@@ -19,6 +19,9 @@
 #include "timer.h"
 #include "uart.h"
 #include "util.h"
+#include "x86_power.h"
+#include "system.h"
+#include "chipset.h"
 
 /* Stop charge when state of charge reaches this percentage */
 #define STOP_CHARGE_THRESHOLD 100
@@ -28,6 +31,9 @@
 #define POLL_PERIOD_CHARGE      250000
 #define POLL_PERIOD_SHORT       100000
 #define MIN_SLEEP_USEC          50000
+
+/* charger update period in usec */
+#define CHARGER_UPDATE_PERIOD   1000000
 
 /* Power state error flags */
 #define F_CHARGER_INIT        (1 << 0) /* Charger initialization */
@@ -93,12 +99,57 @@ struct power_state_context {
 	uint32_t *memmap_batt_rate;
 	uint32_t *memmap_batt_cap;
 	uint8_t *memmap_batt_flags;
+	/* Charger update timestamp */
+	timestamp_t charger_update_time;
 };
 
 /* helper function(s) */
 static inline int get_ac(void)
 {
 	return gpio_get_level(GPIO_AC_PRESENT);
+}
+
+/* Prevent battery from going into deep discharge state */
+static void poweroff_wait_ac(void)
+{
+	/* Shutdown the main processor
+	 * TODO(rong): remove platform dependent code
+	 *     use host_force_shutdown() instead
+	 */
+
+	if (!chipset_in_state(CHIPSET_STATE_ON))
+		return;
+	system_reset(1);
+#ifdef CONFIG_POWER_X86POWER
+	x86_power_force_shutdown();
+
+	/* power_force_shutdown() was not implemented yet.
+	 * TODO(rong): remove following code block after
+	 * crosbug.com/p/8242
+	 */
+	uart_puts("[battery low - x86 forcing G3]\n");
+	gpio_set_level(GPIO_PCH_PWROK, 0);
+	gpio_set_level(GPIO_ENABLE_VCORE, 0);
+	gpio_set_level(GPIO_PCH_RCINn, 0);
+	gpio_set_level(GPIO_ENABLE_VS, 0);
+	gpio_set_level(GPIO_ENABLE_TOUCHPAD, 0);
+	gpio_set_level(GPIO_TOUCHSCREEN_RESETn, 0);
+	gpio_set_level(GPIO_ENABLE_1_5V_DDR, 0);
+	gpio_set_level(GPIO_SHUNT_1_5V_DDR, 1);
+	gpio_set_level(GPIO_PCH_RSMRSTn, 0);
+#endif /* CONFIG_POWER_X86POWER */
+
+	/* TODO(rong): battery deep sleep
+	 *    pause charging task
+	 *    put battery in deep sleep
+	 *    enable only GPIO_AC_PRESENT interrupt and deep sleep ec
+	 */
+
+	/* Proto1 workaround */
+	while (!get_ac()) {
+		/* Check ac_present every 5 seconds */
+		usleep(5000000);
+	}
 }
 
 /* Common handler for charging states.
@@ -184,6 +235,17 @@ static int state_common(struct power_state_context *ctx)
 	rv = battery_state_of_charge(&batt->state_of_charge);
 	if (rv)
 		curr->error |= F_BATTERY_STATE_OF_CHARGE;
+
+	/* Prevent deep discharge
+	 * TODO(rong): move voltage threshold to battery pack
+	 */
+	if (!curr->ac)
+		if ((batt->state_of_charge == 0 &&
+		    !(curr->error & F_BATTERY_STATE_OF_CHARGE)) ||
+		    (/*batt->voltage <= 6800 &&*/
+		    batt->state_of_charge <= 15 &&
+		    !(curr->error & F_BATTERY_VOLTAGE)))
+			poweroff_wait_ac();
 
 	/* Check battery presence */
 	if (curr->error & F_BATTERY_MASK) {
@@ -287,6 +349,8 @@ static enum power_state state_idle(struct power_state_context *ctx)
 			return PWR_STATE_ERROR;
 		if (charger_set_current(ctx->curr.batt.desired_current))
 			return PWR_STATE_ERROR;
+
+		ctx->charger_update_time = get_time();
 		return PWR_STATE_CHARGE;
 	}
 
@@ -316,12 +380,15 @@ static enum power_state state_charge(struct power_state_context *ctx)
 		return PWR_STATE_IDLE;
 	}
 
-	if (ctx->curr.batt.desired_voltage != ctx->curr.charging_voltage)
-		if (charger_set_voltage(ctx->curr.batt.desired_voltage))
+	if ((ctx->curr.batt.desired_voltage != ctx->curr.charging_voltage) ||
+	    (ctx->curr.batt.desired_current != ctx->curr.charging_current) ||
+	    (ctx->curr.ts.val - ctx->charger_update_time.val >
+						CHARGER_UPDATE_PERIOD)) {
+		if (charger_set_voltage(ctx->curr.batt.desired_voltage) ||
+		    charger_set_current(ctx->curr.batt.desired_current))
 			return PWR_STATE_ERROR;
-	if (ctx->curr.batt.desired_current != ctx->curr.charging_current)
-		if (charger_set_current(ctx->curr.batt.desired_current))
-			return PWR_STATE_ERROR;
+		ctx->charger_update_time = get_time();
+	}
 
 	return PWR_STATE_UNCHANGE;
 }
