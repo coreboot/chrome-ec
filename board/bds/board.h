@@ -8,6 +8,10 @@
 #ifndef __BOARD_H
 #define __BOARD_H
 
+/* Optional features */
+#define CONFIG_CONSOLE_CMDHELP
+#define CONFIG_SYSTEM_UNLOCKED  /* Allow dangerous commands */
+
 enum adc_channel
 {
 	ADC_CH_EC_TEMP = 0,  /* EC internal die temperature in degrees K. */

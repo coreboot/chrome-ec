@@ -10,15 +10,6 @@
 
 #include <stdint.h>
 
-
-/* TODO: This is a serious security hole and should be removed in mass
- *       production. We add this to allow manual firmware update.
- *       Once we complete the vboot and autoupdate, we should remove this.
- *       https://code.google.com/p/chrome-os-partner/issues/detail?id=8391
- */
-#define CONFIG_REBOOT_EC
-
-
 /* List of common error codes that can be returned */
 enum ec_error_list {
 	/* Success - no error */
@@ -35,6 +26,19 @@ enum ec_error_list {
 	EC_ERROR_INVAL = 5,
 	/* Already in use */
 	EC_ERROR_BUSY = 6,
+	/* Access denied */
+	EC_ERROR_ACCESS_DENIED = 7,
+	/* Invalid console command param (PARAMn means parameter n is bad) */
+	EC_ERROR_PARAM1 = 11,
+	EC_ERROR_PARAM2 = 12,
+	EC_ERROR_PARAM3 = 13,
+	EC_ERROR_PARAM4 = 14,
+	EC_ERROR_PARAM5 = 15,
+	EC_ERROR_PARAM6 = 16,
+	EC_ERROR_PARAM7 = 17,
+	EC_ERROR_PARAM8 = 18,
+	EC_ERROR_PARAM9 = 19,
+	EC_ERROR_PARAM_COUNT = 20,  /* Wrong number of params */
 
 	/* Module-internal error codes may use this range.   */
 	EC_ERROR_INTERNAL_FIRST = 0x10000,
