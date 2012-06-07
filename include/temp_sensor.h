@@ -40,6 +40,9 @@ struct temp_sensor_t {
 	int (*read)(int idx);
 	/* Index among the same kind of sensors. */
 	int idx;
+	/* Delay between reading tempearture and taking action about it,
+	 * in seconds. */
+	int delay;
 };
 
 /* Return the most recently measured temperature for the sensor in K,
