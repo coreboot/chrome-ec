@@ -41,6 +41,7 @@ static int wp_pin_asserted(void)
 /* Read persistent state into pstate. */
 static int read_pstate(void)
 {
+#ifndef CHIP_stm32
 	int i;
 	int rv = flash_physical_read(usable_flash_size, sizeof(pstate),
 				     (char *)&pstate);
@@ -58,6 +59,7 @@ static int read_pstate(void)
 	for (i = 0; i < MAX_BANKS; i++)
 		pstate.blocks[i] &= FLASH_PROTECT_PERSISTENT;
 
+#endif
 	return EC_SUCCESS;
 }
 
@@ -65,6 +67,7 @@ static int read_pstate(void)
 /* Write persistent state from pstate, erasing if necessary. */
 static int write_pstate(void)
 {
+#ifndef CHIP_stm32
 	int rv;
 
 	/* Erase top protection block.  Assumes pstate size is less than
@@ -84,6 +87,9 @@ static int write_pstate(void)
 	/* Rewrite the data */
 	return flash_physical_write(usable_flash_size, sizeof(pstate),
 				    (const char *)&pstate);
+#else
+	return EC_SUCCESS;
+#endif
 }
 
 
