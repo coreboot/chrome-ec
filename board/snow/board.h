@@ -33,6 +33,9 @@
  * Once we complete the vboot and autoupdate, we should remove this. */
 #define CONFIG_SYSTEM_UNLOCKED
 
+/* compute RW firmware hash at startup */
+#define CONFIG_VBOOT
+
 #ifndef __ASSEMBLER__
 
 /* By default, enable all console messages except keyboard */

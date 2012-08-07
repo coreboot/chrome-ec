@@ -22,6 +22,9 @@
 #define CONFIG_PANIC_NEW_STACK
 #define CONFIG_ASSERT_HELP
 
+/* compute RW firmware hash at startup */
+#define CONFIG_VBOOT
+
 /* Allow dangerous commands all the time, since we don't have a write protect
  * switch. */
 /* TODO: (crosbug.com/p/9986) This is a serious security hole and should be
