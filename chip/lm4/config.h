@@ -59,6 +59,9 @@
 #define CONFIG_SECTION_RW_OFF        (CONFIG_SECTION_RO_OFF \
 					+ CONFIG_SECTION_RO_SIZE)
 
+#define CONFIG_SECTION_WP_RO_SIZE   (40 * CONFIG_FLASH_BANK_SIZE)
+#define CONFIG_SECTION_WP_RO_OFF    CONFIG_FLASH_BASE
+
 #ifdef CONFIG_VBOOT_SIG
 /*
  * The top of each section will hold the vboot stuff, since the firmware vector
