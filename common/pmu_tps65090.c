@@ -296,9 +296,9 @@ int pmu_low_current_charging(int enable)
 
 void pmu_irq_handler(enum gpio_signal signal)
 {
-	/* TODO(rongchang): remove GPIO_AC_STATUS, we're not using it */
+#ifdef CONFIG_AC_POWER_STATUS
 	gpio_set_level(GPIO_AC_STATUS, pmu_get_ac());
-
+#endif
 	task_wake(TASK_ID_PMU_TPS65090_CHARGER);
 	CPRINTF("Charger IRQ received.\n");
 }
@@ -445,6 +445,10 @@ void pmu_init(void)
 
 	if (failure)
 		board_hard_reset();
+
+#ifdef CONFIG_AC_POWER_STATUS
+	gpio_set_flags(GPIO_AC_STATUS, GPIO_OUT_HIGH);
+#endif
 }
 
 /* Initializes PMU when power is turned on.  This is necessary because the TPS'

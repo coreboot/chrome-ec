@@ -17,6 +17,8 @@
 /* use I2C for host communication */
 #define CONFIG_I2C
 
+#define CONFIG_CONFIGURE_BOARD_LATE
+
 /* Debug features */
 #define CONFIG_PANIC_HELP
 #undef  CONFIG_PANIC_NEW_STACK
@@ -110,6 +112,8 @@ enum gpio_signal {
 };
 
 void configure_board(void);
+
+void configure_board_late(void);
 
 void matrix_interrupt(enum gpio_signal signal);
 
