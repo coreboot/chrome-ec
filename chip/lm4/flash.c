@@ -292,7 +292,7 @@ uint32_t flash_get_protect(void)
 			      i < RO_BANK_OFFSET + RO_BANK_COUNT) ||
 			     i == PSTATE_BANK);
 		int bank_flag = (is_ro ? EC_FLASH_PROTECT_RO_NOW :
-				 EC_FLASH_PROTECT_RW_NOW);
+				 EC_FLASH_PROTECT_ALL_NOW);
 
 		if (flash_physical_get_protect(i)) {
 			/* At least one bank in the region is protected */
@@ -302,6 +302,10 @@ uint32_t flash_get_protect(void)
 			flags |= EC_FLASH_PROTECT_ERROR_INCONSISTENT;
 		}
 	}
+
+	if ((flags & EC_FLASH_PROTECT_ALL_NOW) &&
+	    !(flags & EC_FLASH_PROTECT_RO_NOW))
+		flags |= EC_FLASH_PROTECT_ERROR_INCONSISTENT;
 
 	/* Check if blocks were stuck locked at pre-init */
 	if (stuck_locked)
@@ -343,8 +347,8 @@ int flash_set_protect(uint32_t mask, uint32_t flags)
 		protect_banks(RO_BANK_OFFSET, RO_BANK_COUNT);
 	}
 
-	if ((mask & EC_FLASH_PROTECT_RW_NOW) &&
-	    (flags & EC_FLASH_PROTECT_RW_NOW)) {
+	if ((mask & EC_FLASH_PROTECT_ALL_NOW) &&
+	    (flags & EC_FLASH_PROTECT_ALL_NOW)) {
 		/* Protect the entire flash */
 		protect_banks(0, CONFIG_FLASH_PHYSICAL_SIZE /
 			      CONFIG_FLASH_BANK_SIZE);
@@ -357,7 +361,7 @@ int flash_pre_init(void)
 {
 	uint32_t reset_flags = system_get_reset_flags();
 	uint32_t prot_flags = flash_get_protect();
-	uint32_t unwanted_prot_flags = EC_FLASH_PROTECT_RW_NOW |
+	uint32_t unwanted_prot_flags = EC_FLASH_PROTECT_ALL_NOW |
 		EC_FLASH_PROTECT_ERROR_INCONSISTENT;
 
 	/*
