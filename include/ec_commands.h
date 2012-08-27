@@ -916,6 +916,14 @@ struct ec_params_force_idle {
 	uint8_t enabled;
 } __packed;
 
+/*
+ * Cut off battery power output if the battery supports.
+ *
+ * For unsupported battery, just don't implement this command and lets EC
+ * return EC_RES_INVALID_COMMAND.
+ */
+#define EC_CMD_BATTERY_CUT_OFF 0x99
+
 /*****************************************************************************/
 /* System commands */
 
