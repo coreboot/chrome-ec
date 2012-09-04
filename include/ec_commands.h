@@ -970,6 +970,14 @@ struct ec_params_reboot_ec {
 	uint8_t flags;         /* See EC_REBOOT_FLAG_* */
 } __packed;
 
+/*
+ * Get information on last EC panic.
+ *
+ * Returns variable-length platform-dependent panic information.  See panic.h
+ * for details.
+ */
+#define EC_CMD_GET_PANIC_INFO 0xd3
+
 /*****************************************************************************/
 /*
  * ACPI commands
