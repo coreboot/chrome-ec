@@ -261,8 +261,10 @@ static void check_runtime_keys(const uint8_t *state)
 	if (state[MASK_INDEX_KEYR] == MASK_VALUE_KEYR &&
 			state[MASK_INDEX_VOL_UP] == MASK_VALUE_VOL_UP &&
 			(state[MASK_INDEX_RIGHT_ALT] == MASK_VALUE_RIGHT_ALT ||
-			state[MASK_INDEX_LEFT_ALT] == MASK_VALUE_LEFT_ALT))
+			state[MASK_INDEX_LEFT_ALT] == MASK_VALUE_LEFT_ALT)) {
+		keyboard_clear_state();
 		system_warm_reboot();
+	}
 }
 
 /* Print the keyboard state. */
