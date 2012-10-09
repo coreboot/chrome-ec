@@ -25,7 +25,15 @@ uint8_t *lpc_get_memmap_range(void);
 /* Return true if the TOH is still set */
 int lpc_keyboard_has_char(void);
 
-/* Send a byte to host via port 0x60 and asserts IRQ if specified. */
+/* Return true if the FRMH is still set */
+int lpc_keyboard_input_pending(void);
+
+/**
+ * Send a byte to host via keyboard port 0x60.
+ *
+ * @param chr		Byte to send
+ * @param send_irq	If non-zero, asserts IRQ
+ */
 void lpc_keyboard_put_char(uint8_t chr, int send_irq);
 
 /* Clear the keyboard buffer. */
