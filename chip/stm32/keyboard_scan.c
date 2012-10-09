@@ -33,22 +33,13 @@ enum COL_INDEX {
 	/* 0 ~ 12 for the corresponding column */
 };
 
-#define KB_INPUTS 8
-
-#define SCAN_TIME_COUNT 32
-
 /* 15:14, 12:8, 2 */
 #define IRQ_MASK 0xdf04
 
 static struct mutex scanning_enabled;
 
-static uint8_t debounced_state[KB_OUTPUTS];   /* Debounced key matrix */
-static uint8_t prev_state[KB_OUTPUTS];        /* Matrix from previous scan */
-static uint8_t debouncing[KB_OUTPUTS];        /* Mask of keys being debounced */
-static uint32_t scan_time[SCAN_TIME_COUNT];  /* Times of last scans */
-static int scan_time_index;                  /* Current scan_time[] index */
-/* Index into scan_time[] when each key started debouncing */
-static uint8_t scan_edge_index[KB_OUTPUTS][KB_INPUTS];
+/* The keyboard state from the last read */
+static uint8_t raw_state[KB_OUTPUTS];
 
 /* Key masks for special boot keys */
 #define MASK_INDEX_ESC     1
@@ -106,8 +97,6 @@ static struct ec_mkbp_config config = {
 	.poll_timeout_us = 100 * 1000,
 	.min_post_scan_delay_us = 1000,
 	.output_settle_us = 50,
-	.debounce_down_us = 9000,
-	.debounce_up_us = 30000,
 	.fifo_max_depth = KB_FIFO_DEPTH,
 };
 
@@ -239,62 +228,24 @@ void enter_polling_mode(void)
 	select_column(COL_TRI_STATE_ALL);
 }
 
-/**
- * Check special runtime key combinations.
- *
- * @param state		Keyboard state to use when checking keys.
- */
-static void check_runtime_keys(const uint8_t *state)
+static int check_warm_reboot_keys(void)
 {
-	int num_press;
-	int c;
+	if (raw_state[MASK_INDEX_KEYR] == MASK_VALUE_KEYR &&
+		  raw_state[MASK_INDEX_VOL_UP] == MASK_VALUE_VOL_UP &&
+		  (raw_state[MASK_INDEX_RIGHT_ALT] == MASK_VALUE_RIGHT_ALT ||
+		  raw_state[MASK_INDEX_LEFT_ALT] == MASK_VALUE_LEFT_ALT))
+		return 1;
 
-	/* Count number of key pressed */
-	for (c = num_press = 0; c < KB_OUTPUTS; c++) {
-		if (state[c])
-			++num_press;
-	}
-
-	if (num_press != 3)
-		return;
-
-	if (state[MASK_INDEX_KEYR] == MASK_VALUE_KEYR &&
-			state[MASK_INDEX_VOL_UP] == MASK_VALUE_VOL_UP &&
-			(state[MASK_INDEX_RIGHT_ALT] == MASK_VALUE_RIGHT_ALT ||
-			state[MASK_INDEX_LEFT_ALT] == MASK_VALUE_LEFT_ALT))
-		system_warm_reboot();
+	return 0;
 }
 
-/* Print the keyboard state. */
-static void print_state(const uint8_t *state, const char *msg)
-{
-	int c;
-
-	CPRINTF("[%T KB %s:", msg);
-	for (c = 0; c < KB_OUTPUTS; c++) {
-		if (state[c])
-			CPRINTF(" %02x", state[c]);
-		else
-			CPUTS(" --");
-	}
-	CPUTS("]\n");
-}
-
-/**
- * Read the raw keyboard matrix state.
- *
- * Used in pre-init, so must not make task-switching-dependent calls; udelay()
- * is ok because it's a spin-loop.
- *
- * @param state		Destination for new state (must be KB_OUTPUTS long).
- *
- * @return 1 if at least one key is pressed, else zero.
- */
-static int read_matrix(uint8_t *state)
+/* Returns 1 if any key is still pressed. 0 if no key is pressed. */
+static int check_keys_changed(void)
 {
 	int c;
 	uint8_t r;
-	int pressed = 0;
+	int change = 0;
+	int num_press = 0;
 
 	for (c = 0; c < KB_OUTPUTS; c++) {
 		uint16_t tmp;
@@ -303,10 +254,6 @@ static int read_matrix(uint8_t *state)
 		select_column(c);
 		udelay(config.output_settle_us);
 
-		/*
-		 * TODO(sjg@chromium.org): This code can be improved by doing
-		 * the job in 3 shift/or operations.
-		 */
 		r = 0;
 		tmp = STM32_GPIO_IDR(C);
 		/* KB_COL00:04 = PC8:12 */
@@ -337,122 +284,53 @@ static int read_matrix(uint8_t *state)
 #ifdef OR_WITH_CURRENT_STATE_FOR_TESTING
 		/* KLUDGE - or current state in, so we can make sure
 		 * all the lines are hooked up */
-		r |= state[c];
+		r |= raw_state[c];
 #endif
 
-		state[c] = r;
-		pressed |= r;
+		/* Check for changes */
+		if (r != raw_state[c]) {
+			raw_state[c] = r;
+			change = 1;
+		}
 	}
 	select_column(COL_TRI_STATE_ALL);
 
-	return pressed ? 1 : 0;
-}
-
-/**
- * Update keyboard state using low-level interface to read keyboard.
- *
- * @param state		Keyboard state to update.
- *
- * @return 1 if any key is still pressed, 0 if no key is pressed.
- */
-static int check_keys_changed(uint8_t *state)
-{
-	int any_pressed = 0;
-	int c, i;
-	int any_change = 0;
-	uint8_t new_state[KB_OUTPUTS];
-	uint32_t tnow = get_time().le.lo;
-
-	/* Save the current scan time */
-	if (++scan_time_index >= SCAN_TIME_COUNT)
-		scan_time_index = 0;
-	scan_time[scan_time_index] = tnow;
-
-	/* Read the raw key state */
-	any_pressed = read_matrix(new_state);
-
-	/* Check for changes between previous scan and this one */
+	/* Count number of key pressed */
 	for (c = 0; c < KB_OUTPUTS; c++) {
-		int diff = new_state[c] ^ prev_state[c];
-
-		if (!diff)
-			continue;
-
-		for (i = 0; i < KB_INPUTS; i++) {
-			if (diff & (1 << i))
-				scan_edge_index[c][i] = scan_time_index;
-		}
-
-		debouncing[c] |= diff;
-		prev_state[c] = new_state[c];
+		if (raw_state[c])
+			++num_press;
 	}
 
-	/* Check for keys which are done debouncing */
-	for (c = 0; c < KB_OUTPUTS; c++) {
-		int debc = debouncing[c];
-
-		if (!debc)
-			continue;
-
-		for (i = 0; i < KB_INPUTS; i++) {
-			int mask = 1 << i;
-			int new_mask = new_state[c] & mask;
-
-			/* Are we done debouncing this key? */
-			if (!(debc & mask))
-				continue;  /* Not debouncing this key */
-			if (tnow - scan_time[scan_edge_index[c][i]] <
-			    (new_mask ? config.debounce_down_us :
-					config.debounce_up_us))
-				continue;  /* Not done debouncing */
-
-			debouncing[c] &= ~mask;
-
-			/* Did the key change from its previous state? */
-			if ((state[c] & mask) == new_mask)
-				continue;  /* No */
-
-			state[c] ^= mask;
-			any_change = 1;
-		}
-	}
-
-	if (any_change) {
+	if (change) {
 		board_keyboard_suppress_noise();
-		print_state(state, "state");
 
-#ifdef PRINT_SCAN_TIMES
-		/* Print delta times from now back to each previous scan */
-		for (i = 0; i < SCAN_TIME_COUNT; i++) {
-			int tnew = scan_time[
-				(SCAN_TIME_COUNT + scan_time_index - i) %
-				SCAN_TIME_COUNT];
-			CPRINTF(" %d", tnow - tnew);
+		CPRINTF("[%d keys pressed: ", num_press);
+		for (c = 0; c < KB_OUTPUTS; c++) {
+			if (raw_state[c])
+				CPRINTF(" %02x", raw_state[c]);
+			else
+				CPUTS(" --");
 		}
-		CPRINTF("\n");
-#endif
+		CPUTS("]\n");
 
-		check_runtime_keys(state);
+		if (num_press == 3) {
+			if (check_warm_reboot_keys())
+				system_warm_reboot();
+		}
 
-		if (kb_fifo_add(state) == EC_SUCCESS)
+		if (kb_fifo_add(raw_state) == EC_SUCCESS)
 			board_interrupt_host(1);
 		else
 			CPRINTF("dropped keystroke\n");
 	}
 
-	return any_pressed;
+	return num_press ? 1 : 0;
 }
 
-/*
- * Check if the user has triggered a recovery reset
- *
- * Pressing Power + Refresh + ESC. triggers a recovery reset. Here we check
- * for this.
- *
- * @param state		Keyboard state to check
- * @return 1 if there is a recovery reset, else 0
- */
-static int check_recovery_key(const uint8_t *state)
+
+/* Returns non-zero if the user has triggered a recovery reset by pushing
+ * Power + Refresh + ESC. */
+static int check_recovery_key(void)
 {
 	int c;
 
@@ -463,7 +341,7 @@ static int check_recovery_key(const uint8_t *state)
 
 	/* cold boot : Power + Refresh were pressed,
 	 * check if ESC is also pressed for recovery. */
-	if (!(state[MASK_INDEX_ESC] & MASK_VALUE_ESC))
+	if (!(raw_state[MASK_INDEX_ESC] & MASK_VALUE_ESC))
 		return 0;
 
 	/* Make sure only other allowed keys are pressed.  This protects
@@ -471,9 +349,9 @@ static int check_recovery_key(const uint8_t *state)
 	 * your keyboard.  Currently, only the requested key and ESC are
 	 * allowed. */
 	for (c = 0; c < KB_OUTPUTS; c++) {
-		if (state[c] &&
-		(c != MASK_INDEX_ESC || state[c] != MASK_VALUE_ESC) &&
-		(c != MASK_INDEX_REFRESH || state[c] != MASK_VALUE_REFRESH))
+		if (raw_state[c] &&
+		(c != MASK_INDEX_ESC || raw_state[c] != MASK_VALUE_ESC) &&
+		(c != MASK_INDEX_REFRESH || raw_state[c] != MASK_VALUE_REFRESH))
 			return 0;  /* Additional disallowed key pressed */
 	}
 
@@ -491,11 +369,10 @@ int keyboard_scan_init(void)
 	select_column(COL_TRI_STATE_ALL);
 
 	/* Initialize raw state */
-	read_matrix(debounced_state);
-	memcpy(prev_state, debounced_state, sizeof(prev_state));
+	check_keys_changed();
 
 	/* is recovery key pressed on cold startup ? */
-	check_recovery_key(debounced_state);
+	check_recovery_key();
 
 	return EC_SUCCESS;
 }
@@ -531,7 +408,7 @@ static void scan_keyboard(void)
 
 		/* Scan immediately, with no delay */
 		mutex_lock(&scanning_enabled);
-		keys_changed = check_keys_changed(debounced_state);
+		keys_changed = check_keys_changed();
 		mutex_unlock(&scanning_enabled);
 
 		/* Wait a bit before scanning again */
@@ -559,8 +436,6 @@ void keyboard_scan_task(void)
 	gpio_enable_interrupt(GPIO_KB_IN05);
 	gpio_enable_interrupt(GPIO_KB_IN06);
 	gpio_enable_interrupt(GPIO_KB_IN07);
-
-	print_state(debounced_state, "init state");
 
 	while (1) {
 		if (config.flags & EC_MKBP_FLAGS_ENABLE) {
@@ -613,7 +488,7 @@ static int keyboard_get_info(struct host_cmd_handler_args *args)
 {
 	struct ec_response_mkbp_info *r = args->response;
 
-	r->rows = KB_INPUTS;
+	r->rows = 8;
 	r->cols = KB_OUTPUTS;
 	r->switches = 0;
 
@@ -656,16 +531,12 @@ static int command_keyboard_press(int argc, char **argv)
 	if (*e || p < 0 || p > 1)
 		return EC_ERROR_PARAM3;
 
-	/*
-	 * TODO(sjg@chromium.org): This ignores debouncing, so is a bit
-	 * dodgy and might have strange side-effects on real key scans.
-	 */
 	if (p)
-		debounced_state[c] |= (1 << r);
+		raw_state[c] |= (1 << r);
 	else
-		debounced_state[c] &= ~(1 << r);
+		raw_state[c] &= ~(1 << r);
 
-	if (kb_fifo_add(debounced_state) == EC_SUCCESS)
+	if (kb_fifo_add(raw_state) == EC_SUCCESS)
 		board_interrupt_host(1);
 	else
 		ccprintf("dropped keystroke\n");
