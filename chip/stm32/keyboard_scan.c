@@ -238,40 +238,6 @@ static int check_warm_reboot_keys(void)
 	return 0;
 }
 
-static uint8_t read_raw_row_state(void)
-{
-	uint16_t tmp;
-	uint8_t r = 0;
-
-	tmp = STM32_GPIO_IDR(C);
-	/* KB_COL00:04 = PC8:12 */
-	if (tmp & (1 << 8))
-		r |= 1 << 0;
-	if (tmp & (1 << 9))
-		r |= 1 << 1;
-	if (tmp & (1 << 10))
-		r |= 1 << 2;
-	if (tmp & (1 << 11))
-		r |= 1 << 3;
-	if (tmp & (1 << 12))
-		r |= 1 << 4;
-	/* KB_COL05:06 = PC14:15 */
-	if (tmp & (1 << 14))
-		r |= 1 << 5;
-	if (tmp & (1 << 15))
-		r |= 1 << 6;
-
-	tmp = STM32_GPIO_IDR(D);
-	/* KB_COL07 = PD2 */
-	if (tmp & (1 << 2))
-		r |= 1 << 7;
-
-	/* Invert it so 0=not pressed, 1=pressed */
-	r ^= 0xff;
-
-	return r;
-}
-
 /* Returns 1 if any key is still pressed. 0 if no key is pressed. */
 static int check_keys_changed(void)
 {
@@ -281,12 +247,38 @@ static int check_keys_changed(void)
 	int num_press = 0;
 
 	for (c = 0; c < KB_OUTPUTS; c++) {
+		uint16_t tmp;
+
 		/* Select column, then wait a bit for it to settle */
 		select_column(c);
 		udelay(50);
 
-		r = read_raw_row_state();
+		r = 0;
+		tmp = STM32_GPIO_IDR(C);
+		/* KB_COL00:04 = PC8:12 */
+		if (tmp & (1 << 8))
+			r |= 1 << 0;
+		if (tmp & (1 << 9))
+			r |= 1 << 1;
+		if (tmp & (1 << 10))
+			r |= 1 << 2;
+		if (tmp & (1 << 11))
+			r |= 1 << 3;
+		if (tmp & (1 << 12))
+			r |= 1 << 4;
+		/* KB_COL05:06 = PC14:15 */
+		if (tmp & (1 << 14))
+			r |= 1 << 5;
+		if (tmp & (1 << 15))
+			r |= 1 << 6;
 
+		tmp = STM32_GPIO_IDR(D);
+		/* KB_COL07 = PD2 */
+		if (tmp & (1 << 2))
+			r |= 1 << 7;
+
+		/* Invert it so 0=not pressed, 1=pressed */
+		r ^= 0xff;
 		/* Mask off keys that don't exist so they never show
 		 * as pressed */
 		r &= actual_key_mask[c];
@@ -415,13 +407,7 @@ void keyboard_scan_task(void)
 		wait_for_interrupt();
 		mutex_unlock(&scanning_enabled);
 
-		/*
-		 * if a key was pressed after the last polling,
-		 * re-start immediatly polling instead of waiting
-		 * for the next interrupt.
-		 */
-		if (!read_raw_row_state())
-			task_wait_event(-1);
+		task_wait_event(-1);
 
 		enter_polling_mode();
 		/* Busy polling keyboard state. */
@@ -444,6 +430,10 @@ void keyboard_scan_task(void)
 				}
 			}
 		}
+		/* TODO: (crosbug.com/p/7484) A race condition here.
+		 *       If a key state is changed here (before interrupt is
+		 *       enabled), it will be lost.
+		 */
 	}
 }
 
