@@ -31,6 +31,8 @@ const char help_str[] =
 	"      Enable/disable LCD backlight\n"
 	"  battery\n"
 	"      Prints battery info\n"
+	"  chargecurrentlimit\n"
+	"      Set the maximum battery charging current\n"
 	"  chargedump\n"
 	"      Dump the context of charge state machine\n"
 	"  chargeforceidle\n"
@@ -1962,6 +1964,29 @@ int cmd_lcd_backlight(int argc, char *argv[])
 }
 
 
+int cmd_charge_current_limit(int argc, char *argv[])
+{
+	struct ec_params_current_limit p;
+	int rv;
+	char *e;
+
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <max_current_mA>\n", argv[0]);
+		return -1;
+	}
+
+	p.limit = strtol(argv[1], &e, 0);
+	if (e && *e) {
+		fprintf(stderr, "Bad value.\n");
+		return -1;
+	}
+
+	rv = ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0, &p, sizeof(p),
+			NULL, 0);
+	return rv;
+}
+
+
 int cmd_charge_force_idle(int argc, char *argv[])
 {
 	struct ec_params_force_idle p;
@@ -2476,6 +2501,7 @@ const struct command commands[] = {
 	{"autofanctrl", cmd_thermal_auto_fan_ctrl},
 	{"backlight", cmd_lcd_backlight},
 	{"battery", cmd_battery},
+	{"chargecurrentlimit", cmd_charge_current_limit},
 	{"chargedump", cmd_charge_dump},
 	{"chargeforceidle", cmd_charge_force_idle},
 	{"chipinfo", cmd_chipinfo},
