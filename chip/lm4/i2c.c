@@ -85,7 +85,7 @@ static int wait_idle(int port)
 	task_set_event(task_get_current(), event, 0);
 
 	/* Check for errors */
-	if (i & LM4_I2C_MCS_ERROR)
+	if (i & (LM4_I2C_MCS_CLKTO | LM4_I2C_MCS_ARBLST | LM4_I2C_MCS_ERROR))
 		return EC_ERROR_UNKNOWN;
 
 	return EC_SUCCESS;
@@ -108,15 +108,27 @@ static int i2c_transmit_receive(int port, int slave_addr,
 	if (transmit_size == 0 && receive_size == 0)
 		return EC_SUCCESS;
 
-	if (!started && (LM4_I2C_MCS(port) &
-			 (LM4_I2C_MCS_CLKTO | LM4_I2C_MCS_BUSBSY))) {
-		/*
-		 * Previous clock timeout or bus-busy.  Bounce the master to
-		 * clear these error states.
-		 */
-		LM4_I2C_MCR(port) = 0;
-		usleep(100000);
+	reg_mcs = LM4_I2C_MCS(port);
+	if (!started && (reg_mcs & (LM4_I2C_MCS_CLKTO | LM4_I2C_MCS_ARBLST))) {
+		uint32_t tpr = LM4_I2C_MTPR(port);
+
+		CPRINTF("[%T I2C%d bad status 0x%02x]\n", port, reg_mcs);
+
+		/* Clock timeout or arbitration lost.  Reset port to clear. */
+		LM4_SYSTEM_SRI2C |= (1 << port);
+		clock_wait_cycles(3);
+		LM4_SYSTEM_SRI2C &= ~(1 << port);
+		clock_wait_cycles(3);
+
+		/* Restore settings */
 		LM4_I2C_MCR(port) = 0x10;
+		LM4_I2C_MTPR(port) = tpr;
+
+		/*
+		 * We don't know what edges the slave saw, so sleep long enough
+		 * that the slave will see the new start condition below.
+		 */
+		usleep(1000);
 	}
 
 	if (transmit_data) {
@@ -184,7 +196,7 @@ static int i2c_transmit_receive(int port, int slave_addr,
 	}
 
 	/* Check for error conditions */
-	if (LM4_I2C_MCS(port) & (LM4_I2C_MCS_CLKTO | LM4_I2C_MCS_BUSBSY |
+	if (LM4_I2C_MCS(port) & (LM4_I2C_MCS_CLKTO | LM4_I2C_MCS_ARBLST |
 				 LM4_I2C_MCS_ERROR))
 		return EC_ERROR_UNKNOWN;
 
