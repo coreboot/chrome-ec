@@ -5,6 +5,9 @@
  * LED controls.
  */
 
+/* Danger, Will Robinson! Danger! See crosbug.com/p/16827 for details */
+#define USE_OLD_LIGHTBAR_STRUCTS_JUST_TO_BACKPORT_BUG_16827
+
 #include "battery.h"
 #include "battery_pack.h"
 #include "charge_state.h"
@@ -267,9 +270,6 @@ static uint32_t pending_msg;
 /****************************************************************************/
 /* Demo sequence */
 
-struct rgb_s {
-	uint8_t r, g, b;
-};
 enum {
 	COLOR_LOW, COLOR_MEDIUM, COLOR_HIGH, COLOR_FULL, COLOR_BLACK,
 };

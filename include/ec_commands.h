@@ -614,57 +614,155 @@ struct ec_params_pwm_set_fan_duty {
 
 /*****************************************************************************/
 /*
- * Lightbar commands. This looks worse than it is. Since we only use one LPC
+ * Lightbar commands. This looks worse than it is. Since we only use one HOST
  * command to say "talk to the lightbar", we put the "and tell it to do X" part
  * into a subcommand. We'll make separate structs for subcommands with
  * different input args, so that we know how much to expect.
  */
 #define EC_CMD_LIGHTBAR_CMD 0x28
 
+
+#ifdef USE_OLD_LIGHTBAR_STRUCTS_JUST_TO_BACKPORT_BUG_16827
+
+struct rgb_s {
+       uint8_t r, g, b;
+};
+
 struct ec_params_lightbar_cmd {
+        union {
+                union {
+                        uint8_t cmd;  /* Command (see enum lightbar_command) */
+
+                        struct {
+                                uint8_t cmd;
+                        } dump, off, on, init, get_seq;
+
+                        struct num {
+                                uint8_t cmd;
+                                uint8_t num;
+                        } brightness, seq, demo;
+
+                        struct reg {
+                                uint8_t cmd;
+                                uint8_t ctrl, reg, value;
+                        } reg;
+
+                        struct rgb {
+                                uint8_t cmd;
+                                uint8_t led, red, green, blue;
+                        } rgb;
+                } in;
+
+                union {
+                        struct dump {
+                                struct {
+                                        uint8_t reg;
+                                        uint8_t ic0;
+                                        uint8_t ic1;
+                                } vals[23];
+                        } dump;
+
+                        struct get_seq {
+                                uint8_t num;
+                        } get_seq;
+
+                        struct {
+                                /* no return params */
+                        } off, on, init, brightness, seq, reg, rgb, demo;
+                } out;
+        };
+} __packed;
+
+#else
+
+struct rgb_s {
+	uint8_t r, g, b;
+};
+
+#define LB_BATTERY_LEVELS 4
+/* List of tweakable parameters. NOTE: It's __packed so it can be sent in a
+ * host command, but the alignment is the same regardless. Keep it that way.
+ */
+struct lightbar_params {
+	/* Timing */
+	int google_ramp_up;
+	int google_ramp_down;
+	int s3s0_ramp_up;
+	int s0_tick_delay[2];			/* AC=0/1 */
+	int s0a_tick_delay[2];			/* AC=0/1 */
+	int s0s3_ramp_down;
+	int s3_sleep_for;
+	int s3_ramp_up;
+	int s3_ramp_down;
+
+	/* Oscillation */
+	uint8_t new_s0;
+	uint8_t osc_min[2];			/* AC=0/1 */
+	uint8_t osc_max[2];			/* AC=0/1 */
+	uint8_t w_ofs[2];			/* AC=0/1 */
+
+	/* Brightness limits based on the backlight and AC. */
+	uint8_t bright_bl_off_fixed[2];		/* AC=0/1 */
+	uint8_t bright_bl_on_min[2];		/* AC=0/1 */
+	uint8_t bright_bl_on_max[2];		/* AC=0/1 */
+
+	/* Battery level thresholds */
+	uint8_t battery_threshold[LB_BATTERY_LEVELS - 1];
+
+	/* Map [AC][battery_level] to color index */
+	uint8_t s0_idx[2][LB_BATTERY_LEVELS];	/* AP is running */
+	uint8_t s3_idx[2][LB_BATTERY_LEVELS];	/* AP is sleeping */
+
+	/* Color palette */
+	struct rgb_s color[8];			/* 0-3 are Google colors */
+} __packed;
+
+struct ec_params_lightbar {
+	uint8_t cmd;		      /* Command (see enum lightbar_command) */
 	union {
-		union {
-			uint8_t cmd;  /* Command (see enum lightbar_command) */
+		struct {
+			/* no args */
+		} dump, off, on, init, get_seq, get_params;
 
-			struct {
-				uint8_t cmd;
-			} dump, off, on, init, get_seq;
+		struct num {
+			uint8_t num;
+		} brightness, seq, demo;
 
-			struct num {
-				uint8_t cmd;
-				uint8_t num;
-			} brightness, seq, demo;
+		struct reg {
+			uint8_t ctrl, reg, value;
+		} reg;
 
-			struct reg {
-				uint8_t cmd;
-				uint8_t ctrl, reg, value;
-			} reg;
+		struct rgb {
+			uint8_t led, red, green, blue;
+		} rgb;
 
-			struct rgb {
-				uint8_t cmd;
-				uint8_t led, red, green, blue;
-			} rgb;
-		} in;
-
-		union {
-			struct dump {
-				struct {
-					uint8_t reg;
-					uint8_t ic0;
-					uint8_t ic1;
-				} vals[23];
-			} dump;
-
-			struct get_seq {
-				uint8_t num;
-			} get_seq;
-
-			struct {
-				/* no return params */
-			} off, on, init, brightness, seq, reg, rgb, demo;
-		} out;
+		struct lightbar_params set_params;
 	};
 } __packed;
+
+struct ec_response_lightbar {
+	union {
+		struct dump {
+			struct {
+				uint8_t reg;
+				uint8_t ic0;
+				uint8_t ic1;
+			} vals[23];
+		} dump;
+
+		struct get_seq {
+			uint8_t num;
+		} get_seq;
+
+		struct lightbar_params get_params;
+
+		struct {
+			/* no return params */
+		} off, on, init, brightness, seq, reg, rgb, demo, set_params;
+	};
+} __packed;
+
+#endif /* USE_OLD_LIGHTBAR_STRUCTS_JUST_TO_BACKPORT_BUG_16827 */
 
 /* Lightbar commands */
 enum lightbar_command {
@@ -678,6 +776,8 @@ enum lightbar_command {
 	LIGHTBAR_CMD_RGB = 7,
 	LIGHTBAR_CMD_GET_SEQ = 8,
 	LIGHTBAR_CMD_DEMO = 9,
+	LIGHTBAR_CMD_GET_PARAMS = 10,
+	LIGHTBAR_CMD_SET_PARAMS = 11,
 	LIGHTBAR_NUM_CMDS
 };
 
