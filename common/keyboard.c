@@ -705,7 +705,7 @@ void keyboard_set_power_button(int pressed)
 		return;
 
 	code_set = acting_code_set(scancode_set);
-	if (keyboard_enabled) {
+	if (keystroke_enabled) {
 		i8042_send_to_host(
 			 (code_set == SCANCODE_SET_2 && !pressed) ? 3 : 2,
 			 code[code_set - SCANCODE_SET_1][pressed]);
