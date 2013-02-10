@@ -55,6 +55,7 @@ enum scancode_set_list {
  * i8042 global settings.
  */
 static int keyboard_enabled = 0;  /* default the keyboard is disabled. */
+static int keystroke_enabled;  /* output keystrokes */
 static uint8_t resend_command[MAX_SCAN_CODE_LEN];
 static uint8_t resend_command_len = 0;
 static uint8_t controller_ram_address;
@@ -289,7 +290,7 @@ void keyboard_state_changed(int row, int col, int is_pressed)
 			      &len);
 	if (ret == EC_SUCCESS) {
 		ASSERT(len > 0);
-		if (keyboard_enabled)
+		if (keystroke_enabled)
 			i8042_send_to_host(len, scan_code);
 	}
 
@@ -316,6 +317,16 @@ static void keyboard_enable(int enable)
 		typematic_len = 0;  /* stop typematic */
 	}
 	keyboard_enabled = enable;
+}
+
+static void keystroke_enable(int enable)
+{
+	if (!keystroke_enabled && enable)
+		CPRINTF("[%T KS enable]\n");
+	else if (keystroke_enabled && !enable)
+		CPRINTF("[%T KS disable]\n");
+
+	keystroke_enabled = enable;
 }
 
 
@@ -483,13 +494,13 @@ int handle_keyboard_data(uint8_t data, uint8_t *output)
 
 		case I8042_CMD_ENABLE:
 			output[out_len++] = I8042_RET_ACK;
-			keyboard_enable(1);
+			keystroke_enable(1);
 			keyboard_clear_underlying_buffer();
 			break;
 
 		case I8042_CMD_RESET_DIS:
 			output[out_len++] = I8042_RET_ACK;
-			keyboard_enable(0);
+			keystroke_enable(0);
 			reset_rate_and_delay();
 			keyboard_clear_underlying_buffer();
 			break;
@@ -725,7 +736,7 @@ void keyboard_typematic_task(void)
 
 			if (typematic_delay <= 0) {
 				/* re-send to host */
-				if (keyboard_enabled)
+				if (keystroke_enabled)
 					i8042_send_to_host(typematic_len,
 							   typematic_scan_code);
 				typematic_delay = refill_inter_delay * 1000;
