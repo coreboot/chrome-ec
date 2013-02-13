@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -133,6 +133,11 @@ enum power_state charge_get_state(void);
  * Return current battery charge percentage.
  */
 int charge_get_percent(void);
+
+/**
+ * Return non-zero if discharging and battery so low we should shut down.
+ */
+int charge_want_shutdown(void);
 
 #endif /* __CROS_EC_CHARGE_STATE_H */
 
