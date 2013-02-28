@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -40,5 +40,13 @@ void chipset_exit_hard_off(void);
 
 /* Enable/disable CPU throttling. */
 void chipset_throttle_cpu(int throttle);
+
+/**
+ * Immediately shut off power to main processor and chipset.
+ *
+ * This is intended for use when the system is too hot or battery power is
+ * critical.
+ */
+void chipset_force_shutdown(void);
 
 #endif  /* __CROS_EC_CHIPSET_H */

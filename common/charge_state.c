@@ -104,20 +104,17 @@ static void update_battery_info(void)
 /* Prevent battery from going into deep discharge state */
 static void poweroff_wait_ac(int hibernate_ec)
 {
-	/* Shutdown the main processor */
 	if (chipset_in_state(CHIPSET_STATE_ON)) {
-		/* chipset_force_state(CHIPSET_STATE_SOFT_OFF);
-		 * TODO(rong): remove platform dependent code
+		/*
+		 * Shut down the AP.  The EC will hibernate after the AP shuts
+		 * down.
 		 */
-#ifdef CONFIG_TASK_X86POWER
-		x86_power_force_shutdown();
+		CPRINTF("[%T charge force shutdown due to low battery]\n");
+		chipset_force_shutdown();
 		host_set_single_event(EC_HOST_EVENT_BATTERY_SHUTDOWN);
-#endif /* CONFIG_TASK_X86POWER */
-	}
-
-	/* If battery level is critical, hibernate the EC too */
-	if (hibernate_ec) {
-		CPRINTF("[%T force EC hibernate to avoid damaging battery]\n");
+	} else if (hibernate_ec) {
+		/* If battery level is critical, hibernate the EC */
+		CPRINTF("[%T charge force EC hibernate due to low battery]\n");
 		system_hibernate(0, 0);
 	}
 }
@@ -244,9 +241,8 @@ static int state_common(struct power_state_context *ctx)
 		if ((batt->state_of_charge < BATTERY_LEVEL_SHUTDOWN &&
 		    !(curr->error & F_BATTERY_STATE_OF_CHARGE)) ||
 		    (batt->voltage <= ctx->battery->voltage_min &&
-		    !(curr->error & F_BATTERY_VOLTAGE)))
-			poweroff_wait_ac(batt->state_of_charge <
-					 BATTERY_LEVEL_HIBERNATE_EC ? 1 : 0);
+		     !(curr->error & F_BATTERY_VOLTAGE)))
+			poweroff_wait_ac(1);
 	}
 
 	/* Check battery presence */
@@ -827,6 +823,24 @@ static int charge_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, charge_init, HOOK_PRIO_DEFAULT);
 
+
+static int charge_shutdown(void)
+{
+	/* Hibernate immediately if battery level is too low */
+	if (charge_want_shutdown()) {
+		CPRINTF("[%T charge force EC hibernate after"
+			" shutdown due to low battery]\n");
+		system_hibernate(0, 0);
+	}
+
+	return EC_SUCCESS;
+}
+/*
+ * Run the charge shutdown hook last, since when it hibernates no subsequent
+ * hooks would be run.
+ */
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, charge_shutdown, HOOK_PRIO_LAST);
+
 /*****************************************************************************/
 /* Host commands */
 
@@ -907,6 +921,10 @@ static int command_battfake(int argc, char **argv)
 	else
 		ccprintf("Reporting fake battery level %d%%\n",
 			 fake_state_of_charge);
+
+	/* Wake charger task immediately to see new level */
+	task_wake(TASK_ID_POWERSTATE);
+
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(battfake, command_battfake,
