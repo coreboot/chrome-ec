@@ -1,9 +1,9 @@
 /* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
- *
  */
 
+#include "battery_pack.h"
 #include "timer.h"
 
 #ifndef __CROS_EC_CHARGE_STATE_H
@@ -50,8 +50,10 @@
 enum power_state {
 	/* Meta-state; unchanged from previous time through task loop */
 	PWR_STATE_UNCHANGE = 0,
-	/* (Re-)initalizing charge state machine */
+	/* Initializing charge state machine at boot */
 	PWR_STATE_INIT,
+	/* Re-initializing charge state machine */
+	PWR_STATE_REINIT,
 	/* Just transitioned from init to idle */
 	PWR_STATE_IDLE0,
 	/* Idle; AC present */
@@ -73,6 +75,7 @@ enum power_state {
 	{			\
 		"unchange",	\
 		"init",		\
+		"reinit",	\
 		"idle0",	\
 		"idle",		\
 		"discharge",	\
