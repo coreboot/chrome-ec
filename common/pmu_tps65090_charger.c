@@ -29,8 +29,8 @@
 		ALARM_OVER_CHARGED | \
 		ALARM_OVER_TEMP)
 
-/* Maximum retry count to revive a extremely low charge battery */
-#define PRE_CHARGING_RETRY 3
+/* Maximum time allowed to revive a extremely low charge battery */
+#define PRE_CHARGING_TIMEOUT (15 * SECOND)
 
 /*
  * Time delay in usec for idle, charging and discharging.  Defined in battery
@@ -377,7 +377,7 @@ void pmu_charger_task(void)
 {
 	int next_state;
 	int wait_time = T1_USEC;
-	unsigned int pre_charging_count = 0;
+	timestamp_t pre_chg_start = get_time();
 
 	pmu_init();
 	/*
@@ -419,14 +419,16 @@ void pmu_charger_task(void)
 		 * charger should be disabled if the communication to battery
 		 * failed.
 		 */
-		next_state = pre_charging_count > PRE_CHARGING_RETRY ?
-			ST_CHARGING_ERROR : calc_next_state(current_state);
+		if (current_state == ST_PRE_CHARGING &&
+		    get_time().val - pre_chg_start.val >= PRE_CHARGING_TIMEOUT)
+			next_state = ST_CHARGING_ERROR;
+		else
+			next_state = calc_next_state(current_state);
 
 		if (next_state != current_state) {
 			/* Reset state of charge moving average window */
 			rsoc_moving_average(-1);
 
-			pre_charging_count = 0;
 			CPRINTF("[batt] state %s -> %s\n",
 				state_list[current_state],
 				state_list[next_state]);
@@ -435,6 +437,8 @@ void pmu_charger_task(void)
 
 			switch (current_state) {
 			case ST_PRE_CHARGING:
+				pre_chg_start = get_time();
+				/* Fall through */
 			case ST_CHARGING:
 				if (pmu_blink_led(0))
 					next_state = ST_CHARGING_ERROR;
@@ -470,10 +474,9 @@ void pmu_charger_task(void)
 			break;
 		case ST_PRE_CHARGING:
 			wait_time = T1_USEC;
-			if (pre_charging_count > PRE_CHARGING_RETRY)
+			if (get_time().val - pre_chg_start.val >=
+			    PRE_CHARGING_TIMEOUT)
 				enable_charging(0);
-			else
-				pre_charging_count++;
 			break;
 		default:
 			if (board_get_ac()) {
