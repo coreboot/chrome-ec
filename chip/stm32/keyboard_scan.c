@@ -463,7 +463,8 @@ static int check_keys_changed(uint8_t *state)
 		/* Swallow special keys */
 		if (check_runtime_keys(state))
 			return 0;
-		else if (kb_fifo_add(state) == EC_SUCCESS)
+		else if (gpio_get_level(GPIO_LID_OPEN) &&
+			 kb_fifo_add(state) == EC_SUCCESS)
 			board_interrupt_host(1);
 		else
 			CPRINTF("dropped keystroke\n");
