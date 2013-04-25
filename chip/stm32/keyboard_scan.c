@@ -258,7 +258,7 @@ static int check_runtime_keys(const uint8_t *state)
 			++num_press;
 	}
 
-	if (num_press != 3)
+	if (num_press < 3)
 		return 0;
 
 	if (state[MASK_INDEX_KEYR] == MASK_VALUE_KEYR &&
