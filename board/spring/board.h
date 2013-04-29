@@ -14,6 +14,9 @@
 /* Use USART1 as console serial port */
 #define CONFIG_CONSOLE_UART 1
 
+/* Console is not accessible when EC is write-protected */
+#define CONFIG_CONSOLE_RESTRICTED_INPUT
+
 /* use I2C for host communication */
 #define CONFIG_I2C
 
