@@ -59,7 +59,7 @@
 #define CONFIG_CMD_PMU
 
 /* Battery */
-#define CONFIG_BATTERY_BQ20Z453
+#define CONFIG_BATTERY_SPRING
 
 /* Low battery threshold. In mAh. */
 #define BATTERY_AP_OFF_LEVEL 1
