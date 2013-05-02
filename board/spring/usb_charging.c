@@ -715,11 +715,11 @@ static int command_batdebug(int argc, char **argv)
 	ccprintf("VAC = %d mV\n", pmu_adc_read(ADC_VAC, ADC_FLAG_KEEP_ON)
 				  * 17000 / 1024);
 	ccprintf("IAC = %d mA\n", pmu_adc_read(ADC_IAC, ADC_FLAG_KEEP_ON)
-				  * 20 * 33 / 1024);
+				  * (1000 / R_INPUT_MOHM) * 33 / 1024);
 	ccprintf("VBAT = %d mV\n", pmu_adc_read(ADC_VBAT, ADC_FLAG_KEEP_ON)
 				  * 17000 / 1024);
 	ccprintf("IBAT = %d mA\n", pmu_adc_read(ADC_IBAT, 0)
-				  * 50 * 40 / 1024);
+				  * (1000 / R_BATTERY_MOHM) * 40 / 1024);
 	ccprintf("PWM = %d%%\n", STM32_TIM_CCR1(3));
 	battery_current(&val);
 	ccprintf("Battery Current = %d mA\n", val);

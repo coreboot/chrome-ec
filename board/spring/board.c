@@ -526,7 +526,7 @@ static int power_command_info(struct host_cmd_handler_args *args)
 	r->voltage_system = pmu_adc_read(ADC_VAC, ADC_FLAG_KEEP_ON)
 			  * 17000 / 1024;
 	r->current_system = pmu_adc_read(ADC_IAC, 0)
-			  * 20 * 33 / 1024;
+			  * (1000 / R_INPUT_MOHM) * 33 / 1024;
 	r->usb_dev_type = board_get_usb_dev_type();
 	r->usb_current_limit = board_get_usb_current_limit();
 	args->response_size = sizeof(*r);

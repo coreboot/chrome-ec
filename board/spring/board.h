@@ -75,6 +75,10 @@
 #define TIM_CLOCK_MSB 2
 #define TIM_CLOCK_LSB 4
 
+/* Current sense resistor values */
+#define R_INPUT_MOHM 20 /* mOhm */
+#define R_BATTERY_MOHM 33 /* mOhm */
+
 /* ADC signal */
 #define CONFIG_ADC
 enum adc_channel {
