@@ -13,6 +13,7 @@
 
 /* Use USART1 as console serial port */
 #define CONFIG_CONSOLE_UART 1
+#define CONFIG_CONSOLE_RESTRICTED_INPUT
 
 /* Console is not accessible when EC is write-protected */
 #define CONFIG_CONSOLE_RESTRICTED_INPUT
