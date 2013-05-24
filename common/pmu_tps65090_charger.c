@@ -392,11 +392,22 @@ enum charging_state charge_get_state(void)
 	return current_state;
 }
 
+int __board_has_high_power_ac(void)
+{
+	return 0;
+}
+
+int board_has_high_power_ac(void)
+	__attribute__((weak, alias("__board_has_high_power_ac")));
+
 int charge_keep_power_off(void)
 {
 	int charge;
 
 	if (BATTERY_AP_OFF_LEVEL == 0)
+		return 0;
+
+	if (board_has_high_power_ac())
 		return 0;
 
 	if (battery_remaining_capacity(&charge))

@@ -278,6 +278,11 @@ static int board_probe_video(int device_type)
 	}
 }
 
+int board_has_high_power_ac(void)
+{
+	return board_get_usb_dev_type() & TSU6721_TYPE_CHG12;
+}
+
 void board_pwm_duty_cycle(int percent)
 {
 	if (current_ilim_config != ILIM_CONFIG_PWM)
