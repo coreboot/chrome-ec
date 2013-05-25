@@ -599,10 +599,6 @@ static void usb_device_change(int dev_type)
 		enable_sleep(SLEEP_MASK_USB_PWR);
 }
 
-/*
- * TODO(victoryang): Get rid of polling loop when ADC watchdog is ready.
- *                   See crosbug.com/p/18171
- */
 static void board_usb_monitor_detach(void)
 {
 	int vbus;
@@ -616,6 +612,7 @@ static void board_usb_monitor_detach(void)
 		msleep(DELAY_ID_MUX_MS);
 		tsu6721_enable_interrupts();
 		usb_device_change(TSU6721_TYPE_NONE);
+		return;
 	}
 
 	/* Check if there is external power */
