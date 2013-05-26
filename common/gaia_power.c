@@ -498,10 +498,13 @@ static int wait_for_power_on(void)
 			continue;
 		}
 
-		if (charge_keep_power_off()) {
+		/*
+		 * If the system is already on (value == 1), the kernel
+		 * would handle low power condition and we should not
+		 * shutdown the system from EC.
+		 */
+		if (value != 1 && charge_keep_power_off()) {
 			CPRINTF("%T battery low. ignoring power on event.\n");
-			if (value == 1) /* System already on */
-				power_off();
 			continue;
 		}
 
