@@ -61,6 +61,9 @@ uint8_t breathing_prog[] = {0x41, 0xff,  /* 0x80 -> 0x0 */
 			    0x00, 0x00}; /* Go to start */
 #define BREATHING_PROG_ENTRY 7
 
+static enum led_state_t last_state = LED_STATE_OFF;
+static int led_auto_control = 1;
+
 /* GPIO interrupt handlers prototypes */
 #ifndef CONFIG_TASK_GAIAPOWER
 #define gaia_power_event NULL
@@ -350,13 +353,12 @@ static int stop_led_engine(void)
 
 static int set_led_color(enum led_state_t state)
 {
-	static enum led_state_t last_state = LED_STATE_OFF;
 	int rv;
 
 	ASSERT(state != LED_STATE_TRANSITION_ON &&
 	       state != LED_STATE_TRANSITION_OFF);
 
-	if (state == last_state)
+	if (!led_auto_control || state == last_state)
 		return EC_SUCCESS;
 
 	switch (state) {
@@ -452,6 +454,35 @@ static void board_stablize_led(enum led_state_t desired_state)
 
 	current_state = next_state;
 }
+
+/*****************************************************************************/
+/* Host commands */
+
+static int led_command_set(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_led_set *p = args->params;
+
+	if (p->flags & EC_LED_FLAGS_AUTO) {
+		if (!board_get_ac())
+			lp5562_poweroff();
+		last_state = LED_STATE_OFF;
+		led_auto_control = 1;
+	} else {
+		led_auto_control = 0;
+		if (!board_get_ac())
+			lp5562_poweron();
+		if (lp5562_set_color((p->r << 16) + (p->g << 8) + p->b))
+			return EC_RES_ERROR;
+	}
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_LED_SET,
+		     led_command_set,
+		     EC_VER_MASK(0));
+
+/*****************************************************************************/
+/* Hooks */
 
 static void board_battery_led_update(void)
 {
