@@ -497,7 +497,8 @@ static void board_battery_led_update(void)
 			break;
 		}
 
-		if (current && desired_current)
+		/* If battery doesn't want any current, it's considered full. */
+		if (desired_current)
 			state = LED_STATE_SOLID_YELLOW;
 		else
 			state = LED_STATE_SOLID_GREEN;
