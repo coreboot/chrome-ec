@@ -495,6 +495,22 @@ static void i2c_init_port(unsigned int port)
 	board_i2c_post_init(port);
 }
 
+static void i2c_cleanup(void)
+{
+	/*
+	 * if the platform has a dedicated I2C port for AP/EC communication
+	 * and a transfer is still on-going (busy bit set) while we are
+	 * shutting down the AP, the slave I2C will get stuck in that
+	 * situation : It's time to reset it to a sane state.
+	 */
+	if ((I2C_PORT_HOST != I2C_PORT_SLAVE) &&
+	    (STM32_I2C_SR2(I2C_PORT_SLAVE) & 2)) {
+			CPRINTF("host i2c xfer interrupted. resetting i2c.\n");
+			i2c_init_port(I2C_PORT_SLAVE);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, i2c_cleanup, HOOK_PRIO_DEFAULT);
+
 static void i2c_init(void)
 {
 	/* TODO: Add #defines to determine which channels to init */
