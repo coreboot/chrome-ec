@@ -465,8 +465,11 @@ static void power_off(void)
 		if (!pmu_shutdown())
 			break;
 	}
-	if (pmu_shutdown_retries < 0)
+	if (pmu_shutdown_retries < 0) {
+		CPUTS("PMU shutdown failed. Hard-resetting.\n");
+		cflush();
 		board_hard_reset();
+	}
 	CPUTS("Shutdown complete.\n");
 }
 

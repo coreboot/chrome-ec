@@ -593,8 +593,11 @@ void pmu_init(void)
 			break;
 	}
 
-	if (failure)
+	if (failure) {
+		CPUTS("Failed to initialize PMU. Hard-resetting.\n");
+		cflush();
 		board_hard_reset();
+	}
 }
 
 /* Initializes PMU when power is turned on.  This is necessary because the TPS'
