@@ -835,21 +835,16 @@ static int i2c_master_receive(int port, int slave_addr, uint8_t *data,
  * @param in_bytes	Number of bytse to receive
  * @return 0 if ok, else ER_ERROR...
  */
-static int i2c_xfer(int port, int slave_addr, uint8_t *out, int out_bytes,
-		    uint8_t *in, int in_bytes)
+int i2c_xfer(int port, int slave_addr, uint8_t *out, int out_bytes,
+	     uint8_t *in, int in_bytes)
 {
 	int rv;
 
 	ASSERT(out && out_bytes);
 	ASSERT(in || !in_bytes);
 
-	disable_sleep(SLEEP_MASK_I2C);
-	mutex_lock(&i2c_mutex);
-
-	if (board_i2c_claim(port)) {
-		rv = EC_ERROR_BUSY;
-		goto err_claim;
-	}
+	if (board_i2c_claim(port))
+		return EC_ERROR_BUSY;
 
 	disable_i2c_interrupt(port);
 
@@ -863,11 +858,19 @@ static int i2c_xfer(int port, int slave_addr, uint8_t *out, int out_bytes,
 
 	board_i2c_release(port);
 
-err_claim:
+	return rv;
+}
+
+void i2c_lock(void)
+{
+	disable_sleep(SLEEP_MASK_I2C);
+	mutex_lock(&i2c_mutex);
+}
+
+void i2c_unlock(void)
+{
 	mutex_unlock(&i2c_mutex);
 	enable_sleep(SLEEP_MASK_I2C);
-
-	return rv;
 }
 
 int i2c_read16(int port, int slave_addr, int offset, int *data)
@@ -875,10 +878,13 @@ int i2c_read16(int port, int slave_addr, int offset, int *data)
 	uint8_t reg, buf[2];
 	int rv;
 
+	i2c_lock();
+
 	reg = offset & 0xff;
 	rv = i2c_xfer(port, slave_addr, &reg, 1, buf, 2);
-
 	*data = (buf[1] << 8) | buf[0];
+
+	i2c_unlock();
 
 	return rv;
 }
@@ -886,12 +892,17 @@ int i2c_read16(int port, int slave_addr, int offset, int *data)
 int i2c_write16(int port, int slave_addr, int offset, int data)
 {
 	uint8_t buf[3];
+	int rv;
 
 	buf[0] = offset & 0xff;
 	buf[1] = data & 0xff;
 	buf[2] = (data >> 8) & 0xff;
 
-	return i2c_xfer(port, slave_addr, buf, sizeof(buf), NULL, 0);
+	i2c_lock();
+	rv = i2c_xfer(port, slave_addr, buf, sizeof(buf), NULL, 0);
+	i2c_unlock();
+
+	return rv;
 }
 
 int i2c_read8(int port, int slave_addr, int offset, int *data)
@@ -899,10 +910,13 @@ int i2c_read8(int port, int slave_addr, int offset, int *data)
 	uint8_t reg, buf[1];
 	int rv;
 
+	i2c_lock();
+
 	reg = offset & 0xff;
 	rv = i2c_xfer(port, slave_addr, &reg, 1, buf, 1);
-
 	*data = buf[0];
+
+	i2c_unlock();
 
 	return rv;
 }
@@ -910,11 +924,16 @@ int i2c_read8(int port, int slave_addr, int offset, int *data)
 int i2c_write8(int port, int slave_addr, int offset, int data)
 {
 	uint8_t buf[2];
+	int rv;
 
 	buf[0] = offset & 0xff;
 	buf[1] = data & 0xff;
 
-	return i2c_xfer(port, slave_addr, buf, sizeof(buf), NULL, 0);
+	i2c_lock();
+	rv = i2c_xfer(port, slave_addr, buf, sizeof(buf), NULL, 0);
+	i2c_unlock();
+
+	return rv;
 }
 
 int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
@@ -928,7 +947,10 @@ int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
 		return EC_ERROR_INVAL;
 
 	reg = offset;
+
+	i2c_lock();
 	rv = i2c_xfer(port, slave_addr, &reg, 1, buffer, SMBUS_MAX_BLOCK + 1);
+	i2c_unlock();
 	if (rv)
 		return rv;
 

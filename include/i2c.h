@@ -76,4 +76,24 @@ int board_i2c_claim(int port);
  */
 void board_i2c_release(int port);
 
+/**
+ * Perform an I2C transaction, involve a write, and optional read.
+ *
+ * @param port		I2C port to use (e.g. I2C_PORT_HOST)
+ * @param slave_addr	Slave address of chip to access on I2C bus
+ * @param out		Buffer containing bytes to output
+ * @param out_bytes	Number of bytes to send (must be >0)
+ * @param in		Buffer to place input bytes
+ * @param in_bytes	Number of bytse to receive
+ * @return 0 if ok, else ER_ERROR...
+ */
+int i2c_xfer(int port, int slave_addr, uint8_t *out, int out_bytes,
+	     uint8_t *in, int in_bytes);
+
+/* Grab I2C lock */
+void i2c_lock(void);
+
+/* Release I2C lock */
+void i2c_unlock(void);
+
 #endif  /* __CROS_EC_I2C_H */
