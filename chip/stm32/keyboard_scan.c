@@ -59,14 +59,16 @@ static uint8_t scan_edge_index[KB_OUTPUTS][KB_INPUTS];
 #define MASK_VALUE_REFRESH 0x04
 
 /* Key masks and values for warm reboot combination */
-#define MASK_INDEX_KEYR		3
-#define MASK_VALUE_KEYR		0x80
 #define MASK_INDEX_VOL_UP	4
 #define MASK_VALUE_VOL_UP	0x01
 #define MASK_INDEX_RIGHT_ALT	10
 #define MASK_VALUE_RIGHT_ALT	0x01
 #define MASK_INDEX_LEFT_ALT	10
 #define MASK_VALUE_LEFT_ALT	0x40
+#define MASK_INDEX_KEY_R	3
+#define MASK_VALUE_KEY_R	0x80
+#define MASK_INDEX_KEY_H	6
+#define MASK_VALUE_KEY_H	0x02
 
 struct kbc_gpio {
 	int num;		/* logical row or column number */
@@ -249,25 +251,42 @@ void enter_polling_mode(void)
  */
 static int check_runtime_keys(const uint8_t *state)
 {
-	int num_press;
+	int num_press = 0;
 	int c;
 
-	/* Count number of key pressed */
-	for (c = num_press = 0; c < KB_OUTPUTS; c++) {
-		if (state[c])
-			++num_press;
-	}
-
-	if (num_press < 3)
+	/*
+	 * All runtime key combos are (right or left ) alt + volume up + (some
+	 * key NOT on the same col as alt or volume up )
+	 */
+	if (state[MASK_INDEX_VOL_UP] != MASK_VALUE_VOL_UP)
+		return 0;
+	if (state[MASK_INDEX_RIGHT_ALT] != MASK_VALUE_RIGHT_ALT &&
+	    state[MASK_INDEX_LEFT_ALT] != MASK_VALUE_LEFT_ALT)
 		return 0;
 
-	if (state[MASK_INDEX_KEYR] == MASK_VALUE_KEYR &&
-			state[MASK_INDEX_VOL_UP] == MASK_VALUE_VOL_UP &&
-			(state[MASK_INDEX_RIGHT_ALT] == MASK_VALUE_RIGHT_ALT ||
-			state[MASK_INDEX_LEFT_ALT] == MASK_VALUE_LEFT_ALT)) {
+	/*
+	 * Count number of columns with keys pressed.  We know two columns are
+	 * pressed for volume up and alt, so if only one more key is pressed
+	 * there will be exactly 3 non-zero columns.
+	 */
+	for (c = 0; c < KB_OUTPUTS; c++) {
+		if (state[c])
+			num_press++;
+	}
+	if (num_press != 3)
+		return 0;
+
+	/* Check individual keys */
+	if (state[MASK_INDEX_KEY_R] == MASK_VALUE_KEY_R) {
+		/* R = reboot */
+		CPRINTF("[%T KB warm reboot]\n");
 		keyboard_clear_state();
 		system_warm_reboot();
 		return 1;
+	} else if (state[MASK_INDEX_KEY_H] == MASK_VALUE_KEY_H) {
+		/* H = hibernate */
+		CPRINTF("[%T KB hibernate]\n");
+		system_hibernate(0, 0);
 	}
 
 	return 0;
