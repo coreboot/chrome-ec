@@ -39,7 +39,7 @@
 #define TOAD_DEVICE_TYPE (TSU6721_TYPE_UART | TSU6721_TYPE_AUDIO3)
 
 /* Voltage threshold of D+ for video */
-#define VIDEO_ID_THRESHOLD	1335
+#define VIDEO_ID_THRESHOLD	250
 
 /*
  * Mapping from PWM duty to current:
@@ -86,6 +86,7 @@ static int user_pwm_duty = -1;
 static int pwm_fast_mode;
 
 static int pending_tsu6721_reset;
+static int restore_id_mux;
 
 static enum {
 	LIMIT_NORMAL,
@@ -95,6 +96,7 @@ static enum {
 static enum {
 	ADC_WATCH_NONE,
 	ADC_WATCH_TOAD,
+	ADC_WATCH_USB,
 } current_watchdog = ADC_WATCH_NONE;
 
 struct {
@@ -268,12 +270,24 @@ static int board_probe_video(int device_type)
 	gpio_set_level(GPIO_ID_MUX, 1);
 	msleep(DELAY_ID_MUX_MS);
 
-	if (adc_read_channel(ADC_CH_USB_DP_SNS) > VIDEO_ID_THRESHOLD) {
-		/* Actually an USB host */
-		gpio_set_level(GPIO_ID_MUX, 0);
-		msleep(DELAY_ID_MUX_MS);
-		tsu6721_enable_interrupts();
-		return device_type;
+	if (adc_read_channel(ADC_CH_USB_DP_SNS) < VIDEO_ID_THRESHOLD) {
+		if (device_type & TSU6721_TYPE_VBUS_DEBOUNCED) {
+			/*
+			 * Either USB host or video dongle.
+			 * Leave ID_MUX high so we see the change on
+			 * DP_SNS if any.
+			 *
+			 * ADC watchdog is responsible for sensing a
+			 * detach event and switch back ID_MUX.
+			 */
+			return device_type;
+		} else {
+			/* Unhandled unpowered video dongle. Ignore it. */
+			gpio_set_level(GPIO_ID_MUX, 0);
+			msleep(DELAY_ID_MUX_MS);
+			tsu6721_enable_interrupts();
+			return TSU6721_TYPE_NONE;
+		}
 	} else {
 		/* Not USB host but video */
 		device_type = video_dev_type(device_type);
@@ -415,21 +429,40 @@ void usb_charge_interrupt(enum gpio_signal signal)
 	task_wake(TASK_ID_PMU_TPS65090_CHARGER);
 }
 
+static void board_adc_watch_vbus(int high, int low)
+{
+	adc_enable_watchdog(STM32_AIN(5), high, low);
+	task_clear_pending_irq(STM32_IRQ_ADC_1);
+	task_enable_irq(STM32_IRQ_ADC_1);
+}
+
 static void board_adc_watch_toad(void)
 {
 	/* Watch VBUS and interrupt if voltage goes under 3V. */
-	adc_enable_watchdog(STM32_AIN(5), 4095, 1800);
-	task_clear_pending_irq(STM32_IRQ_ADC_1);
-	task_enable_irq(STM32_IRQ_ADC_1);
+	board_adc_watch_vbus(4095, 1800);
 	current_watchdog = ADC_WATCH_TOAD;
+}
+
+static void board_adc_watch_usb(void)
+{
+	/* Watch VBUS and interrupt if voltage goes under 3V. */
+	board_adc_watch_vbus(4095, 1800);
+	current_watchdog = ADC_WATCH_USB;
 }
 
 static void board_adc_watchdog_interrupt(void)
 {
-	if (current_watchdog == ADC_WATCH_TOAD) {
+	switch (current_watchdog) {
+	case ADC_WATCH_USB:
+		restore_id_mux = 1;
+		/* Fall through */
+	case ADC_WATCH_TOAD:
 		pending_tsu6721_reset = 1;
 		task_disable_irq(STM32_IRQ_ADC_1);
 		task_wake(TASK_ID_PMU_TPS65090_CHARGER);
+		break;
+	default:
+		break;
 	}
 }
 DECLARE_IRQ(STM32_IRQ_ADC_1, board_adc_watchdog_interrupt, 2);
@@ -590,17 +623,32 @@ static void usb_device_change(int dev_type)
 	if ((dev_type & TOAD_DEVICE_TYPE) &&
 	    (dev_type & TSU6721_TYPE_VBUS_DEBOUNCED))
 		board_adc_watch_toad();
+	else if (dev_type & TSU6721_TYPE_USB_HOST)
+		board_adc_watch_usb();
 
-	usb_log_dev_type(dev_type);
+	if (dev_type != current_dev_type) {
+		usb_log_dev_type(dev_type);
+		keyboard_send_battery_key();
+		current_dev_type = dev_type;
+	}
 
-	keyboard_send_battery_key();
-
-	current_dev_type = dev_type;
 	if (dev_type)
 		disable_sleep(SLEEP_MASK_USB_PWR);
 	else
 		enable_sleep(SLEEP_MASK_USB_PWR);
 }
+
+static void board_usb_detach_video(void)
+{
+	if (!(current_dev_type & TSU6721_TYPE_JIG_UART_ON))
+		return;
+	set_video_power(0);
+	restore_id_mux = 1;
+	pending_tsu6721_reset = 1;
+	task_wake(TASK_ID_PMU_TPS65090_CHARGER);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_usb_detach_video, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_usb_detach_video, HOOK_PRIO_DEFAULT);
 
 static void board_usb_monitor_detach(void)
 {
@@ -609,12 +657,8 @@ static void board_usb_monitor_detach(void)
 	if (!(current_dev_type & TSU6721_TYPE_JIG_UART_ON))
 		return;
 
-	if (adc_read_channel(ADC_CH_USB_DP_SNS) > VIDEO_ID_THRESHOLD) {
-		set_video_power(0);
-		gpio_set_level(GPIO_ID_MUX, 0);
-		msleep(DELAY_ID_MUX_MS);
-		tsu6721_enable_interrupts();
-		usb_device_change(TSU6721_TYPE_NONE);
+	if (adc_read_channel(ADC_CH_USB_DP_SNS) < VIDEO_ID_THRESHOLD) {
+		board_usb_detach_video();
 		return;
 	}
 
@@ -633,9 +677,25 @@ static void board_usb_monitor_detach(void)
 }
 DECLARE_HOOK(HOOK_SECOND, board_usb_monitor_detach, HOOK_PRIO_DEFAULT);
 
+static void board_usb_monitor_cable_det(void)
+{
+	if (!(current_dev_type & TSU6721_TYPE_USB_HOST))
+		return;
+
+	if (adc_read_channel(ADC_CH_USB_DP_SNS) < VIDEO_ID_THRESHOLD)
+		board_adc_watchdog_interrupt();
+}
+DECLARE_HOOK(HOOK_SECOND, board_usb_monitor_cable_det, HOOK_PRIO_DEFAULT);
+
 void board_usb_charge_update(int force_update)
 {
 	int int_val = 0;
+
+	if (restore_id_mux) {
+		gpio_set_level(GPIO_ID_MUX, 0);
+		msleep(DELAY_ID_MUX_MS);
+		restore_id_mux = 0;
+	}
 
 	if (pending_tsu6721_reset) {
 		current_watchdog = ADC_WATCH_NONE;
