@@ -111,8 +111,8 @@ static int wait_idle(int port)
  * @param stop		Can session be terminated with smbus stop bit?
  * @return EC_SUCCESS, or non-zero if error.
  */
-static int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
-		    uint8_t *in, int in_size, int start, int stop)
+int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+	     uint8_t *in, int in_size, int start, int stop)
 {
 	int rv, i;
 	int started = start ? 0 : 1;

@@ -87,8 +87,13 @@ void board_i2c_release(int port);
  * @param in_bytes	Number of bytse to receive
  * @return 0 if ok, else ER_ERROR...
  */
+#ifdef CHIP_stm32
 int i2c_xfer(int port, int slave_addr, uint8_t *out, int out_bytes,
 	     uint8_t *in, int in_bytes);
+#else /* CHIP_stm32 */
+int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+		    uint8_t *in, int in_size, int start, int stop);
+#endif /* CHIP_stm32 */
 
 /* Grab I2C lock */
 void i2c_lock(void);
