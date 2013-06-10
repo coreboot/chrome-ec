@@ -350,6 +350,7 @@ static void board_battery_led_update(void)
 {
 	int current;
 	int desired_current;
+	int rv;
 	enum led_state_t state = LED_STATE_OFF;
 
 	/* Current states and next states */
@@ -359,13 +360,14 @@ static void board_battery_led_update(void)
 	/* Determine LED power */
 	new_led_power = board_get_ac();
 	if (new_led_power != led_power) {
-		led_power = new_led_power;
 		if (new_led_power) {
-			lp5562_poweron();
+			rv = lp5562_poweron();
 		} else {
-			lp5562_poweroff();
+			rv = lp5562_poweroff();
 			set_led_color(LED_STATE_OFF);
 		}
+		if (!rv)
+			led_power = new_led_power;
 	}
 	if (!new_led_power)
 		return;
