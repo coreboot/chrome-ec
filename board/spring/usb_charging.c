@@ -88,6 +88,7 @@ static int pwm_fast_mode;
 static int pending_tsu6721_reset;
 static int pending_adc_watchdog_disable;
 static int pending_dev_type_update;
+static int pending_video_power_off;
 static int restore_id_mux;
 
 static enum {
@@ -666,7 +667,7 @@ static void board_usb_detach_video(void)
 {
 	if (!(current_dev_type & TSU6721_TYPE_JIG_UART_ON))
 		return;
-	set_video_power(0);
+	pending_video_power_off = 1;
 	restore_id_mux = 1;
 	pending_tsu6721_reset = 1;
 	task_wake(TASK_ID_PMU_TPS65090_CHARGER);
@@ -747,6 +748,11 @@ void board_usb_charge_update(int force_update)
 		current_watchdog = ADC_WATCH_NONE;
 		adc_disable_watchdog();
 		pending_adc_watchdog_disable = 0;
+	}
+
+	if (pending_video_power_off) {
+		set_video_power(0);
+		pending_video_power_off = 0;
 	}
 
 	if (pending_tsu6721_reset) {
