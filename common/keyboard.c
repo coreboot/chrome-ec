@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -98,12 +98,13 @@ static uint8_t typematic_scan_code[MAX_SCAN_CODE_LEN];
 
 
 #define KB_SYSJUMP_TAG 0x4b42  /* "KB" */
-#define KB_HOOK_VERSION 1
+#define KB_HOOK_VERSION 2
 /* the previous keyboard state before reboot_ec. */
 struct kb_state {
 	uint8_t codeset;
 	uint8_t ctlram;
-	uint8_t pad[2];  /* Pad to 4 bytes for system_add_jump_tag(). */
+	uint8_t keystroke_enabled;
+	uint8_t pad;	/* Pad to 4 bytes for system_add_jump_tag(). */
 };
 
 
@@ -1001,6 +1002,7 @@ static int keyboard_preserve_state(void)
 
 	state.codeset = scancode_set;
 	state.ctlram = controller_ram[0];
+	state.keystroke_enabled = keystroke_enabled;
 
 	system_add_jump_tag(KB_SYSJUMP_TAG, KB_HOOK_VERSION,
 	                    sizeof(state), &state);
@@ -1022,6 +1024,15 @@ static int keyboard_restore_state(void)
 		/* Coming back from a sysjump, so restore settings. */
 		scancode_set = prev->codeset;
 		update_ctl_ram(0, prev->ctlram);
+		keystroke_enabled = prev->keystroke_enabled;
+	} else if (prev && version == 1) {
+		/*
+		 * Some variables are kept. Assume keystroke_enabled is enabled.
+		 * See #25 of crbug.com/362108.
+		 */
+		scancode_set = prev->codeset;
+		update_ctl_ram(0, prev->ctlram);
+		keystroke_enabled = 1;
 	}
 
 	return EC_SUCCESS;
