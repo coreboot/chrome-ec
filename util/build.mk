@@ -6,7 +6,7 @@
 # Host tools build
 #
 
-host-util-bin=ectool lbplay burn_my_ec
+host-util-bin=ectool lbplay burn_my_ec fet1cure
 host-util-common=ectool_keyscan comm-host comm-dev
 ifeq ($(CONFIG_LPC),y)
 host-util-common+=comm-lpc
