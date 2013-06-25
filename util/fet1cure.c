@@ -86,14 +86,14 @@ int cmd_cure_fet1(int argc, char *argv[])
 	}
 
 	for (i = 0; i < iter; ++i) {
-		fet1_write(0xf);
+		fet1_write(0x3);
 		usleep(on_usec);
 		buf[i & (BUF_SIZE - 1)] = (fet1_read() & 0x80) ? '1' : '0';
 		if ((i & (BUF_SIZE - 1)) == BUF_SIZE - 1) {
 			buf[BUF_SIZE] = '\0';
 			printf("%s", buf);
 		}
-		fet1_write(0xe);
+		fet1_write(0x2);
 		usleep(off_usec);
 	}
 	buf[iter & (BUF_SIZE - 1)] = '\0';
