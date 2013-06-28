@@ -1285,7 +1285,7 @@ struct ec_response_ldo_get {
 } __packed;
 
 /*****************************************************************************/
-/* Power info. */
+/* Power related. */
 
 /*
  * Get power info.
@@ -1298,6 +1298,15 @@ struct ec_response_power_info {
 	uint16_t voltage_system;
 	uint16_t current_system;
 	uint16_t usb_current_limit;
+} __packed;
+
+/*
+ * Set the delay before the EC hibernates.
+ */
+#define EC_CMD_SET_HIB_DELAY 0x9e
+
+struct ec_params_hib_delay {
+	uint32_t delay_secs; /* 0 to disable */
 } __packed;
 
 /*****************************************************************************/

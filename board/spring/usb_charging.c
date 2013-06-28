@@ -500,12 +500,18 @@ static void board_adc_watchdog_interrupt(void)
 }
 DECLARE_IRQ(STM32_IRQ_ADC_1, board_adc_watchdog_interrupt, 2);
 
-static int usb_has_power_input(int dev_type)
+static int usb_maybe_power_input(int dev_type)
 {
 	if (dev_type & TSU6721_TYPE_JIG_UART_ON)
 		return 1;
 	return (dev_type & TSU6721_TYPE_VBUS_DEBOUNCED) &&
 	       !(dev_type & POWERED_5000_DEVICE_TYPE);
+}
+
+static int usb_has_power_input(int dev_type)
+{
+	return !!(usb_maybe_power_input(dev_type) &&
+		 (dev_type & TSU6721_TYPE_VBUS_DEBOUNCED));
 }
 
 static int usb_need_boost(int dev_type)
@@ -597,7 +603,7 @@ static int usb_manage_boost(int dev_type)
 /* Updates ILIM current limit according to device type. */
 static void usb_update_ilim(int dev_type)
 {
-	if (usb_has_power_input(dev_type)) {
+	if (usb_maybe_power_input(dev_type)) {
 		/* Limit USB port current. 500mA for not listed types. */
 		int current_limit = I_LIMIT_500MA;
 		if (dev_type & TSU6721_TYPE_CHG12)
@@ -637,6 +643,9 @@ DECLARE_DEFERRED(send_battery_key_deferred);
 static void notify_dev_type_change(int dev_type)
 {
 	usb_log_dev_type(dev_type);
+	if (usb_has_power_input(current_dev_type) !=
+	    usb_has_power_input(dev_type))
+		hook_notify(HOOK_AC_CHANGE);
 	current_dev_type = dev_type;
 	hook_call_deferred(send_battery_key_deferred, BATTERY_KEY_DELAY);
 }

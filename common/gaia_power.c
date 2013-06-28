@@ -29,6 +29,7 @@
 #include "console.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "keyboard_scan.h"
 #include "power_led.h"
 #include "pmu_tpschrome.h"
@@ -116,6 +117,14 @@ enum power_request_t {
 };
 
 static enum power_request_t power_request;
+
+#ifdef CONFIG_AUTO_HIBERNATE_SECS
+/* Delay before hibernating in seconds */
+static uint32_t hibernate_delay = CONFIG_AUTO_HIBERNATE_SECS;
+
+/* Deadline for system hibernating */
+static timestamp_t hibernate_time;
+#endif
 
 /*
  * Wait for GPIO "signal" to reach level "value".
@@ -488,6 +497,40 @@ static int next_pwr_event(void)
 	return power_off_deadline.val - get_time().val;
 }
 
+#ifdef CONFIG_AUTO_HIBERNATE_SECS
+/*
+ * Arm hibernation timer if the system is off and external power is not
+ * present.
+ */
+static void hibernate_timer_arm(void)
+{
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+	    !board_get_ac()) {
+		hibernate_time = get_time();
+		hibernate_time.val +=
+			(unsigned long long)hibernate_delay * SECOND;
+		CPRINTF("[%T re-arm hibernation timer]\n");
+	}
+}
+DECLARE_HOOK(HOOK_AC_CHANGE, hibernate_timer_arm, HOOK_PRIO_DEFAULT);
+
+/*
+ * Hibernate if the timer has expired
+ */
+static void check_hibernate_timer(void)
+{
+	if (timestamp_expired(hibernate_time, NULL) &&
+	    !board_get_ac()) {
+		CPRINTF("[%T hibernating]\n");
+		system_hibernate(0, 0);
+	}
+}
+#else
+static void hibernate_timer_arm(void)
+{
+}
+#endif
+
 
 /*****************************************************************************/
 
@@ -497,7 +540,16 @@ static int wait_for_power_on(void)
 	while (1) {
 		value = check_for_power_on_event();
 		if (!value) {
+#ifdef CONFIG_AUTO_HIBERNATE_SECS
+			if (hibernate_delay) {
+				check_hibernate_timer();
+				usleep(SECOND);
+			} else {
+				task_wait_event(-1);
+			}
+#else
 			task_wait_event(-1);
+#endif
 			continue;
 		}
 
@@ -551,6 +603,7 @@ void gaia_power_task(void)
 		}
 		power_off();
 		wait_for_power_button_release(-1);
+		hibernate_timer_arm();
 	}
 }
 
@@ -660,3 +713,43 @@ DECLARE_CONSOLE_COMMAND(warm_reboot, command_warm_reboot,
 			NULL,
 			"EC triggered warm reboot",
 			NULL);
+
+#ifdef CONFIG_AUTO_HIBERNATE_SECS
+static int command_hibernation_delay(int argc, char **argv)
+{
+	char *e;
+	uint32_t time_left = ((uint32_t)
+			(hibernate_time.val - get_time().val) / SECOND);
+
+	if (argc >= 2) {
+		uint32_t s = strtoi(argv[1], &e, 0);
+		if (*e)
+			return EC_ERROR_PARAM1;
+		hibernate_delay = s;
+	}
+
+	ccprintf("Hibernation delay: %d s\n", hibernate_delay);
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF) && !board_get_ac())
+		ccprintf("Time left: %d s\n", time_left);
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(hibdelay, command_hibernation_delay,
+			"[sec]",
+			"Set the delay before going into hibernation",
+			NULL);
+
+/*****************************************************************************/
+/* Host commands */
+
+static int gaia_cmd_hib_delay(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_hib_delay *p = args->params;
+
+	hibernate_delay = p->delay_secs;
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_SET_HIB_DELAY,
+		     gaia_cmd_hib_delay,
+		     EC_VER_MASK(0));
+#endif

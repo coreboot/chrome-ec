@@ -31,8 +31,8 @@
 #undef  CONFIG_TASK_PROFILING
 #define CONFIG_WATCHDOG_HELP
 
-/* use STOP mode when we have nothing to do */
-#define CONFIG_LOW_POWER_IDLE
+/* Go to STANDBY mode when system is off without external power for too long */
+#define CONFIG_AUTO_HIBERNATE_SECS 3600
 
 /* Smart battery and TPSchrome are on a private I2C bus behind the EC */
 #define CONFIG_I2C_PASSTHROUGH
