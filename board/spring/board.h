@@ -32,7 +32,7 @@
 #define CONFIG_WATCHDOG_HELP
 
 /* Go to STANDBY mode when system is off without external power for too long */
-#define CONFIG_AUTO_HIBERNATE_SECS 3600
+#define CONFIG_AUTO_HIBERNATE_SECS 180
 
 /* use STOP mode when we have nothing to do */
 #define CONFIG_LOW_POWER_IDLE
