@@ -124,6 +124,38 @@ static uint32_t hibernate_delay = CONFIG_AUTO_HIBERNATE_SECS;
 
 /* Deadline for system hibernating */
 static timestamp_t hibernate_time;
+
+/*
+ * Arm hibernation timer if the system is off and external power is not
+ * present.
+ */
+static void hibernate_timer_arm(void)
+{
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+	    !board_get_ac()) {
+		hibernate_time = get_time();
+		hibernate_time.val +=
+			(uint64_t)hibernate_delay * SECOND;
+		CPRINTF("[%T re-arm hibernation timer]\n");
+	}
+}
+DECLARE_HOOK(HOOK_AC_CHANGE, hibernate_timer_arm, HOOK_PRIO_DEFAULT);
+
+/*
+ * Hibernate if the timer has expired
+ */
+static void check_hibernate_timer(void)
+{
+	if (timestamp_expired(hibernate_time, NULL) &&
+	    !board_get_ac()) {
+		CPRINTF("[%T hibernating]\n");
+		system_hibernate(0, 0);
+	}
+}
+#else
+static void hibernate_timer_arm(void)
+{
+}
 #endif
 
 /*
@@ -277,6 +309,8 @@ int gaia_power_init(void)
 			"keyboard_scan_recovery_pressed() ...]\n");
 		auto_power_on = 1;
 	}
+
+	hibernate_timer_arm();
 
 	return EC_SUCCESS;
 }
@@ -496,40 +530,6 @@ static int next_pwr_event(void)
 
 	return power_off_deadline.val - get_time().val;
 }
-
-#ifdef CONFIG_AUTO_HIBERNATE_SECS
-/*
- * Arm hibernation timer if the system is off and external power is not
- * present.
- */
-static void hibernate_timer_arm(void)
-{
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
-	    !board_get_ac()) {
-		hibernate_time = get_time();
-		hibernate_time.val +=
-			(unsigned long long)hibernate_delay * SECOND;
-		CPRINTF("[%T re-arm hibernation timer]\n");
-	}
-}
-DECLARE_HOOK(HOOK_AC_CHANGE, hibernate_timer_arm, HOOK_PRIO_DEFAULT);
-
-/*
- * Hibernate if the timer has expired
- */
-static void check_hibernate_timer(void)
-{
-	if (timestamp_expired(hibernate_time, NULL) &&
-	    !board_get_ac()) {
-		CPRINTF("[%T hibernating]\n");
-		system_hibernate(0, 0);
-	}
-}
-#else
-static void hibernate_timer_arm(void)
-{
-}
-#endif
 
 
 /*****************************************************************************/
