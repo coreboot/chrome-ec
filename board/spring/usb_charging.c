@@ -52,6 +52,7 @@
 #define MA_TO_PWM(curr) (((curr) - PWM_MAPPING_A) / PWM_MAPPING_B)
 
 /* PWM controlled current limit */
+#define I_LIMIT_100MA   MA_TO_PWM(100)
 #define I_LIMIT_500MA   MA_TO_PWM(500)
 #define I_LIMIT_1000MA  MA_TO_PWM(1000)
 #define I_LIMIT_1500MA  MA_TO_PWM(1500)
@@ -81,7 +82,7 @@
 #define DELAY_USB_DP_DN_MS	20
 #define DELAY_ID_MUX_MS		30
 #define CABLE_DET_POLL_MS	100
-#define CABLE_DET_POLL_COUNT	10
+#define CABLE_DET_POLL_COUNT	6
 
 static int current_dev_type = TSU6721_TYPE_NONE;
 static int nominal_pwm_duty;
@@ -539,6 +540,26 @@ static void usb_boost_pwr_off_hook(void) { usb_boost_power_hook(0); }
 DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, usb_boost_pwr_on_hook, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usb_boost_pwr_off_hook, HOOK_PRIO_DEFAULT);
 
+static int usb_charger_removed(int dev_type)
+{
+	if (!(current_dev_type & TSU6721_TYPE_VBUS_DEBOUNCED))
+		return 0;
+
+	/* Charger is removed */
+	if (dev_type == TSU6721_TYPE_NONE)
+		return 1;
+
+	/*
+	 * Device type changed from known type to unknown type. Assuming
+	 * it went away and came back.
+	 */
+	if ((current_dev_type != TSU6721_TYPE_VBUS_DEBOUNCED) &&
+	    (dev_type == TSU6721_TYPE_VBUS_DEBOUNCED))
+		return 1;
+
+	return 0;
+}
+
 /*
  * When a power source is removed, record time, power source type,
  * and PWM duty cycle. Then when we see a power source, compare type
@@ -547,8 +568,7 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usb_boost_pwr_off_hook, HOOK_PRIO_DEFAULT);
  */
 static void usb_detect_overcurrent(int dev_type)
 {
-	if ((current_dev_type & TSU6721_TYPE_VBUS_DEBOUNCED) &&
-	    (dev_type == TSU6721_TYPE_NONE)) {
+	if (usb_charger_removed(dev_type)) {
 		int idx = !(current_dev_type == TSU6721_TYPE_VBUS_DEBOUNCED);
 		power_removed_time[idx] = get_time();
 		power_removed_type[idx] = current_dev_type;
@@ -625,6 +645,8 @@ static void usb_update_ilim(int dev_type)
 			current_limit = hard_current_limit(I_LIMIT_2000MA);
 		else if (dev_type & TOAD_DEVICE_TYPE)
 			current_limit = hard_current_limit(I_LIMIT_500MA);
+		else if (dev_type == TSU6721_TYPE_VBUS_DEBOUNCED)
+			current_limit = hard_current_limit(I_LIMIT_100MA);
 
 		board_pwm_nominal_duty_cycle(current_limit);
 	} else {
