@@ -543,7 +543,7 @@ static int wait_for_power_on(void)
 #ifdef CONFIG_AUTO_HIBERNATE_SECS
 			if (hibernate_delay) {
 				check_hibernate_timer();
-				usleep(SECOND);
+				task_wait_event(SECOND);
 			} else {
 				task_wait_event(-1);
 			}
