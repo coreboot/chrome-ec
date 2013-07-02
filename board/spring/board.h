@@ -34,6 +34,9 @@
 /* Go to STANDBY mode when system is off without external power for too long */
 #define CONFIG_AUTO_HIBERNATE_SECS 3600
 
+/* use STOP mode when we have nothing to do */
+#define CONFIG_LOW_POWER_IDLE
+
 /* Smart battery and TPSchrome are on a private I2C bus behind the EC */
 #define CONFIG_I2C_PASSTHROUGH
 
