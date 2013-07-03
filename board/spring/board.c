@@ -32,6 +32,9 @@
 
 #define GREEN_LED_THRESHOLD 94
 
+/* Minimal interval between changing LED color to green and yellow. */
+#define LED_WAIT_INTERVAL (15 * SECOND)
+
 /* We use yellow LED instead of blue LED. Re-map colors here. */
 #define LED_COLOR_NONE   LP5562_COLOR_NONE
 #define LED_COLOR_GREEN  LP5562_COLOR_GREEN
@@ -360,6 +363,12 @@ static void board_battery_led_update(void)
 	static int led_power = -1;
 	int new_led_power;
 
+	/*
+	 * The time before which we should not change LED
+	 * color between green and yellow.
+	 */
+	static timestamp_t led_update_deadline = {.val = 0};
+
 	/* Determine LED power */
 	new_led_power = board_get_ac();
 	if (new_led_power != led_power) {
@@ -368,6 +377,7 @@ static void board_battery_led_update(void)
 		} else {
 			rv = lp5562_poweroff();
 			set_led_color(LED_STATE_OFF);
+			led_update_deadline.val = 0;
 		}
 		if (!rv)
 			led_power = new_led_power;
@@ -415,6 +425,16 @@ static void board_battery_led_update(void)
 	case ST_CHARGING_ERROR:
 		state = LED_STATE_SOLID_RED;
 		break;
+	}
+
+	if (state == LED_STATE_SOLID_GREEN ||
+	    state == LED_STATE_SOLID_YELLOW) {
+		if (!timestamp_expired(led_update_deadline, NULL))
+			return;
+		led_update_deadline.val =
+			get_time().val + LED_WAIT_INTERVAL;
+	} else {
+		led_update_deadline.val = 0;
 	}
 
 	set_led_color(state);
