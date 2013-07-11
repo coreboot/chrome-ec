@@ -84,6 +84,10 @@
 #define CABLE_DET_POLL_MS	100
 #define CABLE_DET_POLL_COUNT	6
 
+/* Battery level thresholds for S5 boost control */
+#define S5_BOOST_CTRL_LOWER_BOUND 94
+#define S5_BOOST_CTRL_UPPER_BOUND 98
+
 static int current_dev_type = TSU6721_TYPE_NONE;
 static int nominal_pwm_duty;
 static int current_pwm_duty;
@@ -94,6 +98,8 @@ static int pending_adc_watchdog_disable;
 static int pending_dev_type_update;
 static int pending_video_power_off;
 static int restore_id_mux;
+
+static int s5_boost_ctrl;
 
 static enum {
 	LIMIT_NORMAL,
@@ -527,10 +533,31 @@ static int usb_need_boost(int dev_type)
 	return (dev_type != TSU6721_TYPE_NONE);
 }
 
+static void usb_s5_manage_boost(void)
+{
+	int charge;
+	int boost = gpio_get_level(GPIO_BOOST_EN);
+
+	if (!usb_maybe_power_input(current_dev_type)) {
+		if (boost)
+			gpio_set_level(GPIO_BOOST_EN, 0);
+		return;
+	}
+
+	if (battery_state_of_charge(&charge))
+		return;
+
+	if (boost == 0 && charge <= S5_BOOST_CTRL_LOWER_BOUND)
+		gpio_set_level(GPIO_BOOST_EN, 1);
+	else if (boost == 1 && charge >= S5_BOOST_CTRL_UPPER_BOUND)
+		gpio_set_level(GPIO_BOOST_EN, 0);
+}
+
 static void usb_boost_power_hook(int power_on)
 {
-	if (current_dev_type == TSU6721_TYPE_NONE)
-		gpio_set_level(GPIO_BOOST_EN, power_on);
+	s5_boost_ctrl = !power_on;
+	if (power_on && usb_need_boost(current_dev_type))
+		gpio_set_level(GPIO_BOOST_EN, 1);
 	else if (current_dev_type & TSU6721_TYPE_JIG_UART_ON)
 		set_video_power(power_on);
 }
@@ -673,11 +700,13 @@ DECLARE_DEFERRED(send_battery_key_deferred);
 
 static void notify_dev_type_change(int dev_type)
 {
+	int org_type = current_dev_type;
+
+	current_dev_type = dev_type;
 	usb_log_dev_type(dev_type);
-	if (usb_has_power_input(current_dev_type) !=
+	if (usb_has_power_input(org_type) !=
 	    usb_has_power_input(dev_type))
 		hook_notify(HOOK_AC_CHANGE);
-	current_dev_type = dev_type;
 	hook_call_deferred(send_battery_key_deferred, BATTERY_KEY_DELAY);
 }
 
@@ -840,6 +869,9 @@ void board_usb_charge_update(int force_update)
 		pending_dev_type_update = 0;
 	}
 
+	if (s5_boost_ctrl)
+		usb_s5_manage_boost();
+
 	/*
 	 * Check device type except when:
 	 *   1. Current device type is non-standard charger or undetermined
@@ -869,6 +901,26 @@ int board_get_usb_current_limit(void)
 {
 	/* Approximate value by PWM duty cycle */
 	return PWM_MAPPING_A + PWM_MAPPING_B * current_pwm_duty;
+}
+
+int board_get_ac(void)
+{
+	static int last_vbus;
+	int vbus, vbus_good;
+
+	if (!usb_maybe_power_input(current_dev_type))
+		return 0;
+
+	/*
+	 * UVLO is 4.1V. We consider AC bad when its voltage drops below 4.2V
+	 * for two consecutive samples. This is to give PWM a chance to bring
+	 * voltage up.
+	 */
+	vbus = adc_read_channel(ADC_CH_USB_VBUS_SNS);
+	vbus_good = (vbus >= 4200 || last_vbus >= 4200);
+	last_vbus = vbus;
+
+	return vbus_good;
 }
 
 /*
