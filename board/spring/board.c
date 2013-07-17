@@ -284,9 +284,9 @@ int board_pmu_init(void)
 	failure |= pmu_set_term_voltage(RANGE_T34, TERM_V2100);
 	failure |= pmu_set_term_voltage(RANGE_T40, TERM_V2100);
 
-	/* Set fast charging timeout to 6 hours*/
+	/* Set fast charging timeout to 10 hours*/
 	if (!failure)
-		failure = pmu_set_fastcharge(TIMEOUT_6HRS);
+		failure = pmu_set_fastcharge(TIMEOUT_10HRS);
 	/* Enable external gpio CHARGER_EN control */
 	if (!failure)
 		failure = pmu_enable_ext_control(1);
