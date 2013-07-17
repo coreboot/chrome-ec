@@ -547,10 +547,13 @@ static void usb_s5_manage_boost(void)
 	if (battery_state_of_charge(&charge))
 		return;
 
-	if (boost == 0 && charge <= S5_BOOST_CTRL_LOWER_BOUND)
+	if (boost == 0 && charge <= S5_BOOST_CTRL_LOWER_BOUND) {
 		gpio_set_level(GPIO_BOOST_EN, 1);
-	else if (boost == 1 && charge >= S5_BOOST_CTRL_UPPER_BOUND)
+		gpio_set_level(GPIO_CHARGER_EN, 1);
+	} else if (boost == 1 && charge >= S5_BOOST_CTRL_UPPER_BOUND) {
+		gpio_set_level(GPIO_CHARGER_EN, 0);
 		gpio_set_level(GPIO_BOOST_EN, 0);
+	}
 }
 
 static void usb_boost_power_hook(int power_on)
