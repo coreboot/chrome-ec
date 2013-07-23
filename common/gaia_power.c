@@ -149,6 +149,7 @@ static void check_hibernate_timer(void)
 	if (timestamp_expired(hibernate_time, NULL) &&
 	    !board_get_ac()) {
 		CPRINTF("[%T hibernating]\n");
+		pmu_battery_mode();
 		system_hibernate(0, 0);
 	}
 }

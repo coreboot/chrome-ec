@@ -283,5 +283,10 @@ enum charging_state charge_get_state(void);
  */
 int charge_keep_power_off(void);
 
+/**
+ * Drop 3.3V power rail a little bit to get TPSChrome locked into battery mode.
+ */
+void pmu_battery_mode(void);
+
 #endif /* __CROS_EC_TPSCHROME_H */
 
