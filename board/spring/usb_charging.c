@@ -714,6 +714,15 @@ static void notify_dev_type_change(int dev_type)
 	hook_call_deferred(send_battery_key_deferred, BATTERY_KEY_DELAY);
 }
 
+static int usb_want_redetect(int dev_type)
+{
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+	    dev_type & TSU6721_TYPE_USB_HOST)
+		return 1;
+	return (dev_type & TSU6721_TYPE_NON_STD_CHG) ||
+	       (dev_type == TSU6721_TYPE_VBUS_DEBOUNCED);
+}
+
 static void usb_device_change(int dev_type)
 {
 
@@ -746,17 +755,15 @@ static void usb_device_change(int dev_type)
 		board_adc_watch_usb();
 
 	if (dev_type != current_dev_type) {
-		if ((dev_type & TSU6721_TYPE_NON_STD_CHG ||
-		     dev_type == TSU6721_TYPE_VBUS_DEBOUNCED) &&
+		if (usb_want_redetect(dev_type) &&
 		    charger_need_redetect == NO_REDETECT) {
 			/* Schedule redetection */
 			charger_need_redetect = REDETECT_SCHEDULED;
 			charger_redetection_time = get_time();
 			charger_redetection_time.val +=
 				NON_STD_CHARGER_REDETECT_DELAY;
-		} else if (dev_type != TSU6721_TYPE_VBUS_DEBOUNCED &&
-			   !(dev_type & TSU6721_TYPE_NON_STD_CHG)) {
-			/* Not non-std charger. Disarm redetection timer. */
+		} else if (!usb_want_redetect(dev_type)) {
+			/* Disarm redetection timer. */
 			charger_need_redetect = NO_REDETECT;
 		}
 		notify_dev_type_change(dev_type);
