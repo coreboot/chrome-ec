@@ -44,4 +44,18 @@ const struct battery_info *battery_get_info(void);
  */
 void battery_vendor_params(struct batt_params *batt);
 
+/**
+ * Cut off the battery.
+ * This must be called without external power. After the battery is
+ * cut off, the user need to plug in a charger to revive it.
+ */
+int battery_cut_off(void);
+
+/**
+ * Check battery status and cut off the battery if needed.
+ *
+ * @return 1 if cutting off the battery. Otherwise, 0.
+ */
+int battery_check_cut_off(void);
+
 #endif

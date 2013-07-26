@@ -7,6 +7,7 @@
 
 #include "console.h"
 #include "cpu.h"
+#include "gpio.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
@@ -110,6 +111,14 @@ static void check_reset_cause(void)
 	if (pwr_status & 0x00000002)
 		/* Hibernated and subsequently awakened */
 		flags |= RESET_FLAG_HIBERNATE;
+
+	if (pwr_status & 0x00000001) {
+		flags |= RESET_FLAG_WAKE_PIN;
+
+		if (gpio_get_level(GPIO_BCHGR_VACG) == 0)
+			/* WKUP=1 but not waken by WKUP pin. Must be RTC. */
+			flags |= RESET_FLAG_RTC_ALARM;
+	}
 
 	if (!flags && (raw_cause & 0xfe000000))
 		flags |= RESET_FLAG_OTHER;
