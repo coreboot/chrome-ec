@@ -16,6 +16,7 @@
 #include "panic.h"
 #include "system.h"
 #include "task.h"
+#include "timer.h"
 #include "uart.h"
 #include "util.h"
 #include "version.h"
@@ -302,7 +303,25 @@ static void jump_to_image(uint32_t init_addr)
 	 * EC is not in read-only firmware.  (This is not technically true if
 	 * jumping from RO -> RO, but that's not a meaningful use case...)
 	 */
+#ifdef BOARD_spring
+	int value;
+
+	/* find whether we have a pull-up or a pull-down on the Silego side */
+	value = gpio_get_level(GPIO_ENTERING_RW);
+	/* drive ENTERING_RW and ensure we are doing the proper edge */
+	gpio_set_flags(GPIO_ENTERING_RW, GPIO_OUTPUT);
+	gpio_set_level(GPIO_ENTERING_RW, !value);
+	usleep(MSEC);
+	gpio_set_level(GPIO_ENTERING_RW, value);
+	usleep(MSEC);
+	/*
+	 * the Silego chip has latched the edge,
+	 * we are back in Hi-Z to save power.
+	 */
+	gpio_set_flags(GPIO_ENTERING_RW, GPIO_INPUT);
+#else
 	gpio_set_level(GPIO_ENTERING_RW, 1);
+#endif
 
 	/* Flush UART output unless the UART hasn't been initialized yet */
 	if (uart_init_done())

@@ -105,7 +105,7 @@ const struct gpio_info gpio_list[GPIO_COUNT] = {
 	{"EN_PP3300",   GPIO_A, (1<<8),  GPIO_OUT_LOW, NULL},
 	{"PMIC_PWRON_L",GPIO_A, (1<<12), GPIO_OUT_HIGH, NULL},
 	{"PMIC_RESET",  GPIO_A, (1<<15), GPIO_OUT_LOW, NULL},
-	{"ENTERING_RW", GPIO_D, (1<<0),  GPIO_OUT_LOW, NULL},
+	{"ENTERING_RW", GPIO_D, (1<<0),  GPIO_INPUT, NULL},
 	{"CHARGER_EN",  GPIO_B, (1<<2),  GPIO_OUT_LOW, NULL},
 	{"EC_INT",      GPIO_B, (1<<9),  GPIO_HI_Z, NULL},
 	{"ID_MUX",      GPIO_D, (1<<1),  GPIO_OUT_LOW, NULL},
