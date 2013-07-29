@@ -602,14 +602,13 @@ void pmu_init(void)
 		board_hard_reset();
 	}
 }
-
-/* Initializes PMU when power is turned on.  This is necessary because the TPS'
- * 3.3V rail is not powered until the power is turned on. */
-static void pmu_chipset_startup(void)
-{
-	pmu_init();
-}
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pmu_chipset_startup, HOOK_PRIO_DEFAULT);
+/*
+ * Initializes PMU when power is turned on.  This is necessary because the TPS'
+ * 3.3V rail is not powered until the power is turned on.
+ * Also, on AC status change, update the registers to make sure we can charge.
+ */
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pmu_init, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_AC_CHANGE, pmu_init, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_CMD_PMU
 static int print_pmu_info(void)
