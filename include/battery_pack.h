@@ -58,4 +58,11 @@ int battery_cut_off(void);
  */
 int battery_check_cut_off(void);
 
+/**
+ * Check if the battery is already cut off.
+ *
+ * @return 1 if battery has been cut off.
+ */
+int battery_is_cut_off(void);
+
 #endif

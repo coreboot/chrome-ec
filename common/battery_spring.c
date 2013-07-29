@@ -26,6 +26,9 @@
 #define BATTERY_CUT_OFF_DELAY 0
 #endif
 
+static timestamp_t last_cutoff;
+static int has_cutoff;
+
 int battery_cut_off(void)
 {
 	int rv;
@@ -40,7 +43,16 @@ int battery_cut_off(void)
 	rv = i2c_xfer(I2C_PORT_BATTERY, BATTERY_ADDR, buf, 3, NULL, 0);
 	i2c_unlock();
 
+	has_cutoff = 1;
+	last_cutoff = get_time();
+
 	return rv;
+}
+
+int battery_is_cut_off(void)
+{
+	return has_cutoff &&
+	       get_time().val - last_cutoff.val < BATTERY_CUT_OFF_DELAY;
 }
 
 int battery_check_cut_off(void)
@@ -48,6 +60,8 @@ int battery_check_cut_off(void)
 	int charge;
 
 	if (!BATTERY_CUT_OFF_MAH)
+		return 0;
+	if (battery_is_cut_off())
 		return 0;
 	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_SUSPEND))
 		return 0;

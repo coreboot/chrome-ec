@@ -206,6 +206,9 @@ static int calc_next_state(int state)
 			return ST_IDLE;
 		}
 
+		if (battery_is_cut_off())
+			return ST_BAD_COND;
+
 		/* Stay in idle mode if charger overtemp */
 		if (pmu_is_charger_alarm())
 			return ST_BAD_COND;

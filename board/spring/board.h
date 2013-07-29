@@ -33,7 +33,7 @@
 
 /* Auto battery cut-off */
 #define BATTERY_CUT_OFF_MAH 10
-#define BATTERY_CUT_OFF_DELAY (11 * SECOND)
+#define BATTERY_CUT_OFF_DELAY (15 * SECOND)
 
 /* use STOP mode when we have nothing to do */
 #define CONFIG_LOW_POWER_IDLE
