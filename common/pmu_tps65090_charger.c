@@ -5,6 +5,7 @@
  * TI TPS65090 PMU charging task.
  */
 
+#include "battery_pack.h"
 #include "board.h"
 #include "clock.h"
 #include "chipset.h"
@@ -454,6 +455,8 @@ void pmu_charger_task(void)
 #ifdef CONFIG_TSU6721
 		board_usb_charge_update(0);
 #endif
+
+		battery_check_cut_off();
 
 		/*
 		 * When battery is extremely low, the internal voltage can not

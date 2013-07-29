@@ -6,6 +6,7 @@
  */
 
 #include "battery_pack.h"
+#include "chipset.h"
 #include "console.h"
 #include "host_command.h"
 #include "i2c.h"
@@ -47,6 +48,8 @@ int battery_check_cut_off(void)
 	int voltage;
 
 	if (!BATTERY_CUT_OFF_MV)
+		return 0;
+	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_SUSPEND))
 		return 0;
 	if (battery_voltage(&voltage))
 		return 0;

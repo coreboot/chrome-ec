@@ -23,7 +23,6 @@
  *  - If XPSHOLD is dropped by the AP, then we power the AP off
  */
 
-#include "battery_pack.h"
 #include "clock.h"
 #include "chipset.h"  /* This module implements chipset functions too */
 #include "common.h"
@@ -584,19 +583,6 @@ void gaia_power_task(void)
 
 	gaia_power_init();
 	ap_on = 0;
-
-	/*
-	 * If we are waken by RTC, check if we want to cut off the battery
-	 * instead of booting the AP
-	 */
-	if (system_get_reset_flags() & RESET_FLAG_RTC_ALARM) {
-		int rv;
-		auto_power_on = 0;
-		ccprintf("[%T Wake from RTC. Check battery.]\n");
-		rv = battery_check_cut_off();
-		ccprintf("[%T Want cut off = %d]\n", rv);
-		system_hibernate(CONFIG_HIBERNATE_WAKE_PERIOD_SECS, 0);
-	}
 
 	while (1) {
 		/* Wait until we need to power on, then power on */
