@@ -18,8 +18,8 @@
 #define PARAM_CUT_OFF_LOW  0x10
 #define PARAM_CUT_OFF_HIGH 0x00
 
-#ifndef BATTERY_CUT_OFF_MV
-#define BATTERY_CUT_OFF_MV 0
+#ifndef BATTERY_CUT_OFF_MAH
+#define BATTERY_CUT_OFF_MAH 0
 #endif
 
 #ifndef BATTERY_CUT_OFF_DELAY
@@ -45,15 +45,15 @@ int battery_cut_off(void)
 
 int battery_check_cut_off(void)
 {
-	int voltage;
+	int charge;
 
-	if (!BATTERY_CUT_OFF_MV)
+	if (!BATTERY_CUT_OFF_MAH)
 		return 0;
 	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_SUSPEND))
 		return 0;
-	if (battery_voltage(&voltage))
+	if (battery_remaining_capacity(&charge))
 		return 0;
-	if (voltage > BATTERY_CUT_OFF_MV)
+	if (charge > BATTERY_CUT_OFF_MAH)
 		return 0;
 	if (board_get_ac())
 		return 0;

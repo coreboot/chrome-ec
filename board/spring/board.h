@@ -32,7 +32,7 @@
 #define CONFIG_WATCHDOG_HELP
 
 /* Auto battery cut-off */
-#define BATTERY_CUT_OFF_MV 10500
+#define BATTERY_CUT_OFF_MAH 10
 #define BATTERY_CUT_OFF_DELAY (11 * SECOND)
 
 /* use STOP mode when we have nothing to do */
@@ -67,7 +67,7 @@
 #define CONFIG_BATTERY_SPRING
 
 /* Low battery threshold. In mAh. */
-#define BATTERY_AP_OFF_LEVEL 1
+#define BATTERY_AP_OFF_LEVEL 12
 
 /* Charger/accessories detection */
 #define CONFIG_TSU6721
