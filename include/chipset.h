@@ -75,4 +75,9 @@ void chipset_force_shutdown(void);
  */
 void chipset_reset(int cold_reset);
 
+/**
+ * Return the auto-hibernate delay in seconds.
+ */
+int chipset_get_auto_hibernate_delay(void);
+
 #endif  /* __CROS_EC_CHIPSET_H */

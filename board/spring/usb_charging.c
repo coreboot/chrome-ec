@@ -731,11 +731,18 @@ static void notify_dev_type_change(int dev_type)
 	/*
 	 * If the charger is surely removed (not coming back within
 	 * BATTERY_KEY_DELAY), pull down VAC.
+	 *
+	 * For older boards, doing this actually resets TPS65090. Fortunately,
+	 * auto-hibernate is disabled on these boards by host command.
+	 * Therefore, we can check auto-hibernate delay to determine if we can
+	 * do this.
 	 */
-	if (!(dev_type & TSU6721_TYPE_VBUS_DEBOUNCED))
-		hook_call_deferred(usb_pull_vac, BATTERY_KEY_DELAY);
-	else
-		hook_call_deferred(usb_pull_vac, -1);
+	if (chipset_get_auto_hibernate_delay()) {
+		if (!(dev_type & TSU6721_TYPE_VBUS_DEBOUNCED))
+			hook_call_deferred(usb_pull_vac, BATTERY_KEY_DELAY);
+		else
+			hook_call_deferred(usb_pull_vac, -1);
+	}
 }
 
 static int usb_want_redetect(int dev_type)

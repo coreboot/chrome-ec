@@ -158,6 +158,11 @@ static void check_hibernate_timer(void)
 		system_hibernate(CONFIG_HIBERNATE_WAKE_PERIOD_SECS, 0);
 	}
 }
+
+int chipset_get_auto_hibernate_delay(void)
+{
+	return hibernate_delay;
+}
 #else
 static void hibernate_timer_arm(void)
 {
