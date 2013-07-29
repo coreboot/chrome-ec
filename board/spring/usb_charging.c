@@ -359,16 +359,7 @@ void board_pwm_duty_cycle(int percent)
 
 void board_pwm_init_limit(void)
 {
-	int dummy;
-
-	/*
-	 * Shut off power input if battery is good. Otherwise, leave
-	 * 500mA to sustain the system.
-	 */
-	if (battery_current(&dummy))
-		board_pwm_duty_cycle(I_LIMIT_500MA);
-	else
-		board_ilim_config(ILIM_CONFIG_MANUAL_ON);
+	board_pwm_duty_cycle(I_LIMIT_500MA);
 }
 
 /**
@@ -418,7 +409,7 @@ static void board_pwm_tweak(void)
 
 	vbus = adc_read_channel(ADC_CH_USB_VBUS_SNS);
 	if (battery_current(&current))
-		return;
+		current = 0;
 
 	if (user_pwm_duty >= 0) {
 		if (current_pwm_duty != user_pwm_duty)
