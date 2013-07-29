@@ -702,6 +702,21 @@ static void send_battery_key_deferred(void)
 }
 DECLARE_DEFERRED(send_battery_key_deferred);
 
+static void usb_release_vac(void)
+{
+	gpio_set_level(GPIO_PMIC_RESET, 0);
+	CPRINTF("[%T Stop pulling VAC]\n");
+}
+DECLARE_DEFERRED(usb_release_vac);
+
+static void usb_pull_vac(void)
+{
+	gpio_set_level(GPIO_PMIC_RESET, 1);
+	hook_call_deferred(usb_release_vac, 550 * MSEC);
+	CPRINTF("[%T Pulling VAC low]\n");
+}
+DECLARE_DEFERRED(usb_pull_vac);
+
 static void notify_dev_type_change(int dev_type)
 {
 	int org_type = current_dev_type;
@@ -712,6 +727,15 @@ static void notify_dev_type_change(int dev_type)
 	    usb_has_power_input(dev_type))
 		hook_notify(HOOK_AC_CHANGE);
 	hook_call_deferred(send_battery_key_deferred, BATTERY_KEY_DELAY);
+
+	/*
+	 * If the charger is surely removed (not coming back within
+	 * BATTERY_KEY_DELAY), pull down VAC.
+	 */
+	if (!(dev_type & TSU6721_TYPE_VBUS_DEBOUNCED))
+		hook_call_deferred(usb_pull_vac, BATTERY_KEY_DELAY);
+	else
+		hook_call_deferred(usb_pull_vac, -1);
 }
 
 static int usb_want_redetect(int dev_type)
