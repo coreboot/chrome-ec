@@ -425,28 +425,6 @@ int pmu_enable_fet(int fet_id, int enable, int *power_good)
 	return EC_SUCCESS;
 }
 
-void pmu_battery_mode(void)
-{
-	/*
-	 * The timing is important here. If we drop 3.3V for too long, the
-	 * EC browns out. Disable interrupt to prevent this.
-	 */
-	interrupt_disable();
-
-	gpio_set_level(GPIO_PMIC_RESET, 1);
-
-	/*
-	 * Delay for 20 us. This drops 3.3V power rail to ~2.4V, which is
-	 * low enough to get TPS65090 to go into battery mode, but not as low
-	 * as to brown out the EC.
-	 */
-	udelay(20);
-
-	gpio_set_level(GPIO_PMIC_RESET, 0);
-
-	interrupt_enable();
-}
-
 int pmu_adc_read(int adc_idx, int flags)
 {
 	int ctrl;
