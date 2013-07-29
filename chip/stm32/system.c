@@ -248,7 +248,11 @@ const char *system_get_chip_name(void)
 
 const char *system_get_chip_revision(void)
 {
-	return "";
+	uint32_t has_reset = system_get_scratchpad() & 0x8000;
+	if (has_reset)
+		return "TPSRESET";
+	else
+		return "";
 }
 
 int system_get_vbnvcontext(uint8_t *block)

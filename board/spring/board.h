@@ -47,6 +47,9 @@
 /* Smart battery and TPSchrome are on a private I2C bus behind the EC */
 #define CONFIG_I2C_PASSTHROUGH
 
+/* allow to reset scratchpad from the EC command-line */
+#define CONFIG_CMD_SCRATCHPAD
+
 #ifndef __ASSEMBLER__
 
 /* By default, enable all console messages except keyboard */
