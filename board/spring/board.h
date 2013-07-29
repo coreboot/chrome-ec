@@ -31,12 +31,6 @@
 #undef  CONFIG_TASK_PROFILING
 #define CONFIG_WATCHDOG_HELP
 
-/* Go to STANDBY mode when system is off without external power for too long */
-#define CONFIG_AUTO_HIBERNATE_SECS 180
-
-/* Wake from hibernate every hour */
-#define CONFIG_HIBERNATE_WAKE_PERIOD_SECS 3600
-
 /* Auto battery cut-off */
 #define BATTERY_CUT_OFF_MV 10500
 #define BATTERY_CUT_OFF_DELAY (11 * SECOND)

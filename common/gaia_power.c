@@ -165,6 +165,11 @@ int chipset_get_auto_hibernate_delay(void)
 static void hibernate_timer_arm(void)
 {
 }
+
+int chipset_get_auto_hibernate_delay(void)
+{
+	return 0;
+}
 #endif
 
 /*
