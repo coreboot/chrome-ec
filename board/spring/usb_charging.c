@@ -99,6 +99,8 @@ static int pending_dev_type_update;
 static int pending_video_power_off;
 static int restore_id_mux;
 
+static int board_rev = 1; /* Assume new boards unless told otherwise */
+
 static int s5_boost_ctrl;
 
 static enum {
@@ -722,13 +724,8 @@ static void notify_dev_type_change(int dev_type)
 	/*
 	 * If the charger is surely removed (not coming back within
 	 * BATTERY_KEY_DELAY), pull down VAC.
-	 *
-	 * For older boards, doing this actually resets TPS65090. Fortunately,
-	 * auto-hibernate is disabled on these boards by host command.
-	 * Therefore, we can check auto-hibernate delay to determine if we can
-	 * do this.
 	 */
-	if (chipset_get_auto_hibernate_delay()) {
+	if (board_rev) {
 		if (!(dev_type & TSU6721_TYPE_VBUS_DEBOUNCED))
 			hook_call_deferred(usb_pull_vac, BATTERY_KEY_DELAY);
 		else
@@ -1054,4 +1051,19 @@ static int ext_power_command_current_limit(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_EXT_POWER_CURRENT_LIMIT,
 		     ext_power_command_current_limit,
+		     EC_VER_MASK(0));
+
+static int ext_power_command_hack_board_rev(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_hib_delay *p = args->params;
+
+	if (p->delay_secs)
+		board_rev = 1;
+	else
+		board_rev = 0;
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_SET_HIB_DELAY,
+		     ext_power_command_hack_board_rev,
 		     EC_VER_MASK(0));
