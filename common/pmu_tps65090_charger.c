@@ -489,28 +489,14 @@ void pmu_charger_task(void)
 				pre_chg_start = get_time();
 				/* Fall through */
 			case ST_CHARGING:
-				if (pmu_blink_led(0))
-					next_state = ST_CHARGING_ERROR;
-				else
-					enable_charging(1);
-				break;
-			case ST_CHARGING_ERROR:
-				/*
-				 * Enable hardware charging circuit after set
-				 * PMU to hardware error state.
-				 */
-				if (pmu_blink_led(1))
-					enable_charging(0);
-				else
-					enable_charging(1);
+				enable_charging(1);
 				break;
 			case ST_IDLE:
 			case ST_REINIT:
 			case ST_BAD_COND:
 			case ST_DISCHARGING:
+			case ST_CHARGING_ERROR:
 				enable_charging(0);
-				/* Ignore charger error when discharging */
-				pmu_blink_led(0);
 				break;
 			}
 		}
