@@ -557,6 +557,24 @@ static void usb_boost_pwr_off_hook(void) { usb_boost_power_hook(0); }
 DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, usb_boost_pwr_on_hook, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usb_boost_pwr_off_hook, HOOK_PRIO_DEFAULT);
 
+static void usb_otg_workaround(void)
+{
+	/*
+	 * TSU6721 doesn't sense the removal of an OTG dongle in S5. If a
+	 * charger is plugged in after OTG dongle is removed, we reset
+	 * TSU6721 to force a redetection. On the other hand, if the system
+	 * boots before a charger is plugged in, TSU6721 would report OTG
+	 * dongle removal, and thus we don't need to do anything in this case.
+	 */
+	if ((current_dev_type & TSU6721_TYPE_OTG) &&
+	    (current_dev_type & TSU6721_TYPE_VBUS_DEBOUNCED) &&
+	    chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		pending_tsu6721_reset = 1;
+		task_wake(TASK_ID_PMU_TPS65090_CHARGER);
+	}
+}
+DECLARE_HOOK(HOOK_SECOND, usb_otg_workaround, HOOK_PRIO_DEFAULT);
+
 static int usb_charger_removed(int dev_type)
 {
 	if (!(current_dev_type & TSU6721_TYPE_VBUS_DEBOUNCED))
