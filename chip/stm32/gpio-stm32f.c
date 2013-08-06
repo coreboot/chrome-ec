@@ -79,7 +79,7 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t pmask, uint32_t flags)
 		 */
 		if (flags & GPIO_PULL_UP) {
 			mask |= 0x88888888 & cnf;
-			STM32_GPIO_BSRR(g->port) |= g->mask;
+			STM32_GPIO_BSRR(port) = pmask;
 		} else if (flags & GPIO_PULL_DOWN) {
 			mask |= 0x88888888 & cnf;
 			STM32_GPIO_BSRR(port) = pmask << 16;
