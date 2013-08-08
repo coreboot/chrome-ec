@@ -27,20 +27,56 @@
  * temp_sensor_type. Threshold values for overheated action first (warning,
  * prochot, power-down), followed by fan speed stepping thresholds.
  */
+
+/* DANGER WILL ROBINSON: This is an ugly hack, just for Falco & Peppy.
+ * DO NOT USE THIS AS AN EXAMPLE OF WHAT TO DO FOR ANY OTHER BOARD!!
+ */
+#ifdef BOARD_falco				/* DON'T DO THIS */
 test_export_static struct thermal_config_t
 		thermal_config[TEMP_SENSOR_TYPE_COUNT] = {
 	/* TEMP_SENSOR_TYPE_CPU */
 	{THERMAL_CONFIG_WARNING_ON_FAIL,
-	 {373, 378, 383, 327, 335, 343, 351, 359} } ,
+	 {373, 378, 383,
+	  333, 338, 343, 348, 353, 358, 363} },
 	/* TEMP_SENSOR_TYPE_BOARD */
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 	/* TEMP_SENSOR_TYPE_CASE */
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 };
-
-/* Fan speed settings.  Real max RPM is about 9300. */
+test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
+{2700, 3000, 3300, 3600, 3900, 4200, 4500, 5000};
+#endif
+#ifdef BOARD_peppy				/* DON'T DO THIS */
+test_export_static struct thermal_config_t
+		thermal_config[TEMP_SENSOR_TYPE_COUNT] = {
+	/* TEMP_SENSOR_TYPE_CPU */
+	{THERMAL_CONFIG_WARNING_ON_FAIL,
+	 {373, 378, 383,
+	  327, 335, 343, 351, 359} } ,
+	/* TEMP_SENSOR_TYPE_BOARD */
+	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
+	/* TEMP_SENSOR_TYPE_CASE */
+	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
+};
 test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
 	{0, 3000, 4575, 6150, 7725, -1};
+#endif
+#ifdef BOARD_host /* for testing */		/* DON'T DO THIS */
+test_export_static struct thermal_config_t
+		thermal_config[TEMP_SENSOR_TYPE_COUNT] = {
+	/* TEMP_SENSOR_TYPE_CPU */
+	{THERMAL_CONFIG_WARNING_ON_FAIL,
+	 {373, 378, 383,
+	  327, 335, 343, 351, 359} } ,
+	/* TEMP_SENSOR_TYPE_BOARD */
+	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
+	/* TEMP_SENSOR_TYPE_CASE */
+	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
+};
+test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
+	{0, 3000, 4575, 6150, 7725, -1};
+#endif
+
 
 /* Number of consecutive overheated events for each temperature sensor. */
 static int8_t ot_count[TEMP_SENSOR_COUNT][THRESHOLD_COUNT + THERMAL_FAN_STEPS];
