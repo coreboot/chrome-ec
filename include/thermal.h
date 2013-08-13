@@ -17,19 +17,7 @@
  * Number of steps for fan speed control. Speed of each step is defined
  * in thermal.c.
  */
-
-/* DANGER WILL ROBINSON: This is an ugly hack, just for Falco & Peppy.
- * DO NOT USE THIS AS AN EXAMPLE OF WHAT TO DO FOR ANY OTHER BOARD!!
- */
-#ifdef BOARD_falco				/* DON'T DO THIS */
-#define THERMAL_FAN_STEPS 7
-#endif
-#ifdef BOARD_peppy				/* DON'T DO THIS */
 #define THERMAL_FAN_STEPS 5
-#endif
-#ifdef BOARD_host /* for testing */		/* DON'T DO THIS */
-#define THERMAL_FAN_STEPS 5
-#endif
 
 /* Set a threshold temperature to this value to disable the threshold limit. */
 #define THERMAL_THRESHOLD_DISABLE 0
