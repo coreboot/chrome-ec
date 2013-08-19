@@ -188,7 +188,8 @@ bad:
 test_export_static int ap_is_throttled;
 static void set_throttle(int on)
 {
-	host_throttle_cpu(on);
+	/* Use the big ugly PROCHOT hammer to throttle the CPU */
+	chipset_throttle_cpu(on);
 	ap_is_throttled = on;
 }
 
