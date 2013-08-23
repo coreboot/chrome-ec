@@ -20,6 +20,12 @@
 #include "timer.h"
 #include "util.h"
 
+#ifdef BOARD_peppy
+/* HORRIBLE HACK: SEE crosbug.com/p/22127 DO NOT RE-USE */
+#include "gpio.h"
+#define PEPPY_BOOTKEY_DELAY_USEC (5 * MSEC)
+#endif /* BOARD_peppy */
+
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_KEYSCAN, outstr)
 #define CPRINTF(format, args...) cprintf(CC_KEYSCAN, format, ## args)
@@ -462,6 +468,11 @@ const uint8_t *keyboard_scan_get_state(void)
 
 void keyboard_scan_init(void)
 {
+#ifdef BOARD_peppy
+	/* HORRIBLE HACK: SEE crosbug.com/p/22127 DO NOT RE-USE */
+	int gpio_pp5000_prev_state;
+#endif /* BOARD_peppy */
+
 	/* Configure GPIO */
 	keyboard_raw_init();
 
@@ -470,6 +481,18 @@ void keyboard_scan_init(void)
 
 	/* Initialize raw state */
 	read_matrix(debounced_state);
+
+#ifdef BOARD_peppy
+	/* HORRIBLE HACK: SEE crosbug.com/p/22127 DO NOT RE-USE */
+	if (check_boot_key(debounced_state) != BOOT_KEY_NONE) {
+		gpio_pp5000_prev_state = gpio_get_level(GPIO_PP5000_EN);
+		gpio_set_level(GPIO_PP5000_EN, 1);
+		usleep(PEPPY_BOOTKEY_DELAY_USEC);
+		read_matrix(debounced_state);
+		gpio_set_level(GPIO_PP5000_EN, gpio_pp5000_prev_state);
+	}
+#endif /* BOARD_peppy */
+
 	memcpy(prev_state, debounced_state, sizeof(prev_state));
 
 	/* Check for keys held down at boot */
