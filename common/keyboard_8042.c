@@ -430,8 +430,10 @@ void keyboard_state_changed(int row, int col, int is_pressed)
 
 static void keystroke_enable(int enable)
 {
-	if (!keystroke_enabled && enable)
+	if (!keystroke_enabled && enable) {
 		CPRINTF("[%T KS enable]\n");
+		task_wake(TASK_ID_KEYSCAN);
+	}
 	else if (keystroke_enabled && !enable)
 		CPRINTF("[%T KS disable]\n");
 
