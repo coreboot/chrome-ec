@@ -106,7 +106,7 @@ void chipset_reset(int cold_reset)
 	}
 }
 
-void chipset_throttle_cpu(int throttle)
+void chipset_throttle_cpu_implementation(int throttle)
 {
 	throttle_cpu = throttle;
 

@@ -23,4 +23,11 @@
 #define CONFIG_EXTPOWER_FALCO
 #endif
 
+#ifdef TEST_thermal_falco
+#define CONFIG_CHARGER
+#define CONFIG_EXTPOWER_FALCO
+#define CONFIG_BATTERY_MOCK
+#define CONFIG_CHARGER_INPUT_CURRENT 4032
+#endif
+
 #endif  /* __CROS_EC_TEST_CONFIG_H */

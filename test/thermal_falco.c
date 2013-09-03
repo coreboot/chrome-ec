@@ -5,14 +5,18 @@
  * Test thermal engine.
  */
 
+#include "battery_pack.h"
 #include "common.h"
 #include "console.h"
+#include "extpower_falco.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "printf.h"
+#include "smart_battery.h"
 #include "temp_sensor.h"
 #include "test_util.h"
 #include "thermal.h"
+#include "thermal_falco_externs.h"
 #include "timer.h"
 #include "util.h"
 
@@ -21,6 +25,9 @@ static int fan_rpm;
 static int fan_rpm_mode = 1;
 static int cpu_throttled;
 static int cpu_down;
+static int mock_ac;
+static int mock_id;
+static int mock_current;
 
 extern struct thermal_config_t thermal_config[TEMP_SENSOR_TYPE_COUNT];
 extern const int fan_speed[THERMAL_FAN_STEPS + 1];
@@ -58,6 +65,27 @@ void chipset_throttle_cpu_implementation(int throttled)
 	cpu_throttled = throttled;
 }
 
+int gpio_get_level(enum gpio_signal signal)
+{
+	if (signal == GPIO_AC_PRESENT)
+		return mock_ac;
+	return 0;
+}
+
+int adc_read_channel(enum adc_channel ch)
+{
+	switch (ch) {
+	case ADC_AC_ADAPTER_ID_VOLTAGE:
+		return mock_id;
+	case ADC_CH_CHARGER_CURRENT:
+		return mock_current;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 /*****************************************************************************/
 /* Test utilities */
 
@@ -77,6 +105,24 @@ static void reset_mock_temp(void)
 		mock_temp[i] = FAN_THRESHOLD(type, 0) - 1;
 	}
 }
+
+static void reset_mock_battery(void)
+{
+	const struct battery_info *bat_info = battery_get_info();
+
+	/* 50% of charge */
+	sb_write(SB_RELATIVE_STATE_OF_CHARGE, 50);
+	sb_write(SB_ABSOLUTE_STATE_OF_CHARGE, 50);
+	/* 25 degree Celsius */
+	sb_write(SB_TEMPERATURE, 250 + 2731);
+	/* Normal voltage */
+	sb_write(SB_VOLTAGE, bat_info->voltage_normal);
+	sb_write(SB_CHARGING_VOLTAGE, bat_info->voltage_max);
+	sb_write(SB_CHARGING_CURRENT, 4000);
+	/* Discharging at 100mAh */
+	sb_write(SB_CURRENT, -100);
+}
+DECLARE_HOOK(HOOK_INIT, reset_mock_battery, HOOK_PRIO_DEFAULT);
 
 static int wait_fan_rpm(int rpm, int timeout_secs)
 {
@@ -390,6 +436,104 @@ static int test_auto_fan_ctrl(void)
 	return EC_SUCCESS;
 }
 
+static int test_throttling(void)
+{
+	/* Use ADAPTER_UNKNOWN, Turbo off, softer limits */
+	/* CAUTION: assuming lim->hi_cnt > 2 */
+	struct adapter_limits *lim = &ad_limits[0][0][0];
+	int longtime = MAX(lim->lo_cnt, lim->hi_cnt) + 2;
+
+	reset_mock_temp();
+	mock_id = 0;				/* adapter unknown */
+	mock_ac = 1;
+
+	/* Lower temperature. CPU not throttled anymore. */
+	mock_temp[T_CPU] = THRESHOLD(T_CPU, THRESHOLD_WARNING) - 5;
+	TEST_ASSERT(wait_clear(&cpu_throttled, 2));
+
+
+	/* NOTE: ap_is_throttled indicates extpower_falco.c's view of
+	 * throttling. cpu_throttled indicates CPU's view. */
+
+	/* above high limit for not quite long enough */
+	mock_current = lim->hi_val + 1;
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * (lim->hi_cnt - 1));
+	TEST_ASSERT(lim->triggered == 0);
+	TEST_ASSERT(ap_is_throttled == 0);
+	TEST_ASSERT(cpu_throttled == 0);
+
+	/* drop below the high limit once */
+	mock_current = lim->hi_val - 1;
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * 1);
+	TEST_ASSERT(ap_is_throttled == 0);
+	TEST_ASSERT(cpu_throttled == 0);
+
+	/* now back up - that should have reset the count */
+	mock_current = lim->hi_val + 1;
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * (lim->hi_cnt - 1));
+	TEST_ASSERT(ap_is_throttled == 0);
+	TEST_ASSERT(cpu_throttled == 0);
+
+	/* one more ought to do it */
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * 1);
+	TEST_ASSERT(ap_is_throttled);
+	TEST_ASSERT(cpu_throttled);
+
+	/* going midrange for a long time shouldn't change anything */
+	mock_current = (lim->lo_val + lim->hi_val) / 2;
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * longtime);
+	TEST_ASSERT(ap_is_throttled);
+	TEST_ASSERT(cpu_throttled);
+
+	/* below low limit for not quite long enough */
+	mock_current = lim->lo_val - 1;
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * (lim->lo_cnt - 1));
+	TEST_ASSERT(lim->triggered == 1);
+	TEST_ASSERT(ap_is_throttled);
+	TEST_ASSERT(cpu_throttled);
+
+	/* back above the low limit once */
+	mock_current = lim->lo_val + 1;
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * 1);
+
+	TEST_ASSERT(lim->triggered == 1);
+	TEST_ASSERT(ap_is_throttled);
+	TEST_ASSERT(cpu_throttled);
+
+	/* now back down - that should have reset the count */
+	mock_current = lim->lo_val - 1;
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * (lim->lo_cnt - 1));
+	TEST_ASSERT(lim->triggered == 1);
+	TEST_ASSERT(ap_is_throttled);
+	TEST_ASSERT(cpu_throttled);
+
+	/* Trigger CPU throttling */
+	mock_temp[T_CPU] = THRESHOLD(T_CPU, THRESHOLD_WARNING);
+	TEST_ASSERT(wait_set(&cpu_throttled, 11));
+	TEST_ASSERT(host_get_events() &
+		    EC_HOST_EVENT_MASK(EC_HOST_EVENT_THERMAL_OVERLOAD));
+
+	/* One more ought to do it for the power */
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * 1);
+	TEST_ASSERT(lim->triggered == 0);
+	TEST_ASSERT(ap_is_throttled == 0);
+	TEST_ASSERT(cpu_throttled);	       /* but CPU is still throttled */
+
+	/* Waiting doesn't help */
+	usleep(EXTPOWER_FALCO_POLL_PERIOD * longtime);
+	TEST_ASSERT(lim->triggered == 0);
+	TEST_ASSERT(ap_is_throttled == 0);
+	TEST_ASSERT(cpu_throttled);
+
+	/* Lower temperature. CPU not throttled anymore. */
+	mock_temp[T_CPU] = THRESHOLD(T_CPU, THRESHOLD_WARNING) - 5;
+	TEST_ASSERT(wait_clear(&cpu_throttled, 2));
+
+	return EC_SUCCESS;
+}
+
+
+
 static int check_assumption(void)
 {
 	TEST_ASSERT((int)TEMP_SENSOR_CPU == (int)TEMP_SENSOR_TYPE_CPU);
@@ -407,6 +551,7 @@ static int check_assumption(void)
 void run_test(void)
 {
 	test_reset();
+	test_chipset_on();
 
 	/* Test assumptions */
 	RUN_TEST(check_assumption);
@@ -421,6 +566,9 @@ void run_test(void)
 	RUN_TEST(test_threshold_hostcmd);
 	RUN_TEST(test_invalid_hostcmd);
 	RUN_TEST(test_threshold_console_cmd);
+
+	/* See if thermal and charger will cooperate on throttling */
+	RUN_TEST(test_throttling);
 
 	test_print_result();
 }

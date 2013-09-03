@@ -28,7 +28,7 @@ void chipset_reset(int cold_reset)
 }
 
 
-void chipset_throttle_cpu(int throttle)
+void chipset_throttle_cpu_implementation(int throttle)
 {
 	/* Print transitions */
 	static int last_val = 0;

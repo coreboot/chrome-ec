@@ -64,11 +64,27 @@ static inline void chipset_exit_hard_off(void) { }
 #endif
 
 /**
+ * Possible sources for CPU throttling requests.
+ */
+enum throttle_sources {
+	THROTTLE_SRC_THERMAL = (1 << 0),
+	THROTTLE_SRC_POWER =   (1 << 1),
+};
+
+/**
  * Enable/disable CPU throttling.
  *
+ * This is a virtual "OR" operation. Any caller can enable CPU
+ * throttling, but all callers must agree in order to disable it.
+ *
  * @param throttle	Enable (!=0) or disable(0) throttling
+ * @param source        Flag indicating which caller is requesting throttling
  */
-void chipset_throttle_cpu(int throttle);
+void chipset_throttle_cpu(int throttle, enum throttle_sources source);
+
+/* This is the private chipset-specific implementation. Don't call this
+ * directly. */
+void chipset_throttle_cpu_implementation(int throttle);
 
 /**
  * Immedaitely shut off power to main processor and chipset.

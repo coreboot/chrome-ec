@@ -104,7 +104,7 @@ void chipset_reset(int cold_reset)
 	}
 }
 
-void chipset_throttle_cpu(int throttle)
+void chipset_throttle_cpu_implementation(int throttle)
 {
 	/* FIXME CPRINTF("[%T %s(%d)]\n", __func__, throttle);*/
 }
