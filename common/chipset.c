@@ -8,6 +8,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
+#include "task.h"
 #include "util.h"
 
 /* Console output macros */
@@ -17,15 +18,21 @@
 
 /*****************************************************************************/
 /* This enforces the virtual OR of all throttling sources. */
+static struct mutex throttle_mutex;
 static uint32_t throttle_request;
+
 void chipset_throttle_cpu(int throttle, enum throttle_sources source)
 {
+	mutex_lock(&throttle_mutex);
+
 	if (throttle)
 		throttle_request |= source;
 	else
 		throttle_request &= ~source;
 
 	chipset_throttle_cpu_implementation(throttle_request);
+
+	mutex_unlock(&throttle_mutex);
 }
 
 /*****************************************************************************/
@@ -33,18 +40,26 @@ void chipset_throttle_cpu(int throttle, enum throttle_sources source)
 
 static int command_apthrottle(int argc, char **argv)
 {
-	uint32_t newval;
+	uint32_t tmpval;
 	char *e;
 	if (argc > 1) {
-		newval = strtoi(argv[1], &e, 0);
+		tmpval = strtoi(argv[1], &e, 0);
 		if (*e)
 			return EC_ERROR_PARAM1;
-		throttle_request = newval;
-		chipset_throttle_cpu_implementation(throttle_request);
+
+		mutex_lock(&throttle_mutex);
+		throttle_request = tmpval;	/* force source */
+		mutex_unlock(&throttle_mutex);
+
+		chipset_throttle_cpu(0, 0);	/* make it so */
 	}
 
+	mutex_lock(&throttle_mutex);
+	tmpval = throttle_request;		/* read current value */
+	mutex_unlock(&throttle_mutex);
+
 	ccprintf("AP throttling is %s (0x%08x)\n",
-		 throttle_request ? "on" : "off", throttle_request);
+		 tmpval ? "on" : "off", tmpval);
 
 	return EC_SUCCESS;
 }
