@@ -7,7 +7,9 @@
 
 #include "battery_pack.h"
 #include "chipset.h"
+#include "clock.h"
 #include "console.h"
+#include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
 #include "pmu_tpschrome.h"
@@ -28,6 +30,7 @@
 
 static timestamp_t last_cutoff;
 static int has_cutoff;
+static int pending_cutoff;
 
 int battery_cut_off(void)
 {
@@ -78,10 +81,32 @@ int battery_check_cut_off(void)
 	return 1;
 }
 
+static void cut_off_wrapper(void)
+{
+	battery_cut_off();
+}
+DECLARE_DEFERRED(cut_off_wrapper);
+
+static void check_pending_cutoff(void)
+{
+	if (pending_cutoff)
+		hook_call_deferred(cut_off_wrapper, 5);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, check_pending_cutoff, HOOK_PRIO_LAST);
+
 int battery_command_cut_off(struct host_cmd_handler_args *args)
 {
-	if (battery_cut_off())
-		return EC_RES_ERROR;
+	pending_cutoff = 1;
+
+	/*
+	 * When cutting off the battery, the AP is off and AC is not present.
+	 * This makes serial console unresponsive and hard to verify battery
+	 * cut-off. Let's disable sleep here so one can check cut-off status
+	 * if needed. This shouldn't matter because we are about to cut off
+	 * the battery.
+	 */
+	disable_sleep(SLEEP_MASK_FORCE);
+
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_BATTERY_CUT_OFF, battery_command_cut_off,
