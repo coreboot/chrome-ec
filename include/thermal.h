@@ -27,6 +27,9 @@
 #ifdef BOARD_peppy				/* DON'T DO THIS */
 #define THERMAL_FAN_STEPS 7
 #endif
+#ifdef BOARD_leon
+#define THERMAL_FAN_STEPS 5
+#endif
 #ifdef BOARD_host /* for testing */		/* DON'T DO THIS */
 #define THERMAL_FAN_STEPS 5
 #endif

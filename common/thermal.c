@@ -44,7 +44,7 @@ test_export_static struct thermal_config_t
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 };
 test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
-{2700, 3000, 3300, 3600, 3900, 4200, 4500, 5000};
+	{2700, 3000, 3300, 3600, 3900, 4200, 4500, 5000};
 #endif
 #ifdef BOARD_peppy				/* DON'T DO THIS */
 test_export_static struct thermal_config_t
@@ -60,6 +60,21 @@ test_export_static struct thermal_config_t
 };
 test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
 	{0, 3200, 3700, 4000, 4400, 4900, 5500, 6500};
+#endif
+#ifdef BOARD_leon /* for testing */		/* DON'T DO THIS */
+test_export_static struct thermal_config_t
+		thermal_config[TEMP_SENSOR_TYPE_COUNT] = {
+	/* TEMP_SENSOR_TYPE_CPU */
+	{THERMAL_CONFIG_WARNING_ON_FAIL,
+	 {373, 378, 383,
+	  327, 335, 343, 351, 359} } ,
+	/* TEMP_SENSOR_TYPE_BOARD */
+	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
+	/* TEMP_SENSOR_TYPE_CASE */
+	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
+};
+test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
+	{0, 3000, 4575, 6150, 7725, -1};
 #endif
 #ifdef BOARD_host /* for testing */		/* DON'T DO THIS */
 test_export_static struct thermal_config_t
