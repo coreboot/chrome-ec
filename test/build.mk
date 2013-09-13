@@ -26,6 +26,7 @@ test-list-$(BOARD_slippy)=
 test-list-$(BOARD_falco)=
 test-list-$(BOARD_peppy)=
 test-list-$(BOARD_wolf)=
+test-list-$(BOARD_leon)=
 test-list-$(BOARD_bolt)=
 
 # Emulator tests
