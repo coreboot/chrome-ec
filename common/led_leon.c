@@ -64,10 +64,10 @@ static int leon_pwr_led_set_gpio(enum led_color color,
 {
 	switch (color) {
 	case LED_OFF:
-		gpio_set_level(gpio_led_blue_l,  1);
+		gpio_set_level(gpio_led_blue_l,  0);
 		break;
 	case LED_BLUE:
-		gpio_set_level(gpio_led_blue_l,  0);
+		gpio_set_level(gpio_led_blue_l,  1);
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;
@@ -141,7 +141,7 @@ static void leon_led_set_power(void)
 		/* Blink once every four seconds. */
 		leon_led_set_color_power(
 			(power_ticks % LED_TOTAL_TICKS < LED_ON_TICKS) ?
-			LED_AMBER : LED_OFF);
+			LED_BLUE : LED_OFF);
 
 		previous_state_suspend = 1;
 		return;
