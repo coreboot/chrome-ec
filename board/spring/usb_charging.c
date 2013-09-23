@@ -361,7 +361,12 @@ void board_pwm_duty_cycle(int percent)
 
 void board_pwm_init_limit(void)
 {
-	board_pwm_duty_cycle(I_LIMIT_500MA);
+	/*
+	 * put a high initial limit to avoid browning out the system
+	 * when we turn on charging, lower power bricks might cut off
+	 * but we will re-enable them with a lower limit later.
+	 */
+	board_pwm_duty_cycle(I_LIMIT_2400MA);
 }
 
 /**
