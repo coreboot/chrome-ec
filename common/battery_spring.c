@@ -28,6 +28,10 @@
 #define BATTERY_CUT_OFF_DELAY 0
 #endif
 
+#ifndef BATTERY_CELL_CUT_OFF_MV
+#define BATTERY_CELL_CUT_OFF_MV 0
+#endif
+
 static timestamp_t last_cutoff;
 static int has_cutoff;
 static int pending_cutoff;
@@ -58,23 +62,39 @@ int battery_is_cut_off(void)
 	       get_time().val - last_cutoff.val < BATTERY_CUT_OFF_DELAY;
 }
 
-int battery_check_cut_off(void)
+static int battery_want_cut_off(void)
 {
 	int charge;
+	int i, v;
 
-	if (!BATTERY_CUT_OFF_MAH)
-		return 0;
 	if (battery_is_cut_off())
 		return 0;
 	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_SUSPEND))
 		return 0;
-	if (battery_remaining_capacity(&charge))
-		return 0;
-	if (charge > BATTERY_CUT_OFF_MAH)
-		return 0;
 	if (board_get_ac())
 		return 0;
 
+	if (BATTERY_CUT_OFF_MAH)
+		if (!battery_remaining_capacity(&charge) &&
+		    charge < BATTERY_CUT_OFF_MAH)
+			return 1;
+
+	if (BATTERY_CELL_CUT_OFF_MV) {
+		for (i = 0x3d; i <= 0x3f; ++i) {
+			if (sb_read(i, &v))
+				continue;
+			if (v < BATTERY_CELL_CUT_OFF_MV)
+				return 1;
+		}
+	}
+
+	return 0;
+}
+
+int battery_check_cut_off(void)
+{
+	if (!battery_want_cut_off())
+		return 0;
 	ccprintf("[%T Cutting off battery]\n");
 	cflush();
 	battery_cut_off();
