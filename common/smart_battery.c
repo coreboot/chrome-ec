@@ -290,7 +290,7 @@ static int host_command_sb_read_word(struct host_cmd_handler_args *args)
 	const struct ec_params_sb_rd *p = args->params;
 	struct ec_response_sb_rd_word *r = args->response;
 
-	if (p->reg > 0x1c)
+	if (p->reg > 0x74)
 		return EC_RES_INVALID_PARAM;
 	rv = i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, p->reg, &val);
 	if (rv)
