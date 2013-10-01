@@ -21,16 +21,16 @@ const struct battery_temperature_ranges bat_temp_ranges = {
 	.start_charging_min_c = 0,
 	.start_charging_max_c = 50,
 	.charging_min_c       = 0,
-	.charging_max_c       = 50,
-	.discharging_min_c    = -20,
-	.discharging_max_c    = 60,
+	.charging_max_c       = 60,
+	.discharging_min_c    = -10,
+	.discharging_max_c    = 40,
 };
 
 static const struct battery_info info = {
 
 	.voltage_max    = 16800,
 	.voltage_normal = 14800,
-	.voltage_min    = 10800,
+	.voltage_min    = 12000,
 
 	/* Pre-charge values. */
 	.precharge_current  = 256,	/* mA */
