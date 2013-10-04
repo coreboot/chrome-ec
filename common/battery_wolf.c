@@ -6,6 +6,7 @@
  */
 
 #include "battery_pack.h"
+#include "gpio.h"
 
 const struct battery_temperature_ranges bat_temp_ranges = {
 	.start_charging_min_c = 0,
@@ -36,5 +37,10 @@ const struct battery_info *battery_get_info(void)
  * called "smart". Do we really want to second-guess it? For now, let's not. */
 void battery_vendor_params(struct batt_params *batt)
 {
+}
+
+int battery_is_connected(void)
+{
+	return (gpio_get_level(GPIO_BAT_DETECT_L) == 0);
 }
 
