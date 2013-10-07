@@ -28,6 +28,7 @@
 #define GPIO_INT_LOW     (1 << 10) /* Interrupt on low level */
 #define GPIO_INT_HIGH    (1 << 11) /* Interrupt on high level */
 #define GPIO_DEFAULT     (1 << 12) /* Don't set up on boot */
+#define GPIO_INT_DSLEEP  (1 << 13) /* Interrupt in deep sleep */
 
 /* Common flag combinations */
 #define GPIO_OUT_LOW     (GPIO_OUTPUT | GPIO_LOW)
@@ -37,6 +38,7 @@
 #define GPIO_INT_EDGE    (GPIO_INT_RISING | GPIO_INT_FALLING | GPIO_INT_BOTH)
 #define GPIO_INT_LEVEL   (GPIO_INT_LOW | GPIO_INT_HIGH)
 #define GPIO_INT_ANY     (GPIO_INT_EDGE | GPIO_INT_LEVEL)
+#define GPIO_INT_BOTH_DSLEEP (GPIO_INT_BOTH | GPIO_INT_DSLEEP)
 /* Note that if no flags are present, the signal is a high-Z input */
 
 /* GPIO signal definition structure, for use by board.c */
