@@ -127,6 +127,11 @@ void uart_tx_flush(void);
 int uart_tx_ready(void);
 
 /**
+ * Return non-zero if a transmit is in progress.
+ */
+int uart_tx_in_progress(void);
+
+/**
  * Return non-zero if the UART has a character available to read.
  */
 int uart_rx_available(void);
@@ -186,6 +191,33 @@ int uart_tx_stopped(void);
  * Designed to be called from the driver interrupt handler.
  */
 void uart_process(void);
+
+/**
+ * Return boolean expressing whether UART buffer is empty or not.
+ */
+int uart_buffer_empty(void);
+
+/**
+ * Disable the EC console UART and convert the UART RX pin to a generic GPIO
+ * with an edge detect interrupt.
+ */
+void uart_enter_dsleep(void);
+
+/**
+ * Enable the EC console UART after a uart_enter_dsleep().
+ */
+void uart_exit_dsleep(void);
+
+#ifdef CONFIG_LOW_POWER_IDLE
+/**
+ * Interrupt handler for UART RX pin transition in deep sleep.
+ *
+ * @param signal	Signal which triggered the interrupt.
+ */
+void uart_deepsleep_interrupt(enum gpio_signal signal);
+#else
+#define uart_deepsleep_interrupt NULL
+#endif
 
 /*
  * COMx functions
