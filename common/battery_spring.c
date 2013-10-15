@@ -69,8 +69,6 @@ static int battery_want_cut_off(void)
 
 	if (battery_is_cut_off())
 		return 0;
-	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_SUSPEND))
-		return 0;
 	if (board_get_ac())
 		return 0;
 
