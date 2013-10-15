@@ -88,6 +88,9 @@
 #define S5_BOOST_CTRL_LOWER_BOUND 94
 #define S5_BOOST_CTRL_UPPER_BOUND 98
 
+static timestamp_t jump_time;
+static int jump_pwm_duty;
+
 static int current_dev_type = TSU6721_TYPE_NONE;
 static int nominal_pwm_duty;
 static int current_pwm_duty;
@@ -214,7 +217,12 @@ static void board_ilim_use_pwm(void)
 	 */
 	STM32_TIM_PSC(3) = CPU_CLOCK / PWM_FREQUENCY / 100 - 1; /* pre-scaler */
 	STM32_TIM_ARR(3) = 100;			/* auto-reload value */
-	STM32_TIM_CCR1(3) = 100;		/* duty cycle */
+
+	/*
+	 * Note that we don't set STM32_TIM_CCR1 here so as to prevent
+	 * setting a wrong value. The caller of this function must ensure
+	 * STM32_TIM_CCR1 is set correctly before calling this function.
+	 */
 
 	/* CC1 configured as output, PWM mode 1, preload enable */
 	STM32_TIM_CCMR1(3) = (6 << 4) | (1 << 3);
@@ -349,18 +357,38 @@ int board_has_high_power_ac(void)
 
 void board_pwm_duty_cycle(int percent)
 {
-	if (current_ilim_config != ILIM_CONFIG_PWM)
-		board_ilim_config(ILIM_CONFIG_PWM);
 	if (percent < 0)
 		percent = 0;
 	if (percent > 100)
 		percent = 100;
-	STM32_TIM_CCR1(3) = (percent * STM32_TIM_ARR(3)) / 100;
+
+	/*
+	 * If we are in RW, we need to prevent unsetting the PWM duty cycle RO
+	 * set. Otherwise the EC might cut its own power when the battery is
+	 * dead.
+	 *
+	 * If we jumped from RO within the last 20 seconds, only allow higher
+	 * current than that when jumping.
+	 */
+	if (system_get_image_copy() == SYSTEM_IMAGE_RW) {
+		if (get_time().val - jump_time.val < (20 * SECOND) &&
+		    percent > jump_pwm_duty)
+			percent = jump_pwm_duty;
+	}
+
+	STM32_TIM_CCR1(3) = percent;
+	if (current_ilim_config != ILIM_CONFIG_PWM)
+		board_ilim_config(ILIM_CONFIG_PWM);
 	current_pwm_duty = percent;
 }
 
 void board_pwm_init_limit(void)
 {
+	if (system_get_image_copy() == SYSTEM_IMAGE_RW) {
+		jump_time = get_time();
+		jump_pwm_duty = STM32_TIM_CCR1(3);
+	}
+
 	/*
 	 * put a high initial limit to avoid browning out the system
 	 * when we turn on charging, lower power bricks might cut off
