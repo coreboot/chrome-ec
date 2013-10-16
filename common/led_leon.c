@@ -14,6 +14,7 @@
 #include "host_command.h"
 #include "led_common.h"
 #include "util.h"
+#include "lid_switch.h"
 
 #define LED_TOTAL_TICKS 16
 #define LED_ON_TICKS 4
@@ -133,6 +134,11 @@ static void leon_led_set_power(void)
 	power_ticks++;
 
 	if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
+		/* If lid close, LED turn off*/
+		if (!lid_is_open()) {
+			leon_led_set_color_power(LED_OFF);
+			return;
+		}
 		/* Reset ticks if entering suspend so LED turns amber
 		 * as soon as possible. */
 		if (!previous_state_suspend)
