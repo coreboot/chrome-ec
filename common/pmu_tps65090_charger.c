@@ -408,6 +408,28 @@ int charge_keep_power_off(void)
 {
 	int charge;
 
+#ifdef CONFIG_BATTERY_SPRING
+	int blk_opstatus;
+	int ret;
+	/*
+	 * bq30z55 specific: reads OperationStatus register
+	 * and checks the status of the discharging FET (DSG FET)
+	 * if it is disabled, we cannot use the battery as a buffer
+	 * whatever charge level it is returning.
+	 */
+	ret = sb_write(SB_MANUFACTURER_ACCESS, 0x54 /* OperationStatus */);
+	ret |= sb_read(SB_MANUFACTURER_DATA, &blk_opstatus);
+	/* DSG FET status is <bit 1> of OperationStatus register
+	 * but this register is accessed using an SMBUS block transfer
+	 * so the first byte is the size of the transfer rather than
+	 * the first byte of data.
+	 * if we can access OperationStatus register AND DSG FET is disabled,
+	 * we stay off.
+	 */
+	if (!ret && !(blk_opstatus & (1 << (1 + 8))))
+		return 1;
+#endif
+
 	if (BATTERY_AP_OFF_LEVEL == 0)
 		return 0;
 
