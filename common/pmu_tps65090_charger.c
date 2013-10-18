@@ -35,8 +35,8 @@
  * Time delay in usec for idle, charging and discharging.  Defined in battery
  * charging flow.
  */
-#define T1_OFF_USEC     (30 * SECOND)
-#define T1_SUSPEND_USEC (30 * SECOND)
+#define T1_OFF_USEC     (10 * SECOND)
+#define T1_SUSPEND_USEC (10 * SECOND)
 #define T1_USEC         (5  * SECOND)
 #define T2_USEC         (10 * SECOND)
 #define T3_USEC         (10 * SECOND)
