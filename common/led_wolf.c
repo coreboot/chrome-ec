@@ -55,10 +55,12 @@ static void led_tick(void)
 		bat_led_set_color(LED_OFF);
 		break;
 	case PWR_STATE_DISCHARGE:
-		bat_led_set_color(LED_AMBER);
+		if (chipset_in_state(CHIPSET_STATE_ON))
+			bat_led_set_color(LED_AMBER);
+		else
+			bat_led_set_color(LED_OFF);
 		break;
 	case PWR_STATE_ERROR:
-	/*FIXME Now keep blink amber till the new spec arrival */
 		bat_led_set_color((ticks & 0x2) ? LED_AMBER : LED_OFF);
 		break;
 	case PWR_STATE_IDLE:
