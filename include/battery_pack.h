@@ -65,4 +65,11 @@ int battery_check_cut_off(void);
  */
 int battery_is_cut_off(void);
 
+/**
+ * Check if one of the battery cell voltage is below our cut-off threshold.
+ *
+ * @return 1 if one cell is in undervoltage.
+ */
+int battery_cell_in_undervoltage(void);
+
 #endif

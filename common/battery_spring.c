@@ -62,10 +62,25 @@ int battery_is_cut_off(void)
 	       get_time().val - last_cutoff.val < BATTERY_CUT_OFF_DELAY;
 }
 
+int battery_cell_in_undervoltage(void)
+{
+	int i, v;
+
+	if (BATTERY_CELL_CUT_OFF_MV) {
+		for (i = 0x3d; i <= 0x3f; ++i) {
+			if (sb_read(i, &v))
+				continue;
+			if (v < BATTERY_CELL_CUT_OFF_MV)
+				return 1;
+		}
+	}
+
+	return 0;
+}
+
 static int battery_want_cut_off(void)
 {
 	int charge;
-	int i, v;
 
 	if (battery_is_cut_off())
 		return 0;
@@ -77,14 +92,8 @@ static int battery_want_cut_off(void)
 		    charge < BATTERY_CUT_OFF_MAH)
 			return 1;
 
-	if (BATTERY_CELL_CUT_OFF_MV) {
-		for (i = 0x3d; i <= 0x3f; ++i) {
-			if (sb_read(i, &v))
-				continue;
-			if (v < BATTERY_CELL_CUT_OFF_MV)
-				return 1;
-		}
-	}
+	if (battery_cell_in_undervoltage())
+		return 1;
 
 	return 0;
 }

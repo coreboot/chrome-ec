@@ -429,6 +429,8 @@ int charge_keep_power_off(void)
 	if (!ret && !(blk_opstatus & (1 << (1 + 8))))
 		return 1;
 #endif
+	if (battery_cell_in_undervoltage())
+		return 1;
 
 	if (BATTERY_AP_OFF_LEVEL == 0)
 		return 0;
