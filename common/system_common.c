@@ -758,23 +758,15 @@ DECLARE_CONSOLE_COMMAND(syslock, command_system_lock,
  */
 static int command_sleepmask(int argc, char **argv)
 {
-	int v;
+	int off;
 
 	if (argc >= 2) {
-		if (parse_bool(argv[1], &v)) {
-			if (v)
-				disable_sleep(SLEEP_MASK_FORCE_NO_DSLEEP);
-			else
-				enable_sleep(SLEEP_MASK_FORCE_NO_DSLEEP);
-		} else {
-			char *e;
-			v = strtoi(argv[1], &e, 10);
-			if (*e)
-				return EC_ERROR_PARAM1;
+		off = strtoi(argv[1], NULL, 10);
 
-			/* Set sleep mask directly. */
-			sleep_mask = v;
-		}
+		if (off)
+			disable_sleep(SLEEP_MASK_FORCE);
+		else
+			enable_sleep(SLEEP_MASK_FORCE);
 	}
 
 	ccprintf("sleep mask: %08x\n", sleep_mask);
@@ -782,8 +774,8 @@ static int command_sleepmask(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(sleepmask, command_sleepmask,
-			"[ on | off | <sleep_mask>]",
-			"Display/force sleep mask.\nSee also 'dsleepmask'.",
+			"[<sleep_mask>]",
+			"Display/force sleep mask",
 			NULL);
 #endif
 
