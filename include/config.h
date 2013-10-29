@@ -164,7 +164,6 @@
 #undef CONFIG_CMD_POWERLED
 #undef CONFIG_CMD_SCRATCHPAD
 #undef CONFIG_CMD_SLEEP
-#undef CONFIG_CMD_RTC_ALARM
 
 /*****************************************************************************/
 

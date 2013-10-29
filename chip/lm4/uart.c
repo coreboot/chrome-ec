@@ -11,7 +11,6 @@
 #include "gpio.h"
 #include "lpc.h"
 #include "registers.h"
-#include "system.h"
 #include "task.h"
 #include "uart.h"
 #include "util.h"
@@ -27,12 +26,6 @@ int uart_init_done(void)
 
 void uart_tx_start(void)
 {
-	/* If interrupt is already enabled, nothing to do */
-	if (LM4_UART_IM(0) & 0x20)
-		return;
-
-	/* Do not allow deep sleep while transmit in progress */
-	disable_sleep(SLEEP_MASK_UART);
 	/*
 	 * Re-enable the transmit interrupt, then forcibly trigger the
 	 * interrupt.  This works around a hardware problem with the
@@ -46,9 +39,6 @@ void uart_tx_start(void)
 void uart_tx_stop(void)
 {
 	LM4_UART_IM(0) &= ~0x20;
-
-	/* Re-allow deep sleep */
-	enable_sleep(SLEEP_MASK_UART);
 }
 
 int uart_tx_stopped(void)
@@ -186,16 +176,11 @@ void uart_init(void)
 {
 	uint32_t mask = 0;
 
-	/*
-	 * Enable UART0 in run, sleep, and deep sleep modes. Enable the Host
-	 * UART in run and sleep modes.
-	 */
+	/* Enable UART0 and Host UART in run, sleep, and deep sleep modes. */
 	mask |= 1;
-	clock_enable_peripheral(CGC_OFFSET_UART, mask, CGC_MODE_DSLEEP);
-
 	mask |= (1 << CONFIG_UART_HOST);
-	clock_enable_peripheral(CGC_OFFSET_UART, mask,
-			CGC_MODE_RUN | CGC_MODE_SLEEP);
+
+	clock_enable_peripheral(CGC_OFFSET_UART, mask, CGC_MODE_ALL);
 
 	gpio_config_module(MODULE_UART, 1);
 
