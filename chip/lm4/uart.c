@@ -5,7 +5,6 @@
 
 /* UART module for Chrome EC */
 
-#include "clock.h"
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
@@ -174,13 +173,11 @@ static void uart_config(int port)
 
 void uart_init(void)
 {
-	uint32_t mask = 0;
+	volatile uint32_t scratch  __attribute__((unused));
 
-	/* Enable UART0 and Host UART in run, sleep, and deep sleep modes. */
-	mask |= 1;
-	mask |= (1 << CONFIG_UART_HOST);
-
-	clock_enable_peripheral(CGC_OFFSET_UART, mask, CGC_MODE_ALL);
+	/* Enable UART0 and Host UART and delay a few clocks */
+	LM4_SYSTEM_RCGCUART |= (1 << CONFIG_UART_HOST) | 1;
+	scratch = LM4_SYSTEM_RCGCUART;
 
 	gpio_config_module(MODULE_UART, 1);
 

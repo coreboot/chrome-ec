@@ -156,7 +156,6 @@
  * console.
  */
 
-#undef CONFIG_CMD_CLOCKGATES
 #undef CONFIG_CMD_COMXTEST
 #undef CONFIG_CMD_ECTEMP
 #undef CONFIG_CMD_PLL
