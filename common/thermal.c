@@ -74,7 +74,7 @@ test_export_static struct thermal_config_t
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 };
 test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
-	{0, 3000, 4575, 6150, 7725, -1};
+	{0, 3700, 4500, 5300, 6000, -1};
 #endif
 #ifdef BOARD_host /* for testing */		/* DON'T DO THIS */
 test_export_static struct thermal_config_t
@@ -170,7 +170,7 @@ static void overheated_action(void)
 
 	if (overheated[THRESHOLD_CPU_DOWN]) {
 		cpu_down_count++;
-		if (cpu_down_count > 3) {
+		if (cpu_down_count > 30) {
 			CPRINTF("[%T overheated; shutting down]\n");
 			chipset_force_shutdown();
 			host_set_single_event(EC_HOST_EVENT_THERMAL_SHUTDOWN);
