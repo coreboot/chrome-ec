@@ -21,7 +21,7 @@
 
 enum led_color {
 	LED_OFF = 0,
-	LED_BLUE,
+	LED_GREEN,
 	LED_AMBER,
 	LED_PINK,
 
@@ -34,24 +34,24 @@ const enum ec_led_id supported_led_ids[] = {
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 static int leon_bat_led_set_gpio(enum led_color color,
-			      enum gpio_signal gpio_led_blue_l,
+			      enum gpio_signal gpio_led_green_l,
 			      enum gpio_signal gpio_led_amber_l)
 {
 	switch (color) {
 	case LED_OFF:
-		gpio_set_level(gpio_led_blue_l,  1);
+		gpio_set_level(gpio_led_green_l,  1);
 		gpio_set_level(gpio_led_amber_l, 1);
 		break;
-	case LED_BLUE:
-		gpio_set_level(gpio_led_blue_l,  0);
+	case LED_GREEN:
+		gpio_set_level(gpio_led_green_l,  0);
 		gpio_set_level(gpio_led_amber_l, 1);
 		break;
 	case LED_AMBER:
-		gpio_set_level(gpio_led_blue_l,  1);
+		gpio_set_level(gpio_led_green_l,  1);
 		gpio_set_level(gpio_led_amber_l, 0);
 		break;
 	case LED_PINK:
-		gpio_set_level(gpio_led_blue_l,  0);
+		gpio_set_level(gpio_led_green_l,  0);
 		gpio_set_level(gpio_led_amber_l, 0);
 		break;
 	default:
@@ -61,14 +61,14 @@ static int leon_bat_led_set_gpio(enum led_color color,
 }
 
 static int leon_pwr_led_set_gpio(enum led_color color,
-			      enum gpio_signal gpio_led_blue_l)
+			      enum gpio_signal gpio_led_green_l)
 {
 	switch (color) {
 	case LED_OFF:
-		gpio_set_level(gpio_led_blue_l,  0);
+		gpio_set_level(gpio_led_green_l,  0);
 		break;
-	case LED_BLUE:
-		gpio_set_level(gpio_led_blue_l,  1);
+	case LED_GREEN:
+		gpio_set_level(gpio_led_green_l,  1);
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;
@@ -106,11 +106,11 @@ static int leon_led_set_color(enum ec_led_id led_id, enum led_color color)
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	if (brightness[EC_LED_COLOR_BLUE] != 0 &&
+	if (brightness[EC_LED_COLOR_GREEN] != 0 &&
 	    brightness[EC_LED_COLOR_YELLOW] != 0)
 		leon_led_set_color(led_id, LED_PINK);
-	else if (brightness[EC_LED_COLOR_BLUE] != 0)
-		leon_led_set_color(led_id, LED_BLUE);
+	else if (brightness[EC_LED_COLOR_GREEN] != 0)
+		leon_led_set_color(led_id, LED_GREEN);
 	else if (brightness[EC_LED_COLOR_YELLOW] != 0)
 		leon_led_set_color(led_id, LED_AMBER);
 	else
@@ -122,7 +122,7 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
 	/* Ignoring led_id as both leds support the same colors */
-	brightness_range[EC_LED_COLOR_BLUE] = 1;
+	brightness_range[EC_LED_COLOR_GREEN] = 1;
 	brightness_range[EC_LED_COLOR_YELLOW] = 1;
 }
 
@@ -147,7 +147,7 @@ static void leon_led_set_power(void)
 		/* Blink once every four seconds. */
 		leon_led_set_color_power(
 			(power_ticks % LED_TOTAL_TICKS < LED_ON_TICKS) ?
-			LED_BLUE : LED_OFF);
+			LED_GREEN : LED_OFF);
 
 		previous_state_suspend = 1;
 		return;
@@ -158,7 +158,7 @@ static void leon_led_set_power(void)
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		leon_led_set_color_power(LED_OFF);
 	else if (chipset_in_state(CHIPSET_STATE_ON))
-		leon_led_set_color_power(LED_BLUE);
+		leon_led_set_color_power(LED_GREEN);
 }
 
 static void leon_led_set_battery(void)
@@ -173,7 +173,7 @@ static void leon_led_set_battery(void)
 		leon_led_set_color_battery(LED_AMBER);
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
-		leon_led_set_color_battery(LED_BLUE);
+		leon_led_set_color_battery(LED_GREEN);
 		break;
 	case PWR_STATE_DISCHARGE:
 		leon_led_set_color_battery(LED_OFF);
@@ -186,9 +186,9 @@ static void leon_led_set_battery(void)
 	case PWR_STATE_IDLE: /* External power connected in IDLE. */
 		if (chflags & CHARGE_FLAG_FORCE_IDLE)
 			leon_led_set_color_battery(
-				(battery_ticks & 0x4) ? LED_BLUE : LED_OFF);
+				(battery_ticks & 0x4) ? LED_GREEN : LED_OFF);
 		else
-			leon_led_set_color_battery(LED_BLUE);
+			leon_led_set_color_battery(LED_GREEN);
 		break;
 	default:
 		/* Other states don't alter LED behavior */
