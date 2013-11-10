@@ -376,7 +376,7 @@ void board_pwm_duty_cycle(int percent)
 	if (system_get_image_copy() == SYSTEM_IMAGE_RW) {
 		if (get_time().val - jump_time.val < (20 * SECOND) &&
 		    percent > jump_pwm_duty)
-			percent = jump_pwm_duty;
+			percent = MAX(jump_pwm_duty, I_LIMIT_MAX);
 	}
 
 	STM32_TIM_CCR1(3) = percent;
