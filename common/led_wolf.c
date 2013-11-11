@@ -55,8 +55,11 @@ static void led_tick(void)
 		bat_led_set_color(LED_OFF);
 		break;
 	case PWR_STATE_DISCHARGE:
-		if (chipset_in_state(CHIPSET_STATE_ON))
-			bat_led_set_color(LED_AMBER);
+		if (chipset_in_state(CHIPSET_STATE_ON) ||
+		    chipset_in_state(CHIPSET_STATE_SUSPEND))
+			bat_led_set_color(
+			 (charge_get_percent() < BATTERY_LEVEL_LOW) ?
+			  LED_AMBER : LED_OFF);
 		else
 			bat_led_set_color(LED_OFF);
 		break;
