@@ -1026,7 +1026,15 @@ int board_get_usb_dev_type(void)
 int board_get_usb_current_limit(void)
 {
 	/* Approximate value by PWM duty cycle */
-	return PWM_MAPPING_A + PWM_MAPPING_B * current_pwm_duty;
+	switch (current_ilim_config) {
+	case ILIM_CONFIG_MANUAL_OFF:
+		return 3000;
+	case ILIM_CONFIG_MANUAL_ON:
+		return 0;
+	case ILIM_CONFIG_PWM:
+	default:
+		return PWM_MAPPING_A + PWM_MAPPING_B * current_pwm_duty;
+	}
 }
 
 int board_get_ac(void)
