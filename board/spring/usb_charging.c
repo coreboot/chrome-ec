@@ -835,6 +835,7 @@ static int usb_want_redetect(int dev_type)
 	    dev_type & TSU6721_TYPE_USB_HOST)
 		return 1;
 	return (dev_type & TSU6721_TYPE_NON_STD_CHG) ||
+	       (dev_type & TSU6721_TYPE_DCP) ||
 	       (dev_type == TSU6721_TYPE_VBUS_DEBOUNCED);
 }
 
