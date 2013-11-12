@@ -80,6 +80,9 @@
 /* Delay before notifying kernel of device type change */
 #define BATTERY_KEY_DELAY (PWM_CTRL_OC_DETECT_TIME + 400 * MSEC)
 
+/* Delay to read again ID pin when VBUS went off */
+#define ID_REDETECTION_DELAY 200000
+
 /* Delay for signals to settle */
 #define DELAY_POWER_MS		20
 #define DELAY_USB_DP_DN_MS	20
@@ -104,6 +107,7 @@ static int pending_adc_watchdog_disable;
 static int pending_dev_type_update;
 static int pending_video_power_off;
 static int restore_id_mux;
+static int charger_idle; /* Spring brick in idle mode */
 
 static int board_rev = 1; /* Assume new boards unless told otherwise */
 
@@ -634,6 +638,23 @@ static int usb_charger_removed(int dev_type)
 	return 0;
 }
 
+static void check_spring_brick_deferred(void)
+{
+	uint8_t id = tsu6721_read(TSU6721_REG_ADC);
+
+	if ((power_removed_type[1] & TSU6721_TYPE_CHG12) &&
+	    (current_dev_type == 0) && (id == 0x17)) {
+		/*
+		 * the power brick is still plugged
+		 * but has internally cut its voltage.
+		 */
+		CPRINTF("[%T Spring brick went to IDLE\n");
+		charger_idle = 1;
+	}
+
+}
+DECLARE_DEFERRED(check_spring_brick_deferred);
+
 /*
  * When a power source is removed, record time, power source type,
  * and PWM duty cycle. Then when we see a power source, compare type
@@ -651,6 +672,15 @@ static void usb_detect_overcurrent(int dev_type)
 		 * retry?
 		 */
 		power_removed_pwm_duty[idx] = current_pwm_duty;
+
+		/*
+		 * if the Spring charger voltage went away,
+		 * check later (after ADC re-sampling time)
+		 * if the ID pin is still there.
+		 */
+		if (current_dev_type & TSU6721_TYPE_CHG12)
+			hook_call_deferred(check_spring_brick_deferred,
+					   ID_REDETECTION_DELAY);
 	} else if (dev_type & TSU6721_TYPE_VBUS_DEBOUNCED) {
 		int idx = !(dev_type == TSU6721_TYPE_VBUS_DEBOUNCED);
 		timestamp_t now = get_time();
@@ -704,6 +734,22 @@ static int usb_manage_boost(int dev_type)
 /* Updates ILIM current limit according to device type. */
 static void usb_update_ilim(int dev_type)
 {
+	if (charger_idle) {
+		/*
+		 * let charger in idle mode until it has been unplugged
+		 * and re-detected.
+		 */
+		if (dev_type == TSU6721_TYPE_VBUS_DEBOUNCED) {
+			charger_idle = 0;
+			CPRINTF("[%T RESET charger idle]\n");
+		} else {
+			/* setting input current to 0 A */
+			board_ilim_config(ILIM_CONFIG_MANUAL_ON);
+			CPRINTF("[%T CHARGER IDLE - ILIM 0A]\n");
+			return;
+		}
+	}
+
 	if (usb_maybe_power_input(dev_type)) {
 		/* Limit USB port current. 500mA for not listed types. */
 		int current_limit = I_LIMIT_500MA;
@@ -974,7 +1020,7 @@ void board_usb_charge_update(int force_update)
 
 int board_get_usb_dev_type(void)
 {
-	return current_dev_type;
+	return charger_idle ? 0 : current_dev_type;
 }
 
 int board_get_usb_current_limit(void)
@@ -989,6 +1035,9 @@ int board_get_ac(void)
 	int vbus, vbus_good;
 
 	if (!usb_maybe_power_input(current_dev_type))
+		return 0;
+
+	if (charger_idle)
 		return 0;
 
 	/*
