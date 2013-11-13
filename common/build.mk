@@ -27,6 +27,7 @@ common-$(CONFIG_BATTERY_SMART)+=smart_battery.o smart_battery_stub.o
 common-$(CONFIG_CHARGER)+=charge_state.o charger_common.o
 common-$(CONFIG_CHARGER_BQ24715)+=charger_bq24715.o
 common-$(CONFIG_CHARGER_BQ24725)+=charger_bq24725.o
+common-$(CONFIG_CHARGER_BQ24727)+=charger_bq24727.o
 common-$(CONFIG_CHARGER_BQ24707A)+=charger_bq24707a.o
 common-$(CONFIG_CHARGER_BQ24738)+=charger_bq24738.o
 common-$(CONFIG_CHARGER_TPS65090)+=pmu_tps65090_charger.o
