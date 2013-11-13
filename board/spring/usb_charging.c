@@ -61,7 +61,7 @@
 #define I_LIMIT_3000MA  0
 
 /* lower bound for PWM duty cycle : max charger current */
-#define I_LIMIT_MAX     MA_TO_PWM(2500)
+#define I_LIMIT_MAX     I_LIMIT_3000MA
 
 /* PWM control loop parameters */
 #define PWM_CTRL_MAX_DUTY	I_LIMIT_100MA /* Minimum current */
