@@ -81,7 +81,11 @@
 #define BATTERY_KEY_DELAY (PWM_CTRL_OC_DETECT_TIME + 400 * MSEC)
 
 /* Delay to read again ID pin when VBUS went off */
-#define ID_REDETECTION_DELAY 200000
+#define ID_REDETECTION_DELAY (200 * MSEC)
+/* Threshold for glitch detection on the Spring charger */
+#define SPRING_GLITCH_THR (250 * MSEC)
+/* Minimum delay before allowing the charger to go off idle mode */
+#define CHARGER_IDLE_MINIMUM_PERIOD (2 * MINUTE)
 
 /* Delay for signals to settle */
 #define DELAY_POWER_MS		20
@@ -108,6 +112,7 @@ static int pending_dev_type_update;
 static int pending_video_power_off;
 static int restore_id_mux;
 static int charger_idle; /* Spring brick in idle mode */
+static timestamp_t charger_idle_time; /* last entry time in idle mode */
 
 static int board_rev = 1; /* Assume new boards unless told otherwise */
 
@@ -650,6 +655,7 @@ static void check_spring_brick_deferred(void)
 		 */
 		CPRINTF("[%T Spring brick went to IDLE\n");
 		charger_idle = 1;
+		charger_idle_time = get_time();
 	}
 
 }
@@ -684,6 +690,18 @@ static void usb_detect_overcurrent(int dev_type)
 	} else if (dev_type & TSU6721_TYPE_VBUS_DEBOUNCED) {
 		int idx = !(dev_type == TSU6721_TYPE_VBUS_DEBOUNCED);
 		timestamp_t now = get_time();
+		if ((power_removed_type[1] & TSU6721_TYPE_CHG12) &&
+		    ((now.val - power_removed_time[1].val) <
+		     SPRING_GLITCH_THR)) {
+			/*
+			 * the spring brick should not glitch,
+			 * put it in idle.
+			 */
+			CPRINTF("[%T Spring brick GLITCH]\n");
+			charger_idle = 1;
+			charger_idle_time = get_time();
+			return;
+		}
 		now.val -= power_removed_time[idx].val;
 		if (now.val >= PWM_CTRL_OC_DETECT_TIME) {
 			oc_detect_retry[idx] = PWM_CTRL_OC_RETRY;
@@ -739,7 +757,9 @@ static void usb_update_ilim(int dev_type)
 		 * let charger in idle mode until it has been unplugged
 		 * and re-detected.
 		 */
-		if (dev_type == TSU6721_TYPE_VBUS_DEBOUNCED) {
+		if ((dev_type == TSU6721_TYPE_VBUS_DEBOUNCED) &&
+		    ((get_time().val - charger_idle_time.val) >
+		     CHARGER_IDLE_MINIMUM_PERIOD)) {
 			charger_idle = 0;
 			CPRINTF("[%T RESET charger idle]\n");
 		} else {
