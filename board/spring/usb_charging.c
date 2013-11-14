@@ -85,7 +85,7 @@
 /* Threshold for glitch detection on the Spring charger */
 #define SPRING_GLITCH_THR (250 * MSEC)
 /* Minimum delay before allowing the charger to go off idle mode */
-#define CHARGER_IDLE_MINIMUM_PERIOD (2 * MINUTE)
+#define CHARGER_IDLE_MINIMUM_PERIOD (3 * MINUTE)
 
 /* Delay for signals to settle */
 #define DELAY_POWER_MS		20
