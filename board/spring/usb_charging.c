@@ -648,7 +648,7 @@ static void check_spring_brick_deferred(void)
 	uint8_t id = tsu6721_read(TSU6721_REG_ADC);
 
 	if ((power_removed_type[1] & TSU6721_TYPE_CHG12) &&
-	    (current_dev_type == 0) && (id == 0x17)) {
+	    (current_dev_type == 0) && (id == 0x17) && !charger_idle) {
 		/*
 		 * the power brick is still plugged
 		 * but has internally cut its voltage.
@@ -692,7 +692,7 @@ static void usb_detect_overcurrent(int dev_type)
 		timestamp_t now = get_time();
 		if ((power_removed_type[1] & TSU6721_TYPE_CHG12) &&
 		    ((now.val - power_removed_time[1].val) <
-		     SPRING_GLITCH_THR)) {
+		     SPRING_GLITCH_THR) && !charger_idle) {
 			/*
 			 * the spring brick should not glitch,
 			 * put it in idle.
