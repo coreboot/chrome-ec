@@ -23,7 +23,7 @@ const struct battery_temperature_ranges bat_temp_ranges = {
 	.charging_min_c       = 0,
 	.charging_max_c       = 60,
 	.discharging_min_c    = -10,
-	.discharging_max_c    = 40,
+	.discharging_max_c    = 80,
 };
 
 static const struct battery_info info = {
