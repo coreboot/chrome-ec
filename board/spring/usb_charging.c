@@ -655,7 +655,7 @@ static void check_spring_brick_deferred(void)
 		 */
 		CPRINTF("[%T Spring brick went to IDLE\n");
 		charger_idle = 1;
-		charger_idle_time = get_time();
+		charger_idle_time.val = 0 /* no minimum idle period */;
 	}
 
 }
@@ -758,8 +758,9 @@ static void usb_update_ilim(int dev_type)
 		 * and re-detected.
 		 */
 		if ((dev_type == TSU6721_TYPE_VBUS_DEBOUNCED) &&
-		    ((get_time().val - charger_idle_time.val) >
-		     CHARGER_IDLE_MINIMUM_PERIOD)) {
+		    ((charger_idle_time.val == 0) ||
+		     ((get_time().val - charger_idle_time.val) >
+		      CHARGER_IDLE_MINIMUM_PERIOD))) {
 			charger_idle = 0;
 			CPRINTF("[%T RESET charger idle]\n");
 		} else {
