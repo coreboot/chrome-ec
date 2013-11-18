@@ -1042,7 +1042,10 @@ void board_usb_charge_update(int force_update)
 
 int board_get_usb_dev_type(void)
 {
-	return charger_idle ? 0 : current_dev_type;
+	uint8_t id = tsu6721_read(TSU6721_REG_ADC);
+	int dev_type = charger_idle ? 0 : current_dev_type;
+
+	return ((int)id << 24) | dev_type;
 }
 
 int board_get_usb_current_limit(void)
