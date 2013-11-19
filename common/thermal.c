@@ -67,14 +67,14 @@ test_export_static struct thermal_config_t
 	/* TEMP_SENSOR_TYPE_CPU */
 	{THERMAL_CONFIG_WARNING_ON_FAIL,
 	 {373, 378, 383,
-	  327, 335, 343, 351, 359} } ,
+	  323, 328, 333, 338, 343, 349, 355} } ,
 	/* TEMP_SENSOR_TYPE_BOARD */
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 	/* TEMP_SENSOR_TYPE_CASE */
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 };
 test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
-	{0, 3700, 4500, 5300, 6000, -1};
+	{0, 2700, 3000, 3400, 4200, 5000, 5700, -1};
 #endif
 #ifdef BOARD_host /* for testing */		/* DON'T DO THIS */
 test_export_static struct thermal_config_t
