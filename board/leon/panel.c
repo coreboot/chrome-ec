@@ -20,7 +20,7 @@
  */
 
 #define BL_ENABLE_DELAY_US 420000 /* 420 ms delay */
-#define LCDVCC_ENABLE_DELAY_US 285000 /* 270 ms delay */
+#define LCDVCC_ENABLE_DELAY_US 285000 /* 285 ms delay */
 
 static int backlight_deferred_value;
 
