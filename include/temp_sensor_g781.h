@@ -13,6 +13,8 @@
 #define G781_IDX_INTERNAL	0
 #define G781_IDX_EXTERNAL	1
 
+#define G781_LOCAL_TEMP_THERM_LIMIT_TRIP	63
+
 /* Chip-specific commands */
 #define G781_TEMP_LOCAL			0x00
 #define G781_TEMP_REMOTE		0x01

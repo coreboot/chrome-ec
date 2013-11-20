@@ -46,6 +46,7 @@ static int g781_set_temp(const int offset, int temp)
 	return g781_write8(offset, (uint8_t)temp);
 }
 
+
 int g781_get_val(int idx, int *temp_ptr)
 {
 	if (!board_g781_has_power())
@@ -67,8 +68,17 @@ int g781_get_val(int idx, int *temp_ptr)
 
 static void g781_temp_sensor_poll(void)
 {
+	int temps;
+
 	if (!board_g781_has_power())
 		return;
+
+#ifdef BOARD_leon
+	g781_get_temp(G781_LOCAL_TEMP_THERM_LIMIT, &temps);
+	if (temps != G781_LOCAL_TEMP_THERM_LIMIT_TRIP)
+		g781_set_temp(G781_LOCAL_TEMP_THERM_LIMIT,
+			      G781_LOCAL_TEMP_THERM_LIMIT_TRIP);
+#endif
 
 	g781_get_temp(G781_TEMP_LOCAL, &g781_temp_val_local);
 	g781_temp_val_local = C_TO_K(g781_temp_val_local);
