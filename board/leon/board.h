@@ -9,7 +9,6 @@
 #define __BOARD_H
 
 /* Optional features */
-#define CONFIG_BACKLIGHT_X86
 #define CONFIG_BATTERY_CHECK_CONNECTED
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
@@ -191,6 +190,10 @@ enum temp_sensor_id {
 
 	TEMP_SENSOR_COUNT
 };
+/**
+ * LCD VCC enable interrupt.
+ */
+void lcdvcc_interrupt(enum gpio_signal signal);
 
 /**
  * Board-specific g781 power state.
