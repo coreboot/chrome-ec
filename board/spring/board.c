@@ -424,7 +424,7 @@ static int power_command_info(struct host_cmd_handler_args *args)
 
 	r->voltage_ac = adc_read_channel(ADC_CH_USB_VBUS_SNS);
 	r->voltage_system = pmu_adc_read(ADC_VAC, ADC_FLAG_KEEP_ON)
-			  * 17000 / 1024;
+			  * 17000 / 1024 * 5 / 3;
 	r->current_system = pmu_adc_read(ADC_IAC, 0)
 			  * (1000 / R_INPUT_MOHM) * 33 / 1024;
 	r->usb_dev_type = board_get_usb_dev_type();

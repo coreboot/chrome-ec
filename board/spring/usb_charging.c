@@ -1126,7 +1126,7 @@ static int command_batdebug(int argc, char **argv)
 	int val;
 	ccprintf("VBUS = %d mV\n", adc_read_channel(ADC_CH_USB_VBUS_SNS));
 	ccprintf("VAC = %d mV\n", pmu_adc_read(ADC_VAC, ADC_FLAG_KEEP_ON)
-				  * 17000 / 1024);
+				  * 17000 / 1024 * 5 / 3);
 	ccprintf("IAC = %d mA\n", pmu_adc_read(ADC_IAC, ADC_FLAG_KEEP_ON)
 				  * (1000 / R_INPUT_MOHM) * 33 / 1024);
 	ccprintf("VBAT = %d mV\n", pmu_adc_read(ADC_VBAT, ADC_FLAG_KEEP_ON)
