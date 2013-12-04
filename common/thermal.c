@@ -74,7 +74,7 @@ test_export_static struct thermal_config_t
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 };
 test_export_static const int fan_speed[THERMAL_FAN_STEPS + 1] =
-	{0, 3000, 3400, 3800, 4200, 5000, 5700, -1};
+	{0, 2700, 3000, 3400, 4200, 5000, 5700, -1};
 #endif
 #ifdef BOARD_host /* for testing */		/* DON'T DO THIS */
 test_export_static struct thermal_config_t
