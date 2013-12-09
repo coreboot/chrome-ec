@@ -46,8 +46,18 @@ struct host_byte {
 	uint8_t byte;
 };
 
-/* 4 is big enough for all i8042 commands */
-static uint8_t from_host_buffer[4 * sizeof(struct host_byte)];
+
+/*
+ * we see from kernel is:
+ *
+ *   d1 -> i8042 (command)    # enable A20 in i8042_platform_init() of
+ *   df -> i8042 (parameter)  # serio/i8042-x86ia64io.h file.
+ *   ff -> i8042 (command)
+ *   20 -> i8042 (command)    # read CTR
+ *
+ * Hence, 5 (actually 4 plus one spare) is large enough, but use 8 for safety.
+ */
+static uint8_t from_host_buffer[8 * sizeof(struct host_byte)];
 static struct queue from_host = {
 	.buf_bytes  = sizeof(from_host_buffer),
 	.unit_bytes = sizeof(struct host_byte),

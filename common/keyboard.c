@@ -307,19 +307,6 @@ void keyboard_state_changed(int row, int col, int is_pressed)
 	}
 }
 
-
-static void keyboard_enable(int enable)
-{
-	if (!keyboard_enabled && enable) {
-		CPRINTF("[%T KB enable]\n");
-	} else if (keyboard_enabled && !enable) {
-		CPRINTF("[%T KB disable]\n");
-		reset_rate_and_delay();
-		typematic_len = 0;  /* stop typematic */
-	}
-	keyboard_enabled = enable;
-}
-
 static void keystroke_enable(int enable)
 {
 	if (!keystroke_enabled && enable)
@@ -330,6 +317,26 @@ static void keystroke_enable(int enable)
 	keystroke_enabled = enable;
 }
 
+static void keyboard_enable(int enable)
+{
+	if (!keyboard_enabled && enable) {
+		CPRINTF("[%T KB enable]\n");
+	} else if (keyboard_enabled && !enable) {
+		CPRINTF("[%T KB disable]\n");
+		reset_rate_and_delay();
+		typematic_len = 0;  /* stop typematic */
+
+		/* Disable keystroke as well in case the BIOS doesn't
+		 * disable keystroke where repeated strokes are queued
+		 * before kernel initializes keyboard. Hence the kernel
+		 * is unable to get stable CTR read (get key codes
+		 * instead).
+		 */
+		keystroke_enable(0);
+		keyboard_clear_underlying_buffer();
+	}
+	keyboard_enabled = enable;
+}
 
 static uint8_t read_ctl_ram(uint8_t addr)
 {
