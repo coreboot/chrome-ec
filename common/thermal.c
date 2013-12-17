@@ -66,8 +66,8 @@ test_export_static struct thermal_config_t
 		thermal_config[TEMP_SENSOR_TYPE_COUNT] = {
 	/* TEMP_SENSOR_TYPE_CPU */
 	{THERMAL_CONFIG_WARNING_ON_FAIL,
-	 {373, 378, 383,
-	  323, 328, 333, 338, 343, 349, 355} } ,
+	 {368, 370, 372,
+	  318, 323, 328, 333, 338, 344, 350} } ,
 	/* TEMP_SENSOR_TYPE_BOARD */
 	{THERMAL_CONFIG_NO_FLAG, {THERMAL_THRESHOLD_DISABLE_ALL} },
 	/* TEMP_SENSOR_TYPE_CASE */
@@ -170,7 +170,7 @@ static void overheated_action(void)
 
 	if (overheated[THRESHOLD_CPU_DOWN]) {
 		cpu_down_count++;
-		if (cpu_down_count > 30) {
+		if (cpu_down_count > 3) {
 			CPRINTF("[%T overheated; shutting down]\n");
 			chipset_force_shutdown();
 			host_set_single_event(EC_HOST_EVENT_THERMAL_SHUTDOWN);
