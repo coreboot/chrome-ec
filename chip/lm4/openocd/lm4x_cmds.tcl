@@ -47,6 +47,10 @@ proc flash_rambi { } {
 	flash_lm4 ../../../build/rambi/ec.bin 0
 }
 
+proc flash_clapper { } {
+	flash_lm4 ../../../build/clapper/ec.bin 0
+}
+
 proc flash_samus { } {
 	flash_lm4 ../../../build/samus/ec.bin 0
 }
@@ -83,6 +87,13 @@ proc flash_rambi_rw { } {
 	flash_lm4 ../../../build/rambi/ec.RW.bin 131072
 }
 
+proc flash_clapper_ro { } {
+	flash_lm4 ../../../build/clapper/ec.RO.flat 0
+}
+
+proc flash_clapper_rw { } {
+	flash_lm4 ../../../build/clapper/ec.RW.bin 131072
+}
 # link has pstate in last sector
 proc unprotect_link { } {
 	reset halt
