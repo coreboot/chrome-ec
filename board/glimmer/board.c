@@ -10,6 +10,7 @@
 #include "button.h"
 #include "charger.h"
 #include "common.h"
+#include "driver/accel_kxcj9.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
 #include "fan.h"
@@ -125,6 +126,8 @@ const struct gpio_alt_func gpio_alt_funcs[] = {
 	{GPIO_B, 0x08, 3, MODULE_I2C, GPIO_OPEN_DRAIN},	/* I2C0 SDA */
 	{GPIO_B, 0x40, 3, MODULE_I2C},			/* I2C5 SCL */
 	{GPIO_B, 0x80, 3, MODULE_I2C, GPIO_OPEN_DRAIN},	/* I2C5 SDA */
+	{GPIO_F, 0x40, 3, MODULE_I2C},			/* I2C2 SCL */
+	{GPIO_F, 0x80, 3, MODULE_I2C, GPIO_OPEN_DRAIN},	/* I2C2 SDA */
 	{GPIO_D, 0x0f, 2, MODULE_SPI},			/* SPI1 */
 	{GPIO_L, 0x3f, 15, MODULE_LPC},			/* LPC */
 	{GPIO_M, 0x21, 15, MODULE_LPC},			/* LPC */
@@ -192,6 +195,7 @@ BUILD_ASSERT(ARRAY_SIZE(fans) == CONFIG_FANS);
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"batt_chg", 0, 100},
+	{"accel", 2, 100},
 	{"thermal",  5, 100},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
@@ -226,6 +230,12 @@ const struct button_config buttons[] = {
 	30 * MSEC, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
+
+const int accel_addr[] = {
+	KXCJ9_ADDR0,	/* ACCEL_LID */
+	KXCJ9_ADDR1	/* ACCEL_BASE */
+};
+BUILD_ASSERT(ARRAY_SIZE(accel_addr) == ACCEL_COUNT);
 
 /**
  * Discharge battery when on AC power for factory test.

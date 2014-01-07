@@ -10,6 +10,7 @@
 #include "button.h"
 #include "charger.h"
 #include "common.h"
+#include "driver/accel_kxcj9.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
 #include "gpio.h"
@@ -218,6 +219,11 @@ const struct button_config buttons[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
 
+const int accel_addr[] = {
+	KXCJ9_ADDR0,	/* ACCEL_LID */
+	KXCJ9_ADDR1	/* ACCEL_BASE */
+};
+BUILD_ASSERT(ARRAY_SIZE(accel_addr) == ACCEL_COUNT);
 
 #ifdef HAS_TASK_CHARGER
 /**
