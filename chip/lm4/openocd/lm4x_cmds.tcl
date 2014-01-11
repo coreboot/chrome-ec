@@ -31,6 +31,18 @@ proc flash_bds { } {
 	flash_lm4 ../../../build/bds/ec.bin 0
 }
 
+proc flash_glimmer { } {
+	flash_lm4 ../../../build/glimmer/ec.bin 0
+}
+
+proc flash_glimmer_ro { } {
+	flash_lm4 ../../../build/glimmer/ec.RO.flat 0
+}
+
+proc flash_glimmer_rw { } {
+	flash_lm4 ../../../build/glimmer/ec.RW.bin 131072
+}
+
 proc flash_rambi { } {
 	flash_lm4 ../../../build/rambi/ec.bin 0
 }
