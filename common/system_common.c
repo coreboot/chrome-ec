@@ -303,7 +303,7 @@ static void jump_to_image(uint32_t init_addr)
 	 * EC is not in read-only firmware.  (This is not technically true if
 	 * jumping from RO -> RO, but that's not a meaningful use case...)
 	 */
-#ifdef BOARD_spring
+#if defined(BOARD_skate) || defined(BOARD_spring)
 	int value;
 
 	/* find whether we have a pull-up or a pull-down on the Silego side */

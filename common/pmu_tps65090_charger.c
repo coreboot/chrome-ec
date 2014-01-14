@@ -310,7 +310,7 @@ static int calc_next_state(int state)
 			return ST_REINIT;
 		}
 
-#ifdef BOARD_spring
+#if defined(BOARD_skate) || defined(BOARD_spring)
 		/* Re-init on charger timeout. */
 		if (pmu_is_charge_timeout()) {
 			CPUTS("[pmu] charging: timeout\n");
