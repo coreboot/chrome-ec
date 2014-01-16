@@ -86,7 +86,6 @@ BUILD_ASSERT(ARRAY_SIZE(gpio_list) == GPIO_COUNT);
 
 /* Pins with alternate functions */
 const struct gpio_alt_func gpio_alt_funcs[] = {
-	{GPIO_A, 0x0004, GPIO_ALT_TIM2,  MODULE_POWER_LED},
 	{GPIO_A, 0x00f0, GPIO_ALT_SPI,   MODULE_SPI},
 	{GPIO_A, 0x0600, GPIO_ALT_USART, MODULE_UART},
 	{GPIO_B, 0x0cc0, GPIO_ALT_I2C,	 MODULE_I2C},
