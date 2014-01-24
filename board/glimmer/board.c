@@ -11,6 +11,7 @@
 #include "common.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
+#include "fan.h"
 #include "gpio.h"
 #include "host_command.h"
 #include "i2c.h"
@@ -123,6 +124,7 @@ const struct gpio_alt_func gpio_alt_funcs[] = {
 	{GPIO_L, 0x3f, 15, MODULE_LPC},			/* LPC */
 	{GPIO_M, 0x21, 15, MODULE_LPC},			/* LPC */
 	{GPIO_N, 0x50, 1, MODULE_PWM_LED, GPIO_OPEN_DRAIN}, /* FAN0PWM 3&4 */
+	{GPIO_N, 0x0c, 1, MODULE_PWM_FAN},		/* FAN0PWM2 */
 };
 const int gpio_alt_funcs_count = ARRAY_SIZE(gpio_alt_funcs);
 
@@ -170,6 +172,18 @@ const struct pwm_t pwm_channels[] = {
 
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
+/* Physical fans. These are logically separate from pwm_channels. */
+const struct fan_t fans[] = {
+	{.flags = FAN_USE_RPM_MODE,
+	 .rpm_min = 3680,
+	 .rpm_max = 4600,
+	 .ch = 2,
+	 .pgood_gpio = GPIO_PP5000_PGOOD,
+	 .enable_gpio = -1,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(fans) == CONFIG_FANS);
+
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"batt_chg", 0, 100},
@@ -197,7 +211,7 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
-	{{0, 0, 0}, 0, 0},
+	{{C_TO_K(80), C_TO_K(85), C_TO_K(88)}, C_TO_K(45), C_TO_K(70)},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
