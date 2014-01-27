@@ -12,6 +12,7 @@
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
 #include "jtag.h"
@@ -201,10 +202,25 @@ struct ec_thermal_config thermal_params[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
+/* Add delay to avoid error detection of AC status. When charger status set to
+ * discharge, EC will detect AC off and trigger re-init to charge status.
+ */
+void discharge_on_ac_deferred(void)
+{
+	charger_discharge_on_ac(1);
+}
+DECLARE_DEFERRED(discharge_on_ac_deferred);
+
 /**
  * Discharge battery when on AC power for factory test.
  */
 int board_discharge_on_ac(int enable)
 {
-	return charger_discharge_on_ac(enable);
+	if (enable) {
+		hook_call_deferred(discharge_on_ac_deferred, 400 * MSEC);
+		return EC_SUCCESS;
+	} else {
+		hook_call_deferred(discharge_on_ac_deferred, -1);
+		return charger_discharge_on_ac(0);
+	}
 }
