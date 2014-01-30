@@ -94,6 +94,19 @@ proc flash_clapper_ro { } {
 proc flash_clapper_rw { } {
 	flash_lm4 ../../../build/clapper/ec.RW.bin 131072
 }
+
+proc flash_winky { } {
+	flash_lm4 ../../../build/winky/ec.bin 0
+}
+
+proc flash_winky_ro { } {
+	flash_lm4 ../../../build/winky/ec.RO.flat 0
+}
+
+proc flash_winky_rw { } {
+	flash_lm4 ../../../build/winky/ec.RW.bin 131072
+}
+
 # link has pstate in last sector
 proc unprotect_link { } {
 	reset halt
