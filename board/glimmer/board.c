@@ -7,6 +7,7 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "backlight.h"
+#include "button.h"
 #include "charger.h"
 #include "common.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -64,6 +65,10 @@ const struct gpio_info gpio_list[] = {
 	{"UART0_RX",             LM4_GPIO_A, (1<<0), GPIO_INT_BOTH_DSLEEP |
 							GPIO_PULL_UP,
 	 uart_deepsleep_interrupt},
+	{"BUTTON_VOLUME_DOWN_L", LM4_GPIO_B, (1<<1), GPIO_INT_BOTH,
+	 button_interrupt},
+	{"BUTTON_VOLUME_UP_L",   LM4_GPIO_B, (1<<0), GPIO_INT_BOTH,
+	 button_interrupt},
 
 	/* Other inputs */
 	{"BOARD_VERSION1",       LM4_GPIO_Q, (1<<5), GPIO_INPUT, NULL},
@@ -214,6 +219,14 @@ struct ec_thermal_config thermal_params[] = {
 	{{C_TO_K(80), C_TO_K(85), C_TO_K(88)}, C_TO_K(45), C_TO_K(70)},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+const struct button_config buttons[] = {
+	{"Volume Down", KEYBOARD_BUTTON_VOLUME_DOWN, GPIO_BUTTON_VOLUME_DOWN_L,
+	30 * MSEC, 0},
+	{"Volume Up", KEYBOARD_BUTTON_VOLUME_UP, GPIO_BUTTON_VOLUME_UP_L,
+	30 * MSEC, 0},
+};
+BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
 
 /**
  * Discharge battery when on AC power for factory test.
