@@ -20,6 +20,8 @@
 #include "jtag.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
+#include "math_util.h"
+#include "motion_sense.h"
 #include "peci.h"
 #include "power.h"
 #include "power_button.h"
@@ -248,3 +250,29 @@ int board_discharge_on_ac(int enable)
 {
 	return charger_discharge_on_ac(enable);
 }
+
+#ifdef HAS_TASK_MOTIONSENSE
+
+#ifndef CONFIG_ACCEL_CALIBRATE
+const
+#endif
+struct accel_orientation acc_orient = {
+	.rot_align = {
+		{0, 1, 0},
+		{-1, 0, 0},
+		{0, 0, 1}
+	},
+	.rot_hinge_90 = {
+		{1, 0, 0},
+		{0, 0, 1},
+		{0, -1, 0}
+	},
+	.rot_hinge_180 = {
+		{1, 0, 0},
+		{0, -1, 0},
+		{0, 0, -1}
+	},
+	.hinge_axis = {1, 0, 0},
+};
+
+#endif /* HAS_TASK_MOTIONSENSE */
