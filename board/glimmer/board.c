@@ -199,10 +199,9 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 /* Temperature sensors data; must be in same order as enum temp_sensor_id. */
 const struct temp_sensor_t temp_sensors[] = {
 	{"ECInternal", TEMP_SENSOR_TYPE_BOARD, chip_temp_sensor_get_val, 0, 4},
-	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_Power_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_LOCAL, 4},
-	/* TODO(crosbug.com/p/24965): Verify placement of temp sensors */
-	{"TMP432_Power_top", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_RAM_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE1, 4},
 	{"TMP432_CPU_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
