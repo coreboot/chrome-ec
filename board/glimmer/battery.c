@@ -81,11 +81,3 @@ DECLARE_CONSOLE_COMMAND(battcutoff, command_battcutoff,
 			NULL,
 			"Enable battery cutoff (ship mode)",
 			NULL);
-
-/**
- * Physical detection of battery connection.
- */
-int battery_is_connected(void)
-{
-	return (gpio_get_level(GPIO_BAT_DETECT_L) == 0);
-}

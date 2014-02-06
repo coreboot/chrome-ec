@@ -12,7 +12,7 @@
 #define CONFIG_ACCEL_KXCJ9
 #define CONFIG_AP_HANG_DETECT
 #define CONFIG_BACKLIGHT_LID
-#define CONFIG_BATTERY_CHECK_CONNECTED
+#define CONFIG_BATTERY_PRESENT_GPIO GPIO_BAT_PRESENT_L
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
 #define CONFIG_BUTTON_COUNT 2
@@ -101,7 +101,7 @@ enum gpio_signal {
 	GPIO_PP1000_S0IX_PGOOD,    /* Power good on 1.00V (S0iX supplies) */
 	GPIO_USB1_OC_L,            /* USB port overcurrent warning */
 	GPIO_USB2_OC_L,            /* USB port overcurrent warning */
-	GPIO_BAT_DETECT_L,         /* Battery detect. Repurposed BAT_TEMP */
+	GPIO_BAT_PRESENT_L,        /* Battery present. Repurposed BAT_TEMP */
 
 	/* Outputs */
 	GPIO_CPU_PROCHOT,          /* Force CPU to think it's overheated */
