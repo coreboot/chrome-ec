@@ -18,9 +18,8 @@
 #define CONFIG_BUTTON_COUNT 2
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_BQ24715
-/* TODO(crosbug.com/p/24645): Set correct input current */
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
-#define CONFIG_CHARGER_INPUT_CURRENT 1700   /* 33 W adapter, 19 V, 1.75 A */
+#define CONFIG_CHARGER_INPUT_CURRENT 1920   /* 45 W adapter, 20 V, 2.25 A */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10    /* Charge sense resistor, mOhm */
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input senso resistor, mOhm */
 #define CONFIG_CHIPSET_BAYTRAIL

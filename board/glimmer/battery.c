@@ -7,7 +7,10 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "charger.h"
+#include "charge_state.h"
 #include "console.h"
+#include "driver/charger/bq24715.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -81,3 +84,23 @@ DECLARE_CONSOLE_COMMAND(battcutoff, command_battcutoff,
 			NULL,
 			"Enable battery cutoff (ship mode)",
 			NULL);
+
+/**
+ * Initialize charger additional option value
+ */
+static void charger_init(void)
+{
+	if ((charge_get_state() == PWR_STATE_INIT) ||
+	    (charge_get_state() == PWR_STATE_REINIT)) {
+		int option;
+
+		charger_get_option(&option);
+
+		/* Disable LDO mode & Enable IDPM by power suggest */
+		option |= OPT_ODPM_ENABLE;
+		option &= ~OPT_LDO_MODE_MASK;
+
+		charger_set_option(option);
+	}
+}
+DECLARE_HOOK(HOOK_CHARGE_STATE_CHANGE, charger_init, HOOK_PRIO_DEFAULT);
