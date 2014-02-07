@@ -133,7 +133,7 @@ const struct gpio_alt_func gpio_alt_funcs[] = {
 	{GPIO_D, 0x0f, 2, MODULE_SPI},			/* SPI1 */
 	{GPIO_L, 0x3f, 15, MODULE_LPC},			/* LPC */
 	{GPIO_M, 0x21, 15, MODULE_LPC},			/* LPC */
-	{GPIO_N, 0x50, 1, MODULE_PWM_LED, GPIO_OPEN_DRAIN}, /* FAN0PWM 3&4 */
+	{GPIO_M, 0x40, 1, MODULE_PWM_LED},		/* FAN0PWM0 */
 	{GPIO_N, 0x0c, 1, MODULE_PWM_FAN},		/* FAN0PWM2 */
 };
 const int gpio_alt_funcs_count = ARRAY_SIZE(gpio_alt_funcs);
@@ -176,8 +176,7 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
 const struct pwm_t pwm_channels[] = {
-	{4, PWM_CONFIG_ACTIVE_LOW},
-	{3, PWM_CONFIG_ACTIVE_LOW},
+	{0, PWM_CONFIG_ACTIVE_LOW},
 };
 
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);

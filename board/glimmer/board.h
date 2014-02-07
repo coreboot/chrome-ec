@@ -33,8 +33,7 @@
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_IRQ_GPIO GPIO_KBD_IRQ_L
 #define CONFIG_KEYBOARD_PROTOCOL_8042
-/* TODO(crosbug.com/p/24647): Add LED support */
-#undef CONFIG_LED_COMMON
+#define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
 #undef  CONFIG_PECI
 #define CONFIG_POWER_BUTTON
@@ -168,7 +167,6 @@ enum adc_channel {
 };
 
 enum pwm_channel {
-	PWM_CH_LED_GREEN,
 	PWM_CH_LED_RED,
 
 	/* Number of PWM channels */
