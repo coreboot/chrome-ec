@@ -8,6 +8,7 @@
 #include "adc_chip.h"
 #include "backlight.h"
 #include "button.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "common.h"
 #include "driver/accel_kxcj9.h"
@@ -214,6 +215,7 @@ const struct temp_sensor_t temp_sensors[] = {
 		TMP432_IDX_REMOTE1, 4},
 	{"TMP432_CPU_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
+	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_temp_sensor_get_val, 0, 4},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -225,6 +227,7 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{C_TO_K(80), C_TO_K(85), C_TO_K(88)}, C_TO_K(45), C_TO_K(70)},
+	{{0, 0, 0}, 0, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
