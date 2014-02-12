@@ -98,8 +98,8 @@ const struct battery_temperature_ranges bat_temp_ranges = {
 	.start_charging_max_c = 45,
 	.charging_min_c       = 0,
 	.charging_max_c       = 60,
-	.discharging_min_c    = 0,
-	.discharging_max_c    = 100,
+	.discharging_min_c    = -20,
+	.discharging_max_c    = 70,
 };
 
 /* I2C ports */
