@@ -274,8 +274,8 @@ static void pwm_fan_init(void)
 	int i;
 
 	/* Enable the fan module and delay a few clocks */
-	LM4_SYSTEM_RCGCFAN = 1;
-	clock_wait_cycles(3);
+	clock_enable_peripheral(CGC_OFFSET_FAN, 0x1,
+				CGC_MODE_RUN | CGC_MODE_SLEEP);
 
 	/* Configure GPIOs */
 	gpio_config_module(MODULE_PWM_FAN, 1);
