@@ -246,6 +246,11 @@ int uart_getc(void)
 	return c;
 }
 
+int uart_buffer_empty(void)
+{
+	return tx_buf_head == tx_buf_tail;
+}
+
 int uart_gets(char *dest, int size)
 {
 	int got = 0;
