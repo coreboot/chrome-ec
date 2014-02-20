@@ -198,10 +198,9 @@ const struct temp_sensor_t temp_sensors[] = {
 	{"ECInternal", TEMP_SENSOR_TYPE_BOARD, chip_temp_sensor_get_val, 0, 4},
 	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_LOCAL, 4},
-	/* TODO(crosbug.com/p/24962): Check placement of tmp432 sensors. */
 	{"TMP432_Power_top", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE1, 4},
-	{"TMP432_CPU_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_RAM_top", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
