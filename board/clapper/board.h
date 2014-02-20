@@ -30,7 +30,7 @@
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_IRQ_GPIO GPIO_KBD_IRQ_L
 #define CONFIG_KEYBOARD_PROTOCOL_8042
-#undef  CONFIG_LED_COMMON
+#define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
 #undef  CONFIG_PECI
 #define CONFIG_POWER_BUTTON
@@ -166,10 +166,10 @@ enum adc_channel {
 	ADC_CH_COUNT
 };
 
-/* TODO(crosbug.com/p/24371): Add support for charger + power LEDs */
 enum pwm_channel {
-	PWM_CH_LED_GREEN,
-	PWM_CH_LED_RED,
+	PWM_CH_BATTERY_LED_AMBER,
+	PWM_CH_BATTERY_LED_WHITE,
+	PWM_CH_POWER_LED_WHITE,
 
 	/* Number of PWM channels */
 	PWM_CH_COUNT
