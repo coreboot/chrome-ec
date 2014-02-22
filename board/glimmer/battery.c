@@ -96,8 +96,7 @@ static void charger_init(void)
 
 		charger_get_option(&option);
 
-		/* Disable LDO mode & Enable IDPM by power suggest */
-		option |= OPT_ODPM_ENABLE;
+		/* Disable LDO mode */
 		option &= ~OPT_LDO_MODE_MASK;
 
 		charger_set_option(option);
