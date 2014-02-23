@@ -8,6 +8,7 @@
 #include "adc_chip.h"
 #include "backlight.h"
 #include "button.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "common.h"
 #include "driver/accel_kxcj9.h"
@@ -204,6 +205,7 @@ const struct temp_sensor_t temp_sensors[] = {
 		TMP432_IDX_REMOTE1, 4},
 	{"TMP432_RAM_top", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
+	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_temp_sensor_get_val, 0, 4},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -211,6 +213,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  * same order as enum temp_sensor_id. To always ignore any temp, use 0.
  */
 struct ec_thermal_config thermal_params[] = {
+	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
