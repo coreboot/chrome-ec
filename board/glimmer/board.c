@@ -197,7 +197,7 @@ BUILD_ASSERT(ARRAY_SIZE(fans) == CONFIG_FANS);
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"batt_chg", 0, 100},
-	{"accel", 2, 100},
+	{"accel", 2, 400},
 	{"thermal",  5, 100},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
