@@ -223,12 +223,15 @@
 /* Compile common x86 chipset infrastructure.  Required for x86 chips. */
 #undef CONFIG_CHIPSET_X86
 
+/* Support chipset throttling */
+#undef CONFIG_CHIPSET_CAN_THROTTLE
+
+/* Enable additional chipset debugging */
+#undef CONFIG_CHIPSET_DEBUG
+
 /* Support power rail control */
 #define CONFIG_CHIPSET_HAS_PP1350
 #define CONFIG_CHIPSET_HAS_PP5000
-
-/* Support chipset throttling */
-#undef CONFIG_CHIPSET_CAN_THROTTLE
 
 /*****************************************************************************/
 /*
