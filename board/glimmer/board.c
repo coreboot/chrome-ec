@@ -138,6 +138,8 @@ const struct gpio_info gpio_list[] = {
 	{"WLAN_OFF_L",           LM4_GPIO_J, (1<<4), GPIO_OUT_LOW, NULL},
 	{"PCH_SCI_L",            LM4_GPIO_M, (1<<1), GPIO_ODR_HIGH, NULL},
 	{"KBD_IRQ_L",            LM4_GPIO_M, (1<<3), GPIO_ODR_HIGH, NULL},
+	{"I2C2_SCL",             LM4_GPIO_F, (1<<6), GPIO_ODR_HIGH, NULL},
+	{"I2C2_SDA",             LM4_GPIO_F, (1<<7), GPIO_ODR_HIGH, NULL},
 };
 BUILD_ASSERT(ARRAY_SIZE(gpio_list) == GPIO_COUNT);
 
@@ -216,9 +218,10 @@ const struct fan_t fans[] = {
 BUILD_ASSERT(ARRAY_SIZE(fans) == CONFIG_FANS);
 
 /* I2C ports */
+/* Ports that define an SCL and SDA pin will automatically unwedge. */
 const struct i2c_port_t i2c_ports[] = {
 	{"batt_chg", 0, 100},
-	{"accel", 2, 400},
+	{"accel", 2, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
 	{"thermal",  5, 100},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);

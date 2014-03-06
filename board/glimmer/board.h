@@ -139,6 +139,8 @@ enum gpio_signal {
 	GPIO_WLAN_OFF_L,           /* Disable WiFi radio */
 	GPIO_PCH_SCI_L,            /* Assert SCI to PCH */
 	GPIO_KBD_IRQ_L,            /* Negative edge triggered irq. */
+	GPIO_I2C2_SCL,             /* I2C port 2, SCL pin */
+	GPIO_I2C2_SDA,             /* I2C port 2, SDA pin */
 
 	/* Number of GPIOs; not an actual GPIO */
 	GPIO_COUNT
