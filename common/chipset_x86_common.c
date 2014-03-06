@@ -335,11 +335,11 @@ DECLARE_HOOK(HOOK_AC_CHANGE, x86_ac_change, HOOK_PRIO_DEFAULT);
 void x86_interrupt(enum gpio_signal signal)
 {
 #ifdef BOARD_peppy
-	/* Catch the PP5000 rail going down in S0 quicky as it is likely the
+	/* Catch the PP5000 rail going down unexpectedly as it is likely the
 	 * PP3300_EC rail is going down with it. (http://crosbug.com/p/25833)
 	 */
 	if (signal == GPIO_PP5000_PGOOD && (gpio_get_level(signal) == 0) &&
-	    chipset_in_state(CHIPSET_STATE_ON)) {
+	    (gpio_get_level(GPIO_PP5000_EN) == 1)) {
 		usb_port_all_ports_off();
 		CPRINTF("[%T Disabled USB ports and triggering shutdown]\n");
 		chipset_force_shutdown();
