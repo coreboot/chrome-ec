@@ -46,11 +46,9 @@ struct fan_step {
 	int lv3;
 };
 
-static struct fan_step fan_table = {
-	.lv0 = 0,
-	.lv1 = 4000,
-	.lv2 = 4350,
-	.lv3 = 5150,
+static struct fan_step fan_table[2] = {
+	{.lv0 = 0, .lv1 = 4000, .lv2 = 4350, .lv3 = 5150,} ,
+	{.lv0 = 0, .lv1 = 3950, .lv2 = 4550, .lv3 = 5600,}
 };
 #endif  /* CONFIG_FAN_RPM_CUSTOM */
 
@@ -310,26 +308,33 @@ struct accel_orientation acc_orient = {
 #ifdef CONFIG_FAN_RPM_CUSTOM
 int fan_percent_to_rpm(int fan, int pct)
 {
+	int id;
+
 	int current_rpm_target = fan_get_rpm_target(fans[fan].ch);
 	int new_rpm_target = -1;
 
+	if (gpio_get_level(GPIO_BOARD_VERSION3))
+		id = 1;
+	else
+		id = 0;
+
 	if (pct < 30)
-		new_rpm_target = fan_table.lv0;
+		new_rpm_target = fan_table[id].lv0;
 	else if (pct < 38)
-		new_rpm_target = (current_rpm_target > fan_table.lv0) ?
-				  fan_table.lv1 : fan_table.lv0;
+		new_rpm_target = (current_rpm_target > fan_table[id].lv0) ?
+				  fan_table[id].lv1 : fan_table[id].lv0;
 	else if (pct < 44)
 		new_rpm_target = current_rpm_target;
 	else if (pct < 56)
-		new_rpm_target = (current_rpm_target > fan_table.lv0) ?
-				  current_rpm_target : fan_table.lv1;
+		new_rpm_target = (current_rpm_target > fan_table[id].lv0) ?
+				  current_rpm_target : fan_table[id].lv1;
 	else if (pct < 66)
-		new_rpm_target = fan_table.lv2;
+		new_rpm_target = fan_table[id].lv2;
 	else if (pct < 86)
-		new_rpm_target = (current_rpm_target > fan_table.lv0) ?
-				  current_rpm_target : fan_table.lv2;
+		new_rpm_target = (current_rpm_target > fan_table[id].lv0) ?
+				  current_rpm_target : fan_table[id].lv2;
 	else
-		new_rpm_target = fan_table.lv3;
+		new_rpm_target = fan_table[id].lv3;
 
 	if (new_rpm_target != current_rpm_target)
 		cprintf(CC_THERMAL, "[%T Setting fan RPM to %d]\n",
