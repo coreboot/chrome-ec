@@ -124,6 +124,8 @@ static void battery_led_update(void)
 
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
+	case PWR_STATE_CHARGE_NEAR_FULL: /* with AC */
+	case PWR_STATE_IDLE:		 /* with AC */
 		/* 1% ~ 4% */
 		if (battery > 0 && battery < 5) {
 			/* 1000 ms on */
@@ -156,8 +158,6 @@ static void battery_led_update(void)
 			set_color_battery(LED_WHITE);
 		break;
 	case PWR_STATE_DISCHARGE:	 /* without AC */
-	case PWR_STATE_CHARGE_NEAR_FULL: /* with AC */
-	case PWR_STATE_IDLE:		 /* with AC */
 		/* not S0 */
 		if (!chipset_in_state(CHIPSET_STATE_ON))
 			set_color_battery(LED_OFF);
