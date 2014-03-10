@@ -93,6 +93,8 @@ enum gpio_signal {
 	GPIO_UART0_RX,             /* UART0 RX input */
 	GPIO_BUTTON_VOLUME_DOWN_L, /* Volume down button */
 	GPIO_BUTTON_VOLUME_UP_L,   /* Volume up button */
+	GPIO_ACCEL_INT_LID,        /* Accelerometer interrupt lid */
+	GPIO_ACCEL_INT_BASE,       /* Accelerometer interrupt base */
 
 	/* Other inputs */
 	GPIO_BOARD_VERSION1,       /* Board version stuffing resistor 1 */

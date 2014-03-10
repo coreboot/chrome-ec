@@ -89,6 +89,8 @@ enum gpio_signal {
 	GPIO_UART0_RX,             /* UART0 RX input */
 	GPIO_BUTTON_VOLUME_DOWN_L, /* Volume down button */
 	GPIO_BUTTON_VOLUME_UP_L,   /* Volume up button */
+	GPIO_ACCEL_INT_LID,        /* Accelerometer interrupt lid */
+	GPIO_ACCEL_INT_BASE,       /* Accelerometer interrupt base */
 
 	/* Other inputs */
 	GPIO_BOARD_VERSION1,       /* Board version stuffing resistor 1 */
@@ -102,8 +104,6 @@ enum gpio_signal {
 	GPIO_PP1000_S0IX_PGOOD,    /* Power good on 1.00V (S0iX supplies) */
 	GPIO_USB1_OC_L,            /* USB port overcurrent warning */
 	GPIO_USB2_OC_L,            /* USB port overcurrent warning */
-	GPIO_ACCEL_INT0,           /* Accelerometer interrupt 0 */
-	GPIO_ACCEL_INT1,           /* Accelerometer interrupt 1 */
 
 	/* Outputs */
 	GPIO_CPU_PROCHOT,          /* Force CPU to think it's overheated */

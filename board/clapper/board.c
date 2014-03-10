@@ -72,6 +72,10 @@ const struct gpio_info gpio_list[] = {
 	 button_interrupt},
 	{"BUTTON_VOLUME_UP_L",   LM4_GPIO_B, (1<<0), GPIO_INT_BOTH,
 	 button_interrupt},
+	{"ACCEL_INT_LID",        LM4_GPIO_F, (1<<2), GPIO_INT_RISING,
+	 accel_int_lid},
+	{"ACCEL_INT_BASE",       LM4_GPIO_N, (1<<5), GPIO_INT_RISING,
+	 accel_int_base},
 
 	/* Other inputs */
 	{"BOARD_VERSION1",       LM4_GPIO_Q, (1<<5), GPIO_INPUT, NULL},
@@ -88,8 +92,6 @@ const struct gpio_info gpio_list[] = {
 	{"PP1000_S0IX_PGOOD",    LM4_GPIO_H, (1<<6), GPIO_INPUT, NULL},
 	{"USB1_OC_L",            LM4_GPIO_E, (1<<7), GPIO_INPUT, NULL},
 	{"USB2_OC_L",            LM4_GPIO_E, (1<<0), GPIO_INPUT, NULL},
-	{"ACCEL_INT0",           LM4_GPIO_F, (1<<2), GPIO_INPUT, NULL},
-	{"ACCEL_INT1",           LM4_GPIO_N, (1<<5), GPIO_INPUT, NULL},
 
 	/* Outputs; all unasserted by default except for reset signals */
 	{"CPU_PROCHOT",          LM4_GPIO_B, (1<<5), GPIO_OUT_LOW, NULL},
