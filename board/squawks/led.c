@@ -122,7 +122,7 @@ static enum led_color new_battery_led_color(void)
 	ticks++;
 
 	/* If charging error, blink orange, 50% duty cycle, 0.5 sec period */
-	if (chstate == PWR_STATE_ERROR)
+	if (chstate == PWR_STATE_ERROR || !charge_battery_responsive())
 		return (ticks & 0x1) ? LED_ORANGE : LED_OFF;
 
 	/* If charge-force-idle, blink green, 50% duty cycle, 2 sec period */
