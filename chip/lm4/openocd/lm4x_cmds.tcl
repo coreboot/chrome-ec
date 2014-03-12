@@ -31,6 +31,18 @@ proc flash_bds { } {
 	flash_lm4 ../../../build/bds/ec.bin 0
 }
 
+proc flash_enguarde { } {
+	flash_lm4 ../../../build/enguarde/ec.bin 0
+}
+
+proc flash_enguarde_ro { } {
+	flash_lm4 ../../../build/enguarde/ec.RO.flat 0
+}
+
+proc flash_enguarde_rw { } {
+	flash_lm4 ../../../build/enguarde/ec.RW.bin 131072
+}
+
 proc flash_glimmer { } {
 	flash_lm4 ../../../build/glimmer/ec.bin 0
 }
