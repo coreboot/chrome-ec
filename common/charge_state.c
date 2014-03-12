@@ -642,6 +642,13 @@ static void charging_progress(struct charge_state_context *ctx)
 	}
 }
 
+int charge_battery_responsive(void)
+{
+	const struct batt_params *batt = &task_ctx.curr.batt;
+
+	return ((batt->flags & BATT_FLAG_RESPONSIVE) != 0);
+}
+
 enum charge_state charge_get_state(void)
 {
 	return task_ctx.curr.state;

@@ -121,6 +121,14 @@ struct charge_state_context {
 };
 
 /**
+ * Returns whether the battery is responsive.
+ * Battery will not respond if not connected or deeply discharged.
+ *
+ * @return 1 if battery is responsive; 0 otherwise.
+ */
+int charge_battery_responsive(void);
+
+/**
  * Return current charge state.
  */
 enum charge_state charge_get_state(void);
