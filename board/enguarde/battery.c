@@ -15,11 +15,10 @@
 /* Shutdown mode parameter to write to manufacturer access register */
 #define SB_SHUTDOWN_DATA	0x0010
 
-/* TODO(crosbug.com/p/26748): Replace with 3S battery parameters */
 static const struct battery_info info = {
-	.voltage_max    = 8400,		/* mV */
-	.voltage_normal = 7400,
-	.voltage_min    = 6000,
+	.voltage_max    = 12600,		/* mV */
+	.voltage_normal = 11100,
+	.voltage_min    = 9000,
 	.precharge_current  = 256,	/* mA */
 	.start_charging_min_c = 0,
 	.start_charging_max_c = 45,
@@ -34,7 +33,6 @@ const struct battery_info *battery_get_info(void)
 	return &info;
 }
 
-/* TODO(crosbug.com/p/26748): Verify cutoff function works with Enguarde */
 static int cutoff(void)
 {
 	int rv;

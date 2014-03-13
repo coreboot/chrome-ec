@@ -187,7 +187,6 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
  *     src/mainboard/google/${board}/acpi/dptf.asl
  */
 
-/* TODO(crosbug.com/p/26748): Verify temp sensor placement. */
 const struct temp_sensor_t temp_sensors[] = {
 	{"ECInternal", TEMP_SENSOR_TYPE_BOARD, chip_temp_sensor_get_val, 0, 4},
 	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
