@@ -83,6 +83,14 @@ proc flash_squawks_ro { } {
 	flash_lm4 ../../../build/squawks/ec.RO.flat 0
 }
 
+proc flash_quawks { } {
+	flash_lm4 ../../../build/quawks/ec.bin 0
+}
+
+proc flash_quawks_ro { } {
+	flash_lm4 ../../../build/quawks/ec.RO.flat 0
+}
+
 proc flash_falco { } {
 	flash_lm4 ../../../build/falco/ec.bin 0
 }
