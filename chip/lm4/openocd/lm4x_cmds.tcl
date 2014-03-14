@@ -127,6 +127,18 @@ proc flash_winky_rw { } {
 	flash_lm4 ../../../build/winky/ec.RW.bin 131072
 }
 
+proc flash_kip { } {
+	flash_lm4 ../../../build/kip/ec.bin 0
+}
+
+proc flash_kip_ro { } {
+	flash_lm4 ../../../build/kip/ec.RO.flat 0
+}
+
+proc flash_kip_rw { } {
+	flash_lm4 ../../../build/kip/ec.RW.bin 131072
+}
+
 # link has pstate in last sector
 proc unprotect_link { } {
 	reset halt
