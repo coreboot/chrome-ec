@@ -248,7 +248,7 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
-	{{C_TO_K(65), C_TO_K(67), C_TO_K(69)}, C_TO_K(20), C_TO_K(70)},
+	{{0, 0, C_TO_K(70)}, C_TO_K(20), C_TO_K(70)},
 	{{0, 0, 0}, 0, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
