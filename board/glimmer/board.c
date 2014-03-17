@@ -299,7 +299,7 @@ struct accel_orientation acc_orient = {
 	.rot_standard_ref = {
 		{ 0,  1,  0},
 		{-1,  0,  0},
-		{ 0,  0,  1}
+		{ 0,  0, -1}
 	},
 	.hinge_axis = {1, 0, 0},
 };
