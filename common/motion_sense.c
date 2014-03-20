@@ -29,11 +29,11 @@ static vector_3_t acc_lid_host, acc_base_host;
 static float lid_angle_deg;
 
 /* Accelerometer polling intervals based on chipset state. */
-#define ACCEL_INTERVAL_MEMORYMAPPED_MS  10
-#define ACCEL_INTERVAL_SUSPEND_MS       100
+#define ACCEL_INTERVAL_AP_ON_MS      10
+#define ACCEL_INTERVAL_AP_SUSPEND_MS 100
 
 /* Sampling interval for measuring acceleration and calculating lid angle. */
-static int accel_interval_ms = ACCEL_INTERVAL_SUSPEND_MS;
+static int accel_interval_ms = ACCEL_INTERVAL_AP_SUSPEND_MS;
 
 #ifdef CONFIG_CMD_LID_ANGLE
 static int accel_disp;
@@ -124,14 +124,14 @@ void motion_get_accel_base(vector_3_t *v)
 /* Lower accel polling rate on chipset suspend. */
 static void set_slow_accel_polling(void)
 {
-	accel_interval_ms = ACCEL_INTERVAL_SUSPEND_MS;
+	accel_interval_ms = ACCEL_INTERVAL_AP_SUSPEND_MS;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, set_slow_accel_polling, HOOK_PRIO_DEFAULT);
 
 /* Raise accel polling rate on chipset resume. */
 static void set_fast_accel_polling(void)
 {
-	accel_interval_ms = ACCEL_INTERVAL_MEMORYMAPPED_MS;
+	accel_interval_ms = ACCEL_INTERVAL_AP_ON_MS;
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, set_fast_accel_polling, HOOK_PRIO_DEFAULT);
 
