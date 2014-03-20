@@ -14,7 +14,6 @@
 #define CONFIG_BACKLIGHT_LID
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
-#define CONFIG_BUTTON_COUNT 2
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_BQ24715
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
@@ -87,8 +86,6 @@ enum gpio_signal {
 	GPIO_WP_L,                 /* Write protect input */
 	GPIO_JTAG_TCK,             /* JTAG clock input */
 	GPIO_UART0_RX,             /* UART0 RX input */
-	GPIO_BUTTON_VOLUME_DOWN_L, /* Volume down button */
-	GPIO_BUTTON_VOLUME_UP_L,   /* Volume up button */
 #ifdef HAS_TASK_MOTIONSENSE
 	GPIO_ACCEL_INT_LID,        /* Accelerometer interrupt lid */
 	GPIO_ACCEL_INT_BASE,       /* Accelerometer interrupt base */

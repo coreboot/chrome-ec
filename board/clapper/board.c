@@ -7,7 +7,6 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "backlight.h"
-#include "button.h"
 #include "charge_state.h"
 #include "charger.h"
 #include "common.h"
@@ -68,10 +67,6 @@ const struct gpio_info gpio_list[] = {
 	{"UART0_RX",             LM4_GPIO_A, (1<<0), GPIO_INT_BOTH_DSLEEP |
 							GPIO_PULL_UP,
 	 uart_deepsleep_interrupt},
-	{"BUTTON_VOLUME_DOWN_L", LM4_GPIO_B, (1<<1), GPIO_INT_BOTH,
-	 button_interrupt},
-	{"BUTTON_VOLUME_UP_L",   LM4_GPIO_B, (1<<0), GPIO_INT_BOTH,
-	 button_interrupt},
 #ifdef HAS_TASK_MOTIONSENSE
 	{"ACCEL_INT_LID",        LM4_GPIO_F, (1<<2), GPIO_INT_RISING,
 	 accel_int_lid},
@@ -231,14 +226,6 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
-
-const struct button_config buttons[] = {
-	{"Volume Down", KEYBOARD_BUTTON_VOLUME_DOWN, GPIO_BUTTON_VOLUME_DOWN_L,
-	30 * MSEC, 0},
-	{"Volume Up", KEYBOARD_BUTTON_VOLUME_UP, GPIO_BUTTON_VOLUME_UP_L,
-	30 * MSEC, 0},
-};
-BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
 
 const int accel_addr[] = {
 	KXCJ9_ADDR0,	/* ACCEL_LID */
