@@ -88,10 +88,12 @@ const struct gpio_info gpio_list[] = {
 	 button_interrupt},
 	{"BUTTON_VOLUME_UP_L",   LM4_GPIO_B, (1<<0), GPIO_INT_BOTH,
 	 button_interrupt},
+#ifdef HAS_TASK_MOTIONSENSE
 	{"ACCEL_INT_LID",        LM4_GPIO_F, (1<<2), GPIO_INT_RISING,
 	 accel_int_lid},
 	{"ACCEL_INT_BASE",       LM4_GPIO_N, (1<<5), GPIO_INT_RISING,
 	 accel_int_base},
+#endif
 
 	/* Other inputs */
 	{"BOARD_VERSION1",       LM4_GPIO_Q, (1<<5), GPIO_INPUT, NULL},
