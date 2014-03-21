@@ -65,8 +65,8 @@ static int cutoff(void)
 	return rv;
 }
 
-/* This is triggered when the AC state changes */
-static void wakeup(void)
+/* This is triggered when the EC is powered or reset */
+static void wakeup_deferred(void)
 {
 	int tmp;
 
@@ -79,7 +79,17 @@ static void wakeup(void)
 		}
 	}
 }
-DECLARE_HOOK(HOOK_AC_CHANGE, wakeup, HOOK_PRIO_DEFAULT);
+DECLARE_DEFERRED(wakeup_deferred);
+
+static void wakeup(void)
+{
+	/*
+	 * The deferred call ensures that wakeup_deferred is called from a
+	 * task. This is required to talk to the battery over I2C.
+	 */
+	hook_call_deferred(wakeup_deferred, 0);
+}
+DECLARE_HOOK(HOOK_INIT, wakeup, HOOK_PRIO_DEFAULT);
 
 static int battery_command_cut_off(struct host_cmd_handler_args *args)
 {
