@@ -220,8 +220,8 @@ enum temp_sensor_id {
 
 /* Identifiers for each accelerometer used. */
 enum accel_id {
-	ACCEL_LID,
 	ACCEL_BASE,
+	ACCEL_LID,
 
 	/* Number of accelerometers. */
 	ACCEL_COUNT

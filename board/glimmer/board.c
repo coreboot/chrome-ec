@@ -268,8 +268,8 @@ const struct button_config buttons[] = {
 BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
 
 const int accel_addr[] = {
-	KXCJ9_ADDR0,	/* ACCEL_LID */
-	KXCJ9_ADDR1	/* ACCEL_BASE */
+	KXCJ9_ADDR1,	/* ACCEL_BASE */
+	KXCJ9_ADDR0	/* ACCEL_LID */
 };
 BUILD_ASSERT(ARRAY_SIZE(accel_addr) == ACCEL_COUNT);
 
