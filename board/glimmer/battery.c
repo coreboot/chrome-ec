@@ -43,7 +43,7 @@ const struct battery_info *battery_get_info(void)
 	return &info;
 }
 
-static void wakeup(void)
+static void wakeup_deferred(void)
 {
 	int d;
 
@@ -54,7 +54,17 @@ static void wakeup(void)
 		sb_write(SB_FET_OFF, SB_FETON_DATA2);
 	}
 }
-DECLARE_HOOK(HOOK_AC_CHANGE, wakeup, HOOK_PRIO_DEFAULT);
+DECLARE_DEFERRED(wakeup_deferred);
+
+static void wakeup(void)
+{
+	/*
+	 * The deferred call ensures that wakeup_deferred is called from a
+	 * task. This is required to talk to the battery over I2C.
+	 */
+	hook_call_deferred(wakeup_deferred, 0);
+}
+DECLARE_HOOK(HOOK_INIT, wakeup, HOOK_PRIO_DEFAULT);
 
 static int cutoff(void)
 {
