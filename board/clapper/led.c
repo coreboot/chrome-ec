@@ -126,12 +126,15 @@ static void battery_led_update(void)
 	case PWR_STATE_CHARGE:
 	case PWR_STATE_CHARGE_NEAR_FULL: /* with AC */
 	case PWR_STATE_IDLE:		 /* with AC */
-		/* 1% ~ 4% */
-		if (battery > 0 && battery < 5) {
-			/* 1000 ms on */
-			if (timer%15 < 10)
-				set_color_battery(LED_AMBER);
-			/* 500 ms off */
+		/* 80% ~ */
+		if (battery >= 80)
+			set_color_battery(LED_WHITE);
+		/* 20% ~ 79% */
+		else if (battery >= 20 && battery < 80) {
+			/* 5000 ms on */
+			if (timer%51 < 50)
+				set_color_battery(LED_WHITE);
+			/* 100 ms off */
 			else
 				set_color_battery(LED_OFF);
 		}
@@ -144,25 +147,8 @@ static void battery_led_update(void)
 			else
 				set_color_battery(LED_OFF);
 		}
-		/* 20% ~ 79% */
-		else if (battery >= 20 && battery < 80) {
-			/* 5000 ms on */
-			if (timer%51 < 50)
-				set_color_battery(LED_WHITE);
-			/* 100 ms off */
-			else
-				set_color_battery(LED_OFF);
-		}
-		/* 80%i ~ 100% */
-		else if (battery >= 80 && battery <= 100)
-			set_color_battery(LED_WHITE);
-		break;
-	case PWR_STATE_DISCHARGE:	 /* without AC */
-		/* not S0 */
-		if (!chipset_in_state(CHIPSET_STATE_ON))
-			set_color_battery(LED_OFF);
-		/* 1% ~ 4% */
-		else if (battery > 0 && battery < 5) {
+		/* 0% ~ 4% */
+		else {
 			/* 1000 ms on */
 			if (timer%15 < 10)
 				set_color_battery(LED_AMBER);
@@ -170,12 +156,26 @@ static void battery_led_update(void)
 			else
 				set_color_battery(LED_OFF);
 		}
+		break;
+	case PWR_STATE_DISCHARGE:	 /* without AC */
+		/* not S0 */
+		if (!chipset_in_state(CHIPSET_STATE_ON))
+			set_color_battery(LED_OFF);
+		/* 20% ~ */
+		else if (battery >= 20)
+			set_color_battery(LED_WHITE);
 		/* 5% ~ 19% */
 		else if (battery >= 5 && battery < 20)
 			set_color_battery(LED_AMBER);
-		/* 20% ~ 100% */
-		else if (battery >= 20 && battery <= 100)
-			set_color_battery(LED_WHITE);
+		/* 1% ~ 4% */
+		else {
+			/* 1000 ms on */
+			if (timer%15 < 10)
+				set_color_battery(LED_AMBER);
+			/* 500 ms off */
+			else
+				set_color_battery(LED_OFF);
+		}
 		break;
 	default:
 		/* Other states don't alter LED behavior */
