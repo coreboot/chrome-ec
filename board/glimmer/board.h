@@ -98,8 +98,7 @@ enum gpio_signal {
 	GPIO_BUTTON_VOLUME_DOWN_L, /* Volume down button */
 	GPIO_BUTTON_VOLUME_UP_L,   /* Volume up button */
 #ifdef HAS_TASK_MOTIONSENSE
-	GPIO_ACCEL_INT_LID,        /* Accelerometer interrupt lid */
-	GPIO_ACCEL_INT_BASE,       /* Accelerometer interrupt base */
+	GPIO_ACCEL_INT,            /* Accelerometer interrupt */
 #endif
 
 	/* Other inputs */
@@ -150,6 +149,7 @@ enum gpio_signal {
 	GPIO_I2C2_SCL,             /* I2C port 2, SCL pin */
 	GPIO_I2C2_SDA,             /* I2C port 2, SDA pin */
 	GPIO_ADAPTER_ID,           /* Adapter ID pin */
+	GPIO_ACCEL_EN,             /* Enable accelerometer power */
 
 	/* Number of GPIOs; not an actual GPIO */
 	GPIO_COUNT

@@ -89,10 +89,8 @@ const struct gpio_info gpio_list[] = {
 	{"BUTTON_VOLUME_UP_L",   LM4_GPIO_B, (1<<0), GPIO_INT_BOTH,
 	 button_interrupt},
 #ifdef HAS_TASK_MOTIONSENSE
-	{"ACCEL_INT_LID",        LM4_GPIO_F, (1<<2), GPIO_INT_RISING,
+	{"ACCEL_INT",            LM4_GPIO_F, (1<<2), GPIO_INT_RISING,
 	 accel_int_lid},
-	{"ACCEL_INT_BASE",       LM4_GPIO_N, (1<<5), GPIO_INT_RISING,
-	 accel_int_base},
 #endif
 
 	/* Other inputs */
@@ -145,6 +143,7 @@ const struct gpio_info gpio_list[] = {
 	{"I2C2_SCL",             LM4_GPIO_F, (1<<6), GPIO_ODR_HIGH, NULL},
 	{"I2C2_SDA",             LM4_GPIO_F, (1<<7), GPIO_ODR_HIGH, NULL},
 	{"ADAPTER_ID",           LM4_GPIO_E, (1<<1), GPIO_OUT_HIGH, NULL},
+	{"ACCEL_EN",             LM4_GPIO_N, (1<<5), GPIO_OUT_HIGH, NULL},
 };
 BUILD_ASSERT(ARRAY_SIZE(gpio_list) == GPIO_COUNT);
 
