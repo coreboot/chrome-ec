@@ -212,45 +212,49 @@ test_mockable int battery_device_chemistry(char *dest, int size)
 
 void battery_get_params(struct batt_params *batt)
 {
+	struct batt_params batt_new = {0};
 	int v;
 
-	/* Reset battery parameters */
-	memset(batt, 0, sizeof(*batt));
+	if (sb_read(SB_TEMPERATURE, &batt_new.temperature)) {
+		batt_new.flags |= BATT_FLAG_BAD_ANY;
+	} else {
+		/* Battery is responding */
+		batt_new.flags |= BATT_FLAG_RESPONSIVE;
+	}
 
-	if (sb_read(SB_TEMPERATURE, &batt->temperature))
-		batt->flags |= BATT_FLAG_BAD_ANY;
-	else
-		batt->flags |= BATT_FLAG_RESPONSIVE; /* Battery is responding */
+	if (sb_read(SB_RELATIVE_STATE_OF_CHARGE, &batt_new.state_of_charge))
+		batt_new.flags |= BATT_FLAG_BAD_ANY |
+				  BATT_FLAG_BAD_CHARGE_PERCENT;
 
-	if (sb_read(SB_RELATIVE_STATE_OF_CHARGE, &batt->state_of_charge))
-		batt->flags |= BATT_FLAG_BAD_ANY | BATT_FLAG_BAD_CHARGE_PERCENT;
-
-	if (sb_read(SB_VOLTAGE, &batt->voltage))
-		batt->flags |= BATT_FLAG_BAD_ANY | BATT_FLAG_BAD_VOLTAGE;
+	if (sb_read(SB_VOLTAGE, &batt_new.voltage))
+		batt_new.flags |= BATT_FLAG_BAD_ANY | BATT_FLAG_BAD_VOLTAGE;
 
 	/* Ensure battery current is set to 0 if unable to read it */
 	v = 0;
 
 	if (sb_read(SB_CURRENT, &v))
-		batt->flags |= BATT_FLAG_BAD_ANY;
+		batt_new.flags |= BATT_FLAG_BAD_ANY;
 
-	batt->current = (int16_t)v;
+	batt_new.current = (int16_t)v;
 
-	if (sb_read(SB_CHARGING_VOLTAGE, &batt->desired_voltage) ||
-	    sb_read(SB_CHARGING_CURRENT, &batt->desired_current))
-		batt->flags |= BATT_FLAG_BAD_ANY;
+	if (sb_read(SB_CHARGING_VOLTAGE, &batt_new.desired_voltage) ||
+	    sb_read(SB_CHARGING_CURRENT, &batt_new.desired_current))
+		batt_new.flags |= BATT_FLAG_BAD_ANY;
 
 	/*
 	 * Charging allowed if both desired voltage and current are nonzero
 	 * and battery isn't full.
 	 */
-	if (batt->desired_voltage && batt->desired_current &&
-	    batt->state_of_charge < BATTERY_LEVEL_FULL) {
-		batt->flags |= BATT_FLAG_WANT_CHARGE;
+	if (batt_new.desired_voltage && batt_new.desired_current &&
+	    batt_new.state_of_charge < BATTERY_LEVEL_FULL) {
+		batt_new.flags |= BATT_FLAG_WANT_CHARGE;
 	} else {
 		/* Force both to zero */
-		batt->desired_voltage = batt->desired_current = 0;
+		batt_new.desired_voltage = batt_new.desired_current = 0;
 	}
+
+	/* Update visible battery parameters */
+	memcpy(batt, &batt_new, sizeof(*batt));
 }
 
 /*****************************************************************************/
