@@ -47,8 +47,8 @@ struct fan_step {
 };
 
 static struct fan_step fan_table[2] = {
-	{.lv0 = 0, .lv1 = 4000, .lv2 = 4350, .lv3 = 5150,} ,
-	{.lv0 = 0, .lv1 = 3950, .lv2 = 4550, .lv3 = 5600,}
+	{.lv0 = 0, .lv1 = 4050, .lv2 = 4400, .lv3 = 5100,} ,
+	{.lv0 = 0, .lv1 = 4150, .lv2 = 4600, .lv3 = 5600,}
 };
 #endif  /* CONFIG_FAN_RPM_CUSTOM */
 
