@@ -79,18 +79,6 @@
 #define WIRELESS_GPIO_WWAN GPIO_PP3300_LTE_EN
 #define WIRELESS_GPIO_WLAN_POWER GPIO_PP3300_WLAN_EN
 
-/*
- * Macros to be used in suspend to determine the state of key scanning
- * based on measured lid angle. Note that the angle input is bound [-180, 180]
- * where 0 degrees is lid closed/lid fully open. Also note that the key scan
- * enable state will only change if recent readings are all within range,
- * therefore it is recommended to leave a deadband where the lid angle doesn't
- * fit into either range. Also note, if lid is closed, key scanning is
- * automatically disabled.
- */
-#define LID_IN_RANGE_TO_ACCEPT_KEYS(ang) ((ang) >= 15 || (ang) <= -173)
-#define LID_IN_RANGE_TO_IGNORE_KEYS(ang) ((ang) <= 12 && (ang) >= -170)
-
 /* GPIO signal definitions. */
 enum gpio_signal {
 	/* Inputs with interrupt handlers are first for efficiency */
