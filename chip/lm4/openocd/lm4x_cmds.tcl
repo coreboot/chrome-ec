@@ -59,6 +59,10 @@ proc flash_rambi { } {
 	flash_lm4 ../../../build/rambi/ec.bin 0
 }
 
+proc flash_expresso { } {
+	flash_lm4 ../../../build/express/ec.bin 0
+}
+
 proc flash_clapper { } {
 	flash_lm4 ../../../build/clapper/ec.bin 0
 }
@@ -105,6 +109,14 @@ proc flash_rambi_ro { } {
 
 proc flash_rambi_rw { } {
 	flash_lm4 ../../../build/rambi/ec.RW.bin 131072
+}
+
+proc flash_expresso_ro { } {
+	flash_lm4 ../../../build/expresso/ec.RO.flat 0
+}
+
+proc flash_expresso_rw { } {
+	flash_lm4 ../../../build/expresso/ec.RW.bin 131072
 }
 
 proc flash_clapper_ro { } {
