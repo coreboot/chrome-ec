@@ -32,4 +32,9 @@ void extpower_interrupt(enum gpio_signal signal);
 #include "extpower_falco.h"
 #endif
 
+#ifdef CONFIG_EXTPOWER_KIP
+/* Adapter-specific logic */
+#include "extpower_kip.h"
+#endif
+
 #endif  /* __CROS_EC_EXTPOWER_H */

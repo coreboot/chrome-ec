@@ -33,6 +33,7 @@ common-$(CONFIG_PMU_POWERINFO)+=pmu_tps65090_powerinfo.o
 common-$(CONFIG_PMU_TPS65090)+=pmu_tps65090.o
 common-$(CONFIG_EOPTION)+=eoption.o
 common-$(CONFIG_EXTPOWER_FALCO)+=extpower_falco.o
+common-$(CONFIG_EXTPOWER_KIP)+=extpower_kip.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
 common-$(CONFIG_EXTPOWER_SNOW)+=extpower_snow.o
 common-$(CONFIG_EXTPOWER_SPRING)+=extpower_spring.o

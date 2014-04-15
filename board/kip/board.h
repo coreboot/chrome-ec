@@ -23,6 +23,7 @@
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_CHIPSET_X86
 #define CONFIG_CMD_GSV
+#define CONFIG_EXTPOWER_KIP
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_I2C_PASSTHRU_RESTRICTED
 #define CONFIG_KEYBOARD_COL2_INVERTED
@@ -161,6 +162,9 @@ enum adc_channel {
 
 	/* Charger current in mA. */
 	ADC_CH_CHARGER_CURRENT,
+
+	/* AC Adapter ID voltage in mV */
+	ADC_AC_ADAPTER_ID_VOLTAGE,
 
 	ADC_CH_COUNT
 };

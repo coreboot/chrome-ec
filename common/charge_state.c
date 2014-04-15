@@ -851,6 +851,11 @@ void charger_task(void)
 		sleep_usec = EXTPOWER_FALCO_POLL_PERIOD;
 #endif
 
+#ifdef CONFIG_EXTPOWER_KIP
+		watch_adapter_closely(ctx);
+		sleep_usec = EXTPOWER_KIP_POLL_PERIOD;
+#endif
+
 		/* Show charging progress in console */
 		charging_progress(ctx);
 

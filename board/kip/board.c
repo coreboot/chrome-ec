@@ -165,6 +165,10 @@ const struct adc_t adc_channels[] = {
 	 */
 	{"ChargerCurrent", LM4_ADC_SEQ1, 33000, ADC_READ_MAX * 4, 0,
 	 LM4_AIN(0), 0x06 /* IE0 | END0 */, LM4_GPIO_E, (1<<3)},
+
+	/* AC Adapter ID voltage (mv) */
+	{"AdapterIDVoltage", LM4_ADC_SEQ2, 3300, ADC_READ_MAX, 0,
+	 LM4_AIN(10), 0x06 /* IE0 | END0 */, LM4_GPIO_B, (1<<4)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
