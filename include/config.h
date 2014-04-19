@@ -95,6 +95,12 @@
 #undef CONFIG_BATTERY_MOCK
 
 /*
+ * Charger should call battery_override_params() to limit/correct the voltage
+ * and current requested by the battery pack before acting on the request.
+ */
+#undef CONFIG_BATTERY_OVERRIDE_PARAMS
+
+/*
  * If defined, the charger will check for battery presence before attempting
  * to communicate with it. This avoids the 30 second delay when booting
  * without a battery present. Do not use with CONFIG_BATTERY_PRESENT_GPIO.
@@ -119,12 +125,6 @@
  * http://sbs-forum.org/specs/sbdat110.pdf)
  */
 #undef CONFIG_BATTERY_SMART
-
-/*
- * Charger should call battery_vendor_params() to limit/correct the voltage and
- * current requested by the battery pack before acting on the request.
- */
-#undef CONFIG_BATTERY_VENDOR_PARAMS
 
 /*****************************************************************************/
 
