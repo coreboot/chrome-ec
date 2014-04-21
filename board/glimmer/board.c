@@ -144,6 +144,7 @@ const struct gpio_info gpio_list[] = {
 	{"KBD_IRQ_L",            LM4_GPIO_M, (1<<3), GPIO_ODR_HIGH, NULL},
 	{"I2C2_SCL",             LM4_GPIO_F, (1<<6), GPIO_ODR_HIGH, NULL},
 	{"I2C2_SDA",             LM4_GPIO_F, (1<<7), GPIO_ODR_HIGH, NULL},
+	{"ADAPTER_ID",           LM4_GPIO_E, (1<<1), GPIO_OUT_HIGH, NULL},
 };
 BUILD_ASSERT(ARRAY_SIZE(gpio_list) == GPIO_COUNT);
 

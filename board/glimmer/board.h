@@ -149,6 +149,7 @@ enum gpio_signal {
 	GPIO_KBD_IRQ_L,            /* Negative edge triggered irq. */
 	GPIO_I2C2_SCL,             /* I2C port 2, SCL pin */
 	GPIO_I2C2_SDA,             /* I2C port 2, SDA pin */
+	GPIO_ADAPTER_ID,           /* Adapter ID pin */
 
 	/* Number of GPIOs; not an actual GPIO */
 	GPIO_COUNT
