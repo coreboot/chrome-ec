@@ -252,4 +252,14 @@ int battery_device_chemistry(char *dest, int size);
  */
 int battery_manufacturer_date(int *year, int *month, int *day);
 
+#ifdef CONFIG_BATTERY_CUT_OFF
+/**
+ * Cut off battery power.
+ * Optional, vendor-specific implementation in board/$board/battery.c
+ *
+ * @return non-zero if error
+ */
+int battery_cut_off(void);
+#endif
+
 #endif /* __CROS_EC_BATTERY_H */

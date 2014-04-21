@@ -8,10 +8,16 @@
 #include "battery.h"
 #include "common.h"
 #include "console.h"
+#include "extpower.h"
 #include "gpio.h"
+#include "hooks.h"
+#include "host_command.h"
+#include "system.h"
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
+
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 
 #ifdef CONFIG_BATTERY_PRESENT_GPIO
 #ifdef CONFIG_BATTERY_PRESENT_CUSTOM
@@ -25,6 +31,13 @@ int battery_is_present(void)
 {
 	return (gpio_get_level(CONFIG_BATTERY_PRESENT_GPIO) == 0);
 }
+#endif
+
+#ifdef CONFIG_BATTERY_CUT_OFF
+#define BATTERY_CUTOFF_DELAY_US       (5 * SECOND)
+#define BATTERY_CUTOFF_CONSOLE_TRIES  5
+
+static int pending_cutoff;	/* If a battery cut-off has been requested */
 #endif
 
 static const char *get_error_text(int rv)
@@ -236,3 +249,66 @@ DECLARE_CONSOLE_COMMAND(battery, command_battery,
 			"<repeat_count> <sleep_ms>",
 			"Print battery info",
 			NULL);
+
+#ifdef CONFIG_BATTERY_CUT_OFF
+static void cut_off_wrapper(void)
+{
+	int rv;
+
+	rv = battery_cut_off();		/* In board/$board/battery.c */
+
+	if (rv == EC_SUCCESS)
+		CPRINTF("[%T Battery cut off succeeded.]\n");
+	else
+		CPRINTF("[%T Battery cut off failed!]\n");
+}
+DECLARE_DEFERRED(cut_off_wrapper);
+
+static void check_pending_cutoff(void)
+{
+	if (pending_cutoff) {
+		CPRINTF("[%T Cutting off battery in %d second(s)]\n",
+			BATTERY_CUTOFF_DELAY_US / SECOND);
+		hook_call_deferred(cut_off_wrapper, BATTERY_CUTOFF_DELAY_US);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, check_pending_cutoff, HOOK_PRIO_LAST);
+
+int host_command_battery_cut_off(struct host_cmd_handler_args *args)
+{
+	pending_cutoff = 1;
+
+	/*
+	 * When cutting off the battery, the AP is off and AC is not present.
+	 * This makes serial console unresponsive and hard to verify battery
+	 * cut-off. Let's disable sleep here so one can check cut-off status
+	 * if needed. This shouldn't matter because we are about to cut off
+	 * the battery.
+	 */
+	disable_sleep(SLEEP_MASK_FORCE_NO_DSLEEP);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_BATTERY_CUT_OFF, host_command_battery_cut_off,
+		     EC_VER_MASK(0));
+
+static int console_command_battcutoff(int argc, char **argv)
+{
+	int tries = BATTERY_CUTOFF_CONSOLE_TRIES;
+
+	while (extpower_is_present() && tries > 0) {
+		ccprintf("Remove AC power within %d seconds...\n", tries);
+		tries--;
+		usleep(SECOND);
+	}
+
+	if (extpower_is_present())
+		return EC_ERROR_UNKNOWN;
+
+	ccprintf("Cutting off battery.\n");
+
+	return battery_cut_off();
+}
+DECLARE_CONSOLE_COMMAND(battcutoff, console_command_battcutoff, NULL,
+			"Cut off the battery", NULL);
+#endif /* CONFIG_BATTERY_CUT_OFF */

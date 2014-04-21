@@ -91,6 +91,13 @@
 #undef CONFIG_BATTERY_BQ27541	/* BQ27541 battery */
 #undef CONFIG_BATTERY_LINK	/* Battery used on Link */
 
+/*
+ * The board's battery.c implements a battery_cut_off() function to command the
+ * battery to enter "shipping mode" from the factory. This config option adds
+ * a host and console command to call this function.
+ */
+#undef CONFIG_BATTERY_CUT_OFF
+
 /* Compile mock battery support; used by tests. */
 #undef CONFIG_BATTERY_MOCK
 
