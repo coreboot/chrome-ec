@@ -126,11 +126,11 @@ static void battery_led_update(void)
 	case PWR_STATE_CHARGE:
 	case PWR_STATE_CHARGE_NEAR_FULL: /* with AC */
 	case PWR_STATE_IDLE:		 /* with AC */
-		/* 80% ~ */
-		if (battery >= 80)
+		/* OS display 80% ~ 100% */
+		if (battery >= 78)
 			set_color_battery(LED_WHITE);
-		/* 20% ~ 79% */
-		else if (battery >= 20 && battery < 80) {
+		/* OS display 20% ~ 79% */
+		else if (battery >= 23 && battery < 78) {
 			/* 5000 ms on */
 			if (timer%51 < 50)
 				set_color_battery(LED_WHITE);
@@ -138,8 +138,8 @@ static void battery_led_update(void)
 			else
 				set_color_battery(LED_OFF);
 		}
-		/* 5% ~ 19% */
-		else if (battery >= 5 && battery < 20) {
+		/* OS display 5% ~ 19% */
+		else if (battery >= 9 && battery < 23) {
 			/* 3200 ms on */
 			if (timer%33 < 32)
 				set_color_battery(LED_AMBER);
@@ -147,7 +147,7 @@ static void battery_led_update(void)
 			else
 				set_color_battery(LED_OFF);
 		}
-		/* 0% ~ 4% */
+		/* OS display 0% ~ 4% */
 		else {
 			/* 1000 ms on */
 			if (timer%15 < 10)
@@ -161,13 +161,13 @@ static void battery_led_update(void)
 		/* not S0 */
 		if (!chipset_in_state(CHIPSET_STATE_ON))
 			set_color_battery(LED_OFF);
-		/* 20% ~ */
-		else if (battery >= 20)
+		/* OS display 20% ~ 100% */
+		else if (battery >= 23)
 			set_color_battery(LED_WHITE);
-		/* 5% ~ 19% */
-		else if (battery >= 5 && battery < 20)
+		/* OS display 5% ~ 19% */
+		else if (battery >= 9 && battery < 23)
 			set_color_battery(LED_AMBER);
-		/* 1% ~ 4% */
+		/* OS display 0% ~ 4% */
 		else {
 			/* 1000 ms on */
 			if (timer%15 < 10)
