@@ -11,6 +11,13 @@
 #include "timer.h"
 #include "util.h"
 
+/* Console output macros */
+#define CPUTS(outstr) cputs(CC_CHARGER, outstr)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
+
+#define BATTERY_WAIT_TIMEOUT		(2800*MSEC)
+#define BATTERY_NO_RESPONSE_TIMEOUT	(1000*MSEC)
+
 /* Read battery discharging current
  * unit: mA
  * negative value: charging
@@ -125,6 +132,40 @@ int battery_device_chemistry(char *device_chemistry, int buf_size)
 {
 	return i2c_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
 		SB_DEVICE_CHEMISTRY, device_chemistry, buf_size);
+}
+
+/* Wait until battery is totally stable */
+int battery_wait_for_stable(void)
+{
+	int status, got_response;
+	uint64_t wait_timeout = get_time().val + BATTERY_WAIT_TIMEOUT;
+	uint64_t no_response_timeout = get_time().val +
+				       BATTERY_NO_RESPONSE_TIMEOUT;
+
+	got_response = 0;
+
+	CPRINTF("[%T Wait for battery stabilized during %d\n",
+		BATTERY_WAIT_TIMEOUT);
+	while (get_time().val < wait_timeout) {
+		/* Starting pinging battery */
+		if (battery_status(&status) == EC_SUCCESS) {
+			got_response = 1;
+			/* Battery is stable */
+			if (status & STATUS_INITIALIZED) {
+				CPRINTF("[%T battery initialized]\n");
+				return EC_SUCCESS;
+			}
+		}
+		/* Assume no battery connected if no response for a while */
+		else if (!got_response &&
+			 get_time().val > no_response_timeout) {
+			CPRINTF("[%T battery not responding]\n");
+			return EC_SUCCESS;
+		}
+		msleep(25); /* clock stretching could hold 25ms */
+	}
+	CPRINTF("[%T battery wait stable timeout]\n");
+	return EC_ERROR_TIMEOUT;
 }
 
 /*****************************************************************************/

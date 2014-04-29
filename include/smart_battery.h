@@ -81,7 +81,7 @@
 #define STATUS_FULLY_DISCHARGED         (1 << 4)
 #define STATUS_FULLY_CHARGED            (1 << 5)
 #define STATUS_DISCHARGING              (1 << 6)
-#define STATUS_INITIALIZING             (1 << 7)
+#define STATUS_INITIALIZED              (1 << 7)
 #define STATUS_REMAINING_TIME_ALARM     (1 << 8)
 #define STATUS_REMAINING_CAPACITY_ALARM (1 << 9)
 #define STATUS_TERMINATE_DISCHARGE_ALARM (1 << 11)
@@ -237,6 +237,9 @@ int battery_time_at_rate(int rate, int *minutes);
 
 /* Read manufacturer date */
 int battery_manufacturer_date(int *year, int *month, int *day);
+
+/* Wait for battery stable when first boot-up */
+int battery_wait_for_stable(void);
 
 #endif /* __CROS_EC_SMART_BATTERY_H */
 
