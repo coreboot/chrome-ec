@@ -280,4 +280,11 @@ int board_cut_off_battery(void);
  */
 int battery_is_cut_off(void);
 
+/**
+ * Wait for battery stable.
+ *
+ * @return non-zero if error.
+ */
+int battery_wait_for_stable(void);
+
 #endif /* __CROS_EC_BATTERY_H */
