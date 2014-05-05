@@ -118,6 +118,7 @@ void lidangle_keyscan_update(float lid_ang)
 {
 	static float lidangle_buffer[KEY_SCAN_LID_ANGLE_BUFFER_SIZE];
 	static int index;
+	static int last_chipset_state_on;
 
 	int i;
 	int keys_accept = 1, keys_ignore = 1;
@@ -131,6 +132,7 @@ void lidangle_keyscan_update(float lid_ang)
 	 * is enabled based on lid angle history.
 	 */
 	if (!chipset_in_state(CHIPSET_STATE_ON)) {
+		last_chipset_state_on = 0;
 		for (i = 0; i < KEY_SCAN_LID_ANGLE_BUFFER_SIZE; i++) {
 			/*
 			 * If any lid angle samples are unreliable, then
@@ -153,17 +155,18 @@ void lidangle_keyscan_update(float lid_ang)
 		/* Enable or disable keyboard scanning as necessary. */
 		if (keys_accept)
 			keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-		else if (keys_ignore && !keys_accept)
+		else if (keys_ignore)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Make sure lid angle is not disabling keyboard scanning when
+		 * AP is running. Note, we can't use a hook here for chipset
+		 * resume because the hook triggers before the chipset state
+		 * variable changes, (crosbug.com/p/28529)
+		 */
+		if (!last_chipset_state_on) {
+			keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+			last_chipset_state_on = 1;
+		}
 	}
 }
-
-static void enable_keyboard(void)
-{
-	/*
-	 * Make sure lid angle is not disabling keyboard scanning when AP is
-	 * running.
-	 */
-	keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-}
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, enable_keyboard, HOOK_PRIO_DEFAULT);
