@@ -49,7 +49,7 @@ static struct battery_info info_precharge = {
 	.start_charging_max_c = 50,
 	.charging_min_c       = 0,
 	.charging_max_c       = 60,
-	.discharging_min_c    = 0,
+	.discharging_min_c    = -20,
 	.discharging_max_c    = 75,
 };
 
@@ -110,7 +110,7 @@ static struct battery_info info_3s_LGC = {
         .start_charging_max_c = 50,
         .charging_min_c       = 0,
         .charging_max_c       = 60,
-        .discharging_min_c    = 0,
+        .discharging_min_c    = -20,
         .discharging_max_c    = 75,
 };
 
@@ -127,7 +127,7 @@ static struct battery_info info_4s_LGC = {
 	.start_charging_max_c = 50,
 	.charging_min_c       = 0,
 	.charging_max_c       = 60,
-	.discharging_min_c    = 0,
+	.discharging_min_c    = -20,
 	.discharging_max_c    = 75,
 };
 
