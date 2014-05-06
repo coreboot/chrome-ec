@@ -22,6 +22,7 @@ BOARDS_LM4=(
 	samus
 	squawks
 	swanky
+	tiny
 	winky
 )
 
