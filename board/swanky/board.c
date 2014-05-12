@@ -80,6 +80,7 @@ const struct gpio_info gpio_list[] = {
 	{"PP1000_S0IX_PGOOD",    LM4_GPIO_H, (1<<6), GPIO_INPUT, NULL},
 	{"USB1_OC_L",            LM4_GPIO_E, (1<<7), GPIO_INPUT, NULL},
 	{"USB2_OC_L",            LM4_GPIO_E, (1<<0), GPIO_INPUT, NULL},
+	{"BAT_PRESENT_L",        LM4_GPIO_B, (1<<4), GPIO_INPUT, NULL},
 
 	/* Outputs; all unasserted by default except for reset signals */
 	{"CPU_PROCHOT",          LM4_GPIO_B, (1<<5), GPIO_OUT_LOW, NULL},
