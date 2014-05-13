@@ -39,35 +39,19 @@ void clock_enable_pll(int enable, int notify);
  */
 void clock_wait_cycles(uint32_t cycles);
 
-/* Clock gate control modes for clock_enable_peripheral() */
-#define CGC_MODE_RUN    (1 << 0)
-#define CGC_MODE_SLEEP  (1 << 1)
-#define CGC_MODE_DSLEEP (1 << 2)
-#define CGC_MODE_ALL    (CGC_MODE_RUN | CGC_MODE_SLEEP | CGC_MODE_DSLEEP)
+/* Low power modes for idle API */
 
-/**
- * Enable clock to peripheral by setting the CGC register pertaining
- * to run, sleep, and/or deep sleep modes.
- *
- * @param offset  Offset of the peripheral. See enum clock_gate_offsets.
- * @param mask    Bit mask of the bits within CGC reg to set.
- * @param mode    Which mode(s) to enable the clock for
- */
-void clock_enable_peripheral(uint32_t offset, uint32_t mask, uint32_t mode);
+enum {
+	SLEEP_MASK_AP_RUN = (1 << 0), /* the main CPU is running */
+	SLEEP_MASK_UART   = (1 << 1), /* UART communication on-going */
+	SLEEP_MASK_I2C    = (1 << 2), /* I2C master communication on-going */
+	SLEEP_MASK_CHARGING = (1 << 3), /* Charging loop on-going */
+	SLEEP_MASK_USB_PWR = (1 << 4), /* USB power loop on-going */
 
-/**
- * Disable clock to peripheral by setting the CGC register pertaining
- * to run, sleep, and/or deep sleep modes.
- *
- * @param offset  Offset of the peripheral. See enum clock_gate_offsets.
- * @param mask    Bit mask of the bits within CGC reg to clear.
- * @param mode    Which mode(s) to enable the clock for
- */
-void clock_disable_peripheral(uint32_t offset, uint32_t mask, uint32_t mode);
+	SLEEP_MASK_FORCE  = (1 << 31), /* Force disabling low power modes */
+};
 
-/**
- * Notify the clock module that the UART for the console is in use.
- */
-void clock_refresh_console_in_use(void);
+void enable_sleep(uint32_t mask);
+void disable_sleep(uint32_t mask);
 
 #endif  /* __CROS_EC_CLOCK_H */

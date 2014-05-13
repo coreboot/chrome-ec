@@ -44,7 +44,7 @@ static void usb_port_all_ports_on(void)
 	usb_port_set_enabled(1, 1);
 }
 
-void usb_port_all_ports_off(void)
+static void usb_port_all_ports_off(void)
 {
 	usb_port_set_enabled(0, 0);
 	usb_port_set_enabled(1, 0);

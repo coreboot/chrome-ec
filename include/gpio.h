@@ -28,7 +28,6 @@
 #define GPIO_INT_LOW     (1 << 10) /* Interrupt on low level */
 #define GPIO_INT_HIGH    (1 << 11) /* Interrupt on high level */
 #define GPIO_DEFAULT     (1 << 12) /* Don't set up on boot */
-#define GPIO_INT_DSLEEP  (1 << 13) /* Interrupt in deep sleep */
 
 /* Common flag combinations */
 #define GPIO_OUT_LOW     (GPIO_OUTPUT | GPIO_LOW)
@@ -38,7 +37,6 @@
 #define GPIO_INT_EDGE    (GPIO_INT_RISING | GPIO_INT_FALLING | GPIO_INT_BOTH)
 #define GPIO_INT_LEVEL   (GPIO_INT_LOW | GPIO_INT_HIGH)
 #define GPIO_INT_ANY     (GPIO_INT_EDGE | GPIO_INT_LEVEL)
-#define GPIO_INT_BOTH_DSLEEP (GPIO_INT_BOTH | GPIO_INT_DSLEEP)
 /* Note that if no flags are present, the signal is a high-Z input */
 
 /* GPIO signal definition structure, for use by board.c */
@@ -163,18 +161,6 @@ void gpio_set_level(enum gpio_signal signal, int value);
  * @return EC_SUCCESS, or non-zero if error.
  */
 int gpio_enable_interrupt(enum gpio_signal signal);
-
-/**
- * Disable interrupts for the signal.
- *
- * The signal must have been defined with
- * an interrupt handler.  Normally called by the module which handles the
- * interrupt, if it doesn't want to process interrupts.
- *
- * @param signal	Signal to disable interrupts for
- * @return EC_SUCCESS, or non-zero if error.
- */
-int gpio_disable_interrupt(enum gpio_signal signal);
 
 /**
  * Set flags for GPIO(s) by port and mask.

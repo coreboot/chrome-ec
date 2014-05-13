@@ -99,9 +99,11 @@ int spi_transaction(const uint8_t *txdata, int txlen,
 
 static int spi_init(void)
 {
-	/* Enable the SPI module in run and sleep modes */
-	clock_enable_peripheral(CGC_OFFSET_SSI, 0x1,
-			CGC_MODE_RUN | CGC_MODE_SLEEP);
+	volatile uint32_t scratch  __attribute__((unused));
+
+	/* Enable the SPI module and delay a few clocks */
+	LM4_SYSTEM_RCGCSSI = 1;
+	scratch = LM4_SYSTEM_RCGCSSI;
 
 	LM4_SSI_CR1(0) = 0;       /* Disable SSI */
 	LM4_SSI_CR0(0) = 0x0007;  /* SCR=0, SPH=0, SPO=0, FRF=SPI, 8-bit */

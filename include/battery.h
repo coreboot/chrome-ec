@@ -17,7 +17,7 @@
 /*
  * Send battery-low host event when discharging and battery level <= this level
  */
-#define BATTERY_LEVEL_LOW		 15
+#define BATTERY_LEVEL_LOW		 10
 
 /*
  * Send battery-critical host event when discharging and battery level <= this

@@ -22,7 +22,6 @@ static const char *channel_names[CC_CHANNEL_COUNT] = {
 	"command",
 	"charger",
 	"chipset",
-	"clock",
 	"dma",
 	"events",
 	"gpio",

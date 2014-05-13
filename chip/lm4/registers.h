@@ -194,7 +194,6 @@ static inline int lm4_fan_addr(int ch, int offset)
 #define LM4_HIBCTL_RTCEN       (1 << 0)
 #define LM4_HIBERNATE_HIBIM    REG32(0x400fc014)
 #define LM4_HIBERNATE_HIBRIS   REG32(0x400fc018)
-#define LM4_HIBERNATE_HIBMIS   REG32(0x400fc01c)
 #define LM4_HIBERNATE_HIBIC    REG32(0x400fc020)
 #define LM4_HIBERNATE_HIBRTCT  REG32(0x400fc024)
 #define LM4_HIBERNATE_HIBRTCSS REG32(0x400fc028)
@@ -228,7 +227,6 @@ static inline int lm4_fan_addr(int ch, int offset)
 #define LM4_SYSTEM_MISC        REG32(0x400fe058)
 #define LM4_SYSTEM_RESC        REG32(0x400fe05c)
 #define LM4_SYSTEM_RCC         REG32(0x400fe060)
-#define LM4_SYSTEM_RCC_ACG        (1 << 27)
 #define LM4_SYSTEM_RCC_SYSDIV(x)  (((x) & 0xf) << 23)
 #define LM4_SYSTEM_RCC_USESYSDIV  (1 << 22)
 #define LM4_SYSTEM_RCC_PWRDN      (1 << 13)
@@ -246,17 +244,9 @@ static inline int lm4_fan_addr(int ch, int offset)
 #define LM4_SYSTEM_RCC2_BYPASS2     (1 << 11)
 #define LM4_SYSTEM_RCC2_OSCSRC2(x)  (((x) & 0x7) << 4)
 #define LM4_SYSTEM_MOSCCTL     REG32(0x400fe07c)
-#define LM4_SYSTEM_DSLPCLKCFG  REG32(0x400fe144)
 #define LM4_SYSTEM_PIOSCCAL    REG32(0x400fe150)
 #define LM4_SYSTEM_PIOSCSTAT   REG32(0x400fe154)
 #define LM4_SYSTEM_PLLSTAT     REG32(0x400fe168)
-#define LM4_SYSTEM_SLPPWRCFG   REG32(0x400fe188)
-#define LM4_SYSTEM_DSLPPWRCFG  REG32(0x400fe18c)
-#define LM4_SYSTEM_LDOSPCTL    REG32(0x400fe1b4)
-#define LM4_SYSTEM_LDOSPCAL    REG32(0x400fe1b8)
-#define LM4_SYSTEM_LDODPCTL    REG32(0x400fe1bc)
-#define LM4_SYSTEM_LDODPCAL    REG32(0x400fe1c0)
-#define LM4_SYSTEM_SPDMST      REG32(0x400fe1cc)
 #define LM4_SYSTEM_BOOTCFG     REG32(0x400fe1d0)
 #define LM4_SYSTEM_BOOTCFG_MASK 0x7fff00ec /* Reserved bits of BOOTCFG reg */
 /* Note: USER_REG3 is used to hold pre-programming process data and should not
@@ -264,34 +254,20 @@ static inline int lm4_fan_addr(int ch, int offset)
 #define LM4_SYSTEM_USER_REG3   REG32(0x400fe1ec)
 #define LM4_SYSTEM_SRI2C       REG32(0x400fe520)
 #define LM4_SYSTEM_SREEPROM    REG32(0x400fe558)
-
-#define LM4_SYSTEM_RCGC_BASE   ((volatile uint32_t *)0x400fe600)
+#define LM4_SYSTEM_RCGCWD      REG32(0x400fe600)
+#define LM4_SYSTEM_RCGCTIMER   REG32(0x400fe604)
 #define LM4_SYSTEM_RCGCGPIO    REG32(0x400fe608)
-#define LM4_SYSTEM_SCGC_BASE   ((volatile uint32_t *)0x400fe700)
-#define LM4_SYSTEM_DCGC_BASE   ((volatile uint32_t *)0x400fe800)
-
-/*
- * Offsets from CGC_BASE registers for each peripheral.
- * Note: these are in units of 32-bit words offset from
- * the base address.
- */
-enum clock_gate_offsets {
-	CGC_OFFSET_WD =        0,
-	CGC_OFFSET_TIMER =     1,
-	CGC_OFFSET_GPIO =      2,
-	CGC_OFFSET_DMA =       3,
-	CGC_OFFSET_HIB =       5,
-	CGC_OFFSET_UART =      6,
-	CGC_OFFSET_SSI =       7,
-	CGC_OFFSET_I2C =       8,
-	CGC_OFFSET_ADC =       14,
-	CGC_OFFSET_LPC =       18,
-	CGC_OFFSET_PECI =      20,
-	CGC_OFFSET_FAN =       21,
-	CGC_OFFSET_EEPROM =    22,
-	CGC_OFFSET_WTIMER =    23,
-};
-
+#define LM4_SYSTEM_RCGCDMA     REG32(0x400fe60c)
+#define LM4_SYSTEM_RCGCHIB     REG32(0x400fe614)
+#define LM4_SYSTEM_RCGCUART    REG32(0x400fe618)
+#define LM4_SYSTEM_RCGCSSI     REG32(0x400fe61c)
+#define LM4_SYSTEM_RCGCI2C     REG32(0x400fe620)
+#define LM4_SYSTEM_RCGCADC     REG32(0x400fe638)
+#define LM4_SYSTEM_RCGCLPC     REG32(0x400fe648)
+#define LM4_SYSTEM_RCGCPECI    REG32(0x400fe650)
+#define LM4_SYSTEM_RCGCFAN     REG32(0x400fe654)
+#define LM4_SYSTEM_RCGCEEPROM  REG32(0x400fe658)
+#define LM4_SYSTEM_RCGCWTIMER  REG32(0x400fe65c)
 #define LM4_SYSTEM_PREEPROM    REG32(0x400fea58)
 
 #define LM4_DMA_DMACFG         REG32(0x400ff004)

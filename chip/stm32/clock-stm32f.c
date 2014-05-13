@@ -35,6 +35,19 @@
 #define RTC_FREQ 40000 /* Hz */
 #define US_PER_RTC_TICK (1000000 / RTC_FREQ)
 
+/* On-going actions preventing to go into deep-sleep mode */
+static uint32_t sleep_mask;
+
+void enable_sleep(uint32_t mask)
+{
+	atomic_clear(&sleep_mask, mask);
+}
+
+void disable_sleep(uint32_t mask)
+{
+	atomic_or(&sleep_mask, mask);
+}
+
 static void wait_rtc_ready(void)
 {
 	/* wait for Registers Synchronized Flag */
@@ -177,10 +190,6 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 
 #ifdef CONFIG_LOW_POWER_IDLE
 
-void clock_refresh_console_in_use(void)
-{
-}
-
 #ifdef CONFIG_FORCE_CONSOLE_RESUME
 static void enable_serial_wakeup(int enable)
 {
@@ -196,7 +205,7 @@ static void enable_serial_wakeup(int enable)
 	} else {
 		/* serial port wake up : don't go back to sleep */
 		if (STM32_EXTI_PR & (1 << 10))
-			disable_sleep(SLEEP_MASK_FORCE_NO_DSLEEP);
+			disable_sleep(SLEEP_MASK_FORCE);
 		/* restore keyboard external IT on PC10 */
 		STM32_AFIO_EXTICR(10 / 4) = save_exticr;
 	}
@@ -220,7 +229,7 @@ void __idle(void)
 		t0 = get_time();
 		next_delay = __hw_clock_event_get() - t0.le.lo;
 
-		if (DEEP_SLEEP_ALLOWED && (next_delay > STOP_MODE_LATENCY)) {
+		if (!sleep_mask && (next_delay > STOP_MODE_LATENCY)) {
 			/* deep-sleep in STOP mode */
 
 			enable_serial_wakeup(1);
@@ -289,4 +298,27 @@ void clock_init(void)
 	task_enable_irq(STM32_IRQ_RTC_ALARM);
 }
 
+/*****************************************************************************/
+/* Console commands */
 
+static int command_sleepmask(int argc, char **argv)
+{
+	int off;
+
+	if (argc >= 2) {
+		off = strtoi(argv[1], NULL, 10);
+
+		if (off)
+			disable_sleep(SLEEP_MASK_FORCE);
+		else
+			enable_sleep(SLEEP_MASK_FORCE);
+	}
+
+	ccprintf("sleep mask: %08x\n", sleep_mask);
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(sleepmask, command_sleepmask,
+			"[0|1]",
+			"Display/force sleep mack",
+			NULL);
