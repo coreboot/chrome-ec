@@ -4,7 +4,6 @@
  */
 
 /* System module for Chrome EC : common functions */
-
 #include "clock.h"
 #include "common.h"
 #include "console.h"
@@ -78,6 +77,9 @@ static int jumped_to_image;
 static int disable_jump;  /* Disable ALL jumps if system is locked */
 static int force_locked;  /* Force system locked even if WP isn't enabled */
 static enum ec_reboot_cmd reboot_at_shutdown;
+
+/* On-going actions preventing going into deep-sleep mode */
+uint32_t sleep_mask;
 
 int system_is_locked(void)
 {
@@ -748,6 +750,42 @@ DECLARE_CONSOLE_COMMAND(syslock, command_system_lock,
 			NULL,
 			"Lock the system, even if WP is disabled",
 			NULL);
+
+#ifdef CONFIG_LOW_POWER_IDLE
+/**
+ * Modify and print the sleep mask which controls access to deep sleep
+ * mode in the idle task.
+ */
+static int command_sleepmask(int argc, char **argv)
+{
+	int v;
+
+	if (argc >= 2) {
+		if (parse_bool(argv[1], &v)) {
+			if (v)
+				disable_sleep(SLEEP_MASK_FORCE_NO_DSLEEP);
+			else
+				enable_sleep(SLEEP_MASK_FORCE_NO_DSLEEP);
+		} else {
+			char *e;
+			v = strtoi(argv[1], &e, 10);
+			if (*e)
+				return EC_ERROR_PARAM1;
+
+			/* Set sleep mask directly. */
+			sleep_mask = v;
+		}
+	}
+
+	ccprintf("sleep mask: %08x\n", sleep_mask);
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(sleepmask, command_sleepmask,
+			"[ on | off | <sleep_mask>]",
+			"Display/force sleep mask.\nSee also 'dsleepmask'.",
+			NULL);
+#endif
 
 /*****************************************************************************/
 /* Host commands */

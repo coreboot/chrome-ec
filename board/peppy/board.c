@@ -15,6 +15,7 @@
 #include "gpio.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "jtag.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "lm4_adc.h"
@@ -25,24 +26,25 @@
 #include "temp_sensor.h"
 #include "temp_sensor_g781.h"
 #include "timer.h"
+#include "uart.h"
 #include "util.h"
 
 /* GPIO signal list.  Must match order from enum gpio_signal. */
 const struct gpio_info gpio_list[] = {
 	/* Inputs with interrupt handlers are first for efficiency */
-	{"POWER_BUTTON_L",       LM4_GPIO_A, (1<<2), GPIO_INT_BOTH,
+	{"POWER_BUTTON_L",       LM4_GPIO_A, (1<<2), GPIO_INT_BOTH_DSLEEP,
 	 power_button_interrupt},
-	{"LID_OPEN",             LM4_GPIO_A, (1<<3), GPIO_INT_BOTH,
+	{"LID_OPEN",             LM4_GPIO_A, (1<<3), GPIO_INT_BOTH_DSLEEP,
 	 lid_interrupt},
-	{"AC_PRESENT",           LM4_GPIO_H, (1<<3), GPIO_INT_BOTH,
+	{"AC_PRESENT",           LM4_GPIO_H, (1<<3), GPIO_INT_BOTH_DSLEEP,
 	 extpower_interrupt},
 	{"PCH_BKLTEN",           LM4_GPIO_M, (1<<3), GPIO_INT_BOTH,
 	 backlight_interrupt},
 	{"PCH_SLP_S0_L",         LM4_GPIO_G, (1<<6), GPIO_INT_BOTH,
 	 x86_interrupt},
-	{"PCH_SLP_S3_L",         LM4_GPIO_G, (1<<7), GPIO_INT_BOTH,
+	{"PCH_SLP_S3_L",         LM4_GPIO_G, (1<<7), GPIO_INT_BOTH_DSLEEP,
 	 x86_interrupt},
-	{"PCH_SLP_S5_L",         LM4_GPIO_H, (1<<1), GPIO_INT_BOTH,
+	{"PCH_SLP_S5_L",         LM4_GPIO_H, (1<<1), GPIO_INT_BOTH_DSLEEP,
 	 x86_interrupt},
 	{"PCH_SLP_SUS_L",        LM4_GPIO_G, (1<<3), GPIO_INT_BOTH,
 	 x86_interrupt},
@@ -60,6 +62,11 @@ const struct gpio_info gpio_list[] = {
 	 switch_interrupt},
 	{"WP_L",                 LM4_GPIO_A, (1<<4), GPIO_INT_BOTH,
 	 switch_interrupt},
+	{"JTAG_TCK",             LM4_GPIO_C, (1<<0), GPIO_DEFAULT,
+	 jtag_interrupt},
+	{"UART0_RX",             LM4_GPIO_A, (1<<0), GPIO_PULL_UP|
+							GPIO_INT_BOTH_DSLEEP,
+	 uart_deepsleep_interrupt},
 
 	/* Other inputs */
 	{"FAN_ALERT_L",          LM4_GPIO_B, (1<<0), GPIO_INPUT, NULL},
@@ -126,7 +133,7 @@ BUILD_ASSERT(ARRAY_SIZE(gpio_list) == GPIO_COUNT);
 
 /* Pins with alternate functions */
 const struct gpio_alt_func gpio_alt_funcs[] = {
-	{GPIO_A, 0x03, 1, MODULE_UART},			/* UART0 */
+	{GPIO_A, 0x03, 1, MODULE_UART, GPIO_PULL_UP},	/* UART0 */
 	{GPIO_B, 0x04, 3, MODULE_I2C},			/* I2C0 SCL */
 	{GPIO_B, 0x08, 3, MODULE_I2C, GPIO_OPEN_DRAIN},	/* I2C0 SDA */
 	{GPIO_B, 0x40, 3, MODULE_I2C},			/* I2C5 SCL */

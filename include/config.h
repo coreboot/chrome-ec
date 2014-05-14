@@ -156,6 +156,7 @@
  * console.
  */
 
+#undef CONFIG_CMD_CLOCKGATES
 #undef CONFIG_CMD_COMXTEST
 #undef CONFIG_CMD_ECTEMP
 #undef CONFIG_CMD_PLL
@@ -163,6 +164,7 @@
 #undef CONFIG_CMD_POWERLED
 #undef CONFIG_CMD_SCRATCHPAD
 #undef CONFIG_CMD_SLEEP
+#undef CONFIG_CMD_RTC_ALARM
 
 /*****************************************************************************/
 
@@ -395,7 +397,13 @@
  */
 #define CONFIG_LID_SWITCH
 
+/*
+ * Low power idle options. These are disabled by default and all boards that
+ * want to use low power idle must define it. When using the LFIOSC, the low
+ * frequency clock will be used to conserve even more power when possible.
+ */
 #undef CONFIG_LOW_POWER_IDLE
+#undef CONFIG_LOW_POWER_USE_LFIOSC
 
 /* Compile support for LPC interface */
 #undef CONFIG_LPC
@@ -414,6 +422,15 @@
 
 /* Compile support for PECI interface to x86 processor */
 #undef CONFIG_PECI
+
+/*
+ * Maximum operating temperature in degrees Celcius used on some x86
+ * processors. CPU chip temperature is reported relative to this value and
+ * is never reported greater than this value. Processor asserts PROCHOT#
+ * and starts throttling frequency and voltage at this temp. Operation may
+ * become unreliable if temperature exceeds this limit.
+ */
+#undef CONFIG_PECI_TJMAX
 
 /*****************************************************************************/
 /* PMU config */

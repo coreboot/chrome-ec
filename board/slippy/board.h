@@ -22,6 +22,7 @@
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_LED_SLIPPY
+#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_PWM_FAN
@@ -82,6 +83,8 @@ enum gpio_signal {
 	GPIO_PCH_EDP_VDD_EN,       /* PCH wants EDP enabled */
 	GPIO_RECOVERY_L,           /* Recovery signal from servo */
 	GPIO_WP_L,                 /* Write protect input */
+	GPIO_JTAG_TCK,             /* JTAG clock input */
+	GPIO_UART0_RX,             /* UART0 RX input */
 
 	/* Other inputs */
 	GPIO_FAN_ALERT_L,          /* From thermal sensor */

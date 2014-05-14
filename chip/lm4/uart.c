@@ -5,11 +5,13 @@
 
 /* UART module for Chrome EC */
 
+#include "clock.h"
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
 #include "lpc.h"
 #include "registers.h"
+#include "system.h"
 #include "task.h"
 #include "uart.h"
 #include "util.h"
@@ -25,6 +27,12 @@ int uart_init_done(void)
 
 void uart_tx_start(void)
 {
+	/* If interrupt is already enabled, nothing to do */
+	if (LM4_UART_IM(0) & 0x20)
+		return;
+
+	/* Do not allow deep sleep while transmit in progress */
+	disable_sleep(SLEEP_MASK_UART);
 	/*
 	 * Re-enable the transmit interrupt, then forcibly trigger the
 	 * interrupt.  This works around a hardware problem with the
@@ -38,6 +46,9 @@ void uart_tx_start(void)
 void uart_tx_stop(void)
 {
 	LM4_UART_IM(0) &= ~0x20;
+
+	/* Re-allow deep sleep */
+	enable_sleep(SLEEP_MASK_UART);
 }
 
 int uart_tx_stopped(void)
@@ -55,6 +66,12 @@ void uart_tx_flush(void)
 int uart_tx_ready(void)
 {
 	return !(LM4_UART_FR(0) & 0x20);
+}
+
+int uart_tx_in_progress(void)
+{
+	/* Transmit is in progress if the TX busy bit is set. */
+	return LM4_UART_FR(0) & 0x08;
 }
 
 int uart_rx_available(void)
@@ -173,11 +190,18 @@ static void uart_config(int port)
 
 void uart_init(void)
 {
-	volatile uint32_t scratch  __attribute__((unused));
+	uint32_t mask = 0;
 
-	/* Enable UART0 and Host UART and delay a few clocks */
-	LM4_SYSTEM_RCGCUART |= (1 << CONFIG_UART_HOST) | 1;
-	scratch = LM4_SYSTEM_RCGCUART;
+	/*
+	 * Enable UART0 in run, sleep, and deep sleep modes. Enable the Host
+	 * UART in run and sleep modes.
+	 */
+	mask |= 1;
+	clock_enable_peripheral(CGC_OFFSET_UART, mask, CGC_MODE_ALL);
+
+	mask |= (1 << CONFIG_UART_HOST);
+	clock_enable_peripheral(CGC_OFFSET_UART, mask,
+			CGC_MODE_RUN | CGC_MODE_SLEEP);
 
 	gpio_config_module(MODULE_UART, 1);
 
@@ -194,6 +218,71 @@ void uart_init(void)
 
 	init_done = 1;
 }
+
+#ifdef CONFIG_LOW_POWER_IDLE
+void uart_enter_dsleep(void)
+{
+	const struct gpio_info g = gpio_list[GPIO_UART0_RX];
+
+	/* Disable the UART0 module interrupt. */
+	task_disable_irq(LM4_IRQ_UART0);
+
+	/* Disable UART0 peripheral in deep sleep. */
+	clock_disable_peripheral(CGC_OFFSET_UART, 0x1, CGC_MODE_DSLEEP);
+
+	/*
+	 * Set the UART0 RX pin to be a generic GPIO with the flags defined
+	 * in the board.c file.
+	 */
+	gpio_set_flags_by_mask(g.port, g.mask, g.flags);
+	gpio_set_alternate_function(g.port, g.mask, -1);
+
+	/* Clear any pending GPIO interrupts on the UART0 RX pin. */
+	LM4_GPIO_ICR(g.port) = g.mask;
+
+	/* Enable GPIO interrupts on the UART0 RX pin. */
+	gpio_enable_interrupt(GPIO_UART0_RX);
+}
+
+void uart_exit_dsleep(void)
+{
+	const struct gpio_info g = gpio_list[GPIO_UART0_RX];
+
+	/*
+	 * If the UART0 RX GPIO interrupt has not fired, then no edge has been
+	 * detected. Disable the GPIO interrupt so that switching the pin over
+	 * to a UART pin doesn't inadvertently cause a GPIO edge interrupt.
+	 * Note: we can't disable this interrupt if it has already fired
+	 * because then the IRQ will not get called.
+	 */
+	if (!(LM4_GPIO_MIS(g.port) & g.mask))
+		gpio_disable_interrupt(GPIO_UART0_RX);
+
+	/* Configure UART0 pins for use in UART peripheral. */
+	gpio_config_module(MODULE_UART, 1);
+
+	/* Clear pending interrupts on UART peripheral and enable interrupts. */
+	uart_clear_rx_fifo(0);
+	task_enable_irq(LM4_IRQ_UART0);
+
+	/* Enable UART0 peripheral in deep sleep */
+	clock_enable_peripheral(CGC_OFFSET_UART, 0x1, CGC_MODE_DSLEEP);
+}
+
+void uart_deepsleep_interrupt(enum gpio_signal signal)
+{
+	/*
+	 * Activity seen on UART RX pin while UART was disabled for deep sleep.
+	 * The console won't see that character because the UART is disabled,
+	 * so we need to inform the clock module of UART activity ourselves.
+	 */
+	clock_refresh_console_in_use();
+
+	/* Disable interrupts on UART0 RX pin to avoid repeated interrupts. */
+	gpio_disable_interrupt(GPIO_UART0_RX);
+}
+#endif /* CONFIG_LOW_POWER_IDLE */
+
 
 /*****************************************************************************/
 /* COMx functions */
