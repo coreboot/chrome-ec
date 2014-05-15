@@ -31,31 +31,31 @@ enum led_color {
 static const uint8_t color_brightness[LED_COLOR_COUNT][2] = {
 	{0, 0},
 	{100, 0},
-	{30, 45},
+	{100, 0},
 	{20, 60},
 	{0, 100},
 };
 
 /**
- * Set LED color
+ * Set Battery LED color
  *
  * @param color		Enumerated color value
  */
-static void set_color(enum led_color color)
+static void set_battery_led_color(enum led_color color)
 {
-	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][0]);
+	pwm_set_duty(PWM_CH_LED_ORANGE, color_brightness[color][0]);
 	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][1]);
 }
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
-	brightness_range[EC_LED_COLOR_RED] = 100;
+	brightness_range[EC_LED_COLOR_YELLOW] = 100;
 	brightness_range[EC_LED_COLOR_GREEN] = 100;
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	pwm_set_duty(PWM_CH_LED_RED, brightness[EC_LED_COLOR_RED]);
+	pwm_set_duty(PWM_CH_LED_ORANGE, brightness[EC_LED_COLOR_YELLOW]);
 	pwm_set_duty(PWM_CH_LED_GREEN, brightness[EC_LED_COLOR_GREEN]);
 	return EC_SUCCESS;
 }
@@ -69,9 +69,9 @@ static void led_init(void)
 	 * Enable PWMs and set to 0% duty cycle.  If they're disabled, the LM4
 	 * seems to ground the pins instead of letting them float.
 	 */
-	pwm_enable(PWM_CH_LED_RED, 1);
+	pwm_enable(PWM_CH_LED_ORANGE, 1);
 	pwm_enable(PWM_CH_LED_GREEN, 1);
-	set_color(LED_OFF);
+	set_battery_led_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
 
@@ -91,31 +91,31 @@ static void led_tick(void)
 
 	/* If charging error, blink orange, 25% duty cycle, 4 sec period */
 	if (chstate == PWR_STATE_ERROR) {
-		set_color((ticks % 16) < 4 ? LED_ORANGE : LED_OFF);
+		set_battery_led_color((ticks % 16) < 4 ? LED_ORANGE : LED_OFF);
 		return;
 	}
 
 	/* If charge-force-idle, blink green, 50% duty cycle, 2 sec period */
 	if (chstate == PWR_STATE_IDLE &&
 	    (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)) {
-		set_color((ticks & 0x4) ? LED_GREEN : LED_OFF);
+		set_battery_led_color((ticks & 0x4) ? LED_GREEN : LED_OFF);
 		return;
 	}
 
 	/* If the system is charging, solid orange */
 	if (chstate == PWR_STATE_CHARGE) {
-		set_color(LED_ORANGE);
+		set_battery_led_color(LED_ORANGE);
 		return;
 	}
 
 	/* If AC connected and fully charged (or close to it), solid green */
 	if (chstate == PWR_STATE_CHARGE_NEAR_FULL ||
 	    chstate == PWR_STATE_IDLE) {
-		set_color(LED_GREEN);
+		set_battery_led_color(LED_GREEN);
 		return;
 	}
 
 	/* Otherwise, system is off and AC not connected, LED off */
-	set_color(LED_OFF);
+	set_battery_led_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
