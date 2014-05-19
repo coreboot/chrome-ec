@@ -20,8 +20,10 @@
 
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 #else
 #define CPRINTF(format, args...)
+#define CPRINTS(format, args...)
 #endif
 
 #define PD_DATARATE 300000 /* Hz */

@@ -52,6 +52,7 @@
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_LPC, outstr)
+#define CPRINTS(format, args...) cprints(CC_LPC, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_LPC, format, ## args)
 
 #define LPC_SYSJUMP_TAG 0x4c50  /* "LP" */
@@ -158,7 +159,7 @@ static void lpc_generate_smi(void)
 	gpio_set_level(GPIO_PCH_SMI_L, 1);
 
 	if (host_events & event_mask[LPC_HOST_EVENT_SMI])
-		CPRINTF("[%T smi 0x%08x]\n",
+		CPRINTS("smi 0x%08x",
 			host_events & event_mask[LPC_HOST_EVENT_SMI]);
 }
 
@@ -181,7 +182,7 @@ static void lpc_generate_sci(void)
 #endif
 
 	if (host_events & event_mask[LPC_HOST_EVENT_SCI])
-		CPRINTF("[%T sci 0x%08x]\n",
+		CPRINTS("sci 0x%08x",
 			host_events & event_mask[LPC_HOST_EVENT_SCI]);
 }
 

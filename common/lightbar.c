@@ -32,6 +32,7 @@
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_LIGHTBAR, outstr)
 #define CPRINTF(format, args...) cprintf(CC_LIGHTBAR, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_LIGHTBAR, format, ## args)
 
 /******************************************************************************/
 /* How to talk to the controller */
@@ -263,7 +264,7 @@ static void lb_restore_state(void)
 	old_state = system_get_jump_tag(LB_SYSJUMP_TAG, 0, &size);
 	if (old_state && size == sizeof(st)) {
 		memcpy(&st, old_state, size);
-		CPRINTF("[%T LB state restored: %d %d - %d/%d]\n",
+		CPRINTS("LB state restored: %d %d - %d/%d",
 			st.cur_seq, st.prev_seq,
 			st.battery_is_charging, st.battery_level);
 	} else {
@@ -272,7 +273,7 @@ static void lb_restore_state(void)
 		st.w0 = 0;
 		st.ramp = 0;
 		memcpy(&st.p, &default_params, sizeof(st.p));
-		CPRINTF("[%T LB state initialized]\n");
+		CPRINTS("LB state initialized");
 	}
 }
 
@@ -356,7 +357,7 @@ void demo_battery_level(int inc)
 	else if (st.battery_level < 0)
 		st.battery_level = 0;
 
-	CPRINTF("[%T LB demo: battery_level=%d]\n", st.battery_level);
+	CPRINTS("LB demo: battery_level=%d", st.battery_level);
 }
 
 void demo_is_charging(int ischarge)
@@ -365,7 +366,7 @@ void demo_is_charging(int ischarge)
 		return;
 
 	st.battery_is_charging = ischarge;
-	CPRINTF("[%T LB demo: battery_is_charging=%d]\n",
+	CPRINTS("LB demo: battery_is_charging=%d",
 		st.battery_is_charging);
 }
 
@@ -843,13 +844,13 @@ static uint32_t sequence_STOP(void)
 
 	do {
 		msg = TASK_EVENT_CUSTOM(task_wait_event(-1));
-		CPRINTF("[%T LB_stop got pending_msg %d]\n", pending_msg);
+		CPRINTS("LB_stop got pending_msg %d", pending_msg);
 	} while (msg != PENDING_MSG || pending_msg != LIGHTBAR_RUN);
 
 	/* Q: What should we do if the host shuts down? */
 	/* A: Nothing. We could be driving from the EC console. */
 
-	CPRINTF("[%T LB_stop->running]\n");
+	CPRINTS("LB_stop->running");
 	return 0;
 }
 
@@ -995,21 +996,21 @@ void lightbar_task(void)
 {
 	uint32_t msg;
 
-	CPRINTF("[%T LB task starting]\n");
+	CPRINTS("LB task starting");
 
 	lb_restore_state();
 
 	while (1) {
-		CPRINTF("[%T LB task %d = %s]\n",
+		CPRINTS("LB task %d = %s",
 			st.cur_seq, lightbar_cmds[st.cur_seq].string);
 		msg = lightbar_cmds[st.cur_seq].sequence();
 		if (TASK_EVENT_CUSTOM(msg) == PENDING_MSG) {
-			CPRINTF("[%T LB msg %d = %s]\n", pending_msg,
+			CPRINTS("LB msg %d = %s", pending_msg,
 				lightbar_cmds[pending_msg].string);
 			st.prev_seq = st.cur_seq;
 			st.cur_seq = pending_msg;
 		} else {
-			CPRINTF("[%T LB msg 0x%x]\n", msg);
+			CPRINTS("LB msg 0x%x", msg);
 			switch (st.cur_seq) {
 			case LIGHTBAR_S5S3:
 				st.cur_seq = LIGHTBAR_S3;
@@ -1040,14 +1041,14 @@ void lightbar_task(void)
 void lightbar_sequence(enum lightbar_sequence num)
 {
 	if (num > 0 && num < LIGHTBAR_NUM_SEQUENCES) {
-		CPRINTF("[%T LB_seq %d = %s]\n", num,
+		CPRINTS("LB_seq %d = %s", num,
 			lightbar_cmds[num].string);
 		pending_msg = num;
 		task_set_event(TASK_ID_LIGHTBAR,
 			       TASK_EVENT_WAKE | TASK_EVENT_CUSTOM(PENDING_MSG),
 			       0);
 	} else
-		CPRINTF("[%T LB_seq %d - ignored]\n", num);
+		CPRINTS("LB_seq %d - ignored", num);
 }
 
 /****************************************************************************/
@@ -1163,25 +1164,25 @@ static int lpc_cmd_lightbar(struct host_cmd_handler_args *args)
 		break;
 	case LIGHTBAR_CMD_DEMO:
 		demo_mode = in->demo.num ? 1 : 0;
-		CPRINTF("[%T LB_demo %d]\n", demo_mode);
+		CPRINTS("LB_demo %d", demo_mode);
 		break;
 	case LIGHTBAR_CMD_GET_PARAMS:
-		CPRINTF("[%T LB_get_params]\n");
+		CPRINTS("LB_get_params");
 		memcpy(&out->get_params, &st.p, sizeof(st.p));
 		args->response_size = sizeof(out->get_params);
 		break;
 	case LIGHTBAR_CMD_SET_PARAMS:
-		CPRINTF("[%T LB_set_params]\n");
+		CPRINTS("LB_set_params");
 		memcpy(&st.p, &in->set_params, sizeof(st.p));
 		break;
 	case LIGHTBAR_CMD_VERSION:
-		CPRINTF("[%T LB_version]\n");
+		CPRINTS("LB_version");
 		out->version.num = LIGHTBAR_IMPLEMENTATION_VERSION;
 		out->version.flags = LIGHTBAR_IMPLEMENTATION_FLAGS;
 		args->response_size = sizeof(out->version);
 		break;
 	default:
-		CPRINTF("[%T LB bad cmd 0x%x]\n", in->cmd);
+		CPRINTS("LB bad cmd 0x%x", in->cmd);
 		return EC_RES_INVALID_PARAM;
 	}
 
