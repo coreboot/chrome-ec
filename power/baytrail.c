@@ -342,8 +342,18 @@ enum power_state power_handle_state(enum power_state state)
 		 */
 		gpio_set_level(GPIO_CPU_PROCHOT, 0);
 
+		/*
+		 * Delay turning off PP3300_DX power when going into S3 to
+		 * give the LCD power switch time to discharge the LCD power
+		 * rail. See crosbug.com/p/26561
+		 */
+#ifdef BOARD_GNAWTY
+		msleep(15);
+#else
+		msleep(7);
+#endif
+
 		/* Turn off power rails */
-		msleep(7);  /* Small delay; see crosbug.com/p/26561 */
 		gpio_set_level(GPIO_PP3300_DX_EN, 0);
 
 #ifdef CONFIG_USB_PORT_POWER_IN_S3
