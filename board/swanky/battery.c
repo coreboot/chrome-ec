@@ -65,7 +65,7 @@ DECLARE_DEFERRED(wakeup_deferred);
 static void wakeup(void)
 {
 	/*
-	 * The deferred call ensures thet wakeup_deferred is called from a
+	 * The deferred call ensures that wakeup_deferred is called from a
 	 * task. This is required to talk to the battery over I2C.
 	 */
 	hook_call_deferred(wakeup_deferred, 0);

@@ -13,12 +13,13 @@
 #include "pwm.h"
 #include "util.h"
 
-const enum ec_led_id supported_led_ids[] = {EC_LED_ID_BATTERY_LED};
+const enum ec_led_id supported_led_ids[] = {
+	EC_LED_ID_BATTERY_LED, EC_LED_ID_POWER_LED};
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 enum led_color {
 	LED_OFF = 0,
-	LED_RED,
+	LED_WHITE,
 	LED_ORANGE,
 	LED_YELLOW,
 	LED_GREEN,
@@ -47,6 +48,11 @@ static void set_battery_led_color(enum led_color color)
 	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][1]);
 }
 
+static void set_power_led_color(enum led_color color)
+{
+	pwm_set_duty(PWM_CH_POWER_LED_WHITE, color_brightness[color][0]);
+}
+
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
 	brightness_range[EC_LED_COLOR_YELLOW] = 100;
@@ -72,13 +78,14 @@ static void led_init(void)
 	pwm_enable(PWM_CH_LED_ORANGE, 1);
 	pwm_enable(PWM_CH_LED_GREEN, 1);
 	set_battery_led_color(LED_OFF);
+	set_power_led_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
 
 /**
  * Called by hook task every 250 ms
  */
-static void led_tick(void)
+static void battery_led_tick(void)
 {
 	static unsigned ticks;
 	int chstate = charge_get_state();
@@ -117,5 +124,27 @@ static void led_tick(void)
 
 	/* Otherwise, system is off and AC not connected, LED off */
 	set_battery_led_color(LED_OFF);
+}
+
+static void power_led_tick(void)
+{
+
+	/* If we don't control the LED, nothing to do */
+	if (!led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
+		return;
+
+	if (chipset_in_state(CHIPSET_STATE_ON)) {
+		set_power_led_color(LED_WHITE);
+		return;
+	}
+
+	set_power_led_color(LED_OFF);
+
+}
+
+static void led_tick(void)
+{
+	battery_led_tick();
+	power_led_tick();
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
