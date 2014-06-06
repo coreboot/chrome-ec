@@ -55,14 +55,25 @@ static void set_power_led_color(enum led_color color)
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
-	brightness_range[EC_LED_COLOR_YELLOW] = 100;
-	brightness_range[EC_LED_COLOR_GREEN] = 100;
+	if (led_id == EC_LED_ID_POWER_LED)
+		brightness_range[EC_LED_COLOR_WHITE] = 100;
+	else {
+		brightness_range[EC_LED_COLOR_YELLOW] = 100;
+		brightness_range[EC_LED_COLOR_GREEN] = 100;
+	}
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	pwm_set_duty(PWM_CH_LED_ORANGE, brightness[EC_LED_COLOR_YELLOW]);
-	pwm_set_duty(PWM_CH_LED_GREEN, brightness[EC_LED_COLOR_GREEN]);
+	if (led_id == EC_LED_ID_POWER_LED) {
+		pwm_set_duty(PWM_CH_POWER_LED_WHITE,
+			     brightness[EC_LED_COLOR_WHITE]);
+	} else {
+		pwm_set_duty(PWM_CH_LED_ORANGE,
+			     brightness[EC_LED_COLOR_YELLOW]);
+		pwm_set_duty(PWM_CH_LED_GREEN,
+			     brightness[EC_LED_COLOR_GREEN]);
+	}
 	return EC_SUCCESS;
 }
 
