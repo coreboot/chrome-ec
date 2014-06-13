@@ -136,6 +136,26 @@
  */
 #undef CONFIG_BATTERY_CUT_OFF
 
+/*
+ * The default delay is 1 second. Define this if a board prefers
+ * different delay.
+ */
+#undef CONFIG_BATTERY_CUTOFF_DELAY_US
+
+/*
+ * The board-specific battery.c implements get and set functions to read and
+ * write arbirary vendor-specific parameters stored in the battery.
+ * See include/battery.h for prototypes.
+ */
+#undef CONFIG_BATTERY_VENDOR_PARAM
+
+/*
+ * TODO(crosbug.com/p/29467): allows charging of a dead battery that
+ * requests nil for current and voltage. Remove this workaround when
+ * possible.
+ */
+#undef CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD
+
 /*****************************************************************************/
 
 /*
