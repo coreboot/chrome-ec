@@ -28,8 +28,8 @@ static int bat_led_set_color(enum led_color color)
 {
 	switch (color) {
 	case LED_OFF:
-		gpio_set_level(GPIO_BAT_LED0, 1);
-		gpio_set_level(GPIO_BAT_LED1, 1);
+		gpio_set_level(GPIO_BAT_LED0, 0);
+		gpio_set_level(GPIO_BAT_LED1, 0);
 		break;
 	case LED_WHITE:
 		gpio_set_level(GPIO_BAT_LED0, 1);
@@ -134,13 +134,12 @@ static void kip_led_set_battery(void)
 
 	battery_ticks++;
 
-	/* Battery LED is solid white if AC connected, unless the battery is
-	 * is charging or there is an error. */
-	bat_led_set_color(extpower_is_present() ? LED_WHITE : LED_OFF);
-
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
 		bat_led_set_color(LED_AMBER);
+		break;
+	case PWR_STATE_CHARGE_NEAR_FULL:
+		bat_led_set_color(LED_WHITE);
 		break;
 	case PWR_STATE_DISCHARGE:
 		/* See crosbug.com/p/22159. There's a 3% difference
@@ -151,6 +150,8 @@ static void kip_led_set_battery(void)
 		if (charge_get_percent() < 15)
 			bat_led_set_color(
 				(battery_ticks & 0x4) ? LED_WHITE : LED_OFF);
+		else
+			bat_led_set_color(LED_OFF);
 		break;
 	case PWR_STATE_ERROR:
 		bat_led_set_color((battery_ticks & 0x2) ? LED_WHITE : LED_OFF);
@@ -159,6 +160,8 @@ static void kip_led_set_battery(void)
 		if (chflags & CHARGE_FLAG_FORCE_IDLE)
 			bat_led_set_color(
 				(battery_ticks & 0x4) ? LED_AMBER : LED_OFF);
+		else
+			bat_led_set_color(LED_WHITE);
 		break;
 	default:
 		/* Other states don't alter LED behavior */
