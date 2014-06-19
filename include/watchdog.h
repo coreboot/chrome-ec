@@ -8,14 +8,15 @@
 #ifndef __CROS_EC_WATCHDOG_H
 #define __CROS_EC_WATCHDOG_H
 
-/* Watchdog period in ms; must be at least twice HOOK_TICK_INTERVAL */
-#define WATCHDOG_PERIOD_MS 1100
+/* Watchdog period in ms; see also AUX_TIMER_PERIOD_MS */
+#define WATCHDOG_PERIOD_MS 1600
 
 /*
- * Fire auxiliary timer 50ms before watchdog timer expires. This leaves
- * some time for debug trace to be printed.
+ * Fire auxiliary timer 500ms before watchdog timer expires. This leaves
+ * some time for debug trace to be printed; must be at least twice
+ * HOOK_TICK_INTERVAL.
  */
-#define AUX_TIMER_PERIOD_MS (WATCHDOG_PERIOD_MS - 50)
+#define AUX_TIMER_PERIOD_MS (WATCHDOG_PERIOD_MS - 500)
 
 /**
  * Initialize the watchdog.
