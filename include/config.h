@@ -98,6 +98,15 @@
  */
 #undef CONFIG_BATTERY_CUT_OFF
 
+/*
+ * Battery percent thresholds to notify the host or shut down the system.
+ * If not specified, default values are set in include/battery.h.
+ */
+#undef CONFIG_BATTERY_LEVEL_CRITICAL
+#undef CONFIG_BATTERY_LEVEL_LOW
+#undef CONFIG_BATTERY_LEVEL_NEAR_FULL
+#undef CONFIG_BATTERY_LEVEL_SHUTDOWN
+
 /* Compile mock battery support; used by tests. */
 #undef CONFIG_BATTERY_MOCK
 

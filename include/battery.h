@@ -14,24 +14,32 @@
 #define BATTERY_LEVEL_FULL		100
 
 /* Tell host we're charged when battery level >= this percentage */
-#define BATTERY_LEVEL_NEAR_FULL		 97
+#ifndef CONFIG_BATTERY_LEVEL_NEAR_FULL
+#define CONFIG_BATTERY_LEVEL_NEAR_FULL	 97
+#endif
 
 /*
  * Send battery-low host event when discharging and battery level <= this level
  */
-#define BATTERY_LEVEL_LOW		 10
+#ifndef CONFIG_BATTERY_LEVEL_LOW
+#define CONFIG_BATTERY_LEVEL_LOW	 10
+#endif
 
 /*
  * Send battery-critical host event when discharging and battery level <= this
  * level.
  */
-#define BATTERY_LEVEL_CRITICAL		  5
+#ifndef CONFIG_BATTERY_LEVEL_CRITICAL
+#define CONFIG_BATTERY_LEVEL_CRITICAL	  5
+#endif
 
 /*
  * Shut down main processor and/or hibernate EC when discharging and battery
  * level < this level.
  */
-#define BATTERY_LEVEL_SHUTDOWN		  3
+#ifndef CONFIG_BATTERY_LEVEL_SHUTDOWN
+#define CONFIG_BATTERY_LEVEL_SHUTDOWN    3
+#endif
 
 /* Battery parameters */
 struct batt_params {
