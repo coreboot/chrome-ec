@@ -10,8 +10,12 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "led_common.h"
+#include "lid_switch.h"
 #include "pwm.h"
 #include "util.h"
+
+#define LED_TOTAL_TICKS	16
+#define LED_ON_TICKS	4
 
 const enum ec_led_id supported_led_ids[] = {
 	EC_LED_ID_BATTERY_LED, EC_LED_ID_POWER_LED};
@@ -140,16 +144,44 @@ static void battery_led_tick(void)
 static void power_led_tick(void)
 {
 
+	static int power_ticks;
+	static int previous_state_suspend;
+
+
 	/* If we don't control the LED, nothing to do */
 	if (!led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
 		return;
 
-	if (chipset_in_state(CHIPSET_STATE_ON)) {
-		set_power_led_color(LED_WHITE);
+	power_ticks++;
+
+	/* If lid close, LED turn off */
+	if (!lid_is_open()) {
+		set_power_led_color(LED_OFF);
 		return;
 	}
 
-	set_power_led_color(LED_OFF);
+	if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
+
+		/* Reset ticks if entering suspend, so LED turns amber
+		 * as soon as possible. */
+		if (!previous_state_suspend)
+			power_ticks = 0;
+
+		/* Blink once every four seconds. */
+		set_power_led_color(
+			(power_ticks % LED_TOTAL_TICKS < LED_ON_TICKS) ?
+			LED_WHITE : LED_OFF);
+
+		previous_state_suspend = 1;
+		return;
+	}
+
+	previous_state_suspend = 0;
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		set_power_led_color(LED_OFF);
+	else if (chipset_in_state(CHIPSET_STATE_ON))
+		set_power_led_color(LED_WHITE);
 
 }
 
