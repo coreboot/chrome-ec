@@ -19,6 +19,17 @@
 
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 
+#ifdef CONFIG_BATTERY_CUT_OFF
+
+#ifndef CONFIG_BATTERY_CUTOFF_DELAY_US
+#define CONFIG_BATTERY_CUTOFF_DELAY_US (1 * SECOND)
+#endif
+
+static enum battery_cutoff_states battery_cutoff_state =
+	BATTERY_CUTOFF_STATE_NORMAL;
+
+#endif
+
 #ifdef CONFIG_BATTERY_PRESENT_GPIO
 #ifdef CONFIG_BATTERY_PRESENT_CUSTOM
 #error "Don't define both CONFIG_BATTERY_PRESENT_CUSTOM and" \
@@ -31,13 +42,6 @@ int battery_is_present(void)
 {
 	return (gpio_get_level(CONFIG_BATTERY_PRESENT_GPIO) == 0);
 }
-#endif
-
-#ifdef CONFIG_BATTERY_CUT_OFF
-#define BATTERY_CUTOFF_DELAY_US       (5 * SECOND)
-#define BATTERY_CUTOFF_CONSOLE_TRIES  5
-
-static int pending_cutoff;	/* If a battery cut-off has been requested */
 #endif
 
 static const char *get_error_text(int rv)
@@ -251,67 +255,103 @@ DECLARE_CONSOLE_COMMAND(battery, command_battery,
 			NULL);
 
 #ifdef CONFIG_BATTERY_CUT_OFF
-static void cut_off_wrapper(void)
+int battery_is_cut_off(void)
+{
+	return (battery_cutoff_state == BATTERY_CUTOFF_STATE_CUT_OFF);
+}
+
+static void pending_cutoff_deferred(void)
 {
 	int rv;
 
-	rv = battery_cut_off();		/* In board/$board/battery.c */
+	rv = board_cut_off_battery();
 
 	if (rv == EC_SUCCESS)
 		CPRINTF("[%T Battery cut off succeeded.]\n");
 	else
 		CPRINTF("[%T Battery cut off failed!]\n");
 }
-DECLARE_DEFERRED(cut_off_wrapper);
+DECLARE_DEFERRED(pending_cutoff_deferred);
+
+static void clear_pending_cutoff(void)
+{
+	if (extpower_is_present()) {
+		battery_cutoff_state = BATTERY_CUTOFF_STATE_NORMAL;
+		hook_call_deferred(pending_cutoff_deferred, -1);
+	}
+}
+DECLARE_HOOK(HOOK_AC_CHANGE, clear_pending_cutoff, HOOK_PRIO_DEFAULT);
+
+static int battery_command_cutoff(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_battery_cutoff *p;
+	int rv;
+
+	if (args->version == 1) {
+		p = args->params;
+		if (p->flags & EC_BATTERY_CUTOFF_FLAG_AT_SHUTDOWN) {
+			battery_cutoff_state = BATTERY_CUTOFF_STATE_PENDING;
+			CPRINTF("[%T Battery cut off at-shutdown");
+			CPRINTF(" is scheduled]\n");
+			return EC_RES_SUCCESS;
+		}
+	}
+
+	rv = board_cut_off_battery();
+	if (!rv) {
+		CPRINTF("[%T Battery cut off is successful.]\n");
+		battery_cutoff_state = BATTERY_CUTOFF_STATE_CUT_OFF;
+	} else {
+		CPRINTF("[%T Battery cut off has failed.]\n");
+	}
+
+	return rv;
+}
+DECLARE_HOST_COMMAND(EC_CMD_BATTERY_CUT_OFF, battery_command_cutoff,
+		EC_VER_MASK(0) | EC_VER_MASK(1));
 
 static void check_pending_cutoff(void)
 {
-	if (pending_cutoff) {
+	if (battery_cutoff_state == BATTERY_CUTOFF_STATE_PENDING) {
 		CPRINTF("[%T Cutting off battery in %d second(s)]\n",
-			BATTERY_CUTOFF_DELAY_US / SECOND);
-		hook_call_deferred(cut_off_wrapper, BATTERY_CUTOFF_DELAY_US);
+			CONFIG_BATTERY_CUTOFF_DELAY_US / SECOND);
+		hook_call_deferred(pending_cutoff_deferred,
+				   CONFIG_BATTERY_CUTOFF_DELAY_US);
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, check_pending_cutoff, HOOK_PRIO_LAST);
 
-int host_command_battery_cut_off(struct host_cmd_handler_args *args)
+static int command_cutoff(int argc, char **argv)
 {
-	pending_cutoff = 1;
+	int rv;
 
-	/*
-	 * When cutting off the battery, the AP is off and AC is not present.
-	 * This makes serial console unresponsive and hard to verify battery
-	 * cut-off. Let's disable sleep here so one can check cut-off status
-	 * if needed. This shouldn't matter because we are about to cut off
-	 * the battery.
-	 */
-	disable_sleep(SLEEP_MASK_FORCE_NO_DSLEEP);
-
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_BATTERY_CUT_OFF, host_command_battery_cut_off,
-		     EC_VER_MASK(0));
-
-static int console_command_battcutoff(int argc, char **argv)
-{
-	int tries = BATTERY_CUTOFF_CONSOLE_TRIES;
-
-	while (extpower_is_present() && tries > 0) {
-		ccprintf("Remove AC power within %d seconds...\n", tries);
-		tries--;
-		usleep(SECOND);
+	if (argc > 1) {
+		if (!strcasecmp(argv[1], "at-shutdown")) {
+			battery_cutoff_state = BATTERY_CUTOFF_STATE_PENDING;
+			return EC_SUCCESS;
+		} else {
+			return EC_ERROR_INVAL;
+		}
 	}
 
-	if (extpower_is_present())
-		return EC_ERROR_UNKNOWN;
+	rv = board_cut_off_battery();
+	if (!rv) {
+		ccprintf("[%T Battery cut off]\n");
+		battery_cutoff_state = BATTERY_CUTOFF_STATE_CUT_OFF;
+	}
 
-	ccprintf("Cutting off battery.\n");
-
-	return battery_cut_off();
+	return rv;
 }
-DECLARE_CONSOLE_COMMAND(battcutoff, console_command_battcutoff, NULL,
-			"Cut off the battery", NULL);
-#endif /* CONFIG_BATTERY_CUT_OFF */
+DECLARE_CONSOLE_COMMAND(cutoff, command_cutoff,
+		"[at-shutdown]",
+		"Cut off the battery output",
+		NULL);
+#else
+int battery_is_cut_off(void)
+{
+	return 0;  /* Always return NOT cut off */
+}
+#endif  /* CONFIG_BATTERY_CUT_OFF */
 
 #ifdef CONFIG_BATTERY_VENDOR_PARAM
 static int console_command_battery_vendor_param(int argc, char **argv)

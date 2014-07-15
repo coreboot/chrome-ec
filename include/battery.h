@@ -41,6 +41,12 @@
 #define CONFIG_BATTERY_LEVEL_SHUTDOWN    3
 #endif
 
+enum battery_cutoff_states {
+	BATTERY_CUTOFF_STATE_NORMAL = 0,
+	BATTERY_CUTOFF_STATE_CUT_OFF,
+	BATTERY_CUTOFF_STATE_PENDING,
+};
+
 /* Battery parameters */
 struct batt_params {
 	int temperature;      /* Temperature in 0.1 K */
@@ -260,15 +266,17 @@ int battery_device_chemistry(char *dest, int size);
  */
 int battery_manufacturer_date(int *year, int *month, int *day);
 
-#ifdef CONFIG_BATTERY_CUT_OFF
 /**
- * Cut off battery power.
- * Optional, vendor-specific implementation in board/$board/battery.c
+ * Call board-specific cut-off function.
  *
- * @return non-zero if error
+ * @return EC_RES_INVALID_COMMAND if the battery doesn't support.
  */
-int battery_cut_off(void);
-#endif
+int board_cut_off_battery(void);
+
+/**
+ * Return if the battery has been cut off.
+ */
+int battery_is_cut_off(void);
 
 /**
  * Read battery vendor parameter.
