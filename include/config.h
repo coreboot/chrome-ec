@@ -487,6 +487,7 @@
 #undef CONFIG_I2C_DEBUG_PASSTHRU
 #undef CONFIG_I2C_PASSTHROUGH
 #undef CONFIG_I2C_PASSTHRU_RESTRICTED
+#undef CONFIG_I2C_RETRY_CNT
 
 /*****************************************************************************/
 
