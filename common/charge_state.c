@@ -252,6 +252,14 @@ static int state_common(struct charge_state_context *ctx)
 	defined(CONFIG_BATTERY_PRESENT_GPIO)
 	if (!battery_is_present()) {
 		curr->error |= F_BATTERY_NOT_CONNECTED;
+		/* This is the only place accumulating previous state
+		   to only send one event */
+		if(*batt_flags & EC_BATT_FLAG_BATT_PRESENT) {
+			*batt_flags &= ~ (EC_BATT_FLAG_BATT_PRESENT |
+					  EC_BATT_FLAG_CHARGING |
+					  EC_BATT_FLAG_DISCHARGING);
+			host_set_single_event(EC_HOST_EVENT_BATTERY);
+		}
 		return curr->error;
 	}
 #endif
