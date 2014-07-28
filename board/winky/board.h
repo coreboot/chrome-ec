@@ -19,6 +19,7 @@
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 /* TODO(crosbug.com/p/25416): Add correct input current limit for Winky */
 #define CONFIG_CHARGER_INPUT_CURRENT 2112   /* 30 W adapter, 12 V, 2.2 A */
+#define CONFIG_CHARGE_NVDC_OFF_VOLTAGE 8592    /* NVDC Off voltage */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10    /* Charge sense resistor, mOhm */
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input senso resistor, mOhm */
 #define CONFIG_CHIPSET_BAYTRAIL
