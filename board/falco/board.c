@@ -54,7 +54,7 @@ const struct gpio_info gpio_list[] = {
 	 x86_interrupt},
 	{"PP1350_PGOOD",         LM4_GPIO_H, (1<<6), GPIO_INT_BOTH,
 	 x86_interrupt},
-	{"PP5000_PGOOD",         LM4_GPIO_N, (1<<0), GPIO_INT_BOTH,
+	{"PP5000_PGOOD",         LM4_GPIO_N, (1<<0), GPIO_INT_BOTH_DSLEEP,
 	 x86_interrupt},
 	{"VCORE_PGOOD",          LM4_GPIO_C, (1<<6), GPIO_INT_BOTH,
 	 x86_interrupt},
