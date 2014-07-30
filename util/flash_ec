@@ -10,6 +10,7 @@ COMMON_SH=/usr/lib/crosutils/common.sh
 # Note: Link is a special case and is not included here.
 BOARDS_LM4=(
 	clapper
+	cranky
 	enguarde
 	expresso
 	falco

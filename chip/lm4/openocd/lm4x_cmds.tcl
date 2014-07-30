@@ -31,6 +31,10 @@ proc flash_bds { } {
 	flash_lm4 ../../../build/bds/ec.bin 0
 }
 
+proc flash_cranky { } {
+	flash_lm4 ../../../build/cranky/ec.bin 0
+}
+
 proc flash_enguarde { } {
 	flash_lm4 ../../../build/enguarde/ec.bin 0
 }
@@ -109,6 +113,14 @@ proc flash_rambi_ro { } {
 
 proc flash_rambi_rw { } {
 	flash_lm4 ../../../build/rambi/ec.RW.bin 131072
+}
+
+proc flash_cranky_ro { } {
+	flash_lm4 ../../../build/cranky/ec.RO.flat 0
+}
+
+proc flash_cranky_rw { } {
+	flash_lm4 ../../../build/cranky/ec.RW.bin 131072
 }
 
 proc flash_expresso_ro { } {
