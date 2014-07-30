@@ -35,6 +35,10 @@
 #define BATTERY_AP_OFF_LEVEL 0
 #endif
 
+#ifndef CONFIG_BATTERY_RESPONSIVE_TIMER
+#define CONFIG_BATTERY_RESPONSIVE_TIMER 30
+#endif
+
 static const char * const state_name[] = CHARGE_STATE_NAME_TABLE;
 
 static int state_machine_force_idle;
@@ -278,7 +282,7 @@ static int state_common(struct charge_state_context *ctx)
 			 */
 			charge_request(ctx->battery->voltage_max,
 				       ctx->battery->precharge_current);
-			for (d = 0; d < 30; d++) {
+			for (d = 0; d < CONFIG_BATTERY_RESPONSIVE_TIMER; d++) {
 				sleep(1);
 				battery_get_params(batt);
 				if (batt->flags & BATT_FLAG_RESPONSIVE) {

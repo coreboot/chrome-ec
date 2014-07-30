@@ -135,6 +135,13 @@
 #undef CONFIG_BATTERY_PRESENT_GPIO
 
 /*
+* Check battery responsive
+*
+* When battery is inserted, EC checks i2c communication during setting time.
+*/
+#undef CONFIG_BATTERY_RESPONSIVE_TIMER
+
+/*
  * Compile smart battery support
  *
  * For batteries which support this specification:
