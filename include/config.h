@@ -111,6 +111,13 @@
 #undef CONFIG_BATTERY_MOCK
 
 /*
+* Check battery connection
+*
+* If defined, board-specific function is called when battery is removed.
+*/
+#undef CONFIG_BATTERY_NOT_CONNECTED
+
+/*
  * Charger should call battery_override_params() to limit/correct the voltage
  * and current requested by the battery pack before acting on the request.
  */

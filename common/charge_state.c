@@ -256,6 +256,9 @@ static int state_common(struct charge_state_context *ctx)
 	defined(CONFIG_BATTERY_PRESENT_GPIO)
 	if (!battery_is_present()) {
 		curr->error |= F_BATTERY_NOT_CONNECTED;
+#ifdef CONFIG_BATTERY_NOT_CONNECTED
+		board_battery_not_connected();
+#endif
 		/* This is the only place accumulating previous state
 		   to only send one event */
 		if(*batt_flags & EC_BATT_FLAG_BATT_PRESENT) {
@@ -300,6 +303,11 @@ static int state_common(struct charge_state_context *ctx)
 	} else {
 		ctx->battery_responsive = 1;
 	}
+
+#ifdef CONFIG_BATTERY_OVERRIDE_PARAMS
+	/* Apply battery pack vendor charging method */
+	battery_override_params(batt);
+#endif
 
 	/* Translate flags */
 	if (batt->flags & BATT_FLAG_BAD_ANY)
@@ -361,11 +369,6 @@ static int state_common(struct charge_state_context *ctx)
 	} else {
 		*ctx->memmap_batt_flags &= ~EC_BATT_FLAG_LEVEL_CRITICAL;
 	}
-
-#ifdef CONFIG_BATTERY_OVERRIDE_PARAMS
-	/* Apply battery pack vendor charging method */
-	battery_override_params(batt);
-#endif
 
 #ifdef CONFIG_CHARGER_CURRENT_LIMIT
 	if (batt->desired_current > CONFIG_CHARGER_CURRENT_LIMIT)
