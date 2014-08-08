@@ -112,12 +112,20 @@ void battery_override_params(struct batt_params *batt)
 		batt->flags |= BATT_FLAG_BAD_VOLTAGE;
 		batt->desired_voltage = 0;
 		batt->desired_current = 0;
+
+		return;
 	}
 
 	if(oem_battery_state & OEM_BATTERY_STATE_STOP_CHARGE) {
 		batt->flags &= ~BATT_FLAG_WANT_CHARGE;
 		batt->desired_voltage = 0;
 		batt->desired_current = 0;
+
+		return;
+	}
+
+	if(chstate == PWR_STATE_CHARGE) {
+		batt->desired_current = (batt->full_capacity)*6/10;
 	}
 }
 #endif /* CONFIG_BATTERY_OVERRIDE_PARAMS */
