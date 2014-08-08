@@ -134,7 +134,8 @@ void battery_override_params(struct batt_params *batt)
 		return;
 	}
 
-	if(chstate == PWR_STATE_CHARGE) {
+	if((chstate == PWR_STATE_CHARGE) ||
+	   (chstate == PWR_STATE_CHARGE_NEAR_FULL)) {
 		battery_full_charge_capacity(&bat_fcc);
 		batt->desired_current = bat_fcc*6/10;
 	}
