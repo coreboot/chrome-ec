@@ -80,6 +80,7 @@ inline void board_battery_not_connected(void)
 
 void battery_override_params(struct batt_params *batt)
 {
+	int bat_fcc;
 	int bat_temp_c = DECI_KELVIN_TO_CELSIUS(batt->temperature);
 	int chstate = charge_get_state();
 
@@ -134,7 +135,8 @@ void battery_override_params(struct batt_params *batt)
 	}
 
 	if(chstate == PWR_STATE_CHARGE) {
-		batt->desired_current = (batt->full_capacity)*6/10;
+		battery_full_charge_capacity(&bat_fcc);
+		batt->desired_current = bat_fcc*6/10;
 	}
 }
 #endif /* CONFIG_BATTERY_OVERRIDE_PARAMS */
