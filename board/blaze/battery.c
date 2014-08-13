@@ -86,9 +86,16 @@ static struct battery_device support_batteries[] = {
 		.support_cut_off	= 1,
 	},
 	{
-		.manuf			= "13-1B",
-		.device			= "BO03032X",
-		.design_mv		= 11100,
+		.manuf			= "3331B",
+		.device			= "BO03037X",
+		.design_mv		= 11400,
+		.battery_info		= &info_3s,
+		.support_cut_off	= 1,
+	},
+	{
+		.manuf			= "3331C",
+		.device			= "BO03037X",
+		.design_mv		= 11400,
 		.battery_info		= &info_3s,
 		.support_cut_off	= 1,
 	}
