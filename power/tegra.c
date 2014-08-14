@@ -270,8 +270,9 @@ enum power_state power_chipset_init(void)
 	 * Some batteries use clock stretching feature, which requires
 	 * more time to be stable. See http://crosbug.com/p/28289
 	 */
+#ifndef BOARD_KITTY
 	battery_wait_for_stable();
-
+#endif
 	return init_power_state;
 }
 

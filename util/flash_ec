@@ -239,7 +239,8 @@ fi
 save="$(servo_save)"
 
 case "${BOARD}" in
-	big | blaze | discovery | nyan | pit | snow | spring ) flash_stm32 ;;
+	big | blaze | discovery | kitty | nyan | pit | snow | spring ) \
+	flash_stm32 ;;
 	fruitpie | zinger) flash_stm32 ;;
 	falco | peppy | rambi | samus | squawks ) flash_lm4 ;;
 	link ) flash_link ;;

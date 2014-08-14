@@ -196,7 +196,9 @@ void clock_enable_module(enum module_id module, int enable)
  */
 void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 {
+#ifdef CONFIG_KEYBOARD_PROTOCOL_MKBP
 	int i;
+#endif
 	fake_hibernate = 1;
 
 #ifdef CONFIG_POWER_COMMON
@@ -218,6 +220,7 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	power_set_state(POWER_G3);
 #endif
 
+#ifdef CONFIG_KEYBOARD_PROTOCOL_MKBP
 	/*
 	 * Change keyboard outputs to high-Z to reduce power draw.
 	 * We don't need corresponding code to change them back,
@@ -227,6 +230,7 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	 */
 	for (i = GPIO_KB_OUT00; i < GPIO_KB_OUT00 + KEYBOARD_COLS; i++)
 		gpio_set_flags(i, GPIO_INPUT);
+#endif
 
 	ccprints("fake hibernate. waits for power button/lid/RTC/AC");
 	cflush();
