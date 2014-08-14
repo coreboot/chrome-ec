@@ -197,6 +197,9 @@ enum temp_sensor_id {
 /* Discharge battery when on AC power for factory test. */
 int board_discharge_on_ac(int enable);
 
+/* Reset the modem when the AP is reset. */
+void board_ap_warm_reset(void);
+
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __BOARD_H */

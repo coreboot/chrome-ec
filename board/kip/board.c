@@ -7,13 +7,16 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "backlight.h"
+#include "board.h"
 #include "charge_state.h"
 #include "charger.h"
 #include "common.h"
+#include "console.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "host_command.h"
+#include "hooks.h"
 #include "i2c.h"
 #include "jtag.h"
 #include "keyboard_scan.h"
@@ -223,4 +226,26 @@ BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 int board_discharge_on_ac(int enable)
 {
 	return charger_discharge_on_ac(enable);
+}
+
+static void modem_power_on(void)
+{
+	cprintf(CC_HOOK, "[%T GPIO_PP3300_LTE_EN %d->1]\n",
+		gpio_get_level(GPIO_PP3300_LTE_EN));
+	gpio_set_level(GPIO_PP3300_LTE_EN, 1);
+}
+DECLARE_DEFERRED(modem_power_on);
+
+static void modem_power_cycle(void)
+{
+	cprintf(CC_HOOK, "[%T GPIO_PP3300_LTE_EN %d->0]\n",
+		gpio_get_level(GPIO_PP3300_LTE_EN));
+	gpio_set_level(GPIO_PP3300_LTE_EN, 0);
+	hook_call_deferred(modem_power_on, 30 * MSEC);
+}
+
+/* Reset the modem when AP is reset. */
+void board_ap_warm_reset(void)
+{
+	modem_power_cycle();
 }
