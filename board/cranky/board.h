@@ -132,6 +132,7 @@ enum gpio_signal {
 	GPIO_USB1_ENABLE,          /* USB port 1 output power enable */
 	GPIO_USB2_ENABLE,          /* USB port 2 output power enable */
 	GPIO_VCORE_EN,             /* Enable core power supplies */
+	GPIO_VIDEO_DISABLE_L,      /* Disable video power supplies */
 	GPIO_WLAN_OFF_L,           /* Disable WiFi radio */
 	GPIO_PCH_SCI_L,            /* Assert SCI to PCH */
 	GPIO_KBD_IRQ_L,            /* Negative edge triggered irq. */
