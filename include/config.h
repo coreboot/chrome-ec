@@ -888,6 +888,11 @@
 #undef CONFIG_WIRELESS_SUSPEND
 
 /*
+ * Support LAN controller be powered in suspend (S3).
+ */
+#undef CONFIG_LAN_POWER_S3
+
+/*
  * Write protect signal is active-high.  If this is defined, there must be a
  * GPIO named GPIO_WP; if not defined, there must be a GPIO names GPIO_WP_L.
  */

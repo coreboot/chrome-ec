@@ -93,6 +93,7 @@ const struct gpio_info gpio_list[] = {
 	{"ENABLE_BACKLIGHT",     LM4_GPIO_M, (1<<7), GPIO_ODR_HIGH, NULL},
 	{"ENABLE_TOUCHPAD",      LM4_GPIO_N, (1<<1), GPIO_OUT_LOW, NULL},
 	{"ENTERING_RW",          LM4_GPIO_D, (1<<6), GPIO_OUT_LOW, NULL},
+	{"LAN_POWER",            LM4_GPIO_M, (1<<6), GPIO_OUT_LOW, NULL},
 	{"LPC_CLKRUN_L",         LM4_GPIO_M, (1<<2), GPIO_ODR_HIGH, NULL},
 	{"PCH_CORE_PWROK",       LM4_GPIO_F, (1<<5), GPIO_OUT_LOW, NULL},
 	{"PCH_PWRBTN_L",         LM4_GPIO_H, (1<<0), GPIO_ODR_HIGH, NULL},

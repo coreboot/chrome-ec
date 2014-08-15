@@ -29,6 +29,7 @@
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_IRQ_GPIO GPIO_KBD_IRQ_L
 #define CONFIG_KEYBOARD_PROTOCOL_8042
+#define CONFIG_LAN_POWER_S3 GPIO_LAN_POWER
 #define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
 #undef  CONFIG_PECI
@@ -109,6 +110,7 @@ enum gpio_signal {
 	GPIO_ENABLE_BACKLIGHT,     /* Enable backlight power */
 	GPIO_ENABLE_TOUCHPAD,      /* Enable touchpad power */
 	GPIO_ENTERING_RW,          /* Indicate when EC is entering RW code */
+	GPIO_LAN_POWER,            /* Enable LAN power supplies*/
 	GPIO_LPC_CLKRUN_L,         /* Request that PCH drive LPC clock */
 	GPIO_PCH_CORE_PWROK,       /* Indicate core well power is stable */
 	GPIO_PCH_PWRBTN_L,         /* Power button output to PCH */

@@ -227,6 +227,11 @@ enum power_state power_handle_state(enum power_state state)
 		 */
 		gpio_set_level(GPIO_ENABLE_TOUCHPAD, 1);
 
+#ifdef CONFIG_LAN_POWER_S3
+		/* Turn on LAN controller power */
+		gpio_set_level(CONFIG_LAN_POWER_S3, 1);
+#endif
+
 		/* Call hooks now that rails are up */
 		hook_notify(HOOK_CHIPSET_STARTUP);
 		return POWER_S3;
@@ -383,6 +388,11 @@ enum power_state power_handle_state(enum power_state state)
 		/* Disable touchpad power and hold touchscreen in reset */
 		gpio_set_level(GPIO_ENABLE_TOUCHPAD, 0);
 		gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, 0);
+
+#ifdef CONFIG_LAN_POWER_S3
+		/* Turn off LAN controller power */
+		gpio_set_level(CONFIG_LAN_POWER_S3, 0);
+#endif
 
 		/* Turn off power to RAM */
 		gpio_set_level(GPIO_PP1350_EN, 0);
