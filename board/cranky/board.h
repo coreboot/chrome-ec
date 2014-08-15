@@ -37,6 +37,7 @@
 #define CONFIG_PWM
 #define CONFIG_PWM_DSLEEP
 #define CONFIG_SCI_GPIO GPIO_PCH_SCI_L
+#define CONFIG_SWITCH_DEDICATED_RECOVERY
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
 #define CONFIG_USB_PORT_POWER_IN_S3
@@ -83,6 +84,7 @@ enum gpio_signal {
 	GPIO_PP5000_PGOOD,         /* Power good on 5V */
 	GPIO_S5_PGOOD,             /* Power good on S5 supplies */
 	GPIO_VCORE_PGOOD,          /* Power good on core VR */
+	GPIO_RECOVERY_L,           /* Recovery signal from servo */
 	GPIO_WP_L,                 /* Write protect input */
 	GPIO_JTAG_TCK,             /* JTAG clock input */
 	GPIO_UART0_RX,             /* UART0 RX input */

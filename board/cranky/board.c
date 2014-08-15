@@ -58,6 +58,8 @@ const struct gpio_info gpio_list[] = {
 	 power_signal_interrupt},
 	{"VCORE_PGOOD",          LM4_GPIO_C, (1<<6), GPIO_INT_BOTH,
 	 power_signal_interrupt},
+	{"RECOVERY_L",           LM4_GPIO_A, (1<<5), GPIO_PULL_UP|GPIO_INT_BOTH,
+	 switch_interrupt},
 	{"WP_L",                 LM4_GPIO_A, (1<<4), GPIO_INT_BOTH,
 	 switch_interrupt},
 	{"JTAG_TCK",             LM4_GPIO_C, (1<<0), GPIO_DEFAULT,
