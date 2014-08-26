@@ -11,6 +11,7 @@ COMMON_SH=/usr/lib/crosutils/common.sh
 BOARDS_LM4=(
 	clapper
 	cranky
+	candy
 	enguarde
 	expresso
 	falco

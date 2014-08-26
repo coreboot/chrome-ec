@@ -199,6 +199,18 @@ proc flash_tiny_rw { } {
 	flash_lm4 ../../../build/tiny/ec.RW.bin 131072
 }
 
+proc flash_candy { } {
+	flash_lm4 ../../../build/candy/ec.bin 0
+}
+
+proc flash_candy_ro { } {
+	flash_lm4 ../../../build/candy/ec.RO.flat 0
+}
+
+proc flash_candy_rw { } {
+	flash_lm4 ../../../build/candy/ec.RW.bin 131072
+}
+
 # link has pstate in last sector
 proc unprotect_link { } {
 	reset halt
