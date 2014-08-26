@@ -14,7 +14,7 @@ CFLAGS_CPU+=-march=armv7-m -mcpu=cortex-m3
 chip-y=dma.o hwtimer.o system.o uart.o
 chip-y+=jtag-$(CHIP_FAMILY).o clock-$(CHIP_FAMILY).o gpio-$(CHIP_FAMILY).o
 chip-$(CONFIG_SPI)+=spi.o
-chip-$(CONFIG_I2C)+=i2c-$(CHIP_FAMILY).o
+chip-$(CONFIG_I2C)+=i2c-$(CHIP_FAMILY).o i2c.o
 chip-$(CONFIG_WATCHDOG)+=watchdog.o
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 chip-$(HAS_TASK_POWERLED)+=power_led.o
