@@ -310,6 +310,9 @@
  */
 #undef CONFIG_CONSOLE_RESTRICTED_INPUT
 
+/* Include crc8 utility functions */
+#undef CONFIG_CRC8
+
 /*****************************************************************************/
 /*
  * Debugging config
@@ -677,6 +680,8 @@
 /* Allow the board to use a GPIO for the SCI# signal. */
 #undef CONFIG_SCI_GPIO
 
+/* Support smbus interface */
+#undef CONFIG_SMBUS
 /* Support SPI interfaces */
 #undef CONFIG_SPI
 

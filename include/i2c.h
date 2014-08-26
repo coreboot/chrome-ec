@@ -143,6 +143,11 @@ int i2c_read8(int port, int slave_addr, int offset, int *data);
 int i2c_write8(int port, int slave_addr, int offset, int data);
 
 /**
+ * @return none-zero if i2c bus is busy
+ */
+int i2c_is_busy(int port);
+
+/**
  * Attempt to unwedge an I2C bus.
  *
  * @param port I2C port
