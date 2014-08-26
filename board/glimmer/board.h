@@ -27,6 +27,7 @@
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_CHIPSET_X86
 #define CONFIG_CMD_GSV
+#define CONFIG_CRC8
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_FANS 1
 #define CONFIG_FAN_RPM_CUSTOM
@@ -44,6 +45,8 @@
 #define CONFIG_PWM
 #define CONFIG_PWM_DSLEEP
 #define CONFIG_SCI_GPIO GPIO_PCH_SCI_L
+#define CONFIG_SB_FIRMWARE_UPDATE
+#define CONFIG_SMBUS
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
 #define CONFIG_USB_PORT_POWER_IN_S3
@@ -147,6 +150,8 @@ enum gpio_signal {
 	GPIO_WLAN_OFF_L,           /* Disable WiFi radio */
 	GPIO_PCH_SCI_L,            /* Assert SCI to PCH */
 	GPIO_KBD_IRQ_L,            /* Negative edge triggered irq. */
+	GPIO_I2C0_SCL,             /* I2C port 0, SCL pin */
+	GPIO_I2C0_SDA,             /* I2C port 0, SDA pin */
 	GPIO_I2C2_SCL,             /* I2C port 2, SCL pin */
 	GPIO_I2C2_SDA,             /* I2C port 2, SDA pin */
 	GPIO_ADAPTER_ID,           /* Adapter ID pin */
