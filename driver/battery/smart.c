@@ -9,6 +9,7 @@
 #include "battery_smart.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "smbus.h"
 #include "timer.h"
 #include "util.h"
 
@@ -24,12 +25,36 @@ test_mockable int sbc_write(int cmd, int param)
 
 int sb_read(int cmd, int *param)
 {
+#ifdef CONFIG_SMBUS
+	{
+		int rv;
+		uint16_t d16 = 0;
+		rv = smbus_read_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, &d16);
+		*param = d16;
+		return rv;
+	}
+#else
 	return i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+#endif
 }
 
 int sb_write(int cmd, int param)
 {
+#ifdef CONFIG_SMBUS
+	return smbus_write_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+#else
 	return i2c_write16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+#endif
+}
+
+int sb_read_string(int port, int slave_addr, int offset, uint8_t *data,
+	int len)
+{
+#ifdef CONFIG_SMBUS
+	return smbus_read_string(port, slave_addr, offset, data, len);
+#else
+	return i2c_read_string(port, slave_addr, offset, data, len);
+#endif
 }
 
 int battery_get_mode(int *mode)
@@ -192,21 +217,21 @@ test_mockable int battery_manufacture_date(int *year, int *month, int *day)
 /* Read manufacturer name */
 test_mockable int battery_manufacturer_name(char *dest, int size)
 {
-	return i2c_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
+	return sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
 			       SB_MANUFACTURER_NAME, dest, size);
 }
 
 /* Read device name */
 test_mockable int battery_device_name(char *dest, int size)
 {
-	return i2c_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
+	return sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
 			       SB_DEVICE_NAME, dest, size);
 }
 
 /* Read battery type/chemistry */
 test_mockable int battery_device_chemistry(char *dest, int size)
 {
-	return i2c_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
+	return sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
 			       SB_DEVICE_CHEMISTRY, dest, size);
 }
 
@@ -270,7 +295,7 @@ static int host_command_sb_read_word(struct host_cmd_handler_args *args)
 
 	if (p->reg > 0x1c)
 		return EC_RES_INVALID_PARAM;
-	rv = i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, p->reg, &val);
+	rv = sb_read(p->reg, &val);
 	if (rv)
 		return EC_RES_ERROR;
 
@@ -290,7 +315,7 @@ static int host_command_sb_write_word(struct host_cmd_handler_args *args)
 
 	if (p->reg > 0x1c)
 		return EC_RES_INVALID_PARAM;
-	rv = i2c_write16(I2C_PORT_BATTERY, BATTERY_ADDR, p->reg, p->value);
+	rv = sb_write(p->reg, p->value);
 	if (rv)
 		return EC_RES_ERROR;
 
@@ -311,7 +336,7 @@ static int host_command_sb_read_block(struct host_cmd_handler_args *args)
 	    (p->reg != SB_DEVICE_CHEMISTRY) &&
 	    (p->reg != SB_MANUFACTURER_DATA))
 		return EC_RES_INVALID_PARAM;
-	rv = i2c_read_string(I2C_PORT_BATTERY, BATTERY_ADDR, p->reg,
+	rv = sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR, p->reg,
 			     r->data, 32);
 	if (rv)
 		return EC_RES_ERROR;
