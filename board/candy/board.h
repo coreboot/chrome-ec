@@ -16,7 +16,7 @@
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_BQ24715
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
-#define CONFIG_CHARGER_INPUT_CURRENT 1894   /* 90% of 40 W adapter @ 19 V */
+#define CONFIG_CHARGER_INPUT_CURRENT 3072   /* 65 W adapter, 19 V, 3.072 A */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10    /* Charge sense resistor, mOhm */
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input senso resistor, mOhm */
 #define CONFIG_CHIPSET_BAYTRAIL
