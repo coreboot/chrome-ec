@@ -112,6 +112,8 @@ const struct gpio_info gpio_list[] = {
 	{"WLAN_OFF_L",           LM4_GPIO_J, (1<<4), GPIO_OUT_LOW, NULL},
 	{"PCH_SCI_L",            LM4_GPIO_M, (1<<1), GPIO_ODR_HIGH, NULL},
 	{"KBD_IRQ_L",            LM4_GPIO_M, (1<<3), GPIO_ODR_HIGH, NULL},
+	{"BAT_LED0",             LM4_GPIO_N, (1<<6), GPIO_OUT_LOW, NULL},
+	{"BAT_LED1",             LM4_GPIO_N, (1<<4), GPIO_OUT_LOW, NULL},
 };
 BUILD_ASSERT(ARRAY_SIZE(gpio_list) == GPIO_COUNT);
 
@@ -125,7 +127,6 @@ const struct gpio_alt_func gpio_alt_funcs[] = {
 	{GPIO_D, 0x0f, 2, MODULE_SPI},			/* SPI1 */
 	{GPIO_L, 0x3f, 15, MODULE_LPC},			/* LPC */
 	{GPIO_M, 0x21, 15, MODULE_LPC},			/* LPC */
-	{GPIO_N, 0x50, 1, MODULE_PWM_LED, GPIO_OPEN_DRAIN}, /* FAN0PWM 3&4 */
 };
 const int gpio_alt_funcs_count = ARRAY_SIZE(gpio_alt_funcs);
 
