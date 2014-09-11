@@ -85,10 +85,11 @@ GPIO(PCH_SLP_SX_L,      PORT(21), 1, GPIO_INT_BOTH_DSLEEP,                      
 UNIMPLEMENTED(WP_L)
 
 /* Alternate functions GPIO definition */
-ALTERNATE(PORT(16), 0x24,     1, MODULE_UART,          0) 			/* UART0 */
+ALTERNATE(PORT(16),     0x24,   1,      MODULE_UART,            0)                      /* UART0 */
+ALTERNATE(PORT(1),      0x60,   2,      MODULE_I2C,             GPIO_PULL_UP)           /* I2C0: Temperature Sensor */
 ALTERNATE(PORT(0),      0xfc,   3,      MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
 ALTERNATE(PORT(1),      0x03,   3,      MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
-ALTERNATE(PORT(10)   ,  0xd8,   3,      MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
+ALTERNATE(PORT(10),     0xd8,   3,      MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
  GPIO(KBD_KSO2,         PORT(0),1,      GPIO_KB_OUTPUT_COL2,    NULL)                   /* Negative edge triggered irq. */
 ALTERNATE(PORT(3),  0x04,     3, MODULE_KEYBOARD_SCAN, GPIO_KB_INPUT)
 ALTERNATE(PORT(4),  0x0d,     3, MODULE_KEYBOARD_SCAN, GPIO_KB_INPUT)

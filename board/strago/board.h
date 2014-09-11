@@ -22,6 +22,7 @@
 #define CONFIG_LID_SWITCH
 #define CONFIG_POWER_COMMON
 #define CONFIG_EXTPOWER_GPIO
+#define CONFIG_I2C
 #define CONFIG_VBOOT_HASH
 
 #define CONFIG_SPI
@@ -33,9 +34,16 @@
 #define CONFIG_FLASH_ERASE_SIZE     0x00001000  /* erase bank size */
 #define CONFIG_FLASH_WRITE_SIZE     0x00000010  /* minimum write size */
 
+/* I2C ports */
+#define I2C_PORT0 0
+#define I2C_PORT_THERMAL	I2C_PORT0
+
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR_TMP431
+#define CONFIG_TEMP_SENSOR_TMP432
+
 /* Ideal flash write size fills the 32-entry flash write buffer */
 #define CONFIG_FLASH_WRITE_IDEAL_SIZE (32 * 4)
-
 
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
@@ -43,7 +51,6 @@
 #undef CONFIG_PSTORE
 #undef CONFIG_PECI
 #undef CONFIG_SWITCH
-#undef CONFIG_I2C
 #undef CONFIG_PWM
 #undef CONFIG_FANS
 #undef CONFIG_ADC
@@ -63,6 +70,18 @@ enum power_signal {
 	POWER_SIGNAL_COUNT
 };
 
+enum temp_sensor_id {
+	/* TMP432 local and remote sensors */
+	TEMP_SENSOR_I2C_TMP432_LOCAL,
+	TEMP_SENSOR_I2C_TMP432_REMOTE1,
+	TEMP_SENSOR_I2C_TMP432_REMOTE2,
+
+	/* TMP431 local and remote sensors */
+	TEMP_SENSOR_I2C_TMP431_LOCAL,
+	TEMP_SENSOR_I2C_TMP431_REMOTE1,
+
+	TEMP_SENSOR_COUNT
+};
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __BOARD_H */
