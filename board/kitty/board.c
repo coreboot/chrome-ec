@@ -80,3 +80,9 @@ const struct pwm_t pwm_channels[] = {
 	 PWM_CONFIG_ACTIVE_LOW, GPIO_PWR_LED0},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+/*Fake lid switch*/
+int lid_is_open(void)
+{
+	return 1;
+}
