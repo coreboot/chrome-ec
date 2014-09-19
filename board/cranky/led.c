@@ -19,17 +19,17 @@ const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 enum led_color {
 	LED_OFF = 0,
-	LED_BLUE,
+	LED_BLUE_POWER_LED,
 	LED_RED,
-	LED_ORANGE,
-	LED_YELLOW,
-	LED_GREEN,
+	LED_VIOLET,
+	LED_INDIGO,
+	LED_BLUE,
 
 	/* Number of colors, not a color itself */
 	LED_COLOR_COUNT
 };
 
-/* Brightness vs. color, for {red, green} LEDs */
+/* Brightness vs. color, for {red, blue} LEDs */
 static const uint8_t color_brightness[LED_COLOR_COUNT][2] = {
 	{0, 0},
 	{100, 0},
@@ -47,7 +47,7 @@ static const uint8_t color_brightness[LED_COLOR_COUNT][2] = {
 static void set_color_battery_led(enum led_color color)
 {
 	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][0]);
-	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][1]);
+	pwm_set_duty(PWM_CH_LED_BLUE, color_brightness[color][1]);
 }
 
 static void set_color_power_led(enum led_color color)
@@ -60,7 +60,7 @@ void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 	switch (led_id) {
 	case EC_LED_ID_BATTERY_LED:
 		brightness_range[EC_LED_COLOR_RED] = 100;
-		brightness_range[EC_LED_COLOR_GREEN] = 100;
+		brightness_range[EC_LED_COLOR_BLUE] = 100;
 		break;
 	case EC_LED_ID_POWER_LED:
 		brightness_range[EC_LED_COLOR_BLUE] = 100;
@@ -77,8 +77,8 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 	case EC_LED_ID_BATTERY_LED:
 		pwm_set_duty(PWM_CH_LED_RED,
 			     brightness[EC_LED_COLOR_RED]);
-		pwm_set_duty(PWM_CH_LED_GREEN,
-			     brightness[EC_LED_COLOR_GREEN]);
+		pwm_set_duty(PWM_CH_LED_BLUE,
+			     brightness[EC_LED_COLOR_BLUE]);
 		break;
 	case EC_LED_ID_POWER_LED:
 		pwm_set_duty(PWM_CH_LED_BLUE_POWER_LED,
@@ -100,7 +100,7 @@ static void led_init(void)
 	 * seems to ground the pins instead of letting them float.
 	 */
 	pwm_enable(PWM_CH_LED_RED, 1);
-	pwm_enable(PWM_CH_LED_GREEN, 1);
+	pwm_enable(PWM_CH_LED_BLUE, 1);
 	pwm_enable(PWM_CH_LED_BLUE_POWER_LED, 1);
 	set_color_battery_led(LED_OFF);
 	set_color_power_led(LED_OFF);
@@ -122,14 +122,15 @@ static void power_led_tick(void)
 		return;
 
 	if (chipset_in_state(CHIPSET_STATE_ON)) {
-		set_color_power_led(LED_BLUE);
+		set_color_power_led(LED_BLUE_POWER_LED);
 	} else if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
 		if (!previous_state_suspend) {
 			previous_state_suspend = 1;
 			power_ticks = 0;
 		}
 		/* Flashing 1 sec on, 1 sec off */
-		set_color_power_led((power_ticks % 8) < 4 ? LED_BLUE : LED_OFF);
+		set_color_power_led((power_ticks % 8) < 4 ?
+					LED_BLUE_POWER_LED : LED_OFF);
 		return;
 	} else {
 		set_color_power_led(LED_OFF);
@@ -152,31 +153,31 @@ static void battery_led_tick(void)
 	if (!led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		return;
 
-	/* If charging error, blink orange, 25% duty cycle, 4 sec period */
+	/* If charging error, blink violet, 25% duty cycle, 4 sec period */
 	if (chstate == PWR_STATE_ERROR) {
 		set_color_battery_led((battery_ticks % 16) < 4 ?
-		LED_ORANGE : LED_OFF);
+		LED_VIOLET : LED_OFF);
 		return;
 	}
 
-	/* If charge-force-idle, blink green, 50% duty cycle, 2 sec period */
+	/* If charge-force-idle, blink blue, 50% duty cycle, 2 sec period */
 	if (chstate == PWR_STATE_IDLE &&
 	    (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)) {
 		set_color_battery_led((battery_ticks & 0x4) ?
-		LED_GREEN : LED_OFF);
+		LED_BLUE : LED_OFF);
 		return;
 	}
 
-	/* If the system is charging, solid orange */
+	/* If the system is charging, solid violet */
 	if (chstate == PWR_STATE_CHARGE) {
-		set_color_battery_led(LED_ORANGE);
+		set_color_battery_led(LED_VIOLET);
 		return;
 	}
 
-	/* If AC connected and fully charged (or close to it), solid green */
+	/* If AC connected and fully charged (or close to it), solid blue */
 	if (chstate == PWR_STATE_CHARGE_NEAR_FULL ||
 	    chstate == PWR_STATE_IDLE) {
-		set_color_battery_led(LED_GREEN);
+		set_color_battery_led(LED_BLUE);
 		return;
 	}
 
