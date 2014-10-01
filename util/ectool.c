@@ -86,6 +86,8 @@ const char help_str[] =
 	"      Reads from EC flash to a file\n"
 	"  flashwrite <offset> <infile>\n"
 	"      Writes to EC flash from a file\n"
+	"  forcelidopen <enable>\n"
+	"      Forces the lid switch to open position\n"
 	"  gpioget <GPIO name>\n"
 	"      Get the value of GPIO signal\n"
 	"  gpioset <GPIO name>\n"
@@ -3810,6 +3812,29 @@ struct command {
 	int (*handler)(int argc, char *argv[]);
 };
 
+int cmd_force_lid_open(int argc, char *argv[])
+{
+	struct ec_params_force_lid_open p;
+	char *e;
+	int rv;
+
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <0|1>\n", argv[0]);
+		return -1;
+	}
+	p.enabled = strtol(argv[1], &e, 0);
+	if (e && *e) {
+		fprintf(stderr, "Bad value.\n");
+		return -1;
+	}
+
+	rv = ec_command(EC_CMD_FORCE_LID_OPEN, 0, &p, sizeof(p), NULL, 0);
+	if (rv < 0)
+		return rv;
+	printf("Success.\n");
+	return 0;
+}
+
 /* NULL-terminated list of commands */
 const struct command commands[] = {
 	{"extpwrcurrentlimit", cmd_ext_power_current_limit},
@@ -3842,6 +3867,7 @@ const struct command commands[] = {
 	{"flashread", cmd_flash_read},
 	{"flashwrite", cmd_flash_write},
 	{"flashinfo", cmd_flash_info},
+	{"forcelidopen", cmd_force_lid_open},
 	{"gpioget", cmd_gpio_get},
 	{"gpioset", cmd_gpio_set},
 	{"hangdetect", cmd_hang_detect},
