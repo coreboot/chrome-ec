@@ -9,6 +9,7 @@
 #include "battery_smart.h"
 #include "gpio.h"
 #include "host_command.h"
+#include "i2c.h"
 #include "util.h"
 #include "console.h"
 
@@ -239,18 +240,34 @@ const struct battery_info *battery_get_info(void)
 int board_cut_off_battery(void)
 {
 	int rv;
+	uint8_t buf[3];
+
+	buf[0] = SB_MANUFACTURER_ACCESS & 0xff;
+
+	if (BATTERY_ADDR & I2C_FLAG_BIG_ENDIAN) {
+		buf[1] = (SB_SHUTDOWN_DATA >> 8) & 0xff;
+		buf[2] = SB_SHUTDOWN_DATA & 0xff;
+	} else {
+		buf[1] = SB_SHUTDOWN_DATA & 0xff;
+		buf[2] = (SB_SHUTDOWN_DATA >> 8) & 0xff;
+	}
 
 	if (!support_cut_off)
 		return EC_RES_INVALID_COMMAND;
 
 	/* Ship mode command must be sent twice to take effect */
-	rv = sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
+	i2c_lock(I2C_PORT_BATTERY, 1);
+	rv = i2c_xfer(I2C_PORT_BATTERY, BATTERY_ADDR,
+		      buf, 3, NULL, 0, I2C_XFER_SINGLE);
 
 	if (rv != EC_SUCCESS)
 		goto out;
 
-	rv = sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
+	rv = i2c_xfer(I2C_PORT_BATTERY, BATTERY_ADDR,
+		      buf, 3, NULL, 0, I2C_XFER_SINGLE);
 out:
+	i2c_lock(I2C_PORT_BATTERY, 0);
+
 	if (rv)
 		return EC_RES_ERROR;
 	else
