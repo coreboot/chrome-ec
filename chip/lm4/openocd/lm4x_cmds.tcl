@@ -103,6 +103,18 @@ proc flash_falco { } {
 	flash_lm4 ../../../build/falco/ec.bin 0
 }
 
+proc flash_parry { } {
+	flash_lm4 ../../../build/parry/ec.bin 0
+}
+
+proc flash_parry_ro { } {
+	flash_lm4 ../../../build/parry/ec.RO.flat 0
+}
+
+proc flash_parry_rw { } {
+	flash_lm4 ../../../build/parry/ec.RW.bin 131072
+}
+
 proc flash_peppy { } {
 	flash_lm4 ../../../build/peppy/ec.bin 0
 }

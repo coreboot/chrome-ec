@@ -18,6 +18,7 @@ BOARDS_LM4=(
 	glimmer
 	gnawty
 	kip
+	parry
 	peppy
 	rambi
 	quawks
