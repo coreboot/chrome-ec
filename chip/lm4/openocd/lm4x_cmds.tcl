@@ -35,6 +35,10 @@ proc flash_bds { } {
 	flash_lm4 ../../../build/bds/ec.bin 0
 }
 
+proc flash_paine { } {
+	flash_lm4 ../../../build/paine/ec.bin 0
+}
+
 proc flash_rambi { } {
 	flash_lm4 ../../../build/rambi/ec.bin 0
 }
@@ -57,6 +61,10 @@ proc flash_squawks { } {
 
 proc flash_squawks_ro { } {
 	flash_lm4 ../../../build/squawks/ec.RO.flat 0
+}
+
+proc flash_yuna { } {
+	flash_lm4 ../../../build/yuna/ec.bin 0
 }
 
 proc flash_falco { } {

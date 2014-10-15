@@ -48,10 +48,12 @@ die() {
 BOARDS_LM4=(
 	auron
 	falco
+	paine
 	peppy
 	rambi
 	samus
 	squawks
+	yuna
 )
 
 BOARDS_LM4_USB=(

@@ -47,7 +47,8 @@ struct i2c_test_param_t {
 };
 /* Disable I2C test for boards without test configuration */
 #if defined(BOARD_BDS) || defined(BOARD_MCCROSKEY) || \
-	defined(BOARD_FALCO) || defined(BOARD_PEPPY) || defined(BOARD_AURON)
+	defined(BOARD_FALCO) || defined(BOARD_PEPPY) || defined(BOARD_AURON) \
+	defined(BOARD_PAINE) || defined(BOARD_YUNA)
 #undef CONFIG_I2C
 #endif
 
