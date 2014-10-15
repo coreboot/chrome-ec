@@ -333,7 +333,15 @@ int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_bytes,
 		 * This allows slaves on the bus to detect bus-idle before
 		 * the next start condition.
 		 */
+
+		/* (crosbug.com/p/32335): Blaze battery need more response
+		 * time at least 2 ms, so make specific changing to blaze
+		 */
+#ifdef BOARD_BLAZE
+		msleep(2);
+#else
 		udelay(10);
+#endif
 	}
 
 	return rv;
