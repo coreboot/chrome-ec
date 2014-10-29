@@ -15,6 +15,10 @@
 #include "led_common.h"
 #include "util.h"
 
+#define CRITICAL_LOW_BATTERY_PERMILLAGE 71
+#define LOW_BATTERY_PERMILLAGE 137
+#define FULL_BATTERY_PERMILLAGE 937
+
 #define LED_TOTAL_4SECS_TICKS 16
 #define LED_TOTAL_2SECS_TICKS 8
 #define LED_ON_1SEC_TICKS 4
@@ -145,24 +149,36 @@ static void yuna_led_set_battery(void)
 {
 	static int battery_ticks;
 	uint32_t chflags = charge_get_flags();
+	int remaining_capacity;
+	int full_charge_capacity;
+	int permillage;
 
 	battery_ticks++;
 
+	remaining_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_CAP);
+	full_charge_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
+	permillage = !full_charge_capacity ? 0 :
+		(1000 * remaining_capacity) / full_charge_capacity;
+
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
-		yuna_led_set_color_battery(LED_AMBER);
+		/* Make the percentage approximate to UI shown */
+		yuna_led_set_color_battery(permillage <
+			FULL_BATTERY_PERMILLAGE ? LED_AMBER : LED_BLUE);
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
 		yuna_led_set_color_battery(LED_BLUE);
 		break;
 	case PWR_STATE_DISCHARGE:
 		/* Less than 3%, blink one second every two seconds */
-		if (charge_get_percent() < BATTERY_LEVEL_SHUTDOWN)
+		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+		    permillage <= CRITICAL_LOW_BATTERY_PERMILLAGE)
 			yuna_led_set_color_battery(
 				(battery_ticks % LED_TOTAL_2SECS_TICKS <
 				 LED_ON_1SEC_TICKS) ? LED_AMBER : LED_OFF);
 		/* Less than 10%, blink one second every four seconds */
-		else if (charge_get_percent() < BATTERY_LEVEL_LOW)
+		else if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+			permillage <= LOW_BATTERY_PERMILLAGE)
 			yuna_led_set_color_battery(
 				(battery_ticks % LED_TOTAL_4SECS_TICKS <
 				 LED_ON_1SEC_TICKS) ? LED_AMBER : LED_OFF);
