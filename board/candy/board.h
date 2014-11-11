@@ -39,6 +39,7 @@
 #define CONFIG_SCI_GPIO GPIO_PCH_SCI_L
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
+#define CONFIG_TOUCHSCREEN_ENABLE_CONTROL GPIO_TOUCHSCREEN_ENABLE
 #define CONFIG_USB_PORT_POWER_IN_S3
 #define CONFIG_USB_PORT_POWER_SMART
 #define CONFIG_USB_PORT_POWER_SMART_DEFAULT_MODE USB_CHARGE_MODE_CDP
@@ -124,6 +125,7 @@ enum gpio_signal {
 	GPIO_PPSX_EN,              /* Enable PP1350_PCH_SX, PP1000_PCH_SX */
 	GPIO_SUSP_VR_EN,           /* Enable 1.05V regulator */
 	GPIO_TOUCHSCREEN_RESET_L,  /* Reset touch screen */
+	GPIO_TOUCHSCREEN_ENABLE,   /* Touch screen enable */
 	GPIO_USB_CTL1,             /* USB control signal 1 to both ports */
 	GPIO_USB_ILIM_SEL,         /* USB current limit to both ports */
 	GPIO_USB1_ENABLE,          /* USB port 1 output power enable */

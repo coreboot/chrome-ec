@@ -780,6 +780,14 @@
 #undef CONFIG_TEMP_SENSOR_POWER_GPIO
 
 /*****************************************************************************/
+
+/*
+ * Some touch screens require additional enable signal for proper power
+ * sequencing.
+ */
+#undef CONFIG_TOUCHSCREEN_ENABLE_CONTROL
+
+/*****************************************************************************/
 /* UART config */
 
 /* Baud rate for UARTs */
