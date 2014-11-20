@@ -9,6 +9,7 @@
 #include "keyboard_raw.h"
 #include "keyboard_scan.h"
 #include "registers.h"
+#include "system.h"
 #include "task.h"
 
 void keyboard_raw_init(void)
@@ -34,7 +35,12 @@ void keyboard_raw_init(void)
 	 * When column 2 is inverted, the Silego has a pulldown instead of a
 	 * pullup.  So drive it push-pull instead of open-drain.
 	 */
+#ifdef BOARD_PAINE
+	if (0x04 != system_get_board_version())
+		LM4_GPIO_ODR(LM4_GPIO_P) &= ~(1 << 2);
+#else
 	LM4_GPIO_ODR(LM4_GPIO_P) &= ~(1 << 2);
+#endif
 #endif
 
 	/* Set row inputs with pull-up */
@@ -71,8 +77,14 @@ test_mockable void keyboard_raw_drive_column(int col)
 		mask = 0x1fff ^ (1 << col);	/* Assert a single output */
 
 #ifdef CONFIG_KEYBOARD_COL2_INVERTED
+#ifdef BOARD_PAINE
+	if (0x04 != system_get_board_version())
+		/* Invert column 2 output */
+		mask ^= (1 << 2);
+#else
 	/* Invert column 2 output */
 	mask ^= (1 << 2);
+#endif
 #endif
 
 	LM4_GPIO_DATA(LM4_GPIO_P, 0xff) = mask & 0xff;
