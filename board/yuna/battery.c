@@ -13,22 +13,22 @@
 #define SB_SHIP_MODE_ADDR	0x3a
 #define SB_SHIP_MODE_DATA	0xc574
 
-/* Values for 54Wh 3UPF656790-1-T1001 battery */
+/* Values for 48Wh 4UAF495780-1-T1186/AC011353-PRR14G01 battery */
 static const struct battery_info info = {
 
-	.voltage_max    = 12600,
-	.voltage_normal = 11100, /* Average of max & min */
-	.voltage_min    =  9000,
+	.voltage_max    = 17200,
+	.voltage_normal = 15200, /* Average of max & min */
+	.voltage_min    = 12000,
 
 	/* Pre-charge values. */
-	.precharge_current  = 392,	/* mA */
+	.precharge_current  = 256,	/* mA */
 
 	.start_charging_min_c = 0,
-	.start_charging_max_c = 60,
+	.start_charging_max_c = 50,
 	.charging_min_c       = 0,
 	.charging_max_c       = 60,
 	.discharging_min_c    = 0,
-	.discharging_max_c    = 50,
+	.discharging_max_c    = 40,
 };
 
 const struct battery_info *battery_get_info(void)

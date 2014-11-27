@@ -34,7 +34,7 @@ GPIO(BOARD_VERSION2,       Q, 6, GPIO_INPUT,    NULL) /* Board version stuffing 
 GPIO(BOARD_VERSION3,       Q, 7, GPIO_INPUT,    NULL) /* Board version stuffing resistor 3 */
 GPIO(CPU_PGOOD,            C, 4, GPIO_INPUT,    NULL) /* Power good to the CPU */
 GPIO(BAT_PRESENT_L,        B, 4, GPIO_INPUT,    NULL) /* Battery present. Repurposed BAT_TEMP */
-
+GPIO(BAT_ID,               N, 5, GPIO_INPUT,    NULL) /* Battery id for 48w/54w battery*/
 /* Outputs; all unasserted by default except for reset signals */
 GPIO(CPU_PROCHOT,          B, 1, GPIO_OUT_LOW, NULL) /* Force CPU to think it's overheated */
 GPIO(PP1350_EN,            H, 5, GPIO_OUT_LOW, NULL) /* Enable 1.35V supply */
