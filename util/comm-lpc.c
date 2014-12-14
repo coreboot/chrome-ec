@@ -11,6 +11,29 @@
 
 #include "comm-host.h"
 
+#ifdef CHIP_MEC1322
+extern int mec1322_read_memmap(uint16_t addr, uint8_t *b);
+extern int mec1322_write_memmap(uint8_t b, uint16_t addr);
+
+const struct {
+	uint8_t (*inb)(uint16_t);
+	uint32_t (*inl)(uint16_t);
+	void (*outl)(uint32_t, uint16_t);
+	int (*usleep)(unsigned int);
+} mec1322_host_func = {
+	.inb = inb,
+	.inl = inl,
+	.outl = outl,
+	.usleep = usleep,
+};
+
+#define HC_INB(addr, b)		mec1322_read_memmap(addr, &b)
+#define HC_OUTB(b, addr)	mec1322_write_memmap(b, addr)
+#else
+#define HC_INB(addr, b)		(b = inb(addr))
+#define HC_OUTB(b, addr)	outb(b, addr)
+#endif
+
 #define INITIAL_UDELAY 5     /* 5 us */
 #define MAXIMUM_UDELAY 10000 /* 10 ms */
 
@@ -63,14 +86,14 @@ static int ec_command_lpc(int command, int version,
 
 	/* Write data and update checksum */
 	for (i = 0, d = (uint8_t *)outdata; i < outsize; i++, d++) {
-		outb(*d, EC_LPC_ADDR_HOST_PARAM + i);
+		HC_OUTB(*d, EC_LPC_ADDR_HOST_PARAM + i);
 		csum += *d;
 	}
 
 	/* Finalize checksum and write args */
 	args.checksum = (uint8_t)csum;
 	for (i = 0, d = (const uint8_t *)&args; i < sizeof(args); i++, d++)
-		outb(*d, EC_LPC_ADDR_HOST_ARGS + i);
+		HC_OUTB(*d, EC_LPC_ADDR_HOST_ARGS + i);
 
 	outb(command, EC_LPC_ADDR_HOST_CMD);
 
@@ -88,7 +111,7 @@ static int ec_command_lpc(int command, int version,
 
 	/* Read back args */
 	for (i = 0, dout = (uint8_t *)&args; i < sizeof(args); i++, dout++)
-		*dout = inb(EC_LPC_ADDR_HOST_ARGS + i);
+		HC_INB(EC_LPC_ADDR_HOST_ARGS + i, *dout);
 
 	/*
 	 * If EC didn't modify args flags, then somehow we sent a new-style
@@ -111,7 +134,7 @@ static int ec_command_lpc(int command, int version,
 	/* Read response and update checksum */
 	for (i = 0, dout = (uint8_t *)indata; i < args.data_size;
 	     i++, dout++) {
-		*dout = inb(EC_LPC_ADDR_HOST_PARAM + i);
+		HC_INB(EC_LPC_ADDR_HOST_PARAM + i, *dout);
 		csum += *dout;
 	}
 
@@ -151,7 +174,7 @@ static int ec_command_lpc_3(int command, int version,
 
 	/* Copy data and start checksum */
 	for (i = 0, d = (const uint8_t *)outdata; i < outsize; i++, d++) {
-		outb(*d, EC_LPC_ADDR_HOST_PACKET + sizeof(rq) + i);
+		HC_OUTB(*d, EC_LPC_ADDR_HOST_PACKET + sizeof(rq) + i);
 		csum += *d;
 	}
 
@@ -164,7 +187,7 @@ static int ec_command_lpc_3(int command, int version,
 
 	/* Copy header */
 	for (i = 0, d = (const uint8_t *)&rq; i < sizeof(rq); i++, d++)
-		outb(*d, EC_LPC_ADDR_HOST_PACKET + i);
+		HC_OUTB(*d, EC_LPC_ADDR_HOST_PACKET + i);
 
 	/* Start the command */
 	outb(EC_COMMAND_PROTOCOL_3, EC_LPC_ADDR_HOST_CMD);
@@ -184,7 +207,7 @@ static int ec_command_lpc_3(int command, int version,
 	/* Read back response header and start checksum */
 	csum = 0;
 	for (i = 0, dout = (uint8_t *)&rs; i < sizeof(rs); i++, dout++) {
-		*dout = inb(EC_LPC_ADDR_HOST_PACKET + i);
+		HC_INB(EC_LPC_ADDR_HOST_PACKET + i, *dout);
 		csum += *dout;
 	}
 
@@ -205,7 +228,7 @@ static int ec_command_lpc_3(int command, int version,
 
 	/* Read back data and update checksum */
 	for (i = 0, dout = (uint8_t *)indata; i < rs.data_len; i++, dout++) {
-		*dout = inb(EC_LPC_ADDR_HOST_PACKET + sizeof(rs) + i);
+		HC_INB(EC_LPC_ADDR_HOST_PACKET + sizeof(rs) + i, *dout);
 		csum += *dout;
 	}
 
@@ -230,10 +253,10 @@ static int ec_readmem_lpc(int offset, int bytes, void *dest)
 
 	if (bytes) {				/* fixed length */
 		for (; cnt < bytes; i++, s++, cnt++)
-			*s = inb(EC_LPC_ADDR_MEMMAP + i);
+			HC_INB(EC_LPC_ADDR_MEMMAP + i, *s);
 	} else {				/* string */
 		for (; i < EC_MEMMAP_SIZE; i++, s++) {
-			*s = inb(EC_LPC_ADDR_MEMMAP + i);
+			HC_INB(EC_LPC_ADDR_MEMMAP + i, *s);
 			cnt++;
 			if (!*s)
 				break;
@@ -245,7 +268,7 @@ static int ec_readmem_lpc(int offset, int bytes, void *dest)
 
 int comm_init_lpc(void)
 {
-	int i;
+	char i, j;
 	int byte = 0xff;
 
 	/* Request I/O privilege */
@@ -278,14 +301,15 @@ int comm_init_lpc(void)
 	 * seeing whether the EC sets the EC_HOST_ARGS_FLAG_FROM_HOST flag
 	 * in args when it responds.
 	 */
-	if (inb(EC_LPC_ADDR_MEMMAP + EC_MEMMAP_ID) != 'E' ||
-	    inb(EC_LPC_ADDR_MEMMAP + EC_MEMMAP_ID + 1) != 'C') {
+	HC_INB(EC_LPC_ADDR_MEMMAP + EC_MEMMAP_ID, i);
+	HC_INB(EC_LPC_ADDR_MEMMAP + EC_MEMMAP_ID + 1, j);
+	if ((i != 'E') || (j != 'C')) {
 		fprintf(stderr, "Missing Chromium EC memory map.\n");
 		return -5;
 	}
 
 	/* Check which command version we'll use */
-	i = inb(EC_LPC_ADDR_MEMMAP + EC_MEMMAP_HOST_CMD_FLAGS);
+	HC_INB(EC_LPC_ADDR_MEMMAP + EC_MEMMAP_HOST_CMD_FLAGS, i);
 
 	if (i & EC_HOST_CMD_FLAG_VERSION_3) {
 		/* Protocol version 3 */

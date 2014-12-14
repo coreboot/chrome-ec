@@ -23,6 +23,8 @@
 #define CPRINTS(format, args...) cprints(CC_LPC, format, ## args)
 
 static uint8_t mem_mapped[0x200] __attribute__((section(".bss.big_align")));
+#define MEC1322_MEMMAP_READ_OP	1
+#define MEC1322_MEMMAP_WRITE_OP	0
 
 static uint32_t host_events;     /* Currently pending SCI/SMI events */
 static uint32_t event_mask[3];   /* Event masks for each type */
@@ -209,6 +211,11 @@ static void setup_lpc(void)
 	MEC1322_INT_ENABLE(15) |= 1 << 8;
 	MEC1322_INT_BLK_EN |= 1 << 15;
 	task_enable_irq(MEC1322_IRQ_ACPIEC1_IBF);
+	MEC1322_INT_ENABLE(15) |= 1 << 9;
+	MEC1322_INT_BLK_EN |= 1 << 15;
+	task_enable_irq(MEC1322_IRQ_ACPIEC1_OBF);
+	/* Enable FOUR_BYTE_ACCESS for Host Command MemMap access */
+	MEC1322_ACPI_EC_BYTE_CTL(1) |= 1;
 
 	/* Set up 8042 interface at 0x60/0x64 */
 	MEC1322_LPC_8042_BAR = 0x00608104;
@@ -308,12 +315,71 @@ void acpi_0_interrupt(void)
 }
 DECLARE_IRQ(MEC1322_IRQ_ACPIEC0_IBF, acpi_0_interrupt, 1);
 
+void read_hc_memmap_isr(void)
+{
+	/* Clear busy bit after Host Command MemMap is read.*/
+	MEC1322_ACPI_EC_STATUS(1) &= ~EC_LPC_STATUS_PROCESSING;
+}
+DECLARE_IRQ(MEC1322_IRQ_ACPIEC1_OBF, read_hc_memmap_isr, 1);
+
+void write_hc_memmap_isr(void)
+{
+	struct {
+	  union {
+	    struct __packed {
+		uint8_t reserved;	/* Reserved for Host Command */
+		uint16_t offset:12;	/* Offset to mem_mapped[] */
+		uint16_t op:4;		/* 0 = Read, 1 = Write */
+		uint8_t data;		/* Data from/to host */
+	    };
+	    uint32_t reg;
+	  };
+	} hc_memmap;
+
+	/* Set busy bit */
+	MEC1322_ACPI_EC_STATUS(1) |= EC_LPC_STATUS_PROCESSING;
+
+	/* Read the data from Host */
+	hc_memmap.reg = MEC1322_ACPI_EC_OS2EC32(1, 0);
+
+	/* Check if address offset is valid */
+	if (hc_memmap.offset < sizeof(mem_mapped)) {
+		/* Check if address offset is read-only */
+		if (hc_memmap.offset < 0x100) {
+			/* Check if write access */
+			if (hc_memmap.op == MEC1322_MEMMAP_WRITE_OP) {
+				/* Update Memory Mapped region */
+				mem_mapped[hc_memmap.offset] = hc_memmap.data;
+			}
+		}
+
+		/* Return value from Memory Mapped region */
+		hc_memmap.data = mem_mapped[hc_memmap.offset];
+	} else {
+		/* Return 0xFF for invalid address offset */
+		hc_memmap.data = 0xFF;
+	}
+
+	if (hc_memmap.op == MEC1322_MEMMAP_READ_OP) {
+		/*
+		 * Return Host Command MemMap value and set OBF to notify host.
+		 * Busy bit is cleared in OBF handler after Host read the value.
+		 */
+		hc_memmap.reserved = MEC1322_ACPI_EC_EC2OS(1, 0);
+		MEC1322_ACPI_EC_EC2OS32(1, 0) = hc_memmap.reg;
+	} else {
+		/* Clear busy bit after Host Command MemMap is written */
+		MEC1322_ACPI_EC_STATUS(1) &= ~EC_LPC_STATUS_PROCESSING;
+	}
+}
+
 void acpi_1_interrupt(void)
 {
-	uint8_t st = MEC1322_ACPI_EC_STATUS(1);
-	if (!(st & EC_LPC_STATUS_FROM_HOST) ||
-	    !(st & EC_LPC_STATUS_LAST_CMD))
+	if (!(MEC1322_ACPI_EC_STATUS(1) & EC_LPC_STATUS_LAST_CMD)) {
+		/* Handle Host Command Memmap access */
+		write_hc_memmap_isr();
 		return;
+	}
 
 	/* Set the busy bit */
 	MEC1322_ACPI_EC_STATUS(1) |= EC_LPC_STATUS_PROCESSING;

@@ -191,11 +191,17 @@ static inline uintptr_t gpio_port_base(int port_id)
 
 
 /* ACPI */
-#define MEC1322_ACPI_EC_BASE(x)     (0x400f0c00 + (x) * 0x400)
-#define MEC1322_ACPI_EC_EC2OS(x, y) REG8(MEC1322_ACPI_EC_BASE(x) + 0x100 + (y))
-#define MEC1322_ACPI_EC_STATUS(x)   REG8(MEC1322_ACPI_EC_BASE(x) + 0x104)
-#define MEC1322_ACPI_EC_BYTE_CTL(x) REG8(MEC1322_ACPI_EC_BASE(x) + 0x105)
-#define MEC1322_ACPI_EC_OS2EC(x, y) REG8(MEC1322_ACPI_EC_BASE(x) + 0x108 + (y))
+#define MEC1322_ACPI_EC_BASE(x)		(0x400f0c00 + (x) * 0x400)
+#define MEC1322_ACPI_EC_EC2OS(x, y)	REG8(MEC1322_ACPI_EC_BASE(x) + 0x100 \
+						+ (y))
+#define MEC1322_ACPI_EC_EC2OS32(x, y)	REG32(MEC1322_ACPI_EC_BASE(x) + 0x100 \
+						+ (y))
+#define MEC1322_ACPI_EC_STATUS(x)	REG8(MEC1322_ACPI_EC_BASE(x) + 0x104)
+#define MEC1322_ACPI_EC_BYTE_CTL(x)	REG8(MEC1322_ACPI_EC_BASE(x) + 0x105)
+#define MEC1322_ACPI_EC_OS2EC(x, y)	REG8(MEC1322_ACPI_EC_BASE(x) + 0x108 \
+						+ (y))
+#define MEC1322_ACPI_EC_OS2EC32(x, y)	REG32(MEC1322_ACPI_EC_BASE(x) + 0x108 \
+						+ (y))
 
 #define MEC1322_ACPI_PM_RT_BASE     0x400f1400
 #define MEC1322_ACPI_PM1_STS1       REG8(MEC1322_ACPI_PM_RT_BASE + 0x0)
