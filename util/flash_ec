@@ -68,6 +68,7 @@ BOARDS_STM32=(
 	kitty
 	mighty
 	minimuffin
+	minnie
 	nyan
 	pinky
 	pit
