@@ -20,6 +20,8 @@
 #include "lid_switch.h"
 #include "peci.h"
 #include "power.h"
+#include "pwm.h"
+#include "pwm_chip.h"
 #include "power_button.h"
 #include "registers.h"
 #include "switch.h"
@@ -64,6 +66,12 @@ const struct adc_t adc_channels[] = {
 	 LM4_AIN(0), 0x06 /* IE0 | END0 */, LM4_GPIO_E, (1<<3)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
+const struct pwm_t pwm_channels[] = {
+	{4, 0},
+};
+BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* Physical fans. These are logically separate from pwm_channels. */
 const struct fan_t fans[] = {

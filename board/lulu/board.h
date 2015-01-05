@@ -32,6 +32,8 @@
 #define CONFIG_PECI_TJMAX 100
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
+#define CONFIG_PWM
+#define CONFIG_PWM_KBLIGHT
 #define CONFIG_SWITCH_DEDICATED_RECOVERY
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_G781
@@ -88,6 +90,13 @@ enum adc_channel {
 	ADC_CH_CHARGER_CURRENT,
 
 	ADC_CH_COUNT
+};
+
+enum pwm_channel {
+	PWM_CH_KBLIGHT,
+
+	/* Number of PWM channels */
+	PWM_CH_COUNT
 };
 
 enum temp_sensor_id {
