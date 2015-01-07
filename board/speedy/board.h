@@ -76,12 +76,18 @@ enum pwm_channel {
 
 /* Charger module */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10 /* Charge sense resistor, mOhm */
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC 20 /* Input sensor resistor, mOhm */
-/* Input current limit for 45W AC adapter:
- * 45W/19V*85%=2013mA, choose the closest charger setting = 2048mA
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input sensor resistor, mOhm */
+
+/* Input current limit for 24W/12V AC adapter: set 1.792A
+ *
+ * Speedy has two protected function: power limit and total power
+ *   power limit : throttle the CPU
+ *   total power : disable battery charge
+ * Due to the tolerance of the adapter is 5%
+ *   Speedy set the power limit 2A * 0.95 = 1.9A
+ *   and set the total power smaller than power limit = 1.8A
  */
-#define CONFIG_CHARGER_INPUT_CURRENT 2048 /* mA, based on Link HW design */
-#define CONFIG_CHARGER_CURRENT_LIMIT 3000 /* PL102 inductor 3.0A(3.8A) */
+#define CONFIG_CHARGER_INPUT_CURRENT 1792 /* mA */
 
 /* Discharge battery when on AC power for factory test. */
 int board_discharge_on_ac(int enable);
