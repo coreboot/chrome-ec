@@ -40,6 +40,7 @@
 #undef CONFIG_ACCEL_INTERRUPTS
 
 /* Specify type of accelerometers attached. */
+#undef CONFIG_ACCEL_KX022
 #undef CONFIG_ACCEL_KXCJ9
 
 /* Compile chip support for analog-to-digital convertor */
