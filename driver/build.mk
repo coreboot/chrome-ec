@@ -48,6 +48,7 @@ driver-$(CONFIG_REGULATOR_IR357X)+=regulator_ir357x.o
 driver-$(CONFIG_TEMP_SENSOR_G781)+=temp_sensor/g781.o
 driver-$(CONFIG_TEMP_SENSOR_TMP006)+=temp_sensor/tmp006.o
 driver-$(CONFIG_TEMP_SENSOR_TMP432)+=temp_sensor/tmp432.o
+driver-$(CONFIG_TEMP_SENSOR_NCT7717)+=temp_sensor/nct7717.o
 
 # USB switches
 driver-$(CONFIG_USB_SWITCH_PI3USB9281)+=usb_switch_pi3usb9281.o
