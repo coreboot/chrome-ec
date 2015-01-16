@@ -5,13 +5,16 @@
 /* Veyron board-specific configuration */
 
 #include "battery.h"
+#include "charger.h"
 #include "chipset.h"
 #include "common.h"
+#include "driver/accel_kx022.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "keyboard_raw.h"
 #include "lid_switch.h"
+#include "motion_sense.h"
 #include "power.h"
 #include "power_button.h"
 #include "power.h"
@@ -22,7 +25,6 @@
 #include "task.h"
 #include "util.h"
 #include "timer.h"
-#include "charger.h"
 
 #define GPIO_KB_INPUT  (GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_BOTH)
 #define GPIO_KB_OUTPUT GPIO_ODR_HIGH
@@ -73,3 +75,47 @@ void board_config_pre_init(void)
 	 */
 	STM32_SYSCFG_CFGR1 |= (1 << 9) | (1 << 10); /* Remap USART1 RX/TX DMA */
 }
+
+/* Base Sensor mutex */
+static struct mutex g_base_mutex;
+
+/* Lid Sensor mutex */
+static struct mutex g_lid_mutex;
+
+/* kxcj9 local/private data */
+struct kx022_data g_kx022_data0;
+
+struct kx022_data g_kx022_data1;
+
+/* Four Motion sensors */
+/* Matrix to rotate accelrator into standard reference frame */
+const matrix_3x3_t base_standard_ref = {
+	{ 0,  1,  0},
+	{-1,  0,  0},
+	{ 0,  0,  1}
+};
+
+const matrix_3x3_t lid_standard_ref = {
+	{ 0, -1,  0},
+	{-1,  0,  0},
+	{ 0,  0, -1}
+};
+
+struct motion_sensor_t motion_sensors[] = {
+
+	/*
+	 * Note: lsm6ds0: supports accelerometer and gyro sensor
+	 * Requriement: accelerometer sensor must init before gyro sensor
+	 * DO NOT change the order of the following table.
+	 */
+	{SENSOR_ACTIVE_S0_S3_S5, "Base", MOTIONSENSE_CHIP_KX022,
+		MOTIONSENSE_TYPE_ACCEL, MOTIONSENSE_LOC_BASE,
+		&kx022_drv, &g_base_mutex, &g_kx022_data0,
+		KX022_ADDR1, &base_standard_ref, 119000, 2},
+
+	{SENSOR_ACTIVE_S0_S3_S5, "Lid",  MOTIONSENSE_CHIP_KX022,
+		MOTIONSENSE_TYPE_ACCEL, MOTIONSENSE_LOC_LID,
+		&kx022_drv, &g_lid_mutex, &g_kx022_data1,
+		KX022_ADDR0, &lid_standard_ref, 100000, 2},
+};
+const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
