@@ -64,7 +64,9 @@ BOARDS_STM32=(
 	discovery
 	firefly
 	fruitpie
-	jerry	
+	gus
+	jaq
+	jerry
 	kitty
 	mighty
 	minimuffin
