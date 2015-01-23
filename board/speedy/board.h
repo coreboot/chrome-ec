@@ -80,16 +80,12 @@ enum pwm_channel {
 #define CONFIG_CHARGER_SENSE_RESISTOR 10 /* Charge sense resistor, mOhm */
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input sensor resistor, mOhm */
 
-/* Input current limit for 24W/12V AC adapter: set 1.792A
+/* Input current limit for 24W/12V AC adapter: set 1.856A
  *
- * Speedy has two protected function: power limit and total power
- *   power limit : throttle the CPU
- *   total power : disable battery charge
  * Due to the tolerance of the adapter is 5%
- *   Speedy set the power limit 2A * 0.95 = 1.9A
- *   and set the total power smaller than power limit = 1.8A
+ *   Speedy set the power limit 2A * 0.95 ~= 1.9A
  */
-#define CONFIG_CHARGER_INPUT_CURRENT 1792 /* mA */
+#define CONFIG_CHARGER_INPUT_CURRENT 1856 /* mA */
 
 /* Discharge battery when on AC power for factory test. */
 int board_discharge_on_ac(int enable);
