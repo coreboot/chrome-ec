@@ -34,7 +34,7 @@
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_UART_RX_DMA
 #define CONFIG_VBOOT_HASH
-#undef CONFIG_WATCHDOG_HELP
+#define CONFIG_WATCHDOG_HELP
 
 #ifndef __ASSEMBLER__
 
@@ -51,7 +51,7 @@
 
 /* Timer selection */
 #define TIM_CLOCK32  2
-#define TIM_WATCHDOG 4
+#define TIM_WATCHDOG 7
 
 #include "gpio_signal.h"
 
