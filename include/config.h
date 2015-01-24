@@ -770,10 +770,14 @@
 /* Support common LED interface */
 #undef CONFIG_LED_COMMON
 
-/* Standard LED behavior according to spec given that we have a red-green
- * bicolor led for charging and one power led
- */
+/* Standard LED behavior according to spec */
 #undef CONFIG_LED_POLICY_STD
+
+/* We have a battery led for CONFIG_LED_POLICY_STD */
+#undef CONFIG_LED_POLICY_STD_BATTERY
+
+/* We have a power led for CONFIG_LED_POLICY_STD */
+#undef CONFIG_LED_POLICY_STD_POWER
 
 /*
  * LEDs for LED_POLICY STD may be inverted.  In this case they are active low

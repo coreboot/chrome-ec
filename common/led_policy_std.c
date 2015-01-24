@@ -32,7 +32,13 @@
 #endif
 
 const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_BATTERY_LED, EC_LED_ID_POWER_LED};
+#ifdef CONFIG_LED_POLICY_STD_BATTERY
+	EC_LED_ID_BATTERY_LED,
+#endif
+#ifdef CONFIG_LED_POLICY_STD_POWER
+	EC_LED_ID_POWER_LED
+#endif
+};
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
@@ -45,6 +51,7 @@ enum led_color {
 	LED_COLOR_COUNT  /* Number of colors, not a color itself */
 };
 
+#ifdef CONFIG_LED_POLICY_STD_BATTERY
 static int bat_led_set_color(enum led_color color)
 {
 	switch (color) {
@@ -69,7 +76,9 @@ static int bat_led_set_color(enum led_color color)
 	}
 	return EC_SUCCESS;
 }
+#endif
 
+#ifdef CONFIG_LED_POLICY_STD_POWER
 static int pwr_led_set_color(enum led_color color)
 {
 	switch (color) {
@@ -85,17 +94,22 @@ static int pwr_led_set_color(enum led_color color)
 	}
 	return EC_SUCCESS;
 }
+#endif
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
 	switch (led_id) {
+#ifdef CONFIG_LED_POLICY_STD_BATTERY
 	case EC_LED_ID_BATTERY_LED:
 		brightness_range[EC_LED_COLOR_RED] = 1;
 		brightness_range[EC_LED_COLOR_GREEN] = 1;
 		break;
+#endif
+#ifdef CONFIG_LED_POLICY_STD_POWER
 	case EC_LED_ID_POWER_LED:
 		brightness_range[EC_LED_COLOR_WHITE] = 1;
 		break;
+#endif
 	default:
 		/* ignore */
 		break;
@@ -105,6 +119,7 @@ void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
 	switch (led_id) {
+#ifdef CONFIG_LED_POLICY_STD_BATTERY
 	case EC_LED_ID_BATTERY_LED:
 		gpio_set_level(GPIO_BAT_LED_RED,
 			       (brightness[EC_LED_COLOR_RED] != 0) ?
@@ -113,17 +128,21 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 			       (brightness[EC_LED_COLOR_GREEN] != 0) ?
 					BAT_LED_ON : BAT_LED_OFF);
 		break;
+#endif
+#ifdef CONFIG_LED_POLICY_STD_POWER
 	case EC_LED_ID_POWER_LED:
 		gpio_set_level(GPIO_POWER_LED,
 			       (brightness[EC_LED_COLOR_WHITE] != 0) ?
 					POWER_LED_ON : POWER_LED_OFF);
 		break;
+#endif
 	default:
 		return EC_ERROR_UNKNOWN;
 	}
 	return EC_SUCCESS;
 }
 
+#ifdef CONFIG_LED_POLICY_STD_POWER
 static void std_led_set_power(void)
 {
 	static int power_second;
@@ -137,7 +156,9 @@ static void std_led_set_power(void)
 	else if (chipset_in_state(CHIPSET_STATE_SUSPEND))
 		pwr_led_set_color((power_second & 3) ? LED_OFF : LED_WHITE);
 }
+#endif
 
+#ifdef CONFIG_LED_POLICY_STD_BATTERY
 static void std_led_set_battery(void)
 {
 	static int battery_second;
@@ -181,14 +202,19 @@ static void std_led_set_battery(void)
 		break;
 	}
 }
+#endif
 
 /**  * Called by hook task every 1 sec  */
 static void led_second(void)
 {
+#ifdef CONFIG_LED_POLICY_STD_POWER
 	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
 		std_led_set_power();
+#endif
+#ifdef CONFIG_LED_POLICY_STD_BATTERY
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		std_led_set_battery();
+#endif
 }
 DECLARE_HOOK(HOOK_SECOND, led_second, HOOK_PRIO_DEFAULT);
 
