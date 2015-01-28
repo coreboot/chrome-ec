@@ -4,21 +4,13 @@
  *
  * Battery pack vendor provided charging profile
  */
-
 #include "battery.h"
-#include "battery_smart.h"
-#include "console.h"
-#include "gpio.h"
-#include "host_command.h"
-#include "util.h"
-
-/* Shutdown mode parameter to write to manufacturer access register */
-#define SB_SHUTDOWN_DATA	0x0010
+#include "i2c.h"
 
 static const struct battery_info info = {
-	.voltage_max    = 8400,		/* mV */
-	.voltage_normal = 7400,
-	.voltage_min    = 6000,
+	.voltage_max    = 4350,		/* mV */
+	.voltage_normal = 4300,
+	.voltage_min    = 3328,
 	.precharge_current  = 256,	/* mA */
 	.start_charging_min_c = 0,
 	.start_charging_max_c = 45,
@@ -33,22 +25,44 @@ const struct battery_info *battery_get_info(void)
 	return &info;
 }
 
-static int cutoff(void)
+void battery_override_params(struct batt_params *batt)
 {
-	int rv;
+	int temp;
 
-	/* Ship mode command must be sent twice to take effect */
-	rv = sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
+	if (!(batt->flags & BATT_FLAG_BAD_TEMPERATURE)) {
+		temp = DECI_KELVIN_TO_CELSIUS(batt->temperature);
 
-	if (rv != EC_SUCCESS)
-		return rv;
-
-	return sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
+		if (temp < 0) {
+			batt->desired_voltage = 4350;
+			batt->desired_current = 0;
+			batt->flags |= BATT_FLAG_BAD_ANY;
+		} else if (temp < 12) {
+			batt->desired_voltage = 4350;
+			batt->desired_current = 1500;
+			batt->flags |= BATT_FLAG_WANT_CHARGE;
+		} else if (temp < 50) {
+			batt->desired_voltage = 4350;
+			batt->desired_current = 3500;
+			batt->flags |= BATT_FLAG_WANT_CHARGE;
+		} else if (temp < 55) {
+			batt->desired_voltage = 4110;
+			batt->desired_current = 3500;
+			batt->flags |= BATT_FLAG_WANT_CHARGE;
+		} else {
+			batt->desired_voltage = 4110;
+			batt->desired_current = 0;
+			batt->flags |= BATT_FLAG_BAD_ANY;
+		}
+	}
 }
 
+static int cutoff(void)
+{
+	/* Write SET_SHUTDOWN(0x13) to CTRL(0x00) */
+	return i2c_write16(I2C_PORT_BATTERY, 0xaa, 0x0, 0x13);
+}
 
 int board_cut_off_battery(void)
 {
 	return cutoff();
 }
-
