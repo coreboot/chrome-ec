@@ -548,6 +548,10 @@ void charger_task(void)
 		charger_get_params(&curr.chg);
 		battery_get_params(&curr.batt);
 
+#ifdef CONFIG_BATTERY_OVERRIDE_PARAMS
+		battery_override_params(&curr.batt);
+#endif
+
 		/*
 		 * TODO(crosbug.com/p/27527). Sometimes the battery thinks its
 		 * temperature is 6280C, which seems a bit high. Let's ignore

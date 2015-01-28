@@ -95,8 +95,6 @@
 /*
  * Charger should call battery_override_params() to limit/correct the voltage
  * and current requested by the battery pack before acting on the request.
- *
- * This is valid with CONFIG_CHARGER_V1 only.
  */
 #undef CONFIG_BATTERY_OVERRIDE_PARAMS
 
