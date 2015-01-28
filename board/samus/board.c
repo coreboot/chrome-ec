@@ -267,15 +267,15 @@ struct lsm6ds0_data g_lsm6ds0_data[2];
 /* Four Motion sensors */
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
-	{-1,  0,  0},
-	{ 0, -1,  0},
-	{ 0,  0, -1}
+	{FLOAT_TO_FP(-1),  0,  0},
+	{ 0, FLOAT_TO_FP(-1),  0},
+	{ 0,  0, FLOAT_TO_FP(-1)}
 };
 
 const matrix_3x3_t lid_standard_ref = {
-	{ 0,  1,  0},
-	{-1,  0,  0},
-	{ 0,  0, -1}
+	{ 0,  FLOAT_TO_FP(1),  0},
+	{FLOAT_TO_FP(-1),  0,  0},
+	{ 0,  0, FLOAT_TO_FP(-1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -333,14 +333,14 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 const struct accel_orientation acc_orient = {
 	/* Hinge aligns with y axis. */
 	.rot_hinge_90 = {
-		{ 1,  0,  0},
-		{ 0,  1,  0},
-		{ 0,  0,  1}
+		{ FLOAT_TO_FP(1),  0,  0},
+		{ 0,  FLOAT_TO_FP(1),  0},
+		{ 0,  0,  FLOAT_TO_FP(1)}
 	},
 	.rot_hinge_180 = {
-		{ 1,  0,  0},
-		{ 0,  1,  0},
-		{ 0,  0,  1}
+		{ FLOAT_TO_FP(1),  0,  0},
+		{ 0,  FLOAT_TO_FP(1),  0},
+		{ 0,  0,  FLOAT_TO_FP(1)}
 	},
 	.hinge_axis = {0, 1, 0},
 };
