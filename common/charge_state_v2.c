@@ -606,6 +606,12 @@ void charger_task(void)
 					else
 						prev_ac = curr.ac;
 				}
+				if (board_charger_post_init) {
+					rv = board_charger_post_init();
+					if (rv != EC_SUCCESS) {
+						problem(PR_POST_INIT, rv);
+					}
+				}
 			} else {
 				/* Some things are only meaningful on AC */
 				state_machine_force_idle = 0;

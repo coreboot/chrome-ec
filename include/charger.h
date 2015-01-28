@@ -55,6 +55,9 @@ void charger_get_params(struct charger_params *chg);
 /* Power state machine post init */
 int charger_post_init(void);
 
+/* board specific charge IC init */
+int __attribute((weak)) board_charger_post_init(void);
+
 /* Get charger information. */
 const struct charger_info *charger_get_info(void);
 
