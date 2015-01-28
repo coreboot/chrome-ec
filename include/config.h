@@ -219,6 +219,9 @@
 #undef CONFIG_CHARGER_BQ24773
 #undef CONFIG_CHARGER_TPS65090  /* Note: does not use CONFIG_CHARGER */
 
+/* Board specific initialize for charger IC. */
+#undef CONFIG_CHARGER_BOARD_SPECIFIC_INIT
+
 /*
  * Board specific charging current limit, in mA.  If defined, the charge state
  * machine will not allow the battery to request more current than this.
