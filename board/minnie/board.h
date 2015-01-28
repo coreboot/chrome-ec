@@ -8,6 +8,11 @@
 #ifndef __BOARD_H
 #define __BOARD_H
 
+/* Remove unnecessary function for reduce the flash size */
+#undef CONFIG_CONSOLE_CMDHELP
+#undef CONFIG_TASK_PROFILING
+#undef CONFIG_WATCHDOG_HELP
+
 /* Optional features */
 #define CONFIG_ACCEL_KX022
 #define CONFIG_AP_HANG_DETECT
@@ -45,7 +50,6 @@
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_UART_RX_DMA
 #define CONFIG_VBOOT_HASH
-#define CONFIG_WATCHDOG_HELP
 
 #define CONFIG_HIBERNATE_WAKEUP_PINS (STM32_PWR_CSR_EWUP1 | STM32_PWR_CSR_EWUP6)
 
