@@ -14,6 +14,7 @@
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_OVERRIDE_PARAMS
 #define CONFIG_BOARD_PRE_INIT
+#define CONFIG_BOARD_SPECIFIC_CHARGER_INIT
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_BQ24770
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
@@ -79,15 +80,18 @@ enum pwm_channel {
 
 /* Charger module */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10 /* Charge sense resistor, mOhm */
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC 20 /* Input sensor resistor, mOhm */
-/* Input current limit for 45W AC adapter:
- * 45W/19V*85%=2013mA, choose the closest charger setting = 2048mA
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC 25 /* Input sensor resistor, mOhm */
+
+/* Input current limit for 24W AC adapter, 24W/12V=2A
+ * minnie support the INOM prochot function, 110% input current limit
+ * 2A/1.1=1.818A
  */
-#define CONFIG_CHARGER_INPUT_CURRENT 2048 /* mA, based on Link HW design */
-#define CONFIG_CHARGER_CURRENT_LIMIT 3000 /* PL102 inductor 3.0A(3.8A) */
+#define CONFIG_CHARGER_INPUT_CURRENT 1818 /* mA */
 
 /* Discharge battery when on AC power for factory test. */
 int board_discharge_on_ac(int enable);
+
+int board_init_charger(void);
 
 #endif /* !__ASSEMBLER__ */
 
