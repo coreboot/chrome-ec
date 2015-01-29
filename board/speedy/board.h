@@ -16,6 +16,7 @@
 /* Optional features */
 #define CONFIG_AP_HANG_DETECT
 #define CONFIG_BATTERY_CUT_OFF
+#define CONFIG_BATTERY_OVERRIDE_PARAMS
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_PRE_INIT
 #define CONFIG_CHARGER
@@ -44,6 +45,8 @@
 #define CONFIG_PWM
 #define CONFIG_SPI
 #define CONFIG_STM_HWTIMER32
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR_NCT7717
 #define CONFIG_UART_RX_DMA
 #define CONFIG_VBOOT_HASH
 
@@ -61,6 +64,7 @@
 #define I2C_PORT_MASTER 0
 #define I2C_PORT_BATTERY I2C_PORT_MASTER
 #define I2C_PORT_CHARGER I2C_PORT_MASTER
+#define I2C_PORT_THERMAL I2C_PORT_MASTER
 
 /* Timer selection */
 #define TIM_CLOCK32  2
@@ -79,6 +83,11 @@ enum pwm_channel {
 	PWM_CH_POWER_LED = 0,
 	/* Number of PWM channels */
 	PWM_CH_COUNT
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_I2C_NCT7717,
+	TEMP_SENSOR_COUNT
 };
 
 /* Charger module */

@@ -7,6 +7,8 @@
 #include "battery.h"
 #include "chipset.h"
 #include "common.h"
+#include "driver/temp_sensor/nct7717.h"
+#include "ec_commands.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "i2c.h"
@@ -21,6 +23,7 @@
 #include "spi.h"
 #include "task.h"
 #include "util.h"
+#include "temp_sensor.h"
 #include "timer.h"
 #include "charger.h"
 
@@ -50,6 +53,16 @@ const struct pwm_t pwm_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
+const struct temp_sensor_t temp_sensors[] = {
+	{"NCT7717", TEMP_SENSOR_TYPE_BOARD, nct7717_get_val,
+		NCT7717_TEMP_LOCAL, 4 },
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
+
+struct ec_thermal_config thermal_params[] = {
+	{{0, 0, 0}, 0, 0},
+};
+
 /**
  * Discharge battery when on AC power for factory test.
  */
@@ -72,4 +85,15 @@ void board_config_pre_init(void)
 	 *  Chan 5 : USART1_RX
 	 */
 	STM32_SYSCFG_CFGR1 |= (1 << 9) | (1 << 10); /* Remap USART1 RX/TX DMA */
+}
+
+void battery_override_params(struct batt_params *batt)
+{
+	int board_temp;
+
+	nct7717_get_val(NCT7717_IDX_INTERNAL, &board_temp);
+	board_temp = K_TO_C(board_temp);
+
+	if ((board_temp >= 60) && (batt->desired_current > 256))
+		batt->desired_current = 256;
 }
