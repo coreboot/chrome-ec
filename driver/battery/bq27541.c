@@ -239,6 +239,12 @@ void battery_get_params(struct batt_params *batt)
 		batt->flags |= BATT_FLAG_BAD_CURRENT;
 	batt->current = (int16_t)v;
 
+	if (battery_remaining_capacity(&batt->remaining_capacity))
+		batt->flags |= BATT_FLAG_BAD_REMAINING_CAPACITY;
+
+	if (battery_full_charge_capacity(&batt->full_capacity))
+		batt->flags |= BATT_FLAG_BAD_FULL_CAPACITY;
+
 	/* Default to not desiring voltage and current */
 	batt->desired_voltage = batt->desired_current = 0;
 
