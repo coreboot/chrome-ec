@@ -5,7 +5,7 @@
  * Battery pack vendor provided charging profile
  */
 #include "battery.h"
-#include "i2c.h"
+#include "gpio.h"
 
 static const struct battery_info info = {
 	.voltage_max    = 4350,		/* mV */
@@ -58,8 +58,8 @@ void battery_override_params(struct batt_params *batt)
 
 static int cutoff(void)
 {
-	/* Write SET_SHUTDOWN(0x13) to CTRL(0x00) */
-	return i2c_write16(I2C_PORT_BATTERY, 0xaa, 0x0, 0x13);
+	gpio_set_level(GPIO_BAT_CUT_OFF, 0);
+	return EC_SUCCESS;
 }
 
 int board_cut_off_battery(void)
