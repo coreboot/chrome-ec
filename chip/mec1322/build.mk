@@ -23,6 +23,7 @@ chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 chip-$(CONFIG_DMA)+=dma.o
 chip-$(CONFIG_SPI)+=spi.o
 
+
 # location of the scripts and keys used to pack the SPI flash image
 SCRIPTDIR:=./chip/${CHIP}/util
 
@@ -30,4 +31,8 @@ SCRIPTDIR:=./chip/${CHIP}/util
 cmd_pack_package = ${SCRIPTDIR}/pack_ec.py -o $@ -i $^ \
 	--payload_key ${SCRIPTDIR}/rsakey_sign_payload.pem \
 	--header_key ${SCRIPTDIR}/rsakey_sign_header.pem \
+	--loader_file ${SCRIPTDIR}/ecloader.bin \
 	--spi_size ${CHIP_SPI_SIZE_KB}
+
+cmd_bin_to_mec1322_spi = \
+		./chip/mec1322/util/pack_ec.py $(MEC1322_PACK_EC_FLAG)

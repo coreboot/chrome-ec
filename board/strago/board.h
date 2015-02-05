@@ -28,6 +28,14 @@
 #define CONFIG_SPI_CS_GPIO GPIO_PVT_CS0
 #define CONFIG_SPI_FLASH
 #define CONFIG_SPI_FLASH_SIZE 4194304
+#define CONFIG_FLASH_BANK_SIZE      0x00000800  /* protect bank size */
+#define CONFIG_FLASH_ERASE_SIZE     0x00001000  /* erase bank size */
+#define CONFIG_FLASH_WRITE_SIZE     0x00000010  /* minimum write size */
+
+/* Ideal flash write size fills the 32-entry flash write buffer */
+#define CONFIG_FLASH_WRITE_IDEAL_SIZE (32 * 4)
+
+
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
 #undef CONFIG_EOPTION
