@@ -23,9 +23,6 @@
 #define CONFIG_FLASH_ERASED_VALUE32 (-1U)
 #endif
 
-/* Flags for persist_state.flags */
-/* Protect persist state and RO firmware at boot */
-#define PERSIST_FLAG_PROTECT_RO 0x02
 
 int flash_dataptr(int offset, int size_req, int align, const char **ptrp)
 {

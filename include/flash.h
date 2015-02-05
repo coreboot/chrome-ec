@@ -45,6 +45,10 @@ struct persist_state {
 
 #define PERSIST_STATE_VERSION 2  /* Expected persist_state.version */
 
+/* Flags for persist_state.flags */
+/* Protect persist state and RO firmware at boot */
+#define PERSIST_FLAG_PROTECT_RO 0x02
+
 #ifdef CONFIG_FLASH_SPI
 /**
  * Get the memory address of a SPI flash offset where code is loaded

@@ -24,6 +24,7 @@
 #include "usb_pd.h"
 #include "util.h"
 #include "version.h"
+#include "watchdog.h"
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
@@ -91,10 +92,13 @@ static enum ec_reboot_cmd reboot_at_shutdown;
 /* On-going actions preventing going into deep-sleep mode */
 uint32_t sleep_mask;
 
+#ifdef CONFIG_FLASH_SPI
+static uint8_t flash_data_ver[sizeof(version_data)];
+#endif
 /**
  * Return the base pointer for the image copy, or 0xffffffff if error.
  */
-static uintptr_t get_base(enum system_image_copy_t copy)
+uintptr_t system_get_image_base(enum system_image_copy_t copy)
 {
 	switch (copy) {
 	case SYSTEM_IMAGE_RO:
@@ -109,7 +113,7 @@ static uintptr_t get_base(enum system_image_copy_t copy)
 /**
  * Return the size of the image copy, or 0 if error.
  */
-static uint32_t get_size(enum system_image_copy_t copy)
+uint32_t system_get_image_size(enum system_image_copy_t copy)
 {
 	switch (copy) {
 	case SYSTEM_IMAGE_RO:
@@ -331,23 +335,12 @@ test_mockable enum system_image_copy_t system_get_image_copy(void)
 
 int system_get_image_used(enum system_image_copy_t copy)
 {
-	const uint8_t *image;
-	int size = 0;
+#ifdef CONFIG_FLASH_SPI
+	return flash_get_image_used_spi(copy);
+#else
+	return flash_get_image_used_internal(copy);
+#endif
 
-	image = (const uint8_t *)get_base(copy);
-	size = get_size(copy);
-
-	if (size <= 0)
-		return 0;
-
-	/*
-	 * Scan backwards looking for 0xea byte, which is by definition the
-	 * last byte of the image.  See ec.lds.S for how this is inserted at
-	 * the end of the image.
-	 */
-	for (size--; size > 0 && image[size] != 0xea; size--)
-		;
-	return size ? size + 1 : 0;  /* 0xea byte IS part of the image */
 }
 
 test_mockable int system_unsafe_to_overwrite(uint32_t offset, uint32_t size)
@@ -473,7 +466,7 @@ int system_run_image_copy(enum system_image_copy_t copy)
 	}
 
 	/* Load the appropriate reset vector */
-	base = get_base(copy);
+	base = system_get_image_base(copy);
 	if (base == 0xffffffff)
 		return EC_ERROR_INVAL;
 
@@ -484,7 +477,7 @@ int system_run_image_copy(enum system_image_copy_t copy)
 	/* Make sure the reset vector is inside the destination image */
 	init_addr = *(uintptr_t *)(base + 4);
 #ifndef EMU_BUILD
-	if (init_addr < base || init_addr >= base + get_size(copy))
+	if (init_addr < base || init_addr >= base + system_get_image_size(copy))
 		return EC_ERROR_UNKNOWN;
 #endif
 #endif
@@ -500,24 +493,35 @@ int system_run_image_copy(enum system_image_copy_t copy)
 const char *system_get_version(enum system_image_copy_t copy)
 {
 	uintptr_t addr;
+	uint32_t version_offset;
 	const struct version_struct *v;
 
 	/* Handle version of current image */
 	if (copy == system_get_image_copy() || copy == SYSTEM_IMAGE_UNKNOWN)
 		return &RO(version_data).version[0];
 
-	addr = get_base(copy);
+	addr = system_get_image_base(copy);
 	if (addr == 0xffffffff)
 		return "";
 
 	/* The version string is always located after the reset vectors, so
 	 * it's the same as in the current image. */
 #ifdef CONFIG_CODERAM_ARCH /* TODO: (ML) we run FW in Code RAM */
-	addr += ((uintptr_t)&version_data - CONFIG_CDRAM_BASE);
+	version_offset = ((uintptr_t)&version_data - CONFIG_CDRAM_BASE);
 #else
-	addr += ((uintptr_t)&version_data - get_base(system_get_image_copy()));
+	version_offset = ((uintptr_t)&version_data -
+		system_get_image_base(system_get_image_copy()));
 #endif
 
+
+#ifdef CONFIG_FLASH_SPI
+	flash_physical_read(flash_get_image_base_spi(copy) +
+		version_offset, sizeof(version_data),
+		(uint8_t *)flash_data_ver);
+	addr = (uintptr_t)flash_data_ver;
+#else
+	addr += version_offset;
+#endif
 	/* Make sure the version struct cookies match before returning the
 	 * version string. */
 	v = (const struct version_struct *)addr;

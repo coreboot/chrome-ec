@@ -151,6 +151,24 @@ const char *system_get_image_copy_string(void);
  */
 const char *system_image_copy_t_to_string(enum system_image_copy_t copy);
 
+/*****************************************************************************/
+/* For use by system level functions. */
+/**
+ * Get the memory address of a flash offset where code starts executing
+ *
+ * @param copy	system image type
+ * @return pointer to flash address offset, if ok, else 0xffffffff
+  */
+uintptr_t system_get_image_base(enum system_image_copy_t copy);
+
+/**
+ * Get the MAX size if the image in the flash
+ *
+ * @param offset	Flash offset to get address of
+ * @return size of he image in the flash memory , if ok, else 0
+ */
+uint32_t system_get_image_size(enum system_image_copy_t copy);
+
 /**
  * Return the number of bytes used in the specified image.
  *

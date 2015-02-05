@@ -15,6 +15,27 @@
 #include "util.h"
 #include "vboot_hash.h"
 
+uint32_t flash_get_image_used_internal(enum system_image_copy_t copy)
+{
+	const uint8_t *image;
+	int size = 0;
+
+	image = (const uint8_t *)system_get_image_base(copy);
+	size = system_get_image_size(copy);
+
+	if (size <= 0)
+		return 0;
+
+	/*
+	 * Scan backwards looking for 0xea byte, which is by definition the
+	 * last byte of the image.  See ec.lds.S for how this is inserted at
+	 * the end of the image.
+	 */
+	for (size--; size > 0 && image[size] != 0xea; size--)
+		;
+	return size ? size + 1 : 0;  /* 0xea byte IS part of the image */
+}
+
 /**
  * Get the physical memory address of a flash offset
  *
