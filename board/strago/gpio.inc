@@ -5,43 +5,90 @@
  * found in the LICENSE file.
  */
 
-GPIO(POWER_BUTTON_L,    PORT(3),  5, GPIO_INT_BOTH_DSLEEP,                      power_button_interrupt) /* Power button */
-GPIO(LID_OPEN,          PORT(2),  7, GPIO_INT_BOTH_DSLEEP,                      lid_interrupt)          /* Lid switch */
-GPIO(PCH_PWRBTN_L,      PORT(16), 0, GPIO_OUT_HIGH,                             NULL)                   /* Power button output to PCH */
-GPIO(STARTUP_LATCH_SET, PORT(4),  6, GPIO_OUT_HIGH,                             NULL)                   /* To enable power button detection */
-
-GPIO(AC_PRESENT,        PORT(3),  0, GPIO_INT_BOTH_DSLEEP,                      extpower_interrupt)     /* BC_ACOK / EC_ACIN - to know if battery or AC connected */
-GPIO(RSMRST_L_PGOOD,    PORT(6),  3, GPIO_INT_BOTH,                             power_signal_interrupt) /* RSMRST_N_PWRGD from power logic */
-GPIO(PCH_RSMRST_L,      PORT(14), 3, GPIO_OUT_LOW,                              NULL)                   /* RSMRST_N to PCH */
-GPIO(PCH_SLP_S4_L,      PORT(20), 0, GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP,       power_signal_interrupt) /* SLP_S4# signal from PCH */
-GPIO(PCH_SLP_S3_L,      PORT(20), 6, GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP,       power_signal_interrupt) /* SLP_S3# signal from PCH */
-GPIO(ALL_SYS_PGOOD,     PORT(13), 0, GPIO_INT_BOTH_DSLEEP,                      power_signal_interrupt) /* ALL_SYS_PWRGD from power logic */
-GPIO(PCH_SYS_PWROK,     PORT(6),  5, GPIO_OUT_LOW,                              NULL)                   /* EC thinks everything is up and ready (DELAY_ALL_SYS_PWRGD) */
-
-GPIO(USB3_PWR_EN,       PORT(5),  7, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for USB3 Port */
-GPIO(USB2_PWR_EN,       PORT(3),  6, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for USB2 Port */
-GPIO(USB_CTL1,          PORT(10), 5, GPIO_OUT_HIGH,                             NULL)                   /* USB charging mode control */
+GPIO(NC_012,            PORT(1),  2, GPIO_INPUT | GPIO_PULL_UP,                 NULL)                   /* NC */
 GPIO(USB_ILIM_SEL,      PORT(1),  3, GPIO_OUT_HIGH,                             NULL)                   /* USB current control */
 
-GPIO(KBD_IRQ_L,         PORT(15), 2, GPIO_ODR_HIGH,                             NULL)                   /* Negative edge triggered irq. */
+GPIO(PCH_SCI_L,         PORT(2),  6, GPIO_ODR_HIGH,                             NULL)                   /* SCI output */
+GPIO(LID_OPEN,          PORT(2),  7, GPIO_INT_BOTH_DSLEEP,                      lid_interrupt)          /* Lid switch */
 
-UNIMPLEMENTED(CPU_PROCHOT)
-UNIMPLEMENTED(PCH_RCIN_L)
+GPIO(AC_PRESENT,        PORT(3),  0, GPIO_INT_BOTH_DSLEEP,                      extpower_interrupt)     /* BC_ACOK / EC_ACIN - to know if battery or AC connected */
+GPIO(VOLUME_UP,         PORT(3),  1, GPIO_INT_FALLING,                          NULL)                   /* Volume up button */
+GPIO(VOLUME_DOWN,       PORT(3),  4, GPIO_INT_FALLING,                          NULL)                   /* Volume down button */
+GPIO(POWER_BUTTON_L,    PORT(3),  5, GPIO_INT_BOTH_DSLEEP,                      power_button_interrupt) /* Power button */
+GPIO(USB2_PWR_EN,       PORT(3),  6, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for USB2 Port */
 
+GPIO(ENTERING_RW,       PORT(4),  1, GPIO_OUT_LOW,                              NULL)                   /* Indicate when EC is entering RW code */
 GPIO(PCH_SMI_L,         PORT(4),  4, GPIO_ODR_HIGH,                             NULL)                   /* SMI output */
+GPIO(USB_OC1_L,         PORT(4),  5, GPIO_INT_FALLING,                          NULL)                   /* DB2 BC1.2 over current signal to EC */
+GPIO(DP_USB_C_HPD_Q,    PORT(4),  6, GPIO_OUT_HIGH,                             NULL)                   /* DP hot plug detect from EC to SOC */
+GPIO(VBATA_VR_HOT_N,    PORT(4),  7, GPIO_INT_FALLING,                          NULL)                   /* PROCHOT signal of VBATA VR connected to EC */
+
+GPIO(VNN_I2C3_ALERT_N,  PORT(5),  0, GPIO_INT_FALLING,                          NULL)                   /* Alert signal from VNN VR to EC */
+GPIO(PCH_SUS_STAT_L,    PORT(5),  1, GPIO_INT_FALLING,                          NULL)                   /* Signal to inform EC that SOC is entering low power state */
+GPIO(TOUCHPANEL_PWREN,  PORT(5),  2, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for Touch Panel */
+GPIO(TRACKPAD_PWREN,    PORT(5),  3, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for Track Pad */
+GPIO(USB_OC0_L,         PORT(5),  5, GPIO_INT_FALLING,                          NULL)                   /* Over current signal of the BC1.2 charger to EC */
+GPIO(EC_ADC0,           PORT(5),  6, GPIO_ANALOG,                               NULL)                   /* EC_ADC0 */
+GPIO(EC_ADC1,           PORT(5),  7, GPIO_ANALOG,                               NULL)                   /* EC_ADC1 */
+
+GPIO(CHGR_PMON,         PORT(6),  0, GPIO_ANALOG,                               NULL)
+GPIO(WIFI_PWREN,        PORT(6),  1, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for WiFi */
+GPIO(BATT_EN_L,         PORT(6),  2, GPIO_INPUT,                                NULL)                   /* Will be NC */
+GPIO(RSMRST_L_PGOOD,    PORT(6),  3, GPIO_INT_BOTH,                             power_signal_interrupt) /* RSMRST_N_PWRGD from power logic */
+GPIO(SW_OPEN_EC,        PORT(6),  4, GPIO_INT_BOTH,                             NULL)                   /* Signal from USB Charger to EC to indicate if the isolation switch is open or close */
+GPIO(PCH_SYS_PWROK,     PORT(6),  5, GPIO_OUT_LOW,                              NULL)                   /* EC thinks everything is up and ready (DELAY_ALL_SYS_PWRGD) */
 GPIO(PCH_WAKE_L,        PORT(6),  6, GPIO_ODR_HIGH,                             NULL)                   /* PCH wake pin */
-GPIO(KBD_KSO2,          PORT(10), 1, GPIO_KB_OUTPUT_COL2,                       NULL)                   /* Negative edge triggered irq. */
-GPIO(PVT_CS0,        	PORT(14), 6, GPIO_ODR_HIGH,                             NULL)                   /* SPI PVT Chip select */
-/*
- * Signals which aren't implemented on MEC1322 eval board but we'll
- * emulate anyway, to make it more convenient to debug other code.
- */
-UNIMPLEMENTED(ENTERING_RW) /* EC entering RW code */
+GPIO(USB3_PWR_EN,       PORT(6),  7, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for USB3 Port */
+
+GPIO(USB_CTL1,          PORT(10), 5, GPIO_OUT_HIGH,                             NULL)                   /* USB charging mode control */
+
+GPIO(PCH_RCIN_L,        PORT(11), 0, GPIO_ODR_HIGH,                             NULL)                   /* Reset line to PCH (for 8042 emulation) */
+GPIO(NC_115,            PORT(11), 5, GPIO_INPUT | GPIO_PULL_UP,                 NULL)                   /* NC */
+
+GPIO(USB_PD_EC_INT,     PORT(12), 2, GPIO_INT_BOTH,                             NULL)                   /* Interrupt from USB PD Controller to EC */
+GPIO(EC_WAKE_L,         PORT(12), 3, GPIO_INT_BOTH_DSLEEP,                      NULL)
+GPIO(USB_CHG_DET_EC,    PORT(12), 4, GPIO_INT_BOTH,                             NULL)                   /* Signal from USB Charger to EC to indicate charger has been detected */
+GPIO(GYRO_INT2,         PORT(12), 7, GPIO_INT_FALLING,                          NULL)                   /* Gyro sensor interrupt 2 to EC */
+
+GPIO(ALL_SYS_PGOOD,     PORT(13), 0, GPIO_INT_BOTH_DSLEEP,                      power_signal_interrupt) /* ALL_SYS_PWRGD from power logic */
+GPIO(EC_PLUG_DETECT,    PORT(13), 2, GPIO_INT_BOTH,                             NULL)
+GPIO(WWAN_PWREN,        PORT(13), 5, GPIO_OUT_HIGH,                             NULL)                   /* Enable power for WWAN - PROBE_DETECT_L */
+
+GPIO(THERMAL_PROBE_EN_L,PORT(14), 0, GPIO_OUT_HIGH,                             NULL)
+GPIO(PCH_RSMRST_L,      PORT(14), 3, GPIO_OUT_LOW,                              NULL)                   /* RSMRST_N to PCH */
+GPIO(NC_145,            PORT(14), 5, GPIO_INPUT | GPIO_PULL_UP,                 NULL)                   /* NC */
+GPIO(PVT_CS0,           PORT(14), 6, GPIO_ODR_HIGH,                             NULL)                   /* SPI PVT Chip select */
+GPIO(ALS_INT,           PORT(14), 7, GPIO_INT_FALLING,                          NULL)                   /* ALS sensor interrupt to EC */
+
+GPIO(WLAN_OFF_L,        PORT(15), 0, GPIO_ODR_HIGH,                             NULL)                   /* Wireless LAN */
+GPIO(CPU_PROCHOT,       PORT(15), 1, GPIO_OUT_LOW,                              NULL)
+GPIO(KBD_IRQ_L,         PORT(15), 2, GPIO_ODR_HIGH,                             NULL)                   /* Negative edge triggered irq. */
+GPIO(NC_154,            PORT(15), 4, GPIO_INPUT | GPIO_PULL_UP,                 NULL)                   /* NC */
+GPIO(CORE_PWROK,        PORT(15), 5, GPIO_ODR_HIGH,                             NULL)                   /* CORE_PWR_OK_R */
+GPIO(LID_OPEN2,         PORT(15), 6, GPIO_INT_BOTH_DSLEEP,                      NULL)                   /* LID_OPEN_OUT2_R */
+GPIO(PCH_SUSPWRDNACK,   PORT(15), 7, GPIO_INT_FALLING,                          NULL)                   /* PMC SUSPWRDNACK signal from SOC to EC */
+
+GPIO(PCH_PWRBTN_L,      PORT(16), 0, GPIO_OUT_HIGH,                             NULL)                   /* Power button output to PCH */
+GPIO(GYRO_INT1,         PORT(16), 1, GPIO_INT_FALLING,                          NULL)                   /* Gyro sensor interrupt 1 to EC */
+GPIO(MUX_CROSS_BAR_EN,  PORT(16), 3, GPIO_OUT_LOW,                              NULL)                   /* Enable signal of the USB Type C Mux */
+
+GPIO(PCH_SLP_S4_L,      PORT(20), 0, GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP,       power_signal_interrupt) /* SLP_S4# signal from PCH */
+GPIO(MUX_CROSS_BAR_POL, PORT(20), 1, GPIO_OUT_LOW,                              NULL)                   /* Output from EC to POL signal of USB Type C Mux */
+GPIO(EC_BL_DISABLE_L,   PORT(20), 2, GPIO_OUT_HIGH,                             NULL)                   /* EDP backligh disable signal from EC */
+GPIO(SMC_SHUTDOWN,      PORT(20), 3, GPIO_OUT_LOW,                              NULL)                   /* Shutdown signal from EC to power sequencing PLD */
+GPIO(MUX_CROSS_BAR_MODE,PORT(20), 4, GPIO_OUT_LOW,                              NULL)                   /* Output from EC - Type C Mux mode select */
+GPIO(PCH_SLP_S3_L,      PORT(20), 6, GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP,       power_signal_interrupt) /* SLP_S3# signal from PCH */
+
+GPIO(SUSPWRDNACK_SOC_EC,PORT(21), 0, GPIO_OUT_LOW,                              NULL)                   /* SUSPWRDNACK signal from EC to MOIC device*/
+GPIO(PCH_SLP_SX_L,      PORT(21), 1, GPIO_INT_BOTH_DSLEEP,                      NULL)                   /* Sleep SOIX signal from SOC to EC */
+
 
 /* Alternate functions GPIO definition */
 ALTERNATE(PORT(16), 0x24,     1, MODULE_UART,          0) 			/* UART0 */
-ALTERNATE(PORT(0),  0x3f,     3, MODULE_KEYBOARD_SCAN, GPIO_KB_OUTPUT)
-ALTERNATE(PORT(10), 0xdd,     3, MODULE_KEYBOARD_SCAN, GPIO_KB_OUTPUT)
+ALTERNATE(PORT(0),      0xfc,   3,      MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
+ALTERNATE(PORT(1),      0x03,   3,      MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
+ALTERNATE(PORT(10)   ,  0xd8,   3,      MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
+ GPIO(KBD_KSO2,         PORT(0),1,      GPIO_KB_OUTPUT_COL2,    NULL)                   /* Negative edge triggered irq. */
 ALTERNATE(PORT(3),  0x04,     3, MODULE_KEYBOARD_SCAN, GPIO_KB_INPUT)
 ALTERNATE(PORT(4),  0x0d,     3, MODULE_KEYBOARD_SCAN, GPIO_KB_INPUT)
 ALTERNATE(PORT(12), 0x60,     2, MODULE_KEYBOARD_SCAN, GPIO_KB_INPUT)
@@ -52,4 +99,4 @@ ALTERNATE(PORT(11), 0x40,     1, MODULE_LPC,           GPIO_INT_BOTH)           
 ALTERNATE(PORT(12), 0x01,     1, MODULE_LPC,           0)                       /* 120: LFRAME# */
 ALTERNATE(PORT(5),  0x10,     1, MODULE_SPI,           0)
 ALTERNATE(PORT(16), 0x10,     1, MODULE_SPI,           0)
-ALTERNATE(PORT(15), 0x8,      1, MODULE_SPI,           0)
+ALTERNATE(PORT(15), 0x08,     1, MODULE_SPI,           0)                      /* 153: CLK */
