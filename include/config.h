@@ -545,7 +545,7 @@
 
 /* Support programming on-chip flash */
 #define CONFIG_FLASH
-
+#undef CONFIG_FLASH_SPI
 #undef CONFIG_FLASH_BANK_SIZE
 #undef CONFIG_FLASH_BASE
 #undef CONFIG_FLASH_ERASED_VALUE32
@@ -1407,6 +1407,10 @@
 
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
+#endif
+
+#if defined(CONFIG_FLASH_SPI) && defined(CONFIG_FLASH)
+#error "Both CONFIG_FLASH_SPI and CONFIG_FLASH cannot be defined"
 #endif
 
 #endif  /* __CROS_EC_CONFIG_H */
