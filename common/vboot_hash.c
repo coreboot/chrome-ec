@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "console.h"
+#include "flash.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "sha256.h"
@@ -64,7 +65,7 @@ static const uint8_t *get_next_chunk_data(uint32_t offset,
 {
 #ifdef CONFIG_FLASH_SPI
 
-	flash_physical_read((CONFIG_RW_IMAGE_FLASHADDR + offset),
+	flash_physical_read(offset,
 			nbytes,	(uint8_t *)vbootbuf);
 
 	return vbootbuf;
