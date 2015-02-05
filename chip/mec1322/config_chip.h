@@ -111,6 +111,8 @@
 #define CONFIG_FW_WP_RO_OFF         	CONFIG_FW_LOADER_OFF
 #define CONFIG_FW_WP_RO_SIZE        	(CONFIG_FW_LOADER_SIZE + \
 						CONFIG_FW_RO_SIZE)
+#define CONFIG_FW_PSTATE_SIZE   CONFIG_FW_RO_SIZE
+#define CONFIG_FW_PSTATE_OFF    (CONFIG_FW_RO_OFF + CONFIG_FW_RO_SIZE)
 
 /****************************************************************************/
 /* SPI Flash Memory Mapping */
@@ -141,7 +143,7 @@
 #define CONFIG_FPU
 #define CONFIG_SPI
 #define CONFIG_DMA
-
+#define CONFIG_FLASH_SPI
 #undef CONFIG_FLASH
 
 #endif  /* __CROS_EC_CONFIG_CHIP_H */

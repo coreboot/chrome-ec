@@ -14,6 +14,8 @@
 #include "system.h"
 #include "util.h"
 #include "watchdog.h"
+/* Console output macros */
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 /*
   * Buffer allocated to read data from spi Flash
@@ -30,9 +32,9 @@ uintptr_t flash_get_image_base_spi(enum system_image_copy_t copy)
 {
 	switch (copy) {
 	case SYSTEM_IMAGE_RO:
-		return CONFIG_RO_IMAGE_FLASHADDR;
+		return CONFIG_RO_SPI_OFF;
 	case SYSTEM_IMAGE_RW:
-		return CONFIG_RW_IMAGE_FLASHADDR;
+		return CONFIG_RW_SPI_OFF;
 	default:
 		return 0xffffffff;
 	}
@@ -125,7 +127,6 @@ int flash_physical_write(int offset, int size, const char *data)
 
 int flash_physical_read(int offset, int size, char *data)
 {
-
 	offset += CONFIG_FLASH_BASE_SPI;
 
 	/* Fail if offset, size, and data aren't at least word-aligned */

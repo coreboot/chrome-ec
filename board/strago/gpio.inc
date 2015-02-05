@@ -82,6 +82,7 @@ GPIO(PCH_SLP_S3_L,      PORT(20), 6, GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP,       
 GPIO(SUSPWRDNACK_SOC_EC,PORT(21), 0, GPIO_OUT_LOW,                              NULL)                   /* SUSPWRDNACK signal from EC to MOIC device*/
 GPIO(PCH_SLP_SX_L,      PORT(21), 1, GPIO_INT_BOTH_DSLEEP,                      NULL)                   /* Sleep SOIX signal from SOC to EC */
 
+UNIMPLEMENTED(WP_L)
 
 /* Alternate functions GPIO definition */
 ALTERNATE(PORT(16), 0x24,     1, MODULE_UART,          0) 			/* UART0 */

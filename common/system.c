@@ -513,7 +513,6 @@ const char *system_get_version(enum system_image_copy_t copy)
 		system_get_image_base(system_get_image_copy()));
 #endif
 
-
 #ifdef CONFIG_FLASH_SPI
 	flash_physical_read(flash_get_image_base_spi(copy) +
 		version_offset, sizeof(version_data),
