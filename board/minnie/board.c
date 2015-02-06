@@ -90,15 +90,15 @@ struct kx022_data g_kx022_data1;
 /* Four Motion sensors */
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
-	{ 0,  1,  0},
-	{-1,  0,  0},
-	{ 0,  0,  1}
+	{ 0, -1,  0},
+	{ 1,  0,  0},
+	{ 0,  0, -1}
 };
 
 const matrix_3x3_t lid_standard_ref = {
-	{ 0, -1,  0},
-	{-1,  0,  0},
-	{ 0,  0, -1}
+	{ 0,  1,  0},
+	{ 1,  0,  0},
+	{ 0,  0,  1}
 };
 
 struct motion_sensor_t motion_sensors[] = {
