@@ -7,7 +7,7 @@
 
 #include "common.h"
 #include "console.h"
-#include "tmp432.h"
+#include "tmp43x.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "hooks.h"
@@ -54,7 +54,7 @@ static int get_temp(const int offset, int *temp_ptr)
 	return EC_SUCCESS;
 }
 
-static int tmp432_set_temp(const int offset, int temp)
+static int tmp43x_set_temp(const int offset, int temp)
 {
 	if (temp < -127 || temp > 127)
 		return EC_ERROR_INVAL;
@@ -62,7 +62,7 @@ static int tmp432_set_temp(const int offset, int temp)
 	return raw_write8(offset, (uint8_t)temp);
 }
 
-int tmp432_get_val(int idx, int *temp_ptr)
+int tmp43x_get_val(int idx, int *temp_ptr)
 {
 	if (!has_power())
 		return EC_ERROR_NOT_POWERED;
@@ -202,7 +202,7 @@ static int command_tmp432(int argc, char **argv)
 
 	if (!strcasecmp(command, "settemp")) {
 		ccprintf("Setting 0x%02x to %dC\n", offset, data);
-		rv = tmp432_set_temp(offset, data);
+		rv = tmp43x_set_temp(offset, data);
 	} else if (!strcasecmp(command, "setbyte")) {
 		ccprintf("Setting 0x%02x to 0x%02x\n", offset, data);
 		rv = raw_write8(offset, data);

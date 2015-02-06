@@ -10,7 +10,7 @@
 #include "charge_state.h"
 #include "charger.h"
 #include "common.h"
-#include "driver/temp_sensor/tmp432.h"
+#include "driver/temp_sensor/tmp43x.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "host_command.h"
@@ -95,11 +95,11 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
  */
 const struct temp_sensor_t temp_sensors[] = {
 	{"ECInternal", TEMP_SENSOR_TYPE_BOARD, chip_temp_sensor_get_val, 0, 4},
-	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp43x_get_val,
 		TMP432_IDX_LOCAL, 4},
-	{"TMP432_Power_top", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_Power_top", TEMP_SENSOR_TYPE_BOARD, tmp43x_get_val,
 		TMP432_IDX_REMOTE1, 4},
-	{"TMP432_CPU_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_CPU_bottom", TEMP_SENSOR_TYPE_BOARD, tmp43x_get_val,
 		TMP432_IDX_REMOTE2, 4},
 	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_temp_sensor_get_val, 0, 4},
 };

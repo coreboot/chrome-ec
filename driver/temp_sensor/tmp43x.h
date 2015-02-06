@@ -5,8 +5,8 @@
 
 /* TMP432 temperature sensor module for Chrome EC */
 
-#ifndef __CROS_EC_TEMP_SENSOR_TMP432_H
-#define __CROS_EC_TEMP_SENSOR_TMP432_H
+#ifndef __CROS_EC_TEMP_SENSOR_TMP43X_H
+#define __CROS_EC_TEMP_SENSOR_TMP43X_H
 
 #define TMP432_I2C_ADDR		0x98 /* 7-bit address is 0x4C */
 
@@ -91,6 +91,6 @@
  *
  * @return EC_SUCCESS if successful, non-zero if error.
  */
-int tmp432_get_val(int idx, int *temp_ptr);
+int tmp43x_get_val(int idx, int *temp_ptr);
 
-#endif /* __CROS_EC_TEMP_SENSOR_TMP432_H */
+#endif /* __CROS_EC_TEMP_SENSOR_TMP43X_H */
