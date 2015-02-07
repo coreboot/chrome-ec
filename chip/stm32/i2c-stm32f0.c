@@ -58,6 +58,9 @@ static int wait_isr(int port, int mask)
 		/* Check for desired mask */
 		if ((isr & mask) == mask)
 			return EC_SUCCESS;
+
+		/* I2C is slow, so let other things run while we wait */
+		usleep(100);
 	}
 
 	return EC_ERROR_TIMEOUT;
@@ -346,11 +349,6 @@ int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_bytes,
 				goto xfer_exit;
 
 			in[i] = STM32_I2C_RXDR(port);
-
-			/*
-			 * TODO: Make this safer: it's still possible we get
-			 * interrupted by another task in here and miss bytes
-			 */
 		}
 	}
 	rv = wait_isr(port, STM32_I2C_ISR_STOP);
