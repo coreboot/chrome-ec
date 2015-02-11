@@ -47,12 +47,11 @@ int sb_fw_update_in_progress(void)
 static int is_protected(void)
 {
 	int state = get_state();
-#if 0
 	int vboot_mode = host_get_vboot_mode();
 
 	if (vboot_mode == VBOOT_MODE_DEVELOPER)
 		return 1;
-#endif
+
 	if (state == EC_SB_FW_UPDATE_PROTECT) {
 		CPRINTF("firmware update is protected.\n");
 		return 1;
