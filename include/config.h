@@ -788,6 +788,9 @@
 #undef CONFIG_LED_BAT_ACTIVE_LOW
 #undef CONFIG_LED_POWER_ACTIVE_LOW
 
+/* Color of the power LED (for example, GREEN or WHITE) */
+#undef CONFIG_LED_POWER_COLOR
+
 /* Support for LED driver chip(s) */
 #undef CONFIG_LED_DRIVER_DS2413  /* Maxim DS2413, on one-wire interface */
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
