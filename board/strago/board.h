@@ -25,6 +25,16 @@
 #define CONFIG_I2C
 #define CONFIG_VBOOT_HASH
 
+#define CONFIG_CHARGER
+#define CONFIG_BATTERY_SMART
+#define CONFIG_CHARGER_V2
+#define CONFIG_CHARGER_BQ24770
+#define CONFIG_CHARGER_ILIM_PIN_DISABLED
+#define CONFIG_CHARGER_SENSE_RESISTOR 10
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
+#define CONFIG_CHARGER_INPUT_CURRENT 2240
+#define CONFIG_CHARGER_DISCHARGE_ON_AC
+
 #define CONFIG_SPI
 #define CONFIG_SPI_PORT 1
 #define CONFIG_SPI_CS_GPIO GPIO_PVT_CS0
@@ -36,6 +46,8 @@
 
 /* I2C ports */
 #define I2C_PORT0 0
+#define I2C_PORT_BATTERY	I2C_PORT0
+#define I2C_PORT_CHARGER	I2C_PORT0
 #define I2C_PORT_THERMAL	I2C_PORT0
 
 #define CONFIG_TEMP_SENSOR
@@ -82,6 +94,9 @@ enum temp_sensor_id {
 
 	TEMP_SENSOR_COUNT
 };
+
+/* Discharge battery when on AC power for factory test. */
+int board_discharge_on_ac(int enable);
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __BOARD_H */
