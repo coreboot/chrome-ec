@@ -14,6 +14,8 @@
 #include "i2c.h"
 #include "keyboard_raw.h"
 #include "lid_switch.h"
+#include "math_util.h"
+#include "motion_lid.h"
 #include "motion_sense.h"
 #include "power.h"
 #include "power_button.h"
@@ -90,15 +92,15 @@ struct kx022_data g_kx022_data1;
 /* Four Motion sensors */
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
-	{ 0, -1,  0},
-	{ 1,  0,  0},
-	{ 0,  0, -1}
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(1), 0,  0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
 const matrix_3x3_t lid_standard_ref = {
-	{ 0,  1,  0},
-	{ 1,  0,  0},
-	{ 0,  0,  1}
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -119,3 +121,19 @@ struct motion_sensor_t motion_sensors[] = {
 		KX022_ADDR0, &lid_standard_ref, 100000, 2},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+/* Define the accelerometer orientation matrices. */
+const struct accel_orientation acc_orient = {
+	/* Hinge aligns with y axis. */
+	.rot_hinge_90 = {
+		{  0, 0, FLOAT_TO_FP(1)},
+		{  0, FLOAT_TO_FP(1), 0},
+		{ FLOAT_TO_FP(-1), 0, 0}
+	},
+	.rot_hinge_180 = {
+		{ FLOAT_TO_FP(-1), 0, 0},
+		{  0, FLOAT_TO_FP(1), 0},
+		{  0, 0, FLOAT_TO_FP(-1)}
+	},
+	.hinge_axis = {0, 1, 0},
+};
