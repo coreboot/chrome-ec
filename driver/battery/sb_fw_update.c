@@ -8,6 +8,7 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
 #include "timer.h"
@@ -38,6 +39,28 @@ int sb_fw_update_in_progress(void)
 {
 	return i2c_access_enable;
 }
+
+/*
+ * Enter Battery FW Protected State
+ * Disable Battery I2C interface on suspend.
+ */
+static void set_ap_suspend(void)
+{
+	set_state(EC_SB_FW_UPDATE_PROTECT);
+	i2c_access_enable = 0;
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, set_ap_suspend, HOOK_PRIO_DEFAULT);
+
+/*
+ * Enter Battery FW Update Prepare State
+ * Disable Battery I2C interface by default.
+ */
+static void set_ap_resume(void)
+{
+	set_state(EC_SB_FW_UPDATE_PREPARE);
+	i2c_access_enable = 0;
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, set_ap_resume, HOOK_PRIO_DEFAULT);
 
 /**
  * Check if a Smart Battery Firmware Update is protected.
