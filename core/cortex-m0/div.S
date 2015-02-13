@@ -18,6 +18,7 @@
  * OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "software_panic.h"
 
 
 	.syntax unified
@@ -180,4 +181,5 @@ L_dont_sub0:
 	bx	lr
 
 __aeabi_idiv0:
-	bl panic_reboot
+	ldr	SOFTWARE_PANIC_REASON_REG, =PANIC_SW_DIV_ZERO
+	bl	exception_panic
