@@ -10,8 +10,8 @@
 #include "gpio.h"
 #include "host_command.h"
 
-#define SB_SHIP_MODE_ADDR	0x3a
-#define SB_SHIP_MODE_DATA	0xc574
+#define SB_SHIP_MODE_ADDR	0x00
+#define SB_SHIP_MODE_DATA	0x0010
 
 /* Values for 54Wh 3UPF656790-1-T1001 battery */
 static const struct battery_info info = {
@@ -38,5 +38,9 @@ const struct battery_info *battery_get_info(void)
 
 int board_cut_off_battery(void)
 {
-	return sb_write(SB_SHIP_MODE_ADDR, SB_SHIP_MODE_DATA);
+	int rv;
+	rv = sb_write(SB_SHIP_MODE_ADDR, SB_SHIP_MODE_DATA);
+	if (!rv)
+		rv = sb_write(SB_SHIP_MODE_ADDR, SB_SHIP_MODE_DATA);
+	return rv;
 }
