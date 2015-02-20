@@ -470,6 +470,11 @@ enum power_state power_handle_state(enum power_state state)
 			return POWER_S3S5;
 		else if (!(power_get_signals() & IN_SUSPEND))
 			return POWER_S3S0;
+		if (check_for_power_off_event()) {
+			CPRINTS("power off from long press in S3");
+			power_off();
+			return POWER_S3S5;
+		}
 		return state;
 
 	case POWER_S3S0:
