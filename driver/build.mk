@@ -22,6 +22,7 @@ driver-$(CONFIG_BATTERY_SMART)+=battery/smart.o
 driver-$(CONFIG_CHARGER_BQ24192)+=charger/bq24192.o
 driver-$(CONFIG_CHARGER_BQ24707A)+=charger/bq24707a.o
 driver-$(CONFIG_CHARGER_BQ24715)+=charger/bq24715.o
+driver-$(CONFIG_CHARGER_BQ24717)+=charger/bq24717.o
 driver-$(CONFIG_CHARGER_BQ24725)+=charger/bq24725.o
 driver-$(CONFIG_CHARGER_BQ24738)+=charger/bq24738.o
 
