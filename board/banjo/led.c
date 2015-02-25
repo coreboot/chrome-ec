@@ -9,10 +9,20 @@
 #include "chipset.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "led_common.h"
 #include "pwm.h"
 #include "util.h"
 #include "extpower.h"
+
+#define CRITICAL_LOW_BATTERY_PERMILLAGE 71
+#define LOW_BATTERY_PERMILLAGE 137
+#define FULL_BATTERY_PERMILLAGE 937
+
+#define LED_TOTAL_4SECS_TICKS 16
+#define LED_TOTAL_2SECS_TICKS 8
+#define LED_ON_1SEC_TICKS 4
+#define LED_ON_2SECS_TICKS 8
 
 const enum ec_led_id supported_led_ids[] = {
 	EC_LED_ID_BATTERY_LED , EC_LED_ID_POWER_LED};
@@ -101,7 +111,7 @@ DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
  */
 static void power_led(void)
 {
-	static unsigned power_ticks;
+	static unsigned int power_ticks;
 	static int previous_state_suspend;
 
 	power_ticks++;
@@ -114,13 +124,12 @@ static void power_led(void)
 		if (!previous_state_suspend)
 			power_ticks = 0;
 
-	/* If chipset state in suspend, blink orange, 25% duty cycle,
-	 * 4 sec period.
-	 */
-			set_color_power_led((power_ticks % 16) < 4 ?
-				     LED_ORANGE : LED_OFF);
-			previous_state_suspend = 1;
-			return;
+		/* Blink once every four seconds. */
+		set_color_power_led((power_ticks % LED_TOTAL_4SECS_TICKS <
+				    LED_ON_1SEC_TICKS) ? LED_ORANGE : LED_OFF);
+
+		previous_state_suspend = 1;
+		return;
 	}
 
 	previous_state_suspend = 0;
@@ -134,49 +143,65 @@ static void power_led(void)
 
 static void battery_led(void)
 {
-	struct batt_params batt;
-	static unsigned battery_ticks;
-	int chstate = charge_get_state();
+	static unsigned int battery_ticks;
+	uint32_t chflags = charge_get_flags();
+	int remaining_capacity;
+	int full_charge_capacity;
+	int permillage;
+
 	battery_ticks++;
 
-	battery_get_params(&batt);
 	/* If we don't control the LED, nothing to do */
 	if (!led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		return;
 
-	/* If Battery critical Low, blink orange, 50% duty cycle,
-	 * 2 sec period.
-	 */
-	if (!extpower_is_present() && chipset_in_state(CHIPSET_STATE_ON) &&
-	    (batt.state_of_charge <= CONFIG_BATTERY_LEVEL_CRITICAL)) {
-		set_color_battery_led((battery_ticks & 0x4) ?
-				      LED_ORANGE : LED_OFF);
-		return;
-	}
+	remaining_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_CAP);
+	full_charge_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
+	permillage = !full_charge_capacity ? 0 :
+		(1000 * remaining_capacity) / full_charge_capacity;
 
-	/* If Battery Low, blink orange, 25% duty cycle, 4 sec period */
-	if (!extpower_is_present() && chipset_in_state(CHIPSET_STATE_ON) &&
-	    (batt.state_of_charge <= CONFIG_BATTERY_LEVEL_LOW)) {
-		set_color_battery_led((battery_ticks % 16) < 4 ?
-				      LED_ORANGE : LED_OFF);
-		return;
-	}
-
-	/* If the system is charging, solid orange */
-	if (chstate == PWR_STATE_CHARGE) {
-		set_color_battery_led(LED_ORANGE);
-		return;
-	}
-
-	/* If AC connected and fully charged (or close to it), solid blue */
-	if (chstate == PWR_STATE_CHARGE_NEAR_FULL ||
-	    chstate == PWR_STATE_IDLE) {
+	switch (charge_get_state()) {
+	case PWR_STATE_CHARGE:
+		/* Make the percentage approximate to UI shown */
+		set_color_battery_led(permillage <
+			FULL_BATTERY_PERMILLAGE ? LED_ORANGE : LED_BLUE);
+		break;
+	case PWR_STATE_CHARGE_NEAR_FULL:
 		set_color_battery_led(LED_BLUE);
-		return;
+		break;
+	case PWR_STATE_DISCHARGE:
+		/* Less than 3%, blink one second every two seconds */
+		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+		    permillage <= CRITICAL_LOW_BATTERY_PERMILLAGE)
+			set_color_battery_led(
+				(battery_ticks % LED_TOTAL_2SECS_TICKS <
+				 LED_ON_1SEC_TICKS) ? LED_ORANGE : LED_OFF);
+		/* Less than 10%, blink one second every four seconds */
+		else if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+			 permillage <= LOW_BATTERY_PERMILLAGE)
+			set_color_battery_led(
+				(battery_ticks % LED_TOTAL_4SECS_TICKS <
+				 LED_ON_1SEC_TICKS) ? LED_ORANGE : LED_OFF);
+		else
+			set_color_battery_led(LED_OFF);
+		break;
+	case PWR_STATE_ERROR:
+		set_color_battery_led(
+			(battery_ticks % LED_TOTAL_2SECS_TICKS <
+			 LED_ON_1SEC_TICKS) ? LED_ORANGE : LED_OFF);
+		break;
+	case PWR_STATE_IDLE: /* External power connected in IDLE. */
+		if (chflags & CHARGE_FLAG_FORCE_IDLE)
+			set_color_battery_led(
+				(battery_ticks % LED_TOTAL_4SECS_TICKS <
+				 LED_ON_2SECS_TICKS) ? LED_BLUE : LED_ORANGE);
+		else
+			set_color_battery_led(LED_BLUE);
+		break;
+	default:
+		/* Other states don't alter LED behavior */
+		break;
 	}
-
-	/* Otherwise, system is off and AC not connected, LED off */
-	set_color_battery_led(LED_OFF);
 }
 
 static void led_tick(void)
