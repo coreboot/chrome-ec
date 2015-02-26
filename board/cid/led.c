@@ -15,9 +15,10 @@
 #include "led_common.h"
 #include "util.h"
 
-#define LED_ERROR_FREQ		2	/* LED on 500ms every 1000ms */
 #define LED_FORCE_IDLE_FREQ	4	/* LED on 1000ms every 2000ms */
 #define LED_BATTERY_LOW_LEVEL	15	/* Battery low level: 15% */
+#define LED_TOTAL_TICKS 16
+#define LED_ON_TICKS 4
 
 enum led_color {
 	LED_OFF = 0,
@@ -118,7 +119,8 @@ static void cid_led_set_battery(void)
 		break;
 	case PWR_STATE_ERROR:
 		cid_led_set_color_battery(
-			(battery_ticks & LED_ERROR_FREQ) ? LED_AMBER : LED_OFF);
+			(battery_ticks % LED_TOTAL_TICKS < LED_ON_TICKS) ?
+			LED_AMBER : LED_OFF);
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE. */
 		if (chflags & CHARGE_FLAG_FORCE_IDLE)
