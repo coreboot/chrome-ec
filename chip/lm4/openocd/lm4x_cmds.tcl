@@ -91,6 +91,18 @@ proc flash_squawks_ro { } {
 	flash_lm4 ../../../build/squawks/ec.RO.flat 0
 }
 
+proc flash_sumo { } {
+	flash_lm4 ../../../build/sumo/ec.bin 0
+}
+
+proc flash_sumo_ro { } {
+	flash_lm4 ../../../build/sumo/ec.RO.flat 0
+}
+
+proc flash_sumo_rw { } {
+	flash_lm4 ../../../build/sumo/ec.RW.bin 131072
+}
+
 proc flash_quawks { } {
 	flash_lm4 ../../../build/quawks/ec.bin 0
 }
