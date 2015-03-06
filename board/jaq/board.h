@@ -77,12 +77,12 @@ enum pwm_channel {
 
 /* Charger module */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10 /* Charge sense resistor, mOhm */
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC 20 /* Input sensor resistor, mOhm */
-/* Input current limit for 45W AC adapter:
- * 45W/19V*85%=2013mA, choose the closest charger setting = 2048mA
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input sensor resistor, mOhm */
+/* Input current limit for 24W AC adapter:
+ * 24W/12V*90%=1800mA, choose the closest charger setting = 1808mA
  */
-#define CONFIG_CHARGER_INPUT_CURRENT 2048 /* mA, based on Link HW design */
-#define CONFIG_CHARGER_CURRENT_LIMIT 3000 /* PL102 inductor 3.0A(3.8A) */
+#define CONFIG_CHARGER_INPUT_CURRENT 1808 /* mA, based on Link HW design */
+#define CONFIG_CHARGER_CURRENT_LIMIT 2260 /* Batt max charge current is 2.2A */
 
 /* Discharge battery when on AC power for factory test. */
 int board_discharge_on_ac(int enable);
