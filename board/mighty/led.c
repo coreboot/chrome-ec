@@ -145,6 +145,8 @@ static void mighty_led_set_battery_poweroff(void)
 	case PWR_STATE_CHARGE:
 		bat_led_set_color(LED_AMBER);
 		break;
+	case PWR_STATE_IDLE: /* External power connected in IDLE. */
+		/* Fall through. */
 	case PWR_STATE_CHARGE_NEAR_FULL:
 		bat_led_set_color(LED_GREEN);
 		break;
