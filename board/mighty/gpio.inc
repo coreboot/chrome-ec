@@ -24,8 +24,9 @@ GPIO(KB_IN06, C, 15, GPIO_KB_INPUT, keyboard_raw_gpio_interrupt)
 GPIO(KB_IN07, D, 2,  GPIO_KB_INPUT, keyboard_raw_gpio_interrupt)
 
 /* Other inputs */
-GPIO(EC_WAKE, A, 0, GPIO_INPUT | GPIO_PULL_DOWN, NULL) /* wk1 */
-GPIO(WP_L,    B, 4, GPIO_INPUT,                  NULL)
+GPIO(EC_WAKE,           A, 0,  GPIO_INPUT | GPIO_PULL_DOWN,   NULL) /* wk1 */
+GPIO(WP_L,              B, 4,  GPIO_INPUT,                    NULL)
+GPIO(BAT_PRESENT_L,     B, 2,  GPIO_INPUT | GPIO_PULL_UP,     NULL)
 
 /* Outputs */
 GPIO(BAT_LED_RED,       B, 11, GPIO_OUT_HIGH,  NULL)
