@@ -1416,7 +1416,8 @@ enum motionsense_command {
 enum motionsensor_type {
 	MOTIONSENSE_TYPE_ACCEL = 0,
 	MOTIONSENSE_TYPE_GYRO = 1,
-	MOTIONSENSE_TYPE_MAX = 2,
+	MOTIONSENSE_TYPE_MAG = 2,
+	MOTIONSENSE_TYPE_MAX = 3,
 };
 
 /* List of motion sensor locations. */
@@ -1430,6 +1431,7 @@ enum motionsensor_location {
 enum motionsensor_chip {
 	MOTIONSENSE_CHIP_KXCJ9 = 0,
 	MOTIONSENSE_CHIP_LSM6DS0 = 1,
+	MOTIONSENSE_CHIP_BMI160 = 2,
 };
 
 /* Module flag masks used for the dump sub-command. */
