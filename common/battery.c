@@ -115,6 +115,12 @@ static void print_battery_params(void)
 	struct batt_params batt;
 
 	battery_get_params(&batt);
+
+#ifdef CONFIG_BATTERY_OVERRIDE_PARAMS
+	/* Apply battery pack vendor charging method */
+	battery_override_params(&batt);
+#endif
+
 	print_item_name("Param flags:");
 	ccprintf("%08x\n", batt.flags);
 
