@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 The Chromium OS Authors. All rights reserved.
+/* Copyright 2015 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -77,8 +77,12 @@ static int pwr_led_set_color(enum led_color color)
 		gpio_set_level(GPIO_POWER_LED, POWER_LED_OFF);
 		break;
 	case LED_WHITE:
+#ifdef CONFIG_POWER_LED_IS_EXTERNAL
+		gpio_set_level(GPIO_POWER_LED, POWER_LED_ON);
+#else
 		gpio_set_level(GPIO_POWER_LED,
 			       lid_is_open() ? POWER_LED_ON : POWER_LED_OFF);
+#endif
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;

@@ -1076,6 +1076,14 @@
 #undef CONFIG_LED_BAT_ACTIVE_LOW
 #undef CONFIG_LED_POWER_ACTIVE_LOW
 
+/*
+ * Normally the power led is part of the keyboard, so there's no point of
+ * having it on when the lid is closed. This option can be used for cases
+ * where the power led is externally visible and is supposed to stay
+ * on when the lid is closed.
+ */
+#undef CONFIG_POWER_LED_IS_EXTERNAL
+
 /* Support for LED driver chip(s) */
 #undef CONFIG_LED_DRIVER_DS2413  /* Maxim DS2413, on one-wire interface */
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
