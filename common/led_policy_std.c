@@ -93,8 +93,12 @@ static int pwr_led_set_color(enum led_color color)
 		gpio_set_level(GPIO_POWER_LED, POWER_LED_OFF);
 		break;
 	case POWER_LED_COLOR:
+#ifdef CONFIG_LED_POWER_IS_EXTERNAL
+		gpio_set_level(GPIO_POWER_LED, POWER_LED_ON);
+#else
 		gpio_set_level(GPIO_POWER_LED,
 			       lid_is_open() ? POWER_LED_ON : POWER_LED_OFF);
+#endif
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;
