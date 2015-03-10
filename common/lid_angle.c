@@ -12,6 +12,7 @@
 #include "keyboard_scan.h"
 #include "lid_angle.h"
 #include "lid_switch.h"
+#include "motion_lid.h"
 #include "motion_sense.h"
 
 /* Console output macros */
