@@ -5,7 +5,27 @@
  * Battery pack vendor provided charging profile
  */
 #include "battery.h"
+#include "extpower.h"
 #include "gpio.h"
+#include "hooks.h"
+#include "timer.h"
+
+#define FORCE_PRECHG_TIME (2 * SECOND)
+
+#ifdef PRINT_FORCE_CHARGE_MSG
+#include "console.h"
+#define FPC_PRINT(format, args...) cprints(CC_CHARGER, format, ## args)
+#else
+#define FPC_PRINT(format, args...)
+#endif
+
+enum {
+	FORCE_PRECHG_IDLE,
+	FORCE_PRECHG_CHARGING,
+	FORCE_PRECHG_PENDING
+} force_pre_charge;
+
+static void deferred_stop_force_precharge(void);
 
 static const struct battery_info info = {
 	.voltage_max    = 4350,		/* mV */
@@ -53,6 +73,30 @@ void battery_override_params(struct batt_params *batt)
 			batt->desired_current = 0;
 			batt->flags |= BATT_FLAG_BAD_ANY;
 		}
+
+		switch (force_pre_charge) {
+		case FORCE_PRECHG_PENDING:
+			FPC_PRINT("FPC: From pending to charging");
+			force_pre_charge = FORCE_PRECHG_CHARGING;
+			hook_call_deferred(deferred_stop_force_precharge, FORCE_PRECHG_TIME);
+
+		case FORCE_PRECHG_CHARGING:
+			FPC_PRINT("FPC: Force pre-charging");
+			batt->state_of_charge = 99;
+			batt->desired_current = 256;
+			break;
+
+		case FORCE_PRECHG_IDLE:
+			break;
+		}
+	}
+	else {
+		if (force_pre_charge == FORCE_PRECHG_CHARGING) {
+			/* We need force pre-charge, but battery error,
+			   so set pending state, wait for battery is OK. */
+			force_pre_charge = FORCE_PRECHG_PENDING;
+			hook_call_deferred(deferred_stop_force_precharge, -1);
+		}
 	}
 }
 
@@ -66,3 +110,26 @@ int board_cut_off_battery(void)
 {
 	return cutoff();
 }
+
+static void hook_ac_change(void)
+{
+	struct batt_params batt;
+	battery_get_params(&batt);
+
+	if (extpower_is_present() && (batt.state_of_charge == 100)) {
+		FPC_PRINT("FPC: Start force pre-charge");
+		force_pre_charge = FORCE_PRECHG_CHARGING;
+		hook_call_deferred(deferred_stop_force_precharge, FORCE_PRECHG_TIME);
+	}
+	else {
+		force_pre_charge = FORCE_PRECHG_IDLE;
+	}
+}
+DECLARE_HOOK(HOOK_AC_CHANGE, hook_ac_change, HOOK_PRIO_DEFAULT);
+
+static void deferred_stop_force_precharge(void)
+{
+	FPC_PRINT("FPC: Stop force pre-charge");
+	force_pre_charge = FORCE_PRECHG_IDLE;
+}
+DECLARE_DEFERRED(deferred_stop_force_precharge);
