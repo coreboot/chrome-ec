@@ -97,6 +97,7 @@ BOARDS_NPCX=(
 )
 
 BOARDS_MEC1322=(
+	cyan
 	glower
 	strago
 )
