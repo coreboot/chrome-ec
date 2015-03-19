@@ -19,6 +19,7 @@ BOARDS_LM4=(
 	glimmer
 	gnawty
 	kip
+	ninja
 	parry
 	peppy
 	rambi

@@ -59,6 +59,10 @@ proc flash_glimmer_rw { } {
 	flash_lm4 ../../../build/glimmer/ec.RW.bin 131072
 }
 
+proc flash_ninja { } {
+	flash_lm4 ../../../build/ninja/ec.bin 0
+}
+
 proc flash_rambi { } {
 	flash_lm4 ../../../build/rambi/ec.bin 0
 }
@@ -161,6 +165,14 @@ proc flash_clapper_ro { } {
 
 proc flash_clapper_rw { } {
 	flash_lm4 ../../../build/clapper/ec.RW.bin 131072
+}
+
+proc flash_ninja_ro { } {
+	flash_lm4 ../../../build/ninja/ec.RO.flat 0
+}
+
+proc flash_ninja_rw { } {
+	flash_lm4 ../../../build/ninja/ec.RW.bin 131072
 }
 
 proc flash_winky { } {
