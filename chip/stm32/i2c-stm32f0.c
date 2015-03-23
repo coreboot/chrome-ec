@@ -21,7 +21,7 @@
 #define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
 
 /* Transmit timeout in microseconds */
-#define I2C_TX_TIMEOUT_MASTER	(10 * MSEC)
+#define I2C_TX_TIMEOUT_MASTER	(160 * MSEC)
 
 /*
  * Max data size for a version 3 request/response packet. This is
