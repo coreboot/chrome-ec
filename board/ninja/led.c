@@ -80,42 +80,5 @@ DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
  */
 static void led_tick(void)
 {
-	static unsigned ticks;
-	int chstate = charge_get_state();
-
-	ticks++;
-
-	/* If we don't control the LED, nothing to do */
-	if (!led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
-		return;
-
-	/* If charging error, blink orange, 25% duty cycle, 4 sec period */
-	if (chstate == PWR_STATE_ERROR) {
-		set_color((ticks % 16) < 4 ? LED_ORANGE : LED_OFF);
-		return;
-	}
-
-	/* If charge-force-idle, blink green, 50% duty cycle, 2 sec period */
-	if (chstate == PWR_STATE_IDLE &&
-	    (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)) {
-		set_color((ticks & 0x4) ? LED_GREEN : LED_OFF);
-		return;
-	}
-
-	/* If the system is charging, solid orange */
-	if (chstate == PWR_STATE_CHARGE) {
-		set_color(LED_ORANGE);
-		return;
-	}
-
-	/* If AC connected and fully charged (or close to it), solid green */
-	if (chstate == PWR_STATE_CHARGE_NEAR_FULL ||
-	    chstate == PWR_STATE_IDLE) {
-		set_color(LED_GREEN);
-		return;
-	}
-
-	/* Otherwise, system is off and AC not connected, LED off */
-	set_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);

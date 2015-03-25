@@ -117,8 +117,6 @@ BUILD_ASSERT(ARRAY_SIZE(gpio_list) == GPIO_COUNT);
 /* Pins with alternate functions */
 const struct gpio_alt_func gpio_alt_funcs[] = {
 	{GPIO_A, 0x03, 1, MODULE_UART},			/* UART0 */
-	{GPIO_B, 0x04, 3, MODULE_I2C},			/* I2C0 SCL */
-	{GPIO_B, 0x08, 3, MODULE_I2C, GPIO_OPEN_DRAIN},	/* I2C0 SDA */
 	{GPIO_B, 0x40, 3, MODULE_I2C},			/* I2C5 SCL */
 	{GPIO_B, 0x80, 3, MODULE_I2C, GPIO_OPEN_DRAIN},	/* I2C5 SDA */
 	{GPIO_D, 0x0f, 2, MODULE_SPI},			/* SPI1 */
@@ -154,15 +152,6 @@ const struct adc_t adc_channels[] = {
 	 */
 	{"ECTemp", LM4_ADC_SEQ0, -225, ADC_READ_MAX, 420,
 	 LM4_AIN_NONE, 0x0e /* TS0 | IE0 | END0 */, 0, 0},
-
-	/* IOUT == ICMNT is on PE3/AIN0 */
-	/* We have 0.01-ohm resistors, and IOUT is 40X the differential
-	 * voltage, so 1000mA ==> 400mV.
-	 * ADC returns 0x000-0xFFF, which maps to 0.0-3.3V (as configured).
-	 * mA = 1000 * ADC_VALUE / ADC_READ_MAX * 3300 / 400
-	 */
-	{"ChargerCurrent", LM4_ADC_SEQ1, 33000, ADC_READ_MAX * 4, 0,
-	 LM4_AIN(0), 0x06 /* IE0 | END0 */, LM4_GPIO_E, (1<<3)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -176,7 +165,6 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"batt_chg", 0, 100},
 	{"thermal",  5, 100},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
@@ -194,7 +182,6 @@ const struct temp_sensor_t temp_sensors[] = {
 		TMP432_IDX_REMOTE1, 4},
 	{"TMP432_CPU_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
-	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_temp_sensor_get_val, 0, 4},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -206,14 +193,5 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
-	{{0, 0, 0}, 0, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
-
-/**
- * Discharge battery when on AC power for factory test.
- */
-int board_discharge_on_ac(int enable)
-{
-	return charger_discharge_on_ac(enable);
-}

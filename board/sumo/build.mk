@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2015 The Chromium OS Authors. All rights reserved.
+# Copyright (c) 2015 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -9,4 +9,4 @@
 # the IC is TI Stellaris LM4
 CHIP:=lm4
 
-board-y=battery.o board.o led.o
+board-y=board.o led.o

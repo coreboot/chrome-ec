@@ -11,14 +11,7 @@
 /* Optional features */
 #define CONFIG_AP_HANG_DETECT
 #define CONFIG_BACKLIGHT_LID
-#define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
-#define CONFIG_CHARGER
-#define CONFIG_CHARGER_BQ24715
-#define CONFIG_CHARGER_DISCHARGE_ON_AC
-#define CONFIG_CHARGER_INPUT_CURRENT 1894   /* 90% of 40 W adapter @ 19 V */
-#define CONFIG_CHARGER_SENSE_RESISTOR 10    /* Charge sense resistor, mOhm */
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input senso resistor, mOhm */
 #define CONFIG_CHIPSET_BAYTRAIL
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_CHIPSET_X86
@@ -50,8 +43,6 @@
 #ifndef __ASSEMBLER__
 
 /* I2C ports */
-#define I2C_PORT_BATTERY 0
-#define I2C_PORT_CHARGER 0
 #define I2C_PORT_THERMAL 5
 
 /* 13x8 keyboard scanner uses an entire GPIO bank for row inputs */
@@ -159,9 +150,6 @@ enum adc_channel {
 	/* EC internal die temperature in degrees K. */
 	ADC_CH_EC_TEMP = 0,
 
-	/* Charger current in mA. */
-	ADC_CH_CHARGER_CURRENT,
-
 	ADC_CH_COUNT
 };
 
@@ -182,14 +170,8 @@ enum temp_sensor_id {
 	TEMP_SENSOR_I2C_TMP432_REMOTE1,
 	TEMP_SENSOR_I2C_TMP432_REMOTE2,
 
-	/* Battery temperature sensor */
-	TEMP_SENSOR_BATTERY,
-
 	TEMP_SENSOR_COUNT
 };
-
-/* Discharge battery when on AC power for factory test. */
-int board_discharge_on_ac(int enable);
 
 #endif /* !__ASSEMBLER__ */
 
