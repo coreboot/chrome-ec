@@ -11,6 +11,7 @@
 #include "charge_state.h"
 #include "driver/accel_kxcj9.h"
 #include "driver/als_isl29035.h"
+#include "driver/gyro_l3gd20h.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
 #include "gpio.h"
@@ -123,6 +124,13 @@ BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
 static struct mutex g_kxcj9_mutex[2];
 struct kxcj9_data g_kxcj9_data[2];
 
+#ifdef CONFIG_GYRO_L3GD20H
+/* Gyro sensor */
+/* l3gd20h mutex and local/private data*/
+static struct mutex g_l3gd20h_mutex;
+struct l3gd20_data g_l3gd20h_data;
+#endif
+
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
 	{ 0,  FLOAT_TO_FP(1),  0},
@@ -169,6 +177,24 @@ struct motion_sensor_t motion_sensors[] = {
 		 .ec_rate = SUSPEND_SAMPLING_INTERVAL,
 	 }
 	},
+#ifdef CONFIG_GYRO_L3GD20H
+	{.name = "Lid Gyro",
+	 .active_mask = SENSOR_ACTIVE_S0,
+	 .chip = MOTIONSENSE_CHIP_L3GD20H,
+	 .type = MOTIONSENSE_TYPE_GYRO,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &l3gd20h_drv,
+	 .mutex = &g_l3gd20h_mutex,
+	 .drv_data = &g_l3gd20h_data,
+	 .i2c_addr = L3GD20_ADDR1,
+	 .rot_standard_ref = NULL,
+	 .default_config = {
+		 .odr = 190000,
+		 .range = 2000,
+		 .ec_rate = SUSPEND_SAMPLING_INTERVAL,
+	 }
+	},
+#endif
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 

@@ -1724,6 +1724,7 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_KXCJ9 = 0,
 	MOTIONSENSE_CHIP_LSM6DS0 = 1,
 	MOTIONSENSE_CHIP_BMI160 = 2,
+	MOTIONSENSE_CHIP_L3GD20H = 3,
 };
 
 struct ec_response_motion_sensor_data {

@@ -49,6 +49,9 @@
 #undef CONFIG_ACCELGYRO_LSM6DS0
 #undef CONFIG_ACCELGYRO_BMI160
 
+/* Specify type of Gyrometers attached. */
+#undef CONFIG_GYRO_L3GD20H
+
 /* Compile chip support for analog-to-digital convertor */
 #undef CONFIG_ADC
 
