@@ -49,6 +49,10 @@ test_mockable int sb_read(int cmd, int *param)
 		return rv;
 	}
 #else
+
+#ifdef CONFIG_BATTERY_I2C_ACCESS_DELAY_TIME
+	usleep(CONFIG_BATTERY_I2C_ACCESS_DELAY_TIME);
+#endif
 	return i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
 #endif
 }
@@ -65,6 +69,10 @@ test_mockable int sb_write(int cmd, int param)
 #ifdef CONFIG_SMBUS
 	return smbus_write_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
 #else
+
+#ifdef CONFIG_BATTERY_I2C_ACCESS_DELAY_TIME
+	usleep(CONFIG_BATTERY_I2C_ACCESS_DELAY_TIME);
+#endif
 	return i2c_write16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
 #endif
 }

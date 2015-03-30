@@ -88,6 +88,11 @@
 #undef CONFIG_BATTERY_BQ27541	/* BQ27541 battery */
 #undef CONFIG_BATTERY_LINK	/* Battery used on Link */
 
+/*
+ * Delay time for smart battery command.
+ */
+#undef CONFIG_BATTERY_I2C_ACCESS_DELAY_TIME
+
 /* Compile mock battery support; used by tests. */
 #undef CONFIG_BATTERY_MOCK
 
