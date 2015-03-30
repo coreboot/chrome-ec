@@ -99,6 +99,11 @@
 #undef CONFIG_BATTERY_CUT_OFF
 
 /*
+ * Delay time for smart battery command.
+ */
+#undef CONFIG_BATTERY_I2C_ACCESS_DELAY_TIME
+
+/*
  * Battery percent thresholds to notify the host or shut down the system.
  * If not specified, default values are set in include/battery.h.
  */
