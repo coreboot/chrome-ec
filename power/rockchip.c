@@ -78,6 +78,19 @@
  */
 #define PMIC_STARTUP_MS 300
 
+/*
+ * Timeout(in ms) to wait for the POWER_GOOD to go low after we initiated a
+ * shutdown. This timeout firing could indicate something is horribly wrong
+ * in hardware and the EC can't turn off the PMIC.
+ */
+#define PMIC_SHUTDOWN_TIMEOUT_MS 200
+
+/*
+ * Time which we need to wait after POWER_GOOD goes low until we're
+ * sure the PMIC lost its state.
+ */
+#define PMIC_STATE_LOST_TIME (50 * MSEC)
+
 /* TODO(crosbug.com/p/25047): move to HOOK_POWER_BUTTON_CHANGE */
 /* 1 if the power button was pressed last time we checked */
 static char power_button_was_pressed;
@@ -103,7 +116,7 @@ static enum power_request_t power_request;
 
 
 /* Forward declaration */
-static void chipset_turn_off_power_rails(void);
+static void power_off(void);
 
 
 /**
@@ -223,13 +236,7 @@ enum power_state power_chipset_init(void)
 	 */
 	if (!(reset_flags & RESET_FLAG_SYSJUMP)) {
 		CPRINTS("not sysjump; forcing AP shutdown");
-		chipset_turn_off_power_rails();
-
-		/*
-		 * The warm reset triggers AP into the RK recovery mode (
-		 * flash SPI from USB).
-		 */
-		chipset_reset(0);
+		power_off();
 
 		init_power_state = POWER_G3;
 	} else {
@@ -362,7 +369,7 @@ static void power_on(void)
  */
 static void power_off(void)
 {
-	unsigned int power_off_timeout = 100; /* ms */
+	unsigned int power_off_timeout = PMIC_SHUTDOWN_TIMEOUT_MS;
 
 	/* Call hooks before we drop power rails */
 	hook_notify(HOOK_CHIPSET_SHUTDOWN);
@@ -382,6 +389,9 @@ static void power_off(void)
 	lid_opened = 0;
 	enable_sleep(SLEEP_MASK_AP_RUN);
 	powerled_set_state(POWERLED_STATE_OFF);
+
+	/* Make sure PMIC has reset its state. */
+	usleep(PMIC_STATE_LOST_TIME);
 
 	CPRINTS("power shutdown complete");
 }
