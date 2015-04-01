@@ -617,6 +617,9 @@
  */
 #define CONFIG_FW_INCLUDE_RO
 
+/* If defined, another image (RW) exists with more features */
+#undef CONFIG_FW_LIMITED_IMAGE
+
 /*****************************************************************************/
 /* Motion sensor based gesture recognition information */
 #undef CONFIG_GESTURE_DETECTION
