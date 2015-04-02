@@ -504,6 +504,27 @@ void charger_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, charger_init, HOOK_PRIO_DEFAULT);
 
+int is_full(void)
+{
+#ifdef CONFIG_BATTERY_FULL_STATUS
+	int status, ret;
+
+	ret = battery_status(&status);
+	if (ret == STATUS_CODE_OK) {
+		if (status & STATUS_FULLY_CHARGED)
+			return 1;
+	} else {
+		ccprintf("battery is not responsive?? StatusCode: 0x%x\n",
+			 status);
+	}
+#else
+	if (curr.batt.state_of_charge >= BATTERY_LEVEL_FULL)
+		return 1;
+#endif
+
+	return 0;
+}
+
 /* Main loop */
 void charger_task(void)
 {
@@ -714,8 +735,7 @@ void charger_task(void)
 		 * If battery seems to be disconnected, we need to get it
 		 * out of that state, even if the charge level is full.
 		 */
-		if (curr.batt.state_of_charge >= BATTERY_LEVEL_FULL &&
-		    !battery_seems_to_be_disconnected) {
+		if (is_full() && !battery_seems_to_be_disconnected) {
 			/* Full up. Stop charging */
 			curr.state = ST_IDLE;
 			goto wait_for_it;

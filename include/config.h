@@ -125,6 +125,12 @@
 #undef CONFIG_BATTERY_SMART
 
 /*
+ * If defined, determine battery-full using the status bit
+ * from the battery instead of state-of-charge above threshold.
+ */
+#define CONFIG_BATTERY_FULL_STATUS
+
+/*
  * Support battery cut-off as host command and console command.
  *
  * Once defined, you have to implement a board_cut_off_battery() function
