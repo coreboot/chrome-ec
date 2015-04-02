@@ -28,7 +28,7 @@ static const struct battery_info info_4s1p = {
 	.charging_min_c       = 0,
 	.charging_max_c       = 60,
 	.discharging_min_c    = 0,
-	.discharging_max_c    = 40,
+	.discharging_max_c    = 60,
 };
 
 /* Values for 54Wh LIS3091ACPC(SYS6)/AC011401-PRR13G01 battery */
