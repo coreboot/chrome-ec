@@ -20,6 +20,7 @@ BOARDS_LM4=(
 	gnawty
 	kip
 	ninja
+	orco
 	parry
 	peppy
 	rambi

@@ -259,6 +259,18 @@ proc flash_banjo_rw { } {
 	flash_lm4 ../../../build/banjo/ec.RW.bin 131072
 }
 
+proc flash_orco { } {
+	flash_lm4 ../../../build/orco/ec.bin 0
+}
+
+proc flash_orco_ro { } {
+	flash_lm4 ../../../build/orco/ec.RO.flat 0
+}
+
+proc flash_orco_rw { } {
+	flash_lm4 ../../../build/orco/ec.RW.bin 131072
+}
+
 # link has pstate in last sector
 proc unprotect_link { } {
 	reset halt
