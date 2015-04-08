@@ -18,7 +18,7 @@
 #ifdef CONFIG_BACKLIGHT_REQ_GPIO
 void backlight_interrupt(enum gpio_signal signal);
 #else
-#define backlight_interrupt NULL
-#endif
+static inline void backlight_interrupt(enum gpio_signal signal) { }
+#endif /* !CONFIG_BACKLIGHT_REQ_GPIO */
 
 #endif  /* __CROS_EC_BACKLIGHT_H */

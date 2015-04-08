@@ -159,18 +159,27 @@ DECLARE_HOOK(HOOK_INIT, gpio_init, HOOK_PRIO_DEFAULT);
 /*****************************************************************************/
 /* Interrupt handler */
 
-static void gpio_interrupt(int wi)
+static void gpio_invoke_handler(uint32_t port, uint32_t mask)
 {
-	int idx;
 	const struct gpio_info *g = gpio_list;
-	uint32_t pending = GR_GPIO_CLRINTSTAT(wi);
+	int i;
+	for (i = 0; i < GPIO_IH_COUNT; i++, g++)
+		if (port == g->port && (mask & g->mask))
+			gpio_irq_handlers[i](i);
+}
+
+static void gpio_interrupt(int port)
+{
+	int bitnum;
+	uint32_t mask;
+	uint32_t pending = GR_GPIO_CLRINTSTAT(port);
 
 	while (pending) {
-		idx = get_next_bit(&pending) + wi * 16;
-		if (g[idx].irq_handler)
-			g[idx].irq_handler(idx);
-		/* clear the interrupt */
-		GR_GPIO_CLRINTSTAT(wi) = 1 << idx;
+		bitnum = 31 - __builtin_clz(pending);
+		mask = 1 << bitnum;
+		pending &= ~mask;
+		gpio_invoke_handler(port, mask);
+		GR_GPIO_CLRINTSTAT(port) = mask;
 	}
 }
 

@@ -224,8 +224,8 @@ void uart_exit_dsleep(void);
  */
 void uart_deepsleep_interrupt(enum gpio_signal signal);
 #else
-#define uart_deepsleep_interrupt NULL
-#endif
+static inline void uart_deepsleep_interrupt(int gpio_signal) { }
+#endif /* !CONFIG_LOW_POWER_IDLE */
 
 /*
  * COMx functions

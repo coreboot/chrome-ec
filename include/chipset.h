@@ -95,8 +95,7 @@ static inline void chipset_exit_hard_off(void) { }
 static inline void chipset_throttle_cpu(int throttle) { }
 static inline void chipset_force_shutdown(void) { }
 static inline void chipset_reset(int cold_reset) { }
-
-#define power_interrupt NULL
+static inline void power_interrupt(int gpio_signal) { }
 
 #endif /* !HAS_TASK_CHIPSET */
 
