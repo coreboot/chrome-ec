@@ -184,6 +184,7 @@ void force_time(timestamp_t ts)
 	task_trigger_irq(timer_irq);
 }
 
+#ifdef CONFIG_CMD_TIMERINFO
 void timer_print_info(void)
 {
 	uint64_t t = get_time().val;
@@ -206,6 +207,9 @@ void timer_print_info(void)
 		}
 	}
 }
+#else
+void timer_print_info(void) { }
+#endif
 
 void timer_init(void)
 {
@@ -268,6 +272,7 @@ DECLARE_CONSOLE_COMMAND(gettime, command_get_time,
 			"Print current time",
 			NULL);
 
+#ifdef CONFIG_CMD_TIMERINFO
 int command_timer_info(int argc, char **argv)
 {
 	timer_print_info();
@@ -278,3 +283,4 @@ DECLARE_CONSOLE_COMMAND(timerinfo, command_timer_info,
 			NULL,
 			"Print timer info",
 			NULL);
+#endif

@@ -380,6 +380,7 @@
 #undef CONFIG_CMD_SPI_FLASH
 #undef CONFIG_CMD_STACKOVERFLOW
 #undef CONFIG_CMD_TASKREADY
+#define CONFIG_CMD_TIMERINFO
 
 /*****************************************************************************/
 
