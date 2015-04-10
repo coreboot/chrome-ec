@@ -5,6 +5,8 @@
  * found in the LICENSE file.
  */
 
+GPIO(START_SW, E, 4, GPIO_INT_FALLING, test_interrupt)
+
 GPIO(H_LED0,   A, 0, GPIO_ODR_HIGH, NULL)
 GPIO(H_LED1,   A, 1, GPIO_ODR_HIGH, NULL)
 GPIO(H_LED2,   A, 2, GPIO_ODR_HIGH, NULL)
@@ -26,7 +28,6 @@ GPIO(SW1,      E, 0, GPIO_INPUT,    NULL)
 GPIO(SW2,      E, 1, GPIO_INPUT | GPIO_PULL_DOWN, NULL)
 GPIO(SW3,      E, 2, GPIO_INPUT | GPIO_PULL_DOWN, NULL)
 GPIO(SW4,      E, 3, GPIO_INPUT | GPIO_PULL_DOWN, NULL)
-GPIO(START_SW, E, 4, GPIO_INT_FALLING, test_interrupt)
 
 /* Unimplemented signals which we need to emulate for now */
 UNIMPLEMENTED(ENTERING_RW)
