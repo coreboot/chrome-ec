@@ -12,6 +12,7 @@
 #define CONFIG_AP_HANG_DETECT
 #define CONFIG_BACKLIGHT_LID
 #define CONFIG_BOARD_VERSION
+#define CONFIG_BUTTON_COUNT 2
 #define CONFIG_CHIPSET_BAYTRAIL
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_CHIPSET_X86
@@ -78,6 +79,8 @@ enum gpio_signal {
 	GPIO_WP_L,                 /* Write protect input */
 	GPIO_JTAG_TCK,             /* JTAG clock input */
 	GPIO_UART0_RX,             /* UART0 RX input */
+	GPIO_BUTTON_BRIGHTNESS_DOWN_L, /* Brightness down button */
+	GPIO_BUTTON_BRIGHTNESS_UP_L,   /* Brightness up button */
 
 	/* Other inputs */
 	GPIO_BOARD_VERSION1,       /* Board version stuffing resistor 1 */
