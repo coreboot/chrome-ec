@@ -29,13 +29,13 @@ static void deferred_stop_force_precharge(void);
 
 static const struct battery_info info = {
 	.voltage_max    = 4350,		/* mV */
-	.voltage_normal = 4300,
+	.voltage_normal = 3850,
 	.voltage_min    = 3328,
 	.precharge_current  = 256,	/* mA */
 	.start_charging_min_c = 0,
-	.start_charging_max_c = 45,
+	.start_charging_max_c = 55,
 	.charging_min_c       = 0,
-	.charging_max_c       = 45,
+	.charging_max_c       = 55,
 	.discharging_min_c    = 0,
 	.discharging_max_c    = 60,
 };
