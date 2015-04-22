@@ -206,8 +206,6 @@ static const struct button_8042_t buttons_8042[] = {
 	{0xe05e, 0xe037, 0}, /* Power */
 	{0xe02e, 0xe021, 1}, /* Volume Down */
 	{0xe030, 0xe032, 1}, /* Volume Up */
-	{0x40, 0x0b, 1}, /* Brightness Down */
-	{0x41, 0x83, 1}, /* Brightness Up */
 };
 BUILD_ASSERT(ARRAY_SIZE(buttons_8042) == KEYBOARD_BUTTON_COUNT);
 
