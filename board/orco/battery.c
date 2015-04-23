@@ -23,6 +23,12 @@
 #define SB_FETON_DATA2	0x4000
 #define BATTERY_FETOFF	0x0100
 
+/*
+ * Green book support parameter
+ * Enable this will make battery meet JEITA standard
+ */
+#define GREEN_BOOK_SUPPORT	(1 << 2)
+
 static const struct battery_info info = {
 	.voltage_max    = 8600,		/* mV */
 	.voltage_normal = 7600,
@@ -44,6 +50,12 @@ const struct battery_info *battery_get_info(void)
 static void wakeup_deferred(void)
 {
 	int d;
+	int mode;
+
+	/* Add Green Book support */
+	sb_read(SB_BATTERY_MODE, &mode);
+	mode |= GREEN_BOOK_SUPPORT;
+	sb_write(SB_BATTERY_MODE, mode);
 
 	sb_read(SB_FET_OFF, &d);
 
