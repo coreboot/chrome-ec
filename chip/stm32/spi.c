@@ -616,6 +616,7 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, spi_chipset_shutdown, HOOK_PRIO_DEFAULT);
 static void spi_init(void)
 {
 	stm32_spi_regs_t *spi = STM32_SPI1_REGS;
+	uint8_t was_enabled = enabled;
 
 	/* Reset the SPI Peripheral to clear any existing weird states. */
 	/* Fix for bug chrome-os-partner:31390 */
@@ -642,8 +643,11 @@ static void spi_init(void)
 
 	gpio_enable_interrupt(GPIO_SPI1_NSS);
 
-	/* If chipset is already on, prepare for transactions */
-	if (chipset_in_state(CHIPSET_STATE_ON))
+	/*
+	 * If we were already enabled, we probably want to
+	 * redo the setting up after the reset.
+	 */
+	if (was_enabled)
 		spi_chipset_startup();
 }
 DECLARE_HOOK(HOOK_INIT, spi_init, HOOK_PRIO_DEFAULT);
