@@ -644,10 +644,10 @@ static void spi_init(void)
 	gpio_enable_interrupt(GPIO_SPI1_NSS);
 
 	/*
-	 * If we were already enabled, we probably want to
-	 * redo the setting up after the reset.
+	 * If we were already enabled or chipset is already on,
+	 * prepare for transaction
 	 */
-	if (was_enabled)
+	if (was_enabled || chipset_in_state(CHIPSET_STATE_ON))
 		spi_chipset_startup();
 }
 DECLARE_HOOK(HOOK_INIT, spi_init, HOOK_PRIO_DEFAULT);
