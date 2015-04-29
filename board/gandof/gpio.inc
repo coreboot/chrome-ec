@@ -76,6 +76,8 @@ GPIO(TOUCHSCREEN_RESET_L,  N, 7, GPIO_OUT_LOW,  NULL) /* Reset touch screen */
 GPIO(EC_EDP_VDD_EN,        J, 5, GPIO_OUT_LOW,  NULL) /* Enable EDP (passthru from PCH) */
 
 GPIO(LPC_CLKRUN_L,         M, 2, GPIO_ODR_HIGH, NULL) /* Dunno. Probably important, though. */
+GPIO(USB_CTL1,             E, 2, GPIO_OUT_LOW,  NULL) /* USB control signal 1 to both ports */
+GPIO(USB_ILIM_SEL,         E, 5, GPIO_OUT_LOW,  NULL) /* USB current limit to both ports */
 GPIO(USB1_ENABLE,          E, 4, GPIO_OUT_LOW,  NULL) /* USB port 1 output power enable */
 GPIO(USB2_ENABLE,          D, 5, GPIO_OUT_LOW,  NULL) /* USB port 2 output power enable */
 
