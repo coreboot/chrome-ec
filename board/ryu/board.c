@@ -253,7 +253,8 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-void board_set_usb_mux(int port, enum typec_mux mux, int polarity)
+void board_set_usb_mux(int port, enum typec_mux mux,
+		       enum usb_switch usb, int polarity)
 {
 	/* reset everything */
 	gpio_set_level(GPIO_USBC_SS_EN_L, 1);
