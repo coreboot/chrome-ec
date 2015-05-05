@@ -7,40 +7,34 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "console.h"
+#include "extpower.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "host_command.h"
+#include "util.h"
 
-#define SB_SHIP_MODE_ADDR	0x3a
-#define SB_SHIP_MODE_DATA	0xc574
+/* Console output macros */
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 
-/* Values for 48Wh 4UAF495780-1-T1186/AC011353-PRR14G01 battery */
-static const struct battery_info info_4s1p = {
+/* Battery FET ON/OFF command write to FET off register */
+#define SB_CELLS_VOLTAGE_MAX	4000	/* mV */
+#define SB_CELL_1_VOLTAGE_REG	0x3F
+#define SB_CELL_2_VOLTAGE_REG	0x3E
+#define SB_CELL_3_VOLTAGE_REG	0x3D
+#define SB_FET_ONOFF_REG	0x35
+#define SB_FET_ON_DATA		0x0003
+#define SB_FET_OFF_DATA		0x0004
+#define SB_FET_STATUS_REG	0x34
+#define SB_FET_OFF_STATUS	0x0004
+#define SB_FET_ON_STATUS	0x0000
 
-	.voltage_max    = 17200,
-	.voltage_normal = 15200, /* Average of max & min */
-	.voltage_min    = 12000,
 
-	/* Pre-charge values. */
-	.precharge_current  = 256,	/* mA */
-
-	.start_charging_min_c = 0,
-	.start_charging_max_c = 50,
-	.charging_min_c       = 0,
-	.charging_max_c       = 60,
-	.discharging_min_c    = 0,
-	.discharging_max_c    = 40,
-};
-
-/* Values for 54Wh LIS3091ACPC(SYS6)/AC011401-PRR13G01 battery */
-static const struct battery_info info_3s1p = {
-
-	.voltage_max    = 12600,
-	.voltage_normal = 11100, /* Average of max & min */
+static const struct battery_info info = {
+	.voltage_max    = 12600,	/* mV */
+	.voltage_normal = 10860,
 	.voltage_min    = 9000,
-
-	 /* Pre-charge values. */
-	.precharge_current  = 256,      /* mA */
-
+	.precharge_current  = 256,	/* mA */
 	.start_charging_min_c = 0,
 	.start_charging_max_c = 50,
 	.charging_min_c       = 0,
@@ -51,13 +45,88 @@ static const struct battery_info info_3s1p = {
 
 const struct battery_info *battery_get_info(void)
 {
-	if (gpio_get_level(GPIO_BAT_ID))
-		return &info_3s1p;
-	else
-		return &info_4s1p;
+	return &info;
 }
 
-int board_cut_off_battery(void)
+static void wakeup_deferred(void)
 {
-	return sb_write(SB_SHIP_MODE_ADDR, SB_SHIP_MODE_DATA);
+	int tmp;
+	if (extpower_is_present()) {
+		sb_read(SB_FET_STATUS_REG, &tmp);
+		if ((tmp & SB_FET_OFF_STATUS) {
+			sb_write(SB_FET_ONOFF_REG, SB_FET_ON_DATA);
+			CPRINTF("[%T Battery wakeup]\n");
+		}
+	}
 }
+DECLARE_DEFERRED(wakeup_deferred);
+
+static void wakeup(void)
+{
+	/*
+	 * The deferred call ensures that wakeup_deferred is called from a
+	 * task. This is required to talk to the battery over I2C.
+	 */
+	hook_call_deferred(wakeup_deferred, 0);
+}
+DECLARE_HOOK(HOOK_INIT, wakeup, HOOK_PRIO_DEFAULT);
+
+static int cutoff(void)
+{
+	int rv, tmp, cell_voltage;
+
+	/* To check AC adaptor is present or not */
+	if (!extpower_is_present()) {
+		CPRINTF("[%T AC Adaptor is not present]\n");
+		return EC_ERROR_UNKNOWN;
+	}
+
+	/* To check the cell voltage of battery pack */
+	sb_read(SB_CELL_1_VOLTAGE_REG, &cell_voltage);
+	if (cell_voltage >= SB_CELLS_VOLTAGE_MAX) {
+		CPRINTF("[%T Battery cell 1 voltage is too high]\n");
+		return EC_ERROR_UNKNOWN;
+	}
+
+	sb_read(SB_CELL_2_VOLTAGE_REG, &cell_voltage);
+	if (cell_voltage >= SB_CELLS_VOLTAGE_MAX) {
+		CPRINTF("[%T Battery cell 2 voltage is too high]\n");
+		return EC_ERROR_UNKNOWN;
+	}
+
+	sb_read(SB_CELL_3_VOLTAGE_REG, &cell_voltage);
+	if (cell_voltage >= SB_CELLS_VOLTAGE_MAX) {
+		CPRINTF("[%T Battery cell 3 voltage is too high]\n");
+		return EC_ERROR_UNKNOWN;
+	}
+
+	/* Ship mode command must be sent to take effect */
+	rv = sb_write(SB_FET_ONOFF_REG, SB_FET_OFF_DATA);
+
+	if (rv != EC_SUCCESS)
+		return rv;
+
+	sb_read(SB_FET_STATUS_REG, &tmp);
+	if (tmp & SB_FET_OFF_STATUS) {
+		CPRINTF("[%T Battery cut off]\n");
+		return EC_SUCCESS;
+	}
+
+	return EC_ERROR_UNKNOWN;
+}
+
+static int battery_command_cut_off(struct host_cmd_handler_args *args)
+{
+	return cutoff() ? EC_RES_ERROR : EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_BATTERY_CUT_OFF, battery_command_cut_off,
+		     EC_VER_MASK(0));
+
+static int command_battcutoff(int argc, char **argv)
+{
+	return cutoff();
+}
+DECLARE_CONSOLE_COMMAND(battcutoff, command_battcutoff,
+			NULL,
+			"Enable battery cutoff (ship mode)",
+			NULL);
