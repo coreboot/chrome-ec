@@ -85,10 +85,10 @@ GPIO(PCH_SUSACK_L,         F, 3, GPIO_OUT_HIGH, NULL) /* Acknowledge PCH SUSWARN
 GPIO(PCH_RTCRST_L,         F, 6, GPIO_ODR_HIGH, NULL) /* Not supposed to be here */
 GPIO(PCH_SRTCRST_L,        F, 7, GPIO_ODR_HIGH, NULL) /* Not supposed to be here */
 
-GPIO(BAT_LED0_L,           D, 0, GPIO_ODR_HIGH, NULL) /* Battery charging LED - blue */
+GPIO(BAT_LED0_L,           N, 6, GPIO_ODR_HIGH, NULL) /* Battery charging LED - blue */
 GPIO(BAT_LED1_L,           N, 4, GPIO_ODR_HIGH, NULL) /* Battery charging LED - orange */
-GPIO(PWR_LED0_L,           D, 1, GPIO_ODR_HIGH, NULL) /* Power LED - blue */
-GPIO(PWR_LED1_L,           N, 6, GPIO_ODR_HIGH, NULL) /* Power LED - orange */
+GPIO(PWR_LED0_L,           D, 0, GPIO_ODR_HIGH, NULL) /* Power LED - blue */
+GPIO(PWR_LED1_L,           D, 1, GPIO_ODR_HIGH, NULL) /* Power LED - orange */
 
 ALTERNATE(A, 0x03, 1,  MODULE_UART,    GPIO_PULL_UP)	/* UART0 */
 ALTERNATE(B, 0x04, 3,  MODULE_I2C,     0)		/* I2C0 SCL */
