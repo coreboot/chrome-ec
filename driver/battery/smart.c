@@ -5,56 +5,105 @@
  * Smart battery driver.
  */
 
+#include "console.h"
 #include "battery.h"
 #include "battery_smart.h"
 #include "host_command.h"
 #include "i2c.h"
 #include "smbus.h"
+#include "sb_fw_update.h"
+#include "task.h"
 #include "timer.h"
 #include "util.h"
 
 test_mockable int sbc_read(int cmd, int *param)
 {
-	return i2c_read16(I2C_PORT_CHARGER, CHARGER_ADDR, cmd, param);
+	int rc;
+#ifdef CONFIG_SB_FIRMWARE_UPDATE
+	if (sb_fw_update_in_progress())
+		return EC_ERROR_ACCESS_DENIED;
+#endif
+	rc = i2c_read16(I2C_PORT_CHARGER, CHARGER_ADDR, cmd, param);
+	return rc;
 }
 
 test_mockable int sbc_write(int cmd, int param)
 {
-	return i2c_write16(I2C_PORT_CHARGER, CHARGER_ADDR, cmd, param);
+	int rc;
+#ifdef CONFIG_SB_FIRMWARE_UPDATE
+	if (sb_fw_update_in_progress())
+		return EC_ERROR_ACCESS_DENIED;
+#endif
+	rc = i2c_write16(I2C_PORT_CHARGER, CHARGER_ADDR, cmd, param);
+	return rc;
+}
+
+int sb_is_fw_update_command(int cmd)
+{
+	uint8_t fw_update_commands[] = {
+		SB_FW_UPDATE_CMD_WRITE_WORD,
+		SB_FW_UPDATE_CMD_WRITE_BLOCK,
+		SB_FW_UPDATE_CMD_READ_INFO
+	};
+	int sz = sizeof(fw_update_commands)/sizeof(fw_update_commands[0]);
+	int i;
+	for (i = 0; i < sz; i++) {
+		if (fw_update_commands[i] == cmd)
+			return 1;
+	}
+	return 0;
 }
 
 int sb_read(int cmd, int *param)
 {
+	int rc;
 #ifdef CONFIG_SMBUS
 	{
-		int rv;
 		uint16_t d16 = 0;
-		rv = smbus_read_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, &d16);
+
+#ifdef CONFIG_SB_FIRMWARE_UPDATE
+		if (sb_fw_update_in_progress() && !sb_is_fw_update_command(cmd))
+			return EC_ERROR_ACCESS_DENIED;
+#endif
+		rc = smbus_read_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, &d16);
 		*param = d16;
-		return rv;
+		return rc;
 	}
 #else
-	return i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+	rc = i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+	return rc;
 #endif
 }
 
 int sb_write(int cmd, int param)
 {
+	int rc;
 #ifdef CONFIG_SMBUS
-	return smbus_write_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
-#else
-	return i2c_write16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+#ifdef CONFIG_SB_FIRMWARE_UPDATE
+	if (sb_fw_update_in_progress() && !sb_is_fw_update_command(cmd))
+		return EC_ERROR_ACCESS_DENIED;
 #endif
+	rc = smbus_write_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+#else
+	rc = i2c_write16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+#endif
+	return rc;
 }
 
 int sb_read_string(int port, int slave_addr, int offset, uint8_t *data,
 	int len)
 {
+	int rc;
 #ifdef CONFIG_SMBUS
-	return smbus_read_string(port, slave_addr, offset, data, len);
-#else
-	return i2c_read_string(port, slave_addr, offset, data, len);
+#ifdef CONFIG_SB_FIRMWARE_UPDATE
+	if (sb_fw_update_in_progress() && !sb_is_fw_update_command(offset))
+		return EC_ERROR_ACCESS_DENIED;
 #endif
+	rc = smbus_read_string(port, slave_addr, offset, data, len);
+#else
+	rc = i2c_read_string(port, slave_addr, offset, data, len);
+#endif
+	return rc;
 }
 
 int battery_get_mode(int *mode)
@@ -240,12 +289,10 @@ void battery_get_params(struct batt_params *batt)
 	struct batt_params batt_new = {0};
 	int v;
 
-	if (sb_read(SB_TEMPERATURE, &batt_new.temperature)) {
+	if (sb_read(SB_TEMPERATURE, &batt_new.temperature))
 		batt_new.flags |= BATT_FLAG_BAD_ANY;
-	} else {
-		/* Battery is responding */
+	else
 		batt_new.flags |= BATT_FLAG_RESPONSIVE;
-	}
 
 	if (sb_read(SB_RELATIVE_STATE_OF_CHARGE, &batt_new.state_of_charge))
 		batt_new.flags |= BATT_FLAG_BAD_ANY |
