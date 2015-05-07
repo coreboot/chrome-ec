@@ -38,26 +38,24 @@ const enum ec_led_id supported_led_ids[] = {
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-static int gandof_led_set_gpio(enum led_color color,
-			      enum gpio_signal gpio_led_blue_l,
-			      enum gpio_signal gpio_led_amber_l)
+static int gandof_led_set_color_battery(enum led_color color)
 {
 	switch (color) {
 	case LED_OFF:
-		gpio_set_level(gpio_led_blue_l,  1);
-		gpio_set_level(gpio_led_amber_l, 1);
+		gpio_set_level(GPIO_BAT_LED0_L,  1);
+		gpio_set_level(GPIO_BAT_LED1_L, 1);
 		break;
 	case LED_BLUE:
-		gpio_set_level(gpio_led_blue_l,  0);
-		gpio_set_level(gpio_led_amber_l, 1);
+		gpio_set_level(GPIO_BAT_LED0_L,  0);
+		gpio_set_level(GPIO_BAT_LED1_L, 1);
 		break;
 	case LED_AMBER:
-		gpio_set_level(gpio_led_blue_l,  1);
-		gpio_set_level(gpio_led_amber_l, 0);
+		gpio_set_level(GPIO_BAT_LED0_L,  1);
+		gpio_set_level(GPIO_BAT_LED1_L, 0);
 		break;
 	case LED_PINK:
-		gpio_set_level(gpio_led_blue_l,  0);
-		gpio_set_level(gpio_led_amber_l, 0);
+		gpio_set_level(GPIO_BAT_LED0_L,  0);
+		gpio_set_level(GPIO_BAT_LED1_L, 0);
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;
@@ -65,14 +63,29 @@ static int gandof_led_set_gpio(enum led_color color,
 	return EC_SUCCESS;
 }
 
-static int gandof_led_set_color_battery(enum led_color color)
-{
-	return gandof_led_set_gpio(color, GPIO_BAT_LED0_L, GPIO_BAT_LED1_L);
-}
-
 static int gandof_led_set_color_power(enum led_color color)
 {
-	return gandof_led_set_gpio(color, GPIO_PWR_LED0_L, GPIO_PWR_LED1_L);
+	switch (color) {
+	case LED_OFF:
+		gpio_set_level(GPIO_PWR_LED0_L,  0);
+		gpio_set_level(GPIO_PWR_LED1_L, 0);
+		break;
+	case LED_BLUE:
+		gpio_set_level(GPIO_PWR_LED0_L,  1);
+		gpio_set_level(GPIO_PWR_LED1_L, 0);
+		break;
+	case LED_AMBER:
+		gpio_set_level(GPIO_PWR_LED0_L,  0);
+		gpio_set_level(GPIO_PWR_LED1_L, 1);
+		break;
+	case LED_PINK:
+		gpio_set_level(GPIO_PWR_LED0_L,  1);
+		gpio_set_level(GPIO_PWR_LED1_L, 1);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
 }
 
 static int gandof_led_set_color(enum ec_led_id led_id, enum led_color color)
