@@ -370,6 +370,14 @@ static void power_on(void)
 static void power_off(void)
 {
 	unsigned int power_off_timeout = PMIC_SHUTDOWN_TIMEOUT_MS;
+	/*
+	 * We have to use gpio_get_level directly instead of power_get_signals
+	 * because power_off might be called from init when
+	 * power_update_signals() doesn't happen often enough
+	 * (and interrupts are still not enabled).
+	 */
+	const struct power_signal_info *power_good =
+		&power_signal_list[RK_POWER_GOOD];
 
 	/* Call hooks before we drop power rails */
 	hook_notify(HOOK_CHIPSET_SHUTDOWN);
@@ -380,7 +388,7 @@ static void power_off(void)
 	gpio_set_flags(GPIO_EC_INT, GPIO_INPUT);
 
 	/* Wait till we actually turn off to not mess up the state machine. */
-	while (power_get_signals() & IN_POWER_GOOD) {
+	while (gpio_get_level(power_good->gpio) == power_good->level) {
 		msleep(1);
 		power_off_timeout--;
 		ASSERT(power_off_timeout);
