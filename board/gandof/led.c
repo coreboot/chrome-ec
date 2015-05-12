@@ -26,9 +26,10 @@
 
 enum led_color {
 	LED_OFF = 0,
-	LED_BLUE,
+	LED_GREEN,
 	LED_AMBER,
 	LED_PINK,
+	LED_WHITE,
 
 	LED_COLOR_COUNT  /* Number of colors, not a color itself */
 };
@@ -45,7 +46,7 @@ static int gandof_led_set_color_battery(enum led_color color)
 		gpio_set_level(GPIO_BAT_LED0_L,  1);
 		gpio_set_level(GPIO_BAT_LED1_L, 1);
 		break;
-	case LED_BLUE:
+	case LED_GREEN:
 		gpio_set_level(GPIO_BAT_LED0_L,  0);
 		gpio_set_level(GPIO_BAT_LED1_L, 1);
 		break;
@@ -68,19 +69,9 @@ static int gandof_led_set_color_power(enum led_color color)
 	switch (color) {
 	case LED_OFF:
 		gpio_set_level(GPIO_PWR_LED0_L,  0);
-		gpio_set_level(GPIO_PWR_LED1_L, 0);
 		break;
-	case LED_BLUE:
+	case LED_WHITE:
 		gpio_set_level(GPIO_PWR_LED0_L,  1);
-		gpio_set_level(GPIO_PWR_LED1_L, 0);
-		break;
-	case LED_AMBER:
-		gpio_set_level(GPIO_PWR_LED0_L,  0);
-		gpio_set_level(GPIO_PWR_LED1_L, 1);
-		break;
-	case LED_PINK:
-		gpio_set_level(GPIO_PWR_LED0_L,  1);
-		gpio_set_level(GPIO_PWR_LED1_L, 1);
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;
@@ -108,24 +99,44 @@ static int gandof_led_set_color(enum ec_led_id led_id, enum led_color color)
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	if (brightness[EC_LED_COLOR_BLUE] != 0 &&
-	    brightness[EC_LED_COLOR_YELLOW] != 0)
-		gandof_led_set_color(led_id, LED_PINK);
-	else if (brightness[EC_LED_COLOR_BLUE] != 0)
-		gandof_led_set_color(led_id, LED_BLUE);
-	else if (brightness[EC_LED_COLOR_YELLOW] != 0)
-		gandof_led_set_color(led_id, LED_AMBER);
-	else
-		gandof_led_set_color(led_id, LED_OFF);
-
+	switch (led_id) {
+	case EC_LED_ID_BATTERY_LED:
+		if (brightness[EC_LED_COLOR_GREEN] != 0 &&
+		    brightness[EC_LED_COLOR_YELLOW] != 0)
+			gandof_led_set_color(led_id, LED_PINK);
+		else if (brightness[EC_LED_COLOR_GREEN] != 0)
+			gandof_led_set_color(led_id, LED_GREEN);
+		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
+			gandof_led_set_color(led_id, LED_AMBER);
+		else
+			gandof_led_set_color(led_id, LED_OFF);
+		break;
+	case EC_LED_ID_POWER_LED:
+		if (brightness[EC_LED_COLOR_WHITE] != 0)
+			gandof_led_set_color(led_id, LED_WHITE);
+		else
+			gandof_led_set_color(led_id, LED_OFF);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
 	return EC_SUCCESS;
 }
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
 	/* Ignoring led_id as both leds support the same colors */
-	brightness_range[EC_LED_COLOR_BLUE] = 1;
-	brightness_range[EC_LED_COLOR_YELLOW] = 1;
+	switch (led_id) {
+	case EC_LED_ID_BATTERY_LED:
+		brightness_range[EC_LED_COLOR_GREEN] = 1;
+		brightness_range[EC_LED_COLOR_YELLOW] = 1;
+		break;
+	case EC_LED_ID_POWER_LED:
+		brightness_range[EC_LED_COLOR_WHITE] = 1;
+		break;
+	default:
+		break;
+	}
 }
 
 static void gandof_led_set_power(void)
@@ -136,7 +147,7 @@ static void gandof_led_set_power(void)
 	power_ticks++;
 
 	if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
-		/* Reset ticks if entering suspend so LED turns amber
+		/* Reset ticks if entering suspend so LED turns white
 		 * as soon as possible. */
 		if (!previous_state_suspend)
 			power_ticks = 0;
@@ -144,7 +155,7 @@ static void gandof_led_set_power(void)
 		/* Blink once every four seconds. */
 		gandof_led_set_color_power(
 			(power_ticks % LED_TOTAL_4SECS_TICKS <
-			 LED_ON_1SEC_TICKS) ? LED_AMBER : LED_OFF);
+			 LED_ON_1SEC_TICKS) ? LED_WHITE : LED_OFF);
 
 		previous_state_suspend = 1;
 		return;
@@ -155,7 +166,7 @@ static void gandof_led_set_power(void)
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		gandof_led_set_color_power(LED_OFF);
 	else if (chipset_in_state(CHIPSET_STATE_ON))
-		gandof_led_set_color_power(LED_BLUE);
+		gandof_led_set_color_power(LED_WHITE);
 }
 
 static void gandof_led_set_battery(void)
@@ -177,10 +188,10 @@ static void gandof_led_set_battery(void)
 	case PWR_STATE_CHARGE:
 		/* Make the percentage approximate to UI shown */
 		gandof_led_set_color_battery(permillage <
-			FULL_BATTERY_PERMILLAGE ? LED_AMBER : LED_BLUE);
+			FULL_BATTERY_PERMILLAGE ? LED_AMBER : LED_GREEN);
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
-		gandof_led_set_color_battery(LED_BLUE);
+		gandof_led_set_color_battery(LED_GREEN);
 		break;
 	case PWR_STATE_DISCHARGE:
 		/* Less than 3%, blink one second every two seconds */
@@ -207,9 +218,9 @@ static void gandof_led_set_battery(void)
 		if (chflags & CHARGE_FLAG_FORCE_IDLE)
 			gandof_led_set_color_battery(
 				(battery_ticks % LED_TOTAL_4SECS_TICKS <
-				 LED_ON_2SECS_TICKS) ? LED_BLUE : LED_AMBER);
+				 LED_ON_2SECS_TICKS) ? LED_GREEN : LED_AMBER);
 		else
-			gandof_led_set_color_battery(LED_BLUE);
+			gandof_led_set_color_battery(LED_GREEN);
 		break;
 	default:
 		/* Other states don't alter LED behavior */
