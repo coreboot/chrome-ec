@@ -502,7 +502,7 @@ static int init(const struct motion_sensor_t *s)
 		}
 	} while (1);
 
-	ret = set_range(s, s->range, 1);
+	ret = set_range(s, s->runtime_config.range, 1);
 	if (ret != EC_SUCCESS)
 		return ret;
 
@@ -510,7 +510,7 @@ static int init(const struct motion_sensor_t *s)
 	if (ret != EC_SUCCESS)
 		return ret;
 
-	ret = set_data_rate(s, s->odr, 1);
+	ret = set_data_rate(s, s->runtime_config.odr, 1);
 	if (ret != EC_SUCCESS)
 		return ret;
 
