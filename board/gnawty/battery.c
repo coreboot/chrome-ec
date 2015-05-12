@@ -16,7 +16,7 @@
 #define	SB_SHIP_MODE_ADDR	0x3a
 #define	SB_SHIP_MODE_DATA	0xc574
 
-static const struct battery_info info = {
+static const struct battery_info info_AC14 = {
 	.voltage_max    = 12900,		/* mV */
 	.voltage_normal = 11400,
 	.voltage_min    = 9000,
@@ -29,9 +29,26 @@ static const struct battery_info info = {
 	.discharging_max_c    = 75,
 };
 
+static const struct battery_info info_AC15 = {
+	/* New battery, use BOARD_ID pin 3 tp separate it. */
+	.voltage_max	= 12600,	/* mV */
+	.voltage_normal = 10800,
+	.voltage_min	= 82500,
+	.precharge_current  = 340,	/* mA */
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 50,
+	.charging_min_c       = 0,
+	.charging_max_c       = 60,
+	.discharging_min_c    = -20,
+	.discharging_max_c    = 75,
+};
+
 const struct battery_info *battery_get_info(void)
 {
-	return &info;
+	if (gpio_get_level(GPIO_BOARD_VERSION3))
+		return &info_AC15;
+	else
+		return &info_AC14;
 }
 
 static int battery_command_cut_off(struct host_cmd_handler_args *args)
