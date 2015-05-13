@@ -53,7 +53,7 @@ static void wakeup_deferred(void)
 	int tmp;
 	if (extpower_is_present()) {
 		sb_read(SB_FET_STATUS_REG, &tmp);
-		if ((tmp & SB_FET_OFF_STATUS) {
+		if (tmp & SB_FET_OFF_STATUS) {
 			sb_write(SB_FET_ONOFF_REG, SB_FET_ON_DATA);
 			CPRINTF("[%T Battery wakeup]\n");
 		}
