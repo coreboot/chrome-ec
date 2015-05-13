@@ -13,7 +13,8 @@
 #include "util.h"
 
 /* Shutdown mode parameter to write to manufacturer access register */
-#define SB_SHUTDOWN_DATA	0x0010
+#define	SB_SHIP_MODE_ADDR	0x3a
+#define	SB_SHIP_MODE_DATA	0xc574
 
 static const struct battery_info info = {
 	.voltage_max    = 12900,		/* mV */
@@ -33,29 +34,16 @@ const struct battery_info *battery_get_info(void)
 	return &info;
 }
 
-static int cutoff(void)
-{
-	int rv;
-
-	/* Ship mode command must be sent twice to take effect */
-	rv = sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
-
-	if (rv != EC_SUCCESS)
-		return rv;
-
-	return sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
-}
-
 static int battery_command_cut_off(struct host_cmd_handler_args *args)
 {
-	return cutoff() ? EC_RES_ERROR : EC_RES_SUCCESS;
+	return sb_write(SB_SHIP_MODE_ADDR, SB_SHIP_MODE_DATA);
 }
 DECLARE_HOST_COMMAND(EC_CMD_BATTERY_CUT_OFF, battery_command_cut_off,
 		     EC_VER_MASK(0));
 
 static int command_battcutoff(int argc, char **argv)
 {
-	return cutoff();
+	return sb_write(SB_SHIP_MODE_ADDR, SB_SHIP_MODE_DATA);
 }
 DECLARE_CONSOLE_COMMAND(battcutoff, command_battcutoff,
 			NULL,
