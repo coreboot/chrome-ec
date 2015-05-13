@@ -71,6 +71,7 @@ BOARDS_STM32=(
 	mighty
 	minimuffin
 	minnie
+	nicky
 	nyan
 	pinky
 	pit
@@ -82,6 +83,7 @@ BOARDS_STM32=(
 	snow
 	speedy
 	spring
+	thea
 	zinger
 )
 
