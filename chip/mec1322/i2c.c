@@ -327,7 +327,20 @@ int i2c_raw_get_sda(int port)
 
 int i2c_get_line_levels(int port)
 {
-	return (MEC1322_I2C_BB_CTRL(port) >> 5) & 0x3;
+	int rv;
+
+	i2c_lock(port, 1);
+	select_port(port);
+	rv = get_line_level(i2c_port_to_controller(port));
+	i2c_lock(port, 0);
+	return rv;
+}
+
+int i2c_port_to_controller(int port)
+{
+	if (port < 0 || port >= MEC1322_I2C_PORT_COUNT)
+		return -1;
+	return (port == MEC1322_I2C0_0) ? 0 : port - 1;
 }
 
 static void i2c_init(void)
