@@ -183,8 +183,8 @@ static inline void fill_in_buf(uint8_t *in, int id, uint8_t val)
 		in[id - 1] = val;
 }
 
-int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
-	     uint8_t *in, int in_size, int flags)
+int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+		  uint8_t *in, int in_size, int flags)
 {
 	int i;
 	int started = (flags & I2C_XFER_START) ? 0 : 1;
@@ -231,11 +231,11 @@ int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 
 		for (i = 0; i < out_size; ++i) {
 			if (wait_byte_done(port))
-				goto err_i2c_xfer;
+				goto err_chip_i2c_xfer;
 			MEC1322_I2C_DATA(port) = out[i];
 		}
 		if (wait_byte_done(port))
-			goto err_i2c_xfer;
+				goto err_chip_i2c_xfer;
 
 		/*
 		 * Send STOP bit if the stop flag is on, and caller
@@ -268,11 +268,11 @@ int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 
 		for (i = 0; i < in_size - 2; ++i) {
 			if (wait_byte_done(port))
-				goto err_i2c_xfer;
+				goto err_chip_i2c_xfer;
 			fill_in_buf(in, i, MEC1322_I2C_DATA(port));
 		}
 		if (wait_byte_done(port))
-			goto err_i2c_xfer;
+			goto err_chip_i2c_xfer;
 
 		/*
 		 * De-assert ACK bit before reading the next to last byte,
@@ -281,7 +281,7 @@ int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 		MEC1322_I2C_CTRL(port) = CTRL_ESO | CTRL_ENI;
 		fill_in_buf(in, in_size - 2, MEC1322_I2C_DATA(port));
 		if (wait_byte_done(port))
-			goto err_i2c_xfer;
+			goto err_chip_i2c_xfer;
 
 		/* Send STOP if stop flag is set */
 		MEC1322_I2C_CTRL(port) =
@@ -297,7 +297,7 @@ int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 		return EC_ERROR_UNKNOWN;
 
 	return EC_SUCCESS;
-err_i2c_xfer:
+err_chip_i2c_xfer:
 	/* Send STOP and return error */
 	MEC1322_I2C_CTRL(port) = CTRL_PIN | CTRL_ESO | CTRL_STO | CTRL_ACK;
 	return EC_ERROR_UNKNOWN;
@@ -327,20 +327,7 @@ int i2c_raw_get_sda(int port)
 
 int i2c_get_line_levels(int port)
 {
-	int rv;
-
-	i2c_lock(port, 1);
-	select_port(port);
-	rv = get_line_level(i2c_port_to_controller(port));
-	i2c_lock(port, 0);
-	return rv;
-}
-
-int i2c_port_to_controller(int port)
-{
-	if (port < 0 || port >= MEC1322_I2C_PORT_COUNT)
-		return -1;
-	return (port == MEC1322_I2C0_0) ? 0 : port - 1;
+	return (MEC1322_I2C_BB_CTRL(port) >> 5) & 0x3;
 }
 
 static void i2c_init(void)
