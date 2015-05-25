@@ -36,7 +36,7 @@
 #include "gpio_list.h"
 
 #ifdef CONFIG_FAN_RPM_CUSTOM
-#define NUM_FAN_LEVELS 8
+#define NUM_FAN_LEVELS 6
 
 struct fan_step {
 	int on;
@@ -47,13 +47,11 @@ struct fan_step {
 /* Do not make the fan on/off point equal to 0 or 100 */
 const struct fan_step fan_table[NUM_FAN_LEVELS] = {
 	{.rpm = 0},
-	{.on = 9, .off = 1, .rpm = 3200},
-	{.on = 20, .off = 12, .rpm = 3700},
-	{.on = 31, .off = 23, .rpm = 4000},
-	{.on = 37, .off = 29, .rpm = 4400},
-	{.on = 40, .off = 32, .rpm = 4900},
-	{.on = 59, .off = 51, .rpm = 5500},
-	{.on = 98, .off = 90, .rpm = 6500},
+	{.on = 11, .off = 2, .rpm = 4200},
+	{.on = 36, .off = 25, .rpm = 5000},
+	{.on = 58, .off = 47, .rpm = 5700},
+	{.on = 77, .off = 69, .rpm = 6400},
+	{.on = 97, .off = 88, .rpm = 7100},
 };
 
 int fan_percent_to_rpm(int fan, int pct)
@@ -142,8 +140,8 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 /* Physical fans. These are logically separate from pwm_channels. */
 const struct fan_t fans[] = {
 	{.flags = FAN_USE_RPM_MODE,
-	 .rpm_min = 3200,
-	 .rpm_max = 6500,
+	 .rpm_min = 4200,
+	 .rpm_max = 7100,
 	 .ch = 2,
 	 .pgood_gpio = GPIO_PP5000_PGOOD,
 	 .enable_gpio = GPIO_PP5000_FAN_EN,
@@ -174,7 +172,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* Only the AP affects the thermal limits and fan speed. */
-	{{C_TO_K(95), C_TO_K(97), C_TO_K(105)}, C_TO_K(32), C_TO_K(96)},
+	{{C_TO_K(66), C_TO_K(80), C_TO_K(100)}, C_TO_K(26), C_TO_K(62)},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
