@@ -2656,6 +2656,7 @@ static const struct {
 	MS_SIZES(sensor_odr),
 	MS_SIZES(sensor_range),
 	MS_SIZES(kb_wake_angle),
+	MS_SIZES(data),
 };
 BUILD_ASSERT(ARRAY_SIZE(ms_command_sizes) == MOTIONSENSE_NUM_CMDS);
 #undef MS_SIZES
