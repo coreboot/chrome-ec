@@ -33,7 +33,7 @@ static const struct battery_info info_AC15 = {
 	/* New battery, use BOARD_ID pin 3 tp separate it. */
 	.voltage_max	= 12600,	/* mV */
 	.voltage_normal = 10800,
-	.voltage_min	= 82500,
+	.voltage_min	= 8250,
 	.precharge_current  = 340,	/* mA */
 	.start_charging_min_c = 0,
 	.start_charging_max_c = 50,
