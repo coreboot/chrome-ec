@@ -1205,7 +1205,7 @@ struct ec_response_led_control {
  */
 
 /* Verified boot hash command */
-#define EC_CMD_VBOOT_HASH 0x2A
+#define EC_CMD_VBOOT_HASH 0x2a
 
 struct ec_params_vboot_hash {
 	uint8_t cmd;             /* enum ec_vboot_hash_cmd */
@@ -1257,7 +1257,7 @@ enum ec_vboot_hash_status {
  * Motion sense commands. We'll make separate structs for sub-commands with
  * different input args, so that we know how much to expect.
  */
-#define EC_CMD_MOTION_SENSE_CMD 0x2B
+#define EC_CMD_MOTION_SENSE_CMD 0x2b
 
 /* Motion sense commands */
 enum motionsense_command {
@@ -1301,6 +1301,11 @@ enum motionsense_command {
 	 */
 	MOTIONSENSE_CMD_KB_WAKE_ANGLE = 5,
 
+	/*
+	 * Returns a single sensor data.
+	 */
+	MOTIONSENSE_CMD_DATA = 6,
+
 	/* Number of motionsense sub-commands. */
 	MOTIONSENSE_NUM_CMDS
 };
@@ -1309,12 +1314,14 @@ enum motionsense_command {
 enum motionsensor_type {
 	MOTIONSENSE_TYPE_ACCEL = 0,
 	MOTIONSENSE_TYPE_GYRO = 1,
+	MOTIONSENSE_TYPE_MAX = 2,
 };
 
 /* List of motion sensor locations. */
 enum motionsensor_location {
 	MOTIONSENSE_LOC_BASE = 0,
 	MOTIONSENSE_LOC_LID = 1,
+	MOTIONSENSE_LOC_MAX = 2,
 };
 
 /* List of motion sensor chips. */
@@ -1358,10 +1365,10 @@ struct ec_params_motion_sense {
 			int16_t data;
 		} ec_rate, kb_wake_angle;
 
-		/* Used for MOTIONSENSE_CMD_INFO. */
+		/* Used for MOTIONSENSE_CMD_INFO, MOTIONSENSE_CMD_DATA. */
 		struct {
 			uint8_t sensor_num;
-		} info;
+		} info, data;
 
 		/*
 		 * Used for MOTIONSENSE_CMD_SENSOR_ODR and
@@ -1418,6 +1425,9 @@ struct ec_response_motion_sense {
 			/* Should be element of enum motionsensor_chip. */
 			uint8_t chip;
 		} info;
+
+		/* Used for MOTIONSENSE_CMD_DATA */
+		struct ec_response_motion_sensor_data data;
 
 		/*
 		 * Used for MOTIONSENSE_CMD_EC_RATE, MOTIONSENSE_CMD_SENSOR_ODR,
