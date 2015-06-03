@@ -64,6 +64,10 @@ enum pwm_channel {
 #define CONFIG_CHARGER_INPUT_CURRENT 4032 /* mA, based on Link HW design */
 #define CONFIG_CHARGER_CURRENT_LIMIT 3000 /* PL102 inductor 3.0A(3.8A) */
 
+/* 8 deferrable tasks on this board */
+#undef  DEFERRABLE_MAX_COUNT
+#define DEFERRABLE_MAX_COUNT 8
+
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __BOARD_H */

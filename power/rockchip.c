@@ -153,6 +153,12 @@ static void set_pmic_source(int asserted)
 	gpio_set_level(GPIO_PMIC_SOURCE_PWREN, asserted ? 1 : 0);
 }
 
+static void wake_chipset_task(void)
+{
+	task_wake(TASK_ID_CHIPSET);
+}
+DECLARE_DEFERRED(wake_chipset_task);
+
 /**
  * Check for some event triggering the shutdown.
  *
@@ -186,11 +192,13 @@ static int check_for_power_off_event(void)
 	now = get_time();
 	if (pressed) {
 		if (!power_button_was_pressed) {
-			power_off_deadline.val = now.val + DELAY_FORCE_SHUTDOWN;
+			power_off_deadline.val = now.val +
+				DELAY_FORCE_SHUTDOWN;
 			CPRINTS("power waiting for long press %u",
 				power_off_deadline.le.lo);
 			/* Ensure we will wake up to check the power key */
-			timer_arm(power_off_deadline, TASK_ID_CHIPSET);
+			hook_call_deferred(wake_chipset_task,
+					   DELAY_FORCE_SHUTDOWN);
 		} else if (timestamp_expired(power_off_deadline, &now)) {
 			power_off_deadline.val = 0;
 			CPRINTS("power off after long press now=%u, %u",
@@ -199,13 +207,13 @@ static int check_for_power_off_event(void)
 		}
 	} else if (power_button_was_pressed) {
 		CPRINTS("power off cancel");
-		timer_cancel(TASK_ID_CHIPSET);
+		hook_call_deferred(wake_chipset_task, -1);
 	}
 
 	/* POWER_GOOD released by AP : shutdown immediately */
 	if (!power_has_signals(IN_POWER_GOOD)) {
 		if (power_button_was_pressed)
-			timer_cancel(TASK_ID_CHIPSET);
+			hook_call_deferred(wake_chipset_task, -1);
 		ret = 3;
 	}
 
