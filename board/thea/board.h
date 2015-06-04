@@ -16,7 +16,6 @@
 
 /* Optional features */
 #define CONFIG_ACCEL_KX022
-#define CONFIG_AP_HANG_DETECT
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_PRE_INIT
