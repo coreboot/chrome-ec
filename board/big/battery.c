@@ -131,6 +131,23 @@ static struct battery_info info_4s_LGC = {
 	.discharging_max_c    = 75,
 };
 
+static struct battery_info info_4s_SANYO = {
+
+	.voltage_max    = 17400,
+	.voltage_normal = 15200, /* Average of max & min */
+	.voltage_min    = 12000,
+
+	/* Pre-charge values. */
+	.precharge_current  = 256,	/* mA */
+
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 50,
+	.charging_min_c       = 0,
+	.charging_max_c       = 60,
+	.discharging_min_c    = -20,
+	.discharging_max_c    = 75,
+};
+
 static struct battery_device support_batteries[] = {
 	{
 		.manuf			= "NVT",
@@ -165,6 +182,13 @@ static struct battery_device support_batteries[] = {
 		.device                 = "AC14B18J",
 		.design_mv              = 11400,
 		.battery_info           = &info_3s_LGC,
+		.support_cut_off        = 1,
+	},
+	{
+		.manuf                  = "SANYO",
+		.device                 = "AC14B3K",
+		.design_mv              = 15200,
+		.battery_info           = &info_4s_SANYO,
 		.support_cut_off        = 1,
 	},
 };
