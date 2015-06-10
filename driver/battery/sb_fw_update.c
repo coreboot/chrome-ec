@@ -23,8 +23,6 @@
 
 static struct ec_sb_fw_update_header sb_fw_hdr;
 
-static int i2c_access_enable;
-
 static int get_state(void)
 {
 	return sb_fw_hdr.subcmd;
@@ -37,7 +35,9 @@ static void set_state(int subcmd)
 
 int sb_fw_update_in_progress(void)
 {
-	return i2c_access_enable;
+	int state = get_state();
+	return (state == EC_SB_FW_UPDATE_WRITE) ||
+		(state == EC_SB_FW_UPDATE_BEGIN);
 }
 
 /*
@@ -47,7 +47,6 @@ int sb_fw_update_in_progress(void)
 static void set_ap_suspend(void)
 {
 	set_state(EC_SB_FW_UPDATE_PROTECT);
-	i2c_access_enable = 0;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, set_ap_suspend, HOOK_PRIO_DEFAULT);
 
@@ -58,7 +57,6 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, set_ap_suspend, HOOK_PRIO_DEFAULT);
 static void set_ap_resume(void)
 {
 	set_state(EC_SB_FW_UPDATE_PREPARE);
-	i2c_access_enable = 0;
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, set_ap_resume, HOOK_PRIO_DEFAULT);
 
@@ -80,7 +78,7 @@ static int is_protected(void)
 		return 1;
 	}
 
-	return !i2c_access_enable;
+	return 0;
 }
 
 static int prepare_update(struct host_cmd_handler_args *args)
@@ -126,9 +124,6 @@ static int begin_update(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_COMMAND;
 	}
 
-	if (!i2c_access_enable)
-		return EC_RES_ERROR;
-
 	set_state(EC_SB_FW_UPDATE_BEGIN);
 
 	rv = smbus_write_word(I2C_PORT_BATTERY, BATTERY_ADDR,
@@ -150,8 +145,6 @@ static int end_update(struct host_cmd_handler_args *args)
 	set_state(EC_SB_FW_UPDATE_END);
 
 	args->response_size = 0;
-	if (!i2c_access_enable)
-		return EC_RES_ERROR;
 
 	rv = smbus_write_word(I2C_PORT_BATTERY, BATTERY_ADDR,
 		SB_FW_UPDATE_CMD_WRITE_WORD,
@@ -180,12 +173,6 @@ static int get_info(struct host_cmd_handler_args *args)
 
 	args->response_size = len;
 
-	if (!i2c_access_enable) {
-		CPRINTF("smbus cmd:%x rd info - protect error\n",
-			SB_FW_UPDATE_CMD_READ_INFO);
-		return EC_RES_ERROR;
-	}
-
 	rv = smbus_read_block(I2C_PORT_BATTERY, BATTERY_ADDR,
 		SB_FW_UPDATE_CMD_READ_INFO, resp->info.data, &len);
 	if (rv) {
@@ -208,9 +195,6 @@ static int get_status(struct host_cmd_handler_args *args)
 	struct sb_fw_update_status *sts =
 		(struct sb_fw_update_status *) resp->status.data;
 
-	/* Enable smart battery i2c access */
-	i2c_access_enable = 1;
-
 	args->response_size = SB_FW_UPDATE_CMD_STATUS_SIZE;
 
 	rv = smbus_read_word(I2C_PORT_BATTERY, BATTERY_ADDR,
@@ -231,7 +215,6 @@ static int get_status(struct host_cmd_handler_args *args)
 static int set_protect(struct host_cmd_handler_args *args)
 {
 	set_state(EC_SB_FW_UPDATE_PROTECT);
-	i2c_access_enable = 0;
 	CPRINTF("firmware enter protect state !\n");
 	args->response_size = 0;
 	return EC_RES_SUCCESS;
