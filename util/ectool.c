@@ -204,7 +204,7 @@ static const char * const image_names[] = {"unknown", "RO", "RW"};
 
 /* Note: depends on enum ec_led_colors */
 static const char * const led_color_names[EC_LED_COLOR_COUNT] = {
-	"red", "green", "blue", "yellow", "white"};
+	"red", "green", "blue", "yellow", "white", "orange"};
 
 /* Note: depends on enum ec_led_id */
 static const char * const led_names[EC_LED_ID_COUNT] = {
