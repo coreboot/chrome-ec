@@ -87,7 +87,7 @@ enum power_signal {
 /* Charger module */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10 /* Charge sense resistor, mOhm */
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input sensor resistor, mOhm */
-#define CONFIG_CHARGER_INPUT_CURRENT 3078 /* mA, 90% of power supply rating */
+#define CONFIG_CHARGER_INPUT_CURRENT 2000 /* mA, 90% of power supply rating */
 
 enum adc_channel {
 	/* EC internal die temperature in degrees K. */
