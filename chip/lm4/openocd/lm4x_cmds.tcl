@@ -67,6 +67,10 @@ proc flash_rambi { } {
 	flash_lm4 ../../../build/rambi/ec.bin 0
 }
 
+proc flash_heli { } {
+	flash_lm4 ../../../build/heli/ec.bin 0
+}
+
 proc flash_expresso { } {
 	flash_lm4 ../../../build/express/ec.bin 0
 }
@@ -141,6 +145,14 @@ proc flash_rambi_ro { } {
 
 proc flash_rambi_rw { } {
 	flash_lm4 ../../../build/rambi/ec.RW.bin 131072
+}
+
+proc flash_heli_ro { } {
+	flash_lm4 ../../../build/heli/ec.RO.flat 0
+}
+
+proc flash_heli_rw { } {
+	flash_lm4 ../../../build/heli/ec.RW.bin 131072
 }
 
 proc flash_cranky_ro { } {

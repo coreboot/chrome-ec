@@ -18,6 +18,7 @@ BOARDS_LM4=(
 	falco
 	glimmer
 	gnawty
+        heli
 	kip
 	ninja
 	orco
