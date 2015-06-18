@@ -76,8 +76,8 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 /* Physical fans. These are logically separate from pwm_channels. */
 const struct fan_t fans[] = {
 	{.flags = FAN_USE_RPM_MODE,
-	 .rpm_min = 4500,
-	 .rpm_max = 6900,
+	 .rpm_min = 3500,
+	 .rpm_max = 6600,
 	 .ch = 2,
 	 .pgood_gpio = GPIO_PP5000_PGOOD,
 	 .enable_gpio = GPIO_PP5000_FAN_EN,
@@ -108,10 +108,10 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* Only the AP affects the thermal limits and fan speed. */
-	{{C_TO_K(101), C_TO_K(104), C_TO_K(105)}, C_TO_K(85), C_TO_K(98)},
-	{{C_TO_K(75), C_TO_K(79), C_TO_K(80)}, C_TO_K(54), C_TO_K(70)},
-	{{C_TO_K(73), C_TO_K(77), C_TO_K(81)}, C_TO_K(51), C_TO_K(58)},
-	{{C_TO_K(71), C_TO_K(75), C_TO_K(79)}, C_TO_K(55), C_TO_K(72)},
+	{{C_TO_K(103), C_TO_K(104), C_TO_K(105)}, C_TO_K(85), C_TO_K(98)},
+	{{C_TO_K(71), C_TO_K(72), C_TO_K(73)}, C_TO_K(54), C_TO_K(61)},
+	{{C_TO_K(85), C_TO_K(86), C_TO_K(87)}, C_TO_K(54), C_TO_K(60)},
+	{{C_TO_K(77), C_TO_K(78), C_TO_K(79)}, C_TO_K(55), C_TO_K(62)},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
