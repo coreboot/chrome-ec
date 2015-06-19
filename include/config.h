@@ -1234,8 +1234,14 @@
 /* Simple DFP, such as power adapter, will not send discovery VDM on connect */
 #undef CONFIG_USB_PD_SIMPLE_DFP
 
+/* Enable Rx BIST processing */
+#undef CONFIG_USB_PD_RX_BIST
+
 /* Use comparator module for PD RX interrupt */
 #define CONFIG_USB_PD_RX_COMP_IRQ
+
+/* Use this option to enable Try.SRC mode for Dual Role devices */
+#undef CONFIG_USB_PD_TRY_SRC
 
 /* Alternative configuration keeping only the TX part of PHY */
 #undef CONFIG_USB_PD_TX_PHY_ONLY
