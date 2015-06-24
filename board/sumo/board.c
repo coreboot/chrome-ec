@@ -7,6 +7,7 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "backlight.h"
+#include "button.h"
 #include "charge_state.h"
 #include "charger.h"
 #include "common.h"
@@ -66,6 +67,10 @@ const struct gpio_info gpio_list[] = {
 	{"UART0_RX",             LM4_GPIO_A, (1<<0), GPIO_INT_BOTH_DSLEEP |
 							GPIO_PULL_UP,
 	 uart_deepsleep_interrupt},
+	{"BUTTON_BRIGHTNESS_DOWN_L", LM4_GPIO_M, (1<<6), GPIO_INT_BOTH,
+	 button_interrupt},
+	{"BUTTON_BRIGHTNESS_UP_L",   LM4_GPIO_J, (1<<5), GPIO_INT_BOTH,
+	 button_interrupt},
 
 	/* Other inputs */
 	{"BOARD_VERSION1",       LM4_GPIO_Q, (1<<5), GPIO_INPUT, NULL},
@@ -196,3 +201,11 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+const struct button_config buttons[] = {
+	{"Brightness Down", KEYBOARD_BUTTON_BRIGHTNESS_DOWN,
+	GPIO_BUTTON_BRIGHTNESS_DOWN_L, 30 * MSEC, 0},
+	{"Brightness Up", KEYBOARD_BUTTON_BRIGHTNESS_UP,
+	GPIO_BUTTON_BRIGHTNESS_UP_L, 30 * MSEC, 0},
+};
+BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
