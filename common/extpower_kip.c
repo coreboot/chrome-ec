@@ -25,6 +25,7 @@
 #include "extpower_kip.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "system.h"
 #include "throttle_ap.h"
 #include "util.h"
 
@@ -98,9 +99,16 @@ BUILD_ASSERT(ARRAY_SIZE(ad_limits) == NUM_ADAPTER_TYPES);
  * hi_val and lo_val are DISCHARGE current in mA.
  */
 test_export_static
-struct adapter_limits batt_limits[] = {
-	{ 5500, 5000, 16, 50, },
-	{ 6000, 5500, 1, 50, },
+struct adapter_limits batt_limits[][NUM_BATT_THRESHOLDS] = {
+	{
+		{ 5500, 5000, 16, 50, },
+		{ 6000, 5500, 1, 50, },
+	},
+	/* The battery discharge OCP table for Kip14 */
+	{
+		{ 4000, 3500, 16, 50, },
+		{ 5000, 4500, 1, 50, },
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(batt_limits) == NUM_BATT_THRESHOLDS);
 
@@ -166,7 +174,7 @@ static void set_throttle(int on, int whosays)
 		ap_is_throttled &= ~(1 << whosays);
 
 	throttle_ap(ap_is_throttled ? THROTTLE_ON : THROTTLE_OFF,
-		    THROTTLE_SOFT, THROTTLE_SRC_POWER);
+		    THROTTLE_HARD, THROTTLE_SRC_POWER);
 }
 
 test_export_static
@@ -202,6 +210,7 @@ test_export_static
 void watch_battery_closely(struct charge_state_context *ctx)
 {
 	int i;
+	int v = ((system_get_board_version() & 0x4) == 0x4 ? 1 : 0);
 	int current = ctx->curr.batt.current;
 
 	/* NB: The values in batt_limits[] indicate DISCHARGE current (mA).
@@ -219,7 +228,8 @@ void watch_battery_closely(struct charge_state_context *ctx)
 
 	/* Check limits against DISCHARGE current, not CHARGE current! */
 	for (i = 0; i < NUM_BATT_THRESHOLDS; i++)
-		check_threshold(-current, &batt_limits[i], /* invert sign! */
+		check_threshold(-current, &batt_limits[v][i],
+				/* invert sign! */
 				i + BATT_REASON_OFFSET);
 }
 
