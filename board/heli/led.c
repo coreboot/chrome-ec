@@ -43,8 +43,8 @@ static const uint8_t color_brightness[LED_COLOR_COUNT][2] = {
  */
 static void set_color(enum led_color color)
 {
-	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][0]);
-	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][1]);
+	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][0]);
+	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][1]);
 }
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
