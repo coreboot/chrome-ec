@@ -274,13 +274,6 @@ void usb_charger_task(void)
 	}
 }
 
-/* Charge manager callback function, called on delayed override timeout */
-void board_charge_manager_override_timeout(void)
-{
-	pd_send_host_event(PD_EVENT_POWER_CHANGE);
-}
-DECLARE_DEFERRED(board_charge_manager_override_timeout);
-
 static void wake_usb_charger_task(int port)
 {
 	task_wake(port ? TASK_ID_USB_CHG_P1 : TASK_ID_USB_CHG_P0);

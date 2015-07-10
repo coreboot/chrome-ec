@@ -732,13 +732,6 @@ void usb_board_disconnect(void)
 	gpio_set_level(GPIO_USB_PU_EN_L, 1);
 }
 
-/* Charge manager callback function, called on delayed override timeout */
-void board_charge_manager_override_timeout(void)
-{
-	/* TODO: Implement me! */
-}
-DECLARE_DEFERRED(board_charge_manager_override_timeout);
-
 /*
  * The type-C port VBUS is connected to the power path inside the charger.
  * At startup, for the dead battery case, the charger power path is enabled.

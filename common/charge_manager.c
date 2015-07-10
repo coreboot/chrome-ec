@@ -558,6 +558,15 @@ static void charge_manager_refresh(void)
 }
 DECLARE_DEFERRED(charge_manager_refresh);
 
+/**
+ * Called when charge override times out waiting for power swap.
+ */
+static void charge_override_timeout(void)
+{
+	pd_send_host_event(PD_EVENT_POWER_CHANGE);
+}
+DECLARE_DEFERRED(charge_override_timeout);
+
 static void charge_manager_make_change(enum charge_manager_change_type change,
 				       int supplier,
 				       int port,
@@ -614,7 +623,7 @@ static void charge_manager_make_change(enum charge_manager_change_type change,
 				delayed_override_port);
 			delayed_override_port = OVERRIDE_OFF;
 			hook_call_deferred(
-				board_charge_manager_override_timeout,
+				charge_override_timeout,
 				-1);
 		}
 	}
@@ -727,7 +736,7 @@ int charge_manager_set_override(int port)
 
 		delayed_override_port = OVERRIDE_OFF;
 		hook_call_deferred(
-			board_charge_manager_override_timeout, -1);
+			charge_override_timeout, -1);
 	}
 
 	/* Set the override port if it's a sink. */
@@ -749,7 +758,7 @@ int charge_manager_set_override(int port)
 						POWER_SWAP_TIMEOUT;
 		delayed_override_port = port;
 		hook_call_deferred(
-			board_charge_manager_override_timeout,
+			charge_override_timeout,
 			POWER_SWAP_TIMEOUT);
 		pd_request_power_swap(port);
 	/* Can't charge from requested port -- return error. */
