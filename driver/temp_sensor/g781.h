@@ -9,6 +9,7 @@
 #define __CROS_EC_TEMP_SENSOR_G781_H
 
 #define G781_I2C_ADDR		0x98 /* 7-bit address is 0x4C */
+#define G781_I2C_ALERT_ADDR	0x19
 
 #define G781_IDX_INTERNAL	0
 #define G781_IDX_EXTERNAL	1
@@ -66,5 +67,12 @@
  * @return EC_SUCCESS if successful, non-zero if error.
  */
 int g781_get_val(int idx, int *temp_ptr);
+
+/**
+ * Interrupt handler for fan alert.
+ *
+ * @param signal       Signal which triggered the interrupt.
+ */
+void fan_alert_interrupt(enum gpio_signal signal);
 
 #endif  /* __CROS_EC_TEMP_SENSOR_G781_H */

@@ -903,6 +903,7 @@
 
 /* Support particular temperature sensor chips */
 #undef CONFIG_TEMP_SENSOR_G781		/* G781 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_G781_INIT	/* G781 sensor init */
 #undef CONFIG_TEMP_SENSOR_TMP006	/* TI TMP006 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP432	/* TI TMP432 sensor, on I2C bus */
 

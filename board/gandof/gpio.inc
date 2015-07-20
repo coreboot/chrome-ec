@@ -25,7 +25,7 @@ GPIO(JTAG_TCK,       C, 0, GPIO_DEFAULT,                        jtag_interrupt) 
 GPIO(UART0_RX,       A, 0, GPIO_PULL_UP | GPIO_INT_BOTH_DSLEEP, uart_deepsleep_interrupt) /* UART0 RX input */
 
 /* Other inputs */
-GPIO(FAN_ALERT_L,          B, 0, GPIO_INPUT,    NULL) /* From thermal sensor */
+GPIO(FAN_ALERT_L,          B, 0, GPIO_INT_LOW | GPIO_INT_FALLING, fan_alert_interrupt) /* From thermal sensor */
 GPIO(PCH_SUSWARN_L,        G, 2, GPIO_INT_BOTH, NULL) /* SUSWARN# signal from PCH */
 GPIO(USB1_OC_L,            E, 7, GPIO_INPUT,    NULL) /* USB port overcurrent warning */
 GPIO(USB2_OC_L,            E, 0, GPIO_INPUT,    NULL) /* USB port overcurrent warning */
