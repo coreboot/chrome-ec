@@ -83,7 +83,7 @@ GPIO(PWR_LED0_L,        PIN(141), GPIO_OUT_HIGH)                   /* Power LED 
 GPIO(PCH_RSMRST_L,      PIN(143), GPIO_OUT_LOW)                    /* RSMRST_N to PCH */
 GPIO(PWR_LED1_L,        PIN(145), GPIO_OUT_HIGH)                   /* Power LED - orange */
 GPIO(PVT_CS0,           PIN(146), GPIO_ODR_HIGH)                   /* SPI PVT Chip select */
-GPIO(EC_KBD_ALERT,      PIN(147), GPIO_OUT_HIGH)
+GPIO(EC_KBD_ALERT,      PIN(147), GPIO_OUT_LOW)
 
 GPIO(WLAN_OFF_L,        PIN(150), GPIO_ODR_HIGH)                   /* Wireless LAN */
 GPIO(CPU_PROCHOT,       PIN(151), GPIO_OUT_LOW)
