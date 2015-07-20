@@ -36,7 +36,7 @@
 #include "gpio_list.h"
 
 #ifdef CONFIG_FAN_RPM_CUSTOM
-#define NUM_FAN_LEVELS 7
+#define NUM_FAN_LEVELS 8
 
 struct fan_step {
 	int on;
@@ -47,12 +47,13 @@ struct fan_step {
 /* Do not make the fan on/off point equal to 0 or 100 */
 const struct fan_step fan_table[NUM_FAN_LEVELS] = {
 	{.rpm = 0},
-	{.on = 11, .off =  2, .rpm = 3800},
-	{.on = 21, .off = 16, .rpm = 4500},
-	{.on = 40, .off = 30, .rpm = 4900},
-	{.on = 59, .off = 50, .rpm = 5400},
-	{.on = 76, .off = 69, .rpm = 6000},
-	{.on = 97, .off = 80, .rpm = 7100},
+	{.on = 10, .off =  2, .rpm = 3800},
+	{.on = 40, .off = 25, .rpm = 4200},
+	{.on = 51, .off = 46, .rpm = 4500},
+	{.on = 61, .off = 57, .rpm = 5100},
+	{.on = 72, .off = 68, .rpm = 5400},
+	{.on = 85, .off = 78, .rpm = 6400},
+	{.on = 97, .off = 91, .rpm = 7100},
 };
 
 int fan_percent_to_rpm(int fan, int pct)
@@ -173,7 +174,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* Only the AP affects the thermal limits and fan speed. */
-	{{C_TO_K(76), C_TO_K(80), C_TO_K(100)}, C_TO_K(28), C_TO_K(70)},
+	{{C_TO_K(76), C_TO_K(80), C_TO_K(100)}, C_TO_K(28), C_TO_K(75)},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
