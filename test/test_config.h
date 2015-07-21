@@ -50,6 +50,10 @@
 #define I2C_PORT_CHARGER 1
 #endif
 
+#ifdef TEST_MATH_UTIL
+#define CONFIG_MATH_UTIL
+#endif
+
 #ifdef TEST_MOTION_LID
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE 0
