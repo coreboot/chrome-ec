@@ -92,7 +92,11 @@ int fan_percent_to_rpm(int fan, int pct)
 
 	previous_pct = pct;
 
-	if (fan_table[index].rpm != fan_get_rpm_target(fans[fan].ch))
+	if (fan_get_rpm_target(fans[fan].ch) == 0) {
+		index = 1;
+		cprintf(CC_THERMAL, "[%T Start fan RPM to %d from RPM 0]\n",
+			fan_table[index].rpm);
+	} else if (fan_table[index].rpm != fan_get_rpm_target(fans[fan].ch))
 		cprintf(CC_THERMAL, "[%T Setting fan RPM to %d]\n",
 			fan_table[index].rpm);
 
