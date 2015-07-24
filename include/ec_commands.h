@@ -861,6 +861,7 @@ struct ec_response_get_set_value {
 
 /* More than one command can use these structs to get/set paramters. */
 #define EC_CMD_GSV_PAUSE_IN_S5	0x0c
+/*      EC_CMD_GSV_BOOT_ON_AC   0xa3 (defined below) */
 
 /*****************************************************************************/
 /* List the features supported by the firmware */
@@ -939,6 +940,8 @@ enum ec_feature_code {
 	EC_FEATURE_USB_MUX = 23,
 	/* Motion Sensor code has an internal software FIFO */
 	EC_FEATURE_MOTION_SENSE_FIFO = 24,
+	/* Support enabling/disabling booting the system on AC plug event */
+	EC_FEATURE_BOOT_ON_AC = 25,
 };
 
 #define EC_FEATURE_MASK_0(event_code) (1UL << (event_code % 32))
@@ -2846,6 +2849,16 @@ struct ec_params_current_limit {
 struct ec_params_ext_power_current_limit {
 	uint32_t limit; /* in mA */
 } __packed;
+
+/*****************************************************************************/
+
+/*
+ * Get/Set the option to boot the AP when the AC power is plugged
+ *
+ * Use ec_params_get_set_value/ec_response_get_set_value structs and EC_GSV_SET
+ * please see "Get/Set miscellaneous values" section above.
+ */
+#define EC_CMD_GSV_BOOT_ON_AC	0xa3
 
 /*****************************************************************************/
 /* Smart battery pass-through */

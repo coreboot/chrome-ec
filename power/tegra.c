@@ -33,6 +33,8 @@
 #include "console.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
+#include "extpower.h"
 #include "lid_switch.h"
 #include "keyboard_scan.h"
 #include "power.h"
@@ -590,3 +592,60 @@ static void powerbtn_tegra_changed(void)
 }
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, powerbtn_tegra_changed,
 		HOOK_PRIO_DEFAULT);
+
+/* ---- handle special test mode: booting when AC is plugged ---- */
+#ifdef CONFIG_POWER_BOOT_ON_AC
+
+#define BOOT_AC_SYSJUMP_TAG 0x4143 /* "AC" - boot on AC flag */
+
+static int boot_on_ac;
+
+static void boot_ac_change(void)
+{
+	if (extpower_is_present() && boot_on_ac &&
+	    chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		/* AC plugged and "oem off-charge-mode" is 0 */
+		CPRINTS("AC plugged : booting ...");
+		auto_power_on = 1;
+		task_wake(TASK_ID_CHIPSET);
+	}
+}
+DECLARE_HOOK(HOOK_AC_CHANGE, boot_ac_change, HOOK_PRIO_DEFAULT);
+
+static void boot_ac_preserve_state(void)
+{
+	system_add_jump_tag(BOOT_AC_SYSJUMP_TAG, 0,
+			    sizeof(boot_on_ac), &boot_on_ac);
+}
+DECLARE_HOOK(HOOK_SYSJUMP, boot_ac_preserve_state, HOOK_PRIO_DEFAULT);
+
+static void boot_ac_restore(void)
+{
+	const uint32_t *p;
+	int version, size;
+
+	p = (const uint32_t *)system_get_jump_tag(BOOT_AC_SYSJUMP_TAG,
+						  &version, &size);
+	if (p && size == sizeof(boot_on_ac) && version == 0)
+		boot_on_ac = *p;
+}
+DECLARE_HOOK(HOOK_INIT, boot_ac_restore, HOOK_PRIO_DEFAULT);
+
+static int host_command_boot_on_ac(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_get_set_value *p = args->params;
+	struct ec_response_get_set_value *r = args->response;
+
+	if (p->flags & EC_GSV_SET)
+		boot_on_ac = p->value;
+
+	r->value = boot_on_ac;
+
+	args->response_size = sizeof(*r);
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_GSV_BOOT_ON_AC,
+		     host_command_boot_on_ac,
+		     EC_VER_MASK(0));
+
+#endif /* CONFIG_POWER_BOOT_ON_AC */

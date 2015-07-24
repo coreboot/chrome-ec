@@ -765,6 +765,9 @@ static int host_command_get_features(struct host_cmd_handler_args *args)
 #ifdef CONFIG_ACCEL_FIFO
 		| EC_FEATURE_MASK_0(EC_FEATURE_MOTION_SENSE_FIFO)
 #endif
+#ifdef CONFIG_POWER_BOOT_ON_AC
+		| EC_FEATURE_MASK_0(EC_FEATURE_BOOT_ON_AC)
+#endif
 		;
 	return EC_RES_SUCCESS;
 }

@@ -1073,6 +1073,9 @@
 
 /*****************************************************************************/
 
+/* Add the option to request the AP to boot when the AC power is plugged */
+#undef CONFIG_POWER_BOOT_ON_AC
+
 /* Compile common code to support power button debouncing */
 #undef CONFIG_POWER_BUTTON
 
