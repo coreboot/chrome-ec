@@ -99,113 +99,140 @@ void vbus_evt(enum gpio_signal signal)
  */
 #define USB_CHG_RESET_DELAY_MS 100
 
-void usb_charger_task(void)
+/* Events handled by the USB_CHG task */
+#define USB_CHG_EVENT_BC12 TASK_EVENT_CUSTOM(1)
+#define USB_CHG_EVENT_HIZ  TASK_EVENT_CUSTOM(2)
+
+static void usb_charger_bc12_detect(void)
 {
 	int device_type, charger_status;
 	struct charge_port_info charge;
 	int type;
 	charge.voltage = USB_BC12_CHARGE_VOLTAGE;
 
-	while (1) {
-		/* Read interrupt register to clear */
-		pi3usb9281_get_interrupts(0);
+	/* Read interrupt register to clear */
+	pi3usb9281_get_interrupts(0);
 
-		/* Set device type */
+	/* Set device type */
+	device_type = pi3usb9281_get_device_type(0);
+	charger_status = pi3usb9281_get_charger_status(0);
+
+	/* Debounce pin plug order if we detect a charger */
+	if (device_type || PI3USB9281_CHG_STATUS_ANY(charger_status)) {
+		msleep(USB_CHG_DEBOUNCE_DELAY_MS);
+
+		/* next operation might trigger a detach interrupt */
+		pi3usb9281_disable_interrupts(0);
+		/* Ensure D+/D- are open before resetting */
+		pi3usb9281_set_switch_manual(0, 1);
+		pi3usb9281_set_pins(0, 0);
+		/* Let D+/D- relax to their idle state */
+		msleep(40);
+
+		/* Trigger chip reset to refresh detection registers */
+		pi3usb9281_reset(0);
+		/*
+		 * Restore data switch settings - switches return to
+		 * closed on reset until restored.
+		 */
+		if (usb_switch_state)
+			pi3usb9281_set_switches(0, 1);
+
+		/* Clear possible disconnect interrupt */
+		pi3usb9281_get_interrupts(0);
+		/* Mask attach interrupt */
+		pi3usb9281_set_interrupt_mask(0,
+					      0xff &
+					      ~PI3USB9281_INT_ATTACH);
+		/* Re-enable interrupts */
+		pi3usb9281_enable_interrupts(0);
+		msleep(USB_CHG_RESET_DELAY_MS);
+
+		/* Clear possible attach interrupt */
+		pi3usb9281_get_interrupts(0);
+		/* Re-enable attach interrupt */
+		pi3usb9281_set_interrupt_mask(0, 0xff);
+
+		/* Re-read ID registers */
 		device_type = pi3usb9281_get_device_type(0);
 		charger_status = pi3usb9281_get_charger_status(0);
+	}
 
-		/* Debounce pin plug order if we detect a charger */
-		if (device_type || PI3USB9281_CHG_STATUS_ANY(charger_status)) {
-			msleep(USB_CHG_DEBOUNCE_DELAY_MS);
+	if (PI3USB9281_CHG_STATUS_ANY(charger_status))
+		type = CHARGE_SUPPLIER_PROPRIETARY;
+	else if (device_type & PI3USB9281_TYPE_CDP)
+		type = CHARGE_SUPPLIER_BC12_CDP;
+	else if (device_type & PI3USB9281_TYPE_DCP)
+		type = CHARGE_SUPPLIER_BC12_DCP;
+	else if (device_type & PI3USB9281_TYPE_SDP)
+		type = CHARGE_SUPPLIER_BC12_SDP;
+	else
+		type = CHARGE_SUPPLIER_OTHER;
 
-			/* next operation might trigger a detach interrupt */
-			pi3usb9281_disable_interrupts(0);
-			/* Ensure D+/D- are open before resetting */
-			pi3usb9281_set_switch_manual(0, 1);
-			pi3usb9281_set_pins(0, 0);
-			/* Let D+/D- relax to their idle state */
-			msleep(40);
+	/* Attachment: decode + update available charge */
+	if (device_type || PI3USB9281_CHG_STATUS_ANY(charger_status)) {
+		charge.current = pi3usb9281_get_ilim(device_type,
+						     charger_status);
+		charge_manager_update_charge(type, 0, &charge);
+	} else { /* Detachment: update available charge to 0 */
+		charge.current = 0;
+		charge_manager_update_charge(
+					CHARGE_SUPPLIER_PROPRIETARY,
+					0,
+					&charge);
+		charge_manager_update_charge(
+					CHARGE_SUPPLIER_BC12_CDP,
+					0,
+					&charge);
+		charge_manager_update_charge(
+					CHARGE_SUPPLIER_BC12_DCP,
+					0,
+					&charge);
+		charge_manager_update_charge(
+					CHARGE_SUPPLIER_BC12_SDP,
+					0,
+					&charge);
+		charge_manager_update_charge(
+					CHARGE_SUPPLIER_OTHER,
+					0,
+					&charge);
+	}
+}
 
-			/* Trigger chip reset to refresh detection registers */
-			pi3usb9281_reset(0);
-			/*
-			 * Restore data switch settings - switches return to
-			 * closed on reset until restored.
-			 */
-			if (usb_switch_state)
-				pi3usb9281_set_switches(0, 1);
+static void board_verify_hiz_mode(void);
 
-			/* Clear possible disconnect interrupt */
-			pi3usb9281_get_interrupts(0);
-			/* Mask attach interrupt */
-			pi3usb9281_set_interrupt_mask(0,
-						      0xff &
-						      ~PI3USB9281_INT_ATTACH);
-			/* Re-enable interrupts */
-			pi3usb9281_enable_interrupts(0);
-			msleep(USB_CHG_RESET_DELAY_MS);
+void usb_charger_task(void)
+{
+	uint32_t evt;
 
-			/* Clear possible attach interrupt */
-			pi3usb9281_get_interrupts(0);
-			/* Re-enable attach interrupt */
-			pi3usb9281_set_interrupt_mask(0, 0xff);
-
-			/* Re-read ID registers */
-			device_type = pi3usb9281_get_device_type(0);
-			charger_status = pi3usb9281_get_charger_status(0);
-		}
-
-		if (PI3USB9281_CHG_STATUS_ANY(charger_status))
-			type = CHARGE_SUPPLIER_PROPRIETARY;
-		else if (device_type & PI3USB9281_TYPE_CDP)
-			type = CHARGE_SUPPLIER_BC12_CDP;
-		else if (device_type & PI3USB9281_TYPE_DCP)
-			type = CHARGE_SUPPLIER_BC12_DCP;
-		else if (device_type & PI3USB9281_TYPE_SDP)
-			type = CHARGE_SUPPLIER_BC12_SDP;
-		else
-			type = CHARGE_SUPPLIER_OTHER;
-
-		/* Attachment: decode + update available charge */
-		if (device_type || PI3USB9281_CHG_STATUS_ANY(charger_status)) {
-			charge.current = pi3usb9281_get_ilim(device_type,
-							     charger_status);
-			charge_manager_update_charge(type, 0, &charge);
-		} else { /* Detachment: update available charge to 0 */
-			charge.current = 0;
-			charge_manager_update_charge(
-						CHARGE_SUPPLIER_PROPRIETARY,
-						0,
-						&charge);
-			charge_manager_update_charge(
-						CHARGE_SUPPLIER_BC12_CDP,
-						0,
-						&charge);
-			charge_manager_update_charge(
-						CHARGE_SUPPLIER_BC12_DCP,
-						0,
-						&charge);
-			charge_manager_update_charge(
-						CHARGE_SUPPLIER_BC12_SDP,
-						0,
-						&charge);
-			charge_manager_update_charge(
-						CHARGE_SUPPLIER_OTHER,
-						0,
-						&charge);
-		}
-
+	usb_charger_bc12_detect();
+	while (1) {
+		/* Wait for interrupt */
+		evt = task_wait_event(-1);
+		/* Got an interrupt from the Pericom BC1.2 chip */
+		if (evt & USB_CHG_EVENT_BC12)
+			usb_charger_bc12_detect();
+		/* Time to re-verify the VBUS disconnection in the charger */
+		if (evt & USB_CHG_EVENT_HIZ)
+			board_verify_hiz_mode();
 		/* notify host of power info change */
 		pd_send_host_event(PD_EVENT_POWER_CHANGE);
-
-		/* Wait for interrupt */
-		task_wait_event(-1);
 	}
 }
 
 void usb_evt(enum gpio_signal signal)
 {
-	task_wake(TASK_ID_USB_CHG);
+	task_set_event(TASK_ID_USB_CHG, USB_CHG_EVENT_BC12, 0);
+}
+
+/* BQ25892 charger events. */
+void charger_interrupt(enum gpio_signal signal)
+{
+	/*
+	 * kick the USB_CHG task to verify that the Hi-Z bit is still set
+	 * according to our previous desire.
+	 */
+	task_set_event(TASK_ID_USB_CHG, USB_CHG_EVENT_HIZ, 0);
 }
 
 #include "gpio_list.h"
@@ -564,11 +591,6 @@ int board_discharge_on_ac(int enable)
 	return charger_discharge_on_ac(enable);
 }
 
-int extpower_is_present(void)
-{
-	return gpio_get_level(GPIO_CHGR_ACOK);
-}
-
 void usb_board_connect(void)
 {
 	gpio_set_level(GPIO_USB_PU_EN_L, 0);
@@ -586,6 +608,64 @@ void board_charge_manager_override_timeout(void)
 }
 DECLARE_DEFERRED(board_charge_manager_override_timeout);
 
+/*
+ * The type-C port VBUS is connected to the power path inside the charger.
+ * At startup, for the dead battery case, the charger power path is enabled.
+ */
+static int typec_power_path = 1;
+static int dead_battery_check_done;
+
+/**
+ * Enable/disable external power path.
+ *
+ * Connect/disconnect the type-C VBUS pin from the charger chip
+ * (for both system power/charging and boost/providing power).
+ *
+ * @param enable 1 to connect VBUS, 0 to disconnect it.
+ * @return not 0 if case of failure to modify the setting.
+ */
+int board_vbus_power_path(int enable)
+{
+	int rv;
+
+	/*
+	 * At startup, do not disconnect VBUS at the first pd_set_host_mode(0)
+	 * call in case the battery is dead and we need system power.
+	 */
+	if (!dead_battery_check_done) {
+		dead_battery_check_done = 1;
+		return EC_SUCCESS;
+	}
+
+	/*
+	 * Put lower current limit (PSEL=1 => 100mA)
+	 * when VBUS is disconnected in case Hi-Z bit disappears
+	 */
+	gpio_set_level(GPIO_CHGR_PSEL, !enable);
+	/* Put the BQ25892 charger in "Hi-Z" mode (VBUS pin disconnected) */
+	rv = charger_discharge_on_ac(!enable);
+	if (rv)
+		return rv;
+	/* Record/cache our current state */
+	typec_power_path = enable;
+
+	return EC_SUCCESS;
+}
+
+static void board_verify_hiz_mode(void)
+{
+	int enable = !charger_is_forced_discharge();
+	/* the VBUS connection is not in the state we want: update it */
+	if (enable != typec_power_path)
+		board_vbus_power_path(typec_power_path);
+}
+
+int extpower_is_present(void)
+{
+	int src = gpio_get_level(GPIO_CHGR_OTG);
+	return !src && typec_power_path && gpio_get_level(GPIO_CHGR_ACOK);
+}
+
 /**
  * Set active charge port -- only one port can be active at a time.
  *
@@ -598,14 +678,22 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* check if we are source vbus on that port */
 	int src = gpio_get_level(GPIO_CHGR_OTG);
+	/* can we sink power from the type-C port */
+	int sink = !src && charge_port != CHARGE_PORT_NONE;
 
-	if (charge_port >= 0 && charge_port < CONFIG_USB_PD_PORT_COUNT && src) {
-		CPRINTS("Port %d is not a sink, skipping enable", charge_port);
-		return EC_ERROR_INVAL;
+	if (typec_power_path != sink) {
+		/* Enable/disable external power path(system + charging) */
+		typec_power_path = sink || src;
+		/* do it through the USB_CHG task to be able to send I2C */
+		task_set_event(TASK_ID_USB_CHG, USB_CHG_EVENT_HIZ, 0);
+
+		/* The status of our external power source changed */
+		hook_notify(HOOK_AC_CHANGE);
 	}
 
-	/* Enable/disable charging */
-	gpio_set_level(GPIO_USBC_CHARGE_EN_L, charge_port == CHARGE_PORT_NONE);
+	/* Tell the charge manager that the type-C port is no longer a sink */
+	if (charge_port == 0 && src)
+		return EC_ERROR_INVAL;
 
 	return EC_SUCCESS;
 }

@@ -14,13 +14,13 @@ GPIO_INT(CHARGE_DONE,          PIN(E, 6),  GPIO_INT_BOTH,                   indu
 GPIO_INT(AP_IN_SUSPEND,        PIN(F, 9),  GPIO_INT_BOTH,                   power_signal_interrupt)
 GPIO_INT(AP_HOLD,              PIN(E, 3),  GPIO_INT_BOTH,                   power_signal_interrupt)
 GPIO_INT(ACC_IRQ1,             PIN(D, 12), GPIO_INT_FALLING,                bmi160_interrupt)
+GPIO_INT(CHGR_INT_L,           PIN(B, 2),  GPIO_INT_FALLING,                charger_interrupt)
 
 /* Interrupt lines not used yet */
 GPIO(BC_TEMP_ALERT_L,      PIN(C, 5),  GPIO_INT_FALLING)
 GPIO(LB_INT_L,             PIN(C, 14), GPIO_INT_FALLING | GPIO_PULL_UP)
 GPIO(LIGHTBAR_EN_L,        PIN(E, 8),  GPIO_INT_FALLING | GPIO_PULL_UP)
 GPIO(BASE_PRES_L,          PIN(E, 10), GPIO_INT_BOTH | GPIO_PULL_UP)
-GPIO(CHGR_INT_L,           PIN(B, 2),  GPIO_INT_FALLING)
 GPIO(CAM_SYNC_INT_L,       PIN(C, 7),  GPIO_INT_FALLING)
 GPIO(COMPASS_DRDY,         PIN(A, 8),  GPIO_INPUT)
 

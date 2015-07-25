@@ -98,6 +98,8 @@ int charger_set_voltage(int voltage);
 
 /* Discharge battery when on AC power. */
 int charger_discharge_on_ac(int enable);
+/* Get whether discharge battery on AC is forced inside the charger */
+int charger_is_forced_discharge(void);
 
 /* Other parameters that may be charger-specific, but are common so far. */
 int charger_set_input_current(int input_current);

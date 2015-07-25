@@ -255,6 +255,9 @@ int board_discharge_on_ac(int enable);
 /* Set the charge current limit. */
 void board_set_charge_limit(int charge_ma);
 
+/* Enable/disable external power path. */
+int board_vbus_power_path(int enable);
+
 /* Send host event to AP */
 void pd_send_host_event(int mask);
 

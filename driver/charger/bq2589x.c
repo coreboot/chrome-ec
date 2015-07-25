@@ -231,6 +231,16 @@ int charger_discharge_on_ac(int enable)
 	return bq2589x_write(BQ2589X_REG_INPUT_CURR, val);
 }
 
+int charger_is_forced_discharge(void)
+{
+	int rv, val;
+
+	rv = bq2589x_read(BQ2589X_REG_INPUT_CURR, &val);
+	if (rv)
+		return 0;
+	return !!(val & BQ2589X_INPUT_CURR_EN_HIZ);
+}
+
 /* Charging power state initialization */
 int charger_post_init(void)
 {
