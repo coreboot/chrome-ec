@@ -1156,6 +1156,9 @@
 /* Support SPI flash */
 #undef CONFIG_SPI_FLASH
 
+/* Define the SPI port to use to access the flash */
+#undef CONFIG_SPI_FLASH_PORT
+
 /* Support W25Q64 SPI flash */
 #undef CONFIG_SPI_FLASH_W25Q64
 
@@ -1168,8 +1171,8 @@
 /* Size (bytes) of SPI flash memory */
 #undef CONFIG_SPI_FLASH_SIZE
 
-/* SPI module port used for master interface */
-#undef CONFIG_SPI_MASTER_PORT
+/* SPI master feature */
+#undef CONFIG_SPI_MASTER
 
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE

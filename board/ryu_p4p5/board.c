@@ -386,6 +386,12 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+/* SPI devices */
+const struct spi_device_t spi_devices[] = {
+	{ CONFIG_SPI_FLASH_PORT, 0, GPIO_SPI_FLASH_NSS},
+};
+const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
+
 static void board_set_usb_switches(int port, int open)
 {
 	/* If switch is not changing, then return */
@@ -670,12 +676,12 @@ void usb_spi_board_enable(struct usb_spi_config const *config)
 	/* Enable SPI LDO to power the flash chip */
 	gpio_set_level(GPIO_VDDSPI_EN, 1);
 
-	spi_enable(1);
+	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
 }
 
 void usb_spi_board_disable(struct usb_spi_config const *config)
 {
-	spi_enable(0);
+	spi_enable(CONFIG_SPI_FLASH_PORT, 0);
 
 	/* Disable SPI LDO */
 	gpio_set_level(GPIO_VDDSPI_EN, 0);

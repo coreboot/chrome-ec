@@ -39,6 +39,13 @@ const struct int_vector_t hdr_int_vect = {
 			&fault_handler    /* Bus fault handler */
 };
 
+/* SPI devices - from glados/board.c*/
+const struct spi_device_t spi_devices[] = {
+	{ CONFIG_SPI_FLASH_PORT, 0, GPIO_PVT_CS0},
+};
+const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
+
+
 void timer_init()
 {
 	uint32_t val = 0;
@@ -82,7 +89,7 @@ static int spi_flash_readloc(uint8_t *buf_usr,
 	if (offset + bytes > CONFIG_SPI_FLASH_SIZE)
 		return EC_ERROR_INVAL;
 
-	return spi_transaction(cmd, 4, buf_usr, bytes);
+	return spi_transaction(SPI_FLASH_DEVICE, cmd, 4, buf_usr, bytes);
 }
 
 int spi_rwimage_load(void)
@@ -92,14 +99,14 @@ int spi_rwimage_load(void)
 
 	memset((void *)buf, 0xFF, (CONFIG_RW_SIZE - 4));
 
-	spi_enable(1);
+	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
 
 	for (i = 0; i < CONFIG_RW_SIZE; i += SPI_CHUNK_SIZE)
 		spi_flash_readloc(&buf[i],
 					CONFIG_RW_IMAGE_FLASHADDR + i,
 					SPI_CHUNK_SIZE);
 
-	spi_enable(0);
+	spi_enable(CONFIG_SPI_FLASH_PORT, 0);
 
 	return 0;
 
@@ -219,6 +226,7 @@ void lfw_main()
 	cpu_init();
 	dma_init();
 	uart_init();
+	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
 
 	uart_puts("littlefw");
 	uart_puts(version_data.version);

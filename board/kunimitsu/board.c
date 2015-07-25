@@ -23,6 +23,7 @@
 #include "power.h"
 #include "power_button.h"
 #include "registers.h"
+#include "spi.h"
 #include "switch.h"
 #include "temp_sensor.h"
 #include "temp_sensor_chip.h"
@@ -90,6 +91,13 @@ const struct temp_sensor_t temp_sensors[] = {
 	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_temp_sensor_get_val,
 		0, 4},
 };
+
+/* SPI devices */
+const struct spi_device_t spi_devices[] = {
+	{ CONFIG_SPI_FLASH_PORT, 0, GPIO_PVT_CS0},
+};
+const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
+
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /* ALS instances. Must be in same order as enum als_id. */

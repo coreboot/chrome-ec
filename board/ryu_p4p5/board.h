@@ -121,8 +121,8 @@
 #define CONFIG_USB_CONSOLE
 
 /* Enable control of SPI over USB */
-#define CONFIG_SPI_MASTER_PORT 2
-#define CONFIG_SPI_CS_GPIO     GPIO_SPI_FLASH_NSS
+#define CONFIG_SPI_MASTER
+#define CONFIG_SPI_FLASH_PORT    0  /* First SPI master port */
 
 #define CONFIG_USB_SPI
 

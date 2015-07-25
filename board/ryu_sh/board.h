@@ -29,7 +29,6 @@
 /* Optional features */
 #undef CONFIG_EXTPOWER
 #undef CONFIG_HIBERNATE
-#define CONFIG_ACCELGYRO_LSM6DS0
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_I2C
 #define CONFIG_BOARD_PRE_INIT
