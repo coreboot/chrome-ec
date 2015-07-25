@@ -30,6 +30,7 @@
 #include "queue_policies.h"
 #include "registers.h"
 #include "spi.h"
+#include "system.h"
 #include "task.h"
 #include "usb.h"
 #include "usb_pd.h"
@@ -635,7 +636,9 @@ int board_vbus_power_path(int enable)
 	 */
 	if (!dead_battery_check_done) {
 		dead_battery_check_done = 1;
-		return EC_SUCCESS;
+		/* if we are coming from RO that's not the dead battery case */
+		if (!(system_get_reset_flags() & RESET_FLAG_SYSJUMP))
+			return EC_SUCCESS;
 	}
 
 	/*
