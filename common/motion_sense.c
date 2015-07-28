@@ -82,6 +82,8 @@ static void motion_sense_shutdown(void)
 		   !(sensor->active_mask & sensor->active)) {
 			sensor->drv->set_data_rate(sensor, 0, 0);
 			sensor->state = SENSOR_NOT_INITIALIZED;
+		} else if (sensor->state == SENSOR_INIT_ERROR) {
+			sensor->state = SENSOR_NOT_INITIALIZED;
 		}
 	}
 }
