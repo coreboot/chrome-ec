@@ -489,8 +489,6 @@ static int init(const struct motion_sensor_t *s)
 		msleep(1);
 
 		ret = raw_read8(s->i2c_addr, KXCJ9_CTRL2, &tmp);
-		if (ret != EC_SUCCESS)
-			return ret;
 
 		/* Reset complete. */
 		if (ret == EC_SUCCESS && !(tmp & KXCJ9_CTRL2_SRST))
