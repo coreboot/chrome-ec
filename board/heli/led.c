@@ -18,10 +18,10 @@ const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 enum led_color {
 	LED_OFF = 0,
-	LED_RED,
+	LED_GREEN,
 	LED_ORANGE,
 	LED_YELLOW,
-	LED_GREEN,
+	LED_RED,
 
 	/* Number of colors, not a color itself */
 	LED_COLOR_COUNT
