@@ -23,6 +23,7 @@
 #include "i2c.h"
 #include "inductive_charging.h"
 #include "lid_switch.h"
+#include "lightbar.h"
 #include "motion_sense.h"
 #include "power.h"
 #include "power_button.h"
@@ -689,6 +690,8 @@ int board_set_active_charge_port(int charge_port)
 
 		/* The status of our external power source changed */
 		hook_notify(HOOK_AC_CHANGE);
+		/* display battery status on the lightbar */
+		lightbar_sequence(LIGHTBAR_TAP);
 	}
 
 	/* Tell the charge manager that the type-C port is no longer a sink */
