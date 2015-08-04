@@ -72,9 +72,6 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE	0
 #define CONFIG_LID_ANGLE_SENSOR_LID	1
 
-/* Number of buttons */
-#define CONFIG_BUTTON_COUNT		2
-
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
 #undef CONFIG_EOPTION
