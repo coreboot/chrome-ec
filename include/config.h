@@ -48,6 +48,11 @@
 #undef CONFIG_ACCEL_KXCJ9
 #undef CONFIG_ACCELGYRO_LSM6DS0
 #undef CONFIG_ACCELGYRO_BMI160
+/*
+ * Define the event to raise when BMI160 interrupt.
+ * Must be within TASK_EVENT_MOTION_INTERRUPT_MASK.
+ */
+#undef CONFIG_ACCELGYRO_BMI160_INT_EVENT
 
 /* Specify type of Gyrometers attached. */
 #undef CONFIG_GYRO_L3GD20H
