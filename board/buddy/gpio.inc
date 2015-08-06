@@ -7,7 +7,7 @@
 
 /* Inputs with interrupt handlers are first for efficiency */
 GPIO(POWER_BUTTON_L, A, 2, GPIO_INT_BOTH_DSLEEP,                power_button_interrupt)   /* Power button */
-GPIO(LID_OPEN,       A, 3, GPIO_INT_BOTH_DSLEEP,                lid_interrupt)            /* Lid switch */
+GPIO(LID_OPEN,       A, 3, GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP, lid_interrupt)            /* Lid switch */
 GPIO(AC_PRESENT,     H, 3, GPIO_INT_BOTH_DSLEEP,                extpower_interrupt)       /* AC power present */
 GPIO(PCH_BKLTEN,     M, 3, GPIO_INT_BOTH,                       backlight_interrupt)      /* Backlight enable signal from PCH */
 GPIO(PCH_SLP_S0_L,   G, 6, GPIO_INT_BOTH,                       power_signal_interrupt)   /* SLP_S0# signal from PCH */
@@ -33,7 +33,7 @@ GPIO(BOARD_VERSION1,       Q, 5, GPIO_INPUT,    NULL) /* Board version stuffing 
 GPIO(BOARD_VERSION2,       Q, 6, GPIO_INPUT,    NULL) /* Board version stuffing resistor 2 */
 GPIO(BOARD_VERSION3,       Q, 7, GPIO_INPUT,    NULL) /* Board version stuffing resistor 3 */
 GPIO(CPU_PGOOD,            C, 4, GPIO_INPUT,    NULL) /* Power good to the CPU */
-GPIO(BAT_PRESENT_L,        B, 4, GPIO_INPUT,    NULL) /* Battery present. Repurposed BAT_TEMP */
+GPIO(BAT_PRESENT_L,        B, 4, GPIO_INPUT | GPIO_PULL_UP,    NULL) /* Battery present. Repurposed BAT_TEMP */
 
 /* Outputs; all unasserted by default except for reset signals */
 GPIO(CPU_PROCHOT,          B, 1, GPIO_OUT_LOW, NULL) /* Force CPU to think it's overheated */
