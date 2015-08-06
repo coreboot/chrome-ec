@@ -15,6 +15,7 @@ GPIO_INT(AP_IN_SUSPEND,        PIN(F, 9),  GPIO_INT_BOTH,                   powe
 GPIO_INT(AP_HOLD,              PIN(E, 3),  GPIO_INT_BOTH,                   power_signal_interrupt)
 GPIO_INT(ACC_IRQ1,             PIN(D, 12), GPIO_INT_FALLING,                bmi160_interrupt)
 GPIO_INT(CHGR_INT_L,           PIN(B, 2),  GPIO_INT_FALLING,                charger_interrupt)
+GPIO_INT(ALS_PROXY_INT_L,      PIN(E, 15), GPIO_INT_FALLING | GPIO_PULL_UP, si114x_interrupt)
 
 /* Interrupt lines not used yet */
 GPIO(BC_TEMP_ALERT_L,      PIN(C, 5),  GPIO_INT_FALLING)
