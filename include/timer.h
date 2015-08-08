@@ -146,4 +146,14 @@ static inline unsigned time_since32(timestamp_t start)
 	return get_time().le.lo - start.le.lo;
 }
 
+/**
+ * To compare time and deal with rollover
+ *
+ * Return true if a is after b.
+ */
+static inline int time_after(uint32_t a, uint32_t b)
+{
+	return (int32_t)(b - a) < 0;
+}
+
 #endif  /* __CROS_EC_TIMER_H */
