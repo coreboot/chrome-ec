@@ -173,6 +173,9 @@ enum power_state power_handle_state(enum power_state state)
 		/* Call hooks now that rails are up */
 		hook_notify(HOOK_CHIPSET_STARTUP);
 
+		/* Enable Trackpad power while transition from S5 to S3 */
+		gpio_set_level(GPIO_TRACKPAD_PWREN, 1);
+
 		return POWER_S3;
 
 
@@ -274,6 +277,9 @@ enum power_state power_handle_state(enum power_state state)
 
 	case POWER_S3S5:
 
+		/* Disable Trackpad power while transition from S3 to S5 */
+		gpio_set_level(GPIO_TRACKPAD_PWREN, 0);
+
 		/* Call hooks before we remove power rails */
 		hook_notify(HOOK_CHIPSET_SHUTDOWN);
 
@@ -296,7 +302,6 @@ enum power_state power_handle_state(enum power_state state)
 #else
 			gpio_set_level(GPIO_PCH_SYS_PWROK, 0);
 #endif
-
 			forcing_shutdown = 0;
 
 			CPRINTS("Enter SOC G3");
