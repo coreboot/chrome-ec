@@ -9,7 +9,7 @@
 GPIO(POWER_BUTTON_L, A, 2, GPIO_INT_BOTH_DSLEEP,                power_button_interrupt)   /* Power button */
 GPIO(LID_OPEN,       A, 3, GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP, lid_interrupt)            /* Lid switch */
 GPIO(AC_PRESENT,     H, 3, GPIO_INT_BOTH_DSLEEP,                extpower_interrupt)       /* AC power present */
-GPIO(PCH_BKLTEN,     M, 3, GPIO_INT_BOTH,                       backlight_interrupt)      /* Backlight enable signal from PCH */
+GPIO(PCH_BKLTEN,     M, 7, GPIO_INT_RISING,                     backlight_interrupt)      /* Backlight enable signal from PCH */
 GPIO(PCH_SLP_S0_L,   G, 6, GPIO_INT_BOTH,                       power_signal_interrupt)   /* SLP_S0# signal from PCH */
 GPIO(PCH_SLP_S3_L,   G, 7, GPIO_INT_BOTH_DSLEEP,                power_signal_interrupt)   /* SLP_S3# signal from PCH */
 GPIO(PCH_SLP_S5_L,   H, 1, GPIO_INT_BOTH_DSLEEP,                power_signal_interrupt)   /* SLP_S5# signal from PCH */
@@ -29,6 +29,9 @@ GPIO(FAN_ALERT_L,          B, 0, GPIO_INPUT,    NULL) /* From thermal sensor */
 GPIO(PCH_SUSWARN_L,        G, 2, GPIO_INT_BOTH, NULL) /* SUSWARN# signal from PCH */
 GPIO(USB1_OC_L,            E, 7, GPIO_INPUT,    NULL) /* USB port overcurrent warning */
 GPIO(USB2_OC_L,            E, 0, GPIO_INPUT,    NULL) /* USB port overcurrent warning */
+GPIO(PANEL_ID1,            Q, 1, GPIO_INPUT,    NULL) /* Panel ID 1 */
+GPIO(PANEL_ID2,            Q, 2, GPIO_INPUT,    NULL) /* Panel ID 2 */
+GPIO(PANEL_ID3,            Q, 3, GPIO_INPUT,    NULL) /* Panel ID 3 */
 GPIO(BOARD_VERSION1,       Q, 5, GPIO_INPUT,    NULL) /* Board version stuffing resistor 1 */
 GPIO(BOARD_VERSION2,       Q, 6, GPIO_INPUT,    NULL) /* Board version stuffing resistor 2 */
 GPIO(BOARD_VERSION3,       Q, 7, GPIO_INPUT,    NULL) /* Board version stuffing resistor 3 */
@@ -49,7 +52,7 @@ GPIO(SYS_PWROK,            H, 2, GPIO_OUT_LOW, NULL) /* EC thinks everything is 
 GPIO(WLAN_OFF_L,           J, 4, GPIO_OUT_LOW, NULL) /* Disable WiFi radio */
 GPIO(CHARGE_L,             E, 6, GPIO_OUT_LOW, NULL) /* Allow battery to charge when on AC */
 
-GPIO(ENABLE_BACKLIGHT,     M, 7, GPIO_OUT_LOW, NULL) /* Enable backlight power */
+GPIO(ENABLE_BACKLIGHT,     M, 3, GPIO_INPUT,   NULL) /* Enable backlight power */
 GPIO(ENABLE_TOUCHPAD,      N, 1, GPIO_OUT_LOW, NULL) /* Enable touchpad power */
 GPIO(ENTERING_RW,          D, 3, GPIO_OUT_LOW, NULL) /* Indicate when EC is entering RW code */
 GPIO(PCH_DPWROK,           G, 0, GPIO_OUT_LOW, NULL) /* Indicate when VccDSW is good */
