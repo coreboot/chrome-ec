@@ -318,6 +318,172 @@ exit:
 	return rv;
 }
 
+int get_sda_from_i2c_port(int port, enum gpio_signal *sda)
+{
+	int i;
+
+	/* Find the matching port in i2c_ports[] table. */
+	for (i = 0; i < I2C_PORTS_USED; i++) {
+		if (i2c_ports[i].port == port)
+			break;
+	}
+
+	/* Crash if the port given is not in the i2c_ports[] table. */
+	ASSERT(i != I2C_PORTS_USED);
+
+	/* Check if the SCL and SDA pins have been defined for this port. */
+	if (i2c_ports[i].scl == 0 && i2c_ports[i].sda == 0)
+		return EC_ERROR_INVAL;
+
+	*sda = i2c_ports[i].sda;
+	return EC_SUCCESS;
+}
+
+int get_scl_from_i2c_port(int port, enum gpio_signal *scl)
+{
+	int i;
+
+	/* Find the matching port in i2c_ports[] table. */
+	for (i = 0; i < I2C_PORTS_USED; i++) {
+		if (i2c_ports[i].port == port)
+			break;
+	}
+
+	/* Crash if the port given is not in the i2c_ports[] table. */
+	ASSERT(i != I2C_PORTS_USED);
+
+	/* Check if the SCL and SDA pins have been defined for this port. */
+	if (i2c_ports[i].scl == 0 && i2c_ports[i].sda == 0)
+		return EC_ERROR_INVAL;
+
+	*scl = i2c_ports[i].scl;
+	return EC_SUCCESS;
+}
+
+void i2c_raw_set_scl(int port, int level)
+{
+	enum gpio_signal g;
+
+	if (get_scl_from_i2c_port(port, &g) == EC_SUCCESS)
+		gpio_set_level(g, level);
+}
+
+void i2c_raw_set_sda(int port, int level)
+{
+	enum gpio_signal g;
+
+	if (get_sda_from_i2c_port(port, &g) == EC_SUCCESS)
+		gpio_set_level(g, level);
+}
+
+int i2c_raw_get_scl(int port)
+{
+	enum gpio_signal g;
+	int ret;
+
+	/* If no SCL pin defined for this port, then return 1 to appear idle. */
+	if (get_scl_from_i2c_port(port, &g) != EC_SUCCESS)
+		return 1;
+
+	/* If we are driving the pin low, it must be low. */
+	if (gpio_get_level(g) == 0)
+		return 0;
+
+	/*
+	 * Otherwise, we need to toggle it to an input to read the true pin
+	 * state.
+	 */
+	gpio_set_flags(g, GPIO_INPUT);
+	ret = gpio_get_level(g);
+	gpio_set_flags(g, GPIO_OUTPUT | GPIO_OPEN_DRAIN);
+
+	return ret;
+}
+
+int i2c_raw_get_sda(int port)
+{
+	enum gpio_signal g;
+	int ret;
+
+	/* If no SDA pin defined for this port, then return 1 to appear idle. */
+	if (get_sda_from_i2c_port(port, &g) != EC_SUCCESS)
+		return 1;
+
+	/* If we are driving the pin low, it must be low. */
+	if (gpio_get_level(g) == 0)
+		return 0;
+
+	/*
+	 * Otherwise, we need to toggle it to an input to read the true pin
+	 * state.
+	 */
+	gpio_set_flags(g, GPIO_INPUT);
+	ret = gpio_get_level(g);
+	gpio_set_flags(g, GPIO_OUTPUT | GPIO_OPEN_DRAIN);
+
+	return ret;
+}
+
+int i2c_get_line_levels(int port)
+{
+	/* Conveniently, MBMON bit (1 << 1) is SDA and (1 << 0) is SCL. */
+	return LM4_I2C_MBMON(port) & 0x03;
+}
+
+int i2c_raw_mode(int port, int enable)
+{
+	enum gpio_signal sda, scl;
+	static struct mutex raw_mode_mutex;
+
+	/* Get the SDA and SCL pins for this port. If none, then return. */
+	if (get_sda_from_i2c_port(port, &sda) != EC_SUCCESS)
+		return EC_ERROR_INVAL;
+	if (get_scl_from_i2c_port(port, &scl) != EC_SUCCESS)
+		return EC_ERROR_INVAL;
+
+	if (enable) {
+		/*
+		 * Lock access to raw mode functionality. Note, this is
+		 * necessary because when we exit raw mode, we put all I2C
+		 * ports into normal mode. This means that if another port
+		 * is using the raw mode capabilities, that port will be
+		 * re-configured from underneath it.
+		 */
+		mutex_lock(&raw_mode_mutex);
+
+		/*
+		 * To enable raw mode, take out of alternate function mode and
+		 * set the flags to open drain output.
+		 */
+		gpio_set_alternate_function(gpio_list[sda].port,
+						gpio_list[sda].mask, 0);
+		gpio_set_alternate_function(gpio_list[scl].port,
+						gpio_list[scl].mask, 0);
+
+		gpio_set_flags(scl, GPIO_OUTPUT | GPIO_OPEN_DRAIN);
+		gpio_set_level(scl, 1);
+		gpio_set_flags(sda, GPIO_OUTPUT | GPIO_OPEN_DRAIN);
+		gpio_set_level(sda, 1);
+	} else {
+		/*
+		 * Configure the I2C pins to exit raw mode and return
+		 * to normal mode.
+		 */
+		gpio_set_alternate_function(gpio_list[sda].port,
+						gpio_list[sda].mask, 3);
+		gpio_set_alternate_function(gpio_list[scl].port,
+						gpio_list[scl].mask, 3);
+
+		gpio_set_flags(scl, GPIO_OUTPUT);
+		gpio_set_flags(sda, GPIO_OUTPUT | GPIO_OPEN_DRAIN);
+
+		/* Unlock mutex, allow other I2C busses to use raw mode. */
+		mutex_unlock(&raw_mode_mutex);
+		return EC_SUCCESS;
+	}
+
+	return EC_SUCCESS;
+}
 
 static int i2c_freq_changed(void)
 {
