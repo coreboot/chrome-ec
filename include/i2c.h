@@ -15,9 +15,11 @@
 
 /* Data structure to define I2C port configuration. */
 struct i2c_port_t {
-	const char *name;  /* Port name */
-	int port;          /* Port */
-	int kbps;          /* Speed in kbps */
+	const char *name;     /* Port name */
+	int port;             /* Port */
+	int kbps;             /* Speed in kbps */
+	enum gpio_signal scl; /* Port SCL GPIO line */
+	enum gpio_signal sda; /* Port SDA GPIO line */
 };
 
 /* Read a 16-bit register from the slave at 8-bit slave address <slaveaddr>, at

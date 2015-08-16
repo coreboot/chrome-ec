@@ -179,6 +179,12 @@ enum gpio_signal {
 	GPIO_USB2_CTL3,           /* USB charger port 2 CTL3 output */
 	GPIO_USB2_ENABLE,         /* USB charger port 2 enable */
 	GPIO_USB2_ILIM_SEL,       /* USB charger port 2 ILIM_SEL output */
+	GPIO_I2C0_SCL,            /* I2C0 (battery/charger) clock */
+	GPIO_I2C0_SDA,            /* I2C0 (battery/charger) data */
+	GPIO_I2C1_SCL,            /* I2C1 (lightbar) clock */
+	GPIO_I2C1_SDA,            /* I2C1 (lightbar) data */
+	GPIO_I2C5_SCL,            /* I2C5 (thermal) clock */
+	GPIO_I2C5_SDA,            /* I2C5 (thermal) data */
 
 	/* Number of GPIOs; not an actual GPIO */
 	GPIO_COUNT

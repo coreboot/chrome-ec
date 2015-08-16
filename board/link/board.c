@@ -117,6 +117,12 @@ const struct gpio_info gpio_list[GPIO_COUNT] = {
 	{"USB2_CTL3",           LM4_GPIO_D, (1<<6), GPIO_OUT_LOW, NULL},
 	{"USB2_ENABLE",         LM4_GPIO_D, (1<<7), GPIO_OUT_LOW, NULL},
 	{"USB2_ILIM_SEL",       LM4_GPIO_E, (1<<0), GPIO_OUT_LOW, NULL},
+	{"I2C0_SCL",            LM4_GPIO_B, (1<<2), GPIO_OUT_LOW, NULL},
+	{"I2C0_SDA",            LM4_GPIO_B, (1<<3), GPIO_OUT_LOW, NULL},
+	{"I2C1_SCL",            LM4_GPIO_A, (1<<6), GPIO_OUT_LOW, NULL},
+	{"I2C1_SDA",            LM4_GPIO_A, (1<<7), GPIO_OUT_LOW, NULL},
+	{"I2C5_SCL",            LM4_GPIO_B, (1<<6), GPIO_OUT_LOW, NULL},
+	{"I2C5_SDA",            LM4_GPIO_B, (1<<7), GPIO_OUT_LOW, NULL},
 };
 
 /* ADC channels. Must be in the exactly same order as in enum adc_channel. */
@@ -139,9 +145,9 @@ const struct adc_t adc_channels[ADC_CH_COUNT] = {
 const struct i2c_port_t i2c_ports[I2C_PORTS_USED] = {
 	/* Note: battery and charger share a port.  Only include it once in
 	 * this list so we don't double-initialize it. */
-	{"batt_chg", I2C_PORT_BATTERY,  100},
-	{"lightbar", I2C_PORT_LIGHTBAR, 400},
-	{"thermal",  I2C_PORT_THERMAL,  100},
+	{"batt_chg", I2C_PORT_BATTERY,  100, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
+	{"lightbar", I2C_PORT_LIGHTBAR, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
+	{"thermal",  I2C_PORT_THERMAL,  100, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
 };
 
 void configure_board(void)
