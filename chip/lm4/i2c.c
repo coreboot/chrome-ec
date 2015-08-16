@@ -44,6 +44,13 @@
 #define NO_START 0
 #define NO_STOP  0
 
+/* Delay for bitbanging i2c corresponds roughly to 100kHz. */
+#define I2C_BITBANG_DELAY_US    5
+
+/* Number of attempts to unwedge each pin. */
+#define UNWEDGE_SCL_ATTEMPTS  10
+#define UNWEDGE_SDA_ATTEMPTS  3
+
 static task_id_t task_waiting_on_port[NUM_PORTS];
 static struct mutex port_mutex[NUM_PORTS];
 extern const struct i2c_port_t i2c_ports[I2C_PORTS_USED];
@@ -109,10 +116,20 @@ static int i2c_transmit_receive(int port, int slave_addr,
 		return EC_SUCCESS;
 
 	reg_mcs = LM4_I2C_MCS(port);
-	if (!started && (reg_mcs & (LM4_I2C_MCS_CLKTO | LM4_I2C_MCS_ARBLST))) {
+	if (!started &&
+	    ((reg_mcs & (LM4_I2C_MCS_CLKTO | LM4_I2C_MCS_ARBLST)) ||
+	     (i2c_get_line_levels(port) != I2C_LINE_IDLE))) {
 		uint32_t tpr = LM4_I2C_MTPR(port);
 
-		CPRINTF("[%T I2C%d bad status 0x%02x]\n", port, reg_mcs);
+		CPRINTF("I2C%d Addr:%02X bad status 0x%02x, SCL=%d, SDA=%d\n",
+				port,
+				slave_addr,
+				reg_mcs,
+				i2c_get_line_levels(port) & I2C_LINE_SCL_HIGH,
+				i2c_get_line_levels(port) & I2C_LINE_SDA_HIGH);
+
+		/* Attempt to unwedge the port. */
+		i2c_unwedge(port);
 
 		/* Clock timeout or arbitration lost.  Reset port to clear. */
 		LM4_SYSTEM_SRI2C |= (1 << port);
@@ -483,6 +500,117 @@ int i2c_raw_mode(int port, int enable)
 	}
 
 	return EC_SUCCESS;
+}
+
+/*
+ * Unwedge the i2c bus for the given port.
+ *
+ * Some devices on our i2c busses keep power even if we get a reset.  That
+ * means that they could be part way through a transaction and could be
+ * driving the bus in a way that makes it hard for us to talk on the bus.
+ * ...or they might listen to the next transaction and interpret it in a
+ * weird way.
+ *
+ * Note that devices could be in one of several states:
+ * - If a device got interrupted in a write transaction it will be watching
+ *   for additional data to finish its write.  It will probably be looking to
+ *   ack the data (drive the data line low) after it gets everything.
+ * - If a device got interrupted while responding to a register read, it will
+ *   be watching for clocks and will drive data out when it sees clocks.  At
+ *   the moment it might be trying to send out a 1 (so both clock and data
+ *   may be high) or it might be trying to send out a 0 (so it's driving data
+ *   low).
+ *
+ * We attempt to unwedge the bus by doing:
+ * - If SCL is being held low, then a slave is clock extending. The only
+ *   thing we can do is try to wait until the slave stops clock extending.
+ * - Otherwise, we will toggle the clock until the slave releases the SDA line.
+ *   Once the SDA line is released, try to send a STOP bit. Rinse and repeat
+ *   until either the bus is normal, or we run out of attempts.
+ *
+ * Note this should work for most devices, but depending on the slaves i2c
+ * state machine, it may not be possible to unwedge the bus.
+ */
+int i2c_unwedge(int port)
+{
+	int i, j;
+	int ret = EC_SUCCESS;
+
+	/* Try to put port in to raw bit bang mode. */
+	if (i2c_raw_mode(port, 1) != EC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
+
+	/*
+	 * If clock is low, wait for a while in case of clock stretched
+	 * by a slave.
+	 */
+	if (!i2c_raw_get_scl(port)) {
+		for (i = 0; i < UNWEDGE_SCL_ATTEMPTS; i++) {
+			udelay(I2C_BITBANG_DELAY_US);
+			if (i2c_raw_get_scl(port))
+				break;
+		}
+
+		/*
+		 * If we get here, a slave is holding the clock low and there
+		 * is nothing we can do.
+		 */
+		CPRINTF("I2C unwedge failed, SCL is being held low\n");
+		ret = EC_ERROR_UNKNOWN;
+		goto unwedge_done;
+	}
+
+	if (i2c_raw_get_sda(port))
+		goto unwedge_done;
+
+	CPRINTF("I2C unwedge called with SDA held low\n");
+
+	/* Keep trying to unwedge the SDA line until we run out of attempts. */
+	for (i = 0; i < UNWEDGE_SDA_ATTEMPTS; i++) {
+		/* Drive the clock high. */
+		i2c_raw_set_scl(port, 1);
+		udelay(I2C_BITBANG_DELAY_US);
+
+		/*
+		 * Clock through the problem by clocking out 9 bits. If slave
+		 * releases the SDA line, then we can stop clocking bits and
+		 * send a STOP.
+		 */
+		for (j = 0; j < 9; j++) {
+			if (i2c_raw_get_sda(port))
+				break;
+
+			i2c_raw_set_scl(port, 0);
+			udelay(I2C_BITBANG_DELAY_US);
+			i2c_raw_set_scl(port, 1);
+			udelay(I2C_BITBANG_DELAY_US);
+		}
+
+		/* Take control of SDA line and issue a STOP command. */
+		i2c_raw_set_sda(port, 0);
+		udelay(I2C_BITBANG_DELAY_US);
+		i2c_raw_set_sda(port, 1);
+		udelay(I2C_BITBANG_DELAY_US);
+
+		/* Check if the bus is unwedged. */
+		if (i2c_raw_get_sda(port) && i2c_raw_get_scl(port))
+			break;
+	}
+
+	if (!i2c_raw_get_sda(port)) {
+		CPRINTF("I2C unwedge failed, SDA still low\n");
+		ret = EC_ERROR_UNKNOWN;
+	}
+	if (!i2c_raw_get_scl(port)) {
+		CPRINTF("I2C unwedge failed, SCL still low\n");
+		ret = EC_ERROR_UNKNOWN;
+	}
+
+unwedge_done:
+	/* Take port out of raw bit bang mode. */
+	i2c_raw_mode(port, 0);
+
+	return ret;
 }
 
 static int i2c_freq_changed(void)

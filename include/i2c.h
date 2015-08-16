@@ -93,6 +93,15 @@ void i2c_raw_set_sda(int port, int level);
  */
 int i2c_raw_mode(int port, int enable);
 
+/**
+ * Attempt to unwedge an I2C bus.
+ *
+ * @param port I2C port
+ *
+ * @return EC_SUCCESS or EC_ERROR_UNKNOWN
+ */
+int i2c_unwedge(int port);
+
 /* Read a 16-bit register from the slave at 8-bit slave address <slaveaddr>, at
  * the specified 8-bit <offset> in the slave's address space. */
 int i2c_read16(int port, int slave_addr, int offset, int* data);
