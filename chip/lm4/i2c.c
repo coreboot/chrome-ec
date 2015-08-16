@@ -220,6 +220,14 @@ static int i2c_transmit_receive(int port, int slave_addr,
 	return EC_SUCCESS;
 }
 
+void i2c_lock(int port, int lock)
+{
+	if (lock) {
+		mutex_lock(port_mutex + port);
+	} else {
+		mutex_unlock(port_mutex + port);
+	}
+}
 
 int i2c_read16(int port, int slave_addr, int offset, int *data)
 {

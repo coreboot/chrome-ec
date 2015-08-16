@@ -94,6 +94,13 @@ void i2c_raw_set_sda(int port, int level);
 int i2c_raw_mode(int port, int enable);
 
 /**
+ * Lock / unlock an I2C port.
+ * @param port		Port to lock
+ * @param lock		1 to lock, 0 to unlock
+ */
+void i2c_lock(int port, int lock);
+
+/**
  * Attempt to unwedge an I2C bus.
  *
  * @param port I2C port

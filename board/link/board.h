@@ -93,6 +93,7 @@ enum adc_channel
 /* I2C ports */
 #define I2C_PORT_BATTERY 0
 #define I2C_PORT_CHARGER 0  /* Note: proto0 used port 1 */
+#define I2C_PORT_HOST 0     /* For i2cwedge only */
 #define I2C_PORT_THERMAL 5
 #define I2C_PORT_LIGHTBAR 1
 #define I2C_PORT_REGULATOR 0
