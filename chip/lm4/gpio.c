@@ -184,7 +184,7 @@ int gpio_set_flags(enum gpio_signal signal, int flags)
 		/* Output */
 		/* Select open drain first, so that we don't glitch the signal
 		 * when changing the line to an output. */
-		if (g->flags & GPIO_OPEN_DRAIN)
+		if (g->flags & GPIO_OPEN_DRAIN || flags & GPIO_OPEN_DRAIN)
 			LM4_GPIO_ODR(g->port) |= g->mask;
 		else
 			LM4_GPIO_ODR(g->port) &= ~g->mask;
