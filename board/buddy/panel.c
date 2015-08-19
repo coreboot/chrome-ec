@@ -91,13 +91,27 @@ static void panel_converter_setting(void)
 }
 DECLARE_DEFERRED(panel_converter_setting);
 
+static void update_backlight(void)
+{
+#ifdef CONFIG_BACKLIGHT_REQ_GPIO
+	if (gpio_get_level(CONFIG_BACKLIGHT_REQ_GPIO)) {
+		gpio_set_level(GPIO_ENABLE_BACKLIGHT, 1);
+		hook_call_deferred(&panel_converter_setting, 200 * MSEC);
+	} else {
+		gpio_set_level(GPIO_ENABLE_BACKLIGHT, 0);
+	}
+#endif
+}
+
 void backlight_interrupt(enum gpio_signal signal)
 {
-	hook_call_deferred(&panel_converter_setting, 200 * MSEC);
+	update_backlight();
 }
 
 static void convert_init(void)
 {
+	update_backlight();
+
 #ifdef CONFIG_BACKLIGHT_REQ_GPIO
 	gpio_enable_interrupt(CONFIG_BACKLIGHT_REQ_GPIO);
 #endif
