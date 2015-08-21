@@ -101,14 +101,6 @@ static void i2c_bang_out_bit(int bit)
 	while (i2c_raw_get_scl(I2C_PORT_HOST) == 0)
 		; /* TODO(crosbug.com/p/26487): TIMEOUT */
 
-	/*
-	 * SCL is high, now data is valid
-	 * If SDA is high, check that nobody else is driving SDA
-	 */
-	i2c_raw_set_sda(I2C_PORT_HOST, 1);
-	if (bit && i2c_raw_get_sda(I2C_PORT_HOST) == 0)
-		; /* TODO(crosbug.com/p/26487): arbitration_lost */
-
 	i2c_bang_delay();
 	i2c_raw_set_scl(I2C_PORT_HOST, 0);
 }
