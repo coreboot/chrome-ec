@@ -34,7 +34,9 @@
 
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
 #define GPIO_KB_OUTPUT (GPIO_ODR_HIGH)
+#ifdef CONFIG_KEYBOARD_COL2_INVERTED
 #define GPIO_KB_OUTPUT_COL2 (GPIO_OUT_LOW)
+#endif
 
 #include "gpio_list.h"
 
