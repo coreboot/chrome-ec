@@ -329,7 +329,7 @@ void gesture_calc(void)
 /* Console commands */
 static int command_tap_info(int argc, char **argv)
 {
-	int odr, val;
+	int val;
 
 	ccprintf("tap:   %s\n", (tap_detection && !lid_is_open()) ?
 					"on" : "off");
@@ -341,8 +341,7 @@ static int command_tap_info(int argc, char **argv)
 	}
 
 	ccprintf("debug: %s\n", tap_debug ? "on" : "off");
-	sensor->drv->get_data_rate(sensor, &odr);
-	ccprintf("odr:   %d\n", odr);
+	ccprintf("odr:   %d\n", sensor->drv->get_data_rate(sensor));
 
 	return EC_SUCCESS;
 }
