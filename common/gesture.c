@@ -22,9 +22,6 @@
 #define CPRINTS(format, args...) cprints(CC_GESTURE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_GESTURE, format, ## args)
 
-/* Output datarate for tap sensor (in milli-Hz) */
-#define TAP_ODR (1000000 / CONFIG_GESTURE_SAMPLING_INTERVAL_MS)
-
 /*
  * Double tap detection parameters
  * Double tap works by looking for two isolated Z-axis accelerometer impulses
@@ -281,13 +278,6 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, gesture_chipset_resume,
 
 static void gesture_chipset_suspend(void)
 {
-	/*
-	 * Set ODR to desired value
-	 * We assume EC rate set correctly: it works because the sensor used
-	 * is never offlined/suspened.
-	 */
-	sensor->drv->set_data_rate(sensor, TAP_ODR, 1);
-
 	/*
 	 * Clear tap init and history initialized so that we have to
 	 * record a whole new set of data, and enable tap detection
