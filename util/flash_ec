@@ -96,6 +96,7 @@ BOARDS_MEC1322=(
 	glower
 	kunimitsu
 	strago
+	ultima
 )
 
 # Flags
