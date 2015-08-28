@@ -100,7 +100,7 @@ GPIO(PCH_PWRBTN_L,      PIN(160), GPIO_OUT_HIGH)                 /* Power button
 GPIO(GYRO_INT1,         PIN(161), GPIO_INPUT | GPIO_PULL_DOWN)   /* Gyro sensor interrupt 1 to EC */
 GPIO(VP9_CODEC_RESET_L, PIN(163), GPIO_OUT_LOW)                  /* VP9_CODEC_RESET_L, OUTPUT, ACTIVE LOW */
 
-GPIO(STARTUP_LATCH_SET, PIN(201), GPIO_OUT_HIGH)                 /* Output from EC to POL signal of USB Type C Mux */
+GPIO(STARTUP_LATCH_SET, PIN(201), GPIO_INPUT)                /* Not used in BCRD2. Programmed as Input to fix EC power leakage in S3 */
 GPIO(EC_BL_DISABLE_L,   PIN(202), GPIO_OUT_HIGH)                 /* EDP backligh disable signal from EC */
 GPIO(SMC_SHUTDOWN,      PIN(203), GPIO_OUT_LOW)                  /* Shutdown signal from EC to power sequencing PLD */
 GPIO(USBPD_BST_OFF,     PIN(204), GPIO_OUT_LOW)
