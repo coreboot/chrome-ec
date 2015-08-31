@@ -1774,6 +1774,7 @@ struct ec_response_motion_sense_fifo_data {
  */
 #define MOTIONSENSE_SENSOR_FLAG_FLUSH (1<<0)
 #define MOTIONSENSE_SENSOR_FLAG_TIMESTAMP (1<<1)
+#define MOTIONSENSE_SENSOR_FLAG_WAKEUP (1<<2)
 
 /*
  * Send this value for the data element to only perform a read. If you
