@@ -174,6 +174,7 @@ static enum power_state power_common_state(enum power_state state)
 		if (task_wait_event(S5_INACTIVITY_TIMEOUT) ==
 		    TASK_EVENT_TIMER) {
 			/* Drop to G3; wake not requested yet */
+			want_g3_exit = 0;
 			return POWER_S5G3;
 		}
 		break;
@@ -245,39 +246,17 @@ int chipset_in_state(int state_mask)
 	return (state_mask & need_mask) == need_mask;
 }
 
-/**
- * Function for exiting hard-off and soft-off state. This function should be
- * only invoked by the tasks whose priorities are higher than the chipset task
- * or the chipset task itself, and the trigger of this invoking should be only
- * done by the tasks whose priorities are lower than the chipset task or the
- * chipset task itself; otherwise there may be some concerns of race condition.
- * For example, if we want system to exit soft-off state for startup, but this
- * function is invoked after S5 inactivity timer expires and before the state
- * changes to POWER_S5G3, the system will not start up and just go to hard-off
- * state instead.
- */
 void chipset_exit_hard_off(void)
 {
-	/*
-	 * If in the hard-off (POWER_G3) state there, set a flag and then
-	 * wake up the chipset task to leave G3. If in the soft off state
-	 * (POWER_S5), we need to stop the transition to the hard-off
-	 * state, which can be done by waking up the chipset task. This
-	 * cancels the existing S5 inactivity timer and starts a new one,
-	 * which gives enough time for the chipset to start up. All other
-	 * states, nothing to do.
-	 */
-	switch (state) {
-	case POWER_G3:
-		want_g3_exit = 1;
-		/* fallthrough */
-	case POWER_S5:
-		if (task_start_called())
-			task_wake(TASK_ID_CHIPSET);
+	/* If not in the hard-off state nor headed there, nothing to do */
+	if (state != POWER_G3 && state != POWER_S5G3)
 		return;
-	default:
-		return;
-	}
+
+	/* Set a flag to leave G3, then wake the task */
+	want_g3_exit = 1;
+
+	if (task_start_called())
+		task_wake(TASK_ID_CHIPSET);
 }
 
 /*****************************************************************************/
