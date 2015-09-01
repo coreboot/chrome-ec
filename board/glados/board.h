@@ -60,6 +60,7 @@
 #define CONFIG_SPI_FLASH_W25Q64
 
 #define CONFIG_TEMP_SENSOR
+
 /*
  * Allow dangerous commands.
  * TODO(shawnn): Remove this config before production.
