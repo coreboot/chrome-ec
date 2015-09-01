@@ -5,6 +5,7 @@
 /* Celes board-specific configuration */
 
 #include "adc.h"
+#include "adc_chip.h"
 #include "als.h"
 #include "button.h"
 #include "charger.h"
@@ -48,6 +49,16 @@ const struct pwm_t pwm_channels[] = {
 };
 
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+/* ADC channels */
+const struct adc_t adc_channels[] = {
+       /* NAME, MUL, DIV, SHIFT, CHANNEL */
+       [ADC_CH_CPU_TEMP] = {"ADC_NCP15WB_CPU", 1, 1, 0, 0},
+       [ADC_CH_DIMM_TEMP] = {"ADC_NCP15WB_DIMM", 1, 1, 0, 1},
+       [ADC_CH_PMIC_TEMP] = {"ADC_NCP15WB_PMIC", 1, 1, 0, 4},
+};
+
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {

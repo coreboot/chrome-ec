@@ -41,6 +41,7 @@
 #define CONFIG_USB_PORT_POWER_SMART_SIMPLE
 #define CONFIG_USB_PORT_POWER_SMART_DEFAULT_MODE USB_CHARGE_MODE_CDP
 
+#define CONFIG_ADC
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
 
@@ -79,7 +80,6 @@
 #undef CONFIG_PSTORE
 #undef CONFIG_PECI
 #undef CONFIG_FANS
-#undef CONFIG_ADC
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -96,6 +96,10 @@
 
 /* ADC signal */
 enum adc_channel {
+	/* temperature in degrees K. */
+	ADC_CH_CPU_TEMP,
+	ADC_CH_DIMM_TEMP,
+	ADC_CH_PMIC_TEMP,
 	/* Number of ADC channels */
 	ADC_CH_COUNT
 };

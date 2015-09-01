@@ -60,7 +60,6 @@ GPIO(PCH_SUS_STAT_L,    PIN(51), GPIO_INT_FALLING)              /* Signal to inf
 GPIO(EC_ACDET_CTRL,     PIN(52), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(TRACKPAD_PWREN,    PIN(53), GPIO_OUT_HIGH)                 /* Enable power for Track Pad */
 GPIO(USB_OC0_L,         PIN(55), GPIO_INT_FALLING)              /* Over current signal of the BC1.2 charger to EC */
-GPIO(EC_ADC1,           PIN(57), GPIO_INPUT)                    /* EC_ADC1, TEMP_SENSOR_2 no_stuff */
 
 GPIO(EC_ADC0,           PIN(61), GPIO_INPUT)                    /* EC_ADC0 */
 GPIO(EC_HIB_L,          PIN(64), GPIO_OUT_LOW)                  /* Set to high before Pseduo G3 */
@@ -138,8 +137,8 @@ ALTERNATE(PIN_MASK(15, 0x08),   1,    MODULE_SPI,             0)                
 
 ALTERNATE(PIN_MASK(13, 0x48),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 133: PWM0, 136: PWM1 */
 ALTERNATE(PIN_MASK(14, 0x02),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 141: PWM3 */
-ALTERNATE(PIN_MASK(5,  0x40),   1,    MODULE_ADC,             0)                     /* 56: temperature sensor 1 */
-ALTERNATE(PIN_MASK(6,  0x05),   1,    MODULE_ADC,             0)                     /* 60: PC_MON, 62: temperature sensor 3 */
+ALTERNATE(PIN_MASK(5,  0x80),   1,    MODULE_ADC,             0)                     /* 56(ADC0): thermistor 1, 57(ADC1): thermistor 2*/
+ALTERNATE(PIN_MASK(6,  0x05),   1,    MODULE_ADC,             0)                     /* 60: PC_MON, 62(ADC4): thermistor 3 */
 
 /* Re-Config LPC Pins to GPIO Open Drain for SOC G3 (EC - POWER_G3) state */
 ALTERNATE(PIN_MASK(1,  0x10),   0,      MODULE_GPIO,          GPIO_ODR_HIGH)         /* 14: LPC CLKRUN */
