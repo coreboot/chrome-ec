@@ -318,6 +318,9 @@ static void board_init(void)
 	queue_init(&ap_usart_to_usb);
 	queue_init(&ap_usb_to_usart);
 	usart_init(&ap_usart);
+	/* Disable UART input when the Write Protect is enabled */
+	if (system_is_locked())
+		ap_usb.state->rx_disabled = 1;
 
 	/*
 	 * Enable CC lines after all GPIO have been initialized. Note, it is
