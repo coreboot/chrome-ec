@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 The Chromium OS Authors. All rights reserved.
+/* Copyright 2015 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -46,8 +46,6 @@
 
 #define CONFIG_PMIC
 
-#define CONFIG_ALS
-#define CONFIG_ALS_ISL29035
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER
@@ -90,10 +88,7 @@
 /* I2C ports */
 #define I2C_PORT_BATTERY	MEC1322_I2C0_0
 #define I2C_PORT_CHARGER	MEC1322_I2C0_0
-#define I2C_PORT_ACCEL		MEC1322_I2C1
-#define I2C_PORT_GYRO		MEC1322_I2C1
-#define I2C_PORT_ALS		MEC1322_I2C1
-#define I2C_PORT_PD_MCU		MEC1322_I2C2
+#define I2C_PORT_ACCEL		MEC1322_I2C2
 #define I2C_PORT_THERMAL	MEC1322_I2C3
 
 /* ADC signal */
@@ -131,13 +126,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,
 
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_ISL29035 = 0,
-
-	ALS_COUNT,
 };
 
 #endif /* !__ASSEMBLER__ */

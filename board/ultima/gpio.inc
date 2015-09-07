@@ -22,14 +22,14 @@ GPIO_INT(UART0_RX,          PIN(162), GPIO_INPUT | GPIO_PULL_UP,          NULL) 
 GPIO_INT(PCH_SLP_S4_L,      PIN(200), GPIO_INT_BOTH,                      power_signal_interrupt)   /* SLP_S4# signal from PCH */
 GPIO_INT(PCH_SLP_S3_L,      PIN(206), GPIO_INT_BOTH,                      power_signal_interrupt)   /* SLP_S3# signal from PCH */
 
-GPIO(NC_GPIO0,          PIN(0),  GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(BOARD_VERSION2,    PIN(0),  GPIO_INPUT)                    /* BOARD_ID1 */
 GPIO(KBD_KSO2,          PIN(1),  GPIO_KB_OUTPUT_COL2)           /* Negative edge triggered irq. */
 
 GPIO(NC_USBPD_BOOT0,    PIN(12), GPIO_INPUT | GPIO_PULL_DOWN)   /* NC */
 GPIO(USB_ILIM_SEL,      PIN(13), GPIO_OUT_HIGH)                 /* USB current control */
-GPIO(I2C_PORT0_SCL,     PIN(15), GPIO_ODR_HIGH)
-GPIO(I2C_PORT0_SDA,     PIN(16), GPIO_ODR_HIGH)
-GPIO(BOARD_VERSION3,    PIN(17), GPIO_INPUT)                    /* BOARD_ID2 */
+GPIO(I2C_PORT0_0_SCL,   PIN(15), GPIO_ODR_HIGH)
+GPIO(I2C_PORT0_0_SDA,   PIN(16), GPIO_ODR_HIGH)
+GPIO(NC_GPIO017,        PIN(17), GPIO_INPUT)
 
 GPIO(I2C_PORT2_SCL,     PIN(20), GPIO_ODR_HIGH)
 GPIO(I2C_PORT2_SDA,     PIN(21), GPIO_ODR_HIGH)
@@ -51,16 +51,16 @@ GPIO(USB2_ENABLE,       PIN(36), GPIO_OUT_LOW)                  /* Enable power 
 GPIO(ENTERING_RW,       PIN(41), GPIO_OUT_LOW)                  /* Indicate when EC is entering RW code */
 GPIO(PCH_SMI_L,         PIN(44), GPIO_ODR_HIGH)                 /* SMI output */
 GPIO(USB_OC1_L,         PIN(45), GPIO_INT_FALLING)              /* DB2 BC1.2 over current signal to EC */
-GPIO(DP_USB_C_HPD_Q,    PIN(46), GPIO_OUT_HIGH)                 /* DP hot plug detect from EC to SOC */
+GPIO(NC_GPIO046,        PIN(46), GPIO_INPUT)                    /* NC */
 
 GPIO(OTG_SW_EN,         PIN(50), GPIO_OUT_LOW)                  /* */
 GPIO(PCH_SUS_STAT_L,    PIN(51), GPIO_INT_FALLING)              /* Signal to inform EC that SOC is entering low power state */
-GPIO(EC_ACDET_CTRL,     PIN(52), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_GPIO052,        PIN(52), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(TRACKPAD_PWREN,    PIN(53), GPIO_OUT_HIGH)                 /* Enable power for Track Pad */
 GPIO(USB_OC0_L,         PIN(55), GPIO_INT_FALLING)              /* Over current signal of the BC1.2 charger to EC */
 GPIO(EC_ADC1,           PIN(57), GPIO_INPUT)                    /* EC_ADC1, TEMP_SENSOR_2 no_stuff */
 
-GPIO(EC_ADC0,           PIN(61), GPIO_INPUT)                    /* EC_ADC0 */
+GPIO(NC_GPIO061,        PIN(61), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(EC_HIB_L,          PIN(64), GPIO_OUT_LOW)                  /* Set to high before Pseduo G3 */
 GPIO(PCH_SYS_PWROK,     PIN(65), GPIO_OUT_LOW)                  /* EC thinks everything is up and ready (DELAY_ALL_SYS_PWRGD) */
 GPIO(PCH_WAKE_L,        PIN(66), GPIO_ODR_HIGH)                 /* PCH wake pin */
@@ -68,7 +68,7 @@ GPIO(USB1_ENABLE,       PIN(67), GPIO_OUT_LOW)                  /* Enable power 
 
 GPIO(NC_GPIO100,        PIN(100), GPIO_INPUT | GPIO_PULL_UP)    /* NC */
 GPIO(NC_GPIO101,        PIN(101), GPIO_INPUT | GPIO_PULL_UP)    /* NC */
-GPIO(NC_GPIO102,        PIN(102), GPIO_INPUT | GPIO_PULL_UP)    /* NC */
+GPIO(BOARD_VERSION3,    PIN(102), GPIO_INPUT)                   /* BOARD_ID2 */
 GPIO(USB_CTL1,          PIN(105), GPIO_OUT_HIGH)                /* USB charging mode control */
 
 GPIO(PCH_RCIN_L,        PIN(110), GPIO_ODR_HIGH)                /* Reset line to PCH (for 8042 emulation) */
@@ -76,44 +76,43 @@ GPIO(NC_115,            PIN(115), GPIO_INPUT | GPIO_PULL_UP)    /* NC */
 GPIO(EC_VNN_VCLK,       PIN(122), GPIO_INPUT | GPIO_PULL_UP)    /* Interrupt from USB PD Controller to EC */
 GPIO(STRAP_L,           PIN(123), GPIO_OUT_LOW)
 GPIO(EC_VNN_ALERT_L,    PIN(124), GPIO_INPUT | GPIO_PULL_UP)
-GPIO(GYRO_INT2,         PIN(127), GPIO_INPUT | GPIO_PULL_DOWN)   /* Gyro sensor interrupt 2 to EC */
+GPIO(NC_127,            PIN(127), GPIO_INPUT | GPIO_PULL_UP)    /* NC */
 
 GPIO(EC_PLUG_DETECT,    PIN(132), GPIO_INT_BOTH | GPIO_PULL_UP | GPIO_PULL_DOWN)
-GPIO(BOARD_VERSION2,    PIN(134), GPIO_INPUT)                    /* BOARD_ID1 */
-GPIO(PD_RST_L,          PIN(135), GPIO_ODR_HIGH)                 /* USB PD MCU reset */
+GPIO(NC_GPIO134,        PIN(134), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_GPIO135,        PIN(135), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
-GPIO(THERMAL_PROBE_EN_L,PIN(140), GPIO_OUT_HIGH)
+GPIO(NC_GPIO140,        PIN(140), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(PCH_RSMRST_L,      PIN(143), GPIO_OUT_LOW)                  /* RSMRST_N to PCH */
 GPIO(EC_KBD_ALERT,      PIN(145), GPIO_OUT_LOW)                   /* EC_KBD_ALERT */
 GPIO(PVT_CS0,           PIN(146), GPIO_ODR_HIGH)                 /* SPI PVT Chip select */
-GPIO(ALS_INT,           PIN(147), GPIO_INPUT | GPIO_PULL_UP)     /* ALS sensor interrupt to EC */
+GPIO(NC_GPIO147,        PIN(147), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
 GPIO(WLAN_OFF_L,        PIN(150), GPIO_ODR_HIGH)                 /* Wireless LAN */
 GPIO(CPU_PROCHOT,       PIN(151), GPIO_OUT_LOW)
 GPIO(KBD_IRQ_L,         PIN(152), GPIO_ODR_HIGH)                 /* Negative edge triggered irq. */
 GPIO(BOARD_VERSION1,    PIN(154), GPIO_INPUT)                    /* BOARD_ID0 */
-GPIO(EC_PERICOM_INT,    PIN(155), GPIO_INT_BOTH)                 /* Pericom USB device interrupt */
+GPIO(NC_GPIO155,        PIN(155), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(PWR_BTN_SELECT,    PIN(156), GPIO_ODR_HIGH)                 /* HIGH in clamshell mode and LOW in tablet mode */
 GPIO(PCH_SUSPWRDNACK,   PIN(157), GPIO_INT_FALLING)              /* PMC SUSPWRDNACK signal from SOC to EC */
 
 GPIO(PCH_PWRBTN_L,      PIN(160), GPIO_OUT_HIGH)                 /* Power button output to PCH */
 GPIO(GYRO_INT1,         PIN(161), GPIO_INPUT | GPIO_PULL_DOWN)   /* Gyro sensor interrupt 1 to EC */
-GPIO(VP9_CODEC_RESET_L, PIN(163), GPIO_OUT_LOW)                  /* VP9_CODEC_RESET_L, OUTPUT, ACTIVE LOW */
+GPIO(NC_GPIO163,        PIN(163), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
 GPIO(STARTUP_LATCH_SET, PIN(201), GPIO_INPUT)                /* Not used in BCRD2. Programmed as Input to fix EC power leakage in S3 */
 GPIO(EC_BL_DISABLE_L,   PIN(202), GPIO_OUT_HIGH)                 /* EDP backligh disable signal from EC */
 GPIO(SMC_SHUTDOWN,      PIN(203), GPIO_OUT_LOW)                  /* Shutdown signal from EC to power sequencing PLD */
-GPIO(USBPD_BST_OFF,     PIN(204), GPIO_OUT_LOW)
+GPIO(NC_GPIO204,        PIN(204), GPIO_INPUT | GPIO_PULL_UP)
 
-GPIO(SUSPWRDNACK_SOC_EC,PIN(210), GPIO_OUT_LOW)                  /* SUSPWRDNACK signal from MOIC device to EC */
+GPIO(NC_GPIO210,        PIN(210), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(GPIO_3_EC,         PIN(211), GPIO_OUT_LOW)                  /* Sleep SOIX signal from SOC to EC */
 
 /* Alternate functions GPIO definition */
 ALTERNATE(PIN_MASK(16, 0x24),   1,    MODULE_UART,            0)                    /* UART0 */
 
-ALTERNATE(PIN_MASK(1,  0x60),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C0: Battery Charger */
-ALTERNATE(PIN_MASK(2,  0x3f),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C1: Temp Sensor / I2C2: SOC / I2C3: VNN */
-
+ALTERNATE(PIN_MASK(1,  0x60),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C0_0: Battery Charger */
+ALTERNATE(PIN_MASK(2,  0x3f),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C1:  / I2C2: Sensor / I2C3: thermal */
 ALTERNATE(PIN_MASK(0,  0xfc),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
 ALTERNATE(PIN_MASK(1,  0x03),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
 ALTERNATE(PIN_MASK(10, 0xd8),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
