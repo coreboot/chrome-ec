@@ -309,6 +309,7 @@ static void board_init(void)
 
 	/* Enable pericom BC1.2 interrupts. */
 	gpio_enable_interrupt(GPIO_USBC_BC12_INT_L);
+	gpio_enable_interrupt(GPIO_CHGR_INT_L);
 	pi3usb9281_set_interrupt_mask(0, 0xff);
 	pi3usb9281_enable_interrupts(0);
 
