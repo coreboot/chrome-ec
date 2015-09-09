@@ -203,6 +203,7 @@ static void usb_charger_bc12_detect(void)
 }
 
 static void board_verify_hiz_mode(void);
+static void board_verify_input_current_limit(void);
 
 void usb_charger_task(void)
 {
@@ -216,8 +217,10 @@ void usb_charger_task(void)
 		if (evt & USB_CHG_EVENT_BC12)
 			usb_charger_bc12_detect();
 		/* Time to re-verify the VBUS disconnection in the charger */
-		if (evt & USB_CHG_EVENT_HIZ)
+		if (evt & USB_CHG_EVENT_HIZ) {
 			board_verify_hiz_mode();
+			board_verify_input_current_limit();
+		}
 		/* notify host of power info change */
 		pd_send_host_event(PD_EVENT_POWER_CHANGE);
 	}
@@ -788,6 +791,12 @@ static void board_verify_hiz_mode(void)
 	/* the VBUS connection is not in the state we want: update it */
 	if (enable != typec_power_path)
 		board_vbus_power_path(typec_power_path);
+}
+
+static void board_verify_input_current_limit(void)
+{
+	/* set bq input current limit to make sure the value is up to date */
+	charge_set_input_current_limit(charge_current_limit);
 }
 
 int extpower_is_present(void)
