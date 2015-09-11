@@ -1085,6 +1085,9 @@
 /* Need for a math library */
 #undef CONFIG_MATH_UTIL
 
+/* Include code to do online compass calibration */
+#undef CONFIG_MAG_CALIBRATE
+
 /* Presence of a Bosh Sensortec BMM150 magnetometer behind a BMI160. */
 #undef CONFIG_MAG_BMI160_BMM150
 
