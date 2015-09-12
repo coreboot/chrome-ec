@@ -175,6 +175,8 @@ enum power_state power_handle_state(enum power_state state)
 		/* Call hooks now that rails are up */
 		hook_notify(HOOK_CHIPSET_STARTUP);
 
+		wireless_set_state(WIRELESS_ON);
+
 		/* Enable Trackpad power while transition from S5 to S3 */
 		gpio_set_level(GPIO_TRACKPAD_PWREN, 1);
 
@@ -285,7 +287,7 @@ enum power_state power_handle_state(enum power_state state)
 		/* Call hooks before we remove power rails */
 		hook_notify(HOOK_CHIPSET_SHUTDOWN);
 
-		/*wireless_set_state(WIRELESS_OFF);*/
+		wireless_set_state(WIRELESS_OFF);
 
 		/* Start shutting down */
 		return power_get_pause_in_s5() ? POWER_S5 : POWER_S5G3;

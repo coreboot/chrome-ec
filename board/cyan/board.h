@@ -32,6 +32,7 @@
 #define CONFIG_I2C
 #define CONFIG_PORT80_TASK_EN
 #define CONFIG_VBOOT_HASH
+#define CONFIG_WIRELESS
 
 #define CONFIG_CHARGER
 #define CONFIG_BATTERY_CUT_OFF
@@ -66,6 +67,9 @@
 #define CONFIG_LID_ANGLE_SENSOR_LID 1
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
+
+/* Wireless signals */
+#define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
 
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
