@@ -336,8 +336,18 @@ static int check_for_power_on_event(void)
 	/* check for power button press */
 	if (gpio_get_level(GPIO_KB_PWR_ON_L) == 0) {
 		udelay(KB_PWR_ON_DEBOUNCE);
-		if (gpio_get_level(GPIO_KB_PWR_ON_L) == 0)
-			return 4;
+		if (gpio_get_level(GPIO_KB_PWR_ON_L) == 0) {
+			/*
+			 * Power button can still be pressed by accident when
+			 * lid is closed: chrome-os-partner:431360 (c#116).
+			 */
+			if (gpio_get_level(GPIO_LID_OPEN) == 1) {
+				return 4;
+			} else {
+				CPRINTF("[%T lid is closed, ignoring "
+					"power button press]\n");
+			}
+		}
 	}
 
 	if (power_request == POWER_REQ_ON) {
