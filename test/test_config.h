@@ -67,10 +67,11 @@
 #define CONFIG_CHARGER_V1
 #define CONFIG_CHARGER_INPUT_CURRENT 4032
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
+#define CONFIG_I2C
 int board_discharge_on_ac(int enabled);
-#define I2C_PORT_MASTER 1
-#define I2C_PORT_BATTERY 1
-#define I2C_PORT_CHARGER 1
+#define I2C_PORT_MASTER 0
+#define I2C_PORT_BATTERY 0
+#define I2C_PORT_CHARGER 0
 #endif
 
 #ifdef TEST_SBS_CHARGING_V2
@@ -81,31 +82,21 @@ int board_discharge_on_ac(int enabled);
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 #define CONFIG_CHARGER_INPUT_CURRENT 4032
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
+#define CONFIG_I2C
 int board_discharge_on_ac(int enabled);
-#define I2C_PORT_MASTER 1
-#define I2C_PORT_BATTERY 1
-#define I2C_PORT_CHARGER 1
+#define I2C_PORT_MASTER 0
+#define I2C_PORT_BATTERY 0
+#define I2C_PORT_CHARGER 0
 #endif
 
 #ifdef TEST_THERMAL
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_FANS 1
+#define CONFIG_I2C
 #define CONFIG_TEMP_SENSOR
-#endif
-
-#ifdef TEST_THERMAL_FALCO
-#define CONFIG_BATTERY_MOCK
-#define CONFIG_BATTERY_SMART
-#define CONFIG_CHARGER
-#define CONFIG_CHARGER_V1
-#define CONFIG_CHARGER_INPUT_CURRENT 4032
-#define CONFIG_CHIPSET_CAN_THROTTLE
-#define CONFIG_EXTPOWER_FALCO
-#define CONFIG_FANS 1
-#define CONFIG_TEMP_SENSOR
-#define I2C_PORT_BATTERY 1
-#define I2C_PORT_CHARGER 1
-#define I2C_PORT_MASTER 1
+#define CONFIG_THERMISTOR_NCP15WB
+#define I2C_PORT_THERMAL 0
+int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 
 #ifdef TEST_FAN
@@ -121,9 +112,10 @@ int board_discharge_on_ac(int enabled);
 #define CONFIG_BATTERY_MOCK
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER_INPUT_CURRENT 4032
-#define I2C_PORT_MASTER 1
-#define I2C_PORT_BATTERY 1
-#define I2C_PORT_CHARGER 1
+#define CONFIG_I2C
+#define I2C_PORT_MASTER 0
+#define I2C_PORT_BATTERY 0
+#define I2C_PORT_CHARGER 0
 #endif
 
 #ifdef TEST_LIGHTBAR
