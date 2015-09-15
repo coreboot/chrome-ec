@@ -158,7 +158,7 @@ static inline uint8_t controller_read(int ctrl_num, uint8_t reg)
 #define MAX_GREEN 0x2c
 #define MAX_BLUE  0x40
 #endif
-#if defined(BOARD_RYU) || defined(BOARD_RYU_P4P5)
+#if defined(BOARD_RYU)
 #define MAX_RED   0xb4
 #define MAX_GREEN 0xac
 #define MAX_BLUE  0xc0
@@ -215,7 +215,7 @@ static const uint8_t led_to_isc[] = { 0x18, 0x15, 0x18, 0x15 };
 #ifdef BOARD_SAMUS
 static const uint8_t led_to_isc[] = { 0x15, 0x18, 0x15, 0x18 };
 #endif
-#if defined(BOARD_RYU) || defined(BOARD_RYU_P4P5)
+#if defined(BOARD_RYU)
 static const uint8_t led_to_isc[] = { 0x18, 0x15, 0x18, 0x15 };
 #endif
 #ifdef BOARD_HOST
