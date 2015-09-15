@@ -52,4 +52,6 @@ extern char __host_flash[CONFIG_FLASH_PHYSICAL_SIZE];
 /* Do NOT use common timer code which is designed for hardware counters. */
 #undef CONFIG_COMMON_TIMER
 
+#define I2C_PORT_COUNT 1
+
 #endif /* __CROS_EC_CONFIG_CHIP_H */

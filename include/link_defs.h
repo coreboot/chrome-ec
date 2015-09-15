@@ -63,20 +63,8 @@ extern const uint8_t __usb_desc_end[];
 extern const uint16_t __usb_ram_start[];
 
 /* I2C fake devices for unit testing */
-extern const struct test_i2c_read_dev __test_i2c_read8[];
-extern const struct test_i2c_read_dev __test_i2c_read8_end[];
-extern const struct test_i2c_write_dev __test_i2c_write8[];
-extern const struct test_i2c_write_dev __test_i2c_write8_end[];
-extern const struct test_i2c_read_dev __test_i2c_read16[];
-extern const struct test_i2c_read_dev __test_i2c_read16_end[];
-extern const struct test_i2c_read_dev __test_i2c_read32[];
-extern const struct test_i2c_read_dev __test_i2c_read32_end[];
-extern const struct test_i2c_write_dev __test_i2c_write16[];
-extern const struct test_i2c_write_dev __test_i2c_write16_end[];
-extern const struct test_i2c_write_dev __test_i2c_write32[];
-extern const struct test_i2c_write_dev __test_i2c_write32_end[];
-extern const struct test_i2c_read_string_dev __test_i2c_read_string[];
-extern const struct test_i2c_read_string_dev __test_i2c_read_string_end[];
+extern const struct test_i2c_xfer __test_i2c_xfer[];
+extern const struct test_i2c_xfer __test_i2c_xfer_end[];
 
 /* Host commands */
 extern const struct host_command __hcmds[];
