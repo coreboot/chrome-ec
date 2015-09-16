@@ -68,6 +68,19 @@ static struct ec_response_host_event_status host_event_status __aligned(4);
  */
 static int usb_switch_state;
 
+/* Wait 200ms after a charger is detected to debounce pin contact order */
+#define USB_CHG_DEBOUNCE_DELAY_MS 200
+/*
+ * Wait 100ms after reset, before re-enabling attach interrupt, so that the
+ * spurious attach interrupt from certain ports is ignored.
+ */
+#define USB_CHG_RESET_DELAY_MS 100
+
+/* Events handled by the USB_CHG task */
+#define USB_CHG_EVENT_BC12 TASK_EVENT_CUSTOM(1)
+#define USB_CHG_EVENT_HIZ  TASK_EVENT_CUSTOM(2)
+#define USB_CHG_EVENT_VBUS TASK_EVENT_CUSTOM(4)
+
 static void vbus_log(void)
 {
 	CPRINTS("VBUS %d", gpio_get_level(GPIO_CHGR_ACOK));
@@ -89,22 +102,12 @@ void vbus_evt(enum gpio_signal signal)
 		charge_manager_update_charge(CHARGE_SUPPLIER_VBUS, 0, &charge);
 	}
 
+	task_set_event(TASK_ID_USB_CHG, USB_CHG_EVENT_VBUS, 0);
+
 	hook_call_deferred(vbus_log, 0);
 	if (task_start_called())
 		task_wake(TASK_ID_PD);
 }
-
-/* Wait 200ms after a charger is detected to debounce pin contact order */
-#define USB_CHG_DEBOUNCE_DELAY_MS 200
-/*
- * Wait 100ms after reset, before re-enabling attach interrupt, so that the
- * spurious attach interrupt from certain ports is ignored.
- */
-#define USB_CHG_RESET_DELAY_MS 100
-
-/* Events handled by the USB_CHG task */
-#define USB_CHG_EVENT_BC12 TASK_EVENT_CUSTOM(1)
-#define USB_CHG_EVENT_HIZ  TASK_EVENT_CUSTOM(2)
 
 static void usb_charger_bc12_detect(void)
 {
@@ -221,6 +224,14 @@ void usb_charger_task(void)
 			board_verify_hiz_mode();
 			board_verify_input_current_limit();
 		}
+		/*
+		 * Re-enable interrupts on pericom charger detector since the
+		 * chip may periodically reset itself, and come back up with
+		 * registers in default state. TODO(crosbug.com/p/33823): Fix
+		 * these unwanted resets.
+		 */
+		if (evt & USB_CHG_EVENT_VBUS)
+			pi3usb9281_enable_interrupts(0);
 		/* notify host of power info change */
 		pd_send_host_event(PD_EVENT_POWER_CHANGE);
 	}
