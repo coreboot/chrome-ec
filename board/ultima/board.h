@@ -73,6 +73,9 @@
 /* Number of buttons */
 #define CONFIG_BUTTON_COUNT		2
 
+#undef DEFERRABLE_MAX_COUNT
+#define DEFERRABLE_MAX_COUNT	10
+
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
 #undef CONFIG_EOPTION
@@ -109,9 +112,9 @@ enum power_signal {
 };
 
 enum pwm_channel {
-	PWM_CH_LED_RED,
-	PWM_CH_LED_BLUE,
 	PWM_CH_LED_GREEN,
+	PWM_CH_LED_BLUE,
+	PWM_CH_LED_RED,
 	/* Number of PWM channels */
 	PWM_CH_COUNT
 };
