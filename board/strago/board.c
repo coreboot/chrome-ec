@@ -165,22 +165,6 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
-/* Define the accelerometer orientation matrices. */
-const struct accel_orientation acc_orient = {
-	/* Hinge aligns with x axis. */
-	.rot_hinge_90 = {
-		{ FLOAT_TO_FP(1),  0,  0},
-		{ 0,  0,  FLOAT_TO_FP(1)},
-		{ 0, FLOAT_TO_FP(-1),  0}
-	},
-	.rot_hinge_180 = {
-		{ FLOAT_TO_FP(1),  0,  0},
-		{ 0, FLOAT_TO_FP(-1),  0},
-		{ 0,  0, FLOAT_TO_FP(-1)}
-	},
-	.hinge_axis = {1, 0, 0},
-};
-
 /*
  * In S3, power rail for sensors (+V3p3S) goes down asynchronous to EC. We need
  * to execute this routine first and set the sensor state to "Not Initialized".

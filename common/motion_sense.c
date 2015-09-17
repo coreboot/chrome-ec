@@ -48,6 +48,10 @@ static int accel_disp;
 
 #define SENSOR_ACTIVE(_sensor) (sensor_active & (_sensor)->active_mask)
 
+#if defined(CONFIG_LPC) || defined(TEST_MOTION_LID)
+#define UPDATE_HOST_MEM_MAP
+#endif
+
 /*
  * Mutex to protect sensor values between host command task and
  * motion sense task:
@@ -479,7 +483,7 @@ static inline void set_present(uint8_t *lpc_status)
 	*lpc_status |= EC_MEMMAP_ACC_STATUS_PRESENCE_BIT;
 }
 
-#ifdef CONFIG_LPC
+#ifdef UPDATE_HOST_MEM_MAP
 /* Update/Write LPC data */
 static inline void update_sense_data(uint8_t *lpc_status,
 		uint16_t *lpc_data, int *psample_id)
@@ -618,7 +622,7 @@ void motion_sense_task(void)
 #ifdef CONFIG_ACCEL_FIFO
 	timestamp_t ts_last_int;
 #endif
-#ifdef CONFIG_LPC
+#ifdef UPDATE_HOST_MEM_MAP
 	int sample_id = 0;
 	uint8_t *lpc_status;
 	uint16_t *lpc_data;
@@ -725,7 +729,7 @@ void motion_sense_task(void)
 			CPRINTF("]\n");
 		}
 #endif
-#ifdef CONFIG_LPC
+#ifdef UPDATE_HOST_MEM_MAP
 		update_sense_data(lpc_status, lpc_data, &sample_id);
 #endif
 
