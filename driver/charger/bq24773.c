@@ -36,6 +36,8 @@
 #define REG8_TO_CURRENT(REG, RS) ((REG) * DEFAULT_SENSE_RESISTOR / (RS) * R8)
 #define CURRENT_TO_REG8(CUR, RS) ((CUR) * (RS) / DEFAULT_SENSE_RESISTOR / R8)
 
+static int prev_charge_inhibited = -1;
+
 /* Charger parameters */
 static const struct charger_info bq2477x_charger_info = {
 	.name         = CHARGER_NAME,
@@ -142,6 +144,7 @@ int charger_get_option(int *option)
 
 int charger_set_option(int option)
 {
+	prev_charge_inhibited = option & CHARGE_FLAG_INHIBIT_CHARGE;
 	return raw_write16(REG_CHARGE_OPTION0, option);
 }
 
@@ -173,11 +176,26 @@ int charger_get_status(int *status)
 int charger_set_mode(int mode)
 {
 	int rv;
-	int option;
+	int option, i;
 
-	rv = charger_get_option(&option);
-	if (rv)
-		return rv;
+	if ((mode & CHARGE_FLAG_INHIBIT_CHARGE) ==
+		prev_charge_inhibited)
+		return EC_SUCCESS;
+
+	/*
+	 * Refer to crosbug.com/p/45575. If LEARN is enabled,
+	 * read one more time to make sure it's not
+	 * bogus value.
+	 */
+	for (i = 0; i < 2; i++) {
+		rv = charger_get_option(&option);
+		if (rv)
+			return rv;
+		else {
+			if (!(option & OPTION0_LEARN_ENABLE))
+				break;
+		}
+	}
 
 	if (mode & CHARGE_FLAG_INHIBIT_CHARGE)
 		option |= OPTION0_CHARGE_INHIBIT;
