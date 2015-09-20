@@ -674,6 +674,41 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+struct lb_brightness_def lb_brightness_levels[] = {
+	{
+		/* regular brightness */
+		.lux = 40,
+		.color = {
+			{0x74, 0x58, 0xb4},	/* Segment0: Google blue */
+			{0xd6, 0x40, 0x20},	/* Segment1: Google red */
+			{0xfa, 0xe6, 0x20},	/* Segment2: Google yellow */
+			{0x66, 0xb0, 0x50},	/* Segment3: Google green */
+		},
+	},
+	{
+		/* 25 - 50% brightness */
+		.lux = 20,
+		.color = {
+			{0x51, 0x38, 0x7d},
+			{0x99, 0x28, 0x15},
+			{0xb8, 0x9e, 0x1a},
+			{0x44, 0x80, 0x35},
+		},
+	},
+	{
+		/* 0 .. 25% brightness */
+		.lux = 0,
+		.color = {
+			{0x3d, 0x28, 0x5c},
+			{0x71, 0x28, 0x10},
+			{0x8a, 0x6f, 0x10},
+			{0x2f, 0x60, 0x25},
+		},
+	},
+};
+const unsigned int lb_brightness_levels_count =
+		ARRAY_SIZE(lb_brightness_levels);
+
 static void board_set_usb_switches(int port, int open)
 {
 	/* If switch is not changing, then return */
