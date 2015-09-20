@@ -18,6 +18,8 @@
 #include "host_command.h"
 #include "lb_common.h"
 #include "lightbar.h"
+#include "lid_switch.h"
+#include "motion_sense.h"
 #include "pwm.h"
 #include "system.h"
 #include "task.h"
@@ -170,6 +172,9 @@ static void lightbar_restore_state(void)
 #ifdef CONFIG_PWM_KBLIGHT
 static int last_backlight_level;
 #endif
+#ifdef CONFIG_ALS_LIGHTBAR_DIMMING
+static int last_google_color = -1;
+#endif
 
 static int demo_mode = DEMO_MODE_DEFAULT;
 
@@ -182,11 +187,30 @@ static int quantize_battery_level(int pct)
 	return bl;
 }
 
+#ifdef CONFIG_ALS_LIGHTBAR_DIMMING
+static int lux_level_to_google_color(int lux)
+{
+	int i;
+
+	if (!lid_is_open())
+		/* The lid shades the light sensor, use full brightness. */
+		return 0;
+
+	for (i = 0; i < lb_brightness_levels_count ; i++)
+		if (lux >= lb_brightness_levels[i].lux)
+			break;
+	return i;
+}
+#endif
+
 /* Update the known state. */
 static void get_battery_level(void)
 {
 	int pct = 0;
 	int bl;
+#ifdef CONFIG_ALS_LIGHTBAR_DIMMING
+	int color_id;
+#endif
 
 	if (demo_mode)
 		return;
@@ -231,6 +255,17 @@ static void get_battery_level(void)
 	if (pct != last_backlight_level) {
 		last_backlight_level = pct;
 		lb_set_brightness(pct);
+	}
+#endif
+#ifdef CONFIG_ALS_LIGHTBAR_DIMMING
+	/* Read last value (in lux) collected by the motion sensor. */
+	/* Convert lux into brightness percentage */
+	color_id = lux_level_to_google_color(MOTION_SENSE_LUX);
+
+	if (color_id != last_google_color) {
+		last_google_color = pct;
+		memcpy(st.p.color, lb_brightness_levels[color_id].color,
+		       sizeof(lb_brightness_levels[color_id].color));
 	}
 #endif
 }

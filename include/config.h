@@ -97,6 +97,9 @@
 #undef CONFIG_ALS
 #undef CONFIG_ALS_ISL29035
 
+/* Define which ALS sensor is used for dimming the lightbar when dark */
+#undef CONFIG_ALS_LIGHTBAR_DIMMING
+
 /* Support AP hang detection host command and state machine */
 #undef CONFIG_AP_HANG_DETECT
 
