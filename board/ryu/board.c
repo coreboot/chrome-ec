@@ -82,6 +82,13 @@ static int usb_switch_state;
 #define USB_CHG_EVENT_HIZ  TASK_EVENT_CUSTOM(2)
 #define USB_CHG_EVENT_VBUS TASK_EVENT_CUSTOM(4)
 
+/*
+ * record we need to switch on VCONN on next VBUS transition
+ * -1  : nothing do
+ * 0/1 : polarity of the VCONN to enable
+ */
+int delayed_vconn;
+
 static void vbus_log(void)
 {
 	CPRINTS("VBUS %d", gpio_get_level(GPIO_CHGR_ACOK));
@@ -92,6 +99,13 @@ void vbus_evt(enum gpio_signal signal)
 {
 	struct charge_port_info charge;
 	int vbus_level = gpio_get_level(signal);
+
+	/* if delayed_vconn set and vbus transitions high, then enable VCONN */
+	if (delayed_vconn >= 0 && vbus_level)
+		gpio_set_level(delayed_vconn ? GPIO_USBC_VCONN1_EN_L :
+					       GPIO_USBC_VCONN2_EN_L, 0);
+	/* Always clear delayed_vconn whenever vbus transitions */
+	delayed_vconn = -1;
 
 	/*
 	 * If VBUS is low, or VBUS is high and we are not outputting VBUS
