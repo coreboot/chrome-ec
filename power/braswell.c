@@ -150,7 +150,7 @@ enum power_state power_handle_state(enum power_state state)
 		gpio_set_level(GPIO_PCH_SYS_PWROK, 1);
 #else
 		gpio_set_level(GPIO_SUSPWRDNACK_SOC_EC, 1); /* disable VNN VR */
-		udelay(200 * MSEC);
+		udelay(10 * MSEC);
 		gpio_set_level(GPIO_SUSPWRDNACK_SOC_EC, 0);
 #endif
 		CPRINTS("Exit SOC G3");
