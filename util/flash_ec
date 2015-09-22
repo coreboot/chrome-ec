@@ -95,6 +95,7 @@ BOARDS_MEC1322=(
 	glados
 	glower
 	kunimitsu
+	reks
 	strago
 	ultima
 )
