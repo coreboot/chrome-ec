@@ -949,6 +949,13 @@ void pd_request_source_voltage(int port, int mv);
 void pd_set_external_voltage_limit(int port, int mv);
 
 /**
+ * Set the debug accessory input current limit.
+ *
+ * @param port USB-C port number
+ */
+void debug_set_input_current_limit(int port);
+
+/**
  * Set the PD input current limit.
  *
  * @param port USB-C port number

@@ -37,6 +37,17 @@ const uint32_t pd_snk_pdo[] = {
 };
 const int pd_snk_pdo_cnt = ARRAY_SIZE(pd_snk_pdo);
 
+void debug_set_input_current_limit(int port)
+{
+	struct charge_port_info charge;
+	charge.current = 2400;
+	charge.voltage = 5000;
+	charge_manager_update_charge(CHARGE_SUPPLIER_OTHER, port, &charge);
+
+	/* notify host of power info change */
+	pd_send_host_event(PD_EVENT_POWER_CHANGE);
+}
+
 void pd_set_input_current_limit(int port, uint32_t max_ma,
 				uint32_t supply_voltage)
 {
