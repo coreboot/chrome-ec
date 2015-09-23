@@ -26,6 +26,8 @@
 
 /* Whether we want to process interrupts on CHARGE_DONE or not. */
 static int monitor_charge_done;
+/* Prevent the inductive charging from happening */
+static int force_disable;
 
 /*
  * Start monitoring CHARGE_DONE and fires the interrupt once so that
@@ -63,7 +65,7 @@ void inductive_charging_interrupt(enum gpio_signal signal)
 			return;
 	}
 
-	if (!charger_enabled || charge_done) {
+	if (!charger_enabled || charge_done || force_disable) {
 		gpio_set_level(GPIO_CHARGE_EN, 0);
 	} else {
 		gpio_set_level(GPIO_CHARGE_EN, 1);
@@ -103,3 +105,16 @@ static void inductive_charging_init(void)
 	inductive_charging_lid_update();
 }
 DECLARE_HOOK(HOOK_INIT, inductive_charging_init, HOOK_PRIO_DEFAULT);
+
+void inductive_charging_override(int enable)
+{
+	int disable_request = !enable;
+	if (disable_request != force_disable) {
+		force_disable = disable_request;
+		if (force_disable) /* stop charging immediatly */
+			gpio_set_level(GPIO_CHARGE_EN, 0);
+		else /* kick the state machine to restart if lid is closed */
+			hook_call_deferred(inductive_charging_deferred_update,
+					   0);
+	}
+}

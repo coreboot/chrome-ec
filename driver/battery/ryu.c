@@ -10,6 +10,7 @@
 #include "console.h"
 #include "ec_commands.h"
 #include "i2c.h"
+#include "inductive_charging.h"
 #include "util.h"
 
 /* Battery temperature ranges in degrees C */
@@ -94,6 +95,8 @@ int charger_profile_override(struct charge_state_data *curr)
 			return 0;
 		}
 
+		/* Disable inductive charging outside of the 10C-50C range */
+		inductive_charging_override((temp_c >= 100) && (temp_c <= 500));
 
 		if (temp_c < 99)
 			temp_range = TEMP_RANGE_1;

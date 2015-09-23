@@ -17,4 +17,11 @@
  */
 void inductive_charging_interrupt(enum gpio_signal);
 
+/*
+ * Force enabling/disabling the inductive charging.
+ *
+ * @param enable 0 to prevent inductive charging.
+ */
+void inductive_charging_override(int enable);
+
 #endif
