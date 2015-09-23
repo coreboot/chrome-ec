@@ -17,6 +17,7 @@
 #include "console.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/als_si114x.h"
+#include "driver/charger/bq2589x.h"
 #include "ec_version.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -840,14 +841,33 @@ int board_set_active_charge_port(int charge_port)
 	return EC_SUCCESS;
 }
 
+static void bq2589x_set_ico(int enable)
+{
+	int val, rv;
+	rv = i2c_read8(I2C_PORT_CHARGER, BQ2589X_ADDR, BQ2589X_REG_CFG1, &val);
+	if (rv)
+		return;
+	if (enable)
+		val |= BQ2589X_CFG1_ICO_EN;
+	else
+		val &= ~BQ2589X_CFG1_ICO_EN;
+	i2c_write8(I2C_PORT_CHARGER, BQ2589X_ADDR, BQ2589X_REG_CFG1, val);
+}
+
 /**
  * Set the charge limit based upon desired maximum.
  *
  * @param charge_ma     Desired charge limit (mA).
  */
-void board_set_charge_limit(int charge_ma)
+void board_set_charge_limit(int charge_ma, int supplier)
 {
 	int rv;
+
+	if ((supplier == CHARGE_SUPPLIER_TYPEC) ||
+	    (supplier == CHARGE_SUPPLIER_PD))
+		bq2589x_set_ico(0);
+	else
+		bq2589x_set_ico(1);
 
 	charge_current_limit = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
 	rv = charge_set_input_current_limit(charge_current_limit);

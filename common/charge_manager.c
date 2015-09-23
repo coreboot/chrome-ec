@@ -498,7 +498,7 @@ static void charge_manager_refresh(void)
 				new_port, new_supplier, new_charge_current,
 				registration_time[new_port]);
 #else
-		board_set_charge_limit(new_charge_current);
+		board_set_charge_limit(new_charge_current, new_supplier);
 #endif
 		CPRINTS("CL: p%d s%d i%d v%d", new_port, new_supplier,
 			new_charge_current, new_charge_voltage);

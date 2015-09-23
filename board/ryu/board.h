@@ -277,9 +277,6 @@ enum usb_strings {
 /* Discharge battery when on AC power for factory test. */
 int board_discharge_on_ac(int enable);
 
-/* Set the charge current limit. */
-void board_set_charge_limit(int charge_ma);
-
 /* Enable/disable external power path. */
 int board_vbus_power_path(int enable);
 
