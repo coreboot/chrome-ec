@@ -9,7 +9,6 @@
 #define __CROS_EC_BOARD_H
 
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED  /* Allow dangerous commands */
 #define CONFIG_WATCHDOG_HELP
 #define CONFIG_BOARD_VERSION
 #define CONFIG_CLOCK_CRYSTAL
