@@ -37,10 +37,17 @@ const uint32_t pd_snk_pdo[] = {
 };
 const int pd_snk_pdo_cnt = ARRAY_SIZE(pd_snk_pdo);
 
-void debug_set_input_current_limit(int port)
+void debug_set_input_current_limit(int port, int enable)
 {
+	static int enabled; /* previous status of enable flag */
 	struct charge_port_info charge;
-	charge.current = 2400;
+
+	/* if enable status is not changing, then do nothing */
+	if (enable == enabled)
+		return;
+
+	enabled = enable;
+	charge.current = enable ? 2400 : 0;
 	charge.voltage = 5000;
 	charge_manager_update_charge(CHARGE_SUPPLIER_OTHER, port, &charge);
 

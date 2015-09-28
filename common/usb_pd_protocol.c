@@ -1528,14 +1528,10 @@ void pd_task(void)
 				pd_set_data_role(port, CONFIG_USB_PD_DEBUG_DR);
 
 #ifdef CONFIG_CASE_CLOSED_DEBUG
-				if (new_cc_state == PD_CC_DEBUG_ACC) {
+				if (new_cc_state == PD_CC_DEBUG_ACC)
 					ccd_set_mode(system_is_locked() ?
 						     CCD_MODE_PARTIAL :
 						     CCD_MODE_ENABLED);
-					debug_set_input_current_limit(port);
-					charge_manager_update_dualrole(
-						port, CAP_DEDICATED);
-				}
 #endif
 				set_state(port, PD_STATE_SRC_ACCESSORY);
 			}
@@ -1543,6 +1539,12 @@ void pd_task(void)
 		case PD_STATE_SRC_ACCESSORY:
 			/* Combined audio / debug accessory state */
 			timeout = 100*MSEC;
+
+#ifdef CONFIG_CASE_CLOSED_DEBUG
+			if (pd[port].cc_state == PD_CC_DEBUG_ACC)
+				debug_set_input_current_limit(port,
+					pd_snk_is_vbus_provided(port));
+#endif
 
 			tcpm_get_cc(port, &cc1, &cc2);
 
@@ -1555,6 +1557,7 @@ void pd_task(void)
 			      cc2 != TYPEC_CC_VOLT_RD))) {
 				set_state(port, PD_STATE_SRC_DISCONNECTED);
 #ifdef CONFIG_CASE_CLOSED_DEBUG
+				debug_set_input_current_limit(port, 0);
 				ccd_set_mode(CCD_MODE_DISABLED);
 #endif
 				timeout = 10*MSEC;
