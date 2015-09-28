@@ -150,4 +150,17 @@ void rotate(const vector_3_t v, const matrix_3x3_t R, vector_3_t res);
  */
 void rotate_inv(const vector_3_t v, const matrix_3x3_t R, vector_3_t res);
 
+/*
+ * Expodential Moving average:
+ *
+ * Based on
+ * https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
+ *
+ * Remove noise from data.
+ * _alpha is a fp_t but _avg and _data are not.
+ */
+#define EXP_MOVING_AVG(_avg, _alpha, _data) \
+	((_avg) = (INT_TO_FP(1) - (_alpha)) * (_avg) + (_alpha) * (_data))
+
+
 #endif /* __CROS_MATH_UTIL_H */

@@ -204,6 +204,23 @@ void bmm150_temp_compensate_z(const struct motion_sensor_t *s,
 		comp[Z] = BMM150_OVERFLOW_OUTPUT;
 }
 
+#ifdef CONFIG_MAG_X_SMOOTH_WEIGHT_INV
+	DECLARE_BMI160_SMOOTH_FUNC(X)
+#else
+	DECLARE_BMI160_NO_SMOOTH_FUNC(X)
+#endif
+#ifdef CONFIG_MAG_Y_SMOOTH_WEIGHT_INV
+	DECLARE_BMI160_SMOOTH_FUNC(Y)
+#else
+	DECLARE_BMI160_NO_SMOOTH_FUNC(Y)
+#endif
+#ifdef CONFIG_MAG_Z_SMOOTH_WEIGHT_INV
+	DECLARE_BMI160_SMOOTH_FUNC(Z)
+#else
+	DECLARE_BMI160_NO_SMOOTH_FUNC(Z)
+#endif
+
+
 void bmm150_normalize(const struct motion_sensor_t *s,
 		      vector_3_t v,
 		      uint8_t *data)
@@ -223,6 +240,10 @@ void bmm150_normalize(const struct motion_sensor_t *s,
 
 	bmm150_temp_compensate_xy(s, raw, v, r);
 	bmm150_temp_compensate_z(s, raw, v, r);
+	v[X] = bmi160_smooth_axis_X(s, v[X]);
+	v[Y] = bmi160_smooth_axis_Y(s, v[Y]);
+	v[Z] = bmi160_smooth_axis_Z(s, v[Z]);
+
 	mag_cal_update(cal, v);
 
 	v[X] += cal->bias[X];

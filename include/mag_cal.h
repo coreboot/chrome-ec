@@ -14,7 +14,13 @@
 
 #define MAG_CAL_MAX_SAMPLES 0xffff
 #define MAG_CAL_MIN_BATCH_WINDOW_US    SECOND
+#if defined CONFIG_MAG_X_SMOOTH_WEIGHT_INV || \
+	defined CONFIG_MAG_Y_SMOOTH_WEIGHT_INV || \
+	defined CONFIG_MAG_Z_SMOOTH_WEIGHT_INV
+#define MAG_CAL_MIN_BATCH_SIZE      50      /* samples */
+#else
 #define MAG_CAL_MIN_BATCH_SIZE      25      /* samples */
+#endif
 
 struct mag_cal_t {
 	/*

@@ -91,15 +91,52 @@ struct bmm150_comp_registers {
 	uint16_t     dig_xyz1;
 };
 
-struct bmm150_private_data {
-	struct bmm150_comp_registers comp;
-	struct mag_cal_t             cal;
-};
 #define BMM150_COMP_REG(_s) \
 	(&BMI160_GET_DATA(_s)->compass.comp)
 
 #define BMM150_CAL(_s) \
 	(&BMI160_GET_DATA(_s)->compass.cal)
+
+/* compass data may need to be filtered to remove internal noise */
+#define BMI160_SMOOTH_ACC_NAME(_axis) CONCAT2(smooth_acc_, _axis)
+#define DECLATE_BMI_SMOOTH_AXIS_VAR(_axis) \
+	fp_t BMI160_SMOOTH_ACC_NAME(_axis)
+#define BMI160_SMOOTH_GET_ACC(_s, _axis) \
+	(BMI160_GET_DATA(_s)->compass.BMI160_SMOOTH_ACC_NAME(_axis))
+
+#define BMI160_SMOOTH_ALPA(_axis) \
+	 (fp_div(INT_TO_FP(1), \
+		 INT_TO_FP(CONCAT3(CONFIG_MAG_, _axis, _SMOOTH_WEIGHT_INV))))
+
+#define DECLARE_BMI160_SMOOTH_FUNC(_axis) \
+	static inline int CONCAT2(bmi160_smooth_axis_, _axis)( \
+			const struct motion_sensor_t \
+			*s, int raw_data) { \
+		EXP_MOVING_AVG(BMI160_SMOOTH_GET_ACC(s, _axis), \
+			       BMI160_SMOOTH_ALPA(_axis), raw_data); \
+		return BMI160_SMOOTH_GET_ACC(s, _axis); \
+	}
+
+#define DECLARE_BMI160_NO_SMOOTH_FUNC(_axis) \
+	static inline int CONCAT2(bmi160_smooth_axis_, _axis)( \
+			const struct motion_sensor_t \
+			*s, int raw_data) { \
+		return raw_data; \
+	}
+
+struct bmm150_private_data {
+	struct bmm150_comp_registers comp;
+	struct mag_cal_t             cal;
+#ifdef CONFIG_MAG_X_SMOOTH_WEIGHT_INV
+	DECLATE_BMI_SMOOTH_AXIS_VAR(X);
+#endif
+#ifdef CONFIG_MAG_Y_SMOOTH_WEIGHT_INV
+	DECLATE_BMI_SMOOTH_AXIS_VAR(Y);
+#endif
+#ifdef CONFIG_MAG_Z_SMOOTH_WEIGHT_INV
+	DECLATE_BMI_SMOOTH_AXIS_VAR(Z);
+#endif
+};
 
 /* Specific initialization of BMM150 when behing BMI160 */
 int bmm150_init(const struct motion_sensor_t *s);
@@ -114,5 +151,6 @@ int bmm150_set_offset(const struct motion_sensor_t *s,
 
 int bmm150_get_offset(const struct motion_sensor_t *s,
 		      vector_3_t   offset);
+
 
 #endif /* __CROS_EC_MAG_BMM150_H */

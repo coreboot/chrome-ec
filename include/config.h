@@ -1094,6 +1094,19 @@
 /* Presence of a Bosh Sensortec BMM150 magnetometer behind a BMI160. */
 #undef CONFIG_MAG_BMI160_BMM150
 
+/*
+ * Smooth magnetometer input:
+ * Defined the number of samples a given sample have effect on.
+ * Using expodential moving avarage method, this represenat 1/alpha
+ * where alpha is used as:
+ * out = out * (1 - alpha) + alpha * in.
+ *
+ * It is defined in the axis of the compass, before device rotation.
+ */
+#undef CONFIG_MAG_X_SMOOTH_WEIGHT_INV
+#undef CONFIG_MAG_Y_SMOOTH_WEIGHT_INV
+#undef CONFIG_MAG_Z_SMOOTH_WEIGHT_INV
+
 /* Support MKBP event */
 #undef CONFIG_MKBP_EVENT
 
