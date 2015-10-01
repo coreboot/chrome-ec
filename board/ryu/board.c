@@ -861,6 +861,12 @@ int board_set_active_charge_port(int charge_port)
 	return EC_SUCCESS;
 }
 
+static void bq2589x_set_vindpm(uint8_t val)
+{
+	i2c_write8(I2C_PORT_CHARGER, BQ2589X_ADDR,
+		   BQ2589X_REG_VINDPM_THRESH, val);
+}
+
 static void bq2589x_set_ico(int enable)
 {
 	int val, rv;
@@ -888,6 +894,13 @@ void board_set_charge_limit(int charge_ma, int supplier)
 		bq2589x_set_ico(0);
 	else
 		bq2589x_set_ico(1);
+
+	/* Force VINDPM threshold for multiple-voltage sources */
+	if (supplier == CHARGE_SUPPLIER_PD && charge_ma)
+		bq2589x_set_vindpm(BQ2589X_VINDPM_VOLT(4300) |
+				   BQ2589X_VINDPM_ABS);
+	else
+		bq2589x_set_vindpm(0);
 
 	charge_current_limit = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
 	rv = charge_set_input_current_limit(charge_current_limit);

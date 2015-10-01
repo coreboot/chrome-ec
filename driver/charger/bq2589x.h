@@ -72,6 +72,10 @@
 
 #define BQ2589X_TERM_CURRENT_LIMIT_DEFAULT 256
 
+/* REG0D : VINDPM Threshold */
+#define BQ2589X_VINDPM_ABS          (1 << 7)
+#define BQ2589X_VINDPM_VOLT(mv)     ((((mv)-2600)/100) & 0x7f)
+
 /* 5V VBUS Boost settings */
 #define BQ2589X_BOOSTV_MV(mv)       (((((mv) - 4550)/64) & 0xF) << 4)
 #define BQ2589X_BOOSTV_DEFAULT      BQ2589X_BOOSTV_MV(4998)
