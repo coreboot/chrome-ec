@@ -31,7 +31,9 @@
  * Shut down main processor and/or hibernate EC when discharging and battery
  * level < this level.
  */
+#ifndef BATTERY_LEVEL_SHUTDOWN
 #define BATTERY_LEVEL_SHUTDOWN		  3
+#endif
 
 /*
  * Sometimes we have hardware to detect battery present, sometimes we have to
