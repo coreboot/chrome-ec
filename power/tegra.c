@@ -460,6 +460,13 @@ static void power_off(void)
 {
 	/* Call hooks before we drop power rails */
 	hook_notify(HOOK_CHIPSET_SHUTDOWN);
+
+	/*
+	 * Delay to ensure proper power-down sequence.
+	 * Max delay required = (5 * 5.12ms) = ~26ms.
+	 */
+	msleep(26);
+
 	/* switch off all rails */
 	chipset_turn_off_power_rails();
 
