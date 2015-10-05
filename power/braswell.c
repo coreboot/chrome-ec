@@ -142,6 +142,7 @@ enum power_state power_handle_state(enum power_state state)
 {
 	switch (state) {
 	case POWER_G3:
+		forcing_shutdown = 0;
 		break;
 
 	case POWER_G3S5:
@@ -165,6 +166,10 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S5;
 
 	case POWER_S5:
+		/* Check for forced shutdown */
+		if (forcing_shutdown)
+			return POWER_S5G3;
+
 		/* Check for SLP S4 */
 		if (gpio_get_level(GPIO_PCH_SLP_S4_L) == 1)
 			return POWER_S5S3; /* Power up to next state */
@@ -306,8 +311,6 @@ enum power_state power_handle_state(enum power_state state)
 #else
 			gpio_set_level(GPIO_PCH_SYS_PWROK, 0);
 #endif
-			forcing_shutdown = 0;
-
 			CPRINTS("Enter SOC G3");
 
 			return POWER_G3;
