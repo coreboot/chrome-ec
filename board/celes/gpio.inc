@@ -15,7 +15,7 @@ GPIO_INT(POWER_BUTTON_L,    PIN(35),  GPIO_INT_BOTH,                      power_
 GPIO_INT(RSMRST_L_PGOOD,    PIN(63),  GPIO_INT_BOTH,                      power_signal_interrupt)   /* RSMRST_N_PWRGD from power logic */
 GPIO_INT(ALL_SYS_PGOOD,     PIN(130), GPIO_INT_BOTH,                      power_signal_interrupt)   /* ALL_SYS_PWRGD from power logic */
 #ifdef CONFIG_LOW_POWER_IDLE
-GPIO_INT(UART0_RX,          PIN(162), GPIO_INT_BOTH | GPIO_PULL_UP,       uart_deepsleep_interrupt) /* UART0 RX input */
+GPIO_INT(UART0_RX,          PIN(162), GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP,       uart_deepsleep_interrupt) /* UART0 RX input */
 #else
 GPIO_INT(UART0_RX,          PIN(162), GPIO_INPUT | GPIO_PULL_UP,          NULL)                     /* UART0 RX input */
 #endif
