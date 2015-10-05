@@ -114,6 +114,9 @@ static uint64_t tnext_state;
 
 static void set_pwrbtn_to_pch(int high)
 {
+	static uint64_t t = 0;
+	static int t_valid = 0;
+
 	/*
 	 * If the battery is discharging and low enough we'd shut down the
 	 * system, don't press the power button. Also, don't press the
@@ -129,6 +132,31 @@ static void set_pwrbtn_to_pch(int high)
 #endif
 	CPRINTS("PB PCH pwrbtn=%s", high ? "HIGH" : "LOW");
 	gpio_set_level(GPIO_PCH_PWRBTN_L, high);
+
+	/*
+	 * Monitor how long PCH_PWRBTN_L is asserted
+	 * Force shutdown if it was held longer than 4 seconds
+	 */
+	if (high == 1) {
+		if (t_valid && ((get_time().val - t) >= (4 * SECOND))) {
+			/*
+			 * Button is de-asserted, if held longer than 4sec,
+			 * then issue a proper shut down.
+			 */
+			chipset_force_shutdown();
+#ifdef HAS_TASK_CHIPSET
+			task_wake(TASK_ID_CHIPSET);
+#endif
+		}
+		/* Reset state */
+		t = 0;
+		t_valid = 0;
+	} else
+		if (!t_valid) {
+			/* Button is asserted, save current time */
+			t = get_time().val;
+			t_valid = 1;
+		}
 }
 
 void power_button_pch_press(void)
