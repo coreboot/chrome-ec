@@ -30,6 +30,7 @@
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_VBOOT_HASH
 #define CONFIG_PORT80_TASK_EN
+#define CONFIG_WIRELESS
 
 #define CONFIG_SPI_PORT 1
 #define CONFIG_SPI_CS_GPIO GPIO_PVT_CS0
@@ -64,6 +65,9 @@
 #define CONFIG_LED_COMMON
 
 #define CONFIG_I2C
+
+/* Wireless signals */
+#define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
 
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
