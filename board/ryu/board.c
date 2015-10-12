@@ -316,6 +316,9 @@ static void board_init(void)
 	int i;
 	struct charge_port_info charge_none, charge_vbus;
 
+	/* Ensure the charge is always enabled whatever RO code has run */
+	gpio_set_level(GPIO_USBC_CHARGE_EN_L, 0);
+
 	/* Initialize all pericom charge suppliers to 0 */
 	charge_none.voltage = USB_BC12_CHARGE_VOLTAGE;
 	charge_none.current = 0;
