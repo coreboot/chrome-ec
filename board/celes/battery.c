@@ -7,6 +7,8 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "gpio.h"
+#include "system.h"
 
 /* Shutdown mode parameter to write to manufacturer access register */
 #define SB_SHUTDOWN_DATA	0x0010
@@ -23,6 +25,19 @@ static const struct battery_info info = {
 	.discharging_min_c = -20,
 	.discharging_max_c = 60,
 };
+
+#ifdef CONFIG_BATTERY_PRESENT_CUSTOM
+/**
+ * Custom physical check of battery presence.
+ */
+enum battery_present battery_is_present(void)
+{
+	if (system_get_board_version() < 5)
+		return BP_YES;
+	else
+		return gpio_get_level(GPIO_BAT_PRESENT_L) ? BP_NO : BP_YES;
+}
+#endif
 
 const struct battery_info *battery_get_info(void)
 {
