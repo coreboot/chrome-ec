@@ -336,6 +336,11 @@
 #undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
 
 /*
+ * Monitoring Battery present so that control chager mode.
+ */
+#undef CONFIG_CHARGER_MONITOR_BP
+
+/*
  * Equivalent of CONFIG_BATTERY_OVERRIDE_PARAMS for use with
  * CONFIG_CHARGER_V2
  */
