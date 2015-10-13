@@ -70,7 +70,7 @@ struct motion_sensor_t {
 	const struct accelgyro_drv *drv;
 	struct mutex *mutex;
 	void *drv_data;
-	/* i2c address or SPI slage logic GPIO. */
+	/* i2c address or SPI slave logic GPIO. */
 	uint8_t addr;
 	const matrix_3x3_t *rot_standard_ref;
 
@@ -88,8 +88,8 @@ struct motion_sensor_t {
 	 * --------+-------------------+-------------------+-----------------
 	 * From AP | <------- SENSOR_CONFIG_AP ----------> |
 	 *         | Use for normal    | While sleeping    | Always disabled
-	 *         | operation: game,  | iFor Activity     |
-	 *         | screen rotatopm   | Recognition       |
+	 *         | operation: game,  | For Activity      |
+	 *         | screen rotation   | Recognition       |
 	 * --------+-------------------+-------------------+------------------
 	 * From EC |SENSOR_CONFIG_EC_S0|SENSOR_CONFIG_EC_S3|SENSOR_CONFIG_EC_S5
 	 *         | Background        | Gesture  Recognition (Double tap, ...)
@@ -121,7 +121,7 @@ struct motion_sensor_t {
 	uint16_t lost;
 
 	/*
-	 * Time since iast collection:
+	 * Time since last collection:
 	 * For sensor with hardware FIFO,  time since last sample
 	 * has move from the hardware FIFO to the FIFO (used if fifo rate != 0).
 	 * For sensor without FIFO, time since the last event was collect

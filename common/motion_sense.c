@@ -196,7 +196,7 @@ int motion_sense_set_data_rate(struct motion_sensor_t *sensor)
 	enum sensor_config config_id;
 	timestamp_t ts = get_time();
 
-	/* We assume the sensor is initalized */
+	/* We assume the sensor is initialized */
 
 	/* Check the AP setting first. */
 	if (sensor_active != SENSOR_ACTIVE_S5)
@@ -292,7 +292,7 @@ static int motion_sense_set_motion_intervals(void)
 	for (i = 0; i < motion_sensor_count; ++i) {
 		sensor = &motion_sensors[i];
 		/*
-		 * If the sensor is sleeping, no need to check it periodicaly.
+		 * If the sensor is sleeping, no need to check it periodically.
 		 */
 		if ((sensor->state != SENSOR_INITIALIZED) ||
 		    (sensor->drv->get_data_rate(sensor) == 0))
@@ -348,7 +348,7 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
  * motion_sense_switch_sensor_rate
  *
  * Suspend all sensors that are not needed.
- * Mark them as unitialized, they wll lose power and
+ * Mark them as uninitialized, they will lose power and
  * need to be initialized again.
  */
 static void motion_sense_switch_sensor_rate(void)
@@ -440,7 +440,7 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, motion_sense_shutdown,
 static void motion_sense_suspend(void)
 {
 	/*
-	 *  If we are comming from S5, don't enter suspend:
+	 *  If we are coming from S5, don't enter suspend:
 	 *  We will go in SO almost immediately.
 	 */
 	if (sensor_active == SENSOR_ACTIVE_S5)
@@ -504,7 +504,7 @@ static inline void update_sense_data(uint8_t *lpc_status,
 	 * assumes little endian, which is what the host expects. Also,
 	 * note that we share the lid angle calculation with host only
 	 * for debugging purposes. The EC lid angle is an approximation
-	 * with un-calibrated accels. The AP calculates a separate,
+	 * with uncalibrated accelerometers. The AP calculates a separate,
 	 * more accurate lid angle.
 	 */
 #ifdef CONFIG_LID_ANGLE
@@ -604,7 +604,7 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 /*
  * Motion Sense Task
  * Requirement: motion_sensors[] are defined in board.c file.
- * Two (minimium) Accelerometers:
+ * Two (minimum) Accelerometers:
  *    1 in the A/B(lid, display) and 1 in the C/D(base, keyboard)
  * Gyro Sensor (optional)
  */
@@ -1054,7 +1054,7 @@ static int host_cmd_motion_sense(struct host_cmd_handler_args *args)
 
 		task_set_event(TASK_ID_MOTIONSENSE,
 			       TASK_EVENT_MOTION_FLUSH_PENDING, 0);
-		/* passthrough */
+		/* pass-through */
 	case MOTIONSENSE_CMD_FIFO_INFO:
 		motion_sense_get_fifo_info(&out->fifo_info);
 		for (i = 0; i < motion_sensor_count; i++) {
@@ -1296,7 +1296,7 @@ static int command_accel_data_rate(int argc, char **argv)
 		ccprintf("EC rate for sensor %d: %d\n", id,
 			 motion_sense_ec_rate(sensor));
 		ccprintf("Current EC rate: %d\n", motion_interval);
-		ccprintf("Current Interupt rate: %d\n", motion_int_interval);
+		ccprintf("Current Interrupt rate: %d\n", motion_int_interval);
 	}
 
 	return EC_SUCCESS;
