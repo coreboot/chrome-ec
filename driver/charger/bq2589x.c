@@ -319,6 +319,13 @@ static void bq2589x_init(void)
 	if (bq2589x_write(BQ2589X_REG_TIMER, val))
 		return;
 
+	/* Disable MAXC and HVDCP handshakes */
+	if (bq2589x_read(BQ2589X_REG_CFG1, &val))
+		return;
+	val &= ~(BQ2589X_CFG1_MAXC_EN | BQ2589X_CFG1_HVDCP_EN);
+	if (bq2589x_write(BQ2589X_REG_CFG1, val))
+		return;
+
 	if (bq2589x_set_terminate_current(CONFIG_CHARGER_TERM_CURRENT_LIMIT))
 		return;
 
