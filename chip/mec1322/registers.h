@@ -9,6 +9,7 @@
 #define __CROS_EC_REGISTERS_H
 
 #include "common.h"
+#include "config.h"
 
 /* Helper function for RAM address aliasing */
 #define MEC1322_RAM_ALIAS(x)   \
@@ -26,7 +27,11 @@
 #define MEC1322_PCR_CHIP_CLK_REQ REG32(MEC1322_PCR_BASE + 0x4)
 #define MEC1322_PCR_EC_SLP_EN    REG32(MEC1322_PCR_BASE + 0x8)
 /* Command all blocks to sleep */
+#ifndef CONFIG_PWM_DSLEEP
 #define  MEC1322_PCR_EC_SLP_EN_SLEEP	0xe0700ff7
+#else
+#define  MEC1322_PCR_EC_SLP_EN_SLEEP	0xe0000fe7
+#endif
 /* Allow all blocks to request clocks */
 #define  MEC1322_PCR_EC_SLP_EN_WAKE	(~0xe0700ff7)
 #define MEC1322_PCR_EC_CLK_REQ   REG32(MEC1322_PCR_BASE + 0xc)
