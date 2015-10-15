@@ -35,6 +35,21 @@
 #define CTRL_ESO (1 << 6) /* Enable serial output */
 #define CTRL_PIN (1 << 7) /* Pending interrupt not */
 
+/* Config */
+#define CFG_TCEN (1 << 4)  /* Timing check enable */
+#define CFG_ENAB (1 << 10) /* SMB core normal/low power */
+
+/* Completion */
+#define CMP_DTEN   (1 << 2)  /* Device time-out enable */
+#define CMP_MCEN   (1 << 3)  /* Master cumulative time-out enable */
+#define CMP_SCEN   (1 << 4)  /* Slave cumulative time-out enable */
+#define CMP_TIMERR (1 << 6)  /* Time-out status bit */
+#define CMP_DTO    (1 << 8)  /* Device time-out status bit*/
+#define CMP_MCTO   (1 << 9)  /* Master cumulative time-out status bit */
+#define CMP_SCTO   (1 << 10) /* Slave cumulative time-out status bit */
+
+#define TIMEOUT_SCALING 0x4B9c76c7 /* master cum 10ms, slave cum 15ms */
+
 /* Maximum transfer of a SMBUS block transfer */
 #define SMBUS_MAX_BLOCK_SIZE 32
 
@@ -85,14 +100,29 @@ static void configure_controller_speed(int controller, int kbps)
 					  (t_low & 0xff);
 }
 
-static void configure_controller(int controller, int kbps)
+static void configure_controller(int controller, int kbps, int port_is_smbus)
 {
 	MEC1322_I2C_CTRL(controller) = CTRL_PIN;
 	MEC1322_I2C_OWN_ADDR(controller) = 0x0;
 	configure_controller_speed(controller, kbps);
 	MEC1322_I2C_CTRL(controller) = CTRL_PIN | CTRL_ESO |
 				       CTRL_ACK | CTRL_ENI;
-	MEC1322_I2C_CONFIG(controller) |= 1 << 10; /* ENAB */
+
+	/*
+	* To enable Master Cumulative time-out, Slave
+	* Cumulative time-out and Device time-out
+	* checking, need to set TCEN, MCEN, SCEN and DTEN.
+	* MEC1322_I2C_TOUT_SCALE default value is for 100KHz
+	* bus speed, so no need to reconfig.
+	*/
+	if (port_is_smbus) {
+		MEC1322_I2C_TOUT_SCALE(controller) = TIMEOUT_SCALING;
+		MEC1322_I2C_COMPLETE(controller) |=
+			(CMP_DTEN | CMP_MCEN | CMP_SCEN);
+		/* ENAB, TCEN */
+		MEC1322_I2C_CONFIG(controller) |= (CFG_ENAB | CFG_TCEN);
+	} else
+		MEC1322_I2C_CONFIG(controller) |= CFG_ENAB; /* ENAB */
 
 	/* Enable interrupt */
 	MEC1322_I2C_CONFIG(controller) |= 1 << 29; /* ENIDI */
@@ -110,7 +140,8 @@ static void reset_controller(int controller)
 
 	for (i = 0; i < i2c_ports_used; ++i)
 		if (controller == i2c_port_to_controller(i2c_ports[i].port)) {
-			configure_controller(controller, i2c_ports[i].kbps);
+			configure_controller(controller, i2c_ports[i].kbps,
+						i2c_port_is_smbus(i));
 			break;
 		}
 }
@@ -162,11 +193,12 @@ static int wait_idle(int controller)
 	return EC_SUCCESS;
 }
 
-static int wait_byte_done(int controller)
+static int wait_byte_done(int controller, int port_is_smbus)
 {
 	uint8_t sts = MEC1322_I2C_STATUS(controller);
 	int rv;
 	int event = 0;
+	uint32_t timeout_err;
 
 	while (sts & STS_PIN) {
 		rv = wait_for_interrupt(controller, &event);
@@ -174,6 +206,15 @@ static int wait_byte_done(int controller)
 			return rv;
 		sts = MEC1322_I2C_STATUS(controller);
 	}
+
+	if (port_is_smbus) {
+		timeout_err = MEC1322_I2C_COMPLETE(controller);
+		if (timeout_err & CMP_TIMERR) {
+			CPRINTS("smbus timeout, 0x%x", timeout_err);
+			return EC_ERROR_TIMEOUT;
+		}
+	}
+
 	/*
 	 * Restore any events that we saw while waiting. TASK_EVENT_TIMER isn't
 	 * one, because we've handled it above.
@@ -230,6 +271,7 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 	int bytes_to_read;
 	uint8_t reg;
 	int ret_done;
+	int is_smbus = i2c_port_is_smbus(port);
 
 	if (out_size == 0 && in_size == 0)
 		return EC_SUCCESS;
@@ -273,12 +315,12 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 		}
 
 		for (i = 0; i < out_size; ++i) {
-			ret_done = wait_byte_done(controller);
+			ret_done = wait_byte_done(controller, is_smbus);
 			if (ret_done)
 				goto err_chip_i2c_xfer;
 			MEC1322_I2C_DATA(controller) = out[i];
 		}
-		ret_done = wait_byte_done(controller);
+		ret_done = wait_byte_done(controller, is_smbus);
 		if (ret_done)
 			goto err_chip_i2c_xfer;
 
@@ -322,13 +364,13 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 		bytes_to_read = send_stop ? in_size - 2 : in_size;
 
 		for (i = 0; i < bytes_to_read; ++i) {
-			ret_done = wait_byte_done(controller);
+			ret_done = wait_byte_done(controller, is_smbus);
 			if (ret_done)
 				goto err_chip_i2c_xfer;
 			push_in_buf(&in, MEC1322_I2C_DATA(controller), skip);
 			skip = 0;
 		}
-		ret_done = wait_byte_done(controller);
+		ret_done = wait_byte_done(controller, is_smbus);
 		if (ret_done)
 			goto err_chip_i2c_xfer;
 
@@ -339,7 +381,7 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 			 */
 			MEC1322_I2C_CTRL(controller) = CTRL_ESO | CTRL_ENI;
 			push_in_buf(&in, MEC1322_I2C_DATA(controller), skip);
-			ret_done = wait_byte_done(controller);
+			ret_done = wait_byte_done(controller, is_smbus);
 			if (ret_done)
 				goto err_chip_i2c_xfer;
 
@@ -435,7 +477,7 @@ static void i2c_init(void)
 	int i;
 	int controller;
 	int controller0_kbps = -1;
-
+	int controller0_smbus = -1;
 	/* Configure GPIOs */
 	gpio_config_module(MODULE_I2C, 1);
 
@@ -449,11 +491,15 @@ static void i2c_init(void)
 		if (controller == 0) {
 			if (controller0_kbps != -1) {
 				ASSERT(controller0_kbps == i2c_ports[i].kbps);
+				ASSERT(controller0_smbus ==
+					i2c_port_is_smbus(i));
 				continue;
 			}
 			controller0_kbps = i2c_ports[i].kbps;
+			controller0_smbus = i2c_port_is_smbus(i);
 		}
-		configure_controller(controller, i2c_ports[i].kbps);
+		configure_controller(controller, i2c_ports[i].kbps,
+					i2c_port_is_smbus(i));
 		cdata[controller].task_waiting = TASK_ID_INVALID;
 
 		/* Use default timeout. */
@@ -490,3 +536,6 @@ DECLARE_IRQ(MEC1322_IRQ_I2C_0, i2c0_interrupt, 2);
 DECLARE_IRQ(MEC1322_IRQ_I2C_1, i2c1_interrupt, 2);
 DECLARE_IRQ(MEC1322_IRQ_I2C_2, i2c2_interrupt, 2);
 DECLARE_IRQ(MEC1322_IRQ_I2C_3, i2c3_interrupt, 2);
+
+int i2c_port_is_smbus(int port) __attribute((weak));
+

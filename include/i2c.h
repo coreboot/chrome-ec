@@ -162,6 +162,14 @@ void i2c_prepare_sysjump(void);
 void i2c_set_timeout(int port, uint32_t timeout);
 
 /**
+ * Determine if the i2c port has smbus peripherals connected to it.
+ *
+ * @param port               determine if the port is i2c or smbus
+ * @return                   1 port is smbus , 0 port is i2c.
+ */
+int i2c_port_is_smbus(int port);
+
+/**
  * Read a 32-bit register from the slave at 8-bit slave address <slaveaddr>, at
  * the specified 8-bit <offset> in the slave's address space.
  */
