@@ -22,6 +22,7 @@
 #include "motion_lid.h"
 #include "power.h"
 #include "queue.h"
+#include "system.h"
 #include "timer.h"
 #include "task.h"
 #include "util.h"
@@ -414,6 +415,28 @@ static void motion_sense_shutdown(void)
 			int activity = get_next_bit(&enabled);
 			sensor->drv->manage_activity(sensor, activity, 0, NULL);
 		}
+		/*
+		 * For RYU, we do not want double tap to be enabled while
+		 * shipping.
+		 * Before packing, we boot in bootloader mode:
+		 * the boot loader revert the EC to RO before accepting commands.
+		 * We issue:
+		 * + fastboot oem Double-tap-disable
+		 *  that command disable double tap (it was set when we init
+		 *  the sensor).
+		 * + fastboot oem Powerdown
+		 *  ends up calling motion_sense_shutdown() while in RO.
+		 * For older RO (and this change), we do not re-enable double
+		 * tap, so ryu will ship with double tap disabled.
+		 * When we are in RW we are re-enabling double tap: that will
+		 * be the state when the user is shutting down the tablet.
+		 * See chrome-os-partner:46572
+		 */
+		if (system_get_image_copy() == SYSTEM_IMAGE_RW)
+			/* Be sure double tap is enabled */
+			sensor->drv->manage_activity(sensor,
+					MOTIONSENSE_ACTIVITY_DOUBLE_TAP,
+					1, NULL);
 	}
 #endif
 }
