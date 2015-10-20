@@ -70,14 +70,6 @@ BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 const struct i2c_port_t i2c_ports[]  = {
 	{"batt_chg", MEC1322_I2C0_0, 100,
 		GPIO_I2C_PORT0_0_SCL, GPIO_I2C_PORT0_0_SDA},
-	{"muxes", MEC1322_I2C0_1, 100,
-		GPIO_I2C_PORT0_1_SCL, GPIO_I2C_PORT0_1_SDA},
-	{"pd_mcu", MEC1322_I2C1, 1000,
-		GPIO_I2C_PORT1_SCL, GPIO_I2C_PORT1_SDA},
-	{"sensors", MEC1322_I2C2, 100,
-		GPIO_I2C_PORT2_SCL, GPIO_I2C_PORT2_SDA},
-	{"thermal",  MEC1322_I2C3,   100,
-		GPIO_I2C_PORT3_SCL, GPIO_I2C_PORT3_SDA}
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -93,12 +85,6 @@ const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
  *     src/mainboard/google/${board}/acpi/dptf.asl
  */
 const struct temp_sensor_t temp_sensors[] = {
-	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_LOCAL, 4},
-	{"TMP432_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_REMOTE1, 4},
-	{"TMP432_Sensor_2", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_REMOTE2, 4},
 	{"NCP15WB_CPU", TEMP_SENSOR_TYPE_BOARD, ec_adc_get_val,
 		ADC_CH_CPU_TEMP, 4},
 	{"NCP15WB_DIMM", TEMP_SENSOR_TYPE_BOARD, ec_adc_get_val,
@@ -114,9 +100,6 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  * same order as enum temp_sensor_id. To always ignore any temp, use 0.
  */
 struct ec_thermal_config thermal_params[] = {
-	{{0, 0, 0}, 0, 0}, /* TMP432_Internal */
-	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_1 */
-	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_2 */
 	{{0, 0, 0}, 0, 0}, /* NCP15WB_CPU */
 	{{0, 0, 0}, 0, 0}, /* NCP15WB_DIMM */
 	{{0, 0, 0}, 0, 0}, /* NCP15WB_PMIC */

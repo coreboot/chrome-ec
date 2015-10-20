@@ -45,7 +45,6 @@
 #define CONFIG_ADC
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_EC_ADC
-#define CONFIG_TEMP_SENSOR_TMP432
 #define CONFIG_THERMISTOR_NCP15WB
 
 #define CONFIG_PMIC
@@ -86,7 +85,6 @@
 /* I2C ports */
 #define I2C_PORT_BATTERY	MEC1322_I2C0_0
 #define I2C_PORT_CHARGER	MEC1322_I2C0_0
-#define I2C_PORT_THERMAL	MEC1322_I2C3
 
 /* ADC signal */
 enum adc_channel {
@@ -118,11 +116,6 @@ enum pwm_channel {
 };
 
 enum temp_sensor_id {
-	/* TMP432 local and remote sensors */
-	TEMP_SENSOR_I2C_TMP432_LOCAL,
-	TEMP_SENSOR_I2C_TMP432_REMOTE1,
-	TEMP_SENSOR_I2C_TMP432_REMOTE2,
-
 	/* NCP15WB thermistors */
 	TEMP_SENSOR_ADC_NCP15_CPU,
 	TEMP_SENSOR_ADC_NCP15_DIMM,
