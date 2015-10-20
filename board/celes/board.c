@@ -10,6 +10,7 @@
 #include "button.h"
 #include "charger.h"
 #include "charge_state.h"
+#include "driver/charger/bq24773.h"
 #include "driver/temp_sensor/ec_adc.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"

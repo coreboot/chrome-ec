@@ -21,6 +21,7 @@ GPIO_INT(UART0_RX,          PIN(162), GPIO_INPUT | GPIO_PULL_UP,          NULL) 
 #endif
 GPIO_INT(PCH_SLP_S4_L,      PIN(200), GPIO_INT_BOTH,                      power_signal_interrupt)   /* SLP_S4# signal from PCH */
 GPIO_INT(PCH_SLP_S3_L,      PIN(206), GPIO_INT_BOTH,                      power_signal_interrupt)   /* SLP_S3# signal from PCH */
+GPIO_INT(BAT_PRESENT_L,    PIN(210),  GPIO_INT_BOTH,                      charger_battery_present_interrupt)   /* HW detection signal for battery to EC, See battery is attached */
 
 GPIO(BOARD_VERSION2,    PIN(0),  GPIO_INPUT)     /* BOARD_ID1 */
 #ifdef CONFIG_KEYBOARD_COL2_INVERTED
@@ -102,7 +103,6 @@ GPIO(EC_BL_DISABLE_L,   PIN(202), GPIO_OUT_HIGH)                 /* EDP backligh
 GPIO(SMC_SHUTDOWN,      PIN(203), GPIO_OUT_LOW)                  /* Shutdown signal from EC to power sequencing PLD */
 GPIO(NC_GPIO204,        PIN(204), GPIO_OUTPUT | GPIO_PULL_UP)    /* NC */
 
-GPIO(BAT_PRESENT_L,    PIN(210), GPIO_INPUT)                    /* HW detection signal for battery to EC */
 GPIO(GPIO_3_EC,         PIN(211), GPIO_OUT_LOW)                  /* Sleep SOIX signal from SOC to EC */
 
 /* Alternate functions GPIO definition */
