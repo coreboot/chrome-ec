@@ -40,6 +40,9 @@
 #define CONFIG_VBOOT_HASH
 #define CONFIG_WIRELESS
 
+/* This board has RTCRST connection from EC GPIO to the PCH */
+#define BOARD_HAS_RTCRST
+
 #ifndef __ASSEMBLER__
 
 /* I2C ports */

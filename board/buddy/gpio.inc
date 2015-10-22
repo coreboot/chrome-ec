@@ -83,7 +83,7 @@ GPIO(USB1_ENABLE,          E, 4, GPIO_OUT_LOW,  NULL) /* USB port 1 output power
 GPIO(USB2_ENABLE,          D, 5, GPIO_OUT_LOW,  NULL) /* USB port 2 output power enable */
 
 GPIO(PCH_SUSACK_L,         F, 3, GPIO_OUT_HIGH, NULL) /* Acknowledge PCH SUSWARN# signal */
-GPIO(PCH_RTCRST_L,         F, 6, GPIO_ODR_HIGH, NULL) /* Not supposed to be here */
+GPIO(PCH_RTCRST_L,         F, 6, GPIO_ODR_HIGH, NULL) /* Reset PCH RTC well */
 GPIO(PCH_SRTCRST_L,        F, 7, GPIO_ODR_HIGH, NULL) /* Not supposed to be here */
 
 GPIO(PWR_LED0_L,           N, 6, GPIO_ODR_HIGH, NULL) /* Power LED - blue */

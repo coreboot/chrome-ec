@@ -15,6 +15,7 @@
 #include "lid_switch.h"
 #include "power.h"
 #include "system.h"
+#include "task.h"
 #include "timer.h"
 #include "util.h"
 #include "wireless.h"
@@ -64,6 +65,21 @@ void chipset_force_shutdown(void)
 	 */
 	gpio_set_level(GPIO_PCH_DPWROK, 0);
 	gpio_set_level(GPIO_PCH_RSMRST_L, 0);
+}
+
+static void chipset_reset_rtc(void)
+{
+#ifdef BOARD_HAS_RTCRST
+	/*
+	 * Assert RTCRST# to the PCH long enough for it to latch the
+	 * assertion and reset the internal RTC backed state.
+	 */
+	CPRINTS("Asserting RTCRST# to PCH");
+	gpio_set_level(GPIO_PCH_RTCRST_L, 0);
+	udelay(3 * SECOND);
+	gpio_set_level(GPIO_PCH_RTCRST_L, 1);
+	udelay(10 * MSEC);
+#endif
 }
 
 void chipset_reset(int cold_reset)
@@ -159,8 +175,17 @@ enum power_state power_handle_state(enum power_state state)
 		break;
 
 	case POWER_S5:
-		if (gpio_get_level(GPIO_PCH_SLP_S5_L) == 1)
-			return POWER_S5S3; /* Power up to next state */
+		while ((power_get_signals() & IN_SLP_S5_DEASSERTED) == 0) {
+			if (task_wait_event(SECOND*4) == TASK_EVENT_TIMER) {
+				CPRINTS("timeout waiting for S5 exit");
+				/* Put system in G3 and assert RTCRST# */
+				chipset_force_shutdown();
+				chipset_reset_rtc();
+				/* Try to power back up after RTC reset */
+				return POWER_G3S5;
+			}
+		}
+		return POWER_S5S3; /* Power up to next state */
 		break;
 
 	case POWER_S3:
