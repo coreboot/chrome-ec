@@ -45,6 +45,9 @@
 #define CONFIG_WIRELESS_SUSPEND \
 	(EC_WIRELESS_SWITCH_WLAN | EC_WIRELESS_SWITCH_WLAN_POWER)
 
+/* This board has RTCRST connection from EC GPIO to the PCH */
+#define BOARD_HAS_RTCRST
+
 #ifndef __ASSEMBLER__
 
 /* I2C ports */
