@@ -118,6 +118,7 @@ int board_discharge_on_ac(int enabled);
 
 #ifdef TEST_LIGHTBAR
 #define I2C_PORT_LIGHTBAR 1
+#define CONFIG_ALS_LIGHTBAR_DIMMING 0
 #endif
 
 #ifdef TEST_USB_PD
