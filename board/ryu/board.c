@@ -537,7 +537,7 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 	[RYU_LID_GYRO] = {
 		.name = "Gyro",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.active_mask = SENSOR_ACTIVE_S0_S3_S5,
 		.chip = MOTIONSENSE_CHIP_BMI160,
 		.type = MOTIONSENSE_TYPE_GYRO,
 		.location = MOTIONSENSE_LOC_LID,
@@ -571,7 +571,7 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 	[RYU_LID_MAG] = {
 		.name = "Mag",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.active_mask = SENSOR_ACTIVE_S0_S3_S5,
 		.chip = MOTIONSENSE_CHIP_BMI160,
 		.type = MOTIONSENSE_TYPE_MAG,
 		.location = MOTIONSENSE_LOC_LID,
