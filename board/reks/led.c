@@ -19,9 +19,6 @@
 #define CPRINTF(format, args...) cprintf(CC_PWM, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_PWM, format, ## args)
 
-#define LED_TOTAL_TICKS 16
-#define LED_ON_TICKS 4
-
 static int led_debug;
 
 const enum ec_led_id supported_led_ids[] = {
@@ -40,11 +37,11 @@ enum led_color {
 
 /* Brightness vs. color, in the order of off, red, amber, and green */
 static const uint8_t color_brightness[LED_COLOR_COUNT][3] = {
-	/* {Red, Blue, Green}, */
+	/* {Red, Amber, Green}, */
 	[LED_OFF]   = {  0,   0,   0},
-	[LED_RED]   = {100,   0,   0},
-	[LED_AMBER] = { 75,   0,  10},
-	[LED_GREEN] = {  0,   0, 100},
+	[LED_RED]   = {  0,   0, 100},
+	[LED_AMBER] = {  0, 100,   0},
+	[LED_GREEN] = {100,   0,   0},
 };
 
 /**
@@ -74,58 +71,6 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 	return EC_SUCCESS;
 }
 
-static void reks_led_set_power(void)
-{
-	static int power_ticks;
-	static int previous_state_suspend;
-
-	power_ticks++;
-
-	if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
-		/* Reset ticks if entering suspend so LED turns amber
-		 * as soon as possible. */
-		if (!previous_state_suspend)
-			power_ticks = 0;
-
-		/* Blink once every four seconds. */
-		set_color(
-			(power_ticks % LED_TOTAL_TICKS) < LED_ON_TICKS ?
-			LED_AMBER : LED_OFF);
-
-		previous_state_suspend = 1;
-		return;
-	}
-
-	previous_state_suspend = 0;
-
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		set_color(LED_OFF);
-	else if (chipset_in_state(CHIPSET_STATE_ON))
-		set_color(LED_GREEN);
-}
-
-static void reks_led_set_battery(void)
-{
-	static int battery_ticks;
-
-	battery_ticks++;
-
-	switch (charge_get_state()) {
-	case PWR_STATE_CHARGE:
-		set_color(LED_AMBER);
-		break;
-	case PWR_STATE_ERROR:
-		set_color(LED_RED);
-		break;
-	case PWR_STATE_CHARGE_NEAR_FULL:
-	case PWR_STATE_IDLE: /* External power connected in IDLE. */
-		set_color(LED_GREEN);
-		break;
-	default:
-		/* Other states don't alter LED behavior */
-		break;
-	}
-}
 
 static void led_init(void)
 {
@@ -149,19 +94,42 @@ DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
  */
 static void led_tick(void)
 {
-	if (led_debug)
+	static unsigned ticks;
+	int chstate = charge_get_state();
+
+	ticks++;
+
+	/* If we don't control the LED, nothing to do */
+	if (!led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		return;
 
-	if (extpower_is_present()) {
-		if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
-			reks_led_set_battery();
-			return;
-		}
-	} else if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED)) {
-		reks_led_set_power();
+	/* If charging error, blink orange, 25% duty cycle, 4 sec period */
+	if (chstate == PWR_STATE_ERROR) {
+		set_color((ticks % 16) < 4 ? LED_AMBER : LED_OFF);
 		return;
 	}
 
+	/* If charge-force-idle, blink green, 50% duty cycle, 2 sec period */
+	if (chstate == PWR_STATE_IDLE &&
+	   (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)) {
+		set_color((ticks & 0x4) ? LED_GREEN : LED_OFF);
+		return;
+	}
+
+	/* If the system is charging, solid orange */
+	if (chstate == PWR_STATE_CHARGE) {
+		set_color(LED_AMBER);
+		return;
+	}
+
+	/* If AC connected and fully charged (or close to it), solid green */
+	if (chstate == PWR_STATE_CHARGE_NEAR_FULL ||
+	   chstate == PWR_STATE_IDLE) {
+		set_color(LED_GREEN);
+		return;
+	}
+
+	/* Otherwise, system is off and AC not connected, LED off */
 	set_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
