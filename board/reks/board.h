@@ -46,8 +46,6 @@
 
 #define CONFIG_PMIC
 
-#define CONFIG_ALS
-#define CONFIG_ALS_ISL29035
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER
@@ -72,9 +70,6 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE	0
 #define CONFIG_LID_ANGLE_SENSOR_LID	1
 
-/* Number of buttons */
-#define CONFIG_BUTTON_COUNT		2
-
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
 #undef CONFIG_EOPTION
@@ -90,11 +85,7 @@
 /* I2C ports */
 #define I2C_PORT_BATTERY	MEC1322_I2C0_0
 #define I2C_PORT_CHARGER	MEC1322_I2C0_0
-#define I2C_PORT_PD_MCU		MEC1322_I2C1
-#define I2C_PORT_TCPC		MEC1322_I2C1
 #define I2C_PORT_ACCEL		MEC1322_I2C2
-#define I2C_PORT_GYRO		MEC1322_I2C2
-#define I2C_PORT_ALS		MEC1322_I2C2
 #define I2C_PORT_THERMAL	MEC1322_I2C3
 
 /* ADC signal */
@@ -132,13 +123,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,
 
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_ISL29035 = 0,
-
-	ALS_COUNT,
 };
 
 #endif /* !__ASSEMBLER__ */
