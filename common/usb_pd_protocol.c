@@ -1860,8 +1860,8 @@ void pd_task(void)
 			break;
 		case PD_STATE_SNK_DISCONNECTED:
 #ifdef CONFIG_USB_PD_LOW_POWER
-			timeout = drp_state == PD_DRP_TOGGLE_OFF ? MINUTE
-								 : 10*MSEC;
+			timeout = drp_state != PD_DRP_TOGGLE_ON ? MINUTE
+								: 10*MSEC;
 #else
 			timeout = 10*MSEC;
 #endif
