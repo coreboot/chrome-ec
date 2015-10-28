@@ -2416,7 +2416,8 @@ void pd_task(void)
 			pd_hw_init(port, PD_ROLE_DEFAULT);
 			break;
 		case PD_STATE_SNK_DISCONNECTED:
-			timeout = 10*MSEC;
+			timeout = drp_state != PD_DRP_TOGGLE_ON ? SECOND
+								: 10*MSEC;
 
 			/* Source connection monitoring */
 			cc1_volt = pd_adc_read(port, 0);
@@ -2429,6 +2430,7 @@ void pd_task(void)
 							PD_T_CC_DEBOUNCE;
 				set_state(port,
 					PD_STATE_SNK_DISCONNECTED_DEBOUNCE);
+				timeout = 10*MSEC;
 				break;
 			}
 
