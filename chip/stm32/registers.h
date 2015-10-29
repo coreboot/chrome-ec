@@ -616,6 +616,8 @@ typedef volatile struct timer_ctlr timer_ctlr_t;
 #define STM32_RCC_CFGR2             REG32(STM32_RCC_BASE + 0x2c)
 /* STM32F0XX and STM32F373 */
 #define STM32_RCC_CFGR3             REG32(STM32_RCC_BASE + 0x30)
+#define STM32_RCC_CFGR3_I2C1		(1 << 4)
+#define STM32_RCC_CFGR3_I2C2		(1 << 5) /* STM32F3XX */
 #define STM32_RCC_CR2               REG32(STM32_RCC_BASE + 0x34) /* STM32F0XX */
 
 #define STM32_RCC_HB_DMA1		(1 << 0)
@@ -660,6 +662,8 @@ typedef volatile struct timer_ctlr timer_ctlr_t;
 #define STM32_RCC_PB1_USART3		(1 << 18)
 #define STM32_RCC_PB1_USART4		(1 << 19)
 #define STM32_RCC_PB1_USART5		(1 << 20)
+#define STM32_RCC_PB1_I2C1		(1 << 21)
+#define STM32_RCC_PB1_I2C2		(1 << 22)
 #define STM32_RCC_PB2_SPI1		(1 << 12)
 #define STM32_RCC_PB2_USART1		(1 << 14)
 
