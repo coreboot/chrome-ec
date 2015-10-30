@@ -1041,6 +1041,14 @@
 #undef CONFIG_KEYBOARD_SUPPRESS_NOISE
 
 /*
+ * Keep keyboard scan enabled even when the EC goes sleep mode / S3.
+ * Disabling keyscan makes KB pins GPIOs so that pins go floating, which
+ * causes a huge leakage on some chips. Keep these pins as an alternative
+ * function to prevent them from going floating.
+ */
+#undef CONFIG_KEYBOARD_ALWAYS_KEYSCAN
+
+/*
  * Enable keyboard testing functionality. This enables a message which receives
  * a list of keyscan events from the AP and processes them.  This will cause
  * keypresses to appear on the AP through the same mechanism as a normal

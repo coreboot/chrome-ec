@@ -117,7 +117,9 @@ void keyboard_scan_enable(int enable, enum kb_scan_disable_masks mask)
 		 */
 		task_wake(TASK_ID_KEYSCAN);
 	} else if (disable_scanning_mask && !old_disable_scanning) {
+#ifndef CONFIG_KEYBOARD_ALWAYS_KEYSCAN
 		keyboard_raw_drive_column(KEYBOARD_COLUMN_NONE);
+#endif
 		keyboard_clear_buffer();
 	}
 }
