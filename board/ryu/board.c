@@ -125,6 +125,20 @@ void vbus_evt(enum gpio_signal signal)
 		task_wake(TASK_ID_PD);
 }
 
+static void usb_clear_bc12_suppliers(int port)
+{
+	struct charge_port_info chg;
+
+	chg.voltage = USB_BC12_CHARGE_VOLTAGE;
+	chg.current = 0;
+
+	charge_manager_update_charge(CHARGE_SUPPLIER_PROPRIETARY, port, &chg);
+	charge_manager_update_charge(CHARGE_SUPPLIER_BC12_CDP, port, &chg);
+	charge_manager_update_charge(CHARGE_SUPPLIER_BC12_DCP, port, &chg);
+	charge_manager_update_charge(CHARGE_SUPPLIER_BC12_SDP, port, &chg);
+	charge_manager_update_charge(CHARGE_SUPPLIER_OTHER, port, &chg);
+}
+
 static void usb_charger_bc12_detect(void)
 {
 	int device_type, charger_status;
@@ -197,27 +211,7 @@ static void usb_charger_bc12_detect(void)
 						     charger_status);
 		charge_manager_update_charge(type, 0, &charge);
 	} else { /* Detachment: update available charge to 0 */
-		charge.current = 0;
-		charge_manager_update_charge(
-					CHARGE_SUPPLIER_PROPRIETARY,
-					0,
-					&charge);
-		charge_manager_update_charge(
-					CHARGE_SUPPLIER_BC12_CDP,
-					0,
-					&charge);
-		charge_manager_update_charge(
-					CHARGE_SUPPLIER_BC12_DCP,
-					0,
-					&charge);
-		charge_manager_update_charge(
-					CHARGE_SUPPLIER_BC12_SDP,
-					0,
-					&charge);
-		charge_manager_update_charge(
-					CHARGE_SUPPLIER_OTHER,
-					0,
-					&charge);
+		usb_clear_bc12_suppliers(0);
 	}
 }
 
@@ -244,10 +238,16 @@ void usb_charger_task(void)
 		 * Re-enable interrupts on pericom charger detector since the
 		 * chip may periodically reset itself, and come back up with
 		 * registers in default state. TODO(crosbug.com/p/33823): Fix
-		 * these unwanted resets.
+		 * these unwanted resets. If VBUS is high, enabling interrupts
+		 * will cause an attach interrupt to be generated immediately,
+		 * so there is nothing else to do. But, if VBUS is low, we
+		 * must clear the BC1.2 suppliers here.
 		 */
-		if (evt & USB_CHG_EVENT_VBUS)
+		if (evt & USB_CHG_EVENT_VBUS) {
+			if (!pd_snk_is_vbus_provided(0))
+				usb_clear_bc12_suppliers(0);
 			pi3usb9281_enable_interrupts(0);
+		}
 		/* notify host of power info change */
 		pd_send_host_event(PD_EVENT_POWER_CHANGE);
 	}
