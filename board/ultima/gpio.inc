@@ -105,7 +105,7 @@ GPIO(EC_BL_DISABLE_L,   PIN(202), GPIO_OUT_HIGH)                 /* EDP backligh
 GPIO(SMC_SHUTDOWN,      PIN(203), GPIO_OUT_LOW)                  /* Shutdown signal from EC to power sequencing PLD */
 GPIO(NC_GPIO204,        PIN(204), GPIO_INPUT | GPIO_PULL_UP)
 
-GPIO(NC_GPIO210,        PIN(210), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(BAT_PRESENT_L,        PIN(210), GPIO_INPUT)
 GPIO(GPIO_3_EC,         PIN(211), GPIO_OUT_LOW)                  /* Sleep SOIX signal from SOC to EC */
 
 /* Alternate functions GPIO definition */
