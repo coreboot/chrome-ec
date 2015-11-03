@@ -234,3 +234,17 @@ static void transmitter_power_on(void)
 	task_wake(TASK_ID_PANEL);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, transmitter_power_on, HOOK_PRIO_DEFAULT);
+
+static void toggle_touchscreen_reset(void)
+{
+	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, 0);
+	msleep(10);
+	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, 1);
+}
+DECLARE_DEFERRED(toggle_touchscreen_reset);
+
+static void system_resume(void)
+{
+	hook_call_deferred(&toggle_touchscreen_reset, 150 * MSEC);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, system_resume, HOOK_PRIO_DEFAULT);
