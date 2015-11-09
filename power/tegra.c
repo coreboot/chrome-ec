@@ -56,6 +56,9 @@
 /* Long power key press to force shutdown */
 #define DELAY_FORCE_SHUTDOWN  (10200 * MSEC)  /* 10.2 seconds */
 
+/* Long power key press to power on the product */
+#define DELAY_LONG_POWER_ON   (2000 * MSEC)  /* 2 seconds */
+
 /*
  * The minimum time to assert the PMIC PWRON pin is 20ms.
  * Give it longer to ensure the PMIC doesn't lose it.
@@ -100,6 +103,9 @@ static char lid_opened;
 
 /* time where we will power off, if power button still held down */
 static timestamp_t power_off_deadline;
+
+/* time where we will power on, if power button still held down */
+static timestamp_t power_on_deadline;
 
 /* force AP power on (used for recovery keypress) */
 static int auto_power_on;
@@ -321,6 +327,13 @@ void chipset_force_shutdown(void)
 
 /*****************************************************************************/
 
+static void check_long_power_on(void)
+{
+	/* we are ready to power-on, kick the chipset task to do it */
+	task_wake(TASK_ID_CHIPSET);
+}
+DECLARE_DEFERRED(check_long_power_on);
+
 /**
  * Check if there has been a power-on event
  *
@@ -365,8 +378,16 @@ static int check_for_power_on_event(void)
 	}
 
 	/* check for power button press */
-	if (power_button_is_pressed())
-		return 4;
+	if (power_button_is_pressed()) {
+		timestamp_t now = get_time();
+		if (!power_on_deadline.val) {
+			power_on_deadline.val = now.val + DELAY_LONG_POWER_ON;
+			hook_call_deferred(check_long_power_on,
+					   DELAY_LONG_POWER_ON);
+		} else if (get_time().val >= power_on_deadline.val) {
+			return 4;
+		}
+	}
 
 	if (power_request == POWER_REQ_ON) {
 		power_request = POWER_REQ_NONE;
@@ -595,6 +616,12 @@ enum power_state power_handle_state(enum power_state state)
 
 static void powerbtn_tegra_changed(void)
 {
+	/* power button released: cancel long power-on */
+	if (!power_button_is_pressed()) {
+		power_on_deadline.val = 0;
+		hook_call_deferred(check_long_power_on, -1);
+	}
+
 	task_wake(TASK_ID_CHIPSET);
 }
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, powerbtn_tegra_changed,
