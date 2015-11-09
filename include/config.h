@@ -810,6 +810,12 @@
  */
 #undef CONFIG_LID_ANGLE_KEY_SCAN
 
+/*
+ * Define the minimal amount of time (in ms) betwen running motion sense task
+ * loop.
+ */
+#define CONFIG_MOTION_MIN_SENSE_WAIT_TIME 3
+
 /*****************************************************************************/
 /*
  * Support the host asking the EC about the status of the most recent host
