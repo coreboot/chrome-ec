@@ -741,6 +741,12 @@
  */
 #undef CONFIG_GPIO_LARGE_ALT_INFO
 
+/*
+ * Define the minimal amount of time (in ms) betwen running motion sense task
+ * loop.
+ */
+#define CONFIG_MOTION_MIN_SENSE_WAIT_TIME 3
+
 /*****************************************************************************/
 
 /*
