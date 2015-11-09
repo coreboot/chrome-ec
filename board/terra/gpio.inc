@@ -36,6 +36,7 @@ GPIO(I2C_PORT3_SDA,     PIN(25), GPIO_INPUT)
 GPIO(PCH_SCI_L,         PIN(26), GPIO_ODR_HIGH)                 /* SCI output */
 
 GPIO(WP_L,              PIN(33), GPIO_INPUT)                    /* EC_SPI_WP_ME_L */
+GPIO(POWER_LED,         PIN(34), GPIO_OUT_LOW)
 GPIO(USB2_ENABLE,       PIN(36), GPIO_OUT_LOW)                  /* Enable power for USB2 Port */
 
 GPIO(ENTERING_RW,       PIN(41), GPIO_OUT_LOW)                  /* Indicate when EC is entering RW code */
@@ -64,6 +65,9 @@ GPIO(EC_VNN_VCLK,       PIN(122), GPIO_INPUT | GPIO_PULL_UP)    /* Interrupt fro
 GPIO(STRAP_L,           PIN(123), GPIO_OUT_LOW)
 GPIO(EC_VNN_ALERT_L,    PIN(124), GPIO_INPUT | GPIO_PULL_UP)
 
+GPIO(RF_LED,            PIN(133), GPIO_ODR_HIGH)
+GPIO(BAT_LED_RED,       PIN(136), GPIO_ODR_HIGH)
+GPIO(BAT_LED_GREEN,     PIN(141), GPIO_ODR_HIGH)
 GPIO(PCH_RSMRST_L,      PIN(143), GPIO_OUT_LOW)                  /* RSMRST_N to PCH */
 GPIO(EC_KBD_ALERT,      PIN(145), GPIO_OUT_LOW)                   /* EC_KBD_ALERT */
 GPIO(PVT_CS0,           PIN(146), GPIO_ODR_HIGH)                 /* SPI PVT Chip select */
@@ -106,8 +110,6 @@ ALTERNATE(PIN_MASK(5,  0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(16, 0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(15, 0x08),   1,    MODULE_SPI,             0)                     /* 153: CLK */
 
-ALTERNATE(PIN_MASK(13, 0x48),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 133: PWM0, 136: PWM1 */
-ALTERNATE(PIN_MASK(14, 0x02),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 141: PWM3 */
 ALTERNATE(PIN_MASK(5,  0x40),   1,    MODULE_ADC,             0)                     /* 56: temperature sensor 1 */
 ALTERNATE(PIN_MASK(6,  0x05),   1,    MODULE_ADC,             0)                     /* 60: PC_MON, 62: temperature sensor 3 */
 
