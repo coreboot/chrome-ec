@@ -17,6 +17,15 @@
 #define CONFIG_WIRELESS_SUSPEND 0
 #endif
 
+#ifdef CONFIG_WIRELESS_LED_ACTIVE_LOW
+#define WIRELESS_LED_ON 0
+#define WIRELESS_LED_OFF 1
+#else
+#define WIRELESS_LED_ON 1
+#define WIRELESS_LED_OFF 0
+#endif
+
+
 /*
  * Flags which will be left on when suspending.  Other flags will be disabled
  * when suspending.
@@ -53,6 +62,10 @@ static void wireless_enable(int flags)
 		       flags & EC_WIRELESS_SWITCH_WLAN_POWER);
 #endif
 
+#ifdef WIRELESS_GPIO_WLAN_LED
+	gpio_set_level(WIRELESS_GPIO_WLAN_LED, (flags & EC_WIRELESS_SWITCH_ALL)
+		       ? WIRELESS_LED_ON : WIRELESS_LED_OFF);
+#endif
 }
 
 static int wireless_get(void)

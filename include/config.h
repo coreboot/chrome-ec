@@ -1767,6 +1767,12 @@
 /*****************************************************************************/
 
 /*
+ * The wireless LED may be inverted. In this case they are active low
+ * and the GPIO names will be GPIO_LED..._L.
+ */
+#undef CONFIG_WIRELESS_LED_ACTIVE_LOW
+
+/*
  * Support controlling power to WiFi, WWAN (3G/LTE), and/or bluetooth modules.
  */
 #undef CONFIG_WIRELESS
