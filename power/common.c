@@ -143,9 +143,12 @@ static enum power_state power_common_state(enum power_state state)
 
 		in_want = 0;
 #ifdef CONFIG_HIBERNATE
+#ifdef CONFIG_CHARGER
 		if (extpower_is_present())
 			task_wait_event(-1);
-		else {
+		else
+#endif
+		{
 			uint64_t target_time = last_shutdown_time +
 				hibernate_delay * 1000000ull;
 			uint64_t time_now = get_time().val;
