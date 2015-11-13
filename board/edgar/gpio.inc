@@ -44,7 +44,7 @@ GPIO(VOLUME_UP,         PIN(31), GPIO_INPUT)                    /* Volume up but
 #endif
 GPIO(WP_L,              PIN(33), GPIO_INPUT)                    /* EC_SPI_WP_ME_L */
 #ifndef CONFIG_BUTTON_COUNT
-GPIO(VOLUME_DOWN,       PIN(34), GPIO_INPUT)                    /* Volume down button */
+GPIO(BAT_LED_BLUE,      PIN(34), GPIO_ODR_HIGH)                 /* Battery LED blue */
 #endif
 GPIO(USB2_ENABLE,       PIN(36), GPIO_OUT_LOW)                  /* Enable power for USB2 Port */
 
@@ -79,9 +79,12 @@ GPIO(EC_VNN_ALERT_L,    PIN(124), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_GPIO127,        PIN(127), GPIO_INPUT | GPIO_PULL_UP)    /* NC */
 
 GPIO(EC_PLUG_DETECT,    PIN(132), GPIO_INT_BOTH | GPIO_PULL_UP | GPIO_PULL_DOWN)
+GPIO(BAT_LED_ORANGE,    PIN(133), GPIO_ODR_HIGH)                 /* Battery LED orange */
 GPIO(PD_RST_L,          PIN(135), GPIO_ODR_HIGH)                 /* USB PD MCU reset */
+GPIO(PWR_LED_ORANGE,    PIN(136), GPIO_ODR_HIGH)                 /* Power LED orange */
 
 GPIO(THERMAL_PROBE_EN_L,PIN(140), GPIO_OUT_HIGH)
+GPIO(PWR_LED_BLUE,      PIN(141), GPIO_ODR_HIGH)                 /* Power LED blue */
 GPIO(PCH_RSMRST_L,      PIN(143), GPIO_OUT_LOW)                  /* RSMRST_N to PCH */
 GPIO(EC_KBD_ALERT,      PIN(145), GPIO_OUT_LOW)                  /* EC_KBD_ALERT */
 GPIO(PVT_CS0,           PIN(146), GPIO_ODR_HIGH)                 /* SPI PVT Chip select */
@@ -130,8 +133,6 @@ ALTERNATE(PIN_MASK(5,  0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(16, 0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(15, 0x08),   1,    MODULE_SPI,             0)                     /* 153: CLK */
 
-ALTERNATE(PIN_MASK(13, 0x48),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 133: PWM0, 136: PWM1 */
-ALTERNATE(PIN_MASK(14, 0x02),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 141: PWM3 */
 ALTERNATE(PIN_MASK(5,  0x40),   1,    MODULE_ADC,             0)                     /* 56: temperature sensor 1 */
 ALTERNATE(PIN_MASK(6,  0x05),   1,    MODULE_ADC,             0)                     /* 60: PC_MON, 62: temperature sensor 3 */
 

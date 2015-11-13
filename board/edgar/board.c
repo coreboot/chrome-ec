@@ -34,15 +34,6 @@
 
 #include "gpio_list.h"
 
-/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
-const struct pwm_t pwm_channels[] = {
-	{0, PWM_CONFIG_ACTIVE_LOW},
-	{1, PWM_CONFIG_ACTIVE_LOW},
-	{3, PWM_CONFIG_ACTIVE_LOW},
-};
-
-BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
-
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
 	{GPIO_ALL_SYS_PGOOD,     1, "ALL_SYS_PWRGD"},
