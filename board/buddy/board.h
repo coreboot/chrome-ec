@@ -10,14 +10,7 @@
 
 /* Optional features */
 #define CONFIG_BACKLIGHT_REQ_GPIO GPIO_PCH_BKLTEN
-#define CONFIG_BATTERY_CUT_OFF
-#define CONFIG_BATTERY_PRESENT_GPIO GPIO_BAT_PRESENT_L
-#define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
-#define CONFIG_CHARGER
-#define CONFIG_CHARGER_V1
-#define CONFIG_CHARGER_BQ24707A
-#define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_CHIPSET_HASWELL
 #define CONFIG_POWER_COMMON
@@ -46,8 +39,6 @@
 #ifndef __ASSEMBLER__
 
 /* I2C ports */
-#define I2C_PORT_BATTERY 0
-#define I2C_PORT_CHARGER 0
 #define I2C_PORT_THERMAL 5
 
 /* 13x8 keyboard scanner uses an entire GPIO bank for row inputs */
@@ -77,17 +68,9 @@ enum power_signal {
 	POWER_SIGNAL_COUNT
 };
 
-/* Charger module */
-#define CONFIG_CHARGER_SENSE_RESISTOR 10 /* Charge sense resistor, mOhm */
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC 10 /* Input sensor resistor, mOhm */
-#define CONFIG_CHARGER_INPUT_CURRENT 3078 /* mA, 90% of power supply rating */
-
 enum adc_channel {
 	/* EC internal die temperature in degrees K. */
 	ADC_CH_EC_TEMP = 0,
-
-	/* Charger current in mA. */
-	ADC_CH_CHARGER_CURRENT,
 
 	ADC_CH_COUNT
 };
@@ -108,9 +91,6 @@ enum temp_sensor_id {
 #define WIRELESS_GPIO_WLAN GPIO_WLAN_OFF_L
 #define WIRELESS_GPIO_WWAN GPIO_PP3300_LTE_EN
 #define WIRELESS_GPIO_WLAN_POWER GPIO_PP3300_WLAN_EN
-
-/* Discharge battery when on AC power for factory test. */
-int board_discharge_on_ac(int enable);
 
 #endif /* !__ASSEMBLER__ */
 

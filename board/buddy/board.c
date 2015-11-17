@@ -53,15 +53,6 @@ const struct adc_t adc_channels[] = {
 	 */
 	{"ECTemp", LM4_ADC_SEQ0, -225, ADC_READ_MAX, 420,
 	 LM4_AIN_NONE, 0x0e /* TS0 | IE0 | END0 */, 0, 0},
-
-	/* IOUT == ICMNT is on PE3/AIN0 */
-	/* We have 0.01-ohm resistors, and IOUT is 20X the differential
-	 * voltage, so 1000mA ==> 200mV.
-	 * ADC returns 0x000-0xFFF, which maps to 0.0-3.3V (as configured).
-	 * mA = 1000 * ADC_VALUE / ADC_READ_MAX * 3300 / 200
-	 */
-	{"ChargerCurrent", LM4_ADC_SEQ1, 33000, ADC_READ_MAX * 2, 0,
-	 LM4_AIN(0), 0x06 /* IE0 | END0 */, LM4_GPIO_E, (1<<3)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -79,7 +70,7 @@ BUILD_ASSERT(ARRAY_SIZE(fans) == CONFIG_FANS);
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"batt_chg", 0, 100},
+	{"converter", 0, 100},
 	{"thermal",  5, 100},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
@@ -119,15 +110,3 @@ struct keyboard_scan_config keyscan_config = {
 		0xa4, 0xff, 0xf6, 0x55, 0xfa, 0xca  /* full set */
 	},
 };
-
-/**
- * Discharge battery when on AC power for factory test.
- */
-int board_discharge_on_ac(int enable)
-{
-	if (enable)
-		gpio_set_level(GPIO_CHARGE_L, 1);
-	else
-		gpio_set_level(GPIO_CHARGE_L, 0);
-	return EC_SUCCESS;
-}
