@@ -1464,6 +1464,11 @@ enum motionsense_command {
 	 */
 	MOTIONSENSE_CMD_SET_ACTIVITY = 13,
 
+	/*
+	 * Lid Angle
+	 */
+	MOTIONSENSE_CMD_LID_ANGLE = 14,
+
 	/* Number of motionsense sub-commands. */
 	MOTIONSENSE_NUM_CMDS
 };
@@ -1577,6 +1582,8 @@ struct ec_motion_sense_activity {
 /* Set Calibration information */
 #define MOTION_SENSE_SET_OFFSET 1
 
+#define LID_ANGLE_UNRELIABLE 500
+
 struct ec_params_motion_sense {
 	uint8_t cmd;
 	union {
@@ -1664,6 +1671,10 @@ struct ec_params_motion_sense {
 		} fifo_read;
 
 		struct ec_motion_sense_activity set_activity;
+
+		/* Used for MOTIONSENSE_CMD_LID_ANGLE */
+		struct {
+		} lid_angle;
 	};
 } __packed;
 
@@ -1727,6 +1738,16 @@ struct ec_response_motion_sense {
 
 		struct {
 		} set_activity;
+
+
+		/* Used for MOTIONSENSE_CMD_LID_ANGLE */
+		struct {
+			/*
+			 * Angle between 0 and 360 degree if available,
+			 * LID_ANGLE_UNRELIABLE otherwise.
+			 */
+			uint16_t value;
+		} lid_angle;
 	};
 } __packed;
 
