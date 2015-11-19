@@ -92,6 +92,7 @@ BOARDS_NPCX=(
 BOARDS_MEC1322=(
 	celes
 	cyan
+	edgar
 	glados
 	glower
 	kunimitsu
