@@ -107,14 +107,11 @@ GPIO(EC_BL_DISABLE_L,   PIN(202), GPIO_OUT_HIGH)                 /* EDP backligh
 GPIO(SMC_SHUTDOWN,      PIN(203), GPIO_OUT_LOW)                  /* Shutdown signal from EC to power sequencing PLD */
 GPIO(NC_GPIO204,        PIN(204), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
-GPIO(BAT_PRESENT_L,    PIN(210), GPIO_INPUT)                     /* HW detection signal from battery to EC */
+GPIO(BAT_PRESENT_L,     PIN(210), GPIO_INPUT)                    /* HW detection signal from battery to EC */
 GPIO(GPIO_3_EC,         PIN(211), GPIO_OUT_LOW)                  /* Sleep SOIX signal from SOC to EC */
 
 /* Alternate functions GPIO definition */
 ALTERNATE(PIN_MASK(16, 0x24),   1,    MODULE_UART,            0)                    /* UART0 */
-
-ALTERNATE(PIN_MASK(1,  0x60),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C0: Battery Charger */
-ALTERNATE(PIN_MASK(2,  0x3f),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C1: Temp Sensor / I2C2: SOC / I2C3: VNN */
 
 ALTERNATE(PIN_MASK(0,  0xfc),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
 ALTERNATE(PIN_MASK(1,  0x03),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
@@ -143,9 +140,7 @@ ALTERNATE(PIN_MASK(11, 0x40),   0,      MODULE_GPIO,          GPIO_ODR_HIGH)    
 ALTERNATE(PIN_MASK(12, 0x01),   0,      MODULE_GPIO,          GPIO_ODR_HIGH)         /* 120: LFRAME# */
 
 /* I2C pins */
-/* I2C0_0 CLK - GPIO015, I2C0_0 DAT - GPIO016, I2C0_1 DAT - GPIO017 */
-ALTERNATE(PIN_MASK(1,  0xe0), 2, MODULE_I2C, GPIO_ODR_HIGH)
-/* I2C0_1 CLK - GPIO134 */
-ALTERNATE(PIN_MASK(13, 0x10), 2, MODULE_I2C, GPIO_ODR_HIGH)
-/* I2C{1,2,3} CLK / DAT - GPIO022-GPIO025*/
-ALTERNATE(PIN_MASK(2,  0x3f), 2, MODULE_I2C, GPIO_ODR_HIGH)
+/* I2C0_0: Battery Charger, I2C0_0 CLK - GPIO015, I2C0_0 DAT - GPIO016 */
+ALTERNATE(PIN_MASK(1,  0x60), 2, MODULE_I2C, GPIO_ODR_HIGH)
+/* I2C1: SOC / I2C3: Temp Sensor, I2C{1,3} CLK / DAT - GPIO022-GPIO025*/
+ALTERNATE(PIN_MASK(2,  0x3c), 2, MODULE_I2C, GPIO_ODR_HIGH)
