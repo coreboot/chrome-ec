@@ -91,7 +91,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* Only the AP affects the thermal limits and fan speed. */
-	{{C_TO_K(103), C_TO_K(104), C_TO_K(105)}, C_TO_K(70), C_TO_K(98)},
+	{{C_TO_K(99), C_TO_K(100), C_TO_K(105)}, C_TO_K(70), C_TO_K(98)},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
 	{{0, 0, 0}, 0, 0},
