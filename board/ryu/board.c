@@ -225,14 +225,14 @@ void usb_charger_task(void)
 	while (1) {
 		/* Wait for interrupt */
 		evt = task_wait_event(-1);
+		/* Time to re-verify the VBUS disconnection in the charger */
+		if (evt & USB_CHG_EVENT_HIZ) {
+			board_verify_input_current_limit();
+			board_verify_hiz_mode();
+		}
 		/* Got an interrupt from the Pericom BC1.2 chip */
 		if (evt & USB_CHG_EVENT_BC12)
 			usb_charger_bc12_detect();
-		/* Time to re-verify the VBUS disconnection in the charger */
-		if (evt & USB_CHG_EVENT_HIZ) {
-			board_verify_hiz_mode();
-			board_verify_input_current_limit();
-		}
 		/*
 		 * Re-enable interrupts on pericom charger detector since the
 		 * chip may periodically reset itself, and come back up with
@@ -260,6 +260,12 @@ void usb_evt(enum gpio_signal signal)
 /* BQ25892 charger events. */
 void charger_interrupt(enum gpio_signal signal)
 {
+	/*
+	 * Put lower current limit (PSEL=1 => 100mA)
+	 * until we have verified what happened as the charger might have reset
+	 * the limit to 3.25A.
+	 */
+	gpio_set_level(GPIO_CHGR_PSEL, 1);
 	/*
 	 * kick the USB_CHG task to verify that the Hi-Z bit is still set
 	 * according to our previous desire.
@@ -856,8 +862,9 @@ int board_vbus_power_path(int enable)
 static void board_verify_hiz_mode(void)
 {
 	int enable = !charger_is_forced_discharge();
+	int psel_en = !gpio_get_level(GPIO_CHGR_PSEL);
 	/* the VBUS connection is not in the state we want: update it */
-	if (enable != typec_power_path)
+	if (enable != typec_power_path || psel_en != typec_power_path)
 		board_vbus_power_path(typec_power_path);
 }
 
