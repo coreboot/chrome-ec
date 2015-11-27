@@ -82,11 +82,31 @@ static int pwr_led_set_color(enum led_color color)
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
 	brightness_range[EC_LED_COLOR_BLUE] = 1;
+	brightness_range[EC_LED_COLOR_YELLOW] = 1;
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	gpio_set_level(GPIO_PWR_LED_BLUE, brightness[EC_LED_COLOR_BLUE]);
+	switch (led_id) {
+	case EC_LED_ID_BATTERY_LED:
+		if (brightness[EC_LED_COLOR_BLUE] != 0)
+			bat_led_set_color(LED_BLUE);
+		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
+			bat_led_set_color(LED_ORANGE);
+		else
+			bat_led_set_color(LED_OFF);
+		break;
+	case EC_LED_ID_POWER_LED:
+		if (brightness[EC_LED_COLOR_BLUE] != 0)
+			pwr_led_set_color(LED_BLUE);
+		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
+			pwr_led_set_color(LED_ORANGE);
+		else
+			pwr_led_set_color(LED_OFF);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
 	return EC_SUCCESS;
 }
 
@@ -180,13 +200,9 @@ static void led_sec(void)
 
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		edgar_led_set_battery();
-	else
-		bat_led_set_color(LED_OFF);
 
 	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
 		edgar_led_set_power();
-	else
-		pwr_led_set_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_SECOND, led_sec, HOOK_PRIO_DEFAULT);
 
