@@ -29,6 +29,9 @@
 
 #define FULL_BATTERY_PERMILLAGE 795
 
+#define BAT_LED_ON 1
+#define BAT_LED_OFF 0
+
 static int led_debug;
 static int ticks;
 
@@ -47,12 +50,10 @@ enum led_color {
 };
 
 /* Brightness vs. color, in the order of off, red, amber, and green */
-static const uint8_t color_brightness[LED_COLOR_COUNT][3] = {
+static const uint8_t color_brightness[2] = {
 	/* {Green, Blue, Red}, */
-	[LED_OFF]   = {100, 100,   0},
-	[LED_RED]   = {  0,   0, 100},
-	[LED_AMBER] = {100,   0,   0},
-	[LED_GREEN] = {  0, 100,   0},
+	[LED_OFF]   = 0,
+	[LED_RED]   = 100,
 };
 
 /**
@@ -60,29 +61,58 @@ static const uint8_t color_brightness[LED_COLOR_COUNT][3] = {
  *
  * @param color		Enumerated color value
  */
-static void set_battery_color(enum led_color color)
+static int set_battery_color(enum led_color color)
 {
-	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][0]);
-	pwm_set_duty(PWM_CH_LED_BLUE, color_brightness[color][1]);
+	switch (color) {
+	case LED_OFF:
+		gpio_set_level(GPIO_BAT_LED_GREEN, BAT_LED_OFF);
+		gpio_set_level(GPIO_BAT_LED_AMBER, BAT_LED_OFF);
+		break;
+	case LED_AMBER:
+		gpio_set_level(GPIO_BAT_LED_GREEN, BAT_LED_OFF);
+		gpio_set_level(GPIO_BAT_LED_AMBER, BAT_LED_ON);
+		break;
+	case LED_GREEN:
+		gpio_set_level(GPIO_BAT_LED_GREEN, BAT_LED_ON);
+		gpio_set_level(GPIO_BAT_LED_AMBER, BAT_LED_OFF);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
 }
+
 
 static void set_power_color(enum led_color color)
 {
-	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][2]);
+	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color]);
 }
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
-	brightness_range[EC_LED_COLOR_GREEN] = 100;
-	brightness_range[EC_LED_COLOR_BLUE] = 100;
 	brightness_range[EC_LED_COLOR_RED] = 100;
+	brightness_range[EC_LED_COLOR_BLUE] = 1;
+	brightness_range[EC_LED_COLOR_GREEN] = 1;
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	pwm_set_duty(PWM_CH_LED_GREEN, brightness[EC_LED_COLOR_GREEN]);
-	pwm_set_duty(PWM_CH_LED_BLUE, brightness[EC_LED_COLOR_BLUE]);
-	pwm_set_duty(PWM_CH_LED_RED, brightness[EC_LED_COLOR_RED]);
+	switch (led_id) {
+	case EC_LED_ID_BATTERY_LED:
+		if (brightness[EC_LED_COLOR_BLUE] != 0)
+			set_battery_color(LED_GREEN);
+		else if (brightness[EC_LED_COLOR_GREEN] != 0)
+			set_battery_color(LED_AMBER);
+		else
+			set_battery_color(LED_OFF);
+		break;
+
+	case EC_LED_ID_POWER_LED:
+		pwm_set_duty(PWM_CH_LED_RED, brightness[EC_LED_COLOR_RED]);
+		break;
+	default:
+		break;
+	}
 	return EC_SUCCESS;
 }
 
@@ -129,6 +159,7 @@ static void ultima_led_set_power(void)
 
 	power_ticks++;
 
+	/* Blink 3 times (0.25s on/0.25s off, repeat 3 times) */
 	if (extpower_is_present()) {
 		blink_ticks++;
 		if (!previous_state_suspend)
@@ -145,24 +176,10 @@ static void ultima_led_set_power(void)
 	}
 	if (!extpower_is_present())
 		blink_ticks = 0;
-	if (chipset_in_state(CHIPSET_STATE_SUSPEND | CHIPSET_STATE_SOFT_OFF)) {
-		/* Reset ticks if entering suspend so LED turns red
-		 * as soon as possible. */
-		if (!previous_state_suspend)
-			power_ticks = 0;
-
-		/* Blink twice every one seconds. */
-		set_power_color(
-			(power_ticks % LED_TOTAL_TICKS) < LED_ON_TICKS ?
-			LED_RED : LED_OFF);
-
-		previous_state_suspend = 1;
-		return;
-	}
 
 	previous_state_suspend = 0;
 
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+	if (chipset_in_state(CHIPSET_STATE_SOFT_OFF))
 		set_power_color(LED_OFF);
 	if (chipset_in_state(CHIPSET_STATE_ON))
 		set_power_color(LED_RED);
@@ -203,10 +220,7 @@ static void led_init(void)
 	 * seems to ground the pins instead of letting them float.
 	 */
 	pwm_enable(PWM_CH_LED_RED, 1);
-	pwm_enable(PWM_CH_LED_GREEN, 1);
-	pwm_enable(PWM_CH_LED_BLUE, 1);
 
-	set_battery_color(LED_OFF);
 	set_power_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
@@ -226,17 +240,6 @@ static void led_tick(void)
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
 
-static void dump_pwm_channels(void)
-{
-	int ch;
-	for (ch = 0; ch < 4; ch++) {
-		CPRINTF("channel = %d\n", ch);
-		CPRINTF("0x%04X 0x%04X 0x%04X\n",
-			MEC1322_PWM_CFG(ch),
-			MEC1322_PWM_ON(ch),
-			MEC1322_PWM_OFF(ch));
-	}
-}
 /******************************************************************/
 /* Console commands */
 static int command_led_color(int argc, char **argv)
@@ -259,9 +262,6 @@ static int command_led_color(int argc, char **argv)
 			return EC_ERROR_PARAM1;
 		}
 	}
-
-	if (led_debug == 1)
-		dump_pwm_channels();
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(ledcolor, command_led_color,
