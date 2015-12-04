@@ -55,7 +55,7 @@ GPIO(NC_GPIO046,        PIN(46), GPIO_INPUT)                    /* NC */
 
 GPIO(OTG_SW_EN,         PIN(50), GPIO_OUT_LOW)                  /* */
 GPIO(PCH_SUS_STAT_L,    PIN(51), GPIO_INT_FALLING)              /* Signal to inform EC that SOC is entering low power state */
-GPIO(NC_GPIO052,        PIN(52), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(TOUCHPANEL_PWREN,  PIN(52), GPIO_OUT_HIGH)			/* Enable power for Touch panel */
 GPIO(TRACKPAD_PWREN,    PIN(53), GPIO_OUT_HIGH)                 /* Enable power for Track Pad */
 GPIO(USB_OC0_L,         PIN(55), GPIO_INT_FALLING)              /* Over current signal of the BC1.2 charger to EC */
 GPIO(EC_ADC1,           PIN(57), GPIO_INPUT)                    /* EC_ADC1, TEMP_SENSOR_2 no_stuff */
