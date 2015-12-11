@@ -220,6 +220,12 @@ int charger_post_init(void)
 #endif
 }
 
+void charger_option_init(void)
+{
+	/* Use BQ24773 default value as safe starting option0 */
+	charger_set_option(0xe34e);
+}
+
 int charger_discharge_on_ac(int enable)
 {
 	int rv;

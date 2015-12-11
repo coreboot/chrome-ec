@@ -106,6 +106,7 @@ int charger_manufacturer_id(int *id);
 int charger_device_id(int *id);
 int charger_get_option(int *option);
 int charger_set_option(int option);
+void charger_option_init(void);
 
 /* Print all charger info for debugging purposes */
 void print_charger_debug(void);

@@ -556,6 +556,14 @@ void charger_task(void)
 	else
 		curr.desired_input_current = info->input_current_max;
 
+#ifdef BOARD_SAMUS
+	/*
+	 * Initialize charger option register to guarantee charger is in a
+	 * known good state.
+	 */
+	charger_option_init();
+#endif
+
 	while (1) {
 
 #ifdef CONFIG_SB_FIRMWARE_UPDATE
