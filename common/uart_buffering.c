@@ -349,6 +349,13 @@ DECLARE_HOOK(HOOK_INIT, uart_rx_dma_init, HOOK_PRIO_DEFAULT);
 
 static int host_command_console_snapshot(struct host_cmd_handler_args *args)
 {
+	/*
+	 * Only allowed on unlocked system, since console output contains
+	 * keystroke data.
+	 */
+	if (system_is_locked())
+		return EC_ERROR_ACCESS_DENIED;
+
 	/* Assume the whole circular buffer is full */
 	tx_snapshot_head = tx_buf_head;
 	tx_snapshot_tail = TX_BUF_NEXT(tx_snapshot_head);
@@ -386,6 +393,13 @@ static int console_read_helper(struct host_cmd_handler_args *args,
 			       int *tail)
 {
 	char *dest = (char *)args->response;
+
+	/*
+	 * Only allowed on unlocked system, since console output contains
+	 * keystroke data.
+	 */
+	if (system_is_locked())
+		return EC_ERROR_ACCESS_DENIED;
 
 	/* If no snapshot data, return empty response */
 	if (tx_snapshot_head == *tail)
