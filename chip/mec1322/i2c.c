@@ -537,5 +537,7 @@ DECLARE_IRQ(MEC1322_IRQ_I2C_1, i2c1_interrupt, 2);
 DECLARE_IRQ(MEC1322_IRQ_I2C_2, i2c2_interrupt, 2);
 DECLARE_IRQ(MEC1322_IRQ_I2C_3, i2c3_interrupt, 2);
 
-int i2c_port_is_smbus(int port) __attribute((weak));
-
+int __attribute((weak)) i2c_port_is_smbus(int port)
+{
+	return 0;
+}
