@@ -48,7 +48,9 @@ GPIO(PCH_SUS_STAT_L,    PIN(51), GPIO_INT_FALLING)              /* Signal to inf
 GPIO(NC_GPIO52,         PIN(52), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(TRACKPAD_PWREN,    PIN(53), GPIO_OUT_HIGH)                 /* Enable power for Track Pad */
 GPIO(USB_OC0_L,         PIN(55), GPIO_INT_FALLING)              /* Over current signal of the BC1.2 charger to EC */
+GPIO(ADC_TEMP_SENSOR_1, PIN(56), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_GPIO57,         PIN(57), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(ADC_BC_PMON,       PIN(60), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_GPIO61,         PIN(61), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(NC_GPIO62,         PIN(62), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(EC_HIB_L,          PIN(64), GPIO_OUT_LOW)                  /* Set to high before Pseduo G3 */
