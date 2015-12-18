@@ -11,6 +11,7 @@
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "led_common.h"
 #include "pwm.h"
 #include "registers.h"
@@ -21,6 +22,9 @@
 
 #define LED_TOTAL_SECS 4
 #define LED_ON_SECS 1
+
+#define CRITICAL_LOW_BATTERY_PERMILLAGE 45
+#define LOW_BATTERY_PERMILLAGE 138
 
 static int led_debug;
 
@@ -133,28 +137,42 @@ static void edgar_led_set_power(void)
 static void edgar_led_set_battery(void)
 {
 	static int battery_secs;
+	int remaining_capacity;
+	int full_charge_capacity;
+	int permillage;
 
 	battery_secs++;
+
+	remaining_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_CAP);
+	full_charge_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
+	permillage = !full_charge_capacity ? 0 :
+		(1000 * remaining_capacity) / full_charge_capacity;
 
 	/* BAT LED behavior:
 	 * Fully charged / idle: Blue
 	 * Force idle (for factory): 2 secs of blue, 2 secs of orange
 	 * Under charging: Orange
-	 * Battery low (10%): Orange in breeze mode (1 sec on, 3 sec off)
-	 * Battery critical low (less than 3%) or abnormal battery
+	 * Battery low (10%[UI]): Orange in breeze mode (1 sec on, 3 sec off)
+	 * Battery critical low (less than 0%[UI]) or abnormal battery
 	 *     situation: Orange in blinking mode (1 sec on, 1 sec off)
 	 * Using battery or not connected to AC power: OFF
 	 */
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
-		bat_led_set_color(LED_ORANGE);
+		bat_led_set_color(
+			charge_get_percent() == 100
+			? LED_BLUE : LED_ORANGE);
 		break;
 	case PWR_STATE_DISCHARGE:
-		if (charge_get_percent() < 3)
+		/* Less than 0%[UI], blink one second every two seconds */
+		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+			permillage <= CRITICAL_LOW_BATTERY_PERMILLAGE)
 			bat_led_set_color(
 				(battery_secs % 2) < LED_ON_SECS
 				? LED_ORANGE : LED_OFF);
-		else if (charge_get_percent() < 10)
+		/* Less than 10%[UI], blink one second every four seconds */
+		else if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+			permillage <= LOW_BATTERY_PERMILLAGE)
 			bat_led_set_color(
 				(battery_secs % LED_TOTAL_SECS) < LED_ON_SECS
 				? LED_ORANGE : LED_OFF);
@@ -167,7 +185,9 @@ static void edgar_led_set_battery(void)
 			? LED_ORANGE : LED_OFF);
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
-		bat_led_set_color(LED_BLUE);
+		bat_led_set_color(
+			charge_get_percent() == 100
+			? LED_BLUE : LED_ORANGE);
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE. */
 		if (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)
