@@ -246,7 +246,8 @@ DUT_CONTROL_CMD="dut-control --port=${FLAGS_port}"
 # Find the EC UART on the servo v2
 function ec_uart() {
 	SERVOD_FAIL="Cannot communicate with servo. is servod running ?"
-	($DUT_CONTROL_CMD ${MCU}_uart_pty || \
+	($DUT_CONTROL_CMD raw_${MCU}_uart_pty || \
+	    $DUT_CONTROL_CMD ${MCU}_uart_pty || \
 	    die "${SERVOD_FAIL}") | cut -d: -f2
 }
 
@@ -287,6 +288,12 @@ function servo_restore() {
 
 function free_pty() {
 	local pids
+
+	# Disconnect the EC-3PO interpreter from the UART since it will
+	# interfere with flashing.
+	dut_control ${MCU}_ec3po_interp_connect:off || \
+	    warn "hdctools cannot disconnect the EC-3PO interpreter from" \
+	    "the UART."
 
 	pids=$(lsof -F p 2>/dev/null -- $1 | cut -d'p' -f2)
 	if [ "${pids}" == "" ]; then
@@ -339,6 +346,11 @@ function flash_stm32() {
 	ec_reset
 	# Unprotect flash, erase, and write
 	${STM32MON} -d ${EC_UART} -u -e -w "${IMG}"
+
+	# Reconnect the EC-3PO interpreter to the UART.
+	dut_control ${MCU}_ec3po_interp_connect:on || \
+	    warn "hdctools cannot reconnect the EC-3PO interpreter to" \
+	    "the UART."
 }
 
 function flash_stm32_dfu() {
