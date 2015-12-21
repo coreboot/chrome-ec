@@ -11,6 +11,7 @@
 #include "charge_state.h"
 #include "driver/accel_kxcj9.h"
 #include "driver/als_isl29035.h"
+#include "driver/charger/bq24773.h"
 #include "driver/gyro_l3gd20h.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
@@ -105,4 +106,27 @@ uint32_t board_get_gpio_hibernate_state(uint32_t port, uint32_t pin)
 
 	/* Other GPIOs should be put in a low-power state */
 	return GPIO_INPUT | GPIO_PULL_UP;
+}
+
+int board_charger_post_init(void)
+{
+	int ret;
+
+	ret = raw_write16(REG_CHARGE_OPTION0, 0x014f);
+	if (ret)
+		return ret;
+
+	ret = raw_write16(REG_CHARGE_OPTION1, 0x0211);
+	if (ret)
+		return ret;
+
+	ret = raw_write16(REG_CHARGE_OPTION2, 0x0000);
+	if (ret)
+		return ret;
+
+	ret = raw_write16(REG_PROCHOT_OPTION0, 0x4b4e);
+	if (ret)
+		return ret;
+
+	return raw_write16(REG_PROCHOT_OPTION1, 0x813C);
 }
