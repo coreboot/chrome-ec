@@ -62,6 +62,7 @@
 #define CONFIG_LED_COMMON
 
 #define CONFIG_I2C
+#define CONFIG_ADC
 
 /* Wireless signals */
 #define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
@@ -72,7 +73,6 @@
 #undef CONFIG_PSTORE
 #undef CONFIG_PECI
 #undef CONFIG_FANS
-#undef CONFIG_ADC
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -85,6 +85,8 @@
 
 /* ADC signal */
 enum adc_channel {
+	ADC_CH_0 = 0,
+
 	/* Number of ADC channels */
 	ADC_CH_COUNT
 };
@@ -105,6 +107,8 @@ enum temp_sensor_id {
 	TEMP_SENSOR_I2C_TMP432_LOCAL,
 	TEMP_SENSOR_I2C_TMP432_REMOTE1,
 	TEMP_SENSOR_I2C_TMP432_REMOTE2,
+	/* ADC Sensors */
+	TEMP_SENSOR_ADC_SENSOR1,
 
 	/* Battery temperature sensor */
 	TEMP_SENSOR_BATTERY,
