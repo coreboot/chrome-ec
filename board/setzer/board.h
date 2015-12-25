@@ -61,7 +61,6 @@
 #define CONFIG_CHARGER_INPUT_CURRENT 2240
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 
-#define CONFIG_PWM
 #define CONFIG_LED_COMMON
 
 #define CONFIG_I2C
@@ -84,6 +83,7 @@
 #undef CONFIG_PECI
 #undef CONFIG_FANS
 #undef CONFIG_ADC
+#undef CONFIG_PWM
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -114,14 +114,6 @@ enum power_signal {
 
 	/* Number of X86 signals */
 	POWER_SIGNAL_COUNT
-};
-
-enum pwm_channel {
-	PWM_CH_LED_RED,
-	PWM_CH_LED_BLUE,
-	PWM_CH_LED_GREEN,
-	/* Number of PWM channels */
-	PWM_CH_COUNT
 };
 
 enum temp_sensor_id {

@@ -78,7 +78,10 @@ GPIO(EC_VNN_ALERT_L,    PIN(124), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_GPIO127,        PIN(127), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
 GPIO(NC_GPIO132,        PIN(132), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(BAT_LED_WHITE,     PIN(133), GPIO_OUT_LOW)                  /* LED color white */
+GPIO(BAT_LED_AMBER,     PIN(136), GPIO_OUT_LOW)                  /* LED color amber */
 GPIO(PD_RST_L,          PIN(135), GPIO_ODR_HIGH)                 /* USB PD MCU reset */
+GPIO(PWR_LED_WHITE,     PIN(141), GPIO_OUT_LOW)                  /* Power LED - white */
 
 GPIO(NC_GPIO140,        PIN(140), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(PCH_RSMRST_L,      PIN(143), GPIO_OUT_LOW)                  /* RSMRST_N to PCH */
@@ -128,9 +131,6 @@ ALTERNATE(PIN_MASK(12, 0x01),   1,    MODULE_LPC,             0)                
 ALTERNATE(PIN_MASK(5,  0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(16, 0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(15, 0x08),   1,    MODULE_SPI,             0)                     /* 153: CLK */
-
-ALTERNATE(PIN_MASK(13, 0x48),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 133: PWM0, 136: PWM1 */
-ALTERNATE(PIN_MASK(14, 0x02),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 141: PWM3 */
 ALTERNATE(PIN_MASK(5,  0x40),   1,    MODULE_ADC,             0)                     /* 56: temperature sensor 1 */
 ALTERNATE(PIN_MASK(6,  0x07),   1,    MODULE_ADC,             0)                     /* 60: PC_MON, 61: ADT_TYPE_AD, 62: temperature sensor 3 */
 
