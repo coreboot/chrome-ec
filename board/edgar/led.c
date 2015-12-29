@@ -5,6 +5,7 @@
  * Power/Battery LED control for Edgar
  */
 
+#include "battery.h"
 #include "charge_state.h"
 #include "chipset.h"
 #include "console.h"
@@ -140,13 +141,15 @@ static void edgar_led_set_battery(void)
 	int remaining_capacity;
 	int full_charge_capacity;
 	int permillage;
-
+	int full_charge_flag;
+	const struct batt_params *batt = charger_current_battery_params();
 	battery_secs++;
 
 	remaining_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_CAP);
 	full_charge_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
 	permillage = !full_charge_capacity ? 0 :
 		(1000 * remaining_capacity) / full_charge_capacity;
+	full_charge_flag = ((batt->status & 0x0020) == 0) ? 0 : 1;
 
 	/* BAT LED behavior:
 	 * Fully charged / idle: Blue
@@ -157,11 +160,16 @@ static void edgar_led_set_battery(void)
 	 *     situation: Orange in blinking mode (1 sec on, 1 sec off)
 	 * Using battery or not connected to AC power: OFF
 	 */
+	if (!full_charge_flag && (batt->desired_voltage == 0)
+	     && (batt->desired_current == 0)) {
+		bat_led_set_color(
+			(battery_secs % 2) < LED_ON_SECS
+			? LED_ORANGE : LED_OFF);
+		return;
+	}
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
-		bat_led_set_color(
-			charge_get_percent() == 100
-			? LED_BLUE : LED_ORANGE);
+		bat_led_set_color(full_charge_flag ? LED_BLUE : LED_ORANGE);
 		break;
 	case PWR_STATE_DISCHARGE:
 		/* Less than 0%[UI], blink one second every two seconds */
@@ -185,9 +193,7 @@ static void edgar_led_set_battery(void)
 			? LED_ORANGE : LED_OFF);
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
-		bat_led_set_color(
-			charge_get_percent() == 100
-			? LED_BLUE : LED_ORANGE);
+		bat_led_set_color(full_charge_flag ? LED_BLUE : LED_ORANGE);
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE. */
 		if (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)

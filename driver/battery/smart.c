@@ -290,6 +290,9 @@ void battery_get_params(struct batt_params *batt)
 	if (sb_read(SB_CHARGING_CURRENT, &batt_new.desired_current))
 		batt_new.flags |= BATT_FLAG_BAD_DESIRED_CURRENT;
 
+	if (sb_read(SB_BATTERY_STATUS, &batt_new.status))
+		batt_new.flags |= BATT_FLAG_BAD_STATUS;
+
 	if (battery_remaining_capacity(&batt_new.remaining_capacity))
 		batt_new.flags |= BATT_FLAG_BAD_REMAINING_CAPACITY;
 
