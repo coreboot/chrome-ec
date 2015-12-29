@@ -89,3 +89,20 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0}, /* Battery Sensor */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+uint32_t board_get_gpio_hibernate_state(uint32_t port, uint32_t pin)
+{
+	int i;
+	const uint32_t out_low_gpios[][2] = {
+		GPIO_TO_PORT_MASK_PAIR(GPIO_SMC_SHUTDOWN),
+	};
+
+	/* Some GPIOs should be driven low in hibernate */
+	for (i = 0; i < ARRAY_SIZE(out_low_gpios); ++i) {
+		if (out_low_gpios[i][0] == port && out_low_gpios[i][1] == pin)
+			return GPIO_OUTPUT | GPIO_LOW;
+	}
+
+	/* Other GPIOs should be put in a low-power state */
+	return GPIO_INPUT | GPIO_PULL_UP;
+}
