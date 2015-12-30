@@ -25,7 +25,9 @@
 #define BQ24773_CHARGE_OPTION2          0x10
 
 /* Option bits */
+#define OPTION0_DEFAULT                 (0xe34e)
 #define OPTION0_CHARGE_INHIBIT          (1 << 0)
+#define OPTION0_IDPM_ENABLE             (1 << 1)
 #define OPTION0_LEARN_ENABLE            (1 << 5)
 
 #define OPTION2_EN_EXTILIM              (1 << 7)

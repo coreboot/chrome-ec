@@ -178,7 +178,17 @@ int charger_post_init(void)
 	if (rv)
 		return rv;
 
+#ifdef BOARD_SAMUS
+	/*
+	 * Check if input current regulation was disabled and restore
+	 * register to default (crosbug.com/p/48421).
+	 */
+	if (!(option & OPTION0_IDPM_ENABLE))
+		ccprintf("Input regulation loop was disabled\n");
+	option = OPTION0_DEFAULT;
+#else
 	option &= ~OPTION0_LEARN_ENABLE;
+#endif
 
 	rv = charger_set_option(option);
 	if (rv)
@@ -223,7 +233,7 @@ int charger_post_init(void)
 void charger_option_init(void)
 {
 	/* Use BQ24773 default value as safe starting option0 */
-	charger_set_option(0xe34e);
+	charger_set_option(OPTION0_DEFAULT);
 }
 
 int charger_discharge_on_ac(int enable)
