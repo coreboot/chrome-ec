@@ -121,7 +121,7 @@ ALTERNATE(PIN_MASK(4,  0x0d),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_INPUT)
 ALTERNATE(PIN_MASK(12, 0x60),   2,    MODULE_KEYBOARD_SCAN,   GPIO_KB_INPUT)
 ALTERNATE(PIN_MASK(14, 0x14),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_INPUT)
 
-ALTERNATE(PIN_MASK(1,  0x10),   0,    MODULE_LPC,             GPIO_OUT_HIGH)         /* 14: LPC CLKRUN - Program as GPIO for power saving */
+ALTERNATE(PIN_MASK(1,  0x10),   0,    MODULE_LPC,             GPIO_ODR_HIGH)         /* 14: LPC CLKRUN - Program as GPIO for power saving */
 ALTERNATE(PIN_MASK(11, 0x9e),   1,    MODULE_LPC,             0)                     /* 111~114:LAD[0:3],  117:PCI_CLK */
 ALTERNATE(PIN_MASK(11, 0x40),   1,    MODULE_LPC,             GPIO_INT_BOTH)         /* 116: LRESET# */
 ALTERNATE(PIN_MASK(12, 0x01),   1,    MODULE_LPC,             0)                     /* 120: LFRAME# */
