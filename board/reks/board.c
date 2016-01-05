@@ -63,6 +63,8 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_POWER_BUTTON_L,
+	GPIO_AC_PRESENT,
+	GPIO_LID_OPEN,
 };
 
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
