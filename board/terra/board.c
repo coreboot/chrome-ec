@@ -78,6 +78,7 @@ uint32_t board_get_gpio_hibernate_state(uint32_t port, uint32_t pin)
 {
 	int i;
 	const uint32_t out_low_gpios[][2] = {
+		GPIO_TO_PORT_MASK_PAIR(GPIO_POWER_LED),
 		GPIO_TO_PORT_MASK_PAIR(GPIO_SMC_SHUTDOWN),
 	};
 
