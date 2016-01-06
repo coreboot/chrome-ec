@@ -24,7 +24,7 @@
 #define LED_TOTAL_SECS 4
 #define LED_ON_SECS 1
 
-#define CRITICAL_LOW_BATTERY_PERMILLAGE 45
+#define CRITICAL_LOW_BATTERY_PERMILLAGE 72
 #define LOW_BATTERY_PERMILLAGE 138
 
 static int led_debug;
@@ -156,7 +156,7 @@ static void edgar_led_set_battery(void)
 	 * Force idle (for factory): 2 secs of blue, 2 secs of orange
 	 * Under charging: Orange
 	 * Battery low (10%[UI]): Orange in breeze mode (1 sec on, 3 sec off)
-	 * Battery critical low (less than 0%[UI]) or abnormal battery
+	 * Battery critical low (less than 3%[UI]) or abnormal battery
 	 *     situation: Orange in blinking mode (1 sec on, 1 sec off)
 	 * Using battery or not connected to AC power: OFF
 	 */
@@ -172,7 +172,7 @@ static void edgar_led_set_battery(void)
 		bat_led_set_color(full_charge_flag ? LED_BLUE : LED_ORANGE);
 		break;
 	case PWR_STATE_DISCHARGE:
-		/* Less than 0%[UI], blink one second every two seconds */
+		/* Less than 3%[UI], blink one second every two seconds */
 		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
 			permillage <= CRITICAL_LOW_BATTERY_PERMILLAGE)
 			bat_led_set_color(
