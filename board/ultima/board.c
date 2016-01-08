@@ -202,8 +202,10 @@ void lid_angle_peripheral_enable(int enable)
 		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
 		track_pad_enable(0);
 	} else {
-		keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-		track_pad_enable(1);
+		if (!chipset_in_state(CHIPSET_STATE_ON)) {
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+			track_pad_enable(1);
+		}
 	}
 }
 #endif
