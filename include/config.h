@@ -1524,6 +1524,7 @@
 #undef CONFIG_UART_RX_DMA_CH
 
 /*****************************************************************************/
+
 /* USB PD config */
 
 /* Include all USB Power Delivery modules */

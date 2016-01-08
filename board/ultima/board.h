@@ -102,6 +102,11 @@
 #define I2C_PORT_ACCEL		MEC1322_I2C2
 #define I2C_PORT_THERMAL	MEC1322_I2C3
 
+/* battery firmware update */
+#define CONFIG_CRC8
+#define CONFIG_SB_FIRMWARE_UPDATE
+#define CONFIG_SMBUS
+
 /* ADC signal */
 enum adc_channel {
 	/* Number of ADC channels */

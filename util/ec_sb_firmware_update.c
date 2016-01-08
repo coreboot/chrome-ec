@@ -19,7 +19,7 @@
 #include "powerd_lock.h"
 
 #define SIMPLO_MAKER_ID 0x5
-#define SIMPLO_HWID 0x74
+#define SIMPLO_HWID 0x152
 
 /* Subcommands: [check|update] */
 enum {
@@ -742,7 +742,7 @@ void usage(char *argv[])
 
 int main(int argc, char *argv[])
 {
-	int rv = 0, interfaces = COMM_LPC;
+	int rv = 0, interfaces = COMM_ALL;
 	int op = OP_UNKNOWN;
 	uint8_t val = 0;
 

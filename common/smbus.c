@@ -57,12 +57,10 @@ static int smbus_if_write(int i2c_port, struct smbus_wr_if *intf,
 		intf->data[n-1] = crc8((const uint8_t *)intf,
 				n - 1 + sizeof(struct smbus_wr_if));
 	i2c_lock(i2c_port, 1);
-	rv = i2c_is_busy(i2c_port);
-	if (!rv)
-		rv = i2c_xfer(i2c_port, intf->slave_addr,
-			&intf->smbus_cmd, n + 1, NULL, 0, I2C_XFER_SINGLE);
-	else
-		rv = EC_ERROR_BUSY;
+  
+	rv = i2c_xfer(i2c_port, intf->slave_addr,
+		&intf->smbus_cmd, n + 1, NULL, 0, I2C_XFER_SINGLE);
+
 	i2c_lock(i2c_port, 0);
 	if (rv)
 		CPRINTF("smbus wr i2c_xfer error:%d cmd:%02X n:%d\n",
@@ -92,16 +90,6 @@ static int smbus_if_read(int i2c_port, struct smbus_rd_if *intf,
 	n = size_n + data_n + pec_n;
 
 	i2c_lock(i2c_port, 1);
-
-	/* Check if smbus is busy */
-	rv = i2c_is_busy(i2c_port);
-	if (rv) {
-		rv = EC_ERROR_BUSY;
-		CPRINTF("smbus_cmd:%02X bus busy error:%d\n",
-			intf->smbus_cmd, rv);
-		i2c_lock(i2c_port, 0);
-		return rv;
-	}
 
 	rv = i2c_xfer(i2c_port, intf->slave_addr,
 			&(intf->smbus_cmd), 1, intf->data, n, I2C_XFER_SINGLE);
