@@ -46,6 +46,7 @@
 #define OPTION0_LEARN_ENABLE            (1 << 5)
 #define OPTION0_AUDIO_FREQ_40KHZ_LIMIT  (1 << 10)
 #define OPTION1_AUTO_WAKEUP_ENABLE      (1 << 0)
+#define OPTION1_PMON_ENABLE             (1 << 10)
 #define OPTION2_EN_EXTILIM              (1 << 7)
 
 /* Prochot Option bits */

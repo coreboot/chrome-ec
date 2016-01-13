@@ -5,8 +5,10 @@
 /* Setzer board-specific configuration */
 
 #include "adc.h"
+#include "adc_chip.h"
 #include "als.h"
 #include "button.h"
+#include "console.h"
 #include "charger.h"
 #include "charge_state.h"
 #include "driver/accel_kxcj9.h"
@@ -37,8 +39,16 @@
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
 #define GPIO_KB_OUTPUT (GPIO_ODR_HIGH)
 #define GPIO_KB_OUTPUT_COL2 (GPIO_OUT_LOW)
+#define CHARGER_TIMEOUT_SEC 36000
 
 #include "gpio_list.h"
+
+static int prev_stats;
+static int charge_timeout_secs;
+int state_charger_timeout;
+
+/* Console output macros */
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
 
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
@@ -99,7 +109,7 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0}, /* TMP432_Internal */
 	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_1 */
 	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_2 */
-	{{0, 0, 0}, 0, 0}, /* Battery Sensor */
+	{{0, 326, 332}, 0, 0}, /* Battery Sensor */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -228,6 +238,21 @@ static void adc_pre_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, adc_pre_init, HOOK_PRIO_INIT_ADC - 1);
 
+/* ADC channels */
+const struct adc_t adc_channels[] = {
+	/*
+	 * We have 0.01-ohm resistors, and IOUT is 40X the differential
+	 * voltage, so 1000mA ==> 400mV.
+	 * ADC returns 0x000-0xFFF, which maps to 0.0-3.0V (as configured).
+	 * mA = 1000 * ADC_VALUE / ADC_READ_MAX * 3000 / 400
+	*/
+	[ADC_CH_CHARGER_CURRENT] = {"ChargerCurrent", 3000 * 10,
+	 ADC_READ_MAX * 4, 0, MEC1322_ADC_CH(2)},
+	[ADC_AC_ADAPTER_ID_VOLTAGE] = {"AdapterIDVoltage", 3000,
+	 ADC_READ_MAX, 0, MEC1322_ADC_CH(3)},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
 int i2c_port_is_smbus(int port)
 {
 	return (port == MEC1322_I2C0_0 || port == MEC1322_I2C0_1) ? 1 : 0;
@@ -235,14 +260,23 @@ int i2c_port_is_smbus(int port)
 
 int board_charger_post_init(void)
 {
-	int ret, option0;
+	int ret, option0, option1;
 
 	ret = raw_read16(REG_CHARGE_OPTION0, &option0);
 	if (ret)
 		return ret;
-	option0 |= OPTION0_AUDIO_FREQ_40KHZ_LIMIT;
 
-	return raw_write16(REG_CHARGE_OPTION0, option0);
+	option0 |= OPTION0_AUDIO_FREQ_40KHZ_LIMIT;
+	ret = raw_write16(REG_CHARGE_OPTION0, option0);
+	if (ret)
+		return ret;
+
+	ret = raw_read16(REG_CHARGE_OPTION1, &option1);
+	if (ret)
+		return ret;
+
+	option1 |= OPTION1_PMON_ENABLE;
+	return raw_write16(REG_CHARGE_OPTION1, option1);
 }
 
 static void touch_screen_set_control_mode(void)
@@ -264,3 +298,25 @@ static void touch_screen_reset(void)
 	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_reset, HOOK_PRIO_DEFAULT);
+
+/* Called by hook task every 1 sec  */
+void check_charger_timeout_second(void)
+{
+	if (charge_get_state() != prev_stats) {
+		if (charge_get_state() == PWR_STATE_CHARGE)
+			charge_timeout_secs = CHARGER_TIMEOUT_SEC;
+		prev_stats = charge_get_state();
+	}
+	if (charge_get_state() == PWR_STATE_CHARGE) {
+		charge_timeout_secs--;
+		if (charge_timeout_secs == 0) {
+			state_charger_timeout = 1;
+			charge_set_input_current_limit(128);
+			CPRINTS("Charge timed out after %d hours",
+				(CHARGER_TIMEOUT_SEC / 3600));
+		}
+	} else {
+		state_charger_timeout = 0;
+	}
+}
+DECLARE_HOOK(HOOK_SECOND, check_charger_timeout_second, HOOK_PRIO_DEFAULT);
