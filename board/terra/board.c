@@ -115,3 +115,19 @@ int board_charger_post_init(void)
 
 	return raw_write16(REG_PROCHOT_OPTION1, 0x813C);
 }
+
+int board_get_version(void)
+{
+	int v = 0;
+
+	if (gpio_get_level(GPIO_BOARD_VERSION1))
+		v |= 0x01;
+	if (gpio_get_level(GPIO_BOARD_VERSION2))
+		v |= 0x02;
+	if (gpio_get_level(GPIO_BOARD_VERSION3))
+		v |= 0x04;
+	if (gpio_get_level(GPIO_IMAGE_SEL))
+		v |= 0x08;
+
+	return v;
+}
