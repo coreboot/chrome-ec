@@ -32,6 +32,7 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 #define CONFIG_TRICKLE_CHARGING
+#define CONFIG_PWM
 
 /* PSYS resistor 8.25KOhm */
 #define CHARGER_PSYS_RESISTOR 8250
@@ -123,7 +124,7 @@
 #define I2C_PORT_USB_CHARGER_2 MEC1322_I2C0_0
 
 #undef DEFERRABLE_MAX_COUNT
-#define DEFERRABLE_MAX_COUNT 14
+#define DEFERRABLE_MAX_COUNT 15
 
 #define CONFIG_ALS
 #define CONFIG_ALS_OPT3001
@@ -175,6 +176,11 @@ enum power_signal {
 	X86_SLP_SUS_DEASSERTED,
 	/* Number of X86 signals */
 	POWER_SIGNAL_COUNT
+};
+
+enum pwm_channel {
+	PWM_CH_LED_RED,
+	PWM_CH_COUNT
 };
 
 enum temp_sensor_id {

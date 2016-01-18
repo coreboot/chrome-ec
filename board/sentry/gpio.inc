@@ -103,6 +103,9 @@ GPIO(CHARGE_LED2,           PIN(156), GPIO_OUT_LOW)
 GPIO(KBD_KSO2,              PIN(101), GPIO_OUT_LOW)
 /* Alternate functions GPIO definitions */
 
+/* PWM for LED */
+ALTERNATE(PIN_MASK(13, 0x40), 1, MODULE_PWM, 0)
+
 /* GPIO162(UART_RX),  GPIO165(UART_TX) */
 ALTERNATE(PIN_MASK(16, 0x24), 1, MODULE_UART, 0)
 
