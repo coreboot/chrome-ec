@@ -191,20 +191,20 @@ DECLARE_HOOK(HOOK_INIT, adc_pre_init, HOOK_PRIO_INIT_ADC - 1);
 static void track_pad_enable(int enable)
 {
 	if (enable)
-		gpio_set_level(GPIO_TRACKPAD_PWREN, 0);
-	else
 		gpio_set_level(GPIO_TRACKPAD_PWREN, 1);
+	else
+		gpio_set_level(GPIO_TRACKPAD_PWREN, 0);
 }
 
 void lid_angle_peripheral_enable(int enable)
 {
 	if (enable) {
 		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-		track_pad_enable(0);
+		track_pad_enable(1);
 	} else {
-		if (!chipset_in_state(CHIPSET_STATE_ON)) {
+		if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-			track_pad_enable(1);
+			track_pad_enable(0);
 		}
 	}
 }
