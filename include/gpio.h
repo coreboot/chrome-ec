@@ -250,4 +250,7 @@ int gpio_is_reboot_warm(void);
  */
 void gpio_enable_clocks(void);
 
+/* Optional board-level function to set hibernate GPIO states. */
+void board_set_gpio_hibernate_state(void) __attribute__((weak));
+
 #endif  /* __CROS_EC_GPIO_H */

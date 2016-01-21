@@ -994,10 +994,14 @@
 #define CONFIG_HIBERNATE_DELAY_SEC 3600
 
 /*
- * Perform a system reset on wake from hibernate. This is the default behavior,
- * and the only chip-supported behavior for certain ECs.
+ * Use to define going in to hibernate early if low on battery.
+ * CONFIG_HIBERNATE_BATT_PCT specifies the low battery threshold
+ * for going into hibernate early, and CONFIG_HIBERNATE_BATT_SEC defines
+ * the minimum amount of time to stay in G3 before checking for low
+ * battery hibernate.
  */
-#define CONFIG_HIBERNATE_RESET_ON_WAKE
+#undef CONFIG_HIBERNATE_BATT_PCT
+#undef CONFIG_HIBERNATE_BATT_SEC
 
 /* For ECs with multiple wakeup pins, define enabled wakeup pins */
 #undef CONFIG_HIBERNATE_WAKEUP_PINS
