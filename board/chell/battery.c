@@ -22,9 +22,9 @@ static const struct battery_info info = {
 	.voltage_min		= 9000,
 	.precharge_current	= 392,		/* mA */
 	.start_charging_min_c	= 0,
-	.start_charging_max_c	= 60,
+	.start_charging_max_c	= 45,
 	.charging_min_c		= 0,
-	.charging_max_c		= 60,
+	.charging_max_c		= 45,
 	.discharging_min_c	= 0,
 	.discharging_max_c	= 60,
 };
