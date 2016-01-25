@@ -14,7 +14,29 @@
 #include "led_common.h"
 #include "pwm.h"
 #include "registers.h"
+#include "system.h"
 #include "util.h"
+
+/*
+ * ----------------------- The LEDs behavior of wizpig ------------------------
+ * Power status | the behavior of AC and Battery   |   red orange green purple
+ * Power On     | Adapter in, no battery           |   red
+ *              | Adapter in，battery charging      |   orange
+ *              | Adapter in，battery full charge   |   green
+ *              | Only battery，capacity above 10%  |   purple
+ *              | Only battery，capacity below 10%  |   red blink
+ * Power Off    | Adapter in, no battery           |   red
+ *              | Adapter in，battery charging      |   orange
+ *              | Adapter in，battery full charge   |   green
+ *              | Only battery，capacity above 10%  |   off
+ *              | Only battery，capacity below 10%  |   off
+ * Suspend      | Adapter in, no battery           |   red
+ *              | Adapter in，battery charging      |   orange blink
+ *              | Adapter in，battery full chargee  |   green
+ *              | Only battery，capacity above 10%  |   purple blink
+ *              | Only battery，capacity below 10%  |   red blink
+ */
+
 
 #define CPRINTF(format, args...) cprintf(CC_PWM, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_PWM, format, ## args)
@@ -23,28 +45,35 @@
 #define LED_ON_TICKS 4
 
 static int led_debug;
+static int battery_second;
 
 const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_POWER_LED, EC_LED_ID_BATTERY_LED};
+	EC_LED_ID_BATTERY_LED};
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 enum led_color {
 	LED_OFF = 0,
 	LED_RED,
-	LED_AMBER,
+	LED_ORANGE,
 	LED_GREEN,
-
+	LED_BLUE,
+	LED_PURPLE,
+	LED_YELLOW,
 	/* Number of colors, not a color itself */
 	LED_COLOR_COUNT
 };
 
 /* Brightness vs. color, in the order of off, red, amber, and green */
 static const uint8_t color_brightness[LED_COLOR_COUNT][3] = {
-	/* {Red, Blue, Green}, */
-	[LED_OFF]   = {  0,   0,   0},
-	[LED_RED]   = {100,   0,   0},
-	[LED_AMBER] = { 75,   0,  10},
-	[LED_GREEN] = {  0,   0, 100},
+			/* {Red, Blue, Green}, */
+	[LED_OFF]    =  {  0,   0,   0},
+	[LED_RED]    =  {100,   0,   0},
+	[LED_ORANGE] =  { 70,   0,  30},
+	[LED_GREEN]  =  {  0,   0, 100},
+	[LED_BLUE]   =  {  0,   100, 0},
+	[LED_PURPLE] =  {  50,  50, 0 },
+	[LED_YELLOW] =  { 50,   00, 50},
+
 };
 
 /**
@@ -52,7 +81,7 @@ static const uint8_t color_brightness[LED_COLOR_COUNT][3] = {
  *
  * @param color		Enumerated color value
  */
-static void set_color(enum led_color color)
+static void bat_led_set_color(enum led_color color)
 {
 	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][0]);
 	pwm_set_duty(PWM_CH_LED_BLUE, color_brightness[color][1]);
@@ -74,57 +103,92 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 	return EC_SUCCESS;
 }
 
-static void wizpig_led_set_power(void)
+static void wizpig_led_set_battery_poweron(void)
 {
-	static int power_ticks;
-	static int previous_state_suspend;
-
-	power_ticks++;
-
-	if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
-		/* Reset ticks if entering suspend so LED turns amber
-		 * as soon as possible. */
-		if (!previous_state_suspend)
-			power_ticks = 0;
-
-		/* Blink once every four seconds. */
-		set_color(
-			(power_ticks % LED_TOTAL_TICKS) < LED_ON_TICKS ?
-			LED_AMBER : LED_OFF);
-
-		previous_state_suspend = 1;
-		return;
-	}
-
-	previous_state_suspend = 0;
-
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		set_color(LED_OFF);
-	else if (chipset_in_state(CHIPSET_STATE_ON))
-		set_color(LED_GREEN);
-}
-
-static void wizpig_led_set_battery(void)
-{
-	static int battery_ticks;
-
-	battery_ticks++;
-
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
-		set_color(LED_AMBER);
+		bat_led_set_color(LED_ORANGE);
 		break;
-	case PWR_STATE_ERROR:
-		set_color(LED_RED);
+	case PWR_STATE_DISCHARGE:
+		if (charge_get_percent() < 10)
+			bat_led_set_color((battery_second & 0x1)
+					? LED_OFF : LED_RED);
+		else
+			bat_led_set_color(LED_PURPLE);
 		break;
-	case PWR_STATE_CHARGE_NEAR_FULL:
+	case PWR_STATE_ERROR: /* Battery has been removed and AC input now. */
+		bat_led_set_color(LED_RED);
+		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE. */
-		set_color(LED_GREEN);
+		/* Fall through. */
+	case PWR_STATE_CHARGE_NEAR_FULL:
+		bat_led_set_color(LED_GREEN);
 		break;
 	default:
 		/* Other states don't alter LED behavior */
 		break;
 	}
+}
+
+static void wizpig_led_set_battery_poweroff(void)
+{
+	switch (charge_get_state()) {
+	case PWR_STATE_CHARGE:
+		bat_led_set_color(LED_ORANGE);
+		break;
+	case PWR_STATE_CHARGE_NEAR_FULL:
+		bat_led_set_color(LED_GREEN);
+		break;
+	case PWR_STATE_ERROR: /* Battery has been removed and AC input now. */
+		bat_led_set_color(LED_RED);
+		break;
+	default:
+		/* Close all LEDs */
+		bat_led_set_color(LED_OFF);
+		break;
+	}
+}
+
+static void wizpig_led_set_battery_suspend(void)
+{
+	switch (charge_get_state()) {
+	case PWR_STATE_CHARGE:
+		bat_led_set_color((battery_second & 0x1)
+					? LED_OFF : LED_ORANGE);
+		break;
+	case PWR_STATE_DISCHARGE:
+		if (charge_get_percent() < 10)
+			bat_led_set_color((battery_second & 0x1)
+					? LED_OFF : LED_RED);
+		else
+			bat_led_set_color((battery_second & 0x1)
+					? LED_OFF : LED_PURPLE);
+		break;
+	case PWR_STATE_ERROR: /* Battery has been removed and AC input now. */
+		bat_led_set_color(LED_RED);
+		break;
+	case PWR_STATE_IDLE: /* External power connected in IDLE. */
+		/* Fall through. */
+	case PWR_STATE_CHARGE_NEAR_FULL:
+		bat_led_set_color(LED_GREEN);
+		break;
+	default:
+		/* Other states don't alter LED behavior */
+		break;
+	}
+}
+
+
+static void wizpig_led_set_battery(void)
+{
+	battery_second++;
+
+	if (chipset_in_state(CHIPSET_STATE_ON))
+		wizpig_led_set_battery_poweron();
+	else if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		wizpig_led_set_battery_poweroff();
+	else if (chipset_in_state(CHIPSET_STATE_SUSPEND))
+		wizpig_led_set_battery_suspend();
 }
 
 static void led_init(void)
@@ -140,31 +204,20 @@ static void led_init(void)
 	pwm_enable(PWM_CH_LED_GREEN, 1);
 	pwm_enable(PWM_CH_LED_BLUE, 1);
 
-	set_color(LED_OFF);
+	bat_led_set_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
 
-/**
- * Called by hook task every 250 ms
- */
-static void led_tick(void)
+/**  * Called by hook task every 1 sec  */
+static void led_second(void)
 {
 	if (led_debug)
 		return;
-
-	if (extpower_is_present()) {
-		if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
-			wizpig_led_set_battery();
-			return;
-		}
-	} else if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED)) {
-		wizpig_led_set_power();
-		return;
-	}
-
-	set_color(LED_OFF);
+	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
+		wizpig_led_set_battery();
 }
-DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_SECOND, led_second, HOOK_PRIO_DEFAULT);
+
 
 static void dump_pwm_channels(void)
 {
@@ -186,13 +239,19 @@ static int command_led_color(int argc, char **argv)
 			led_debug ^= 1;
 			CPRINTF("led_debug = %d\n", led_debug);
 		} else if (!strcasecmp(argv[1], "off")) {
-			set_color(LED_OFF);
+			bat_led_set_color(LED_OFF);
 		} else if (!strcasecmp(argv[1], "red")) {
-			set_color(LED_RED);
+			bat_led_set_color(LED_RED);
 		} else if (!strcasecmp(argv[1], "green")) {
-			set_color(LED_GREEN);
-		} else if (!strcasecmp(argv[1], "amber")) {
-			set_color(LED_AMBER);
+			bat_led_set_color(LED_GREEN);
+		} else if (!strcasecmp(argv[1], "orange")) {
+			bat_led_set_color(LED_ORANGE);
+		} else if (!strcasecmp(argv[1], "blue")) {
+			bat_led_set_color(LED_BLUE);
+		} else if (!strcasecmp(argv[1], "purple")) {
+			bat_led_set_color(LED_PURPLE);
+		} else if (!strcasecmp(argv[1], "yellow")) {
+			bat_led_set_color(LED_YELLOW);
 		} else {
 			/* maybe handle charger_discharge_on_ac() too? */
 			return EC_ERROR_PARAM1;
@@ -204,7 +263,7 @@ static int command_led_color(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(ledcolor, command_led_color,
-			"[debug|red|green|amber|off]",
+			"[debug|red|green|orange|blue|purple|yellow|off]",
 			"Change LED color",
 			NULL);
 
