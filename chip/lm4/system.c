@@ -385,6 +385,10 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 {
 	/* Flush console before hibernating */
 	cflush();
+
+	if (board_hibernate)
+		board_hibernate();
+
 	hibernate(seconds, microseconds, HIBDATA_WAKE_PIN);
 }
 
