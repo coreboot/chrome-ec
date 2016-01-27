@@ -427,6 +427,9 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	/* Flush console before hibernating */
 	cflush();
 
+	if (board_hibernate)
+		board_hibernate();
+
 #if SUPPORT_HIB
 	/* Add additional hibernate operations here */
 	__enter_hibernate(seconds, microseconds);

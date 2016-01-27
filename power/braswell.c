@@ -367,6 +367,11 @@ enum power_state power_handle_state(enum power_state state)
 }
 
 #ifdef CONFIG_LOW_POWER_PSEUDO_G3
+void board_hibernate(void)
+{
+	enter_pseudo_g3();
+}
+
 void enter_pseudo_g3(void)
 {
 	CPRINTS("Enter Psuedo G3");
