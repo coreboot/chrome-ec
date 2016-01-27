@@ -24,6 +24,9 @@ enum system_bram_indices {
 
 void system_hibernate(uint32_t seconds, uint32_t microseconds)
 {
+	if (board_hibernate)
+		board_hibernate();
+
 	/* TODO(crosbug.com/p/23575): IMPLEMENT ME ! */
 }
 
