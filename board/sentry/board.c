@@ -5,7 +5,6 @@
 /* Skylake Chrome Reference Design board-specific configuration */
 
 #include "adc_chip.h"
-#include "als.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
@@ -13,7 +12,6 @@
 #include "console.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kxcj9.h"
-#include "driver/als_opt3001.h"
 #include "driver/gyro_l3gd20h.h"
 #include "driver/pmic_tps650830.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -125,7 +123,6 @@ const struct i2c_port_t i2c_ports[]  = {
 	{"pmic",     MEC1322_I2C0_0, 400,  GPIO_I2C0_0_SCL, GPIO_I2C0_0_SDA},
 	{"muxes",    MEC1322_I2C0_1, 400,  GPIO_I2C0_1_SCL, GPIO_I2C0_1_SDA},
 	{"pd_mcu",   MEC1322_I2C1,   500,  GPIO_I2C1_SCL,   GPIO_I2C1_SDA},
-	{"sensors",  MEC1322_I2C2,   400,  GPIO_I2C2_SCL,   GPIO_I2C2_SDA  },
 	{"batt",     MEC1322_I2C3,   100,  GPIO_I2C3_SCL,   GPIO_I2C3_SDA  },
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
@@ -361,20 +358,6 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},	/* Battery */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
-
-/* ALS instances. Must be in same order as enum als_id. */
-struct als_t als[] = {
-	{"TI", opt3001_init, opt3001_read_lux, 5},
-};
-BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
-
-const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
-	{"Volume Down", KEYBOARD_BUTTON_VOLUME_DOWN, GPIO_VOLUME_DOWN_L,
-		30 * MSEC, 0},
-	{"Volume Up", KEYBOARD_BUTTON_VOLUME_UP, GPIO_VOLUME_UP_L,
-		30 * MSEC, 0},
-};
-BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
 
 /* Initialize PMIC */
 #define I2C_PMIC_READ(reg, data) \

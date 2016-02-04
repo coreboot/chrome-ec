@@ -15,7 +15,6 @@
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BATTERY_VENDOR_PARAM
 #define CONFIG_BOARD_VERSION
-#define CONFIG_BUTTON_COUNT 2
 #define CONFIG_CHARGE_MANAGER
 
 #define CONFIG_CHARGER
@@ -120,7 +119,6 @@
 #define I2C_PORT_USB_MUX MEC1322_I2C0_1
 #define I2C_PORT_PD_MCU MEC1322_I2C1
 #define I2C_PORT_TCPC MEC1322_I2C1
-#define I2C_PORT_ALS MEC1322_I2C2
 #define I2C_PORT_ACCEL MEC1322_I2C2
 #define I2C_PORT_GYRO MEC1322_I2C2
 #define I2C_PORT_PMIC MEC1322_I2C0_0
@@ -128,10 +126,6 @@
 
 #undef DEFERRABLE_MAX_COUNT
 #define DEFERRABLE_MAX_COUNT 15
-
-#define CONFIG_ALS
-#define CONFIG_ALS_OPT3001
-#define OPT3001_I2C_ADDR OPT3001_I2C_ADDR1
 
 /* Accelerometer */
 #ifdef HAS_TASK_MOTIONSENSE
@@ -196,13 +190,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,
 
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_OPT3001 = 0,
-
-	ALS_COUNT,
 };
 
 /* start as a sink in case we have no other power supply/battery */
