@@ -92,6 +92,8 @@ BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* ADC channels */
 const struct adc_t adc_channels[] = {
+	/* read voltage in battery thermistor as battery present */
+	[ADC_BATT_PRESENT] = {"BATTPRES", 3300, 1024, 0, 0},
 	/* Vbus sensing. Converted to mV, full ADC is equivalent to 30V. */
 	[ADC_VBUS] = {"VBUS", 30000, 1024, 0, 1},
 	/* Adapter current output or battery discharging current */
