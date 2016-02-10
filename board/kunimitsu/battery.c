@@ -28,7 +28,14 @@ static const struct battery_info info = {
 
 const struct battery_info *battery_get_info(void)
 {
-	return &info;
+	static struct battery_info batt_info;
+
+	if (battery_is_present() == BP_NO) {
+		batt_info = info;
+		batt_info.voltage_min = batt_info.voltage_max;
+		return &batt_info;
+	} else
+		return &info;
 }
 
 int board_cut_off_battery(void)
