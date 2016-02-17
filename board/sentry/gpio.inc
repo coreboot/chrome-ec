@@ -69,8 +69,6 @@ GPIO(GYRO_DRDY,             PIN(133), GPIO_INPUT | GPIO_PULL_DOWN)  /* Lid Gyro 
 GPIO(WLAN_OFF_L,            PIN(132), GPIO_OUT_HIGH)
 /* RCIN# line to PCH for 8042 emulation */
 GPIO(PCH_RCIN_L,            PIN(135), GPIO_ODR_HIGH)
-/* Fan PWM output - NC / testing only */
-GPIO(NC_136,                PIN(136), GPIO_INPUT | GPIO_PULL_UP)    /* Reserved for KBD Backlight */
 
 /* Bring down all rails but RTC rail */
 GPIO(LDO_EN,                PIN(211), GPIO_OUT_LOW)
