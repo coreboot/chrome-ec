@@ -241,6 +241,14 @@ int charger_post_init(void)
 	if (rv)
 		return rv;
 
+	/*
+	 * Set Battery Discharging current Prochot# threshold to maximum value
+	 * so Prochot# assertion is effectively disabled.
+	 */
+	rv = raw_write16(ISL9237_REG_PROCHOT_DC, ISL9237_PROCHOT_DC_REG_MAX);
+	if (rv)
+		return rv;
+
 	rv = charger_get_option(&reg);
 	if (rv)
 		return rv;
