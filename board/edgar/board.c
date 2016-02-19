@@ -73,8 +73,6 @@ const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 const struct temp_sensor_t temp_sensors[] = {
 	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_LOCAL, 4},
-	{"TMP432_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_REMOTE1, 4},
 	{"TMP432_Sensor_2", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
 	{"ADC_Sensor_1", TEMP_SENSOR_TYPE_BOARD, adc_get_val,
@@ -89,7 +87,6 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0}, /* TMP432_Internal */
-	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_1 */
 	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_2 */
 	{{0, 0, 0}, 0, 0}, /* ADC_Sensor_1 */
 	{{0, 0, 0}, 0, 0}, /* Battery Sensor */
@@ -141,7 +138,16 @@ static int adc_get_val(int idx, int *temp_ptr)
 			tail = mid;
 	}
 
-	/* Offset 3 dergee */
-	*temp_ptr = C_TO_K(mid) + 3;
+	/* Offset 5 dergee */
+	*temp_ptr = C_TO_K(mid) + 5;
 	return EC_SUCCESS;
 }
+static void THM_tmp432(void)
+{
+	i2c_write8(4, 0x98, 0x1A, 0x48);
+	i2c_write8(4, 0x98, 0x20, 0x48);
+}
+DECLARE_HOOK(HOOK_INIT, THM_tmp432, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_STARUP, THM_tmp432, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, THM_tmp432, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, THM_tmp432, HOOK_PRIO_DEFAULT);

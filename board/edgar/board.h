@@ -105,7 +105,6 @@ enum power_signal {
 enum temp_sensor_id {
 	/* TMP432 local and remote sensors */
 	TEMP_SENSOR_I2C_TMP432_LOCAL,
-	TEMP_SENSOR_I2C_TMP432_REMOTE1,
 	TEMP_SENSOR_I2C_TMP432_REMOTE2,
 	/* ADC Sensors */
 	TEMP_SENSOR_ADC_SENSOR1,
