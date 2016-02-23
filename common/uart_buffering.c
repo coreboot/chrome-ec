@@ -39,10 +39,10 @@
 				 (CONFIG_UART_RX_DMA_RECHECKS + 1))
 
 /* Transmit and receive buffers */
-static volatile char tx_buf[CONFIG_UART_TX_BUF_SIZE];
+static volatile char __bss_slow tx_buf[CONFIG_UART_TX_BUF_SIZE];
 static volatile int tx_buf_head;
 static volatile int tx_buf_tail;
-static volatile char rx_buf[CONFIG_UART_RX_BUF_SIZE];
+static volatile char __bss_slow  rx_buf[CONFIG_UART_RX_BUF_SIZE];
 static volatile int rx_buf_head;
 static volatile int rx_buf_tail;
 static int tx_snapshot_head;
