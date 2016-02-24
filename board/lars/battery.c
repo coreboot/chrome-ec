@@ -131,27 +131,19 @@ const struct battery_info *battery_get_info(void)
 	if ((batt_inserted != INIT) && (batt_inserted != UNKNOWN))
 		return support_batteries[batt_inserted].battery_info;
 
-	if (battery_manufacturer_name(manuf, sizeof(manuf))) {
-		CPRINTS("Failed to get MANUF name");
+	if (battery_manufacturer_name(manuf, sizeof(manuf)))
 		goto err_unknown;
-	}
 
-	if (battery_device_name(device, sizeof(device))) {
-		CPRINTS("Failed to get DEVICE name");
+	if (battery_device_name(device, sizeof(device)))
 		goto err_unknown;
-	}
 
-	if (battery_design_voltage((int *)&design_mv)) {
-		CPRINTS("Failed to get DESIGN_VOLTAGE");
+	if (battery_design_voltage((int *)&design_mv))
 		goto err_unknown;
-	}
 
 	for (i = 0; i < BATTERY_TYPE_COUNT; ++i) {
 		if ((strcasecmp(support_batteries[i].manuf, manuf) == 0) &&
 		    (strcasecmp(support_batteries[i].device, device) == 0) &&
 		    (support_batteries[i].design_mv == design_mv)) {
-			CPRINTS("battery Manuf:%s, Device=%s, design=%u",
-				manuf, device, design_mv);
 			batt_inserted = i;
 
 			return support_batteries[batt_inserted].battery_info;
