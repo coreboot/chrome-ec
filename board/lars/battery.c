@@ -128,6 +128,9 @@ const struct battery_info *battery_get_info(void)
 	char device[9];
 	int design_mv;
 
+	if ((batt_inserted != INIT) && (batt_inserted != UNKNOWN))
+		return support_batteries[batt_inserted].battery_info;
+
 	if (battery_manufacturer_name(manuf, sizeof(manuf))) {
 		CPRINTS("Failed to get MANUF name");
 		goto err_unknown;
