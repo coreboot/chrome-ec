@@ -204,6 +204,9 @@ static void ultima_led_set_battery(void)
 		set_battery_color(permillage <
 			FULL_BATTERY_PERMILLAGE ? LED_AMBER : LED_GREEN);
 		break;
+	case PWR_STATE_CHARGE_NEAR_FULL:
+		set_battery_color(LED_GREEN);
+		break;
 	default:
 		set_battery_color(LED_OFF);
 		break;
