@@ -244,3 +244,23 @@ int board_charger_post_init(void)
 
 	return raw_write16(REG_CHARGE_OPTION0, option0);
 }
+
+static void touch_screen_set_control_mode(void)
+{
+	/*
+	* If lid is closed; hold touchscreen in reset to cut power
+	* usage.  If lid is open, take touchscreen out of reset so it
+	* can wake the processor.
+	*/
+	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, lid_is_open());
+}
+DECLARE_HOOK(HOOK_LID_CHANGE, touch_screen_set_control_mode, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, touch_screen_set_control_mode,
+	HOOK_PRIO_DEFAULT);
+
+static void touch_screen_reset(void)
+{
+	/* Hold touchscreen in reset */
+	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_reset, HOOK_PRIO_DEFAULT);
