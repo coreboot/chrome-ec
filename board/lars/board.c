@@ -640,3 +640,52 @@ void board_hibernate(void)
 	while (1)
 		;
 }
+
+/* Initialize TMP432 */
+#define I2C_TMP432_READ(reg, data) \
+	i2c_read16(I2C_PORT_THERMAL, TMP432_I2C_ADDR, (reg), (data))
+
+#define I2C_TMP432_WRITE8(reg, data) \
+	i2c_write8(I2C_PORT_THERMAL, TMP432_I2C_ADDR, (reg), (data))
+
+#define I2C_TMP432_WRITE16(reg, data) \
+	i2c_write16(I2C_PORT_THERMAL, TMP432_I2C_ADDR, (reg), (data))
+
+static void board_tmp432_init(void)
+{
+	int ret;
+	int data;
+
+	ret = I2C_TMP432_READ(TMP432_CONFIGURATION1_R, &data);
+	if (ret)
+		goto tmp432_error;
+
+	/*
+	 * Change ALERT/THERM pin to THERM mode
+	 * [5] : 0 for ALERT mode(default), 1 for THERM mode
+	 */
+	data |= TMP432_CONFIG1_MODE;
+	ret = I2C_TMP432_WRITE8(TMP432_CONFIGURATION1_W, data);
+	if (ret)
+		goto tmp432_error;
+
+	/* Set Throttling Point:68C */
+	ret = I2C_TMP432_WRITE16(TMP432_LOCAL_HIGH_LIMIT_W, 68);
+	if (ret)
+		goto tmp432_error;
+
+	/*
+	 * Set hysteresis to 5C ,throttling off 63C, THERM mode only
+	 * default: 10C
+	 */
+	ret = I2C_TMP432_WRITE8(TMP432_THERM_HYSTERESIS, 0x05);
+	if (ret)
+		goto tmp432_error;
+
+	CPRINTS("TMP432 initialization done");
+	return;
+
+tmp432_error:
+	CPRINTS("TMP432 initialization failed");
+}
+DECLARE_HOOK(HOOK_INIT, board_tmp432_init, HOOK_PRIO_TEMP_SENSOR + 1);
