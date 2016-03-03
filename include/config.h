@@ -763,6 +763,15 @@
  */
 #undef CONFIG_FAN_UPDATE_PERIOD
 
+/*
+ * When DPTF daemon from host is not active for various reasons,
+ * EC will take EC control.
+ * The value of this flag will be added to 'temp_fan_max'(temp for
+ * max fan speed) to determine the termperature where fan is not controlled
+ * by dptf daemon.
+ */
+#undef CONFIG_DPTF_FAIL_SAFE_OFFSET
+
 /*****************************************************************************/
 /* Flash configuration */
 
