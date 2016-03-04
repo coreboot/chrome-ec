@@ -191,6 +191,11 @@
  */
 #undef CONFIG_BATTERY_REVIVE_DISCONNECT
 
+/*
+ * Define the battery level near full
+ */
+#define CONFIG_BATTERY_LEVEL_NEAR_FULL 97
+
 /* Boot header storage offset. */
 #undef CONFIG_BOOT_HEADER_STORAGE_OFF
 
