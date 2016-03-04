@@ -14,7 +14,7 @@
 #define BATTERY_LEVEL_FULL		100
 
 /* Tell host we're charged when battery level >= this percentage */
-#define BATTERY_LEVEL_NEAR_FULL		 97
+#define BATTERY_LEVEL_NEAR_FULL		CONFIG_BATTERY_LEVEL_NEAR_FULL
 
 /*
  * Send battery-low host event when discharging and battery level <= this level
