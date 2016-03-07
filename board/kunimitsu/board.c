@@ -24,6 +24,7 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "math_util.h"
 #include "motion_lid.h"
@@ -229,7 +230,7 @@ const matrix_3x3_t lid_standard_ref = {
 
 struct motion_sensor_t motion_sensors[] = {
 	{.name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_BASE,
@@ -250,12 +251,12 @@ struct motion_sensor_t motion_sensors[] = {
 			 .odr = 100000 | ROUND_UP_FLAG,
 			 .ec_rate = 100 * MSEC,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor on in S3 */
 		 [SENSOR_CONFIG_EC_S3] = {
-			 .odr = 0,
-			 .ec_rate = 0
+			 .odr = 100000 | ROUND_UP_FLAG,
+			 .ec_rate = 100 * MSEC
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor off in S5 */
 		 [SENSOR_CONFIG_EC_S5] = {
 			 .odr = 0,
 			 .ec_rate = 0
@@ -263,7 +264,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 },
 	},
 	{.name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
@@ -284,12 +285,12 @@ struct motion_sensor_t motion_sensors[] = {
 			 .odr = 100000 | ROUND_UP_FLAG,
 			 .ec_rate = 100 * MSEC,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor on in S3 */
 		 [SENSOR_CONFIG_EC_S3] = {
-			 .odr = 0,
-			 .ec_rate = 0
+			 .odr = 100000 | ROUND_UP_FLAG,
+			 .ec_rate = 100 * MSEC,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor off in S5 */
 		 [SENSOR_CONFIG_EC_S5] = {
 			 .odr = 0,
 			 .ec_rate = 0
@@ -722,3 +723,28 @@ void board_hibernate(void)
 	while (1)
 		;
 }
+
+#ifdef CONFIG_LID_ANGLE_UPDATE
+void lid_angle_peripheral_enable(int enable)
+{
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+		gpio_set_level(GPIO_ENABLE_TOUCHPAD, 1);
+	} else {
+		/*
+		 * Ensure chipset is off before disabling keyboard. When chipset
+		 * is on, EC keeps keyboard enabled and the AP decides when to
+		 * ignore keys based on its more accurate lid angle calculation.
+		 *
+		 * TODO(crosbug.com/p/43695): Remove this check once we have a
+		 * host command that can inform EC when we are entering or
+		 * exiting tablet mode in S0. Also, add this check back to the
+		 * function lid_angle_update in lid_angle.c
+		 */
+		if (!chipset_in_state(CHIPSET_STATE_ON)) {
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+			gpio_set_level(GPIO_ENABLE_TOUCHPAD, 0);
+		}
+	}
+}
+#endif

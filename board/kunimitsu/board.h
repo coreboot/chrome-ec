@@ -149,6 +149,7 @@
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE 0
 #define CONFIG_LID_ANGLE_SENSOR_LID 1
+#define CONFIG_LID_ANGLE_UPDATE
 #endif
 
 /* Modules we want to exclude */
