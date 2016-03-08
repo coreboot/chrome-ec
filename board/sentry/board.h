@@ -161,6 +161,11 @@
 #undef CONFIG_CONSOLE_HISTORY
 #undef CONFIG_PECI
 
+/* battery firmware update */
+#define CONFIG_CRC8
+#define CONFIG_SB_FIRMWARE_UPDATE
+#define CONFIG_SMBUS
+
 /* Enable Pseudo G3 */
 #define CONFIG_LOW_POWER_PSEUDO_G3
 
