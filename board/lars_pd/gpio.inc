@@ -8,6 +8,21 @@
 /* Interrupts */
 GPIO_INT(USB_C0_VBUS_WAKE_L,     PIN(C, 14),  GPIO_INT_BOTH,    pd_vbus_evt_p0)
 
+/*
+ * Older boards have A13 connected to a test point with no PU / PD, so we must
+ * enable an internal PU.
+ * Newer boards have A13 connected to 3.3V / GND through a 100K resistor, so
+ * we must not enable an internal PU. All MP boards will use the newer config.
+ * TODO(crosbug.com/p/50518): Remove CONFIG_SYSTEM_UNLOCKED prior to building
+ * MP FW.
+ */
+#ifdef CONFIG_SYSTEM_UNLOCKED
+GPIO_INT(WP_L,		     PIN(A, 13), GPIO_INT_BOTH | GPIO_PULL_UP,
+         switch_interrupt)
+#else
+GPIO_INT(WP_L,		     PIN(A, 13), GPIO_INT_BOTH, switch_interrupt)
+#endif
+
 /* PD RX/TX */
 GPIO(USB_C0_CC1_PD,          PIN(A, 2),  GPIO_ANALOG)
 GPIO(USB_C_REF,              PIN(A, 1),  GPIO_ANALOG)
@@ -34,7 +49,6 @@ GPIO(SLAVE_I2C_SDA,          PIN(B, 7),  GPIO_INPUT)
 
 GPIO(EC_INT,                 PIN(A, 14), GPIO_ODR_HIGH)
 
-UNIMPLEMENTED(WP_L)
 UNIMPLEMENTED(ENTERING_RW)
 
 #if 0
