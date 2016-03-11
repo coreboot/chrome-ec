@@ -137,7 +137,7 @@ const struct fan_t fans[] = {
 	{.flags = FAN_USE_RPM_MODE,
 	 .rpm_min = 1000,
 	 .rpm_start = 1000,
-	 .rpm_max = 5200,
+	 .rpm_max = 4500,
 	 .ch = 1,
 	 .pgood_gpio = -1,
 	 .enable_gpio = GPIO_FAN_PWR_DIS_L,
@@ -354,7 +354,7 @@ struct ec_thermal_config thermal_params[] = {
 	/* {Twarn, Thigh, Thalt}, fan_off, fan_max */
 	{{0, 0, 0}, 0, 0},	/* TMP432_Internal */
 	{{0, 0, 0}, 0, 0},	/* TMP432_Sensor_1 */
-	{{0, 0, 0}, 0, 0},	/* TMP432_Sensor_2 */
+	{{0, 0, 0}, C_TO_K(20), C_TO_K(100)},	/* TMP432_Sensor_2 */
 	{{0, 0, 0}, 0, 0},	/* Battery */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
@@ -706,3 +706,46 @@ void board_hibernate(void)
 	while (1)
 		;
 }
+
+#ifdef CONFIG_FAN_RPM_CUSTOM
+#define FAN_STEPS 5
+static const int fan_table[FAN_STEPS] = {
+	0, 3300, 3500, 3900, 4500,
+};
+
+int fan_percent_to_rpm(int fan, int pct)
+{
+	int current_rpm_target = fan_get_rpm_target(fans[fan].ch);
+	int new_rpm_target = -1;
+
+	if (pct < 13)
+		new_rpm_target = fan_table[0];
+	else if (pct < 19)
+		new_rpm_target = (current_rpm_target > fan_table[0]) ?
+				fan_table[1] : fan_table[0];
+	else if (pct < 21)
+		new_rpm_target = fan_table[1];
+	else if (pct < 25)
+		new_rpm_target = (current_rpm_target > fan_table[1]) ?
+				fan_table[2] : fan_table[1];
+	else if (pct < 28)
+		new_rpm_target = (current_rpm_target > fan_table[1]) ?
+				fan_table[3] : fan_table[1];
+	else if (pct < 31)
+		new_rpm_target = (current_rpm_target > fan_table[2]) ?
+				fan_table[3] : fan_table[2];
+	else if (pct < 44)
+		new_rpm_target = fan_table[3];
+	else if (pct < 50)
+		new_rpm_target = (current_rpm_target > fan_table[3]) ?
+				fan_table[4] : fan_table[3];
+	else
+		new_rpm_target = fan_table[4];
+
+	if (new_rpm_target != current_rpm_target)
+		cprintf(CC_THERMAL, "[%T Setting fan RPM to %d]\n",
+			new_rpm_target);
+
+	return new_rpm_target;
+}
+#endif  /* CONFIG_FAN_RPM_CUSTOM */
