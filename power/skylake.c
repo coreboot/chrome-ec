@@ -18,27 +18,20 @@
 #include "util.h"
 #include "wireless.h"
 #include "lpc.h"
+#include "lid_switch.h"
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_CHIPSET, outstr)
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
 
 /* Input state flags */
-#define IN_PCH_SLP_S0_DEASSERTED  POWER_SIGNAL_MASK(X86_SLP_S0_DEASSERTED)
 #define IN_PCH_SLP_S3_DEASSERTED  POWER_SIGNAL_MASK(X86_SLP_S3_DEASSERTED)
 #define IN_PCH_SLP_S4_DEASSERTED  POWER_SIGNAL_MASK(X86_SLP_S4_DEASSERTED)
 #define IN_PCH_SLP_SUS_DEASSERTED POWER_SIGNAL_MASK(X86_SLP_SUS_DEASSERTED)
 
-#ifdef CONFIG_POWER_S0IX
-#define IN_ALL_PM_SLP_DEASSERTED (IN_PCH_SLP_S0_DEASSERTED | \
-				  IN_PCH_SLP_S3_DEASSERTED | \
-				  IN_PCH_SLP_S4_DEASSERTED | \
-				  IN_PCH_SLP_SUS_DEASSERTED)
-#else
 #define IN_ALL_PM_SLP_DEASSERTED (IN_PCH_SLP_S3_DEASSERTED | \
 				  IN_PCH_SLP_S4_DEASSERTED | \
 				  IN_PCH_SLP_SUS_DEASSERTED)
-#endif
 
 /*
  * DPWROK is NC / stuffing option on initial boards.
@@ -54,6 +47,19 @@
 static int throttle_cpu;      /* Throttle CPU? */
 static int forcing_shutdown;  /* Forced shutdown in progress? */
 static int power_s5_up;       /* Chipset is sequencing up or down */
+
+#ifdef CONFIG_POWER_S0IX
+static int slp_s0_track = 1;
+int get_slp_s0_track(void)
+{
+	return slp_s0_track;
+}
+
+void set_slp_s0_track(int val)
+{
+	slp_s0_track = val ? 1 : 0;
+}
+#endif
 
 void chipset_force_shutdown(void)
 {
@@ -242,7 +248,7 @@ static enum power_state _power_handle_state(enum power_state state)
 			chipset_force_shutdown();
 			return POWER_S0S3;
 #ifdef CONFIG_POWER_S0IX
-		} else if ((gpio_get_level(GPIO_PCH_SLP_S0_L) == 0) &&
+		} else if ((get_slp_s0_track() == 0) &&
 			   (gpio_get_level(GPIO_PCH_SLP_S3_L) == 1)) {
 			return POWER_S0S0ix;
 #endif
@@ -258,7 +264,7 @@ static enum power_state _power_handle_state(enum power_state state)
 		/*
 		 * TODO: add code for unexpected power loss
 		 */
-		if ((gpio_get_level(GPIO_PCH_SLP_S0_L) == 1) &&
+		if ((get_slp_s0_track() == 1) &&
 		   (gpio_get_level(GPIO_PCH_SLP_S3_L) == 1)) {
 			return POWER_S0ixS0;
 		}
@@ -304,6 +310,11 @@ static enum power_state _power_handle_state(enum power_state state)
 
 		/* Call hooks now that rails are up */
 		hook_notify(HOOK_CHIPSET_STARTUP);
+
+#ifdef CONFIG_POWER_S0IX
+		/* re-init S0ix flag */
+		set_slp_s0_track(1);
+#endif
 		return POWER_S3;
 
 	case POWER_S3S0:
@@ -350,6 +361,10 @@ static enum power_state _power_handle_state(enum power_state state)
 		 */
 		enable_sleep(SLEEP_MASK_AP_RUN);
 
+#ifdef CONFIG_POWER_S0IX
+		/* re-init S0ix flag */
+		set_slp_s0_track(1);
+#endif
 		return POWER_S3;
 
 #ifdef CONFIG_POWER_S0IX
@@ -423,64 +438,33 @@ enum power_state power_handle_state(enum power_state state)
 }
 
 #ifdef CONFIG_POWER_S0IX
-static struct {
-	int required; /* indicates de-bounce required. */
-	int done;     /* debounced */
-} slp_s0_debounce = {
-	.required = 0,
-	.done = 1,
-};
 
-int chipset_get_ps_debounced_level(enum gpio_signal signal)
-{
-	/*
-	 * If power state is updated in power_update_signal() by any interrupts
-	 * other than SLP_S0 during the 1 msec pulse(invalid SLP_S0 signal),
-	 * reading SLP_S0 should be corrected with slp_s0_debounce.done flag.
-	 */
-	int level = gpio_get_level(signal);
-	return (signal == GPIO_PCH_SLP_S0_L) ?
-			(level & slp_s0_debounce.done) : level;
-}
-
-static void slp_s0_assertion_deferred(void)
-{
-	int s0_level = gpio_get_level(GPIO_PCH_SLP_S0_L);
-	/*
-	     (s0_level != 0) ||
-	     ((s0_level == 0) && (slp_s0_debounce.required == 0))
-	*/
-	if (s0_level == slp_s0_debounce.required) {
-		if (s0_level)
-			slp_s0_debounce.done = 1; /* debounced! */
-
-		power_signal_interrupt(GPIO_PCH_SLP_S0_L);
-	}
-
-	slp_s0_debounce.required = 0;
-}
-DECLARE_DEFERRED(slp_s0_assertion_deferred);
-
-void power_signal_interrupt_S0(enum gpio_signal signal)
-{
-	if (gpio_get_level(GPIO_PCH_SLP_S0_L)) {
-		slp_s0_debounce.required = 1;
-		hook_call_deferred(slp_s0_assertion_deferred, 3 * MSEC);
-	}
-	else if (slp_s0_debounce.required == 0) {
-		slp_s0_debounce.done = 0;
-		slp_s0_assertion_deferred();
-	}
-}
+/*
+ * EC enters S0ix via a host command and exits S0ix via the above
+ * lid open hook. The host event for exit is received but is a no-op for now.
+ *
+ * EC will not react directly to SLP_S0 signal interrupts anymore.
+ */
 
 static int host_event_sleep_event(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_host_sleep_event *p = args->params;
 
-	if (p->sleep_event == HOST_SLEEP_EVENT_S0IX_SUSPEND)
+	if (p->sleep_event == HOST_SLEEP_EVENT_S0IX_SUSPEND) {
 		CPRINTS("S0ix sus evt");
-	else if (p->sleep_event == HOST_SLEEP_EVENT_S0IX_RESUME)
+		set_slp_s0_track(0);
+		task_wake(TASK_ID_CHIPSET);
+	} else if (p->sleep_event == HOST_SLEEP_EVENT_S0IX_RESUME) {
 		CPRINTS("S0ix res evt");
+		set_slp_s0_track(1);
+		/*
+		 * For all scenarios where lid is not open
+		 * this will be trigerred when other wake
+		 * sources like keyboard, trackpad are used.
+		 */
+		if (!chipset_in_state(CHIPSET_STATE_ON))
+			task_wake(TASK_ID_CHIPSET);
+	}
 
 	return EC_RES_SUCCESS;
 }
