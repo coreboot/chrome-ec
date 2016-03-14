@@ -17,6 +17,7 @@
 #define CONFIG_BOARD_VERSION
 
 #define CONFIG_KEYBOARD_COL2_INVERTED
+#define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_KEYBOARD_IRQ_GPIO GPIO_KBD_IRQ_L
 #undef CONFIG_KEYBOARD_KSO_BASE
 #define CONFIG_KEYBOARD_KSO_BASE 4 /* KSO starts from KSO04 */
@@ -83,6 +84,11 @@
 #define I2C_PORT_BATTERY	MEC1322_I2C0_0
 #define I2C_PORT_CHARGER	MEC1322_I2C0_0
 #define I2C_PORT_THERMAL	MEC1322_I2C3
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+#endif
 
 /* ADC signal */
 enum adc_channel {
