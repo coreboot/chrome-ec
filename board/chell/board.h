@@ -8,12 +8,6 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
-/*
- * Allow dangerous commands.
- * TODO: Remove this config before production.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* Optional features */
 #define CONFIG_ADC
 #define CONFIG_BATTERY_CUT_OFF
