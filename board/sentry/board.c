@@ -617,3 +617,24 @@ static void board_handle_reboot(void)
 	gpio_set_level(GPIO_LDO_EN, 1);
 }
 DECLARE_HOOK(HOOK_INIT, board_handle_reboot, HOOK_PRIO_FIRST);
+
+void board_hibernate(void)
+{
+	CPRINTS("Triggering PMIC shutdown.");
+	uart_flush_output();
+
+	/* Trigger PMIC shutdown. */
+	if (I2C_PMIC_WRITE(0x49, 0x01)) {
+		/*
+		 * If we can't tell the PMIC to shutdown, instead reset
+		 * and don't start the AP. Hopefully we'll be able to
+		 * communicate with the PMIC next time.
+		 */
+		CPRINTS("PMIC i2c failed.");
+		system_reset(SYSTEM_RESET_LEAVE_AP_OFF);
+	}
+
+	/* Await shutdown. */
+	while (1)
+		;
+}
