@@ -93,6 +93,7 @@
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
+#define CONFIG_USBC_VCONN_SWAP
 
 /* USB-A ports */
 #define USB_PORT_COUNT 2
@@ -214,6 +215,9 @@ enum temp_sensor_id {
  */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
+
+/* delay to turn on/off vconn */
+#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /* Define typical operating power and max power */
 #define PD_OPERATING_POWER_MW 15000
