@@ -89,14 +89,14 @@ static const struct battery_info info_sanyo = {
 	.voltage_normal = 11250,
 	.voltage_min = 9100,
 
-	.precharge_current = 392, /* mA */
+	.precharge_current = 256, /* mA */
 
 	.start_charging_min_c = 0,
 	.start_charging_max_c = 50,
 	.charging_min_c = 0,
 	.charging_max_c = 60,
-	.discharging_min_c = 0,
-	.discharging_max_c = 40,
+	.discharging_min_c = -20,
+	.discharging_max_c = 60,
 };
 
 /* see enum battery_type */
