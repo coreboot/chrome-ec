@@ -67,8 +67,8 @@
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
-/* Enable S0IX */
-#define CONFIG_POWER_S0IX
+/* Disable S0IX */
+#undef CONFIG_POWER_S0IX
 #define CONFIG_PWM
 #define CONFIG_PWM_KBLIGHT
 /* All data won't fit in data RAM.  So, moving boundary slightly. */

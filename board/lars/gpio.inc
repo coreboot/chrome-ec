@@ -21,12 +21,18 @@ GPIO_INT(AC_PRESENT,		PIN(30), GPIO_INT_BOTH, extpower_interrupt)
 GPIO_INT(WP_L,			PIN(33), GPIO_INT_BOTH, switch_interrupt)
 /* Buffered power button input from PMIC / ROP_EC_PWR_BTN_L_R */
 GPIO_INT(POWER_BUTTON_L,	PIN(35), GPIO_INT_BOTH, power_button_interrupt)
-GPIO_INT(PCH_SLP_S0_L,		PIN(141), GPIO_INT_BOTH, power_signal_interrupt_S0)
+#ifdef CONFIG_POWER_S0IX
+GPIO_INT(PCH_SLP_S0_L,      	PIN(141), GPIO_INT_BOTH, power_signal_interrupt_S0)
+#endif
 GPIO_INT(PCH_SLP_S4_L,		PIN(200), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
 /* RSMRST from PMIC */
 GPIO_INT(PCH_SLP_S3_L,		PIN(206), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
 GPIO_INT(USB_C0_BC12_INT_L,	PIN(124), GPIO_INT_FALLING, usb0_evt)
 GPIO_INT(PD_MCU_INT,		PIN(122), GPIO_INT_FALLING, pd_mcu_interrupt)
+
+#ifndef CONFIG_POWER_S0IX
+GPIO(PCH_SLP_S0_L,          	PIN(141), GPIO_INPUT)
+#endif
 
 GPIO(BOARD_VERSION1,		PIN(6), GPIO_INPUT)
 GPIO(BOARD_VERSION2,		PIN(7), GPIO_INPUT)
