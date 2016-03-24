@@ -59,7 +59,7 @@ GPIO(USB_PD_WAKE,           PIN(60),  GPIO_OUT_LOW)
 /* When asserted, ME does not lock security descriptor */
 GPIO(PCH_SEC_DISABLE_L,     PIN(65),  GPIO_ODR_HIGH)
 GPIO(PCH_WAKE_L,            PIN(66),  GPIO_ODR_HIGH)
-GPIO(USB2_OTG_VBUSSENSE,    PIN(105), GPIO_ODR_LOW)
+GPIO(USB2_OTG_VBUSSENSE,    PIN(105), GPIO_OUT_LOW)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(LID_ACCEL_INT,         PIN(161), GPIO_INPUT | GPIO_PULL_DOWN)  /* Lid ACCEL sensor interrupt to EC */
