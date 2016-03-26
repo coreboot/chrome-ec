@@ -73,7 +73,7 @@
 /* We're space constrained on Kunimitsu, so reduce the UART TX buffer size. */
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 512
-#undef CONFIG_POWER_S0IX
+#define CONFIG_POWER_S0IX
 #define CONFIG_USB_CHARGER
 #define CONFIG_USB_MUX_PI3USB30532
 #define CONFIG_USB_POWER_DELIVERY
