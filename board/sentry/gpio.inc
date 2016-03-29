@@ -14,7 +14,6 @@ GPIO_INT(POWER_BUTTON_L,    PIN(35), GPIO_INT_BOTH, power_button_interrupt)
 GPIO_INT(RSMRST_L_PGOOD,    PIN(63),  GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PCH_SLP_S4_L,      PIN(200), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
 GPIO_INT(PCH_SLP_S3_L,      PIN(206), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
-GPIO_INT(PCH_SLP_S0_L,      PIN(141), GPIO_INT_BOTH, power_signal_interrupt_S0)
 GPIO_INT(PCH_SLP_SUS_L,     PIN(12),  GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
 GPIO_INT(PMIC_INT_L,        PIN(50),  GPIO_INT_FALLING, power_signal_interrupt)
 GPIO_INT(PD_MCU_INT,        PIN(122), GPIO_INT_FALLING, pd_mcu_interrupt)
@@ -25,6 +24,10 @@ GPIO_INT(USB_C1_BC12_INT_L, PIN(145), GPIO_INT_FALLING, usb1_evt)
 #ifdef CONFIG_LOW_POWER_IDLE
 GPIO_INT(UART0_RX,          PIN(162), GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP, uart_deepsleep_interrupt) /* UART0 RX input */
 #endif
+#ifdef CONFIG_POWER_S0IX
+GPIO(PCH_SLP_S0_L,          PIN(141), GPIO_INPUT)
+#endif
+
 /* Puesdo G3 */
 GPIO(G3_SLEEP_EN,           PIN(55),  GPIO_OUT_LOW)
 
