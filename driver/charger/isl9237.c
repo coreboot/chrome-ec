@@ -28,6 +28,7 @@
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
+static int reg_ctrl1_set; /* TODO(crosbug.com/p/51196) */
 
 /* Charger parameters */
 static const struct charger_info isl9237_charger_info = {
@@ -126,6 +127,7 @@ int charger_get_option(int *option)
 	int rv;
 	uint32_t controls;
 	int reg;
+	int i;
 
 	rv = raw_read8(ISL9237_REG_CONTROL0, &reg);
 	if (rv)
@@ -135,6 +137,22 @@ int charger_get_option(int *option)
 	rv = raw_read16(ISL9237_REG_CONTROL1, &reg);
 	if (rv)
 		return rv;
+
+	/*
+	 * TODO(crosbug.com/p/51196): Revert this code once we figure
+	 * out the charging bug.
+	 */
+	if (reg_ctrl1_set && (reg != reg_ctrl1_set)) {
+		CPRINTF("isl9237 0x3C 0x%04x(0x%04x)", reg, reg_ctrl1_set);
+		for (i = 0; i < 10; i++) {
+			rv = raw_read16(ISL9237_REG_CONTROL1, &reg);
+			if (rv)
+				return rv;
+			if (reg != reg_ctrl1_set)
+				CPRINTF("isl9237 0x3C 0x%04x(0x%04x), i=%d",
+					reg, reg_ctrl1_set, i);
+		}
+	}
 
 	controls |= reg << 16;
 	*option = controls;
@@ -153,6 +171,7 @@ int charger_set_option(int option)
 		return rv;
 
 	reg = (option >> 16) & 0xffff;
+	reg_ctrl1_set = reg; /* TODO(crosbug.com/p/51196) */
 	return raw_write16(ISL9237_REG_CONTROL1, reg);
 }
 

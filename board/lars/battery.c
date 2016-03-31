@@ -127,12 +127,17 @@ const struct battery_info *battery_get_info(void)
 	char manuf[9];
 	char device[9];
 	int design_mv;
+	static int print = 1;
 
 	if ((batt_inserted != INIT) && (batt_inserted != UNKNOWN))
 		return support_batteries[batt_inserted].battery_info;
 
 	if (battery_manufacturer_name(manuf, sizeof(manuf)))
 		goto err_unknown;
+	if (print == 1) {
+		ccprintf("%s\n", manuf);
+		print = 0;
+	}
 
 	if (battery_device_name(device, sizeof(device)))
 		goto err_unknown;
