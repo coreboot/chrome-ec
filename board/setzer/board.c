@@ -13,6 +13,7 @@
 #include "driver/als_isl29035.h"
 #include "driver/gyro_l3gd20h.h"
 #include "driver/temp_sensor/tmp432.h"
+#include "driver/charger/bq24773.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -230,4 +231,16 @@ DECLARE_HOOK(HOOK_INIT, adc_pre_init, HOOK_PRIO_INIT_ADC - 1);
 int i2c_port_is_smbus(int port)
 {
 	return (port == MEC1322_I2C0_0 || port == MEC1322_I2C0_1) ? 1 : 0;
+}
+
+int board_charger_post_init(void)
+{
+	int ret, option0;
+
+	ret = raw_read16(REG_CHARGE_OPTION0, &option0);
+	if (ret)
+		return ret;
+	option0 |= OPTION0_AUDIO_FREQ_40KHZ_LIMIT;
+
+	return raw_write16(REG_CHARGE_OPTION0, option0);
 }
