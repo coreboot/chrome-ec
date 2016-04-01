@@ -2,76 +2,117 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
- * Power/Battery LED control for Banon
+ * Power and battery LED control for Banon.
  */
 
+#include "battery.h"
 #include "charge_state.h"
 #include "chipset.h"
-#include "console.h"
-#include "extpower.h"
+#include "ec_commands.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "led_common.h"
-#include "pwm.h"
-#include "registers.h"
 #include "util.h"
 
-#define CPRINTF(format, args...) cprintf(CC_PWM, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_PWM, format, ## args)
+#define CRITICAL_LOW_BATTERY_PERMILLAGE 71
+#define LOW_BATTERY_PERMILLAGE 137
+#define FULL_BATTERY_PERMILLAGE 937
 
-#define LED_TOTAL_TICKS 16
-#define LED_ON_TICKS 4
-
-static int led_debug;
-
-const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_POWER_LED, EC_LED_ID_BATTERY_LED};
-const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
+#define LED_TOTAL_4SECS_TICKS 16
+#define LED_TOTAL_2SECS_TICKS 8
+#define LED_ON_1SEC_TICKS 4
+#define LED_ON_2SECS_TICKS 8
 
 enum led_color {
 	LED_OFF = 0,
-	LED_RED,
+	LED_BLUE,
 	LED_AMBER,
-	LED_GREEN,
+	LED_PINK,
 
-	/* Number of colors, not a color itself */
-	LED_COLOR_COUNT
+	LED_COLOR_COUNT  /* Number of colors, not a color itself */
 };
 
-/* Brightness vs. color, in the order of off, red, amber, and green */
-static const uint8_t color_brightness[LED_COLOR_COUNT][3] = {
-	/* {Red, Blue, Green}, */
-	[LED_OFF]   = {  0,   0,   0},
-	[LED_RED]   = {100,   0,   0},
-	[LED_AMBER] = { 75,   0,  10},
-	[LED_GREEN] = {  0,   0, 100},
-};
+const enum ec_led_id supported_led_ids[] = {
+	EC_LED_ID_POWER_LED, EC_LED_ID_BATTERY_LED};
 
-/**
- * Set LED color
- *
- * @param color		Enumerated color value
- */
-static void set_color(enum led_color color)
+const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
+
+static int banon_led_set_gpio(enum led_color color,
+			      enum gpio_signal gpio_led_blue_l,
+			      enum gpio_signal gpio_led_amber_l)
 {
-	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][0]);
-	pwm_set_duty(PWM_CH_LED_BLUE, color_brightness[color][1]);
-	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][2]);
+	switch (color) {
+	case LED_OFF:
+		gpio_set_level(gpio_led_blue_l,  1);
+		gpio_set_level(gpio_led_amber_l, 1);
+		break;
+	case LED_BLUE:
+		gpio_set_level(gpio_led_blue_l,  0);
+		gpio_set_level(gpio_led_amber_l, 1);
+		break;
+	case LED_AMBER:
+		gpio_set_level(gpio_led_blue_l,  1);
+		gpio_set_level(gpio_led_amber_l, 0);
+		break;
+	case LED_PINK:
+		gpio_set_level(gpio_led_blue_l,  0);
+		gpio_set_level(gpio_led_amber_l, 0);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
 }
 
-void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
+static int banon_led_set_color_battery(enum led_color color)
 {
-	brightness_range[EC_LED_COLOR_RED] = 100;
-	brightness_range[EC_LED_COLOR_BLUE] = 100;
-	brightness_range[EC_LED_COLOR_GREEN] = 100;
+	return banon_led_set_gpio(color, GPIO_BAT_LED0_L, GPIO_BAT_LED1_L);
+}
+
+static int banon_led_set_color_power(enum led_color color)
+{
+	return banon_led_set_gpio(color, GPIO_PWR_LED0_L, GPIO_PWR_LED1_L);
+}
+
+static int banon_led_set_color(enum ec_led_id led_id, enum led_color color)
+{
+	int rv;
+
+	led_auto_control(led_id, 0);
+	switch (led_id) {
+	case EC_LED_ID_BATTERY_LED:
+		rv = banon_led_set_color_battery(color);
+		break;
+	case EC_LED_ID_POWER_LED:
+		rv = banon_led_set_color_power(color);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return rv;
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	pwm_set_duty(PWM_CH_LED_RED, brightness[EC_LED_COLOR_RED]);
-	pwm_set_duty(PWM_CH_LED_BLUE, brightness[EC_LED_COLOR_BLUE]);
-	pwm_set_duty(PWM_CH_LED_GREEN, brightness[EC_LED_COLOR_GREEN]);
+	if (brightness[EC_LED_COLOR_BLUE] != 0 &&
+	    brightness[EC_LED_COLOR_YELLOW] != 0)
+		banon_led_set_color(led_id, LED_PINK);
+	else if (brightness[EC_LED_COLOR_BLUE] != 0)
+		banon_led_set_color(led_id, LED_BLUE);
+	else if (brightness[EC_LED_COLOR_YELLOW] != 0)
+		banon_led_set_color(led_id, LED_AMBER);
+	else
+		banon_led_set_color(led_id, LED_OFF);
+
 	return EC_SUCCESS;
+}
+
+void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
+{
+	/* Ignoring led_id as both leds support the same colors */
+	brightness_range[EC_LED_COLOR_BLUE] = 1;
+	brightness_range[EC_LED_COLOR_YELLOW] = 1;
 }
 
 static void banon_led_set_power(void)
@@ -88,9 +129,9 @@ static void banon_led_set_power(void)
 			power_ticks = 0;
 
 		/* Blink once every four seconds. */
-		set_color(
-			(power_ticks % LED_TOTAL_TICKS) < LED_ON_TICKS ?
-			LED_AMBER : LED_OFF);
+		banon_led_set_color_power(
+			(power_ticks % LED_TOTAL_4SECS_TICKS <
+			 LED_ON_1SEC_TICKS) ? LED_AMBER : LED_OFF);
 
 		previous_state_suspend = 1;
 		return;
@@ -99,27 +140,63 @@ static void banon_led_set_power(void)
 	previous_state_suspend = 0;
 
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		set_color(LED_OFF);
+		banon_led_set_color_power(LED_OFF);
 	else if (chipset_in_state(CHIPSET_STATE_ON))
-		set_color(LED_GREEN);
+		banon_led_set_color_power(LED_BLUE);
 }
 
 static void banon_led_set_battery(void)
 {
 	static int battery_ticks;
+	uint32_t chflags = charge_get_flags();
+	int remaining_capacity;
+	int full_charge_capacity;
+	int permillage;
 
 	battery_ticks++;
 
+	remaining_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_CAP);
+	full_charge_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
+	permillage = !full_charge_capacity ? 0 :
+		(1000 * remaining_capacity) / full_charge_capacity;
+
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
-		set_color(LED_AMBER);
-		break;
-	case PWR_STATE_ERROR:
-		set_color(LED_RED);
+		/* Make the percentage approximate to UI shown */
+		banon_led_set_color_battery(permillage <
+			FULL_BATTERY_PERMILLAGE ? LED_AMBER : LED_BLUE);
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
+		banon_led_set_color_battery(LED_BLUE);
+		break;
+	case PWR_STATE_DISCHARGE:
+		/* Less than 3%, blink one second every two seconds */
+		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+		    permillage <= CRITICAL_LOW_BATTERY_PERMILLAGE)
+			banon_led_set_color_battery(
+				(battery_ticks % LED_TOTAL_2SECS_TICKS <
+				 LED_ON_1SEC_TICKS) ? LED_AMBER : LED_OFF);
+		/* Less than 10%, blink one second every four seconds */
+		else if (!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+			 permillage <= LOW_BATTERY_PERMILLAGE)
+			banon_led_set_color_battery(
+				(battery_ticks % LED_TOTAL_4SECS_TICKS <
+				 LED_ON_1SEC_TICKS) ? LED_AMBER : LED_OFF);
+		else
+			banon_led_set_color_battery(LED_OFF);
+		break;
+	case PWR_STATE_ERROR:
+		banon_led_set_color_battery(
+			(battery_ticks % LED_TOTAL_2SECS_TICKS <
+			 LED_ON_1SEC_TICKS) ? LED_AMBER : LED_OFF);
+		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE. */
-		set_color(LED_GREEN);
+		if (chflags & CHARGE_FLAG_FORCE_IDLE)
+			banon_led_set_color_battery(
+				(battery_ticks % LED_TOTAL_4SECS_TICKS <
+				 LED_ON_2SECS_TICKS) ? LED_BLUE : LED_AMBER);
+		else
+			banon_led_set_color_battery(LED_BLUE);
 		break;
 	default:
 		/* Other states don't alter LED behavior */
@@ -127,84 +204,13 @@ static void banon_led_set_battery(void)
 	}
 }
 
-static void led_init(void)
-{
-	/* Configure GPIOs */
-	gpio_config_module(MODULE_PWM_LED, 1);
-
-	/*
-	 * Enable PWMs and set to 0% duty cycle.  If they're disabled,
-	 * seems to ground the pins instead of letting them float.
-	 */
-	pwm_enable(PWM_CH_LED_RED, 1);
-	pwm_enable(PWM_CH_LED_GREEN, 1);
-	pwm_enable(PWM_CH_LED_BLUE, 1);
-
-	set_color(LED_OFF);
-}
-DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
-
-/**
- * Called by hook task every 250 ms
- */
+/* Called by hook task every 250mSec */
 static void led_tick(void)
 {
-	if (led_debug)
-		return;
-
-	if (extpower_is_present()) {
-		if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
-			banon_led_set_battery();
-			return;
-		}
-	} else if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED)) {
+	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
 		banon_led_set_power();
-		return;
-	}
 
-	set_color(LED_OFF);
+	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
+		banon_led_set_battery();
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
-
-static void dump_pwm_channels(void)
-{
-	int ch;
-	for (ch = 0; ch < 4; ch++) {
-		CPRINTF("channel = %d\n", ch);
-		CPRINTF("0x%04X 0x%04X 0x%04X\n",
-			MEC1322_PWM_CFG(ch),
-			MEC1322_PWM_ON(ch),
-			MEC1322_PWM_OFF(ch));
-	}
-}
-/******************************************************************/
-/* Console commands */
-static int command_led_color(int argc, char **argv)
-{
-	if (argc > 1) {
-		if (!strcasecmp(argv[1], "debug")) {
-			led_debug ^= 1;
-			CPRINTF("led_debug = %d\n", led_debug);
-		} else if (!strcasecmp(argv[1], "off")) {
-			set_color(LED_OFF);
-		} else if (!strcasecmp(argv[1], "red")) {
-			set_color(LED_RED);
-		} else if (!strcasecmp(argv[1], "green")) {
-			set_color(LED_GREEN);
-		} else if (!strcasecmp(argv[1], "amber")) {
-			set_color(LED_AMBER);
-		} else {
-			/* maybe handle charger_discharge_on_ac() too? */
-			return EC_ERROR_PARAM1;
-		}
-	}
-
-	if (led_debug == 1)
-		dump_pwm_channels();
-	return EC_SUCCESS;
-}
-DECLARE_CONSOLE_COMMAND(ledcolor, command_led_color,
-			"[debug|red|green|amber|off]",
-			"Change LED color",
-			NULL);
-

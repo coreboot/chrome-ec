@@ -47,8 +47,6 @@
 
 #define CONFIG_PMIC
 
-#define CONFIG_ALS
-#define CONFIG_ALS_ISL29035
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_PRESENT_GPIO GPIO_BAT_PRESENT_L
 #define CONFIG_BATTERY_SMART
@@ -61,24 +59,12 @@
 #define CONFIG_CHARGER_INPUT_CURRENT 2240
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 
-#define CONFIG_PWM
 #define CONFIG_LED_COMMON
 
 #define CONFIG_I2C
 
-/* Accelerometer */
-#define CONFIG_ACCEL_KXCJ9
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE	0
-#define CONFIG_LID_ANGLE_SENSOR_LID	1
-
 /* Wireless signals */
 #define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
-
-/* Number of buttons */
-#define CONFIG_BUTTON_COUNT		2
 
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
@@ -95,11 +81,6 @@
 /* I2C ports */
 #define I2C_PORT_BATTERY	MEC1322_I2C0_0
 #define I2C_PORT_CHARGER	MEC1322_I2C0_0
-#define I2C_PORT_PD_MCU		MEC1322_I2C1
-#define I2C_PORT_TCPC		MEC1322_I2C1
-#define I2C_PORT_ACCEL		MEC1322_I2C2
-#define I2C_PORT_GYRO		MEC1322_I2C2
-#define I2C_PORT_ALS		MEC1322_I2C2
 #define I2C_PORT_THERMAL	MEC1322_I2C3
 
 /* ADC signal */
@@ -119,14 +100,6 @@ enum power_signal {
 	POWER_SIGNAL_COUNT
 };
 
-enum pwm_channel {
-	PWM_CH_LED_RED,
-	PWM_CH_LED_BLUE,
-	PWM_CH_LED_GREEN,
-	/* Number of PWM channels */
-	PWM_CH_COUNT
-};
-
 enum temp_sensor_id {
 	/* TMP432 local and remote sensors */
 	TEMP_SENSOR_I2C_TMP432_LOCAL,
@@ -137,13 +110,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,
 
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_ISL29035 = 0,
-
-	ALS_COUNT,
 };
 
 #endif /* !__ASSEMBLER__ */
