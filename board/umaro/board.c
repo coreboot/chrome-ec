@@ -135,7 +135,7 @@ struct l3gd20_data g_l3gd20h_data;
 const matrix_3x3_t base_standard_ref = {
 	{ 0,  FLOAT_TO_FP(1),  0},
 	{FLOAT_TO_FP(-1),  0,  0},
-	{ 0,  0,  FLOAT_TO_FP(1)}
+	{ 0,  0,  FLOAT_TO_FP(-1)}
 };
 
 const matrix_3x3_t lid_standard_ref = {
