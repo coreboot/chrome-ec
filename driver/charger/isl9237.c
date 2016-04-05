@@ -363,6 +363,7 @@ static void charger_enable_psys(void)
 	 */
 	if (!raw_read16(ISL9237_REG_CONTROL1, &val)) {
 		val |= ISL9237_C1_ENABLE_PSYS;
+		reg_ctrl1_set = val;
 		raw_write16(ISL9237_REG_CONTROL1, val);
 	}
 }
@@ -377,6 +378,7 @@ static void charger_disable_psys(void)
 	 */
 	if (!raw_read16(ISL9237_REG_CONTROL1, &val)) {
 		val &= ~ISL9237_C1_ENABLE_PSYS;
+		reg_ctrl1_set = val;
 		raw_write16(ISL9237_REG_CONTROL1, val);
 	}
 }
