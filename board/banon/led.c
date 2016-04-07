@@ -19,10 +19,10 @@
 #define LOW_BATTERY_PERMILLAGE 137
 #define FULL_BATTERY_PERMILLAGE 937
 
-#define LED_TOTAL_4SECS_TICKS 16
-#define LED_TOTAL_2SECS_TICKS 8
-#define LED_ON_1SEC_TICKS 4
-#define LED_ON_2SECS_TICKS 8
+#define LED_TOTAL_4SECS_TICKS 4
+#define LED_TOTAL_2SECS_TICKS 2
+#define LED_ON_1SEC_TICKS 1
+#define LED_ON_2SECS_TICKS 2
 
 enum led_color {
 	LED_OFF = 0,
@@ -204,7 +204,7 @@ static void banon_led_set_battery(void)
 	}
 }
 
-/* Called by hook task every 250mSec */
+/* Called by hook task every Sec */
 static void led_tick(void)
 {
 	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
@@ -213,4 +213,4 @@ static void led_tick(void)
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		banon_led_set_battery();
 }
-DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_SECOND, led_tick, HOOK_PRIO_DEFAULT);
