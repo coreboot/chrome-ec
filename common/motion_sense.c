@@ -1343,7 +1343,7 @@ static int command_accel_data_rate(int argc, char **argv)
 		ccprintf("EC rate for sensor %d: %d\n", id,
 			 motion_sense_ec_rate(sensor));
 		ccprintf("Current EC rate: %d\n", motion_interval);
-		ccprintf("Current Interrupt rate: %d\n", motion_int_interval);
+		ccprintf("Current Intr rate: %d\n", motion_int_interval);
 	}
 
 	return EC_SUCCESS;
@@ -1452,8 +1452,8 @@ static int command_display_accel_info(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(accelinfo, command_display_accel_info,
 	"on/off [interval]",
-	"Print motion sensor info, lid angle calculations"
-	" and set calculation frequency.", NULL);
+	"Print motion sensor info, lid angle calc"
+	" and set calc freq.", NULL);
 #endif /* CONFIG_CMD_ACCEL_INFO */
 
 #ifdef CONFIG_ACCEL_INTERRUPTS
@@ -1464,7 +1464,7 @@ void accel_int_lid(enum gpio_signal signal)
 	 * Print statement is here for testing with console accelint command.
 	 * Remove print statement when interrupt is used for real.
 	 */
-	CPRINTS("Accelerometer wake-up interrupt occurred on lid");
+	CPRINTS("Accelerometer wake-up intr occurred on lid");
 }
 
 void accel_int_base(enum gpio_signal signal)
@@ -1473,7 +1473,7 @@ void accel_int_base(enum gpio_signal signal)
 	 * Print statement is here for testing with console accelint command.
 	 * Remove print statement when interrupt is used for real.
 	 */
-	CPRINTS("Accelerometer wake-up interrupt occurred on base");
+	CPRINTS("Accelerometer wake-up intr occurred on base");
 }
 
 static int command_accelerometer_interrupt(int argc, char **argv)

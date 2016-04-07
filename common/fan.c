@@ -119,7 +119,7 @@ static int cc_fanauto(int argc, char **argv)
 
 	if (CONFIG_FANS > 1) {
 		if (argc < 2) {
-			ccprintf("fan number is required as the first arg\n");
+			ccprintf("fan num as the first arg\n");
 			return EC_ERROR_PARAM_COUNT;
 		}
 		fan = strtoi(argv[1], &e, 0);
@@ -201,7 +201,7 @@ static int cc_fanset(int argc, char **argv)
 
 	if (CONFIG_FANS > 1) {
 		if (argc < 2) {
-			ccprintf("fan number is required as the first arg\n");
+			ccprintf("fan number as the first arg\n");
 			return EC_ERROR_PARAM_COUNT;
 		}
 		fan = strtoi(argv[1], &e, 0);
@@ -254,7 +254,7 @@ static int cc_fanduty(int argc, char **argv)
 
 	if (CONFIG_FANS > 1) {
 		if (argc < 2) {
-			ccprintf("fan number is required as the first arg\n");
+			ccprintf("fan number as the first arg\n");
 			return EC_ERROR_PARAM_COUNT;
 		}
 		fan = strtoi(argv[1], &e, 0);

@@ -189,7 +189,7 @@ static void lightbar_restore_state(void)
 		st.w0 = 0;
 		st.ramp = 0;
 		memcpy(&st.p, &default_params, sizeof(st.p));
-		CPRINTS("LB state initialized");
+		CPRINTS("LB state init'd");
 	}
 }
 

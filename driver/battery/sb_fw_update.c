@@ -152,7 +152,7 @@ static int get_info(struct host_cmd_handler_args *args)
 	struct ec_response_sb_fw_update *resp =
 		(struct ec_response_sb_fw_update *)args->response;
 
-	CPRINTF("smbus cmd:%x read battery info\n",
+	CPRINTF("smbus cmd:%x read batt info\n",
 			SB_FW_UPDATE_CMD_READ_INFO);
 
 	args->response_size = len;

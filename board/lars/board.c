@@ -438,11 +438,11 @@ static void board_pmic_init(void)
 	if (ret)
 		goto pmic_error;
 
-	CPRINTS("PMIC initialization done");
+	CPRINTS("PMIC init done");
 	return;
 
 pmic_error:
-	CPRINTS("PMIC initialization failed");
+	CPRINTS("PMIC init failed");
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_INIT_I2C + 1);
 

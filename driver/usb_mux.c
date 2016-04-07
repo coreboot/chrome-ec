@@ -23,7 +23,7 @@ void usb_mux_init(int port)
 	ASSERT(port >= 0 && port < CONFIG_USB_PD_PORT_COUNT);
 	res = mux->driver->init(mux->port_addr);
 	if (res)
-		CPRINTS("Error initializing mux port(%d): %d", port, res);
+		CPRINTS("Err initializing mux port(%d): %d", port, res);
 
 	/* Apply board specific initialization */
 	if (mux->board_init)
@@ -50,7 +50,7 @@ void usb_mux_set(int port, enum typec_mux mux_mode,
 	mux_state = polarity ? mux_mode | MUX_POLARITY_INVERTED : mux_mode;
 	res = mux->driver->set(mux->port_addr, mux_state);
 	if (res) {
-		CPRINTS("Error setting mux port(%d): %d", port, res);
+		CPRINTS("Err setting mux port(%d): %d", port, res);
 		return;
 	}
 
@@ -69,7 +69,7 @@ int usb_mux_get(int port, const char **dp_str, const char **usb_str)
 
 	res = mux->driver->get(mux->port_addr, &mux_state);
 	if (res) {
-		CPRINTS("Error setting mux port(%d): %d", port, res);
+		CPRINTS("Err setting mux port(%d): %d", port, res);
 		return 0;
 	}
 
@@ -90,7 +90,7 @@ void usb_mux_flip(int port)
 
 	res = mux->driver->get(mux->port_addr, &mux_state);
 	if (res) {
-		CPRINTS("Error getting mux port(%d): %d", port, res);
+		CPRINTS("Err getting mux port(%d): %d", port, res);
 		return;
 	}
 
@@ -101,7 +101,7 @@ void usb_mux_flip(int port)
 
 	res = mux->driver->set(mux->port_addr, mux_state);
 	if (res)
-		CPRINTS("Error setting mux port(%d): %d", port, res);
+		CPRINTS("Err setting mux port(%d): %d", port, res);
 }
 
 #ifdef CONFIG_CMD_TYPEC

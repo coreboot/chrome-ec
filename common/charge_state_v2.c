@@ -489,7 +489,7 @@ static void shutdown_on_critical_battery(void)
 	}
 
 	if (battery_too_low() && !curr.batt_is_charging) {
-		CPRINTS("Low battery: %d%%, %dmV",
+		CPRINTS("Low batt: %d%%, %dmV",
 			curr.batt.state_of_charge, curr.batt.voltage);
 		battery_critical = 1;
 	}
@@ -501,7 +501,7 @@ static void shutdown_on_critical_battery(void)
 	}
 
 	if (!shutdown_warning_time.val) {
-		CPRINTS("charge warn shutdown due to critical battery");
+		CPRINTS("charge warn shutdown : critical batt");
 		shutdown_warning_time = get_time();
 		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF))
 			host_set_single_event(EC_HOST_EVENT_BATTERY_SHUTDOWN);
@@ -511,17 +511,17 @@ static void shutdown_on_critical_battery(void)
 #ifdef CONFIG_HIBERNATE
 			/* Timeout waiting for charger to provide more power */
 			CPRINTS(
-			  "charge force EC hibernate due to critical battery");
+			  "charge force EC hibernate : critical batt");
 			system_hibernate(0, 0);
 #elif defined(CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF)
 			CPRINTS(
-			  "charge force battery cut-off due to critical level");
+			  "charge force batt cut-off : critical level");
 			board_cut_off_battery();
 #endif
 		} else {
 			/* Timeout waiting for AP to shut down, so kill it */
 			CPRINTS(
-			  "charge force shutdown due to critical battery");
+			  "charge force shutdown : critical batt");
 			chipset_force_shutdown();
 		}
 	}
@@ -737,7 +737,7 @@ void charger_task(void)
 				   (get_time().val > precharge_start_time.val +
 				    PRECHARGE_TIMEOUT_US)) {
 				/* We've tried long enough, give up */
-				CPRINTS("battery seems to be dead");
+				CPRINTS("batt seems dead");
 				battery_seems_to_be_dead = 1;
 				curr.state = ST_IDLE;
 				curr.requested_voltage = 0;
@@ -745,7 +745,7 @@ void charger_task(void)
 			} else {
 				/* See if we can wake it up */
 				if (curr.state != ST_PRECHARGE) {
-					CPRINTS("try to wake battery");
+					CPRINTS("try to wake batt");
 					precharge_start_time = get_time();
 					need_static = 1;
 				}
@@ -784,7 +784,7 @@ void charger_task(void)
 				 * Battery is in disconnect state. Apply a
 				 * current to kick it out of this state.
 				 */
-				CPRINTS("found battery in disconnect state");
+				CPRINTS("batt in disconnect state");
 				curr.requested_voltage =
 					batt_info->voltage_max;
 				curr.requested_current =
@@ -795,7 +795,7 @@ void charger_task(void)
 			if (curr.state == ST_PRECHARGE ||
 			    battery_seems_to_be_dead ||
 			    battery_was_removed) {
-				CPRINTS("battery woke up");
+				CPRINTS("batt woke up");
 
 				/* Update the battery-specific values */
 				batt_info = battery_get_info();

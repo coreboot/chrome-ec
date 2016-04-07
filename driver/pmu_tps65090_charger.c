@@ -128,7 +128,7 @@ static int notify_battery_low(void)
 	if (chipset_in_state(CHIPSET_STATE_ON)) {
 		now = get_time();
 		if (now.val - last_notify_time.val > MINUTE) {
-			CPRINTS("pmu notify battery low (< 4%)");
+			CPRINTS("pmu notify batt low (< 4%)");
 			last_notify_time = now;
 			/* TODO(crosbug.com/p/23814): Actually notify AP */
 		}
@@ -272,11 +272,11 @@ static int calc_next_state(int state)
 		 * temperature out of range.
 		 */
 		if (!(batt.flags & BATT_FLAG_RESPONSIVE)) {
-			CPRINTS("pmu charging: unable to get battery "
-				"temperature");
+			CPRINTS("pmu charging: unable to get batt "
+				"temp");
 			return ST_IDLE0;
 		} else if (!battery_charging_range(batt.temperature)) {
-			CPRINTS("pmu charging: temperature out of range "
+			CPRINTS("pmu charging: temp out of range "
 				"%dC",
 				DECI_KELVIN_TO_CELSIUS(batt.temperature));
 			return ST_CHARGING_ERROR;
@@ -291,7 +291,7 @@ static int calc_next_state(int state)
 			return ST_IDLE0;
 
 		if (alarm & ALARM_OVER_TEMP) {
-			CPRINTS("pmu charging: battery over temp");
+			CPRINTS("pmu charging: batt over temp");
 			return ST_CHARGING_ERROR;
 		}
 
@@ -350,7 +350,7 @@ static int calc_next_state(int state)
 		/* Check battery discharging temperature range */
 		if (batt.flags & BATT_FLAG_RESPONSIVE) {
 			if (!battery_discharging_range(batt.temperature)) {
-				CPRINTS("pmu discharging: temperature out of "
+				CPRINTS("pmu discharging: temp out of "
 					"range %dC",
 					DECI_KELVIN_TO_CELSIUS(
 							batt.temperature));
@@ -359,7 +359,7 @@ static int calc_next_state(int state)
 		}
 		/* Check discharging alarm */
 		if (!battery_status(&alarm) && (alarm & ALARM_DISCHARGING)) {
-			CPRINTS("pmu discharging: battery alarm %016b", alarm);
+			CPRINTS("pmu discharging: batt alarm %016b", alarm);
 			return system_off();
 		}
 		/* Check remaining charge % */

@@ -121,9 +121,9 @@ test_mockable __keep int main(void)
 	uart_init();
 
 	if (system_jumped_to_this_image()) {
-		CPRINTS("UART initialized after sysjump");
+		CPRINTS("UART init'd after sysjump");
 	} else {
-		CPUTS("\n\n--- UART initialized after reboot ---\n");
+		CPUTS("\n\n--- UART init'd after reboot ---\n");
 		CPUTS("[Reset cause: ");
 		system_print_reset_flags();
 		CPUTS("]\n");

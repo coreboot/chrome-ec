@@ -112,7 +112,7 @@ void keyboard_clear_buffer(void)
 {
 	int i;
 
-	CPRINTS("clearing keyboard fifo");
+	CPRINTS("clearing KB fifo");
 
 	kb_fifo_start = 0;
 	kb_fifo_end = 0;

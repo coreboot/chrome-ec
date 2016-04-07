@@ -609,7 +609,7 @@ void pmu_init(void)
 	}
 
 	if (failure) {
-		CPUTS("Failed to initialize PMU. Hard-resetting.\n");
+		CPUTS("Failed to init PMU. Hard-resetting.\n");
 		cflush();
 		pmu_hard_reset();
 	}

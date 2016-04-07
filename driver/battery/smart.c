@@ -359,18 +359,18 @@ int battery_wait_for_stable(void)
 	int status;
 	uint64_t wait_timeout = get_time().val + BATTERY_NO_RESPONSE_TIMEOUT;
 
-	CPRINTS("Wait for battery stabilized during %d",
+	CPRINTS("Wait for batt stabilized during %d",
 			 BATTERY_NO_RESPONSE_TIMEOUT);
 	while (get_time().val < wait_timeout) {
 		/* Starting pinging battery */
 		if (battery_status(&status) == EC_SUCCESS) {
 			/* Battery is stable */
-			CPRINTS("battery responded with status %x", status);
+			CPRINTS("batt status %x", status);
 			return EC_SUCCESS;
 		}
 		msleep(25); /* clock stretching could hold 25ms */
 	}
-	CPRINTS("battery not responding");
+	CPRINTS("batt not responding");
 	return EC_ERROR_NOT_POWERED;
 }
 
@@ -396,7 +396,7 @@ static int command_battfake(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(battfake, command_battfake,
 			"percent (-1 = use real level)",
-			"Set fake battery level",
+			"Set fake batt level",
 			NULL);
 #endif
 

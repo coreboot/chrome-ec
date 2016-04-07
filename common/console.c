@@ -236,7 +236,7 @@ command_has_error:
 
 	cmd = find_command(argv[0]);
 	if (!cmd) {
-		ccprintf("Command '%s' not found or ambiguous.\n", argv[0]);
+		ccprintf("Cmd '%s' not found or ambiguous.\n", argv[0]);
 		return EC_ERROR_UNKNOWN;
 	}
 
@@ -248,11 +248,11 @@ command_has_error:
 	if (rv < ARRAY_SIZE(errmsgs))
 		ccprintf("%s\n", errmsgs[rv]);
 	else if (rv >= EC_ERROR_PARAM1 && rv < EC_ERROR_PARAM_COUNT)
-		ccprintf("Parameter %d invalid\n", rv - EC_ERROR_PARAM1 + 1);
+		ccprintf("Param %d invalid\n", rv - EC_ERROR_PARAM1 + 1);
 	else if (rv == EC_ERROR_PARAM_COUNT)
 		ccputs("Wrong number of params\n");
 	else if (rv != EC_SUCCESS)
-		ccprintf("Command returned error %d\n", rv);
+		ccprintf("Cmd returned err %d\n", rv);
 
 #ifdef CONFIG_CONSOLE_CMDHELP
 	if (cmd->argdesc)
@@ -690,7 +690,7 @@ static int command_help(int argc, char **argv)
 		const struct console_command *cmd;
 
 		if (!strcasecmp(argv[1], "list")) {
-			ccputs("Known commands:\n");
+			ccputs("Known cmds:\n");
 			for (i = 0; i < ncmds; i++) {
 				ccprintf("  %-15s%s\n",
 					 __cmds[i].name, __cmds[i].shorthelp);
@@ -701,7 +701,7 @@ static int command_help(int argc, char **argv)
 		}
 		cmd = find_command(argv[1]);
 		if (!cmd) {
-			ccprintf("Command '%s' not found or ambiguous.\n",
+			ccprintf("Cmd '%s' not found or ambiguous.\n",
 				 argv[1]);
 			return EC_ERROR_UNKNOWN;
 		}
@@ -735,7 +735,7 @@ static int command_help(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(help, command_help,
 			"[ list | <name> ]",
-			"Print command help",
+			"Print cmd help",
 			NULL);
 
 #ifdef CONFIG_CONSOLE_RESTRICTED_INPUT

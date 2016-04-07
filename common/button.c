@@ -44,7 +44,7 @@ static void button_init(void)
 {
 	int i;
 
-	CPRINTS("(re)initializing buttons and interrupts");
+	CPRINTS("(re)init buttons and intr");
 	next_deferred_time = 0;
 	for (i = 0; i < CONFIG_BUTTON_COUNT; i++) {
 		state[i].debounced_pressed = raw_button_pressed(&buttons[i]);

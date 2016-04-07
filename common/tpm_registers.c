@@ -454,7 +454,7 @@ void tpm_task(void)
 		task_wait_event(-1);
 		tpmh = (struct tpm_cmd_header *)tpm_.regs.data_fifo;
 		command_code = be32toh(tpmh->command_code);
-		CPRINTF("%s: received fifo command 0x%04x\n",
+		CPRINTF("%s: received fifo cmd 0x%04x\n",
 			__func__, command_code);
 
 #ifdef CONFIG_EXTENSION_COMMAND

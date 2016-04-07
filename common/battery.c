@@ -284,9 +284,9 @@ static void pending_cutoff_deferred(void)
 	rv = board_cut_off_battery();
 
 	if (rv == EC_SUCCESS)
-		CPRINTF("[%T Battery cut off succeeded.]\n");
+		CPRINTS("Batt cutoff success");
 	else
-		CPRINTF("[%T Battery cut off failed!]\n");
+		CPRINTS("Batt cutoff failed!");
 }
 DECLARE_DEFERRED(pending_cutoff_deferred);
 
@@ -308,17 +308,17 @@ static int battery_command_cutoff(struct host_cmd_handler_args *args)
 		p = args->params;
 		if (p->flags & EC_BATTERY_CUTOFF_FLAG_AT_SHUTDOWN) {
 			battery_cutoff_state = BATTERY_CUTOFF_STATE_PENDING;
-			CPRINTS("Battery cut off at-shutdown is scheduled");
+			CPRINTS("Batt cutoff at-shutdown is scheduled");
 			return EC_RES_SUCCESS;
 		}
 	}
 
 	rv = board_cut_off_battery();
 	if (!rv) {
-		CPRINTS("Battery cut off is successful.");
+		CPRINTS("Batt cutoff success");
 		battery_cutoff_state = BATTERY_CUTOFF_STATE_CUT_OFF;
 	} else {
-		CPRINTS("Battery cut off has failed.");
+		CPRINTS("Batt cutoff failed");
 	}
 
 	return rv;
@@ -329,7 +329,7 @@ DECLARE_HOST_COMMAND(EC_CMD_BATTERY_CUT_OFF, battery_command_cutoff,
 static void check_pending_cutoff(void)
 {
 	if (battery_cutoff_state == BATTERY_CUTOFF_STATE_PENDING) {
-		CPRINTF("[%T Cutting off battery in %d second(s)]\n",
+		CPRINTS("Cutting off batt in %d sec",
 			CONFIG_BATTERY_CUTOFF_DELAY_US / SECOND);
 		hook_call_deferred(pending_cutoff_deferred,
 				   CONFIG_BATTERY_CUTOFF_DELAY_US);
@@ -352,7 +352,7 @@ static int command_cutoff(int argc, char **argv)
 
 	rv = board_cut_off_battery();
 	if (!rv) {
-		ccprintf("[%T Battery cut off]\n");
+		ccprints("Batt cut off");
 		battery_cutoff_state = BATTERY_CUTOFF_STATE_CUT_OFF;
 	}
 
@@ -360,7 +360,7 @@ static int command_cutoff(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(cutoff, command_cutoff,
 		"[at-shutdown]",
-		"Cut off the battery output",
+		"Cut off batt output",
 		NULL);
 #else
 int battery_is_cut_off(void)
@@ -406,7 +406,7 @@ static int console_command_battery_vendor_param(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(battparam, console_command_battery_vendor_param,
 			"<param> [value]",
-			"Get or set battery vendor parameters",
+			"Get or set batt vendor params",
 			NULL);
 
 static int host_command_battery_vendor_param(struct host_cmd_handler_args *args)
