@@ -81,7 +81,7 @@ test_mockable void fan_set_percent_needed(int fan, int pct)
 		new_rpm = fans[fan].rpm_start;
 
 	/* enable the fan when non-zero duty */
-	set_enabled(fan, (pct > 0) ? 1 : 0);
+	set_enabled(fan, (new_rpm > 0) ? 1 : 0);
 	fan_set_rpm_target(fans[fan].ch, new_rpm);
 }
 
