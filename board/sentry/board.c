@@ -529,6 +529,9 @@ void board_config_pre_init(void)
 /* Initialize board. */
 static void board_init(void)
 {
+	/* Set fan spin up level to 40% */
+	MEC1322_FAN_SPIN_UP &= ~0x10;
+
 	/* Enable PD MCU interrupt */
 	gpio_enable_interrupt(GPIO_PD_MCU_INT);
 	/* Enable VBUS interrupt */
