@@ -23,7 +23,7 @@
  * Power On     | Adapter in, no battery           |   red
  *              | Adapter in，battery charging      |   orange
  *              | Adapter in，battery full charge   |   green
- *              | Only battery，capacity above 10%  |   purple
+ *              | Only battery，capacity above 10%  |   green
  *              | Only battery，capacity below 10%  |   red blink
  * Power Off    | Adapter in, no battery           |   red
  *              | Adapter in，battery charging      |   orange
@@ -33,7 +33,7 @@
  * Suspend      | Adapter in, no battery           |   red
  *              | Adapter in，battery charging      |   orange blink
  *              | Adapter in，battery full chargee  |   green
- *              | Only battery，capacity above 10%  |   purple blink
+ *              | Only battery，capacity above 10%  |   green blink
  *              | Only battery，capacity below 10%  |   red blink
  */
 
@@ -114,7 +114,7 @@ static void wizpig_led_set_battery_poweron(void)
 			bat_led_set_color((battery_second & 0x1)
 					? LED_OFF : LED_RED);
 		else
-			bat_led_set_color(LED_PURPLE);
+			bat_led_set_color(LED_GREEN);
 		break;
 	case PWR_STATE_ERROR: /* Battery has been removed and AC input now. */
 		bat_led_set_color(LED_RED);
@@ -162,7 +162,7 @@ static void wizpig_led_set_battery_suspend(void)
 					? LED_OFF : LED_RED);
 		else
 			bat_led_set_color((battery_second & 0x1)
-					? LED_OFF : LED_PURPLE);
+					? LED_OFF : LED_GREEN);
 		break;
 	case PWR_STATE_ERROR: /* Battery has been removed and AC input now. */
 		bat_led_set_color(LED_RED);
