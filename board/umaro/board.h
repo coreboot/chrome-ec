@@ -47,8 +47,6 @@
 
 #define CONFIG_PMIC
 
-#define CONFIG_ALS
-#define CONFIG_ALS_ISL29035
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_PRESENT_GPIO GPIO_BAT_PRESENT_L
 #define CONFIG_BATTERY_SMART
@@ -76,9 +74,6 @@
 
 /* Wireless signals */
 #define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
-
-/* Number of buttons */
-#define CONFIG_BUTTON_COUNT		2
 
 /* Modules we want to exclude */
 #undef CONFIG_EEPROM
@@ -137,13 +132,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,
 
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_ISL29035 = 0,
-
-	ALS_COUNT,
 };
 
 #endif /* !__ASSEMBLER__ */

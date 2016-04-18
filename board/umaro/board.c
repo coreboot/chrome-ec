@@ -60,10 +60,6 @@ BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 const struct i2c_port_t i2c_ports[]  = {
 	{"batt_chg", MEC1322_I2C0_0, 100,
 		GPIO_I2C_PORT0_0_SCL, GPIO_I2C_PORT0_0_SDA},
-	{"muxes", MEC1322_I2C0_1, 100,
-		GPIO_I2C_PORT0_1_SCL, GPIO_I2C_PORT0_1_SDA},
-	{"pd_mcu", MEC1322_I2C1, 1000,
-		GPIO_I2C_PORT1_SCL, GPIO_I2C_PORT1_SDA},
 	{"sensors", MEC1322_I2C2, 100,
 		GPIO_I2C_PORT2_SCL, GPIO_I2C_PORT2_SDA},
 	{"thermal", MEC1322_I2C3, 100,
@@ -94,12 +90,6 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-/* ALS instances. Must be in same order as enum als_id. */
-struct als_t als[] = {
-	{"ISL", isl29035_read_lux, 5},
-};
-BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
-
 /* Thermal limits for each temp sensor. All temps are in degrees K. Must be in
  * same order as enum temp_sensor_id. To always ignore any temp, use 0.
  */
@@ -110,14 +100,6 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0}, /* Battery Sensor */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
-
-const struct button_config buttons[] = {
-	{"Volume Down", KEYBOARD_BUTTON_VOLUME_DOWN, GPIO_VOLUME_DOWN,
-		30 * MSEC, 0},
-	{"Volume Up", KEYBOARD_BUTTON_VOLUME_UP, GPIO_VOLUME_UP,
-		30 * MSEC, 0},
-};
-BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
 
 /* Four Motion sensors */
 /* kxcj9 mutex and local/private data*/

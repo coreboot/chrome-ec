@@ -29,8 +29,8 @@ GPIO(NC_GPIO12,         PIN(12), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(USB_ILIM_SEL,      PIN(13), GPIO_OUT_HIGH)                 /* USB current control */
 GPIO(I2C_PORT0_0_SCL,   PIN(15), GPIO_INPUT)
 GPIO(I2C_PORT0_0_SDA,   PIN(16), GPIO_INPUT)
-GPIO(I2C_PORT0_1_SCL,   PIN(134), GPIO_INPUT)
-GPIO(I2C_PORT0_1_SDA,   PIN(17), GPIO_INPUT)
+GPIO(NC_GPIO134,        PIN(134), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_GPIO17,         PIN(17), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(I2C_PORT1_SCL,     PIN(22), GPIO_INPUT)
 GPIO(I2C_PORT1_SDA,     PIN(23), GPIO_INPUT)
 GPIO(I2C_PORT2_SCL,     PIN(20), GPIO_INPUT)
@@ -61,6 +61,7 @@ GPIO(USB_OC0_L,         PIN(55), GPIO_INT_FALLING)              /* Over current 
 GPIO(NC_GPIO57,         PIN(57), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
 GPIO(NC_GPIO61,         PIN(61), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(NC_GPIO62,         PIN(62), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(EC_HIB_L,          PIN(64), GPIO_OUT_LOW)                  /* Set to high before Pseduo G3 */
 GPIO(PCH_SYS_PWROK,     PIN(65), GPIO_OUT_LOW)                  /* EC thinks everything is up and ready (DELAY_ALL_SYS_PWRGD) */
 GPIO(PCH_WAKE_L,        PIN(66), GPIO_ODR_HIGH)                 /* PCH wake pin */
@@ -83,7 +84,7 @@ GPIO(PD_RST_L,          PIN(135), GPIO_ODR_HIGH)                 /* USB PD MCU r
 
 GPIO(NC_GPIO140,        PIN(140), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(PCH_RSMRST_L,      PIN(143), GPIO_OUT_LOW)                  /* RSMRST_N to PCH */
-GPIO(EC_KBD_ALERT,      PIN(145), GPIO_OUT_LOW)                   /* EC_KBD_ALERT */
+GPIO(EC_KBD_ALERT,      PIN(145), GPIO_OUT_LOW)                  /* EC_KBD_ALERT */
 GPIO(PVT_CS0,           PIN(146), GPIO_ODR_HIGH)                 /* SPI PVT Chip select */
 GPIO(NC_GPIO147,        PIN(147), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
@@ -104,14 +105,11 @@ GPIO(EC_BL_DISABLE_L,   PIN(202), GPIO_OUT_HIGH)                 /* EDP backligh
 GPIO(SMC_SHUTDOWN,      PIN(203), GPIO_OUT_LOW)                  /* Shutdown signal from EC to power sequencing PLD */
 GPIO(NC_GPIO204,        PIN(204), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
-GPIO(BAT_PRESENT_L,     PIN(210), GPIO_INPUT)                     /* HW detection signal from battery to EC */
+GPIO(BAT_PRESENT_L,     PIN(210), GPIO_INPUT)                    /* HW detection signal from battery to EC */
 GPIO(GPIO_3_EC,         PIN(211), GPIO_OUT_LOW)                  /* Sleep SOIX signal from SOC to EC */
 
 /* Alternate functions GPIO definition */
 ALTERNATE(PIN_MASK(16, 0x24),   1,    MODULE_UART,            0)                    /* UART0 */
-
-ALTERNATE(PIN_MASK(1,  0x60),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C0: Battery Charger */
-ALTERNATE(PIN_MASK(2,  0x3f),   2,    MODULE_I2C,             GPIO_OPEN_DRAIN)      /* I2C1: Temp Sensor / I2C2: SOC / I2C3: VNN */
 
 ALTERNATE(PIN_MASK(0,  0xfc),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
 ALTERNATE(PIN_MASK(1,  0x03),   3,    MODULE_KEYBOARD_SCAN,   GPIO_KB_OUTPUT)
@@ -133,7 +131,7 @@ ALTERNATE(PIN_MASK(15, 0x08),   1,    MODULE_SPI,             0)                
 ALTERNATE(PIN_MASK(13, 0x48),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 133: PWM0, 136: PWM1 */
 ALTERNATE(PIN_MASK(14, 0x02),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 141: PWM3 */
 ALTERNATE(PIN_MASK(5,  0x40),   1,    MODULE_ADC,             0)                     /* 56: temperature sensor 1 */
-ALTERNATE(PIN_MASK(6,  0x05),   1,    MODULE_ADC,             0)                     /* 60: PC_MON, 62: temperature sensor 3 */
+ALTERNATE(PIN_MASK(6,  0x01),   1,    MODULE_ADC,             0)                     /* 60: PC_MON */
 
 /* Re-Config LPC Pins to GPIO Open Drain for SOC G3 (EC - POWER_G3) state */
 ALTERNATE(PIN_MASK(1,  0x10),   0,      MODULE_GPIO,          GPIO_ODR_HIGH)         /* 14: LPC CLKRUN */
@@ -142,9 +140,7 @@ ALTERNATE(PIN_MASK(11, 0x40),   0,      MODULE_GPIO,          GPIO_ODR_HIGH)    
 ALTERNATE(PIN_MASK(12, 0x01),   0,      MODULE_GPIO,          GPIO_ODR_HIGH)         /* 120: LFRAME# */
 
 /* I2C pins */
-/* I2C0_0 CLK - GPIO015, I2C0_0 DAT - GPIO016, I2C0_1 DAT - GPIO017 */
-ALTERNATE(PIN_MASK(1,  0xe0), 2, MODULE_I2C, GPIO_ODR_HIGH)
-/* I2C0_1 CLK - GPIO134 */
-ALTERNATE(PIN_MASK(13, 0x10), 2, MODULE_I2C, GPIO_ODR_HIGH)
-/* I2C{1,2,3} CLK / DAT - GPIO022-GPIO025*/
+/* I2C0_0 CLK - GPIO015, I2C0_0 DAT - GPIO016 */
+ALTERNATE(PIN_MASK(1,  0x60), 2, MODULE_I2C, GPIO_ODR_HIGH)
+/* I2C{1,2,3} CLK / DAT - GPIO020-GPIO025*/
 ALTERNATE(PIN_MASK(2,  0x3f), 2, MODULE_I2C, GPIO_ODR_HIGH)
