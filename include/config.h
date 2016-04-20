@@ -1866,6 +1866,12 @@
 #define CONFIG_USB_PD_DEBUG_DR PD_ROLE_DFP
 
 /*
+ * Define to have a fixed PD Task debug level.
+ * Undef to allow runtime change via console command.
+ */
+#undef CONFIG_USB_PD_DEBUG_LEVEL
+
+/*
  * Define if this board has a GPIO-controlled 5v discharge circuit that can be
  * used to discharge VBUS when power swapping out of source role.
  */
