@@ -80,6 +80,7 @@ driver-$(CONFIG_USB_PD_TCPM_TCPCI)+=tcpm/tcpci.o
 driver-$(CONFIG_USB_PD_TCPM_FUSB302)+=tcpm/fusb302.o
 driver-$(CONFIG_USB_PD_TCPM_ITE83XX)+=tcpm/it83xx.o
 driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
+driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
 
 # USB switches
 driver-$(CONFIG_USB_SWITCH_PI3USB9281)+=usb_switch_pi3usb9281.o
