@@ -7,7 +7,7 @@
 
 GPIO_INT(LID_OPEN,          PIN(27), GPIO_INT_BOTH | GPIO_PULL_UP, lid_interrupt)
 GPIO_INT(AC_PRESENT,        PIN(30), GPIO_INT_BOTH, extpower_interrupt)
-GPIO_INT(WP_L,              PIN(33), GPIO_INT_BOTH,        switch_interrupt)
+GPIO_INT(WP_L,              PIN(33), GPIO_INT_BOTH, switch_interrupt)
 /* Buffered power button input from PMIC / ROP_EC_PWR_BTN_L_R */
 GPIO_INT(POWER_BUTTON_L,    PIN(35), GPIO_INT_BOTH, power_button_interrupt)
 /* RSMRST from PMIC */
@@ -52,10 +52,6 @@ GPIO(I2C2_SDA,              PIN(21),  GPIO_INPUT)
 GPIO(I2C3_SCL,              PIN(24),  GPIO_INPUT)
 GPIO(I2C3_SDA,              PIN(25),  GPIO_INPUT)
 GPIO(PCH_SCI_L,             PIN(26),  GPIO_ODR_HIGH)
-/* KB BL PWM, only connected to TP */
-GPIO(PWM_KBLIGHT,           PIN(34),  GPIO_OUT_LOW)
-GPIO(USB1_ENABLE,           PIN(36),  GPIO_OUT_LOW)
-GPIO(USB2_ENABLE,           PIN(67),  GPIO_OUT_LOW)
 GPIO(ENTERING_RW,           PIN(41),  GPIO_OUT_LOW)
 GPIO(PCH_SMI_L,             PIN(44),  GPIO_ODR_HIGH)
 GPIO(PCH_PWRBTN_L,          PIN(45),  GPIO_OUTPUT)
@@ -68,14 +64,13 @@ GPIO(USB_PD_WAKE,           PIN(60),  GPIO_OUT_HIGH)
 /* When asserted, ME does not lock security descriptor */
 GPIO(PCH_SEC_DISABLE_L,     PIN(65),  GPIO_OUT_HIGH)
 GPIO(PCH_WAKE_L,            PIN(66),  GPIO_ODR_HIGH)
-GPIO(EC_FAN1_TTACH,         PIN(105), GPIO_INPUT | GPIO_PULL_UP)
-/* Fan PWM output - NC / testing only */
-GPIO(EC_FAN1_PWM,           PIN(136), GPIO_OUT_LOW)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
+/* Interrupt from trackpad */
+GPIO(TRACKPAD_INT,          PIN(127), GPIO_INPUT)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(ACCEL1_INT,            PIN(161), GPIO_INPUT)
-GPIO(ACCEL2_INT,            PIN(127), GPIO_INPUT)
 GPIO(ACCEL3_INT,            PIN(147), GPIO_INPUT)
+GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)
 GPIO(WLAN_OFF_L,            PIN(132), GPIO_OUT_LOW)
 /* RCIN# line to PCH for 8042 emulation */
 GPIO(PCH_RCIN_L,            PIN(135), GPIO_ODR_HIGH)
@@ -86,8 +81,8 @@ GPIO(PLATFORM_EC_PROCHOT,   PIN(151), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(USB_C0_5V_EN,          PIN(154), GPIO_OUT_LOW)
 GPIO(USB_C1_5V_EN,          PIN(204), GPIO_OUT_LOW)
 GPIO(USB_C0_CHARGE_EN_L,    PIN(64),  GPIO_OUT_LOW)
+GPIO(USB_C1_CHARGE_EN_L,    PIN(210), GPIO_OUT_LOW)
 GPIO(PP1800_DX_SENSOR_EN,   PIN(11),  GPIO_OUT_LOW)
-/* From lid sensor */
 GPIO(ENABLE_BACKLIGHT,      PIN(202), GPIO_OUT_LOW)
 GPIO(PP3300_WLAN_EN,        PIN(203), GPIO_OUT_LOW)
 GPIO(BOARD_VERSION1,        PIN(6),   GPIO_INPUT)
@@ -96,13 +91,9 @@ GPIO(BOARD_VERSION3,        PIN(10),  GPIO_INPUT)
 GPIO(PVT_CS0,               PIN(146), GPIO_ODR_HIGH)
 GPIO(SYS_RESET_L,           PIN(121), GPIO_ODR_HIGH)
 
-/*
- * TODO(crosbug.com/p/40848): These LEDs should be under control of the mec1322
- * LED control unit. Remove these GPIO definitions once the LED control unit
- * is functional.
- */
-GPIO(CHARGE_LED_1,        PIN(155), GPIO_OUT_LOW)
-GPIO(CHARGE_LED_2,        PIN(156), GPIO_OUT_LOW)
+GPIO(POWER_LED,             PIN(34), GPIO_OUT_LOW)
+GPIO(BAT_LED_GREEN,         PIN(155), GPIO_ODR_HIGH)
+GPIO(BAT_LED_RED,           PIN(156), GPIO_ODR_HIGH)
 
 /*
  * BATLOW_L and ROP_LDO_EN are stuffing options. Set as input to dynamically
@@ -110,12 +101,17 @@ GPIO(CHARGE_LED_2,        PIN(156), GPIO_OUT_LOW)
  * pulls setting this pin as input won't harm anything.
  */
 GPIO(BATLOW_L_PMIC_LDO_EN,  PIN(55),  GPIO_INPUT)
-GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)
 GPIO(PP1800_DX_AUDIO_EN,    PIN(141), GPIO_OUT_LOW)
+
+/* Keyboard backlight */
+GPIO(KBBL_EN,               PIN(105), GPIO_OUT_LOW)
+ALTERNATE(PIN_MASK(13,  0x40), 1, MODULE_PWM, 0) /* GP136 PWM1 */
+
 /* NC / stuffing option */
+GPIO(NC_GPIO36,             PIN(36),  GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_GPIO67,             PIN(67),  GPIO_INPUT | GPIO_PULL_UP)
 GPIO(PCH_RTCRST,            PIN(163), GPIO_OUT_LOW)
 GPIO(PMIC_SLP_SUS_L,        PIN(201), GPIO_OUT_LOW)
-GPIO(USB_C1_CHARGE_EN_L,    PIN(210), GPIO_OUT_LOW)
 
 /* Alternate functions GPIO definitions */
 
@@ -169,9 +165,6 @@ ALTERNATE(PIN_MASK(13, 0x10), 2, MODULE_I2C, GPIO_ODR_HIGH)
 ALTERNATE(PIN_MASK(5,  0x80), 1, MODULE_ADC, GPIO_ANALOG)
 /* ADC3 - GPIO061 / IADP_ACMON_BMON. ADC4 - GPIO062 / PMON_PSYS */
 ALTERNATE(PIN_MASK(6,  0x06), 1, MODULE_ADC, GPIO_ANALOG)
-
-/* LED1 - GPIO155. LED2 - GPIO156 */
-ALTERNATE(PIN_MASK(15, 0x60), 2, MODULE_POWER_LED, 0)
 
 /* VCC1_RST# - GPIO131 */
 ALTERNATE(PIN_MASK(13, 0x02), 1, MODULE_PMU, 0)

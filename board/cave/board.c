@@ -31,6 +31,8 @@
 #include "pi3usb9281.h"
 #include "power.h"
 #include "power_button.h"
+#include "pwm.h"
+#include "pwm_chip.h"
 #include "spi.h"
 #include "switch.h"
 #include "system.h"
@@ -119,6 +121,12 @@ const struct adc_t adc_channels[] = {
 
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
+const struct pwm_t pwm_channels[] = {
+	{1, 0},
+};
+BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 const struct i2c_port_t i2c_ports[]  = {
 	{"pmic",     MEC1322_I2C0_0, 400,  GPIO_I2C0_0_SCL, GPIO_I2C0_0_SDA},
@@ -387,8 +395,6 @@ DECLARE_DEFERRED(enable_input_devices);
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)
 {
-	gpio_set_level(GPIO_USB1_ENABLE, 1);
-	gpio_set_level(GPIO_USB2_ENABLE, 1);
 	hook_call_deferred(enable_input_devices, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
@@ -396,8 +402,6 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 /* Called on AP S3 -> S5 transition */
 static void board_chipset_shutdown(void)
 {
-	gpio_set_level(GPIO_USB1_ENABLE, 0);
-	gpio_set_level(GPIO_USB2_ENABLE, 0);
 	hook_call_deferred(enable_input_devices, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
@@ -433,10 +437,6 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
 void board_set_gpio_hibernate_state(void)
 {
-	/* Turn off LEDs in hibernate */
-	gpio_set_level(GPIO_CHARGE_LED_1, 0);
-	gpio_set_level(GPIO_CHARGE_LED_2, 0);
-
 	/*
 	 * Set PD wake low so that it toggles high to generate a wake
 	 * event once we leave hibernate.

@@ -193,6 +193,12 @@ enum als_id {
 	ALS_COUNT
 };
 
+enum pwm_channel {
+	PWM_CH_KBLIGHT,
+	/* Number of PWM channels */
+	PWM_CH_COUNT,
+};
+
 /* start as a sink in case we have no other power supply/battery */
 #define PD_DEFAULT_STATE PD_STATE_SNK_DISCONNECTED
 
