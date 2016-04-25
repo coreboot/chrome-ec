@@ -73,7 +73,7 @@ GPIO(USB_CTL1,          PIN(105), GPIO_OUT_HIGH)                /* USB charging 
 GPIO(PCH_RCIN_L,        PIN(110), GPIO_ODR_HIGH)                /* Reset line to PCH (for 8042 emulation) */
 GPIO(NC_115,            PIN(115), GPIO_INPUT | GPIO_PULL_UP)    /* NC */
 GPIO(EC_VNN_VCLK,       PIN(122), GPIO_INPUT | GPIO_PULL_UP)    /* Interrupt from USB PD Controller to EC */
-GPIO(STRAP_L,           PIN(123), GPIO_OUT_LOW)
+GPIO(PCH_RTCRST,        PIN(123), GPIO_OUT_LOW)                 /* Reset PCH RTC well */
 GPIO(EC_VNN_ALERT_L,    PIN(124), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_GPIO127,        PIN(127), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 

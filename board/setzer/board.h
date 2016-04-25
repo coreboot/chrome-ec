@@ -15,6 +15,7 @@
 #define CONFIG_SCI_GPIO GPIO_PCH_SCI_L
 
 #define CONFIG_BOARD_VERSION
+#define CONFIG_BOARD_HAS_RTC_RESET
 
 #define CONFIG_KEYBOARD_ALWAYS_KEYSCAN
 #define CONFIG_KEYBOARD_COL2_INVERTED
@@ -151,6 +152,9 @@ enum als_id {
 };
 
 extern int state_charger_timeout;
+
+/* Reset RTC */
+void board_rtc_reset(void);
 
 #endif /* !__ASSEMBLER__ */
 

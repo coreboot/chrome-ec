@@ -320,3 +320,18 @@ void check_charger_timeout_second(void)
 	}
 }
 DECLARE_HOOK(HOOK_SECOND, check_charger_timeout_second, HOOK_PRIO_DEFAULT);
+
+void board_rtc_reset(void)
+{
+	gpio_set_level(GPIO_PCH_SYS_PWROK, 0);
+	gpio_set_level(GPIO_PCH_RSMRST_L, 0);
+	/*
+	 * Assert RTCRST# to the PCH long enough for it to latch the
+	 * assertion and reset the internal RTC backed state.
+	 */
+	CPRINTS("Asserting RTCRST# to PCH");
+	gpio_set_level(GPIO_PCH_RTCRST, 1);
+	usleep(3 * SECOND);
+	gpio_set_level(GPIO_PCH_RTCRST, 0);
+	udelay(10 * MSEC);
+}

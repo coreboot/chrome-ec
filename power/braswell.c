@@ -16,6 +16,7 @@
 #include "power.h"
 #include "power_button.h"
 #include "system.h"
+#include "task.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "util.h"
@@ -170,9 +171,22 @@ enum power_state power_handle_state(enum power_state state)
 		if (forcing_shutdown)
 			return POWER_S5G3;
 
+#ifdef CONFIG_BOARD_HAS_RTC_RESET
+		while ((power_get_signals() & IN_SLP_S4_DEASSERTED) == 0) {
+			if (task_wait_event(SECOND * 4) == TASK_EVENT_TIMER) {
+				CPRINTS("timeout waiting for S5 exit");
+				/* Assert RTCRST# */
+				board_rtc_reset();
+				/* Try to power back up after RTC reset */
+				return POWER_G3S5;
+			}
+		}
+		return POWER_S5S3;
+#else
 		/* Check for SLP S4 */
 		if (gpio_get_level(GPIO_PCH_SLP_S4_L) == 1)
 			return POWER_S5S3; /* Power up to next state */
+#endif
 		break;
 
 	case POWER_S5S3:
