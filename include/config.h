@@ -753,6 +753,9 @@
 /* Number of cooling fans. Undef if none. */
 #undef CONFIG_FANS
 
+/* Support fan control while in low-power idle */
+#undef CONFIG_FAN_DSLEEP
+
 /*
  * Replace the default fan_percent_to_rpm() function with a board-specific
  * implementation in board.c
@@ -1477,9 +1480,6 @@
 /*****************************************************************************/
 /* Support PWM control */
 #undef CONFIG_PWM
-
-/* Support PWM control while in low-power idle */
-#undef CONFIG_PWM_DSLEEP
 
 /* Define clock input to PWM module. */
 #undef CONFIG_PWM_INPUT_LFCLK
