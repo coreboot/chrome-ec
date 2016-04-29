@@ -93,4 +93,19 @@
  */
 int tmp432_get_val(int idx, int *temp_ptr);
 
+/*
+ * Set TMP432 ALERT# pin to THERM mode
+ * [5] : 0 for ALERT mode(default), 1 for THERM mode
+ *
+ * @param limit_degree	High limit temperature, default: 85C
+ *
+ * @param hysteresis	Hysteresis temperature, default: 10C
+ *
+ * In THERM mode, ALERT# pin will trigger(Low) by itself when
+ * any channel's temperature is greater( >= ) limit_degree,
+ * and release(High) by itself when all temperature
+ * is lower than (LimitDegree + Hysteresis)
+ */
+int tmp432_set_therm_mode(int limit_degree, int hysteresis);
+
 #endif /* __CROS_EC_TMP432_H */

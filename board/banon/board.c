@@ -9,6 +9,7 @@
 #include "button.h"
 #include "charger.h"
 #include "charge_state.h"
+#include "console.h"
 #include "driver/accel_kxcj9.h"
 #include "driver/als_isl29035.h"
 #include "driver/gyro_l3gd20h.h"
@@ -32,6 +33,8 @@
 #include "thermal.h"
 #include "uart.h"
 #include "util.h"
+
+#define CPRINTS(format, args...) cprints(CC_THERMAL, format, ## args)
 
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
 #define GPIO_KB_OUTPUT (GPIO_ODR_HIGH)
@@ -94,3 +97,13 @@ int i2c_port_is_smbus(int port)
 {
 	return (port == MEC1322_I2C0_0 || port == MEC1322_I2C0_1) ? 1 : 0;
 }
+
+/* Initialize TMP432 */
+static void board_tmp432_init(void)
+{
+	if (tmp432_set_therm_mode(85, 0) == EC_SUCCESS)
+		CPRINTS("TMP432 initialization done");
+	else
+		CPRINTS("TMP432 initialization failed");
+}
+DECLARE_HOOK(HOOK_INIT, board_tmp432_init, HOOK_PRIO_TEMP_SENSOR + 1);
