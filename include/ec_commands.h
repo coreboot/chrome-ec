@@ -288,6 +288,11 @@ enum host_event_code {
 	/* Keyboard fastboot combo has been pressed */
 	EC_HOST_EVENT_KEYBOARD_FASTBOOT = 25,
 
+	/* EC RTC event occurred */
+	EC_HOST_EVENT_RTC_UNUSED = 26,
+
+	/* Emulate MKBP event */
+	EC_HOST_EVENT_MKBP = 27,
 	/*
 	 * The high bit of the event mask is not used as a host event code.  If
 	 * it reads back as set, then the entire event mask should be
