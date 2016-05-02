@@ -1234,6 +1234,9 @@
 /* Support MKBP event */
 #undef CONFIG_MKBP_EVENT
 
+/* MKBP events are sent using host event */
+#undef CONFIG_MKBP_USE_HOST_EVENT
+
 /* Support memory protection unit (MPU) */
 #undef CONFIG_MPU
 
