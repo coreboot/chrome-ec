@@ -24,6 +24,8 @@
 #define CONFIG_WEBUSB_URL "storage.googleapis.com/webtwinkie.org/tool.html"
 
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_ALT_MODE
+#define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_INTERNAL_COMP
 #define CONFIG_USB_PD_PORT_COUNT 1
@@ -43,6 +45,7 @@
 #define CONFIG_ADC
 #define CONFIG_BOARD_PRE_INIT
 #define CONFIG_CMD_REBOOT_DFU
+#define CONFIG_CMD_USB_PD_PE
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
 #define CONFIG_INA231

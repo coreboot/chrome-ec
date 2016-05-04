@@ -152,6 +152,7 @@ static struct pd_protocol {
 	/* next Vendor Defined Message to send */
 	uint32_t vdo_data[VDO_MAX_SIZE];
 	uint8_t vdo_count;
+	uint8_t vdm_tx_type;
 	/* VDO to retry if UFP responder replied busy. */
 	uint32_t vdo_retry;
 
@@ -1269,8 +1270,9 @@ static void pd_vdm_send_state_machine(int port)
 		header = PD_HEADER(PD_DATA_VENDOR_DEF, pd[port].power_role,
 				   pd[port].data_role, pd[port].msg_id,
 				   (int)pd[port].vdo_count);
-		res = pd_transmit(port, TCPC_TX_SOP, header,
+		res = pd_transmit(port, pd[port].vdm_tx_type, header,
 				  pd[port].vdo_data);
+		pd[port].vdm_tx_type = TCPC_TX_SOP;
 		if (res < 0) {
 			pd[port].vdm_state = VDM_STATE_ERR_SEND;
 		} else {
@@ -3477,6 +3479,10 @@ static int command_pd(int argc, char **argv)
 				    NULL, 0);
 		} else if (!strncasecmp(argv[3], "vers", 4)) {
 			pd_send_vdm(port, USB_VID_GOOGLE, VDO_CMD_VERSION,
+				    NULL, 0);
+		} else if (!strncasecmp(argv[3], "ident", 4)) {
+			pd[port].vdm_tx_type = TCPC_TX_SOP_PRIME;
+			pd_send_vdm(port, USB_SID_PD, CMD_DISCOVER_IDENT,
 				    NULL, 0);
 		} else {
 			return EC_ERROR_PARAM_COUNT;

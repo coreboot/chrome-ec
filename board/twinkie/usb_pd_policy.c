@@ -99,8 +99,19 @@ void pd_execute_data_swap(int port, int data_role)
 	/* Do nothing */
 }
 
+/* ----------------- Vendor Defined Messages ------------------ */
+const struct svdm_response svdm_rsp = {
+	.identity = NULL,
+	.svids = NULL,
+	.modes = NULL,
+};
+
 int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 		  uint32_t **rpayload)
 {
 	return 0;
 }
+
+const struct svdm_amode_fx supported_modes[] = {
+};
+const int supported_modes_cnt = ARRAY_SIZE(supported_modes);
