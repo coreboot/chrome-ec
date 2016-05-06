@@ -285,6 +285,12 @@ int chipset_in_state(int state_mask)
 	return (state_mask & need_mask) == need_mask;
 }
 
+/*  TODO(crosbug.com/p/23773): Handle transition states in chipset_in_state() */
+int chipset_will_be_in_s0(void)
+{
+	return (state == POWER_S3S0 || state == POWER_S0);
+}
+
 void chipset_exit_hard_off(void)
 {
 	/*

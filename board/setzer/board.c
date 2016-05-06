@@ -282,22 +282,18 @@ int board_charger_post_init(void)
 static void touch_screen_set_control_mode(void)
 {
 	/*
-	* If lid is closed; hold touchscreen in reset to cut power
-	* usage.  If lid is open, take touchscreen out of reset so it
-	* can wake the processor.
+	* If lid is closed or if we aren't in S0,  hold touchscreen in reset
+	* to cut power usage.
 	*/
-	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, lid_is_open());
+	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L,
+		lid_is_open() && chipset_will_be_in_s0());
 }
+DECLARE_HOOK(HOOK_INIT, touch_screen_set_control_mode, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_LID_CHANGE, touch_screen_set_control_mode, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, touch_screen_set_control_mode,
 	HOOK_PRIO_DEFAULT);
-
-static void touch_screen_reset(void)
-{
-	/* Hold touchscreen in reset */
-	gpio_set_level(GPIO_TOUCHSCREEN_RESET_L, 0);
-}
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_reset, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_set_control_mode,
+	HOOK_PRIO_DEFAULT);
 
 /* Called by hook task every 1 sec  */
 void check_charger_timeout_second(void)

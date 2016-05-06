@@ -48,6 +48,13 @@ enum chipset_state_mask {
 int chipset_in_state(int state_mask);
 
 /**
+ * Check if chipset is in S0 or is transitioning to S0.
+ *
+ * @return non-zero if the chipset is in S0 or is headed to S0.
+ */
+int chipset_will_be_in_s0(void);
+
+/**
  * Ask the chipset to exit the hard off state.
  *
  * Does nothing if the chipset has already left the state, or was not in the
