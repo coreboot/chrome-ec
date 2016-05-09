@@ -53,6 +53,7 @@
 
 static int throttle_cpu;      /* Throttle CPU? */
 static int forcing_shutdown;  /* Forced shutdown in progress? */
+static int power_s5_up;       /* Chipset is sequencing up or down */
 
 void chipset_force_shutdown(void)
 {
@@ -139,6 +140,22 @@ enum power_state power_chipset_init(void)
 	return POWER_G3;
 }
 
+#ifdef CONFIG_BOARD_HAS_RTC_RESET
+static enum power_state power_wait_s5_rtc_reset(void)
+{
+	while ((power_get_signals() & IN_SLP_S4_DEASSERTED) == 0) {
+		if (task_wait_event(SECOND * 4) == TASK_EVENT_TIMER) {
+			CPRINTS("timeout waiting for S5 exit");
+			/* Assert RTCRST# */
+			board_rtc_reset();
+			/* Try to power back up after RTC reset */
+			return POWER_G3S5;
+		}
+	}
+	return POWER_S5S3;
+}
+#endif
+
 enum power_state power_handle_state(enum power_state state)
 {
 	switch (state) {
@@ -164,6 +181,7 @@ enum power_state power_handle_state(enum power_state state)
 
 		/* Deassert RSMRST# */
 		gpio_set_level(GPIO_PCH_RSMRST_L, 1);
+		power_s5_up = 1;
 		return POWER_S5;
 
 	case POWER_S5:
@@ -172,21 +190,12 @@ enum power_state power_handle_state(enum power_state state)
 			return POWER_S5G3;
 
 #ifdef CONFIG_BOARD_HAS_RTC_RESET
-		while ((power_get_signals() & IN_SLP_S4_DEASSERTED) == 0) {
-			if (task_wait_event(SECOND * 4) == TASK_EVENT_TIMER) {
-				CPRINTS("timeout waiting for S5 exit");
-				/* Assert RTCRST# */
-				board_rtc_reset();
-				/* Try to power back up after RTC reset */
-				return POWER_G3S5;
-			}
-		}
-		return POWER_S5S3;
-#else
+		if (power_s5_up)
+			return power_wait_s5_rtc_reset();
+#endif
 		/* Check for SLP S4 */
 		if (gpio_get_level(GPIO_PCH_SLP_S4_L) == 1)
 			return POWER_S5S3; /* Power up to next state */
-#endif
 		break;
 
 	case POWER_S5S3:
@@ -308,6 +317,7 @@ enum power_state power_handle_state(enum power_state state)
 
 		wireless_set_state(WIRELESS_OFF);
 
+		power_s5_up = 0;
 		/* Start shutting down */
 		return power_get_pause_in_s5() ? POWER_S5 : POWER_S5G3;
 
