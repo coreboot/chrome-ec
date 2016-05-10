@@ -491,6 +491,18 @@ struct kionix_accel_data g_kx022_data = {
 	.variant = KX022,
 };
 
+const matrix_3x3_t rot_base_accel = {
+	{ FLOAT_TO_FP(-1), 0, 0 },
+	{ 0, FLOAT_TO_FP(1), 0  },
+	{ 0, 0, FLOAT_TO_FP(-1) },
+};
+
+const matrix_3x3_t rot_lid_accel = {
+	{ FLOAT_TO_FP(-1), 0, 0 },
+	{ 0, FLOAT_TO_FP(1), 0 },
+	{ 0, 0, FLOAT_TO_FP(-1) },
+};
+
 struct motion_sensor_t motion_sensors[] = {
 	/*
 	 * Note: bmi160: supports accelerometer and gyro sensor
@@ -506,7 +518,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .addr = BMI160_ADDR0,
-	 .rot_standard_ref = NULL, /* Identity matrix. */
+	 .rot_standard_ref = &rot_base_accel,
 	 .default_range = 2,  /* g, enough for laptop. */
 	 .config = {
 		 /* AP: by default use EC settings */
@@ -542,7 +554,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = NULL, /* Identity Matrix. */
+	 .rot_standard_ref = NULL,
 	 .config = {
 		 /* AP: by default shutdown all sensors */
 		 [SENSOR_CONFIG_AP] = {
@@ -576,7 +588,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_lid_mutex,
 	 .drv_data = &g_kx022_data,
 	 .addr = KX022_ADDR0,
-	 .rot_standard_ref = NULL, /* Identity matrix. */
+	 .rot_standard_ref = &rot_lid_accel,
 	 .default_range = 2, /* g, enough for laptop. */
 	 .config = {
 		/* AP: by default use EC settings */
