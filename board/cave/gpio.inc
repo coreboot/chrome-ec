@@ -91,9 +91,9 @@ GPIO(BOARD_VERSION3,        PIN(10),  GPIO_INPUT)
 GPIO(PVT_CS0,               PIN(146), GPIO_ODR_HIGH)
 GPIO(SYS_RESET_L,           PIN(121), GPIO_ODR_HIGH)
 
-GPIO(POWER_LED,             PIN(34), GPIO_OUT_LOW)
-GPIO(BAT_LED_GREEN,         PIN(155), GPIO_ODR_HIGH)
-GPIO(BAT_LED_RED,           PIN(156), GPIO_ODR_HIGH)
+GPIO(POWER_LED,             PIN(34), GPIO_OUT_HIGH)
+GPIO(BAT_LED_GREEN,         PIN(155), GPIO_OUT_LOW)
+GPIO(BAT_LED_RED,           PIN(156), GPIO_OUT_LOW)
 
 /*
  * BATLOW_L and ROP_LDO_EN are stuffing options. Set as input to dynamically
