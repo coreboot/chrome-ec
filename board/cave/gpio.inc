@@ -5,7 +5,7 @@
  * found in the LICENSE file.
  */
 
-GPIO_INT(LID_OPEN,          PIN(27), GPIO_INT_BOTH | GPIO_PULL_UP, lid_interrupt)
+GPIO_INT(TABLET_MODE_L,     PIN(27), GPIO_INT_BOTH | GPIO_PULL_UP, tablet_mode_interrupt)
 GPIO_INT(AC_PRESENT,        PIN(30), GPIO_INT_BOTH, extpower_interrupt)
 GPIO_INT(WP_L,              PIN(33), GPIO_INT_BOTH, switch_interrupt)
 /* Buffered power button input from PMIC / ROP_EC_PWR_BTN_L_R */
@@ -23,7 +23,7 @@ GPIO_INT(USB_C0_VBUS_WAKE_L,PIN(152), GPIO_INT_BOTH, vbus0_evt)
 GPIO_INT(USB_C1_VBUS_WAKE_L,PIN(123), GPIO_INT_BOTH, vbus1_evt)
 GPIO_INT(USB_C0_BC12_INT_L, PIN(124), GPIO_INT_FALLING, usb0_evt)
 GPIO_INT(USB_C1_BC12_INT_L, PIN(145), GPIO_INT_FALLING, usb1_evt)
-GPIO_INT(TABLET_MODE_L,     PIN(160), GPIO_INT_BOTH | GPIO_PULL_UP, tablet_mode_interrupt)
+GPIO_INT(LID_OPEN,          PIN(160), GPIO_INT_BOTH | GPIO_PULL_UP, lid_interrupt)
 /* Delayed PWR_OK from PMIC */
 GPIO_INT(PMIC_DPWROK,       PIN(133), GPIO_INT_BOTH, power_signal_interrupt)
 /* UART input */
