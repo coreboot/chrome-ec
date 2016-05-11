@@ -411,6 +411,7 @@ static void board_chipset_resume(void)
 {
 	gpio_set_level(GPIO_PP1800_DX_AUDIO_EN, 1);
 	gpio_set_level(GPIO_PP1800_DX_SENSOR_EN, 1);
+	gpio_set_level(GPIO_KBBL_EN, 1);
 
 	/*
 	 * Now that we have enabled the rail to the sensors, let's give enough
@@ -432,6 +433,7 @@ static void board_chipset_suspend(void)
 {
 	gpio_set_level(GPIO_PP1800_DX_AUDIO_EN, 0);
 	gpio_set_level(GPIO_PP1800_DX_SENSOR_EN, 0);
+	gpio_set_level(GPIO_KBBL_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
