@@ -99,6 +99,11 @@ static inline int chipset_in_state(int state_mask)
 	return 0;
 }
 
+static inline int chipset_will_be_in_s0(void)
+{
+	return 0;
+}
+
 static inline void chipset_exit_hard_off(void) { }
 static inline void chipset_throttle_cpu(int throttle) { }
 static inline void chipset_force_shutdown(void) { }
