@@ -87,7 +87,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0}, /* TMP432_Internal */
-	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_1 */
+	{{0, 0, C_TO_K(70)}, 0, 0}, /* TMP432_Sensor_1 */
 	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_2 */
 	{{0, 0, 0}, 0, 0}, /* Battery Sensor */
 };
@@ -101,7 +101,7 @@ int i2c_port_is_smbus(int port)
 /* Initialize TMP432 */
 static void board_tmp432_init(void)
 {
-	if (tmp432_set_therm_mode(85, 0) == EC_SUCCESS)
+	if (tmp432_set_therm_limit(TMP432_CHANNEL_REMOTE1, 66, 3) == EC_SUCCESS)
 		CPRINTS("TMP432 initialization done");
 	else
 		CPRINTS("TMP432 initialization failed");
