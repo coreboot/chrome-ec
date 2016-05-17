@@ -182,126 +182,29 @@ uint32_t system_get_scratchpad(void)
 	return MEC1322_VBAT_RAM(HIBDATA_INDEX_SCRATCHPAD);
 }
 
-/* Convert a GPIO to a port + mask, used in the skip table below. */
-#define PORT_MASK_PAIR(gpio) \
-	{ gpio_list[(gpio)].port, \
-	  GPIO_MASK_TO_NUM(gpio_list[(gpio)].mask) }
-
-static void system_set_gpio_power(int enabled, uint32_t *backup_gpio_ctl)
-{
-	int i, j, k;
-	uint32_t val;
-	int want_skip;
-
-	const int pins[][2] = {
-				{0, 7}, {1, 7}, {2, 7}, {3, 6}, {4, 7}, {5, 7},
-				{6, 7}, {10, 7}, {11, 7}, {12, 7}, {13, 6},
-				{14, 7}, {15, 7}, {16, 5}, {20, 6}, {21, 1}
-	};
-
-	const int skip[][2] = {
-#ifdef BOARD_GLADOS
-		/*
-		 * Leave PCH RTCRST deasserted.
-		 * TODO(crosbug.com/p/42774): Remove this once we have a
-		 * pull-down on PCH_RTCRST.
-		 */
-		PORT_MASK_PAIR(GPIO_PCH_RTCRST),
-#endif
-
-		/*
-		 * Leave USB-C charging enabled in hibernate, in order to
-		 * allow wake-on-plug. 5V enable must be pulled low.
-		 */
-#ifdef CONFIG_USB_PD_PORT_COUNT
-#if CONFIG_USB_PD_PORT_COUNT > 0
-		PORT_MASK_PAIR(GPIO_USB_C0_5V_EN),
-		PORT_MASK_PAIR(GPIO_USB_C0_CHARGE_EN_L),
-#endif
-#if CONFIG_USB_PD_PORT_COUNT > 1
-		PORT_MASK_PAIR(GPIO_USB_C1_5V_EN),
-		PORT_MASK_PAIR(GPIO_USB_C1_CHARGE_EN_L),
-#endif
-#endif /* CONFIG_USB_PD_PORT_COUNT */
-
-		/*
-		 * MEC1322 datasheet, sec. 20.6: VCC1_RST# cannot be used
-		 * as a GPIO pin.
-		 */
-		{13, 1},
-		/* GPIO 205 doesn't exist. */
-		{20, 5},
-	};
-
-	for (i = 0; i < ARRAY_SIZE(pins); ++i) {
-		for (j = 0; j <= pins[i][1]; ++j) {
-			want_skip = 0;
-			for (k = 0; k < ARRAY_SIZE(skip); ++k)
-				if (skip[k][0] == pins[i][0] &&
-				    skip[k][1] == j)
-					want_skip = 1;
-			if (want_skip)
-				continue;
-
-			if (enabled) {
-				MEC1322_GPIO_CTL(pins[i][0], j) =
-					backup_gpio_ctl[i * 8 + j];
-			} else {
-				/* GPIO Input, pull-high, interrupt disabled */
-				val = MEC1322_GPIO_CTL(pins[i][0], j);
-				if (backup_gpio_ctl != NULL)
-					backup_gpio_ctl[i * 8 + j] = val;
-				val &= ~((1 << 12) | (1 << 13));
-				val &= ~(1 << 9);
-				val = (val & ~(0xf << 4)) | (0x4 << 4);
-				val = (val & ~0x3) | 0x1;
-				MEC1322_GPIO_CTL(pins[i][0], j) = val;
-			}
-		}
-	}
-
-#ifdef CONFIG_USB_PD_PORT_COUNT
-	if (!enabled) {
-		/*
-		 * Leave USB-C charging enabled in hibernate, in order to
-		 * allow wake-on-plug. 5V enable must be pulled low.
-		 */
-#if CONFIG_USB_PD_PORT_COUNT > 0
-		gpio_set_flags(GPIO_USB_C0_5V_EN, GPIO_PULL_DOWN | GPIO_INPUT);
-		gpio_set_level(GPIO_USB_C0_CHARGE_EN_L, 0);
-#endif
-#if CONFIG_USB_PD_PORT_COUNT > 1
-		gpio_set_flags(GPIO_USB_C1_5V_EN, GPIO_PULL_DOWN | GPIO_INPUT);
-		gpio_set_level(GPIO_USB_C1_CHARGE_EN_L, 0);
-#endif
-	}
-#endif /* CONFIG_USB_PD_PORT_COUNT */
-}
-
 void system_hibernate(uint32_t seconds, uint32_t microseconds)
 {
 	int i;
-	uint32_t int_status[16];
-	uint32_t int_block_status;
-	uint32_t nvic_status[3];
-	char *backup_gpio_ctl;
+
+#ifdef CONFIG_HOSTCMD_PD
+	/* Inform the PD MCU that we are going to hibernate. */
+	host_command_pd_request_hibernate();
+	/* Wait to ensure exchange with PD before hibernating. */
+	msleep(100);
+#endif
 
 	cflush();
 
 	/* Disable interrupts */
 	interrupt_disable();
-	for (i = 0; i < 3; ++i)
-		nvic_status[i] = CPU_NVIC_EN(i);
 	for (i = 0; i <= 92; ++i) {
 		task_disable_irq(i);
 		task_clear_pending_irq(i);
 	}
 
-	for (i = 8; i <= 23; ++i) {
-		int_status[i - 8] = MEC1322_INT_ENABLE(i);
+	for (i = 8; i <= 23; ++i)
 		MEC1322_INT_DISABLE(i) = 0xffffffff;
-	}
-	int_block_status = MEC1322_INT_BLK_EN;
+
 	MEC1322_INT_BLK_DIS |= 0xffff00;
 
 	/* Power down ADC VREF */
@@ -342,12 +245,24 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	MEC1322_PCR_SYS_SLP_CTL = (MEC1322_PCR_SYS_SLP_CTL & ~0x7) | 0x2;
 	CPU_SCB_SYSCTRL |= 0x4;
 
-	/* Attempt to backup GPIO states if we need to restore them on wake. */
-#ifndef CONFIG_HIBERNATE_RESET_ON_WAKE
-	if (shared_mem_acquire(512, &backup_gpio_ctl) != EC_SUCCESS)
+	/* Setup GPIOs for hibernate */
+	if (board_set_gpio_hibernate_state)
+		board_set_gpio_hibernate_state();
+
+#ifdef CONFIG_USB_PD_PORT_COUNT
+	/*
+	 * Leave USB-C charging enabled in hibernate, in order to
+	 * allow wake-on-plug. 5V enable must be pulled low.
+	 */
+#if CONFIG_USB_PD_PORT_COUNT > 0
+	gpio_set_flags(GPIO_USB_C0_5V_EN, GPIO_PULL_DOWN | GPIO_INPUT);
+	gpio_set_level(GPIO_USB_C0_CHARGE_EN_L, 0);
 #endif
-		backup_gpio_ctl = NULL;
-	system_set_gpio_power(0, (uint32_t *)backup_gpio_ctl);
+#if CONFIG_USB_PD_PORT_COUNT > 1
+	gpio_set_flags(GPIO_USB_C1_5V_EN, GPIO_PULL_DOWN | GPIO_INPUT);
+	gpio_set_level(GPIO_USB_C1_CHARGE_EN_L, 0);
+#endif
+#endif /* CONFIG_USB_PD_PORT_COUNT */
 
 	if (hibernate_wake_pins_used > 0) {
 		for (i = 0; i < hibernate_wake_pins_used; ++i) {
@@ -388,55 +303,12 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	/* Use 48MHz clock to speed through wake-up */
 	MEC1322_PCR_PROC_CLK_CTL = 1;
 
-	/* If we didn't back up GPIO status, just reboot. */
-	if (backup_gpio_ctl == NULL)
-		_system_reset(0, 1);
+	/* Reboot */
+	_system_reset(0, 1);
 
-	system_set_gpio_power(1, (uint32_t *)backup_gpio_ctl);
-	shared_mem_release(backup_gpio_ctl);
-
-	/* Enable blocks */
-	MEC1322_PCR_SLOW_CLK_CTL |= 0x1e0;
-	MEC1322_PCR_CHIP_SLP_EN &= ~0x3;
-	MEC1322_PCR_EC_SLP_EN &= MEC1322_PCR_EC_SLP_EN_WAKE;
-	MEC1322_PCR_HOST_SLP_EN &= MEC1322_PCR_HOST_SLP_EN_WAKE;
-	MEC1322_PCR_EC_SLP_EN2 &= MEC1322_PCR_EC_SLP_EN2_WAKE;
-
-	/* Enable timer */
-	MEC1322_TMR32_CTL(0) |= 1;
-	MEC1322_TMR32_CTL(1) |= 1;
-	MEC1322_TMR16_CTL(0) |= 1;
-
-	/* Enable watchdog */
-	MEC1322_WDG_CTL |= 1;
-
-	/* Enable 32KHz clock */
-	MEC1322_VBAT_CE |= 0x2;
-
-	/* Enable JTAG */
-	MEC1322_EC_JTAG_EN |= 1;
-
-	/* Enable UART */
-	MEC1322_LPC_ACT |= 1;
-	MEC1322_UART_ACT |= 1;
-
-	/* Deassert nSIO_RESET */
-	MEC1322_PCR_PWR_RST_CTL &= ~1;
-
-	/* Enable ADC */
-	MEC1322_EC_ADC_VREF_PD &= ~1;
-	MEC1322_ADC_CTRL |= 1 << 0;
-
-	/* Restore interrupts */
-	for (i = 8; i <= 23; ++i)
-		MEC1322_INT_ENABLE(i) = int_status[i - 8];
-	MEC1322_INT_BLK_EN = int_block_status;
-
-	for (i = 0; i < 3; ++i)
-		CPU_NVIC_EN(i) = nvic_status[i];
-
-	/* Restore processor clock */
-	MEC1322_PCR_PROC_CLK_CTL = 4;
+	/* We should never get here. */
+	while (1)
+		;
 }
 
 void htimer_interrupt(void)

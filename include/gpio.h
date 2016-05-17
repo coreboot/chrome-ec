@@ -49,6 +49,11 @@
 /* Convert GPIO mask to GPIO number / index. */
 #define GPIO_MASK_TO_NUM(mask) (31 - __builtin_clz(mask))
 
+/* Convert a GPIO to a port + mask pair */
+#define GPIO_TO_PORT_MASK_PAIR(gpio) \
+	{ gpio_list[(gpio)].port, \
+	  GPIO_MASK_TO_NUM(gpio_list[(gpio)].mask) }
+
 /* NOTE: This is normally included from board.h, thru config.h and common.h But,
  * some boards and unit tests don't have a gpio_signal enum defined, so we
  * define an emtpy one here.*/
@@ -244,5 +249,8 @@ int gpio_is_reboot_warm(void);
  * outside of that context.
  */
 void gpio_enable_clocks(void);
+
+/* Optional board-level function to set hibernate GPIO states. */
+void board_set_gpio_hibernate_state(void) __attribute__((weak));
 
 #endif  /* __CROS_EC_GPIO_H */
