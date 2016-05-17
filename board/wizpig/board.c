@@ -236,3 +236,29 @@ static void adc_pre_init(void)
 	gpio_config_module(MODULE_ADC, 1);
 }
 DECLARE_HOOK(HOOK_INIT, adc_pre_init, HOOK_PRIO_INIT_ADC - 1);
+static void touch_screen_power_control(void)
+{
+
+	if (chipset_will_be_in_s0()) {
+		/*
+		 * Enable Touch screen when platform is in S0
+		 */
+		gpio_set_level(GPIO_TS_VDD_EN, 1);
+		gpio_set_level(GPIO_TS_RST_L, 0);
+		msleep(10);
+		gpio_set_level(GPIO_TS_RST_L, 1);
+	} else {
+		/*
+		 * Disable the load switch and hold touch screen in reset
+		 * to reduce the power consumption
+		 */
+		gpio_set_level(GPIO_TS_VDD_EN, 0);
+		usleep(10);
+		gpio_set_level(GPIO_TS_RST_L, 0);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, touch_screen_power_control, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, touch_screen_power_control,
+	HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_power_control,
+	HOOK_PRIO_DEFAULT);

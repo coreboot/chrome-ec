@@ -92,7 +92,7 @@ GPIO(WLAN_OFF_L,        PIN(150), GPIO_ODR_HIGH)                 /* Wireless LAN
 GPIO(CPU_PROCHOT,       PIN(151), GPIO_OUT_LOW)
 GPIO(KBD_IRQ_L,         PIN(152), GPIO_ODR_HIGH)                 /* Negative edge triggered irq. */
 GPIO(BOARD_VERSION1,    PIN(154), GPIO_INPUT)                    /* BOARD_ID0 */
-GPIO(NC_GPIO155,        PIN(155), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(TS_VDD_EN,         PIN(155), GPIO_OUT_LOW)                  /* Touch control Enable */
 GPIO(PWR_BTN_SELECT,    PIN(156), GPIO_ODR_HIGH)                 /* HIGH in clamshell mode and LOW in tablet mode */
 GPIO(PCH_SUSPWRDNACK,   PIN(157), GPIO_INT_FALLING)              /* PMC SUSPWRDNACK signal from SOC to EC */
 
@@ -103,7 +103,7 @@ GPIO(NC_GPIO163,        PIN(163), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(STARTUP_LATCH_SET, PIN(201), GPIO_INPUT)			/* Not used in BCRD2. Programmed as Input to fix EC power leakage in S3*/
 GPIO(EC_BL_DISABLE_L,   PIN(202), GPIO_OUT_HIGH)                 /* EDP backligh disable signal from EC */
 GPIO(SMC_SHUTDOWN,      PIN(203), GPIO_OUT_LOW)                  /* Shutdown signal from EC to power sequencing PLD */
-GPIO(NC_GPIO204,        PIN(204), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(TS_RST_L,          PIN(204), GPIO_OUT_LOW)                  /* Touch screen reset */
 
 GPIO(BAT_PRESENT_L,     PIN(210), GPIO_INPUT)                    /* HW battery detection signal from battery to EC */
 GPIO(GPIO_3_EC,         PIN(211), GPIO_OUT_LOW)                  /* Sleep SOIX signal from SOC to EC */
