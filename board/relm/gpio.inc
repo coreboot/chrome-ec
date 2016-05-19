@@ -107,6 +107,9 @@ GPIO(USBPD_BST_OFF,     PIN(204), GPIO_OUT_LOW)
 GPIO(BAT_PRESENT_L,    PIN(210), GPIO_INPUT)                     /* HW detection signal from battery to EC */
 GPIO(GPIO_3_EC,         PIN(211), GPIO_OUT_LOW)                  /* Sleep SOIX signal from SOC to EC */
 
+GPIO(BAT_LED_GREEN,	PIN(133), GPIO_OUT_HIGH)		/*LED color green*/
+GPIO(BAT_LED_AMBER,	PIN(136), GPIO_OUT_HIGH)		/*LED color amber*/
+
 /* Alternate functions GPIO definition */
 ALTERNATE(PIN_MASK(16, 0x24),   1,    MODULE_UART,            0)                    /* UART0 */
 
@@ -130,7 +133,6 @@ ALTERNATE(PIN_MASK(5,  0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(16, 0x10),   1,    MODULE_SPI,             0)
 ALTERNATE(PIN_MASK(15, 0x08),   1,    MODULE_SPI,             0)                     /* 153: CLK */
 
-ALTERNATE(PIN_MASK(13, 0x48),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 133: PWM0, 136: PWM1 */
 ALTERNATE(PIN_MASK(14, 0x02),   1,    MODULE_PWM_LED,         GPIO_OUTPUT)           /* 141: PWM3 */
 ALTERNATE(PIN_MASK(5,  0x40),   1,    MODULE_ADC,             0)                     /* 56: temperature sensor 1 */
 ALTERNATE(PIN_MASK(6,  0x05),   1,    MODULE_ADC,             0)                     /* 60: PC_MON, 62: temperature sensor 3 */
