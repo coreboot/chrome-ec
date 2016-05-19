@@ -15,14 +15,13 @@ GPIO_INT(RSMRST_L_PGOOD,    PIN(63),  GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PCH_SLP_S4_L,      PIN(200), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
 GPIO_INT(PCH_SLP_S3_L,      PIN(206), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
 GPIO_INT(PCH_SLP_SUS_L,     PIN(12),  GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
-GPIO_INT(VOLUME_UP_L,       PIN(31),  GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-GPIO_INT(VOLUME_DOWN_L,     PIN(47),  GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 GPIO_INT(PMIC_INT_L,        PIN(50),  GPIO_INT_FALLING, power_signal_interrupt)
 GPIO_INT(PD_MCU_INT,        PIN(122), GPIO_INT_FALLING, pd_mcu_interrupt)
 GPIO_INT(USB_C0_VBUS_WAKE_L,PIN(152), GPIO_INT_BOTH, vbus0_evt)
 GPIO_INT(USB_C1_VBUS_WAKE_L,PIN(123), GPIO_INT_BOTH, vbus1_evt)
-GPIO_INT(USB_C0_BC12_INT_L, PIN(124), GPIO_INT_FALLING, usb0_evt)
-GPIO_INT(USB_C1_BC12_INT_L, PIN(145), GPIO_INT_FALLING, usb1_evt)
+/* TODO: crosbug.com/p/53561: Re-add this interrupt for next board revision. */
+/* GPIO_INT(USB_C0_BC12_INT_L, PIN(124), GPIO_INT_FALLING, usb0_evt) */
+/* GPIO_INT(USB_C1_BC12_INT_L, PIN(145), GPIO_INT_FALLING, usb1_evt) */
 #ifdef CONFIG_LOW_POWER_IDLE
 GPIO_INT(UART0_RX,          PIN(162), GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP, uart_deepsleep_interrupt) /* UART0 RX input */
 #endif
@@ -42,11 +41,15 @@ GPIO(I2C0_1_SCL,            PIN(134), GPIO_INPUT)
 GPIO(I2C0_1_SDA,            PIN(17),  GPIO_INPUT)
 GPIO(I2C1_SCL,              PIN(22),  GPIO_INPUT)
 GPIO(I2C1_SDA,              PIN(23),  GPIO_INPUT)
-GPIO(I2C2_SCL,              PIN(20),  GPIO_INPUT)
-GPIO(I2C2_SDA,              PIN(21),  GPIO_INPUT)
+GPIO(NC_20,                 PIN(20),  GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_21,                 PIN(21),  GPIO_INPUT | GPIO_PULL_UP)
 GPIO(I2C3_SCL,              PIN(24),  GPIO_INPUT)
 GPIO(I2C3_SDA,              PIN(25),  GPIO_INPUT)
 GPIO(PCH_SCI_L,             PIN(26),  GPIO_ODR_HIGH)
+GPIO(NC_31,                 PIN(31),  GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_47,                 PIN(47),  GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_124,                PIN(124), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_145,                PIN(145), GPIO_INPUT | GPIO_PULL_UP)
 
 GPIO(USB1_ENABLE,           PIN(36),  GPIO_OUT_HIGH)
 GPIO(USB2_ENABLE,           PIN(67),  GPIO_OUT_HIGH)
@@ -64,10 +67,10 @@ GPIO(PCH_WAKE_L,            PIN(66),  GPIO_ODR_HIGH)
 GPIO(USB2_OTG_VBUSSENSE,    PIN(105), GPIO_OUT_LOW)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
-GPIO(LID_ACCEL_INT,         PIN(161), GPIO_INPUT | GPIO_PULL_DOWN)  /* Lid ACCEL sensor interrupt to EC */
-GPIO(GYRO_INT,              PIN(127), GPIO_INPUT | GPIO_PULL_DOWN)  /* Lid Gyro sensor interrupt to EC */
-GPIO(BASE_ACCEL_INT,        PIN(147), GPIO_INPUT | GPIO_PULL_DOWN)  /* Base ACCEL sensor interrupt to EC */
-GPIO(GYRO_DRDY,             PIN(133), GPIO_INPUT | GPIO_PULL_DOWN)  /* Lid Gyro sensor DRDY interrupt to EC */
+GPIO(NC_161,                PIN(161), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_127,                PIN(127), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(TRACKPAD_INT_L,        PIN(147), GPIO_INPUT)
+GPIO(NC_133,                PIN(133), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(WLAN_OFF_L,            PIN(132), GPIO_OUT_HIGH)
 /* RCIN# line to PCH for 8042 emulation */
 GPIO(PCH_RCIN_L,            PIN(135), GPIO_ODR_HIGH)
