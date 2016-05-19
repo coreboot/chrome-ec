@@ -25,6 +25,7 @@
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_LID_SWITCH
 #define CONFIG_LOW_POWER_IDLE
+#undef CONFIG_LOW_POWER_PSEUDO_G3 /* Not supported board ver4,5 */
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_EXTPOWER_GPIO
@@ -67,9 +68,6 @@
 #define CONFIG_LED_COMMON
 
 #define CONFIG_I2C
-
-/* Not going to P-G3/Hibernation */
-#undef CONFIG_HIBERNATE
 
 /* Wireless signals */
 #define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L

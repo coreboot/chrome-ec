@@ -10,6 +10,7 @@
 #include "button.h"
 #include "charger.h"
 #include "charge_state.h"
+#include "console.h"
 #include "driver/charger/bq24773.h"
 #include "driver/temp_sensor/ec_adc.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -25,6 +26,7 @@
 #include "pwm.h"
 #include "pwm_chip.h"
 #include "registers.h"
+#include "system.h"
 #include "temp_sensor.h"
 #include "temp_sensor_chip.h"
 #include "thermal.h"
@@ -75,6 +77,8 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_POWER_BUTTON_L,
+	GPIO_AC_PRESENT,
+	GPIO_LID_OPEN,
 };
 
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
@@ -114,3 +118,60 @@ static void adc_pre_init(void)
 	gpio_config_module(MODULE_ADC, 1);
 }
 DECLARE_HOOK(HOOK_INIT, adc_pre_init, HOOK_PRIO_INIT_ADC - 1);
+
+void board_hibernate(void)
+{
+	int i;
+	const uint32_t hibernate_pins[][2] = {
+		/*
+		 * In hibernate, this pin connected to 1.8V control
+		 * Making PU so that its domain should be in 3.3V
+		 */
+		{GPIO_EC_KBD_ALERT, GPIO_OUTPUT | GPIO_PULL_UP},
+		/*
+		 * This pin is cpu_core_pwrgd, with P3.3V_PRIME pull-up and pull down.
+		 * Assume hibernation wiil go into when PRIME is gone, just GND working
+		 */
+		{GPIO_EC_VNN_VCLK, GPIO_INPUT},
+
+		{GPIO_SMC_SHUTDOWN, GPIO_OUTPUT | GPIO_PULL_DOWN},
+	};
+
+	cflush();
+
+	/*
+	 * Board ID started from 100 to 101, cannot wake-up by AC from P-G3
+	 * The others 6,7,0,1,2,3 reserved for future can go pseudo G3
+	 */
+	if (system_get_board_version() != 4 && system_get_board_version() !=5) {
+		/* Entering pseudo G3 */
+		gpio_set_level(GPIO_EC_HIB_L, 1);
+		gpio_set_level(GPIO_SMC_SHUTDOWN, 1);
+
+		/* Power to EC should shut down now */
+		while (1)
+			;
+	}
+
+	/* Change GPIOs' state in hibernate for better power consumption */
+	for (i = 0; i < ARRAY_SIZE(hibernate_pins); ++i)
+		gpio_set_flags(hibernate_pins[i][0], hibernate_pins[i][1]);
+
+	/*
+	 * Some alternative pin will go floating when hibernating, which is usual case.
+	 * mec seems not to want handle it on their alternative enable/disable.
+	 * Dealing these pins as GPIO at hibernation and get more power benefit.
+	 */
+	/* UART : floating if servo is not connected */
+	gpio_config_module(MODULE_UART, 0);
+	gpio_set_flags_by_mask(16,0x24, GPIO_INPUT | GPIO_PULL_UP);
+
+	/* SPI : All pin have live external pull-up*/
+	gpio_config_module(MODULE_SPI, 0);
+
+	/* KSOs */
+	gpio_config_module(MODULE_KEYBOARD_SCAN, 0);
+	gpio_set_flags_by_mask(0,0xfc, GPIO_OUTPUT | GPIO_PULL_UP);
+	gpio_set_flags_by_mask(1,0x03, GPIO_OUTPUT | GPIO_PULL_UP);
+	gpio_set_flags_by_mask(10,0xd8, GPIO_OUTPUT | GPIO_PULL_UP);
+}

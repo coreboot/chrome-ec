@@ -239,7 +239,7 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 
 	/* Disable blocks */
 	MEC1322_PCR_CHIP_SLP_EN |= 0x3;
-	MEC1322_PCR_EC_SLP_EN |= MEC1322_PCR_EC_SLP_EN_SLEEP;
+	MEC1322_PCR_EC_SLP_EN |= 0xe0700ff7;
 	MEC1322_PCR_HOST_SLP_EN |= MEC1322_PCR_HOST_SLP_EN_SLEEP;
 	MEC1322_PCR_EC_SLP_EN2 |= MEC1322_PCR_EC_SLP_EN2_SLEEP;
 	MEC1322_PCR_SLOW_CLK_CTL &= 0xfffffc00;
@@ -297,7 +297,7 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 		} else {
 			MEC1322_HTIMER_CONTROL = 0;
 			MEC1322_HTIMER_PRELOAD =
-				(seconds * 1000000 + microseconds) * 2 / 71;
+				(seconds * 1000000 + microseconds) * 2 / 61;
 		}
 	}
 
