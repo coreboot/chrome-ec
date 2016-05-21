@@ -54,6 +54,25 @@ static void usb_charge_set_control_mode(int port_id, int mode)
 #endif
 }
 
+static int usb_charge_is_enabled(int port_id)
+{
+	int en;
+	ASSERT(port_id < CONFIG_USB_PORT_POWER_SMART_PORT_COUNT);
+#if CONFIG_USB_PORT_POWER_SMART_PORT_COUNT >= 1
+	if (port_id == 0)
+		en = gpio_get_level(GPIO_USB1_ENABLE);
+#endif
+#if CONFIG_USB_PORT_POWER_SMART_PORT_COUNT >= 2
+	if (port_id == 1)
+		en = gpio_get_level(GPIO_USB2_ENABLE);
+#endif
+#if CONFIG_USB_PORT_POWER_SMART_PORT_COUNT >= 3
+	if (port_id == 2)
+		en = gpio_get_level(GPIO_USB3_ENABLE);
+#endif
+	return en;
+}
+
 static void usb_charge_set_enabled(int port_id, int en)
 {
 	ASSERT(port_id < CONFIG_USB_PORT_POWER_SMART_PORT_COUNT);
@@ -95,8 +114,14 @@ static void usb_charge_all_ports_ctrl(enum usb_charge_mode mode)
 {
 	int i;
 
-	for (i = 0; i < CONFIG_USB_PORT_POWER_SMART_PORT_COUNT; i++)
+	for (i = 0; i < CONFIG_USB_PORT_POWER_SMART_PORT_COUNT; i++) {
+#ifdef CONFIG_USB_PORT_POWER_ENABLE_DELAY
+		if (i != 0 && !usb_charge_is_enabled(i) &&
+		    mode != USB_CHARGE_MODE_DISABLED)
+			msleep(20);
+#endif
 		usb_charge_set_mode(i, mode);
+	}
 }
 
 int usb_charge_ports_enabled(void)

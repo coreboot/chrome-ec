@@ -1731,6 +1731,13 @@
  */
 #undef CONFIG_USB_PORT_POWER_SMART_INVERTED
 
+/*
+ * USB power enable may cause +VBATT drop if system boot without battery.
+ * Enable one USB port power, delay for a while and then enable another port
+ * can reduce the drop.
+ */
+#undef CONFIG_USB_PORT_POWER_ENABLE_DELAY
+
 /******************************************************************************/
 /* USB port switch */
 
