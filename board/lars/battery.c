@@ -250,7 +250,7 @@ enum battery_present battery_is_present(void)
 
 	if (batt_pres == BP_YES &&
 		can_battery_provide_power(batt_inserted) == UNABLE)
-			batt_pres = BP_NO;
+			batt_pres = BP_NOT_SURE;
 
 	return batt_pres;
 }
