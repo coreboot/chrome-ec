@@ -463,6 +463,9 @@
  */
 #undef CONFIG_CHARGER_TIMEOUT_HOURS
 
+/* Maximum time to wake a non-responsive battery, in second */
+#define CONFIG_PRECHARGE_TIMEOUT 30
+
 /*
  * Board has an GPIO pin to enable or disable charging.
  *

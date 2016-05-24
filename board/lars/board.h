@@ -69,6 +69,10 @@
 #define CONFIG_POWER_S0IX
 #define CONFIG_PWM
 #define CONFIG_PWM_KBLIGHT
+
+#undef CONFIG_PRECHARGE_TIMEOUT
+#define CONFIG_PRECHARGE_TIMEOUT 300
+
 /* All data won't fit in data RAM.  So, moving boundary slightly. */
 #undef CONFIG_RO_SIZE
 #define CONFIG_RO_SIZE (104 * 1024)
