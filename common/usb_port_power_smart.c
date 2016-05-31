@@ -54,6 +54,7 @@ static void usb_charge_set_control_mode(int port_id, int mode)
 #endif
 }
 
+#ifdef CONFIG_USB_PORT_POWER_ENABLE_DELAY
 static int usb_charge_is_enabled(int port_id)
 {
 	int en;
@@ -72,6 +73,7 @@ static int usb_charge_is_enabled(int port_id)
 #endif
 	return en;
 }
+#endif
 
 static void usb_charge_set_enabled(int port_id, int en)
 {
