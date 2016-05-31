@@ -52,6 +52,7 @@ GPIO(ENTERING_RW,       PIN(41), GPIO_OUT_LOW)                  /* Indicate when
 GPIO(PCH_SMI_L,         PIN(44), GPIO_ODR_HIGH)                 /* SMI output */
 GPIO(USB_OC1_L,         PIN(45), GPIO_INT_FALLING)              /* DB2 BC1.2 over current signal to EC */
 GPIO(NC_GPIO46,         PIN(46), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
+GPIO(NC_GPIO47,         PIN(47), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
 GPIO(NC_GPIO50,         PIN(50), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(PCH_SUS_STAT_L,    PIN(51), GPIO_INT_FALLING)              /* Signal to inform EC that SOC is entering low power state */
