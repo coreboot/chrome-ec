@@ -12,17 +12,31 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "led_common.h"
-#include "pwm.h"
 #include "registers.h"
 #include "util.h"
 
-#define CPRINTF(format, args...) cprintf(CC_PWM, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_PWM, format, ## args)
+/*
+ *  * ----------------- The LEDs behavior of umaro -----------------
+ *  * Power status | the behavior of AC and Battery    |   red amber green
+ *  * Power On     | Adapter in, no battery            |   red
+ *  *              | Adapter in，battery charging      |   amber
+ *  *              | Adapter in，battery full charge   |   green
+ *  *              | Only battery，capacity above 5%   |   green
+ *  *              | Only battery，capacity below 5%   |   amber blink
+ *  * Power Off    | Adapter in, no battery            |   red
+ *  *              | Adapter in，battery charging      |   amber
+ *  *              | Adapter in，battery full charge   |   green
+ *  *              | Only battery，capacity above 5%   |   off
+ *  *              | Only battery，capacity below 5%   |   off
+ *  * Suspend      | Adapter in, no battery            |   red
+ *  *              | Adapter in，battery charging      |   amber
+ *  *              | Adapter in，battery full chargee  |   green
+ *  *              | Only battery，capacity above 5%   |   amber blink
+ *  *              | Only battery，capacity below 5%   |   amber blink
+ *  */
 
 #define LED_TOTAL_TICKS 16
 #define LED_ON_TICKS 4
-
-static int led_debug;
 
 const enum ec_led_id supported_led_ids[] = {
 	EC_LED_ID_POWER_LED, EC_LED_ID_BATTERY_LED};
@@ -38,39 +52,73 @@ enum led_color {
 	LED_COLOR_COUNT
 };
 
-/* Brightness vs. color, in the order of off, red, amber, and green */
-static const uint8_t color_brightness[LED_COLOR_COUNT][3] = {
-	/* {Red, Blue, Green}, */
-	[LED_OFF]   = {  0,   0,   0},
-	[LED_RED]   = {100,   0,   0},
-	[LED_AMBER] = { 75,   0,  10},
-	[LED_GREEN] = {  0,   0, 100},
-};
-
 /**
  * Set LED color
  *
  * @param color		Enumerated color value
  */
-static void set_color(enum led_color color)
+static int set_color(enum led_color color)
 {
-	pwm_set_duty(PWM_CH_LED_RED, color_brightness[color][0]);
-	pwm_set_duty(PWM_CH_LED_BLUE, color_brightness[color][1]);
-	pwm_set_duty(PWM_CH_LED_GREEN, color_brightness[color][2]);
+	switch (color) {
+	case LED_OFF:
+		gpio_set_level(GPIO_LED_RED, 1);
+		gpio_set_level(GPIO_LED_AMBER, 1);
+		gpio_set_level(GPIO_LED_GREEN, 1);
+		break;
+	case LED_RED:
+		gpio_set_level(GPIO_LED_RED, 0);
+		gpio_set_level(GPIO_LED_AMBER, 1);
+		gpio_set_level(GPIO_LED_GREEN, 1);
+		break;
+	case LED_AMBER:
+		gpio_set_level(GPIO_LED_RED, 1);
+		gpio_set_level(GPIO_LED_AMBER, 0);
+		gpio_set_level(GPIO_LED_GREEN, 1);
+		break;
+	case LED_GREEN:
+		gpio_set_level(GPIO_LED_RED, 1);
+		gpio_set_level(GPIO_LED_AMBER, 1);
+		gpio_set_level(GPIO_LED_GREEN, 0);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
 }
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
-	brightness_range[EC_LED_COLOR_RED] = 100;
-	brightness_range[EC_LED_COLOR_BLUE] = 100;
-	brightness_range[EC_LED_COLOR_GREEN] = 100;
+	brightness_range[EC_LED_COLOR_RED] = 1;
+	brightness_range[EC_LED_COLOR_YELLOW] = 1;
+	brightness_range[EC_LED_COLOR_GREEN] = 1;
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	pwm_set_duty(PWM_CH_LED_RED, brightness[EC_LED_COLOR_RED]);
-	pwm_set_duty(PWM_CH_LED_BLUE, brightness[EC_LED_COLOR_BLUE]);
-	pwm_set_duty(PWM_CH_LED_GREEN, brightness[EC_LED_COLOR_GREEN]);
+	switch (led_id) {
+	case EC_LED_ID_BATTERY_LED:
+		if (brightness[EC_LED_COLOR_RED] != 0)
+			set_color(LED_RED);
+		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
+			set_color(LED_AMBER);
+		else if (brightness[EC_LED_COLOR_GREEN] != 0)
+			set_color(LED_GREEN);
+		else
+			set_color(LED_OFF);
+		break;
+	case EC_LED_ID_POWER_LED:
+		if (brightness[EC_LED_COLOR_RED] != 0)
+			set_color(LED_RED);
+		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
+			set_color(LED_AMBER);
+		else if (brightness[EC_LED_COLOR_GREEN] != 0)
+			set_color(LED_GREEN);
+		else
+			set_color(LED_OFF);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
 	return EC_SUCCESS;
 }
 
@@ -100,8 +148,14 @@ static void umaro_led_set_power(void)
 
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		set_color(LED_OFF);
-	else if (chipset_in_state(CHIPSET_STATE_ON))
-		set_color(LED_GREEN);
+	else if (chipset_in_state(CHIPSET_STATE_ON)) {
+			if (charge_get_percent() < 5)
+				set_color(
+					(power_ticks % LED_TOTAL_TICKS) < LED_ON_TICKS ?
+					LED_AMBER : LED_OFF);
+			else
+				set_color(LED_GREEN);
+	}
 }
 
 static void umaro_led_set_battery(void)
@@ -129,17 +183,6 @@ static void umaro_led_set_battery(void)
 
 static void led_init(void)
 {
-	/* Configure GPIOs */
-	gpio_config_module(MODULE_PWM_LED, 1);
-
-	/*
-	 * Enable PWMs and set to 0% duty cycle.  If they're disabled,
-	 * seems to ground the pins instead of letting them float.
-	 */
-	pwm_enable(PWM_CH_LED_RED, 1);
-	pwm_enable(PWM_CH_LED_GREEN, 1);
-	pwm_enable(PWM_CH_LED_BLUE, 1);
-
 	set_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
@@ -149,9 +192,6 @@ DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
  */
 static void led_tick(void)
 {
-	if (led_debug)
-		return;
-
 	if (extpower_is_present()) {
 		if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
 			umaro_led_set_battery();
@@ -166,26 +206,12 @@ static void led_tick(void)
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
 
-static void dump_pwm_channels(void)
-{
-	int ch;
-	for (ch = 0; ch < 4; ch++) {
-		CPRINTF("channel = %d\n", ch);
-		CPRINTF("0x%04X 0x%04X 0x%04X\n",
-			MEC1322_PWM_CFG(ch),
-			MEC1322_PWM_ON(ch),
-			MEC1322_PWM_OFF(ch));
-	}
-}
 /******************************************************************/
 /* Console commands */
 static int command_led_color(int argc, char **argv)
 {
 	if (argc > 1) {
-		if (!strcasecmp(argv[1], "debug")) {
-			led_debug ^= 1;
-			CPRINTF("led_debug = %d\n", led_debug);
-		} else if (!strcasecmp(argv[1], "off")) {
+		if (!strcasecmp(argv[1], "off")) {
 			set_color(LED_OFF);
 		} else if (!strcasecmp(argv[1], "red")) {
 			set_color(LED_RED);
@@ -198,13 +224,10 @@ static int command_led_color(int argc, char **argv)
 			return EC_ERROR_PARAM1;
 		}
 	}
-
-	if (led_debug == 1)
-		dump_pwm_channels();
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(ledcolor, command_led_color,
-			"[debug|red|green|amber|off]",
+			"[red|green|amber|off]",
 			"Change LED color",
 			NULL);
 
