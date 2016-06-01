@@ -335,9 +335,9 @@ static int svdm_dp_attention(int port, uint32_t *payload)
 	} else if (irq & !cur_lvl) {
 		CPRINTF("ERR:HPD:IRQ&LOW\n");
 		return 0; /* nak */
+	} else {
+		gpio_set_level(hpd, lvl);
 	}
-
-	gpio_set_level(hpd, lvl);
 	/* ack */
 	return 1;
 }
