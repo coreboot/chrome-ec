@@ -206,28 +206,24 @@ static int can_battery_provide_power(enum battery_type type)
 
 	rv = sb_read(SB_MANUFACTURER_ACCESS, &batt_discharge_fet);
 
-	if (rv != EC_SUCCESS && type != UNKNOWN)
+	if (rv != EC_SUCCESS)
 		return UNABLE;
 
 	switch (type) {
 	case SONY:
-		if (batt_discharge_fet & SONY_DISCHARGE_FET_BIT)
-			return UNABLE;
+		if (!(batt_discharge_fet & SONY_DISCHARGE_FET_BIT))
+			return ABLE;
 		break;
 	case SANYO:
-		if (!(batt_discharge_fet & SANYO_DISCHARGE_FET_BIT))
-			return UNABLE;
-		break;
-	case UNKNOWN:
-		/* give battery a chance to precharge
-		   to enable I2C communication */
+		if (batt_discharge_fet & SANYO_DISCHARGE_FET_BIT)
+			return ABLE;
 		break;
 	default:
 		/* see enum battery_type */
 		return UNABLE;
 	}
 
-	return ABLE;
+	return UNABLE;
 }
 
 enum battery_present battery_is_present(void)
