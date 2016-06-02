@@ -10,7 +10,6 @@
 #include "charger.h"
 #include "charge_state.h"
 #include "driver/accel_kxcj9.h"
-#include "driver/als_isl29035.h"
 #include "driver/gyro_l3gd20h.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
@@ -60,10 +59,6 @@ BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 const struct i2c_port_t i2c_ports[]  = {
 	{"batt_chg", MEC1322_I2C0_0, 100,
 		GPIO_I2C_PORT0_0_SCL, GPIO_I2C_PORT0_0_SDA},
-	{"muxes", MEC1322_I2C0_1, 100,
-		GPIO_I2C_PORT0_1_SCL, GPIO_I2C_PORT0_1_SDA},
-	{"pd_mcu", MEC1322_I2C1, 1000,
-		GPIO_I2C_PORT1_SCL, GPIO_I2C_PORT1_SDA},
 	{"sensors", MEC1322_I2C2, 100,
 		GPIO_I2C_PORT2_SCL, GPIO_I2C_PORT2_SDA},
 	{"thermal", MEC1322_I2C3, 100,
@@ -93,12 +88,6 @@ const struct temp_sensor_t temp_sensors[] = {
 		0, 4},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-/* ALS instances. Must be in same order as enum als_id. */
-struct als_t als[] = {
-	{"ISL", isl29035_read_lux, 5},
-};
-BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
 
 /* Thermal limits for each temp sensor. All temps are in degrees K. Must be in
  * same order as enum temp_sensor_id. To always ignore any temp, use 0.
