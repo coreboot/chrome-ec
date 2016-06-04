@@ -39,13 +39,9 @@
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
 #define GPIO_KB_OUTPUT (GPIO_ODR_HIGH)
 #define GPIO_KB_OUTPUT_COL2 (GPIO_OUT_LOW)
-#define CHARGER_TIMEOUT_SEC 36000
 
 #include "gpio_list.h"
 
-static int prev_stats;
-static int charge_timeout_secs;
-int state_charger_timeout;
 
 /* Console output macros */
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
@@ -294,28 +290,6 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, touch_screen_set_control_mode,
 	HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_set_control_mode,
 	HOOK_PRIO_DEFAULT);
-
-/* Called by hook task every 1 sec  */
-void check_charger_timeout_second(void)
-{
-	if (charge_get_state() != prev_stats) {
-		if (charge_get_state() == PWR_STATE_CHARGE)
-			charge_timeout_secs = CHARGER_TIMEOUT_SEC;
-		prev_stats = charge_get_state();
-	}
-	if (charge_get_state() == PWR_STATE_CHARGE) {
-		charge_timeout_secs--;
-		if (charge_timeout_secs == 0) {
-			state_charger_timeout = 1;
-			charge_set_input_current_limit(128);
-			CPRINTS("Charge timed out after %d hours",
-				(CHARGER_TIMEOUT_SEC / 3600));
-		}
-	} else {
-		state_charger_timeout = 0;
-	}
-}
-DECLARE_HOOK(HOOK_SECOND, check_charger_timeout_second, HOOK_PRIO_DEFAULT);
 
 void board_rtc_reset(void)
 {

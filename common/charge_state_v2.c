@@ -782,6 +782,7 @@ void charger_task(void)
 			curr.state = ST_CHARGE;
 		}
 
+wait_for_it:
 		/*
 		 * TODO(crosbug.com/p/27643): Quit trying if charging too long
 		 * without getting full (CONFIG_CHARGER_TIMEOUT_HOURS).
@@ -800,7 +801,6 @@ void charger_task(void)
 		state_machine_force_idle = 1;
 #endif
 
-wait_for_it:
 #ifdef CONFIG_CHARGER_PROFILE_OVERRIDE
 		sleep_usec = charger_profile_override(&curr);
 		if (sleep_usec < 0)

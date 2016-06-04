@@ -178,9 +178,6 @@ static void setzer_led_set_battery(void)
 		 */
 		if (charge_get_battery_percent() >= 94)
 			bat_led_set_color(LED_WHITE);
-		else if (state_charger_timeout)
-			bat_led_set_color((battery_ticks & 0x2) ? LED_WHITE :
-				LED_OFF);
 		else
 			bat_led_set_color(LED_AMBER);
 		break;
