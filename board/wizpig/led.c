@@ -21,20 +21,20 @@
  * ----------------------- The LEDs behavior of wizpig ------------------------
  * Power status | the behavior of AC and Battery   |   red orange green purple
  * Power On     | Adapter in, no battery           |   red
- *              | Adapter in，battery charging      |   orange
- *              | Adapter in，battery full charge   |   green
- *              | Only battery，capacity above 10%  |   green
- *              | Only battery，capacity below 10%  |   red blink
+ *              | Adapter in,battery charging      |   orange
+ *              | Adapter in,battery full charge   |   green
+ *              | Only battery,capacity above 10%  |   green
+ *              | Only battery,capacity below 10%  |   red blink
  * Power Off    | Adapter in, no battery           |   red
- *              | Adapter in，battery charging      |   orange
- *              | Adapter in，battery full charge   |   green
- *              | Only battery，capacity above 10%  |   off
- *              | Only battery，capacity below 10%  |   off
+ *              | Adapter in,battery charging      |   orange
+ *              | Adapter in,battery full charge   |   green
+ *              | Only battery,capacity above 10%  |   off
+ *              | Only battery,capacity below 10%  |   off
  * Suspend      | Adapter in, no battery           |   red
- *              | Adapter in，battery charging      |   orange blink
- *              | Adapter in，battery full chargee  |   green
- *              | Only battery，capacity above 10%  |   green blink
- *              | Only battery，capacity below 10%  |   red blink
+ *              | Adapter in,battery charging      |   orange blink
+ *              | Adapter in,battery full chargee  |   green
+ *              | Only battery,capacity above 10%  |   green blink
+ *              | Only battery,capacity below 10%  |   red blink
  */
 
 
@@ -110,7 +110,8 @@ static void wizpig_led_set_battery_poweron(void)
 		bat_led_set_color(LED_ORANGE);
 		break;
 	case PWR_STATE_DISCHARGE:
-		if (charge_get_percent() < 10)
+		/* charge_get_percent=13, display_percentage is about 10 */
+		if (charge_get_percent() < 14)
 			bat_led_set_color((battery_second & 0x1)
 					? LED_OFF : LED_RED);
 		else
@@ -157,7 +158,8 @@ static void wizpig_led_set_battery_suspend(void)
 					? LED_OFF : LED_ORANGE);
 		break;
 	case PWR_STATE_DISCHARGE:
-		if (charge_get_percent() < 10)
+		/* charge_get_percent=13, display_percentage is about 10 */
+		if (charge_get_percent() < 14)
 			bat_led_set_color((battery_second & 0x1)
 					? LED_OFF : LED_RED);
 		else
