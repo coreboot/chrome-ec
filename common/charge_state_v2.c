@@ -588,7 +588,6 @@ void charger_task(void)
 	const struct charger_info * const info = charger_get_info();
 #ifdef CONFIG_CHARGER_TIMEOUT_HOURS
 	timestamp_t deadline;
-	int was_discharging = 1;
 #endif
 
 	/* Get the battery-specific values */
@@ -810,25 +809,28 @@ void charger_task(void)
 			curr.state = ST_CHARGE;
 		}
 
+wait_for_it:
 		/*
 		 * TODO(crosbug.com/p/27643): Quit trying if charging too long
 		 * without getting full (CONFIG_CHARGER_TIMEOUT_HOURS).
 		 */
 #ifdef CONFIG_CHARGER_TIMEOUT_HOURS
-	if (curr.state == ST_DISCHARGE) {
-		was_discharging = 1;
-	} else if (was_discharging &&
-		(curr.state == ST_CHARGE || curr.state == ST_PRECHARGE)) {
-		was_discharging = 0;
-		deadline = get_time();
-		deadline.val += CONFIG_CHARGER_TIMEOUT_HOURS * HOUR;
-	}
-
-	if ((was_discharging == 0) && timestamp_expired(deadline, NULL))
-		state_machine_force_idle = 1;
+		if (curr.state == ST_DISCHARGE || calc_is_full()) {
+			deadline.val = 0;
+		} else if ((curr.state == ST_CHARGE ||
+			    curr.state == ST_PRECHARGE) &&
+			   (deadline.val == 0)) {
+			/* must be !calc_is_full() */
+			deadline = get_time();
+			deadline.val += CONFIG_CHARGER_TIMEOUT_HOURS * HOUR;
+		} else if ((curr.state == ST_CHARGE ||
+			    curr.state == ST_PRECHARGE) &&
+			   timestamp_expired(deadline, NULL)) {
+			/* must be !calc_is_full() && deadline.val != 0 */
+			state_machine_force_idle = 1;
+			battery_seems_to_be_dead = 1;
+		}
 #endif
-
-wait_for_it:
 #ifdef CONFIG_CHARGER_PROFILE_OVERRIDE
 		sleep_usec = charger_profile_override(&curr);
 		if (sleep_usec < 0)
