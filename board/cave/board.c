@@ -514,10 +514,14 @@ const matrix_3x3_t rot_lid_accel = {
 
 struct motion_sensor_t motion_sensors[] = {
 	/*
-	 * Note: bmi160: supports accelerometer and gyro sensor
-	 * Requirement: accelerometer sensor must init before gyro sensor
-	 * DO NOT change the order of the following table.
+	 * Requirement: all accelerometer sensors must init before gyro sensor
+	 * Currently, at most 2 accelerometer and 1 gyro sensors are supported.
+	 * DO NOT change the order of the following table because the shared
+	 * memory addresses are fixed. Changing the order will cause kernel
+	 * driver read wrong data.
 	 */
+
+	/* Note: bmi160: supports accelerometer and gyro sensor */
 	{.name = "Base Accel",
 	 .active_mask = SENSOR_ACTIVE_S0,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
@@ -553,41 +557,6 @@ struct motion_sensor_t motion_sensors[] = {
 	 },
 	},
 
-	{.name = "Base Gyro",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
-	 .type = MOTIONSENSE_TYPE_GYRO,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmi160_drv,
-	 .mutex = &g_base_mutex,
-	 .drv_data = &g_bmi160_data,
-	 .addr = BMI160_ADDR0,
-	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = NULL,
-	 .config = {
-		 /* AP: by default shutdown all sensors */
-		 [SENSOR_CONFIG_AP] = {
-			 .odr = 0,
-			 .ec_rate = 0,
-		 },
-		 /* EC does not need in S0 */
-		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 0,
-			 .ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S3] = {
-			 .odr = 0,
-			 .ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S5] = {
-			 .odr = 0,
-			 .ec_rate = 0,
-		 },
-	 },
-	},
-
 	{.name = "Lid Accel",
 	 .active_mask = SENSOR_ACTIVE_S0,
 	 .chip = MOTIONSENSE_CHIP_KX022,
@@ -619,6 +588,42 @@ struct motion_sensor_t motion_sensors[] = {
 			.odr = 0,
 			.ec_rate = 0,
 		},
+	 },
+	},
+
+	/* Note: bmi160: supports accelerometer and gyro sensor */
+	{.name = "Base Gyro",
+	 .active_mask = SENSOR_ACTIVE_S0,
+	 .chip = MOTIONSENSE_CHIP_BMI160,
+	 .type = MOTIONSENSE_TYPE_GYRO,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &bmi160_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_bmi160_data,
+	 .addr = BMI160_ADDR0,
+	 .default_range = 1000, /* dps */
+	 .rot_standard_ref = NULL,
+	 .config = {
+		 /* AP: by default shutdown all sensors */
+		 [SENSOR_CONFIG_AP] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* EC does not need in S0 */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = 1600000 | ROUND_UP_FLAG,
+			 .ec_rate = 100 * MSEC,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S5] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
 	 },
 	},
 };
