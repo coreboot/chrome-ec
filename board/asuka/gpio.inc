@@ -100,11 +100,11 @@ GPIO(BOARD_VERSION2,        PIN(7),   GPIO_INPUT)
 GPIO(BOARD_VERSION3,        PIN(10),  GPIO_INPUT)
 GPIO(PVT_CS0,               PIN(146), GPIO_ODR_HIGH)
 GPIO(SYS_RESET_L,           PIN(121), GPIO_ODR_HIGH)
-GPIO(KBD_KSO2,              PIN(101),  GPIO_KB_OUTPUT_COL2)    /* Negative edge triggered irq. */
+GPIO(KBD_KSO2,              PIN(101), GPIO_KB_OUTPUT_COL2)    /* Negative edge triggered irq. */
 
 GPIO(NC_150,                PIN(150), GPIO_INPUT | GPIO_PULL_UP)
-GPIO(CHARGE_LED1,           PIN(155), GPIO_OUT_LOW)
-GPIO(CHARGE_LED2,           PIN(156), GPIO_OUT_LOW)
+GPIO(CHARGE_LED1,           PIN(155), GPIO_OUT_HIGH)
+GPIO(CHARGE_LED2,           PIN(156), GPIO_OUT_HIGH)
 
 /* Alternate functions GPIO definitions */
 
