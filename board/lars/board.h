@@ -108,6 +108,7 @@
 
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
+#define CONFIG_THROTTLE_AP
 
 /*
  * Enable 1 slot of secure temporary storage to support
