@@ -32,32 +32,25 @@ const enum ec_led_id supported_led_ids[] = {
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-static int asuka_led_set_gpio(enum led_color color,
-			     enum gpio_signal gpio_led_white_l,
-			     enum gpio_signal gpio_led_amber_l)
+static int asuka_led_set_color_battery(enum led_color color)
 {
 	switch (color) {
 	case LED_OFF:
-		gpio_set_level(gpio_led_white_l, 1);
-		gpio_set_level(gpio_led_amber_l, 1);
+		gpio_set_level(GPIO_CHARGE_LED_WHITE_L, 1);
+		gpio_set_level(GPIO_CHARGE_LED_AMBER_L, 1);
 		break;
 	case LED_WHITE:
-		gpio_set_level(gpio_led_white_l, 0);
-		gpio_set_level(gpio_led_amber_l, 1);
+		gpio_set_level(GPIO_CHARGE_LED_WHITE_L, 0);
+		gpio_set_level(GPIO_CHARGE_LED_AMBER_L, 1);
 		break;
 	case LED_AMBER:
-		gpio_set_level(gpio_led_white_l, 1);
-		gpio_set_level(gpio_led_amber_l, 0);
+		gpio_set_level(GPIO_CHARGE_LED_WHITE_L, 1);
+		gpio_set_level(GPIO_CHARGE_LED_AMBER_L, 0);
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;
 	}
 	return EC_SUCCESS;
-}
-
-static int asuka_led_set_color_battery(enum led_color color)
-{
-	return asuka_led_set_gpio(color, GPIO_CHARGE_LED1, GPIO_CHARGE_LED2);
 }
 
 static int asuka_led_set_color(enum ec_led_id led_id, enum led_color color)
