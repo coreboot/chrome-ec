@@ -77,9 +77,6 @@
 /* slave address for host commands */
 #define CONFIG_HOSTCMD_I2C_SLAVE_ADDR 0x3c
 
-/* Allow dangerous commands */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* No Write-protect GPIO, force the write-protection */
 #define CONFIG_WP_ALWAYS
 
