@@ -80,8 +80,10 @@ GPIO(GYRO_INT2,         PIN(127), GPIO_INPUT | GPIO_PULL_DOWN)   /* Gyro sensor 
 
 GPIO(NC_GPIO132,        PIN(132), GPIO_INPUT | GPIO_PULL_UP)	 /* NC */
 GPIO(NC_GPIO135,        PIN(135), GPIO_INPUT | GPIO_PULL_UP)	 /* NC */
+GPIO(BAT_LED_AMBER,     PIN(136), GPIO_OUT_HIGH)	         /* LED color is amber */
 
 GPIO(NC_GPIO140,        PIN(140), GPIO_INPUT | GPIO_PULL_UP)	 /* NC */
+GPIO(BAT_LED_WHITE,     PIN(141), GPIO_OUT_HIGH)	         /* LED color is white */
 GPIO(PCH_RSMRST_L,      PIN(143), GPIO_OUT_LOW)                  /* RSMRST_N to PCH */
 GPIO(EC_KBD_ALERT,      PIN(145), GPIO_OUT_LOW)                  /* EC_KBD_ALERT */
 GPIO(PVT_CS0,           PIN(146), GPIO_ODR_HIGH)                 /* SPI PVT Chip select */
