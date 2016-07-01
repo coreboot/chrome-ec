@@ -138,10 +138,6 @@
 #undef DEFERRABLE_MAX_COUNT
 #define DEFERRABLE_MAX_COUNT 17
 
-#define CONFIG_ALS
-#define CONFIG_ALS_OPT3001
-#define OPT3001_I2C_ADDR OPT3001_I2C_ADDR1
-
 /* Accelerometer */
 #ifdef HAS_TASK_MOTIONSENSE
 #define CONFIG_ACCEL_KXCJ9
@@ -203,13 +199,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,
 
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_OPT3001 = 0,
-
-	ALS_COUNT,
 };
 
 /* start as a sink in case we have no other power supply/battery */

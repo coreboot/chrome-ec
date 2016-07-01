@@ -5,7 +5,6 @@
 /* Skylake Chrome Reference Design board-specific configuration */
 #include "adc.h"
 #include "adc_chip.h"
-#include "als.h"
 #include "battery.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -14,7 +13,6 @@
 #include "console.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kxcj9.h"
-#include "driver/als_opt3001.h"
 #include "driver/gyro_l3gd20h.h"
 #include "driver/pmic_tps650830.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -364,12 +362,6 @@ struct ec_thermal_config thermal_params[] = {
 	{{0, 0, 0}, 0, 0},	/* Battery */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
-
-/* ALS instances. Must be in same order as enum als_id. */
-struct als_t als[] = {
-	{"TI", opt3001_init, opt3001_read_lux, 5},
-};
-BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
 
 /* Initialize PMIC */
 #define I2C_PMIC_READ(reg, data) \
