@@ -143,6 +143,9 @@
 		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_KEY_PRESSED) |\
 		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_RTC))
 
+/* Define to report hardware button event as keyboard event */
+#define HAS_HW_BUTTON_KEY
+
 #ifndef __ASSEMBLER__
 
 enum adc_channel {

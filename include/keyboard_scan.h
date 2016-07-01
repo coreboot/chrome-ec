@@ -105,4 +105,8 @@ static inline void keyboard_scan_enable(int enable,
 void keyboard_suppress_noise(void);
 #endif
 
+#ifdef HAS_HW_BUTTON_KEY
+test_mockable void report_hw_button_key(int type, int pressed);
+#endif
+
 #endif  /* __CROS_EC_KEYBOARD_SCAN_H */

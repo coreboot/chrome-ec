@@ -203,6 +203,24 @@ static void simulate_key(int row, int col, int pressed)
 	ensure_keyboard_scanned(kbd_polls);
 }
 
+#ifdef HAS_HW_BUTTON_KEY
+/**
+ * Report hardware button key as key scan code
+ * @param type		button type
+ * @param pressed 	key pressed[0] or released[1]
+ */
+test_mockable void report_hw_button_key(int type, int pressed)
+{
+	if( type == KEYBOARD_BUTTON_VOLUME_UP ) {
+		simulate_key(KEYBOARD_VOLUME_UP_ROW, KEYBOARD_VOLUME_UP_COL, pressed);
+	} else if ( type == KEYBOARD_BUTTON_VOLUME_DOWN ) {
+		simulate_key(KEYBOARD_VOLUME_DOWN_ROW, KEYBOARD_VOLUME_DOWN_COL, pressed);
+	} else {
+		CPRINTF("Not handled");
+	}
+}
+#endif
+
 /**
  * Read the raw keyboard matrix state.
  *

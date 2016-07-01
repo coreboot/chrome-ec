@@ -11,6 +11,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "keyboard_protocol.h"
+#include "keyboard_scan.h"
 #include "timer.h"
 #include "util.h"
 
@@ -81,6 +82,9 @@ static void button_change_deferred(void)
 				CPRINTS("Button '%s' was %s",
 					buttons[i].name, new_pressed ?
 					"pressed" : "released");
+#ifdef HAS_HW_BUTTON_KEY
+				report_hw_button_key(buttons[i].type, new_pressed);
+#endif
 #ifdef HAS_TASK_KEYPROTO
 				keyboard_update_button(buttons[i].type,
 					new_pressed);
