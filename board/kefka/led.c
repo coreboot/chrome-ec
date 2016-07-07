@@ -82,7 +82,7 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
 		if (brightness[EC_LED_COLOR_WHITE] != 0)
 			kefka_led_set_color(led_id, LED_WHITE);
-		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
+		else if (brightness[EC_LED_COLOR_AMBER] != 0)
 			kefka_led_set_color(led_id, LED_AMBER);
 		else
 			kefka_led_set_color(led_id, LED_OFF);
@@ -95,7 +95,7 @@ void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 
 	/* Ignoring led_id as both leds support the same colors */
 	brightness_range[EC_LED_COLOR_WHITE] = 1;
-	brightness_range[EC_LED_COLOR_YELLOW] = 1;
+	brightness_range[EC_LED_COLOR_AMBER] = 1;
 
 }
 
