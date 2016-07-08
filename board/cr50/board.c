@@ -223,7 +223,7 @@ void sys_rst_asserted(enum gpio_signal signal)
 		return;
 
 	cflush();
-	system_reset(SYSTEM_RESET_HARD);
+	system_reset(0);
 }
 
 void nvmem_compute_sha(uint8_t *p_buf, int num_bytes,
