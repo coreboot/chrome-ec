@@ -6,7 +6,6 @@
  */
 
 #include "atomic.h"
-#include "button.h"
 #include "chipset.h"
 #include "console.h"
 #include "gpio.h"
@@ -157,40 +156,6 @@ kb_fifo_push_done:
 	}
 
 	return ret;
-}
-
-void mkbp_update_button(enum keyboard_button_type button, int is_pressed)
-{
-	struct mkbp_btn_data d;
-	static uint8_t buttons;
-
-	switch (button) {
-	case KEYBOARD_BUTTON_POWER:
-		buttons &= ~(1 << POWER_BUTTON);
-		buttons |= (is_pressed << POWER_BUTTON);
-		break;
-
-	case KEYBOARD_BUTTON_VOLUME_UP:
-		buttons &= ~(1 << VOL_UP);
-		buttons |= (is_pressed << VOL_UP);
-		break;
-
-	case KEYBOARD_BUTTON_VOLUME_DOWN:
-		buttons &= ~(1 << VOL_DOWN);
-		buttons |= (is_pressed << VOL_DOWN);
-		break;
-
-	default:
-		/* ignored. */
-		return;
-	}
-
-	CPRINTS("buttons: %x", buttons);
-
-	/* Add the new state to the FIFO. */
-	memcpy(d.cookie, MKBP_BUTTON_COOKIE, MKBP_BUTTON_COOKIE_LEN);
-	d.state = buttons;
-	keyboard_fifo_add((uint8_t *)&d);
 }
 
 #ifdef CONFIG_MKBP_EVENT

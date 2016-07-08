@@ -85,10 +85,6 @@ static void button_change_deferred(void)
 				keyboard_update_button(buttons[i].type,
 					new_pressed);
 #endif
-#ifdef CONFIG_KEYBOARD_PROTOCOL_MKBP
-				mkbp_update_button(buttons[i].type,
-						   new_pressed);
-#endif
 			}
 
 			/* Clear the debounce time to stop checking it */

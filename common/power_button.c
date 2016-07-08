@@ -5,14 +5,12 @@
 
 /* Power button module for Chrome EC */
 
-#include "button.h"
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "keyboard_scan.h"
-#include "keyboard_mkbp.h"
 #include "lid_switch.h"
 #include "power_button.h"
 #include "task.h"
@@ -143,10 +141,6 @@ static void power_button_change_deferred(void)
 	/* Notify host if power button has been pressed */
 	if (new_pressed)
 		host_set_single_event(EC_HOST_EVENT_POWER_BUTTON);
-
-#ifdef CONFIG_KEYBOARD_PROTOCOL_MKBP
-	mkbp_update_button(KEYBOARD_BUTTON_POWER, new_pressed);
-#endif
 }
 DECLARE_DEFERRED(power_button_change_deferred);
 
