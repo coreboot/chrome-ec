@@ -50,11 +50,13 @@ class TPM(object):
   STARTUP_RSP = ('80 01 00 00 00 0a 00 00 00 00',
                  '80 01 00 00 00 0a 00 00 01 00')
 
-  def __init__(self, freq=800*1000, debug_mode=False):
+  def __init__(self, freq=800*1000, debug_mode=False, try_startup=True):
     self._debug_enabled = debug_mode
     self._handle = ftdi_spi_tpm
     if not self._handle.FtdiSpiInit(freq, debug_mode):
       raise subcmd.TpmTestError('Failed to connect')
+    if not try_startup:
+      return
     response = self.command(''.join('%c' % int('0x%s' % x, 16)
                                     for x in self.STARTUP_CMD.split()))
     if ' '.join('%2.2x' % ord(x) for x in response) not in self.STARTUP_RSP:
