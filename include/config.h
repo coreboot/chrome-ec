@@ -711,6 +711,9 @@
  */
 #undef CONFIG_HOST_COMMAND_STATUS
 
+/* Default hcdebug mode, e.g. HCDEBUG_OFF or HCDEBUG_NORMAL */
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_NORMAL
+
 /*
  * For ECs where the host command interface is I2C, slave
  * address which the EC will respond to.
