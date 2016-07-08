@@ -38,6 +38,7 @@ enum hashing_mode {
 /*
  * AES implementation, based on a hardware AES block.
  */
+#define AES256_BLOCK_CIPHER_KEY_SIZE 32
 int DCRYPTO_aes_init(const uint8_t *key, uint32_t key_len, const uint8_t *iv,
 		enum cipher_mode c_mode, enum encrypt_mode e_mode);
 int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out);

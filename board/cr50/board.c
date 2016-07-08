@@ -22,6 +22,7 @@
 #include "usb_hid.h"
 #include "util.h"
 #include "spi.h"
+#include "tpm_manufacture.h"
 #include "usb_spi.h"
 
 /* Define interrupt and gpio structs */
@@ -133,7 +134,13 @@ static void board_init(void)
 	init_interrupts();
 	init_trng();
 	init_jittery_clock(1);
-	init_runlevel(PERMISSION_MEDIUM);
+
+	if (tpm_manufactured())
+		init_runlevel(PERMISSION_MEDIUM);
+	else
+		/* Writing to INFO requires permission HIGH. */
+		init_runlevel(PERMISSION_HIGH);
+
 	/* Initialize NvMem partitions */
 	nvmem_init();
 
