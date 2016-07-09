@@ -12,6 +12,7 @@
 #include "charge_state.h"
 #include "charger.h"
 #include "console.h"
+#include "dptf.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kxcj9.h"
 #include "driver/als_opt3001.h"
@@ -747,3 +748,19 @@ void lid_angle_peripheral_enable(int enable)
 	}
 }
 #endif
+
+/*
+ * abort fan control in thermal_thread unless power state is not S0 or S0ix.
+ */
+void abort_fan_control_on_suspend(void)
+{
+	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_STANDBY)
+	      && !chipset_in_state(CHIPSET_STATE_SUSPEND))
+		return;
+
+	dptf_set_fan_duty_target(0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, abort_fan_control_on_suspend,
+		HOOK_PRIO_TEMP_SENSOR);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, abort_fan_control_on_suspend,
+		HOOK_PRIO_TEMP_SENSOR);

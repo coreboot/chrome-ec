@@ -9,6 +9,7 @@
 #include "charge_state.h"
 #include "charger.h"
 #include "console.h"
+#include "dptf.h"
 #include "driver/pmic_tps650830.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
@@ -706,3 +707,19 @@ tmp432_error:
 	CPRINTS("TMP432 initialization failed");
 }
 DECLARE_HOOK(HOOK_INIT, board_tmp432_init, HOOK_PRIO_TEMP_SENSOR + 1);
+
+/*
+ * abort thermal_thread not to control fan unless power state is not S0 or S0ix.
+ */
+void abort_fan_control_on_suspend(void)
+{
+	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_STANDBY)
+	      && !chipset_in_state(CHIPSET_STATE_SUSPEND))
+		return;
+
+	dptf_set_fan_duty_target(0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, abort_fan_control_on_suspend,
+		HOOK_PRIO_TEMP_SENSOR);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, abort_fan_control_on_suspend,
+		HOOK_PRIO_TEMP_SENSOR);
