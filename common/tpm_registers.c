@@ -22,8 +22,9 @@
 #include "util.h"
 
 /* TPM2 library includes. */
+#include "Platform.h"	/* Keep this one on top. */
 #include "ExecCommand_fp.h"
-#include "Platform.h"
+#include "Manufacture_fp.h"
 #include "_TPM_Init_fp.h"
 
 #define CPRINTS(format, args...) cprints(CC_TPM, format, ## args)
@@ -456,24 +457,13 @@ static void tpm_init(void)
 	/* TPM2 library functions. */
 	_plat__Signal_PowerOn();
 
-#ifdef CROS_DEVELOPER_SETUP
 	/*
-	 * TODO(ngm): CRBUG/50115, initialize state expected by TPM2
-	 * compliance tests.
-	 *
-	 * Developer boards may not be endorsed in which case
-	 * manufactured() returns false, and the TPM is hence
-	 * unavailable to handle TPM commands.  Such builds should
-	 * define CROS_DEVELOPER_SETUP to skip the manufactured() check.
+	 * If tpm has not been manufactured yet - run this on every startup.
+	 * This will wipe out NV Ram, among other things.
 	 */
-	nvmem_read(0, sizeof(saved_value), &saved_value, NVMEM_CR50);
-	if (saved_value != manufacturing_done) {
-	  TPM_Manufacture(1);
-	  saved_value = manufacturing_done;
-	  nvmem_write(0, sizeof(saved_value), &saved_value, NVMEM_CR50);
-	  nvmem_commit();
-	}
-#endif
+	if (!tpm_manufactured())
+		TPM_Manufacture(1);
+
        _TPM_Init();
        _plat__SetNvAvail();
 }
@@ -546,13 +536,7 @@ void tpm_task(void)
 			call_extension_command(tpmh, &response_size);
 		} else
 #endif
-
-		  /* Support for development environments in which
-		   * boards may have not been endorsed. */
-#ifndef CROS_DEVELOPER_SETUP
-		if (tpm_manufactured())
-#endif
-		  {
+		{
 			ExecuteCommand(tpm_.fifo_write_index,
 				       tpm_.regs.data_fifo,
 				       &response_size,
