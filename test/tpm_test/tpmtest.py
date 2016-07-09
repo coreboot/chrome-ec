@@ -3,7 +3,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Module for initializing and driving a SPI TPM."""
+"""Module for initializing and driving a TPM device."""
 
 from __future__ import print_function
 
@@ -12,21 +12,18 @@ import struct
 import sys
 import traceback
 
-# Suppressing pylint warning about an import not at the top of the file. The
-# path needs to be set *before* the last import.
-# pylint: disable=C6204
-root_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-sys.path.append(os.path.join(root_dir, '..', '..', 'build', 'tpm_test'))
+import tpm_handler
 
-import crypto_test
-import ecc_test
-import ecies_test
-import ftdi_spi_tpm
-import hash_test
-import hkdf_test
-import rsa_test
-import subcmd
-import upgrade_test
+# Modules below are not essential when this module is imported by others.
+if __name__ == '__main__':
+  import crypto_test
+  import ecc_test
+  import ecies_test
+  import hash_test
+  import hkdf_test
+  import rsa_test
+  import subcmd
+  import upgrade_test
 
 # Extension command for dcypto testing
 EXT_CMD = 0xbaccd00a
@@ -41,8 +38,8 @@ class TPM(object):
   as extracting extended command responses.
 
   Attributes:
-    _handle: a ftdi_spi_tpm object, a USB/FTDI/SPI driver which allows
-      communicate with a TPM connected over USB dongle.
+  _handle: a tpm_handler object, which allows to initialize a TPM and
+      communicate with it
   """
 
   HEADER_FMT = '>H2IH'
@@ -52,8 +49,8 @@ class TPM(object):
 
   def __init__(self, freq=800*1000, debug_mode=False, try_startup=True):
     self._debug_enabled = debug_mode
-    self._handle = ftdi_spi_tpm
-    if not self._handle.FtdiSpiInit(freq, debug_mode):
+    self._handle = tpm_handler.TpmHandlerFactory().GetHandler()
+    if not self._handle.Init(freq, debug_mode):
       raise subcmd.TpmTestError('Failed to connect')
     if not try_startup:
       return
@@ -86,7 +83,7 @@ class TPM(object):
   def command(self, cmd_data):
     # Verify command header
     self.validate(cmd_data)
-    response = self._handle.FtdiSendCommandAndWait(cmd_data)
+    response = self._handle.SendAndReceive(cmd_data)
     self.validate(response, response_mode=True)
     return response
 
@@ -135,6 +132,8 @@ class TPM(object):
 if __name__ == '__main__':
   try:
     debug_needed = len(sys.argv) == 2 and sys.argv[1] == '-d'
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+
     t = TPM(debug_mode=debug_needed)
 
     crypto_test.crypto_tests(t, os.path.join(root_dir, 'crypto_test.xml'))
