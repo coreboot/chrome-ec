@@ -7,7 +7,7 @@
 
 GPIO_INT(LID_OPEN,          PIN(27), GPIO_INT_BOTH | GPIO_PULL_UP, lid_interrupt)
 GPIO_INT(AC_PRESENT,        PIN(30), GPIO_INT_BOTH, extpower_interrupt)
-GPIO_INT(WP_L,              PIN(33), GPIO_INT_BOTH,        switch_interrupt)
+GPIO_INT(WP_L,              PIN(33), GPIO_INT_BOTH, switch_interrupt)
 /* Buffered power button input from PMIC / ROP_EC_PWR_BTN_L_R */
 GPIO_INT(POWER_BUTTON_L,    PIN(35), GPIO_INT_BOTH, power_button_interrupt)
 /* RSMRST from PMIC */
@@ -18,7 +18,6 @@ GPIO_INT(PCH_SLP_SUS_L,     PIN(12),  GPIO_INT_BOTH | GPIO_PULL_UP, power_signal
 GPIO_INT(PMIC_INT_L,        PIN(50),  GPIO_INT_FALLING, power_signal_interrupt)
 GPIO_INT(PD_MCU_INT,        PIN(122), GPIO_INT_FALLING, pd_mcu_interrupt)
 GPIO_INT(USB_C0_VBUS_WAKE_L,PIN(152), GPIO_INT_BOTH, vbus0_evt)
-GPIO_INT(USB_C1_VBUS_WAKE_L,PIN(123), GPIO_INT_BOTH, vbus1_evt)
 /* TODO: crosbug.com/p/53561: Re-add this interrupt for next board revision. */
 /* GPIO_INT(USB_C0_BC12_INT_L, PIN(124), GPIO_INT_FALLING, usb0_evt) */
 /* GPIO_INT(USB_C1_BC12_INT_L, PIN(145), GPIO_INT_FALLING, usb1_evt) */
@@ -50,6 +49,7 @@ GPIO(NC_31,                 PIN(31),  GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_47,                 PIN(47),  GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_124,                PIN(124), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(NC_145,                PIN(145), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(NC_123,                PIN(123), GPIO_INPUT | GPIO_PULL_UP)
 
 GPIO(USB1_ENABLE,           PIN(36),  GPIO_OUT_HIGH)
 GPIO(USB2_ENABLE,           PIN(67),  GPIO_OUT_HIGH)
