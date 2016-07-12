@@ -42,13 +42,15 @@
 
 #define FRAME_SIZE             1024
 #define KEY_SIZE               32
-#define PAYLOAD_MAGIC          0xb1
-#define HW_CAT                 0
+#define PAYLOAD_MAGIC_B1       0xb1
+#define PAYLOAD_MAGIC_B2       0xb2
+#define PAYLOAD_MAGIC_FPGA     0xFF
+#define PAYLOAD_MAGIC_FAIL     0x00
+#define HW_CAT_B1              0x00
+#define HW_CAT_B2              0x01
+#define HW_CAT_FPGA            0xFF
 #define PRODUCT_TYPE           2
-#define RWR0_CROS              2
 #define PAYLOAD_VERSION        0x8000
-#define DEVKEY_ID              0xb93d6539
-#define TEST_REGISTRATION_FLAG 0x80
 
 struct cros_ack_response_v0 {
 	uint32_t magic;
@@ -61,10 +63,6 @@ struct cros_ack_response_v0 {
 	uint32_t checksum[SHA256_DIGEST_WORDS];
 } __packed;
 BUILD_ASSERT(sizeof(struct cros_ack_response_v0) == 1012);
-
-enum cros_product_type {
-	PRODUCT_TYPE_CROS_TPM = 2,
-};
 
 enum cros_perso_component_type {
 	CROS_PERSO_COMPONENT_TYPE_EPS = 128,
@@ -163,6 +161,52 @@ void uart_hexdump(const char *label, const uint8_t *p, size_t len)
 	}
 	if (len % 8 != 0)
 		uart_printf("\n");
+}
+
+static int get_hw_cat(uint8_t *hw_cat)
+{
+	/* Top four bits of PMU_CHIP_ID contain the HW category. */
+	switch (GREAD_FIELD(PMU, CHIP_ID, REVISION)) {
+		case 0x3:
+			/* Rev B1 silicon. */
+			*hw_cat = HW_CAT_B1;
+			return 1;
+		case 0x4:
+			/* Rev B2 silicon. */
+			*hw_cat = HW_CAT_B2;
+			return 1;
+		case 0x1:
+			/* FPGA. */
+			*hw_cat = HW_CAT_FPGA;
+			return 1;
+		default:
+			return 0;
+		}
+}
+
+static uint8_t get_payload_magic(uint8_t hw_cat)
+{
+	switch (hw_cat) {
+	case HW_CAT_B1:
+		return PAYLOAD_MAGIC_B1;
+	case HW_CAT_B2:
+		return PAYLOAD_MAGIC_B2;
+	case HW_CAT_FPGA:
+		return PAYLOAD_MAGIC_FPGA;
+	default:
+		/* Never reached.  hw_cat should be valid here. */
+		assert(0);
+		return PAYLOAD_MAGIC_FAIL;
+	}
+}
+
+static void get_rwr(uint32_t *rwr)
+{
+	int i;
+	const volatile uint32_t *base_ptr = GREG32_ADDR(KEYMGR, HKEY_RWR0);
+
+	for (i = 0; i < 8; i++)
+		*rwr++ = *base_ptr++;
 }
 
 static int validate_cert(
@@ -384,8 +428,13 @@ int tpm_manufactured(void)
 static void ack_command_handler(void *request, size_t command_size,
 				size_t *response_size)
 {
+	uint32_t rwr_cros[8];
+	uint8_t hw_cat;
 	uint32_t dev_id0;
 	uint32_t dev_id1;
+	uint8_t rwr0;
+	uint8_t test_registration_flag;
+	uint8_t devkey_id;
 	uint32_t product_type;
 	struct cros_ack_response_v0 *ack_response = request;
 
@@ -400,19 +449,30 @@ static void ack_command_handler(void *request, size_t command_size,
 		return;
 	}
 
+	if (!get_hw_cat(&hw_cat)) {
+		CPRINTF("%s unknown hw category %d\n", __func__, hw_cat);
+		return;
+	}
+
 	memset(ack_response, 0, sizeof(struct cros_ack_response_v0));
 
-	ack_response->magic = PAYLOAD_MAGIC;
+	ack_response->magic = get_payload_magic(hw_cat);
 	ack_response->payload_version = PAYLOAD_VERSION;
 	ack_response->n_keys = 1;
 
+	get_rwr(rwr_cros);
+	/* Pick up low byte of specified words. */
+	rwr0 = rwr_cros[0];
+	test_registration_flag = rwr_cros[1];
+	devkey_id = rwr_cros[7];
+
 	dev_id0 = htobe32(GREG32(FUSE, DEV_ID0));
 	dev_id1 = htobe32(GREG32(FUSE, DEV_ID1));
+
 	product_type = htobe16(PRODUCT_TYPE);
 	snprintf(ack_response->keys[0].name, KEY_SIZE,
-		"%02x:%08x%08x:%02x%02x%02x:%04x", HW_CAT, dev_id0, dev_id1,
-		RWR0_CROS, TEST_REGISTRATION_FLAG, DEVKEY_ID & 255,
-		product_type);
+		"%02X:%08X%08X:%02X%02X%02X:%04X", hw_cat, dev_id0, dev_id1,
+		rwr0, test_registration_flag, devkey_id, product_type);
 
 	/* Compute a checksum over all previous fields. */
 	SHA256_hash(ack_response,
