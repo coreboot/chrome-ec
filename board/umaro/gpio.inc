@@ -82,7 +82,7 @@ GPIO(NC_GPIO127,        PIN(127), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 
 GPIO(NC_GPIO132,        PIN(132), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(LED_RED,           PIN(133), GPIO_ODR_HIGH)     		 /* LED RED */
-GPIO(PD_RST_L,          PIN(135), GPIO_ODR_HIGH)                 /* USB PD MCU reset */
+GPIO(NC_GPIO135,        PIN(135), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
 GPIO(LED_AMBER,         PIN(136), GPIO_ODR_HIGH)     		 /* LED AMBER */
 
 GPIO(NC_GPIO140,        PIN(140), GPIO_INPUT | GPIO_PULL_UP)     /* NC */
