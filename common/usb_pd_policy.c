@@ -119,7 +119,7 @@ static int pd_find_pdo_index(int cnt, uint32_t *src_caps, int max_mv)
 			cur_mv = mv;
 		}
 #else
-		if ((uw > max_uw) && (mv <= max_mv)) {
+		if ((uw >= max_uw) && (mv <= max_mv)) {
 			ret = i;
 			max_uw = uw;
 		}
