@@ -132,12 +132,22 @@ static int spi_master_shutdown(int port)
 
 int spi_enable(int port, int enable)
 {
+	int rv;
+
+	/*
+	 * Called from another task,
+	 * make sure this does not race with an existing spi transaction
+	 */
+	mutex_lock(spi_mutex + port);
+
 	if (enable == spi_enabled[port])
 		return EC_SUCCESS;
 	if (enable)
-		return spi_master_initialize(port);
+		rv = spi_master_initialize(port);
 	else
-		return spi_master_shutdown(port);
+		rv = spi_master_shutdown(port);
+	mutex_unlock(spi_mutex + port);
+	return rv;
 }
 
 static int spi_dma_start(int port, const uint8_t *txdata,
@@ -249,11 +259,23 @@ int spi_transaction(const struct spi_device_t *spi_device,
 {
 	int rv;
 	int port = spi_device->port;
+	stm32_spi_regs_t *spi = SPI_REGS[port];
 
 	mutex_lock(spi_mutex + port);
+
+	/*
+	 * Skip if SPI is disabled, or this changes CS pin status
+	 * spi_enabled cannot be used since it is zero after sysjump
+	 */
+	if (!(spi->cr1 & STM32_SPI_CR1_SPE)) {
+		rv = EC_ERROR_ACCESS_DENIED;
+		goto spi_transaction_end;
+	}
+
 	rv = spi_transaction_async(spi_device, txdata, txlen, rxdata, rxlen);
 	rv |= spi_transaction_flush(spi_device);
-	mutex_unlock(spi_mutex + port);
 
+spi_transaction_end:
+	mutex_unlock(spi_mutex + port);
 	return rv;
 }

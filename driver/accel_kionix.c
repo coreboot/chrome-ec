@@ -465,6 +465,13 @@ static int read(const struct motion_sensor_t *s, vector_3_t v)
 	for (i = X; i <= Z; i++)
 		v[i] += (data->offset[i] << 5) / range;
 
+#ifdef CONFIG_ACCEL_RESET
+	/* Check if sensor is dead */
+	if (v[X] == 0 && v[Y] == 0 && v[Z] == 0) {
+		CPRINTF("[%T %s: all zeros!]\n", s->name);
+		return EC_ERROR_HW_INTERNAL;
+	}
+#endif
 	return EC_SUCCESS;
 }
 

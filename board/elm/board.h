@@ -10,8 +10,10 @@
 
 /* Accelero meter and gyro sensor */
 #define CONFIG_ACCEL_KX022
+#define CONFIG_ACCEL_RESET
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+#define CONFIG_CMD_ACCEL_RESET
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE 0
 #define CONFIG_LID_ANGLE_SENSOR_LID 1
@@ -213,6 +215,8 @@ enum temp_sensor_id {
 void board_reset_pd_mcu(void);
 /* Set AP reset pin according to parameter */
 void board_set_ap_reset(int asserted);
+
+void board_reset_sensors(void);
 
 #endif  /* !__ASSEMBLER__ */
 

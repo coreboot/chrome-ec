@@ -58,6 +58,10 @@ static int accel_disp;
  */
 #define MOTION_SENSOR_INT_ADJUSTMENT_US 10
 
+#ifdef CONFIG_ACCEL_RESET
+static int8_t force_reset;
+#endif
+
 /*
  * Mutex to protect sensor values between host command task and
  * motion sense task:
@@ -645,6 +649,26 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 	return ret;
 }
 
+#ifdef CONFIG_ACCEL_RESET
+static void motion_sense_reset_sensors(void)
+{
+	int i, ret;
+	struct motion_sensor_t *sensor;
+
+	/* Power off and power on sensors */
+	board_reset_sensors();
+
+	for (i = 0; i < motion_sensor_count; ++i) {
+		sensor = &motion_sensors[i];
+		ret = motion_sense_init(sensor);
+		if (ret) {
+			CPRINTS("%s %s: %d: init failed: %d",
+				__func__, sensor->name, i, ret);
+		}
+	}
+}
+#endif
+
 /*
  * Motion Sense Task
  * Requirement: motion_sensors[] are defined in board.c file.
@@ -694,6 +718,16 @@ void motion_sense_task(void)
 
 				ret = motion_sense_process(sensor, &event,
 						&ts_begin_task);
+#ifdef CONFIG_ACCEL_RESET
+				if (ret == EC_ERROR_HW_INTERNAL ||
+				    force_reset) {
+					/* Sensor is dead, try to recover */
+					motion_sense_reset_sensors();
+					ready_status = 0;
+					force_reset = 0;
+					break;
+				}
+#endif
 				if (ret != EC_SUCCESS)
 					continue;
 				ready_status |= (1 << i);
@@ -1540,6 +1574,17 @@ static int motion_sense_read_fifo(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(fiforead, motion_sense_read_fifo,
 	"id",
 	"Read Fifo sensor", NULL);
+#endif
+
+#ifdef CONFIG_CMD_ACCEL_RESET
+static int command_accel_reset(int argc, char **argv)
+{
+	force_reset = 1;
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(accelreset, command_accel_reset,
+	NULL,
+	"Reset sensors", NULL);
 #endif
 
 #endif /* CONFIG_CMD_ACCELS */

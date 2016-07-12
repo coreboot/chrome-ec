@@ -425,12 +425,8 @@ static void board_extpower(void)
 }
 DECLARE_HOOK(HOOK_AC_CHANGE, board_extpower, HOOK_PRIO_DEFAULT);
 
-/* Called on AP S5 -> S3 transition, and before HOOK_CHIPSET_STARTUP */
-static void board_chipset_pre_init(void)
+static void board_spi_enable(void)
 {
-	/* Enable level shift of AC_OK when power on */
-	board_extpower_buffer_to_soc();
-
 	/* Enable SPI for KX022 */
 	gpio_config_module(MODULE_SPI_MASTER, 1);
 
@@ -449,14 +445,9 @@ static void board_chipset_pre_init(void)
 
 	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
 }
-DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, board_chipset_pre_init, HOOK_PRIO_DEFAULT);
 
-/* Called on AP S3 -> S5 transition */
-static void board_chipset_shutdown(void)
+static void board_spi_disable(void)
 {
-	/* Disable level shift to SoC when shutting down */
-	gpio_set_level(GPIO_LEVEL_SHIFT_EN_L, 1);
-
 	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
 
 	/* Disable clocks to SPI2 module */
@@ -471,6 +462,24 @@ static void board_chipset_shutdown(void)
 	gpio_set_flags_by_mask(GPIO_D, 0x1a, GPIO_OUT_LOW);
 	gpio_set_level(GPIO_SPI2_NSS, 0);
 	gpio_set_level(GPIO_SPI2_NSS_DB, 0);
+}
+/* Called on AP S5 -> S3 transition, and before HOOK_CHIPSET_STARTUP */
+static void board_chipset_pre_init(void)
+{
+	/* Enable level shift of AC_OK when power on */
+	board_extpower_buffer_to_soc();
+
+	board_spi_enable();
+}
+DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, board_chipset_pre_init, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S3 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	/* Disable level shift to SoC when shutting down */
+	gpio_set_level(GPIO_LEVEL_SHIFT_EN_L, 1);
+
+	board_spi_disable();
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
@@ -491,6 +500,29 @@ static void board_chipset_suspend(void)
 #endif
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
+void board_reset_sensors(void)
+{
+	/*
+	 * There is leakage from EC to sensors through SPI and this causes
+	 * sensor power cannot be turned off. Pull low SPI pins.
+	 */
+	board_spi_disable();
+
+	/* Power off sensors */
+	gpio_set_level(GPIO_SENSOR_PWR_EN_L, 1);
+
+	/* Min VDD off time is 10 ms, make it longer */
+	msleep(20);
+
+	/* Power on sensors */
+	gpio_set_level(GPIO_SENSOR_PWR_EN_L, 0);
+
+	board_spi_enable();
+
+	/* Power up time is 10 ms, make it longer */
+	msleep(20);
+}
 
 #ifdef HAS_TASK_MOTIONSENSE
 /* Motion sensors */

@@ -128,6 +128,8 @@ enum ec_error_list {
 
 	EC_ERROR_NOT_HANDLED = 21,  /* Interrupt event not handled */
 
+	EC_ERROR_HW_INTERNAL = 22,  /* something wrong in a HW */
+
 	/* Module-internal error codes may use this range.   */
 	EC_ERROR_INTERNAL_FIRST = 0x10000,
 	EC_ERROR_INTERNAL_LAST =  0x1FFFF
