@@ -8,12 +8,6 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
-/*
- * Allow dangerous commands.
- * TODO: Remove this config engineering velidation.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* Accelero meter and gyro sensor */
 #define CONFIG_ACCEL_KX022
 #define CONFIG_CMD_ACCELS
