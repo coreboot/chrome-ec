@@ -274,7 +274,7 @@ static uint32_t hw_key_ladder_step(uint32_t cert)
 
 	GREG32(KEYMGR, SHA_ITOP) = 0;  /* clear status */
 
-	return !GREG32(KEYMGR, HKEY_ERR_FLAGS);
+	return !!GREG32(KEYMGR, HKEY_ERR_FLAGS);
 }
 
 
