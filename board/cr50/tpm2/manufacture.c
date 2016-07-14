@@ -6,13 +6,19 @@
 #include "tpm_manufacture.h"
 #include "tpm_registers.h"
 
+#include "TPM_Types.h"
+#include "TpmBuildSwitches.h"
+#include "CryptoEngine.h"
+#include "CpriECC_fp.h"
+#include "CpriRSA_fp.h"
+#include "tpm_types.h"
+
 #include "Global.h"
 #include "Hierarchy_fp.h"
 #include "InternalRoutines.h"
 #include "Manufacture_fp.h"
 #include "NV_Write_fp.h"
 #include "NV_DefineSpace_fp.h"
-#include "TPM_Types.h"
 
 #include "console.h"
 #include "extension.h"
@@ -209,9 +215,136 @@ static void get_rwr(uint32_t *rwr)
 		*rwr++ = *base_ptr++;
 }
 
+static int memstr(const void *haystack, size_t haystack_len,
+		const void *needle, size_t needle_len)
+{
+	size_t i;
+	const uint8_t *p = haystack;
+
+	if (haystack_len < needle_len)
+		return -1;
+
+	for (i = 0; i < haystack_len - needle_len + 1; i++) {
+		if (memcmp(&p[i], needle, needle_len) == 0)
+			return i;
+	}
+
+	return -1;
+}
+
+/* The TPM2B_BYTE_VALUE macro does not work with a #defined parameter. */
+BUILD_ASSERT(PRIMARY_SEED_SIZE == 32);
+TPM2B_BYTE_VALUE(32);
+
+/* This is the SHA-256 hash of the RSA template from the TCG
+ * EK Credential Profile spec.
+ */
+static const TPM2B_32_BYTE_VALUE RSA_TEMPLATE_EK_EXTRA = {
+	.t = {32, {
+			0x68, 0xd1, 0xa2, 0x41, 0xfb, 0x27, 0x2f, 0x03,
+			0x90, 0xbf, 0xd0, 0x42, 0x8d, 0xad, 0xee, 0xb0,
+			0x2b, 0xf4, 0xa1, 0xcd, 0x46, 0xab, 0x6c, 0x39,
+			0x1b, 0xa3, 0x1f, 0x51, 0x87, 0x06, 0x8e, 0x6a
+		}
+	}
+};
+const char VENDOR_EK_RSA_LABEL[] = "RSA key by vendor";
+const char VENDOR_EK_ECC_LABEL[] = "ECC key by vendor";
+
+/* Verify that the endorsement certificate being installs corresponds
+ * to RSA endorsement key.
+ */
+static int validate_cert_rsa(
+	const struct cros_perso_certificate_response_v0 *cert,
+	const uint8_t eps[PRIMARY_SEED_SIZE])
+{
+	int result = 0;
+	TPM2B_32_BYTE_VALUE seed;
+
+	seed.b.size = PRIMARY_SEED_SIZE;
+	memcpy(seed.b.buffer, eps, PRIMARY_SEED_SIZE);
+
+	do {
+		TPM2B_PUBLIC_KEY_RSA N;
+		TPM2B_PRIVATE_KEY_RSA p;
+
+		if (_cpri__GenerateKeyRSA(
+				&N.b, &p.b, 2048, RSA_F4,
+				TPM_ALG_SHA256, &seed.b, VENDOR_EK_RSA_LABEL,
+				(TPM2B *) &RSA_TEMPLATE_EK_EXTRA.b, NULL)
+			!= CRYPT_SUCCESS)
+			break;
+
+		if (memstr(cert->cert, cert->cert_len,
+				N.b.buffer, N.b.size) >= 0)
+			result = 1;
+		else
+			result = 0;
+
+		memset(N.b.buffer, 0, 256);
+		memset(p.b.buffer, 0, 128);
+	} while (0);
+
+	memset(seed.b.buffer, 0, seed.b.size);
+	return result;
+}
+
+/* This is the SHA-256 hash of the RSA template from the TCG
+ * EK Credential Profile spec.
+ */
+static const TPM2B_32_BYTE_VALUE ECC_TEMPLATE_EK_EXTRA = {
+	.t = {32, {
+			0xC2, 0xE0, 0x31, 0x93, 0x40, 0xFB, 0x48, 0xF1,
+			0x02, 0x53, 0x9E, 0xA9, 0x83, 0x63, 0xF8, 0x1E,
+			0x2D, 0x30, 0x6E, 0x91, 0x8D, 0xD7, 0x78, 0xAB,
+			0xF0, 0x54, 0x73, 0xA2, 0xA6, 0x0D, 0xAE, 0x09,
+		}
+	}
+};
+
+/* Verify that the endorsement certificate being installs corresponds
+ * to P256 endorsement key.
+ */
+static int validate_cert_ecc(
+	const struct cros_perso_certificate_response_v0 *cert,
+	const uint8_t eps[PRIMARY_SEED_SIZE])
+{
+	int result = 0;
+	TPM2B_32_BYTE_VALUE seed;
+
+	seed.b.size = PRIMARY_SEED_SIZE;
+	memcpy(seed.b.buffer, eps, PRIMARY_SEED_SIZE);
+
+	do {
+		TPMS_ECC_POINT q;
+		TPM2B_ECC_PARAMETER d;
+
+		if (_cpri__GenerateKeyEcc(
+				&q, &d, TPM_ECC_NIST_P256, TPM_ALG_SHA256,
+				&seed.b, VENDOR_EK_ECC_LABEL,
+				(TPM2B *) &ECC_TEMPLATE_EK_EXTRA.b, NULL)
+			!= CRYPT_SUCCESS)
+			break;
+
+		if (memstr(cert->cert, cert->cert_len,
+				q.x.b.buffer, P256_NBYTES) >= 0)
+			result = 1;
+		else
+			result = 0;
+
+		memset(q.x.b.buffer, 0, P256_NBYTES);
+		memset(q.y.b.buffer, 0, P256_NBYTES);
+		memset(d.b.buffer, 0, P256_NBYTES);
+	} while (0);
+
+	memset(seed.b.buffer, 0, seed.b.size);
+	return result;
+}
+
 static int validate_cert(
 	const struct cros_perso_response_component_info_v0 *cert_info,
-	const struct cros_perso_certificate_response_v0 *cert)
+	const struct cros_perso_certificate_response_v0 *cert,
+	const uint8_t eps[PRIMARY_SEED_SIZE])
 {
 	if (cert_info->component_type != CROS_PERSO_COMPONENT_TYPE_RSA_CERT &&
 		cert_info->component_type !=
@@ -227,8 +360,17 @@ static int validate_cert(
 		cert->cert_len > MAX_NV_BUFFER_SIZE)
 		return 0;
 
-	return DCRYPTO_x509_verify(cert->cert, cert->cert_len,
-				&ENDORSEMENT_CA_RSA_PUB);
+	/* Verify certificate signature. */
+	if (!DCRYPTO_x509_verify(cert->cert, cert->cert_len,
+					&ENDORSEMENT_CA_RSA_PUB))
+		return 0;
+
+	/* Generate corresponding key, and match cert. */
+	/* TODO(ngm): time consuming: remove from production runs. */
+	if (cert_info->component_type == CROS_PERSO_COMPONENT_TYPE_RSA_CERT)
+		return validate_cert_rsa(cert, eps);
+	else
+		return validate_cert_ecc(cert, eps);
 }
 
 static int store_cert(enum cros_perso_component_type component_type,
@@ -339,6 +481,13 @@ static int compute_frk2(uint8_t frk2[AES256_BLOCK_CIPHER_KEY_SIZE])
 {
 	int i;
 
+	/* TODO(ngm): reading ITOP in hw_key_ladder_step hangs on
+	 * second run of this function (i.e. install of ECC cert,
+	 * which re-generates FRK2) unless the SHA engine is reset.
+	 */
+	GREG32(KEYMGR, SHA_TRIG) =
+		GC_KEYMGR_SHA_TRIG_TRIG_RESET_MASK;
+
 	if (hw_key_ladder_step(KEYMGR_CERT_0))
 		return 0;
 	/* Derive HC_PHIK --> Deposited into ISR0 */
@@ -375,7 +524,7 @@ static int compute_frk2(uint8_t frk2[AES256_BLOCK_CIPHER_KEY_SIZE])
 
 /* EPS is stored XOR'd with FRK2, so make sure that the sizes match. */
 BUILD_ASSERT(AES256_BLOCK_CIPHER_KEY_SIZE == PRIMARY_SEED_SIZE);
-static int decrypt_and_copy_eps(void)
+static int get_decrypted_eps(uint8_t eps[PRIMARY_SEED_SIZE])
 {
 	int i;
 	uint8_t frk2[AES256_BLOCK_CIPHER_KEY_SIZE];
@@ -387,15 +536,26 @@ static int decrypt_and_copy_eps(void)
 		uint32_t word;
 
 		if (flash_physical_info_read_word(
-				INFO1_EPS_OFFSET + i, &word) != EC_SUCCESS)
+				INFO1_EPS_OFFSET + i, &word) != EC_SUCCESS) {
+			memset(frk2, 0, sizeof(frk2));
 			return 0;     /* Flash read INFO1 failed. */
-		/* gp is a TPM global state structure , declared in Global.h. */
-		memcpy(gp.EPSeed.t.buffer + i, &word, sizeof(word));
+		}
+		memcpy(eps + i, &word, sizeof(word));
 	}
 
 	/* One-time-pad decrypt EPS. */
 	for (i = 0; i < PRIMARY_SEED_SIZE; i++)
-		gp.EPSeed.t.buffer[i] ^= frk2[i];
+		eps[i] ^= frk2[i];
+
+	memset(frk2, 0, sizeof(frk2));
+	return 1;
+}
+
+static int store_eps(uint8_t eps[PRIMARY_SEED_SIZE])
+{
+	/* gp is a TPM global state structure, declared in Global.h. */
+	memcpy(gp.EPSeed.t.buffer, eps, PRIMARY_SEED_SIZE);
+
 	/* Persist the seed to flash. */
 	NvWriteReserved(NV_EP_SEED, &gp.EPSeed);
 	return 1;
@@ -486,6 +646,7 @@ static void perso_command_handler(void *request, size_t command_size,
 				size_t *response_size)
 {
 	uint16_t ok = RESPONSE_NOT_OK;
+	uint8_t eps[PRIMARY_SEED_SIZE];
 	const struct cros_perso_response_v0  *perso_response = request;
 	struct cros_perso_ok_response_v0 *ok_response =
 		(struct cros_perso_ok_response_v0 *) request;
@@ -500,9 +661,12 @@ static void perso_command_handler(void *request, size_t command_size,
 		if (command_size != sizeof(struct cros_perso_response_v0))
 			break;
 
+		if (!get_decrypted_eps(eps))
+			break;
+
 		/* Write RSA / P256 endorsement certificate. */
 		if (!validate_cert(&perso_response->cert_info,
-					&perso_response->cert))
+					&perso_response->cert, eps))
 			break;  /* Invalid cert. */
 
 		if (!rsa_cert_done && !p256_cert_done)
@@ -527,7 +691,7 @@ static void perso_command_handler(void *request, size_t command_size,
 			flash_info_write_enable();
 
 			/* Copy EPS from INFO1 to flash data region. */
-			if (!decrypt_and_copy_eps())
+			if (!store_eps(eps))
 				break;
 
 			/* TODO: generate RSA and ECC keys,
@@ -541,6 +705,7 @@ static void perso_command_handler(void *request, size_t command_size,
 		ok = RESPONSE_OK;
 	} while (0);
 
+	memset(eps, 0, sizeof(eps));
 	*response_size = sizeof(*ok_response);
 	ok_response->ok = ok;
 }
