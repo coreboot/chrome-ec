@@ -373,11 +373,13 @@ static int validate_cert(
 		return validate_cert_ecc(cert, eps);
 }
 
+#define EK_CERT_NV_START_INDEX  0x01C00000
+
 static int store_cert(enum cros_perso_component_type component_type,
 		const struct cros_perso_certificate_response_v0 *cert)
 {
-	const uint32_t ek_nv_index_0 = 0x01C00000;
-	const uint32_t ek_nv_index_1 = ek_nv_index_0 + 1;
+	const uint32_t rsa_ek_nv_index = EK_CERT_NV_START_INDEX;
+	const uint32_t ecc_ek_nv_index = EK_CERT_NV_START_INDEX + 1;
 	uint32_t nv_index;
 	NV_DefineSpace_In define_space;
 	TPMA_NV space_attributes;
@@ -389,9 +391,9 @@ static int store_cert(enum cros_perso_component_type component_type,
 	HierarchyStartup(SU_RESET);
 
 	if (component_type == CROS_PERSO_COMPONENT_TYPE_RSA_CERT)
-		nv_index = ek_nv_index_0;
+		nv_index = rsa_ek_nv_index;
 	else   /* P256 certificate. */
-		nv_index = ek_nv_index_1;
+		nv_index = ecc_ek_nv_index;
 
 	memset(&space_attributes, 0, sizeof(space_attributes));
 
@@ -563,6 +565,12 @@ static int store_eps(uint8_t eps[PRIMARY_SEED_SIZE])
 
 static void manufacture_complete(void)
 {
+	/* The code below commented out as a temporary allowance for
+	 * development; so as to allow re-manufacturability of a chip
+	 * after a full flash wipe.  See crbug/p/55288 for a detailed
+	 * description.
+	 */
+#if 0
 	int i;
 	const uint32_t erase = INFO1_SENTINEL_MANUFACTURE_DONE;
 
@@ -571,16 +579,37 @@ static void manufacture_complete(void)
 		flash_info_physical_write(
 			FLASH_INFO_MANUFACTURE_STATE_OFFSET + i, sizeof(erase),
 			(unsigned char *) &erase);
-
+#endif
 	/* TODO(ngm): lock HIK export. */
 }
 
 int tpm_manufactured(void)
 {
+	/* The code below commented out as a temporary allowance for
+	 * development; so as to allow re-manufacturability of a chip
+	 * after a full flash wipe.  See crbug/p/55288 for a detailed
+	 * description.
+	 */
+#if 0
 	uint32_t sentinel;
 
 	flash_physical_info_read_word(INFO1_SENTINEL_OFFSET, &sentinel);
 	return sentinel == INFO1_SENTINEL_MANUFACTURE_DONE;
+#else
+
+	/* If either endorsement certificate is not installed,
+	 * consider the chip un-manufactured.  Thus, wiping flash
+	 * causes the chip to be un-manufactured.
+	 */
+	const uint32_t rsa_ek_nv_index = EK_CERT_NV_START_INDEX;
+	const uint32_t ecc_ek_nv_index = EK_CERT_NV_START_INDEX + 1;
+
+	if (NvIsUndefinedIndex(rsa_ek_nv_index) == TPM_RC_SUCCESS ||
+		NvIsUndefinedIndex(ecc_ek_nv_index) == TPM_RC_SUCCESS)
+		return 0;
+	else
+		return 1;
+#endif
 }
 
 static void ack_command_handler(void *request, size_t command_size,
