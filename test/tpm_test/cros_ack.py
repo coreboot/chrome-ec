@@ -216,6 +216,6 @@ if __name__ == '__main__':
   except subcmd.TpmTestError as e:
     exc_file, exc_line = traceback.extract_tb(sys.exc_traceback)[-1][:2]
     print('\nError in %s:%s: ' % (os.path.basename(exc_file), exc_line), e)
-    if debug_needed:
+    if FLAGS.debug:
       traceback.print_exc()
     sys.exit(1)

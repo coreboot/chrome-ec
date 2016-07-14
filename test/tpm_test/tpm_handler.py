@@ -49,7 +49,7 @@ class DevTpm(object):
     try:
       self._fd = os.open(self._TPM_DEV_, os.O_RDWR)
     except OSError:
-      raise subcmd.TpmTestError('Failed to open %s' % self._TPM_DEV)
+      raise subcmd.TpmTestError('Failed to open %s' % self._TPM_DEV_)
 
   def __del__(self):
     os.close(self._fd)
