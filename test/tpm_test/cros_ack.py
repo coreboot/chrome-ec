@@ -134,12 +134,16 @@ def cros_ack():
           # Skip sending the TPM2_Startup() command.
           try_startup=False)
   wrapped_response = t.command(t.wrap_ext_command(subcmd.MANUFACTURE_ACK, ''))
-  if len(wrapped_response) == TPM_HEADER_SIZE:
-    print('Error: manufacture complete, or unknown error')
+  if len(wrapped_response) <= TPM_HEADER_SIZE:
+    print('Error: manufacture not supported')
     return False
 
   # Skip over TPM header and unpack Ack response.
   ack_body = wrapped_response[TPM_HEADER_SIZE:]
+  if len(ack_body) == 2:
+    print('Error: %d' % struct.unpack('<H', ack_body))
+    return False
+
   ack = CrosAckResponse_v0._make(struct.unpack(
     CrosAckResponse_v0_FMT, ack_body))
 
@@ -168,20 +172,20 @@ def cros_ack():
   response = t.command(blob.rsa_blob)
   # Skip over TPM header and unpack Ok response.
   rsa_ok = struct.unpack(CrosOkResponse_v0_FMT, response[TPM_HEADER_SIZE:])[0]
-  print(utils.cursor_back() + 'RSA PERSO RESULT: %x' % rsa_ok)
+  print(utils.cursor_back() + 'RSA PERSO RESULT: %d' % rsa_ok)
 
   # Blobs include serialized TPM header.
   response = t.command(blob.ecc_blob)
   # Skip over TPM header and unpack Ok response.
   ecc_ok = struct.unpack(CrosOkResponse_v0_FMT, response[TPM_HEADER_SIZE:])[0]
-  print(utils.cursor_back() + 'ECC PERSO RESULT: %x' % ecc_ok)
+  print(utils.cursor_back() + 'ECC PERSO RESULT: %d' % ecc_ok)
 
-  if rsa_ok == ecc_ok and ecc_ok == 0x8080:
-    print(utils.cursor_back() + 'SUCCESS')
-    return True
-  else:
+  if rsa_ok or ecc_ok:
     print(utils.cursor_back() + 'FAIL')
     return False
+  else:
+    print(utils.cursor_back() + 'SUCCESS')
+    return True
 
 
 def parse_args():

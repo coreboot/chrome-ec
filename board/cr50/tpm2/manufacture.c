@@ -44,7 +44,7 @@
 #define INFO1_SENTINEL_OFFSET FLASH_INFO_MANUFACTURE_STATE_OFFSET
 #define INFO1_EPS_OFFSET      FLASH_INFO_MANUFACTURE_STATE_OFFSET
 
-#define CPRINTF(format, args...) cprintf(CC_TPM, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ## args)
 
 #define FRAME_SIZE             1024
 #define KEY_SIZE               32
@@ -122,6 +122,9 @@ BUILD_ASSERT(sizeof(struct cros_perso_response_v0) == 2036);
 struct cros_perso_ok_response_v0 {
 	uint16_t ok;
 } __packed;
+
+/* Is set to the line number where error was detected, zero on success. */
+static uint16_t error_code;
 
 /* TODO(ngm): replace with real pub key. */
 static const uint32_t ENDORSEMENT_CA_RSA_N[64] = {
@@ -269,18 +272,21 @@ static int validate_cert_rsa(
 		TPM2B_PRIVATE_KEY_RSA p;
 
 		if (_cpri__GenerateKeyRSA(
-				&N.b, &p.b, 2048, RSA_F4,
-				TPM_ALG_SHA256, &seed.b, VENDOR_EK_RSA_LABEL,
-				(TPM2B *) &RSA_TEMPLATE_EK_EXTRA.b, NULL)
-			!= CRYPT_SUCCESS)
+			&N.b, &p.b, 2048, RSA_F4,
+			TPM_ALG_SHA256, &seed.b, VENDOR_EK_RSA_LABEL,
+			(TPM2B *) &RSA_TEMPLATE_EK_EXTRA.b, NULL)
+		    != CRYPT_SUCCESS) {
+			error_code = __LINE__;
 			break;
+		}
 
 		if (memstr(cert->cert, cert->cert_len,
-				N.b.buffer, N.b.size) >= 0)
+			   N.b.buffer, N.b.size) >= 0) {
 			result = 1;
-		else
+		} else {
+			error_code = __LINE__;
 			result = 0;
-
+		}
 		memset(N.b.buffer, 0, 256);
 		memset(p.b.buffer, 0, 128);
 	} while (0);
@@ -320,17 +326,21 @@ static int validate_cert_ecc(
 		TPM2B_ECC_PARAMETER d;
 
 		if (_cpri__GenerateKeyEcc(
-				&q, &d, TPM_ECC_NIST_P256, TPM_ALG_SHA256,
-				&seed.b, VENDOR_EK_ECC_LABEL,
-				(TPM2B *) &ECC_TEMPLATE_EK_EXTRA.b, NULL)
-			!= CRYPT_SUCCESS)
+			&q, &d, TPM_ECC_NIST_P256, TPM_ALG_SHA256,
+			&seed.b, VENDOR_EK_ECC_LABEL,
+			(TPM2B *) &ECC_TEMPLATE_EK_EXTRA.b, NULL)
+		    != CRYPT_SUCCESS) {
+			error_code = __LINE__;
 			break;
+		}
 
 		if (memstr(cert->cert, cert->cert_len,
-				q.x.b.buffer, P256_NBYTES) >= 0)
+			   q.x.b.buffer, P256_NBYTES) >= 0) {
 			result = 1;
-		else
+		} else {
+			error_code = __LINE__;
 			result = 0;
+		}
 
 		memset(q.x.b.buffer, 0, P256_NBYTES);
 		memset(q.y.b.buffer, 0, P256_NBYTES);
@@ -347,24 +357,31 @@ static int validate_cert(
 	const uint8_t eps[PRIMARY_SEED_SIZE])
 {
 	if (cert_info->component_type != CROS_PERSO_COMPONENT_TYPE_RSA_CERT &&
-		cert_info->component_type !=
-		CROS_PERSO_COMPONENT_TYPE_P256_CERT)
+	    cert_info->component_type !=
+	    CROS_PERSO_COMPONENT_TYPE_P256_CERT) {
+		error_code = __LINE__;
 		return 0;  /* Invalid component type. */
+	}
 
 	if (cert_info->component_size != sizeof(
-			struct cros_perso_certificate_response_v0))
+		struct cros_perso_certificate_response_v0)) {
+		error_code = __LINE__;
 		return 0;  /* Invalid component size. */
+	}
 
 	/* TODO(ngm): verify key_id against HIK/FRK0. */
 	if (cert->cert_len > CROS_ENDORSEMENT_CERT_MAX_SIZE ||
-		cert->cert_len > MAX_NV_BUFFER_SIZE)
+	    cert->cert_len > MAX_NV_BUFFER_SIZE) {
+		error_code = __LINE__;
 		return 0;
+	}
 
 	/* Verify certificate signature. */
 	if (!DCRYPTO_x509_verify(cert->cert, cert->cert_len,
-					&ENDORSEMENT_CA_RSA_PUB))
+				 &ENDORSEMENT_CA_RSA_PUB)) {
+		error_code = __LINE__;
 		return 0;
-
+	}
 	/* Generate corresponding key, and match cert. */
 	/* TODO(ngm): time consuming: remove from production runs. */
 	if (cert_info->component_type == CROS_PERSO_COMPONENT_TYPE_RSA_CERT)
@@ -494,35 +511,56 @@ static int compute_frk2(uint8_t frk2[AES256_BLOCK_CIPHER_KEY_SIZE])
 	GREG32(KEYMGR, SHA_TRIG) =
 		GC_KEYMGR_SHA_TRIG_TRIG_RESET_MASK;
 
-	if (hw_key_ladder_step(KEYMGR_CERT_0))
+	if (hw_key_ladder_step(KEYMGR_CERT_0)) {
+		error_code = __LINE__;
 		return 0;
+	}
 	/* Derive HC_PHIK --> Deposited into ISR0 */
-	if (hw_key_ladder_step(KEYMGR_CERT_3))
+	if (hw_key_ladder_step(KEYMGR_CERT_3)) {
+		error_code = __LINE__;
 		return 0;
+	}
 
 	/* Cryptographically mix OBS-FBS --> Deposited into ISR1 */
-	if (hw_key_ladder_step(KEYMGR_CERT_4))
+	if (hw_key_ladder_step(KEYMGR_CERT_4)) {
+		error_code = __LINE__;
 		return 0;
+	}
+
 	/* Derive HIK_RT --> Deposited into ISR0 */
-	if (hw_key_ladder_step(KEYMGR_CERT_5))
+	if (hw_key_ladder_step(KEYMGR_CERT_5)) {
+		error_code = __LINE__;
 		return 0;
+	}
+
 	/* Derive BL_HIK --> Deposited into ISR0 */
-	if (hw_key_ladder_step(KEYMGR_CERT_7))
+	if (hw_key_ladder_step(KEYMGR_CERT_7)) {
+		error_code = __LINE__;
 		return 0;
+	}
 
 	/* Generate FRK2 by executing certs 15, 20, 25, and 26 */
-	if (hw_key_ladder_step(KEYMGR_CERT_15))
+	if (hw_key_ladder_step(KEYMGR_CERT_15)) {
+		error_code = __LINE__;
 		return 0;
-	if (hw_key_ladder_step(KEYMGR_CERT_20))
+	}
+
+	if (hw_key_ladder_step(KEYMGR_CERT_20)) {
+		error_code = __LINE__;
 		return 0;
+	}
 
 	for (i = 0; i < k_cr50_max_fw_major_version -
 			K_CROS_FW_MAJOR_VERSION; i++) {
-		if (hw_key_ladder_step(KEYMGR_CERT_25))
+		if (hw_key_ladder_step(KEYMGR_CERT_25)) {
+			error_code = __LINE__;
 			return 0;
+		}
 	}
-	if (hw_key_ladder_step(KEYMGR_CERT_26))
+	if (hw_key_ladder_step(KEYMGR_CERT_26)) {
+		error_code = __LINE__;
 		return 0;
+	}
 	memcpy(frk2, (void *) GREG32_ADDR(KEYMGR, HKEY_FRR0),
 		AES256_BLOCK_CIPHER_KEY_SIZE);
 	return 1;
@@ -544,6 +582,7 @@ static int get_decrypted_eps(uint8_t eps[PRIMARY_SEED_SIZE])
 		if (flash_physical_info_read_word(
 				INFO1_EPS_OFFSET + i, &word) != EC_SUCCESS) {
 			memset(frk2, 0, sizeof(frk2));
+			error_code = __LINE__;
 			return 0;     /* Flash read INFO1 failed. */
 		}
 		memcpy(eps + i, &word, sizeof(word));
@@ -624,6 +663,13 @@ int tpm_manufactured(void)
 #endif
 }
 
+static void prepare_ack_cmd_error_return(uint16_t *buffer,
+					 size_t *response_size, uint16_t code)
+{
+	*buffer = code;
+	*response_size = sizeof(code);
+}
+
 static void ack_command_handler(void *request, size_t command_size,
 				size_t *response_size)
 {
@@ -638,18 +684,22 @@ static void ack_command_handler(void *request, size_t command_size,
 	struct cros_ack_response_v0 *ack_response = request;
 
 	CPRINTF("%s size %d\n", __func__, command_size);
-	*response_size = 0;
 
-	if (tpm_manufactured())
+	if (tpm_manufactured()) {
+		prepare_ack_cmd_error_return(request,
+					     response_size, __LINE__);
 		return;
+	}
 
 	if (command_size) {
-		CPRINTF("%s command size is %d\n", __func__, command_size);
+		prepare_ack_cmd_error_return(request,
+					     response_size, __LINE__);
 		return;
 	}
 
 	if (!get_hw_cat(&hw_cat)) {
-		CPRINTF("%s unknown hw category %d\n", __func__, hw_cat);
+		prepare_ack_cmd_error_return(request,
+					     response_size, __LINE__);
 		return;
 	}
 
@@ -686,43 +736,50 @@ static int p256_cert_done;
 static void perso_command_handler(void *request, size_t command_size,
 				size_t *response_size)
 {
-	uint16_t ok = RESPONSE_NOT_OK;
 	uint8_t eps[PRIMARY_SEED_SIZE];
 	const struct cros_perso_response_v0  *perso_response = request;
 	struct cros_perso_ok_response_v0 *ok_response =
 		(struct cros_perso_ok_response_v0 *) request;
 
 	CPRINTF("%s size %d\n", __func__, command_size);
-	*response_size = 0;
+	*response_size = sizeof(*ok_response);
+	error_code = ~0;  /* catch all. */
 
 	do {
-		if (tpm_manufactured())
+		if (tpm_manufactured()) {
+			error_code = __LINE__;
 			break;
+		}
 
-		if (command_size != sizeof(struct cros_perso_response_v0))
+		if (command_size != sizeof(struct cros_perso_response_v0)) {
+			error_code = __LINE__;
 			break;
+		}
 
 		if (!get_decrypted_eps(eps))
 			break;
 
 		/* Write RSA / P256 endorsement certificate. */
 		if (!validate_cert(&perso_response->cert_info,
-					&perso_response->cert, eps))
-			break;  /* Invalid cert. */
+				   &perso_response->cert, eps))
+			break;
 
 		if (!rsa_cert_done && !p256_cert_done)
 			/* Input validated; initialize flash, TPM globals. */
-			if (TPM_Manufacture(1) != 0)
+			if (TPM_Manufacture(1) != 0) {
+				error_code = __LINE__;
 				break;
-
-		if (!store_cert(perso_response->cert_info.component_type,
-					&perso_response->cert))
-			break;  /* Internal failure. */
+			}
 
 		/* TODO(ngm): verify that storage succeeded. */
+		if (!store_cert(perso_response->cert_info.component_type,
+				&perso_response->cert)) {
+			error_code = __LINE__;
+			break;  /* Internal failure. */
+		}
 
 		if (perso_response->cert_info.component_type ==
-			CROS_PERSO_COMPONENT_TYPE_RSA_CERT)
+		    CROS_PERSO_COMPONENT_TYPE_RSA_CERT)
 			rsa_cert_done = 1;
 		else
 			p256_cert_done = 1;
@@ -732,8 +789,10 @@ static void perso_command_handler(void *request, size_t command_size,
 			flash_info_write_enable();
 
 			/* Copy EPS from INFO1 to flash data region. */
-			if (!store_eps(eps))
+			if (!store_eps(eps)) {
+				error_code = __LINE__;
 				break;
+			}
 
 			/* TODO: generate RSA and ECC keys,
 			 *  and verify matching cert.
@@ -742,13 +801,11 @@ static void perso_command_handler(void *request, size_t command_size,
 			/* Mark as manufactured. */
 			manufacture_complete();
 		}
-
-		ok = RESPONSE_OK;
+		error_code = 0;
 	} while (0);
 
 	memset(eps, 0, sizeof(eps));
-	*response_size = sizeof(*ok_response);
-	ok_response->ok = ok;
+	ok_response->ok = error_code;
 }
 
 DECLARE_EXTENSION_COMMAND(EXTENSION_MANUFACTURE_ACK, ack_command_handler);
