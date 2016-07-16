@@ -385,6 +385,11 @@ static int store_cert(enum cros_perso_component_type component_type,
 	TPMA_NV space_attributes;
 	NV_Write_In in;
 
+	/* Clear up structures potentially uszed only partially. */
+	memset(&define_space, 0, sizeof(define_space));
+	memset(&space_attributes, 0, sizeof(space_attributes));
+	memset(&in, 0, sizeof(in));
+
 	/* Indicate that a system reset has occurred, and currently
 	 * running with Platform auth.
 	 */
@@ -394,8 +399,6 @@ static int store_cert(enum cros_perso_component_type component_type,
 		nv_index = rsa_ek_nv_index;
 	else   /* P256 certificate. */
 		nv_index = ecc_ek_nv_index;
-
-	memset(&space_attributes, 0, sizeof(space_attributes));
 
 	/* Writeable under platform auth. */
 	space_attributes.TPMA_NV_PPWRITE = 1;
