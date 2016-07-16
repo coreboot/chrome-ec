@@ -599,19 +599,27 @@ int tpm_manufactured(void)
 	flash_physical_info_read_word(INFO1_SENTINEL_OFFSET, &sentinel);
 	return sentinel == INFO1_SENTINEL_MANUFACTURE_DONE;
 #else
-
-	/* If either endorsement certificate is not installed,
-	 * consider the chip un-manufactured.  Thus, wiping flash
-	 * causes the chip to be un-manufactured.
-	 */
+	uint32_t nv_ram_index;
 	const uint32_t rsa_ek_nv_index = EK_CERT_NV_START_INDEX;
 	const uint32_t ecc_ek_nv_index = EK_CERT_NV_START_INDEX + 1;
 
-	if (NvIsUndefinedIndex(rsa_ek_nv_index) == TPM_RC_SUCCESS ||
-		NvIsUndefinedIndex(ecc_ek_nv_index) == TPM_RC_SUCCESS)
+	/*
+	 * If nvram_index (value written at NV RAM offset of zero) is all
+	 * ones, or either endorsement certificate is not installed, consider
+	 * the chip un-manufactured.
+	 *
+	 * Thus, wiping flash NV ram allows to re-manufacture the chip.
+	 */
+	_plat__NvMemoryRead(0, sizeof(nv_ram_index), &nv_ram_index);
+	if ((nv_ram_index == ~0) ||
+	    (NvIsUndefinedIndex(rsa_ek_nv_index) == TPM_RC_SUCCESS) ||
+	    (NvIsUndefinedIndex(ecc_ek_nv_index) == TPM_RC_SUCCESS)) {
+		CPRINTF("%s: NOT manufactured\n", __func__);
 		return 0;
-	else
+	} else {
+		CPRINTF("%s: manufactured\n", __func__);
 		return 1;
+	}
 #endif
 }
 
