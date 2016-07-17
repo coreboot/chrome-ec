@@ -418,19 +418,19 @@ static int store_cert(enum cros_perso_component_type component_type,
 	else   /* P256 certificate. */
 		nv_index = ecc_ek_nv_index;
 
-	/* Writeable under platform auth. */
-	space_attributes.TPMA_NV_PPWRITE = 1;
-	/* Not modifyable by OWNER; require PLATFORM auth. */
-	/* POLICY_DELETE requires PLATFORM_AUTH */
-	space_attributes.TPMA_NV_POLICY_DELETE = 1;
-	/* Mark as write-once; space must be deleted to be
-	 * re-written.
+	/* EK Credential attributes specified in the "TCG PC Client
+	 * Platform, TPM Profile (PTP) Specification" document.
 	 */
+	/* REQUIRED: Writeable under platform auth. */
+	space_attributes.TPMA_NV_PPWRITE = 1;
+	/* OPTIONAL: Write-once; space must be deleted to be re-written. */
 	space_attributes.TPMA_NV_WRITEDEFINE = 1;
-	/* Space created with platform auth. */
+	/* REQUIRED: Space created with platform auth. */
 	space_attributes.TPMA_NV_PLATFORMCREATE = 1;
-	/* Readable under empty password? */
+	/* REQUIRED: Readable under empty password? */
 	space_attributes.TPMA_NV_AUTHREAD = 1;
+	/* REQUIRED: Disable dictionary attack protection. */
+	space_attributes.TPMA_NV_NO_DA = 1;
 
 	define_space.authHandle = TPM_RH_PLATFORM;
 	define_space.auth.t.size = 0;
