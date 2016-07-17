@@ -135,11 +135,7 @@ static void board_init(void)
 	init_trng();
 	init_jittery_clock(1);
 
-	if (tpm_manufactured())
-		init_runlevel(PERMISSION_MEDIUM);
-	else
-		/* Writing to INFO requires permission HIGH. */
-		init_runlevel(PERMISSION_HIGH);
+	init_runlevel(PERMISSION_HIGH);
 
 	/* Initialize NvMem partitions */
 	nvmem_init();
