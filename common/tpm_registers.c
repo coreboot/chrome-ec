@@ -459,13 +459,24 @@ static void tpm_init(void)
 	_plat__Signal_PowerOn();
 
 	/*
-	 * If tpm has not been manufactured yet - run this on every startup.
-	 * This will wipe out NV Ram, among other things.
+	 * Make sure NV RAM metadata is initialzed, needed to check
+	 * manufactured status. This is a speculative call which will have to
+	 * be repeated in case the TPM has not been through the manufacturing
+	 * sequence yet.
+	 *
+	 * No harm in calling it twice in that case.
 	 */
-	if (!tpm_manufactured())
-		TPM_Manufacture(1);
+	_TPM_Init();
 
-       _TPM_Init();
+	if (!tpm_manufactured()) {
+		/*
+		 * If tpm has not been manufactured yet - this needs to run on
+		 * every startup. It will wipe out NV RAM, among other things.
+		 */
+		TPM_Manufacture(1);
+		_TPM_Init();
+	}
+
        _plat__SetNvAvail();
 }
 
