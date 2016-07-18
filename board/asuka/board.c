@@ -339,11 +339,11 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
  *     src/mainboard/google/${board}/acpi/dptf.asl
  */
 const struct temp_sensor_t temp_sensors[] = {
-	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_Memory", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_LOCAL, 4},
-	{"TMP432_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_PCH", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE1, 4},
-	{"TMP432_Sensor_2", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_Battery", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
 	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_temp_sensor_get_val,
 		0, 4},
@@ -356,9 +356,9 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* {Twarn, Thigh, Thalt}, fan_off, fan_max */
-	{{0, 0, 0}, C_TO_K(35), C_TO_K(65)},	/* TMP432_Internal */
-	{{0, 0, 0}, 0, 0},	/* TMP432_Sensor_1 */
-	{{0, 0, 0}, 0, 0},	/* TMP432_Sensor_2 */
+	{{0, 0, 0}, C_TO_K(35), C_TO_K(65)},	/* TMP432_Memory */
+	{{0, 0, 0}, 0, 0},	/* TMP432_PCH */
+	{{0, 0, 0}, 0, 0},	/* TMP432_Battery */
 	{{0, 0, 0}, 0, 0},	/* Battery */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
