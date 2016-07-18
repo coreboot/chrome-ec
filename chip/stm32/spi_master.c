@@ -140,12 +140,17 @@ int spi_enable(int port, int enable)
 	 */
 	mutex_lock(spi_mutex + port);
 
-	if (enable == spi_enabled[port])
-		return EC_SUCCESS;
+	if (enable == spi_enabled[port]) {
+		rv = EC_SUCCESS;
+		goto unlock;
+	}
+
 	if (enable)
 		rv = spi_master_initialize(port);
 	else
 		rv = spi_master_shutdown(port);
+
+unlock:
 	mutex_unlock(spi_mutex + port);
 	return rv;
 }
