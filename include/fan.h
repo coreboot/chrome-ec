@@ -90,4 +90,6 @@ enum fan_status fan_get_status(int ch);
 /* Initialize the HW according to the desired flags */
 void fan_channel_setup(int ch, unsigned int flags);
 
+/* Re-enable thermal_control_enable[] flag */
+void reenble_thermal_control(void);
 #endif  /* __CROS_EC_FAN_H */

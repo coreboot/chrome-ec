@@ -94,6 +94,13 @@ static void set_thermal_control_enabled(int fan, int enable)
 		fan_set_rpm_mode(fans[fan].ch, 1);
 }
 
+void reenble_thermal_control(void)
+{
+	int fan;
+	for (fan = 0; fan < CONFIG_FANS; fan++)
+		set_thermal_control_enabled(fan, 1);
+}
+
 static void set_duty_cycle(int fan, int percent)
 {
 	/* Move the fan to manual control */

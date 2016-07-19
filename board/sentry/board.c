@@ -816,3 +816,10 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, abort_fan_control_on_suspend,
 		HOOK_PRIO_TEMP_SENSOR);
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, abort_fan_control_on_suspend,
 		HOOK_PRIO_TEMP_SENSOR);
+
+void reenable_thermal_control_on_resume(void)
+{
+	reenble_thermal_control();
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, reenable_thermal_control_on_resume,
+		HOOK_PRIO_TEMP_SENSOR);
