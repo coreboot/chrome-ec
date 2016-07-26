@@ -796,6 +796,9 @@
  */
 #undef CONFIG_DPTF_FAIL_SAFE_OFFSET
 
+/* Send event when mode change, host read acpi memory and select DPTF table */
+#undef CONFIG_DPTF_DEVICE_ORIENTATION
+
 /*****************************************************************************/
 /* Flash configuration */
 
