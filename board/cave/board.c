@@ -235,6 +235,8 @@ const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
 
 static void board_pmic_init(void)
 {
+	int pmic_reg31;
+
 	/* No need to re-init PMIC since settings are sticky across sysjump */
 	if (system_jumped_to_this_image())
 		return;
@@ -257,6 +259,12 @@ static void board_pmic_init(void)
 
 	/* VRMODECTRL - enable low-power mode for VCCIO and V0.85A */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x18);
+
+	/* V5ADS3CNT - Set CTLV5ADS3 = Force PWM */
+	if (!i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x31, &pmic_reg31)) {
+		pmic_reg31 |= 0x03;
+		i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x31, pmic_reg31);
+	}
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
 
