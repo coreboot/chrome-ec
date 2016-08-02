@@ -83,8 +83,10 @@ static int mkbp_get_next_event(struct host_cmd_handler_args *args)
 		if (event_is_set((last + i) % EC_MKBP_EVENT_COUNT))
 			break;
 
-	if (i == EC_MKBP_EVENT_COUNT)
+	if (i == EC_MKBP_EVENT_COUNT) {
+		set_host_interrupt(0);
 		return EC_RES_ERROR;
+	}
 
 	evt = (i + last) % EC_MKBP_EVENT_COUNT;
 	last = evt + 1;
