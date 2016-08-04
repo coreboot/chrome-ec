@@ -7,9 +7,16 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "system.h"
 
 /* Shutdown mode parameter to write to manufacturer access register */
 #define SB_SHUTDOWN_DATA	0x0010
+
+#define	SB_SHIP_MODE_ADDR	0x3a
+#define	SB_SHIP_MODE_DATA	0xc574
+
+/* Padova battery board ID */
+#define BOARD_VERSION_WITH_TIFA_BATTERY	0x07
 
 static const struct battery_info info = {
 	.voltage_max = 12600,/* mV */
@@ -33,11 +40,17 @@ int board_cut_off_battery(void)
 {
 	int rv;
 
-	/* Ship mode command must be sent twice to take effect */
-	rv = sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
-
-	if (rv != EC_SUCCESS)
+	/* Ship mode for Tifa */
+	if (BOARD_VERSION_WITH_TIFA_BATTERY == system_get_board_version()) {
+		rv = sb_write(SB_SHIP_MODE_ADDR, SB_SHIP_MODE_DATA);
 		return rv;
+	} else {
+		/* Ship mode command must be sent twice to take effect */
+		rv = sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
 
-	return sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
+		if (rv != EC_SUCCESS)
+			return rv;
+
+		return sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
+	}
 }
