@@ -608,7 +608,7 @@ static void set_kso_pins(int status, uint32_t flag)
 {
 	if (status) {
 		gpio_set_flags_by_mask(0, 0x3F, flag);
-		gpio_set_flags_by_mask(10, 0xDF, flag);
+		gpio_set_flags_by_mask(10, 0xDD, flag);
 	}
 }
 
