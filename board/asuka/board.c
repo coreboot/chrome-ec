@@ -155,10 +155,6 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 		.i2c_port = I2C_PORT_USB_CHARGER_1,
 		.mux_lock = NULL,
 	},
-	{
-		.i2c_port = I2C_PORT_USB_CHARGER_2,
-		.mux_lock = NULL,
-	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_USB_SWITCH_PI3USB9281_CHIP_COUNT);
@@ -489,6 +485,9 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_PD_MCU_INT);
 	/* Enable VBUS interrupt */
 	gpio_enable_interrupt(GPIO_USB_C0_VBUS_WAKE_L);
+
+	/* Enable pericom BC1.2 interrupt */
+	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 
 	/* Provide AC status to the PCH */
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
