@@ -274,15 +274,15 @@ struct lsm6ds0_data g_saved_data[2];
 /* Four Motion sensors */
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
-	{FLOAT_TO_FP(-1),  0,  0},
 	{ 0, FLOAT_TO_FP(-1),  0},
+	{FLOAT_TO_FP(-1),  0,  0},
 	{ 0,  0, FLOAT_TO_FP(-1)}
 };
 
 const matrix_3x3_t lid_standard_ref = {
+	{FLOAT_TO_FP(1),  0,  0},
 	{ 0,  FLOAT_TO_FP(1),  0},
-	{FLOAT_TO_FP(-1),  0,  0},
-	{ 0,  0, FLOAT_TO_FP(-1)}
+	{ 0,  0, FLOAT_TO_FP(1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -291,7 +291,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 * Requirement: accelerometer sensor must init before gyro sensor
 	 * DO NOT change the order of the following table.
 	 */
-	{.name = "Base",
+	[BASE_ACCEL] = {
+	 .name = "Base",
 	 .active_mask = SENSOR_ACTIVE_S0_S3_S5,
 	 .chip = MOTIONSENSE_CHIP_LSM6DS0,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
@@ -312,21 +313,22 @@ struct motion_sensor_t motion_sensors[] = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
 			 .odr = 119000 | ROUND_UP_FLAG,
-			 .ec_rate = 100 * MSEC,
+			 .ec_rate = 0,
 		 },
 		 /* Used for double tap */
 		 [SENSOR_CONFIG_EC_S3] = {
 			 .odr = TAP_ODR | ROUND_UP_FLAG,
-			 .ec_rate = CONFIG_GESTURE_SAMPLING_INTERVAL_MS * MSEC,
+			 .ec_rate = 0
 		 },
 		 [SENSOR_CONFIG_EC_S5] = {
 			 .odr = TAP_ODR | ROUND_UP_FLAG,
-			 .ec_rate = CONFIG_GESTURE_SAMPLING_INTERVAL_MS * MSEC,
+			 .ec_rate = 0
 		 },
 	 },
 	},
 
-	{.name = "Lid",
+	[LID_ACCEL] = {
+	 .name = "Lid",
 	 .active_mask = SENSOR_ACTIVE_S0,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
@@ -347,7 +349,7 @@ struct motion_sensor_t motion_sensors[] = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
 			 .odr = 100000 | ROUND_UP_FLAG,
-			 .ec_rate = 100 * MSEC,
+			 .ec_rate = 0,
 		 },
 		 /* unused */
 		 [SENSOR_CONFIG_EC_S3] = {
@@ -361,7 +363,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 },
 	},
 
-	{.name = "Base Gyro",
+	[BASE_GYRO] = {
+	 .name = "Base Gyro",
 	 .active_mask = SENSOR_ACTIVE_S0_S3_S5,
 	 .chip = MOTIONSENSE_CHIP_LSM6DS0,
 	 .type = MOTIONSENSE_TYPE_GYRO,
@@ -379,10 +382,10 @@ struct motion_sensor_t motion_sensors[] = {
 			 .odr = 0,
 			 .ec_rate = 0,
 		 },
-		 /* EC use accel for angle detection */
+		 /* unused */
 		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 119000 | ROUND_UP_FLAG,
-			 .ec_rate = 100 * MSEC,
+			 .odr = 0,
+			 .ec_rate = 0,
 		 },
 		 /* unused */
 		 [SENSOR_CONFIG_EC_S3] = {

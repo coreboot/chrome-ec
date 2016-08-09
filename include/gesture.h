@@ -17,10 +17,6 @@ void gesture_calc(uint32_t *event);
 #define GESTURE_HOOK_PRIO (MOTION_SENSE_HOOK_PRIO + 10)
 
 /* Output datarate for tap sensor (in milli-Hz) */
-/*
- * Note: lsm6ds0 accel needs twice the expected data rate in order to guarantee
- * that we have a new data sample every reading.
- */
-#define TAP_ODR (2 * (1000000 / CONFIG_GESTURE_SAMPLING_INTERVAL_MS))
+#define TAP_ODR (1000000 / CONFIG_GESTURE_SAMPLING_INTERVAL_MS)
 
 #endif /* __CROS_EC_GESTURE_H */
