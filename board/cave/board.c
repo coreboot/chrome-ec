@@ -89,6 +89,7 @@ void usb1_evt(enum gpio_signal signal)
 
 void tablet_mode_interrupt(enum gpio_signal signal)
 {
+	host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
 }
 
 #include "gpio_list.h"
@@ -666,5 +667,17 @@ void lid_angle_peripheral_enable(int enable)
 
 		gpio_set_level(GPIO_KBBL_EN, 0);
 	}
+}
+#endif
+
+#ifdef CONFIG_DPTF_DEVICE_ORIENTATION
+int board_get_device_orientation(void)
+{
+	int ret = 0;
+
+	if (!gpio_get_level(GPIO_TABLET_MODE_L))
+		ret |= EC_ACPI_MEM_DEVICE_TABLET_MODE;
+
+	return ret;
 }
 #endif

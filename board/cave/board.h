@@ -49,6 +49,7 @@
 #define CONFIG_CHIPSET_SKYLAKE
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_CLOCK_CRYSTAL
+#define CONFIG_DPTF_DEVICE_ORIENTATION
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_HOSTCMD_PD
 #define CONFIG_I2C
@@ -247,6 +248,8 @@ int board_get_version(void);
 
 /* Reset RTC */
 void board_rtc_reset(void);
+
+int board_get_device_orientation(void);
 
 #endif /* !__ASSEMBLER__ */
 
