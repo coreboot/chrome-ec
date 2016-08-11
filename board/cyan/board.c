@@ -113,7 +113,8 @@ const matrix_3x3_t lid_standard_ref = {
 };
 
 struct motion_sensor_t motion_sensors[] = {
-	{.name = "Base",
+	[BASE_ACCEL] = {
+	 .name = "Base",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
@@ -133,8 +134,8 @@ struct motion_sensor_t motion_sensors[] = {
 		 },
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 100000 | ROUND_UP_FLAG,
-			 .ec_rate = 10 * MSEC,
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
 		 },
 		 /* Sensor off in S3/S5 */
 		 [SENSOR_CONFIG_EC_S3] = {
@@ -148,7 +149,8 @@ struct motion_sensor_t motion_sensors[] = {
 		 },
 	 }
 	},
-	{.name = "Lid",
+	[LID_ACCEL] = {
+	 .name = "Lid",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
@@ -168,8 +170,8 @@ struct motion_sensor_t motion_sensors[] = {
 		 },
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 100000 | ROUND_UP_FLAG,
-			 .ec_rate = 10 * MSEC,
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
 		 },
 		 /* Sensor off in S3/S5 */
 		 [SENSOR_CONFIG_EC_S3] = {
