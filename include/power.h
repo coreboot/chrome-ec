@@ -103,4 +103,12 @@ void power_signal_interrupt(enum gpio_signal signal);
 #define power_signal_interrupt NULL
 #endif
 
+#ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
+/**
+ * Get sleep state of host, as reported by the host.
+ *
+ * @return Believed sleep state of host.
+ */
+enum host_sleep_event power_get_host_sleep_state(void);
+#endif
 #endif  /* __CROS_EC_POWER_H */

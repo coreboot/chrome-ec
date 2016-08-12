@@ -12,6 +12,7 @@
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "power.h"
 #include "system.h"
 #include "task.h"
@@ -505,3 +506,24 @@ DECLARE_CONSOLE_COMMAND(hibdelay, command_hibernation_delay,
 			"Set the delay before going into hibernation",
 			NULL);
 #endif /* CONFIG_HIBERNATE */
+
+#ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
+/* Track last reported sleep event */
+static enum host_sleep_event host_sleep_state;
+
+static int host_command_host_sleep_event(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_host_sleep_event *p = args->params;
+
+	host_sleep_state = p->sleep_event;
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_HOST_SLEEP_EVENT,
+		     host_command_host_sleep_event,
+		     EC_VER_MASK(0));
+
+enum host_sleep_event power_get_host_sleep_state(void)
+{
+	return host_sleep_state;
+}
+#endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */

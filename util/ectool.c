@@ -116,6 +116,8 @@ const char help_str[] =
 	"      Configure or start/stop the hang detect timer\n"
 	"  hello\n"
 	"      Checks for basic communication with EC\n"
+	"  hostsleepstate\n"
+	"      Report host sleep state to the EC\n"
 	"  kbpress\n"
 	"      Simulate key press\n"
 	"  i2cread\n"
@@ -318,6 +320,32 @@ int cmd_hello(int argc, char *argv[])
 
 	printf("EC says hello!\n");
 	return 0;
+}
+
+int cmd_hostsleepstate(int argc, char *argv[])
+{
+	struct ec_params_host_sleep_event p;
+
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s [suspend|resume|freeze|thaw]\n",
+			argv[0]);
+		return -1;
+	}
+
+	if (!strcmp(argv[1], "suspend"))
+		p.sleep_event = HOST_SLEEP_EVENT_S3_SUSPEND;
+	else if (!strcmp(argv[1], "resume"))
+		p.sleep_event = HOST_SLEEP_EVENT_S3_RESUME;
+	else if (!strcmp(argv[1], "freeze"))
+		p.sleep_event = HOST_SLEEP_EVENT_S0IX_SUSPEND;
+	else if (!strcmp(argv[1], "thaw"))
+		p.sleep_event = HOST_SLEEP_EVENT_S0IX_RESUME;
+	else {
+		fprintf(stderr, "Unknown command: %s\n", argv[1]);
+		return -1;
+	}
+
+	return ec_command(EC_CMD_HOST_SLEEP_EVENT, 0, &p, sizeof(p), NULL, 0);
 }
 
 int cmd_test(int argc, char *argv[])
@@ -5535,6 +5563,7 @@ const struct command commands[] = {
 	{"gpioset", cmd_gpio_set},
 	{"hangdetect", cmd_hang_detect},
 	{"hello", cmd_hello},
+	{"hostsleepstate", cmd_hostsleepstate},
 	{"kbpress", cmd_kbpress},
 	{"i2cread", cmd_i2c_read},
 	{"i2cwrite", cmd_i2c_write},
