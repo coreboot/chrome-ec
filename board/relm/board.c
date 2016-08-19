@@ -145,3 +145,11 @@ static void board_chipset_suspend(void)
 	gpio_set_level(GPIO_TOUCHPANEL_PWREN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
+/* System jump to RW from RO, enable touchpanel if the system is in S0 */
+static void touchpanel_enable_in_s0(void)
+{
+	if (chipset_in_state(CHIPSET_STATE_ON))
+		gpio_set_level(GPIO_TOUCHPANEL_PWREN, 1);
+}
+DECLARE_HOOK(HOOK_INIT, touchpanel_enable_in_s0, HOOK_PRIO_DEFAULT);
