@@ -35,11 +35,12 @@
  *  *              | Only battery，capacity below 5%   |   amber blink
  *  */
 
+
 #define LED_TOTAL_TICKS 16
 #define LED_ON_TICKS 4
 
 const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_POWER_LED, EC_LED_ID_BATTERY_LED};
+	 EC_LED_ID_BATTERY_LED};
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 enum led_color {
@@ -97,16 +98,6 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
 	switch (led_id) {
 	case EC_LED_ID_BATTERY_LED:
-		if (brightness[EC_LED_COLOR_RED] != 0)
-			set_color(LED_RED);
-		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
-			set_color(LED_AMBER);
-		else if (brightness[EC_LED_COLOR_GREEN] != 0)
-			set_color(LED_GREEN);
-		else
-			set_color(LED_OFF);
-		break;
-	case EC_LED_ID_POWER_LED:
 		if (brightness[EC_LED_COLOR_RED] != 0)
 			set_color(LED_RED);
 		else if (brightness[EC_LED_COLOR_YELLOW] != 0)
@@ -192,17 +183,15 @@ DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
  */
 static void led_tick(void)
 {
-	if (extpower_is_present()) {
-		if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
+	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
+		if (extpower_is_present()) {
 			umaro_led_set_battery();
 			return;
+		} else {
+			umaro_led_set_power();
+			return;
 		}
-	} else if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED)) {
-		umaro_led_set_power();
-		return;
 	}
-
-	set_color(LED_OFF);
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
 
