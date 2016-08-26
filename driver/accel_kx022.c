@@ -496,7 +496,7 @@ static int init(const struct motion_sensor_t *s)
 			break;
 
 		/* Check for timeout. */
-		if (cnt++ > 20) {
+		if (cnt++ > 5) {
 			ret = EC_ERROR_TIMEOUT;
 			CPRINTF("%s: SRST Error.\n", s->name);
 			return ret;
