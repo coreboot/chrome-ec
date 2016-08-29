@@ -93,10 +93,7 @@ BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
 /* kxcj9 mutex and local/private data*/
 static struct mutex g_kxcj9_mutex[2];
-struct kionix_accel_data g_kxcj9_data[2] = {
-	{.variant = KXCJ9},
-	{.variant = KXCJ9},
-};
+struct kionix_accel_data g_kxcj9_data[2];
 
 /* Four Motion sensors */
 /* Matrix to rotate accelrator into standard reference frame */
