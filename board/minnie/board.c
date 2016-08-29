@@ -8,6 +8,7 @@
 #include "charger.h"
 #include "chipset.h"
 #include "common.h"
+#include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "extpower.h"
 #include "gpio.h"
@@ -78,62 +79,95 @@ void board_config_pre_init(void)
 	STM32_SYSCFG_CFGR1 |= (1 << 9) | (1 << 10); /* Remap USART1 RX/TX DMA */
 }
 
-/* Base Sensor mutex */
-static struct mutex g_base_mutex;
+/* kxcj9 mutex and local/private data*/
+static struct mutex g_kx022_mutex[2];
+struct kionix_accel_data g_kx022_data[2];
 
-/* Lid Sensor mutex */
-static struct mutex g_lid_mutex;
-
-/* kxcj9 local/private data */
-struct kx022_data g_kx022_data0;
-
-struct kx022_data g_kx022_data1;
-
-/* Four Motion sensors */
+/* For Motion sensors */
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(1), 0,  0},
+	{ FLOAT_TO_FP(-1), 0,  0},
+	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
+/* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
+	{ FLOAT_TO_FP(1), 0,  0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
-
-	/*
-	 * Note: lsm6ds0: supports accelerometer and gyro sensor
-	 * Requriement: accelerometer sensor must init before gyro sensor
-	 * DO NOT change the order of the following table.
-	 */
-	{SENSOR_ACTIVE_S0_S3, "Base", MOTIONSENSE_CHIP_KX022,
-		MOTIONSENSE_TYPE_ACCEL, MOTIONSENSE_LOC_BASE,
-		&kx022_drv, &g_base_mutex, &g_kx022_data0,
-		KX022_ADDR1, &base_standard_ref, 119000, 2},
-
-	{SENSOR_ACTIVE_S0_S3, "Lid",  MOTIONSENSE_CHIP_KX022,
-		MOTIONSENSE_TYPE_ACCEL, MOTIONSENSE_LOC_LID,
-		&kx022_drv, &g_lid_mutex, &g_kx022_data1,
-		KX022_ADDR0, &lid_standard_ref, 100000, 2},
+	[BASE_ACCEL] = {
+	 .name = "Base",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_KX022,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &kionix_accel_drv,
+	 .mutex = &g_kx022_mutex[0],
+	 .drv_data = &g_kx022_data[0],
+	 .addr = KX022_ADDR1,
+	 .rot_standard_ref = &base_standard_ref,
+	 .default_range = 8,  /* g, use hifi requirements */
+	 .config = {
+		 /* AP: by default shutdown all sensors */
+		 [SENSOR_CONFIG_AP] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S5] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+	 }
+	},
+	[LID_ACCEL] = {
+	 .name = "Lid",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_KX022,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &kionix_accel_drv,
+	 .mutex = &g_kx022_mutex[1],
+	 .drv_data = &g_kx022_data[1],
+	 .addr = KX022_ADDR0,
+	 .rot_standard_ref = &lid_standard_ref,
+	 .default_range = 8,  /* g, enough for laptop. */
+	 .config = {
+		 /* AP: by default shutdown all sensors */
+		 [SENSOR_CONFIG_AP] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S5] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+	 },
+	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-/* Define the accelerometer orientation matrices. */
-const struct accel_orientation acc_orient = {
-	/* Hinge aligns with y axis. */
-	.rot_hinge_90 = {
-		{  0, 0, FLOAT_TO_FP(1)},
-		{  0, FLOAT_TO_FP(1), 0},
-		{ FLOAT_TO_FP(-1), 0, 0}
-	},
-	.rot_hinge_180 = {
-		{ FLOAT_TO_FP(-1), 0, 0},
-		{  0, FLOAT_TO_FP(1), 0},
-		{  0, 0, FLOAT_TO_FP(-1)}
-	},
-	.hinge_axis = {0, 1, 0},
-};

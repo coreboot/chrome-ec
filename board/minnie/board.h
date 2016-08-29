@@ -14,6 +14,10 @@
 #undef CONFIG_WATCHDOG_HELP
 #define CONFIG_DEBUG_ASSERT_BRIEF
 
+/* Limit console output */
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
+
 /* Optional features */
 #define CONFIG_ACCEL_KX022
 #define CONFIG_AP_HANG_DETECT
@@ -27,8 +31,13 @@
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_V2
 #define CONFIG_CHIPSET_ROCKCHIP
-#define CONFIG_CMD_ACCEL_INFO
-#define CONFIG_CMD_ACCELS
+#undef CONFIG_CMD_MEM
+#undef CONFIG_CMD_I2C_SCAN
+
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO 512
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_FORCE_CONSOLE_RESUME
 #define CONFIG_HOST_COMMAND_STATUS
@@ -46,6 +55,7 @@
 #define CONFIG_LID_ANGLE_KEY_SCAN
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LOW_POWER_S0
+#define CONFIG_MKBP_EVENT
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_ACTIVE_STATE 1
 #define CONFIG_POWER_COMMON
@@ -66,6 +76,21 @@
 /* Keyboard output port list */
 #define KB_OUT_PORT_LIST GPIO_A, GPIO_B, GPIO_C
 
+/* Sensor index definition */
+enum sensor_id {
+	BASE_ACCEL = 0,
+	LID_ACCEL = 1,
+};
+
+/*
+ * We have not enabled the sensor FIFO on the accels, so we force the EC
+ * to collect at every sample.
+ */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	((1 << BASE_ACCEL) | (1 << LID_ACCEL))
+
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 /* Single I2C port, where the EC is the master. */
 #define I2C_PORT_MASTER 0
 #define I2C_PORT_ACCEL   I2C_PORT_MASTER
