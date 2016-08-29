@@ -216,10 +216,7 @@ void board_rtc_reset(void)
 /* Four Motion sensors */
 /* kxcj9 mutex and local/private data*/
 static struct mutex g_kxcj9_mutex[2];
-struct kionix_accel_data g_kxcj9_data[2] = {
-	{.variant = KXCJ9},
-	{.variant = KXCJ9},
-};
+struct kionix_accel_data g_kxcj9_data[2];
 
 #ifdef CONFIG_GYRO_L3GD20H
 /* Gyro sensor */

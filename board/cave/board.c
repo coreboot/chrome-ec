@@ -492,9 +492,7 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* KX022 private data */
-struct kionix_accel_data g_kx022_data = {
-	.variant = KX022,
-};
+struct kionix_accel_data g_kx022_data;
 
 const matrix_3x3_t rot_base_accel = {
 	{ FLOAT_TO_FP(-1), 0, 0 },
