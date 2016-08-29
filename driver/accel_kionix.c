@@ -26,11 +26,18 @@
 /* Number of times to attempt to enable sensor before giving up. */
 #define SENSOR_ENABLE_ATTEMPTS 3
 
+#if defined(CONFIG_ACCEL_KXCJ9) && !defined(CONFIG_ACCEL_KX022)
+#define V(s_) 1
+#elif defined(CONFIG_ACCEL_KX022) && !defined(CONFIG_ACCEL_KXCJ9)
+#define V(s_) 0
+#else
+#define V(s_) ((s_)->chip == MOTIONSENSE_CHIP_KXCJ9)
+#endif
 /* Index for which table to use. */
 #if !defined(CONFIG_ACCEL_KXCJ9) || !defined(CONFIG_ACCEL_KX022)
-#define T 0
+#define T(s_) 0
 #else
-#define T (data->variant)
+#define T(s_) V(s_)
 #endif /* !defined(CONFIG_ACCEL_KXCJ9) || !defined(CONFIG_ACCEL_KX022) */
 
 /* List of range values in +/-G's and their associated register values. */
@@ -152,10 +159,9 @@ static int raw_write8(const int addr, const int reg, int data)
 static int disable_sensor(const struct motion_sensor_t *s, int *reg_val)
 {
 	int i, ret, reg, pc1_field;
-	struct kionix_accel_data *data = s->drv_data;
 
-	reg = KIONIX_CTRL1_REG(data->variant);
-	pc1_field = KIONIX_PC1_FIELD(data->variant);
+	reg = KIONIX_CTRL1_REG(V(s));
+	pc1_field = KIONIX_PC1_FIELD(V(s));
 
 	/*
 	 * Read the current state of the control register
@@ -188,10 +194,9 @@ static int disable_sensor(const struct motion_sensor_t *s, int *reg_val)
 static int enable_sensor(const struct motion_sensor_t *s, int reg_val)
 {
 	int i, ret, reg, pc1_field;
-	struct kionix_accel_data *data = s->drv_data;
 
-	reg = KIONIX_CTRL1_REG(data->variant);
-	pc1_field = KIONIX_PC1_FIELD(data->variant);
+	reg = KIONIX_CTRL1_REG(V(s));
+	pc1_field = KIONIX_PC1_FIELD(V(s));
 
 	for (i = 0; i < SENSOR_ENABLE_ATTEMPTS; i++) {
 		ret = raw_read8(s->addr, reg, &reg_val);
@@ -215,10 +220,11 @@ static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 	struct kionix_accel_data *data = s->drv_data;
 
 	/* Find index for interface pair matching the specified range. */
-	index = find_param_index(range, rnd, ranges[T], ARRAY_SIZE(ranges[T]));
-	range_field = KIONIX_RANGE_FIELD(data->variant);
-	reg = KIONIX_CTRL1_REG(data->variant);
-	range_val = ranges[T][index].reg;
+	index = find_param_index(range, rnd, ranges[T(s)],
+				 ARRAY_SIZE(ranges[T(s)]));
+	range_field = KIONIX_RANGE_FIELD(V(s));
+	reg = KIONIX_CTRL1_REG(V(s));
+	range_val = ranges[T(s)][index].reg;
 
 	/* Disable the sensor to allow for changing of critical parameters. */
 	mutex_lock(s->mutex);
@@ -249,7 +255,7 @@ static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 static int get_range(const struct motion_sensor_t *s)
 {
 	struct kionix_accel_data *data = s->drv_data;
-	return ranges[T][data->sensor_range].val;
+	return ranges[T(s)][data->sensor_range].val;
 }
 
 static int set_resolution(const struct motion_sensor_t *s, int res, int rnd)
@@ -258,11 +264,11 @@ static int set_resolution(const struct motion_sensor_t *s, int res, int rnd)
 	struct kionix_accel_data *data = s->drv_data;
 
 	/* Find index for interface pair matching the specified resolution. */
-	index = find_param_index(res, rnd, resolutions[T],
-				 ARRAY_SIZE(resolutions[T]));
-	res_val = resolutions[T][index].reg;
-	res_field = KIONIX_RES_FIELD(data->variant);
-	reg = KIONIX_CTRL1_REG(data->variant);
+	index = find_param_index(res, rnd, resolutions[T(s)],
+				 ARRAY_SIZE(resolutions[T(s)]));
+	res_val = resolutions[T(s)][index].reg;
+	res_field = KIONIX_RES_FIELD(V(s));
+	reg = KIONIX_CTRL1_REG(V(s));
 
 	/* Disable the sensor to allow for changing of critical parameters. */
 	mutex_lock(s->mutex);
@@ -293,7 +299,7 @@ static int set_resolution(const struct motion_sensor_t *s, int res, int rnd)
 static int get_resolution(const struct motion_sensor_t *s)
 {
 	struct kionix_accel_data *data = s->drv_data;
-	return resolutions[T][data->sensor_resolution].val;
+	return resolutions[T(s)][data->sensor_resolution].val;
 }
 
 static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
@@ -303,11 +309,11 @@ static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 	struct kionix_accel_data *data = s->drv_data;
 
 	/* Find index for interface pair matching the specified rate. */
-	index = find_param_index(rate, rnd, datarates[T],
-				 ARRAY_SIZE(datarates[T]));
-	odr_val = datarates[T][index].reg;
-	reg = KIONIX_ODR_REG(data->variant);
-	odr_field = KIONIX_ODR_FIELD(data->variant);
+	index = find_param_index(rate, rnd, datarates[T(s)],
+				 ARRAY_SIZE(datarates[T(s)]));
+	odr_val = datarates[T(s)][index].reg;
+	reg = KIONIX_ODR_REG(V(s));
+	odr_field = KIONIX_ODR_FIELD(V(s));
 
 	/* Disable the sensor to allow for changing of critical parameters. */
 	mutex_lock(s->mutex);
@@ -342,7 +348,7 @@ static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 static int get_data_rate(const struct motion_sensor_t *s)
 {
 	struct kionix_accel_data *data = s->drv_data;
-	return datarates[T][data->sensor_datarate].val;
+	return datarates[T(s)][data->sensor_datarate].val;
 }
 
 static int set_offset(const struct motion_sensor_t *s, const int16_t *offset,
@@ -375,7 +381,7 @@ static int read(const struct motion_sensor_t *s, vector_3_t v)
 	struct kionix_accel_data *data = s->drv_data;
 
 	/* Read 6 bytes starting at XOUT_L. */
-	reg = KIONIX_XOUT_L(data->variant);
+	reg = KIONIX_XOUT_L(V(s));
 	mutex_lock(s->mutex);
 	i2c_lock(I2C_PORT_ACCEL, 1);
 	ret = i2c_xfer(I2C_PORT_ACCEL, s->addr, &reg, 1, acc, 6,
@@ -401,11 +407,11 @@ static int read(const struct motion_sensor_t *s, vector_3_t v)
 	 */
 	resolution = get_resolution(s);
 	for (i = X; i <= Z; i++) {
-		if (KXCJ9 == data->variant) {
+		if (V(s)) {
 			v[i] = (((int8_t)acc[i * 2 + 1]) << 4) |
 				(acc[i * 2] >> 4);
 			v[i] <<= 16 - resolution;
-		} else if (KX022 == data->variant) {
+		} else {
 			if (resolution == 8)
 				acc[i * 2] = 0;
 			v[i] = (((int8_t)acc[i * 2 + 1]) << 8) | acc[i * 2];
@@ -425,10 +431,9 @@ static int init(const struct motion_sensor_t *s)
 {
 	int ret, val, reg, reset_field;
 	uint8_t timeout;
-	struct kionix_accel_data *data = s->drv_data;
 
-	reg = KIONIX_CTRL2_REG(data->variant);
-	reset_field = KIONIX_RESET_FIELD(data->variant);
+	reg = KIONIX_CTRL2_REG(V(s));
+	reset_field = KIONIX_RESET_FIELD(V(s));
 
 	/* Issue a software reset. */
 	mutex_lock(s->mutex);
@@ -480,9 +485,9 @@ static int init(const struct motion_sensor_t *s)
 	if (ret != EC_SUCCESS)
 		return ret;
 
-	if (KXCJ9 == data->variant)
+	if (V(s))
 		ret = set_resolution(s, 12, 1);
-	else if (KX022 == data->variant)
+	else
 		ret = set_resolution(s, 16, 1);
 	if (ret != EC_SUCCESS)
 		return ret;
