@@ -40,32 +40,6 @@
 #define T(s_) V(s_)
 #endif /* !defined(CONFIG_ACCEL_KXCJ9) || !defined(CONFIG_ACCEL_KX022) */
 
-/* List of range values in +/-G's and their associated register values. */
-static const struct accel_param_pair ranges[][3] = {
-#ifdef CONFIG_ACCEL_KX022
-	{ {2, KX022_GSEL_2G},
-	  {4, KX022_GSEL_4G},
-	  {8, KX022_GSEL_8G} },
-#endif /* defined(CONFIG_ACCEL_KX022) */
-#ifdef CONFIG_ACCEL_KXCJ9
-	{ {2, KXCJ9_GSEL_2G},
-	  {4, KXCJ9_GSEL_4G},
-	  {8, KXCJ9_GSEL_8G_14BIT} },
-#endif /* defined(CONFIG_ACCEL_KXCJ9) */
-};
-
-/* List of resolution values in bits and their associated register values. */
-static const struct accel_param_pair resolutions[][2] = {
-#ifdef CONFIG_ACCEL_KX022
-	{ {8,  KX022_RES_8BIT},
-	  {16, KX022_RES_16BIT} },
-#endif /* defined(CONFIG_ACCEL_KX022) */
-#ifdef CONFIG_ACCEL_KXCJ9
-	{ {8,  KXCJ9_RES_8BIT},
-	  {12, KXCJ9_RES_12BIT} },
-#endif /* defined(CONFIG_ACCEL_KXCJ9) */
-};
-
 /* List of ODR values in mHz and their associated register values. */
 static const struct accel_param_pair datarates[][13] = {
 #ifdef CONFIG_ACCEL_KX022
@@ -252,50 +226,42 @@ static int set_value(const struct motion_sensor_t *s, int reg, int val,
 
 static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 {
-	int ret, index, reg, range_field, range_val;
-	struct kionix_accel_data *data = s->drv_data;
+	int reg, range_field, range_val;
 
-	/* Find index for interface pair matching the specified range. */
-	index = find_param_index(range, rnd, ranges[T(s)],
-				 ARRAY_SIZE(ranges[T(s)]));
 	range_field = KIONIX_RANGE_FIELD(V(s));
 	reg = KIONIX_CTRL1_REG(V(s));
-	range_val = ranges[T(s)][index].reg;
-
-	ret = set_value(s, reg, range_val, range_field);
-	if (ret == EC_SUCCESS)
-		data->sensor_range = index;
-	return ret;
+	if (V(s))
+		range_val = KXCJ9_GSEL_8G;
+	else
+		range_val = KX022_GSEL_8G;
+	return set_value(s, reg, range_val, range_field);
 }
 
 static int get_range(const struct motion_sensor_t *s)
 {
-	struct kionix_accel_data *data = s->drv_data;
-	return ranges[T(s)][data->sensor_range].val;
+	return 8;
 }
 
 static int set_resolution(const struct motion_sensor_t *s, int res, int rnd)
 {
-	int ret, index, reg, res_field, res_val;
-	struct kionix_accel_data *data = s->drv_data;
+	int reg, res_field, res_val;
 
-	/* Find index for interface pair matching the specified resolution. */
-	index = find_param_index(res, rnd, resolutions[T(s)],
-				 ARRAY_SIZE(resolutions[T(s)]));
-	res_val = resolutions[T(s)][index].reg;
+	if (V(s))
+		res_val = KXCJ9_RES_12BIT;
+	else
+		res_val = KX022_RES_16BIT;
 	res_field = KIONIX_RES_FIELD(V(s));
 	reg = KIONIX_CTRL1_REG(V(s));
 
-	ret = set_value(s, reg, res_val, res_field);
-	if (ret == EC_SUCCESS)
-		data->sensor_resolution = index;
-	return ret;
+	return set_value(s, reg, res_val, res_field);
 }
 
 static int get_resolution(const struct motion_sensor_t *s)
 {
-	struct kionix_accel_data *data = s->drv_data;
-	return resolutions[T(s)][data->sensor_resolution].val;
+	if (V(s))
+		return 12;
+	else
+		return 16;
 }
 
 static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)

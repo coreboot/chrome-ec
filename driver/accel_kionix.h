@@ -23,12 +23,8 @@ struct accel_param_pair {
 
 struct kionix_accel_data {
 	/* Note, the following are indicies into their respective tables. */
-	/* Current range of accelerometer. */
-	int sensor_range;
 	/* Current output data rate of accelerometer. */
 	int sensor_datarate;
-	/* Current resolution of accelerometer. */
-	int sensor_resolution;
 	/* Device address. */
 	int accel_addr;
 	int16_t offset[3];
