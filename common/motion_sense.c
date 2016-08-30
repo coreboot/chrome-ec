@@ -187,14 +187,11 @@ static enum sensor_config motion_sense_get_ec_config(void)
 		return SENSOR_CONFIG_EC_S0;
 	case SENSOR_ACTIVE_S3:
 		return SENSOR_CONFIG_EC_S3;
-	case SENSOR_ACTIVE_S5:
+	default:  /* SENSOR_ACTIVE_S5 */
 		return SENSOR_CONFIG_EC_S5;
-	default:
-		CPRINTS("get_ec_config: Invalid active state: %x",
-			sensor_active);
-		return SENSOR_CONFIG_MAX;
 	}
 }
+
 /* motion_sense_set_data_rate
  *
  * Set the sensor data rate. It is altered when the AP change the data
