@@ -55,4 +55,9 @@ extern const struct accelgyro_drv kionix_accel_drv;
 #define KIONIX_XOUT_L(v) (KX022_XOUT_L +	\
 			  (v) * (KXCJ9_XOUT_L - KX022_XOUT_L))
 
+/* Common ODR setting: */
+#define KX_OSA_12_50HZ	0
+#define KX_OSA_1600HZ	7
+
+
 #endif /* __CROS_EC_ACCEL_KIONIX_H */

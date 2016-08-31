@@ -33,101 +33,6 @@
 #else
 #define V(s_) ((s_)->chip == MOTIONSENSE_CHIP_KXCJ9)
 #endif
-/* Index for which table to use. */
-#if !defined(CONFIG_ACCEL_KXCJ9) || !defined(CONFIG_ACCEL_KX022)
-#define T(s_) 0
-#else
-#define T(s_) V(s_)
-#endif /* !defined(CONFIG_ACCEL_KXCJ9) || !defined(CONFIG_ACCEL_KX022) */
-
-/* List of range values in +/-G's and their associated register values. */
-static const struct accel_param_pair ranges[][3] = {
-#ifdef CONFIG_ACCEL_KX022
-	{ {2, KX022_GSEL_2G},
-	  {4, KX022_GSEL_4G},
-	  {8, KX022_GSEL_8G} },
-#endif /* defined(CONFIG_ACCEL_KX022) */
-#ifdef CONFIG_ACCEL_KXCJ9
-	{ {2, KXCJ9_GSEL_2G},
-	  {4, KXCJ9_GSEL_4G},
-	  {8, KXCJ9_GSEL_8G_14BIT} },
-#endif /* defined(CONFIG_ACCEL_KXCJ9) */
-};
-
-/* List of resolution values in bits and their associated register values. */
-static const struct accel_param_pair resolutions[][2] = {
-#ifdef CONFIG_ACCEL_KX022
-	{ {8,  KX022_RES_8BIT},
-	  {16, KX022_RES_16BIT} },
-#endif /* defined(CONFIG_ACCEL_KX022) */
-#ifdef CONFIG_ACCEL_KXCJ9
-	{ {8,  KXCJ9_RES_8BIT},
-	  {12, KXCJ9_RES_12BIT} },
-#endif /* defined(CONFIG_ACCEL_KXCJ9) */
-};
-
-/* List of ODR values in mHz and their associated register values. */
-static const struct accel_param_pair datarates[][13] = {
-#ifdef CONFIG_ACCEL_KX022
-	/* One duplicate because table sizes must match. */
-	{ {781,     KX022_OSA_0_781HZ},
-	  {781,     KX022_OSA_0_781HZ},
-	  {1563,    KX022_OSA_1_563HZ},
-	  {3125,    KX022_OSA_3_125HZ},
-	  {6250,    KX022_OSA_6_250HZ},
-	  {12500,   KX022_OSA_12_50HZ},
-	  {25000,   KX022_OSA_25_00HZ},
-	  {50000,   KX022_OSA_50_00HZ},
-	  {100000,  KX022_OSA_100_0HZ},
-	  {200000,  KX022_OSA_200_0HZ},
-	  {400000,  KX022_OSA_400_0HZ},
-	  {800000,  KX022_OSA_800_0HZ},
-	  {1600000, KX022_OSA_1600HZ} },
-#endif /* defined(CONFIG_ACCEL_KX022) */
-#ifdef CONFIG_ACCEL_KXCJ9
-	{ {0,       KXCJ9_OSA_0_000HZ},
-	  {781,     KXCJ9_OSA_0_781HZ},
-	  {1563,    KXCJ9_OSA_1_563HZ},
-	  {3125,    KXCJ9_OSA_3_125HZ},
-	  {6250,    KXCJ9_OSA_6_250HZ},
-	  {12500,   KXCJ9_OSA_12_50HZ},
-	  {25000,   KXCJ9_OSA_25_00HZ},
-	  {50000,   KXCJ9_OSA_50_00HZ},
-	  {100000,  KXCJ9_OSA_100_0HZ},
-	  {200000,  KXCJ9_OSA_200_0HZ},
-	  {400000,  KXCJ9_OSA_400_0HZ},
-	  {800000,  KXCJ9_OSA_800_0HZ},
-	  {1600000, KXCJ9_OSA_1600_HZ} },
-#endif /* defined(CONFIG_ACCEL_KXCJ9) */
-};
-
-/**
- * Find index into a accel_param_pair that matches the given engineering value
- * passed in. The round_up flag is used to specify whether to round up or down.
- * Note, this function always returns a valid index. If the request is
- * outside the range of values, it returns the closest valid index.
- */
-static int find_param_index(const int eng_val, const int round_up,
-			    const struct accel_param_pair *pairs,
-			    const int size)
-{
-	int i;
-
-	/* Linear search for index to match. */
-	for (i = 0; i < size - 1; i++) {
-		if (eng_val <= pairs[i].val)
-			return i;
-
-		if (eng_val < pairs[i+1].val) {
-			if (round_up)
-				return i + 1;
-			else
-				return i;
-		}
-	}
-
-	return i;
-}
 
 /**
  * Read register from accelerometer.
@@ -176,7 +81,7 @@ static int disable_sensor(const struct motion_sensor_t *s, int *reg_val)
 
 		ret = raw_write8(s->addr, reg, *reg_val);
 		if (ret == EC_SUCCESS)
-			return EC_SUCCESS;
+			break;
 	}
 	return ret;
 }
@@ -300,26 +205,37 @@ static int get_resolution(const struct motion_sensor_t *s)
 
 static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 {
-	int ret, index, reg, odr_field, odr_val;
+	int ret, reg, odr_field, odr_val, real_rate;
 	struct kionix_accel_data *data = s->drv_data;
 
-	/* Find index for interface pair matching the specified rate. */
-	index = find_param_index(rate, rnd, datarates[T(s)],
-				 ARRAY_SIZE(datarates[T(s)]));
-	odr_val = datarates[T(s)][index].reg;
+	/* Find ODR from rate between 12.5Hz and 1600Hz */
+	if (rate <= 12500) {
+		/*
+		 * On minnie, EC is polling at 10Hz, so that the lowest we
+		 * will got
+		 */
+		odr_val = KX_OSA_12_50HZ;
+	} else {
+		odr_val = 31 - __builtin_clz(rate / 12500);
+	}
+	real_rate = 12500 << odr_val;
+	if (odr_val < KX_OSA_1600HZ && real_rate < rate && rnd) {
+		odr_val++;
+		real_rate *= 2;
+	}
+
 	reg = KIONIX_ODR_REG(V(s));
 	odr_field = KIONIX_ODR_FIELD(V(s));
-
 	ret = set_value(s, reg, odr_val, odr_field);
 	if (ret == EC_SUCCESS)
-		data->sensor_datarate = index;
+		data->sensor_datarate = real_rate;
 	return ret;
 }
 
 static int get_data_rate(const struct motion_sensor_t *s)
 {
 	struct kionix_accel_data *data = s->drv_data;
-	return datarates[T(s)][data->sensor_datarate].val;
+	return data->sensor_datarate;
 }
 
 static int set_offset(const struct motion_sensor_t *s, const int16_t *offset,
