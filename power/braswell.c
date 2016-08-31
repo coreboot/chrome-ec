@@ -19,6 +19,7 @@
 #include "timer.h"
 #include "usb_charge.h"
 #include "util.h"
+#include "watchdog.h"
 #include "wireless.h"
 #include "registers.h"
 
@@ -357,7 +358,8 @@ void enter_pseudo_g3(void)
 	gpio_set_level(GPIO_SMC_SHUTDOWN, 1);
 
 	/* Power to EC should shut down now */
+	/* Terra11 shutdown takes several seconds, for unknown reasons */
 	while (1)
-		;
+		watchdog_reload();
 }
 #endif
