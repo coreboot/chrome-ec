@@ -261,9 +261,13 @@ static void board_pmic_init(void)
 	/* VRMODECTRL - enable low-power mode for VCCIO and V0.85A */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x18);
 
-	/* V5ADS3CNT - Set CTLV5ADS3 = Force PWM */
+	/* V5ADS3CNT
+	 * [5:4] Bit 0:1 Set V5ADS3VSEL = Vnom+2%
+	 * [1:0] BIT 1:0 Set CTLV5ADS3 = Force PWM
+	 */
 	if (!i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x31, &pmic_reg31)) {
-		pmic_reg31 |= 0x03;
+		pmic_reg31 &= 0xCF;
+		pmic_reg31 |= 0x13;
 		i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x31, pmic_reg31);
 	}
 }
