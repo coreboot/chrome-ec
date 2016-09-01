@@ -2520,6 +2520,16 @@ struct ec_response_get_next_event {
 	union ec_response_get_next_data data;
 } __packed;
 
+/* Bit indices for buttons and switches.*/
+/* Buttons */
+#define EC_MKBP_POWER_BUTTON	0
+#define EC_MKBP_VOL_UP		1
+#define EC_MKBP_VOL_DOWN	2
+
+/* Switches */
+#define EC_MKBP_LID_OPEN	0
+#define EC_MKBP_TABLET_MODE	1
+
 /* Run keyboard factory test scanning */
 #define EC_CMD_KEYBOARD_FACTORY_TEST 0x68
 
