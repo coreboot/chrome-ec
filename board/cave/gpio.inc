@@ -100,7 +100,7 @@ GPIO(BAT_LED_RED,           PIN(156), GPIO_OUT_LOW)
  * pulls setting this pin as input won't harm anything.
  */
 GPIO(BATLOW_L_PMIC_LDO_EN,  PIN(55),  GPIO_INPUT)
-GPIO(PP1800_DX_AUDIO_EN,    PIN(141), GPIO_OUT_LOW)
+GPIO(PP1800_DX_AUDIO_EN,    PIN(141), GPIO_OUT_HIGH)
 
 /* Keyboard backlight */
 GPIO(KBBL_EN,               PIN(105), GPIO_OUT_LOW)
