@@ -68,6 +68,7 @@ BOARDS_STM32=(
 	minimuffin
 	oak
 	oak_pd
+	pbody_pd
 	pit
 	plankton
 	ryu
@@ -107,6 +108,7 @@ BOARDS_MEC1322=(
 	glados
 	kunimitsu
 	lars
+	pbody
 	sentry
 	strago
 )
@@ -314,7 +316,7 @@ function ec_uart() {
 # Servo variables management
 case "${BOARD}" in
 	oak_pd|samus_pd|strago_pd ) MCU="usbpd" ;;
-	asuka_pd|cave_pd|chell_pd|glados_pd|kunimitsu_pd|lars_pd|sentry_pd ) MCU="usbpd" ;;
+	asuka_pd|cave_pd|chell_pd|glados_pd|kunimitsu_pd|lars_pd|pbody_pd|sentry_pd ) MCU="usbpd" ;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD="true" ; MCU="ec" ;;
 	*) MCU="ec" ;;
 esac
