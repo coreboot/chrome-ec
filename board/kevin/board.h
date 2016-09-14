@@ -25,7 +25,9 @@
 #define CONFIG_SPI
 #define CONFIG_SPI_MASTER
 
+#ifdef BOARD_GRU
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
+#endif
 
 /*
  * We are code space-constrained on kevin, so take 10K that is normally used
