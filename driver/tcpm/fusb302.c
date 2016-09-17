@@ -993,3 +993,35 @@ const struct tcpm_drv fusb302_tcpm_drv = {
 	.transmit		= &fusb302_tcpm_transmit,
 	.tcpc_alert		= &fusb302_tcpc_alert,
 };
+
+#ifdef CONFIG_CMD_TCPC_DUMP
+static int command_fusb302dump(int argc, char **argv)
+{
+	int port, reg;
+	int val;
+
+	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; ++port) {
+		ccprintf("St:  %x %x %x %x %x %x\n", state[port].cc_polarity,
+			state[port].vconn_enabled, state[port].pulling_up,
+			state[port].rx_enable, state[port].dfp_toggling_on,
+			state[port].previous_pull);
+		ccprintf("St2: %x %x %x %x %x\n",
+			state[port].togdone_pullup_cc1,
+			state[port].togdone_pullup_cc2,
+			state[port].tx_hard_reset_req,
+			state[port].mdac_vnc, state[port].mdac_rd);
+		for (reg = 1; reg <= 0xf; ++reg) {
+			tcpc_read(port, reg, &val);
+			ccprintf("REG %x\t%x\n", reg, val);
+		}
+		for (reg = 0x3c; reg <= 0x42; ++reg) {
+			tcpc_read(port, reg, &val);
+			ccprintf("REG %x\t%x\n", reg, val);
+		}
+	}
+
+	return 0;
+}
+DECLARE_CONSOLE_COMMAND(tcpc_dump, command_fusb302dump,
+			"NULL", "Dump TCPC regs");
+#endif
