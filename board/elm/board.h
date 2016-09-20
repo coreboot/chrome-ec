@@ -15,9 +15,18 @@
 #define CONFIG_CMD_ACCEL_INFO
 #define CONFIG_CMD_ACCEL_RESET
 #define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE 0
-#define CONFIG_LID_ANGLE_SENSOR_LID 1
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 #define CONFIG_LID_ANGLE_UPDATE
+/* FIFO size is in power of 2. */
+#define CONFIG_ACCEL_FIFO 512
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+
+/*
+ * Sensor internal FIFO is enabled for BMI160, but not for BMA255.
+ */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	((1 << LID_ACCEL) | (1 << BASE_ACCEL))
 
 #define CONFIG_ADC
 #undef  CONFIG_ADC_WATCHDOG
@@ -187,6 +196,12 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,
 
 	TEMP_SENSOR_COUNT
+};
+
+/* Motion sensors */
+enum sensor_id {
+	BASE_ACCEL = 0,
+	LID_ACCEL,
 };
 
 /* start as a sink in case we have no other power supply/battery */

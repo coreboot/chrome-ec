@@ -546,7 +546,8 @@ const matrix_3x3_t lid_standard_ref = {
 struct kionix_accel_data g_kx022_data[2];
 
 struct motion_sensor_t motion_sensors[] = {
-	{.name = "Base Accel",
+	[BASE_ACCEL] = {
+	 .name = "Base Accel",
 	 .active_mask = SENSOR_ACTIVE_S0,
 	 .chip = MOTIONSENSE_CHIP_KX022,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
@@ -560,8 +561,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .config = {
 		/* AP: by default use EC settings */
 		[SENSOR_CONFIG_AP] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
+			.odr = 0,
+			.ec_rate = 0,
 		},
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
@@ -580,7 +581,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 },
 	},
 
-	{.name = "Lid Accel",
+	[LID_ACCEL] = {
+	 .name = "Lid Accel",
 	 .active_mask = SENSOR_ACTIVE_S0,
 	 .chip = MOTIONSENSE_CHIP_KX022,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
@@ -594,8 +596,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .config = {
 		/* AP: by default use EC settings */
 		[SENSOR_CONFIG_AP] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
+			.odr = 0,
+			.ec_rate = 0,
 		},
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
