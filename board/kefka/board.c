@@ -237,3 +237,22 @@ int i2c_port_is_smbus(int port)
 {
 	return (port == MEC1322_I2C0_0 || port == MEC1322_I2C0_1) ? 1 : 0;
 }
+
+/* To prevent power leakage, need to set touch screen reset pin */
+static void touch_screen_control(void)
+{
+
+		if (chipset_will_be_in_s0()) {
+				/* when platform is at s0, set pin as high */
+				gpio_set_level(GPIO_TS_RST_L, 0);
+				msleep(1);
+				gpio_set_level(GPIO_TS_RST_L, 1);
+
+		} else {
+				usleep(20);
+				gpio_set_level(GPIO_TS_RST_L, 0);
+		}
+}
+DECLARE_HOOK(HOOK_INIT, touch_screen_control, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_control, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, touch_screen_control, HOOK_PRIO_DEFAULT);
