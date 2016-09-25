@@ -685,8 +685,8 @@ static void bd99995_init(void)
 	ch_raw_write16(BD99955_CMD_VM_CTRL_SET, reg,
 		       BD99955_EXTENDED_COMMAND);
 
-	/* Set fast charging watchdog to 1020 minutes. */
-	ch_raw_write16(BD99955_CMD_CHGWDT_SET, 0xFF10,
+	/* Disable fast/pre-charging watchdog */
+	ch_raw_write16(BD99955_CMD_CHGWDT_SET, 0,
 		       BD99955_EXTENDED_COMMAND);
 
 	/* Set charge termination current to 0 mA. */
