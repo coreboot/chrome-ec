@@ -321,27 +321,6 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND,
 	     board_spi_disable,
 	     MOTION_SENSE_HOOK_PRIO + 1);
 
-/*
- * Reset our charger IC on power-on. This will briefly cut extpower to the
- * system, so skip the reset if our battery can't provide sufficient charge
- * to briefly power the system.
- * TODO(shawnn): Move to common code.
- */
-static void board_reset_charger(void)
-{
-	int bat_pct = 0;
-
-	if (!system_jumped_to_this_image() &&
-	    battery_is_present() == BP_YES &&
-	    battery_get_disconnect_state() != BATTERY_DISCONNECTED) {
-		if (battery_state_of_charge_abs(&bat_pct) ||
-		    bat_pct < CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
-			return;
-		charger_set_mode(CHARGE_FLAG_POR_RESET);
-	}
-}
-DECLARE_HOOK(HOOK_INIT, board_reset_charger, HOOK_PRIO_INIT_EXTPOWER - 1);
-
 static void board_init(void)
 {
 	/* Enable TCPC alert interrupts */
