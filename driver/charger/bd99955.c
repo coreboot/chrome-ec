@@ -67,8 +67,10 @@ static inline int ch_raw_read16(int cmd, int *param,
 	if (charger_map_cmd != map_cmd) {
 		rv = i2c_write16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER,
 				 BD99955_CMD_MAP_SET, map_cmd);
-		if (rv)
+		if (rv) {
+			charger_map_cmd = BD99955_INVALID_COMMAND;
 			goto bd99955_read_cleanup;
+		}
 
 		charger_map_cmd = map_cmd;
 	}
@@ -91,8 +93,10 @@ static inline int ch_raw_write16(int cmd, int param,
 	if (charger_map_cmd != map_cmd) {
 		rv = i2c_write16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER,
 					BD99955_CMD_MAP_SET, map_cmd);
-		if (rv)
+		if (rv) {
+			charger_map_cmd = BD99955_INVALID_COMMAND;
 			goto bd99955_write_cleanup;
+		}
 
 		charger_map_cmd = map_cmd;
 	}
@@ -720,7 +724,6 @@ static void bd99995_init(void)
 
 	/* Unlock debug regs */
 	ch_raw_write16(BD99955_CMD_PROTECT_SET, 0x3c, BD99955_EXTENDED_COMMAND);
-	ch_raw_write16(BD99955_CMD_MAP_SET, 0x2, BD99955_EXTENDED_COMMAND);
 
 	/* Undocumented - reverse current threshold = -50mV */
 	ch_raw_write16(0x14, 0x0202, BD99955_DEBUG_COMMAND);
@@ -729,7 +732,6 @@ static void bd99995_init(void)
 
 	/* Re-lock debug regs */
 	ch_raw_write16(BD99955_CMD_PROTECT_SET, 0x0, BD99955_EXTENDED_COMMAND);
-	ch_raw_write16(BD99955_CMD_MAP_SET, 0x1, BD99955_EXTENDED_COMMAND);
 }
 DECLARE_HOOK(HOOK_INIT, bd99995_init, HOOK_PRIO_INIT_EXTPOWER);
 
