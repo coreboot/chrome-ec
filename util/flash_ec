@@ -54,6 +54,7 @@ BOARDS_STM32=(
 	asuka_pd
 	big
 	blaze
+	caroline_pd
 	cave_pd
 	chell_pd
 	discovery
@@ -103,6 +104,7 @@ BOARDS_NRF51=(
 
 BOARDS_MEC1322=(
 	asuka
+	caroline
 	cave
 	chell
 	glados
@@ -315,7 +317,7 @@ function ec_uart() {
 
 # Servo variables management
 case "${BOARD}" in
-	oak_pd|samus_pd|strago_pd ) MCU="usbpd" ;;
+	caroline_pd|oak_pd|samus_pd|strago_pd ) MCU="usbpd" ;;
 	asuka_pd|cave_pd|chell_pd|glados_pd|kunimitsu_pd|lars_pd|pbody_pd|sentry_pd ) MCU="usbpd" ;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD="true" ; MCU="ec" ;;
 	*) MCU="ec" ;;
