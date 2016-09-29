@@ -339,7 +339,6 @@ enum power_state power_handle_state(enum power_state state)
 	return state;
 }
 
-#ifdef CONFIG_LOW_POWER_PSEUDO_G3
 void enter_pseudo_g3(void)
 {
 	CPRINTS("Enter Psuedo G3");
@@ -352,4 +351,3 @@ void enter_pseudo_g3(void)
 	while (1)
 		;
 }
-#endif

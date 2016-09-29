@@ -16,6 +16,7 @@
 #include "keyboard_raw.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
+#include "power.h"
 #include "switch.h"
 #include "system.h"
 #include "task.h"
@@ -346,8 +347,8 @@ static int check_runtime_keys(const uint8_t *state)
 		return 1;
 	} else if (state[KEYBOARD_COL_KEY_H] == KEYBOARD_MASK_KEY_H) {
 		/* H = hibernate */
-		CPRINTS("KB hibernate");
-		system_hibernate(0, 0);
+		CPRINTS("KB G3");
+		enter_pseudo_g3();
 		return 1;
 	}
 
