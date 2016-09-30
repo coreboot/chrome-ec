@@ -112,6 +112,7 @@ DECLARE_CONSOLE_COMMAND(md, command_mem_dump,
 			NULL);
 #endif /* CONFIG_CMD_MD */
 
+#ifdef CONFIG_CMD_RW
 static int command_read_word(int argc, char **argv)
 {
 	volatile uint32_t *address;
@@ -193,3 +194,4 @@ DECLARE_CONSOLE_COMMAND
 	 "[.b|.h] addr [value]",
 	 "Read or write a word in memory optionally specifying the size",
 	 NULL);
+#endif	/* CONFIG_CMD_RW */

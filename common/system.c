@@ -880,6 +880,7 @@ DECLARE_CONSOLE_COMMAND(version, command_version,
 			"Print versions",
 			NULL);
 
+#ifdef CONFIG_CMD_SYSJUMP
 static int command_sysjump(int argc, char **argv)
 {
 	uint32_t addr;
@@ -920,6 +921,7 @@ DECLARE_CONSOLE_COMMAND(sysjump, command_sysjump,
 			"[RO | RW | addr | disable]",
 			"Jump to a system image or address",
 			NULL);
+#endif
 
 static int command_reboot(int argc, char **argv)
 {
@@ -966,7 +968,7 @@ DECLARE_CONSOLE_COMMAND(syslock, command_system_lock,
 			"Lock the system, even if WP is disabled",
 			NULL);
 
-#ifdef CONFIG_LOW_POWER_IDLE
+#if defined(CONFIG_LOW_POWER_IDLE) && defined(CONFIG_CMD_SLEEPMASK)
 /**
  * Modify and print the sleep mask which controls access to deep sleep
  * mode in the idle task.
