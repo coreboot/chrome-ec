@@ -32,6 +32,7 @@ test-list-$(BOARD_OAK_PD)=
 test-list-$(BOARD_SAMUS_PD)=
 test-list-$(BOARD_LARS_PD)=
 test-list-$(BOARD_SENTRY_PD)=
+test-list-$(BOARD_CAROLINE_PD)=
 
 # Emulator tests
 test-list-host=mutex pingpong utils kb_scan kb_mkbp lid_sw power_button hooks
