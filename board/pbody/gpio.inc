@@ -54,8 +54,8 @@ GPIO(I2C3_SDA,              PIN(25),  GPIO_INPUT)
 GPIO(PCH_SCI_L,             PIN(26),  GPIO_ODR_HIGH)
 /* KB BL PWM, only connected to TP */
 GPIO(PWM_KBLIGHT,           PIN(34),  GPIO_OUT_LOW)
-GPIO(USB1_ENABLE,           PIN(36),  GPIO_OUT_LOW)
-GPIO(USB2_ENABLE,           PIN(67),  GPIO_OUT_LOW)
+GPIO(PWR_LED,               PIN(36),  GPIO_OUT_HIGH)
+GPIO(NC_GPIO67,             PIN(67),  GPIO_INPUT | GPIO_PULL_UP)
 GPIO(ENTERING_RW,           PIN(41),  GPIO_OUT_LOW)
 GPIO(PCH_SMI_L,             PIN(44),  GPIO_ODR_HIGH)
 GPIO(PCH_PWRBTN_L,          PIN(45),  GPIO_OUTPUT)
@@ -68,9 +68,8 @@ GPIO(USB_PD_WAKE,           PIN(60),  GPIO_OUT_HIGH)
 /* When asserted, ME does not lock security descriptor */
 GPIO(PCH_SEC_DISABLE_L,     PIN(65),  GPIO_OUT_HIGH)
 GPIO(PCH_WAKE_L,            PIN(66),  GPIO_ODR_HIGH)
-GPIO(EC_FAN1_TTACH,         PIN(105), GPIO_INPUT | GPIO_PULL_UP)
-/* Fan PWM output - NC / testing only */
-GPIO(EC_FAN1_PWM,           PIN(136), GPIO_OUT_LOW)
+GPIO(USB_C1_DISCHARGE,      PIN(105), GPIO_OUT_LOW)
+GPIO(USB_C0_DISCHARGE,      PIN(136), GPIO_OUT_LOW)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(ACCEL1_INT,            PIN(161), GPIO_INPUT)

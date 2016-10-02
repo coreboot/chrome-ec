@@ -26,8 +26,9 @@
 #define LED_ON_1SEC_TICKS 1
 #define LED_ON_2SECS_TICKS 2
 
+/* Add Power led */
 const enum ec_led_id supported_led_ids[] = {
-			EC_LED_ID_BATTERY_LED};
+		EC_LED_ID_BATTERY_LED, EC_LED_ID_POWER_LED};
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
@@ -158,10 +159,35 @@ static void pbody_led_set_battery(void)
 	}
 }
 
+static void pbody_led_set_power(void)
+{
+	static int power_ticks;
+	static int previous_state_suspend;
+
+	power_ticks++;
+
+	if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
+		if (!previous_state_suspend)
+			power_ticks = 0;
+		/* Blink once every four seconds */
+		gpio_set_level(GPIO_PWR_LED, (power_ticks %
+			LED_TOTAL_4SECS_TICKS) < LED_ON_1SEC_TICKS ? 0 : 1);
+		previous_state_suspend = 1;
+		return;
+	}
+	previous_state_suspend = 0;
+
+	gpio_set_level(GPIO_PWR_LED, chipset_in_state(CHIPSET_STATE_ANY_OFF));
+
+}
+
 /** * Called by hook task every 1 sec  */
 static void led_second(void)
 {
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		pbody_led_set_battery();
+
+	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
+		pbody_led_set_power();
 }
 DECLARE_HOOK(HOOK_SECOND, led_second, HOOK_PRIO_DEFAULT);
