@@ -27,7 +27,6 @@ static struct fusb302_chip_state {
 	int previous_pull;
 	int togdone_pullup_cc1;
 	int togdone_pullup_cc2;
-	int tx_hard_reset_req;
 	struct mutex set_cc_lock;
 	uint8_t mdac_vnc;
 	uint8_t mdac_rd;
@@ -786,8 +785,6 @@ static int fusb302_tcpm_transmit(int port, enum tcpm_transmit_type type,
 
 		return fusb302_send_message(port, header, data, buf, buf_pos);
 	case TCPC_TX_HARD_RESET:
-		state[port].tx_hard_reset_req = 1;
-
 		/* Simply hit the SEND_HARD_RESET bit */
 		tcpc_read(port, TCPC_REG_CONTROL3, &reg);
 		reg |= TCPC_REG_CONTROL3_SEND_HARDRESET;
@@ -843,7 +840,6 @@ void fusb302_tcpc_alert(int port)
 
 	if (interrupt & TCPC_REG_INTERRUPT_COLLISION) {
 		/* packet sending collided */
-		state[port].tx_hard_reset_req = 0;
 		pd_transmit_complete(port, TCPC_TX_COMPLETE_FAILED);
 	}
 
@@ -929,13 +925,10 @@ void fusb302_tcpc_alert(int port)
 	if (interrupta & TCPC_REG_INTERRUPTA_HARDSENT) {
 		/* hard reset has been sent */
 
-		if (state[port].tx_hard_reset_req) {
-			state[port].tx_hard_reset_req = 0;
-			/* bring FUSB302 out of reset */
-			fusb302_pd_reset(port);
+		/* bring FUSB302 out of reset */
+		fusb302_pd_reset(port);
 
-			pd_transmit_complete(port, TCPC_TX_COMPLETE_SUCCESS);
-		}
+		pd_transmit_complete(port, TCPC_TX_COMPLETE_SUCCESS);
 	}
 
 	if (interrupta & TCPC_REG_INTERRUPTA_HARDRESET) {
@@ -1005,10 +998,9 @@ static int command_fusb302dump(int argc, char **argv)
 			state[port].vconn_enabled, state[port].pulling_up,
 			state[port].rx_enable, state[port].dfp_toggling_on,
 			state[port].previous_pull);
-		ccprintf("St2: %x %x %x %x %x\n",
+		ccprintf("St2: %x %x %x %x\n",
 			state[port].togdone_pullup_cc1,
 			state[port].togdone_pullup_cc2,
-			state[port].tx_hard_reset_req,
 			state[port].mdac_vnc, state[port].mdac_rd);
 		for (reg = 1; reg <= 0xf; ++reg) {
 			tcpc_read(port, reg, &val);
