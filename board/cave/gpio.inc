@@ -28,6 +28,8 @@ GPIO_INT(TABLET_MODE_L,     PIN(160), GPIO_INT_BOTH | GPIO_PULL_UP, tablet_mode_
 GPIO_INT(PMIC_DPWROK,       PIN(133), GPIO_INT_BOTH, power_signal_interrupt)
 /* UART input */
 GPIO_INT(UART0_RX,          PIN(162), GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP, uart_deepsleep_interrupt)
+/* Interrupts from accelerometer / gyro */
+GPIO_INT(ACCEL3_INT,            PIN(147), GPIO_INT_FALLING, bmi160_interrupt)
 
 #ifdef CONFIG_POWER_S0IX
 GPIO(PCH_SLP_S0_L,          PIN(211), GPIO_INPUT)
@@ -64,9 +66,7 @@ GPIO(PCH_WAKE_L,            PIN(66),  GPIO_ODR_HIGH)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupt from trackpad */
 GPIO(TRACKPAD_INT_DISABLE,  PIN(127), GPIO_OUT_LOW)
-/* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(ACCEL1_INT,            PIN(161), GPIO_INPUT)
-GPIO(ACCEL3_INT,            PIN(147), GPIO_INPUT)
 GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)
 GPIO(WLAN_OFF_L,            PIN(132), GPIO_OUT_LOW)
 /* RCIN# line to PCH for 8042 emulation */

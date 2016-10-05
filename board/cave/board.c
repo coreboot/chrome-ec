@@ -510,16 +510,44 @@ const matrix_3x3_t rot_lid_accel = {
 };
 
 struct motion_sensor_t motion_sensors[] = {
-	/*
-	 * Requirement: all accelerometer sensors must init before gyro sensor
-	 * Currently, at most 2 accelerometer and 1 gyro sensors are supported.
-	 * DO NOT change the order of the following table because the shared
-	 * memory addresses are fixed. Changing the order will cause kernel
-	 * driver read wrong data.
-	 */
+	[LID_ACCEL] = {
+	 .name = "Lid Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_KX022,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &kionix_accel_drv,
+	 .mutex = &g_lid_mutex,
+	 .drv_data = &g_kx022_data,
+	 .addr = KX022_ADDR0,
+	 .rot_standard_ref = &rot_lid_accel,
+	 .default_range = 8, /* g, to support laptop mode */
+	 .config = {
+		/* AP: by default use EC settings */
+		[SENSOR_CONFIG_AP] = {
+			.odr = 0,
+			.ec_rate = 0,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor on in S3 */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor off in S5 */
+		[SENSOR_CONFIG_EC_S5] = {
+			.odr = 0,
+			.ec_rate = 0,
+		},
+	 },
+	},
 
-	/* Note: bmi160: supports accelerometer and gyro sensor */
-	{.name = "Base Accel",
+	[BASE_ACCEL] = {
+	 .name = "Base Accel",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
@@ -529,7 +557,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .addr = BMI160_ADDR0,
 	 .rot_standard_ref = &rot_base_accel,
-	 .default_range = 2,  /* g, enough for laptop. */
+	 .default_range = 8, /* g, to support laptop mode */
 	 .config = {
 		 /* AP: by default use EC settings */
 		 [SENSOR_CONFIG_AP] = {
@@ -554,44 +582,9 @@ struct motion_sensor_t motion_sensors[] = {
 	 },
 	},
 
-	{.name = "Lid Accel",
+	[BASE_GYRO] = {
+	 .name = "Base Gyro",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_KX022,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
-	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_kx022_data,
-	 .addr = KX022_ADDR0,
-	 .rot_standard_ref = &rot_lid_accel,
-	 .default_range = 2, /* g, enough for laptop. */
-	 .config = {
-		/* AP: by default use EC settings */
-		[SENSOR_CONFIG_AP] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
-		},
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
-		},
-		/* Sensor on in S3 */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
-		},
-		/* Sensor off in S5 */
-		[SENSOR_CONFIG_EC_S5] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
-	 },
-	},
-
-	/* Note: bmi160: supports accelerometer and gyro sensor */
-	{.name = "Base Gyro",
-	 .active_mask = SENSOR_ACTIVE_S0,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_GYRO,
 	 .location = MOTIONSENSE_LOC_BASE,
@@ -600,7 +593,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = NULL,
+	 .rot_standard_ref = &rot_base_accel,
 	 .config = {
 		 /* AP: by default shutdown all sensors */
 		 [SENSOR_CONFIG_AP] = {
@@ -609,8 +602,8 @@ struct motion_sensor_t motion_sensors[] = {
 		 },
 		 /* EC does not need in S0 */
 		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 1600000 | ROUND_UP_FLAG,
-			 .ec_rate = 100 * MSEC,
+			 .odr = 0,
+			 .ec_rate = 0,
 		 },
 		 /* Sensor off in S3/S5 */
 		 [SENSOR_CONFIG_EC_S3] = {

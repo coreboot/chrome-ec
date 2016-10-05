@@ -8,12 +8,22 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+/*
+ * Allow dangerous commands.
+ * TODO(shawnn): Remove this config before production.
+ */
+#define CONFIG_SYSTEM_UNLOCKED
+
+/*
+ * By default, enable all console messages except HC, ACPI and event:
+ * The sensor stack is generating a lot of activity.
+ */
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
+
 /* Optional features */
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCEL_KX022
 #define CONFIG_ADC
-#define CONFIG_ALS
-#define CONFIG_ALS_OPT3001
 #define CONFIG_BATTERY_CUT_OFF
 #undef CONFIG_BATTERY_LEVEL_NEAR_FULL
 #define CONFIG_BATTERY_LEVEL_NEAR_FULL 96
@@ -44,7 +54,6 @@
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_CLOCK_CRYSTAL
 #define CONFIG_DEBUG_ASSERT_BRIEF
-#define CONFIG_DPTF_DEVICE_ORIENTATION
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_HOSTCMD_PD
 #define CONFIG_I2C
@@ -54,10 +63,6 @@
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_POLICY_STD
 #define CONFIG_LED_POWER_ACTIVE_LOW
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE 0
-#define CONFIG_LID_ANGLE_SENSOR_LID 1
-#define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_SWITCH
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
@@ -140,25 +145,51 @@
 /* Thermal sensors read through PMIC ADC interface */
 #define I2C_PORT_THERMAL I2C_PORT_PMIC
 
+/* Sensors */
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_HOST_EVENT
+#define CONFIG_ACCELGYRO_BMI160
+#define CONFIG_ACCELGYRO_BMI160_INT_EVENT TASK_EVENT_CUSTOM(4)
+#define CONFIG_ACCELGYRO_BMI160_INT2_OUTPUT
+#define CONFIG_ACCEL_INTERRUPTS
+#define CONFIG_ACCEL_KX022
+#define CONFIG_ALS
+#define CONFIG_ALS_OPT3001
 /* Ambient Light Sensor address */
 #define OPT3001_I2C_ADDR OPT3001_I2C_ADDR1
+#define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
+#define CONFIG_LID_ANGLE_UPDATE
+#define CONFIG_LID_ANGLE_TABLET_MODE
+#define CONFIG_LID_ANGLE_INVALID_CHECK
+/* FIFO size is in power of 2. */
+#define CONFIG_ACCEL_FIFO 128
+
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
 
 /* Modules we want to exclude */
-#undef CONFIG_CMD_ACCEL_INFO
-#undef CONFIG_CMD_ACCELS
 #undef CONFIG_CMD_APTHROTTLE
 #undef CONFIG_CMD_BATTFAKE
+#undef CONFIG_CMD_SPI_FLASHINFO
 #undef CONFIG_CMD_HASH
 #undef CONFIG_CMD_I2C_SCAN
 #undef CONFIG_CMD_I2C_XFER
 #undef CONFIG_CMD_IDLE_STATS
+#undef CONFIG_CMD_MEM
 #undef CONFIG_CMD_POWERINDEBUG
+#undef CONFIG_CMD_RW
+#undef CONFIG_CMD_SLEEPMASK
+#undef CONFIG_CMD_SYSJUMP
 #undef CONFIG_CMD_TEMP_SENSOR
 #undef CONFIG_CMD_TIMERINFO
+#undef CONFIG_CMD_WAITMS
 #undef CONFIG_CONSOLE_CMDHELP
 #undef CONFIG_CONSOLE_HISTORY
 #undef CONFIG_PECI
 #undef CONFIG_TASK_PROFILING
+
 
 #undef DEFERRABLE_MAX_COUNT
 #define DEFERRABLE_MAX_COUNT 17
@@ -208,6 +239,18 @@ enum als_id {
 	ALS_COUNT
 };
 
+/*
+ * Motion sensors:
+ * When reading through IO memory is set up, the first 2 entries must be
+ * accelerometers, then gyroscope.
+ * For BMI160, accel and gyro sensors must be next to each other.
+ */
+enum sensor_id {
+	LID_ACCEL = 0,
+	BASE_ACCEL,
+	BASE_GYRO,
+};
+
 enum pwm_channel {
 	PWM_CH_KBLIGHT,
 	/* Number of PWM channels */
@@ -245,6 +288,9 @@ int board_get_version(void);
 void board_rtc_reset(void);
 
 int board_get_device_orientation(void);
+
+/* Sensors without hardware FIFO are in forced mode */
+#define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
 
 #endif /* !__ASSEMBLER__ */
 
