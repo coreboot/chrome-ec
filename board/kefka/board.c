@@ -31,6 +31,7 @@
 #include "thermal.h"
 #include "uart.h"
 #include "util.h"
+#include "keyboard_scan.h"
 
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
 #define GPIO_KB_OUTPUT (GPIO_ODR_HIGH)
@@ -135,7 +136,7 @@ const matrix_3x3_t lid_standard_ref = {
 
 struct motion_sensor_t motion_sensors[] = {
 	{.name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_BASE,
@@ -151,7 +152,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 }
 	},
 	{.name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
@@ -202,28 +203,37 @@ const struct accel_orientation acc_orient = {
 	},
 	.hinge_axis = {1, 0, 0},
 };
-
-/*
- * In S3, power rail for sensors (+V3p3S) goes down asynchronous to EC. We need
- * to execute this routine first and set the sensor state to "Not Initialized".
- * This prevents the motion_sense_suspend hook routine from communicating with
- * the sensor.
- */
-static void motion_sensors_pre_init(void)
+#ifdef CONFIG_LID_ANGLE_UPDATE
+static void track_pad_enable(int enable)
 {
-	struct motion_sensor_t *sensor;
-	int i;
+	gpio_set_level(GPIO_TRACKPAD_PWREN, enable);
+	return;
+}
 
-	for (i = 0; i < motion_sensor_count; ++i) {
-		sensor = &motion_sensors[i];
-		sensor->state = SENSOR_NOT_INITIALIZED;
-
-		sensor->runtime_config.odr = sensor->default_config.odr;
-		sensor->runtime_config.range = sensor->default_config.range;
+void lid_angle_peripheral_enable(int enable)
+{
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+		track_pad_enable(1);
+	} else {
+		/*
+		* Ensure chipset is off before disabling keyboard. When chipset
+		* is on, EC keeps keyboard enabled and the AP decides when to
+		* ignore keys based on its more accurate lid angle calculation.
+		*
+		* TODO(crosbug.com/p/43695): Remove this check once we have a
+		* host command that can inform EC when we are entering or
+		* exiting tablet mode in S0. Also, add this check back to the
+		* function lid_angle_update in lid_angle.c
+		*
+		*/
+		if (!chipset_in_state(CHIPSET_STATE_ON)) {
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+			track_pad_enable(0);
+		}
 	}
 }
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, motion_sensors_pre_init,
-	MOTION_SENSE_HOOK_PRIO - 1);
+#endif
 
 /* init ADC ports to avoid floating state due to thermistors */
 static void adc_pre_init(void)
