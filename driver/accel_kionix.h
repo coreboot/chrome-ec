@@ -69,4 +69,10 @@ extern const struct accelgyro_drv kionix_accel_drv;
 #define KIONIX_XOUT_L(v) (KX022_XOUT_L +	\
 			  (v) * (KXCJ9_XOUT_L - KX022_XOUT_L))
 
+#define KIONIX_WHO_AM_I(v) (KX022_WHOAMI + \
+			    (v) * (KXCJ9_WHOAMI - KX022_WHOAMI))
+
+#define KIONIX_WHO_AM_I_VAL(v) (KX022_WHO_AM_I_VAL + \
+			(v) * (KXCJ9_WHO_AM_I_VAL - KX022_WHO_AM_I_VAL))
+
 #endif /* __CROS_EC_ACCEL_KIONIX_H */
