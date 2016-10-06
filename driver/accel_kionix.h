@@ -55,5 +55,10 @@ extern const struct accelgyro_drv kionix_accel_drv;
 #define KX_OSA_12_50HZ	0
 #define KX_OSA_1600HZ	7
 
+#define KIONIX_WHO_AM_I(v) (KX022_WHOAMI + \
+			    (v) * (KXCJ9_WHOAMI - KX022_WHOAMI))
+
+#define KIONIX_WHO_AM_I_VAL(v) (KX022_WHO_AM_I_VAL + \
+			(v) * (KXCJ9_WHO_AM_I_VAL - KX022_WHO_AM_I_VAL))
 
 #endif /* __CROS_EC_ACCEL_KIONIX_H */
