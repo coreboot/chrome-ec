@@ -859,11 +859,13 @@ wait_for_it:
 		}
 		prev_full = is_full;
 
+#ifndef CONFIG_CHARGER_MAINTAIN_VBAT
 		/* Turn charger off if it's not needed */
 		if (curr.state == ST_IDLE || curr.state == ST_DISCHARGE) {
 			curr.requested_voltage = 0;
 			curr.requested_current = 0;
 		}
+#endif
 
 		/* Apply external limits */
 		if (curr.requested_current > user_current_limit)
@@ -875,8 +877,10 @@ wait_for_it:
 		curr.requested_current =
 			charger_closest_current(curr.requested_current);
 
+#ifndef CONFIG_CHARGER_MAINTAIN_VBAT
 		/* Charger only accpets request when AC is on. */
 		if (curr.ac) {
+#endif
 			/*
 			 * Some batteries would wake up after cut-off if we keep
 			 * charging it. Thus, we only charge when AC is on and
@@ -897,11 +901,13 @@ wait_for_it:
 				charge_request(curr.requested_voltage,
 					       curr.requested_current);
 			}
+#ifndef CONFIG_CHARGER_MAINTAIN_VBAT
 		} else {
 			charge_request(
 				charger_closest_voltage(
 				  curr.batt.voltage + info->voltage_step), -1);
 		}
+#endif
 
 		/* How long to sleep? */
 		if (problems_exist)

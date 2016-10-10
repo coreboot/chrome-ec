@@ -457,6 +457,12 @@
  */
 #undef CONFIG_CHARGER_MAX_INPUT_CURRENT
 
+/*
+ * Leave charger VBAT configured to battery-requested voltage under all
+ * conditions, even when AC is not present.
+ */
+#undef CONFIG_CHARGER_MAINTAIN_VBAT
+
 /* Minimum battery percentage for power on */
 #undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
 
