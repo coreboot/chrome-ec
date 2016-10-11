@@ -473,6 +473,21 @@ static void board_handle_reboot(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_handle_reboot, HOOK_PRIO_FIRST);
 
+/* combo button for recovery mode */
+static int pbody_button_pressed(const struct button_config *button)
+{
+	int value = gpio_get_level(button->gpio);
+	return button->flags & BUTTON_FLAG_ACTIVE_HIGH ?
+				value : !value;
+}
+
+void board_config_post_gpio_init(void)
+{
+	if ((system_get_reset_flags() & RESET_FLAG_RESET_PIN) &&
+		(pbody_button_pressed(&buttons[BUTTON_VOLDOWN])))
+			host_set_single_event(EC_HOST_EVENT_KEYBOARD_RECOVERY);
+}
+
 #ifdef HAS_TASK_MOTIONSENSE
 /* Motion sensors */
 /* Mutexes */

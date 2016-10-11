@@ -24,6 +24,7 @@
 #define CONFIG_BATTERY_PRESENT_GPIO GPIO_BAT_PRESENT_L
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
+#define CONFIG_BOARD_POST_GPIO_INIT
 #define CONFIG_BUTTON_COUNT 2
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGE_RAMP_HW
@@ -151,6 +152,13 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
+
+/* BUTTON port */
+enum button_port {
+	BUTTON_VOLDOWN = 0,
+	BUTTON_VOLUP = 1,
+	BUTTON_PORT_COUNT
+};
 
 /* ADC signal */
 enum adc_channel {
