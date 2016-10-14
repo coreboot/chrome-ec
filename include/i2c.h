@@ -37,6 +37,12 @@ struct i2c_port_t {
 				uint16_t address);
 };
 
+/* I2C error return codes, extension of enum ec_error_list. */
+enum i2c_error {
+	I2C_ERROR_FAILED_START = EC_ERROR_INTERNAL_FIRST,
+	I2C_ERROR_NACK,
+};
+
 extern const struct i2c_port_t i2c_ports[];
 extern const unsigned int i2c_ports_used;
 

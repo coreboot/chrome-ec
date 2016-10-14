@@ -56,7 +56,7 @@ enum smb_error {
 	SMB_UNEXIST_CH_ERROR,       /* Channel does not exist              */
 	SMB_NO_SUPPORT_PTL,         /* Not support SMBus Protocol          */
 	SMB_BUS_ERROR,              /* Encounter bus error                 */
-	SMB_MASTER_NO_ADDRESS_MATCH,/* No slave address match (Master Mode)*/
+	SMB_MASTER_NACK,            /* Slave did not ack addr or data byte */
 	SMB_READ_DATA_ERROR,        /* Read data for SDA error             */
 	SMB_READ_OVERFLOW_ERROR,    /* Read data over than we predict      */
 	SMB_TIMEOUT_ERROR,          /* Timeout expired                     */
@@ -523,7 +523,7 @@ void i2c_master_int_handler (int controller)
 		/* Clear NEGACK Bit */
 		SET_BIT(NPCX_SMBST(controller), NPCX_SMBST_NEGACK);
 		/* Set error code */
-		p_status->err_code = SMB_MASTER_NO_ADDRESS_MATCH;
+		p_status->err_code = SMB_MASTER_NACK;
 		/* Notify upper layer */
 		p_status->oper_state = SMB_IDLE;
 		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE, 0);
@@ -609,6 +609,7 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 {
 	volatile struct i2c_status *p_status;
 	int ctrl = i2c_port_to_controller(port);
+	int ret;
 
 	/* Return error if i2c_port_to_controller() returned an error */
 	if (ctrl < 0)
@@ -665,7 +666,19 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 
 	CPRINTS("-Err:0x%02x\n", p_status->err_code);
 
-	return (p_status->err_code == SMB_OK) ? EC_SUCCESS : EC_ERROR_UNKNOWN;
+	switch (p_status->err_code) {
+	case SMB_OK:
+		ret = EC_SUCCESS;
+		break;
+	case SMB_MASTER_NACK:
+		ret = I2C_ERROR_NACK;
+		break;
+	default:
+		ret = EC_ERROR_UNKNOWN;
+		break;
+	}
+
+	return ret;
 }
 
 /**

@@ -32,8 +32,22 @@ test_mockable int sbc_write(int cmd, int param)
 	return i2c_write16(I2C_PORT_CHARGER, CHARGER_ADDR, cmd, param);
 }
 
+/* Retry i2c transaction several times on NACK */
+#ifdef CONFIG_BATTERY_RETRY_NACK
+#ifndef CHIP_NPCX
+#error "RETRY_NACK only supported on NPCX, please add support for your chip"
+#endif
+#define SB_READ_NACK_RETRIES 10
+#else /* CONFIG_BATTERY_RETRY_NACK */
+#define SB_READ_NACK_RETRIES 0
+#endif /* CONFIG_BATTERY_RETRY_NACK */
+/* Delay between retries */
+#define SB_READ_RETRY_DELAY 10
+
 test_mockable int sb_read(int cmd, int *param)
 {
+	int rv;
+	int tries = 0;
 #ifdef CONFIG_BATTERY_CUT_OFF
 	/*
 	 * Some batteries would wake up after cut-off if we talk to it.
@@ -43,15 +57,19 @@ test_mockable int sb_read(int cmd, int *param)
 #endif
 #ifdef CONFIG_SMBUS
 	{
-		int rv;
 		uint16_t d16 = 0;
 		rv = smbus_read_word(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, &d16);
 		*param = d16;
-		return rv;
 	}
 #else
-	return i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+	do {
+		if (tries > 0)
+			msleep(SB_READ_RETRY_DELAY);
+		rv = i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR, cmd, param);
+	} while (rv == I2C_ERROR_NACK && tries++ <= SB_READ_NACK_RETRIES);
 #endif
+
+	return rv;
 }
 
 test_mockable int sb_write(int cmd, int param)

@@ -207,6 +207,14 @@
 #undef CONFIG_BATTERY_SMART
 
 /*
+ * Retry smart battery I2C communication when NACK'd
+ *
+ * When busy, certain batteries may occasionally fail to ACK address or data
+ * bytes. Retry read commands when such a failure occurs.
+ */
+#undef CONFIG_BATTERY_RETRY_NACK
+
+/*
  * Critical battery shutdown timeout (seconds)
  *
  * If the battery is at extremely low charge (and discharging) or extremely

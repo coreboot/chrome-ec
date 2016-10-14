@@ -21,8 +21,6 @@
 #define CPUTS(outstr) cputs(CC_I2C, outstr)
 #define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
 
-#define I2C_ERROR_FAILED_START EC_ERROR_INTERNAL_FIRST
-
 /*
  * Transmit timeout in microseconds
  *
