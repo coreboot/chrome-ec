@@ -226,6 +226,9 @@ const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
 
 static void board_pmic_init(void)
 {
+	/* VRMODECTRL - disable S0ix low-power mode for all rails */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x1f);
+
 	/* No need to re-init PMIC since settings are sticky across sysjump */
 	if (system_jumped_to_this_image())
 		return;
@@ -245,9 +248,6 @@ static void board_pmic_init(void)
 	 * Nominal output = 1.0V.
 	 */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7a);
-
-	/* VRMODECTRL - enable low-power mode for VCCIO and V0.85A */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x18);
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
 

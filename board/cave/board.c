@@ -238,6 +238,9 @@ static void board_pmic_init(void)
 {
 	int pmic_reg31;
 
+	/* VRMODECTRL - disable S0ix low-power mode for all rails */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x1f);
+
 	/* No need to re-init PMIC since settings are sticky across sysjump */
 	if (system_jumped_to_this_image())
 		return;
@@ -257,9 +260,6 @@ static void board_pmic_init(void)
 	 * Nominal output = 1.0V.
 	 */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7a);
-
-	/* VRMODECTRL - enable low-power mode for VCCIO and V0.85A */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x18);
 
 	/* V5ADS3CNT
 	 * [5:4] Bit 0:1 Set V5ADS3VSEL = Vnom+2%
