@@ -186,7 +186,7 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 #endif
 };
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count;
 
 /* Define the accelerometer orientation matrices. */
 const struct accel_orientation acc_orient = {
@@ -266,3 +266,19 @@ static void touch_screen_control(void)
 DECLARE_HOOK(HOOK_INIT, touch_screen_control, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, touch_screen_control, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, touch_screen_control, HOOK_PRIO_DEFAULT);
+static void get_motion_sensors_count(void)
+{
+	/*
+	 * Get the sensor count by SKU.
+	 *
+	 * GPIO_BOARD_VERSION1
+	 * Sabin : 1
+	 * Kefka : 0
+	 *
+	 */
+	if (gpio_get_level(GPIO_BOARD_VERSION1) == 1)
+		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+	else
+		motion_sensor_count = 0;
+}
+DECLARE_HOOK(HOOK_INIT, get_motion_sensors_count, HOOK_PRIO_FIRST);

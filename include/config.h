@@ -812,7 +812,8 @@
 
 /* Define which index in motion_sensors is in the lid. */
 #undef CONFIG_SENSOR_LID
-
+/* Define motion sensor count in board layer */
+#undef CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 /******************************************************************************/
 /* Host to RAM (H2RAM) Memory Mapping */
 
