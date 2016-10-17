@@ -374,7 +374,7 @@ static int charge_request(int voltage, int current)
 	static int __bss_slow prev_volt, prev_curr;
 
 	if (!voltage || !current) {
-#ifdef CONFIG_CHARGER_NARROW_VDC
+#if defined(CONFIG_CHARGER_NARROW_VDC)
 		current = 0;
 		/* With NVDC charger, keep VSYS voltage higher than battery */
 		voltage = charger_closest_voltage(
@@ -384,6 +384,15 @@ static int charge_request(int voltage, int current)
 			voltage = battery_get_info()->voltage_max;
 		/* And handle dead battery case */
 		voltage = MAX(voltage, battery_get_info()->voltage_min);
+#elif defined(CONFIG_CHARGER_MAINTAIN_VBAT)
+		/*
+		 * Some charger IC need to keep charging voltage higher than
+		 * NVDC. Whatever case charge_request(0, 0) means we need to
+		 * set the voltage max on this charger. Assume charger
+		 * driver will inhibit charging when its current is 0.
+		 */
+		current = 0;
+		voltage = battery_get_info()->voltage_max;
 #else
 		voltage = current = 0;
 #endif
