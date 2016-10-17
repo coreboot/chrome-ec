@@ -238,6 +238,9 @@ static void board_pmic_init(void)
 {
 	int pmic_reg31;
 
+	/* DISCHGCNT3 - enable 100 ohm discharge on V1.00A */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3e, 0x04);
+
 	/* VRMODECTRL - disable S0ix low-power mode for all rails */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x1f);
 
