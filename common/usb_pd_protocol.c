@@ -640,9 +640,17 @@ static int pd_send_request_msg(int port, int always_send_request)
 		 */
 		return -1;
 
-	/* Don't re-request the same voltage */
-	if (!always_send_request && pd[port].prev_request_mv == supply_voltage)
-		return EC_SUCCESS;
+	if (!always_send_request) {
+		/* Don't re-request the same voltage */
+		if (pd[port].prev_request_mv == supply_voltage)
+			return EC_SUCCESS;
+#if defined(CONFIG_CHARGE_MANAGER) && \
+	defined(CONFIG_USB_PD_LOW_POWER_TRANSITION)
+		/* Limit current to PD_MIN_MA during transition */
+		else
+			charge_manager_force_ceil(port, PD_MIN_MA);
+#endif
+	}
 
 	CPRINTF("Req C%d [%d] %dmV %dmA", port, RDO_POS(rdo),
 		supply_voltage, curr_limit);

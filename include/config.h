@@ -1915,6 +1915,12 @@
 /* Allow chip to go into low power idle even when a PD device is attached */
 #undef CONFIG_USB_PD_LOW_POWER_IDLE_WHEN_CONNECTED
 
+/*
+ * Limit current to 500mA on voltage transition, eg. 5V to 20V, in order to
+ * better adhere to spec.
+ */
+#undef CONFIG_USB_PD_LOW_POWER_TRANSITION
+
 /* Define if USB-PD device has no way of detecting USB VBUS */
 #undef CONFIG_USB_PD_NO_VBUS_DETECT
 
