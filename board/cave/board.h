@@ -8,12 +8,6 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
-/*
- * Allow dangerous commands.
- * TODO(shawnn): Remove this config before production.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* Optional features */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_KX022
