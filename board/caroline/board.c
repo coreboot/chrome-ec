@@ -82,11 +82,6 @@ void usb1_evt(enum gpio_signal signal)
 	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
 }
 
-void tablet_mode_interrupt(enum gpio_signal signal)
-{
-	host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
-}
-
 #include "gpio_list.h"
 
 /* power signal list.  Must match order of enum power_signal. */
@@ -265,6 +260,9 @@ static void board_init(void)
 	/* Enable pericom BC1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
+
+	/* Enable interrupts from BMI160 sensor. */
+	gpio_enable_interrupt(GPIO_ACCEL3_INT);
 
 	/* Provide AC status to the PCH */
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
@@ -472,16 +470,45 @@ const matrix_3x3_t lid_standard_ref = {
 };
 
 struct motion_sensor_t motion_sensors[] = {
-	/*
-	 * Note: bmi160: supports accelerometer and gyro sensor
-	 * Requirement: accelerometer sensor must init before gyro sensor
-	 * DO NOT change the order of the following table because the shared
-	 * memory addresses are fixed. Changing the order will cause kernel
-	 * driver read wrong data.
-	 */
+	[LID_ACCEL] = {
+	 .name = "Lid Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_BMA255,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &bma2x2_accel_drv,
+	 .mutex = &g_lid_mutex,
+	 .drv_data = &g_bma255_data,
+	 .addr = BMA2x2_I2C_ADDR1,
+	 .rot_standard_ref = &lid_standard_ref,
+	 .default_range = 8, /* g, to support tablet mode */
+	 .config = {
+		/* AP: by default use EC settings */
+		[SENSOR_CONFIG_AP] = {
+			.odr = 0,
+			.ec_rate = 0,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor on in S3 */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor off in S5 */
+		[SENSOR_CONFIG_EC_S5] = {
+			.odr = 0,
+			.ec_rate = 0,
+		},
+	 },
+	},
+
 	[BASE_ACCEL] = {
 	 .name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_BASE,
@@ -490,7 +517,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .addr = BMI160_ADDR0,
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 2,  /* g, enough for laptop. */
+	 .default_range = 8, /* g, to support tablet mode  */
 	 .config = {
 		 /* AP: by default use EC settings */
 		 [SENSOR_CONFIG_AP] = {
@@ -502,21 +529,22 @@ struct motion_sensor_t motion_sensors[] = {
 			 .odr = 10000 | ROUND_UP_FLAG,
 			 .ec_rate = 100 * MSEC,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor on in S3 */
 		 [SENSOR_CONFIG_EC_S3] = {
-			 .odr = 0,
-			 .ec_rate = 0
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 100 * MSEC,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor off in S5 */
 		 [SENSOR_CONFIG_EC_S5] = {
 			 .odr = 0,
 			 .ec_rate = 0
 		 },
 	 },
 	},
+
 	[BASE_GYRO] = {
 	 .name = "Base Gyro",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_GYRO,
 	 .location = MOTIONSENSE_LOC_BASE,
@@ -547,40 +575,6 @@ struct motion_sensor_t motion_sensors[] = {
 			 .odr = 0,
 			 .ec_rate = 0,
 		 },
-	 },
-	},
-	[LID_ACCEL] = {
-	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_BMA255,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &bma2x2_accel_drv,
-	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_bma255_data,
-	 .addr = BMA2x2_I2C_ADDR1,
-	 .rot_standard_ref = &lid_standard_ref,
-	 .default_range = 2, /* g, enough for laptop. */
-	 .config = {
-		/* AP: by default use EC settings */
-		[SENSOR_CONFIG_AP] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 0,
-		},
-		/* unused */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
-		[SENSOR_CONFIG_EC_S5] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
 	 },
 	},
 };
