@@ -28,6 +28,7 @@
 #define CONFIG_POWER_BUTTON
 #define CONFIG_VBOOT_HASH
 #define CONFIG_PWM_KBLIGHT
+#define CONFIG_TABLET_MODE
 #define CONFIG_BOARD_VERSION
 
 /* Optional features for test commands */

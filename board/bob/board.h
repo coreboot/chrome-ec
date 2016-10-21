@@ -100,6 +100,7 @@
  * Sensor internal FIFO is enabled for BMI160, but not for BMA255.
  */
 #define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
+#define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
 
 /* USB PD config */

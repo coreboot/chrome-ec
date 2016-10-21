@@ -86,6 +86,7 @@ common-$(CONFIG_SPI_FLASH_REGS)+=spi_flash_reg.o
 common-$(CONFIG_SPI_NOR)+=spi_nor.o
 common-$(CONFIG_SWITCH)+=switch.o
 common-$(CONFIG_SW_CRC)+=crc.o
+common-$(CONFIG_TABLET_MODE)+=tablet_mode.o
 common-$(CONFIG_TEMP_SENSOR)+=temp_sensor.o
 common-$(CONFIG_THROTTLE_AP)+=thermal.o throttle_ap.o
 common-$(CONFIG_TPM_I2CS)+=i2cs_tpm.o
