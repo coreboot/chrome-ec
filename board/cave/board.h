@@ -155,13 +155,14 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 #define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_TABLET_MODE
 #define CONFIG_LID_ANGLE_INVALID_CHECK
 /* FIFO size is in power of 2. */
 #define CONFIG_ACCEL_FIFO 128
 
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+
+#define CONFIG_TABLET_MODE
 
 /* Modules we want to exclude */
 #undef CONFIG_CMD_APTHROTTLE
