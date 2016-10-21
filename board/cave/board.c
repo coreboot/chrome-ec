@@ -292,6 +292,9 @@ static void board_init(void)
 	/* Enable tablet mode interrupt for input device enable */
 	gpio_enable_interrupt(GPIO_TABLET_MODE_L);
 
+	/* Enable interrupts from BMI160 sensor. */
+	gpio_enable_interrupt(GPIO_ACCEL3_INT);
+
 	/* Provide AC status to the PCH */
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
 }
