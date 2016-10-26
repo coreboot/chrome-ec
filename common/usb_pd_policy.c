@@ -974,8 +974,7 @@ void pd_set_vbus_discharge(int port, int enable)
 
 	mutex_lock(&discharge_lock[port]);
 #ifdef CONFIG_USB_PD_DISCHARGE_GPIO
-	enable &= !gpio_get_level(port ? GPIO_USB_C1_5V_EN :
-					 GPIO_USB_C0_5V_EN);
+	enable &= !board_vbus_source_enabled(port);
 
 	gpio_set_level(port ? GPIO_USB_C1_DISCHARGE :
 			      GPIO_USB_C0_DISCHARGE, enable);
