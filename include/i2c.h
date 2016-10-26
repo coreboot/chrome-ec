@@ -256,4 +256,13 @@ int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
  */
 int i2c_port_to_controller(int port);
 
+/**
+ * Board-level function to determine whether i2c passthru should be allowed
+ * on a given port.
+ *
+ * @parm port I2C port
+ *
+ * @return true, if passthru should be allowed on the port.
+ */
+int board_allow_i2c_passthru(int port);
 #endif  /* __CROS_EC_I2C_H */
