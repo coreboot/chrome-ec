@@ -63,7 +63,7 @@ GPIO(PCH_SEC_DISABLE_L,     PIN(65),  GPIO_OUT_HIGH)
 GPIO(PCH_WAKE_L,            PIN(66),  GPIO_ODR_HIGH)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupt from trackpad */
-GPIO(TRACKPAD_INT_L,        PIN(127), GPIO_INPUT)
+GPIO(TRACKPAD_INT_DISABLE,  PIN(127), GPIO_OUT_LOW)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(ACCEL1_INT,            PIN(161), GPIO_INPUT)
 GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)

@@ -596,12 +596,27 @@ int board_get_version(void)
 }
 
 #ifdef CONFIG_LID_ANGLE_UPDATE
+static int has_trackpad_disable = -1;
+
 void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
+	/*
+	 * Support old hardware where GPIO 127 is directly connected
+	 * to the trackpad interrupt.
+	 * Can be removed once board version 0 and 1 are retired.
+	 */
+	if (has_trackpad_disable < 0) {
+		has_trackpad_disable = board_get_version() >= 2;
+		if (!has_trackpad_disable)
+			gpio_set_flags(GPIO_TRACKPAD_INT_DISABLE, GPIO_INPUT);
+	}
+
 	if (enable) {
 		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+		if (has_trackpad_disable)
+			gpio_set_level(GPIO_TRACKPAD_INT_DISABLE, 0);
 	} else {
 		/*
 		 * Ensure chipset is off before disabling keyboard. When chipset
@@ -613,8 +628,11 @@ void lid_angle_peripheral_enable(int enable)
 		 * exiting tablet mode in S0. Also, add this check back to the
 		 * function lid_angle_update in lid_angle.c
 		 */
-		if (!chipset_in_s0)
+		if (!chipset_in_s0) {
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+			if (has_trackpad_disable)
+				gpio_set_level(GPIO_TRACKPAD_INT_DISABLE, 1);
+		}
 	}
 }
 #endif
