@@ -144,7 +144,6 @@
 #define PD_DEFAULT_STATE PD_STATE_SNK_DISCONNECTED
 
 /* Optional features for test commands */
-#define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_CHARGER_PSYS
 
 /* Set PSYS gain for 50W max measurement */
@@ -166,7 +165,6 @@
 #undef  CONFIG_PSTORE
 
 /* Modules we want to exclude */
-#undef CONFIG_CMD_ACCEL_INFO
 #undef CONFIG_CMD_BATTFAKE
 #undef CONFIG_CMD_CHARGER_PSYS
 #undef CONFIG_CMD_FLASH
