@@ -332,7 +332,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* {Twarn, Thigh, Thalt}, fan_off, fan_max */
-	{{0, 0, 0}, C_TO_K(35), C_TO_K(65)},	/* TMP432_Memory */
+	{{0, 0, 0}, 0, 0},	/* TMP432_Memory */
 	{{0, 0, 0}, 0, 0},	/* TMP432_PCH */
 	{{0, 0, 0}, 0, 0},	/* TMP432_Battery */
 	{{0, 0, 0}, 0, 0},	/* Battery */
