@@ -16,6 +16,10 @@
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
+/* Reduce shared memory space for FIFO */
+#undef CONFIG_SHARED_MEM_MIN_SIZE
+#define CONFIG_SHARED_MEM_MIN_SIZE 512
+
 /* Optional features */
 #define CONFIG_ADC
 #define CONFIG_BATTERY_CUT_OFF

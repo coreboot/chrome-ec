@@ -16,6 +16,10 @@
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
+/* Reduce shared memory space for FIFO */
+#undef CONFIG_SHARED_MEM_MIN_SIZE
+#define CONFIG_SHARED_MEM_MIN_SIZE 512
+
 /* Optional features */
 #define CONFIG_ADC
 #define CONFIG_BATTERY_CUT_OFF
@@ -150,7 +154,7 @@
 #define CONFIG_LID_ANGLE_TABLET_MODE
 #define CONFIG_LID_ANGLE_INVALID_CHECK
 /* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 256
+#define CONFIG_ACCEL_FIFO 128
 
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
