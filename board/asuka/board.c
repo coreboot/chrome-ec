@@ -676,6 +676,14 @@ void board_hibernate(void)
 		;
 }
 
+void board_rtc_reset(void)
+{
+	CPRINTS("Asserting RTCRST# to PCH");
+	gpio_set_level(GPIO_PCH_RTCRST_L, 0);
+	udelay(100);
+	gpio_set_level(GPIO_PCH_RTCRST_L, 1);
+}
+
 #ifdef CONFIG_LID_ANGLE_UPDATE
 void lid_angle_peripheral_enable(int enable)
 {

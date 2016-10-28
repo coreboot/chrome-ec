@@ -20,6 +20,7 @@
 #define CONFIG_BATTERY_PRESENT_CUSTOM
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
+#define CONFIG_BOARD_HAS_RTC_RESET
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGE_RAMP_HW
 
@@ -223,6 +224,9 @@ enum temp_sensor_id {
 
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);
+
+/* Reset RTC */
+void board_rtc_reset(void);
 
 #endif /* !__ASSEMBLER__ */
 
