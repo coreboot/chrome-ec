@@ -123,8 +123,6 @@ void keyboard_clear_buffer(void)
 
 test_mockable int keyboard_fifo_add(const uint8_t *buffp)
 {
-	int ret = EC_SUCCESS;
-
 	/*
 	 * If keyboard protocol is not enabled, don't save the state to the
 	 * FIFO or trigger an interrupt.
@@ -135,27 +133,29 @@ test_mockable int keyboard_fifo_add(const uint8_t *buffp)
 	if (kb_fifo_entries >= config.fifo_max_depth) {
 		CPRINTS("KB FIFO depth %d reached",
 			config.fifo_max_depth);
-		ret = EC_ERROR_OVERFLOW;
-		goto kb_fifo_push_done;
+
+		return EC_ERROR_OVERFLOW;
 	}
 
 	mutex_lock(&fifo_mutex);
 	memcpy(kb_fifo[kb_fifo_end], buffp, KEYBOARD_COLS);
 	kb_fifo_end = (kb_fifo_end + 1) % KB_FIFO_DEPTH;
 	atomic_add(&kb_fifo_entries, 1);
-	mutex_unlock(&fifo_mutex);
 
-kb_fifo_push_done:
-
-	if (ret == EC_SUCCESS) {
 #ifdef CONFIG_MKBP_EVENT
-		mkbp_send_event(EC_MKBP_EVENT_KEY_MATRIX);
+	/*
+	 * If our event didn't generate an interrupt then the host is still
+	 * asleep. In this case, we don't want to queue our event, except if
+	 * another event just woke the host (and wake is already in progress).
+	 */
+	if (!mkbp_send_event(EC_MKBP_EVENT_KEY_MATRIX) && kb_fifo_entries == 1)
+		keyboard_clear_buffer();
 #else
 		set_host_interrupt(1);
 #endif
-	}
 
-	return ret;
+	mutex_unlock(&fifo_mutex);
+	return EC_SUCCESS;
 }
 
 #ifdef CONFIG_MKBP_EVENT
