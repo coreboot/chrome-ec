@@ -68,15 +68,16 @@ static void battery_wakeup(void)
 	int mode;
 
 	/* Add Green Book support */
-	if (sb_read(SB_BATTERY_MODE, &mode)) {
+	if (sb_read(SB_BATTERY_MODE, &mode) == EC_RES_SUCCESS) {
 		mode |= GREEN_BOOK_SUPPORT;
 		sb_write(SB_BATTERY_MODE, mode);
         }
 
-	sb_read(SB_FET_OFF, &d);
-	if (extpower_is_present() && (BATTERY_FETOFF == d)) {
-		sb_write(SB_FET_OFF, SB_FETON_DATA1);
-		sb_write(SB_FET_OFF, SB_FETON_DATA2);
+	if (sb_read(SB_FET_OFF, &d) == EC_RES_SUCCESS) {
+		if (extpower_is_present() && (BATTERY_FETOFF == d)) {
+			sb_write(SB_FET_OFF, SB_FETON_DATA1);
+			sb_write(SB_FET_OFF, SB_FETON_DATA2);
+		}
 	}
 }
 DECLARE_HOOK(HOOK_INIT, battery_wakeup, HOOK_PRIO_DEFAULT);
