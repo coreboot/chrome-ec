@@ -37,6 +37,7 @@ enum led_color {
 	LED_RED,
 	LED_AMBER,
 	LED_GREEN,
+	LED_WHITE,
 	LED_COLOR_COUNT  /* Number of colors, not a color itself */
 };
 
@@ -67,8 +68,17 @@ static int bat_led_set_color(enum led_color color)
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
-	brightness_range[EC_LED_COLOR_RED] = 1;
-	brightness_range[EC_LED_COLOR_GREEN] = 1;
+	switch (led_id) {
+	case EC_LED_ID_BATTERY_LED:
+		brightness_range[EC_LED_COLOR_RED] = 1;
+		brightness_range[EC_LED_COLOR_GREEN] = 1;
+		break;
+	case EC_LED_ID_POWER_LED:
+		brightness_range[EC_LED_COLOR_WHITE] = 1;
+		break;
+	default:
+		break;
+	}
 }
 
 static int pbody_led_set_color_battery(enum led_color color)
@@ -76,6 +86,20 @@ static int pbody_led_set_color_battery(enum led_color color)
 	return bat_led_set_color(color);
 }
 
+static int pbody_led_set_color_power(enum led_color color)
+{
+	switch(color) {
+	case LED_OFF:
+		gpio_set_level(GPIO_PWR_LED, 1);
+		break;
+	case LED_WHITE:
+		gpio_set_level(GPIO_PWR_LED, 0);
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
+}
 static int pbody_led_set_color(enum ec_led_id led_id, enum led_color color)
 {
 	int rv;
@@ -85,6 +109,8 @@ static int pbody_led_set_color(enum ec_led_id led_id, enum led_color color)
 	case EC_LED_ID_BATTERY_LED:
 		rv = pbody_led_set_color_battery(color);
 		break;
+	case EC_LED_ID_POWER_LED:
+		rv = pbody_led_set_color_power(color);
 	default:
 		return EC_ERROR_UNKNOWN;
 	}
@@ -100,6 +126,8 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 		pbody_led_set_color(led_id, LED_RED);
 	else if (brightness[EC_LED_COLOR_GREEN] != 0)
 		pbody_led_set_color(led_id, LED_GREEN);
+	else if (brightness[EC_LED_COLOR_WHITE] != 0)
+		pbody_led_set_color(led_id, LED_WHITE);
 	else
 		pbody_led_set_color(led_id, LED_OFF);
 
