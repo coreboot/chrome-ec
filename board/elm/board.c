@@ -532,6 +532,8 @@ void board_reset_sensors(void)
 static struct mutex g_kx022_mutex[2];
 
 /* Matrix to rotate accelerometer into standard reference frame */
+
+#ifdef BOARD_ELM
 const matrix_3x3_t base_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0,  0},
 	{ 0,  FLOAT_TO_FP(1),  0},
@@ -543,6 +545,19 @@ const matrix_3x3_t lid_standard_ref = {
 	{ 0, FLOAT_TO_FP(-1),  0},
 	{ 0,  0, FLOAT_TO_FP(-1)}
 };
+#elif defined(BOARD_HANA)
+const matrix_3x3_t base_standard_ref = {
+	{ 0,  FLOAT_TO_FP(1),  0},
+	{ FLOAT_TO_FP(-1), 0,  0},
+	{ 0,  0,  FLOAT_TO_FP(1)}
+};
+
+const matrix_3x3_t lid_standard_ref = {
+	{ 0,  FLOAT_TO_FP(1),  0},
+	{ FLOAT_TO_FP(1),  0,  0},
+	{ 0,  0,  FLOAT_TO_FP(-1)}
+};
+#endif
 
 /* KX022 private data */
 struct kionix_accel_data g_kx022_data[2];
