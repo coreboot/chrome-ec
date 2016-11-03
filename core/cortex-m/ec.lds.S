@@ -303,6 +303,27 @@ SECTIONS
         BYTE(0xea);
 	/* NOTHING MAY GO AFTER THIS! */
     } > IRAM
+#if (defined(CONFIG_VBOOT_HASH) && !defined(CONFIG_MAPPED_STORAGE)) || \
+     defined(CONFIG_RWSIG)
+    /*
+     * Check the shared memory is not too small.
+     * The end of memory can have jump data and panic data.
+     * Based on calculation, set aside 128 bytes for these.
+     * This assert is approximate but prevents unexpected behavior at run time.
+     *
+     *               CONFIG_RAM_BASE + CONFIG_RAM_SIZE
+     * ---+---------------------+---------+----------+
+     *    | shared memory       |jump data|panic data|
+     * ---+---------------------+---------+----------+
+     *    __shared_mem_buf      jdata(RO) pdata_ptr(if present)
+     *
+     * If hash calculation is disable, it is likely the shared memory is not
+     * used.
+     */
+    ASSERT((CONFIG_RAM_BASE + CONFIG_RAM_SIZE - 128) >=
+           (__shared_mem_buf + CONFIG_SHARED_MEM_MIN_SIZE),
+           "Not enough space for shared memory")
+#endif
 
     /* The linker won't notice if the .data section is too big to fit,
      * apparently because we're sending it into IRAM, not FLASH. The following

@@ -148,8 +148,6 @@ struct kb_state {
 /* Keyboard event log */
 
 /* Log the traffic between EC and host -- for debug only */
-#define MAX_KBLOG 512  /* Max events in keyboard log */
-
 struct kblog_t {
 	/*
 	 * Type:
@@ -171,6 +169,9 @@ struct kblog_t {
 	uint8_t type;
 	uint8_t byte;
 };
+
+/* Max events in keyboard log */
+#define MAX_KBLOG (CONFIG_SHARED_MEM_MIN_SIZE / sizeof(struct kblog_t))
 
 static struct kblog_t *kblog_buf;	/* Log buffer; NULL if not logging */
 static int kblog_len;			/* Current log length */

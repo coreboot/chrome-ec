@@ -31,7 +31,10 @@ struct vboot_hash_tag {
 #define VBOOT_HASH_SYSJUMP_TAG 0x5648 /* "VH" */
 #define VBOOT_HASH_SYSJUMP_VERSION 1
 
-#define CHUNK_SIZE 1024       /* Bytes to hash per deferred call */
+/* Bytes to hash per deferred call */
+#define CHUNK_SIZE (CONFIG_SHARED_MEM_MIN_SIZE / SHA256_BLOCK_SIZE \
+					       * SHA256_BLOCK_SIZE)
+
 #define WORK_INTERVAL_US 100  /* Delay between deferred calls */
 
 static uint32_t data_offset;

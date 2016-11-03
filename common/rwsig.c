@@ -41,6 +41,10 @@ void check_rw_signature(void)
 
 	CPRINTS("Verifying RW image...");
 
+#if (3 * RSANUMBYTES > CONFIG_SHARED_MEM_MIN_SIZE)
+# error "Risk of never be able to calculate signature"
+#endif
+
 	/* Large buffer for RSA computation : could be re-use afterwards... */
 	res = shared_mem_acquire(3 * RSANUMBYTES, (char **)&rsa_workbuf);
 	if (res) {
