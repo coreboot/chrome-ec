@@ -126,9 +126,9 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 /* Physical fans. These are logically separate from pwm_channels. */
 const struct fan_t fans[] = {
 	{.flags = FAN_USE_RPM_MODE,
-	 .rpm_min = 3000,
-	 .rpm_start = 3000,
-	 .rpm_max = 5900,
+	 .rpm_min = 3900,
+	 .rpm_start = 3900,
+	 .rpm_max = 6700,
 	 .ch = 1,
 	 .pgood_gpio = -1,
 	 .enable_gpio = GPIO_FAN_PWR_DIS_L,
@@ -332,9 +332,10 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* {Twarn, Thigh, Thalt}, fan_off, fan_max */
-	{{0, 0, 0}, 0, 0},	/* TMP432_Memory */
-	{{0, 0, 0}, 0, 0},	/* TMP432_PCH */
-	{{0, 0, 0}, 0, 0},	/* TMP432_Battery */
+	{{C_TO_K(76), C_TO_K(78), C_TO_K(80)}, 0,
+					C_TO_K(68)}, /* TMP432_Memory */
+	{{C_TO_K(74), C_TO_K(76), C_TO_K(78)}, 0, 0},	/* TMP432_PCH */
+	{{C_TO_K(69), C_TO_K(71), C_TO_K(73)}, 0, 0},	/* TMP432_Battery */
 	{{0, 0, 0}, 0, 0},	/* Battery */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
