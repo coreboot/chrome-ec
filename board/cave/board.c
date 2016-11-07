@@ -237,15 +237,34 @@ const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
 	 30 * MSEC, 0},
 };
 
+static void set_pmic_v5a_ds3_ctrl(int forced_pwm)
+{
+	/* Set V5ADS3CNT
+	 * [5:4] 0:1 Set V5ADS3VSEL = Vnom+2% (chrome-os-partner:56642)
+	 * [3:2] 0:0 Set AOACCNTV5ADS3 = fast-charge mode disable
+	 * [1:0] 1:1 Set CTLV5ADS3 = Force PWM (chrome-os-partner:55742)
+	 * [1:0] 1:0 Set CTLV5ADS3 = Auto (chrome-os-partner:58996)
+	 */
+	int value = forced_pwm ? 0x13 : 0x12;
+
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x31, value);
+}
+
 static void board_pmic_init(void)
 {
-	int pmic_reg31;
-
 	/* DISCHGCNT3 - enable 100 ohm discharge on V1.00A */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3e, 0x04);
 
 	/* VRMODECTRL - disable S0ix low-power mode for all rails */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x1f);
+
+	/*
+	 * The older ec firmware set wrong value, so we need to re-write
+	 * after system jump.
+	 * If system is power on, we set the CTLV5ADS3 for noice issue
+	 * else set CTLV5ADS3 to auto mode for lower power consumption.
+	 */
+	set_pmic_v5a_ds3_ctrl(!!chipset_in_state(CHIPSET_STATE_ON));
 
 	/* No need to re-init PMIC since settings are sticky across sysjump */
 	if (system_jumped_to_this_image())
@@ -266,16 +285,6 @@ static void board_pmic_init(void)
 	 * Nominal output = 1.0V.
 	 */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7a);
-
-	/* V5ADS3CNT
-	 * [5:4] Bit 0:1 Set V5ADS3VSEL = Vnom+2%
-	 * [1:0] BIT 1:0 Set CTLV5ADS3 = Force PWM
-	 */
-	if (!i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x31, &pmic_reg31)) {
-		pmic_reg31 &= 0xCF;
-		pmic_reg31 |= 0x13;
-		i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x31, pmic_reg31);
-	}
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
 
@@ -420,6 +429,8 @@ static void board_chipset_resume(void)
 {
 	gpio_set_level(GPIO_PP3300_DX_CAM_EN, 1);
 	gpio_set_level(GPIO_KBBL_EN, 1);
+	/* set V5A_DS3 to FORCED_PWM */
+	set_pmic_v5a_ds3_ctrl(1);
 
 	/*
 	 * Now that we have enabled the rail to the sensors, let's give enough
@@ -441,6 +452,8 @@ static void board_chipset_suspend(void)
 {
 	gpio_set_level(GPIO_KBBL_EN, 0);
 	gpio_set_level(GPIO_PP3300_DX_CAM_EN, 0);
+	/* set V5A_DS3 to AUTO */
+	set_pmic_v5a_ds3_ctrl(0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
