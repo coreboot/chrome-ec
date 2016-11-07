@@ -18,7 +18,9 @@
 #define CONFIG_I2C_MASTER
 #define CONFIG_I2C_VIRTUAL_BATTERY
 #define CONFIG_I2C_PASSTHRU_RESTRICTED
+#define CONFIG_LED_BAT_ACTIVE_LOW
 #define CONFIG_LED_COMMON
+#define CONFIG_LED_POLICY_STD
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_POWER_COMMON
 #define CONFIG_PWM
@@ -26,9 +28,7 @@
 #define CONFIG_SPI
 #define CONFIG_SPI_MASTER
 
-#ifdef BOARD_GRU
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
-#endif
 
 /*
  * We are code space-constrained on kevin, so take 10K that is normally used
@@ -78,7 +78,6 @@
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
 /* Motion Sensors */
-#define CONFIG_ACCEL_BMA255
 #define CONFIG_ACCEL_KX022
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_INTERRUPTS
@@ -127,14 +126,12 @@
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_SMART
 
-#ifdef BOARD_KEVIN
 #define CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD
-#endif
 
 #define PD_OPERATING_POWER_MW 15000
-#define PD_MAX_POWER_MW       60000
-#define PD_MAX_CURRENT_MA     3000
-#define PD_MAX_VOLTAGE_MV     20000
+#define PD_MAX_POWER_MW       33000
+#define PD_MAX_CURRENT_MA     2200
+#define PD_MAX_VOLTAGE_MV     15000
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 50000  /* us */
@@ -213,14 +210,8 @@ enum adc_channel {
 };
 
 enum pwm_channel {
-#ifdef BOARD_KEVIN
-	PWM_CH_LED_GREEN,
-#endif
 	PWM_CH_DISPLIGHT,
-	PWM_CH_LED_RED,
-#ifdef BOARD_KEVIN
-	PWM_CH_LED_BLUE,
-#endif
+
 	/* Number of PWM channels */
 	PWM_CH_COUNT
 };

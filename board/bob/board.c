@@ -90,19 +90,8 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /******************************************************************************/
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
 const struct pwm_t pwm_channels[] = {
-#ifdef BOARD_KEVIN
-	[PWM_CH_LED_GREEN] = { 0, PWM_CONFIG_DSLEEP, 100 },
-#endif
-#ifdef BOARD_KEVIN
-	[PWM_CH_DISPLIGHT] = { 2, 0, 210 },
-#else
-	/* ArcticSand part on Gru requires >= 2.6KHz */
+	/* ArcticSand part on Bob requires >= 2.6KHz */
 	[PWM_CH_DISPLIGHT] = { 2, 0, 2600 },
-#endif
-	[PWM_CH_LED_RED] =   { 3, PWM_CONFIG_DSLEEP, 100 },
-#ifdef BOARD_KEVIN
-	[PWM_CH_LED_BLUE] =  { 4, PWM_CONFIG_DSLEEP, 100 },
-#endif
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
@@ -362,7 +351,7 @@ void board_hibernate(void)
 	cflush();
 }
 
-enum kevin_board_version {
+enum bob_board_version {
 	BOARD_VERSION_UNKNOWN = -1,
 	BOARD_VERSION_REV0 = 0,
 	BOARD_VERSION_REV1 = 1,
@@ -384,9 +373,9 @@ enum kevin_board_version {
 };
 
 struct {
-	enum kevin_board_version version;
+	enum bob_board_version version;
 	int expect_mv;
-} const kevin_boards[] = {
+} const bob_boards[] = {
 	{ BOARD_VERSION_REV0, 109 },   /* 51.1K , 2.2K(gru 3.3K) ohm */
 	{ BOARD_VERSION_REV1, 211 },   /* 51.1k , 6.8K ohm */
 	{ BOARD_VERSION_REV2, 319 },   /* 51.1K , 11K ohm */
@@ -404,9 +393,9 @@ struct {
 	{ BOARD_VERSION_REV14, 1684 }, /* 47K   , 680K ohm */
 	{ BOARD_VERSION_REV15, 1800 }, /* 56K   , NC */
 };
-BUILD_ASSERT(ARRAY_SIZE(kevin_boards) == BOARD_VERSION_COUNT);
+BUILD_ASSERT(ARRAY_SIZE(bob_boards) == BOARD_VERSION_COUNT);
 
-#define THRESHHOLD_MV 56 /* Simply assume 1800/16/2 */
+#define THRESHOLD_MV 56 /* Simply assume 1800/16/2 */
 
 int board_get_version(void)
 {
@@ -429,8 +418,8 @@ int board_get_version(void)
 	gpio_set_level(GPIO_EC_BOARD_ID_EN_L, 1);
 
 	for (i = 0; i < BOARD_VERSION_COUNT; ++i) {
-		if (mv < kevin_boards[i].expect_mv + THRESHHOLD_MV) {
-			version = kevin_boards[i].version;
+		if (mv < bob_boards[i].expect_mv + THRESHOLD_MV) {
+			version = bob_boards[i].version;
 			break;
 		}
 	}
@@ -444,25 +433,6 @@ int board_get_version(void)
 static struct mutex g_base_mutex;
 static struct mutex g_lid_mutex;
 
-#ifdef BOARD_KEVIN
-/* BMA255 private data */
-struct bma2x2_accel_data g_bma255_data = {
-	.variant = BMA255,
-};
-
-/* Matrix to rotate accelrator into standard reference frame */
-const matrix_3x3_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1),  0},
-	{ FLOAT_TO_FP(1),  0, 0},
-	{ 0,  0, FLOAT_TO_FP(-1)}
-};
-
-const matrix_3x3_t lid_standard_ref = {
-	{ 0,  FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1),  0,  0},
-	{ 0,  0, FLOAT_TO_FP(1)}
-};
-#else
 /* Matrix to rotate accelerometer into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0,  0},
@@ -478,7 +448,6 @@ const matrix_3x3_t lid_standard_ref = {
 
 /* KX022 private data */
 struct kionix_accel_data g_kx022_data;
-#endif /* BOARD_KEVIN */
 
 struct motion_sensor_t motion_sensors[] = {
 	/*
@@ -534,11 +503,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = CONFIG_SPI_ACCEL_PORT,
 	 .addr = BMI160_SET_SPI_ADDRESS(CONFIG_SPI_ACCEL_PORT),
 	 .default_range = 1000, /* dps */
-#ifdef BOARD_KEVIN
-	 .rot_standard_ref = &base_standard_ref,
-#else
 	 .rot_standard_ref = NULL, /* Identity matrix. */
-#endif
 	 .config = {
 		 /* AP: by default shutdown all sensors */
 		 [SENSOR_CONFIG_AP] = {
@@ -562,43 +527,6 @@ struct motion_sensor_t motion_sensors[] = {
 		 },
 	 },
 	},
-#ifdef BOARD_KEVIN
-	[LID_ACCEL] = {
-	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMA255,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &bma2x2_accel_drv,
-	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_bma255_data,
-	 .port = I2C_PORT_ACCEL,
-	 .addr = BMA2x2_I2C_ADDR1,
-	 .rot_standard_ref = &lid_standard_ref,
-	 .default_range = 2, /* g, enough for laptop. */
-	 .config = {
-		/* AP: by default use EC settings */
-		[SENSOR_CONFIG_AP] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 0,
-		},
-		 /* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 0,
-		},
-		[SENSOR_CONFIG_EC_S5] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
-	 },
-	},
-#else
 	[LID_ACCEL] = {
 	 .name = "Lid Accel",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
@@ -634,7 +562,6 @@ struct motion_sensor_t motion_sensors[] = {
 		},
 	 },
 	},
-#endif /* BOARD_KEVIN */
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 #endif /* defined(HAS_TASK_MOTIONSENSE) */
@@ -647,24 +574,6 @@ void lid_angle_peripheral_enable(int enable)
 	/* enable/disable touchpad */
 	gpio_set_level(GPIO_PP3300_TRACKPAD_EN_L, !enable);
 }
-#endif
-
-#ifdef BOARD_GRU
-static void usb_charge_resume(void)
-{
-	/* Turn on USB-A ports on as we go into S0 from S3. */
-	gpio_set_level(GPIO_USB_A_EN, 1);
-	gpio_set_level(GPIO_USB_A_CHARGE_EN, 1);
-}
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, usb_charge_resume, HOOK_PRIO_DEFAULT);
-
-static void usb_charge_shutdown(void)
-{
-	/* Turn off USB-A ports as we go back to S5. */
-	gpio_set_level(GPIO_USB_A_CHARGE_EN, 0);
-	gpio_set_level(GPIO_USB_A_EN, 0);
-}
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usb_charge_shutdown, HOOK_PRIO_DEFAULT);
 #endif
 
 #define PWM_DISPLIGHT_SYSJUMP_TAG 0x5044 /* "PD" */
