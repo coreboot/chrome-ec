@@ -102,6 +102,7 @@ BOARDS_NPCX_5M6G_JTAG=(
 
 BOARDS_NPCX_SPI=(
 	amenia
+	bob
 	gru
 	kevin
 	reef
@@ -119,12 +120,14 @@ BOARDS_MEC1322=(
 )
 
 BOARDS_SPI_1800MV=(
+	bob
 	gru
 	kevin
 	reef
 )
 
 BOARDS_RAIDEN=(
+	bob
 	gru
 	kevin
 	reef
