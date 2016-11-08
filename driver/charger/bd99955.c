@@ -750,10 +750,15 @@ int charger_discharge_on_ac(int enable)
 	if (rv)
 		return rv;
 
+	/*
+	 * Usually we should use BD99955_CMD_CHGOP_SET2_BATT_LEARN
+	 * But bd9995x sets this bit clear when VBAT < VSYSREG_SET
+	 * So we need to use USB suspend switch if we want to do it manually
+	 */
 	if (enable)
-		reg |= BD99955_CMD_CHGOP_SET2_BATT_LEARN;
+		reg |= BD99955_CMD_CHGOP_SET2_USB_SUS;
 	else
-		reg &= ~BD99955_CMD_CHGOP_SET2_BATT_LEARN;
+		reg &= ~BD99955_CMD_CHGOP_SET2_USB_SUS;
 
 	return ch_raw_write16(BD99955_CMD_CHGOP_SET2, reg,
 				BD99955_EXTENDED_COMMAND);
