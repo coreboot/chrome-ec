@@ -63,14 +63,6 @@
 
 #define CONFIG_I2C
 
-/* Accelerometer */
-#define CONFIG_ACCEL_KXCJ9
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE	0
-#define CONFIG_LID_ANGLE_SENSOR_LID	1
-
 /* Wireless signals */
 #define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
 

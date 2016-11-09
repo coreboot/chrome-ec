@@ -8,6 +8,15 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+/*
+ * By default, enable all console messages excepted HC, ACPI and event:
+ * The sensor stack is generating a lot of activity.
+ */
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+/* By default, set hcdebug to off */
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
+
 /* Optional features */
 #define CONFIG_WATCHDOG_HELP
 #define CONFIG_CLOCK_CRYSTAL
@@ -76,8 +85,10 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 #define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE	0
-#define CONFIG_LID_ANGLE_SENSOR_LID	1
+
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO 512
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
 
 /* Wireless signals */
 #define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
@@ -124,6 +135,22 @@ enum adc_channel {
 	/* Number of ADC channels */
 	ADC_CH_COUNT
 };
+
+/* Sensor index definition */
+enum sensor_id {
+	BASE_ACCEL = 0,
+	LID_ACCEL = 1,
+};
+
+/*
+ * We have not enabled the sensor FIFO on the accels, so we force the EC
+ * to collect at every sample.
+ */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	((1 << BASE_ACCEL) | (1 << LID_ACCEL))
+
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
 /* power signal definitions */
 enum power_signal {

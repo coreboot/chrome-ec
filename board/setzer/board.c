@@ -11,7 +11,7 @@
 #include "console.h"
 #include "charger.h"
 #include "charge_state.h"
-#include "driver/accel_kxcj9.h"
+#include "driver/accel_kionix.h"
 #include "driver/als_isl29035.h"
 #include "driver/gyro_l3gd20h.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -113,14 +113,7 @@ BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 /* Four Motion sensors */
 /* kxcj9 mutex and local/private data*/
 static struct mutex g_kxcj9_mutex[2];
-struct kxcj9_data g_kxcj9_data[2];
-
-#ifdef CONFIG_GYRO_L3GD20H
-/* Gyro sensor */
-/* l3gd20h mutex and local/private data*/
-static struct mutex g_l3gd20h_mutex;
-struct l3gd20_data g_l3gd20h_data;
-#endif
+struct kionix_accel_data g_kxcj9_data[2];
 
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
@@ -136,96 +129,80 @@ const matrix_3x3_t lid_standard_ref = {
 };
 
 struct motion_sensor_t motion_sensors[] = {
-	{.name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	[BASE_ACCEL] = {
+	 .name = "Base",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &kxcj9_drv,
+	 .drv = &kionix_accel_drv,
 	 .mutex = &g_kxcj9_mutex[0],
 	 .drv_data = &g_kxcj9_data[0],
-	 .i2c_addr = KXCJ9_ADDR1,
+	 .port = I2C_PORT_ACCEL,
+	 .addr = KXCJ9_ADDR1,
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_config = {
-		 .odr = 100000,
-		 .range = 2,
-		 .ec_rate = SUSPEND_SAMPLING_INTERVAL,
+	 .default_range = 2,  /* g, enough for laptop. */
+	 .config = {
+		 /* AP: by default shutdown all sensors */
+		 [SENSOR_CONFIG_AP] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S5] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
 	 }
 	},
-	{.name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	[LID_ACCEL] = {
+	 .name = "Lid",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KXCJ9,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kxcj9_drv,
+	 .drv = &kionix_accel_drv,
 	 .mutex = &g_kxcj9_mutex[1],
 	 .drv_data = &g_kxcj9_data[1],
-	 .i2c_addr = KXCJ9_ADDR0,
+	 .port = I2C_PORT_ACCEL,
+	 .addr = KXCJ9_ADDR0,
 	 .rot_standard_ref = &lid_standard_ref,
-	 .default_config = {
-		 .odr = 100000,
-		 .range = 2,
-		 .ec_rate = SUSPEND_SAMPLING_INTERVAL,
-	 }
+	 .default_range = 2,  /* g, enough for laptop. */
+	 .config = {
+		 /* AP: by default shutdown all sensors */
+		 [SENSOR_CONFIG_AP] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S5] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+	 },
 	},
-#ifdef CONFIG_GYRO_L3GD20H
-	{.name = "Lid Gyro",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_L3GD20H,
-	 .type = MOTIONSENSE_TYPE_GYRO,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &l3gd20h_drv,
-	 .mutex = &g_l3gd20h_mutex,
-	 .drv_data = &g_l3gd20h_data,
-	 .i2c_addr = L3GD20_ADDR1,
-	 .rot_standard_ref = NULL,
-	 .default_config = {
-		 .odr = 190000,
-		 .range = 2000,
-		 .ec_rate = SUSPEND_SAMPLING_INTERVAL,
-	 }
-	},
-#endif
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-/* Define the accelerometer orientation matrices. */
-const struct accel_orientation acc_orient = {
-	/* Hinge aligns with x axis. */
-	.rot_hinge_90 = {
-		{ FLOAT_TO_FP(1),  0,  0},
-		{ 0,  0,  FLOAT_TO_FP(1)},
-		{ 0, FLOAT_TO_FP(-1),  0}
-	},
-	.rot_hinge_180 = {
-		{ FLOAT_TO_FP(1),  0,  0},
-		{ 0, FLOAT_TO_FP(-1),  0},
-		{ 0,  0, FLOAT_TO_FP(-1)}
-	},
-	.hinge_axis = {1, 0, 0},
-};
-
-/*
- * In S3, power rail for sensors (+V3p3S) goes down asynchronous to EC. We need
- * to execute this routine first and set the sensor state to "Not Initialized".
- * This prevents the motion_sense_suspend hook routine from communicating with
- * the sensor.
- */
-static void motion_sensors_pre_init(void)
-{
-	struct motion_sensor_t *sensor;
-	int i;
-
-	for (i = 0; i < motion_sensor_count; ++i) {
-		sensor = &motion_sensors[i];
-		sensor->state = SENSOR_NOT_INITIALIZED;
-
-		sensor->runtime_config.odr = sensor->default_config.odr;
-		sensor->runtime_config.range = sensor->default_config.range;
-	}
-}
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, motion_sensors_pre_init,
-	MOTION_SENSE_HOOK_PRIO - 1);
 
 /* init ADC ports to avoid floating state due to thermistors */
 static void adc_pre_init(void)
