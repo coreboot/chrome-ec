@@ -11,6 +11,7 @@
 #include "host_command.h"
 #include "link_defs.h"
 #include "lpc.h"
+#include "include/motion_sense.h"
 #include "shared_mem.h"
 #include "system.h"
 #include "task.h"
@@ -693,7 +694,8 @@ static int host_command_get_features(struct host_cmd_handler_args *args)
 		| EC_FEATURE_MASK_0(EC_FEATURE_LED)
 #endif
 #ifdef HAS_TASK_MOTIONSENSE
-		| EC_FEATURE_MASK_0(EC_FEATURE_MOTION_SENSE)
+		| (motion_sensor_count > 0 ?
+		   EC_FEATURE_MASK_0(EC_FEATURE_MOTION_SENSE) : 0)
 #endif
 #ifdef HAS_TASK_KEYSCAN
 		| EC_FEATURE_MASK_0(EC_FEATURE_KEYB)
@@ -749,7 +751,8 @@ static int host_command_get_features(struct host_cmd_handler_args *args)
 		| EC_FEATURE_MASK_0(EC_FEATURE_USB_MUX)
 #endif
 #ifdef CONFIG_ACCEL_FIFO
-		| EC_FEATURE_MASK_0(EC_FEATURE_MOTION_SENSE_FIFO)
+		| (motion_sensor_count > 0 ?
+		   EC_FEATURE_MASK_0(EC_FEATURE_MOTION_SENSE_FIFO) : 0)
 #endif
 		;
 	return EC_RES_SUCCESS;
