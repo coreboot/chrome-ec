@@ -216,11 +216,11 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  */
 struct ec_thermal_config thermal_params[] = {
 	/* {Twarn, Thigh, Thalt}, fan_off, fan_max */
-	{{0, 0, 0}, 0, 0},	/* Battery */
-	{{0, 0, 0}, 0, 0},	/* Ambient */
-	{{0, 0, 0}, 0, 0},	/* Charger */
-	{{0, 0, 0}, 0, 0},	/* DRAM */
-	{{0, 0, 0}, 0, 0},	/* Wifi */
+	{{0, 0, 0}, 0, 0},		/* Battery */
+	{{0, 0, C_TO_K(82)}, 0, 0},	/* Ambient */
+	{{0, 0, C_TO_K(82)}, 0, 0},	/* Charger */
+	{{0, 0, C_TO_K(82)}, 0, 0},	/* DRAM */
+	{{0, 0, C_TO_K(87)}, 0, 0},	/* Wifi */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
