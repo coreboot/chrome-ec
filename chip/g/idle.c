@@ -8,12 +8,15 @@
 #include "console.h"
 #include "hooks.h"
 #include "hwtimer.h"
+#include "init_chip.h"
 #include "rdd.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
+
+#define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
 
 /* What to do when we're just waiting */
 static enum {
@@ -24,12 +27,9 @@ static enum {
 	NUM_CHOICES
 } idle_action;
 
-/*
- * TODO(crosbug.com/p/59641): Set the default action to sleep when the new
- * boards come in.
- */
-#define IDLE_DEFAULT IDLE_WFI
 #define EVENT_MIN 500
+
+static int idle_default;
 
 static const char const *idle_name[] = {
 	"invalid",
@@ -169,7 +169,7 @@ void clock_refresh_console_in_use(void)
 
 void disable_deep_sleep(void)
 {
-	idle_action = IDLE_DEFAULT;
+	idle_action = idle_default;
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, disable_deep_sleep, HOOK_PRIO_DEFAULT);
 
@@ -178,6 +178,22 @@ void enable_deep_sleep(void)
 	idle_action = IDLE_DEEP_SLEEP;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, enable_deep_sleep, HOOK_PRIO_DEFAULT);
+
+static void idle_init(void)
+{
+	/*
+	 * If bus obfuscation is enabled disable sleep.
+	 */
+	if ((GR_FUSE(OBFUSCATION_EN) == 5) ||
+	    (GR_FUSE(FW_DEFINED_BROM_APPLYSEC) & (1 << 3)) ||
+	    (runlevel_is_high() && GREAD(GLOBALSEC, OBFS_SW_EN))) {
+		CPRINTS("bus obfuscation enabled disabling sleep");
+		idle_default = IDLE_WFI;
+	} else {
+		idle_default = IDLE_SLEEP;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, idle_init, HOOK_PRIO_DEFAULT - 1);
 
 /* Custom idle task, executed when no tasks are ready to be scheduled. */
 void __idle(void)
@@ -193,7 +209,7 @@ void __idle(void)
 	 * this and set the idle_action.
 	 */
 	if (!idle_action)
-		idle_action = IDLE_DEFAULT;
+		idle_action = idle_default;
 
 	/* Disable sleep until 3 minutes after init */
 	delay_sleep_by(3 * MINUTE);
