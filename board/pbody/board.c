@@ -437,8 +437,7 @@ void board_set_gpio_hibernate_state(void)
 	gpio_set_level(GPIO_USB_PD_WAKE, 0);
 }
 
-/* Any glados boards post version 2 should have ROP_LDO_EN stuffed. */
-#define BOARD_MIN_ID_LOD_EN 2
+
 /* Make the pmic re-sequence the power rails under these conditions. */
 #define PMIC_RESET_FLAGS \
 	(RESET_FLAG_WATCHDOG | RESET_FLAG_SOFT | RESET_FLAG_HARD)
@@ -447,9 +446,6 @@ static void board_handle_reboot(void)
 	int flags;
 
 	if (system_jumped_to_this_image())
-		return;
-
-	if (system_get_board_version() < BOARD_MIN_ID_LOD_EN)
 		return;
 
 	/* Interrogate current reset flags from previous reboot. */
