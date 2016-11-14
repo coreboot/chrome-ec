@@ -58,8 +58,6 @@
 #define TABLET_ZONE_LID_ANGLE FLOAT_TO_FP(300)
 #define LAPTOP_ZONE_LID_ANGLE FLOAT_TO_FP(240)
 
-static int tablet_mode = 1;
-
 /*
  * We will change our tablet mode status when we are "convinced" that it has
  * changed.  This means we will have to consecutively calculate our new tablet
@@ -249,12 +247,12 @@ static int calculate_lid_angle(const vector_3_t base, const vector_3_t lid,
 			new_tablet_mode = 0;
 
 		/* Only change tablet mode if we're sure. */
-		if (tablet_mode != new_tablet_mode) {
+		if (tablet_get_mode() != new_tablet_mode) {
 			if (tablet_mode_debounce_cnt == 0) {
 				/* Alright, we're convinced. */
 				tablet_mode_debounce_cnt =
 					TABLET_MODE_DEBOUNCE_COUNT;
-				tablet_mode = new_tablet_mode;
+				tablet_set_mode(new_tablet_mode);
 				hook_notify(HOOK_TABLET_MODE_CHANGE);
 				return reliable;
 			}
