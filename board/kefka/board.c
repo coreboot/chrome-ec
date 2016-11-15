@@ -81,9 +81,9 @@ const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 const struct temp_sensor_t temp_sensors[] = {
 	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_LOCAL, 4},
-	{"TMP432_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_Power_top", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE1, 4},
-	{"TMP432_Sensor_2", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+	{"TMP432_CPU_bottom", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
 		TMP432_IDX_REMOTE2, 4},
 	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_temp_sensor_get_val,
 		0, 4},
@@ -94,9 +94,9 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  * same order as enum temp_sensor_id. To always ignore any temp, use 0.
  */
 struct ec_thermal_config thermal_params[] = {
-	{{0, 0, 0}, 0, 0}, /* TMP432_Internal */
-	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_1 */
-	{{0, 0, 0}, 0, 0}, /* TMP432_Sensor_2 */
+	{{0, C_TO_K(60), C_TO_K(127)}, 0, 0}, /* TMP432_Internal */
+	{{0, C_TO_K(60), C_TO_K(127)}, 0, 0}, /* TMP432_Power_top */
+	{{0, C_TO_K(58), C_TO_K(127)}, 0, 0}, /* TMP432_CPU_bottom */
 	{{0, 0, 0}, 0, 0}, /* Battery Sensor */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
