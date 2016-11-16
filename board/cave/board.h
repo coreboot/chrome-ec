@@ -88,6 +88,7 @@
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_CUSTOM_VDM
+#define CONFIG_USB_PD_DEBUG_LEVEL 1
 #define CONFIG_USB_PD_DISCHARGE_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_LOGGING
@@ -161,6 +162,9 @@
 #define CONFIG_LID_ANGLE_INVALID_CHECK
 /* FIFO size is in power of 2. */
 #define CONFIG_ACCEL_FIFO 128
+/* Useful debug command */
+#define CONFIG_CMD_ACCELS
+#define CONFIG_CMD_ACCEL_INFO
 
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
