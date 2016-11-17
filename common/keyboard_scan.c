@@ -638,6 +638,7 @@ void keyboard_scan_task(void)
 		CPRINTS5("KB wait");
 		if (keyboard_scan_is_enabled())
 			keyboard_raw_drive_column(KEYBOARD_COLUMN_ALL);
+		keyboard_raw_enable_interrupt(1);
 
 		/* Wait for scanning enabled and key pressed. */
 		do {
