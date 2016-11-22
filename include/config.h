@@ -1703,6 +1703,9 @@
 /* Support SPI flash */
 #undef CONFIG_SPI_FLASH
 
+/* Support SPI flash protection register translation */
+#undef CONFIG_SPI_FLASH_REGS
+
 /* Define the SPI port to use to access the flash */
 #undef CONFIG_SPI_FLASH_PORT
 
