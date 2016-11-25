@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #include "common.h"
+#include "tpm_vendor_cmds.h"
 
 /*
  * Type of function handling extension commands.
@@ -34,11 +35,12 @@ typedef void (*extension_handler)(void *buffer,
  *                     data returned by the handler. A single byte return
  *                     usually indicates an error and contains the error code.
  */
-void extension_route_command(uint16_t command_code,
-			    void *buffer,
-			    size_t command_size,
-			    size_t *size);
+uint32_t extension_route_command(uint16_t command_code,
+				 void *buffer,
+				 size_t command_size,
+				 size_t *size);
 
+/* Pointer table */
 struct extension_command {
 	uint16_t command_code;
 	extension_handler handler;
