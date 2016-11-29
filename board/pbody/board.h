@@ -12,8 +12,6 @@
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_KX022
 #define CONFIG_ADC
-#define CONFIG_ALS
-#define CONFIG_ALS_OPT3001
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_PRESENT_GPIO GPIO_BAT_PRESENT_L
 #define CONFIG_BATTERY_SMART
@@ -43,6 +41,7 @@
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_CLOCK_CRYSTAL
 #define CONFIG_EXTPOWER_GPIO
+#define CONFIG_HOSTCMD_ALIGNED
 #define CONFIG_HOSTCMD_PD
 #define CONFIG_HOSTCMD_PD_PANIC
 #define CONFIG_I2C
@@ -187,13 +186,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_WIFI,
 
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_OPT3001 = 0,
-
-	ALS_COUNT
 };
 
 /* start as a sink in case we have no other power supply/battery */
