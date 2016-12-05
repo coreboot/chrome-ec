@@ -29,6 +29,7 @@ GPIO_INT(PMIC_DPWROK,       PIN(133), GPIO_INT_BOTH, power_signal_interrupt)
 /* UART input */
 GPIO_INT(UART0_RX,          PIN(162), GPIO_INT_BOTH_DSLEEP | GPIO_PULL_UP, uart_deepsleep_interrupt)
 
+GPIO_INT(ACCEL3_INT,        PIN(147), GPIO_INT_FALLING, bmi160_interrupt)
 /*
  * This pulldown should be removed and SLP_S0 should be enabled as a power
  * signal interrupt in future hardware followers. The signal is pulled up in
@@ -73,8 +74,8 @@ GPIO(USB_C0_DISCHARGE,      PIN(136), GPIO_OUT_LOW)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(ACCEL1_INT,            PIN(161), GPIO_INPUT)
-GPIO(ACCEL2_INT,            PIN(127), GPIO_INPUT)
-GPIO(ACCEL3_INT,            PIN(147), GPIO_INPUT)
+GPIO(TRACKPAD_INT_DISABLE,  PIN(127), GPIO_OUT_LOW)
+GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)
 GPIO(WLAN_OFF_L,            PIN(132), GPIO_OUT_LOW)
 /* RCIN# line to PCH for 8042 emulation */
 GPIO(PCH_RCIN_L,            PIN(135), GPIO_ODR_HIGH)
@@ -109,7 +110,7 @@ GPIO(CHARGE_LED_2,        PIN(156), GPIO_OUT_LOW)
  * pulls setting this pin as input won't harm anything.
  */
 GPIO(BATLOW_L_PMIC_LDO_EN,  PIN(55),  GPIO_INPUT)
-GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)
+
 GPIO(PP1800_DX_AUDIO_EN,    PIN(141), GPIO_OUT_LOW)
 /* NC / stuffing option */
 GPIO(PCH_RTCRST,            PIN(163), GPIO_OUT_LOW)
