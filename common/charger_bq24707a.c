@@ -168,6 +168,11 @@ int charger_get_voltage(int *voltage)
 
 int charger_set_voltage(int voltage)
 {
+/* crosbug.com/p/60681: Limit charge voltage to 12.832V */
+#ifdef BOARD_peppy
+	if (voltage != 0)
+		voltage = MIN(voltage, 12832);
+#endif
 	return sbc_write(SB_CHARGING_VOLTAGE, voltage);
 }
 
