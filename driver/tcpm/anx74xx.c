@@ -653,7 +653,6 @@ static int anx74xx_tcpm_get_message(int port, uint32_t *payload, int *head)
 	/* Fetch the header */
 	rv |= tcpc_read16(port, ANX74XX_REG_PD_HEADER, &reg);
 	if (rv) {
-		*head = 0;
 		/* Clear receive message interrupt bit(bit-0) */
 		tcpc_read(port, ANX74XX_REG_IRQ_SOURCE_RECV_MSG, &reg);
 		tcpc_write(port, ANX74XX_REG_IRQ_SOURCE_RECV_MSG,
@@ -675,10 +674,8 @@ static int anx74xx_tcpm_get_message(int port, uint32_t *payload, int *head)
 	 * memory allocated
 	 */
 	rv |= anx74xx_read_pd_obj(port, (uint8_t *)payload, len);
-	if (rv) {
-		*head = 0;
+	if (rv)
 		return EC_ERROR_UNKNOWN;
-	}
 
 	return rv;
 }
