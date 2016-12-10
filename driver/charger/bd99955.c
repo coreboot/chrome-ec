@@ -664,13 +664,20 @@ static void bd99995_init(void)
 	ch_raw_write16(BD99955_CMD_CHGOP_SET1, reg,
 		       BD99955_EXTENDED_COMMAND);
 
-	/* Enable BC1.2 USB charging and DC/DC converter @ 1200KHz */
+	/* Enable BC1.2 USB charging and DC/DC converter */
 	if (ch_raw_read16(BD99955_CMD_CHGOP_SET2, &reg,
 			  BD99955_EXTENDED_COMMAND))
 		return;
 	reg &= ~(BD99955_CMD_CHGOP_SET2_USB_SUS |
 		 BD99955_CMD_CHGOP_SET2_DCDC_CLK_SEL);
+
+#if (CONFIG_BD99955_DCDC_CLK_KHZ == 1200)
 	reg |= BD99955_CMD_CHGOP_SET2_DCDC_CLK_SEL_1200;
+#elif (CONFIG_BD99955_DCDC_CLK_KHZ == 1000)
+	reg |= BD99955_CMD_CHGOP_SET2_DCDC_CLK_SEL_1000;
+#else
+#error "CONFIG_BD99955_DCDC_CLK_KHZ misconfigured"
+#endif
 	ch_raw_write16(BD99955_CMD_CHGOP_SET2, reg,
 		       BD99955_EXTENDED_COMMAND);
 

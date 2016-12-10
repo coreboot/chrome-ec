@@ -380,6 +380,9 @@
 #undef CONFIG_CHARGER_ISL9237
 #undef CONFIG_CHARGER_TPS65090  /* Note: does not use CONFIG_CHARGER */
 
+/* BD99955 DC/DC switching frequency. */
+#define CONFIG_BD99955_DCDC_CLK_KHZ 1200
+
 /*
  * BD99955 PD port to charger port mapping.
  * By default VBUS is selected as primary port.

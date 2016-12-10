@@ -154,6 +154,12 @@
 #define BD99955_PSYS_GAIN_SELECT \
 		BD99955_CMD_PMON_IOUT_CTRL_SET_PMON_GAIN_SET_08UAW
 
+/* Use 1000 KHz DC/DC switching frequency for kevin only */
+#ifdef BOARD_KEVIN
+#undef CONFIG_BD99955_DCDC_CLK_KHZ
+#define CONFIG_BD99955_DCDC_CLK_KHZ 1000
+#endif
+
 #define CONFIG_UART_HOST                0
 
 /* Optional feature - used by nuvoton */
