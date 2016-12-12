@@ -132,7 +132,7 @@ const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 /******************************************************************************/
 /* Keyboard scan setting */
 struct keyboard_scan_config keyscan_config = {
-	.output_settle_us = 40,
+	.output_settle_us = 60, /* Extra delay when KSO2 is tied to cr50 */
 	.debounce_down_us = 6 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 1500,
