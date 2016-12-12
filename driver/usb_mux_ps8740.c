@@ -118,6 +118,12 @@ int ps8740_tune_usb_eq(int i2c_addr, uint8_t tx, uint8_t rx)
 	return ret;
 }
 
+/* Tune High-Speed Signal Detector threshold */
+int ps8740_tune_hs_vth(int i2c_addr, uint8_t adj)
+{
+	return ps8740_write(i2c_addr, PS8740_REG_HS_VTH, adj);
+}
+
 const struct usb_mux_driver ps8740_usb_mux_driver = {
 	.init = ps8740_init,
 	.set = ps8740_set_mux,

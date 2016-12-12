@@ -62,6 +62,19 @@
 #define PS8740_USB_EQ_RX_20_1_DB 0xd0
 #define PS8740_USB_EQ_RX_21_3_DB 0xe0
 
+/* High-Speed Signal Detector threshold adjustment */
+#define PS8740_REG_HS_VTH        0x3c
+#define PS8740_HS_VTH_DEFAULT    0x00
+#define PS8740_HS_VTH_ADD_10P    0x20
+#define PS8740_HS_VTH_ADD_33P    0x40
+#define PS8740_HS_VTH_SUB_10P    0x60
+#define PS8740_HS_VTH_SUB_25P    0x80
+#define PS8740_HS_VTH_ADD_25P    0xA0
+#define PS8740_HS_VTH_SUB_45P    0xC0
+#define PS8740_HS_VTH_SUB_35P    0xE0
+
+
 int ps8740_tune_usb_eq(int i2c_addr, uint8_t tx, uint8_t rx);
+int ps8740_tune_hs_vth(int i2c_addr, uint8_t adj);
 
 #endif /* __CROS_EC_PS8740_H */
