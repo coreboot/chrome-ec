@@ -7,6 +7,8 @@
 
 #include "battery.h"
 #include "charge_state.h"
+#include "ec_commands.h"
+#include "host_command.h"
 #include "i2c.h"
 #include "system.h"
 #include "util.h"
