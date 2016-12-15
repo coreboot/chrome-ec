@@ -134,12 +134,12 @@ struct motion_sensor_t motion_sensors[] = {
 			 .odr = 10000 | ROUND_UP_FLAG,
 			 .ec_rate = 0,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S3] = {
-			 .odr = 0,
+			 .odr = 10000 | ROUND_UP_FLAG,
 			 .ec_rate = 0
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor off in S5 */
 		 [SENSOR_CONFIG_EC_S5] = {
 			 .odr = 0,
 			 .ec_rate = 0
@@ -170,12 +170,12 @@ struct motion_sensor_t motion_sensors[] = {
 			 .odr = 10000 | ROUND_UP_FLAG,
 			 .ec_rate = 0,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S3] = {
-			 .odr = 0,
+			 .odr = 10000 | ROUND_UP_FLAG,
 			 .ec_rate = 0
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor off in S5 */
 		 [SENSOR_CONFIG_EC_S5] = {
 			 .odr = 0,
 			 .ec_rate = 0
