@@ -235,12 +235,6 @@ static void board_pmic_init(void)
 	 * Nominal output = 1.0V.
 	 */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7a);
-
-	/*
-	 * Set V1.8A Control Register:
-	 * D[1:0]:11 force PWM
-	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x34, 0x2b);
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
 
