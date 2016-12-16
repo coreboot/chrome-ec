@@ -985,6 +985,9 @@ int charge_prevent_power_on(int power_button_pressed)
 	}
 	/* Require a minimum battery level to power on */
 	if (current_batt_params->is_present != BP_YES ||
+#ifdef CONFIG_BATTERY_REVIVE_DISCONNECT
+	    battery_get_disconnect_state() == BATTERY_DISCONNECTED ||
+#endif
 	    current_batt_params->state_of_charge <
 	    CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
 		prevent_power_on = 1;
@@ -1198,6 +1201,10 @@ static int charge_command_charge_state(struct host_cmd_handler_args *args)
 				 * and external charger power.
 				 */
 				if ((curr.batt.is_present != BP_YES ||
+#ifdef CONFIG_BATTERY_REVIVE_DISCONNECT
+				     battery_get_disconnect_state() ==
+				     BATTERY_DISCONNECTED ||
+#endif
 				     curr.batt.state_of_charge <
 				     CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT)
 				     && charge_manager_get_power_limit_uw() <
