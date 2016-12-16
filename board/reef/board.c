@@ -789,7 +789,7 @@ struct bmp280_drv_data_t bmp280_drv_data;
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_KX022,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
@@ -809,11 +809,11 @@ struct motion_sensor_t motion_sensors[] = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
 			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
+			.ec_rate = 0,
 		},
-		/* unused */
+		 /* Sensor on for lid angle detection */
 		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 0,
+			.odr = 10000 | ROUND_UP_FLAG,
 			.ec_rate = 0,
 		},
 		[SENSOR_CONFIG_EC_S5] = {
@@ -825,7 +825,7 @@ struct motion_sensor_t motion_sensors[] = {
 
 	[BASE_ACCEL] = {
 	 .name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_BASE,
@@ -847,10 +847,10 @@ struct motion_sensor_t motion_sensors[] = {
 			.odr = 10000 | ROUND_UP_FLAG,
 			.ec_rate = 100 * MSEC,
 		 },
-		 /* Sensor off in S3/S5 */
+		 /* Sensor on for lid angle detection */
 		 [SENSOR_CONFIG_EC_S3] = {
-			.odr = 0,
-			.ec_rate = 0
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
 		 },
 		 /* Sensor off in S3/S5 */
 		 [SENSOR_CONFIG_EC_S5] = {
