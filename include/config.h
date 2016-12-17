@@ -36,11 +36,12 @@
  * BOARD_*, CHIP_*, and CHIP_FAMILY_*.
  */
 
-/* Enable accelerometer interrupts. */
-#undef CONFIG_ACCEL_INTERRUPTS
-/* Add support for sensor FIFO:
- * define the size of the global fifo, must be a power of 2. */
+/*
+ * Add support for sensor FIFO:
+ * define the size of the global fifo, must be a power of 2.
+ */
 #undef CONFIG_ACCEL_FIFO
+
 /* The amount of free entries that trigger an interrupt to the AP. */
 #undef CONFIG_ACCEL_FIFO_THRES
 
@@ -49,6 +50,15 @@
  * at their data rate frequency.
  */
 #undef CONFIG_ACCEL_FORCE_MODE_MASK
+
+/* Enable accelerometer interrupts. */
+#undef CONFIG_ACCEL_INTERRUPTS
+
+/*
+ * Support "spoof" mode for sensors.  This allows sensors to have their values
+ * spoofed to any arbitrary value.  This is useful for testing.
+ */
+#define CONFIG_ACCEL_SPOOF_MODE
 
 /* Specify type of accelerometers attached. */
 #undef CONFIG_ACCEL_KXCJ9
@@ -446,6 +456,7 @@
 
 #undef CONFIG_CMD_ACCELS
 #undef CONFIG_CMD_ACCEL_INFO
+#define CONFIG_CMD_ACCELSPOOF
 #undef CONFIG_CMD_BATDEBUG
 #undef CONFIG_CMD_CHGRAMP
 #undef CONFIG_CMD_CLOCKGATES
