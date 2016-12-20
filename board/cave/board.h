@@ -197,6 +197,12 @@
 
 #define CONFIG_WATCHDOG_HELP
 
+/*
+ * Define for more ram space
+ * there is open issue chromium:606035
+ */
+#define CONFIG_REPLACE_LOADER_WITH_BSS_SLOW
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
