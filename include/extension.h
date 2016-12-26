@@ -21,12 +21,13 @@
  * @param response_size On input - max size of the buffer, on output - actual
  *                      number of data returned by the handler.
  */
-typedef void (*extension_handler)(void *buffer,
-				 size_t command_size,
-				 size_t *response_size);
+typedef enum vendor_cmd_rc (*extension_handler)(enum vendor_cmd_cc code,
+						void *buffer,
+						size_t command_size,
+						size_t *response_size);
+
 /*
  * Find handler for an extension command.
- *
  * @param command_code Code associated with a extension command handler.
  * @param buffer       Data to be processd by the handler, the same space
  *                     is used for data returned by the handler.
@@ -46,31 +47,21 @@ struct extension_command {
 	extension_handler handler;
 } __packed;
 
-/* Values for different extension subcommands. */
-enum {
-	EXTENSION_AES = 0,
-	EXTENSION_HASH = 1,
-	EXTENSION_RSA = 2,
-	EXTENSION_ECC = 3,
-	EXTENSION_FW_UPGRADE = 4,
-	EXTENSION_HKDF = 5,
-	EXTENSION_ECIES = 6,
-};
+#define DECLARE_EXTENSION_COMMAND(code, func)				\
+	static enum vendor_cmd_rc func##_wrap(enum vendor_cmd_cc code,	\
+				       void *cmd_body,			\
+				       size_t cmd_size,			\
+				       size_t *response_size) {		\
+		func(cmd_body, cmd_size, response_size);		\
+		return 0;						\
+	}								\
+	const struct extension_command __keep __extension_cmd_##code	\
+	__attribute__((section(".rodata.extensioncmds")))		\
+		= {.command_code = code, .handler = func##_wrap }
 
-
-/* Error codes reported by extension commands. */
-enum {
-	/* EXTENSION_HASH error codes */
-	/* Attempt to start a session on an active handle. */
-	EXC_HASH_DUPLICATED_HANDLE = 1,
-	EXC_HASH_TOO_MANY_HANDLES = 2,  /* No room to allocate a new context. */
-	/* Continuation/finish on unknown context. */
-	EXC_HASH_UNKNOWN_CONTEXT = 3
-};
-
-#define DECLARE_EXTENSION_COMMAND(code, handler) \
-	const struct extension_command __keep __extension_cmd_##code \
-	__attribute__((section(".rodata.extensioncmds")))	   \
-	= {code, handler}
+#define DECLARE_VENDOR_COMMAND(code, func)				\
+	const struct extension_command __keep __vendor_cmd_##code	\
+	__attribute__((section(".rodata.extensioncmds")))		\
+		= {.command_code = code, .handler = func}
 
 #endif  /* __EC_INCLUDE_EXTENSION_H */
