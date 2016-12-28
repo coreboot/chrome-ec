@@ -110,7 +110,11 @@
  * Some ALS modules may be connected to the EC. We need the command, and
  * specific drivers for each module.
  */
+#ifdef HAS_TASK_ALS
+#define CONFIG_ALS
+#else
 #undef CONFIG_ALS
+#endif
 #undef CONFIG_ALS_ISL29035
 #undef CONFIG_ALS_OPT3001
 /* Define the exact model ID present on the board: SI1141 = 41, SI1142 = 42, */
