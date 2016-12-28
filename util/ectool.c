@@ -3465,6 +3465,18 @@ static int cmd_motionsense(int argc, char **argv)
 		case MOTIONSENSE_CHIP_KX022:
 			printf("kx022\n");
 			break;
+		case MOTIONSENSE_CHIP_L3GD20H:
+			printf("l3gd20h\n");
+			break;
+		case MOTIONSENSE_CHIP_BMA255:
+			printf("bma255\n");
+			break;
+		case MOTIONSENSE_CHIP_BMP280:
+			printf("bmp280\n");
+			break;
+		case MOTIONSENSE_CHIP_OPT3001:
+			printf("opt3001\n");
+			break;
 		default:
 			printf("unknown\n");
 		}
