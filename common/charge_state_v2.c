@@ -966,6 +966,7 @@ int charge_prevent_power_on(int power_button_pressed)
 {
 	int prevent_power_on = 0;
 #ifdef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
+	int battery_disconnected = 0;
 	struct batt_params params;
 	struct batt_params *current_batt_params = &curr.batt;
 	static int automatic_power_on = 1;
@@ -982,11 +983,15 @@ int charge_prevent_power_on(int power_button_pressed)
 		battery_get_params(&params);
 		current_batt_params = &params;
 	}
+
+#ifdef CONFIG_BATTERY_REVIVE_DISCONNECT
+	battery_disconnected = (battery_get_disconnect_state() ==
+			       BATTERY_DISCONNECTED);
+#endif
+
 	/* Require a minimum battery level to power on */
 	if (current_batt_params->is_present != BP_YES ||
-#ifdef CONFIG_BATTERY_REVIVE_DISCONNECT
-	    battery_get_disconnect_state() == BATTERY_DISCONNECTED ||
-#endif
+	    battery_disconnected ||
 	    current_batt_params->state_of_charge <
 	    CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
 		prevent_power_on = 1;
@@ -997,7 +1002,7 @@ int charge_prevent_power_on(int power_button_pressed)
 	 * LIKELY_PD_USBC_POWER_MW since it may speak PD and provide
 	 * sufficient power once we enable PD communication.
 	 */
-	if (prevent_power_on)
+	if (prevent_power_on && !battery_disconnected)
 		if (charge_manager_get_power_limit_uw() >=
 		    MIN(LIKELY_PD_USBC_POWER_MW * 1000,
 			CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW * 1000))
