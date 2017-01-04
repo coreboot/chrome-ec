@@ -180,6 +180,12 @@
 #undef DEFERRABLE_MAX_COUNT
 #define DEFERRABLE_MAX_COUNT 17
 
+/*
+ * Define for more ram space.
+ * There is open issue chromium:606035.
+ */
+#define CONFIG_REPLACE_LOADER_WITH_BSS_SLOW
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
