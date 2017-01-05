@@ -462,6 +462,13 @@ static void board_handle_reboot(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_handle_reboot, HOOK_PRIO_FIRST);
 
+
+static void tablet_mode_changed(void)
+{
+	host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
+}
+DECLARE_HOOK(HOOK_TABLET_MODE_CHANGE, tablet_mode_changed, HOOK_PRIO_DEFAULT);
+
 #ifdef HAS_TASK_MOTIONSENSE
 /* Motion sensors */
 /* Mutexes */
