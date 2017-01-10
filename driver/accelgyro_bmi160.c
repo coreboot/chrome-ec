@@ -1083,6 +1083,7 @@ static int read(const struct motion_sensor_t *s, vector_3_t v)
 static int init(const struct motion_sensor_t *s)
 {
 	int ret = 0, tmp;
+	struct accelgyro_saved_data_t *data = BMI160_GET_SAVED_DATA(s);
 
 	ret = raw_read8(s->port, s->addr, BMI160_CHIP_ID, &tmp);
 	if (ret)
@@ -1210,6 +1211,11 @@ static int init(const struct motion_sensor_t *s)
 	}
 #endif
 
+	/*
+	 * The sensor is in Suspend mode at init,
+	 * so set data rate to 0.
+	 */
+	data->odr = 0;
 	set_range(s, s->default_range, 0);
 
 	if (s->type == MOTIONSENSE_TYPE_ACCEL) {
