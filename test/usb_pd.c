@@ -24,6 +24,8 @@ struct pd_port_t {
 	int partner_polarity;
 } pd_port[CONFIG_USB_PD_PORT_COUNT];
 
+static int give_back_called;
+
 /* Mock functions */
 
 int pd_adc_read(int port, int cc)
@@ -158,9 +160,39 @@ static void unplug(int port)
 	usleep(30 * MSEC);
 }
 
+void pd_snk_give_back(int port, uint32_t * const ma, uint32_t * const mv)
+{
+	if (*ma == 3000)
+		give_back_called = 1;
+}
+
+/*
+static void simulate_ps_rdy(int port)
+{
+	uint16_t header = PD_HEADER(PD_CTRL_PS_RDY, PD_ROLE_SOURCE,
+				PD_ROLE_DFP, pd_port[port].msg_rx_id,
+				0);
+
+	simulate_rx_msg(port, header, 0, NULL);
+}
+
+static void simulate_goto_min(int port)
+{
+	uint16_t header = PD_HEADER(PD_CTRL_GOTO_MIN, PD_ROLE_SOURCE,
+		PD_ROLE_DFP, pd_port[port].msg_rx_id, 0);
+
+	simulate_rx_msg(port, header, 0, NULL);
+}
+*/
+
 static int test_request(void)
 {
+#ifdef CONFIG_USB_PD_GIVE_BACK
+	uint32_t expected_rdo = RDO_FIXED(1, 900, PD_MIN_CURRENT_MA,
+					RDO_CAP_MISMATCH | RDO_GIVE_BACK);
+#else
 	uint32_t expected_rdo = RDO_FIXED(1, 900, 900, RDO_CAP_MISMATCH);
+#endif
 
 	plug_in_source(0, 0);
 	task_wake(PD_PORT_TO_TASK_ID(0));

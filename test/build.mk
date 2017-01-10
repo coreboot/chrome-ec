@@ -39,6 +39,7 @@ test-list-host+=math_util motion_lid sbs_charging_v2 battery_get_params_smart
 test-list-host+=lightbar inductive_charging usb_pd fan charge_manager
 test-list-host+=charge_manager_drp_charging charge_ramp
 test-list-host+=rsa rsa3
+test-list-host+=usb_pd_giveback
 endif
 
 battery_get_params_smart-y=battery_get_params_smart.o
@@ -78,6 +79,7 @@ thermal-y=thermal.o
 timer_calib-y=timer_calib.o
 timer_dos-y=timer_dos.o
 usb_pd-y=usb_pd.o
+usb_pd_giveback-y=usb_pd.o
 utils-y=utils.o
 battery_get_params_smart-y=battery_get_params_smart.o
 lightbar-y=lightbar.o
