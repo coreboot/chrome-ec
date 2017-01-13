@@ -308,19 +308,23 @@ SECTIONS
     /*
      * Check the shared memory is not too small.
      * The end of memory can have jump data and panic data.
-     * Based on calculation, set aside 128 bytes for these.
-     * This assert is approximate but prevents unexpected behavior at run time.
+     * Based on calculation, set aside 140 bytes for these.
+     * This assert is approximate for RO region but prevents unexpected
+     * behavior at run time.
      *
-     *               CONFIG_RAM_BASE + CONFIG_RAM_SIZE
-     * ---+---------------------+---------+----------+
-     *    | shared memory       |jump data|panic data|
-     * ---+---------------------+---------+----------+
-     *    __shared_mem_buf      jdata(RO) pdata_ptr(if present)
+     *                                       CONFIG_RAM_BASE + CONFIG_RAM_SIZE
+     * ---+----------------------------------+---------+---------------------+
+     *    | shared memory                    |jump data|   panic data        |
+     * ---+----------------------------------+---------+---------------------+
+     *    __shared_mem_buf                   | jdata(RO) pdata_ptr(if present)
+     * ---+-------------------+--------------+---------+---------------------+
+     *    __shared_mem_buf    | jdata->total | jdata(RW) pdata_ptr(if present)
+     * ---+-------------------+--------------+---------+---------------------+
      *
      * If hash calculation is disable, it is likely the shared memory is not
      * used.
      */
-    ASSERT((CONFIG_RAM_BASE + CONFIG_RAM_SIZE - 128) >=
+    ASSERT((CONFIG_RAM_BASE + CONFIG_RAM_SIZE - 140) >=
            (__shared_mem_buf + CONFIG_SHARED_MEM_MIN_SIZE),
            "Not enough space for shared memory")
 #endif
