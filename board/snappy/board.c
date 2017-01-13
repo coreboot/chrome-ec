@@ -198,11 +198,6 @@ struct i2c_stress_test i2c_stress_tests[] = {
 		.i2c_test = &kionix_i2c_stress_test_dev,
 	},
 #endif
-#ifdef CONFIG_CMD_I2C_STRESS_TEST_ALS
-	{
-		.i2c_test = &opt3001_i2c_stress_test_dev,
-	},
-#endif
 
 /* NPCX_I2C_PORT3 */
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_BATTERY
@@ -438,13 +433,6 @@ const struct temp_sensor_t temp_sensors[] = {
 	{"Charger", TEMP_SENSOR_TYPE_BOARD, board_get_charger_temp, 1, 1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-/* ALS instances. Must be in same order as enum als_id. */
-struct als_t als[] = {
-	/* FIXME(dhendrix): verify attenuation_factor */
-	{"TI", opt3001_init, opt3001_read_lux, 5},
-};
-BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
 
 const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
 	{"Volume Down", KEYBOARD_BUTTON_VOLUME_DOWN, GPIO_EC_VOLDN_BTN_ODL,
