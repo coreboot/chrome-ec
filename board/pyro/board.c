@@ -19,7 +19,6 @@
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "driver/accelgyro_bmi160.h"
-#include "driver/baro_bmp280.h"
 #include "driver/charger/bd9995x.h"
 #include "driver/tcpm/anx74xx.h"
 #include "driver/tcpm/ps8751.h"
@@ -194,19 +193,9 @@ struct i2c_stress_test i2c_stress_tests[] = {
 /* NPCX_I2C_PORT2 */
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_ACCEL
 	{
-		.port = I2C_PORT_BARO,
-		.addr = BMP280_I2C_ADDRESS1,
-		.i2c_test = &bmp280_i2c_stress_test_dev,
-	},
-	{
 		.port = I2C_PORT_LID_ACCEL,
 		.addr = KX022_ADDR1,
 		.i2c_test = &kionix_i2c_stress_test_dev,
-	},
-#endif
-#ifdef CONFIG_CMD_I2C_STRESS_TEST_ALS
-	{
-		.i2c_test = &opt3001_i2c_stress_test_dev,
 	},
 #endif
 
@@ -444,13 +433,6 @@ const struct temp_sensor_t temp_sensors[] = {
 	{"Charger", TEMP_SENSOR_TYPE_BOARD, board_get_charger_temp, 1, 1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-/* ALS instances. Must be in same order as enum als_id. */
-struct als_t als[] = {
-	/* FIXME(dhendrix): verify attenuation_factor */
-	{"TI", opt3001_init, opt3001_read_lux, 5},
-};
-BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
 
 const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
 	{"Volume Down", KEYBOARD_BUTTON_VOLUME_DOWN, GPIO_EC_VOLDN_BTN_ODL,
@@ -800,7 +782,6 @@ const matrix_3x3_t lid_standard_ref = {
 
 struct kionix_accel_data g_kx022_data;
 struct bmi160_drv_data_t g_bmi160_data;
-struct bmp280_drv_data_t bmp280_drv_data;
 
 /* FIXME(dhendrix): Copied from Amenia, probably need to tweak for Pyro */
 struct motion_sensor_t motion_sensors[] = {
@@ -914,77 +895,6 @@ struct motion_sensor_t motion_sensors[] = {
 	 },
 	},
 
-	[BASE_MAG] = {
-	 .name = "Base Mag",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
-	 .type = MOTIONSENSE_TYPE_MAG,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmi160_drv,
-	 .mutex = &g_base_mutex,
-	 .drv_data = &g_bmi160_data,
-	 .port = I2C_PORT_GYRO,
-	 .addr = BMI160_ADDR0,
-	 .default_range = 1 << 11, /* 16LSB / uT, fixed */
-	 .rot_standard_ref = NULL,
-	 .config = {
-		 /* AP: by default shutdown all sensors */
-		 [SENSOR_CONFIG_AP] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* EC does not need in S0 */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S3] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S5] = {
-			 .odr = 0,
-			 .ec_rate = 0,
-		 },
-	 },
-	},
-
-	[BASE_BARO] = {
-	 .name = "Base Baro",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_BMP280,
-	 .type = MOTIONSENSE_TYPE_BARO,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmp280_drv,
-	 .drv_data = &bmp280_drv_data,
-	 .port = I2C_PORT_BARO,
-	 .addr = BMP280_I2C_ADDRESS1,
-	 .default_range = 1 << 18, /*  1bit = 4 Pa, 16bit ~= 2600 hPa */
-	 .config = {
-		 /* AP: by default shutdown all sensors */
-		 [SENSOR_CONFIG_AP] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* EC does not need in S0 */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S3] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S5] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-	 },
-	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 

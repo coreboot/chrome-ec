@@ -38,7 +38,6 @@
 
 #define CONFIG_CMD_I2C_STRESS_TEST
 #define CONFIG_CMD_I2C_STRESS_TEST_ACCEL
-#define CONFIG_CMD_I2C_STRESS_TEST_ALS
 #define CONFIG_CMD_I2C_STRESS_TEST_BATTERY
 #define CONFIG_CMD_I2C_STRESS_TEST_CHARGER
 #define CONFIG_CMD_I2C_STRESS_TEST_TCPC
@@ -186,8 +185,6 @@
 /* I2C ports */
 #define I2C_PORT_GYRO			NPCX_I2C_PORT1
 #define I2C_PORT_LID_ACCEL		NPCX_I2C_PORT2
-#define I2C_PORT_ALS			NPCX_I2C_PORT2
-#define I2C_PORT_BARO			NPCX_I2C_PORT2
 #define I2C_PORT_BATTERY		NPCX_I2C_PORT3
 #define I2C_PORT_CHARGER		NPCX_I2C_PORT3
 /* Accelerometer and Gyroscope are the same device. */
@@ -199,13 +196,8 @@
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT TASK_EVENT_CUSTOM(4)
-#define CONFIG_MAG_BMI160_BMM150
-#define BMM150_I2C_ADDRESS BMM150_ADDR0	/* 8-bit address */
-#define CONFIG_MAG_CALIBRATE
 #define CONFIG_ACCEL_KX022
-#define CONFIG_ALS_OPT3001
 #define OPT3001_I2C_ADDR OPT3001_I2C_ADDR1
-#define CONFIG_BARO_BMP280
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
@@ -258,13 +250,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-/* Light sensors */
-enum als_id {
-	ALS_OPT3001 = 0,
-
-	ALS_COUNT
-};
-
 /*
  * Motion sensors:
  * When reading through IO memory is set up for sensors (LPC is used),
@@ -275,8 +260,6 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
-	BASE_MAG,
-	BASE_BARO,
 };
 
 enum pyro_board_version {
@@ -330,8 +313,7 @@ void board_set_tcpc_power_mode(int port, int mode);
 void board_print_tcpc_fw_version(int port);
 
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	((1 << LID_ACCEL) | (1 << BASE_BARO))
+#define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
 
 #endif /* !__ASSEMBLER__ */
 
