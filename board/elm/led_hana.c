@@ -43,7 +43,9 @@ static int bat_led_set(enum led_color color, int on)
 		gpio_set_level(GPIO_BAT_LED1, on); /* BAT_LED_RED */
 		break;
 	case PWR_LED_WHITE:
-		gpio_set_level(GPIO_PWR_LED0, on); /* PWR_LED_WHITE */
+		/* Hana uses LED0 and Birch uses LED1. Either pin is used */
+		gpio_set_level(GPIO_PWR_LED0, on);
+		gpio_set_level(GPIO_PWR_LED1, on);
 		break;
 	default:
 		return EC_ERROR_UNKNOWN;
