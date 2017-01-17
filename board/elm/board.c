@@ -637,10 +637,23 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 void lid_angle_peripheral_enable(int enable)
 {
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
-	/* enable/disable touchpad */
-	gpio_set_level(GPIO_EN_TP_INT_L, !enable);
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+		gpio_set_level(GPIO_EN_TP_INT_L, 0);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_s0) {
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+			/* Disable trackpad interrupts. */
+			gpio_set_level(GPIO_EN_TP_INT_L, 1);
+		}
+	}
 }
 #endif /* defined(HAS_TASK_MOTIONSENSE) */
 
