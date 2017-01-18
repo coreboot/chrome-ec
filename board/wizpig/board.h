@@ -8,14 +8,21 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+/*
+ * By default, enable all console messages excepted HC, ACPI and event:
+ * The sensor stack is generating a lot of activity.
+ */
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+/* By default, set hcdebug to off */
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
+
 /* Optional features */
 #define CONFIG_WATCHDOG_HELP
+#define CONFIG_BOARD_VERSION
 #define CONFIG_CLOCK_CRYSTAL
 #define CONFIG_CHIPSET_BRASWELL
 #define CONFIG_SCI_GPIO GPIO_PCH_SCI_L
-
-#define CONFIG_BOARD_VERSION
-
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_IRQ_GPIO GPIO_KBD_IRQ_L
 #undef CONFIG_KEYBOARD_KSO_BASE
@@ -26,6 +33,8 @@
 #define CONFIG_LID_SWITCH
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LOW_POWER_PSEUDO_G3
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_HOST_EVENT
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_EXTPOWER_GPIO
@@ -68,6 +77,18 @@
 
 #define CONFIG_I2C
 
+/* Accelerometer */
+#define CONFIG_ACCEL_KXCJ9
+#define CONFIG_CMD_ACCELS
+#define CONFIG_CMD_ACCEL_INFO
+
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO 512
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+
+#define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
+
 /* Wireless signals */
 #define WIRELESS_GPIO_WLAN	GPIO_WLAN_OFF_L
 
@@ -91,6 +112,9 @@
 #define I2C_PORT_CHARGER	MEC1322_I2C0_0
 #define I2C_PORT_PD_MCU		MEC1322_I2C1
 #define I2C_PORT_TCPC		MEC1322_I2C1
+#define I2C_PORT_ACCEL		MEC1322_I2C2
+#define I2C_PORT_GYRO		MEC1322_I2C2
+
 #define I2C_PORT_THERMAL	MEC1322_I2C3
 
 /* ADC signal */
@@ -98,6 +122,22 @@ enum adc_channel {
 	/* Number of ADC channels */
 	ADC_CH_COUNT
 };
+
+/* Sensor index definition */
+enum sensor_id {
+	BASE_ACCEL = 0,
+	LID_ACCEL = 1,
+};
+
+/*
+ * We have not enabled the sensor FIFO on the accels, so we force the EC
+ * to collect at every sample.
+ */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	((1 << BASE_ACCEL) | (1 << LID_ACCEL))
+
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
 /* power signal definitions */
 enum power_signal {

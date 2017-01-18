@@ -10,13 +10,13 @@
 #include "charger.h"
 #include "charge_state.h"
 #include "driver/accel_kionix.h"
-#include "driver/gyro_l3gd20h.h"
 #include "driver/temp_sensor/tmp432.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "math_util.h"
 #include "motion_lid.h"
@@ -111,6 +111,117 @@ const struct button_config buttons[] = {
 		30 * MSEC, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(buttons) == CONFIG_BUTTON_COUNT);
+
+/* Two Motion sensors */
+/* kxcj9 mutex and local/private data*/
+static struct mutex g_kxcj9_mutex[2];
+struct kionix_accel_data g_kxcj9_data[2];
+
+/* Matrix to rotate accelrator into standard reference frame */
+const matrix_3x3_t base_standard_ref = {
+	{ 0,  FLOAT_TO_FP(1),  0},
+	{FLOAT_TO_FP(-1),  0,  0},
+	{ 0,  0,  FLOAT_TO_FP(1)}
+};
+
+const matrix_3x3_t lid_standard_ref = {
+	{FLOAT_TO_FP(1),  0,  0},
+	{ 0, FLOAT_TO_FP(1),  0},
+	{ 0,  0, FLOAT_TO_FP(1)}
+};
+
+struct motion_sensor_t motion_sensors[] = {
+	[BASE_ACCEL] = {
+	 .name = "Base",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_KXCJ9,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &kionix_accel_drv,
+	 .mutex = &g_kxcj9_mutex[0],
+	 .drv_data = &g_kxcj9_data[0],
+	 .port = I2C_PORT_ACCEL,
+	 .addr = KXCJ9_ADDR1,
+	 .rot_standard_ref = &base_standard_ref,
+	 .default_range = 2,  /* g, enough for laptop. */
+	 .config = {
+		 /* AP: by default shutdown all sensors */
+		 [SENSOR_CONFIG_AP] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S5] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+	 }
+	},
+	[LID_ACCEL] = {
+	 .name = "Lid",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_KXCJ9,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &kionix_accel_drv,
+	 .mutex = &g_kxcj9_mutex[1],
+	 .drv_data = &g_kxcj9_data[1],
+	 .port = I2C_PORT_ACCEL,
+	 .addr = KXCJ9_ADDR0,
+	 .rot_standard_ref = &lid_standard_ref,
+	 .default_range = 2,  /* g, enough for laptop. */
+	 .config = {
+		 /* AP: by default shutdown all sensors */
+		 [SENSOR_CONFIG_AP] = {
+			 .odr = 0,
+			 .ec_rate = 0,
+		 },
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = 10000 | ROUND_UP_FLAG,
+			 .ec_rate = 0,
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+		 /* Sensor off in S3/S5 */
+		 [SENSOR_CONFIG_EC_S5] = {
+			 .odr = 0,
+			 .ec_rate = 0
+		 },
+	 },
+	},
+};
+const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+#ifdef CONFIG_LID_ANGLE_UPDATE
+void lid_angle_peripheral_enable(int enable)
+{
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_state(CHIPSET_STATE_ON))
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	}
+}
+#endif
 
 /* init ADC ports to avoid floating state due to thermistors */
 static void adc_pre_init(void)
