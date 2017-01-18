@@ -840,6 +840,7 @@ DECLARE_CONSOLE_COMMAND(scratchpad, command_scratchpad,
 #endif /* CONFIG_CMD_SCRATCHPAD */
 
 #ifdef CONFIG_HIBERNATE
+#ifdef CONFIG_CMD_HIBERNATE
 static int command_hibernate(int argc, char **argv)
 {
 	int seconds = 0;
@@ -863,6 +864,7 @@ DECLARE_CONSOLE_COMMAND(hibernate, command_hibernate,
 			"[sec] [usec]",
 			"Hibernate the EC",
 			NULL);
+#endif /* defined(CONFIG_CMD_HIBERNATE) */
 #endif /* CONFIG_HIBERNATE */
 
 static int command_version(int argc, char **argv)

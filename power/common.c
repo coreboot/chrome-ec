@@ -587,6 +587,7 @@ DECLARE_CONSOLE_COMMAND(powerindebug, command_powerindebug,
 #endif
 
 #ifdef CONFIG_HIBERNATE
+#ifdef CONFIG_CMD_HIBDELAY
 static int command_hibernation_delay(int argc, char **argv)
 {
 	char *e;
@@ -613,6 +614,7 @@ DECLARE_CONSOLE_COMMAND(hibdelay, command_hibernation_delay,
 			"[sec]",
 			"Set the delay before going into hibernation",
 			NULL);
+#endif /* defined(CONFIG_CMD_HIBDELAY) */
 
 static int host_command_hibernation_delay(struct host_cmd_handler_args *args)
 {
