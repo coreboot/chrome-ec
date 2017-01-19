@@ -82,6 +82,9 @@
 /* Enable debug cable detection */
 #define CONFIG_RDD
 
+/* Also use the cr50 as a second factor authentication */
+#define CONFIG_U2F
+
 /* USB configuration */
 #define CONFIG_USB
 #define CONFIG_USB_CONSOLE
@@ -171,6 +174,7 @@ enum device_type {
 enum nvmem_vars {
 	NVMEM_VAR_CONSOLE_LOCKED = 0,
 	NVMEM_VAR_TEST_VAR,
+	NVMEM_VAR_U2F_SALT,
 
 	NVMEM_VARS_COUNT
 };
@@ -199,6 +203,7 @@ int board_id_is_mismatched(void);
 
 /* Returns True if chip is brought up in a factory test harness. */
 int chip_factory_mode(void);
+void power_button_record(void);
 
 #endif /* !__ASSEMBLER__ */
 
