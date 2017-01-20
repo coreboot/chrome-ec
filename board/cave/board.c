@@ -46,6 +46,7 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
+#include "panic_extra.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -501,6 +502,12 @@ static void board_handle_reboot(void)
 	ccprintf("Restarting system with PMIC.\n");
 	/* Flush console */
 	cflush();
+
+	/*
+	 * Top 8KB of Data RAM will be used by ROM during system reboot.
+	 * So, copy the panic data to the panic_backup.
+	 */
+	panic_data_backup();
 
 	/* Bring down all rails but RTC rail (including EC power). */
 	gpio_set_flags(GPIO_BATLOW_L_PMIC_LDO_EN, GPIO_OUT_HIGH);
