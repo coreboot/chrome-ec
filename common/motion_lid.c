@@ -291,6 +291,7 @@ static int calculate_lid_angle(const vector_3_t base, const vector_3_t lid,
 	    (2 * 10 * NOISY_MAGNITUDE_DEVIATION))
 		reliable = 0;
 
+#ifdef CONFIG_LID_ANGLE_INVALID_CHECK
 	/* Ignore large angles when the lid is closed. */
 	if (!lid_is_open() &&
 	    (lid_to_base_fp > FLOAT_TO_FP(SMALL_LID_ANGLE_RANGE)))
@@ -311,7 +312,6 @@ static int calculate_lid_angle(const vector_3_t base, const vector_3_t lid,
 	    (lid_to_base_fp <= FLOAT_TO_FP(SMALL_LID_ANGLE_RANGE)))
 		reliable = 0;
 
-#ifdef CONFIG_LID_ANGLE_INVALID_CHECK
 	if (reliable) {
 		/*
 		 * Seed the lid angle now that we have a reliable
