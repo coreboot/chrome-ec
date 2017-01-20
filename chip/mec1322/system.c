@@ -19,6 +19,10 @@
 #include "timer.h"
 #include "util.h"
 #include "spi.h"
+#include "panic_extra.h"
+
+__keep __attribute__ ((section(".bss.panic_extra")))
+struct panic_data panic_backup;
 
 /* Indices for hibernate data registers (RAM backed by VBAT) */
 enum hibdata_index {
@@ -78,6 +82,9 @@ int system_is_reboot_warm(void)
 
 void system_pre_init(void)
 {
+	/* make sure the panic_backup is located to the predefine address */
+	ASSERT(&panic_backup == (struct panic_data *)PANIC_DATA_BACKUP_ADDRESS);
+
 	/* Enable direct NVIC */
 	MEC1322_EC_INT_CTRL |= 1;
 
@@ -117,6 +124,12 @@ void _system_reset(int flags, int wake_from_hibernate)
 		save_flags |= RESET_FLAG_SOFT;
 
 	chip_save_reset_flags(save_flags);
+
+	/*
+	 * Top 8KB of Data RAM will be used by ROM during system reboot.
+	 * So, copy the panic data to the panic_backup.
+	 */
+	panic_data_backup();
 
 	/* Trigger watchdog in 1ms */
 	MEC1322_WDG_LOAD = 1;

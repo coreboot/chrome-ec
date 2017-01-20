@@ -237,6 +237,7 @@ SECTIONS
 	 */
         . = ALIGN(512);
         __bss_start = .;
+	*(.bss.panic_extra)
 	*(.bss.big_align)
 	/* Stacks must be 64-bit aligned */
         . = ALIGN(8);
