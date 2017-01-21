@@ -630,11 +630,14 @@ int charger_set_voltage(int voltage)
 		battery_is_cut_off())
 		voltage = bi->voltage_max;
 
-	/* Charge voltage step 16 mV */
-	voltage &= ~0x0F;
-
 	if (voltage < bd99955_charger_info.voltage_min)
 		voltage = bd99955_charger_info.voltage_min;
+
+	if (voltage > bi->voltage_max)
+		voltage = bi->voltage_max;
+
+	/* Charge voltage step 16 mV */
+	voltage &= ~0x0F;
 
 	return ch_raw_write16(BD99955_CMD_CHG_VOLTAGE, voltage,
 				BD99955_BAT_CHG_COMMAND);

@@ -18,7 +18,7 @@
 
 #ifdef BOARD_KEVIN
 static const struct battery_info info = {
-	.voltage_max		= 8688, /* 8700mA, round down for chg reg */
+	.voltage_max		= 8656, /* 8700mV, reduce for margin */
 	.voltage_normal		= 7600,
 	.voltage_min		= 6000,
 	.precharge_current	= 200,
@@ -31,7 +31,7 @@ static const struct battery_info info = {
 };
 #elif defined(BOARD_GRU)
 static const struct battery_info info = {
-	.voltage_max		= 8688, /* 8700mA, round down for chg reg */
+	.voltage_max		= 8688, /* 8700mV, round down for chg reg */
 	.voltage_normal		= 7600,
 	.voltage_min		= 5800,
 	.precharge_current	= 256,
@@ -116,6 +116,19 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 
 int charger_profile_override(struct charge_state_data *curr)
 {
+	/*
+	 * crosbug.com/p/61906: Battery charge voltage is reduced in latest
+	 * RW FW, but RO may still charge to 8.688V. Reverse current may
+	 * occur if voltage is applied to the battery that is below the
+	 * voltage the battery itself provides, so ensure that on our first
+	 * attempt to charge, our battery is not full.
+	 */
+#ifdef BOARD_KEVIN
+	static int have_charged;
+#else
+	int have_charged = 1;
+#endif
+
 	const struct battery_info *batt_info = battery_get_info();
 	int now_discharging;
 
@@ -131,14 +144,18 @@ int charger_profile_override(struct charge_state_data *curr)
 			curr->state = ST_IDLE;
 			now_discharging = 0;
 		/* Don't start charging if battery is nearly full */
-		} else if ((curr->batt.status & STATUS_FULLY_CHARGED) &&
-			    battery_not_disconnected) {
+		} else if (((curr->batt.status & STATUS_FULLY_CHARGED) ||
+			  (!have_charged && curr->batt.state_of_charge > 98)) &&
+			  battery_not_disconnected) {
 			curr->requested_current = curr->requested_voltage = 0;
 			curr->batt.flags &= ~BATT_FLAG_WANT_CHARGE;
 			curr->state = ST_DISCHARGE;
 			now_discharging = 1;
-		} else
+		} else {
 			now_discharging = 0;
+			have_charged = 1;
+		}
+
 		charger_discharge_on_ac(now_discharging);
 	}
 
