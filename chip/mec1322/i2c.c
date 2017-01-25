@@ -79,6 +79,8 @@ static void configure_controller_speed(int controller, int kbps)
 {
 	int t_low, t_high;
 	const int period = I2C_CLOCK / 1000 / kbps;
+	uint32_t tim_val;
+	uint8_t tim2_val;
 
 	/*
 	 * Refer to NXP UM10204 for minimum timing requirement of T_Low and
@@ -88,21 +90,23 @@ static void configure_controller_speed(int controller, int kbps)
 	if (kbps > 400) {
 		/* Fast mode plus */
 		t_low = t_high = period / 2 - 1;
-		MEC1322_I2C_DATA_TIM(controller) = 0x06060601;
-		MEC1322_I2C_DATA_TIM_2(controller) = 0x06;
+		tim_val = 0x06060601;
+		tim2_val = 0x06;
 	} else if (kbps > 100) {
 		/* Fast mode */
 		/* By spec, clk low period is 1.3us min */
 		t_low = MAX((int)(I2C_CLOCK * 1.3 / 1000000), period / 2 - 1);
 		t_high = period - t_low - 2;
-		MEC1322_I2C_DATA_TIM(controller) = 0x040a0a01;
-		MEC1322_I2C_DATA_TIM_2(controller) = 0x0a;
+		tim_val = 0x040a0a01;
+		tim2_val = 0x0a;
 	} else {
 		/* Standard mode */
 		t_low = t_high = period / 2 - 1;
-		MEC1322_I2C_DATA_TIM(controller) = 0x0c4d5006;
-		MEC1322_I2C_DATA_TIM_2(controller) = 0x4d;
+		tim_val = 0x0c4d5006;
+		tim2_val = 0x4d;
 	}
+	MEC1322_I2C_DATA_TIM(controller) = tim_val;
+	MEC1322_I2C_DATA_TIM_2(controller) = tim2_val;
 
 	/* Clock periods is one greater than the contents of these fields */
 	MEC1322_I2C_BUS_CLK(controller) = ((t_high & 0xff) << 8) |
