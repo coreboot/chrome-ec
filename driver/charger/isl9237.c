@@ -231,6 +231,8 @@ int charger_get_voltage(int *voltage)
 
 int charger_set_voltage(int voltage)
 {
+	const struct battery_info *bi = battery_get_info();
+
 	/* The ISL9237 will drop voltage to as low as requested. As the
 	 * charger state machine will pass in 0 voltage, protect the system
 	 * voltage by capping to the minimum. The reason is that the ISL9237
@@ -240,6 +242,9 @@ int charger_set_voltage(int voltage)
 		const struct battery_info *bi = battery_get_info();
 		voltage = bi->voltage_min;
 	}
+
+	if (voltage > bi->voltage_max)
+		voltage = bi->voltage_max;
 
 	return isl9237_set_voltage(voltage);
 }
