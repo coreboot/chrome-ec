@@ -9,6 +9,7 @@
 
 #include "anx74xx.h"
 #include "task.h"
+#include "tcpci.h"
 #include "tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
@@ -16,6 +17,11 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
 #include "util.h"
+
+#if !defined(CONFIG_USB_PD_TCPM_TCPCI)
+#error "ANX74xx is using part of standard TCPCI control"
+#error "Please upgrade your board configuration"
+#endif
 
 struct anx_state {
 	int	polarity;
@@ -541,12 +547,10 @@ static int anx74xx_tcpm_set_polarity(int port, int polarity)
 	return rv;
 }
 
-#ifdef CONFIG_USB_PD_TCPC_FW_VERSION
 int anx74xx_tcpc_get_fw_version(int port, int *version)
 {
 	return tcpc_read(port, ANX74XX_REG_FW_VERSION, version);
 }
-#endif
 
 static int anx74xx_tcpm_set_vconn(int port, int enable)
 {
@@ -855,9 +859,7 @@ int anx74xx_tcpm_init(int port)
 	if (rv)
 		return EC_ERROR_UNKNOWN;
 
-#ifdef CONFIG_USB_PD_TCPC_FW_VERSION
-	board_print_tcpc_fw_version(port);
-#endif
+	tcpm_get_chip_info(port, NULL);
 
 	return EC_SUCCESS;
 }
@@ -880,4 +882,5 @@ const struct tcpm_drv anx74xx_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 	.tcpc_discharge_vbus	= &anx74xx_tcpc_discharge_vbus,
 #endif
+	.get_chip_info		= &tcpci_get_chip_info,
 };

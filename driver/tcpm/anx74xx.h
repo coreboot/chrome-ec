@@ -13,6 +13,10 @@
 #define ANX74XX_REG_IRQ_POL_LOW		0x00
 #define ANX74XX_REG_IRQ_POL_HIGH		0x02
 
+#define ANX74XX_REG_VENDOR_ID_L         0x00
+#define ANX74XX_REG_VENDOR_ID_H         0x01
+#define ANX74XX_VENDOR_ID               0xAAAA
+
 /* ANX F/W version：0x50:0x44 which contains otp firmware version */
 #define ANX74XX_REG_FW_VERSION          0x44
 

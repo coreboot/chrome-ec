@@ -9,6 +9,7 @@
 #define __CROS_EC_USB_PD_TCPM_TCPM_H
 
 #include "common.h"
+#include "ec_commands.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "usb_pd_tcpm.h"
@@ -128,6 +129,14 @@ static inline void tcpc_alert(int port)
 static inline void tcpc_discharge_vbus(int port, int enable)
 {
 	tcpc_config[port].drv->tcpc_discharge_vbus(port, enable);
+}
+
+static inline int tcpm_get_chip_info(int port,
+				     struct ec_response_pd_chip_info **info)
+{
+	if (tcpc_config[port].drv->get_chip_info)
+		return tcpc_config[port].drv->get_chip_info(port, info);
+	return EC_ERROR_UNIMPLEMENTED;
 }
 
 #else
