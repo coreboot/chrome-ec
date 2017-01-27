@@ -35,7 +35,11 @@
 #define LFCC_EVENT_THRESH 5 /* Full-capacity change reqd for host event */
 
 /* Prior to negotiating PD, most PD chargers advertise 15W */
+#ifndef CONFIG_CHARGER_LIMIT_POWER_ENFORCE_RO_THRESH
 #define LIKELY_PD_USBC_POWER_MW 15000
+#else
+#define LIKELY_PD_USBC_POWER_MW CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW
+#endif
 
 /*
  * State for charger_task(). Here so we can reset it on a HOOK_INIT, and

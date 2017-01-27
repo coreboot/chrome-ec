@@ -445,6 +445,12 @@
  */
 #undef CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT
 #undef CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW
+/*
+ * Enforce the above CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW threshold,
+ * rather than booting to do soft-sync in RO even if a possibly-PD 15W
+ * charger is present.
+ */
+#undef CONFIG_CHARGER_LIMIT_POWER_ENFORCE_RO_THRESH
 
 /*
  * Equivalent of CONFIG_BATTERY_OVERRIDE_PARAMS for use with
