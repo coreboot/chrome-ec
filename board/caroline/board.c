@@ -59,18 +59,13 @@ static void pd_mcu_interrupt(enum gpio_signal signal)
 #endif
 }
 
-void vbus0_evt(enum gpio_signal signal)
+void vbus_evt(enum gpio_signal signal)
 {
-	/* VBUS present GPIO is inverted */
-	usb_charger_vbus_change(0, !gpio_get_level(signal));
-	task_wake(TASK_ID_PD_C0);
-}
+	int port = (signal == GPIO_USB_C1_VBUS_WAKE_L);
 
-void vbus1_evt(enum gpio_signal signal)
-{
 	/* VBUS present GPIO is inverted */
-	usb_charger_vbus_change(1, !gpio_get_level(signal));
-	task_wake(TASK_ID_PD_C1);
+	usb_charger_vbus_change(port, !gpio_get_level(signal));
+	task_wake(port ? TASK_ID_PD_C1 : TASK_ID_PD_C0);
 }
 
 void usb0_evt(enum gpio_signal signal)
