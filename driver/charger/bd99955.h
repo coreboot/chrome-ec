@@ -331,7 +331,7 @@ static inline enum bd99955_charge_port bd99955_pd_port_to_chg_port(int port)
  */
 
 /* Is VBUS provided or external power present */
-int bd99955_is_vbus_provided(int port);
+int bd99955_is_vbus_provided(enum bd99955_charge_port port);
 /* Select input port from {VCC, VBUS, VCC&VBUS, NONE}. */
 int bd99955_select_input_port(enum bd99955_charge_port port);
 /* Get input current limit for BC1.2 suppliers */
