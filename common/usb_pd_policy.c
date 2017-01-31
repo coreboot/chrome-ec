@@ -975,9 +975,12 @@ void pd_set_vbus_discharge(int port, int enable)
 	mutex_lock(&discharge_lock[port]);
 #ifdef CONFIG_USB_PD_DISCHARGE_GPIO
 	enable &= !board_vbus_source_enabled(port);
-
-	gpio_set_level(port ? GPIO_USB_C1_DISCHARGE :
-			      GPIO_USB_C0_DISCHARGE, enable);
+	if(!port)
+		gpio_set_level(GPIO_USB_C0_DISCHARGE, enable);
+#if CONFIG_USB_PD_PORT_COUNT > 1
+	else
+		gpio_set_level(GPIO_USB_C1_DISCHARGE, enable);
+#endif /* CONFIG_USB_PD_PORT_COUNT */
 #else
 /* TODO: Add support for TCPC-controlled discharge */
 #error "PD discharge implementation not defined"
