@@ -53,8 +53,7 @@ GPIO(I2C2_SDA,              PIN(21),  GPIO_INPUT)
 GPIO(I2C3_SCL,              PIN(24),  GPIO_INPUT)
 GPIO(I2C3_SDA,              PIN(25),  GPIO_INPUT)
 GPIO(PCH_SCI_L,             PIN(26),  GPIO_ODR_HIGH)
-/* KB BL PWM, only connected to TP */
-GPIO(PWM_KBLIGHT,           PIN(34),  GPIO_OUT_LOW)
+GPIO(NC_GPIO34,             PIN(34),  GPIO_INPUT | GPIO_PULL_UP)
 GPIO(PWR_LED,               PIN(36),  GPIO_OUT_HIGH)
 GPIO(NC_GPIO67,             PIN(67),  GPIO_INPUT | GPIO_PULL_UP)
 GPIO(ENTERING_RW,           PIN(41),  GPIO_OUT_LOW)
@@ -74,7 +73,7 @@ GPIO(USB_C0_DISCHARGE,      PIN(136), GPIO_OUT_LOW)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(ACCEL1_INT,            PIN(161), GPIO_INPUT)
-GPIO(TRACKPAD_INT_DISABLE,  PIN(127), GPIO_OUT_LOW)
+GPIO(NC_GPIO127,  	    PIN(127), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)
 GPIO(WLAN_OFF_L,            PIN(132), GPIO_OUT_LOW)
 /* RCIN# line to PCH for 8042 emulation */

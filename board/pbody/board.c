@@ -379,7 +379,6 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 static void board_chipset_resume(void)
 {
 	gpio_set_level(GPIO_PP1800_DX_AUDIO_EN, 1);
-	gpio_set_level(GPIO_PWM_KBLIGHT, 1);
 	/*
 	 * Now that we have enabled the rail to the sensors, let's give enough
 	 * time for the sensors to boot up.  Without this delay, the very first
@@ -399,7 +398,6 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume,
 static void board_chipset_suspend(void)
 {
 	gpio_set_level(GPIO_PP1800_DX_AUDIO_EN, 0);
-	gpio_set_level(GPIO_PWM_KBLIGHT, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
@@ -609,17 +607,9 @@ void lid_angle_peripheral_enable(int enable)
 
 	if (enable) {
 		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-		gpio_set_level(GPIO_TRACKPAD_INT_DISABLE, 0);
-
-		if (chipset_in_s0)
-			gpio_set_level(GPIO_PWM_KBLIGHT, 1);
 	} else {
-		if (!chipset_in_s0) {
+		if (!chipset_in_s0)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-		}
-
-		gpio_set_level(GPIO_TRACKPAD_INT_DISABLE, 1);
-		gpio_set_level(GPIO_PWM_KBLIGHT, 0);
 	}
 }
 
