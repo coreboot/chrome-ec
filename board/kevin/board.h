@@ -80,7 +80,7 @@
 
 /* Increase tx buffer size, as we'd like to stream EC log to AP. */
 #undef CONFIG_UART_TX_BUF_SIZE
-#define CONFIG_UART_TX_BUF_SIZE 4096
+#define CONFIG_UART_TX_BUF_SIZE 2048
 
 /* Motion Sensors */
 #define CONFIG_ACCEL_BMA255
@@ -169,12 +169,20 @@
 #undef  CONFIG_PECI
 #undef  CONFIG_PSTORE
 
+/* Reduce code size */
+#define CONFIG_COMMON_GPIO_SHORTNAMES
+#define GPIO_NAME_BY_PIN(port, index) #port#index
+#undef  CONFIG_CONSOLE_VERBOSE
+
+#define CONFIG_HOSTCMD_ALIGNED
+
 /* Modules we want to exclude */
 #undef CONFIG_CMD_BATTFAKE
 #undef CONFIG_CMD_FLASH
 #undef CONFIG_CMD_HASH
 #undef CONFIG_CMD_I2C_SCAN
 #undef CONFIG_CMD_MD
+#undef CONFIG_CMD_MMAPINFO
 #undef CONFIG_CMD_POWERINDEBUG
 #undef CONFIG_CMD_TIMERINFO
 #undef CONFIG_CONSOLE_CMDHELP
