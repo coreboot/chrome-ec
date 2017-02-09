@@ -13,6 +13,10 @@
 #undef CONFIG_TASK_PROFILING
 #undef CONFIG_WATCHDOG_HELP
 #define CONFIG_DEBUG_ASSERT_BRIEF
+#undef CONFIG_CMD_MEM
+#undef CONFIG_CMD_I2C_SCAN
+#undef CONFIG_CMD_SHMEM
+#undef CONFIG_CMD_TIMERINFO
 
 /* Limit console output */
 #undef CONFIG_HOSTCMD_DEBUG_MODE
@@ -31,8 +35,6 @@
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_V2
 #define CONFIG_CHIPSET_ROCKCHIP
-#undef CONFIG_CMD_MEM
-#undef CONFIG_CMD_I2C_SCAN
 
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO 512
