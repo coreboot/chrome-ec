@@ -13,6 +13,7 @@
 #define CONFIG_CHIPSET_RK3399
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_RTC
+#define CONFIG_FPU
 #define CONFIG_HOSTCMD_RTC
 #define CONFIG_HOSTCMD_SPS
 #define CONFIG_I2C
@@ -139,13 +140,6 @@
 /* start as a sink in case we have no other power supply/battery */
 #define PD_DEFAULT_STATE PD_STATE_SNK_DISCONNECTED
 
-/* Optional features for test commands */
-#define CONFIG_CMD_CHARGER_PSYS
-
-/* Set PSYS gain for 50W max measurement */
-#define BD99955_PSYS_GAIN_SELECT \
-		BD99955_CMD_PMON_IOUT_CTRL_SET_PMON_GAIN_SET_08UAW
-
 #define CONFIG_UART_HOST                0
 
 /* Optional feature - used by nuvoton */
@@ -162,7 +156,6 @@
 
 /* Modules we want to exclude */
 #undef CONFIG_CMD_BATTFAKE
-#undef CONFIG_CMD_CHARGER_PSYS
 #undef CONFIG_CMD_FLASH
 #undef CONFIG_CMD_HASH
 #undef CONFIG_CMD_I2C_SCAN
