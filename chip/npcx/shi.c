@@ -169,6 +169,7 @@ struct shi_bus_parameters {
 	uint16_t sz_response;     /* response bytes need to receive   */
 	timestamp_t rx_deadline;  /* deadline of receiving            */
 	uint8_t  pre_ibufstat;    /* Previous IBUFSTAT value          */
+	uint8_t  pre_rx[2];       /* Previous initial two Rx buf vals */
 #ifdef NPCX_SHI_BYPASS_OVER_256B
 	uint16_t bytes_in_256b;   /* Sent bytes in 256 bytes boundary */
 #endif
@@ -370,6 +371,16 @@ static void shi_fill_out_status(uint8_t status)
 static int shi_is_cs_glitch(void)
 {
 	timestamp_t deadline;
+
+	/*
+	 * If either of our first two Rx buf values (host protocol version +
+	 * packet checksum) have changed since CS deassert then IBUFSTAT has
+	 * definitely reset.
+	 */
+	if (*SHI_IBUF_START_ADDR == EC_HOST_REQUEST_VERSION &&
+	    (shi_params.pre_rx[0] != EC_HOST_REQUEST_VERSION ||
+	     shi_params.pre_rx[1] != *(SHI_IBUF_START_ADDR + 1)))
+		return 0;
 
 	deadline.val = get_time().val + SHI_GLITCH_TIMEOUT_US;
 	/*
@@ -758,6 +769,9 @@ static void shi_reset_prepare(void)
 #endif
 	/* Record last IBUFSTAT for glitch case */
 	shi_params.pre_ibufstat = shi_read_buf_pointer();
+	/* Record first two vals in Rx buf for glitch detection */
+	shi_params.pre_rx[0] = *SHI_IBUF_START_ADDR;
+	shi_params.pre_rx[1] = *(SHI_IBUF_START_ADDR + 1);
 
 	/*
 	 * Fill output buffer to indicate we`re
