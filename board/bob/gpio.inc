@@ -113,15 +113,15 @@ GPIO(USB_C1_DISCHARGE,     PIN(B, 1), GPIO_OUT_LOW)
 
 /* Bob LEDs */
 GPIO(POWER_LED,            PIN(B, 6), GPIO_OUT_LOW)
-GPIO(BAT_LED_GREEN,        PIN(4, 4), GPIO_OUT_HIGH | GPIO_OPEN_DRAIN)
+GPIO(BAT_LED_GREEN,        PIN(C, 3), GPIO_OUT_HIGH | GPIO_OPEN_DRAIN)
 GPIO(BAT_LED_RED,          PIN(8, 0), GPIO_OUT_HIGH | GPIO_OPEN_DRAIN)
 
 GPIO(BOARD_DET,            PIN(3, 6), GPIO_INPUT)
 
 /* NC */
+GPIO(GPIO44_NC,            PIN(4, 4), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(GPIO81_NC,            PIN(8, 1), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(GPIO84_NC,            PIN(8, 4), GPIO_INPUT | GPIO_PULL_UP)
-GPIO(GPIOC3_NC,            PIN(C, 3), GPIO_INPUT | GPIO_PULL_UP)
 
 /*
  * SPI host interface - enable PDs by default. These will be made functional
