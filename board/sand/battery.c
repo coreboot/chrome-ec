@@ -31,6 +31,12 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
+enum fast_chg_voltage_ranges {
+	VOLTAGE_RANGE_0,
+	VOLTAGE_RANGE_1,
+	VOLTAGE_RANGE_2,
+};
+
 enum temp_range {
 	TEMP_RANGE_0,
 	TEMP_RANGE_1,
@@ -69,8 +75,8 @@ static const struct fast_charge_profile fast_charge_smp_cos4870_info[] = {
 	[TEMP_RANGE_0] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(-1),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
 		},
 	},
 
@@ -78,8 +84,8 @@ static const struct fast_charge_profile fast_charge_smp_cos4870_info[] = {
 	[TEMP_RANGE_1] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(15),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 944,
-			[VOLTAGE_RANGE_HIGH] = 472,
+			[VOLTAGE_RANGE_0] = 944,
+			[VOLTAGE_RANGE_1] = 472,
 		},
 	},
 
@@ -87,8 +93,8 @@ static const struct fast_charge_profile fast_charge_smp_cos4870_info[] = {
 	[TEMP_RANGE_2] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(20),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 1416,
-			[VOLTAGE_RANGE_HIGH] = 1416,
+			[VOLTAGE_RANGE_0] = 1416,
+			[VOLTAGE_RANGE_1] = 1416,
 		},
 	},
 
@@ -96,8 +102,8 @@ static const struct fast_charge_profile fast_charge_smp_cos4870_info[] = {
 	[TEMP_RANGE_3] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(45),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 3300,
-			[VOLTAGE_RANGE_HIGH] = 3300,
+			[VOLTAGE_RANGE_0] = 3300,
+			[VOLTAGE_RANGE_1] = 3300,
 		},
 	},
 
@@ -105,8 +111,8 @@ static const struct fast_charge_profile fast_charge_smp_cos4870_info[] = {
 	[TEMP_RANGE_4] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
 		},
 	},
 };
@@ -114,7 +120,10 @@ static const struct fast_charge_profile fast_charge_smp_cos4870_info[] = {
 static const struct fast_charge_params fast_chg_params_smp_cos4870 = {
 	.total_temp_ranges = ARRAY_SIZE(fast_charge_smp_cos4870_info),
 	.default_temp_range_profile = TEMP_RANGE_2,
-	.vtg_low_limit_mV = 8000,
+	.voltage_mV = {
+		[VOLTAGE_RANGE_0] = 8000,
+		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
+	},
 	.chg_profile_info = &fast_charge_smp_cos4870_info[0],
 };
 
@@ -140,8 +149,8 @@ static const struct fast_charge_profile fast_charge_sonycorp_info[] = {
 	[TEMP_RANGE_0] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(9),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 1200,
-			[VOLTAGE_RANGE_HIGH] = 1200,
+			[VOLTAGE_RANGE_0] = 1200,
+			[VOLTAGE_RANGE_1] = 1200,
 		},
 	},
 
@@ -149,8 +158,8 @@ static const struct fast_charge_profile fast_charge_sonycorp_info[] = {
 	[TEMP_RANGE_1] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 2250,
-			[VOLTAGE_RANGE_HIGH] = 2250,
+			[VOLTAGE_RANGE_0] = 2250,
+			[VOLTAGE_RANGE_1] = 2250,
 		},
 	},
 };
@@ -158,7 +167,10 @@ static const struct fast_charge_profile fast_charge_sonycorp_info[] = {
 static const struct fast_charge_params fast_chg_params_sonycorp = {
 	.total_temp_ranges = ARRAY_SIZE(fast_charge_sonycorp_info),
 	.default_temp_range_profile = TEMP_RANGE_1,
-	.vtg_low_limit_mV = 8000,
+	.voltage_mV = {
+		[VOLTAGE_RANGE_0] = 8000,
+		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
+	},
 	.chg_profile_info = &fast_charge_sonycorp_info[0],
 };
 
@@ -185,8 +197,8 @@ static const struct fast_charge_profile fast_charge_panasonic_info[] = {
 	[TEMP_RANGE_0] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(-1),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
 		},
 	},
 
@@ -194,8 +206,8 @@ static const struct fast_charge_profile fast_charge_panasonic_info[] = {
 	[TEMP_RANGE_1] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(60),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 3072,
-			[VOLTAGE_RANGE_HIGH] = 3072,
+			[VOLTAGE_RANGE_0] = 3072,
+			[VOLTAGE_RANGE_1] = 3072,
 		},
 	},
 
@@ -203,8 +215,8 @@ static const struct fast_charge_profile fast_charge_panasonic_info[] = {
 	[TEMP_RANGE_2] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
 		},
 	},
 };
@@ -212,7 +224,10 @@ static const struct fast_charge_profile fast_charge_panasonic_info[] = {
 static const struct fast_charge_params fast_chg_params_panasonic = {
 	.total_temp_ranges = ARRAY_SIZE(fast_charge_panasonic_info),
 	.default_temp_range_profile = TEMP_RANGE_1,
-	.vtg_low_limit_mV = 8000,
+	.voltage_mV = {
+		[VOLTAGE_RANGE_0] = 8000,
+		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
+	},
 	.chg_profile_info = &fast_charge_panasonic_info[0],
 };
 
@@ -239,8 +254,9 @@ static const struct fast_charge_profile fast_charge_smp_c22n1626_info[] = {
 	[TEMP_RANGE_0] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(0),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
+			[VOLTAGE_RANGE_2] = 0,
 		},
 	},
 
@@ -248,8 +264,9 @@ static const struct fast_charge_profile fast_charge_smp_c22n1626_info[] = {
 	[TEMP_RANGE_1] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(10),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 1752,
-			[VOLTAGE_RANGE_HIGH] = 1752,
+			[VOLTAGE_RANGE_0] = 1752,
+			[VOLTAGE_RANGE_1] = 1752,
+			[VOLTAGE_RANGE_2] = 1752,
 		},
 	},
 
@@ -257,8 +274,9 @@ static const struct fast_charge_profile fast_charge_smp_c22n1626_info[] = {
 	[TEMP_RANGE_2] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(45),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 5200,
-			[VOLTAGE_RANGE_HIGH] = 5200,
+			[VOLTAGE_RANGE_0] = 4672,
+			[VOLTAGE_RANGE_1] = 4672,
+			[VOLTAGE_RANGE_2] = 2920,
 		},
 	},
 
@@ -266,8 +284,9 @@ static const struct fast_charge_profile fast_charge_smp_c22n1626_info[] = {
 	[TEMP_RANGE_3] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(60),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 2920,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 2920,
+			[VOLTAGE_RANGE_1] = 0,
+			[VOLTAGE_RANGE_2] = 0,
 		},
 	},
 
@@ -275,8 +294,9 @@ static const struct fast_charge_profile fast_charge_smp_c22n1626_info[] = {
 	[TEMP_RANGE_4] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
+			[VOLTAGE_RANGE_2] = 0,
 		},
 	},
 };
@@ -284,7 +304,11 @@ static const struct fast_charge_profile fast_charge_smp_c22n1626_info[] = {
 static const struct fast_charge_params fast_chg_params_smp_c22n1626 = {
 	.total_temp_ranges = ARRAY_SIZE(fast_charge_smp_c22n1626_info),
 	.default_temp_range_profile = TEMP_RANGE_2,
-	.vtg_low_limit_mV = 8200,
+	.voltage_mV = {
+		[VOLTAGE_RANGE_0] = 8200,
+		[VOLTAGE_RANGE_1] = 8500,
+		[VOLTAGE_RANGE_2] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
+	},
 	.chg_profile_info = &fast_charge_smp_c22n1626_info[0],
 };
 
@@ -293,8 +317,8 @@ static const struct fast_charge_profile fast_charge_cpt_c22n1626_info[] = {
 	[TEMP_RANGE_0] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(-1),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
 		},
 	},
 
@@ -302,8 +326,8 @@ static const struct fast_charge_profile fast_charge_cpt_c22n1626_info[] = {
 	[TEMP_RANGE_1] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(60),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 5200,
-			[VOLTAGE_RANGE_HIGH] = 5200,
+			[VOLTAGE_RANGE_0] = 5200,
+			[VOLTAGE_RANGE_1] = 5200,
 		},
 	},
 
@@ -311,8 +335,8 @@ static const struct fast_charge_profile fast_charge_cpt_c22n1626_info[] = {
 	[TEMP_RANGE_2] = {
 		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
 		.current_mA = {
-			[VOLTAGE_RANGE_LOW] = 0,
-			[VOLTAGE_RANGE_HIGH] = 0,
+			[VOLTAGE_RANGE_0] = 0,
+			[VOLTAGE_RANGE_1] = 0,
 		},
 	},
 };
@@ -320,7 +344,10 @@ static const struct fast_charge_profile fast_charge_cpt_c22n1626_info[] = {
 static const struct fast_charge_params fast_chg_params_cpt_c22n1626 = {
 	.total_temp_ranges = ARRAY_SIZE(fast_charge_cpt_c22n1626_info),
 	.default_temp_range_profile = TEMP_RANGE_1,
-	.vtg_low_limit_mV = 8000,
+	.voltage_mV = {
+		[VOLTAGE_RANGE_0] = 8000,
+		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
+	},
 	.chg_profile_info = &fast_charge_cpt_c22n1626_info[0],
 };
 
