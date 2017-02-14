@@ -21,6 +21,7 @@
 #define CONFIG_BATTERY_PRESENT_GPIO GPIO_BAT_PRESENT_L
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BOARD_VERSION
+#define CONFIG_BOARD_HAS_RTC_RESET
 #define CONFIG_BOARD_POST_GPIO_INIT
 #define CONFIG_BUTTON_COUNT 2
 #define CONFIG_CHARGE_MANAGER
@@ -263,6 +264,9 @@ enum sensor_id {
 
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);
+
+/* Reset RTC */
+void board_rtc_reset(void);
 
 #endif /* !__ASSEMBLER__ */
 
