@@ -2461,11 +2461,6 @@
  */
 #endif
 
-#ifndef HAS_TASK_KEYSCAN
-#undef CONFIG_KEYBOARD_PROTOCOL_8042
-#undef CONFIG_KEYBOARD_PROTOCOL_MKBP
-#endif
-
 #ifndef HAS_TASK_PDCMD
 #undef CONFIG_HOSTCMD_PD
 #endif
