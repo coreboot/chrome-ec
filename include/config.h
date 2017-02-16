@@ -654,6 +654,10 @@
 #undef CONFIG_CURVE25519
 
 /*****************************************************************************/
+/* Support curve25519 public key cryptography */
+#undef CONFIG_CURVE25519
+
+/*****************************************************************************/
 /* PMIC config */
 
 /* Support firmware long press power-off timer */
