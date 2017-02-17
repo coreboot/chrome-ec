@@ -31,12 +31,20 @@
 #include "thermal.h"
 #include "uart.h"
 #include "util.h"
+#include "system.h"
 
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
 #define GPIO_KB_OUTPUT (GPIO_ODR_HIGH)
 #define GPIO_KB_OUTPUT_COL2 (GPIO_OUT_LOW)
 
+#define BOARD_VERSION_CLAMSHELL 0x5
+
+#define CLAMSHELL_SKU 0
+#define CONVERTIBLE_SKU 1
+
 #include "gpio_list.h"
+
+static uint8_t sku_type;
 
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
 const struct pwm_t pwm_channels[] = {
@@ -204,7 +212,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 },
 	},
 };
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 #ifdef CONFIG_LID_ANGLE_UPDATE
 void lid_angle_peripheral_enable(int enable)
@@ -234,9 +242,11 @@ DECLARE_HOOK(HOOK_INIT, adc_pre_init, HOOK_PRIO_INIT_ADC - 1);
 static void touch_screen_power_init(void)
 {
 	/* Enable touch screen. */
-	gpio_set_level(GPIO_TS_VDD_EN, 1);
-	msleep(1);
-	gpio_set_level(GPIO_TS_RST_L, 1);
+	if (sku_type == CONVERTIBLE_SKU) {
+		gpio_set_level(GPIO_TS_VDD_EN, 1);
+		msleep(1);
+		gpio_set_level(GPIO_TS_RST_L, 1);
+	}
 
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, touch_screen_power_init,
@@ -248,10 +258,36 @@ static void touch_screen_power_disable(void)
 	 * Disable the load switch and hold touch screen in reset
 	 * to reduce the power consumption.
 	 */
-	gpio_set_level(GPIO_TS_VDD_EN, 0);
-	usleep(10);
-	gpio_set_level(GPIO_TS_RST_L, 0);
+	if (sku_type == CONVERTIBLE_SKU) {
+		gpio_set_level(GPIO_TS_VDD_EN, 0);
+		usleep(10);
+		gpio_set_level(GPIO_TS_RST_L, 0);
+	}
 
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, touch_screen_power_disable,
 	HOOK_PRIO_DEFAULT);
+
+static void get_sku_version(void)
+{
+	/*
+	 * clamshell sku ：0 (board id : 101b)
+	 *
+	 * convertible sku : 1
+	 */
+	if (BOARD_VERSION_CLAMSHELL == system_get_board_version())
+		sku_type = CLAMSHELL_SKU;
+	else
+		sku_type = CONVERTIBLE_SKU;
+
+}
+DECLARE_HOOK(HOOK_INIT, get_sku_version, HOOK_PRIO_FIRST);
+
+static void get_motion_sensors_count(void)
+{
+	if (sku_type == CONVERTIBLE_SKU)
+		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+	else
+		motion_sensor_count = 0;
+}
+DECLARE_HOOK(HOOK_INIT, get_motion_sensors_count, HOOK_PRIO_FIRST + 1);
