@@ -7,7 +7,6 @@
 
 #include "adc.h"
 #include "adc_chip.h"
-#include "als.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
@@ -15,7 +14,6 @@
 #include "charger.h"
 #include "chipset.h"
 #include "console.h"
-#include "driver/als_opt3001.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "driver/accelgyro_bmi160.h"
@@ -97,20 +95,6 @@ void anx74xx_cable_det_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&anx74xx_cable_det_handler_data, (2 * MSEC));
 }
 #endif
-
-/*
- * enable_input_devices() is called by the tablet_mode ISR, but changes the
- * state of GPIOs, so its definition must reside after including gpio_list.
- * Use DECLARE_DEFERRED to generate enable_input_devices_data.
- */
-static void enable_input_devices(void);
-DECLARE_DEFERRED(enable_input_devices);
-
-#define LID_DEBOUNCE_US    (30 * MSEC)  /* Debounce time for lid switch */
-void tablet_mode_interrupt(enum gpio_signal signal)
-{
-	hook_call_deferred(&enable_input_devices_data, LID_DEBOUNCE_US);
-}
 
 #include "gpio_list.h"
 
@@ -443,24 +427,9 @@ int board_get_ambient_temp(int idx, int *temp_ptr)
 const struct temp_sensor_t temp_sensors[] = {
 	/* FIXME(dhendrix): tweak action_delay_sec */
 	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_get_battery_temp, 0, 1},
-	{"Ambient", TEMP_SENSOR_TYPE_BOARD, board_get_ambient_temp, 0, 5},
 	{"Charger", TEMP_SENSOR_TYPE_BOARD, board_get_charger_temp, 1, 1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-/* ALS instances. Must be in same order as enum als_id. */
-struct als_t als[] = {
-	/* FIXME(dhendrix): verify attenuation_factor */
-	{"TI", opt3001_init, opt3001_read_lux, 5},
-};
-BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
-
-const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
-	{"Volume Down", KEYBOARD_BUTTON_VOLUME_DOWN, GPIO_EC_VOLDN_BTN_ODL,
-	 30 * MSEC, 0},
-	{"Volume Up", KEYBOARD_BUTTON_VOLUME_UP, GPIO_EC_VOLUP_BTN_ODL,
-	 30 * MSEC, 0},
-};
 
 /* Called by APL power state machine when transitioning from G3 to S5 */
 static void chipset_pre_init(void)
@@ -492,20 +461,9 @@ static void chipset_pre_init(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, chipset_pre_init, HOOK_PRIO_DEFAULT);
 
-static void board_set_tablet_mode(void)
-{
-	tablet_set_mode(!gpio_get_level(GPIO_TABLET_MODE_L));
-}
-
 /* Initialize board. */
 static void board_init(void)
 {
-	/* Ensure tablet mode is initialized according to the hardware state
-	 * so that the cached state reflects reality. */
-	board_set_tablet_mode();
-
-	gpio_enable_interrupt(GPIO_TABLET_MODE_L);
-
 	/* Enable charger interrupts */
 	gpio_enable_interrupt(GPIO_CHARGER_INT_L);
 
@@ -655,32 +613,6 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	return charger_get_vbus_voltage(port) < BD9995X_BC12_MIN_VOLTAGE;
 }
 
-static void enable_input_devices(void)
-{
-	/* We need to turn on tablet mode for motion sense */
-	board_set_tablet_mode();
-
-	/* Then, we disable peripherals only when the lid reaches 360 position.
-	 * (It's probably already disabled by motion_sense_task.)
-	 * We deliberately do not enable peripherals when the lid is leaving
-	 * 360 position. Instead, we let motion_sense_task enable it once it
-	 * reaches laptop zone (180 or less). */
-	if (tablet_get_mode())
-		lid_angle_peripheral_enable(0);
-}
-
-/* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
-{
-	/* If the lid is in 360 position, ignore the lid angle,
-	 * which might be faulty. Disable keyboard and touchpad. */
-	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		enable = 0;
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
-}
-#endif
-
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)
 {
@@ -689,8 +621,6 @@ static void board_chipset_startup(void)
 
 	/* Enable Trackpad */
 	gpio_set_level(GPIO_EN_P3300_TRACKPAD_ODL, 0);
-
-	hook_call_deferred(&enable_input_devices_data, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 
@@ -702,10 +632,6 @@ static void board_chipset_shutdown(void)
 
 	/* Disable Trackpad */
 	gpio_set_level(GPIO_EN_P3300_TRACKPAD_ODL, 1);
-
-	hook_call_deferred(&enable_input_devices_data, 0);
-	/* FIXME(dhendrix): Drive USB_PD_RST_ODL low to prevent
-	   leakage? (see comment in schematic) */
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
@@ -770,7 +696,6 @@ void board_hibernate_late(void)
 
 /* Motion sensors */
 /* Mutexes */
-static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* Matrix to rotate accelrator into standard reference frame */
@@ -793,42 +718,6 @@ struct bmp280_drv_data_t bmp280_drv_data;
 
 /* FIXME(dhendrix): Copied from Amenia, probably need to tweak for Sand */
 struct motion_sensor_t motion_sensors[] = {
-	[LID_ACCEL] = {
-	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_KX022,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
-	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_kx022_data,
-	 .port = I2C_PORT_LID_ACCEL,
-	 .addr = KX022_ADDR1,
-	 .rot_standard_ref = NULL, /* Identity matrix. */
-	 .default_range = 2, /* g, enough for laptop. */
-	 .config = {
-		/* AP: by default use EC settings */
-		[SENSOR_CONFIG_AP] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 0,
-		},
-		 /* Sensor on for lid angle detection */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 0,
-		},
-		[SENSOR_CONFIG_EC_S5] = {
-			.odr = 0,
-			.ec_rate = 0,
-		},
-	 },
-	},
-
 	[BASE_ACCEL] = {
 	 .name = "Base Accel",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
@@ -936,41 +825,6 @@ struct motion_sensor_t motion_sensors[] = {
 		 [SENSOR_CONFIG_EC_S5] = {
 			 .odr = 0,
 			 .ec_rate = 0,
-		 },
-	 },
-	},
-
-	[BASE_BARO] = {
-	 .name = "Base Baro",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_BMP280,
-	 .type = MOTIONSENSE_TYPE_BARO,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmp280_drv,
-	 .drv_data = &bmp280_drv_data,
-	 .port = I2C_PORT_BARO,
-	 .addr = BMP280_I2C_ADDRESS1,
-	 .default_range = 1 << 18, /*  1bit = 4 Pa, 16bit ~= 2600 hPa */
-	 .config = {
-		 /* AP: by default shutdown all sensors */
-		 [SENSOR_CONFIG_AP] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* EC does not need in S0 */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S3] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S5] = {
-			.odr = 0,
-			.ec_rate = 0,
 		 },
 	 },
 	},

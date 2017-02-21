@@ -29,21 +29,11 @@ GPIO_INT(AC_PRESENT,		PIN(C, 1), GPIO_INT_BOTH, extpower_interrupt)			/* ACOK_OD
 /* TODO: We might remove external pull-up for POWER_BUTTON_L in EVT */
 GPIO_INT(POWER_BUTTON_L,	PIN(0, 4), GPIO_INT_BOTH, power_button_interrupt)		/* MECH_PWR_BTN_ODL */
 GPIO_INT(LID_OPEN,		PIN(6, 7), GPIO_INT_BOTH, lid_interrupt)
-/* Volume up and down buttons need to be swapped. The one closer to the hinge
- * should be volume up and the one closer to the user should be volume down.
- * (cros.bug/p/60057) */
-GPIO_INT(EC_VOLDN_BTN_ODL_SWAPPED,	PIN(8, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-GPIO_INT(EC_VOLUP_BTN_ODL_SWAPPED,	PIN(8, 2), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-#define GPIO_EC_VOLDN_BTN_ODL GPIO_EC_VOLUP_BTN_ODL_SWAPPED
-#define GPIO_EC_VOLUP_BTN_ODL GPIO_EC_VOLDN_BTN_ODL_SWAPPED
-/* Tablet switch is active-low. L: lid is attached (360 position) H: detached */
-GPIO_INT(TABLET_MODE_L,		PIN(3, 6), GPIO_INT_BOTH, tablet_mode_interrupt)
 
 GPIO_INT(WP_L,			PIN(4, 0), GPIO_INT_BOTH | GPIO_SEL_1P8V, switch_interrupt)	/* EC_WP_ODL */
 
 GPIO_INT(BASE_SIXAXIS_INT_L,	PIN(9, 3), GPIO_INT_FALLING | GPIO_SEL_1P8V,
 	 bmi160_interrupt)
-GPIO(LID_ACCEL_INT_L,		PIN(C, 7), GPIO_INPUT | GPIO_SEL_1P8V)
 
 /* I2C GPIOs will be set to alt. function later. */
 GPIO(EC_I2C_GYRO_SDA,		PIN(8, 7), GPIO_INPUT | GPIO_SEL_1P8V)
@@ -77,6 +67,11 @@ GPIO(PCH_SLP_S0_L,              PIN(7, 5), GPIO_INPUT)				/* SLP_S0_L */
  */
 ALTERNATE(PIN_MASK(4, 0x08), 1, MODULE_ADC, 0)
 GPIO(EC_BRD_ID_EN_ODL,		PIN(3, 5), GPIO_INPUT)
+
+GPIO(NC_36,                     PIN(3, 6), GPIO_INPUT | GPIO_PULL_UP)	/* NC */
+GPIO(NC_82,                     PIN(8, 2), GPIO_INPUT | GPIO_PULL_UP)	/* NC */
+GPIO(NC_83,                     PIN(8, 3), GPIO_INPUT | GPIO_PULL_UP)	/* NC */
+GPIO(NC_C7,                     PIN(C, 7), GPIO_INPUT | GPIO_PULL_UP)	/* NC */
 
 GPIO(CCD_MODE_ODL,		PIN(6, 3), GPIO_INPUT)
 GPIO(EC_HAVEN_RESET_ODL,	PIN(0, 2), GPIO_ODR_HIGH)
@@ -163,7 +158,6 @@ ALTERNATE(PIN(4, 5), 6, MODULE_ADC, 0)		/* TEMP_SENSOR_CHARGER (FIXME: alt funct
 
 ALTERNATE(PIN_MASK(8, 0x80), 1, MODULE_I2C, 0)	/* GPIO87 for EC_I2C_GYRO_SDA */
 ALTERNATE(PIN_MASK(9, 0x01), 1, MODULE_I2C, 0)	/* GPIO90 for EC_I2C_GYRO_SCL */
-ALTERNATE(PIN_MASK(9, 0x06), 1, MODULE_I2C, 0)	/* GPIO92-91 for EC_I2C_SENSOR_SDA/SCL */
 ALTERNATE(PIN_MASK(B, 0x30), 1, MODULE_I2C, 0)	/* GPIOB5-B4 for EC_I2C_USB_C0_PD_SDA/SCL */
 ALTERNATE(PIN_MASK(B, 0x0C), 1, MODULE_I2C, 0)	/* GPOPB3-B2 for EC_I2C_USB_C1_PD_SDA/SCL */
 ALTERNATE(PIN_MASK(D, 0x03), 1, MODULE_I2C, 0)	/* GPIOD1-D0 for EC_I2C_POWER_SDA/SCL */
