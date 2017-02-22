@@ -12,16 +12,24 @@
 #include "ec_commands.h"  /* For EC_FLASH_PROTECT_* flags */
 
 /* Number of physical flash banks */
+#ifndef PHYSICAL_BANKS
 #define PHYSICAL_BANKS (CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
 
 /*WP region offset and size in units of flash banks */
 #define WP_BANK_OFFSET	(CONFIG_WP_STORAGE_OFF / CONFIG_FLASH_BANK_SIZE)
+#ifndef WP_BANK_COUNT
 #define WP_BANK_COUNT	(CONFIG_WP_STORAGE_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
 
 /* Persistent protection state flash offset / size / bank */
 #if defined(CONFIG_FLASH_PSTATE) && defined(CONFIG_FLASH_PSTATE_BANK)
+#ifndef PSTATE_BANK
 #define PSTATE_BANK	    (CONFIG_FW_PSTATE_OFF / CONFIG_FLASH_BANK_SIZE)
+#endif
+#ifndef PSTATE_BANK_COUNT
 #define PSTATE_BANK_COUNT   (CONFIG_FW_PSTATE_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
 #else
 #define PSTATE_BANK_COUNT	0
 #endif
