@@ -25,6 +25,7 @@
 #include "tpm_registers.h"
 #include "util.h"
 #include "watchdog.h"
+#include "wp.h"
 
 /* TPM2 library includes. */
 #include "ExecCommand_fp.h"
@@ -906,6 +907,10 @@ void tpm_task(void)
 			 */
 			if (command_code == TPM2_PCR_Read)
 				system_process_retry_counter();
+
+			else if (command_code == TPM2_Startup)
+				read_fwmp();
+
 #ifdef CONFIG_EXTENSION_COMMAND
 			if (!IS_CUSTOM_CODE(command_code))
 #endif
