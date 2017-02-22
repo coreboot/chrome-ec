@@ -43,6 +43,8 @@
 /* TODO(crosbug.com/p/44745): For debugging only */
 #define CONFIG_CMD_FLASH
 
+#define CONFIG_CRC8
+
 /* We're using TOP_A for partition 0, TOP_B for partition 1 */
 #define CONFIG_FLASH_NVMEM
 /* Offset to start of NvMem area from base of flash */
