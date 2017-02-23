@@ -628,3 +628,35 @@ void lid_angle_peripheral_enable(int enable)
 	}
 }
 
+/*
+ * Various voltage rails will be enabled / disabled by the PMIC when
+ * GPIO_PMIC_SLP_SUS_L changes. We need to delay the disable of V0.85A
+ * by approximately 50ms in order to allow V1.00A to sufficiently discharge
+ * first.
+ *
+ * Therefore, after GPIO_PMIC_SLP_SUS_L goes high, ignore the state of
+ * the V12_EN pin: Keep V0.85A enabled.
+ *
+ * When GPIO_PMIC_SLP_SUS_L goes low, delay 50ms, and make V12_EN function
+ * as normal - this should result in V0.85A discharging immediately after the
+ * i2c write completes.
+ */
+void chipset_set_pmic_slp_sus_l(int level)
+{
+	static int previous_level;
+	int val;
+
+	gpio_set_level(GPIO_PMIC_SLP_SUS_L, level);
+
+	if (previous_level != level) {
+		/* Rising edge: Force V0.85A enable. Falling: Pin control. */
+		val = level ? 0x80 : 0;
+		if (!level)
+			msleep(50);
+
+		i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x43, val);
+		previous_level = level;
+
+	}
+
+}
