@@ -8,661 +8,230 @@
 #include "battery.h"
 #include "battery_smart.h"
 #include "bd9995x.h"
-#include "charge_ramp.h"
 #include "charge_state.h"
-#include "charger_profile_override.h"
-#include "common.h"
 #include "console.h"
 #include "ec_commands.h"
-#include "extpower.h"
 #include "gpio.h"
-#include "hooks.h"
-#include "i2c.h"
 #include "util.h"
 
+/* Console output macros */
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
 
+/* array size of block reading */
+#define CUSTOM_DATA_SIZE	9
+
+/* Shutdown mode parameter to write to manufacturer access register */
+#define SB_SHIP_MODE_REG	0x3a
+#define SB_SHUTDOWN_DATA	0xC574
+
+/*
+ * Since battery_is_present() is executed earlier than battery_get_info(),
+ * which mean support_batteries[] will be used before assigning value
+ * to it. Without this, A static value would initialize to 0, and system
+ * would get SMP battery, that would be wrong.
+ * If put unknown firstly and treat unknown battery as UNABLE to provide
+ * power, we will never pre-charge a I2C failed battery. Treat it as ABLE,
+ * system reboots because battery could not provide power.
+ *
+ * So INIT state is used for preventing an initial wrong state, and never
+ * use support_batteries[INIT] in any other place.
+ *
+ * enum battery_type must be the same order as support_batteries[]
+ */
 enum battery_type {
-	BATTERY_SONY_CORP,
-	BATTERY_PANASONIC,
-	BATTERY_SMP_COS4870,
-	BATTERY_SMP_C22N1626,
-	BATTERY_CPT_C22N1626,
+	INIT = -1,	/* only use this as default static value */
+	SMP = 0,
+	LG,
+	UNKNOWN,
+	/* Number of types, not a real type */
 	BATTERY_TYPE_COUNT,
 };
 
-enum fast_chg_voltage_ranges {
-	VOLTAGE_RANGE_0,
-	VOLTAGE_RANGE_1,
-	VOLTAGE_RANGE_2,
+struct battery_device {
+	char				manuf[CUSTOM_DATA_SIZE];
+	char				device[CUSTOM_DATA_SIZE];
+	int				design_mv;
+	const struct battery_info	*battery_info;
 };
-
-enum temp_range {
-	TEMP_RANGE_0,
-	TEMP_RANGE_1,
-	TEMP_RANGE_2,
-	TEMP_RANGE_3,
-	TEMP_RANGE_4,
-};
-
-struct ship_mode_info {
-	const int ship_mode_reg;
-	const int ship_mode_data;
-	int (*batt_init)(void);
-};
-
-struct board_batt_params {
-	const char *manuf_name;
-	const struct ship_mode_info *ship_mode_inf;
-	const struct battery_info *batt_info;
-	const struct fast_charge_params *fast_chg_params;
-};
-
-#define DEFAULT_BATTERY_TYPE BATTERY_SONY_CORP
-#define SONY_DISCHARGE_DISABLE_FET_BIT (0x01 << 13)
-#define PANASONIC_DISCHARGE_ENABLE_FET_BIT (0x01 << 14)
-#define C22N1626_DISCHARGE_ENABLE_FET_BIT (0x01 << 0)
-
-/* keep track of previous charge profile info */
-static const struct fast_charge_profile *prev_chg_profile_info;
-
-static enum battery_present batt_pres_prev = BP_NOT_SURE;
-
-static enum battery_type board_battery_type = BATTERY_TYPE_COUNT;
-
-static const struct fast_charge_profile fast_charge_smp_cos4870_info[] = {
-	/* < 0C */
-	[TEMP_RANGE_0] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(-1),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-		},
-	},
-
-	/* 0C >= && <=15C */
-	[TEMP_RANGE_1] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(15),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 944,
-			[VOLTAGE_RANGE_1] = 472,
-		},
-	},
-
-	/* 15C > && <=20C */
-	[TEMP_RANGE_2] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(20),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 1416,
-			[VOLTAGE_RANGE_1] = 1416,
-		},
-	},
-
-	/* 20C > && <=45C */
-	[TEMP_RANGE_3] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(45),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 3300,
-			[VOLTAGE_RANGE_1] = 3300,
-		},
-	},
-
-	/* > 45C */
-	[TEMP_RANGE_4] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-		},
-	},
-};
-
-static const struct fast_charge_params fast_chg_params_smp_cos4870 = {
-	.total_temp_ranges = ARRAY_SIZE(fast_charge_smp_cos4870_info),
-	.default_temp_range_profile = TEMP_RANGE_2,
-	.voltage_mV = {
-		[VOLTAGE_RANGE_0] = 8000,
-		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
-	},
-	.chg_profile_info = &fast_charge_smp_cos4870_info[0],
-};
-
-const struct battery_info batt_info_smp_cos4870 = {
-	.voltage_max = TARGET_WITH_MARGIN(8700, 5),
-	.voltage_normal = 7600,
-	/*
-	 * Actual value 6000mV, added 100mV for charger accuracy so that
-	 * unwanted low VSYS_Prochot# assertion can be avoided.
-	 */
-	.voltage_min = 6100,
-	.precharge_current = 256,	/* mA */
-	.start_charging_min_c = 0,
-	.start_charging_max_c = 46,
-	.charging_min_c = 0,
-	.charging_max_c = 45,
-	.discharging_min_c = 0,
-	.discharging_max_c = 60,
-};
-
-static const struct fast_charge_profile fast_charge_sonycorp_info[] = {
-	/* < 10C */
-	[TEMP_RANGE_0] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(9),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 1200,
-			[VOLTAGE_RANGE_1] = 1200,
-		},
-	},
-
-	/* >= 10C */
-	[TEMP_RANGE_1] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 2250,
-			[VOLTAGE_RANGE_1] = 2250,
-		},
-	},
-};
-
-static const struct fast_charge_params fast_chg_params_sonycorp = {
-	.total_temp_ranges = ARRAY_SIZE(fast_charge_sonycorp_info),
-	.default_temp_range_profile = TEMP_RANGE_1,
-	.voltage_mV = {
-		[VOLTAGE_RANGE_0] = 8000,
-		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
-	},
-	.chg_profile_info = &fast_charge_sonycorp_info[0],
-};
-
-const struct battery_info batt_info_sonycorp = {
-	.voltage_max = TARGET_WITH_MARGIN(8700, 5),
-	.voltage_normal = 7600,
-
-	/*
-	 * Actual value 6000mV, added 100mV for charger accuracy so that
-	 * unwanted low VSYS_Prochot# assertion can be avoided.
-	 */
-	.voltage_min = 6100,
-	.precharge_current = 256,	/* mA */
-	.start_charging_min_c = 0,
-	.start_charging_max_c = 50,
-	.charging_min_c = 0,
-	.charging_max_c = 60,
-	.discharging_min_c = -20,
-	.discharging_max_c = 75,
-};
-
-static const struct fast_charge_profile fast_charge_panasonic_info[] = {
-	/* < 0C */
-	[TEMP_RANGE_0] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(-1),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-		},
-	},
-
-	/* 0C >= && <= 60C */
-	[TEMP_RANGE_1] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(60),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 3072,
-			[VOLTAGE_RANGE_1] = 3072,
-		},
-	},
-
-	/* > 60C */
-	[TEMP_RANGE_2] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-		},
-	},
-};
-
-static const struct fast_charge_params fast_chg_params_panasonic = {
-	.total_temp_ranges = ARRAY_SIZE(fast_charge_panasonic_info),
-	.default_temp_range_profile = TEMP_RANGE_1,
-	.voltage_mV = {
-		[VOLTAGE_RANGE_0] = 8000,
-		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
-	},
-	.chg_profile_info = &fast_charge_panasonic_info[0],
-};
-
-const struct battery_info batt_info_panasoic = {
-	.voltage_max = TARGET_WITH_MARGIN(8800, 5),
-	.voltage_normal = 7700,
-
-	/*
-	 * Actual value 6000mV, added 100mV for charger accuracy so that
-	 * unwanted low VSYS_Prochot# assertion can be avoided.
-	 */
-	.voltage_min = 6100,
-	.precharge_current = 256,	/* mA */
-	.start_charging_min_c = 0,
-	.start_charging_max_c = 50,
-	.charging_min_c = 0,
-	.charging_max_c = 60,
-	.discharging_min_c = -20,
-	.discharging_max_c = 75,
-};
-
-static const struct fast_charge_profile fast_charge_smp_c22n1626_info[] = {
-	/* < 1C */
-	[TEMP_RANGE_0] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(0),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-			[VOLTAGE_RANGE_2] = 0,
-		},
-	},
-
-	/* >=1C && <=10C */
-	[TEMP_RANGE_1] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(10),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 1752,
-			[VOLTAGE_RANGE_1] = 1752,
-			[VOLTAGE_RANGE_2] = 1752,
-		},
-	},
-
-	/* 10C > && <=45C */
-	[TEMP_RANGE_2] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(45),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 4672,
-			[VOLTAGE_RANGE_1] = 4672,
-			[VOLTAGE_RANGE_2] = 2920,
-		},
-	},
-
-	/* 45C > && <=60C */
-	[TEMP_RANGE_3] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(60),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 2920,
-			[VOLTAGE_RANGE_1] = 0,
-			[VOLTAGE_RANGE_2] = 0,
-		},
-	},
-
-	/* > 60C */
-	[TEMP_RANGE_4] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-			[VOLTAGE_RANGE_2] = 0,
-		},
-	},
-};
-
-static const struct fast_charge_params fast_chg_params_smp_c22n1626 = {
-	.total_temp_ranges = ARRAY_SIZE(fast_charge_smp_c22n1626_info),
-	.default_temp_range_profile = TEMP_RANGE_2,
-	.voltage_mV = {
-		[VOLTAGE_RANGE_0] = 8200,
-		[VOLTAGE_RANGE_1] = 8500,
-		[VOLTAGE_RANGE_2] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
-	},
-	.chg_profile_info = &fast_charge_smp_c22n1626_info[0],
-};
-
-static const struct fast_charge_profile fast_charge_cpt_c22n1626_info[] = {
-	/* < 0C */
-	[TEMP_RANGE_0] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(-1),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-		},
-	},
-
-	/* >=0C && <=60C */
-	[TEMP_RANGE_1] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(60),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 5200,
-			[VOLTAGE_RANGE_1] = 5200,
-		},
-	},
-
-	/* >60C */
-	[TEMP_RANGE_2] = {
-		.temp_c = TEMPC_TENTHS_OF_DEG(CHARGER_PROF_TEMP_C_LAST_RANGE),
-		.current_mA = {
-			[VOLTAGE_RANGE_0] = 0,
-			[VOLTAGE_RANGE_1] = 0,
-		},
-	},
-};
-
-static const struct fast_charge_params fast_chg_params_cpt_c22n1626 = {
-	.total_temp_ranges = ARRAY_SIZE(fast_charge_cpt_c22n1626_info),
-	.default_temp_range_profile = TEMP_RANGE_1,
-	.voltage_mV = {
-		[VOLTAGE_RANGE_0] = 8000,
-		[VOLTAGE_RANGE_1] = CHARGER_PROF_VOLTAGE_MV_LAST_RANGE,
-	},
-	.chg_profile_info = &fast_charge_cpt_c22n1626_info[0],
-};
-
-const struct battery_info batt_info_c22n1626 = {
-	.voltage_max = TARGET_WITH_MARGIN(8800, 5),
-	.voltage_normal = 7700,
-
-	/*
-	 * Actual value 6000mV, added 100mV for charger accuracy so that
-	 * unwanted low VSYS_Prochot# assertion can be avoided.
-	 */
-	.voltage_min = 6100,
-	.precharge_current = 256,	/* mA */
-	.start_charging_min_c = 0,
-	.start_charging_max_c = 45,
-	.charging_min_c = 0,
-	.charging_max_c = 60,
-	.discharging_min_c = 0,
-	.discharging_max_c = 60,
-};
-
-static int batt_smp_cos4870_init(void)
-{
-	int batt_status;
-
-	return battery_status(&batt_status) ? 0 :
-		batt_status & STATUS_INITIALIZED;
-}
-
-static int batt_sony_corp_init(void)
-{
-	int batt_status;
-
-	/*
-	 * SB_MANUFACTURER_ACCESS:
-	 * [13] : Discharging Disabled
-	 *      : 0b - Allowed to Discharge
-	 *      : 1b - Not Allowed to Discharge
-	 */
-	return sb_read(SB_MANUFACTURER_ACCESS, &batt_status) ? 0 :
-		!(batt_status & SONY_DISCHARGE_DISABLE_FET_BIT);
-}
-
-static int batt_panasonic_init(void)
-{
-	int batt_status;
-
-	/*
-	 * SB_MANUFACTURER_ACCESS:
-	 * [14] : Discharging Disabled
-	 *      : 0b - Not Allowed to Discharge
-	 *      : 1b - Allowed to Discharge
-	 */
-	return sb_read(SB_MANUFACTURER_ACCESS, &batt_status) ? 0 :
-		!!(batt_status & PANASONIC_DISCHARGE_ENABLE_FET_BIT);
-}
-
-static int batt_c22n1626_init(void)
-{
-	int batt_status;
-
-	/*
-	 * SB_PACK_STATUS:
-	 * [0] : Discharging Enabled
-	 *      : 0b - Not Allowed to Discharge
-	 *      : 1b - Allowed to Discharge
-	 */
-	return sb_read(SB_PACK_STATUS, &batt_status) ? 0 :
-		!!(batt_status & C22N1626_DISCHARGE_ENABLE_FET_BIT);
-}
-
-static const struct ship_mode_info ship_mode_info_smp_cos4870 = {
-	.ship_mode_reg = 0x00,
-	.ship_mode_data = 0x0010,
-	.batt_init = batt_smp_cos4870_init,
-};
-
-static const struct ship_mode_info ship_mode_info_sonycorp = {
-	.ship_mode_reg = 0x3A,
-	.ship_mode_data = 0xC574,
-	.batt_init = batt_sony_corp_init,
-};
-
-static const struct ship_mode_info ship_mode_info_panasonic = {
-	.ship_mode_reg = 0x3A,
-	.ship_mode_data = 0xC574,
-	.batt_init = batt_panasonic_init,
-};
-
-static const struct ship_mode_info ship_mode_info_c22n1626= {
-	.ship_mode_reg = 0x00,
-	.ship_mode_data = 0x0010,
-	.batt_init = batt_c22n1626_init,
-};
-
-static const struct board_batt_params info[] = {
-	/* BQ40Z555 SONY CORP BATTERY battery specific configurations */
-	[BATTERY_SONY_CORP] = {
-		.manuf_name = "SONYCorp",
-		.ship_mode_inf = &ship_mode_info_sonycorp,
-		.fast_chg_params = &fast_chg_params_sonycorp,
-		.batt_info = &batt_info_sonycorp,
-	},
-
-	/* RAJ240045 Panasoic battery specific configurations */
-	[BATTERY_PANASONIC] = {
-		.manuf_name = "PANASONIC",
-		.ship_mode_inf = &ship_mode_info_panasonic,
-		.fast_chg_params = &fast_chg_params_panasonic,
-		.batt_info = &batt_info_panasoic,
-	},
-
-	/* BQ40Z55 SMP COS4870 BATTERY battery specific configurations */
-	[BATTERY_SMP_COS4870] = {
-		.manuf_name = "SMP-COS4870",
-		.ship_mode_inf = &ship_mode_info_smp_cos4870,
-		.fast_chg_params = &fast_chg_params_smp_cos4870,
-		.batt_info = &batt_info_smp_cos4870,
-	},
-
-	/* BQ40Z55 SMP C22N1626 BATTERY battery specific configurations */
-	[BATTERY_SMP_C22N1626] = {
-		.manuf_name = "AS1FNZD3KD",
-		.ship_mode_inf = &ship_mode_info_c22n1626,
-		.fast_chg_params = &fast_chg_params_smp_c22n1626,
-		.batt_info = &batt_info_c22n1626,
-	},
-
-	/* BQ40Z55 CPT C22N1626 BATTERY battery specific configurations */
-	[BATTERY_CPT_C22N1626] = {
-		.manuf_name = "AS1FOAD3KD",
-		.ship_mode_inf = &ship_mode_info_c22n1626,
-		.fast_chg_params = &fast_chg_params_cpt_c22n1626,
-		.batt_info = &batt_info_c22n1626,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(info) == BATTERY_TYPE_COUNT);
-
-static inline const struct board_batt_params *board_get_batt_params(void)
-{
-	return &info[board_battery_type == BATTERY_TYPE_COUNT ?
-			DEFAULT_BATTERY_TYPE : board_battery_type];
-}
-
-static inline enum battery_present battery_hw_present(void)
-{
-	/* The GPIO is low when the battery is physically present */
-	return gpio_get_level(GPIO_EC_BATT_PRES_L) ? BP_NO : BP_YES;
-}
-
-/* Get type of the battery connected on the board */
-static int board_get_battery_type(void)
-{
-	const struct fast_charge_params *chg_params;
-	char name[32];
-	int i;
-
-	if (!battery_manufacturer_name(name, sizeof(name))) {
-		for (i = 0; i < BATTERY_TYPE_COUNT; i++) {
-			if (!strcasecmp(name, info[i].manuf_name)) {
-				board_battery_type = i;
-				break;
-			}
-		}
-	}
-
-	/* Initialize fast charging parameters */
-	chg_params = board_get_batt_params()->fast_chg_params;
-	prev_chg_profile_info = &chg_params->chg_profile_info[
-					chg_params->default_temp_range_profile];
-
-	return board_battery_type;
-}
 
 /*
- * Initialize the battery type for the board.
- *
- * Very first battery info is called by the charger driver to initialize
- * the charger parameters hence initialize the battery type for the board
- * as soon as the I2C is initialized.
+ * Used for the case that battery cannot be detected, such as the pre-charge
+ * case. In this case, we need to provide the unknown battery with the enough
+ * voltage (usually the highest voltage among batteries, but the smallest
+ * precharge current). This should be as conservative as possible.
  */
-static void board_init_battery_type(void)
-{
-	if (board_get_battery_type() != BATTERY_TYPE_COUNT)
-		CPRINTS("found batt:%s", info[board_battery_type].manuf_name);
-	else
-		CPRINTS("battery not found");
-}
-DECLARE_HOOK(HOOK_INIT, board_init_battery_type, HOOK_PRIO_INIT_I2C + 1);
+static const struct battery_info info_precharge = {
+	.voltage_max    = 8700,  /* the max voltage among batteries */
+	.voltage_normal = 7600,  /* min */
+	.voltage_min    =  6100,
+
+	/* Pre-charge values. */
+	.precharge_current  = 180,  /* mA, the min current among batteries */
+
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 50,
+	.charging_min_c       = 0,
+	.charging_max_c       = 50,
+	.discharging_min_c    = -20,
+	.discharging_max_c    = 75, /* min */
+};
+
+static const struct battery_info info_SMP = {
+	.voltage_max = 8700, /* mV */
+	.voltage_normal = 7640,
+	.voltage_min = 6100,
+
+	.precharge_current = 180, /* mA */
+
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 60,
+	.charging_min_c = 0,
+	.charging_max_c = 60,
+	.discharging_min_c = -20,
+	.discharging_max_c = 75,
+};
+
+static const struct battery_info info_LG = {
+	.voltage_max = 8600, /* mV */
+	.voltage_normal = 7600,
+	.voltage_min = 6100,
+
+	.precharge_current = 256, /* mA */
+
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 50,
+	.charging_min_c = 0,
+	.charging_max_c = 50,
+	.discharging_min_c = -20,
+	.discharging_max_c = 75,
+};
+
+/* see enum battery_type */
+static const struct battery_device support_batteries[BATTERY_TYPE_COUNT] = {
+	{
+		.manuf		= "SMP-SDI3",
+		.device		= "AC16B7K",
+		.design_mv	= 7640,
+		.battery_info	= &info_SMP,
+	},
+	{
+		.manuf		= "LGC",
+		.device		= "Empoli",
+		.design_mv	= 7600,
+		.battery_info	= &info_LG,
+	},
+	{
+		.manuf		= "Unknown",
+		.battery_info	= &info_precharge,
+	},
+};
+
+static enum battery_type batt_inserted = INIT;
 
 const struct battery_info *battery_get_info(void)
 {
-	return board_get_batt_params()->batt_info;
+	int i;
+	char manuf[CUSTOM_DATA_SIZE];
+	char device[CUSTOM_DATA_SIZE];
+	int design_mv;
+	static int print = 1;
+
+	if ((batt_inserted != INIT) && (batt_inserted != UNKNOWN))
+		return support_batteries[batt_inserted].battery_info;
+
+	if (battery_manufacturer_name(manuf, sizeof(manuf)))
+		goto err_unknown;
+	if (print == 1) {
+		CPRINTS("Battery=%s\n", manuf);
+		print = 0;
+	}
+
+	if (battery_device_name(device, sizeof(device)))
+		goto err_unknown;
+
+	if (battery_design_voltage(&design_mv))
+		goto err_unknown;
+
+	for (i = 0; i < BATTERY_TYPE_COUNT; ++i) {
+		if ((strcasecmp(support_batteries[i].manuf, manuf) == 0) &&
+		    (strcasecmp(support_batteries[i].device, device) == 0) &&
+		    (support_batteries[i].design_mv == design_mv)) {
+			batt_inserted = i;
+
+			return support_batteries[batt_inserted].battery_info;
+		}
+	}
+
+	CPRINTS("un-recognized battery Manuf:%s, Device:%s", manuf, device);
+
+err_unknown:
+	batt_inserted = UNKNOWN;
+	return support_batteries[batt_inserted].battery_info;
 }
 
 int board_cut_off_battery(void)
 {
 	int rv;
-	const struct ship_mode_info *ship_mode_inf =
-				board_get_batt_params()->ship_mode_inf;
 
 	/* Ship mode command must be sent twice to take effect */
-	rv = sb_write(ship_mode_inf->ship_mode_reg,
-			ship_mode_inf->ship_mode_data);
+	rv = sb_write(SB_SHIP_MODE_REG, SB_SHUTDOWN_DATA);
+
 	if (rv != EC_SUCCESS)
 		return rv;
 
-	return sb_write(ship_mode_inf->ship_mode_reg,
-			ship_mode_inf->ship_mode_data);
+	return sb_write(SB_SHIP_MODE_REG, SB_SHUTDOWN_DATA);
 }
-
-static int charger_should_discharge_on_ac(struct charge_state_data *curr)
-{
-	/* can not discharge on AC without battery */
-	if (curr->batt.is_present != BP_YES)
-		return 0;
-
-	/* Do not discharge on AC if the battery is still waking up */
-	if (!(curr->batt.flags & BATT_FLAG_WANT_CHARGE) &&
-		!(curr->batt.status & STATUS_FULLY_CHARGED))
-		return 0;
-
-	/*
-	 * In light load (<450mA being withdrawn from VSYS) the DCDC of the
-	 * charger operates intermittently i.e. DCDC switches continuously
-	 * and then stops to regulate the output voltage and current, and
-	 * sometimes to prevent reverse current from flowing to the input.
-	 * This causes a slight voltage ripple on VSYS that falls in the
-	 * audible noise frequency (single digit kHz range). This small
-	 * ripple generates audible noise in the output ceramic capacitors
-	 * (caps on VSYS and any input of DCDC under VSYS).
-	 *
-	 * To overcome this issue enable the battery learning operation
-	 * and suspend USB charging and DC/DC converter.
-	 */
-	if (!battery_is_cut_off() &&
-		!(curr->batt.flags & BATT_FLAG_WANT_CHARGE) &&
-		(curr->batt.status & STATUS_FULLY_CHARGED))
-		return 1;
-
-	/*
-	 * To avoid inrush current from the external charger, enable
-	 * discharge on AC till the new charger is detected and charge
-	 * detect delay has passed.
-	 */
-	if (!chg_ramp_is_detected() && curr->batt.state_of_charge > 2)
-		return 1;
-
-	return 0;
-}
-
 /*
- * This can override the smart battery's charging profile. To make a change,
- * modify one or more of requested_voltage, requested_current, or state.
- * Leave everything else unchanged.
+ * 1. Physical detection of battery via GPIO.
+ * 2. Check DFET is on/off by reading battery custom register
  *
- * Return the next poll period in usec, or zero to use the default (which is
- * state dependent).
+ *    SMP  : SB_MANUFACTURER_ACCESS.[13] : Discharge Disabled
+ *	   : 0b - Allowed to discharge
+ *	   : 1b - Not allowed to discharge
  */
-int charger_profile_override(struct charge_state_data *curr)
-{
-	int disch_on_ac = charger_should_discharge_on_ac(curr);
-
-	charger_discharge_on_ac(disch_on_ac);
-
-	if (disch_on_ac) {
-		curr->state = ST_DISCHARGE;
-		return 0;
-	}
-
-	return charger_profile_override_common(curr,
-			board_get_batt_params()->fast_chg_params,
-			&prev_chg_profile_info,
-			board_get_batt_params()->batt_info->voltage_max);
-}
-
-/*
- * Physical detection of battery.
- */
+#define SMP_DISCHARGE_DISABLE_FET_BIT	(0x01 << 13)
 enum battery_present battery_is_present(void)
 {
-	enum battery_present batt_pres;
+	int batt_discharge_fet = -1;
+	enum battery_present batt_pres = BP_NOT_SURE;
 
-	/* Get the physical hardware status */
-	batt_pres = battery_hw_present();
+	if (battery_is_cut_off())
+		return BP_NO;
 
-	/*
-	 * Make sure battery status is implemented, I2C transactions are
-	 * success & the battery status is Initialized to find out if it
-	 * is a working battery and it is not in the cut-off mode.
-	 *
-	 * If battery I2C fails but VBATT is high, battery is booting from
-	 * cut-off mode.
-	 *
-	 * FETs are turned off after Power Shutdown time.
-	 * The device will wake up when a voltage is applied to PACK.
-	 * Battery status will be inactive until it is initialized.
-	 */
-	if (batt_pres == BP_YES && batt_pres_prev != batt_pres &&
-		!battery_is_cut_off()) {
-		/* Re-init board battery if battery presence status changes */
-		if (board_get_battery_type() == BATTERY_TYPE_COUNT) {
-			if (bd9995x_get_battery_voltage() >=
-			    board_get_batt_params()->batt_info->voltage_min)
-				batt_pres = BP_NO;
-		} else if (!board_get_batt_params()->ship_mode_inf->batt_init())
-			batt_pres = BP_NO;
+	batt_pres = gpio_get_level(GPIO_EC_BATT_PRES_L) ? BP_NO : BP_YES;
+
+	if (batt_pres == BP_YES) {
+		if (sb_read(SB_MANUFACTURER_ACCESS, &batt_discharge_fet))
+			batt_pres = BP_NOT_SURE;
+		else if ((batt_discharge_fet & SMP_DISCHARGE_DISABLE_FET_BIT)
+			  != 0)
+			batt_pres = BP_NOT_SURE;
 	}
-
-	batt_pres_prev = batt_pres;
 
 	return batt_pres;
 }
 
 int board_battery_initialized(void)
 {
-	return battery_hw_present() == batt_pres_prev;
+	return (battery_is_present() == BP_YES);
+}
+
+int charger_profile_override(struct charge_state_data *curr)
+{
+	if (curr->batt.flags & BATT_FLAG_WANT_CHARGE)
+		charger_discharge_on_ac(0);
+
+	return EC_SUCCESS;
+}
+
+enum ec_status charger_profile_override_get_param(uint32_t param,
+						  uint32_t *value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+enum ec_status charger_profile_override_set_param(uint32_t param,
+						  uint32_t value)
+{
+	return EC_RES_INVALID_PARAM;
 }
