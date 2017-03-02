@@ -106,6 +106,7 @@ BOARDS_NPCX_SPI=(
 	gru
 	kevin
 	reef
+	scarlet
 	wheatley
 )
 
@@ -124,6 +125,7 @@ BOARDS_SPI_1800MV=(
 	gru
 	kevin
 	reef
+	scarlet
 )
 
 BOARDS_RAIDEN=(
@@ -131,6 +133,7 @@ BOARDS_RAIDEN=(
 	gru
 	kevin
 	reef
+	scarlet
 )
 
 # Flags
