@@ -225,6 +225,9 @@ const struct button_config buttons[CONFIG_BUTTON_COUNT] = {
 
 static void board_pmic_init(void)
 {
+	/* DISCHGCNT3 - enable 100 ohm discharge on V1.00A */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3e, 0x04);
+
 	/* No need to re-init PMIC since settings are sticky across sysjump */
 	if (system_jumped_to_this_image())
 		return;
