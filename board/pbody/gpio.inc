@@ -73,7 +73,8 @@ GPIO(USB_C0_DISCHARGE,      PIN(136), GPIO_OUT_LOW)
 GPIO(PCH_ACOK,              PIN(110), GPIO_OUT_LOW)
 /* Interrupts from accelerometer / gyro -- not yet implemented */
 GPIO(ACCEL1_INT,            PIN(161), GPIO_INPUT)
-GPIO(NC_GPIO127,  	    PIN(127), GPIO_INPUT | GPIO_PULL_UP)
+/* Enable/disable trackpad interrupts pin */
+GPIO(TRACKPAD_INT_ENABLE,   PIN(127), GPIO_OUT_HIGH)
 GPIO(ACCEL4_INT,            PIN(157), GPIO_INPUT)
 GPIO(WLAN_OFF_L,            PIN(132), GPIO_OUT_LOW)
 /* RCIN# line to PCH for 8042 emulation */

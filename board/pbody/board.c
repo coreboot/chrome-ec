@@ -625,9 +625,12 @@ void lid_angle_peripheral_enable(int enable)
 
 	if (enable) {
 		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+		gpio_set_level(GPIO_TRACKPAD_INT_ENABLE, 1);
 	} else {
-		if (!chipset_in_s0)
+		if (!chipset_in_s0) {
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+			gpio_set_level(GPIO_TRACKPAD_INT_ENABLE, 0);
+		}
 	}
 }
 
