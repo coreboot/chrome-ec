@@ -63,6 +63,8 @@
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_SIGNAL_INTERRUPT_STORM_DETECT_THRESHOLD 30
+#define CONFIG_PWM
+#define CONFIG_PWM_KBLIGHT
 /* All data won't fit in data RAM.  So, moving boundary slightly. */
 #undef CONFIG_RO_SIZE
 #define CONFIG_RO_SIZE (104 * 1024)
@@ -243,6 +245,13 @@ enum sensor_id {
 	BASE_GYRO,
 
 };
+
+enum pwm_channel {
+	PWM_CH_KBLIGHT,
+	/* Number of PWM channels */
+	PWM_CH_COUNT
+};
+
 /* start as a sink in case we have no other power supply/battery */
 #define PD_DEFAULT_STATE PD_STATE_SNK_DISCONNECTED
 
