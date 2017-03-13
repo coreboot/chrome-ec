@@ -16,10 +16,7 @@
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
-
 /* EC console commands  */
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
 #define CONFIG_CMD_BATT_MFG_ACCESS
 #define CONFIG_CMD_CHARGER_ADC_AMON_BMON
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
@@ -143,19 +140,6 @@
 #define CONFIG_WLAN_POWER_ACTIVE_LOW
 #define  WIRELESS_GPIO_WLAN_POWER GPIO_WIRELESS_GPIO_WLAN_POWER
 
-/*
- * During shutdown sequence TPS65094x PMIC turns off the sensor rails
- * asynchronously to the EC. If we access the sensors when the sensor power
- * rails are off we get I2C errors. To avoid this issue, defer switching
- * the sensors rate if in S3. By the time deferred function is serviced if
- * the chipset is in S5 we can back out from switching the sensor rate.
- *
- * Time taken by V1P8U rail to go down from S3 is 30ms to 60ms hence defer
- * the sensor switching after 60ms.
- */
-#undef CONFIG_MOTION_SENSE_SUSPEND_DELAY_US
-#define CONFIG_MOTION_SENSE_SUSPEND_DELAY_US (MSEC * 60)
-
 #define CONFIG_FLASH_SIZE 524288
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40	/* FIXME: Should be GD25LQ40? */
@@ -175,34 +159,12 @@
 #define NPCX_TACH_SEL2       0 /* 0:GPIO40/A4 1:GPIO93/D3 as TACH */
 
 /* I2C ports */
-#define I2C_PORT_GYRO			NPCX_I2C_PORT1
 #define I2C_PORT_BATTERY		NPCX_I2C_PORT3
 #define I2C_PORT_CHARGER		NPCX_I2C_PORT3
-/* Accelerometer and Gyroscope are the same device. */
-#define I2C_PORT_ACCEL			I2C_PORT_GYRO
 
 /* Sensors */
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_HOST_EVENT
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT TASK_EVENT_CUSTOM(4)
-#define CONFIG_MAG_BMI160_BMM150
-#define BMM150_I2C_ADDRESS BMM150_ADDR0	/* 8-bit address */
-#define CONFIG_MAG_CALIBRATE
-#define CONFIG_ACCEL_KX022
-#define OPT3001_I2C_ADDR OPT3001_I2C_ADDR1
-#define CONFIG_BARO_BMP280
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
-
-/* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 1024
-
-/* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
-
 
 #ifndef __ASSEMBLER__
 
@@ -242,27 +204,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY = 0,
 	TEMP_SENSOR_CHARGER,
 	TEMP_SENSOR_COUNT
-};
-
-/* Light sensors */
-enum als_id {
-	ALS_OPT3001 = 0,
-
-	ALS_COUNT
-};
-
-/*
- * Motion sensors:
- * When reading through IO memory is set up for sensors (LPC is used),
- * the first 2 entries must be accelerometers, then gyroscope.
- * For BMI160, accel, gyro and compass sensors must be next to each other.
- */
-enum sensor_id {
-	LID_ACCEL = 0,
-	BASE_ACCEL,
-	BASE_GYRO,
-	BASE_MAG,
-	BASE_BARO,
 };
 
 enum sand_board_version {
