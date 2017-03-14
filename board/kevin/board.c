@@ -94,7 +94,7 @@ const struct pwm_t pwm_channels[] = {
 	[PWM_CH_LED_GREEN] = { 0, PWM_CONFIG_DSLEEP, 100 },
 #endif
 #ifdef BOARD_KEVIN
-	[PWM_CH_DISPLIGHT] = { 2, 0, 210 },
+	[PWM_CH_DISPLIGHT] = { 2, 0, 1200 },
 #else
 	/* ArcticSand part on Gru requires >= 2.6KHz */
 	[PWM_CH_DISPLIGHT] = { 2, 0, 2600 },
