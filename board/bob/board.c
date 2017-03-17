@@ -336,6 +336,15 @@ void board_hibernate(void)
 	int i;
 	int rv;
 
+	if (!chipset_in_state(CHIPSET_STATE_HARD_OFF)) {
+		chipset_force_shutdown();
+		/* Wait for shutdown */
+		msleep(200);
+
+		if (!chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			ccprintf("Chipset refused to shutdown!\n");
+	}
+
 	/*
 	 * Disable the power enables for the TCPCs since we're going into
 	 * hibernate.  The charger VBUS interrupt will wake us up and reset the
