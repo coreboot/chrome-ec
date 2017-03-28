@@ -10,6 +10,7 @@
 #include "console.h"
 #include "ec_commands.h"
 #include "rsa.h"
+#include "rwsig.h"
 #include "sha256.h"
 #include "shared_mem.h"
 #include "system.h"
