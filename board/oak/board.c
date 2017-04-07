@@ -165,6 +165,12 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 static int dp_hw_port = PD_PORT_NONE;
 static struct mutex dp_hw_lock;
 
+/*
+ * timestamp of the next possible toggle to ensure the 2-ms spacing
+ * between IRQ_HPD.
+ */
+static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_COUNT];
+
 /**
  * Reset PD MCU
  */
@@ -306,12 +312,6 @@ int board_get_ramp_current_limit(int supplier, int sup_curr)
 	}
 }
 
-static void hpd_irq_deferred(void)
-{
-	gpio_set_level(GPIO_USB_DP_HPD, 1);
-}
-DECLARE_DEFERRED(hpd_irq_deferred);
-
 /**
  * Turn on DP hardware on type-C port.
  */
@@ -328,11 +328,18 @@ void board_typec_dp_on(int port)
 		if (!gpio_get_level(GPIO_USB_DP_HPD)) {
 			gpio_set_level(GPIO_USB_DP_HPD, 1);
 		} else {
+			uint64_t now = get_time().val;
+			/* wait for the minimum spacing between IRQ_HPD */
+			if (now < hpd_deadline[port])
+				usleep(hpd_deadline[port] - now);
+
 			gpio_set_level(GPIO_USB_DP_HPD, 0);
-			hook_call_deferred(hpd_irq_deferred,
-					HPD_DSTREAM_DEBOUNCE_IRQ);
+			usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
+			gpio_set_level(GPIO_USB_DP_HPD, 1);
 		}
 	}
+	/* enforce 2-ms delay between HPD pulses */
+	hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
 
 	mutex_unlock(&dp_hw_lock);
 }
