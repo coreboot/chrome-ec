@@ -128,6 +128,7 @@
 #define CONFIG_LTO
 #define CONFIG_POWER_SIGNAL_INTERRUPT_STORM_DETECT_THRESHOLD 30
 #define CONFIG_PWM
+#define CONFIG_PWM_KBLIGHT
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR_NCP15WB
 #define CONFIG_DPTF
@@ -180,8 +181,7 @@ enum adc_channel {
 };
 
 enum pwm_channel {
-	PWM_CH_LED_GREEN = 0,
-	PWM_CH_LED_RED,
+	PWM_CH_KBLIGHT,
 	/* Number of PWM channels */
 	PWM_CH_COUNT
 };
