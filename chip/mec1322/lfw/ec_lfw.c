@@ -26,6 +26,11 @@
 
 #include "ec_lfw.h"
 
+#define PMIC_RESET_FLAGS \
+	(RESET_FLAG_WATCHDOG | RESET_FLAG_SOFT | RESET_FLAG_HARD)
+/* Mirrored from chip/mec1322/system.c enum hibdata_index */
+#define HIBDATA_INDEX_SAVED_RESET_FLAGS 1
+
 __attribute__ ((section(".intvector")))
 const struct int_vector_t hdr_int_vect = {
 			(void *)0x11FA00, /* init sp, unused,
@@ -231,6 +236,8 @@ enum system_image_copy_t system_get_image_copy(void)
 void lfw_main()
 {
 
+	uint32_t flags;
+	uint32_t vcc1_rst;
 	uintptr_t init_addr;
 
 	/* install vector table */
@@ -275,7 +282,10 @@ void lfw_main()
 		 * Top 8KB of Data RAM will be used by ROM during system reboot.
 		 * Restore the panic data from the panic_backup.
 		 */
-		panic_data_restore();
+		flags = MEC1322_VBAT_RAM(HIBDATA_INDEX_SAVED_RESET_FLAGS);
+		vcc1_rst = MEC1322_PCR_CHIP_PWR_RST & MEC1322_PWR_RST_STS_VCC1;
+		if ((flags & PMIC_RESET_FLAGS) || vcc1_rst)
+			panic_data_restore();
 		/* fall through */
 	default:
 		MEC1322_VBAT_RAM(MEC1322_IMAGETYPE_IDX) =
