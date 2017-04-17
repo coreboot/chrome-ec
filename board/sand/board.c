@@ -52,6 +52,9 @@
 #define IN_PGOOD_PP3300	POWER_SIGNAL_MASK(X86_PGOOD_PP3300)
 #define IN_PGOOD_PP5000	POWER_SIGNAL_MASK(X86_PGOOD_PP5000)
 
+#define USB_PD_PORT_ANX74XX	0
+#define USB_PD_PORT_PS8751	1
+
 static void tcpc_alert_event(enum gpio_signal signal)
 {
 	if ((signal == GPIO_USB_C0_PD_INT_ODL) &&
@@ -71,9 +74,18 @@ static void tcpc_alert_event(enum gpio_signal signal)
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 static void anx74xx_cable_det_handler(void)
 {
+	int level = gpio_get_level(GPIO_USB_C0_CABLE_DET);
+
+	/*
+	 * Setting the low power is handled by DRP status hence
+	 * handle only the attach event.
+	 */
+	if (level)
+		anx74xx_handle_power_mode(USB_PD_PORT_ANX74XX,
+					  ANX74XX_NORMAL_MODE);
+
 	/* confirm if cable_det is asserted */
-	if (!gpio_get_level(GPIO_USB_C0_CABLE_DET) ||
-		gpio_get_level(GPIO_USB_C0_PD_RST_L))
+	if (!level || gpio_get_level(GPIO_USB_C0_PD_RST_L))
 		return;
 
 	task_set_event(TASK_ID_PD_C0, PD_EVENT_TCPC_RESET, 0);
@@ -170,8 +182,18 @@ const int i2c_test_dev_used = ARRAY_SIZE(i2c_stress_tests);
 #endif /* CONFIG_CMD_I2C_STRESS_TEST */
 
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	{NPCX_I2C_PORT0_0, 0x50, &anx74xx_tcpm_drv, TCPC_ALERT_ACTIVE_LOW},
-	{NPCX_I2C_PORT0_1, 0x16, &tcpci_tcpm_drv, TCPC_ALERT_ACTIVE_LOW},
+	[USB_PD_PORT_ANX74XX] = {
+		.i2c_host_port = NPCX_I2C_PORT0_0,
+		.i2c_slave_addr = 0x50,
+		.drv = &anx74xx_tcpm_drv,
+		.pol = TCPC_ALERT_ACTIVE_LOW,
+	},
+	[USB_PD_PORT_PS8751] = {
+		.i2c_host_port = NPCX_I2C_PORT0_1,
+		.i2c_slave_addr = 0x16,
+		.drv = &tcpci_tcpm_drv,
+		.pol = TCPC_ALERT_ACTIVE_LOW,
+	},
 };
 
 uint16_t tcpc_get_alert_status(void)
@@ -199,26 +221,47 @@ const enum gpio_signal hibernate_wake_pins[] = {
 
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
+static int ps8751_tune_mux(const struct usb_mux *mux)
+{
+	/* 0x98 sets lower EQ of DP port (4.5db) */
+	i2c_write8(NPCX_I2C_PORT0_1, 0x16, PS8751_REG_MUX_DP_EQ_CONFIGURATION,
+		   0x98);
+	return EC_SUCCESS;
+}
+
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 	{
-		.port_addr = 0,	/* don't care / unused */
+		.port_addr = USB_PD_PORT_ANX74XX,  /* don't care / unused */
 		.driver = &anx74xx_tcpm_usb_mux_driver,
 		.hpd_update = &anx74xx_tcpc_update_hpd_status,
 	},
 	{
-		.port_addr = 1,
+		.port_addr = USB_PD_PORT_PS8751,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8751_tcpc_update_hpd_status,
+		.board_init = &ps8751_tune_mux,
 	}
 };
 
 /* called from anx74xx_set_power_mode() */
 void board_set_tcpc_power_mode(int port, int mode)
 {
-	if (port == 0) {
-		gpio_set_level(GPIO_USB_C0_PD_RST_L, mode);
-		msleep(mode ? 10 : 1);
-		gpio_set_level(GPIO_EN_USB_TCPC_PWR, mode);
+	if (port != USB_PD_PORT_ANX74XX)
+		return;
+
+	switch (mode) {
+	case ANX74XX_NORMAL_MODE:
+		gpio_set_level(GPIO_EN_USB_TCPC_PWR, 1);
+		msleep(10);
+		gpio_set_level(GPIO_USB_C0_PD_RST_L, 1);
+		break;
+	case ANX74XX_STANDBY_MODE:
+		gpio_set_level(GPIO_USB_C0_PD_RST_L, 0);
+		msleep(1);
+		gpio_set_level(GPIO_EN_USB_TCPC_PWR, 0);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -434,8 +477,8 @@ int pd_snk_is_vbus_provided(int port)
 	enum bd9995x_charge_port bd9995x_port;
 
 	switch (port) {
-	case 0:
-	case 1:
+	case USB_PD_PORT_ANX74XX:
+	case USB_PD_PORT_PS8751:
 		bd9995x_port = bd9995x_pd_port_to_chg_port(port);
 		break;
 	default:
@@ -471,8 +514,8 @@ int board_set_active_charge_port(int charge_port)
 		return -1;
 
 	switch (charge_port) {
-	case 0:
-	case 1:
+	case USB_PD_PORT_ANX74XX:
+	case USB_PD_PORT_PS8751:
 		/* Don't charge from a source port */
 		if (board_vbus_source_enabled(charge_port))
 			return -1;
@@ -714,7 +757,7 @@ int board_get_version(void)
 		}
 	}
 
-	CPRINTS("Board version: %d\n", version);
+	CPRINTS("Board version: %d", version);
 	return version;
 }
 

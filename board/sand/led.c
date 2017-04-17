@@ -9,6 +9,7 @@
 #include "charge_state.h"
 #include "chipset.h"
 #include "ec_commands.h"
+#include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -99,7 +100,13 @@ static void led_set_battery(void)
 	case PWR_STATE_CHARGE:
 		led_set_color_battery(LED_AMBER);
 		break;
-	case PWR_STATE_DISCHARGE:
+	case PWR_STATE_DISCHARGE_FULL:
+		if (extpower_is_present()) {
+			led_set_color_battery(LED_BLUE);
+			break;
+		}
+		/* Intentional fall-through */
+	case PWR_STATE_DISCHARGE /* and PWR_STATE_DISCHARGE_FULL */:
 		if (chipset_in_state(CHIPSET_STATE_ON)) {
 			led_set_color_battery(LED_BLUE);
 		} else if (chipset_in_state(CHIPSET_STATE_SUSPEND |
