@@ -852,6 +852,17 @@
  */
 #undef CONFIG_MAPPED_STORAGE_BASE
 
+/* Protected region of storage belonging to EC */
+#undef CONFIG_EC_PROTECTED_STORAGE_OFF
+#undef CONFIG_EC_PROTECTED_STORAGE_SIZE
+
+/* Writable region of storage belonging to EC */
+#undef CONFIG_EC_WRITABLE_STORAGE_OFF
+#undef CONFIG_EC_WRITABLE_STORAGE_SIZE
+
+/* EC capable of sensor speeds up to 200000 mHz */
+#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 200000
+
 #undef CONFIG_FLASH_PROTECT_NEXT_BOOT
 
 /*
@@ -881,14 +892,6 @@
 #undef CONFIG_FLASH_WRITE_SIZE
 /* Most efficient flash write size (in bytes) */
 #undef CONFIG_FLASH_WRITE_IDEAL_SIZE
-
-/* Protected region of storage belonging to EC */
-#undef CONFIG_EC_PROTECTED_STORAGE_OFF
-#undef CONFIG_EC_PROTECTED_STORAGE_SIZE
-
-/* Writable region of storage belonging to EC */
-#undef CONFIG_EC_WRITABLE_STORAGE_OFF
-#undef CONFIG_EC_WRITABLE_STORAGE_SIZE
 
 /*****************************************************************************/
 
@@ -2261,5 +2264,4 @@
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
 #endif
-
 #endif  /* __CROS_EC_CONFIG_H */

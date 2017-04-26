@@ -530,6 +530,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = KX022_ADDR0,
 	 .rot_standard_ref = &rot_lid_accel, /* Identity matrix. */
 	 .default_range = 8, /* g, enough for laptop. */
+	 .min_frequency = KX022_ACCEL_MIN_FREQ,
+	 .max_frequency = KX022_ACCEL_MAX_FREQ,
 	 .config = {
 		/* AP: by default use EC settings */
 		[SENSOR_CONFIG_AP] = {
@@ -565,6 +567,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_ADDR0,
 	 .rot_standard_ref = NULL, /* Identity matrix. */
 	 .default_range = 8,  /* g, enough for laptop. */
+	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* AP: by default use EC settings */
 		 [SENSOR_CONFIG_AP] = {
@@ -601,6 +605,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = NULL, /* Identity Matrix. */
+	 .min_frequency = BMI160_GYRO_MIN_FREQ,
+	 .max_frequency = BMI160_GYRO_MAX_FREQ,
 	 .config = {
 		 /* AP: by default shutdown all sensors */
 		 [SENSOR_CONFIG_AP] = {
