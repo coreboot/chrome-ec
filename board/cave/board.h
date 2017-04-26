@@ -163,9 +163,6 @@
 #define CONFIG_LID_ANGLE_INVALID_CHECK
 /* FIFO size is in power of 2. */
 #define CONFIG_ACCEL_FIFO 128
-/* Useful debug command */
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
 
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
