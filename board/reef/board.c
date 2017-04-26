@@ -860,6 +860,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = KX022_ADDR1,
 	 .rot_standard_ref = NULL, /* Identity matrix. */
 	 .default_range = 2, /* g, enough for laptop. */
+	 .min_frequency = KX022_ACCEL_MIN_FREQ,
+	 .max_frequency = KX022_ACCEL_MAX_FREQ,
 	 .config = {
 		/* AP: by default use EC settings */
 		[SENSOR_CONFIG_AP] = {
@@ -896,6 +898,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_ADDR0,
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 2,  /* g, enough for laptop. */
+	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* AP: by default use EC settings */
 		 [SENSOR_CONFIG_AP] = {
@@ -933,6 +937,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
+	 .min_frequency = BMI160_GYRO_MIN_FREQ,
+	 .max_frequency = BMI160_GYRO_MAX_FREQ,
 	 .config = {
 		 /* AP: by default shutdown all sensors */
 		 [SENSOR_CONFIG_AP] = {
@@ -970,6 +976,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1 << 11, /* 16LSB / uT, fixed */
 	 .rot_standard_ref = &mag_standard_ref,
+	 .min_frequency = BMM150_MAG_MIN_FREQ,
+	 .max_frequency = BMM150_MAG_MAX_FREQ,
 	 .config = {
 		 /* AP: by default shutdown all sensors */
 		 [SENSOR_CONFIG_AP] = {
@@ -1005,6 +1013,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_BARO,
 	 .addr = BMP280_I2C_ADDRESS1,
 	 .default_range = 1 << 18, /*  1bit = 4 Pa, 16bit ~= 2600 hPa */
+	 .min_frequency = BMP280_BARO_MIN_FREQ,
+	 .max_frequency = BMP280_BARO_MAX_FREQ,
 	 .config = {
 		 /* AP: by default shutdown all sensors */
 		 [SENSOR_CONFIG_AP] = {

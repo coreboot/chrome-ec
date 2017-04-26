@@ -879,6 +879,9 @@
 /* Support EC to Internal bus bridge. */
 #undef CONFIG_EC2I
 
+/* EC capable of sensor speeds up to 200000 mHz */
+#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 200000
+
 /*
  * Allow board to override the feature bitmap provided through host command
  * and ACPI.
