@@ -205,6 +205,7 @@ enum temp_sensor_id {
 #define PD_MAX_POWER_MW       60000
 #define PD_MAX_CURRENT_MA     3000
 #define PD_MAX_VOLTAGE_MV     20000
+#define PD_PREFER_LOW_VOLTAGE
 
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);
