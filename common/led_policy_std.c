@@ -155,6 +155,7 @@ static void std_led_set_battery(void)
 {
 	static int battery_second;
 	uint32_t chflags = charge_get_flags();
+	int percent = charge_get_percent();
 
 	battery_second++;
 
@@ -167,12 +168,15 @@ static void std_led_set_battery(void)
 		bat_led_set_color(LED_AMBER);
 		break;
 	case PWR_STATE_DISCHARGE:
-		if (charge_get_percent() < 3)
+		if (percent < 3)
 			bat_led_set_color((battery_second & 1)
 					? LED_OFF : LED_AMBER);
-		else if (charge_get_percent() < 10)
+		else if (percent < 10)
 			bat_led_set_color((battery_second & 3)
 					? LED_OFF : LED_AMBER);
+		else if (percent >= BATTERY_LEVEL_NEAR_FULL &&
+			(chflags & CHARGE_FLAG_EXTERNAL_POWER))
+			bat_led_set_color(LED_GREEN);
 		else
 			bat_led_set_color(LED_OFF);
 		break;
