@@ -112,10 +112,84 @@ bd99955_write_cleanup:
 
 /* BD99955 local interfaces */
 
-static int bd99955_charger_enable(int enable)
+static int bd99955_set_vfastchg(int voltage)
 {
 	int rv;
-	int reg;
+
+	/* Fast Charge Voltage Regulation Settings for fast charging. */
+	rv = ch_raw_write16(BD99955_CMD_VFASTCHG_REG_SET1,
+			voltage & 0x7FF0, BD99955_EXTENDED_COMMAND);
+
+	if (rv)
+		return rv;
+
+#ifndef CONFIG_CHARGER_BATTERY_TSENSE
+	/*
+	 * If TSENSE is not connected set all the VFASTCHG_REG_SETx
+	 * to same voltage.
+	 */
+	rv = ch_raw_write16(BD99955_CMD_VFASTCHG_REG_SET2,
+			voltage & 0x7FF0, BD99955_EXTENDED_COMMAND);
+	if (rv)
+		return rv;
+
+	rv = ch_raw_write16(BD99955_CMD_VFASTCHG_REG_SET3,
+			voltage & 0x7FF0, BD99955_EXTENDED_COMMAND);
+#endif
+	return rv;
+}
+
+static int bd99955_set_vsysreg(int voltage)
+{
+	/* VSYS Regulation voltage is in 64mV steps. */
+	voltage &= ~0x3F;
+
+	return ch_raw_write16(BD99955_CMD_VSYSREG_SET, voltage,
+			      BD99955_EXTENDED_COMMAND);
+}
+
+static int bd99955_charger_enable(int enable)
+{
+	int rv, reg;
+	static int prev_chg_enable = -1;
+	const struct battery_info *bi = battery_get_info();
+
+	/* Nothing to change */
+	if (enable == prev_chg_enable)
+		return EC_SUCCESS;
+
+	prev_chg_enable = enable;
+
+	if (enable) {
+		/*
+		 * BGATE capacitor max : 0.1uF + 20%
+		 * Charge MOSFET threshold max : 2.8V
+		 * BGATE charge pump current min : 3uA
+		 * T = C * V / I so, Tmax = 112ms
+		 */
+		msleep(115);
+
+		/*
+		 * Set VSYSREG_SET <= VBAT so that the charger is in Fast-Charge
+		 * state when charging.
+		 */
+		rv = bd99955_set_vsysreg(bi->voltage_min);
+	} else {
+		/*
+		 * Set VSYSREG_SET > VBAT so that the charger is in Pre-Charge
+		 * state when not charging or discharging.
+		 */
+		rv = bd99955_set_vsysreg(bi->voltage_max + 200);
+
+		/*
+		 * Allow charger in pre-charge state for 50ms before disabling
+		 * the charger which prevents inrush current while moving from
+		 * fast-charge state to pre-charge state.
+		 */
+		msleep(50);
+	}
+	if (rv)
+		return rv;
 
 	rv = ch_raw_read16(BD99955_CMD_CHGOP_SET2, &reg,
 				BD99955_EXTENDED_COMMAND);
@@ -373,15 +447,6 @@ static void usb_charger_process(enum bd99955_charge_port port)
 }
 #endif /* HAS_TASK_USB_CHG */
 
-static int bd99955_set_vsysreg(int voltage)
-{
-	/* VSYS Regulation voltage is in 64mV steps. */
-	voltage &= ~0x3F;
-
-	return ch_raw_write16(BD99955_CMD_VSYSREG_SET, voltage,
-			      BD99955_EXTENDED_COMMAND);
-}
-
 /* chip specific interfaces */
 
 int charger_set_input_current(int input_current)
@@ -535,31 +600,11 @@ int charger_get_status(int *status)
 
 int charger_set_mode(int mode)
 {
-	int rv, inhibit_chg;
-	static int inhibit_chg_prev = -1;
+	int rv;
 
-	inhibit_chg = mode & CHARGE_FLAG_INHIBIT_CHARGE;
-
-	if (inhibit_chg != inhibit_chg_prev) {
-		if (inhibit_chg) {
-			rv = bd99955_set_vsysreg(BD99955_DISCHARGE_VSYSREG);
-			msleep(50);
-			rv |= bd99955_charger_enable(0);
-		} else {
-			rv = bd99955_charger_enable(1);
-			/*
-			 * BGATE capacitor max : 0.1uF + 20%
-			 * Charge MOSFET threshold max : 2.8V
-			 * BGATE charge pump current min : 3uA
-			 * T = C * V / I so, Tmax = 112ms
-			 */
-			msleep(115);
-			rv |= bd99955_set_vsysreg(BD99955_CHARGE_VSYSREG);
-		}
-		inhibit_chg_prev = inhibit_chg;
-		if (rv)
-			return rv;
-	}
+	rv = bd99955_charger_enable(mode & CHARGE_FLAG_INHIBIT_CHARGE ? 0 : 1);
+	if (rv)
+		return rv;
 
 	if (mode & CHARGE_FLAG_POR_RESET) {
 		rv = bd99955_por_reset();
@@ -642,8 +687,11 @@ int charger_set_voltage(int voltage)
 	/* Charge voltage step 16 mV */
 	voltage &= ~0x0F;
 
-	return ch_raw_write16(BD99955_CMD_CHG_VOLTAGE, voltage,
-				BD99955_BAT_CHG_COMMAND);
+	/* Assumes charger's voltage_min < battery's voltage_max */
+	if (voltage < bd99955_charger_info.voltage_min)
+		voltage = bd99955_charger_info.voltage_min;
+
+	return bd99955_set_vfastchg(voltage);
 }
 
 static void bd99995_init(void)
