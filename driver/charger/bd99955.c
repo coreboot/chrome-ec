@@ -148,6 +148,17 @@ static int bd99955_set_vsysreg(int voltage)
 			      BD99955_EXTENDED_COMMAND);
 }
 
+static int bd99955_is_discharging_on_ac(void)
+{
+	int reg;
+
+	if (ch_raw_read16(BD99955_CMD_CHGOP_SET2, &reg,
+				BD99955_EXTENDED_COMMAND))
+		return 0;
+
+	return !!(reg & BD99955_CMD_CHGOP_SET2_BATT_LEARN);
+}
+
 static int bd99955_charger_enable(int enable)
 {
 	int rv, reg;
@@ -602,10 +613,6 @@ int charger_set_mode(int mode)
 {
 	int rv;
 
-	rv = bd99955_charger_enable(mode & CHARGE_FLAG_INHIBIT_CHARGE ? 0 : 1);
-	if (rv)
-		return rv;
-
 	if (mode & CHARGE_FLAG_POR_RESET) {
 		rv = bd99955_por_reset();
 		if (rv)
@@ -630,6 +637,7 @@ int charger_get_current(int *current)
 int charger_set_current(int current)
 {
 	int rv;
+	int chg_enable = 1;
 
 	/* Charge current step 64 mA */
 	current &= ~0x3F;
@@ -637,18 +645,38 @@ int charger_set_current(int current)
 	if (current < BD99955_NO_BATTERY_CHARGE_I_MIN &&
 	    (battery_is_present() != BP_YES || battery_is_cut_off()))
 		current = BD99955_NO_BATTERY_CHARGE_I_MIN;
-	else if (current < bd99955_charger_info.current_min &&
-		!(charge_get_flags() & CHARGE_FLAG_FORCE_IDLE))
-		current = bd99955_charger_info.current_min;
 
-	rv = ch_raw_write16(BD99955_CMD_CHG_CURRENT, current,
-			    BD99955_BAT_CHG_COMMAND);
+	/*
+	 * Disable charger before setting charge current to 0 or when
+	 * discharging on AC.
+	 * If charging current is set to 0mA during charging, reference of
+	 * the charge current feedback amp (VREF_CHG) is set to 0V. Hence
+	 * the DCDC stops switching (because of the EA offset).
+	 */
+	if (!current || bd99955_is_discharging_on_ac()) {
+		chg_enable = 0;
+		rv = bd99955_charger_enable(0);
+		if (rv)
+			return rv;
+	}
+
+	rv = ch_raw_write16(BD99955_CMD_IPRECH_SET,
+			    MIN(current, BD99955_IPRECH_MAX),
+			    BD99955_EXTENDED_COMMAND);
+
 	if (rv)
 		return rv;
 
-	return ch_raw_write16(BD99955_CMD_IPRECH_SET,
-			      MIN(current, BD99955_IPRECH_MAX),
-			      BD99955_EXTENDED_COMMAND);
+	rv = ch_raw_write16(BD99955_CMD_CHG_CURRENT, current,
+				BD99955_BAT_CHG_COMMAND);
+	if (rv)
+		return rv;
+
+	/*
+	 * Enable charger if charge current is non-zero or not discharging
+	 * on AC.
+	 */
+	return chg_enable ? bd99955_charger_enable(1) : EC_SUCCESS;
 }
 
 int charger_get_voltage(int *voltage)
@@ -659,30 +687,21 @@ int charger_get_voltage(int *voltage)
 
 int charger_set_voltage(int voltage)
 {
-	int rv;
-	int reg;
 	const struct battery_info *bi = battery_get_info();
 
 	/*
 	 * Regulate the system voltage to battery max if the battery
 	 * is not present or the battery is discharging on AC.
 	 */
-	rv = ch_raw_read16(BD99955_CMD_CHGOP_SET2, &reg,
-				BD99955_EXTENDED_COMMAND);
-	if (rv)
-		return rv;
-
 	if (voltage == 0 ||
-		reg & BD99955_CMD_CHGOP_SET2_BATT_LEARN ||
+		bd99955_is_discharging_on_ac() ||
 		battery_is_present() != BP_YES ||
-		battery_is_cut_off())
+		battery_is_cut_off() ||
+		voltage > bi->voltage_max)
 		voltage = bi->voltage_max;
 
 	if (voltage < bd99955_charger_info.voltage_min)
 		voltage = bd99955_charger_info.voltage_min;
-
-	if (voltage > bi->voltage_max)
-		voltage = bi->voltage_max;
 
 	/* Charge voltage step 16 mV */
 	voltage &= ~0x0F;
