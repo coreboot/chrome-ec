@@ -210,7 +210,6 @@ enum power_state power_handle_state(enum power_state state)
 	case POWER_S5S3:
 		gpio_set_level(GPIO_PPVAR_LOGIC_EN, 1);
 		gpio_set_level(GPIO_PP900_AP_EN, 1);
-		gpio_set_level(GPIO_PP900_PCIE_EN, 1);
 		msleep(2);
 #if CONFIG_CHIPSET_POWER_SEQ_VERSION == 0
 		gpio_set_level(GPIO_PP900_PMU_EN, 1);
@@ -258,6 +257,7 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S3;
 
 	case POWER_S3S0:
+		gpio_set_level(GPIO_PP900_PCIE_EN, 1);
 		gpio_set_level(GPIO_PPVAR_CLOGIC_EN, 1);
 		msleep(2);
 		gpio_set_level(GPIO_PP900_DDRPLL_EN, 1);
@@ -315,6 +315,9 @@ enum power_state power_handle_state(enum power_state state)
 		gpio_set_level(GPIO_PP900_DDRPLL_EN, 0);
 		MSLEEP_CHECK_ABORTED_SUSPEND(1);
 
+		gpio_set_level(GPIO_PP900_PCIE_EN, 0);
+		MSLEEP_CHECK_ABORTED_SUSPEND(1);
+
 		gpio_set_level(GPIO_PPVAR_CLOGIC_EN, 0);
 
 		/*
@@ -357,7 +360,6 @@ enum power_state power_handle_state(enum power_state state)
 		gpio_set_level(GPIO_PP900_PMU_EN, 0);
 #endif
 		msleep(6);
-		gpio_set_level(GPIO_PP900_PCIE_EN, 0);
 		gpio_set_level(GPIO_PP900_AP_EN, 0);
 		gpio_set_level(GPIO_PPVAR_LOGIC_EN, 0);
 
