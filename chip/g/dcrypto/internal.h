@@ -129,10 +129,4 @@ int dcrypto_ladder_derive(enum dcrypto_appid appid, const uint32_t salt[8],
 			  const uint32_t input[8], uint32_t output[8]);
 
 
-/*
- * Utility functions.
- */
-/* TODO(ngm): memset that doesn't get optimized out. */
-#define dcrypto_memset(p, b, len)  memset((p), (b), (len))
-
 #endif  /* ! __EC_CHIP_G_DCRYPTO_INTERNAL_H */
