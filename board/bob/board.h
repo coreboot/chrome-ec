@@ -34,8 +34,6 @@
 #define CONFIG_SPI_FLASH_GD25LQ40
 #define CONFIG_SPI_FLASH_REGS
 
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
-
 /*
  * We are code space-constrained on kevin, so take 10K that is normally used
  * as data RAM (was 30K, now 22K) and use it for code RAM (was 96K, now 104K)
