@@ -693,8 +693,7 @@ int charger_set_voltage(int voltage)
 	 * Regulate the system voltage to battery max if the battery
 	 * is not present or the battery is discharging on AC.
 	 */
-	if (voltage == 0 ||
-		bd99955_is_discharging_on_ac() ||
+	if (bd99955_is_discharging_on_ac() ||
 		battery_is_present() != BP_YES ||
 		battery_is_cut_off() ||
 		voltage > bi->voltage_max)
