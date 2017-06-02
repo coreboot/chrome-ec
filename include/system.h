@@ -268,6 +268,15 @@ const char *system_get_chip_name(void);
 const char *system_get_chip_revision(void);
 
 /**
+ * Get a unique per-chip id.
+ *
+ * @param id		Set to the address of the unique id data (statically
+ *			allocated, or register-backed).
+ * @return Number of bytes available at the provided address.
+ */
+int system_get_chip_unique_id(uint8_t **id);
+
+/**
  * Get/Set VbNvContext in non-volatile storage.  The block should be 16 bytes
  * long, which is the current size of VbNvContext block.
  *
