@@ -457,60 +457,82 @@ static int init(const struct motion_sensor_t *s)
 	int ret, val, reg, reset_field;
 	uint8_t timeout;
 
-	/* The chip can take up to 10ms to boot */
 	mutex_lock(s->mutex);
-	reg = KIONIX_WHO_AM_I(V(s));
-	timeout = 0;
-	do {
-		msleep(1);
-		/* Read WHO_AM_I to be sure the device has booted */
-		ret = raw_read8(s->port, s->addr, reg, &val);
-		if (ret == EC_SUCCESS && val == KIONIX_WHO_AM_I_VAL(V(s)))
-			break;
-
-		/* Check for timeout. */
-		if (timeout++ > 20) {
-			ret = EC_ERROR_TIMEOUT;
-			break;
+	if (V(s)) {
+		/* Place the sensor in standby mode for KXCJ9 */
+		ret = disable_sensor(s, &val);
+	} else {
+		/* Write 0x00 to the internal register for KX022 */
+		reg = KX022_INTERNAL;
+		ret = raw_write8(s->port, s->addr, reg, 0x0);
+		if (ret != EC_SUCCESS) {
+			/*
+			 * For I2C communication, if ACK was not received
+			 * from the first address, resend the command using
+			 * the second address.
+			 */
+			if (!KIONIX_IS_SPI(s->addr)) {
+				ret = raw_write8(s->port, s->addr & ~4, reg,
+						 0x0);
+			}
 		}
-	} while (1);
-	if (ret != EC_SUCCESS) {
-		mutex_unlock(s->mutex);
-		return ret;
 	}
 
+	if (ret != EC_SUCCESS)
+		goto reset_failed;
+
+	/* Issue a software reset.*/
 	reg = KIONIX_CTRL2_REG(V(s));
 	reset_field = KIONIX_RESET_FIELD(V(s));
 
-	/* Issue a software reset. */
+	if (V(s)) {
+		ret = raw_read8(s->port, s->addr, reg, &val);
+		if (ret != EC_SUCCESS)
+			goto reset_failed;
 
-	/* Place the sensor in standby mode to make changes. */
-	ret = disable_sensor(s, &val);
-	if (ret != EC_SUCCESS) {
-		mutex_unlock(s->mutex);
-		return ret;
+		val |= reset_field;
+	} else {
+		/* Write 0 to CTRL2 for KX022 */
+		ret = raw_write8(s->port, s->addr, reg, 0x0);
+		if (ret != EC_SUCCESS)
+			goto reset_failed;
+
+		val = reset_field;
 	}
-	ret = raw_read8(s->port, s->addr, reg, &val);
-	if (ret != EC_SUCCESS) {
-		mutex_unlock(s->mutex);
-		return ret;
-	}
-	val |= reset_field;
+
 	ret = raw_write8(s->port, s->addr, reg, val);
-	if (ret != EC_SUCCESS) {
-		mutex_unlock(s->mutex);
-		return ret;
+	if (ret != EC_SUCCESS)
+		goto reset_failed;
+
+	if (!V(s)) {
+		/* wait 2 milliseconds for completion of the software reset*/
+		msleep(2);
+
+		reg = KX022_COTR;
+		ret = raw_read8(s->port, s->addr, reg, &val);
+		if (val != KX022_COTR_VAL_DEFAULT) {
+			CPRINTF("[%s: the software reset failed]\n", s->name);
+			ret = EC_ERROR_HW_INTERNAL;
+			goto reset_failed;
+		}
+	}
+
+	reg = KIONIX_WHO_AM_I(V(s));
+	ret = raw_read8(s->port, s->addr, reg, &val);
+	if (ret != EC_SUCCESS || val != KIONIX_WHO_AM_I_VAL(V(s))) {
+		ret = EC_ERROR_HW_INTERNAL;
+		goto reset_failed;
 	}
 
 	/* The SRST will be cleared when reset is complete. */
+	reg = KIONIX_CTRL2_REG(V(s));
 	timeout = 0;
 	do {
 		msleep(1);
 
 		ret = raw_read8(s->port, s->addr, reg, &val);
 		if (ret != EC_SUCCESS) {
-			mutex_unlock(s->mutex);
-			return ret;
+			goto reset_failed;
 		}
 
 		/* Reset complete. */
@@ -520,8 +542,7 @@ static int init(const struct motion_sensor_t *s)
 		/* Check for timeout. */
 		if (timeout++ > 5) {
 			ret = EC_ERROR_TIMEOUT;
-			mutex_unlock(s->mutex);
-			return ret;
+			goto reset_failed;
 		}
 	} while (1);
 	mutex_unlock(s->mutex);
@@ -540,7 +561,7 @@ static int init(const struct motion_sensor_t *s)
 
 	CPRINTF("[%T %s: Done Init type:0x%X range:%d]\n",
 		s->name, s->type, get_range(s));
-
+reset_failed:
 	mutex_unlock(s->mutex);
 	return ret;
 }
