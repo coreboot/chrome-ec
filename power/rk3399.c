@@ -135,7 +135,9 @@ DECLARE_DEFERRED(force_shutdown);
 
 enum power_state power_handle_state(enum power_state state)
 {
+#ifdef BOARD_KEVIN
 	static int sys_reset_asserted;
+#endif
 	int tries = 0;
 
 	switch (state) {
@@ -218,13 +220,14 @@ enum power_state power_handle_state(enum power_state state)
 #endif
 		gpio_set_level(GPIO_PP900_USB_EN, 1);
 		msleep(2);
-
+#ifdef BOARD_KEVIN
 		/*
 		 * Assert SYS_RST now, to be released in S3S0, to avoid
 		 * resetting the TPM soon after power-on.
 		 */
 		gpio_set_level(GPIO_SYS_RST_L, 0);
 		sys_reset_asserted = 1;
+#endif
 
 		gpio_set_level(GPIO_PP1800_PMU_EN_L, 0);
 		msleep(2);
@@ -271,13 +274,17 @@ enum power_state power_handle_state(enum power_state state)
 		msleep(2);
 		gpio_set_level(GPIO_PP3300_S0_EN_L, 0);
 
+#ifdef BOARD_KEVIN
 		/* Release SYS_RST if we came from S5 */
 		if (sys_reset_asserted) {
+#endif
+			/* Release SYS_RST now. */
 			msleep(10);
 			gpio_set_level(GPIO_SYS_RST_L, 1);
-
+#ifdef BOARD_KEVIN
 			sys_reset_asserted = 0;
 		}
+#endif
 
 		if (power_wait_signals(IN_PGOOD_S0)) {
 			chipset_force_shutdown();
@@ -363,6 +370,14 @@ enum power_state power_handle_state(enum power_state state)
 		msleep(6);
 		gpio_set_level(GPIO_PP900_AP_EN, 0);
 		gpio_set_level(GPIO_PPVAR_LOGIC_EN, 0);
+
+#ifndef BOARD_KEVIN
+		/*
+		 * Keep SYS_RST_L asserted in S5.  We'll deassert on the way
+		 * up.
+		 */
+		gpio_set_level(GPIO_SYS_RST_L, 0);
+#endif
 
 		/* Start shutting down */
 		return POWER_S5;
