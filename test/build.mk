@@ -10,7 +10,6 @@ test-list-y=pingpong timer_calib timer_dos timer_jump mutex utils
 #disable: powerdemo
 
 test-list-$(BOARD_BDS)+=
-test-list-$(BOARD_PIT)+=kb_scan stress
 
 # Samus has board-specific chipset code, and the tests don't
 # compile with it. Disable them for now.
