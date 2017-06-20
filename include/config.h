@@ -385,7 +385,6 @@
 #undef CONFIG_CHARGER_BQ25892
 #undef CONFIG_CHARGER_BQ25895
 #undef CONFIG_CHARGER_ISL9237
-#undef CONFIG_CHARGER_TPS65090  /* Note: does not use CONFIG_CHARGER */
 
 /*
  * Enable the CHG_EN at initialization to turn-on the BGATE which allows voltage
@@ -542,7 +541,6 @@
 #undef CONFIG_CHIPSET_BAYTRAIL  /* Intel Bay Trail (x86) */
 #undef CONFIG_CHIPSET_BRASWELL  /* Intel Braswell (x86) */
 #undef CONFIG_CHIPSET_ECDRIVEN  /* Dummy power module */
-#undef CONFIG_CHIPSET_GAIA      /* Gaia and Ares (ARM) */
 #undef CONFIG_CHIPSET_HASWELL   /* Intel Haswell (x86) */
 #undef CONFIG_CHIPSET_MEDIATEK  /* MediaTek MT81xx */
 #undef CONFIG_CHIPSET_RK3399    /* Rockchip rk3399 */
@@ -1579,19 +1577,6 @@
  */
 #undef CONFIG_PMU_HARD_RESET
 
-/* Support TPS65090 PMU */
-#undef CONFIG_PMU_TPS65090
-
-/* Suport TPS65090 PMU charging LED. */
-#undef CONFIG_PMU_TPS65090_CHARGING_LED
-
-/*
- * Support PMU powerinfo host and console commands.  Note that the
- * implementation is currently specific to the Pit board, so don't blindly
- * enable this for another board without fixing that first.
- */
-#undef CONFIG_PMU_POWERINFO
-
 /*
  * Enable this config to make console UART self sufficient (no other
  * initialization required before uart_init(), no interrupts, uart_tx_char()
@@ -2514,7 +2499,6 @@
 #undef CONFIG_CHIPSET_APOLLOLAKE
 #undef CONFIG_CHIPSET_BAYTRAIL
 #undef CONFIG_CHIPSET_BRASWELL
-#undef CONFIG_CHIPSET_GAIA
 #undef CONFIG_CHIPSET_HASWELL
 #undef CONFIG_CHIPSET_MEDIATEK
 #undef CONFIG_CHIPSET_RK3399
