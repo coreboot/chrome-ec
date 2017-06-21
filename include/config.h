@@ -188,6 +188,9 @@
  */
 #undef CONFIG_BACKLIGHT_REQ_GPIO
 
+/* Support base32 text encoding */
+#undef CONFIG_BASE32
+
 /*****************************************************************************/
 /* Battery config */
 
