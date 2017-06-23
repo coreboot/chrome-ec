@@ -285,6 +285,12 @@
  */
 #undef CONFIG_BATTERY_REVIVE_DISCONNECT
 
+/*
+ * Specify the battery percentage at which the host is told it is full.
+ * If this value is not specified the default is 97% set in battery.h.
+ */
+#undef CONFIG_BATTERY_LEVEL_NEAR_FULL
+
 /* Include support for Bluetooth LE */
 #undef CONFIG_BLUETOOTH_LE
 
@@ -578,6 +584,7 @@
 #undef CONFIG_CHIPSET_ROCKCHIP  /* Rockchip rk32xx */
 #undef CONFIG_CHIPSET_SKYLAKE   /* Intel Skylake (x86) */
 #undef CONFIG_CHIPSET_TEGRA     /* nVidia Tegra 5 */
+#undef CONFIG_CHIPSET_STONEY     /* AMD Stoney (x86)*/
 
 /* Support chipset throttling */
 #undef CONFIG_CHIPSET_CAN_THROTTLE
@@ -604,6 +611,10 @@
 
 /* Indicate if a clock source is connected to stm32f4's "HSE" specific input */
 #undef CONFIG_STM32_CLOCK_HSE_HZ
+
+/*****************************************************************************/
+/* Support curve25519 public key cryptography */
+#undef CONFIG_CURVE25519
 
 /*****************************************************************************/
 /* PMIC config */
@@ -1120,6 +1131,17 @@
 #undef CONFIG_ROLLBACK_SIZE
 
 /*
+ * Current rollback version. Meaningless for RO (but provides the minimum value
+ * that will be written to the rollback protection at flash time).
+ *
+ * For RW, rollback version included in version structure, used by RO to
+ * determine if the RW image is recent enough and can be jumped to.
+ *
+ * Valid values are >= 0, <= INT32_MAX (positive, 32-bit signed integer).
+ */
+#define CONFIG_ROLLBACK_VERSION 0
+
+/*
  * Board Image ec.bin contains a RO firmware.  If not defined, the image will
  * only contain the RW firmware. The RO firmware comes from another board.
  */
@@ -1326,8 +1348,11 @@
 /* Panic when status of PD MCU reflects that it has crashed */
 #undef CONFIG_HOSTCMD_PD_PANIC
 
-/* Board supports RTC host commands*/
+/* Board supports RTC host commands */
 #undef CONFIG_HOSTCMD_RTC
+
+/* For access to VBNV on-EC battery-backed storage */
+#undef CONFIG_HOSTCMD_VBNV_CONTEXT
 
 /*****************************************************************************/
 
@@ -1768,6 +1793,9 @@
 /* Support IR357x Link voltage regulator debugging / reprogramming */
 #undef CONFIG_REGULATOR_IR357X
 
+/* Enable hardware Random Number generator support */
+#undef CONFIG_RNG
+
 /* Support verifying 2048-bit RSA signature */
 #undef CONFIG_RSA
 
@@ -1788,6 +1816,13 @@
  * (for accessories without software sync)
  */
 #undef CONFIG_RWSIG
+
+/*
+ * When RWSIG verification is performed as a task, time to wait from signature
+ * verification to an automatic jump to RW (if AP does not request the wait to
+ * be interrupted).
+ */
+#define CONFIG_RWSIG_JUMP_TIMEOUT (1000 * MSEC)
 
 /*
  * Defines what type of futility signature type should be used.
@@ -2156,8 +2191,8 @@
 /* Check if max voltage request is allowed before each request */
 #undef CONFIG_USB_PD_CHECK_MAX_REQUEST_ALLOWED
 
-/* Default state of PD communication enabled flag */
-#define CONFIG_USB_PD_COMM_ENABLED
+/* Default state of PD communication disabled flag */
+#undef CONFIG_USB_PD_COMM_DISABLED
 
 /*
  * Do not enable PD communication in RO as a security measure.
@@ -2439,6 +2474,12 @@
  */
 #undef CONFIG_USB_PORT_POWER_SMART_INVERTED
 
+/*
+ * Support waking up host by setting the K-state on the data lines (requires
+ * CONFIG_USB_SUSPEND to be set as well).
+ */
+#undef CONFIG_USB_REMOTE_WAKEUP
+
 /* Support programmable USB device iSerial field. */
 #undef CONFIG_USB_SERIALNO
 
@@ -2447,6 +2488,9 @@
 
 /* Support reporting as self powered in USB configuration. */
 #undef CONFIG_USB_SELF_POWERED
+
+/* Support correct handling of USB suspend (host-initiated). */
+#undef CONFIG_USB_SUSPEND
 
 /* Default pull-up value on the USB-C ports when they are used as source. */
 #define CONFIG_USB_PD_PULLUP TYPEC_RP_1A5
@@ -2579,6 +2623,24 @@
 #undef CONFIG_USB_FW_UPDATE
 /* A different config for the same update. TODO(vbendeb): dedup these */
 #undef CONFIG_USB_UPDATE
+
+/*
+ * If defined, charge_get_state returns a special status if battery is
+ * discharging and battery is nearly full.
+ */
+#undef CONFIG_PWR_STATE_DISCHARGE_FULL
+
+/*
+ * Define this if a chip needs to add some information to the common 'version'
+ * command output.
+ */
+#undef CONFIG_EXTENDED_VERSION_INFO
+
+/*
+ * Define this if board ID support is required. For g chip based boards it
+ * allows to nail different images to different boards.
+ */
+#undef CONFIG_BOARD_ID_SUPPORT
 
 /*****************************************************************************/
 /*
