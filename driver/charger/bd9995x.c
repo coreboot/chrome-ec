@@ -15,6 +15,7 @@
 #include "ec_commands.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "system.h"
 #include "task.h"
 #include "time.h"
 #include "util.h"
@@ -723,7 +724,8 @@ static void bd9995x_battery_charging_profile_settings(void)
 	const struct battery_info *bi = battery_get_info();
 
 	/* Input Current Limit Setting */
-	charger_set_input_current(CONFIG_CHARGER_INPUT_CURRENT);
+	if (system_get_image_copy() != SYSTEM_IMAGE_RW)
+		charger_set_input_current(CONFIG_CHARGER_INPUT_CURRENT);
 
 	/* Fast-charge & Pre-charge Current Setting */
 	charger_set_current(PD_MAX_CURRENT_MA);
