@@ -23,12 +23,14 @@
 #include "nvmem_vars.h"
 #include "registers.h"
 #include "signed_header.h"
+#include "signing.h"
 #include "spi.h"
 #include "system.h"
 #include "task.h"
 #include "trng.h"
 #include "uartn.h"
 #include "usb_api.h"
+#include "usb_console.h"
 #include "usb_descriptor.h"
 #include "usb_hid.h"
 #include "usb_spi.h"
@@ -86,7 +88,7 @@ void decrement_retry_counter(void)
 	}
 }
 
-void ccd_phy_init(int none)
+void ccd_phy_init(void)
 {
 	usb_select_phy(USB_SEL_PHY1);
 
@@ -106,6 +108,8 @@ int usb_i2c_board_is_enabled(void)
 {
 	return 1;
 }
+
+USB_SPI_CONFIG(ccd_usb_spi, USB_IFACE_SPI, USB_EP_SPI);
 
 /* Initialize board. */
 static void board_init(void)
@@ -132,8 +136,9 @@ static void board_init(void)
 	GREG32(PMU, PWRDN_SCRATCH16) = 0xCAFECAFE;
 
 	/* Enable USB / CCD */
-	ccd_set_mode(CCD_MODE_ENABLED);
-	uartn_enable(UART_AP);
+	usb_release();
+	usb_console_enable(1, 0);
+	ccd_phy_init();
 
 	/* Calibrate INA0 (VBUS) with 1mA/LSB scale */
 	i2cm_init();
@@ -142,6 +147,11 @@ static void board_init(void)
 	ina2xx_init(4, 0x8000, INA2XX_CALIB_1MA(150 /*mOhm*/));
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+int ccd_ext_is_enabled(void)
+{
+	return 1;
+}
 
 const void * const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
@@ -247,6 +257,9 @@ void enable_socket(void)
 
 	/* UART */
 	GWRITE(PINMUX, DIOA7_SEL, GC_PINMUX_UART1_TX_SEL);
+	GWRITE(PINMUX, DIOA3_SEL, GC_PINMUX_UART1_RX_SEL);
+	GWRITE_FIELD(PINMUX, DIOA3_CTL, PU, 1);
+	uartn_enable(UART_AP);
 
 	/* Chip select. */
 	GWRITE_FIELD(PINMUX, DIOA5_CTL, PU, 1);
@@ -270,7 +283,10 @@ void disable_socket(void)
 	GWRITE(PINMUX, DIOA5_SEL, GC_PINMUX_GPIO0_GPIO10_SEL);
 
 	/* UART */
+	uartn_disable(UART_AP);
 	GWRITE(PINMUX, DIOA7_SEL, 0);
+	GWRITE(PINMUX, DIOA3_SEL, 0);
+	GWRITE_FIELD(PINMUX, DIOA3_CTL, PU, 0);
 
 	/* GPIOs as inputs. */
 	gpio_set_flags(GPIO_DUT_BOOT_CFG, GPIO_INPUT);
@@ -307,6 +323,67 @@ static int command_socket(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(socket, command_socket,
 			     "[enable|disable]",
 			     "Activate and deactivate socket");
+
+#ifdef CONFIG_STREAM_SIGNATURE
+/*
+ * This command allows signing the contents of a data stream that passes
+ * through mn50/scribe. This allows critical segments of SPI readouts,
+ * including the haven personalization data to be verified on the server
+ * side as coming from a registered scribe board. (go/haven-registration)
+ *
+ * The actual interface enables capturing data (start command) on a stream
+ * (either SPI or UART), until stopped (sign command), at which point a
+ * signature is printed to the console. An "append" command is available
+ * to manually insert characters for testing, and should be disabled
+ * before release.
+ */
+static int command_signer(int argc, char **argv)
+{
+	static int initted; /* = 0; */
+	char *data;
+
+	if (!initted) {
+		init_signing();
+		initted = 1;
+	}
+
+	if (argc > 2) {
+		enum stream_id id;
+
+		if (!strcasecmp("spi", argv[1]))
+			id = stream_spi;
+		else if (!strcasecmp("uart", argv[1]))
+			id = stream_uart;
+		else
+			return EC_ERROR_PARAM1;
+
+		if (!strcasecmp("sign", argv[2])) {
+			if (argc == 3)
+				return sig_sign(id);
+			else
+				return EC_ERROR_PARAM3;
+		} else if (!strcasecmp("start", argv[2])) {
+			if (argc == 3)
+				return sig_start(id);
+			else
+				return EC_ERROR_PARAM3;
+		} else if (!strcasecmp("append", argv[2])) {
+			if (argc == 4) {
+				data = argv[3];
+				return sig_append(id, data, strlen(data));
+			} else
+				return EC_ERROR_PARAM3;
+		} else
+			return EC_ERROR_PARAM2;
+	} else
+		return EC_ERROR_PARAM1;
+
+	return EC_SUCCESS;
+}
+DECLARE_SAFE_CONSOLE_COMMAND(signer, command_signer,
+			     "[spi|uart] [start|append|sign] data",
+			     "Sign data");
+#endif
 
 void post_reboot_request(void)
 {
