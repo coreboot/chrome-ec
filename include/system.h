@@ -194,6 +194,15 @@ int system_get_image_used(enum system_image_copy_t copy);
 int system_run_image_copy(enum system_image_copy_t copy);
 
 /**
+ * Get the rollback version for an image
+ *
+ * @param copy		Image copy to get version from, or SYSTEM_IMAGE_UNKNOWN
+ *			to get the version for the currently running image.
+ * @return The rollback version, negative value on error.
+ */
+int32_t system_get_rollback_version(enum system_image_copy_t copy);
+
+/**
  * Get the version string for an image
  *
  * @param copy		Image copy to get version from, or SYSTEM_IMAGE_UNKNOWN
@@ -276,16 +285,18 @@ const char *system_get_chip_revision(void);
  */
 int system_get_chip_unique_id(uint8_t **id);
 
+/**
+ * Optional board-level callback functions to read a unique serial number per
+ * chip. Default implementation reads from flash (flash_read_serial).
+ */
+const char *board_read_serial(void) __attribute__((weak));
+
 /*
  * Common bbram entries. Chips don't necessarily need to implement
  * all of these, error will be returned from system_get/set_bbram if
  * not implemented.
  */
 enum system_bbram_idx {
-	/*
-	 * TODO(crbug.com/693210): Consider boards without vbnvcontext
-	 * host command.
-	 */
 	SYSTEM_BBRAM_IDX_VBNVBLOCK0 = 0,
 	/*
 	 * ...
@@ -293,6 +304,10 @@ enum system_bbram_idx {
 	 * ...
 	 */
 	SYSTEM_BBRAM_IDX_VBNVBLOCK15 = 15,
+	/* PD state for CONFIG_USB_PD_DUAL_ROLE uses one byte per port */
+	SYSTEM_BBRAM_IDX_PD0,
+	SYSTEM_BBRAM_IDX_PD1,
+	SYSTEM_BBRAM_IDX_TRY_SLOT,
 };
 
 /**
@@ -373,6 +388,9 @@ enum {
 	SLEEP_MASK_I2C_SLAVE  = (1 << 7), /* I2C slave communication ongoing */
 	SLEEP_MASK_FAN        = (1 << 8), /* Fan control loop ongoing */
 	SLEEP_MASK_USB_DEVICE = (1 << 9), /* Generic USB device in use */
+	SLEEP_MASK_PWM        = (1 << 10), /* PWM output is enabled */
+	SLEEP_MASK_PHYSICAL_PRESENCE  = (1 << 11), /* Physical presence
+						    * detection ongoing */
 	SLEEP_MASK_FORCE_NO_DSLEEP    = (1 << 15), /* Force disable. */
 
 
@@ -515,4 +533,12 @@ static inline void system_print_extended_version_info(void)
 {
 }
 #endif
+
+/**
+ * Check if the system can supply enough power to boot AP
+ *
+ * @return true if the system is powered enough or false otherwise
+ */
+int system_can_boot_ap(void);
+
 #endif  /* __CROS_EC_SYSTEM_H */
