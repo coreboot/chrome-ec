@@ -787,7 +787,8 @@ wait_for_it:
 		 * without getting full (CONFIG_CHARGER_TIMEOUT_HOURS).
 		 */
 #ifdef CONFIG_CHARGER_TIMEOUT_HOURS
-		if (curr.state == ST_DISCHARGE || calc_is_full()) {
+		if (curr.state == ST_DISCHARGE || calc_is_full() ||
+		    manual_mode) {
 			deadline.val = 0;
 		} else if ((curr.state == ST_CHARGE ||
 			    curr.state == ST_PRECHARGE) &&
