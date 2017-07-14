@@ -8,16 +8,13 @@
 BOARD ?= bds
 
 # Directory where the board is configured (includes /$(BOARD) at the end)
-BDIR:=$(wildcard board/$(BOARD) private-*/board/$(BOARD))
+BDIR:=$(wildcard board/$(BOARD))
 # There can be only one <insert exploding windows here>
 ifeq (,$(BDIR))
 $(error unable to locate BOARD $(BOARD))
 endif
 ifneq (1,$(words $(BDIR)))
 $(error multiple definitions for BOARD $(BOARD): $(BDIR))
-endif
-ifneq ($(filter private-%,$(BDIR)),)
-PDIR=$(subst /board/$(BOARD),,$(BDIR))
 endif
 
 PROJECT?=ec
