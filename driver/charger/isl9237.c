@@ -70,6 +70,16 @@ static int isl9237_set_voltage(uint16_t voltage)
 	return raw_write16(ISL9237_REG_SYS_VOLTAGE_MAX, voltage);
 }
 
+static int get_prochot_ac_limit(void)
+{
+	int new_limit = AC_CURRENT_TO_REG(PD_MAX_CURRENT_MA *
+					  ISL9237_PROCHOT_AC_TOLERANCE) +
+			ISL9237_PROCHOT_AC_STEP;
+
+	/* round new value by minimum step */
+	return new_limit - (new_limit % ISL9237_PROCHOT_AC_STEP);
+}
+
 /* chip specific interfaces */
 
 int charger_set_input_current(int input_current)
@@ -253,6 +263,13 @@ int charger_post_init(void)
 		return rv;
 
 	rv = charger_get_option(&reg);
+	if (rv)
+		return rv;
+
+	/*
+	 * Set new threshold due to tolerance of isl9237.
+	 */
+	rv = raw_write16(ISL9237_REG_PROCHOT_AC, get_prochot_ac_limit());
 	if (rv)
 		return rv;
 

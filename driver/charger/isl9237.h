@@ -77,6 +77,12 @@
 #define ISL9237_PROCHOT_AC_REG_MAX 6400
 #define ISL9237_PROCHOT_DC_REG_MAX 12800
 
+/* AC PROCHOT minimum value for each step */
+#define ISL9237_PROCHOT_AC_STEP	   128
+
+/* ISL9237 has -3% ~ 3% tolerance by itself */
+#define ISL9237_PROCHOT_AC_TOLERANCE 1.05
+
 /* Control0: adapter voltage regulation reference */
 #define ISL9237_C0_VREG_REF_3900 0
 #define ISL9237_C0_VREG_REF_4200 1
