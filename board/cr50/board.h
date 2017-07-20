@@ -190,6 +190,9 @@ int board_rst_pullup_needed(void);
 int board_tpm_uses_i2c(void);
 int board_tpm_uses_spi(void);
 
+/* Returns True if chip is brought up in a factory test harness. */
+int chip_factory_mode(void);
+
 #endif /* !__ASSEMBLER__ */
 
 /* USB interface indexes (use define rather than enum to expand them) */
