@@ -213,8 +213,6 @@ int board_tpm_uses_i2c(void);
 int board_tpm_uses_spi(void);
 int board_id_is_mismatched(void);
 
-/* Returns True if chip is brought up in a factory test harness. */
-int chip_factory_mode(void);
 void power_button_record(void);
 
 /* Functions needed by CCD config */
@@ -223,6 +221,9 @@ int board_fwmp_allows_unlock(void);
 void board_reboot_ap(void);
 int board_wipe_tpm(void);
 int board_is_first_factory_boot(void);
+
+/* Returns True if chip is brought up in a factory test harness. */
+int chip_factory_mode(void);
 
 #endif /* !__ASSEMBLER__ */
 
