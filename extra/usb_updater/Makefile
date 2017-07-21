@@ -35,6 +35,7 @@ CFLAGS  += $(shell $(PKG_CONFIG) --cflags libusb-1.0 libcrypto)
 # NOTE: This may be board-specific
 BOARD ?= cr50
 CFLAGS  += -I../../include -I../../board/$(BOARD) -I ../../chip/g -I../../util
+CFLAGS  += -I../../test
 
 $(PROGRAM): $(SOURCE) Makefile
 	$(CC) $(CFLAGS) $(SOURCE) $(LFLAGS) $(LIBS) -o $@
