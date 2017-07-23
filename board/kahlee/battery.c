@@ -40,7 +40,7 @@ int board_cut_off_battery(void)
 	return sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
 }
 
-static inline enum battery_present battery_hw_present(void)
+enum battery_present battery_hw_present(void)
 {
 	/* The GPIO is low when the battery is physically present */
 	return gpio_get_level(GPIO_EC_BATT_PRES_L) ? BP_NO : BP_YES;
