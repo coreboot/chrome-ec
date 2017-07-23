@@ -1021,6 +1021,14 @@ int charge_prevent_power_on(int power_button_pressed)
 				     ));
 #endif
 
+#ifdef CONFIG_CHARGE_MANAGER
+	/* Always prevent power on until charge current is initialized */
+	if (extpower_is_present() &&
+	    (charge_manager_get_charger_current() ==
+	     CHARGE_CURRENT_UNINITIALIZED))
+		prevent_power_on = 1;
+#endif
+
 	return prevent_power_on;
 }
 
