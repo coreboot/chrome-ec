@@ -344,6 +344,9 @@
 /* The decoding of the GPIOs defining board version is defined in board code */
 #undef CONFIG_BOARD_SPECIFIC_VERSION
 
+/* EC responses to a board defined I2C slave address */
+#undef CONFIG_BOARD_I2C_SLAVE_ADDR
+
 /* Permanent LM4 boot configuration */
 #undef CONFIG_BOOTCFG_VALUE
 
@@ -365,8 +368,16 @@
  */
 #undef CONFIG_BUTTON_COUNT
 
-/* Support for entering recovery mode using volume buttons. */
+/*
+ * Support for entering recovery mode using volume buttons. You need to
+ * list the buttons in recovery_buttons.
+ */
 #undef CONFIG_BUTTON_RECOVERY
+
+/*
+ * Indicates there is a dedicated recovery button.
+ */
+#undef CONFIG_DEDICATED_RECOVERY_BUTTON
 
 /*
  * Enable case close debug (CCD) mode in the EC.
@@ -388,6 +399,9 @@
 
 /* Compile charge manager */
 #undef CONFIG_CHARGE_MANAGER
+
+/* Number of charge ports excluding type-c ports */
+#define CONFIG_DEDICATED_CHARGE_PORT_COUNT 0
 
 /* Allow charge manager to default to charging from dual-role partners */
 #undef CONFIG_CHARGE_MANAGER_DRP_CHARGING
@@ -423,7 +437,8 @@
 #undef CONFIG_CHARGER_BQ25895
 #undef CONFIG_CHARGER_ISL9237
 #undef CONFIG_CHARGER_ISL9238
-#undef CONFIG_CHARGER_TPS65090  /* Note: does not use CONFIG_CHARGER */
+#undef CONFIG_CHARGER_RT9466
+#undef CONFIG_CHARGER_RT9467
 
 /*
  * Enable the CHG_EN at initialization to turn-on the BGATE which allows voltage
@@ -583,8 +598,8 @@
 /* AP chipset support; pick at most one */
 #undef CONFIG_CHIPSET_APOLLOLAKE/* Intel Apollolake (x86) */
 #undef CONFIG_CHIPSET_BRASWELL  /* Intel Braswell (x86) */
+#undef CONFIG_CHIPSET_CANNONLAKE /* Intel Cannonlake (x86) */
 #undef CONFIG_CHIPSET_ECDRIVEN  /* Dummy power module */
-#undef CONFIG_CHIPSET_GAIA      /* Gaia and Ares (ARM) */
 #undef CONFIG_CHIPSET_MEDIATEK  /* MediaTek MT81xx */
 #undef CONFIG_CHIPSET_RK3399    /* Rockchip rk3399 */
 /* TODO: Rename below config to CONFIG_CHIPSET_RK32XX */
@@ -609,6 +624,9 @@
 /* Support PMIC reset(using LDO_EN) in chipset */
 #undef CONFIG_CHIPSET_HAS_PLATFORM_PMIC_RESET
 
+/* Redefine when we need a different power-on sequence on the same chipset. */
+#define CONFIG_CHIPSET_POWER_SEQ_VERSION 0
+
 /*****************************************************************************/
 /*
  * Chip config for clock circuitry
@@ -618,6 +636,12 @@
 
 /* Indicate if a clock source is connected to stm32f4's "HSE" specific input */
 #undef CONFIG_STM32_CLOCK_HSE_HZ
+
+/*
+ * Chip config for clock source
+ *	 define = external crystal oscillator / undef = internal clock source
+ */
+#undef CONFIG_CLOCK_SRC_EXTERNAL
 
 /*****************************************************************************/
 /* Support curve25519 public key cryptography */
@@ -660,6 +684,7 @@
 #undef  CONFIG_CMD_CLOCKGATES
 #undef  CONFIG_CMD_COMXTEST
 #define CONFIG_CMD_CRASH
+#define CONFIG_CMD_DEVICE_EVENT
 #undef  CONFIG_CMD_ECTEMP
 #define CONFIG_CMD_FASTCHARGE
 #undef  CONFIG_CMD_FLASH
@@ -924,6 +949,9 @@
 
 /*****************************************************************************/
 
+/* Support events from devices attached to the EC */
+#undef CONFIG_DEVICE_EVENT
+
 /* Monitor the states of other devices */
 #undef CONFIG_DEVICE_STATE
 
@@ -939,8 +967,17 @@
 /* Support EC to Internal bus bridge. */
 #undef CONFIG_EC2I
 
+/* EC capable of sensor speeds up to 200000 mHz */
+#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 200000
+
 /* Support EC chip internal data EEPROM */
 #undef CONFIG_EEPROM
+
+/*
+ * Support for sending emulated sysrq events to AP (on designs with a keyboard,
+ * sysrq is passed as normal key presses).
+ */
+#undef CONFIG_EMULATED_SYSRQ
 
 /* Support for eSPI for host communication */
 #undef CONFIG_ESPI
@@ -991,6 +1028,10 @@
 #undef CONFIG_FLASH_ERASED_VALUE32
 #undef CONFIG_FLASH_ERASE_SIZE
 #undef CONFIG_FLASH_ROW_SIZE
+/* Allow deferred (async) flash erase */
+#undef CONFIG_FLASH_DEFERRED_ERASE
+/* Flash must be selected for write/erase operations to succeed. */
+#undef CONFIG_FLASH_SELECT_REQUIRED
 
 /* Base address of program memory */
 #undef CONFIG_PROGRAM_MEMORY_BASE
@@ -1040,6 +1081,13 @@
  * screw, of course).
  */
 #define CONFIG_FLASH_PSTATE_BANK
+
+/*
+ * Lock the PSTATE by default (currently only supported when
+ * CONFIG_FLASH_PSTATE_BANK is not defined).
+ */
+#undef CONFIG_FLASH_PSTATE_LOCKED
+
 /*
  * For flash that is segemented in different regions.
  */
@@ -1159,6 +1207,19 @@
 #undef CONFIG_ROLLBACK_OFF
 #undef CONFIG_ROLLBACK_SIZE
 
+/* If defined, add support for storing some entropy in the rollback region. */
+#undef CONFIG_ROLLBACK_SECRET_SIZE
+
+/*
+ * If defined, inject some locally generated entropy when secret is updated,
+ * using board_get_entropy function.
+ * Large values may take a long time to generate.
+ */
+#undef CONFIG_ROLLBACK_SECRET_LOCAL_ENTROPY_SIZE
+
+/* If defined, we can update rollback information (RW can unset this). */
+#define CONFIG_ROLLBACK_UPDATE
+
 /*
  * Current rollback version. Meaningless for RO (but provides the minimum value
  * that will be written to the rollback protection at flash time).
@@ -1243,7 +1304,6 @@
 
 #undef CONFIG_GESTURE_SIGMO_EVENT
 
-
 /* Do we want to detect the lid angle? */
 #undef CONFIG_LID_ANGLE
 
@@ -1309,6 +1369,9 @@
  * of the previous command.
  */
 #undef CONFIG_HOST_COMMAND_STATUS
+
+/* clear bit(s) to mask reporting of an EC_HOST_EVENT_XXX event(s) */
+#define CONFIG_HOST_EVENT_REPORT_MASK 0xffffffff
 
 /*
  * The host commands are sorted in the .rodata.hcmds section so use the binary
@@ -1418,6 +1481,13 @@
 /* For ECs with multiple wakeup pins, define enabled wakeup pins */
 #undef CONFIG_HIBERNATE_WAKEUP_PINS
 
+/*
+ * Use PSL (Power Switch Logic) for hibernating. It turns off VCC power rail
+ * for ultra-low power consumption and uses PSL inputs rely on VSBY power rail
+ * to wake up ec and the whole system.
+ */
+#undef CONFIG_HIBERNATE_PSL
+
 /* Use a hardware specific udelay(). */
 #undef CONFIG_HW_SPECIFIC_UDELAY
 
@@ -1449,6 +1519,14 @@
 #undef CONFIG_I2C_SCL_GATE_PORT
 #undef CONFIG_I2C_SCL_GATE_ADDR
 #undef CONFIG_I2C_SCL_GATE_GPIO
+
+/*
+ * Some chip supports two owned slave address. The second slave address is used
+ * for other purpose such as board specific i2c commands. This option can be
+ * set if user of the second slave address requires larger host packet buffer
+ * size.
+ */
+#define CONFIG_I2C_EXTRA_PACKET_SIZE 0
 
 /*
  * I2C multi-port controller.
@@ -1535,6 +1613,15 @@
 #undef CONFIG_KEYBOARD_BOARD_CONFIG
 
 /*
+ * Support for boot key combinations (e.g. refresh key being held on boot to
+ * trigger recovery).
+ */
+#define CONFIG_KEYBOARD_BOOT_KEYS
+
+/* Add support for the new key. */
+#undef CONFIG_KEYBOARD_NEW_KEY
+
+/*
  * Minimum CPU clocks between scans.  This ensures that keyboard scanning
  * doesn't starve the other EC tasks of CPU when running at a decreased system
  * clock.
@@ -1543,6 +1630,17 @@
 
 /*  Print keyboard scan time intervals. */
 #undef CONFIG_KEYBOARD_PRINT_SCAN_TIMES
+
+/*
+ * Support for extra runtime key combinations (e.g. alt+volup+h/r for hibernate
+ * and warm reboot, respectively).
+ */
+#define CONFIG_KEYBOARD_RUNTIME_KEYS
+
+/*
+ * Allow the keyboard scan code set tables to be modified at runtime.
+ */
+#undef CONFIG_KEYBOARD_SCANCODE_MUTABLE
 
 /*
  * Call board-supplied keyboard_suppress_noise() function when the debounced
@@ -1561,6 +1659,14 @@
  * except during internal testing.
  */
 #undef CONFIG_KEYBOARD_TEST
+
+/*
+ * Enable quasi-bidirectional buffers for KSO pins. It has an open-drain output
+ * and a low-impedance pull-up. The low-impedance pull-up is active when ec
+ * changes the output data buffers from 0 to 1, thereby reducing the
+ * low-to-high transition time.
+ */
+#undef CONFIG_KEYBOARD_KSO_HIGH_DRIVE
 
 /*****************************************************************************/
 
@@ -1736,19 +1842,6 @@
  */
 #undef CONFIG_PMU_HARD_RESET
 
-/* Support TPS65090 PMU */
-#undef CONFIG_PMU_TPS65090
-
-/* Suport TPS65090 PMU charging LED. */
-#undef CONFIG_PMU_TPS65090_CHARGING_LED
-
-/*
- * Support PMU powerinfo host and console commands.  Note that the
- * implementation is currently specific to the Pit board, so don't blindly
- * enable this for another board without fixing that first.
- */
-#undef CONFIG_PMU_POWERINFO
-
 /*
  * Enable this config to make console UART self sufficient (no other
  * initialization required before uart_init(), no interrupts, uart_tx_char()
@@ -1770,6 +1863,23 @@
 
 /* Support sending the power button signal to x86 chipsets */
 #undef CONFIG_POWER_BUTTON_X86
+
+/* Set power button state idle at init. Implemented only for npcx. */
+#undef CONFIG_POWER_BUTTON_INIT_IDLE
+
+/*
+ * Enable delay between DSW_PWROK and PWRBTN assertion.
+ * If enabled, DSW_PWROK_TO_PWRBTN_US and get_time_dsw_pwrok must be defined
+ * as well.
+ */
+#undef CONFIG_DELAY_DSW_PWROK_TO_PWRBTN
+
+/*
+ * The time in usec required for PMC to be ready to detect power button press.
+ * Refer to the timing diagram for G3 to S0 on PDG for details.
+ */
+#define CONFIG_DSW_PWROK_TO_PWRBTN_US (95 * MSEC)
+
 
 /* Compile common code for AP power state machine */
 #undef CONFIG_POWER_COMMON
@@ -1828,6 +1938,12 @@
 /* Support IR357x Link voltage regulator debugging / reprogramming */
 #undef CONFIG_REGULATOR_IR357X
 
+/* Support RMA auth challenge-response */
+#undef CONFIG_RMA_AUTH
+/* If that's defined, the server public key and ID must also be defined */
+#undef CONFIG_RMA_AUTH_SERVER_PUBLIC_KEY  /* 32 bytes: {0xNN, 0xNN, ... 0xNN} */
+#undef CONFIG_RMA_AUTH_SERVER_KEY_ID      /* 6-bit key ID, 0xMM */
+
 /* Enable hardware Random Number generator support */
 #undef CONFIG_RNG
 
@@ -1851,6 +1967,12 @@
  * (for accessories without software sync)
  */
 #undef CONFIG_RWSIG
+
+/*
+ * Disable rwsig jump when the reset source is hard pin-reset. This only work
+ * for the case where rwsig task is not used.
+ */
+#undef CONFIG_RWSIG_DONT_CHECK_ON_PIN_RESET
 
 /*
  * When RWSIG verification is performed as a task, time to wait from signature
@@ -1942,20 +2064,13 @@
 /* Define the SPI port to use to access the flash */
 #undef CONFIG_SPI_FLASH_PORT
 
-/* Support W25Q40 SPI flash */
-#undef CONFIG_SPI_FLASH_W25Q40
-
-/* Support W25Q64 SPI flash */
-#undef CONFIG_SPI_FLASH_W25Q64
-
-/* Support W25X40 SPI flash */
-#undef CONFIG_SPI_FLASH_W25X40
-
-/* Support GD25Q40 SPI flash */
+/* Select any of the following SPI flash configs that your board uses. */
 #undef CONFIG_SPI_FLASH_GD25LQ40
-
-/* Support GD25Q41B SPI flash */
 #undef CONFIG_SPI_FLASH_GD25Q41B
+#undef CONFIG_SPI_FLASH_W25Q40
+#undef CONFIG_SPI_FLASH_W25Q64
+#undef CONFIG_SPI_FLASH_W25Q80
+#undef CONFIG_SPI_FLASH_W25X40
 
 /* SPI flash part supports SR2 register */
 #undef CONFIG_SPI_FLASH_HAS_SR2
@@ -1994,6 +2109,12 @@
 
 /* SPI master feature */
 #undef CONFIG_SPI_MASTER
+
+/* SPI master halfduplex/3-wire mode */
+#undef CONFIG_SPI_HALFDUPLEX
+
+/* Support STM32 SPI1 as master. */
+#undef CONFIG_STM32_SPI1_MASTER
 
 /* SPI master configure gpios on init */
 #undef CONFIG_SPI_MASTER_CONFIGURE_GPIOS
@@ -2361,6 +2482,7 @@
 #undef CONFIG_USB_PD_TCPM_ANX74XX
 #undef CONFIG_USB_PD_TCPM_ANX7688
 #undef CONFIG_USB_PD_TCPM_PS8751
+#undef CONFIG_USB_PD_TCPM_PS8805
 
 /*
  * Use this option if the TCPC port controller supports the optional register
@@ -2436,6 +2558,19 @@
 /* USB Device version of product */
 #undef CONFIG_USB_BCD_DEV
 
+/*
+ * Used during generation of VIF for USB Type-C Compliance Testing.
+ * Indicates whether the UUT can communicate with USB 2.0 or USB 3.1 as a host
+ * or as the Downstream Facing Port of a hub.
+ */
+#undef CONFIG_VIF_TYPE_C_CAN_ACT_AS_HOST
+
+/*
+ * Used during generation of VIF for USB Type-C Compliance Testing.
+ * Indicates whether the UUT has a captive cable.
+ */
+#undef CONFIG_VIF_CAPTIVE_CABLE
+
 /*****************************************************************************/
 
 /* Compile chip support for the USB device controller */
@@ -2458,6 +2593,13 @@
 
 /* Support USB HID touchpad interface. */
 #undef CONFIG_USB_HID_TOUCHPAD
+
+/* HID touchpad logical dimensions */
+#undef CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_X
+#undef CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_Y
+/* HID touchpad physical dimensions (tenth of mm) */
+#undef CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_X
+#undef CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_Y
 
 /* USB device buffers and descriptors */
 #undef CONFIG_USB_RAM_ACCESS_SIZE
@@ -2578,6 +2720,9 @@
 /* USB I2C config */
 #undef CONFIG_USB_I2C
 
+/* Allowed write count for USB over I2C */
+#define CONFIG_USB_I2C_MAX_WRITE_COUNT 60
+
 /*****************************************************************************/
 /* USB Power monitoring interface config */
 #undef CONFIG_USB_POWER
@@ -2662,6 +2807,12 @@
 #undef CONFIG_USB_FW_UPDATE
 /* A different config for the same update. TODO(vbendeb): dedup these */
 #undef CONFIG_USB_UPDATE
+
+/* Add support for pairing over the USB update interface. */
+#undef CONFIG_USB_PAIRING
+
+/* PDU size for fw update over USB (or TPM). */
+#define CONFIG_UPDATE_PDU_SIZE 1024
 
 /*
  * If defined, charge_get_state returns a special status if battery is
@@ -2749,12 +2900,13 @@
 #ifndef HAS_TASK_CHIPSET
 #undef CONFIG_CHIPSET_APOLLOLAKE
 #undef CONFIG_CHIPSET_BRASWELL
-#undef CONFIG_CHIPSET_GAIA
+#undef CONFIG_CHIPSET_CANNONLAKE
 #undef CONFIG_CHIPSET_MEDIATEK
 #undef CONFIG_CHIPSET_RK3399
 #undef CONFIG_CHIPSET_ROCKCHIP
 #undef CONFIG_CHIPSET_SKYLAKE
 #undef CONFIG_CHIPSET_TEGRA
+#undef CONFIG_CHIPSET_STONEY
 #undef CONFIG_POWER_COMMON
 #undef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #endif
