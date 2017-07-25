@@ -37,6 +37,7 @@ const void *const usb_strings[] = {
 };
 
 BUILD_ASSERT(ARRAY_SIZE(usb_strings) == USB_STR_COUNT);
+int usb_i2c_board_is_enabled(void) { return 1; }
 
 /******************************************************************************
  * Support I2C master port for trackpad.
