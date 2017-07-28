@@ -59,9 +59,6 @@ static int battery_seems_to_be_dead;
 
 static int battery_seems_to_be_disconnected;
 
-/* Battery may prevent booting until it is ready */
-static int battery_allow_boot;
-
 /*
  * Was battery removed?  Set when we see BP_NO, cleared after the battery is
  * reattached and becomes responsive.  Used to indicate an error state after
@@ -616,14 +613,6 @@ static int get_desired_input_current(enum battery_present batt_present,
 	}
 }
 
-/* Allow booting now that the battery has woke up */
-static void battery_woke_up(void)
-{
-	CPRINTS("battery will now allow booting");
-	battery_allow_boot = 1;
-}
-DECLARE_DEFERRED(battery_woke_up);
-
 /* Main loop */
 void charger_task(void)
 {
@@ -638,7 +627,6 @@ void charger_task(void)
 	chg_ctl_mode = CHARGE_CONTROL_NORMAL;
 	shutdown_warning_time.val = 0UL;
 	battery_seems_to_be_dead = 0;
-	battery_allow_boot = 1;
 
 	/*
 	 * If system is not locked and we don't have a battery to live on,
@@ -747,7 +735,6 @@ void charger_task(void)
 			curr.state = ST_IDLE;
 			curr.batt_is_charging = 0;
 			battery_was_removed = 1;
-			battery_allow_boot = 0;
 			goto wait_for_it;
 		}
 
@@ -853,10 +840,6 @@ void charger_task(void)
 			    battery_seems_to_be_dead ||
 			    battery_was_removed) {
 				CPRINTS("battery woke up");
-
-				/* Wait 1 second before allowing boot */
-				hook_call_deferred(&battery_woke_up_data,
-						   SECOND);
 
 				/* Update the battery-specific values */
 				batt_info = battery_get_info();
@@ -1043,12 +1026,6 @@ int charge_prevent_power_on(int power_button_pressed)
 	if (extpower_is_present() &&
 	    (charge_manager_get_charger_current() ==
 	     CHARGE_CURRENT_UNINITIALIZED))
-		prevent_power_on = 1;
-#endif
-
-#ifdef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
-	/* Always prevent power on until battery is ready if it is present */
-	if (current_batt_params->is_present && !battery_allow_boot)
 		prevent_power_on = 1;
 #endif
 
