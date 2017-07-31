@@ -35,6 +35,7 @@
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
 #define CONFIG_CHIP_PANIC_BACKUP
+#undef CONFIG_MPU /* Region sizes are not a power of 2 */
 #define CONFIG_PWM
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_SPI_FLASH_REGS
