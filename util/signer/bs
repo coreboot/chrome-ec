@@ -139,7 +139,7 @@ fi
 
 if [ -z "${do_prod}" -a -n "${H1_DEVIDS}" ]; then
   echo "creating a customized DEV image for DEV IDS ${H1_DEVIDS}"
-  sub=$(printf "\\\n    \"DEV_ID0\": %d,\\\n    \"DEV_ID1\": %d," ${H1_DEVIDS})
+  sub=$(printf "\\\n    \"DEV_ID0\": %s,\\\n    \"DEV_ID1\": %s," ${H1_DEVIDS})
   sed -i "s/\"fuses\": {/\"fuses\": {${sub}/" "${tmpf}"
 fi
 
