@@ -42,7 +42,8 @@
 enum battery_type {
 	INIT = -1,	/* only use this as default static value */
 	SMP = 0,
-	LG,
+	LG_OLD,
+	LG_NEW,
 	UNKNOWN,
 	/* Number of types, not a real type */
 	BATTERY_TYPE_COUNT,
@@ -118,6 +119,12 @@ static const struct battery_device support_batteries[BATTERY_TYPE_COUNT] = {
 	{
 		.manuf		= "LGC",
 		.device		= "Empoli",
+		.design_mv	= 7600,
+		.battery_info	= &info_LG,
+	},
+	{
+		.manuf		= "LGC",
+		.device		= "AC16B8K",
 		.design_mv	= 7600,
 		.battery_info	= &info_LG,
 	},
