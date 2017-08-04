@@ -589,7 +589,7 @@ static void led_init(void)
 
 }
 
-void led_task(void)
+void led_task(void *u)
 {
 	uint32_t start_time;
 	uint32_t task_duration;
