@@ -650,7 +650,7 @@ void keyboard_scan_init(void)
 #endif
 }
 
-void keyboard_scan_task(void)
+void keyboard_scan_task(void *u)
 {
 	timestamp_t poll_deadline, start;
 	int wait_time;
