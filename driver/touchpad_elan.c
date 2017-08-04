@@ -254,7 +254,7 @@ void elan_tp_interrupt(enum gpio_signal signal)
 	task_wake(TASK_ID_TOUCHPAD);
 }
 
-void elan_tp_task(void)
+void elan_tp_task(void *u)
 {
 	elan_tp_init();
 
