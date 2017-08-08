@@ -398,7 +398,7 @@ int board_has_working_reset_flags(void)
 	int version = board_get_version();
 
 	/* board version P1b to EVTb will lose reset flags on power cycle */
-	if (version >= 3 && version < 6)
+	if (version >= BOARD_VERSION_P1B && version <= BOARD_VERSION_EVTB)
 		return 0;
 
 	/* All other board versions should have working reset flags */
@@ -424,7 +424,7 @@ static void board_init(void)
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
 
 #if defined(CONFIG_KEYBOARD_SCANCODE_MUTABLE) && !defined(TEST_BUILD)
-	if (board_get_version() == 4) {
+	if (board_get_version() == BOARD_VERSION_EVT) {
 		/* Set F13 to new defined key on EVT */
 		CPRINTS("Overriding F13 scan code");
 		scancode_set1[3][9] = 0xe058;
