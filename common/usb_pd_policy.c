@@ -32,7 +32,7 @@
 
 static int rw_flash_changed = 1;
 
-int pd_check_requested_voltage(uint32_t rdo)
+int pd_check_requested_voltage(uint32_t rdo, const int port)
 {
 	int max_ma = rdo & 0x3FF;
 	int op_ma = (rdo >> 10) & 0x3FF;
@@ -42,7 +42,7 @@ int pd_check_requested_voltage(uint32_t rdo)
 #if defined(CONFIG_USB_PD_DYNAMIC_SRC_CAP) || \
 		defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
 	const uint32_t *src_pdo;
-	const int pdo_cnt = charge_manager_get_source_pdo(&src_pdo);
+	const int pdo_cnt = charge_manager_get_source_pdo(&src_pdo, port);
 #else
 	const uint32_t *src_pdo = pd_src_pdo;
 	const int pdo_cnt = pd_src_pdo_cnt;
