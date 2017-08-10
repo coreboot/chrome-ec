@@ -93,8 +93,11 @@ static void cmd_ep_rx(void)
 	console_has_input();
 }
 
-static void cmd_ep_reset(void)
+static void cmd_ep_event(enum usb_ep_event evt)
 {
+	if (evt != USB_EVENT_RESET)
+		return;
+
 	btable_ep[USB_EP_COMMAND].tx_addr  = usb_sram_addr(ep_buf_tx);
 	btable_ep[USB_EP_COMMAND].tx_count = 0;
 
@@ -108,7 +111,7 @@ static void cmd_ep_reset(void)
 					EP_RX_VALID);
 }
 
-USB_DECLARE_EP(USB_EP_COMMAND, cmd_ep_tx, cmd_ep_rx, cmd_ep_reset);
+USB_DECLARE_EP(USB_EP_COMMAND, cmd_ep_tx, cmd_ep_rx, cmd_ep_event);
 
 /* we have space to insert the null terminator */
 BUILD_ASSERT(CONFIG_CONSOLE_INPUT_LINE_SIZE > USB_MAX_PACKET_SIZE);
