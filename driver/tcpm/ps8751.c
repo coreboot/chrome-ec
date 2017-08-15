@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "ps8751.h"
+#include "tcpci.h"
 #include "tcpm.h"
 #include "timer.h"
 
@@ -65,6 +66,45 @@ int ps8751_tcpc_get_fw_version(int port, int *version)
 {
 	return tcpc_read(port, PS8751_REG_VERSION, version);
 }
+
+static int ps8751_tcpm_release(int port)
+{
+	int version;
+	int status;
+
+	status = tcpc_read(port, PS8751_REG_VERSION, &version);
+	if (status != 0) {
+		/* wait for chip to wake up */
+		msleep(10);
+	}
+
+	return tcpci_tcpm_release(port);
+}
+
+const struct tcpm_drv ps8751_tcpm_drv = {
+	.init			= &tcpci_tcpm_init,
+	.release		= &ps8751_tcpm_release,
+	.get_cc			= &tcpci_tcpm_get_cc,
+#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
+	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
+#endif
+	.select_rp_value	= &tcpci_tcpm_select_rp_value,
+	.set_cc			= &tcpci_tcpm_set_cc,
+	.set_polarity		= &tcpci_tcpm_set_polarity,
+	.set_vconn		= &tcpci_tcpm_set_vconn,
+	.set_msg_header		= &tcpci_tcpm_set_msg_header,
+	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,
+	.get_message		= &tcpci_tcpm_get_message,
+	.transmit		= &tcpci_tcpm_transmit,
+	.tcpc_alert		= &tcpci_tcpc_alert,
+#ifdef CONFIG_USB_PD_DISCHARGE_TCPC
+	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
+#endif
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+	.drp_toggle		= &tcpci_tcpc_drp_toggle,
+#endif
+	.get_chip_info		= &tcpci_get_chip_info,
+};
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
 struct i2c_stress_test_dev ps8751_i2c_stress_test_dev = {

@@ -22,6 +22,7 @@
 #define PS8751_REG_MUX_USB_C2SS_EQ		0xe7
 #define PS8751_REG_MUX_USB_C2SS_HS_THRESHOLD	0xe8
 
+extern const struct tcpm_drv ps8751_tcpm_drv;
 void ps8751_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq);
 int ps8751_tcpc_get_fw_version(int port, int *version);
 
@@ -30,4 +31,3 @@ extern struct i2c_stress_test_dev ps8751_i2c_stress_test_dev;
 #endif
 
 #endif /* __CROS_EC_USB_PD_TCPM_PS8751_H */
-
