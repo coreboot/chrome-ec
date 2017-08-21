@@ -22,6 +22,7 @@
 #include "task.h"
 #include "timer.h"
 #include "util.h"
+#include "watchdog.h"
 
 /* Flags for BBRM_DATA_INDEX_WAKE */
 #define HIBERNATE_WAKE_MTC        (1 << 0)  /* MTC alarm */
@@ -692,27 +693,27 @@ void system_pre_init(void)
 
 void system_reset(int flags)
 {
-	uint32_t save_flags = 0;
+	uint32_t save_flags;
 
 	/* Disable interrupts to avoid task swaps during reboot */
 	interrupt_disable();
 
-	/* Save current reset reasons if necessary */
-	if (flags & SYSTEM_RESET_PRESERVE_FLAGS)
-		save_flags = system_get_reset_flags() | RESET_FLAG_PRESERVED;
-
-	/* Add in AP off flag into saved flags. */
-	if (flags & SYSTEM_RESET_LEAVE_AP_OFF)
-		save_flags |= RESET_FLAG_AP_OFF;
-
-	/* Save reset flag */
-	if (flags & SYSTEM_RESET_HARD)
-		save_flags |= RESET_FLAG_HARD;
-	else
-		save_flags |= RESET_FLAG_SOFT;
+	/*  Get flags to be saved in BBRAM */
+	system_encode_save_flags(flags, &save_flags);
 
 	/* Store flags to battery backed RAM. */
 	bbram_data_write(BBRM_DATA_INDEX_SAVED_RESET_FLAGS, save_flags);
+
+	/* If WAIT_EXT is set, then allow 10 seconds for external reset */
+	if (flags & SYSTEM_RESET_WAIT_EXT) {
+		int i;
+
+		/* Wait 10 seconds for external reset */
+		for (i = 0; i < 1000; i++) {
+			watchdog_reload();
+			udelay(10000);
+		}
+	}
 
 	/* Ask the watchdog to trigger a hard reboot */
 	system_watchdog_reset();
