@@ -78,6 +78,13 @@ void rdd_init(void)
 
 	GWRITE(RDD, PROG_DEBUG_STATE_MAP, DETECT_DEBUG);
 
+	/*
+	 * Set the 0.4V comparator reference to 0.3V instead.  The voltage is
+	 * marginal near 0.4V for example with VBUS at 4.75V and a SuzyQable See
+	 * b/64847312.
+	 */
+	GWRITE_FIELD(RDD, REF_ADJ, LVL0P4V, 0x2);
+
 	/* Initialize the debug state based on the current cc values */
 	rdd_interrupt();
 
