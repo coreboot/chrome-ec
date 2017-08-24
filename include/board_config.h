@@ -48,4 +48,10 @@ void board_config_post_gpio_init(void);
 void board_before_rsmrst(int rsmrst);
 #endif
 
+#ifdef CONFIG_EC_FEATURE_BOARD_OVERRIDE
+/* function for board specific overrides to default feature flags */
+uint32_t board_override_feature_flags0(uint32_t flags0);
+uint32_t board_override_feature_flags1(uint32_t flags1);
+#endif
+
 #endif /* __CROS_EC_BOARD_CONFIG_H */
