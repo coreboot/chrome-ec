@@ -260,4 +260,8 @@ int pd_host_command(int command, int version,
  */
 int host_get_vboot_mode(void);
 
+/* Return the lower/higher part of the feature flags bitmap */
+uint32_t get_feature_flags0(void);
+uint32_t get_feature_flags1(void);
+
 #endif  /* __CROS_EC_HOST_COMMAND_H */
