@@ -1267,6 +1267,9 @@
 /* Board supports RTC host commands*/
 #undef CONFIG_HOSTCMD_RTC
 
+/* Set SKU ID from AP */
+#undef CONFIG_HOSTCMD_AP_SET_SKUID
+
 /*****************************************************************************/
 
 /* Enable debugging and profiling statistics for hook functions */

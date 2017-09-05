@@ -1101,6 +1101,14 @@ struct __ec_align4 ec_response_get_features {
 };
 
 /*****************************************************************************/
+/* Set SKU ID from AP */
+#define EC_CMD_SET_SKU_ID 0x000F
+
+struct __ec_align4 ec_sku_id_info {
+	uint32_t sku_id;
+};
+
+/*****************************************************************************/
 /* Flash commands */
 
 /* Get flash info */
