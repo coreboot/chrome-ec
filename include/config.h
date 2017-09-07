@@ -204,7 +204,6 @@
 #undef CONFIG_BATTERY_BQ20Z453
 #undef CONFIG_BATTERY_BQ27541
 #undef CONFIG_BATTERY_BQ27621
-#undef CONFIG_BATTERY_RYU
 #undef CONFIG_BATTERY_SAMUS
 
 /* Compile mock battery support; used by tests. */
@@ -584,7 +583,6 @@
 /* TODO: Rename below config to CONFIG_CHIPSET_RK32XX */
 #undef CONFIG_CHIPSET_ROCKCHIP  /* Rockchip rk32xx */
 #undef CONFIG_CHIPSET_SKYLAKE   /* Intel Skylake (x86) */
-#undef CONFIG_CHIPSET_TEGRA     /* nVidia Tegra 5 */
 
 /* Support chipset throttling */
 #undef CONFIG_CHIPSET_CAN_THROTTLE
@@ -2635,7 +2633,6 @@
 #undef CONFIG_CHIPSET_RK3399
 #undef CONFIG_CHIPSET_ROCKCHIP
 #undef CONFIG_CHIPSET_SKYLAKE
-#undef CONFIG_CHIPSET_TEGRA
 #undef CONFIG_POWER_COMMON
 #undef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #endif
