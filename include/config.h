@@ -372,9 +372,10 @@
 #undef CONFIG_BUTTON_RECOVERY
 
 /*
- * Enable case close debug (CCD) mode in the EC.
+ * Indicates there is a dedicated recovery button.
  */
-#undef CONFIG_CASE_CLOSED_DEBUG
+#undef CONFIG_DEDICATED_RECOVERY_BUTTON
+
 /* The case close debug (CCD) feature is provided by an external chip. */
 #undef CONFIG_CASE_CLOSED_DEBUG_EXTERNAL
 
