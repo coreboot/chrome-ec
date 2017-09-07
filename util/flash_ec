@@ -71,7 +71,6 @@ BOARDS_STM32=(
 	oak_pd
 	pit
 	plankton
-	ryu
 	samus_pd
 	snoball
 	strago_pd
