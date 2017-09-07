@@ -50,6 +50,18 @@ void usb_release(void);
  */
 void usb_wake(void);
 
+/*
+ * Preserve in non-volatile memory the state of the USB hardware registers
+ * which cannot be simply re-initialized when powered up again.
+ */
+void usb_save_suspended_state(void);
+
+/*
+ * Restore from non-volatile memory the state of the USB hardware registers
+ * which was lost by powering them down.
+ */
+void usb_restore_suspended_state(void);
+
 #ifdef CONFIG_USB_SELECT_PHY
 /* Select which PHY to use. */
 void usb_select_phy(uint32_t phy);
