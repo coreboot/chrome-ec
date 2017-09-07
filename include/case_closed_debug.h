@@ -35,11 +35,9 @@ enum ccd_mode {
  */
 void ccd_set_mode(enum ccd_mode new_mode);
 
-/* Initialize the PHY based on CCD state */
-void ccd_phy_init(int enable_ccd);
-
-/*
- * Get current CCD mode.
+/**
+ * Return non-zero if the CCD external interface is enabled.
  */
-enum ccd_mode ccd_get_mode(void);
+int ccd_ext_is_enabled(void);
+
 #endif /* __CROS_EC_CASE_CLOSED_DEBUG_H */
