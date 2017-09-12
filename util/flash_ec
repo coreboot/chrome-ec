@@ -66,14 +66,12 @@ BOARDS_STM32=(
 	jerry
 	kitty
 	llama
-	lucid
 	minimuffin
 	oak
 	oak_pd
 	pit
 	plankton
 	samus_pd
-	snoball
 	strago_pd
 	zinger
 )
