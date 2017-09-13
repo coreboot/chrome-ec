@@ -879,6 +879,12 @@
 /* Support EC to Internal bus bridge. */
 #undef CONFIG_EC2I
 
+/*
+ * Allow board to override the feature bitmap provided through host command
+ * and ACPI.
+ */
+#undef CONFIG_EC_FEATURE_BOARD_OVERRIDE
+
 /* Support EC chip internal data EEPROM */
 #undef CONFIG_EEPROM
 

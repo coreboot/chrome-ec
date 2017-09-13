@@ -153,6 +153,7 @@
 #define CONFIG_WLAN_POWER_ACTIVE_LOW
 #define  WIRELESS_GPIO_WLAN_POWER GPIO_WIRELESS_GPIO_WLAN_POWER
 #define CONFIG_PWR_STATE_DISCHARGE_FULL
+#define CONFIG_EC_FEATURE_BOARD_OVERRIDE
 
 /*
  *During shutdown sequence TPS65094x PMIC turns off the sensor rails
@@ -271,6 +272,7 @@ enum sensor_id {
 	BASE_MAG,
 };
 
+#define CONFIG_HOSTCMD_AP_SET_SKUID
 enum snappy_board_version {
 	BOARD_VERSION_UNKNOWN = -1,
 	BOARD_VERSION_1,

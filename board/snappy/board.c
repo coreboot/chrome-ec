@@ -1117,3 +1117,27 @@ static void board_init_late(void)
  * comes after adc_init().
  */
 DECLARE_HOOK(HOOK_INIT, board_init_late, HOOK_PRIO_INIT_ADC + 1);
+
+uint32_t board_override_feature_flags0(uint32_t flags0)
+{
+	uint32_t sku = system_get_sku_id();
+
+	/*
+	 * We always compile in backlight support for snappy, but only some
+	 * models come with the hardware. Therefore, check if the current
+	 * device is one of them and return the default value - with backlight
+	 * here.
+	 */
+	if (sku == 2)
+		return flags0;
+
+	/* Report that there is no keyboard backlight */
+	flags0 &= ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB);
+
+	return flags0;
+}
+
+uint32_t board_override_feature_flags1(uint32_t flags1)
+{
+	return flags1;
+}
