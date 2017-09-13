@@ -31,7 +31,7 @@ ALG_SHA512 = 3
 
 # A standard empty response to HASH extended commands.
 EMPTY_RESPONSE = ''.join('%c' % x for x in (0x80, 0x01, 0x00, 0x00, 0x00, 0x0c,
-                                            0xba, 0xcc, 0xd0, 0x0a, 0x00, 0x01))
+                                            0x00, 0x00, 0x00, 0x00, 0x00, 0x01))
 test_inputs = (
   # Hash cmd    alg      handle  hmac_key           text
   (CMD_HMAC_SW, ALG_SHA256, 0, 'hmac_key1', 'some text, this time for sw hmac'),
