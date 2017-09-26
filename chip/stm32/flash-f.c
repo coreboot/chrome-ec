@@ -653,3 +653,17 @@ int flash_pre_init(void)
 
 	return EC_SUCCESS;
 }
+
+#ifdef CONFIG_CMD_REBOOT_DFU
+static int command_dfu(int argc, char **argv)
+{
+	/* Enable BOOT_SEL and nBOOT0 */
+	write_optb(STM32_OPTB_USER_OFF, read_optb(STM32_OPTB_USER_OFF) & ~0x88);
+	system_reset(SYSTEM_RESET_HARD);
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(dfu, command_dfu,
+			"",
+			"Reboot in DFU mode");
+#endif /* CONFIG_CMD_REBOOT_DFU */

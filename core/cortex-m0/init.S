@@ -85,6 +85,23 @@ sram_vtable: .skip (48*4)
 .global reset
 .thumb_func
 reset:
+#if defined(CONFIG_CMD_REBOOT_DFU) && defined(CHIP_VARIANT_STM32F07X)
+	/*
+	 * Emulate on STM32F07x the ROM code jumping to the USB DFU bootloader
+	 * if BOOT_SEL and nBOOT0 are set in the user option byte,
+	 * as it is missing on those chips.
+	 */
+	ldr  r0, =0x1FFFF800 @ Option byte mapping
+	ldr  r1, =0x1FFFC800 @ ROM entry point
+	ldrb r2, [r0, #2]    @ Read the 'USER' option byte
+	movs r3, #0x88       @ BOOT_SEL and nBOOT0  bits
+	tst  r2, r3          @ are BOOT_SEL and nBOOT0 set (ie equal 0) ?
+	bne  normal_boot     @ No, use the RO EC copy
+	ldr  r3, [r1, #4]    @ Read the reset vector address
+	bx   r3              @ Go to DFU bootloader
+normal_boot:
+#endif /* defined(CONFIG_CMD_REBOOT_DFU) && defined(HIP_VARIANT_STM32F07X) */
+
 	/*
 	 * Ensure we're in privileged mode with main stack.  Necessary if
 	 * we've jumped directly here from another image after task_start().
