@@ -13,7 +13,9 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "ina2xx.h"
+#include "printf.h"
 #include "registers.h"
+#include "system.h"
 #include "task.h"
 #include "usb_descriptor.h"
 #include "util.h"
@@ -78,5 +80,24 @@ const void * const usb_strings[] = {
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),
 	[USB_STR_SNIFFER] = USB_STRING_DESC("USB-PD Sniffer"),
 	[USB_STR_CONSOLE_NAME] = USB_STRING_DESC("Shell"),
+	[USB_STR_SERIALNO] = USB_STRING_DESC(""),
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_strings) == USB_STR_COUNT);
+
+/* Generate a USB serial number from unique chip ID. */
+const char *board_read_serial(void)
+{
+	static char str[USB_STRING_LEN];
+
+	if (str[0] == '\0') {
+		uint8_t *id;
+		int pos = 0;
+		int idlen = system_get_chip_unique_id(&id);
+		int i;
+
+		for (i = 0; i < idlen && pos < sizeof(str); i++, pos += 2)
+			snprintf(&str[pos], sizeof(str)-pos, "%02x", id[i]);
+	}
+
+	return str;
+}

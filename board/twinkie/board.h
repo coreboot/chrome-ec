@@ -18,6 +18,9 @@
 #define CONFIG_USB
 #define CONFIG_USB_BOS
 #define CONFIG_USB_CONSOLE
+#define CONFIG_USB_SERIALNO
+/* Replaced at runtime (board_read_serial) by chip unique-id-based number. */
+#define DEFAULT_SERIALNO ""
 #define CONFIG_WEBUSB_URL "storage.googleapis.com/webtwinkie.org/tool.html"
 
 #define CONFIG_USB_POWER_DELIVERY
@@ -105,6 +108,7 @@ enum usb_strings {
 	USB_STR_VERSION,
 	USB_STR_SNIFFER,
 	USB_STR_CONSOLE_NAME,
+	USB_STR_SERIALNO,
 
 	USB_STR_COUNT
 };
