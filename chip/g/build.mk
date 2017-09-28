@@ -123,7 +123,7 @@ $(out)/RW/ec.RW_B.flat: $(out)/util/signer
 endif
 
 ifneq ($(CR50_DEV),)
-CPPFLAGS += -DCR50_DEV=1
+CPPFLAGS += -DCR50_DEV=$(CR50_DEV)
 endif
 
 MANIFEST := util/signer/ec_RW-manifest-dev.json
