@@ -298,11 +298,25 @@ int prepare_message(int port, uint16_t header, uint8_t cnt,
 	int off, i;
 	/* 64-bit preamble */
 	off = pd_write_preamble(port);
-	/* Start Of Packet: 3x Sync-1 + 1x Sync-2 */
-	off = pd_write_sym(port, off, BMC(PD_SYNC1));
-	off = pd_write_sym(port, off, BMC(PD_SYNC1));
-	off = pd_write_sym(port, off, BMC(PD_SYNC1));
-	off = pd_write_sym(port, off, BMC(PD_SYNC2));
+	if (pd[port].tx_type == TCPC_TX_SOP_PRIME) {
+		/* SOP': 2x Sync-1 + 2x Sync-3 */
+		off = pd_write_sym(port, off, BMC(PD_SYNC1));
+		off = pd_write_sym(port, off, BMC(PD_SYNC1));
+		off = pd_write_sym(port, off, BMC(PD_SYNC3));
+		off = pd_write_sym(port, off, BMC(PD_SYNC3));
+	} else if (pd[port].tx_type == TCPC_TX_SOP_PRIME_PRIME) {
+		/* SOP'': Sync-1, Sync-3, Sync-1, Sync-3 */
+		off = pd_write_sym(port, off, BMC(PD_SYNC1));
+		off = pd_write_sym(port, off, BMC(PD_SYNC3));
+		off = pd_write_sym(port, off, BMC(PD_SYNC1));
+		off = pd_write_sym(port, off, BMC(PD_SYNC3));
+	} else {
+		/* Start Of Packet: 3x Sync-1 + 1x Sync-2 */
+		off = pd_write_sym(port, off, BMC(PD_SYNC1));
+		off = pd_write_sym(port, off, BMC(PD_SYNC1));
+		off = pd_write_sym(port, off, BMC(PD_SYNC1));
+		off = pd_write_sym(port, off, BMC(PD_SYNC2));
+	}
 	/* header */
 	off = encode_short(port, off, header);
 
@@ -634,15 +648,9 @@ int pd_analyze_rx(int port, uint32_t *payload)
 	/* Find the Start Of Packet sequence */
 	while (bit > 0) {
 		bit = pd_dequeue_bits(port, bit, 20, &val);
-		if (val == PD_SOP) {
+		if (val == PD_SOP || val == PD_SOP_PRIME ||
+		    val == PD_SOP_PRIME_PRIME)
 			break;
-		} else if (val == PD_SOP_PRIME) {
-			CPRINTF("SOP'\n");
-			return PD_RX_ERR_UNSUPPORTED_SOP;
-		} else if (val == PD_SOP_PRIME_PRIME) {
-			CPRINTF("SOP''\n");
-			return PD_RX_ERR_UNSUPPORTED_SOP;
-		}
 	}
 	if (bit < 0) {
 		msg = "SOP";
@@ -792,6 +800,8 @@ int tcpc_run(int port, int evt)
 	if ((evt & PD_EVENT_TX) && pd[port].rx_enabled) {
 		switch (pd[port].tx_type) {
 		case TCPC_TX_SOP:
+		case TCPC_TX_SOP_PRIME:
+		case TCPC_TX_SOP_PRIME_PRIME:
 			res = send_validate_message(port,
 					pd[port].tx_head,
 					pd[port].tx_data);
