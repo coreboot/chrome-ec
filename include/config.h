@@ -800,6 +800,9 @@
 /* Max length of a single line of input */
 #define CONFIG_CONSOLE_INPUT_LINE_SIZE 80
 
+/* Enable a 'packetized' mode for the console. */
+#undef CONFIG_CONSOLE_PACKETS
+
 /* Enable verbose output to UART console and extra timestamp print precision. */
 #define CONFIG_CONSOLE_VERBOSE
 

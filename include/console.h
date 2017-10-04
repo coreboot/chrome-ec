@@ -8,6 +8,7 @@
 #ifndef __CROS_EC_CONSOLE_H
 #define __CROS_EC_CONSOLE_H
 
+#include <stdarg.h>  /* For va_list */
 #include "common.h"
 
 /* Console command; used by DECLARE_CONSOLE_COMMAND macro. */
@@ -189,5 +190,15 @@ void console_has_input(void);
 			  ~CMD_FLAG_RESTRICTED))
 
 #endif	/* HAS_TASK_CONSOLE */
+
+/*
+ * Packetized console under CONFIG_CONSOLE_PACKETS flags.
+ */
+
+int console_packet_get_command(char *buf);
+void console_packet_send_response(int rv);
+int console_packet_puts(enum console_channel channel, const char *outstr);
+int console_packet_vprintf(enum console_channel channel, const char *format,
+			   va_list args);
 
 #endif  /* __CROS_EC_CONSOLE_H */

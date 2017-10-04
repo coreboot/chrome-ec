@@ -46,6 +46,10 @@ int cputs(enum console_channel channel, const char *outstr)
 	if (!(CC_MASK(channel) & channel_mask))
 		return EC_SUCCESS;
 
+#ifdef CONFIG_CONSOLE_PACKETS
+	if (!console_packet_puts(channel, outstr))
+		return EC_SUCCESS; /* in packet mode, skip others */
+#endif /* CONFIG_CONSOLE_PACKETS */
 	rv1 = usb_puts(outstr);
 	rv2 = uart_puts(outstr);
 
@@ -61,6 +65,14 @@ int cprintf(enum console_channel channel, const char *format, ...)
 	if (!(CC_MASK(channel) & channel_mask))
 		return EC_SUCCESS;
 
+#ifdef CONFIG_CONSOLE_PACKETS
+	va_start(args, format);
+	if (!console_packet_vprintf(channel, format, args)) {
+		va_end(args);
+		return EC_SUCCESS; /* in packet mode, skip others */
+	}
+	va_end(args);
+#endif /* CONFIG_CONSOLE_PACKETS */
 	usb_va_start(args, format);
 	rv1 = usb_vprintf(format, args);
 	usb_va_end(args);
@@ -83,6 +95,15 @@ int cprints(enum console_channel channel, const char *format, ...)
 
 	rv = cprintf(channel, "[%T ");
 
+#ifdef CONFIG_CONSOLE_PACKETS
+	va_start(args, format);
+	if (!console_packet_vprintf(channel, format, args)) {
+		va_end(args);
+		cputs(channel, "]\n");
+		return EC_SUCCESS; /* in packet mode, skip others */
+	}
+	va_end(args);
+#endif /* CONFIG_CONSOLE_PACKETS */
 	va_start(args, format);
 	r = uart_vprintf(format, args);
 	if (r)

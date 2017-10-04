@@ -656,6 +656,10 @@ void console_task(void)
 
 	while (1) {
 		int c;
+#ifdef CONFIG_CONSOLE_PACKETS
+		if (console_packet_get_command(input_buf))
+			console_packet_send_response(handle_command(input_buf));
+#endif /* CONFIG_CONSOLE_PACKETS */
 
 		while (1) {
 			c = uart_getc();
