@@ -7329,7 +7329,7 @@ int main(int argc, char *argv[])
 	const struct command *cmd;
 	int dev = 0;
 	int interfaces = COMM_ALL;
-	char device_name[40] = "cros_ec";
+	char device_name[41] = "cros_ec";
 	int rv = 1;
 	int parse_error = 0;
 	char *e;
@@ -7366,6 +7366,7 @@ int main(int argc, char *argv[])
 			break;
 		case OPT_NAME:
 			strncpy(device_name, optarg, 40);
+			device_name[40] = '\0';
 			break;
 		}
 	}
