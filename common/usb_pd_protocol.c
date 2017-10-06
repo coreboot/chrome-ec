@@ -1535,9 +1535,9 @@ static inline int get_snk_polarity(int cc1, int cc2)
 /**
  * Returns type C current limit (mA) based upon cc_voltage (mV).
  */
-static inline int get_typec_current_limit(int polarity, int cc1, int cc2)
+static typec_current_t get_typec_current_limit(int polarity, int cc1, int cc2)
 {
-	int charge;
+	typec_current_t charge;
 	int cc = polarity ? cc2 : cc1;
 	int cc_alt = polarity ? cc1 : cc2;
 
@@ -1547,6 +1547,9 @@ static inline int get_typec_current_limit(int polarity, int cc1, int cc2)
 		charge = 1500;
 	else
 		charge = 0;
+
+	if (cc_alt != TYPEC_CC_OPEN)
+		charge |= TYPEC_CURRENT_DTS_MASK;
 
 	return charge;
 }
@@ -1625,8 +1628,8 @@ void pd_task(void *u)
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	const int auto_toggle_supported = tcpm_auto_toggle_supported(port);
 #endif
-#if defined(CONFIG_CHARGE_MANAGER) || defined(CONFIG_USB_PD_DTS)
-	int typec_curr = 0, typec_curr_change = 0;
+#if defined(CONFIG_CHARGE_MANAGER)
+	typec_current_t typec_curr = 0, typec_curr_change = 0;
 #endif /* CONFIG_CHARGE_MANAGER */
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
 	enum pd_states this_state;
