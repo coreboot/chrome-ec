@@ -1027,6 +1027,17 @@ int charge_prevent_power_on(int power_button_pressed)
 	    (charge_manager_get_charger_current() ==
 	     CHARGE_CURRENT_UNINITIALIZED))
 		prevent_power_on = 1;
+
+#ifdef CONFIG_BATTERY_HW_PRESENT_CUSTOM
+	/*
+	 * If battery is NOT physically present then prevent power on until
+	 * charge manager provides at least LIKELY_PD_USBC_POWER_MW.
+	 */
+	if (extpower_is_present() && battery_hw_present() == BP_NO &&
+	    charge_manager_get_power_limit_uw() <
+	    (LIKELY_PD_USBC_POWER_MW * 1000))
+		prevent_power_on = 1;
+#endif
 #endif
 
 	return prevent_power_on;
