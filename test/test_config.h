@@ -79,6 +79,7 @@ int board_discharge_on_ac(int enabled);
 #endif
 
 #ifdef TEST_SBS_CHARGING_V2
+#define CONFIG_BATTERY
 #define CONFIG_BATTERY_MOCK
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER
