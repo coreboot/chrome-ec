@@ -146,19 +146,22 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_SW_CRC
 #endif
 
-#ifdef TEST_CHARGE_MANAGER
+#if defined(TEST_CHARGE_MANAGER) || defined(TEST_CHARGE_MANAGER_DRP_CHARGING)
 #define CONFIG_CHARGE_MANAGER
-#undef CONFIG_CHARGE_MANAGER_DRP_CHARGING
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_PORT_COUNT 2
-#endif
+#define CONFIG_BATTERY
+#define CONFIG_BATTERY_SMART
+#define CONFIG_I2C
+#define CONFIG_I2C_MASTER
+#define I2C_PORT_BATTERY 0
+#endif /* TEST_CHARGE_MANAGER_* */
 
 #ifdef TEST_CHARGE_MANAGER_DRP_CHARGING
-#define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGE_MANAGER_DRP_CHARGING
-#define CONFIG_USB_PD_DUAL_ROLE
-#define CONFIG_USB_PD_PORT_COUNT 2
-#endif
+#else
+#undef CONFIG_CHARGE_MANAGER_DRP_CHARGING
+#endif /* TEST_CHARGE_MANAGER_DRP_CHARGING */
 
 #ifdef TEST_CHARGE_RAMP
 #define CONFIG_CHARGE_RAMP
@@ -193,11 +196,6 @@ enum nvmem_users {
 	NVMEM_NUM_USERS
 };
 #endif
-#endif
-
-#ifndef __ASSEMBLER__
-/* Callback function from charge_manager to send host event */
-static inline void pd_send_host_event(int mask) { }
 #endif
 
 #endif  /* TEST_BUILD */

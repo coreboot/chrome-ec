@@ -93,6 +93,7 @@ enum charge_manager_change_type {
  * Also, if no battery is present, the charger may be our only source of power,
  * so again we must assume that the charger is dedicated.
  */
+#ifdef CONFIG_BATTERY
 static int charge_manager_spoof_dualrole_capability(void)
 {
 	int spoof_dualrole =  (system_get_image_copy() == SYSTEM_IMAGE_RO &&
@@ -104,6 +105,13 @@ static int charge_manager_spoof_dualrole_capability(void)
 #endif
 	return spoof_dualrole;
 }
+#else /* CONFIG_BATTERY */
+/* No battery, so always charge from input port. */
+static inline int charge_manager_spoof_dualrole_capability(void)
+{
+	return 1;
+}
+#endif /* CONFIG_BATTERY */
 
 /**
  * Initialize available charge. Run before board init, so board init can
