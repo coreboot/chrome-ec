@@ -97,7 +97,7 @@ enum vdm_states {
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 /* Port dual-role state */
-enum pd_dual_role_states drp_state = PD_DRP_TOGGLE_OFF;
+enum pd_dual_role_states drp_state = CONFIG_USB_PD_INITIAL_DRP_STATE;
 
 /* Last received source cap */
 static uint32_t pd_src_caps[CONFIG_USB_PD_PORT_COUNT][PDO_MAX_OBJECTS];
@@ -1662,7 +1662,7 @@ void pd_task(void)
 				set_state(port,
 					PD_STATE_SRC_DISCONNECTED_DEBOUNCE);
 			}
-#if defined(CONFIG_USB_PD_DUAL_ROLE) && !defined(CONFIG_USB_PD_DTS)
+#if defined(CONFIG_USB_PD_DUAL_ROLE)
 			/*
 			 * Try.SRC state is embedded here. Wait for SNK
 			 * detect, or if timer expires, transition to
@@ -1675,6 +1675,7 @@ void pd_task(void)
 				 get_time().val >= pd[port].try_src_marker) ||
 				 (!(pd[port].flags & PD_FLAGS_TRY_SRC) &&
 				  drp_state != PD_DRP_FORCE_SOURCE &&
+				  drp_state != PD_DRP_FREEZE &&
 				 get_time().val >= next_role_swap)) {
 				pd[port].power_role = PD_ROLE_SINK;
 				set_state(port, PD_STATE_SNK_DISCONNECTED);
@@ -3029,6 +3030,9 @@ static int command_pd(int argc, char **argv)
 			case PD_DRP_TOGGLE_OFF:
 				ccprintf("off\n");
 				break;
+			case PD_DRP_FREEZE:
+				ccprintf("freeze\n");
+				break;
 			case PD_DRP_FORCE_SINK:
 				ccprintf("force sink\n");
 				break;
@@ -3041,6 +3045,8 @@ static int command_pd(int argc, char **argv)
 				pd_set_dual_role(PD_DRP_TOGGLE_ON);
 			else if (!strcasecmp(argv[2], "off"))
 				pd_set_dual_role(PD_DRP_TOGGLE_OFF);
+			else if (!strcasecmp(argv[2], "freeze"))
+				pd_set_dual_role(PD_DRP_FREEZE);
 			else if (!strcasecmp(argv[2], "sink"))
 				pd_set_dual_role(PD_DRP_FORCE_SINK);
 			else if (!strcasecmp(argv[2], "source"))
@@ -3253,6 +3259,7 @@ static const enum pd_dual_role_states dual_role_map[USB_PD_CTRL_ROLE_COUNT] = {
 	[USB_PD_CTRL_ROLE_TOGGLE_OFF]   = PD_DRP_TOGGLE_OFF,
 	[USB_PD_CTRL_ROLE_FORCE_SINK]   = PD_DRP_FORCE_SINK,
 	[USB_PD_CTRL_ROLE_FORCE_SOURCE] = PD_DRP_FORCE_SOURCE,
+	[USB_PD_CTRL_ROLE_FREEZE]       = PD_DRP_FREEZE,
 };
 
 #ifdef CONFIG_USBC_SS_MUX
