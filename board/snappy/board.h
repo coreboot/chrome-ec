@@ -286,6 +286,20 @@ enum snappy_board_version {
 	BOARD_VERSION_COUNT,
 };
 
+/* SKU ID enumeration */
+enum snappy_sku {
+	SKU_UNKNOWN = -1,
+	SKU_RESERVED0,
+	SKU_RESERVED1,
+	SKU_BIGDADDY_KBDBKLIGHT,
+	SKU_RESERVED3,
+	SKU_RESERVED4,
+	SKU_BIGDADDY,
+	SKU_RESERVED6,
+	SKU_ALAN,
+	SKU_SNAPPY,
+};
+
 /* start as a sink in case we have no other power supply/battery */
 #define PD_DEFAULT_STATE PD_STATE_SNK_DISCONNECTED
 

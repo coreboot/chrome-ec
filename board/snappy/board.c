@@ -259,6 +259,14 @@ const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
 static int ps8751_tune_mux(const struct usb_mux *mux)
 {
+	uint32_t sku = system_get_sku_id();
+
+	/* b/67674524: Override BigDaddy DP EQ to 4.5db */
+	if (sku == SKU_BIGDADDY_KBDBKLIGHT || sku == SKU_BIGDADDY) {
+		i2c_write8(mux->port_addr, TCPC_PORT1_I2C_ADDR,
+			PS8751_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	}
+
 	/* Snappy specific signal reconditioning */
 	i2c_write8(mux->port_addr, TCPC_PORT1_I2C_ADDR,
 		   PS8751_REG_MUX_USB_C2SS_EQ, 0x50);
@@ -1128,7 +1136,7 @@ uint32_t board_override_feature_flags0(uint32_t flags0)
 	 * device is one of them and return the default value - with backlight
 	 * here.
 	 */
-	if (sku == 2)
+	if (sku == SKU_BIGDADDY_KBDBKLIGHT)
 		return flags0;
 
 	/* Report that there is no keyboard backlight */
