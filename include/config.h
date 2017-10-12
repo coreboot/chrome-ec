@@ -336,9 +336,6 @@
  */
 #undef CONFIG_BUTTON_COUNT
 
-/* The case close debug (CCD) feature is provided by an external chip. */
-#undef CONFIG_CASE_CLOSED_DEBUG_EXTERNAL
-
 /*
  * Capsense chip has buttons, too.
  */
@@ -2047,9 +2044,6 @@
  * using PD discharge registers.
  */
 #undef CONFIG_USB_PD_DISCHARGE_TCPC
-
-/* Define if this board is acting as a Debug Test System (DTS) */
-#undef CONFIG_USB_PD_DTS
 
 /* Define if this board can act as a dual-role PD port (source and sink) */
 #undef CONFIG_USB_PD_DUAL_ROLE
