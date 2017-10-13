@@ -212,8 +212,13 @@ static int test_sink(void)
 	TEST_ASSERT(pd_test_tx_msg_verify_crc(1));
 	TEST_ASSERT(pd_test_tx_msg_verify_eop(1));
 
+	/* Wake from pd_start_tx */
+	task_wake(PD_PORT_TO_TASK_ID(1));
+	usleep(30 * MSEC);
+
 	/* Looks good. Ack the source cap. */
 	simulate_goodcrc(1, PD_ROLE_SINK, pd_port[1].msg_tx_id);
+	/* Wake from pd_rx_start */
 	task_wake(PD_PORT_TO_TASK_ID(1));
 	usleep(30 * MSEC);
 	inc_tx_id(1);
