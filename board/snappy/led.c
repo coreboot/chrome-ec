@@ -15,6 +15,7 @@
 #include "host_command.h"
 #include "led_common.h"
 #include "util.h"
+#include "system.h"
 
 #define BAT_LED_ON 0
 #define BAT_LED_OFF 1
@@ -112,7 +113,24 @@ static void led_set_battery(void)
 	int permillage;
 
 	battery_ticks++;
-	power_ticks++;
+
+	/* b/67870473: override battery led for system suspend,
+	 * because Alan/BigDaddy boards are non-power-led design.
+	 */
+	switch (system_get_sku_id()) {
+	case SKU_BIGDADDY_KBDBKLIGHT:
+	case SKU_BIGDADDY:
+	case SKU_ALAN:
+		if (chipset_in_state(CHIPSET_STATE_SUSPEND |
+				     CHIPSET_STATE_STANDBY) &&
+		    charge_get_state() != PWR_STATE_CHARGE) {
+			led_set_color_battery(power_ticks++ & 0x4 ?
+					      LED_WHITE : LED_OFF);
+			return;
+		}
+	}
+
+	power_ticks = 0;
 
 	remaining_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_CAP);
 	full_charge_capacity = *(int *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
