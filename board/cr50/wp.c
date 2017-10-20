@@ -39,14 +39,7 @@ void set_wp_state(int asserted)
 	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 0);
 }
 
-/**
- * Force write protect state or follow battery presence.
- *
- * @param force: Force write protect to wp_en if non-zero, otherwise use battery
- *               presence as the source.
- * @param wp_en: 0: Deassert WP. 1: Assert WP.
- */
-static void force_write_protect(int force, int wp_en)
+void force_write_protect(int force, int wp_en)
 {
 	/* Enable writing to the long life register */
 	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 1);
@@ -174,7 +167,7 @@ static void lock_the_console(void)
 	set_console_lock_state(LOCK_ENABLED);
 }
 
-static void unlock_the_console(void)
+void unlock_the_console(void)
 {
 	int rc;
 

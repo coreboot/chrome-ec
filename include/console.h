@@ -48,6 +48,18 @@ static inline int console_is_restricted(void)
 }
 #endif
 
+/**
+ * Force write protect state or follow battery presence.
+ *
+ * @param force: Force write protect to wp_en if non-zero, otherwise use battery
+ *               presence as the source.
+ * @param wp_en: 0: Deassert WP. 1: Assert WP.
+ */
+void force_write_protect(int force, int wp_en);
+
+/* Calling this function will unlock the console unconditionally. */
+void unlock_the_console(void);
+
 /* Console channels */
 enum console_channel {
 	#define CONSOLE_CHANNEL(enumeration, string) enumeration,

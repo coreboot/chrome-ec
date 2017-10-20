@@ -12,6 +12,7 @@
 #include "console.h"
 #include "curve25519.h"
 #include "extension.h"
+#include "hooks.h"
 #include "rma_auth.h"
 #include "shared_mem.h"
 #include "system.h"
@@ -225,6 +226,32 @@ static enum vendor_cmd_rc get_challenge(uint8_t *buf, size_t *buf_size)
 	return VENDOR_RC_SUCCESS;
 }
 
+/* The below time constants are way longer than should be required in practice:
+ *
+ * Time it takes to finish processing TPM command which provided valid RMA
+ * authentication code.
+ */
+#define TPM_PROCESSING_TIME (1 * SECOND)
+
+/*
+ * Time it takse TPM reset function to wipe out the NVMEM and reboot the
+ * device.
+ */
+#define TPM_RESET_TIME (10 * SECOND)
+
+/* Total time deep sleep should not be allowed. */
+#define DISABLE_SLEEP_TIME (TPM_PROCESSING_TIME + TPM_RESET_TIME)
+
+static void enter_rma_mode(void)
+{
+	CPRINTF("unlocking console\n");
+	unlock_the_console();
+
+	CPRINTF("forcing write protect disabled\n");
+	force_write_protect(1, 0);
+}
+DECLARE_DEFERRED(enter_rma_mode);
+
 /*
  * Compare response sent by the operator with the pre-compiled auth code.
  * Return error code or success depending on the comparison results.
@@ -249,6 +276,8 @@ static enum vendor_cmd_rc process_response(uint8_t *buf,
 	if (rv == EC_SUCCESS) {
 		CPRINTF("%s: success!\n", __func__);
 		*response_size = 0;
+		delay_sleep_by(DISABLE_SLEEP_TIME);
+		hook_call_deferred(&enter_rma_mode_data, TPM_PROCESSING_TIME);
 		return VENDOR_RC_SUCCESS;
 	}
 
