@@ -171,6 +171,14 @@ void unlock_the_console(void)
 {
 	int rc;
 
+	/*
+	 * Blindly zapping the TPM space while the AP is awake and poking at
+	 * it will bork the TPM task and the AP itself, so force the whole
+	 * system off by holding the EC in reset.
+	 */
+	CPRINTS("%s: force EC off", __func__);
+	assert_ec_rst();
+
 	/* Wipe the TPM's memory and reset the TPM task. */
 	rc = tpm_reset_request(1, 1);
 	if (rc != EC_SUCCESS) {
@@ -193,6 +201,10 @@ void unlock_the_console(void)
 
 	/* Unlock the console. */
 	set_console_lock_state(!LOCK_ENABLED);
+
+	/* Let the rest of the system boot. */
+	CPRINTS("%s: release EC reset", __func__);
+	deassert_ec_rst();
 }
 
 static void init_console_lock_and_wp(void)
