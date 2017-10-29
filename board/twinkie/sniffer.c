@@ -18,6 +18,7 @@
 #include "timer.h"
 #include "usb_descriptor.h"
 #include "usb_hw.h"
+#include "usb_pd.h"
 #include "util.h"
 #include "ina2xx.h"
 
@@ -286,6 +287,11 @@ DECLARE_HOOK(HOOK_INIT, sniffer_init, HOOK_PRIO_DEFAULT);
 /* state of the simple text tracer */
 extern int trace_mode;
 
+/* Index of the next buffer to use inside the 'samples' array */
+static uint32_t sp_idx;
+/* bitmap of the 'samples' sub-buffer filled with packet binary traces */
+static volatile uint32_t filled_pkt;
+
 /* Task to post-process the samples and copy them the USB endpoint buffer */
 void sniffer_task(void)
 {
@@ -321,10 +327,49 @@ void sniffer_task(void)
 
 		if (trace_mode != TRACE_MODE_OFF) {
 			uint8_t curr = recording_enable(0);
+			filled_pkt = 0;
 			trace_packets();
+			filled_dma = 0;
 			recording_enable(curr);
 		}
 	}
+}
+
+void sniffer_trace_reload(void)
+{
+	static uint32_t u;
+	/* copy a new buffer to send over USB if needed */
+	while (free_usb && filled_pkt) {
+		static int idx;
+		uint8_t *buff;
+
+		while (!(filled_pkt & (1 << idx)))
+			idx = (idx + 1) & 31;
+		buff = &samples[idx >> 4][(idx & 0xF) * EP_PAYLOAD_SIZE];
+		/* it's faster to let some junk at the end of the buffer */
+		memcpy_to_usbram(((void *)usb_sram_addr(ep_buf[u])), buff, 40);
+		atomic_clear((uint32_t *)&free_usb, 1 << u);
+		u = !u;
+		filled_pkt &= ~(1 << idx);
+	}
+}
+
+void sniffer_trace_packet(struct rx_header rx, uint32_t *payload)
+{
+	uint32_t tstamp = __hw_clock_source_read();
+	uint32_t *buf = (uint32_t *)
+		&samples[sp_idx >> 4][(sp_idx & 0xF) * EP_PAYLOAD_SIZE];
+
+	buf[0] = tstamp;
+	buf[1] = sp_idx | 0xfada0000; /* reserved */
+	buf[2] = *(uint32_t *)&rx;
+	memcpy(buf + 3, payload, 7 * sizeof(uint32_t));
+	filled_pkt |= 1 << sp_idx;
+	sp_idx = (sp_idx + 1) & 31;
+
+	/* copy a new buffer to send over USB if starved */
+	if (free_usb == 3)
+		sniffer_trace_reload();
 }
 
 int wait_packet(int pol, uint32_t min_edges, uint32_t timeout_us)

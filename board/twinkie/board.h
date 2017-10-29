@@ -70,6 +70,8 @@
 
 #ifndef __ASSEMBLER__
 
+struct rx_header;
+
 void sniffer_init(void);
 
 int wait_packet(int pol, uint32_t min_edges, uint32_t timeout_us);
@@ -81,6 +83,9 @@ uint8_t recording_enable(uint8_t mask);
 void trace_packets(void);
 
 void set_trace_mode(int mode);
+
+void sniffer_trace_packet(struct rx_header rx, uint32_t *payload);
+void sniffer_trace_reload(void);
 
 /* Timer selection */
 #define TIM_CLOCK_MSB  3
