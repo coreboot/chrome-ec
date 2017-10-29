@@ -22,7 +22,7 @@
 #define CONFIG_USB_SERIALNO
 /* Replaced at runtime (board_read_serial) by chip unique-id-based number. */
 #define DEFAULT_SERIALNO ""
-#define CONFIG_WEBUSB_URL "storage.googleapis.com/webtwinkie.org/tool.html"
+#define CONFIG_WEBUSB_URL "twebkie.org"
 
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_ALT_MODE
