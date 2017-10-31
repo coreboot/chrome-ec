@@ -379,7 +379,8 @@ static int send_validate_message(int port, uint16_t header,
 
 	/* retry 3 times if we are not getting a valid answer */
 	for (r = 0; r <= PD_RETRY_COUNT; r++) {
-		int bit_len, head;
+		int bit_len;
+		struct rx_header rx;
 		/* write the encoded packet in the transmission buffer */
 		bit_len = prepare_message(port, header, cnt, data);
 		/* Transmit the packet */
@@ -417,11 +418,14 @@ static int send_validate_message(int port, uint16_t header,
 			pd_rx_start(port);
 		}
 		/* read the incoming packet if any */
-		head = pd_analyze_rx(port, payload);
+		rx = pd_analyze_rx(port, payload);
 		pd_rx_complete(port);
 		/* keep RX monitoring on to avoid collisions */
 		pd_rx_enable_monitoring(port);
-		if (head > 0) { /* we got a good packet, analyze it */
+		if (rx.packet_type == TCPC_TX_SOP ||
+		    rx.packet_type == TCPC_TX_SOP_PRIME ||
+		    rx.packet_type == TCPC_TX_SOP_PRIME_PRIME) {
+			uint16_t head = rx.head;
 			int type = PD_HEADER_TYPE(head);
 			int nb = PD_HEADER_CNT(head);
 			uint8_t id = PD_HEADER_ID(head);
@@ -623,12 +627,13 @@ static int analyze_rx_bist(int port)
 #endif
 #endif
 
-int pd_analyze_rx(int port, uint32_t *payload)
+struct rx_header pd_analyze_rx(int port, uint32_t *payload)
 {
 	int bit;
 	char *msg = "---";
 	uint32_t val = 0;
 	uint16_t header;
+	uint16_t rx_type = TCPC_TX_SOP;
 	uint32_t pcrc, ccrc;
 	int p, cnt;
 	uint32_t eop;
@@ -637,9 +642,10 @@ int pd_analyze_rx(int port, uint32_t *payload)
 
 	/* Detect preamble */
 	bit = pd_find_preamble(port);
-	if (bit == PD_RX_ERR_HARD_RESET || bit == PD_RX_ERR_CABLE_RESET) {
-		/* Hard reset or cable reset */
-		return bit;
+	if (bit == PD_RX_ERR_HARD_RESET) {
+		return RX_HEADER(TCPC_TX_HARD_RESET, 0);
+	} else if (bit == PD_RX_ERR_CABLE_RESET) {
+		return RX_HEADER(TCPC_TX_HARD_RESET, 0);
 	} else if (bit < 0) {
 		msg = "Preamble";
 		goto packet_err;
@@ -655,6 +661,14 @@ int pd_analyze_rx(int port, uint32_t *payload)
 	if (bit < 0) {
 		msg = "SOP";
 		goto packet_err;
+	}
+	switch (val) {
+	case PD_SOP_PRIME:
+		rx_type = TCPC_TX_SOP_PRIME;
+		break;
+	case PD_SOP_PRIME_PRIME:
+		rx_type = TCPC_TX_SOP_PRIME_PRIME;
+		break;
 	}
 
 	/* read header */
@@ -689,10 +703,9 @@ int pd_analyze_rx(int port, uint32_t *payload)
 	if (bit < 0 || pcrc != ccrc) {
 		msg = "CRC";
 		if (pcrc != ccrc)
-			bit = PD_RX_ERR_CRC;
+			rx_type = PD_RX_ERR_CRC;
 		if (debug_level >= 1)
 			CPRINTF("CRC%d %08x <> %08x\n", port, pcrc, ccrc);
-		goto packet_err;
 	}
 
 	/*
@@ -706,13 +719,13 @@ int pd_analyze_rx(int port, uint32_t *payload)
 		goto packet_err;
 	}
 
-	return header;
+	return RX_HEADER(rx_type, header);
 packet_err:
 	if (debug_level >= 2)
 		pd_dump_packet(port, msg);
 	else
 		CPRINTF("RXERR%d %s\n", port, msg);
-	return bit;
+	return RX_HEADER(bit, 0);
 }
 
 static void handle_request(int port, uint16_t head)
@@ -770,14 +783,14 @@ static void alert(int port, int mask)
 
 int tcpc_run(int port, int evt)
 {
-	int cc, i, res;
+	int cc, i;
 
 	/* incoming packet ? */
 	if (pd_rx_started(port) && pd[port].rx_enabled) {
 		/* Get message and place at RX buffer head */
-		res = pd[port].rx_head[pd[port].rx_buf_head] =
-			pd_analyze_rx(port,
+		struct rx_header rx = pd_analyze_rx(port,
 				pd[port].rx_payload[pd[port].rx_buf_head]);
+		pd[port].rx_head[pd[port].rx_buf_head] = rx.head;
 		pd_rx_complete(port);
 
 		/*
@@ -787,17 +800,19 @@ int tcpc_run(int port, int evt)
 		 * no space in buffer, then do not send goodCRC and drop
 		 * message.
 		 */
-		if (res > 0 && !rx_buf_is_full(port)) {
-			rx_buf_increment(port, &pd[port].rx_buf_head);
-			handle_request(port, res);
-			alert(port, TCPC_REG_ALERT_RX_STATUS);
-		} else if (res == PD_RX_ERR_HARD_RESET) {
+		if (rx.packet_type == TCPC_TX_HARD_RESET) {
 			alert(port, TCPC_REG_ALERT_RX_HARD_RST);
+		} else if (rx.packet_type >= 0 && !rx_buf_is_full(port)) {
+			rx_buf_increment(port, &pd[port].rx_buf_head);
+			handle_request(port, rx.head);
+			alert(port, TCPC_REG_ALERT_RX_STATUS);
 		}
 	}
 
 	/* outgoing packet ? */
 	if ((evt & PD_EVENT_TX) && pd[port].rx_enabled) {
+		int res;
+
 		switch (pd[port].tx_type) {
 		case TCPC_TX_SOP:
 		case TCPC_TX_SOP_PRIME:

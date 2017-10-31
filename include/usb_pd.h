@@ -1485,6 +1485,14 @@ void pd_hw_init_rx(int port);
 
 /* --- Protocol layer functions --- */
 
+struct rx_header {
+	/* USB PD packet header */
+	uint16_t head;
+	/* one of the TCPC_TX_xxx constants, or <0 for error */
+	int16_t packet_type;
+};
+#define RX_HEADER(_t, _h) ((struct rx_header){.head = _h, .packet_type = _t})
+
 /**
  * Decode a raw packet in the RX buffer.
  *
@@ -1492,7 +1500,7 @@ void pd_hw_init_rx(int port);
  * @param payload buffer to store the packet payload (must be 7x 32-bit)
  * @return the packet header or <0 in case of error
  */
-int pd_analyze_rx(int port, uint32_t *payload);
+struct rx_header pd_analyze_rx(int port, uint32_t *payload);
 
 /**
  * Get connected state

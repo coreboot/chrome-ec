@@ -17,6 +17,7 @@
 #include "timer.h"
 #include "usb_pd.h"
 #include "usb_pd_config.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 /* PD packet text tracing state : TRACE_MODE_OFF/RAW/ON */
@@ -101,14 +102,30 @@ static void print_vdo(int idx, uint32_t word)
 	}
 }
 
-static void print_packet(int head, uint32_t *payload)
+static void print_packet(struct rx_header rx, uint32_t *payload)
 {
 	int i;
+	uint16_t head = rx.head;
 	int cnt = PD_HEADER_CNT(head);
 	int typ = PD_HEADER_TYPE(head);
 	int id = PD_HEADER_ID(head);
 	const char *name;
 	const char *prole;
+
+	switch (rx.packet_type) {
+	case TCPC_TX_SOP:
+	case TCPC_TX_SOP_PRIME:
+	case TCPC_TX_SOP_PRIME_PRIME:
+		break;
+	case PD_RX_ERR_INVAL:
+		ccprintf("%T TMOUT\n"); return;
+	case TCPC_TX_HARD_RESET:
+		ccprintf("%T HARD-RST\n"); return;
+	case TCPC_TX_CABLE_RESET:
+		ccprintf("%T CABLE-RST\n"); return;
+	default:
+		ccprintf("ERR %d\n", rx.packet_type); return;
+	}
 
 	if (trace_mode == TRACE_MODE_RAW) {
 		ccprintf("%T[%04x]", head);
@@ -145,18 +162,6 @@ static void print_packet(int head, uint32_t *payload)
 			ccprintf(" %08x", payload[i]);
 	}
 	ccputs("\n");
-}
-
-static void print_error(enum pd_rx_errors err)
-{
-	if (err == PD_RX_ERR_INVAL)
-		ccprintf("%T TMOUT\n");
-	else if (err == PD_RX_ERR_HARD_RESET)
-		ccprintf("%T HARD-RST\n");
-	else if (err == PD_RX_ERR_UNSUPPORTED_SOP)
-		ccprintf("%T SOP*\n");
-	else
-		ccprintf("ERR %d\n", err);
 }
 
 /* keep track of RX edge timing in order to trigger receive */
@@ -214,7 +219,7 @@ DECLARE_IRQ(STM32_IRQ_COMP, rx_event, 1);
 
 void trace_packets(void)
 {
-	int head;
+	struct rx_header rx;
 	uint32_t payload[7];
 
 #ifdef HAS_TASK_SNIFFER
@@ -239,17 +244,15 @@ void trace_packets(void)
 		if (trace_mode == TRACE_MODE_OFF)
 			break;
 		/* incoming packet processing */
-		head = pd_analyze_rx(0, payload);
+		rx = pd_analyze_rx(0, payload);
 		pd_rx_complete(0);
 		/* re-enabled detection on both CCx lines */
 		STM32_COMP_CSR |= STM32_COMP_CMP2EN | STM32_COMP_CMP1EN;
 		pd_rx_enable_monitoring(0);
 		/* print the last packet content */
-		if (head > 0)
-			print_packet(head, payload);
-		else
-			print_error(head);
-		if (head > 0 && expected_cmd == PD_HEADER_TYPE(head))
+		print_packet(rx, payload);
+		if (rx.packet_type >= 0 &&
+		    expected_cmd == PD_HEADER_TYPE(rx.head))
 			task_wake(TASK_ID_CONSOLE);
 	}
 
