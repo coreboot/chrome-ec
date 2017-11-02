@@ -49,8 +49,8 @@
 /* Long power key press to force shutdown in S0 */
 #define FORCED_SHUTDOWN_DELAY  (8 * SECOND)
 
-#define CHARGER_INITIALIZED_DELAY_MS 100
-#define CHARGER_INITIALIZED_TRIES 40
+#define POWER_INITIALIZED_DELAY_MS 100
+#define POWER_INITIALIZED_TRIES 70
 
 static int forcing_shutdown;
 
@@ -188,17 +188,18 @@ enum power_state power_handle_state(enum power_state state)
 		forcing_shutdown = 0;
 
 		/*
-		 * Allow time for charger to be initialized, in case we're
-		 * trying to boot the AP with no battery.
+		 * Allow time for battery or charger to be initialized, in case
+		 * we're trying to boot the AP with no battery or the battery
+		 * is too low or disconnected.
 		 */
 		while (charge_prevent_power_on(0) &&
-		       tries++ < CHARGER_INITIALIZED_TRIES) {
-			msleep(CHARGER_INITIALIZED_DELAY_MS);
+		       tries++ < POWER_INITIALIZED_TRIES) {
+			msleep(POWER_INITIALIZED_DELAY_MS);
 		}
 
 		/* Return to G3 if battery level is too low. */
 		if (charge_want_shutdown() ||
-		    tries > CHARGER_INITIALIZED_TRIES) {
+		    tries > POWER_INITIALIZED_TRIES) {
 			CPRINTS("power-up inhibited");
 			chipset_force_shutdown();
 			return POWER_G3;
