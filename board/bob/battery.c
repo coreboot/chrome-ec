@@ -11,7 +11,11 @@
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
+#include "i2c.h"
 #include "util.h"
+
+/* Condition of D-FET read from pack status register to detect disconnected */
+#define SB_PACK_STATUS_DFET	(1 << 0)
 
 /* Shutdown mode parameter to write to manufacturer access register */
 #define SB_SHUTDOWN_DATA	0x0010
@@ -51,7 +55,7 @@ static int battery_not_disconnected;
 
 enum battery_disconnect_state battery_get_disconnect_state(void)
 {
-	uint8_t data[6];
+	int data;
 	int rv;
 
 	/*
@@ -64,39 +68,29 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 		return BATTERY_NOT_DISCONNECTED;
 
 	if (extpower_is_present()) {
-		/* Check if battery charging + discharging is disabled. */
+		/*
+		 * Use sb_write() to detect battery responsive first, since
+		 * we enabled nack retry in sb_read().
+		 */
 		rv = sb_write(SB_MANUFACTURER_ACCESS, PARAM_OPERATION_STATUS);
 		if (rv)
-			return BATTERY_DISCONNECT_ERROR;
+			goto err;
 
-		rv = sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
-				    SB_ALT_MANUFACTURER_ACCESS, data, 6);
-
-		if (rv || (~data[3] & (BATTERY_DISCHARGING_DISABLED |
-				       BATTERY_CHARGING_DISABLED))) {
-			battery_not_disconnected = 1;
-			return BATTERY_NOT_DISCONNECTED;
-		}
-
-		/*
-		 * Battery is neither charging nor discharging. Verify that
-		 * we didn't enter this state due to a safety fault.
-		 */
-		rv = sb_write(SB_MANUFACTURER_ACCESS, PARAM_SAFETY_STATUS);
+		rv = sb_read(SB_PACK_STATUS, &data);
 		if (rv)
-			return BATTERY_DISCONNECT_ERROR;
+			goto err;
 
-		rv = sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
-				    SB_ALT_MANUFACTURER_ACCESS, data, 6);
-
-		if (rv || data[2] || data[3] || data[4] || data[5])
-			return BATTERY_DISCONNECT_ERROR;
-
-		/* No safety fault, battery is disconnected */
-		return BATTERY_DISCONNECTED;
+		if (!(data & SB_PACK_STATUS_DFET))
+			return BATTERY_DISCONNECTED;
 	}
 	battery_not_disconnected = 1;
 	return BATTERY_NOT_DISCONNECTED;
+err:
+	/* Battery is present but not responsive. */
+	if (rv == I2C_ERROR_NACK && battery_is_present() == BP_YES)
+		return BATTERY_DISCONNECTED;
+
+	return BATTERY_DISCONNECT_ERROR;
 }
 
 int charger_profile_override(struct charge_state_data *curr)
