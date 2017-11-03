@@ -3215,7 +3215,9 @@ void pd_request_source_voltage(int port, int mv)
 static int command_pd(int argc, char **argv)
 {
 	int port;
+#ifdef CONFIG_CMD_PD
 	int duration;
+#endif
 	char *e;
 
 	if (argc < 2)
