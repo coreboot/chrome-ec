@@ -82,6 +82,9 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
+/* Lower maximal ODR to 100Hz */
+#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 100000
+
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO 512
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
