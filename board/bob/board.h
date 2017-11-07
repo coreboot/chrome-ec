@@ -45,6 +45,8 @@
 #define CONFIG_RAM_BASE (0x200C0000 + RAM_SHIFT_SIZE)
 #undef  CONFIG_RAM_SIZE
 #define CONFIG_RAM_SIZE (0x00008000 - 0x800 - RAM_SHIFT_SIZE)
+/* crbug.com/782244: CONFIG_MPU only supports power-of-2 region size */
+#undef  CONFIG_MPU
 
 /* Optional features */
 #define CONFIG_BOARD_VERSION
