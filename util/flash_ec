@@ -64,7 +64,6 @@ BOARDS_STM32=(
 	honeybuns
 	jerry
 	kitty
-	llama
 	lucid
 	minimuffin
 	oak
