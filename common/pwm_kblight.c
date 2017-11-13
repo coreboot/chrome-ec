@@ -73,6 +73,7 @@ DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_KEYBOARD_BACKLIGHT,
 		     pwm_command_set_keyboard_backlight,
 		     EC_VER_MASK(0));
 
+#ifndef CONFIG_PWM_KBLIGHT_CHIP
 /*****************************************************************************/
 /* Hooks */
 
@@ -124,3 +125,4 @@ static void pwm_kblight_lid_change(void)
 	pwm_enable(PWM_CH_KBLIGHT, lid_is_open());
 }
 DECLARE_HOOK(HOOK_LID_CHANGE, pwm_kblight_lid_change, HOOK_PRIO_DEFAULT);
+#endif

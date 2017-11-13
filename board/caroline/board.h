@@ -61,6 +61,7 @@
 #define CONFIG_HOSTCMD_PD
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
+#define CONFIG_KBLIGHT_MAX14521
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_LED_COMMON
@@ -72,6 +73,9 @@
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_S0IX
 #define CONFIG_POWER_SIGNAL_INTERRUPT_STORM_DETECT_THRESHOLD 30
+#undef CONFIG_PWM
+#define CONFIG_PWM_KBLIGHT
+#define CONFIG_PWM_KBLIGHT_CHIP
 /* All data won't fit in data RAM.  So, moving boundary slightly. */
 #undef CONFIG_RO_SIZE
 #define CONFIG_RO_SIZE (104 * 1024)
@@ -132,6 +136,7 @@
 
 /* I2C ports */
 #define I2C_PORT_PMIC MEC1322_I2C0_0
+#define I2C_PORT_KBLIGHT MEC1322_I2C0_0
 #define I2C_PORT_USB_CHARGER_1 MEC1322_I2C0_1
 #define I2C_PORT_USB_MUX MEC1322_I2C0_1
 #define I2C_PORT_USB_CHARGER_2 MEC1322_I2C0_0
@@ -222,6 +227,12 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
+};
+
+enum pwm_channel {
+        PWM_CH_KBLIGHT,
+        /* Number of PWM channels */
+        PWM_CH_COUNT,
 };
 
 enum temp_sensor_id {
