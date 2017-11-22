@@ -412,6 +412,22 @@ static enum vendor_cmd_rc vc_lock(enum vendor_cmd_cc code,
 DECLARE_VENDOR_COMMAND(VENDOR_CC_GET_LOCK, vc_lock);
 DECLARE_VENDOR_COMMAND(VENDOR_CC_SET_LOCK, vc_lock);
 
+static enum vendor_cmd_rc ccd_disable_rma(enum vendor_cmd_cc code,
+					  void *buf,
+					  size_t input_size,
+					  size_t *response_size)
+{
+	CPRINTF("setting WP to follow battery presence\n");
+	force_write_protect(0, 1);
+
+	CPRINTF("locking console\n");
+	lock_the_console();
+
+	*response_size = 0;
+	return VENDOR_RC_SUCCESS;
+}
+DECLARE_VENDOR_COMMAND(VENDOR_CC_DISABLE_RMA, ccd_disable_rma);
+
 /****************************************************************************/
 static const char warning[] = "\n\t!!! WARNING !!!\n\n"
 	"\tThe AP will be impolitely shut down and the TPM persistent memory\n"
