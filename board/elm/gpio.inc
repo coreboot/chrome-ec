@@ -100,8 +100,8 @@ GPIO(I2C1_SCL, PIN(B, 13), GPIO_INPUT) /* PD I2C */
 GPIO(I2C1_SDA, PIN(B, 14), GPIO_INPUT)
 
 /* SPI MASTER. For SPI sensor */
-GPIO(SPI2_NSS,    PIN(D, 0),  GPIO_OUT_HIGH) /* mainboard */
-GPIO(SPI2_NSS_DB, PIN(F, 6),  GPIO_OUT_HIGH) /* daughterboard */
+GPIO(SPI2_NSS,    PIN(D, 0),  GPIO_OUT_LOW) /* mainboard */
+GPIO(SPI2_NSS_DB, PIN(F, 6),  GPIO_OUT_LOW) /* daughterboard */
 
 /* sensor power control */
 GPIO(SENSOR_PWR_EN_L, PIN(D, 11), GPIO_OUT_LOW)
