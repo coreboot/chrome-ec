@@ -504,7 +504,7 @@ static inline int battery_too_low(void)
  * Send host event to the AP if the battery is temperature or charge level
  * is critical. Force-shutdown if the problem isn't corrected after timeout.
  */
-static void shutdown_on_critical_battery(void)
+static int shutdown_on_critical_battery(void)
 {
 	int batt_temp_c;
 	int battery_critical = 0;
@@ -528,7 +528,7 @@ static void shutdown_on_critical_battery(void)
 	if (!battery_critical) {
 		/* Reset shutdown warning time */
 		shutdown_warning_time.val = 0;
-		return;
+		return battery_critical;
 	}
 
 	if (!shutdown_warning_time.val) {
@@ -556,6 +556,8 @@ static void shutdown_on_critical_battery(void)
 			chipset_force_shutdown();
 		}
 	}
+
+	return battery_critical;
 }
 
 /*
@@ -617,6 +619,7 @@ static int get_desired_input_current(enum battery_present batt_present,
 void charger_task(void)
 {
 	int sleep_usec;
+	int battery_critical;
 	int need_static = 1;
 	const struct charger_info * const info = charger_get_info();
 
@@ -650,6 +653,7 @@ void charger_task(void)
 		curr.ts = get_time();
 		sleep_usec = 0;
 		problems_exist = 0;
+		battery_critical = 0;
 		curr.ac = extpower_is_present();
 		if (curr.ac != prev_ac) {
 			if (curr.ac) {
@@ -755,7 +759,7 @@ void charger_task(void)
 		curr.batt_is_charging = curr.ac && (curr.batt.current >= 0);
 
 		/* Don't let the battery hurt itself. */
-		shutdown_on_critical_battery();
+		battery_critical = shutdown_on_critical_battery();
 
 		if (!curr.ac) {
 			curr.state = ST_DISCHARGE;
@@ -954,6 +958,15 @@ wait_for_it:
 			sleep_usec = CHARGE_MIN_SLEEP_USEC;
 		else if (sleep_usec > CHARGE_MAX_SLEEP_USEC)
 			sleep_usec = CHARGE_MAX_SLEEP_USEC;
+
+		/*
+		 * If battery is critical, ensure that the sleep time is not
+		 * very long since we might want to hibernate or cut-off
+		 * battery sooner.
+		 */
+		if (battery_critical &&
+		    (sleep_usec > CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US))
+			sleep_usec = CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US;
 
 		task_wait_event(sleep_usec);
 	}
