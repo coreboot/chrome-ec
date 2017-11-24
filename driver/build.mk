@@ -21,6 +21,7 @@ driver-$(CONFIG_GYRO_L3GD20H)+=gyro_l3gd20h.o
 driver-$(CONFIG_ALS_ISL29035)+=als_isl29035.o
 driver-$(CONFIG_ALS_OPT3001)+=als_opt3001.o
 driver-$(CONFIG_ALS_SI114X)+=als_si114x.o
+driver-$(CONFIG_ALS_BH1730)+=als_bh1730.o
 
 #Keyboard Backlight
 driver-$(CONFIG_KBLIGHT_MAX14521)+=kbl_max14521.o

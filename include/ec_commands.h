@@ -1877,6 +1877,7 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_BMA255 = 8,
 	MOTIONSENSE_CHIP_BMP280 = 9,
 	MOTIONSENSE_CHIP_OPT3001 = 10,
+	MOTIONSENSE_CHIP_BH1730 = 11,
 };
 
 struct __ec_todo_packed ec_response_motion_sensor_data {
