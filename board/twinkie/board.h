@@ -135,7 +135,6 @@ enum usb_strings {
 /* USB interface indexes (use define rather than enum to expand them) */
 #define USB_IFACE_CONSOLE 0
 #define USB_IFACE_VENDOR  1
-#define USB_IFACE_COMMAND 2
 
 /* USB endpoint indexes (use define rather than enum to expand them) */
 #define USB_EP_CONTROL   0
@@ -145,11 +144,14 @@ enum usb_strings {
 #ifdef HAS_TASK_SNIFFER
 #define USB_EP_SNIFFER   3
 #define USB_EP_COUNT     4
-#define USB_IFACE_COUNT  3
+
+#define USB_IFACE_COMMAND 2
+#define USB_IFACE_COUNT   3
 #else
 #define USB_EP_COUNT     3
 /* No IFACE_VENDOR for the sniffer */
-#define USB_IFACE_COUNT  2
+#define USB_IFACE_COMMAND 1
+#define USB_IFACE_COUNT   2
 #endif
 
 #endif /* __CROS_EC_BOARD_H */
