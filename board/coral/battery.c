@@ -36,6 +36,8 @@ enum battery_type {
 	BATTERY_LGC,
 	BATTERY_BYD,
 	BATTERY_SIMPLO,
+	BATTERY_GF,
+	BATTERY_POWTECH,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -402,6 +404,64 @@ static const struct board_batt_params info[] = {
 			.charging_min_c		= 0,
 			.charging_max_c		= 60,
 			.discharging_min_c	= 0,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* GF () Battery Information */
+	[BATTERY_GF] = {
+		.fuel_gauge = {
+			.manuf_name = "GF",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x2000,
+				.disconnect_val = 0x2000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(13050, 5),
+			.voltage_normal		= 11400, /* mV */
+			.voltage_min		= 9000, /* mV */
+			.precharge_current	= 200,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 45,
+			.charging_min_c		= 0,
+			.charging_max_c		= 45,
+			.discharging_min_c	= -20,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* POW-TECH () Battery Information */
+	[BATTERY_POWTECH] = {
+		.fuel_gauge = {
+			.manuf_name = "POW-TECH",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x2000,
+				.disconnect_val = 0x2000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(13050, 5),
+			.voltage_normal		= 11400, /* mV */
+			.voltage_min		= 9000, /* mV */
+			.precharge_current	= 200,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 45,
+			.charging_min_c		= 0,
+			.charging_max_c		= 45,
+			.discharging_min_c	= -20,
 			.discharging_max_c	= 60,
 		},
 	},
