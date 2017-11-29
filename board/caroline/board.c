@@ -169,6 +169,8 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 	}
 };
 
+static int cached_board_id;
+
 /**
  * Reset PD MCU
  */
@@ -275,6 +277,21 @@ static void board_init(void)
 
 	/* Provide AC status to the PCH */
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
+
+	cached_board_id = system_get_board_version();
+
+	/*
+	 * If board id is lower than 6 and we define ALS in build stage
+	 * Disable ALS.
+	 * LID_ALS : als sensor index is the last of motion_sensors.
+	 */
+#ifdef CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+	if (cached_board_id < 6)
+		motion_sensor_count -= 1;
+#else
+	/* In case of Caroline, we have to enable ALS motion seneor dynamically. */
+#error "Need to define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT on caroline."
+#endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -641,7 +658,12 @@ struct motion_sensor_t motion_sensors[] = {
          },
         },
 };
+
+#ifdef CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+#else
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+#endif
 
 /* ALS instances when LPC mapping is needed. Each entry directs to a sensor. */
 const struct motion_sensor_t *motion_als_sensors[] = {
@@ -745,6 +767,8 @@ void chipset_set_pmic_slp_sus_l(int level)
 
 static void kblight_enable(void)
 {
+	if(cached_board_id < 6)
+		return;
 	gpio_set_level(GPIO_KBDBKLIT_RST_L, 1);
 	msleep(10);
 	max14521_init();
@@ -753,6 +777,8 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, kblight_enable, HOOK_PRIO_DEFAULT);
 
 static void kblight_disable(void)
 {
+	if(cached_board_id < 6)
+		return;
 	gpio_set_level(GPIO_KBDBKLIT_RST_L, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, kblight_disable, HOOK_PRIO_DEFAULT);
