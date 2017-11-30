@@ -777,7 +777,7 @@ static int send_request(int port, uint32_t rdo)
 	return bit_len;
 }
 
-static int pd_get_saved_active(int port)
+static int pd_get_saved_vbus_high_voltage(int port)
 {
 	uint8_t val;
 
@@ -789,8 +789,15 @@ static int pd_get_saved_active(int port)
 	return !!val;
 }
 
-static void pd_set_saved_active(int port, int val)
+static void pd_set_saved_vbus_high_voltage(int port, int val)
 {
+	/*
+	 * The flag SYSTEM_BBRAM_IDX_PD0|1 is used to track when a PD contract
+	 * has been negotiated while the port is in a SNK power role and VBUS is
+	 * > 5V. The only path to set this flag is when a PS_READY message is
+	 * received and VBUS > 5V. In all other instances, this flag will be
+	 * reset.
+	 */
 	if (system_set_bbram(port ? SYSTEM_BBRAM_IDX_PD1 :
 				    SYSTEM_BBRAM_IDX_PD0, val))
 		CPRINTS("PD NVRAM FAIL");
@@ -1118,9 +1125,6 @@ static void handle_data_request(int port, uint16_t head,
 					pd[port].power_role == PD_ROLE_SOURCE)
 					sink_can_xmit(port, SINK_TX_OK);
 #endif
-#ifdef CONFIG_USB_PD_DUAL_ROLE
-				pd_set_saved_active(port, 1);
-#endif
 				pd[port].requested_idx = RDO_POS(payload[0]);
 				set_state(port, PD_STATE_SRC_ACCEPTED);
 				return;
@@ -1311,6 +1315,12 @@ static void handle_ctrl_request(int port, uint16_t head,
 			set_state(port, PD_STATE_SNK_READY);
 			pd_set_input_current_limit(port, pd[port].curr_limit,
 						   pd[port].supply_voltage);
+			/*
+			 * If VBUS > 5V, then need to save port to BBRAM to
+			 * ensure that partner port gets reset.
+			 */
+			pd_set_saved_vbus_high_voltage(port,
+					    pd[port].supply_voltage > 5000);
 #ifdef CONFIG_CHARGE_MANAGER
 			/* Set ceiling based on what's negotiated */
 			charge_manager_set_ceil(port,
@@ -1411,7 +1421,6 @@ static void handle_ctrl_request(int port, uint16_t head,
 		} else if (pd[port].task_state == PD_STATE_SNK_REQUESTED) {
 			/* explicit contract is now in place */
 			pd[port].flags |= PD_FLAGS_EXPLICIT_CONTRACT;
-			pd_set_saved_active(port, 1);
 			set_state(port, PD_STATE_SNK_TRANSITION);
 #endif
 		}
@@ -1816,7 +1825,7 @@ static void pd_partner_port_reset(int port)
 	 * active, and we didn't just lose power, make sure we
 	 * don't boot into RO with a pre-existing power contract.
 	 */
-	if (!pd_get_saved_active(port) ||
+	if (!pd_get_saved_vbus_high_voltage(port) ||
 	   system_get_image_copy() != SYSTEM_IMAGE_RO ||
 	   system_get_reset_flags() &
 	   (RESET_FLAG_BROWNOUT | RESET_FLAG_POWER_ON))
@@ -1828,7 +1837,7 @@ static void pd_partner_port_reset(int port)
 
 	while (get_time().val < timeout && pd_is_vbus_present(port))
 		msleep(10);
-	pd_set_saved_active(port, 0);
+	pd_set_saved_vbus_high_voltage(port, 0);
 }
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
 
