@@ -15,6 +15,7 @@
 #include "console.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/accelgyro_bmi160.h"
+#include "driver/als_bh1730.h"
 #include "driver/kbl_max14521.h"
 #include "extpower.h"
 #include "gpio.h"
@@ -475,6 +476,7 @@ static struct mutex g_base_mutex;
 struct bma2x2_accel_data g_bma255_data = {
 	.variant = BMA255,
 };
+struct bh1730_drv_data_t g_bh1730_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
@@ -603,8 +605,49 @@ struct motion_sensor_t motion_sensors[] = {
 		 },
 	 },
 	},
+        [LID_ALS] = {
+         .name = "Light",
+         .active_mask = SENSOR_ACTIVE_S0,
+         .chip = MOTIONSENSE_CHIP_BH1730,
+         .type = MOTIONSENSE_TYPE_LIGHT,
+         .location = MOTIONSENSE_LOC_LID,
+         .drv = &bh1730_drv,
+         .drv_data = &g_bh1730_data,
+         .addr = BH1730_I2C_ADDR,
+         .rot_standard_ref = NULL,
+         .default_range = 65535,
+         .min_frequency = 10,
+         .max_frequency = 10,
+         .config = {
+                /* AP: by default shutdown all sensors */
+                [SENSOR_CONFIG_AP] = {
+                        .odr = 0,
+                        .ec_rate = 0,
+                },
+                [SENSOR_CONFIG_EC_S0] = {
+                        .odr = 100000,
+                        .ec_rate = 0,
+                },
+                /* Sensor off in S3/S5 */
+                [SENSOR_CONFIG_EC_S3] = {
+                        .odr = 0,
+                        .ec_rate = 0,
+                },
+                /* Sensor off in S3/S5 */
+                [SENSOR_CONFIG_EC_S5] = {
+                        .odr = 0,
+                        .ec_rate = 0,
+                },
+         },
+        },
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+/* ALS instances when LPC mapping is needed. Each entry directs to a sensor. */
+const struct motion_sensor_t *motion_als_sensors[] = {
+        &motion_sensors[LID_ALS],
+};
+BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 #endif /* HAS_TASK_MOTIONSENSE */
 
 int board_get_version(void)

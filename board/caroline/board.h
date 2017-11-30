@@ -143,6 +143,7 @@
 #define I2C_PORT_PD_MCU MEC1322_I2C1
 #define I2C_PORT_TCPC MEC1322_I2C1
 #define I2C_PORT_ACCEL MEC1322_I2C2
+#define I2C_PORT_ALS MEC1322_I2C2
 #define I2C_PORT_BATTERY MEC1322_I2C3
 #define I2C_PORT_CHARGER MEC1322_I2C3
 
@@ -157,6 +158,7 @@
 #define CONFIG_ACCELGYRO_BMI160_INT2_OUTPUT
 #define CONFIG_ACCEL_BMA255
 #define CONFIG_ACCEL_INTERRUPTS
+#define CONFIG_ALS_BH1730
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
@@ -165,7 +167,20 @@
 #define CONFIG_LID_ANGLE_INVALID_CHECK
 /* FIFO size is in power of 2. */
 #define CONFIG_ACCEL_FIFO 128
-
+/* Parameter to calculate LUX on caroline */
+#define CONFIG_ALS_BH1730_LUXTH_PARAMS
+#define BH1730_LUXTH1_1K                270
+#define BH1730_LUXTH1_D0_1K             4000
+#define BH1730_LUXTH1_D1_1K             6364
+#define BH1730_LUXTH2_1K                740
+#define BH1730_LUXTH2_D0_1K             3088
+#define BH1730_LUXTH2_D1_1K             3010
+#define BH1730_LUXTH3_1K                1030
+#define BH1730_LUXTH3_D0_1K             2056
+#define BH1730_LUXTH3_D1_1K             1608
+#define BH1730_LUXTH4_1K                3670
+#define BH1730_LUXTH4_D0_1K             550
+#define BH1730_LUXTH4_D1_1K             149
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
 
@@ -227,7 +242,16 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
+        LID_ALS,
 };
+
+/*
+ * For backward compatibility, to report ALS via ACPI,
+ * Define the number of ALS sensors: motion_sensor copy the data to the ALS
+ * memmap region.
+ */
+#define CONFIG_ALS
+#define ALS_COUNT 1
 
 enum pwm_channel {
         PWM_CH_KBLIGHT,
@@ -276,7 +300,7 @@ int board_get_version(void);
 void board_rtc_reset(void);
 
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
+#define CONFIG_ACCEL_FORCE_MODE_MASK ((1 << LID_ACCEL) || (1 << LID_ALS))
 
 #endif /* !__ASSEMBLER__ */
 
