@@ -29,7 +29,8 @@
 #define LED_POWER_OFF_TICKS (LED_POWER_BLINK_OFF_MSEC / HOOK_TICK_INTERVAL_MS)
 
 const enum ec_led_id supported_led_ids[] = {
-			EC_LED_ID_BATTERY_LED};
+			EC_LED_ID_BATTERY_LED,
+			EC_LED_ID_POWER_LED};
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
@@ -152,24 +153,53 @@ static void led_set_color_power(int level)
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
-	brightness_range[EC_LED_COLOR_BLUE] = 1;
-	brightness_range[EC_LED_COLOR_AMBER] = 1;
-	brightness_range[EC_LED_COLOR_RED] = 1;
-	brightness_range[EC_LED_COLOR_GREEN] = 1;
+	if (led.state_table == led_robo_state_table) {
+		if (led_id == EC_LED_ID_BATTERY_LED) {
+			brightness_range[EC_LED_COLOR_RED] = 1;
+			brightness_range[EC_LED_COLOR_AMBER] = 1;
+			brightness_range[EC_LED_COLOR_GREEN] = 1;
+		} else if (led_id == EC_LED_ID_POWER_LED) {
+			brightness_range[EC_LED_COLOR_WHITE] = 1;
+		}
+	} else if (led_id == EC_LED_ID_BATTERY_LED) {
+		brightness_range[EC_LED_COLOR_BLUE] = 1;
+		brightness_range[EC_LED_COLOR_AMBER] = 1;
+		brightness_range[EC_LED_COLOR_WHITE] = 1;
+	}
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	if (brightness[EC_LED_COLOR_BLUE] != 0)
-		led_set_color_battery(LED_COLOR_2);
-	else if (brightness[EC_LED_COLOR_AMBER] != 0)
-		led_set_color_battery(LED_COLOR_1);
-	else if (brightness[EC_LED_COLOR_RED] != 0)
-		led_set_color_battery(LED_COLOR_2);
-	else if (brightness[EC_LED_COLOR_GREEN] != 0)
-		led_set_color_battery(LED_COLOR_1);
-	else
-		led_set_color_battery(LED_OFF);
+	if (led.state_table == led_robo_state_table) {
+		if (led_id == EC_LED_ID_BATTERY_LED) {
+			if (brightness[EC_LED_COLOR_GREEN] != 0)
+				led_set_color_battery(LED_COLOR_1);
+			else if (brightness[EC_LED_COLOR_AMBER] != 0)
+				led_set_color_battery(LED_COLOR_BOTH);
+			else if (brightness[EC_LED_COLOR_RED] != 0)
+				led_set_color_battery(LED_COLOR_2);
+			else
+				led_set_color_battery(LED_OFF);
+		} else if (led_id == EC_LED_ID_POWER_LED) {
+			if (brightness[EC_LED_COLOR_WHITE] != 0)
+				led_set_color_power(LED_ON_LVL);
+			else
+				led_set_color_power(LED_OFF_LVL);
+		}
+	} else {
+		/* If not Robo, then power LED not supported */
+		if (led_id == EC_LED_ID_POWER_LED)
+			return EC_RES_INVALID_PARAM;
+
+		if (brightness[EC_LED_COLOR_BLUE] != 0)
+			led_set_color_battery(LED_COLOR_2);
+		else if (brightness[EC_LED_COLOR_AMBER] != 0)
+			led_set_color_battery(LED_COLOR_1);
+		else if (brightness[EC_LED_COLOR_WHITE] != 0)
+			led_set_color_battery(LED_COLOR_2);
+		else
+			led_set_color_battery(LED_OFF);
+	}
 
 	return EC_SUCCESS;
 }
@@ -295,6 +325,10 @@ static void led_update(void)
 	/* Update battery LED */
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
 		led_update_battery();
+	}
+
+	/* Update power LED */
+	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED)) {
 		if (led.update_power != NULL)
 			(*led.update_power)();
 	}
