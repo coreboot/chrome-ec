@@ -48,16 +48,27 @@ static void usb0_evt(enum gpio_signal signal);
 static void usb1_evt(enum gpio_signal signal);
 static void ppc_interrupt(enum gpio_signal signal);
 static void anx74xx_cable_det_interrupt(enum gpio_signal signal);
+static void usb1_oc_evt(enum gpio_signal signal);
 
 #include "gpio_list.h"
 
 /* GPIO Interrupt Handlers */
 static void tcpc_alert_event(enum gpio_signal signal)
 {
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	int port = -1;
+
+	switch (signal) {
+	case GPIO_USB_C0_PD_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_PD_INT_ODL:
+		port = 1;
+		break;
+	default:
+		return;
+	}
+
+	schedule_deferred_pd_interrupt(port);
 }
 
 static void vbus0_evt(enum gpio_signal signal)
@@ -115,6 +126,28 @@ static void ppc_interrupt(enum gpio_signal signal)
 	sn5s330_interrupt(0);
 }
 
+static void usb1_oc_evt_deferred(void)
+{
+	/* Only port-1 has overcurrent GPIO interrupt */
+	board_overcurrent_event(0, 1);
+}
+DECLARE_DEFERRED(usb1_oc_evt_deferred);
+
+static void usb1_oc_evt(enum gpio_signal signal)
+{
+	/* Switch the context to handle the event */
+	hook_call_deferred(&usb1_oc_evt_deferred_data, 0);
+}
+
+/* Wake-up pins for hibernate */
+const enum gpio_signal hibernate_wake_pins[] = {
+	GPIO_LID_OPEN,
+	GPIO_AC_PRESENT,
+	GPIO_POWER_BUTTON_L,
+	GPIO_EC_RST_ODL,
+};
+const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
+
 /* ADC channels */
 const struct adc_t adc_channels[] = {
 	/* Base detection */
@@ -145,15 +178,15 @@ const struct adc_t adc_channels[] = {
 		0
 	},
 	/*
-	 * ISL9238 PSYS output is 1.44 uA/W over 12.4K resistor, to read
-	 * 0.8V @ 45 W, i.e. 56250 uW/mV. Using ADC_MAX_VOLT*56250 and
+	 * ISL9238 PSYS output is 1.44 uA/W over 5.6K resistor, to read
+	 * 0.8V @ 99 W, i.e. 124000 uW/mV. Using ADC_MAX_VOLT*124000 and
 	 * ADC_READ_MAX+1 as multiplier/divider leads to overflows, so we
 	 * only divide by 2 (enough to avoid precision issues).
 	 */
 	[ADC_PSYS] = {
 		"PSYS",
 		NPCX_ADC_CH3,
-		ADC_MAX_VOLT * 56250 * 2 / (ADC_READ_MAX + 1),
+		ADC_MAX_VOLT * 124000 * 2 / (ADC_READ_MAX + 1),
 		2,
 		0
 	},
@@ -169,10 +202,10 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* Power signal list. Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
-	[SDM845_AP_RST_L] = {
+	[SDM845_AP_RST_ASSERTED] = {
 		GPIO_AP_RST_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"AP_RST_L"},
+		POWER_SIGNAL_ACTIVE_LOW | POWER_SIGNAL_DISABLE_AT_BOOT,
+		"AP_RST_ASSERTED"},
 	[SDM845_PS_HOLD] = {
 		GPIO_PS_HOLD,
 		POWER_SIGNAL_ACTIVE_HIGH,
@@ -185,6 +218,10 @@ const struct power_signal_info power_signal_list[] = {
 		GPIO_POWER_GOOD,
 		POWER_SIGNAL_ACTIVE_HIGH,
 		"POWER_GOOD"},
+	[SDM845_WARM_RESET] = {
+		GPIO_WARM_RESET_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"WARM_RESET_L"},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
@@ -223,14 +260,92 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 				TCPC_ALERT_ACTIVE_LOW},
 };
 
+/*
+ * Port-0 USB mux driver.
+ *
+ * The USB mux is handled by TCPC chip and the HPD is handled by AP.
+ * Redirect to anx74xx_tcpm_usb_mux_driver but override the get() function
+ * to check the HPD_IRQ mask from virtual_usb_mux_driver.
+ */
+static int port0_usb_mux_init(int port)
+{
+	return anx74xx_tcpm_usb_mux_driver.init(port);
+}
+
+static int port0_usb_mux_set(int i2c_addr, mux_state_t mux_state)
+{
+	return anx74xx_tcpm_usb_mux_driver.set(i2c_addr, mux_state);
+}
+
+static int port0_usb_mux_get(int port, mux_state_t *mux_state)
+{
+	int rv;
+	mux_state_t virtual_mux_state;
+
+	rv = anx74xx_tcpm_usb_mux_driver.get(port, mux_state);
+	rv |= virtual_usb_mux_driver.get(port, &virtual_mux_state);
+
+	if (virtual_mux_state & USB_PD_MUX_HPD_IRQ)
+		*mux_state |= USB_PD_MUX_HPD_IRQ;
+	return rv;
+}
+
+const struct usb_mux_driver port0_usb_mux_driver = {
+	.init = port0_usb_mux_init,
+	.set = port0_usb_mux_set,
+	.get = port0_usb_mux_get,
+};
+
+/*
+ * Port-1 USB mux driver.
+ *
+ * The USB mux is handled by TCPC chip and the HPD is handled by AP.
+ * Redirect to tcpci_tcpm_usb_mux_driver but override the get() function
+ * to check the HPD_IRQ mask from virtual_usb_mux_driver.
+ */
+static int port1_usb_mux_init(int port)
+{
+	return tcpci_tcpm_usb_mux_driver.init(port);
+}
+
+static int port1_usb_mux_set(int i2c_addr, mux_state_t mux_state)
+{
+	return tcpci_tcpm_usb_mux_driver.set(i2c_addr, mux_state);
+}
+
+static int port1_usb_mux_get(int port, mux_state_t *mux_state)
+{
+	int rv;
+	mux_state_t virtual_mux_state;
+
+	rv = tcpci_tcpm_usb_mux_driver.get(port, mux_state);
+	rv |= virtual_usb_mux_driver.get(port, &virtual_mux_state);
+
+	if (virtual_mux_state & USB_PD_MUX_HPD_IRQ)
+		*mux_state |= USB_PD_MUX_HPD_IRQ;
+	return rv;
+}
+
+static int port1_usb_mux_enter_low_power(int port)
+{
+	return tcpci_tcpm_usb_mux_driver.enter_low_power_mode(port);
+}
+
+const struct usb_mux_driver port1_usb_mux_driver = {
+	.init = &port1_usb_mux_init,
+	.set = &port1_usb_mux_set,
+	.get = &port1_usb_mux_get,
+	.enter_low_power_mode = &port1_usb_mux_enter_low_power,
+};
+
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 	{
-		.driver = &anx74xx_tcpm_usb_mux_driver,
-		.hpd_update = &anx74xx_tcpc_update_hpd_status,
+		.driver = &port0_usb_mux_driver,
+		.hpd_update = &virtual_hpd_update,
 	},
 	{
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.driver = &port1_usb_mux_driver,
+		.hpd_update = &virtual_hpd_update,
 	}
 };
 
@@ -294,6 +409,7 @@ void board_tcpc_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
+/* Called on AP S0 -> S3 transition */
 static void board_chipset_suspend(void)
 {
 	/*
@@ -304,12 +420,30 @@ static void board_chipset_suspend(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
+/* Called on AP S3 -> S0 transition */
 static void board_chipset_resume(void)
 {
 	/* Turn on display backlight in S0. */
 	gpio_set_level(GPIO_ENABLE_BACKLIGHT, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S5 -> S3 transition */
+static void board_chipset_startup(void)
+{
+	gpio_set_flags(GPIO_USB_C1_OC_ODL, GPIO_INT_FALLING | GPIO_PULL_UP);
+	gpio_enable_interrupt(GPIO_USB_C1_OC_ODL);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S3 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	/* 5V is off in S5. Disable pull-up to prevent current leak. */
+	gpio_disable_interrupt(GPIO_USB_C1_OC_ODL);
+	gpio_set_flags(GPIO_USB_C1_OC_ODL, GPIO_INT_FALLING);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
 /**
  * Power on (or off) a single TCPC.
@@ -375,9 +509,9 @@ int board_is_sourcing_vbus(int port)
 	return EC_ERROR_INVAL;
 }
 
-void board_overcurrent_event(int port)
+void board_overcurrent_event(int port, int is_overcurrented)
 {
-	/* TODO(waihong): Notify AP? */
+	/* TODO(b/120231371): Notify AP */
 	CPRINTS("p%d: overcurrent!", port);
 }
 
