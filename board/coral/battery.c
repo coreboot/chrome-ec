@@ -38,6 +38,7 @@ enum battery_type {
 	BATTERY_SIMPLO,
 	BATTERY_GF,
 	BATTERY_POWTECH,
+	BATTERY_SMP_LI9,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -464,6 +465,35 @@ static const struct board_batt_params info[] = {
 			.start_charging_max_c	= 45,
 			.charging_min_c		= 0,
 			.charging_max_c		= 45,
+			.discharging_min_c	= -20,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* SMP AC15A3J Battery Information */
+	[BATTERY_SMP_LI9] = {
+		.fuel_gauge = {
+			.manuf_name = "SMP-SDI3320",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x0002,
+				.disconnect_val = 0x0,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(13050, 5),
+			.voltage_normal		= 11460, /* mV */
+			.voltage_min		= 9000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 45,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
 			.discharging_min_c	= -20,
 			.discharging_max_c	= 60,
 		},
