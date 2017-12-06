@@ -26,7 +26,7 @@ static enum battery_present batt_pres_prev = BP_NOT_SURE;
 /* Battery info for BQ40Z55 */
 static const struct battery_info info = {
 	/* FIXME(dhendrix): where do these values come from? */
-	.voltage_max = 8700,	/* mV */
+	.voltage_max = 8800,	/* mV */
 	.voltage_normal = 7600,
 	.voltage_min = 6100,
 	.precharge_current = 256,	/* mA */
