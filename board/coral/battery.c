@@ -56,6 +56,7 @@ struct fet_info {
 struct fuel_gauge_info {
 	const char *manuf_name;
 	const char *device_name;
+	const uint8_t override_nil;
 	const struct ship_mode_info ship_mode;
 	const struct fet_info fet;
 };
@@ -328,6 +329,7 @@ static const struct board_batt_params info[] = {
 	[BATTERY_LGC] = {
 		.fuel_gauge = {
 			.manuf_name = "LGC-LGC3.553",
+			.override_nil = 1,
 			.ship_mode = {
 				.reg_addr = 0x0,
 				.reg_data = { 0x10, 0x10 },
@@ -356,6 +358,7 @@ static const struct board_batt_params info[] = {
 	[BATTERY_BYD] = {
 		.fuel_gauge = {
 			.manuf_name = "BYD",
+			.override_nil = 1,
 			.ship_mode = {
 				.reg_addr = 0x0,
 				.reg_data = { 0x10, 0x10 },
@@ -597,6 +600,30 @@ int charger_profile_override(struct charge_state_data *curr)
 	if (disch_on_ac) {
 		curr->state = ST_DISCHARGE;
 		return 0;
+	}
+
+	/*
+	 * Some batteries, when fully discharged, may request 0 voltage/current
+	 * which can then inadvertently disable the charger leading to the
+	 * battery not waking up. For this type of battery, marked by
+	 * override_nil being set, if SOC is 0 and requested voltage/current is
+	 * 0, then use precharge current and max voltage instead.
+	 */
+	if (board_battery_type != BATTERY_TYPE_COUNT &&
+	    info[board_battery_type].fuel_gauge.override_nil) {
+		int v = info[board_battery_type].batt_info.voltage_max;
+		int i = info[board_battery_type].batt_info.precharge_current;
+
+		if (curr->requested_voltage == 0 &&
+		    curr->requested_current == 0 &&
+		    curr->batt.state_of_charge == 0) {
+			/*
+			 * Battery is dead, override with precharge current and
+			 * max voltage setting for the battery.
+			 */
+			curr->requested_voltage = v;
+			curr->requested_current = i;
+		}
 	}
 
 	return 0;
