@@ -521,9 +521,12 @@ static void shutdown_on_critical_battery(void)
 			  "charge force EC hibernate due to critical battery");
 			system_hibernate(0, 0);
 #elif defined(CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF)
+			int rv;
 			CPRINTS(
 			  "charge force battery cut-off due to critical level");
-			board_cut_off_battery();
+			rv = board_cut_off_battery();
+			/* Theoretically, we should not reach here */
+			CPRINTS("Battery cutoff may have failed: %d", rv);
 #endif
 		} else {
 			/* Timeout waiting for AP to shut down, so kill it */
