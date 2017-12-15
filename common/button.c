@@ -61,7 +61,7 @@ static int raw_button_pressed(const struct button_config *button)
 				       raw_value : !raw_value;
 }
 
-#ifdef CONFIG_BUTTON_RECOVERY
+#ifdef CONFIG_BUTTON_TRIGGERED_RECOVERY
 
 #ifdef CONFIG_LED_COMMON
 static void button_blink_hw_reinit_led(void)
@@ -162,7 +162,7 @@ static int is_recovery_boot(void)
 		return 0;
 	return 1;
 }
-#endif	/* CONFIG_BUTTON_RECOVERY */
+#endif /* CONFIG_BUTTON_TRIGGERED_RECOVERY */
 
 /*
  * Button initialization.
@@ -179,13 +179,13 @@ void button_init(void)
 		gpio_enable_interrupt(buttons[i].gpio);
 	}
 
-#ifdef CONFIG_BUTTON_RECOVERY
+#ifdef CONFIG_BUTTON_TRIGGERED_RECOVERY
 	if (is_recovery_boot()) {
 		system_clear_reset_flags(RESET_FLAG_AP_OFF);
 		host_set_single_event(EC_HOST_EVENT_KEYBOARD_RECOVERY);
 		button_check_hw_reinit_required();
 	}
-#endif
+#endif /* defined(CONFIG_BUTTON_TRIGGERED_RECOVERY) */
 }
 
 /*
@@ -679,6 +679,10 @@ DECLARE_HOOK(HOOK_TICK, debug_led_tick, HOOK_PRIO_DEFAULT);
 #endif /* !CONFIG_DEDICATED_RECOVERY_BUTTON */
 #endif /* CONFIG_EMULATED_SYSRQ */
 
+#if defined(CONFIG_VOLUME_BUTTONS) && defined(CONFIG_DEDICATED_RECOVERY_BUTTON)
+#error "A dedicated recovery button is not needed if you have volume buttons."
+#endif /* defined(CONFIG_VOLUME_BUTTONS && CONFIG_DEDICATED_RECOVERY_BUTTON) */
+
 const struct button_config buttons[BUTTON_COUNT] = {
 #ifdef CONFIG_VOLUME_BUTTONS
 	[BUTTON_VOLUME_UP] = {
@@ -696,9 +700,8 @@ const struct button_config buttons[BUTTON_COUNT] = {
 		.debounce_us = 30 * MSEC,
 		.flags = 0,
 	},
-#endif /* defined(CONFIG_VOLUME_BUTTONS) */
 
-#ifdef CONFIG_DEDICATED_RECOVERY_BUTTON
+#elif defined(CONFIG_DEDICATED_RECOVERY_BUTTON)
 	[BUTTON_RECOVERY] = {
 		.name = "Recovery",
 		.type = KEYBOARD_BUTTON_RECOVERY,
@@ -708,3 +711,16 @@ const struct button_config buttons[BUTTON_COUNT] = {
 	}
 #endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON) */
 };
+
+#ifdef CONFIG_BUTTON_TRIGGERED_RECOVERY
+const struct button_config *recovery_buttons[] = {
+#ifdef CONFIG_DEDICATED_RECOVERY_BUTTON
+	&buttons[BUTTON_RECOVERY],
+
+#elif defined(CONFIG_VOLUME_BUTTONS)
+	&buttons[BUTTON_VOLUME_DOWN],
+	&buttons[BUTTON_VOLUME_UP],
+#endif /* defined(CONFIG_VOLUME_BUTTONS) */
+};
+const int recovery_buttons_count = ARRAY_SIZE(recovery_buttons);
+#endif /* defined(CONFIG_BUTTON_TRIGGERED_RECOVERY) */
