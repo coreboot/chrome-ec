@@ -774,6 +774,7 @@ static void kblight_enable(void)
 	max14521_init();
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, kblight_enable, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, kblight_enable, HOOK_PRIO_DEFAULT);
 
 static void kblight_disable(void)
 {
