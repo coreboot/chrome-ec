@@ -24,6 +24,18 @@
 
 void set_wp_state(int asserted)
 {
+	if (asserted) {
+		uint8_t key;
+
+		key = NVMEM_VAR_RMA_MODE_ACTIVE;
+
+		if (getvar(&key, sizeof(key))) {
+			CPRINTS("%s: RMA mode active, not enabling WP",
+				__func__);
+			asserted = 0;
+		}
+	}
+
 	/* Enable writing to the long life register */
 	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 1);
 
@@ -417,11 +429,26 @@ static enum vendor_cmd_rc ccd_disable_rma(enum vendor_cmd_cc code,
 					  size_t input_size,
 					  size_t *response_size)
 {
+	uint8_t key;
+	int rv;
+
 	CPRINTF("setting WP to follow battery presence\n");
 	force_write_protect(0, 1);
 
 	CPRINTF("locking console\n");
 	lock_the_console();
+
+	CPRINTS("Removing RMA mode flag");
+	key = NVMEM_VAR_RMA_MODE_ACTIVE;
+	rv = setvar(&key, sizeof(key), NULL, 0);
+	if (rv == EC_SUCCESS)
+		rv = writevars();
+	if (rv != EC_SUCCESS) {
+		CPRINTS("%s: failed to remove RMA mode flag!", __func__);
+		*((uint8_t *)buf) = rv;
+		*response_size = 1;
+		return VENDOR_RC_WRITE_FLASH_FAIL;
+	}
 
 	*response_size = 0;
 	return VENDOR_RC_SUCCESS;

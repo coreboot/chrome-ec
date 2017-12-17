@@ -13,6 +13,7 @@
 #include "curve25519.h"
 #include "extension.h"
 #include "hooks.h"
+#include "nvmem_vars.h"
 #include "rma_auth.h"
 #include "shared_mem.h"
 #include "system.h"
@@ -244,6 +245,28 @@ static enum vendor_cmd_rc get_challenge(uint8_t *buf, size_t *buf_size)
 
 static void enter_rma_mode(void)
 {
+	uint8_t key;
+
+	/*
+	 * The presence of this NVMEM variable is an indication that RMA mode
+	 * is active and hence flash write protect should not be enalbed on
+	 * power up.
+	 *
+	 * Failure to create this variable will prevent activating RMA mode.
+	 * Not much we can do about the failure at this point as far as
+	 * informing the AP is concerned, because this function runs after the
+	 * vendor command was processed.
+	 *
+	 * Worse comes to worst the operator will have to repeat RMA enabling
+	 * process.
+	 */
+	key = NVMEM_VAR_RMA_MODE_ACTIVE;
+	setvar(&key, sizeof(key), &key, sizeof(key));
+	if (writevars() != EC_SUCCESS) {
+		CPRINTF("%s: Failed to save RMA mode state\n", __func__);
+		return;
+	}
+
 	CPRINTF("unlocking console\n");
 	unlock_the_console();
 
