@@ -339,7 +339,7 @@ static void led_init(void)
 {
 	int sku = system_get_sku_id();
 
-	if ((sku >= 70 && sku <= 79) || (sku >= 124 && sku <= 125) ||
+	if ((sku >= 70 && sku <= 82) || (sku >= 124 && sku <= 125) ||
 	    (sku >= 144 && sku <= 145)) {
 		led.charge_lvl_1 = LED_CHARGE_LEVEL_1_ROBO;
 		led.state_table = led_robo_state_table;
