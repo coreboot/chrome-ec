@@ -459,7 +459,16 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	/* Initialize watchdog */
 	NPCX_TWCFG = 0; /* Select T0IN clock as watchdog prescaler clock */
 	SET_BIT(NPCX_TWCFG, NPCX_TWCFG_WDCT0I);
+#if defined(BOARD_SNAPPY)
+	/*
+	 * This will delay the watchdog reset after wake-up from hibernation
+	 * to 500 ms.
+	 */
+	NPCX_TWCP = 0x0A; /* Set prescaler ratio for timer0 to 1:1024 */
+	NPCX_WDCP = 0x03; /* Set prescaler ratio for watchdog clock to 1:8 */
+#else
 	NPCX_TWCP = 0x00; /* Keep prescaler ratio timer0 clock to 1:1 */
+#endif
 	NPCX_TWDT0 = 0x00; /* Set internal counter and prescaler */
 
 	/* Copy the __enter_hibernate_in_lpram instructions to LPRAM */
@@ -496,7 +505,6 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 
 	/* execute hibernate func in LPRAM */
 	__hibernate_in_lpram();
-
 }
 
 static char system_to_hex(uint8_t x)
