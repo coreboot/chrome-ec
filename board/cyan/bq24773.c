@@ -218,12 +218,15 @@ static int battery_charge_voltage_check(void)
 int charger_set_voltage(int voltage)
 {
 	char device[10];
+	int desired_voltage;
 
 	if (battery_charge_voltage_check()) {
 		if (voltage != 0) {
 			if (!battery_device_name(device, sizeof(device))) {
 				if (!strcasecmp(device, "AC15A3J"))
-					voltage = 12900;
+					if (!sb_read(SB_CHARGING_VOLTAGE,
+						&desired_voltage))
+					voltage = desired_voltage - 150;
 			}
 		}
 	}
