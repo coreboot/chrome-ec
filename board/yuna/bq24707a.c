@@ -152,40 +152,40 @@ int charger_get_voltage(int *voltage)
 
 static int battery_charge_voltage_check(void)
 {
-	int cycle, fcc, dc, soh, rv, change = 0;
+	int cycle, fcc, dc, soh, rv;
 	char device[10];
 
 	if (!battery_device_name(device, sizeof(device))) {
-		CPRINTF("Battery device name : %s", device);
 		if (!strcasecmp(device, "AC14B8K")) {
 			rv = battery_cycle_count(&cycle);
-			if (!rv && cycle >= 21) {
-				CPRINTF("Cycle change charge voltage\n");
-				change = 1;
-				return change;
-			}
+			if (!rv && cycle >= 21)
+				return 1;
 		} else if (!strcasecmp(device, "AC14B3K")) {
 			rv = battery_full_charge_capacity(&fcc);
 			rv &= battery_design_capacity(&dc);
 			if (!rv) {
 				soh = fcc*100/dc;
-				if (soh <= 95) {
-					CPRINTF("SOH change charge voltage\n");
-					change = 1;
-					return change;
-				}
+				if (soh <= 95)
+					return 1;
 			}
 		}
 	}
-	return change;
+	return 0;
 }
 
 int charger_set_voltage(int voltage)
 {
+	char device[10];
+
 	if (battery_charge_voltage_check()) {
 		if (voltage != 0) {
-			CPRINTF("Change charge voltage\n");
-			voltage = charger_closest_voltage(17000);
+			if (!battery_device_name(device, sizeof(device))) {
+				if (!strcasecmp(device, "AC14B8K"))
+					voltage = 17008;
+				else if (!strcasecmp(device, "AC14B3K"))
+					voltage = 17200;
+			}
+			voltage = charger_closest_voltage(voltage);
 		}
 	} else
 		voltage = charger_closest_voltage(voltage);
