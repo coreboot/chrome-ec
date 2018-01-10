@@ -827,6 +827,7 @@ static int ccd_command_wrapper(int argc, char *password,
 	struct ccd_vendor_cmd_header *vch;
 	size_t command_size;
 	size_t password_size;
+	uint32_t return_code;
 
 	if (argc > 1) {
 		password_size = strlen(password);
@@ -856,7 +857,8 @@ static int ccd_command_wrapper(int argc, char *password,
 	 * Return status in the command code field now, in case of error,
 	 * error code is the first byte after the header.
 	 */
-	if (vch->tpm_header.command_code) {
+	return_code = be32toh(vch->tpm_header.command_code);
+	if (return_code && (return_code != VENDOR_RC_IN_PROGRESS)) {
 		ccprintf("Command error %d\n", vch->ccd_subcommand);
 		rv = EC_ERROR_UNKNOWN;
 	} else {
@@ -938,10 +940,11 @@ static enum vendor_cmd_rc ccd_open(void *buf,
 			buffer[0] = rv;
 			return VENDOR_RC_INTERNAL_ERROR;
 		}
-	} else {
-		/* No physical presence required; go straight to done */
-		ccd_open_done();
+		return VENDOR_RC_IN_PROGRESS;
 	}
+
+	/* No physical presence required; go straight to done */
+	ccd_open_done();
 
 	return VENDOR_RC_SUCCESS;
 }
@@ -1039,10 +1042,12 @@ static enum vendor_cmd_rc ccd_unlock(void *buf,
 			buffer[0] = rv;
 			return VENDOR_RC_INTERNAL_ERROR;
 		}
-	} else {
-		/* Unlock immediately */
-		ccd_unlock_done();
+		return VENDOR_RC_IN_PROGRESS;
 	}
+
+	/* Unlock immediately */
+	ccd_unlock_done();
+
 	return VENDOR_RC_SUCCESS;
 }
 
