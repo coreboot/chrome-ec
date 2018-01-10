@@ -259,6 +259,12 @@ void battery_get_params(struct batt_params *batt)
 		batt_new.desired_voltage = batt_new.desired_current = 0;
 	}
 
+	if (sb_read(SB_CYCLE_COUNT, &batt_new.cycle))
+		batt_new.flags |= BATT_FLAG_BAD_ANY;
+	if (sb_read(SB_FULL_CHARGE_CAPACITY, &batt_new.full_charge_cap))
+		batt_new.flags |= BATT_FLAG_BAD_ANY;
+	if (sb_read(SB_DESIGN_CAPACITY, &batt_new.design_cap))
+		batt_new.flags |= BATT_FLAG_BAD_ANY;
 	/* Update visible battery parameters */
 	memcpy(batt, &batt_new, sizeof(*batt));
 }

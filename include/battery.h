@@ -49,6 +49,9 @@ struct batt_params {
 	int current;          /* Battery current (mA); negative=discharging */
 	int desired_voltage;  /* Charging voltage desired by battery (mV) */
 	int desired_current;  /* Charging current desired by battery (mA) */
+	int cycle;
+	int full_charge_cap;
+	int design_cap;
 	int flags;            /* Flags */
 };
 

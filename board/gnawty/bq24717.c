@@ -11,6 +11,7 @@
 #include "charger.h"
 #include "console.h"
 #include "common.h"
+#include "host_command.h"
 #include "system.h"
 #include "util.h"
 
@@ -166,52 +167,47 @@ int charger_get_voltage(int *voltage)
 	return ret;
 }
 
-static int battery_charge_voltage_check(void)
+int battery_charge_voltage_check(void)
 {
-	int cycle, fcc, dc, soh, rv, change = 0;
+	int cycle, fcc, dc, soh = 100;
 	int board_version = 0;
 
 	board_version = system_get_board_version();
 
 	if (board_version == 0x00) {
-		rv = battery_cycle_count(&cycle);
-		if (!rv && cycle >= 21) {
-			CPRINTF("Cycle change charge voltage\n");
-			change = 1;
-			return change;
-		}
+		cycle = *(int *)host_get_memmap(EC_MEMMAP_BATT_CCNT);
+		if (cycle >= 21)
+			return 1;
 	} else if ((board_version == 0x02) || (board_version == 0x04)) {
-		rv = battery_full_charge_capacity(&fcc);
-		rv &= battery_design_capacity(&dc);
-		if (!rv) {
-			soh = fcc*100/dc;
-			if (soh <= 95) {
-				CPRINTF("SOH change charge voltage\n");
-				change = 1;
-				return change;
-			}
-		}
+		fcc = *(int *)host_get_memmap(EC_MEMMAP_BATT_LFCC);
+		dc = *(int *)host_get_memmap(EC_MEMMAP_BATT_DCAP);
+		if (dc != 0)
+			soh = fcc * 100 / dc;
+		if (soh <= 95)
+			return 1;
 	}
-	return change;
+	return 0;
 }
 
 int charger_set_voltage(int voltage)
 {
-	int board_version = 0;
+	int desired_voltage, board_version = 0;
 
 	board_version = system_get_board_version();
 
-	if (battery_charge_voltage_check()) {
-		if (voltage != 0) {
-			if (board_version == 0x00)
-				voltage = charger_closest_voltage(12750);
-			else if (board_version == 0x02)
-				voltage = charger_closest_voltage(17200);
-			else if (board_version == 0x04)
-				voltage = charger_closest_voltage(12900);
+	if (voltage != 0) {
+		if (battery_charge_voltage_check()) {
+			if (!sb_read(SB_CHARGING_VOLTAGE, &desired_voltage)) {
+				if (board_version == 0x00)
+					voltage = desired_voltage - 132;
+				else if (board_version == 0x02)
+					voltage = desired_voltage - 200;
+				else if (board_version == 0x04)
+					voltage = desired_voltage - 150;
+				voltage = charger_closest_voltage(voltage);
+			}
 		}
-	} else
-		voltage = charger_closest_voltage(voltage);
+	}
 
 	cached_voltage = voltage;
 
@@ -222,7 +218,6 @@ int charger_set_voltage(int voltage)
 
 	return sbc_write(SB_CHARGING_VOLTAGE, voltage);
 }
-
 /* Charging power state initialization */
 int charger_post_init(void)
 {

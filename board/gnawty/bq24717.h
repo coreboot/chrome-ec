@@ -128,4 +128,6 @@
 #define INPUT_I_MAX                    (8064)
 #define INPUT_I_STEP                   (64)
 
+void charger_battery_get_params(void);
+
 #endif /* __CROS_EC_CHARGER_BQ24717_H */
