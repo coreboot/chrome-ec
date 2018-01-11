@@ -1007,8 +1007,8 @@ void board_hibernate(void)
 	/* Enable both the VBUS & VCC ports before entering PG3 */
 	bd9995x_select_input_port(BD9995X_CHARGE_PORT_BOTH, 1);
 
-	/* Turn BGATE OFF for saving the power */
-	bd9995x_set_power_save_mode(BD9995X_PWR_SAVE_MAX);
+	/* Turn on power save mode but keep BGATE on, which keeps pp1800 on */
+	bd9995x_set_power_save_mode(BD9995X_PWR_SAVE_HIGH);
 }
 
 struct {
