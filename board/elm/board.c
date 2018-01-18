@@ -286,6 +286,8 @@ static void board_init(void)
 	/* Remap SPI2 to DMA channels 6 and 7 */
 	REG32(STM32_DMA1_BASE + 0xa8) |= (1 << 20) | (1 << 21) |
 					 (1 << 24) | (1 << 25);
+
+	board_reset_sensors();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -518,7 +520,7 @@ void board_reset_sensors(void)
 	gpio_set_level(GPIO_SENSOR_PWR_EN_L, 1);
 
 	/* Min VDD off time is 10 ms, make it longer */
-	msleep(20);
+	msleep(25);
 
 	/* Power on sensors */
 	gpio_set_level(GPIO_SENSOR_PWR_EN_L, 0);
