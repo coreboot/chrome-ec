@@ -3,9 +3,10 @@
  * found in the LICENSE file.
  */
 
-/* Zoombini board-specific configuration */
+/* Meowth/Zoombini board-specific configuration */
 
 #include "adc_chip.h"
+#include "base_detect.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
@@ -119,6 +120,14 @@ const struct adc_t adc_channels[] = {
 
 	[ADC_TEMP_SENSOR_WIFI] = {
 		"WIFI", NPCX_ADC_CH8, ADC_MAX_VOLT, ADC_READ_MAX + 1, 0
+	},
+
+	[ADC_BASE_ATTACH] = {
+		"BASE ATTACH", NPCX_ADC_CH9, ADC_MAX_VOLT, ADC_READ_MAX + 1, 0
+	},
+
+	[ADC_BASE_DETACH] = {
+		"BASE DETACH", NPCX_ADC_CH4, ADC_MAX_VOLT, ADC_READ_MAX + 1, 0
 	},
 #endif /* defined(BOARD_ZOOMBINI) */
 };
