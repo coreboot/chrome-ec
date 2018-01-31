@@ -272,6 +272,7 @@ enum dcrypto_appid {
 	U2F_ORIGIN = 3,
 	U2F_WRAP = 4,
 	PERSO_AUTH = 5,
+	PINWEAVER = 6,
 	/* This enum value should not exceed 7. */
 };
 
