@@ -15,16 +15,18 @@
 #include "host_command.h"
 #include "led_common.h"
 #include "system.h"
+#include "timer.h"
 #include "util.h"
 
 #define LED_ON_LVL 0
 #define LED_OFF_LVL 1
 #define LED_INDEFINITE -1
-#define LED_ONE_SEC (1000 / HOOK_TICK_INTERVAL_MS)
+#define LED_TICK_TIME_MSEC 500
+#define LED_ONE_SEC (1000 / LED_TICK_TIME_MSEC)
 #define LED_CHARGE_LEVEL_1_DEFAULT 100
 #define LED_CHARGE_LEVEL_1_ROBO 5
 #define LED_POWER_BLINK_ON_MSEC 3000
-#define LED_POWER_BLINK_OFF_MSEC 600
+#define LED_POWER_BLINK_OFF_MSEC 500
 #define LED_POWER_ON_TICKS (LED_POWER_BLINK_ON_MSEC / HOOK_TICK_INTERVAL_MS)
 #define LED_POWER_OFF_TICKS (LED_POWER_BLINK_OFF_MSEC / HOOK_TICK_INTERVAL_MS)
 
@@ -319,21 +321,35 @@ static void led_robo_update_power(void)
 	led_set_color_power(level);
 }
 
-/* Called by hook task every hook tick (200 msec) */
-static void led_update(void)
+void led_task(void *u)
 {
-	/* Update battery LED */
-	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
-		led_update_battery();
-	}
+	uint32_t start_time_us;
+	uint32_t task_duration_us;
 
-	/* Update power LED */
-	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED)) {
-		if (led.update_power != NULL)
-			(*led.update_power)();
+	while (1) {
+
+		start_time_us = get_time().le.lo;
+
+		/* Update battery LED */
+		if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
+			led_update_battery();
+
+		/* Update power LED */
+		if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED)) {
+			if (led.update_power != NULL)
+				(*led.update_power)();
+		}
+
+		/* Compute time for this iteration */
+		task_duration_us = get_time().le.lo - start_time_us;
+		/*
+		 * Compute wait time required to for next desired LED tick. If
+		 * the duration exceeds the tick time, then don't sleep.
+		 */
+		if (task_duration_us < LED_TICK_TIME_MSEC * MSEC)
+			usleep(LED_TICK_TIME_MSEC * MSEC - task_duration_us);
 	}
 }
-DECLARE_HOOK(HOOK_TICK, led_update, HOOK_PRIO_DEFAULT);
 
 static void led_init(void)
 {
