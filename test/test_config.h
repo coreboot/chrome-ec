@@ -246,6 +246,11 @@ enum nvmem_vars {
 #define CONFIG_FLASH_NVMEM_VARS_USER_SIZE 600
 #endif	/* TEST_NVMEM_VARS */
 
+#ifdef TEST_PINWEAVER
+#define CONFIG_PINWEAVER
+#define CONFIG_SHA256
+#endif
+
 #ifdef TEST_X25519
 #define CONFIG_CURVE25519
 #endif /* TEST_X25519 */
