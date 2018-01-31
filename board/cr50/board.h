@@ -352,4 +352,7 @@ enum nvmem_users {
 #define CONFIG_RMA_AUTH
 #define CONFIG_RNG
 
+/* Enable hardware backed brute force resistance feature */
+#define CONFIG_PINWEAVER
+
 #endif /* __CROS_EC_BOARD_H */
