@@ -267,6 +267,8 @@ static void board_extpower_buffer_to_soc(void)
 /* Initialize board. */
 static void board_init(void)
 {
+	uint32_t reset_flags = system_get_reset_flags();
+
 	/* Enable Level shift of AC_OK & LID_OPEN signals */
 	board_extpower_buffer_to_soc();
 	/* Enable rev1 testing GPIOs */
@@ -287,7 +289,9 @@ static void board_init(void)
 	REG32(STM32_DMA1_BASE + 0xa8) |= (1 << 20) | (1 << 21) |
 					 (1 << 24) | (1 << 25);
 
-	board_reset_sensors();
+	/* Hard reset G-sensors after doing SYSJUMP */
+	if (reset_flags & RESET_FLAG_SYSJUMP)
+		board_reset_sensors();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -475,7 +479,6 @@ static void board_chipset_pre_init(void)
 {
 	/* Enable level shift of AC_OK when power on */
 	board_extpower_buffer_to_soc();
-
 }
 DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, board_chipset_pre_init, HOOK_PRIO_DEFAULT);
 
@@ -484,15 +487,13 @@ static void board_chipset_shutdown(void)
 {
 	/* Disable level shift to SoC when shutting down */
 	gpio_set_level(GPIO_LEVEL_SHIFT_EN_L, 1);
-
-	board_spi_disable();
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
 /* Called on AP S3 -> S0 transition */
 static void board_chipset_resume(void)
 {
-        board_spi_enable();
+	board_spi_enable();
 #ifdef CONFIG_TEMP_SENSOR_TMP432
 	hook_call_deferred(&tmp432_set_power_deferred_data, 0);
 #endif
@@ -502,6 +503,7 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 /* Called on AP S0 -> S3 transition */
 static void board_chipset_suspend(void)
 {
+	board_spi_disable();
 #ifdef CONFIG_TEMP_SENSOR_TMP432
 	hook_call_deferred(&tmp432_set_power_deferred_data, 0);
 #endif
