@@ -54,6 +54,9 @@ static enum bd9995x_command charger_map_cmd = BD9995X_INVALID_COMMAND;
 
 static struct mutex bd9995x_map_mutex;
 
+/* Chopper mode control desired value */
+static int chop_mode_req;
+
 #ifdef HAS_TASK_USB_CHG
 /* USB switch */
 static enum usb_switch usb_switch_state[BD9995X_CHARGE_PORT_COUNT] = {
@@ -706,10 +709,6 @@ int charger_set_current(int current)
 	/* Charge current step 64 mA */
 	current &= ~0x3F;
 
-	if (current < BD9995X_NO_BATTERY_CHARGE_I_MIN &&
-	    (battery_is_present() != BP_YES || battery_is_cut_off()))
-		current = BD9995X_NO_BATTERY_CHARGE_I_MIN;
-
 	/*
 	 * Disable charger before setting charge current to 0 or when
 	 * discharging on AC.
@@ -717,7 +716,7 @@ int charger_set_current(int current)
 	 * the charge current feedback amp (VREF_CHG) is set to 0V. Hence
 	 * the DCDC stops switching (because of the EA offset).
 	 */
-	if (!current || bd9995x_is_discharging_on_ac()) {
+	if (bd9995x_is_discharging_on_ac() || !current) {
 		chg_enable = 0;
 		rv = bd9995x_charger_enable(0);
 		if (rv)
@@ -935,11 +934,25 @@ int charger_discharge_on_ac(int enable)
 {
 	int rv;
 	int reg;
+	int reg_copy;
 
 	rv = ch_raw_read16(BD9995X_CMD_CHGOP_SET2, &reg,
 				BD9995X_EXTENDED_COMMAND);
 	if (rv)
 		return rv;
+
+	/*
+	 * Chopper mode is used under light load conditions. This means when the
+	 * AP is not in S0 and the battery is not charging or is disconnected.
+	 */
+	reg_copy = reg;
+	if (chop_mode_req && !(reg & BD9995X_CMD_CHGOP_SET2_CHG_EN))
+		reg |=  BD9995X_CMD_CHGOP_SET2_CHOP_ALL;
+	else
+		reg &= ~BD9995X_CMD_CHGOP_SET2_CHOP_ALL;
+	if ((reg ^ reg_copy) & BD9995X_CMD_CHGOP_SET2_CHOP_ALL)
+		CPRINTS("bd9995x: Chop Mode change, new val = %d",
+			reg & BD9995X_CMD_CHGOP_SET2_CHOP_ALL);
 
 	/*
 	 * Suspend USB charging and DC/DC converter so that BATT_LEARN mode
@@ -957,6 +970,26 @@ int charger_discharge_on_ac(int enable)
 	return ch_raw_write16(BD9995X_CMD_CHGOP_SET2, reg,
 				BD9995X_EXTENDED_COMMAND);
 }
+
+static void bd99995x_chopper_mode_disable(void)
+{
+	chop_mode_req = 0;
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, bd99995x_chopper_mode_disable,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, bd99995x_chopper_mode_disable,
+	     HOOK_PRIO_DEFAULT);
+
+static void bd99995x_chopper_mode_enable(void)
+{
+	chop_mode_req = 1;
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, bd99995x_chopper_mode_enable,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, bd99995x_chopper_mode_enable,
+	     HOOK_PRIO_DEFAULT);
+
+
 
 int charger_get_vbus_voltage(int port)
 {
