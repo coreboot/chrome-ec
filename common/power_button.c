@@ -5,6 +5,7 @@
 
 /* Power button module for Chrome EC */
 
+#include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
@@ -13,6 +14,7 @@
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power_button.h"
+#include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -134,7 +136,16 @@ static void power_button_change_deferred(void)
 	power_button_is_stable = 1;
 
 	CPRINTS("power button %s", new_pressed ? "pressed" : "released");
-
+#ifdef CONFIG_VBOOT_EFS
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+			new_pressed && !system_is_in_rw()) {
+		CPRINTS("cold reset");
+		cflush();
+		system_reset(0);
+		while (1)
+			;
+	}
+#endif
 	/* Call hooks */
 	hook_notify(HOOK_POWER_BUTTON_CHANGE);
 
