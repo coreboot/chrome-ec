@@ -729,8 +729,16 @@ int charger_set_current(int current)
 			return rv;
 	}
 
+	/*
+	 * The bd9995x will transition between trickle charge, precharge, and
+	 * fastcharge states based on VSYS and battery voltage levels. As a
+	 * safety measure, ensure that precharge current command requested is
+	 * never more than one step from the battery's precharge current
+	 * specification.
+	 */
 	rv = ch_raw_write16(BD9995X_CMD_IPRECH_SET,
-			    MIN(current, BD9995X_IPRECH_MAX),
+			    MIN(current, (battery_get_info()->precharge_current
+					  + BD9995X_IPRECH_MARGIN) & ~0x3F),
 			    BD9995X_EXTENDED_COMMAND);
 	if (rv)
 		return rv;
