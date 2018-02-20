@@ -265,12 +265,33 @@ static void board_pmic_init(void)
 
 	/*
 	 * Set V085ACNT / V0.85A Control Register:
-	 * Lower power mode = 0.7V.
-	 * Nominal output = 1.0V.
+	 * Lower power mode = 0.7V == d[7:6] == 01b.
+	 * Nominal output   = 1.0V == d[5:4] == 11b.
+	 * Force LP mode exit = rise SLP_S0# ==  d[3:2] == 10b (default).
+	 * mode control     = PWM  == d[1:0] == 11b.
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7b);
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
+
+static void chell_pmic_resume(void)
+{
+	/*
+	 * Set V085ACNT mode control to PWM for stability.
+	 */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7b);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, chell_pmic_resume, HOOK_PRIO_DEFAULT);
+
+static void chell_pmic_suspend(void)
+{
+	/*
+	 * Set V085ACNT mode control to PFM for power saving.
+	 * mode control     = PFM  == d[1:0] == 01b.
+	 */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x79);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, chell_pmic_suspend, HOOK_PRIO_DEFAULT);
 
 /* Initialize board. */
 static void board_init(void)
