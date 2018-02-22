@@ -127,7 +127,7 @@
  * modes, among other things.
  *
  * Protocol version 6 does not change the format of the first PDU response,
- * but it indicates the target's ablitiy to channel TPM venfor commands
+ * but it indicates the target's ablitiy to channel TPM vendor commands
  * through USB connection.
  *
  * When channeling TPM vendor commands the USB frame looks as follows:
@@ -234,11 +234,15 @@ struct transfer_descriptor {
 
 static uint32_t protocol_version;
 static char *progname;
-static char *short_opts = "bcd:fhiPprstu";
+static char *short_opts = "abcd:fhikoPprstUu";
 static const struct option long_opts[] = {
 	/* name    hasarg *flag val */
+	{"any",		0,   NULL, 'a'},
 	{"binvers",	0,   NULL, 'b'},
 	{"board_id",    2,   NULL, 'i'},
+	{"ccd_lock",    0,   NULL, 'k'},
+	{"ccd_open",    0,   NULL, 'o'},
+	{"ccd_unlock",  0,   NULL, 'U'},
 	{"corrupt",	0,   NULL, 'c'},
 	{"device",	1,   NULL, 'd'},
 	{"fwver",	0,   NULL, 'f'},
@@ -282,7 +286,7 @@ static int from_hexascii(char c)
 static FILE *tpm_output;
 static int ts_write(const void *out, size_t len)
 {
-	const char *cmd_head = "trunks_send --raw ";
+	const char *cmd_head = "PATH=\"${PATH}:/usr/sbin\" trunks_send --raw ";
 	size_t head_size = strlen(cmd_head);
 	char full_command[head_size + 2 * len + 1];
 	size_t i;
@@ -506,6 +510,10 @@ static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 	memcpy(&rv, &((struct upgrade_pkt *)outbuf)->ordinal, sizeof(rv));
 	rv = be32toh(rv);
 
+	/* Clear out vendor command return value offset.*/
+	if ((rv & VENDOR_RC_ERR) == VENDOR_RC_ERR)
+		rv &= ~VENDOR_RC_ERR;
+
 	return rv;
 }
 
@@ -531,6 +539,8 @@ static void usage(int errs)
 	       "\n"
 	       "Options:\n"
 	       "\n"
+	       "  -a,--any                 Try any interfaces to find Cr50"
+	       " (-d, -s, -t are all ignored)\n"
 	       "  -b,--binvers             Report versions of image's "
 				"RW and RO headers, do not update\n"
 	       "  -c,--corrupt             Corrupt the inactive rw\n"
@@ -541,9 +551,11 @@ static void usage(int errs)
 	       "                           Get or set Info1 board ID fields\n"
 	       "                           ID could be 32 bit hex or 4 "
 	       "character string.\n"
+	       "  -k,--ccd_lock            Lock CCD\n"
+	       "  -o,--ccd_open            Start CCD open sequence\n"
 	       "  -P,--password <password>\n"
 	       "                           Set or clear CCD password. Use\n"
-	       "                           'clear' to clear it.\n"
+	       "                           'clear:<cur password>' to clear it.\n"
 	       "  -p,--post_reset          Request post reset after transfer\n"
 	       "  -r,--rma_auth [[auth_code|\"disable\"]\n"
 	       "                           Request RMA challenge, process "
@@ -551,6 +563,7 @@ static void usage(int errs)
 	       "  -s,--systemdev           Use /dev/tpm0 (-d is ignored)\n"
 	       "  -t,--trunks_send         Use `trunks_send --raw' "
 	       "(-d is ignored)\n"
+	       "  -U,--ccd_unlock          Start CCD unlock sequence\n"
 	       "  -u,--upstart             "
 			"Upstart mode (strict header checks)\n"
 	       "\n", progname, VID, PID);
@@ -1532,7 +1545,8 @@ static int parse_bid(const char *opt,
 	return 1;
 }
 
-static void process_password(struct transfer_descriptor *td)
+static uint32_t common_process_password(struct transfer_descriptor *td,
+					enum ccd_vendor_subcommands subcmd)
 {
 	size_t response_size;
 	uint8_t response;
@@ -1582,19 +1596,134 @@ static void process_password(struct transfer_descriptor *td)
 	 * the newline and free a byte to prepend the subcommand code.
 	 */
 	memmove(password + 1, password, len  - 1);
-	password[0] = CCDV_PASSWORD;
+	password[0] = subcmd;
 	response_size = sizeof(response);
 	rv = send_vendor_command(td, VENDOR_CC_CCD,
 				 password, len,
 				 &response, &response_size);
 	free(password);
 	free(password_copy);
-	if (!rv)
+
+	if ((rv != VENDOR_RC_SUCCESS) && (rv != VENDOR_RC_IN_PROGRESS))
+		fprintf(stderr, "Error sending password: rv %d, response %d\n",
+			rv, response_size ? response : 0);
+
+	return rv;
+}
+
+static void process_password(struct transfer_descriptor *td)
+{
+	if (common_process_password(td, CCDV_PASSWORD) == VENDOR_RC_SUCCESS)
 		return;
 
-	fprintf(stderr, "Error setting password: rv %d, response %d\n",
-		rv, response_size ? response : 0);
 	exit(update_error);
+}
+
+/*
+ * This function can be used to retrieve the current PP status from Cr50 and
+ * prompt the user when a PP press is required.
+ *
+ * Physical presence can be required by different gsctool options, for which
+ * Cr50 behavior also differs. The 'command' and 'poll_type' parameters are
+ * used by Cr50 to tell what the host is polling for.
+ */
+static void poll_for_pp(struct transfer_descriptor *td,
+			uint16_t command,
+			uint8_t poll_type)
+{
+	uint8_t response;
+	uint8_t prev_response;
+	size_t response_size;
+	int rv;
+
+	prev_response = ~0; /* Guaranteed invalid value. */
+
+	while (1) {
+		response_size = sizeof(response);
+		rv = send_vendor_command(td, command,
+					 &poll_type, sizeof(poll_type),
+					 &response, &response_size);
+
+		if (((rv != VENDOR_RC_SUCCESS) && (rv != VENDOR_RC_IN_PROGRESS))
+		    || (response_size != 1)) {
+			fprintf(stderr, "Error: rv %d, response %d\n",
+				rv, response_size ? response : 0);
+			exit(update_error);
+		}
+
+		if (response == CCD_PP_DONE) {
+			printf("PP Done!\n");
+			return;
+		}
+
+		if (response == CCD_PP_CLOSED) {
+			fprintf(stderr,
+				"Error: Physical presence check timeout!\n");
+			exit(update_error);
+		}
+
+
+		if (response == CCD_PP_AWAITING_PRESS) {
+			printf("Press PP button now!\n");
+		} else if (response == CCD_PP_BETWEEN_PRESSES) {
+			if (prev_response != response)
+				printf("Another press will be required!\n");
+		} else {
+			fprintf(stderr, "Error: unknown poll result %d\n",
+				response);
+			exit(update_error);
+		}
+		prev_response = response;
+
+		usleep(500 * 1000); /* Poll every half a second. */
+	}
+
+}
+
+static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
+			      int ccd_open, int ccd_lock)
+{
+	uint8_t payload;
+	uint8_t response;
+	size_t response_size;
+	int rv;
+
+	if (ccd_unlock)
+		payload = CCDV_UNLOCK;
+	else if (ccd_open)
+		payload = CCDV_OPEN;
+	else
+		payload = CCDV_LOCK;
+
+	response_size = sizeof(response);
+	rv = send_vendor_command(td, VENDOR_CC_CCD,
+				 &payload, sizeof(payload),
+				 &response, &response_size);
+
+	/*
+	 * If password is required - try sending the same subcommand
+	 * accompanied by user password.
+	 */
+	if (rv == VENDOR_RC_PASSWORD_REQUIRED)
+		rv = common_process_password(td, payload);
+
+	if (rv == VENDOR_RC_SUCCESS)
+		return;
+
+	if (rv != VENDOR_RC_IN_PROGRESS) {
+		fprintf(stderr, "Error: rv %d, response %d\n",
+			rv, response_size ? response : 0);
+		exit(update_error);
+	}
+
+	/*
+	 * Physical presence process started, poll for the state the user
+	 * asked for. Only two subcommands would return 'IN_PROGRESS'.
+	 */
+	if (ccd_unlock)
+		poll_for_pp(td, VENDOR_CC_CCD, CCDV_PP_POLL_UNLOCK);
+	else
+		poll_for_pp(td, VENDOR_CC_CCD, CCDV_PP_POLL_OPEN);
 }
 
 static void process_bid(struct transfer_descriptor *td,
@@ -1741,8 +1870,12 @@ int main(int argc, char *argv[])
 	struct board_id bid;
 	enum board_id_action bid_action;
 	int password = 0;
+	int ccd_open = 0;
+	int ccd_unlock = 0;
+	int ccd_lock = 0;
+	int try_all_transfer = 0;
 	const char *exclusive_opt_error =
-		"Options -s and -t are mutually exclusive\n";
+		"Options -a, -s and -t are mutually exclusive\n";
 
 	progname = strrchr(argv[0], '/');
 	if (progname)
@@ -1759,6 +1892,16 @@ int main(int argc, char *argv[])
 	opterr = 0;				/* quiet, you */
 	while ((i = getopt_long(argc, argv, short_opts, long_opts, 0)) != -1) {
 		switch (i) {
+		case 'a':
+			if (td.ep_type) {
+				errorcnt++;
+				fprintf(stderr, "%s", exclusive_opt_error);
+				break;
+			}
+			try_all_transfer = 1;
+			/* Try dev_xfer first. */
+			td.ep_type = dev_xfer;
+			break;
 		case 'b':
 			binary_vers = 1;
 			break;
@@ -1791,6 +1934,18 @@ int main(int argc, char *argv[])
 				errorcnt++;
 			}
 			break;
+		case 'k':
+			ccd_lock = 1;
+			break;
+		case 'o':
+			ccd_open = 1;
+			break;
+		case 'p':
+			td.post_reset = 1;
+			break;
+		case 'P':
+			password = 1;
+			break;
 		case 'r':
 			rma = 1;
 
@@ -1801,7 +1956,7 @@ int main(int argc, char *argv[])
 			rma_auth_code = optarg;
 			break;
 		case 's':
-			if (td.ep_type) {
+			if (td.ep_type || try_all_transfer) {
 				errorcnt++;
 				fprintf(stderr, "%s", exclusive_opt_error);
 				break;
@@ -1809,18 +1964,15 @@ int main(int argc, char *argv[])
 			td.ep_type = dev_xfer;
 			break;
 		case 't':
-			if (td.ep_type) {
+			if (td.ep_type || try_all_transfer) {
 				errorcnt++;
 				fprintf(stderr, "%s", exclusive_opt_error);
 				break;
 			}
 			td.ep_type = ts_xfer;
 			break;
-		case 'p':
-			td.post_reset = 1;
-			break;
-		case 'P':
-			password = 1;
+		case 'U':
+			ccd_unlock = 1;
 			break;
 		case 'u':
 			td.upstart_mode = 1;
@@ -1851,11 +2003,14 @@ int main(int argc, char *argv[])
 	if (errorcnt)
 		usage(errorcnt);
 
-	if (!show_fw_ver &&
+	if ((bid_action == bid_none) &&
+	    !ccd_lock &&
+	    !ccd_open &&
+	    !ccd_unlock &&
 	    !corrupt_inactive_rw &&
-	    (bid_action == bid_none) &&
+	    !password &&
 	    !rma &&
-	    !password) {
+	    !show_fw_ver) {
 		if (optind >= argc) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
@@ -1880,15 +2035,28 @@ int main(int argc, char *argv[])
 			printf("Ignoring binary image %s\n", argv[optind]);
 	}
 
+	if (((bid_action != bid_none) + !!rma + !!password +
+	     !!ccd_open + !!ccd_unlock + !!ccd_lock) > 2) {
+		fprintf(stderr, "ERROR: options -i, -k, -o, -P, -r, and -u "
+			"are mutually exclusive\n");
+		exit(update_error);
+	}
+
 	if (td.ep_type == usb_xfer) {
 		usb_findit(vid, pid, &td.uep);
 	} else if (td.ep_type == dev_xfer) {
 		td.tpm_fd = open("/dev/tpm0", O_RDWR);
 		if (td.tpm_fd < 0) {
-			perror("Could not open TPM");
-			exit(update_error);
+			if (!try_all_transfer) {
+				perror("Could not open TPM");
+				exit(update_error);
+			}
+			td.ep_type = ts_xfer;
 		}
 	}
+
+	if (ccd_unlock || ccd_open || ccd_lock)
+		process_ccd_state(&td, ccd_unlock, ccd_open, ccd_lock);
 
 	if (password)
 		process_password(&td);
