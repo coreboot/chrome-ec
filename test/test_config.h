@@ -249,7 +249,7 @@ enum nvmem_vars {
 #ifdef TEST_PINWEAVER
 #define CONFIG_PINWEAVER
 #define CONFIG_SHA256
-#endif
+#endif /* TEST_PINWEAVER */
 
 #ifdef TEST_X25519
 #define CONFIG_CURVE25519
