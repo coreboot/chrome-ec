@@ -17,6 +17,8 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "sku.h"
+#include "system.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
@@ -39,6 +41,9 @@ enum battery_type {
 	BATTERY_GF,
 	BATTERY_POWTECH,
 	BATTERY_SMP_LI9,
+	BATTERY_SMP_NZD_2S2P,
+	BATTERY_SMP_OAD_2S2P,
+	BATTERY_SMP223_2S1P,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -67,7 +72,8 @@ struct board_batt_params {
 	const struct battery_info batt_info;
 };
 
-#define DEFAULT_BATTERY_TYPE BATTERY_SANYO
+#define DEFAULT_3S_BATTERY_TYPE BATTERY_SANYO
+#define DEFAULT_2S_BATTERY_TYPE BATTERY_SMP_NZD_2S2P
 static enum battery_present batt_pres_prev = BP_NOT_SURE;
 static enum battery_type board_battery_type = BATTERY_TYPE_COUNT;
 
@@ -499,13 +505,103 @@ static const struct board_batt_params info[] = {
 		},
 	},
 
+/* Simplo AS1FNZD3KD 2S2P Battery Information */
+	[BATTERY_SMP_NZD_2S2P] = {
+		.fuel_gauge = {
+			.manuf_name = "AS1FNZD3KD",
+			.device_name = "C213-60",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.reg_addr = 0x43,
+				.reg_mask = 0x0003,
+				.disconnect_val = 0x0000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(8800, 5),
+			.voltage_normal		= 7700, /* mV */
+			.voltage_min		= 6000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 46,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* Simplo AS1FOAD3KD  2S2P Battery Information */
+	[BATTERY_SMP_OAD_2S2P] = {
+		.fuel_gauge = {
+			.manuf_name = "AS1FOAD3KD",
+			.device_name = "C213-60",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.reg_addr = 0x43,
+				.reg_mask = 0x0003,
+				.disconnect_val = 0x0000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(8800, 5),
+			.voltage_normal		= 7700, /* mV */
+			.voltage_min		= 6000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 46,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* Simplo AS1GTBE3KA 2S1P Battery Information */
+	[BATTERY_SMP223_2S1P] = {
+		.fuel_gauge = {
+			.manuf_name = "AS1GTBE3KA",
+			.device_name = "C223-50",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x0006,
+				.disconnect_val = 0x0000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(8800, 5),
+			.voltage_normal		= 7700, /* mV */
+			.voltage_min		= 6000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 50,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 60,
+		},
+	},
+
 };
 BUILD_ASSERT(ARRAY_SIZE(info) == BATTERY_TYPE_COUNT);
 
 static inline const struct board_batt_params *board_get_batt_params(void)
 {
 	return &info[board_battery_type == BATTERY_TYPE_COUNT ?
-			DEFAULT_BATTERY_TYPE : board_battery_type];
+		(SKU_IS_2S_BATTERY(system_get_sku_id()) ?
+			DEFAULT_2S_BATTERY_TYPE : DEFAULT_3S_BATTERY_TYPE) :
+		board_battery_type];
 }
 
 /* Get type of the battery connected on the board */
@@ -514,21 +610,25 @@ static int board_get_battery_type(void)
 	char manu_name[32], device_name[32];
 	int i;
 
-	if (!battery_manufacturer_name(manu_name, sizeof(manu_name))) {
-		for (i = 0; i < BATTERY_TYPE_COUNT; i++) {
-			if (!strcasecmp(manu_name,
-				info[i].fuel_gauge.manuf_name)) {
-				if (info[i].fuel_gauge.device_name == NULL) {
-					board_battery_type = i;
-					break;
-				} else if (!battery_device_name(device_name,
-					sizeof(device_name))) {
-					if (!strcasecmp(device_name,
-					info[i].fuel_gauge.device_name)) {
-						board_battery_type = i;
-						break;
-					}
-				}
+	if (battery_manufacturer_name(manu_name, sizeof(manu_name)))
+		return board_battery_type;
+
+	for (i = 0; i < BATTERY_TYPE_COUNT; i++) {
+		if (strcasecmp(manu_name,
+			info[i].fuel_gauge.manuf_name))
+			continue;
+
+		if (info[i].fuel_gauge.device_name == NULL) {
+			board_battery_type = i;
+			break;
+		}
+
+		if (!battery_device_name(device_name,
+			sizeof(device_name))) {
+			if (!strcasecmp(device_name,
+			info[i].fuel_gauge.device_name)) {
+				board_battery_type = i;
+				break;
 			}
 		}
 	}
