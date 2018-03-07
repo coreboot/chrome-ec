@@ -194,7 +194,7 @@ static void base_detect_deferred(void)
 	/* Check again in the appropriate time. */
 	hook_call_deferred(&base_detect_deferred_data, timeout);
 };
-DECLARE_HOOK(HOOK_INIT, base_detect_deferred, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, base_detect_deferred, HOOK_PRIO_INIT_ADC + 1);
 
 static uint8_t base_power_on_attempts;
 static void clear_base_power_on_attempts_deferred(void)
