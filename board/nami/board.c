@@ -502,6 +502,7 @@ static struct opt3001_drv_data_t g_opt3001_data = {
 	.scale = 1,
 	.uscale = 0,
 	.offset = 0,
+	.attenuation_factor = 1,
 };
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {

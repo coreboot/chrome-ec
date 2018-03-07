@@ -786,6 +786,7 @@ static struct opt3001_drv_data_t g_opt3001_data = {
 	.scale = 1,
 	.uscale = 0,
 	.offset = 0,
+	.attenuation_factor = 1,
 };
 
 /* FIXME(dhendrix): Copied from Amenia, probably need to tweak for Reef */
