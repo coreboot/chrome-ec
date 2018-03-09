@@ -28,7 +28,7 @@ static const uint8_t form_factor[32] = {
 	/* SKU 24 - 31 */
 	0x00,
 	/* SKU 32 - 39 */
-	0x00,
+	SKU_CONVERTIBLE(37) | SKU_CONVERTIBLE(38),
 	/* SKU 40 - 47 */
 	0x00,
 	/* SKU 48 - 55 */
