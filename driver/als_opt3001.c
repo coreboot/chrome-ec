@@ -147,8 +147,7 @@ int opt3001_read_lux(const struct motion_sensor_t *s, vector_3_t v)
 	/*
 	 * lux = 2EXP[3:0] × R[11:0] / 100
 	 */
-	data = (1 << (data >> 12)) * (data & 0x0FFF) *
-		drv_data->attenuation_factor / 100;
+	data = (1 << (data >> 12)) * (data & 0x0FFF) / 100;
 	data += drv_data->offset;
 	if (data < 0)
 		data = 1;

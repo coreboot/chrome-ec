@@ -53,7 +53,6 @@ struct opt3001_drv_data_t {
 	int16_t scale;
 	uint16_t uscale;
 	int16_t offset;
-	int attenuation_factor;
 };
 
 extern const struct accelgyro_drv opt3001_drv;
