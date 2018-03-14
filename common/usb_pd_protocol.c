@@ -3482,8 +3482,20 @@ static void pd_chipset_startup(void)
 {
 	int i;
 	pd_set_dual_role(PD_DRP_TOGGLE_OFF);
+	/*
+	 * Key observations are:
+	 * - Setting CHECK_IDENTITY there was useful for the following reasons:
+	 *   * In S5 we are in FORCE_SINK. So we might not be able to discover
+	 *     mode (due to the fact that we are a UFP initially when being a
+	 *     SINK).
+	 *   * Once we start, we want to discover the full capabilities.
+	 * - The use case above is not true if we are a DFP (since we can
+	 *   discover mode immediately)
+	 * - So it's useful IFF we are a UFP at transition.
+	 */
 	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++)
-		pd[i].flags |= PD_FLAGS_CHECK_IDENTITY;
+		if (pd[i].data_role == PD_ROLE_UFP)
+			pd[i].flags |= PD_FLAGS_CHECK_IDENTITY;
 	CPRINTS("PD:S5->S3");
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pd_chipset_startup, HOOK_PRIO_DEFAULT);
