@@ -835,6 +835,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .config = {
 		[SENSOR_CONFIG_EC_S0] = {
 			.odr = 1000,
+			.ec_rate = 1000 * MSEC,
 		},
 	 },
 	},

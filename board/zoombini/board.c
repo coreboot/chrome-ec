@@ -202,23 +202,26 @@ static struct opt3001_drv_data_t g_opt3001_data = {
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ALS] = {
-	 .name = "Light",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_OPT3001,
-	 .type = MOTIONSENSE_TYPE_LIGHT,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &opt3001_drv,
-	 .drv_data = &g_opt3001_data,
-	 .port = I2C_PORT_SENSOR,
-	 .addr = OPT3001_I2C_ADDR,
-	 .rot_standard_ref = NULL,
-	 .default_range = 0x10000, /* scale = 1; uscale = 0 */
-	 .min_frequency = OPT3001_LIGHT_MIN_FREQ,
-	 .max_frequency = OPT3001_LIGHT_MAX_FREQ,
-	 .config = {
-		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 1000,
-		 },
+		.name = "Light",
+		.active_mask = SENSOR_ACTIVE_S0,
+		.chip = MOTIONSENSE_CHIP_OPT3001,
+		.type = MOTIONSENSE_TYPE_LIGHT,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &opt3001_drv,
+		.drv_data = &g_opt3001_data,
+		.port = I2C_PORT_SENSOR,
+		.addr = OPT3001_I2C_ADDR,
+		.rot_standard_ref = NULL,
+		.default_range = 0x10000, /* scale = 1; uscale = 0 */
+		.min_frequency = OPT3001_LIGHT_MIN_FREQ,
+		.max_frequency = OPT3001_LIGHT_MAX_FREQ,
+		.config = {
+			/* Run ALS sensor in S0 */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 1000,
+				.ec_rate = 1000 * MSEC,
+			},
+		},
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
