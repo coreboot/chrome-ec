@@ -216,20 +216,9 @@ struct motion_sensor_t motion_sensors[] = {
 	 .min_frequency = OPT3001_LIGHT_MIN_FREQ,
 	 .max_frequency = OPT3001_LIGHT_MAX_FREQ,
 	 .config = {
-		 /* AP: by default shutdown all sensors */
-		 [SENSOR_CONFIG_AP] = {
-		 },
-		 /* Run ALS sensor in S0 */
 		 [SENSOR_CONFIG_EC_S0] = {
 			 .odr = 1000,
 		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S3] = {
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S5] = {
-		 },
-	 },
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
