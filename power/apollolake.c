@@ -46,27 +46,6 @@ void chipset_handle_espi_reset_assert(void)
 {
 }
 
-void chipset_reset(int cold_reset)
-{
-	CPRINTS("%s(%d)", __func__, cold_reset);
-	if (cold_reset) {
-		/*
-		 * Perform chipset_force_shutdown and mark forcing_coldreset.
-		 * Once in S5G3 state, check forcing_coldreset to power up.
-		 */
-		forcing_coldreset = 1;
-
-		chipset_force_shutdown();
-	} else {
-		/*
-		 * Send a pulse to SOC PMU_RSTBTN_N to trigger a warm reset.
-		 */
-		gpio_set_level(GPIO_PCH_RCIN_L, 0);
-		usleep(32 * MSEC);
-		gpio_set_level(GPIO_PCH_RCIN_L, 1);
-	}
-}
-
 static void handle_all_sys_pgood(enum power_state state)
 {
 	/*
