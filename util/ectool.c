@@ -73,6 +73,8 @@ const char help_str[] =
 	"      Prints supported version mask for a command number\n"
 	"  console\n"
 	"      Prints the last output to the EC debug console\n"
+	"  cec <tv_on|tv_off|status>\n"
+	"      Send CEC command to TV or retrieve CEC status\n"
 	"  echash [CMDS]\n"
 	"      Various EC hash commands\n"
 	"  eventclear <mask>\n"
@@ -7222,6 +7224,35 @@ err:
 	return rv < 0;
 }
 
+int cmd_cec(int argc, char *argv[])
+{
+	struct ec_params_cec p;
+	struct ec_response_cec r;
+
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <tv_on|tv_off|status>\n", argv[0]);
+		return -1;
+	}
+
+	if (!strcmp(argv[1], "tv_off")) {
+		fprintf(stdout, "Turning TV off\n");
+		p.cec_cmd = CEC_CMD_TV_OFF;
+	} else if (!strcmp(argv[1], "tv_on")) {
+		fprintf(stdout, "Turning TV on\n");
+		p.cec_cmd = CEC_CMD_TV_ON;
+	} else if (!strcmp(argv[1], "status")) {
+		fprintf(stdout, "Fetching CEC status\n");
+		p.cec_cmd = CEC_CMD_STATUS;
+	} else {
+		fprintf(stderr, "Invalid argument: '%s'\n", argv[1]);
+		return -EINVAL;
+	}
+
+	return ec_command(EC_CMD_CEC, 0, &p,
+			  sizeof(p), &r, sizeof(r));
+}
+
+
 /* NULL-terminated list of commands */
 const struct command commands[] = {
 	{"autofanctrl", cmd_thermal_auto_fan_ctrl},
@@ -7237,6 +7268,7 @@ const struct command commands[] = {
 	{"chipinfo", cmd_chipinfo},
 	{"cmdversions", cmd_cmdversions},
 	{"console", cmd_console},
+	{"cec", cmd_cec},
 	{"echash", cmd_ec_hash},
 	{"eventclear", cmd_host_event_clear},
 	{"eventclearb", cmd_host_event_clear_b},
