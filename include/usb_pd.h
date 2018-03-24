@@ -911,11 +911,12 @@ enum pd_data_msg_type {
 	((id) << 9) | ((cnt) << 12) | ((ext) << 15))
 
 /* Used for processing pd header */
-#define PD_HEADER_EXT(header)  (((header) >> 15) & 1)
-#define PD_HEADER_CNT(header)  (((header) >> 12) & 7)
-#define PD_HEADER_TYPE(header) ((header) & 0xF)
-#define PD_HEADER_ID(header)   (((header) >> 9) & 7)
-#define PD_HEADER_REV(header)  (((header) >> 6) & 3)
+#define PD_HEADER_EXT(header)   (((header) >> 15) & 1)
+#define PD_HEADER_CNT(header)   (((header) >> 12) & 7)
+#define PD_HEADER_TYPE(header)  ((header) & 0xF)
+#define PD_HEADER_ID(header)    (((header) >> 9) & 7)
+#define PD_HEADER_REV(header)   (((header) >> 6) & 3)
+#define PD_HEADER_DROLE(header) (((header) >> 5) & 1)
 
 /* Used for processing pd extended header */
 #define PD_EXT_HEADER_CHUNKED(header)   (((header) >> 15) & 1)
