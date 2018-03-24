@@ -1300,6 +1300,14 @@ static void pd_set_data_role(int port, int role)
 	pd_update_roles(port);
 }
 
+static void pd_set_power_role(int port, int role)
+{
+	pd[port].power_role = role;
+#ifdef CONFIG_USB_PD_DUAL_ROLE
+	pd_update_saved_port_flags(port, PD_BBRMFLG_POWER_ROLE, role);
+#endif /* defined(CONFIG_USB_PD_DUAL_ROLE) */
+}
+
 static void pd_dr_swap(int port)
 {
 	pd_set_data_role(port, !pd[port].data_role);
@@ -1356,7 +1364,7 @@ static void handle_ctrl_request(int port, uint16_t head,
 		} else if (pd[port].task_state == PD_STATE_SRC_SWAP_STANDBY) {
 			/* reset message ID and swap roles */
 			pd[port].msg_id = 0;
-			pd[port].power_role = PD_ROLE_SINK;
+			pd_set_power_role(port, PD_ROLE_SINK);
 			pd_update_roles(port);
 			set_state(port, PD_STATE_SNK_DISCOVERY);
 #ifdef CONFIG_USBC_VCONN_SWAP
@@ -1835,7 +1843,7 @@ void pd_update_dual_role_config(int port)
 	    ((drp_state == PD_DRP_FORCE_SINK && !pd_ts_dts_plugged(port)) ||
 	     (drp_state == PD_DRP_TOGGLE_OFF
 	      && pd[port].task_state == PD_STATE_SRC_DISCONNECTED))) {
-		pd[port].power_role = PD_ROLE_SINK;
+		pd_set_power_role(port, PD_ROLE_SINK);
 		set_state(port, PD_STATE_SNK_DISCONNECTED);
 		tcpm_set_cc(port, TYPEC_CC_RD);
 		/* Make sure we're not sourcing VBUS. */
@@ -1848,7 +1856,7 @@ void pd_update_dual_role_config(int port)
 	 */
 	if (pd[port].power_role == PD_ROLE_SINK &&
 	    drp_state == PD_DRP_FORCE_SOURCE) {
-		pd[port].power_role = PD_ROLE_SOURCE;
+		pd_set_power_role(port, PD_ROLE_SOURCE);
 		set_state(port, PD_STATE_SRC_DISCONNECTED);
 		tcpm_set_cc(port, TYPEC_CC_RP);
 	}
@@ -2166,7 +2174,7 @@ void pd_task(void *u)
 #endif
 
 	/* Initialize PD protocol state variables for each port. */
-	pd[port].power_role = PD_ROLE_DEFAULT(port);
+	pd_set_power_role(port, PD_ROLE_DEFAULT(port));
 	pd[port].vdm_state = VDM_STATE_DONE;
 	set_state(port, this_state);
 #ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
@@ -2267,7 +2275,7 @@ void pd_task(void *u)
 				tcpm_set_rx_enable(port, 1);
 			} else {
 				/* Ensure state variables are at default */
-				pd[port].power_role = PD_ROLE_DEFAULT(port);
+				pd_set_power_role(port, PD_ROLE_DEFAULT(port));
 				pd[port].vdm_state = VDM_STATE_DONE;
 				set_state(port, PD_DEFAULT_STATE(port));
 			}
@@ -2339,7 +2347,7 @@ void pd_task(void *u)
 				  drp_state != PD_DRP_FORCE_SOURCE &&
 				  drp_state != PD_DRP_FREEZE &&
 				 get_time().val >= next_role_swap)) {
-				pd[port].power_role = PD_ROLE_SINK;
+				pd_set_power_role(port, PD_ROLE_SINK);
 				set_state(port, PD_STATE_SNK_DISCONNECTED);
 				tcpm_set_cc(port, TYPEC_CC_RD);
 				next_role_swap = get_time().val + PD_T_DRP_SNK;
@@ -2721,7 +2729,7 @@ void pd_task(void *u)
 				}
 				/* Switch to Rd and swap roles to sink */
 				tcpm_set_cc(port, TYPEC_CC_RD);
-				pd[port].power_role = PD_ROLE_SINK;
+				pd_set_power_role(port, PD_ROLE_SINK);
 				/* Wait for PS_RDY from new source */
 				set_state_timeout(port,
 						  get_time().val +
@@ -2817,7 +2825,7 @@ void pd_task(void *u)
 			if (drp_state == PD_DRP_TOGGLE_ON &&
 			    get_time().val >= next_role_swap) {
 				/* Swap roles to source */
-				pd[port].power_role = PD_ROLE_SOURCE;
+				pd_set_power_role(port, PD_ROLE_SOURCE);
 				set_state(port, PD_STATE_SRC_DISCONNECTED);
 				tcpm_set_cc(port, TYPEC_CC_RP);
 				next_role_swap = get_time().val + PD_T_DRP_SRC;
@@ -2864,7 +2872,7 @@ void pd_task(void *u)
 				pd[port].try_src_marker = get_time().val
 					+ PD_T_TRY_SRC;
 				/* Swap roles to source */
-				pd[port].power_role = PD_ROLE_SOURCE;
+				pd_set_power_role(port, PD_ROLE_SOURCE);
 				tcpm_set_cc(port, TYPEC_CC_RP);
 				timeout = 2*MSEC;
 				set_state(port, PD_STATE_SRC_DISCONNECTED);
@@ -3177,7 +3185,7 @@ void pd_task(void *u)
 			snk_cap_count = PD_SNK_CAP_RETRIES+1;
 			caps_count = 0;
 			pd[port].msg_id = 0;
-			pd[port].power_role = PD_ROLE_SOURCE;
+			pd_set_power_role(port, PD_ROLE_SOURCE);
 			pd_update_roles(port);
 			set_state(port, PD_STATE_SRC_DISCOVERY);
 			timeout = 10*MSEC;
@@ -3393,11 +3401,11 @@ void pd_task(void *u)
 
 			if (next_state == PD_STATE_SNK_DISCONNECTED) {
 				tcpm_set_cc(port, TYPEC_CC_RD);
-				pd[port].power_role = PD_ROLE_SINK;
+				pd_set_power_role(port, PD_ROLE_SINK);
 				timeout = 2*MSEC;
 			} else if (next_state == PD_STATE_SRC_DISCONNECTED) {
 				tcpm_set_cc(port, TYPEC_CC_RP);
-				pd[port].power_role = PD_ROLE_SOURCE;
+				pd_set_power_role(port, PD_ROLE_SOURCE);
 				timeout = 2*MSEC;
 			} else {
 				tcpm_set_drp_toggle(port, 1);
@@ -3457,7 +3465,7 @@ void pd_task(void *u)
 				 */
 				if (pd_try_src_enable) {
 					/* Swap roles to sink */
-					pd[port].power_role = PD_ROLE_SINK;
+					pd_set_power_role(port, PD_ROLE_SINK);
 					tcpm_set_cc(port, TYPEC_CC_RD);
 					/* Set timer for TryWait.SNK state */
 					pd[port].try_src_marker = get_time().val
@@ -3716,7 +3724,7 @@ void pd_request_source_voltage(int port, int mv)
 		/* Set flag to send new power request in pd_task */
 		pd[port].new_power_request = 1;
 	} else {
-		pd[port].power_role = PD_ROLE_SINK;
+		pd_set_power_role(port, PD_ROLE_SINK);
 		tcpm_set_cc(port, TYPEC_CC_RD);
 		set_state(port, PD_STATE_SNK_DISCONNECTED);
 	}
@@ -3859,7 +3867,7 @@ static int command_pd(int argc, char **argv)
 		set_state(port, PD_STATE_BIST_TX);
 		task_wake(PD_PORT_TO_TASK_ID(port));
 	} else if (!strcasecmp(argv[2], "charger")) {
-		pd[port].power_role = PD_ROLE_SOURCE;
+		pd_set_power_role(port, PD_ROLE_SOURCE);
 		tcpm_set_cc(port, TYPEC_CC_RP);
 		set_state(port, PD_STATE_SRC_DISCONNECTED);
 		task_wake(PD_PORT_TO_TASK_ID(port));
