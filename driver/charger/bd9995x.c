@@ -894,21 +894,6 @@ static void bd9995x_init(void)
 		return;
 	reg &= ~BD9995X_CMD_VM_CTRL_SET_EXTIADPEN;
 	ch_raw_write16(BD9995X_CMD_VM_CTRL_SET, reg, BD9995X_EXTENDED_COMMAND);
-	/*
-	 * Disable the input current limit when VBAT is < VSYSREG_SET. This
-	 * needs to be done before calling
-	 * bd9995x_battery_charging_profile_settings() as in that function the
-	 * input current limit is set to CONFIG_CHARGER_INPUT_CURRENT which is
-	 * 512 mA. In deeply discharged battery cases, setting the input current
-	 * limit this low can cause VSYS to collapse, which in turn can cause
-	 * the EC's brownout detector to reset the EC.
-	 */
-	if (ch_raw_read16(BD9995X_CMD_VIN_CTRL_SET, &reg,
-			  BD9995X_EXTENDED_COMMAND))
-		return;
-	reg |= BD9995X_CMD_VIN_CTRL_SET_VSYS_PRIORITY;
-	ch_raw_write16(BD9995X_CMD_VIN_CTRL_SET, reg,
-		       BD9995X_EXTENDED_COMMAND);
 
 	/* Define battery charging profile */
 	bd9995x_battery_charging_profile_settings();
