@@ -267,6 +267,24 @@ void __hw_clock_source_irq(void)
 }
 DECLARE_IRQ(NPCX_IRQ_ITIM32, __hw_clock_source_irq, 3);
 
+/* Handle ITIM32 overflow if interrupt is disable */
+void __hw_clock_handle_overflow(uint32_t clksrc_high)
+{
+	timestamp_t new;
+
+	/*
+	 * Restore ITIM32 preload counter value to maximum and execute
+	 * process_timers() later in ISR by trigger software interrupt in
+	 * force_time().
+	 */
+	new.le.hi = ++clksrc_high;
+	new.le.lo = 0;
+	force_time(new);
+
+	/* Clear timeout status */
+	SET_BIT(NPCX_ITCTS(ITIM32), NPCX_ITCTS_TO_STS);
+}
+
 static void update_prescaler(void)
 {
 	/*
