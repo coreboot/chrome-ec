@@ -144,3 +144,12 @@ ifneq ($(CONFIG_RSA_OPTIMIZED),)
 $(out)/RW/common/rsa.o: CFLAGS+=-O3
 $(out)/RO/common/rsa.o: CFLAGS+=-O3
 endif
+
+ifeq ($(TEST_BUILD),)
+
+$(out)/RW/common/rma_auth.o: $(out)/rma_key_from_blob.h
+
+$(out)/rma_key_from_blob.h: board/$(BOARD)/rma_key_blob.test util/bin2h.sh
+	$(Q)util/bin2h.sh RMA_KEY_BLOB $< $@
+
+endif
