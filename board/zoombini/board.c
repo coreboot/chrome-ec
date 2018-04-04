@@ -371,11 +371,6 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 static void board_init(void)
 {
 #ifdef BOARD_ZOOMBINI
-	struct charge_port_info chg;
-	int i;
-#endif /* defined(BOARD_ZOOMBINI) */
-
-#ifdef BOARD_ZOOMBINI
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_L);
@@ -387,18 +382,6 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_USB_C1_PD_INT_L);
 #ifdef BOARD_ZOOMBINI
 	gpio_enable_interrupt(GPIO_USB_C2_PD_INT_L);
-
-	/* Initialize VBUS suppliers. */
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
-		if (tcpm_get_vbus_level(i)) {
-			chg.voltage = 5000;
-			chg.current = USB_CHARGER_MIN_CURR_MA;
-		} else {
-			chg.voltage = 0;
-			chg.current = 0;
-		}
-		charge_manager_update_charge(CHARGE_SUPPLIER_VBUS, i, &chg);
-	}
 #endif /* defined(BOARD_ZOOMBINI) */
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
