@@ -447,7 +447,7 @@ static void board_pmic_init(void)
 	/* VRMODECTRL - disable low-power mode for all rails */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x1f);
 }
-DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
+DECLARE_DEFERRED(board_pmic_init);
 
 static void board_set_tablet_mode(void)
 {
@@ -505,6 +505,9 @@ static void board_init(void)
 		scancode_set2[3][9] = 0xe007;
 	}
 #endif
+
+	/* Initialize PMIC */
+	hook_call_deferred(&board_pmic_init_data, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
