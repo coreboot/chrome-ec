@@ -10,6 +10,7 @@
 #include "bd9995x.h"
 #include "charge_ramp.h"
 #include "charge_state.h"
+#include "chipset.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
@@ -128,6 +129,16 @@ static int charger_should_discharge_on_ac(struct charge_state_data *curr)
 	/* Do not discharge on AC if the battery is still waking up */
 	if (!(curr->batt.flags & BATT_FLAG_WANT_CHARGE) &&
 		!(curr->batt.status & STATUS_FULLY_CHARGED))
+		return 0;
+
+	/*
+	 * Do not discharge on AC if the system is not consuming significant
+	 * power. This is any of the following states including transitional
+	 * states between them: G3, S5.
+	 * S3 is not included because we can't distinguish whether we're booting
+	 * up or we're quietly sleeping.
+	 */
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		return 0;
 
 	/*
