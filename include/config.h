@@ -457,6 +457,10 @@
 #undef CONFIG_CAPSENSE
 
 /*****************************************************************************/
+/* Support CEC */
+#undef CONFIG_CEC
+
+/*****************************************************************************/
 
 /* Compile charge manager */
 #undef CONFIG_CHARGE_MANAGER
