@@ -224,7 +224,7 @@ deps := $(ro-deps) $(rw-deps)
 $(config): $(out)/$(PROJECT).bin
 	@printf '%s=y\n' $(_tsk_cfg) $(_flag_cfg) > $@
 
-def_all_deps:=utils ro rw notice $(config) $(PROJECT_EXTRA)
+def_all_deps:=utils ro rw notice $(config) $(PROJECT_EXTRA) size
 all_deps?=$(def_all_deps)
 all: $(all_deps)
 
