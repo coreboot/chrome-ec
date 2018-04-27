@@ -613,7 +613,7 @@ int board_set_active_charge_port(int charge_port)
 		 */
 		if (charge_get_percent() > 2 &&
 				!chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
-				!system_jumped_to_this_image())
+				extpower_is_inrush_protection_needed())
 			charger_discharge_on_ac(1);
 		break;
 	default:

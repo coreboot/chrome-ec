@@ -13,10 +13,16 @@
 #include "timer.h"
 
 static int debounced_extpower_presence;
+static int need_inrush_protection;
 
 int extpower_is_present(void)
 {
 	return debounced_extpower_presence;
+}
+
+int extpower_is_inrush_protection_needed(void)
+{
+	return need_inrush_protection;
 }
 
 /**
@@ -30,6 +36,11 @@ static void extpower_deferred(void)
 		return;
 
 	debounced_extpower_presence = extpower_presence;
+
+	if (!extpower_presence)
+		/* Once unplugged, we need inrush protection until next boot. */
+		need_inrush_protection = 1;
+
 	hook_notify(HOOK_AC_CHANGE);
 
 	/* Forward notification to host */
@@ -63,3 +74,12 @@ static void extpower_init(void)
 	gpio_enable_interrupt(GPIO_AC_PRESENT);
 }
 DECLARE_HOOK(HOOK_INIT, extpower_init, HOOK_PRIO_INIT_EXTPOWER);
+
+static void extpower_startup(void)
+{
+	/* If AC is present on boot (or reboot), inrush protection is not
+	 * necessary. Actually, it could be harmful if we're booting on a
+	 * weak battery because battery learning mode can cause brownout. */
+	need_inrush_protection = !gpio_get_level(GPIO_AC_PRESENT);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, extpower_startup, HOOK_PRIO_DEFAULT);
