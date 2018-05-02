@@ -31,7 +31,7 @@ static enum {
 
 static int idle_default;
 
-static const char const *idle_name[] = {
+static const char *const idle_name[] = {
 	"invalid",
 	"wfi",
 	"sleep",
