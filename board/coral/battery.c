@@ -46,6 +46,9 @@ enum battery_type {
 	BATTERY_SMP223_2S1P,
 	BATTERY_SMP523_2S1P,
 	BATTERY_SMP_AP13J7K,
+	BATTERY_SMP423_2S1P,
+	BATTERY_SMP523_PROTO_2S1P,
+	BATTERY_SMP423_PROTO_2S1P,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -655,6 +658,95 @@ static const struct board_batt_params info[] = {
 		},
 	},
 
+	/* Simplo AS1GTGE3KA 2S1P Battery Information */
+	[BATTERY_SMP423_2S1P] = {
+		.fuel_gauge = {
+			.manuf_name = "AS1GTFE3KA",
+			.device_name = "C423-50",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x0006,
+				.disconnect_val = 0x0000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(8800, 5),
+			.voltage_normal		= 7700, /* mV */
+			.voltage_min		= 6000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 50,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* Simplo AS1GTGE3KA 2S1P Battery Information */
+	[BATTERY_SMP523_PROTO_2S1P] = {
+		.fuel_gauge = {
+			.manuf_name = "AS19XXE3KA",
+			.device_name = "C523-50",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x0006,
+				.disconnect_val = 0x0000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(8800, 5),
+			.voltage_normal		= 7700, /* mV */
+			.voltage_min		= 6000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 50,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* Simplo AS1GTGE3KA 2S1P Battery Information */
+	[BATTERY_SMP423_PROTO_2S1P] = {
+		.fuel_gauge = {
+			.manuf_name = "AS19XXE3KA",
+			.device_name = "C423-50",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x0006,
+				.disconnect_val = 0x0000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(8800, 5),
+			.voltage_normal		= 7700, /* mV */
+			.voltage_min		= 6000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 50,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 60,
+		},
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(info) == BATTERY_TYPE_COUNT);
 

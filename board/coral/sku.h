@@ -100,9 +100,9 @@ static const uint8_t battery_2s[32] = {
 	/* SKU 16 - 23 */
 	0x00,
 	/* SKU 24 - 31 */
-	SKU_ENCODE(28) | SKU_ENCODE(29) | SKU_ENCODE(30),
+	SKU_ENCODE(28) | SKU_ENCODE(29) | SKU_ENCODE(30) | SKU_ENCODE(31),
 	/* SKU 32 - 39 */
-	SKU_ENCODE(33),
+	SKU_ENCODE(32) | SKU_ENCODE(33),
 	/* SKU 40 - 47 */
 	0x00,
 	/* SKU 48 - 55 */
