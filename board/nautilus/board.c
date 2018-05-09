@@ -776,6 +776,11 @@ static int is_battery_i2c(int port, int slave_addr)
 	return (port == I2C_PORT_BATTERY) && (slave_addr == BATTERY_ADDR);
 }
 
+static int is_battery_port(int port)
+{
+	return (port == I2C_PORT_BATTERY);
+}
+
 void i2c_start_xfer_notify(int port, int slave_addr)
 {
 	unsigned int time_delta_us;
@@ -792,7 +797,11 @@ void i2c_start_xfer_notify(int port, int slave_addr)
 
 void i2c_end_xfer_notify(int port, int slave_addr)
 {
-	if (!is_battery_i2c(port, slave_addr))
+	/*
+	 * The bus free time needs to be maintained from last transaction
+	 * on I2C bus to any device on it to the next transaction to battery.
+	 */
+	if (!is_battery_port(port))
 		return;
 
 	battery_last_i2c_time = get_time();
