@@ -317,6 +317,19 @@ int board_get_version(void)
 	return board_version;
 }
 
+static void board_pmic_init(void)
+{
+	int pgmask1 = 0;
+
+	/* Mask V5A_DS3_PG from PMIC PGMASK1. */
+	if (i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x18, &pgmask1))
+		return;
+	pgmask1 |= (1 << 2);
+	if (i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x18, pgmask1))
+		return;
+}
+DECLARE_DEFERRED(board_pmic_init);
+
 static void board_init(void)
 {
 	/* Enable sensor interrupts. */
@@ -326,6 +339,9 @@ static void board_init(void)
 	/* Enable USB Type-C interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_PD_INT_ODL);
+
+	/* Do PMIC init in a deferred function. */
+	hook_call_deferred(&board_pmic_init_data, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
