@@ -31,6 +31,7 @@
 #include "pwm_chip.h"
 #include "registers.h"
 #include "system.h"
+#include "system_chip.h"
 #include "switch.h"
 #include "task.h"
 #include "tcpci.h"
@@ -315,6 +316,31 @@ int board_get_version(void)
 	}
 
 	return board_version;
+}
+
+void board_hibernate(void)
+{
+	int p;
+
+	/* Configure PSL pins */
+	for (p = 0; p < hibernate_wake_pins_used; p++)
+		system_config_psl_mode(hibernate_wake_pins[p]);
+	gpio_config_module(MODULE_PMU, 1);
+
+	/*
+	 * Only PSL_IN events can pull PSL_OUT to high and reboot ec.
+	 * We should treat it as wake-up pin reset.
+	 */
+	NPCX_BBRAM(BBRM_DATA_INDEX_WAKE) = HIBERNATE_WAKE_PIN;
+
+	/*
+	 * Set PSL_OUT (GPIO85) to low in order to enter PSL mode by
+	 * setting bit 5 of PDOUT(8).
+	 */
+	SET_BIT(NPCX_PDOUT(GPIO_PORT_8), 5);
+
+	/* Cut off DSW power via the ROP PMIC. */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x49, 0x1);
 }
 
 static void board_pmic_init(void)
