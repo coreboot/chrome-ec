@@ -2126,6 +2126,15 @@
 /* Do not try hold I/O pins at frozen level during deep sleep */
 #undef CONFIG_NO_PINHOLD
 
+/*
+ * Since the accelerometers are on the same physical device, they should be
+ * under the same acceleration.  This constant, which mirrors
+ * kNoisyMagnitudeDeviation used in Chromium, is an integer, 1, which defines
+ * the maximum deviation in magnitude between the base and lid vectors.  The
+ * units are in m/s^2.
+ */
+#define CONFIG_NOISY_MAGNITUDE_DEVIATION FLOAT_TO_FP(1)
+
 /* Support one-wire interface */
 #undef CONFIG_ONEWIRE
 

@@ -105,15 +105,6 @@ static int lid_angle_is_reliable;
 #define DEBOUNCE_ANGLE_DELTA FLOAT_TO_FP(45)
 
 /*
- * Since the accelerometers are on the same physical device, they should be
- * under the same acceleration.  This constant, which mirrors
- * kNoisyMagnitudeDeviation used in Chromium, is an integer which defines the
- * maximum deviation in magnitude between the base and lid vectors.  The units
- * are in m/s^2.
- */
-#define NOISY_MAGNITUDE_DEVIATION 1
-
-/*
  * Define the accelerometer orientation matrices based on the standard
  * reference frame in use (note: accel data is converted to standard ref
  * frame before calculating lid angle).
@@ -280,8 +271,9 @@ static int calculate_lid_angle(const vector_3_t base, const vector_3_t lid,
 			  scaled_lid[Z] * scaled_lid[Z]) >> 6;
 
 	/*
-	 * Check to see if they differ than more than NOISY_MAGNITUDE_DEVIATION.
-	 * If the vectors do, then the measured angle is unreliable.
+	 * Check to see if they differ than more than
+	 * CONFIG_NOISY_MAGNITUDE_DEVIATION.  If the vectors do, then the
+	 * measured angle is unreliable.
 	 *
 	 * Note, that we don't actually have to take the square root to get the
 	 * magnitude, but we can work with the magnitudes squared directly as
@@ -297,10 +289,10 @@ static int calculate_lid_angle(const vector_3_t base, const vector_3_t lid,
 	 * If we assume that the average acceleration should be about 1g, then
 	 * we have:
 	 *
-	 *          (A^2 - B^2) < 2 * 1g * NOISY_MAGNITUDE_DEVIATION
+	 *          (A^2 - B^2) < 2 * 1g * CONFIG_NOISY_MAGNITUDE_DEVIATION
 	 */
-	if (ABS(base_magnitude2 - lid_magnitude2) >
-	    (2 * 10 * NOISY_MAGNITUDE_DEVIATION))
+	if (FLOAT_TO_FP(ABS(base_magnitude2 - lid_magnitude2)) >
+	    FLOAT_TO_FP(2 * 10 * CONFIG_NOISY_MAGNITUDE_DEVIATION))
 		reliable = 0;
 
 #ifdef CONFIG_LID_ANGLE_INVALID_CHECK

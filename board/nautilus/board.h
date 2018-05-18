@@ -126,7 +126,15 @@
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_TABLET_MODE
 #define CONFIG_LID_ANGLE_INVALID_CHECK
-/* Lower maximal ODR to 100Hz */
+/*
+ * Workound for b/79670788.
+ *
+ * Be more lenient when determining valid lid angles.
+ */
+#undef CONFIG_NOISY_MAGNITUDE_DEVIATION
+#define CONFIG_NOISY_MAGNITUDE_DEVIATION FLOAT_TO_FP(1.5)
+
+/* Lower maximal ODR to 100Hz. */
 #define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 100000
 
 /* FIFO size is in power of 2. */
