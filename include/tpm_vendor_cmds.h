@@ -49,7 +49,11 @@ enum vendor_cmd_cc {
 
 	/* A gap left for the no longer supported CCD password command. */
 
-	VENDOR_CC_DISABLE_RMA = 32,
+	/*
+	 * Disable factory mode. Reset all ccd capabilities to default and reset
+	 * write protect to follow battery presence.
+	 */
+	VENDOR_CC_DISABLE_FACTORY = 32,
 	VENDOR_CC_MANAGE_CCD_PWD = 33,
 	VENDOR_CC_CCD = 34,
 	VENDOR_CC_GET_ALERTS_DATA = 35,
