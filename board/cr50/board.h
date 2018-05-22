@@ -347,6 +347,7 @@ enum nvmem_users {
 #define CONFIG_BASE32
 #define CONFIG_CURVE25519
 #define CONFIG_RMA_AUTH
+#define CONFIG_FACTORY_MODE
 #define CONFIG_RNG
 
 /* Dummy values to be replaced with real ones. */
