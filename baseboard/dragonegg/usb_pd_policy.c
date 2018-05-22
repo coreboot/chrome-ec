@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Shared USB-C policy for octopus boards */
+/* Shared USB-C policy for DragonEgg boards */
 
 #include "charge_manager.h"
 #include "common.h"
@@ -105,9 +105,9 @@ int pd_check_vconn_swap(int port)
 
 void pd_execute_data_swap(int port, int data_role)
 {
-	/* On Octopus, only the first port can act as OTG */
+	/* On DragonEgg, only the first port can act as OTG */
 	if (port == 0)
-		gpio_set_level(GPIO_USB2_OTG_ID, (data_role == PD_ROLE_UFP));
+		gpio_set_level(GPIO_CHG_VAP_OTG_EN, (data_role == PD_ROLE_UFP));
 }
 
 int pd_is_valid_input_voltage(int mv)
