@@ -349,13 +349,20 @@ enum nvmem_users {
 #define I2C_PORT_MASTER 0
 
 #define CONFIG_BASE32
-#define CONFIG_CURVE25519
 #define CONFIG_RMA_AUTH
 #define CONFIG_RNG
+
+#define CONFIG_ENABLE_H1_ALERTS
 
 /* Enable hardware backed brute force resistance feature */
 #define CONFIG_PINWEAVER
 
-#define CONFIG_ENABLE_H1_ALERTS
-
+/*
+ * While RMA server support is not ready keep using x25519. Switching to P256
+ * saves 5336 bytes of flash space.
+ */
+/* #define CONFIG_RMA_AUTH_USE_P256 */
+#ifndef CONFIG_RMA_AUTH_USE_P256
+#define CONFIG_CURVE25519
+#endif
 #endif /* __CROS_EC_BOARD_H */
