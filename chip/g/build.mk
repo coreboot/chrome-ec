@@ -117,6 +117,9 @@ endif
 $(out)/RO/ec.RO.flat: $(out)/util/signer
 $(out)/RW/ec.RW.flat: $(out)/util/signer
 
+# Do not build any test on chip/g
+test-list-y=
+
 %.hex: %.flat
 
 ifneq ($(CONFIG_RW_B),)
