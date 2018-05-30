@@ -190,7 +190,14 @@ CHIP_MK_INCLUDED_ONCE=1
 else
 
 ifneq ($(CR50_SWAP_RMA_KEYS),)
-RMA_KEY_BASE := board/$(BOARD)/rma_key_blob
+
+ifneq ($(CONFIG_RMA_AUTH_USE_P256),)
+CURVE := p256
+else
+CURVE := x25519
+endif
+
+RMA_KEY_BASE := board/$(BOARD)/rma_key_blob.$(CURVE)
 RW_SIGNER_EXTRAS += --swap $(RMA_KEY_BASE).test,$(RMA_KEY_BASE).prod
 endif
 

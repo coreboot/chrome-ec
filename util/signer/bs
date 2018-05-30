@@ -13,6 +13,8 @@ set -u
 
 progname=$(basename $0)
 
+OD="/usr/bin/od"
+
 tmpf="/tmp/bs_manifest.$$"
 trap "{ rm -rf [01].flat ${tmpf} ; }" EXIT
 
@@ -25,7 +27,9 @@ ec.RW_B.elf in build/cr50/RW as inputs and util/signer/ec_RW-manifest-dev.json
 as the manifest, and places the newly signed images into build/cr50/ec.bin.
 
 The only outside dependency of this script is the signing utility itself,
-which is expected to be available as \$HOME/bin/codesigner.
+which is expected to be available as /usr/bin/cr50-codesigner.
+
+The utility can be installed by running 'sudo emerge cr50-utils',
 
 The following command line options are accepted:
 
@@ -105,8 +109,83 @@ tweak_manifest () {
   sed -i "s/\"fuses\": {/${sub}\"fuses\": {/" "${tmpf}"
 }
 
-# This is the suggested location of the codesigner utility.
-BIN_ROOT="${HOME}/bin"
+# This function accepts two arguments, names of two binary files.
+#
+# It searches the first passed in file for the first 8 bytes of the second
+# passed in file. The od utility is used to generate full hex dump of the
+# first file (16 bytes per line) and the first 8 bytes of the second file.
+#
+# grep is used to check if the pattern is present in the full dump. If the
+# pattern is not found, the first file is dumped again, this time with an 8
+# byte offset into the file. This makes sure that if the match is present, but
+# is spanning two lines of the original hex dump, it is in a single dump line
+# the second time around.
+find_blob_in_blob() {
+  local main_blob="${1}"
+  local pattern_blob="${2}"
+  local pattern
+  local od_options="-An -tx1"
+
+  # Get the first 8 bytes of the pattern blob.
+  pattern="$(${OD} ${od_options} -N8 "${pattern_blob}")"
+
+  if "${OD}" ${od_options} "${main_blob}" | grep "${pattern}" > /dev/null; then
+    return 0
+  fi
+
+  # Just in case pattern was wrapped in the previous od output, let's do it
+  # again with an 8 bytes offset
+  if "${OD}" ${od_options} -j8 "${main_blob}" |
+      grep "${pattern}" > /dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+# This function accepts two arguments, names of the two elf files.
+#
+# The files are searched for test RMA public key patterns - x25519 or p256,
+# both files are supposed to have pattern of one of these keys and not the
+# other. If this holds true the function prints the public key base name. If
+# not both files include the same key, or include more than one key, the
+# function reports failure and exits the script.
+determine_rma_key_base() {
+  local base_name="${EC_ROOT}/board/cr50/rma_key_blob"
+  local curve
+  local curves=( "x25519" "p256" )
+  local elf
+  local elves=( "$1" "$2" )
+  local key_file
+  local mask=1
+  local result=0
+
+  for curve in ${curves[@]}; do
+    key_file="${base_name}.${curve}.test"
+    for elf in ${elves[@]}; do
+      if find_blob_in_blob "${elf}" "${key_file}"; then
+        result=$(( result | mask ))
+      fi
+      mask=$(( mask << 1 ))
+    done
+  done
+
+  case "${result}" in
+    (3)  curve="x25519";;
+    (12) curve="p256";;
+    (*) echo "could not determine key type in the elves" >&2
+        exit 1
+        ;;
+  esac
+
+  echo "${base_name}.${curve}.test"
+}
+
+SIGNER="cr50-codesigner"
+if ! which "${SIGNER}" 2>/dev/null > /dev/null; then
+  echo "${SIGNER} is not available, try running 'sudo emerge cr50-utils'" >&2
+  exit 1
+fi
 
 # This is where the new signed image will be pasted into.
 : ${RESULT_FILE=build/cr50/ec.bin}
@@ -171,6 +250,8 @@ if [[ -n "${do_prod}" && -n "${do_b1}" ]]; then
   exit 1
 fi
 
+rma_key_base="$(determine_rma_key_base ${elves[@]})"
+
 signer_command_params=()
 signer_command_params+=(--b -x ${EC_BIN_ROOT}/fuses.xml)
 if [[ -z "${do_prod}" ]]; then
@@ -178,6 +259,8 @@ if [[ -z "${do_prod}" ]]; then
 else
   cp "${EC_BIN_ROOT}/ec_RW-manifest-prod.json" "${tmpf}"
   signer_command_params+=(-k ${EC_BIN_ROOT}/cr50_RW-prod.pem.pub)
+  # Swap test public RMA server key with the prod version.
+  signer_command_params+=(-S "${rma_key_base}.test","${rma_key_base}.prod")
 fi
 signer_command_params+=(-j ${tmpf})
 
@@ -193,19 +276,30 @@ tweak_manifest
 count=0
 for elf in ${elves[@]}; do
   if [[ -n "${do_prod}" ]]; then
-    if grep -q "DEV/cr50" "${elf}"; then
+    if strings "${elf}" | grep -q "DBG/cr50"; then
       echo "Will not sign debug image with prod keys" >&2
       exit 1
     fi
   fi
   signed_file="${count}.${dst_suffix}"
 
-  # Make sure this file is not owned by root
+  # Make sure output file is not owned by root
   touch "${signed_file}"
-  sudo ${BIN_ROOT}/codesigner ${signer_command_params[@]} \
-    -i ${elf} -o "${signed_file}"
-  if [[ ! -s "${signed_file}" ]]; then
-    echo "${progname}: error: empty signed file ${signed_file}" >&2
+  if ! "${SIGNER}" ${signer_command_params[@]} \
+       -i ${elf} -o "${signed_file}"; then
+    echo "${progname}: ${SIGNER} failed" >&2
+    exit 1
+  fi
+
+  if find_blob_in_blob  "${signed_file}" "${rma_key_base}.test"; then
+    echo "${progname}: test RMA key in the signed image!" >&2
+    rm *."${dst_suffix}"
+    exit 1
+  fi
+
+  if ! find_blob_in_blob "${signed_file}" "${rma_key_base}.prod"; then
+    echo "${progname}: prod RMA key not in the signed image!" >&2
+    rm *."${dst_suffix}"
     exit 1
   fi
   : $(( count++ ))
