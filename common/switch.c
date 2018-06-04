@@ -111,6 +111,9 @@ static int command_mmapinfo(int argc, char **argv)
 {
 	uint8_t *memmap_switches = host_get_memmap(EC_MEMMAP_SWITCHES);
 	uint8_t val = *memmap_switches;
+	uint8_t *memmap_kb_mapping_type = host_get_memmap(
+			EC_MEMMAP_KB_MAPPING_TYPE);
+	uint8_t mapping = *memmap_kb_mapping_type;
 	int i;
 	const char *explanation[] = {
 		"lid_open",
@@ -121,6 +124,7 @@ static int command_mmapinfo(int argc, char **argv)
 		"fake_dev",
 	};
 	ccprintf("memmap switches = 0x%x\n", val);
+	ccprintf("memmap kb mapping type = 0x%x\n", mapping);
 	for (i = 0; i < ARRAY_SIZE(explanation); i++)
 		if (val & (1 << i))
 			ccprintf(" %s\n", explanation[i]);

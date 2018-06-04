@@ -1598,6 +1598,12 @@
 #undef CONFIG_KEYBOARD_SCANCODE_MUTABLE
 
 /*
+ * Allow changing keyboard mapping dynamically (for example to provide Fn keys
+ * in AP firmware legacy mode).
+ */
+#undef CONFIG_KEYBOARD_DYNAMIC_MAPPING
+
+/*
  * Call board-supplied keyboard_suppress_noise() function when the debounced
  * keyboard state changes.  Some boards use this to send a signal to the audio
  * codec to suppress typing noise picked up by the microphone.
