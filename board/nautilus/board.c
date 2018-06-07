@@ -700,12 +700,19 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
 {
-	/* If the lid is in 360 position, ignore the lid angle,
-	 * which might be faulty. Disable keyboard.
-	 */
-	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		enable = 0;
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
+
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_s0)
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	}
 }
 #endif
 
