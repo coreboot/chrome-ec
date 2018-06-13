@@ -43,6 +43,7 @@ enum pd_rx_errors {
 #define PD_EVENT_CC               (1<<4) /* CC line change event */
 #define PD_EVENT_TCPC_RESET       (1<<5) /* TCPC has reset */
 #define PD_EVENT_UPDATE_DUAL_ROLE (1<<6) /* DRP state has changed */
+#define PD_EVENT_DP_DISCONNECT    (1<<7) /* DisplayPort disconnect requested */
 
 /* --- PD data message helpers --- */
 #define PDO_MAX_OBJECTS   7
