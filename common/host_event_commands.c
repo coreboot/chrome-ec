@@ -40,14 +40,9 @@ uint32_t host_get_events(void)
 
 void host_set_events(uint32_t mask)
 {
-	/* ignore host events the rest of board doesn't care about */
-	mask &= CONFIG_HOST_EVENT_REPORT_MASK;
-
-	/* exit now if nothing has changed */
-	if (!((events & mask) != mask || (events_copy_b & mask) != mask))
-		return;
-
-	CPRINTS("event set 0x%08x", mask);
+	/* Only print if something's about to change */
+	if ((events & mask) != mask || (events_copy_b & mask) != mask)
+		CPRINTS("event set 0x%08x", mask);
 
 	atomic_or(&events, mask);
 	atomic_or(&events_copy_b, mask);
@@ -67,14 +62,9 @@ void host_set_events(uint32_t mask)
 
 void host_clear_events(uint32_t mask)
 {
-	/* ignore host events the rest of board doesn't care about */
-	mask &= CONFIG_HOST_EVENT_REPORT_MASK;
-
-	/* return early if nothing changed */
-	if (!(events & mask))
-		return;
-
-	CPRINTS("event clear 0x%08x", mask);
+	/* Only print if something's about to change */
+	if (events & mask)
+		CPRINTS("event clear 0x%08x", mask);
 
 	atomic_clear(&events, mask);
 
