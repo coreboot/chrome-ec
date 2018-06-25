@@ -17,7 +17,6 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "jtag.h"
-#include "lpc.h"
 #include "keyboard_scan.h"
 #ifdef CONFIG_MPU
 #include "mpu.h"
@@ -155,16 +154,6 @@ test_mockable __keep int main(void)
 	 */
 #ifdef CONFIG_EEPROM
 	eeprom_init();
-#endif
-
-	/*
-	 * Keyboard scan init/Button init can set recovery events to
-	 * indicate to host entry into recovery mode. Before this is
-	 * done, lpc always report mask needs to be initialized
-	 * correctly.
-	 */
-#ifdef CONFIG_LPC
-	lpc_init_mask();
 #endif
 #ifdef HAS_TASK_KEYSCAN
 	keyboard_scan_init();
