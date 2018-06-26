@@ -147,11 +147,13 @@ int sbc_write(int cmd, int param);
 int sb_read(int cmd, int *param);
 
 /* Read sequence from battery */
-int sb_read_string(int port, int slave_addr, int offset, uint8_t *data,
-		   int len);
+int sb_read_string(int offset, uint8_t *data, int len);
 
 /* Write to battery */
 int sb_write(int cmd, int param);
+
+/* Read manufactures access data from the batter */
+int sb_read_mfgacc(int cmd, int block, uint8_t *data, int len);
 
 #endif /* __CROS_EC_BATTERY_SMART_H */
 

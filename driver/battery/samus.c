@@ -255,8 +255,7 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 		if (rv)
 			return BATTERY_DISCONNECT_ERROR;
 
-		rv = sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
-				    SB_ALT_MANUFACTURER_ACCESS, data, 6);
+		rv = sb_read_string(SB_ALT_MANUFACTURER_ACCESS, data, 6);
 
 		if (rv || !(data[3] & BATTERY_DISCHARGING_DISABLED) ||
 		    !(data[3] & BATTERY_CHARGING_DISABLED)) {
@@ -272,8 +271,7 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 		if (rv)
 			return BATTERY_DISCONNECT_ERROR;
 
-		rv = sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
-				    SB_ALT_MANUFACTURER_ACCESS, data, 6);
+		rv = sb_read_string(SB_ALT_MANUFACTURER_ACCESS, data, 6);
 
 		if (rv || data[2] || data[3] || data[4] || data[5])
 			return BATTERY_DISCONNECT_ERROR;

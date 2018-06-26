@@ -84,8 +84,7 @@ static int validate_string(uint8_t *data)
 }
 #endif
 
-int sb_read_string(int port, int slave_addr, int offset, uint8_t *data,
-	int len)
+int sb_read_string(int offset, uint8_t *data, int len)
 {
 	int rv;
 
@@ -97,9 +96,11 @@ int sb_read_string(int port, int slave_addr, int offset, uint8_t *data,
 		return EC_RES_ACCESS_DENIED;
 #endif
 #ifdef CONFIG_SMBUS
-	rv = smbus_read_string(port, slave_addr, offset, data, len);
+	rv = smbus_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
+			       offset, data, len);
 #else
-	rv = i2c_read_string(port, slave_addr, offset, data, len);
+	rv = i2c_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
+			     offset, data, len);
 #endif
 #ifdef CONFIG_BATTERY_VALIDATE_STRINGS
 	if (rv == EC_SUCCESS)
@@ -107,6 +108,36 @@ int sb_read_string(int port, int slave_addr, int offset, uint8_t *data,
 #endif
 
 	return rv;
+}
+
+int sb_read_mfgacc(int cmd, int block, uint8_t *data, int len)
+{
+	int rv;
+
+	/*
+	 *First two bytes returned from read are command sent hence read
+	 *doesn't yield anything if the length is less than 3 bytes.
+	 */
+	if (len < 3)
+		return EC_ERROR_INVAL;
+
+	/* Send manufactureraccess command */
+	rv = sb_write(SB_MANUFACTURER_ACCESS, cmd);
+	if (rv)
+		return rv;
+
+	/*
+	 *Read data on the register block.
+	 *First two bytes returned are command sent,
+	 *rest are actual data LSB to MSB
+	 */
+	rv = sb_read_string(block, data, len);
+	if (rv)
+		return rv;
+	if ((data[0] | data[1] << 8) != cmd)
+		return EC_ERROR_UNKNOWN;
+
+	return EC_SUCCESS;
 }
 
 int battery_get_mode(int *mode)
@@ -269,22 +300,19 @@ test_mockable int battery_manufacture_date(int *year, int *month, int *day)
 /* Read manufacturer name */
 test_mockable int battery_manufacturer_name(char *dest, int size)
 {
-	return sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
-			       SB_MANUFACTURER_NAME, dest, size);
+	return sb_read_string(SB_MANUFACTURER_NAME, dest, size);
 }
 
 /* Read device name */
 test_mockable int battery_device_name(char *dest, int size)
 {
-	return sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
-			       SB_DEVICE_NAME, dest, size);
+	return sb_read_string(SB_DEVICE_NAME, dest, size);
 }
 
 /* Read battery type/chemistry */
 test_mockable int battery_device_chemistry(char *dest, int size)
 {
-	return sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR,
-			       SB_DEVICE_CHEMISTRY, dest, size);
+	return sb_read_string(SB_DEVICE_CHEMISTRY, dest, size);
 }
 
 void battery_get_params(struct batt_params *batt)
@@ -476,8 +504,7 @@ static int host_command_sb_read_block(struct host_cmd_handler_args *args)
 	    (p->reg != SB_DEVICE_CHEMISTRY) &&
 	    (p->reg != SB_MANUFACTURER_DATA))
 		return EC_RES_INVALID_PARAM;
-	rv = sb_read_string(I2C_PORT_BATTERY, BATTERY_ADDR, p->reg,
-			     r->data, 32);
+	rv = sb_read_string(p->reg, r->data, 32);
 	if (rv)
 		return EC_RES_ERROR;
 
