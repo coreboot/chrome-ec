@@ -73,12 +73,8 @@ static void tcpc_alert_event(enum gpio_signal signal)
 /* Set PD discharge whenever VBUS detection is high (i.e. below threshold). */
 static void vbus_discharge_handler(void)
 {
-	if (system_get_board_version() >= 2) {
-		pd_set_vbus_discharge(0,
-				gpio_get_level(GPIO_USB_C0_VBUS_WAKE_L));
-		pd_set_vbus_discharge(1,
-				gpio_get_level(GPIO_USB_C1_VBUS_WAKE_L));
-	}
+	pd_set_vbus_discharge(0, gpio_get_level(GPIO_USB_C0_VBUS_WAKE_L));
+	pd_set_vbus_discharge(1, gpio_get_level(GPIO_USB_C1_VBUS_WAKE_L));
 }
 DECLARE_DEFERRED(vbus_discharge_handler);
 
@@ -433,15 +429,6 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
 
-	/* Level of sensor's I2C and interrupt are 3.3V on proto board */
-	if(system_get_board_version() < 2) {
-		/* ACCELGYRO3_INT_L */
-		gpio_set_flags(GPIO_ACCELGYRO3_INT_L, GPIO_INT_FALLING);
-		/* I2C3_SCL / I2C3_SDA */
-		gpio_set_flags(GPIO_I2C3_SCL, GPIO_INPUT);
-		gpio_set_flags(GPIO_I2C3_SDA, GPIO_INPUT);
-        }
-
 	/* Enable Gyro interrupts */
 	gpio_enable_interrupt(GPIO_ACCELGYRO3_INT_L);
 
@@ -761,18 +748,6 @@ static void board_chipset_shutdown(void)
 	gpio_set_level(GPIO_PP1800_DX_SENSOR, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
-
-int board_has_working_reset_flags(void)
-{
-	int version = system_get_board_version();
-
-	/* Boards Rev1, Rev2 and Rev3 will lose reset flags on power cycle. */
-	if ((version == 1) || (version == 2) || (version == 3))
-		return 0;
-
-	/* All other board versions should have working reset flags */
-	return 1;
-}
 
 /*
  * I2C callbacks to ensure bus free time for battery I2C transactions is at
