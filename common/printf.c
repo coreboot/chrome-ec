@@ -363,5 +363,5 @@ int snprintf(char *str, int size, const char *format, ...)
 	/* Terminate string */
 	*ctx.str = '\0';
 
-	return rv;
+	return (rv == EC_SUCCESS) ? (ctx.str - str) : -rv;
 }
