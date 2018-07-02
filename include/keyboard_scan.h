@@ -117,4 +117,29 @@ static inline void keyboard_scan_enable(int enable,
 void keyboard_suppress_noise(void);
 #endif
 
+/**
+ * Gets the keyboard matrix at boot.
+ *
+ * @param key_matrix A uint8_t array to hold the keyboard matrix.
+ * @param buffer_size Size of the key_matrix, should be at least KEYBOARD_COLS.
+ *
+ * @return EC_SUCCESS if success, non-zero if fail.
+ */
+int keyboard_get_matrix_at_boot(uint8_t *key_matrix, uint16_t buffer_size);
+
+/**
+ * Clears the keyboard matrix at boot
+ */
+void keyboard_clear_matrix_at_boot(void);
+
+/**
+ * Sets the simulated keyboard matrix at boot.
+ *
+ * @param key_matrix A uint8_t array to hold the keyboard matrix.
+ * @param buffer_size Size of the key_matrix, should be at least KEYBOARD_COLS.
+ *
+ * @return EC_SUCCESS if success, non-zero if fail.
+ */
+int keyboard_simulate_matrix_at_boot(const uint8_t *key_matrix, uint16_t size);
+
 #endif  /* __CROS_EC_KEYBOARD_SCAN_H */

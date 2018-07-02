@@ -31,6 +31,12 @@
 		old = fifo_add_count; \
 	} while (0)
 
+#define CHECK_ARRAY_EQ(actual, size, ...) \
+	do { \
+		uint8_t expected[size] = {__VA_ARGS__}; \
+		TEST_ASSERT_ARRAY_EQ(actual, expected, size); \
+	} while (0)
+
 static uint8_t mock_state[KEYBOARD_COLS];
 static int column_driven;
 static int fifo_add_count;
@@ -130,6 +136,21 @@ static int host_command_simulate(int r, int c, int keydown)
 
 	return test_send_host_command(EC_CMD_MKBP_SIMULATE_KEY, 0, &params,
 				      sizeof(params), NULL, 0);
+}
+
+static int host_command_get_kbatboot(uint8_t *key_matrix)
+{
+	struct ec_params_mkbp_info p;
+	union ec_response_get_next_data r;
+	int rv;
+
+	p.info_type = EC_MKBP_INFO_GET_KB_AT_BOOT;
+	rv = test_send_host_command(EC_CMD_MKBP_INFO, 0, &p, sizeof(p),
+				    &r, sizeof(r));
+	if (rv != 0)
+		return rv;
+	memcpy(key_matrix, r.key_matrix, KEYBOARD_COLS);
+	return 0;
 }
 
 static int verify_key_presses(int old, int expected)
@@ -358,18 +379,34 @@ static int test_check_boot_down(void)
 	TEST_CHECK(keyboard_scan_get_boot_keys() == BOOT_KEY_DOWN_ARROW);
 }
 
-static int test_check_boot_key_matrix(void)
+static int test_kbatboot(void)
 {
-	struct ec_params_keyboard_matrix_at_boot params;
-	uint8_t key_matrix[KEYBOARD_COLS], expected[KEYBOARD_COLS] = {};
+	uint8_t key_matrix[KEYBOARD_COLS];
+	struct ec_params_mkbp_info p = {};
 
-	params.command = KEYBOARD_MATRIX_GET;
-	test_send_host_command(EC_CMD_KEYBOARD_MATRIX_AT_BOOT, 0, &params,
-			       sizeof(params), key_matrix, sizeof(key_matrix));
+	host_command_get_kbatboot(key_matrix);
+	CHECK_ARRAY_EQ(key_matrix, KEYBOARD_COLS,
+		       0, 0, 0, 0x80, 0,
+		       0, 0, 0, 0x40, 0,
+		       0, 0, 0);
 
-	expected[8] = 0x40; /* key 0 */
-	expected[3] = 0x80; /* key R */
-	TEST_ASSERT_ARRAY_EQ(key_matrix, expected, KEYBOARD_COLS);
+	p.info_type = EC_MKBP_INFO_SIMULATE_KB_AT_BOOT;
+	p.simulate_kb_at_boot.key_matrix[5] = 0x66;
+	test_send_host_command(EC_CMD_MKBP_INFO, 0, &p, sizeof(p), NULL, 0);
+	host_command_get_kbatboot(key_matrix);
+	CHECK_ARRAY_EQ(key_matrix, KEYBOARD_COLS,
+		       0, 0, 0, 0x80, 0,
+		       0x66, 0, 0, 0x40, 0,
+		       0, 0, 0);
+
+	p.info_type = EC_MKBP_INFO_CLEAR_KB_AT_BOOT;
+	test_send_host_command(EC_CMD_MKBP_INFO, 0, &p, sizeof(p), NULL, 0);
+	host_command_get_kbatboot(key_matrix);
+	CHECK_ARRAY_EQ(key_matrix, KEYBOARD_COLS,
+		       0, 0, 0, 0, 0,
+		       0x66, 0, 0, 0, 0,
+		       0, 0, 0);
+
 
 	return EC_SUCCESS;
 }
@@ -453,7 +490,7 @@ static void run_test_step4(void)
 	hook_notify(HOOK_LID_CHANGE);
 	test_reset();
 
-	RUN_TEST(test_check_boot_key_matrix);
+	RUN_TEST(test_kbatboot);
 
 	if (test_get_error_count())
 		test_reboot_to_next_step(TEST_STATE_FAILED);

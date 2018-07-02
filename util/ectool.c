@@ -21,6 +21,7 @@
 #include "ec_panicinfo.h"
 #include "ec_flash.h"
 #include "ectool.h"
+#include "keyboard_config.h"
 #include "lightbar.h"
 #include "lock/gec_lock.h"
 #include "misc_util.h"
@@ -132,6 +133,8 @@ const char help_str[] =
 	"      Set the delay before going into hibernation\n"
 	"  hostsleepstate\n"
 	"      Report host sleep state to the EC\n"
+	"  kbatboot\n"
+	"      Get/simulate boottime keyboard press\n"
 	"  kbpress\n"
 	"      Simulate key press\n"
 	"  kbfactorytest\n"
@@ -4678,6 +4681,60 @@ int cmd_usb_pd_power(int argc, char *argv[])
 	return 0;
 }
 
+int cmd_kbatboot(int argc, char *argv[])
+{
+	struct ec_params_mkbp_info p;
+	union ec_response_get_next_data r;
+	char *e;
+	int i, j, rv;
+
+	if (argc == 1) {
+		p.info_type = EC_MKBP_INFO_GET_KB_AT_BOOT;
+		rv = ec_command(EC_CMD_MKBP_INFO, 0, &p, sizeof(p),
+				&r, sizeof(r));
+		if (rv < 0)
+			return rv;
+
+		printf("boot key:\n");
+		printf(" col row\n");
+		for (i = 0; i < KEYBOARD_COLS; i++) {
+			for (j = 0; j < KEYBOARD_ROWS; j++) {
+				if (r.key_matrix[i] & (1 << j))
+					printf("  %2d  %2d\n", i, j);
+			}
+		}
+
+	} else if (argc == KEYBOARD_COLS + 1) {
+		for (i = 0; i < KEYBOARD_COLS; i++) {
+			long x;
+
+			x = strtol(argv[i + 1], &e, 0);
+			if (*e || x < 0 || x > 255) {
+				fprintf(stderr, "Invalid number: %s\n",
+					argv[i + 1]);
+				return -1;
+			}
+			p.simulate_kb_at_boot.key_matrix[i] = x;
+		}
+
+		p.info_type = EC_MKBP_INFO_SIMULATE_KB_AT_BOOT;
+		rv = ec_command(EC_CMD_MKBP_INFO, 0, &p, sizeof(p),
+				&r, sizeof(r));
+		if (rv < 0)
+			return rv;
+		printf("Done\n");
+		return 0;
+
+	} else {
+		fprintf(stderr,
+			"Usage: %s <array of %d numbers>\n", argv[0],
+			KEYBOARD_COLS);
+		return -1;
+	}
+
+	return 0;
+}
+
 int cmd_kbpress(int argc, char *argv[])
 {
 	struct ec_params_mkbp_simulate_key p;
@@ -7184,6 +7241,7 @@ const struct command commands[] = {
 	{"hello", cmd_hello},
 	{"hibdelay", cmd_hibdelay},
 	{"hostsleepstate", cmd_hostsleepstate},
+	{"kbatboot", cmd_kbatboot},
 	{"kbpress", cmd_kbpress},
 	{"i2cprotect", cmd_i2c_protect},
 	{"i2cread", cmd_i2c_read},
