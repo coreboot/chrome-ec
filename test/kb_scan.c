@@ -358,6 +358,22 @@ static int test_check_boot_down(void)
 	TEST_CHECK(keyboard_scan_get_boot_keys() == BOOT_KEY_DOWN_ARROW);
 }
 
+static int test_check_boot_key_matrix(void)
+{
+	struct ec_params_keyboard_matrix_at_boot params;
+	uint8_t key_matrix[KEYBOARD_COLS], expected[KEYBOARD_COLS] = {};
+
+	params.command = KEYBOARD_MATRIX_GET;
+	test_send_host_command(EC_CMD_KEYBOARD_MATRIX_AT_BOOT, 0, &params,
+			       sizeof(params), key_matrix, sizeof(key_matrix));
+
+	expected[8] = 0x40; /* key 0 */
+	expected[3] = 0x80; /* key R */
+	TEST_ASSERT_ARRAY_EQ(key_matrix, expected, KEYBOARD_COLS);
+
+	return EC_SUCCESS;
+}
+
 void test_init(void)
 {
 	uint32_t state = system_get_scratchpad();
@@ -372,6 +388,12 @@ void test_init(void)
 		system_set_reset_flags(system_get_reset_flags() |
 				       RESET_FLAG_RESET_PIN);
 		mock_key(6, 11, 1);
+	} else if (state & TEST_STATE_MASK(TEST_STATE_STEP_4)) {
+		/* Power-F3-Down */
+		system_set_reset_flags(system_get_reset_flags() |
+				       RESET_FLAG_RESET_PIN);
+		mock_defined_key(KEY_0, 1);
+		mock_defined_key(KEY_R, 1);
 	}
 }
 
@@ -422,6 +444,20 @@ static void run_test_step3(void)
 	if (test_get_error_count())
 		test_reboot_to_next_step(TEST_STATE_FAILED);
 	else
+		test_reboot_to_next_step(TEST_STATE_STEP_4);
+}
+
+static void run_test_step4(void)
+{
+	lid_open = 1;
+	hook_notify(HOOK_LID_CHANGE);
+	test_reset();
+
+	RUN_TEST(test_check_boot_key_matrix);
+
+	if (test_get_error_count())
+		test_reboot_to_next_step(TEST_STATE_FAILED);
+	else
 		test_reboot_to_next_step(TEST_STATE_PASSED);
 }
 
@@ -433,6 +469,8 @@ void test_run_step(uint32_t state)
 		run_test_step2();
 	else if (state & TEST_STATE_MASK(TEST_STATE_STEP_3))
 		run_test_step3();
+	else if (state & TEST_STATE_MASK(TEST_STATE_STEP_4))
+		run_test_step4();
 }
 
 int test_task(void *data)
