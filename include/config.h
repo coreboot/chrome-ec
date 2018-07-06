@@ -2946,6 +2946,12 @@
  */
 #undef CONFIG_BOARD_ID_SUPPORT
 
+/*
+ * Define this if serial number support is required. For g chip based boards
+ * it allows a verifiable serial number to be stored / certified.
+ */
+#undef CONFIG_SN_BITS_SUPPORT
+
 /*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
