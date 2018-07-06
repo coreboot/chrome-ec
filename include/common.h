@@ -59,13 +59,31 @@
 #endif
 
 /*
+ * Define __unused in the same manner.
+ */
+#ifndef __unused
+#define __unused __attribute__((unused))
+#endif
+
+/*
+ * externally_visible is required by GCC to avoid kicking out memset.
+ */
+#ifndef __visible
+#ifndef __clang__
+#define __visible __attribute__((externally_visible))
+#else
+#define __visible __attribute__((used))
+#endif
+#endif
+
+/*
  * Force the toolchain to keep a symbol even with Link Time Optimization
  * activated.
  *
  * Useful for C functions called only from assembly or through special sections.
  */
 #ifndef __keep
-#define __keep __attribute__((used)) __attribute__((externally_visible))
+#define __keep __attribute__((used)) __visible
 #endif
 
 /*
@@ -76,6 +94,23 @@
  */
 #ifndef __bss_slow
 #define __bss_slow __attribute__((section(".bss.slow")))
+#endif
+
+/* gcc does not support __has_feature */
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+/*
+ * Use this to prevent AddressSanitizer from putting guards around some global
+ * variables (e.g. hook/commands "arrays" that are put together at link time).
+ */
+#ifndef __no_sanitize_address
+#if __has_feature(address_sanitizer)
+#define __no_sanitize_address __attribute__((no_sanitize("address")))
+#else
+#define __no_sanitize_address
+#endif
 #endif
 
 /* There isn't really a better place for this */
@@ -136,6 +171,30 @@ enum ec_error_list {
 	EC_ERROR_NOT_HANDLED = 21,
 	/* Data has not changed */
 	EC_ERROR_UNCHANGED = 22,
+	/* Memory allocation */
+	EC_ERROR_MEMORY_ALLOCATION = 23,
+	/* Invalid to configure in the current module mode/stage */
+	EC_ERROR_INVALID_CONFIG = 24,
+	/* something wrong in a HW */
+	EC_ERROR_HW_INTERNAL = 25,
+
+	/* Verified boot errors */
+	EC_ERROR_VBOOT_SIGNATURE = 0x1000, /* 4096 */
+	EC_ERROR_VBOOT_SIG_MAGIC = 0x1001,
+	EC_ERROR_VBOOT_SIG_SIZE = 0x1002,
+	EC_ERROR_VBOOT_SIG_ALGORITHM = 0x1003,
+	EC_ERROR_VBOOT_HASH_ALGORITHM = 0x1004,
+	EC_ERROR_VBOOT_SIG_OFFSET = 0x1005,
+	EC_ERROR_VBOOT_DATA_SIZE = 0x1006,
+
+	/* Verified boot key errors */
+	EC_ERROR_VBOOT_KEY = 0x1100,
+	EC_ERROR_VBOOT_KEY_MAGIC = 0x1101,
+	EC_ERROR_VBOOT_KEY_SIZE = 0x1102,
+
+	/* Verified boot data errors */
+	EC_ERROR_VBOOT_DATA = 0x1200,
+	EC_ERROR_VBOOT_DATA_VERIFY = 0x1201,
 
 	/* Module-internal error codes may use this range.   */
 	EC_ERROR_INTERNAL_FIRST = 0x10000,
@@ -155,5 +214,8 @@ enum ec_error_list {
 #define test_mockable_static static
 #define test_export_static static
 #endif
+
+/* find the most significant bit. Not defined in n == 0. */
+#define __fls(n) (31 - __builtin_clz(n))
 
 #endif  /* __CROS_EC_COMMON_H */
