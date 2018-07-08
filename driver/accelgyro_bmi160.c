@@ -845,9 +845,31 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 {
 	int done = 0;
 	struct bmi160_drv_data_t *data = BMI160_GET_DATA(s);
+	uint16_t length;
 
 	if (s->type != MOTIONSENSE_TYPE_ACCEL)
 		return EC_SUCCESS;
+
+	raw_read_n(s->port, s->addr, BMI160_FIFO_LENGTH_0,
+			(uint8_t *)&length, sizeof(length));
+	length &= BMI160_FIFO_LENGTH_MASK;
+
+	/* Add one byte to get an empty FIFO frame.*/
+	length++;
+
+	if (length > sizeof(bmi160_buffer))
+		CPRINTF("[%T unexpected large FIFO: %d ]", length);
+
+	length = MIN(length, sizeof(bmi160_buffer));
+	/*
+	 * We have not requested timestamp, no extra frame to read.
+	 * if we have too much to read, read the whole buffer.
+	 */
+	if (length == 1) {
+		CPRINTF("[%T unexpected empty FIFO ]");
+		return EC_SUCCESS;
+	}
+
 
 	do {
 		enum fifo_state state = FIFO_HEADER;
@@ -857,7 +879,7 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 		if (!(data->flags &
 		      (BMI160_FIFO_ALL_MASK << BMI160_FIFO_FLAG_OFFSET))) {
 			/*
-			 * The FIFO was disable while were processing it.
+			 * The FIFO was disabled while were processing it.
 			 *
 			 * Flush potential left over:
 			 * When sensor is resumed, we won't read old data.
@@ -868,7 +890,7 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 		}
 
 		raw_read_n(s->port, s->addr, BMI160_FIFO_DATA, bmi160_buffer,
-				sizeof(bmi160_buffer));
+				length);
 		beginning = *(uint32_t *)bmi160_buffer;
 		/*
 		 * FIFO is invalid when reading while the sensors are all
@@ -887,7 +909,7 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 			return EC_SUCCESS;
 		}
 
-		while (!done && bp != BUFFER_END(bmi160_buffer)) {
+		while (!done && bp < bmi160_buffer + length) {
 			switch (state) {
 			case FIFO_HEADER: {
 				enum fifo_header hdr = *bp++;
@@ -919,11 +941,15 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 				break;
 			}
 			case FIFO_DATA_SKIP:
-				CPRINTS("skipped %d frames", *bp++);
+				CPRINTS("@ %d - %d, skipped %d frames",
+					bp - bmi160_buffer, length, *bp);
+				bp++;
 				state = FIFO_HEADER;
 				break;
 			case FIFO_DATA_CONFIG:
-				CPRINTS("config change: 0x%02x", *bp++);
+				CPRINTS("@ %d - %d, config change: 0x%02x",
+					bp - bmi160_buffer, length, *bp);
+				bp++;
 				state = FIFO_HEADER;
 				break;
 			case FIFO_DATA_TIME:
@@ -942,6 +968,8 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 				state = FIFO_HEADER;
 			}
 		}
+		if (length < sizeof(bmi160_buffer))
+			done = 1;
 	} while (!done);
 	return EC_SUCCESS;
 }
