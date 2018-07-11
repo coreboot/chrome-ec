@@ -836,8 +836,9 @@ static int config_interrupt(const struct motion_sensor_t *s)
 			BMI160_INT_MAP(1, FWM) |
 			BMI160_INT_MAP(1, FFULL));
 
-	/* configure fifo watermark to int whenever there's any data in there */
-	ret = raw_write8(s->port, s->addr, BMI160_FIFO_CONFIG_0, 1);
+	/* configure fifo watermark at 50% */
+	ret = raw_write8(s->port, s->addr, BMI160_FIFO_CONFIG_0,
+			512 / sizeof(uint32_t));
 #ifdef CONFIG_ACCELGYRO_BMI160_INT2_OUTPUT
 	ret = raw_write8(s->port, s->addr, BMI160_FIFO_CONFIG_1,
 			BMI160_FIFO_HEADER_EN);
