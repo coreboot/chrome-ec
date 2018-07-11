@@ -14,7 +14,6 @@
 #include "driver/accelgyro_bmi160.h"
 #include "driver/mag_bmm150.h"
 #include "hooks.h"
-#include "hwtimer.h"
 #include "i2c.h"
 #include "math_util.h"
 #include "spi.h"
@@ -25,10 +24,6 @@
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
-
-#ifdef CONFIG_ACCEL_FIFO
-static uint32_t last_interrupt_timestamp;
-#endif
 
 /*
  * Struct for pairing an engineering value with the register value for a
@@ -818,8 +813,7 @@ static int bmi160_decode_header(struct motion_sensor_t *s,
 				vector.data[Y] = v[Y];
 				vector.data[Z] = v[Z];
 				vector.sensor_num = i + (s - motion_sensors);
-				motion_sense_fifo_add_data(&vector, s + i, 3,
-						last_interrupt_timestamp);
+				motion_sense_fifo_add_unit(&vector, s + i, 3);
 				*bp += (i == MOTIONSENSE_TYPE_MAG ? 8 : 6);
 			}
 		}
@@ -954,9 +948,6 @@ static int load_fifo(struct motion_sensor_t *s)
  */
 void bmi160_interrupt(enum gpio_signal signal)
 {
-#ifdef CONFIG_ACCEL_FIFO
-	last_interrupt_timestamp = __hw_clock_source_read();
-#endif
 	task_set_event(TASK_ID_MOTIONSENSE,
 		       CONFIG_ACCELGYRO_BMI160_INT_EVENT, 0);
 }

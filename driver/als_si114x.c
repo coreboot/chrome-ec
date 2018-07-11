@@ -11,7 +11,6 @@
 #include "console.h"
 #include "driver/als_si114x.h"
 #include "hooks.h"
-#include "hwtimer.h"
 #include "i2c.h"
 #include "math_util.h"
 #include "task.h"
@@ -151,12 +150,7 @@ static int si114x_read_results(struct motion_sensor_t *s, int nb)
 	for (i = nb; i < 3; i++)
 		vector.data[i] = 0;
 	vector.sensor_num = s - motion_sensors;
-	motion_sense_fifo_add_data(&vector, s, nb,
-				   __hw_clock_source_read());
-	/*
-	 * TODO: get time at a more accurate spot.
-	 * Like in si114x_interrupt
-	 */
+	motion_sense_fifo_add_unit(&vector, s, nb);
 #else
 	/* We need to copy raw_xyz into xyz with mutex */
 #endif

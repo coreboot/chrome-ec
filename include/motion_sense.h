@@ -180,18 +180,15 @@ extern unsigned int motion_min_interval;
 extern struct queue motion_sense_fifo;
 
 /**
- * Add new actual data to the fifo, including a timestamp.
+ * Interrupt function for lid accelerometer.
  *
  * @param data data to insert in the FIFO
  * @param sensor sensor the data comes from
- * @param valid_data data should be copied into the public sensor vector
- * @param time accurate time (ideally measured in an interrupt) the sample
- *             was taken at
+ * @valid_data data should be copied into the public sensor vector
  */
-void motion_sense_fifo_add_data(struct ec_response_motion_sensor_data *data,
+void motion_sense_fifo_add_unit(struct ec_response_motion_sensor_data *data,
 				struct motion_sensor_t *sensor,
-				int valid_data,
-				uint32_t time);
+				int valid_data);
 
 #endif
 
