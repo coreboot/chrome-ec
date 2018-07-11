@@ -187,22 +187,6 @@ static void motion_sense_get_fifo_info(
 }
 #endif
 
-static inline int motion_sensor_in_forced_mode(
-		const struct motion_sensor_t *sensor)
-{
-#ifdef CONFIG_ACCEL_FORCE_MODE_MASK
-	/* Sensor not in force mode, its irq_handler is getting data. */
-	if (!(CONFIG_ACCEL_FORCE_MODE_MASK & (1 << (sensor - motion_sensors))))
-		return 0;
-	else
-		return 1;
-#else
-	return 0;
-#endif
-}
-
-
-
 /* Minimal amount of time since last collection before triggering a new one */
 static inline int motion_sensor_time_to_read(const timestamp_t *ts,
 		const struct motion_sensor_t *sensor)
@@ -303,12 +287,14 @@ static int motion_sense_set_ec_rate_from_ap(
 
 	if (new_rate_us == 0)
 		return 0;
-	if (motion_sensor_in_forced_mode(sensor))
+#ifdef CONFIG_ACCEL_FORCE_MODE_MASK
+	if (CONFIG_ACCEL_FORCE_MODE_MASK & (1 << (sensor - motion_sensors)))
 		/*
 		 * AP EC sampling rate does not matter: we will collect at the
 		 * requested sensor frequency.
 		 */
 		goto end_set_ec_rate_from_ap;
+#endif
 	if (odr_mhz == 0)
 		goto end_set_ec_rate_from_ap;
 
@@ -350,16 +336,18 @@ static int motion_sense_select_ec_rate(
 		enum sensor_config config_id,
 		int interrupt)
 {
-	if (interrupt == 0 && motion_sensor_in_forced_mode(sensor)) {
+#ifdef CONFIG_ACCEL_FORCE_MODE_MASK
+	if (interrupt == 0 &&
+	    (CONFIG_ACCEL_FORCE_MODE_MASK & (1 << (sensor - motion_sensors)))) {
 		int rate_mhz = BASE_ODR(sensor->config[config_id].odr);
 		/* we have to run ec at the sensor frequency rate.*/
 		if (rate_mhz > 0)
 			return SECOND * 1000 / rate_mhz;
 		else
 			return 0;
-	} else {
-		return sensor->config[config_id].ec_rate;
-	}
+	} else
+#endif
+	return sensor->config[config_id].ec_rate;
 }
 
 /* motion_sense_ec_rate
@@ -716,28 +704,28 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 	}
 #endif
 #ifdef CONFIG_ACCEL_FIFO
-	if (motion_sensor_in_forced_mode(sensor)) {
-		if (motion_sensor_time_to_read(ts, sensor)) {
-			struct ec_response_motion_sensor_data vector;
-			int *v = sensor->raw_xyz;
-
-			ret = motion_sense_read(sensor);
-			if (ret == EC_SUCCESS) {
-				vector.flags = 0;
-				vector.sensor_num = sensor - motion_sensors;
+	if (sensor->drv->load_fifo != NULL) {
+		/* Load fifo is filling raw_xyz sensor vector */
+		sensor->drv->load_fifo(sensor);
+	} else if (motion_sensor_time_to_read(ts, sensor)) {
+		struct ec_response_motion_sensor_data vector;
+		int *v = sensor->raw_xyz;
+		ret = motion_sense_read(sensor);
+		if (ret == EC_SUCCESS) {
+			vector.flags = 0;
+			vector.sensor_num = sensor - motion_sensors;
 #ifdef CONFIG_ACCEL_SPOOF_MODE
-				if (sensor->in_spoof_mode)
-					v = sensor->spoof_xyz;
+			if (sensor->in_spoof_mode)
+				v = sensor->spoof_xyz;
 #endif /* defined(CONFIG_ACCEL_SPOOF_MODE) */
-				vector.data[X] = v[X];
-				vector.data[Y] = v[Y];
-				vector.data[Z] = v[Z];
-				motion_sense_fifo_add_unit(&vector, sensor, 3);
-			}
-			sensor->last_collection = ts->le.lo;
-		} else {
-			ret = EC_ERROR_BUSY;
+			vector.data[X] = v[X];
+			vector.data[Y] = v[Y];
+			vector.data[Z] = v[Z];
+			motion_sense_fifo_add_unit(&vector, sensor, 3);
 		}
+		sensor->last_collection = ts->le.lo;
+	} else {
+		ret = EC_ERROR_BUSY;
 	}
 	if (*event & TASK_EVENT_MOTION_FLUSH_PENDING) {
 		int flush_pending;
@@ -748,21 +736,19 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 		}
 	}
 #else
-	if (motion_sensor_in_forced_mode(sensor)) {
-		if (motion_sensor_time_to_read(ts, sensor)) {
-			/* Get latest data for local calculation */
-			ret = motion_sense_read(sensor);
-			sensor->last_collection = ts->le.lo;
-		} else {
-			ret = EC_ERROR_BUSY;
-		}
-		if (ret == EC_SUCCESS) {
-			mutex_lock(&g_sensor_mutex);
-			memcpy(sensor->xyz, sensor->raw_xyz,
-			       sizeof(sensor->xyz));
-			mutex_unlock(&g_sensor_mutex);
-		}
+	if (motion_sensor_time_to_read(ts, sensor)) {
+		/* Get latest data for local calculation */
+		ret = motion_sense_read(sensor);
+		sensor->last_collection = ts->le.lo;
+	} else {
+		ret = EC_ERROR_BUSY;
 	}
+	if (ret == EC_SUCCESS) {
+		mutex_lock(&g_sensor_mutex);
+		memcpy(sensor->xyz, sensor->raw_xyz, sizeof(sensor->xyz));
+		mutex_unlock(&g_sensor_mutex);
+	}
+
 #endif
 	return ret;
 }
