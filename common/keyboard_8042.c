@@ -175,6 +175,9 @@ struct kblog_t {
 static struct kblog_t *kblog_buf;	/* Log buffer; NULL if not logging */
 static int kblog_len;			/* Current log length */
 
+/* button state */
+static uint32_t button_state;
+
 /**
  * Add event to keyboard log.
  */
@@ -927,6 +930,27 @@ test_mockable void keyboard_update_button(enum keyboard_button_type button,
 	code_set = acting_code_set(scancode_set);
 	button_8042 = buttons_8042[button];
 
+	switch (button) {
+	case KEYBOARD_BUTTON_POWER:
+		button_state &= ~(1 << EC_MKBP_POWER_BUTTON);
+		button_state |= (is_pressed << EC_MKBP_POWER_BUTTON);
+		break;
+
+	case KEYBOARD_BUTTON_VOLUME_UP:
+		button_state &= ~(1 << EC_MKBP_VOL_UP);
+		button_state |= (is_pressed << EC_MKBP_VOL_UP);
+		break;
+
+	case KEYBOARD_BUTTON_VOLUME_DOWN:
+		button_state &= ~(1 << EC_MKBP_VOL_DOWN);
+		button_state |= (is_pressed << EC_MKBP_VOL_DOWN);
+		break;
+
+	default:
+		/* ignored. */
+		break;
+	}
+
 	switch (code_set) {
 	case SCANCODE_SET_1:
 		make_code = button_8042.scancode_set1;
@@ -1235,3 +1259,8 @@ static void keyboard_power_button(void)
 }
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, keyboard_power_button,
 	     HOOK_PRIO_DEFAULT);
+
+uint32_t keyboard_get_button_state(void)
+{
+	return button_state;
+}

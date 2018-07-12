@@ -27,6 +27,11 @@ void keyboard_clear_buffer(void);
  */
 void keyboard_update_button(enum keyboard_button_type button, int is_pressed);
 
+/*
+ * Get the state of supported buttons.
+ */
+uint32_t keyboard_get_button_state(void);
+
 /* Protocol-specific includes */
 
 #ifdef CONFIG_KEYBOARD_PROTOCOL_8042
