@@ -6,6 +6,7 @@
 /* Apollolake chipset power control module for Chrome EC */
 
 #include "apollolake.h"
+#include "chipset.h"
 #include "console.h"
 #include "gpio.h"
 #include "intel_x86.h"
@@ -21,8 +22,11 @@ __attribute__((weak)) void chipset_do_shutdown(void)
 	/* Need to implement board specific shutdown */
 }
 
-void chipset_force_shutdown(void)
+void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
+	CPRINTS("%s: %d", __func__, reason);
+	report_ap_reset(reason);
+
 	if (!forcing_coldreset)
 		CPRINTS("%s()", __func__);
 
@@ -31,7 +35,7 @@ void chipset_force_shutdown(void)
 
 enum power_state chipset_force_g3(void)
 {
-	chipset_force_shutdown();
+	chipset_force_shutdown(CHIPSET_SHUTDOWN_G3);
 
 	/* Power up the platform again for forced cold reset */
 	if (forcing_coldreset) {
