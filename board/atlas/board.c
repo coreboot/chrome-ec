@@ -26,6 +26,7 @@
 #include "host_command.h"
 #include "i2c.h"
 #include "keyboard_8042_sharedlib.h"
+#include "keyboard_backlight.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "motion_sense.h"
@@ -449,6 +450,13 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_ACCELGYRO3_INT_L);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+static void board_keyboard_backlight(void)
+{
+	kblight_enable(1);
+	kblight_set(100);
+}
+DECLARE_HOOK(HOOK_INIT, board_keyboard_backlight, HOOK_PRIO_LAST);
 
 static void board_extpower(void)
 {
