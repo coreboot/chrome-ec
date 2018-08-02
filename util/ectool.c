@@ -6516,7 +6516,7 @@ static int cmd_cbi(int argc, char *argv[])
 	}
 
 	if (!strcasecmp(argv[1], "get")) {
-		struct ec_params_get_cbi p;
+		struct ec_params_get_cbi p = { 0 };
 		uint8_t *r;
 		int i;
 		p.tag = tag;
