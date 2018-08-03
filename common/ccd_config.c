@@ -1493,7 +1493,6 @@ static enum vendor_cmd_rc ccd_vendor(enum vendor_cmd_cc code,
 	}
 
 	if (handler) {
-#ifdef CR50_DEV
 		/*
 		 * Let's be optimistic: 0 usually means success.
 		 *
@@ -1510,12 +1509,6 @@ static enum vendor_cmd_rc ccd_vendor(enum vendor_cmd_cc code,
 		 * place in the response buffer.
 		 */
 		memmove(buf, buf + 1, *response_size);
-#else
-		*response_size = 1;
-		((uint8_t *)buf)[0] = EC_ERROR_ACCESS_DENIED;
-		ccprintf("CCD is disabled in this image\n");
-		rc = VENDOR_RC_NOT_ALLOWED;
-#endif
 	} else {
 		rc = VENDOR_RC_NO_SUCH_SUBCOMMAND;
 		*response_size = 0;
