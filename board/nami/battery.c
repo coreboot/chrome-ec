@@ -270,7 +270,7 @@ static int battery_check_disconnect_1(void)
 	if (batt_discharge_fet & 0x4000)
 		return BATTERY_NOT_DISCONNECTED;
 
-	return BATTERY_DISCONNECTED;
+	return BATTERY_DISCONNECT_ERROR;
 }
 
 static int battery_check_disconnect(void)
