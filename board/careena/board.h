@@ -23,6 +23,9 @@
 #define CONFIG_LED_COMMON
 #define CONFIG_CMD_LEDTEST
 
+#define CONFIG_BATTERY_MEASURE_IMBALANCE
+#define CONFIG_BATTERY_BQ4050
+
 #ifndef __ASSEMBLER__
 
 enum pwm_channel {
