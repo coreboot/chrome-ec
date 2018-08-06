@@ -15,6 +15,7 @@
 #include "ec_commands.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "system.h"
 #include "task.h"
 #include "time.h"
 #include "util.h"
@@ -784,9 +785,6 @@ static void bd9995x_battery_charging_profile_settings(void)
 {
 	const struct battery_info *bi = battery_get_info();
 
-	/* Input Current Limit Setting */
-	charger_set_input_current(CONFIG_CHARGER_INPUT_CURRENT);
-
 	/* Charge Termination Current Setting */
 	ch_raw_write16(BD9995X_CMD_ITERM_SET, 0, BD9995X_EXTENDED_COMMAND);
 
@@ -819,6 +817,17 @@ static void bd9995x_battery_charging_profile_settings(void)
 	/* Disable fast/pre-charging watchdog */
 	ch_raw_write16(BD9995X_CMD_CHGWDT_SET, 0,
 		       BD9995X_EXTENDED_COMMAND);
+
+	/* We don't want to reset input current here in the RW stage or it might
+	 * cause system to brown out. More detail is that when system is unlocked
+	 * and device boots with AC only (in the RMA), RO can do PD negotiation in
+	 * order to get higher power supported AP to boot. But if we reset input
+	 * current here in the beginning of jumping to RW then the entire system
+	 * power may exceed this low and default current.
+	 */
+	if (!system_jumped_to_this_image())
+		/* Input Current Limit Setting */
+		charger_set_input_current(CONFIG_CHARGER_INPUT_CURRENT);
 
 	/* TODO(crosbug.com/p/55626): Set  VSYSVAL_THH/THL appropriately */
 }
