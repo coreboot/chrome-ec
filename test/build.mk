@@ -25,6 +25,9 @@ test-list-$(BOARD_LLAMA)=
 # So does Cr50
 test-list-$(BOARD_CR50)=
 
+# So does Eve
+test-list-$(BOARD_EVE)=
+
 # For some tests, we are running out of RAM. Disable them for now.
 test-list-$(BOARD_GLADOS_PD)=
 test-list-$(BOARD_CHELL_PD)=

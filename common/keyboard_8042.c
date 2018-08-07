@@ -266,7 +266,7 @@ static void keyboard_enable_irq(int enable)
  * @param len		Number of bytes to send to the host
  * @param to_host	Data to send
  */
-static void i8042_send_to_host(int len, const uint8_t *bytes)
+void i8042_send_to_host(int len, const uint8_t *bytes)
 {
 	int i;
 

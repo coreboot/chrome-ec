@@ -30,6 +30,17 @@ void button_state_changed(enum keyboard_button_type button, int is_pressed);
  */
 void keyboard_host_write(int data, int is_cmd);
 
+/**
+ * Send a scan code to the host.
+ *
+ * The EC lib will push the scan code bytes to host via port 0x60 and assert
+ * the IBF flag to trigger an interrupt.  The EC lib must queue them if the
+ * host cannot read the previous byte away in time.
+ *
+ * @param len		Number of bytes to send to the host
+ * @param bytes	Data to send
+ */
+void i8042_send_to_host(int len, const uint8_t *bytes);
 
 /* Utilities for scan code and make code. */
 
