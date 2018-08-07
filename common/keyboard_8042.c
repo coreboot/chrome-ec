@@ -1113,7 +1113,7 @@ static int command_keyboard(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(kbd, command_keyboard,
-			"[0 | 1]",
+			"[on | off]",
 			"Print or toggle keyboard info");
 
 
