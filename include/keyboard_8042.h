@@ -41,6 +41,34 @@ enum scancode_set_list {
 	SCANCODE_MAX = SCANCODE_SET_3,
 };
 
+struct makecode_entry {
+	uint16_t set1, set2;
+};
+
+struct makecode_translate_entry {
+	struct makecode_entry from, to;
+};
+
+/**
+ * Checks if a given make code matches given record.
+ *
+ * Returns 1 if matches.
+ */
+int makecode_match(uint16_t make_code, enum scancode_set_list code_set,
+		   const struct makecode_entry *entry);
+
+/**
+ * Translate a make code to different value.
+ *
+ * @param make_code	The value of make_code.
+ * @param code_set	The code set of make code.
+ * @param entries	Pointer to array of struct makecode_translate_entry
+ * @param count		Number of elements in entries
+ */
+uint16_t makecode_translate(
+		uint16_t make_code, enum scancode_set_list code_set,
+		const struct makecode_translate_entry *entries, size_t count);
+
 /**
  * Returns a board-specific translated make code.
  *

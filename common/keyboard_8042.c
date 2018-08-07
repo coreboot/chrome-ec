@@ -203,6 +203,35 @@ void keyboard_select_mapping(enum keyboard_mapping_type mapping)
 }
 #endif
 
+int makecode_match(uint16_t make_code, enum scancode_set_list code_set,
+		   const struct makecode_entry *entry)
+{
+	/* Compare SET 2 (default) first. */
+	if (code_set == SCANCODE_SET_2)
+		return make_code == entry->set2;
+	if (code_set == SCANCODE_SET_1)
+		return make_code == entry->set1;
+	return 0;
+}
+
+uint16_t makecode_translate(
+		uint16_t make_code, enum scancode_set_list code_set,
+		const struct makecode_translate_entry *entries, size_t count)
+{
+	for (; count > 0; count--, entries++) {
+		if (makecode_match(make_code, code_set, &entries->from)) {
+			if (code_set == SCANCODE_SET_2)
+				return entries->to.set2;
+			if (code_set == SCANCODE_SET_1)
+				return entries->to.set1;
+
+			/* Should never reach here. */
+			assert(!"Unexpected code set");
+		}
+	}
+	return make_code;
+}
+
 void keyboard_host_write(int data, int is_cmd)
 {
 	struct host_byte h;
