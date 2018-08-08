@@ -20,41 +20,40 @@
 #define MK_DIM		0xf003
 #define MK_BRIGHT	0xf004
 
+/* Scan codes in set2 */
+
 /* Use SEARCH (before translate) as Fn key. */
-static const struct makecode_entry makecode_fn_key = {
-	.set1 = 0xe05b, .set2 = 0xe01f };
+#define SCANCODE_FN	0xe01f
 
 static const struct makecode_translate_entry legacy_mapping[] = {
-	/* from[set1,set2], to[set1,set2] */
-	{ {0xe058, 0xe007}, {0xe05b, 0xe020} },  /* ASSIST => SEARCH(Win) */
-	{ {0x005d, 0x002f}, {0xe05d, 0xe02f} },  /* MENU => APP */
+	{ 0xe007, 0xe020 },  /* ASSIST => SEARCH(Win) */
+	{ 0x002f, 0xe02f },  /* MENU => APP */
 };
 
 /* Alternate mapping when Fn is pressed. */
 static const struct makecode_translate_entry legacy_fn_mapping[] = {
-	/* from[set1,set2], to[set1,set2] */
-	{{0x003b, 0x0005}, {0xe06a, 0xe038}},  /* F1 => Browser Back */
-	{{0x003c, 0x0006}, {0xe067, 0xe020}},  /* F2 => Browser Refresh */
-	{{0x003d, 0x0004}, {0x0057, 0x0078}},  /* F3 => Full Screen */
-	{{0x003e, 0x000c}, {0xe037, 0xe07c}},  /* F4 => Print Screen */
-	{{0x003f, 0x0003}, {MK_DIM, MK_DIM}},  /* F5 => Dim Screen */
-	{{0x0040, 0x000b}, {MK_BRIGHT, MK_BRIGHT}},  /* F6 => Brighten */
-	{{0x0041, 0x0083}, {0xe022, 0xe034}},  /* F7 => Play/Pause */
-	{{0x0042, 0x000a}, {0xe020, 0xe023}},  /* F8 => Mute */
-	{{0x0043, 0x0001}, {0xe02e, 0xe021}},  /* F9 => Vol Down */
-	{{0x0044, 0x0009}, {0xe030, 0xe032}},  /* F10 => Vol Up */
+	{ 0x0005, 0xe038 },  /* F1 => Browser Back */
+	{ 0x0006, 0xe020 },  /* F2 => Browser Refresh */
+	{ 0x0004, 0x0078 },  /* F3 => Full Screen */
+	{ 0x000c, 0xe07c },  /* F4 => Print Screen */
+	{ 0x0003, MK_DIM },  /* F5 => Dim Screen */
+	{ 0x000b, MK_BRIGHT },  /* F6 => Brighten Screen */
+	{ 0x0083, 0xe034 },  /* F7 => Play/Pause */
+	{ 0x000a, 0xe023 },  /* F8 => Mute */
+	{ 0x0001, 0xe021 },  /* F9 => Vol Down */
+	{ 0x0009, 0xe032 },  /* F10 => Vol Up */
 
-	{{0x0038, 0x0011}, {0x003a, 0x0058}},  /* LAlt => Caps Lock */
-	{{0x0034, 0x0049}, {0xe052, 0xe070}},  /* Dot(.) => Insert */
-	{{0x000e, 0x0066}, {0xe053, 0xe071}},  /* BackSpace => Delete */
+	{ 0x0011, 0x0058 },  /* LAlt => Caps Lock */
+	{ 0x0049, 0xe070 },  /* Dot(.) => Insert */
+	{ 0x0066, 0xe071 },  /* BackSpace => Delete */
 
-	{{0x0019, 0x004d}, {MK_PAUSE, MK_PAUSE}},  /* P => Pause */
-	{{0x0030, 0x0032}, {MK_CBREAK, MK_CBREAK}},  /* B => Ctrl-Break */
+	{ 0x004d, MK_PAUSE },  /* P => Pause */
+	{ 0x0032, MK_CBREAK },  /* B => Ctrl-Break */
 
-	{{0xe048, 0xe075}, {0xe049, 0xe07d}},  /* Up => Page Up */
-	{{0xe050, 0xe072}, {0xe051, 0xe07a}},  /* Down => Page Down */
-	{{0xe04b, 0xe06b}, {0xe047, 0xe06c}},  /* Left => Home */
-	{{0xe04d, 0xe074}, {0xe04f, 0xe069}},  /* Right => End */
+	{ 0xe075, 0xe07d },  /* Up => Page Up */
+	{ 0xe072, 0xe07a },  /* Down => Page Down */
+	{ 0xe06b, 0xe06c },  /* Left => Home */
+	{ 0xe074, 0xe069 },  /* Right => End */
 };
 
 static const char pause_key_scancode_set1[] = {
@@ -149,7 +148,7 @@ uint16_t keyboard_board_translate(uint16_t make_code, int8_t pressed,
 		return make_code;
 
 	/* Fn must be processed because Fn makecode conflicts with Win. */
-	if (makecode_match(make_code, code_set, &makecode_fn_key)) {
+	if (make_code == SCANCODE_FN) {
 		fn_pressed = pressed;
 		/**
 		 * TODO(hungte): If we press Fn, X, (triggers an Fn+X make) then
@@ -160,13 +159,13 @@ uint16_t keyboard_board_translate(uint16_t make_code, int8_t pressed,
 	}
 
 	make_code = makecode_translate(
-			make_code, code_set, ARRAY_BEGIN(legacy_mapping),
+			make_code, ARRAY_BEGIN(legacy_mapping),
 			ARRAY_SIZE(legacy_mapping));
 	if (!fn_pressed)
 		return make_code;
 
 	make_code = makecode_translate(
-			make_code, code_set, ARRAY_BEGIN(legacy_fn_mapping),
+			make_code, ARRAY_BEGIN(legacy_fn_mapping),
 			ARRAY_SIZE(legacy_fn_mapping));
 	switch (make_code) {
 	case MK_PAUSE:
