@@ -57,11 +57,11 @@ static inline int tcpc_xfer(int port,
 			    uint8_t *in, int in_size,
 			    int flags)
 {
-	return i2c_xfer(tcpc_config[port].i2c_host_port,
-			tcpc_config[port].i2c_slave_addr,
-			out, out_size,
-			in, in_size,
-			flags);
+	return i2c_xfer_unlocked(tcpc_config[port].i2c_host_port,
+				 tcpc_config[port].i2c_slave_addr,
+				 out, out_size,
+				 in, in_size,
+				 flags);
 }
 
 static inline void tcpc_lock(int port, int lock)
