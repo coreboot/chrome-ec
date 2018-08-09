@@ -445,6 +445,7 @@ static void pwm_fan_init(void)
 		for (fan = 0; fan < CONFIG_FANS; fan++) {
 			fan_set_enabled(FAN_CH(fan), prev->fan_en);
 			fan_set_rpm_target(FAN_CH(fan), prev->fan_rpm);
+			set_thermal_control_enabled(fan, 1);
 		}
 	} else {
 		/* Set initial fan speed */
