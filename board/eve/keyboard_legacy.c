@@ -56,7 +56,7 @@ static const struct makecode_translate_entry legacy_fn_mapping[] = {
 static int is_legacy_mapping;
 
 /* Indicate if Fn key is already pressed. */
-static int fn_pressed;
+static uint8_t fn_pressed, alt_pressed;
 
 /* Override the board_init_keyboard_mapping in board.c */
 void board_init_keyboard_mapping(int reset)
@@ -81,11 +81,18 @@ enum ec_error_list keyboard_scancode_callback(uint32_t *make_code,
 	if (!is_legacy_mapping)
 		return EC_SUCCESS;
 
-	/* Fn must be processed because Fn makecode conflicts with Win. */
-	if (m == SCANCODE_FN) {
+	switch (m) {
+	case SCANCODE_LEFT_ALT:
+		alt_pressed = pressed;
+		break;
+	case SCANCODE_FN:
+		/* Fn must be processed because Fn makecode conflicts with Win. */
 		fn_pressed = pressed;
 		*oneshot = 1;
-		*make_code = 0;
+
+		/* Special case: convert to caps lock if ALT pressed. */
+		*make_code = (pressed && alt_pressed) ? SCANCODE_CAPSLOCK : 0;
+
 		/**
 		 * TODO(hungte): If we press Fn, X, (triggers an Fn+X make) then
 		 * release Fn, X, then it'll trigger a X break instead of Fn+X
