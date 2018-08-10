@@ -50,6 +50,13 @@ static enum {
 	STATE_SEND_TO_MOUSE,
 } data_port_state = STATE_NORMAL;
 
+enum scancode_set_list {
+	SCANCODE_GET_SET = 0,
+	SCANCODE_SET_1,
+	SCANCODE_SET_2,
+	SCANCODE_SET_3,
+	SCANCODE_MAX = SCANCODE_SET_3,
+};
 
 #define MAX_SCAN_CODE_LEN 4
 
@@ -101,7 +108,6 @@ static uint8_t controller_ram[0x20] = {
 	/* 0x01 - 0x1f are controller RAM */
 };
 static uint8_t A20_status;
-static void keyboard_special(uint16_t k);
 
 /*
  * Scancode settings
@@ -203,17 +209,6 @@ void keyboard_select_mapping(enum keyboard_mapping_type mapping)
 }
 #endif
 
-uint16_t makecode_translate(uint16_t make_code,
-			    const struct makecode_translate_entry *entries,
-			    size_t count)
-{
-	for (; count > 0; count--, entries++) {
-		if (make_code == entries->from)
-			return entries->to;
-	}
-	return make_code;
-}
-
 void keyboard_host_write(int data, int is_cmd)
 {
 	struct host_byte h;
@@ -248,7 +243,7 @@ static void keyboard_enable_irq(int enable)
  * @param len		Number of bytes to send to the host
  * @param to_host	Data to send
  */
-void i8042_send_to_host(int len, const uint8_t *bytes)
+static void i8042_send_to_host(int len, const uint8_t *bytes)
 {
 	int i;
 
@@ -291,7 +286,7 @@ static int is_supported_code_set(enum scancode_set_list set)
  * @param scan_code	An array of bytes to store the make or break code in
  * @param len		The number of valid bytes to send in scan_code
  */
-static void scancode_bytes(uint16_t make_code, int8_t pressed,
+static void scancode_bytes(uint32_t make_code, int8_t pressed,
 			   enum scancode_set_list code_set, uint8_t *scan_code,
 			   int32_t *len)
 {
@@ -299,7 +294,14 @@ static void scancode_bytes(uint16_t make_code, int8_t pressed,
 
 	/* Output the make code (from table) */
 	if (make_code >= 0x0100) {
-		scan_code[(*len)++] = make_code >> 8;
+		if (make_code < 0x010000) {
+			scan_code[(*len)++] = make_code >> 8;
+		} else {
+			/* Special key combination like SCANCODE_PAUSE. */
+			ASSERT((make_code >> 8) >= 0x0100);
+			scancode_bytes(make_code >> 8, pressed, code_set,
+				       scan_code, len);
+		}
 		make_code &= 0xff;
 	}
 
@@ -325,19 +327,27 @@ static void scancode_bytes(uint16_t make_code, int8_t pressed,
 static enum ec_error_list matrix_callback(int8_t row, int8_t col,
 					  int8_t pressed,
 					  enum scancode_set_list code_set,
-					  uint8_t *scan_code, int32_t *len)
+					  uint8_t *scan_code, int32_t *len,
+					  int *oneshot)
 {
-	uint16_t make_code;
+	uint32_t make_code;
 
 	ASSERT(scan_code);
 	ASSERT(len);
 
-	if (row > KEYBOARD_ROWS || col > KEYBOARD_COLS)
+	if (row >= KEYBOARD_ROWS || col >= KEYBOARD_COLS)
 		return EC_ERROR_INVAL;
 
 	make_code = scancode_set2[row][col];
-	if (pressed)
-		keyboard_special(make_code);
+
+#ifdef CONFIG_KEYBOARD_SCANCODE_CALLBACK
+	{
+		enum ec_error_list r = keyboard_scancode_callback(
+				&make_code, pressed, oneshot);
+		if (r != EC_SUCCESS)
+			return r;
+	}
+#endif
 
 	code_set = acting_code_set(code_set);
 	if (!is_supported_code_set(code_set)) {
@@ -345,21 +355,18 @@ static enum ec_error_list matrix_callback(int8_t row, int8_t col,
 		return EC_ERROR_UNIMPLEMENTED;
 	}
 
-#ifdef CONFIG_KEYBOARD_DYNAMIC_MAPPING
-	/**
-	 * Currently it only makes sense to apply board translation in dynamic
-	 * mapping. If we find more boards need special processing, then this
-	 * can changed to weak linking or a specific config.
-	 */
-	make_code = keyboard_board_translate(make_code, pressed, code_set);
-#endif
-
 	if (!make_code) {
 		CPRINTS("KB scancode %d:%d missing", row, col);
 		return EC_ERROR_UNIMPLEMENTED;
 	}
 
 	scancode_bytes(make_code, pressed, code_set, scan_code, len);
+	if (*oneshot && pressed) {
+		int32_t break_len = 0;
+		scan_code += *len;
+		scancode_bytes(make_code, 0, code_set, scan_code, &break_len);
+		*len += break_len;
+	}
 	return EC_SUCCESS;
 }
 
@@ -397,6 +404,7 @@ static void keyboard_wakeup(void)
 static void set_typematic_key(const uint8_t *scan_code, int32_t len)
 {
 	typematic_deadline.val = get_time().val + typematic_first_delay;
+	ASSERT(len <= sizeof(typematic_scan_code));
 	memcpy(typematic_scan_code, scan_code, len);
 	typematic_len = len;
 }
@@ -408,23 +416,33 @@ void clear_typematic_key(void)
 
 void keyboard_state_changed(int row, int col, int is_pressed)
 {
-	uint8_t scan_code[MAX_SCAN_CODE_LEN];
+	/**
+	 * In one matrix_callback there may be scan codes generated
+	 * as one shot (make+break) so we have to double the buffer.
+	 * Currently the largest sequence is PAUSE (8 bytes).
+	 */
+	uint8_t scan_code[MAX_SCAN_CODE_LEN * 2];
 	int32_t len = 0;
+	int is_oneshot = 0;
 	enum ec_error_list ret;
 
 	CPRINTS5("KB (%d,%d)=%d", row, col, is_pressed);
 
 	ret = matrix_callback(row, col, is_pressed, scancode_set, scan_code,
-			      &len);
+			      &len, &is_oneshot);
 	if (ret == EC_SUCCESS) {
-		ASSERT(len > 0);
-		if (keystroke_enabled)
+		/**
+		 * One shot means keys should send MAKE+BREAK at when pressed,
+		 * and fire nothing when released. For example PAUSE.
+		 */
+		ASSERT(len > 0 || is_oneshot);
+		if (keystroke_enabled && len)
 			i8042_send_to_host(len, scan_code);
 	}
 
 	if (is_pressed) {
 		keyboard_wakeup();
-		set_typematic_key(scan_code, len);
+		set_typematic_key(scan_code, is_oneshot ? 0 : len);
 		task_wake(TASK_ID_KEYPROTO);
 	} else {
 		clear_typematic_key();
@@ -686,6 +704,13 @@ static int handle_keyboard_command(uint8_t command, uint8_t *output)
 
 	switch (command) {
 	case I8042_READ_CMD_BYTE:
+		/*
+		 * Ensure that the keyboard buffer is cleared before adding
+		 * command byte to it. Since the host is asking for command
+		 * byte, sending it buffered key press data can confuse the
+		 * host and result in it taking incorrect action.
+		 */
+		keyboard_clear_buffer();
 		output[out_len++] = read_ctl_ram(0);
 		break;
 
@@ -796,54 +821,6 @@ static void i8042_handle_from_host(void)
 			ret_len = handle_keyboard_data(h.byte, output);
 
 		i8042_send_to_host(ret_len, output);
-	}
-}
-
-/* U U D D L R L R b a */
-static void keyboard_special(uint16_t k)
-{
-	static uint8_t s;
-	static const uint16_t a[] = {0xe075, 0xe075, 0xe072, 0xe072, 0xe06b,
-				     0xe074, 0xe06b, 0xe074, 0x0032, 0x001c};
-#ifdef HAS_TASK_LIGHTBAR
-	/* Lightbar demo mode: keyboard can fake the battery state */
-	switch (k) {
-	case 0xe075:				/* up */
-		demo_battery_level(1);
-		break;
-	case 0xe072:				/* down */
-		demo_battery_level(-1);
-		break;
-	case 0xe06b:				/* left */
-		demo_is_charging(0);
-		break;
-	case 0xe074:				/* right */
-		demo_is_charging(1);
-		break;
-	case 0x000b:				/* dim */
-		demo_brightness(-1);
-		break;
-	case 0x0083:				/* bright */
-		demo_brightness(1);
-		break;
-	case 0x002c:				/* T */
-		demo_tap();
-		break;
-	}
-#endif
-
-	if (k == a[s])
-		s++;
-	else if (k != 0xe075)
-		s = 0;
-	else if (s != 2)
-		s = 1;
-
-	if (s == ARRAY_SIZE(a)) {
-		s = 0;
-#ifdef HAS_TASK_LIGHTBAR
-		lightbar_sequence(LIGHTBAR_KONAMI);
-#endif
 	}
 }
 

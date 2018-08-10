@@ -30,52 +30,20 @@ void button_state_changed(enum keyboard_button_type button, int is_pressed);
  */
 void keyboard_host_write(int data, int is_cmd);
 
-/**
- * Send a scan code to the host.
+/*
+ * Board specific callback function when a key state is changed.
  *
- * The EC lib will push the scan code bytes to host via port 0x60 and assert
- * the IBF flag to trigger an interrupt.  The EC lib must queue them if the
- * host cannot read the previous byte away in time.
+ * A board may watch key events and create some easter eggs, or apply dynamic
+ * translation to the make code (i.e., remap keys).
  *
- * @param len		Number of bytes to send to the host
- * @param bytes	Data to send
+ * Returning EC_SUCCESS implies the make points to a valid make code and should
+ * be processed. Any other failure will abort key processing.
+ *
+ * @param make_code	Pointer to scan code (set 2) of key in action.
+ * @param pressed	Is the key being pressed (1) or released (0).
  */
-void i8042_send_to_host(int len, const uint8_t *bytes);
-
-/* Utilities for scan code and make code. */
-
-enum scancode_set_list {
-	SCANCODE_GET_SET = 0,
-	SCANCODE_SET_1,
-	SCANCODE_SET_2,
-	SCANCODE_SET_3,
-	SCANCODE_MAX = SCANCODE_SET_3,
-};
-
-struct makecode_translate_entry {
-	uint16_t from, to;
-};
-
-/**
- * Translate a make code to different value.
- *
- * @param make_code	The value of make_code.
- * @param entries	Pointer to array of struct makecode_translate_entry
- * @param count		Number of elements in entries
- */
-uint16_t makecode_translate(uint16_t make_code,
-			    const struct makecode_translate_entry *entries,
-			    size_t count);
-
-/**
- * Returns a board-specific translated make code.
- *
- * @param make_code	8042 make code
- * @param pressed	Whether the key was pressed
- * @param code_set	8042 scan code set
- */
-uint16_t keyboard_board_translate(
-		uint16_t make_code, int8_t pressed,
-		enum scancode_set_list code_set);
+enum ec_error_list keyboard_scancode_callback(uint32_t *make_code,
+					      int8_t pressed,
+					      int32_t *oneshot);
 
 #endif  /* __CROS_EC_KEYBOARD_8042_H */

@@ -1598,6 +1598,11 @@
 #undef CONFIG_KEYBOARD_SCANCODE_MUTABLE
 
 /*
+ * Allow board-specific 8042 keyboard callback when a key state is changed.
+ */
+#undef CONFIG_KEYBOARD_SCANCODE_CALLBACK
+
+/*
  * Allow changing keyboard mapping dynamically (for example to provide Fn keys
  * in AP firmware legacy mode).
  */
