@@ -7,7 +7,7 @@
 #
 
 # Select Andes bare-metal toolchain
-$(call set-option,CROSS_COMPILE,$(CROSS_COMPILE_nds32),nds32le-cros-elf-)
+$(call set-option,CROSS_COMPILE,$(CROSS_COMPILE_nds32),/opt/coreboot-sdk/bin/nds32le-elf-)
 
 # CPU specific compilation flags
 CFLAGS_CPU+=-march=v3m -Os
