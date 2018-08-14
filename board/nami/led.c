@@ -390,21 +390,12 @@ void config_one_led(enum ec_led_id id, enum led_charge_state charge)
 	if (!pattern)
 		return;	/* This LED isn't present */
 
-	p = (*pattern)[charge][power_state];
-	if (id == EC_LED_ID_BATTERY_LED) {
-		if (charge == LED_STATE_DISCHARGE &&
-				charge_get_percent() < low_battery_soc)
-			/* AC isn't plugged and low battery */
-			p = low_battery;
-		else if (charge == LED_STATE_CHARGE &&
-				charge_get_percent() <
-					CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
-			/* AC is plugged and battery is very low. We don't check
-			 * power state because system should be already off.
-			 * System can't boot until battery is charged. We show
-			 * error on LED until battery charge is ready for AP. */
-			p = battery_error;
-	}
+	if (id == EC_LED_ID_BATTERY_LED &&
+			charge == LED_STATE_DISCHARGE &&
+			charge_get_percent() < low_battery_soc)
+		p = low_battery;
+	else
+		p = (*pattern)[charge][power_state];
 
 	if (!p.pulse) {
 		/* solid/static color */
