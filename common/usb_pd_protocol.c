@@ -3749,7 +3749,15 @@ void pd_task(void *u)
 				pd_set_power_role(port, PD_ROLE_SOURCE);
 				timeout = 2*MSEC;
 			} else {
-				pd_set_drp_toggle(port, 1);
+				/*
+				 * Staying in PD_STATE_DRP_AUTO_TOGGLE,
+				 * always enter low power mode, and auto-toggle
+				 * while in low power mode if drp_state allows
+				 * us to be dual role.
+				 */
+				if (drp_state[port] == PD_DRP_TOGGLE_ON)
+					tcpm_set_drp_toggle(port, 1);
+				request_low_power_mode(port, 1);
 				pd[port].flags |= PD_FLAGS_TCPC_DRP_TOGGLE;
 				timeout = -1;
 			}
