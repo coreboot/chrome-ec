@@ -51,6 +51,9 @@ endif
 endif
 
 # commands to build all targets
+cmd_libec = $(LD) -r $^ -o $@.1.o && \
+	$(OBJCOPY) --localize-hidden $@.1.o $@.2.o && \
+	$(AR) scr $@ $@.2.o
 cmd_lds = $(CPP) -P -C -MMD -MF $@.d -MT $@ $(CPPFLAGS) $< -o $@
 cmd_lds_b = $(cmd_lds) -DRW_B_LDS
 # Allow obj_to_bin to be overridden by board or chip specific commands
@@ -70,6 +73,7 @@ cmd_bin_to_hex = $(OBJCOPY) -I binary -O ihex \
 cmd_smap = $(NM) $< | sort > $@
 cmd_elf = $(CC) $(objs) $(libsharedobjs_elf-y) $(LDFLAGS) \
 	-o $@ -Wl,-T,$< -Wl,-Map,$(patsubst %.elf,%.map,$@)
+cmd_fuzz_exe = $(CXX) $^ $(HOST_TEST_LDFLAGS) -o $@
 cmd_exe = $(CC) $(ro-objs) $(HOST_TEST_LDFLAGS) -o $@
 cmd_c_to_o = $(CC) $(CFLAGS) -MMD -MF $@.d -c $< -o $(@D)/$(@F)
 cmd_c_to_build = $(BUILDCC) $(BUILD_CFLAGS) \
@@ -284,6 +288,22 @@ coverage: TEST_FLAG=TEST_COVERAGE=y
 coverage: $(cov-test-targets)
 	$(call quiet,report_cov,REPORT )
 
+# Fuzzing tests
+
+fuzz-test-targets=$(foreach t,$(fuzz-test-list-host),host-$(t))
+
+.PHONY: $(fuzz-test-targets)
+
+$(fuzz-test-targets): host-%:
+	$(call quiet,host_test,BUILD  )
+
+.PHONY: buildfuzztests
+buildfuzztests: TEST_FLAG=TEST_FUZZ=y TEST_ASAN=y
+buildfuzztests: $(fuzz-test-targets)
+
+$(out)/libec.a: $(ro-objs)
+	$(call quiet,libec,BUILD )
+
 $(out)/firmware_image.lds: common/firmware_image.lds.S
 	$(call quiet,lds,LDS    )
 $(out)/%.lds: core/$(CORE)/ec.lds.S
@@ -364,8 +384,13 @@ $(out)/$(SHOBJLIB)/$(SHOBJLIB).elf: $(sharedlib-objs)
 $(out)/%.smap: $(out)/%.elf
 	$(call quiet,smap,NM     )
 
+ifeq ($(TEST_FUZZ),y)
+$(out)/$(PROJECT).exe: $(rw-only-objs) $(out)/libec.a
+	$(call quiet,fuzz_exe,EXE    )
+else
 $(out)/$(PROJECT).exe: $(ro-objs)
 	$(call quiet,exe,EXE    )
+endif
 
 $(out)/RO/%.o:%.c
 	$(call quiet,c_to_o,CC     )
