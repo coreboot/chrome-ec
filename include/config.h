@@ -1982,6 +1982,9 @@
 /* Enable rbox peripheral */
 #undef CONFIG_RBOX
 
+/* Enable rbox wakeup */
+#undef CONFIG_RBOX_WAKEUP
+
 /* Enable RDD peripheral */
 #undef CONFIG_RDD
 
