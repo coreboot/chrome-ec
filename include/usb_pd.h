@@ -46,7 +46,8 @@ enum pd_rx_errors {
  * A task, other than the task owning the PD port, accessed the TCPC. The task
  * that owns the port does not send itself this event.
  */
-#define PD_EVENT_DEVICE_ACCESSED  (1<<7)
+#define PD_EVENT_DEVICE_ACCESSED    (1<<7)
+#define PD_EVENT_POWER_STATE_CHANGE (1<<8) /* Chipset power state changed */
 
 /* Ensure TCPC is out of low power mode before handling these events. */
 #define PD_EXIT_LOW_POWER_EVENT_MASK \
