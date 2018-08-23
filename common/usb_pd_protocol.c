@@ -2328,6 +2328,16 @@ static int pd_restart_tcpc(int port)
 }
 #endif
 
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#define DRP_AUTO_TOGGLE_ALLOWED_DELAY_US (5 * SECOND)
+static uint8_t auto_toggle_allowed;
+static void allow_drp_auto_toggle(void)
+{
+	auto_toggle_allowed = 1;
+}
+DECLARE_DEFERRED(allow_drp_auto_toggle);
+#endif /* CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE */
+
 void pd_task(void *u)
 {
 	int head;
@@ -2481,6 +2491,17 @@ void pd_task(void *u)
 	typec_set_input_current_limit(port, 0, 0);
 	charge_manager_update_dualrole(port, CAP_UNKNOWN);
 #endif
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+	/*
+	 * Delay entering PD_STATE_DRP_AUTO_TOGGLE by
+	 * DRP_AUTO_TOGGLE_ALLOWED_DELAY_US, such that we don't dismiss a
+	 * charger from being detected as a source.  Otherwise, shortly after
+	 * init, we may think that nothing is connected and remain in the auto
+	 * toggle state and never charge our battery.
+	 */
+	hook_call_deferred(&allow_drp_auto_toggle_data,
+			   DRP_AUTO_TOGGLE_ALLOWED_DELAY_US);
+#endif /* CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE */
 
 	while (1) {
 #ifdef CONFIG_USB_PD_REV30
@@ -2608,9 +2629,10 @@ void pd_task(void *u)
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 			/*
 			 * Attempt TCPC auto DRP toggle if it is
-			 * not already auto toggling and not try.src
+			 * allowed, not already auto toggling, and not try.src
 			 */
 			if (auto_toggle_supported &&
+			    auto_toggle_allowed &&
 			    !(pd[port].flags & PD_FLAGS_TCPC_DRP_TOGGLE) &&
 			    !(pd[port].flags & PD_FLAGS_TRY_SRC) &&
 			    (cc1 == TYPEC_CC_VOLT_OPEN &&
@@ -3094,9 +3116,10 @@ void pd_task(void *u)
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 			/*
 			 * Attempt TCPC auto DRP toggle if it is
-			 * not already auto toggling and not try.src
+			 * allowed, not already auto toggling, and not try.src
 			 */
 			if (auto_toggle_supported &&
+			    auto_toggle_allowed &&
 			    !(pd[port].flags & PD_FLAGS_TCPC_DRP_TOGGLE) &&
 			    !(pd[port].flags & PD_FLAGS_TRY_SRC) &&
 			    (cc1 == TYPEC_CC_VOLT_OPEN &&
