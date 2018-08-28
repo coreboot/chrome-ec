@@ -727,6 +727,30 @@ static int anx74xx_tcpm_set_cc(int port, int pull)
 	return rv;
 }
 
+#if defined(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE) && \
+	defined(CONFIG_USB_PD_TCPC_LOW_POWER)
+static void anx74xx_handle_power_mode(int port, int mode)
+{
+	if (mode == ANX74XX_STANDBY_MODE) {
+		anx74xx_set_power_mode(port, mode);
+	} else if (anx[port].prev_mode != ANX74XX_NORMAL_MODE) {
+		/*
+		 * TODO: Interrupt high follows CC line hence ignore multiple
+		 * interrupts.
+		 */
+		anx74xx_tcpm_init(port);
+	}
+}
+
+static int anx74xx_tcpc_drp_toggle(int port)
+{
+	/* DRP auto-toggle happens when the ANX3429 is in standby mode. */
+	anx74xx_handle_power_mode(port, ANX74XX_STANDBY_MODE);
+
+	return EC_SUCCESS;
+}
+#endif /* CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE && CONFIG_USB_PD_TCPC_LOW_POWER */
+
 static int anx74xx_tcpm_set_polarity(int port, int polarity)
 {
 	int reg, mux_state, rv = EC_SUCCESS;
