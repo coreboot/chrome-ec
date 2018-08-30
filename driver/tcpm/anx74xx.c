@@ -204,12 +204,12 @@ void anx74xx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
 {
 	int reg;
 
-	tcpc_read(port, ANX74XX_REG_HPD_CTRL_0, &reg);
+	mux_read(port, ANX74XX_REG_HPD_CTRL_0, &reg);
 	if (hpd_lvl)
 		reg |= ANX74XX_REG_HPD_OUT_DATA;
 	else
 		reg &= ~ANX74XX_REG_HPD_OUT_DATA;
-	tcpc_write(port, ANX74XX_REG_HPD_CTRL_0, reg);
+	mux_write(port, ANX74XX_REG_HPD_CTRL_0, reg);
 
 	if (hpd_irq) {
 		uint64_t now = get_time().val;
@@ -217,12 +217,12 @@ void anx74xx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
 		if (now < hpd_deadline[port])
 			usleep(hpd_deadline[port] - now);
 
-		tcpc_read(port, ANX74XX_REG_HPD_CTRL_0, &reg);
+		mux_read(port, ANX74XX_REG_HPD_CTRL_0, &reg);
 		reg &= ~ANX74XX_REG_HPD_OUT_DATA;
-		tcpc_write(port, ANX74XX_REG_HPD_CTRL_0, reg);
+		mux_write(port, ANX74XX_REG_HPD_CTRL_0, reg);
 		usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
 		reg |= ANX74XX_REG_HPD_OUT_DATA;
-		tcpc_write(port, ANX74XX_REG_HPD_CTRL_0, reg);
+		mux_write(port, ANX74XX_REG_HPD_CTRL_0, reg);
 	}
 	/* enforce 2-ms delay between HPD pulses */
 	hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
@@ -238,10 +238,8 @@ void anx74xx_tcpc_clear_hpd_status(int port)
 }
 
 #ifdef CONFIG_USB_PD_TCPM_MUX
-static int anx74xx_tcpm_mux_init(int i2c_addr)
+static int anx74xx_tcpm_mux_init(int port)
 {
-	int port = i2c_addr;
-
 	/* Nothing to do here, ANX initializes its muxes
 	 * as (MUX_USB_ENABLED | MUX_DP_ENABLED)
 	 */
@@ -254,9 +252,9 @@ static int anx74xx_tcpm_mux_enter_safe_mode(int port)
 {
 	int reg;
 
-	if (tcpc_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
+	if (mux_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
 		return EC_ERROR_UNKNOWN;
-	if (tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg |
+	if (mux_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg |
 		       ANX74XX_REG_MODE_TRANS))
 		return EC_ERROR_UNKNOWN;
 
@@ -268,9 +266,9 @@ static int anx74xx_tcpm_mux_exit_safe_mode(int port)
 {
 	int reg;
 
-	if (tcpc_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
+	if (mux_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
 		return EC_ERROR_UNKNOWN;
-	if (tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg &
+	if (mux_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg &
 		       ~ANX74XX_REG_MODE_TRANS))
 		return EC_ERROR_UNKNOWN;
 
@@ -294,18 +292,18 @@ static int anx74xx_tcpm_mux_exit(int port)
 		return EC_ERROR_UNKNOWN;
 
 	/* Disconnect aux from sbu */
-	if (tcpc_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
+	if (mux_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
 		return EC_ERROR_UNKNOWN;
-	if (tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg & 0xf))
+	if (mux_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg & 0xf))
 		return EC_ERROR_UNKNOWN;
 
 	/* Clear Bit[7:0] R_SWITCH */
-	if (tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_1, 0x0))
+	if (mux_write(port, ANX74XX_REG_ANALOG_CTRL_1, 0x0))
 		return EC_ERROR_UNKNOWN;
 	/* Clear Bit[7:4] R_SWITCH_H */
-	if (tcpc_read(port, ANX74XX_REG_ANALOG_CTRL_5, &reg))
+	if (mux_read(port, ANX74XX_REG_ANALOG_CTRL_5, &reg))
 		return EC_ERROR_UNKNOWN;
-	if (tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_5, reg & 0x0f))
+	if (mux_write(port, ANX74XX_REG_ANALOG_CTRL_5, reg & 0x0f))
 		return EC_ERROR_UNKNOWN;
 
 	/* Exit safe mode */
@@ -328,7 +326,7 @@ static int anx74xx_mux_aux_to_sbu(int port, int polarity, int enabled)
 	 * about setting the correct value for the upper 4 bits of analog_ctrl_2
 	 * here.
 	 */
-	if (tcpc_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
+	if (mux_read(port, ANX74XX_REG_ANALOG_CTRL_2, &reg))
 		return EC_ERROR_UNKNOWN;
 
 	/* Assume aux_p/n lines are not connected */
@@ -342,7 +340,7 @@ static int anx74xx_mux_aux_to_sbu(int port, int polarity, int enabled)
 			reg |= ANX74XX_REG_AUX_SWAP_SET_CC1;
 	}
 	/* Write new aux <-> sbu settings */
-	if (tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg))
+	if (mux_write(port, ANX74XX_REG_ANALOG_CTRL_2, reg))
 		return EC_ERROR_UNKNOWN;
 
 	return EC_SUCCESS;
@@ -360,7 +358,7 @@ static int anx74xx_tcpm_mux_set(int i2c_addr, mux_state_t mux_state)
 		return anx74xx_tcpm_mux_exit(port);
 	}
 
-	rv = tcpc_read(port, ANX74XX_REG_ANALOG_CTRL_5, &reg);
+	rv = mux_read(port, ANX74XX_REG_ANALOG_CTRL_5, &reg);
 	if (rv)
 		return EC_ERROR_UNKNOWN;
 	reg &= 0x0f;
@@ -398,9 +396,9 @@ static int anx74xx_tcpm_mux_set(int i2c_addr, mux_state_t mux_state)
 		return EC_ERROR_UNKNOWN;
 
 	/* Write updated pin assignment */
-	rv = tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_1, pin_cfg);
+	rv = mux_write(port, ANX74XX_REG_ANALOG_CTRL_1, pin_cfg);
 	/* Write Rswitch config bits */
-	rv |= tcpc_write(port, ANX74XX_REG_ANALOG_CTRL_5, reg);
+	rv |= mux_write(port, ANX74XX_REG_ANALOG_CTRL_5, reg);
 	if (rv)
 		return EC_ERROR_UNKNOWN;
 
@@ -419,10 +417,8 @@ static int anx74xx_tcpm_mux_set(int i2c_addr, mux_state_t mux_state)
 }
 
 /* current mux state  */
-static int anx74xx_tcpm_mux_get(int i2c_addr, mux_state_t *mux_state)
+static int anx74xx_tcpm_mux_get(int port, mux_state_t *mux_state)
 {
-	int port = i2c_addr;
-
 	*mux_state = anx[port].mux_state;
 
 	return EC_SUCCESS;
