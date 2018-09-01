@@ -17,6 +17,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "system.h"
+#include "usb_pd.h"
 #include "util.h"
 
 /*
@@ -97,6 +98,16 @@ static const struct max17055_batt_profile batt_profile[] = {
 		.qr_table30		= 0x0480,
 	},
 };
+
+static void pd_limit_5v(uint8_t en)
+{
+	int wanted_pd_voltage;
+
+	wanted_pd_voltage = en ? 5500 : PD_MAX_VOLTAGE_MV;
+
+	if (pd_get_max_voltage() != wanted_pd_voltage)
+		pd_set_external_voltage_limit(0, wanted_pd_voltage);
+}
 
 const struct battery_info *battery_get_info(void)
 {
@@ -255,22 +266,27 @@ int charger_profile_override(struct charge_state_data *curr)
 						 curr->batt.state_of_charge);
 		/*
 		 * This is a workaround for b:78792296. When AP is off and
-		 * charge termination is detected, we disable idle mode.
+		 * charge termination is detected, we disable idle mode and
+		 * lower the max PD voltage.
 		 */
-		if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
 			disable_idle();
-		else
+			pd_limit_5v(1);
+		} else {
 			enable_idle();
+			pd_limit_5v(0);
+		}
 	}
 
 	return 0;
 }
 
-static void board_enable_idle(void)
+static void board_protection_reset(void)
 {
 	enable_idle();
+	pd_limit_5v(0);
 }
-DECLARE_HOOK(HOOK_AC_CHANGE, board_enable_idle, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_AC_CHANGE, board_protection_reset, HOOK_PRIO_DEFAULT);
 
 static void board_charge_termination(void)
 {
