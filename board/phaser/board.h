@@ -46,26 +46,8 @@
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
-#define CONFIG_TABLET_MODE
-#define CONFIG_TABLET_SWITCH
-#define TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
-
-#define CONFIG_DPTF
-#define CONFIG_DPTF_DEVICE_ORIENTATION
-
-/* Interrupt and fifo are only used for base accelerometer
- * and the lid sensor is polled real-time (in forced mode).
- */
-#define CONFIG_ACCEL_INTERRUPTS
-/* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 1024
-
-/* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_HOST_EVENT
-
-#define CONFIG_ACCEL_LSM6DSM_INT_EVENT TASK_EVENT_CUSTOM(4)
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #ifndef __ASSEMBLER__
 
