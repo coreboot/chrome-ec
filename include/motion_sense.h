@@ -125,6 +125,9 @@ struct motion_sensor_t {
 	/* How many flush events are pending */
 	uint32_t flush_pending;
 
+	/* new ODR pending */
+	uint32_t new_odr;
+
 	/*
 	 * Allow EC to request an higher frequency for the sensors than the AP.
 	 * We will downsample according to oversampling_ratio, or ignore the
