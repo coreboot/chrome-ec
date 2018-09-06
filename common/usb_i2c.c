@@ -30,6 +30,11 @@ USB_I2C_CONFIG(i2c,
 	       USB_STR_I2C_NAME,
 	       USB_EP_I2C)
 
+static int (*cros_cmd_handler)(void *data_in,
+			       size_t in_size,
+			       void *data_out,
+			       size_t out_size);
+
 static int16_t usb_i2c_map_error(int error)
 {
 	switch (error) {
@@ -97,7 +102,7 @@ static uint8_t usb_i2c_executable(struct usb_i2c_config const *config)
 	return 0;
 }
 
-void usb_i2c_execute(struct usb_i2c_config const *config)
+static void usb_i2c_execute(struct usb_i2c_config const *config)
 {
 	/* Payload is ready to execute. */
 	uint32_t count      = usb_i2c_read_packet(config);
@@ -131,6 +136,18 @@ void usb_i2c_execute(struct usb_i2c_config const *config)
 		config->buffer[0] = USB_I2C_READ_COUNT_INVALID;
 	} else if (portindex >= i2c_ports_used) {
 		config->buffer[0] = USB_I2C_PORT_INVALID;
+	} else if (slave_addr == USB_I2C_CMD_ADDR) {
+		/*
+		 * This is a non-i2c command, invoke the handler if it has
+		 * been registered, if not - report the appropriate error.
+		 */
+		if (!cros_cmd_handler)
+			config->buffer[0] = USB_I2C_MISSING_HANDLER;
+		else
+			config->buffer[0] = cros_cmd_handler(config->buffer + 2,
+							     write_count,
+							     config->buffer + 2,
+							     read_count);
 	} else {
 		int ret;
 
@@ -169,3 +186,15 @@ static void usb_i2c_written(struct consumer const *consumer, size_t count)
 struct consumer_ops const usb_i2c_consumer_ops = {
 	.written = usb_i2c_written,
 };
+
+int usb_i2c_register_cros_cmd_handler(int (*cmd_handler)
+				      (void *data_in,
+				       size_t in_size,
+				       void *data_out,
+				       size_t out_size))
+{
+	if (cros_cmd_handler)
+		return -1;
+	cros_cmd_handler = cmd_handler;
+	return 0;
+}
