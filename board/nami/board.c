@@ -571,10 +571,10 @@ static void board_pmic_init(void)
 	/*
 	 * Increase Voltage
 	 *  [7:0] : 0x2a default
-	 *  [5:4] : 10b default
-	 *  [5:4] : 01b 5.1V (0x1a)
+	 *  [5:4] : 10b default (5.0V)
+	 *  [5:4] : 00b +3% (5.15V)
 	 */
-	err = I2C_PMIC_WRITE(TPS650X30_REG_V5ADS3CNT, 0x1a);
+	err = I2C_PMIC_WRITE(TPS650X30_REG_V5ADS3CNT, 0x0a);
 	if (err)
 		goto pmic_error;
 
