@@ -96,7 +96,7 @@ static void power_down_ic(const int port)
 	gpio_set_level(pin_tbl[port].chip_enable_l, 1);
 
 	/* Let charge manager know there's no more charge available. */
-	charge_manager_update_charge(CHARGE_SUPPLIER_OTHER, port, &no_chg);
+	charge_manager_update_charge(CHARGE_SUPPLIER_OTHER, port, NULL);
 }
 
 /**
