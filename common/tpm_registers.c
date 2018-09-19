@@ -691,6 +691,13 @@ int tpm_reset_request(int wait_until_done, int wipe_nvmem_first)
 	cprints(CC_TASK, "%s(%d, %d)", __func__,
 		wait_until_done, wipe_nvmem_first);
 
+	if  (chip_factory_mode()) {
+		cprints(CC_TASK,
+			"%s: chip factory mode, reset request ignored",
+			__func__);
+		return EC_SUCCESS;
+	}
+
 	if (reset_in_progress) {
 		cprints(CC_TASK, "%s: already scheduled", __func__);
 		return EC_ERROR_BUSY;
