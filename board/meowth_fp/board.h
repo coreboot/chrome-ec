@@ -9,12 +9,6 @@
 #define __BOARD_H
 
 /*
- * TODO(b/73337313) remove this config,
- * once the write-protection scheme is decided and validated.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
-/*
  * Flash layout: we redefine the sections offsets and sizes as we want to
  * include a rollback region, and will use RO/RW regions of different sizes.
  */
