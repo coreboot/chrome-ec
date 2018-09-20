@@ -121,13 +121,12 @@ endif
 
 MANIFEST := util/signer/ec_RW-manifest-dev.json
 CR50_RO_KEY ?= rom-testkey-A.pem
+SIGNER = /usr/bin/cr50-codesigner
 ifeq ($(H1_DEVIDS),)
 CR50_RW_KEY = loader-testkey-A.pem
-SIGNER = $(out)/util/signer
 SIGNER_EXTRAS =
 SIGNER_MANIFEST := $(MANIFEST)
 else
-SIGNER = $(HOME)/bin/codesigner
 CR50_RW_KEY = cr50_rom0-dev-blsign.pem.pub
 RW_SIGNER_EXTRAS = -x util/signer/fuses.xml
 
@@ -164,7 +163,7 @@ else
 DUMMY := $(shell /bin/cp $(MANIFEST) $(SIGNER_MANIFEST))
 endif
 REPLACEMENT := $(shell printf \
-	'\\n    \\"DEV_ID0\\": %d,\\n    \\"DEV_ID1\\": %d,' $(H1_DEVIDS))
+	'\\n    \\"DEV_ID0\\": %s,\\n    \\"DEV_ID1\\": %s,' $(H1_DEVIDS))
 NODE_JSON :=  $(shell sed -i \
 	"s/\"fuses\": {/\"fuses\": {$(REPLACEMENT)/" $(SIGNER_MANIFEST))
 
