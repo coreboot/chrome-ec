@@ -121,14 +121,14 @@ endif
 
 MANIFEST := util/signer/ec_RW-manifest-dev.json
 CR50_RO_KEY ?= rom-testkey-A.pem
-SIGNER = /usr/bin/cr50-codesigner
+SIGNER ?= $(out)/util/signer
 ifeq ($(H1_DEVIDS),)
 CR50_RW_KEY = loader-testkey-A.pem
 SIGNER_EXTRAS =
 SIGNER_MANIFEST := $(MANIFEST)
 else
 CR50_RW_KEY = cr50_rom0-dev-blsign.pem.pub
-RW_SIGNER_EXTRAS = -x util/signer/fuses.xml
+RW_SIGNER_EXTRAS = -x util/signer/fuses.xml --b
 
 ifneq ($(CHIP_MK_INCLUDED_ONCE),)
 #
