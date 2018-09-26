@@ -77,6 +77,16 @@ struct ppc_drv {
 	 */
 	int (*discharge_vbus)(int port, int enable);
 
+#ifdef CONFIG_USBC_PPC_SBU
+	/**
+	 * Turn on/off the SBU FETs.
+	 *
+	 * @param port: The Type-C port number.
+	 * @param enable: 1: enable SBU FETs 0: disable SBU FETs.
+	 */
+	int (*set_sbu)(int port, int enable);
+#endif /* CONFIG_USBC_PPC_SBU */
+
 #ifdef CONFIG_USBC_PPC_VCONN
 	/**
 	 * Turn on/off the VCONN FET.
@@ -158,6 +168,14 @@ int ppc_set_polarity(int port, int polarity);
  * @return EC_SUCCESS on success, error otherwise.
  */
 int ppc_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp);
+
+/**
+ * Turn on/off the SBU FETs.
+ *
+ * @param port: The Type-C port number.
+ * @param enable: 1: enable SBU FETs 0: disable SBU FETs.
+ */
+int ppc_set_sbu(int port, int enable);
 
 /**
  * Turn on/off the VCONN FET.

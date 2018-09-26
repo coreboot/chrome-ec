@@ -68,6 +68,16 @@ int ppc_discharge_vbus(int port, int enable)
 	return ppc_chips[port].drv->discharge_vbus(port, enable);
 }
 
+#ifdef CONFIG_USBC_PPC_SBU
+int ppc_set_sbu(int port, int enable)
+{
+	if ((port < 0) || (port >= ppc_cnt))
+		return EC_ERROR_INVAL;
+
+	return ppc_chips[port].drv->set_sbu(port, enable);
+}
+#endif /* defined(CONFIG_USBC_PPC_SBU) */
+
 #ifdef CONFIG_USBC_PPC_VCONN
 int ppc_set_vconn(int port, int enable)
 {
