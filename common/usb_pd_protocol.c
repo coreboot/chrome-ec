@@ -2223,8 +2223,11 @@ void pd_interrupt_handler_task(void *p)
 			 * PD_PROCESS_INTERRUPT to check if we missed anything.
 			 */
 			while ((tcpc_get_alert_status() & port_mask) &&
-			       pd_is_port_enabled(port))
+			       pd_is_port_enabled(port)) {
 				tcpc_alert(port);
+				/* Give other tasks a chance to run. */
+				usleep(3*MSEC);
+			}
 		}
 	}
 }
