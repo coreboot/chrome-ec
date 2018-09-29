@@ -9,6 +9,7 @@
 #include "tcpci.h"
 #include "tcpm.h"
 #include "usb_pd.h"
+#include "usb_pd_tcpc.h"
 #include "usb_pd_tcpm.h"
 
 extern int tcpc_alert_status(int port, int *alert);
