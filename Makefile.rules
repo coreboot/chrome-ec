@@ -16,9 +16,8 @@ build-art := $(foreach u,$(build-util-art),$(out)/$(u))
 build-srcs := $(foreach u,$(build-util-bin),$(sort $($(u)-objs:%.o=util/%.c) $(wildcard util/$(u).c)))
 host-srcs := $(foreach u,$(host-util-bin),$(sort $($(u)-objs:%.o=util/%.c) $(wildcard util/$(u).c)))
 
-# Don't do a build test on the following boards:
-skip_boards = OWNERS host kevin gru
-boards := $(filter-out $(skip_boards),$(notdir $(wildcard board/* private*/board/*)))
+# The only boards we care about on this branch are below.
+boards := nocturne nocturne_fp whiskers
 
 # Create output directories if necessary
 _common_dir_create := $(foreach d,$(common_dirs),$(shell [ -d $(out)/$(d) ] || \
