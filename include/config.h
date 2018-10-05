@@ -159,6 +159,12 @@
 #define CONFIG_ADC_PROFILE_SINGLE
 #undef CONFIG_ADC_PROFILE_FAST_CONTINUOUS
 
+/* Support AES symmetric-key algorithm */
+#undef CONFIG_AES
+
+/* Support AES-GCM */
+#undef CONFIG_AES_GCM
+
 /*
  * Some ALS modules may be connected to the EC. We need the command, and
  * specific drivers for each module.
@@ -512,6 +518,13 @@
  * matrix.
  */
 #undef CONFIG_BUTTON_TRIGGERED_RECOVERY
+
+/*
+ * Compile detachable base support
+ *
+ * Enabled on all boards that have a detachable base.
+ */
+#undef CONFIG_DETACHABLE_BASE
 
 /*
  * Indicates there is a dedicated recovery button.  Note, that if there are
@@ -1157,8 +1170,17 @@
 /*
  * When enabled, build in support for software & hardware crypto;
  * only supported on CR50.
+ *
+ * If this is enabled on the host board, a minimal implementation is included to
+ * allow fuzzing targets to fuzz code that depends on dcrypto.
  */
 #undef CONFIG_DCRYPTO
+/*
+ * This provides struct definitions and function declarations that can be
+ * implemented by unit tests for testing code that depends on dcrypto.
+ * This should not be set at the same time as CONFIG_DCRYPTO.
+ */
+#undef CONFIG_DCRYPTO_MOCK
 
 /*
  * When enabled, RSA 2048 bit keygen gets a 40% performance boost,
@@ -1423,6 +1445,28 @@
  * CONFIG_FLASH_PSTATE_BANK is not defined).
  */
 #undef CONFIG_FLASH_PSTATE_LOCKED
+
+/*
+ * Enable readout protection.
+ */
+#undef CONFIG_FLASH_READOUT_PROTECTION
+
+/*
+ * Use Read-out protection status as PSTATE, i.e. after RDP is enabled, we never
+ * allow RO protection to be disabled.
+ *
+ * This is used when we want to prevent read-back of some critical region (e.g.
+ * rollback), even in DFU/BOOT0 mode.
+ *
+ * Note that this significantly changes the behaviour or flash protection,
+ * as this tie EC_FLASH_PROTECT_RO_AT_BOOT with RDP status: it makes no
+ * sense to be able to unlock RO protection if RDP is enabled, as a custom RO
+ * could allow protected regions readback.
+ *
+ * TODO(crbug.com/888109): Implementation is currently only available on
+ * STM32H7, and requires more documentation.
+ */
+#undef CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE
 
 /*
  * For flash that is segemented in different regions.
@@ -2869,6 +2913,7 @@
 #undef CONFIG_TEMP_SENSOR_TMP006	/* TI TMP006 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP411	/* TI TMP411 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP432	/* TI TMP432 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_TMP468	/* TI TMP468 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_F75303	/* Fintek  F75303 sensor, on I2C bus */
 
 /* Compile common code for thermistor support */
@@ -3196,6 +3241,7 @@
 #undef CONFIG_USB_PD_TCPM_PS8751
 #undef CONFIG_USB_PD_TCPM_PS8805
 #undef CONFIG_USB_PD_TCPM_MT6370
+#undef CONFIG_USB_PD_TCPM_TUSB422
 
 /*
  * Adds an EC console command to erase the ANX7447 OCM flash.
@@ -3257,8 +3303,10 @@
 #undef CONFIG_USBC_PPC_POLARITY
 
 /* USB Type-C Power Path Controllers (PPC) */
+#undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
 #undef CONFIG_USBC_PPC_SN5S330
+#undef CONFIG_USBC_PPC_SYV682X
 
 /* PPC is capable of providing VCONN */
 #undef CONFIG_USBC_PPC_VCONN
@@ -3594,6 +3642,9 @@
 /* Add support for pairing over the USB update interface. */
 #undef CONFIG_USB_PAIRING
 
+/* Add support for reading UART buffer from USB update interface. */
+#undef CONFIG_USB_CONSOLE_READ
+
 /* PDU size for fw update over USB (or TPM). */
 #define CONFIG_UPDATE_PDU_SIZE 1024
 
@@ -3614,6 +3665,12 @@
  * allows to nail different images to different boards.
  */
 #undef CONFIG_BOARD_ID_SUPPORT
+
+/*
+ * Define this if serial number support is required. For g chip based boards
+ * it allows a verifiable serial number to be stored / certified.
+ */
+#undef CONFIG_SN_BITS_SUPPORT
 
 /*
  * Define this to enable Cros Board Info support. I2C_EEPROM_PORT and
@@ -4014,5 +4071,20 @@
 #ifdef CONFIG_MAG_BMI160_BMM150
 #define CONFIG_BMI160_SEC_I2C
 #endif
+
+/*
+ * TODO(crbug.com/888109): Makes sure RDP as PSTATE is only enabled where it
+ * makes sense.
+ */
+#ifdef CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE
+#ifdef CONFIG_FLASH_PSTATE
+#error "Flash readout protection and PSTATE may not work as intended."
+#endif
+
+#ifndef CHIP_FAMILY_STM32H7
+#error "Flash readout protection only implemented on STM32H7."
+#endif
+#endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
+
 #endif  /* __CROS_EC_CONFIG_H */
 
