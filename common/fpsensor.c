@@ -31,6 +31,8 @@
 #define FP_MAX_FINGER_COUNT 0
 #endif
 
+#define FP_TEMPLATE_FORMAT_VERSION 2
+
 /* if no special memory regions are defined, fallback on regular SRAM */
 #ifndef FP_FRAME_SECTION
 #define FP_FRAME_SECTION
