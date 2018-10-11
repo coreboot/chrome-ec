@@ -52,7 +52,7 @@ def obtain_current_config_options():
 def print_missing_config_options(file_list, config_options):
   """Searches through all files in file_list for missing config options.
 
-  TODO: make it search only added lines instead.
+  TODO(aaboagye): make it search only added lines instead.
   """
   missing_config_option = False
   print_banner = True
