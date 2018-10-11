@@ -835,20 +835,16 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
 static void setup_motion_sensors(void)
 {
-	switch (oem) {
-	case PROJECT_AKALI:
-		if (sku & SKU_ID_MASK_CONVERTIBLE) {
+	if (sku & SKU_ID_MASK_CONVERTIBLE) {
+		if (oem == PROJECT_AKALI) {
 			/* Rotate axis for Akali 360 */
 			motion_sensors[LID_ACCEL] = lid_accel_1;
 			motion_sensors[BASE_ACCEL].rot_standard_ref = NULL;
 			motion_sensors[BASE_GYRO].rot_standard_ref = NULL;
-		} else {
-			/* Clamshell Akali has no accel/gyro */
-			motion_sensor_count = ARRAY_SIZE(motion_sensors) - 2;
 		}
-		break;
-	default:
-		break;
+	} else {
+		/* Clamshells have no accel/gyro */
+		motion_sensor_count = 0;
 	}
 }
 
