@@ -619,6 +619,7 @@ static void pd_update_saved_port_flags(int port, uint8_t flag, uint8_t val)
 static inline void set_state(int port, enum pd_states next_state)
 {
 	enum pd_states last_state = pd[port].task_state;
+	int flags_to_clear = PD_FLAGS_RESET_ON_DISCONNECT_MASK;
 #ifdef CONFIG_LOW_POWER_IDLE
 	int i;
 #endif
@@ -683,7 +684,19 @@ static inline void set_state(int port, enum pd_states next_state)
 		pd[port].rev = PD_REV30;
 #endif
 		pd[port].dev_id = 0;
-		pd[port].flags &= ~PD_FLAGS_RESET_ON_DISCONNECT_MASK;
+		/*
+		 * A port shall only transition to Attached.SRC when a
+		 * Rd is detected on exactly one of the CC pins for at
+		 * least tPDDebounce.  If the state machine is
+		 * transitioning back to SRC_DISCONNECTED after being in
+		 * the SRC_DISCONNECTED_DEBOUNCE state, it means that
+		 * the Rd was not detected after debouncing.  Therefore,
+		 * don't clear the Try.Src flag such that we transition
+		 * to the TryWait.SNK after timing out.
+		 */
+		if (last_state == PD_STATE_SRC_DISCONNECTED_DEBOUNCE)
+			flags_to_clear &= ~PD_FLAGS_TRY_SRC;
+		pd[port].flags &= ~flags_to_clear;
 #ifdef CONFIG_CHARGE_MANAGER
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
 #endif
