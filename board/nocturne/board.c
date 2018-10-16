@@ -51,10 +51,6 @@
 static void tcpc_alert_event(enum gpio_signal s)
 {
 	int port = (s == GPIO_USB_C0_PD_INT_ODL) ? 0 : 1;
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
 	schedule_deferred_pd_interrupt(port);
 }
 
