@@ -86,6 +86,13 @@
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
+/*
+ * A falling edge on PWR_BTN_L causes the AP to wake back up from S5.
+ * Avoid this by increasing the delay before we assert PWR_BTN_L
+ * to be longer than the time it takes to reach S5. b/117676579
+ */
+#undef  CONFIG_POWER_BUTTON_SHUTDOWN_STRETCH
+#define CONFIG_POWER_BUTTON_SHUTDOWN_STRETCH	(5 * SECOND)
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 

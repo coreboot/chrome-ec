@@ -2491,6 +2491,12 @@
 #define CONFIG_POWER_BUTTON_INIT_TIMEOUT	1
 
 /*
+ * Time we allow the AP to shut down before asserting the power button signal
+ * to start the AP hardware timer.
+ */
+#define CONFIG_POWER_BUTTON_SHUTDOWN_STRETCH	(4 * SECOND)
+
+/*
  * Enable delay between DSW_PWROK and PWRBTN assertion.
  * If enabled, DSW_PWROK_TO_PWRBTN_US and get_time_dsw_pwrok must be defined
  * as well.
