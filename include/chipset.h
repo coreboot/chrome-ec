@@ -68,6 +68,8 @@ enum chipset_reset_reason {
 	CHIPSET_RESET_AP_REQ,
 	/* Reset as side-effect of startup sequence */
 	CHIPSET_RESET_INIT,
+	/* EC detected an AP watchdog event. */
+	CHIPSET_RESET_AP_WATCHDOG,
 	CHIPSET_RESET_COUNT,
 };
 
@@ -165,6 +167,7 @@ static inline void chipset_reset(enum chipset_reset_reason reason) { }
 static inline void power_interrupt(enum gpio_signal signal) { }
 static inline void chipset_handle_espi_reset_assert(void) { }
 static inline void chipset_handle_reboot(void) { }
+static inline void chipset_watchdog_interrupt(enum gpio_signal signal) { }
 
 #endif /* !HAS_TASK_CHIPSET */
 
@@ -179,6 +182,14 @@ int chipset_pltrst_is_valid(void) __attribute__((weak));
  * Execute chipset-specific reboot.
  */
 void chipset_handle_reboot(void);
+
+/**
+ * GPIO interrupt handler of watchdog from AP.
+ *
+ * It is used in MT8183 chipset, where it must be setup to trigger on falling
+ * edge only.
+ */
+void chipset_watchdog_interrupt(enum gpio_signal signal);
 
 #ifdef CONFIG_CMD_AP_RESET_LOG
 
