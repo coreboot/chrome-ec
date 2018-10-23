@@ -17,6 +17,9 @@ enum battery_type {
 	INIT = -1,
 	SIMPLO = 0,
 	SUNWODA,
+	SMP011,
+	LGC,
+	SUNWODA01,
 	BATTERY_TYPE_COUNT,
 	DEFAULT_BATTERY_TYPE = SIMPLO,
 };
@@ -51,10 +54,6 @@ static const struct battery_info info_simplo = {
 	.discharging_max_c = 60,
 };
 
-static const struct ship_mode_info ship_mode_info_simplo = {
-	.ship_mode_reg = 0x34,
-	.ship_mode_data = { 0x0000, 0x1000 },
-};
 
 static const struct battery_info info_sunwoda = {
 	.voltage_max = 13050,
@@ -76,13 +75,63 @@ static const struct ship_mode_info ship_mode_info_sunwoda = {
 	.ship_mode_data = { 0x0010, 0x0010 },
 };
 
+static const struct battery_info info_smp011 = {
+	.voltage_max = 13050,
+	.voltage_normal = 11250,
+	.voltage_min = 9000,
+	/* Pre-charge values. */
+	.precharge_current = 186, /* mA */
+
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 50,
+	.charging_min_c = 0,
+	.charging_max_c = 60,
+	.discharging_min_c = -20,
+	.discharging_max_c = 60,
+};
+
+static const struct ship_mode_info ship_mode_info_default = {
+	.ship_mode_reg = 0x34,
+	.ship_mode_data = { 0x0000, 0x1000 },
+};
+
+static const struct battery_info info_lgc = {
+	.voltage_max = 13050,
+	.voltage_normal = 11400,
+	.voltage_min = 9000,
+	/* Pre-charge values. */
+	.precharge_current = 181, /* mA */
+
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 50,
+	.charging_min_c = 0,
+	.charging_max_c = 60,
+	.discharging_min_c = -20,
+	.discharging_max_c = 73,
+};
+
+static const struct battery_info info_sunwoda01 = {
+	.voltage_max = 13050,
+	.voltage_normal = 11250,
+	.voltage_min = 9000,
+	/* Pre-charge values. */
+	.precharge_current = 200, /* mA */
+
+	.start_charging_min_c = 0,
+	.start_charging_max_c = 60,
+	.charging_min_c = 0,
+	.charging_max_c = 60,
+	.discharging_min_c = -20,
+	.discharging_max_c = 60,
+};
+
 static const struct battery_device support_batteries[BATTERY_TYPE_COUNT] = {
 	[SIMPLO] = {
 		.manuf		= "SMP",
 		.device		= "L15M3PB1",
 		.design_mv	= 11100,
 		.battery_info	= &info_simplo,
-		.ship_mode_info	= &ship_mode_info_simplo,
+		.ship_mode_info	= &ship_mode_info_default,
 	},
 	[SUNWODA] = {
 		.manuf		= "sunwoda",
@@ -90,6 +139,27 @@ static const struct battery_device support_batteries[BATTERY_TYPE_COUNT] = {
 		.design_mv	= 11400,
 		.battery_info	= &info_sunwoda,
 		.ship_mode_info	= &ship_mode_info_sunwoda,
+	},
+	[SMP011] = {
+		.manuf		= "smp",
+		.device		= "L18M3PG5",
+		.design_mv	= 11250,
+		.battery_info	= &info_smp011,
+		.ship_mode_info	= &ship_mode_info_default,
+	},
+	[LGC] = {
+		.manuf		= "lgc",
+		.device		= "L18L3PG5",
+		.design_mv	= 11400,
+		.battery_info	= &info_lgc,
+		.ship_mode_info	= &ship_mode_info_default,
+	},
+	[SUNWODA01] = {
+		.manuf		= "sunwoda",
+		.device		= "L18D3PG5",
+		.design_mv	= 11250,
+		.battery_info	= &info_sunwoda01,
+		.ship_mode_info	= &ship_mode_info_default,
 	},
 };
 
