@@ -45,7 +45,7 @@
 #define PWREN_ATTACH_MIN_MV 2300
 
 /* Threshold for detach pin reading. */
-#define DETACH_MIN_MV 10
+#define DETACH_MIN_MV 4
 
 
 enum base_detect_state {
