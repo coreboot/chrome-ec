@@ -30,6 +30,8 @@
 
 #define TEMP_OUT_OF_RANGE TEMP_ZONE_COUNT
 
+#define BAT_LEVEL_PD_LIMIT 90
+
 static uint8_t batt_id = 0xff;
 
 /* Do not change the enum values. We directly use strap gpio level to index. */
@@ -98,16 +100,6 @@ static const struct max17055_batt_profile batt_profile[] = {
 		.qr_table30		= 0x0480,
 	},
 };
-
-static void pd_limit_5v(uint8_t en)
-{
-	int wanted_pd_voltage;
-
-	wanted_pd_voltage = en ? 5500 : PD_MAX_VOLTAGE_MV;
-
-	if (pd_get_max_voltage() != wanted_pd_voltage)
-		pd_set_external_voltage_limit(0, wanted_pd_voltage);
-}
 
 const struct battery_info *battery_get_info(void)
 {
@@ -266,16 +258,12 @@ int charger_profile_override(struct charge_state_data *curr)
 						 curr->batt.state_of_charge);
 		/*
 		 * This is a workaround for b:78792296. When AP is off and
-		 * charge termination is detected, we disable idle mode and
-		 * lower the max PD voltage.
+		 * charge termination is detected, we disable idle mode.
 		 */
-		if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 			disable_idle();
-			pd_limit_5v(1);
-		} else {
+		else
 			enable_idle();
-			pd_limit_5v(0);
-		}
 	}
 
 	return 0;
@@ -284,7 +272,6 @@ int charger_profile_override(struct charge_state_data *curr)
 static void board_protection_reset(void)
 {
 	enable_idle();
-	pd_limit_5v(0);
 }
 DECLARE_HOOK(HOOK_AC_CHANGE, board_protection_reset, HOOK_PRIO_DEFAULT);
 
@@ -300,6 +287,35 @@ static void board_charge_termination(void)
 DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE,
 	     board_charge_termination,
 	     HOOK_PRIO_DEFAULT);
+
+static void pd_limit_5v(uint8_t en)
+{
+	int wanted_pd_voltage;
+
+	wanted_pd_voltage = en ? 5500 : PD_MAX_VOLTAGE_MV;
+
+	if (pd_get_max_voltage() != wanted_pd_voltage)
+		pd_set_external_voltage_limit(0, wanted_pd_voltage);
+}
+
+/*
+ * When the board is in S3/S5 and battery level > BAT_LEVEL_PD_LIMIT,
+ * we limit PD voltage to 5V.
+ */
+static void board_pd_voltage(void)
+{
+	uint8_t pd_limit_en;
+	int bat_level;
+
+	bat_level = charge_get_percent();
+	pd_limit_en = chipset_in_state(CHIPSET_STATE_ANY_OFF |
+		CHIPSET_STATE_ANY_SUSPEND) && bat_level > BAT_LEVEL_PD_LIMIT;
+
+	pd_limit_5v(pd_limit_en);
+}
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, board_pd_voltage, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_pd_voltage, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_pd_voltage, HOOK_PRIO_DEFAULT);
 
 /* Customs options controllable by host command. */
 #define PARAM_FASTCHARGE (CS_PARAM_CUSTOM_PROFILE_MIN + 0)
