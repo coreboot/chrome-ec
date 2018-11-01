@@ -40,7 +40,6 @@
 #define CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US \
 	(CONFIG_BATTERY_CRITICAL_SHUTDOWN_TIMEOUT * SECOND)
 #define PRECHARGE_TIMEOUT_US (PRECHARGE_TIMEOUT * SECOND)
-#define LFCC_EVENT_THRESH 5 /* Full-capacity change reqd for host event */
 
 #ifdef CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT
 #ifndef CONFIG_HOSTCMD_EVENTS
@@ -828,8 +827,10 @@ static void update_dynamic_battery_info(void)
 	}
 
 	if (!(curr.batt.flags & BATT_FLAG_BAD_FULL_CAPACITY) &&
-	    (curr.batt.full_capacity <= (*memmap_lfcc - LFCC_EVENT_THRESH) ||
-	     curr.batt.full_capacity >= (*memmap_lfcc + LFCC_EVENT_THRESH))) {
+	    (curr.batt.full_capacity <=
+			    (*memmap_lfcc - CONFIG_LFCC_EVENT_THRESH) ||
+	     curr.batt.full_capacity >=
+	     		    (*memmap_lfcc + CONFIG_LFCC_EVENT_THRESH))) {
 		*memmap_lfcc = curr.batt.full_capacity;
 		/* Poke the AP if the full_capacity changes. */
 		send_batt_info_event++;
@@ -980,9 +981,9 @@ static void update_dynamic_battery_info(void)
 
 	if (!(curr.batt.flags & BATT_FLAG_BAD_FULL_CAPACITY) &&
 		(curr.batt.full_capacity <=
-			(bd->full_capacity - LFCC_EVENT_THRESH) ||
+			(bd->full_capacity - CONFIG_LFCC_EVENT_THRESH) ||
 		 curr.batt.full_capacity >=
-			(bd->full_capacity + LFCC_EVENT_THRESH))) {
+			(bd->full_capacity + CONFIG_LFCC_EVENT_THRESH))) {
 		bd->full_capacity = curr.batt.full_capacity;
 		/* Poke the AP if the full_capacity changes. */
 		send_batt_info_event++;
