@@ -20,6 +20,9 @@ enum battery_type {
 	SMP011,
 	LGC,
 	SUNWODA01,
+	SMP02,
+	LGC02,
+	SUNWODA02,
 	BATTERY_TYPE_COUNT,
 	DEFAULT_BATTERY_TYPE = SIMPLO,
 };
@@ -157,6 +160,27 @@ static const struct battery_device support_batteries[BATTERY_TYPE_COUNT] = {
 	[SUNWODA01] = {
 		.manuf		= "sunwoda",
 		.device		= "L18D3PG5",
+		.design_mv	= 11250,
+		.battery_info	= &info_sunwoda01,
+		.ship_mode_info	= &ship_mode_info_default,
+	},
+	[SMP02] = {
+		.manuf		= "smp",
+		.device		= "L17M3PB0",
+		.design_mv	= 11250,
+		.battery_info	= &info_smp011,
+		.ship_mode_info	= &ship_mode_info_default,
+	},
+	[LGC02] = {
+		.manuf		= "lgc",
+		.device		= "L17L3PB0",
+		.design_mv	= 11400,
+		.battery_info	= &info_lgc,
+		.ship_mode_info	= &ship_mode_info_default,
+	},
+	[SUNWODA02] = {
+		.manuf		= "sunwoda",
+		.device		= "L18D3PG1",
 		.design_mv	= 11250,
 		.battery_info	= &info_sunwoda01,
 		.ship_mode_info	= &ship_mode_info_default,
