@@ -5,6 +5,9 @@
         "FW_DEFINED_DATA_BLK0": 2,  // cros SKU
         "FW_DEFINED_DATA_EXTRA_BLK6": 0  // escape hatch
 },
+  "board_id": 0x46464646,  // that's FFFF
+  "board_id_mask": 0,
+  "board_id_flags": 0x10,
 // Rollback state.
 "info": {
                                    "3": -1,   "4": -1,   "5": -1,   "6": -1,
