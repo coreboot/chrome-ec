@@ -4797,6 +4797,11 @@ struct __ec_align4 ec_response_uptime_info {
 		uint32_t reset_time_ms;
 	} recent_ap_reset[4];
 };
+
+
+/* Issue AP reset */
+#define EC_CMD_AP_RESET 0x0125
+
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */
 

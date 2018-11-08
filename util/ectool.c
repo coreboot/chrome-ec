@@ -48,6 +48,8 @@ static struct option long_opts[] = {
 
 const char help_str[] =
 	"Commands:\n"
+	"  apreset\n"
+	"      Issue AP reset\n"
 	"  autofanctrl <on>\n"
 	"      Turn on automatic fan speed control.\n"
 	"  backlight <enabled>\n"
@@ -622,6 +624,7 @@ static const char *reset_cause_to_str(uint16_t cause)
 		"reset: board custom",
 		"reset: ap hang detected",
 		"reset: console command",
+		"reset: host command",
 		"reset: keyboard sysreset",
 		"reset: keyboard warm reboot",
 		"reset: debug warm reboot",
@@ -1212,6 +1215,11 @@ int cmd_rwsig_action(int argc, char *argv[])
 		return -1;
 
 	return ec_command(EC_CMD_RWSIG_ACTION, 0, &req, sizeof(req), NULL, 0);
+}
+
+int cmd_apreset(int argc, char *argv[])
+{
+	return ec_command(EC_CMD_AP_RESET, 0, NULL, 0, NULL, 0);
 }
 
 static void *fp_download_frame(struct ec_response_fp_info *info, int all)
@@ -8010,6 +8018,7 @@ int cmd_cec(int argc, char *argv[])
 
 /* NULL-terminated list of commands */
 const struct command commands[] = {
+	{"apreset", cmd_apreset},
 	{"autofanctrl", cmd_thermal_auto_fan_ctrl},
 	{"backlight", cmd_lcd_backlight},
 	{"battery", cmd_battery},
