@@ -18,6 +18,10 @@
 #include "cryptoc/sha384.h"
 #include "cryptoc/sha512.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * SHA.
  */
@@ -176,5 +180,8 @@ int dcrypto_ladder_compute_usr(enum dcrypto_appid id,
 int dcrypto_ladder_derive(enum dcrypto_appid appid, const uint32_t salt[8],
 			  const uint32_t input[8], uint32_t output[8]);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* ! __EC_CHIP_G_DCRYPTO_INTERNAL_H */

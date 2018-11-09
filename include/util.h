@@ -15,6 +15,10 @@
 #include "builtin/assert.h"         /* For ASSERT(). */
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Standard macros / definitions */
 #ifndef MAX
 #define MAX(a, b)					\
@@ -183,5 +187,9 @@ static inline int cond_went_true(cond_t *c) { return cond_went(c, 1); }
  */
 int parse_offset_size(int argc, char **argv, int shift,
 			     int *offset, int *size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* __CROS_EC_UTIL_H */
