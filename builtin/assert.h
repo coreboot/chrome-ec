@@ -11,6 +11,10 @@
 #include "common.h"
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef CONFIG_DEBUG_ASSERT
 #ifdef CONFIG_DEBUG_ASSERT_REBOOTS
 
@@ -40,5 +44,9 @@ extern void panic_assert_fail(const char *msg, const char *func,
 #endif
 
 #define assert(x...) ASSERT(x)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __CROS_EC_ASSERT_H__ */
