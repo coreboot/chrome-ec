@@ -412,14 +412,6 @@
 #define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	4
 
 /*
- * Full-capacity change required for host event
- *
- * You don't need to change it unless your battery is frequently changing
- * <capacity_full>.
- */
-#define CONFIG_LFCC_EVENT_THRESH		0
-
-/*
  * Expose some data when it is needed.
  * For example, battery disconnect state
  */
