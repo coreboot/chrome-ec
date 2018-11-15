@@ -308,8 +308,9 @@ static void board_pd_voltage(void)
 	int bat_level;
 
 	bat_level = charge_get_percent();
-	pd_limit_en = chipset_in_state(CHIPSET_STATE_ANY_OFF |
-		CHIPSET_STATE_ANY_SUSPEND) && bat_level > BAT_LEVEL_PD_LIMIT;
+	pd_limit_en = chipset_in_or_transitioning_to_state(
+		CHIPSET_STATE_ANY_OFF | CHIPSET_STATE_ANY_SUSPEND) &&
+		bat_level > BAT_LEVEL_PD_LIMIT;
 
 	pd_limit_5v(pd_limit_en);
 }
