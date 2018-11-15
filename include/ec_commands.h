@@ -12,6 +12,10 @@
 #include <stdint.h>
 #endif
 
+#ifdef __cplusplus
+extern "C"{
+#endif
+
 /*
  * Include common.h for CONFIG_HOSTCMD_ALIGNED, if it's defined. This
  * generates more efficient code for accessing request/response structures on
@@ -5122,5 +5126,9 @@ struct __ec_align_size1 ec_params_charger_control {
 #define EC_OLD_PARAM_SIZE       EC_HOST_CMD_REGION_SIZE
 
 #endif  /* !__ACPI__ */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* __CROS_EC_EC_COMMANDS_H */
