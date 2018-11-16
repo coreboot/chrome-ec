@@ -2260,6 +2260,12 @@ static enum pd_states drp_auto_toggle_next_state(int port, int cc1, int cc2)
 {
 	enum pd_states next_state;
 
+	/*
+	 * We'd like to enter low power mode as long as we don't have port
+	 * partner connected.
+	 */
+	pd[port].flags |= PD_FLAGS_LPM_REQUESTED;
+
 	/* Set to appropriate port state */
 	if (cc1 == TYPEC_CC_VOLT_OPEN &&
 	    cc2 == TYPEC_CC_VOLT_OPEN) {
@@ -2297,6 +2303,12 @@ static enum pd_states drp_auto_toggle_next_state(int port, int cc1, int cc2)
 		}
 	} else if ((cc_is_rp(cc1) || cc_is_rp(cc2)) &&
 		 drp_state[port] != PD_DRP_FORCE_SOURCE) {
+		/*
+		 * We see a source and we're allowed to be a sink, so don't go
+		 * into LPM.
+		 */
+		pd[port].flags &= ~PD_FLAGS_LPM_REQUESTED;
+
 		/* SNK allowed unless ForceSRC */
 		next_state = PD_STATE_SNK_DISCONNECTED;
 	} else if ((cc1 == TYPEC_CC_VOLT_RD ||
@@ -2325,11 +2337,19 @@ static enum pd_states drp_auto_toggle_next_state(int port, int cc1, int cc2)
 				next_state = PD_STATE_SNK_DISCONNECTED;
 			else
 				next_state = PD_STATE_DRP_AUTO_TOGGLE;
-		} else
+		} else {
+			/*
+			 * We're allowed to be a source to the detected sink,
+			 * therefore don't go into LPM.
+			 */
+			pd[port].flags &= ~PD_FLAGS_LPM_REQUESTED;
 			next_state = PD_STATE_SRC_DISCONNECTED;
-	} else
+		}
+	} else {
 		/* Anything else, keep toggling */
 		next_state = PD_STATE_DRP_AUTO_TOGGLE;
+	}
+
 	return next_state;
 }
 #endif /* CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE */
@@ -3994,13 +4014,12 @@ void pd_task(void *u)
 			/* Check for connection */
 			tcpm_get_cc(port, &cc1, &cc2);
 
-			next_state = drp_auto_toggle_next_state(port, cc1, cc2);
-
 			/*
-			 * Always stay in low power mode since we are waiting
-			 * for a connection.
+			 * drp_auto_toggle_next_state() will set the LPM flag,
+			 * but it may also unset the LPM flag if it detects a
+			 * port partner.
 			 */
-			pd[port].flags |= PD_FLAGS_LPM_REQUESTED;
+			next_state = drp_auto_toggle_next_state(port, cc1, cc2);
 
 			if (next_state == PD_STATE_SNK_DISCONNECTED) {
 				tcpm_set_cc(port, TYPEC_CC_RD);
