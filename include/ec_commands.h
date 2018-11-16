@@ -4764,6 +4764,7 @@ enum cbi_data_tag {
 	CBI_TAG_SKU_ID = 2,        /* uint32_t or smaller */
 	CBI_TAG_DRAM_PART_NUM = 3, /* variable length ascii, nul terminated. */
 	CBI_TAG_OEM_NAME = 4,      /* variable length ascii, nul terminated. */
+	CBI_TAG_MODEL_ID = 5,      /* uint32_t or smaller */
 	CBI_TAG_COUNT,
 };
 
