@@ -2522,6 +2522,7 @@ void pd_task(void *u)
 	enum pd_states this_state;
 	enum pd_cc_states new_cc_state;
 	timestamp_t now;
+	uint64_t next_src_cap = 0;
 	int caps_count = 0, hard_reset_sent = 0;
 	int snk_cap_count = 0;
 	int evt;
@@ -3006,8 +3007,10 @@ void pd_task(void *u)
 			}
 			break;
 		case PD_STATE_SRC_DISCOVERY:
+			now = get_time();
 			if (pd[port].last_state != pd[port].task_state) {
 				caps_count = 0;
+				next_src_cap = now.val;
 				/*
 				 * If we have had PD connection with this port
 				 * partner, then start NoResponseTimer.
@@ -3023,7 +3026,8 @@ void pd_task(void *u)
 			}
 
 			/* Send source cap some minimum number of times */
-			if (caps_count < PD_CAPS_COUNT) {
+			if (caps_count < PD_CAPS_COUNT  &&
+						next_src_cap <= now.val) {
 				/* Query capabilities of the other side */
 				res = send_source_cap(port);
 				/* packet was acked => PD capable device) */
@@ -3038,8 +3042,12 @@ void pd_task(void *u)
 						PD_FLAGS_PREVIOUS_PD_CONN;
 				} else { /* failed, retry later */
 					timeout = PD_T_SEND_SOURCE_CAP;
+					next_src_cap = now.val +
+							PD_T_SEND_SOURCE_CAP;
 					caps_count++;
 				}
+			} else if (caps_count < PD_CAPS_COUNT) {
+				timeout = next_src_cap - now.val;
 			}
 			break;
 		case PD_STATE_SRC_NEGOCIATE:
