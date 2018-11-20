@@ -2188,10 +2188,16 @@
 
 /*
  * By default the PWM LED behaviour is reflected on both LEDs and includes the
- * chipset state, battery state, as well as the charging state.  However, enable
- * this CONFIG_* option to only allow the charging state to be reflected on the
- * LEDs.  Additionally, only the active charge port will indicate the charge
- * state.
+ * chipset state, battery state, as well as the charging state.  Enable
+ * this CONFIG_* option to show only the charging state on the LEDs.
+ */
+#undef CONFIG_LED_PWM_CHARGE_STATE_ONLY
+
+/*
+ * By default the PWM LED behaviour is reflected on both LEDs and includes the
+ * chipset state, battery state, as well as the charging state.  Enable
+ * this CONFIG_* option to show only the charging state, and only on the LED of
+ * the active charge port.
  */
 #undef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
 
@@ -3881,6 +3887,10 @@
 #ifdef CONFIG_LED_PWM_COUNT
 #define CONFIG_LED_PWM
 #endif /* defined(CONFIG_LED_PWM_COUNT) */
+
+#ifdef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
+#define CONFIG_LED_PWM_CHARGE_STATE_ONLY
+#endif
 
 /*****************************************************************************/
 /*
