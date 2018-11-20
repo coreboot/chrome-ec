@@ -264,19 +264,8 @@ void battery_get_params(struct batt_params *batt)
 {
 	int reg = 0;
 
-	/* Reset params */
-	memset(batt, 0, sizeof(struct batt_params));
-	/*
-	 * Assuming the battery is responsive as long as
-	 * max17055 finds battery is present.
-	 */
-	batt->is_present = battery_is_present();
-
-	if (batt->is_present == BP_YES)
-		batt->flags |= BATT_FLAG_RESPONSIVE;
-	else if (batt->is_present == BP_NO)
-		/* Battery is not present, gauge won't report useful info. */
-		return;
+	/* Reset flags */
+	batt->flags = 0;
 
 	if (max17055_read(REG_TEMPERATURE, &reg))
 		batt->flags |= BATT_FLAG_BAD_TEMPERATURE;
@@ -308,6 +297,15 @@ void battery_get_params(struct batt_params *batt)
 
 	if (battery_full_charge_capacity(&batt->full_capacity))
 		batt->flags |= BATT_FLAG_BAD_FULL_CAPACITY;
+
+	/*
+	 * Assuming the battery is responsive as long as
+	 * max17055 finds battery is present.
+	 */
+	batt->is_present = battery_is_present();
+
+	if (batt->is_present == BP_YES)
+		batt->flags |= BATT_FLAG_RESPONSIVE;
 
 	/*
 	 * Charging allowed if both desired voltage and current are nonzero
