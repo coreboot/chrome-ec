@@ -30,7 +30,7 @@
 
 #define TEMP_OUT_OF_RANGE TEMP_ZONE_COUNT
 
-#define BAT_LEVEL_PD_LIMIT 90
+#define BAT_LEVEL_PD_LIMIT 85
 
 static uint8_t batt_id = 0xff;
 
