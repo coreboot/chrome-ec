@@ -5,6 +5,7 @@
  * TI OPT3001 light sensor driver
  */
 
+#include "config.h"
 #include "driver/als_opt3001.h"
 #include "i2c.h"
 
