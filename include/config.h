@@ -652,8 +652,8 @@
 /* Support EC to Internal bus bridge. */
 #undef CONFIG_EC2I
 
-/* Usually, EC capable of sensor speeds up to 200000 mHz */
-#define CONFIG_EC_MAX_SENSOR_FREQ_DEFAULT_MILLIHZ 200000
+/* Usually, EC capable of sensor speeds up to 250 Hz */
+#define CONFIG_EC_MAX_SENSOR_FREQ_DEFAULT_MILLIHZ 250000
 
 /* Maximal EC sampling rate */
 #undef CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ
