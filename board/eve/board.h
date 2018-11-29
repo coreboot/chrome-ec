@@ -76,8 +76,6 @@
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_SCANCODE_MUTABLE
-#define CONFIG_KEYBOARD_SCANCODE_CALLBACK
-#define CONFIG_KEYBOARD_DYNAMIC_MAPPING
 #define CONFIG_TABLET_MODE
 #undef CONFIG_PECI
 
@@ -313,7 +311,6 @@ void board_set_tcpc_power_mode(int port, int mode);
 void board_tcpc_init(void);
 void led_register_double_tap(void);
 void board_update_ac_status(void);
-void board_init_keyboard_mapping(int reset);
 
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK ((1 << LID_ACCEL) | (1 << LID_LIGHT))

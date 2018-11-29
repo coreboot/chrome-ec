@@ -191,24 +191,6 @@ static void kblog_put(char type, uint8_t byte)
 
 /*****************************************************************************/
 
-#ifdef CONFIG_KEYBOARD_DYNAMIC_MAPPING
-static uint8_t *memmap_kb_mapping_type;
-
-void keyboard_select_mapping(enum keyboard_mapping_type mapping)
-{
-	if (mapping < 0 || mapping >= KEYBOARD_MAPPING_INVALID)
-		return;
-	if (!memmap_kb_mapping_type)
-		memmap_kb_mapping_type = host_get_memmap(
-				EC_MEMMAP_KB_MAPPING_TYPE);
-	assert(memmap_kb_mapping_type);
-	*memmap_kb_mapping_type = mapping;
-
-	/* Notify board-specific handler. */
-	keyboard_board_mapping_changed(mapping);
-}
-#endif
-
 void keyboard_host_write(int data, int is_cmd)
 {
 	struct host_byte h;

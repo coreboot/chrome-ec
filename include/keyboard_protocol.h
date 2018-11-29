@@ -32,31 +32,6 @@ void keyboard_update_button(enum keyboard_button_type button, int is_pressed);
  */
 uint32_t keyboard_get_button_state(void);
 
-#ifdef CONFIG_KEYBOARD_DYNAMIC_MAPPING
-/* Values to select scancode mapping (need CONFIG_KEYBOARD_DYNAMIC_MAPPING) */
-enum keyboard_mapping_type {
-	KEYBOARD_MAPPING_CHROMEOS = 0,
-	KEYBOARD_MAPPING_LEGACY,
-	KEYBOARD_MAPPING_INVALID,
-
-	KEYBOARD_MAPPING_DEFAULT = KEYBOARD_MAPPING_CHROMEOS
-};
-
-/**
- * Select and change keyboard mapping.
- *
- * @param mapping	The type of mapping (keyboard_mapping_type).
- */
-void keyboard_select_mapping(enum keyboard_mapping_type mapping);
-
-/**
- * Board-specific callback when keyboard mapping is changed.
- *
- * @param new_mapping	The type of mapping to apply (keyboard_mapping_type).
- */
-void keyboard_board_mapping_changed(enum keyboard_mapping_type new_mapping);
-#endif
-
 /* Protocol-specific includes */
 
 #ifdef CONFIG_KEYBOARD_PROTOCOL_8042

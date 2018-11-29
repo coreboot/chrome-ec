@@ -60,13 +60,6 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-/*
- * Initialize keyboard mapping type.
- * If CONFIG_KEYBOARD_DYNAMIC_MAPPING is set, a different implementation will
- * be provided in keyboard_legacy.c.
- */
-__attribute__((weak)) void board_init_keyboard_mapping(int reset) {}
-
 static void tcpc_alert_event(enum gpio_signal signal)
 {
 	if ((signal == GPIO_USB_C0_PD_INT_ODL) &&
@@ -511,8 +504,6 @@ static void board_init(void)
 		scancode_set2[3][9] = 0xe007;
 	}
 #endif
-
-	board_init_keyboard_mapping(0);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -694,7 +685,6 @@ static void board_chipset_startup(void)
 	/* Enable Trackpad */
 	gpio_set_level(GPIO_TRACKPAD_SHDN_L, 1);
 	hook_call_deferred(&enable_input_devices_data, 0);
-	board_init_keyboard_mapping(0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 
@@ -706,7 +696,6 @@ static void board_chipset_shutdown(void)
 	dsp_wake_enable(0);
 	gpio_set_level(GPIO_TRACKPAD_SHDN_L, 0);
 	hook_call_deferred(&enable_input_devices_data, 0);
-	board_init_keyboard_mapping(0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
@@ -737,7 +726,6 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 static void board_chipset_reset(void)
 {
 	board_report_pmic_fault("CHIPSET RESET");
-	board_init_keyboard_mapping(1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESET, board_chipset_reset, HOOK_PRIO_DEFAULT);
 

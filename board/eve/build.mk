@@ -12,4 +12,3 @@ CHIP_VARIANT:=npcx5m6g
 board-y=board.o led.o
 board-$(CONFIG_BATTERY_SMART)+=battery.o
 board-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_policy.o
-board-$(CONFIG_KEYBOARD_DYNAMIC_MAPPING)+=keyboard_legacy.o
