@@ -62,5 +62,6 @@ void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx);
 
 int DCRYPTO_appkey_derive(enum dcrypto_appid appid, const uint32_t input[8],
 			  uint32_t output[8]);
+int DCRYPTO_ladder_is_enabled(void);
 
 #endif  /* __CROS_EC_HOST_DCRYPTO_H */
