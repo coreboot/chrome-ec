@@ -1116,7 +1116,7 @@ static void irq_set_orientation(struct motion_sensor_t *s,
  */
 static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 {
-	uint32_t interrupt, last_ts;
+	uint32_t interrupt;
 	int rv;
 
 	if ((s->type != MOTIONSENSE_TYPE_ACCEL) ||
@@ -1124,12 +1124,6 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 		return EC_ERROR_NOT_HANDLED;
 
 	do {
-		/*
-		 * Collect timestamp before resetting the interrupt line:
-		 * After reading, it is possible for the timestamp to change,
-		 * before we can process the FIFO.
-		 */
-		last_ts = last_interrupt_timestamp;
 		rv = raw_read32(s->port, s->addr, BMI160_INT_STATUS_0,
 				&interrupt);
 		/*
@@ -1148,7 +1142,7 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 #endif
 #ifdef CONFIG_ACCEL_FIFO
 		if (interrupt & (BMI160_FWM_INT | BMI160_FFULL_INT))
-			load_fifo(s, last_ts);
+			load_fifo(s, last_interrupt_timestamp);
 #endif
 #ifdef CONFIG_BMI160_ORIENTATION_SENSOR
 		irq_set_orientation(s, interrupt);
