@@ -777,7 +777,6 @@ enum fifo_state {
 
 #define BMI160_FIFO_BUFFER 64
 static uint8_t bmi160_buffer[BMI160_FIFO_BUFFER];
-#define BUFFER_END(_buffer) ((_buffer) + sizeof(_buffer))
 /*
  * Decode the header from the fifo.
  * Return 0 if we need further processing.
@@ -786,9 +785,11 @@ static uint8_t bmi160_buffer[BMI160_FIFO_BUFFER];
  * @s: base sensor
  * @hdr: the header to decode
  * @bp: current pointer in the buffer, updated when processing the header.
+ * @ep: pointer to the end of the valid data in the buffer.
  */
 static int bmi160_decode_header(struct motion_sensor_t *s,
-		enum fifo_header hdr, uint32_t last_ts, uint8_t **bp)
+		enum fifo_header hdr, uint32_t last_ts,
+		uint8_t **bp, uint8_t *ep)
 {
 	if ((hdr & BMI160_FH_MODE_MASK) == BMI160_EMPTY &&
 			(hdr & BMI160_FH_PARM_MASK) != 0) {
@@ -799,9 +800,9 @@ static int bmi160_decode_header(struct motion_sensor_t *s,
 			if (hdr & (1 << (i + BMI160_FH_PARM_OFFSET)))
 				size += (i == MOTIONSENSE_TYPE_MAG ? 8 : 6);
 		}
-		if (*bp + size > BUFFER_END(bmi160_buffer)) {
+		if (*bp + size > ep) {
 			/* frame is not complete, it will be retransmitted. */
-			*bp = BUFFER_END(bmi160_buffer);
+			*bp = ep;
 			return 1;
 		}
 		for (i = MOTIONSENSE_TYPE_MAG; i >= MOTIONSENSE_TYPE_ACCEL;
@@ -875,6 +876,7 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 		enum fifo_state state = FIFO_HEADER;
 		uint8_t *bp = bmi160_buffer;
 		uint32_t beginning;
+		uint8_t *ep;
 
 		if (!(data->flags &
 		      (BMI160_FIFO_ALL_MASK << BMI160_FIFO_FLAG_OFFSET))) {
@@ -892,6 +894,7 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 		raw_read_n(s->port, s->addr, BMI160_FIFO_DATA, bmi160_buffer,
 				length);
 		beginning = *(uint32_t *)bmi160_buffer;
+		ep = bmi160_buffer + length;
 		/*
 		 * FIFO is invalid when reading while the sensors are all
 		 * suspended.
@@ -909,11 +912,11 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 			return EC_SUCCESS;
 		}
 
-		while (!done && bp < bmi160_buffer + length) {
+		while (!done && bp < ep) {
 			switch (state) {
 			case FIFO_HEADER: {
 				enum fifo_header hdr = *bp++;
-				if (bmi160_decode_header(s, hdr, last_ts, &bp))
+				if (bmi160_decode_header(s, hdr, last_ts, &bp, ep))
 					continue;
 				/* Other cases */
 				hdr &= 0xdc;
@@ -953,8 +956,8 @@ static int load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 				state = FIFO_HEADER;
 				break;
 			case FIFO_DATA_TIME:
-				if (bp + 3 > BUFFER_END(bmi160_buffer)) {
-					bp = BUFFER_END(bmi160_buffer);
+				if (bp + 3 > ep) {
+					bp = ep;
 					continue;
 				}
 				/* We are not requesting timestamp */
