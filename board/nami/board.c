@@ -991,7 +991,6 @@ static void board_init(void)
 		/* No need to swap scancode_set2[0][3] and [1][0] because both
 		 * are mapped to search key. */
 	}
-#endif
 	if (sku & SKU_ID_MASK_UK2)
 		/*
 		 * Observed on Shyvana with UK keyboard,
@@ -999,6 +998,7 @@ static void board_init(void)
 		 *   r-ctrl: 0xe014->0x14->0x1d
 		 */
 		swap(scancode_set2[0][4], scancode_set2[7][2]);
+#endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
