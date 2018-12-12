@@ -156,6 +156,31 @@ static struct usart_config const ec_ec_usart =
 		ec_ec_comm_slave_output);
 #endif /* BOARD_WAND && SECTION_IS_RW */
 
+#ifdef BOARD_WHISKERS
+/*
+ * Whiskers can sometimes consume such little power that it appears
+ * disconnected to the nocturne.  Therefore, let's periodically burn
+ * more power such that nocturne can differentiate between whiskers
+ * actually being connected and not.  Nocturne normally polls for a
+ * detach at 250ms intervals.  Once it reads a sample that is less than
+ * the disconnection threshold, it starts to poll faster (every 4ms) for
+ * a total of 20ms while taking an average of the samples.  We just need
+ * to ensure one of those samples is taken while this function is
+ * running.
+ */
+static void board_burn_power(void);
+DECLARE_DEFERRED(board_burn_power);
+static void board_burn_power(void)
+{
+	timestamp_t t0 = get_time();
+
+	do {
+	} while (time_since32(t0) < 5 * MSEC);
+
+	hook_call_deferred(&board_burn_power_data, 10 * MSEC);
+}
+#endif /* BOARD_WHISKERS */
+
 /******************************************************************************
  * Initialize board.
  */
@@ -215,6 +240,8 @@ static void board_init(void)
 	/* Enable SPI for touchpad */
 	gpio_config_module(MODULE_SPI_MASTER, 1);
 	spi_enable(CONFIG_SPI_TOUCHPAD_PORT, 1);
+
+	board_burn_power();
 #endif /* BOARD_WHISKERS */
 #endif /* SECTION_IS_RW */
 }
