@@ -685,14 +685,14 @@ static void lpc_sysjump(void)
 	lpc_task_disable_irq();
 
 	/* Disable protect for Win 1 and 2. */
-	NPCX_WIN_WR_PROT(0) = 0;
 	NPCX_WIN_WR_PROT(1) = 0;
-	NPCX_WIN_RD_PROT(0) = 0;
+	NPCX_WIN_WR_PROT(2) = 0;
 	NPCX_WIN_RD_PROT(1) = 0;
+	NPCX_WIN_RD_PROT(2) = 0;
 
 	/* Reset base address for Win 1 and 2. */
-	NPCX_WIN_BASE(0) = 0xfffffff8;
 	NPCX_WIN_BASE(1) = 0xfffffff8;
+	NPCX_WIN_BASE(2) = 0xfffffff8;
 
 	system_add_jump_tag(LPC_SYSJUMP_TAG, 1,
 			sizeof(event_mask), event_mask);
@@ -982,16 +982,16 @@ static void lpc_init(void)
 	/* Semaphore and Indirect access disable */
 	NPCX_SHCFG = 0xE0;
 	/* Disable Protect Win1&2*/
-	NPCX_WIN_WR_PROT(0) = 0;
 	NPCX_WIN_WR_PROT(1) = 0;
-	NPCX_WIN_RD_PROT(0) = 0;
+	NPCX_WIN_WR_PROT(2) = 0;
 	NPCX_WIN_RD_PROT(1) = 0;
+	NPCX_WIN_RD_PROT(2) = 0;
 	/* Open Win1 256 byte for Host CMD, Win2 256 for MEMMAP*/
 	NPCX_WIN_SIZE = 0x88;
-	NPCX_WIN_BASE(0) = (uint32_t)shm_mem_host_cmd;
-	NPCX_WIN_BASE(1) = (uint32_t)shm_memmap;
+	NPCX_WIN_BASE(1) = (uint32_t)shm_mem_host_cmd;
+	NPCX_WIN_BASE(2) = (uint32_t)shm_memmap;
 	/* Write protect of Share memory */
-	NPCX_WIN_WR_PROT(1) = 0xFF;
+	NPCX_WIN_WR_PROT(2) = 0xFF;
 
 	/* We support LPC args and version 3 protocol */
 	*(lpc_get_memmap_range() + EC_MEMMAP_HOST_CMD_FLAGS) =

@@ -994,17 +994,22 @@ enum NPCX_PMC_PWDWN_CTL_T {
 #define NPCX_SHM_CTL                REG8(NPCX_SHM_BASE_ADDR + 0x002)
 #define NPCX_IMA_WIN_SIZE           REG8(NPCX_SHM_BASE_ADDR + 0x005)
 #define NPCX_WIN_SIZE               REG8(NPCX_SHM_BASE_ADDR + 0x007)
-#define NPCX_SHAW_SEM(win)          REG8(NPCX_SHM_BASE_ADDR + 0x008 + (win))
+#define NPCX_SHAW_SEM(win) \
+	REG8(NPCX_SHM_BASE_ADDR + 0x008 + (win - 1))
 #define NPCX_IMA_SEM                REG8(NPCX_SHM_BASE_ADDR + 0x00B)
 #define NPCX_SHCFG                  REG8(NPCX_SHM_BASE_ADDR + 0x00E)
-#define NPCX_WIN_WR_PROT(win)       REG8(NPCX_SHM_BASE_ADDR + 0x010 + (win*2L))
-#define NPCX_WIN_RD_PROT(win)       REG8(NPCX_SHM_BASE_ADDR + 0x011 + (win*2L))
+#define NPCX_WIN_WR_PROT(win) \
+	REG8(NPCX_SHM_BASE_ADDR + 0x010 + ((win - 1) * 2L))
+#define NPCX_WIN_RD_PROT(win) \
+	REG8(NPCX_SHM_BASE_ADDR + 0x011 + ((win - 1) * 2L))
 #define NPCX_IMA_WR_PROT            REG8(NPCX_SHM_BASE_ADDR + 0x016)
 #define NPCX_IMA_RD_PROT            REG8(NPCX_SHM_BASE_ADDR + 0x017)
-#define NPCX_WIN_BASE(win)         REG32(NPCX_SHM_BASE_ADDR + 0x020 + (win*4L))
-
-#define NPCX_PWIN_BASEI(win)       REG16(NPCX_SHM_BASE_ADDR + 0x020 + (win*4L))
-#define NPCX_PWIN_SIZEI(win)       REG16(NPCX_SHM_BASE_ADDR + 0x022 + (win*4L))
+#define NPCX_WIN_BASE(win) \
+	REG32(NPCX_SHM_BASE_ADDR + 0x020 + ((win - 1) * 4L))
+#define NPCX_PWIN_BASEI(win) \
+	REG16(NPCX_SHM_BASE_ADDR + 0x020 + ((win - 1) * 4L))
+#define NPCX_PWIN_SIZEI(win) \
+	REG16(NPCX_SHM_BASE_ADDR + 0x022 + ((win - 1) * 4L))
 
 #define NPCX_IMA_BASE              REG32(NPCX_SHM_BASE_ADDR + 0x02C)
 #define NPCX_RST_CFG                REG8(NPCX_SHM_BASE_ADDR + 0x03A)
