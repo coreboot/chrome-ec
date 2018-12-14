@@ -1132,8 +1132,10 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 		last_ts = last_interrupt_timestamp;
 		rv = raw_read32(s->port, s->addr, BMI160_INT_STATUS_0,
 				&interrupt);
-		/* Bail out of this loop if the sensor isn't powered. */
-		if (rv == EC_ERROR_NOT_POWERED)
+		/*
+		 * Bail out of this loop there was an error reading the register
+		 */
+		if (rv)
 			return rv;
 
 #ifdef CONFIG_GESTURE_SENSOR_BATTERY_TAP
