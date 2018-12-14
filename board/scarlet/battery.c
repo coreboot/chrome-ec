@@ -298,25 +298,12 @@ static void pd_limit_5v(uint8_t en)
 		pd_set_external_voltage_limit(0, wanted_pd_voltage);
 }
 
-/*
- * When the board is in S3/S5 and battery level > BAT_LEVEL_PD_LIMIT,
- * we limit PD voltage to 5V.
- */
+/* When battery level > BAT_LEVEL_PD_LIMIT, we limit PD voltage to 5V. */
 static void board_pd_voltage(void)
 {
-	uint8_t pd_limit_en;
-	int bat_level;
-
-	bat_level = charge_get_percent();
-	pd_limit_en = chipset_in_or_transitioning_to_state(
-		CHIPSET_STATE_ANY_OFF | CHIPSET_STATE_ANY_SUSPEND) &&
-		bat_level > BAT_LEVEL_PD_LIMIT;
-
-	pd_limit_5v(pd_limit_en);
+	pd_limit_5v(charge_get_percent() > BAT_LEVEL_PD_LIMIT);
 }
 DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, board_pd_voltage, HOOK_PRIO_DEFAULT);
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_pd_voltage, HOOK_PRIO_DEFAULT);
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_pd_voltage, HOOK_PRIO_DEFAULT);
 
 /* Customs options controllable by host command. */
 #define PARAM_FASTCHARGE (CS_PARAM_CUSTOM_PROFILE_MIN + 0)
