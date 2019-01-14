@@ -35,7 +35,7 @@
  * Shut down main processor and/or hibernate EC when discharging and battery
  * level < this level.
  */
-#define BATTERY_LEVEL_SHUTDOWN		  3
+#define BATTERY_LEVEL_SHUTDOWN		  4
 
 /*
  * Sometimes we have hardware to detect battery present, sometimes we have to
@@ -352,6 +352,14 @@ void print_battery_debug(void);
  * Get the disconnect state of the battery.
  */
 enum battery_disconnect_state battery_get_disconnect_state(void);
+
+/**
+ * Check if need  battery cutoff
+ *
+ * @return A value that if RO version is 10068.82  previous version
+ * and sku id is 70 and 71
+ */
+int battery_is_cutoff_required(void);
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_BATTERY
 extern struct i2c_stress_test_dev battery_i2c_stress_test_dev;

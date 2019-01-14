@@ -903,6 +903,26 @@ const struct battery_info *battery_get_info(void)
 	return &board_get_batt_params()->batt_info;
 }
 
+int battery_is_cutoff_required(void)
+{
+	/*
+	 * this function is used to identify Coral SKU 70-71 units
+	 * with EC RO FW older than v7292. For these units,
+	 * want to prevent batteries from reaching < 1% SOC.
+	 */
+	uint32_t sku_id;
+	const char *version_ro;
+	char version_minor[5] = {0};
+
+	sku_id = system_get_sku_id();
+	version_ro = system_get_version(SYSTEM_IMAGE_RO);
+	strncpy(version_minor, version_ro + 11, 4);
+	return (!strncmp(version_ro, "coral_v1.1.", 11) &&
+			atoi(version_minor) < 7292 &&
+			(70 == sku_id || 71 == sku_id));
+
+}
+
 int board_cut_off_battery(void)
 {
 	int rv;

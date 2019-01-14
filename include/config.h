@@ -277,6 +277,8 @@
 
 /* Perform a battery cut-off when we reach the battery critical level */
 #undef CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF
+/* Make sure if need to perform a battery cutoff when battery critical level */
+#undef CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF_REQUIRED
 
 /*
  * Support battery cut-off as host command and console command.

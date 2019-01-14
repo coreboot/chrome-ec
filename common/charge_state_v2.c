@@ -558,9 +558,24 @@ static void shutdown_on_critical_battery(void)
 		if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
 			/* Timeout waiting for charger to provide more power */
 #if defined(CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF)
+#ifdef CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF_REQUIRED
+		/*
+		 * Since can't cutoff battery if EC in hibernate mode
+		 * prevent from hibernating if battery
+		 * soc <= BATTERY_LEVEL_SHUTDOWN
+		 */
+		if (battery_is_cutoff_required()) {
+#endif
 			CPRINTS(
 			  "charge force battery cut-off due to critical level");
 			board_cut_off_battery();
+#ifdef CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF_REQUIRED
+		} else  {
+			CPRINTS(
+			  "charge force EC hibernate due to critical battery");
+			system_hibernate(0, 0);
+		}
+#endif
 #elif defined(CONFIG_HIBERNATE)
 			CPRINTS(
 			  "charge force EC hibernate due to critical battery");
