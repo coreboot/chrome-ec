@@ -15,6 +15,9 @@ const enum pwm_channel kblight_pwm_ch = PWM_CH_KBLIGHT;
 
 static int kblight_pwm_set(int percent)
 {
+#ifdef CONFIG_PWM_KBLIGHT_RECONFIG_PERCENTAGE
+	percent = percent * CONFIG_PWM_KBLIGHT_RECONFIG_PERCENTAGE / 100;
+#endif
 	pwm_set_duty(kblight_pwm_ch, percent);
 	return EC_SUCCESS;
 }

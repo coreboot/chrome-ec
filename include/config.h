@@ -2587,6 +2587,9 @@
  */
 #undef CONFIG_PWM_KBLIGHT
 
+/* Reconfig the max value of PWM percentage for keyboard backlight */
+#undef CONFIG_PWM_KBLIGHT_RECONFIG_PERCENTAGE
+
 /* Base address of RAM for the chip */
 #undef CONFIG_RAM_BASE
 
