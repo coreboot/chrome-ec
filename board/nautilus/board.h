@@ -138,7 +138,7 @@
 #define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 100000
 
 /* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 512
+#define CONFIG_ACCEL_FIFO 256
 
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
