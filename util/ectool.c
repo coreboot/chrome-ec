@@ -1323,7 +1323,7 @@ int cmd_rollback_info(int argc, char *argv[])
 	printf("Rollback min version: %d\n", r.rollback_min_version);
 	printf("RW rollback version:  %d\n", r.rw_rollback_version);
 
-	return rv;
+	return 0;
 }
 
 #define FP_FRAME_INDEX_SIMPLE_IMAGE -1
