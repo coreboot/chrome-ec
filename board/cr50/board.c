@@ -1605,8 +1605,8 @@ DECLARE_SAFE_CONSOLE_COMMAND(brdprop, command_board_properties,
 static void set_factory_gpios(void)
 {
 	gpio_set_flags(GPIO_TPM_RST_L, GPIO_PULL_UP);
-	gpio_set_flags(GPIO_DETECT_AP, GPIO_PULL_DOWN);
-	gpio_set_flags(GPIO_DETECT_EC, GPIO_PULL_DOWN);
+	gpio_set_flags(GPIO_DETECT_AP_UART, GPIO_PULL_DOWN);
+	gpio_set_flags(GPIO_DETECT_EC_UART, GPIO_PULL_DOWN);
 	gpio_set_flags(GPIO_DETECT_SERVO, GPIO_PULL_DOWN);
 }
 
