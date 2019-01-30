@@ -129,9 +129,8 @@ FAILED_BOARDS_DIR = .failedboards
 try_build_boards: $(foreach b, $(BOARDS), proj-$(b))
 
 .PHONY: build_boards
-build_boards:
-	@rm -rf $(FAILED_BOARDS_DIR)
-	@mkdir $(FAILED_BOARDS_DIR)
+build_boards: | $(FAILED_BOARDS_DIR)
+	@rm -f $(FAILED_BOARDS_DIR)/*
 	@for b in $(BOARDS); do echo 'starting' > $(FAILED_BOARDS_DIR)/$$b; done
 	$(MAKE) try_build_boards
 
@@ -156,11 +155,14 @@ ifeq ($(TEST_BUILD),)
 endif # not a TEST_BUILD
 endif # CONFIG_EXPERIMENTAL_CONSOLE=y
 
-proj-%:
-	@echo 'building' > $(FAILED_BOARDS_DIR)/$*
+proj-%: | $(FAILED_BOARDS_DIR)
+	@touch $(FAILED_BOARDS_DIR)/$*
 	@echo "======= building $*"
 	$(MAKE) --no-print-directory BOARD=$* V=$(V)
 	@rm $(FAILED_BOARDS_DIR)/$*
+
+$(FAILED_BOARDS_DIR):
+	@mkdir $(FAILED_BOARDS_DIR)
 
 dis-y := $(out)/RW/$(PROJECT).RW.dis
 dis-$(CONFIG_FW_INCLUDE_RO) += $(out)/RO/$(PROJECT).RO.dis
@@ -203,6 +205,7 @@ run-test-targets=$(foreach t,$(test-list-host),run-$(t))
 .PHONY: $(host-test-targets) $(run-test-targets)
 
 $(host-test-targets): host-%:
+	@touch $(FAILED_BOARDS_DIR)/test-$*
 	@set -e ; \
 	$(call echo,"  BUILD   host - build/host/$*") \
 	$(MAKE) --no-print-directory BOARD=host PROJECT=$* \
@@ -211,6 +214,7 @@ $(host-test-targets): host-%:
 
 $(run-test-targets): run-%: host-%
 	$(call quiet,host_test,TEST   )
+	@rm -f $(FAILED_BOARDS_DIR)/test-$*
 
 .PHONY: hosttests runtests
 hosttests: $(host-test-targets)
@@ -232,7 +236,9 @@ cts_boards := stm32l476g-eval nucleo-f072rb
 define make-cts =
 build_cts: cts-$(1)-$(2)
 cts-$(1)-$(2):
+	@touch $(FAILED_BOARDS_DIR)/cts-$(2)-$(1)
 	$$(MAKE) CTS_MODULE=$(1) BOARD=$(2)
+	@rm -f $(FAILED_BOARDS_DIR)/cts-$(2)-$(1)
 # Do not remove this blank line
 
 endef
