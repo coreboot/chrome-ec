@@ -348,6 +348,15 @@ static int anx7447_init(int port)
 	anx7447_set_hpd_level(port, 0);
 	anx7447_hpd_output_en(port);
 
+#ifdef CONFIG_USB_PD_TCPM_MUX
+	/*
+	 * Run mux_set() here for considering CCD(Case-Closed Debugging) case
+	 * If this TCPC is not also the MUX then don't initialize to NONE
+	 */
+	if (!(usb_muxes[port].flags & USB_MUX_FLAG_NOT_TCPC))
+		rv |= anx7447_mux_set(port, TYPEC_MUX_NONE);
+#endif /* CONFIG_USB_PD_TCPM_MUX */
+
 	return rv;
 }
 
@@ -482,6 +491,40 @@ static int anx7447_mux_init(int port)
 	return anx7447_mux_set(port, TYPEC_MUX_NONE);
 }
 
+
+static void anx7447_mux_safemode(int port, int on_off)
+{
+        int reg;
+
+        mux_read(port, ANX7447_REG_ANALOG_CTRL_9, &reg);
+
+        if (on_off)
+                reg |= ANX7447_REG_SAFE_MODE;
+        else
+                reg &= ~(ANX7447_REG_SAFE_MODE);
+
+        mux_write(port, ANX7447_REG_ANALOG_CTRL_9, reg);
+        CPRINTS("C%d set mux to safemode %s, reg = 0x%x",
+		port, (on_off) ? "on" : "off", reg);
+}
+
+static inline void anx7447_configure_aux_src(int port, int on_off)
+{
+	int reg;
+
+	mux_read(port, ANX7447_REG_ANALOG_CTRL_9, &reg);
+
+	if (on_off)
+		reg |= ANX7447_REG_R_AUX_RES_PULL_SRC;
+	else
+		reg &= ~(ANX7447_REG_R_AUX_RES_PULL_SRC);
+
+	mux_write(port, ANX7447_REG_ANALOG_CTRL_9, reg);
+
+	CPRINTS("C%d set aux_src to %s, reg = 0x%x",
+		port, (on_off) ? "on" : "off", reg);
+}
+
 /*
  * Set mux.
  *
@@ -500,8 +543,8 @@ static int anx7447_mux_set(int port, mux_state_t mux_state)
 
 	cc_direction = mux_state & MUX_POLARITY_INVERTED;
 	mux_type = mux_state & TYPEC_MUX_DOCK;
-	CPRINTS("mux_state = 0x%x, mux_type = 0x%x", mux_state, mux_type);
-
+	CPRINTS("C%d mux_state = 0x%x, mux_type = 0x%x",
+		port, mux_state, mux_type);
 	if (cc_direction == 0) {
 		/* cc1 connection */
 		if (mux_type == TYPEC_MUX_DOCK) {
@@ -535,11 +578,27 @@ static int anx7447_mux_set(int port, mux_state_t mux_state)
 			sw_sel = 0x10;
 		}
 	}
+
+	/*
+	 * Once need to configure the Mux, should set the mux to safe mode
+	 * first. After the  mux configured, should set mux to normal mode.
+	 */
+	anx7447_mux_safemode(port, 1);
 	rv = mux_write(port, ANX7447_REG_TCPC_SWITCH_0, sw_sel);
 	rv |= mux_write(port, ANX7447_REG_TCPC_SWITCH_1, sw_sel);
 	rv |= mux_write(port, ANX7447_REG_TCPC_AUX_SWITCH, aux_sw);
 
 	anx[port].mux_state = mux_state;
+
+	/*
+	 * DP and Dock mode: after configured the Mux, change the Mux to
+	 * normal mode, otherwise: keep safe mode.
+	 */
+	if (mux_type != TYPEC_MUX_NONE) {
+		anx7447_configure_aux_src(port, 1);
+		anx7447_mux_safemode(port, 0);
+	} else
+		anx7447_configure_aux_src(port, 0);
 
 	return rv;
 }
