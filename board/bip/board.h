@@ -30,6 +30,10 @@
 #undef CONFIG_PWM
 #undef CONFIG_PWM_KBLIGHT
 
+/* Old hardware does not support dedicated EC->AP interrupt for MKBP */
+#undef CONFIG_MKBP_USE_GPIO
+#define CONFIG_MKBP_USE_HOST_EVENT
+
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 

@@ -238,7 +238,38 @@
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI2
-#define CONFIG_PWM_KBLIGHT
+
+/*******************************************************************************
+ * Sensor Config
+ */
+
+/* Common Sensor Defines */
+#define CONFIG_TABLET_MODE
+#define CONFIG_HALL_SENSOR
+#define HALL_SENSOR_GPIO_L GPIO_TABLET_MODE_L
+/*
+ * Slew rate on the PP1800_SENSOR load switch requires a short delay on startup.
+ */
+#undef  CONFIG_MOTION_SENSE_RESUME_DELAY_US
+#define CONFIG_MOTION_SENSE_RESUME_DELAY_US (10 * MSEC)
+
+/*
+ * Interrupt and fifo are only used for base accelerometer
+ * and the lid sensor is polled real-time (in forced mode).
+ */
+#define CONFIG_ACCEL_INTERRUPTS
+/* Power of 2 - Too large of a fifo causes too much timestamp jitter */
+#define CONFIG_ACCEL_FIFO 256
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+
+/*
+ * Sensor stack in EC/Kernel depends on a hardware interrupt pin from EC->AP, so
+ * do not define CONFIG_MKBP_USE_HOST_EVENT since all octopus boards use
+ * hardware pin to send interrupt from EC -> AP (except bip and casta).
+ */
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO
 
 #ifndef __ASSEMBLER__
 
