@@ -36,7 +36,12 @@ static void reset_mocks(void)
 	shutdown_warning_time.val = 0ULL;
 }
 
-void chipset_force_shutdown(void)
+int board_cut_off_battery(void)
+{
+	return EC_SUCCESS;
+}
+
+void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
 	is_shutdown = 1;
 	mock_chipset_state = CHIPSET_STATE_HARD_OFF;

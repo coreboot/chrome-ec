@@ -68,5 +68,21 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
  */
 int charge_set_input_current_limit(int ma);
 
-#endif /* __CROS_EC_CHARGE_STATE_V2_H */
+/**
+ * Callback with which boards determine action on critical low battery
+ *
+ * The default implementation is provided in charge_state_v2.c. Overwrite it
+ * to customize it.
+ *
+ * @param curr Pointer to struct charge_state_data
+ * @return Action to take.
+ */
+enum critical_shutdown {
+	CRITICAL_SHUTDOWN_IGNORE,
+	CRITICAL_SHUTDOWN_HIBERNATE,
+	CRITICAL_SHUTDOWN_CUTOFF,
+};
+enum critical_shutdown board_critical_shutdown_check(
+		struct charge_state_data *curr);
 
+#endif /* __CROS_EC_CHARGE_STATE_V2_H */
