@@ -29,6 +29,8 @@
 /* KB backlight driver */
 #define CONFIG_LED_DRIVER_LM3630A
 
+#define CONFIG_MKBP_USE_GPIO
+
 #ifndef __ASSEMBLER__
 
 enum pwm_channel {
