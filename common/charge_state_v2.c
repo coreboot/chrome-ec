@@ -1281,6 +1281,18 @@ static inline int battery_too_low(void)
 		 curr.batt.voltage <= batt_info->voltage_min));
 }
 
+__attribute__((weak))
+enum critical_shutdown board_critical_shutdown_check(
+		struct charge_state_data *curr)
+{
+#ifdef CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF
+	return CRITICAL_SHUTDOWN_CUTOFF;
+#elif defined(CONFIG_HIBERNATE)
+	return CRITICAL_SHUTDOWN_HIBERNATE;
+#else
+	return CRITICAL_SHUTDOWN_IGNORE;
+#endif
+}
 
 /*
  * Send host event to the AP if the battery is temperature or charge level
@@ -1324,15 +1336,19 @@ static int shutdown_on_critical_battery(void)
 		   CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US) {
 		if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
 			/* Timeout waiting for charger to provide more power */
-#if defined(CONFIG_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF)
-			CPRINTS(
-			  "charge force battery cut-off due to critical level");
-			board_cut_off_battery();
-#elif defined(CONFIG_HIBERNATE)
-			CPRINTS(
-			  "charge force EC hibernate due to critical battery");
-			system_hibernate(0, 0);
-#endif
+			switch (board_critical_shutdown_check(&curr)) {
+			case CRITICAL_SHUTDOWN_HIBERNATE:
+				CPRINTS("Hibernate due to critical battery");
+				system_hibernate(0, 0);
+				break;
+			case CRITICAL_SHUTDOWN_CUTOFF:
+				CPRINTS("Cutoff due to critical battery");
+				board_cut_off_battery();
+				break;
+			case CRITICAL_SHUTDOWN_IGNORE:
+			default:
+				break;
+			}
 		} else {
 			/* Timeout waiting for AP to shut down, so kill it */
 			CPRINTS(
