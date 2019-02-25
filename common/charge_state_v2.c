@@ -33,6 +33,8 @@
 #define PRECHARGE_TIMEOUT_US (PRECHARGE_TIMEOUT * SECOND)
 #define LFCC_EVENT_THRESH 5 /* Full-capacity change reqd for host event */
 
+static uint8_t battery_level_shutdown;
+
 /*
  * State for charger_task(). Here so we can reset it on a HOOK_INIT, and
  * because stack space is more limited than .bss
@@ -445,11 +447,16 @@ static inline int battery_too_hot(int batt_temp_c)
 		 batt_temp_c < batt_info->discharging_min_c));
 }
 
+__attribute__((weak)) uint8_t board_set_battery_level_shutdown(void)
+{
+	return BATTERY_LEVEL_SHUTDOWN;
+}
+
 /* True if we know the charge is too low, or we know the voltage is too low. */
 static inline int battery_too_low(void)
 {
 	return ((!(curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
-		 curr.batt.state_of_charge < BATTERY_LEVEL_SHUTDOWN) ||
+		 curr.batt.state_of_charge < battery_level_shutdown) ||
 		(!(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE) &&
 		 curr.batt.voltage <= batt_info->voltage_min));
 }
@@ -583,6 +590,8 @@ void charger_task(void)
 	state_machine_force_idle = 0;
 	shutdown_warning_time.val = 0UL;
 	battery_seems_to_be_dead = 0;
+
+	battery_level_shutdown = board_set_battery_level_shutdown();
 
 	while (1) {
 
@@ -938,7 +947,7 @@ int charge_want_shutdown(void)
 {
 	return (curr.state == ST_DISCHARGE) &&
 		!(curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
-		(curr.batt.state_of_charge < BATTERY_LEVEL_SHUTDOWN);
+		(curr.batt.state_of_charge < battery_level_shutdown);
 }
 
 int charge_prevent_power_on(void)
