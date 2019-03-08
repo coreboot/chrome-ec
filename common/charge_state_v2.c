@@ -46,7 +46,7 @@ static int is_full; /* battery not accepting current */
 static int state_machine_force_idle;
 static int manual_mode;  /* volt/curr are no longer maintained by charger */
 static unsigned int user_current_limit = -1U;
-test_export_static timestamp_t shutdown_warning_time;
+test_export_static timestamp_t shutdown_target_time;
 static timestamp_t precharge_start_time;
 
 /* Is battery connected but unresponsive after precharge? */
@@ -474,6 +474,28 @@ enum critical_shutdown board_critical_shutdown_check(
 #endif
 }
 
+static int is_battery_critical(void)
+{
+	int batt_temp_c = DECI_KELVIN_TO_CELSIUS(curr.batt.temperature);
+
+	/*
+	 * TODO(crosbug.com/p/27642): The thermal loop should watch the battery
+	 * temp, so it can turn fans on.
+	 */
+	if (battery_too_hot(batt_temp_c)) {
+		CPRINTS("Batt temp out of range: %dC", batt_temp_c);
+		return 1;
+	}
+
+	if (battery_too_low() && !curr.batt_is_charging) {
+		CPRINTS("Low battery: %d%%, %dmV",
+			curr.batt.state_of_charge, curr.batt.voltage);
+		return 1;
+	}
+
+	return 0;
+}
+
  /*
   * If the battery is at extremely low charge (and discharging) or extremely
   * high temperature, the EC will notify the AP and start a timer. If the
@@ -483,60 +505,50 @@ enum critical_shutdown board_critical_shutdown_check(
   */
 static int shutdown_on_critical_battery(void)
 {
-	int batt_temp_c;
-	int battery_critical = 0;
-
-	/*
-	 * TODO(crosbug.com/p/27642): The thermal loop should watch the battery
-	 * temp, so it can turn fans on.
-	 */
-	batt_temp_c = DECI_KELVIN_TO_CELSIUS(curr.batt.temperature);
-	if (battery_too_hot(batt_temp_c)) {
-		CPRINTS("Batt temp out of range: %dC", batt_temp_c);
-		battery_critical = 1;
-	}
-
-	if (battery_too_low() && !curr.batt_is_charging) {
-		CPRINTS("Low battery: %d%%, %dmV",
-			curr.batt.state_of_charge, curr.batt.voltage);
-		battery_critical = 1;
-	}
-
-	if (!battery_critical) {
+	if (!is_battery_critical()) {
 		/* Reset shutdown warning time */
-		shutdown_warning_time.val = 0;
-		return;
+		shutdown_target_time.val = 0;
+		return 0;
 	}
 
-	if (!shutdown_warning_time.val) {
-		CPRINTS("charge warn shutdown due to critical battery");
-		shutdown_warning_time = get_time();
+	if (!shutdown_target_time.val) {
+		/* Start count down timer */
+		CPRINTS("Start shutdown due to critical battery");
+		shutdown_target_time.val = get_time().val
+				+ CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US;
+#ifdef CONFIG_HOSTCMD_EVENTS
 		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF))
 			host_set_single_event(EC_HOST_EVENT_BATTERY_SHUTDOWN);
-	} else if (get_time().val > shutdown_warning_time.val +
-		   CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US) {
-		if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-			/* Timeout waiting for charger to provide more power */
-			switch (board_critical_shutdown_check(&curr)) {
-			case CRITICAL_SHUTDOWN_HIBERNATE:
-				CPRINTS("Hibernate due to critical battery");
-				system_hibernate(0, 0);
-				break;
-			case CRITICAL_SHUTDOWN_CUTOFF:
-				CPRINTS("Cutoff due to critical battery");
-				board_cut_off_battery();
-				break;
-			case CRITICAL_SHUTDOWN_IGNORE:
-			default:
-				break;
-			}
-		} else {
-			/* Timeout waiting for AP to shut down, so kill it */
-			CPRINTS(
-			  "charge force shutdown due to critical battery");
-			chipset_force_shutdown();
-		}
+#endif
+		return 1;
 	}
+
+	if (!timestamp_expired(shutdown_target_time, 0))
+		return 1;
+
+	/* Timer has expired */
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		switch (board_critical_shutdown_check(&curr)) {
+		case CRITICAL_SHUTDOWN_HIBERNATE:
+			CPRINTS("Hibernate due to critical battery");
+			system_hibernate(0, 0);
+			break;
+		case CRITICAL_SHUTDOWN_CUTOFF:
+			CPRINTS("Cutoff due to critical battery");
+			board_cut_off_battery();
+			break;
+		case CRITICAL_SHUTDOWN_IGNORE:
+		default:
+			break;
+		}
+	} else {
+		/* Timeout waiting for AP to shut down, so kill it */
+		CPRINTS(
+		  "charge force shutdown due to critical battery");
+		chipset_force_shutdown();
+	}
+
+	return 1;
 }
 
 /*
@@ -588,7 +600,7 @@ void charger_task(void)
 
 	prev_ac = prev_charge = prev_bp = -1;
 	state_machine_force_idle = 0;
-	shutdown_warning_time.val = 0UL;
+	shutdown_target_time.val = 0UL;
 	battery_seems_to_be_dead = 0;
 
 	battery_level_shutdown = board_set_battery_level_shutdown();
