@@ -266,7 +266,7 @@ static void connect_pinmux(struct pinmux const *p)
 	/* Enable any wake pins needed to exit low-power modes */
 	if ((p->flags & DIO_WAKE_EN0) &&
 	    (p->dio.offset <= GC_PINMUX_DIOB7_SEL_OFFSET)) { /* not VIOn ! */
-		bitmask = (1 << (p->dio.offset / 8));
+		bitmask = BIT((p->dio.offset / 8));
 
 		/* enable pad as wake source */
 		GREG32(PINMUX, EXITEN0) |= bitmask;

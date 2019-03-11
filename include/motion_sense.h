@@ -42,7 +42,7 @@ enum sensor_config {
 /* Next 8 events for sensor interrupt lines */
 #define TASK_EVENT_MOTION_INTERRUPT_MASK    (0xff << 2)
 
-#define ROUND_UP_FLAG (1 << 31)
+#define ROUND_UP_FLAG BIT(31)
 #define BASE_ODR(_odr) ((_odr) & ~ROUND_UP_FLAG)
 
 struct motion_data_t {

@@ -289,7 +289,7 @@ error:
 
 static void ep0_reset(void)
 {
-	STM32_USB_EP(0) = (1 << 9) /* control EP */ |
+	STM32_USB_EP(0) = BIT(9) /* control EP */ |
 			  (2 << 4) /* TX NAK */ |
 			  (3 << 12) /* RX VALID */;
 
@@ -319,10 +319,10 @@ void usb_interrupt(void)
 {
 	uint16_t status = STM32_USB_ISTR;
 
-	if ((status & (1 << 10)))
+	if ((status & BIT(10)))
 		usb_reset();
 
-	if (status & (1 << 15)) {
+	if (status & BIT(15)) {
 		int ep = status & 0x000f;
 		if (ep < USB_EP_COUNT) {
 			if (status & 0x0010)

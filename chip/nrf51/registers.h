@@ -355,13 +355,13 @@
 #define NRF51_RADIO_STATE_TXDISABLE                   12
 
 /* DACNF */
-#define NRF51_RADIO_DACNF_ENA(n)                      (1 << (n))
+#define NRF51_RADIO_DACNF_ENA(n)                      BIT((n))
 #define NRF51_RADIO_DACNF_MAX                         8
-#define NRF51_RADIO_DACNF_TXADD(n)                    (1 << ((n)+8))
+#define NRF51_RADIO_DACNF_TXADD(n)                    BIT(((n)+8))
 #define NRF51_RADIO_TXADD_MAX                         8
 
 /* OVERRIDE4 */
-#define NRF51_RADIO_OVERRIDE_EN                       (1 << 31)
+#define NRF51_RADIO_OVERRIDE_EN                       BIT(31)
 
 
 /*
@@ -560,8 +560,8 @@
 /* For Timer.INTEN bits */
 #define NRF51_TIMER_COMPARE_BIT(n)  (((0x140 - 0x100) / 4) + (n))
 /* For Timer Shortcuts */
-#define NRF51_TIMER_COMPARE_CLEAR(n)  (1 << (n))
-#define NRF51_TIMER_COMPARE_STOP(n)   (1 << (8 + (n)))
+#define NRF51_TIMER_COMPARE_CLEAR(n)  BIT((n))
+#define NRF51_TIMER_COMPARE_STOP(n)   BIT((8 + (n)))
 /* Timer Mode (NRF51_TIMER_MODE) */
 #define NRF51_TIMER_MODE_TIMER   0  /* reset default */
 #define NRF51_TIMER_MODE_COUNTER 1
@@ -590,9 +590,9 @@
 #define NRF51_RNG_CONFIG             REG32(NRF51_RNG_BASE + 0x504)
 #define NRF51_RNG_VALUE              REG32(NRF51_RNG_BASE + 0x508)
 /* For RNG Shortcuts */
-#define NRF51_RNG_SHORTS_VALRDY_STOP (1 << 0)
+#define NRF51_RNG_SHORTS_VALRDY_STOP BIT(0)
 /* For RNG Config */
-#define NRF51_RNG_DERCEN             (1 << 0)
+#define NRF51_RNG_DERCEN             BIT(0)
 
 
 /*

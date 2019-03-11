@@ -134,7 +134,7 @@ int keyboard_factory_test_scan(void)
 			val = MEC1322_GPIO_CTL(keyboard_factory_scan_pins[j][0],
 					keyboard_factory_scan_pins[j][1]);
 
-			if ((val & (1 << 24)) == 0) {
+			if ((val & BIT(24)) == 0) {
 				shorted = i << 8 | j;
 				goto done;
 			}

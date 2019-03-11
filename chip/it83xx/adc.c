@@ -115,13 +115,13 @@ int adc_read_channel(enum adc_channel ch)
 
 	if (events & TASK_EVENT_ADC_DONE) {
 		/* data valid of adc channel[x] */
-		if (IT83XX_ADC_ADCDVSTS & (1 << adc_ch)) {
+		if (IT83XX_ADC_ADCDVSTS & BIT(adc_ch)) {
 			/* read adc raw data msb and lsb */
 			adc_raw_data = (*adc_ctrl_regs[adc_ch].adc_datm << 8) +
 				*adc_ctrl_regs[adc_ch].adc_datl;
 
 			/* W/C data valid flag */
-			IT83XX_ADC_ADCDVSTS = (1 << adc_ch);
+			IT83XX_ADC_ADCDVSTS = BIT(adc_ch);
 
 			mv = adc_raw_data * adc_channels[ch].factor_mul /
 				adc_channels[ch].factor_div +
@@ -202,8 +202,8 @@ static void adc_init(void)
 	 * NOTE: A sample time delay (60us) also need to be included in
 	 * conversion time, so the final result is ~= 121.6us.
 	 */
-	IT83XX_ADC_ADCSTS &= ~(1 << 7);
-	IT83XX_ADC_ADCCFG &= ~(1 << 5);
+	IT83XX_ADC_ADCSTS &= ~BIT(7);
+	IT83XX_ADC_ADCCFG &= ~BIT(5);
 	IT83XX_ADC_ADCCTL = 1;
 
 	task_waiting = TASK_ID_INVALID;

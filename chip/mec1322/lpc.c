@@ -248,14 +248,14 @@ static void setup_lpc(void)
 	MEC1322_8042_KB_CTRL |= 1 << 7;
 
 	MEC1322_8042_ACT |= 1;
-	MEC1322_INT_ENABLE(15) |= ((1 << 13) | (1 << 14));
+	MEC1322_INT_ENABLE(15) |= (BIT(13) | BIT(14));
 	MEC1322_INT_BLK_EN |= 1 << 15;
 	task_enable_irq(MEC1322_IRQ_8042EM_IBF);
 	task_enable_irq(MEC1322_IRQ_8042EM_OBF);
 
 #ifndef CONFIG_KEYBOARD_IRQ_GPIO
 	/* Set up SERIRQ for keyboard */
-	MEC1322_8042_KB_CTRL |= (1 << 5);
+	MEC1322_8042_KB_CTRL |= BIT(5);
 	MEC1322_LPC_SIRQ(1) = 0x01;
 #endif
 
@@ -347,7 +347,7 @@ DECLARE_DEFERRED(lpc_chipset_reset);
 void girq19_interrupt(void)
 {
 	/* Check interrupt result for LRESET# trigger */
-	if (MEC1322_INT_RESULT(19) & (1 << 1)) {
+	if (MEC1322_INT_RESULT(19) & BIT(1)) {
 		/* Initialize LPC module when LRESET# is deasserted */
 		if (!lpc_get_pltrst_asserted()) {
 			setup_lpc();
@@ -475,7 +475,7 @@ void kb_ibf_interrupt(void)
 {
 	if (lpc_keyboard_input_pending())
 		keyboard_host_write(MEC1322_8042_H2E,
-				    MEC1322_8042_STS & (1 << 3));
+				    MEC1322_8042_STS & BIT(3));
 	task_wake(TASK_ID_KEYPROTO);
 }
 DECLARE_IRQ(MEC1322_IRQ_8042EM_IBF, kb_ibf_interrupt, 1);
@@ -489,12 +489,12 @@ DECLARE_IRQ(MEC1322_IRQ_8042EM_OBF, kb_obf_interrupt, 1);
 
 int lpc_keyboard_has_char(void)
 {
-	return (MEC1322_8042_STS & (1 << 0)) ? 1 : 0;
+	return (MEC1322_8042_STS & BIT(0)) ? 1 : 0;
 }
 
 int lpc_keyboard_input_pending(void)
 {
-	return (MEC1322_8042_STS & (1 << 1)) ? 1 : 0;
+	return (MEC1322_8042_STS & BIT(1)) ? 1 : 0;
 }
 
 void lpc_keyboard_put_char(uint8_t chr, int send_irq)
@@ -532,7 +532,7 @@ int lpc_query_host_event_state(void)
 	int i;
 
 	for (i = 0; i < 32; i++) {
-		const uint32_t e = (1 << i);
+		const uint32_t e = BIT(i);
 
 		if (host_events & e) {
 			host_clear_events(e);
@@ -606,7 +606,7 @@ static int lpc_get_protocol_info(struct host_cmd_handler_args *args)
 	struct ec_response_get_protocol_info *r = args->response;
 
 	memset(r, 0, sizeof(*r));
-	r->protocol_versions = (1 << 3);
+	r->protocol_versions = BIT(3);
 	r->max_request_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->max_response_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->flags = 0;

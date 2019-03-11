@@ -17,11 +17,11 @@
 #define TASK_EVENT_CUSTOM(x)	(x & 0x0007ffff)
 
 /* npcx peci event */
-#define TASK_EVENT_PECI_DONE	(1 << 19)
+#define TASK_EVENT_PECI_DONE	BIT(19)
 
 /* I2C tx/rx interrupt handler completion event. */
 #define TASK_EVENT_I2C_COMPLETION(port) \
-				(1 << ((port) + 20))
+				BIT(((port) + 20))
 #define TASK_EVENT_I2C_IDLE	(TASK_EVENT_I2C_COMPLETION(0))
 #define TASK_EVENT_MAX_I2C	6
 #ifdef I2C_PORT_COUNT
@@ -31,13 +31,13 @@
 #endif
 
 /* DMA transmit complete event */
-#define TASK_EVENT_DMA_TC       (1 << 26)
+#define TASK_EVENT_DMA_TC       BIT(26)
 /* ADC interrupt handler event */
-#define TASK_EVENT_ADC_DONE	(1 << 27)
+#define TASK_EVENT_ADC_DONE	BIT(27)
 /* task_wake() called on task */
-#define TASK_EVENT_WAKE		(1 << 29)
+#define TASK_EVENT_WAKE		BIT(29)
 /* Mutex unlocking */
-#define TASK_EVENT_MUTEX	(1 << 30)
+#define TASK_EVENT_MUTEX	BIT(30)
 /*
  * Timer expired.  For example, task_wait_event() timed out before receiving
  * another event.

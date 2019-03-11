@@ -43,8 +43,8 @@
 /* Flags for persist_state.flags */
 /* Protect persist state and RO firmware at boot */
 #define PERSIST_FLAG_PROTECT_RO 0x02
-#define PSTATE_VALID_FLAGS	(1 << 0)
-#define PSTATE_VALID_SERIALNO	(1 << 1)
+#define PSTATE_VALID_FLAGS	BIT(0)
+#define PSTATE_VALID_SERIALNO	BIT(1)
 
 struct persist_state {
 	uint8_t version;            /* Version of this struct */
@@ -127,7 +127,7 @@ int flash_bank_index(int offset)
 			bank_offset += flash_bank_array[i].count;
 			continue;
 		}
-		if (offset & ((1 << flash_bank_array[i].size_exp) - 1))
+		if (offset & (BIT(flash_bank_array[i].size_exp) - 1))
 			return -1;
 		return bank_offset + (offset >> flash_bank_array[i].size_exp);
 	}
