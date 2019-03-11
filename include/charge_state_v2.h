@@ -5,6 +5,7 @@
 
 #include "battery.h"
 #include "charger.h"
+#include "chipset.h"
 #include "timer.h"
 
 #ifndef __CROS_EC_CHARGE_STATE_V2_H
@@ -77,11 +78,6 @@ int charge_set_input_current_limit(int ma);
  * @param curr Pointer to struct charge_state_data
  * @return Action to take.
  */
-enum critical_shutdown {
-	CRITICAL_SHUTDOWN_IGNORE,
-	CRITICAL_SHUTDOWN_HIBERNATE,
-	CRITICAL_SHUTDOWN_CUTOFF,
-};
 enum critical_shutdown board_critical_shutdown_check(
 		struct charge_state_data *curr);
 

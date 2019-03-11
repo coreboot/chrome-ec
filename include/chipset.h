@@ -35,6 +35,12 @@ enum chipset_state_mask {
 				 CHIPSET_STATE_SOFT_OFF),  /* Any off state */
 };
 
+enum critical_shutdown {
+	CRITICAL_SHUTDOWN_IGNORE,
+	CRITICAL_SHUTDOWN_HIBERNATE,
+	CRITICAL_SHUTDOWN_CUTOFF,
+};
+
 #ifdef HAS_TASK_CHIPSET
 
 /**
@@ -111,5 +117,16 @@ static inline void chipset_reset(int cold_reset) { }
 static inline void power_interrupt(enum gpio_signal signal) { }
 
 #endif /* !HAS_TASK_CHIPSET */
+
+/**
+ * Callback which allows board to take custom action on G3 timer expiration
+ *
+ * @param last_shutdown_time Last shutdown time
+ * @param target             Expiration time. Can be modified by board.
+ * @param now                Current time
+ * @return Action to take
+ */
+enum critical_shutdown board_system_is_idle(uint64_t last_shutdown_time,
+					    uint64_t *target, uint64_t now);
 
 #endif  /* __CROS_EC_CHIPSET_H */
