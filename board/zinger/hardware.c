@@ -22,7 +22,7 @@ static void system_init(void)
 	/* switch on LSI */
 	STM32_RCC_CSR |= 1 << 0;
 	/* Wait for LSI to be ready */
-	while (!(STM32_RCC_CSR & (1 << 1)))
+	while (!(STM32_RCC_CSR & BIT(1)))
 		;
 	/* re-configure RTC if needed */
 	if ((STM32_RCC_BDCR & 0x00018300) != 0x00008200) {
@@ -44,11 +44,11 @@ static void power_init(void)
 }
 
 /* GPIO setting helpers */
-#define OUT(n) (1 << ((n) * 2))
+#define OUT(n) BIT(((n) * 2))
 #define AF(n) (2 << ((n) * 2))
 #define ANALOG(n) (3 << ((n) * 2))
-#define HIGH(n) (1 << (n))
-#define ODR(n) (1 << (n))
+#define HIGH(n) BIT((n))
+#define ODR(n) BIT((n))
 #define HISPEED(n) (3 << ((n) * 2))
 #define AFx(n, x) (x << (((n) % 8) * 4))
 
@@ -108,7 +108,7 @@ static void adc_init(void)
 			;
 	}
 	/* Single conversion, right aligned, 12-bit */
-	STM32_ADC_CFGR1 = 1 << 12; /* (1 << 15) => AUTOOFF */;
+	STM32_ADC_CFGR1 = 1 << 12; /* BIT(15) => AUTOOFF */;
 	/* clock is ADCCLK (ADEN must be off when writing this reg) */
 	STM32_ADC_CFGR2 = 0;
 	/* Sampling time : 71.5 ADC clock cycles, about 5us */
@@ -206,7 +206,7 @@ static int adc_enable_last_watchdog(void)
 
 static inline int adc_watchdog_enabled(void)
 {
-	return STM32_ADC_CFGR1 & (1 << 23);
+	return STM32_ADC_CFGR1 & BIT(23);
 }
 
 int adc_read_channel(enum adc_channel ch)
@@ -224,7 +224,7 @@ int adc_read_channel(enum adc_channel ch)
 	/* Start conversion */
 	STM32_ADC_CR |= 1 << 2; /* ADSTART */
 	/* Wait for end of conversion */
-	while (!(STM32_ADC_ISR & (1 << 2)))
+	while (!(STM32_ADC_ISR & BIT(2)))
 		;
 	/* read converted value */
 	value = STM32_ADC_DR;
@@ -249,8 +249,8 @@ int adc_enable_watchdog(int ch, int high, int low)
 	/* Clear flags */
 	STM32_ADC_ISR = 0x8e;
 	/* Set Watchdog enable bit on a single channel / continuous mode */
-	STM32_ADC_CFGR1 = (ch << 26) | (1 << 23) | (1 << 22)
-			|  (1 << 13) | (1 << 12);
+	STM32_ADC_CFGR1 = (ch << 26) | BIT(23) | BIT(22)
+			|  BIT(13) | BIT(12);
 	/* Enable watchdog interrupt */
 	STM32_ADC_IER = 1 << 7;
 	/* Start continuous conversion */
@@ -264,7 +264,7 @@ int adc_disable_watchdog(void)
 	/* Stop on-going conversion */
 	STM32_ADC_CR |= 1 << 4; /* ADSTP */
 	/* Wait for conversion to stop */
-	while (STM32_ADC_CR & (1 << 4))
+	while (STM32_ADC_CR & BIT(4))
 		;
 	/* CONT=0 -> continuous mode off / Clear Watchdog enable */
 	STM32_ADC_CFGR1 = 1 << 12;

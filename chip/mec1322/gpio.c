@@ -37,12 +37,12 @@ void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func)
 	while (mask) {
 		i = __builtin_ffs(mask) - 1;
 		val = MEC1322_GPIO_CTL(port, i);
-		val &= ~((1 << 12) | (1 << 13));
+		val &= ~(BIT(12) | BIT(13));
 		/* mux_control = 0 indicates GPIO */
 		if (func > 0)
 			val |= (func & 0x3) << 12;
 		MEC1322_GPIO_CTL(port, i) = val;
-		mask &= ~(1 << i);
+		mask &= ~BIT(i);
 	}
 }
 
@@ -57,7 +57,7 @@ test_mockable int gpio_get_level(enum gpio_signal signal)
 	i = GPIO_MASK_TO_NUM(mask);
 	val = MEC1322_GPIO_CTL(gpio_list[signal].port, i);
 
-	return (val & (1 << 24)) ? 1 : 0;
+	return (val & BIT(24)) ? 1 : 0;
 }
 
 void gpio_set_level(enum gpio_signal signal, int value)
@@ -70,9 +70,9 @@ void gpio_set_level(enum gpio_signal signal, int value)
 	i = GPIO_MASK_TO_NUM(mask);
 
 	if (value)
-		MEC1322_GPIO_CTL(gpio_list[signal].port, i) |= (1 << 16);
+		MEC1322_GPIO_CTL(gpio_list[signal].port, i) |= BIT(16);
 	else
-		MEC1322_GPIO_CTL(gpio_list[signal].port, i) &= ~(1 << 16);
+		MEC1322_GPIO_CTL(gpio_list[signal].port, i) &= ~BIT(16);
 }
 
 void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
@@ -81,7 +81,7 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 	uint32_t val;
 	while (mask) {
 		i = GPIO_MASK_TO_NUM(mask);
-		mask &= ~(1 << i);
+		mask &= ~BIT(i);
 		val = MEC1322_GPIO_CTL(port, i);
 
 		/*
@@ -89,16 +89,16 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 		 * when changing the line to an output.
 		 */
 		if (flags & GPIO_OPEN_DRAIN)
-			val |= (1 << 8);
+			val |= BIT(8);
 		else
-			val &= ~(1 << 8);
+			val &= ~BIT(8);
 
 		if (flags & GPIO_OUTPUT) {
-			val |= (1 << 9);
-			val &= ~(1 << 10);
+			val |= BIT(9);
+			val &= ~BIT(10);
 		} else {
-			val &= ~(1 << 9);
-			val |= (1 << 10);
+			val &= ~BIT(9);
+			val |= BIT(10);
 		}
 
 		/* Handle pullup / pulldown */
@@ -111,9 +111,9 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 
 		/* Set up interrupt */
 		if (flags & (GPIO_INT_F_RISING | GPIO_INT_F_FALLING))
-			val |= (1 << 7);
+			val |= BIT(7);
 		else
-			val &= ~(1 << 7);
+			val &= ~BIT(7);
 
 		val &= ~(0x7 << 4);
 
@@ -130,9 +130,9 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 
 		/* Set up level */
 		if (flags & GPIO_HIGH)
-			val |= (1 << 16);
+			val |= BIT(16);
 		else if (flags & GPIO_LOW)
-			val &= ~(1 << 16);
+			val &= ~BIT(16);
 
 		MEC1322_GPIO_CTL(port, i) = val;
 	}
@@ -150,8 +150,8 @@ int gpio_enable_interrupt(enum gpio_signal signal)
 	girq_id = int_map[port].girq_id;
 	bit_id = (port - int_map[port].port_offset) * 8 + i;
 
-	MEC1322_INT_ENABLE(girq_id) |= (1 << bit_id);
-	MEC1322_INT_BLK_EN |= (1 << girq_id);
+	MEC1322_INT_ENABLE(girq_id) |= BIT(bit_id);
+	MEC1322_INT_BLK_EN |= BIT(girq_id);
 
 	return EC_SUCCESS;
 }
@@ -168,7 +168,7 @@ int gpio_disable_interrupt(enum gpio_signal signal)
 	girq_id = int_map[port].girq_id;
 	bit_id = (port - int_map[port].port_offset) * 8 + i;
 
-	MEC1322_INT_DISABLE(girq_id) = (1 << bit_id);
+	MEC1322_INT_DISABLE(girq_id) = BIT(bit_id);
 
 	return EC_SUCCESS;
 }
@@ -258,9 +258,9 @@ static void gpio_interrupt(int girq, int port_offset)
 
 	for (i = 0; i < GPIO_IH_COUNT && sts; ++i, ++g) {
 		bit = (g->port - port_offset) * 8 + __builtin_ffs(g->mask) - 1;
-		if (sts & (1 << bit))
+		if (sts & BIT(bit))
 			gpio_irq_handlers[i](i);
-		sts &= ~(1 << bit);
+		sts &= ~BIT(bit);
 	}
 }
 

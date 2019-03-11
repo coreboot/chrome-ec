@@ -73,7 +73,7 @@
 #include "task.h"
 #include "tpm_log.h"
 
-#define REGISTER_FILE_SIZE (1 << 6) /* 64 bytes. */
+#define REGISTER_FILE_SIZE BIT(6) /* 64 bytes. */
 #define REGISTER_FILE_MASK (REGISTER_FILE_SIZE - 1)
 
 /* Console output macros */
@@ -373,7 +373,7 @@ void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len)
 	if (remainder_bytes) {
 		/* mask the bytes to be kept */
 		word_out_value = value_addr[addr_offset];
-		word_out_value &= (1 << (8 * start_offset)) - 1;
+		word_out_value &= BIT((8 * start_offset)) - 1;
 		/* Write in remainder bytes */
 		for (i = 0; i < remainder_bytes; i++)
 			word_out_value |= *buffer++ << (8 * (start_offset + i));

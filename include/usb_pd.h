@@ -59,15 +59,15 @@ enum pd_rx_errors {
  *    if present, shall be sent in Minimum Voltage order; lowest to highest.
  */
 #define PDO_TYPE_FIXED    (0 << 30)
-#define PDO_TYPE_BATTERY  (1 << 30)
+#define PDO_TYPE_BATTERY  BIT(30)
 #define PDO_TYPE_VARIABLE (2 << 30)
 #define PDO_TYPE_MASK     (3 << 30)
 
-#define PDO_FIXED_DUAL_ROLE (1 << 29) /* Dual role device */
-#define PDO_FIXED_SUSPEND   (1 << 28) /* USB Suspend supported */
-#define PDO_FIXED_EXTERNAL  (1 << 27) /* Externally powered */
-#define PDO_FIXED_COMM_CAP  (1 << 26) /* USB Communications Capable */
-#define PDO_FIXED_DATA_SWAP (1 << 25) /* Data role swap command supported */
+#define PDO_FIXED_DUAL_ROLE BIT(29) /* Dual role device */
+#define PDO_FIXED_SUSPEND   BIT(28) /* USB Suspend supported */
+#define PDO_FIXED_EXTERNAL  BIT(27) /* Externally powered */
+#define PDO_FIXED_COMM_CAP  BIT(26) /* USB Communications Capable */
+#define PDO_FIXED_DATA_SWAP BIT(25) /* Data role swap command supported */
 #define PDO_FIXED_PEAK_CURR () /* [21..20] Peak current */
 #define PDO_FIXED_VOLT(mv)  (((mv)/50) << 10) /* Voltage in 50mV units */
 #define PDO_FIXED_CURR(ma)  (((ma)/10) << 0)  /* Max current in 10mA units */
@@ -98,10 +98,10 @@ enum pd_rx_errors {
 /* RDO : Request Data Object */
 #define RDO_OBJ_POS(n)             (((n) & 0x7) << 28)
 #define RDO_POS(rdo)               (((rdo) >> 28) & 0x7)
-#define RDO_GIVE_BACK              (1 << 27)
-#define RDO_CAP_MISMATCH           (1 << 26)
-#define RDO_COMM_CAP               (1 << 25)
-#define RDO_NO_SUSPEND             (1 << 24)
+#define RDO_GIVE_BACK              BIT(27)
+#define RDO_CAP_MISMATCH           BIT(26)
+#define RDO_COMM_CAP               BIT(25)
+#define RDO_NO_SUSPEND             BIT(24)
 #define RDO_FIXED_VAR_OP_CURR(ma)  ((((ma) / 10) & 0x3FF) << 10)
 #define RDO_FIXED_VAR_MAX_CURR(ma) ((((ma) / 10) & 0x3FF) << 0)
 
@@ -121,7 +121,7 @@ enum pd_rx_errors {
 
 /* BDO : BIST Data Object */
 #define BDO_MODE_RECV       (0 << 28)
-#define BDO_MODE_TRANSMIT   (1 << 28)
+#define BDO_MODE_TRANSMIT   BIT(28)
 #define BDO_MODE_COUNTERS   (2 << 28)
 #define BDO_MODE_CARRIER0   (3 << 28)
 #define BDO_MODE_CARRIER1   (4 << 28)
@@ -232,8 +232,8 @@ enum hpd_event {
 };
 
 /* DisplayPort flags */
-#define DP_FLAGS_DP_ON              (1 << 0) /* Display port mode is on */
-#define DP_FLAGS_HPD_HI_PENDING     (1 << 1) /* Pending HPD_HI */
+#define DP_FLAGS_DP_ON              BIT(0) /* Display port mode is on */
+#define DP_FLAGS_HPD_HI_PENDING     BIT(1) /* Pending HPD_HI */
 
 /* supported alternate modes */
 enum pd_alternate_modes {
@@ -282,7 +282,7 @@ struct pd_policy {
 	 ((type) << 15) |				\
 	 ((custom) & 0x7FFF))
 
-#define VDO_SVDM_TYPE     (1 << 15)
+#define VDO_SVDM_TYPE     BIT(15)
 #define VDO_SVDM_VERS(x)  (x << 13)
 #define VDO_OPOS(x)       (x << 8)
 #define VDO_CMDT(x)       (x << 6)
@@ -297,7 +297,7 @@ struct pd_policy {
 
 /* reserved for SVDM ... for Google UVDM */
 #define VDO_SRC_INITIATOR (0 << 5)
-#define VDO_SRC_RESPONDER (1 << 5)
+#define VDO_SRC_RESPONDER BIT(5)
 
 #define CMD_DISCOVER_IDENT  1
 #define CMD_DISCOVER_SVID   2
@@ -692,22 +692,22 @@ enum pd_states {
 	PD_STATE_COUNT,
 };
 
-#define PD_FLAGS_PING_ENABLED      (1 << 0) /* SRC_READY pings enabled */
-#define PD_FLAGS_PARTNER_DR_POWER  (1 << 1) /* port partner is dualrole power */
-#define PD_FLAGS_PARTNER_DR_DATA   (1 << 2) /* port partner is dualrole data */
-#define PD_FLAGS_CHECK_IDENTITY    (1 << 3) /* discover identity in READY */
-#define PD_FLAGS_SNK_CAP_RECVD     (1 << 4) /* sink capabilities received */
-#define PD_FLAGS_TCPC_DRP_TOGGLE   (1 << 5) /* TCPC-controlled DRP toggling */
-#define PD_FLAGS_EXPLICIT_CONTRACT (1 << 6) /* explicit pwr contract in place */
-#define PD_FLAGS_VBUS_NEVER_LOW    (1 << 7) /* VBUS input has never been low */
-#define PD_FLAGS_PREVIOUS_PD_CONN  (1 << 8) /* previously PD connected */
-#define PD_FLAGS_CHECK_PR_ROLE     (1 << 9) /* check power role in READY */
-#define PD_FLAGS_CHECK_DR_ROLE     (1 << 10)/* check data role in READY */
-#define PD_FLAGS_PARTNER_EXTPOWER  (1 << 11)/* port partner has external pwr */
-#define PD_FLAGS_VCONN_ON          (1 << 12)/* vconn is being sourced */
-#define PD_FLAGS_TRY_SRC           (1 << 13)/* Try.SRC states are active */
-#define PD_FLAGS_PARTNER_USB_COMM  (1 << 14)/* port partner is USB comms */
-#define PD_FLAGS_UPDATE_SRC_CAPS   (1 << 15)/* send new source capabilities */
+#define PD_FLAGS_PING_ENABLED      BIT(0) /* SRC_READY pings enabled */
+#define PD_FLAGS_PARTNER_DR_POWER  BIT(1) /* port partner is dualrole power */
+#define PD_FLAGS_PARTNER_DR_DATA   BIT(2) /* port partner is dualrole data */
+#define PD_FLAGS_CHECK_IDENTITY    BIT(3) /* discover identity in READY */
+#define PD_FLAGS_SNK_CAP_RECVD     BIT(4) /* sink capabilities received */
+#define PD_FLAGS_TCPC_DRP_TOGGLE   BIT(5) /* TCPC-controlled DRP toggling */
+#define PD_FLAGS_EXPLICIT_CONTRACT BIT(6) /* explicit pwr contract in place */
+#define PD_FLAGS_VBUS_NEVER_LOW    BIT(7) /* VBUS input has never been low */
+#define PD_FLAGS_PREVIOUS_PD_CONN  BIT(8) /* previously PD connected */
+#define PD_FLAGS_CHECK_PR_ROLE     BIT(9) /* check power role in READY */
+#define PD_FLAGS_CHECK_DR_ROLE     BIT(10)/* check data role in READY */
+#define PD_FLAGS_PARTNER_EXTPOWER  BIT(11)/* port partner has external pwr */
+#define PD_FLAGS_VCONN_ON          BIT(12)/* vconn is being sourced */
+#define PD_FLAGS_TRY_SRC           BIT(13)/* Try.SRC states are active */
+#define PD_FLAGS_PARTNER_USB_COMM  BIT(14)/* port partner is USB comms */
+#define PD_FLAGS_UPDATE_SRC_CAPS   BIT(15)/* send new source capabilities */
 /* Flags to clear on a disconnect */
 #define PD_FLAGS_RESET_ON_DISCONNECT_MASK (PD_FLAGS_PARTNER_DR_POWER | \
 					   PD_FLAGS_PARTNER_DR_DATA | \

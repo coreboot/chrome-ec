@@ -199,7 +199,7 @@ void board_config_pre_init(void)
 	 * Remap USART1 RX/TX DMA to match uart driver. Remap SPI2 RX/TX and
 	 * TIM3_CH1 for unique DMA channels.
 	 */
-	STM32_SYSCFG_CFGR1 |= (1 << 9) | (1 << 10) | (1 << 24) | (1 << 30);
+	STM32_SYSCFG_CFGR1 |= BIT(9) | BIT(10) | BIT(24) | BIT(30);
 }
 
 #include "gpio_list.h"

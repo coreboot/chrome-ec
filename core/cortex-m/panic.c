@@ -154,7 +154,7 @@ static void show_fault(uint32_t mmfs, uint32_t hfsr, uint32_t dfsr)
 	int count = 0;
 
 	for (upto = 0; upto < 32; upto++) {
-		if ((mmfs & (1 << upto)) && mmfs_name[upto]) {
+		if ((mmfs & BIT(upto)) && mmfs_name[upto]) {
 			do_separate(&count);
 			panic_puts(mmfs_name[upto]);
 		}
@@ -174,7 +174,7 @@ static void show_fault(uint32_t mmfs, uint32_t hfsr, uint32_t dfsr)
 	}
 
 	for (upto = 0; upto < 5; upto++) {
-		if ((dfsr & (1 << upto))) {
+		if ((dfsr & BIT(upto))) {
 			do_separate(&count);
 			panic_puts(dfsr_name[upto]);
 		}
@@ -197,13 +197,13 @@ static uint32_t get_exception_frame_size(const struct panic_data *pdata)
 
 	/* CPU uses xPSR[9] to indicate whether it padded the stack for
 	 * alignment or not. */
-	if (pdata->cm.frame[7] & (1 << 9))
+	if (pdata->cm.frame[7] & BIT(9))
 		frame_size += sizeof(uint32_t);
 
 #ifdef CONFIG_FPU
 	/* CPU uses EXC_RETURN[4] to indicate whether it stored extended
 	 * frame for FPU or not. */
-	if (!(pdata->cm.regs[11] & (1 << 4)))
+	if (!(pdata->cm.regs[11] & BIT(4)))
 		frame_size += 18 * sizeof(uint32_t);
 #endif
 

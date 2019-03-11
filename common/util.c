@@ -461,7 +461,7 @@ int uint64divmod(uint64_t *n, int d)
 int get_next_bit(uint32_t *mask)
 {
 	int bit = 31 - __builtin_clz(*mask);
-	*mask &= ~(1 << bit);
+	*mask &= ~BIT(bit);
 	return bit;
 }
 
@@ -470,9 +470,9 @@ int get_next_bit(uint32_t *mask)
 /* stateful conditional stuff */
 
 enum cond_internal_bits {
-	COND_CURR_MASK = (1 << 0),		/* current value */
-	COND_RISE_MASK = (1 << 1),		/* set if 0->1 */
-	COND_FALL_MASK = (1 << 2),		/* set if 1->0 */
+	COND_CURR_MASK = BIT(0),		/* current value */
+	COND_RISE_MASK = BIT(1),		/* set if 0->1 */
+	COND_FALL_MASK = BIT(2),		/* set if 1->0 */
 };
 
 void cond_init(cond_t *c, int val)

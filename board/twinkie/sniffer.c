@@ -348,7 +348,7 @@ static void rx_timer_init(int tim_id, timer_ctlr_t *tim, int ch_idx, int up_idx)
 	tim->ccer = 0xB << ((ch_idx - 1) * 4);
 	/* TODO: add input filtering */
 	/* configure DMA request on CCRx update and overflow/update event */
-	tim->dier = (1 << (8 + ch_idx)) | (1 << (8 + up_idx));
+	tim->dier = BIT((8 + ch_idx)) | BIT((8 + up_idx));
 	/* set prescaler to /26 (F=2.4Mhz, T=0.4us) */
 	tim->psc = RX_CLOCK_DIV;
 	/* Reload the pre-scaler and reset the counter, clear CCRx */
@@ -430,7 +430,7 @@ void sniffer_task(void)
 		task_wait_event(-1);
 		/* send the available samples over USB if we have a buffer*/
 		while (filled_dma && free_usb) {
-			while (!(filled_dma & (1 << d))) {
+			while (!(filled_dma & BIT(d))) {
 				d = (d + 1) & 31;
 				off += EP_PAYLOAD_SIZE;
 				if (off >= RX_COUNT)

@@ -38,10 +38,10 @@ static enum tcpc_cc_voltage_status it83xx_get_cc(
 
 	/* select Rp */
 	if (pull)
-		CLEAR_MASK(cc_state, (1 << 2));
+		CLEAR_MASK(cc_state, BIT(2));
 	/* select Rd */
 	else
-		SET_MASK(cc_state, (1 << 2));
+		SET_MASK(cc_state, BIT(2));
 
 	/* sink */
 	if (USBPD_GET_POWER_ROLE(port) == USBPD_POWER_ROLE_CONSUMER) {
@@ -144,7 +144,7 @@ static enum tcpc_transmit_complete it83xx_tx_data(
 
 	if (length) {
 		/* set data bit */
-		IT83XX_USBPD_MTSR0(port) |= (1 << 4);
+		IT83XX_USBPD_MTSR0(port) |= BIT(4);
 		/* set data length setting */
 		IT83XX_USBPD_MTSR1(port) |= length;
 		/* set data */
@@ -237,9 +237,9 @@ static void it83xx_enable_vconn(enum usbpd_port port, int enabled)
 static void it83xx_enable_cc(enum usbpd_port port, int enable)
 {
 	if (enable)
-		CLEAR_MASK(IT83XX_USBPD_CCGCR(port), (1 << 4));
+		CLEAR_MASK(IT83XX_USBPD_CCGCR(port), BIT(4));
 	else
-		SET_MASK(IT83XX_USBPD_CCGCR(port), (1 << 4));
+		SET_MASK(IT83XX_USBPD_CCGCR(port), BIT(4));
 }
 
 static void it83xx_set_power_role(enum usbpd_port port, int power_role)
@@ -247,18 +247,18 @@ static void it83xx_set_power_role(enum usbpd_port port, int power_role)
 	/* PD_ROLE_SINK 0, PD_ROLE_SOURCE 1 */
 	if (power_role == PD_ROLE_SOURCE) {
 		/* bit0: source */
-		SET_MASK(IT83XX_USBPD_PDMSR(port), (1 << 0));
+		SET_MASK(IT83XX_USBPD_PDMSR(port), BIT(0));
 		/* bit1: CC1 select Rp */
-		SET_MASK(IT83XX_USBPD_CCGCR(port), (1 << 1));
+		SET_MASK(IT83XX_USBPD_CCGCR(port), BIT(1));
 		/* bit3: CC2 select Rp */
-		SET_MASK(IT83XX_USBPD_BMCSR(port), (1 << 3));
+		SET_MASK(IT83XX_USBPD_BMCSR(port), BIT(3));
 	} else {
 		/* bit0: sink */
-		CLEAR_MASK(IT83XX_USBPD_PDMSR(port), (1 << 0));
+		CLEAR_MASK(IT83XX_USBPD_PDMSR(port), BIT(0));
 		/* bit1: CC1 select Rd */
-		CLEAR_MASK(IT83XX_USBPD_CCGCR(port), (1 << 1));
+		CLEAR_MASK(IT83XX_USBPD_CCGCR(port), BIT(1));
 		/* bit3: CC2 select Rd */
-		CLEAR_MASK(IT83XX_USBPD_BMCSR(port), (1 << 3));
+		CLEAR_MASK(IT83XX_USBPD_BMCSR(port), BIT(3));
 	}
 }
 
@@ -299,7 +299,7 @@ static void it83xx_init(enum usbpd_port port, int role)
 	/* disable vconn */
 	it83xx_enable_vconn(port, 0);
 	/* TX start from high */
-	IT83XX_USBPD_CCADCR(port) |= (1 << 6);
+	IT83XX_USBPD_CCADCR(port) |= BIT(6);
 	/* enable cc1/cc2 */
 	*usbpd_ctrl_regs[port].cc1 = 0x86;
 	*usbpd_ctrl_regs[port].cc2 = 0x86;
@@ -313,9 +313,9 @@ static void it83xx_select_polarity(enum usbpd_port port,
 {
 	/* cc1/cc2 selection */
 	if (cc_pin == USBPD_CC_PIN_1)
-		SET_MASK(IT83XX_USBPD_CCGCR(port), (1 << 0));
+		SET_MASK(IT83XX_USBPD_CCGCR(port), BIT(0));
 	else
-		CLEAR_MASK(IT83XX_USBPD_CCGCR(port), (1 << 0));
+		CLEAR_MASK(IT83XX_USBPD_CCGCR(port), BIT(0));
 }
 
 static int it83xx_set_cc(enum usbpd_port port, int pull)
