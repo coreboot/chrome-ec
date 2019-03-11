@@ -72,7 +72,7 @@ static inline void spi_enable_clock(int port)
  * EXTI line 22 is connected to the CMP2 output,
  * C0 uses CMP2, and C1 uses CMP1.
  */
-#define EXTI_COMP_MASK(p) ((p) ? (1<<21) : (1 << 22))
+#define EXTI_COMP_MASK(p) ((p) ? (1<<21) : BIT(22))
 
 #define IRQ_COMP STM32_IRQ_COMP
 /* triggers packet detection on comparator falling edge */
@@ -108,12 +108,12 @@ static inline void pd_tx_spi_reset(int port)
 {
 	if (port == 0) {
 		/* Reset SPI1 */
-		STM32_RCC_APB2RSTR |= (1 << 12);
-		STM32_RCC_APB2RSTR &= ~(1 << 12);
+		STM32_RCC_APB2RSTR |= BIT(12);
+		STM32_RCC_APB2RSTR &= ~BIT(12);
 	} else {
 		/* Reset SPI2 */
-		STM32_RCC_APB1RSTR |= (1 << 14);
-		STM32_RCC_APB1RSTR &= ~(1 << 14);
+		STM32_RCC_APB1RSTR |= BIT(14);
+		STM32_RCC_APB1RSTR &= ~BIT(14);
 	}
 }
 
@@ -128,7 +128,7 @@ static inline void pd_tx_enable(int port, int polarity)
 			/* MCU ADC PA4 pin output low */
 			STM32_GPIO_MODER(GPIO_A) = (STM32_GPIO_MODER(GPIO_A)
 					& ~(3 << (2*4))) /* PA4 disable ADC */
-					|  (1 << (2*4)); /* Set as GPO */
+					|  BIT((2*4)); /* Set as GPO */
 			gpio_set_level(GPIO_USB_C0_CC2_PD, 0);
 		} else {
 			/* USB_C0_CC1_TX_DATA: PB4 is SPI1 MISO */
@@ -136,7 +136,7 @@ static inline void pd_tx_enable(int port, int polarity)
 			/* MCU ADC PA2 pin output low */
 			STM32_GPIO_MODER(GPIO_A) = (STM32_GPIO_MODER(GPIO_A)
 					& ~(3 << (2*2))) /* PA2 disable ADC */
-					|  (1 << (2*2)); /* Set as GPO */
+					|  BIT((2*2)); /* Set as GPO */
 			gpio_set_level(GPIO_USB_C0_CC1_PD, 0);
 		}
 	} else {
@@ -147,12 +147,12 @@ static inline void pd_tx_enable(int port, int polarity)
 		if (polarity) {
 			STM32_GPIO_MODER(GPIO_A) = (STM32_GPIO_MODER(GPIO_A)
 					& ~(3 << (2*5))) /* PA5 disable ADC */
-					|  (1 << (2*5)); /* Set as GPO */
+					|  BIT((2*5)); /* Set as GPO */
 			gpio_set_level(GPIO_USB_C1_CC2_PD, 0);
 		} else {
 			STM32_GPIO_MODER(GPIO_A) = (STM32_GPIO_MODER(GPIO_A)
 					& ~(3 << (2*0))) /* PA0 disable ADC */
-					|  (1 << (2*0)); /* Set as GPO */
+					|  BIT((2*0)); /* Set as GPO */
 			gpio_set_level(GPIO_USB_C1_CC1_PD, 0);
 		}
 

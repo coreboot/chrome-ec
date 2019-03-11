@@ -143,7 +143,7 @@ static int elan_tp_read_report(void)
 	}
 
 	for (i = 0; i < ETP_MAX_FINGERS; i++) {
-		int valid = touch_info & (1 << (3+i));
+		int valid = touch_info & BIT((3+i));
 
 		if (valid) {
 			int width = (finger[3] & 0xf0) >> 4;

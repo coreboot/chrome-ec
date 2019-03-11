@@ -23,12 +23,12 @@
 #include "util.h"
 
 /* Flags for BBRM_DATA_INDEX_WAKE */
-#define HIBERNATE_WAKE_MTC        (1 << 0)  /* MTC alarm */
-#define HIBERNATE_WAKE_PIN        (1 << 1)  /* Wake pin */
+#define HIBERNATE_WAKE_MTC        BIT(0)  /* MTC alarm */
+#define HIBERNATE_WAKE_PIN        BIT(1)  /* Wake pin */
 
 /* Delay after writing TTC for value to latch */
 #define MTC_TTC_LOAD_DELAY_US 250
-#define MTC_ALARM_MASK     ((1 << 25) - 1)
+#define MTC_ALARM_MASK     (BIT(25) - 1)
 #define MTC_WUI_GROUP      MIWU_GROUP_4
 #define MTC_WUI_MASK       MASK_PIN7
 

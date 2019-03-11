@@ -100,7 +100,7 @@ static void adc_continuous_stop(void)
 	STM32_ADC_CR |= 1 << 4; /* ADSTP */
 
 	/* Wait for conversion to stop */
-	while (STM32_ADC_CR & (1 << 4))
+	while (STM32_ADC_CR & BIT(4))
 		;
 
 	/* CONT=0 -> continuous mode off */
@@ -150,7 +150,7 @@ static void adc_interval_stop(void)
 	STM32_ADC_CR |= 1 << 4; /* ADSTP */
 
 	/* Wait for conversion to stop */
-	while (STM32_ADC_CR & (1 << 4))
+	while (STM32_ADC_CR & BIT(4))
 		;
 
 	/* Stop the timer */
@@ -272,7 +272,7 @@ int adc_read_channel(enum adc_channel ch)
 	STM32_ADC_CR |= 1 << 2; /* ADSTART */
 
 	/* Wait for end of conversion */
-	while (!(STM32_ADC_ISR & (1 << 2)))
+	while (!(STM32_ADC_ISR & BIT(2)))
 		;
 	/* read converted value */
 	value = STM32_ADC_DR;
@@ -290,11 +290,11 @@ static void adc_init(void)
 	 * If clock is already enabled, and ADC module is enabled
 	 * then this is a warm reboot and ADC is already initialized.
 	 */
-	if (STM32_RCC_APB2ENR & (1 << 9) && (STM32_ADC_CR & STM32_ADC_CR_ADEN))
+	if (STM32_RCC_APB2ENR & BIT(9) && (STM32_ADC_CR & STM32_ADC_CR_ADEN))
 		return;
 
 	/* Enable ADC clock */
-	STM32_RCC_APB2ENR |= (1 << 9);
+	STM32_RCC_APB2ENR |= BIT(9);
 	/* check HSI14 in RCC ? ON by default */
 
 	/* ADC calibration (done with ADEN = 0) */

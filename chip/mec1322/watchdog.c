@@ -16,7 +16,7 @@ void watchdog_reload(void)
 
 #ifdef CONFIG_WATCHDOG_HELP
 	/* Reload the auxiliary timer */
-	MEC1322_TMR16_CTL(0) &= ~(1 << 5);
+	MEC1322_TMR16_CTL(0) &= ~BIT(5);
 	MEC1322_TMR16_CNT(0) = CONFIG_AUX_TIMER_PERIOD_MS;
 	MEC1322_TMR16_CTL(0) |= 1 << 5;
 #endif
@@ -34,7 +34,7 @@ int watchdog_init(void)
 	 */
 
 	/* Stop the auxiliary timer if it's running */
-	MEC1322_TMR16_CTL(0) &= ~(1 << 5);
+	MEC1322_TMR16_CTL(0) &= ~BIT(5);
 
 	/* Enable auxiliary timer */
 	MEC1322_TMR16_CTL(0) |= 1 << 0;
@@ -45,10 +45,10 @@ int watchdog_init(void)
 	val = (val & 0xffff) | (47999 << 16);
 
 	/* No auto restart */
-	val &= ~(1 << 3);
+	val &= ~BIT(3);
 
 	/* Count down */
-	val &= ~(1 << 2);
+	val &= ~BIT(2);
 
 	MEC1322_TMR16_CTL(0) = val;
 

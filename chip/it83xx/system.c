@@ -104,7 +104,7 @@ int system_is_reboot_warm(void)
 void chip_pre_init(void)
 {
 	/* bit4, enable debug mode through SMBus */
-	IT83XX_SMB_SLVISELR &= ~(1 << 4);
+	IT83XX_SMB_SLVISELR &= ~BIT(4);
 }
 
 void system_pre_init(void)
@@ -147,7 +147,7 @@ void system_reset(int flags)
 	 * If we are in debug mode, we need disable it before triggering
 	 * a soft reset or reset will fail.
 	 */
-	IT83XX_SMB_SLVISELR |= (1 << 4);
+	IT83XX_SMB_SLVISELR |= BIT(4);
 
 	/*
 	 * Writing invalid key to watchdog module triggers a soft reset. For

@@ -95,5 +95,5 @@ void board_config_pre_init(void)
 	 *  Chan 4 : USART1_TX
 	 *  Chan 5 : USART1_RX
 	 */
-	STM32_SYSCFG_CFGR1 |= (1 << 9) | (1 << 10); /* Remap USART1 RX/TX DMA */
+	STM32_SYSCFG_CFGR1 |= BIT(9) | BIT(10); /* Remap USART1 RX/TX DMA */
 }
