@@ -107,7 +107,7 @@ static const struct {
 static task_ tasks[TASK_ID_COUNT];
 /* Sanity checks about static task invariants */
 BUILD_ASSERT(TASK_ID_COUNT <= sizeof(unsigned) * 8);
-BUILD_ASSERT(TASK_ID_COUNT < (1 << (sizeof(task_id_t) * 8)));
+BUILD_ASSERT(TASK_ID_COUNT < BIT((sizeof(task_id_t) * 8)));
 
 
 /* Stacks for all tasks */
@@ -133,13 +133,13 @@ static task_ *current_task = (task_ *)scratchpad;
  * can do their init within a task switching context.  The hooks task will then
  * make a call to enable all tasks.
  */
-static uint32_t tasks_ready = (1 << TASK_ID_HOOKS);
+static uint32_t tasks_ready = BIT(TASK_ID_HOOKS);
 /*
  * Initially allow only the HOOKS and IDLE task to run, regardless of ready
  * status, in order for HOOK_INIT to complete before other tasks.
  * task_enable_all_tasks() will open the flood gates.
  */
-static uint32_t tasks_enabled = (1 << TASK_ID_HOOKS) | (1 << TASK_ID_IDLE);
+static uint32_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
 
 static int start_called;  /* Has task swapping started */
 
@@ -236,7 +236,7 @@ task_  __attribute__((noinline)) *__svc_handler(int desched, task_id_t resched)
 		 * Remove our own ready bit (current - tasks is same as
 		 * task_get_current())
 		 */
-		tasks_ready &= ~(1 << (current - tasks));
+		tasks_ready &= ~BIT((current - tasks));
 	}
 	tasks_ready |= 1 << resched;
 
@@ -283,7 +283,7 @@ void __schedule(int desched, int resched)
 void pendsv_handler(void)
 {
 	/* Clear pending flag */
-	CPU_SCB_ICSR = (1 << 27);
+	CPU_SCB_ICSR = BIT(27);
 
 	/* ensure we have priority 0 during re-scheduling */
 	__asm__ __volatile__("cpsid i");
@@ -392,7 +392,7 @@ uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait)
 			 * Trigger the scheduler when there's
 			 * no other irqs happening.
 			 */
-			CPU_SCB_ICSR = (1 << 28);
+			CPU_SCB_ICSR = BIT(28);
 		}
 	} else {
 		if (wait) {
@@ -449,7 +449,7 @@ uint32_t task_wait_event_mask(uint32_t event_mask, int timeout_us)
 void task_enable_all_tasks(void)
 {
 	/* Mark all tasks as ready and able to run. */
-	tasks_ready = tasks_enabled = (1 << TASK_ID_COUNT) - 1;
+	tasks_ready = tasks_enabled = BIT(TASK_ID_COUNT) - 1;
 	/* Reschedule the highest priority task. */
 	__schedule(0, 0);
 }
@@ -547,7 +547,7 @@ void mutex_unlock(struct mutex *mtx)
 
 	while (waiters) {
 		task_id_t id = __fls(waiters);
-		waiters &= ~(1 << id);
+		waiters &= ~BIT(id);
 
 		/* Somebody is waiting on the mutex */
 		task_set_event(id, TASK_EVENT_MUTEX, 0);

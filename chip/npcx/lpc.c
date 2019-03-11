@@ -483,7 +483,7 @@ int lpc_query_host_event_state(void)
 	int i;
 
 	for (i = 0; i < 32; i++) {
-		const uint32_t e = (1 << i);
+		const uint32_t e = BIT(i);
 
 		if (host_events & e) {
 			host_clear_events(e);
@@ -1067,7 +1067,7 @@ static void lpc_init(void)
 	CLEAR_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SMIPOL);
 	/* Set SMIB/SCIB to make sure SMI/SCI are high at init */
 	NPCX_HIPMIC(PMC_ACPI) = NPCX_HIPMIC(PMC_ACPI)
-			| (1 << NPCX_HIPMIC_SMIB) | (1 << NPCX_HIPMIC_SCIB);
+			| BIT(NPCX_HIPMIC_SMIB) | BIT(NPCX_HIPMIC_SCIB);
 #ifndef CONFIG_SCI_GPIO
 	/*
 	 * Allow SMI/SCI generated from PM module.
@@ -1134,7 +1134,7 @@ static int lpc_get_protocol_info(struct host_cmd_handler_args *args)
 	struct ec_response_get_protocol_info *r = args->response;
 
 	memset(r, 0, sizeof(*r));
-	r->protocol_versions = (1 << 3);
+	r->protocol_versions = BIT(3);
 	r->max_request_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->max_response_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->flags = 0;

@@ -10,11 +10,11 @@
 
 void usb_connect(void)
 {
-	STM32_USB_BCDR |= (1 << 15) /* DPPU */;
+	STM32_USB_BCDR |= BIT(15) /* DPPU */;
 }
 
 void usb_disconnect(void)
 {
 	/* disable pull-up on DP to disconnect */
-	STM32_USB_BCDR &= ~(1 << 15) /* DPPU */;
+	STM32_USB_BCDR &= ~BIT(15) /* DPPU */;
 }

@@ -86,7 +86,7 @@ void system_pre_init(void)
 	MEC1322_EC_TRACE_EN &= ~1;
 
 	/* Deassert nSIO_RESET */
-	MEC1322_PCR_PWR_RST_CTL &= ~(1 << 0);
+	MEC1322_PCR_PWR_RST_CTL &= ~BIT(0);
 
 	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
 }

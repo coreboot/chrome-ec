@@ -50,7 +50,7 @@ struct power_signal_info {
 extern const struct power_signal_info power_signal_list[];
 
 /* Convert enum power_signal to a mask for signal functions */
-#define POWER_SIGNAL_MASK(signal) (1 << (signal))
+#define POWER_SIGNAL_MASK(signal) BIT((signal))
 
 /**
  * Return current input signal state (one or more POWER_SIGNAL_MASK()s).

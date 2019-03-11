@@ -51,7 +51,7 @@ static inline void spi_enable_clock(int port)
 #define TIM_RX_CCR_IDX(p) TIM_RX_CCR_C0
 #define TIM_TX_CCR_IDX(p) TIM_TX_CCR_C0
 #define TIM_CCR_CS  1
-#define EXTI_COMP_MASK(p) ((1 << 21) | (1 << 22))
+#define EXTI_COMP_MASK(p) (BIT(21) | BIT(22))
 #define IRQ_COMP STM32_IRQ_COMP
 /* triggers packet detection on comparator falling edge */
 #define EXTI_XTSR STM32_EXTI_FTSR
@@ -71,8 +71,8 @@ static inline void pd_set_pins_speed(int port)
 static inline void pd_tx_spi_reset(int port)
 {
 	/* Reset SPI1 */
-	STM32_RCC_APB2RSTR |= (1 << 12);
-	STM32_RCC_APB2RSTR &= ~(1 << 12);
+	STM32_RCC_APB2RSTR |= BIT(12);
+	STM32_RCC_APB2RSTR &= ~BIT(12);
 }
 
 /* Drive the CC line from the TX block */
@@ -103,10 +103,10 @@ static inline void pd_tx_disable(int port, int polarity)
 {
 	/* TX_DATA on PB4 is an output low GPIO to disable the FET */
 	STM32_GPIO_MODER(GPIO_B) = (STM32_GPIO_MODER(GPIO_B) & ~(3 << (2*4)))
-							     |  (1 << (2*4));
+							     |  BIT((2*4));
 	/* TX_DATA on PA6 is an output low GPIO to disable the FET */
 	STM32_GPIO_MODER(GPIO_A) = (STM32_GPIO_MODER(GPIO_A) & ~(3 << (2*6)))
-							     |  (1 << (2*6));
+							     |  BIT((2*6));
 	/*
 	 * Tri-state the low side after the high side
 	 * to ensure we are not going above Vnc

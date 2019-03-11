@@ -47,7 +47,7 @@ static inline void spi_enable_clock(int port)
 #define TIM_RX_CCR_IDX(p) TIM_RX_CCR_C0
 /* connect TIM3 CH1 to TIM3_CH2 input */
 #define TIM_CCR_CS  2
-#define EXTI_COMP_MASK(p) (1 << 7)
+#define EXTI_COMP_MASK(p) BIT(7)
 #define IRQ_COMP STM32_IRQ_EXTI4_15
 /* the RX is inverted, triggers on rising edge */
 #define EXTI_XTSR STM32_EXTI_RTSR
@@ -64,8 +64,8 @@ static inline void pd_set_pins_speed(int port)
 static inline void pd_tx_spi_reset(int port)
 {
 	/* Reset SPI1 */
-	STM32_RCC_APB2RSTR |= (1 << 12);
-	STM32_RCC_APB2RSTR &= ~(1 << 12);
+	STM32_RCC_APB2RSTR |= BIT(12);
+	STM32_RCC_APB2RSTR &= ~BIT(12);
 }
 
 /* Drive the CC line from the TX block */

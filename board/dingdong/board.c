@@ -97,7 +97,7 @@ void board_config_pre_init(void)
 	/* enable SYSCFG clock */
 	STM32_RCC_APB2ENR |= 1 << 0;
 	/* Remap USART DMA to match the USART driver */
-	STM32_SYSCFG_CFGR1 |= (1 << 9) | (1 << 10);/* Remap USART1 RX/TX DMA */
+	STM32_SYSCFG_CFGR1 |= BIT(9) | BIT(10);/* Remap USART1 RX/TX DMA */
 }
 
 /* Initialize board. */

@@ -14,10 +14,10 @@
 #define CPUREG(addr) (*(volatile uint32_t*)(addr))
 
 #define CPU_NVIC_ST_CTRL       CPUREG(0xE000E010)
-#define ST_ENABLE              (1 << 0)
-#define ST_TICKINT             (1 << 1)
-#define ST_CLKSOURCE           (1 << 2)
-#define ST_COUNTFLAG           (1 << 16)
+#define ST_ENABLE              BIT(0)
+#define ST_TICKINT             BIT(1)
+#define ST_CLKSOURCE           BIT(2)
+#define ST_COUNTFLAG           BIT(16)
 
 /* Nested Vectored Interrupt Controller */
 #define CPU_NVIC_EN(x)         CPUREG(0xe000e100 + 4 * (x))

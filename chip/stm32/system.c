@@ -242,7 +242,7 @@ void system_pre_init(void)
 	/* switch on LSI */
 	STM32_RCC_CSR |= 1 << 0;
 	/* Wait for LSI to be ready */
-	while (!(STM32_RCC_CSR & (1 << 1)))
+	while (!(STM32_RCC_CSR & BIT(1)))
 		;
 	/* re-configure RTC if needed */
 #ifdef CHIP_FAMILY_STM32L

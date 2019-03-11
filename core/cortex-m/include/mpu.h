@@ -17,16 +17,16 @@
 #define MPU_SIZE		REG16(0xe000eda0)
 #define MPU_ATTR		REG16(0xe000eda2)
 
-#define MPU_CTRL_PRIVDEFEN	(1 << 2)
-#define MPU_CTRL_HFNMIENA	(1 << 1)
-#define MPU_CTRL_ENABLE		(1 << 0)
+#define MPU_CTRL_PRIVDEFEN	BIT(2)
+#define MPU_CTRL_HFNMIENA	BIT(1)
+#define MPU_CTRL_ENABLE		BIT(0)
 
 /*
  * XN (execute never) bit. It's bit 12 if accessed by halfword.
  *   0: XN off
  *   1: XN on
  */
-#define MPU_ATTR_XN		(1 << 12)
+#define MPU_ATTR_XN		BIT(12)
 
 /* AP bit. See table 3-5 of Stellaris LM4F232H5QC datasheet for details */
 #define MPU_ATTR_NO_NO (0 << 8)  /* previleged no access, unprev no access */

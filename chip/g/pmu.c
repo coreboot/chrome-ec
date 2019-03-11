@@ -10,7 +10,7 @@
  * RC Trim constants
  */
 #define RCTRIM_RESOLUTION       (12)
-#define RCTRIM_LOAD_VAL	        (1 << 11)
+#define RCTRIM_LOAD_VAL	        BIT(11)
 #define RCTRIM_RANGE_MAX	(7 * 7)
 #define RCTRIM_RANGE_MIN	(-8 * 7)
 #define RCTRIM_RANGE		(RCTRIM_RANGE_MAX - RCTRIM_RANGE_MIN + 1)
@@ -22,9 +22,9 @@
 void pmu_clock_en(uint32_t periph)
 {
 	if (periph <= 31)
-		GR_PMU_PERICLKSET0 = (1 << periph);
+		GR_PMU_PERICLKSET0 = BIT(periph);
 	else
-		GR_PMU_PERICLKSET1 = (1 << (periph - 32));
+		GR_PMU_PERICLKSET1 = BIT((periph - 32));
 }
 
 /*
@@ -34,9 +34,9 @@ void pmu_clock_en(uint32_t periph)
 void pmu_clock_dis(uint32_t periph)
 {
 	if (periph <= 31)
-		GR_PMU_PERICLKCLR0 = (1 << periph);
+		GR_PMU_PERICLKCLR0 = BIT(periph);
 	else
-		GR_PMU_PERICLKCLR1 = (1 << (periph - 32));
+		GR_PMU_PERICLKCLR1 = BIT((periph - 32));
 }
 
 /*
