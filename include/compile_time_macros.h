@@ -29,4 +29,10 @@
 
 #define __visible	__attribute__((externally_visible))
 
+/*
+ * Bit operation macros.
+ */
+#define BIT(nr)			(1UL << (nr))
+#define BIT_ULL(nr)		(1ULL << (nr))
+
 #endif /* __CROS_EC_COMPILE_TIME_MACROS_H */
