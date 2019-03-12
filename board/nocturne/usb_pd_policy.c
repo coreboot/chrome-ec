@@ -336,12 +336,8 @@ static int svdm_dp_config(int port, uint32_t *payload)
 		TYPEC_MUX_DOCK : TYPEC_MUX_DP;
 	CPRINTS("pin_mode: %x, mf: %d, mux: %d", pin_mode, mf_pref, mux_mode);
 
-	/*
-	 * Connect the SS USB lines to the connector.  Normally, we
-	 * would connect the SBU lines to connector here but because of
-	 * b/119441488, we will turn them on after receiving a DPStatus
-	 * PDO to generate a falling edge.
-	 */
+	/* Connect the SBU and USB lines to the connector. */
+	ppc_set_sbu(port, 1);
 	usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT, pd_get_polarity(port));
 
 	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
@@ -393,14 +389,6 @@ static int svdm_dp_attention(int port, uint32_t *payload)
 			dp_flags[port] |= DP_FLAGS_HPD_HI_PENDING;
 		return 1;
 	}
-
-	/*
-	 * To help with b/119441488, turn on/off the SBU FETs
-	 * corresponding with the HPD level.  This generates a falling
-	 * edge on AUX+ which some DP receivers need to see for DP
-	 * upstream device detection.
-	 */
-	ppc_set_sbu(port, !!lvl);
 
 	if (irq & cur_lvl) {
 		uint64_t now = get_time().val;
