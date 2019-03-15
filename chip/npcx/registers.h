@@ -9,6 +9,9 @@
 #define __CROS_EC_REGISTERS_H
 
 #include "common.h"
+#include "compile_time_macros.h"
+#include "clock_chip.h"
+
 /******************************************************************************/
 /*
  * Macro Functions
@@ -43,14 +46,13 @@
  */
 
 /* Global Definition */
-#define CHIP_VERSION                     3 /* A3 version */
 #define I2C_7BITS_ADDR                   0
 /* Switcher of features */
 #define SUPPORT_LCT                      1
 #define SUPPORT_WDG                      1
-#define SUPPORT_HIB                      1
 #define SUPPORT_P80_SEG                  0 /* Note: it uses KSO10 & KSO11 */
 /* Switcher of debugging */
+#define DEBUG_GPIO                       0
 #define DEBUG_I2C                        0
 #define DEBUG_TMR                        0
 #define DEBUG_WDG                        0
@@ -63,29 +65,34 @@
 #define DEBUG_CLK                        0
 #define DEBUG_LPC                        0
 #define DEBUG_ESPI                       0
+#define DEBUG_WOV                        0
+#define DEBUG_CEC                        0
 
 /* Modules Map */
+#define NPCX_ESPI_BASE_ADDR              0x4000A000
 #define NPCX_MDC_BASE_ADDR               0x4000C000
-#define NPCX_SIB_BASE_ADDR               0x4000E000
 #define NPCX_PMC_BASE_ADDR               0x4000D000
+#define NPCX_SIB_BASE_ADDR               0x4000E000
+#define NPCX_SHI_BASE_ADDR               0x4000F000
 #define NPCX_SHM_BASE_ADDR               0x40010000
+#define NPCX_GDMA_BASE_ADDR              0x40011000
 #define NPCX_FIU_BASE_ADDR               0x40020000
 #define NPCX_KBSCAN_REGS_BASE            0x400A3000
+#define NPCX_WOV_BASE_ADDR               0x400A4000
+#define NPCX_APM_BASE_ADDR               0x400A4800
 #define NPCX_GLUE_REGS_BASE              0x400A5000
 #define NPCX_BBRAM_BASE_ADDR             0x400AF000
 #define NPCX_HFCG_BASE_ADDR              0x400B5000
-#define NPCX_SHI_BASE_ADDR               0x4000F000
+#define NPCX_LFCG_BASE_ADDR              0x400B5100
+#define NPCX_FMUL2_BASE_ADDR             0x400B5200
 #define NPCX_MTC_BASE_ADDR               0x400B7000
 #define NPCX_MSWC_BASE_ADDR              0x400C1000
 #define NPCX_SCFG_BASE_ADDR              0x400C3000
-#define NPCX_CR_UART_BASE_ADDR           0x400C4000
 #define NPCX_KBC_BASE_ADDR               0x400C7000
 #define NPCX_ADC_BASE_ADDR               0x400D1000
 #define NPCX_SPI_BASE_ADDR               0x400D2000
 #define NPCX_PECI_BASE_ADDR              0x400D4000
 #define NPCX_TWD_BASE_ADDR               0x400D8000
-#define NPCX_ESPI_BASE_ADDR              0x4000A000
-#define NPCX_GDMA_BASE_ADDR              0x40011000
 
 /* Multi-Modules Map */
 #define NPCX_PWM_BASE_ADDR(mdl)          (0x40080000 + ((mdl) * 0x2000L))
@@ -94,10 +101,21 @@
 #define NPCX_ITIM32_BASE_ADDR            0x400BC000
 #define NPCX_MIWU_BASE_ADDR(mdl)         (0x400BB000 + ((mdl) * 0x2000L))
 #define NPCX_MFT_BASE_ADDR(mdl)          (0x400E1000 + ((mdl) * 0x2000L))
+#define NPCX_CR_UART_BASE_ADDR(mdl)      (0x400C4000 + ((mdl) * 0x2000L))
 #define NPCX_PM_CH_BASE_ADDR(mdl)        (0x400C9000 + ((mdl) * 0x2000L))
-#define NPCX_SMB_BASE_ADDR(mdl)          ((mdl < 2) ? (0x40009000 + \
-					 ((mdl) * 0x2000L)) : \
-					 (0x400C0000 + ((mdl - 2) * 0x2000L)))
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_SMB_BASE_ADDR(mdl)        (((mdl) < 2) ? \
+					(0x40009000 +  ((mdl) * 0x2000L)) : \
+					((mdl) < 4) ? \
+				      (0x400C0000 + (((mdl) - 2) * 0x2000L)) : \
+					((mdl) == 4) ? \
+					(0x40008000) : \
+					(0x40017000 + (((mdl) - 5) * 0x1000L)))
+#else
+#define NPCX_SMB_BASE_ADDR(mdl)        (((mdl) < 2) ? \
+					(0x40009000 +  ((mdl) * 0x2000L)) : \
+					(0x400C0000 + (((mdl) - 2) * 0x2000L)))
+#endif
 
 /*
  * NPCX-IRQ numbers
@@ -175,7 +193,7 @@
 #define NPCX_IRQ5_NOUSED                 NPCX_IRQ_5
 #define NPCX_IRQ_PORT80                  NPCX_IRQ_6
 #define NPCX_IRQ_MTC_WKINTAD_0           NPCX_IRQ_7
-#define NPCX_IRQ8_NOUSED                 NPCX_IRQ_8
+#define NPCX_IRQ_SMB8                    NPCX_IRQ_8
 #define NPCX_IRQ_MFT_1                   NPCX_IRQ_9
 #define NPCX_IRQ_ADC                     NPCX_IRQ_10
 #define NPCX_IRQ_WKINTEFGH_0             NPCX_IRQ_11
@@ -183,14 +201,14 @@
 #define NPCX_IRQ_SMB1                    NPCX_IRQ_13
 #define NPCX_IRQ_SMB2                    NPCX_IRQ_14
 #define NPCX_IRQ_WKINTC_0                NPCX_IRQ_15
-#define NPCX_IRQ16_NOUSED                NPCX_IRQ_16
+#define NPCX_IRQ_SMB7                    NPCX_IRQ_16
 #define NPCX_IRQ_ITIM16_3                NPCX_IRQ_17
 #define NPCX_IRQ_SHI                     NPCX_IRQ_18
 #define NPCX_IRQ_ESPI                    NPCX_IRQ_18
-#define NPCX_IRQ19_NOUSED                NPCX_IRQ_19
-#define NPCX_IRQ20_NOUSED                NPCX_IRQ_20
+#define NPCX_IRQ_SMB5                    NPCX_IRQ_19
+#define NPCX_IRQ_SMB6                    NPCX_IRQ_20
 #define NPCX_IRQ_PS2                     NPCX_IRQ_21
-#define NPCX_IRQ22_NOUSED                NPCX_IRQ_22
+#define NPCX_IRQ_WOV                     NPCX_IRQ_22
 #define NPCX_IRQ_MFT_2                   NPCX_IRQ_23
 #define NPCX_IRQ_SHM                     NPCX_IRQ_24
 #define NPCX_IRQ_KBC_IBF                 NPCX_IRQ_25
@@ -200,7 +218,7 @@
 #define NPCX_IRQ29_NOUSED                NPCX_IRQ_29
 #define NPCX_IRQ30_NOUSED                NPCX_IRQ_30
 #define NPCX_IRQ_TWD_WKINTB_0            NPCX_IRQ_31
-#define NPCX_IRQ32_NOUSED                NPCX_IRQ_32
+#define NPCX_IRQ_UART2                   NPCX_IRQ_32
 #define NPCX_IRQ_UART                    NPCX_IRQ_33
 #define NPCX_IRQ34_NOUSED                NPCX_IRQ_34
 #define NPCX_IRQ35_NOUSED                NPCX_IRQ_35
@@ -227,7 +245,7 @@
 #define NPCX_IRQ_KBC_OBE                 NPCX_IRQ_56
 #define NPCX_IRQ_SPI                     NPCX_IRQ_57
 #define NPCX_IRQ58_NOUSED                NPCX_IRQ_58
-#define NPCX_IRQ59_NOUSED                NPCX_IRQ_59
+#define NPCX_IRQ_WKINTFG_2               NPCX_IRQ_59
 #define NPCX_IRQ_WKINTA_2                NPCX_IRQ_60
 #define NPCX_IRQ_WKINTB_2                NPCX_IRQ_61
 #define NPCX_IRQ_WKINTC_2                NPCX_IRQ_62
@@ -241,6 +259,7 @@
 
 /* MDC register fields */
 #define NPCX_FWCTRL_RO_REGION            0
+#define NPCX_FWCTRL_FW_SLOT              1
 
 /******************************************************************************/
 /* High Frequency Clock Generator (HFCG) registers */
@@ -250,6 +269,10 @@
 #define NPCX_HFCGN                        REG8(NPCX_HFCG_BASE_ADDR + 0x006)
 #define NPCX_HFCGP                        REG8(NPCX_HFCG_BASE_ADDR + 0x008)
 #define NPCX_HFCBCD                       REG8(NPCX_HFCG_BASE_ADDR + 0x010)
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_HFCBCD1                      REG8(NPCX_HFCG_BASE_ADDR + 0x012)
+#define NPCX_HFCBCD2                      REG8(NPCX_HFCG_BASE_ADDR + 0x014)
+#endif
 
 /* HFCG register fields */
 #define NPCX_HFCGCTRL_LOAD               0
@@ -257,15 +280,76 @@
 #define NPCX_HFCGCTRL_CLK_CHNG           7
 
 /******************************************************************************/
-/*CR UART Register */
-#define NPCX_UTBUF                        REG8(NPCX_CR_UART_BASE_ADDR + 0x000)
-#define NPCX_URBUF                        REG8(NPCX_CR_UART_BASE_ADDR + 0x002)
-#define NPCX_UICTRL                       REG8(NPCX_CR_UART_BASE_ADDR + 0x004)
-#define NPCX_USTAT                        REG8(NPCX_CR_UART_BASE_ADDR + 0x006)
-#define NPCX_UFRS                         REG8(NPCX_CR_UART_BASE_ADDR + 0x008)
-#define NPCX_UMDSL                        REG8(NPCX_CR_UART_BASE_ADDR + 0x00A)
-#define NPCX_UBAUD                        REG8(NPCX_CR_UART_BASE_ADDR + 0x00C)
-#define NPCX_UPSR                         REG8(NPCX_CR_UART_BASE_ADDR + 0x00E)
+/* Low Frequency Clock Generator (LFCG) registers */
+#define NPCX_LFCGCTL                      REG8(NPCX_LFCG_BASE_ADDR + 0x000)
+#define NPCX_HFRDI                       REG16(NPCX_LFCG_BASE_ADDR + 0x002)
+#define NPCX_HFRDF                       REG16(NPCX_LFCG_BASE_ADDR + 0x004)
+#define NPCX_FRCDIV                      REG16(NPCX_LFCG_BASE_ADDR + 0x006)
+#define NPCX_DIVCOR1                     REG16(NPCX_LFCG_BASE_ADDR + 0x008)
+#define NPCX_DIVCOR2                     REG16(NPCX_LFCG_BASE_ADDR + 0x00A)
+#define NPCX_LFCGCTL2                     REG8(NPCX_LFCG_BASE_ADDR + 0x014)
+
+/* LFCG register fields */
+#define NPCX_LFCGCTL_XTCLK_VAL            7
+#define NPCX_LFCGCTL2_XT_OSC_SL_EN        6
+
+/******************************************************************************/
+/* CR UART Register */
+#define NPCX_UTBUF(n)                    REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x000)
+#define NPCX_URBUF(n)                    REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x002)
+#define NPCX_UICTRL(n)                   REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x004)
+#define NPCX_USTAT(n)                    REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x006)
+#define NPCX_UFRS(n)                     REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x008)
+#define NPCX_UMDSL(n)                    REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x00A)
+#define NPCX_UBAUD(n)                    REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x00C)
+#define NPCX_UPSR(n)                     REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x00E)
+#ifdef NPCX_UART_FIFO_SUPPORT
+ /* UART registers only used for FIFO mode */
+#define NPCX_UFTSTS(n)                   REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x020)
+#define NPCX_UFRSTS(n)                   REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x022)
+#define NPCX_UFTCTL(n)                   REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x024)
+#define NPCX_UFRCTL(n)                   REG8(NPCX_CR_UART_BASE_ADDR(n) + 0x026)
+
+/* UART FIFO register fields */
+#define NPCX_UMDSL_FIFO_MD                0
+
+#define NPCX_UFTSTS_TEMPTY_LVL            FIELD(0, 5)
+#define NPCX_UFTSTS_TEMPTY_LVL_STS        5
+#define NPCX_UFTSTS_TFIFO_EMPTY_STS       6
+#define NPCX_UFTSTS_NXMIP                 7
+
+#define NPCX_UFRSTS_RFULL_LVL_STS         5
+#define NPCX_UFRSTS_RFIFO_NEMPTY_STS      6
+#define NPCX_UFRSTS_ERR                   7
+
+#define NPCX_UFTCTL_TEMPTY_LVL_SEL        FIELD(0, 5)
+#define NPCX_UFTCTL_TEMPTY_LVL_EN         5
+#define NPCX_UFTCTL_TEMPTY_EN             6
+#define NPCX_UFTCTL_NXIMPEN               7
+
+#define NPCX_UFRCTL_RFULL_LVL_SEL         FIELD(0, 5)
+#define NPCX_UFRCTL_RFULL_LVL_EN          5
+#define NPCX_UFRCTL_RNEMPTY_EN            6
+#define NPCX_UFRCTL_ERR_EN                7
+
+#endif
+
+#if defined(CHIP_FAMILY_NPCX5)
+enum {
+	NPCX_UART_PORT0 = 0, /* UART port 0 */
+	NPCX_UART_COUNT
+};
+#elif defined(CHIP_FAMILY_NPCX7)
+enum {
+	NPCX_UART_PORT0 = 0, /* UART port 0 */
+#ifdef NPCX_SECOND_UART
+	NPCX_UART_PORT1 = 1, /* UART port 1 */
+#endif
+	NPCX_UART_COUNT
+};
+#else
+#error "Unsupported chip family for uart ports."
+#endif
 
 /******************************************************************************/
 /* KBSCAN registers */
@@ -288,13 +372,15 @@
 #define NPCX_KBSMODE                     1
 #define NPCX_KBSIEN                      2
 #define NPCX_KBSINC                      3
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_KBHDRV_FIELD                FIELD(6, 2)
+#endif
 #define NPCX_KBSCFGINDX                  0
 
 /* KBSCAN definitions */
 #define KB_ROW_NUM  8  /* Rows numbers of keyboard matrix */
 #define KB_COL_NUM  18 /* Columns numbers of keyboard matrix */
 #define KB_ROW_MASK ((1<<KB_ROW_NUM) - 1) /* Mask of rows of keyboard matrix */
-#define KB_COL_MASK ((1<<KB_COL_NUM) - 1) /* Mask of cols of keyboard matrix */
 
 /******************************************************************************/
 /* GLUE registers */
@@ -302,7 +388,9 @@
 #define NPCX_GLUE_SDPD1                   REG8(NPCX_GLUE_REGS_BASE + 0x012)
 #define NPCX_GLUE_SDP_CTS                 REG8(NPCX_GLUE_REGS_BASE + 0x014)
 #define NPCX_GLUE_SMBSEL                  REG8(NPCX_GLUE_REGS_BASE + 0x021)
-
+#if defined(NPCX_PSL_MODE_SUPPORT)
+#define NPCX_GLUE_PSL_CTS                 REG8(NPCX_GLUE_REGS_BASE + 0x027)
+#endif
 /******************************************************************************/
 /* MIWU registers */
 #define NPCX_WKEDG_ADDR(port, n)         (NPCX_MIWU_BASE_ADDR(port) + 0x00 + \
@@ -317,7 +405,7 @@
 					 ((n) * 2L) + ((n) < 5 ? 0 : 0x12))
 #define NPCX_WKINEN_ADDR(port, n)        (NPCX_MIWU_BASE_ADDR(port) + 0x1F + \
 					 ((n) * 2L) + ((n) < 5 ? 0 : 0x12))
-#define NPCX_WKMOD_ADDR(port, n)         (NPCX_MIWU_BASE_ADDR(port) + 0x70 + n)
+#define NPCX_WKMOD_ADDR(port, n)        (NPCX_MIWU_BASE_ADDR(port) + 0x70 + (n))
 
 #define NPCX_WKEDG(port, n)               REG8(NPCX_WKEDG_ADDR(port, n))
 #define NPCX_WKAEDG(port, n)              REG8(NPCX_WKAEDG_ADDR(port, n))
@@ -366,6 +454,9 @@ enum {
 #define NPCX_PPUD(n)                      REG8(NPCX_GPIO_BASE_ADDR(n) + 0x004)
 #define NPCX_PENVDD(n)                    REG8(NPCX_GPIO_BASE_ADDR(n) + 0x005)
 #define NPCX_PTYPE(n)                     REG8(NPCX_GPIO_BASE_ADDR(n) + 0x006)
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_PLOCK_CTL(n)                 REG8(NPCX_GPIO_BASE_ADDR(n) + 0x007)
+#endif
 
 /* GPIO enumeration */
 enum {
@@ -443,11 +534,18 @@ enum {
 #define NPCX_STRPST                       REG8(NPCX_SCFG_BASE_ADDR + 0x001)
 #define NPCX_RSTCTL                       REG8(NPCX_SCFG_BASE_ADDR + 0x002)
 #define NPCX_DEV_CTL4                     REG8(NPCX_SCFG_BASE_ADDR + 0x006)
-#define NPCX_DEVALT(n)                    REG8(NPCX_SCFG_BASE_ADDR + 0x010 + n)
+#define NPCX_DEVALT(n)                   REG8(NPCX_SCFG_BASE_ADDR + 0x010 + (n))
 #define NPCX_LFCGCALCNT                   REG8(NPCX_SCFG_BASE_ADDR + 0x021)
 #define NPCX_PUPD_EN0                     REG8(NPCX_SCFG_BASE_ADDR + 0x028)
 #define NPCX_PUPD_EN1                     REG8(NPCX_SCFG_BASE_ADDR + 0x029)
-#define NPCX_LV_GPIO_CTL(n)               REG8(NPCX_SCFG_BASE_ADDR + 0x02A + n)
+#if defined(CHIP_FAMILY_NPCX5)
+#define NPCX_LV_GPIO_CTL(n)              REG8(NPCX_SCFG_BASE_ADDR + 0x02A + (n))
+#elif defined(CHIP_FAMILY_NPCX7)
+#define NPCX_LV_GPIO_CTL_ADDR(n)          (((n) < 5) ? \
+					  (NPCX_SCFG_BASE_ADDR + 0x02A + (n)) :\
+					   (NPCX_SCFG_BASE_ADDR + 0x026))
+#define NPCX_LV_GPIO_CTL(n)               REG8(NPCX_LV_GPIO_CTL_ADDR(n))
+#endif
 #define NPCX_SCFG_VER                     REG8(NPCX_SCFG_BASE_ADDR + 0x02F)
 
 #define TEST_BKSL                         REG8(NPCX_SCFG_BASE_ADDR + 0x037)
@@ -492,6 +590,8 @@ enum {
 #define NPCX_RSTCTL_HIPRST_MODE          6
 #define NPCX_DEV_CTL4_F_SPI_SLLK         2
 #define NPCX_DEV_CTL4_SPI_SP_SEL         4
+#define NPCX_DEV_CTL4_WP_IF              5
+#define NPCX_DEV_CTL4_VCC1_RST_LK        6
 #define NPCX_DEVPU0_I2C0_0_PUE           0
 #define NPCX_DEVPU0_I2C0_1_PUE           1
 #define NPCX_DEVPU0_I2C1_0_PUE           2
@@ -500,6 +600,7 @@ enum {
 #define NPCX_DEVPU1_F_SPI_PUD_EN         7
 
 /* DEVALT */
+/* pin-mux for SPI/FIU */
 #define NPCX_DEVALT0_SPIP_SL             0
 #define NPCX_DEVALT0_GPIO_NO_SPIP        3
 #define NPCX_DEVALT0_F_SPI_CS1_2         4
@@ -507,6 +608,7 @@ enum {
 #define NPCX_DEVALT0_F_SPI_QUAD          6
 #define NPCX_DEVALT0_NO_F_SPI            7
 
+/* pin-mux for LPC/eSPI */
 #define NPCX_DEVALT1_KBRST_SL            0
 #define NPCX_DEVALT1_A20M_SL             1
 #define NPCX_DEVALT1_SMI_SL              2
@@ -516,21 +618,45 @@ enum {
 #define NPCX_DEVALT1_CLKRN_SL            6
 #define NPCX_DEVALT1_NO_LPC_ESPI         7
 
+/* pin-mux for I2C */
+#if defined(CHIP_FAMILY_NPCX5)
 #define NPCX_DEVALT2_I2C0_0_SL           0
 #define NPCX_DEVALT2_I2C0_1_SL           1
 #define NPCX_DEVALT2_I2C1_0_SL           2
 #define NPCX_DEVALT2_I2C2_0_SL           4
 #define NPCX_DEVALT2_I2C3_0_SL           6
+#elif defined(CHIP_FAMILY_NPCX7)
+#define NPCX_DEVALT2_I2C0_0_SL           0
+#define NPCX_DEVALT2_I2C7_0_SL           1
+#define NPCX_DEVALT2_I2C1_0_SL           2
+#define NPCX_DEVALT2_I2C6_0_SL           3
+#define NPCX_DEVALT2_I2C2_0_SL           4
+#define NPCX_DEVALT2_I2C5_0_SL           5
+#define NPCX_DEVALT2_I2C3_0_SL           6
+#define NPCX_DEVALT2_I2C4_0_SL           7
+#define NPCX_DEVALT6_I2C6_1_SL           5
+#define NPCX_DEVALT6_I2C5_1_SL           6
+#define NPCX_DEVALT6_I2C4_1_SL           7
+#endif
 
+/* pin-mux for PS2 */
 #define NPCX_DEVALT3_PS2_0_SL            0
 #define NPCX_DEVALT3_PS2_1_SL            1
 #define NPCX_DEVALT3_PS2_2_SL            2
 #define NPCX_DEVALT3_PS2_3_SL            3
-#define NPCX_DEVALT3_TA1_TACH1_SL1       4
-#define NPCX_DEVALT3_TB1_TACH2_SL1       5
+#define NPCX_DEVALTC_PS2_3_SL2           3
+
+/* pin-mux for Tacho */
+#define NPCX_DEVALT3_TA1_SL1             4
+#define NPCX_DEVALT3_TB1_SL1             5
 #define NPCX_DEVALT3_TA2_SL1             6
 #define NPCX_DEVALT3_TB2_SL1             7
+#define NPCX_DEVALTC_TA1_SL2             4
+#define NPCX_DEVALTC_TB1_SL2             5
+#define NPCX_DEVALTC_TA2_SL2             6
+#define NPCX_DEVALTC_TB2_SL2             7
 
+/* pin-mux for PWM */
 #define NPCX_DEVALT4_PWM0_SL             0
 #define NPCX_DEVALT4_PWM1_SL             1
 #define NPCX_DEVALT4_PWM2_SL             2
@@ -540,16 +666,26 @@ enum {
 #define NPCX_DEVALT4_PWM6_SL             6
 #define NPCX_DEVALT4_PWM7_SL             7
 
+/* pin-mux for JTAG */
 #define NPCX_DEVALT5_TRACE_EN            0
 #define NPCX_DEVALT5_NJEN1_EN            1
 #define NPCX_DEVALT5_NJEN0_EN            2
 
+/* pin-mux for ADC */
 #define NPCX_DEVALT6_ADC0_SL             0
 #define NPCX_DEVALT6_ADC1_SL             1
 #define NPCX_DEVALT6_ADC2_SL             2
 #define NPCX_DEVALT6_ADC3_SL             3
 #define NPCX_DEVALT6_ADC4_SL             4
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_DEVALTF_ADC5_SL             0
+#define NPCX_DEVALTF_ADC6_SL             1
+#define NPCX_DEVALTF_ADC7_SL             2
+#define NPCX_DEVALTF_ADC8_SL             3
+#define NPCX_DEVALTF_ADC9_SL             4
+#endif
 
+/* pin-mux for Keyboard */
 #define NPCX_DEVALT7_NO_KSI0_SL          0
 #define NPCX_DEVALT7_NO_KSI1_SL          1
 #define NPCX_DEVALT7_NO_KSI2_SL          2
@@ -558,7 +694,6 @@ enum {
 #define NPCX_DEVALT7_NO_KSI5_SL          5
 #define NPCX_DEVALT7_NO_KSI6_SL          6
 #define NPCX_DEVALT7_NO_KSI7_SL          7
-
 #define NPCX_DEVALT8_NO_KSO00_SL         0
 #define NPCX_DEVALT8_NO_KSO01_SL         1
 #define NPCX_DEVALT8_NO_KSO02_SL         2
@@ -567,7 +702,6 @@ enum {
 #define NPCX_DEVALT8_NO_KSO05_SL         5
 #define NPCX_DEVALT8_NO_KSO06_SL         6
 #define NPCX_DEVALT8_NO_KSO07_SL         7
-
 #define NPCX_DEVALT9_NO_KSO08_SL         0
 #define NPCX_DEVALT9_NO_KSO09_SL         1
 #define NPCX_DEVALT9_NO_KSO10_SL         2
@@ -576,25 +710,46 @@ enum {
 #define NPCX_DEVALT9_NO_KSO13_SL         5
 #define NPCX_DEVALT9_NO_KSO14_SL         6
 #define NPCX_DEVALT9_NO_KSO15_SL         7
-
 #define NPCX_DEVALTA_NO_KSO16_SL         0
 #define NPCX_DEVALTA_NO_KSO17_SL         1
+
+/* pin-mux for PSL */
+#if defined(NPCX_PSL_MODE_SUPPORT)
+#define NPCX_DEVALTD_PSL_IN1_AHI         0
+#define NPCX_DEVALTD_NPSL_IN1_SL         1
+#define NPCX_DEVALTD_PSL_IN2_AHI         2
+#define NPCX_DEVALTD_NPSL_IN2_SL         3
+#define NPCX_DEVALTD_PSL_IN3_AHI         4
+#define NPCX_DEVALTD_PSL_IN3_SL          5
+#define NPCX_DEVALTD_PSL_IN4_AHI         6
+#define NPCX_DEVALTD_PSL_IN4_SL          7
+#endif
+
+/* pin-mux for Others */
 #define NPCX_DEVALTA_32K_OUT_SL          2
+#if !defined(NPCX_EXT32K_OSC_SUPPORT)
 #define NPCX_DEVALTA_32KCLKIN_SL         3
+#endif
 #define NPCX_DEVALTA_NO_VCC1_RST         4
+#ifdef NPCX_SECOND_UART
+#define NPCX_DEVALTA_UART2_SL            5
+#endif
 #define NPCX_DEVALTA_NO_PECI_EN          6
 #define NPCX_DEVALTA_UART_SL1            7
-
-#define NPCX_DEVALTB_RXD_SL              0
-#define NPCX_DEVALTB_TXD_SL              1
-
 #define NPCX_DEVALTC_UART_SL2            0
 #define NPCX_DEVALTC_SHI_SL              1
-#define NPCX_DEVALTC_PS2_3_SL2           3
-#define NPCX_DEVALTC_TA1_TACH1_SL2       4
-#define NPCX_DEVALTC_TB1_TACH2_SL2       5
-#define NPCX_DEVALTC_TA2_SL2             6
-#define NPCX_DEVALTC_TB2_SL2             7
+
+#if defined(CHIP_FAMILY_NPCX7)
+/* SHI module version 2 enable bit */
+#define NPCX_DEVALTF_SHI_NEW             7
+#endif
+
+/* pin-mux for WoV */
+#ifdef NPCX_WOV_SUPPORT
+#define NPCX_DEVALTE_WOV_SL              0
+#define NPCX_DEVALTE_I2S_SL              1
+#define NPCX_DEVALTE_DMCLK_FAST          2
+#endif
 
 /* Others bit definitions */
 #define NPCX_LFCGCALCNT_LPREG_CTL_EN     1
@@ -607,7 +762,6 @@ enum {
 #define NPCX_DBGFRZEN3                    REG8(NPCX_SCFG_BASE_ADDR + 0x078)
 /* DBG register fields */
 #define NPCX_DBGFRZEN3_GLBL_FRZ_DIS      7
-
 
 /******************************************************************************/
 /* SMBus Registers */
@@ -685,19 +839,46 @@ enum {
 #define NPCX_SMBADDR6_SAEN               7
 #define NPCX_SMBADDR7_SAEN               7
 #define NPCX_SMBADDR8_SAEN               7
+#if defined(CHIP_FAMILY_NPCX5)
 #define NPCX_SMBSEL_SMB0SEL              0
-
+#elif defined(CHIP_FAMILY_NPCX7)
+#define NPCX_SMBSEL_SMB4SEL              4
+#define NPCX_SMBSEL_SMB5SEL              5
+#define NPCX_SMBSEL_SMB6SEL              6
+#endif
 /*
  * SMB enumeration
- * I2C Port.
+ * I2C port definitions.
  */
-enum NPCX_I2C_PORT_T {
-	NPCX_I2C_PORT0_0  = 0, /* I2C port 0, bus 0*/
-	NPCX_I2C_PORT0_1  = 1, /* I2C port 0, bus 1*/
-	NPCX_I2C_PORT1    = 2, /* I2C port 1 */
-	NPCX_I2C_PORT2    = 3, /* I2C port 2 */
-	NPCX_I2C_PORT3    = 4, /* I2C port 3 */
+#if defined(CHIP_FAMILY_NPCX5)
+enum {
+	NPCX_I2C_PORT0_0  = 0, /* I2C port 0, bus 0 */
+	NPCX_I2C_PORT0_1,      /* I2C port 0, bus 1 */
+	NPCX_I2C_PORT1,        /* I2C port 1 */
+	NPCX_I2C_PORT2,        /* I2C port 2 */
+	NPCX_I2C_PORT3,        /* I2C port 3 */
+	NPCX_I2C_COUNT,
 };
+#elif defined(CHIP_FAMILY_NPCX7)
+enum {
+	NPCX_I2C_PORT0_0  = 0, /* I2C port 0, bus 0 */
+	NPCX_I2C_PORT1_0,      /* I2C port 1, bus 0 */
+	NPCX_I2C_PORT2_0,      /* I2C port 2, bus 0 */
+	NPCX_I2C_PORT3_0,      /* I2C port 3, bus 0 */
+#if !defined(NPCX_PSL_MODE_SUPPORT)
+	NPCX_I2C_PORT4_0,      /* I2C port 4, bus 0 */
+#endif
+	NPCX_I2C_PORT4_1,      /* I2C port 4, bus 1 */
+	NPCX_I2C_PORT5_0,      /* I2C port 5, bus 0 */
+	NPCX_I2C_PORT5_1,      /* I2C port 5, bus 1 */
+	NPCX_I2C_PORT6_0,      /* I2C port 6, bus 0 */
+	NPCX_I2C_PORT6_1,      /* I2C port 6, bus 1 */
+	NPCX_I2C_PORT7_0,      /* I2C port 7, bus 0 */
+	NPCX_I2C_COUNT,
+};
+#else
+#error "Unsupported chip family for i2c ports."
+#endif
 
 /******************************************************************************/
 /* Power Management Controller (PMC) Registers */
@@ -705,8 +886,14 @@ enum NPCX_I2C_PORT_T {
 #define NPCX_ENIDL_CTL                 REG8(NPCX_PMC_BASE_ADDR + 0x003)
 #define NPCX_DISIDL_CTL                REG8(NPCX_PMC_BASE_ADDR + 0x004)
 #define NPCX_DISIDL_CTL1               REG8(NPCX_PMC_BASE_ADDR + 0x005)
-#define NPCX_PWDWN_CTL(offset)         REG8(NPCX_PMC_BASE_ADDR + 0x008 + offset)
-#define NPCX_PWDWN_CTL_COUNT          6
+#define NPCX_PWDWN_CTL_ADDR(offset)    (((offset) < 6) ? \
+			(NPCX_PMC_BASE_ADDR + 0x008 + (offset)) : \
+			(NPCX_PMC_BASE_ADDR + 0x024))
+#define NPCX_PWDWN_CTL(offset)         REG8(NPCX_PWDWN_CTL_ADDR(offset))
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_FMUL_WIN_DLY              REG8(NPCX_PMC_BASE_ADDR + 0x010)
+#define NPCX_RAM_PD(offset)            REG8(NPCX_PMC_BASE_ADDR + 0x020 + offset)
+#endif
 
 /* PMC register fields */
 #define NPCX_PMCSR_DI_INSTW              0
@@ -740,6 +927,9 @@ enum NPCX_I2C_PORT_T {
 #define NPCX_PWDWN_CTL3_SMB1_PD          1
 #define NPCX_PWDWN_CTL3_SMB2_PD          2
 #define NPCX_PWDWN_CTL3_SMB3_PD          3
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_PWDWN_CTL3_SMB4_PD          4
+#endif
 #define NPCX_PWDWN_CTL3_GMDA_PD          7
 #define NPCX_PWDWN_CTL4_ITIM1_PD         0
 #define NPCX_PWDWN_CTL4_ITIM2_PD         1
@@ -759,6 +949,19 @@ enum NPCX_I2C_PORT_T {
 #define NPCX_PWDWN_CTL6_ITIM5_PD         1
 #define NPCX_PWDWN_CTL6_ITIM6_PD         2
 #define NPCX_PWDWN_CTL6_ESPI_PD          7
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_PWDWN_CTL7_SMB5_PD          0
+#define NPCX_PWDWN_CTL7_SMB6_PD          1
+#define NPCX_PWDWN_CTL7_SMB7_PD          2
+#if defined(CHIP_VARIANT_NPCX7M6FB) || defined(CHIP_VARIANT_NPCX7M6FC) || \
+	defined(CHIP_VARIANT_NPCX7M7WB)
+#define NPCX_PWDWN_CTL7_ITIM64_PD        5
+#define NPCX_PWDWN_CTL7_UART2_PD         6
+#endif
+#ifdef CHIP_VARIANT_NPCX7M7WB
+#define NPCX_PWDWN_CTL7_WOV_PD           7
+#endif
+#endif
 
 /*
  * PMC enumeration
@@ -777,6 +980,15 @@ enum {
 	CGC_OFFSET_TIMER  = 3,
 	CGC_OFFSET_LPC    = 4,
 	CGC_OFFSET_ESPI   = 5,
+#if defined(CHIP_FAMILY_NPCX7)
+	CGC_OFFSET_I2C2   = 6,
+#ifdef NPCX_SECOND_UART
+	CGC_OFFSET_UART2  = 6,
+#endif
+#ifdef NPCX_WOV_SUPPORT
+	CGC_OFFSET_WOV    = 6,
+#endif
+#endif
 };
 
 enum NPCX_PMC_PWDWN_CTL_T {
@@ -786,17 +998,39 @@ enum NPCX_PMC_PWDWN_CTL_T {
 	NPCX_PMC_PWDWN_4    = 3,
 	NPCX_PMC_PWDWN_5    = 4,
 	NPCX_PMC_PWDWN_6    = 5,
+#if defined(CHIP_FAMILY_NPCX7)
+	NPCX_PMC_PWDWN_7    = 6,
+#endif
+	NPCX_PMC_PWDWN_CNT,
 };
 
 /* TODO: set PD masks based upon actual peripheral usage */
 #define CGC_KBS_MASK     (1 << NPCX_PWDWN_CTL1_KBS_PD)
 #define CGC_UART_MASK    (1 << NPCX_PWDWN_CTL1_UART_PD)
-#define CGC_FAN_MASK     (1 << NPCX_PWDWN_CTL1_MFT1_PD)
+#define CGC_FAN_MASK     ((1 << NPCX_PWDWN_CTL1_MFT1_PD) | \
+			 (1 << NPCX_PWDWN_CTL1_MFT2_PD))
 #define CGC_FIU_MASK     (1 << NPCX_PWDWN_CTL1_FIU_PD)
+#if defined(CHIP_FAMILY_NPCX5)
 #define CGC_I2C_MASK     ((1 << NPCX_PWDWN_CTL3_SMB0_PD) | \
 			 (1 << NPCX_PWDWN_CTL3_SMB1_PD) | \
 			 (1 << NPCX_PWDWN_CTL3_SMB2_PD) | \
 			 (1 << NPCX_PWDWN_CTL3_SMB3_PD))
+#elif defined(CHIP_FAMILY_NPCX7)
+#define CGC_I2C_MASK     ((1 << NPCX_PWDWN_CTL3_SMB0_PD) | \
+			 (1 << NPCX_PWDWN_CTL3_SMB1_PD) | \
+			 (1 << NPCX_PWDWN_CTL3_SMB2_PD) | \
+			 (1 << NPCX_PWDWN_CTL3_SMB3_PD) | \
+			 (1 << NPCX_PWDWN_CTL3_SMB4_PD))
+#define CGC_I2C_MASK2    ((1 << NPCX_PWDWN_CTL7_SMB5_PD) | \
+			 (1 << NPCX_PWDWN_CTL7_SMB6_PD) | \
+			 (1 << NPCX_PWDWN_CTL7_SMB7_PD))
+#ifdef NPCX_SECOND_UART
+#define CGC_UART2_MASK   (1 << NPCX_PWDWN_CTL7_UART2_PD)
+#endif
+#ifdef NPCX_WOV_SUPPORT
+#define CGC_WOV_MASK     (1 << NPCX_PWDWN_CTL7_WOV_PD)
+#endif
+#endif
 #define CGC_ADC_MASK     (1 << NPCX_PWDWN_CTL4_ADC_PD)
 #define CGC_PECI_MASK    (1 << NPCX_PWDWN_CTL4_PECI_PD)
 #define CGC_SPI_MASK     (1 << NPCX_PWDWN_CTL4_SPIP_PD)
@@ -876,7 +1110,6 @@ enum NPCX_PMC_PWDWN_CTL_T {
 #define NPCX_IHOFS2                REG16(NPCX_SHM_BASE_ADDR + 0x050)
 #define NPCX_IHOFS1                REG16(NPCX_SHM_BASE_ADDR + 0x052)
 #define NPCX_SHM_VER                REG8(NPCX_SHM_BASE_ADDR + 0x07F)
-
 
 /* SHM register fields */
 #define NPCX_SMC_STS_HRERR               0
@@ -999,12 +1232,23 @@ enum PM_CHANNEL_T {
 
 /******************************************************************************/
 /* Battery-Backed RAM (BBRAM) Registers */
-#define NPCX_BKUP_STS                REG8(NPCX_BBRAM_BASE_ADDR + 0x000)
-#define NPCX_BBRAM(offset)           REG8(NPCX_BBRAM_BASE_ADDR + 0x001 + offset)
+#define NPCX_BKUP_STS                REG8(NPCX_BBRAM_BASE_ADDR + 0x100)
+#define NPCX_BBRAM(offset)           REG8(NPCX_BBRAM_BASE_ADDR + offset)
 
 /* BBRAM register fields */
 #define NPCX_BKUP_STS_IBBR               7
-#define NPCX_BBRAM_SIZE                  63  /* Size of BBRAM */
+#if defined(CHIP_VARIANT_NPCX7M6FB) || defined(CHIP_VARIANT_NPCX7M6FC) || \
+	defined(CHIP_VARIANT_NPCX7M7WB)
+#define NPCX_BKUP_STS_VSBY_STS           1
+#define NPCX_BKUP_STS_VCC1_STS           0
+#define NPCX_BKUP_STS_ALL_MASK \
+	((1 << NPCX_BKUP_STS_IBBR) | (1 << NPCX_BKUP_STS_VSBY_STS) | \
+	(1 << NPCX_BKUP_STS_VCC1_STS))
+#define NPCX_BBRAM_SIZE                 128  /* Size of BBRAM */
+#else
+#define NPCX_BKUP_STS_ALL_MASK (1 << NPCX_BKUP_STS_IBBR)
+#define NPCX_BBRAM_SIZE                  64  /* Size of BBRAM */
+#endif
 
 /******************************************************************************/
 /* Timer Watch Dog (TWD) Registers */
@@ -1206,9 +1450,19 @@ enum ITIM16_MODULE_T {
 #define NPCX_STATUS                       REG8(NPCX_SHI_BASE_ADDR + 0x008)
 #define NPCX_IBUFSTAT                     REG8(NPCX_SHI_BASE_ADDR + 0x00A)
 #define NPCX_OBUFSTAT                     REG8(NPCX_SHI_BASE_ADDR + 0x00B)
-#define NPCX_ADVCFG                       REG8(NPCX_SHI_BASE_ADDR + 0x00E)
+#if defined(CHIP_FAMILY_NPCX5)
 #define NPCX_OBUF(n)                      REG8(NPCX_SHI_BASE_ADDR + 0x020 + (n))
 #define NPCX_IBUF(n)                      REG8(NPCX_SHI_BASE_ADDR + 0x060 + (n))
+#elif defined(CHIP_FAMILY_NPCX7)
+/* Serial Host Interface (SHI) Registers - only available on SHI Version 2 */
+#define NPCX_SHICFG3                      REG8(NPCX_SHI_BASE_ADDR + 0x00C)
+#define NPCX_SHICFG4                      REG8(NPCX_SHI_BASE_ADDR + 0x00D)
+#define NPCX_SHICFG5                      REG8(NPCX_SHI_BASE_ADDR + 0x00E)
+#define NPCX_EVSTAT2                      REG8(NPCX_SHI_BASE_ADDR + 0x00F)
+#define NPCX_EVENABLE2                    REG8(NPCX_SHI_BASE_ADDR + 0x010)
+#define NPCX_OBUF(n)                      REG8(NPCX_SHI_BASE_ADDR + 0x020 + (n))
+#define NPCX_IBUF(n)                      REG8(NPCX_SHI_BASE_ADDR + 0x0A0 + (n))
+#endif
 
 /* SHI register fields */
 #define NPCX_SHICFG1_EN                  0
@@ -1244,6 +1498,18 @@ enum ITIM16_MODULE_T {
 #define NPCX_EVSTAT_IBOR                 7
 #define NPCX_STATUS_OBES                 6
 #define NPCX_STATUS_IBFS                 7
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_SHICFG3_OBUFLVLDIS          7
+#define NPCX_SHICFG4_IBUFLVLDIS          7
+#define NPCX_SHICFG5_IBUFLVL2            FIELD(0, 6)
+#define NPCX_SHICFG5_IBUFLVL2DIS         7
+#define NPCX_EVSTAT2_IBHF2               0
+#define NPCX_EVSTAT2_CSNRE               1
+#define NPCX_EVSTAT2_CSNFE               2
+#define NPCX_EVENABLE2_IBHF2EN           0
+#define NPCX_EVENABLE2_CSNREEN           1
+#define NPCX_EVENABLE2_CSNFEEN           2
+#endif
 
 /******************************************************************************/
 /* Monotonic Counter (MTC) Registers */
@@ -1266,7 +1532,7 @@ enum ITIM16_MODULE_T {
 #define NPCX_ESPICFG                REG32(NPCX_ESPI_BASE_ADDR + 0X04)
 #define NPCX_ESPISTS                REG32(NPCX_ESPI_BASE_ADDR + 0X08)
 #define NPCX_ESPIIE                 REG32(NPCX_ESPI_BASE_ADDR + 0X0C)
-#define NPCX_ESPIIWE                REG32(NPCX_ESPI_BASE_ADDR + 0X10)
+#define NPCX_ESPIWE                 REG32(NPCX_ESPI_BASE_ADDR + 0X10)
 #define NPCX_VWREGIDX               REG32(NPCX_ESPI_BASE_ADDR + 0X14)
 #define NPCX_VWREGDATA              REG32(NPCX_ESPI_BASE_ADDR + 0X18)
 #define NPCX_OOBCTL                 REG32(NPCX_ESPI_BASE_ADDR + 0X24)
@@ -1279,9 +1545,6 @@ enum ITIM16_MODULE_T {
 /* eSPI Virtual Wire channel registers */
 #define NPCX_VWEVSM(n)              REG32(NPCX_ESPI_BASE_ADDR + 0x100 + (4*(n)))
 #define NPCX_VWEVMS(n)              REG32(NPCX_ESPI_BASE_ADDR + 0x140 + (4*(n)))
-#define NPCX_VWGPSM(n)              REG32(NPCX_ESPI_BASE_ADDR + 0x180 + (4*(n)))
-#define NPCX_VWGPMS(n)              REG32(NPCX_ESPI_BASE_ADDR + 0x1C0 + (4*(n)))
-#define NPCX_VWPING                 REG32(NPCX_ESPI_BASE_ADDR + 0x2F8)
 #define NPCX_VWCTL                  REG32(NPCX_ESPI_BASE_ADDR + 0x2FC)
 
 /* eSPI register fields */
@@ -1306,12 +1569,28 @@ enum ITIM16_MODULE_T {
 #define NPCX_ESPIIE_VWUPDIE              8
 #define NPCX_ESPIIE_ESPIRSTIE            9
 #define NPCX_ESPIIE_PLTRSTIE             10
-#define NPCX_ESPIIE_VW1IE                11
-#define NPCX_ESPIIE_VW2IE                12
-#define NPCX_ESPIIE_VW3IE                13
-#define NPCX_ESPIIE_VW4IE                14
 #define NPCX_ESPIIE_AMERRIE              15
 #define NPCX_ESPIIE_AMDONEIE             16
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_ESPIIE_BMTXDONEIE           19
+#define NPCX_ESPIIE_PBMRXIE              20
+#define NPCX_ESPIIE_PMSGRXIE             21
+#define NPCX_ESPIIE_BMBURSTERRIE         22
+#define NPCX_ESPIIE_BMBURSTDONEIE        23
+#endif
+#define NPCX_ESPIWE_IBRSTWE              0
+#define NPCX_ESPIWE_CFGUPDWE             1
+#define NPCX_ESPIWE_BERRWE               2
+#define NPCX_ESPIWE_OOBRXWE              3
+#define NPCX_ESPIWE_FLASHRXWE            4
+#define NPCX_ESPIWE_PERACCWE             6
+#define NPCX_ESPIWE_DFRDWE               7
+#define NPCX_ESPIWE_VWUPDWE              8
+#define NPCX_ESPIWE_ESPIRSTWE            9
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_ESPIWE_PBMRXWE              20
+#define NPCX_ESPIWE_PMSGRXWE             21
+#endif
 #define NPCX_ESPISTS_IBRST               0
 #define NPCX_ESPISTS_CFGUPD              1
 #define NPCX_ESPISTS_BERR                2
@@ -1323,19 +1602,24 @@ enum ITIM16_MODULE_T {
 #define NPCX_ESPISTS_VWUPD               8
 #define NPCX_ESPISTS_ESPIRST             9
 #define NPCX_ESPISTS_PLTRST              10
-#define NPCX_ESPISTS_VW1                 11
-#define NPCX_ESPISTS_VW2                 12
-#define NPCX_ESPISTS_VW3                 13
-#define NPCX_ESPISTS_VW4                 14
 #define NPCX_ESPISTS_AMERR               15
 #define NPCX_ESPISTS_AMDONE              16
+#if defined(CHIP_FAMILY_NPCX7)
+#define NPCX_ESPISTS_VWUPDW              17
+#define NPCX_ESPISTS_BMTXDONE            19
+#define NPCX_ESPISTS_PBMRX               20
+#define NPCX_ESPISTS_PMSGRX              21
+#define NPCX_ESPISTS_BMBURSTERR          22
+#define NPCX_ESPISTS_BMBURSTDONE         23
+#define NPCX_ESPISTS_ESPIRST_LVL         24
+#endif
 /* eSPI Virtual Wire channel register fields */
 #define NPCX_VWEVSM_WIRE                 FIELD(0, 4)
 #define NPCX_VWEVMS_WIRE                 FIELD(0, 4)
 #define NPCX_VWEVSM_VALID                FIELD(4, 4)
 #define NPCX_VWEVMS_VALID                FIELD(4, 4)
 
-/* Marco functions for eSPI CFG & IE */
+/* Macro functions for eSPI CFG & IE */
 #define IS_SLAVE_CHAN_ENABLE(ch)         IS_BIT_SET(NPCX_ESPICFG, ch)
 #define IS_HOST_CHAN_EN(ch)              IS_BIT_SET(NPCX_ESPICFG, (ch+4))
 #define ENABLE_ESPI_CHAN(ch)             SET_BIT(NPCX_ESPICFG, ch)
@@ -1346,7 +1630,7 @@ enum ITIM16_MODULE_T {
 #define ESPI_SUPP_CH_OOB                 (1 << NPCX_ESPICFG_OOBCHN_SUPP)
 #define ESPI_SUPP_CH_FLASH               (1 << NPCX_ESPICFG_FLASHCHN_SUPP)
 #define ESPI_SUPP_CH_ALL                 (ESPI_SUPP_CH_PC | ESPI_SUPP_CH_VM | \
-					ESPI_SUPP_CH_OOB | ESPI_SUPP_CH_FLASH)
+					  ESPI_SUPP_CH_OOB | ESPI_SUPP_CH_FLASH)
 /* ESPI Interrupts Enable Definitions */
 #define ESPIIE_IBRST                     (1 << NPCX_ESPIIE_IBRSTIE)
 #define ESPIIE_CFGUPD                    (1 << NPCX_ESPIIE_CFGUPDIE)
@@ -1359,29 +1643,48 @@ enum ITIM16_MODULE_T {
 #define ESPIIE_VWUPD                     (1 << NPCX_ESPIIE_VWUPDIE)
 #define ESPIIE_ESPIRST                   (1 << NPCX_ESPIIE_ESPIRSTIE)
 #define ESPIIE_PLTRST                    (1 << NPCX_ESPIIE_PLTRSTIE)
-#define ESPIIE_VW1                       (1 << NPCX_ESPIIE_VW1IE)
-#define ESPIIE_VW2                       (1 << NPCX_ESPIIE_VW2IE)
-#define ESPIIE_VW3                       (1 << NPCX_ESPIIE_VW3IE)
-#define ESPIIE_VW4                       (1 << NPCX_ESPIIE_VW4IE)
 #define ESPIIE_AMERR                     (1 << NPCX_ESPIIE_AMERRIE)
 #define ESPIIE_AMDONE                    (1 << NPCX_ESPIIE_AMDONEIE)
+#if defined(CHIP_FAMILY_NPCX7)
+#define ESPIIE_BMTXDONE                  (1 << NPCX_ESPIIE_BMTXDONEIE)
+#define ESPIIE_PBMRX                     (1 << NPCX_ESPIIE_PBMRXIE)
+#define ESPIIE_PMSGRX                    (1 << NPCX_ESPIIE_PMSGRXIE)
+#define ESPIIE_BMBURSTERR                (1 << NPCX_ESPIIE_BMBURSTERRIE)
+#define ESPIIE_BMBURSTDONE               (1 << NPCX_ESPIIE_BMBURSTDONEIE)
+#endif
 /* eSPI Interrupts for VW */
-#define ESPIIE_VW                    (ESPIIE_VWUPD | ESPIIE_VW1 | ESPIIE_VW2 | \
-				ESPIIE_VW3 | ESPIIE_VW4 | ESPIIE_PLTRST)
+#define ESPIIE_VW                        (ESPIIE_VWUPD | ESPIIE_PLTRST)
 /* eSPI Interrupts for Generic */
-#define ESPIIE_GENERIC               (ESPIIE_IBRST | ESPIIE_CFGUPD | \
-				ESPIIE_BERR | ESPIIE_ESPIRST)
-
-/* Marco functions for eSPI VW */
+#define ESPIIE_GENERIC                   (ESPIIE_IBRST | ESPIIE_CFGUPD | \
+					  ESPIIE_BERR | ESPIIE_ESPIRST)
+/* ESPI Wake-up Enable Definitions */
+#define ESPIWE_IBRST                     (1 << NPCX_ESPIWE_IBRSTWE)
+#define ESPIWE_CFGUPD                    (1 << NPCX_ESPIWE_CFGUPDWE)
+#define ESPIWE_BERR                      (1 << NPCX_ESPIWE_BERRWE)
+#define ESPIWE_OOBRX                     (1 << NPCX_ESPIWE_OOBRXWE)
+#define ESPIWE_FLASHRX                   (1 << NPCX_ESPIWE_FLASHRXWE)
+#define ESPIWE_PERACC                    (1 << NPCX_ESPIWE_PERACCWE)
+#define ESPIWE_DFRD                      (1 << NPCX_ESPIWE_DFRDWE)
+#define ESPIWE_VWUPD                     (1 << NPCX_ESPIWE_VWUPDWE)
+#define ESPIWE_ESPIRST                   (1 << NPCX_ESPIWE_ESPIRSTWE)
+#if defined(CHIP_FAMILY_NPCX7)
+#define ESPIWE_PBMRX                     (1 << NPCX_ESPIWE_PBMRXWE)
+#define ESPIWE_PMSGRX                    (1 << NPCX_ESPIWE_PMSGRXWE)
+#endif
+/* eSPI  Wake-up enable for VW */
+#define ESPIWE_VW                        ESPIWE_VWUPD
+/* eSPI  Wake-up enable for Generic */
+#define ESPIWE_GENERIC                   (ESPIWE_IBRST | ESPIWE_CFGUPD | \
+					  ESPIWE_BERR)
+/* Macro functions for eSPI VW */
 #define ESPI_VWEVMS_NUM                  12
 #define ESPI_VWEVSM_NUM                  10
-#define ESPI_VWGPMS_NUM                  16
 #define ESPI_VW_IDX_WIRE_NUM             4
 /* Determine Virtual Wire type */
-#define VM_TYPE(i)               ((i >= 0  && i <=  1) ? ESPI_VW_TYPE_INT_EV : \
-				(i >= 2  && i <=    7) ? ESPI_VW_TYPE_SYS_EV : \
-				(i >= 64  && i <= 127) ? ESPI_VW_TYPE_PLT : \
-				(i >= 128 && i <= 255) ? ESPI_VW_TYPE_GPIO : \
+#define VM_TYPE(i)              ((i >= 0   && i <=  1) ? ESPI_VW_TYPE_INT_EV : \
+				 (i >= 2   && i <=  7) ? ESPI_VW_TYPE_SYS_EV : \
+				 (i >= 64  && i <= 127) ? ESPI_VW_TYPE_PLT : \
+				 (i >= 128 && i <= 255) ? ESPI_VW_TYPE_GPIO : \
 							ESPI_VW_TYPE_NONE)
 
 /* Bit filed manipulation for VWEVMS Value */
@@ -1390,8 +1693,14 @@ enum ITIM16_MODULE_T {
 #define VWEVMS_PLTRST_EN(p)          ((p<<17) & 0x00020000)
 #define VWEVMS_INT_EN(e)             ((e<<18) & 0x00040000)
 #define VWEVMS_ESPIRST_EN(r)         ((r<<19) & 0x00080000)
+#if defined(CHIP_FAMILY_NPCX7)
+#define VWEVMS_WK_EN(e)              ((e<<20) & 0x00100000)
+#define VWEVMS_INTWK_EN(e)           (VWEVMS_INT_EN(e) | VWEVMS_WK_EN(e))
+#elif defined(CHIP_FAMILY_NPCX5)
+#define VWEVMS_INTWK_EN              VWEVMS_INT_EN
+#endif
 #define VWEVMS_FIELD(i, n, p, e, r)  (VWEVMS_INX(i) | VWEVMS_INX_EN(n) | \
-				VWEVMS_PLTRST_EN(p) | VWEVMS_INT_EN(e) | \
+				VWEVMS_PLTRST_EN(p) | VWEVMS_INTWK_EN(e) | \
 				VWEVMS_ESPIRST_EN(r))
 #define VWEVMS_IDX_GET(reg)          (((reg & 0x00007F00)>>8))
 
@@ -1406,14 +1715,6 @@ enum ITIM16_MODULE_T {
 				VWEVSM_VALID_N(v) | VWEVSM_PLTRST_EN(p) |\
 				VWEVSM_CDRST_EN(c))
 #define VWEVSM_IDX_GET(reg)          (((reg & 0x00007F00)>>8))
-
-/* Bit filed manpulation for VWGPMS Value */
-#define VWGPMS_INX_EN(n)             (((n<<15) & 0x00008000))
-#define VWGPMS_MODIFIED(m)           (((m<<16) & 0x00010000))
-#define VWGPMS_PLTRST_EN(p)          (((p<<17) & 0x00020000))
-#define VWGPMS_INT_EN(e)             (((e<<18) & 0x00040000))
-#define VWGPMS_FIELD(n, m, p, e)     (VMGPMS_INX_EN(n) | VWGPMS_MODIFIED(m) | \
-				VWGPMS_PLTRST_EN(p) | VWGPMS_INT_EN(e))
 
 /* define macro to handle SMI/SCI Virtual Wire */
 /* Read SMI VWire status from VWEVSM(offset 2) register. */
@@ -1457,9 +1758,33 @@ enum {
 	NPCX_ESPI_MAXFREQ_25   = 1,
 	NPCX_ESPI_MAXFREQ_33   = 2,
 	NPCX_ESPI_MAXFREQ_50   = 3,
+#if defined(CHIP_FAMILY_NPCX5)
 	NPCX_ESPI_MAXFREQ_66   = 4,
+#endif
 	NPCX_ESPI_MAXFREQ_NOOE = 0xFF
 };
+
+#if defined(CHIP_FAMILY_NPCX5)
+
+#if (FMCLK <= 33000000)
+#define NPCX_ESPI_MAXFREQ_MAX	NPCX_ESPI_MAXFREQ_33
+#elif (FMCLK <= 48000000)
+#define NPCX_ESPI_MAXFREQ_MAX	NPCX_ESPI_MAXFREQ_50
+#else
+#define NPCX_ESPI_MAXFREQ_MAX	NPCX_ESPI_MAXFREQ_66
+#endif
+
+#elif defined(CHIP_FAMILY_NPCX7)
+
+#if (FMCLK <= 33000000)
+#define NPCX_ESPI_MAXFREQ_MAX	NPCX_ESPI_MAXFREQ_33
+#else
+#define NPCX_ESPI_MAXFREQ_MAX	NPCX_ESPI_MAXFREQ_50
+#endif
+
+#else
+#error "Please define NPCX_ESPI_MAXFREQ_MAX for your chip."
+#endif
 
 /* VW types */
 enum {
@@ -1528,6 +1853,8 @@ enum {
 #define CMD_WRITE_STATUS_REG             0x01
 #define CMD_FLASH_PROGRAM                0x02
 #define CMD_SECTOR_ERASE                 0x20
+#define CMD_BLOCK_32K_ERASE              0x52
+#define CMD_BLOCK_64K_ERASE              0xd8
 #define CMD_PROGRAM_UINT_SIZE            0x08
 #define CMD_PAGE_SIZE                    0x00
 #define CMD_READ_ID_TYPE                 0x47
@@ -1589,79 +1916,251 @@ enum {
 				| MASK(A_SIZE))
 
 /******************************************************************************/
-/* Inline functions */
+/* APM (Audio Processing Module) Registers */
+#define NPCX_APM_SR                 REG8(NPCX_APM_BASE_ADDR + 0x000)
+#define NPCX_APM_SR2                REG8(NPCX_APM_BASE_ADDR + 0x004)
+#define NPCX_APM_ICR                REG8(NPCX_APM_BASE_ADDR + 0x008)
+#define NPCX_APM_IMR                REG8(NPCX_APM_BASE_ADDR + 0x00C)
+#define NPCX_APM_IFR                REG8(NPCX_APM_BASE_ADDR + 0x010)
+#define NPCX_APM_CR_APM             REG8(NPCX_APM_BASE_ADDR + 0x014)
+#define NPCX_APM_CR_CK              REG8(NPCX_APM_BASE_ADDR + 0x018)
+#define NPCX_APM_AICR_ADC           REG8(NPCX_APM_BASE_ADDR + 0x01C)
+#define NPCX_APM_FCR_ADC            REG8(NPCX_APM_BASE_ADDR + 0x020)
+#define NPCX_APM_CR_DMIC            REG8(NPCX_APM_BASE_ADDR + 0x02C)
+#define NPCX_APM_CR_ADC             REG8(NPCX_APM_BASE_ADDR + 0x030)
+#define NPCX_APM_CR_MIX             REG8(NPCX_APM_BASE_ADDR + 0x034)
+#define NPCX_APM_DR_MIX             REG8(NPCX_APM_BASE_ADDR + 0x038)
+#define NPCX_APM_GCR_ADCL           REG8(NPCX_APM_BASE_ADDR + 0x03C)
+#define NPCX_APM_GCR_ADCR           REG8(NPCX_APM_BASE_ADDR + 0x040)
+#define NPCX_APM_GCR_MIXADCL        REG8(NPCX_APM_BASE_ADDR + 0x044)
+#define NPCX_APM_GCR_MIXADCR        REG8(NPCX_APM_BASE_ADDR + 0x048)
+#define NPCX_APM_CR_ADC_AGC         REG8(NPCX_APM_BASE_ADDR + 0x04C)
+#define NPCX_APM_DR_ADC_AGC         REG8(NPCX_APM_BASE_ADDR + 0x050)
+#define NPCX_APM_SR_ADC_AGCDGL      REG8(NPCX_APM_BASE_ADDR + 0x054)
+#define NPCX_APM_SR_ADC_AGCDGR      REG8(NPCX_APM_BASE_ADDR + 0x058)
+#define NPCX_APM_CR_VAD             REG8(NPCX_APM_BASE_ADDR + 0x05C)
+#define NPCX_APM_DR_VAD             REG8(NPCX_APM_BASE_ADDR + 0x060)
+#define NPCX_APM_CR_VAD_CMD         REG8(NPCX_APM_BASE_ADDR + 0x064)
+#define NPCX_APM_CR_TR              REG8(NPCX_APM_BASE_ADDR + 0x068)
+#define NPCX_APM_DR_TR              REG8(NPCX_APM_BASE_ADDR + 0x06C)
+#define NPCX_APM_SR_TR1             REG8(NPCX_APM_BASE_ADDR + 0x070)
+#define NPCX_APM_SR_TR_SRCADC       REG8(NPCX_APM_BASE_ADDR + 0x074)
+
+/******************************************************************************/
+/* APM register fields */
+#define NPCX_APM_SR_IRQ_PEND                    6
+#define NPCX_APM_SR2_SMUTEIP                    6
+#define NPCX_APM_ICR_INTR_MODE                  FIELD(6, 2)
+#define NPCX_APM_IMR_VAD_DTC_MASK               6
+#define NPCX_APM_IFR_VAD_DTC                    6
+#define NPCX_APM_CR_APM_PD                      0
+#define NPCX_APM_CR_APM_AGC_DIS                 FIELD(1, 2)
+#define NPCX_APM_CR_CK_MCLK_FREQ                FIELD(0, 2)
+#define NPCX_APM_AICR_ADC_ADC_AUDIOIF           FIELD(0, 2)
+#define NPCX_APM_AICR_ADC_PD_AICR_ADC           4
+#define NPCX_APM_AICR_ADC_ADC_ADWL              FIELD(6, 2)
+#define NPCX_APM_FCR_ADC_ADC_FREQ               FIELD(0, 4)
+#define NPCX_APM_FCR_ADC_ADC_WNF                FIELD(4, 2)
+#define NPCX_APM_FCR_ADC_ADC_HPF                6
+#define NPCX_APM_CR_DMIC_ADC_DMIC_SEL_RIGHT     FIELD(0, 2)
+#define NPCX_APM_CR_DMIC_ADC_DMIC_SEL_LEFT      FIELD(2, 2)
+#define NPCX_APM_CR_DMIC_ADC_DMIC_RATE          FIELD(4, 3)
+#define NPCX_APM_CR_DMIC_PD_DMIC                7
+#define NPCX_APM_CR_ADC_ADC_SOFT_MUTE           7
+#define NPCX_APM_CR_MIX_MIX_ADD                 FIELD(0, 6)
+#define NPCX_APM_CR_MIX_MIX_LOAD                6
+#define NPCX_APM_DR_MIX_MIX_DATA                FIELD(0, 8)
+#define NPCX_APM_MIX_2_AIADCR_SEL               FIELD(4, 2)
+#define NPCX_APM_MIX_2_AIADCL_SEL               FIELD(6, 2)
+#define NPCX_APM_GCR_ADCL_GIDL                  FIELD(0, 6)
+#define NPCX_APM_GCR_ADCL_LRGID                 7
+#define NPCX_APM_GCR_ADCR_GIDR                  FIELD(0, 6)
+#define NPCX_APM_GCR_MIXADCL_GIMIXL             FIELD(0, 6)
+#define NPCX_APM_GCR_MIXADCR_GIMIXR             FIELD(0, 6)
+#define NPCX_APM_CR_ADC_AGC_ADC_AGC_ADD         FIELD(0, 6)
+#define NPCX_APM_CR_ADC_AGC_ADC_AGC_LOAD        6
+#define NPCX_APM_CR_ADC_AGC_ADC_AGC_EN          7
+#define NPCX_APM_DR_ADC_AGC_ADC_AGC_DATA        FIELD(0, 8)
+#define NPCX_ADC_AGC_0_AGC_TARGET               FIELD(2, 4)
+#define NPCX_ADC_AGC_0_AGC_STEREO               6
+#define NPCX_ADC_AGC_1_HOLD                     FIELD(0, 4)
+#define NPCX_ADC_AGC_1_NG_THR                   FIELD(4, 3)
+#define NPCX_ADC_AGC_1_NG_EN                    7
+#define NPCX_ADC_AGC_2_DCY                      FIELD(0, 4)
+#define NPCX_ADC_AGC_2_ATK                      FIELD(4, 4)
+#define NPCX_ADC_AGC_3_AGC_MAX                  FIELD(0, 5)
+#define NPCX_ADC_AGC_4_AGC_MIN                  FIELD(0, 5)
+#define NPCX_APM_CR_VAD_VAD_ADD                 FIELD(0, 6)
+#define NPCX_APM_CR_VAD_VAD_LOAD                6
+#define NPCX_APM_CR_VAD_VAD_EN                  7
+#define NPCX_APM_DR_VAD_VAD_DATA                FIELD(0, 8)
+#define NPCX_APM_CR_VAD_CMD_VAD_RESTART         0
+#define NPCX_APM_CR_TR_FAST_ON                  7
+#define NPCX_VAD_0_VAD_INSEL                    FIELD(0, 2)
+#define NPCX_VAD_0_VAD_DMIC_FREQ                FIELD(2, 3)
+#define NPCX_VAD_0_VAD_ADC_WAKEUP               5
+#define NPCX_VAD_0_ZCD_EN                       6
+#define NPCX_VAD_1_VAD_POWER_SENS               FIELD(0, 5)
+#define NPCX_APM_CONTROL_ADD                    FIELD(0, 6)
+#define NPCX_APM_CONTROL_LOAD                   6
+
+/******************************************************************************/
+/* FMUL2 (Frequency Multiplier Module 2) Registers */
+#define NPCX_FMUL2_FM2CTRL          REG8(NPCX_FMUL2_BASE_ADDR + 0x000)
+#define NPCX_FMUL2_FM2ML            REG8(NPCX_FMUL2_BASE_ADDR + 0x002)
+#define NPCX_FMUL2_FM2MH            REG8(NPCX_FMUL2_BASE_ADDR + 0x004)
+#define NPCX_FMUL2_FM2N             REG8(NPCX_FMUL2_BASE_ADDR + 0x006)
+#define NPCX_FMUL2_FM2P             REG8(NPCX_FMUL2_BASE_ADDR + 0x008)
+#define NPCX_FMUL2_FM2_VER          REG8(NPCX_FMUL2_BASE_ADDR + 0x00A)
+
+/******************************************************************************/
+/* FMUL2 register fields */
+#define NPCX_FMUL2_FM2CTRL_LOAD2                0
+#define NPCX_FMUL2_FM2CTRL_LOCK2                2
+#define NPCX_FMUL2_FM2CTRL_FMUL2_DIS            5
+#define NPCX_FMUL2_FM2CTRL_TUNE_DIS             6
+#define NPCX_FMUL2_FM2CTRL_CLK2_CHNG            7
+#define NPCX_FMUL2_FM2N_FM2N                    FIELD(0, 6)
+#define NPCX_FMUL2_FM2P_WFPRED                  FIELD(4, 4)
+
+/******************************************************************************/
+/* WOV (Wake-on-Voice) Registers */
+#define NPCX_WOV_CLOCK_CNTL         REG32(NPCX_WOV_BASE_ADDR + 0x000)
+#define NPCX_WOV_PLL_CNTL1          REG32(NPCX_WOV_BASE_ADDR + 0x004)
+#define NPCX_WOV_PLL_CNTL2          REG32(NPCX_WOV_BASE_ADDR + 0x008)
+#define NPCX_WOV_FIFO_CNT           REG32(NPCX_WOV_BASE_ADDR + 0x00C)
+#define NPCX_WOV_FIFO_OUT           REG32(NPCX_WOV_BASE_ADDR + 0x010)
+#define NPCX_WOV_STATUS             REG32(NPCX_WOV_BASE_ADDR + 0x014)
+#define NPCX_WOV_WOV_INTEN          REG32(NPCX_WOV_BASE_ADDR + 0x018)
+#define NPCX_WOV_APM_CTRL           REG32(NPCX_WOV_BASE_ADDR + 0x01C)
+#define NPCX_WOV_I2S_CNTL(n)        REG32(NPCX_WOV_BASE_ADDR + 0x020 + (4*n))
+#define NPCX_WOV_VERSION            REG32(NPCX_WOV_BASE_ADDR + 0x030)
+
+/******************************************************************************/
+/* WOV register fields */
+#define NPCX_WOV_CLOCK_CNT_CLK_SEL              0
+#define NPCX_WOV_CLOCK_CNT_DMIC_EN              3
+#define NPCX_WOV_CLOCK_CNT_PLL_EDIV_SEL         7
+#define NPCX_WOV_CLOCK_CNT_PLL_EDIV             FIELD(8, 7)
+#define NPCX_WOV_CLOCK_CNT_PLL_EDIV_DC          FIELD(16, 7)
+#define NPCX_WOV_CLOCK_CNT_DMIC_CKDIV_EN        24
+#define NPCX_WOV_CLOCK_CNT_DMIC_CKDIV_SEL       25
+#define NPCX_WOV_FIFO_CNT_FIFO_ITHRSH           FIELD(0, 6)
+#define NPCX_WOV_FIFO_CNT_FIFO_WTHRSH           FIELD(6, 6)
+#define NPCX_WOV_FIFO_CNT_I2S_FFRST             13
+#define NPCX_WOV_FIFO_CNT_CORE_FFRST            14
+#define NPCX_WOV_FIFO_CNT_CFIFO_ISEL            FIELD(16, 3)
+#define NPCX_WOV_STATUS_CFIFO_CNT               FIELD(0, 8)
+#define NPCX_WOV_STATUS_CFIFO_NE                8
+#define NPCX_WOV_STATUS_CFIFO_OIT               9
+#define NPCX_WOV_STATUS_CFIFO_OWT               10
+#define NPCX_WOV_STATUS_CFIFO_OVRN              11
+#define NPCX_WOV_STATUS_I2S_FIFO_OVRN           12
+#define NPCX_WOV_STATUS_I2S_FIFO_UNDRN          13
+#define NPCX_WOV_STATUS_BITS			FIELD(9, 6)
+#define NPCX_WOV_INTEN_VAD_INTEN                0
+#define NPCX_WOV_INTEN_VAD_WKEN                 1
+#define NPCX_WOV_INTEN_CFIFO_NE_IE              8
+#define NPCX_WOV_INTEN_CFIFO_OIT_IE             9
+#define NPCX_WOV_INTEN_CFIFO_OWT_WE             10
+#define NPCX_WOV_INTEN_CFIFO_OVRN_IE            11
+#define NPCX_WOV_INTEN_I2S_FIFO_OVRN_IE         12
+#define NPCX_WOV_INTEN_I2S_FIFO_UNDRN_IE        13
+#define NPCX_WOV_APM_CTRL_APM_RST               0
+#define NPCX_WOV_PLL_CNTL1_PLL_PWDEN            0
+#define NPCX_WOV_PLL_CNTL1_PLL_OTDV1            FIELD(4, 4)
+#define NPCX_WOV_PLL_CNTL1_PLL_OTDV2            FIELD(8, 4)
+#define NPCX_WOV_PLL_CNTL1_PLL_LOCKI            15
+#define NPCX_WOV_PLL_CNTL2_PLL_FBDV             FIELD(0, 12)
+#define NPCX_WOV_PLL_CNTL2_PLL_INDV             FIELD(12, 4)
+#define NPCX_WOV_I2S_CNTL_I2S_BCNT              FIELD(0, 5)
+#define NPCX_WOV_I2S_CNTL_I2S_TRIG              5
+#define NPCX_WOV_I2S_CNTL_I2S_LBHIZ             6
+#define NPCX_WOV_I2S_CNTL_I2S_ST_DEL            FIELD(7, 9)
+#define NPCX_WOV_I2S_CNTL_I2S_CHAN              FIELD(0, 16)
+#define NPCX_WOV_I2S_CNTL0_I2S_HIZD             16
+#define NPCX_WOV_I2S_CNTL0_I2S_HIZ              17
+#define NPCX_WOV_I2S_CNTL0_I2S_SCLK_INV         18
+#define NPCX_WOV_I2S_CNTL0_I2S_OPS              19
+#define NPCX_WOV_I2S_CNTL0_I2S_OPE              20
+#define NPCX_WOV_I2S_CNTL0_I2S_IPS              21
+#define NPCX_WOV_I2S_CNTL0_I2S_IPE              22
+#define NPCX_WOV_I2S_CNTL0_I2S_TST              23
+#define NPCX_WOV_I2S_CNTL1_I2S_CHN1_DIS         24
+
+/******************************************************************************/
+/* UART registers and functions */
+
+#if NPCX_UART_MODULE2
+
+#ifdef CHIP_FAMILY_NPCX5
+/*
+ * To be used as 2nd parameter to NPCX_WK*() macro, table (1st parameter) is
+ * always 1 == MIWU_TABLE_1.
+ */
+#define NPCX_UART_WK_GROUP 6
+#define NPCX_UART_WK_BIT 4
+#endif /* CHIP_FAMILY_NPCX5 */
+#define NPCX_UART_MIWU_IRQ NPCX_IRQ_WKINTG_1
+#define NPCX_UART_DEVALT NPCX_DEVALT(0x0C)
+#define NPCX_UART_DEVALT_SL NPCX_DEVALTC_UART_SL2
+#define NPCX_UART_ALT_DEVALT NPCX_DEVALT(0x0A)
+#define NPCX_UART_ALT_DEVALT_SL NPCX_DEVALTA_UART_SL1
+#else /* !NPCX_UART_MODULE2 */
+
+#ifdef CHIP_FAMILY_NPCX5
+#define NPCX_UART_WK_GROUP 1
+#define NPCX_UART_WK_BIT 0
+#endif /* CHIP_FAMILY_NPCX5 */
+#define NPCX_UART_MIWU_IRQ NPCX_IRQ_WKINTB_1
+#define NPCX_UART_DEVALT NPCX_DEVALT(0x0A)
+#define NPCX_UART_DEVALT_SL NPCX_DEVALTA_UART_SL1
+#define NPCX_UART_ALT_DEVALT NPCX_DEVALT(0x0C)
+#define NPCX_UART_ALT_DEVALT_SL NPCX_DEVALTC_UART_SL2
+#endif /* NPCX_UART_MODULE2 */
+
+#ifdef CHIP_FAMILY_NPCX7
+#define NPCX_UART_WK_GROUP     MIWU_GROUP_8
+#define NPCX_UART_WK_BIT       7
+#ifdef NPCX_SECOND_UART
+#define NPCX_UART2_WK_GROUP    MIWU_GROUP_1
+#define NPCX_UART2_WK_BIT      6
+#endif
+
+#endif
+
 /* This routine checks pending bit of GPIO wake-up functionality */
+#if defined(CHIP_FAMILY_NPCX5)
 static inline int uart_is_wakeup_from_gpio(void)
 {
-#if NPCX_UART_MODULE2
-	return IS_BIT_SET(NPCX_WKPND(1, 6), 4);
-#else
-	return IS_BIT_SET(NPCX_WKPND(1, 1), 0);
-#endif
+	return IS_BIT_SET(NPCX_WKPND(1, NPCX_UART_WK_GROUP), NPCX_UART_WK_BIT);
 }
 
 /* This routine checks wake-up functionality from GPIO is enabled or not */
 static inline int uart_is_enable_wakeup(void)
 {
-#if NPCX_UART_MODULE2
-	return IS_BIT_SET(NPCX_WKEN(1, 6), 4);
-#else
-	return IS_BIT_SET(NPCX_WKEN(1, 1), 0);
-#endif
+	return IS_BIT_SET(NPCX_WKEN(1, NPCX_UART_WK_GROUP), NPCX_UART_WK_BIT);
 }
 
 /* This routine clears the pending wake-up from GPIO on UART rx pin */
 static inline void uart_clear_pending_wakeup(void)
 {
-#if NPCX_UART_MODULE2
-	SET_BIT(NPCX_WKPCL(1, 6), 4);
-#else
-	SET_BIT(NPCX_WKPCL(1, 1), 0);
-#endif
+	SET_BIT(NPCX_WKPCL(1, NPCX_UART_WK_GROUP), NPCX_UART_WK_BIT);
 }
 
 /* This routine enables wake-up functionality from GPIO on UART rx pin */
 static inline void uart_enable_wakeup(int enable)
 {
-#if NPCX_UART_MODULE2
-	UPDATE_BIT(NPCX_WKEN(1, 6), 4, enable);
-#else
-	UPDATE_BIT(NPCX_WKEN(1, 1), 0, enable);
-#endif
+	UPDATE_BIT(NPCX_WKEN(1, NPCX_UART_WK_GROUP), NPCX_UART_WK_BIT,
+		enable);
 }
 
 /* This routine checks functionality is UART rx or not */
 static inline int npcx_is_uart(void)
 {
-#if NPCX_UART_MODULE2
-	return IS_BIT_SET(NPCX_DEVALT(0x0C), NPCX_DEVALTC_UART_SL2);
-#else
-	return IS_BIT_SET(NPCX_DEVALT(0x0A), NPCX_DEVALTA_UART_SL1);
-#endif
+	return IS_BIT_SET(NPCX_UART_DEVALT, NPCX_UART_DEVALT_SL);
 }
-
-/* This routine switches the functionality from UART rx to GPIO */
-static inline void npcx_uart2gpio(void)
-{
-#if NPCX_UART_MODULE2
-	UPDATE_BIT(NPCX_WKEDG(1, 6), 4, 1);
-	CLEAR_BIT(NPCX_DEVALT(0x0C), NPCX_DEVALTC_UART_SL2);
-#else
-	UPDATE_BIT(NPCX_WKEDG(1, 1), 0, 1);
-	CLEAR_BIT(NPCX_DEVALT(0x0A), NPCX_DEVALTA_UART_SL1);
 #endif
-}
-
-/* This routine switches the functionality from GPIO to UART rx */
-static inline void npcx_gpio2uart(void)
-{
-#if NPCX_UART_MODULE2
-	CLEAR_BIT(NPCX_DEVALT(0x0A), NPCX_DEVALTA_UART_SL1);
-	SET_BIT(NPCX_DEVALT(0x0C), NPCX_DEVALTC_UART_SL2);
-#else
-	SET_BIT(NPCX_DEVALT(0x0A), NPCX_DEVALTA_UART_SL1);
-#endif
-}
 
 /* Wake pin definitions, defined at board-level */
 extern const enum gpio_signal hibernate_wake_pins[];
