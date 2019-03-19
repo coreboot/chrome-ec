@@ -136,6 +136,7 @@ BOARDS_NPCX_SPI=(
 
 BOARDS_NPCX_INT_SPI=(
 	atlas
+	bloog
 	bobba
 	casta
 	fleex
@@ -147,6 +148,7 @@ BOARDS_NPCX_INT_SPI=(
 )
 
 BOARDS_NPCX_UUT=(
+	bloog
 	bobba
 	casta
 	cheza
@@ -192,6 +194,8 @@ BOARDS_RAIDEN=(
 # i.e., If a board needs to use one CHIP when connected via a Suzy-Q and another
 # chip when connected via a Servo.
 declare -A VALID_CHIP_COMBO
+VALID_CHIP_COMBO["bloog.npcx_spi"]="(servo_micro|servo_v2)"
+VALID_CHIP_COMBO["bloog.npcx_uut"]="ccd_cr50"
 VALID_CHIP_COMBO["bobba.npcx_spi"]="(servo_micro|servo_v2)"
 VALID_CHIP_COMBO["bobba.npcx_uut"]="ccd_cr50"
 VALID_CHIP_COMBO["casta.npcx_spi"]="(servo_micro|servo_v2)"
