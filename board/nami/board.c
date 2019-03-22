@@ -887,6 +887,7 @@ static void setup_motion_sensors(void)
 	} else {
 		/* Clamshells have no accel/gyro */
 		motion_sensor_count = 0;
+		tablet_set_mode(0);
 	}
 }
 
