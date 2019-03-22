@@ -2271,6 +2271,32 @@ static int charge_command_current_limit(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_CHARGE_CURRENT_LIMIT, charge_command_current_limit,
 		     EC_VER_MASK(0));
 
+/**
+ * Check whether enough power is available for the OS to boot.
+ *
+ * @return 0: Power is good. 1: Power is short.
+ */
+static int charge_state_limit_power(void)
+{
+#ifdef CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW
+	if ((curr.batt.is_present == BP_YES) &&
+	     CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT <=
+	     curr.batt.state_of_charge)
+		return 0;
+
+	if (CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW * 1000
+			<= charge_manager_get_power_limit_uw())
+		return 0;
+
+	if (!system_is_locked())
+		return 0;
+
+	return 1;
+#else
+	return 0;
+#endif
+}
+
 static int charge_command_charge_state(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_charge_state *in = args->params;
@@ -2325,21 +2351,7 @@ static int charge_command_charge_state(struct host_cmd_handler_args *args)
 				val = curr.chg.option;
 				break;
 			case CS_PARAM_LIMIT_POWER:
-#ifdef CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT
-				/*
-				 * LIMIT_POWER status is based on battery level
-				 * and external charger power.
-				 */
-				if ((curr.batt.is_present != BP_YES ||
-				     curr.batt.state_of_charge <
-				     CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT)
-				     && charge_manager_get_power_limit_uw() <
-				     CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW
-				     * 1000 && system_is_locked())
-					val = 1;
-				else
-#endif
-					val = 0;
+				val = charge_state_limit_power();
 				break;
 			default:
 				rv = EC_RES_INVALID_PARAM;
