@@ -49,6 +49,14 @@ GPIO(BATTERY_PRESENT_L,		PIN(3, 4), GPIO_INPUT)		/* Battery Present */
 GPIO(CCD_MODE_ODL,		PIN(6, 3), GPIO_INPUT)		/* Case Closed Debug Mode */
 GPIO(ENTERING_RW,		PIN(7, 6), GPIO_OUTPUT)		/* EC Entering RW */
 GPIO(PMIC_INT_L,		PIN(6, 0), GPIO_INPUT)		/* PMIC interrupt */
+#ifndef CONFIG_PWM_KBLIGHT
+/* For Ekko, Bard to control BC1.2 power.
+ * Sona uses C4 for keyboard backlight but its firmware isn't built here. */
+GPIO(BC12_ENABLE_1,		PIN(C, 4), GPIO_OUT_LOW)
+#endif
+/* For Pyke to control BC1.2 power.
+ * Akali360 uses 72 for GMR sensor but its firmware isn't built here. */
+GPIO(BC12_ENABLE_2,		PIN(7, 2), GPIO_OUT_LOW)
 #ifndef CONFIG_POWER_S0IX
 GPIO(PCH_SLP_S0_L,		PIN(7, 5), GPIO_INPUT)
 #endif
@@ -105,7 +113,9 @@ ALTERNATE(PIN_MASK(B, 0x40), 1, MODULE_PWM, 0)	/* GPIOB6 PWM1 Fan control */
 ALTERNATE(PIN_MASK(8, 0x01), 1, MODULE_PWM, 0)	/* GPIO80 PWM3 LED White */
 ALTERNATE(PIN_MASK(B, 0x80), 1, MODULE_PWM, 0)	/* GPIOB7 PWM5 LED Yellow */
 ALTERNATE(PIN_MASK(A, 0x40), 1, MODULE_PWM, 0)	/* GPIOA6 TA2 */
+#ifdef CONFIG_PWM_KBLIGHT
 ALTERNATE(PIN_MASK(C, 0x10), 1, MODULE_PWM, 0)	/* GPIOC4 PWM2 */
+#endif
 
 /* Keyboard pins */
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
