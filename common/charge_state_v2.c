@@ -2271,12 +2271,7 @@ static int charge_command_current_limit(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_CHARGE_CURRENT_LIMIT, charge_command_current_limit,
 		     EC_VER_MASK(0));
 
-/**
- * Check whether enough power is available for the OS to boot.
- *
- * @return 0: Power is good. 1: Power is short.
- */
-static int charge_state_limit_power(void)
+int charge_state_limit_power(void)
 {
 #ifdef CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW
 	if ((curr.batt.is_present == BP_YES) &&
@@ -2295,6 +2290,11 @@ static int charge_state_limit_power(void)
 #else
 	return 0;
 #endif
+}
+
+__attribute__((weak)) int board_check_os_boot_power(void)
+{
+	return charge_state_limit_power();
 }
 
 static int charge_command_charge_state(struct host_cmd_handler_args *args)
@@ -2351,7 +2351,7 @@ static int charge_command_charge_state(struct host_cmd_handler_args *args)
 				val = curr.chg.option;
 				break;
 			case CS_PARAM_LIMIT_POWER:
-				val = charge_state_limit_power();
+				val = board_check_os_boot_power();
 				break;
 			default:
 				rv = EC_RES_INVALID_PARAM;
