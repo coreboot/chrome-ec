@@ -3350,7 +3350,9 @@ static int cmd_motionsense(int argc, char **argv)
 	}
 
 	if (argc == 3 && !strcasecmp(argv[1], "info")) {
-		param.cmd = MOTIONSENSE_CMD_INFO;
+		struct ec_params_get_cmd_versions p;
+		struct ec_response_get_cmd_versions r;
+		int version = 0;
 
 		param.sensor_odr.sensor_num = strtol(argv[2], &e, 0);
 		if (e && *e) {
@@ -3358,7 +3360,21 @@ static int cmd_motionsense(int argc, char **argv)
 			return -1;
 		}
 
-		rv = ec_command(EC_CMD_MOTION_SENSE_CMD, 1,
+		/* tool defaults to using latest version of info command */
+		p.cmd = EC_CMD_MOTION_SENSE_CMD;
+		rv = ec_command(EC_CMD_GET_CMD_VERSIONS, 0, &p, sizeof(p),
+				&r, sizeof(r));
+		if (rv < 0) {
+			if (rv == -EC_RES_INVALID_PARAM)
+				printf("Command 0x%02x not supported by EC.\n",
+						EC_CMD_GET_CMD_VERSIONS);
+			return rv;
+		}
+
+		if (r.version_mask)
+			version = __fls(r.version_mask);
+
+		rv = ec_command(EC_CMD_MOTION_SENSE_CMD, version,
 				&param, ms_command_sizes[param.cmd].outsize,
 				resp, ms_command_sizes[param.cmd].insize);
 
@@ -3414,6 +3430,15 @@ static int cmd_motionsense(int argc, char **argv)
 			break;
 		default:
 			printf("unknown\n");
+		}
+
+		if (version >= 3) {
+			printf("Min Frequency:              %d mHz\n",
+					resp->info_3.min_frequency);
+			printf("Max Frequency:              %d mHz\n",
+					resp->info_3.max_frequency);
+			printf("FIFO Max Event Count:       %d\n",
+					resp->info_3.fifo_max_event_count);
 		}
 
 		return 0;
