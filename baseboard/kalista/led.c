@@ -174,6 +174,21 @@ void led_alert(int enable)
 	}
 }
 
+static void led_init(void)
+{
+	/*
+	 * Kalista would turn off leds after sysjump.
+	 * Therefore, it should be init the led state.
+	 */
+	if (chipset_in_state(CHIPSET_STATE_ON))
+		led_resume();
+	else if (chipset_in_state(CHIPSET_STATE_SUSPEND))
+		led_suspend();
+	else if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		led_shutdown();
+}
+DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
+
 void led_critical(void)
 {
 	hook_call_deferred(&led_tick_data, -1);
