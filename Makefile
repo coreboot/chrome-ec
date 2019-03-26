@@ -45,6 +45,14 @@ all:
 include $(BDIR)/build.mk
 include chip/$(CHIP)/build.mk
 
+ifneq ($(ENV_VARS),)
+# Let's make sure $(out)/env_config.h changes if value any of the above
+# variables has changed since the prvious make invocation. This in turn will
+# make sure that relevant object files are re-built.
+current_set = $(foreach env_flag, $(ENV_VARS), $(env_flag)=$($(env_flag)))
+$(shell util/env_changed.sh "$(out)/env_config.h" "$(current_set)")
+endif
+
 # Create uppercase config variants, to avoid mixed case constants.
 # Also translate '-' to '_', so 'cortex-m' turns into 'CORTEX_M'.  This must
 # be done before evaluating config.h.
@@ -93,6 +101,11 @@ _tsk_cfg_rw:= $(filter-out $(_tsk_cfg), $(_tsk_cfg_rw))
 CPPFLAGS_RO+=$(foreach t,$(_tsk_cfg_ro),-D$(t))
 CPPFLAGS_RW+=$(foreach t,$(_tsk_cfg_rw),-D$(t))
 CPPFLAGS+=$(foreach t,$(_tsk_cfg),-D$(t))
+
+ifneq ($(ENV_VARS),)
+CPPFLAGS += -DINCLUDE_ENV_CONFIG
+CFLAGS += -I$(realpath $(out))
+endif
 
 _flag_cfg_ro:=$(shell $(CPP) $(CPPFLAGS) -P -dM -Ichip/$(CHIP) \
 	-I$(BDIR) -DSECTION_IS_RO include/config.h | \
