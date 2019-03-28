@@ -1774,6 +1774,12 @@ int pd_get_partner_usb_comm_capable(int port);
  */
 int pd_is_vbus_present(int port);
 
+/*
+ * Notify the AP that we have entered into DisplayPort Alternate Mode.  This
+ * sets a MODE_CHANGE host event which may wake the AP.
+ */
+void pd_notify_dp_alt_mode_entry(void);
+
 /* ----- Logging ----- */
 #ifdef CONFIG_USB_PD_LOGGING
 /**
