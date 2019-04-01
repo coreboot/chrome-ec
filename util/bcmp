@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# Copyright 2019 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+#
+# This script allows to compare Cr50 source files across branches, By default
+# it compares files in the current tree with the Cr50 pre-pvt branch
+# (cros/firmware-cr50-9308.B). If the user wants to compare with some other
+# branch or any git sha1 to that matter, the branch name/sha1 could be passed
+# as the command line parameter.
+#
+# This script will erase build/cr50 and then re-build Cr50 image, and then
+# based on .o and .d files found in build/cr50/RW will figure out the set of
+# constituent source files which need to be compared across branches, and then
+# compare the files with the requested branch, reporting the differences.
+#
+# Note that all files in util/signer are also included in the comparison.
+
+tmpf="/tmp/bcmp.$$"
+
+if [[ ! -f Makefile.rules || ! -f board/cr50/board.h ]]; then
+  echo "this script must run in the root ec directory" >&2
+  exit 1
+fi
+
+if [[ "$#" != 0 ]]; then
+  compare_to="$1"
+else
+  compare_to="cros/firmware-cr50-9308.B"
+fi
+
+echo "Will rebuild CR50"
+rm -rf build/cr50
+if ! make BOARD=cr50 CR50_DEV=1 -j > /dev/null ; then
+  echo "building cr50 failed" >&2
+  exit 1
+fi
+echo "Now looking for .c and .S files"
+
+for f in $((cd build/cr50/RW; find . -name '*.o'); find util/signer -type f); do
+
+  c="${f/\.o/.c}"
+  if [[ -f "$c" ]]; then
+    echo "$c" >> "${tmpf}"
+    continue
+  fi
+  g="${f/\.o/.S}"
+  if [ -f "$g" ]; then
+    echo "$g" >> "${tmpf}"
+    continue
+  fi
+  echo "neither $c nor $g found in this tree" >&2
+done
+
+echo "Now looking for .h files"
+for f in $(find build/cr50/RW/ -name '*.d' -exec cat {} + |
+              sed 's/ /\n/g' |
+              sed 's|/mnt/host/source/src/platform/ec/||' |
+              grep -v third_party |
+              sort -u |
+              grep '\.h' ); do
+  if [ ! -f $f ]; then
+    echo $f is not in this tree;
+    continue;
+  fi;
+  echo $f >> "${tmpf}"
+done
+
+echo "Comparing local tree to ${compare_to}"
+git diff "${compare_to}" $(cat "${tmpf}");
+
+rm -rf "${tmpf}"
