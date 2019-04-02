@@ -1528,6 +1528,17 @@ static int get_desired_input_current(enum battery_present batt_present,
 	}
 }
 
+static int min_power_mw_for_power_on;
+
+__attribute__((weak)) int board_set_min_power_mw_for_power_on(void)
+{
+#ifdef CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
+	return  CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON;
+#else
+	return 0;
+#endif
+}
+
 /* Main loop */
 void charger_task(void *u)
 {
@@ -1549,6 +1560,8 @@ void charger_task(void *u)
 	battery_dynamic[BATT_IDX_BASE].flags = EC_BATT_FLAG_INVALID_DATA;
 	charge_base = -1;
 #endif
+
+	min_power_mw_for_power_on = board_set_min_power_mw_for_power_on();
 
 	/*
 	 * If system is not locked and we don't have a battery to live on,
@@ -2006,7 +2019,7 @@ int charge_prevent_power_on(int power_button_pressed)
 	/* However, we can power on if a sufficient charger is present. */
 	if (prevent_power_on) {
 		if (charge_manager_get_power_limit_uw() >=
-		    CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON * 1000)
+		    min_power_mw_for_power_on * 1000)
 			prevent_power_on = 0;
 #if defined(CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT) && \
 	defined(CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC)
@@ -2045,7 +2058,7 @@ int charge_prevent_power_on(int power_button_pressed)
 	if (extpower_is_present() && battery_hw_present() == BP_NO
 #ifdef CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
 	    && charge_manager_get_power_limit_uw() <
-		CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON * 1000
+		min_power_mw_for_power_on * 1000
 #endif /* CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON */
 	    )
 		prevent_power_on = 1;

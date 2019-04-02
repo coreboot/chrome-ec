@@ -149,4 +149,11 @@ int charge_state_limit_power(void);
  */
 int board_check_os_boot_power(void);
 
+/**
+ * Callback with which a board sets minimum power to boot AP
+ *
+ * @return Power in MW
+ */
+int board_set_min_power_mw_for_power_on(void);
+
 #endif /* __CROS_EC_CHARGE_STATE_V2_H */
