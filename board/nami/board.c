@@ -976,7 +976,7 @@ struct keyboard_scan_config keyscan_config = {
 	},
 };
 
-static void bc12_enable(void)
+void board_bc12_enable(void)
 {
 	enum gpio_signal pin;
 	/* This branch is only for 2nd gen.. No need to check SKU or MODEL. */
@@ -1056,7 +1056,7 @@ static void board_init(void)
 			EC_HOST_EVENT_MASK(EC_HOST_EVENT_KEYBOARD_RECOVERY))
 		/* If recovery mode is being entered, enable BC1.2 for a USB
 		 * drive. */
-		bc12_enable();
+		board_bc12_enable();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -1116,7 +1116,7 @@ int board_check_os_boot_power(void)
 	if (is_low_power_boot_supported()) {
 		if (!limit)
 			/* Power is ready. Enable BC1.2 before booting OS */
-			bc12_enable();
+			board_bc12_enable();
 	}
 
 	return limit;

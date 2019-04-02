@@ -418,6 +418,8 @@ test_mockable void host_throttle_cpu(int throttle)
 		host_set_single_event(EC_HOST_EVENT_THROTTLE_STOP);
 }
 
+void board_bc12_enable(void);
+
 /*****************************************************************************/
 /* Console commands */
 static int command_host_event(int argc, char **argv)
@@ -429,9 +431,12 @@ static int command_host_event(int argc, char **argv)
 		if (*e)
 			return EC_ERROR_PARAM2;
 
-		if (!strcasecmp(argv[1], "set"))
+		if (!strcasecmp(argv[1], "set")) {
 			host_set_events(i);
-		else if (!strcasecmp(argv[1], "clear"))
+			if (host_get_events() & EC_HOST_EVENT_MASK(
+					EC_HOST_EVENT_KEYBOARD_RECOVERY))
+				board_bc12_enable();
+		} else if (!strcasecmp(argv[1], "clear"))
 			host_clear_events(i);
 		else if (!strcasecmp(argv[1], "clearb"))
 			host_clear_events_b(i);
