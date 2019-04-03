@@ -1,42 +1,51 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-/* DragonEgg family-specific configuration */
+/* Hatch family-specific configuration */
+#include "atomic.h"
+#include "battery_fuel_gauge.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "chipset.h"
 #include "console.h"
-#include "driver/bc12/max14637.h"
-#include "driver/ppc/nx20p348x.h"
+#include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
-#include "driver/ppc/syv682x.h"
-#include "driver/tcpm/it83xx_pd.h"
+#include "driver/tcpm/anx7447.h"
+#include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
-#include "driver/tcpm/tusb422.h"
 #include "espi.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "keyboard_scan.h"
 #include "power.h"
-#include "timer.h"
-#include "util.h"
 #include "tcpci.h"
+#include "timer.h"
 #include "usbc_ppc.h"
 #include "util.h"
-
-#define USB_PD_PORT_ITE_0	0
-#define USB_PD_PORT_ITE_1	1
-#define USB_PD_PORT_TUSB422_2	2
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+#define USB_PD_PORT_TCPC_0	0
+#define USB_PD_PORT_TCPC_1	1
+
+/******************************************************************************/
+/* Wake up pins */
+const enum gpio_signal hibernate_wake_pins[] = {
+	GPIO_LID_OPEN,
+	GPIO_ACOK_OD,
+	GPIO_POWER_BUTTON_L,
+	/* EC_RST_ODL needs to wake device while in PSL hibernate. */
+	GPIO_SYS_RESET_L,
+};
+const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
 /******************************************************************************/
 /* Keyboard scan setting */
@@ -60,31 +69,24 @@ struct keyboard_scan_config keyscan_config = {
 };
 
 /******************************************************************************/
-/* Wake up pins */
-const enum gpio_signal hibernate_wake_pins[] = {
-	GPIO_LID_OPEN,
-	GPIO_AC_PRESENT,
-	GPIO_POWER_BUTTON_L,
-};
-const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
-
 /* I2C port map configuration */
-/* TODO(b/111125177): Increase these speeds to 400 kHz and verify operation */
 const struct i2c_port_t i2c_ports[] = {
-	{"eeprom", IT83XX_I2C_CH_A, 100, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
-	{"sensor", IT83XX_I2C_CH_B, 100, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"usbc12",  IT83XX_I2C_CH_C, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
-	{"usbc0",  IT83XX_I2C_CH_E, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
-	{"power",  IT83XX_I2C_CH_F, 100, GPIO_I2C5_SCL, GPIO_I2C5_SDA}
+	{"sensor",  I2C_PORT_SENSOR,  100, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
+	{"ppc0",    I2C_PORT_PPC0,    100, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
+	{"tcpc1",   I2C_PORT_TCPC1,   100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{"tcpc0",   I2C_PORT_TCPC0,   100, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
+	{"power",   I2C_PORT_POWER,   100, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
+	{"eeprom",  I2C_PORT_EEPROM,  100, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /* power signal list. */
 const struct power_signal_info power_signal_list[] = {
+
 	[X86_SLP_S0_DEASSERTED] = {GPIO_SLP_S0_L,
 		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
 		"SLP_S0_DEASSERTED"},
-#ifdef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#ifdef CONFIG_HOSTCMD_ESPI_VW_SIGNALS
 	[X86_SLP_S3_DEASSERTED] = {VW_SLP_S3_L, POWER_SIGNAL_ACTIVE_HIGH,
 				   "SLP_S3_DEASSERTED"},
 	[X86_SLP_S4_DEASSERTED] = {VW_SLP_S4_L, POWER_SIGNAL_ACTIVE_HIGH,
@@ -95,12 +97,12 @@ const struct power_signal_info power_signal_list[] = {
 	[X86_SLP_S4_DEASSERTED] = {GPIO_SLP_S4_L, POWER_SIGNAL_ACTIVE_HIGH,
 				   "SLP_S4_DEASSERTED"},
 #endif
-	[X86_SLP_SUS_DEASSERTED] = {GPIO_SLP_SUS_L, POWER_SIGNAL_ACTIVE_HIGH,
-				    "SLP_SUS_DEASSERTED"},
-	[X86_RSMRST_L_PGOOD] = {GPIO_PG_EC_RSMRST_ODL, POWER_SIGNAL_ACTIVE_HIGH,
+	[X86_RSMRST_L_PGOOD] = {GPIO_PG_EC_RSMRST_L, POWER_SIGNAL_ACTIVE_HIGH,
 				"RSMRST_L_PGOOD"},
-	[X86_DSW_DPWROK] = {GPIO_PG_EC_DSW_PWROK, POWER_SIGNAL_ACTIVE_HIGH,
-			    "DSW_DPWROK"},
+	[PP5000_A_PGOOD] = {GPIO_PP5000_A_PG_OD, POWER_SIGNAL_ACTIVE_HIGH,
+			    "PP5000_A_PGOOD"},
+	[ALL_SYS_PGOOD] = {GPIO_PG_EC_ALL_SYS_PWRGD, POWER_SIGNAL_ACTIVE_HIGH,
+			   "ALL_SYS_PWRGD"}
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
@@ -110,7 +112,7 @@ BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 /* Called on AP S5 -> S3 transition */
 static void baseboard_chipset_startup(void)
 {
-	/* TODD(b/111121615): Need to fill out this hook */
+	/* TODD(b/122266850): Need to fill out this hook */
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, baseboard_chipset_startup,
 	     HOOK_PRIO_DEFAULT);
@@ -118,18 +120,18 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP, baseboard_chipset_startup,
 /* Called on AP S0iX -> S0 transition */
 static void baseboard_chipset_resume(void)
 {
-	/* TODD(b/111121615): Need to fill out this hook */
-	/* Enable display backlight. */
-	gpio_set_level(GPIO_EDP_BKTLEN_OD, 1);
+	/* TODD(b/122266850): Need to fill out this hook */
+	/* Enable keyboard backlight */
+	gpio_set_level(GPIO_EC_KB_BL_EN, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
 
 /* Called on AP S0 -> S0iX transition */
 static void baseboard_chipset_suspend(void)
 {
-	/* TODD(b/111121615): Need to fill out this hook */
-	/* Enable display backlight. */
-	gpio_set_level(GPIO_EDP_BKTLEN_OD, 0);
+	/* TODD(b/122266850): Need to fill out this hook */
+	/* Disable keyboard backlight */
+	gpio_set_level(GPIO_EC_KB_BL_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
 	     HOOK_PRIO_DEFAULT);
@@ -137,50 +139,25 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
 /* Called on AP S3 -> S5 transition */
 static void baseboard_chipset_shutdown(void)
 {
-	/* TODD(b/111121615): Need to fill out this hook */
+	/* TODD(b/122266850): Need to fill out this hook */
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, baseboard_chipset_shutdown,
 	     HOOK_PRIO_DEFAULT);
 
-void board_hibernate(void)
-{
-	int timeout_ms = 20;
-	/*
-	 * Disable the TCPC power rail and the PP5000 rail before going into
-	 * hibernate. Note, these 2 rails are powered up as the default state in
-	 * gpio.inc.
-	 */
-	gpio_set_level(GPIO_EN_PP5000, 0);
-	/* Wait for PP5000 to drop before disabling PP3300_TCPC */
-	while (gpio_get_level(GPIO_PP5000_PG_OD) && timeout_ms > 0) {
-		msleep(1);
-		timeout_ms--;
-	}
-	if (!timeout_ms)
-		CPRINTS("PP5000_PG didn't go low after 20 msec");
-	gpio_set_level(GPIO_EN_PP3300_TCPC, 0);
-}
 /******************************************************************************/
 /* USB-C TPCP Configuration */
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	[USB_PD_PORT_ITE_0] = {
-		/* TCPC is embedded within EC so no i2c config needed */
-		.drv = &it83xx_tcpm_drv,
+	[USB_PD_PORT_TCPC_0] = {
+		.i2c_host_port = I2C_PORT_TCPC0,
+		.i2c_slave_addr = AN7447_TCPC0_I2C_ADDR,
+		.drv = &anx7447_tcpm_drv,
 		/* Alert is active-low, push-pull */
 		.flags = 0,
 	},
-
-	[USB_PD_PORT_ITE_1] = {
-		/* TCPC is embedded within EC so no i2c config needed */
-		.drv = &it83xx_tcpm_drv,
-		/* Alert is active-low, push-pull */
-		.flags = 0,
-	},
-
-	[USB_PD_PORT_TUSB422_2] = {
-		.i2c_host_port = I2C_PORT_USBC1C2,
-		.i2c_slave_addr = TUSB422_I2C_ADDR,
-		.drv = &tusb422_tcpm_drv,
+	[USB_PD_PORT_TCPC_1] = {
+		.i2c_host_port = I2C_PORT_TCPC1,
+		.i2c_slave_addr = PS8751_I2C_ADDR1,
+		.drv = &ps8xxx_tcpm_drv,
 		/* Alert is active-low, push-pull */
 		.flags = 0,
 	},
@@ -189,62 +166,46 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 /******************************************************************************/
 /* USB-C PPC Configuration */
 struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_COUNT] = {
-	[USB_PD_PORT_ITE_0] = {
-		.i2c_port = I2C_PORT_USBC0,
+	[USB_PD_PORT_TCPC_0] = {
+		.i2c_port = I2C_PORT_PPC0,
 		.i2c_addr = SN5S330_ADDR0,
 		.drv = &sn5s330_drv
 	},
 
-	[USB_PD_PORT_ITE_1] = {
-		.i2c_port = I2C_PORT_USBC1C2,
-		.i2c_addr = SYV682X_ADDR0,
-		.drv = &syv682x_drv
-	},
-
-	[USB_PD_PORT_TUSB422_2] = {
-		.i2c_port = I2C_PORT_USBC1C2,
-		.i2c_addr = NX20P3481_ADDR2,
-		.drv = &nx20p348x_drv,
+	[USB_PD_PORT_TCPC_1] = {
+		.i2c_port = I2C_PORT_TCPC1,
+		.i2c_addr = SN5S330_ADDR0,
+		.drv = &sn5s330_drv
 	},
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
-	[USB_PD_PORT_ITE_0] = {
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+	[USB_PD_PORT_TCPC_0] = {
+		.driver = &anx7447_usb_mux_driver,
+		.hpd_update = &anx7447_tcpc_update_hpd_status,
+	},
+	[USB_PD_PORT_TCPC_1] = {
+		.driver = &tcpci_tcpm_usb_mux_driver,
+		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+	}
+};
+
+const struct pi3usb2901_config_t pi3usb2901_bc12_chips[] = {
+	[USB_PD_PORT_TCPC_0] = {
+		.i2c_port = I2C_PORT_PPC0,
+		.i2c_addr = PI3USB9201_I2C_ADDR_3,
 	},
 
-	[USB_PD_PORT_ITE_1] = {
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-	},
-
-	[USB_PD_PORT_TUSB422_2] = {
-		.port_addr = 0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+	[USB_PD_PORT_TCPC_1] = {
+		.i2c_port = I2C_PORT_TCPC1,
+		.i2c_addr = PI3USB9201_I2C_ADDR_3,
 	},
 };
 
-/******************************************************************************/
-/* BC 1.2 chip Configuration */
-const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_COUNT] = {
-	{
-		.chip_enable_pin = GPIO_USB_C0_BC12_VBUS_ON_ODL,
-		.chg_det_pin = GPIO_USB_C0_BC12_CHG_MAX,
-		.flags = MAX14637_FLAGS_ENABLE_ACTIVE_LOW,
-	},
-	{
-		.chip_enable_pin = GPIO_USB_C1_BC12_VBUS_ON_ODL,
-		.chg_det_pin = GPIO_USB_C1_BC12_CHG_MAX,
-		.flags = MAX14637_FLAGS_ENABLE_ACTIVE_LOW,
-	},
-	{
-		.chip_enable_pin = GPIO_USB_C2_BC12_VBUS_ON_ODL,
-		.chg_det_pin = GPIO_USB_C2_BC12_CHG_MAX,
-		.flags = MAX14637_FLAGS_ENABLE_ACTIVE_LOW,
-	},
+/* GPIO to enable/disable the USB Type-A port. */
+const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
+	GPIO_EN_USB_A_5V,
 };
 
 /* Power Delivery and charging functions */
@@ -252,44 +213,74 @@ const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_COUNT] = {
 void baseboard_tcpc_init(void)
 {
 	/* Enable PPC interrupts. */
-	gpio_enable_interrupt(GPIO_USB_C0_TCPPC_INT_L);
-	gpio_enable_interrupt(GPIO_USB_C2_TCPPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
 
 	/* Enable TCPC interrupts. */
-	gpio_enable_interrupt(GPIO_USB_C2_TCPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
 
+	/* Enable HDMI HPD interrupt. */
+	gpio_enable_interrupt(GPIO_HDMI_CONN_HPD);
+
+	/* Enable BC 1.2 interrupts */
+	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
 uint16_t tcpc_get_alert_status(void)
 {
 	uint16_t status = 0;
-	/*
-	 * Since C0/C1 TCPC are embedded within EC, we don't need the PDCMD
-	 * tasks.The (embedded) TCPC status since chip driver code will
-	 * handles its own interrupts and forward the correct events to
-	 * the PD_C0 task. See it83xx/intc.c
-	 */
 
-	if (!gpio_get_level(GPIO_USB_C2_TCPC_INT_ODL))
-		status = PD_STATUS_TCPC_ALERT_2;
+	/*
+	 * Check which port has the ALERT line set and ignore if that TCPC has
+	 * its reset line active. Note that port 0 reset is active high and
+	 * port 1 reset is active low.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_TCPC_INT_ODL)) {
+		if (!gpio_get_level(GPIO_USB_C0_TCPC_RST))
+			status |= PD_STATUS_TCPC_ALERT_0;
+	}
+
+	if (!gpio_get_level(GPIO_USB_C1_TCPC_INT_ODL)) {
+		if (gpio_get_level(GPIO_USB_C1_TCPC_RST_ODL))
+			status |= PD_STATUS_TCPC_ALERT_1;
+	}
 
 	return status;
 }
 
-/**
- * Reset all system PD/TCPC MCUs -- currently only called from
- * handle_pending_reboot() in common/power.c just before hard
- * resetting the system. This logic is likely not needed as the
- * PP3300_A rail should be dropped on EC reset.
- */
 void board_reset_pd_mcu(void)
 {
 	/*
-	 * C0 & C1: The internal TCPC on ITE EC does not have a reset signal,
-	 * but it will get reset when the EC gets reset.
+	 * C0: Assert reset to TCPC0 (ANX7447) for required delay (1ms) only if
+	 * we have a battery
+	 *
 	 */
+	if (battery_is_present() == BP_YES) {
+		gpio_set_level(GPIO_USB_C0_TCPC_RST, 1);
+		msleep(ANX74XX_RESET_HOLD_MS);
+		gpio_set_level(GPIO_USB_C0_TCPC_RST, 0);
+		msleep(ANX74XX_RESET_FINISH_MS);
+	}
+	/*
+	 * C1: Assert reset to TCPC1 (PS8751) for required delay (1ms) only if
+	 * we have a battery, otherwise we may brown out the system.
+	 */
+	if (battery_is_present() == BP_YES) {
+		/*
+		 * TODO(crbug:846412): After refactor, ensure that battery has
+		 * enough charge to last the reboot as well
+		 */
+		gpio_set_level(GPIO_USB_C1_TCPC_RST_ODL, 0);
+		msleep(PS8XXX_RESET_DELAY_MS);
+		gpio_set_level(GPIO_USB_C1_TCPC_RST_ODL, 1);
+	} else {
+		CPRINTS("Skipping C1 TCPC reset because no battery");
+	}
 }
+
 void board_pd_vconn_ctrl(int port, int cc_pin, int enabled)
 {
 	/*
@@ -362,3 +353,26 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 					   CONFIG_CHARGER_INPUT_CURRENT),
 				       charge_mv);
 }
+
+void baseboard_mst_enable_control(enum mst_source src, int level)
+{
+	static uint32_t mst_input_levels;
+
+	if (level)
+		atomic_or(&mst_input_levels, 1 << src);
+	else
+		atomic_clear(&mst_input_levels, 1 << src);
+
+	gpio_set_level(GPIO_EN_MST, mst_input_levels ? 1 : 0);
+}
+
+/* Enable or disable input devices, based on chipset state */
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	/* TODO(b/125936966): Need to add SKU dependency for convertibles */
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		enable = 0;
+	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+}
+#endif
