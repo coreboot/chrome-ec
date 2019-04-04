@@ -1121,3 +1121,12 @@ int board_check_os_boot_power(void)
 
 	return limit;
 }
+
+int board_set_min_power_mw_for_power_on(void)
+{
+	int power = CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON;
+	if (is_low_power_boot_supported())
+		power = 15000;
+	CPRINTS("Set AP boot threshold to %d mW", power);
+	return power;
+}
