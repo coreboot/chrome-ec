@@ -559,6 +559,9 @@
 
 /*****************************************************************************/
 
+/* Cli command for generating UART console traffic, used for testing. */
+#undef CONFIG_CHARGEN
+
 /* Compile charge manager */
 #undef CONFIG_CHARGE_MANAGER
 
