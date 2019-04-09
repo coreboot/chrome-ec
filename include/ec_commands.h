@@ -2957,6 +2957,30 @@ struct __ec_align1 ec_params_switch_enable_backlight {
 #define EC_CMD_SWITCH_ENABLE_WIRELESS 0x0091
 #define EC_VER_SWITCH_ENABLE_WIRELESS 1
 
+/* Reset causes */
+#define EC_RESET_FLAG_OTHER       BIT(0)   /* Other known reason */
+#define EC_RESET_FLAG_RESET_PIN   BIT(1)   /* Reset pin asserted */
+#define EC_RESET_FLAG_BROWNOUT    BIT(2)   /* Brownout */
+#define EC_RESET_FLAG_POWER_ON    BIT(3)   /* Power-on reset */
+#define EC_RESET_FLAG_WATCHDOG    BIT(4)   /* Watchdog timer reset */
+#define EC_RESET_FLAG_SOFT        BIT(5)   /* Soft reset trigger by core */
+#define EC_RESET_FLAG_HIBERNATE   BIT(6)   /* Wake from hibernate */
+#define EC_RESET_FLAG_RTC_ALARM   BIT(7)   /* RTC alarm wake */
+#define EC_RESET_FLAG_WAKE_PIN    BIT(8)   /* Wake pin triggered wake */
+#define EC_RESET_FLAG_LOW_BATTERY BIT(9)   /* Low battery triggered wake */
+#define EC_RESET_FLAG_SYSJUMP     BIT(10)  /* Jumped directly to this image */
+#define EC_RESET_FLAG_HARD        BIT(11)  /* Hard reset from software */
+#define EC_RESET_FLAG_AP_OFF      BIT(12)  /* Do not power on AP */
+#define EC_RESET_FLAG_PRESERVED   BIT(13)  /* Some reset flags preserved from
+					    * previous boot
+					    */
+#define EC_RESET_FLAG_USB_RESUME  BIT(14)  /* USB resume triggered wake */
+#define EC_RESET_FLAG_RDD         BIT(15)  /* USB Type-C debug cable */
+#define EC_RESET_FLAG_RBOX        BIT(16)  /* Fixed Reset Functionality */
+#define EC_RESET_FLAG_SECURITY    BIT(17)  /* Security threat */
+#define EC_RESET_FLAG_AP_WATCHDOG BIT(18)  /* AP experienced a watchdog reset */
+
+
 /* Version 0 params; no response */
 struct __ec_align1 ec_params_switch_enable_wireless_v0 {
 	uint8_t enabled;

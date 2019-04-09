@@ -660,7 +660,7 @@ void system_common_pre_init(void)
 	 * must happen before calculating jump_data address
 	 * because it might change panic pointer.
 	 */
-	if (system_get_reset_flags() & RESET_FLAG_WATCHDOG)
+	if (system_get_reset_flags() & EC_RESET_FLAG_WATCHDOG)
 		panic_set_reason(PANIC_SW_WATCHDOG, 0, 0);
 #endif
 
@@ -689,7 +689,7 @@ void system_common_pre_init(void)
 		/* Yes, we jumped to this image */
 		jumped_to_image = 1;
 		/* Restore the reset flags */
-		reset_flags = jdata->reset_flags | RESET_FLAG_SYSJUMP;
+		reset_flags = jdata->reset_flags | EC_RESET_FLAG_SYSJUMP;
 
 		/*
 		 * If the jump data structure isn't the same size as the

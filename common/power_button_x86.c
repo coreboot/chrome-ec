@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -113,7 +113,19 @@ static const char * const state_names[] = {
 static uint64_t tnext_state;
 
 /*
- * Determines whether to execute initial SMI pulse (t0 stage)
+ * Record the time when power button task starts. It can be used by any code
+ * path that needs to compare the current time with power button task start time
+ * to identify any timeouts e.g. PB state machine checks current time to
+ * identify if it should wait more for charger and battery to be initialized. In
+ * case of recovery using buttons (where the user could be holding the buttons
+ * for >30seconds), it is not right to compare current time with the time when
+ * EC was reset since the tasks would not have started. Hence, this variable is
+ * being added to record the time at which power button task starts.
+ */
+static uint64_t tpb_task_start;
+
+/*
+ * Determines whether to execute power button pulse (t0 stage)
  */
 static int power_button_pulse_enabled = 1;
 
@@ -204,15 +216,21 @@ static void set_initial_pwrbtn_state(void)
 	    chipset_in_state(CHIPSET_STATE_ON)) {
 		/*
 		 * Jumped to this image while the chipset was already on, so
-		 * simply reflect the actual power button state.
+		 * simply reflect the actual power button state unless power
+		 * button pulse is disabled. If power button SMI pulse is
+		 * enabled, then it should be honored, else setting power
+		 * button to PCH could lead to x86 platform shutting down. If
+		 * power button is still held by the time control reaches
+		 * state_machine(), it would take the appropriate action there.
 		 */
-		if (power_button_is_pressed()) {
+		if (power_button_is_pressed() && power_button_pulse_enabled) {
 			CPRINTS("PB init-jumped-held");
 			set_pwrbtn_to_pch(0, 0);
 		} else {
 			CPRINTS("PB init-jumped");
 		}
-	} else if ((reset_flags & RESET_FLAG_AP_OFF) ||
+		return;
+	} else if ((reset_flags & EC_RESET_FLAG_AP_OFF) ||
 		   (keyboard_scan_get_boot_keys() == BOOT_KEY_DOWN_ARROW)) {
 		/*
 		 * Reset triggered by keyboard-controlled reset, and down-arrow
@@ -227,19 +245,16 @@ static void set_initial_pwrbtn_state(void)
 		 */
 		CPRINTS("PB init-off");
 		power_button_pch_release();
-	} else {
-		/*
-		 * All other EC reset conditions power on the main processor so
-		 * it can verify the EC.
-		 */
-#ifdef CONFIG_BRINGUP
-		CPRINTS("PB idle");
-		pwrbtn_state = PWRBTN_STATE_IDLE;
-#else
-		CPRINTS("PB init-on");
-		pwrbtn_state = PWRBTN_STATE_INIT_ON;
-#endif
+		return;
 	}
+
+#ifdef CONFIG_BRINGUP
+	pwrbtn_state = PWRBTN_STATE_IDLE;
+#else
+	pwrbtn_state = PWRBTN_STATE_INIT_ON;
+#endif
+	CPRINTS("PB %s",
+		pwrbtn_state == PWRBTN_STATE_INIT_ON ? "init-on" : "idle");
 }
 
 /**
@@ -307,13 +322,31 @@ static void state_machine(uint64_t tnow)
 		break;
 	case PWRBTN_STATE_INIT_ON:
 		/*
-		 * Don't do anything until the charger knows the battery level.
-		 * Otherwise we could power on the AP only to shut it right
-		 * back down due to insufficient battery.
+		 * Before attempting to power the system on, we need to wait for
+		 * charger and battery to be ready to supply sufficient power.
+		 * Check every 100 milliseconds, and give up
+		 * CONFIG_POWER_BUTTON_INIT_TIMEOUT seconds after the PB task
+		 * was started. Here, it is important to check the current time
+		 * against PB task start time to prevent unnecessary timeouts
+		 * happening in recovery case where the tasks could start as
+		 * late as 30 seconds after EC reset.
 		 */
-#ifdef HAS_TASK_CHARGER
-		if (charge_get_state() == PWR_STATE_INIT)
+		if (tnow >
+		    (tpb_task_start +
+		     CONFIG_POWER_BUTTON_INIT_TIMEOUT * SECOND)) {
+			pwrbtn_state = PWRBTN_STATE_IDLE;
 			break;
+		}
+
+#ifdef CONFIG_CHARGER
+		/*
+		 * If not able to power on, try again later, to allow time for
+		 * charger, battery and USB-C PD initialization.
+		 */
+		if (charge_prevent_power_on(0)) {
+			tnext_state = tnow + 100 * MSEC;
+			break;
+		}
 #endif
 
 		/*
@@ -321,18 +354,19 @@ static void state_machine(uint64_t tnow)
 		 * battery is handled inside set_pwrbtn_to_pch().
 		 */
 		chipset_exit_hard_off();
+#ifdef CONFIG_DELAY_DSW_PWROK_TO_PWRBTN
+		/* Check if power button is ready. If not, we'll come back. */
+		if (get_time().val - get_time_dsw_pwrok() <
+				CONFIG_DSW_PWROK_TO_PWRBTN_US) {
+			tnext_state = get_time_dsw_pwrok() +
+					CONFIG_DSW_PWROK_TO_PWRBTN_US;
+			break;
+		}
+#endif
+
 		set_pwrbtn_to_pch(0, 1);
 		tnext_state = get_time().val + PWRBTN_INITIAL_US;
-
-		if (power_button_is_pressed()) {
-			if (system_get_reset_flags() & RESET_FLAG_RESET_PIN)
-				pwrbtn_state = PWRBTN_STATE_BOOT_KB_RESET;
-			else
-				pwrbtn_state = PWRBTN_STATE_WAS_OFF;
-		} else {
-			pwrbtn_state = PWRBTN_STATE_RELEASED;
-		}
-
+		pwrbtn_state = PWRBTN_STATE_BOOT_KB_RESET;
 		break;
 
 	case PWRBTN_STATE_BOOT_KB_RESET:
@@ -369,6 +403,12 @@ void power_button_task(void *u)
 {
 	uint64_t t;
 	uint64_t tsleep;
+
+	/*
+	 * Record the time when the task starts so that the state machine can
+	 * use this to identify any timeouts.
+	 */
+	tpb_task_start = get_time().val;
 
 	while (1) {
 		t = get_time().val;
@@ -410,16 +450,19 @@ static void powerbtn_x86_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, powerbtn_x86_init, HOOK_PRIO_DEFAULT);
 
+#ifdef CONFIG_LID_SWITCH
 /**
  * Handle switch changes based on lid event.
  */
 static void powerbtn_x86_lid_change(void)
 {
 	/* If chipset is off, pulse the power button on lid open to wake it. */
-	if (lid_is_open() && chipset_in_state(CHIPSET_STATE_ANY_OFF))
+	if (lid_is_open() && chipset_in_state(CHIPSET_STATE_ANY_OFF)
+	    && pwrbtn_state != PWRBTN_STATE_INIT_ON)
 		power_button_pch_pulse();
 }
 DECLARE_HOOK(HOOK_LID_CHANGE, powerbtn_x86_lid_change, HOOK_PRIO_DEFAULT);
+#endif
 
 /**
  * Handle debounced power button changing state.
@@ -466,9 +509,58 @@ static int hc_config_powerbtn_x86(struct host_cmd_handler_args *args)
 	const struct ec_params_config_power_button *p = args->params;
 
 	power_button_pulse_enabled =
-		p->flags & (1 << EC_POWER_BUTTON_ENABLE_SMI_PULSE);
+		!!(p->flags & EC_POWER_BUTTON_ENABLE_PULSE);
 
 	return EC_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_CONFIG_POWER_BUTTON, hc_config_powerbtn_x86,
 		     EC_VER_MASK(0));
+
+
+/*
+ * Currently, the only reason why we disable power button pulse is to allow
+ * detachable menu on AP to use power button for selection purpose without
+ * triggering SMI. Thus, re-enable the pulse any time there is a chipset
+ * state transition event.
+ */
+static void power_button_pulse_setting_reset(void)
+{
+	power_button_pulse_enabled = 1;
+}
+
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, power_button_pulse_setting_reset,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, power_button_pulse_setting_reset,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, power_button_pulse_setting_reset,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, power_button_pulse_setting_reset,
+	     HOOK_PRIO_DEFAULT);
+
+#define POWER_BUTTON_SYSJUMP_TAG		0x5042 /* PB */
+#define POWER_BUTTON_HOOK_VERSION		1
+
+static void power_button_pulse_setting_restore_state(void)
+{
+	const int *state;
+	int version, size;
+
+	state = (const int *)system_get_jump_tag(POWER_BUTTON_SYSJUMP_TAG,
+						 &version, &size);
+
+	if (state && (version == POWER_BUTTON_HOOK_VERSION) &&
+	    (size == sizeof(power_button_pulse_enabled)))
+		power_button_pulse_enabled = *state;
+}
+DECLARE_HOOK(HOOK_INIT, power_button_pulse_setting_restore_state,
+	     HOOK_PRIO_INIT_POWER_BUTTON + 1);
+
+static void power_button_pulse_setting_preserve_state(void)
+{
+	system_add_jump_tag(POWER_BUTTON_SYSJUMP_TAG,
+			    POWER_BUTTON_HOOK_VERSION,
+			    sizeof(power_button_pulse_enabled),
+			    &power_button_pulse_enabled);
+}
+DECLARE_HOOK(HOOK_SYSJUMP, power_button_pulse_setting_preserve_state,
+	     HOOK_PRIO_DEFAULT);

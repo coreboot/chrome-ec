@@ -113,7 +113,7 @@ test_mockable __keep int main(void)
 	uart_init();
 
 	/* be less verbose if we boot for USB resume to meet spec timings */
-	if (!(system_get_reset_flags() & RESET_FLAG_USB_RESUME)) {
+	if (!(system_get_reset_flags() & EC_RESET_FLAG_USB_RESUME)) {
 		if (system_jumped_to_this_image()) {
 			CPRINTS("UART initialized after sysjump");
 		} else {

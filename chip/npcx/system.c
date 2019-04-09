@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,15 +16,13 @@
 #include "hwtimer_chip.h"
 #include "registers.h"
 #include "rom_chip.h"
+#include "sib_chip.h"
 #include "system.h"
 #include "system_chip.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
-
-/* Flags for BBRM_DATA_INDEX_WAKE */
-#define HIBERNATE_WAKE_MTC        BIT(0)  /* MTC alarm */
-#define HIBERNATE_WAKE_PIN        BIT(1)  /* Wake pin */
+#include "watchdog.h"
 
 /* Delay after writing TTC for value to latch */
 #define MTC_TTC_LOAD_DELAY_US 250
@@ -38,14 +36,7 @@
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
-
-/* Begin address of Suspend RAM for hibernate utility */
-uintptr_t __lpram_fw_start = CONFIG_LPRAM_BASE;
-
-/* Offset of little FW in Suspend Ram for GDMA bypass */
-#define LFW_OFFSET 0x160
-/* Begin address of Suspend RAM for little FW (GDMA utilities). */
-uintptr_t __lpram_lfw_start = CONFIG_LPRAM_BASE + LFW_OFFSET;
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
 
 /*****************************************************************************/
 /* Internal functions */
@@ -87,7 +78,51 @@ void system_watchdog_reset(void)
 static int bbram_is_byte_access(enum bbram_data_index index)
 {
 	return (index >= BBRM_DATA_INDEX_VBNVCNTXT &&
-		index <  BBRM_DATA_INDEX_RAMLOG);
+		index <  BBRM_DATA_INDEX_RAMLOG)
+#ifdef CONFIG_USB_PD_DUAL_ROLE
+		|| index == BBRM_DATA_INDEX_PD0
+		|| index == BBRM_DATA_INDEX_PD1
+#endif
+		|| index == BBRM_DATA_INDEX_PANIC_FLAGS
+	;
+}
+
+/* Check and clear BBRAM status on any reset */
+void system_check_bbram_on_reset(void)
+{
+	if (IS_BIT_SET(NPCX_BKUP_STS, NPCX_BKUP_STS_IBBR)) {
+		/*
+		 * If the reset cause is not power-on reset and VBAT has ever
+		 * dropped, print a warning message.
+		 */
+		if (IS_BIT_SET(NPCX_RSTCTL, NPCX_RSTCTL_VCC1_RST_SCRATCH) ||
+			IS_BIT_SET(NPCX_RSTCTL, NPCX_RSTCTL_VCC1_RST_STS))
+			CPRINTF("VBAT drop!\n");
+
+		/*
+		 * npcx5/npcx7m6g/npcx7m6f:
+		 *   Clear IBBR bit
+		 * npcx7m6fb/npcx7m6fc/npcx7m7wb/npcx7m7wc:
+		 *   Clear IBBR/VSBY_STS/VCC1_STS bit
+		 */
+		NPCX_BKUP_STS = NPCX_BKUP_STS_ALL_MASK;
+	}
+}
+
+/* Check index is within valid BBRAM range and IBBR is not set */
+static int bbram_valid(enum bbram_data_index index, int bytes)
+{
+	/* Check index */
+	if (index < 0 || index + bytes > NPCX_BBRAM_SIZE)
+		return 0;
+
+	/* Check BBRAM is valid */
+	if (IS_BIT_SET(NPCX_BKUP_STS, NPCX_BKUP_STS_IBBR)) {
+		NPCX_BKUP_STS = BIT(NPCX_BKUP_STS_IBBR);
+		panic_printf("IBBR set: BBRAM corrupted!\n");
+		return 0;
+	}
+	return 1;
 }
 
 /**
@@ -100,12 +135,7 @@ static uint32_t bbram_data_read(enum bbram_data_index index)
 	uint32_t value = 0;
 	int bytes = bbram_is_byte_access(index) ? 1 : 4;
 
-	/* Check index */
-	if (index < 0 || index + bytes >= NPCX_BBRAM_SIZE)
-		return 0;
-
-	/* BBRAM is valid */
-	if (IS_BIT_SET(NPCX_BKUP_STS, NPCX_BKUP_STS_IBBR))
+	if (!bbram_valid(index, bytes))
 		return 0;
 
 	/* Read BBRAM */
@@ -131,12 +161,7 @@ static int bbram_data_write(enum bbram_data_index index, uint32_t value)
 {
 	int bytes = bbram_is_byte_access(index) ? 1 : 4;
 
-	/* Check index */
-	if (index < 0 || index >= NPCX_BBRAM_SIZE)
-		return EC_ERROR_INVAL;
-
-	/* BBRAM is valid */
-	if (IS_BIT_SET(NPCX_BKUP_STS, NPCX_BKUP_STS_IBBR))
+	if (!bbram_valid(index, bytes))
 		return EC_ERROR_INVAL;
 
 	/* Write BBRAM */
@@ -158,6 +183,20 @@ static int bbram_idx_lookup(enum system_bbram_idx idx)
 	    idx <= SYSTEM_BBRAM_IDX_VBNVBLOCK15)
 		return BBRM_DATA_INDEX_VBNVCNTXT +
 		       idx - SYSTEM_BBRAM_IDX_VBNVBLOCK0;
+#ifdef CONFIG_USB_PD_DUAL_ROLE
+	if (idx == SYSTEM_BBRAM_IDX_PD0)
+		return BBRM_DATA_INDEX_PD0;
+	if (idx == SYSTEM_BBRAM_IDX_PD1)
+		return BBRM_DATA_INDEX_PD1;
+#if CONFIG_USB_PD_PORT_COUNT >= 3
+	if (idx == SYSTEM_BBRAM_IDX_PD2)
+		return BBRM_DATA_INDEX_PD2;
+#endif /* CONFIG_USB_PD_PORT_COUNT >= 3 */
+#endif /* defined(CONFIG_USB_PD_DUAL_ROLE) */
+#ifdef CONFIG_VBOOT_EFS
+	if (idx == SYSTEM_BBRAM_IDX_TRY_SLOT)
+		return BBRM_DATA_INDEX_TRY_SLOT;
+#endif
 	return -1;
 }
 
@@ -202,33 +241,150 @@ void system_set_rtc(uint32_t seconds)
 	udelay(MTC_TTC_LOAD_DELAY_US);
 }
 
-void chip_save_reset_flags(int flags)
+#ifdef CONFIG_CHIP_PANIC_BACKUP
+/*
+ * Following information from panic data is stored in BBRAM:
+ *
+ * index     |       data
+ * ==========|=============
+ *   36      |       MMFS
+ *   40      |       HFSR
+ *   44      |       BFAR
+ *   48      |      LREG1
+ *   52      |      LREG3
+ *   56      |      LREG4
+ *   60      |     reserved
+ *
+ * Above registers are chosen to be saved in case of panic because:
+ * 1. MMFS, HFSR and BFAR seem to provide more information about the fault.
+ * 2. LREG1, LREG3 and LREG4 store exception, reason and info in case of
+ * software panic.
+ */
+#define BKUP_MMFS		(BBRM_DATA_INDEX_PANIC_BKUP + 0)
+#define BKUP_HFSR		(BBRM_DATA_INDEX_PANIC_BKUP + 4)
+#define BKUP_BFAR		(BBRM_DATA_INDEX_PANIC_BKUP + 8)
+#define BKUP_LREG1		(BBRM_DATA_INDEX_PANIC_BKUP + 12)
+#define BKUP_LREG3		(BBRM_DATA_INDEX_PANIC_BKUP + 16)
+#define BKUP_LREG4		(BBRM_DATA_INDEX_PANIC_BKUP + 20)
+
+#define BKUP_PANIC_DATA_VALID	BIT(0)
+
+void chip_panic_data_backup(void)
+{
+	struct panic_data *d = panic_get_data();
+
+	if (!d)
+		return;
+
+	bbram_data_write(BKUP_MMFS, d->cm.mmfs);
+	bbram_data_write(BKUP_HFSR, d->cm.hfsr);
+	bbram_data_write(BKUP_BFAR, d->cm.dfsr);
+	bbram_data_write(BKUP_LREG1, d->cm.regs[1]);
+	bbram_data_write(BKUP_LREG3, d->cm.regs[3]);
+	bbram_data_write(BKUP_LREG4, d->cm.regs[4]);
+	bbram_data_write(BBRM_DATA_INDEX_PANIC_FLAGS, BKUP_PANIC_DATA_VALID);
+}
+
+static void chip_panic_data_restore(void)
+{
+	struct panic_data *d = PANIC_DATA_PTR;
+
+	/* Ensure BBRAM is valid. */
+	if (!bbram_valid(BKUP_MMFS, 4))
+		return;
+
+	/* Ensure Panic data in BBRAM is valid. */
+	if (!(bbram_data_read(BBRM_DATA_INDEX_PANIC_FLAGS) &
+	      BKUP_PANIC_DATA_VALID))
+		return;
+
+	memset(d, 0, sizeof(*d));
+	d->magic = PANIC_DATA_MAGIC;
+	d->struct_size = sizeof(*d);
+	d->struct_version = 2;
+	d->arch = PANIC_ARCH_CORTEX_M;
+
+	d->cm.mmfs = bbram_data_read(BKUP_MMFS);
+	d->cm.hfsr = bbram_data_read(BKUP_HFSR);
+	d->cm.dfsr = bbram_data_read(BKUP_BFAR);
+
+	d->cm.regs[1] = bbram_data_read(BKUP_LREG1);
+	d->cm.regs[3] = bbram_data_read(BKUP_LREG3);
+	d->cm.regs[4] = bbram_data_read(BKUP_LREG4);
+
+	/* Reset panic data in BBRAM. */
+	bbram_data_write(BBRM_DATA_INDEX_PANIC_FLAGS, 0);
+}
+#endif /* CONFIG_CHIP_PANIC_BACKUP */
+
+void chip_save_reset_flags(uint32_t flags)
 {
 	bbram_data_write(BBRM_DATA_INDEX_SAVED_RESET_FLAGS, flags);
 }
 
-/* Check reset cause */
-void system_check_reset_cause(void)
+uint32_t chip_read_reset_flags(void)
+{
+	return bbram_data_read(BBRM_DATA_INDEX_SAVED_RESET_FLAGS);
+}
+
+#ifdef CONFIG_POWER_BUTTON_INIT_IDLE
+/*
+ * Set/clear AP_OFF flag. It's set when the system gracefully shuts down and
+ * it's cleared when the system boots up. The result is the system tries to
+ * go back to the previous state upon AC plug-in. If the system uncleanly
+ * shuts down, it boots immediately. If the system shuts down gracefully,
+ * it'll stay at S5 and wait for power button press.
+ */
+static void board_chipset_startup(void)
+{
+	uint32_t flags = bbram_data_read(BBRM_DATA_INDEX_SAVED_RESET_FLAGS);
+	flags &= ~EC_RESET_FLAG_AP_OFF;
+	chip_save_reset_flags(flags);
+	system_clear_reset_flags(EC_RESET_FLAG_AP_OFF);
+	CPRINTS("Cleared AP_OFF flag");
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
+
+static void board_chipset_shutdown(void)
+{
+	uint32_t flags = bbram_data_read(BBRM_DATA_INDEX_SAVED_RESET_FLAGS);
+	flags |= EC_RESET_FLAG_AP_OFF;
+	chip_save_reset_flags(flags);
+	system_set_reset_flags(EC_RESET_FLAG_AP_OFF);
+	CPRINTS("Set AP_OFF flag");
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown,
+	     /* Slightly higher than handle_pending_reboot because
+	      * it may clear AP_OFF flag. */
+	     HOOK_PRIO_DEFAULT - 1);
+#endif
+
+static void check_reset_cause(void)
 {
 	uint32_t hib_wake_flags = bbram_data_read(BBRM_DATA_INDEX_WAKE);
 	uint32_t flags = bbram_data_read(BBRM_DATA_INDEX_SAVED_RESET_FLAGS);
 
 	/* Clear saved reset flags in bbram */
+#ifdef CONFIG_POWER_BUTTON_INIT_IDLE
+	/* We'll clear AP_OFF on S5->S3 transition */
+	chip_save_reset_flags(flags & EC_RESET_FLAG_AP_OFF);
+#else
 	chip_save_reset_flags(0);
+#endif
 	/* Clear saved hibernate wake flag in bbram , too */
 	bbram_data_write(BBRM_DATA_INDEX_WAKE, 0);
 
 	/* Use scratch bit to check power on reset or VCC1_RST reset */
 	if (!IS_BIT_SET(NPCX_RSTCTL, NPCX_RSTCTL_VCC1_RST_SCRATCH)) {
-#if defined(BOARD_WHEATLEY) || defined(BOARD_EVE) || defined(BOARD_POPPY)
-		/* TODO(crosbug.com/p/61028): Remove workaround for Eve */
-		flags |= RESET_FLAG_RESET_PIN;
+#ifdef CONFIG_BOARD_FORCE_RESET_PIN
+		/* Treat all resets as RESET_PIN */
+		flags |= EC_RESET_FLAG_RESET_PIN;
 #else
 		/* Check for VCC1 reset */
 		if (IS_BIT_SET(NPCX_RSTCTL, NPCX_RSTCTL_VCC1_RST_STS))
-			flags |= RESET_FLAG_RESET_PIN;
+			flags |= EC_RESET_FLAG_RESET_PIN;
 		else
-			flags |= RESET_FLAG_POWER_ON;
+			flags |= EC_RESET_FLAG_POWER_ON;
 #endif
 	}
 
@@ -241,27 +397,27 @@ void system_check_reset_cause(void)
 
 	/* Software debugger reset */
 	if (IS_BIT_SET(NPCX_RSTCTL, NPCX_RSTCTL_DBGRST_STS)) {
-		flags |= RESET_FLAG_SOFT;
+		flags |= EC_RESET_FLAG_SOFT;
 		/* Clear debugger reset status initially*/
 		SET_BIT(NPCX_RSTCTL, NPCX_RSTCTL_DBGRST_STS);
 	}
 
 	/* Reset by hibernate */
 	if (hib_wake_flags & HIBERNATE_WAKE_PIN)
-		flags |= RESET_FLAG_WAKE_PIN | RESET_FLAG_HIBERNATE;
+		flags |= EC_RESET_FLAG_WAKE_PIN | EC_RESET_FLAG_HIBERNATE;
 	else if (hib_wake_flags & HIBERNATE_WAKE_MTC)
-		flags |= RESET_FLAG_RTC_ALARM | RESET_FLAG_HIBERNATE;
+		flags |= EC_RESET_FLAG_RTC_ALARM | EC_RESET_FLAG_HIBERNATE;
 
 	/* Watchdog Reset */
 	if (IS_BIT_SET(NPCX_T0CSR, NPCX_T0CSR_WDRST_STS)) {
 		/*
-		 * Don't set RESET_FLAG_WATCHDOG flag if watchdog is issued by
-		 * system_reset or hibernate in order to distinguish reset cause
-		 * is panic reason or not.
+		 * Don't set EC_RESET_FLAG_WATCHDOG flag if watchdog is issued
+		 * by system_reset or hibernate in order to distinguish reset
+		 * cause is panic reason or not.
 		 */
-		if (!(flags & (RESET_FLAG_SOFT | RESET_FLAG_HARD |
-				RESET_FLAG_HIBERNATE)))
-			flags |= RESET_FLAG_WATCHDOG;
+		if (!(flags & (EC_RESET_FLAG_SOFT | EC_RESET_FLAG_HARD |
+				EC_RESET_FLAG_HIBERNATE)))
+			flags |= EC_RESET_FLAG_WATCHDOG;
 
 		/* Clear watchdog reset status initially*/
 		SET_BIT(NPCX_T0CSR, NPCX_T0CSR_WDRST_STS);
@@ -271,118 +427,10 @@ void system_check_reset_cause(void)
 }
 
 /**
- * Configure address 0x40001600 in the the MPU
- * (Memory Protection Unit) as a "regular" memory
- */
-void system_mpu_config(void)
-{
-	/* Enable MPU */
-	CPU_MPU_CTRL = 0x7;
-
-	/* Create a new MPU Region for low-power ram */
-	CPU_MPU_RNR  = 0;                         /* Select region number 0 */
-	CPU_MPU_RASR = CPU_MPU_RASR & 0xFFFFFFFE; /* Disable region */
-	CPU_MPU_RBAR = CONFIG_LPRAM_BASE;         /* Set region base address */
-	/*
-	 * Set region size & attribute and enable region
-	 * [31:29] - Reserved.
-	 * [28]    - XN (Execute Never) = 0
-	 * [27]    - Reserved.
-	 * [26:24] - AP                 = 011 (Full access)
-	 * [23:22] - Reserved.
-	 * [21:19,18,17,16] - TEX,S,C,B = 001000 (Normal memory)
-	 * [15:8]  - SRD                = 0 (Subregions enabled)
-	 * [7:6]   - Reserved.
-	 * [5:1]   - SIZE               = 01001 (1K)
-	 * [0]     - ENABLE             = 1 (enabled)
-	 */
-	CPU_MPU_RASR = 0x03080013;
-
-	/* Create a new MPU Region for data ram */
-	CPU_MPU_RNR  = 1;                         /* Select region number 1 */
-	CPU_MPU_RASR = CPU_MPU_RASR & 0xFFFFFFFE; /* Disable region */
-	CPU_MPU_RBAR = CONFIG_RAM_BASE;           /* Set region base address */
-	/*
-	 * Set region size & attribute and enable region
-	 * [31:29] - Reserved.
-	 * [28]    - XN (Execute Never) = 1
-	 * [27]    - Reserved.
-	 * [26:24] - AP                 = 011 (Full access)
-	 * [23:22] - Reserved.
-	 * [21:19,18,17,16] - TEX,S,C,B = 001000 (Normal memory)
-	 * [15:8]  - SRD                = 0 (Subregions enabled)
-	 * [7:6]   - Reserved.
-	 * [5:1]   - SIZE               = 01110 (32K)
-	 * [0]     - ENABLE             = 1 (enabled)
-	 */
-	CPU_MPU_RASR = 0x1308001D;
-}
-
-void __keep __attribute__ ((noreturn, section(".lowpower_ram")))
-__enter_hibernate_in_lpram(void)
-{
-	/*
-	 * TODO (ML): Set stack pointer to upper 512B of Suspend RAM.
-	 * Our bypass needs stack instructions but FW will turn off main ram
-	 * later for better power consumption.
-	 */
-	asm (
-		"ldr r0, =0x40001800\n"
-		"mov sp, r0\n"
-	);
-
-	/* Disable Code RAM first */
-	SET_BIT(NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_5), NPCX_PWDWN_CTL5_MRFSH_DIS);
-	SET_BIT(NPCX_DISIDL_CTL, NPCX_DISIDL_CTL_RAM_DID);
-
-	/* Set deep idle mode*/
-	NPCX_PMCSR = 0x6;
-
-	/* Enter deep idle, wake-up by GPIOxx or RTC */
-	/*
-	 * TODO (ML): Although the probability is small, it still has chance
-	 * to meet the same symptom that CPU's behavior is abnormal after
-	 * wake-up from deep idle.
-	 * Workaround: Apply the same bypass of idle but don't enable interrupt.
-	 */
-	asm (
-		"push {r0-r5}\n"        /* Save needed registers */
-		"ldr r0, =0x40001600\n" /* Set r0 to Suspend RAM addr */
-		"wfi\n"                 /* Wait for int to enter idle */
-		"ldm r0, {r0-r5}\n"     /* Add a delay after WFI */
-		"pop {r0-r5}\n"         /* Restore regs before enabling ints */
-		"isb\n"                 /* Flush the cpu pipeline */
-	);
-
-	/* RTC wake-up */
-	if (IS_BIT_SET(NPCX_WTC, NPCX_WTC_PTO))
-		/*
-		 * Mark wake-up reason for hibernate
-		 * Do not call bbram_data_write directly cause of
-		 * executing in low-power ram
-		 */
-		NPCX_BBRAM(BBRM_DATA_INDEX_WAKE) = HIBERNATE_WAKE_MTC;
-	else
-		/* Otherwise, we treat it as GPIOs wake-up */
-		NPCX_BBRAM(BBRM_DATA_INDEX_WAKE) = HIBERNATE_WAKE_PIN;
-
-	/* Start a watchdog reset */
-	NPCX_WDCNT = 0x01;
-	/* Reload and restart Timer 0*/
-	SET_BIT(NPCX_T0CSR, NPCX_T0CSR_RST);
-	/* Wait for timer is loaded and restart */
-	while (IS_BIT_SET(NPCX_T0CSR, NPCX_T0CSR_RST))
-		;
-
-	/* Spin and wait for reboot; should never return */
-	while (1)
-		;
-}
-
-/**
  * Chip-level function to set GPIOs and wake-up inputs for hibernate.
  */
-void system_set_gpios_and_wakeup_inputs_hibernate(void)
+#ifdef CONFIG_SUPPORT_CHIP_HIBERNATION
+static void system_set_gpios_and_wakeup_inputs_hibernate(void)
 {
 	int table, i;
 
@@ -401,16 +449,28 @@ void system_set_gpios_and_wakeup_inputs_hibernate(void)
 		}
 	}
 
+#if defined(CHIP_FAMILY_NPCX7)
+	/* Disable MIWU 2 group 6 inputs which used for the additional GPIOs */
+	NPCX_WKEN(MIWU_TABLE_2, MIWU_GROUP_6)  = 0x00;
+	NPCX_WKPCL(MIWU_TABLE_2, MIWU_GROUP_6) = 0xFF;
+	NPCX_WKINEN(MIWU_TABLE_2, MIWU_GROUP_6) = 0x00;
+#endif
+
 	/* Enable wake-up inputs of hibernate_wake_pins array */
 	for (i = 0; i < hibernate_wake_pins_used; i++) {
 		gpio_reset(hibernate_wake_pins[i]);
 		/* Re-enable interrupt for wake-up inputs */
 		gpio_enable_interrupt(hibernate_wake_pins[i]);
+#if defined(CONFIG_HIBERNATE_PSL)
+		/* Config PSL pins setting for wake-up inputs */
+		if (!system_config_psl_mode(hibernate_wake_pins[i]))
+			ccprintf("Invalid PSL setting in wake-up pin %d\n", i);
+#endif
 	}
 }
 
 /**
- * Internal hibernate function.
+ * hibernate function for npcx ec.
  *
  * @param seconds      Number of seconds to sleep before LCT alarm
  * @param microseconds Number of microseconds to sleep before LCT alarm
@@ -418,11 +478,6 @@ void system_set_gpios_and_wakeup_inputs_hibernate(void)
 void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 {
 	int i;
-	void (*__hibernate_in_lpram)(void) =
-			(void(*)(void))(__lpram_fw_start | 0x01);
-
-	/* Enable power for the Low Power RAM */
-	CLEAR_BIT(NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_6), 6);
 
 	/* Disable ADC */
 	NPCX_ADCCNF = 0;
@@ -434,6 +489,7 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	/* Disable instant wake up mode for better power consumption */
 	CLEAR_BIT(NPCX_ENIDL_CTL, NPCX_ENIDL_CTL_LP_WK_CTL);
 
+	/* Disable interrupt */
 	interrupt_disable();
 
 	/* ITIM event module disable */
@@ -448,19 +504,11 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	NPCX_WDSDM = 0x61;
 	NPCX_WDSDM = 0x63;
 
-	/* Enable Low Power RAM */
-	NPCX_LPRAM_CTRL = 1;
-
 	/* Initialize watchdog */
 	NPCX_TWCFG = 0; /* Select T0IN clock as watchdog prescaler clock */
 	SET_BIT(NPCX_TWCFG, NPCX_TWCFG_WDCT0I);
 	NPCX_TWCP = 0x00; /* Keep prescaler ratio timer0 clock to 1:1 */
 	NPCX_TWDT0 = 0x00; /* Set internal counter and prescaler */
-
-	/* Copy the __enter_hibernate_in_lpram instructions to LPRAM */
-	for (i = 0; i < &__flash_lpfw_end - &__flash_lpfw_start; i++)
-		*((uint32_t *)__lpram_fw_start + i) =
-				*(&__flash_lpfw_start + i);
 
 	/* Disable interrupt */
 	interrupt_disable();
@@ -489,14 +537,16 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	if (seconds || microseconds)
 		system_set_rtc_alarm(seconds, microseconds);
 
-	/* execute hibernate func in LPRAM */
-	__hibernate_in_lpram();
+
+	/* execute hibernate func depend on chip series */
+	__hibernate_npcx_series();
 
 }
+#endif /* CONFIG_SUPPORT_CHIP_HIBERNATION */
 
 static char system_to_hex(uint8_t x)
 {
-	if (x >= 0 && x <= 9)
+	if (x <= 9)
 		return '0' + x;
 	return 'a' + x - 10;
 }
@@ -513,7 +563,7 @@ void system_set_rtc_alarm(uint32_t seconds, uint32_t microseconds)
 {
 	uint32_t cur_secs, alarm_secs;
 
-	if (seconds == EC_RTC_ALARM_CLEAR) {
+	if (seconds == EC_RTC_ALARM_CLEAR && !microseconds) {
 		CLEAR_BIT(NPCX_WTC, NPCX_WTC_WIE);
 		SET_BIT(NPCX_WTC, NPCX_WTC_PTO);
 
@@ -527,11 +577,14 @@ void system_set_rtc_alarm(uint32_t seconds, uint32_t microseconds)
 	alarm_secs = cur_secs + seconds;
 	alarm_secs = alarm_secs & MTC_ALARM_MASK;
 
+	/*
+	 * We should set new alarm (first 25 bits of clock value) first before
+	 * clearing PTO in case issue rtc interrupt immediately.
+	 */
+	NPCX_WTC = alarm_secs;
+
 	/* Reset alarm first */
 	system_reset_rtc_alarm();
-
-	/* Set alarm, use first 25 bits of clock value */
-	NPCX_WTC = alarm_secs;
 
 	/* Enable interrupt mode alarm */
 	SET_BIT(NPCX_WTC, NPCX_WTC_WIE);
@@ -593,7 +646,7 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	if (board_hibernate)
 		board_hibernate();
 
-#if SUPPORT_HIB
+#ifdef CONFIG_SUPPORT_CHIP_HIBERNATION
 	/* Add additional hibernate operations here */
 	__enter_hibernate(seconds, microseconds);
 #endif
@@ -618,10 +671,34 @@ void chip_pre_init(void)
 	CLEAR_BIT(NPCX_DEVALT(ALT_GROUP_5), NPCX_DEVALT5_NJEN0_EN);
 #endif
 #endif
+
+#ifndef CONFIG_ENABLE_JTAG_SELECTION
+	/*
+	 * (b/129908668)
+	 * This is the workaround to disable the JTAG0 which is enabled
+	 * accidentally by a special key combination.
+	 */
+	if (!IS_BIT_SET(NPCX_DEVALT(5), NPCX_DEVALT5_NJEN0_EN)) {
+		int data;
+		/* Set DEVALT5.nJEN0_EN to disable JTAG0 */
+		SET_BIT(NPCX_DEVALT(5), NPCX_DEVALT5_NJEN0_EN);
+		/* Enable Core-to-Host Modules Access */
+		SET_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSAE);
+		/* Clear SIOCFD.JEN0_HSL to disable JTAG0 */
+		data = sib_read_reg(SIO_OFFSET, 0x2D);
+		data &= ~0x80;
+		sib_write_reg(SIO_OFFSET, 0x2D, data);
+		/* Disable Core-to-Host Modules Access */
+		CLEAR_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSAE);
+	}
+#endif
+
 }
 
 void system_pre_init(void)
 {
+	uint8_t pwdwn6;
+
 	/*
 	 * Add additional initialization here
 	 * EC should be initialized in Booter
@@ -630,12 +707,34 @@ void system_pre_init(void)
 	/* Power-down the modules we don't need */
 	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_1) = 0xF9; /* Skip SDP_PD FIU_PD */
 	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_2) = 0xFF;
+#if defined(CHIP_FAMILY_NPCX5)
 	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_3) = 0x0F; /* Skip GDMA */
+#elif defined(CHIP_FAMILY_NPCX7)
+	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_3) = 0x1F; /* Skip GDMA */
+#endif
 	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_4) = 0xF4; /* Skip ITIM2/1_PD */
 	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_5) = 0xF8;
-	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_6) = 0xF5; /* Skip ITIM5_PD */
 
-	/* Power down the modules used internally */
+	pwdwn6 = 0x70 |
+		BIT(NPCX_PWDWN_CTL6_ITIM6_PD) |
+		BIT(NPCX_PWDWN_CTL6_ITIM4_PD); /* Skip ITIM5_PD */
+#if !defined(CONFIG_HOSTCMD_ESPI)
+	pwdwn6 |= 1 << NPCX_PWDWN_CTL6_ESPI_PD;
+#endif
+	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_6) = pwdwn6;
+
+#if defined(CHIP_FAMILY_NPCX7)
+#if defined(CHIP_VARIANT_NPCX7M6FB) || defined(CHIP_VARIANT_NPCX7M6FC) || \
+	defined(CHIP_VARIANT_NPCX7M7WB) || defined(CHIP_VARIANT_NPCX7M7WC)
+	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_7) = 0xE7;
+#else
+	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_7) = 0x07;
+#endif
+#endif
+
+	/* Following modules can be powered down automatically in npcx7 */
+#if defined(CHIP_FAMILY_NPCX5)
+	/* Power down the modules of npcx5 used internally */
 	NPCX_INTERNAL_CTRL1 = 0x03;
 	NPCX_INTERNAL_CTRL2 = 0x03;
 	NPCX_INTERNAL_CTRL3 = 0x03;
@@ -643,37 +742,50 @@ void system_pre_init(void)
 	/* Enable low-power regulator */
 	CLEAR_BIT(NPCX_LFCGCALCNT, NPCX_LFCGCALCNT_LPREG_CTL_EN);
 	SET_BIT(NPCX_LFCGCALCNT, NPCX_LFCGCALCNT_LPREG_CTL_EN);
+#endif
 
 	/*
 	 * Configure LPRAM in the MPU as a regular memory
 	 * and DATA RAM to prevent code execution
 	 */
 	system_mpu_config();
+
+	/*
+	 * Change FMUL_WIN_DLY from 0x8A to 0x81 for better WoV
+	 * audio quality.
+	 */
+#ifdef CHIP_FAMILY_NPCX7
+	NPCX_FMUL_WIN_DLY = 0x81;
+#endif
+
+#ifdef CONFIG_CHIP_PANIC_BACKUP
+	chip_panic_data_restore();
+#endif
 }
 
 void system_reset(int flags)
 {
-	uint32_t save_flags = 0;
+	uint32_t save_flags;
 
 	/* Disable interrupts to avoid task swaps during reboot */
 	interrupt_disable();
 
-	/* Save current reset reasons if necessary */
-	if (flags & SYSTEM_RESET_PRESERVE_FLAGS)
-		save_flags = system_get_reset_flags() | RESET_FLAG_PRESERVED;
-
-	/* Add in AP off flag into saved flags. */
-	if (flags & SYSTEM_RESET_LEAVE_AP_OFF)
-		save_flags |= RESET_FLAG_AP_OFF;
-
-	/* Save reset flag */
-	if (flags & SYSTEM_RESET_HARD)
-		save_flags |= RESET_FLAG_HARD;
-	else
-		save_flags |= RESET_FLAG_SOFT;
+	/*  Get flags to be saved in BBRAM */
+	system_encode_save_flags(flags, &save_flags);
 
 	/* Store flags to battery backed RAM. */
 	chip_save_reset_flags(save_flags);
+
+	/* If WAIT_EXT is set, then allow 10 seconds for external reset */
+	if (flags & SYSTEM_RESET_WAIT_EXT) {
+		int i;
+
+		/* Wait 10 seconds for external reset */
+		for (i = 0; i < 1000; i++) {
+			watchdog_reload();
+			udelay(10000);
+		}
+	}
 
 	/* Ask the watchdog to trigger a hard reboot */
 	system_watchdog_reset();
@@ -712,6 +824,7 @@ const char *system_get_chip_name(void)
 	/* Read Chip ID in core register */
 	uint8_t chip_id = NPCX_DEVICE_ID_CR;
 	switch (chip_id) {
+#if defined(CHIP_FAMILY_NPCX5)
 	case 0x12:
 		return "NPCX585G";
 	case 0x13:
@@ -720,6 +833,16 @@ const char *system_get_chip_name(void)
 		return "NPCX586G";
 	case 0x17:
 		return "NPCX576G";
+#elif defined(CHIP_FAMILY_NPCX7)
+	case 0x1F:
+		return "NPCX787G";
+	case 0x21:
+	case 0x29:
+		return "NPCX796F";
+	case 0x24:
+	case 0x2C:
+		return "NPCX797W";
+#endif
 	default:
 		*p       = system_to_hex((chip_id & 0xF0) >> 4);
 		*(p + 1) = system_to_hex(chip_id & 0x0F);
@@ -730,15 +853,42 @@ const char *system_get_chip_name(void)
 
 const char *system_get_chip_revision(void)
 {
-	static char rev[5];
+	static char rev[6];
+	char *p = rev;
+	/* Read chip generation from SRID_CR */
+	uint8_t chip_gen = NPCX_SRID_CR;
 	/* Read ROM data for chip revision directly */
 	uint8_t rev_num = *((uint8_t *)CHIP_REV_ADDR);
+#ifdef CHIP_FAMILY_NPCX7
+	uint8_t chip_id = NPCX_DEVICE_ID_CR;
+#endif
 
-	*(rev) = 'A';
-	*(rev + 1) = '.';
-	*(rev + 2) = system_to_hex((rev_num & 0xF0) >> 4);
-	*(rev + 3) = system_to_hex(rev_num & 0x0F);
-	*(rev + 4) = '\0';
+	switch (chip_gen) {
+#if defined(CHIP_FAMILY_NPCX5)
+	case 0x05:
+		*p++ = 'A';
+		break;
+#elif defined(CHIP_FAMILY_NPCX7)
+	case 0x06:
+		*p++ = 'A';
+		break;
+	case 0x07:
+		if (chip_id == 0x21 || chip_id == 0x24)
+			*p++ = 'B';
+		else
+			*p++ = 'C';
+		break;
+#endif
+	default:
+		*p++ = system_to_hex((chip_gen & 0xF0) >> 4);
+		*p++ = system_to_hex(chip_gen & 0x0F);
+		break;
+	}
+
+	*p++ = '.';
+	*p++ = system_to_hex((rev_num & 0xF0) >> 4);
+	*p++ = system_to_hex(rev_num & 0x0F);
+	*p++ = '\0';
 
 	return rev;
 }
@@ -772,15 +922,15 @@ int system_is_reboot_warm(void)
 	 * Check reset cause here,
 	 * gpio_pre_init is executed faster than system_pre_init
 	 */
-	system_check_reset_cause();
+	check_reset_cause();
 	reset_flags = system_get_reset_flags();
 
-	if ((reset_flags & RESET_FLAG_RESET_PIN) ||
-	    (reset_flags & RESET_FLAG_POWER_ON) ||
-	    (reset_flags & RESET_FLAG_WATCHDOG) ||
-	    (reset_flags & RESET_FLAG_HARD) ||
-	    (reset_flags & RESET_FLAG_SOFT) ||
-	    (reset_flags & RESET_FLAG_HIBERNATE))
+	if ((reset_flags & EC_RESET_FLAG_RESET_PIN) ||
+	    (reset_flags & EC_RESET_FLAG_POWER_ON) ||
+	    (reset_flags & EC_RESET_FLAG_WATCHDOG) ||
+	    (reset_flags & EC_RESET_FLAG_HARD) ||
+	    (reset_flags & EC_RESET_FLAG_SOFT) ||
+	    (reset_flags & EC_RESET_FLAG_HIBERNATE))
 		return 0;
 	else
 		return 1;
@@ -788,7 +938,6 @@ int system_is_reboot_warm(void)
 
 /*****************************************************************************/
 /* Console commands */
-#ifdef CONFIG_CMD_RTC
 void print_system_rtc(enum console_channel ch)
 {
 	uint32_t sec = system_get_rtc_sec();
@@ -796,6 +945,7 @@ void print_system_rtc(enum console_channel ch)
 	cprintf(ch, "RTC: 0x%08x (%d.00 s)\n", sec, sec);
 }
 
+#ifdef CONFIG_CMD_RTC
 static int command_system_rtc(int argc, char **argv)
 {
 	if (argc == 3 && !strcasecmp(argv[1], "set")) {
@@ -906,116 +1056,6 @@ DECLARE_HOST_COMMAND(EC_CMD_RTC_GET_ALARM,
 
 #endif /* CONFIG_HOSTCMD_RTC */
 #ifdef CONFIG_EXTERNAL_STORAGE
-void __keep __attribute__ ((noreturn, section(".lowpower_ram2")))
-__start_gdma(uint32_t exeAddr)
-{
-	/* Enable GDMA now */
-	SET_BIT(NPCX_GDMA_CTL, NPCX_GDMA_CTL_GDMAEN);
-
-	/* Start GDMA */
-	SET_BIT(NPCX_GDMA_CTL, NPCX_GDMA_CTL_SOFTREQ);
-
-	/* Wait for transfer to complete/fail */
-	while (!IS_BIT_SET(NPCX_GDMA_CTL, NPCX_GDMA_CTL_TC) &&
-			!IS_BIT_SET(NPCX_GDMA_CTL, NPCX_GDMA_CTL_GDMAERR))
-		;
-
-	/* Disable GDMA now */
-	CLEAR_BIT(NPCX_GDMA_CTL, NPCX_GDMA_CTL_GDMAEN);
-
-	/*
-	 * Failure occurs during GMDA transaction. Let watchdog issue and
-	 * boot from RO region again.
-	 */
-	if (IS_BIT_SET(NPCX_GDMA_CTL, NPCX_GDMA_CTL_GDMAERR))
-		while (1)
-			;
-
-	/*
-	 * Jump to the exeAddr address if needed. Setting bit 0 of address to
-	 * indicate it's a thumb branch for cortex-m series CPU.
-	 */
-	((void (*)(void))(exeAddr | 0x01))();
-
-	/* Should never get here */
-	while (1)
-		;
-}
-
-static void system_download_from_flash(uint32_t srcAddr, uint32_t dstAddr,
-		uint32_t size, uint32_t exeAddr)
-{
-	int i;
-	uint8_t chunkSize = 16; /* 4 data burst mode. ie.16 bytes */
-	/*
-	 * GDMA utility in Suspend RAM. Setting bit 0 of address to indicate
-	 * it's a thumb branch for cortex-m series CPU.
-	 */
-	void (*__start_gdma_in_lpram)(uint32_t) =
-			(void(*)(uint32_t))(__lpram_lfw_start | 0x01);
-
-	/*
-	 * Before enabling burst mode for better performance of GDMA, it's
-	 * important to make sure srcAddr, dstAddr and size of transactions
-	 * are 16 bytes aligned in case failure occurs.
-	 */
-	ASSERT((size % chunkSize) == 0 && (srcAddr % chunkSize) == 0 &&
-			(dstAddr % chunkSize) == 0);
-
-	/* Check valid address for jumpiing */
-	ASSERT(exeAddr != 0x0);
-
-	/* Enable power for the Low Power RAM */
-	CLEAR_BIT(NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_6), 6);
-
-	/* Enable Low Power RAM */
-	NPCX_LPRAM_CTRL = 1;
-
-	/*
-	 * Initialize GDMA for flash reading.
-	 * [31:21] - Reserved.
-	 * [20]    - GDMAERR   = 0  (Indicate GMDA transfer error)
-	 * [19]    - Reserved.
-	 * [18]    - TC        = 0  (Terminal Count. Indicate operation is end.)
-	 * [17]    - Reserved.
-	 * [16]    - SOFTREQ   = 0  (Don't trigger here)
-	 * [15]    - DM        = 0  (Set normal demand mode)
-	 * [14]    - Reserved.
-	 * [13:12] - TWS.      = 10 (One double-word for every GDMA transaction)
-	 * [11:10] - Reserved.
-	 * [9]     - BME       = 1  (4-data ie.16 bytes - Burst mode enable)
-	 * [8]     - SIEN      = 0  (Stop interrupt disable)
-	 * [7]     - SAFIX     = 0  (Fixed source address)
-	 * [6]     - Reserved.
-	 * [5]     - SADIR     = 0  (Source address incremented)
-	 * [4]     - DADIR     = 0  (Destination address incremented)
-	 * [3:2]   - GDMAMS    = 00 (Software mode)
-	 * [1]     - Reserved.
-	 * [0]     - ENABLE    = 0  (Don't enable yet)
-	 */
-	NPCX_GDMA_CTL = 0x00002200;
-
-	/* Set source base address */
-	NPCX_GDMA_SRCB = CONFIG_MAPPED_STORAGE_BASE + srcAddr;
-
-	/* Set destination base address */
-	NPCX_GDMA_DSTB = dstAddr;
-
-	/* Set number of transfers */
-	NPCX_GDMA_TCNT = (size / chunkSize);
-
-	/* Clear Transfer Complete event */
-	SET_BIT(NPCX_GDMA_CTL, NPCX_GDMA_CTL_TC);
-
-	/* Copy the __start_gdma_in_lpram instructions to LPRAM */
-	for (i = 0; i < &__flash_lplfw_end - &__flash_lplfw_start; i++)
-		*((uint32_t *)__lpram_lfw_start + i) =
-				*(&__flash_lplfw_start + i);
-
-	/* Start GDMA in Suspend RAM */
-	__start_gdma_in_lpram(exeAddr);
-}
-
 void system_jump_to_booter(void)
 {
 	enum API_RETURN_STATUS_T status __attribute__((unused));
@@ -1027,14 +1067,25 @@ void system_jump_to_booter(void)
 	 * Get memory offset and size for RO/RW regions.
 	 * Both of them need 16-bytes alignment since GDMA burst mode.
 	 */
-	if (IS_BIT_SET(NPCX_FWCTRL, NPCX_FWCTRL_RO_REGION)) {
-		flash_offset = CONFIG_EC_PROTECTED_STORAGE_OFF +
-				CONFIG_RO_STORAGE_OFF;
-		flash_used = CONFIG_RO_SIZE;
-	} else {
+	switch (system_get_shrspi_image_copy()) {
+	case SYSTEM_IMAGE_RW:
 		flash_offset = CONFIG_EC_WRITABLE_STORAGE_OFF +
 				CONFIG_RW_STORAGE_OFF;
 		flash_used = CONFIG_RW_SIZE;
+		break;
+#ifdef CONFIG_RW_B
+	case SYSTEM_IMAGE_RW_B:
+		flash_offset = CONFIG_EC_WRITABLE_STORAGE_OFF +
+				CONFIG_RW_B_STORAGE_OFF;
+		flash_used = CONFIG_RW_SIZE;
+		break;
+#endif
+	case SYSTEM_IMAGE_RO:
+	default: /* Jump to RO by default */
+		flash_offset = CONFIG_EC_PROTECTED_STORAGE_OFF +
+				CONFIG_RO_STORAGE_OFF;
+		flash_used = CONFIG_RO_SIZE;
+		break;
 	}
 
 	/* Make sure the reset vector is inside the destination image */
@@ -1048,7 +1099,7 @@ void system_jump_to_booter(void)
 	clock_turbo();
 
 	/* Bypass for GMDA issue of ROM api utilities */
-#if defined(CHIP_VARIANT_NPCX5M5G) || defined(CHIP_VARIANT_NPCX5M6G)
+#if defined(CHIP_FAMILY_NPCX5)
 	system_download_from_flash(
 		flash_offset,      /* The offset of the data in spi flash */
 		CONFIG_PROGRAM_MEMORY_BASE, /* RAM Addr of downloaded data */
@@ -1077,21 +1128,54 @@ uint32_t system_get_lfw_address()
 	return jump_addr;
 }
 
+/*
+ * Set and clear image copy flags in MDC register.
+ *
+ * NPCX_FWCTRL_RO_REGION: 1 - RO, 0 - RW
+ * NPCX_FWCTRL_FW_SLOT: 1 - SLOT_A, 0 - SLOT_B
+ */
 void system_set_image_copy(enum system_image_copy_t copy)
 {
-	/* Jump to RW region -- clear flag */
-	if (copy == SYSTEM_IMAGE_RW)
+	switch (copy) {
+	case SYSTEM_IMAGE_RW:
 		CLEAR_BIT(NPCX_FWCTRL, NPCX_FWCTRL_RO_REGION);
-	else /* Jump to RO region -- set flag */
+		SET_BIT(NPCX_FWCTRL, NPCX_FWCTRL_FW_SLOT);
+		break;
+#ifdef CONFIG_RW_B
+	case SYSTEM_IMAGE_RW_B:
+		CLEAR_BIT(NPCX_FWCTRL, NPCX_FWCTRL_RO_REGION);
+		CLEAR_BIT(NPCX_FWCTRL, NPCX_FWCTRL_FW_SLOT);
+		break;
+#endif
+	default:
+		CPRINTS("Invalid copy (%d) is requested as a jump destination. "
+			"Change it to %d.", copy, SYSTEM_IMAGE_RO);
+		/* Fall through to SYSTEM_IMAGE_RO */
+	case SYSTEM_IMAGE_RO:
 		SET_BIT(NPCX_FWCTRL, NPCX_FWCTRL_RO_REGION);
+		SET_BIT(NPCX_FWCTRL, NPCX_FWCTRL_FW_SLOT);
+		break;
+	}
 }
 
 enum system_image_copy_t system_get_shrspi_image_copy(void)
 {
-	/* RO region FW */
-	if (IS_BIT_SET(NPCX_FWCTRL, NPCX_FWCTRL_RO_REGION))
+	if (IS_BIT_SET(NPCX_FWCTRL, NPCX_FWCTRL_RO_REGION)) {
+		/* RO image */
+#ifdef CHIP_HAS_RO_B
+		if (!IS_BIT_SET(NPCX_FWCTRL, NPCX_FWCTRL_FW_SLOT))
+			return SYSTEM_IMAGE_RO_B;
+#endif
 		return SYSTEM_IMAGE_RO;
-	else/* RW region FW */
+	} else {
+#ifdef CONFIG_RW_B
+		/* RW image */
+		if (!IS_BIT_SET(NPCX_FWCTRL, NPCX_FWCTRL_FW_SLOT))
+			/* Slot A */
+			return SYSTEM_IMAGE_RW_B;
+#endif
 		return SYSTEM_IMAGE_RW;
+	}
 }
+
 #endif
