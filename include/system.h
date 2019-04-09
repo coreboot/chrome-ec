@@ -14,28 +14,7 @@
 #include "console.h"
 #include "timer.h"
 
-/* Reset causes */
-#define RESET_FLAG_OTHER       BIT(0)   /* Other known reason */
-#define RESET_FLAG_RESET_PIN   BIT(1)   /* Reset pin asserted */
-#define RESET_FLAG_BROWNOUT    BIT(2)   /* Brownout */
-#define RESET_FLAG_POWER_ON    BIT(3)   /* Power-on reset */
-#define RESET_FLAG_WATCHDOG    BIT(4)   /* Watchdog timer reset */
-#define RESET_FLAG_SOFT        BIT(5)   /* Soft reset trigger by core */
-#define RESET_FLAG_HIBERNATE   BIT(6)   /* Wake from hibernate */
-#define RESET_FLAG_RTC_ALARM   BIT(7)   /* RTC alarm wake */
-#define RESET_FLAG_WAKE_PIN    BIT(8)   /* Wake pin triggered wake */
-#define RESET_FLAG_LOW_BATTERY BIT(9)   /* Low battery triggered wake */
-#define RESET_FLAG_SYSJUMP     BIT(10)  /* Jumped directly to this image */
-#define RESET_FLAG_HARD        BIT(11)  /* Hard reset from software */
-#define RESET_FLAG_AP_OFF      BIT(12)  /* Do not power on AP */
-#define RESET_FLAG_PRESERVED   BIT(13)  /* Some reset flags preserved from
-					   * previous boot */
-#define RESET_FLAG_USB_RESUME  BIT(14)  /* USB resume triggered wake */
-#define RESET_FLAG_RDD         BIT(15)  /* USB Type-C debug cable */
-#define RESET_FLAG_RBOX        BIT(16)  /* Fixed Reset Functionality */
-#define RESET_FLAG_SECURITY    BIT(17)  /* Security threat */
-
-/* Per chip implementation to save raw RESET_FLAG_ flags. */
+/* Per chip implementation to save raw EC_RESET_FLAG_ flags. */
 void chip_save_reset_flags(int flags);
 
 /* System images */
@@ -63,7 +42,7 @@ void system_common_pre_init(void);
 /**
  * Get the reset flags.
  *
- * @return Reset flags (RESET_FLAG_*), or 0 if the cause is unknown.
+ * @return Reset flags (EC_RESET_FLAG_*), or 0 if the cause is unknown.
  */
 uint32_t system_get_reset_flags(void);
 

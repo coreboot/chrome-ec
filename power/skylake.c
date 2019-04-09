@@ -11,8 +11,8 @@
 #include "hooks.h"
 #include "intel_x86.h"
 #include "lpc.h"
+#include "panic.h"
 #include "power_button.h"
-#include "skylake.h"
 #include "system.h"
 #include "timer.h"
 
@@ -21,8 +21,45 @@
 
 static int forcing_shutdown;  /* Forced shutdown in progress? */
 
+/* Power signals list. Must match order of enum power_signal. */
+const struct power_signal_info power_signal_list[] = {
+#ifdef CONFIG_POWER_S0IX
+	[X86_SLP_S0_DEASSERTED] = {
+		GPIO_PCH_SLP_S0_L,
+		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
+		"SLP_S0_DEASSERTED",
+	},
+#endif
+	[X86_SLP_S3_DEASSERTED] = {
+		SLP_S3_SIGNAL_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"SLP_S3_DEASSERTED",
+	},
+	[X86_SLP_S4_DEASSERTED] = {
+		SLP_S4_SIGNAL_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"SLP_S4_DEASSERTED",
+	},
+	[X86_SLP_SUS_DEASSERTED] = {
+		GPIO_PCH_SLP_SUS_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"SLP_SUS_DEASSERTED",
+	},
+	[X86_RSMRST_L_PWRGD] = {
+		GPIO_RSMRST_L_PGOOD,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"RSMRST_N_PWRGD",
+	},
+	[X86_PMIC_DPWROK] = {
+		GPIO_PMIC_DPWROK,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"PMIC_DPWROK",
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
-void chipset_force_shutdown(void)
+
+void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
 	CPRINTS("%s()", __func__);
 
@@ -33,7 +70,8 @@ void chipset_force_shutdown(void)
 	 * Consider reducing the latency here by changing the power off
 	 * hold time on the PMIC.
 	 */
-	if (!chipset_in_state(CHIPSET_STATE_HARD_OFF)) {
+	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		report_ap_reset(reason);
 		forcing_shutdown = 1;
 		power_button_pch_press();
 	}
@@ -51,35 +89,6 @@ enum power_state chipset_force_g3(void)
 	chipset_set_pmic_slp_sus_l(0);
 
 	return POWER_G3;
-}
-
-void chipset_reset(int cold_reset)
-{
-	CPRINTS("%s(%d)", __func__, cold_reset);
-
-	if (cold_reset) {
-		if (gpio_get_level(GPIO_SYS_RESET_L) == 0)
-			return;
-		gpio_set_level(GPIO_SYS_RESET_L, 0);
-		/* Debounce time for SYS_RESET_L is 16 ms */
-		udelay(20 * MSEC);
-		gpio_set_level(GPIO_SYS_RESET_L, 1);
-	} else {
-		/*
-		 * Send a RCIN_PCH_RCIN_L
-		 * assert INIT# to the CPU without dropping power or asserting
-		 * PLTRST# to reset the rest of the system.
-		 */
-
-		/* Pulse must be at least 16 PCI clocks long = 500 ns */
-#ifdef CONFIG_ESPI_VW_SIGNALS
-		lpc_host_reset();
-#else
-		gpio_set_level(GPIO_PCH_RCIN_L, 0);
-		udelay(10);
-		gpio_set_level(GPIO_PCH_RCIN_L, 1);
-#endif
-	}
 }
 
 static void handle_slp_sus(enum power_state state)
@@ -127,8 +136,14 @@ enum power_state power_handle_state(enum power_state state)
 	return new_state;
 }
 
+/* Workaround for flags getting lost with power cycle */
+__attribute__((weak)) int board_has_working_reset_flags(void)
+{
+	return 1;
+}
+
 #ifdef CONFIG_CHIPSET_HAS_PLATFORM_PMIC_RESET
-static void chipset_handle_reboot(void)
+void chipset_handle_reboot(void)
 {
 	int flags;
 
@@ -143,12 +158,25 @@ static void chipset_handle_reboot(void)
 	 * conditions are not met.
 	 */
 	if (!(flags &
-		(RESET_FLAG_WATCHDOG | RESET_FLAG_SOFT | RESET_FLAG_HARD)))
+		(EC_RESET_FLAG_WATCHDOG | EC_RESET_FLAG_SOFT |
+		 EC_RESET_FLAG_HARD)))
 		return;
 
 	/* Preserve AP off request. */
-	if (flags & RESET_FLAG_AP_OFF)
-		chip_save_reset_flags(RESET_FLAG_AP_OFF);
+	if (flags & EC_RESET_FLAG_AP_OFF) {
+		/* Do not issue PMIC reset if board cannot save reset flags */
+		if (!board_has_working_reset_flags()) {
+			ccprintf("Skip PMIC reset due to board issue.\n");
+			cflush();
+			return;
+		}
+		chip_save_reset_flags(EC_RESET_FLAG_AP_OFF);
+	}
+
+#ifdef CONFIG_CHIP_PANIC_BACKUP
+	/* Ensure panic data if any is backed up. */
+	chip_panic_data_backup();
+#endif
 
 	ccprintf("Restarting system with PMIC.\n");
 	/* Flush console */
@@ -159,5 +187,7 @@ static void chipset_handle_reboot(void)
 	while (1)
 		; /* wait here */
 }
+#ifndef CONFIG_VBOOT_EFS
 DECLARE_HOOK(HOOK_INIT, chipset_handle_reboot, HOOK_PRIO_FIRST);
 #endif
+#endif /* CONFIG_CHIPSET_HAS_PLATFORM_RESET */
