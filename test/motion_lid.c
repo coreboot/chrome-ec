@@ -21,7 +21,6 @@
 #include "util.h"
 
 extern enum chipset_state_mask sensor_active;
-extern unsigned motion_interval;
 
 /*
  * Period in us for the motion task period.
@@ -179,15 +178,18 @@ static int test_lid_angle(void)
 	hook_notify(HOOK_CHIPSET_SHUTDOWN);
 	TEST_ASSERT(sensor_active == SENSOR_ACTIVE_S5);
 	TEST_ASSERT(accel_get_data_rate(lid) == 0);
-	TEST_ASSERT(motion_interval == 0);
 
 	/* Go to S0 state */
 	hook_notify(HOOK_CHIPSET_SUSPEND);
 	hook_notify(HOOK_CHIPSET_RESUME);
 	msleep(1000);
 	TEST_ASSERT(sensor_active == SENSOR_ACTIVE_S0);
+<<<<<<< HEAD   (67a275 TCPMv1, TCPMv2: add pd event for receiving hard reset)
 	TEST_ASSERT(accel_get_data_rate(lid) == (119000 | ROUND_UP_FLAG));
 	TEST_ASSERT(motion_interval == TEST_LID_EC_RATE);
+=======
+	TEST_ASSERT(accel_get_data_rate(lid) == 119000);
+>>>>>>> CHANGE (0c71c4 motion sense: Calculate loop time based on sensor needs)
 
 	/*
 	 * Set the base accelerometer as if it were sitting flat on a desk
