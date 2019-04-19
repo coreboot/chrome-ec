@@ -12,7 +12,7 @@ CORE:=cortex-m
 CFLAGS_CPU+=-march=armv7e-m -mcpu=cortex-m4
 
 # Required chip modules
-chip-y=header.o clock.o gpio.o hwtimer.o system.o uart.o
+chip-y=header.o clock.o gpio.o hwtimer.o system.o uart.o sib.o
 
 # Optional chip modules
 chip-$(CONFIG_ADC)+=adc.o

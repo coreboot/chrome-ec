@@ -63,6 +63,7 @@
 #define DEBUG_CLK                        0
 #define DEBUG_LPC                        0
 #define DEBUG_ESPI                       0
+#define DEBUG_SIB                        0
 
 /* Modules Map */
 #define NPCX_MDC_BASE_ADDR               0x4000C000
