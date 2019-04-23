@@ -249,6 +249,7 @@ static void board_sku_init(void)
 	else {
 		gpio_set_level(GPIO_EN_PP1800_DX_SENSOR, 0);
 		motion_sensor_count = 0;
+		tablet_set_mode(0);
 	}
 	CPRINTS("Motion Sensor Count: %d", motion_sensor_count);
 }
