@@ -98,6 +98,9 @@
 #define CONFIG_ALS_TCS3400_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 
+/* Include "alslog" ec command.  Requires CONFIG_ALS_TCS3400 */
+#define CONFIG_CMD_ALSLOG
+
 /* ALS needs to be polled */
 #define CONFIG_ACCEL_FORCE_MODE_MASK    BIT(CLEAR_ALS)
 
