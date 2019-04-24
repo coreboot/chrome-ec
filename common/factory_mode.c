@@ -46,21 +46,6 @@ static void factory_enable_failed(void)
 }
 DECLARE_DEFERRED(factory_enable_failed);
 
-/* The below time constants are way longer than should be required in practice:
- *
- * Time it takes to finish processing TPM command
- */
-#define TPM_PROCESSING_TIME (1 * SECOND)
-
-/*
- * Time it takse TPM reset function to wipe out the NVMEM and reboot the
- * device.
- */
-#define TPM_RESET_TIME (10 * SECOND)
-
-/* Total time deep sleep should not be allowed. */
-#define DISABLE_SLEEP_TIME (TPM_PROCESSING_TIME + TPM_RESET_TIME)
-
 static void factory_enable_deferred(void)
 {
 	int rv;
@@ -114,7 +99,11 @@ DECLARE_DEFERRED(factory_enable_deferred);
 
 void enable_ccd_factory_mode(int reset_required)
 {
-	delay_sleep_by(DISABLE_SLEEP_TIME);
+	/*
+	 * Wiping the TPM may take a while. Delay sleep long enough for the
+	 * factory enable process to finish.
+	 */
+	delay_sleep_by(DISABLE_SLEEP_TIME_TPM_WIPE);
 
 	reset_required_ = !!reset_required;
 	hook_call_deferred(&factory_enable_deferred_data,
