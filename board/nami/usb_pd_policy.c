@@ -135,11 +135,16 @@ int pd_board_checks(void)
 int pd_check_power_swap(int port)
 {
 	/*
-	 * Allow power swap as long as we are acting as a dual role device,
-	 * otherwise assume our role is fixed (not in S0 or console command
-	 * to fix our role).
+	 * Allow power swap if we are acting as a dual role device.  If we are
+	 * not acting as dual role (ex. suspended), then only allow power swap
+	 * if we are sourcing when we could be sinking.
 	 */
-	return pd_get_dual_role(port) == PD_DRP_TOGGLE_ON ? 1 : 0;
+	if (pd_get_dual_role(port) == PD_DRP_TOGGLE_ON)
+		return 1;
+	else if (pd_get_role(port) == PD_ROLE_SOURCE)
+		return 1;
+
+	return 0;
 }
 
 int pd_check_data_swap(int port, int data_role)
