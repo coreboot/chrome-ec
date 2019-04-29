@@ -220,6 +220,22 @@ struct ec_thermal_config thermal_params[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
+/*
+ * Whitelist of I2C Passthru parameters that are allowed even when
+ * system is locked.
+ */
+const struct i2c_cmd_desc_t i2c_whitelist[] = {
+	/* Battery CT LABEL */
+	{
+		.port = 0x00,
+		.cmd = 0x70,
+		.slave_addr = 0x0b,
+		.leng_rd = 15,
+		.leng_wr = 1,
+	},
+};
+volatile const int i2c_whitelist_size = ARRAY_SIZE(i2c_whitelist);
+
 /**
  * Discharge battery when on AC power for factory test.
  */

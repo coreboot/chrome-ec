@@ -25,6 +25,24 @@ struct i2c_port_t {
 extern const struct i2c_port_t i2c_ports[];
 extern const unsigned int i2c_ports_used;
 
+/*
+ * Data structure to define I2C Parameters for a command
+ */
+struct i2c_cmd_desc_t {
+	uint8_t port;        /* I2C port */
+	uint8_t cmd;         /* command ID */
+	uint16_t slave_addr; /* Slave address */
+	uint16_t leng_rd;    /* max byte length to allow for read*/
+	uint16_t leng_wr;    /* max byte length to allow for write*/
+};
+
+/*
+ * The list of commands that are allowed even when the system is locked.
+ * board/${BOARD}/board.c should define this.
+ */
+extern const struct i2c_cmd_desc_t i2c_whitelist[];
+extern volatile const int i2c_whitelist_size;
+
 /* Flags for i2c_xfer() */
 #define I2C_XFER_START (1 << 0)  /* Start smbus session from idle state */
 #define I2C_XFER_STOP (1 << 1)  /* Terminate smbus session with stop bit */
