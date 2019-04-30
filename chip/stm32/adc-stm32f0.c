@@ -100,8 +100,6 @@ static void adc_init(const struct adc_t *adc)
 	STM32_ADC_CFGR1 = profile.cfgr1_reg;
 	/* clock is ADCCLK (ADEN must be off when writing this reg) */
 	STM32_ADC_CFGR2 = profile.cfgr2_reg;
-	/* Sampling time */
-	STM32_ADC_SMPR = adc->sample_rate ? adc->sample_rate : profile.smpr_reg;
 
 	/*
 	 * ADC enable (note: takes 4 ADC clocks between end of calibration
@@ -112,8 +110,11 @@ static void adc_init(const struct adc_t *adc)
 		STM32_ADC_CR = STM32_ADC_CR_ADEN;
 }
 
-static void adc_configure(int ain_id)
+static void adc_configure(int ain_id, uint32_t sample_rate)
 {
+	/* Sampling time */
+	STM32_ADC_SMPR = sample_rate ? sample_rate : profile.smpr_reg;
+
 	/* Select channel to convert */
 	STM32_ADC_CHSELR = BIT(ain_id);
 
@@ -128,7 +129,7 @@ static int watchdog_delay_ms;
 
 static void adc_continuous_read(int ain_id)
 {
-	adc_configure(ain_id);
+	adc_configure(ain_id, 0);
 
 	/* CONT=1 -> continuous mode on */
 	STM32_ADC_CFGR1 |= STM32_ADC_CFGR1_CONT;
@@ -152,7 +153,7 @@ static void adc_continuous_stop(void)
 
 static void adc_interval_read(int ain_id, int interval_ms)
 {
-	adc_configure(ain_id);
+	adc_configure(ain_id, 0);
 
 	/* EXTEN=01 -> hardware trigger detection on rising edge */
 	STM32_ADC_CFGR1 = (STM32_ADC_CFGR1 & ~STM32_ADC_CFGR1_EXTEN_MASK)
@@ -210,7 +211,7 @@ static int adc_enable_watchdog_no_lock(void)
 	/* Select channel */
 	STM32_ADC_CFGR1 = (STM32_ADC_CFGR1 & ~STM32_ADC_CFGR1_AWDCH_MASK) |
 			  (watchdog_ain_id << 26);
-	adc_configure(watchdog_ain_id);
+	adc_configure(watchdog_ain_id, 0);
 
 	/* Clear AWD interrupt flag */
 	STM32_ADC_ISR = 0x80;
@@ -309,7 +310,7 @@ int adc_read_channel(enum adc_channel ch)
 		adc_disable_watchdog_no_lock();
 	}
 
-	adc_configure(adc->channel);
+	adc_configure(adc->channel, adc->sample_rate);
 
 	/* Clear flags */
 	STM32_ADC_ISR = 0xe;
