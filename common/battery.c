@@ -556,3 +556,14 @@ static void battery_init(void)
 DECLARE_HOOK(HOOK_INIT, battery_init, HOOK_PRIO_DEFAULT);
 #endif /* HAS_TASK_HOSTCMD */
 #endif /* CONFIG_BATTERY_V2 */
+
+__attribute__((weak)) int get_battery_manufacturer_name(char *dest, int size)
+{
+	strzcpy(dest, "<unkn>", size);
+	return EC_SUCCESS;
+}
+
+int battery_manufacturer_name(char *dest, int size)
+{
+	return get_battery_manufacturer_name(dest, size);
+}
