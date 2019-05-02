@@ -38,6 +38,11 @@
 #define CONFIG_RAM_SIZE			CONFIG_ISH_SRAM_SIZE
 #define CONFIG_RAM_BASE			CONFIG_ISH_SRAM_BASE_START
 
+/* Store persistent panic data in AON memory */
+#define CONFIG_PANIC_DATA_SIZE		0xFF
+#define CONFIG_PANIC_DATA_BASE		(CONFIG_AON_ROM_BASE	\
+					 - CONFIG_PANIC_DATA_SIZE)
+
 /* System stack size */
 #define CONFIG_STACK_SIZE		1024
 
