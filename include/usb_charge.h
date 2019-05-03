@@ -40,9 +40,10 @@ enum usb_charge_mode {
 int usb_charge_set_mode(int usb_port_id, enum usb_charge_mode mode);
 
 #ifdef HAS_TASK_USB_CHG_P0
-#define USB_CHG_EVENT_BC12 TASK_EVENT_CUSTOM(1)
-#define USB_CHG_EVENT_VBUS TASK_EVENT_CUSTOM(2)
-#define USB_CHG_EVENT_INTR TASK_EVENT_CUSTOM(4)
+#define USB_CHG_EVENT_BC12 TASK_EVENT_CUSTOM(1 << 0)
+#define USB_CHG_EVENT_VBUS TASK_EVENT_CUSTOM(1 << 1)
+#define USB_CHG_EVENT_INTR TASK_EVENT_CUSTOM(1 << 2)
+#define USB_CHG_EVENT_MUX  TASK_EVENT_CUSTOM(1 << 3)
 #endif
 
 /*
