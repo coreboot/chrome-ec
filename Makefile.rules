@@ -136,7 +136,7 @@ build_boards: | $(FAILED_BOARDS_DIR)
 
 .PHONY: buildall
 buildall: build_boards
-	$(MAKE) build_cts
+#	$(MAKE) build_cts
 	$(MAKE) runtests
 	@touch .tests-passed
 	@echo "$@ completed successfully!"
