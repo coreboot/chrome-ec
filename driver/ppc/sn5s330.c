@@ -272,8 +272,12 @@ static int sn5s330_init(int port)
 		return status;
 	}
 
-	/* Set analog current limit delay to 200 us for both PP1 & PP2. */
-	regval = (PPX_ILIM_DEGLITCH_0_US_200 << 3) | PPX_ILIM_DEGLITCH_0_US_200;
+	/*
+	 * Set analog current limit delay to 200 us for PP1,
+	 * set 1000 us for PP2 for compatibility.
+	 */
+	regval = (PPX_ILIM_DEGLITCH_0_US_200 << 3) |
+		  PPX_ILIM_DEGLITCH_0_US_1000;
 	status = i2c_write8(i2c_port, i2c_addr, SN5S330_FUNC_SET11,
 			    regval);
 	if (status) {
