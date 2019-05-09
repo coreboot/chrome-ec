@@ -280,27 +280,3 @@ static void get_motion_sensors_count(void)
 		motion_sensor_count = 0;
 }
 DECLARE_HOOK(HOOK_INIT, get_motion_sensors_count, HOOK_PRIO_FIRST);
-
-
-enum critical_shutdown board_critical_shutdown_check(
-		struct charge_state_data *curr)
-{
-		return CRITICAL_SHUTDOWN_CUTOFF;
-}
-
-uint8_t board_set_battery_level_shutdown(void)
-{
-	/* Cut off at 5% */
-	return 6;
-}
-
-enum critical_shutdown board_system_is_idle(uint64_t last_shutdown_time,
-					    uint64_t *target, uint64_t now)
-{
-	/*
-	 * Don't do anything. Battery eventually will reach critical
-	 * charge (5%). Then, board_critical_shutdown_check will be
-	 * called and request cutoff.
-	 */
-	return CRITICAL_SHUTDOWN_IGNORE;
-}
