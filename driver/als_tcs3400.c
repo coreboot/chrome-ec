@@ -83,6 +83,7 @@ static int tcs3400_rgb_read(const struct motion_sensor_t *s, intv3_t v)
 	return EC_SUCCESS;
 }
 
+#if 0
 static int tcs3400_post_events(struct motion_sensor_t *s, uint32_t last_ts)
 {
 	/*
@@ -227,6 +228,7 @@ skip_vector_load:
 
 	return EC_SUCCESS;
 }
+#endif
 
 void tcs3400_interrupt(enum gpio_signal signal)
 {
@@ -242,6 +244,7 @@ void tcs3400_interrupt(enum gpio_signal signal)
  * Ran from the motion_sense task, finds the events that raised the interrupt,
  * and posts those events via motion_sense_fifo_add_data()..
  */
+#if 0
 static int tcs3400_irq_handler(struct motion_sensor_t *s, uint32_t *event)
 {
 	int status = 0;
@@ -277,6 +280,7 @@ static int tcs3400_irq_handler(struct motion_sensor_t *s, uint32_t *event)
 
 	return ret;
 }
+#endif
 
 static int tcs3400_rgb_get_range(const struct motion_sensor_t *s)
 {
@@ -440,7 +444,7 @@ static int tcs3400_init(const struct motion_sensor_t *s)
 		uint8_t reg;
 		uint8_t data;
 	} defaults[] = { { TCS_I2C_ENABLE, 0 },
-			 { TCS_I2C_ATIME, 0x4 },
+			 { TCS_I2C_ATIME, 0x0 },
 			 { TCS_I2C_WTIME, 0xFF },
 			 { TCS_I2C_AILTL, 0 },
 			 { TCS_I2C_AILTH, 0 },
@@ -448,7 +452,7 @@ static int tcs3400_init(const struct motion_sensor_t *s)
 			 { TCS_I2C_AIHTH, 0 },
 			 { TCS_I2C_PERS, 0 },
 			 { TCS_I2C_CONFIG, 0x40 },
-			 { TCS_I2C_CONTROL, 0x10 },
+			 { TCS_I2C_CONTROL, 0x02 },
 			 { TCS_I2C_AUX, 0 },
 			 { TCS_I2C_IR, 0 },
 			 { TCS_I2C_CICLEAR, 0 },
@@ -486,7 +490,7 @@ const struct accelgyro_drv tcs3400_drv = {
 	.set_data_rate = tcs3400_set_data_rate,
 	.get_data_rate = tcs3400_get_data_rate,
 #ifdef CONFIG_ACCEL_INTERRUPTS
-	.irq_handler = tcs3400_irq_handler,
+/*	.irq_handler = tcs3400_irq_handler, */
 #endif
 };
 

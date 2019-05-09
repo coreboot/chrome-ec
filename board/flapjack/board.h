@@ -102,7 +102,7 @@
 #define CONFIG_CMD_ALSLOG
 
 /* ALS needs to be polled */
-#define CONFIG_ACCEL_FORCE_MODE_MASK    BIT(CLEAR_ALS)
+/* #define CONFIG_ACCEL_FORCE_MODE_MASK    BIT(CLEAR_ALS) */
 
 /* Camera VSYNC */
 #define CONFIG_SYNC
