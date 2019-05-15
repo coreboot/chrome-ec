@@ -104,6 +104,6 @@ utils-y=utils.o
 x25519-y=x25519.o
 
 TPM2_ROOT := $(CROS_WORKON_SRCROOT)/src/third_party/tpm2
-$(out)/RO/common/new_nvmem.o: CFLAGS += -I$(TPM2_ROOT)
+$(out)/RO/common/new_nvmem.o: CFLAGS += -I$(TPM2_ROOT) -I chip/g
 $(out)/RO/test/nvmem.o: CFLAGS += -I$(TPM2_ROOT)
 $(out)/RO/test/nvmem_tpm2_mock.o: CFLAGS += -I$(TPM2_ROOT)
