@@ -1903,6 +1903,11 @@
 /* Command to issue AP reset */
 #undef  CONFIG_HOSTCMD_AP_RESET
 
+#if !defined(TEST_BUILD) && !defined(TEST_FUZZ)
+/* Enable EC_CMD_LOCATE_CHIP */
+#define CONFIG_HOSTCMD_LOCATE_CHIP
+#endif
+
 /* List of host commands whose debug output will be suppressed */
 #undef CONFIG_SUPPRESSED_HOST_COMMANDS
 
