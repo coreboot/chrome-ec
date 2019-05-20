@@ -32,8 +32,6 @@ GPIO_INT(AP_OVERTEMP,      PIN(E, 4),  GPIO_INT_RISING | GPIO_PULL_DOWN,
          overtemp_interrupt)
 GPIO_INT(ACCEL_INT_L,      PIN(D, 14), GPIO_INT_FALLING | GPIO_SEL_1P8V,
          bmi160_interrupt)
-GPIO_INT(SYNC_INT,         PIN(A, 12), GPIO_INT_RISING | GPIO_PULL_DOWN,
-         sync_interrupt)
 GPIO_INT(CHARGER_INT_L,    PIN(E, 6),  GPIO_INT_FALLING | GPIO_PULL_UP,
          rt946x_interrupt)
 
@@ -73,6 +71,8 @@ GPIO(BAT_LED_RED,          PIN(E, 13), GPIO_ODR_HIGH)
 GPIO(WP_L,                 PIN(E, 5),  GPIO_INPUT)
 /* TODO(philipchen): Add an interrupt handler once CCD is fully developed. */
 GPIO(CCD_MODE_ODL,         PIN(C, 5),  GPIO_INPUT | GPIO_PULL_UP)
+/* TODO(b:63773130): Add an interrupt handler for battery gauge max17055 */
+GPIO(BATTERY_INT_L,        PIN(A, 12), GPIO_INPUT | GPIO_PULL_UP)
 /* Non-INT power signal pin */
 GPIO(AP_CORE_PG,           PIN(D, 7),  GPIO_INPUT | GPIO_PULL_UP)
 /* Battery ID strap pin */

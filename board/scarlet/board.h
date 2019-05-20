@@ -90,11 +90,6 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT TASK_EVENT_CUSTOM(4)
 
-/* Camera VSYNC */
-#define CONFIG_SYNC
-#define CONFIG_SYNC_COMMAND
-#define CONFIG_SYNC_INT_EVENT TASK_EVENT_CUSTOM(5)
-
 /* To be able to indicate the device is in tablet mode. */
 #define CONFIG_TABLET_MODE_SWITCH
 
@@ -203,7 +198,6 @@ enum power_signal {
 enum sensor_id {
 	LID_ACCEL = 0,
 	LID_GYRO,
-	VSYNC,
 };
 
 #include "gpio_signal.h"
