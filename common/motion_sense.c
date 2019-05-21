@@ -438,9 +438,6 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
 {
 	int ret, cnt = 3;
 
-	/* By default, report the actual sensor values. */
-	sensor->in_spoof_mode = 0;
-
 	/* Initialize accelerometers. */
 	do {
 		ret = sensor->drv->init(sensor);
@@ -699,7 +696,7 @@ static int motion_sense_read(struct motion_sensor_t *sensor)
 	 * If the sensor is in spoof mode, the readings are already present in
 	 * spoof_xyz.
 	 */
-	if (sensor->in_spoof_mode)
+	if (sensor->flags & MOTIONSENSE_FLAG_IN_SPOOF_MODE)
 		return EC_SUCCESS;
 #endif /* defined(CONFIG_ACCEL_SPOOF_MODE) */
 
@@ -762,7 +759,8 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 				vector.flags = 0;
 				vector.sensor_num = sensor - motion_sensors;
 #ifdef CONFIG_ACCEL_SPOOF_MODE
-				if (sensor->in_spoof_mode)
+				if (sensor->flags &
+				    MOTIONSENSE_FLAG_IN_SPOOF_MODE)
 					v = sensor->spoof_xyz;
 #endif /* defined(CONFIG_ACCEL_SPOOF_MODE) */
 				vector.data[X] = v[X];
@@ -1484,7 +1482,7 @@ static int host_cmd_motion_sense(struct host_cmd_handler_args *args)
 		switch (in->spoof.spoof_enable) {
 		case MOTIONSENSE_SPOOF_MODE_DISABLE:
 			/* Disable spoof mode. */
-			sensor->in_spoof_mode = 0;
+			sensor->flags &= ~MOTIONSENSE_FLAG_IN_SPOOF_MODE;
 			break;
 
 		case MOTIONSENSE_SPOOF_MODE_CUSTOM:
@@ -1494,7 +1492,7 @@ static int host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			sensor->spoof_xyz[X] = (int)in->spoof.components[X];
 			sensor->spoof_xyz[Y] = (int)in->spoof.components[Y];
 			sensor->spoof_xyz[Z] = (int)in->spoof.components[Z];
-			sensor->in_spoof_mode = 1;
+			sensor->flags |= MOTIONSENSE_FLAG_IN_SPOOF_MODE;
 			break;
 
 		case MOTIONSENSE_SPOOF_MODE_LOCK_CURRENT:
@@ -1505,12 +1503,13 @@ static int host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			sensor->spoof_xyz[X] = sensor->raw_xyz[X];
 			sensor->spoof_xyz[Y] = sensor->raw_xyz[Y];
 			sensor->spoof_xyz[Z] = sensor->raw_xyz[Z];
-			sensor->in_spoof_mode = 1;
+			sensor->flags |= MOTIONSENSE_FLAG_IN_SPOOF_MODE;
 			break;
 
 		case MOTIONSENSE_SPOOF_MODE_QUERY:
 			/* Querying the spoof status of the sensor. */
-			out->spoof.ret = sensor->in_spoof_mode;
+			out->spoof.ret = !!(sensor->flags &
+					MOTIONSENSE_FLAG_IN_SPOOF_MODE);
 			args->response_size = sizeof(out->spoof);
 			break;
 
@@ -1847,7 +1846,8 @@ DECLARE_CONSOLE_COMMAND(fiforead, motion_sense_read_fifo,
 static void print_spoof_mode_status(int id)
 {
 	CPRINTS("Sensor %d spoof mode is %s. <%d, %d, %d>", id,
-		motion_sensors[id].in_spoof_mode ? "enabled" : "disabled",
+		(motion_sensors[id].flags & MOTIONSENSE_FLAG_IN_SPOOF_MODE)
+				? "enabled" : "disabled",
 		motion_sensors[id].spoof_xyz[X],
 		motion_sensors[id].spoof_xyz[Y],
 		motion_sensors[id].spoof_xyz[Z]);
@@ -1899,7 +1899,10 @@ static int command_accelspoof(int argc, char **argv)
 				return EC_ERROR_PARAM_COUNT;
 			}
 		}
-		s->in_spoof_mode = enable;
+		if (enable)
+			s->flags |= MOTIONSENSE_FLAG_IN_SPOOF_MODE;
+		else
+			s->flags &= ~MOTIONSENSE_FLAG_IN_SPOOF_MODE;
 		print_spoof_mode_status(id);
 	}
 
