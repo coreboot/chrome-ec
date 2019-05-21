@@ -337,7 +337,6 @@ static void report_failure(struct nvmem_failure_payload *payload,
 			offsetof(struct nvmem_failure_payload, size),
 		payload);
 	ccprintf("Logging failure %d\n", payload->failure_type);
-	cflush();
 	system_reset(SYSTEM_RESET_MANUALLY_TRIGGERED | SYSTEM_RESET_HARD);
 }
 
@@ -711,8 +710,7 @@ enum ec_error_list get_next_object(struct access_tracker *at,
 			salt[2] = ch->container_hash;
 
 			/* Decrypt in place. */
-			if (!app_cipher(salt, ch + 1, ch + 1, ch->size))
-				report_no_payload_failure(NVMEMF_CIPHER_ERROR);
+			app_cipher(salt, ch + 1, ch + 1, ch->size);
 		}
 
 		/* And calculate hash. */
@@ -2653,8 +2651,7 @@ static enum ec_error_list save_container(struct nn_container *nc)
 		salt[2] = nc->container_hash;
 		salt[3] = 0;
 
-		if (!app_cipher(salt, nc + 1, nc + 1, nc->size))
-			report_no_payload_failure(NVMEMF_CIPHER_ERROR);
+		app_cipher(salt, nc + 1, nc + 1, nc->size);
 	}
 
 	return save_object(nc);
