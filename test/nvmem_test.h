@@ -19,8 +19,7 @@ enum test_failure_mode {
 	TEST_FAIL_WHEN_INVALIDATING,
 	TEST_FAIL_WHEN_COMPACTING,
 	TEST_FAIL_SAVING_VAR,
-	TEST_FAIL_FINALIZING_VAR,
-	TEST_FAILED_HASH
+	TEST_FAIL_FINALIZING_VAR
 };
 
 extern enum test_failure_mode failure_mode;
