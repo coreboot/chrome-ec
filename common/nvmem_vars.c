@@ -344,7 +344,7 @@ int writevars(void)
 }
 
 /****************************************************************************/
-#if defined(TEST_BUILD) && !defined(TEST_FUZZ)
+#ifdef TEST_BUILD
 #include "console.h"
 
 static void print_blob(const uint8_t *blob, int blob_len)
