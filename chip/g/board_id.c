@@ -23,11 +23,6 @@ const struct SignedHeader *get_current_image_header(void)
 			get_program_memory_addr(system_get_image_copy());
 }
 
-int board_id_is_blank(const struct board_id *id)
-{
-	return ~(id->type & id->type_inv & id->flags) == 0;
-}
-
 uint32_t check_board_id_vs_header(const struct board_id *id,
 				  const struct SignedHeader *h)
 {
@@ -37,7 +32,7 @@ uint32_t check_board_id_vs_header(const struct board_id *id,
 	uint32_t header_board_id_flags;
 
 	/* Blank Board ID matches all headers */
-	if (board_id_is_blank(id))
+	if (~(id->type & id->type_inv & id->flags) == 0)
 		return 0;
 
 	header_board_id_type = SIGNED_HEADER_PADDING ^ h->board_id_type;
@@ -151,7 +146,7 @@ static int write_board_id(const struct board_id *id)
 		return rv;
 	}
 
-	if (!board_id_is_blank(&id_test)) {
+	if (~(id_test.type & id_test.type_inv & id_test.flags) != 0) {
 		CPRINTS("%s: Board ID already programmed", __func__);
 		return EC_ERROR_ACCESS_DENIED;
 	}
@@ -221,7 +216,7 @@ static int command_board_id(int argc, char **argv)
 		}
 		ccprintf("Board ID: %08x, flags %08x\n", id.type, id.flags);
 
-		if (board_id_is_blank(&id))
+		if ((~id.type | ~id.type_inv | ~id.flags) == 0)
 			return rv; /* The space is not initialized. */
 
 		if (id.type != ~id.type_inv)
