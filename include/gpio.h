@@ -158,11 +158,7 @@ int gpio_is_implemented(enum gpio_signal signal);
  */
 void gpio_set_flags(enum gpio_signal signal, int flags);
 
-#if defined(CONFIG_CMD_GPIO_EXTENDED) && !defined(CONFIG_GPIO_GET_EXTENDED)
-#define CONFIG_GPIO_GET_EXTENDED
-#endif
-
-#ifdef CONFIG_GPIO_GET_EXTENDED
+#ifdef CONFIG_CMD_GPIO_EXTENDED
 /**
  * Get the current flags for a signal.
  *
