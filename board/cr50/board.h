@@ -65,7 +65,6 @@
 /* Size partition in NvMem */
 #define NVMEM_PARTITION_SIZE (CFG_TOP_SIZE - CONFIG_FLASH_NVCTR_SIZE)
 /* Size in bytes of NvMem area */
-#define CONFIG_FLASH_LOG
 #define CONFIG_FLASH_NVMEM_SIZE (NVMEM_PARTITION_SIZE * NVMEM_NUM_PARTITIONS)
 /* Enable <key, value> variable support. */
 #define CONFIG_FLASH_NVMEM_VARS
@@ -108,7 +107,6 @@
 #ifdef CR50_DEV
 /* Enable unsafe dev features for CCD in dev builds */
 #define CONFIG_CASE_CLOSED_DEBUG_V1_UNSAFE
-#define CONFIG_CMD_FLASH_LOG
 #define CONFIG_PHYSICAL_PRESENCE_DEBUG_UNSAFE
 #endif
 
@@ -149,6 +147,8 @@
 
 /* Implement custom udelay, due to usec hwtimer imprecision. */
 #define CONFIG_HW_SPECIFIC_UDELAY
+
+#define CONFIG_TPM_LOGGING
 
 #ifndef __ASSEMBLER__
 
