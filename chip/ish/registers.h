@@ -10,7 +10,6 @@
 
 #ifndef __ASSEMBLER__
 #include "common.h"
-#include "compile_time_macros.h"
 
 /*
  * ISH3.0 has 3 controllers. Locking must occur by-controller (not by-port).

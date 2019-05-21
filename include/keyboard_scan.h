@@ -9,7 +9,6 @@
 #define __CROS_EC_KEYBOARD_SCAN_H
 
 #include "common.h"
-#include "compile_time_macros.h"
 #include "keyboard_config.h"
 
 struct keyboard_scan_config {

@@ -9,7 +9,6 @@
 #define __NRF51_RADIO_H
 
 #include "common.h"
-#include "compile_time_macros.h"
 #include "registers.h"
 
 #ifndef NRF51_RADIO_MAX_PAYLOAD

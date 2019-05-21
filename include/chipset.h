@@ -14,7 +14,6 @@
 #define __CROS_EC_CHIPSET_H
 
 #include "common.h"
-#include "compile_time_macros.h"
 #include "gpio.h"
 
 /*
