@@ -713,9 +713,10 @@ static int load_merkle_tree(struct merkle_tree_t *merkle_tree)
 		       tree->key_derivation_nonce,
 		       sizeof(tree->key_derivation_nonce));
 		ret = derive_keys(merkle_tree);
-		freevar(ptr);
-		if (ret != EC_SUCCESS)
+		if (ret != EC_SUCCESS) {
+			freevar(ptr);
 			return ret;
+		}
 	}
 
 	/* Handle the root hash. */
@@ -760,9 +761,9 @@ static int load_merkle_tree(struct merkle_tree_t *merkle_tree)
 			}
 		}
 		pw_restart_count = log->restart_count;
-		freevar(ptr);
 	}
 
+	freevar(ptr);
 	cprints(CC_TASK, "PinWeaver: Loaded Tree. restart_count = %d",
 		pw_restart_count);
 
