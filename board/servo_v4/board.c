@@ -56,13 +56,13 @@ void board_config_pre_init(void)
 	 * Reference Manual
 	 */
 	/* Remap USART1 Tx from DMA channel 2 to channel 4 */
-	STM32_SYSCFG_CFGR1 |= BIT(9);
+	STM32_SYSCFG_CFGR1 |= (1 << 9);
 	/* Remap USART1 Rx from DMA channel 3 to channel 5 */
-	STM32_SYSCFG_CFGR1 |= BIT(10);
+	STM32_SYSCFG_CFGR1 |= (1 << 10);
 	/* Remap TIM3_CH1 from DMA channel 4 to channel 6 */
-	STM32_SYSCFG_CFGR1 |= BIT(30);
+	STM32_SYSCFG_CFGR1 |= (1 << 30);
 	/* Remap SPI2 Tx from DMA channel 5 to channel 7 */
-	STM32_SYSCFG_CFGR1 |= BIT(24);
+	STM32_SYSCFG_CFGR1 |= (1 << 24);
 }
 
 /******************************************************************************
@@ -270,15 +270,15 @@ static void write_ioexpander(int bank, int gpio, int val)
 	/* Read output port register */
 	i2c_read8(1, 0x40, 0x2 + bank, &tmp);
 	if (val)
-		tmp |= BIT(gpio);
+		tmp |= (1 << gpio);
 	else
-		tmp &= ~BIT(gpio);
+		tmp &= ~(1 << gpio);
 	/* Write back modified output port register */
 	i2c_write8(1, 0x40, 0x2 + bank, tmp);
 
 	/* Set Configuration port to output/0 */
 	i2c_read8(1, 0x40, 0x6 + bank, &tmp);
-	i2c_write8(1, 0x40, 0x6 + bank, tmp & ~BIT(gpio));
+	i2c_write8(1, 0x40, 0x6 + bank, tmp & ~(1 << gpio));
 }
 
 /* Enable uservo USB. */
