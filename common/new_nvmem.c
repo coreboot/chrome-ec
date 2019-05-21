@@ -312,6 +312,7 @@ static struct delete_candidates {
  * list.
  */
 static uint8_t page_list[NEW_NVMEM_TOTAL_PAGES];
+static uint8_t migration_in_progress;
 static uint32_t next_evict_obj_base;
 
 /*
@@ -1352,8 +1353,11 @@ static enum ec_error_list save_var(const uint8_t *key, uint8_t key_len,
 	vc->c_header.size = sizeof(struct tuple) + val_len + key_len;
 
 	rv = save_container(&vc->c_header);
-	if (rv == EC_SUCCESS)
+	if (rv == EC_SUCCESS) {
 		total_var_space += key_len + val_len;
+		if (!migration_in_progress)
+			add_final_delimiter();
+	}
 
 	if (local_alloc)
 		shared_mem_release(vc);
@@ -1441,8 +1445,10 @@ enum ec_error_list new_nvmem_migrate(unsigned int act_partition)
 	ch->encrypted = 1;
 	ch->generation = 0;
 
+	migration_in_progress = 1;
 	migrate_vars(ch);
 	migrate_tpm_nvmem(ch);
+	migration_in_progress = 0;
 
 	shared_mem_release(ch);
 
@@ -1882,10 +1888,6 @@ static enum ec_error_list verify_last_section(
 		union {
 			uint32_t handle; /* For evictables. */
 			uint8_t id;	 /* For reserved objects. */
-			struct {	 /* For tuples. */
-				uint32_t key_hash;
-				uint8_t key_len;
-			};
 		};
 	};
 	struct new_objects {
@@ -1898,7 +1900,6 @@ static enum ec_error_list verify_last_section(
 	struct object *po;
 	uint8_t ctype;
 	struct page_tracker top_del;
-	struct max_var_container *vc;
 	int i;
 
 	newobjs = get_scratch_buffer(sizeof(struct new_objects));
@@ -1924,14 +1925,6 @@ static enum ec_error_list verify_last_section(
 
 		case NN_OBJ_TPM_EVICTABLE:
 			po->handle = *((uint32_t *)(ch + 1));
-			break;
-
-		case NN_OBJ_TUPLE:
-			vc = (struct max_var_container *)ch;
-			po->key_len = vc->t_header.key_len;
-			app_compute_hash_wrapper(vc->t_header.data_,
-						 po->key_len, &po->key_hash,
-						 sizeof(po->key_hash));
 			break;
 		default:
 			continue;
@@ -1982,33 +1975,15 @@ static enum ec_error_list verify_last_section(
 			key = *((uint32_t *)(ch + 1));
 			key_size = sizeof(uint32_t);
 			break;
-
-		case NN_OBJ_TUPLE:
-			vc = (struct max_var_container *)ch;
-			key_size = vc->t_header.key_len;
-			app_compute_hash_wrapper(vc->t_header.data_, key_size,
-						 &key, sizeof(key));
-			break;
-
 		default:
 			continue;
 		}
 
 		for (i = 0, po = newobjs->objects; i < newobjs->num_objects;
 		     i++, po++) {
-			if (po->cont_type != ctype)
-				continue;
-
-			if ((ctype == NN_OBJ_TPM_RESERVED) && (po->id != key))
-				continue;
-
-			if ((ctype == NN_OBJ_TPM_EVICTABLE) &&
-			    (po->handle != key))
-				continue;
-
-			if ((ctype == NN_OBJ_TUPLE) &&
-			    ((po->key_len != key_size) ||
-			     (key != po->key_hash)))
+			if ((po->cont_type != ctype) ||
+			    ((key_size == 1) && (po->id != key)) ||
+			    ((key_size == 4) && (po->handle != key)))
 				continue;
 
 			/*
@@ -2081,8 +2056,11 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 				dpt.list_index = i;
 	}
 
-	while ((rv = get_next_object(&dpt, nc, 0)) == EC_SUCCESS)
+	while ((rv = get_next_object(&dpt, nc, 0)) == EC_SUCCESS) {
+		if (nc->container_type == NN_OBJ_TUPLE)
+			continue;
 		delete_object(&dpt, nc);
+	}
 
 	if (rv == EC_ERROR_INVAL) {
 		/*
@@ -2691,7 +2669,6 @@ int setvar(const uint8_t *key, uint8_t key_len, const uint8_t *val,
 	size_t old_var_space;
 	struct max_var_container *vc;
 	struct access_tracker at = {};
-	const struct nn_container *del;
 
 	if (!key || !key_len)
 		return EC_ERROR_INVAL;
@@ -2738,11 +2715,7 @@ int setvar(const uint8_t *key, uint8_t key_len, const uint8_t *val,
 			/* No, it will not. */
 			return EC_ERROR_OVERFLOW;
 
-		rv = save_var(key, key_len, val, val_len, vc);
-		if (rv == EC_SUCCESS)
-			add_final_delimiter();
-
-		return rv;
+		return save_var(key, key_len, val, val_len, vc);
 	}
 
 	/* The variable was found, let's see if the value is being changed. */
@@ -2764,23 +2737,12 @@ int setvar(const uint8_t *key, uint8_t key_len, const uint8_t *val,
 	vc->c_header.generation++;
 	rv = save_var(key, key_len, val, val_len, vc);
 	shared_mem_release(vc);
-	del = page_cursor(&master_at.mt);
-#if defined(NVMEM_TEST_BUILD)
-	if (failure_mode == TEST_FAIL_SAVING_VAR)
-		return EC_SUCCESS;
-#endif
-	add_delimiter();
 	if (rv == EC_SUCCESS) {
 		rv = invalidate_object(
 			(struct nn_container *)((uintptr_t)at.ct.ph +
 						at.ct.data_offset));
-		if (rv == EC_SUCCESS) {
+		if (rv == EC_SUCCESS)
 			total_var_space -= old_var_space;
-#if defined(NVMEM_TEST_BUILD)
-			if (failure_mode != TEST_FAIL_FINALIZING_VAR)
-#endif
-				finalize_delimiter(del);
-		}
 	}
 	return rv;
 }
