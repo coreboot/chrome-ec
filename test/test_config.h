@@ -240,7 +240,6 @@ enum nvmem_users { NVMEM_TPM = 0, NVMEM_CR50, NVMEM_NUM_USERS };
 #endif
 
 #ifdef TEST_PINWEAVER
-#define CONFIG_DCRYPTO_MOCK
 #define CONFIG_PINWEAVER
 #define CONFIG_SHA256
 #endif /* TEST_PINWEAVER */
