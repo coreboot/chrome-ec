@@ -17,8 +17,11 @@
 
 static struct mutex shmem_lock;
 
-#ifndef TEST_SHMALLOC
+#ifndef TEST_BUILD
 #define set_map_bit(x)
+#define TEST_GLOBAL static
+#else
+#define TEST_GLOBAL
 #endif
 
 /*
@@ -26,10 +29,10 @@ static struct mutex shmem_lock;
  * memory available in the system. It then gets fragmented/defragmented based
  * on actual allocations/releases.
  */
-test_export_static struct shm_buffer *free_buf_chain;
+TEST_GLOBAL struct shm_buffer *free_buf_chain;
 
 /* At the beginning there is no allocated buffers */
-test_export_static struct shm_buffer *allocced_buf_chain;
+TEST_GLOBAL struct shm_buffer *allocced_buf_chain;
 
 /* The size of the biggest ever allocated buffer. */
 static int max_allocated_size;
