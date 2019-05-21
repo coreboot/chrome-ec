@@ -38,9 +38,6 @@
 #undef CONFIG_FLASH
 #endif
 
-/* Enable getting gpio flags to tell if open drain pins are asserted */
-#define CONFIG_GPIO_GET_EXTENDED
-
 /* Flash configuration */
 #undef CONFIG_FLASH_PSTATE
 #define CONFIG_WP_ALWAYS
