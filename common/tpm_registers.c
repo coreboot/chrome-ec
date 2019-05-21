@@ -13,7 +13,7 @@
 #include "console.h"
 #include "extension.h"
 #include "link_defs.h"
-#include "new_nvmem.h"
+#include "nvmem.h"
 #include "printf.h"
 #include "signed_header.h"
 #include "sps.h"
@@ -828,9 +828,18 @@ static void tpm_reset_now(int wipe_first)
 
 	if (wipe_first)
 		/* Now wipe the TPM's nvmem */
-		wipe_result = nvmem_erase_tpm_data();
+		wipe_result = nvmem_erase_user_data(NVMEM_TPM);
 	else
 		wipe_result = EC_SUCCESS;
+
+	/*
+	 * Clear the TPM library's zero-init data.  Note that the linker script
+	 * includes this file's .bss in the same section, so it will be cleared
+	 * at the same time.
+	 */
+	memset(&__bss_libtpm2_start, 0,
+	       (uintptr_t)(&__bss_libtpm2_end) -
+	       (uintptr_t)(&__bss_libtpm2_start));
 
 	/*
 	 * NOTE: If any __initialized variables need reinitializing after
@@ -842,15 +851,6 @@ static void tpm_reset_now(int wipe_first)
 	 * might have accumulated.
 	 */
 	nvmem_enable_commits();
-
-	/*
-	 * Clear the TPM library's zero-init data.  Note that the linker script
-	 * includes this file's .bss in the same section, so it will be cleared
-	 * at the same time.
-	 */
-	memset(&__bss_libtpm2_start, 0,
-	       (uintptr_t)(&__bss_libtpm2_end) -
-		       (uintptr_t)(&__bss_libtpm2_start));
 
 	/*
 	 * Prevent NVRAM commits until further notice, unless running in
