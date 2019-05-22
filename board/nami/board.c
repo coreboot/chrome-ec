@@ -419,7 +419,7 @@ const static struct ec_thermal_config thermal_c1 = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(66),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(71),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
@@ -435,7 +435,7 @@ const static struct ec_thermal_config thermal_c2 = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(74),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(79),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(82),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
