@@ -150,6 +150,8 @@
 /* KB backlight driver */
 #define CONFIG_LED_DRIVER_LM3509
 
+#undef CONFIG_SENSOR_TIGHT_TIMESTAMPS
+
 /* FIFO size is in power of 2. */
 #define CONFIG_ACCEL_FIFO 512
 
