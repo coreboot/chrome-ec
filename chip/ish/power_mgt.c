@@ -3,15 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <console.h>
-#include <task.h>
-#include <system.h>
-#include <hwtimer.h>
-#include <util.h>
-#include "interrupts.h"
 #include "aontaskfw/ish_aon_share.h"
-#include "power_mgt.h"
+#include "console.h"
+#include "hwtimer.h"
+#include "interrupts.h"
 #include "ish_dma.h"
+#include "power_mgt.h"
+#include "system.h"
+#include "task.h"
+#include "util.h"
 
 #ifdef CONFIG_ISH_PM_DEBUG
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
