@@ -226,6 +226,33 @@ enum ec_error_list {
 #define test_export_static static
 #endif
 
+/*
+ * Weak symbol markers
+ *
+ * These macros are used to annotate weak definitions, their declarations, and
+ * overriding definitions.
+ *
+ * __override_proto: declarations
+ * __override: definitions which take precedence
+ * __overridable: default (weak) definitions
+ *
+ * For example, in foo.h:
+ *   __override_proto void foo(void);
+ *
+ * and in foo.c:
+ *   __overridable void foo(void) {
+ *     ...
+ *   }
+ *
+ * and in board.c:
+ *   __override void foo(void) {
+ *     ...
+ *   }
+ */
+#define __override_proto
+#define __override
+#define __overridable	__attribute__((weak))
+
 /* find the most significant bit. Not defined in n == 0. */
 #define __fls(n) (31 - __builtin_clz(n))
 
