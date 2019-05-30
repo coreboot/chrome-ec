@@ -244,6 +244,7 @@ enum sensor_id {
 	BASE_ACCEL,
 	BASE_GYRO,
 	LID_ALS,
+	SENSOR_COUNT,
 };
 
 enum adc_channel {

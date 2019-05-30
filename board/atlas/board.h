@@ -218,6 +218,7 @@ enum sensor_id {
 	BASE_ACCEL,
 	BASE_GYRO,
 	LID_ALS,
+	SENSOR_COUNT,
 };
 
 /* LID_ALS needs to be polled */
