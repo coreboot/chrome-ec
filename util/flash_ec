@@ -140,6 +140,7 @@ BOARDS_NPCX_INT_SPI=(
 	bobba
 	casta
 	fleex
+	garg
 	grunt
 	meep
 	nocturne
@@ -153,6 +154,7 @@ BOARDS_NPCX_UUT=(
 	casta
 	cheza
 	fleex
+	garg
 	grunt
 	meep
 	phaser
@@ -202,6 +204,8 @@ VALID_CHIP_COMBO["casta.npcx_spi"]="(servo_micro|servo_v2)"
 VALID_CHIP_COMBO["casta.npcx_uut"]="ccd_cr50"
 VALID_CHIP_COMBO["fleex.npcx_spi"]="(servo_micro|servo_v2)"
 VALID_CHIP_COMBO["fleex.npcx_uut"]="ccd_cr50"
+VALID_CHIP_COMBO["garg.npcx_spi"]="(servo_micro|servo_v2)"
+VALID_CHIP_COMBO["garg.npcx_uut"]="ccd_cr50"
 VALID_CHIP_COMBO["grunt.npcx_spi"]="(servo_micro|servo_v2)"
 VALID_CHIP_COMBO["grunt.npcx_uut"]="ccd_cr50"
 VALID_CHIP_COMBO["meep.npcx_spi"]="(servo_micro|servo_v2)"
