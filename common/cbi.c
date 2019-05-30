@@ -141,13 +141,19 @@ static int do_read_board_info(void)
 	return EC_SUCCESS;
 }
 
+void i2c_init_port(const struct i2c_port_t *p);
+
 static int read_board_info(void)
 {
 	if (cached_read_result == EC_ERROR_CBI_CACHE_INVALID) {
 		cached_read_result = do_read_board_info();
-		if (cached_read_result)
+		if (cached_read_result) {
+			int rv = i2c_unwedge(I2C_PORT_EEPROM);
+			CPRINTS("I2C-4 unwedged (%d)", rv);
+			i2c_init_port(&i2c_ports[4]);
 			/* On error (I2C or bad contents), retry a read */
 			cached_read_result = do_read_board_info();
+		}
 	}
 	/* Else, we already tried and know the result. Return the cached
 	 * error code immediately to avoid wasteful reads. */

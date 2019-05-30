@@ -135,7 +135,7 @@ static void i2c_set_freq_port(const struct i2c_port_t *p,
  *
  * @param p		the I2c port
  */
-static void i2c_init_port(const struct i2c_port_t *p)
+void i2c_init_port(const struct i2c_port_t *p)
 {
 	int port = p->port;
 	enum stm32_i2c_clk_src src = I2C_CLK_SRC_48MHZ;
