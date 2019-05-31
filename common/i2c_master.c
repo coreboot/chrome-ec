@@ -787,9 +787,9 @@ static void i2c_passthru_protect_tcpc_ports(void)
 
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		/* TCPC tunnel not configured. No need to protect anything */
-		if (!tcpc_config[i].i2c_slave_addr)
+		if (!tcpc_config[i].i2c_info.addr)
 			continue;
-		i2c_passthru_protect_port(tcpc_config[i].i2c_host_port);
+		i2c_passthru_protect_port(tcpc_config[i].i2c_info.port);
 	}
 #endif
 }

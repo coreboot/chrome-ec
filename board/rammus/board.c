@@ -162,18 +162,20 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 /* TCPC mux configuration */
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_PS8751] = {
-		.i2c_host_port = I2C_PORT_TCPC1,
-		.i2c_slave_addr = PS8751_I2C_ADDR1,
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC1,
+			.addr = PS8751_I2C_ADDR1,
+		},
 		.drv = &ps8xxx_tcpm_drv,
-		/* Alert is active-low, push-pull */
-		.flags = 0,
 	},
 	[USB_PD_PORT_ANX7447] = {
-		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = AN7447_TCPC3_I2C_ADDR, /* Verified on v1.1 */
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC0,
+			.addr = AN7447_TCPC3_I2C_ADDR, /* Verified on v1.1 */
+		},
 		.drv = &anx7447_tcpm_drv,
-		/* Alert is active-low, push-pull */
-		.flags = 0,
 	},
 };
 
