@@ -19,6 +19,13 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
+/* i2c_write function which won't wake TCPC from low power mode. */
+static int mt6370_i2c_write8(int port, int reg, int val)
+{
+	return i2c_write8(tcpc_config[port].i2c_info.port,
+			  tcpc_config[port].i2c_info.addr, reg, val);
+}
+
 static int mt6370_init(int port)
 {
 	int rv;

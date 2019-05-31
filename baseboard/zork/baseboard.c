@@ -1,9 +1,9 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-/* Grunt family-specific configuration */
+/* Zork family-specific configuration */
 
 #include "adc.h"
 #include "adc_chip.h"
@@ -48,6 +48,13 @@
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+const enum gpio_signal hibernate_wake_pins[] = {
+	GPIO_LID_OPEN,
+	GPIO_AC_PRESENT,
+	GPIO_POWER_BUTTON_L,
+};
+const int hibernate_wake_pins_used =  ARRAY_SIZE(hibernate_wake_pins);
 
 const struct adc_t adc_channels[] = {
 	[ADC_TEMP_SENSOR_CHARGER] = {
@@ -352,7 +359,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
-mat33_fp_t grunt_base_standard_ref = {
+mat33_fp_t zork_base_standard_ref = {
 	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
@@ -410,7 +417,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_SENSOR,
 	 .addr = BMI160_ADDR0,
 	 .default_range = 2, /* g, enough for laptop */
-	 .rot_standard_ref = (const mat33_fp_t *)&grunt_base_standard_ref,
+	 .rot_standard_ref = (const mat33_fp_t *)&zork_base_standard_ref,
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
 	 .config = {
@@ -438,7 +445,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_SENSOR,
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = (const mat33_fp_t *)&grunt_base_standard_ref,
+	 .rot_standard_ref = (const mat33_fp_t *)&zork_base_standard_ref,
 	 .min_frequency = BMI160_GYRO_MIN_FREQ,
 	 .max_frequency = BMI160_GYRO_MAX_FREQ,
 	},
@@ -568,9 +575,8 @@ int board_get_version(void)
  */
 int board_is_convertible(void)
 {
-	/* Grunt: 6 */
-	/* Kasumi360: 82 */
-	return (sku_id == 6 || sku_id == 82);
+	/* TODO: Add convertible SKU values */
+	return 0;
 }
 
 int board_is_lid_angle_tablet_mode(void)
@@ -580,15 +586,7 @@ int board_is_lid_angle_tablet_mode(void)
 
 uint32_t board_override_feature_flags0(uint32_t flags0)
 {
-	/*
-	 * Remove keyboard backlight feature for devices that don't support it.
-	 */
-	if (sku_id == 16 || sku_id == 17 ||
-	    sku_id == 20 || sku_id == 21 ||
-	    sku_id == 32 || sku_id == 33)
-		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
-	else
-		return flags0;
+	return flags0;
 }
 
 uint32_t board_override_feature_flags1(uint32_t flags1)
