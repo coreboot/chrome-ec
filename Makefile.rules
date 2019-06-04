@@ -291,10 +291,12 @@ $(FAILED_BOARDS_DIR):
 .PHONY: buildfuzztests
 buildfuzztests: $(fuzz-test-targets)
 
-.PHONY: hosttests runtests
+.PHONY: hosttests runhosttests runfuzztests runtests
 hosttests: $(host-test-targets)
-# TODO(crbug.com/963768): Add back $(run-fuzz-test-targets)
-runtests: $(run-test-targets)
+runhosttests: $(run-test-targets)
+runfuzztests: $(run-fuzz-test-targets)
+# TODO(crbug.com/963768): Add back runfuzztests below
+runtests: runhosttests
 
 # Automatically enumerate all suites.
 cts_excludes := common
