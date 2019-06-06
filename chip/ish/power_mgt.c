@@ -3,16 +3,16 @@
  * found in the LICENSE file.
  */
 
-#include <console.h>
-#include <task.h>
-#include <system.h>
-#include <hwtimer.h>
-#include <util.h>
-#include "interrupts.h"
 #include "aontaskfw/ish_aon_share.h"
-#include "power_mgt.h"
-#include "watchdog.h"
+#include "console.h"
+#include "hwtimer.h"
+#include "interrupts.h"
 #include "ish_dma.h"
+#include "power_mgt.h"
+#include "system.h"
+#include "task.h"
+#include "util.h"
+#include "watchdog.h"
 
 #ifdef CONFIG_ISH_PM_DEBUG
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
@@ -24,16 +24,21 @@
 #define CPRINTF(format, args...)
 #endif
 
-#ifdef CONFIG_WATCHDOG
-extern void watchdog_enable(void);
-extern void watchdog_disable(void);
-#endif
-
 /* defined in link script: core/minute-ia/ec.lds.S */
 extern uint32_t __aon_ro_start;
 extern uint32_t __aon_ro_end;
 extern uint32_t __aon_rw_start;
 extern uint32_t __aon_rw_end;
+
+/**
+ * on ISH, uart interrupt can only wakeup ISH from low power state via
+ * CTS pin, but most ISH platforms only have Rx and Tx pins, no CTS pin
+ * exposed, so, we need block ISH enter low power state for a while when
+ * console is in use.
+ * fixed amount of time to keep the console in use flag true after boot in
+ * order to give a permanent window in which the low speed clock is not used.
+ */
+#define CONSOLE_IN_USE_ON_BOOT_TIME (15*SECOND)
 
 /* power management internal context data structure */
 struct pm_context {
@@ -43,37 +48,45 @@ struct pm_context {
 	struct ish_aon_share *aon_share;
 	/* TSS segment selector for task switching */
 	int aon_tss_selector[2];
+	/* console expire time */
+	timestamp_t console_expire_time;
+	/* console in use timeout */
+	int console_in_use_timeout_sec;
 } __packed;
 
 static struct pm_context pm_ctx = {
 	.aon_valid = 0,
 	/* aon shared data located in the start of aon memory */
-	.aon_share = (struct ish_aon_share *)CONFIG_ISH_AON_SRAM_BASE_START
+	.aon_share = (struct ish_aon_share *)CONFIG_AON_RAM_BASE,
+	.console_in_use_timeout_sec = 60
 };
 
 /* D0ix statistics data, including each state's count and total stay time */
+struct pm_stat {
+	uint64_t count;
+	uint64_t total_time_us;
+};
+
 struct pm_statistics {
-	uint64_t d0i0_cnt;
-	uint64_t d0i0_time_us;
-
-#ifdef CONFIG_ISH_PM_D0I1
-	uint64_t d0i1_cnt;
-	uint64_t d0i1_time_us;
-#endif
-
-#ifdef CONFIG_ISH_PM_D0I2
-	uint64_t d0i2_cnt;
-	uint64_t d0i2_time_us;
-#endif
-
-#ifdef CONFIG_ISH_PM_D0I3
-	uint64_t d0i3_cnt;
-	uint64_t d0i3_time_us;
-#endif
-
-} __packed;
+	struct pm_stat d0i0;
+	struct pm_stat d0i1;
+	struct pm_stat d0i2;
+	struct pm_stat d0i3;
+};
 
 static struct pm_statistics pm_stats;
+
+/*
+ * Log a new statistic
+ *
+ * t0: start time, in us
+ * t1: end time, in us
+ */
+static void log_pm_stat(struct pm_stat *stat, uint64_t t0, uint64_t t1)
+{
+	stat->total_time_us += t1 - t0;
+	stat->count++;
+}
 
 #ifdef CONFIG_ISH_PM_AONTASK
 
@@ -256,21 +269,63 @@ static void handle_reset_in_aontask(int pm_state)
 
 static void enter_d0i0(void)
 {
-	timestamp_t t0, t1;
+	uint32_t t0, t1;
 
-	t0 = get_time();
-
+	t0 = __hw_clock_source_read();
 	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0I0;
 
 	/* halt ISH cpu, will wakeup from any interrupt */
 	ish_mia_halt();
 
-	t1 = get_time();
-
+	t1 = __hw_clock_source_read();
 	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
+	log_pm_stat(&pm_stats.d0i0, t0, t1);
+}
 
-	pm_stats.d0i0_time_us += t1.val - t0.val;
-	pm_stats.d0i0_cnt++;
+/**
+ * ISH PMU does not support both-edge interrupt triggered gpio configuration.
+ * If both edges are configured, then the ISH can't stay in low poer mode
+ * because it will exit immediately.
+ *
+ * As a workaround, we scan all gpio pins which have been configured as
+ * both-edge triggered, and then temporarily set each gpio pin to the single
+ * edge trigger that is opposite of its value, then restore the both-edge
+ * trigger configuration immediately after exiting low power mode.
+ */
+static uint32_t __unused convert_both_edge_gpio_to_single_edge(void)
+{
+	uint32_t both_edge_pins = 0;
+	int i = 0;
+
+	/**
+	 * scan GPIO GFER, GRER and GIMR registers to find the both edge
+	 * interrupt trigger mode enabled pins.
+	 */
+	for (i = 0; i < 32; i++) {
+		if (ISH_GPIO_GIMR & BIT(i) &&
+		    ISH_GPIO_GRER & BIT(i) &&
+		    ISH_GPIO_GFER & BIT(i)) {
+
+			/* Record the pin so we can restore it later */
+			both_edge_pins |= BIT(i);
+
+			if (ISH_GPIO_GPLR & BIT(i)) {
+				/* pin is high, just keep falling edge mode */
+				ISH_GPIO_GRER &= ~BIT(i);
+			} else {
+				/* pin is low, just keep rising edge mode */
+				ISH_GPIO_GFER &= ~BIT(i);
+			}
+		}
+	}
+
+	return both_edge_pins;
+}
+
+static void __unused restore_both_edge_gpio_config(uint32_t both_edge_pin_map)
+{
+	ISH_GPIO_GRER |= both_edge_pin_map;
+	ISH_GPIO_GFER |= both_edge_pin_map;
 }
 
 #ifdef CONFIG_ISH_PM_D0I1
@@ -278,11 +333,8 @@ static void enter_d0i0(void)
 static void enter_d0i1(void)
 {
 	uint64_t current_irq_map;
-
-	timestamp_t t0, t1;
-	t0 = get_time();
-
-	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0I1;
+	uint32_t both_edge_gpio_pins;
+	uint32_t t0, t1;
 
 	/* only enable PMU wakeup interrupt */
 	current_irq_map = disable_all_interrupts();
@@ -291,6 +343,11 @@ static void enter_d0i1(void)
 #ifdef CONFIG_ISH_PM_RESET_PREP
 	task_enable_irq(ISH_RESET_PREP_IRQ);
 #endif
+
+	t0 = __hw_clock_source_read();
+	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0I1;
+
+	both_edge_gpio_pins = convert_both_edge_gpio_to_single_edge();
 
 	/* enable Trunk Clock Gating (TCG) of ISH */
 	CCU_TCG_EN = 1;
@@ -301,15 +358,18 @@ static void enter_d0i1(void)
 	/* disable Trunk Clock Gating (TCG) of ISH */
 	CCU_TCG_EN = 0;
 
+	restore_both_edge_gpio_config(both_edge_gpio_pins);
+
+	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
+	t1 = __hw_clock_source_read();
+	log_pm_stat(&pm_stats.d0i1, t0, t1);
+
+	/* Reload watchdog before enabling interrupts again */
+	watchdog_reload();
+
 	/* restore interrupts */
 	task_disable_irq(ISH_PMU_WAKEUP_IRQ);
 	restore_interrupts(current_irq_map);
-
-	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
-
-	t1 = get_time();
-	pm_stats.d0i1_time_us += t1.val - t0.val;
-	pm_stats.d0i1_cnt++;
 }
 
 #endif
@@ -319,11 +379,8 @@ static void enter_d0i1(void)
 static void enter_d0i2(void)
 {
 	uint64_t current_irq_map;
-
-	timestamp_t t0, t1;
-	t0 = get_time();
-
-	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0I2;
+	uint32_t both_edge_gpio_pins;
+	uint32_t t0, t1;
 
 	/* only enable PMU wakeup interrupt */
 	current_irq_map = disable_all_interrupts();
@@ -332,6 +389,11 @@ static void enter_d0i2(void)
 #ifdef CONFIG_ISH_PM_RESET_PREP
 	task_enable_irq(ISH_RESET_PREP_IRQ);
 #endif
+
+	t0 = __hw_clock_source_read();
+	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0I2;
+
+	both_edge_gpio_pins = convert_both_edge_gpio_to_single_edge();
 
 	/* enable Trunk Clock Gating (TCG) of ISH */
 	CCU_TCG_EN = 1;
@@ -349,16 +411,18 @@ static void enter_d0i2(void)
 	/* disable Trunk Clock Gating (TCG) of ISH */
 	CCU_TCG_EN = 0;
 
+	restore_both_edge_gpio_config(both_edge_gpio_pins);
+
+	t1 = __hw_clock_source_read();
+	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
+	log_pm_stat(&pm_stats.d0i2, t0, t1);
+
+	/* Reload watchdog before enabling interrupts again */
+	watchdog_reload();
+
 	/* restore interrupts */
 	task_disable_irq(ISH_PMU_WAKEUP_IRQ);
 	restore_interrupts(current_irq_map);
-
-	t1 = get_time();
-
-	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
-
-	pm_stats.d0i2_time_us += t1.val - t0.val;
-	pm_stats.d0i2_cnt++;
 }
 
 #endif
@@ -368,11 +432,8 @@ static void enter_d0i2(void)
 static void enter_d0i3(void)
 {
 	uint64_t current_irq_map;
-	timestamp_t t0, t1;
-
-	t0 = get_time();
-
-	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0I3;
+	uint32_t both_edge_gpio_pins;
+	uint32_t t0, t1;
 
 	/* only enable PMU wakeup interrupt */
 	current_irq_map = disable_all_interrupts();
@@ -381,6 +442,11 @@ static void enter_d0i3(void)
 #ifdef CONFIG_ISH_PM_RESET_PREP
 	task_enable_irq(ISH_RESET_PREP_IRQ);
 #endif
+
+	t0 = __hw_clock_source_read();
+	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0I3;
+
+	both_edge_gpio_pins = convert_both_edge_gpio_to_single_edge();
 
 	/* enable Trunk Clock Gating (TCG) of ISH */
 	CCU_TCG_EN = 1;
@@ -398,25 +464,38 @@ static void enter_d0i3(void)
 	/* disable Trunk Clock Gating (TCG) of ISH */
 	CCU_TCG_EN = 0;
 
+	restore_both_edge_gpio_config(both_edge_gpio_pins);
+
+	t1 = __hw_clock_source_read();
+	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
+	log_pm_stat(&pm_stats.d0i3, t0, t1);
+
+	/* Reload watchdog before enabling interrupts again */
+	watchdog_reload();
+
 	/* restore interrupts */
 	task_disable_irq(ISH_PMU_WAKEUP_IRQ);
 	restore_interrupts(current_irq_map);
-
-	t1 = get_time();
-
-	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
-
-	pm_stats.d0i3_time_us += t1.val - t0.val;
-	pm_stats.d0i3_cnt++;
 }
 
 #endif
 
-static int d0ix_decide(uint32_t idle_us)
+static int d0ix_decide(timestamp_t cur_time, uint32_t idle_us)
 {
 	int pm_state = ISH_PM_STATE_D0I0;
 
 	if (DEEP_SLEEP_ALLOWED) {
+
+		/* check if the console use has expired. */
+		if (sleep_mask & SLEEP_MASK_CONSOLE) {
+			if (cur_time.val > pm_ctx.console_expire_time.val) {
+				enable_sleep(SLEEP_MASK_CONSOLE);
+				ccprints("Disabling console in deep sleep");
+			} else {
+				return pm_state;
+			}
+		}
+
 #ifdef CONFIG_ISH_PM_D0I1
 		pm_state = ISH_PM_STATE_D0I1;
 #endif
@@ -430,20 +509,17 @@ static int d0ix_decide(uint32_t idle_us)
 		if (idle_us >= CONFIG_ISH_D0I3_MIN_USEC && pm_ctx.aon_valid)
 			pm_state = ISH_PM_STATE_D0I3;
 #endif
+
 	}
 
 	return pm_state;
 }
 
-static void pm_process(uint32_t idle_us)
+static void pm_process(timestamp_t cur_time, uint32_t idle_us)
 {
 	int decide;
 
-	decide = d0ix_decide(idle_us);
-
-#ifdef CONFIG_WATCHDOG
-	watchdog_disable();
-#endif
+	decide = d0ix_decide(cur_time, idle_us);
 
 	switch (decide) {
 #ifdef CONFIG_ISH_PM_D0I1
@@ -470,12 +546,6 @@ static void pm_process(uint32_t idle_us)
 	if (decide == ISH_PM_STATE_D0I2 || decide == ISH_PM_STATE_D0I3)
 		check_aon_task_status();
 #endif
-
-#ifdef CONFIG_WATCHDOG
-	watchdog_enable();
-	watchdog_reload();
-#endif
-
 }
 
 void ish_pm_init(void)
@@ -545,12 +615,32 @@ void __idle(void)
 	timestamp_t t0;
 	int next_delay = 0;
 
+	/**
+	 * initialize console in use to true and specify the console expire
+	 * time in order to give a fixed window on boot
+	 */
+	disable_sleep(SLEEP_MASK_CONSOLE);
+	pm_ctx.console_expire_time.val = get_time().val +
+					 CONSOLE_IN_USE_ON_BOOT_TIME;
+
 	while (1) {
 		t0 = get_time();
 		next_delay = __hw_clock_event_get() - t0.le.lo;
 
-		pm_process(next_delay);
+		pm_process(t0, next_delay);
 	}
+}
+
+/*
+ * helper for command_idle_stats
+ */
+static void print_stats(const char *name, const struct pm_stat *stat)
+{
+	if (stat->count)
+		ccprintf("    %s:\n"
+			 "        counts: %lu\n"
+			 "        time:   %.6lus\n",
+			 name, stat->count, stat->total_time_us);
 }
 
 /**
@@ -558,54 +648,29 @@ void __idle(void)
  */
 static int command_idle_stats(int argc, char **argv)
 {
-#if defined(CONFIG_ISH_PM_D0I2) || defined(CONFIG_ISH_PM_D0I3)
 	struct ish_aon_share *aon_share = pm_ctx.aon_share;
-#endif
 
-	ccprintf("Aontask exist: %s\n", pm_ctx.aon_valid ? "Yes" : "No");
+	ccprintf("Aontask exists: %s\n", pm_ctx.aon_valid ? "Yes" : "No");
+	ccprintf("Total time on: %.6lus\n", get_time().val);
 	ccprintf("Idle sleep:\n");
-	ccprintf("    D0i0:\n");
-	ccprintf("        counts: %ld\n", pm_stats.d0i0_cnt);
-	ccprintf("        time:   %.6lds\n", pm_stats.d0i0_time_us);
+	print_stats("D0i0", &pm_stats.d0i0);
 
 	ccprintf("Deep sleep:\n");
-#ifdef CONFIG_ISH_PM_D0I1
-	ccprintf("    D0i1:\n");
-	ccprintf("        counts: %ld\n", pm_stats.d0i1_cnt);
-	ccprintf("        time:   %.6lds\n", pm_stats.d0i1_time_us);
-#endif
+	print_stats("D0i1", &pm_stats.d0i1);
+	print_stats("D0i2", &pm_stats.d0i2);
+	print_stats("D0i3", &pm_stats.d0i3);
 
-#ifdef CONFIG_ISH_PM_D0I2
-	if (pm_ctx.aon_valid) {
-		ccprintf("    D0i2:\n");
-		ccprintf("        counts: %ld\n", pm_stats.d0i2_cnt);
-		ccprintf("        time:   %.6lds\n", pm_stats.d0i2_time_us);
-	}
-#endif
-
-#ifdef CONFIG_ISH_PM_D0I3
-	if (pm_ctx.aon_valid) {
-		ccprintf("    D0i3:\n");
-		ccprintf("        counts: %ld\n", pm_stats.d0i3_cnt);
-		ccprintf("        time:   %.6lds\n", pm_stats.d0i3_time_us);
-	}
-#endif
-
-#if defined(CONFIG_ISH_PM_D0I2) || defined(CONFIG_ISH_PM_D0I3)
 	if (pm_ctx.aon_valid) {
 		ccprintf("    Aontask status:\n");
-		ccprintf("        last error:   %d\n", aon_share->last_error);
-		ccprintf("        error counts: %d\n", aon_share->error_count);
+		ccprintf("        last error:   %lu\n", aon_share->last_error);
+		ccprintf("        error counts: %lu\n", aon_share->error_count);
 	}
-#endif
-
-	ccprintf("Total time on: %.6lds\n", get_time().val);
 
 	return EC_SUCCESS;
 }
 
 DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats, "",
-			"Print last idle stats");
+			"Print power management statistics");
 
 
 #ifdef CONFIG_ISH_PM_D0I1
@@ -641,8 +706,8 @@ static void reset_prep_isr(void)
 	 * Indicate completion of servicing the interrupt to IOAPIC first
 	 * then indicate completion of servicing the interrupt to LAPIC
 	 */
-	REG32(IOAPIC_EOI_REG) = ISH_RESET_PREP_VEC;
-	REG32(LAPIC_EOI_REG) = 0x0;
+	IOAPIC_EOI_REG = ISH_RESET_PREP_VEC;
+	LAPIC_EOI_REG = 0x0;
 
 	if (pm_ctx.aon_valid) {
 		handle_reset_in_aontask(ISH_PM_STATE_RESET_PREP);
@@ -673,8 +738,8 @@ static void handle_d3(uint32_t irq_vec)
 		 * first then indicate completion of servicing the interrupt
 		 * to LAPIC
 		 */
-		REG32(IOAPIC_EOI_REG) = irq_vec;
-		REG32(LAPIC_EOI_REG) = 0x0;
+		IOAPIC_EOI_REG = irq_vec;
+		LAPIC_EOI_REG = 0x0;
 
 		pm_ctx.aon_share->pm_state = ISH_PM_STATE_D3;
 
@@ -724,3 +789,13 @@ DECLARE_IRQ(ISH_BME_RISE_IRQ, bme_rise_isr);
 DECLARE_IRQ(ISH_BME_FALL_IRQ, bme_fall_isr);
 
 #endif
+
+void ish_pm_refresh_console_in_use(void)
+{
+	disable_sleep(SLEEP_MASK_CONSOLE);
+
+	/* Set console in use expire time. */
+	pm_ctx.console_expire_time = get_time();
+	pm_ctx.console_expire_time.val +=
+				pm_ctx.console_in_use_timeout_sec * SECOND;
+}

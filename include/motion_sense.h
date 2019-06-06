@@ -107,6 +107,13 @@ struct motion_data_t {
 	unsigned int ec_rate;
 };
 
+/*
+ * When set, spoof mode will allow the EC to report arbitrary values for any of
+ * the components.
+ */
+#define MOTIONSENSE_FLAG_IN_SPOOF_MODE	BIT(1)
+#define MOTIONSENSE_FLAG_INT_SIGNAL	BIT(2)
+
 struct motion_sensor_t {
 	/* RO fields */
 	uint32_t active_mask;
@@ -115,8 +122,11 @@ struct motion_sensor_t {
 	enum motionsensor_type type;
 	enum motionsensor_location location;
 	const struct accelgyro_drv *drv;
+	/* One mutex per physical chip. */
 	struct mutex *mutex;
 	void *drv_data;
+	/* Only valid if flags & MOTIONSENSE_FLAG_INT_SIGNAL is true. */
+	enum gpio_signal int_signal;
 
 	/* i2c port */
 	uint8_t port;
@@ -124,10 +134,9 @@ struct motion_sensor_t {
 	uint8_t addr;
 
 	/*
-	 * When non-zero, spoof mode will allow the EC to report arbitrary
-	 * values for any of the components.
+	 * Various flags, see MOTIONSENSE_FLAG_*
 	 */
-	uint8_t in_spoof_mode;
+	uint32_t flags;
 
 	const mat33_fp_t *rot_standard_ref;
 
@@ -179,13 +188,17 @@ struct motion_sensor_t {
 	uint16_t lost;
 
 	/*
-	 * Time since last collection:
-	 * For sensor with hardware FIFO,  time since last sample
-	 * has move from the hardware FIFO to the FIFO (used if fifo rate != 0).
-	 * For sensor without FIFO, time since the last event was collect
-	 * from sensor registers.
+	 * For sensors in forced mode the ideal time to collect the next
+	 * measurement.
+	 *
+	 * This is unused with sensors that interrupt the ec like hw fifo chips.
 	 */
-	uint32_t last_collection;
+	uint32_t next_collection;
+
+	/*
+	 * The time in us between collection measurements
+	 */
+	uint32_t collection_rate;
 
 	/* Minimum supported sampling frequency in miliHertz for this sensor */
 	uint32_t min_frequency;

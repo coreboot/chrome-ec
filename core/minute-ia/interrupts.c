@@ -13,6 +13,7 @@
 #include "irq_handler.h"
 #include "registers.h"
 #include "task_defs.h"
+#include "task.h"
 #include "util.h"
 
 /* Console output macros */
@@ -26,19 +27,19 @@ extern struct idt_entry __idt[NUM_VECTORS];
 /* To count the interrupt nesting depth. Usually it is not nested */
 volatile uint32_t __in_isr;
 
-void write_ioapic_reg(const uint32_t reg, const uint32_t val)
+static void write_ioapic_reg(const uint32_t reg, const uint32_t val)
 {
-	REG32(IOAPIC_IDX) = (uint8_t)reg;
-	REG32(IOAPIC_WDW) = val;
+	IOAPIC_IDX = reg;
+	IOAPIC_WDW = val;
 }
 
-uint32_t read_ioapic_reg(const uint32_t reg)
+static uint32_t read_ioapic_reg(const uint32_t reg)
 {
-	REG32(IOAPIC_IDX) = (uint8_t)reg;
-	return REG32(IOAPIC_WDW);
+	IOAPIC_IDX = reg;
+	return IOAPIC_WDW;
 }
 
-void set_ioapic_redtbl_raw(const unsigned irq, const uint32_t val)
+static void set_ioapic_redtbl_raw(const uint32_t irq, const uint32_t val)
 {
 	const uint32_t redtbl_lo = IOAPIC_IOREDTBL + 2 * irq;
 	const uint32_t redtbl_hi = redtbl_lo + 1;
@@ -81,10 +82,13 @@ void restore_interrupts(uint64_t irq_map)
 {
 	int i;
 
+	/* Disable interrupts until everything is unmasked */
+	interrupt_disable();
 	for (i = 0; i < ISH_MAX_IOAPIC_IRQS; i++) {
 		if (((uint64_t)0x1 << i) & irq_map)
 			unmask_interrupt(i);
 	}
+	interrupt_enable();
 }
 
 /*
@@ -143,6 +147,7 @@ static const irq_desc_t system_irqs[] = {
 	LEVEL_INTR(ISH_HPET_TIMER0_IRQ, ISH_HPET_TIMER0_VEC),
 	LEVEL_INTR(ISH_HPET_TIMER1_IRQ, ISH_HPET_TIMER1_VEC),
 	LEVEL_INTR(ISH_DEBUG_UART_IRQ, ISH_DEBUG_UART_VEC),
+	LEVEL_INTR(ISH_FABRIC_IRQ, ISH_FABRIC_VEC),
 #ifdef CONFIG_ISH_PM_RESET_PREP
 	LEVEL_INTR(ISH_RESET_PREP_IRQ, ISH_RESET_PREP_VEC),
 #endif
@@ -168,15 +173,19 @@ static const irq_desc_t system_irqs[] = {
  * and go directly to the CPU core, so get_current_interrupt_vector
  * cannot be used.
  */
-#define DEFINE_EXN_HANDLER(vector)					\
-	void __keep exception_panic_##vector(void);			\
-	__attribute__ ((noreturn)) void exception_panic_##vector(void)	\
-	{								\
-		__asm__ (						\
-			"push $" #vector "\n"				\
-			"call exception_panic\n");			\
-		while (1)						\
-			continue;					\
+#define DEFINE_EXN_HANDLER(vector)				\
+	_DEFINE_EXN_HANDLER(vector, exception_panic_##vector)
+#define _DEFINE_EXN_HANDLER(vector, name)	\
+	__DEFINE_EXN_HANDLER(vector, name)
+#define __DEFINE_EXN_HANDLER(vector, name)		\
+	void __keep name(void);			\
+	__attribute__ ((noreturn)) void name(void)	\
+	{						\
+		__asm__ (				\
+			"push $" #vector "\n"		\
+			"call exception_panic\n");	\
+		while (1)				\
+			continue;			\
 	}
 
 DEFINE_EXN_HANDLER(0);
@@ -199,6 +208,7 @@ DEFINE_EXN_HANDLER(17);
 DEFINE_EXN_HANDLER(18);
 DEFINE_EXN_HANDLER(19);
 DEFINE_EXN_HANDLER(20);
+_DEFINE_EXN_HANDLER(ISH_WDT_VEC, exception_panic_wdt);
 
 void set_interrupt_gate(uint8_t num, isr_handler_t func, uint8_t flags)
 {
@@ -227,11 +237,11 @@ uint32_t get_current_interrupt_vector(void)
 	uint32_t vec;
 
 	/* In service register */
-	uint32_t *ioapic_icr_last = (uint32_t *)LAPIC_ISR_REG;
+	volatile uint32_t *ioapic_isr_last = &LAPIC_ISR_LAST_REG;
 
 	/* Scan ISRs from highest priority */
-	for (i = 7; i >= 0; i--, ioapic_icr_last -= 4) {
-		vec = *ioapic_icr_last;
+	for (i = 7; i >= 0; i--, ioapic_isr_last -= 4) {
+		vec = *ioapic_isr_last;
 		if (vec) {
 			return (32 * i) + __fls(vec);
 		}
@@ -271,12 +281,17 @@ DECLARE_DEFERRED(print_lpaic_lvt_error);
  * #define VEC_POS(v) ((v) & (32 - 1))
  * #define REG_POS(v) (((v) >> 5) << 4)
  */
-static inline unsigned int lapic_get_vector(uint32_t reg_base, uint32_t vector)
+static inline unsigned int lapic_get_vector(volatile uint32_t *reg_base,
+					    uint32_t vector)
 {
-	uint32_t reg_pos = (vector >> 5) << 4;
+	/*
+	 * Since we are using array indexing, we need to divide the vec_pos by
+	 * sizeof(uint32_t), i.e. shift to the right 2.
+	 */
+	uint32_t reg_pos = (vector >> 5) << 2;
 	uint32_t vec_pos = vector & (32 - 1);
 
-	return REG32(reg_base + reg_pos) & BIT(vec_pos);
+	return reg_base[reg_pos] & BIT(vec_pos);
 }
 
 /*
@@ -297,12 +312,12 @@ static inline unsigned int lapic_get_vector(uint32_t reg_base, uint32_t vector)
  */
 void handle_lapic_lvt_error(void)
 {
-	uint32_t esr = REG32(LAPIC_ESR_REG);
+	uint32_t esr = LAPIC_ESR_REG;
 	uint32_t ioapic_redtbl, vec;
 	int irq, max_irq_entries;
 
 	/* Ack LVT ERROR exception */
-	REG32(LAPIC_ESR_REG) = 0;
+	LAPIC_ESR_REG = 0;
 
 	/*
 	 * When IOAPIC has more than 1 interrupts in remote IRR state,
@@ -322,9 +337,9 @@ void handle_lapic_lvt_error(void)
 			/* If pending interrupt is not in LAPIC, clear it. */
 			if (ioapic_redtbl & IOAPIC_REDTBL_IRR) {
 				vec = IRQ_TO_VEC(irq);
-				if (!lapic_get_vector(LAPIC_IRR_REG, vec)) {
+				if (!lapic_get_vector(&LAPIC_IRR_REG, vec)) {
 					/* End of interrupt */
-					REG32(IOAPIC_EOI_REG) = vec;
+					IOAPIC_EOI_REG = vec;
 					ioapic_pending_count++;
 				}
 			}
@@ -348,6 +363,11 @@ __asm__ (
 		"movl %esp, %eax\n"
 		"movl $stack_end, %esp\n"
 		"push %eax\n"
+#ifdef CONFIG_TASK_PROFILING
+		"push $" STRINGIFY(CONFIG_IRQ_COUNT) "\n"
+		"call task_start_irq_handler\n"
+		"addl $0x04, %esp\n"
+#endif
 		"call handle_lapic_lvt_error\n"
 		"pop %esp\n"
 		"movl $0x00, (0xFEE000B0)\n"	/* Set EOI for LAPIC */
@@ -368,6 +388,30 @@ void unhandled_vector(void)
 /* This needs to be moved to link_defs.h */
 extern const struct irq_data __irq_data[], __irq_data_end[];
 
+/**
+ * Called from SOFTIRQ_VECTOR when software is trigger an IRQ manually
+ *
+ * If IRQ is out of range, then no routine should be called
+ */
+void call_irq_service_routine(uint32_t irq)
+{
+	const struct irq_data *p = __irq_data;
+
+	/* If just rescheduling a task, we won't have a routine to call */
+	if (irq >= CONFIG_IRQ_COUNT)
+		return;
+
+	for (; p < __irq_data_end; p++) {
+		if (p->irq == irq) {
+			p->routine();
+			break;
+		}
+	}
+
+	if (p == __irq_data_end)
+		CPRINTS("IRQ %d routine not found!", irq);
+}
+
 void init_interrupts(void)
 {
 	unsigned entry;
@@ -377,10 +421,14 @@ void init_interrupts(void)
 
 	/* Setup gates for IRQs declared by drivers using DECLARE_IRQ */
 	for (; p < __irq_data_end; p++)
-		set_interrupt_gate(IRQ_TO_VEC(p->irq), p->routine, IDT_DESC_FLAGS);
+		set_interrupt_gate(IRQ_TO_VEC(p->irq), p->ioapic_routine,
+				   IDT_DESC_FLAGS);
+
+	/* Software generated IRQ */
+	set_interrupt_gate(SOFTIRQ_VECTOR, sw_irq_handler, IDT_DESC_FLAGS);
 
 	/* Setup gate for LAPIC_LVT_ERROR vector; clear any remnant error. */
-	REG32(LAPIC_ESR_REG) = 0;
+	LAPIC_ESR_REG = 0;
 	set_interrupt_gate(LAPIC_LVT_ERROR_VECTOR, _lapic_error_handler,
 			   IDT_DESC_FLAGS);
 
@@ -421,6 +469,16 @@ void init_interrupts(void)
 	set_interrupt_gate(18, exception_panic_18, IDT_DESC_FLAGS);
 	set_interrupt_gate(19, exception_panic_19, IDT_DESC_FLAGS);
 	set_interrupt_gate(20, exception_panic_20, IDT_DESC_FLAGS);
+
+	/*
+	 * Set up watchdog expiration like a panic, that way we can
+	 * use the common panic handling code, and also properly
+	 * retrieve EIP.
+	 */
+	if (IS_ENABLED(CONFIG_WATCHDOG))
+		set_interrupt_gate(ISH_WDT_VEC,
+				   exception_panic_wdt,
+				   IDT_DESC_FLAGS);
 
 	/* Note: At reset, ID field is already set to 0 in APIC ID register */
 

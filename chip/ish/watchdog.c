@@ -20,8 +20,8 @@
  */
 
 #include "common.h"
-#include "console.h"
 #include "hooks.h"
+#include "ish_persistent_data.h"
 #include "task.h"
 #include "registers.h"
 #include "system.h"
@@ -33,6 +33,13 @@
 
 int watchdog_init(void)
 {
+	/*
+	 * Put reset counter back at zero if last reset was not caused
+	 * by watchdog
+	 */
+	if ((system_get_reset_flags() & RESET_FLAG_WATCHDOG) == 0)
+		ish_persistent_data.watchdog_counter = 0;
+
 	/* Initialize WDT clock divider */
 	CCU_WDT_CD = WDT_CLOCK_HZ / 10; /* 10 Hz => 100 ms period */
 
@@ -45,42 +52,6 @@ int watchdog_init(void)
 
 	return EC_SUCCESS;
 }
-
-void watchdog_enable(void)
-{
-	WDT_CONTROL |= WDT_CONTROL_ENABLE_BIT;
-}
-
-void watchdog_disable(void)
-{
-	WDT_CONTROL &= ~WDT_CONTROL_ENABLE_BIT;
-}
-
-/* Parameters are pushed by hardware, we only care about %EIP */
-__attribute__ ((noreturn))
-void watchdog_warning(uint32_t errorcode,
-		      uint32_t eip,
-		      uint32_t cs,
-		      uint32_t eflags)
-{
-	ccprintf("\nWDT Expired. EIP was 0x%08X. Resetting...\n", eip);
-	cflush();
-
-	system_reset(SYSTEM_RESET_AP_WATCHDOG);
-	__builtin_unreachable();
-}
-
-__attribute__ ((noreturn))
-void watchdog_warning_irq(void)
-{
-	/*
-	 * Parameters to watchdog_warning were pushed by hardware, use
-	 * asm here to re-use these parameters in the call.
-	 */
-	__asm__ ("call watchdog_warning\n");
-	__builtin_unreachable();
-}
-DECLARE_IRQ(ISH_WDT_IRQ, watchdog_warning_irq);
 
 void watchdog_reload(void)
 {

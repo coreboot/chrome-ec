@@ -18,9 +18,6 @@
 /*
  * RW only, no flash
  * +-------------------- 0x0
- * | ptr to stack_top  0x0
- * | ptr to reset func 0x04
- * +-------------------- 0x00800
  * | ROM vectortable, .text, .rodata, .data LMA
  * +-------------------- 0x10000
  * | RAM .bss, .data
@@ -33,7 +30,7 @@
  * +-------------------- 0x80000
  */
 #define ICACHE_BASE 0x7C000
-#define CONFIG_ROM_BASE 0x00800
+#define CONFIG_ROM_BASE 0x0
 #define CONFIG_RAM_BASE 0x10000
 #define CONFIG_ROM_SIZE (CONFIG_RAM_BASE - CONFIG_ROM_BASE)
 #define CONFIG_RAM_SIZE (CONFIG_IPC_SHARED_OBJ_ADDR - CONFIG_RAM_BASE)
@@ -62,9 +59,15 @@
 #define IPI_VDEC_VP9 3
 #define IPI_VENC_H264 4
 #define IPI_VENC_VP8 5
-#define IPI_MDP 6
-#define IPI_HOST_COMMAND 7
-#define IPI_COUNT 8
+#define IPI_MDP_INIT 6
+#define IPI_MDP_DEINIT 7
+#define IPI_MDP_FRAME 8
+#define IPI_DIP 9
+#define IPI_ISP_CMD 10
+#define IPI_ISP_FRAME 11
+#define IPI_FD_CMD 12
+#define IPI_HOST_COMMAND 13
+#define IPI_COUNT 14
 
 #define IPI_NS_SERVICE 0xFF
 

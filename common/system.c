@@ -86,16 +86,6 @@ struct jump_data {
 /* Jump data (at end of RAM, or preceding panic data) */
 static struct jump_data *jdata;
 
-/*
- * Reset flag descriptions.  Must be in same order as bits of RESET_FLAG_
- * constants.
- */
-static const char * const reset_flag_descs[] = {
-	"other", "reset-pin", "brownout", "power-on", "watchdog", "soft",
-	"hibernate", "rtc-alarm", "wake-pin", "low-battery", "sysjump",
-	"hard", "ap-off", "preserved", "usb-resume", "rdd", "rbox",
-	"security", "ap-watchdog" };
-
 static uint32_t reset_flags;
 static int jumped_to_image;
 static int disable_jump;  /* Disable ALL jumps if system is locked */
@@ -278,6 +268,9 @@ void system_print_reset_flags(void)
 {
 	int count = 0;
 	int i;
+	static const char * const reset_flag_descs[] = {
+		#include "reset_flag_desc.inc"
+	};
 
 	if (!reset_flags) {
 		CPUTS("unknown");
@@ -291,6 +284,13 @@ void system_print_reset_flags(void)
 
 			CPUTS(reset_flag_descs[i]);
 		}
+	}
+
+	if (reset_flags >= BIT(i)) {
+		if (count)
+			CPUTS(" ");
+
+		CPUTS("no-desc");
 	}
 }
 
@@ -553,6 +553,11 @@ static void jump_to_image(uintptr_t init_addr)
 	gpio_set_level(GPIO_ENTERING_RW, 1);
 	usleep(MSEC);
 	gpio_set_level(GPIO_ENTERING_RW, 0);
+
+#ifdef CONFIG_USB_PD_ALT_MODE_DFP
+	/* Note: must be before i2c module is locked down */
+	pd_prepare_sysjump();
+#endif
 
 #ifdef CONFIG_I2C_MASTER
 	/* Prepare I2C module for sysjump */
@@ -937,7 +942,19 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 		return system_run_image_copy(system_get_active_copy());
 	case EC_REBOOT_COLD:
 #ifdef HAS_TASK_PDCMD
-		/* Reboot the PD chip as well */
+		/*
+		 * Reboot the PD chip(s) as well, but first suspend the ports
+		 * if this board has PD tasks running so they don't query the
+		 * TCPCs while they reset.
+		 */
+#ifdef HAS_TASK_PD_C0
+		{
+			int port;
+
+			for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++)
+				pd_set_suspend(port, 1);
+		}
+#endif
 		board_reset_pd_mcu();
 #endif
 

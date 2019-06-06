@@ -8,10 +8,12 @@
 #include "console.h"
 #include "driver/accel_lis2dh.h"
 #include "driver/accelgyro_lsm6dsm.h"
+#include "driver/mag_lis2mdl.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "lid_switch.h"
 #include "motion_sense.h"
 #include "power.h"
 #include "tablet_mode.h"
@@ -31,11 +33,13 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /* Sensor config */
 static struct mutex g_lid_mutex;
+static struct mutex g_lid_mag_mutex;
 static struct mutex g_base_mutex;
 
 /* sensor private data */
 static struct lsm6dsm_data lsm6dsm_a_data;
 static struct stprivate_data g_lis2dh_data;
+static struct lis2mdl_private_data lis2mdl_a_data;
 
 /* Matrix to rotate lid sensor into standard reference frame */
 const mat33_fp_t lid_rot_ref = {
@@ -56,6 +60,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_a_data,
 				MOTIONSENSE_TYPE_ACCEL),
+		.int_signal = GPIO_ACCEL_GYRO_INT_L,
+		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.addr = LSM6DSM_ADDR1,
 		.rot_standard_ref = &lid_rot_ref,
@@ -84,10 +90,12 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_a_data,
 				MOTIONSENSE_TYPE_GYRO),
+		.int_signal = GPIO_ACCEL_GYRO_INT_L,
+		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.addr = LSM6DSM_ADDR1,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL, /* TODO rotate correctly */
+		.rot_standard_ref = &lid_rot_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 	},
@@ -120,9 +128,36 @@ struct motion_sensor_t motion_sensors[] = {
 		},
 	},
 
-	/* TODO(b/122281217): Add remain sensors */
+	[LID_MAG] = {
+		.name = "Lid Mag",
+		.active_mask = SENSOR_ACTIVE_S0,
+		.chip = MOTIONSENSE_CHIP_LIS2MDL,
+		.type = MOTIONSENSE_TYPE_MAG,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &lis2mdl_drv,
+		.mutex = &g_lid_mag_mutex,
+		.drv_data = LIS2MDL_ST_DATA(lis2mdl_a_data),
+		.port = I2C_PORT_SENSOR,
+		.addr = LIS2MDL_ADDR,
+		.default_range = 1 << 11,	/* 16LSB / uT, fixed  */
+		.rot_standard_ref = &lid_rot_ref,
+		.min_frequency = LIS2MDL_ODR_MIN_VAL,
+		.max_frequency = LIS2MDL_ODR_MAX_VAL,
+	},
 };
+
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+int board_sensor_at_360(void)
+{
+	/*
+	 * The 360 degree sensor is too sensitive and is active when the lid is
+	 * closed at 0 degrees. Ignore the hall sensor when the lid close is
+	 * also active.
+	 */
+	return lid_is_open() &&
+	       !gpio_get_level(HALL_SENSOR_GPIO_L);
+}
 
 /* Initialize board. */
 static void board_init(void)

@@ -111,15 +111,15 @@ static struct mutex g_base_mutex;
 
 /* Matrix to rotate accelrator into standard reference frame */
 const mat33_fp_t lid_standrd_ref = {
-	{ FLOAT_TO_FP(1),  0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0,  FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
 const mat33_fp_t base_standard_ref = {
-	{ FLOAT_TO_FP(1),  0, 0},
+	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
+	{ 0, 0,  FLOAT_TO_FP(1)}
 };
 
 /* sensor private data */
@@ -163,6 +163,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_ACCEL),
+		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
+		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.addr = LSM6DSM_ADDR0,
 		.rot_standard_ref = &base_standard_ref,
@@ -193,6 +195,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_GYRO),
+		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
+		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.addr = LSM6DSM_ADDR0,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -299,4 +303,20 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC, !is_overcurrented);
+}
+
+uint32_t board_override_feature_flags0(uint32_t flags0)
+{
+	/*
+	 * Remove keyboard backlight feature for devices that don't support it.
+	 */
+	if (sku_id == 33)
+		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
+	else
+		return flags0;
+}
+
+uint32_t board_override_feature_flags1(uint32_t flags1)
+{
+	return flags1;
 }

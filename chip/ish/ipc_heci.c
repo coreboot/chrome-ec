@@ -31,6 +31,7 @@
 #include "ish_fwst.h"
 #include "queue.h"
 #include "hooks.h"
+#include "hwtimer.h"
 
 #define CPUTS(outstr) cputs(CC_LPC, outstr)
 #define CPRINTS(format, args...) cprints(CC_LPC, format, ## args)
@@ -50,27 +51,6 @@
 #define MNG_RESET_NOTIFY_ACK            4
 #define MNG_SYNC_FW_CLOCK               5
 #define MNG_ILLEGAL_CMD                 0xFF
-
-/* Peripheral Interrupt Satus Register */
-#define IPC_PISR_HOST2ISH_BIT		BIT(0)
-#define IPC_PISR_PMC2ISH_BIT		BIT(1)
-#define IPC_PISR_CSME2ISH_BIT		BIT(2)
-
-/* Peripheral Interrupt Mask Register */
-#define IPC_PIMR_HOST2ISH_BIT		BIT(0)
-#define IPC_PIMR_PMC2ISH_BIT		BIT(1)
-#define IPC_PIMR_CSME2ISH_BIT		BIT(2)
-
-#define IPC_PIMR_ISH2HOST_CLR_BIT	BIT(11)
-#define IPC_PIMR_ISH2PMC_CLR_BIT	BIT(12)
-#define IPC_PIMR_ISH2CSME_CLR_BIT	BIT(13)
-
-/* Peripheral Interrupt DB(DoorBell) Clear Status Register */
-#define IPC_DB_CLR_STS_ISH2HOST_BIT	BIT(0)
-#define IPC_DB_CLR_STS_ISH2ISP_BIT	BIT(2)
-#define IPC_DB_CLR_STS_ISH2AUDIO_BIT	BIT(3)
-#define IPC_DB_CLR_STS_ISH2PMC_BIT	BIT(8)
-#define IPC_DB_CLR_STS_ISH2CSME_BIT	BIT(16)
 
 /* Doorbell */
 #define IPC_DB_MSG_LENGTH_FIELD		0x3FF
@@ -130,6 +110,7 @@
 
 struct ipc_msg {
 	uint32_t drbl;
+	uint32_t *timestamp_of_outgoing_doorbell;
 	uint8_t payload[IPC_MSG_MAX_SIZE];
 } __packed;
 
@@ -154,10 +135,10 @@ struct ipc_msg_event {
  * This is per-IPC context.
  */
 struct ipc_if_ctx {
-	uint32_t in_msg_reg;
-	uint32_t out_msg_reg;
-	uint32_t in_drbl_reg;
-	uint32_t out_drbl_reg;
+	volatile uint8_t *in_msg_reg;
+	volatile uint8_t *out_msg_reg;
+	volatile uint32_t *in_drbl_reg;
+	volatile uint32_t *out_drbl_reg;
 	uint32_t clr_busy_bit;
 	uint32_t pimr_2ish_bit;
 	uint32_t pimr_2host_clearing_bit;
@@ -176,10 +157,10 @@ struct ipc_if_ctx {
 /* list of peer contexts */
 static struct ipc_if_ctx ipc_peer_ctxs[IPC_PEERS_COUNT] = {
 	[IPC_PEER_ID_HOST] = {
-		.in_msg_reg = IPC_HOST2ISH_MSG_REGS,
-		.out_msg_reg = IPC_ISH2HOST_MSG_REGS,
-		.in_drbl_reg = IPC_HOST2ISH_DOORBELL,
-		.out_drbl_reg = IPC_ISH2HOST_DOORBELL,
+		.in_msg_reg = IPC_HOST2ISH_MSG_BASE,
+		.out_msg_reg = IPC_ISH2HOST_MSG_BASE,
+		.in_drbl_reg = IPC_HOST2ISH_DOORBELL_ADDR,
+		.out_drbl_reg = IPC_ISH2HOST_DOORBELL_ADDR,
 		.clr_busy_bit = IPC_DB_CLR_STS_ISH2HOST_BIT,
 		.pimr_2ish_bit = IPC_PIMR_HOST2ISH_BIT,
 		.pimr_2host_clearing_bit = IPC_PIMR_ISH2HOST_CLR_BIT,
@@ -202,24 +183,24 @@ static inline struct ipc_if_ctx *ipc_handle_to_if_ctx(const ipc_handle_t handle)
 
 static inline void ipc_enable_pimr_db_interrupt(const struct ipc_if_ctx *ctx)
 {
-	REG32(IPC_PIMR) |= ctx->pimr_2ish_bit;
+	IPC_PIMR |= ctx->pimr_2ish_bit;
 }
 
 static inline void ipc_disable_pimr_db_interrupt(const struct ipc_if_ctx *ctx)
 {
-	REG32(IPC_PIMR) &= ~ctx->pimr_2ish_bit;
+	IPC_PIMR &= ~ctx->pimr_2ish_bit;
 }
 
 static inline void ipc_enable_pimr_clearing_interrupt(
 						const struct ipc_if_ctx *ctx)
 {
-	REG32(IPC_PIMR) |= ctx->pimr_2host_clearing_bit;
+	IPC_PIMR |= ctx->pimr_2host_clearing_bit;
 }
 
 static inline void ipc_disable_pimr_clearing_interrupt(
 						const struct ipc_if_ctx *ctx)
 {
-	REG32(IPC_PIMR) &= ~ctx->pimr_2host_clearing_bit;
+	IPC_PIMR &= ~ctx->pimr_2host_clearing_bit;
 }
 
 static void write_payload_and_ring_drbl(const struct ipc_if_ctx *ctx,
@@ -227,30 +208,13 @@ static void write_payload_and_ring_drbl(const struct ipc_if_ctx *ctx,
 					const uint8_t *payload,
 					size_t payload_size)
 {
-	uint32_t msg_idx = 0;
-
-	/* write in 32-bits unit */
-	while (payload_size >= sizeof(uint32_t)) {
-		REG32(ctx->out_msg_reg + msg_idx) =
-			*(uint32_t *)(payload + msg_idx);
-		msg_idx += sizeof(uint32_t);
-		payload_size -= sizeof(uint32_t);
-	}
-
-	/* write leftovers in 8-bits unit */
-	while (payload_size) {
-		REG8(ctx->out_msg_reg + msg_idx) =
-			*(uint8_t *)(payload + msg_idx);
-		msg_idx++;
-		payload_size--;
-	}
-
-	REG32(ctx->out_drbl_reg) = drbl;
+	memcpy((void *)(ctx->out_msg_reg), payload, payload_size);
+	*(ctx->out_drbl_reg) = drbl;
 }
 
-
-static int ipc_write_raw(struct ipc_if_ctx *ctx, uint32_t drbl,
-			 const uint8_t *payload, size_t payload_size)
+static int ipc_write_raw_timestamp(struct ipc_if_ctx *ctx, uint32_t drbl,
+				   const uint8_t *payload, size_t payload_size,
+				   uint32_t *timestamp)
 {
 	struct queue *q = &ctx->tx_queue;
 	struct ipc_msg *msg;
@@ -266,6 +230,7 @@ static int ipc_write_raw(struct ipc_if_ctx *ctx, uint32_t drbl,
 			tail = q->state->tail & (q->buffer_units - 1);
 			msg = (struct ipc_msg *)q->buffer + tail;
 			msg->drbl = drbl;
+			msg->timestamp_of_outgoing_doorbell = timestamp;
 			memcpy(msg->payload, payload, payload_size);
 			queue_advance_tail(q, 1);
 		} else {
@@ -281,9 +246,19 @@ static int ipc_write_raw(struct ipc_if_ctx *ctx, uint32_t drbl,
 
 	write_payload_and_ring_drbl(ctx, drbl, payload, payload_size);
 
+	/* We wrote inline, take timestamp now */
+	if (timestamp)
+		*timestamp = __hw_clock_source_read();
+
 write_unlock:
 	mutex_unlock(&ctx->write_lock);
 	return res;
+}
+
+static int ipc_write_raw(struct ipc_if_ctx *ctx, uint32_t drbl,
+			 const uint8_t *payload, size_t payload_size)
+{
+	return ipc_write_raw_timestamp(ctx, drbl, payload, payload_size, NULL);
 }
 
 static int ipc_send_reset_notify(const ipc_handle_t handle)
@@ -322,7 +297,7 @@ static int ipc_get_protocol_data(const struct ipc_if_ctx *ctx,
 	struct ipc_msg *msg;
 	uint32_t drbl_val;
 
-	drbl_val = REG32(ctx->in_drbl_reg);
+	drbl_val = *(ctx->in_drbl_reg);
 	payload_size = IPC_DB_MSG_LENGTH(drbl_val);
 
 	if (payload_size > IPC_MAX_PAYLOAD_SIZE) {
@@ -360,7 +335,6 @@ static int ipc_get_protocol_data(const struct ipc_if_ctx *ctx,
 		break;
 	case IPC_PROTOCOL_MNG:
 		src = (uint8_t *)ctx->in_msg_reg;
-
 		msg = (struct ipc_msg *)buf;
 		msg->drbl = drbl_val;
 		dest = msg->payload;
@@ -389,7 +363,7 @@ static void handle_msg_recv_interrupt(const uint32_t peer_id)
 	ctx = ipc_get_if_ctx(peer_id);
 	ipc_disable_pimr_db_interrupt(ctx);
 
-	drbl_val = REG32(ctx->in_drbl_reg);
+	drbl_val = *(ctx->in_drbl_reg);
 	protocol = IPC_DB_PROTOCOL(drbl_val);
 	payload_size = IPC_DB_MSG_LENGTH(drbl_val);
 
@@ -404,9 +378,9 @@ static void handle_msg_recv_interrupt(const uint32_t peer_id)
 		task_set_event(ctx->msg_events[protocol].task_id,
 			       ctx->msg_events[protocol].event, 0);
 	} else {
-		CPRINTS("discard msg : %d\n", invalid_msg);
+		CPRINTS("discard msg (%d) : %d", protocol, invalid_msg);
 
-		REG32(ctx->in_drbl_reg) = 0;
+		*(ctx->in_drbl_reg) = 0;
 		set_pimr_and_send_rx_complete(ctx);
 	}
 }
@@ -424,7 +398,7 @@ static void handle_busy_clear_interrupt(const uint32_t peer_id)
 	 * Resetting interrupt status bit should be done
 	 * before sending an item in tx_queue.
 	 */
-	REG32(IPC_BUSY_CLEAR) = ctx->clr_busy_bit;
+	IPC_BUSY_CLEAR = ctx->clr_busy_bit;
 
 	/*
 	 * No need to use sync mechanism here since the accesing the queue
@@ -437,6 +411,10 @@ static void handle_busy_clear_interrupt(const uint32_t peer_id)
 		msg = (struct ipc_msg *)(q->buffer + head * q->unit_bytes);
 		write_payload_and_ring_drbl(ctx, msg->drbl, msg->payload,
 					    IPC_DB_MSG_LENGTH(msg->drbl));
+		if (msg->timestamp_of_outgoing_doorbell)
+			*msg->timestamp_of_outgoing_doorbell =
+				__hw_clock_source_read();
+
 		queue_advance_head(q, 1);
 	} else {
 		ctx->is_tx_ipc_busy = 0;
@@ -465,8 +443,8 @@ static void handle_busy_clear_interrupt(const uint32_t peer_id)
  */
 static void ipc_host2ish_isr(void)
 {
-	uint32_t pisr = REG32(IPC_PISR);
-	uint32_t pimr = REG32(IPC_PIMR);
+	uint32_t pisr = IPC_PISR;
+	uint32_t pimr = IPC_PIMR;
 
 #ifdef CHIP_FAMILY_ISH5
 	/*
@@ -489,8 +467,8 @@ DECLARE_IRQ(ISH_IPC_HOST2ISH_IRQ, ipc_host2ish_isr);
 
 static void ipc_host2ish_busy_clear_isr(void)
 {
-	uint32_t busy_clear = REG32(IPC_BUSY_CLEAR);
-	uint32_t pimr = REG32(IPC_PIMR);
+	uint32_t busy_clear = IPC_BUSY_CLEAR;
+	uint32_t pimr = IPC_PIMR;
 
 	if ((busy_clear & IPC_DB_CLR_STS_ISH2HOST_BIT) &&
 	    (pimr & IPC_PIMR_ISH2HOST_CLR_BIT))
@@ -498,7 +476,8 @@ static void ipc_host2ish_busy_clear_isr(void)
 }
 DECLARE_IRQ(ISH_IPC_ISH2HOST_CLR_IRQ, ipc_host2ish_busy_clear_isr);
 
-int ipc_write(const ipc_handle_t handle, const void *buf, const size_t buf_size)
+int ipc_write_timestamp(const ipc_handle_t handle, const void *buf,
+			const size_t buf_size, uint32_t *timestamp)
 {
 	int ret;
 	struct ipc_if_ctx *ctx;
@@ -547,7 +526,8 @@ int ipc_write(const ipc_handle_t handle, const void *buf, const size_t buf_size)
 		return -EC_ERROR_OVERFLOW;
 	}
 
-	ret = ipc_write_raw(ctx, drbl, payload, payload_size);
+	ret = ipc_write_raw_timestamp(ctx, drbl, payload, payload_size,
+				      timestamp);
 	if (ret)
 		return ret;
 
@@ -633,7 +613,7 @@ static int do_ipc_read(struct ipc_if_ctx *ctx, const uint32_t protocol,
 
 	len = ipc_get_protocol_data(ctx, protocol, buf, buf_size);
 
-	REG32(ctx->in_drbl_reg) = 0;
+	*(ctx->in_drbl_reg) = 0;
 	set_pimr_and_send_rx_complete(ctx);
 
 	return len;
@@ -686,7 +666,7 @@ int ipc_read(const ipc_handle_t handle, void *buf, const size_t buf_size,
 			return -EC_ERROR_UNKNOWN;
 	} else {
 		/* check if msg for the protocol is available */
-		drbl_val = REG32(ctx->in_drbl_reg);
+		drbl_val = *(ctx->in_drbl_reg);
 		drbl_protocol = IPC_DB_PROTOCOL(drbl_val);
 		if (!(protocol == drbl_protocol) || !IPC_DB_BUSY(drbl_val))
 			return -IPC_ERR_MSG_NOT_AVAILABLE;
@@ -748,5 +728,8 @@ void ipc_init(void)
 		ctx = ipc_get_if_ctx(i);
 		queue_init(&ctx->tx_queue);
 	}
+
+	/* inform host firmware is running */
+	ish_fwst_set_fw_status(FWSTS_FW_IS_RUNNING);
 }
 DECLARE_HOOK(HOOK_INIT, ipc_init, HOOK_PRIO_DEFAULT);

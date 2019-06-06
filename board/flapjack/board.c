@@ -29,6 +29,7 @@
 #include "i2c.h"
 #include "power.h"
 #include "power_button.h"
+#include "lid_switch.h"
 #include "pwm.h"
 #include "pwm_chip.h"
 #include "registers.h"
@@ -49,9 +50,31 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
+static const struct mv_to_id panels[] = {
+	{ PANEL_BOE_HIMAX8279D10P,	98 },
+	{ PANEL_BOE_HIMAX8279D8P,	280 },
+};
+BUILD_ASSERT(ARRAY_SIZE(panels) < PANEL_COUNT);
+
 uint16_t board_version;
 uint8_t oem;
 uint32_t sku;
+
+int board_read_id(enum adc_channel ch, const struct mv_to_id *table, int size)
+{
+	int mv = adc_read_channel(ch);
+	int i;
+
+	if (mv == ADC_READ_ERROR)
+		mv = adc_read_channel(ch);
+
+	for (i = 0; i < size; i++) {
+		if (ABS(mv - table[i].median_mv) < ADC_MARGIN_MV)
+			return table[i].id;
+	}
+
+	return ADC_READ_ERROR;
+}
 
 static void board_setup_panel(void)
 {
@@ -59,8 +82,24 @@ static void board_setup_panel(void)
 	uint8_t dim;
 	int rv = 0;
 
-	channel = sku & SKU_ID_PANEL_SIZE_MASK ? 0xfe : 0xfa;
-	dim = sku & SKU_ID_PANEL_SIZE_MASK ? 0xc4 : 0xc8;
+	if (board_version >= 3) {
+		switch ((sku >> PANEL_ID_BIT_POSITION) & 0xf) {
+		case PANEL_BOE_HIMAX8279D8P:
+			channel = 0xfa;
+			dim = 0xc8;
+			break;
+		case PANEL_BOE_HIMAX8279D10P:
+			channel = 0xfe;
+			dim = 0xc4;
+			break;
+		default:
+			return;
+		}
+	} else {
+		/* TODO: to be removed once the boards are deprecated. */
+		channel = sku & SKU_ID_PANEL_SIZE_MASK ? 0xfe : 0xfa;
+		dim = sku & SKU_ID_PANEL_SIZE_MASK ? 0xc4 : 0xc8;
+	}
 
 	rv |= i2c_write8(I2C_PORT_CHARGER, RT946X_ADDR, MT6370_BACKLIGHT_BLEN,
 		channel);
@@ -70,6 +109,15 @@ static void board_setup_panel(void)
 		0xac);
 	if (rv)
 		CPRINTS("Board setup panel failed\n");
+}
+
+static enum panel_id board_get_panel_id(void)
+{
+	int id = board_read_id(ADC_LCM_ID, panels, ARRAY_SIZE(panels));
+	if (id == ADC_READ_ERROR)
+		id = PANEL_UNKNOWN;
+	CPRINTS("LCM ID: %d", id);
+	return id;
 }
 
 static void cbi_init(void)
@@ -86,6 +134,11 @@ static void cbi_init(void)
 
 	if (cbi_get_sku_id(&val) == EC_SUCCESS)
 		sku = val;
+
+	if (board_version >= 3)
+		/* Embed LCM_ID in sku_id bit[19-16] */
+		sku |= ((board_get_panel_id() & 0xf) << PANEL_ID_BIT_POSITION);
+
 	CPRINTS("SKU: 0x%08x", sku);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
@@ -93,11 +146,6 @@ DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 static void tcpc_alert_event(enum gpio_signal signal)
 {
 	schedule_deferred_pd_interrupt(0 /* port */);
-}
-
-static void hall_interrupt(enum gpio_signal signal)
-{
-	/* TODO(b/111378000): Implement hall_interrupt */
 }
 
 static void gauge_interrupt(enum gpio_signal signal)
@@ -110,10 +158,11 @@ static void gauge_interrupt(enum gpio_signal signal)
 /******************************************************************************/
 /* ADC channels. Must be in the exactly same order as in enum adc_channel. */
 const struct adc_t adc_channels[] = {
-	[ADC_BOARD_ID] = {"BOARD_ID", 3300, 4096, 0, STM32_AIN(10)},
+	[ADC_LCM_ID] = {"LCM_ID", 3300, 4096, 0, STM32_AIN(10)},
 	[ADC_EC_SKU_ID] = {"EC_SKU_ID", 3300, 4096, 0, STM32_AIN(8)},
 	[ADC_BATT_ID] = {"BATT_ID", 3300, 4096, 0, STM32_AIN(7)},
-	[ADC_USBC_THERM] = {"USBC_THERM", 3300, 4096, 0, STM32_AIN(14)},
+	[ADC_USBC_THERM] = {"USBC_THERM", 3300, 4096, 0, STM32_AIN(14),
+		STM32_ADC_SMPR_239_5_CY},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -244,8 +293,31 @@ int pd_snk_is_vbus_provided(int port)
 	return rt946x_is_vbus_ready();
 }
 
+/*
+ * Threshold to detect USB-C board. If the USB-C board isn't connected,
+ * USBC_THERM is floating thus the ADC pin should read about the pull-up
+ * voltage. If it's connected, the voltage is capped by the resistor (429k)
+ * place in parallel to the thermistor. 3.3V x 429k/(39k + 429k) = 3.025V
+ */
+#define USBC_THERM_THRESHOLD 3025
+
 static void board_init(void)
 {
+#ifdef SECTION_IS_RO
+	/* If USB-C board isn't connected, the device is being assembled.
+	 * We cut off the battery until the assembly is done for better yield.
+	 * Timing is ok because STM32F0 initializes ADC on demand. */
+	if (board_version > 0x02) {
+		int mv = adc_read_channel(ADC_USBC_THERM);
+		if (mv == ADC_READ_ERROR)
+			mv = adc_read_channel(ADC_USBC_THERM);
+		CPRINTS("USBC_THERM=%d", mv);
+		if (mv > USBC_THERM_THRESHOLD) {
+			cflush();
+			board_cut_off_battery();
+		}
+	}
+#endif
 	/* Set SPI1 PB13/14/15 pins to high speed */
 	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xfc000000;
 

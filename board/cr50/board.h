@@ -38,6 +38,9 @@
 #undef CONFIG_FLASH
 #endif
 
+/* Enable getting gpio flags to tell if open drain pins are asserted */
+#define CONFIG_GPIO_GET_EXTENDED
+
 /* Flash configuration */
 #undef CONFIG_FLASH_PSTATE
 #define CONFIG_WP_ALWAYS
@@ -59,12 +62,20 @@
 #define CONFIG_FLASH_NVMEM_OFFSET_A (CFG_TOP_A_OFF + CONFIG_FLASH_NVCTR_SIZE)
 #define CONFIG_FLASH_NVMEM_OFFSET_B (CFG_TOP_B_OFF + CONFIG_FLASH_NVCTR_SIZE)
 /* Address of start of Nvmem area */
-#define CONFIG_FLASH_NVMEM_BASE_A (CONFIG_PROGRAM_MEMORY_BASE + \
-				 CONFIG_FLASH_NVMEM_OFFSET_A)
-#define CONFIG_FLASH_NVMEM_BASE_B (CONFIG_PROGRAM_MEMORY_BASE + \
-				 CONFIG_FLASH_NVMEM_OFFSET_B)
+#define CONFIG_FLASH_NVMEM_BASE_A                                              \
+	(CONFIG_PROGRAM_MEMORY_BASE + CONFIG_FLASH_NVMEM_OFFSET_A)
+#define CONFIG_FLASH_NVMEM_BASE_B                                              \
+	(CONFIG_PROGRAM_MEMORY_BASE + CONFIG_FLASH_NVMEM_OFFSET_B)
+#define CONFIG_FLASH_NEW_NVMEM_BASE_A                                          \
+	(CONFIG_FLASH_NVMEM_BASE_A + CONFIG_FLASH_BANK_SIZE)
+#define CONFIG_FLASH_NEW_NVMEM_BASE_B                                          \
+	(CONFIG_FLASH_NVMEM_BASE_B + CONFIG_FLASH_BANK_SIZE)
+
 /* Size partition in NvMem */
 #define NVMEM_PARTITION_SIZE (CFG_TOP_SIZE - CONFIG_FLASH_NVCTR_SIZE)
+#define NEW_NVMEM_PARTITION_SIZE (NVMEM_PARTITION_SIZE - CONFIG_FLASH_BANK_SIZE)
+#define NEW_NVMEM_TOTAL_PAGES                                                  \
+	(2 * NEW_NVMEM_PARTITION_SIZE / CONFIG_FLASH_BANK_SIZE)
 /* Size in bytes of NvMem area */
 #define CONFIG_FLASH_LOG
 #define CONFIG_FLASH_NVMEM_SIZE (NVMEM_PARTITION_SIZE * NVMEM_NUM_PARTITIONS)
@@ -247,7 +258,6 @@ enum nvmem_vars {
 void board_configure_deep_sleep_wakepins(void);
 void ap_detect_asserted(enum gpio_signal signal);
 void ec_detect_asserted(enum gpio_signal signal);
-void ec_tx_cr50_rx(enum gpio_signal signal);
 void servo_detect_asserted(enum gpio_signal signal);
 void tpm_rst_deasserted(enum gpio_signal signal);
 void tpm_rst_asserted(enum gpio_signal signal);
@@ -257,7 +267,6 @@ void post_reboot_request(void);
 /* Special controls over EC and AP */
 void assert_sys_rst(void);
 void deassert_sys_rst(void);
-int is_sys_rst_asserted(void);
 void assert_ec_rst(void);
 void deassert_ec_rst(void);
 int is_ec_rst_asserted(void);
@@ -332,8 +341,9 @@ int board_battery_is_present(void);
 int board_fwmp_allows_unlock(void);
 int board_vboot_dev_mode_enabled(void);
 void board_reboot_ap(void);
+void board_reboot_ec(void);
 void board_closed_loop_reset(void);
-int board_wipe_tpm(void);
+int board_wipe_tpm(int reset_required);
 int board_is_first_factory_boot(void);
 
 int usb_i2c_board_enable(void);

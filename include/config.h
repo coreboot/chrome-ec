@@ -83,6 +83,19 @@
 #undef CONFIG_ACCELGYRO_LSM6DSM
 #undef CONFIG_ACCELGYRO_LSM6DSO
 
+/*
+ * Some chips have a portion of memory which will remain powered even
+ * during a reset.  This is called Always-On, or AON memory, and
+ * typically has a separate firmware to manage the memory.  These
+ * values can be used to configure the RAM layout for Always-On.
+ *
+ * See chip/ish/ for an example implementation.
+ */
+#undef CONFIG_AON_RAM_BASE
+#undef CONFIG_AON_RAM_SIZE
+#undef CONFIG_AON_ROM_BASE
+#undef CONFIG_AON_ROM_SIZE
+
 /* Add sensorhub function for LSM6DSM, required if 2nd device attached. */
 #undef CONFIG_SENSORHUB_LSM6DSM
 
@@ -779,6 +792,33 @@
  */
 #undef CONFIG_CHARGER_INPUT_CURRENT
 
+/* Define to use Power Delivery State Machine Framework */
+#undef CONFIG_USB_SM_FRAMEWORK
+
+/*
+ * This is the maximum number of levels in the hierarchical
+ * state machine framework. Set to 0 for a flat state machine.
+ */
+#define CONFIG_SM_NESTING_NUM 3
+
+/*
+ * Define to enable Type-C State Machine. Must be enabled
+ * with CONFIG_USB_SM_FRAMEWORK
+ */
+#define CONFIG_USB_TYPEC_SM
+
+/*
+ * Define to enable Protocol Layer State Machine. Must be enabled
+ * with CONFIG_USB_SM_FRAMEWORK and CONFIG_USB_TYPEC_SM
+ */
+#define CONFIG_USB_PRL_SM
+
+/*
+ * Define to enable Policy Engine State Machine. Must be enabled
+ * with CONFIG_USB_SM_FRAMEWORK and CONFIG_USB_TYPEC_SM
+ */
+#define CONFIG_USB_PE_SM
+
 /*
  * Board specific maximum input current limit, in mA.
  */
@@ -1027,6 +1067,7 @@
 #define CONFIG_CMD_BATTFAKE
 #undef  CONFIG_CMD_BATT_MFG_ACCESS
 #undef  CONFIG_CMD_BUTTON
+#define CONFIG_CMD_CBI
 #undef  CONFIG_CMD_CCD_DISABLE  /* 'ccd disable' subcommand */
 #define CONFIG_CMD_CHARGER
 #undef  CONFIG_CMD_CHARGER_ADC_AMON_BMON
@@ -1606,6 +1647,11 @@
 /* Address of start of Nvmem area */
 #undef CONFIG_FLASH_NVMEM_BASE_A
 #undef CONFIG_FLASH_NVMEM_BASE_B
+
+/* Flash offsets for the 'new' (as of 1/2019) nvmem storage scheme. */
+#undef CONFIG_FLASH_NEW_NVMEM_BASE_A
+#undef CONFIG_FLASH_NEW_NVMEM_BASE_B
+
 /* Size in bytes of NvMem area */
 #undef CONFIG_FLASH_NVMEM_SIZE
 
@@ -1798,6 +1844,9 @@
  */
 #undef CONFIG_GPIO_INIT_POWER_ON_DELAY_MS
 
+/* Support getting gpio flags. */
+#undef CONFIG_GPIO_GET_EXTENDED
+
 /* Do we want to detect the lid angle? */
 #undef CONFIG_LID_ANGLE
 
@@ -1955,7 +2004,13 @@
 #undef CONFIG_HOSTCMD_AP_SET_SKUID
 
 /* Command to issue AP reset */
-#undef  CONFIG_HOSTCMD_AP_RESET
+#undef CONFIG_HOSTCMD_AP_RESET
+
+/* Flash commands over PD */
+#define CONFIG_HOSTCMD_FLASHPD
+
+/* Set entry in PD MCU's device rw_hash table */
+#define CONFIG_HOSTCMD_RWHASHPD
 
 /* List of host commands whose debug output will be suppressed */
 #undef CONFIG_SUPPRESSED_HOST_COMMANDS
@@ -2543,6 +2598,13 @@
 /* Support One Time Protection structure */
 #undef CONFIG_OTP
 
+/*
+ * Address to store persistent panic data at. By default, this will be
+ * at the end of RAM, and have a size of sizeof(struct panic_data)
+ */
+#undef CONFIG_PANIC_DATA_BASE
+#undef CONFIG_PANIC_DATA_SIZE
+
 /* Support PECI interface to x86 processor */
 #undef CONFIG_PECI
 
@@ -2688,15 +2750,31 @@
 #undef CONFIG_PWM_DISPLIGHT
 
 /*
+ * Support keyboard backlight control
+ *
+ * You need to define board_kblight_init unless CONFIG_PWM_KBLIGHT is used.
+ * For example, lm3509 can be registered as a driver in board_kblight_init.
+ */
+#undef CONFIG_KEYBOARD_BACKLIGHT
+
+/*
  * Support PWM output to keyboard backlight
  *
- * Optionally, lm3509 can be used as a keyboard backlight controller.
- * TODO: Create CONFIG_KEYBOARD_BACKLIGHT to allow lm3509 is used without PWM.
+ * This implies CONFIG_KEYBOARD_BACKLIGHT.
  */
 #undef CONFIG_PWM_KBLIGHT
 
 /* Support Real-Time Clock (RTC) */
 #undef CONFIG_RTC
+
+/* Size of each RAM bank in chip, default is CONFIG_RAM_SIZE */
+#undef CONFIG_RAM_BANK_SIZE
+
+/*
+ * Number of RAM banks in chip, default is
+ * CONFIG_RAM_SIZE / CONFIG_RAM_BANK_SIZE
+ */
+#undef CONFIG_RAM_BANKS
 
 /* Base address of RAM for the chip */
 #undef CONFIG_RAM_BASE
@@ -2987,6 +3065,12 @@
  * interrupt to hall_sensor_isr.
  */
 #undef CONFIG_HALL_SENSOR
+
+/*
+ * Board provides board_sensor_at_360 method instead of HALL_SENSOR_GPIO_L as
+ * the means for determining the state of the 360 hall sensor.
+ */
+#undef CONFIG_HALL_SENSOR_CUSTOM
 
 /*
  * Add a virtual switch to indicate when detachable device has
@@ -3491,6 +3575,12 @@
 /* Use DAC as reference for comparator at 850mV. */
 #undef CONFIG_PD_USE_DAC_AS_REF
 
+/* Type-C VCONN Powered Device */
+#undef CONFIG_USB_TYPEC_VPD
+
+/* Type-C Charge Through VCONN Powered Device */
+#undef CONFIG_USB_TYPEC_CTVPD
+
 /* USB Product ID. */
 #undef CONFIG_USB_PID
 
@@ -3789,6 +3879,13 @@
  */
 #undef CONFIG_WATCHDOG_HELP
 
+/*
+ * The maximum number of times that the watchdog timer may reset
+ * before halting the system (or taking some sort of other
+ * chip-dependent corrective action).
+ */
+#define CONFIG_WATCHDOG_MAX_RETRIES 4
+
 /* Watchdog period in ms; see also AUX_TIMER_PERIOD_MS */
 #define CONFIG_WATCHDOG_PERIOD_MS 1600
 
@@ -3940,6 +4037,33 @@
  */
 #ifndef CONFIG_DATA_RAM_SIZE
 #define CONFIG_DATA_RAM_SIZE	CONFIG_RAM_SIZE
+#endif
+
+/* Automatic configuration of RAM banks **************************************/
+/* Assume one RAM bank if not specified, auto-compute number of banks        */
+#ifndef CONFIG_RAM_BANK_SIZE
+#define CONFIG_RAM_BANK_SIZE	CONFIG_RAM_SIZE
+#endif
+
+#ifndef CONFIG_RAM_BANKS
+#define CONFIG_RAM_BANKS	(CONFIG_RAM_SIZE / CONFIG_RAM_BANK_SIZE)
+#endif
+
+/******************************************************************************/
+/*
+ * Store panic data at end of memory by default, unless otherwise
+ * configured.  This is safe because we don't context switch away from
+ * the panic handler before rebooting, and stacks and data start at
+ * the beginning of RAM.
+ */
+#ifndef CONFIG_PANIC_DATA_SIZE
+#define CONFIG_PANIC_DATA_SIZE	sizeof(struct panic_data)
+#endif
+
+#ifndef CONFIG_PANIC_DATA_BASE
+#define CONFIG_PANIC_DATA_BASE (CONFIG_RAM_BASE			\
+				+ CONFIG_RAM_SIZE			\
+				- CONFIG_PANIC_DATA_SIZE)
 #endif
 
 /******************************************************************************/

@@ -6,6 +6,8 @@
 #ifndef __CROS_EC_POWER_MGT_H
 #define __CROS_EC_POWER_MGT_H
 
+#include "registers.h"
+
 /* power states for ISH */
 enum {
 	/* D0 state: active mode */
@@ -57,16 +59,23 @@ static inline void ish_mia_reset(void)
 	__builtin_unreachable();
 }
 
-
-/**
- * ish low power management initialization,
- * should be called at system init stage before RTOS task scheduling start
- */
+/* Initialize power management module. */
+#ifdef CONFIG_LOW_POWER_IDLE
 void ish_pm_init(void);
+#else
+__maybe_unused static void ish_pm_init(void)
+{
+}
+#endif
 
 /**
  * reset ISH (reset minute-ia cpu core, and power off main SRAM)
  */
 void ish_pm_reset(void) __attribute__((noreturn));
+
+/**
+ * notify the power management module that the UART for the console is in use.
+ */
+void ish_pm_refresh_console_in_use(void);
 
 #endif /* __CROS_EC_POWER_MGT_H */

@@ -66,6 +66,7 @@ common-$(CONFIG_FLASH)+=flash.o
 common-$(CONFIG_FLASH_LOG)+=flash_log.o flash_log_vc.o
 common-$(CONFIG_FLASH_NVCOUNTER)+=nvcounter.o
 common-$(CONFIG_FLASH_NVMEM)+=nvmem.o
+common-$(CONFIG_FLASH_NVMEM)+=new_nvmem.o
 common-$(CONFIG_FLASH_NVMEM_VARS)+=nvmem_vars.o
 common-$(CONFIG_FMAP)+=fmap.o
 common-$(CONFIG_GESTURE_SW_DETECTION)+=gesture.o
@@ -98,7 +99,7 @@ common-$(CONFIG_POWER_BUTTON_X86)+=power_button_x86.o
 common-$(CONFIG_PSTORE)+=pstore_commands.o
 common-$(CONFIG_PWM)+=pwm.o
 common-$(CONFIG_PWM_KBLIGHT)+=pwm_kblight.o
-common-$(CONFIG_PWM_KBLIGHT)+=keyboard_backlight.o
+common-$(CONFIG_KEYBOARD_BACKLIGHT)+=keyboard_backlight.o
 common-$(CONFIG_RMA_AUTH)+=rma_auth.o
 common-$(CONFIG_RSA)+=rsa.o
 common-$(CONFIG_ROLLBACK)+=rollback.o
@@ -127,7 +128,14 @@ common-$(CONFIG_USB_I2C)+=usb_i2c.o
 common-$(CONFIG_USB_CHARGER)+=usb_charger.o
 common-$(CONFIG_USB_PORT_POWER_DUMB)+=usb_port_power_dumb.o
 common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
+ifeq ($(CONFIG_USB_SM_FRAMEWORK),)
 common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o
+else
+common-$(CONFIG_USB_SM_FRAMEWORK)+=usb_sm.o
+common-$(CONFIG_USB_TYPEC_SM)+=usb_tc_sm.o
+common-$(CONFIG_USB_PRL_SM)+=usb_prl_sm.o
+common-$(CONFIG_USB_PE_SM)+=usb_pe_sm.o
+endif
 common-$(CONFIG_USB_PD_LOGGING)+=event_log.o pd_log.o
 common-$(CONFIG_USB_PD_TCPC)+=usb_pd_tcpc.o
 common-$(CONFIG_USB_UPDATE)+=usb_update.o update_fw.o

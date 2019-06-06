@@ -261,6 +261,12 @@ static struct board_cfg board_cfg_table[] = {
 			BOARD_USE_PLT_RESET | BOARD_NO_INA_SUPPORT |
 			BOARD_CLOSED_LOOP_RESET,
 	},
+	/* Kukui: DI0A9 = 5k PU, DIOA1 = 5k PU */
+	{
+		.strap_cfg = 0x0F,
+		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+			BOARD_USE_PLT_RESET,
+	},
 	/* I2C Variants: DIOA9 = 1M PD, DIOA1 = 1M PD */
 	/* Reef/Eve: DIOA12 = 5k PD, DIOA6 = 1M PU */
 	{
@@ -633,17 +639,6 @@ static void configure_board_specific_gpios(void)
 		closed_source_set1_configure_gpios();
 }
 
-void decrement_retry_counter(void)
-{
-	uint32_t counter = GREG32(PMU, LONG_LIFE_SCRATCH0);
-
-	if (counter) {
-		GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 1);
-		GREG32(PMU, LONG_LIFE_SCRATCH0) = counter - 1;
-		GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 0);
-	}
-}
-
 static uint8_t mismatched_board_id;
 
 int board_id_is_mismatched(void)
@@ -712,7 +707,7 @@ static void board_init(void)
 	 * the rolling reboot count.
 	 */
 	if (system_get_reset_flags() & RESET_FLAG_HIBERNATE)
-		decrement_retry_counter();
+		system_decrement_retry_counter();
 	configure_board_specific_gpios();
 	init_pmu();
 	reset_wake_logic();
@@ -722,8 +717,6 @@ static void board_init(void)
 	init_runlevel(PERMISSION_MEDIUM);
 	/* Initialize NvMem partitions */
 	nvmem_init();
-	/* Initialize the persistent storage. */
-	initvars();
 
 	/*
 	 * If this was a low power wake and not a rollback, restore the ccd
@@ -928,40 +921,23 @@ void tpm_rst_deasserted(enum gpio_signal signal)
 
 void assert_sys_rst(void)
 {
-	/*
-	 * We don't have a good (any?) way to easily look up the pinmux/gpio
-	 * assignments in gpio.inc, so they're hard-coded in this routine. This
-	 * assertion is just to ensure it hasn't changed.
-	 */
-	ASSERT(GREAD(PINMUX, GPIO0_GPIO4_SEL) == GC_PINMUX_DIOM0_SEL);
-
-	/* Set SYS_RST_L_OUT as an output, connected to the pad */
-	GWRITE(PINMUX, DIOM0_SEL, GC_PINMUX_GPIO0_GPIO4_SEL);
-	gpio_set_flags(GPIO_SYS_RST_L_OUT, GPIO_OUT_HIGH);
-
 	/* Assert it */
 	gpio_set_level(GPIO_SYS_RST_L_OUT, 0);
 }
 
 void deassert_sys_rst(void)
 {
-	ASSERT(GREAD(PINMUX, GPIO0_GPIO4_SEL) == GC_PINMUX_DIOM0_SEL);
-
-	/* Deassert SYS_RST_L */
+	/* Deassert it */
 	gpio_set_level(GPIO_SYS_RST_L_OUT, 1);
-
-	/* Set SYS_RST_L_OUT as an input, disconnected from the pad */
-	gpio_set_flags(GPIO_SYS_RST_L_OUT, GPIO_INPUT);
-	GWRITE(PINMUX, DIOM0_SEL, 0);
 }
 
-int is_sys_rst_asserted(void)
+static int is_sys_rst_asserted(void)
 {
-	return (GREAD(PINMUX, DIOM0_SEL) == GC_PINMUX_GPIO0_GPIO4_SEL)
-#ifdef CONFIG_CMD_GPIO_EXTENDED
-		&& (gpio_get_flags(GPIO_SYS_RST_L_OUT) & GPIO_OUTPUT)
-#endif
-		&& (gpio_get_level(GPIO_SYS_RST_L_OUT) == 0);
+	/*
+	 * SYS_RST_L is pseudo open drain. It is only an output when it's
+	 * asserted.
+	 */
+	return gpio_get_flags(GPIO_SYS_RST_L_OUT) & GPIO_OUTPUT;
 }
 
 /**
@@ -981,7 +957,7 @@ void board_reboot_ap(void)
 /**
  * Reboot the EC
  */
-static void board_reboot_ec(void)
+void board_reboot_ec(void)
 {
 	if (board_uses_closed_loop_reset()) {
 		board_closed_loop_reset();

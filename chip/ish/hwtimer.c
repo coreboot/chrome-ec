@@ -146,6 +146,9 @@ static inline uint64_t read_main_timer(void)
 	timestamp_t t;
 	uint32_t hi;
 
+	/* need check main counter if valid when exit low power TCG mode */
+	wait_while_settling(HPET_MAIN_COUNTER_VALID);
+
 	do {
 		t.le.hi = HPET_MAIN_COUNTER_64_HI;
 		t.le.lo = HPET_MAIN_COUNTER_64_LO;
@@ -172,6 +175,7 @@ void __hw_clock_event_set(uint32_t deadline)
 	 * of 12Mhz timer comparator value. Watchdog refresh happens at least
 	 * every 10 seconds.
 	 */
+	wait_while_settling(HPET_T1_CMP_SETTLING);
 	HPET_TIMER_COMP(1) = read_main_timer() + scale_us2ticks(remaining_us);
 
 	wait_while_settling(HPET_T1_SETTLING);
@@ -187,6 +191,12 @@ uint32_t __hw_clock_event_get(void)
 
 void __hw_clock_event_clear(void)
 {
+	/*
+	 * we get timer event at every new clksrc_high.
+	 * so when there's no event, last_dealine should be
+	 * the last value within current clksrc_high.
+	 */
+	last_deadline = 0xFFFFFFFF;
 	wait_while_settling(HPET_T1_SETTLING);
 	HPET_TIMER_CONF_CAP(1) &= ~HPET_Tn_INT_ENB_CNF;
 }
@@ -212,6 +222,7 @@ void __hw_clock_source_set(uint32_t ts)
 static void __hw_clock_source_irq(int timer_id)
 {
 	/* Clear interrupt */
+	wait_while_settling(HPET_INT_STATUS_SETTLING);
 	HPET_INTR_CLEAR = BIT(timer_id);
 
 	/*
@@ -275,6 +286,9 @@ int __hw_clock_source_init(uint32_t start_t)
 	/* Level triggered interrupt */
 	timer0_config |= HPET_Tn_INT_TYPE_CNF;
 	timer1_config |= HPET_Tn_INT_TYPE_CNF;
+
+	/* no event until next timer 0 IRQ for clksrc_high++ */
+	last_deadline = 0xFFFFFFFF;
 
 	/* Enable interrupt */
 	timer0_config |= HPET_Tn_INT_ENB_CNF;

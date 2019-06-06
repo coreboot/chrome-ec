@@ -94,14 +94,18 @@ GPIO(INT_AP_L,        PIN(0, 0), GPIO_OUT_HIGH)
 GPIO(EC_FLASH_SELECT, PIN(0, 1), GPIO_OUT_LOW)
 GPIO(AP_FLASH_SELECT, PIN(0, 2), GPIO_OUT_LOW)
 
-/* Pull this low to reset the AP. (We reset the EC with the RBOX.) */
-GPIO(SYS_RST_L_OUT,   PIN(0, 4), GPIO_INPUT)
+/*
+ * Pull this low to reset the AP. (We reset the EC with the RBOX.)
+ * This is pseudo open drain.
+ */
+GPIO(SYS_RST_L_OUT,   PIN(0, 4), GPIO_ODR_HIGH)
 
 /*
  * Indicate to EC when CCD is enabled. EC can pull this down too, to tell us if
  * it decided instead.
+ * This is pseudo open drain.
  */
-GPIO(CCD_MODE_L,      PIN(0, 5), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(CCD_MODE_L,      PIN(0, 5), GPIO_ODR_HIGH | GPIO_PULL_UP)
 
 /* Battery present signal is active low */
 GPIO(BATT_PRES_L,     PIN(0, 6), GPIO_INPUT)
@@ -170,18 +174,8 @@ PINMUX(GPIO(AP_FLASH_SELECT), B3, DIO_INPUT)
  * removed.
  */
 PINMUX(GPIO(EN_PP3300_INA_L), B7, DIO_INPUT)
-/*
- * To allow the EC to drive the signal we set sys_rst_l_out as an input here and
- * only change it to an output when we want to assert the signal.
- */
 PINMUX(GPIO(SYS_RST_L_OUT),   M0, DIO_INPUT)
-/*
- * CCD_MODE_L is an input above, but we need to be able to drive it as
- * an output if Rdd detects the debug cable.  So set DIO_OUTPUT as
- * well.  It will be tristated initially, because we don't set
- * GPIO_OUTPUT above.
- */
-PINMUX(GPIO(CCD_MODE_L),      M1, DIO_INPUT | DIO_OUTPUT)
+PINMUX(GPIO(CCD_MODE_L),      M1, DIO_INPUT)
 PINMUX(GPIO(BATT_PRES_L),     M2, 0)
 /*
  * Update closed_source_set1.c if pinmux for I2C_SCL_INA or I2C_SDA_INA is

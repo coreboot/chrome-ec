@@ -152,6 +152,11 @@ static const uint8_t vdo_ver[] = {
 #define VDO_VER(v) VDM_VER10
 #endif
 
+#ifdef CONFIG_USB_PD_ALT_MODE_DFP
+/* Tracker for which task is waiting on sysjump prep to finish */
+static volatile task_id_t sysjump_task_waiting = TASK_ID_INVALID;
+#endif
+
 static struct pd_protocol {
 	/* current port power role (SOURCE or SINK) */
 	uint8_t power_role;
@@ -2165,7 +2170,7 @@ int pd_dev_store_rw_hash(int port, uint16_t dev_id, uint32_t *rw_hash,
 	return 0;
 }
 
-#ifdef CONFIG_POWER_COMMON /* Needed b/c CONFIG_POWER_COMMON is only caller */
+#if defined(CONFIG_POWER_COMMON) || defined(CONFIG_USB_PD_ALT_MODE_DFP)
 static void exit_dp_mode(int port)
 {
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
@@ -2508,6 +2513,8 @@ static typec_current_t get_typec_current_limit(int polarity, int cc1, int cc2)
 		charge = 3000;
 	else if (cc == TYPEC_CC_VOLT_RP_1_5)
 		charge = 1500;
+	else if (cc == TYPEC_CC_VOLT_RP_DEF)
+		charge = 500;
 	else
 		charge = 0;
 
@@ -2766,6 +2773,12 @@ void pd_task(void *u)
 			this_state = PD_STATE_SOFT_RESET;
 
 			/*
+			 * Re-discover any alternate modes we may have been
+			 * using with this port partner.
+			 */
+			pd[port].flags |= PD_FLAGS_CHECK_IDENTITY;
+
+			/*
 			 * Set the TCPC reset event such that we can set our CC
 			 * terminations, determine polarity, and enable RX so we
 			 * can hear back from our port partner.
@@ -2857,6 +2870,20 @@ void pd_task(void *u)
 		if (evt & PD_EVENT_POWER_STATE_CHANGE)
 			handle_new_power_state(port);
 #endif
+
+#if defined(CONFIG_USB_PD_ALT_MODE_DFP)
+		if (evt & PD_EVENT_SYSJUMP) {
+			exit_dp_mode(port);
+			/*
+			 * If event was set from pd_prepare_sysjump, wake the
+			 * task waiting on us to complete.
+			 */
+			if (sysjump_task_waiting != TASK_ID_INVALID)
+				task_set_event(sysjump_task_waiting,
+					       TASK_EVENT_SYSJUMP_READY, 0);
+		}
+#endif
+
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 		if (evt & PD_EVENT_UPDATE_DUAL_ROLE)
 			pd_update_dual_role_config(port);
@@ -3466,9 +3493,26 @@ void pd_task(void *u)
 						  PD_STATE_SRC_SWAP_SRC_DISABLE);
 			break;
 		case PD_STATE_SRC_SWAP_SRC_DISABLE:
-			/* Turn power off */
 			if (pd[port].last_state != pd[port].task_state) {
+				/* Turn power off */
 				pd_power_supply_reset(port);
+
+				/*
+				 * Switch to Rd and swap roles to sink
+				 *
+				 * The reason we do this as early as possible is
+				 * to help prevent CC disconnection cases where
+				 * both partners are applying an Rp.  Certain PD
+				 * stacks (e.g. qualcomm), reflexively apply
+				 * their Rp once VBUS falls beneath
+				 * ~3.67V. (b/77827528).
+				 */
+				tcpm_set_cc(port, TYPEC_CC_RD);
+				pd_set_power_role(port, PD_ROLE_SINK);
+
+				/* Inform TCPC of power role update. */
+				pd_update_roles(port);
+
 				set_state_timeout(port,
 						  get_time().val +
 						  PD_POWER_SUPPLY_TURN_OFF_DELAY,
@@ -3486,9 +3530,6 @@ void pd_task(void *u)
 						  PD_STATE_SRC_DISCONNECTED);
 					break;
 				}
-				/* Switch to Rd and swap roles to sink */
-				tcpm_set_cc(port, TYPEC_CC_RD);
-				pd_set_power_role(port, PD_ROLE_SINK);
 				/* Wait for PS_RDY from new source */
 				set_state_timeout(port,
 						  get_time().val +
@@ -3925,7 +3966,7 @@ void pd_task(void *u)
 			break;
 		case PD_STATE_SNK_SWAP_STANDBY:
 			if (pd[port].last_state != pd[port].task_state) {
-				/* Switch to Rp and enable power supply */
+				/* Switch to Rp and enable power supply. */
 				tcpm_set_cc(port, TYPEC_CC_RP);
 				if (pd_set_power_supply_ready(port)) {
 					/* Restore Rd */
@@ -4354,6 +4395,28 @@ static void pd_chipset_shutdown(void)
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pd_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
+
+#ifdef CONFIG_USB_PD_ALT_MODE_DFP
+void pd_prepare_sysjump(void)
+{
+	int i;
+
+	/* Exit modes before sysjump so we can cleanly enter again later */
+	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+		/*
+		 * We can't be in an alternate mode if PD comm is disabled, so
+		 * no need to send the event
+		 */
+		if (!pd_comm_is_enabled(i))
+			continue;
+
+		sysjump_task_waiting = task_get_current();
+		task_set_event(PD_PORT_TO_TASK_ID(i), PD_EVENT_SYSJUMP, 0);
+		task_wait_event_mask(TASK_EVENT_SYSJUMP_READY, -1);
+		sysjump_task_waiting = TASK_ID_INVALID;
+	}
+}
+#endif
 
 #ifdef CONFIG_COMMON_RUNTIME
 
@@ -5030,6 +5093,7 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_CONTROL,
 		     hc_usb_pd_control,
 		     EC_VER_MASK(0) | EC_VER_MASK(1) | EC_VER_MASK(2));
 
+#ifdef CONFIG_HOSTCMD_FLASHPD
 static int hc_remote_flash(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_usb_pd_fw_update *p = args->params;
@@ -5127,7 +5191,9 @@ static int hc_remote_flash(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_FW_UPDATE,
 		     hc_remote_flash,
 		     EC_VER_MASK(0));
+#endif /* CONFIG_HOSTCMD_FLASHPD */
 
+#ifdef CONFIG_HOSTCMD_RWHASHPD
 static int hc_remote_rw_hash_entry(struct host_cmd_handler_args *args)
 {
 	int i, idx = 0, found = 0;
@@ -5157,6 +5223,7 @@ static int hc_remote_rw_hash_entry(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_RW_HASH_ENTRY,
 		     hc_remote_rw_hash_entry,
 		     EC_VER_MASK(0));
+#endif /* CONFIG_HOSTCMD_RWHASHPD */
 
 static int hc_remote_pd_dev_info(struct host_cmd_handler_args *args)
 {
@@ -5178,7 +5245,6 @@ static int hc_remote_pd_dev_info(struct host_cmd_handler_args *args)
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
 }
-
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DEV_INFO,
 		     hc_remote_pd_dev_info,
 		     EC_VER_MASK(0));

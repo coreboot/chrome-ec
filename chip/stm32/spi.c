@@ -41,11 +41,17 @@
 static const struct dma_option dma_tx_option = {
 	STM32_DMAC_SPI1_TX, (void *)&SPI_TXDR,
 	STM32_DMA_CCR_MSIZE_8_BIT | STM32_DMA_CCR_PSIZE_8_BIT
+#ifdef CHIP_FAMILY_STM32F4
+	| STM32_DMA_CCR_CHANNEL(STM32_SPI1_TX_REQ_CH)
+#endif
 };
 
 static const struct dma_option dma_rx_option = {
 	STM32_DMAC_SPI1_RX, (void *)&SPI_RXDR,
 	STM32_DMA_CCR_MSIZE_8_BIT | STM32_DMA_CCR_PSIZE_8_BIT
+#ifdef CHIP_FAMILY_STM32F4
+	| STM32_DMA_CCR_CHANNEL(STM32_SPI1_RX_REQ_CH)
+#endif
 };
 
 /*
@@ -279,7 +285,7 @@ static void reply(dma_chan_t *txdma,
  */
 static void tx_status(uint8_t byte)
 {
-	stm32_spi_regs_t *spi = STM32_SPI1_REGS;
+	stm32_spi_regs_t *spi __attribute__((unused)) = STM32_SPI1_REGS;
 
 	SPI_TXDR = byte;
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32L4)
@@ -302,7 +308,7 @@ static void tx_status(uint8_t byte)
  */
 static void setup_for_transaction(void)
 {
-	stm32_spi_regs_t *spi = STM32_SPI1_REGS;
+	stm32_spi_regs_t *spi __attribute__((unused)) = STM32_SPI1_REGS;
 	volatile uint8_t dummy __attribute__((unused));
 
 	/* clear this as soon as possible */
@@ -667,7 +673,12 @@ static void spi_init(void)
 	/* Delay 1 APB clock cycle after the clock is enabled */
 	clock_wait_bus_cycles(BUS_APB, 1);
 
-	/* Select the right DMA request for the variants using it */
+	/*
+	 * Select the right DMA request for the variants using it.
+	 * This is not required for STM32F4 since the channel (aka request) is
+	 * set directly in the respective dma_option. In fact, it would be
+	 * overridden in dma-stm32f4::prepare_stream().
+	 */
 #ifdef CHIP_FAMILY_STM32L4
 	dma_select_channel(STM32_DMAC_SPI1_TX, 1);
 	dma_select_channel(STM32_DMAC_SPI1_RX, 1);

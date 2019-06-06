@@ -13,14 +13,13 @@
 #include "task.h"
 #include "timer.h"
 #include "util.h"
-#include "watchdog.h"
 
 /*
  * This array maps an interrupt vector number to the corresponding
  * exception name. See see "Intel 64 and IA-32 Architectures Software
  * Developer's Manual", Volume 3A, Section 6.15.
  */
-const static char *PANIC_REASON[] = {
+const static char *panic_reason[] = {
 	"Divide By Zero",
 	"Debug Exception",
 	"NMI Interrupt",
@@ -45,13 +44,16 @@ const static char *PANIC_REASON[] = {
 };
 
 /*
- * Print panic data
+ * Print panic data. This may be called either from the report_panic
+ * procedure (below) while handling a panic, or from the panicinfo
+ * console command.
  */
 void panic_data_print(const struct panic_data *pdata)
 {
-	panic_printf("\n========== PANIC ==========\n");
-	if (pdata->x86.vector <= 20)
-		panic_printf("%s\n", PANIC_REASON[pdata->x86.vector]);
+	if (pdata->x86.vector == ISH_WDT_VEC)
+		panic_printf("Reason: Watchdog Expiration\n");
+	else if (pdata->x86.vector <= 20)
+		panic_printf("Reason: %s\n", panic_reason[pdata->x86.vector]);
 	else
 		panic_printf("Interrupt vector number: 0x%08X (unknown)\n",
 			     pdata->x86.vector);
@@ -66,13 +68,6 @@ void panic_data_print(const struct panic_data *pdata)
 	panic_printf("EDX        = 0x%08X\n", pdata->x86.edx);
 	panic_printf("ESI        = 0x%08X\n", pdata->x86.esi);
 	panic_printf("EDI        = 0x%08X\n", pdata->x86.edi);
-	panic_printf("\n");
-	panic_printf("Resetting system...\n");
-	panic_printf("===========================\n");
-}
-
-void __keep report_panic(void)
-{
 }
 
 /**
@@ -93,6 +88,14 @@ __attribute__ ((noreturn)) void __keep exception_panic(
 	uint32_t cs,
 	uint32_t eflags)
 {
+	/*
+	 * If a panic were to occur during the reset procedure, we want
+	 * to make sure that this panic will certainly cause a hard
+	 * reset, rather than aontaskfw reset. Track if paniced once
+	 * already.
+	 */
+	static int panic_once;
+
 	register uint32_t eax asm("eax");
 	register uint32_t ebx asm("ebx");
 	register uint32_t ecx asm("ecx");
@@ -121,21 +124,28 @@ __attribute__ ((noreturn)) void __keep exception_panic(
 	PANIC_DATA_PTR->magic = PANIC_DATA_MAGIC;
 
 	/* Display the panic and reset */
+	if (panic_once)
+		panic_printf("\nWhile resetting from a panic, another panic"
+			     " occurred!");
+
+	panic_printf("\n========== PANIC ==========\n");
 	panic_data_print(PANIC_DATA_PTR);
-	system_reset(SYSTEM_RESET_HARD);
-	while (1)
-		continue;
-}
+	panic_printf("\n");
+	panic_printf("Resetting system...\n");
+	panic_printf("===========================\n");
 
-static int command_divzero(int argc, char **argv)
-{
-	volatile int x = 0;
+	if (panic_once) {
+		system_reset(SYSTEM_RESET_HARD);
+	} else if (vector == ISH_WDT_VEC) {
+		panic_once = 1;
+		system_reset(SYSTEM_RESET_AP_WATCHDOG);
+	} else {
+		panic_once = 1;
+		system_reset(0);
+	}
 
-	x = 1 / x;
-	return EC_SUCCESS;
+	__builtin_unreachable();
 }
-DECLARE_CONSOLE_COMMAND(divzero, command_divzero, NULL,
-			"Divide by zero to trigger a processor exception");
 
 #ifdef CONFIG_SOFTWARE_PANIC
 void software_panic(uint32_t reason, uint32_t info)

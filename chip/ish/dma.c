@@ -110,7 +110,7 @@ int ish_dma_copy(uint32_t chan, uint32_t dst, uint32_t src, uint32_t length,
 	mode |= NON_SNOOP;
 	MISC_DMA_CTL_REG(chan) = mode; /* Set transfer direction */
 
-	DMA_CFG_REG = DMA_EN_MASK; /* Enable DMA module */
+	DMA_CFG_REG = DMA_ENABLE;  /* Enable DMA module */
 	DMA_LLP(chan_reg) = 0;     /* Linked lists are not used */
 	DMA_CTL_LOW(chan_reg) =
 		0 /* Set transfer parameters */ |
@@ -181,36 +181,6 @@ void ish_dma_disable(void)
 int ish_wait_for_dma_done(uint32_t ch)
 {
 	return dma_poll(DMA_EN_REG_ADDR, 0, DMA_CH_EN_BIT(ch));
-}
-
-static int ish_dma_page_internal(uint32_t dst, uint32_t src, enum dma_mode mode)
-{
-	int rc;
-	uint32_t eflags = interrupt_lock();
-
-	if (!dma_init_called)
-		ish_dma_init();
-
-	/* Wait for DMA to be free */
-	rc = dma_poll(DMA_EN_REG_ADDR, 0,
-		      DMA_CH_EN_BIT(PAGING_CHAN) | DMA_CH_EN_BIT(KERNEL_CHAN));
-
-	if (rc == DMA_RC_OK)
-		rc = ish_dma_copy(PAGING_CHAN, dst, src, PAGE_SIZE, mode);
-
-	interrupt_unlock(eflags);
-	return rc;
-}
-
-/* DMA page between DRAM and SRAM. */
-int ish_dma_page(uint32_t dst, uint32_t src, int page_in)
-{
-	int ret = 0;
-
-	ret = ish_dma_page_internal(dst, src,
-				    (page_in ? UMA_TO_SRAM : SRAM_TO_UMA));
-
-	return ret;
 }
 
 void ish_dma_set_msb(uint32_t chan, uint32_t dst_msb, uint32_t src_msb)

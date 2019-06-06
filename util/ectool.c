@@ -333,7 +333,7 @@ int parse_bool(const char *s, int *dest)
 void print_help(const char *prog, int print_cmds)
 {
 	printf("Usage: %s [--dev=n] [--interface=dev|i2c|lpc] ", prog);
-	printf("[--name=cros_ec|cros_fp|cros_pd|cros_scp|cros_sh] [--ascii] ");
+	printf("[--name=cros_ec|cros_fp|cros_pd|cros_scp|cros_ish] [--ascii] ");
 	printf("<command> [params]\n\n");
 	if (print_cmds)
 		puts(help_str);
@@ -843,33 +843,14 @@ static const char *reset_cause_to_str(uint16_t cause)
 
 int cmd_uptimeinfo(int argc, char *argv[])
 {
-	static const char * const reset_flag_strings[] = {
-		"other",
-		"reset-pin",
-		"brownout",
-		"power-on",
-		"watchdog",
-		"soft",
-		"hibernate",
-		"rtc-alarm",
-		"wake-pin",
-		"low-battery",
-		"sysjump",
-		"hard",
-		"ap-off",
-		"preserved",
-		"usb-resume",
-		"rdd",
-		"rbox",
-		"security",
-		"ap-watchdog"
-	};
-
 	struct ec_response_uptime_info r;
 	int rv;
 	int i;
 	int flag_count;
 	uint32_t flag;
+	static const char * const reset_flag_descs[] = {
+		#include "reset_flag_desc.inc"
+	};
 
 	if (argc != 1) {
 		fprintf(stderr, "uptimeinfo takes no arguments");
@@ -901,14 +882,26 @@ int cmd_uptimeinfo(int argc, char *argv[])
 	}
 
 	printf("EC reset flags at last EC boot: ");
+
+	if (!r.ec_reset_flags) {
+		printf("unknown\n");
+		return 0;
+	}
+
 	flag_count = 0;
-	for (flag = 0; flag != ARRAY_SIZE(reset_flag_strings); ++flag) {
+	for (flag = 0; flag < ARRAY_SIZE(reset_flag_descs); ++flag) {
 		if ((r.ec_reset_flags & BIT(flag)) != 0) {
 			if (flag_count)
 				printf(" | ");
-			printf(reset_flag_strings[flag]);
+			printf(reset_flag_descs[flag]);
 			flag_count++;
 		}
+	}
+
+	if (r.ec_reset_flags >= BIT(flag)) {
+		if (flag_count)
+			printf(" | ");
+		printf("no-desc");
 	}
 	printf("\n");
 	return 0;
@@ -1563,13 +1556,13 @@ int cmd_fp_mode(int argc, char *argv[])
 int cmd_fp_seed(int argc, char *argv[])
 {
 	struct ec_params_fp_seed p;
-	const char *seed = argv[1];
-	int rv;
+	char *seed;
 
-	if (argc == 1) {
-		printf("Missing seed argument.\n");
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <seed>\n", argv[0]);
 		return 1;
 	}
+	seed = argv[1];
 	if (strlen(seed) != FP_CONTEXT_TPM_BYTES) {
 		printf("Invalid seed '%s' is %zd bytes long instead of %d.\n",
 		       seed, strlen(seed), FP_CONTEXT_TPM_BYTES);
@@ -1579,8 +1572,7 @@ int cmd_fp_seed(int argc, char *argv[])
 	p.struct_version = FP_TEMPLATE_FORMAT_VERSION;
 	memcpy(p.seed, seed, FP_CONTEXT_TPM_BYTES);
 
-	rv = ec_command(EC_CMD_FP_SEED, 0, &p, sizeof(p), NULL, 0);
-	return rv;
+	return ec_command(EC_CMD_FP_SEED, 0, &p, sizeof(p), NULL, 0);
 }
 
 int cmd_fp_stats(int argc, char *argv[])

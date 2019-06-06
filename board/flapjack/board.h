@@ -58,7 +58,6 @@
 /* By default, set hcdebug to off */
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
-#undef CONFIG_LID_SWITCH
 #undef CONFIG_LTO
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_IGNORE_LID
@@ -130,6 +129,9 @@
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_PD_COMM_LOCKED
+#ifdef SECTION_IS_RO
+#define CONFIG_USB_PD_DEBUG_LEVEL 0
+#endif
 
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_PRESENT_CUSTOM
@@ -169,17 +171,32 @@
 #undef CONFIG_CMD_FASTCHARGE
 #undef CONFIG_CMD_FLASH
 #undef CONFIG_CMD_GETTIME
-#ifdef SECTION_IS_RO
-#undef CONFIG_CMD_ADC
-#undef CONFIG_CMD_I2C_XFER
-#undef CONFIG_CMD_IDLE_STATS
-#endif
 #undef CONFIG_CMD_HASH
 #undef CONFIG_CMD_HCDEBUG
 #undef CONFIG_CMD_MD
 #undef CONFIG_CMD_MEM
 #undef CONFIG_CMD_POWERINDEBUG
 #undef CONFIG_CMD_TIMERINFO
+
+#ifdef SECTION_IS_RO
+#undef CONFIG_CMD_ADC
+#undef CONFIG_CMD_APTHROTTLE
+#undef CONFIG_CMD_CBI
+#undef CONFIG_CMD_I2C_SCAN
+#undef CONFIG_CMD_I2C_XFER
+#undef CONFIG_CMD_IDLE_STATS
+#undef CONFIG_CMD_INA
+#undef CONFIG_CMD_MMAPINFO
+#undef CONFIG_CMD_PD
+#undef CONFIG_CMD_PWR_AVG
+#undef CONFIG_CMD_REGULATOR
+#undef CONFIG_CMD_RW
+#undef CONFIG_CMD_SHMEM
+/* TODO: Consider put these back when FSI is (about to be) done. */
+#undef CONFIG_CMD_SLEEPMASK
+#undef CONFIG_CMD_SLEEPMASK_SET
+#undef CONFIG_CMD_SYSLOCK
+#endif
 
 #define CONFIG_TASK_PROFILING
 
@@ -221,11 +238,23 @@ enum oem_id {
 
 enum adc_channel {
 	/* Real ADC channels begin here */
-	ADC_BOARD_ID = 0,
+	ADC_LCM_ID = 0,
 	ADC_EC_SKU_ID,
 	ADC_BATT_ID,
 	ADC_USBC_THERM,
 	ADC_CH_COUNT
+};
+
+/* Panel ID bit position inside sku_id */
+#define PANEL_ID_BIT_POSITION  16
+
+/* Refer to coreboot/src/mainboard/google/kukui/display.h */
+enum panel_id {
+	PANEL_KUKUI_INNOLUX = 0,
+	PANEL_BOE_HIMAX8279D10P,
+	PANEL_BOE_HIMAX8279D8P,
+	PANEL_UNKNOWN,
+	PANEL_COUNT,
 };
 
 /* power signal definitions */
@@ -262,6 +291,15 @@ void emmc_cmd_interrupt(enum gpio_signal signal);
 #endif
 
 void board_reset_pd_mcu(void);
+
+#define ADC_MARGIN_MV 56 /* Simply assume 1800/16/2 */
+
+struct mv_to_id {
+	int id;
+	int median_mv;
+};
+
+int board_read_id(enum adc_channel, const struct mv_to_id *table, int size);
 
 #endif /* !__ASSEMBLER__ */
 

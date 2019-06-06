@@ -14,6 +14,9 @@
 #include "driver/accelgyro_bmi160.h"
 #include "driver/als_opt3001.h"
 #include "driver/ppc/sn5s330.h"
+#include "driver/tcpm/anx7447.h"
+#include "driver/tcpm/ps8xxx.h"
+#include "driver/tcpm/tcpci.h"
 #include "ec_commands.h"
 #include "extpower.h"
 #include "fan.h"
@@ -113,6 +116,34 @@ const struct pwm_t pwm_channels[] = {
 			.freq = 25000},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+/******************************************************************************/
+/* USB-C TPCP Configuration */
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+	[USB_PD_PORT_TCPC_0] = {
+		.i2c_host_port = I2C_PORT_TCPC0,
+		.i2c_slave_addr = AN7447_TCPC0_I2C_ADDR,
+		.drv = &anx7447_tcpm_drv,
+		.flags = TCPC_FLAGS_RESET_ACTIVE_HIGH,
+	},
+	[USB_PD_PORT_TCPC_1] = {
+		.i2c_host_port = I2C_PORT_TCPC1,
+		.i2c_slave_addr = PS8751_I2C_ADDR1,
+		.drv = &ps8xxx_tcpm_drv,
+		.flags = 0,
+	},
+};
+
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+	[USB_PD_PORT_TCPC_0] = {
+		.driver = &anx7447_usb_mux_driver,
+		.hpd_update = &anx7447_tcpc_update_hpd_status,
+	},
+	[USB_PD_PORT_TCPC_1] = {
+		.driver = &tcpci_tcpm_usb_mux_driver,
+		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+	}
+};
 
 /******************************************************************************/
 /* Sensors */
@@ -386,3 +417,25 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC_ODL, !is_overcurrented);
 }
+
+/* Called on AP S5 -> S3 transition */
+static void board_chipset_startup(void)
+{
+	gpio_set_level(GPIO_EC_INT_L, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup,
+	     HOOK_PRIO_DEFAULT);
+
+/* Called on AP S3 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	/*
+	 * EC_INT_L is currently a push-pull pin and this causes leakage in G3
+	 * onto the PP3300_A_SOC rail. Pull this pin low when host enters S5 to
+	 * avoid the leakage. It will be pulled back high when host transitions
+	 * out of S5.
+	 */
+	gpio_set_level(GPIO_EC_INT_L, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown,
+	     HOOK_PRIO_DEFAULT);

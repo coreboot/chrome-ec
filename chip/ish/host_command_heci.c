@@ -9,6 +9,7 @@
 #include "host_command.h"
 #include "host_command_heci.h"
 #include "ipc_heci.h"
+#include "ish_fwst.h"
 #include "util.h"
 
 #define CPUTS(outstr) cputs(CC_LPC, outstr)
@@ -53,14 +54,21 @@ enum heci_cros_ec_channel {
 static uint8_t response_buffer[IPC_MAX_PAYLOAD_SIZE] __aligned(4);
 static struct host_packet heci_packet;
 
-void heci_send_mkbp_event(void)
+int heci_send_mkbp_event(uint32_t *timestamp)
 {
 	struct cros_ec_ishtp_msg evt;
+	int rv;
 
 	evt.hdr.channel = CROS_MKBP_EVENT;
 	evt.hdr.status = 0;
 
-	heci_send_msg(heci_cros_ec_handle, (uint8_t *)&evt, sizeof(evt));
+	rv = heci_send_msg_timestamp(heci_cros_ec_handle, (uint8_t *)&evt,
+				     sizeof(evt), timestamp);
+	/*
+	 * heci_send_msg_timestamp sends back negative error codes. Change to
+	 * EC style codes
+	 */
+	return rv < 0 ? -rv : EC_SUCCESS;
 }
 
 static void heci_send_hostcmd_response(struct host_packet *pkt)
@@ -137,6 +145,7 @@ EC_VER_MASK(0));
 static int cros_ec_ishtp_subsys_initialize(const heci_handle_t heci_handle)
 {
 	heci_cros_ec_handle = heci_handle;
+	ish_fwst_set_fw_status(FWSTS_SENSOR_APP_RUNNING);
 	return EC_SUCCESS;
 }
 

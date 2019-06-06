@@ -85,8 +85,8 @@ static void pmu_wakeup_isr(void)
 	 * Indicate completion of servicing the interrupt to IOAPIC first
 	 * then indicate completion of servicing the interrupt to LAPIC
 	 */
-	REG32(IOAPIC_EOI_REG) = ISH_PMU_WAKEUP_VEC;
-	REG32(LAPIC_EOI_REG) = 0x0;
+	IOAPIC_EOI_REG = ISH_PMU_WAKEUP_VEC;
+	LAPIC_EOI_REG = 0x0;
 
 	__asm__ volatile ("iret;");
 
@@ -105,8 +105,8 @@ static void reset_prep_isr(void)
 	 * Indicate completion of servicing the interrupt to IOAPIC first
 	 * then indicate completion of servicing the interrupt to LAPIC
 	 */
-	REG32(IOAPIC_EOI_REG) = ISH_RESET_PREP_VEC;
-	REG32(LAPIC_EOI_REG) = 0x0;
+	IOAPIC_EOI_REG = ISH_RESET_PREP_VEC;
+	LAPIC_EOI_REG = 0x0;
 
 	handle_reset(ISH_PM_STATE_RESET_PREP);
 
@@ -172,7 +172,7 @@ void ish_aon_main(void);
 static struct tss_entry aon_tss = {
 	.prev_task_link = 0,
 	.reserved1 = 0,
-	.esp0 = (uint8_t *)(CONFIG_ISH_AON_SRAM_ROM_START - AON_SP_RESERVED),
+	.esp0 = (uint8_t *)(CONFIG_AON_ROM_BASE - AON_SP_RESERVED),
 	/* entry 1 in LDT for data segment */
 	.ss0 = 0xc,
 	.reserved2 = 0,
@@ -191,8 +191,8 @@ static struct tss_entry aon_tss = {
 	.edx = 0,
 	.ebx = 0,
 	/* set stack top pointer at the end of usable aon memory */
-	.esp = CONFIG_ISH_AON_SRAM_ROM_START - AON_SP_RESERVED,
-	.ebp = AON_SP_RESERVED,
+	.esp = CONFIG_AON_ROM_BASE - AON_SP_RESERVED,
+	.ebp = CONFIG_AON_ROM_BASE - AON_SP_RESERVED,
 	.esi = 0,
 	.edi = 0,
 	/* entry 1 in LDT for data segment */
@@ -295,20 +295,20 @@ static int store_main_fw(void)
 			SNOWBALL_FW_OFFSET +
 			ISH_FW_IMAGE_MANIFEST_HEADER_SIZE;
 
-	imr_fw_rw_addr = imr_fw_addr + aon_share.main_fw_rw_addr -
-			CONFIG_ISH_SRAM_BASE_START;
+	imr_fw_rw_addr = (imr_fw_addr
+			  + aon_share.main_fw_rw_addr
+			  - CONFIG_RAM_BASE);
 
 	/* disable BCG (Block Clock Gating) for DMA, DMA can be accessed now */
 	CCU_BCG_EN = CCU_BCG_EN & ~CCU_BCG_BIT_DMA;
 
 	/* store main FW's read and write data region to IMR/UMA DDR */
 	ret = ish_dma_copy(
-			PAGING_CHAN,
-			imr_fw_rw_addr,
-			aon_share.main_fw_rw_addr,
-			aon_share.main_fw_rw_size,
-			SRAM_TO_UMA
-			);
+		PAGING_CHAN,
+		imr_fw_rw_addr,
+		aon_share.main_fw_rw_addr,
+		aon_share.main_fw_rw_size,
+		SRAM_TO_UMA);
 
 	/* enable BCG for DMA, DMA can't be accessed now */
 	CCU_BCG_EN = CCU_BCG_EN | CCU_BCG_BIT_DMA;
@@ -336,23 +336,24 @@ static int restore_main_fw(void)
 			SNOWBALL_FW_OFFSET +
 			ISH_FW_IMAGE_MANIFEST_HEADER_SIZE;
 
-	imr_fw_ro_addr = imr_fw_addr + aon_share.main_fw_ro_addr -
-			CONFIG_ISH_SRAM_BASE_START;
+	imr_fw_ro_addr = (imr_fw_addr
+			  + aon_share.main_fw_ro_addr
+			  - CONFIG_RAM_BASE);
 
-	imr_fw_rw_addr = imr_fw_addr + aon_share.main_fw_rw_addr -
-			CONFIG_ISH_SRAM_BASE_START;
+	imr_fw_rw_addr = (imr_fw_addr
+			  + aon_share.main_fw_rw_addr
+			  - CONFIG_RAM_BASE);
 
 	/* disable BCG (Block Clock Gating) for DMA, DMA can be accessed now */
 	CCU_BCG_EN = CCU_BCG_EN & ~CCU_BCG_BIT_DMA;
 
 	/* restore main FW's read only code and data region from IMR/UMA DDR */
 	ret = ish_dma_copy(
-			PAGING_CHAN,
-			aon_share.main_fw_ro_addr,
-			imr_fw_ro_addr,
-			aon_share.main_fw_ro_size,
-			UMA_TO_SRAM
-			);
+		PAGING_CHAN,
+		aon_share.main_fw_ro_addr,
+		imr_fw_ro_addr,
+		aon_share.main_fw_ro_size,
+		UMA_TO_SRAM);
 
 	if (ret != DMA_RC_OK) {
 
@@ -388,12 +389,14 @@ static int restore_main_fw(void)
 	return AON_SUCCESS;
 }
 
-#ifdef CHIP_FAMILY_ISH3
-/* on ISH3, need reserve last SRAM bank for AON use */
-#define SRAM_POWER_OFF_BANKS	(CONFIG_ISH_SRAM_BANKS - 1)
+#if defined(CHIP_FAMILY_ISH3)
+/* on ISH3, the last SRAM bank is reserved for AON use */
+#define SRAM_POWER_OFF_BANKS	(CONFIG_RAM_BANKS - 1)
+#elif defined(CHIP_FAMILY_ISH4) || defined(CHIP_FAMILY_ISH5)
+/* ISH4 and ISH5 have separate AON memory, can power off entire main SRAM */
+#define SRAM_POWER_OFF_BANKS	CONFIG_RAM_BANKS
 #else
-/* from ISH4, has seprated AON memory, can power off entire main SRAM  */
-#define SRAM_POWER_OFF_BANKS	CONFIG_ISH_SRAM_BANKS
+#error "CHIP_FAMILY_ISH(3|4|5) must be defined"
 #endif
 
 /**
@@ -435,8 +438,8 @@ static void sram_power(int on)
 	uint32_t sram_addr;
 	uint32_t erase_cfg;
 
-	bank_size = CONFIG_ISH_SRAM_BANK_SIZE;
-	sram_addr = CONFIG_ISH_SRAM_BASE_START;
+	bank_size = CONFIG_RAM_BANK_SIZE;
+	sram_addr = CONFIG_RAM_BASE;
 
 	/**
 	 * set erase size as one bank, erase control register using DWORD as
@@ -483,7 +486,8 @@ static void sram_power(int on)
 static void handle_d0i2(void)
 {
 	/* set main SRAM into retention mode*/
-	PMU_LDO_CTRL = PMU_LDO_BIT_RETENTION_ON | PMU_LDO_BIT_ON;
+	PMU_LDO_CTRL = PMU_LDO_ENABLE_BIT
+		| PMU_LDO_RETENTION_BIT;
 
 	/* delay some cycles before halt */
 	delay(SRAM_RETENTION_CYCLES_DELAY);
@@ -492,13 +496,13 @@ static void handle_d0i2(void)
 	/* wakeup from PMU interrupt */
 
 	/* set main SRAM intto normal mode */
-	PMU_LDO_CTRL = PMU_LDO_BIT_ON;
+	PMU_LDO_CTRL = PMU_LDO_ENABLE_BIT;
 
 	/**
 	 * poll LDO_READY status to make sure SRAM LDO is on
 	 * (exited retention mode)
 	 */
-	while (!(PMU_LDO_CTRL & PMU_LDO_BIT_READY))
+	while (!(PMU_LDO_CTRL & PMU_LDO_READY_BIT))
 		continue;
 }
 
@@ -539,31 +543,65 @@ static void handle_d3(void)
 
 static void handle_reset(int pm_state)
 {
+	/* disable watch dog */
+	WDT_CONTROL &= ~WDT_CONTROL_ENABLE_BIT;
+
+	/* disable all gpio interrupts */
+	ISH_GPIO_GRER = 0;
+	ISH_GPIO_GFER = 0;
+	ISH_GPIO_GIMR = 0;
+
 	/* disable CSME CSR irq */
-	REG32(IPC_PIMR) &= ~IPC_PIMR_CSME_CSR_BIT;
+	IPC_PIMR &= ~IPC_PIMR_CSME_CSR_BIT;
 
 	/* power off main SRAM */
 	sram_power(0);
 
 	while (1) {
-
-		/* check if host ish driver already set the DMA enable flag */
-		if (REG32(IPC_ISH_RMP2) & DMA_ENABLED_MASK) {
+		/**
+		 * check if host ish driver already set the DMA enable flag
+		 *
+		 * ISH FW and ISH ipc host driver using IPC_ISH_RMP2 register
+		 * for synchronization during ISH boot.
+		 * ISH ipc host driver will set DMA_ENABLED_MASK bit when it
+		 * is loaded and starts, and clear this bit when it is removed.
+		 *
+		 * see: https://github.com/torvalds/linux/blob/master/drivers/
+		 *      hid/intel-ish-hid/ipc/ipc.c
+		 *
+		 * we have two kinds of reset situations need to handle here:
+		 * 1: reset ISH via uart console cmd or ectool host cmd
+		 * 2: S0 -> Sx (reset_prep interrupt)
+		 *
+		 * for #1, ISH ipc host driver no changed states,
+		 * DMA_ENABLED_MASK bit always set, so, will reset ISH directly
+		 *
+		 * for #2, ISH ipc host driver changed states, and cleared
+		 * DMA_ENABLED_MASK bit, then ISH FW received reset_prep
+		 * interrupt, ISH will stay in this while loop (most time in
+		 * halt state), waiting for DMA_ENABLED_MASK bit was set and
+		 * reset ISH then. Since ISH ROM have no power managment, stay
+		 * in aontask can save more power especially if system stay in
+		 * Sx for long time.
+		 *
+		 */
+		if (IPC_ISH_RMP2 & DMA_ENABLED_MASK) {
 
 			/* clear ISH2HOST doorbell register */
-			REG32(IPC_ISH2HOST_DOORBELL) = 0;
+			*IPC_ISH2HOST_DOORBELL_ADDR = 0;
 
 			/* clear error register in MISC space */
 			MISC_ISH_ECC_ERR_SRESP = 1;
 
 			/* reset ISH minute-ia cpu core, will goto ISH ROM */
 			ish_mia_reset();
+
+			__builtin_unreachable();
 		}
 
 		ish_mia_halt();
 	}
 
-	__builtin_unreachable();
 }
 
 static void handle_unknown_state(void)
