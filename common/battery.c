@@ -598,6 +598,8 @@ void battery_compensate_params(struct batt_params *batt)
 	denom = full * (batt_host_full_factor - batt_host_shutdown_pct);
 	/* Rounding (instead of truncating) */
 	batt->display_charge = (numer + denom / 2) / denom;
+	if (batt->display_charge < 0)
+		batt->display_charge = 0;
 }
 
 __attribute__((weak)) int get_battery_manufacturer_name(char *dest, int size)
