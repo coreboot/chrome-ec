@@ -88,6 +88,7 @@ CFLAGS+= -ffunction-sections -fshort-wchar
 ifneq ($(cc-name),clang)
 # TODO(chromium:854924): LLVM support for this flag is coming soon.
 CFLAGS+= -fno-delete-null-pointer-checks
+CFLAGS+= -ffat-lto-objects
 CFLAGS+= -fconserve-stack
 endif
 CFLAGS+= -DCHROMIUM_EC
