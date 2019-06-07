@@ -69,6 +69,7 @@ CPPFLAGS+=-ffreestanding -fno-builtin -nostdinc -nostdlib
 CPPFLAGS+=-Ibuiltin/
 endif
 CFLAGS=$(CPPFLAGS) $(CFLAGS_CPU) $(CFLAGS_DEBUG) $(CFLAGS_WARN) $(CFLAGS_y)
+CFLAGS+= -ffat-lto-objects
 CFLAGS+= -ffunction-sections -fshort-wchar
 CFLAGS+= -fno-delete-null-pointer-checks -fconserve-stack
 CFLAGS+= -DCHROMIUM_EC
