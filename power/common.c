@@ -180,11 +180,11 @@ static enum power_state power_common_state(enum power_state state)
 			switch (board_system_is_idle(last_shutdown_time,
 						     &target, now)) {
 			case CRITICAL_SHUTDOWN_HIBERNATE:
+			CPRINTS("Hibernating");
 #ifdef CONFIG_LOW_POWER_PSEUDO_G3
 				enter_pseudo_g3();
 #else
-				CPRINTS("hibernating");
-				system_hibernate(0, 0);
+				system_hibernate(CONFIG_HIBERNATE_PERIOD, 0);
 #endif
 				break;
 #ifdef CONFIG_BATTERY_CUT_OFF

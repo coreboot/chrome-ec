@@ -994,6 +994,11 @@
 #define CONFIG_HIBERNATE_DELAY_SEC 3600
 
 /*
+ * Duration in hibernation
+ */
+#undef CONFIG_HIBERNATE_PERIOD
+
+/*
  * Use to define going in to hibernate early if low on battery.
  * CONFIG_HIBERNATE_BATT_PCT specifies the low battery threshold
  * for going into hibernate early, and CONFIG_HIBERNATE_BATT_SEC defines
