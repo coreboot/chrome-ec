@@ -20,6 +20,8 @@
 #include "util.h"
 #include "spi.h"
 
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
+
 /* Indices for hibernate data registers (RAM backed by VBAT) */
 enum hibdata_index {
 	HIBDATA_INDEX_SCRATCHPAD = 0,    /* General-purpose scratchpad */
@@ -186,6 +188,7 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 {
 	int i;
 
+	CPRINTS("%s(%d, %d)", __func__, seconds, microseconds);
 	cflush();
 
 	if (board_hibernate)
