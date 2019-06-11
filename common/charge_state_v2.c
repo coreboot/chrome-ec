@@ -535,7 +535,7 @@ static int shutdown_on_critical_battery(void)
 			break;
 		case CRITICAL_SHUTDOWN_CUTOFF:
 			CPRINTS("Cutoff due to critical battery");
-			board_cut_off_battery();
+			battery_cutoff();
 			break;
 		case CRITICAL_SHUTDOWN_IGNORE:
 		default:
