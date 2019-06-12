@@ -3571,6 +3571,30 @@ struct ec_params_pd_write_log_entry {
 
 #endif  /* !__ACPI__ */
 
+/* Get reset flags */
+#define EC_CMD_GET_RESET_FLAG 0x127
+
+/* Reset causes */
+#define RESET_FLAG_OTHER       (1 << 0)   /* Other known reason */
+#define RESET_FLAG_RESET_PIN   (1 << 1)   /* Reset pin asserted */
+#define RESET_FLAG_BROWNOUT    (1 << 2)   /* Brownout */
+#define RESET_FLAG_POWER_ON    (1 << 3)   /* Power-on reset */
+#define RESET_FLAG_WATCHDOG    (1 << 4)   /* Watchdog timer reset */
+#define RESET_FLAG_SOFT        (1 << 5)   /* Soft reset trigger by core */
+#define RESET_FLAG_HIBERNATE   (1 << 6)   /* Wake from hibernate */
+#define RESET_FLAG_RTC_ALARM   (1 << 7)   /* RTC alarm wake */
+#define RESET_FLAG_WAKE_PIN    (1 << 8)   /* Wake pin triggered wake */
+#define RESET_FLAG_LOW_BATTERY (1 << 9)   /* Low battery triggered wake */
+#define RESET_FLAG_SYSJUMP     (1 << 10)  /* Jumped directly to this image */
+#define RESET_FLAG_HARD        (1 << 11)  /* Hard reset from software */
+#define RESET_FLAG_AP_OFF      (1 << 12)  /* Do not power on AP */
+#define RESET_FLAG_PRESERVED   (1 << 13)  /* Some reset flags preserved from
+					   * previous boot */
+#define RESET_FLAG_TIMER       (1 << 14)
+
+struct ec_response_get_reset_flag {
+	uint32_t reset_flag;
+} __packed;
 
 /*****************************************************************************/
 /*

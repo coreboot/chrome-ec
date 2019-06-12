@@ -1159,3 +1159,14 @@ int host_command_reboot(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_REBOOT_EC,
 		     host_command_reboot,
 		     EC_VER_MASK(0));
+
+static int host_command_get_reset_flag(struct host_cmd_handler_args *args)
+{
+	struct ec_response_get_reset_flag *r = args->response;
+	r->reset_flag = system_get_reset_flags();
+	args->response_size = sizeof(*r);
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_GET_RESET_FLAG,
+		     host_command_get_reset_flag,
+		     EC_VER_MASK(0));
