@@ -28,6 +28,7 @@
 #define RESET_FLAG_AP_OFF      (1 << 12)  /* Do not power on AP */
 #define RESET_FLAG_PRESERVED   (1 << 13)  /* Some reset flags preserved from
 					   * previous boot */
+#define RESET_FLAG_TIMER       (1 << 14)
 
 /* System images */
 enum system_image_copy_t {

@@ -82,7 +82,7 @@ static struct jump_data *jdata;
 static const char * const reset_flag_descs[] = {
 	"other", "reset-pin", "brownout", "power-on", "watchdog", "soft",
 	"hibernate", "rtc-alarm", "wake-pin", "low-battery", "sysjump",
-	"hard", "ap-off", "preserved"};
+	"hard", "ap-off", "preserved", "timer"};
 
 static uint32_t reset_flags;
 static int jumped_to_image;
