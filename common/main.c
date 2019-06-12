@@ -111,14 +111,14 @@ test_mockable __keep int main(void)
 	/* Initialize UART.  Console output functions may now be used. */
 	uart_init();
 
-	if (system_jumped_to_this_image()) {
+	if (system_jumped_to_this_image())
 		CPRINTS("UART initialized after sysjump");
-	} else {
+	else
 		CPUTS("\n\n--- UART initialized after reboot ---\n");
-		CPUTS("[Reset cause: ");
-		system_print_reset_flags();
-		CPUTS("]\n");
-	}
+	CPUTS("[Reset cause: ");
+	system_print_reset_flags();
+	CPUTS("]\n");
+
 	CPRINTF("[Image: %s, %s]\n",
 		 system_get_image_copy_string(), system_get_build_info());
 
