@@ -66,20 +66,21 @@
  * @param context	Context pointer to pass to addchar()
  * @param format	Format string (see above for acceptable formats)
  * @param args		Parameters
- * @return EC_SUCCESS, or non-zero if output was truncated.
+ * @return EC_SUCCESS, or EC_ERROR_OVERFLOW if output was truncated.
  */
 int vfnprintf(int (*addchar)(void *context, int c), void *context,
 	      const char *format, va_list args);
 
 /**
- * Print formatted outut to a string.
+ * Print formatted output to a string.
  *
  * Guarantees null-termination if size!=0.
  *
  * @param str		Destination string
  * @param size		Size of destination in bytes
  * @param format	Format string
- * @return EC_SUCCESS, or non-zero if output was truncated.
+ * @return The string length written to str, or a negative value on error.
+ *         The negative values can be -EC_ERROR_INVAL or -EC_ERROR_OVERFLOW.
  */
 int snprintf(char *str, int size, const char *format, ...);
 
