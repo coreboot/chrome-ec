@@ -5,3 +5,4 @@
 # See common/mock/README.md for more information.
 
 mock-$(HAS_MOCK_FPSENSOR) += fpsensor_mock.o
+mock-$(HAS_MOCK_TIMER) += timer_mock.o
