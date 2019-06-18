@@ -1,7 +1,7 @@
 /* Runtime ABI for the ARM Cortex-M0
  * lmul.S: 64 bit multiplication
  *
- * Copyright (c) 2013 Jörg Mische <bobbl@gmx.de>
+ * Copyright 2013 Jörg Mische <bobbl@gmx.de>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above

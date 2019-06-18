@@ -3,7 +3,7 @@
  * idivmod.S: signed 32 bit division (quotient and remainder)
  * uidivmod.S: unsigned 32 bit division
  *
- * Copyright (c) 2012 Jörg Mische <bobbl@gmx.de>
+ * Copyright 2012 Jörg Mische <bobbl@gmx.de>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
