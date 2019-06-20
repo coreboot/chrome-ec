@@ -116,8 +116,6 @@ void _system_reset(int flags, int wake_from_hibernate)
 
 	if (MEC1322_INT_SOURCE(17) & MEC1322_INT_SOURCE_HTIMER) {
 		save_flags |= RESET_FLAG_TIMER;
-		/* Disable HTIMER interrupt */
-		MEC1322_INT_DISABLE(17) |= MEC1322_INT_SOURCE_HTIMER;
 		/* Clear the bit */
 		MEC1322_INT_SOURCE(17) |= MEC1322_INT_SOURCE_HTIMER;
 	}
@@ -303,6 +301,9 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 			MEC1322_HTIMER_PRELOAD =
 				(seconds * 1000000 + microseconds) * 2 / 71;
 		}
+		/* Clear source register so that we will know for sure we
+		 * woke up by *NEW* timer expiration. */
+		MEC1322_INT_SOURCE(17) |= MEC1322_INT_SOURCE_HTIMER;
 	}
 
 	asm("wfi");
