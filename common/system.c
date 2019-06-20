@@ -1170,3 +1170,14 @@ static int host_command_get_reset_flag(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_GET_RESET_FLAG,
 		     host_command_get_reset_flag,
 		     EC_VER_MASK(0));
+
+static int host_command_clear_reset_flag(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_clear_reset_flag *p = args->params;
+	system_clear_reset_flags(p->reset_flag);
+	args->response_size = 0;
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_CLEAR_RESET_FLAG,
+		     host_command_clear_reset_flag,
+		     EC_VER_MASK(0));

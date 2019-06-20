@@ -3596,6 +3596,13 @@ struct ec_response_get_reset_flag {
 	uint32_t reset_flag;
 } __packed;
 
+/* Clear reset flags */
+#define EC_CMD_CLEAR_RESET_FLAG 0x128
+
+struct ec_params_clear_reset_flag {
+	uint32_t reset_flag;
+} __packed;
+
 /*****************************************************************************/
 /*
  * Blob commands are just opaque chunks of data, sent with proto v3.
