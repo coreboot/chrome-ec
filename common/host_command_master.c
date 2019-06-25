@@ -80,9 +80,10 @@ static int pd_host_command_internal(int command, int version,
 	 */
 	i2c_lock(I2C_PORT_PD_MCU, 1);
 	i2c_set_timeout(I2C_PORT_PD_MCU, PD_HOST_COMMAND_TIMEOUT_US);
-	ret = i2c_xfer_unlocked(I2C_PORT_PD_MCU, CONFIG_USB_PD_I2C_SLAVE_ADDR,
-			&req_buf[0], outsize + sizeof(rq) + 1, &resp_buf[0],
-			2, I2C_XFER_START);
+	ret = i2c_xfer_unlocked__7bf(I2C_PORT_PD_MCU,
+				CONFIG_USB_PD_I2C_SLAVE_ADDR__7BF,
+				&req_buf[0], outsize + sizeof(rq) + 1,
+				&resp_buf[0], 2, I2C_XFER_START);
 	i2c_set_timeout(I2C_PORT_PD_MCU, 0);
 	if (ret) {
 		i2c_lock(I2C_PORT_PD_MCU, 0);
@@ -94,8 +95,9 @@ static int pd_host_command_internal(int command, int version,
 
 	if (resp_len > (insize + sizeof(rs))) {
 		/* Do a dummy read to generate stop condition */
-		i2c_xfer_unlocked(I2C_PORT_PD_MCU, CONFIG_USB_PD_I2C_SLAVE_ADDR,
-			0, 0, &resp_buf[2], 1, I2C_XFER_STOP);
+		i2c_xfer_unlocked__7bf(I2C_PORT_PD_MCU,
+				  CONFIG_USB_PD_I2C_SLAVE_ADDR__7BF,
+				  0, 0, &resp_buf[2], 1, I2C_XFER_STOP);
 		i2c_lock(I2C_PORT_PD_MCU, 0);
 		CPRINTF("[%T response size is too large %d > %d]\n",
 				resp_len, insize + sizeof(rs));
@@ -103,9 +105,10 @@ static int pd_host_command_internal(int command, int version,
 	}
 
 	/* Receive remaining data */
-	ret = i2c_xfer_unlocked(I2C_PORT_PD_MCU, CONFIG_USB_PD_I2C_SLAVE_ADDR,
-			0, 0,
-			&resp_buf[2], resp_len, I2C_XFER_STOP);
+	ret = i2c_xfer_unlocked__7bf(I2C_PORT_PD_MCU,
+				CONFIG_USB_PD_I2C_SLAVE_ADDR__7BF,
+				0, 0,
+				&resp_buf[2], resp_len, I2C_XFER_STOP);
 	i2c_lock(I2C_PORT_PD_MCU, 0);
 	if (ret) {
 		CPRINTF("[%T i2c transaction 2 failed: %d]\n", ret);

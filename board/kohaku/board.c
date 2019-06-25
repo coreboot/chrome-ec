@@ -13,8 +13,10 @@
 #include "driver/accel_bma2x2.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/als_bh1730.h"
+#include "driver/als_tcs3400.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/bc12/max14637.h"
+#include "driver/sync.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
 #include "ec_commands.h"
@@ -115,7 +117,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr = PS8751_I2C_ADDR1,
+			.addr__7bf = PS8751_I2C_ADDR1__7bf,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -123,7 +125,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC1,
-			.addr = PS8751_I2C_ADDR1,
+			.addr__7bf = PS8751_I2C_ADDR1__7bf,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -169,6 +171,30 @@ static struct accelgyro_saved_data_t g_bma255_data;
 /* BH1730 private data */
 struct bh1730_drv_data_t g_bh1730_data;
 
+/* TCS3400 private data */
+static struct als_drv_data_t g_tcs3400_data = {
+	.als_cal.scale = 1,
+	.als_cal.uscale = 0,
+	.als_cal.offset = 0,
+};
+
+static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
+	.device_scale = 1,
+	.device_uscale = 0,
+	.rgb_cal[X] = {
+		.scale = ALS_CHANNEL_SCALE(1),
+		.offset = 0,
+	},
+	.rgb_cal[Y] = {
+		.scale = ALS_CHANNEL_SCALE(1),
+		.offset = 0,
+	},
+	.rgb_cal[Z] = {
+		.scale = ALS_CHANNEL_SCALE(1),
+		.offset = 0,
+	},
+};
+
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
@@ -182,9 +208,9 @@ static const mat33_fp_t base_standard_ref = {
  * sure the rotaiton matrix for the lid sensor is correct.
  */
 static const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -198,7 +224,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = &g_bma255_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMA2x2_I2C_ADDR1,
+		.i2c_spi_addr__7bf = BMA2x2_I2C_ADDR1__7bf,
 		.rot_standard_ref = &lid_standard_ref,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
@@ -225,7 +251,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMI160_ADDR0,
+		.i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
@@ -251,7 +277,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMI160_ADDR0,
+		.i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_GYRO_MIN_FREQ,
@@ -267,7 +293,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &bh1730_drv,
 		.drv_data = &g_bh1730_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BH1730_I2C_ADDR,
+		.i2c_spi_addr__7bf = BH1730_I2C_ADDR__7bf,
 		.rot_standard_ref = NULL,
 		.default_range = 65535,
 		.min_frequency = 10,
@@ -279,12 +305,63 @@ struct motion_sensor_t motion_sensors[] = {
 			},
 		},
 	},
+
+	[VSYNC] = {
+		.name = "Camera VSYNC",
+		.active_mask = SENSOR_ACTIVE_S0,
+		.chip = MOTIONSENSE_CHIP_GPIO,
+		.type = MOTIONSENSE_TYPE_SYNC,
+		.location = MOTIONSENSE_LOC_CAMERA,
+		.drv = &sync_drv,
+		.default_range = 0,
+		.min_frequency = 0,
+		.max_frequency = 1,
+	},
+
+	[CLEAR_ALS] = {
+		.name = "Clear Light",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_TCS3400,
+		.type = MOTIONSENSE_TYPE_LIGHT,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &tcs3400_drv,
+		.drv_data = &g_tcs3400_data,
+		.port = I2C_PORT_ALS,
+		.i2c_spi_addr__7bf = TCS3400_I2C_ADDR__7bf,
+		.rot_standard_ref = NULL,
+		.default_range = 0x10000, /* scale = 1x, uscale = 0 */
+		.min_frequency = TCS3400_LIGHT_MIN_FREQ,
+		.max_frequency = TCS3400_LIGHT_MAX_FREQ,
+		.config = {
+			/* Run ALS sensor in S0 */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 1000,
+			},
+		},
+	},
+
+	[RGB_ALS] = {
+		/*
+		 * RGB channels read by CLEAR_ALS and so the i2c port and
+		 * address do not need to be defined for RGB_ALS.
+		 */
+		.name = "RGB Light",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_TCS3400,
+		.type = MOTIONSENSE_TYPE_LIGHT_RGB,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &tcs3400_rgb_drv,
+		.drv_data = &g_tcs3400_rgb_data,
+		.rot_standard_ref = NULL,
+		.default_range = 0x10000, /* scale = 1x, uscale = 0 */
+	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 /* ALS instances when LPC mapping is needed. Each entry directs to a sensor. */
 const struct motion_sensor_t *motion_als_sensors[] = {
 	&motion_sensors[LID_ALS],
+	&motion_sensors[CLEAR_ALS],
 };
 BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
@@ -320,6 +397,10 @@ static void board_init(void)
 {
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+	/* Enable gpio interrupt for camera vsync */
+	gpio_enable_interrupt(GPIO_WFCAM_VSYNC);
+	/* Enable interrupt for the TCS3400 color light sensor */
+	gpio_enable_interrupt(GPIO_TCS3400_INT_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

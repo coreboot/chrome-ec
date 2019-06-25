@@ -6,12 +6,14 @@
 /* Cheza board-specific configuration */
 
 #include "adc_chip.h"
+#include "als.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "chipset.h"
 #include "extpower.h"
 #include "driver/accelgyro_bmi160.h"
+#include "driver/als_opt3001.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/anx74xx.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -129,7 +131,7 @@ static void ppc_interrupt(enum gpio_signal signal)
 static void usb1_oc_evt_deferred(void)
 {
 	/* Only port-1 has overcurrent GPIO interrupt */
-	board_overcurrent_event(0, 1);
+	board_overcurrent_event(1, 1);
 }
 DECLARE_DEFERRED(usb1_oc_evt_deferred);
 
@@ -240,7 +242,7 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 struct ppc_config_t ppc_chips[] = {
 	{
 		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr = SN5S330_ADDR0,
+		.i2c_addr__7bf = SN5S330_ADDR0__7bf,
 		.drv = &sn5s330_drv
 	},
 	/*
@@ -259,7 +261,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr = 0x50,
+			.addr__7bf = 0x28,
 		},
 		.drv = &anx74xx_tcpm_drv,
 		.flags = TCPC_FLAGS_ALERT_OD,
@@ -268,7 +270,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC1,
-			.addr = 0x16,
+			.addr__7bf = 0x0B,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -618,6 +620,11 @@ uint16_t tcpc_get_alert_status(void)
 static struct mutex g_lid_mutex;
 
 static struct bmi160_drv_data_t g_bmi160_data;
+static struct opt3001_drv_data_t g_opt3001_data = {
+	.scale = 1,
+	.uscale = 0,
+	.offset = 0,
+};
 
 /* Matrix to rotate accelerometer into standard reference frame */
 const mat33_fp_t base_standard_ref = {
@@ -642,7 +649,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_lid_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
-	 .addr = BMI160_ADDR0,
+	 .i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 4,  /* g */
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
@@ -663,11 +670,31 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_lid_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
-	 .addr = BMI160_ADDR0,
+	 .i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = BMI160_GYRO_MIN_FREQ,
 	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	},
+	[LID_ALS] = {
+	 .name = "Light",
+	 .active_mask = SENSOR_ACTIVE_S0,
+	 .chip = MOTIONSENSE_CHIP_OPT3001,
+	 .type = MOTIONSENSE_TYPE_LIGHT,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &opt3001_drv,
+	 .drv_data = &g_opt3001_data,
+	 .port = I2C_PORT_SENSOR,
+	 .i2c_spi_addr__7bf = OPT3001_I2C_ADDR__7bf,
+	 .rot_standard_ref = NULL,
+	 .default_range = 0x10000, /* scale = 1; uscale = 0 */
+	 .min_frequency = OPT3001_LIGHT_MIN_FREQ,
+	 .max_frequency = OPT3001_LIGHT_MAX_FREQ,
+	 .config = {
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 1000,
+		},
+	 },
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);

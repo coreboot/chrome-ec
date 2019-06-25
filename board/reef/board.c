@@ -66,18 +66,20 @@
 
 static void tcpc_alert_event(enum gpio_signal signal)
 {
-	if ((signal == GPIO_USB_C0_PD_INT_ODL) &&
-			!gpio_get_level(GPIO_USB_C0_PD_RST_L))
-		return;
+	int port = -1;
 
-	if ((signal == GPIO_USB_C1_PD_INT_ODL) &&
-			!gpio_get_level(GPIO_USB_C1_PD_RST_ODL))
+	switch (signal) {
+	case GPIO_USB_C0_PD_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_PD_INT_ODL:
+		port = 1;
+		break;
+	default:
 		return;
+	}
 
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	schedule_deferred_pd_interrupt(port);
 }
 
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
@@ -123,25 +125,6 @@ void tablet_mode_interrupt(enum gpio_signal signal)
 
 #include "gpio_list.h"
 
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-#ifdef CONFIG_POWER_S0IX
-	{GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-#endif
-	{GPIO_RSMRST_L_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L"},
-	{GPIO_PCH_SLP_S3_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{GPIO_PCH_SLP_S4_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_SUSPWRNACK,     POWER_SIGNAL_ACTIVE_HIGH,
-	 "SUSPWRNACK_DEASSERTED"},
-
-	{GPIO_ALL_SYS_PGOOD,  POWER_SIGNAL_ACTIVE_HIGH, "ALL_SYS_PGOOD"},
-	{GPIO_PP3300_PG,      POWER_SIGNAL_ACTIVE_HIGH, "PP3300_PG"},
-	{GPIO_PP5000_PG,      POWER_SIGNAL_ACTIVE_HIGH, "PP5000_PG"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
-
 /* ADC channels */
 const struct adc_t adc_channels[] = {
 	/* Vfs = Vref = 2.816V, 10-bit unsigned reading */
@@ -184,7 +167,7 @@ struct i2c_stress_test i2c_stress_tests[] = {
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
 	{
 		.port = NPCX_I2C_PORT0_0,
-		.addr = ANX74XX_I2C_ADDR1,
+		.addr__7bf = ANX74XX_I2C_ADDR1__7bf,
 		.i2c_test = &anx74xx_i2c_stress_test_dev,
 	},
 #endif
@@ -193,7 +176,7 @@ struct i2c_stress_test i2c_stress_tests[] = {
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
 	{
 		.port = NPCX_I2C_PORT0_1,
-		.addr = PS8751_I2C_ADDR1,
+		.addr__7bf = PS8751_I2C_ADDR1__7bf,
 		.i2c_test = &ps8xxx_i2c_stress_test_dev,
 	},
 #endif
@@ -202,7 +185,7 @@ struct i2c_stress_test i2c_stress_tests[] = {
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_ACCEL
 	{
 		.port = I2C_PORT_GYRO,
-		.addr = BMI160_ADDR0,
+		.addr__7bf = BMI160_ADDR0__7bf,
 		.i2c_test = &bmi160_i2c_stress_test_dev,
 	},
 #endif
@@ -211,19 +194,19 @@ struct i2c_stress_test i2c_stress_tests[] = {
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_ACCEL
 	{
 		.port = I2C_PORT_BARO,
-		.addr = BMP280_I2C_ADDRESS1,
+		.addr__7bf = BMP280_I2C_ADDRESS1__7bf,
 		.i2c_test = &bmp280_i2c_stress_test_dev,
 	},
 	{
 		.port = I2C_PORT_LID_ACCEL,
-		.addr = KX022_ADDR1,
+		.addr__7bf = KX022_ADDR1__7bf,
 		.i2c_test = &kionix_i2c_stress_test_dev,
 	},
 #endif
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_ALS
 	{
 		.port = I2C_PORT_ALS,
-		.addr = OPT3001_I2C_ADDR1,
+		.addr__7bf = OPT3001_I2C_ADDR1__7bf,
 		.i2c_test = &opt3001_i2c_stress_test_dev,
 	},
 #endif
@@ -248,7 +231,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = NPCX_I2C_PORT0_0,
-			.addr = ANX74XX_I2C_ADDR1,
+			.addr__7bf = ANX74XX_I2C_ADDR1__7bf,
 		},
 		.drv = &anx74xx_tcpm_drv,
 	},
@@ -256,7 +239,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = NPCX_I2C_PORT0_1,
-			.addr = PS8751_I2C_ADDR1,
+			.addr__7bf = PS8751_I2C_ADDR1__7bf,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -384,7 +367,7 @@ void board_tcpc_init(void)
 	 *
 	 * NOTE: PS8751 A3 will wake on any I2C access.
 	 */
-	i2c_read8(NPCX_I2C_PORT0_1, 0x10, 0xA0, &reg);
+	i2c_read8__7bf(NPCX_I2C_PORT0_1, 0x08, 0xA0, &reg);
 
 	/* Enable TCPC0 interrupt */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
@@ -732,7 +715,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_lid_mutex,
 	 .drv_data = &g_kx022_data,
 	 .port = I2C_PORT_LID_ACCEL,
-	 .addr = KX022_ADDR1,
+	 .i2c_spi_addr__7bf = KX022_ADDR1__7bf,
 	 .rot_standard_ref = NULL, /* Identity matrix. */
 	 .default_range = 2, /* g, enough for laptop. */
 	 .min_frequency = KX022_ACCEL_MIN_FREQ,
@@ -759,7 +742,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_GYRO,
-	 .addr = BMI160_ADDR0,
+	 .i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 2,  /* g, enough for laptop. */
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
@@ -788,7 +771,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_GYRO,
-	 .addr = BMI160_ADDR0,
+	 .i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = BMI160_GYRO_MIN_FREQ,
@@ -804,8 +787,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_GYRO,
-	 .addr = BMI160_ADDR0,
-	 .default_range = 1 << 11, /* 16LSB / uT, fixed */
+	 .i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
+	 .default_range = BIT(11), /* 16LSB / uT, fixed */
 	 .rot_standard_ref = &mag_standard_ref,
 	 .min_frequency = BMM150_MAG_MIN_FREQ,
 	 .max_frequency = BMM150_MAG_MAX_FREQ(SPECIAL),
@@ -819,8 +802,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv = &bmp280_drv,
 	 .drv_data = &bmp280_drv_data,
 	 .port = I2C_PORT_BARO,
-	 .addr = BMP280_I2C_ADDRESS1,
-	 .default_range = 1 << 18, /*  1bit = 4 Pa, 16bit ~= 2600 hPa */
+	 .i2c_spi_addr__7bf = BMP280_I2C_ADDRESS1__7bf,
+	 .default_range = BIT(18), /*  1bit = 4 Pa, 16bit ~= 2600 hPa */
 	 .min_frequency = BMP280_BARO_MIN_FREQ,
 	 .max_frequency = BMP280_BARO_MAX_FREQ,
 	},
@@ -833,7 +816,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv = &opt3001_drv,
 	 .drv_data = &g_opt3001_data,
 	 .port = I2C_PORT_ALS,
-	 .addr = OPT3001_I2C_ADDR1,
+	 .i2c_spi_addr__7bf = OPT3001_I2C_ADDR1__7bf,
 	 .rot_standard_ref = NULL,
 	 .default_range = 0x10000, /* scale = 1; uscale = 0 */
 	 .min_frequency = OPT3001_LIGHT_MIN_FREQ,

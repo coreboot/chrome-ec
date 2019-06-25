@@ -44,18 +44,6 @@
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
-static void tcpc_alert_event(enum gpio_signal signal)
-{
-	if ((signal == GPIO_USB_C1_MUX_INT_ODL) &&
-	    !gpio_get_level(GPIO_USB_C1_PD_RST_ODL))
-		return;
-
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
-}
-
 static void ppc_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
@@ -122,28 +110,28 @@ static struct lsm6dsm_data lsm6dsm_data;
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
-	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_KX022,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
-	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_kx022_data,
-	 .port = I2C_PORT_SENSOR,
-	 .addr = KX022_ADDR1,
-	 .rot_standard_ref = NULL, /* Identity matrix. */
-	 .default_range = 4, /* g */
-	 .config = {
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
+		.name = "Lid Accel",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_KX022,
+		.type = MOTIONSENSE_TYPE_ACCEL,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &kionix_accel_drv,
+		.mutex = &g_lid_mutex,
+		.drv_data = &g_kx022_data,
+		.port = I2C_PORT_SENSOR,
+		.i2c_spi_addr__7bf = KX022_ADDR1__7bf,
+		.rot_standard_ref = NULL, /* Identity matrix. */
+		.default_range = 4, /* g */
+		.config = {
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+			},
+			/* Sensor on for lid angle detection */
+			[SENSOR_CONFIG_EC_S3] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+			},
 		},
-		 /* Sensor on for lid angle detection */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-		},
-	 },
 	},
 
 	[BASE_ACCEL] = {
@@ -159,7 +147,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.addr = LSM6DSM_ADDR0,
+		.i2c_spi_addr__7bf = LSM6DSM_ADDR0__7bf,
 		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,  /* g */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
@@ -191,7 +179,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.addr = LSM6DSM_ADDR0,
+		.i2c_spi_addr__7bf = LSM6DSM_ADDR0__7bf,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
@@ -257,3 +245,13 @@ static void post_old_board_warning(void)
 }
 DECLARE_HOOK(HOOK_INIT, post_old_board_warning, HOOK_PRIO_INIT_I2C + 1);
 #endif
+
+void board_overcurrent_event(int port, int is_overcurrented)
+{
+	/* Sanity check the port. */
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+		return;
+
+	/* Note that the level is inverted because the pin is active low. */
+	gpio_set_level(GPIO_USB_C_OC, !is_overcurrented);
+}

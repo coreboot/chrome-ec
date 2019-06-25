@@ -44,6 +44,8 @@
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
 
+#define CONFIG_DETACHABLE_BASE
+
 /* EC console commands */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
@@ -83,18 +85,18 @@
 
 /* MKBP */
 #define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_HOST_EVENT
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK 0
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
-#define CONFIG_MKBP_USE_GPIO
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 
 /* Sensors */
 #define CONFIG_ALS
 #define ALS_COUNT 1
 #define CONFIG_ALS_OPT3001
-#define OPT3001_I2C_ADDR OPT3001_I2C_ADDR1
-#define CONFIG_ACCEL_FIFO 1024 /* Must be a power of 2 */
+#define OPT3001_I2C_ADDR__7bf OPT3001_I2C_ADDR1__7bf
+#define CONFIG_ACCEL_FIFO 512 /* Must be a power of 2 */
 /* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 100)
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
@@ -127,7 +129,6 @@
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_PORT_COUNT 2
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_PS8805
@@ -174,8 +175,8 @@
 #define GPIO_USB_C1_SCL GPIO_EC_I2C2_USB_C1_SCL
 #define GPIO_USB_C1_SDA GPIO_EC_I2C2_USB_C1_SDA
 
-#define I2C_ADDR_MP2949  0x40
-#define I2C_ADDR_BD99992 0x60
+#define I2C_ADDR_MP2949__7bf  0x20
+#define I2C_ADDR_BD99992__7bf 0x30
 
 /*
  * Remapping of schematic GPIO names to common GPIO names expected (hardcoded)
@@ -213,16 +214,6 @@ enum adc_channel {
 	ADC_CH_COUNT
 };
 
-enum power_signal {
-	X86_SLP_S0_DEASSERTED,
-	X86_SLP_S3_DEASSERTED,
-	X86_SLP_S4_DEASSERTED,
-	X86_SLP_SUS_DEASSERTED,
-	X86_RSMRST_L_PGOOD,
-	X86_PMIC_DPWROK,
-	POWER_SIGNAL_COUNT
-};
-
 enum temp_sensor_id {
 	TEMP_SENSOR_BATTERY,	/* BD99956GW TSENSE */
 	TEMP_SENSOR_AMBIENT,	/* BD99992GW SYSTHERM0 */
@@ -257,7 +248,7 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
-#define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ALS)
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ALS)
 
 void base_pwr_fault_interrupt(enum gpio_signal s);
 int board_get_version(void);

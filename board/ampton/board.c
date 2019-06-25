@@ -17,7 +17,7 @@
 #include "driver/sync.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/ps8xxx.h"
-#include "driver/usb_mux_it5205.h"
+#include "driver/usb_mux/it5205.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -66,25 +66,41 @@ int ppc_get_alert_status(int port)
 #define USB_PD_PORT_ITE_0      0
 #define USB_PD_PORT_ITE_1      1
 
+static int tune_mux(int port);
+
 struct usb_mux ampton_usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
 		/* Use PS8751 as mux only */
 		.port_addr = MUX_PORT_AND_ADDR(
-			I2C_PORT_USBC0, PS8751_I2C_ADDR1),
+			I2C_PORT_USBC0, PS8751_I2C_ADDR1__7bf),
 		.flags = USB_MUX_FLAG_NOT_TCPC,
-		.driver = &tcpci_tcpm_usb_mux_driver,
+		.driver = &ps8xxx_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.board_init = &tune_mux,
 	},
 	[USB_PD_PORT_ITE_1] = {
 		/* Use PS8751 as mux only */
 		.port_addr = MUX_PORT_AND_ADDR(
-			I2C_PORT_USBC1, PS8751_I2C_ADDR1),
+			I2C_PORT_USBC1, PS8751_I2C_ADDR1__7bf),
 		.flags = USB_MUX_FLAG_NOT_TCPC,
-		.driver = &tcpci_tcpm_usb_mux_driver,
+		.driver = &ps8xxx_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.board_init = &tune_mux,
 	}
 };
 
+/* Some external monitors can't display content normally (eg. ViewSonic VX2880).
+ * We need to turn the mux for monitors to function normally.
+ */
+static int tune_mux(int port)
+{
+	/* Auto EQ disabled, compensate for channel lost up to 3.6dB */
+	mux_write(port, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	/* DP output swing adjustment +15% */
+	mux_write(port, PS8XXX_REG_MUX_DP_OUTPUT_CONFIGURATION, 0xc0);
+
+	return EC_SUCCESS;
+}
 /******************************************************************************/
 /* ADC channels */
 const struct adc_t adc_channels[] = {
@@ -115,13 +131,6 @@ const struct adc_t adc_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
-static int read_charger_temp(int idx, int *temp_ptr)
-{
-	if (!gpio_get_level(GPIO_AC_PRESENT))
-		return EC_ERROR_NOT_POWERED;
-	return get_temp_3v3_13k7_47k_4050b(idx, temp_ptr);
-}
-
 const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_BATTERY] = {.name = "Battery",
 				 .type = TEMP_SENSOR_TYPE_BATTERY,
@@ -134,7 +143,7 @@ const struct temp_sensor_t temp_sensors[] = {
 				 .action_delay_sec = 5},
 	[TEMP_SENSOR_CHARGER] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = read_charger_temp,
+				 .read = get_temp_3v3_13k7_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_CHARGER,
 				 .action_delay_sec = 1},
 };
@@ -146,6 +155,18 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 const mat33_fp_t lid_standard_ref = {
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
+const mat33_fp_t base_standard_ref = {
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
+const mat33_fp_t gyro_standard_ref = {
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
@@ -167,7 +188,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_lid_mutex,
 	 .drv_data = &g_kx022_data,
 	 .port = I2C_PORT_SENSOR,
-	 .addr = KX022_ADDR1,
+	 .i2c_spi_addr__7bf = KX022_ADDR1__7bf,
 	 .rot_standard_ref = &lid_standard_ref,
 	 .default_range = 4, /* g */
 	 .config = {
@@ -191,8 +212,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
-	 .addr = BMI160_ADDR0,
-	 .rot_standard_ref = NULL, /* Identity matrix. */
+	 .i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
+	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 4,  /* g */
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
@@ -219,9 +240,9 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
-	 .addr = BMI160_ADDR0,
+	 .i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = NULL, /* Identity matrix. */
+	 .rot_standard_ref = &gyro_standard_ref,
 	 .min_frequency = BMI160_GYRO_MIN_FREQ,
 	 .max_frequency = BMI160_GYRO_MAX_FREQ,
 	},

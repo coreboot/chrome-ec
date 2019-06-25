@@ -15,7 +15,6 @@
 #include "driver/als_opt3001.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
-#include "driver/tcpm/anx7447.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
 #include "ec_commands.h"
@@ -45,11 +44,6 @@
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
-
-/* GPIO to enable/disable the USB Type-A port. */
-const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
-	GPIO_EN_USB_A_5V,
-};
 
 static void ppc_interrupt(enum gpio_signal signal)
 {
@@ -125,16 +119,15 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr = AN7447_TCPC0_I2C_ADDR,
+			.addr__7bf = PS8751_I2C_ADDR1__7bf,
 		},
-		.drv = &anx7447_tcpm_drv,
-		.flags = TCPC_FLAGS_RESET_ACTIVE_HIGH,
+		.drv = &ps8xxx_tcpm_drv,
 	},
 	[USB_PD_PORT_TCPC_1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC1,
-			.addr = PS8751_I2C_ADDR1,
+			.addr__7bf = PS8751_I2C_ADDR1__7bf,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -142,8 +135,8 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
-		.driver = &anx7447_usb_mux_driver,
-		.hpd_update = &anx7447_tcpc_update_hpd_status,
+		.driver = &tcpci_tcpm_usb_mux_driver,
+		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
 	[USB_PD_PORT_TCPC_1] = {
 		.driver = &tcpci_tcpm_usb_mux_driver,
@@ -154,12 +147,12 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 const struct pi3usb2901_config_t pi3usb2901_bc12_chips[] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.i2c_port = I2C_PORT_PPC0,
-		.i2c_addr = PI3USB9201_I2C_ADDR_3,
+		.i2c_addr__7bf = PI3USB9201_I2C_ADDR_3__7bf,
 	},
 
 	[USB_PD_PORT_TCPC_1] = {
 		.i2c_port = I2C_PORT_TCPC1,
-		.i2c_addr = PI3USB9201_I2C_ADDR_3,
+		.i2c_addr__7bf = PI3USB9201_I2C_ADDR_3__7bf,
 	},
 };
 
@@ -184,18 +177,13 @@ static struct opt3001_drv_data_t g_opt3001_data = {
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
-/*
- * TODO(b/124337208): P0 boards don't have this sensor mounted so the rotation
- * matrix can't be tested properly. This needs to be revisited after EVT to make
- * sure the rotaiton matrix for the lid sensor is correct.
- */
 static const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
@@ -210,7 +198,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = &g_bma255_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMA2x2_I2C_ADDR1,
+		.i2c_spi_addr__7bf = BMA2x2_I2C_ADDR1__7bf,
 		.rot_standard_ref = &lid_standard_ref,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
@@ -237,7 +225,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMI160_ADDR0,
+		.i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
@@ -263,7 +251,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMI160_ADDR0,
+		.i2c_spi_addr__7bf = BMI160_ADDR0__7bf,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_GYRO_MIN_FREQ,
@@ -279,7 +267,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &opt3001_drv,
 		.drv_data = &g_opt3001_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = OPT3001_I2C_ADDR,
+		.i2c_spi_addr__7bf = OPT3001_I2C_ADDR__7bf,
 		.rot_standard_ref = NULL,
 		.default_range = 0x2b11a1,
 		.min_frequency = OPT3001_LIGHT_MIN_FREQ,
@@ -398,4 +386,11 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC_ODL, !is_overcurrented);
+}
+
+int board_tcpc_post_init(int port)
+{
+	return port == USB_PD_PORT_TCPC_1 ?
+		tcpc_write(port, PS8XXX_REG_MUX_USB_C2SS_HS_THRESHOLD, 0x80) :
+		EC_SUCCESS;
 }

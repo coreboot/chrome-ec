@@ -31,7 +31,7 @@
 #include "gpio_list.h"
 
 #define I2C_PORT_PCA555_BOARD_ID_GPIO	IT83XX_I2C_CH_C
-#define I2C_ADDR_PCA555_BOARD_ID_GPIO	0x40
+#define I2C_ADDR_PCA555_BOARD_ID_GPIO__7bf	0x20
 
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
@@ -70,8 +70,8 @@ void chipset_pre_init_callback(void)
 {
 	int data;
 
-	if (pca9555_read(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+	if (pca9555_read__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
 		PCA9555_CMD_OUTPUT_PORT_0, &data))
 		return;
 
@@ -85,16 +85,17 @@ void chipset_pre_init_callback(void)
 
 	/* Enable SOC_3P3_EN_L: Set the Output port O0.1 to low level */
 	data &= ~PCA9555_IO_1;
-	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+	pca9555_write__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
 		PCA9555_CMD_OUTPUT_PORT_0, data);
 
 	/* TODO: Find out from the spec */
 	msleep(10);
 
 	/* Enable PMIC_EN: Set the Output port O0.0 to high level */
-	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO, PCA9555_CMD_OUTPUT_PORT_0,
+	pca9555_write__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
+		PCA9555_CMD_OUTPUT_PORT_0,
 		data | PCA9555_IO_0);
 }
 
@@ -120,23 +121,24 @@ void chipset_do_shutdown(void)
 {
 	int data;
 
-	if (pca9555_read(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+	if (pca9555_read__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
 		PCA9555_CMD_OUTPUT_PORT_0, &data))
 		return;
 
 	/* Disable SOC_3P3_EN_L: Set the Output port O0.1 to high level */
 	data |= PCA9555_IO_1;
-	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+	pca9555_write__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
 		PCA9555_CMD_OUTPUT_PORT_0, data);
 
 	/* TODO: Find out from the spec */
 	msleep(10);
 
 	/* Disable PMIC_EN: Set the Output port O0.0 to low level */
-	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO, PCA9555_CMD_OUTPUT_PORT_0,
+	pca9555_write__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
+		PCA9555_CMD_OUTPUT_PORT_0,
 		data & ~PCA9555_IO_0);
 }
 
@@ -160,8 +162,9 @@ int board_get_version(void)
 {
 	int data;
 
-	if (pca9555_read(I2C_PORT_PCA555_BOARD_ID_GPIO,
-		I2C_ADDR_PCA555_BOARD_ID_GPIO, PCA9555_CMD_INPUT_PORT_1, &data))
+	if (pca9555_read__7bf(I2C_PORT_PCA555_BOARD_ID_GPIO,
+			     I2C_ADDR_PCA555_BOARD_ID_GPIO__7bf,
+			     PCA9555_CMD_INPUT_PORT_1, &data))
 		return -1;
 
 	return data & 0x0f;
@@ -178,8 +181,8 @@ static void pmic_init(void)
 	 * Configure Port O0.0 as Output port - PMIC_EN
 	 * Configure Port O0.1 as Output port - SOC_3P3_EN_L
 	 */
-	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+	pca9555_write__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
 		PCA9555_CMD_CONFIGURATION_PORT_0, 0xfc);
 
 	/*
@@ -189,8 +192,8 @@ static void pmic_init(void)
 	 * POR of PCA9555 port is input with high impedance hence explicitly
 	 * configure the SOC_3P3_EN_L to high level.
 	 */
-	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+	pca9555_write__7bf(I2C_PORT_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO__7bf,
 		PCA9555_CMD_OUTPUT_PORT_0, 0xfe);
 }
 DECLARE_HOOK(HOOK_INIT, pmic_init, HOOK_PRIO_INIT_I2C + 1);
