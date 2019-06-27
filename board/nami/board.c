@@ -1069,6 +1069,9 @@ int board_is_lid_angle_tablet_mode(void)
 
 void board_kblight_init(void)
 {
+	if (!(sku & SKU_ID_MASK_KBLIGHT))
+		return;
+
 	switch (oem) {
 	default:
 	case PROJECT_NAMI:
@@ -1078,8 +1081,6 @@ void board_kblight_init(void)
 		kblight_register(&kblight_lm3509);
 		break;
 	case PROJECT_SONA:
-		if (sku == 0x3AE2)
-			break;
 		kblight_register(&kblight_pwm);
 		break;
 	}
