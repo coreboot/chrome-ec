@@ -278,7 +278,6 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 			gpio_enable_interrupt(*pin);
 		}
 
-		interrupt_enable();
 		task_enable_irq(MEC1322_IRQ_GIRQ8);
 		task_enable_irq(MEC1322_IRQ_GIRQ9);
 		task_enable_irq(MEC1322_IRQ_GIRQ10);
@@ -289,7 +288,6 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	if (seconds || microseconds) {
 		MEC1322_INT_BLK_EN |= 1 << 17;
 		MEC1322_INT_ENABLE(17) |= MEC1322_INT_SOURCE_HTIMER;
-		interrupt_enable();
 		task_enable_irq(MEC1322_IRQ_HTIMER);
 		if (seconds > 2) {
 			ASSERT(seconds <= 0xffff / 8);
