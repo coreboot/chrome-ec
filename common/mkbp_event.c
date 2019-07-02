@@ -45,7 +45,8 @@ static void set_host_interrupt(int active)
 #endif
 }
 
-#ifdef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
+#if defined(CONFIG_MKBP_EVENT_WAKEUP_MASK) || \
+	defined(CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK)
 /**
  * Check if the host is sleeping. Check our power state in addition to the
  * self-reported sleep state of host (CONFIG_POWER_TRACK_HOST_SLEEP_STATE).
@@ -60,7 +61,7 @@ static inline int host_is_sleeping(void)
 #endif
 	return is_sleeping;
 }
-#endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
+#endif /* CONFIG_MKBP_(HOST_EVENT_)?WAKEUP_MASK */
 
 int mkbp_send_event(uint8_t event_type)
 {
@@ -74,6 +75,13 @@ int mkbp_send_event(uint8_t event_type)
 			 !(host_get_events() &
 			   CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK);
 #endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
+
+#ifdef CONFIG_MKBP_EVENT_WAKEUP_MASK
+	/* Check to see if this MKBP event should wake the system. */
+	if (!skip_interrupt)
+		skip_interrupt = host_is_sleeping() &&
+			!((1 << event_type) & CONFIG_MKBP_EVENT_WAKEUP_MASK);
+#endif /* CONFIG_MKBP_EVENT_WAKEUP_MASK */
 
 	/* To skip the interrupt, we cannot have the EC_MKBP_EVENT_KEY_MATRIX */
 	skip_interrupt = skip_interrupt &&
