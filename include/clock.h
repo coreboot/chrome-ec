@@ -101,4 +101,10 @@ void clock_disable_peripheral(uint32_t offset, uint32_t mask, uint32_t mode);
  */
 void clock_refresh_console_in_use(void);
 
+/**
+ * Get EC ready for entering and waking from deep sleep
+ */
+void prepare_for_deep_sleep(void);
+void resume_from_deep_sleep(void);
+
 #endif  /* __CROS_EC_CLOCK_H */

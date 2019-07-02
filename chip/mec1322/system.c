@@ -5,6 +5,8 @@
 
 /* System module for Chrome EC : MEC1322 hardware specific implementation */
 
+#include "battery.h"
+#include "charge_state_v2.h"
 #include "clock.h"
 #include "common.h"
 #include "console.h"
@@ -190,10 +192,56 @@ uint32_t system_get_scratchpad(void)
 	return MEC1322_VBAT_RAM(HIBDATA_INDEX_SCRATCHPAD);
 }
 
+/*
+ * This runs in a single thread environment. Interrupts are disabled.
+ */
+static void check_battery(void)
+{
+	int battery_is_low = 0;
+	struct batt_params batt;
+	int batt_level_shutdown;
+	const struct battery_info *batt_info;
+
+	/* Gather info */
+	batt_level_shutdown = board_set_battery_level_shutdown();
+	batt_info = battery_get_info();
+	battery_get_params(&batt);
+
+	/*
+	 * Check soc & VBAT.
+	 *
+	 * We shouldn't need to check if AC is plugged or a battery is being
+	 * charged because we get here only by timer wake-up.
+	 *
+	 * That is, if AC is plugged, EC doesn't enter the battery probe loop.
+	 * If AC is plugged after entering the loop, EC wakes up by AC instead
+	 * of timer.
+	 */
+	if (!(batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
+			batt.state_of_charge < batt_level_shutdown)
+		battery_is_low = 1;
+	else if (!(batt.flags & BATT_FLAG_BAD_VOLTAGE) &&
+			batt.voltage <= batt_info->voltage_min)
+		battery_is_low = 1;
+
+	CPRINTS("Battery %s (%d%%, %dmV)", battery_is_low ? "low" : "ok",
+			batt.state_of_charge, batt.voltage);
+
+	if (!battery_is_low)
+		return;
+
+	board_cut_off_battery();
+	CPRINTS("Battery cutoff");
+	/*
+	 *  While looping here causes WDT to trigger. So, we let rest of the
+	 *  code run until EC naturally loses power (as done in other places).
+	 */
+}
+
 void system_hibernate(uint32_t seconds, uint32_t microseconds)
 {
 	int i;
-	int htimer;
+	int htimer = 0;
 
 	CPRINTS("%s(%d, %d)", __func__, seconds, microseconds);
 	if (seconds || microseconds) {
@@ -214,55 +262,8 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	if (board_hibernate)
 		board_hibernate();
 
-	/* Disable interrupts */
 	interrupt_disable();
-	for (i = 0; i <= 92; ++i) {
-		task_disable_irq(i);
-		task_clear_pending_irq(i);
-	}
-
-	for (i = 8; i <= 23; ++i)
-		MEC1322_INT_DISABLE(i) = 0xffffffff;
-
-	MEC1322_INT_BLK_DIS |= 0xffff00;
-
-	/* Power down ADC VREF */
-	MEC1322_EC_ADC_VREF_PD |= 1;
-
-	/* Assert nSIO_RESET */
-	MEC1322_PCR_PWR_RST_CTL |= 1;
-
-	/* Disable UART */
-	MEC1322_UART_ACT &= ~0x1;
-	MEC1322_LPC_ACT &= ~0x1;
-
-	/* Disable JTAG */
-	MEC1322_EC_JTAG_EN &= ~1;
-
-	/* Disable 32KHz clock */
-	MEC1322_VBAT_CE &= ~0x2;
-
-	/* Stop watchdog */
-	MEC1322_WDG_CTL &= ~1;
-
-	/* Stop timers */
-	MEC1322_TMR32_CTL(0) &= ~1;
-	MEC1322_TMR32_CTL(1) &= ~1;
-	MEC1322_TMR16_CTL(0) &= ~1;
-
-	/* Power down ADC */
-	MEC1322_ADC_CTRL &= ~1;
-
-	/* Disable blocks */
-	MEC1322_PCR_CHIP_SLP_EN |= 0x3;
-	MEC1322_PCR_EC_SLP_EN |= MEC1322_PCR_EC_SLP_EN_SLEEP;
-	MEC1322_PCR_HOST_SLP_EN |= MEC1322_PCR_HOST_SLP_EN_SLEEP;
-	MEC1322_PCR_EC_SLP_EN2 |= MEC1322_PCR_EC_SLP_EN2_SLEEP;
-	MEC1322_PCR_SLOW_CLK_CTL &= 0xfffffc00;
-
-	/* Set sleep state */
-	MEC1322_PCR_SYS_SLP_CTL = (MEC1322_PCR_SYS_SLP_CTL & ~0x7) | 0x2;
-	CPU_SCB_SYSCTRL |= 0x4;
+	prepare_for_deep_sleep();
 
 	/* Setup GPIOs for hibernate */
 	if (board_set_gpio_hibernate_state)
@@ -310,6 +311,18 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	}
 
 	asm("wfi");
+
+	while (MEC1322_INT_SOURCE(17) & MEC1322_INT_SOURCE_HTIMER) {
+		resume_from_deep_sleep();
+		interrupt_enable();
+		check_battery();
+		cflush();
+		interrupt_disable();
+		prepare_for_deep_sleep();
+		MEC1322_HTIMER_PRELOAD = htimer;
+		MEC1322_INT_SOURCE(17) |= MEC1322_INT_SOURCE_HTIMER;
+		asm("wfi");
+	}
 
 	/* Use 48MHz clock to speed through wake-up */
 	MEC1322_PCR_PROC_CLK_CTL = 1;

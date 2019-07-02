@@ -158,7 +158,7 @@ static void system_reset_htimer_alarm(void)
  * This is mec1322 specific and equivalent to ARM Cortex's
  * 'DeepSleep' via system control block register, CPU_SCB_SYSCTRL
  */
-static void prepare_for_deep_sleep(void)
+void prepare_for_deep_sleep(void)
 {
 	/* sysTick timer */
 	CPU_NVIC_ST_CTRL &= ~ST_ENABLE;
@@ -192,7 +192,7 @@ static void prepare_for_deep_sleep(void)
 	CPU_NVIC_ST_CTRL &= ~ST_TICKINT; /* SYS_TICK_INT_DISABLE */
 }
 
-static void resume_from_deep_sleep(void)
+void resume_from_deep_sleep(void)
 {
 	CPU_NVIC_ST_CTRL |= ST_TICKINT; /* SYS_TICK_INT_ENABLE */
 	CPU_NVIC_ST_CTRL |= ST_ENABLE;
