@@ -73,7 +73,7 @@ static void set_host_interrupt(int active)
 	interrupt_enable();
 }
 
-#ifdef CONFIG_MKBP_WAKEUP_MASK
+#ifdef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
 /**
  * Check if the host is sleeping. Check our power state in addition to the
  * self-reported sleep state of host (CONFIG_POWER_TRACK_HOST_SLEEP_STATE).
@@ -90,21 +90,27 @@ static inline int host_is_sleeping(void)
 #endif
 	return is_sleeping;
 }
-#endif /* CONFIG_MKBP_WAKEUP_MASK */
+#endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
 
 int mkbp_send_event(uint8_t event_type)
 {
+	int skip_interrupt = 0;
+
 	set_event(event_type);
 
-#ifdef CONFIG_MKBP_WAKEUP_MASK
-	/* Only assert interrupt for wake events if host is sleeping */
-	if (host_is_sleeping()) {
-		/* Skip host wake if this isn't a wake event */
-		if (!(host_get_events() & CONFIG_MKBP_WAKEUP_MASK) &&
-		      event_type != EC_MKBP_EVENT_KEY_MATRIX)
-			return 0;
-	}
-#endif
+#ifdef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
+	/* Check to see if this host event should wake the system. */
+	skip_interrupt = host_is_sleeping() &&
+			 !(host_get_events() &
+			   CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK);
+#endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
+
+	/* To skip the interrupt, we cannot have the EC_MKBP_EVENT_KEY_MATRIX */
+	skip_interrupt = skip_interrupt &&
+			 (event_type != EC_MKBP_EVENT_KEY_MATRIX);
+
+	if (skip_interrupt)
+		return 0;
 
 	set_host_interrupt(1);
 	return 1;
@@ -177,17 +183,19 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_NEXT_EVENT,
 		     mkbp_get_next_event,
 		     EC_VER_MASK(0) | EC_VER_MASK(1) | EC_VER_MASK(2));
 
-#ifdef CONFIG_MKBP_WAKEUP_MASK
-static int mkbp_get_wake_mask(struct host_cmd_handler_args *args)
+#ifdef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
+#ifdef CONFIG_MKBP_USE_HOST_EVENT
+static int mkbp_get_host_event_wake_mask(struct host_cmd_handler_args *args)
 {
 	struct ec_response_host_event_mask *r = args->response;
 
-	r->mask = CONFIG_MKBP_WAKEUP_MASK;
+	r->mask = CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK;
 	args->response_size = sizeof(*r);
 
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_HOST_EVENT_GET_WAKE_MASK,
-		     mkbp_get_wake_mask,
+		     mkbp_get_host_event_wake_mask,
 		     EC_VER_MASK(0));
-#endif
+#endif /* CONFIG_MKBP_USE_HOST_EVENT */
+#endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
