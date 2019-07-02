@@ -593,6 +593,16 @@ static void handle_reset(int pm_state)
 			/* clear error register in MISC space */
 			MISC_ISH_ECC_ERR_SRESP = 1;
 
+			/*
+			 * Disable power gating of RF(Cache) and ROMs.
+			 *
+			 * Before switch to aon task, RF and ROMs are already
+			 * power gated, so we need disable the power gating
+			 * before reset to ROM, to make sure ROM code runs
+			 * correctly.
+			 */
+			PMU_RF_ROM_PWR_CTRL = 0;
+
 			/* reset ISH minute-ia cpu core, will goto ISH ROM */
 			ish_mia_reset();
 
