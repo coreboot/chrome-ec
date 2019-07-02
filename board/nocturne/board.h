@@ -88,6 +88,7 @@
 
 /* MKBP */
 #define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK 0
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 
 /* Sensors */
