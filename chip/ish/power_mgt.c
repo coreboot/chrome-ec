@@ -709,12 +709,7 @@ static void reset_prep_isr(void)
 	IOAPIC_EOI_REG = ISH_RESET_PREP_VEC;
 	LAPIC_EOI_REG = 0x0;
 
-	if (pm_ctx.aon_valid) {
-		handle_reset_in_aontask(ISH_PM_STATE_RESET_PREP);
-	} else {
-		ish_mia_reset();
-	}
-
+	ish_mia_reset();
 	__builtin_unreachable();
 }
 
