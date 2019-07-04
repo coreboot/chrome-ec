@@ -73,7 +73,7 @@ static int SKU_ID_IS_LEONA(void)
 	uint32_t sku_id;
 
 	cbi_get_sku_id(&sku_id);
-	if (sku_id == 0x2863)
+	if (sku_id == 0x2863 || sku_id == 0x2861)
 		return 1;
 	return 0;
 }
