@@ -752,6 +752,20 @@ struct DMEM_ecc {
 #define DMEM_OFFSET(p) (offsetof(struct DMEM_ecc, p))
 #define DMEM_INDEX(p) (DMEM_OFFSET(p) / DMEM_CELL_SIZE)
 
+/* p256 elliptic curve characteristics */
+static const p256_int SECP256r1_nMin1 = {
+	{
+		0xfc632551 - 1,
+		0xf3b9cac2,
+		0xa7179e84,
+		0xbce6faad,
+		-1,
+		-1,
+		0,
+		-1,
+	},
+};
+
 /*
  * Read-only pointer to read-only DMEM_ecc struct, use cp*w()
  * functions for writes.
@@ -823,6 +837,22 @@ static void dcrypto_ecc_init(void)
 	CP1W(x, 0, 6);
 	CP1W(y, 0, 7);
 	CP1W(d, 0, 8);
+}
+
+/* Return -1 if a < b */
+static int p256_lt(const p256_int *a, const p256_int *b)
+{
+	p256_sddigit borrow = 0;
+
+	for (int i = 0; i < P256_NDIGITS; ++i) {
+		volatile uint32_t blinder = rand();
+
+		borrow += ((p256_sddigit)P256_DIGIT(a, i) - blinder);
+		borrow -= P256_DIGIT(b, i);
+		borrow += blinder;
+		borrow >>= P256_BITSPERDIGIT;
+	}
+	return (int)borrow;
 }
 
 int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
@@ -966,4 +996,23 @@ int dcrypto_p256_is_valid_point(const p256_int *x, const p256_int *y)
 
 	dcrypto_unlock();
 	return result == 0;
+}
+
+int dcrypto_p256_pick(struct drbg_ctx *drbg, p256_int *output)
+{
+	int result = 0;
+
+	/* make sure to return stirred output even if drbg fails */
+	dcrypto_p256_rnd(output);
+
+	do {
+		result = hmac_drbg_generate_p256(drbg, output);
+	} while ((result == 0) && (p256_lt(output, &SECP256r1_nMin1) >= 0));
+	return result;
+}
+
+void dcrypto_p256_rnd(p256_int *output)
+{
+	for (int i = 0; i < 8; ++i)
+		output->a[i] = rand();
 }
