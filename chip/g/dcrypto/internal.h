@@ -165,7 +165,7 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 			    const p256_int *message, p256_int *r, p256_int *s)
 	__attribute__((warn_unused_result));
 int dcrypto_p256_base_point_mul(const p256_int *k, p256_int *x, p256_int *y)
-	 __attribute__((warn_unused_result));
+	__attribute__((warn_unused_result));
 int dcrypto_p256_point_mul(const p256_int *k,
 		const p256_int *in_x, const p256_int *in_y,
 		p256_int *x, p256_int *y)
@@ -176,6 +176,12 @@ int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
 	__attribute__((warn_unused_result));
 int dcrypto_p256_is_valid_point(const p256_int *x, const p256_int *y)
 	__attribute__((warn_unused_result));
+
+/* Pick a p256 number between 1 < k < |p256| */
+int dcrypto_p256_pick(struct drbg_ctx *drbg, p256_int *output);
+
+/* Overwrite with random p256 value */
+void dcrypto_p256_rnd(p256_int *output);
 
 /*
  * Accelerator runtime.
