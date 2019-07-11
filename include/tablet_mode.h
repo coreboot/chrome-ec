@@ -9,4 +9,7 @@
 int tablet_get_mode(void);
 void tablet_set_mode(int mode);
 
-
+/**
+ * Disable tablet mode
+ */
+void tablet_disable(void);
