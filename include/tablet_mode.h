@@ -3,12 +3,21 @@
  * found in the LICENSE file.
  */
 
-/* Header for tablet_mode.c */
+#ifndef __CROS_EC_TABLET_MODE_H
+#define __CROS_EC_TABLET_MODE_H
 
-#ifdef CONFIG_TABLET_MODE
-
-/* Return 1 if in tablet mode, 0 otherwise */
+/**
+ * Get tablet mode state
+ *
+ * Return 1 if in tablet mode, 0 otherwise
+ */
 int tablet_get_mode(void);
+
+/**
+ * Set tablet mode state
+ *
+ * @param mode 1: tablet mode. 0 clamshell mode.
+ */
 void tablet_set_mode(int mode);
 
 /**
