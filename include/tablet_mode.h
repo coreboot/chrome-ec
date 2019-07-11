@@ -17,3 +17,8 @@ void tablet_set_mode(int mode);
  * @param signal: GPIO signal
  */
 void tablet_mode_isr(enum gpio_signal signal);
+
+/**
+ * Disable tablet mode
+ */
+void tablet_disable(void);

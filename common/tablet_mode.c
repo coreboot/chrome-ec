@@ -9,12 +9,19 @@
 #include "lid_angle.h"
 #include "tablet_mode.h"
 #include "timer.h"
+#include "tablet_mode.h"
 
 #define CPRINTS(format, args...) cprints(CC_MOTION_LID, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_MOTION_LID, format, ## args)
 
 /* 1: in tablet mode. 0: otherwise */
 static int tablet_mode = 1;
+
+/*
+ * 1: all calls to tablet_set_mode are ignored and tablet_mode if forced to 0
+ * 0: all calls to tablet_set_mode are honored
+ */
+static int disabled;
 
 int tablet_get_mode(void)
 {
@@ -25,6 +32,11 @@ void tablet_set_mode(int mode)
 {
 	if (tablet_mode == mode)
 		return;
+
+	if (disabled) {
+		CPRINTS("Tablet mode set while disabled (ignoring)!");
+		return;
+	}
 
 	tablet_mode = mode;
 	CPRINTS("tablet mode %sabled", mode ? "en" : "dis");
@@ -69,3 +81,9 @@ static void tablet_mode_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, tablet_mode_init, HOOK_PRIO_DEFAULT);
 #endif
+
+void tablet_disable(void)
+{
+	tablet_mode = 0;
+	disabled = 1;
+}
