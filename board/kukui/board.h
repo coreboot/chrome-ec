@@ -91,7 +91,7 @@
 /* Motion Sensors */
 #ifdef SECTION_IS_RW
 #define CONFIG_MAG_BMI160_BMM150
-#define CONFIG_ACCELGYRO_SEC_ADDR__7BF BMM150_ADDR0__7bf
+#define CONFIG_ACCELGYRO_SEC_ADDR_FLAGS BMM150_ADDR0_FLAGS
 #define CONFIG_MAG_CALIBRATE
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_INTERRUPTS
@@ -184,7 +184,7 @@
 #define I2C_PORT_ACCEL    1
 
 /* Route sbs host requests to virtual battery driver */
-#define VIRTUAL_BATTERY_ADDR__7bf 0x0B
+#define VIRTUAL_BATTERY_ADDR_FLAGS 0x0B
 
 /* Enable Accel over SPI */
 #define CONFIG_SPI_ACCEL_PORT    0  /* The first SPI master port (SPI2) */
