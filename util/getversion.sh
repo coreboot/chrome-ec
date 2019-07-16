@@ -77,7 +77,7 @@ get_tree_version() {
 
 
 IFS="${dc}"
-ver="${CR50_DEV:+DBG/}${BOARD}_"
+ver="${CR50_SQA:+SQA/}${CR50_DEV:+DBG/}${CRYPTO_TEST:+CT/}${BOARD}_"
 global_dirty=    # set if any of the component repos is 'dirty'.
 dir_list=( . )   # list of component directories, always includes the EC tree
 
