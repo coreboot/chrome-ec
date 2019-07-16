@@ -26,11 +26,20 @@
 #include "watchdog.h"
 #include "wp.h"
 
+/*
+ * Do not enable TPM if crypto test is enabled - there is no room in the flash
+ * for both.
+ */
+#ifndef CRYPTO_TEST_SETUP
+#define ENABLE_TPM
+
 /* TPM2 library includes. */
 #include "ExecCommand_fp.h"
 #include "Platform.h"
 #include "_TPM_Init_fp.h"
 #include "Manufacture_fp.h"
+
+#endif
 
 /****************************************************************************/
 /*
@@ -585,11 +594,12 @@ static void tpm_init(void)
 	tpm_.regs.sts = (tpm_family_tpm2 << tpm_family_shift) |
 		(63 << burst_count_shift) | sts_valid;
 
-	/* TPM2 library functions. */
-	_plat__Signal_PowerOn();
-
 	/* Create version string to be read by host */
 	set_version_string();
+
+#ifdef ENABLE_TPM
+	/* TPM2 library functions. */
+	_plat__Signal_PowerOn();
 
 	watchdog_reload();
 
@@ -621,6 +631,7 @@ static void tpm_init(void)
 	} else {
 		_plat__SetNvAvail();
 	}
+#endif
 }
 
 size_t tpm_get_burst_size(void)
@@ -923,7 +934,7 @@ void tpm_task(void *u)
 
 	tpm_reset_now(0);
 	while (1) {
-		uint8_t *response;
+		uint8_t *response = NULL;
 		unsigned response_size;
 		uint32_t command_code;
 		struct tpm_cmd_header *tpmh;
@@ -1007,10 +1018,30 @@ void tpm_task(void *u)
 				memcpy(response, tpm_broken_response,
 				       response_size);
 			} else {
+#ifdef ENABLE_TPM
 				ExecuteCommand(tpm_.fifo_write_index,
 					       (uint8_t *)tpmh,
 					       &response_size,
 					       &response);
+#else
+				{
+					/*
+					 * This response is sent by actual
+					 * TPM2 when replying to gibberish
+					 * input. Copy it here to avoid the
+					 * need to add conditional compilation
+					 * cases below.
+					 */
+					const uint8_t bad_cmd_resp[] = {
+						0x00, 0xc4, 0x00, 0x00, 0x00,
+						0x0a, 0x00, 0x00, 0x00, 0x1e
+					};
+					response = (uint8_t *)tpmh;
+					response_size = sizeof(bad_cmd_resp);
+					memcpy(response, bad_cmd_resp,
+					       response_size);
+				}
+#endif
 			}
 		}
 		CPRINTF("got %d bytes in response\n", response_size);
