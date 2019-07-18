@@ -1158,3 +1158,16 @@ int board_set_min_power_mw_for_power_on(void)
 	CPRINTS("Set AP boot threshold to %d mW", power);
 	return power;
 }
+
+uint32_t board_override_feature_flags0(uint32_t flags0)
+{
+	if (!(sku & SKU_ID_MASK_KBLIGHT))
+		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
+
+	return flags0;
+}
+
+uint32_t board_override_feature_flags1(uint32_t flags1)
+{
+	return flags1;
+}
