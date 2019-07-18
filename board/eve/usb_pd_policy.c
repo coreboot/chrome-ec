@@ -6,6 +6,7 @@
 #include "atomic.h"
 #include "extpower.h"
 #include "charge_manager.h"
+#include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "driver/charger/bd9995x.h"
@@ -313,6 +314,14 @@ static int svdm_enter_dp_mode(int port, uint32_t mode_caps)
 	/* Only enter mode if device is DFP_D capable */
 	if (mode_caps & MODE_DP_SNK) {
 		svdm_safe_dp_mode(port);
+
+		if (chipset_in_state(CHIPSET_STATE_SUSPEND) ||
+		    chipset_in_state(CHIPSET_STATE_STANDBY))
+			/*
+			 * Wake the system up to since we've attached an adapter
+			 */
+			pd_notify_dp_alt_mode_entry();
+
 		return 0;
 	}
 
@@ -371,6 +380,12 @@ static int svdm_dp_attention(int port, uint32_t *payload)
 	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
 	int irq = PD_VDO_DPSTS_HPD_IRQ(payload[1]);
 	const struct usb_mux *mux = &usb_muxes[port];
+
+	if ((chipset_in_state(CHIPSET_STATE_SUSPEND) ||
+	     chipset_in_state(CHIPSET_STATE_STANDBY)) &&
+	    (irq || lvl))
+		/* Wake up the AP. */
+		pd_notify_dp_alt_mode_entry();
 
 	dp_status[port] = payload[1];
 	if (!(dp_flags[port] & DP_FLAGS_DP_ON)) {
