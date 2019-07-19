@@ -1,19 +1,23 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include "acpi.h"
+#include "battery.h"
 #include "common.h"
 #include "console.h"
 #include "dptf.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "keyboard_backlight.h"
 #include "lpc.h"
 #include "ec_commands.h"
 #include "tablet_mode.h"
 #include "pwm.h"
 #include "timer.h"
+#include "usb_charge.h"
 #include "util.h"
 
 /* Console output macros */
@@ -33,6 +37,21 @@ static uint8_t __bss_slow acpi_mem_test;
 #ifdef CONFIG_DPTF
 static int __bss_slow dptf_temp_sensor_id;	/* last sensor ID written */
 static int __bss_slow dptf_temp_threshold;	/* last threshold written */
+
+/*
+ * Current DPTF profile number.
+ * This is by default initialized to 1 if multi-profile DPTF is not supported.
+ * If multi-profile DPTF is supported, this is by default initialized to 2 under
+ * the assumption that profile #2 corresponds to lower thresholds and is a safer
+ * profile to use until board or some EC driver sets the appropriate profile for
+ * device mode.
+ */
+static int current_dptf_profile = DPTF_PROFILE_DEFAULT;
+
+#endif
+
+#ifdef CONFIG_USB_PORT_POWER_DUMB
+extern const int usb_port_enable[USB_PORT_COUNT];
 #endif
 
 /*
@@ -72,6 +91,43 @@ static void acpi_disable_burst_deferred(void)
 	CPUTS("ACPI missed burst disable?");
 }
 DECLARE_DEFERRED(acpi_disable_burst_deferred);
+
+#ifdef CONFIG_DPTF
+
+static int acpi_dptf_is_profile_valid(int n)
+{
+#ifdef CONFIG_DPTF_MULTI_PROFILE
+	if ((n < DPTF_PROFILE_VALID_FIRST) || (n > DPTF_PROFILE_VALID_LAST))
+		return EC_ERROR_INVAL;
+#else
+	if (n != DPTF_PROFILE_DEFAULT)
+		return EC_ERROR_INVAL;
+#endif
+
+	return EC_SUCCESS;
+}
+
+int acpi_dptf_set_profile_num(int n)
+{
+	int ret = acpi_dptf_is_profile_valid(n);
+
+	if (ret == EC_SUCCESS) {
+		current_dptf_profile = n;
+		if (IS_ENABLED(CONFIG_DPTF_MULTI_PROFILE) &&
+		    IS_ENABLED(CONFIG_HOSTCMD_EVENTS)) {
+			/* Notify kernel to update DPTF profile */
+			host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
+		}
+	}
+	return ret;
+}
+
+int acpi_dptf_get_profile_num(void)
+{
+	return current_dptf_profile;
+}
+
+#endif
 
 /* Read memmapped data, returns read data or 0xff on error. */
 static int acpi_read(uint8_t addr)
@@ -144,9 +200,9 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 		case EC_ACPI_MEM_TEST_COMPLIMENT:
 			result = 0xff - acpi_mem_test;
 			break;
-#ifdef CONFIG_PWM_KBLIGHT
+#ifdef CONFIG_KEYBOARD_BACKLIGHT
 		case EC_ACPI_MEM_KEYBOARD_BACKLIGHT:
-			result = pwm_get_duty(PWM_CH_KBLIGHT);
+			result = kblight_get();
 			break;
 #endif
 #ifdef CONFIG_FANS
@@ -169,10 +225,64 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 			break;
 #endif
 
-#ifdef CONFIG_DPTF_DEVICE_ORIENTATION
 		case EC_ACPI_MEM_DEVICE_ORIENTATION:
-			result = tablet_get_mode();
+			result = 0;
+
+#ifdef CONFIG_TABLET_MODE
+			result = tablet_get_mode() << EC_ACPI_MEM_TBMD_SHIFT;
+#endif
+
+#ifdef CONFIG_DPTF
+			result |= (acpi_dptf_get_profile_num() &
+				   EC_ACPI_MEM_DDPN_MASK)
+				<< EC_ACPI_MEM_DDPN_SHIFT;
+#endif
 			break;
+
+		case EC_ACPI_MEM_DEVICE_FEATURES0:
+		case EC_ACPI_MEM_DEVICE_FEATURES1:
+		case EC_ACPI_MEM_DEVICE_FEATURES2:
+		case EC_ACPI_MEM_DEVICE_FEATURES3: {
+			int off = acpi_addr - EC_ACPI_MEM_DEVICE_FEATURES0;
+			uint32_t val = get_feature_flags0();
+
+			/* Flush EC_FEATURE_LIMITED bit. Having it reset to 0
+			 * means that FEATURES[0-3] are supported in the first
+			 * place, and the other bits are valid.
+			 */
+			val &= ~1;
+
+			result = val >> (8 * off);
+			break;
+			}
+		case EC_ACPI_MEM_DEVICE_FEATURES4:
+		case EC_ACPI_MEM_DEVICE_FEATURES5:
+		case EC_ACPI_MEM_DEVICE_FEATURES6:
+		case EC_ACPI_MEM_DEVICE_FEATURES7: {
+			int off = acpi_addr - EC_ACPI_MEM_DEVICE_FEATURES4;
+			uint32_t val = get_feature_flags1();
+
+			result = val >> (8 * off);
+			break;
+			}
+
+#ifdef CONFIG_USB_PORT_POWER_DUMB
+		case EC_ACPI_MEM_USB_PORT_POWER: {
+			int i;
+			const int port_count = MIN(8, USB_PORT_COUNT);
+
+			/*
+			 * Convert each USB port power GPIO signal to a bit
+			 * field with max size 8 bits. USB port ID (index) 0 is
+			 * the least significant bit.
+			 */
+			result = 0;
+			for (i = 0; i < port_count; ++i) {
+				if (gpio_get_level(usb_port_enable[i]) != 0)
+					result |= 1 << i;
+			}
+			break;
+			}
 #endif
 
 		default:
@@ -190,15 +300,22 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 		case EC_ACPI_MEM_TEST:
 			acpi_mem_test = data;
 			break;
-#ifdef CONFIG_PWM_KBLIGHT
+#ifdef CONFIG_BATTERY_V2
+		case EC_ACPI_MEM_BATTERY_INDEX:
+			CPRINTS("ACPI battery %d", data);
+			battery_memmap_set_index(data);
+			break;
+#endif
+#ifdef CONFIG_KEYBOARD_BACKLIGHT
 		case EC_ACPI_MEM_KEYBOARD_BACKLIGHT:
 			/*
 			 * Debug output with CR not newline, because the host
 			 * does a lot of keyboard backlights and it scrolls the
 			 * debug console.
 			 */
-			CPRINTF("\r[%T ACPI kblight %d]", data);
-			pwm_set_duty(PWM_CH_KBLIGHT, data);
+			CPRINTF("\r[%pT ACPI kblight %d]",
+				PRINTF_TIMESTAMP_NOW, data);
+			kblight_set(data);
 			break;
 #endif
 #ifdef CONFIG_FANS
@@ -233,6 +350,36 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 			}
 			break;
 #endif
+
+#ifdef CONFIG_USB_PORT_POWER_DUMB
+		case EC_ACPI_MEM_USB_PORT_POWER: {
+			int i;
+			int mode_field = data;
+			const int port_count = MIN(8, USB_PORT_COUNT);
+
+			/*
+			 * Read the port power bit field (with max size 8 bits)
+			 * and set the charge mode of each USB port accordingly.
+			 * USB port ID 0 is the least significant bit.
+			 */
+			for (i = 0; i < port_count; ++i) {
+				int mode = USB_CHARGE_MODE_DISABLED;
+
+				if (mode_field & 1)
+					mode = USB_CHARGE_MODE_ENABLED;
+
+				if (usb_charge_set_mode(i, mode,
+				    USB_ALLOW_SUSPEND_CHARGE)) {
+					CPRINTS("ERROR: could not set charge "
+						"mode of USB port p%d to %d",
+						i, mode);
+				}
+				mode_field >>= 1;
+			}
+			break;
+			}
+#endif
+
 		default:
 			CPRINTS("ACPI write 0x%02x = 0x%02x (ignored)",
 				acpi_addr, data);
@@ -240,7 +387,7 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 		}
 	} else if (acpi_cmd == EC_CMD_ACPI_QUERY_EVENT && !acpi_data_count) {
 		/* Clear and return the lowest host event */
-		int evt_index = lpc_query_host_event_state();
+		int evt_index = lpc_get_next_host_event();
 		CPRINTS("ACPI query = %d", evt_index);
 		*resultptr = evt_index;
 		retval = 1;
