@@ -603,15 +603,15 @@ static void tpm_init(void)
 		_plat__SetNvAvail();
 		endorse_result = tpm_endorse();
 
-		ccprintf("[%T Endorsement %s]\n",
+		ccprintf("[%pT Endorsement %s]\n", PRINTF_TIMESTAMP_NOW,
 			 (endorse_result == mnf_success) ?
 			 "succeeded" : "failed");
 
 		if (chip_factory_mode()) {
 			underrun_char |= endorse_result;
 
-			ccprintf("[%T Setting underrun character to 0x%x]\n",
-				 underrun_char);
+			ccprintf("[%pT Setting underrun character to 0x%x]\n",
+				 PRINTF_TIMESTAMP_NOW, underrun_char);
 			sps_tx_status(underrun_char);
 		}
 	} else {

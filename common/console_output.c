@@ -81,7 +81,7 @@ int cprints(enum console_channel channel, const char *format, ...)
 	if (!(CC_MASK(channel) & channel_mask))
 		return EC_SUCCESS;
 
-	rv = cprintf(channel, "[%T ");
+	rv = cprintf(channel, "[%pT ", PRINTF_TIMESTAMP_NOW);
 
 	va_start(args, format);
 	r = uart_vprintf(format, args);
