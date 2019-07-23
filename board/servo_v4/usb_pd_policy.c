@@ -110,15 +110,10 @@ static int cc_pull_stored = TYPEC_CC_RD;
  */
 #define MAX_MV_RED_BLUE 9000
 
-static int user_limited_max_mv = 20000;
-
 static uint32_t max_supported_voltage(void)
 {
-	int board_max_mv = board_get_version() >= BOARD_VERSION_BLACK ?
+	return board_get_version() >= BOARD_VERSION_BLACK ?
 		PD_MAX_VOLTAGE_MV : MAX_MV_RED_BLUE;
-
-	return board_max_mv < user_limited_max_mv ? board_max_mv :
-						    user_limited_max_mv;
 }
 
 static int charge_port_is_active(void)
@@ -207,7 +202,6 @@ static void update_ports(void)
 				if (pd_src_voltages_mv[i] >
 				    max_supported_voltage())
 					break;
-
 				/* Find the 'best' PDO <= voltage */
 				pdo_index = pd_find_pdo_index(
 					CHG, pd_src_voltages_mv[i], &pdo);
@@ -862,43 +856,3 @@ static int cmd_fake_disconnect(int argc, char *argv[])
 }
 DECLARE_CONSOLE_COMMAND(fakedisconnect, cmd_fake_disconnect,
 			"<delay_ms> <duration_ms>", NULL);
-<<<<<<< HEAD   (baf1eb servo_v4: Remove unnecessary init for GPIO MODULE_USB_PD)
-=======
-
-static int cmd_usbc_action(int argc, char *argv[])
-{
-	if (argc != 2)
-		return EC_ERROR_PARAM_COUNT;
-
-	if (!strcasecmp(argv[1], "5v")) {
-		do_cc(CONFIG_SRC(cc_config));
-		user_limited_max_mv = 5000;
-		update_ports();
-	} else if (!strcasecmp(argv[1], "12v")) {
-		do_cc(CONFIG_SRC(cc_config));
-		user_limited_max_mv = 12000;
-		update_ports();
-	} else if (!strcasecmp(argv[1], "20v")) {
-		do_cc(CONFIG_SRC(cc_config));
-		user_limited_max_mv = 20000;
-		update_ports();
-	} else if (!strcasecmp(argv[1], "dev")) {
-		/* Set the limit back to original */
-		user_limited_max_mv = 20000;
-		do_cc(CONFIG_PDSNK(cc_config));
-	} else if (!strcasecmp(argv[1], "drp")) {
-		/* Toggle the DRP state, compatible with Plankton. */
-		do_cc(cc_config ^ CC_ENABLE_DRP);
-		CPRINTF("DRP = %d, host_mode = %d\n",
-			!!(cc_config & CC_ENABLE_DRP),
-			!!(cc_config & CC_ALLOW_SRC));
-	} else {
-		return EC_ERROR_PARAM1;
-	}
-
-	return EC_SUCCESS;
-}
-DECLARE_CONSOLE_COMMAND(usbc_action, cmd_usbc_action,
-			"5v|12v|20v|dev|drp",
-			"Set Servo v4 type-C port state");
->>>>>>> CHANGE (f3b961 servo_v4: Support command to limit the max_voltage)
