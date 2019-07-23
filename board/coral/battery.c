@@ -52,6 +52,7 @@ enum battery_type {
 	BATTERY_SMP223_2S1P_COS,
 	BATTERY_SMP403_2S1P_PROTO,
 	BATTERY_SMP403_2S1P,
+	BATTERY_SIMPLO_BYD,
 	BATTERY_LGC_AP19A8K,
 	BATTERY_TYPE_COUNT,
 };
@@ -839,6 +840,36 @@ static const struct board_batt_params info[] = {
 			.discharging_max_c	= 60,
 		},
 	},
+
+	/* Simplo BYD 916Q2294H battery information */
+	[BATTERY_SIMPLO_BYD] = {
+		.fuel_gauge = {
+			.manuf_name = "SMP-LP485780",
+			.ship_mode = {
+				.reg_addr = 0x00,
+				.reg_data = { 0x0010, 0x0010 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x0002,
+				.disconnect_val = 0x0,
+			},
+		},
+		.batt_info = {
+			.voltage_max = TARGET_WITH_MARGIN(13200, 5),	/* mV */
+			.voltage_normal = 11550,
+			.voltage_min = 9000,
+			.precharge_current = 256,	/* mA */
+			.start_charging_min_c = 0,
+			.start_charging_max_c = 45,
+			.charging_min_c = 0,
+			.charging_max_c = 45,
+			.discharging_min_c = -20,
+			.discharging_max_c = 60,
+		},
+	},
+
 	[BATTERY_LGC_AP19A8K] = {
 		.fuel_gauge = {
 			.manuf_name = "LGC KTxxxxGxxx",
