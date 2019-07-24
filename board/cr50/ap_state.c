@@ -124,6 +124,7 @@ void tpm_rst_asserted(enum gpio_signal unused)
 	set_state(DEVICE_STATE_DEBOUNCING);
 
 	if (waiting_for_ap_reset) {
+		CPRINTS("CL: done");
 		waiting_for_ap_reset = 0;
 		deassert_ec_rst();
 		enable_sleep(SLEEP_MASK_AP_RUN);
@@ -132,6 +133,7 @@ void tpm_rst_asserted(enum gpio_signal unused)
 
 void board_closed_loop_reset(void)
 {
+	CPRINTS("CL: start");
 	/* Disable sleep while waiting for the reset */
 	disable_sleep(SLEEP_MASK_AP_RUN);
 
