@@ -569,9 +569,6 @@ void power_chipset_handle_host_sleep_event(enum host_sleep_event state)
 		 */
 		s0ix_notify = S0IX_NOTIFY_RESUME;
 		task_wake(TASK_ID_CHIPSET);
-		/* clear host events */
-		while (lpc_get_next_host_event() != 0)
-			;
 		lpc_s0ix_resume_restore_masks();
 		power_signal_disable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	} else if (state == HOST_SLEEP_EVENT_DEFAULT_RESET) {
