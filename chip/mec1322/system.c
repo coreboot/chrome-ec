@@ -243,7 +243,6 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	int i;
 	int htimer = 0;
 
-	CPRINTS("%s(%d, %d)", __func__, seconds, microseconds);
 	if (seconds || microseconds) {
 		if (seconds > 2) {
 			MEC1322_HTIMER_CONTROL = 1;

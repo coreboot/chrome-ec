@@ -9,6 +9,7 @@
 #include "button.h"
 #include "charger.h"
 #include "charge_state.h"
+#include "console.h"
 #include "driver/accel_kionix.h"
 #include "driver/gyro_l3gd20h.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -38,6 +39,8 @@
 #define GPIO_KB_OUTPUT_COL2 (GPIO_OUT_LOW)
 
 #include "gpio_list.h"
+
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
 const struct pwm_t pwm_channels[] = {
@@ -286,4 +289,29 @@ uint8_t board_set_battery_level_shutdown(void)
 {
 	/* Cut off at 5% */
 	return 6;
+}
+
+enum critical_shutdown board_system_is_idle(uint64_t last_shutdown_time,
+					    uint64_t *target, uint64_t now)
+{
+	if (now < *target)
+		/* It's not idle yet */
+		return CRITICAL_SHUTDOWN_IGNORE;
+	/*
+	 * We're idle. We check soc, and
+	 *
+	 *   1. if it's above 25%, EC does Pseudo G3
+	 *   2. if it's below 25%, EC does deep sleep
+	 *
+	 * In case 1, EC never wakes up but according to our power measurement,
+	 * PG3 should give us more than 90 days with 25% battery.
+	 *
+	 * In case 2, system consumes more power but EC eventually will cut off
+	 * a battery (at 5%).
+	 */
+	if (charge_get_percent() >= 25)
+		return CRITICAL_SHUTDOWN_HIBERNATE;
+
+	CPRINTS("Battery is too low to hibernate");
+	return CRITICAL_SHUTDOWN_IGNORE;
 }
