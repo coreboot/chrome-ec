@@ -411,17 +411,26 @@ static int mkbp_uses_gpio(void)
 
 void mkbp_set_host_active(int active)
 {
-	if (mkbp_uses_gpio())
+	if (mkbp_uses_gpio()) {
 		mkbp_set_host_active_via_gpio(active);
 
-	/*
-	 * Always send the host event for compatibility.
-	 * On board versions 2 and newer, the firmware is configured
-	 * to not actually trigger an SCI on MKBP events. This means that
-	 * the EC can send host event notifications without concern for the
-	 * board version and expect the right thing to happen.
-	 */
-	mkbp_set_host_active_via_event(active);
+		/*
+		 * On newer boards with the GPIO for MKBP notification, we're
+		 * now also sending MKBP notifications using the host event
+		 * interface in order to wake the AP in suspend.  Therefore,
+		 * make sure that it is only used in suspend.
+		 */
+		if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
+			mkbp_set_host_active_via_event(active);
+
+	} else {
+		/*
+		 * Older boards don't physically have the GPIO used for MKBP
+		 * event notification, therefore we'll always need to send the
+		 * event using the host event interface.
+		 */
+		mkbp_set_host_active_via_event(active);
+	}
 }
 
 static void board_init(void)
