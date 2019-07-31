@@ -104,6 +104,13 @@ int flash_pre_init(void)
 	GWRITE_FIELD(GLOBALSEC, FLASH_REGION5_CTRL, RD_EN, 1);
 	flash_log_register_flash_control_callback(flash_log_space_control);
 #endif
+
+	/* Create a flash region window for INFO1 access. */
+	GREG32(GLOBALSEC, FLASH_REGION7_BASE_ADDR) = FLASH_INFO_MEMORY_BASE;
+	GREG32(GLOBALSEC, FLASH_REGION7_SIZE) = FLASH_INFO_SIZE - 1;
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION7_CTRL, EN, 1);
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION7_CTRL, RD_EN, 1);
+
 	return EC_SUCCESS;
 }
 
@@ -389,62 +396,14 @@ int flash_physical_info_read_word(int byte_offset, uint32_t *dst)
 	return ret;
 }
 
-/*
- * Verify that the range's size is power of 2, the range offset is aligned by
- * size, and the range does not cross the INFO space boundary.
- */
-static int valid_info_range(uint32_t offset, size_t size)
+void flash_info_write_enable(void)
 {
-	if (!size || (size & (size - 1)))
-		return 0;
-
-	if (offset & (size - 1))
-		return 0;
-
-	if ((offset + size) > FLASH_INFO_SIZE)
-		return 0;
-
-	return 1;
-
-}
-
-/* Write access is a superset of read access. */
-static int flash_info_configure_access(uint32_t offset,
-				       size_t size, int write_mode)
-{
-	int mask;
-
-	if (!valid_info_range(offset, size))
-		return EC_ERROR_INVAL;
-
-	mask = GREG32(GLOBALSEC, FLASH_REGION6_CTRL);
-	mask |= GC_GLOBALSEC_FLASH_REGION6_CTRL_EN_MASK |
-		GC_GLOBALSEC_FLASH_REGION6_CTRL_RD_EN_MASK;
-	if (write_mode)
-		mask |= GC_GLOBALSEC_FLASH_REGION6_CTRL_WR_EN_MASK;
-
-	GREG32(GLOBALSEC, FLASH_REGION6_BASE_ADDR) =
-		FLASH_INFO_MEMORY_BASE + offset;
-
-	GREG32(GLOBALSEC, FLASH_REGION6_SIZE) = size - 1;
-	GREG32(GLOBALSEC, FLASH_REGION6_CTRL) = mask;
-
-	return EC_SUCCESS;
-}
-
-int flash_info_read_enable(uint32_t offset, size_t size)
-{
-	return flash_info_configure_access(offset, size, 0);
-}
-
-int flash_info_write_enable(uint32_t offset, size_t size)
-{
-	return flash_info_configure_access(offset, size, 1);
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION7_CTRL, WR_EN, 1);
 }
 
 void flash_info_write_disable(void)
 {
-	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, WR_EN, 0);
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION7_CTRL, WR_EN, 0);
 }
 
 int flash_info_physical_write(int byte_offset, int num_bytes, const char *data)
@@ -519,21 +478,19 @@ static int command_erase_flash_info(int argc, char **argv)
 		return rv;
 	}
 
-	flash_info_read_enable(0, 2048);
-	flash_info_write_enable(0, 2048);
-
-	/* Preserve manufacturing information. */
-	for (i = 0; i < manuf_word_count; i++) {
-		if (flash_physical_info_read_word
-		    (FLASH_INFO_MANUFACTURE_STATE_OFFSET +
-		     i * sizeof(uint32_t),
-		     preserved_manufacture_state + i) != EC_SUCCESS) {
+	/* Read the entire info1. */
+	p = (uint32_t *)info1;
+	for (i = 0; i < (sizeof(*info1) / sizeof(*p)); i++) {
+		if (flash_physical_info_read_word(i * sizeof(*p), p + i) !=
+		    EC_SUCCESS) {
 			ccprintf("Failed to read word %d!\n", i);
 			goto exit;
 		}
 	}
 
 	mutex_lock(&flash_mtx);
+
+	flash_info_write_enable();
 
 	rv = do_flash_op(OP_ERASE_BLOCK, 1, 0, 512);
 
