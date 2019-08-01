@@ -1053,7 +1053,7 @@ static int command_i2cxfer(int argc, char **argv)
 		rv = i2c_xfer(port, slave_addr, (uint8_t *)&offset, 1, data, v);
 
 		if (!rv)
-			ccprintf("Data: %.*h\n", v, data);
+			ccprintf("Data: %ph\n", HEX_BUF(data, v));
 
 	} else if (strcasecmp(argv[1], "w") == 0) {
 		/* 8-bit write */
