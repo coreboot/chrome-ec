@@ -211,3 +211,12 @@ void udelay(unsigned us)
 		;
 }
 #endif /* CONFIG_HW_SPECIFIC_UDELAY */
+
+void tick_delay(uint32_t ticks)
+{
+	uint32_t cur_tick = GREG32(TIMELS, SOURCE(VALUE));
+
+	/* Note: the counter counts down. */
+	while ((cur_tick - GREG32(TIMELS, SOURCE(VALUE))) < ticks)
+		;
+}
