@@ -208,6 +208,16 @@ static void wr_complete_handler(void *i2cs_data, size_t i2cs_data_size)
 	 * on the AP interrupt line for that.
 	 */
 	gpio_set_level(GPIO_INT_AP_L, 0);
+
+	/*
+	 * This is to meet the AP requirement of minimum 4 usec
+	 *  duration of INT_AP_L assertion.
+	 *
+	 * TODO(b/130515803): Ideally, this should be improved
+	 * to support any duration requirement in future.
+	 */
+	tick_delay(2);
+
 	gpio_set_level(GPIO_INT_AP_L, 1);
 }
 
