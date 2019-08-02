@@ -178,3 +178,10 @@ static inline int time_after(uint32_t a, uint32_t b)
 }
 
 #endif  /* __CROS_EC_TIMER_H */
+
+/**
+ * Busy-wait for the given ticks.
+ *
+ * @param ticks		Number of ticks to delay.
+ */
+void tick_delay(uint32_t ticks);
