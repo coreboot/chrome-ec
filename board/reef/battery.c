@@ -642,6 +642,11 @@ int charger_profile_override(struct charge_state_data *curr)
 		return 0;
 	}
 
+	if ((battery_is_present() == BP_YES) &&
+	    ((board_get_battery_type() == BATTERY_SONY_CORP) ||
+	    (board_get_battery_type() == BATTERY_PANASONIC)))
+		return 0;
+
 	return charger_profile_override_common(curr,
 			board_get_batt_params()->fast_chg_params,
 			&prev_chg_profile_info,
