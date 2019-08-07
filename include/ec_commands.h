@@ -4706,6 +4706,7 @@ struct __ec_align1 ec_params_usb_pd_mux_info {
 #define USB_PD_MUX_DP_ENABLED        (1 << 1)
 #define USB_PD_MUX_POLARITY_INVERTED (1 << 2)
 #define USB_PD_MUX_HPD_IRQ           (1 << 3)
+#define USB_PD_MUX_SAFE_MODE         (1 << 4) /* DP is in safe mode */
 
 struct __ec_align1 ec_response_usb_pd_mux_info {
 	uint8_t flags; /* USB_PD_MUX_*-encoded USB mux state */
