@@ -2705,6 +2705,13 @@
 #undef CONFIG_USB_CONSOLE
 
 /*
+ * Enable USB serial console module using usb stream config.
+ * NOTE: CONFIG_USB_CONSOLE and CONFIG_USB_CONSOLE_STREAM should be defined
+ * exclusively each other.
+ */
+#undef CONFIG_USB_CONSOLE_STREAM
+
+/*
  * Enable USB serial console crc32 computation.
  * Also makes console output block on overrun.
  */
