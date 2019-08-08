@@ -56,6 +56,15 @@ enum tcpc_transmit_complete {
 	TCPC_TX_COMPLETE_FAILED =    2,
 };
 
+/**
+ * Returns whether the sink has detected a Rp resistor on the other side.
+ */
+static inline int cc_is_rp(int cc)
+{
+  return (cc == TYPEC_CC_VOLT_SNK_DEF) || (cc == TYPEC_CC_VOLT_SNK_1_5) ||
+         (cc == TYPEC_CC_VOLT_SNK_3_0);
+}
+
 struct tcpm_drv {
 	/**
 	 * Initialize TCPM driver and wait for TCPC readiness.
