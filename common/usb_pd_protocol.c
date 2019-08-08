@@ -22,6 +22,7 @@
 #include "timer.h"
 #include "util.h"
 #include "usb_charge.h"
+#include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -2485,56 +2486,7 @@ void pd_ping_enable(int port, int enable)
 		pd[port].flags &= ~PD_FLAGS_PING_ENABLED;
 }
 
-/*
- * CC values for regular sources and Debug sources (aka DTS)
- *
- * Source type  Mode of Operation   CC1    CC2
- * ---------------------------------------------
- * Regular      Default USB Power   RpUSB  Open
- * Regular      USB-C @ 1.5 A       Rp1A5  Open
- * Regular      USB-C @ 3 A         Rp3A0  Open
- * DTS          Default USB Power   Rp3A0  Rp1A5
- * DTS          USB-C @ 1.5 A       Rp1A5  RpUSB
- * DTS          USB-C @ 3 A         Rp3A0  RpUSB
-*/
-
-/**
- * Returns the polarity of a Sink.
- */
-static inline int get_snk_polarity(int cc1, int cc2)
-{
-	/* the following assumes:
-	 * TYPEC_CC_VOLT_RP_3_0 > TYPEC_CC_VOLT_RP_1_5
-	 * TYPEC_CC_VOLT_RP_1_5 > TYPEC_CC_VOLT_RP_DEF
-	 * TYPEC_CC_VOLT_RP_DEF > TYPEC_CC_VOLT_OPEN
-	 */
-	return (cc2 > cc1);
-}
-
 #if defined(CONFIG_CHARGE_MANAGER)
-/**
- * Returns type C current limit (mA) based upon cc_voltage (mV).
- */
-static typec_current_t get_typec_current_limit(int polarity, int cc1, int cc2)
-{
-	typec_current_t charge;
-	int cc = polarity ? cc2 : cc1;
-	int cc_alt = polarity ? cc1 : cc2;
-
-	if (cc == TYPEC_CC_VOLT_RP_3_0 && cc_alt != TYPEC_CC_VOLT_RP_1_5)
-		charge = 3000;
-	else if (cc == TYPEC_CC_VOLT_RP_1_5)
-		charge = 1500;
-	else if (cc == TYPEC_CC_VOLT_RP_DEF)
-		charge = 500;
-	else
-		charge = 0;
-
-	if (cc_is_rp(cc_alt))
-		charge |= TYPEC_CURRENT_DTS_MASK;
-
-	return charge;
-}
 
 /**
  * Signal power request to indicate a charger update that affects the port.
@@ -3750,8 +3702,8 @@ void pd_task(void *u)
 			/* initial data role for sink is UFP */
 			pd_set_data_role(port, PD_ROLE_UFP);
 #if defined(CONFIG_CHARGE_MANAGER)
-			typec_curr = get_typec_current_limit(pd[port].polarity,
-							     cc1, cc2);
+			typec_curr = usb_get_typec_current_limit(
+				pd[port].polarity, cc1, cc2);
 			typec_set_input_current_limit(
 				port, typec_curr, TYPE_C_VOLTAGE);
 #endif
@@ -3884,13 +3836,15 @@ void pd_task(void *u)
 
 			/* Check if CC pull-up has changed */
 			tcpm_get_cc(port, &cc1, &cc2);
-			if (typec_curr != get_typec_current_limit(
+			if (typec_curr != usb_get_typec_current_limit(
 						pd[port].polarity, cc1, cc2)) {
 				/* debounce signal by requiring two reads */
 				if (typec_curr_change) {
 					/* set new input current limit */
-					typec_curr = get_typec_current_limit(
-						pd[port].polarity, cc1, cc2);
+					typec_curr =
+						usb_get_typec_current_limit(
+							pd[port].polarity,
+							cc1, cc2);
 					typec_set_input_current_limit(
 					  port, typec_curr, TYPE_C_VOLTAGE);
 				} else {
