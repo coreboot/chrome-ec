@@ -890,6 +890,12 @@ enum pd_data_msg_type {
 	PD_DATA_VENDOR_DEF = 15,
 };
 
+/* CC Polarity type */
+enum pd_cc_polarity_type {
+	POLARITY_CC1 = 0,
+	POLARITY_CC2 = 1,
+};
+
 /* Protocol revision */
 #define PD_REV10 0
 #define PD_REV20 1
