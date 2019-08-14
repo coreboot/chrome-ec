@@ -1174,10 +1174,6 @@
 #undef CONFIG_EC_WRITABLE_STORAGE_OFF
 #undef CONFIG_EC_WRITABLE_STORAGE_SIZE
 
-/* Address of start of the NVcounter flash page */
-#undef CONFIG_FLASH_NVCTR_BASE_A
-#undef CONFIG_FLASH_NVCTR_BASE_B
-
 /*****************************************************************************/
 /* NvMem Configuration */
 /* Enable NV Memory module within flash */
