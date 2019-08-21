@@ -312,6 +312,13 @@ static int svdm_enter_dp_mode(int port, uint32_t mode_caps)
 	/* Only enter mode if device is DFP_D capable */
 	if (mode_caps & MODE_DP_SNK) {
 		svdm_safe_dp_mode(port);
+
+		if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
+			/*
+			 * Wake the system up since we're entering DP AltMode.
+			 */
+			pd_notify_dp_alt_mode_entry();
+
 		return 0;
 	}
 
@@ -381,6 +388,14 @@ static int svdm_dp_attention(int port, uint32_t *payload)
 	const struct usb_mux *mux = &usb_muxes[port];
 
 	dp_status[port] = payload[1];
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) &&
+	    (irq || lvl))
+		/*
+		 * Wake up the AP.  IRQ or level high indicates a DP sink is now
+		 * present.
+		 */
+		pd_notify_dp_alt_mode_entry();
 
 	/* Its initial DP status message prior to config */
 	if (!(dp_flags[port] & DP_FLAGS_DP_ON)) {
