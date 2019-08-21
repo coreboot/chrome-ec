@@ -133,7 +133,7 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_FLOG_TIMESTAMP = 47,
 
-	VENDOR_CC_U2F_MODE = 48,
+	VENDOR_CC_U2F_MODE = 49,
 
 	/*
 	 * HMAC-SHA256 DRBG invocation for ACVP tests
