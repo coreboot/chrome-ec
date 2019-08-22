@@ -230,4 +230,26 @@ $(out)/rma_key_from_blob.h: board/$(BOARD)/$(BLOB_FILE) util/bin2h.sh
 
 endif
 
+ifeq ($(CONFIG_LIBCRYPTOC),y)
+CRYPTOCLIB := $(realpath ../../third_party/cryptoc)
+ifneq ($(BOARD),host)
+CPPFLAGS += -I$(abspath ./builtin)
+endif
+CPPFLAGS += -I$(CRYPTOCLIB)/include
+CRYPTOC_LDFLAGS := -L$(out)/cryptoc -lcryptoc
+
+# Force the external build each time, so it can look for changed sources.
+.PHONY: $(out)/cryptoc/libcryptoc.a
+$(out)/cryptoc/libcryptoc.a:
+	$(MAKE) obj=$(realpath $(out))/cryptoc SUPPORT_UNALIGNED=1 \
+		CONFIG_UPTO_SHA512=$(CONFIG_UPTO_SHA512) -C $(CRYPTOCLIB)
+
+# Link RW against cryptoc.
+$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
+$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: $(out)/cryptoc/libcryptoc.a
+# Host test executables (including fuzz tests).
+$(out)/$(PROJECT).exe: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
+$(out)/$(PROJECT).exe: $(out)/cryptoc/libcryptoc.a
+endif
+
 include $(_common_dir)fpsensor/build.mk

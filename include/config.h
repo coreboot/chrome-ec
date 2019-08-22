@@ -207,6 +207,9 @@
 /* Define which ALS sensor is used for dimming the lightbar when dark */
 #undef CONFIG_ALS_LIGHTBAR_DIMMING
 
+/* Link against third_party/cryptoc. */
+#undef CONFIG_LIBCRYPTOC
+
 /* Support AP hang detection host command and state machine */
 #undef CONFIG_AP_HANG_DETECT
 
