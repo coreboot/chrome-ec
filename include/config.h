@@ -1645,6 +1645,9 @@
 /* Command to issue AP reset */
 #undef  CONFIG_HOSTCMD_AP_RESET
 
+/* Command to get the EC uptime (and optionally AP reset stats) */
+#define CONFIG_HOSTCMD_GET_UPTIME_INFO
+
 /* List of host commands whose debug output will be suppressed */
 #undef CONFIG_SUPPRESSED_HOST_COMMANDS
 
