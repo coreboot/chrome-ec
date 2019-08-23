@@ -1515,6 +1515,9 @@
 /* Set SKU ID from AP */
 #undef CONFIG_HOSTCMD_AP_SET_SKUID
 
+/* Command to get the EC uptime (and optionally AP reset stats) */
+#define CONFIG_HOSTCMD_GET_UPTIME_INFO
+
 /*****************************************************************************/
 
 /* Enable debugging and profiling statistics for hook functions */
