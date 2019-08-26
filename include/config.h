@@ -3912,6 +3912,10 @@
 #undef CONFIG_CMD_ADC
 #endif
 
+#ifdef CONFIG_PWM_KBLIGHT
+#define CONFIG_KEYBOARD_BACKLIGHT
+#endif
+
 /*****************************************************************************/
 /* Define derived Chipset configs */
 #if defined(CONFIG_CHIPSET_APOLLOLAKE) || \
