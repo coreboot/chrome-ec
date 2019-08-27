@@ -7,11 +7,15 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "charge_manager.h"
 #include "charge_state.h"
+#include "chipset.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
+#include "hooks.h"
 #include "gpio.h"
+#include "usb_pd.h"
 #include "util.h"
 
 static enum battery_present batt_pres_prev = BP_NOT_SURE;
@@ -128,3 +132,28 @@ enum battery_present battery_is_present(void)
 	return batt_pres;
 }
 
+static void reduce_input_voltage_when_full(void)
+{
+	struct batt_params batt;
+	int max_pd_voltage_mv;
+	int active_chg_port;
+
+	active_chg_port = charge_manager_get_active_charge_port();
+	if (active_chg_port == CHARGE_PORT_NONE)
+		return;
+
+	battery_get_params(&batt);
+	if (!(batt.flags & BATT_FLAG_BAD_STATUS)) {
+		/* Lower our input voltage to 9V when battery is full. */
+		if ((batt.status & STATUS_FULLY_CHARGED) &&
+		    chipset_in_state(CHIPSET_STATE_ANY_OFF))
+			max_pd_voltage_mv = 9000;
+		else
+			max_pd_voltage_mv = PD_MAX_VOLTAGE_MV;
+
+		if (pd_get_max_voltage() != max_pd_voltage_mv)
+			pd_set_external_voltage_limit(active_chg_port,
+						      max_pd_voltage_mv);
+	}
+}
+DECLARE_HOOK(HOOK_SECOND, reduce_input_voltage_when_full, HOOK_PRIO_DEFAULT);
