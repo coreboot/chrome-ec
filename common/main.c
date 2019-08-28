@@ -16,6 +16,7 @@
 #include "flash.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "i2c.h"
 #include "keyboard_scan.h"
 #ifdef CONFIG_MPU
 #include "mpu.h"
@@ -150,6 +151,15 @@ test_mockable __keep int main(void)
 #ifdef CONFIG_EEPROM
 	eeprom_init();
 #endif
+
+#ifdef CONFIG_I2C_MASTER
+	/*
+	 * Some devices (like the I2C keyboards, CBI) need I2C access
+	 * pretty early, so let's initialize the controller now.
+	 */
+	i2c_init();
+#endif
+
 #ifdef HAS_TASK_KEYSCAN
 	keyboard_scan_init();
 #endif
