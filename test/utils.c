@@ -485,33 +485,53 @@ static int test_cond_t(void)
 	return EC_SUCCESS;
 }
 
+static int test_bytes_are_trivial(void)
+{
+	static const uint8_t all0x00[] = { 0x00, 0x00, 0x00 };
+	static const uint8_t all0xff[] = { 0xff, 0xff, 0xff, 0xff };
+	static const uint8_t nontrivial1[] = { 0x00, 0x01, 0x02 };
+	static const uint8_t nontrivial2[] = { 0xdd, 0xee, 0xff };
+	static const uint8_t nontrivial3[] = { 0x00, 0x00, 0x00, 0xff };
+	static const uint8_t nontrivial4[] = { 0xff, 0x00, 0x00, 0x00 };
+
+	TEST_ASSERT(bytes_are_trivial(all0x00, sizeof(all0x00)));
+	TEST_ASSERT(bytes_are_trivial(all0xff, sizeof(all0xff)));
+	TEST_ASSERT(!bytes_are_trivial(nontrivial1, sizeof(nontrivial1)));
+	TEST_ASSERT(!bytes_are_trivial(nontrivial2, sizeof(nontrivial2)));
+	TEST_ASSERT(!bytes_are_trivial(nontrivial3, sizeof(nontrivial3)));
+	TEST_ASSERT(!bytes_are_trivial(nontrivial4, sizeof(nontrivial4)));
+
+	return EC_SUCCESS;
+}
+
 void run_test(void)
 {
 	test_reset();
 
+	RUN_TEST(test_atoi);
+	RUN_TEST(test_bytes_are_trivial);
+	RUN_TEST(test_cond_t);
+	RUN_TEST(test_get_next_bit);
 	RUN_TEST(test_isalpha);
 	RUN_TEST(test_isprint);
-	RUN_TEST(test_strtoi);
-	RUN_TEST(test_parse_bool);
-	RUN_TEST(test_memmove);
-	RUN_TEST(test_memcpy);
-	RUN_TEST(test_memset);
 	RUN_TEST(test_memchr);
-	RUN_TEST(test_strzcpy);
-	RUN_TEST(test_strncpy);
-	RUN_TEST(test_strncmp);
-	RUN_TEST(test_strlen);
-	RUN_TEST(test_strnlen);
+	RUN_TEST(test_memcpy);
+	RUN_TEST(test_memmove);
+	RUN_TEST(test_memset);
+	RUN_TEST(test_parse_bool);
+	RUN_TEST(test_scratchpad);
+	RUN_TEST(test_shared_mem);
 	RUN_TEST(test_strcasecmp);
+	RUN_TEST(test_strlen);
 	RUN_TEST(test_strncasecmp);
-	RUN_TEST(test_atoi);
+	RUN_TEST(test_strncmp);
+	RUN_TEST(test_strncpy);
+	RUN_TEST(test_strnlen);
+	RUN_TEST(test_strtoi);
+	RUN_TEST(test_strzcpy);
 	RUN_TEST(test_uint64divmod_0);
 	RUN_TEST(test_uint64divmod_1);
 	RUN_TEST(test_uint64divmod_2);
-	RUN_TEST(test_get_next_bit);
-	RUN_TEST(test_shared_mem);
-	RUN_TEST(test_scratchpad);
-	RUN_TEST(test_cond_t);
 
 	test_print_result();
 }
