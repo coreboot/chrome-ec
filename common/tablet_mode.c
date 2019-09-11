@@ -6,6 +6,7 @@
 #include "console.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "lid_angle.h"
 #include "tablet_mode.h"
 #include "timer.h"
@@ -13,14 +14,17 @@
 #define CPRINTS(format, args...) cprints(CC_MOTION_LID, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_MOTION_LID, format, ## args)
 
-/* 1: in tablet mode. 0: otherwise */
-static int tablet_mode = 1;
+/* 1: in tablet mode; 0: notebook mode; -1: uninitialized  */
+static int tablet_mode = -1;
+static int forced_tablet_mode = -1;
 
 static int disabled;
 
 int tablet_get_mode(void)
 {
-	return tablet_mode;
+	if (forced_tablet_mode != -1)
+		return !!forced_tablet_mode;
+	return !!tablet_mode;
 }
 
 void tablet_set_mode(int mode)
@@ -34,8 +38,24 @@ void tablet_set_mode(int mode)
 	}
 
 	tablet_mode = mode;
+
+	if (forced_tablet_mode != -1)
+		return;
+
 	CPRINTS("tablet mode %sabled", mode ? "en" : "dis");
 	hook_notify(HOOK_TABLET_MODE_CHANGE);
+}
+
+static void tabletmode_force_state(int mode)
+{
+	if (forced_tablet_mode == mode)
+		return;
+
+	forced_tablet_mode = mode;
+
+	hook_notify(HOOK_TABLET_MODE_CHANGE);
+	if (IS_ENABLED(CONFIG_HOSTCMD_EVENTS))
+		host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
 }
 
 void tablet_disable(void)
@@ -108,3 +128,21 @@ void hall_sensor_disable(void)
 	tablet_disable();
 }
 #endif
+
+static int command_settabletmode(int argc, char **argv)
+{
+	if (argc != 2)
+		return EC_ERROR_PARAM_COUNT;
+	if (argv[1][0] == 'o' && argv[1][1] == 'n')
+		tabletmode_force_state(1);
+	else if (argv[1][0] == 'o' && argv[1][1] == 'f')
+		tabletmode_force_state(0);
+	else if (argv[1][0] == 'r')
+		tabletmode_force_state(-1);
+	else
+		return EC_ERROR_PARAM1;
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(tabletmode, command_settabletmode,
+	"[on | off | reset]",
+	"Manually force tablet mode to on, off or reset.");
