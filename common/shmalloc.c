@@ -210,7 +210,7 @@ static int do_acquire(int size, struct shm_buffer **dest_ptr)
 
 	pfb = free_buf_chain;
 	while (pfb) {
-		if ((pfb->buffer_size > size) &&
+		if ((pfb->buffer_size >= size) &&
 		    ((pfb->buffer_size - size) < headroom)) {
 			/* this is a new candidate. */
 			headroom = pfb->buffer_size - size;
@@ -299,6 +299,8 @@ int shared_mem_size(void)
 	}
 
 	mutex_unlock(&shmem_lock);
+	/* Leave room for shmem header */
+	max_available -= sizeof(struct shm_buffer);
 	return max_available;
 }
 
