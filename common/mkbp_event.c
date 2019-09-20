@@ -134,7 +134,7 @@ int mkbp_send_event(uint8_t event_type)
 	return 1;
 }
 
-static int mkbp_get_next_event(struct host_cmd_handler_args *args)
+static enum ec_status mkbp_get_next_event(struct host_cmd_handler_args *args)
 {
 	static int last;
 	int i, data_size, evt;
@@ -203,7 +203,8 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_NEXT_EVENT,
 
 #ifdef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
 #ifdef CONFIG_MKBP_USE_HOST_EVENT
-static int mkbp_get_host_event_wake_mask(struct host_cmd_handler_args *args)
+static enum ec_status
+mkbp_get_host_event_wake_mask(struct host_cmd_handler_args *args)
 {
 	struct ec_response_host_event_mask *r = args->response;
 
@@ -218,7 +219,7 @@ DECLARE_HOST_COMMAND(EC_CMD_HOST_EVENT_GET_WAKE_MASK,
 #endif /* CONFIG_MKBP_USE_HOST_EVENT */
 #endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
 
-static int hc_mkbp_wake_mask(struct host_cmd_handler_args *args)
+static enum ec_status hc_mkbp_wake_mask(struct host_cmd_handler_args *args)
 {
 	struct ec_response_mkbp_event_wake_mask *r = args->response;
 	const struct ec_params_mkbp_event_wake_mask *p = args->params;

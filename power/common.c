@@ -792,7 +792,8 @@ DECLARE_CONSOLE_COMMAND(hibdelay, command_hibernation_delay,
 			"[sec]",
 			"Set the delay before going into hibernation");
 
-static int host_command_hibernation_delay(struct host_cmd_handler_args *args)
+static enum ec_status
+host_command_hibernation_delay(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_hibernation_delay *p = args->params;
 	struct ec_response_hibernation_delay *r = args->response;
@@ -827,7 +828,8 @@ DECLARE_HOST_COMMAND(EC_CMD_HIBERNATION_DELAY,
 #endif /* CONFIG_HIBERNATE */
 
 #ifdef CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
-static int host_command_pause_in_s5(struct host_cmd_handler_args *args)
+static enum ec_status
+host_command_pause_in_s5(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_get_set_value *p = args->params;
 	struct ec_response_get_set_value *r = args->response;
@@ -868,7 +870,8 @@ power_chipset_handle_host_sleep_event(enum host_sleep_event state)
 	/* Default weak implementation -- no action required. */
 }
 
-static int host_command_host_sleep_event(struct host_cmd_handler_args *args)
+static enum ec_status
+host_command_host_sleep_event(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_host_sleep_event *p = args->params;
 

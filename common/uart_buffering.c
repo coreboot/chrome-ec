@@ -328,7 +328,8 @@ DECLARE_HOOK(HOOK_INIT, uart_rx_dma_init, HOOK_PRIO_DEFAULT);
 /*****************************************************************************/
 /* Host commands */
 
-static int host_command_console_snapshot(struct host_cmd_handler_args *args)
+static enum ec_status
+host_command_console_snapshot(struct host_cmd_handler_args *args)
 {
 	return uart_console_read_buffer_init();
 }
@@ -336,8 +337,8 @@ DECLARE_HOST_COMMAND(EC_CMD_CONSOLE_SNAPSHOT,
 		     host_command_console_snapshot,
 		     EC_VER_MASK(0));
 
-
-static int host_command_console_read(struct host_cmd_handler_args *args)
+static enum ec_status
+host_command_console_read(struct host_cmd_handler_args *args)
 {
 	if (args->version == 0) {
 		/*
@@ -373,7 +374,7 @@ DECLARE_HOST_COMMAND(EC_CMD_CONSOLE_READ,
 #endif
 		     );
 
-int uart_console_read_buffer_init(void)
+enum ec_status uart_console_read_buffer_init(void)
 {
 	/* Assume the whole circular buffer is full */
 	tx_snapshot_head = tx_buf_head;
