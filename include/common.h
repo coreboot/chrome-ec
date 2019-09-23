@@ -9,6 +9,7 @@
 #define __CROS_EC_COMMON_H
 
 #include <stdint.h>
+#include <inttypes.h>
 
 /*
  * Macros to concatenate 2 - 4 tokens together to form a single token.
