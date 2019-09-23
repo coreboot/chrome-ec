@@ -291,8 +291,9 @@ void system_disable_jump(void)
 		ret = mpu_protect_ram();
 		if (ret == EC_SUCCESS) {
 			enable_mpu = 1;
-			CPRINTS("RAM locked. Exclusion %08x-%08x",
-				&__iram_text_start, &__iram_text_end);
+			CPRINTS("data RAM locked. Exclusion %08lx-%08lx",
+				(unsigned long)&__iram_text_start,
+				(unsigned long)&__iram_text_end);
 		} else {
 			CPRINTS("Failed to lock RAM (%d)", ret);
 		}
