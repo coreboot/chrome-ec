@@ -151,6 +151,7 @@ driver-$(CONFIG_USB_MUX_AMD_FP5)+=usb_mux/amd_fp5.o
 driver-$(CONFIG_USB_MUX_IT5205)+=usb_mux/it5205.o
 driver-$(CONFIG_USB_MUX_PI3USB30532)+=usb_mux/pi3usb30532.o
 driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps874x.o
+driver-$(CONFIG_USB_MUX_PS8742)+=usb_mux/ps874x.o
 driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps874x.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
 
