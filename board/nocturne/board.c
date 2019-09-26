@@ -22,7 +22,6 @@
 #include "driver/temp_sensor/bd99992gw.h"
 #include "ec_commands.h"
 #include "extpower.h"
-#include "gesture.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -200,10 +199,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.config = {
 			/* EC setup accel for chrome usage */
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = TAP_ODR | ROUND_UP_FLAG,
-			},
-			[SENSOR_CONFIG_EC_S3] = {
-				.odr = TAP_ODR | ROUND_UP_FLAG,
+				.odr = 10000 | ROUND_UP_FLAG,
 			},
 		},
 	},
