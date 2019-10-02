@@ -654,7 +654,7 @@ static int command_pe(int argc, char **argv)
 		return EC_ERROR_PARAM_COUNT;
 	/* command: pe <port> <subcmd> <args> */
 	port = strtoi(argv[1], &e, 10);
-	if (*e || port >= CONFIG_USB_PD_PORT_MAX_COUNT)
+	if (*e || port >= board_get_usb_pd_port_count())
 		return EC_ERROR_PARAM2;
 	if (!strncasecmp(argv[2], "dump", 4))
 		dump_pe(port);
@@ -871,7 +871,7 @@ static int hc_remote_pd_discovery(struct host_cmd_handler_args *args)
 	const uint8_t *port = args->params;
 	struct ec_params_usb_pd_discovery_entry *r = args->response;
 
-	if (*port >= CONFIG_USB_PD_PORT_MAX_COUNT)
+	if (*port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
 
 	r->vid = pd_get_identity_vid(*port);
@@ -893,7 +893,7 @@ static int hc_remote_pd_get_amode(struct host_cmd_handler_args *args)
 	const struct ec_params_usb_pd_get_mode_request *p = args->params;
 	struct ec_params_usb_pd_get_mode_response *r = args->response;
 
-	if (p->port >= CONFIG_USB_PD_PORT_MAX_COUNT)
+	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
 
 	/* no more to send */
@@ -1043,3 +1043,8 @@ void pd_set_vbus_discharge(int port, int enable)
 	mutex_unlock(&discharge_lock[port]);
 }
 #endif /* CONFIG_USB_PD_DISCHARGE */
+
+__attribute__((weak)) uint8_t board_get_usb_pd_port_count(void)
+{
+	return CONFIG_USB_PD_PORT_MAX_COUNT;
+}

@@ -615,7 +615,7 @@ int tcpci_get_chip_info(int port, int live,
 	int error;
 	int val;
 
-	if (port >= CONFIG_USB_PD_PORT_MAX_COUNT)
+	if (port >= board_get_usb_pd_port_count())
 		return EC_ERROR_INVAL;
 
 	i = &info[port];
@@ -686,6 +686,9 @@ int tcpci_tcpm_init(int port)
 	int error;
 	int power_status;
 	int tries = TCPM_INIT_TRIES;
+
+	if (port >= board_get_usb_pd_port_count())
+		return EC_ERROR_INVAL;
 
 	while (1) {
 		error = tcpc_read(port, TCPC_REG_POWER_STATUS, &power_status);

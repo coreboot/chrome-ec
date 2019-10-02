@@ -86,7 +86,7 @@ static void usb_charger_init(void)
 	int i;
 
 	/* Initialize all charge suppliers */
-	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		charge_manager_update_charge(CHARGE_SUPPLIER_PROPRIETARY,
 					     i, NULL);
 		charge_manager_update_charge(CHARGE_SUPPLIER_BC12_CDP,

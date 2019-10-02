@@ -1848,6 +1848,23 @@ int pd_capable(int port);
  */
 int pd_is_vbus_present(int port);
 
+#ifdef CONFIG_USB_PD_PORT_MAX_COUNT
+#ifdef CONFIG_USB_POWER_DELIVERY
+/**
+ * Get board specific usb pd port count
+ *
+ * @return <= CONFIG_USB_PD_PORT_MAX_COUNT if configured in board file,
+ *         else return CONFIG_USB_PD_PORT_MAX_COUNT
+ */
+uint8_t board_get_usb_pd_port_count(void);
+#else
+static inline uint8_t board_get_usb_pd_port_count(void)
+{
+	return CONFIG_USB_PD_PORT_MAX_COUNT;
+}
+#endif /* CONFIG_USB_POWER_DELIVERY */
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT */
+
 /* ----- Logging ----- */
 #ifdef CONFIG_USB_PD_LOGGING
 /**
