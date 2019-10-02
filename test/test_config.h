@@ -237,7 +237,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 
 #if defined(TEST_USB_SM_FRAMEWORK_H3)
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
@@ -245,7 +245,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 
 #if defined(TEST_USB_SM_FRAMEWORK_H2)
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
@@ -253,7 +253,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 
 #if defined(TEST_USB_SM_FRAMEWORK_H1)
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
@@ -261,7 +261,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 
 #if defined(TEST_USB_SM_FRAMEWORK_H0)
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
@@ -269,7 +269,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 
 #if defined(TEST_USB_PRL)
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_SM_FRAMEWORK
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
@@ -296,7 +296,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 /* GND impedance in milliohms */
 #define VPD_GND_IMPEDANCE 33
 
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_SM_FRAMEWORK
 #define CONFIG_USB_PE_SM
 #define CONFIG_USB_PRL_SM
@@ -327,7 +327,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 	defined(TEST_USB_PD_REV30)
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_DUAL_ROLE
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
 #define CONFIG_SHA256
@@ -342,7 +342,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif /* TEST_USB_PD || TEST_USB_PD_GIVEBACK || TEST_USB_PD_REV30 */
 
 #ifdef TEST_USB_PPC
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
 #define CONFIG_USBC_PPC
 #define CONFIG_USBC_PPC_POLARITY
@@ -353,7 +353,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #if defined(TEST_CHARGE_MANAGER) || defined(TEST_CHARGE_MANAGER_DRP_CHARGING)
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_USB_PD_DUAL_ROLE
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_BATTERY
 #define CONFIG_BATTERY_SMART
 #define CONFIG_I2C
@@ -369,7 +369,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #ifdef TEST_CHARGE_RAMP
 #define CONFIG_CHARGE_RAMP_SW
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #endif
 
 #if defined(TEST_NVMEM) || defined(TEST_NVMEM_VARS)
