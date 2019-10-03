@@ -32,33 +32,6 @@ static int board_id_is_erased(void)
 	return 0;
 }
 
-static int inactive_image_is_guc_image(void)
-{
-	enum system_image_copy_t inactive_copy;
-	const struct SignedHeader *other;
-
-	if (system_get_image_copy() == SYSTEM_IMAGE_RW)
-		inactive_copy = SYSTEM_IMAGE_RW_B;
-	else
-		inactive_copy = SYSTEM_IMAGE_RW;
-	other = (struct SignedHeader *) get_program_memory_addr(
-		inactive_copy);
-	/*
-	 * Chips from GUC are manufactured with 0.0.13 or 0.0.22. Compare the
-	 * versions to determine if the inactive image is a GUC image.
-	 */
-	if (other->epoch_ == 0 && other->major_ == 0 &&
-	    ((other->minor_ == 13) || (other->minor_ == 22))) {
-		CPRINTS("GUC in inactive RW");
-		return 1;
-	}
-	/*
-	 * TODO(mruthven): Return true if factory image field of header is
-	 * set
-	 */
-	return 0;
-}
-
 /**
  * Return non-zero if this is the first boot of a board in the factory.
  *
@@ -74,7 +47,7 @@ static int inactive_image_is_guc_image(void)
 int board_is_first_factory_boot(void)
 {
 	return (!(system_get_reset_flags() & RESET_FLAG_HIBERNATE) &&
-		inactive_image_is_guc_image() && board_id_is_erased());
+		chip_factory_mode() && board_id_is_erased());
 }
 
 /*
