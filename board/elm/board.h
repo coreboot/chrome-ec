@@ -22,6 +22,9 @@
 #define CONFIG_ACCEL_FIFO 512
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
 
+/* Lower maximal ODR to 100Hz */
+#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 100000
+
 /*
  * Sensor internal FIFO is enabled for BMI160, but not for BMA255.
  */
