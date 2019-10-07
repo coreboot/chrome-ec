@@ -17,6 +17,7 @@
 #include "NV_Write_fp.h"
 #include "NV_DefineSpace_fp.h"
 
+#include "ccd_config.h"
 #include "console.h"
 #include "extension.h"
 #include "flash.h"
@@ -690,6 +691,11 @@ enum manufacturing_status tpm_endorse(void)
 
 		/* Mark as endorsed. */
 		endorsement_complete();
+
+		if (!ccd_get_factory_mode()) {
+			result = mnf_factory_mode_mising;
+			break;
+		}
 
 		/* Chip has been marked as manufactured. */
 		result = mnf_success;

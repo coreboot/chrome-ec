@@ -29,6 +29,7 @@ enum manufacturing_status {
 	mnf_store = 10,
 	mnf_manufactured = 11,
 	mnf_unverified_cert = 12,
+	mnf_factory_mode_mising = 13,
 };
 
 enum manufacturing_status tpm_endorse(void);
