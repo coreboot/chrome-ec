@@ -37,7 +37,7 @@
 
   // cros_loader uses b1-dev key as key to verify RW with
   //"keyid": -1187158727,  // b1-dev key
-  "keyid": -561489779,  // prod RW key
+  "keyid": -2018034841,  // prod RW key used by the builder
 
   "p4cl": 177,  // P4 sync cl for XML we link against. 177 == 0xb1.
 
