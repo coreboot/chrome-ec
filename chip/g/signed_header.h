@@ -20,6 +20,7 @@
 
 /* Default value for _pad[] words */
 #define SIGNED_HEADER_PADDING 0x33333333
+#define INFO1_IS_ERASABLE 0x80000000
 
 struct SignedHeader {
 	uint32_t magic;       /* -1 (thanks, boot_sys!) */
