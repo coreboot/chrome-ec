@@ -47,6 +47,7 @@
 #include "flash_info.h"
 #include "registers.h"
 #include "shared_mem.h"
+#include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "watchdog.h"
@@ -504,36 +505,44 @@ void flash_open_ro_window(uint32_t offset, size_t size_b)
 	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, WR_EN, 1);
 }
 
-#ifdef CR50_DEV
-
 static int command_erase_flash_info(int argc, char **argv)
 {
 	uint32_t *preserved_manufacture_state;
-	const size_t manuf_word_count = FLASH_INFO_MANUFACTURE_STATE_SIZE /
-		sizeof(uint32_t);
+	const size_t manuf_word_count =
+		FLASH_INFO_MANUFACTURE_STATE_SIZE / sizeof(uint32_t);
 	int i;
 	int rv = EC_ERROR_BUSY;
+#ifndef CR50_DEV
+	const struct SignedHeader *h;
 
+	h = (struct SignedHeader *)get_program_memory_addr(
+		system_get_image_copy());
+	if (!(h->config1_ & INFO1_IS_ERASABLE)) {
+		ccprintf("This image is not authorized to erase INFO1!\n");
+		return EC_ERROR_ACCESS_DENIED;
+	}
+#endif
 	if (shared_mem_acquire(FLASH_INFO_MANUFACTURE_STATE_SIZE,
 			       (char **)&preserved_manufacture_state) !=
 	    EC_SUCCESS) {
 		ccprintf("Failed to allocate memory for manufacture state!\n");
-		return rv;
+		return EC_ERROR_MEMORY_ALLOCATION;
 	}
 
 	flash_info_read_enable(0, 2048);
-	flash_info_write_enable(0, 2048);
 
 	/* Preserve manufacturing information. */
 	for (i = 0; i < manuf_word_count; i++) {
-		if (flash_physical_info_read_word
-		    (FLASH_INFO_MANUFACTURE_STATE_OFFSET +
-		     i * sizeof(uint32_t),
-		     preserved_manufacture_state + i) != EC_SUCCESS) {
+		if (flash_physical_info_read_word(
+			    FLASH_INFO_MANUFACTURE_STATE_OFFSET +
+				    i * sizeof(uint32_t),
+			    preserved_manufacture_state + i) != EC_SUCCESS) {
 			ccprintf("Failed to read word %d!\n", i);
 			goto exit;
 		}
 	}
+
+	flash_info_write_enable(0, 2048);
 
 	mutex_lock(&flash_mtx);
 
@@ -546,23 +555,23 @@ static int command_erase_flash_info(int argc, char **argv)
 		goto exit;
 	}
 
-	if (flash_info_physical_write
-	    (FLASH_INFO_MANUFACTURE_STATE_OFFSET,
-	     FLASH_INFO_MANUFACTURE_STATE_SIZE,
-	     (char *)preserved_manufacture_state) != EC_SUCCESS) {
+	if (flash_info_physical_write(FLASH_INFO_MANUFACTURE_STATE_OFFSET,
+				      FLASH_INFO_MANUFACTURE_STATE_SIZE,
+				      (char *)preserved_manufacture_state) !=
+	    EC_SUCCESS) {
 		ccprintf("Failed to restore manufacture state!\n");
 		goto exit;
 	}
 
 	rv = EC_SUCCESS;
- exit:
+exit:
+	flash_info_write_disable();
+
 	always_memset(preserved_manufacture_state, 0,
 		      FLASH_INFO_MANUFACTURE_STATE_SIZE);
 	shared_mem_release(preserved_manufacture_state);
-	flash_info_write_disable();
+
 	return rv;
 }
-DECLARE_CONSOLE_COMMAND(eraseflashinfo, command_erase_flash_info,
-			"",
-			"Erase INFO1 flash space");
-#endif
+DECLARE_SAFE_CONSOLE_COMMAND(eraseflashinfo, command_erase_flash_info, "",
+			     "Erase INFO1 flash space");
