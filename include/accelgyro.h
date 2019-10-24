@@ -208,7 +208,7 @@ struct als_calibration_t {
 };
 
 /* RGB ALS Calibration Data */
-struct rgb_calibration_t {
+struct rgb_channel_calibration_t {
 	/*
 	 * Each channel has scaling factor for normalization & cover
 	 */
@@ -219,6 +219,13 @@ struct rgb_calibration_t {
 
 	/* Clear, R, G, and B coefficients for this channel */
 	fp_t coeff[COEFF_CHANNEL_COUNT];
+};
+
+struct rgb_calibration_t {
+	struct rgb_channel_calibration_t rgb_cal[RGB_CHANNEL_COUNT];
+
+	/* incandecent scaling factor */
+	fp_t irt;
 };
 
 /* als driver data */
