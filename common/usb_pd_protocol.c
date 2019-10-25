@@ -3545,6 +3545,7 @@ void pd_task(void *u)
 			pd_hw_release(port);
 			pd_power_supply_reset(port);
 #else
+			pd_power_supply_reset(port);
 			rstatus = tcpm_release(port);
 			if (rstatus != 0 && rstatus != EC_ERROR_UNIMPLEMENTED)
 				CPRINTS("TCPC p%d release failed!", port);
