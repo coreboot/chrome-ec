@@ -192,12 +192,6 @@ static int do_flash_op(enum flash_op op, int is_info_bank,
 	/* What are we doing? */
 	switch (op) {
 	case OP_ERASE_BLOCK:
-#ifndef CR50_DEV
-		if (is_info_bank)
-			/* Erasing the INFO bank from the RW section is
-			 * unsupported. */
-			return EC_ERROR_INVAL;
-#endif
 		opcode = 0x31415927;
 		words = 0;			/* don't care, really */
 		/* This number is based on the TSMC spec Nme=Terase/Tsme */
