@@ -2246,6 +2246,16 @@ static inline int get_snk_polarity(int cc1, int cc2)
 	return (cc2 > cc1);
 }
 
+__overridable uint8_t board_get_src_dts_polarity(int port)
+{
+	/*
+	 * If the port in SRC DTS, the polarity is determined by the board,
+	 * i.e. what Rp impedance the CC lines are pulled. If this function
+	 * is not overridden, assume CC1 is primary.
+	 */
+	return 0;
+}
+
 #if defined(CONFIG_CHARGE_MANAGER)
 /**
  * Returns type C current limit (mA) based upon cc_voltage (mV).
@@ -2562,6 +2572,11 @@ void pd_task(void *u)
 				if (pd[port].power_role == PD_ROLE_SINK) {
 					pd[port].polarity =
 						get_snk_polarity(cc1, cc2);
+				} else if (cc1 == TYPEC_CC_VOLT_RD &&
+					   cc2 == TYPEC_CC_VOLT_RD) {
+					pd[port].polarity =
+						board_get_src_dts_polarity(
+								port);
 				} else {
 					pd[port].polarity =
 						(cc1 != TYPEC_CC_VOLT_RD);
@@ -2720,7 +2735,14 @@ void pd_task(void *u)
 			/* UFP is attached */
 			if (new_cc_state == PD_CC_UFP_ATTACHED ||
 			    new_cc_state == PD_CC_DEBUG_ACC) {
-				pd[port].polarity = (cc1 != TYPEC_CC_VOLT_RD);
+				if (new_cc_state == PD_CC_DEBUG_ACC) {
+					pd[port].polarity =
+						board_get_src_dts_polarity(
+							port);
+				} else {
+					pd[port].polarity =
+						(cc1 != TYPEC_CC_VOLT_RD);
+				}
 				set_polarity(port, pd[port].polarity);
 
 				/* initial data role for source is DFP */
