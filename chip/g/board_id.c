@@ -204,7 +204,8 @@ static int command_board_id(int argc, char **argv)
 			ccprintf("Failed to read board ID space\n");
 			return rv;
 		}
-		ccprintf("Board ID: %08x, flags %08x\n", id.type, id.flags);
+		ccprintf("Board ID: %08x:%08x, flags %08x\n", id.type,
+			 id.type_inv, id.flags);
 
 		if (board_id_is_blank(&id))
 			return rv; /* The space is not initialized. */
