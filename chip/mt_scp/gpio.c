@@ -21,6 +21,9 @@ void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func)
 	if (func > 7)
 		return;
 
+	if (func == GPIO_ALT_FUNC_NONE)
+		func = GPIO_ALT_FUNC_DEFAULT;
+
 	while (mask) {
 		/* 32 gpio per port */
 		bit = get_next_bit(&mask);
@@ -174,4 +177,3 @@ void __keep gpio_interrupt(void)
 	}
 }
 DECLARE_IRQ(SCP_IRQ_EINT, gpio_interrupt, 1);
-
