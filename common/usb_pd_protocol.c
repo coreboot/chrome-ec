@@ -3566,6 +3566,11 @@ void pd_task(void *u)
 				CPRINTS("TCPC p%d restart failed!", port);
 				break;
 			}
+			/* Set the CC termination and state back to default */
+			tcpm_set_cc(port,
+				    PD_ROLE_DEFAULT(port) == PD_ROLE_SOURCE ?
+					TYPEC_CC_RP :
+					TYPEC_CC_RD);
 			set_state(port, PD_DEFAULT_STATE(port));
 			CPRINTS("TCPC p%d resumed!", port);
 #endif
