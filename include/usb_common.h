@@ -9,6 +9,24 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
+enum pd_pref_type {
+	/* prefer voltage larger than or equal to pd_pref_config.mv */
+	PD_PREFER_BUCK,
+	/* prefer voltage less than or equal to pd_pref_config.mv */
+	PD_PREFER_BOOST,
+};
+
+struct pd_pref_config_t {
+	/* Preferred PD voltage in mV */
+	int mv;
+	/* above which percent the battery is in constant voltage stage */
+	int cv;
+	/* System PLT (minimum consuming) power in mW. */
+	int plt_mw;
+	/* Preferred PD voltage pick strategy */
+	enum pd_pref_type type;
+};
+
 /* Returns the battery percentage [0-100] of the system. */
 int usb_get_battery_soc(void);
 
