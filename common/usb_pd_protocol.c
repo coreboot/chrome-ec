@@ -249,11 +249,6 @@ static struct pd_protocol {
 	 * of our own.
 	 */
 	uint64_t ready_state_holdoff_timer;
-	/*
-	 * PD 2.0 spec, section 6.5.11.1
-	 * When we can give up on a HARD_RESET transmission.
-	 */
-	uint64_t hard_reset_complete_timer;
 } pd[CONFIG_USB_PD_PORT_COUNT];
 
 #ifdef CONFIG_COMMON_RUNTIME
@@ -4133,10 +4128,8 @@ void pd_task(void *u)
 			break;
 		case PD_STATE_HARD_RESET_SEND:
 			hard_reset_count++;
-			if (pd[port].last_state != pd[port].task_state) {
+			if (pd[port].last_state != pd[port].task_state)
 				hard_reset_sent = 0;
-				pd[port].hard_reset_complete_timer = 0;
-			}
 #ifdef CONFIG_CHARGE_MANAGER
 			if (pd[port].last_state == PD_STATE_SNK_DISCOVERY ||
 			    (pd[port].last_state == PD_STATE_SOFT_RESET &&
@@ -4156,39 +4149,29 @@ void pd_task(void *u)
 			}
 #endif
 
-			if (hard_reset_sent)
-				break;
 			/* try sending hard reset until it succeeds */
-			now = get_time();
-			if (now.val < pd[port].hard_reset_complete_timer) {
-				CPRINTF("C%d: Waiting for "
-					"hard reset complete timer\n", port);
-				timeout = pd[port].hard_reset_complete_timer -
-					now.val;
-				break;
-			}
-			if (pd_transmit(port, TCPC_TX_HARD_RESET,
-					0, NULL) < 0) {
-				timeout = PD_T_HARD_RESET_COMPLETE;
-				pd[port].hard_reset_complete_timer =
-					get_time().val + timeout;
-				break;
-			}
+			if (!hard_reset_sent) {
+				if (pd_transmit(port, TCPC_TX_HARD_RESET,
+						0, NULL) < 0) {
+					timeout = 10*MSEC;
+					break;
+				}
 
-			/* successfully sent hard reset */
-			hard_reset_sent = 1;
-			/*
-			 * If we are source, delay before cutting power
-			 * to allow sink time to get hard reset.
-			 */
-			if (pd[port].power_role == PD_ROLE_SOURCE) {
-				set_state_timeout(port,
-				  get_time().val + PD_T_PS_HARD_RESET,
-				  PD_STATE_HARD_RESET_EXECUTE);
-			} else {
-				set_state(port,
+				/* successfully sent hard reset */
+				hard_reset_sent = 1;
+				/*
+				 * If we are source, delay before cutting power
+				 * to allow sink time to get hard reset.
+				 */
+				if (pd[port].power_role == PD_ROLE_SOURCE) {
+					set_state_timeout(port,
+					  get_time().val + PD_T_PS_HARD_RESET,
 					  PD_STATE_HARD_RESET_EXECUTE);
-				timeout = 10*MSEC;
+				} else {
+					set_state(port,
+						  PD_STATE_HARD_RESET_EXECUTE);
+					timeout = 10*MSEC;
+				}
 			}
 			break;
 		case PD_STATE_HARD_RESET_EXECUTE:
