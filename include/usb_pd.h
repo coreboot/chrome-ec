@@ -1109,7 +1109,9 @@ enum pd_states {
 #define PD_BBRMFLG_DATA_ROLE         BIT(2)
 #define PD_BBRMFLG_VCONN_ROLE        BIT(3)
 
-#ifdef CONFIG_USB_PD_DUAL_ROLE
+/* Initial value for CC debounce variable */
+#define PD_CC_UNSET -1
+
 enum pd_dual_role_states {
 	/* While disconnected, toggle between src and sink */
 	PD_DRP_TOGGLE_ON,
@@ -1144,8 +1146,6 @@ void pd_set_dual_role(int port, enum pd_dual_role_states state);
  * @param port Port number from which to get role
  */
 int pd_get_role(int port);
-
-#endif
 
 /* Control Message type */
 enum pd_ctrl_msg_type {

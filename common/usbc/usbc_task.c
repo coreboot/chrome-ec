@@ -32,9 +32,22 @@
 #include "usbc_ppc.h"
 #include "version.h"
 
+static uint8_t paused;
+
 int tc_restart_tcpc(int port)
 {
 	return tcpm_init(port);
+}
+
+void tc_pause_event_loop(int port)
+{
+	paused = 1;
+}
+
+void tc_start_event_loop(int port)
+{
+	paused = 0;
+	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
 }
 
 void set_polarity(int port, int polarity)
