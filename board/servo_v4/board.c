@@ -14,7 +14,7 @@
 #include "i2c.h"
 /* Just want the .h file for PS8742 definitions, not the large object file. */
 #define CONFIG_USB_MUX_PS8742
-#include "ps8740.h"
+#include "ps874x.h"
 #undef CONFIG_USB_MUX_PS8742
 #include "queue_policies.h"
 #include "registers.h"
@@ -522,7 +522,7 @@ static void board_init(void)
 	/*
 	 * Disable USB3 mode in PS8742 USB/DP Mux.
 	 */
-	i2c_write8(I2C_PORT_MASTER, PS8740_I2C_ADDR0_FLAG, PS8740_REG_MODE, 0);
+	i2c_write8(I2C_PORT_MASTER, PS874X_I2C_ADDR0_FLAG, PS874X_REG_MODE, 0);
 
 	/* Enable uservo USB by default. */
 	init_ioexpander();
