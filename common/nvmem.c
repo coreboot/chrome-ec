@@ -4,10 +4,10 @@
  */
 
 #include "common.h"
+#include "board.h"
 #include "console.h"
 #include "dcrypto.h"
 #include "flash.h"
-#include "nvmem.h"
 #include "new_nvmem.h"
 #include "task.h"
 #include "timer.h"
@@ -313,7 +313,8 @@ int nvmem_init(void)
 	 * Try discovering legacy partition(s). If even one is present, need
 	 * to migrate to the new nvmem storage scheme.
 	 */
-	if (nvmem_find_partition() == EC_SUCCESS)
+	if (board_nvmem_legacy_check_needed() &&
+	    (nvmem_find_partition() == EC_SUCCESS))
 		ret = new_nvmem_migrate(nvmem_act_partition);
 	else
 		ret = new_nvmem_init();

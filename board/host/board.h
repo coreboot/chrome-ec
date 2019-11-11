@@ -72,4 +72,7 @@ extern const int supplier_priority[];
 #define PD_MIN_CURRENT_MA     500
 #define PD_MIN_POWER_MW       7500
 
+/* Let the tests always check the other NVMEM slot. */
+static inline int board_nvmem_legacy_check_needed(void){ return 1; }
+
 #endif /* __CROS_EC_BOARD_H */

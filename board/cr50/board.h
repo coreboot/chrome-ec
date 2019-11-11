@@ -355,6 +355,9 @@ int ec_is_on(void);
 int ec_is_rx_allowed(void);
 int servo_is_connected(void);
 
+/* Moving from legacy versions might require NVMEM transition. */
+int board_nvmem_legacy_check_needed(void);
+
 void set_ap_on(void);
 
 /* Returns True if chip is brought up in a factory test harness. */
