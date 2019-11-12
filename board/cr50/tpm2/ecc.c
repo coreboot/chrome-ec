@@ -361,13 +361,17 @@ CRYPT_RESULT _cpri__GetEphemeralEcc(TPMS_ECC_POINT *q, TPM2B_ECC_PARAMETER *d,
 
 #ifdef CRYPTO_TEST_SETUP
 
+#include "console.h"
 #include "extension.h"
 
 enum {
 	TEST_SIGN = 0,
 	TEST_VERIFY = 1,
 	TEST_KEYGEN = 2,
-	TEST_KEYDERIVE = 3
+	TEST_KEYDERIVE = 3,
+	TEST_POINT = 4,
+	TEST_VERIFY_ANY = 5,
+	TEST_SIGN_ANY = 6,
 };
 
 struct TPM2B_ECC_PARAMETER_aligned {
@@ -434,182 +438,278 @@ static int point_equals(const TPMS_ECC_POINT *a, const TPMS_ECC_POINT *b)
 	return !diff;
 }
 
+/**
+ * Parse TPM_2B data, copy data to destination, update position
+ * @param ptr - pointer to current position, updated if parsed successfully
+ * @param cmd_size - remaining number of bytes, [in/out]
+ * @param len [out] - length of parsed data
+ * @param out [out] - destination buffer to copy data
+ * @param out_len - size of destination buffer
+ */
+static int parse_2b(uint8_t **ptr, size_t *cmd_size, uint16_t *len,
+		    uint8_t *out, size_t out_len)
+{
+	uint16_t length;
+	uint8_t *local_ptr = *ptr;
+
+	*len = 0;
+	/* if there is no space for 2 bytes of length, exit */
+	if (*cmd_size < sizeof(length))
+		return 0;
+	length = local_ptr[0];
+	length = (length << 8) | local_ptr[1];
+	*cmd_size -= sizeof(length);
+	local_ptr += 2;
+	if (*cmd_size < length || length > out_len) {
+		ccprintf("%s: length = %d (0x%4x),"
+			 " data available = %d, out_len = %d\n",
+			 __func__, length, length, *cmd_size, out_len);
+		*cmd_size = 0;
+		return 0;
+	}
+	*len = length;
+	memcpy(out, local_ptr, length);
+	*ptr = local_ptr + length;
+	*cmd_size -= length;
+	return 1;
+}
+
+static void store_2b(uint8_t **ptr, size_t *rsp_size, TPM2B_ECC_PARAMETER *p)
+{
+	uint8_t *out = *ptr;
+
+	*out++ = p->t.size >> 8;
+	*out++ = p->t.size & 0xff;
+	memcpy(out, p->t.buffer, p->t.size);
+	*ptr = out + p->t.size;
+	*rsp_size += 2 + p->t.size;
+}
+
 static void ecc_command_handler(void *cmd_body, size_t cmd_size,
 			size_t *response_size_out)
 {
 	uint8_t *cmd;
 	uint8_t op;
 	uint8_t curve_id;
-	uint8_t sign_mode;
-	uint8_t hashing;
-	uint16_t in_len;
-	uint8_t in[MAX_MSG_BYTES];
-	uint16_t digest_len;
+	uint8_t sign_mode = 0;
+	uint8_t hashing = 0;
+	TPM2B_SEED seed;
+
 	struct TPM2B_MAX_BUFFER_aligned digest;
 	uint8_t *out = (uint8_t *) cmd_body;
-	uint32_t *response_size = (uint32_t *) response_size_out;
+	size_t *response_size = response_size_out;
 
 	TPMS_ECC_POINT q;
 	TPM2B_ECC_PARAMETER d;
 	struct TPM2B_ECC_PARAMETER_aligned r;
 	struct TPM2B_ECC_PARAMETER_aligned s;
-
-	/* Command format.
+	/**
+	 * Command formats:
 	 *
-	 *   OFFSET       FIELD
-	 *   0            OP
-	 *   1            CURVE_ID
-	 *   2            SIGN_MODE
-	 *   3            HASHING
-	 *   4            MSB IN LEN
-	 *   5            LSB IN LEN
-	 *   6            IN
-	 *   6 + IN_LEN   MSB DIGEST LEN
-	 *   7 + IN_LEN   LSB DIGEST LEN
-	 *   8 + IN_LEN   DIGEST
+	 * TEST_SIGN:
+	 * OP | CURVE_ID | SIGN_MODE | HASHING | DIGEST_LEN | DIGEST
+	 *    @returns 0/1 | R_LEN | R | S_LEN | S
+	 *
+	 * TEST_SIGN_ANY:
+	 * OP | CURVE_ID | SIGN_MODE | HASHING | DIGEST_LEN | DIGEST |
+	 *   D_LEN | D
+	 *    @returns 0/1 | R_LEN | R | S_LEN | S
+	 *
+	 * TEST_VERIFY:
+	 * OP | CURVE_ID | SIGN_MODE | HASHING | R_LEN | R | S_LEN | S
+	 *   DIGEST_LEN | DIGEST
+	 *    @returns 0/1 |  if successful
+	 *
+	 * TEST_VERIFY_ANY:
+	 * OP | CURVE_ID | SIGN_MODE | HASHING | R_LEN | R | S_LEN | S |
+	 *   DIGEST_LEN | DIGEST | QX_LEN | QX | QY_LEN | QY
+	 *    @returns 1 if successful
+	 *
+	 * TEST_KEYDERIVE :
+	 * OP | CURVE_ID | SEED_LEN | SEED
+	 *    @returns 1 if successful
+	 *
+	 * TEST_POINT:
+	 * OP | CURVE_ID | QX_LEN | QX | QY_LEN | QY
+	 *    @returns 1 if point is on curve
+	 *
+	 * TEST_KEYGEN:
+	 * OP | CURVE_ID
+	 *    @returns 0/1 | D_LEN | D | QX_LEN | QX | QY_LEN | QY
+	 *
+	 * Field size:
+	 * FIELD          LENGTH
+	 * OP             1
+	 * CURVE_ID       1
+	 * SIGN_MODE      1
+	 * HASHING        1
+	 * MSG_LEN        2 (big endian)
+	 * MSG            MSG_LEN
+	 * SEED_LEN       2 (big endian)
+	 * SEED           SEED_LEN
+	 * R_LEN          2 (big endian)
+	 * R              R_LEN
+	 * S_LEN          2 (big endian)
+	 * S              S_LEN
+	 * DIGEST_LEN     2 (big endian)
+	 * DIGEST         DIGEST_LEN
+	 * D_LEN          2 (big endian)
+	 * D              D_LEN
+	 * QX_LEN         2 (big endian)
+	 * QX             QX_LEN
+	 * QY_LEN         2 (big endian)
+	 * QY             QX_LEN
 	 */
+	*response_size = 0;
+	if (cmd_size < 2)
+		return;
 
-	cmd = (uint8_t *) cmd_body;
+	cmd = (uint8_t *)cmd_body;
 	op = *cmd++;
 	curve_id = *cmd++;
-	sign_mode = *cmd++;
-	hashing = *cmd++;
-	in_len = ((uint16_t) (cmd[0] << 8)) | cmd[1];
-	cmd += 2;
-	if (in_len > sizeof(in)) {
-		*response_size = 0;
-		return;
-	}
-	memcpy(in, cmd, in_len);
-	cmd += in_len;
+	cmd_size -= 2;
 
-	digest_len = ((uint16_t) (cmd[0] << 8)) | cmd[1];
-	cmd += 2;
-	if (digest_len > sizeof(digest.d.t.buffer)) {
-		*response_size = 0;
-		return;
+	if (op == TEST_SIGN || op == TEST_VERIFY || op == TEST_VERIFY_ANY ||
+	    op == TEST_SIGN_ANY) {
+		if (cmd_size >= 2) {
+			sign_mode = *cmd++;
+			hashing = *cmd++;
+			cmd_size -= 2;
+		} else
+			return;
 	}
-	digest.d.t.size = digest_len;
-	memcpy(digest.d.t.buffer, cmd, digest_len);
-	cmd += digest_len;
 
-	/* Make copies of d, and q, as const data is immutable. */
-	switch (curve_id) {
-	case TPM_ECC_NIST_P256:
-		d = NIST_P256_d.d;
+	if (op == TEST_SIGN || op == TEST_SIGN_ANY) {
+		if (!parse_2b(&cmd, &cmd_size, &digest.d.t.size,
+			      digest.d.t.buffer, sizeof(digest.d.t.buffer)))
+			return;
+		if (op == TEST_SIGN_ANY &&
+		    !parse_2b(&cmd, &cmd_size, &d.t.size, d.t.buffer,
+			      sizeof(d.t.buffer)))
+			return;
+		if (op == TEST_SIGN) {
+			if (curve_id == TPM_ECC_NIST_P256)
+				d = NIST_P256_d.d;
+			else
+				return;
+		}
+	}
+
+	if (op == TEST_KEYDERIVE &&
+	    !parse_2b(&cmd, &cmd_size, &seed.t.size, seed.t.buffer,
+		      sizeof(seed.t.buffer)))
+		return;
+
+	if (op == TEST_VERIFY || op == TEST_VERIFY_ANY) {
+		if (!parse_2b(&cmd, &cmd_size, &r.d.t.size, r.d.t.buffer,
+			      sizeof(r.d.t.buffer)))
+			return;
+		if (!parse_2b(&cmd, &cmd_size, &s.d.t.size, s.d.t.buffer,
+			      sizeof(s.d.t.buffer)))
+			return;
+		if (!parse_2b(&cmd, &cmd_size, &digest.d.t.size,
+			      digest.d.t.buffer, sizeof(digest.d.t.buffer)))
+			return;
+	}
+
+	if (op == TEST_VERIFY_ANY || op == TEST_POINT) {
+		if (!parse_2b(&cmd, &cmd_size, &q.x.t.size, q.x.t.buffer,
+			      sizeof(q.x.t.buffer)))
+			return;
+		if (!parse_2b(&cmd, &cmd_size, &q.y.t.size, q.y.t.buffer,
+			      sizeof(q.y.t.buffer)))
+			return;
+	} else {
+		/* use fixed signature */
 		q.x = NIST_P256_qx.d;
 		q.y = NIST_P256_qy.d;
-		break;
-	default:
-		*response_size = 0;
-		return;
 	}
 
+	/* there should be no other data as command is parsed */
+	if (cmd_size != 0)
+		return;
+
+	*out = 0;
+	*response_size = 1;
 	switch (op) {
 	case TEST_SIGN:
-		if (_cpri__SignEcc(&r.d, &s.d, sign_mode, hashing,
-					curve_id, &d, &digest.d.b, NULL)
-			!= CRYPT_SUCCESS) {
-			*response_size = 0;
+	case TEST_SIGN_ANY:
+		if (hashing != TPM_ALG_SHA256 && hashing != TPM_ALG_NULL)
+			return;
+		if (_cpri__SignEcc(&r.d, &s.d, sign_mode, hashing, curve_id, &d,
+				   &digest.d.b, NULL) != CRYPT_SUCCESS) {
+			ccprintf("test_sign: error signing\n");
 			return;
 		}
-		memcpy(out, r.d.b.buffer, r.d.b.size);
-		out += r.d.b.size;
-		memcpy(out, s.d.b.buffer, s.d.b.size);
-		*response_size = r.d.b.size + s.d.b.size;
+		*out++ = 1;
+		store_2b(&out, response_size, &r.d);
+		store_2b(&out, response_size, &s.d);
 		break;
 	case TEST_VERIFY:
-		r.d.b.size = in_len / 2;
-		memcpy(r.d.b.buffer, in, r.d.b.size);
-		s.d.b.size = in_len / 2;
-		memcpy(s.d.b.buffer, in + r.d.b.size, s.d.b.size);
-		if (_cpri__ValidateSignatureEcc(
-				&r.d, &s.d, sign_mode, hashing, curve_id,
-				&q, &digest.d.b) != CRYPT_SUCCESS) {
-			*response_size = 0;
-		} else {
+	case TEST_VERIFY_ANY:
+		if (_cpri__ValidateSignatureEcc(&r.d, &s.d, sign_mode, hashing,
+						curve_id, &q,
+						&digest.d.b) != CRYPT_SUCCESS) {
+			ccprintf("test_verify: verification failed\n");
+		} else
 			*out = 1;
-			*response_size = 1;
-		}
 		return;
-	case TEST_KEYGEN:
-	{
+	case TEST_KEYGEN: {
 		struct TPM2B_ECC_PARAMETER_aligned d_local;
 		TPMS_ECC_POINT q_local;
 
 		if (_cpri__GetEphemeralEcc(&q, &d_local.d, curve_id)
-			!= CRYPT_SUCCESS) {
-			*response_size = 0;
+			!= CRYPT_SUCCESS)
 			return;
-		}
 
-		if (_cpri__EccIsPointOnCurve(curve_id, &q) != TRUE) {
-			*response_size = 0;
+
+		if (_cpri__EccIsPointOnCurve(curve_id, &q) != TRUE)
 			return;
-		}
 
 		/* Verify correspondence of secret with the public point. */
 		if (_cpri__EccPointMultiply(
 				&q_local, curve_id, &d_local.d,
-				NULL, NULL) != CRYPT_SUCCESS) {
-			*response_size = 0;
+				NULL, NULL) != CRYPT_SUCCESS)
 			return;
-		}
-		if (!point_equals(&q, &q_local)) {
-			*response_size = 0;
+		if (!point_equals(&q, &q_local))
 			return;
-		}
-		*out = 1;
-		*response_size = 1;
+
+		*out++ = 1;
+		store_2b(&out, response_size, &d_local.d);
+		store_2b(&out, response_size, &q.x);
+		store_2b(&out, response_size, &q.y);
 		return;
 	}
-	case TEST_KEYDERIVE:
-	{
-		/* Random seed. */
-		TPM2B_SEED seed;
+	case TEST_KEYDERIVE: {
 		struct TPM2B_ECC_PARAMETER_aligned d_local;
 		TPMS_ECC_POINT q_local;
 		const char *label = "ecc_test";
 
-
-		if (in_len > PRIMARY_SEED_SIZE) {
-			*response_size = 0;
+		if (_cpri__GenerateKeyEcc(&q, &d_local.d, curve_id, hashing,
+					  &seed.b, label, NULL,
+					  NULL) != CRYPT_SUCCESS)
 			return;
-		}
-		seed.t.size = in_len;
-		memcpy(seed.t.buffer, in, in_len);
 
-		if (_cpri__GenerateKeyEcc(
-				&q, &d_local.d, curve_id, hashing,
-				&seed.b, label, NULL, NULL) != CRYPT_SUCCESS) {
-			*response_size = 0;
+		if (_cpri__EccIsPointOnCurve(curve_id, &q) != TRUE)
 			return;
-		}
-
-		if (_cpri__EccIsPointOnCurve(curve_id, &q) != TRUE) {
-			*response_size = 0;
-			return;
-		}
 
 		/* Verify correspondence of secret with the public point. */
-		if (_cpri__EccPointMultiply(
-				&q_local, curve_id, &d_local.d,
-				NULL, NULL) != CRYPT_SUCCESS) {
-			*response_size = 0;
+		if (_cpri__EccPointMultiply(&q_local, curve_id, &d_local.d,
+					    NULL, NULL) != CRYPT_SUCCESS)
 			return;
-		}
-		if (!point_equals(&q, &q_local)) {
-			*response_size = 0;
+
+		if (!point_equals(&q, &q_local))
 			return;
-		}
 
 		*out = 1;
-		*response_size = 1;
-		return;
+		break;
 	}
+	case TEST_POINT:
+		*out = _cpri__EccIsPointOnCurve(curve_id, &q);
+		break;
+
 	default:
-		*response_size = 0;
-		return;
+		break;
 	}
 }
 
