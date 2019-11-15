@@ -11,8 +11,8 @@
 #include "usb_mux.h"
 #include "util.h"
 
-static mux_state_t virtual_mux_state[CONFIG_USB_PD_PORT_COUNT];
-static int hpd_irq_state[CONFIG_USB_PD_PORT_COUNT];
+static mux_state_t virtual_mux_state[CONFIG_USB_PD_PORT_MAX_COUNT];
+static int hpd_irq_state[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static int virtual_init(int port)
 {

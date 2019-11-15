@@ -30,8 +30,8 @@ static int hc_locate_chip(struct host_cmd_handler_args *args)
 #endif /* CONFIG_CROS_BOARD_INFO */
 		break;
 	case EC_CHIP_TYPE_TCPC:
-#if defined(CONFIG_USB_PD_PORT_COUNT) && !defined(CONFIG_USB_PD_TCPC)
-		if (params->index >= CONFIG_USB_PD_PORT_COUNT)
+#if defined(CONFIG_USB_PD_PORT_MAX_COUNT) && !defined(CONFIG_USB_PD_TCPC)
+		if (params->index >= CONFIG_USB_PD_PORT_MAX_COUNT)
 			return EC_RES_OVERFLOW;
 		resp->bus_type = EC_BUS_TYPE_I2C;
 		resp->i2c_info.port = tcpc_config[params->index].i2c_host_port;
@@ -39,7 +39,7 @@ static int hc_locate_chip(struct host_cmd_handler_args *args)
 				tcpc_config[params->index].i2c_slave_addr >> 1;
 #else
 		return EC_RES_UNAVAILABLE;
-#endif /* CONFIG_USB_PD_PORT_COUNT */
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT */
 		break;
 	default:
 		/* The type was unrecognized */

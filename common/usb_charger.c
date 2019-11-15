@@ -52,7 +52,7 @@ int usb_charger_port_is_sourcing_vbus(int port)
 {
 	if (port == 0)
 		return USB_5V_EN(0);
-#if CONFIG_USB_PD_PORT_COUNT >= 2
+#if CONFIG_USB_PD_PORT_MAX_COUNT >= 2
 	else if (port == 1)
 		return USB_5V_EN(1);
 #endif
@@ -86,7 +86,7 @@ static void usb_charger_init(void)
 	int i;
 
 	/* Initialize all charge suppliers */
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		charge_manager_update_charge(CHARGE_SUPPLIER_PROPRIETARY,
 					     i, NULL);
 		charge_manager_update_charge(CHARGE_SUPPLIER_BC12_CDP,

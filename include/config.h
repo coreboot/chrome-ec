@@ -3280,7 +3280,7 @@
 #undef CONFIG_USB_PD_LOW_POWER_IDLE_WHEN_CONNECTED
 
 /* Number of USB PD ports */
-#undef CONFIG_USB_PD_PORT_COUNT
+#undef CONFIG_USB_PD_PORT_MAX_COUNT
 
 /* Simple DFP, such as power adapter, will not send discovery VDM on connect */
 #undef CONFIG_USB_PD_SIMPLE_DFP

@@ -296,7 +296,7 @@ struct ppc_config_t ppc_chips[] = {
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.i2c_host_port = I2C_PORT_USB_C0,
 		.i2c_slave_addr = PS8751_I2C_ADDR1,
@@ -312,7 +312,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
@@ -577,7 +577,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	int lvl;
 
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the levels are inverted because the pin is active low. */
@@ -700,7 +700,7 @@ void board_rtc_reset(void)
 int board_set_active_charge_port(int port)
 {
 	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 	int rv;
 

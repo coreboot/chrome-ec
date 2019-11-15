@@ -253,7 +253,7 @@ struct ppc_config_t ppc_chips[] = {
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ANX3429] = {I2C_PORT_TCPC0, 0x50, &anx74xx_tcpm_drv,
 				 TCPC_ALERT_ACTIVE_LOW, TCPC_ALERT_OPEN_DRAIN},
 	[USB_PD_PORT_PS8751] = {I2C_PORT_TCPC1, 0x16, &ps8xxx_tcpm_drv,
@@ -338,7 +338,7 @@ const struct usb_mux_driver port1_usb_mux_driver = {
 	.enter_low_power_mode = &port1_usb_mux_enter_low_power,
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.driver = &port0_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
@@ -401,7 +401,7 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
 		const struct usb_mux *mux = &usb_muxes[port];
 
 		mux->hpd_update(port, 0, 0);
@@ -518,7 +518,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 int board_set_active_charge_port(int port)
 {
 	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 	int rv;
 
@@ -529,7 +529,7 @@ int board_set_active_charge_port(int port)
 
 	if (port == CHARGE_PORT_NONE) {
 		/* Disable all ports. */
-		for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 			rv = board_vbus_sink_enable(i, 0);
 			if (rv) {
 				CPRINTS("Disabling p%d sink path failed.", i);
@@ -550,7 +550,7 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		if (i == port)
 			continue;
 

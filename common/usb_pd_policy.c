@@ -81,8 +81,8 @@ __attribute__((weak)) int pd_board_check_request(uint32_t rdo, int pdo_cnt)
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 /* Last received source cap */
-static uint32_t pd_src_caps[CONFIG_USB_PD_PORT_COUNT][PDO_MAX_OBJECTS];
-static uint8_t pd_src_cap_cnt[CONFIG_USB_PD_PORT_COUNT];
+static uint32_t pd_src_caps[CONFIG_USB_PD_PORT_MAX_COUNT][PDO_MAX_OBJECTS];
+static uint8_t pd_src_cap_cnt[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Cap on the max voltage requested as a sink (in millivolts) */
 static unsigned max_request_mv = PD_MAX_VOLTAGE_MV; /* no cap */
@@ -276,7 +276,7 @@ int pd_charge_from_device(uint16_t vid, uint16_t pid)
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 
-static struct pd_policy pe[CONFIG_USB_PD_PORT_COUNT];
+static struct pd_policy pe[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 void pd_dfp_pe_init(int port)
 {
@@ -654,7 +654,7 @@ static int command_pe(int argc, char **argv)
 		return EC_ERROR_PARAM_COUNT;
 	/* command: pe <port> <subcmd> <args> */
 	port = strtoi(argv[1], &e, 10);
-	if (*e || port >= CONFIG_USB_PD_PORT_COUNT)
+	if (*e || port >= CONFIG_USB_PD_PORT_MAX_COUNT)
 		return EC_ERROR_PARAM2;
 	if (!strncasecmp(argv[2], "dump", 4))
 		dump_pe(port);
@@ -871,7 +871,7 @@ static int hc_remote_pd_discovery(struct host_cmd_handler_args *args)
 	const uint8_t *port = args->params;
 	struct ec_params_usb_pd_discovery_entry *r = args->response;
 
-	if (*port >= CONFIG_USB_PD_PORT_COUNT)
+	if (*port >= CONFIG_USB_PD_PORT_MAX_COUNT)
 		return EC_RES_INVALID_PARAM;
 
 	r->vid = pd_get_identity_vid(*port);
@@ -893,7 +893,7 @@ static int hc_remote_pd_get_amode(struct host_cmd_handler_args *args)
 	const struct ec_params_usb_pd_get_mode_request *p = args->params;
 	struct ec_params_usb_pd_get_mode_response *r = args->response;
 
-	if (p->port >= CONFIG_USB_PD_PORT_COUNT)
+	if (p->port >= CONFIG_USB_PD_PORT_MAX_COUNT)
 		return EC_RES_INVALID_PARAM;
 
 	/* no more to send */
@@ -1022,17 +1022,17 @@ int pd_custom_flash_vdm(int port, int cnt, uint32_t *payload)
 #ifdef CONFIG_USB_PD_DISCHARGE
 void pd_set_vbus_discharge(int port, int enable)
 {
-	static struct mutex discharge_lock[CONFIG_USB_PD_PORT_COUNT];
+	static struct mutex discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 	mutex_lock(&discharge_lock[port]);
 	enable &= !board_vbus_source_enabled(port);
 #ifdef CONFIG_USB_PD_DISCHARGE_GPIO
 	if (!port)
 		gpio_set_level(GPIO_USB_C0_DISCHARGE, enable);
-#if CONFIG_USB_PD_PORT_COUNT > 1
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	else
 		gpio_set_level(GPIO_USB_C1_DISCHARGE, enable);
-#endif /* CONFIG_USB_PD_PORT_COUNT */
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT */
 #elif defined(CONFIG_USB_PD_DISCHARGE_TCPC)
 	tcpc_discharge_vbus(port, enable);
 #elif defined(CONFIG_USB_PD_DISCHARGE_PPC)

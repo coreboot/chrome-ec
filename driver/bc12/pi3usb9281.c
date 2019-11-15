@@ -38,8 +38,8 @@
 #define PI3USB9281_RESET_DEBOUNCE_DELAY_MS 100
 
 /* Store the state of our USB data switches so that they can be restored. */
-static int usb_switch_state[CONFIG_USB_PD_PORT_COUNT];
-static struct mutex usb_switch_lock[CONFIG_USB_PD_PORT_COUNT];
+static int usb_switch_state[CONFIG_USB_PD_PORT_MAX_COUNT];
+static struct mutex usb_switch_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static int pi3usb9281_reset(int port);
 static int pi3usb9281_get_interrupts(int port);
