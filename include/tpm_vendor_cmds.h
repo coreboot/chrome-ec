@@ -135,6 +135,8 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_U2F_MODE = 48,
 
+	VENDOR_CC_TRNG_TEST = 51,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
