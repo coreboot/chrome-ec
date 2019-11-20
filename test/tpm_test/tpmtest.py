@@ -148,34 +148,47 @@ class TPM:
 
 def usage():
     """Print usage information"""
-    print('Syntax: tpmtest.py [-d | -t | -h ]\n'
-          '     -d   -  prints additional debug information during tests\n'
-          '     -t   -  dump raw output from TRNG to /tmp/trng_output\n'
-          '     -h   -  this help\n')
+    print('Syntax: tpmtest.py [-d] | [-t source [-o file] [-s bits] ]| -h ]\n'
+          '     -d - prints additional debug information during tests\n'
+          '     -t source - only dump raw output from TRNG. source values:\n'
+          '        0 - raw TRNG'
+          '        [-o file] - set output file, default /tmp/trng_output\n'
+          '        [-s bits] - TRNG sample size in bit, default = 1\n'
+          '     -h - this help\n')
 
 def main():
     """Run TPM tests"""
     try:
-        opts, _ = getopt.getopt(sys.argv[1:], 'dth', 'help')
+        opts, _ = getopt.getopt(sys.argv[1:], 'dt:hs:o:', 'help')
     except getopt.GetoptError as err:
         print(str(err))
         usage()
         sys.exit(2)
     debug_needed = False
     trng_only = False
-    for option, _ in opts:
+    trng_output = '/tmp/trng_output'
+    trng_sample_bits = 1
+    trng_mode = 0
+
+    for option, arg in opts:
         if option == '-d':
             debug_needed = True
         elif option == '-t':
             trng_only = True
+            trng_mode = int(arg)
+        elif option == '-o':
+            trng_output = arg
+        elif option == '-s':
+            trng_sample_bits = int(arg)
         elif option in ('-h', '--help'):
             usage()
             sys.exit(0)
     try:
         tpm_object = TPM(debug_mode=debug_needed)
         if trng_only:
-            trng_test.trng_test(tpm_object)
-            sys.exit(1)
+            trng_test.trng_test(tpm_object, trng_output,
+                                trng_mode, trng_sample_bits)
+            sys.exit(0)
         crypto_test.crypto_tests(tpm_object, os.path.join(ROOT_DIR,
                                                           'crypto_test.xml'))
         drbg_test.drbg_test(tpm_object)
