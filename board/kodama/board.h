@@ -65,6 +65,7 @@
 #define I2C_PORT_USB_MUX  0
 #define I2C_PORT_ACCEL    1
 #define I2C_PORT_BATTERY  board_get_battery_i2c()
+#define I2C_PORT_VIRTUAL_BATTERY I2C_PORT_BATTERY
 
 /* Define the host events which are allowed to wakeup AP in S3. */
 #define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
