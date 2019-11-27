@@ -671,6 +671,34 @@ static int register_mask_reset(int port)
 }
 #endif
 
+static int tcpci_get_fault(int port, int *fault)
+{
+	int rv;
+
+	rv = tcpc_read(port, TCPC_REG_FAULT_STATUS, fault);
+	if (rv)
+		CPRINTS("C%d Reading FAULT failed, rv=%d", port, rv);
+
+	return rv;
+}
+
+static int tcpci_handle_fault(int port, int fault)
+{
+	CPRINTS("C%d FAULT 0x%02X detected", port, fault);
+	return EC_SUCCESS;
+}
+
+static int tcpci_clear_fault(int port, int fault)
+{
+	int rv;
+
+	rv = tcpc_write(port, TCPC_REG_FAULT_STATUS, fault);
+	if (rv)
+		CPRINTS("C%d Writing FAULT failed, rv=%d", port, rv);
+
+	return rv;
+}
+
 /*
  * Don't let the TCPC try to pull from the RX buffer forever. We typical only
  * have 1 or 2 messages waiting.
@@ -690,6 +718,16 @@ void tcpci_tcpc_alert(int port)
 	/* Get Extended Alert register if needed */
 	if (status & TCPC_REG_ALERT_ALERT_EXT)
 		tcpm_alert_ext_status(port, &alert_ext);
+
+	/* Clear any pending faults */
+	if (status & TCPC_REG_ALERT_FAULT) {
+		int fault;
+
+		if (tcpci_get_fault(port, &fault) == EC_SUCCESS &&
+		    tcpci_handle_fault(port, fault) == EC_SUCCESS &&
+		    tcpci_clear_fault(port, fault) == EC_SUCCESS)
+			CPRINTS("C%d FAULT 0x%02X handled", port, fault);
+	}
 
 	/*
 	 * Check for TX complete first b/c PD state machine waits on TX
