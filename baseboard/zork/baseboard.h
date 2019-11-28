@@ -132,6 +132,7 @@
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_DISCHARGE_PPC
+#define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
@@ -295,6 +296,8 @@ void ppc_interrupt(enum gpio_signal signal);
 
 int board_is_convertible(void);
 void board_update_sensor_config_from_sku(void);
+
+#define PORT_TO_HPD(port) ((port) ? GPIO_DP2_HPD : GPIO_USB_C0_HPD)
 
 #endif /* !__ASSEMBLER__ */
 
