@@ -38,6 +38,7 @@
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_PORT_COUNT 1
 #define CONFIG_USB_PD_TCPM_TCPCI
@@ -198,6 +199,8 @@ enum als_id {
 
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);
+
+#define PORT_TO_HPD(port) (GPIO_USB_C0_DP_HPD)
 
 #endif /* !__ASSEMBLER__ */
 

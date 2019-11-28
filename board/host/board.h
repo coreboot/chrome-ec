@@ -21,6 +21,9 @@
 
 #define CONFIG_WP_ACTIVE_HIGH
 
+#define CONFIG_USB_PD_CUSTOM_PDO
+#define CONFIG_USB_PD_DUAL_ROLE
+
 #include "gpio_signal.h"
 
 enum temp_sensor_id {
