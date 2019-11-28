@@ -131,6 +131,7 @@
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_PD_COMM_LOCKED
+#define CONFIG_USB_PD_DP_HPD_GPIO
 
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_PRESENT_CUSTOM
@@ -245,6 +246,8 @@ void emmc_cmd_interrupt(enum gpio_signal signal);
 
 void board_reset_pd_mcu(void);
 int board_get_version(void);
+
+#define PORT_TO_HPD(port) GPIO_USB_C0_HPD_OD
 
 #endif /* !__ASSEMBLER__ */
 
