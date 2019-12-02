@@ -44,13 +44,14 @@ struct cbi_data {
 /**
  * Board info accessors
  *
- * @param version/sku_id/oem_id [OUT] Data read from EEPROM
+ * @param version/sku_id/oem_id/id/fw_config [OUT] Data read from EEPROM
  * @return EC_SUCCESS on success or EC_ERROR_* otherwise.
  */
 int cbi_get_board_version(uint32_t *version);
 int cbi_get_sku_id(uint32_t *sku_id);
 int cbi_get_oem_id(uint32_t *oem_id);
 int cbi_get_model_id(uint32_t *id);
+int cbi_get_fw_config(uint32_t *fw_config);
 
 /**
  * Primitive accessors
