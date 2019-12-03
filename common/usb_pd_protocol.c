@@ -4675,6 +4675,12 @@ void pd_handle_overcurrent(int port)
 	atomic_or(&port_oc_reset_req, (1 << port));
 	hook_call_deferred(&re_enable_ports_data, SECOND);
 }
+
+void pd_handle_cc_overvoltage(int port)
+{
+	pd_send_hard_reset(port);
+}
+
 #endif /* defined(CONFIG_USBC_PPC) */
 
 static int command_pd(int argc, char **argv)
