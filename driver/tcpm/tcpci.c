@@ -143,6 +143,38 @@ int tcpc_xfer_unlocked(int port, const uint8_t *out, int out_size,
 	pd_device_accessed(port);
 	return rv;
 }
+
+int tcpc_update8(int port, int reg,
+		 uint8_t mask,
+		 enum mask_update_action action)
+{
+	int rv;
+
+	pd_wait_exit_low_power(port);
+
+	rv = i2c_update8(tcpc_config[port].i2c_info.port,
+			 tcpc_config[port].i2c_info.addr_flags,
+			 reg, mask, action);
+
+	pd_device_accessed(port);
+	return rv;
+}
+int tcpc_update16(int port, int reg,
+		  uint16_t mask,
+		  enum mask_update_action action)
+{
+	int rv;
+
+	pd_wait_exit_low_power(port);
+
+	rv = i2c_update16(tcpc_config[port].i2c_info.port,
+			  tcpc_config[port].i2c_info.addr_flags,
+			  reg, mask, action);
+
+	pd_device_accessed(port);
+	return rv;
+}
+
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
 static int init_alert_mask(int port)
@@ -233,17 +265,10 @@ int tcpci_tcpm_select_rp_value(int port, int rp)
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 void tcpci_tcpc_discharge_vbus(int port, int enable)
 {
-	int reg;
-
-	if (tcpc_read(port, TCPC_REG_POWER_CTRL, &reg))
-		return;
-
-	if (enable)
-		reg |= TCPC_REG_POWER_CTRL_FORCE_DISCHARGE;
-	else
-		reg &= ~TCPC_REG_POWER_CTRL_FORCE_DISCHARGE;
-
-	tcpc_write(port, TCPC_REG_POWER_CTRL, reg);
+	tcpc_update8(port,
+		     TCPC_REG_POWER_CTRL,
+		     TCPC_REG_POWER_CTRL_FORCE_DISCHARGE,
+		     (enable) ? MASK_SET : MASK_CLR);
 }
 #endif
 
