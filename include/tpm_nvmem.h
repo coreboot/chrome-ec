@@ -8,6 +8,7 @@
 #define __CROS_EC_TPM_NVMEM_H
 
 #define FIRMWARE_NV_INDEX       0x1007
-#define FWMP_NV_INDEX		0x100a
+#define KERNEL_NV_INDEX         0x1008
+#define FWMP_NV_INDEX           0x100a
 
 #endif /* __CROS_EC_TPM_NVMEM_H */

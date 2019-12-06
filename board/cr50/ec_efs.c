@@ -7,10 +7,13 @@
 #include "common.h"
 #include "console.h"
 #include "ec_comm.h"
+#include "crc8.h"
 #include "ec_commands.h"
 #include "hooks.h"
 #include "registers.h"
 #include "system.h"
+#include "tpm_nvmem.h"
+#include "tpm_nvmem_ops.h"
 #include "vboot.h"
 
 #ifdef CR50_DEV
@@ -48,6 +51,44 @@ static void set_boot_mode_(uint8_t mode_val)
 	GREG32(PMU, PWRDN_SCRATCH20) |= mode_val;
 }
 
+static int load_ec_hash_(uint8_t * const ec_hash)
+{
+	struct vb2_secdata_kernel secdata;
+	const uint8_t secdata_size = sizeof(struct vb2_secdata_kernel);
+	uint8_t size_to_crc;
+	uint8_t struct_size;
+	uint8_t crc;
+
+	if (read_tpm_nvmem(KERNEL_NV_INDEX, secdata_size,
+			   (void *)&secdata) != tpm_read_success)
+		return EC_ERROR_VBOOT_DATA_UNDERSIZED;
+
+	/*
+	 * Check struct version. CRC offset may be different with old struct
+	 * version
+	 */
+	if (secdata.struct_version < VB2_SECDATA_KERNEL_STRUCT_VERSION_MIN)
+		return EC_ERROR_VBOOT_DATA_INCOMPATIBLE;
+
+	/* Check struct size. */
+	struct_size = secdata.struct_size;
+	if (struct_size != secdata_size)
+		return EC_ERROR_VBOOT_DATA;
+
+	/* Check CRC */
+	size_to_crc = struct_size -
+		      offsetof(struct vb2_secdata_kernel, crc8) -
+		      sizeof(secdata.crc8);
+	crc = crc8((uint8_t *)&secdata.reserved0, size_to_crc);
+	if (crc != secdata.crc8)
+		return EC_ERROR_CRC;
+
+	/* Read hash and copy to hash */
+	memcpy(ec_hash, secdata.ec_hash, sizeof(secdata.ec_hash));
+
+	return EC_SUCCESS;
+}
+
 /*
  * Initialize EC-EFS context.
  */
@@ -66,11 +107,29 @@ static void ec_efs_init_(void)
 	else
 		ec_efs_reset();
 
-	/* TODO(crbug/1020578): Read Hash from Kernel NV Index */
+	/* Read an EC hash in kernel secdata (TPM kernel NV index). */
+	if (ec_efs_ctx.hash_is_loaded)
+		return;
+
+	ec_efs_refresh();
 }
 DECLARE_HOOK(HOOK_INIT, ec_efs_init_, HOOK_PRIO_DEFAULT);
 
 void ec_efs_reset(void)
 {
 	set_boot_mode_(EC_EFS_BOOT_MODE_NORMAL);
+}
+
+void ec_efs_refresh(void)
+{
+	int rv;
+
+	rv = load_ec_hash_(ec_efs_ctx.hash);
+	if (rv == EC_SUCCESS) {
+		ec_efs_ctx.hash_is_loaded = 1;
+	} else {
+		ec_efs_ctx.hash_is_loaded = 0;
+		cprints(CC_SYSTEM, "load_ec_hash error: 0x%x\n", rv);
+	}
+	ec_efs_ctx.secdata_error_code = rv;
 }
