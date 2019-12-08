@@ -306,6 +306,92 @@ int i2c_write8(int port, int slave_addr, int offset, int data)
 	return i2c_xfer(port, slave_addr, buf, 2, 0, 0);
 }
 
+int i2c_update8(const int port,
+		const uint16_t slave_addr_flags,
+		const int offset,
+		const uint8_t mask,
+		const enum mask_update_action action)
+{
+	int rv;
+	int val, oldval;
+
+	rv = i2c_read8(port, slave_addr_flags, offset, &oldval);
+	if (rv)
+		return rv;
+
+	val = (action == MASK_SET) ? oldval | mask
+				   : oldval & ~mask;
+
+	if (val != oldval)
+		return i2c_write8(port, slave_addr_flags, offset, val);
+
+	return EC_SUCCESS;
+}
+
+int i2c_update16(const int port,
+		 const uint16_t slave_addr_flags,
+		 const int offset,
+		 const uint16_t mask,
+		 const enum mask_update_action action)
+{
+	int rv;
+	int val, oldval;
+
+	rv = i2c_read16(port, slave_addr_flags, offset, &oldval);
+	if (rv)
+		return rv;
+
+	val = (action == MASK_SET) ? oldval | mask
+				   : oldval & ~mask;
+
+	if (val != oldval)
+		return i2c_write16(port, slave_addr_flags, offset, val);
+
+	return EC_SUCCESS;
+}
+
+int i2c_field_update8(const int port,
+		      const uint16_t slave_addr_flags,
+		      const int offset,
+		      const uint8_t field_mask,
+		      const uint8_t set_value)
+{
+	int rv;
+	int val, oldval;
+
+	rv = i2c_read8(port, slave_addr_flags, offset, &oldval);
+	if (rv)
+		return rv;
+
+	val = (oldval & (~field_mask)) | set_value;
+
+	if (val != oldval)
+		return i2c_write8(port, slave_addr_flags, offset, val);
+
+	return EC_SUCCESS;
+}
+
+int i2c_field_update16(const int port,
+		       const uint16_t slave_addr_flags,
+		       const int offset,
+		       const uint16_t field_mask,
+		       const uint16_t set_value)
+{
+	int rv;
+	int val, oldval;
+
+	rv = i2c_read16(port, slave_addr_flags, offset, &oldval);
+	if (rv)
+		return rv;
+
+	val = (oldval & (~field_mask)) | set_value;
+
+	if (val != oldval)
+		return i2c_write16(port, slave_addr_flags, offset, val);
+
+	return EC_SUCCESS;
+}
+
 int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
 		    int len)
 {
