@@ -414,8 +414,10 @@ int tcpci_enter_low_power_mode(int port)
 
 int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
-	return tcpc_write(port, TCPC_REG_TCPC_CTRL,
-			  TCPC_REG_TCPC_CTRL_SET(polarity));
+	return tcpc_update8(port,
+			    TCPC_REG_TCPC_CTRL,
+			    TCPC_REG_TCPC_CTRL_SET(1),
+			    (polarity) ? MASK_SET : MASK_CLR);
 }
 
 #ifdef CONFIG_USBC_PPC
