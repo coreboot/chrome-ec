@@ -77,7 +77,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .addr = BMI160_ADDR0,
 	 .rot_standard_ref = NULL,
-	 .default_range = 2,  /* g, enough for laptop. */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .config = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
