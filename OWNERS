@@ -1,11 +1,9 @@
-# Chromium EC owners
-aaboagye@chromium.org
-dnojiri@chromium.org
-jettrink@chromium.org
-rspangler@chromium.org
-
-# Allow anyone to approve changes.
-*
+# Chromium Cr50 owners
+apronin@chromium.org
+mruthven@chromium.org
+namyoon@chromium.org
+sukhomlinov@chromium.org
+vbendeb@chromium.org
 
 # Don't inherit owners from elsewhere in the manifest
 set noparent
