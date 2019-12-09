@@ -39,5 +39,7 @@ uint16_t ec_efs_verify_hash(const char *hash_data, const uint8_t size);
 
 /* Re-load EC Hash code from TPM Kernel Secdata */
 void ec_efs_refresh(void);
+/* print EC-EFS status */
+void ec_efs_print_status(void);
 
 #endif /* __CROS_EC_COMM_H */
