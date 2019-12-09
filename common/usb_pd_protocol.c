@@ -3315,6 +3315,9 @@ void pd_task(void *u)
 				break;
 
 			/* Debounce complete */
+			if (IS_ENABLED(CONFIG_COMMON_RUNTIME))
+				hook_notify(HOOK_USB_PD_CONNECT);
+
 #ifdef CONFIG_USBC_PPC
 			/*
 			 * If the port is latched off, just continue to
@@ -3398,9 +3401,6 @@ void pd_task(void *u)
 						  PD_FLAGS_CHECK_DR_ROLE;
 				hard_reset_count = 0;
 				timeout = 5*MSEC;
-
-				if (IS_ENABLED(CONFIG_COMMON_RUNTIME))
-					hook_notify(HOOK_USB_PD_CONNECT);
 
 				set_state(port, PD_STATE_SRC_STARTUP);
 			}
@@ -3967,6 +3967,8 @@ void pd_task(void *u)
 			}
 
 			/* We are attached */
+			if (IS_ENABLED(CONFIG_COMMON_RUNTIME))
+				hook_notify(HOOK_USB_PD_CONNECT);
 			pd[port].polarity = get_snk_polarity(cc1, cc2);
 			set_polarity(port, pd[port].polarity);
 			/* reset message ID  on connection */
@@ -4001,8 +4003,6 @@ void pd_task(void *u)
 					&pd_usb_billboard_deferred_data,
 					PD_T_AME);
 			}
-			if (IS_ENABLED(CONFIG_COMMON_RUNTIME))
-				hook_notify(HOOK_USB_PD_CONNECT);
 			break;
 		case PD_STATE_SNK_HARD_RESET_RECOVER:
 			if (pd[port].last_state != pd[port].task_state)
