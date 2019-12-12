@@ -106,7 +106,7 @@ const mat33_fp_t standard_rot_ref = {
 
 /* sensor private data */
 static struct stprivate_data g_lis2dh_data;
-static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
+static struct lsm6dsm_data lsm6dsm_data;
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -120,7 +120,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = &g_lis2dh_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LIS2DH_ADDR1_FLAGS,
+		.addr = LIS2DH_ADDR1,
 		.rot_standard_ref = &standard_rot_ref,
 		/* We only use 2g because its resolution is only 8-bits */
 		.default_range = 2, /* g */
@@ -148,10 +148,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
+		.addr = LSM6DSM_ADDR0,
 		.rot_standard_ref = &standard_rot_ref,
 		.default_range = 4,  /* g */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
@@ -180,10 +178,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
+		.addr = LSM6DSM_ADDR0,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
 		.rot_standard_ref = &standard_rot_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
@@ -201,7 +197,7 @@ static int board_is_convertible(void)
 static void board_update_sensor_config_from_sku(void)
 {
 		motion_sensor_count = 0;
-		gmr_tablet_switch_disable();
+		hall_sensor_disable();
 		/* Base accel is not stuffed, don't allow line to float */
 		gpio_set_flags(GPIO_BASE_SIXAXIS_INT_L,
 			       GPIO_INPUT | GPIO_PULL_DOWN);
