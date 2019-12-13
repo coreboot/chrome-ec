@@ -181,6 +181,11 @@ int board_tpm_mode_change_allowed(void)
 	return !!(board_properties & BOARD_ALLOW_CHANGE_TPM_MODE);
 }
 
+int board_has_ec_cr50_comm_support(void)
+{
+	return !!(board_properties & BOARD_EC_CR50_COMM_SUPPORT);
+}
+
 /* Get header address of the backup RW copy. */
 const struct SignedHeader *get_other_rw_addr(void)
 {
@@ -294,7 +299,18 @@ static struct board_cfg board_cfg_table[] = {
 			BOARD_CLOSED_SOURCE_SET1 | BOARD_NO_INA_SUPPORT |
 			BOARD_ALLOW_CHANGE_TPM_MODE,
 	},
-
+	/* Dedede/Puff/Volteer: DIOA9 = 5K PU, DIOA1 = 1M PU */
+	{
+		.strap_cfg = 0x0E,
+		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+			BOARD_USE_PLT_RESET | BOARD_EC_CR50_COMM_SUPPORT,
+	},
+	/* Zork: DIOA12 = 5K PU, DIOA6 = 1M PU */
+	{
+		.strap_cfg = 0xE0,
+		.board_properties = BOARD_SLAVE_CONFIG_I2C |
+			BOARD_USE_PLT_RESET | BOARD_EC_CR50_COMM_SUPPORT,
+	},
 };
 
 void post_reboot_request(void)
@@ -644,6 +660,26 @@ static void configure_board_specific_gpios(void)
 
 	if (board_uses_closed_source_set1())
 		closed_source_set1_configure_gpios();
+
+	/*
+	 * Connect GPIO_AP_FLASH_SELECT, which is GPIO(0, 2) to DIOB4 if EC-CR50
+	 * commnuication is supported. Otherwise, connect it to DIOB3.
+	 */
+	if (board_has_ec_cr50_comm_support()) {
+		/* Connect GPIO_AP_FLASH_SELECT to DIOB4. */
+		GWRITE(PINMUX, DIOB4_SEL, GC_PINMUX_GPIO0_GPIO2_SEL);
+		GWRITE(PINMUX, GPIO0_GPIO2_SEL, GC_PINMUX_DIOB4_SEL);
+
+		/* Enable the input */
+		GWRITE_FIELD(PINMUX, DIOB4_CTL, IE, 1);
+	} else {
+		/* Connect GPIO_AP_FLASH_SELECT to DIOB3. */
+		GWRITE(PINMUX, DIOB3_SEL, GC_PINMUX_GPIO0_GPIO2_SEL);
+		GWRITE(PINMUX, GPIO0_GPIO2_SEL, GC_PINMUX_DIOB3_SEL);
+
+		/* Enable the input */
+		GWRITE_FIELD(PINMUX, DIOB3_CTL, IE, 1);
+	}
 }
 
 static uint8_t mismatched_board_id;
