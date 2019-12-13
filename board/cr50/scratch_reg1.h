@@ -86,6 +86,11 @@
 #define BOARD_ALLOW_CHANGE_TPM_MODE       BIT(20)
 
 /*
+ * The board supports EC-CR50 communication.
+ */
+#define BOARD_EC_CR50_COMM_SUPPORT        BIT(21)
+
+/*
  * Macro to capture all properties related to board strapping pins. This must be
  * updated if additional strap related properties are added.
  */
@@ -95,6 +100,7 @@
 	BOARD_CLOSED_SOURCE_SET1 | \
 	BOARD_DEEP_SLEEP_DISABLED | \
 	BOARD_DETECT_AP_WITH_UART | \
+	BOARD_EC_CR50_COMM_SUPPORT | \
 	BOARD_NEEDS_SYS_RST_PULL_UP | \
 	BOARD_NO_INA_SUPPORT | \
 	BOARD_SLAVE_CONFIG_I2C | \
