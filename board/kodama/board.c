@@ -63,7 +63,8 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"other", 1, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{"other", 1, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA,
+		.flags = I2C_PORT_FLAG_DYNAMIC_SPEED},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -256,6 +257,21 @@ static void board_init(void)
 	mt6370_backlight_set_dim(MT6370_BLDIM_DEFAULT * 3 / 4);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+/*
+ * Re-configure i2c-2 to 100kHz for EVT devices, this must execute after
+ * i2c_init (in main()) and before battery fuel gauge access the battery
+ * (i.e. HOOK_PRIO_I2C + 1).
+ *
+ * Note that stm32f0 don't run adc_init in hooks, so we can safely call
+ * board_get_version() before HOOK_PRIO_INIT_ADC(=HOOK_PRIO_DEFAULT).
+ */
+static void board_i2c_init(void)
+{
+	if (board_get_version() < 2)
+		i2c_set_freq(1,  I2C_FREQ_100KHZ);
+}
+DECLARE_HOOK(HOOK_INIT, board_i2c_init, HOOK_PRIO_INIT_I2C);
 
 /* Motion sensors */
 /* Mutexes */
