@@ -12,6 +12,7 @@
 #include "host_command.h"
 #include "hwtimer.h"
 #include "i2c.h"
+#include "i2c-stm32f0.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
@@ -135,7 +136,7 @@ static void i2c_set_freq_port(const struct i2c_port_t *p,
  *
  * @param p		the I2c port
  */
-static void i2c_init_port(const struct i2c_port_t *p)
+void stm32f0_i2c_init_port(const struct i2c_port_t *p)
 {
 	int port = p->port;
 	enum stm32_i2c_clk_src src = I2C_CLK_SRC_48MHZ;
@@ -447,8 +448,25 @@ int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
 
 	/* Clear status */
 	if (xfer_start) {
+		uint32_t cr2 = STM32_I2C_CR2(port);
+
 		STM32_I2C_ICR(port) = STM32_I2C_ICR_ALL;
 		STM32_I2C_CR2(port) = 0;
+		if (cr2 & STM32_I2C_CR2_RELOAD) {
+			/*
+			 * If I2C_XFER_START flag is on and we've set RELOAD=1
+			 * in previous chip_i2c_xfer() call. Then we are
+			 * probably in the middle of an i2c transaction.
+			 *
+			 * In this case, we need to clear the RELOAD bit and
+			 * wait for Transfer Complete (TC) flag, to make sure
+			 * the chip is not expecting another NBYTES data, And
+			 * send repeated-start correctly.
+			 */
+			rv = wait_isr(port, STM32_I2C_ISR_TC);
+			if (rv)
+				goto xfer_exit;
+		}
 	}
 
 	if (out_bytes || !in_bytes) {
@@ -580,13 +598,13 @@ int i2c_get_line_levels(int port)
 		(i2c_raw_get_scl(port) ? I2C_LINE_SCL_HIGH : 0);
 }
 
-static void i2c_init(void)
+void i2c_init(void)
 {
 	const struct i2c_port_t *p = i2c_ports;
 	int i;
 
 	for (i = 0; i < i2c_ports_used; i++, p++)
-		i2c_init_port(p);
+		stm32f0_i2c_init_port(p);
 
 #ifdef CONFIG_HOSTCMD_I2C_SLAVE_ADDR_FLAGS
 	STM32_I2C_CR1(I2C_PORT_EC) |= STM32_I2C_CR1_RXIE | STM32_I2C_CR1_ERRIE
@@ -613,5 +631,4 @@ static void i2c_init(void)
 	task_enable_irq(IRQ_SLAVE);
 #endif
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);
 

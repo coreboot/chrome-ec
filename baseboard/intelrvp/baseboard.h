@@ -90,7 +90,8 @@
 /* SoC / PCH */
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_HOSTCMD_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_HOST_EVENT
 #define CONFIG_POWER_BUTTON
@@ -142,6 +143,8 @@
 #include "gpio_signal.h"
 #include "module_id.h"
 #include "registers.h"
+
+enum tcpc_rp_value;
 
 /* PWM channels */
 enum pwm_channel {
@@ -229,7 +232,7 @@ void vbus0_evt(enum gpio_signal signal);
 void vbus1_evt(enum gpio_signal signal);
 void board_charging_enable(int port, int enable);
 void board_vbus_enable(int port, int enable);
-void board_set_vbus_source_current_limit(int port, int rp);
+void board_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp);
 int ioexpander_read_intelrvp_version(int *port0, int *port1);
 void board_dc_jack_interrupt(enum gpio_signal signal);
 

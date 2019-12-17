@@ -16,8 +16,10 @@ GPIO_INT(ACOK_OD,              PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, ex
 
 /* Power sequencing interrupts */
 GPIO_INT(SLP_S0_L,             PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
 GPIO_INT(SLP_S3_L,             PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
+#endif
+#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 GPIO_INT(SLP_S4_L,             PIN(D, 4), GPIO_INT_BOTH, power_signal_interrupt)
 #endif
 GPIO_INT(PG_EC_RSMRST_L,       PIN(E, 2), GPIO_INT_BOTH, intel_x86_rsmrst_signal_interrupt)
@@ -39,7 +41,7 @@ GPIO_INT(USB_C1_BC12_INT_ODL,  PIN(E, 4), GPIO_INT_FALLING, bc12_interrupt)
 GPIO_INT(EC_VOLDN_BTN_ODL,     PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 GPIO_INT(EC_VOLUP_BTN_ODL,     PIN(7, 5), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 
-GPIO(SYS_RESET_L,              PIN(0, 2), GPIO_ODR_HIGH)        /* SYS_RST_ODL */
+GPIO(SYS_RESET_L,              PIN(C, 5), GPIO_ODR_HIGH)        /* SYS_RST_ODL */
 GPIO(ENTERING_RW,              PIN(E, 3), GPIO_OUT_LOW)         /* EC_ENTERING_RW */
 GPIO(PCH_WAKE_L,               PIN(7, 4), GPIO_ODR_HIGH)        /* EC_PCH_WAKE_ODL */
 GPIO(PCH_PWRBTN_L,             PIN(C, 1), GPIO_ODR_HIGH)        /* EC_PCH_PWR_BTN_ODL */
@@ -55,6 +57,17 @@ GPIO(CPU_C10_GATE_L,           PIN(6, 7), GPIO_INPUT)
 
 /* MKBP event synchronization */
 GPIO(EC_INT_L,                 PIN(7, 0), GPIO_ODR_HIGH)
+
+/*
+ * GPIO_INT_BOTH is required for PSL wake from hibernate, but we don't need an
+ * interrupt handler because it is automatically handled by the PSL.
+ *
+ * We need to lock the setting so this gpio can't be reconfigured to overdrive
+ * the real reset signal. (This is the PSL input pin not the real reset pin).
+ */
+GPIO(EC_RST_ODL,		PIN(0, 2), GPIO_INT_BOTH |
+					   GPIO_HIB_WAKE_HIGH |
+					   GPIO_LOCKED)
 
 /* USB and USBC Signals */
 GPIO(USB_C_OC_ODL,             PIN(B, 1), GPIO_ODR_HIGH)
@@ -83,6 +96,8 @@ GPIO(I2C2_SCL,                 PIN(9, 2), GPIO_INPUT)           /* EC_I2C_USB_C1
 GPIO(I2C2_SDA,                 PIN(9, 1), GPIO_INPUT)           /* EC_I2C_USB_C1_PD_SDA */
 GPIO(I2C3_SCL,                 PIN(D, 1), GPIO_INPUT)           /* EC_I2C_USB_C0_TCPC_SDA */
 GPIO(I2C3_SDA,                 PIN(D, 0), GPIO_INPUT)           /* EC_I2C_USB_C0_TCPC_SCL */
+GPIO(I2C4_SCL,                 PIN(F, 3), GPIO_INPUT)           /* EC_I2C_USB_C3_PD_SCL */
+GPIO(I2C4_SDA,                 PIN(F, 2), GPIO_INPUT)           /* EC_I2C_USB_C3_PD_SDA */
 GPIO(I2C5_SCL,                 PIN(3, 3), GPIO_INPUT)           /* EC_I2C_POWER_SCL */
 GPIO(I2C5_SDA,                 PIN(3, 6), GPIO_INPUT)           /* EC_I2C_POWER_SDA */
 GPIO(I2C7_SCL,                 PIN(B, 3), GPIO_INPUT)           /* EC_I2C_EEPROM_SCL */
@@ -103,6 +118,7 @@ ALTERNATE(PIN_MASK(B, 0x30), 0, MODULE_I2C, (GPIO_INPUT | GPIO_SEL_1P8V))  /* I2
 ALTERNATE(PIN_MASK(9, 0x07), 0, MODULE_I2C, 0)                             /* I2C1 SCL / I2C2 */
 ALTERNATE(PIN_MASK(8, 0x80), 0, MODULE_I2C, 0)                             /* I2C1 SDA */
 ALTERNATE(PIN_MASK(D, 0x03), 0, MODULE_I2C, 0)                             /* I2C3 */
+ALTERNATE(PIN_MASK(F, 0x0C), 0, MODULE_I2C, 0)                             /* I2C4 */
 ALTERNATE(PIN_MASK(3, 0x48), 0, MODULE_I2C, 0)                             /* I2C5 */
 ALTERNATE(PIN_MASK(B, 0x0C), 0, MODULE_I2C, 0)                             /* I2C7 */
 

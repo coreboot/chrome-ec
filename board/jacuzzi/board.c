@@ -27,6 +27,9 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "i2c_bitbang.h"
+#include "it8801.h"
+#include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -66,9 +69,18 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
+#ifdef BOARD_JACUZZI
 	{"other", 1, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+#else /* Juniper */
+	{"other", 1, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+#endif
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+const struct i2c_port_t i2c_bitbang_ports[] = {
+	{"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
+};
+const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
 
 #define BC12_I2C_ADDR PI3USB9201_I2C_ADDR_3
 
@@ -78,6 +90,24 @@ const struct power_signal_info power_signal_list[] = {
 	{GPIO_PMIC_EC_RESETB,  POWER_SIGNAL_ACTIVE_HIGH, "PMIC_PWR_GOOD"},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
+
+/* Keyboard scan setting */
+struct keyboard_scan_config keyscan_config = {
+	/*
+	 * TODO(b/133200075): Tune this once we have the final performance
+	 * out of the driver and the i2c bus.
+	 */
+	.output_settle_us = 35,
+	.debounce_down_us = 5 * MSEC,
+	.debounce_up_us = 40 * MSEC,
+	.scan_period_us = 3 * MSEC,
+	.min_post_scan_delay_us = 1000,
+	.poll_timeout_us = 100 * MSEC,
+	.actual_key_mask = {
+		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
+	},
+};
 
 /******************************************************************************/
 /* SPI devices */
@@ -94,7 +124,7 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 };
 
 /******************************************************************************/
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -114,7 +144,7 @@ static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
 	host_set_single_event(EC_HOST_EVENT_USB_MUX);
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		/* Driver uses I2C_PORT_USB_MUX as I2C port */
 		.port_addr = IT5205_I2C_ADDR1_FLAGS,
@@ -140,7 +170,7 @@ int board_set_active_charge_port(int charge_port)
 	CPRINTS("New chg p%d", charge_port);
 
 	/* ignore all request when discharge mode is on */
-	if (force_discharge)
+	if (force_discharge && charge_port != CHARGE_PORT_NONE)
 		return EC_SUCCESS;
 
 	switch (charge_port) {
@@ -186,12 +216,12 @@ int board_discharge_on_ac(int enable)
 			port = charge_manager_get_active_charge_port();
 	}
 
-	ret = board_set_active_charge_port(port);
+	ret = charger_discharge_on_ac(enable);
 	if (ret)
 		return ret;
-	force_discharge = enable;
 
-	return charger_discharge_on_ac(enable);
+	force_discharge = enable;
+	return board_set_active_charge_port(port);
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -213,9 +243,6 @@ static void board_init(void)
 		msleep(100);
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 1);
 	}
-
-	/* Set SPI1 PB13/14/15 pins to high speed */
-	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xfc000000;
 
 	/* Enable TCPC alert interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
@@ -256,44 +283,20 @@ static void board_chipset_startup(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 
-static void disable_pp1800_s5_deferred(void);
-DECLARE_DEFERRED(disable_pp1800_s5_deferred);
-
-static void disable_pp1800_s5_deferred(void)
-{
-	if (power_get_state() == POWER_G3)
-		gpio_set_level(GPIO_EN_PP1800_S5_L, 1);
-	else if (power_get_state() == POWER_S5G3 ||
-			power_get_state() == POWER_S3S5 ||
-			power_get_state() == POWER_S5)
-		/* pmic is still on, wait a few seconds and try again */
-		hook_call_deferred(&disable_pp1800_s5_deferred_data,
-			SECOND);
-}
-
 /* Called on AP S3 -> S5 transition */
 static void board_chipset_shutdown(void)
 {
 	gpio_set_level(GPIO_EN_USBA_5V, 0);
-	if (board_get_version() >= 1)
-		/*
-		 * use deferred to make sure pp1800_s5 is turned off after pmic
-		 * off.
-		 */
-		hook_call_deferred(&disable_pp1800_s5_deferred_data,
-			SECOND);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
-
-void board_chipset_pre_init(void)
-{
-	if (board_get_version() >= 1)
-		gpio_set_level(GPIO_EN_PP1800_S5_L, 0);
-}
-DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, board_chipset_pre_init, HOOK_PRIO_DEFAULT);
 
 int board_get_charger_i2c(void)
 {
 	/* TODO(b:138415463): confirm the bus allocation for future builds */
 	return board_get_version() == 1 ? 2 : 1;
+}
+
+int board_get_battery_i2c(void)
+{
+	return board_get_version() >= 1 ? 2 : 1;
 }

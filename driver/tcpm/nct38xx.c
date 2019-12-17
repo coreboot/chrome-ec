@@ -8,8 +8,10 @@
 
 #include "common.h"
 #include "console.h"
+#include "hooks.h"
 #include "ioexpander_nct38xx.h"
 #include "nct38xx.h"
+#include "task.h"
 #include "tcpci.h"
 
 #if !defined(CONFIG_USB_PD_TCPM_TCPCI)
@@ -24,11 +26,12 @@
 #define POLARITY_FLIPPED   1
 #define POLARITY_NONE      3
 
-static int cable_polarity[CONFIG_USB_PD_PORT_COUNT];
+static int cable_polarity[CONFIG_USB_PD_PORT_MAX_COUNT];
 static unsigned char txBuf[33];
 static unsigned char rxBuf[33];
 /* Save the selected rp value */
-static int selected_rp[CONFIG_USB_PD_PORT_COUNT];
+static int selected_rp[CONFIG_USB_PD_PORT_MAX_COUNT];
+static int selected_pull[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static int nct38xx_tcpm_init(int port)
 {
@@ -36,6 +39,7 @@ static int nct38xx_tcpm_init(int port)
 	int reg;
 
 	cable_polarity[port] = POLARITY_NONE;
+	selected_pull[port] = TYPEC_CC_OPEN;
 
 	rv = tcpci_tcpm_init(port);
 		if (rv)
@@ -56,21 +60,19 @@ static int nct38xx_tcpm_init(int port)
 		return rv;
 
 	/* Disable OVP */
-	rv = tcpc_read(port, TCPC_REG_FAULT_CTRL, &reg);
-	if (rv)
-		return rv;
-	reg = reg | TCPC_REG_FAULT_CTRL_VBUS_OVP_FAULT_DIS;
-	rv = tcpc_write(port, TCPC_REG_FAULT_CTRL, reg);
+	rv = tcpc_update8(port,
+			  TCPC_REG_FAULT_CTRL,
+			  TCPC_REG_FAULT_CTRL_VBUS_OVP_FAULT_DIS,
+			  MASK_SET);
 	if (rv)
 		return rv;
 
 	/* Enable VBus monitor and Disable FRS */
-	rv = tcpc_read(port, TCPC_REG_POWER_CTRL, &reg);
-	if (rv)
-		return rv;
-	reg = reg & ~(TCPC_REG_POWER_CTRL_VBUS_VOL_MONITOR_DIS |
-		      TCPC_REG_POWER_CTRL_FRS_ENABLE);
-	rv = tcpc_write(port, TCPC_REG_POWER_CTRL, reg);
+	rv = tcpc_update8(port,
+			  TCPC_REG_POWER_CTRL,
+			  (TCPC_REG_POWER_CTRL_VBUS_VOL_MONITOR_DIS |
+			   TCPC_REG_POWER_CTRL_FRS_ENABLE),
+			  MASK_CLR);
 	if (rv)
 		return rv;
 
@@ -95,37 +97,13 @@ static int nct38xx_tcpm_init(int port)
 	 * Enable the Vendor Define alert event only when the IO expander
 	 * feature is defined
 	 */
-	if (IS_ENABLED(CONFIG_IO_EXPANDER_NCT38XX)) {
-		int mask;
+	if (IS_ENABLED(CONFIG_IO_EXPANDER_NCT38XX))
+		rv |= tcpc_update16(port,
+				    TCPC_REG_ALERT_MASK,
+				    TCPC_REG_ALERT_VENDOR_DEF,
+				    MASK_SET);
 
-		rv |= tcpc_read16(port, TCPC_REG_ALERT_MASK, &mask);
-		mask |= TCPC_REG_ALERT_VENDOR_DEF;
-		rv |= tcpc_write16(port, TCPC_REG_ALERT_MASK, mask);
-	}
 	return rv;
-}
-
-static int tcpci_nct38xx_select_rp_value(int port, int rp)
-{
-	selected_rp[port] = rp;
-	return EC_SUCCESS;
-}
-
-static int auto_discharge_disconnect(int port, int enable)
-{
-	int reg, rv;
-
-	rv = tcpc_read(port, TCPC_REG_POWER_CTRL, &reg);
-	if (rv)
-		return rv;
-
-	if (enable)
-		reg = reg | TCPC_REG_POWER_CTRL_AUTO_DISCHARGE_DISCONNECT;
-	else
-		reg = reg & ~TCPC_REG_POWER_CTRL_AUTO_DISCHARGE_DISCONNECT;
-	rv = tcpc_write(port, TCPC_REG_POWER_CTRL, reg);
-	return rv;
-
 }
 
 static int tcpci_nct38xx_check_cable_polarity(int port)
@@ -165,13 +143,20 @@ static int tcpci_nct38xx_check_cable_polarity(int port)
 	return rv;
 }
 
+int tcpci_nct38xx_select_rp_value(int port, int rp)
+{
+	selected_rp[port] = rp;
+	return EC_SUCCESS;
+}
+
  /*
   * TODO(crbug.com/951681): This code can be simplified once that bug is fixed.
   */
 static int tcpci_nct38xx_set_cc(int port, int pull)
 {
-
 	int rv;
+
+	selected_pull[port] = pull;
 
 	if (cable_polarity[port] == POLARITY_NONE) {
 		rv = tcpci_nct38xx_check_cable_polarity(port);
@@ -193,6 +178,30 @@ static int tcpci_nct38xx_set_cc(int port, int pull)
 
 	return rv;
 }
+
+/*
+ * tcpci_nct38xx_set_cc() only sets the pull resistor on one CC line according
+ * to polarity. This is correct when attached, but on disconnect we need to
+ * set the pull resistor on both CC lines, since polarity is no longer known
+ * (unless DRP toggle is enabled, since that will take care of setting both
+ * CC lines to do the toggling).
+ * TODO(crbug.com/951681): This code can be removed once that bug is fixed.
+ */
+static void disconnect_hook(void)
+{
+	int port = TASK_ID_TO_PD_PORT(task_get_current());
+	int rv;
+
+	if (pd_get_dual_role(port) != PD_DRP_TOGGLE_ON
+	    && selected_pull[port] != TYPEC_CC_OPEN) {
+		rv = tcpc_write(port, TCPC_REG_ROLE_CTRL,
+				TCPC_REG_ROLE_CTRL_SET(0, selected_rp[port],
+				selected_pull[port], selected_pull[port]));
+		if (rv)
+			CPRINTS("C%d failed to set pull on disconnect", port);
+	}
+}
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, disconnect_hook, HOOK_PRIO_DEFAULT);
 
 static int tcpci_nct38xx_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 		enum tcpc_cc_voltage_status *cc2)
@@ -222,46 +231,9 @@ static int tcpci_nct38xx_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 
 int tcpci_nct38xx_drp_toggle(int port)
 {
-	int rv;
-
 	cable_polarity[port] = POLARITY_NONE;
 
-	/*
-	 * The port was disconnected so it is probably a good place to set
-	 * auto-discharge-disconnect to '0'
-	 *
-	 * TODO(crbug.com/951683: this should be removed when common code adds
-	 * auto discharge.
-	 */
-	rv = auto_discharge_disconnect(port, 0);
-	if (rv)
-		return rv;
-
 	return tcpci_tcpc_drp_toggle(port);
-
-}
-
-int tcpci_nct38xx_set_polarity(int port, int polarity)
-{
-	int rv, reg;
-
-	rv = tcpc_read(port, TCPC_REG_TCPC_CTRL, &reg);
-	if (rv)
-		return rv;
-
-	reg = polarity ? (reg | TCPC_REG_TCPC_CTRL_SET(1)) :
-			  (reg & ~TCPC_REG_TCPC_CTRL_SET(1));
-
-	rv = tcpc_write(port, TCPC_REG_TCPC_CTRL, reg);
-	if (rv)
-		return rv;
-
-	/*
-	 * Polarity is set after connection so it is probably a good time to set
-	 * auto-discharge-disconnect to '1'
-	 */
-	rv = auto_discharge_disconnect(port, 1);
-	return rv;
 }
 
 int tcpci_nct38xx_transmit(int port, enum tcpm_transmit_type type,
@@ -348,6 +320,7 @@ static void nct38xx_tcpc_alert(int port)
 			nct38xx_ioex_event_handler(port);
 
 }
+
 const struct tcpm_drv nct38xx_tcpm_drv = {
 	.init			= &nct38xx_tcpm_init,
 	.release		= &tcpci_tcpm_release,
@@ -357,7 +330,7 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #endif
 	.select_rp_value	= &tcpci_nct38xx_select_rp_value,
 	.set_cc			= &tcpci_nct38xx_set_cc,
-	.set_polarity		= &tcpci_nct38xx_set_polarity,
+	.set_polarity		= &tcpci_tcpm_set_polarity,
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,
@@ -367,6 +340,8 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif
+	.tcpc_enable_auto_discharge_disconnect =
+				  &tcpci_tcpc_enable_auto_discharge_disconnect,
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	.drp_toggle		= &tcpci_nct38xx_drp_toggle,
 #endif

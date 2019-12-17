@@ -10,6 +10,7 @@
 #include "charge_ramp.h"
 #include "charge_state.h"
 #include "charger.h"
+#include "charger_mt6370.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -21,6 +22,7 @@
 #include "driver/tcpm/mt6370.h"
 #include "driver/usb_mux/it5205.h"
 #include "extpower.h"
+#include "gesture.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -91,7 +93,7 @@ const struct spi_device_t spi_devices[] = {
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 
 /******************************************************************************/
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -100,6 +102,11 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		},
 		.drv = &mt6370_tcpm_drv,
 	},
+};
+
+struct mt6370_thermal_bound thermal_bound = {
+	.target = 80,
+	.err = 4,
 };
 
 void board_set_dp_mux_control(int output_enable, int polarity)
@@ -121,7 +128,21 @@ static void board_hpd_update(int port, int hpd_lvl, int hpd_irq)
 	host_set_single_event(EC_HOST_EVENT_USB_MUX);
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+__override const struct rt946x_init_setting *board_rt946x_init_setting(void)
+{
+	static const struct rt946x_init_setting battery_init_setting = {
+		.eoc_current = 140,
+		.mivr = 4000,
+		.ircmp_vclamp = 32,
+		.ircmp_res = 25,
+		.boost_voltage = 5050,
+		.boost_current = 1500,
+	};
+
+	return &battery_init_setting;
+}
+
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.port_addr = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
@@ -146,7 +167,7 @@ int board_set_active_charge_port(int charge_port)
 	CPRINTS("New chg p%d", charge_port);
 
 	/* ignore all request when discharge mode is on */
-	if (force_discharge)
+	if (force_discharge && charge_port != CHARGE_PORT_NONE)
 		return EC_SUCCESS;
 
 	switch (charge_port) {
@@ -194,13 +215,23 @@ int board_discharge_on_ac(int enable)
 			port = charge_manager_get_active_charge_port();
 	}
 
-	ret = board_set_active_charge_port(port);
+	ret = charger_discharge_on_ac(enable);
 	if (ret)
 		return ret;
-	force_discharge = enable;
 
-	return charger_discharge_on_ac(enable);
+	if (force_discharge && !enable)
+		rt946x_toggle_bc12_detection();
+
+	force_discharge = enable;
+	return board_set_active_charge_port(port);
 }
+
+#ifndef VARIANT_KUKUI_POGO_KEYBOARD
+int kukui_pogo_extpower_present(void)
+{
+	return 0;
+}
+#endif
 
 int extpower_is_present(void)
 {
@@ -215,7 +246,7 @@ int extpower_is_present(void)
 	else
 		usb_c_extpower_present = tcpm_get_vbus_level(CHARGE_PORT_USB_C);
 
-	return usb_c_extpower_present || gpio_get_level(GPIO_POGO_VBUS_PRESENT);
+	return usb_c_extpower_present || kukui_pogo_extpower_present();
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -242,9 +273,6 @@ static void board_init(void)
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 1);
 	}
 
-	/* Set SPI1 PB13/14/15 pins to high speed */
-	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xfc000000;
-
 	/* Enable TCPC alert interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
 
@@ -264,9 +292,6 @@ static void board_init(void)
 
 	/* Enable gauge interrupt from max17055 */
 	gpio_enable_interrupt(GPIO_GAUGE_INT_ODL);
-
-	/* Enable pogo interrupt */
-	gpio_enable_interrupt(GPIO_POGO_ADC_INT_L);
 
 	if (IS_ENABLED(BOARD_KRANE)) {
 		/*
@@ -321,6 +346,11 @@ static void board_rev_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_rev_init, HOOK_PRIO_INIT_ADC + 1);
 
+void sensor_board_proc_double_tap(void)
+{
+	CPRINTS("Detect double tap");
+}
+
 /* Motion sensors */
 /* Mutexes */
 #ifndef VARIANT_KUKUI_NO_SENSORS
@@ -344,7 +374,7 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 	 * TODO(b:139366662): calculates the actual coefficients and scaling
 	 * factors
 	 */
-	.rgb_cal[X] = {
+	.calibration.rgb_cal[X] = {
 		.offset = 0,
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kr */
@@ -355,7 +385,7 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
 		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0),
 	},
-	.rgb_cal[Y] = {
+	.calibration.rgb_cal[Y] = {
 		.offset = 0,
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kg */
@@ -366,7 +396,7 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
 		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.1),
 	},
-	.rgb_cal[Z] = {
+	.calibration.rgb_cal[Z] = {
 		.offset = 0,
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kb */
@@ -377,6 +407,7 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
 		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0),
 	},
+	.calibration.irt = INT_TO_FP(1),
 	.saturation.again = TCS_DEFAULT_AGAIN,
 	.saturation.atime = TCS_DEFAULT_ATIME,
 };
@@ -429,7 +460,12 @@ struct motion_sensor_t motion_sensors[] = {
 	 .config = {
 		 /* Enable accel in S0 */
 		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 10000 | ROUND_UP_FLAG,
+			 .odr = TAP_ODR,
+			 .ec_rate = 100 * MSEC,
+		 },
+		 /* For double tap detection */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = TAP_ODR,
 			 .ec_rate = 100 * MSEC,
 		 },
 	 },

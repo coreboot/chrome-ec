@@ -124,7 +124,7 @@ const mat33_fp_t base_standard_ref = {
 
 /* sensor private data */
 static struct kionix_accel_data kx022_data;
-static struct lsm6dsm_data lsm6dsm_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -141,6 +141,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_standrd_ref,
 		.default_range = 2, /* g */
+		.min_frequency = KX022_ACCEL_MIN_FREQ,
+		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -305,14 +307,14 @@ const int keyboard_factory_scan_pins_used =
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC, !is_overcurrented);
 }
 
-uint32_t board_override_feature_flags0(uint32_t flags0)
+__override uint32_t board_override_feature_flags0(uint32_t flags0)
 {
 	/*
 	 * Remove keyboard backlight feature for devices that don't support it.
@@ -322,9 +324,4 @@ uint32_t board_override_feature_flags0(uint32_t flags0)
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
 	else
 		return flags0;
-}
-
-uint32_t board_override_feature_flags1(uint32_t flags1)
-{
-	return flags1;
 }

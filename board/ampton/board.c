@@ -68,7 +68,7 @@ int ppc_get_alert_status(int port)
 
 static int tune_mux(int port);
 
-struct usb_mux ampton_usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux ampton_usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
 		/* Use PS8751 as mux only */
 		.port_addr = MUX_PORT_AND_ADDR(
@@ -191,6 +191,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 	 .rot_standard_ref = &lid_standard_ref,
 	 .default_range = 4, /* g */
+	 .min_frequency = KX022_ACCEL_MIN_FREQ,
+	 .max_frequency = KX022_ACCEL_MAX_FREQ,
 	 .config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {

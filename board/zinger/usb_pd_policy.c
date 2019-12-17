@@ -154,7 +154,7 @@ static void discharge_voltage(int target_volt)
 
 /* ----------------------- USB Power delivery policy ---------------------- */
 
-#define PDO_FIXED_FLAGS (PDO_FIXED_EXTERNAL | PDO_FIXED_DATA_SWAP)
+#define PDO_FIXED_FLAGS (PDO_FIXED_UNCONSTRAINED | PDO_FIXED_DATA_SWAP)
 
 /* Voltage indexes for the PDOs */
 enum volt_idx {
@@ -524,7 +524,7 @@ const struct svdm_response svdm_rsp = {
 	.exit_mode = &svdm_exit_mode,
 };
 
-int pd_custom_vdm(int port, int cnt, uint32_t *payload,
+__override int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 		  uint32_t **rpayload)
 {
 	int cmd = PD_VDO_CMD(payload[0]);

@@ -49,7 +49,7 @@ static struct mutex g_base_mutex_1;
 /* Lid accel private data */
 static struct stprivate_data g_lis2dwl_data;
 /* Base accel private data */
-static struct lsm6dsm_data g_lsm6dsm_data;
+static struct lsm6dsm_data g_lsm6dsm_data = LSM6DSM_DATA;
 
 
 /* Matrix to rotate accelrator into standard reference frame */
@@ -171,7 +171,6 @@ void board_update_sensor_config_from_sku(void)
 			motion_sensors[BASE_GYRO] = base_gyro_1;
 		} else{
 			/*Need to change matrix for treeya*/
-			motion_sensors[LID_ACCEL].rot_standard_ref = &treeya_standard_ref;
 			motion_sensors[BASE_ACCEL].rot_standard_ref = &treeya_standard_ref;
 			motion_sensors[BASE_GYRO].rot_standard_ref = &treeya_standard_ref;
 		}

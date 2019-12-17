@@ -17,9 +17,6 @@
 /* Time to wait for TCPC to complete transmit */
 #define PD_T_TCPC_TX_TIMEOUT  (100*MSEC)
 
-/* Number of valid Transmit Types */
-#define NUM_XMIT_TYPES (TCPC_TX_SOP_DEBUG_PRIME_PRIME + 1)
-
 enum usbpd_cc_pin {
 	USBPD_CC_PIN_1,
 	USBPD_CC_PIN_2,
@@ -62,6 +59,9 @@ enum tcpm_transmit_type {
 	TCPC_TX_CABLE_RESET = 6,
 	TCPC_TX_BIST_MODE_2 = 7
 };
+
+/* Number of valid Transmit Types */
+#define NUM_SOP_STAR_TYPES (TCPC_TX_SOP_DEBUG_PRIME_PRIME + 1)
 
 enum tcpc_transmit_complete {
 	TCPC_TX_UNSET = -1,
@@ -266,6 +266,15 @@ struct tcpm_drv {
 	 */
 	void (*tcpc_discharge_vbus)(int port, int enable);
 
+	/**
+	 * Auto Discharge Disconnect
+	 *
+	 * @param port Type-C port number
+	 * @param enable Auto Discharge enable or disable
+	 */
+	void (*tcpc_enable_auto_discharge_disconnect)(int port,
+						      int enable);
+
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	/**
 	 * Enable TCPC auto DRP toggling.
@@ -425,5 +434,14 @@ int board_tcpc_post_init(int port) __attribute__((weak));
  *
  */
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled);
+
+/**
+ * Get the VBUS voltage from TCPC
+ *
+ * @param port Type-C port number
+ *
+ * @return VBUS voltage in mV.
+ */
+int tcpc_get_vbus_voltage(int port);
 
 #endif /* __CROS_EC_USB_PD_TCPM_H */

@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /* 48 MHz SYSCLK clock frequency */
 #define CPU_CLOCK 48000000
 
@@ -129,6 +131,10 @@
 #define TIM_CLOCK32 2
 
 #include "gpio_signal.h"
+
+/* GPIO signal mapping */
+#define GPIO_USART4_SERVO_TX_DUT_RX GPIO_UART3_TX_SERVO_JTAG_TCK
+#define GPIO_USART4_SERVO_RX_DUT_TX GPIO_UART3_RX_JTAG_BUFFER_TO_SERVO_TDO
 
 /* USB string indexes */
 enum usb_strings {

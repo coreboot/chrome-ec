@@ -14,26 +14,38 @@ GPIO_INT(EC_WP_L,              PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)
 GPIO_INT(H1_EC_PWR_BTN_ODL,    PIN(0, 1), GPIO_INT_BOTH, power_button_interrupt)
 GPIO_INT(ACOK_OD,              PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, extpower_interrupt)
 
+/* Optional power sequencing interrupts */
+#ifdef VOLTEER_POWER_SEQUENCE
+GPIO_INT(CPU_C10_GATE_L,       PIN(6, 7), GPIO_INT_BOTH, c10_gate_change)
+#endif
+
 /* Power sequencing interrupts */
 GPIO_INT(SLP_S0_L,             PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
 GPIO_INT(SLP_S3_L,             PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
 #endif
 GPIO_INT(SLP_SUS_L,            PIN(D, 7), GPIO_INT_BOTH, power_signal_interrupt)
-/* TODO(b/139553375): Consider using intel_x86_rsmrst_signal_interrupt. */
 GPIO_INT(PG_EC_RSMRST_ODL,     PIN(E, 2), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(DSW_PWROK,            PIN(C, 7), GPIO_INT_BOTH, power_signal_interrupt)
-/* TODO(b/139553375): This signal is virtual; need to change code to support
- * virtual S4 with physical S3. */
-UNIMPLEMENTED(SLP_S4_L)
+GPIO_INT(PG_EC_ALL_SYS_PWRGD,  PIN(F, 4),  GPIO_INT_BOTH, power_signal_interrupt)
 
 /* Sensor Interrupts */
 
 /* USB-C interrupts */
+GPIO_INT(USB_C0_TCPC_INT_ODL,	PIN(E, 0), GPIO_INT_BOTH, tcpc_alert_event)
+GPIO_INT(USB_C1_TCPC_INT_ODL,	PIN(A, 2), GPIO_INT_BOTH, tcpc_alert_event)
+
+GPIO_INT(USB_C0_PPC_INT_ODL,	PIN(6, 2), GPIO_INT_BOTH, ppc_interrupt)
+GPIO_INT(USB_C1_PPC_INT_ODL,	PIN(F, 5), GPIO_INT_BOTH, ppc_interrupt)
+
+GPIO_INT(USB_C0_BC12_INT_ODL,	PIN(E, 4), GPIO_INT_BOTH, bc12_interrupt)
+GPIO_INT(USB_C1_MIX_INT_ODL,	PIN(0, 3), GPIO_INT_BOTH, bc12_interrupt)
 
 /* HDMI interrupts */
 
 /* Volume button interrupts */
+GPIO_INT(EC_VOLDN_BTN_ODL,     PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
+GPIO_INT(EC_VOLUP_BTN_ODL,     PIN(7, 5), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 
 /* Power Sequencing Signals */
 GPIO(EN_PP3300_A,              PIN(A, 3), GPIO_OUT_LOW)
@@ -41,33 +53,65 @@ GPIO(EN_PP5000_A,              PIN(A, 4), GPIO_OUT_LOW)
 /* The EC does not buffer this signal on Volteer. */
 UNIMPLEMENTED(PCH_DSW_PWROK)
 
+#ifdef VOLTEER_POWER_SEQUENCE
+/* Optional power sequencing signals that are not stuffed by default */
+GPIO(EN_DRAM_VDDQ,		PIN(F, 2), GPIO_OUT_LOW)
+GPIO(EN_PP1050_STG,		PIN(C, 0), GPIO_OUT_LOW)
+GPIO(EN_PP5000_USB_AG,		PIN(A, 7), GPIO_OUT_LOW)
+GPIO(EN_PP1800_A,		PIN(8, 3), GPIO_OUT_LOW)
+GPIO(EN_PPVAR_VCCIN_AUX,	PIN(8, 1), GPIO_OUT_LOW)
+GPIO(EN_PP1050_ST_S0,		PIN(3, 4), GPIO_OUT_LOW)
+GPIO(EN_VNN_BYPASS,		PIN(B, 0), GPIO_OUT_LOW)
+GPIO(EN_PP1050_BYPASS,		PIN(9, 7), GPIO_OUT_LOW)
+GPIO(EN_DRAM_VDD1,		PIN(9, 6), GPIO_OUT_LOW)
+#endif
+
 /* Other wake sources */
 /*
  * GPIO_INT_BOTH is required for PSL wake from hibernate, but we don't need an
  * interrupt handler because it is automatically handled by the PSL.
+ *
+ * We need to lock the setting so this gpio can't be reconfigured to overdrive
+ * the real reset signal. (This is the PSL input pin not the real reset pin).
  */
-GPIO(EC_RST_ODL,		PIN(0, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH)
+GPIO(EC_RST_ODL,		PIN(0, 2), GPIO_INT_BOTH |
+					   GPIO_HIB_WAKE_HIGH |
+					   GPIO_LOCKED)
 
 /* AP/PCH Signals */
-GPIO(EC_PCH_SYS_PWROK,         PIN(3, 7), GPIO_OUT_LOW)  /* TODO - b/140556273 - implement support with power sequencing */
-GPIO(EC_PCH_RSMRST_ODL,        PIN(A, 6), GPIO_ODR_HIGH) /* TODO - b/140950085 - implement TGL sequencing requirement */
+GPIO(EC_PCH_SYS_PWROK,         PIN(3, 7), GPIO_OUT_LOW)
+GPIO(EC_PCH_RSMRST_ODL,        PIN(A, 6), GPIO_ODR_LOW) /* TODO - b/140950085 - implement TGL sequencing requirement */
 GPIO(EC_PCH_PWR_BTN_ODL,       PIN(C, 1), GPIO_ODR_HIGH)
 GPIO(EC_PCH_RTCRST,            PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_ODL,          PIN(7, 4), GPIO_ODR_HIGH)
 GPIO(EC_ENTERING_RW,           PIN(E, 3), GPIO_OUT_LOW)
 GPIO(EC_PROCHOT_ODL,           PIN(6, 3), GPIO_ODR_HIGH)
-GPIO(CPU_C10_GATE_L,           PIN(6, 7), GPIO_INPUT)    /* TODO - b/141322107 - implement if board power sequencing insufficient */
 GPIO(SYS_RST_ODL,              PIN(C, 5), GPIO_ODR_HIGH)
 
 GPIO(EC_PCH_INT_ODL,           PIN(D, 6), GPIO_ODR_HIGH) /* TODO - b/140557015 - implement with MKBD sensor events */
 
 /* USB and USBC Signals */
+GPIO(EN_PP3300_AG,		PIN(8, 5), GPIO_OUT_LOW)
+
+/* TODO - b/145560203 route USB_C1_RT_RST_ODL to EC */
+UNIMPLEMENTED(USB_C1_RT_RST_ODL)
+/* Don't have a load switch for retimer */
+UNIMPLEMENTED(USB_C1_LS_EN)
+/* Retimer Force Power enable is connected to AP */
+UNIMPLEMENTED(USB_C1_RT_FORCE_PWR)
 
 /* Misc Signals */
 /* This selects between an LED module on the motherboard and one on the daughter
  * board, to be controlled by LED{1,2,3}. Select the one on the motherboard by
  * default. */
 GPIO(LED_SIDESEL_4_L,          PIN(6, 0), GPIO_OUT_LOW)
+
+/*
+ * eDP backlight - both PCH and EC have enable pins that must be high
+ * for the backlight to turn on. Default state is high, and can be turned
+ * off during sleep states.
+ */
+GPIO(EC_EDP_BL_EN,             PIN(D, 3), GPIO_OUT_HIGH)
 
 /* I2C pins - Alternate function below configures I2C module on these pins */
 GPIO(EC_I2C0_SENSOR_SCL,       PIN(B, 5), GPIO_INPUT | GPIO_SEL_1P8V)
@@ -83,6 +127,13 @@ GPIO(EC_I2C5_POWER_SDA,        PIN(3, 6), GPIO_INPUT)
 GPIO(EC_I2C7_EEPROM_SCL,       PIN(B, 3), GPIO_INPUT)
 GPIO(EC_I2C7_EEPROM_SDA,       PIN(B, 2), GPIO_INPUT)
 
+/* Battery signals */
+GPIO(EC_BATT_PRES_ODL, 		PIN(E, 1), GPIO_INPUT)
+
+/* Physical HPD pins are not needed on EC as these are configured by PMC */
+GPIO(USB_C0_DP_HPD,		PIN(F, 3), GPIO_INPUT)
+GPIO(USB_C1_DP_HPD,		PIN(7, 0), GPIO_INPUT)
+
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(B, BIT(5) | BIT(4)), 0, MODULE_I2C, (GPIO_INPUT | GPIO_SEL_1P8V)) /* I2C0 */
 ALTERNATE(PIN_MASK(9, BIT(0) | BIT(2) | BIT(1)), 0, MODULE_I2C, 0)                   /* I2C1 SCL / I2C2 */
@@ -92,6 +143,11 @@ ALTERNATE(PIN_MASK(3, BIT(3) | BIT(6)), 0, MODULE_I2C, 0)                       
 ALTERNATE(PIN_MASK(B, BIT(3) | BIT(2)), 0, MODULE_I2C, 0)                            /* I2C7 */
 
 ALTERNATE(PIN_MASK(C, BIT(2) | BIT(3) | BIT(4)), 0, MODULE_PWM, 0)                   /* LED{3,2,1}_L */
+
+/* Fan signals */
+GPIO(EN_PP5000_FAN,            PIN(6, 1), GPIO_OUT_LOW)
+ALTERNATE(PIN_MASK(B, BIT(7)), 0, MODULE_PWM, 0)	/* FAN_PWM */
+ALTERNATE(PIN_MASK(4, BIT(0)), 0, MODULE_PWM, 0)	/* FAN_SPEED_TACH */
 
 /* Keyboard pins */
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)

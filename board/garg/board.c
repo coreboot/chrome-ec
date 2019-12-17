@@ -149,6 +149,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 	 .rot_standard_ref = NULL, /* Identity matrix. */
 	 .default_range = 4, /* g */
+	 .min_frequency = KX022_ACCEL_MIN_FREQ,
+	 .max_frequency = KX022_ACCEL_MAX_FREQ,
 	 .config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
@@ -246,7 +248,7 @@ static void cbi_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
-uint32_t board_override_feature_flags0(uint32_t flags0)
+__override uint32_t board_override_feature_flags0(uint32_t flags0)
 {
 	/*
 	 * Remove keyboard backlight feature for devices that don't support it.
@@ -255,11 +257,6 @@ uint32_t board_override_feature_flags0(uint32_t flags0)
 		return flags0;
 	else
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
-}
-
-uint32_t board_override_feature_flags1(uint32_t flags1)
-{
-	return flags1;
 }
 
 void board_hibernate_late(void)
@@ -295,9 +292,17 @@ void lid_angle_peripheral_enable(int enable)
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC, !is_overcurrented);
+}
+
+uint8_t board_get_usb_pd_port_count(void)
+{
+	/* HDMI SKU has one USB PD port */
+	if (sku_id == 9)
+		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
+	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }

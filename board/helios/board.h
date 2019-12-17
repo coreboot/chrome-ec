@@ -43,12 +43,6 @@
 #define CONFIG_GMR_TABLET_MODE
 #define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 
-/* OPT3001 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT 1
-#define CONFIG_ALS_OPT3001
-#define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
-
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_TCPM_PS8751
@@ -58,6 +52,13 @@
 #define BOARD_TCPC_C1_RESET_POST_DELAY 0
 #define GPIO_USB_C0_TCPC_RST GPIO_USB_C0_TCPC_RST_ODL
 #define GPIO_USB_C1_TCPC_RST GPIO_USB_C1_TCPC_RST_ODL
+
+/*
+ * Helios' battery takes several seconds to come back out of its disconnect
+ * state (~4.2 seconds on the unit I have, so give it a little more for margin).
+ */
+#undef  CONFIG_POWER_BUTTON_INIT_TIMEOUT
+#define CONFIG_POWER_BUTTON_INIT_TIMEOUT 6
 
 /* BC 1.2 */
 #define CONFIG_BC12_DETECT_PI3USB9201

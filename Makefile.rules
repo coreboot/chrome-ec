@@ -17,7 +17,7 @@ build-srcs := $(foreach u,$(build-util-bin),$(sort $($(u)-objs:%.o=util/%.c) $(w
 host-srcs := $(foreach u,$(host-util-bin),$(sort $($(u)-objs:%.o=util/%.c) $(wildcard util/$(u).c)))
 
 # Don't do a build test on the following boards:
-skip_boards = OWNERS host kevin gru
+skip_boards = OWNERS host kevin gru chell glados chell_pd glados_pd
 boards := $(filter-out $(skip_boards),$(notdir $(wildcard board/* private*/board/*)))
 
 # Create output directories if necessary
@@ -453,10 +453,10 @@ $(out)/RW/%.hex: $(out)/RW/%.elf $(out)/RW/%.smap
 	$(call quiet,elf_to_hex,OBJCOPY)
 
 ifeq ($(SIGNED_IMAGES),)
-$(out)/%.flat: $(out)/%.elf $(out)/%.smap utils-build
+$(out)/%.flat: $(out)/%.elf $(out)/%.smap $(build-utils)
 	$(call quiet,ec_elf_to_flat,OBJCOPY)
 
-$(out)/%.flat.dram: $(out)/%.elf $(out)/%.smap utils-build
+$(out)/%.flat.dram: $(out)/%.elf $(out)/%.smap $(build-utils)
 	$(call quiet,ec_elf_to_flat_dram,OBJCOPY)
 
 $(out)/RO/%.hex: $(out)/RO/%.elf $(out)/RO/%.smap
@@ -621,11 +621,14 @@ $(npcx-monitor-hdr-rw-bin):$(out)/$(npcx-monitor-hdr)_rw.o
 xrefs: $(call targ_if_prog,etags,$(out)/TAGS) \
 	$(call targ_if_prog,ctags,$(out)/tags)
 
+openocd-cfg-flash = $(or $(wildcard $(BDIR)/openocd-flash.cfg),\
+	$(error Board $(BOARD) doesn't support OpenOCD flashing))
+
 .PHONY: flash
 flash: $(out)/ec.bin
 	openocd -c "set BOARD $(BOARD)"\
 		-c "set BUILD_DIR $(out)"\
-		-f $(BDIR)/openocd-flash.cfg
+		-f $(openocd-cfg-flash)
 
 .PHONY: flash_ec
 flash_ec: $(out)/ec.bin
@@ -676,12 +679,17 @@ help:
 	@echo "  proj-<boardname>     - Build a single board (similar to 'all BOARD=boardname')"
 	@echo "  savesizes            - Save the filesizes of currently built boards for comparison"
 	@echo "  newsizes             - Compare previously saved filesizes against new sizes"
+	@echo "  utils                - Build all host utilities"
 	@echo ""
 	@echo "  tests [BOARD=]       - Build all unit tests for a specific board"
 	@echo "  hosttests            - Build all host unit tests"
 	@echo "  runhosttests         - Build and run all host unit tests"
 	@echo "  buildfuzztests       - Build all host fuzzers"
 	@echo "  runfuzztests         - Build and run all host fuzzers for one round"
+	@echo ""
+	@echo "  flash     [BOARD=]   - Use OpenOCD to flash the latest image"
+	@echo "  flash_ec  [BOARD=]   - Use flash_ec to flash the latest image"
+	@echo "  flash_dfu [BOARD=]   - Use DFU to flash the latest image"
 	@echo ""
 	@echo "  print-tests          - Prints all device specific test targets"
 	@echo "  print-host-tests     - Prints all host test targets"

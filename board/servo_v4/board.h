@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /*
  * Board Versions:
  * Versions are designated by the PCB color and consist of red, blue, and
@@ -103,10 +105,11 @@
 #undef  CONFIG_CHARGE_MANAGER_SAFE_MODE
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_CMD_PD
+#define CONFIG_USB_PD_CUSTOM_PDO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DYNAMIC_SRC_CAP
 #define CONFIG_USB_PD_INTERNAL_COMP
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
 #undef CONFIG_USB_PD_PULLUP
@@ -140,6 +143,10 @@
  * switch.
  */
 #define CONFIG_SYSTEM_UNLOCKED
+
+/* Console command removed on ToT only. Do not cherry pick to servo branch */
+#undef CONFIG_CMD_PD
+#undef CONFIG_CMD_USART_INFO
 
 #ifndef __ASSEMBLER__
 

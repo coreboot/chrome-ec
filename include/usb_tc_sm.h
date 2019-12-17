@@ -51,17 +51,26 @@ int tc_is_attached_snk(int port);
  * Get current data role
  *
  * @param port USB-C port number
- * @return 0 for ufp, 1 for dfp, 2 for disconnected
+ * @return PD data role
  */
-int tc_get_data_role(int port);
+enum pd_data_role tc_get_data_role(int port);
 
 /**
  * Get current power role
  *
  * @param port USB-C port number
- * @return 0 for sink, 1 for source or vpd
+ * @return PD power role
  */
-int tc_get_power_role(int port);
+enum pd_power_role tc_get_power_role(int port);
+
+/**
+ * Get cable plug setting. This should be constant per build. This replaces
+ * the power role bit in PD header for SOP' and SOP" packets.
+ *
+ * @param port USB-C port number
+ * @return PD cable plug setting
+ */
+enum pd_cable_plug tc_get_cable_plug(int port);
 
 /**
  * Get current polarity
@@ -86,7 +95,7 @@ uint8_t tc_get_pd_enabled(int port);
  * @param port USB-C port number
  * @param role power role
  */
-void tc_set_power_role(int port, int role);
+void tc_set_power_role(int port, enum pd_power_role role);
 
 /**
  * Set the data role
@@ -94,7 +103,7 @@ void tc_set_power_role(int port, int role);
  * @param port USB-C port number
  * @param role data role
  */
-void tc_set_data_role(int port, int role);
+void tc_set_data_role(int port, enum pd_data_role role);
 
 /**
  * Sets the USB Mux depending on current data role
@@ -117,12 +126,12 @@ void tc_partner_dr_power(int port, int en);
 
 /**
  * Policy Engine informs the Type-C state machine if the port partner
- * has external power
+ * has unconstrained power
  *
  * @param port USB_C port number
- * @param en   1 if port partner has external power, else 0
+ * @param en   1 if port partner has unconstrained power, else 0
  */
-void tc_partner_extpower(int port, int en);
+void tc_partner_unconstrainedpower(int port, int en);
 
 /**
  * Policy Engine informs the Type-C state machine if the port partner
@@ -166,6 +175,14 @@ void tc_prs_src_snk_assert_rd(int port);
  * @param port USB_C port number
  */
 void tc_prs_snk_src_assert_rp(int port);
+
+/**
+ * Informs the Type-C State Machine that a Power Role Swap is starting.
+ * This function is called from the Policy Engine.
+ *
+ * @parm port USB_C port number
+ */
+void tc_request_power_swap(int port);
 
 /**
  * Informs the Type-C State Machine that a Power Role Swap is complete.
@@ -325,6 +342,20 @@ void tc_start_error_recovery(int port);
  * @param port USB-C port number
  */
 void tc_hard_reset(int port);
+
+/**
+ * Start the state machine event loop
+ *
+ * @param port USB-C port number
+ */
+void tc_start_event_loop(int port);
+
+/**
+ * Pauses the state machine event loop
+ *
+ * @param port USB-C port number
+ */
+void tc_pause_event_loop(int port);
 
 #ifdef CONFIG_USB_TYPEC_CTVPD
 

@@ -21,6 +21,7 @@
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
+#include "driver/retimer/pi3dpx1207.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
@@ -125,12 +126,12 @@ const struct i2c_port_t i2c_ports[] = {
 		.name = "power",
 		.port = I2C_PORT_BATTERY,
 		.kbps = 100,
-		.scl = GPIO_EC_I2C_POWER_CBI_SCL,
-		.sda = GPIO_EC_I2C_POWER_CBI_SDA,
+		.scl = GPIO_EC_I2C_POWER_SCL,
+		.sda = GPIO_EC_I2C_POWER_SDA,
 	},
 	{
 		.name = "mux",
-		.port = I2C_PORT_MUX,
+		.port = I2C_PORT_USB_MUX,
 		.kbps = 400,
 		.scl = GPIO_EC_I2C_USBC_AP_MUX_SCL,
 		.sda = GPIO_EC_I2C_USBC_AP_MUX_SDA,
@@ -146,8 +147,8 @@ const struct i2c_port_t i2c_ports[] = {
 		.name = "sensor",
 		.port = I2C_PORT_SENSOR,
 		.kbps = 400,
-		.scl = GPIO_EC_I2C_SENSOR_SCL,
-		.sda = GPIO_EC_I2C_SENSOR_SDA,
+		.scl = GPIO_EC_I2C_SENSOR_CBI_SCL,
+		.sda = GPIO_EC_I2C_SENSOR_CBI_SDA,
 	},
 	{
 		.name = "ap_audio",
@@ -192,7 +193,7 @@ const struct fan_rpm fan_rpm_0 = {
 	.rpm_start = 3100,
 	.rpm_max = 6900,
 };
-struct fan_t fans[] = {
+const struct fan_t fans[] = {
 	[FAN_CH_0] = {
 		.conf = &fan_conf_0,
 		.rpm = &fan_rpm_0,
@@ -244,7 +245,7 @@ void ppc_interrupt(enum gpio_signal signal)
 int board_set_active_charge_port(int port)
 {
 	int is_valid_port = (port >= 0 &&
-			     port < CONFIG_USB_PD_PORT_COUNT);
+			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 
 	if (port == CHARGE_PORT_NONE) {
@@ -314,7 +315,7 @@ const struct tcpc_config_t tcpc_config[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
-BUILD_ASSERT(CONFIG_USB_PD_PORT_COUNT == USBC_PORT_COUNT);
+BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	[USBC_PORT_C0] = {
@@ -458,15 +459,25 @@ void bc12_interrupt(enum gpio_signal signal)
 
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.driver = &amd_fp5_usb_mux_driver,
 	},
 	[USBC_PORT_C1] = {
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.driver = &amd_fp5_usb_mux_driver,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
+
+struct usb_retimer usb_retimers[USBC_PORT_COUNT] = {
+	[USBC_PORT_C0] = {
+		.driver = &pi3dpx1207_usb_retimer,
+		.i2c_port = I2C_PORT_TCPC0,
+		.i2c_addr_flags = PI3DPX1207_I2C_ADDR_FLAGS,
+		.gpio_enable = IOEX_USB_C0_DATA_EN,
+		.gpio_dp_enable = GPIO_USB_C0_IN_HPD,
+	},
+	[USBC_PORT_C1] = {
+	},
+};
 
 struct ioexpander_config_t ioex_config[] = {
 	[USBC_PORT_C0] = {
@@ -482,6 +493,11 @@ struct ioexpander_config_t ioex_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_IO_EXPANDER_PORT_COUNT == USBC_PORT_COUNT);
+
+const int usb_port_enable[USB_PORT_COUNT] = {
+	IOEX_EN_USB_A0_5V,
+	IOEX_EN_USB_A1_5V_DB,
+};
 
 static void baseboard_chipset_suspend(void)
 {
@@ -557,17 +573,45 @@ static const struct thermistor_info thermistor_info = {
 
 static int board_get_temp(int idx, int *temp_k)
 {
-	/* idx is the sensor index set below in temp_sensors[] */
-	int mv = adc_read_channel(
-		idx ? ADC_TEMP_SENSOR_SOC : ADC_TEMP_SENSOR_CHARGER);
+	int mv;
 	int temp_c;
+	enum adc_channel channel;
 
+	/* idx is the sensor index set below in temp_sensors[] */
+	switch (idx) {
+	case TEMP_SENSOR_CHARGER:
+		/* TODO: b/143598098
+		 * Revision 1.6 of the schematic will put this
+		 * thermistor on power rail EC_A instead of
+		 * PP3300_A.  This will make the charger circuit
+		 * temperature available even when the AP is not
+		 * powered and the check will no longer be needed
+		 */
+
+		/* thermistor is not powered in G3 */
+		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			return EC_ERROR_NOT_POWERED;
+
+		channel = ADC_TEMP_SENSOR_CHARGER;
+		break;
+	case TEMP_SENSOR_SOC:
+		/* thermistor is not powered in G3 */
+		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			return EC_ERROR_NOT_POWERED;
+
+		channel = ADC_TEMP_SENSOR_SOC;
+		break;
+	default:
+		return EC_ERROR_INVAL;
+	}
+
+	mv = adc_read_channel(channel);
 	if (mv < 0)
-		return -1;
+		return EC_ERROR_INVAL;
 
 	temp_c = thermistor_linear_interpolate(mv, &thermistor_info);
 	*temp_k = C_TO_K(temp_c);
-	return 0;
+	return EC_SUCCESS;
 }
 
 const struct temp_sensor_t temp_sensors[] = {
@@ -575,14 +619,14 @@ const struct temp_sensor_t temp_sensors[] = {
 		.name = "Charger",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = board_get_temp,
-		.idx = 0,
+		.idx = TEMP_SENSOR_CHARGER,
 		.action_delay_sec = 1,
 	},
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = board_get_temp,
-		.idx = 1,
+		.idx = TEMP_SENSOR_SOC,
 		.action_delay_sec = 5,
 	},
 	[TEMP_SENSOR_CPU] = {
@@ -595,10 +639,22 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_a = {
+const static struct ec_thermal_config thermal_thermistor = {
 	.temp_host = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+	},
+	.temp_fan_off = C_TO_K(25),
+	.temp_fan_max = C_TO_K(50),
+};
+
+const static struct ec_thermal_config thermal_cpu = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(95),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
@@ -611,9 +667,9 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
 static void setup_fans(void)
 {
-	thermal_params[TEMP_SENSOR_CHARGER] = thermal_a;
-	thermal_params[TEMP_SENSOR_SOC] = thermal_a;
-	thermal_params[TEMP_SENSOR_CPU] = thermal_a;
+	thermal_params[TEMP_SENSOR_CHARGER] = thermal_thermistor;
+	thermal_params[TEMP_SENSOR_SOC] = thermal_thermistor;
+	thermal_params[TEMP_SENSOR_CPU] = thermal_cpu;
 }
 
 #ifdef HAS_TASK_MOTIONSENSE
@@ -766,16 +822,6 @@ int board_is_convertible(void)
 int board_is_lid_angle_tablet_mode(void)
 {
 	return board_is_convertible();
-}
-
-uint32_t board_override_feature_flags0(uint32_t flags0)
-{
-	return flags0;
-}
-
-uint32_t board_override_feature_flags1(uint32_t flags1)
-{
-	return flags1;
 }
 
 void board_overcurrent_event(int port, int is_overcurrented)

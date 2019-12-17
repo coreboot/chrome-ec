@@ -24,8 +24,9 @@
 #include "baseboard.h"
 
 #define CONFIG_CHIPSET_TIGERLAKE
-#define GPIO_PG_EC_RSMRST_ODL	GPIO_RSMRST_L_PGOOD
-#define GPIO_PCH_DSW_PWROK	GPIO_EC_PCH_DSW_PWROK
+#define GPIO_PG_EC_RSMRST_ODL		GPIO_RSMRST_L_PGOOD
+#define GPIO_PCH_DSW_PWROK		GPIO_EC_PCH_DSW_PWROK
+#define GPIO_PG_EC_ALL_SYS_PWRGD	GPIO_ALL_SYS_PWRGD
 
 /* Charger */
 #define CONFIG_CHARGER_ISL9241
@@ -35,7 +36,7 @@
 #define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
 
 /* USB ports */
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define DEDICATED_CHARGE_PORT 2
 
 /* USB-C port's USB2 & USB3 port numbers */
@@ -55,7 +56,7 @@
 
 
 /* Config BB retimer */
-#define CONFIG_USB_PD_RETIMER_INTEL_BB
+#define CONFIG_USBC_RETIMER_INTEL_BB
 
 /* Thermal configs */
 
@@ -76,13 +77,13 @@
 	#define I2C_PORT1_BB_RETIMER_ADDR	0x43
 
 	/* BB retimer nvm is shared between port 0 & 1 */
-	#define BB_RETIMER_SHARED_NVM 1
+	#define BB_RETIMER_SHARED_NVM true
 #else /* BOARD_TGLRVPY_ITE */
 	#define I2C_PORT0_BB_RETIMER_ADDR	0x42
 	#define I2C_PORT1_BB_RETIMER_ADDR	0x41
 
 	/* BB retimers have respective nvm for port 0 & 1 */
-	#define BB_RETIMER_SHARED_NVM 0
+	#define BB_RETIMER_SHARED_NVM false
 #endif /* BOARD_TGLRVPU_ITE */
 #define USB_PORT0_BB_RETIMER_SHARED_NVM	BB_RETIMER_SHARED_NVM
 #define USB_PORT1_BB_RETIMER_SHARED_NVM	BB_RETIMER_SHARED_NVM

@@ -3,16 +3,29 @@
  * found in the LICENSE file.
  */
 
-/* Meowth Fingerprint MCU configuration */
+/*
+ * STM32H743 + FPC 1145 Fingerprint MCU configuration
+ *
+ * Alternate names that share this same board file:
+ *   nocturne_fp
+ *   nami_fp
+ *   dartmonkey
+ *   dragontalon
+ */
 
 #ifndef __BOARD_H
 #define __BOARD_H
 
+#undef CONFIG_SYSTEM_UNLOCKED
+
 /*
- * TODO(b/73337313) remove this config,
- * once the write-protection scheme is decided and validated.
+ * These allow console commands to be flagged as restricted.
+ * Restricted commands will only be permitted to run when
+ * console_is_restricted() returns false.
+ * See console_is_restricted's definition in board.c.
  */
-#define CONFIG_SYSTEM_UNLOCKED
+#define CONFIG_CONSOLE_COMMAND_FLAGS
+#define CONFIG_RESTRICTED_CONSOLE_COMMANDS
 
 /*
  * Flash layout: we redefine the sections offsets and sizes as we want to

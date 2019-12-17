@@ -10,6 +10,7 @@
 #include "charge_ramp.h"
 #include "charge_state.h"
 #include "charger.h"
+#include "charger_mt6370.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -23,6 +24,7 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "i2c_bitbang.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -66,6 +68,11 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+const struct i2c_port_t i2c_bitbang_ports[] = {
+	{"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
+};
+const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
+
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
 	{GPIO_AP_IN_SLEEP_L,   POWER_SIGNAL_ACTIVE_LOW,  "AP_IN_S3_L"},
@@ -80,7 +87,7 @@ const struct spi_device_t spi_devices[] = {
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 
 /******************************************************************************/
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -89,6 +96,11 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		},
 		.drv = &mt6370_tcpm_drv,
 	},
+};
+
+struct mt6370_thermal_bound thermal_bound = {
+	.target = 75,
+	.err = 4,
 };
 
 static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
@@ -100,7 +112,22 @@ static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
 	host_set_single_event(EC_HOST_EVENT_USB_MUX);
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+
+__override const struct rt946x_init_setting *board_rt946x_init_setting(void)
+{
+	static const struct rt946x_init_setting battery_init_setting = {
+		.eoc_current = 150,
+		.mivr = 4000,
+		.ircmp_vclamp = 32,
+		.ircmp_res = 25,
+		.boost_voltage = 5050,
+		.boost_current = 1500,
+	};
+
+	return &battery_init_setting;
+}
+
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.port_addr = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
@@ -125,7 +152,7 @@ int board_set_active_charge_port(int charge_port)
 	CPRINTS("New chg p%d", charge_port);
 
 	/* ignore all request when discharge mode is on */
-	if (force_discharge)
+	if (force_discharge && charge_port != CHARGE_PORT_NONE)
 		return EC_SUCCESS;
 
 	switch (charge_port) {
@@ -163,12 +190,15 @@ int board_discharge_on_ac(int enable)
 			port = charge_manager_get_active_charge_port();
 	}
 
-	ret = board_set_active_charge_port(port);
+	ret = charger_discharge_on_ac(enable);
 	if (ret)
 		return ret;
-	force_discharge = enable;
 
-	return charger_discharge_on_ac(enable);
+	if (force_discharge && !enable)
+		rt946x_toggle_bc12_detection();
+
+	force_discharge = enable;
+	return board_set_active_charge_port(port);
 }
 
 int extpower_is_present(void)
@@ -204,9 +234,6 @@ static void board_init(void)
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 1);
 	}
 
-	/* Set SPI1 PB13/14/15 pins to high speed */
-	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xfc000000;
-
 	/* Enable TCPC alert interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
 
@@ -241,12 +268,12 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 #ifdef SECTION_IS_RW
 static struct mutex g_lid_mutex;
 
-static struct lsm6dsm_data lsm6dsm_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Matrix to rotate accelerometer into standard reference frame */
 static const mat33_fp_t lid_standard_ref = {
+	{0, FLOAT_TO_FP(1), 0},
 	{FLOAT_TO_FP(-1), 0, 0},
-	{0, FLOAT_TO_FP(-1), 0},
 	{0, 0, FLOAT_TO_FP(1)}
 };
 
@@ -349,4 +376,9 @@ void board_fill_source_power_info(int port,
 	r->meas.current_max = 1500;
 	r->meas.current_lim = 1500;
 	r->max_power = r->meas.voltage_now * r->meas.current_max;
+}
+
+int board_get_battery_i2c(void)
+{
+	return board_get_version() >= 2 ? 2 : 1;
 }

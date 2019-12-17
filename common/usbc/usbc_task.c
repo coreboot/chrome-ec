@@ -34,9 +34,22 @@
 
 #define USBC_EVENT_TIMEOUT (5 * MSEC)
 
+static uint8_t paused[CONFIG_USB_PD_PORT_MAX_COUNT];
+
 int tc_restart_tcpc(int port)
 {
 	return tcpm_init(port);
+}
+
+void tc_pause_event_loop(int port)
+{
+	paused[port] = 1;
+}
+
+void tc_start_event_loop(int port)
+{
+	paused[port] = 0;
+	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
 }
 
 void set_polarity(int port, int polarity)
@@ -97,7 +110,7 @@ void set_usb_mux_with_current_data_role(int port)
 /* Events for pd_interrupt_handler_task */
 #define PD_PROCESS_INTERRUPT  (1<<0)
 
-static uint8_t pd_int_task_id[CONFIG_USB_PD_PORT_COUNT];
+static uint8_t pd_int_task_id[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 void schedule_deferred_pd_interrupt(const int port)
 {
@@ -115,7 +128,7 @@ void pd_interrupt_handler_task(void *p)
 	const int port = (int) p;
 	const int port_mask = (PD_STATUS_TCPC_ALERT_0 << port);
 
-	ASSERT(port >= 0 && port < CONFIG_USB_PD_PORT_COUNT);
+	ASSERT(port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 
 	pd_int_task_id[port] = task_get_current();
 
@@ -164,7 +177,10 @@ void pd_task(void *u)
 
 	while (1) {
 		/* wait for next event/packet or timeout expiration */
-		const uint32_t evt = task_wait_event(USBC_EVENT_TIMEOUT);
+		const uint32_t evt =
+			task_wait_event(paused[port]
+						? -1
+						: USBC_EVENT_TIMEOUT);
 
 		/* handle events that affect the state machine as a whole */
 		tc_event_check(port, evt);

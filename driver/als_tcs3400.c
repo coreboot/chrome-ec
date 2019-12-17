@@ -273,7 +273,10 @@ static void tcs3400_translate_to_xyz(struct motion_sensor_t *s,
 	int i;
 
 	/* IR removal */
-	ir = (crgb_data[1] + crgb_data[2] + crgb_data[3] - crgb_data[0]) / 2;
+	ir = FP_TO_INT(fp_mul(INT_TO_FP(crgb_data[1] + crgb_data[2] +
+			      crgb_data[3] - crgb_data[0]),
+			      rgb_drv_data->calibration.irt) / 2);
+
 	for (i = 0; i < ARRAY_SIZE(crgb_prime); i++) {
 		if (crgb_data[i] < ir)
 			crgb_prime[i] = 0;
@@ -287,7 +290,8 @@ static void tcs3400_translate_to_xyz(struct motion_sensor_t *s,
 
 	/* regression fit to XYZ space */
 	for (i = 0; i < 3; i++) {
-		const struct rgb_calibration_t *p = &rgb_drv_data->rgb_cal[i];
+		const struct rgb_channel_calibration_t *p =
+				&rgb_drv_data->calibration.rgb_cal[i];
 
 		xyz_data[i] = p->offset + FP_TO_INT(
 			(fp_inter_t)p->coeff[RED_CRGB_IDX] *
@@ -332,7 +336,7 @@ static void tcs3400_process_raw_data(struct motion_sensor_t *s,
 		/* rgb data at index 1, 2, and 3 owned by rgb driver, not ALS */
 		if (i > 0) {
 			struct als_channel_scale_t *csp =
-				&rgb_drv_data->rgb_cal[i-1].scale;
+				&rgb_drv_data->calibration.rgb_cal[i-1].scale;
 			k_channel_scale = csp->k_channel_scale;
 			cover_scale = csp->cover_scale;
 		}
@@ -358,6 +362,20 @@ static void tcs3400_process_raw_data(struct motion_sensor_t *s,
 	}
 }
 
+static int32_t get_lux_from_xyz(struct motion_sensor_t *s, int32_t *xyz_data)
+{
+	int32_t lux = xyz_data[Y];
+	const int32_t offset =
+		TCS3400_RGB_DRV_DATA(s+1)->calibration.rgb_cal[Y].offset;
+
+	/*
+	 * Do not include the offset when determining LUX from XYZ.
+	 */
+	lux = MAX(0, lux - offset);
+
+	return lux;
+}
+
 static int tcs3400_post_events(struct motion_sensor_t *s, uint32_t last_ts)
 {
 	/*
@@ -374,6 +392,7 @@ static int tcs3400_post_events(struct motion_sensor_t *s, uint32_t last_ts)
 	int retries = 20;     /* 400 ms max */
 	int *last_v = s->raw_xyz;
 	int32_t data = 0;
+	int32_t lux;
 	int i, ret = EC_SUCCESS;
 
 	/* Make sure data is valid */
@@ -401,13 +420,19 @@ static int tcs3400_post_events(struct motion_sensor_t *s, uint32_t last_ts)
 	/* Process the raw light data, adjusting for scale and calibration */
 	tcs3400_process_raw_data(s, buf, raw_data, xyz_data);
 
+	/* get lux value */
+	if (calibration_mode)
+		lux = xyz_data[Y];
+	else
+		lux = get_lux_from_xyz(s, xyz_data);
+
 	/* if clear channel data changed, send illuminance upstream */
 	if ((raw_data[CLEAR_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
-	    (last_v[X] != xyz_data[Y])) {
+	    (last_v[X] != lux)) {
 		if (calibration_mode)
 			last_v[X] = raw_data[CLEAR_CRGB_IDX];
 		else
-			last_v[X] = xyz_data[Y];
+			last_v[X] = lux;
 		vector.flags = 0;
 		vector.data[X] = last_v[X];
 		vector.data[Y] = 0;
@@ -531,7 +556,8 @@ static int tcs3400_rgb_get_scale(const struct motion_sensor_t *s,
 				 uint16_t *scale,
 				 int16_t *temp)
 {
-	struct rgb_calibration_t *rgb_cal = TCS3400_RGB_DRV_DATA(s)->rgb_cal;
+	struct rgb_channel_calibration_t *rgb_cal =
+			TCS3400_RGB_DRV_DATA(s)->calibration.rgb_cal;
 
 	scale[X] = rgb_cal[RED_RGB_IDX].scale.k_channel_scale;
 	scale[Y] = rgb_cal[GREEN_RGB_IDX].scale.k_channel_scale;
@@ -544,7 +570,8 @@ static int tcs3400_rgb_set_scale(const struct motion_sensor_t *s,
 				 const uint16_t *scale,
 				 int16_t temp)
 {
-	struct rgb_calibration_t *rgb_cal = TCS3400_RGB_DRV_DATA(s)->rgb_cal;
+	struct rgb_channel_calibration_t *rgb_cal =
+			TCS3400_RGB_DRV_DATA(s)->calibration.rgb_cal;
 
 	rgb_cal[RED_RGB_IDX].scale.k_channel_scale = scale[X];
 	rgb_cal[GREEN_RGB_IDX].scale.k_channel_scale = scale[Y];
@@ -556,9 +583,9 @@ static int tcs3400_rgb_get_offset(const struct motion_sensor_t *s,
 				  int16_t *offset,
 				  int16_t *temp)
 {
-	offset[X] = TCS3400_RGB_DRV_DATA(s)->rgb_cal[X].offset;
-	offset[Y] = TCS3400_RGB_DRV_DATA(s)->rgb_cal[Y].offset;
-	offset[Z] = TCS3400_RGB_DRV_DATA(s)->rgb_cal[Z].offset;
+	offset[X] = TCS3400_RGB_DRV_DATA(s)->calibration.rgb_cal[X].offset;
+	offset[Y] = TCS3400_RGB_DRV_DATA(s)->calibration.rgb_cal[Y].offset;
+	offset[Z] = TCS3400_RGB_DRV_DATA(s)->calibration.rgb_cal[Z].offset;
 	*temp = EC_MOTION_SENSE_INVALID_CALIB_TEMP;
 	return EC_SUCCESS;
 }

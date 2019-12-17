@@ -9,7 +9,6 @@
 #include "console.h"
 #include "host_command.h"
 #include "usb_mux.h"
-#include "usb_retimer.h"
 #include "util.h"
 
 /*
@@ -22,27 +21,20 @@
 			USB_PD_MUX_DP_ENABLED | USB_PD_MUX_POLARITY_INVERTED | \
 			USB_PD_MUX_SAFE_MODE)
 
-static mux_state_t virtual_mux_state[CONFIG_USB_PD_PORT_COUNT];
+static mux_state_t virtual_mux_state[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static inline void virtual_mux_update_state(int port, mux_state_t mux_state)
 {
 	if (virtual_mux_state[port] != mux_state) {
 		virtual_mux_state[port] = mux_state;
-#ifdef CONFIG_USB_PD_RETIMER
-		if (retimer_set_state(port, mux_state))
-			return;
-#endif
+
 		host_set_single_event(EC_HOST_EVENT_USB_MUX);
 	}
 }
 
 static int virtual_init(int port)
 {
-#ifdef CONFIG_USB_PD_RETIMER
-	return retimer_init(port);
-#else
 	return EC_SUCCESS;
-#endif
 }
 
 /*
@@ -86,7 +78,4 @@ const struct usb_mux_driver virtual_usb_mux_driver = {
 	.init = virtual_init,
 	.set = virtual_set_mux,
 	.get = virtual_get_mux,
-#ifdef CONFIG_USB_PD_RETIMER
-	.enter_low_power_mode = retimer_low_power_mode,
-#endif
 };

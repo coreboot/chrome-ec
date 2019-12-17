@@ -11,7 +11,6 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#define CONFIG_EC_FEATURE_BOARD_OVERRIDE
 #define CONFIG_POWER_BUTTON
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
@@ -26,6 +25,7 @@
 
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
+#define CONFIG_KEYBOARD_FACTORY_TEST
 
 /* Sensors */
 /* BMI160 Base accel/gyro */
@@ -36,15 +36,19 @@
 #define CONFIG_ACCELGYRO_BMI160_INT2_OUTPUT
 /* BMA253 Lid accel */
 #define CONFIG_ACCEL_BMA255
-#define CONFIG_ACCEL_FORCE_MODE_MASK (BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 #define CONFIG_LID_ANGLE_UPDATE
+#define CONFIG_GMR_TABLET_MODE
+#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_TCPM_ANX7447
+#define CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
 #define CONFIG_USB_PD_TCPM_PS8751
 #define BOARD_TCPC_C0_RESET_HOLD_DELAY ANX74XX_RESET_HOLD_MS
 #define BOARD_TCPC_C0_RESET_POST_DELAY ANX74XX_RESET_HOLD_MS
@@ -82,7 +86,7 @@
 /* Fan features */
 #define CONFIG_FANS 1
 #undef CONFIG_FAN_INIT_SPEED
-#define CONFIG_FAN_INIT_SPEED 50
+#define CONFIG_FAN_INIT_SPEED 10
 #define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_A_RAILS
 #define CONFIG_THERMISTOR
 #define CONFIG_THROTTLE_AP
@@ -120,6 +124,7 @@
 enum adc_channel {
 	ADC_TEMP_SENSOR_1,	/* ADC0 */
 	ADC_TEMP_SENSOR_2,	/* ADC1 */
+	ADC_TEMP_SENSOR_3,	/* ADC2 */
 	ADC_CH_COUNT
 };
 
@@ -127,8 +132,6 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
-	CLEAR_ALS,
-	RGB_ALS,
 	SENSOR_COUNT,
 };
 
@@ -153,6 +156,7 @@ enum mft_channel {
 enum temp_sensor_id {
 	TEMP_SENSOR_1,
 	TEMP_SENSOR_2,
+	TEMP_SENSOR_3,
 	TEMP_SENSOR_COUNT
 };
 
@@ -162,6 +166,11 @@ enum battery_type {
 	BATTERY_LGC,
 	BATTERY_TYPE_COUNT,
 };
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+#endif
 
 #endif /* !__ASSEMBLER__ */
 

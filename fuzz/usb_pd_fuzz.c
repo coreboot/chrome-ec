@@ -45,6 +45,11 @@ static int mock_tcpci_get_chip_info(int port, int live,
 	return EC_ERROR_UNIMPLEMENTED;
 }
 
+static __maybe_unused int mock_enter_low_power_mode(int port)
+{
+	return EC_SUCCESS;
+}
+
 #define MAX_TCPC_PAYLOAD 28
 
 struct message {
@@ -58,7 +63,7 @@ struct tcpc_state {
 	struct message message;
 };
 
-static struct tcpc_state mock_tcpc_state[CONFIG_USB_PD_PORT_COUNT];
+static struct tcpc_state mock_tcpc_state[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static int mock_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 	enum tcpc_cc_voltage_status *cc2)
@@ -130,10 +135,13 @@ static const struct tcpm_drv mock_tcpm_drv = {
 	.transmit               = &mock_tcpm_transmit,
 	.tcpc_alert             = &mock_tcpc_alert,
 	.get_chip_info          = &mock_tcpci_get_chip_info,
+#ifdef CONFIG_USB_PD_TCPC_LOW_POWER
+	.enter_low_power_mode   = &mock_enter_low_power_mode,
+#endif
 };
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.drv = &mock_tcpm_drv,
 	},
@@ -184,6 +192,11 @@ void run_test(void)
 
 		pthread_cond_signal(&done_cond);
 	}
+}
+
+int board_vbus_source_enabled(int port)
+{
+	return 0;
 }
 
 int test_fuzz_one_input(const uint8_t *data, unsigned int size)

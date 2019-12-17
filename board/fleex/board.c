@@ -119,7 +119,7 @@ const mat33_fp_t lid_standard_ref = {
 
 /* sensor private data */
 static struct stprivate_data g_lis2dh_data;
-static struct lsm6dsm_data lsm6dsm_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -258,7 +258,7 @@ void lid_angle_peripheral_enable(int enable)
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */

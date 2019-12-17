@@ -53,6 +53,9 @@ documentation][wp_screw]. Older Chrome OS devices had a write protect screw
 that had to be physically removed. More details on this history can be found
 here: http://go/cros-wp-status.
 
+Another way of disabling hardware write protection is to remove the battery;
+this method is mainly used during bringup.
+
 Additional reference:
 https://www.google.com/chromeos/partner/fe/docs/cpfe/firmwaretestmanual.html#hardware-write-protect
 
@@ -300,4 +303,4 @@ etc.) return an error if `EC_FLASH_PROTECT_ALL_NOW` is set.
 [`OverrideWP`]: ./case_closed_debugging_cr50.md
 [wp_screw]: https://www.chromium.org/chromium-os/firmware-porting-guide/firmware-ec-write-protection
 [`system_is_locked()`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/aaba1d5efd51082d143ce2ac64e6caf9cb14d5e5/common/system.c#195
-[Servo]: https://www.chromium.org/chromium-os/servo
+[Servo]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/master/README.md

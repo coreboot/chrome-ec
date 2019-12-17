@@ -33,6 +33,7 @@
 #include "spi.h"
 #include "switch.h"
 #include "system.h"
+#include "tablet_mode.h"
 #include "task.h"
 #include "temp_sensor.h"
 #include "thermal.h"
@@ -125,7 +126,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /******************************************************************************/
 /* USB-C TPCP Configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -145,7 +146,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.driver = &anx7447_usb_mux_driver,
 		.hpd_update = &anx7447_tcpc_update_hpd_status,
@@ -182,19 +183,14 @@ static struct accelgyro_saved_data_t g_bma255_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
-/*
- * TODO(b/124337208): P0 boards don't have this sensor mounted so the rotation
- * matrix can't be tested properly. This needs to be revisited after EVT to make
- * sure the rotaiton matrix for the lid sensor is correct.
- */
 static const mat33_fp_t lid_standard_ref = {
+	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
@@ -283,12 +279,12 @@ const struct fan_conf fan_conf_0 = {
 
 /* Default */
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3100,
-	.rpm_start = 3100,
-	.rpm_max = 6900,
+	.rpm_min = 2500,
+	.rpm_start = 2500,
+	.rpm_max = 6500,
 };
 
-struct fan_t fans[FAN_CH_COUNT] = {
+const struct fan_t fans[FAN_CH_COUNT] = {
 	[FAN_CH_0] = { .conf = &fan_conf_0, .rpm = &fan_rpm_0, },
 };
 
@@ -302,38 +298,55 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 /* ADC channels */
 const struct adc_t adc_channels[] = {
 	[ADC_TEMP_SENSOR_1] = {
-		"TEMP_AMB", NPCX_ADC_CH0, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
+		"TEMP_CHARGER", NPCX_ADC_CH0, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
 	[ADC_TEMP_SENSOR_2] = {
-		"TEMP_CHARGER", NPCX_ADC_CH1, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
+		"TEMP_5V_REG", NPCX_ADC_CH1, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
+	[ADC_TEMP_SENSOR_3] = {
+		"TEMP_CPU", NPCX_ADC_CH2, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1] = {.name = "Temp1",
+	[TEMP_SENSOR_1] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_1,
 				 .action_delay_sec = 1},
-	[TEMP_SENSOR_2] = {.name = "Temp2",
+	[TEMP_SENSOR_2] = {.name = "5V Reg",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_2,
+				 .action_delay_sec = 1},
+	[TEMP_SENSOR_3] = {.name = "CPU",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_3,
 				 .action_delay_sec = 1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 
-/* Hatch Temperature sensors */
-/*
- * TODO(b/124316213): These setting need to be reviewed and set appropriately
- * for Hatch. They matter when the EC is controlling the fan as opposed to DPTF
- * control.
- */
+/* Dratini Temperature sensors */
 const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = 0,
+	},
+	.temp_fan_off = C_TO_K(25),
+	.temp_fan_max = C_TO_K(70),
+};
+
+const static struct ec_thermal_config thermal_b = {
+	.temp_host = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(75),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
@@ -349,24 +362,54 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 static void setup_fans(void)
 {
 	thermal_params[TEMP_SENSOR_1] = thermal_a;
-	thermal_params[TEMP_SENSOR_2] = thermal_a;
+	thermal_params[TEMP_SENSOR_2] = thermal_b;
+}
+
+/*
+ * Returns true for boards that are convertible into tablet mode, and
+ * false for clamshells.
+ */
+static bool board_is_convertible(void)
+{
+	uint8_t sku_id = get_board_sku();
+
+	/*
+	 * Dragonair (SKU 21 ,22 and 23) is a convertible. Dratini is not.
+	 * Unprovisioned SKU 255.
+	 */
+	return sku_id == 21 || sku_id == 22 || sku_id == 23 || sku_id == 255;
+}
+
+static void board_update_sensor_config_from_sku(void)
+{
+	if (board_is_convertible()) {
+		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+		/* Enable gpio interrupt for base accelgyro sensor */
+		gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+	} else {
+		motion_sensor_count = 0;
+		gmr_tablet_switch_disable();
+		/* Base accel is not stuffed, don't allow line to float */
+		gpio_set_flags(GPIO_BASE_SIXAXIS_INT_L,
+			       GPIO_INPUT | GPIO_PULL_DOWN);
+	}
 }
 
 static void board_init(void)
 {
 	/* Initialize Fans */
 	setup_fans();
-	/* Enable gpio interrupt for base accelgyro sensor */
-	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 	/* Enable HDMI HPD interrupt. */
 	gpio_enable_interrupt(GPIO_HDMI_CONN_HPD);
+
+	board_update_sensor_config_from_sku();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */
@@ -380,11 +423,12 @@ bool board_has_kb_backlight(void)
 	 * SKUs have keyboard backlight.
 	 * Dratini: 2, 3
 	 * Dragonair: 22
+	 * Unprovisioned: 255
 	 */
-	return sku_id == 2 || sku_id == 3 || sku_id == 22;
+	return sku_id == 2 || sku_id == 3 || sku_id == 22 || sku_id == 255;
 }
 
-uint32_t board_override_feature_flags0(uint32_t flags0)
+__override uint32_t board_override_feature_flags0(uint32_t flags0)
 {
 	if (board_has_kb_backlight())
 		return flags0;
@@ -392,7 +436,20 @@ uint32_t board_override_feature_flags0(uint32_t flags0)
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
 }
 
-uint32_t board_override_feature_flags1(uint32_t flags1)
-{
-	return flags1;
-}
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ * The connector has 24 pins total, and there is no pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+		{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+		{0, 7}, {1, 4}, {1, 3}, {1, 6}, {1, 7},
+		{3, 1}, {2, 0}, {1, 5}, {2, 6}, {2, 7},
+		{2, 1}, {2, 4}, {2, 5}, {1, 2}, {2, 3},
+		{2, 2}, {3, 0}, {-1, -1}, {-1, -1}, {-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+			ARRAY_SIZE(keyboard_factory_scan_pins);
+#endif

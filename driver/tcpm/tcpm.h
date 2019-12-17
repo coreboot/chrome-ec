@@ -82,6 +82,24 @@ static inline int tcpc_write_block(int port, int reg,
 			       reg, out, size);
 }
 
+static inline int tcpc_update8(int port, int reg,
+			       uint8_t mask,
+			       enum mask_update_action action)
+{
+	return i2c_update8(tcpc_config[port].i2c_info.port,
+			   tcpc_config[port].i2c_info.addr_flags,
+			   reg, mask, action);
+}
+static inline int tcpc_update16(int port, int reg,
+				uint16_t mask,
+				enum mask_update_action action)
+{
+	return i2c_update16(tcpc_config[port].i2c_info.port,
+			    tcpc_config[port].i2c_info.addr_flags,
+			    reg, mask, action);
+}
+
+
 #else /* !CONFIG_USB_PD_TCPC_LOW_POWER */
 int tcpc_addr_write(int port, int i2c_addr, int reg, int val);
 int tcpc_write16(int port, int reg, int val);
@@ -93,6 +111,11 @@ int tcpc_xfer(int port, const uint8_t *out, int out_size,
 		uint8_t *in, int in_size);
 int tcpc_xfer_unlocked(int port, const uint8_t *out, int out_size,
 		uint8_t *in, int in_size, int flags);
+
+int tcpc_update8(int port, int reg,
+		 uint8_t mask, enum mask_update_action action);
+int tcpc_update16(int port, int reg,
+		  uint16_t mask, enum mask_update_action action);
 
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
@@ -174,6 +197,14 @@ static inline int tcpm_set_msg_header(int port, int power_role, int data_role)
 static inline int tcpm_set_rx_enable(int port, int enable)
 {
 	return tcpc_config[port].drv->set_rx_enable(port, enable);
+}
+
+static inline void tcpm_enable_auto_discharge_disconnect(int port, int enable)
+{
+	const struct tcpm_drv *tcpc = tcpc_config[port].drv;
+
+	if (tcpc->tcpc_enable_auto_discharge_disconnect)
+		tcpc->tcpc_enable_auto_discharge_disconnect(port, enable);
 }
 
 /**
@@ -349,6 +380,14 @@ int tcpm_set_msg_header(int port, int power_role, int data_role);
  * @return EC_SUCCESS or error
  */
 int tcpm_set_rx_enable(int port, int enable);
+
+/**
+ * Enable Auto Discharge Disconnect
+ *
+ * @param port Type-C port number
+ * @param enable true for enable, false for disable
+ */
+void tcpm_enable_auto_discharge_disconnect(int port, int enable);
 
 /**
  * Transmit PD message

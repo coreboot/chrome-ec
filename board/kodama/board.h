@@ -11,6 +11,7 @@
 #define VARIANT_KUKUI_BATTERY_SMART
 #define VARIANT_KUKUI_CHARGER_MT6370
 #define VARIANT_KUKUI_POGO_KEYBOARD
+#define VARIANT_KUKUI_TABLET_PWRBTN
 
 #ifndef SECTION_IS_RW
 #define VARIANT_KUKUI_NO_SENSORS
@@ -27,12 +28,14 @@
 
 #define CONFIG_BATTERY_HW_PRESENT_CUSTOM
 
+#define CONFIG_I2C_BITBANG
+#define I2C_BITBANG_PORT_COUNT 1
+#undef CONFIG_I2C_NACK_RETRY_COUNT
+#define CONFIG_I2C_NACK_RETRY_COUNT 3
+#define CONFIG_SMBUS_PEC
+
 /* Battery */
-#ifdef BOARD_KRANE
-#define BATTERY_DESIRED_CHARGING_CURRENT    3500  /* mA */
-#else
 #define BATTERY_DESIRED_CHARGING_CURRENT    2000  /* mA */
-#endif /* BOARD_KRANE */
 
 #define CONFIG_CHARGER_MT6370_BACKLIGHT
 #define CONFIG_CHARGER_MAINTAIN_VBAT
@@ -55,13 +58,16 @@
 #define I2C_PORT_CHARGER  0
 #define I2C_PORT_TCPC0    0
 #define I2C_PORT_USB_MUX  0
-#define I2C_PORT_BATTERY  1
 #define I2C_PORT_ACCEL    1
+#define I2C_PORT_BATTERY  board_get_battery_i2c()
+#define I2C_PORT_VIRTUAL_BATTERY I2C_PORT_BATTERY
 
 /* Define the host events which are allowed to wakeup AP in S3. */
 #define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
 		(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |\
 		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
+
+#define PD_OPERATING_POWER_MW 15000
 
 #ifndef __ASSEMBLER__
 
@@ -113,6 +119,8 @@ int board_get_version(void);
 int board_is_sourcing_vbus(int port);
 void pogo_adc_interrupt(enum gpio_signal signal);
 int board_discharge_on_ac(int enable);
+/* returns the i2c port number of battery */
+int board_get_battery_i2c(void);
 
 #endif /* !__ASSEMBLER__ */
 

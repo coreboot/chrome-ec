@@ -33,9 +33,10 @@ GPIO_INT(AC_PRESENT,        PIN(A, 6),  GPIO_INT_BOTH,
          extpower_interrupt) /* ACOK_OD */
 GPIO_INT(BC12_EC_INT_ODL,   PIN(C, 9),  GPIO_INT_FALLING,
          bc12_interrupt)
+GPIO_INT(IT8801_SMB_INT,    PIN(A, 8),  GPIO_INT_FALLING | GPIO_PULL_UP,
+         io_expander_it8801_interrupt) /* KB_INT_ODL */
 
 /* Unimplemented interrupts */
-GPIO(KB_INT_ODL,           PIN(A, 8),  GPIO_INPUT)
 GPIO(ALS_RGB_INT_ODL,      PIN(C, 10), GPIO_INPUT)
 GPIO(TABLET_MODE_L,        PIN(B, 11), GPIO_INPUT)
 
@@ -52,6 +53,8 @@ GPIO(I2C1_SCL,             PIN(B, 8),  GPIO_INPUT)
 GPIO(I2C1_SDA,             PIN(B, 9),  GPIO_INPUT)
 GPIO(I2C2_SCL,             PIN(A, 11), GPIO_INPUT)
 GPIO(I2C2_SDA,             PIN(A, 12), GPIO_INPUT)
+GPIO(I2C3_SCL,             PIN(A, 5),  GPIO_ODR_HIGH)
+GPIO(I2C3_SDA,             PIN(C, 4),  GPIO_ODR_HIGH)
 
 /* Analog pins */
 GPIO(BOARD_ID,             PIN(C, 0),  GPIO_ANALOG)
@@ -76,8 +79,15 @@ GPIO(EC_INT_L,             PIN(C, 7),  GPIO_ODR_HIGH) /* EC_AP_INT_ODL */
 GPIO(EC_BOARD_ID_EN_L,     PIN(C, 15), GPIO_ODR_HIGH) /* EC_BOARD_ID_EN_ODL */
 GPIO(USB_C0_HPD_OD,        PIN(F, 1),  GPIO_ODR_LOW)
 GPIO(BOOTBLOCK_EN_L,       PIN(C, 1),  GPIO_ODR_HIGH)
-GPIO(EN_PP1800_S5_L,       PIN(A, 14), GPIO_OUT_HIGH)
+GPIO(USB_C0_DISCHARGE,     PIN(B, 6),  GPIO_OUT_LOW)
 
+#ifdef BOARD_JACUZZI
+GPIO(LID_ACCEL_INT_ODL, PIN(A, 14), GPIO_INPUT)
+/* Jacuzzi doesn't have EN_PP1800_S5_L. */
+UNIMPLEMENTED(EN_PP1800_S5_L)
+#else
+GPIO(EN_PP1800_S5_L,       PIN(A, 14), GPIO_OUT_LOW)
+#endif
 /*
  * TODO(b:138352732): On IT88801 expander, To be readded once IT8801 driver and
  * gpio expander framework has landed.
@@ -85,9 +95,6 @@ GPIO(EN_PP1800_S5_L,       PIN(A, 14), GPIO_OUT_HIGH)
 UNIMPLEMENTED(EN_PP5000_USBC)
 UNIMPLEMENTED(PMIC_FORCE_RESET_ODL)
 UNIMPLEMENTED(EN_USBC_CHARGE_L)
-
-/* TODO(b:137939749): to be added in later versions */
-UNIMPLEMENTED(USB_C0_DISCHARGE)
 
 /* USART1: PA9/PA10 */
 ALTERNATE(PIN_MASK(A, 0x0600), 1, MODULE_UART,       0)

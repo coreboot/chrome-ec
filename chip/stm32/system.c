@@ -9,6 +9,7 @@
 #include "console.h"
 #include "cpu.h"
 #include "flash.h"
+#include "gpio_chip.h"
 #include "host_command.h"
 #include "registers.h"
 #include "panic.h"
@@ -78,7 +79,7 @@ enum bkpdata_index {
 BUILD_ASSERT(STM32_BKP_ENTRIES >= BKPDATA_COUNT);
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE
-BUILD_ASSERT(CONFIG_USB_PD_PORT_COUNT <= 2);
+BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT <= 3);
 #endif
 
 /**
@@ -567,6 +568,17 @@ int system_set_bbram(enum system_bbram_idx idx, uint8_t value)
 
 int system_is_reboot_warm(void)
 {
+	/*
+	 * Detecting if the system is warm is relevant for a
+	 * few reasons.
+	 * One such reason is that some firmwares transition from
+	 * RO to RW images. When this happens, we may not need to
+	 * restart certain clocks. On the flip side, we may need
+	 * to restart the clocks if the RW requires a different
+	 * set of clocks. Thus, the clock configurations need to
+	 * be checked for a perfect match.
+	 */
+
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3)
 	return ((STM32_RCC_AHBENR & 0x7e0000) == 0x7e0000);
 #elif defined(CHIP_FAMILY_STM32L)
@@ -576,7 +588,7 @@ int system_is_reboot_warm(void)
 			== STM32_RCC_AHB2ENR_GPIOMASK);
 #elif defined(CHIP_FAMILY_STM32F4)
 	return ((STM32_RCC_AHB1ENR & STM32_RCC_AHB1ENR_GPIOMASK)
-			== STM32_RCC_AHB1ENR_GPIOMASK);
+			== gpio_required_clocks());
 #elif defined(CHIP_FAMILY_STM32H7)
 	return ((STM32_RCC_AHB4ENR & STM32_RCC_AHB4ENR_GPIOMASK)
 			== STM32_RCC_AHB4ENR_GPIOMASK);

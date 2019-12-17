@@ -525,7 +525,14 @@ static int it83xx_tcpm_set_vconn(int port, int enable)
 
 static int it83xx_tcpm_set_msg_header(int port, int power_role, int data_role)
 {
-	it83xx_set_power_role(port, power_role);
+	/* PD_ROLE_SINK 0, PD_ROLE_SOURCE 1 */
+	if (power_role == PD_ROLE_SOURCE)
+		/* bit0: source */
+		SET_MASK(IT83XX_USBPD_PDMSR(port), BIT(0));
+	else
+		/* bit0: sink */
+		CLEAR_MASK(IT83XX_USBPD_PDMSR(port), BIT(0));
+
 	it83xx_set_data_role(port, data_role);
 
 	return EC_SUCCESS;
@@ -544,11 +551,11 @@ static int it83xx_tcpm_set_rx_enable(int port, int enable)
 	}
 
 	/* If any PD port is connected, then disable deep sleep */
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; ++i)
+	for (i = 0; i < board_get_usb_pd_port_count(); ++i)
 		if (IT83XX_USBPD_GCR(i) | USBPD_REG_MASK_BMC_PHY)
 			break;
 
-	if (i == CONFIG_USB_PD_PORT_COUNT)
+	if (i == board_get_usb_pd_port_count())
 		enable_sleep(SLEEP_MASK_USB_PD);
 	else
 		disable_sleep(SLEEP_MASK_USB_PD);

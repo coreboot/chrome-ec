@@ -125,6 +125,7 @@ struct usb_mux {
 };
 
 /* Supported USB mux drivers */
+extern const struct usb_mux_driver amd_fp5_usb_mux_driver;
 extern const struct usb_mux_driver it5205_usb_mux_driver;
 extern const struct usb_mux_driver pi3usb30532_usb_mux_driver;
 extern const struct usb_mux_driver ps874x_usb_mux_driver;
@@ -136,6 +137,77 @@ void virtual_hpd_update(int port, int hpd_lvl, int hpd_irq);
 
 /* USB muxes present in system, ordered by PD port #, defined at board-level */
 extern struct usb_mux usb_muxes[];
+
+/*
+ * Retimer driver function pointers
+ *
+ * The retimer driver is driven by calls to the MUX API.  These are not
+ * called directly anywhere else in the code.
+ */
+struct usb_retimer_driver {
+	/**
+	 * Initialize USB retimer. This is called every time the MUX is
+	 * access after being put in a fully disconnected state (low power
+	 * mode).
+	 *
+	 * @param port usb port of redriver (not port_addr)
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*init)(int port);
+
+	/**
+	 * Put USB retimer in low power mode. This is called when the MUX
+	 * is put into low power mode).
+	 *
+	 * @param port usb port of redriver (not port_addr)
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*enter_low_power_mode)(int port);
+
+	/**
+	 * Set USB retimer state.
+	 *
+	 * @param port usb port of retimer (not port_addr)
+	 * @param mux_state State to set retimer mode to.
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*set)(int port, mux_state_t mux_state);
+};
+
+/* Describes a USB retimer present in the system */
+struct usb_retimer {
+	/*
+	 * All of the fields are provided on an as needed basis.
+	 * If your retimer does not use the provided machanism then
+	 * values would not be set (defaulted to 0/NULL).  This
+	 * defaulting includes the driver field, which would indicate
+	 * no retimer driver is to be called.
+	 */
+
+	/* I2C port and slave address */
+	const int i2c_port;
+	const uint16_t i2c_addr_flags;
+
+	/* NVM flag if shared with multiple retimers */
+	const bool shared_nvm;
+
+	/* Retimer control GPIOs */
+	const enum gpio_signal gpio_enable;     /* Retimer enable */
+	const enum gpio_signal gpio_dp_enable;  /* DP Mode enable */
+
+	const enum gpio_signal usb_ls_en_gpio;  /* Load switch enable */
+	const enum gpio_signal retimer_rst_gpio;/* Retimer reset */
+	const enum gpio_signal force_power_gpio;/* Force power (active/low) */
+
+	/* Driver interfaces for this retimer */
+	const struct usb_retimer_driver *driver;
+};
+
+/*
+ * USB retimers present in system, ordered by PD port #, defined at
+ * board-level
+ */
+extern struct usb_retimer usb_retimers[];
 
 /*
  * Helper methods that either use tcpc communication or direct i2c
@@ -195,11 +267,9 @@ void usb_mux_set(int port, enum typec_mux mux_mode,
  * Query superspeed mux status on type-C port.
  *
  * @param port port number.
- * @param dp_str pointer to the DP string to return.
- * @param usb_str pointer to the USB string to return.
- * @return Non-zero if superspeed connection is enabled; otherwise, zero.
+ * @return current MUX state (USB_PD_MUX_*).
  */
-int usb_mux_get(int port, const char **dp_str, const char **usb_str);
+mux_state_t usb_mux_get(int port);
 
 /**
  * Flip the superspeed muxes on type-C port.

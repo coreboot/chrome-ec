@@ -41,7 +41,11 @@ const struct SignedHeader *get_current_image_header(void);
  * Check if board ID in the image matches board ID field in the INFO1.
  *
  * Pass the pointer to the image header to check. If the pointer is set to
- * NULL, check board ID against the currently running image's header.
+ * NULL, check board ID against the currently running image's header. All 1
+ * bits in header Board ID flags must be present in the board id from flash.
+ *
+ * If the board id from flash is blank, board_id_type field from the header is
+ * ignored and only board_if_flags field is verified to match.
  *
  * Return true if there is a mismatch (the code should not run).
  */
@@ -55,4 +59,13 @@ uint32_t board_id_mismatch(const struct SignedHeader *h);
  * @return True if the board id is all 0xffffffff.
  */
 int board_id_is_blank(const struct board_id *id);
+
+/**
+ * Check if the board id type and type_inv are 0xffffffff.
+ *
+ * @param id	Pointer to a Board ID structure
+ *
+ * @return True if the board id type and type_inv are 0xffffffff.
+ */
+int board_id_type_is_blank(const struct board_id *id);
 #endif  /* ! __EC_CHIP_G_BOARD_ID_H */

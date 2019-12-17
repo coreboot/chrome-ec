@@ -8,9 +8,13 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+/*
+ * By default, enable all console messages excepted HC
+ */
+#define CC_DEFAULT     (CC_ALL & ~(BIT(CC_HOSTCMD)))
 
 /* NPCX7 config */
-#define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
+#define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 /* Internal SPI flash on NPCX796FC is 512 kB */
 #define CONFIG_FLASH_SIZE (512 * 1024)
@@ -22,25 +26,20 @@
 #define CONFIG_CRC8
 #define CONFIG_CROS_BOARD_INFO
 #define CONFIG_HIBERNATE_PSL
-#define CONFIG_LED_COMMON
-/* TODO(b/140557020): Define CONFIG_LED_ONOFF_STATES and
- * CONFIG_LED_ONOFF_STATES_BAT_LOW when CONFIG_CHARGER is defined.
- */
-#define CONFIG_LED_PWM
-/* TODO(b/140557020): Remove this when CONFIG_CHARGER is defined. */
-#define CONFIG_LED_PWM_CHARGE_STATE_ONLY
-/* Although there are 2 LEDs, they are both controlled by the same lines. */
-#define CONFIG_LED_PWM_COUNT 1
 #define CONFIG_PWM
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
+#define CONFIG_VOLUME_BUTTONS
 
 /* Host communication */
 #define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 
 /* Chipset config */
 #define CONFIG_CHIPSET_TIGERLAKE
+#define CONFIG_CHIPSET_PP3300_RAIL_FIRST
+#define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_CPU_PROCHOT_ACTIVE_LOW
 #define CONFIG_EXTPOWER_GPIO
@@ -62,13 +61,101 @@
 
 /* Sensors */
 
+/* Thermal features */
+#define CONFIG_FANS			FAN_CH_COUNT
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_EN_PP3300_A
+#define CONFIG_THERMISTOR
+#define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
+#define CONFIG_THROTTLE_AP
+
 /* Common charger defines */
+#define CONFIG_CHARGE_MANAGER
+#define CONFIG_CHARGE_RAMP_HW
+#define CONFIG_CHARGER
+#define CONFIG_CHARGER_DISCHARGE_ON_AC
+#define CONFIG_CHARGER_INPUT_CURRENT		512
+#define CONFIG_CHARGER_ISL9241
+#define CONFIG_CHARGER_SENSE_RESISTOR		10
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+#define CONFIG_USB_CHARGER
+#define CONFIG_BC12_DETECT_PI3USB9201
 
 /* Common battery defines */
+#define CONFIG_BATTERY_SMART
+#define CONFIG_BATTERY_FUEL_GAUGE
+/* TODO: b/143809318 enable cut off */
+/* #define CONFIG_BATTERY_CUT_OFF */
+
+/* Common LED defines */
+#define CONFIG_LED_COMMON
+#define CONFIG_LED_PWM
+/* Although there are 2 LEDs, they are both controlled by the same lines. */
+#define CONFIG_LED_PWM_COUNT 1
 
 /* USB Type C and USB PD defines */
+/* Enable the new USB-C PD stack */
+/* TODO: b/145756626 - re-enable once all blocking issues resolved */
+#if 0
+#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_TYPEC_SM
+#define CONFIG_USB_PRL_SM
+#define CONFIG_USB_PE_SM
+#define CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
+#endif
 
-/* BC 1.2 */
+#define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_ALT_MODE
+#define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DISCHARGE_PPC
+#define CONFIG_USB_PD_DUAL_ROLE
+#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT		TYPEC_RP_3A0
+#define CONFIG_USB_PD_PORT_MAX_COUNT			2
+/* TODO: b/145250123: Enabling low-power mode breaks USB SNK detection */
+#undef CONFIG_USB_PD_TCPC_LOW_POWER
+#define CONFIG_USB_PD_TCPM_TCPCI
+#define CONFIG_USB_PD_TCPM_TUSB422	/* USBC port C0 */
+#define CONFIG_USB_PD_TRY_SRC
+#define CONFIG_USB_PD_VBUS_DETECT_PPC
+#define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
+
+#define CONFIG_USBC_PPC
+#define CONFIG_CMD_PPC_DUMP
+/* Note - SN5S330 support automatically adds
+ * CONFIG_USBC_PPC_POLARITY
+ * CONFIG_USBC_PPC_SBU
+ * CONFIG_USBC_PPC_VCONN
+ */
+#define CONFIG_USBC_PPC_SN5S330		/* USBC port C0 */
+#define CONFIG_USBC_PPC_SYV682X		/* USBC port C1 */
+
+#define CONFIG_INTEL_VIRTUAL_MUX
+#define CONFIG_USBC_SS_MUX
+#define CONFIG_USB_MUX_VIRTUAL
+
+#define CONFIG_USBC_VCONN
+#define CONFIG_USBC_VCONN_SWAP
+
+/* TODO: b/144165680 - measure and check these values on Volteer */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
+#define PD_VCONN_SWAP_DELAY		5000 /* us */
+
+/* Retimer */
+#define CONFIG_USBC_MUX_RETIMER
+#define CONFIG_USBC_RETIMER_INTEL_BB
+#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
+
+/*
+ * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
+ * cables only support up to 60W.
+ */
+#define PD_OPERATING_POWER_MW	15000
+#define PD_MAX_POWER_MW		60000
+#define PD_MAX_CURRENT_MA	3000
+#define PD_MAX_VOLTAGE_MV	20000
+
 
 /* I2C Bus Configuration */
 #define CONFIG_I2C
@@ -78,18 +165,67 @@
 #define I2C_PORT_USB_1_MIX	NPCX_I2C_PORT3_0
 #define I2C_PORT_POWER		NPCX_I2C_PORT5_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
+
+#define I2C_PORT_BATTERY	I2C_PORT_POWER
+#define I2C_PORT_CHARGER	I2C_PORT_EEPROM
+
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 #define CONFIG_I2C_MASTER
 
 
 #ifndef __ASSEMBLER__
 
+#include "gpio_signal.h"
+
+
+enum adc_channel {
+	ADC_TEMP_SENSOR_1_CHARGER,
+	ADC_TEMP_SENSOR_2_PP3300_REGULATOR,
+	ADC_TEMP_SENSOR_3_DDR_SOC,
+	ADC_TEMP_SENSOR_4_FAN,
+	ADC_CH_COUNT
+};
+
 enum pwm_channel {
 	PWM_CH_LED1_BLUE = 0,
 	PWM_CH_LED2_GREEN,
 	PWM_CH_LED3_RED,
+	PWM_CH_FAN,
 	PWM_CH_COUNT
 };
+
+enum fan_channel {
+	FAN_CH_0 = 0,
+	/* Number of FAN channels */
+	FAN_CH_COUNT,
+};
+
+enum mft_channel {
+	MFT_CH_0 = 0,
+	/* Number of MFT channels */
+	MFT_CH_COUNT,
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_1_CHARGER,
+	TEMP_SENSOR_2_PP3300_REGULATOR,
+	TEMP_SENSOR_3_DDR_SOC,
+	TEMP_SENSOR_4_FAN,
+	TEMP_SENSOR_COUNT
+};
+
+enum usbc_port {
+	USBC_PORT_C0 = 0,
+	USBC_PORT_C1,
+	USBC_PORT_COUNT
+};
+
+void board_reset_pd_mcu(void);
+
+/* Common definition for the USB PD interrupt handlers. */
+void ppc_interrupt(enum gpio_signal signal);
+void tcpc_alert_event(enum gpio_signal signal);
+void bc12_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

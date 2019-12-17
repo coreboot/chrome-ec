@@ -19,14 +19,15 @@
 #include "driver/wpc/p9221.h"
 #include "rt946x.h"
 #include "task.h"
+#include "tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
+#include "usb_pd.h"
 #include "util.h"
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_CHARGER, "CHG " format, ## args)
-
 
 /* Charger parameters */
 static const struct charger_info rt946x_charger_info = {
@@ -70,10 +71,58 @@ enum rt946x_chg_stat {
 	RT946X_CHGSTAT_FAULT,
 };
 
-enum rt946x_adc_in_sel {
-	RT946X_ADC_VBUS_DIV5 = 1,
-	RT946X_ADC_VBUS_DIV2,
+static struct mutex adc_access_lock;
+
+#ifdef CONFIG_CHARGER_MT6370
+/*
+ * Unit for each ADC parameter
+ * 0 stands for reserved
+ */
+static const int mt6370_adc_unit[MT6370_ADC_MAX] = {
+	0,
+	MT6370_ADC_UNIT_VBUS_DIV5,
+	MT6370_ADC_UNIT_VBUS_DIV2,
+	MT6370_ADC_UNIT_VSYS,
+	MT6370_ADC_UNIT_VBAT,
+	0,
+	MT6370_ADC_UNIT_TS_BAT,
+	0,
+	MT6370_ADC_UNIT_IBUS,
+	MT6370_ADC_UNIT_IBAT,
+	0,
+	MT6370_ADC_UNIT_CHG_VDDP,
+	MT6370_ADC_UNIT_TEMP_JC,
 };
+
+static const int mt6370_adc_offset[MT6370_ADC_MAX] = {
+	0,
+	MT6370_ADC_OFFSET_VBUS_DIV5,
+	MT6370_ADC_OFFSET_VBUS_DIV2,
+	MT6370_ADC_OFFSET_VSYS,
+	MT6370_ADC_OFFSET_VBAT,
+	0,
+	MT6370_ADC_OFFSET_TS_BAT,
+	0,
+	MT6370_ADC_OFFSET_IBUS,
+	MT6370_ADC_OFFSET_IBAT,
+	0,
+	MT6370_ADC_OFFSET_CHG_VDDP,
+	MT6370_ADC_OFFSET_TEMP_JC,
+};
+
+static int hidden_mode_cnt = 0;
+static struct mutex hidden_mode_lock;
+static const unsigned char mt6370_reg_en_hidden_mode[] = {
+	MT6370_REG_HIDDENPASCODE1,
+	MT6370_REG_HIDDENPASCODE2,
+	MT6370_REG_HIDDENPASCODE3,
+	MT6370_REG_HIDDENPASCODE4,
+};
+
+static const unsigned char mt6370_val_en_hidden_mode[] = {
+	0x96, 0x69, 0xC3, 0x3C,
+};
+#endif /* CONFIG_CHARGER_MT6370 */
 
 #if defined(CONFIG_CHARGER_RT9466) || defined(CONFIG_CHARGER_RT9467)
 enum rt946x_irq {
@@ -124,7 +173,7 @@ enum rt946x_irq {
 };
 
 static uint8_t rt946x_irqmask[RT946X_IRQ_COUNT] = {
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xBF, 0xFF, 0xFF, 0xFF, 0xFF,
 	0xFF, 0xFC, 0xFF, 0xFF, 0xFF,
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 	0xFF,
@@ -183,6 +232,20 @@ static inline int rt946x_clr_bit(int reg, int mask)
 	return rt946x_update_bits(reg, mask, 0x00);
 }
 
+static inline int mt6370_pmu_reg_test_bit(int cmd, int shift, int *is_one)
+{
+	int rv, data;
+
+	rv = rt946x_read8(cmd, &data);
+	if (rv) {
+		*is_one = 0;
+		return rv;
+	}
+
+	*is_one = !!(data & BIT(shift));
+	return rv;
+}
+
 static inline uint8_t rt946x_closest_reg(uint16_t min, uint16_t max,
 					 uint16_t step, uint16_t target)
 {
@@ -192,6 +255,102 @@ static inline uint8_t rt946x_closest_reg(uint16_t min, uint16_t max,
 		return ((max - min) / step);
 	return (target - min) / step;
 }
+
+static int rt946x_get_ieoc(uint32_t *ieoc)
+{
+	int ret, reg_ieoc;
+
+	ret = rt946x_read8(RT946X_REG_CHGCTRL9, &reg_ieoc);
+	if (ret)
+		return ret;
+
+	*ieoc = RT946X_IEOC_MIN +
+		RT946X_IEOC_STEP *
+			((reg_ieoc & RT946X_MASK_IEOC) >> RT946X_SHIFT_IEOC);
+
+	return EC_SUCCESS;
+}
+
+#ifdef CONFIG_CHARGER_MT6370
+static int mt6370_enable_hidden_mode(int en)
+{
+	int rv = 0;
+
+	if (in_interrupt_context()) {
+		CPRINTS("Shouldn't use %s in IRQ", __func__);
+		return EC_ERROR_INVAL;
+        }
+
+	mutex_lock(&hidden_mode_lock);
+	if (en) {
+		if (hidden_mode_cnt == 0) {
+			rv = rt946x_block_write(mt6370_reg_en_hidden_mode[0],
+				mt6370_val_en_hidden_mode,
+				ARRAY_SIZE(mt6370_val_en_hidden_mode));
+			if (rv)
+				goto out;
+		}
+		hidden_mode_cnt++;
+	} else {
+		if (hidden_mode_cnt == 1) /* last one */
+			rv = rt946x_write8(mt6370_reg_en_hidden_mode[0], 0x00);
+		hidden_mode_cnt--;
+		if (rv)
+			goto out;
+	}
+
+out:
+	mutex_unlock(&hidden_mode_lock);
+	return rv;
+}
+
+/*
+ * Vsys short protection:
+ * When the system is charging at 500mA, and if Isys > 3600mA, the
+ * power path will be turned off and cause the system shutdown.
+ * When Ichg < 400mA, then power path is roughly 1/8 of the original.
+ * When Isys > 3600mA, this cause the voltage between Vbat and Vsys too
+ * huge (Vbat - Vsys > Vsys short portection) and turns off the power
+ * path.
+ * To workaround this,
+ * 1. disable Vsys short protection when Ichg is set below 900mA
+ * 2. forbids Ichg <= 400mA (this is done natually on mt6370, since mt6370's
+ *    minimum current is 512)
+ */
+static int mt6370_ichg_workaround(int new_ichg)
+{
+	int rv = EC_SUCCESS;
+	int curr_ichg;
+
+	/*
+	 * TODO(b:144532905): The workaround should be applied to rt9466 as
+	 * well. But this needs rt9466's hidden register datasheet. Enable
+	 * this if we need it in the future.
+	 */
+	if (!IS_ENABLED(CONFIG_CHARGER_MT6370))
+		return EC_SUCCESS;
+
+	rv = charger_get_current(&curr_ichg);
+	if (rv)
+		return rv;
+
+	mt6370_enable_hidden_mode(1);
+
+	/* disable Vsys protect if if the new ichg is below 900mA */
+	if (curr_ichg >= 900 && new_ichg < 900)
+		rv = rt946x_update_bits(RT946X_REG_CHGHIDDENCTRL7,
+					RT946X_MASK_HIDDENCTRL7_VSYS_PROTECT,
+					0);
+	/* enable Vsys protect if the new ichg is above 900mA */
+	else if (new_ichg >= 900 && curr_ichg < 900)
+		rv = rt946x_update_bits(RT946X_REG_CHGHIDDENCTRL7,
+					RT946X_MASK_HIDDENCTRL7_VSYS_PROTECT,
+					RT946X_ENABLE_VSYS_PROTECT);
+
+	mt6370_enable_hidden_mode(0);
+	return rv;
+}
+#endif /* CONFIG_CHARGER_MT6370 */
 
 static int rt946x_chip_rev(int *chip_rev)
 {
@@ -242,7 +401,7 @@ int rt946x_por_reset(void)
 
 static int rt946x_reset_to_zero(void)
 {
-	int rv = 0;
+	int rv;
 
 	rv = charger_set_current(0);
 	if (rv)
@@ -278,15 +437,15 @@ static int rt946x_enable_bc12_detection(int en)
 
 static int rt946x_set_ieoc(unsigned int ieoc)
 {
-	uint8_t reg_ieoc = 0;
+	uint8_t reg_ieoc;
 
 	reg_ieoc = rt946x_closest_reg(RT946X_IEOC_MIN, RT946X_IEOC_MAX,
-		RT946X_IEOC_STEP, ieoc);
+				      RT946X_IEOC_STEP, ieoc);
 
 	CPRINTF("%s ieoc = %d(0x%02X)\n", __func__, ieoc, reg_ieoc);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL9, RT946X_MASK_IEOC,
-		reg_ieoc << RT946X_SHIFT_IEOC);
+				reg_ieoc << RT946X_SHIFT_IEOC);
 }
 
 static int rt946x_set_mivr(unsigned int mivr)
@@ -426,12 +585,8 @@ static int rt946x_init_setting(void)
 	if (rv)
 		return rv;
 #endif
-	/* Enable/Disable BC 1.2 detection */
-#ifdef HAS_TASK_USB_CHG
-	rv = rt946x_enable_bc12_detection(1);
-#else
+	/* Disable BC 1.2 detection by default. It will be enabled on demand */
 	rv = rt946x_enable_bc12_detection(0);
-#endif
 	if (rv)
 		return rv;
 	/* Disable WDT */
@@ -653,14 +808,59 @@ int charger_get_current(int *current)
 
 int charger_set_current(int current)
 {
-	uint8_t reg_icc = 0;
-	const struct charger_info * const info = charger_get_info();
+	int rv;
+	uint8_t reg_icc;
+	static int workaround;
+	const struct charger_info *const info = charger_get_info();
+
+	/*
+	 * mt6370's minimun regulated current is 500mA REG17[7:2] 0b100,
+	 * values below 0b100 are preserved.
+	 */
+	if (IS_ENABLED(CONFIG_CHARGER_MT6370))
+		current = MAX(500, current);
+
+#ifdef CONFIG_CHARGER_MT6370
+	rv = mt6370_ichg_workaround(current);
+	if (rv)
+		return rv;
+#endif
 
 	reg_icc = rt946x_closest_reg(info->current_min, info->current_max,
-		info->current_step, current);
+				     info->current_step, current);
 
-	return rt946x_update_bits(RT946X_REG_CHGCTRL7, RT946X_MASK_ICHG,
-		reg_icc << RT946X_SHIFT_ICHG);
+	rv = rt946x_update_bits(RT946X_REG_CHGCTRL7, RT946X_MASK_ICHG,
+				reg_icc << RT946X_SHIFT_ICHG);
+	if (rv)
+		return rv;
+
+	if (IS_ENABLED(CONFIG_CHARGER_RT9466) ||
+	    IS_ENABLED(CONFIG_CHARGER_MT6370)) {
+		uint32_t curr_ieoc;
+
+		/*
+		 * workaround to make IEOC accurate:
+		 * witht normal charging (ICC >= 900mA), the power path is fully
+		 * turned on. But at low charging current state (ICC < 900mA),
+		 * the power path will only be partially turned on. So under
+		 * such situation, the IEOC is inaccurate.
+		 */
+		rv = rt946x_get_ieoc(&curr_ieoc);
+		if (rv)
+			return rv;
+
+		if (current < 900 && !workaround) {
+			/* raise IEOC if charge current is under 900 */
+			rv = rt946x_set_ieoc(curr_ieoc + 100);
+			workaround = 1;
+		} else if (current >= 900 && workaround) {
+			/* reset IEOC if charge current is above 900 */
+			workaround = 0;
+			rv = rt946x_set_ieoc(curr_ieoc - 100);
+		}
+	}
+
+	return rv;
 }
 
 int charger_get_voltage(int *voltage)
@@ -696,47 +896,6 @@ int charger_discharge_on_ac(int enable)
 	return rt946x_enable_hz(enable);
 }
 
-int charger_get_vbus_voltage(int port)
-{
-	int val;
-	static int vbus_mv;
-	int retries = 10;
-
-	/* Set VBUS as ADC input */
-	rt946x_update_bits(RT946X_REG_CHGADC, RT946X_MASK_ADC_IN_SEL,
-		RT946X_ADC_VBUS_DIV5 << RT946X_SHIFT_ADC_IN_SEL);
-
-	/* Start ADC conversion */
-	rt946x_set_bit(RT946X_REG_CHGADC, RT946X_MASK_ADC_START);
-
-	/*
-	 * In practice, ADC conversion rarely takes more than 35ms.
-	 * However, according to the datasheet, ADC conversion may take
-	 * up to 200ms. But we can't wait for that long, otherwise
-	 * host command would time out. So here we set ADC timeout as 50ms.
-	 * If ADC times out, we just return the last read vbus_mv.
-	 *
-	 * TODO(chromium:820335): We may handle this more gracefully with
-	 * EC_RES_IN_PROGRESS.
-	 */
-	while (--retries) {
-		rt946x_read8(RT946X_REG_CHGSTAT, &val);
-		if (!(val & RT946X_MASK_ADC_STAT))
-			break;
-		msleep(5);
-	}
-
-	if (retries) {
-		/* Read measured results if ADC finishes in time. */
-		rt946x_read8(RT946X_REG_ADCDATAL, &vbus_mv);
-		rt946x_read8(RT946X_REG_ADCDATAH, &val);
-		vbus_mv |= (val << 8);
-		vbus_mv *= 25;
-	}
-
-	return vbus_mv;
-}
-
 /* Setup sourcing current to prevent overload */
 #ifdef CONFIG_CHARGER_ILIM_PIN_DISABLED
 static int rt946x_enable_ilim_pin(int en)
@@ -769,6 +928,10 @@ int charger_post_init(void)
 	rv = rt946x_select_ilmt(RT946X_ILMTSEL_AICR);
 	if (rv)
 		return rv;
+
+	/* Need 5ms to ramp after choose current limit source */
+	msleep(5);
+
 	/* Disable ILIM pin */
 	rv = rt946x_enable_ilim_pin(0);
 	if (rv)
@@ -888,11 +1051,142 @@ static void rt946x_init(void)
 DECLARE_HOOK(HOOK_INIT, rt946x_init, HOOK_PRIO_INIT_I2C + 1);
 
 #ifdef HAS_TASK_USB_CHG
-static int rt946x_get_bc12_device_type(void)
+#ifdef CONFIG_CHARGER_MT6370
+static int mt6370_detect_apple_samsung_ta(int usb_stat)
+{
+	int ret, reg;
+	int chg_type =
+		(usb_stat & MT6370_MASK_USB_STATUS) >> MT6370_SHIFT_USB_STATUS;
+	int dp_2_3v, dm_2_3v;
+
+	/* Only SDP/CDP/DCP could possibly be Apple/Samsung TA */
+	if (chg_type != MT6370_CHG_TYPE_SDPNSTD &&
+	    chg_type != MT6370_CHG_TYPE_CDP &&
+	    chg_type != MT6370_CHG_TYPE_DCP)
+		return chg_type;
+
+	if (chg_type == MT6370_CHG_TYPE_SDPNSTD ||
+	    chg_type == MT6370_CHG_TYPE_CDP)
+		if (!(usb_stat & MT6370_MASK_DCD_TIMEOUT))
+			return chg_type;
+
+	/* Check D+ > 0.9V */
+	ret = rt946x_update_bits(MT6370_REG_QCSTATUS2, MT6360_MASK_CHECK_DPDM,
+				 MT6370_MASK_APP_SS_EN | MT6370_MASK_APP_SS_PL);
+	ret |= rt946x_read8(MT6370_REG_QCSTATUS2, &reg);
+
+	if (ret)
+		return chg_type;
+
+	/* Normal port (D+ < 0.9V) */
+	if (!(reg & MT6370_MASK_SS_OUT))
+		return chg_type;
+
+	/* Samsung charger (D+ < 1.5V) */
+	if (!(reg & MT6370_MASK_APP_OUT))
+		return MT6370_CHG_TYPE_SAMSUNG_CHARGER;
+
+	/* Check D+ > 2.3 V */
+	ret = rt946x_update_bits(MT6370_REG_QCSTATUS2, MT6360_MASK_CHECK_DPDM,
+				  MT6370_MASK_APP_REF | MT6370_MASK_APP_SS_PL |
+					  MT6370_MASK_APP_SS_EN);
+	ret |= rt946x_read8(MT6370_REG_QCSTATUS2, &reg);
+	dp_2_3v = reg & MT6370_MASK_APP_OUT;
+
+	/* Check D- > 2.3 V */
+	ret |= rt946x_update_bits(
+		MT6370_REG_QCSTATUS2, MT6360_MASK_CHECK_DPDM,
+		MT6370_MASK_APP_REF | MT6370_MASK_APP_DPDM_IN |
+			MT6370_MASK_APP_SS_PL | MT6370_MASK_APP_SS_EN);
+	ret |= rt946x_read8(MT6370_REG_QCSTATUS2, &reg);
+	dm_2_3v = reg & MT6370_MASK_APP_OUT;
+
+	if (ret)
+		return chg_type;
+
+	/* Apple charger */
+	if (!dp_2_3v && !dm_2_3v)
+		/* Apple 2.5W charger */
+		return MT6370_CHG_TYPE_APPLE_0_5A_CHARGER;
+	else if (!dp_2_3v && dm_2_3v)
+		/* Apple 5W charger */
+		return MT6370_CHG_TYPE_APPLE_1_0A_CHARGER;
+	else if (dp_2_3v && !dm_2_3v)
+		/* Apple 10W charger */
+		return MT6370_CHG_TYPE_APPLE_2_1A_CHARGER;
+	else
+		/* Apple 12W charger */
+		return MT6370_CHG_TYPE_APPLE_2_4A_CHARGER;
+}
+#endif
+
+static int mt6370_get_bc12_device_type(int charger_type)
+{
+	switch (charger_type) {
+	case MT6370_CHG_TYPE_SDP:
+	case MT6370_CHG_TYPE_SDPNSTD:
+		return CHARGE_SUPPLIER_BC12_SDP;
+	case MT6370_CHG_TYPE_CDP:
+		return CHARGE_SUPPLIER_BC12_CDP;
+	case MT6370_CHG_TYPE_DCP:
+	case MT6370_CHG_TYPE_SAMSUNG_CHARGER:
+	case MT6370_CHG_TYPE_APPLE_0_5A_CHARGER:
+	case MT6370_CHG_TYPE_APPLE_1_0A_CHARGER:
+	case MT6370_CHG_TYPE_APPLE_2_1A_CHARGER:
+	case MT6370_CHG_TYPE_APPLE_2_4A_CHARGER:
+		return CHARGE_SUPPLIER_BC12_DCP;
+	default:
+		return CHARGE_SUPPLIER_NONE;
+	}
+}
+
+/* Returns a mt6370 charger_type. */
+static int mt6370_get_charger_type(void)
+{
+#ifdef CONFIG_CHARGER_MT6370
+	int reg;
+
+	if (rt946x_read8(MT6370_REG_USBSTATUS1, &reg))
+		return CHARGE_SUPPLIER_NONE;
+	return mt6370_detect_apple_samsung_ta(reg);
+#else
+	return CHARGE_SUPPLIER_NONE;
+#endif
+}
+
+static int mt6370_get_bc12_ilim(int charge_supplier)
+{
+	switch (charge_supplier) {
+	case MT6370_CHG_TYPE_APPLE_0_5A_CHARGER:
+		return 500;
+	case MT6370_CHG_TYPE_APPLE_1_0A_CHARGER:
+		return 1000;
+	case MT6370_CHG_TYPE_APPLE_2_1A_CHARGER:
+		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
+		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
+			return 2100;
+	case MT6370_CHG_TYPE_APPLE_2_4A_CHARGER:
+		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
+		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
+			return 2400;
+	case MT6370_CHG_TYPE_DCP:
+		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
+		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
+			/* A conservative value to prevent a bad charger. */
+			return RT946X_AICR_TYP2MAX(2000);
+	case MT6370_CHG_TYPE_CDP:
+	case MT6370_CHG_TYPE_SAMSUNG_CHARGER:
+		return 1500;
+	case MT6370_CHG_TYPE_SDP:
+	default:
+		return USB_CHARGER_MIN_CURR_MA;
+	}
+}
+
+static int rt946x_get_bc12_device_type(int charger_type)
 {
 	int reg;
 
-#if defined(CONFIG_CHARGER_RT9466) || defined(CONFIG_CHARGER_RT9467)
 	if (rt946x_read8(RT946X_REG_DPDM1, &reg))
 		return CHARGE_SUPPLIER_NONE;
 
@@ -906,22 +1200,6 @@ static int rt946x_get_bc12_device_type(void)
 	default:
 		return CHARGE_SUPPLIER_NONE;
 	}
-#elif defined(CONFIG_CHARGER_MT6370)
-	if (rt946x_read8(MT6370_REG_USBSTATUS1, &reg))
-		return CHARGE_SUPPLIER_NONE;
-
-	switch ((reg & MT6370_MASK_USB_STATUS) >> MT6370_SHIFT_USB_STATUS) {
-	case MT6370_CHG_TYPE_SDP:
-	case MT6370_CHG_TYPE_SDPNSTD:
-		return CHARGE_SUPPLIER_BC12_SDP;
-	case MT6370_CHG_TYPE_CDP:
-		return CHARGE_SUPPLIER_BC12_CDP;
-	case MT6370_CHG_TYPE_DCP:
-		return CHARGE_SUPPLIER_BC12_DCP;
-	default:
-		return CHARGE_SUPPLIER_NONE;
-	}
-#endif
 }
 
 static int rt946x_get_bc12_ilim(int charge_supplier)
@@ -929,7 +1207,7 @@ static int rt946x_get_bc12_ilim(int charge_supplier)
 	switch (charge_supplier) {
 	case CHARGE_SUPPLIER_BC12_DCP:
 		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
-				IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
+		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
 			/* A conservative value to prevent a bad charger. */
 			return RT946X_AICR_TYP2MAX(2000);
 		/* fallback */
@@ -957,67 +1235,321 @@ int rt946x_toggle_bc12_detection(void)
 	return rt946x_enable_bc12_detection(1);
 }
 
-#ifdef CONFIG_CHARGER_MT6370_BC12_GPIO
-static void usb_pd_connect(void)
+static void check_pd_capable(void)
 {
+	const int port = TASK_ID_TO_USB_CHG_PORT(TASK_ID_USB_CHG);
+
+	if (!pd_capable(port)) {
+		enum tcpc_cc_voltage_status cc1, cc2;
+
+		tcpm_get_cc(port, &cc1, &cc2);
+		/* if CC is not changed. */
+		if (cc_is_rp(cc1) || cc_is_rp(cc2))
+			rt946x_toggle_bc12_detection();
+	}
+}
+DECLARE_DEFERRED(check_pd_capable);
+
+static void rt946x_usb_connect(void)
+{
+	const int port = TASK_ID_TO_USB_CHG_PORT(TASK_ID_USB_CHG);
+	enum tcpc_cc_voltage_status cc1, cc2;
+
+	tcpm_get_cc(port, &cc1, &cc2);
+
+	/*
+	 * Only detect BC1.2 device when USB-C device recognition is
+	 * finished to prevent a potential race condition with USB enumeration.
+	 * If CC exists RP, then it might be a BC12 or a PD capable device.
+	 * Check this later to ensure it's not PD capable.
+	 */
+	if (cc_is_rp(cc1) || cc_is_rp(cc2))
+		/* delay extra 50 ms to ensure SrcCap received */
+		hook_call_deferred(&check_pd_capable_data,
+				   PD_T_SINK_WAIT_CAP + 50 * MSEC);
+}
+DECLARE_HOOK(HOOK_USB_PD_CONNECT, rt946x_usb_connect, HOOK_PRIO_DEFAULT);
+
+static void rt946x_pd_disconnect(void)
+{
+	/* Type-C disconnected, disable deferred check. */
+	hook_call_deferred(&check_pd_capable_data, -1);
+}
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, rt946x_pd_disconnect, HOOK_PRIO_DEFAULT);
+
+int rt946x_get_adc(enum rt946x_adc_in_sel adc_sel, int *adc_val)
+{
+	int rv, i, adc_start, adc_result = 0;
+	int adc_data_h, adc_data_l, aicr;
+	const int max_wait_times = 6;
+
+	if (in_interrupt_context()) {
+		CPRINTS("Shouldn't use %s in IRQ", __func__);
+		return EC_ERROR_INVAL;
+        }
+	mutex_lock(&adc_access_lock);
+#ifdef CONFIG_CHARGER_MT6370
+	mt6370_enable_hidden_mode(1);
+#endif
+
+	/* Select ADC to desired channel */
+	rv = rt946x_update_bits(RT946X_REG_CHGADC, RT946X_MASK_ADC_IN_SEL,
+					adc_sel << RT946X_SHIFT_ADC_IN_SEL);
+	if (rv)
+		goto out;
+
+	if (adc_sel == MT6370_ADC_IBUS) {
+		rv = charger_get_input_current(&aicr);
+		if (rv)
+			goto out;
+	}
+
+	/* Start ADC conversation */
+	rv = rt946x_set_bit(RT946X_REG_CHGADC, RT946X_MASK_ADC_START);
+	if (rv)
+		goto out;
+
+	for (i = 0; i < max_wait_times; i++) {
+		msleep(35);
+		rv = mt6370_pmu_reg_test_bit(RT946X_REG_CHGADC,
+					      RT946X_SHIFT_ADC_START,
+					      &adc_start);
+		if (!adc_start && rv == 0)
+			break;
+	}
+	if (i == max_wait_times)
+		CPRINTS("%s: wait conversation failed, sel = %d, rv = %d",
+			__func__, adc_sel, rv);
+
+	/* Read ADC data */
+	rv = rt946x_read8(RT946X_REG_ADCDATAH, &adc_data_h);
+	rv = rt946x_read8(RT946X_REG_ADCDATAL, &adc_data_l);
+	if (rv)
+		goto out;
+
+#if defined(CONFIG_CHARGER_RT9466) || defined(CONFIG_CHARGER_RT9467)
+	if (adc_sel == RT946X_ADC_VBUS_DIV5)
+		adc_result = ((adc_data_h << 8) | adc_data_l) * 25;
+	else
+		CPRINTS("%s: RT946X not yet support channels", __func__);
+	*adc_val = adc_result;
+#elif defined(CONFIG_CHARGER_MT6370)
+	/* Calculate ADC value */
+	adc_result = (adc_data_h * 256 + adc_data_l)
+			* mt6370_adc_unit[adc_sel] + mt6370_adc_offset[adc_sel];
+
+	/* For TS_BAT/TS_BUS, the real unit is 0.25, here we use 25(unit) */
+	if (adc_sel == MT6370_ADC_TS_BAT)
+		adc_result /= 100;
+#endif
+
+out:
+#ifdef CONFIG_CHARGER_MT6370
+	if (adc_sel == MT6370_ADC_IBUS) {
+		if (aicr < 400) /* 400mA */
+			adc_result = adc_result * 67 / 100;
+	}
+
+	if (adc_sel != MT6370_ADC_TS_BAT && adc_sel != MT6370_ADC_TEMP_JC)
+		*adc_val = adc_result / 1000;
+	else
+		*adc_val = adc_result;
+	mt6370_enable_hidden_mode(0);
+#endif
+	mutex_unlock(&adc_access_lock);
+	return rv;
+}
+
+int charger_get_vbus_voltage(int port)
+{
+	static int vbus_mv;
+
+	rt946x_get_adc(RT946X_ADC_VBUS_DIV5, &vbus_mv);
+	return vbus_mv;
+}
+
+#ifdef CONFIG_CHARGER_MT6370
+static int mt6370_toggle_cfo(void)
+{
+	int rv, data;
+
+	rv = rt946x_read8(MT6370_REG_FLEDEN, &data);
+	if (rv)
+		return rv;
+
+	if (data & MT6370_STROBE_EN_MASK)
+		return rv;
+
+	/* read data */
+	rv = rt946x_read8(RT946X_REG_CHGCTRL2, &data);
+	if (rv)
+		return rv;
+
+	/* cfo off */
+	data &= ~RT946X_MASK_CFO_EN;
+	rv = rt946x_write8(RT946X_REG_CHGCTRL2, data);
+	if (rv)
+		return rv;
+
+	/* cfo on */
+	data |= RT946X_MASK_CFO_EN;
+	return rt946x_write8(RT946X_REG_CHGCTRL2, data);
+}
+
+static int mt6370_pmu_chg_mivr_irq_handler(void)
+{
+	int rv, ibus = 0, mivr_stat;
+
+	rv = mt6370_pmu_reg_test_bit(MT6370_REG_CHGSTAT1,
+				MT6370_SHIFT_MIVR_STAT, &mivr_stat);
+	if (rv)
+		return rv;
+
+	if (!mivr_stat) {
+		CPRINTS("%s: mivr stat not act", __func__);
+		return rv;
+	}
+
+	rv = rt946x_get_adc(MT6370_ADC_IBUS, &ibus);
+	if (rv)
+		return rv;
+
+	if (ibus < 100) /* 100mA */
+		rv = mt6370_toggle_cfo();
+
+	return rv;
+}
+
+static int mt6370_irq_handler(void)
+{
+	int data, mask, ret, reg_val;
+	int stat_chg, valid_chg, stat_old, stat_new;
+
+	ret = rt946x_write8(MT6370_REG_IRQMASK, MT6370_IRQ_MASK_ALL);
+	if (ret)
+		return ret;
+
+	ret = rt946x_read8(MT6370_REG_IRQIND, &reg_val);
+	if (ret)
+		return ret;
+
+	/* read stat before reading irq evt */
+	ret = rt946x_read8(MT6370_REG_CHGSTAT1, &stat_old);
+	if (ret)
+		return ret;
+
+	/* workaround for irq, divided irq event into upper and lower */
+	ret = rt946x_read8(MT6370_REG_CHGIRQ1, &data);
+	if (ret)
+		return ret;
+
+	/* read stat after reading irq evt */
+	ret = rt946x_read8(MT6370_REG_CHGSTAT1, &stat_new);
+	if (ret)
+		return ret;
+
+	ret = rt946x_read8(MT6370_REG_CHGMASK1, &mask);
+	if (ret)
+		return ret;
+
+	ret = rt946x_write8(MT6370_REG_IRQMASK, 0x00);
+	if (ret)
+		return ret;
+
+	stat_chg = stat_old ^ stat_new;
+	valid_chg = (stat_new & 0xF1) | (~stat_new & 0xF1);
+	data |= (stat_chg & valid_chg);
+	data &= ~mask;
+	if (data)
+		ret = mt6370_pmu_chg_mivr_irq_handler();
+	return ret;
+}
+#endif /* CONFIG_CHARGER_MT6370 */
+
+static void rt946x_bc12_workaround(void)
+{
+	/*
+	 * There is a parasitic capacitance on D+,
+	 * which results in pulling D+ up too slow while detecting BC1.2.
+	 * So we try to fix this in two steps:
+	 * 1. Pull D+ up to a voltage under 0.6V
+	 * 2. re-toggling and pull D+ up to 0.6V (again)
+	 * and then detect the voltage of D-.
+	 */
+	rt946x_toggle_bc12_detection();
+	msleep(10);
 	rt946x_toggle_bc12_detection();
 }
-DECLARE_HOOK(HOOK_USB_PD_CONNECT, usb_pd_connect, HOOK_PRIO_DEFAULT);
-#endif
+DECLARE_DEFERRED(rt946x_bc12_workaround);
 
 void usb_charger_task(void *u)
 {
 	struct charge_port_info chg;
 	int bc12_type = CHARGE_SUPPLIER_NONE;
+	int chg_type;
 	int reg = 0;
+	int bc12_cnt = 0;
+	const int max_bc12_cnt = 3;
 
 	chg.voltage = USB_CHARGER_VOLTAGE_MV;
 	while (1) {
+#ifdef CONFIG_CHARGER_MT6370
+		mt6370_irq_handler();
+#endif /* CONFIG_CHARGER_MT6370 */
+
 		rt946x_read8(RT946X_REG_DPDMIRQ, &reg);
 
 		/* VBUS attach event */
 		if (reg & RT946X_MASK_DPDMIRQ_ATTACH) {
 			CPRINTS("VBUS attached: %dmV",
 					charger_get_vbus_voltage(0));
-			bc12_type = rt946x_get_bc12_device_type();
-
+			if (IS_ENABLED(CONFIG_CHARGER_MT6370)) {
+				chg_type = mt6370_get_charger_type();
+				bc12_type =
+					mt6370_get_bc12_device_type(chg_type);
+				chg.current = mt6370_get_bc12_ilim(bc12_type);
+			} else {
+				bc12_type =
+					rt946x_get_bc12_device_type(chg_type);
+				chg.current = rt946x_get_bc12_ilim(bc12_type);
+			}
 			CPRINTS("BC12 type %d", bc12_type);
-			if (bc12_type != CHARGE_SUPPLIER_NONE) {
-#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
-				if ((bc12_type == CHARGE_SUPPLIER_BC12_SDP) &&
-						wpc_chip_is_online()) {
+			if (bc12_type == CHARGE_SUPPLIER_NONE)
+				goto bc12_none;
+			if (IS_ENABLED(CONFIG_WIRELESS_CHARGER_P9221_R7) &&
+			    bc12_type == CHARGE_SUPPLIER_BC12_SDP &&
+			    wpc_chip_is_online()) {
 					p9221_notify_vbus_change(1);
 					CPRINTS("WPC ON");
-				} else {
-
-#endif
-					chg.current = rt946x_get_bc12_ilim(
-								bc12_type);
-					charge_manager_update_charge(bc12_type,
-								     0, &chg);
-#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
-				}
-#endif
+			}
+			if (bc12_type == CHARGE_SUPPLIER_BC12_SDP &&
+			    ++bc12_cnt < max_bc12_cnt) {
+				/*
+				 * defer the workaround and awaiting for
+				 * waken up by the interrupt.
+				 */
+				hook_call_deferred(
+					&rt946x_bc12_workaround_data, 5);
+				goto wait_event;
 			}
 
+			charge_manager_update_charge(bc12_type, 0, &chg);
+bc12_none:
 			rt946x_enable_bc12_detection(0);
-			hook_notify(HOOK_AC_CHANGE);
 		}
 
 		/* VBUS detach event */
-		if (reg & RT946X_MASK_DPDMIRQ_DETACH) {
+		if (reg & RT946X_MASK_DPDMIRQ_DETACH &&
+		    bc12_type != CHARGE_SUPPLIER_NONE) {
 			CPRINTS("VBUS detached");
+			bc12_cnt = 0;
 #ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
 			p9221_notify_vbus_change(0);
 #endif
 			charge_manager_update_charge(bc12_type, 0, NULL);
-
-			if (!IS_ENABLED(CONFIG_CHARGER_MT6370_BC12_GPIO))
-				rt946x_enable_bc12_detection(1);
-
-			hook_notify(HOOK_AC_CHANGE);
 		}
 
+wait_event:
 		task_wait_event(-1);
 	}
 }
@@ -1079,6 +1611,12 @@ int rt946x_enable_charge_termination(int en)
 {
 	return (en ? rt946x_set_bit : rt946x_clr_bit)
 		(RT946X_REG_CHGCTRL2, RT946X_MASK_TE);
+}
+
+int rt946x_enable_charge_eoc(int en)
+{
+	return (en ? rt946x_set_bit : rt946x_clr_bit)
+		(RT946X_REG_CHGCTRL9, RT946X_MASK_EOC);
 }
 
 #ifdef CONFIG_CHARGER_MT6370

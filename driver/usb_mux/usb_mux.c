@@ -21,7 +21,7 @@ static int enable_debug_prints;
  * Flags will reset to 0 after sysjump; This works for current flags as LPM will
  * get reset in the init method which is called during PD task startup.
  */
-static uint8_t flags[CONFIG_USB_PD_PORT_COUNT];
+static uint8_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #define USB_MUX_FLAG_IN_LPM BIT(0) /* Device is in low power mode. */
 
@@ -41,10 +41,24 @@ static void enter_low_power_mode(int port)
 	/* Apply any low power customization if present */
 	if (mux->driver->enter_low_power_mode) {
 		res = mux->driver->enter_low_power_mode(port);
+		if (res) {
+			CPRINTS("Err: %s mux port(%d): %d",
+				__func__, port, res);
+			return;
+		}
+	}
 
-		if (res)
-			CPRINTS("Err: enter_low_power_mode mux port(%d): %d",
-				port, res);
+	if (IS_ENABLED(CONFIG_USBC_MUX_RETIMER)) {
+		const struct usb_retimer *retimer = &usb_retimers[port];
+
+		if (retimer->driver && retimer->driver->enter_low_power_mode) {
+			res = retimer->driver->enter_low_power_mode(port);
+			if (res) {
+				CPRINTS("Err: %s retimer port(%d): %d",
+					__func__, port, res);
+				return;
+			}
+		}
 	}
 }
 
@@ -60,12 +74,25 @@ void usb_mux_init(int port)
 	const struct usb_mux *mux = &usb_muxes[port];
 	int res;
 
-	ASSERT(port >= 0 && port < CONFIG_USB_PD_PORT_COUNT);
+	ASSERT(port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 
 	res = mux->driver->init(port);
 	if (res) {
 		CPRINTS("Err: init mux port(%d): %d", port, res);
 		return;
+	}
+
+	if (IS_ENABLED(CONFIG_USBC_MUX_RETIMER)) {
+		const struct usb_retimer *retimer = &usb_retimers[port];
+
+		if (retimer->driver && retimer->driver->init) {
+			res = retimer->driver->init(port);
+			if (res) {
+				CPRINTS("Err: init retimer port(%d): %d",
+					port, res);
+				return;
+			}
+		}
 	}
 
 	/* Device is always out of LPM after initialization. */
@@ -93,10 +120,9 @@ void usb_mux_set(int port, enum typec_mux mux_mode,
 	const int should_enter_low_power_mode =
 		mux_mode == TYPEC_MUX_NONE && usb_mode == USB_SWITCH_DISCONNECT;
 
-#ifdef CONFIG_USB_CHARGER
 	/* Configure USB2.0 */
-	usb_charger_set_switches(port, usb_mode);
-#endif
+	if (IS_ENABLED(CONFIG_USB_CHARGER))
+		usb_charger_set_switches(port, usb_mode);
 
 	/*
 	 * Don't wake device up just to put it back to sleep. Low power mode
@@ -109,11 +135,27 @@ void usb_mux_set(int port, enum typec_mux mux_mode,
 	exit_low_power_mode(port);
 
 	/* Configure superspeed lanes */
-	mux_state = polarity ? mux_mode | MUX_POLARITY_INVERTED : mux_mode;
+	mux_state = ((mux_mode != TYPEC_MUX_NONE) && polarity)
+			? mux_mode | MUX_POLARITY_INVERTED
+			: mux_mode;
+
 	res = mux->driver->set(port, mux_state);
 	if (res) {
 		CPRINTS("Err: set mux port(%d): %d", port, res);
 		return;
+	}
+
+	if (IS_ENABLED(CONFIG_USBC_MUX_RETIMER)) {
+		const struct usb_retimer *retimer = &usb_retimers[port];
+
+		if (retimer->driver && retimer->driver->set) {
+			res = retimer->driver->set(port, mux_state);
+			if (res) {
+				CPRINTS("Err: set retimer port(%d): %d",
+					port, res);
+				return;
+			}
+		}
 	}
 
 	if (enable_debug_prints)
@@ -129,12 +171,11 @@ void usb_mux_set(int port, enum typec_mux mux_mode,
 		enter_low_power_mode(port);
 }
 
-int usb_mux_get(int port, const char **dp_str, const char **usb_str)
+mux_state_t usb_mux_get(int port)
 {
 	const struct usb_mux *mux = &usb_muxes[port];
 	int res;
 	mux_state_t mux_state;
-	const char *dp, *usb;
 
 	exit_low_power_mode(port);
 
@@ -144,13 +185,7 @@ int usb_mux_get(int port, const char **dp_str, const char **usb_str)
 		return 0;
 	}
 
-	dp = mux_state & MUX_POLARITY_INVERTED ? "DP2" : "DP1";
-	usb = mux_state & MUX_POLARITY_INVERTED ? "USB2" : "USB1";
-
-	*dp_str = mux_state & MUX_DP_ENABLED ? dp : NULL;
-	*usb_str = mux_state & MUX_USB_ENABLED ? usb : NULL;
-
-	return *dp_str || *usb_str;
+	return mux_state;
 }
 
 void usb_mux_flip(int port)
@@ -195,20 +230,22 @@ static int command_typec(int argc, char **argv)
 		return EC_ERROR_PARAM_COUNT;
 
 	port = strtoi(argv[1], &e, 10);
-	if (*e || port >= CONFIG_USB_PD_PORT_COUNT)
+	if (*e || port >= board_get_usb_pd_port_count())
 		return EC_ERROR_PARAM1;
 
 	if (argc < 3) {
-		const char *dp_str, *usb_str;
-		ccprintf("Port C%d: polarity:CC%d\n",
-			port, pd_get_polarity(port) + 1);
-		if (usb_mux_get(port, &dp_str, &usb_str))
-			ccprintf("Superspeed %s%s%s\n",
-				 dp_str ? dp_str : "",
-				 dp_str && usb_str ? "+" : "",
-				 usb_str ? usb_str : "");
-		else
-			ccprintf("No Superspeed connection\n");
+		mux_state_t mux_state;
+
+		mux_state = usb_mux_get(port);
+		ccprintf("Port %d: USB=%d DP=%d POLARITY=%s HPD_IRQ=%d "
+			"HPD_LVL=%d SAFE=%d\n", port,
+			!!(mux_state & USB_PD_MUX_USB_ENABLED),
+			!!(mux_state & USB_PD_MUX_DP_ENABLED),
+			mux_state & USB_PD_MUX_POLARITY_INVERTED ?
+				"INVERTED" : "NORMAL",
+			!!(mux_state & USB_PD_MUX_HPD_IRQ),
+			!!(mux_state & USB_PD_MUX_HPD_LVL),
+			!!(mux_state & USB_PD_MUX_SAFE_MODE));
 
 		return EC_SUCCESS;
 	}
@@ -234,19 +271,18 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 	int port = p->port;
 	const struct usb_mux *mux;
 
-	if (port >= CONFIG_USB_PD_PORT_COUNT)
+	if (port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
 
 	mux = &usb_muxes[port];
 	if (mux->driver->get(port, &r->flags) != EC_SUCCESS)
 		return EC_RES_ERROR;
 
-#ifdef CONFIG_USB_MUX_VIRTUAL
 	/* Clear HPD IRQ event since we're about to inform host of it. */
-	if ((r->flags & USB_PD_MUX_HPD_IRQ) &&
-	    mux->hpd_update == &virtual_hpd_update)
+	if (IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) &&
+	    (r->flags & USB_PD_MUX_HPD_IRQ) &&
+	    (mux->hpd_update == &virtual_hpd_update))
 		mux->hpd_update(port, r->flags & USB_PD_MUX_HPD_LVL, 0);
-#endif
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;

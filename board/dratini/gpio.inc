@@ -10,14 +10,17 @@
 
 /* Wake Source interrupts */
 GPIO_INT(LID_OPEN,             PIN(D, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, lid_interrupt)
+GPIO_INT(TABLET_MODE_L,        PIN(C, 7), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 GPIO_INT(WP_L,                 PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)              /* EC_WP_ODL */
 GPIO_INT(POWER_BUTTON_L,       PIN(0, 1), GPIO_INT_BOTH, power_button_interrupt)        /* MECH_PWR_BTN_ODL */
 GPIO_INT(ACOK_OD,              PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, extpower_interrupt)
 
 /* Power sequencing interrupts */
 GPIO_INT(SLP_S0_L,             PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
 GPIO_INT(SLP_S3_L,             PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
+#endif
+#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 GPIO_INT(SLP_S4_L,             PIN(D, 4), GPIO_INT_BOTH, power_signal_interrupt)
 #endif
 GPIO_INT(PG_EC_RSMRST_L,       PIN(E, 2), GPIO_INT_BOTH, intel_x86_rsmrst_signal_interrupt)
@@ -41,7 +44,7 @@ GPIO_INT(HDMI_CONN_HPD,        PIN(7, 2), GPIO_INT_BOTH, hdmi_hpd_interrupt)
 GPIO_INT(EC_VOLDN_BTN_ODL,     PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 GPIO_INT(EC_VOLUP_BTN_ODL,     PIN(7, 5), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 
-GPIO(SYS_RESET_L,              PIN(0, 2), GPIO_ODR_HIGH)        /* SYS_RST_ODL */
+GPIO(SYS_RESET_L,              PIN(C, 5), GPIO_ODR_HIGH)        /* SYS_RST_ODL */
 GPIO(ENTERING_RW,              PIN(E, 3), GPIO_OUT_LOW)         /* EC_ENTERING_RW */
 GPIO(PCH_WAKE_L,               PIN(7, 4), GPIO_ODR_HIGH)        /* EC_PCH_WAKE_ODL */
 GPIO(PCH_PWRBTN_L,             PIN(C, 1), GPIO_ODR_HIGH)        /* EC_PCH_PWR_BTN_ODL */
@@ -57,6 +60,17 @@ GPIO(CPU_C10_GATE_L,           PIN(6, 7), GPIO_INPUT)
 
 /* MKBP event synchronization */
 GPIO(EC_INT_L,                 PIN(7, 0), GPIO_ODR_HIGH)
+
+/*
+ * GPIO_INT_BOTH is required for PSL wake from hibernate, but we don't need an
+ * interrupt handler because it is automatically handled by the PSL.
+ *
+ * We need to lock the setting so this gpio can't be reconfigured to overdrive
+ * the real reset signal. (This is the PSL input pin not the real reset pin).
+ */
+GPIO(EC_RST_ODL,		PIN(0, 2), GPIO_INT_BOTH |
+					   GPIO_HIB_WAKE_HIGH |
+					   GPIO_LOCKED)
 
 /* USB and USBC Signals */
 GPIO(USB_C_OC_ODL,             PIN(B, 1), GPIO_ODR_HIGH)
@@ -121,7 +135,7 @@ ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)                             /* PW
 ALTERNATE(PIN_MASK(4, 0x01), 0, MODULE_PWM, 0)                             /* TA1 - Fan Tachometer */
 
 /* ADC */
-ALTERNATE(PIN_MASK(4, 0x30), 0, MODULE_ADC, 0)                             /* ADC0-1 */
+ALTERNATE(PIN_MASK(4, 0x38), 0, MODULE_ADC, 0)                             /* ADC0-2 */
 
 /* Power Switch Logic (PSL) inputs */
 ALTERNATE(PIN_MASK(D, 0x04), 0, MODULE_PMU, 0)                             /* GPIOD2 = LID_OPEN */

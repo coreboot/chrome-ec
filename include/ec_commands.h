@@ -536,8 +536,7 @@ extern "C" {
 	(EC_LPC_STATUS_FROM_HOST | EC_LPC_STATUS_PROCESSING)
 
 /*
- * Host command response codes (16-bit).  Note that response codes should be
- * stored in a uint16_t rather than directly in a value of this type.
+ * Host command response codes (16-bit).
  */
 enum ec_status {
 	EC_RES_SUCCESS = 0,
@@ -561,7 +560,10 @@ enum ec_status {
 	EC_RES_INVALID_HEADER_CRC = 18,      /* Header CRC invalid */
 	EC_RES_INVALID_DATA_CRC = 19,        /* Data CRC invalid */
 	EC_RES_DUP_UNAVAILABLE = 20,         /* Can't resend response */
-};
+
+	EC_RES_MAX = UINT16_MAX		/**< Force enum to be 16 bits */
+} __packed;
+BUILD_ASSERT(sizeof(enum ec_status) == sizeof(uint16_t));
 
 /*
  * Host event codes.  Note these are 1-based, not 0-based, because ACPI query
@@ -4605,6 +4607,9 @@ struct ec_response_sb_fw_update {
  * Entering Verified Boot Mode Command
  * Default mode is VBOOT_MODE_NORMAL if EC did not receive this command.
  * Valid Modes are: normal, developer, and recovery.
+ *
+ * EC no longer needs to know what mode vboot has entered,
+ * so this command is deprecated.  (See chromium:1014379.)
  */
 #define EC_CMD_ENTERING_MODE 0x00B6
 
@@ -5139,7 +5144,7 @@ struct ec_params_usb_pd_control {
 #define PD_CTRL_RESP_ROLE_DR_POWER      BIT(3) /* Partner is dualrole power */
 #define PD_CTRL_RESP_ROLE_DR_DATA       BIT(4) /* Partner is dualrole data */
 #define PD_CTRL_RESP_ROLE_USB_COMM      BIT(5) /* Partner USB comm capable */
-#define PD_CTRL_RESP_ROLE_EXT_POWERED   BIT(6) /* Partner externally powerd */
+#define PD_CTRL_RESP_ROLE_UNCONSTRAINED BIT(6) /* Partner unconstrained power */
 
 struct ec_response_usb_pd_control {
 	uint8_t enabled;
@@ -5301,7 +5306,7 @@ struct ec_params_usb_pd_discovery_entry {
 enum usb_pd_override_ports {
 	OVERRIDE_DONT_CHARGE = -2,
 	OVERRIDE_OFF = -1,
-	/* [0, CONFIG_USB_PD_PORT_COUNT): Port# */
+	/* [0, CONFIG_USB_PD_PORT_MAX_COUNT): Port# */
 };
 
 struct ec_params_charge_port_override {
@@ -5554,6 +5559,7 @@ enum cbi_data_tag {
 	CBI_TAG_DRAM_PART_NUM = 3, /* variable length ascii, nul terminated. */
 	CBI_TAG_OEM_NAME = 4,      /* variable length ascii, nul terminated. */
 	CBI_TAG_MODEL_ID = 5,      /* uint32_t or smaller */
+	CBI_TAG_FW_CONFIG = 6,     /* uint32_t bit field */
 	CBI_TAG_COUNT,
 };
 
@@ -5760,6 +5766,18 @@ struct ec_response_locate_chip {
 		struct ec_i2c_info i2c_info;
 	};
 } __ec_align2;
+
+/*
+ * Reboot AP on G3
+ *
+ * This command is used for validation purpose, where the AP needs to be
+ * returned back to S0 state from G3 state without using the servo to trigger
+ * wake events.For this,there is no request or response struct.
+ *
+ * Order of command usage:
+ * ectool reboot_ap_on_g3 && shutdown -h now
+ */
+#define EC_CMD_REBOOT_AP_ON_G3 0x0127
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

@@ -45,21 +45,23 @@ void prl_run(int port, int evt, int en);
  * Set the PD revision
  *
  * @param port USB-C port number
+ * @param type port address
  * @param rev revision
  */
-void prl_set_rev(int port, enum pd_rev_type rev);
+void prl_set_rev(int port, enum tcpm_transmit_type type,
+					enum pd_rev_type rev);
 
 /**
  * Get the PD revision
  *
  * @param port USB-C port number
+ * @param type port address
  * @return pd rev
  */
-enum pd_rev_type prl_get_rev(int port);
+enum pd_rev_type prl_get_rev(int port, enum tcpm_transmit_type type);
 
 /**
- * Sends a PD control message. Either pe_message_sent() or pe_report_error() is
- * guaranteed to be called in response to this call.
+ * Sends a PD control message
  *
  * @param port USB-C port number
  * @param type Transmit type
@@ -70,8 +72,7 @@ void prl_send_ctrl_msg(int port, enum tcpm_transmit_type type,
 	enum pd_ctrl_msg_type msg);
 
 /**
- * Sends a PD data message. Either pe_message_sent() or pe_report_error() is
- * guaranteed to be called in response to this call.
+ * Sends a PD data message
  *
  * @param port USB-C port number
  * @param type Transmit type
@@ -82,8 +83,7 @@ void prl_send_data_msg(int port, enum tcpm_transmit_type type,
 	enum pd_data_msg_type msg);
 
 /**
- * Sends a PD extended data message. Either pe_message_sent() or
- * pe_report_error() is guaranteed to be called in response to this call.
+ * Sends a PD extended data message
  *
  * @param port USB-C port number
  * @param type Transmit type

@@ -7,6 +7,7 @@
 
 from __future__ import print_function
 
+import getopt
 import os
 import struct
 import sys
@@ -19,6 +20,7 @@ root_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 sys.path.append(os.path.join(root_dir, '..', '..', 'build', 'tpm_test'))
 
 import crypto_test
+import drbg_test
 import ecc_test
 import ecies_test
 import ftdi_spi_tpm
@@ -26,6 +28,7 @@ import hash_test
 import hkdf_test
 import rsa_test
 import subcmd
+import trng_test
 import upgrade_test
 
 # Extension command for dcypto testing
@@ -69,17 +72,18 @@ class TPM(object):
     if size > 4096:
       raise subcmd.TpmTestError(prefix + 'invalid size %d' % size)
     if response_mode:
-      # Startup response code or extension command response code
-      if cmd_code == 0x100 or cmd_code == 0:
+      # Startup response code, extension or vendor command response code
+      if cmd_code == 0x100 or cmd_code == 0 or cmd_code == 0x500:
         return
       else:
         raise subcmd.TpmTestError(
-          prefix + 'invalid command code 0x%x' % cmd_code)
+          prefix + 'invalid response code 0x%x' % cmd_code)
     if cmd_code >= 0x11f and cmd_code <= 0x18f:
       return  # This is a valid command
     if cmd_code == EXT_CMD:
       return  # This is an extension command
-
+    if cmd_code >= 0x20000000 and cmd_code <= 0x200001ff:
+      return  # this is vendor command
     raise subcmd.TpmTestError(prefix + 'invalid command code 0x%x' % cmd_code)
 
   def command(self, cmd_data):
@@ -130,13 +134,37 @@ class TPM(object):
   def debug_enabled(self):
     return self._debug_enabled
 
+def usage():
+  print ('Syntax: tpmtest.py [-d | -t | -h ]\n'
+         '     -d   -  prints additional debug information during tests\n'
+         '     -t   -  dump raw output from TRNG to /tmp/trng_output\n'
+         '     -h   -  this help\n')
+  return
 
 if __name__ == '__main__':
   try:
-    debug_needed = len(sys.argv) == 2 and sys.argv[1] == '-d'
+    opts, args = getopt.getopt(sys.argv[1:], 'dth','help')
+  except getopt.GetoptError as err:
+    print(str(err))
+    usage()
+    sys.exit(2)
+  debug_needed = False
+  trng_only = False
+  for o, a in opts:
+    if o == '-d':
+      debug_needed = True
+    elif o == '-t':
+      trng_only = True
+    elif o == '-h' or o == '--help':
+      usage()
+      sys.exit(0)
+  try:
     t = TPM(debug_mode=debug_needed)
-
+    if trng_only:
+      trng_test.trng_test(t)
+      sys.exit(1)
     crypto_test.crypto_tests(t, os.path.join(root_dir, 'crypto_test.xml'))
+    drbg_test.drbg_test(t)
     ecc_test.ecc_test(t)
     ecies_test.ecies_test(t)
     hash_test.hash_test(t)

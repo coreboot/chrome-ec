@@ -105,7 +105,7 @@ const mat33_fp_t base_standard_ref = {
 
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
-static struct lsm6dsm_data lsm6dsm_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -122,6 +122,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 		.rot_standard_ref = NULL, /* Identity matrix. */
 		.default_range = 4, /* g */
+		.min_frequency = KX022_ACCEL_MIN_FREQ,
+		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -249,7 +251,7 @@ DECLARE_HOOK(HOOK_INIT, post_old_board_warning, HOOK_PRIO_INIT_I2C + 1);
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */

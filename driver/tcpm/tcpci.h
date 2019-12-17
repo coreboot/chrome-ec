@@ -89,6 +89,14 @@
 #define TCPC_REG_POWER_STATUS_VBUS_PRES BIT(2)
 
 #define TCPC_REG_FAULT_STATUS      0x1f
+#define TCPC_REG_FAULT_STATUS_ALL_REGS_RESET            BIT(7)
+#define TCPC_REG_FAULT_STATUS_FORCE_OFF_VBUS            BIT(6)
+#define TCPC_REG_FAULT_STATUS_AUTO_DISCHARGE_FAIL       BIT(5)
+#define TCPC_REG_FAULT_STATUS_FORCE_DISCHARGE_FAIL      BIT(4)
+#define TCPC_REG_FAULT_STATUS_VBUS_OVER_CURRENT         BIT(3)
+#define TCPC_REG_FAULT_STATUS_VBUS_OVER_VOLTAGE         BIT(2)
+#define TCPC_REG_FAULT_STATUS_VCONN_OVER_CURRENT        BIT(1)
+#define TCPC_REG_FAULT_STATUS_I2C_INTERFACE_ERR         BIT(0)
 
 #define TCPC_REG_ALERT_EXT         0x21
 #define TCPC_REG_ALERT_EXT_TIMER_EXPIRED        BIT(2)
@@ -174,6 +182,7 @@ int tcpci_enter_low_power_mode(int port);
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 void tcpci_tcpc_discharge_vbus(int port, int enable);
 #endif
+void tcpci_tcpc_enable_auto_discharge_disconnect(int port, int enable);
 
 int tcpci_tcpm_mux_init(int i2c_addr);
 int tcpci_tcpm_mux_set(int i2c_addr, mux_state_t mux_state);

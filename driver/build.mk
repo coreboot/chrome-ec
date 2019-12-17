@@ -6,6 +6,9 @@
 # Drivers for off-chip devices
 #
 
+# Note that this variable includes the trailing "/"
+_driver_cur_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
+
 # Accelerometers
 driver-$(CONFIG_ACCEL_BMA255)+=accel_bma2x2.o
 driver-$(CONFIG_ACCEL_KXCJ9)+=accel_kionix.o
@@ -72,13 +75,18 @@ driver-$(CONFIG_CHARGER_RT9466)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_RT9467)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_SY21612)+=charger/sy21612.o
 
+# Fingerprint Sensors
+include $(_driver_cur_dir)fingerprint/build.mk
+
 # I/O expander
-driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander_pca9534.o
-driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander_nct38xx.o
+driver-$(CONFIG_IO_EXPANDER_IT8801)+=ioexpander/it8801.o
+driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
+driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander/ioexpander_nct38xx.o
 
 
 # Current/Power monitor
 driver-$(CONFIG_INA219)$(CONFIG_INA231)+=ina2xx.o
+driver-$(CONFIG_INA3221)+=ina3221.o
 
 # LED drivers
 driver-$(CONFIG_LED_DRIVER_DS2413)+=led/ds2413.o
@@ -98,6 +106,7 @@ driver-$(CONFIG_TEMP_SENSOR_ADT7481)+=temp_sensor/adt7481.o
 driver-$(CONFIG_TEMP_SENSOR_BD99992GW)+=temp_sensor/bd99992gw.o
 driver-$(CONFIG_TEMP_SENSOR_EC_ADC)+=temp_sensor/ec_adc.o
 driver-$(CONFIG_TEMP_SENSOR_F75303)+=temp_sensor/f75303.o
+driver-$(CONFIG_TEMP_SENSOR_G753)+=temp_sensor/g753.o
 driver-$(CONFIG_TEMP_SENSOR_G781)+=temp_sensor/g78x.o
 driver-$(CONFIG_TEMP_SENSOR_G782)+=temp_sensor/g78x.o
 driver-$(CONFIG_TEMP_SENSOR_SB_TSI)+=temp_sensor/sb_tsi.o
@@ -131,12 +140,14 @@ driver-$(CONFIG_USB_PD_TCPM_TUSB422)+=tcpm/tusb422.o
 driver-$(CONFIG_USB_PD_TCPM_NCT38XX)+=tcpm/nct38xx.o
 
 # Type-C Retimer drivers
-driver-$(CONFIG_USB_PD_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
+driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
+driver-$(CONFIG_USBC_RETIMER_PI3DPX1207)+=retimer/pi3dpx1207.o
 
 # USB mux high-level driver
 driver-$(CONFIG_USBC_SS_MUX)+=usb_mux/usb_mux.o
 
 # USB muxes
+driver-$(CONFIG_USB_MUX_AMD_FP5)+=usb_mux/amd_fp5.o
 driver-$(CONFIG_USB_MUX_IT5205)+=usb_mux/it5205.o
 driver-$(CONFIG_USB_MUX_PI3USB30532)+=usb_mux/pi3usb30532.o
 driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps874x.o

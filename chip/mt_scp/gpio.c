@@ -12,14 +12,18 @@
 #include "task.h"
 #include "util.h"
 
-void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func)
+void gpio_set_alternate_function(uint32_t port, uint32_t mask,
+				enum gpio_alternate_func func)
 {
 	int bit, mode_reg_index, shift;
 	uint32_t mode_bits, mode_mask;
 
 	/* Up to 8 alt functions per port */
-	if (func > 7)
+	if (func > GPIO_ALT_FUNC_7)
 		return;
+
+	if (func == GPIO_ALT_FUNC_NONE)
+		func = GPIO_ALT_FUNC_DEFAULT;
 
 	while (mask) {
 		/* 32 gpio per port */
@@ -174,4 +178,3 @@ void __keep gpio_interrupt(void)
 	}
 }
 DECLARE_IRQ(SCP_IRQ_EINT, gpio_interrupt, 1);
-

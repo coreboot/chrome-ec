@@ -49,6 +49,7 @@
 #define TCPC_REG_SWITCHES1_TXCC1_EN	(1<<0)
 
 #define TCPC_REG_MEASURE	0x04
+#define TCPC_REG_MEASURE_MDAC_MASK	0x3F
 #define TCPC_REG_MEASURE_VBUS		(1<<6)
 /*
  * MDAC reference voltage step size is 42 mV. Round our thresholds to reduce
@@ -76,7 +77,7 @@
 
 #define TCPC_REG_CONTROL2	0x08
 /* two-bit field, valid values below */
-#define TCPC_REG_CONTROL2_MODE		(1<<1)
+#define TCPC_REG_CONTROL2_MODE_MASK	(0x3<<TCPC_REG_CONTROL2_MODE_POS)
 #define TCPC_REG_CONTROL2_MODE_DFP	(0x3)
 #define TCPC_REG_CONTROL2_MODE_UFP	(0x2)
 #define TCPC_REG_CONTROL2_MODE_DRP	(0x1)

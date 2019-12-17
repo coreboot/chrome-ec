@@ -190,7 +190,11 @@ class RMAOpen(object):
 
 
     def find_cr50_servo_uart(self):
-        """Save the device used for the console"""
+        """Save the device used for the console.
+
+        Find the console and configure it, so it can be used with this script.
+        """
+        self._dut_control('cr50_uart_timestamp:off')
         self.device = self._dut_control('cr50_uart_pty').split(':')[-1]
 
 
@@ -580,7 +584,7 @@ class RMAOpen(object):
     def print_platform_info(self):
         """Print the cr50 BID RLZ code"""
         bid_output = self.send_cmd_get_output('bid')
-        bid = re.search('Board ID: (\S+),', bid_output).group(1)
+        bid = re.search('Board ID: (\S+?)[:,]', bid_output).group(1)
         if bid == ERASED_BID:
             debug(DEBUG_ERASED_BOARD_ID)
             raise ValueError('Cannot run RMA Open when board id is erased')

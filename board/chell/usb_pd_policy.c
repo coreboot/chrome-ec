@@ -119,14 +119,14 @@ void pd_check_pr_role(int port, int pr_role, int flags)
 	if ((flags & PD_FLAGS_PARTNER_DR_POWER) &&
 	    pd_get_dual_role(port) == PD_DRP_TOGGLE_ON) {
 		/*
-		 * If we are a sink and partner is not externally powered, then
+		 * If we are a sink and partner is not unconstrained, then
 		 * swap to become a source. If we are source and partner is
-		 * externally powered, swap to become a sink.
+		 * unconstrained, swap to become a sink.
 		 */
-		int partner_extpower = flags & PD_FLAGS_PARTNER_EXTPOWER;
+		int partner_unconstrained = flags & PD_FLAGS_PARTNER_UNCONSTR;
 
-		if ((!partner_extpower && pr_role == PD_ROLE_SINK) ||
-		     (partner_extpower && pr_role == PD_ROLE_SOURCE))
+		if ((!partner_unconstrained && pr_role == PD_ROLE_SINK) ||
+		     (partner_unconstrained && pr_role == PD_ROLE_SOURCE))
 			pd_request_power_swap(port);
 	}
 }
@@ -196,9 +196,9 @@ int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 }
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-static int dp_flags[CONFIG_USB_PD_PORT_COUNT];
+static int dp_flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 /* DP Status VDM as returned by UFP */
-static uint32_t dp_status[CONFIG_USB_PD_PORT_COUNT];
+static uint32_t dp_status[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static void svdm_safe_dp_mode(int port)
 {
@@ -261,7 +261,7 @@ static int svdm_dp_config(int port, uint32_t *payload)
  * timestamp of the next possible toggle to ensure the 2-ms spacing
  * between IRQ_HPD.
  */
-static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_COUNT];
+static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #define PORT_TO_HPD(port) ((port) ? GPIO_USB_C1_DP_HPD : GPIO_USB_C0_DP_HPD)
 static void svdm_dp_post_config(int port)

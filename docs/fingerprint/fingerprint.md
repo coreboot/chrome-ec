@@ -16,7 +16,8 @@ build/<board>` or `make clobber` to prevent compilation errors.
 ## Software
 
 The main source code for fingerprint sensor functionality lives in the
-[`common/fpsensor`] directory.
+[`common/fpsensor`] directory. The driver code for specific sensors lives in the
+[`driver/fingerprint`] directory.
 
 ## Hardware
 
@@ -70,10 +71,24 @@ prevent you from uploading.
 (chroot) ~/trunk/src/platform/ec $ make buildall -j
 ```
 
-## Build tests
+## Building and running unit tests
+
+List available unit tests:
 
 ```bash
-(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp tests-nocturne_fp -j
+(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp print-host-tests
+```
+
+Build and run a specific unit test:
+
+```bash
+(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp run-fpsensor
+```
+
+Build and run all unit tests:
+
+```bash
+(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp runhosttests -j
 ```
 
 ## Build ectool
@@ -86,6 +101,42 @@ prevent you from uploading.
 
 ```bash
 (chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp run-host_command_fuzz
+```
+
+## Logs
+
+[`timberslide`] is a simple daemon that collects logs from the FPMCU and writes
+them to disk. [`timberslide`] reads from sysfs, where the kernel driver
+[periodically dumps the FPMCU console output][cros_ec_debugfs]. [`timberslide`]
+writes the resulting logs to `/var/log/cros_fp.log`. There are multiple
+instances of [`timberslide`] that run; one for each MCU running the EC
+codebase.
+
+### Starting timberslide
+
+```bash
+(dut)$ start timberslide LOG_PATH=/sys/kernel/debug/cros_fp/console_log
+```
+
+### Stopping timberslide
+
+```bash
+(dut)$ stop timberslide LOG_PATH=/sys/kernel/debug/cros_fp/console_log
+```
+
+### Manually running timberslide
+
+```bash
+(dut)$ timberslide --device_log=/sys/kernel/debug/cros_fp/console_log
+```
+
+### Reading logs from kernel
+
+If [`timberslide`] is not running you can just `cat` the logs directly from the
+kernel:
+
+```bash
+(dut)$ cat /sys/kernel/debug/cros_fp/console_log
 ```
 
 ## Production Updates
@@ -115,9 +166,10 @@ in the field (can’t by design).
 ***
 
 [`flash_fp_mcu`] enables spidev and toggles some GPIOs to put the FPMCU (STM32)
-into bootloader mode. At that point it uses `stm32mon` to rewrite the entire
-flash (both RO and RW). This will only work if [hardware write protection] is
-disabled.
+into bootloader mode. At that point it uses [`stm32mon`] to rewrite the entire
+flash (both RO and RW). The FPMCU can only be put into bootloader mode when
+[hardware write protection] is disabled, which means [`flash_fp_mcu`] can only
+be used when [hardware write protection] is disabled.
 
 ### `stm32mon`
 
@@ -127,15 +179,34 @@ for development (through `flash_fp_mcu`) to erase and flash the entire chip.
 ## Keys
 
 The `RO` section of the fingerprint firmware contains the public portion of the
-key used to sign the RW firmware. It uses the public key to validate the
-signature of the RW firmware before jumping to it. It is not possible to
-update the public key stored in the RO firmware once a device has been shipped
-(i.e., once the hardware write protect is enabled).
+key used to sign the RW firmware. The RO firmware uses the public key to
+validate the signature of the RW firmware before jumping to it. It is not
+possible to update the public key stored in the RO firmware once a device has
+been shipped (i.e., once [hardware write protection] is enabled).
 
-*** promo
-TODO(tomhughes): Add details about different types of keys (`dev`, `premp`,
-`mp`, etc).
-***
+Different keys are used to sign the firmware during development and production.
+The `dev` key is used for local builds and development and is not private; it
+is called `dev_key.pem` and located in the "board" directory for the given
+FPMCU (e.g., [`board/nocturne_fp/dev_key.pem`]). After doing a build, the
+`ec.bin` in the `build` directory (e.g., `build/nocturne_fp/ec.bin`) will be
+signed with the `dev` key.
+
+The two other types of keys are `premp` and `mp`, which stand for
+"pre-mass production" and "mass production", respectively. Both the `premp` and
+`mp` keys are only available to the buildbots as part of the official build.
+The `premp` is typically used during bringup of new hardware to validate the
+signing flow of the buildbots, while the `mp` key is used for PVT and production
+devices.
+
+Switching keys is only possible when the `RO` firmware is not write protected,
+since the public portion of the keypair is stored in the `RO` firmware.
+
+### Generate Key
+
+For testing, you can generate a new key by using the following openssl command:
+```bash
+openssl genrsa -3 -out board/$BOARD/dev_key.pem 3072
+```
 
 ### Resources
 
@@ -207,7 +278,8 @@ Signature verification succeeded.
 about adding an EC command to show the Key ID (fingerprint) from the RO version.
 This would make it a lot easier during both development and testing.
 
-[`common/fpsensor`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/common/fpsensor/
+[`common/fpsensor`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/common/fpsensor/
+[`driver/fingerprint`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/driver/fingerprint
 [`nocturne_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/nocturne_fp/
 [`nami_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/nami_fp/
 [`hatch_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/hatch_fp/
@@ -226,3 +298,6 @@ This would make it a lot easier during both development and testing.
 [`flashrom`]: https://chromium.googlesource.com/chromiumos/third_party/flashrom/
 [STM32F412]: https://www.st.com/resource/en/reference_manual/dm00180369.pdf
 [STM32H743]: https://www.st.com/resource/en/reference_manual/dm00314099.pdf
+[`board/nocturne_fp/dev_key.pem`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/board/nocturne_fp/dev_key.pem
+[`timberslide`]: https://chromium.googlesource.com/chromiumos/platform2/+/master/timberslide
+[cros_ec_debugfs]: https://chromium.googlesource.com/chromiumos/third_party/kernel/+/9db44685934a2e4bc9180ea2de87a6c429672395/drivers/platform/chrome/cros_ec_debugfs.c

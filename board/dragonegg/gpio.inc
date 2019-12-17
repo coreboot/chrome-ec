@@ -20,8 +20,10 @@ GPIO_INT(UART1_RX,        PIN(B, 0), GPIO_INT_BOTH, uart_deepsleep_interrupt) /*
 
 /* Power sequencing interrupts */
 GPIO_INT(SLP_S0_L,        PIN(E, 4), GPIO_INT_BOTH, power_signal_interrupt)
-#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
 GPIO_INT(SLP_S3_L,        PIN(I, 4), GPIO_INT_BOTH, power_signal_interrupt)
+#endif
+#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 GPIO_INT(SLP_S4_L,        PIN(I, 5), GPIO_INT_BOTH, power_signal_interrupt)
 #endif
 GPIO_INT(SLP_SUS_L,       PIN(G, 2), GPIO_INT_BOTH, power_signal_interrupt)
@@ -44,11 +46,6 @@ GPIO_INT(VOLUME_UP_L,      PIN(I, 7), GPIO_INT_BOTH | GPIO_PULL_UP, button_inter
 GPIO_INT(ESPI_RESET_L,    PIN(D, 2), GPIO_INT_FALLING | GPIO_SEL_1P8V, espi_reset_pin_asserted_interrupt) /* eSPI_reset# */
 #endif
 
-#ifdef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
-GPIO(SLP_S3_L,            PIN(I, 4), GPIO_INPUT)
-GPIO(SLP_S4_L,            PIN(I, 5), GPIO_INPUT)
-#endif
-
 GPIO(SYS_RESET_L,         PIN(D, 1), GPIO_ODR_HIGH)  /* SYS_RST_ODL */
 GPIO(PCH_WAKE_L,          PIN(D, 5), GPIO_ODR_HIGH)  /* EC_PCH_WAKE_ODL */
 GPIO(PCH_PWRBTN_L,        PIN(B, 6), GPIO_ODR_HIGH)  /* EC_PCH_PWR_BTN_ODL */
@@ -66,6 +63,10 @@ GPIO(EC_PCH_DSW_PWROK,    PIN(L, 7), GPIO_OUT_LOW)
 GPIO(EC_PCH_RSMRST_L,     PIN(H, 0), GPIO_OUT_LOW)
 GPIO(EC_PROCHOT_ODL,      PIN(D, 0), GPIO_ODR_HIGH)
 GPIO(PP5000_PG_OD,        PIN(F, 0), GPIO_INPUT)
+
+/* SYS_PWROK generation is done by the Dialog power good IC */
+UNIMPLEMENTED(PG_EC_ALL_SYS_PWRGD)
+UNIMPLEMENTED(PCH_SYS_PWROK)
 
 /* USB and USBC Signals */
 GPIO(USB_OC_ODL,          PIN(J, 6), GPIO_ODR_HIGH)

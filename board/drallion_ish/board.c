@@ -38,15 +38,15 @@ static struct mutex g_lid_mag_mutex;
 static struct mutex g_base_mutex;
 
 /* sensor private data */
-static struct lsm6dsm_data lsm6dsm_a_data;
+static struct lsm6dsm_data lsm6dsm_a_data = LSM6DSM_DATA;
 static struct stprivate_data g_lis2dh_data;
 static struct lis2mdl_private_data lis2mdl_a_data;
 
 /* Matrix to rotate lid sensor into standard reference frame */
 const mat33_fp_t lid_rot_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, 0,  FLOAT_TO_FP(1)}
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
 /* Drivers */
@@ -148,11 +148,6 @@ struct motion_sensor_t motion_sensors[] = {
 };
 
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-int board_sensor_at_360(void)
-{
-	return lid_is_open();
-}
 
 /* Initialize board. */
 static void board_init(void)
