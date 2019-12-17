@@ -41,6 +41,31 @@ void gpio_set_level(enum gpio_signal signal, int value)
 	set_one_gpio_bit(g->port, g->mask, value);
 }
 
+int gpio_get_flags_by_mask(uint32_t port, uint32_t mask)
+{
+	uint32_t flags = 0;
+	uint32_t val = 0;
+
+	/* Only one bit must be set. */
+	if ((mask != (mask & -mask)) || (mask == 0))
+		return 0;
+
+	/* Check mode. */
+	/* ARM DDI 0479B: 3.5.2 */
+	val = GR_GPIO_SETDOUTEN(port) & mask;
+	if (val) {
+		flags |= GPIO_OUTPUT;
+		val = GR_GPIO_DOUT(port) & mask;
+		if (val)
+			flags |= GPIO_HIGH;
+		else
+			flags |= GPIO_LOW;
+	} else
+		flags |= GPIO_INPUT;
+
+	return flags;
+}
+
 void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 {
 	/* Only matters for outputs */
@@ -59,24 +84,19 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 	if (flags & GPIO_INT_F_LOW) {
 		GR_GPIO_CLRINTTYPE(port) = mask;
 		GR_GPIO_CLRINTPOL(port) = mask;
-		GR_GPIO_SETINTEN(port) = mask;
 	}
 	if (flags & GPIO_INT_F_HIGH) {
 		GR_GPIO_CLRINTTYPE(port) = mask;
 		GR_GPIO_SETINTPOL(port) = mask;
-		GR_GPIO_SETINTEN(port) = mask;
 	}
 	if (flags & GPIO_INT_F_FALLING) {
 		GR_GPIO_SETINTTYPE(port) = mask;
 		GR_GPIO_CLRINTPOL(port) = mask;
-		GR_GPIO_SETINTEN(port) = mask;
 	}
 	if (flags & GPIO_INT_F_RISING) {
 		GR_GPIO_SETINTTYPE(port) = mask;
 		GR_GPIO_SETINTPOL(port) = mask;
-		GR_GPIO_SETINTEN(port) = mask;
 	}
-
 	/* No way to trigger on both rising and falling edges, darn it. */
 }
 
@@ -256,6 +276,13 @@ int gpio_disable_interrupt(enum gpio_signal signal)
 	return EC_SUCCESS;
 }
 
+int gpio_clear_pending_interrupt(enum gpio_signal signal)
+{
+	const struct gpio_info *g = gpio_list + signal;
+	GR_GPIO_CLRINTSTAT(g->port) = g->mask;
+	return EC_SUCCESS;
+}
+
 void gpio_pre_init(void)
 {
 	const struct gpio_info *g = gpio_list;
@@ -325,11 +352,42 @@ void _gpio1_interrupt(void)
 DECLARE_IRQ(GC_IRQNUM_GPIO0_GPIOCOMBINT, _gpio0_interrupt, 1);
 DECLARE_IRQ(GC_IRQNUM_GPIO1_GPIOCOMBINT, _gpio1_interrupt, 1);
 
+/*
+ * The uart, i2c, and spi suffix arrays must match the order of the pinmux
+ * select registers in chip/g/hw_regdefs.h. If the order is incorrect, the
+ * pinmux command output will be wrong.
+ */
 static const char * const uart_str[] = {
 	"0_CTS", "0_RTS", "0_RX", "0_TX",
 	"1_CTS", "1_RTS", "1_RX", "1_TX",
 	"2_CTS", "2_RTS", "2_RX", "2_TX",
 };
+
+static const char * const i2c_str[] = {
+	"0_SCL", "0_SDA",
+	"1_SCL", "1_SDA",
+	"S0_SCL", "S0_SDA",
+};
+
+static const char * const spi_str[] = {
+	"SPICLK", "SPICSB", "SPIMISO", "SPIMOSI",
+};
+
+static void print_periph(int sel)
+{
+	if (sel >= 1 && sel <= 16)
+		ccprintf("GPIO0_GPIO%d", sel - 1);
+	else if (sel >= 17 && sel <= 32)
+		ccprintf("GPIO1_GPIO%d", sel - 17);
+	else if (sel >= 33 && sel <= 38)
+		ccprintf("I2C%s", i2c_str[sel - 33]);
+	else if (sel >= 49 && sel <= 52)
+		ccprintf("SPI1_%s", spi_str[sel - 49]);
+	else if (sel >= 67 && sel <= 78)
+		ccprintf("UART%s", uart_str[sel - 67]);
+	else if (sel)
+		ccprintf("UNDEF");
+}
 
 static void show_pinmux(const char *name, int i, int ofs)
 {
@@ -342,7 +400,7 @@ static void show_pinmux(const char *name, int i, int ofs)
 	if (!sel && !(ctl & (0xf << 2)) && !(GREG32(PINMUX, EXITEN0) & bitmask))
 		return;
 
-	ccprintf("%08x: %s%-2d  %2d %s%s%s%s",
+	ccprintf("%08x: %s%-2d  %2d %s%s%s%s  ",
 		 GC_PINMUX_BASE_ADDR + i * 8 + ofs,
 		 name, i, sel,
 		 (ctl & (1<<2)) ? " IN" : "",
@@ -350,12 +408,7 @@ static void show_pinmux(const char *name, int i, int ofs)
 		 (ctl & (1<<4)) ? " PU" : "",
 		 (ctl & (1<<5)) ? " INV" : "");
 
-	if (sel >= 1 && sel <= 16)
-		ccprintf("  GPIO0_GPIO%d", sel - 1);
-	else if (sel >= 17 && sel <= 32)
-		ccprintf("  GPIO1_GPIO%d", sel - 17);
-	else if (sel >= 67 && sel <= 78)
-		ccprintf("  UART%s", uart_str[sel - 67]);
+	print_periph(sel);
 
 	if (GREG32(PINMUX, EXITEN0) & bitmask) {
 		ccprintf("  WAKE_");
@@ -365,6 +418,7 @@ static void show_pinmux(const char *name, int i, int ofs)
 			ccprintf("%s", edge ? "RISING" : "HIGH");
 	}
 	ccprintf("\n");
+	cflush();
 }
 
 static void print_dio_str(uint32_t sel)
@@ -379,34 +433,21 @@ static void print_dio_str(uint32_t sel)
 		ccprintf("  DIOM%d\n", 30 - sel);
 	else
 		ccprintf("\n");
+	cflush();
 }
 
-static void show_pinmux_gpio(const char *name, int i, int ofs)
+static void show_pinmux_periph(int i)
 {
-	uint32_t sel = DIO_SEL_REG(i * 4 + ofs);
-
-	if (sel == 0)
-		return;
-
-	ccprintf("%08x: %s%-2d  %2d",
-		 GC_PINMUX_BASE_ADDR + i * 4 + ofs,
-		 name, i, sel);
-	print_dio_str(sel);
-}
-
-static void show_pinmux_uart(int i)
-{
-
-	uint32_t ofs = GC_PINMUX_UART0_CTS_SEL_OFFSET + i * 4;
+	uint32_t ofs = GC_PINMUX_GPIO0_GPIO0_SEL_OFFSET + i * 4;
 	uint32_t sel = DIO_SEL_REG(ofs);
 
 	if (sel == 0)
 		return;
 
-	ccprintf("%08x: UART%s      %2d",
-		 GC_PINMUX_BASE_ADDR + ofs,
-		 uart_str[i], sel);
+	ccprintf("%08x: ", GC_PINMUX_BASE_ADDR + ofs);
+	print_periph(i + 1);
 
+	ccprintf("\t%2d", sel);
 	print_dio_str(sel);
 }
 
@@ -425,14 +466,10 @@ static int command_pinmux(int argc, char **argv)
 	ccprintf("\n");
 
 	/* GPIO & Peripheral sources */
-	for (i = 0; i <= 15; i++)
-		show_pinmux_gpio("GPIO0_GPIO", i, 0xf8);
-	for (i = 0; i <= 15; i++)
-		show_pinmux_gpio("GPIO1_GPIO", i, 0x134);
+	for (i = 0; i <= 98; i++)
+		show_pinmux_periph(i);
 
-	for (i = 0; i <= 11; i++)
-		show_pinmux_uart(i);
-
+	ccprintf("\n");
 	return EC_SUCCESS;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(pinmux, command_pinmux,

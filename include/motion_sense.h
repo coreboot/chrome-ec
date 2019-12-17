@@ -45,6 +45,12 @@ enum sensor_config {
 #define ROUND_UP_FLAG (1 << 31)
 #define BASE_ODR(_odr) ((_odr) & ~ROUND_UP_FLAG)
 
+#ifdef CONFIG_ACCEL_FIFO
+#define MAX_FIFO_EVENT_COUNT CONFIG_ACCEL_FIFO
+#else
+#define MAX_FIFO_EVENT_COUNT 0
+#endif
+
 struct motion_data_t {
 	/*
 	 * data rate the sensor will measure, in mHz: 0 suspended.
@@ -78,6 +84,12 @@ struct motion_sensor_t {
 	/* i2c address or SPI slave logic GPIO. */
 	uint8_t addr;
 
+	/*
+	 * When non-zero, spoof mode will allow the EC to report arbitrary
+	 * values for any of the components.
+	 */
+	uint8_t in_spoof_mode;
+
 	const matrix_3x3_t *rot_standard_ref;
 
 	/*
@@ -108,6 +120,7 @@ struct motion_sensor_t {
 	enum sensor_state state;
 	vector_3_t raw_xyz;
 	vector_3_t xyz;
+	vector_3_t spoof_xyz;
 
 	/* How many flush events are pending */
 	uint32_t flush_pending;
@@ -134,11 +147,25 @@ struct motion_sensor_t {
 	 * from sensor registers.
 	 */
 	 uint32_t last_collection;
+
+	 /* Minimum supported sampling frequency in miliHertz for this sensor */
+	 uint32_t min_frequency;
+
+	 /* Maximum supported sampling frequency in miliHertz for this sensor */
+	 uint32_t max_frequency;
 };
 
 /* Defined at board level. */
 extern struct motion_sensor_t motion_sensors[];
+#ifdef CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+extern unsigned motion_sensor_count;
+#else
 extern const unsigned motion_sensor_count;
+#endif
+#if (!defined HAS_TASK_ALS) && (defined CONFIG_ALS)
+/* Needed if reading ALS via LPC is needed */
+extern const struct motion_sensor_t *motion_als_sensors[];
+#endif
 
 /* optionally defined at board level */
 extern unsigned int motion_min_interval;
@@ -165,7 +192,28 @@ void motion_sense_fifo_add_unit(struct ec_response_motion_sensor_data *data,
 
 #endif
 
-#ifdef CONFIG_GESTURE_HOST_DETECTION
+/**
+ * Take actions at end of sensor initialization (currently only printing
+ * init done status to console).
+ *
+ * @param sensor sensor which was just initialized
+ * @param range  range of sensor
+ */
+void sensor_init_done(const struct motion_sensor_t *sensor, int range);
+
+/**
+ * Board specific function that is called when a double_tap event is detected.
+ *
+ */
+void sensor_board_proc_double_tap(void);
+
+#ifdef CONFIG_ORIENTATION_SENSOR
+enum motionsensor_orientation motion_sense_remap_orientation(
+		const struct motion_sensor_t *s,
+		enum motionsensor_orientation orientation);
+#endif
+
+#if defined(CONFIG_GESTURE_HOST_DETECTION) || defined(CONFIG_ORIENTATION_SENSOR)
 /* Add an extra sensor. We may need to add more */
 #define MOTION_SENSE_ACTIVITY_SENSOR_ID (motion_sensor_count)
 #define ALL_MOTION_SENSORS (MOTION_SENSE_ACTIVITY_SENSOR_ID + 1)

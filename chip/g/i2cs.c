@@ -14,10 +14,10 @@
  *
  * The file holding data written by the master has associated with it a
  * register showing where the controller accessed the file last, comparing it
- * with its pervious value tells the driver how many bytes recently written by
+ * with its previous value tells the driver how many bytes recently written by
  * the master are there.
  *
- * The file holding data to be read by the master has a register associtated
+ * The file holding data to be read by the master has a register associated
  * with it showing where was the latest BIT the controller transmitted.
  *
  * The controller can generate interrupts on three different conditions:
@@ -64,12 +64,14 @@
 
 #include "common.h"
 #include "console.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "i2cs.h"
 #include "pmu.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
+#include "tpm_log.h"
 
 #define REGISTER_FILE_SIZE (1 << 6) /* 64 bytes. */
 #define REGISTER_FILE_MASK (REGISTER_FILE_SIZE - 1)
@@ -96,14 +98,39 @@ static uint16_t last_write_pointer;
  */
 static uint16_t last_read_pointer;
 
+/*
+ * Keep track of i2c interrupts and the number of times the "hosed slave"
+ * condition was encountered.
+ */
+static uint16_t i2cs_read_irq_count;
+static uint16_t i2cs_read_recovery_count;
+
 static void i2cs_init(void)
 {
 	/* First decide if i2c is even needed for this platform. */
 	/* if (i2cs is not needed) return; */
-	if (!(system_get_board_properties() & BOARD_SLAVE_CONFIG_I2C))
+	if (!board_tpm_uses_i2c())
 		return;
 
 	pmu_clock_en(PERIPH_I2CS);
+
+	/*
+	 * Toggle the reset register to make sure i2cs interface is in the
+	 * initial state even if it is mid transaction at this time.
+	 */
+	GWRITE_FIELD(PMU, RST0, DI2CS0, 1);
+
+	/*
+	 * This initialization is guraranteed to take way more than enough
+	 * time for the reset to kick in.
+	 */
+	memset(i2cs_buffer, 0, sizeof(i2cs_buffer));
+	last_write_pointer = 0;
+	last_read_pointer = 0;
+	i2cs_read_irq_count = 0;
+
+	GWRITE_FIELD(PMU, RST0, DI2CS0, 0);
+
 
 	/* Set pinmux registers for I2CS interface */
 	i2cs_set_pinmux();
@@ -114,7 +141,61 @@ static void i2cs_init(void)
 	/* Slave address is hardcoded to 0x50. */
 	GWRITE(I2CS, SLAVE_DEVADDRVAL, 0x50);
 }
-DECLARE_HOOK(HOOK_INIT, i2cs_init, HOOK_PRIO_DEFAULT);
+
+/* Forward declaration of the hook function. */
+static void poll_read_state(void);
+DECLARE_DEFERRED(poll_read_state);
+
+/* Poll SDA line to detect the "hosed" condition. */
+#define READ_STATUS_CHECK_INTERVAL (500 * MSEC)
+
+/*
+ * Check for receive problems, if found - reinitialize the i2c slave
+ * interface.
+ */
+static void poll_read_state(void)
+{
+	/*
+	 * Make sure there is no accidental match between
+	 * last_i2cs_read_irq_count and i2cs_read_irq_count if the first run
+	 * of this function happens when SDA is low.
+	 */
+	static uint16_t last_i2cs_read_irq_count = ~0;
+
+	if (ap_is_on()) {
+		if (!gpio_get_level(GPIO_I2CS_SDA)) {
+			if (last_i2cs_read_irq_count == i2cs_read_irq_count) {
+				/*
+				 * SDA line is low and number of RX interrupts
+				 * has not changed since last poll when it was
+				 * low, it must be hosed. Reinitialize the i2c
+				 * interface (which will also restart this
+				 * polling function).
+				 */
+				last_i2cs_read_irq_count = ~0;
+				i2cs_read_recovery_count++;
+				i2cs_register_write_complete_handler
+					(write_complete_handler_);
+
+#ifdef CONFIG_TPM_LOGGING
+				tpm_log_event(TPM_I2C_RESET,
+					i2cs_read_recovery_count);
+#endif
+				return;
+			}
+			last_i2cs_read_irq_count = i2cs_read_irq_count;
+		}
+	} else {
+		/*
+		 * AP is off, let's make sure that in case this function
+		 * happens to run right after AP wakes up and i2c is active,
+		 * there is no false positive 'hosed' condition detection.
+		 */
+		if (last_i2cs_read_irq_count == i2cs_read_irq_count)
+			last_i2cs_read_irq_count -= 1;
+	}
+	hook_call_deferred(&poll_read_state_data, READ_STATUS_CHECK_INTERVAL);
+}
 
 /* Process the 'end of a write cycle' interrupt. */
 static void _i2cs_write_complete_int(void)
@@ -122,10 +203,13 @@ static void _i2cs_write_complete_int(void)
 	/* Reset the IRQ condition. */
 	GWRITE_FIELD(I2CS, INT_STATE, INTR_WRITE_COMPLETE, 1);
 
+	/* We're receiving some bytes, so don't sleep */
+	disable_sleep(SLEEP_MASK_I2C_SLAVE);
+
 	if (write_complete_handler_) {
 		uint16_t bytes_written;
 		uint16_t bytes_processed;
-		uint32_t word_in_value;
+		uint32_t word_in_value = 0;
 
 		/* How many bytes has the master just written. */
 		bytes_written = ((uint16_t)GREAD(I2CS, WRITE_PTR) -
@@ -166,7 +250,18 @@ static void _i2cs_write_complete_int(void)
 
 		/* Invoke the callback to process the message. */
 		write_complete_handler_(i2cs_buffer, bytes_processed);
+
+		if (bytes_processed == 1)
+			i2cs_read_irq_count++;
 	}
+
+	/*
+	 * Could be the end of a TPM trasaction. Set sleep to be reenabled in 1
+	 * second. If this is not the end of a TPM response, then sleep will be
+	 * disabled again in the next I2CS interrupt.
+	 */
+	delay_sleep_by(1 * SECOND);
+	enable_sleep(SLEEP_MASK_I2C_SLAVE);
 }
 DECLARE_IRQ(GC_IRQNUM_I2CS0_INTR_WRITE_COMPLETE_INT,
 	    _i2cs_write_complete_int, 1);
@@ -216,12 +311,12 @@ void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len)
 	/* Insert bytes until fifo is word aligned */
 	if (remainder_bytes) {
 		/* mask the bytes to be kept */
-		word_out_value = *value_addr;
+		word_out_value = value_addr[addr_offset];
 		word_out_value &= (1 << (8 * start_offset)) - 1;
 		/* Write in remainder bytes */
 		for (i = 0; i < remainder_bytes; i++)
 			word_out_value |= *buffer++ << (8 * (start_offset + i));
-		/* Write to fifo regsiter */
+		/* Write to fifo register */
 		value_addr[addr_offset] = word_out_value;
 		addr_offset = (addr_offset + 1) & (REGISTER_FILE_MASK >> 2);
 		/* Account for bytes consumed */
@@ -240,11 +335,11 @@ void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len)
 	}
 	len -= (num_words << 2);
 
-	/* Now proccess remaining bytes (if any), will be <= 3 at this point */
+	/* Now process remaining bytes (if any), will be <= 3 at this point */
 	remainder_bytes = len;
 	if (remainder_bytes) {
 		/* read from HW fifo */
-		word_out_value = *value_addr;
+		word_out_value = value_addr[addr_offset];
 		/* Mask bytes that need to be kept */
 		word_out_value &= (0xffffffff << (8 * remainder_bytes));
 		for (i = 0; i < remainder_bytes; i++)
@@ -255,16 +350,25 @@ void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len)
 
 int i2cs_register_write_complete_handler(wr_complete_handler_f wc_handler)
 {
-	if (write_complete_handler_)
-		return -1;
+	task_disable_irq(GC_IRQNUM_I2CS0_INTR_WRITE_COMPLETE_INT);
 
+	if (!wc_handler)
+		return 0;
+
+	i2cs_init();
 	write_complete_handler_ = wc_handler;
 	task_enable_irq(GC_IRQNUM_I2CS0_INTR_WRITE_COMPLETE_INT);
+
+	/*
+	 * Start a self perpetuating polling function to check for 'hosed'
+	 * condition periodically.
+	 */
+	hook_call_deferred(&poll_read_state_data, READ_STATUS_CHECK_INTERVAL);
 
 	return 0;
 }
 
-size_t i2cs_get_read_fifo_buffer_depth(void)
+size_t i2cs_zero_read_fifo_buffer_depth(void)
 {
 	uint32_t hw_read_pointer;
 	size_t depth;
@@ -277,6 +381,20 @@ size_t i2cs_get_read_fifo_buffer_depth(void)
 	hw_read_pointer = GREAD(I2CS, READ_PTR) >> 3;
 	/* Determine the number of bytes buffered in the HW fifo */
 	depth = (last_read_pointer - hw_read_pointer) & REGISTER_FILE_MASK;
-
+	/*
+	 * If queue depth is not zero, force it to 0 by adjusting
+	 * last_read_pointer to where the hw read pointer is.
+	 */
+	if (depth)
+		last_read_pointer = (uint16_t)hw_read_pointer;
+	/*
+	 * Return number of bytes queued when this funciton is called so it can
+	 * be tracked or logged by caller if desired.
+	 */
 	return depth;
+}
+
+void i2cs_get_status(struct i2cs_status *status)
+{
+	status->read_recovery_count = i2cs_read_recovery_count;
 }

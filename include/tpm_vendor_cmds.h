@@ -6,10 +6,12 @@
 #ifndef __INCLUDE_TPM_VENDOR_CMDS_H
 #define __INCLUDE_TPM_VENDOR_CMDS_H
 
+#include "common.h"  /* For __packed. */
+
 /*
  * This file includes definitions of extended/vendor TPM2 commands and their
  * return codes. The definitions are shared between the embedded code and the
- * usb_updater utility running on the host.
+ * gsctool utility running on the host.
  */
 
 /* Extension and vendor commands. */
@@ -40,6 +42,31 @@ enum vendor_cmd_cc {
 	VENDOR_CC_TURN_UPDATE_ON = 24,
 	VENDOR_CC_GET_BOARD_ID = 25,
 	VENDOR_CC_SET_BOARD_ID = 26,
+	VENDOR_CC_U2F_APDU = 27,
+	VENDOR_CC_POP_LOG_ENTRY = 28,
+	VENDOR_CC_GET_REC_BTN = 29,
+	VENDOR_CC_RMA_CHALLENGE_RESPONSE = 30,
+
+	/* A gap left for the no longer supported CCD password command. */
+
+	/*
+	 * Disable factory mode. Reset all ccd capabilities to default and reset
+	 * write protect to follow battery presence.
+	 */
+	VENDOR_CC_DISABLE_FACTORY = 32,
+	VENDOR_CC_MANAGE_CCD_PWD = 33,
+	VENDOR_CC_CCD = 34,
+	VENDOR_CC_GET_ALERTS_DATA = 35,
+	VENDOR_CC_SPI_HASH = 36,
+	VENDOR_CC_PINWEAVER = 37,
+	/*
+	 * Check the factory reset settings. If they're all set correctly, do a
+	 * factory reset to enable ccd factory mode. All capabilities will be
+	 * set to Always and write protect will be permanently disabled. This
+	 * mode can't be reset unless VENDOR_CC_DISABLE_FACTORY is called or
+	 * the 'ccd reset' console command is run.
+	 */
+	VENDOR_CC_RESET_FACTORY = 38,
 
 	LAST_VENDOR_COMMAND = 65535,
 };
@@ -58,6 +85,14 @@ enum vendor_cmd_rc {
 	VENDOR_RC_BOGUS_ARGS = 1,
 	VENDOR_RC_READ_FLASH_FAIL = 2,
 	VENDOR_RC_WRITE_FLASH_FAIL = 3,
+	VENDOR_RC_REQUEST_TOO_BIG = 4,
+	VENDOR_RC_RESPONSE_TOO_BIG = 5,
+	VENDOR_RC_INTERNAL_ERROR = 6,
+	VENDOR_RC_NOT_ALLOWED = 7,
+	VENDOR_RC_NO_SUCH_SUBCOMMAND = 8,
+	VENDOR_RC_IN_PROGRESS = 9,
+	VENDOR_RC_PASSWORD_REQUIRED = 10,
+
 	/* Only 7 bits available; max is 127 */
 	VENDOR_RC_NO_SUCH_COMMAND = 127,
 };
@@ -89,5 +124,38 @@ enum vendor_cmd_rc {
  */
 #define VENDOR_RC_ERR 0x00000500
 
+/*** Structures and constants for VENDOR_CC_SPI_HASH ***/
+
+enum vendor_cc_spi_hash_request_subcmd {
+	/* Relinquish the bus */
+	SPI_HASH_SUBCMD_DISABLE = 0,
+	/* Acquire the bus for AP SPI */
+	SPI_HASH_SUBCMD_AP = 1,
+	/* Acquire the bus for EC SPI */
+	SPI_HASH_SUBCMD_EC = 2,
+	/* Hash SPI data */
+	SPI_HASH_SUBCMD_SHA256 = 4,
+	/* Read SPI data */
+	SPI_HASH_SUBCMD_DUMP = 5,
+	/* Poll spi hash PP state. */
+	SPI_HASH_PP_POLL = 6,
+};
+
+enum vendor_cc_spi_hash_request_flags {
+	/* EC uses gang programmer mode */
+	SPI_HASH_FLAG_EC_GANG = (1 << 0),
+};
+
+/* Structure for VENDOR_CC_SPI_HASH request which follows tpm_header */
+struct vendor_cc_spi_hash_request {
+	uint8_t subcmd;		/* See vendor_cc_spi_hash_request_subcmd */
+	uint8_t flags;		/* See vendor_cc_spi_hash_request_flags */
+	/* Offset and size used by SHA256 and DUMP; ignored by other subcmds */
+	uint32_t offset;	/* Offset in flash to hash/read */
+	uint32_t size;		/* Size in bytes to hash/read */
+} __packed;
+
+/* Maximum size of a response = SHA-256 hash or 1-32 bytes of data */
+#define SPI_HASH_MAX_RESPONSE_BYTES 32
 
 #endif /* __INCLUDE_TPM_VENDOR_CMDS_H */

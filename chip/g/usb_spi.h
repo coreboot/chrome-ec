@@ -66,7 +66,23 @@ enum usb_spi_request {
 	USB_SPI_REQ_DISABLE         = 0x0001,
 	USB_SPI_REQ_ENABLE_AP       = 0x0002,
 	USB_SPI_REQ_ENABLE_EC       = 0x0003,
+	USB_SPI_REQ_ENABLE_H1       = 0x0004,
+	USB_SPI_REQ_RESET           = 0x0005,
+	USB_SPI_REQ_BOOT_CFG        = 0x0006,
+	USB_SPI_REQ_SOCKET          = 0x0007,
+	USB_SPI_REQ_SIGNING_START   = 0x0008,
+	USB_SPI_REQ_SIGNING_SIGN    = 0x0009,
 };
+
+/* USB SPI device bitmasks */
+enum usb_spi {
+	USB_SPI_DISABLE = 0,
+	USB_SPI_AP = (1 << 0),
+	USB_SPI_EC = (1 << 1),
+	USB_SPI_H1 = (1 << 2),
+	USB_SPI_ALL = USB_SPI_AP | USB_SPI_EC | USB_SPI_H1
+};
+
 
 #define USB_SPI_MAX_WRITE_COUNT 62
 #define USB_SPI_MAX_READ_COUNT  62
@@ -109,10 +125,8 @@ struct usb_spi_config {
 	 */
 	struct usb_spi_state *state;
 
-	struct usb_stream_config const *usb;
-
 	/*
-	 * Interface and endpoint indicies.
+	 * Interface and endpoint indices.
 	 */
 	int interface;
 	int endpoint;
@@ -125,7 +139,7 @@ struct usb_spi_config {
 
 
 	/*
-	 * Pointer to tx and rx queus and bounce buffer.
+	 * Pointer to tx and rx queues and bounce buffer.
 	 */
 	uint8_t *buffer;
 	struct consumer const consumer;
@@ -170,7 +184,6 @@ extern struct consumer_ops const usb_spi_consumer_ops;
 	static struct usb_spi_state CONCAT2(NAME, _state_);		\
 	struct usb_spi_config const NAME = {				\
 		.state     = &CONCAT2(NAME, _state_),			\
-		.usb       = &CONCAT2(NAME, _usb_),			\
 		.interface = INTERFACE,					\
 		.endpoint  = ENDPOINT,					\
 		.deferred  = &CONCAT2(NAME, _deferred__data),		\
@@ -223,14 +236,10 @@ int usb_spi_interface(struct usb_spi_config const *config,
 /*
  * These functions should be implemented by the board to provide any board
  * specific operations required to enable or disable access to the SPI device.
+ * usb_spi_board_enable should return EC_SUCCESS on success or an error
+ * otherwise.
  */
-void usb_spi_board_enable(struct usb_spi_config const *config);
+int usb_spi_board_enable(struct usb_spi_config const *config);
 void usb_spi_board_disable(struct usb_spi_config const *config);
-
-/*
- * Returns true if SPI update is running, needed to properly handle SYS_RST_L
- * input state changes.
- */
-int usb_spi_update_in_progress(void);
 
 #endif /* __CROS_EC_USB_SPI_H */

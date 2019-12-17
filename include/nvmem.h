@@ -6,38 +6,39 @@
 #ifndef __CROS_EC_NVMEM_UTILS_H
 #define __CROS_EC_NVMEM_UTILS_H
 
+#include "crypto_api.h"
+
 /*
  * In order to provide maximum robustness for NvMem operations, the NvMem space
  * is divided into two equal sized partitions. A partition contains a tag
  * and a buffer for each NvMem user.
  *
  *     NvMem Partiion
- *     ---------------------------------------------------------------------
- *     |0x8 tag | User Buffer 0 | User Buffer 1 | .... |  User Buffer N-1  |
- *     ---------------------------------------------------------------------
+ *     ------------------------------------------------------------------------
+ *     |36 byte tag | User Buffer 0 | User Buffer 1 | .... |  User Buffer N-1 |
+ *     ------------------------------------------------------------------------
  *
  *     Physical Block Tag details
- *     ---------------------------------------------------------------------
- *     |             sha               |    version      |    reserved     |
- *     ---------------------------------------------------------------------
- *         sha       -> 4 bytes of sha1 digest
- *         version   -> 1 byte version number (0 - 0xfe)
- *         reserved  -> 3 bytes
+ *     ------------------------------------------------------------------------
+ *     |      sha       |      padding     |  version  | generation | reserved |
+ *     -------------------------------------------------------------------------
+ *         sha        -> 16 bytes of sha1 digest
+ *         padding    -> 16 bytes for future extensions
+ *         version    -> nvmem layout version, currently at 0
+ *         generation -> 1 byte generation number (0 - 0xfe)
+ *         reserved   -> 2 bytes
  *
  * At initialization time, each partition is scanned to see if it has a good sha
  * entry. One of the two partitions being valid is a supported condition. If
- * however, neither partiion is valid, then a check is made to see if NvMem
- * space is fully erased. If this is detected, then the tag for partion 0 is
- * populated and written into flash. If neither partition is valid and they
- * aren't fully erased, then NvMem is marked corrupt and this failure condition
- * must be reported back to the caller.
+ * neither partiion is valid a new partition is created with generation set to
+ * zero.
  *
  * Note that the NvMem partitions can be placed anywhere in flash space, but
  * must be equal in total size. A table is used by the NvMem module to get the
- * correct base address and offset for each partition.
+ * correct base address for each partition.
  *
- * A version number is used to distinguish between two valid partitions with
- * the newsest version number (in a circular sense) marking the correct
+ * A generation number is used to distinguish between two valid partitions with
+ * the newsest generation number (in a circular sense) marking the correct
  * partition to use. The parition number 0/1 is tracked via a static
  * variable. When the NvMem contents need to be updated, the flash erase/write
  * of the updated partition will use the inactive partition space in NvMem. This
@@ -51,9 +52,10 @@
  *    CONFIG_FLASH_NVMEM_BASE_(A|B) -> address of start of each partition
  *
  * The board.h file must define a macro or enum named NVMEM_NUM_USERS.
- * The board.c file must include 1 function and an array of user buffer lengths
+ * The board.c file must implement:
  *    nvmem_user_sizes[] -> array of user buffer lengths
- *    nvmem_compute_sha() -> function used to compute 4 byte sha (or equivalent)
+ * The chip must provide
+ *    app_compute_hash() -> function used to compute 16 byte sha (or equivalent)
  *
  * Note that total length of user buffers must satisfy the following:
  *   sum(user sizes) <= (NVMEM_PARTITION_SIZE) - sizeof(struct nvmem_tag)
@@ -63,15 +65,19 @@
 extern uint32_t nvmem_user_sizes[NVMEM_NUM_USERS];
 
 #define NVMEM_NUM_PARTITIONS 2
-#define NVMEM_SHA_SIZE 4
-#define NVMEM_VERSION_BITS 8
-#define NVMEM_VERSION_MASK ((1 << NVMEM_VERSION_BITS) - 1)
+#define NVMEM_SHA_SIZE CIPHER_SALT_SIZE
+#define NVMEM_GENERATION_BITS 8
+#define NVMEM_GENERATION_MASK ((1 << NVMEM_GENERATION_BITS) - 1)
+#define NVMEM_PADDING_SIZE 16
+#define NVMEM_LAYOUT_VERSION 0
 
 /* Struct for NV block tag */
 struct nvmem_tag {
 	uint8_t sha[NVMEM_SHA_SIZE];
-	uint8_t version;
-	uint8_t reserved[3];
+	uint8_t padding[NVMEM_PADDING_SIZE];
+	uint8_t layout_version;
+	uint8_t generation;
+	uint8_t reserved[2];
 };
 
 /* Structure MvMem Partition */
@@ -124,6 +130,9 @@ int nvmem_read(uint32_t startOffset, uint32_t size,
 /**
  * Write 'size' amount of bytes to NvMem
  *
+ * Calling this function will wait for the mutex, then lock it until
+ * nvmem_commit() is invoked.
+ *
  * @param startOffset: Offset (in bytes) into NVmem logical space
  * @param size: Number of bytes to write
  * @param data: Pointer to source buffer
@@ -137,6 +146,9 @@ int nvmem_write(uint32_t startOffset, uint32_t size,
 
 /**
  * Move 'size' amount of bytes within NvMem
+ *
+ * Calling this function will wait for the mutex, then lock it until
+ * nvmem_commit() is invoked.
  *
  * @param src_offset: source offset within NvMem logical space
  * @param dest_offset: destination offset within NvMem logical space
@@ -152,28 +164,41 @@ int nvmem_move(uint32_t src_offset, uint32_t dest_offset, uint32_t size,
  * Commit all previous NvMem writes to flash
  *
  * @return EC_SUCCESS if flash erase/operations are successful.
- *         EC_ERROR_UNKNOWN otherwise.
+
+ *         EC_ERROR_OVERFLOW in case the mutex is not locked when this
+ *                           function is called
+ *         EC_ERROR_INVAL    if task trying to commit is not the one
+ *                           holding the mutex
+ *         EC_ERROR_UNKNOWN  in other error cases
  */
 int nvmem_commit(void);
 
-/**
- * One time initialization of NvMem partitions
- * @param version: Starting version number of partition 0
+/*
+ * Clear out a user's data across all partitions.
  *
- * @return EC_SUCCESS if flash operations are successful.
- *         EC_ERROR_UNKNOWN otherwise.
+ * @param user:   The user who's data should be cleared.
+ * @return        EC_SUCCESS if the user's data across all partitions was
+ *                cleared.  Error othrwise.
  */
-int nvmem_setup(uint8_t version);
+int nvmem_erase_user_data(enum nvmem_users user);
 
-/**
- * Compute sha1 (lower 4 bytes or equivalent checksum) for NvMem tag
+/*
+ * Temporarily stopping NVMEM commits could be beneficial. One use case is
+ * when TPM operations need to be sped up.
  *
- * @param p_buf: pointer to beginning of data
- * @param num_bytes: length of data in bytes
- * @param p_sha: pointer to where computed sha will be stored
- * @param sha_len: length in bytes to use from sha computation
+ * Calling this function will wait for the mutex, then lock it until
+ * nvmem_commit() is invoked.
+ *
+ * Both below functions should be called from the same task.
  */
-void nvmem_compute_sha(uint8_t *p_buf, int num_bytes, uint8_t *p_sha,
-		       int sha_len);
+void nvmem_disable_commits(void);
+
+/*
+ * Only the task holding the mutex is allowed to enable commits.
+ *
+ * @return error if this task does not hold the lock or commit
+ *         fails, EC_SUCCESS otherwise.
+ */
+int nvmem_enable_commits(void);
 
 #endif /* __CROS_EC_NVMEM_UTILS_H */

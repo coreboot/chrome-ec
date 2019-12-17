@@ -40,10 +40,12 @@
 
 #include "common.h"
 #include "console.h"
+#include "cryptoc/util.h"
 #include "flash.h"
 #include "flash_config.h"
 #include "flash_info.h"
 #include "registers.h"
+#include "shared_mem.h"
 #include "timer.h"
 #include "watchdog.h"
 
@@ -105,7 +107,7 @@ uint32_t flash_physical_get_writable_flags(uint32_t cur_flags)
 	return 0;				/* no flags writable */
 }
 
-int flash_physical_protect_at_boot(enum flash_wp_range range)
+int flash_physical_protect_at_boot(uint32_t new_flags)
 {
 	return EC_SUCCESS;			/* yeah, I did it. */
 }
@@ -166,10 +168,12 @@ static int do_flash_op(enum flash_op op, int is_info_bank,
 	/* What are we doing? */
 	switch (op) {
 	case OP_ERASE_BLOCK:
+#ifndef CR50_DEV
 		if (is_info_bank)
 			/* Erasing the INFO bank from the RW section is
 			 * unsupported. */
 			return EC_ERROR_INVAL;
+#endif
 		opcode = 0x31415927;
 		words = 0;			/* don't care, really */
 		/* This number is based on the TSMC spec Nme=Terase/Tsme */
@@ -191,6 +195,8 @@ static int do_flash_op(enum flash_op op, int is_info_bank,
 		words = 1;
 		max_attempts = 9;
 		break;
+	default:
+		return EC_ERROR_INVAL;
 	}
 
 	/*
@@ -350,22 +356,62 @@ int flash_physical_info_read_word(int byte_offset, uint32_t *dst)
 	return EC_SUCCESS;
 }
 
-void flash_info_write_enable(void)
+/*
+ * Verify that the range's size is power of 2, the range offset is aligned by
+ * size, and the range does not cross the INFO space boundary.
+ */
+static int valid_info_range(uint32_t offset, size_t size)
 {
-	/* Enable R/W access to INFO. */
-	GREG32(GLOBALSEC, FLASH_REGION3_BASE_ADDR) = FLASH_INFO_MEMORY_BASE +
-		FLASH_INFO_MANUFACTURE_STATE_OFFSET;
-	GREG32(GLOBALSEC, FLASH_REGION3_SIZE) =
-		FLASH_INFO_MANUFACTURE_STATE_SIZE - 1;
-	GREG32(GLOBALSEC, FLASH_REGION3_CTRL) =
-		GC_GLOBALSEC_FLASH_REGION3_CTRL_EN_MASK |
-		GC_GLOBALSEC_FLASH_REGION3_CTRL_WR_EN_MASK |
-		GC_GLOBALSEC_FLASH_REGION3_CTRL_RD_EN_MASK;
+	if (!size || (size & (size - 1)))
+		return 0;
+
+	if (offset & (size - 1))
+		return 0;
+
+	if ((offset + size) > FLASH_INFO_SIZE)
+		return 0;
+
+	return 1;
+
+}
+
+/* Write access is a superset of read access. */
+static int flash_info_configure_access(uint32_t offset,
+				       size_t size, int write_mode)
+{
+	int mask;
+
+	if (!valid_info_range(offset, size))
+		return EC_ERROR_INVAL;
+
+	mask = GREG32(GLOBALSEC, FLASH_REGION6_CTRL);
+	mask |= GC_GLOBALSEC_FLASH_REGION6_CTRL_EN_MASK |
+		GC_GLOBALSEC_FLASH_REGION6_CTRL_RD_EN_MASK;
+	if (write_mode)
+		mask |= GC_GLOBALSEC_FLASH_REGION6_CTRL_WR_EN_MASK;
+
+	GREG32(GLOBALSEC, FLASH_REGION6_BASE_ADDR) =
+		FLASH_INFO_MEMORY_BASE + offset;
+
+	GREG32(GLOBALSEC, FLASH_REGION6_SIZE) = size - 1;
+	GREG32(GLOBALSEC, FLASH_REGION6_CTRL) = mask;
+
+	return EC_SUCCESS;
+}
+
+int flash_info_read_enable(uint32_t offset, size_t size)
+{
+	return flash_info_configure_access(offset, size, 0);
+}
+
+int flash_info_write_enable(uint32_t offset, size_t size)
+{
+	return flash_info_configure_access(offset, size, 1);
 }
 
 void flash_info_write_disable(void)
 {
-	GREG32(GLOBALSEC, FLASH_REGION3_CTRL) = 0;
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, WR_EN, 0);
 }
 
 int flash_info_physical_write(int byte_offset, int num_bytes, const char *data)
@@ -404,3 +450,72 @@ int flash_physical_erase(int byte_offset, int num_bytes)
 
 	return EC_SUCCESS;
 }
+
+
+/* Enable write access to the backup RO section. */
+void flash_open_ro_window(uint32_t offset, size_t size_b)
+{
+	GREG32(GLOBALSEC, FLASH_REGION6_BASE_ADDR) =
+		offset + CONFIG_PROGRAM_MEMORY_BASE;
+	GREG32(GLOBALSEC, FLASH_REGION6_SIZE) = size_b - 1;
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, EN, 1);
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, RD_EN, 1);
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, WR_EN, 1);
+}
+
+#ifdef CR50_DEV
+
+static int command_erase_flash_info(int argc, char **argv)
+{
+	uint32_t *preserved_manufacture_state;
+	const size_t manuf_word_count = FLASH_INFO_MANUFACTURE_STATE_SIZE /
+		sizeof(uint32_t);
+	int i;
+	int rv = EC_ERROR_BUSY;
+
+	if (shared_mem_acquire(FLASH_INFO_MANUFACTURE_STATE_SIZE,
+			       (char **)&preserved_manufacture_state) !=
+	    EC_SUCCESS) {
+		ccprintf("Failed to allocate memory for manufacture state!\n");
+		return rv;
+	}
+
+	flash_info_read_enable(0, 2048);
+	flash_info_write_enable(0, 2048);
+
+	/* Preserve manufacturing information. */
+	for (i = 0; i < manuf_word_count; i++) {
+		if (flash_physical_info_read_word
+		    (FLASH_INFO_MANUFACTURE_STATE_OFFSET +
+		     i * sizeof(uint32_t),
+		     preserved_manufacture_state + i) != EC_SUCCESS) {
+			ccprintf("Failed to read word %d!\n", i);
+			goto exit;
+		}
+	}
+
+	if (do_flash_op(OP_ERASE_BLOCK, 1, 0, 512) != EC_SUCCESS) {
+		ccprintf("Failed to erase info space!\n");
+		goto exit;
+	}
+
+	if (flash_info_physical_write
+	    (FLASH_INFO_MANUFACTURE_STATE_OFFSET,
+	     FLASH_INFO_MANUFACTURE_STATE_SIZE,
+	     (char *)preserved_manufacture_state) != EC_SUCCESS) {
+		ccprintf("Failed to restore manufacture state!\n");
+		goto exit;
+	}
+
+	rv = EC_SUCCESS;
+ exit:
+	always_memset(preserved_manufacture_state, 0,
+		      FLASH_INFO_MANUFACTURE_STATE_SIZE);
+	shared_mem_release(preserved_manufacture_state);
+	flash_info_write_disable();
+	return rv;
+}
+DECLARE_CONSOLE_COMMAND(eraseflashinfo, command_erase_flash_info,
+			"",
+			"Erase INFO1 flash space");
+#endif

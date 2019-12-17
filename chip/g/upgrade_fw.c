@@ -3,20 +3,24 @@
  * found in the LICENSE file.
  */
 
+#include "config.h"
+
+#include "board_id.h"
 #include "byteorder.h"
+#include "compile_time_macros.h"
 #include "console.h"
+#include "cryptoc/sha.h"
 #include "dcrypto/dcrypto.h"
 #include "extension.h"
 #include "flash.h"
+#include "flash_info.h"
 #include "hooks.h"
-#include "include/compile_time_macros.h"
-#include "system.h"
 #include "registers.h"
-#include "uart.h"
-
 #include "signed_header.h"
+#include "system.h"
+#include "system_chip.h"
+#include "uart.h"
 #include "upgrade_fw.h"
-#include "cryptoc/sha.h"
 
 #define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ## args)
 
@@ -65,17 +69,6 @@ static void set_valid_sections(void)
 		CONFIG_RW_SIZE;
 }
 
-/* Enable write access to the backup RO section. */
-static void open_ro_window(uint32_t offset, size_t size_b)
-{
-	GREG32(GLOBALSEC, FLASH_REGION6_BASE_ADDR) =
-		offset + CONFIG_PROGRAM_MEMORY_BASE;
-	GREG32(GLOBALSEC, FLASH_REGION6_SIZE) = size_b - 1;
-	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, EN, 1);
-	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, RD_EN, 1);
-	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, WR_EN, 1);
-}
-
 /*
  * Verify that the passed in block fits into the valid area. If it does, and
  * is destined to the base address of the area - erase the area contents.
@@ -101,7 +94,7 @@ static uint8_t check_update_chunk(uint32_t block_offset, size_t body_size)
 		 * be erased.
 		 */
 		if (block_offset == valid_sections.rw_base_offset) {
-			if (flash_erase(base, size) != EC_SUCCESS) {
+			if (flash_physical_erase(base, size) != EC_SUCCESS) {
 				CPRINTF("%s:%d erase failure of 0x%x..+0x%x\n",
 					__func__, __LINE__, base, size);
 				return UPGRADE_ERASE_FAILURE;
@@ -127,8 +120,8 @@ static uint8_t check_update_chunk(uint32_t block_offset, size_t body_size)
 			size = valid_sections.ro_top_offset -
 				valid_sections.ro_base_offset;
 			/* backup RO area write access needs to be enabled. */
-			open_ro_window(base, size);
-			if (flash_erase(base, size) != EC_SUCCESS) {
+			flash_open_ro_window(base, size);
+			if (flash_physical_erase(base, size) != EC_SUCCESS) {
 				CPRINTF("%s:%d erase failure of 0x%x..+0x%x\n",
 					__func__, __LINE__, base, size);
 				return UPGRADE_ERASE_FAILURE;
@@ -148,6 +141,187 @@ static uint8_t check_update_chunk(uint32_t block_offset, size_t body_size)
 	return UPGRADE_BAD_ADDR;
 }
 
+int usb_pdu_valid(struct upgrade_command *cmd_body,  size_t cmd_size)
+{
+	uint8_t sha1_digest[SHA_DIGEST_SIZE];
+	size_t body_size = cmd_size - offsetof(struct update_frame_header,
+					       cmd.block_base);
+
+	/* Check if the block was received properly. */
+	DCRYPTO_SHA1_hash((uint8_t *)&cmd_body->block_base,
+			  body_size + sizeof(cmd_body->block_base),
+			  sha1_digest);
+	if (memcmp(sha1_digest, &cmd_body->block_digest,
+		   sizeof(cmd_body->block_digest))) {
+		CPRINTF("%s:%d sha1 %x not equal received %x\n",
+			__func__, __LINE__,
+			*(uint32_t *)sha1_digest, cmd_body->block_digest);
+		return 0;
+	}
+
+	return 1;
+}
+
+#ifdef CR50_DEV
+#ifndef CONFIG_IGNORE_G_UPDATE_CHECKS
+#define CONFIG_IGNORE_G_UPDATE_CHECKS
+#endif
+#endif
+
+#ifndef CONFIG_IGNORE_G_UPDATE_CHECKS
+/* Compare two versions, return True if the new version is older. */
+static int new_is_older(const struct SignedHeader *new,
+			const struct SignedHeader *old)
+{
+	if (new->epoch_ != old->epoch_)
+		return new->epoch_ < old->epoch_;
+
+	if (new->major_ != old->major_)
+		return new->major_ < old->major_;
+
+
+	return new->minor_ < old->minor_;
+}
+
+/*
+ * Check if this chunk of data is a rollback attempt, or is unaligned,
+ * overlaps RO or RW header, or would cause a board ID mismatch if attempted
+ * to run.
+ *
+ * Return False if there is any of the above problems and set the passed in
+ * error_code pointer to the proper error_code.
+ */
+static int contents_allowed(uint32_t block_offset,
+			    size_t body_size, void *upgrade_data,
+			    uint8_t *error_code)
+{
+	/* Pointer to RO or RW header in flash, to compare against. */
+	const struct SignedHeader *header;
+	int is_rw_header = 0;
+
+	if (block_offset == valid_sections.ro_base_offset) {
+		header = (const struct SignedHeader *)
+			get_program_memory_addr(system_get_ro_image_copy());
+	} else if (block_offset == valid_sections.rw_base_offset) {
+		header = (const struct SignedHeader *)
+			get_program_memory_addr(system_get_image_copy());
+		is_rw_header = 1;
+	} else {
+
+		/*
+		 * The received block is not destined to a header directly,
+		 * but does it overlap with a header by any chance?
+		 */
+		int i;
+		/* Base offsets of valid headers in flash. */
+		uint32_t bases[] = { valid_sections.ro_base_offset,
+				     valid_sections.rw_base_offset };
+		/* Range of offsets this block is covering. */
+		uint32_t range[] = { block_offset, block_offset + body_size };
+
+		for (i = 0; i < ARRAY_SIZE(bases); i++) {
+			int j;
+
+			for (j = 0; j < ARRAY_SIZE(range); j++) {
+				if ((range[j] >= bases[i]) &&
+				    (range[j] <
+				     (bases[i] +
+				      sizeof(struct SignedHeader)))) {
+					CPRINTF("%s:"
+						" unaligned block overlaps\n",
+						__func__);
+					*error_code =
+						UPGRADE_UNALIGNED_BLOCK_ERROR;
+					return 0;
+				}
+			}
+		}
+
+		return 1;
+	}
+
+	/* This block is a header (ro or rw) of the new image. */
+	if (body_size < sizeof(struct SignedHeader)) {
+		CPRINTF("%s: block too short\n", __func__);
+		*error_code = UPGRADE_TRUNCATED_HEADER_ERROR;
+		return 0;
+	}
+
+	/* upgrade_data is the new header. */
+	if (new_is_older(upgrade_data, header)) {
+		CPRINTF("%s: rejecting an older header.\n", __func__);
+		*error_code = UPGRADE_ROLLBACK_ERROR;
+		return 0;
+	}
+
+	if (is_rw_header && board_id_mismatch(upgrade_data)) {
+		CPRINTF("%s: rejecting Board ID mismatch.\n", __func__);
+		*error_code = UPGRADE_BOARD_ID_ERROR;
+		return 0;
+	}
+
+	return 1;
+}
+
+
+static uint32_t prev_offset;
+static uint64_t prev_timestamp;
+#define BACKOFF_TIME (60 * SECOND)
+
+static int chunk_came_too_soon(uint32_t block_offset)
+{
+	int hard_reset = system_get_reset_flags() & RESET_FLAG_HARD;
+
+	/*
+	 * If it has been BACKOFF_TIME since the last time we wrote to a block
+	 * or since the last boot, the write is ok.
+	 */
+	if ((get_time().val - prev_timestamp) > BACKOFF_TIME)
+		return 0;
+
+	if (!prev_timestamp) {
+		/*
+		 * If we just recovered from a hard reset, we have to wait until
+		 * backoff time to accept an update. All other resets can accept
+		 * updates immediately.
+		 */
+		if (hard_reset)
+			CPRINTF("%s: rejecting a write after hard reset\n",
+				__func__);
+		return hard_reset;
+	}
+
+	if (!prev_offset ||
+	    (block_offset >= (prev_offset + SIGNED_TRANSFER_SIZE)))
+		return 0;
+
+	CPRINTF("%s: rejecting a write to the same block\n", __func__);
+	return 1;
+}
+
+static void new_chunk_written(uint32_t block_offset)
+{
+	prev_timestamp = get_time().val;
+	prev_offset = block_offset;
+}
+#else
+static int chunk_came_too_soon(uint32_t block_offset)
+{
+	return 0;
+}
+
+static void new_chunk_written(uint32_t block_offset)
+{
+}
+
+static int contents_allowed(uint32_t block_offset,
+			    size_t body_size, void *upgrade_data,
+			    uint8_t *error_code)
+{
+	return 1;
+}
+#endif
+
 void fw_upgrade_command_handler(void *body,
 				size_t cmd_size,
 				size_t *response_size)
@@ -155,7 +329,6 @@ void fw_upgrade_command_handler(void *body,
 	struct upgrade_command *cmd_body = body;
 	void *upgrade_data;
 	uint8_t *error_code = body;  /* Cache the address for code clarity. */
-	uint8_t sha1_digest[SHA_DIGEST_SIZE];
 	size_t body_size;
 	uint32_t block_offset;
 
@@ -190,7 +363,7 @@ void fw_upgrade_command_handler(void *body,
 
 		/*
 		 * If there have been any problems when determining the valid
-		 * secitons offsets/sizes - return an error code.
+		 * Sections offsets/sizes - return an error code.
 		 */
 		if (!valid_sections.ro_top_offset ||
 		    !valid_sections.rw_top_offset) {
@@ -225,35 +398,55 @@ void fw_upgrade_command_handler(void *body,
 		return;
 	}
 
-	/* Check if the block was received properly. */
-	DCRYPTO_SHA1_hash((uint8_t *)&cmd_body->block_base,
-			  body_size + sizeof(cmd_body->block_base),
-			  sha1_digest);
-	if (memcmp(sha1_digest, &cmd_body->block_digest,
-		   sizeof(cmd_body->block_digest))) {
+	block_offset = be32toh(cmd_body->block_base);
+
+	if (!usb_pdu_valid(cmd_body, cmd_size)) {
 		*error_code = UPGRADE_DATA_ERROR;
-		CPRINTF("%s:%d sha1 %x not equal received %x at offs. 0x%x\n",
-			__func__, __LINE__,
-			*(uint32_t *)sha1_digest, cmd_body->block_digest,
-			block_offset);
 		return;
 	}
 
+	upgrade_data = cmd_body + 1;
+	if (!contents_allowed(block_offset, body_size,
+			      upgrade_data, error_code))
+		return;
+
 	/* Check if the block will fit into the valid area. */
-	block_offset = be32toh(cmd_body->block_base);
 	*error_code = check_update_chunk(block_offset, body_size);
 	if (*error_code)
 		return;
 
+	if (chunk_came_too_soon(block_offset)) {
+		*error_code = UPGRADE_RATE_LIMIT_ERROR;
+		return;
+	}
+
+	if ((block_offset == valid_sections.ro_base_offset) ||
+	    (block_offset == valid_sections.rw_base_offset)) {
+		/*
+		 * This is the header coming, let's corrupt it so that it does
+		 * not run until it's time to switch.
+		 */
+		struct SignedHeader *header;
+
+		header = (struct SignedHeader *) upgrade_data;
+
+		/*
+		 * Set the top bit of the size field. It will be impossible to
+		 * run this image until this bit is erased.
+		 */
+		header->image_size |= TOP_IMAGE_SIZE_BIT;
+	}
+
 	CPRINTF("%s: programming at address 0x%x\n", __func__,
 		block_offset + CONFIG_PROGRAM_MEMORY_BASE);
-	upgrade_data = cmd_body + 1;
 	if (flash_physical_write(block_offset, body_size, upgrade_data)
 	    != EC_SUCCESS) {
 		*error_code = UPGRADE_WRITE_FAILURE;
 		CPRINTF("%s:%d upgrade write error\n",	__func__, __LINE__);
 		return;
 	}
+
+	new_chunk_written(block_offset);
 
 	/* Verify that data was written properly. */
 	if (memcmp(upgrade_data, (void *)
@@ -272,4 +465,3 @@ void fw_upgrade_complete(void)
 {
 	system_clear_retry_counter();
 }
-

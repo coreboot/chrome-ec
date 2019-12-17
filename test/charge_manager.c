@@ -26,6 +26,7 @@ const int supplier_priority[] = {
 	[CHARGE_SUPPLIER_TEST6] = 3,
 	[CHARGE_SUPPLIER_TEST7] = 5,
 	[CHARGE_SUPPLIER_TEST8] = 6,
+	[CHARGE_SUPPLIER_TEST9] = 6,
 };
 BUILD_ASSERT((int)CHARGE_SUPPLIER_COUNT == (int)CHARGE_SUPPLIER_TEST_COUNT);
 BUILD_ASSERT(ARRAY_SIZE(supplier_priority) == CHARGE_SUPPLIER_COUNT);
@@ -37,7 +38,8 @@ static int new_power_request[CONFIG_USB_PD_PORT_COUNT];
 static int power_role[CONFIG_USB_PD_PORT_COUNT];
 
 /* Callback functions called by CM on state change */
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma)
+void board_set_charge_limit(int port, int supplier, int charge_ma,
+			    int max_ma, int charge_mv)
 {
 	active_charge_limit = charge_ma;
 }
@@ -159,6 +161,48 @@ static int test_initialization(void)
 	wait_for_charge_manager_refresh();
 	TEST_ASSERT(active_charge_port != CHARGE_PORT_NONE);
 
+	return EC_SUCCESS;
+}
+
+static int test_safe_mode(void)
+{
+	int port = 0;
+	struct charge_port_info charge;
+
+	/* Initialize table to no charge */
+	initialize_charge_table(0, 5000, 5000);
+
+	/*
+	 * Set a 2A non-dedicated charger on port 0 and verify that
+	 * it is selected, due to safe mode.
+	 */
+	charge_manager_update_dualrole(port, CAP_DUALROLE);
+	charge.current = 2000;
+	charge.voltage = 5000;
+	charge_manager_update_charge(CHARGE_SUPPLIER_TEST2, port, &charge);
+	wait_for_charge_manager_refresh();
+	TEST_ASSERT(active_charge_port == port);
+	TEST_ASSERT(active_charge_limit == 2000);
+
+	/* Verify ceil is ignored, due to safe mode. */
+	charge_manager_set_ceil(port, 0, 500);
+	wait_for_charge_manager_refresh();
+	TEST_ASSERT(active_charge_limit == 2000);
+
+	/*
+	 * Leave safe mode and verify normal port selection rules go
+	 * into effect.
+	 */
+	charge_manager_leave_safe_mode();
+	wait_for_charge_manager_refresh();
+#ifdef CONFIG_CHARGE_MANAGER_DRP_CHARGING
+	TEST_ASSERT(active_charge_port == port);
+	TEST_ASSERT(active_charge_limit == 500);
+#else
+	TEST_ASSERT(active_charge_port == CHARGE_PORT_NONE);
+#endif
+
+	/* For subsequent tests, safe mode is exited. */
 	return EC_SUCCESS;
 }
 
@@ -287,6 +331,14 @@ static int test_charge_ceil(void)
 	wait_for_charge_manager_refresh();
 	TEST_ASSERT(active_charge_port == 1);
 	TEST_ASSERT(active_charge_limit == 2500);
+
+	/* Verify forced ceil takes effect immediately */
+	charge_manager_force_ceil(1, 500);
+	TEST_ASSERT(active_charge_port == 1);
+	TEST_ASSERT(active_charge_limit == 500);
+	wait_for_charge_manager_refresh();
+	TEST_ASSERT(active_charge_port == 1);
+	TEST_ASSERT(active_charge_limit == 500);
 
 	return EC_SUCCESS;
 }
@@ -739,6 +791,7 @@ void run_test(void)
 	test_reset();
 
 	RUN_TEST(test_initialization);
+	RUN_TEST(test_safe_mode);
 	RUN_TEST(test_priority);
 	RUN_TEST(test_charge_ceil);
 	RUN_TEST(test_new_power_request);

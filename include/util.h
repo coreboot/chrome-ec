@@ -49,9 +49,6 @@
 /* True of x is a power of two */
 #define POWER_OF_TWO(x) (x && !(x & (x - 1)))
 
-/* find the most significant bit. Not defined in n == 0. */
-#define __fls(n) (31 - __builtin_clz(n))
-
 /*
  * macros for integer division with various rounding variants
  * default integer division rounds down.
@@ -66,12 +63,17 @@ int isspace(int c);
 int isalpha(int c);
 int isprint(int c);
 int memcmp(const void *s1, const void *s2, size_t len);
+int safe_memcmp(const void *s1, const void *s2, size_t len);
 void *memcpy(void *dest, const void *src, size_t len);
 __visible void *memset(void *dest, int c, size_t len);
 void *memmove(void *dest, const void *src, size_t len);
+void *memchr(const void *buffer, int c, size_t n);
 int strcasecmp(const char *s1, const char *s2);
 int strncasecmp(const char *s1, const char *s2, size_t size);
-int strlen(const char *s);
+size_t strlen(const char *s);
+size_t strnlen(const char *s, size_t maxlen);
+char *strncpy(char *dest, const char *src, size_t n);
+int strncmp(const char *s1, const char *s2, size_t n);
 
 /* Like strtol(), but for integers. */
 int strtoi(const char *nptr, char **endptr, int base);

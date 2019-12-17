@@ -3,10 +3,16 @@
  * found in the LICENSE file.
  */
 
+#ifdef PRINT_PRIMES
+#include "console.h"
+#endif
+
 #include "dcrypto.h"
 #include "internal.h"
 
 #include "trng.h"
+
+#include "cryptoc/util.h"
 
 #include <assert.h>
 
@@ -19,7 +25,7 @@ static inline void watchdog_reload(void) { }
 void bn_init(struct LITE_BIGNUM *b, void *buf, size_t len)
 {
 	DCRYPTO_bn_wrap(b, buf, len);
-	dcrypto_memset(buf, 0x00, len);
+	always_memset(buf, 0x00, len);
 }
 
 void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len)
@@ -241,7 +247,7 @@ static void bn_rshift(struct LITE_BIGNUM *r, uint32_t carry, uint32_t neg)
 /* Montgomery c[] += a * b[] / R % N. */
 /* TODO(ngm): constant time. */
 static void bn_mont_mul_add(struct LITE_BIGNUM *c, const uint32_t a,
-			const struct LITE_BIGNUM *b,	const uint32_t nprime,
+			const struct LITE_BIGNUM *b, const uint32_t nprime,
 			const struct LITE_BIGNUM *N)
 {
 	uint32_t A, B, d0;
@@ -324,11 +330,12 @@ static uint32_t bn_compute_nprime(const uint32_t n0)
 	return ~ninv + 1;       /* Two's complement. */
 }
 
-/* Montgomery output = input ^ exp % N. */
 /* TODO(ngm): this implementation not timing or side-channel safe by
  * any measure. */
-void bn_mont_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
-		const struct LITE_BIGNUM *exp, const struct LITE_BIGNUM *N)
+static void bn_modexp_internal(struct LITE_BIGNUM *output,
+				const struct LITE_BIGNUM *input,
+				const struct LITE_BIGNUM *exp,
+				const struct LITE_BIGNUM *N)
 {
 	int i;
 	uint32_t nprime;
@@ -339,18 +346,6 @@ void bn_mont_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
 	struct LITE_BIGNUM RR;
 	struct LITE_BIGNUM acc;
 	struct LITE_BIGNUM aR;
-
-#ifndef CR50_NO_BN_ASM
-	if (bn_bits(N) == 2048 || bn_bits(N) == 1024) {
-		/* TODO(ngm): add hardware support for standard key sizes. */
-		bn_mont_modexp_asm(output, input, exp, N);
-		/* Final reduce. */
-		/* TODO(ngm): constant time. */
-		if (bn_sub(output, N))
-			bn_add(output, N);
-		return;
-	}
-#endif
 
 	bn_init(&RR, RR_buf, bn_size(N));
 	bn_init(&acc, acc_buf, bn_size(N));
@@ -391,14 +386,64 @@ void bn_mont_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
 		bn_add(output, N);                      /* Final reduce. */
 	output->dmax = N->dmax;
 
-	dcrypto_memset(RR_buf, 0, sizeof(RR_buf));
-	dcrypto_memset(acc_buf, 0, sizeof(acc_buf));
-	dcrypto_memset(aR_buf, 0, sizeof(aR_buf));
+	always_memset(RR_buf, 0, sizeof(RR_buf));
+	always_memset(acc_buf, 0, sizeof(acc_buf));
+	always_memset(aR_buf, 0, sizeof(aR_buf));
+}
+
+/* output = input ^ exp % N */
+int bn_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
+		const struct LITE_BIGNUM *exp, const struct LITE_BIGNUM *N)
+{
+#ifndef CR50_NO_BN_ASM
+	if ((bn_bits(N) & 255) == 0) {
+		/* Use hardware support for standard key sizes. */
+		return dcrypto_modexp(output, input, exp, N);
+	}
+#endif
+	bn_modexp_internal(output, input, exp, N);
+	return 1;
+}
+
+/* output = input ^ exp % N */
+int bn_modexp_word(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
+		uint32_t exp, const struct LITE_BIGNUM *N)
+{
+#ifndef CR50_NO_BN_ASM
+	if ((bn_bits(N) & 255) == 0) {
+		/* Use hardware support for standard key sizes. */
+		return dcrypto_modexp_word(output, input, exp, N);
+	}
+#endif
+	{
+	struct LITE_BIGNUM pubexp;
+
+	DCRYPTO_bn_wrap(&pubexp, &exp, sizeof(exp));
+	bn_modexp_internal(output, input, &pubexp, N);
+	return 1;
+	}
+}
+
+/* output = input ^ exp % N */
+int bn_modexp_blinded(struct LITE_BIGNUM *output,
+			const struct LITE_BIGNUM *input,
+			const struct LITE_BIGNUM *exp,
+			const struct LITE_BIGNUM *N,
+			uint32_t pubexp)
+{
+#ifndef CR50_NO_BN_ASM
+	if ((bn_bits(N) & 255) == 0) {
+		/* Use hardware support for standard key sizes. */
+		return dcrypto_modexp_blinded(output, input, exp, N, pubexp);
+	}
+#endif
+	bn_modexp_internal(output, input, exp, N);
+	return 1;
 }
 
 /* c[] += a * b[] */
 static uint32_t bn_mul_add(struct LITE_BIGNUM *c, uint32_t a,
-			const struct LITE_BIGNUM *b, uint32_t offset)
+		const struct LITE_BIGNUM *b, uint32_t offset)
 {
 	int i;
 	uint64_t carry = 0;
@@ -429,386 +474,549 @@ void DCRYPTO_bn_mul(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a,
 	BN_DIGIT(c, i + b->dmax - 1) = carry;
 }
 
-#define bn_is_even(b) !bn_is_bit_set((b), 0)
-#define bn_is_odd(b) bn_is_bit_set((b), 0)
-
-static int bn_is_zero(const struct LITE_BIGNUM *a)
+/* c[] = a[] * b[] */
+static void bn_mul_ex(struct LITE_BIGNUM *c,
+		const struct LITE_BIGNUM *a, int a_len,
+		const struct LITE_BIGNUM *b)
 {
-	int i, result = 0;
+	int i;
+	uint32_t carry = 0;
 
-	for (i = 0; i < a->dmax; ++i)
-		result |= BN_DIGIT(a, i);
-	return !result;
+	memset(c->d, 0, bn_size(c));
+	for (i = 0; i < a_len; i++) {
+		BN_DIGIT(c, i + b->dmax - 1) = carry;
+		carry = bn_mul_add(c, BN_DIGIT(a, i), b, i);
+	}
+
+	BN_DIGIT(c, i + b->dmax - 1) = carry;
 }
 
-/* d = (e ^ -1) mod MOD  */
-/* TODO(ngm): this method is used in place of division to calculate
- * q = N/p, i.e.  q = p^-1 mod (N-1).  The buffer e may be
- * resized to uint32_t once division is implemented. */
-int bn_modinv_vartime(struct LITE_BIGNUM *d, const struct LITE_BIGNUM *e,
-		const struct LITE_BIGNUM *MOD)
+static int bn_div_word_ex(struct LITE_BIGNUM *q,
+		struct LITE_BIGNUM *r,
+		const struct LITE_BIGNUM *u, int m,
+		uint32_t div)
 {
-	/* Buffers for B, D, and U must be as large as e. */
-	uint32_t A_buf[RSA_MAX_WORDS + 1];
-	uint32_t B_buf[RSA_MAX_WORDS + 1];
-	uint32_t C_buf[RSA_MAX_WORDS + 1];
-	uint32_t D_buf[RSA_MAX_WORDS + 1];
-	uint32_t U_buf[RSA_MAX_WORDS];
-	uint32_t V_buf[RSA_MAX_WORDS];
-	int a_neg = 0;
-	int b_neg = 0;
-	int c_neg = 0;
-	int d_neg = 0;
-	int carry1;
-	int carry2;
-	int i = 0;
+	uint32_t rem = 0;
+	int i;
 
-	struct LITE_BIGNUM A;
-	struct LITE_BIGNUM B;
-	struct LITE_BIGNUM C;
-	struct LITE_BIGNUM D;
-	struct LITE_BIGNUM U;
-	struct LITE_BIGNUM V;
+	for (i = m - 1; i >= 0; --i) {
+		uint64_t tmp = ((uint64_t)rem << 32) + BN_DIGIT(u, i);
+		uint32_t qd = tmp / div;
 
-	if (bn_size(e) > sizeof(U_buf))
+		BN_DIGIT(q, i) = qd;
+		rem = tmp - (uint64_t)qd * div;
+	}
+
+	if (r != NULL)
+		BN_DIGIT(r, 0) = rem;
+
+	return 1;
+}
+
+/*
+ * Knuth's long division.
+ *
+ * Returns 0 on error.
+ * |u| >= |v|
+ * v[n-1] must not be 0
+ * r gets |v| digits written to.
+ * q gets |u| - |v| + 1 digits written to.
+ */
+static int bn_div_ex(struct LITE_BIGNUM *q,
+		struct LITE_BIGNUM *r,
+		const struct LITE_BIGNUM *u, int m,
+		const struct LITE_BIGNUM *v, int n)
+{
+	uint32_t vtop;
+	int s, i, j;
+	uint32_t vn[RSA_MAX_WORDS]; /* Normalized v */
+	uint32_t un[RSA_MAX_WORDS + 1]; /* Normalized u */
+
+	if (m < n || n <= 0)
 		return 0;
 
-	if (bn_is_even(e) && bn_is_even(MOD))
+	vtop = BN_DIGIT(v, n - 1);
+
+	if (vtop == 0)
 		return 0;
 
-	bn_init(&A, A_buf, bn_size(MOD) + sizeof(uint32_t));
-	bn_init(&B, B_buf, bn_size(MOD) + sizeof(uint32_t));
-	bn_init(&C, C_buf, bn_size(MOD) + sizeof(uint32_t));
-	bn_init(&D, D_buf, bn_size(MOD) + sizeof(uint32_t));
-	bn_init(&U, U_buf, bn_size(MOD));
-	bn_init(&V, V_buf, bn_size(MOD));
+	if (n == 1)
+		return bn_div_word_ex(q, r, u, m, vtop);
 
-	BN_DIGIT(&A, 0) = 1;
-	BN_DIGIT(&D, 0) = 1;
-	memcpy(U_buf, e->d, bn_size(e));
-	memcpy(V_buf, MOD->d, bn_size(MOD));
+	/* Compute shift factor to make v have high bit set */
+	s = 0;
+	while ((vtop & 0x80000000) == 0) {
+		s = s + 1;
+		vtop = vtop << 1;
+	}
 
-	/* Binary extended GCD, as per Handbook of Applied
-	 * Cryptography, 14.61. */
-	for (i = 0;; i++) {
-		carry1 = 0;
-		carry2 = 0;
-		if (bn_is_even(&U)) {
-			bn_rshift(&U, 0, 0);
-			if (bn_is_odd(&A) || bn_is_odd(&B)) {
-				carry1 = bn_signed_add(&A, &a_neg, MOD, 0);
-				carry2 = bn_signed_sub(&B, &b_neg, e, 0);
-			}
-			bn_rshift(&A, carry1, a_neg);
-			bn_rshift(&B, carry2, b_neg);
-		} else if (bn_is_even(&V)) {
-			bn_rshift(&V, 0, 0);
-			if (bn_is_odd(&C) || bn_is_odd(&D)) {
-				carry1 = bn_signed_add(&C, &c_neg, MOD, 0);
-				carry2 = bn_signed_sub(&D, &d_neg, e, 0);
-			}
-			bn_rshift(&C, carry1, c_neg);
-			bn_rshift(&D, carry2, d_neg);
-		} else {  /* U, V both odd. */
-			if (bn_gte(&U, &V)) {
-				assert(!bn_sub(&U, &V));
-				bn_signed_sub(&A, &a_neg, &C, c_neg);
-				bn_signed_sub(&B, &b_neg, &D, d_neg);
-				if (bn_is_zero(&U))
-					break;  /* done. */
-			} else {
-				assert(!bn_sub(&V, &U));
-				bn_signed_sub(&C, &c_neg, &A, a_neg);
-				bn_signed_sub(&D, &d_neg, &B, b_neg);
+	/* Normalize u and v into un and vn.
+	 * Note un always gains a leading digit
+	 */
+	if (s != 0) {
+		for (i = n - 1; i > 0; i--)
+			vn[i] = (BN_DIGIT(v, i) << s) |
+				(BN_DIGIT(v, i - 1) >> (32 - s));
+		vn[0] = BN_DIGIT(v, 0) << s;
+
+		un[m] = BN_DIGIT(u, m - 1) >> (32 - s);
+		for (i = m - 1; i > 0; i--)
+			un[i] = (BN_DIGIT(u, i) << s) |
+			  (BN_DIGIT(u, i - 1) >> (32 - s));
+		un[0] = BN_DIGIT(u, 0) << s;
+	} else {
+		for (i = 0; i < n; ++i)
+			vn[i] = BN_DIGIT(v, i);
+		for (i = 0; i < m; ++i)
+			un[i] = BN_DIGIT(u, i);
+		un[m] = 0;
+	}
+
+	/* Main loop, reducing un digit by digit */
+	for (j = m - n; j >= 0; j--) {
+		uint32_t qd;
+		int64_t t, k;
+
+		/* Estimate quotient digit */
+		if (un[j + n] == vn[n - 1]) {
+			/* Maxed out */
+			qd = 0xFFFFFFFF;
+		} else {
+			/* Fine tune estimate */
+			uint64_t rhat = ((uint64_t)un[j + n] << 32) +
+				un[j + n - 1];
+
+			qd = rhat / vn[n - 1];
+			rhat = rhat - (uint64_t)qd * vn[n - 1];
+			while ((rhat >> 32) == 0 &&
+				(uint64_t)qd * vn[n - 2] >
+					(rhat << 32) + un[j + n - 2]) {
+				qd = qd - 1;
+				rhat = rhat + vn[n - 1];
 			}
 		}
-		if ((i + 1) % 1000 == 0)
-			/* TODO(ngm): Poke the watchdog (only
-			 * necessary for q = N/p).  Remove once
-			 * division is implemented. */
-			watchdog_reload();
+
+		/* Multiply and subtract */
+		k = 0;
+		for (i = 0; i < n; i++) {
+			uint64_t p = (uint64_t)qd * vn[i];
+
+			t = un[i + j] - k - (p & 0xFFFFFFFF);
+			un[i + j] = t;
+			k = (p >> 32) - (t >> 32);
+		}
+		t = un[j + n] - k;
+		un[j + n] = t;
+
+		/* If borrowed, add one back and adjust estimate */
+		if (t < 0) {
+			qd = qd - 1;
+			for (i = 0; i < n; i++) {
+				t = (uint64_t)un[i + j] + vn[i] + k;
+				un[i + j] = t;
+				k = t >> 32;
+			}
+			un[j + n] = un[j + n] + k;
+		}
+
+		BN_DIGIT(q, j) = qd;
 	}
 
-	BN_DIGIT(&V, 0) ^= 0x01;
-	if (bn_is_zero(&V)) {
-		while (c_neg)
-			bn_signed_add(&C, &c_neg, MOD, 0);
-		while (bn_gte(&C, MOD))
-			bn_sub(&C, MOD);
-
-		memcpy(d->d, C.d, bn_size(d));
-		return 1;
-	} else {
-		return 0;  /* Inverse not found. */
+	if (r != NULL) {
+		/* Denormalize un into r */
+		if (s != 0) {
+			for (i = 0; i < n - 1; i++)
+				BN_DIGIT(r, i) = (un[i] >> s) |
+					(un[i + 1] << (32 - s));
+			BN_DIGIT(r, n - 1) = un[n - 1] >> s;
+		} else {
+			for (i = 0; i < n; i++)
+				BN_DIGIT(r, i) = un[i];
+		}
 	}
+
+	return 1;
 }
 
-#define NUM_PRIMES 4095
+static void bn_set_bn(struct LITE_BIGNUM *d, const struct LITE_BIGNUM *src,
+		size_t n)
+{
+	size_t i = 0;
+
+	for (; i < n && i < d->dmax; ++i)
+		BN_DIGIT(d, i) = BN_DIGIT(src, i);
+	for (; i < d->dmax; ++i)
+		BN_DIGIT(d, i) = 0;
+}
+
+static size_t bn_digits(const struct LITE_BIGNUM *a)
+{
+	size_t n = a->dmax - 1;
+
+	while (BN_DIGIT(a, n) == 0 && n)
+		--n;
+	return n + 1;
+}
+
+int DCRYPTO_bn_div(struct LITE_BIGNUM *quotient,
+		struct LITE_BIGNUM *remainder,
+		const struct LITE_BIGNUM *src,
+		const struct LITE_BIGNUM *divisor)
+{
+	int src_len = bn_digits(src);
+	int div_len = bn_digits(divisor);
+	int i, result;
+
+	if (src_len < div_len)
+		return 0;
+
+	result = bn_div_ex(quotient, remainder,
+			src, src_len,
+			divisor, div_len);
+
+	if (!result)
+		return 0;
+
+	/* 0-pad the destinations. */
+	for (i = src_len - div_len + 1; i < quotient->dmax; ++i)
+		BN_DIGIT(quotient, i) = 0;
+	if (remainder) {
+		for (i = div_len; i < remainder->dmax; ++i)
+			BN_DIGIT(remainder, i) = 0;
+	}
+
+	return result;
+}
+
+/*
+ * Extended Euclid modular inverse.
+ *
+ * https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm
+ * #Computing_multiplicative_inverses_in_modular_structures:
+
+ * function inverse(a, n)
+ *  t := 0;     newt := 1;
+ *  r := n;     newr := a;
+ *  while newr ≠ 0
+ *      quotient := r div newr
+ *      (t, newt) := (newt, t - quotient * newt)
+ *      (r, newr) := (newr, r - quotient * newr)
+ *  if r > 1 then return "a is not invertible"
+ *  if t < 0 then t := t + n
+ *  return t
+ */
+int bn_modinv_vartime(struct LITE_BIGNUM *dst, const struct LITE_BIGNUM *src,
+		const struct LITE_BIGNUM *mod)
+{
+	uint32_t R_buf[RSA_MAX_WORDS];
+	uint32_t nR_buf[RSA_MAX_WORDS];
+	uint32_t Q_buf[RSA_MAX_WORDS];
+
+	uint32_t nT_buf[RSA_MAX_WORDS + 1]; /* Can go negative, hence +1 */
+	uint32_t T_buf[RSA_MAX_WORDS + 1]; /* Can go negative */
+	uint32_t tmp_buf[2 * RSA_MAX_WORDS + 1]; /* needs to hold Q*nT */
+
+	struct LITE_BIGNUM R;
+	struct LITE_BIGNUM nR;
+	struct LITE_BIGNUM Q;
+	struct LITE_BIGNUM T;
+	struct LITE_BIGNUM nT;
+	struct LITE_BIGNUM tmp;
+
+	struct LITE_BIGNUM *pT = &T;
+	struct LITE_BIGNUM *pnT = &nT;
+	struct LITE_BIGNUM *pR = &R;
+	struct LITE_BIGNUM *pnR = &nR;
+	struct LITE_BIGNUM *bnswap;
+
+	int t_neg = 0;
+	int nt_neg = 0;
+	int iswap;
+
+	size_t r_len, nr_len;
+
+	bn_init(&R, R_buf, bn_size(mod));
+	bn_init(&nR, nR_buf, bn_size(mod));
+	bn_init(&Q, Q_buf, bn_size(mod));
+	bn_init(&T, T_buf, bn_size(mod) + sizeof(uint32_t));
+	bn_init(&nT, nT_buf, bn_size(mod) + sizeof(uint32_t));
+	bn_init(&tmp, tmp_buf, bn_size(mod) + sizeof(uint32_t));
+
+	r_len = bn_digits(mod);
+	nr_len = bn_digits(src);
+
+	BN_DIGIT(&nT, 0) = 1;              /* T = 0, nT = 1 */
+	bn_set_bn(&R, mod, r_len);         /* R = n */
+	bn_set_bn(&nR, src, nr_len);       /* nR = input */
+
+	/* Trim nR */
+	while (nr_len && BN_DIGIT(&nR, nr_len - 1) == 0)
+		--nr_len;
+
+	while (nr_len) {
+		size_t q_len = r_len - nr_len + 1;
+
+		/* (r, nr) = (nr, r % nr), q = r / nr */
+		if (!bn_div_ex(&Q, pR, pR, r_len, pnR, nr_len))
+			return 0;
+
+		/* swap R and nR */
+		r_len = nr_len;
+		bnswap = pR; pR = pnR; pnR = bnswap;
+
+		/* trim nR and Q */
+		while (nr_len && BN_DIGIT(pnR, nr_len - 1) == 0)
+			--nr_len;
+		while (q_len && BN_DIGIT(&Q, q_len - 1) == 0)
+			--q_len;
+
+		Q.dmax = q_len;
+
+		/* compute t - q*nt */
+		if (q_len == 1 && BN_DIGIT(&Q, 0) <= 2) {
+			/* Doing few direct subs is faster than mul + sub */
+			uint32_t n = BN_DIGIT(&Q, 0);
+
+			while (n--)
+				bn_signed_sub(pT, &t_neg, pnT, nt_neg);
+		} else {
+			/* Call bn_mul_ex with smallest operand first */
+			if (nt_neg) {
+				/* Negative numbers use all digits,
+				 * thus pnT is large
+				 */
+				bn_mul_ex(&tmp, &Q, q_len, pnT);
+			} else {
+				int nt_len = bn_digits(pnT);
+
+				if (q_len < nt_len)
+					bn_mul_ex(&tmp, &Q, q_len, pnT);
+				else
+					bn_mul_ex(&tmp, pnT, nt_len, &Q);
+			}
+			bn_signed_sub(pT, &t_neg, &tmp, nt_neg);
+		}
+
+		/* swap T and nT */
+		bnswap = pT; pT = pnT; pnT = bnswap;
+		iswap = t_neg; t_neg = nt_neg; nt_neg = iswap;
+	}
+
+	if (r_len != 1 || BN_DIGIT(pR, 0) != 1) {
+		/* gcd not 1; no direct inverse */
+		return 0;
+	}
+
+	if (t_neg)
+		bn_signed_add(pT, &t_neg, mod, 0);
+
+	bn_set_bn(dst, pT, bn_digits(pT));
+
+	return 1;
+}
+
 #define PRIME1 3
 
-/* First NUM_PRIMES worth of primes starting with PRIME1.  The entries
- * are a delta / 2 encoding, i.e.:
- *     prime(x) = prime(x - 1) + (PRIME_DELTAS[x] * 2)
+/*
+ * The array below is an encoding of the first 4096 primes, starting with
+ * PRIME1. Using 4096 of the first primes results in at least 5% improvement
+ * in running time over using the first 2048.
  *
- * Using 4096 of the first primes results in a 5-10% improvement in
- * running time over using the first 2048. */
-const uint8_t PRIME_DELTAS[NUM_PRIMES] = {
-	    0,  1,  1,  2,  1,  2,  1,  2,  3,  1,  3,  2,  1,  2,  3,
-	3,  1,  3,  2,  1,  3,  2,  3,  4,  2,  1,  2,  1,  2,  7,  2,
-	3,  1,  5,  1,  3,  3,  2,  3,  3,  1,  5,  1,  2,  1,  6,  6,
-	2,  1,  2,  3,  1,  5,  3,  3,  3,  1,  3,  2,  1,  5,  7,  2,
-	1,  2,  7,  3,  5,  1,  2,  3,  4,  3,  3,  2,  3,  4,  2,  4,
-	5,  1,  5,  1,  3,  2,  3,  4,  2,  1,  2,  6,  4,  2,  4,  2,
-	3,  6,  1,  9,  3,  5,  3,  3,  1,  3,  5,  3,  3,  1,  3,  3,
-	2,  1,  6,  5,  1,  2,  3,  3,  1,  6,  2,  3,  4,  5,  4,  5,
-	4,  3,  3,  2,  4,  3,  2,  4,  2,  7,  5,  6,  1,  5,  1,  2,
-	1,  5,  7,  2,  1,  2,  7,  2,  1,  2, 10,  2,  4,  5,  4,  2,
-	3,  3,  7,  2,  3,  3,  4,  3,  6,  2,  3,  1,  5,  1,  3,  5,
-	1,  5,  1,  3,  9,  2,  1,  2,  3,  3,  4,  3,  3, 11,  1,  5,
-	4,  5,  3,  3,  4,  6,  2,  3,  3,  1,  3,  6,  5,  9,  1,  2,
-	3,  1,  3,  2,  1,  2,  6,  1,  3, 17,  3,  3,  4,  9,  5,  7,
-	2,  1,  2,  3,  4,  2,  1,  3,  6,  5,  1,  2,  1,  2,  3,  6,
-	6,  4,  6,  3,  2,  3,  4,  2,  4,  2,  7,  2,  3,  1,  2,  3,
-	1,  3,  5, 10,  3,  2,  1, 12,  2,  1,  5,  6,  1,  5,  4,  3,
-	3,  3,  9,  3,  2,  1,  6,  5,  6,  4,  8,  7,  3,  2,  1,  2,
-	1,  5,  6,  3,  3,  9,  1,  8,  1, 11,  3,  4,  3,  2,  1,  2,
-	4,  3,  5,  1,  5,  7,  5,  3,  6,  1,  2,  1,  5,  6,  1,  8,
-	1,  3,  2,  1,  5,  4,  9, 12,  2,  3,  4,  8,  1,  2,  4,  8,
-	1,  2,  4,  3,  3,  2,  6,  1, 11,  3,  1,  3,  2,  3,  7,  3,
-	2,  1,  3,  2,  3,  6,  3,  3,  7,  2,  3,  6,  4,  3,  2, 13,
-	9,  5,  4,  2,  3,  1,  3, 11,  6,  1,  8,  4,  2,  6,  7,  5,
-	1,  2,  4,  3,  3,  2,  1,  2,  3,  4,  2,  1,  3,  5,  1,  5,
-	4,  2,  7,  5,  6,  1,  3,  2,  1,  8,  7,  2,  3,  4,  3,  2,
-	9,  4,  5,  3,  3,  4,  5,  6,  7,  2,  3,  3,  1, 14,  1,  5,
-	4,  2,  7,  2,  4,  6,  3,  6,  2,  3, 10,  5,  1,  8, 13,  2,
-	1,  6,  3,  2,  6,  3,  4,  2,  4, 11,  1,  2,  1,  6, 14,  1,
-	3,  3,  3,  2,  3,  1,  6,  2,  6,  1,  5,  1,  8,  1,  8,  3,
-	10, 8,  4,  2,  1,  2,  1, 11,  4,  6,  3,  5,  1,  2,  3,  1,
-	3,  5,  1,  6,  5,  1,  5,  7,  3,  2,  3,  4,  3,  3,  8,  6,
-	1,  2,  7,  3,  2,  4,  5,  4,  3,  3, 11,  3,  1,  5,  7,  2,
-	3,  9,  1,  5,  7,  2,  1,  5,  7,  2,  4,  9,  2,  3,  1,  2,
-	3,  1,  6,  2, 10, 11,  6,  1,  2,  3,  3,  1,  3, 11,  1,  3,
-	8,  3,  6,  1,  3,  6,  8,  1,  2,  3,  7,  2,  1,  9, 12,  5,
-	3,  1,  5,  1,  5,  1,  5,  3,  1,  5,  1,  5,  3,  4, 15,  5,
-	1,  5,  4,  3,  5,  9,  3,  6,  6,  1,  9,  3,  2,  3,  3,  9,
-	1,  5,  7,  3,  2,  1,  2, 12,  1,  6,  3,  8,  4,  3,  3,  9,
-	8,  1,  2,  3,  1,  3,  3,  5,  3,  6,  6,  9,  1,  3,  2,  9,
-	4, 12,  2,  1,  2,  3,  1,  6,  2,  7, 15,  5,  3,  6,  7,  3,
-	5,  6,  1,  2,  3,  4,  3,  5,  1,  2,  7,  3,  3,  2,  3,  1,
-	5,  1,  8,  6,  4,  9,  2,  3,  6,  1,  3,  3,  3, 14,  3,  7,
-	2,  4,  5,  4,  6,  9,  2,  1,  2, 12,  6,  3,  1,  8,  3,  3,
-	7,  5,  7,  2, 15,  3,  3,  3,  4,  3,  2,  1,  6,  3,  2,  1,
-	3, 11,  3,  1,  2,  9,  1,  2,  6,  1,  3,  2, 13,  3,  3,  2,
-	4,  5, 16,  8,  1,  3,  2,  1,  2,  1,  5,  7,  3,  2,  4,  5,
-	3, 10,  2,  1,  3, 15,  2,  4,  5,  3,  3,  4,  3,  6,  2,  3,
-	1,  3,  2,  3,  1,  5,  1,  8,  3, 10,  2,  6,  7, 14,  3, 10,
-	2,  9,  4,  3,  2,  3,  7,  3,  3,  5,  1,  5,  6,  4,  5,  1,
-	5,  4,  6,  5, 12,  1,  2,  4,  3,  2,  4,  9,  5,  3,  3,  1,
-	3,  5,  6,  1,  5,  3,  3,  3,  4,  3,  5,  3,  1,  3,  3,  3,
-	5,  4, 12,  3, 11,  1,  9,  2,  4,  5, 15,  4,  9,  2,  1,  5,
-	3,  1,  3,  2,  9,  4,  6,  9,  8,  3,  1,  6,  3,  5,  1,  5,
-	1,  3,  5,  7,  2, 12,  1,  8,  1,  5,  1,  5, 10,  2,  1,  2,
-	4,  8,  3,  3,  1,  6,  8,  4,  2,  3, 15,  1,  5,  1,  3,  2,
-	3,  3,  4,  3,  2,  6,  3,  4,  6,  2,  7,  6,  5, 12,  3,  6,
-	3,  1, 11,  4,  9,  5,  3,  7,  2,  1,  3,  5,  4,  3,  2,  3,
-	15, 7,  5,  1,  6,  5,  1,  8,  1,  9, 12,  9,  3,  8,  9,  3,
-	1,  9,  2,  3,  1,  5,  4,  5,  3,  3,  4,  2,  3,  1,  5,  1,
-	6,  2,  3,  3,  1,  6,  2,  7,  9,  2,  3, 10,  2,  4,  3,  2,
-	4,  2,  7,  3,  2,  7,  6,  2,  1, 15,  2, 12,  3,  3,  6,  6,
-	7,  3,  2,  1,  2,  9,  3,  6,  4,  3,  2,  6,  1,  6, 15,  8,
-	1,  3, 11,  7,  3,  5,  6,  3,  1,  2,  4,  5,  3,  3, 12,  7,
-	3,  2,  4,  6,  9,  5,  1,  5,  1,  2,  3, 10,  3,  2,  7,  2,
-	1,  2,  7,  3,  6, 12,  5,  3,  4,  5,  1, 15,  2,  3,  1,  6,
-	2,  7,  3, 17,  6,  4,  3,  5,  1,  2, 10,  5,  4,  8,  1,  5,
-	7,  2,  1,  6,  3,  8,  3,  4,  2,  4,  2,  3,  4,  3,  3,  6,
-	3,  2,  3,  3,  4,  9,  2, 10,  2,  6,  1,  5,  3,  1,  5,  6,
-	1,  2, 10,  3, 15,  3,  2,  4,  5,  6,  3,  1, 14,  1,  3,  2,
-	1,  8,  6,  1,  3,  5,  4, 12,  6,  3,  9,  3,  2,  7,  3,  2,
-	6,  4,  3,  6,  2,  3,  6,  3,  6,  1,  8, 10,  2,  1,  5,  9,
-	4,  2,  7,  2,  1,  3, 11,  3,  7,  3,  3,  5,  3,  1,  5,  1,
-	2,  1, 11,  1,  2,  3,  3,  6,  3,  7,  5,  6,  3,  4,  2, 18,
-	7,  6,  3,  2,  3,  1,  6,  3,  6,  8,  1,  5,  4, 11,  1,  6,
-	3,  2,  3,  9,  1,  6,  3,  2,  6,  4,  3,  6,  2,  3,  6,  3,
-	1,  6,  6,  2,  7,  3,  8,  3,  1,  5,  4,  9,  3, 17,  1, 14,
-	1, 11,  3,  1,  5,  6,  1,  3,  2,  4, 11,  3,  1,  5,  4,  2,
-	3,  4,  2,  6,  9,  6, 10,  2,  3,  3,  4,  2,  1,  8,  6,  1,
-	5,  4,  5,  1,  2,  3,  7,  6, 11,  4, 14,  1,  2, 10,  2,  1,
-	2,  7,  5,  6,  1,  6,  8,  1, 14,  4, 11,  4,  2,  3,  3,  7,
-	2,  4,  6,  3,  3,  2, 10,  2,  9,  1,  6,  3,  2,  3,  7,  9,
-	5,  4,  5, 16,  3,  5,  3,  3,  1,  3,  8,  3,  1,  6,  3, 14,
-	1,  5,  4,  8,  3,  4,  3,  5, 12, 10,  5,  1,  5,  1,  6,  2,
-	3, 10,  2,  1,  6,  9,  5,  1,  5,  1,  2, 10,  8, 13,  2,  4,
-	3,  2,  6,  3,  4,  6,  6,  3,  2,  4, 11,  1,  8,  7,  5,  3,
-	6,  6,  7,  3,  2, 10,  2,  6,  3,  1,  3,  3,  8,  4, 11,  1,
-	14, 4,  3,  2, 10,  2,  6, 12, 10,  2,  4,  5,  1,  8,  1,  6,
-	6, 17,  1,  2,  3,  6,  3,  3,  4,  3,  2,  1,  3, 12,  2, 10,
-	5,  3,  3,  7,  2,  3,  3,  1,  6,  3,  5,  1,  5,  3, 10,  2,
-	13, 2,  1,  3, 11,  1, 12,  2,  3,  1,  2,  3, 12,  3,  4,  2,
-	1, 17,  3,  4,  8,  6,  1,  5,  1,  5,  3,  4,  2,  4,  6, 11,
-	3,  7,  2, 13,  2,  1,  6,  5,  4,  2,  4,  6,  2,  7,  3,  8,
-	3,  4,  2,  3,  3,  4,  3,  5,  6,  1,  3,  3,  8,  4,  3,  3,
-	6,  5,  1,  3,  9,  2,  3,  3,  3,  6,  9,  4,  3,  5,  4,  9,
-	2,  7,  3,  9,  5,  4,  5,  6,  1,  3,  6,  6, 18,  2,  3,  4,
-	2,  3,  1,  2,  9,  6,  3,  4,  3,  3,  2,  9,  1,  2,  1, 12,
-	2,  3,  3,  7, 15,  3,  2,  3,  6,  3, 10,  2,  4,  2,  4,  3,
-	3,  2, 15,  1,  5,  6,  4,  5,  4, 12,  3,  6,  2,  7,  2,  3,
-	1, 14,  7,  8,  1,  6,  3,  2, 10,  5,  3,  3,  3,  4,  5,  6,
-	7,  5,  7,  8,  7,  5,  7,  3,  8,  3,  4,  3,  8, 10,  5,  1,
-	3,  2,  1,  2,  6,  1,  5,  1,  3, 11,  3,  1,  2,  9,  4,  5,
-	4, 11,  1,  5,  9,  7,  2,  1,  2,  9,  1,  2,  3,  4,  5,  1,
-	15, 2, 15,  1,  5,  1,  9,  2,  9,  3,  7,  5,  1,  2, 10, 18,
-	3,  2,  3,  7,  2, 10,  5,  7, 11,  3,  1, 15,  6,  5,  9,  1,
-	2,  7,  3, 11,  9,  1,  6,  3,  2,  4,  2,  4,  3,  5,  1,  6,
-	9,  5,  7,  8,  7,  2,  3,  3,  1,  3,  2,  1, 14,  1, 14,  3,
-	1,  2,  3,  7,  2,  6,  7,  8,  7,  2,  3,  4,  3,  2,  3,  3,
-	3,  4,  2,  4,  2,  7,  8,  4,  3,  2,  6,  4,  8,  1,  5,  4,
-	2,  3, 13,  3,  5,  4,  2,  3,  6,  7, 15,  2,  7, 11,  4,  6,
-	2,  3,  4,  5,  3,  7,  5,  3,  1,  5,  6,  6,  7,  3,  3,  9,
-	5,  3,  4,  9,  2,  3,  1,  3,  5,  1,  5,  4,  3,  3,  5,  1,
-	9,  5,  1,  6,  2,  3,  4,  5,  6,  7,  6,  2,  4,  5,  3,  3,
-	10, 2,  7,  8,  7,  5,  4,  5,  6,  1,  9,  3,  6,  5,  6,  1,
-	2,  1,  6,  3,  2,  4,  2, 22,  2,  1,  2,  1,  5,  6,  3,  3,
-	7,  2,  3,  3,  3,  4,  3, 18,  9,  2,  3,  1,  6,  3,  3,  3,
-	2,  7, 11,  6,  1,  9,  5,  3, 13, 12,  2,  1,  2,  1,  2,  7,
-	2,  3,  3,  4,  8,  6,  1, 21,  2,  1,  2, 12,  3,  3,  1,  9,
-	2,  7,  3, 14,  9,  7,  3,  5,  6,  1,  3,  6, 15,  3,  2,  3,
-	3,  7,  2,  1, 12,  2,  3,  3, 13,  5,  9,  3,  4,  3,  3, 15,
-	2,  6,  6,  1,  8,  1,  3,  2,  6,  9,  1,  3,  2, 13,  6,  3,
-	6,  2, 12, 12,  6,  3,  1,  6, 14,  4,  2,  3,  6,  1,  9,  3,
-	2,  3,  3, 10,  8,  1,  3,  3,  9,  5,  3,  1,  2,  4,  3,  3,
-	12, 8,  3,  4,  5,  3,  7, 11,  4,  8,  3,  1,  6,  2,  1, 11,
-	4,  9, 17,  1,  3,  9,  2,  3,  3,  4,  5,  4,  9,  3,  2,  1,
-	2,  4,  8,  1,  6,  6,  3,  9,  2,  3,  3,  3,  1,  3,  6,  5,
-	10, 6,  9,  2,  3,  1,  8,  1,  5,  7,  2, 15,  1,  5,  6,  1,
-	12, 3,  8,  4,  5,  1,  6, 11,  3,  1,  8, 10,  5,  1,  6,  6,
-	9,  5,  6,  3,  1,  5,  1,  3,  5,  9,  1,  6,  3,  2,  3,  1,
-	12, 14, 1,  2,  1,  5,  1,  8,  6,  4, 11,  1,  3,  2,  1,  5,
-	3,  10, 6,  5,  4,  6,  3,  3,  3,  2,  9,  1,  2,  6,  9,  1,
-	6,  3,  2,  1,  8,  6,  6,  7,  2,  4,  9,  2,  6,  7,  3,  3,
-	2,  4,  3,  2, 10,  6,  5,  7,  2,  1,  8,  1,  6, 15,  2,  3,
-	12, 10, 12, 5,  4,  6,  5,  6,  3,  6,  6,  3,  4,  8,  7,  3,
-	2,  3, 18, 10,  5, 15,  6,  1,  2,  1, 14,  6,  7,  3, 11,  4,
-	2,  9,  3,  7,  9,  2,  3,  1,  3, 17,  9,  1,  8,  3,  9,  1,
-	12, 2,  1,  3,  6,  3,  6,  5,  4,  3,  8,  6,  4,  5,  7, 20,
-	3,  1,  3,  2,  6,  7,  2,  1,  2,  1,  2,  4,  3,  5,  3,  3,
-	1,  3,  3,  3,  6,  3, 12,  5,  1,  5,  3,  6,  3,  3,  7,  3,
-	3, 26, 10,  3,  5,  1,  5,  4,  5,  6,  6,  1,  3,  2,  7,  8,
-	4,  6,  3, 11,  1,  5,  4,  3, 11,  1, 11,  3,  4,  5,  6,  6,
-	1,  5,  3,  6,  1,  2,  7,  5,  1,  3,  9,  2,  6,  4,  9,  6,
-	3,  3,  2,  3,  3,  7,  2,  1,  6,  6,  2,  3,  9,  9,  6,  1,
-	8,  6,  4,  9,  5, 13,  2,  3,  4,  3,  3,  2,  1,  5, 10,  2,
-	3,  4,  2, 10,  5,  1, 17,  1,  2, 12,  1,  6,  6,  5,  3,  1,
-	6, 15,  3,  6,  8,  6,  1, 11,  9,  6,  7,  5,  1,  6,  6,  2,
-	1,  2,  3,  6,  1,  8,  9,  1, 20,  4,  8,  3,  4,  5,  1,  2,
-	9,  4,  5,  4,  6,  2,  9,  1,  9,  5,  1,  2,  1,  2,  4, 14,
-	1,  3, 11,  6,  3,  7,  9,  2,  3,  4,  3,  3,  5,  4,  2,  1,
-	9,  5,  3, 10, 11,  4,  3, 15,  2,  1,  2,  9,  3, 15,  1,  2,
-	4,  3,  2,  3,  6,  7, 17,  7,  3,  2,  1,  3,  2,  7,  2,  1,
-	3, 14,  1,  2,  3,  4,  5,  1,  5,  1,  5,  1,  2, 15,  1,  6,
-	6,  5,  9,  6,  7,  5,  1,  6,  3,  5,  3,  7,  6,  2,  7,  2,
-	9,  1,  5,  4,  2,  4,  5,  6,  9,  9,  4,  3,  9,  8,  7,  3,
-	3,  5,  7,  2,  3,  1,  6,  6,  2,  3,  3,  6,  1,  8,  1,  6,
-	3,  2,  7,  3,  2,  1,  6,  9,  2, 18,  9,  6,  6,  1,  2,  1,
-	2,  4,  6,  2, 18,  3,  9,  1,  6,  5,  3,  6, 12,  4,  3,  3,
-	8,  6,  1,  9,  5, 10,  5,  1,  3,  9,  2,  1, 20,  3,  1,  8,
-	1,  2,  4,  9,  5,  6,  3,  1,  5,  4,  2,  3,  6,  1,  5,  9,
-	4,  3,  2, 10,  2,  3, 18,  3,  1,  5,  3, 12,  3,  7,  8,  3,
-	9,  1,  5, 10,  5,  4,  3,  2,  3,  1,  5,  1,  6,  2,  1,  2,
-	4,  5,  3,  6,  9,  7,  6,  8,  4,  3,  8,  4,  2,  1,  3,  9,
-	12, 9,  5,  6,  1,  2,  7,  5,  3,  3,  3,  9,  6,  1, 14,  9,
-	7,  8,  6,  7, 12,  6, 11,  3,  1,  5,  4,  2,  1,  2,  7,  6,
-	3,  2,  3,  7,  2,  1,  2, 15,  3,  1,  3,  5,  1, 15, 11,  1,
-	2,  3,  4,  3,  3,  8,  6,  6,  3,  4,  2,  1, 12,  6,  2,  3,
-	4,  3,  3,  5,  1,  3,  6, 14,  7,  3,  2,  6,  4,  3,  6,  2,
-	3,  7,  3,  6,  5,  3,  3,  4,  3,  3,  2,  1,  2,  4,  6,  2,
-	7,  9,  5,  1,  8,  3, 10,  3,  5,  4,  2, 15, 18,  6,  4, 11,
-	6,  1,  3,  6,  8,  3,  3,  1,  9,  2, 13,  2,  4,  9,  5,  4,
-	5,  3,  7,  2, 10, 11,  9,  6,  4, 14,  6,  3,  3,  4,  3,  6,
-	12, 8,  7,  2,  7,  6,  3,  5,  6, 10,  3,  2,  4,  9,  6,  9,
-	5,  1,  2, 10,  5,  7,  2,  3,  1,  5, 12,  9,  1,  2, 10,  8,
-	7,  5,  7,  3,  2,  3, 10,  3,  5,  3,  1,  6,  3, 15,  5,  4,
-	3,  2,  3,  4, 20,  1,  2,  1,  6,  9,  2,  3,  4,  5,  3,  9,
-	9,  1,  6,  8,  4,  3,  2,  3,  3,  1, 26,  7,  2, 10,  8,  1,
-	2,  3,  6,  1,  3,  6,  6,  3,  2,  7,  5,  3,  3,  7,  5,  7,
-	8,  4,  3,  6,  2,  4, 11,  3,  1,  9, 11,  3,  1,  9,  3,  8,
-	7,  5,  3,  6,  1,  3,  2,  4,  9,  6,  8,  1,  2,  7,  2,  4,
-	6,  6, 15,  8,  4,  2,  1,  3, 11,  6,  4,  5,  3,  3,  3,  7,
-	3,  9,  5,  6,  1,  5,  1,  2, 13,  2,  6,  4,  2,  9,  4,  5,
-	7,  8,  3,  3,  4,  5,  3,  4,  3,  6,  5, 10,  5,  4,  2,  6,
-	13, 9,  2,  6,  9,  3, 15,  3,  4,  3, 11,  6,  1,  2,  3,  3,
-	1,  5,  1,  2,  3,  3,  1,  3, 11,  9,  3,  9,  6,  4,  6,  3,
-	5,  6,  1,  8,  1,  5,  1,  5,  9,  3, 10,  2,  1,  3, 11,  3,
-	3,  9,  3,  7,  6,  8,  1,  3,  3,  2,  7,  6,  2,  1,  9,  8,
-	18, 6,  3,  7, 14,  1,  6,  3,  6,  3,  2,  1,  8, 15,  4, 12,
-	3, 15,  5,  1,  9,  2,  3,  6,  4, 11,  1,  3, 11,  9,  1,  5,
-	1,  5, 15,  1, 14,  3,  7,  8,  3, 10,  8,  1,  3,  2, 16,  2,
-	1,  2,  3,  1,  6,  2,  3,  3,  6,  1,  3,  2,  3,  4,  3,  2,
-	10, 2, 16,  5,  4,  8,  1, 11,  1,  2,  3,  4,  3,  8,  7,  2,
-	9,  4,  2, 10,  3,  6,  6,  3,  5,  1,  5,  1,  6, 14,  6,  9,
-	1,  9,  5,  4,  5, 24,  1,  2,  3,  4,  5,  1,  5, 15,  1, 18,
-	3,  5,  3,  1,  9,  2,  3,  4,  8,  7,  8,  3,  7,  2, 10,  2,
-	3,  1,  5,  6,  1,  3,  6,  3,  3,  2,  6,  1,  3,  2,  6,  3,
-	4,  2,  1,  3,  9,  5,  3,  4,  6,  3, 11,  1,  3,  6,  9,  2,
-	7,  3,  2, 10,  3,  8,  4,  2,  4, 11,  4,  6,  3,  3,  8,  6,
-	9, 15,  4,  2,  1,  2,  3, 13,  2,  7, 12, 11,  3,  1,  3,  5,
-	3,  7,  3,  3,  6,  5,  3,  1,  6,  5,  6,  4,  9,  9,  5,  3,
-	4,  8,  3,  3,  4,  8, 10,  2,  1,  5,  1,  5,  6,  3,  4,  3,
-	5, 10,  5,  9, 13,  2,  3, 15,  1,  2,  4,  3,  6,  6,  9,  2,
-	4, 11,  3,  1,  6, 17,  3,  9,  6,  3,  1, 14,  7,  8,  7,  2,
-	7,  6,  2,  3,  3,  1, 18,  2,  3, 10,  6, 12,  3, 11,  1,  8,
-	9,  6,  6,  9,  1,  3,  3,  3,  2,  3,  7,  2,  1, 11,  4,  6,
-	3,  5,  3,  4,  6,  9,  6,  3,  5,  1, 11,  7,  3,  3,  2,  9,
-	3, 10, 11,  1,  6, 12,  2,  9,  9,  1, 11,  1,  2,  6,  4,  6,
-	5,  7,  2,  1,  9,  8, 19,  3,  3,  3,  6,  5,  3,  6,  4,  3,
-	2,  3,  7, 15,  3,  5,  4, 11,  3,  4,  6,  5,  1,  5,  1,  3,
-	5,  1,  5,  6,  9, 10,  3,  2,  4, 11,  3,  3, 15,  3,  7,  3,
-	6,  6,  3,  5,  1,  5, 15,  1,  8,  4,  2,  1,  3,  9,  2,  1,
-	3,  2, 13,  2,  4,  3,  5,  1,  2,  3,  4,  2,  3, 15,  6,  1,
-	3,  3,  2, 10, 11,  4,  2,  1,  2, 36,  4,  2,  4, 11,  1,  2,
-	7,  5,  1,  2, 10,  3,  5,  9,  3, 10,  8,  3,  4,  3,  2, 10,
-	6, 11,  1,  2,  1,  6,  5,  9,  1, 11,  3,  9, 15,  1,  5,  7,
-	5,  4,  8, 25,  3,  5,  4,  5,  6,  3,  9,  1, 11,  3,  1,  2,
-	3,  4,  3,  3,  5,  9,  1, 11,  1,  8,  7,  5,  3,  1,  6,  5,
-	10, 2,  7,  3,  2, 18,  1,  2,  3,  6,  1,  2,  7,  6,  3,  2,
-	3,  1,  3,  2, 10,  5,  1,  5,  3,  6,  1, 12,  6,  6,  3,  3,
-	2, 12,  1,  2, 12,  1,  3,  2,  3,  4,  8,  3,  1,  5,  6,  7,
-	3, 17,  3,  7,  3,  2,  1, 15, 11,  4,  2,  3,  4,  2,  1, 14,
-	1,  3,  2, 13,  9, 11,  1,  3,  8,  3,  1,  8,  6,  1,  6,  2,
-	3,  3,  7,  5,  3,  4,  6,  2,  9,  1,  5,  4,  8,  3,  3, 15,
-	1,  5,  9,  1,  5,  4,  2,  4,  6, 12, 20,  1,  6,  5,  3,  6,
-	1,  6,  2,  1,  2,  3,  9,  7,  6,  3,  2,  7, 15,  2,  4,  5,
-	4,  3,  5,  9,  4,  2,  7,  8,  3,  4,  2,  3,  1,  5,  1,  6,
-	2,  1,  2,  3,  4,  2,  3, 16, 12,  5,  4,  9,  5,  1,  3,  5,
-	1,  2,  9,  3,  6,  1,  8,  1, 11,  3,  3,  4,  9,  2,  9,  6,
-	4,  3,  2, 10,  3, 15, 11,  6,  1,  3,  9,  2, 31,  2,  1,  6,
-	3,  5,  1,  6,  6, 14,  1,  2,  7, 11,  3,  1,  3,  3,  5,  7,
-	2,  1,  5,  3,  4,  5,  7,  5,  3,  1,  6, 11,  9,  4,  5,  9,
-	6,  1,  6,  2,  6,  1,  5,  1,  3,  9,  3,  3, 17,  3,  1,  6,
-	2,  3,  9,  9,  1,  8,  3,  3,  4,  3,  5,  9,  4,  5,  4,  5,
-	1,  2,  9, 13,  6, 11,  1,  2,  1, 11,  3,  3,  7,  8,  3, 10,
-	5,  6,  1,  9, 21,  2, 12,  1,  3,  5,  6,  1,  3,  5,  4,  2,
-	3,  6,  6,  4,  2,  3,  6, 15, 10,  3, 12,  3,  5,  6,  1,  5,
-	10, 3,  3,  2,  6,  7,  5,  9,  6,  4,  3,  6,  2,  7,  5,  1,
-	6, 15,  8,  1,  6,  3,  2,  1,  2,  3, 13,  2,  9,  1,  2,  3,
-	7, 27,  3, 26,  1,  8,  3,  3,  6, 13,  2,  1,  3, 11,  3,  1,
-	6,  6,  3,  5,  9,  1,  6,  6,  5,  9,  6,  3,  4,  3,  5,  3,
-	4,  2,  1,  2, 10, 12,  3,  3,  5,  7,  5,  1, 11,  3,  7,  5,
-	13, 2,  9,  4,  6,  6,  5,  6,  3,  4,  8,  3,  4,  3,  3, 11,
-	1,  5, 10,  5,  3, 22,  9,  3,  5,  1,  2,  3,  7,  2, 13,  2,
-	1,  6,  5,  4,  2,  4,  6,  2,  6,  4, 11,  4,  3,  5,  9,  3,
-	3,  4,  3,  6,  2,  4,  9,  5,  6,  3,  6,  1,  3,  2,  1,  8,
-	6,  6,  7,  5,  7,  3,  5,  6,  1,  6,  3,  2,  3,  1,  6,  2,
-	13, 3,  9,  3,  5,  3,  1,  9,  5,  4,  2, 13,  5, 10,  3,  8,
-	10, 6,  5,  4,  5,  1,  8,  3, 10,  5, 10,  2, 15,  1,  2,  4,
-	8,  1,  9,  2,  1,  3,  5,  9,  6,  7,  9,  3,  8, 10,  3,  2,
-	4,  3,  2,  3,  6,  4,  5,  1,  6,  3,  2,  1,  3,  5,  1,  8,
-	6,  7,  5,  3,  4,  3, 14,  1,  3,  9, 15, 17,  1,  8,  6,  1,
-	9,  8,  3,  4,  5,  4,  5,  4,  5, 22,  3,  3,  2, 10,  2,  1,
-	2,  7, 14,  4,  3,  8,  7, 15,  3, 15,  2,  7,  5,  3,  3,  4,
-	2,  9,  6,  3,  1, 11,  6,  4,  3,  6,  2,  7,  2,  3,  1,  2,
-	9, 10,  3,  8, 19,  8,  1,  2,  3,  1, 20, 21,  7,  2,  3,  1,
-	12, 5,  3,  1,  9,  5,  6,  1,  8,  1,  3,  8,  3,  4,  2,  1,
-	5,  3,  4,  5,  1,  9,  8,  4,  6,  9,  6,  3,  6,  5,  3,  3
+ * Most byte entries in the array contain two sequential differentials between
+ * two adjacent prime numbers, each differential halved (as the difference is
+ * always even) and packed into 4 bits.
+ *
+ * If a halved differential value exceeds 0xf (and as such does not fit into 4
+ * bits), a zero is placed in the array followed by the value literal (no
+ * halving).
+ *
+ * If out of two consecutive differencials only the second one exceeds 0xf,
+ * the first one still is put into the array in its own byte prepended by a
+ * zero.
+ */
+const uint8_t PRIME_DELTAS[] = {
+	  1,  18,  18,  18,  49,  50,  18,  51,  19,  33,  50,  52,
+	 33,  33,  39,  35,  21,  19,  50,  51,  21,  18,  22,  98,
+	 18,  49,  83,  51,  19,  33,  87,  33,  39,  53,  18,  52,
+	 51,  35,  66,  69,  21,  19,  35,  66,  18, 100,  36,  35,
+	 97, 147,  83,  49,  53,  51,  19,  50,  22,  81,  35,  49,
+	 98,  52,  84,  84,  51,  36,  50,  66, 117,  97,  81,  33,
+	 87,  33,  39,  33,  42,  36,  84,  35,  55,  35,  52,  54,
+	 35,  21,  19,  81,  81,  57,  33,  35,  52,  51, 177,  84,
+	 83,  52,  98,  51,  19, 101, 145,  35,  19,  33,  38,  19,
+	  0,  34,  51,  73,  87,  33,  35,  66,  19, 101,  18,  18,
+	 54, 100,  99,  35,  66,  66, 114,  49,  35,  19,  90,  50,
+	 28,  33,  86,  21,  67,  51, 147,  33, 101, 100, 135,  50,
+	 18,  21,  99,  57,  24,  27,  52,  50,  18,  67,  81,  87,
+	 83,  97,  33,  86,  24,  19,  33,  84, 156,  35,  72,  18,
+	 72,  18,  67,  50,  97, 179,  19,  35, 115,  33,  50,  54,
+	 51, 114,  54,  67,  45, 149,  66,  49,  59,  97, 132,  38,
+	117,  18,  67,  50,  18,  52,  33,  53,  21,  66, 117,  97,
+	 50,  24, 114,  52,  50, 148,  83,  52,  86, 114,  51,  30,
+	 21,  66, 114,  70,  54,  35, 165,  24, 210,  22,  50,  99,
+	 66,  75,  18,  22, 225,  51,  50,  49,  98,  97,  81, 129,
+	131, 168,  66,  18,  27,  70,  53,  18,  49,  53,  22,  81,
+	 87,  50,  52,  51, 134,  18, 115,  36,  84,  51, 179,  21,
+	114,  57,  21, 114,  21, 114,  73,  35,  18,  49,  98, 171,
+	 97,  35,  49,  59,  19, 131,  97,  54, 129,  35, 114,  25,
+	197,  49,  81,  81,  83,  21,  21,  52, 245,  21,  67,  89,
+	 54,  97, 147,  35,  57,  21, 115,  33,  44,  22,  56,  67,
+	 57, 129,  35,  19,  53,  54, 105,  19,  41,  76,  33,  35,
+	 22,  39, 245,  54, 115,  86,  18,  52,  53,  18, 115,  50,
+	 49,  81, 134,  73,  35,  97,  51,  62,  55,  36,  84, 105,
+	 33,  44,  99,  24,  51, 117, 114, 243,  51,  67,  33,  99,
+	 33,  59,  49,  41,  18,  97,  50, 211,  50,  69,   0,  32,
+	129,  50,  18,  21, 115,  36,  83, 162,  19, 242,  69,  51,
+	 67,  98,  49,  50,  49,  81, 131, 162, 103, 227, 162, 148,
+	 50,  55,  51,  81,  86,  69,  21,  70,  92,  18,  67,  36,
+	149,  51,  19,  86,  21,  51,  52,  53,  49,  51,  53,  76,
+	 59,  25,  36,  95,  73,  33,  83,  19,  41,  70, 152,  49,
+	 99,  81,  81,  53, 114, 193, 129,  81,  90,  33,  36, 131,
+	 49, 104,  66,  63,  21,  19,  35,  52,  50,  99,  70,  39,
+	101, 195,  99,  27,  73,  83, 114,  19,  84,  50,  63, 117,
+	 22,  81, 129, 156, 147, 137,  49, 146,  49,  84,  83,  52,
+	 35,  21,  22,  35,  49,  98, 121,  35, 162,  67,  36,  39,
+	 50, 118,  33, 242, 195,  54, 103,  50,  18, 147, 100,  50,
+	 97, 111, 129,  59, 115,  86,  49,  36,  83,  60, 115,  36,
+	105,  81,  81,  35, 163,  39,  33,  39,  54, 197,  52,  81,
+	242,  49,  98, 115,   0,  34, 100,  53,  18, 165,  72,  21,
+	114,  22,  56,  52,  36,  35,  67,  54,  50,  51,  73,  42,
+	 38,  21,  49,  86,  18, 163, 243,  36,  86,  49, 225,  50,
+	 24,  97,  53,  76,  99, 147,  39,  50, 100,  54,  35,  99,
+	 97, 138,  33,  89,  66, 114,  19, 179, 115,  53,  49,  81,
+	 33, 177,  35,  54,  55,  86,  52,   0,   4,   0,  36, 118,
+	 50,  49,  99, 104,  21,  75,  22,  50,  57,  22,  50, 100,
+	 54,  35,  99,  22,  98, 115, 131,  21,  73,   0,   6,   0,
+	 34,  30,  27,  49,  86,  19,  36, 179,  21,  66,  52,  38,
+	150, 162,  51,  66,  24,  97,  84,  81,  35, 118, 180, 225,
+	 42,  33,  39,  86,  22, 129, 228, 180,  35,  55,  36,  99,
+	 50, 162, 145,  99,  35, 121,  84,   0,  10,   0,  32,  53,
+	 51,  19, 131,  22,  62,  21,  72,  52,  53, 202,  81,  81,
+	 98,  58,  33, 105,  81,  81,  42, 141,  36,  50,  99,  70,
+	 99,  36, 177, 135,  83, 102, 115,  42,  38,  49,  51, 132,
+	177, 228,  50, 162, 108, 162,  69,  24,  22,   0,  12,   0,
+	 34,  18,  54,  51,  67,  33,  60,  42,  83,  55,  35,  49,
+	 99,  81,  83, 162, 210,  19, 177, 194,  49,  35, 195,  66,
+	  0,   2,   0,  34,  52, 134,  21,  21,  52,  36, 107,  55,
+	 45,  33, 101,  66,  70,  39,  56,  52,  35,  52,  53,  97,
+	 51, 132,  51, 101,  19, 146,  51,  54, 148,  53,  73,  39,
+	 57,  84,  86,  19, 102,   0,  36,  35,  66,  49,  41,  99,
+	 67,  50, 145,  33, 194,  51, 127,  50,  54,  58,  36,  36,
+	 51,  47,  21, 100,  84, 195,  98, 114,  49, 231, 129,  99,
+	 42,  83,  51,  69, 103,  87, 135,  87,  56,  52,  56, 165,
+	 19,  33,  38,  21,  19, 179,  18, 148,  84, 177,  89, 114,
+	 18, 145,  35,  69,  31,  47,  21,  25,  41,  55,  81,  42,
+	  0,  36,  50,  55,  42,  87, 179,  31, 101, 145,  39,  59,
+	145,  99,  36,  36,  53,  22, 149, 120, 114,  51,  19,  33,
+	225, 227,  18,  55,  38, 120, 114,  52,  50,  51,  52,  36,
+	 39, 132,  50, 100, 129,  84,  35, 211,  84,  35, 103, 242,
+	123,  70,  35,  69,  55,  83,  21, 102, 115,  57,  83,  73,
+	 35,  19,  81,  84,  51,  81, 149,  22,  35,  69, 103,  98,
+	 69,  51, 162, 120, 117,  69,  97, 147, 101,  97,  33,  99,
+	 36,   0,   4,   0,  44,  33,  33,  86,  51, 114,  51,  52,
+	  0,   6,   0,  36, 146,  49,  99,  51,  39, 182,  25,  83,
+	220,  33,  33,  39,  35,  52, 134,   0,   2,   0,  42,  33,
+	 44,  51,  25,  39,  62, 151,  53,  97,  54, 243,  35,  55,
+	 33, 194,  51, 213, 147,  67,  63,  38,  97, 129,  50, 105,
+	 19,  45,  99,  98, 204,  99,  22, 228,  35,  97, 147,  35,
+	 58, 129,  51, 149,  49,  36,  51, 200,  52,  83, 123,  72,
+	 49,  98,  27,  73,   0,  34,  19, 146,  51,  69,  73,  50,
+	 18,  72,  22,  99, 146,  51,  49,  54,  90, 105,  35,  24,
+	 21, 114, 241,  86,  28,  56,  69,  22, 179,  24, 165,  22,
+	105,  86,  49,  81,  53, 145,  99,  35,  28, 225,  33,  81,
+	134,  75,  19,  33,  83, 166,  84,  99,  51,  41,  18, 105,
+	 22,  50,  24, 102, 114,  73,  38, 115,  50,  67,  42, 101,
+	114,  24,  22, 242,  60, 172,  84, 101,  99, 102,  52, 135,
+	 50,   0,   6,   0,  36, 165, 246,  18,  30, 103,  59,  66,
+	147, 121,  35,  19,   0,  34, 145, 131, 145, 194,  19,  99,
+	101,  67, 134,  69,   0,  14,   0,  40,  49,  50, 103,  33,
+	 33,  36,  53,  51,  19,  51,  99, 197,  21,  54,  51, 115,
+	  0,   6,   0,  52, 163,  81,  84,  86,  97,  50, 120,  70,
+	 59,  21,  67, 177, 179,  69, 102,  21,  54,  18, 117,  19,
+	146, 100, 150,  51,  35,  55,  33, 102,  35, 153,  97, 134,
+	 73,  93,  35,  67,  50,  21, 162,  52,  42,  81,   0,  34,
+	 18, 193, 102,  83,  22, 243, 104,  97, 185, 103,  81, 102,
+	 33,  35,  97, 137,   0,   2,   0,  40,  72,  52,  81,  41,
+	 69,  70,  41,  25,  81,  33,  36, 225,  59,  99, 121,  35,
+	 67,  53,  66,  25,  83, 171,  67, 242,  18, 147, 241,  36,
+	 50,  54,   0,  14,   0,  34, 115,  33,  50, 114,  19, 225,
+	 35,  69,  21,  21,  18, 241, 102,  89, 103,  81,  99,  83,
+	118,  39,  41,  21,  66,  69, 105, 148,  57, 135,  51,  87,
+	 35,  22,  98,  51,  97, 129,  99,  39,  50,  22, 146,   0,
+	 36, 150,  97,  33,  36,  98,   0,  36,  57,  22,  83, 108,
+	 67,  56,  97, 149, 165,  19, 146,   0,   2,   0,  40,  49,
+	129,  36, 149,  99,  21,  66,  54,  21, 148,  50, 162,   0,
+	  6,   0,  36,  49,  83, 195, 120,  57,  21, 165,  67,  35,
+	 21,  22,  33,  36,  83, 105, 118, 132,  56,  66,  19, 156,
+	149,  97,  39,  83,  51, 150,  30, 151, 134, 124, 107,  49,
+	 84,  33,  39,  99,  35, 114,  18, 243,  19,  81, 251,  18,
+	 52,  51, 134,  99,  66,  28,  98,  52,  51,  81,  54, 231,
+	 50, 100,  54,  35, 115, 101,  51,  67,  50,  18,  70,  39,
+	149,  24,  58,  53,  66,   0,  30,   0,  36, 100, 182,  19,
+	104,  51,  25,  45,  36, 149,  69,  55,  42, 185, 100, 230,
+	 51,  67, 108, 135,  39,  99,  86, 163,  36, 150, 149,  18,
+	165, 114,  49,  92, 145,  42, 135,  87,  50,  58,  53,  49,
+	 99, 245,  67,  35,   0,   8,   0,  40,  18,  22, 146,  52,
+	 83, 153,  22, 132,  50,  51,   0,   2,   0,  52, 114, 168,
+	 18,  54,  19, 102,  50, 117,  51, 117, 120,  67,  98,  75,
+	 49, 155,  49, 147, 135,  83,  97,  50,  73, 104,  18, 114,
+	 70, 111, 132,  33,  59, 100,  83,  51, 115, 149,  97,  81,
+	 45,  38,  66, 148,  87, 131,  52,  83,  67, 101, 165,  66,
+	109, 146, 105,  63,  52,  59,  97,  35,  49,  81,  35,  49,
+	 59, 147, 150,  70,  53,  97, 129,  81,  89,  58,  33,  59,
+	 51, 147, 118, 129,  51,  39,  98,  25,   0,  16,   0,  36,
+	 99, 126,  22,  54,  50,  24, 244, 195, 245,  25,  35, 100,
+	177,  59, 145,  81,  95,  30,  55, 131, 168,  19,   0,   4,
+	  0,  32,  33,  35,  22,  35,  54,  19,  35,  67,  42,   0,
+	  4,   0,  32,  84, 129, 177,  35,  67, 135,  41,  66, 163,
+	102,  53,  21,  22, 230, 145, 149,  69,   0,  48,  18,  52,
+	 81,  95,   0,   2,   0,  36,  53,  49, 146,  52, 135, 131,
+	114, 162,  49,  86,  19,  99,  50,  97,  50,  99,  66,  19,
+	149,  52,  99, 177,  54, 146, 115,  42,  56,  66,  75,  70,
+	 51, 134, 159,  66,  18,  61,  39, 203,  49,  53,  55,  51,
+	101,  49, 101, 100, 153,  83,  72,  51,  72, 162,  21,  21,
+	 99,  67,  90,  89, 210,  63,  18,  67, 102, 146,  75,  49,
+	  0,  12,   0,  34,  57,  99,  30, 120, 114, 118,  35,  49,
+	  0,  36,  35, 166, 195, 177, 137, 102, 145,  51,  50,  55,
+	 33, 180,  99,  83,  70, 150,  53,  27, 115,  50, 147, 171,
+	 22, 194, 153,  27,  18, 100, 101, 114,  25,   0,  16,   0,
+	 38,  51,  54,  83, 100,  50,  55, 243,  84, 179,  70,  81,
+	 81,  53,  21, 105, 163,  36, 179,  63,  55,  54,  99,  81,
+	 95,  24,  66,  19, 146,  19,  45,  36,  53,  18,  52,  35,
+	246,  19,  50, 171,  66,  18,   0,  72,  66,  75,  18, 117,
+	 18, 163,  89,  58, 131,  67,  42, 107,  18,  22,  89,  27,
+	 57, 241,  87,  84,   0,  16,   0,  50,  53,  69,  99, 145,
+	179,  18,  52,  51,  89,  27,  24, 117,  49, 101, 162, 115,
+	  0,   4,   0,  36,  18,  54,  18, 118,  50,  49,  50, 165,
+	 21,  54,  28, 102,  51,  44,  18, 193,  50,  52, 131,  21,
+	103,   0,   6,   0,  34,  55,  50,  31, 180,  35,  66,  30,
+	 19,  45, 155,  19, 131,  24,  97,  98,  51, 117,  52,  98,
+	145,  84, 131,  63,  21, 145,  84,  36, 108,   0,  40,  22,
+	 83,  97,  98,  18,  57, 118,  50, 127,  36,  84,  53, 148,
+	 39, 131,  66,  49,  81,  98,  18,  52,  35,   0,  32, 197,
+	 73,  81,  53,  18, 147,  97, 129, 179,  52, 146, 150,  67,
+	 42,  63, 182,  19, 146,   0,  62,  33,  99,  81, 102, 225,
+	 39, 179,  19,  53, 114,  21,  52,  87,  83,  22, 185,  69,
+	150,  22,  38,  21,  19, 147,   0,   6,   0,  34,  49,  98,
+	 57, 145, 131,  52,  53, 148,  84,  81,  41, 214, 177,  33,
+	179,  55, 131, 165,  97,   0,  18,   0,  42,  44,  19,  86,
+	 19,  84,  35, 102,  66,  54, 250,  60,  53,  97,  90,  51,
+	 38, 117, 150,  67,  98, 117,  22, 248,  22,  50,  18,  61,
+	 41,  18,  55,   0,  54,   0,   6,   0,  52,  24,  51, 109,
+	 33,  59,  49, 102,  53, 145, 102,  89,  99,  67,  83,  66,
+	 18, 172,  51,  87,  81, 179, 117, 210, 148, 102,  86,  52,
+	131,  67,  59,  21, 165,   0,   6,   0,  44, 147,  81,  35,
+	114, 210,  22,  84,  36,  98, 100, 180,  53, 147,  52,  54,
+	 36, 149,  99,  97,  50,  24, 102, 117, 115,  86,  22,  50,
+	 49,  98, 211, 147,  83,  25,  84,  45,  90,  56, 166,  84,
+	 81, 131, 165, 162, 241,  36, 129, 146,  19,  89, 103, 147,
+	138,  50,  67,  35, 100,  81,  99,  33,  53,  24, 103,  83,
+	 67, 225,  57,   0,  30,   0,  34,  24,  97, 152,  52,  84,
+	 84,   0,  10,   0,  44,  51,  42,  33,  39, 228,  56, 127,
+	 63,  39,  83,  52,  41,  99,  27, 100,  54,  39,  35,  18,
+	154,  56,   0,  38, 129,  35,   0,   2,   0,  40,   0,  42,
+	114,  49, 197,  49, 149,  97, 129,  56,  52,  33,  83,  69,
+	 25, 132, 105,  99, 101,  51,
 };
 
 static uint32_t bn_mod_word16(const struct LITE_BIGNUM *p, uint16_t word)
@@ -911,7 +1119,7 @@ static int bn_probable_prime(const struct LITE_BIGNUM *p)
 		}
 
 		/* y = a ^ r mod p */
-		bn_mont_modexp(&y, &A, &r, p);
+		bn_modexp(&y, &A, &r, p);
 		if (bn_eq(&y, &ONE))
 			continue;
 		bn_add(&y, &ONE);
@@ -922,7 +1130,7 @@ static int bn_probable_prime(const struct LITE_BIGNUM *p)
 		/* y = y ^ 2 mod p */
 		for (i = 0; i < s - 1; i++) {
 			bn_copy(&A, &y);
-			bn_mont_modexp(&y, &A, &TWO, p);
+			bn_modexp(&y, &A, &TWO, p);
 
 			if (bn_eq(&y, &ONE))
 				return 0;
@@ -940,6 +1148,27 @@ static int bn_probable_prime(const struct LITE_BIGNUM *p)
 	}
 
 	return 1;
+}
+
+/* #define PRINT_PRIMES to enable printing predefined prime numbers' set. */
+static void print_primes(uint16_t prime)
+{
+#ifdef PRINT_PRIMES
+	static uint16_t num_per_line;
+	static uint16_t max_printed;
+
+	if (prime <=  max_printed)
+		return;
+
+	if (!(num_per_line++ % 8)) {
+		if (num_per_line == 1)
+			ccprintf("Prime numbers:");
+		ccprintf("\n");
+		cflush();
+	}
+	max_printed = prime;
+	ccprintf(" %6d", prime);
+#endif
 }
 
 int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p)
@@ -960,17 +1189,34 @@ int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p)
 
 	/* Save on trial division by marking known composites. */
 	bn_init(&composites, composites_buf, sizeof(composites_buf));
-	for (i = 0; i < sizeof(PRIME_DELTAS) / sizeof(PRIME_DELTAS[0]); i++) {
+	for (i = 0; i < ARRAY_SIZE(PRIME_DELTAS); i++) {
 		uint16_t rem;
+		uint8_t unpacked_deltas[2];
+		uint8_t packed_deltas = PRIME_DELTAS[i];
+		int k;
+		int m;
 
-		prime += (PRIME_DELTAS[i] << 1);
-		rem = bn_mod_word16(p, prime);
-		/* Skip marking odd offsets (i.e. even candidates). */
-		for (j = (rem == 0) ? 0 : prime - rem;
-		     j < bn_bits(&composites) << 1;
-		     j += prime) {
-			if ((j & 1) == 0)
-				bn_set_bit(&composites, j >> 1);
+		if (packed_deltas) {
+			unpacked_deltas[0] = (packed_deltas >> 4) << 1;
+			unpacked_deltas[1] = (packed_deltas & 0xf) << 1;
+			m = 2;
+		} else {
+			i += 1;
+			unpacked_deltas[0] = PRIME_DELTAS[i];
+			m = 1;
+		}
+
+		for (k = 0; k < m; k++) {
+			prime += unpacked_deltas[k];
+			print_primes(prime);
+			rem = bn_mod_word16(p, prime);
+			/* Skip marking odd offsets (i.e. even candidates). */
+			for (j = (rem == 0) ? 0 : prime - rem;
+			     j < bn_bits(&composites) << 1;
+			     j += prime) {
+				if ((j & 1) == 0)
+					bn_set_bit(&composites, j >> 1);
+			}
 		}
 	}
 
@@ -995,6 +1241,6 @@ int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p)
 		}
 	}
 
-	memset(composites_buf, 0, sizeof(composites_buf));
+	always_memset(composites_buf, 0, sizeof(composites_buf));
 	return 0;
 }

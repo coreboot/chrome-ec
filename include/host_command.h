@@ -48,8 +48,13 @@ struct host_cmd_handler_args {
 	 * command execution is complete. The driver may still override this
 	 * when sending the response back to the host if it detects an error
 	 * in the response or in its own operation.
+	 *
+	 * Note that while this holds an ec_status enum, we are intentionally
+	 * representing this field as a uint16_t, to prevent issues related to
+	 * compiler optimizations affecting the range of values representable
+	 * by this field.
 	 */
-	enum ec_status result;
+	uint16_t result;
 };
 
 /* Args for host packet handler */
@@ -95,8 +100,13 @@ struct host_packet {
 	 * Error from driver; if this is non-zero, host command handler will
 	 * return a properly formatted error response packet rather than
 	 * calling a command handler.
+	 *
+	 * Note that while this holds an ec_status enum, we are intentionally
+	 * representing this field as a uint16_t, to prevent issues related to
+	 * compiler optimizations affecting the range of values representable
+	 * by this field.
 	 */
-	enum ec_status driver_result;
+	uint16_t driver_result;
 };
 
 /* Host command */
@@ -127,10 +137,14 @@ uint8_t *host_get_memmap(int offset);
  * Process a host command and return its response
  *
  * @param args	        Command handler args
- * @return resulting status
+ * @return resulting status. Note that while this returns an ec_status enum, we
+ * are intentionally specifying the return type as a uint16_t, to prevent issues
+ * related to compiler optimizations affecting the range of values returnable
+ * from this function.
  */
-enum ec_status host_command_process(struct host_cmd_handler_args *args);
+uint16_t host_command_process(struct host_cmd_handler_args *args);
 
+#ifdef CONFIG_HOSTCMD_EVENTS
 /**
  * Set one or more host event bits.
  *
@@ -162,7 +176,19 @@ void host_clear_events(uint32_t mask);
 uint32_t host_get_events(void);
 
 /**
- * Send a response to the relevent driver for transmission
+ * Check a single host event.
+ *
+ * @param event		Event to check
+ * @return true if <event> is set or false otherwise
+ */
+static inline int host_is_event_set(enum host_event_code event)
+{
+	return host_get_events() & EC_HOST_EVENT_MASK(event);
+}
+#endif
+
+/**
+ * Send a response to the relevant driver for transmission
  *
  * Once command processing is complete, this is used to send a response
  * back to the host.
@@ -193,18 +219,39 @@ int host_request_expected_size(const struct ec_host_request *r);
  */
 void host_packet_receive(struct host_packet *pkt);
 
-/* Register a host command handler */
 #ifdef HAS_TASK_HOSTCMD
-#define DECLARE_HOST_COMMAND(command, routine, version_mask)		\
-	const struct host_command __keep __host_cmd_##command		\
-	__attribute__((section(".rodata.hcmds")))			\
-	     = {routine, command, version_mask}
-#else
-#define DECLARE_HOST_COMMAND(command, routine, version_mask)		\
-	int (routine)(struct host_cmd_handler_args *args)		\
-	__attribute__((unused))
-#endif
+#define EXPAND(off, cmd) __host_cmd_(off, cmd)
+#define __host_cmd_(off, cmd) __host_cmd_##off##cmd
+#define EXPANDSTR(off, cmd) "__host_cmd_"#off#cmd
 
+/*
+ * Register a host command handler with
+ * commands starting at offset 0x0000
+ */
+#define DECLARE_HOST_COMMAND(command, routine, version_mask)    \
+	const struct host_command __keep EXPAND(0x0000, command)        \
+	__attribute__((section(".rodata.hcmds."EXPANDSTR(0x0000, command)))) \
+		= {routine, command, version_mask}
+
+/*
+ * Register a private host command handler with
+ * commands starting at offset EC_CMD_BOARD_SPECIFIC_BASE,
+ */
+#define DECLARE_PRIVATE_HOST_COMMAND(command, routine, version_mask) \
+	const struct host_command __keep \
+	EXPAND(EC_CMD_BOARD_SPECIFIC_BASE, command) \
+	__attribute__((section(".rodata.hcmds."\
+	EXPANDSTR(EC_CMD_BOARD_SPECIFIC_BASE, command)))) \
+		= {routine, EC_PRIVATE_HOST_COMMAND_VALUE(command), \
+		   version_mask}
+#else
+#define DECLARE_HOST_COMMAND(command, routine, version_mask)    \
+	int (routine)(struct host_cmd_handler_args *args)       \
+		__attribute__((unused))
+
+#define DECLARE_PRIVATE_HOST_COMMAND(command, routine, version_mask)	\
+	DECLARE_HOST_COMMAND(command, routine, version_mask)
+#endif
 
 /**
  * Politely ask the CPU to enable/disable its own throttling.
@@ -257,5 +304,17 @@ int pd_host_command(int command, int version,
  *    VBOOT_MODE_RECOVERY  - recovery mode
  */
 int host_get_vboot_mode(void);
+
+/*
+ * Sends an emulated sysrq to the host, used by button-based debug mode.
+ * Only implemented on top of MKBP protocol.
+ *
+ * @param key		Key to be sent (e.g. 'x')
+ */
+void host_send_sysrq(uint8_t key);
+
+/* Return the lower/higher part of the feature flags bitmap */
+uint32_t get_feature_flags0(void);
+uint32_t get_feature_flags1(void);
 
 #endif  /* __CROS_EC_HOST_COMMAND_H */

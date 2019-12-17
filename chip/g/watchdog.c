@@ -33,7 +33,7 @@ void IRQ_HANDLER(GC_IRQNUM_WATCHDOG0_WDOGINT)(void)
 	asm volatile("mov r0, lr\n"
 		     "mov r1, sp\n"
 		     /* Must push registers in pairs to keep 64-bit aligned
-		      * stack for ARM EABI.  This also conveninently saves
+		      * stack for ARM EABI.  This also conveniently saves
 		      * R0=LR so we can pass it to task_resched_if_needed. */
 		     "push {r0, lr}\n"
 		     /* We've lowered our runlevel, so just rebooting the ARM
@@ -52,7 +52,7 @@ void IRQ_HANDLER(GC_IRQNUM_WATCHDOG0_WDOGINT)(void)
 		     "b task_resched_if_needed\n"
 		     : : [irq] "i" (GC_IRQNUM_WATCHDOG0_WDOGINT));
 }
-const struct irq_priority IRQ_PRIORITY(GC_IRQNUM_WATCHDOG0_WDOGINT)
+const struct irq_priority __keep IRQ_PRIORITY(GC_IRQNUM_WATCHDOG0_WDOGINT)
 	__attribute__((section(".rodata.irqprio")))
 		= {GC_IRQNUM_WATCHDOG0_WDOGINT, 0};
 	/* put the watchdog at the highest priority */

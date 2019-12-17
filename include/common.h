@@ -59,6 +59,13 @@
 #endif
 
 /*
+ * Define __unused in the same manner.
+ */
+#ifndef __unused
+#define __unused __attribute__((unused))
+#endif
+
+/*
  * Force the toolchain to keep a symbol even with Link Time Optimization
  * activated.
  *
@@ -83,6 +90,12 @@
 #define K_TO_C(temp_c) ((temp_c) - 273)
 #define CELSIUS_TO_DECI_KELVIN(temp_c) ((temp_c) * 10 + 2731)
 #define DECI_KELVIN_TO_CELSIUS(temp_dk) ((temp_dk - 2731) / 10)
+
+/* Calculate a value with error margin considered. For example,
+ * TARGET_WITH_MARGIN(X, 5) returns X' where X' * 100.5% is almost equal to
+ * but does not exceed X. */
+#define TARGET_WITH_MARGIN(target, tenths_percent) \
+	(((target) * 1000) / (1000 + (tenths_percent)))
 
 /* Include top-level configuration file */
 #include "config.h"
@@ -124,9 +137,32 @@ enum ec_error_list {
 	EC_ERROR_PARAM7 = 17,
 	EC_ERROR_PARAM8 = 18,
 	EC_ERROR_PARAM9 = 19,
-	EC_ERROR_PARAM_COUNT = 20,  /* Wrong number of params */
+	/* Wrong number of params */
+	EC_ERROR_PARAM_COUNT = 20,
+	/* Interrupt event not handled */
+	EC_ERROR_NOT_HANDLED = 21,
+	/* Data has not changed */
+	EC_ERROR_UNCHANGED = 22,
+	/* Memory allocation */
+	EC_ERROR_MEMORY_ALLOCATION = 23,
 
-	EC_ERROR_NOT_HANDLED = 21,  /* Interrupt event not handled */
+	/* Verified boot errors */
+	EC_ERROR_VBOOT_SIGNATURE = 0x1000, /* 4096 */
+	EC_ERROR_VBOOT_SIG_MAGIC = 0x1001,
+	EC_ERROR_VBOOT_SIG_SIZE = 0x1002,
+	EC_ERROR_VBOOT_SIG_ALGORITHM = 0x1003,
+	EC_ERROR_VBOOT_HASH_ALGORITHM = 0x1004,
+	EC_ERROR_VBOOT_SIG_OFFSET = 0x1005,
+	EC_ERROR_VBOOT_DATA_SIZE = 0x1006,
+
+	/* Verified boot key errors */
+	EC_ERROR_VBOOT_KEY = 0x1100,
+	EC_ERROR_VBOOT_KEY_MAGIC = 0x1101,
+	EC_ERROR_VBOOT_KEY_SIZE = 0x1102,
+
+	/* Verified boot data errors */
+	EC_ERROR_VBOOT_DATA = 0x1200,
+	EC_ERROR_VBOOT_DATA_VERIFY = 0x1201,
 
 	/* Module-internal error codes may use this range.   */
 	EC_ERROR_INTERNAL_FIRST = 0x10000,
@@ -146,5 +182,8 @@ enum ec_error_list {
 #define test_mockable_static static
 #define test_export_static static
 #endif
+
+/* find the most significant bit. Not defined in n == 0. */
+#define __fls(n) (31 - __builtin_clz(n))
 
 #endif  /* __CROS_EC_COMMON_H */

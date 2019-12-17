@@ -71,7 +71,8 @@ struct usb_mux {
 
 	/**
 	 * Board specific initialization for USB mux that is
-	 * called after mux->driver->init() function.
+	 * called after mux->driver->init() function and every time the port
+	 * leaves auto-toggle state.
 	 *
 	 * @param mux USB mux to tune
 	 * @return EC_SUCCESS on success, non-zero error code on failure.
@@ -87,8 +88,9 @@ struct usb_mux {
 };
 
 /* Supported USB mux drivers */
+extern const struct usb_mux_driver it5205_usb_mux_driver;
 extern const struct usb_mux_driver pi3usb30532_usb_mux_driver;
-extern const struct usb_mux_driver ps8740_usb_mux_driver;
+extern const struct usb_mux_driver ps874x_usb_mux_driver;
 extern const struct usb_mux_driver tcpm_usb_mux_driver;
 extern const struct usb_mux_driver virtual_usb_mux_driver;
 

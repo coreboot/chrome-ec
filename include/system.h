@@ -10,6 +10,7 @@
 
 #include "atomic.h"
 #include "common.h"
+#include "console.h"
 #include "timer.h"
 
 /* Reset causes */
@@ -41,10 +42,18 @@ enum system_image_copy_t {
 	SYSTEM_IMAGE_UNKNOWN = 0,
 	SYSTEM_IMAGE_RO,
 	SYSTEM_IMAGE_RW,
+	SYSTEM_IMAGE_RW_A = SYSTEM_IMAGE_RW,
 	/* Some systems may have these too */
 	SYSTEM_IMAGE_RO_B,
 	SYSTEM_IMAGE_RW_B,
 };
+
+/**
+ * Checks if running image is RW or not
+ *
+ * @return True if system is running in a RW image or false otherwise.
+ */
+int system_is_in_rw(void);
 
 /**
  * Pre-initializes the module.  This occurs before clocks or tasks are
@@ -193,6 +202,15 @@ int system_get_image_used(enum system_image_copy_t copy);
 int system_run_image_copy(enum system_image_copy_t copy);
 
 /**
+ * Get the rollback version for an image
+ *
+ * @param copy		Image copy to get version from, or SYSTEM_IMAGE_UNKNOWN
+ *			to get the version for the currently running image.
+ * @return The rollback version, negative value on error.
+ */
+int32_t system_get_rollback_version(enum system_image_copy_t copy);
+
+/**
  * Get the version string for an image
  *
  * @param copy		Image copy to get version from, or SYSTEM_IMAGE_UNKNOWN
@@ -201,6 +219,14 @@ int system_run_image_copy(enum system_image_copy_t copy);
  * error.
  */
 const char *system_get_version(enum system_image_copy_t copy);
+
+/**
+ * Get the SKU ID for a device
+ *
+ * @return A value that identifies the SKU variant of a model. Its meaning and
+ * the number of bits actually used is opaque outside board specific code.
+ */
+uint32_t system_get_sku_id(void);
 
 /**
  * Return the board version number.  The meaning of this number is
@@ -220,24 +246,28 @@ const char *system_get_build_info(void);
  * Hard reset.  Cuts power to the entire system.  If not present, does a soft
  * reset which just resets the core and on-chip peripherals.
  */
-#define SYSTEM_RESET_HARD           (1 << 0)
+#define SYSTEM_RESET_HARD               (1 << 0)
 /*
  * Preserve existing reset flags.  Used by flash pre-init when it discovers it
  * needs to do a hard reset to clear write protect registers.
  */
-#define SYSTEM_RESET_PRESERVE_FLAGS (1 << 1)
+#define SYSTEM_RESET_PRESERVE_FLAGS     (1 << 1)
 /*
  * Leave AP off on next reboot, instead of powering it on to do EC software
  * sync.
  */
-#define SYSTEM_RESET_LEAVE_AP_OFF   (1 << 2)
+#define SYSTEM_RESET_LEAVE_AP_OFF       (1 << 2)
+/*
+ * Indicate that this was a manually triggered reset.
+ */
+#define SYSTEM_RESET_MANUALLY_TRIGGERED (1 << 3)
 
 /**
  * Reset the system.
  *
  * @param flags		Reset flags; see SYSTEM_RESET_* above.
  */
-void system_reset(int flags);
+void system_reset(int flags) __attribute__((noreturn));
 
 /**
  * Set a scratchpad register to the specified value.
@@ -263,14 +293,53 @@ const char *system_get_chip_name(void);
 const char *system_get_chip_revision(void);
 
 /**
- * Get/Set VbNvContext in non-volatile storage.  The block should be 16 bytes
- * long, which is the current size of VbNvContext block.
+ * Get a unique per-chip id.
  *
- * @param block		Pointer to a buffer holding VbNvContext.
- * @return 0 on success, !0 on error.
+ * @param id		Set to the address of the unique id data (statically
+ *			allocated, or register-backed).
+ * @return Number of bytes available at the provided address.
  */
-int system_get_vbnvcontext(uint8_t *block);
-int system_set_vbnvcontext(const uint8_t *block);
+int system_get_chip_unique_id(uint8_t **id);
+
+/**
+ * Optional board-level callback functions to read a unique serial number per
+ * chip. Default implementation reads from flash/otp (flash/otp_read_serial).
+ */
+const char *board_read_serial(void) __attribute__((weak));
+
+/**
+ * Optional board-level callback functions to write a unique serial number per
+ * chip. Default implementation reads from flash/otp (flash/otp_write_serial).
+ */
+int board_write_serial(const char *serial) __attribute__((weak));
+/*
+ * Common bbram entries. Chips don't necessarily need to implement
+ * all of these, error will be returned from system_get/set_bbram if
+ * not implemented.
+ */
+enum system_bbram_idx {
+	SYSTEM_BBRAM_IDX_VBNVBLOCK0 = 0,
+	/*
+	 * ...
+	 * 16 total bytes of VB NVRAM.
+	 * ...
+	 */
+	SYSTEM_BBRAM_IDX_VBNVBLOCK15 = 15,
+	/* PD state for CONFIG_USB_PD_DUAL_ROLE uses one byte per port */
+	SYSTEM_BBRAM_IDX_PD0,
+	SYSTEM_BBRAM_IDX_PD1,
+	SYSTEM_BBRAM_IDX_TRY_SLOT,
+};
+
+/**
+ * Get/Set byte in battery-backed storage.
+ *
+ * @param idx		bbram byte to get / set.
+ * @param value		byte to read / write from / to bbram.
+ * @return		0 on success, !0 on error.
+ */
+int system_get_bbram(enum system_bbram_idx idx, uint8_t *value);
+int system_set_bbram(enum system_bbram_idx idx, uint8_t value);
 
 /**
  * Put the EC in hibernate (lowest EC power state).
@@ -309,6 +378,18 @@ void board_hibernate_late(void) __attribute__((weak));
 timestamp_t system_get_rtc(void);
 
 /**
+ * Print out the current real-time clock value to the console.
+ *
+ * @param channel	Console channel to print on.
+ */
+/* TODO(aaboagye): Replace this with CONFIG_RTC eventually. */
+#ifdef CONFIG_CMD_RTC
+void print_system_rtc(enum console_channel channel);
+#else
+static inline void print_system_rtc(enum console_channel channel) { }
+#endif /* !defined(CONFIG_CMD_RTC) */
+
+/**
  * Enable hibernate interrupt
  */
 void system_enable_hib_interrupt(void);
@@ -328,8 +409,9 @@ enum {
 	SLEEP_MASK_I2C_SLAVE  = (1 << 7), /* I2C slave communication ongoing */
 	SLEEP_MASK_FAN        = (1 << 8), /* Fan control loop ongoing */
 	SLEEP_MASK_USB_DEVICE = (1 << 9), /* Generic USB device in use */
-	SLEEP_MASK_RDD        = (1 << 10),/* RDD ongoing */
-
+	SLEEP_MASK_PWM        = (1 << 10), /* PWM output is enabled */
+	SLEEP_MASK_PHYSICAL_PRESENCE  = (1 << 11), /* Physical presence
+						    * detection ongoing */
 	SLEEP_MASK_FORCE_NO_DSLEEP    = (1 << 15), /* Force disable. */
 
 
@@ -383,12 +465,23 @@ static inline void disable_sleep(uint32_t mask)
 	atomic_or(&sleep_mask, mask);
 }
 
+/* The following three functions are not available on all chips. */
 /**
  * Postpone sleeping for at least this long, regardless of sleep_mask.
  *
  * @param Amount of time to postpone sleeping
  */
 void delay_sleep_by(uint32_t us);
+
+/*
+ **
+ * Funtctions to control deep sleep behavior. When disabled - the device never
+ * falls into deep sleep (the lowest power consumption state exit of which
+ * usually happens through the regular reset vector with just a few bits of
+ * state preserved).
+ */
+void disable_deep_sleep(void);
+void enable_deep_sleep(void);
 
 /**
  * Use hibernate module to set up an RTC interrupt at a given
@@ -454,59 +547,52 @@ uintptr_t system_get_fw_reset_vector(uintptr_t base);
  */
 int system_is_reboot_warm(void);
 
-/**
- * On systems with protection from a failing RW update: read the retry counter
- * and act on it.
- *
- * @return EC_SUCCESS if no flash write errors were encounterd.
- */
-int system_process_retry_counter(void);
+#ifdef CONFIG_EXTENDED_VERSION_INFO
+void system_print_extended_version_info(void);
+#else
+static inline void system_print_extended_version_info(void)
+{
+}
+#endif
 
 /**
- * On systems with protection from a failing RW update: reset retry
- * counter, this is used after a new image upload is finished, to make
- * sure that the new image has a chance to run.
+ * Check if the system can supply enough power to boot AP
+ *
+ * @return true if the system is powered enough or false otherwise
  */
-void system_clear_retry_counter(void);
-
-
-/* Board properties options */
-#define BOARD_SLAVE_CONFIG_SPI       (1 << 0)   /* Slave SPI interface */
-#define BOARD_SLAVE_CONFIG_I2C       (1 << 1)   /* Slave I2C interface */
-#define BOARD_USB_AP                 (1 << 2)   /* One of the PHYs is  */
-						/* connected to the AP */
-#define BOARD_DISABLE_UART0_RX       (1 << 3)   /* Disable UART0 RX */
-#define BOARD_MARK_UPDATE_ON_USB_REQ (1 << 4)   /* update is good once the   */
-						/* controller gets a request */
-/* TODO(crosbug.com/p/56945): Remove when sys_rst_l has an external pullup */
-#define BOARD_NEEDS_SYS_RST_PULL_UP  (1 << 5)   /* Add a pullup to sys_rst_l */
+int system_can_boot_ap(void);
 
 /**
- * Get board properites
+ * Get active image copy
  *
+ * Active slot contains an image which is being executed or will be executed
+ * after sysjump.
  *
- * @return uint32_t bit field where a set bit indicates option exists
+ * @return Active copy index
  */
-uint32_t system_get_board_properties(void);
-
-/* Board specific function used to initialize the system board properties. */
-void system_init_board_properties(void);
-
-/**
- * API for board specific version of system_get_board_properties
- *
- * This function must be in the board's board.c file
- *
- * @return uint32_t bit field where a set bit indicates option exists
- */
-uint32_t system_board_properties_callback(void);
+enum system_image_copy_t system_get_active_copy(void);
 
 /**
- * A function provided by some platforms to hint that something is going
- * wrong.
+ * Get updatable (non-active) image copy
  *
- * @return a boolean, set to True if rolling reboot condition is suspected.
+ * @return Updatable copy index
  */
-int system_rolling_reboot_suspected(void);
+enum system_image_copy_t system_get_update_copy(void);
+
+/**
+ * Set active image copy
+ *
+ * @param copy Copy id to be activated.
+ * @return     Non-zero if error.
+ */
+int system_set_active_copy(enum system_image_copy_t copy);
+
+/**
+ * Get flash offset of a RW copy
+ *
+ * @param copy Copy index to get the flash offset of.
+ * @return     Flash offset of the slot storing <copy>
+ */
+uint32_t flash_get_rw_offset(enum system_image_copy_t copy);
 
 #endif  /* __CROS_EC_SYSTEM_H */

@@ -67,6 +67,16 @@ struct tcpm_drv {
 	int (*init)(int port);
 
 	/**
+	 * Release the TCPM hardware and disconnect the driver.
+	 * Only .init() can be called after .release().
+	 *
+	 * @param port Type-C port number
+	 *
+	 * @return EC_SUCCESS or error
+	 */
+	int (*release)(int port);
+
+	/**
 	 * Read the CC line status.
 	 *
 	 * @param port Type-C port number
@@ -187,6 +197,18 @@ struct tcpm_drv {
 	 */
 	void (*tcpc_discharge_vbus)(int port, int enable);
 
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+	/**
+	 * Enable TCPC auto DRP toggling.
+	 *
+	 * @param port Type-C port number
+	 * @param enable 1: Enable 0: Disable
+	 *
+	 * @return EC_SUCCESS or error
+	 */
+	int (*drp_toggle)(int port, int enable);
+#endif
+
 	/**
 	 * Get firmware version.
 	 *
@@ -221,6 +243,14 @@ struct tcpc_config_t {
 uint16_t tcpc_get_alert_status(void);
 
 /**
+ * Optional, set the TCPC power mode.
+ *
+ * @param port Type-C port number
+ * @param mode 0: off/sleep, 1: on/awake
+ */
+void board_set_tcpc_power_mode(int port, int mode) __attribute__((weak));
+
+/**
  * Initialize TCPC.
  *
  * @param port Type-C port number
@@ -242,5 +272,14 @@ void tcpc_alert_clear(int port);
  * @param evt Event type that woke up this task
  */
 int tcpc_run(int port, int evt);
+
+/**
+ * Initialize board specific TCPC functions post TCPC initialization.
+ *
+ * @param port Type-C port number
+ *
+ * @return EC_SUCCESS or error
+ */
+int board_tcpc_post_init(int port) __attribute__((weak));
 
 #endif /* __CROS_EC_USB_PD_TCPM_H */

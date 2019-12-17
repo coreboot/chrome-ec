@@ -7,6 +7,7 @@
 #include "common.h"
 #include "console.h"
 #include "consumer.h"
+#include "extension.h"
 #include "queue_policies.h"
 #include "shared_mem.h"
 #include "system.h"
@@ -65,7 +66,6 @@ enum rx_state {
 	rx_inside_block,   /* Assembling a block to pass to the programmer. */
 	rx_outside_block,  /* Waiting for the next block to start or for the
 			      reset command. */
-	rx_awaiting_reset /* Waiting for reset confirmation. */
 };
 
 enum rx_state rx_state_ = rx_idle;
@@ -74,7 +74,7 @@ static uint32_t block_size;
 static uint32_t block_index;
 
 /*
- * Verify that the contens of the USB rx queue is a valid transfer start
+ * Verify that the contents of the USB rx queue is a valid transfer start
  * message from host, and if so - save its contents in the passed in
  * update_frame_header structure.
  */
@@ -106,12 +106,94 @@ static int valid_transfer_start(struct consumer const *consumer, size_t count,
 			return 0;
 	return 1;
 }
+static int try_vendor_command(struct consumer const *consumer, size_t count)
+{
+	struct update_frame_header ufh;
+	struct update_frame_header *cmd_buffer;
+	int rv = 0;
+
+	if (count < sizeof(ufh))
+		return 0;	/* Too short to be a valid vendor command. */
+
+	/*
+	 * Let's copy off the queue the upgrade frame header, to see if this
+	 * is a channeled vendor command.
+	 */
+	queue_peek_units(consumer->queue, &ufh, 0, sizeof(ufh));
+	if (be32toh(ufh.cmd.block_base) != CONFIG_EXTENSION_COMMAND)
+		return 0;
+
+	if (be32toh(ufh.block_size) != count) {
+		CPRINTS("%s: problem: block size and count mismatch (%d != %d)",
+			__func__, be32toh(ufh.block_size), count);
+		return 0;
+	}
+
+	if (shared_mem_acquire(count, (char **)&cmd_buffer)
+	    != EC_SUCCESS) {
+		CPRINTS("%s: problem: failed to allocate block of %d",
+			__func__, count);
+		return 0;
+	}
+
+	/* Get the entire command, don't remove it from the queue just yet. */
+	queue_peek_units(consumer->queue, cmd_buffer, 0, count);
+
+	/* Looks like this is a vendor command, let's verify it. */
+	if (usb_pdu_valid(&cmd_buffer->cmd,
+			  count - offsetof(struct update_frame_header, cmd))) {
+		uint16_t *subcommand;
+		size_t response_size;
+		size_t request_size;
+		/*
+		 * Should be enough for any vendor command/response. We'll
+		 * generate an error if it is not.
+		 */
+		uint8_t subcommand_body[32];
+
+		/* looks good, let's process it. */
+		rv = 1;
+
+		/* Now remove if from the queue. */
+		queue_advance_head(consumer->queue, count);
+
+		subcommand = (uint16_t *)(cmd_buffer + 1);
+		request_size = count - sizeof(struct update_frame_header) -
+			sizeof(*subcommand);
+
+		if (request_size > sizeof(subcommand_body)) {
+			CPRINTS("%s: vendor command payload too big (%d)",
+				__func__, request_size);
+			subcommand_body[0] = VENDOR_RC_REQUEST_TOO_BIG;
+			response_size = 1;
+		} else {
+			memcpy(subcommand_body, subcommand + 1, request_size);
+			response_size = sizeof(subcommand_body);
+			usb_extension_route_command(be16toh(*subcommand),
+						    subcommand_body,
+						    request_size,
+						    &response_size);
+		}
+
+		QUEUE_ADD_UNITS(&upgrade_to_usb,
+				subcommand_body, response_size);
+	}
+	shared_mem_release(cmd_buffer);
+
+	return rv;
+}
 
 /*
  * When was last time a USB callback was called, in microseconds, free running
  * timer.
  */
 static uint64_t prev_activity_timestamp;
+
+/*
+ * A flag indicating that at least one valid PDU containing flash update block
+ * has been received in the current transfer session.
+ */
+static uint8_t  data_was_transferred;
 
 /* Called to deal with data from the host */
 static void upgrade_out_handler(struct consumer const *consumer, size_t count)
@@ -155,9 +237,13 @@ static void upgrade_out_handler(struct consumer const *consumer, size_t count)
 			};
 		} u;
 
+		/* Check is this is a channeled TPM extension command. */
+		if (try_vendor_command(consumer, count))
+			return;
+
 		if (!valid_transfer_start(consumer, count, &u.upfr)) {
 			/*
-			 * Someting is wrong, this payload is not a valid
+			 * Something is wrong, this payload is not a valid
 			 * update start PDU. Let'w indicate this by returning
 			 * a single byte error code.
 			 */
@@ -173,24 +259,14 @@ static void upgrade_out_handler(struct consumer const *consumer, size_t count)
 						    cmd),
 					   &resp_size);
 
-		if (!u.startup_resp.return_value)
+		if (!u.startup_resp.return_value) {
 			rx_state_ = rx_outside_block;  /* We're in business. */
+			data_was_transferred = 0;   /* No data received yet. */
+		}
 
 		/* Let the host know what upgrader had to say. */
 		QUEUE_ADD_UNITS(&upgrade_to_usb, &u.startup_resp, resp_size);
 		return;
-	}
-
-	if (rx_state_ == rx_awaiting_reset) {
-		/*
-		 * Any USB data received in this state triggers reset, no
-		 * response required.
-		 */
-		CPRINTS("reboot hard");
-		cflush();
-		system_reset(SYSTEM_RESET_HARD);
-		while (1)
-			;
 	}
 
 	if (rx_state_ == rx_outside_block) {
@@ -207,11 +283,15 @@ static void upgrade_out_handler(struct consumer const *consumer, size_t count)
 			if (command == UPGRADE_DONE) {
 				CPRINTS("FW update: done");
 
-				fw_upgrade_complete();
+				if (data_was_transferred) {
+					fw_upgrade_complete();
+					data_was_transferred = 0;
+				}
+
 				resp_value = 0;
 				QUEUE_ADD_UNITS(&upgrade_to_usb,
 						&resp_value, 1);
-				rx_state_ = rx_awaiting_reset;
+				rx_state_ = rx_idle;
 				return;
 			}
 		}
@@ -308,6 +388,11 @@ static void upgrade_out_handler(struct consumer const *consumer, size_t count)
 	 */
 	fw_upgrade_command_handler(block_buffer, block_index, &resp_size);
 
+	/*
+	 * There was at least an attempt to program the flash, set the
+	 * flag.
+	 */
+	data_was_transferred = 1;
 	resp_value = block_buffer[0];
 	QUEUE_ADD_UNITS(&upgrade_to_usb, &resp_value, sizeof(resp_value));
 	rx_state_ = rx_outside_block;

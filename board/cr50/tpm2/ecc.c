@@ -15,6 +15,7 @@
 
 #include "cryptoc/p256.h"
 #include "cryptoc/p256_ecdsa.h"
+#include "cryptoc/util.h"
 
 static void reverse_tpm2b(TPM2B *b)
 {
@@ -47,7 +48,7 @@ BOOL _cpri__EccIsPointOnCurve(TPM_ECC_CURVE curve_id, TPMS_ECC_POINT *q)
 		reverse_tpm2b(&q->x.b);
 		reverse_tpm2b(&q->y.b);
 
-		result = p256_is_valid_point((p256_int *) q->x.b.buffer,
+		result = dcrypto_p256_is_valid_point((p256_int *) q->x.b.buffer,
 					(p256_int *) q->y.b.buffer);
 
 		reverse_tpm2b(&q->x.b);
@@ -171,6 +172,7 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 	HASH_update(&hmac.hash, "ECC", 4);
 	memcpy(local_seed.t.buffer, DCRYPTO_HMAC_final(&hmac),
 	       local_seed.t.size);
+	always_memset(&hmac, 0, sizeof(hmac));
 	/* TODO(ngm): CRBUG/P/55260: the personalize code uses only
 	 * the first 4 bytes of extra.
 	 */
@@ -204,8 +206,9 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 			break;
 		}
 	}
-	/* TODO(ngm): implement secure memset. */
-	memset(local_seed.t.buffer, 0, local_seed.t.size);
+
+	always_memset(local_seed.t.buffer, 0, local_seed.t.size);
+	always_memset(key_bytes, 0, sizeof(key_bytes));
 
 	if (count == 0)
 		FAIL(FATAL_ERROR_INTERNAL);
@@ -223,6 +226,8 @@ CRYPT_RESULT _cpri__SignEcc(
 	uint8_t digest_local[sizeof(p256_int)];
 	const size_t digest_len = MIN(digest->size, sizeof(digest_local));
 	p256_int p256_digest;
+	int result;
+	struct drbg_ctx drbg;
 
 	if (curve_id != TPM_ECC_NIST_P256)
 		return CRYPT_PARAMETER;
@@ -239,7 +244,9 @@ CRYPT_RESULT _cpri__SignEcc(
 
 		reverse_tpm2b(&d->b);
 
-		p256_ecdsa_sign((p256_int *) d->b.buffer,
+		drbg_rand_init(&drbg);
+		result = dcrypto_p256_ecdsa_sign(&drbg,
+				(p256_int *) d->b.buffer,
 				&p256_digest,
 				(p256_int *) r->b.buffer,
 				(p256_int *) s->b.buffer);
@@ -250,7 +257,10 @@ CRYPT_RESULT _cpri__SignEcc(
 		reverse_tpm2b(&r->b);
 		reverse_tpm2b(&s->b);
 
-		return CRYPT_SUCCESS;
+		if (result)
+			return CRYPT_SUCCESS;
+		else
+			return CRYPT_FAIL;
 	default:
 		return CRYPT_PARAMETER;
 	}
@@ -283,7 +293,7 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 		reverse_tpm2b(&r->b);
 		reverse_tpm2b(&s->b);
 
-		result = p256_ecdsa_verify(
+		result = dcrypto_p256_ecdsa_verify(
 			(p256_int *) q->x.b.buffer,
 			(p256_int *) q->y.b.buffer,
 			&p256_digest,
@@ -308,6 +318,7 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 CRYPT_RESULT _cpri__GetEphemeralEcc(TPMS_ECC_POINT *q, TPM2B_ECC_PARAMETER *d,
 				TPM_ECC_CURVE curve_id)
 {
+	int result;
 	uint8_t key_bytes[P256_NBYTES] __aligned(4);
 
 	if (curve_id != TPM_ECC_NIST_P256)
@@ -315,10 +326,13 @@ CRYPT_RESULT _cpri__GetEphemeralEcc(TPMS_ECC_POINT *q, TPM2B_ECC_PARAMETER *d,
 
 	rand_bytes(key_bytes, sizeof(key_bytes));
 
-	if (DCRYPTO_p256_key_from_bytes((p256_int *) q->x.b.buffer,
-						(p256_int *) q->y.b.buffer,
-						(p256_int *) d->b.buffer,
-						key_bytes)) {
+	result = DCRYPTO_p256_key_from_bytes((p256_int *) q->x.b.buffer,
+					(p256_int *) q->y.b.buffer,
+					(p256_int *) d->b.buffer,
+					key_bytes);
+	always_memset(key_bytes, 0, sizeof(key_bytes));
+
+	if (result) {
 		q->x.b.size = sizeof(p256_int);
 		q->y.b.size = sizeof(p256_int);
 		reverse_tpm2b(&q->x.b);
@@ -394,11 +408,18 @@ static const struct TPM2B_ECC_PARAMETER_aligned NIST_P256_qy = {
 
 static int point_equals(const TPMS_ECC_POINT *a, const TPMS_ECC_POINT *b)
 {
-	return a->x.b.size == b->x.b.size &&
-		a->y.b.size == b->y.b.size &&
-		memcmp(a->x.b.buffer, b->x.b.buffer, a->x.b.size) == 0 &&
-		memcmp(a->y.b.buffer, b->y.b.buffer, a->y.b.size) == 0;
+	int diff = 0;
 
+	diff = a->x.b.size != b->x.b.size;
+	diff |= a->y.b.size != b->y.b.size;
+	if (!diff) {
+		diff |= !DCRYPTO_equals(
+			a->x.b.buffer, b->x.b.buffer, a->x.b.size);
+		diff |= !DCRYPTO_equals(
+			a->y.b.buffer, b->y.b.buffer, a->y.b.size);
+	}
+
+	return !diff;
 }
 
 static void ecc_command_handler(void *cmd_body, size_t cmd_size,

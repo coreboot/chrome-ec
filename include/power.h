@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "gpio.h"
+#include "task_id.h"
 
 enum power_state {
 	/* Steady states */
@@ -36,10 +37,31 @@ enum power_state {
 #endif
 };
 
+/*
+ * Power signal flags:
+ *
+ * +-----------------+------------------------------------+
+ * |     Bit #       |           Description              |
+ * +------------------------------------------------------+
+ * |       0         |      Active level (low/high)       |
+ * +------------------------------------------------------+
+ * |       1         |    Signal interrupt state at boot  |
+ * +------------------------------------------------------+
+ * |     2 : 32      |            Reserved                |
+ * +-----------------+------------------------------------+
+ */
+
+#define POWER_SIGNAL_ACTIVE_STATE	(1 << 0)
+#define POWER_SIGNAL_ACTIVE_LOW	(0 << 0)
+#define POWER_SIGNAL_ACTIVE_HIGH	(1 << 0)
+
+#define POWER_SIGNAL_INTR_STATE	(1 << 1)
+#define POWER_SIGNAL_DISABLE_AT_BOOT	(1 << 1)
+
 /* Information on an power signal */
 struct power_signal_info {
 	enum gpio_signal gpio;	/* GPIO for signal */
-	int level;		/* GPIO level which sets signal bit */
+	uint32_t flags;		/* See POWER_SIGNAL_* macros */
 	const char *name;	/* Name of signal */
 };
 
@@ -56,6 +78,25 @@ extern const struct power_signal_info power_signal_list[];
  * Return current input signal state (one or more POWER_SIGNAL_MASK()s).
  */
 uint32_t power_get_signals(void);
+
+/**
+ * Check if provided power signal is currently asserted.
+ *
+ * @param s		Power signal that needs to be checked.
+ *
+ * @return 1 if power signal is asserted, 0 otherwise.
+ */
+int power_signal_is_asserted(const struct power_signal_info *s);
+
+/**
+ * Enable interrupt for provided input signal.
+ */
+int power_signal_enable_interrupt(enum gpio_signal signal);
+
+/**
+ * Disable interrupt for provided input signal.
+ */
+int power_signal_disable_interrupt(enum gpio_signal signal);
 
 /**
  * Check for required inputs
@@ -117,19 +158,9 @@ enum power_state power_handle_state(enum power_state state);
  */
 #ifdef HAS_TASK_CHIPSET
 void power_signal_interrupt(enum gpio_signal signal);
-#ifdef CONFIG_POWER_S0IX
-void power_signal_interrupt_S0(enum gpio_signal signal);
-#endif
 #else
 static inline void power_signal_interrupt(enum gpio_signal signal) { }
-#ifdef CONFIG_POWER_S0IX
-static inline void power_signal_interrupt_S0(enum gpio_signal signal) { }
-#endif
 #endif /* !HAS_TASK_CHIPSET */
-
-#ifdef CONFIG_POWER_S0IX
-int chipset_get_ps_debounced_level(enum gpio_signal signal);
-#endif
 
 /**
  * pause_in_s5 getter method.
@@ -152,5 +183,45 @@ void power_set_pause_in_s5(int pause);
  * @return Believed sleep state of host.
  */
 enum host_sleep_event power_get_host_sleep_state(void);
-#endif
+
+/**
+ * Provide callback to allow chipset to take any action on host sleep event
+ * command.
+ *
+ * @param state Current host sleep state updated by the host.
+ */
+void power_chipset_handle_host_sleep_event(enum host_sleep_event state);
+
+/*
+ * This is the default state of host sleep event. Calls to
+ * power_reset_host_sleep_state will set host sleep event to this
+ * value. EC components listening to host sleep event updates can check for this
+ * special value to know if the state was reset.
+ */
+#define HOST_SLEEP_EVENT_DEFAULT_RESET		0
+
+#ifdef CONFIG_POWER_S0IX
+/**
+ * Reset the sleep state reported by the host.
+ *
+ * @param sleep_event Reset sleep state.
+ */
+void power_reset_host_sleep_state(void);
+#endif /* CONFIG_POWER_S0IX */
+#endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */
+
+/**
+ * Enable/Disable the PP5000 rail.
+ *
+ * This function will turn on the 5V rail immediately if requested.  However,
+ * the rail will not turn off until all tasks want it off.
+ *
+ * NOTE: Be careful when calling from deferred functions, as they will all be
+ * executed within the same task context! (The HOOKS task).
+ *
+ * @param tid: The caller's task ID.
+ * @param enable: 1 to turn on the rail, 0 to request the rail to be turned off.
+ */
+void power_5v_enable(task_id_t tid, int enable);
+
 #endif  /* __CROS_EC_POWER_H */

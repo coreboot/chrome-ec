@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 
+#include "common.h"  /* For __packed. */
 
 /*
  * This file contains structures used to facilitate cr50 firmware updates,
@@ -81,7 +82,7 @@ struct signed_header_version {
  * just as to any other block of the transfer sequence.
  *
  * It became clear that there is a need to be able to enhance the upgrade
- * protocol, while stayng backwards compatible.
+ * protocol, while staying backwards compatible.
  *
  * All newer protocol versions (starting with version 2) respond to the very
  * first packet with an 8 byte or larger response, where the first 4 bytes are
@@ -112,7 +113,6 @@ struct first_response_pdu {
 	uint32_t keyid[2];
 };
 
-/* TODO: Handle this in upgrade_fw.c, not usb_upgrade.c */
 #define UPGRADE_DONE          0xB007AB1E
 
 void fw_upgrade_command_handler(void *body,
@@ -121,6 +121,10 @@ void fw_upgrade_command_handler(void *body,
 
 /* Used to tell fw upgrade the update ran successfully and is finished */
 void fw_upgrade_complete(void);
+
+/* Verify integrity of the PDU received over USB. */
+int usb_pdu_valid(struct upgrade_command *cmd_body,
+		  size_t cmd_size);
 
 /* Various upgrade command return values. */
 enum return_value {
@@ -132,6 +136,11 @@ enum return_value {
 	UPGRADE_VERIFY_ERROR = 5,
 	UPGRADE_GEN_ERROR = 6,
 	UPGRADE_MALLOC_ERROR = 7,
+	UPGRADE_ROLLBACK_ERROR = 8,
+	UPGRADE_RATE_LIMIT_ERROR = 9,
+	UPGRADE_UNALIGNED_BLOCK_ERROR = 10,
+	UPGRADE_TRUNCATED_HEADER_ERROR = 11,
+	UPGRADE_BOARD_ID_ERROR = 12,
 };
 
 /*
@@ -139,4 +148,5 @@ enum return_value {
  * of the image.
  */
 #define SIGNED_TRANSFER_SIZE 1024
+
 #endif  /* ! __EC_CHIP_G_UPGRADE_FW_H */

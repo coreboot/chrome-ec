@@ -40,48 +40,26 @@ struct charge_state_data {
 	int desired_input_current;
 };
 
-/*
- * Optional customization.
- *
- * On input, the struct reflects the default behavior. The function can make
- * changes to the state, requested_voltage, or requested_current.
- *
- * Return value:
- *   >0    Desired time in usec for this poll period.
- *   0     Use the default poll period (which varies with the state).
- *  <0     An error occurred. The poll time will be shorter than usual. Too
- *           many errors in a row may trigger some corrective action.
- */
-int charger_profile_override(struct charge_state_data *);
-
-/*
- * Access to custom profile params through host commands.
- * What this does is up to the implementation.
- */
-enum ec_status charger_profile_override_get_param(uint32_t param,
-						  uint32_t *value);
-enum ec_status charger_profile_override_set_param(uint32_t param,
-						  uint32_t value);
-
 /**
  * Set the charge input current limit. This value is stored and sent every
  * time AC is applied.
  *
  * @param ma New input current limit in mA
+ * @param mv Negotiated charge voltage in mV.
  * @return EC_SUCCESS or error
  */
-int charge_set_input_current_limit(int ma);
+int charge_set_input_current_limit(int ma, int mv);
 
-
-/**
- * Get value of battery parameter from charge state.
+/*
+ * Expose charge/battery related state
  *
- * @param batt_param	battery parameter
- * @param dest		Destination buffer for data
- * @param read_len	Number of bytes to write to buffer
- * @return EC_SUCCESS if successful, non-zero if error.
- *
+ * @param param command to get corresponding data
+ * @param value the corresponding data
+ * @return EC_SUCCESS or error
  */
-int virtual_battery_read(uint8_t batt_param, uint8_t *dest, int read_len);
+#ifdef CONFIG_CHARGE_STATE_DEBUG
+int charge_get_charge_state_debug(int param, uint32_t *value);
+#endif /* CONFIG_CHARGE_STATE_DEBUG */
+
 #endif /* __CROS_EC_CHARGE_STATE_V2_H */
 

@@ -3,26 +3,42 @@
  * found in the LICENSE file.
  */
 
+#include "init_chip.h"
 #include "registers.h"
+#include "trng.h"
 
 void init_trng(void)
 {
+#if (!(defined(CONFIG_CUSTOMIZED_RO) && defined(SECTION_IS_RO)))
+	/*
+	 * Most of the trng initialization requires high permissions. If RO has
+	 * dropped the permission level, dont try to read or write these high
+	 * permission registers because it will cause rolling reboots. RO
+	 * should do the TRNG initialization before dropping the level.
+	 */
+	if (!runlevel_is_high())
+		return;
+#endif
+
+	GWRITE(TRNG, POST_PROCESSING_CTRL,
+		GC_TRNG_POST_PROCESSING_CTRL_SHUFFLE_BITS_MASK |
+		GC_TRNG_POST_PROCESSING_CTRL_CHURN_MODE_MASK);
+	GWRITE(TRNG, SLICE_MAX_UPPER_LIMIT, 1);
+	GWRITE(TRNG, SLICE_MIN_LOWER_LIMIT, 0);
+	GWRITE(TRNG, TIMEOUT_COUNTER, 0x7ff);
+	GWRITE(TRNG, TIMEOUT_MAX_TRY_NUM, 4);
 	GWRITE(TRNG, POWER_DOWN_B, 1);
 	GWRITE(TRNG, GO_EVENT, 1);
-	while (GREAD(TRNG, EMPTY))
-		;
-	GREAD(TRNG, READ_DATA);
 }
 
 uint32_t rand(void)
 {
 	while (GREAD(TRNG, EMPTY)) {
-		if (!GREAD_FIELD(TRNG, FSM_STATE, FSM_IDLE))
-			continue;
-
-		/* TRNG must have stopped, needs to be restarted. */
-		GWRITE(TRNG, STOP_WORK, 1);
-		init_trng();
+		if (GREAD_FIELD(TRNG, FSM_STATE, FSM_TIMEOUT)) {
+			/* TRNG timed out, restart */
+			GWRITE(TRNG, STOP_WORK, 1);
+			GWRITE(TRNG, GO_EVENT, 1);
+		}
 	}
 	return GREAD(TRNG, READ_DATA);
 }

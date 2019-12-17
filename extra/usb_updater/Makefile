@@ -4,8 +4,7 @@
 
 CC ?= gcc
 PKG_CONFIG ?= pkg-config
-PROGRAM := usb_updater
-SOURCE  := $(PROGRAM).c
+PROGRAMS := gsctool usb_updater2
 LIBS    :=
 LFLAGS  :=
 CFLAGS  := -std=gnu99 \
@@ -29,17 +28,45 @@ endif
 #
 # Add libusb-1.0 required flags
 #
-LIBS    += $(shell $(PKG_CONFIG) --libs   libusb-1.0 libcrypto)
-CFLAGS  += $(shell $(PKG_CONFIG) --cflags libusb-1.0 libcrypto)
+LIBS    += $(shell $(PKG_CONFIG) --libs   libusb-1.0)
+CFLAGS  += $(shell $(PKG_CONFIG) --cflags libusb-1.0)
+CFLAGS  += -I../../include -I../../util -I../../test
 
-# NOTE: This may be board-specific
 BOARD ?= cr50
-CFLAGS  += -I../../include -I../../board/$(BOARD) -I ../../chip/g -I../../util
+LIBS_g  = $(shell $(PKG_CONFIG) --libs   libcrypto)
+CFLAGS_g = $(shell $(PKG_CONFIG) --cflags libcrypto)
+CFLAGS_g  += -I../../board/$(BOARD) -I ../../chip/g
 
-$(PROGRAM): $(SOURCE) Makefile
-	$(CC) $(CFLAGS) $(SOURCE) $(LFLAGS) $(LIBS) -o $@
+LIBS_common  = -lfmap
+
+all: $(PROGRAMS)
+
+GSCTOOL_SOURCES := gsctool.c desc_parser.c verify_ro.c
+GSCTOOL_OBJS := $(patsubst %.c,%.o,$(GSCTOOL_SOURCES))
+DEPS := $(patsubst %.c,%.d,$(GSCTOOL_SOURCES))
+
+# chip/g updater
+gsctool: $(GSCTOOL_OBJS) Makefile
+	$(CC) $(GSCTOOL_OBJS) $(LFLAGS) $(LIBS) $(LIBS_g) -o $@
+
+%.o: %.c
+	$(CC) $(CFLAGS) $(CFLAGS_g) -c -MMD -MF $(basename $@).d -o $@ $<
+
+gsctool.o:  generated_version.h
+
+# common EC code USB updater
+usb_updater2: usb_updater2.c Makefile
+	$(CC) $(CFLAGS) $< $(LFLAGS) $(LIBS) $(LIBS_common) -o $@
 
 .PHONY: clean
 
+generated_version.h: $(GSCTOOL_SOURCES)
+	@../../util/getversion.sh > $@
+
 clean:
-	rm -rf $(PROGRAM) *~
+	rm -rf $(PROGRAMS) *~ *.o *.d dp generated_version.h
+
+parser_debug: desc_parser.c
+	gcc -g -O0  -DTEST_PARSER desc_parser.c -o dp
+
+-include $(DEPS)

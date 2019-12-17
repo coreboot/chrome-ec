@@ -11,26 +11,95 @@
 #include "common.h"
 #include "ec_commands.h"  /* For EC_FLASH_PROTECT_* flags */
 
-/* Number of physical flash banks */
-#define PHYSICAL_BANKS (CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE)
+#ifdef CONFIG_FLASH_MULTIPLE_REGION
+extern struct ec_flash_bank const flash_bank_array[
+	CONFIG_FLASH_REGION_TYPE_COUNT];
 
-/*WP region offset and size in units of flash banks */
+/*
+ * Return the bank the offset is in.
+ * Return -1 if the offset is not at the beginning of that bank.
+ */
+int flash_bank_index(int offset);
+
+/*
+ * Number of banks between offset and offset+size.
+ *
+ * offset and offset + size should be addresses at the beginning of bank:
+ * 0                   32
+ * +-------------------+--------...
+ * |  bank 0           | bank 1 ...
+ * +-------------------+--------...
+ * In that case, begin = 0, end = 1, return is 1.
+ * otherwise, this is an error:
+ * 0          32       64
+ * +----------+--------+--------...
+ * |  bank 0           | bank 1 ...
+ * +----------+--------+--------...
+ * begin = 0, end = -1....
+ * The idea is to prevent erasing more than you think.
+ */
+int flash_bank_count(int offset, int size);
+
+/*
+ * Return the size of the specified bank in bytes.
+ * Return -1 if the bank is too large.
+ */
+int flash_bank_size(int bank);
+
+/* Number of physical flash banks */
+#define PHYSICAL_BANKS  CONFIG_FLASH_MULTIPLE_REGION
+
+/* WP region offset and size in units of flash banks */
+#define WP_BANK_OFFSET	flash_bank_index(CONFIG_WP_STORAGE_OFF)
+#define WP_BANK_COUNT \
+	(flash_bank_count(CONFIG_WP_STORAGE_OFF, CONFIG_WP_STORAGE_SIZE))
+
+#else  /* CONFIG_FLASH_MULTIPLE_REGION */
+/* Number of physical flash banks */
+#ifndef PHYSICAL_BANKS
+#define PHYSICAL_BANKS (CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
+
+/* WP region offset and size in units of flash banks */
 #define WP_BANK_OFFSET	(CONFIG_WP_STORAGE_OFF / CONFIG_FLASH_BANK_SIZE)
+#ifndef WP_BANK_COUNT
 #define WP_BANK_COUNT	(CONFIG_WP_STORAGE_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
+#endif  /* CONFIG_FLASH_MULTIPLE_REGION */
 
 /* Persistent protection state flash offset / size / bank */
 #if defined(CONFIG_FLASH_PSTATE) && defined(CONFIG_FLASH_PSTATE_BANK)
-#define PSTATE_BANK	    (CONFIG_FW_PSTATE_OFF / CONFIG_FLASH_BANK_SIZE)
-#define PSTATE_BANK_COUNT   (CONFIG_FW_PSTATE_SIZE / CONFIG_FLASH_BANK_SIZE)
-#else
-#define PSTATE_BANK_COUNT	0
+
+#ifdef CONFIG_FLASH_MULTIPLE_REGION
+#error "Not supported."
 #endif
 
-/* Range of write protection */
-enum flash_wp_range {
-	FLASH_WP_NONE = 0,
-	FLASH_WP_RO,
-	FLASH_WP_ALL,
+#ifndef PSTATE_BANK
+#define PSTATE_BANK	    (CONFIG_FW_PSTATE_OFF / CONFIG_FLASH_BANK_SIZE)
+#endif
+#ifndef PSTATE_BANK_COUNT
+#define PSTATE_BANK_COUNT   (CONFIG_FW_PSTATE_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
+#else   /* CONFIG_FLASH_PSTATE && CONFIG_FLASH_PSTATE_BANK */
+#define PSTATE_BANK_COUNT	0
+#endif  /* CONFIG_FLASH_PSTATE && CONFIG_FLASH_PSTATE_BANK */
+
+#ifdef CONFIG_ROLLBACK
+/*
+ * ROLLBACK region offset and size in units of flash banks.
+ */
+#define ROLLBACK_BANK_OFFSET	(CONFIG_ROLLBACK_OFF / CONFIG_FLASH_BANK_SIZE)
+#define ROLLBACK_BANK_COUNT	(CONFIG_ROLLBACK_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
+
+/* This enum is useful to identify different regions during verification. */
+enum flash_region {
+	FLASH_REGION_RW = 0,
+	FLASH_REGION_RO,
+#ifdef CONFIG_ROLLBACK
+	FLASH_REGION_ROLLBACK,
+#endif
+	FLASH_REGION_COUNT
 };
 
 /*****************************************************************************/
@@ -86,10 +155,11 @@ uint32_t flash_physical_get_protect_flags(void);
 /**
  * Enable/disable protecting firmware/pstate at boot.
  *
- * @param range		The range to protect
+ * @param new_flags to protect (only EC_FLASH_PROTECT_*_AT_BOOT are
+ * taken care of)
  * @return non-zero if error.
  */
-int flash_physical_protect_at_boot(enum flash_wp_range range);
+int flash_physical_protect_at_boot(uint32_t new_flags);
 
 /**
  * Protect flash now.
@@ -154,10 +224,11 @@ int flash_is_erased(uint32_t offset, int size);
  * protect pin is deasserted, the protect setting is ignored, and the entire
  * flash will be writable.
  *
- * @param range		The range to protect.
+ * @param new_flags to protect (only EC_FLASH_PROTECT_*_AT_BOOT are
+ * taken care of)
  * @return EC_SUCCESS, or nonzero if error.
  */
-int flash_protect_at_boot(enum flash_wp_range range);
+int flash_protect_at_boot(uint32_t new_flags);
 
 /*****************************************************************************/
 /* High-level interface for use by other modules. */
@@ -249,17 +320,18 @@ int flash_set_protect(uint32_t mask, uint32_t flags);
  * Get the serial number from flash.
  *
  * @return char * ascii serial number string.
+ *     NULL if error.
  */
-const char *flash_read_serial(void);
+const char *flash_read_pstate_serial(void);
 
 /**
  * Set the serial number in flash.
  *
- * @param serialno	ascii serial number string < 30 char.
+ * @param serialno	ascii serial number string.
  *
  * @return success status.
  */
-int flash_write_serial(const char *serialno);
+int flash_write_pstate_serial(const char *serialno);
 
 /**
  * Lock or unlock HW necessary for mapped storage read.
@@ -271,4 +343,14 @@ void flash_lock_mapped_storage(int lock);
 #else
 static inline void flash_lock_mapped_storage(int lock) { };
 #endif /* CONFIG_EXTERNAL_STORAGE */
+
+/**
+ * Select flash for performing flash operations. Board should implement this
+ * if some steps needed be done before flash operation can succeed.
+ *
+ * @param select   1 to select flash, 0 to deselect (disable).
+ * @return EC_RES_* status code.
+ */
+int board_flash_select(int select);
+
 #endif  /* __CROS_EC_FLASH_H */

@@ -14,7 +14,11 @@
 #define BATTERY_LEVEL_FULL		100
 
 /* Tell host we're charged when battery level >= this percentage */
+#ifdef CONFIG_BATTERY_LEVEL_NEAR_FULL
+#define BATTERY_LEVEL_NEAR_FULL		 CONFIG_BATTERY_LEVEL_NEAR_FULL
+#else
 #define BATTERY_LEVEL_NEAR_FULL		 97
+#endif
 
 /*
  * Send battery-low host event when discharging and battery level <= this level
@@ -97,6 +101,7 @@ struct battery_info {
 	int voltage_max;
 	int voltage_normal;
 	int voltage_min;
+	/* (TODO(chromium:756700): add desired_charging_current */
 	/* Pre-charge current in mA */
 	int precharge_current;
 	/* Working temperature ranges in degrees C */
@@ -135,6 +140,21 @@ void battery_override_params(struct batt_params *batt);
  * @return Whether there is a battery attached or not, or if we can't tell.
  */
 enum battery_present battery_is_present(void);
+
+/**
+ * Check for physical presence of battery.
+ *
+ * @return Whether there is a battery physically present, but possibly
+ * in a disconnected or cut off state, or if we can't tell;
+ */
+enum battery_present battery_hw_present(void);
+
+/**
+ * Check for battery initialization status.
+ *
+ * @return zero if not initialized.
+ */
+int board_battery_initialized(void);
 
 /**
  * Get battery mode.
@@ -332,5 +352,9 @@ void print_battery_debug(void);
  * Get the disconnect state of the battery.
  */
 enum battery_disconnect_state battery_get_disconnect_state(void);
+
+#ifdef CONFIG_CMD_I2C_STRESS_TEST_BATTERY
+extern struct i2c_stress_test_dev battery_i2c_stress_test_dev;
+#endif
 
 #endif /* __CROS_EC_BATTERY_H */

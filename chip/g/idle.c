@@ -3,16 +3,22 @@
  * found in the LICENSE file.
  */
 
+#include "case_closed_debug.h"
+#include "clock.h"
 #include "common.h"
 #include "console.h"
 #include "hooks.h"
 #include "hwtimer.h"
+#include "init_chip.h"
 #include "rdd.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
+#include "usb_api.h"
 #include "util.h"
+
+#define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
 
 /* What to do when we're just waiting */
 static enum {
@@ -23,8 +29,9 @@ static enum {
 	NUM_CHOICES
 } idle_action;
 
-#define IDLE_DEFAULT IDLE_SLEEP
 #define EVENT_MIN 500
+
+static int idle_default;
 
 static const char const *idle_name[] = {
 	"invalid",
@@ -36,31 +43,45 @@ BUILD_ASSERT(ARRAY_SIZE(idle_name) == NUM_CHOICES);
 
 static int command_idle(int argc, char **argv)
 {
-	int c, i;
+	int i;
 
 	if (argc > 1) {
-		c = tolower(argv[1][0]);
-		for (i = 1; i < ARRAY_SIZE(idle_name); i++)
-			if (idle_name[i][0] == c) {
-				idle_action = i;
-				break;
-			}
+		if (!strncasecmp("c", argv[1], 1)) {
+			GREG32(PMU, PWRDN_SCRATCH17) = 0;
+		} else if (console_is_restricted()) {
+			ccprintf("Console is locked, cannot set idle state\n");
+			return EC_ERROR_INVAL;
+		} else {
+			for (i = 1; i < ARRAY_SIZE(idle_name); i++)
+				if (!strncasecmp(idle_name[i], argv[1], 1)) {
+					idle_action = i;
+					break;
+				}
+		}
 	}
 
 	ccprintf("idle action: %s\n", idle_name[idle_action]);
+	ccprintf("deep sleep count: %u\n", GREG32(PMU, PWRDN_SCRATCH17));
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(idle, command_idle,
-			"[w|s|d]",
-			"Set or show the idle action: wfi, sleep, deep sleep");
+DECLARE_SAFE_CONSOLE_COMMAND(idle, command_idle,
+			     "[w|s|d|c]",
+			     "Set idle action: wfi, sleep, deep sleep or "
+			     "Clear the deep sleep count");
 
 static int utmi_wakeup_is_enabled(void)
 {
 #ifdef CONFIG_RDD
-	return is_utmi_wakeup_allowed();
-#endif
+	/*
+	 * USB is only used for CCD, so only enable UTMI wakeups when RDD
+	 * detects that a debug accessory is attached.
+	 */
+	return ccd_ext_is_enabled();
+#else
+	/* USB is used for the host interface, so always enable UTMI wakeups */
 	return 1;
+#endif
 }
 
 static void prepare_to_sleep(void)
@@ -81,7 +102,7 @@ static void prepare_to_sleep(void)
 	/* Wake on RBOX interrupts */
 	GREG32(RBOX, WAKEUP) = GC_RBOX_WAKEUP_ENABLE_MASK;
 
-	if (utmi_wakeup_is_enabled())
+	if (utmi_wakeup_is_enabled() && idle_action != IDLE_DEEP_SLEEP)
 		GR_PMU_EXITPD_MASK |=
 			GC_PMU_EXITPD_MASK_UTMI_SUSPEND_N_MASK;
 
@@ -94,9 +115,6 @@ static void prepare_to_sleep(void)
 	/*
 	 * Deep sleep should only be enabled when the AP is off otherwise the
 	 * TPM state will lost.
-	 *
-	 * TODO(crosbug.com/p/55747): Enable deep sleep when the AP is shut
-	 * down. Currently deep sleep is only enabled through the console.
 	 */
 	if (idle_action == IDLE_DEEP_SLEEP) {
 		/* Clear upcoming events. They don't matter in deep sleep */
@@ -105,15 +123,20 @@ static void prepare_to_sleep(void)
 		/* Configure pins for deep sleep */
 		board_configure_deep_sleep_wakepins();
 
-		/*
-		 * Preserve some state prior to deep sleep. Pretty much all we
-		 * need is the device address, since everything else can be
-		 * reinitialized on resume.
-		 */
-		GREG32(PMU, PWRDN_SCRATCH18) = GR_USB_DCFG;
+		/* Make sure the usb clock is enabled */
+		clock_enable_module(MODULE_USB, 1);
+		/* Preserve some state from USB hardware prior to deep sleep. */
+		if (!GREAD_FIELD(USB, PCGCCTL, RSTPDWNMODULE))
+			usb_save_suspended_state();
 
+		/* Increment the deep sleep count */
+		GREG32(PMU, PWRDN_SCRATCH17) =
+			GREG32(PMU, PWRDN_SCRATCH17) + 1;
+
+#ifndef CONFIG_NO_PINHOLD
 		/* Latch the pinmux values */
 		GREG32(PINMUX, HOLD) = 1;
+#endif
 
 		/* Clamp the USB pins and shut the PHY down. We have to do this
 		 * in three separate steps, or Bad Things happen. */
@@ -162,15 +185,29 @@ void clock_refresh_console_in_use(void)
 
 void disable_deep_sleep(void)
 {
-	idle_action = IDLE_DEFAULT;
+	idle_action = idle_default;
 }
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, disable_deep_sleep, HOOK_PRIO_DEFAULT);
 
 void enable_deep_sleep(void)
 {
 	idle_action = IDLE_DEEP_SLEEP;
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, enable_deep_sleep, HOOK_PRIO_DEFAULT);
+
+static void idle_init(void)
+{
+	/*
+	 * If bus obfuscation is enabled disable sleep.
+	 */
+	if ((GR_FUSE(OBFUSCATION_EN) == 5) ||
+	    (GR_FUSE(FW_DEFINED_BROM_APPLYSEC) & (1 << 3)) ||
+	    (runlevel_is_high() && GREAD(GLOBALSEC, OBFS_SW_EN))) {
+		CPRINTS("bus obfuscation enabled disabling sleep");
+		idle_default = IDLE_WFI;
+	} else {
+		idle_default = IDLE_SLEEP;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, idle_init, HOOK_PRIO_DEFAULT - 1);
 
 /* Custom idle task, executed when no tasks are ready to be scheduled. */
 void __idle(void)
@@ -186,14 +223,14 @@ void __idle(void)
 	 * this and set the idle_action.
 	 */
 	if (!idle_action)
-		idle_action = IDLE_DEFAULT;
+		idle_action = idle_default;
 
-	/* Disable sleep until 3 minutes after init */
-	delay_sleep_by(3 * MINUTE);
+	/* Disable sleep for 20 seconds after init */
+	delay_sleep_by(20 * SECOND);
 
 	while (1) {
 
-		/* Anyone still busy? */
+		/* Anyone still busy?  (this checks sleep_mask) */
 		sleep_ok = DEEP_SLEEP_ALLOWED;
 
 		/* Wait a bit, just in case */

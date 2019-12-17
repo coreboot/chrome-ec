@@ -46,7 +46,7 @@
 #define CONFIG_STACK_SIZE 1024
 
 /* Idle task stack size */
-#define IDLE_TASK_STACK_SIZE 256
+#define IDLE_TASK_STACK_SIZE 512
 
 /* Default task stack size */
 #define TASK_STACK_SIZE 488
@@ -66,6 +66,9 @@
 
 /* We'll have some special commands of our own */
 #define CONFIG_EXTENSION_COMMAND 0xbaccd00a
+
+/* Chip needs to do custom pre-init */
+#define CONFIG_CHIP_PRE_INIT
 
 /*
  * The flash memory is implemented in two halves. The SoC bootrom will look for
@@ -95,7 +98,7 @@
  * use these two areas for the same thing, it's just more convenient to make
  * them the same size.
  */
-#define CFG_TOP_SIZE  0x4000
+#define CFG_TOP_SIZE  0x3800
 #define CFG_TOP_A_OFF (CFG_FLASH_HALF - CFG_TOP_SIZE)
 #define CFG_TOP_B_OFF (CONFIG_FLASH_SIZE - CFG_TOP_SIZE)
 
@@ -139,5 +142,8 @@
  * firmware images, they may not be useful.
  */
 #define CONFIG_CUSTOMIZED_RO
+
+/* Number of I2C ports */
+#define I2C_PORT_COUNT 2
 
 #endif	/* __CROS_EC_CONFIG_CHIP_H */

@@ -9,9 +9,16 @@
 #define __CROS_EC_I2C_H
 
 #include "common.h"
+#include "host_command.h"
 
 /* Flags for slave address field, in addition to the 8-bit address */
 #define I2C_FLAG_BIG_ENDIAN 0x100  /* 16 byte values are MSB-first */
+
+/*
+ * Max data size for a version 3 request/response packet. This is
+ * big enough for EC_CMD_GET_VERSION plus header info.
+ */
+#define I2C_MAX_HOST_PACKET_SIZE 128
 
 /*
  * Supported I2C CLK frequencies.
@@ -39,6 +46,42 @@ struct i2c_port_t {
 
 extern const struct i2c_port_t i2c_ports[];
 extern const unsigned int i2c_ports_used;
+
+#ifdef CONFIG_CMD_I2C_STRESS_TEST
+struct i2c_test_reg_info {
+	int read_reg;      /* Read register (WHO_AM_I, DEV_ID, MAN_ID) */
+	int read_val;      /* Expected val (WHO_AM_I, DEV_ID, MAN_ID) */
+	int write_reg;     /* Read/Write reg which doesn't impact the system */
+};
+
+struct i2c_test_results {
+	int read_success;  /* Successful read count */
+	int read_fail;     /* Read fail count */
+	int write_success; /* Successful write count */
+	int write_fail;    /* Write fail count */
+};
+
+/* Data structure to define I2C test configuration. */
+struct i2c_stress_test_dev {
+	struct i2c_test_reg_info reg_info;
+	struct i2c_test_results test_results;
+	int (*i2c_read)(const int port, const int addr,
+				  const int reg, int *data);
+	int (*i2c_write)(const int port, const int addr,
+				   const int reg, int data);
+	int (*i2c_read_dev)(const int reg, int *data);
+	int (*i2c_write_dev)(const int reg, int data);
+};
+
+struct i2c_stress_test {
+	int port;
+	int addr;
+	struct i2c_stress_test_dev *i2c_test;
+};
+
+extern struct i2c_stress_test i2c_stress_tests[];
+extern const int i2c_test_dev_used;
+#endif
 
 /* Flags for i2c_xfer() */
 #define I2C_XFER_START (1 << 0)  /* Start smbus session from idle state */
@@ -231,7 +274,7 @@ int i2c_unwedge(int port);
  * Read bytestream from <slaveaddr>:<offset> with format:
  *     [length_N] [byte_0] [byte_1] ... [byte_N-1]
  *
- * <len>      : the max length of receving buffer. to read N bytes
+ * <len>      : the max length of receiving buffer. to read N bytes
  *              ascii, len should be at least N+1 to include the
  *              terminating 0.
  * <len> == 0 : buffer size > 255
@@ -250,4 +293,44 @@ int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
  */
 int i2c_port_to_controller(int port);
 
+/**
+ * Command handler to get host command protocol information
+ *
+ * @param args:	host command handler arguments
+ * @return	EC_SUCCESS
+ */
+int i2c_get_protocol_info(struct host_cmd_handler_args *args);
+
+/**
+ * Callbacks processing received data and response
+ *
+ * i2c_data_recived will be called when a slave finishes receiving data and
+ * i2c_set_response will be called when a slave is expected to send response.
+ *
+ * Using these, Chrome OS host command protocol should be separated from
+ * i2c slave drivers (e.g. i2c-stm32f0.c, i2c-stm32f3.c).
+ *
+ * @param port: I2C port number
+ * @param buf:	Buffer containing received data on call and response on return
+ * @param len:	Size of received data
+ * @return	Size of response data
+ */
+void i2c_data_received(int port, uint8_t *buf, int len);
+int i2c_set_response(int port, uint8_t *buf, int len);
+
+/**
+ * Initialize i2c master ports. This function can be called for cases where i2c
+ * ports are not initialized by default via a hook call.
+ */
+void i2cm_init(void);
+
+/**
+ * Board-level function to determine whether i2c passthru should be allowed
+ * on a given port.
+ *
+ * @parm port I2C port
+ *
+ * @return true, if passthru should be allowed on the port.
+ */
+int board_allow_i2c_passthru(int port);
 #endif  /* __CROS_EC_I2C_H */

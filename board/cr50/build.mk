@@ -29,10 +29,11 @@ dirs-y += chip/$(CHIP)/dcrypto
 dirs-y += $(BDIR)/tpm2
 
 # Objects that we need to build
-board-y =  board.o
-board-y += board_id.o
+board-y =  board.o ap_state.o ec_state.o power_button.o servo_state.o
 board-${CONFIG_RDD} += rdd.o
 board-${CONFIG_USB_SPI} += usb_spi.o
+board-${CONFIG_USB_I2C} += usb_i2c.o
+board-y += recovery_button.o
 board-y += tpm2/NVMem.o
 board-y += tpm2/aes.o
 board-y += tpm2/ecc.o
@@ -47,8 +48,9 @@ board-y += tpm2/rsa.o
 board-y += tpm2/stubs.o
 board-y += tpm2/tpm_state.o
 board-y += tpm2/trng.o
-board-y += tpm2/upgrade.o
+board-y += tpm_nvmem_read.o
 board-y += wp.o
+board-$(CONFIG_U2F) += u2f.o
 
 # Build and link with an external library
 EXTLIB := $(realpath ../../third_party/tpm2)
@@ -63,10 +65,17 @@ CPPFLAGS += -I$(abspath ./chip/$(CHIP))
 CPPFLAGS += -I$(abspath .)
 CPPFLAGS += -I$(abspath $(BDIR))
 CPPFLAGS += -I$(abspath ./test)
+ifeq ($(CONFIG_UPTO_SHA512),y)
+CPPFLAGS += -DSHA512_SUPPORT
+endif
 
-# Make sure the context of the software sha256 implementation fits. If it ever
+# Make sure the context of the software sha512 implementation fits. If it ever
 # increases, a compile time assert will fire in tpm2/hash.c.
+ifeq ($(CONFIG_UPTO_SHA512),y)
+CFLAGS += -DUSER_MIN_HASH_STATE_SIZE=208
+else
 CFLAGS += -DUSER_MIN_HASH_STATE_SIZE=112
+endif
 # Configure TPM2 headers accordingly.
 CFLAGS += -DEMBEDDED_MODE=1
 # Configure cryptoc headers to handle unaligned accesses.
@@ -81,6 +90,8 @@ $(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: $(out)/tpm2/libtpm2.a
 # Force the external build each time, so it can look for changed sources.
 .PHONY: $(out)/tpm2/libtpm2.a
 $(out)/tpm2/libtpm2.a:
-	$(MAKE) obj=$(realpath $(out))/tpm2 EMBEDDED_MODE=1 -C $(EXTLIB)
+	$(MAKE) obj=$(realpath $(out))/tpm2 EMBEDDED_MODE=1 OBJ_PREFIX=Tpm2_ -C $(EXTLIB)
 
 endif   # BOARD_MK_INCLUDED_ONCE is nonempty
+
+board-$(CONFIG_PINWEAVER)+=pinweaver_tpm_imports.o

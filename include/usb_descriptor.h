@@ -10,9 +10,6 @@
 
 #include <stddef.h> /* for wchar_t */
 
-#include "usb_api.h"
-#include "usb_hw.h"
-
 #define USB_MAX_PACKET_SIZE 64
 
 /* USB 2.0 chapter 9 definitions */
@@ -88,6 +85,24 @@ struct usb_contid_caps_descriptor {
 #define USB_DC_DTYPE_WUSBEXT   0x0c
 #define USB_DC_DTYPE_BILLBOARD 0x0d
 /* RESERVED 0x00, 0xOe - 0xff */
+
+/* Platform descriptor */
+struct usb_platform_descriptor {
+	uint8_t  bLength;
+	uint8_t  bDescriptorType;     /* USB_DT_DEVICE_CAPABILITY */
+	uint8_t  bDevCapabilityType;  /* USB_DC_DTYPE_PLATFORM */
+	uint8_t  bReserved;           /* SBZ */
+	uint8_t  PlatformCapUUID[16]; /* USB_PLAT_CAP_xxx */
+	uint16_t bcdVersion;          /* 0x0100 */
+	uint8_t  bVendorCode;
+	uint8_t  iLandingPage;
+} __packed;
+#define USB_DT_PLATFORM_SIZE   24
+
+/* Platform Capability UUIDs */
+#define USB_PLAT_CAP_WEBUSB /*{3408b638-09a9-47a0-8bfd-a0768815b665}*/ \
+	{0x38, 0xB6, 0x08, 0x34, 0xA9, 0x09, 0xA0, 0x47,               \
+	 0x8B, 0xFD, 0xA0, 0x76, 0x88, 0x15, 0xB6, 0x65}
 
 /* Qualifier Descriptor */
 struct usb_qualifier_descriptor {
@@ -190,6 +205,9 @@ struct usb_endpoint_descriptor {
 /* We can use any protocol we want */
 #define USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE 0xff
 
+#define USB_SUBCLASS_GOOGLE_POWER  0x54
+#define USB_PROTOCOL_GOOGLE_POWER  0x01
+
 /* Control requests */
 
 /* bRequestType fields */
@@ -211,8 +229,13 @@ struct usb_endpoint_descriptor {
 
 /* Standard requests for bRequest field in a SETUP packet. */
 #define USB_REQ_GET_STATUS         0x00
+#define USB_REQ_GET_STATUS_SELF_POWERED  (1 << 0)
+#define USB_REQ_GET_STATUS_REMOTE_WAKEUP (1 << 1)
 #define USB_REQ_CLEAR_FEATURE      0x01
 #define USB_REQ_SET_FEATURE        0x03
+#define USB_REQ_FEATURE_ENDPOINT_HALT        0x0000
+#define USB_REQ_FEATURE_DEVICE_REMOTE_WAKEUP 0x0001
+#define USB_REQ_FEATURE_TEST_MODE            0x0002
 #define USB_REQ_SET_ADDRESS        0x05
 #define USB_REQ_GET_DESCRIPTOR     0x06
 #define USB_REQ_SET_DESCRIPTOR     0x07
@@ -221,6 +244,35 @@ struct usb_endpoint_descriptor {
 #define USB_REQ_GET_INTERFACE      0x0A
 #define USB_REQ_SET_INTERFACE      0x0B
 #define USB_REQ_SYNCH_FRAME        0x0C
+
+/* WebUSB URL descriptors */
+#define WEBUSB_REQ_GET_URL         0x02
+#define USB_DT_WEBUSB_URL          0x03
+
+#define USB_URL_SCHEME_HTTP       0x00
+#define USB_URL_SCHEME_HTTPS      0x01
+#define USB_URL_SCHEME_NONE       0xff
+
+/*
+ * URL descriptor helper.
+ * (similar to string descriptor but UTF-8 instead of UTF-16)
+ */
+#define USB_URL_DESC(scheme, str) \
+	(const void *)&(const struct { \
+		uint8_t _len; \
+		uint8_t _type; \
+		uint8_t _scheme; \
+		char _data[sizeof(str)]; \
+	}) { \
+		/* Total size of the descriptor is : \
+		 * size of the UTF-8 text plus the len/type fields \
+		 * minus the string 0-termination \
+		 */ \
+		sizeof(str) + 3 - 1, \
+		USB_DT_WEBUSB_URL, \
+		USB_URL_SCHEME_##scheme, \
+		str \
+	}
 
 /* Setup Packet */
 struct usb_setup_packet {
@@ -253,11 +305,10 @@ struct usb_setup_packet {
 
 #ifdef CONFIG_USB_SERIALNO
 /* String Descriptor for USB, for editable strings. */
-#define USB_STRING_LEN 30
 struct usb_string_desc {
 	uint8_t _len;
 	uint8_t _type;
-	wchar_t _data[USB_STRING_LEN];
+	wchar_t _data[CONFIG_SERIALNO_LEN];
 };
 #define USB_WR_STRING_DESC(str) \
 	(&(struct usb_string_desc) { \
@@ -270,9 +321,12 @@ extern struct usb_string_desc *usb_serialno_desc;
 #endif
 
 /* Use these macros for declaring descriptors, to order them properly */
-#define USB_CONF_DESC(name) CONCAT2(usb_desc_, name)			\
-	__attribute__((section(".rodata.usb_desc_" STRINGIFY(name))))
+#define USB_CONF_DESC_VAR(name, varname) varname		\
+	__keep __attribute__((section(".rodata.usb_desc_" STRINGIFY(name))))
+#define USB_CONF_DESC(name) USB_CONF_DESC_VAR(name, CONCAT2(usb_desc_, name))
 #define USB_IFACE_DESC(num) USB_CONF_DESC(CONCAT3(iface, num, _0iface))
+#define USB_CUSTOM_DESC_VAR(i, name, varname)			\
+	USB_CONF_DESC_VAR(CONCAT4(iface, i, _1, name), varname)
 #define USB_CUSTOM_DESC(i, name) USB_CONF_DESC(CONCAT4(iface, i, _1, name))
 #define USB_EP_DESC(i, num) USB_CONF_DESC(CONCAT4(iface, i, _2ep, num))
 
@@ -287,5 +341,6 @@ extern const uint8_t usb_string_desc[];
 /* USB string descriptor with the firmware version */
 extern const void * const usb_fw_version;
 extern const struct bos_context bos_ctx;
+extern const void *webusb_url;
 
 #endif /* __CROS_EC_USB_DESCRIPTOR_H */

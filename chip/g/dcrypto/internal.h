@@ -15,6 +15,8 @@
 #include "cryptoc/p256.h"
 #include "cryptoc/sha.h"
 #include "cryptoc/sha256.h"
+#include "cryptoc/sha384.h"
+#include "cryptoc/sha512.h"
 
 /*
  * SHA.
@@ -27,7 +29,11 @@
 #define SHA_DIGEST_WORDS   (SHA_DIGEST_SIZE / sizeof(uint32_t))
 #define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
 
+#ifdef SHA512_SUPPORT
+#define SHA_DIGEST_MAX_BYTES SHA512_DIGEST_SIZE
+#else
 #define SHA_DIGEST_MAX_BYTES SHA256_DIGEST_SIZE
+#endif
 
 enum sha_mode {
 	SHA1_MODE = 0,
@@ -72,31 +78,100 @@ void bn_init(struct LITE_BIGNUM *bn, void *buf, size_t len);
 #define bn_bits(b) ((b)->dmax * LITE_BN_BITS2)
 int bn_eq(const struct LITE_BIGNUM *a, const struct LITE_BIGNUM *b);
 int bn_check_topbit(const struct LITE_BIGNUM *N);
-void bn_mont_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
-		const struct LITE_BIGNUM *exp, const struct LITE_BIGNUM *N);
-void bn_mont_modexp_asm(struct LITE_BIGNUM *output,
+int bn_modexp(struct LITE_BIGNUM *output,
 			const struct LITE_BIGNUM *input,
 			const struct LITE_BIGNUM *exp,
 			const struct LITE_BIGNUM *N);
-uint32_t bn_add(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a);
-uint32_t bn_sub(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a);
-int bn_modinv_vartime(struct LITE_BIGNUM *r, const struct LITE_BIGNUM *e,
-		const struct LITE_BIGNUM *MOD);
+int bn_modexp_word(struct LITE_BIGNUM *output,
+			const struct LITE_BIGNUM *input,
+			uint32_t pubexp,
+			const struct LITE_BIGNUM *N);
+int bn_modexp_blinded(struct LITE_BIGNUM *output,
+			const struct LITE_BIGNUM *input,
+			const struct LITE_BIGNUM *exp,
+			const struct LITE_BIGNUM *N,
+			uint32_t pubexp);
+uint32_t bn_add(struct LITE_BIGNUM *c,
+		const struct LITE_BIGNUM *a);
+uint32_t bn_sub(struct LITE_BIGNUM *c,
+		const struct LITE_BIGNUM *a);
+int bn_modinv_vartime(struct LITE_BIGNUM *r,
+			const struct LITE_BIGNUM *e,
+			const struct LITE_BIGNUM *MOD);
 int bn_is_bit_set(const struct LITE_BIGNUM *a, int n);
 
 /*
- * Runtime.
+ * Accelerated bn.
  */
-void dcrypto_init(void);
-uint32_t dcrypto_call(uint32_t adr);
+int dcrypto_modexp(struct LITE_BIGNUM *output,
+			const struct LITE_BIGNUM *input,
+			const struct LITE_BIGNUM *exp,
+			const struct LITE_BIGNUM *N);
+int dcrypto_modexp_word(struct LITE_BIGNUM *output,
+			const struct LITE_BIGNUM *input,
+			uint32_t pubexp,
+			const struct LITE_BIGNUM *N);
+int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
+			const struct LITE_BIGNUM *input,
+			const struct LITE_BIGNUM *exp,
+			const struct LITE_BIGNUM *N,
+			uint32_t pubexp);
+
+/*
+ * RFC6979 based DRBG for ECDSA signature.
+ */
+struct drbg_ctx {
+	uint32_t k[SHA256_DIGEST_WORDS];
+	uint32_t v[SHA256_DIGEST_WORDS];
+};
+void drbg_rfc6979_init(struct drbg_ctx *ctx, const p256_int *key,
+		       const p256_int *message);
+void drbg_rand_init(struct drbg_ctx *ctx);
+void drbg_generate(struct drbg_ctx *ctx, p256_int *k_out);
+void drbg_exit(struct drbg_ctx *ctx);
+
+/*
+ * Accelerated p256.
+ */
+int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
+			    const p256_int *message, p256_int *r, p256_int *s)
+	__attribute__((warn_unused_result));
+int dcrypto_p256_base_point_mul(const p256_int *k, p256_int *x, p256_int *y)
+	 __attribute__((warn_unused_result));
+int dcrypto_p256_point_mul(const p256_int *k,
+		const p256_int *in_x, const p256_int *in_y,
+		p256_int *x, p256_int *y)
+	__attribute__((warn_unused_result));
+int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
+		const p256_int *message, const p256_int *r,
+		const p256_int *s)
+	__attribute__((warn_unused_result));
+int dcrypto_p256_is_valid_point(const p256_int *x, const p256_int *y)
+	__attribute__((warn_unused_result));
+
+/*
+ * Accelerator runtime.
+ *
+ * Note dcrypto_init_and_lock grabs a mutex and dcrypto_unlock releases it.
+ * Do not use dcrypto_call, dcrypto_imem_load or dcrypto_dmem_load w/o holding
+ * the mutex.
+ */
+void dcrypto_init_and_lock(void);
+void dcrypto_unlock(void);
+uint32_t dcrypto_call(uint32_t adr) __attribute__((warn_unused_result));
 void dcrypto_imem_load(size_t offset, const uint32_t *opcodes,
 		       size_t n_opcodes);
 void dcrypto_dmem_load(size_t offset, const void *words, size_t n_words);
 
 /*
- * Utility functions.
+ * Key ladder.
  */
-/* TODO(ngm): memset that doesn't get optimized out. */
-#define dcrypto_memset(p, b, len)  memset((p), (b), (len))
+enum dcrypto_appid;      /* Forward declaration. */
+
+int dcrypto_ladder_compute_usr(enum dcrypto_appid id,
+			const uint32_t usr_salt[8]);
+int dcrypto_ladder_derive(enum dcrypto_appid appid, const uint32_t salt[8],
+			  const uint32_t input[8], uint32_t output[8]);
+
 
 #endif  /* ! __EC_CHIP_G_DCRYPTO_INTERNAL_H */

@@ -4,23 +4,68 @@
  * found in the LICENSE file.
  */
 
+/*
+ * This file describes GPIO mapping for the cr50 code running on the H1 chip.
+ *
+ * For the purposes of this file H1 core has the following logical and
+ * physical items and properties:
+ *
+ *   - 32 internal GPIOs, which are split into two ports of 16 bits each.
+ *     Ports' architecture and programmig is described in "ARM Cortex-M System
+ *     Design Kit TRM" DDIO47B.
+ *
+ *   - a set of peripherals - slave and master SPI and I2C controllers, UARTs,
+ *     interrupt controller, etc.
+ *
+ *   - 28 pins on the package named DIOA0..14, DIOB0..7 and DIOM0..4
+ *
+ *   - a PINMUX - a unit which allows to interconnect objects from the three
+ *     groups listed above. Note that some peripherals are attached to some
+ *     pins directly, so in case those peripherals are used the pins should
+ *     not be connected by PINMUX to any other outputs.
+ *
+ * The below macros are somewhat misleading (apparently for historical
+ * reasons), as PIN(p, b) component in fact refers not to the external pin,
+ * but to the GPIO (bit b on port p), where bit is in 0..15 range, and port is
+ * in 0..1 range.
+ *
+ * To describe routing of an external signal two macro instantiations are
+ * required:
+ *
+ * The GPIO_INT() or GPIO() macro assigns the signal a name and assigns it to
+ * the internal GPIO port, (again, defining the port using the PIN(port, bit)
+ * component of the macro invocation). GPIO_INT definitions assign their
+ * respective signals to interrupts and ISRs.
+ *
+ * The PINMUX macro assigns the previously defined GPIO to another object,
+ * most commonly to an external pin, but possibly to some internal component.
+ */
+
 /* Declare symbolic names for all the GPIOs that we care about.
  * Note: Those with interrupt handlers must be declared first. */
 
 /*
- * We can assert SYS_RST_L but so can the EC, so we need react if it's pulled
- * low. The ARM core can't trigger an interrupt if it's driving it as an output
- * so we attach two internal GPIOs to the same pad.
+ * The system reset signal can be from two different pins depending on what the
+ * board type is. One board uses plt_rst_l (diom3) and the other board type uses
+ * sys_rst_l (diom0) to detect a warm reset. The pin is selected based on the
+ * board properties in board.c
+ *
+ * On both boards sys_rst_l is used as an output to trigger warm resets. The ARM
+ * core can't trigger an interrupt if it's driving it as an output so we attach
+ * two internal GPIOs to the same pad if sys_rst_l is also being used to detect
+ * system resets.
  */
-GPIO_INT(SYS_RST_L_IN,    PIN(1, 0),  GPIO_INT_FALLING, sys_rst_asserted)
-GPIO_INT(AP_ON,           PIN(1, 1),  GPIO_INT_RISING, device_state_on)
-GPIO_INT(EC_ON,           PIN(1, 2),  GPIO_INT_RISING, device_state_on)
-GPIO_INT(SERVO_UART2_ON,  PIN(1, 3),  GPIO_INT_RISING | GPIO_PULL_DOWN,
-	 device_state_on)
-GPIO_INT(AP_OFF,          PIN(1, 4),  GPIO_INT_FALLING,  device_state_off)
-GPIO_INT(EC_OFF,          PIN(1, 5),  GPIO_INT_FALLING,  device_state_off)
-GPIO_INT(SERVO_UART2_OFF, PIN(1, 6),  GPIO_INT_FALLING | GPIO_PULL_DOWN,
-	 device_state_off)
+GPIO_INT(TPM_RST_L,       PIN(1, 0),  GPIO_INT_RISING, tpm_rst_deasserted)
+GPIO_INT(DETECT_AP,       PIN(1, 1),  GPIO_INT_HIGH, ap_detect_asserted)
+GPIO_INT(DETECT_EC,       PIN(1, 2),  GPIO_INT_HIGH, ec_detect_asserted)
+/*
+ * DETECT_SERVO and EC_TX_CR50_RX pins must NOT be changed without also changing
+ * the pinmux_regval fields in the bitbang_config in board.c.  The pinmux values
+ * in the config assume the pin definitions here.
+ */
+GPIO_INT(DETECT_SERVO,    PIN(1, 3),  GPIO_INT_HIGH | GPIO_PULL_DOWN,
+	 servo_detect_asserted)
+GPIO_INT(EC_TX_CR50_RX,   PIN(1, 4),  GPIO_INT_FALLING, ec_tx_cr50_rx)
 
 /* Pull this low to interrupt the AP */
 GPIO(INT_AP_L,        PIN(0, 0), GPIO_OUT_HIGH)
@@ -32,23 +77,45 @@ GPIO(AP_FLASH_SELECT, PIN(0, 2), GPIO_OUT_LOW)
 /* Pull this low to reset the AP. (We reset the EC with the RBOX.) */
 GPIO(SYS_RST_L_OUT,   PIN(0, 4), GPIO_INPUT)
 
-/* Indicate to EC when CCD is enabled. EC can pull this down too, to tell us if
- * it decided instead. The pullup is on the EC's side. */
-GPIO(CCD_MODE_L,      PIN(0, 5), GPIO_ODR_HIGH)
+/*
+ * Indicate to EC when CCD is enabled. EC can pull this down too, to tell us if
+ * it decided instead.
+ */
+GPIO(CCD_MODE_L,      PIN(0, 5), GPIO_INPUT | GPIO_PULL_UP)
 
 /* Battery present signal is active low */
 GPIO(BATT_PRES_L,     PIN(0, 6), GPIO_INPUT)
 
 /* GPIOs used to tristate the SPI bus */
-GPIO(SPI_MOSI,        PIN(0, 7), GPIO_INPUT)
-GPIO(SPI_CLK,         PIN(0, 8), GPIO_INPUT)
+GPIO(SPI_MOSI,        PIN(0, 7), GPIO_INPUT | GPIO_PULL_DOWN)
+GPIO(SPI_CLK,         PIN(0, 8), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(SPI_CS_L,        PIN(0, 9), GPIO_INPUT)
 
-/* Control the load switch powering the INA 3.3V rail */
-GPIO(EN_PP3300_INA_L, PIN(1, 9), GPIO_ODR_HIGH)
+/* Used during *chip* factory process. */
+GPIO(DIOB4,           PIN(0, 10), GPIO_INPUT | GPIO_PULL_DOWN)
 
 /* GPIOs used for Cr50 strapping options */
-GPIO(STRAP0,        PIN(0, 10), GPIO_INPUT)
+GPIO(STRAP_A0,        PIN(1, 12), GPIO_INPUT)
+GPIO(STRAP_A1,        PIN(1, 13), GPIO_INPUT)
+GPIO(STRAP_B0,        PIN(1, 14), GPIO_INPUT)
+GPIO(STRAP_B1,        PIN(1, 15), GPIO_INPUT)
+
+/* Control the load switch powering the INA 3.3V rail */
+GPIO(EN_PP3300_INA_L, PIN(0, 11), GPIO_ODR_HIGH)
+/* GPIOs used for I2CM pins for INAs */
+GPIO(I2C_SCL_INA,     PIN(0, 12), GPIO_INPUT)
+GPIO(I2C_SDA_INA,     PIN(0, 13), GPIO_INPUT)
+
+/*
+ * Use this to poll the state of the I2CS SDA line. Note that this is not
+ * necessary if SPI interface is used to communicate with the AP, if needed,
+ * this GPIO could be reclaimed in that case.
+ *
+ * Actual attachment of this GPIO to the SDA line happens in board.c only when
+ * I2CS interface is required. Should this GPIO ever change, the code setting
+ * up the pinmux in board.c will have to change as well.
+ */
+GPIO(I2CS_SDA,        PIN(0, 14), GPIO_INPUT)
 
 /* Unimplemented signals which we need to emulate for now */
 /* TODO(wfrichar): Half the boards don't use this signal. Take it out. */
@@ -69,15 +136,24 @@ PINMUX(GPIO(INT_AP_L),        A5, DIO_INPUT)	/* DIOB7 is p_digitial_od */
 PINMUX(GPIO(EC_FLASH_SELECT), B2, DIO_INPUT)
 PINMUX(GPIO(AP_FLASH_SELECT), B3, DIO_INPUT)
 PINMUX(GPIO(EN_PP3300_INA_L), B7, DIO_INPUT)
-PINMUX(GPIO(SYS_RST_L_IN),    M0, DIO_WAKE_FALLING)
+/*
+ * To allow the EC to drive the signal we set sys_rst_l_out as an input here and
+ * only change it to an output when we want to assert the signal.
+ */
 PINMUX(GPIO(SYS_RST_L_OUT),   M0, DIO_INPUT)
-PINMUX(GPIO(CCD_MODE_L),      M1, DIO_INPUT)
+/*
+ * CCD_MODE_L is an input above, but we need to be able to drive it as
+ * an output if Rdd detects the debug cable.  So set DIO_OUTPUT as
+ * well.  It will be tristated initially, because we don't set
+ * GPIO_OUTPUT above.
+ */
+PINMUX(GPIO(CCD_MODE_L),      M1, DIO_INPUT | DIO_OUTPUT)
 PINMUX(GPIO(BATT_PRES_L),     M2, 0)
-PINMUX(GPIO(STRAP0),          A1, DIO_INPUT)
-
+PINMUX(GPIO(I2C_SCL_INA),     B0, DIO_INPUT)
+PINMUX(GPIO(I2C_SDA_INA),     B1, DIO_INPUT)
 /* UARTs */
 PINMUX(FUNC(UART0_TX),        A0, DIO_OUTPUT)	/* Cr50 console */
-PINMUX(FUNC(UART0_RX),        A13, DIO_INPUT | DIO_WAKE_FALLING)
+PINMUX(FUNC(UART0_RX),        A13, DIO_INPUT | DIO_WAKE_LOW)
 /*
  * UART1_TX and UART2_TX are configured in usart.c. They are not set as outputs
  * here in order to avoid interfering with servo. They can be controlled using
@@ -97,12 +173,9 @@ PINMUX(FUNC(UART2_RX),        B6, DIO_INPUT)	/* EC console */
  * driving the cr50 uart TX at the same time as servo is driving those pins may
  * damage both servo and cr50.
  */
-PINMUX(GPIO(AP_ON),           A3, DIO_INPUT)
-PINMUX(GPIO(AP_OFF),          A3, DIO_INPUT)
-PINMUX(GPIO(EC_ON),           B6, DIO_INPUT)
-PINMUX(GPIO(EC_OFF),          B6, DIO_INPUT)
-PINMUX(GPIO(SERVO_UART2_ON),  B5, DIO_INPUT)
-PINMUX(GPIO(SERVO_UART2_OFF), B5, DIO_INPUT)
+PINMUX(GPIO(DETECT_EC),       B6, DIO_INPUT)
+PINMUX(GPIO(EC_TX_CR50_RX),   B6, DIO_INPUT)
+PINMUX(GPIO(DETECT_SERVO),    B5, DIO_INPUT)
 
 /*
  * I2CS pins are bi-directional and would be configured here as shown. However,
@@ -137,4 +210,8 @@ PINMUX(GPIO(SERVO_UART2_OFF), B5, DIO_INPUT)
 PINMUX(GPIO(SPI_MOSI),           A4, DIO_OUTPUT)
 PINMUX(GPIO(SPI_CLK),            A8, DIO_OUTPUT)
 PINMUX(GPIO(SPI_CS_L),          A14, DIO_OUTPUT)
+
+PINMUX(GPIO(DIOB4),              B4, DIO_INPUT)
+
+
 #undef PINMUX

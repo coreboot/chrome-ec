@@ -39,14 +39,6 @@ enum usb_charge_mode {
  */
 int usb_charge_set_mode(int usb_port_id, enum usb_charge_mode mode);
 
-/**
- * Return a bitmask of which USB ports are enabled.
- *
- * If bit (1 << i) is set, port <i> is enabled.  If it is clear, port <i> is
- * in USB_CHARGE_MODE_DISABLED.
- */
-int usb_charge_ports_enabled(void);
-
 #ifdef HAS_TASK_USB_CHG_P0
 #define USB_CHG_EVENT_BC12 TASK_EVENT_CUSTOM(1)
 #define USB_CHG_EVENT_VBUS TASK_EVENT_CUSTOM(2)
@@ -96,4 +88,22 @@ void usb_charger_set_switches(int port, enum usb_switch setting);
  */
 void usb_charger_vbus_change(int port, int vbus_level);
 
+/**
+ * Check if ramping is allowed for given supplier
+ *
+ * @supplier Supplier to check
+ *
+ * @return Ramping is allowed for given supplier
+ */
+int usb_charger_ramp_allowed(int supplier);
+
+/**
+ * Get the maximum current limit that we are allowed to ramp to
+ *
+ * @supplier Active supplier type
+ * @sup_curr Input current limit based on supplier
+ *
+ * @return Maximum current in mA
+ */
+int usb_charger_ramp_max(int supplier, int sup_curr);
 #endif  /* __CROS_EC_USB_CHARGE_H */

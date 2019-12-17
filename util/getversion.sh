@@ -11,7 +11,7 @@
 dc=$'\001'
 
 # Default marker to indicate 'dirty' repositories
-dirty_marker='-dirty'
+dirty_marker='+'
 
 # This function examines the state of the current directory and attempts to
 # extract its version information: the latest tag, if any, how many patches
@@ -28,7 +28,7 @@ dirty_marker='-dirty'
 # "no_version"
 
 get_tree_version() {
-  local dirty
+  local marker
   local ghash
   local numcommits
   local tag
@@ -54,9 +54,11 @@ get_tree_version() {
     git status > /dev/null 2>&1
 
     if [ -n "$(git diff-index --name-only HEAD 2>/dev/null)" ]; then
-      dirty="${dirty_marker}"
+      marker="${dirty_marker}"
+    else
+      marker="-"
     fi
-    vbase="${ver_major}.${ver_branch}.${numcommits}-${ghash}${dirty}"
+    vbase="${ver_major}.${ver_branch}.${numcommits}${marker}${ghash}"
   else
     # Fall back to the VCSID provided by the packaging system if available.
     if ghash=${VCSID##*-}; then
@@ -66,21 +68,22 @@ get_tree_version() {
       vbase="no_version"
     fi
   fi
-  echo "${vbase}${dc}${dirty}"
+  if [[ "${marker}" == "${dirty_marker}" ]]; then
+      echo "${vbase}${dc}${marker}"
+  else
+      echo "${vbase}${dc}"
+  fi
 }
 
 
 IFS="${dc}"
-ver="${CR50_DEV:+DEV/}${BOARD}_"
+ver="${CR50_DEV:+DBG/}${BOARD}_"
 global_dirty=    # set if any of the component repos is 'dirty'.
 dir_list=( . )   # list of component directories, always includes the EC tree
 
 case "${BOARD}" in
   (cr50)
-    # cr50 includes sources from 4 different git trees. Shortened 'dirty' tree
-    # marker allows to keep the summary version string shorter.
-    dirty_marker='+'
-    dir_list+=( private-cr51 ../../third_party/tpm2 ../../third_party/cryptoc )
+    dir_list+=( ../../third_party/tpm2 ../../third_party/cryptoc )
     ;;
 esac
 
@@ -121,6 +124,8 @@ if [ -n "$global_dirty" ]; then
     echo "#define DATE \"$(date '+%F %T')\""
 else
     echo "/* Repo is clean, use the commit date of the last commit */"
-    gitdate=$(git log -1 --format='%ci' HEAD | cut -d ' ' -f '1 2')
+    # If called from an ebuild we won't have a git repo, so redirect stderr
+    # to avoid annoying 'Not a git repository' errors.
+    gitdate=$(git log -1 --format='%ci' HEAD 2>/dev/null | cut -d ' ' -f '1 2')
     echo "#define DATE \"${gitdate}\""
 fi

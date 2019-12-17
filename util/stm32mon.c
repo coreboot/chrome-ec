@@ -27,9 +27,18 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <linux/i2c-dev.h>
+#include <linux/spi/spidev.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+
+/*
+ * Some Ubuntu versions do not export SPI_IOC_WR_MODE32 even though
+ * the kernel shipped on those supports it.
+ */
+#ifndef SPI_IOC_WR_MODE32
+#define SPI_IOC_WR_MODE32		_IOW(SPI_IOC_MAGIC, 5, __u32)
+#endif
 
 /* Monitor command set */
 #define CMD_INIT 0x7f    /* Starts the monitor */
@@ -42,6 +51,7 @@
 #define CMD_WRITEMEM 0x31 /* Writes memory (SRAM or Flash) */
 #define CMD_ERASE    0x43 /* Erases n pages of Flash memory */
 #define CMD_EXTERASE 0x44 /* Erases n pages of Flash memory */
+#define CMD_NO_STRETCH_ERASE 0x45 /* Erases while sending busy frame */
 #define CMD_WP       0x63 /* Enables write protect */
 #define CMD_WU       0x73 /* Disables write protect */
 #define CMD_RP       0x82 /* Enables the read protection */
@@ -49,31 +59,41 @@
 
 #define RESP_NACK    0x1f
 #define RESP_ACK     0x79
+#define RESP_BUSY    0x76
+
+/* SPI Start of Frame */
+#define SOF          0x5A
 
 /* Extended erase special parameters */
 #define ERASE_ALL    0xffff
 #define ERASE_BANK1  0xfffe
 #define ERASE_BANK2  0xfffd
 
+/* Upper bound of fully erasing the flash and rebooting the monitor */
+#define MAX_DELAY_MASS_ERASE_REBOOT 100000 /* us */
+
 /* known STM32 SoC parameters */
 struct stm32_def {
 	uint16_t   id;
 	const char *name;
-	uint32_t flash_start;
 	uint32_t flash_size;
 	uint32_t page_size;
-	uint32_t cmds_len;
+	uint32_t cmds_len[2];
 } chip_defs[] = {
-	{0x416, "STM32L15xxB",   0x08000000, 0x20000, 256, 13},
-	{0x429, "STM32L15xxB-A", 0x08000000, 0x20000, 256, 13},
-	{0x427, "STM32L15xxC",   0x08000000, 0x40000, 256, 13},
-	{0x420, "STM32F100xx",   0x08000000, 0x20000, 1024, 13},
-	{0x410, "STM32F102R8",   0x08000000, 0x10000, 1024, 13},
-	{0x440, "STM32F05x",     0x08000000, 0x10000, 1024, 13},
-	{0x444, "STM32F03x",     0x08000000, 0x08000, 1024, 13},
-	{0x448, "STM32F07xB",    0x08000000, 0x20000, 2048, 13},
-	{0x432, "STM32F37xx",    0x08000000, 0x40000, 2048, 13},
-	{0x442, "STM32F09x",     0x08000000, 0x40000, 2048, 13},
+	{0x416, "STM32L15xxB",   0x20000,   256, {13, 13} },
+	{0x429, "STM32L15xxB-A", 0x20000,   256, {13, 13} },
+	{0x427, "STM32L15xxC",   0x40000,   256, {13, 13} },
+	{0x435, "STM32L44xx",    0x40000,  2048, {13, 13} },
+	{0x420, "STM32F100xx",   0x20000,  1024, {13, 13} },
+	{0x410, "STM32F102R8",   0x10000,  1024, {13, 13} },
+	{0x440, "STM32F05x",     0x10000,  1024, {13, 13} },
+	{0x444, "STM32F03x",     0x08000,  1024, {13, 13} },
+	{0x448, "STM32F07xB",    0x20000,  2048, {13, 13} },
+	{0x432, "STM32F37xx",    0x40000,  2048, {13, 13} },
+	{0x442, "STM32F09x",     0x40000,  2048, {13, 13} },
+	{0x431, "STM32F411",     0x80000, 16384, {13, 19} },
+	{0x441, "STM32F412",     0x80000, 16384, {13, 19} },
+	{0x451, "STM32F76x",    0x200000, 32768, {13, 19} },
 	{ 0 }
 };
 
@@ -82,12 +102,28 @@ struct stm32_def {
 #define PAGE_SIZE 256
 #define INVALID_I2C_ADAPTER -1
 
+enum interface_mode {
+	MODE_SERIAL,
+	MODE_I2C,
+	MODE_SPI,
+} mode = MODE_SERIAL;
+
+/* I2c address the EC is listening depends on the device:
+ * stm32f07xxx: 0x76
+ * stm32f411xx: 0x72
+ */
+#define DEFAULT_I2C_SLAVE_ADDRESS 0x76
+
 /* store custom parameters */
 speed_t baudrate = DEFAULT_BAUDRATE;
 int i2c_adapter = INVALID_I2C_ADAPTER;
+const char *spi_adapter;
+int i2c_slave_address = DEFAULT_I2C_SLAVE_ADDRESS;
+uint8_t boot_loader_version;
 const char *serial_port = "/dev/ttyUSB1";
 const char *input_filename;
 const char *output_filename;
+uint32_t offset = 0x08000000, length = 0;
 
 /* optional command flags */
 enum {
@@ -144,7 +180,7 @@ int open_serial(const char *port)
 	/*
 	 * tcsetattr() returns success if any of the modifications succeed, so
 	 * its return value of zero is not an indication of success, one needs
-	 * to check the result explicitely.
+	 * to check the result explicitly.
 	 */
 	tcsetattr(fd, TCSANOW, &cfg);
 	if (tcgetattr(fd, &cfg)) {
@@ -188,11 +224,7 @@ int open_i2c(const int port)
 		perror("Unable to open i2c adapter");
 		return -1;
 	}
-	/*
-	 * When in I2C mode, the bootloader is listening at address 0x76 (10 bit
-	 * mode), 0x3B (7 bit mode)
-	 */
-	if (ioctl(fd, I2C_SLAVE, 0x3B) < 0) {
+	if (ioctl(fd, I2C_SLAVE, i2c_slave_address >> 1) < 0) {
 		perror("Unable to select proper address");
 		close(fd);
 		return -1;
@@ -201,14 +233,43 @@ int open_i2c(const int port)
 	return fd;
 }
 
+int open_spi(const char *port)
+{
+	int fd;
+	int res;
+	uint32_t mode = SPI_MODE_0;
+	uint8_t bits = 8;
+
+	fd = open(port, O_RDWR);
+	if (fd == -1) {
+		perror("Unable to open SPI controller");
+		return -1;
+	}
+
+	res = ioctl(fd, SPI_IOC_WR_MODE32, &mode);
+	if (res == -1) {
+		perror("Cannot set SPI mode");
+		close(fd);
+		return -1;
+	}
+
+	res = ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+	if (res == -1) {
+		perror("Cannot set SPI bits per word");
+		close(fd);
+		return -1;
+	}
+
+	return fd;
+}
 
 static void discard_input(int fd)
 {
 	uint8_t buffer[64];
 	int res, i;
 
-	/* Skip in i2c mode */
-	if (i2c_adapter != INVALID_I2C_ADAPTER)
+	/* Skip in i2c and spi modes */
+	if (mode != MODE_SERIAL)
 		return;
 
 	/* eat trailing garbage */
@@ -228,6 +289,7 @@ int wait_for_ack(int fd)
 	uint8_t resp;
 	int res;
 	time_t deadline = time(NULL) + DEFAULT_TIMEOUT;
+	uint8_t ack = RESP_ACK;
 
 	while (time(NULL) < deadline) {
 		res = read(fd, &resp, 1);
@@ -236,14 +298,25 @@ int wait_for_ack(int fd)
 			return -EIO;
 		}
 		if (res == 1) {
-			if (resp == RESP_ACK)
+			if (resp == RESP_ACK) {
+				if (mode == MODE_SPI) /* Ack the ACK */
+					if (write(fd, &ack, 1) != 1)
+						return -EIO;
 				return 0;
-			else if (resp == RESP_NACK) {
+			} else if (resp == RESP_NACK) {
 				fprintf(stderr, "NACK\n");
+				if (mode == MODE_SPI) /* Ack the NACK */
+					if (write(fd, &ack, 1) != 1)
+						return -EIO;
 				discard_input(fd);
 				return -EINVAL;
+			} else if (resp == RESP_BUSY) {
+				/* I2C Boot protocol 1.1 */
+				deadline = time(NULL) + DEFAULT_TIMEOUT;
 			} else {
-				fprintf(stderr, "Receive junk: %02x\n", resp);
+				if (mode == MODE_SERIAL)
+					fprintf(stderr, "Receive junk: %02x\n",
+						resp);
 			}
 		}
 	}
@@ -257,10 +330,12 @@ int send_command(int fd, uint8_t cmd, payload_t *loads, int cnt,
 	int res, i, c;
 	payload_t *p;
 	int readcnt = 0;
-	uint8_t cmd_frame[] = { cmd, 0xff ^ cmd }; /* XOR checksum */
+	uint8_t cmd_frame[] = { SOF, cmd, 0xff ^ cmd }; /* XOR checksum */
+	/* only the SPI mode needs the Start Of Frame byte */
+	int cmd_off = mode == MODE_SPI ? 0 : 1;
 
 	/* Send the command index */
-	res = write(fd, cmd_frame, 2);
+	res = write(fd, cmd_frame + cmd_off, sizeof(cmd_frame) - cmd_off);
 	if (res <= 0) {
 		perror("Failed to write command frame");
 		return -1;
@@ -314,6 +389,9 @@ int send_command(int fd, uint8_t cmd, payload_t *loads, int cnt,
 
 	/* Read the answer payload */
 	if (resp) {
+		if (mode == MODE_SPI) /* ignore dummy byte */
+			if (read(fd, resp, 1) < 0)
+				return -1;
 		while ((resp_size > 0) && (res = read(fd, resp, resp_size))) {
 			if (res < 0) {
 				perror("Failed to read payload");
@@ -367,10 +445,10 @@ struct stm32_def *command_get_id(int fd)
 int init_monitor(int fd)
 {
 	int res;
-	uint8_t init = CMD_INIT;
+	uint8_t init = mode == MODE_SPI ? SOF : CMD_INIT;
 
 	/* Skip in i2c mode */
-	if (i2c_adapter != INVALID_I2C_ADAPTER)
+	if (mode == MODE_I2C)
 		return 0;
 
 	printf("Waiting for the monitor startup ...");
@@ -415,9 +493,9 @@ int command_get_commands(int fd, struct stm32_def *chip)
 
 	/*
 	 * For i2c, we have to request the exact amount of bytes we expect.
-	 * TODO(gwendal): Broken on device with Bootloader version 1.1
 	 */
-	res = send_command(fd, CMD_GETCMD, NULL, 0, cmds, chip->cmds_len, 1);
+	res = send_command(fd, CMD_GETCMD, NULL, 0, cmds,
+			   chip->cmds_len[(mode == MODE_I2C ? 1 : 0)], 1);
 	if (res > 0) {
 		if (cmds[0] > sizeof(cmds) - 2) {
 			fprintf(stderr, "invalid GET answer (%02x...)\n",
@@ -426,6 +504,7 @@ int command_get_commands(int fd, struct stm32_def *chip)
 		}
 		printf("Bootloader v%d.%d, commands : ",
 		       cmds[1] >> 4, cmds[1] & 0xf);
+		boot_loader_version = cmds[1];
 
 		erase = command_erase;
 		for (i = 2; i < 2 + cmds[0]; i++) {
@@ -434,7 +513,7 @@ int command_get_commands(int fd, struct stm32_def *chip)
 			printf("%02x ", cmds[i]);
 		}
 
-		if (i2c_adapter != INVALID_I2C_ADAPTER)
+		if (mode == MODE_I2C)
 			erase = command_erase_i2c;
 		printf("\n");
 
@@ -547,6 +626,7 @@ int command_ext_erase(int fd, uint16_t count, uint16_t start)
 int command_erase_i2c(int fd, uint16_t count, uint16_t start)
 {
 	int res;
+	uint8_t erase_cmd;
 	uint16_t count_be = htons(count);
 	payload_t load[2] = {
 		{ 2, (uint8_t *)&count_be},
@@ -576,7 +656,9 @@ int command_erase_i2c(int fd, uint16_t count, uint16_t start)
 		load_cnt = 1;
 	}
 
-	res = send_command(fd, CMD_EXTERASE, load, load_cnt,
+	erase_cmd = (boot_loader_version == 0x10 ? CMD_EXTERASE :
+		     CMD_NO_STRETCH_ERASE);
+	res = send_command(fd, erase_cmd, load, load_cnt,
 			   NULL, 0, 1);
 	if (res >= 0)
 		printf("Flash erased.\n");
@@ -631,7 +713,13 @@ int command_read_unprotect(int fd)
 	}
 	printf("Flash read unprotected.\n");
 
-	/* This commands triggers a reset */
+	/*
+	 * This command triggers a reset.
+	 *
+	 * Wait at least the 'mass-erase' delay, else we could reconnect
+	 * before the actual reset depending on the bootloader.
+	 */
+	usleep(MAX_DELAY_MASS_ERASE_REBOOT);
 	if (init_monitor(fd) < 0) {
 		fprintf(stderr, "Cannot recover after RP reset\n");
 		return -EIO;
@@ -655,7 +743,13 @@ int command_write_unprotect(int fd)
 	}
 	printf("Flash write unprotected.\n");
 
-	/* This commands triggers a reset */
+	/*
+	 * This command triggers a reset.
+	 *
+	 * Wait at least the 'mass-erase' delay, else we could reconnect
+	 * before the actual reset depending on the bootloader.
+	 */
+	usleep(MAX_DELAY_MASS_ERASE_REBOOT);
 	if (init_monitor(fd) < 0) {
 		fprintf(stderr, "Cannot recover after WP reset\n");
 		return -EIO;
@@ -693,8 +787,11 @@ int read_flash(int fd, struct stm32_def *chip, const char *filename,
 {
 	int res;
 	FILE *hnd;
-	uint8_t *buffer = malloc(size);
+	uint8_t *buffer;
 
+	if (!size)
+		size = chip->flash_size;
+	buffer = malloc(size);
 	if (!buffer) {
 		fprintf(stderr, "Cannot allocate %d bytes\n", size);
 		return -ENOMEM;
@@ -707,9 +804,6 @@ int read_flash(int fd, struct stm32_def *chip, const char *filename,
 		return -EIO;
 	}
 
-	if (!size)
-		size = chip->flash_size;
-	offset += chip->flash_start;
 	printf("Reading %d bytes at 0x%08x\n", size, offset);
 	res = command_read_mem(fd, offset, size, buffer);
 	if (res > 0) {
@@ -754,7 +848,6 @@ int write_flash(int fd, struct stm32_def *chip, const char *filename,
 	}
 	fclose(hnd);
 
-	offset += chip->flash_start;
 	printf("Writing %d bytes at 0x%08x\n", res, offset);
 	written = command_write_mem(fd, offset, res, buffer);
 	if (written != res) {
@@ -775,31 +868,42 @@ static const struct option longopts[] = {
 	{"erase", 0, 0, 'e'},
 	{"go", 0, 0, 'g'},
 	{"help", 0, 0, 'h'},
+	{"location", 1, 0, 'l'},
 	{"unprotect", 0, 0, 'u'},
 	{"baudrate", 1, 0, 'b'},
 	{"adapter", 1, 0, 'a'},
+	{"spi", 1, 0, 's'},
+	{"length", 1, 0, 'n'},
+	{"offset", 1, 0, 'o'},
 	{NULL, 0, 0, 0}
 };
 
 void display_usage(char *program)
 {
 	fprintf(stderr,
-		"Usage: %s [-a <i2c_adapter> | [-d <tty>] [-b <baudrate>]]"
-		" [-u] [-e] [-U] [-r <file>] [-w <file>] [-g]\n", program);
+		"Usage: %s [-a <i2c_adapter> [-l address ]] | [-s]"
+		" [-d <tty>] [-b <baudrate>]] [-u] [-e] [-U]"
+		" [-r <file>] [-w <file>] [-o offset] [-l length] [-g]\n",
+		program);
 	fprintf(stderr, "Can access the controller via serial port or i2c\n");
 	fprintf(stderr, "Serial port mode:\n");
 	fprintf(stderr, "--d[evice] <tty> : use <tty> as the serial port\n");
 	fprintf(stderr, "--b[audrate] <baudrate> : set serial port speed "
 			"to <baudrate> bauds\n");
 	fprintf(stderr, "i2c mode:\n");
-	fprintf(stderr, "--a[dapter] <id> : use i2c adapter <id>.\n\n");
+	fprintf(stderr, "--a[dapter] <id> : use i2c adapter <id>.\n");
+	fprintf(stderr, "--l[ocation]  <address> : use address <address>.\n");
+	fprintf(stderr, "--s[pi]: use spi mode.\n");
 	fprintf(stderr, "--u[nprotect] : remove flash write protect\n");
 	fprintf(stderr, "--U[nprotect] : remove flash read protect\n");
 	fprintf(stderr, "--e[rase] : erase all the flash content\n");
 	fprintf(stderr, "--r[ead] <file> : read the flash content and "
 			"write it into <file>\n");
+	fprintf(stderr, "--s[pi] </dev/spi> : use SPI adapter on </dev>.\n");
 	fprintf(stderr, "--w[rite] <file|-> : read <file> or\n\t"
 			"standard input and write it to flash\n");
+	fprintf(stderr, "--o[ffset] : offset to read/write/start from/to\n");
+	fprintf(stderr, "--n[length] : amount to read/write\n");
 	fprintf(stderr, "--g[o] : jump to execute flash entrypoint\n");
 
 	exit(2);
@@ -832,17 +936,22 @@ int parse_parameters(int argc, char **argv)
 	int opt, idx;
 	int flags = 0;
 
-	while ((opt = getopt_long(argc, argv, "a:b:d:eghr:w:uU?",
+	while ((opt = getopt_long(argc, argv, "a:l:b:d:eghn:o:r:s:w:uU?",
 				  longopts, &idx)) != -1) {
 		switch (opt) {
 		case 'a':
 			i2c_adapter = atoi(optarg);
+			mode = MODE_I2C;
+			break;
+		case 'l':
+			i2c_slave_address = strtol(optarg, NULL, 0);
 			break;
 		case 'b':
 			baudrate = parse_baudrate(optarg);
 			break;
 		case 'd':
 			serial_port = optarg;
+			mode = MODE_SERIAL;
 			break;
 		case 'e':
 			flags |= FLAG_ERASE;
@@ -854,8 +963,18 @@ int parse_parameters(int argc, char **argv)
 		case '?':
 			display_usage(argv[0]);
 			break;
+		case 'n':
+			length = strtol(optarg, NULL, 0);
+			break;
+		case 'o':
+			offset = strtol(optarg, NULL, 0);
+			break;
 		case 'r':
 			input_filename = optarg;
+			break;
+		case 's':
+			spi_adapter = optarg;
+			mode = MODE_SPI;
 			break;
 		case 'w':
 			output_filename = optarg;
@@ -881,11 +1000,17 @@ int main(int argc, char **argv)
 	/* Parse command line options */
 	flags = parse_parameters(argc, argv);
 
-	if (i2c_adapter == INVALID_I2C_ADAPTER) {
+	switch (mode) {
+	case MODE_SPI:
+		ser = open_spi(spi_adapter);
+		break;
+	case MODE_I2C:
+		ser = open_i2c(i2c_adapter);
+		break;
+	case MODE_SERIAL:
+	default:
 		/* Open the serial port tty */
 		ser = open_serial(serial_port);
-	} else {
-		ser = open_i2c(i2c_adapter);
 	}
 	if (ser < 0)
 		return 1;
@@ -905,9 +1030,9 @@ int main(int argc, char **argv)
 		command_write_unprotect(ser);
 
 	if (flags & FLAG_ERASE || output_filename) {
-		if (!strncmp("STM32L15", chip->name, 8)) {
-			/* Mass erase is not supported on STM32L15xx */
-			/* command_ext_erase(ser, ERASE_ALL, 0); */
+		if ((!strncmp("STM32L15", chip->name, 8)) ||
+		    (!strncmp("STM32F41", chip->name, 8))) {
+			/* Mass erase is not supported on these chips*/
 			int i, page_count = chip->flash_size / chip->page_size;
 			for (i = 0; i < page_count; i += 128) {
 				int count = MIN(128, page_count - i);
@@ -923,21 +1048,20 @@ int main(int argc, char **argv)
 	}
 
 	if (input_filename) {
-		ret = read_flash(ser, chip, input_filename,
-				 0, chip->flash_size);
+		ret = read_flash(ser, chip, input_filename, offset, length);
 		if (ret)
 			goto terminate;
 	}
 
 	if (output_filename) {
-		ret = write_flash(ser, chip, output_filename, 0);
+		ret = write_flash(ser, chip, output_filename, offset);
 		if (ret)
 			goto terminate;
 	}
 
 	/* Run the program from flash */
 	if (flags & FLAG_GO)
-		command_go(ser, chip->flash_start);
+		command_go(ser, offset);
 
 	/* Normal exit */
 	ret = 0;

@@ -3,17 +3,20 @@
  * found in the LICENSE file.
  */
 
-#include "config.h"
+#include "board_id.h"
 #include "console.h"
 #include "cpu.h"
 #include "cpu.h"
 #include "flash.h"
+#include "flash_info.h"
 #include "printf.h"
 #include "registers.h"
-#include "signed_header.h"
 #include "system.h"
+#include "system_chip.h"
 #include "task.h"
 #include "version.h"
+
+static uint8_t pinhold_on_reset;
 
 static void check_reset_cause(void)
 {
@@ -33,6 +36,8 @@ static void check_reset_cause(void)
 	if (g_rstsrc & GC_PMU_RSTSRC_EXIT_MASK) {
 		/* This register is cleared by reading it */
 		uint32_t g_exitpd = GR_PMU_EXITPD_SRC;
+
+		flags |= RESET_FLAG_HIBERNATE;
 
 		if (g_exitpd & GC_PMU_EXITPD_SRC_PIN_PD_EXIT_MASK)
 			flags |= RESET_FLAG_WAKE_PIN;
@@ -81,20 +86,43 @@ void system_pre_init(void)
 	 * no effect.
 	 */
 	GREG32(GLOBALSEC, FLASH_REGION0_CTRL_CFG_EN) = 0;
+}
 
-#ifdef BOARD_CR50
-	system_init_board_properties();
-#endif
+void system_pinhold_disengage(void)
+{
+	GREG32(PINMUX, HOLD) = 0;
+}
+
+void system_pinhold_on_reset_enable(void)
+{
+	pinhold_on_reset = 1;
+}
+
+void system_pinhold_on_reset_disable(void)
+{
+	pinhold_on_reset = 0;
 }
 
 void system_reset(int flags)
 {
-	/* TODO: Do we need to handle SYSTEM_RESET_PRESERVE_FLAGS? Doubtful. */
-	/* TODO(crosbug.com/p/47289): handle RESET_FLAG_WATCHDOG */
-
 	/* Disable interrupts to avoid task swaps during reboot */
 	interrupt_disable();
 
+#if defined(CHIP_FAMILY_CR50)
+	/*
+	 * Decrement the retry counter on manually triggered reboots.  We were
+	 * able to process the console command, therefore we're probably okay.
+	 */
+	if (flags & SYSTEM_RESET_MANUALLY_TRIGGERED)
+		system_decrement_retry_counter();
+
+	/*
+	 * On CR50 we want every reset be hard reset, causing the entire
+	 * chromebook to reboot: we don't want the TPM reset while the AP
+	 * stays up.
+	 */
+	GR_PMU_GLOBAL_RESET = GC_PMU_GLOBAL_RESET_KEY;
+#else
 	if (flags & SYSTEM_RESET_HARD) {
 		/* Reset the full microcontroller */
 		GR_PMU_GLOBAL_RESET = GC_PMU_GLOBAL_RESET_KEY;
@@ -103,6 +131,9 @@ void system_reset(int flags)
 		 * permission registers to be reset to their initial
 		 * state.  To accomplish this, first register a wakeup
 		 * timer and then enter lower power mode. */
+
+		if (pinhold_on_reset)
+			GREG32(PINMUX, HOLD) = 1;
 
 		/* Low speed timers continue to run in low power mode. */
 		GREG32(TIMELS, TIMER1_CONTROL) = 0x1;
@@ -124,9 +155,11 @@ void system_reset(int flags)
 			GC_PMU_LOW_POWER_DIS_START_LSB,
 			1);
 	}
+#endif  /* ^^^^^^^ CHIP_FAMILY_CR50 Not defined */
 
 	/* Wait for reboot; should never return  */
-	asm("wfi");
+	while (1)
+		asm("wfi");
 }
 
 const char *system_get_chip_vendor(void)
@@ -139,10 +172,41 @@ const char *system_get_chip_name(void)
 	return "cr50";
 }
 
-const char *system_get_chip_revision(void)
+/*
+ * There are three versions of B2 H1s outhere in the wild so far: chromebook,
+ * poppy and detachable. The following registers are different in those
+ * three versions in the following way:
+ *
+ *   register                chromebook          poppy     detachable
+ *--------------------------------------------------------------------
+ * RBOX_KEY_COMBO0_VAL          0xc0             0x80        0xc0
+ * RBOX_POL_KEY1_IN             0x01             0x00        0x00
+ * RBOX_KEY_COMBO0_HOLD         0x00             0x00        0x59
+ */
+
+static const struct {
+	uint32_t  register_values;
+	const char *revision_str;
+} rev_map[] = {
+	{0xc00100, "B2-C"},	/* Chromebook. */
+	{0x800000, "B2-P"},	/* Poppy (a one off actually). */
+	{0xc00059, "B2-D"},	/* Detachable. */
+};
+
+/* Return a value which allows to identify the fuse setting of this chip. */
+static uint32_t get_fuse_set_id(void)
+{
+	return  (GREAD_FIELD(FUSE, RBOX_KEY_COMBO0_VAL, VAL) << 16) |
+		(GREAD_FIELD(FUSE, RBOX_POL_KEY1_IN, VAL) << 8) |
+		GREAD_FIELD(FUSE, RBOX_KEY_COMBO0_HOLD, VAL);
+}
+
+static const char *get_revision_str(void)
 {
 	int build_date = GR_SWDP_BUILD_DATE;
 	int build_time = GR_SWDP_BUILD_TIME;
+	uint32_t register_vals;
+	int i;
 
 	if ((build_date != GC_SWDP_BUILD_DATE_DEFAULT) ||
 	    (build_time != GC_SWDP_BUILD_TIME_DEFAULT))
@@ -151,20 +215,62 @@ const char *system_get_chip_revision(void)
 	switch (GREAD_FIELD(PMU, CHIP_ID, REVISION)) {
 	case 3:
 		return "B1";
+
 	case 4:
-		return "B2";
+		register_vals = get_fuse_set_id();
+		for (i = 0; i < ARRAY_SIZE(rev_map); i++)
+			if (rev_map[i].register_values == register_vals)
+				return rev_map[i].revision_str;
+
+		return "B2-?";
 	}
 
 	return "B?";
 }
 
-/* TODO(crosbug.com/p/33822): Where can we store stuff persistently? */
-int system_get_vbnvcontext(uint8_t *block)
+const char *system_get_chip_revision(void)
+{
+	static const char *revision_str;
+
+	if (!revision_str)
+		revision_str = get_revision_str();
+
+	return revision_str;
+}
+
+int system_get_chip_unique_id(uint8_t **id)
+{
+	static uint32_t cached[8];
+
+	if (!cached[3]) { /* generate it if it doesn't exist yet */
+		const struct SignedHeader *ro_hdr = (const void *)
+			get_program_memory_addr(system_get_ro_image_copy());
+		const char *rev = get_revision_str();
+
+		cached[0] = ro_hdr->keyid;
+		cached[1] = GREG32(FUSE, DEV_ID0);
+		cached[2] = GREG32(FUSE, DEV_ID1);
+		strncpy((char *)&cached[3], rev, sizeof(cached[3]));
+	}
+	*id = (uint8_t *)cached;
+	return sizeof(cached);
+}
+
+int system_battery_cutoff_support_required(void)
+{
+	switch (get_fuse_set_id())
+	case 0xc00059:
+		return 1;
+
+	return 0;
+}
+
+int system_get_bbram(enum system_bbram_idx idx, uint8_t *value)
 {
 	return 0;
 }
 
-int system_set_vbnvcontext(const uint8_t *block)
+int system_set_bbram(enum system_bbram_idx idx, uint8_t value)
 {
 	return 0;
 }
@@ -187,6 +293,19 @@ enum system_image_copy_t system_get_ro_image_copy(void)
 }
 
 /*
+ * TODO(crbug.com/698882): Remove support for version_struct_deprecated once
+ * we no longer care about supporting legacy RO.
+ */
+struct version_struct_deprecated {
+	uint32_t cookie1;
+	char version[32];
+	uint32_t cookie2;
+};
+
+#define CROS_EC_IMAGE_DATA_COOKIE1_DEPRECATED 0xce112233
+#define CROS_EC_IMAGE_DATA_COOKIE2_DEPRECATED 0xce445566
+
+/*
  * The RW images contain version strings. The RO images don't, so we'll make
  * some here.
  */
@@ -195,7 +314,10 @@ static char vers_str[MAX_RO_VER_LEN];
 
 const char *system_get_version(enum system_image_copy_t copy)
 {
-	const struct version_struct *v;
+	const struct image_data *data;
+	const struct version_struct_deprecated *data_deprecated;
+	const char *version;
+
 	const struct SignedHeader *h;
 	enum system_image_copy_t this_copy;
 	uintptr_t vaddr, delta;
@@ -226,7 +348,7 @@ const char *system_get_version(enum system_image_copy_t copy)
 		if (copy == this_copy) {
 			snprintf(vers_str, sizeof(vers_str), "%d.%d.%d/%s",
 				 h->epoch_, h->major_, h->minor_,
-				 version_data.version);
+				 current_image_data.version);
 			return vers_str;
 		}
 
@@ -235,26 +357,42 @@ const char *system_get_version(enum system_image_copy_t copy)
 		 * puts the version string right after the reset vectors, so
 		 * it's at the same relative offset. Measure that offset here.
 		 */
-		delta = (uintptr_t)&version_data - vaddr;
+		delta = (uintptr_t)&current_image_data - vaddr;
 
 		/* Now look at that offset in the requested image */
 		vaddr = get_program_memory_addr(copy);
 		if (vaddr == INVALID_ADDR)
 			break;
 		h = (const struct SignedHeader *)vaddr;
+		/* Corrupted header's magic is set to zero. */
+		if (!h->magic)
+			break;
+
 		vaddr += delta;
-		v = (const struct version_struct *)vaddr;
+		data = (const struct image_data *)vaddr;
+		data_deprecated = (const struct version_struct_deprecated *)
+				  vaddr;
 
 		/*
 		 * Make sure the version struct cookies match before returning
 		 * the version string.
 		 */
-		if (v->cookie1 == version_data.cookie1 &&
-		    v->cookie2 == version_data.cookie2) {
-			snprintf(vers_str, sizeof(vers_str), "%d.%d.%d/%s",
-				 h->epoch_, h->major_, h->minor_, v->version);
-			return vers_str;
-		}
+		if (data->cookie1 == current_image_data.cookie1 &&
+		    data->cookie2 == current_image_data.cookie2)
+			version = data->version;
+		/* Check for old / deprecated structure. */
+		else if (data_deprecated->cookie1 ==
+			 CROS_EC_IMAGE_DATA_COOKIE1_DEPRECATED &&
+			 data_deprecated->cookie2 ==
+			 CROS_EC_IMAGE_DATA_COOKIE2_DEPRECATED)
+			version = data_deprecated->version;
+		else
+			break;
+
+		snprintf(vers_str, sizeof(vers_str), "%d.%d.%d/%s",
+			 h->epoch_, h->major_, h->minor_, version);
+		return vers_str;
+
 	default:
 		break;
 	}
@@ -262,8 +400,7 @@ const char *system_get_version(enum system_image_copy_t copy)
 	return "Error";
 }
 
-#ifdef BOARD_CR50
-
+#if defined(CHIP_FAMILY_CR50)
 void system_clear_retry_counter(void)
 {
 	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 1);
@@ -271,8 +408,19 @@ void system_clear_retry_counter(void)
 	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 0);
 }
 
+void system_decrement_retry_counter(void)
+{
+	uint32_t val = GREG32(PMU, LONG_LIFE_SCRATCH0);
+
+	if (val != 0) {
+		GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 1);
+		GREG32(PMU, LONG_LIFE_SCRATCH0) = val - 1;
+		GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 0);
+	}
+}
+
 /*
- * Check wich of the two cr50 RW images is newer, return true if the first
+ * Check which of the two cr50 RW images is newer, return true if the first
  * image is no older than the second one.
  *
  * Note that RO and RW images use the same header structure. When deciding
@@ -301,7 +449,7 @@ static int a_is_newer_than_b(const struct SignedHeader *a,
  * apparently failing image from being considered as a candidate to load and
  * run on the following reboots.
  */
-static int corrupt_other_header(volatile struct SignedHeader *header)
+static int corrupt_header(volatile struct SignedHeader *header)
 {
 	int rv;
 	const char zero[4] = {}; /* value to write to magic. */
@@ -335,18 +483,14 @@ static int corrupt_other_header(volatile struct SignedHeader *header)
  */
 #define RW_BOOT_MAX_RETRY_COUNT 5
 
-int system_process_retry_counter(void)
+/*
+ * Check if the current running image is newer. Set the passed in pointer, if
+ * supplied, to point to the newer image in case the running image is the
+ * older one.
+ */
+static int current_image_is_newer(struct SignedHeader **newer_image)
 {
-	unsigned retry_counter;
 	struct SignedHeader *me, *other;
-
-	retry_counter = GREG32(PMU, LONG_LIFE_SCRATCH0);
-	system_clear_retry_counter();
-
-	ccprintf("%s:retry counter %d\n", __func__, retry_counter);
-
-	if (retry_counter <= RW_BOOT_MAX_RETRY_COUNT)
-		return EC_SUCCESS;
 
 	if (system_get_image_copy() == SYSTEM_IMAGE_RW) {
 		me = (struct SignedHeader *)
@@ -360,17 +504,50 @@ int system_process_retry_counter(void)
 			get_program_memory_addr(SYSTEM_IMAGE_RW);
 	}
 
-	if (a_is_newer_than_b(me, other)) {
+	if (a_is_newer_than_b(me, other))
+		return 1;
+
+	if (newer_image)
+		*newer_image = other;
+	return 0;
+}
+
+int system_rollback_detected(void)
+{
+	return !current_image_is_newer(NULL);
+}
+
+int system_process_retry_counter(void)
+{
+	unsigned retry_counter;
+	struct SignedHeader *newer_image;
+
+	retry_counter = GREG32(PMU, LONG_LIFE_SCRATCH0);
+	system_clear_retry_counter();
+
+	ccprintf("%s:retry counter %d\n", __func__, retry_counter);
+
+	if (retry_counter <= RW_BOOT_MAX_RETRY_COUNT)
+		return EC_SUCCESS;
+
+	if (current_image_is_newer(&newer_image)) {
 		ccprintf("%s: "
 			 "this is odd, I am newer, but retry counter was %d\n",
 			 __func__, retry_counter);
 		return EC_SUCCESS;
 	}
 	/*
-	 * let's corrupt the "other" guy so that the next restart is happening
-	 * straight into this version.
+	 * let's corrupt the newer image so that the next restart is happening
+	 * straight into the current version.
 	 */
-	return corrupt_other_header(other);
+	return corrupt_header(newer_image);
+}
+
+void system_ensure_rollback(void)
+{
+	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 1);
+	GREG32(PMU, LONG_LIFE_SCRATCH0) = RW_BOOT_MAX_RETRY_COUNT + 1;
+	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG0, 0);
 }
 
 int system_rolling_reboot_suspected(void)
@@ -390,16 +567,6 @@ int system_rolling_reboot_suspected(void)
 }
 #endif
 
-uint32_t system_get_board_properties(void)
-{
-	uint32_t properties = 0;
-
-#ifdef BOARD_CR50
-	properties = system_board_properties_callback();
-#endif
-	return properties;
-}
-
 /* Prepend header version to the current image's build info. */
 const char *system_get_build_info(void)
 {
@@ -417,3 +584,201 @@ const char *system_get_build_info(void)
 
 	return combined_build_info;
 }
+
+/**
+ * Modify info1 RW rollback mask to match the passed in header(s).
+ *
+ * If both headers' addressses are passed in, the INFO1 rollback mask field is
+ * erased in case both headers have a zero in the appropriate bit. If only one
+ * header address is passed (the other one is set to zero), only the valid
+ * header is considered when updating INFO1.
+ */
+static void update_rollback_mask(const struct SignedHeader *header_a,
+				 const struct SignedHeader *header_b)
+{
+#ifndef CR50_DEV
+	int updated_words_count = 0;
+	int i;
+	int write_enabled = 0;
+	uint32_t header_mask = 0;
+
+	/*
+	 * Make sure INFO1 RW map space is readable.
+	 */
+	if (flash_info_read_enable(INFO_RW_MAP_OFFSET, INFO_RW_MAP_SIZE) !=
+	    EC_SUCCESS) {
+		ccprintf("%s: failed to enable read access to info\n",
+			 __func__);
+		return;
+	}
+
+	/*
+	 * The infomap field in the image header has a matching space in the
+	 * flash INFO1 section.
+	 *
+	 * The INFO1 space words which map into zeroed bits in the infomap
+	 * header are ignored by the RO.
+	 *
+	 * Let's make sure that those words in the INFO1 space are erased.
+	 * This in turn makes sure that attempts to load earlier RW images
+	 * (where those bits in the header are not zeroed) will fail, thus
+	 * ensuring rollback protection.
+	 */
+	/* For each bit in the header infomap field of the running image. */
+	for (i = 0; i < INFO_MAX; i++) {
+		uint32_t bit;
+		uint32_t word;
+		int byte_offset;
+
+		/* Read the next infomap word when done with the current one. */
+		if (!(i % 32)) {
+			/*
+			 * Not to shoot ourselves in the foot, let's zero only
+			 * those words in the INFO1 space which are set to
+			 * zero in all headers we are supposed to look at.
+			 */
+			header_mask = 0;
+
+			if (header_a)
+				header_mask |= header_a->infomap[i/32];
+
+			if (header_b)
+				header_mask |= header_b->infomap[i/32];
+		}
+
+		/* Get the next bit value. */
+		bit = !!(header_mask & (1 << (i % 32)));
+		if (bit) {
+			/*
+			 * By convention zeroed bits are expected to be
+			 * adjacent at the LSB of the info mask field. Stop as
+			 * soon as a non-zeroed bit is encountered.
+			 */
+			ccprintf("%s: bailing out at bit %d\n", __func__, i);
+			break;
+		}
+
+		byte_offset = (INFO_MAX + i) * sizeof(uint32_t);
+
+		if (flash_physical_info_read_word(byte_offset, &word) !=
+		    EC_SUCCESS) {
+			ccprintf("failed to read info mask word %d\n", i);
+			continue;
+		}
+
+		if (!word)
+			continue; /* This word has been zeroed already. */
+
+		if (!write_enabled) {
+			if (flash_info_write_enable(
+				INFO_RW_MAP_OFFSET,
+				INFO_RW_MAP_SIZE) != EC_SUCCESS) {
+				ccprintf("%s: failed to enable write access to"
+					 " info\n", __func__);
+				return;
+			}
+			write_enabled = 1;
+		}
+
+		word = 0;
+		if (flash_info_physical_write(byte_offset,
+					      sizeof(word),
+					      (const char *) &word) !=
+		    EC_SUCCESS) {
+			ccprintf("failed to write info mask word %d\n", i);
+			continue;
+		}
+		updated_words_count++;
+
+	}
+	if (!write_enabled)
+		return;
+
+	flash_info_write_disable();
+	ccprintf("updated %d info map words\n", updated_words_count);
+#endif  /*  CR50_DEV ^^^^^^^^ NOT defined. */
+}
+
+void system_update_rollback_mask_with_active_img(void)
+{
+	update_rollback_mask((const struct SignedHeader *)
+			     get_program_memory_addr(system_get_image_copy()),
+			     0);
+}
+
+void system_update_rollback_mask_with_both_imgs(void)
+{
+	update_rollback_mask((const struct SignedHeader *)
+			     get_program_memory_addr(SYSTEM_IMAGE_RW),
+			     (const struct SignedHeader *)
+			     get_program_memory_addr(SYSTEM_IMAGE_RW_B));
+}
+
+void system_get_rollback_bits(char *value, size_t value_size)
+{
+	int info_count;
+	int i;
+	struct {
+		int count;
+		const struct SignedHeader *h;
+	} headers[] = {
+		{.h = (const struct SignedHeader *)
+		 get_program_memory_addr(SYSTEM_IMAGE_RW)},
+
+		{.h = (const struct SignedHeader *)
+		 get_program_memory_addr(SYSTEM_IMAGE_RW_B)},
+	};
+
+	flash_info_read_enable(INFO_RW_MAP_OFFSET, INFO_RW_MAP_SIZE);
+	for (i = 0; i < INFO_MAX; i++) {
+		uint32_t w;
+
+		flash_physical_info_read_word(INFO_RW_MAP_OFFSET +
+					      i * sizeof(uint32_t),
+					      &w);
+		if (w)
+			break;
+	}
+	info_count = i;
+
+	for (i = 0; i < ARRAY_SIZE(headers); i++) {
+		int j;
+
+		for (j = 0; j < INFO_MAX; j++)
+			if (headers[i].h->infomap[j/32] & (1 << (j%32)))
+				break;
+		headers[i].count = j;
+	}
+
+	snprintf(value, value_size, "%d/%d/%d", info_count,
+		 headers[0].count, headers[1].count);
+}
+
+#ifdef CONFIG_EXTENDED_VERSION_INFO
+
+void system_print_extended_version_info(void)
+{
+	int i;
+	struct board_id bid;
+	enum system_image_copy_t rw_images[] = {
+		SYSTEM_IMAGE_RW, SYSTEM_IMAGE_RW_B
+	};
+
+	if (read_board_id(&bid) != EC_SUCCESS) {
+		ccprintf("Board ID read failure!\n");
+		return;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(rw_images); i++) {
+		struct SignedHeader *ss = (struct SignedHeader *)
+			get_program_memory_addr(rw_images[i]);
+
+		ccprintf("BID %c:   %08x:%08x:%08x %s\n", 'A' + i,
+			 ss->board_id_type ^ SIGNED_HEADER_PADDING,
+			 ss->board_id_type_mask ^ SIGNED_HEADER_PADDING,
+			 ss->board_id_flags ^ SIGNED_HEADER_PADDING,
+			 check_board_id_vs_header(&bid, ss) ? " No" : "Yes");
+	}
+}
+
+#endif /* CONFIG_EXTENDED_VERSION_INFO */

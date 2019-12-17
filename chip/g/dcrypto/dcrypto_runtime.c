@@ -10,12 +10,20 @@
 #define DMEM_NUM_WORDS 1024
 #define IMEM_NUM_WORDS 1024
 
-static task_id_t my_task_id;
+static struct mutex dcrypto_mutex;
+static volatile task_id_t my_task_id;
+static int dcrypto_is_initialized;
 
-void dcrypto_init(void)
+void dcrypto_init_and_lock(void)
 {
 	int i;
 	volatile uint32_t *ptr;
+
+	mutex_lock(&dcrypto_mutex);
+	my_task_id = task_get_current();
+
+	if (dcrypto_is_initialized)
+		return;
 
 	/* Enable PMU. */
 	REG_WRITE_MLV(GR_PMU_PERICLKSET0, GC_PMU_PERICLKSET0_DCRYPTO0_CLK_MASK,
@@ -25,9 +33,12 @@ void dcrypto_init(void)
 	REG_WRITE_MLV(GR_PMU_RST0, GC_PMU_RST0_DCRYPTO0_MASK,
 		GC_PMU_RST0_DCRYPTO0_LSB, 0);
 
-	/* Turn off random nops (for accurate measuring here). */
-	/* TODO(ngm): enable for production. */
-	GREG32(CRYPTO, RAND_STALL_CTL) = 0;
+	/* Turn off random nops (which are enabled by default). */
+	GWRITE_FIELD(CRYPTO, RAND_STALL_CTL, STALL_EN, 0);
+	/* Configure random nop percentage at 6%. */
+	GWRITE_FIELD(CRYPTO, RAND_STALL_CTL, FREQ, 3);
+	/* Now turn on random nops. */
+	GWRITE_FIELD(CRYPTO, RAND_STALL_CTL, STALL_EN, 1);
 
 	/* Initialize DMEM. */
 	ptr = GREG32_ADDR(CRYPTO, DMEM_DUMMY);
@@ -42,15 +53,25 @@ void dcrypto_init(void)
 	GREG32(CRYPTO, INT_STATE) = -1;   /* Reset all the status bits. */
 	GREG32(CRYPTO, INT_ENABLE) = -1;  /* Enable all status bits. */
 
-	my_task_id = task_get_current();
 	task_enable_irq(GC_IRQNUM_CRYPTO0_HOST_CMD_DONE_INT);
 
 	/* Reset. */
 	GREG32(CRYPTO, CONTROL) = 1;
 	GREG32(CRYPTO, CONTROL) = 0;
+
+	dcrypto_is_initialized = 1;
+}
+
+void dcrypto_unlock(void)
+{
+	mutex_unlock(&dcrypto_mutex);
 }
 
 #define DCRYPTO_CALL_TIMEOUT_US  (700 * 1000)
+/*
+ * When running on Cr50 this event belongs in the TPM task event space. Make
+ * sure there is no collision with events defined in ./common/tpm_regsters.c.
+ */
 #define TASK_EVENT_DCRYPTO_DONE  TASK_EVENT_CUSTOM(1)
 
 uint32_t dcrypto_call(uint32_t adr)
@@ -65,13 +86,13 @@ uint32_t dcrypto_call(uint32_t adr)
 	GREG32(CRYPTO, HOST_CMD) = 0x08000000 + adr; /* Call imem:adr. */
 
 	event = task_wait_event_mask(TASK_EVENT_DCRYPTO_DONE,
-				DCRYPTO_CALL_TIMEOUT_US);
+				     DCRYPTO_CALL_TIMEOUT_US);
 	/* TODO(ngm): switch return value to an enum. */
 	switch (event) {
 	case TASK_EVENT_DCRYPTO_DONE:
-		return 1;
-	default:
 		return 0;
+	default:
+		return 1;
 	}
 }
 
@@ -90,8 +111,11 @@ void dcrypto_imem_load(size_t offset, const uint32_t *opcodes,
 	volatile uint32_t *ptr = GREG32_ADDR(CRYPTO, IMEM_DUMMY);
 
 	ptr += offset;
-	for (i = 0; i < n_opcodes; ++i)
-		ptr[i] = opcodes[i];
+	/* Check first word and copy all only if different. */
+	if (ptr[0] != opcodes[0]) {
+		for (i = 0; i < n_opcodes; ++i)
+			ptr[i] = opcodes[i];
+	}
 }
 
 void dcrypto_dmem_load(size_t offset, const void *words, size_t n_words)

@@ -313,7 +313,7 @@ static int test_overwrite_other(void)
 	uint32_t offset, size;
 
 	/* Test that we can overwrite the other image */
-	if (system_get_image_copy() == SYSTEM_IMAGE_RW) {
+	if (system_is_in_rw()) {
 		offset = CONFIG_RO_STORAGE_OFF;
 		size = CONFIG_RO_SIZE;
 	} else {
@@ -364,11 +364,14 @@ static int test_region_info(void)
 	VERIFY_REGION_INFO(EC_FLASH_REGION_RO,
 			   CONFIG_EC_PROTECTED_STORAGE_OFF +
 			   CONFIG_RO_STORAGE_OFF, CONFIG_RO_SIZE);
-	VERIFY_REGION_INFO(EC_FLASH_REGION_RW,
+	VERIFY_REGION_INFO(EC_FLASH_REGION_ACTIVE,
 			   CONFIG_EC_WRITABLE_STORAGE_OFF +
 			   CONFIG_RW_STORAGE_OFF, CONFIG_RW_SIZE);
 	VERIFY_REGION_INFO(EC_FLASH_REGION_WP_RO,
 			   CONFIG_WP_STORAGE_OFF, CONFIG_WP_STORAGE_SIZE);
+	VERIFY_REGION_INFO(EC_FLASH_REGION_UPDATE,
+			   CONFIG_EC_WRITABLE_STORAGE_OFF +
+			   CONFIG_RW_STORAGE_OFF, CONFIG_RW_SIZE);
 
 	return EC_SUCCESS;
 }

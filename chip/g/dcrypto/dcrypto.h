@@ -9,10 +9,13 @@
 #ifndef __EC_CHIP_G_DCRYPTO_DCRYPTO_H
 #define __EC_CHIP_G_DCRYPTO_DCRYPTO_H
 
-/* TODO(vbendeb) don't forget to disable this for prod builds. */
+#if defined(CR50_DEV) && (CR50_DEV) > 1
 #define CRYPTO_TEST_SETUP
+#endif
 
 #include "internal.h"
+
+#include "crypto_api.h"
 
 #include <stddef.h>
 
@@ -32,12 +35,17 @@ enum encrypt_mode {
 
 enum hashing_mode {
 	HASH_SHA1 = 0,
-	HASH_SHA256 = 1
+	HASH_SHA256 = 1,
+	HASH_SHA384 = 2,  /* Only supported for PKCS#1 signing */
+	HASH_SHA512 = 3,  /* Only supported for PKCS#1 signing */
+	HASH_NULL = 4  /* Only supported for PKCS#1 signing */
 };
 
 /*
  * AES implementation, based on a hardware AES block.
  */
+#define AES256_BLOCK_CIPHER_KEY_SIZE       32
+
 int DCRYPTO_aes_init(const uint8_t *key, uint32_t key_len, const uint8_t *iv,
 		enum cipher_mode c_mode, enum encrypt_mode e_mode);
 int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out);
@@ -46,6 +54,48 @@ void DCRYPTO_aes_write_iv(const uint8_t *iv);
 void DCRYPTO_aes_read_iv(uint8_t *iv);
 int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 		const uint8_t *iv, const uint8_t *in, size_t in_len);
+
+/* AES-GCM-128 */
+struct GCM_CTX {
+	union {
+		uint32_t d[4];
+		uint8_t c[16];
+	} block, Ej0;
+
+	uint64_t aad_len;
+	uint64_t count;
+	size_t remainder;
+};
+
+/* Initialize the GCM context structure. */
+void DCRYPTO_gcm_init(struct GCM_CTX *ctx, const uint8_t *key,
+		const uint8_t *iv, size_t iv_len);
+/* Additional authentication data to include in the tag calculation. */
+void DCRYPTO_gcm_aad(struct GCM_CTX *ctx, const uint8_t *aad_data, size_t len);
+/* Encrypt & decrypt return the number of bytes written to out
+ * (always an integral multiple of 16), or -1 on error.  These functions
+ * may be called repeatedly with incremental data.
+ *
+ * NOTE: if in_len is not a integral multiple of 16, then out_len must
+ * be atleast in_len - (in_len % 16) + 16 bytes.
+ */
+int DCRYPTO_gcm_encrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
+			const uint8_t *in, size_t in_len);
+int DCRYPTO_gcm_decrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
+			const uint8_t *in, size_t in_len);
+/* Encrypt & decrypt a partial final block, if any.  These functions
+ * return the number of bytes written to out (<= 15), or -1 on error.
+ */
+int DCRYPTO_gcm_encrypt_final(struct GCM_CTX *ctx,
+			uint8_t *out, size_t out_len);
+int DCRYPTO_gcm_decrypt_final(struct GCM_CTX *ctx,
+			uint8_t *out, size_t out_len);
+/* Compute the tag over AAD + encrypt or decrypt data, and return the
+ * number of bytes written to tag.  Returns -1 on error.
+ */
+int DCRYPTO_gcm_tag(struct GCM_CTX *ctx, uint8_t *tag, size_t tag_len);
+/* Cleanup secrets. */
+void DCRYPTO_gcm_finish(struct GCM_CTX *ctx);
 
 /*
  * SHA implementation.  This abstraction is backed by either a
@@ -58,11 +108,16 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
  */
 void DCRYPTO_SHA1_init(SHA_CTX *ctx, uint32_t sw_required);
 void DCRYPTO_SHA256_init(LITE_SHA256_CTX *ctx, uint32_t sw_required);
+void DCRYPTO_SHA384_init(LITE_SHA384_CTX *ctx);
+void DCRYPTO_SHA512_init(LITE_SHA512_CTX *ctx);
 const uint8_t *DCRYPTO_SHA1_hash(const void *data, uint32_t n,
 				uint8_t *digest);
 const uint8_t *DCRYPTO_SHA256_hash(const void *data, uint32_t n,
-				uint8_t *digest);
-
+				   uint8_t *digest);
+const uint8_t *DCRYPTO_SHA384_hash(const void *data, uint32_t n,
+				   uint8_t *digest);
+const uint8_t *DCRYPTO_SHA512_hash(const void *data, uint32_t n,
+				   uint8_t *digest);
 /*
  *  HMAC.
  */
@@ -79,8 +134,17 @@ void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
  *  RSA.
  */
 
-/* Largest supported key size, 2048-bits. */
-#define RSA_MAX_BYTES   256
+/* Largest supported key size for signing / encryption: 2048-bits.
+ * Verification is a special case and supports 4096-bits (signing /
+ * decryption could also support 4k-RSA, but is disabled since support
+ * is not required, and enabling support would result in increased
+ * stack usage for all key sizes.)
+ */
+#define RSA_BYTES_2K    256
+#define RSA_BYTES_4K    512
+#define RSA_WORDS_2K    (RSA_BYTES_2K / sizeof(uint32_t))
+#define RSA_WORDS_4K    (RSA_BYTES_4K / sizeof(uint32_t))
+#define RSA_MAX_BYTES   RSA_BYTES_2K
 #define RSA_MAX_WORDS   (RSA_MAX_BYTES / sizeof(uint32_t))
 #define RSA_F4          65537
 
@@ -135,8 +199,13 @@ int DCRYPTO_p256_base_point_mul(p256_int *out_x, p256_int *out_y,
 int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
 			const p256_int *n, const p256_int *in_x,
 			const p256_int *in_y);
+/*
+ * Produce uniform private key from seed.
+ * If x or y is NULL, the public key part is not computed.
+ * Returns !0 on success.
+ */
 int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
-				const uint8_t key_bytes[P256_NBYTES]);
+				const uint8_t bytes[P256_NBYTES]);
 /* P256 based integration encryption (DH+AES128+SHA256). */
 /* Authenticated data may be provided, where the first auth_data_len
  * bytes of in will be authenticated but not encrypted. */
@@ -169,11 +238,84 @@ int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p);
 void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
 void DCRYPTO_bn_mul(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a,
 		const struct LITE_BIGNUM *b);
+int DCRYPTO_bn_div(struct LITE_BIGNUM *quotient, struct LITE_BIGNUM *remainder,
+		const struct LITE_BIGNUM *input,
+		const struct LITE_BIGNUM *divisor);
+
+/*
+ * ASN.1 DER
+ */
+size_t DCRYPTO_asn1_sigp(uint8_t *buf, const p256_int *r, const p256_int *s);
+size_t DCRYPTO_asn1_pubp(uint8_t *buf, const p256_int *x, const p256_int *y);
 
 /*
  *  X509.
  */
 int DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
 			const struct RSA *ca_pub_key);
+int DCRYPTO_x509_gen_u2f_cert(const p256_int *d, const p256_int *pk_x,
+			const p256_int *pk_y, const p256_int *serial,
+			uint8_t *cert, const int n);
+
+/*
+ * Memory related functions.
+ */
+int DCRYPTO_equals(const void *a, const void *b, size_t len);
+
+/*
+ * Key-ladder and application key related functions.
+ */
+enum dcrypto_appid {
+	RESERVED = 0,
+	NVMEM = 1,
+	U2F_ATTEST = 2,
+	U2F_ORIGIN = 3,
+	U2F_WRAP = 4,
+	PERSO_AUTH = 5,
+	PINWEAVER = 6,
+	/* This enum value should not exceed 7. */
+};
+
+struct APPKEY_CTX {
+};
+
+int DCRYPTO_ladder_compute_frk2(size_t major_fw_version, uint8_t *frk2);
+int DCRYPTO_ladder_random(void *output);
+
+int DCRYPTO_appkey_init(enum dcrypto_appid id, struct APPKEY_CTX *ctx);
+void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx);
+int DCRYPTO_appkey_derive(enum dcrypto_appid appid, const uint32_t input[8],
+			  uint32_t output[8]);
+
+/* Number of bytes in the salt object. */
+#define DCRYPTO_CIPHER_SALT_SIZE 16
+BUILD_ASSERT(DCRYPTO_CIPHER_SALT_SIZE == CIPHER_SALT_SIZE);
+
+/*
+ * Encrypt/decrypt a flat blob.
+ *
+ * Encrypt or decrypt the input buffer, and write the correspondingly
+ * ciphered output to out.  The number of bytes produced is equal to
+ * the number of input bytes.  Note that the input and output pointers
+ * MUST be word-aligned.
+ *
+ * This API is expected to be applied to a single contiguous region.
+
+ * WARNING: A given salt/"in" pair MUST be unique, i.e. re-using a
+ * salt with a logically different input buffer is catastrophic.  An
+ * example of a suitable salt is one that is derived from "in", e.g. a
+ * digest of the input data.
+ *
+ * @param appid the application-id of the calling context.
+ * @param salt pointer to a unique value to be associated with this blob,
+ *	       used for derivation of the proper IV, the size of the value
+ *	       is as defined by DCRYPTO_CIPHER_SALT_SIZE above.
+ * @param out Destination pointer where to write plaintext / ciphertext.
+ * @param in  Source pointer where to read ciphertext / plaintext.
+ * @param len Number of bytes to read from in / write to out.
+ * @return non-zero on success, and zero otherwise.
+ */
+int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
+		void *out, const void *in, size_t len);
 
 #endif  /* ! __EC_CHIP_G_DCRYPTO_DCRYPTO_H */

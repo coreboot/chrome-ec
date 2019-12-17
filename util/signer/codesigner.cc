@@ -17,6 +17,8 @@
 #include <common/signed_header.h>
 #ifdef HAVE_JSON
 #include <rapidjson/document.h>
+#else
+#include <pmjp.h>
 #endif
 
 #include <map>
@@ -297,6 +299,7 @@ void usage(int argc, char* argv[]) {
           "--input=$elf-filename\n"
           "--output=output-filename\n"
           "--key=$pem-filename\n"
+          "[--b] ignored option, could be included for forward compatibility\n"
           "[--cros] to sign for the ChromeOS realm w/o manifest\n"
           "[--xml=$xml-filename] typically 'havenTop.xml'\n"
           "[--json=$json-filename] the signing manifest\n"
@@ -313,6 +316,7 @@ void usage(int argc, char* argv[]) {
 int getOptions(int argc, char* argv[]) {
   static struct option long_options[] = {
       // name, has_arg
+      {"b", no_argument, NULL, 'b'},
       {"cros", no_argument, NULL, 'c'},
       {"format", required_argument, NULL, 'f'},
       {"help", no_argument, NULL, 'h'},
@@ -330,13 +334,15 @@ int getOptions(int argc, char* argv[]) {
       {0, 0, 0, 0}};
   int c, option_index = 0;
   outputFormat.assign("hex");
-  while ((c = getopt_long(argc, argv, "i:o:p:k:x:j:f:s:H:chvr", long_options,
+  while ((c = getopt_long(argc, argv, "i:o:p:k:x:j:f:s:H:bchvr", long_options,
                           &option_index)) != -1) {
     switch (c) {
       case 0:
         fprintf(stderr, "option %s", long_options[option_index].name);
         if (optarg) fprintf(stderr, " with arg %s", optarg);
         fprintf(stderr, "\n");
+        break;
+      case 'b':
         break;
       case 'c':
         FLAGS_cros = true;
@@ -429,7 +435,9 @@ int main(int argc, char* argv[]) {
   if (jsonFilename.empty()) {
     // Defaults, in case no JSON
     values.insert(make_pair("keyid", key.n0inv()));
-    values.insert(make_pair("epoch", 0x1337));
+    values.insert(make_pair("epoch", MANIFEST_EPOCH));
+    values.insert(make_pair("major", MANIFEST_MAJOR));
+    values.insert(make_pair("minor", MANIFEST_MINOR));
   }
 
   // Hardcoded expectation. Can be overwritten in JSON w/ new explicit value.

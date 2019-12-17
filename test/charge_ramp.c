@@ -36,31 +36,14 @@ static int charge_limit_ma;
 
 /* Mock functions */
 
-int board_is_ramp_allowed(int supplier)
+/* Override test_mockable implementations in charge_ramp module */
+int chg_ramp_allowed(int supplier)
 {
 	/* Ramp for TEST4-TEST8 */
 	return supplier > CHARGE_SUPPLIER_TEST3;
 }
 
-int board_is_consuming_full_charge(void)
-{
-	return charge_limit_ma <= system_load_current_ma;
-}
-
-int board_is_vbus_too_low(enum chg_ramp_vbus_state ramp_state)
-{
-	return MIN(system_load_current_ma, charge_limit_ma) >
-	       vbus_low_current_ma;
-}
-
-void board_set_charge_limit(int port, int supplier, int limit_ma, int max_ma)
-{
-	charge_limit_ma = limit_ma;
-	if (charge_limit_ma > overcurrent_current_ma)
-		task_set_event(TASK_ID_TEST_RUNNER, TASK_EVENT_OVERCURRENT, 0);
-}
-
-int board_get_ramp_current_limit(int supplier, int sup_curr)
+int chg_ramp_max(int supplier, int sup_curr)
 {
 	if (supplier == CHARGE_SUPPLIER_TEST7)
 		return 1600;
@@ -68,6 +51,36 @@ int board_get_ramp_current_limit(int supplier, int sup_curr)
 		return 2400;
 	else
 		return 3000;
+}
+
+/* These usb_charger functions are unused, but necessary to link */
+int usb_charger_ramp_allowed(int supplier)
+{
+	return 0;
+}
+
+int usb_charger_ramp_max(int supplier, int sup_curr)
+{
+	return 0;
+}
+
+int charge_is_consuming_full_input_current(void)
+{
+	return charge_limit_ma <= system_load_current_ma;
+}
+
+int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
+{
+	return MIN(system_load_current_ma, charge_limit_ma) >
+	       vbus_low_current_ma;
+}
+
+void board_set_charge_limit(int port, int supplier, int limit_ma,
+			    int max_ma, int max_mv)
+{
+	charge_limit_ma = limit_ma;
+	if (charge_limit_ma > overcurrent_current_ma)
+		task_set_event(TASK_ID_TEST_RUNNER, TASK_EVENT_OVERCURRENT, 0);
 }
 
 /* Test utilities */
@@ -79,7 +92,7 @@ static void plug_charger_with_ts(int supplier_type, int port, int min_current,
 	vbus_low_current_ma = vbus_low_current;
 	overcurrent_current_ma = overcurrent_current;
 	chg_ramp_charge_supplier_change(port, supplier_type, min_current,
-					reg_time);
+					reg_time, 0);
 }
 
 static void plug_charger(int supplier_type, int port, int min_current,
@@ -93,7 +106,7 @@ static void plug_charger(int supplier_type, int port, int min_current,
 static void unplug_charger(void)
 {
 	chg_ramp_charge_supplier_change(CHARGE_PORT_NONE, CHARGE_SUPPLIER_NONE,
-					0, get_time());
+					0, get_time(), 0);
 }
 
 static int unplug_charger_and_check(void)
@@ -120,7 +133,13 @@ static int test_no_ramp(void)
 	system_load_current_ma = 3000;
 	/* A powerful charger, but hey, you're not allowed to ramp! */
 	plug_charger(CHARGE_SUPPLIER_TEST1, 0, 500, 3000, 3000);
-	usleep(CHARGE_DETECT_DELAY_TEST);
+	/*
+	 * NOTE: Since this is currently the first test being run, give the
+	 * charge ramp task enough time to actually transition states and set
+	 * the charge limit.  This just needs at least transition to the
+	 * CHG_RAMP_OVERCURRENT_DETECT state.
+	 */
+	usleep(CHARGE_DETECT_DELAY_TEST + 200*MSEC);
 	/* That's right. Start at 500 mA */
 	TEST_ASSERT(charge_limit_ma == 500);
 	TEST_ASSERT(wait_stable_no_overcurrent());
@@ -195,7 +214,7 @@ static int test_switch_outlet(void)
 
 	/*
 	 * Now the user decides to move it to a nearby outlet...actually
-	 * he decides to move it 5 times!
+	 * they decide to move it 5 times!
 	 */
 	for (i = 0; i < 5; ++i) {
 		usleep(SECOND * 20);
@@ -223,8 +242,8 @@ static int test_fast_switch(void)
 	plug_charger(CHARGE_SUPPLIER_TEST4, 0, 500, 3000, 3000);
 
 	/*
-	 * Here comes that naughty user again, and this time he's switching
-	 * outlet really quickly. Fortunately this time he only does it twice.
+	 * Here comes that naughty user again, and this time they are switching
+	 * outlet really quickly. Fortunately this time they only do it twice.
 	 */
 	for (i = 0; i < 2; ++i) {
 		usleep(SECOND * 20);
@@ -484,6 +503,11 @@ void run_test(void)
 {
 	test_reset();
 
+	/*
+	 * If the following test order changes, make sure to add enough time for
+	 * the charge ramp task to make its first transition after plugging in a
+	 * charger.  See the comment in test_no_ramp().
+	 */
 	RUN_TEST(test_no_ramp);
 	RUN_TEST(test_full_ramp);
 	RUN_TEST(test_vbus_dip);

@@ -47,11 +47,10 @@ die() {
 
 BOARDS_IT83XX=(
 	it83xx_evb
+	reef_it8320
 )
 
 BOARDS_LM4=(
-	auron
-	rambi
 	samus
 )
 
@@ -60,21 +59,22 @@ BOARDS_STM32=(
 	blaze
 	chell_pd
 	elm
+	eve_fp
 	glados_pd
+	hammer
 	honeybuns
 	jerry
 	kitty
-	llama
-	lucid
 	minimuffin
 	oak
 	oak_pd
 	pit
 	plankton
-	ryu
 	samus_pd
-	snoball
+	scarlet
+	staff
 	strago_pd
+	whiskers
 	zinger
 )
 BOARDS_STM32_PROG_EN=(
@@ -89,7 +89,9 @@ BOARDS_STM32_DFU=(
 	servo_v4
 	servo_micro
 	sweetberry
+	polyberry
 	stm32f446e-eval
+	tigertail
 )
 
 BOARDS_NPCX_5M5G_JTAG=(
@@ -100,12 +102,29 @@ BOARDS_NPCX_5M5G_JTAG=(
 BOARDS_NPCX_5M6G_JTAG=(
 )
 
+BOARDS_NPCX_7M6X_JTAG=(
+	npcx7_evb
+)
+
 BOARDS_NPCX_SPI=(
-	amenia
+	coral
+	eve
+	fizz
+	glkrvp
 	gru
 	kevin
+	nautilus
+	nefario
+	poppy
 	reef
+	soraka
 	wheatley
+	kahlee
+	grunt
+)
+
+BOARDS_NPCX_INT_SPI=(
+	zoombini
 )
 
 BOARDS_NRF51=(
@@ -119,15 +138,25 @@ BOARDS_MEC1322=(
 )
 
 BOARDS_SPI_1800MV=(
+	coral
 	gru
 	kevin
+	nefario
 	reef
 )
 
 BOARDS_RAIDEN=(
+	coral
+	eve
+	fizz
 	gru
 	kevin
+	nautilus
+	nefario
+	poppy
 	reef
+	scarlet
+	soraka
 )
 
 # Flags
@@ -162,7 +191,18 @@ if [ -z "${FLAGS_board}" -a -z "${FLAGS_chip}" ]; then
 	die "should specify a board or a chip."
 fi
 
-SERVO_TYPE=servo
+DUT_CONTROL_CMD="dut-control --port=${FLAGS_port}"
+
+function dut_control() {
+	$DUT_CONTROL_CMD "$@" >/dev/null
+}
+
+function get_servo_type() {
+	if dut_control "servo_type" ; then
+		$DUT_CONTROL_CMD servo_type | sed -e s/servo_type://
+	fi
+}
+
 BOARD=${FLAGS_board}
 BOARD_ROOT=/build/${BOARD}
 
@@ -184,12 +224,15 @@ elif $(in_array "${BOARDS_STM32[@]}" "${BOARD}"); then
 	CHIP="stm32"
 elif $(in_array "${BOARDS_STM32_DFU[@]}" "${BOARD}"); then
 	CHIP="stm32_dfu"
-	NEED_SERVO="no"
 elif $(in_array "${BOARDS_NPCX_5M5G_JTAG[@]}" "${BOARD}"); then
 	CHIP="npcx_5m5g_jtag"
 elif $(in_array "${BOARDS_NPCX_5M6G_JTAG[@]}" "${BOARD}"); then
 	CHIP="npcx_5m6g_jtag"
+elif $(in_array "${BOARDS_NPCX_7M6X_JTAG[@]}" "${BOARD}"); then
+	CHIP="npcx_7m6x_jtag"
 elif $(in_array "${BOARDS_NPCX_SPI[@]}" "${BOARD}"); then
+	CHIP="npcx_spi"
+elif $(in_array "${BOARDS_NPCX_INT_SPI[@]}" "${BOARD}"); then
 	CHIP="npcx_spi"
 elif $(in_array "${BOARDS_NRF51[@]}" "${BOARD}"); then
 	CHIP="nrf51"
@@ -197,7 +240,6 @@ elif $(in_array "${BOARDS_MEC1322[@]}" "${BOARD}"); then
 	CHIP="mec1322"
 elif $(in_array "${BOARDS_IT83XX[@]}" "${BOARD}"); then
 	CHIP="it83xx"
-	NEED_SERVO="no"
 elif [ -n "${FLAGS_chip}" ]; then
 	CHIP="${FLAGS_chip}"
 else
@@ -206,6 +248,10 @@ fi
 
 if [ -n "${FLAGS_chip}" -a "${CHIP}" != "${FLAGS_chip}" ]; then
 	die "board ${BOARD} doesn't use chip ${FLAGS_chip}"
+fi
+
+if [ "${CHIP}" = "stm32_dfu" -o "${CHIP}" = "it83xx" ]; then
+	NEED_SERVO="no"
 fi
 
 servo_has_warm_reset() {
@@ -241,7 +287,14 @@ servo_sh_hard_reset() {
 }
 
 ec_reset() {
-	eval ${SERVO_TYPE}_${MCU}_hard_reset
+	stype=${SERVO_TYPE}
+	if [[ "${SERVO_TYPE}" =~ "servo" ]] ; then
+		stype=servo
+	fi
+
+	if [[ ! -z "${stype}" ]]; then
+		eval ${stype}_${MCU}_hard_reset
+	fi
 }
 
 # force the EC to boot in serial monitor mode
@@ -250,7 +303,12 @@ toad_ec_boot0() {
 }
 
 servo_ec_boot0() {
-	dut_control ec_boot_mode:on
+	if [[ "${SERVO_TYPE}" =~ "_with_ccd" ]] ; then
+		info "Using CCD."
+		dut_control ccd_ec_boot_mode:on
+	else
+		dut_control ec_boot_mode:on
+	fi
 }
 
 servo_usbpd_boot0() {
@@ -266,7 +324,12 @@ ec_enable_boot0() {
 	if $(in_array "${BOARDS_STM32_PROG_EN[@]}" "${BOARD}"); then
 		dut_control prog_en:yes
 	fi
-	eval ${SERVO_TYPE}_${MCU}_boot0
+	if [[ "${SERVO_TYPE}" =~ "servo" ]] ; then
+		stype=servo
+	else
+		stype=${SERVO_TYPE}
+	fi
+	eval ${stype}_${MCU}_boot0
 }
 
 # Returns 0 on success (if on beaglebone)
@@ -275,10 +338,23 @@ on_servov3() {
 }
 
 # Returns 0 on success (if raiden should be used instead of servo)
+error_reported=  # Avoid double printing the error message.
 on_raiden() {
-	if $(in_array "${BOARDS_RAIDEN[@]}" "${BOARD}") && \
-	   [ "${FLAGS_raiden}" = ${FLAGS_TRUE} ] ; then
+	if [[ "${SERVO_TYPE}" =~ "servo_v4" ]] || \
+	   [[ "${SERVO_TYPE}" =~ "servo_micro" ]]; then
 		return 0
+	fi
+	if [ -z "${BOARD}" ]; then
+		[ "${FLAGS_raiden}" = ${FLAGS_TRUE} ] && return 0 || return 1
+	fi
+	if [ "${FLAGS_raiden}" = ${FLAGS_TRUE} ]; then
+		if in_array "${BOARDS_RAIDEN[@]}" "${BOARD}"; then
+			return 0
+		fi
+		if [ -z "${error_reported}" ]; then
+			error_reported="y"
+			die "raiden mode not supported on ${BOARD}" >&2
+		fi
 	fi
 	return 1
 }
@@ -296,7 +372,7 @@ cleanup() {
 		kill -CONT ${pid}
 	done
 
-	if ! on_raiden; then
+	if ! on_raiden || [[ "${SERVO_TYPE}" =~ "servo_micro" ]] ; then
 		ec_reset
 	fi
 }
@@ -339,42 +415,60 @@ function ec_image() {
 	die "no EC image found : build one or specify one."
 }
 
-DUT_CONTROL_CMD="dut-control --port=${FLAGS_port}"
-
-function dut_control() {
-	$DUT_CONTROL_CMD "$@" >/dev/null
-}
-
-# Find the EC UART on the servo v2
-function ec_uart() {
-	SERVOD_FAIL="Cannot communicate with servo. is servod running ?"
-	($DUT_CONTROL_CMD raw_${MCU}_uart_pty || \
-	    $DUT_CONTROL_CMD ${MCU}_uart_pty || \
-	    die "${SERVOD_FAIL}") | cut -d: -f2
+# Find the EC UART provided by servo.
+function servo_ec_uart() {
+	SERVOD_FAIL="Cannot communicate with servod. Is servod running?"
+	PTY=$(($DUT_CONTROL_CMD raw_${MCU}_uart_pty ||
+	       $DUT_CONTROL_CMD ${MCU}_uart_pty) | cut -d: -f2)
+	if [[ -z "${PTY}" ]]; then
+	    die "${SERVOD_FAIL}"
+	fi
+	echo $PTY
 }
 
 # Servo variables management
 case "${BOARD}" in
 	oak_pd|samus_pd|strago_pd ) MCU="usbpd" ;;
 	chell_pd|glados_pd ) MCU="usbpd" ;;
+	eve_fp ) MCU="usbpd" ;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD="true" ; MCU="ec" ;;
 	*) MCU="ec" ;;
 esac
 
-servo_VARS="${MCU}_uart_en ${MCU}_uart_parity \
-${MCU}_uart_baudrate jtag_buf_on_flex_en jtag_buf_en dev_mode"
+# Not every control is supported on every servo type.  Therefore, define which
+# controls are supported by each servo type.
+servo_v2_VARS="jtag_buf_on_flex_en jtag_buf_en cold_reset spi1_vref"
+servo_micro_VARS="cold_reset spi1_vref"
+servo_v4_with_ccd_cr50_VARS="cold_reset"
+# Flashing an STM32 over the UART requires modifying the UART properties along
+# with the boot mode pin.
 if [ "${CHIP}" = "stm32" ] ; then
-	servo_VARS+=" ${MCU}_boot_mode"
+	common_stm32_VARS=" ${MCU}_uart_en ${MCU}_uart_parity"
+	common_stm32_VARS+=" ${MCU}_uart_baudrate"
+	servo_v2_VARS+=$common_stm32_VARS
+	servo_v2_VARS+=" ${MCU}_boot_mode"
+	servo_micro_VARS+=$common_stm32_VARS
+	servo_micro_VARS+=" ${MCU}_boot_mode"
+	servo_v4_with_ccd_cr50_VARS+=$common_stm32_VARS
+	servo_v4_with_ccd_cr50_VARS+=" ccd_${MCU}_boot_mode ec_uart_bitbang_en"
 fi
 if $(in_array "${BOARDS_STM32_PROG_EN[@]}" "${BOARD}"); then
-	servo_VARS+=" prog_en"
+	servo_v2_VARS+=" prog_en"
 fi
-toad_VARS="${MCU}_uart_parity \
-${MCU}_uart_baudrate boot_mode"
+toad_VARS="${MCU}_uart_parity ${MCU}_uart_baudrate boot_mode"
+
+if $(in_array "${BOARDS_NPCX_INT_SPI[@]}" "${BOARD}"); then
+	servo_v2_VARS+=" fw_up"
+fi
+# Some servo boards use the same controls.
+servo_v3_VARS="${servo_v2_VARS}"
+servo_v4_with_servo_micro_VARS="${servo_micro_VARS}"
 
 function servo_save() {
 	SERVO_VARS_NAME=${SERVO_TYPE}_VARS
-	$DUT_CONTROL_CMD ${!SERVO_VARS_NAME}
+	if [[ -n "${!SERVO_VARS_NAME}" ]]; then
+		$DUT_CONTROL_CMD ${!SERVO_VARS_NAME}
+	fi
 }
 
 function servo_restore() {
@@ -388,6 +482,11 @@ function claim_pty() {
 	if grep -q cros_sdk /proc/1/cmdline; then
 		die "You must run this tool in a chroot that was entered with" \
 		    "'cros_sdk --no-ns-pid' (see crbug.com/444931 for details)"
+	fi
+
+	if [[ -z "$1" ]]; then
+		warn "No parameter passed to claim_pty()"
+		return
 	fi
 
 	# Disconnect the EC-3PO interpreter from the UART since it will
@@ -410,6 +509,24 @@ function claim_pty() {
 			kill -STOP ${pid}
 		fi
 	done
+}
+
+function get_serial() {
+	if [[ "${SERVO_TYPE}" =~ "servo_v4_with_servo_micro" ]]; then
+		if [[ -z "${BOARD}" ]]; then
+			sn_ctl="servo_micro_"
+		else
+			sn_ctl="servo_micro_for_${BOARD}_"
+		fi
+	elif [[ "${SERVO_TYPE}" =~ "_with_ccd" ]] ; then
+		sn_ctl="ccd_"
+	else
+		# If it's none of the above, the main serialname will do.
+		sn_ctl=""
+	fi
+
+	SERIALNAME=$(${DUT_CONTROL_CMD} "${sn_ctl}serialname" | cut -d: -f2)
+	echo $SERIALNAME
 }
 
 # Board specific flashing scripts
@@ -437,7 +554,7 @@ function flash_openocd() {
 	die "Failed to program ${IMG}"
 }
 
-# helper function for using servo v2/3 with flashrom
+# helper function for using servo with flashrom
 function flash_flashrom() {
 	TOOL_PATH="${EC_DIR}/build/${BOARD}/util:/usr/sbin/:$PATH"
 	FLASHROM=$(PATH="${TOOL_PATH}" which flashrom)
@@ -445,25 +562,28 @@ function flash_flashrom() {
 	if on_servov3; then
 		FLASHROM_PARAM="-p linux_spi"
 	elif on_raiden; then
-		info "Using raiden debug cable."
-		FLASHROM_PARAM="-p raiden_debug_spi:target=EC"
+	    if [[ "${SERVO_TYPE}" =~ "servo_micro" ]]; then
+		# Servo micro doesn't use the "target" parameter.
+		FLASHROM_PARAM="-p raiden_debug_spi:"
+	    else
+		FLASHROM_PARAM="-p raiden_debug_spi:target=EC,"
+	    fi
 	else
-		FLASHROM_PARAM="-p ft2232_spi:type=servo-v2,port=B"
+		FLASHROM_PARAM="-p ft2232_spi:type=servo-v2,port=B,"
 	fi
 
 	if [ ! -x "$FLASHROM" ]; then
 		die "no flashrom util found."
 	fi
 
-	if ! on_raiden; then
-		if ! on_servov3; then
-			SERIALNAME=$(${DUT_CONTROL_CMD} serialname | \
-				cut -d: -f2)
-			if [[ "$SERIALNAME" != "" ]] ; then
-				FLASHROM_PARAM+=",serial=${SERIALNAME}"
-			fi
+	if ! on_servov3; then
+		SERIALNAME=$(get_serial)
+		if [[ "$SERIALNAME" != "" ]] ; then
+			FLASHROM_PARAM+="serial=${SERIALNAME}"
 		fi
+	fi
 
+	if ! on_raiden || [[ "${SERVO_TYPE}" =~ "servo_micro" ]] ; then
 		if $(in_array "${BOARDS_SPI_1800MV[@]}" "${BOARD}"); then
 			SPI_VOLTAGE="pp1800"
 		else
@@ -472,9 +592,27 @@ function flash_flashrom() {
 
 		dut_control cold_reset:on
 
+		# If spi flash is in npcx's ec, enable gang programer mode
+		if $(in_array "${BOARDS_NPCX_INT_SPI[@]}" "${BOARD}"); then
+			# Set GP_SEL# as low then start ec
+			dut_control fw_up:on
+			sleep 0.1
+			dut_control cold_reset:off
+		fi
+
 		# Turn on SPI1 interface on servo for SPI Flash Chip
-		dut_control spi1_vref:${SPI_VOLTAGE} spi1_buf_en:on \
-			spi1_buf_on_flex_en:on
+		dut_control spi1_vref:${SPI_VOLTAGE} spi1_buf_en:on
+		if [[ ! "${SERVO_TYPE}" =~ "servo_micro" ]]; then
+			# Servo micro doesn't support this control.
+			dut_control spi1_buf_on_flex_en:on
+		fi
+
+		# b/65694390: Zoombini takes enough power that when flashing
+		# without power, the SPI Vref voltage dips for a little bit.
+		# Therefore, wait 1 second to let the voltage stabilize.
+		if [[ "${BOARD}" == "zoombini" ]]; then
+			sleep 1
+		fi
 	else
 		# Temp layout
 		L=/tmp/flash_spi_layout_$$
@@ -485,15 +623,19 @@ function flash_flashrom() {
 			--fast-verify"
 	fi
 
-	SPI_SIZE=$(sudo ${FLASHROM} ${FLASHROM_PARAM} --get-size 2>/dev/null | \
-		tail -n 1)
+
+	# flashrom should report the image size at the end of the output.
+	SPI_SIZE=$(sudo ${FLASHROM} ${FLASHROM_PARAM} --get-size 2>/dev/null |\
+		       grep -oe '[0-9]\+$') || \
+		die "Failed to determine chip size!"
+
 	IMG_SIZE=$(stat -c%s "$IMG")
 	PATCH_SIZE=$((${SPI_SIZE} - ${IMG_SIZE}))
 
 	# Temp image
 	T=/tmp/flash_spi_$$
 
-if $(in_array "${BOARDS_NPCX_SPI[@]}" "${BOARD}"); then
+if [ "${CHIP}" = "npcx_spi" ] ; then
 	{	# Patch temp image up to SPI_SIZE
 		cat $IMG
 		if [[ ${IMG_SIZE} -lt ${SPI_SIZE} ]] ; then
@@ -515,10 +657,17 @@ fi
 
 	rm $T
 
-	if ! on_raiden; then
+	if  ! on_raiden || [[ "${SERVO_TYPE}" =~ "servo_micro" ]] ; then
 		# Turn off SPI1 interface on servo
-		dut_control spi1_vref:off spi1_buf_en:off \
-			spi1_buf_on_flex_en:off
+		dut_control spi1_vref:off spi1_buf_en:off
+		if [[ ! "${SERVO_TYPE}" =~ "servo_micro" ]] ; then
+			dut_control spi1_buf_on_flex_en:off
+		fi
+
+		# Set GP_SEL# as default to disable GP mode when ec reboots
+		if $(in_array "${BOARDS_NPCX_INT_SPI[@]}" "${BOARD}"); then
+			dut_control fw_up:off
+		fi
 	else
 		rm $L
 	fi
@@ -530,18 +679,27 @@ fi
 function flash_stm32() {
 	TOOL_PATH="${EC_DIR}/build/${BOARD}/util:$PATH"
 	STM32MON=$(PATH="${TOOL_PATH}" which stm32mon)
+	EC_UART="$(servo_ec_uart)"
 	if [ ! -x "$STM32MON" ]; then
 		die "no stm32mon util found."
 	fi
 
 	info "Using serial flasher : ${STM32MON}"
+	info "${MCU} UART pty : ${EC_UART}"
 	claim_pty ${EC_UART}
 
-	if [ "${SERVO_TYPE}" = "servo" ] ; then
+	if [[ "${SERVO_TYPE}" =~ "servo" ]] ; then
 		dut_control ${MCU}_uart_en:on
 	fi
 	dut_control ${MCU}_uart_parity:even
-	dut_control ${MCU}_uart_baudrate:115200
+
+	if [ "${SERVO_TYPE}" == "servo_v4_with_ccd_cr50" ] ; then
+		dut_control ${MCU}_uart_baudrate:9600
+		dut_control ${MCU}_uart_bitbang_en:on
+	else
+		dut_control ${MCU}_uart_baudrate:115200
+	fi
+
 	if $(servo_has_warm_reset); then
 		dut_control warm_reset:on
 	fi
@@ -646,6 +804,10 @@ function flash_npcx_5m6g_jtag() {
 	flash_npcx_jtag
 }
 
+function flash_npcx_7m6x_jtag() {
+	flash_npcx_jtag
+}
+
 function flash_npcx_spi() {
 	flash_flashrom
 }
@@ -654,6 +816,7 @@ function flash_mec1322() {
 	flash_flashrom
 }
 
+SERVO_TYPE="$(get_servo_type)"
 if dut_control boot_mode 2>/dev/null ; then
 	if [[ "${MCU}" != "ec" ]] ; then
 		die "Toad cable can't support non-ec UARTs"
@@ -661,15 +824,13 @@ if dut_control boot_mode 2>/dev/null ; then
 	SERVO_TYPE=toad
 	info "Using a dedicated debug cable"
 fi
+info "Using ${SERVO_TYPE}."
 
 IMG="$(ec_image)"
 info "Using ${MCU} image : ${IMG}"
 
 if ! on_raiden && [ "${NEED_SERVO}" != "no" ] ; then
-  EC_UART="$(ec_uart)"
-  info "${MCU} UART pty : ${EC_UART}"
-
-  save="$(servo_save)"
+	save="$(servo_save)"
 fi
 
 info "Flashing chip ${CHIP}."

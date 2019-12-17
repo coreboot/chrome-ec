@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "cryptoc/sha256.h"
+#include "cryptoc/util.h"
 
 /* TODO(ngm): add support for hardware hmac. */
 static void HMAC_init(LITE_HMAC_CTX *ctx, const void *key, unsigned int len)
@@ -40,7 +41,6 @@ static void HMAC_init(LITE_HMAC_CTX *ctx, const void *key, unsigned int len)
 void DCRYPTO_HMAC_SHA256_init(LITE_HMAC_CTX *ctx, const void *key,
 			unsigned int len)
 {
-	DCRYPTO_SHA256_init(&ctx->hash, 0);
 	HMAC_init(ctx, key, len);
 }
 
@@ -54,6 +54,6 @@ const uint8_t *DCRYPTO_HMAC_final(LITE_HMAC_CTX *ctx)
 	DCRYPTO_SHA256_init(&ctx->hash, 0);
 	HASH_update(&ctx->hash, ctx->opad, sizeof(ctx->opad));
 	HASH_update(&ctx->hash, digest, HASH_size(&ctx->hash));
-	memset(&ctx->opad[0], 0, sizeof(ctx->opad));  /* wipe key */
+	always_memset(&ctx->opad[0], 0, sizeof(ctx->opad));  /* wipe key */
 	return HASH_final(&ctx->hash);
 }

@@ -17,6 +17,7 @@ enum keyboard_button_type {
 	KEYBOARD_BUTTON_POWER = 0,
 	KEYBOARD_BUTTON_VOLUME_DOWN,
 	KEYBOARD_BUTTON_VOLUME_UP,
+	KEYBOARD_BUTTON_RECOVERY,
 	KEYBOARD_BUTTON_CAPSENSE_1,
 	KEYBOARD_BUTTON_CAPSENSE_2,
 	KEYBOARD_BUTTON_CAPSENSE_3,
@@ -41,6 +42,17 @@ struct button_config {
  * Defined in board.c. Should be CONFIG_BUTTON_COUNT elements long.
  */
 extern const struct button_config buttons[];
+
+/*
+ * Buttons used to decide whether recovery is requested or not
+ */
+extern const struct button_config *recovery_buttons[];
+extern const int recovery_buttons_count;
+
+/*
+ * Button initialization, called from main.
+ */
+void button_init(void);
 
 /*
  * Interrupt handler for button.

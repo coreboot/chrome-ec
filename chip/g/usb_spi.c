@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "ccd_config.h"
 #include "common.h"
 #include "link_defs.h"
 #include "gpio.h"
@@ -12,6 +13,10 @@
 #include "usb_descriptor.h"
 #include "usb_spi.h"
 #include "util.h"
+
+#ifdef CONFIG_STREAM_SIGNATURE
+#include "signing.h"
+#endif
 
 #define CPUTS(outstr) cputs(CC_USB, outstr)
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
@@ -39,65 +44,85 @@ static uint16_t usb_spi_read_packet(struct usb_spi_config const *config)
 static void usb_spi_write_packet(struct usb_spi_config const *config,
 				 uint8_t count)
 {
-	QUEUE_ADD_UNITS(config->tx_queue, config->buffer, count);
-}
+#ifdef CONFIG_STREAM_SIGNATURE
+	/*
+	 * This hook allows mn50 to sign SPI data read from newly
+	 * manufactured H1 devieces. The data is added to a running
+	 * hash until a completion message is received.
+	 */
+	sig_append(stream_spi, config->buffer, count);
+#endif
 
-static int rx_valid(struct usb_spi_config const *config)
-{
-	return (config->usb->out_desc->flags & DOEPDMA_BS_MASK) ==
-	       DOEPDMA_BS_DMA_DONE;
+	QUEUE_ADD_UNITS(config->tx_queue, config->buffer, count);
 }
 
 void usb_spi_deferred(struct usb_spi_config const *config)
 {
+	uint16_t count;
+	int write_count;
+	int read_count;
+	int read_length;
+	uint16_t res;
+	int rv = EC_SUCCESS;
+
 	/*
 	 * If our overall enabled state has changed we call the board specific
 	 * enable or disable routines and save our new state.
 	 */
-	int enabled = (config->state->enabled_host &
-		       config->state->enabled_device);
+	int enabled = !!(config->state->enabled_host &
+			 config->state->enabled_device);
 
 	if (enabled ^ config->state->enabled) {
 		if (enabled)
-			usb_spi_board_enable(config);
+			rv = usb_spi_board_enable(config);
 		else
 			usb_spi_board_disable(config);
 
-		config->state->enabled = enabled;
+		/* Only update our state if we were successful. */
+		if (rv == EC_SUCCESS)
+			config->state->enabled = enabled;
 	}
 
 	/*
 	 * And if there is a USB packet waiting we process it and generate a
 	 * response.
 	 */
-	if (!rx_valid(config)) {
-		uint16_t count       = usb_spi_read_packet(config);
-		uint8_t  write_count = config->buffer[0];
-		uint8_t  read_count  = config->buffer[1];
-		uint16_t res;
+	count       = usb_spi_read_packet(config);
+	write_count = config->buffer[0];
+	read_count  = config->buffer[1];
 
-		if (!read_count && !write_count)
-			return;
-
-		if (!config->state->enabled) {
-			res = USB_SPI_DISABLED;
-		} else if (write_count > USB_SPI_MAX_WRITE_COUNT ||
-			   write_count != (count - HEADER_SIZE)) {
-			res = USB_SPI_WRITE_COUNT_INVALID;
-		} else if (read_count > USB_SPI_MAX_READ_COUNT) {
-			res = USB_SPI_READ_COUNT_INVALID;
-		} else {
-			res = usb_spi_map_error(
-				spi_transaction(SPI_FLASH_DEVICE,
-						config->buffer + HEADER_SIZE,
-						write_count,
-						config->buffer + HEADER_SIZE,
-						read_count));
-		}
-
-		memcpy(config->buffer, &res, HEADER_SIZE);
-		usb_spi_write_packet(config, read_count + HEADER_SIZE);
+	/* Handle SPI_READBACK_ALL case */
+	if (read_count == 255) {
+		/* Handle simultaneously clocked RX and TX */
+		read_count = SPI_READBACK_ALL;
+		read_length = write_count;
+	} else {
+		/* Normal case */
+		read_length = read_count;
 	}
+
+	if (!count || (!read_count && !write_count) ||
+	    (!write_count && read_count == (uint8_t)SPI_READBACK_ALL))
+		return;
+
+	if (!config->state->enabled) {
+		res = USB_SPI_DISABLED;
+	} else if (write_count > USB_SPI_MAX_WRITE_COUNT ||
+		   write_count != (count - HEADER_SIZE)) {
+		res = USB_SPI_WRITE_COUNT_INVALID;
+	} else if (read_length > USB_SPI_MAX_READ_COUNT) {
+		res = USB_SPI_READ_COUNT_INVALID;
+	} else {
+		res = usb_spi_map_error(
+			spi_transaction(SPI_FLASH_DEVICE,
+					config->buffer + HEADER_SIZE,
+					write_count,
+					config->buffer + HEADER_SIZE,
+					read_count));
+	}
+
+	memcpy(config->buffer, &res, HEADER_SIZE);
+	usb_spi_write_packet(config, read_length + HEADER_SIZE);
 }
 
 static void usb_spi_written(struct consumer const *consumer, size_t count)
@@ -119,7 +144,17 @@ struct consumer_ops const usb_spi_consumer_ops = {
 
 void usb_spi_enable(struct usb_spi_config const *config, int enabled)
 {
-	config->state->enabled_device = enabled ? 0xf : 0;
+	config->state->enabled_device = 0;
+	if (enabled) {
+#ifdef CONFIG_CASE_CLOSED_DEBUG_V1
+		if (ccd_is_cap_enabled(CCD_CAP_AP_FLASH))
+			config->state->enabled_device |= USB_SPI_AP;
+		if (ccd_is_cap_enabled(CCD_CAP_EC_FLASH))
+			config->state->enabled_device |= USB_SPI_EC;
+#else
+		config->state->enabled_device = USB_SPI_ALL;
+#endif
+	}
 
 	hook_call_deferred(config->deferred, 0);
 }

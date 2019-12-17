@@ -52,10 +52,12 @@ extern const struct hook_data __hooks_tablet_mode_change[];
 extern const struct hook_data __hooks_tablet_mode_change_end[];
 extern const struct hook_data __hooks_pwrbtn_change[];
 extern const struct hook_data __hooks_pwrbtn_change_end[];
-extern const struct hook_data __hooks_charge_state_change[];
-extern const struct hook_data __hooks_charge_state_change_end[];
 extern const struct hook_data __hooks_battery_soc_change[];
 extern const struct hook_data __hooks_battery_soc_change_end[];
+#ifdef CONFIG_CASE_CLOSED_DEBUG_V1
+extern const struct hook_data __hooks_ccd_change[];
+extern const struct hook_data __hooks_ccd_change_end[];
+#endif
 extern const struct hook_data __hooks_tick[];
 extern const struct hook_data __hooks_tick_end[];
 extern const struct hook_data __hooks_second[];
@@ -86,6 +88,12 @@ extern const void *__irqhandler[];
 
 /* Shared memory buffer.  Use via shared_mem.h interface. */
 extern uint8_t __shared_mem_buf[];
+
+/* Image sections used by the TPM2 library */
+extern uint8_t *__bss_libtpm2_start;
+extern uint8_t *__bss_libtpm2_end;
+extern uint8_t *__data_libtpm2_start;
+extern uint8_t *__data_libtpm2_end;
 
 /* Image sections. */
 extern const void *__ro_end;

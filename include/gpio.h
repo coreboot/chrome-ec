@@ -31,6 +31,8 @@
 #define GPIO_INT_SHARED    (1 << 15) /* Shared among multiple pins */
 #define GPIO_SEL_1P8V      (1 << 16) /* Support 1.8v */
 #define GPIO_ALTERNATE     (1 << 17) /* GPIO used for alternate function. */
+#define GPIO_LOCKED        (1 << 18) /* Lock GPIO output and configuration */
+#define GPIO_HIB_WAKE_HIGH (1 << 19) /* Hibernate wake on high level */
 
 /* Common flag combinations */
 #define GPIO_OUT_LOW        (GPIO_OUTPUT | GPIO_LOW)
@@ -119,6 +121,15 @@ int gpio_config_pin(enum module_id id, enum gpio_signal signal, int enable);
  * @return 0 if low, 1 if high.
  */
 int gpio_get_level(enum gpio_signal signal);
+
+/**
+ * Read a ternary GPIO input, activating internal pull-down, then pull-up,
+ * to check if the GPIO is high, low, or Hi-Z. Useful for board strappings.
+ *
+ * @param signal	Signal to get
+ * @return 0 if low, 1 if high, 2 if Hi-Z.
+ */
+int gpio_get_ternary(enum gpio_signal signal);
 
 /**
  * Return the name of a given GPIO signal.
@@ -214,6 +225,16 @@ int gpio_enable_interrupt(enum gpio_signal signal);
  * @return EC_SUCCESS, or non-zero if error.
  */
 int gpio_disable_interrupt(enum gpio_signal signal);
+
+/**
+ * Clear pending interrupts for the signal.
+ *
+ * The signal must have been defined with an interrupt handler.
+ *
+ * @param signal	Signal to clear interrupts for
+ * @return EC_SUCCESS, or non-zero on error.
+ */
+int gpio_clear_pending_interrupt(enum gpio_signal signal);
 
 /**
  * Set flags for GPIO(s) by port and mask.

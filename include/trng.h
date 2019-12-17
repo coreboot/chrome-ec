@@ -6,6 +6,7 @@
 #define __EC_INCLUDE_TRNG_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * Initialize the true random number generator.
@@ -13,6 +14,16 @@
  * Not supported by all platforms.
  **/
 void init_trng(void);
+
+/**
+ * Shutdown the true random number generator.
+ *
+ * The opposite operation of init_trng(), disable the hardware resources
+ * used by the TRNG to save power.
+ *
+ * Not supported by all platforms.
+ **/
+void exit_trng(void);
 
 /**
  * Retrieve a 32 bit random value.

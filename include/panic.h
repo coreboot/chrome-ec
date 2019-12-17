@@ -129,12 +129,12 @@ void panic_assert_fail(const char *msg, const char *func, const char *fname,
  *
  * @param msg	Panic message
  */
-void panic(const char *msg);
+void panic(const char *msg) __attribute__((noreturn));
 
 /**
  * Display a default message and reset
  */
-void panic_reboot(void);
+void panic_reboot(void) __attribute__((noreturn));
 
 #ifdef CONFIG_SOFTWARE_PANIC
 /**
@@ -169,5 +169,15 @@ void ignore_bus_fault(int ignored);
  * the last reboot was not caused by a panic).
  */
 struct panic_data *panic_get_data(void);
+
+/**
+ * Chip-specific implementation for backing up panic data to persistent
+ * storage. This function is used to ensure that the panic data can survive loss
+ * of VCC power rail.
+ *
+ * There is no generic restore function provided since every chip can decide
+ * when it is safe to restore panic data during the system initialization step.
+ */
+void chip_panic_data_backup(void);
 
 #endif  /* __CROS_EC_PANIC_H */

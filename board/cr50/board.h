@@ -6,6 +6,15 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+/*
+ * The default watchdog timeout is 1.6 seconds, but there are some legitimate
+ * flash-intensive TPM operations that actually take close to that long to
+ * complete. Make sure we don't trigger the watchdog accidentally if the timing
+ * is just a little off.
+ */
+#undef CONFIG_WATCHDOG_PERIOD_MS
+#define CONFIG_WATCHDOG_PERIOD_MS 5000
+
 /* Features that we don't want */
 #undef CONFIG_CMD_LID_ANGLE
 #undef CONFIG_CMD_POWERINDEBUG
@@ -13,55 +22,98 @@
 #undef CONFIG_FMAP
 #undef CONFIG_HIBERNATE
 #undef CONFIG_LID_SWITCH
+#undef CONFIG_CMD_SYSINFO
+#undef CONFIG_CMD_SYSJUMP
+#undef CONFIG_CMD_SYSLOCK
+
+#ifndef CR50_DEV
+/* Disable stuff that should only be in debug builds */
+#undef CONFIG_CMD_CRASH
+#undef CONFIG_CMD_MD
+#undef CONFIG_CMD_RW
+#undef CONFIG_CMD_SLEEPMASK
+#undef CONFIG_CMD_WAITMS
+#undef CONFIG_FLASH
+#endif
 
 /* Flash configuration */
 #undef CONFIG_FLASH_PSTATE
-/* TODO(crosbug.com/p/44745): Bringup only! Do the right thing for real! */
 #define CONFIG_WP_ALWAYS
-/* TODO(crosbug.com/p/44745): For debugging only */
 #define CONFIG_CMD_FLASH
 
+#define CONFIG_CRC8
+
+/* Non-volatile counter storage for U2F */
+#define CONFIG_FLASH_NVCOUNTER
+#define CONFIG_FLASH_NVCTR_SIZE CONFIG_FLASH_BANK_SIZE
+#define CONFIG_FLASH_NVCTR_BASE_A (CONFIG_PROGRAM_MEMORY_BASE + \
+				   CFG_TOP_A_OFF)
+#define CONFIG_FLASH_NVCTR_BASE_B (CONFIG_PROGRAM_MEMORY_BASE + \
+				   CFG_TOP_B_OFF)
 /* We're using TOP_A for partition 0, TOP_B for partition 1 */
 #define CONFIG_FLASH_NVMEM
 /* Offset to start of NvMem area from base of flash */
-#define CONFIG_FLASH_NVMEM_OFFSET_A (CFG_TOP_A_OFF)
-#define CONFIG_FLASH_NVMEM_OFFSET_B (CFG_TOP_B_OFF)
+#define CONFIG_FLASH_NVMEM_OFFSET_A (CFG_TOP_A_OFF + CONFIG_FLASH_NVCTR_SIZE)
+#define CONFIG_FLASH_NVMEM_OFFSET_B (CFG_TOP_B_OFF + CONFIG_FLASH_NVCTR_SIZE)
 /* Address of start of Nvmem area */
 #define CONFIG_FLASH_NVMEM_BASE_A (CONFIG_PROGRAM_MEMORY_BASE + \
 				 CONFIG_FLASH_NVMEM_OFFSET_A)
 #define CONFIG_FLASH_NVMEM_BASE_B (CONFIG_PROGRAM_MEMORY_BASE + \
 				 CONFIG_FLASH_NVMEM_OFFSET_B)
 /* Size partition in NvMem */
-#define NVMEM_PARTITION_SIZE CFG_TOP_SIZE
+#define NVMEM_PARTITION_SIZE (CFG_TOP_SIZE - CONFIG_FLASH_NVCTR_SIZE)
 /* Size in bytes of NvMem area */
-#define CONFIG_FLASH_NVMEM_SIZE (CFG_TOP_SIZE * NVMEM_NUM_PARTITIONS)
+#define CONFIG_FLASH_NVMEM_SIZE (NVMEM_PARTITION_SIZE * NVMEM_NUM_PARTITIONS)
+/* Enable <key, value> variable support. */
+#define CONFIG_FLASH_NVMEM_VARS
+#define NVMEM_CR50_SIZE 272
+#define CONFIG_FLASH_NVMEM_VARS_USER_SIZE NVMEM_CR50_SIZE
 
 
 /* Go to sleep when nothing else is happening */
 #define CONFIG_LOW_POWER_IDLE
 
-/* Detect the states of other devices */
-#define CONFIG_DEVICE_STATE
+/* Allow multiple concurrent memory allocations. */
+#define CONFIG_MALLOC
 
 /* Enable debug cable detection */
 #define CONFIG_RDD
 
+/* Also use the cr50 as a second factor authentication */
+#define CONFIG_U2F
+
 /* USB configuration */
 #define CONFIG_USB
-#define CONFIG_USB_HID
 #define CONFIG_USB_CONSOLE
+#define CONFIG_USB_I2C
 #define CONFIG_USB_INHIBIT_INIT
-#define CONFIG_USB_SELECT_PHY
 #define CONFIG_USB_SPI
+#define CONFIG_USB_SERIALNO
+#define DEFAULT_SERIALNO "0"
 
 #define CONFIG_STREAM_USART
 #define CONFIG_STREAM_USB
+#define CONFIG_STREAM_USART1
+#define CONFIG_STREAM_USART2
 
 /* Enable Case Closed Debugging */
-#define CONFIG_CASE_CLOSED_DEBUG
+#define CONFIG_CASE_CLOSED_DEBUG_V1
+#define CONFIG_PHYSICAL_PRESENCE
+
+#ifdef CR50_DEV
+/* Enable unsafe dev features for CCD in dev builds */
+#define CONFIG_CASE_CLOSED_DEBUG_V1_UNSAFE
+#define CONFIG_PHYSICAL_PRESENCE_DEBUG_UNSAFE
+#endif
 
 #define CONFIG_USB_PID 0x5014
 #define CONFIG_USB_SELF_POWERED
+
+#undef CONFIG_USB_MAXPOWER_MA
+#define CONFIG_USB_MAXPOWER_MA 0
+
+/* Need to be able to bitbang the EC UART for updates through CCD. */
+#define CONFIG_UART_BITBANG
 
 /* Enable SPI Master (SPI) module */
 #define CONFIG_SPI_MASTER
@@ -85,6 +137,12 @@
 
 /* Include crypto stuff, both software and hardware. */
 #define CONFIG_DCRYPTO
+#define CONFIG_UPTO_SHA512
+
+/* Implement custom udelay, due to usec hwtimer imprecision. */
+#define CONFIG_HW_SPECIFIC_UDELAY
+
+#define CONFIG_TPM_LOGGING
 
 #ifndef __ASSEMBLER__
 
@@ -98,36 +156,89 @@ enum usb_strings {
 	USB_STR_VERSION,
 	USB_STR_CONSOLE_NAME,
 	USB_STR_BLOB_NAME,
-	USB_STR_HID_NAME,
+	USB_STR_HID_KEYBOARD_NAME,
 	USB_STR_AP_NAME,
 	USB_STR_EC_NAME,
 	USB_STR_UPGRADE_NAME,
 	USB_STR_SPI_NAME,
+	USB_STR_SERIALNO,
+	USB_STR_I2C_NAME,
 
 	USB_STR_COUNT
 };
 
-/* Device indexes */
-enum device_type {
-	DEVICE_AP = 0,
-	DEVICE_EC,
-	DEVICE_SERVO,
+/*
+ * Device states
+ *
+ * Note that not all states are used by all devices.
+ */
+enum device_state {
+	/* Initial state at boot */
+	DEVICE_STATE_INIT = 0,
 
-	DEVICE_COUNT
+	/*
+	 * Detect was not asserted at boot, but we're not willing to give up on
+	 * the device right away so we're debouncing to see if it shows up.
+	 */
+	DEVICE_STATE_INIT_DEBOUNCING,
+
+	/*
+	 * Device was detected at boot, but we can't enable transmit yet
+	 * because that would interfere with detection of another device.
+	 */
+	DEVICE_STATE_INIT_RX_ONLY,
+
+	/* Disconnected or off, because detect is deasserted */
+	DEVICE_STATE_DISCONNECTED,
+	DEVICE_STATE_OFF,
+
+	/* Device state is not knowable because we're driving detect */
+	DEVICE_STATE_UNDETECTABLE,
+
+	/* Connected or on, because detect is asserted */
+	DEVICE_STATE_CONNECTED,
+	DEVICE_STATE_ON,
+
+	/*
+	 * Device was connected, but we saw detect deasserted and are
+	 * debouncing to see if it stays deasserted - at which point we'll
+	 * decide that it's disconnected.
+	 */
+	DEVICE_STATE_DEBOUNCING,
+
+	/* Device state is unknown.  Used only by legacy device_state code. */
+	DEVICE_STATE_UNKNOWN,
+
+	/* Number of device states */
+	DEVICE_STATE_COUNT
 };
 
-/* USB SPI device indexes */
-enum usb_spi {
-	USB_SPI_DISABLE = 0,
-	USB_SPI_AP,
-	USB_SPI_EC,
+/**
+ * Return the name of the device state as as string.
+ *
+ * @param state		State to look up
+ * @return Name of the state, or "?" if no match.
+ */
+const char *device_state_name(enum device_state state);
+
+/* NVMem variables. */
+enum nvmem_vars {
+	NVMEM_VAR_CONSOLE_LOCKED = 0,
+	NVMEM_VAR_TEST_VAR,
+	NVMEM_VAR_U2F_SALT,
+	NVMEM_VAR_CCD_CONFIG,
+
+	NVMEM_VARS_COUNT
 };
 
 void board_configure_deep_sleep_wakepins(void);
-/* Interrupt handler */
-void sys_rst_asserted(enum gpio_signal signal);
-void device_state_on(enum gpio_signal signal);
-void device_state_off(enum gpio_signal signal);
+void ap_detect_asserted(enum gpio_signal signal);
+void ec_detect_asserted(enum gpio_signal signal);
+void ec_tx_cr50_rx(enum gpio_signal signal);
+void servo_detect_asserted(enum gpio_signal signal);
+void tpm_rst_deasserted(enum gpio_signal signal);
+
+void post_reboot_request(void);
 
 /* Special controls over EC and AP */
 void assert_sys_rst(void);
@@ -137,25 +248,65 @@ void assert_ec_rst(void);
 void deassert_ec_rst(void);
 int is_ec_rst_asserted(void);
 
+/**
+ * Set up a deferred call to update CCD state.
+ *
+ * This will enable/disable UARTs, SPI, I2C, etc. as needed.
+ */
+void ccd_update_state(void);
+
+int board_use_plt_rst(void);
+int board_rst_pullup_needed(void);
+int board_tpm_uses_i2c(void);
+int board_tpm_uses_spi(void);
+int board_id_is_mismatched(void);
+/* Use TPM_RST_L to detect the AP state instead of the uart */
+int board_detect_ap_with_tpm_rst(void);
+/* Allow for deep sleep to be enabled on AP shutdown */
+int board_deep_sleep_allowed(void);
+
+void power_button_record(void);
+
+/* Functions needed by CCD config */
+int board_battery_is_present(void);
+int board_fwmp_allows_unlock(void);
+void board_reboot_ap(void);
+int board_wipe_tpm(void);
+int board_is_first_factory_boot(void);
+
+void print_ap_state(void);
+void print_ec_state(void);
+void print_servo_state(void);
+
+int ap_is_on(void);
+int ec_is_on(void);
+int ec_is_rx_allowed(void);
+int servo_is_connected(void);
+
+void set_ap_on_deferred(void);
+
+/* Returns True if chip is brought up in a factory test harness. */
+int chip_factory_mode(void);
+
 #endif /* !__ASSEMBLER__ */
 
 /* USB interface indexes (use define rather than enum to expand them) */
 #define USB_IFACE_CONSOLE 0
-#define USB_IFACE_HID     1
-#define USB_IFACE_AP      2
-#define USB_IFACE_EC      3
-#define USB_IFACE_UPGRADE 4
-#define USB_IFACE_SPI     5
+#define USB_IFACE_AP      1
+#define USB_IFACE_EC      2
+#define USB_IFACE_UPGRADE 3
+#define USB_IFACE_SPI     4
+#define USB_IFACE_I2C     5
 #define USB_IFACE_COUNT   6
 
 /* USB endpoint indexes (use define rather than enum to expand them) */
 #define USB_EP_CONTROL   0
 #define USB_EP_CONSOLE   1
-#define USB_EP_HID       2
-#define USB_EP_AP        3
-#define USB_EP_EC        4
-#define USB_EP_UPGRADE   5
-#define USB_EP_SPI       6
+#define USB_EP_AP        2
+#define USB_EP_EC        3
+#define USB_EP_UPGRADE   4
+#define USB_EP_SPI       5
+#define USB_EP_I2C       6
 #define USB_EP_COUNT     7
 
 /* UART indexes (use define rather than enum to expand them) */
@@ -164,18 +315,6 @@ int is_ec_rst_asserted(void);
 #define UART_EC		2
 
 #define UARTN UART_CR50
-
-/* TODO(crosbug.com/p/56540): Remove this when UART0_RX works everywhere */
-#define GC_UART0_RX_DISABLE
-
-/*
- * This would be a low hanging fruit if there is a need to reduce memory
- * footprint. Having a large buffer helps not to drop debug outputs generated
- * before console is initialized, but this is not really necessary in a
- * production device.
- */
-#undef CONFIG_UART_TX_BUF_SIZE
-#define CONFIG_UART_TX_BUF_SIZE 4096
 
 #define CC_DEFAULT     (CC_ALL & ~CC_MASK(CC_TPM))
 
@@ -188,12 +327,7 @@ enum nvmem_users {
 };
 #endif
 
-/*
- * Let's be on the lookout for stack overflow, while debugging.
- *
- * TODO(vbendeb): remove this before finalizing the code.
- */
-#define CONFIG_DEBUG_STACK_OVERFLOW
+#define CONFIG_FLASH_NVMEM_VARS_USER_NUM NVMEM_CR50
 #define CONFIG_RW_B
 
 /* Firmware upgrade options. */
@@ -201,7 +335,32 @@ enum nvmem_users {
 #define CONFIG_USB_FW_UPDATE
 
 #define CONFIG_I2C
+#define CONFIG_I2C_MASTER
 #define CONFIG_I2C_SLAVE
 #define CONFIG_TPM_I2CS
+
+#define CONFIG_BOARD_ID_SUPPORT
+#define CONFIG_EXTENDED_VERSION_INFO
+
+#define I2C_PORT_MASTER 0
+
+#define CONFIG_BASE32
+#define CONFIG_CURVE25519
+#define CONFIG_RMA_AUTH
+#define CONFIG_FACTORY_MODE
+#define CONFIG_RNG
+
+/* Dummy values to be replaced with real ones. */
+#define CONFIG_RMA_AUTH_SERVER_PUBLIC_KEY {			\
+		0x03, 0xae, 0x2d, 0x2c, 0x06, 0x23, 0xe0, 0x73, \
+		0x0d, 0xd3, 0xb7, 0x92, 0xac, 0x54, 0xc5, 0xfd,	\
+		0x7e, 0x9c, 0xf0, 0xa8, 0xeb, 0x7e, 0x2a, 0xb5,	\
+		0xdb, 0xf4, 0x79, 0x5f, 0x8a, 0x0f, 0x28, 0x3f}
+#define CONFIG_RMA_AUTH_SERVER_KEY_ID	  0x10
+
+#define CONFIG_ENABLE_H1_ALERTS
+
+/* Enable hardware backed brute force resistance feature */
+#define CONFIG_PINWEAVER
 
 #endif /* __CROS_EC_BOARD_H */

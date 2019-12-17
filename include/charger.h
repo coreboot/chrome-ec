@@ -10,7 +10,7 @@
 
 #include "common.h"
 
-/* Charger infomation
+/* Charger information
  * voltage unit: mV
  * current unit: mA
  */
@@ -65,10 +65,26 @@ int charger_get_status(int *status);
 int charger_set_mode(int mode);
 
 /**
- * For chargers that are able to supply 5V output power for OTG dongle, this
- * function enables or disables 5V power output.
+ * For chargers that are able to supply output power for OTG dongle, this
+ * function enables or disables power output.
  */
 int charger_enable_otg_power(int enabled);
+
+/**
+ * Sets OTG current limit and voltage (independent of whether OTG power is
+ * currently enabled).
+ *
+ * Depending on the charger and use case, one needs to be careful about
+ * changing the current/voltage while OTG power is enabled, and it might be wise
+ * to reset the value before enabling OTG power to ensure one does not provide
+ * excessive voltage to a device.
+ *
+ * @param output_current	Requested current limit in mA.
+ * @param output_voltage	Requested voltage in mV.
+ *
+ * @return EC_SUCCESS on success, an error otherwise.
+ */
+int charger_set_otg_current_voltage(int output_current, int output_voltage);
 
 /**
  * Return the closest match the charger can supply to the requested current.
@@ -99,8 +115,8 @@ int charger_set_voltage(int voltage);
 /* Discharge battery when on AC power. */
 int charger_discharge_on_ac(int enable);
 
-/* Get the VBUS level from the charger */
-int charger_get_vbus_level(void);
+/* Get the VBUS voltage (mV) from the charger */
+int charger_get_vbus_voltage(int port);
 
 /* Custom board function to discharge battery when on AC power */
 int board_discharge_on_ac(int enable);

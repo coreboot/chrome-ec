@@ -6,14 +6,51 @@
 #include "clock.h"
 #include "hooks.h"
 #include "registers.h"
+#include "timer.h"
+
+#define POWER_BUTTON 2
+
+static uint8_t val;
+
+int rbox_powerbtn_is_pressed(void)
+{
+	return !GREAD_FIELD(RBOX, CHECK_OUTPUT, PWRB_OUT);
+}
+
+int rbox_powerbtn_override_is_enabled(void)
+{
+	return GREAD_FIELD(RBOX, OVERRIDE_OUTPUT, EN) & (1 << POWER_BUTTON);
+}
+
+void rbox_powerbtn_release(void)
+{
+	GWRITE_FIELD(RBOX, OVERRIDE_OUTPUT, EN, 0);
+	GWRITE_FIELD(RBOX, OVERRIDE_OUTPUT, OEN, 0);
+	GWRITE_FIELD(RBOX, OVERRIDE_OUTPUT, VAL, val);
+}
+
+void rbox_powerbtn_press(void)
+{
+	if (rbox_powerbtn_override_is_enabled())
+		return;
+
+	val = GREAD_FIELD(RBOX, OVERRIDE_OUTPUT, VAL);
+	GWRITE_FIELD(RBOX, OVERRIDE_OUTPUT, VAL, ~(1 << POWER_BUTTON) & val);
+	GWRITE_FIELD(RBOX, OVERRIDE_OUTPUT, OEN, 1 << POWER_BUTTON);
+	GWRITE_FIELD(RBOX, OVERRIDE_OUTPUT, EN, 1 << POWER_BUTTON);
+}
 
 static void rbox_release_ec_reset(void)
 {
+	/* Unfreeze the PINMUX */
+	GREG32(PINMUX, HOLD) = 0;
+
+	/* Allow some time for outputs to stabilize. */
+	usleep(500);
+
 	/* Let the EC go (the RO bootloader asserts it ASAP after POR) */
 	GREG32(RBOX, ASSERT_EC_RST) = 0;
 
-	/* And unfreeze the PINMUX */
-	GREG32(PINMUX, HOLD) = 0;
 }
 DECLARE_HOOK(HOOK_INIT, rbox_release_ec_reset, HOOK_PRIO_LAST);
 
@@ -62,7 +99,7 @@ static void rbox_init(void)
 	       0x2 << GC_RBOX_DEBUG_TERM_KEY0_IN_LSB |
 	       0x0 << GC_RBOX_DEBUG_TERM_KEY0_OUT_LSB |
 	       0x1 << GC_RBOX_DEBUG_TERM_KEY1_IN_LSB |
-	       0x0 << GC_RBOX_DEBUG_TERM_KEY1_IN_LSB);
+	       0x0 << GC_RBOX_DEBUG_TERM_KEY1_OUT_LSB);
 	/* DEBUG_BLOCK_OUTPUT value should be 0x157 */
 	GWRITE(RBOX, DEBUG_DRIVE,
 	       0x3 << GC_RBOX_DEBUG_DRIVE_PWRB_OUT_LSB |
