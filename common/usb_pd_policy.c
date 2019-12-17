@@ -223,7 +223,113 @@ static void enable_transmit_sop_prime(int port)
 
 static void disable_transmit_sop_prime(int port)
 {
-	cable[port].flags &= ~CABLE_FLAGS_SOP_PRIME_ENABLE;
+	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP))
+		cable[port].flags &= ~CABLE_FLAGS_SOP_PRIME_ENABLE;
+}
+
+static bool is_tbt_compat_enabled(int port)
+{
+	return (IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE) &&
+	       (cable[port].flags & CABLE_FLAGS_TBT_COMPAT_ENABLE));
+}
+
+static void enable_tbt_compat_mode(int port)
+{
+	if (IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE))
+		cable[port].flags |= CABLE_FLAGS_TBT_COMPAT_ENABLE;
+}
+
+static inline void disable_tbt_compat_mode(int port)
+{
+	if (IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE))
+		cable[port].flags &= ~CABLE_FLAGS_TBT_COMPAT_ENABLE;
+}
+
+/*
+ * TODO (b/146006708): Make the below three functions independent of
+ * Thunderbolt-compatible mode enabled as these USB PD 3.0 VDO responses
+ * can be used to identify other cable attributes like cable speed.
+ */
+static bool is_cable_superspeed(int port)
+{
+	if (is_tbt_compat_enabled(port) &&
+	    IS_ENABLED(CONFIG_USB_PD_DECODE_SOP)) {
+		/*
+		 * Bit 4 gives if USB SS is supported for active cables
+		 * for Rev 3.0
+		 * Ref: PD Spec 3.0 Active Cable VDO 2
+		 */
+		if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
+		   (cable[port].type == IDH_PTYPE_ACABLE))
+			return !!cable[port].attr2.a2_rev30.usb_ss_support;
+
+		/*
+		 * Bits 2:0 gives USB SS support for passive cable
+		 * for both Rev2.0 and Rev3.0
+		 * Ref: PD Spec 3.0 Passive cable VDO and
+		 * Spec 2.0 Passive cable VDO
+		 *
+		 * For rev2.0 active cable, bits 2:0 give USB SS support
+		 * (Ref: spec 2.0 Passive cable VDO)
+		 */
+		return !!(cable[port].attr.rev20.ss & USB_SS_U31_GEN2);
+	}
+	return false;
+}
+
+/* Check if product supports any Modal Operation (Alternate Modes) */
+static bool is_modal(int port, int cnt, uint32_t *payload)
+{
+	return (is_tbt_compat_enabled(port) &&
+		is_vdo_present(cnt, VDO_INDEX_IDH) &&
+		PD_IDH_IS_MODAL(payload[VDO_INDEX_IDH]));
+}
+
+static bool is_intel_svid(int port, int prev_svid_cnt)
+{
+	int i;
+
+	/*
+	 * Check if SVID0 = USB_VID_INTEL
+	 * (Ref: USB Type-C cable and connector specification, Table F-9)
+	 */
+	if (is_tbt_compat_enabled(port)) {
+		/*
+		 * errata: All the Thunderbolt certified cables and docks
+		 * tested have SVID1 = 0x8087
+		 *
+		 * For the Discover SVIDs, responder may present the SVIDs
+		 * in any order hence check all SVIDs if Intel SVID present.
+		 */
+		for (i = prev_svid_cnt; i < pe[port].svid_cnt; i++) {
+			if (pe[port].svids[i].svid == USB_VID_INTEL)
+				return true;
+		}
+	}
+	return false;
+}
+
+static inline bool is_tbt_compat_mode(int port, int cnt, uint32_t *payload)
+{
+	/*
+	 * Ref: USB Type-C cable and connector specification
+	 * F.2.5 TBT3 Device Discover Mode Responses
+	 */
+
+	return is_tbt_compat_enabled(port) &&
+		is_vdo_present(cnt, VDO_INDEX_IDH) &&
+		PD_VDO_RESP_MODE_INTEL_TBT(payload[VDO_INDEX_IDH]);
+}
+
+static inline void limit_cable_speed(int port)
+{
+	cable[port].flags |= CABLE_FLAGS_TBT_COMPAT_LIMIT_SPEED;
+}
+
+static inline bool is_limit_cable_speed(int port)
+{
+	return !!(cable[port].flags & CABLE_FLAGS_TBT_COMPAT_LIMIT_SPEED);
+>>>>>>> 78c2dcc67c... TCPMv1: TBT: Correct checking for Intel SVIDs
 }
 
 void pd_dfp_pe_init(int port)
@@ -742,8 +848,37 @@ int pd_svdm(int port, int cnt, uint32_t *payload, uint32_t **rpayload)
 #endif
 			break;
 		case CMD_DISCOVER_SVID:
+			{
+			int prev_svid_cnt = pe[port].svid_cnt;
 			dfp_consume_svids(port, cnt, payload);
+			/*
+			 * Check if 0x8087 is received for Discover SVID SOP.
+			 * If not, disable Thunderbolt-compatible mode
+			 * Ref: USB Type-C Cable and Connector Specification,
+			 * figure F-1: TBT3 Discovery Flow
+			 */
+			if (is_intel_svid(port, prev_svid_cnt)) {
+				if (!is_transmit_msg_sop_prime(port)) {
+					rsize = dfp_discover_svids(payload);
+					enable_transmit_sop_prime(port);
+					break;
+				}
+			/*
+			 * If 0x8087 is not received for Discover SVID SOP'
+			 * limit to TBT passive Gen 2 cable
+			 * Ref: USB Type-C Cable and Connector Specification,
+			 * figure F-1: TBT3 Discovery Flow
+			 */
+			} else if (is_tbt_compat_enabled(port) &&
+				   is_transmit_msg_sop_prime(port)) {
+				limit_cable_speed(port);
+			} else {
+				disable_tbt_compat_mode(port);
+			}
+
 			rsize = dfp_discover_modes(port, payload);
+			disable_transmit_sop_prime(port);
+			}
 			break;
 		case CMD_DISCOVER_MODES:
 			dfp_consume_modes(port, cnt, payload);
