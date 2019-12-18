@@ -277,7 +277,7 @@ static int mt6370_enable_hidden_mode(int en)
 	int rv = 0;
 
 	if (in_interrupt_context()) {
-		CPRINTS("Err: use hidden mode in IRQ");
+		CPRINTS("Shouldn't use %s in IRQ", __func__);
 		return EC_ERROR_INVAL;
         }
 
@@ -351,6 +351,16 @@ static int mt6370_ichg_workaround(int new_ichg)
 	return rv;
 }
 #endif /* CONFIG_CHARGER_MT6370 */
+
+static int rt946x_chip_rev(int *chip_rev)
+{
+	int rv;
+
+	rv = rt946x_read8(RT946X_REG_DEVICEID, chip_rev);
+	if (rv == EC_SUCCESS)
+		*chip_rev &= RT946X_MASK_CHIP_REV;
+	return rv;
+}
 
 static inline int rt946x_enable_wdt(int en)
 {
@@ -432,7 +442,7 @@ static int rt946x_set_ieoc(unsigned int ieoc)
 	reg_ieoc = rt946x_closest_reg(RT946X_IEOC_MIN, RT946X_IEOC_MAX,
 				      RT946X_IEOC_STEP, ieoc);
 
-	CPRINTS("ieoc=%d", ieoc);
+	CPRINTF("%s ieoc = %d(0x%02X)\n", __func__, ieoc, reg_ieoc);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL9, RT946X_MASK_IEOC,
 				reg_ieoc << RT946X_SHIFT_IEOC);
@@ -445,7 +455,7 @@ static int rt946x_set_mivr(unsigned int mivr)
 	reg_mivr = rt946x_closest_reg(RT946X_MIVR_MIN, RT946X_MIVR_MAX,
 		RT946X_MIVR_STEP, mivr);
 
-	CPRINTS("mivr=%d", mivr);
+	CPRINTF("%s: mivr = %d(0x%02X)\n", __func__, mivr, reg_mivr);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL6, RT946X_MASK_MIVR,
 		reg_mivr << RT946X_SHIFT_MIVR);
@@ -458,7 +468,7 @@ static int rt946x_set_boost_voltage(unsigned int voltage)
 	reg_voltage = rt946x_closest_reg(RT946X_BOOST_VOLTAGE_MIN,
 		RT946X_BOOST_VOLTAGE_MAX, RT946X_BOOST_VOLTAGE_STEP, voltage);
 
-	CPRINTS("voltage=%d", voltage);
+	CPRINTF("%s voltage = %d(0x%02X)\n", __func__, voltage, reg_voltage);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL5,
 		RT946X_MASK_BOOST_VOLTAGE,
@@ -479,7 +489,7 @@ static int rt946x_set_boost_current(unsigned int current)
 			break;
 	}
 
-	CPRINTS("current=%d", current);
+	CPRINTF("%s current = %d(0x%02X)\n", __func__, current, i);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL10,
 		RT946X_MASK_BOOST_CURRENT,
@@ -493,7 +503,7 @@ static int rt946x_set_ircmp_vclamp(unsigned int vclamp)
 	reg_vclamp = rt946x_closest_reg(RT946X_IRCMP_VCLAMP_MIN,
 		RT946X_IRCMP_VCLAMP_MAX, RT946X_IRCMP_VCLAMP_STEP, vclamp);
 
-	CPRINTS("vclamp=%d", vclamp);
+	CPRINTF("%s: vclamp = %d(0x%02X)\n", __func__, vclamp, reg_vclamp);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL18,
 		RT946X_MASK_IRCMP_VCLAMP,
@@ -507,7 +517,7 @@ static int rt946x_set_ircmp_res(unsigned int res)
 	reg_res = rt946x_closest_reg(RT946X_IRCMP_RES_MIN, RT946X_IRCMP_RES_MAX,
 		RT946X_IRCMP_RES_STEP, res);
 
-	CPRINTS("res=%d", res);
+	CPRINTF("%s: res = %d(0x%02X)\n", __func__, res, reg_res);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL18, RT946X_MASK_IRCMP_RES,
 		reg_res << RT946X_SHIFT_IRCMP_RES);
@@ -520,7 +530,7 @@ static int rt946x_set_vprec(unsigned int vprec)
 	reg_vprec = rt946x_closest_reg(RT946X_VPREC_MIN, RT946X_VPREC_MAX,
 		RT946X_VPREC_STEP, vprec);
 
-	CPRINTS("vprec=%d", vprec);
+	CPRINTF("%s: vprec = %d(0x%02X)\n", __func__, vprec, reg_vprec);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL8, RT946X_MASK_VPREC,
 		reg_vprec << RT946X_SHIFT_VPREC);
@@ -533,7 +543,7 @@ static int rt946x_set_iprec(unsigned int iprec)
 	reg_iprec = rt946x_closest_reg(RT946X_IPREC_MIN, RT946X_IPREC_MAX,
 		RT946X_IPREC_STEP, iprec);
 
-	CPRINTS("iprec=%d", iprec);
+	CPRINTF("%s: iprec = %d(0x%02X)\n", __func__, iprec, reg_iprec);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL8, RT946X_MASK_IPREC,
 		reg_iprec << RT946X_SHIFT_IPREC);
@@ -659,7 +669,7 @@ int charger_set_input_current(int input_current)
 		info->input_current_max, info->input_current_step,
 		input_current);
 
-	CPRINTF("iin=%d", input_current);
+	CPRINTF("%s iin = %d(0x%02X)\n", __func__, input_current, reg_iin);
 
 	return rt946x_update_bits(RT946X_REG_CHGCTRL3, RT946X_MASK_AICR,
 		reg_iin << RT946X_SHIFT_AICR);
@@ -977,7 +987,7 @@ int charger_set_hw_ramp(int enable)
 	 * The vendor suggests setting AICL_VTH as (MIVR + 200mV).
 	 */
 	if ((mivr + 200) > RT946X_AICLVTH_MAX) {
-		CPRINTS("no suitable vth, %d", mivr);
+		CPRINTF("%s: no suitable vth, mivr = %d\n", __func__, mivr);
 		return EC_ERROR_INVAL;
 	}
 
@@ -1017,9 +1027,26 @@ int chg_ramp_get_current_limit(void)
 
 static void rt946x_init(void)
 {
-	int ret = rt946x_init_setting();
+	int reg = 0xFFFFFFFF;
 
-	CPRINTS("RT946X init %s", ret ? "fail" : "success");
+	/* Check device id */
+	if (charger_device_id(&reg) || reg != RT946X_VENDOR_ID) {
+		CPRINTF("RT946X incorrect ID: 0x%02x\n", reg);
+		return;
+	}
+
+	/* Check revision id */
+	if (rt946x_chip_rev(&reg)) {
+		CPRINTF("Failed to read RT946X CHIP REV\n");
+		return;
+	}
+	CPRINTF("RT946X CHIP REV: 0x%02x\n", reg);
+
+	if (rt946x_init_setting()) {
+		CPRINTF("RT946X init failed\n");
+		return;
+	}
+	CPRINTF("RT946X init succeeded\n");
 }
 DECLARE_HOOK(HOOK_INIT, rt946x_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -1257,7 +1284,7 @@ int rt946x_get_adc(enum rt946x_adc_in_sel adc_sel, int *adc_val)
 	const int max_wait_times = 6;
 
 	if (in_interrupt_context()) {
-		CPRINTS("Err: use ADC in IRQ");
+		CPRINTS("Shouldn't use %s in IRQ", __func__);
 		return EC_ERROR_INVAL;
         }
 	mutex_lock(&adc_access_lock);
@@ -1291,7 +1318,8 @@ int rt946x_get_adc(enum rt946x_adc_in_sel adc_sel, int *adc_val)
 			break;
 	}
 	if (i == max_wait_times)
-		CPRINTS("conversion fail sel=%d", adc_sel);
+		CPRINTS("%s: wait conversation failed, sel = %d, rv = %d",
+			__func__, adc_sel, rv);
 
 	/* Read ADC data */
 	rv = rt946x_read8(RT946X_REG_ADCDATAH, &adc_data_h);
@@ -1303,7 +1331,7 @@ int rt946x_get_adc(enum rt946x_adc_in_sel adc_sel, int *adc_val)
 	if (adc_sel == RT946X_ADC_VBUS_DIV5)
 		adc_result = ((adc_data_h << 8) | adc_data_l) * 25;
 	else
-		CPRINTS("unsupported channel");
+		CPRINTS("%s: RT946X not yet support channels", __func__);
 	*adc_val = adc_result;
 #elif defined(CONFIG_CHARGER_MT6370)
 	/* Calculate ADC value */
@@ -1378,7 +1406,7 @@ static int mt6370_pmu_chg_mivr_irq_handler(void)
 		return rv;
 
 	if (!mivr_stat) {
-		CPRINTS("mivr inact");
+		CPRINTS("%s: mivr stat not act", __func__);
 		return rv;
 	}
 
