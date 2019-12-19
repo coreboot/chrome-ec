@@ -233,7 +233,7 @@ static int command_board_id(int argc, char **argv)
 			ccprintf("Inv Type Mismatch (%08x instead of %08x)!\n",
 				 id.type_inv, ~id.type);
 	}
-#ifdef CR50_DEV
+#ifdef CR50_RELAXED
 	else if (argc == 3) {
 		char *e;
 
@@ -250,7 +250,7 @@ static int command_board_id(int argc, char **argv)
 	return rv;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(bid, command_board_id,
-#ifdef CR50_DEV
+#ifdef CR50_RELAXED
 			     "[bid flags]",
 #else
 			     NULL,
