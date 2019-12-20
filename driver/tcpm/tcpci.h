@@ -54,6 +54,7 @@
 #define TCPC_REG_TCPC_CTRL_POLARITY(reg) ((reg) & 0x1)
 
 #define TCPC_REG_ROLE_CTRL         0x1a
+#define TCPC_REG_ROLE_CTRL_DRP_MASK                    BIT(6)
 #define TCPC_REG_ROLE_CTRL_SET(drp, rp, cc1, cc2) \
 		((drp) << 6 | (rp) << 4 | (cc2) << 2 | (cc1))
 #define TCPC_REG_ROLE_CTRL_DRP(reg) (((reg) & 0x40) >> 6)
