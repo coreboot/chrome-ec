@@ -22,6 +22,8 @@
 
 #define CONFIG_POWER_BUTTON
 
+#define CONFIG_USB_PD_ALT_MODE_DFP
+
 /*
  * USB ID
  * TODO(b/140578872): Figure out what volteer's is.

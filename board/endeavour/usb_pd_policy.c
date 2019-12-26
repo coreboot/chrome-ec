@@ -25,14 +25,8 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
-#define PDO_FIXED_FLAGS (PDO_FIXED_EXTERNAL | \
-			 PDO_FIXED_DATA_SWAP | \
+#define PDO_FIXED_FLAGS (PDO_FIXED_DATA_SWAP | \
 			 PDO_FIXED_COMM_CAP)
-
-const uint32_t pd_src_pdo[] = {
-	PDO_FIXED(5000, 3000, PDO_FIXED_FLAGS),
-};
-const int pd_src_pdo_cnt = ARRAY_SIZE(pd_src_pdo);
 
 void pd_transition_voltage(int idx)
 {
@@ -165,136 +159,6 @@ int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 #endif /* CONFIG_USB_PD_LOGGING */
 	}
 
-	return 0;
-}
-
-static int dp_flags[CONFIG_USB_PD_PORT_MAX_COUNT];
-static uint32_t dp_status[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-static void svdm_safe_dp_mode(int port)
-{
-	/* make DP interface safe until configure */
-	dp_flags[port] = 0;
-	dp_status[port] = 0;
-	usb_mux_set(port, TYPEC_MUX_NONE,
-		USB_SWITCH_CONNECT, pd_get_polarity(port));
-}
-
-static int svdm_enter_dp_mode(int port, uint32_t mode_caps)
-{
-	/* Only enter mode if device is DFP_D capable */
-	if (mode_caps & MODE_DP_SNK) {
-		pd_log_event(PD_EVENT_VIDEO_DP_MODE,
-			     PD_LOG_PORT_SIZE(port, 0), 1, NULL);
-		svdm_safe_dp_mode(port);
-		return 0;
-	}
-
-	return -1;
-}
-
-static int svdm_dp_status(int port, uint32_t *payload)
-{
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
-
-	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
-			 CMD_DP_STATUS | VDO_OPOS(opos));
-	payload[1] = VDO_DP_STATUS(0, /* HPD IRQ  ... not applicable */
-				   0, /* HPD level ... not applicable */
-				   0, /* exit DP? ... no */
-				   0, /* usb mode? ... no */
-				   0, /* multi-function ... no */
-				   (!!(dp_flags[port] & DP_FLAGS_DP_ON)),
-				   0, /* power low? ... no */
-				   (!!(dp_flags[port] & DP_FLAGS_DP_ON)));
-	return 2;
-};
-
-static int svdm_dp_config(int port, uint32_t *payload)
-{
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
-	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
-	int pin_mode = pd_dfp_dp_get_pin_mode(port, dp_status[port]);
-
-	if (!pin_mode)
-		return 0;
-
-	usb_mux_set(port, mf_pref ? TYPEC_MUX_DOCK : TYPEC_MUX_DP,
-		    USB_SWITCH_CONNECT, pd_get_polarity(port));
-
-	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
-			 CMD_DP_CONFIG | VDO_OPOS(opos));
-	payload[1] = VDO_DP_CFG(pin_mode,      /* pin mode */
-				1,             /* DPv1.3 signaling */
-				2);            /* UFP connected */
-	return 2;
-};
-
-static void svdm_dp_post_config(int port)
-{
-	const struct usb_mux *mux = &usb_muxes[port];
-
-	dp_flags[port] |= DP_FLAGS_DP_ON;
-	if (!(dp_flags[port] & DP_FLAGS_HPD_HI_PENDING))
-		return;
-	mux->hpd_update(port, 1, 0);
-}
-
-static int svdm_dp_attention(int port, uint32_t *payload)
-{
-	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
-	int irq = PD_VDO_DPSTS_HPD_IRQ(payload[1]);
-	const struct usb_mux *mux = &usb_muxes[port];
-
-	dp_status[port] = payload[1];
-	if (!(dp_flags[port] & DP_FLAGS_DP_ON)) {
-		if (lvl)
-			dp_flags[port] |= DP_FLAGS_HPD_HI_PENDING;
-		return 1;
-	}
-	mux->hpd_update(port, lvl, irq);
-
-	/* ack */
-	return 1;
-}
-
-static void svdm_exit_dp_mode(int port)
-{
-	const struct usb_mux *mux = &usb_muxes[port];
-
-	pd_log_event(PD_EVENT_VIDEO_DP_MODE,
-		     PD_LOG_PORT_SIZE(port, 0), 0, NULL);
-	svdm_safe_dp_mode(port);
-	mux->hpd_update(port, 0, 0);
-}
-
-static int svdm_enter_gfu_mode(int port, uint32_t mode_caps)
-{
-	/* Always enter GFU mode */
-	return 0;
-}
-
-static void svdm_exit_gfu_mode(int port)
-{
-}
-
-static int svdm_gfu_status(int port, uint32_t *payload)
-{
-	/*
-	 * This is called after enter mode is successful, send unstructured
-	 * VDM to read info.
-	 */
-	pd_send_vdm(port, USB_VID_GOOGLE, VDO_CMD_READ_INFO, NULL, 0);
-	return 0;
-}
-
-static int svdm_gfu_config(int port, uint32_t *payload)
-{
-	return 0;
-}
-
-static int svdm_gfu_attention(int port, uint32_t *payload)
-{
 	return 0;
 }
 
