@@ -441,6 +441,7 @@ enum {
 	 */
 	SLEEP_MASK_JTAG     = BIT(16), /* JTAG is in use. */
 	SLEEP_MASK_CONSOLE  = BIT(17), /* Console is in use. */
+	SLEEP_MASK_EC_CR50_COMM = BIT(18), /* EC-CR50 commncation is active. */
 
 	SLEEP_MASK_FORCE_NO_LOW_SPEED = BIT(31)  /* Force disable. */
 };

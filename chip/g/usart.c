@@ -134,6 +134,15 @@ void get_data_from_usb(struct usart_config const *config)
 	struct queue const *uart_out = config->consumer.queue;
 	int c;
 
+#ifdef BOARD_CR50
+	/*
+	 * If EC-CR50 communication is on-going, then let's not forward
+	 * console input to EC for now.
+	 */
+	if (ec_comm_is_uart_in_packet_mode(config->uart))
+		return;
+#endif
+
 	/* Copy output from buffer until TX fifo full or output buffer empty */
 	while (queue_count(uart_out) && QUEUE_REMOVE_UNITS(uart_out, &c, 1))
 		uartn_write_char(config->uart, c);
@@ -160,6 +169,13 @@ void send_data_to_usb(struct usart_config const *config)
 	mask = uart_in->buffer_units_mask;
 	tail = uart_in->state->tail & mask;
 	count = 0;
+
+	/*
+	 * TODO(b/119329144): Process packet data separately,
+	 * and filter console data based on ccd capability.
+	 * if (ec_comm_is_uart_in_packet_mode(uart))
+	 *	...
+	 */
 
 	while ((count != q_room) && uartn_rx_available(uart)) {
 		uart_in->buffer[tail] = uartn_read_char(uart);
