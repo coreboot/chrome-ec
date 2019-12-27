@@ -69,6 +69,8 @@
  * GPIO1.4   detect_tpm_rst_asserted
  * GPIO1.5   unwedge_i2cs_scl
  * GPIO1.6   monitor_i2cs_sda
+ * GPIO1.7   ec_packet_mode_en
+ * GPIO1.8   ec_packet_mode_dis
  * GPIO1.10  rec_lid_switch
  * GPIO1.11  ec_tx_cr50_rx_in
  * GPIO1.12  strap_a0
@@ -105,6 +107,15 @@ GPIO_INT(DETECT_SERVO,    PIN(1, 3),  GPIO_INT_HIGH | GPIO_PULL_DOWN,
  */
 GPIO_INT(DETECT_TPM_RST_L_ASSERTED, PIN(1, 4),  GPIO_INT_FALLING,
          tpm_rst_asserted)
+
+/*
+ * These GPIOs are to enable or disable EC-CR50 communication.
+ * NOTE: If these are changed, you must update the information in board.c
+ *       and ec_comm.c
+ */
+GPIO_INT(EC_PACKET_MODE_EN, PIN(1, 7), GPIO_INT_RISING, ec_comm_packet_mode_en)
+GPIO_INT(EC_PACKET_MODE_DIS, PIN(1, 8), GPIO_INT_FALLING,
+	 ec_comm_packet_mode_dis)
 
 /*****************************************************************************/
 /* NON STANDARD INTERRUPT GPIOs - handlers defined and configured in board.c */

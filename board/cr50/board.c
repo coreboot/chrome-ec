@@ -460,12 +460,18 @@ static void init_ac_detect(void)
 /*****************************************************************************/
 
 /*
- * There's no way to trigger on both rising and falling edges, so force a
- * compiler error if we try. The workaround is to use the pinmux to connect
- * two GPIOs to the same input and configure each one for a separate edge.
+ * There's no way to have more than one trigger condition on a GPIO,
+ * so force a compiler error if we try. The workaround is to use the pinmux to
+ * connect as many GPIOs as the number of required trigger conditions to the
+ * same input and configure each one for a separate condition.
+ */
+#define GPIO_INT_COND(x) ((x) & GPIO_INT_ANY & ~GPIO_INPUT)
+/*
+ * Checks flags has only one bit set among GPIO_INT_F_RISING,
+ * GPIO_INT_F_FALLING, GPIO_INT_F_LOW, GPIO_INT_F_HIGH.
  */
 #define GPIO_INT(name, pin, flags, signal)	\
-	BUILD_ASSERT(((flags) & GPIO_INT_BOTH) != GPIO_INT_BOTH);
+	BUILD_ASSERT((GPIO_INT_COND(flags) & (GPIO_INT_COND(flags) - 1)) == 0);
 #include "gpio.wrap"
 
 /**
@@ -607,6 +613,15 @@ void board_configure_deep_sleep_wakepins(void)
 		/* enable powerdown exit */
 		GWRITE_FIELD(PINMUX, EXITEN0, DIOM0, 1);
 	}
+
+	if (board_has_ec_cr50_comm_support()) {
+		/* disable powerdown exit */
+		GWRITE_FIELD(PINMUX, EXITEN0,   DIOB3, 0);
+		GWRITE_FIELD(PINMUX, EXITEDGE0, DIOB3, 0); /* level sensitive */
+		GWRITE_FIELD(PINMUX, EXITINV0,  DIOB3, 0); /* wake on high */
+		 /* enable powerdown exit */
+		GWRITE_FIELD(PINMUX, EXITEN0,   DIOB3, 1);
+	}
 }
 
 static void deferred_tpm_rst_isr(void);
@@ -704,16 +719,21 @@ static void configure_board_specific_gpios(void)
 		GWRITE(PINMUX, DIOB4_SEL, GC_PINMUX_GPIO0_GPIO2_SEL);
 		GWRITE(PINMUX, GPIO0_GPIO2_SEL, GC_PINMUX_DIOB4_SEL);
 
-		/* Enable the input */
+		/* Enable the input for DIOB4 */
 		GWRITE_FIELD(PINMUX, DIOB4_CTL, IE, 1);
+
+		/* Connect GPIO_EC_PACKET_MODE_EN to DIOB3 as input. */
+		GWRITE(PINMUX, GPIO1_GPIO7_SEL, GC_PINMUX_DIOB3_SEL);
+		/* Connect GPIO_EC_PACKET_MODE_DIS to DIOB3 as input. */
+		GWRITE(PINMUX, GPIO1_GPIO8_SEL, GC_PINMUX_DIOB3_SEL);
 	} else {
 		/* Connect GPIO_AP_FLASH_SELECT to DIOB3. */
 		GWRITE(PINMUX, DIOB3_SEL, GC_PINMUX_GPIO0_GPIO2_SEL);
 		GWRITE(PINMUX, GPIO0_GPIO2_SEL, GC_PINMUX_DIOB3_SEL);
-
-		/* Enable the input */
-		GWRITE_FIELD(PINMUX, DIOB3_CTL, IE, 1);
 	}
+	/* Enable the input for DIOB3 */
+	GWRITE_FIELD(PINMUX, DIOB3_CTL, IE, 1);
+
 }
 
 static uint8_t mismatched_board_id;
