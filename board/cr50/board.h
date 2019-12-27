@@ -377,6 +377,18 @@ void board_unwedge_i2cs(void);
 
 int board_in_prod_mode(void);
 
+/* GPIO Interrupt handler for GPIO_EC_PACKET_MODE_EN rising edge */
+void ec_comm_packet_mode_en(enum gpio_signal unsed);
+
+/* GPIO Interrupt handler for GPIO_EC_PACKET_MODE_DIS falling edge */
+void ec_comm_packet_mode_dis(enum gpio_signal unsed);
+
+/*
+ * Return True if the given UART is in packet mode, in which EC-CR50
+ * communication is on-going.
+ */
+int ec_comm_is_uart_in_packet_mode(int uart);
+
 #endif /* !__ASSEMBLER__ */
 
 /* USB interface indexes (use define rather than enum to expand them) */
@@ -402,6 +414,7 @@ int board_in_prod_mode(void);
 #define UART_CR50	0
 #define UART_AP		1
 #define UART_EC		2
+#define UART_NULL	0xff
 
 #define UARTN UART_CR50
 
