@@ -4,7 +4,7 @@
 
 CC ?= gcc
 PKG_CONFIG ?= pkg-config
-PROGRAMS := gsctool usb_updater2
+PROGRAMS := gsctool
 LIBS    :=
 LFLAGS  :=
 CFLAGS  := -std=gnu99 \
@@ -55,10 +55,6 @@ gsctool: $(GSCTOOL_OBJS) Makefile
 	$(CC) $(CFLAGS) $(CFLAGS_g) -c -MMD -MF $(basename $@).d -o $@ $<
 
 gsctool.o:  generated_version.h
-
-# common EC code USB updater
-usb_updater2: usb_updater2.c Makefile
-	$(CC) $(CFLAGS) $< $(LFLAGS) $(LIBS) $(LIBS_common) -o $@
 
 .PHONY: clean
 
