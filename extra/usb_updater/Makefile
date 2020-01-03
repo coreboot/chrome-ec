@@ -52,10 +52,6 @@ gsctool: $(GSCTOOL_OBJS) Makefile
 %.o: %.c
 	$(CC) $(CFLAGS) $(CFLAGS_g) -c -MMD -MF $(basename $@).d -o $@ $<
 
-# common EC code USB updater
-usb_updater2: usb_updater2.c Makefile
-	$(CC) $(CFLAGS) $< $(LFLAGS) $(LIBS) $(LIBS_common) -o $@
-
 .PHONY: clean
 
 clean:
