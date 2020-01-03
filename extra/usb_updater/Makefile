@@ -45,10 +45,6 @@ all: $(PROGRAMS)
 gsctool: gsctool.c Makefile
 	$(CC) $(CFLAGS) $(CFLAGS_g) $< $(LFLAGS) $(LIBS) $(LIBS_g) -o $@
 
-# common EC code USB updater
-usb_updater2: usb_updater2.c Makefile
-	$(CC) $(CFLAGS) $< $(LFLAGS) $(LIBS) $(LIBS_common) -o $@
-
 .PHONY: clean
 
 clean:
