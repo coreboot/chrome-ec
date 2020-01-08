@@ -753,8 +753,6 @@ static void check_and_queue_gestures(uint32_t *event)
 					     __hw_clock_source_read());
 		motion_sense_fifo_commit_data();
 #endif
-		/* Call board specific function to process tap */
-		sensor_board_proc_double_tap();
 	}
 #endif
 #ifdef CONFIG_GESTURE_SIGMO
