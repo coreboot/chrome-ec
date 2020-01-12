@@ -358,9 +358,6 @@ int board_nvmem_legacy_check_needed(void);
 
 void set_ap_on(void);
 
-/* Returns True if chip is brought up in a factory test harness. */
-int chip_factory_mode(void);
-
 /*
  * Trigger generation of the ITE SYNC sequence on the way up after next
  * reboot.

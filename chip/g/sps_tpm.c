@@ -193,9 +193,6 @@ static void process_rx_data(uint8_t *data, size_t data_size, int cs_deasserted)
 
 static void tpm_rx_handler(uint8_t *data, size_t data_size, int cs_deasserted)
 {
-	if (chip_factory_mode())
-		return;  /* Ignore TPM traffic in factory mode. */
-
 	if ((sps_tpm_state == SPS_TPM_STATE_RECEIVING_HEADER) ||
 	    (sps_tpm_state == SPS_TPM_STATE_RECEIVING_WRITE_DATA))
 		process_rx_data(data, data_size, cs_deasserted);
