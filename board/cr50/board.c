@@ -1352,11 +1352,6 @@ static uint32_t get_properties(void)
 	uint8_t config;
 	uint32_t properties;
 
-	if (chip_factory_mode()) {
-		CPRINTS("Chip factory mode, short circuit to SPI");
-		return BOARD_SLAVE_CONFIG_SPI;
-	}
-
 #ifdef H1_RED_BOARD
 	CPRINTS("Unconditionally enabling SPI and platform reset");
 	return (BOARD_SLAVE_CONFIG_SPI | BOARD_USE_PLT_RESET);
@@ -1634,20 +1629,6 @@ static int command_board_properties(int argc, char **argv)
 }
 DECLARE_SAFE_CONSOLE_COMMAND(brdprop, command_board_properties,
 			     NULL, "Display board properties");
-
-int chip_factory_mode(void)
-{
-	static uint8_t mode_set;
-
-	/*
-	 * Bit 0x2 used to indicate that mode has been set, bit 0x1 is the
-	 * actual indicator of the chip factory mode.
-	 */
-	if (!mode_set)
-		mode_set = 2 | !!gpio_get_level(GPIO_DIOB4);
-
-	return mode_set & 1;
-}
 
 #ifdef CR50_RELAXED
 static int command_rollback(int argc, char **argv)

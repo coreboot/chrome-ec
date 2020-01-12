@@ -557,13 +557,6 @@ void tpm_register_interface(interface_control_func interface_start,
 
 static void tpm_init(void)
 {
-#ifdef ENABLE_TPM
-	/*
-	 * 0xc0 Means successful endorsement. Actual endorsement reasult code
-	 * is added in lower bits to indicate endorsement failure, if any.
-	 */
-	uint8_t underrun_char = 0xc0;
-#endif
 	/* This is more related to TPM task activity than TPM transactions */
 	cprints(CC_TASK, "%s", __func__);
 
@@ -616,18 +609,7 @@ static void tpm_init(void)
 		ccprints("Endorsement %s",
 			 (endorse_result == mnf_success) ?
 			 "succeeded" : "failed");
-
-		if (chip_factory_mode()) {
-			underrun_char |= endorse_result;
-
-			ccprints("Setting underrun character to 0x%x",
-				 underrun_char);
-			sps_tx_status(underrun_char);
-		}
 	} else {
-		if (chip_factory_mode())
-			sps_tx_status(underrun_char | mnf_manufactured);
-
 		_plat__SetNvAvail();
 	}
 #endif
@@ -832,9 +814,7 @@ void tpm_reinstate_nvmem_commits(void)
 
 static void tpm_reset_now(int wipe_first)
 {
-	/* TPM is not running in factory mode. */
-	if (!chip_factory_mode())
-		if_stop();
+	if_stop();
 
 	/* This is more related to TPM task activity than TPM transactions */
 	cprints(CC_TASK, "%s(%d)", __func__, wipe_first);
@@ -865,12 +845,8 @@ static void tpm_reset_now(int wipe_first)
 	       (uintptr_t)(&__bss_libtpm2_end) -
 		       (uintptr_t)(&__bss_libtpm2_start));
 
-	/*
-	 * Prevent NVRAM commits until further notice, unless running in
-	 * factory mode.
-	 */
-	if (!chip_factory_mode())
-		nvmem_disable_commits();
+	/* Prevent NVRAM commits until further notice. */
+	nvmem_disable_commits();
 
 	/* Re-initialize our registers */
 	tpm_init();
@@ -889,13 +865,7 @@ static void tpm_reset_now(int wipe_first)
 	 */
 	hook_call_deferred(&reinstate_nvmem_commits_data, 3 * SECOND);
 
-	/*
-	 * In chip factory mode SPI idle byte sent on MISO is used for
-	 * progress reporting. TPM flow control messes it up, do not start TPM
-	 * in factory mode.
-	 */
-	if (!chip_factory_mode())
-		if_start();
+	if_start();
 }
 
 int tpm_sync_reset(int wipe_first)
@@ -916,34 +886,29 @@ void tpm_task(void *u)
 {
 	uint32_t evt = 0;
 
-	if (!chip_factory_mode()) {
+	/*
+	 * Just in case there is a resume from deep sleep where AP is not out
+	 * of reset, let's not proceed until AP is actually up.
+	 */
+	while (!ap_is_on()) {
 		/*
-		 * Just in case there is a resume from deep sleep where AP is
-		 * not out of reset, let's not proceed until AP is actually
-		 * up. No need to worry about the AP state in chip factory
-		 * mode of course.
+		 * The only events we should expect at this point would be the
+		 * reset request or a command routed through TPM task context
+		 * to make use of the large stack.
 		 */
-		while (!ap_is_on()) {
+		evt = task_wait_event(-1);
+		if (evt & (TPM_EVENT_RESET | TPM_EVENT_ALT_EXTENSION)) {
 			/*
-			 * The only events we should expect at this point
-			 * would be the reset request or a command routed
-			 * through TPM task context to make use of the large
-			 * stack.
+			 * No need to remember the reset request: tpm reset
+			 * will happen as soon as we break out from this while
+			 * loop.
 			 */
-			evt = task_wait_event(-1);
-			if (evt & (TPM_EVENT_RESET | TPM_EVENT_ALT_EXTENSION)) {
-				/*
-				 * No need to remember the reset request: tpm
-				 * reset will happen as soon as we break out
-				 * from this while loop,
-				 */
-				evt &= TPM_EVENT_ALT_EXTENSION;
-				break;
-			}
-
-			cprints(CC_TASK, "%s:%d unexpected event %x",
-				__func__, __LINE__, evt);
+			evt &= TPM_EVENT_ALT_EXTENSION;
+			break;
 		}
+
+		cprints(CC_TASK, "%s:%d unexpected event %x",
+				__func__, __LINE__, evt);
 	}
 
 	tpm_reset_now(0);
