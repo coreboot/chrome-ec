@@ -64,4 +64,21 @@
 #define BQ25710_ADC_IIN_STEP_MA			50
 #define BQ25710_ADC_IIN_STEP_BIT_OFFSET		8
 
+/* ProchotOption0 Register */
+#define BQ25710_PROCHOT0_ILIM_VTH_SHIFT 11
+#define BQ25710_PROCHOT0_ILIM_VTH_MASK	(0x1f << \
+					 BQ25710_PROCHOT0_ILIM_VTH_SHIFT)
+
+/* ProchotOption1 Register */
+#define BQ25710_PROCHOT_PROFILE_VDPM		BIT(7)
+#define BQ25710_PROCHOT_PROFILE_IDCHG		BIT(3)
+#define BQ25710_PROCHOT_PROFILE_VSYS		BIT(2)
+#define BQ25710_PROCHOT_IDCHG_VTH_MASK		0xFC00
+
+/* IIN_DPM Register */
+#define BQ25710_IIN_DPM_BIT_SHIFT		8
+#define BQ25710_IIN_DPM_STEP_MA			50
+
+extern const struct charger_drv bq25710_drv;
+
 #endif /* __CROS_EC_BQ25710_H */

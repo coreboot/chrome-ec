@@ -8,7 +8,7 @@
 #ifndef __CROS_EC_ISL923X_H
 #define __CROS_EC_ISL923X_H
 
-#define ISL923X_ADDR 0x12 /* 7bit address 0001001 */
+#define ISL923X_ADDR (0x12)
 
 /* Registers */
 #define ISL923X_REG_CHG_CURRENT      0x14
@@ -251,6 +251,12 @@
 #define ISL9237_INFO_PSTATE_SHIFT 5
 #define ISL9237_INFO_PSTATE_MASK 3
 
+/* ADC registers */
+#define RAA489000_REG_ADC_INPUT_CURRENT 0x83
+#define RAA489000_REG_ADC_CHARGE_CURRENT 0x85
+#define RAA489000_REG_ADC_VSYS 0x86
+#define RAA489000_REG_ADC_VBUS 0x89
+
 enum isl9237_power_stage {
 	BUCK_MODE,
 	BOOST_MODE,
@@ -296,5 +302,9 @@ enum isl9237_fsm_state {
 #define INPUT_I_MIN   4
 #define INPUT_I_STEP  4
 
+#undef I2C_ADDR_CHARGER
 #define I2C_ADDR_CHARGER ISL923X_ADDR
+
+extern const struct charger_drv isl923x_drv;
+
 #endif /* __CROS_EC_ISL923X_H */
