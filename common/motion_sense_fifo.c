@@ -10,6 +10,7 @@
 #include "tablet_mode.h"
 #include "task.h"
 #include "util.h"
+#include "stdbool.h"
 
 #define CPRINTS(format, args...) cprints(CC_MOTION_SENSE, format, ## args)
 
@@ -73,6 +74,18 @@ static inline int is_timestamp(
 	const struct ec_response_motion_sensor_data *data)
 {
 	return data->flags & MOTIONSENSE_SENSOR_FLAG_TIMESTAMP;
+}
+
+/**
+ * Check whether or not a given sensor data entry contains sensor data or not.
+ *
+ * @param data The data entry to check.
+ * @return True if the entry contains data, false otherwise.
+ */
+static inline bool is_data(const struct ec_response_motion_sensor_data *data)
+{
+	return (data->flags & (MOTIONSENSE_SENSOR_FLAG_TIMESTAMP |
+			       MOTIONSENSE_SENSOR_FLAG_ODR)) == 0;
 }
 
 /**
@@ -424,13 +437,22 @@ commit_data_end:
 		if (data->flags & MOTIONSENSE_SENSOR_FLAG_WAKEUP)
 			wake_up_needed = 1;
 
-		/* Skip timestamp, we don't know the sensor number yet. */
-		if (is_timestamp(data))
+		/*
+		 * Skip non-data entries, we don't know the sensor number yet.
+		 */
+		if (!is_data(data))
 			continue;
 
 		/* Get the sensor number and point to the timestamp entry. */
 		sensor_num = data->sensor_num;
 		data = peek_fifo_staged(i - 1);
+
+		/* Verify we're pointing at a timestamp. */
+		if (!is_timestamp(data)) {
+			CPRINTS("FIFO entries out of order,"
+				" expected timestamp");
+			continue;
+		}
 
 		/*
 		 * If this is the first time we're seeing a timestamp for this
