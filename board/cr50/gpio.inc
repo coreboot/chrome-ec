@@ -69,6 +69,7 @@
  * GPIO1.4   detect_tpm_rst_asserted
  * GPIO1.5   unwedge_i2cs_scl
  * GPIO1.6   monitor_i2cs_sda
+ * GPIO1.10  rec_lid_switch
  * GPIO1.11  ec_tx_cr50_rx_in
  * GPIO1.12  strap_a0
  * GPIO1.13  strap_a1
@@ -152,6 +153,13 @@ GPIO(SPI_CS_L,        PIN(0, 9), GPIO_INPUT)
 
 /* Used during *chip* factory process. */
 GPIO(DIOB4,           PIN(0, 10), GPIO_INPUT | GPIO_PULL_DOWN)
+
+/*
+ * Used to assert lid open or recovery switch with ccd. This signal is
+ * guaranteed to have an external pull-up. The pin is connected to the gpio in
+ * board.c. If the gpio number changes, it needs to be updated in board.c.
+ */
+GPIO(CCD_REC_LID_SWITCH,   PIN(1, 10),  GPIO_ODR_HIGH | GPIO_INPUT)
 
 /* GPIOs used for Cr50 strapping options */
 GPIO(STRAP_A0,        PIN(1, 12), GPIO_INPUT)

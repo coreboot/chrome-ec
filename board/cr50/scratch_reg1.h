@@ -91,11 +91,22 @@
 #define BOARD_EC_CR50_COMM_SUPPORT        BIT(21)
 
 /*
+ * Bits to store which pin is used for the ccd recovery switch/lid open signal.
+ */
+#define BOARD_CCD_REC_LID_PIN_SHIFT       22
+#define BOARD_CCD_REC_LID_PIN_MASK        (3 << BOARD_CCD_REC_LID_PIN_SHIFT)
+#define BOARD_CCD_REC_LID_PIN_DIOA1       (1 << BOARD_CCD_REC_LID_PIN_SHIFT)
+#define BOARD_CCD_REC_LID_PIN_DIOA9       (2 << BOARD_CCD_REC_LID_PIN_SHIFT)
+#define BOARD_CCD_REC_LID_PIN_DIOA12      (3 << BOARD_CCD_REC_LID_PIN_SHIFT)
+
+
+/*
  * Macro to capture all properties related to board strapping pins. This must be
  * updated if additional strap related properties are added.
  */
 #define BOARD_ALL_PROPERTIES ( \
 	BOARD_ALLOW_CHANGE_TPM_MODE | \
+	BOARD_CCD_REC_LID_PIN_MASK | \
 	BOARD_CLOSED_LOOP_RESET | \
 	BOARD_CLOSED_SOURCE_SET1 | \
 	BOARD_DEEP_SLEEP_DISABLED | \
