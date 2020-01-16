@@ -15,7 +15,7 @@
 #include "u2f.h"
 #include "util.h"
 
-#define G2F_CERT_NAME "CrOS"
+#define G2F_CERT_NAME "CrO2"
 
 #define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ##args)
 
