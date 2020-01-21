@@ -82,12 +82,6 @@ void uartn_tx_stop(int uart);
  */
 int uart_tx_is_connected(int uart);
 
-/* Connect TX pin for the UART */
-void uartn_tx_connect(int uart);
-
-/* Disconnect TX pin for the UART */
-void uartn_tx_disconnect(int uart);
-
 /**
  * Return non-zero if TX and RX are enabled for the UART.
  *

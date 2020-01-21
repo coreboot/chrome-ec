@@ -78,58 +78,30 @@ int uart_tx_is_connected(int uart)
 	return !uart_bitbang_is_enabled() && GREAD(PINMUX, DIOB5_SEL);
 }
 
-/**
- * Connect the UART pin to the given signal
- *
- * @param uart		the uart peripheral number
- * @param signal	the pinmux selector value for the gpio or peripheral
- *			function. 0 to disable the output.
- */
-static void uart_select_tx(int uart, int signal)
+static void uartn_tx_connect(int uart)
 {
+	/* Connect the TX pin to UART peripheral */
 	if (uart == UART_AP) {
-		GWRITE(PINMUX, DIOA7_SEL, signal);
+		GWRITE(PINMUX, DIOA7_SEL, GC_PINMUX_UART1_TX_SEL);
 	} else {
-		GWRITE(PINMUX, DIOB5_SEL, signal);
+		GWRITE(PINMUX, DIOB5_SEL, GC_PINMUX_UART2_TX_SEL);
 
 		/* Remove the pulldown when we are driving the signal */
-		GWRITE_FIELD(PINMUX, DIOB5_CTL, PD, signal ? 0 : 1);
+		GWRITE_FIELD(PINMUX, DIOB5_CTL, PD, 0);
 	}
 }
 
-void uartn_tx_connect(int uart)
-{
-	/*
-	 * Don't drive TX unless the debug cable is connected (we have
-	 * something to transmit) and servo is disconnected (we won't be
-	 * drive-fighting with servo).
-	 */
-	if (servo_is_connected() || !ccd_ext_is_enabled())
-		return;
-
-	if (uart == UART_AP) {
-		if (!ccd_is_cap_enabled(CCD_CAP_GSC_TX_AP_RX))
-			return;
-
-		if (!ap_uart_is_on())
-			return;
-
-		uart_select_tx(UART_AP, GC_PINMUX_UART1_TX_SEL);
-	} else {
-		if (!ccd_is_cap_enabled(CCD_CAP_GSC_TX_EC_RX))
-			return;
-
-		if (!ec_is_on())
-			return;
-
-		uart_select_tx(UART_EC, GC_PINMUX_UART2_TX_SEL);
-	}
-}
-
-void uartn_tx_disconnect(int uart)
+static void uartn_tx_disconnect(int uart)
 {
 	/* Disconnect the TX pin from UART peripheral */
-	uart_select_tx(uart, 0);
+	if (uart == UART_AP) {
+		GWRITE(PINMUX, DIOA7_SEL, 0);
+	} else {
+		GWRITE(PINMUX, DIOB5_SEL, 0);
+
+		/* Set up the pulldown */
+		GWRITE_FIELD(PINMUX, DIOB5_CTL, PD, 1);
+	}
 }
 
 /*
