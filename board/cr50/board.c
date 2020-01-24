@@ -1044,6 +1044,7 @@ void board_reboot_ec(void)
 	assert_ec_rst();
 	deassert_ec_rst();
 }
+DECLARE_DEFERRED(board_reboot_ec);
 
 /*
  * This interrupt handler will be called if the RBOX key combo is detected.
@@ -1052,7 +1053,7 @@ static void key_combo0_irq(void)
 {
 	GWRITE_FIELD(RBOX, INT_STATE, INTR_BUTTON_COMBO0_RDY, 1);
 	recovery_button_record();
-	board_reboot_ec();
+	hook_call_deferred(&board_reboot_ec_data, 0);
 	CPRINTS("Recovery Requested");
 }
 DECLARE_IRQ(GC_IRQNUM_RBOX0_INTR_BUTTON_COMBO0_RDY_INT, key_combo0_irq, 0);
