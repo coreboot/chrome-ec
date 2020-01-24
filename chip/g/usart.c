@@ -129,19 +129,57 @@ USB_STREAM_CONFIG(ec_usb,
 		  ec_uart_to_usb)
 #endif
 
+#ifdef BOARD_CR50
+static uint8_t ec_bridge_enabled_;
+static uint8_t ec_bridge_tx_enabled_;
+
+void uart_ec_bridge_enable(int enable, int write)
+{
+	write = enable && write;
+
+	if (write && !ec_bridge_tx_enabled_)
+		task_trigger_irq(GC_IRQNUM_UART2_TXINT);
+
+	ec_bridge_enabled_ = enable;
+	ec_bridge_tx_enabled_ = write;
+}
+
+int uart_ec_bridge_is_enabled(void)
+{
+	return !!ec_bridge_enabled_;
+}
+
+int uart_ec_bridge_tx_is_enabled(void)
+{
+	return !!ec_bridge_tx_enabled_;
+}
+
+#endif  /* BOARD_CR50 */
+
 void get_data_from_usb(struct usart_config const *config)
 {
 	struct queue const *uart_out = config->consumer.queue;
 	int c;
 
 #ifdef BOARD_CR50
-	/*
-	 * If EC-CR50 communication is on-going, then let's not forward
-	 * console input to EC for now.
-	 */
-	if (ec_comm_is_uart_in_packet_mode(config->uart))
-		return;
-#endif
+	if (config->uart == UART_EC) {
+		/*
+		 * If USB-to-UART bridging is disabled, drop all input data.
+		 * Otherwise, data could be pushed into UART TX FIFO, and
+		 * transferred to EC eventually once EC-CR50 communication
+		 * enables EC UART.
+		 */
+		if (!ec_bridge_tx_enabled_)
+			return;
+
+		/*
+		 * If EC-CR50 communication is on-going, then let's not forward
+		 * console input to EC for now.
+		 */
+		if (ec_comm_is_uart_in_packet_mode(UART_EC))
+			return;
+	}
+#endif  /* BOARD_CR50 */
 
 	/* Copy output from buffer until TX fifo full or output buffer empty */
 	while (queue_count(uart_out) && QUEUE_REMOVE_UNITS(uart_out, &c, 1))
@@ -170,6 +208,14 @@ void send_data_to_usb(struct usart_config const *config)
 	tail = uart_in->state->tail & mask;
 	count = 0;
 
+#ifdef BOARD_CR50
+	/*
+	 * If UART-to-USB bridging is not allowed, do not put any output
+	 * data to uart_in queue.
+	 */
+	if ((uart == UART_EC) && !ec_bridge_enabled_)
+		return;
+#endif  /* BOARD_CR50 */
 	/*
 	 * TODO(b/119329144): Process packet data separately,
 	 * and filter console data based on ccd capability.
