@@ -222,11 +222,18 @@ static void ccd_state_change_hook(void)
 
 	/* Start out by figuring what flags we might want enabled */
 
-	/* Enable EC/AP UART RX if that device is on */
+	/* Enable AP UART RX if that device is on */
 	if (ap_uart_is_on())
 		flags_want |= CCD_ENABLE_UART_AP;
-	if (ec_is_rx_allowed())
-		flags_want |= CCD_ENABLE_UART_EC;
+	/*
+	 * Enable EC UART RX.
+	 * Checking that EC is off (ec_is_rx_allowed()) will be done in the end,
+	 * and CCD_ENABLE_UART_EC will be cleared if so. This is to guarantee
+	 * that EC UART RX won't be enabled if EC is off even with any codes
+	 * overriding this flag. We also intend to keep ec_is_rx_allowed()
+	 * called once.
+	 */
+	flags_want |= CCD_ENABLE_UART_EC;
 
 #ifdef CONFIG_UART_BITBANG
 	if (uart_bitbang_is_wanted())
@@ -287,6 +294,21 @@ static void ccd_state_change_hook(void)
 	if (ccd_block & CCD_BLOCK_AP_UART)
 		flags_want &= ~CCD_ENABLE_UART_AP;
 	if (ccd_block & CCD_BLOCK_EC_UART)
+		flags_want &= ~CCD_ENABLE_UART_EC;
+
+	/*
+	 * EC UART flags are cleared if ccd ext is not detected or if ccd block
+	 * EC UART is enabled. EC-CR50 comm trumps both of those conditions.
+	 * Re-enable the EC UART flags if EC-CR50 comm is enabled.
+	 */
+	if (ec_comm_is_uart_in_packet_mode(UART_EC))
+		flags_want |= (CCD_ENABLE_UART_EC | CCD_ENABLE_UART_EC_TX);
+
+	/*
+	 * Disable EC UART RX if that device is off, otherwise there will be
+	 * an UART interrupt storm.
+	 */
+	if (!ec_is_rx_allowed())
 		flags_want &= ~CCD_ENABLE_UART_EC;
 
 	/* UARTs are either RX-only or RX+TX, so no RX implies no TX */
