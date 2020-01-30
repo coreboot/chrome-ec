@@ -56,13 +56,13 @@ struct cr50_comm_packet {
 #define CR50_COMM_ERROR_UNDEFINED_CMD   CR50_COMM_RESPONSE(0x07)
 
 /*
- * BIT(1) : NO_BOOT flag
- * BIT(0) : RECOVERY flag
+ * BIT(0) : NO_BOOT flag
+ * BIT(1) : RECOVERY flag
  */
 enum ec_efs_boot_mode {
 	EC_EFS_BOOT_MODE_NORMAL           = 0x00,
-	EC_EFS_BOOT_MODE_RECOVERY         = 0x01,
-	EC_EFS_BOOT_MODE_NO_BOOT          = 0x02,
+	EC_EFS_BOOT_MODE_NO_BOOT          = 0x01,
+	EC_EFS_BOOT_MODE_RECOVERY         = 0x02,
 	EC_EFS_BOOT_MODE_NO_BOOT_RECOVERY = 0x03,
 	EC_EFS_BOOT_MODE_RESET            = 0xff,
 
