@@ -70,8 +70,8 @@ static int moc_eigen_test(struct mag_cal_t *moc)
 
 	CPRINTF("ratio %d, mag %d: pass %d\r\n",
 		PRINTF_FLOAT(evmax / evmin),
-		PRINTF_FLOAT(evmag),
-		PRINTF_FLOAT(eigen_pass));
+		PRINTF_FLOAT(evmag / MAG_CAL_RAW_UT),
+		eigen_pass);
 #endif
 
 	return eigen_pass;
