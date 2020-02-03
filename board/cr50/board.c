@@ -264,6 +264,13 @@ static struct board_cfg board_cfg_table[] = {
 		.board_properties = BOARD_SLAVE_CONFIG_SPI |
 			BOARD_NEEDS_SYS_RST_PULL_UP,
 	},
+	/* Asurada: DI0A9 = 5k PD, DIOA1 = 5k PU */
+	{
+		.strap_cfg = 0x03,
+		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+			BOARD_NEEDS_SYS_RST_PULL_UP |
+			BOARD_CCD_REC_LID_PIN_DIOA1,
+	},
 	/* Poppy: DI0A9 = 1M PU, DIOA1 = 1M PU */
 	{
 		.strap_cfg = 0x0A,
