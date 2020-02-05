@@ -21,16 +21,18 @@ enum tpm_read_rv read_tpm_nvmem(uint16_t obj_index,
 {
 	TPM_HANDLE       object_handle;
 	NV_INDEX         nvIndex;
+	uint32_t         handle_addr;
 
 	object_handle = HR_NV_INDEX + obj_index;
 
-	if (!NvEarlyStageFindHandle(object_handle)) {
+	handle_addr = NvEarlyStageFindHandle(object_handle);
+	if (!handle_addr) {
 		CPRINTF("%s: object at 0x%x not found\n", __func__, obj_index);
 		return tpm_read_not_found;
 	}
 
 	/* Get properties of this index as stored in nvmem. */
-	NvGetIndexInfo(object_handle, &nvIndex);
+	NvReadIndexInfo(object_handle, handle_addr, &nvIndex);
 
 	/*
 	 * We presume it is readable and are not checking the access
@@ -49,7 +51,8 @@ enum tpm_read_rv read_tpm_nvmem(uint16_t obj_index,
 	}
 
 	/* Perform the read. */
-	NvGetIndexData(object_handle, &nvIndex, 0, obj_size, obj_value);
+	NvReadIndexData(object_handle, &nvIndex, handle_addr, 0, obj_size,
+			   obj_value);
 
 	return tpm_read_success;
 }
