@@ -39,7 +39,7 @@ const uint16_t res_sizes[] = {4,  2,  2,  2,  66,   66,	 66,  66, 66,  66,
 
 static uint16_t res_addrs[ARRAY_SIZE(res_sizes)];
 
-BOOL NvEarlyStageFindHandle(TPM_HANDLE handle)
+UINT32 NvEarlyStageFindHandle(TPM_HANDLE handle)
 {
 	size_t i;
 
