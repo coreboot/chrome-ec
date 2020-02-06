@@ -24,6 +24,12 @@ int ec_comm_is_uart_in_packet_mode(int uart);
  *         0 otherwise.
  */
 int ec_comm_process_packet(uint8_t ch);
+/*
+ * Block or unblock EC-CR50 communication.
+ * @param block   non-zero value blocks EC-CR50 communication.
+ *                Zero value unblocks it.
+ */
+void ec_comm_block(int block);
 /* Reset EC EFS context */
 void ec_efs_reset(void);
 /* Set EC-EFS boot_mode */
