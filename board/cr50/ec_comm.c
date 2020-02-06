@@ -73,3 +73,26 @@ int ec_comm_is_uart_in_packet_mode(int uart)
 {
 	return uart == ec_comm_ctx.uart;
 }
+
+void ec_comm_block(int block)
+{
+	static int is_blocked;
+
+	if (is_blocked == block)
+		return;
+
+	if (block) {
+		gpio_disable_interrupt(GPIO_EC_PACKET_MODE_EN);
+		gpio_disable_interrupt(GPIO_EC_PACKET_MODE_DIS);
+
+		if (ec_comm_is_uart_in_packet_mode(UART_EC))
+			ec_comm_packet_mode_dis(GPIO_EC_PACKET_MODE_DIS);
+	} else {
+		gpio_enable_interrupt(GPIO_EC_PACKET_MODE_EN);
+		gpio_enable_interrupt(GPIO_EC_PACKET_MODE_DIS);
+	}
+
+	is_blocked = block;
+
+	/* Note: ccd_update_state() should be called to change UART status. */
+}
