@@ -57,12 +57,12 @@ int usb_get_battery_soc(void);
  * Returns type C current limit (mA), potentially with the DTS flag, based upon
  * states of the CC lines on the partner side.
  *
- * @param polarity 0 if cc1 is primary, otherwise 1
+ * @param polarity port polarity
  * @param cc1 value of CC1 set by tcpm_get_cc
  * @param cc2 value of CC2 set by tcpm_get_cc
  * @return current limit (mA) with DTS flag set if appropriate
  */
-typec_current_t usb_get_typec_current_limit(enum pd_cc_polarity_type polarity,
+typec_current_t usb_get_typec_current_limit(enum tcpc_cc_polarity polarity,
 	enum tcpc_cc_voltage_status cc1, enum tcpc_cc_voltage_status cc2);
 
 /**
@@ -70,9 +70,19 @@ typec_current_t usb_get_typec_current_limit(enum pd_cc_polarity_type polarity,
  *
  * @param cc1 value of CC1 set by tcpm_get_cc
  * @param cc2 value of CC2 set by tcpm_get_cc
- * @return 0 if cc1 is primary, else 1 for cc2 being primary
+ * @return polarity
  */
-enum pd_cc_polarity_type get_snk_polarity(enum tcpc_cc_voltage_status cc1,
+enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
+	enum tcpc_cc_voltage_status cc2);
+
+/**
+ * Returns the polarity of a Source.
+ *
+ * @param cc1 value of CC1 set by tcpm_get_cc
+ * @param cc2 value of CC2 set by tcpm_get_cc
+ * @return polarity
+ */
+enum tcpc_cc_polarity get_src_polarity(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2);
 
 /**
@@ -108,10 +118,11 @@ void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv);
  * @param req_type request type
  * @param max_request_mv max voltage a sink can request before getting
  *			source caps
+ * @param port USB-C port number
  */
 void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 	int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma, uint32_t *mv,
-	enum pd_request_type req_type, uint32_t max_request_mv);
+	enum pd_request_type req_type, uint32_t max_request_mv, int port);
 
 /**
  * Notifies a task that is waiting on a system jump, that it's complete.
@@ -121,4 +132,11 @@ void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
  */
 void notify_sysjump_ready(volatile const task_id_t * const
 	sysjump_task_waiting);
+
+/**
+ * Set USB MUX with current data role
+ *
+ * @param port USB-C port number
+ */
+void set_usb_mux_with_current_data_role(int port);
 #endif /* __CROS_EC_USB_COMMON_H */

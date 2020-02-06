@@ -38,15 +38,54 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_USE_HOST_EVENT
 #undef CONFIG_KEYBOARD_RUNTIME_KEYS
+#undef CONFIG_HIBERNATE
 #define CONFIG_HOSTCMD_ESPI
 #define CONFIG_LED_COMMON
 #undef  CONFIG_LID_SWITCH
+#define CONFIG_LTO
 #define CONFIG_PWM
-#define CONFIG_SHA256
-#define CONFIG_SHA256_UNROLLED
+#define CONFIG_VBOOT_EFS
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
+
+/*
+ * Override Flash layout for EFS.
+ *
+ * 3 images are stored: RO, RW-A and RW-B. RO must be one of 64k, 128k or 256k
+ * in size to be correctly protected by the hardware block protection. RW must
+ * be the same size as RO, so divide the flash into four equal-size blocks.
+ *
+ * A public key is stored at the end of RO. Signatures are stored at the
+ * end of RW_A and RW_B, respectively.
+ */
+#define CONFIG_RW_B
+#define CONFIG_RW_B_MEM_OFF		CONFIG_RO_MEM_OFF
+#undef  CONFIG_RO_SIZE
+#define CONFIG_RO_SIZE			(CONFIG_FLASH_SIZE / 4)
+#undef  CONFIG_RW_SIZE
+#define CONFIG_RW_SIZE			CONFIG_RO_SIZE
+#define CONFIG_RW_A_STORAGE_OFF		CONFIG_RW_STORAGE_OFF
+#define CONFIG_RW_B_STORAGE_OFF		(CONFIG_RW_A_STORAGE_OFF + \
+					 CONFIG_RW_SIZE)
+#define CONFIG_RW_A_SIGN_STORAGE_OFF	(CONFIG_RW_A_STORAGE_OFF + \
+					 CONFIG_RW_SIZE - CONFIG_RW_SIG_SIZE)
+#define CONFIG_RW_B_SIGN_STORAGE_OFF	(CONFIG_RW_B_STORAGE_OFF + \
+					 CONFIG_RW_SIZE - CONFIG_RW_SIG_SIZE)
+
+#define CONFIG_RWSIG
+#define CONFIG_RWSIG_TYPE_RWSIG
+#define CONFIG_RSA
+#ifdef SECTION_IS_RO
+#define CONFIG_RSA_OPTIMIZED
+#endif
+#define CONFIG_SHA256
+#ifdef SECTION_IS_RO
+#define CONFIG_SHA256_UNROLLED
+#endif
+#define CONFIG_RSA_KEY_SIZE 3072
+#define CONFIG_RSA_EXPONENT_3
+
 
 #define CONFIG_SUPPRESSED_HOST_COMMANDS \
 	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_PD_GET_LOG_ENTRY
@@ -60,6 +99,17 @@
 #define CONFIG_CMD_PD_CONTROL
 #undef CONFIG_CMD_PWR_AVG
 #define CONFIG_CMD_PPC_DUMP
+#ifdef SECTION_IS_RO
+/* Reduce RO size by removing less-relevant commands. */
+#undef CONFIG_CMD_APTHROTTLE
+#undef CONFIG_CMD_CHARGEN
+#undef CONFIG_CMD_HCDEBUG
+#undef CONFIG_CMD_MMAPINFO
+#endif
+
+/* Don't generate host command debug by default */
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
 /* Chipset config */
 #define CONFIG_CHIPSET_COMETLAKE_DISCRETE
@@ -79,9 +129,6 @@
 /* Check: */
 #define CONFIG_POWER_BUTTON_INIT_IDLE
 #define CONFIG_POWER_COMMON
-/* from fizz - Check */
-/* check: #define CONFIG_EXTPOWER_DEBOUNCE_MS */
-#define CONFIG_EXTPOWER_GPIO
 #define CONFIG_POWER_SIGNAL_INTERRUPT_STORM_DETECT_THRESHOLD 30
 #define CONFIG_DELAY_DSW_PWROK_TO_PWRBTN
 #define CONFIG_POWER_PP5000_CONTROL
@@ -90,13 +137,11 @@
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define CONFIG_INA3221
 
-/* TODO: (b/143501304) Use correct PD delay values */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000	/* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000	/* us */
 #define PD_VCONN_SWAP_DELAY		5000	/* us */
 
-/* TODO: (b/143501304) Use correct PD power values */
-#define PD_OPERATING_POWER_MW	30000
+#define PD_OPERATING_POWER_MW	CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
 #define PD_MAX_POWER_MW		100000
 #define PD_MAX_CURRENT_MA	5000
 #define PD_MAX_VOLTAGE_MV	20000
@@ -104,19 +149,25 @@
 /* Fan and temp. */
 #define CONFIG_FANS 1
 #undef CONFIG_FAN_INIT_SPEED
-#define CONFIG_FAN_INIT_SPEED 50
+#define CONFIG_FAN_INIT_SPEED 0
 #define CONFIG_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_ROA_RAILS
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
 
 /* Charger */
 #define CONFIG_CHARGE_MANAGER
-#define CONFIG_CHARGER_INPUT_CURRENT 512 /* Allow low-current USB charging */
+/* Less than this much blocks AP power-on. */
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 30000
+#undef CONFIG_CHARGE_MANAGER_SAFE_MODE
 
 /* USB type C */
-/* Use TCPMv2 */
+/* TODO: (b/147255678) Use TCPMv2 */
+#if 0
 #define CONFIG_USB_SM_FRAMEWORK
+#endif
+
 #undef CONFIG_USB_CHARGER
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PID		0x5040
@@ -133,7 +184,6 @@
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TCPM_ANX7447
-#define CONFIG_USB_PD_TCPM_ANX7447_OCM_ERASE_COMMAND
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
 #define CONFIG_USBC_SS_MUX
@@ -162,14 +212,15 @@
 
 #define PP5000_PGOOD_POWER_SIGNAL_MASK POWER_SIGNAL_MASK(PP5000_A_PGOOD)
 
-#define CEC_GPIO_OUT GPIO_CEC_OUT
-#define CEC_GPIO_IN  GPIO_CEC_IN
-#define CEC_GPIO_PULL_UP GPIO_CEC_PULL_UP
-
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
 #include "registers.h"
+
+enum charge_port {
+	CHARGE_PORT_TYPEC0,
+	CHARGE_PORT_BARRELJACK,
+};
 
 enum adc_channel {
 	ADC_SNS_PP3300,     /* ADC2 */

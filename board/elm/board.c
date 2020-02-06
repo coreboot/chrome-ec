@@ -17,6 +17,7 @@
 #include "console.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
+#include "driver/charger/isl923x.h"
 #include "driver/tcpm/anx7688.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -167,6 +168,15 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.driver    = &anx7688_usb_mux_driver,
 	},
 };
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /**
  * Reset PD MCU
@@ -471,7 +481,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_kx022_data[0],
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(0),
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 2, /* g, enough for laptop. */
+		.default_range = 2, /* g, enough for lid angle calculation. */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
 		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {
@@ -494,7 +504,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_kx022_data[1],
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(1),
 		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 2, /* g, enough for laptop. */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
 		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {

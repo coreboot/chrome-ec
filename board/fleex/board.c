@@ -16,7 +16,7 @@
 #include "cros_board_info.h"
 #include "driver/accel_lis2dh.h"
 #include "driver/accelgyro_lsm6dsm.h"
-#include "driver/charger/bd9995x.h"
+#include "driver/charger/isl923x.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/tcpm/anx7447.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -166,7 +166,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 4,  /* g */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 		.config = {
@@ -264,3 +264,22 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC, !is_overcurrented);
 }
+
+static void charger_set_buck_boost_mode(void)
+{
+	int reg;
+	/* Reduce Buck-boost mode switching frequency to improve power efficiency. */
+	if (i2c_read16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER_FLAGS,
+			ISL9238_REG_CONTROL3, &reg) == EC_SUCCESS) {
+		reg |= ISL9238_C3_BB_SWITCHING_PERIOD;
+		if (i2c_write16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER_FLAGS,
+				ISL9238_REG_CONTROL3, reg))
+			ccprints("Failed to set isl9238");
+	}
+}
+
+static void board_init(void)
+{
+	charger_set_buck_boost_mode();
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);

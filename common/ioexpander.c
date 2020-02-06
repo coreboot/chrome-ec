@@ -16,8 +16,12 @@
 
 static uint8_t last_val[(IOEX_COUNT + 7) / 8];
 
-static int last_val_changed(int i, int v)
+static int last_val_changed(enum ioex_signal signal, int v)
 {
+	const int i = signal - IOEX_SIGNAL_START;
+
+	ASSERT(signal_is_ioex(signal));
+
 	if (v && !(last_val[i / 8] & (BIT(i % 8)))) {
 		last_val[i / 8] |= BIT(i % 8);
 		return 1;
@@ -47,7 +51,7 @@ static int ioex_is_valid_interrupt_signal(enum ioex_signal signal)
 	const struct ioex_info *g = ioex_get_signal_info(signal);
 
 	/* Fail if no interrupt handler */
-	if (signal >= ioex_ih_count)
+	if (signal - IOEX_SIGNAL_START >= ioex_ih_count)
 		return EC_ERROR_PARAM1;
 
 	drv = ioex_config[g->ioex].drv;

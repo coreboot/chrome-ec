@@ -184,33 +184,33 @@ static struct als_drv_data_t g_tcs3400_data = {
 
 static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 	.calibration.rgb_cal[X] = {
-		.offset = 92, /* 91.86488992 */
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.30551661),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(1.60934973),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-1.1675665),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.30301793),
+		.offset = 3, /* 3.0350726 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.34710205),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(1.72064361),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-0.95427326),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.20677441),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kr */
 			.cover_scale = ALS_CHANNEL_SCALE(0.5)
 		}
 	},
 	.calibration.rgb_cal[Y] = {
-		.offset = 89, /* 89.06144741 */
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.57703771),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(1.46485215),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-1.12901904),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.43166926),
+		.offset = 7, /* 6.50411397 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.40729596),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(1.82527267),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-1.01523751),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.20903764),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kg */
 			.cover_scale = ALS_CHANNEL_SCALE(1.0)
 		},
 	},
 	.calibration.rgb_cal[Z] = {
-		.offset = 91, /* 91.37365646 */
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-1.88271283),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(1.27117152),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-1.19261862),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.95401891),
+		.offset = -4, /* -4.13932233 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-2.35802533),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(-0.19742447),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0.13837045),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(1.07436207),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kb */
 			.cover_scale = ALS_CHANNEL_SCALE(1.44)
@@ -228,17 +228,6 @@ static const mat33_fp_t base_standard_ref = {
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
-/*
- * TODO(b/124337208): P0 boards don't have this sensor mounted so the rotation
- * matrix can't be tested properly. This needs to be revisited after EVT to make
- * sure the rotaiton matrix for the lid sensor is correct.
- */
-static const mat33_fp_t lid_standard_ref = {
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
-
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
@@ -251,10 +240,10 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_bma255_data,
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
-		.rot_standard_ref = &lid_standard_ref,
+		.rot_standard_ref = NULL,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode */
+		.default_range = 2, /* g, to support lid angle calculation. */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -281,7 +270,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode  */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 10000 | ROUND_UP_FLAG,

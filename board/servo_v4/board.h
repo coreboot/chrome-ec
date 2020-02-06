@@ -32,6 +32,10 @@
 /* Optional features */
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
+#define CONFIG_PVD
+/* See 'Programmable voltage detector characteristics' in the STM32F072x8 Datasheet.
+   PVD Threshold 1 corresponds to a falling voltage threshold of min:2.09V, max:2.27V. */
+#define PVD_THRESHOLD     (1)
 
 /* USB Configuration */
 #define CONFIG_USB
@@ -143,10 +147,6 @@
  * switch.
  */
 #define CONFIG_SYSTEM_UNLOCKED
-
-/* Console command removed on ToT only. Do not cherry pick to servo branch */
-#undef CONFIG_CMD_PD
-#undef CONFIG_CMD_USART_INFO
 
 #ifndef __ASSEMBLER__
 

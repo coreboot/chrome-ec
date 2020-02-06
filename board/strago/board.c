@@ -15,8 +15,10 @@
 #include "driver/accel_kionix.h"
 #include "driver/accel_kxcj9.h"
 #include "driver/als_isl29035.h"
+#include "driver/charger/bq24773.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/temp_sensor/tmp432.h"
+#include "driver/usb_mux/pi3usb3x532.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -141,8 +143,9 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0x55,
-		.driver = &pi3usb30532_usb_mux_driver,
+		.port_addr = MUX_PORT_AND_ADDR(I2C_PORT_USB_MUX,
+					       PI3USB3X532_I2C_ADDR1),
+		.driver = &pi3usb3x532_usb_mux_driver,
 	},
 };
 
@@ -173,6 +176,15 @@ struct als_t als[] = {
 	{"ISL", isl29035_init, isl29035_read_lux, 5},
 };
 BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = I2C_ADDR_CHARGER_FLAGS,
+		.drv = &bq2477x_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /**
  * Reset PD MCU
@@ -215,7 +227,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = KXCJ9_ADDR1_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 2,  /* g, enough for laptop. */
+		.default_range = 2,  /* g, to support lid angle calculation. */
 		.min_frequency = KXCJ9_ACCEL_MIN_FREQ,
 		.max_frequency = KXCJ9_ACCEL_MAX_FREQ,
 		.config = {
@@ -238,7 +250,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = KXCJ9_ADDR0_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 2,  /* g, enough for laptop. */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = KXCJ9_ACCEL_MIN_FREQ,
 		.max_frequency = KXCJ9_ACCEL_MAX_FREQ,
 		.config = {

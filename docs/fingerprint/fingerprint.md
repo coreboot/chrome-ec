@@ -19,7 +19,7 @@ The main source code for fingerprint sensor functionality lives in the
 [`common/fpsensor`] directory. The driver code for specific sensors lives in the
 [`driver/fingerprint`] directory.
 
-## Hardware
+## Hardware {#hardware}
 
 The following "boards" (specified by the `BOARD` environment variable when
 building the EC code) are for fingerprint:
@@ -30,6 +30,28 @@ building the EC code) are for fingerprint:
     *   Based on [STM32F412] (Cortex-M4).
     *   Support for the STM32F412 for the FPMCU is not yet fully complete,
         but it is functional enough for testing.
+
+### Determining Hardware {#chromeos-config-fingerprint}
+
+If you have access to a shell on your Chromebook, you can use [Chrome OS Config]
+to determine the FPMCU that it contains:
+
+```bash
+(dut) $ cros_config /fingerprint board
+```
+
+Alternatively, if you have a Chromium OS build, you can use [Chrome OS Config]
+in the chroot to determine the FPMCU:
+
+```bash
+(chroot) $  cros_config_host -c /build/<BOARD>/usr/share/chromeos-config/yaml/config.yaml -m <MODEL> get /fingerprint board
+```
+
+*** note
+**NOTE**: If you get an empty response when running these commands, the
+[Chrome OS Config] properties for fingerprint may not have been set up yet. See
+the [section on updating Chrome OS Config](#update-chromeos-config).
+***
 
 ## Building FPMCU Firmware Locally
 
@@ -139,9 +161,15 @@ kernel:
 (dut)$ cat /sys/kernel/debug/cros_fp/console_log
 ```
 
-## Production Updates
+## Production Updates (Auto-Update)
 
 ### `fp_updater.sh` and `bio_fw_updater`
+
+*** note
+**NOTE**: The auto-update process requires a working version of the firmware
+running on the FPMCU. See [Fingerprint Factory Requirements] for details on
+flashing in the factory.
+***
 
 [`fp_updater.sh`] and [`bio_fw_updater`] are wrappers around [`flashrom`] and
 require already-functioning RO firmware running on the FPMCU. It’s meant to be
@@ -155,14 +183,15 @@ that do not have write protect enabled (dogfood devices, EVT, etc.)
 In production, only the RW portion of the firmware can be updated (unless the
 user disables [hardware write protection]).
 
-## Factory / RMA / Development Updates
+## Factory / RMA / Development Updates {#factory-rma-dev-updates}
 
 ### `flash_fp_mcu`
 
 *** note
-NOTE: This tool is really just for us to use during development or during the
-RMA flow (must go through finalization again in that case). We never update RO
-in the field (can’t by design).
+**NOTE**: This tool is really just for us to use during development or during
+the RMA flow (must go through finalization again in that case). We never update
+RO in the field (can’t by design). See [Fingerprint Factory Requirements] for
+details on flashing in the factory.
 ***
 
 [`flash_fp_mcu`] enables spidev and toggles some GPIOs to put the FPMCU (STM32)
@@ -171,10 +200,14 @@ flash (both RO and RW). The FPMCU can only be put into bootloader mode when
 [hardware write protection] is disabled, which means [`flash_fp_mcu`] can only
 be used when [hardware write protection] is disabled.
 
+[`flash_fp_mcu`] is available in the [Chromium OS test image].
+
 ### `stm32mon`
 
 [`stm32mon`] is a tool used to send commands to the STM32 bootloader. We use it
-for development (through `flash_fp_mcu`) to erase and flash the entire chip.
+for development (through [`flash_fp_mcu`]) to erase and flash the entire chip.
+
+[`stm32mon`] is available in the [Chromium OS test image].
 
 ## Keys
 
@@ -278,6 +311,65 @@ Signature verification succeeded.
 about adding an EC command to show the Key ID (fingerprint) from the RO version.
 This would make it a lot easier during both development and testing.
 
+## Chrome OS Build (portage / ebuild)
+
+In order to use the fingerprint sensor with a given [Chrome OS board], a few
+things need to be configured for the [Chrome OS board].
+
+### Enable biod USE flag
+
+The biod [`USE` flag] needs to be enabled for the [Chrome OS board]. This `USE`
+flag
+[determines whether the `biod` daemon is built and installed][biod chromium-os].
+
+To enable the `USE` flag, update the `make.defaults` for the [Chrome OS board].
+See the [`make.defaults` for the Hatch board][hatch make.defaults] as an
+example.
+
+### Update FPMCU_FIRMWARE
+
+`FPMCU_FIRMWARE` should be set to the set of fingerprint firmware that should be
+built and installed for the [Chrome OS board].
+
+`FPMCU_FIRMWARE` is a [`USE_EXPAND` variable][`USE` flag],
+[defined in the base `make.defaults`][FPMCU_FIRMWARE make.defaults].
+
+The `biod` ebuild uses the resulting [`USE` flags] to
+[determine which FPMCU release firmware to build][biod release firmware] and the
+`chromeos-firmware-fpmcu` ebuild uses the resulting [`USE` flags] to
+[determine which firmware to install][firmware ebuild] to the rootfs in
+`/opt/google/biod/fw`.
+
+Possible values for `FPMCU_FIRMWARE` can be found by looking at the
+`FIRMWARE_EC_BOARD` values in the [`chromeos-fpmcu-release*` ebuilds], which
+correspond to the [FPMCU hardware](#hardware).
+
+See the [Hatch baseboard `make.defaults`] for an example.
+
+### Update Chrome OS Config {#update-chromeos-config}
+
+With "unibuild", the same OS image (build) for a given [Chrome OS board] is used
+across multiple devices. Often there will be some devices that have a
+fingerprint sensor, some that do not, and even different sensors for the same
+board.
+
+Determining what fingerprint hardware is on a given [Chrome OS board] is thus
+done at runtime, using [Chrome OS Config].
+
+The `fingerprint` config needs to be in the `model.yaml` for the given
+[Chrome OS board]. The [Chrome OS Config fingerprint] section describes the
+attributes for the `fingerprint` config in more detail.
+
+The [`ec_extras` attribute] needs to be set to the list of fingerprint firmware
+that should be built as part of the build.
+
+See the [`model.yaml` for the Hatch board][hatch model.yaml] as an example.
+
+You can test your changes by
+[running `cros_config`](#chromeos-config-fingerprint). The Chrome OS Config
+documentation has a [section on testing properties] that describes this in more
+detail.
+
 [`common/fpsensor`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/common/fpsensor/
 [`driver/fingerprint`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/driver/fingerprint
 [`nocturne_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/nocturne_fp/
@@ -286,7 +378,7 @@ This would make it a lot easier during both development and testing.
 [`bloonchipper`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/bloonchipper/
 [`dartmonkey`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/dartmonkey/
 [hardware write protection]: ../write_protection.md
-[`flash_fp_mcu`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/board/nocturne_fp/flash_fp_mcu
+[`flash_fp_mcu`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/util/flash_fp_mcu
 [`stm32mon`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/e1f3f89e7ea7945adddd0c2e6838f5e59856cff2/util/stm32mon.c#14
 [`futility`]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/master/futility/
 [`sign_official_build.sh`]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/master/scripts/image_signing/sign_official_build.sh
@@ -301,3 +393,20 @@ This would make it a lot easier during both development and testing.
 [`board/nocturne_fp/dev_key.pem`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/board/nocturne_fp/dev_key.pem
 [`timberslide`]: https://chromium.googlesource.com/chromiumos/platform2/+/master/timberslide
 [cros_ec_debugfs]: https://chromium.googlesource.com/chromiumos/third_party/kernel/+/9db44685934a2e4bc9180ea2de87a6c429672395/drivers/platform/chrome/cros_ec_debugfs.c
+[Fingerprint Factory Requirements]: ./fingerprint-factory-requirements.md
+[Chromium OS test image]: https://chromium.googlesource.com/chromiumos/platform/factory/+/master/README.md#building-test-image
+[Chrome OS Config]: https://chromium.googlesource.com/chromiumos/platform2/+/master/chromeos-config/README.md
+[Chrome OS Config fingerprint]: https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/master/chromeos-config/README.md#fingerprint
+[section on testing properties]: https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/master/chromeos-config/README.md#adding-and-testing-new-properties
+[Chrome OS board]: https://chromium.googlesource.com/chromiumos/docs/+/master/developer_guide.md#Select-a-board
+[biod chromium-os]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/4ea72b588af3394cb9fd1c330dcf726472183dfd/virtual/target-chromium-os/target-chromium-os-1.ebuild#154
+[hatch make.defaults]: https://chromium.googlesource.com/chromiumos/overlays/board-overlays/+/2f075f0e7ce09d3eb460f3c529da463a6201276c/overlay-hatch/profiles/base/make.defaults#22
+[Hatch baseboard `make.defaults`]: https://chrome-internal.googlesource.com/chromeos/overlays/baseboard-hatch-private/+/refs/heads/master/profiles/base/make.defaults#17
+[hatch model.yaml]: https://chrome-internal.googlesource.com/chromeos/overlays/overlay-hatch-private/+/master/chromeos-base/chromeos-config-bsp-hatch-private/files/model.yaml
+[`ec_extras` attribute]: https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/master/chromeos-config/README.md#build_targets
+[FPMCU_FIRMWARE make.defaults]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/4ea72b588af3394cb9fd1c330dcf726472183dfd/profiles/base/make.defaults#157
+[`USE` flag]: https://devmanual.gentoo.org/general-concepts/use-flags/index.html
+[`USE` flags]: https://devmanual.gentoo.org/general-concepts/use-flags/index.html
+[biod release firmware]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/4ea72b588af3394cb9fd1c330dcf726472183dfd/chromeos-base/biod/biod-9999.ebuild#49
+[firmware ebuild]: https://chrome-internal.googlesource.com/chromeos/overlays/chromeos-overlay/+/refs/heads/master/chromeos-base/chromeos-firmware-fpmcu/chromeos-firmware-fpmcu-9999.ebuild#40
+[`chromeos-fpmcu-release*` ebuilds]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/master/sys-firmware

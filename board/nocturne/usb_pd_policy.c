@@ -25,7 +25,8 @@ int pd_check_vconn_swap(int port)
 	return gpio_get_level(GPIO_EN_5V);
 }
 
-__override void pd_execute_data_swap(int port, int data_role)
+__override void pd_execute_data_swap(int port,
+				     enum pd_data_role data_role)
 {
 	int level;
 
@@ -95,7 +96,7 @@ int pd_set_power_supply_ready(int port)
 __override void svdm_safe_dp_mode(int port)
 {
 	/* make DP interface safe until configure */
-	usb_mux_set(port, TYPEC_MUX_NONE,
+	usb_mux_set(port, USB_PD_MUX_NONE,
 		USB_SWITCH_CONNECT, pd_get_polarity(port));
 
 	/*

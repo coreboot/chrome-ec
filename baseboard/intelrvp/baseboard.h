@@ -31,6 +31,7 @@
 #define CONFIG_CMD_CHARGER_DUMP
 #define CONFIG_CMD_KEYBOARD
 #define CONFIG_CMD_USB_PD_CABLE
+#define CONFIG_CMD_USB_PD_PE
 
 /* Port80 display */
 #define CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
@@ -69,6 +70,10 @@
 #ifdef HAS_TASK_USB_CHG_P0
 	#define CONFIG_CHARGE_RAMP_HW
 #endif
+
+/* Enable USB-PD REV 3.0 */
+#define CONFIG_USB_PD_REV30
+#define CONFIG_USB_PID 0x8086
 
 /* USB PD config */
 #define CONFIG_USB_PD_ALT_MODE

@@ -8,9 +8,12 @@
 #include "bb_retimer.h"
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "cros_board_info.h"
 #include "driver/bc12/pi3usb9201.h"
+#include "driver/charger/isl9241.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/syv682x.h"
+#include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tusb422.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "fan.h"
@@ -21,6 +24,7 @@
 #include "keyboard_scan.h"
 #include "pwm.h"
 #include "pwm_chip.h"
+#include "system.h"
 #include "task.h"
 #include "temp_sensor.h"
 #include "usbc_ppc.h"
@@ -161,27 +165,59 @@ const struct i2c_port_t i2c_ports[] = {
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /******************************************************************************/
+/* Charger Chip Configuration */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
+		.drv = &isl9241_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
+
+/******************************************************************************/
 /* PWM configuration */
 const struct pwm_t pwm_channels[] = {
 	[PWM_CH_LED1_BLUE] = {
 		.channel = 2,
 		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 100,
+		.freq = 2400,
 	},
 	[PWM_CH_LED2_GREEN] = {
 		.channel = 0,
 		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 100,
+		.freq = 2400,
 	},
 	[PWM_CH_LED3_RED] = {
 		.channel = 1,
 		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 100,
+		.freq = 2400,
+	},
+	[PWM_CH_LED4_SIDESEL] = {
+		.channel = 7,
+		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
+		/* Run at a higher frequency than the color PWM signals to avoid
+		 * timing-based color shifts.
+		 */
+		.freq = 4800,
 	},
 	[PWM_CH_FAN] = {
 		.channel = 5,
 		.flags = PWM_CONFIG_OPEN_DRAIN,
 		.freq = 25000
+	},
+	[PWM_CH_KBLIGHT] = {
+		.channel = 3,
+		.flags = 0,
+		/*
+		 * Set PWM frequency to multiple of 50 Hz and 60 Hz to prevent
+		 * flicker. Higher frequencies consume similar average power to
+		 * lower PWM frequencies, but higher frequencies record a much
+		 * lower maximum power.
+		 */
+		.freq = 2400,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
@@ -309,7 +345,7 @@ BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
 /******************************************************************************/
 /* USBC TCPC configuration */
-const struct tcpc_config_t tcpc_config[] = {
+struct tcpc_config_t tcpc_config[] = {
 	[USBC_PORT_C0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -331,6 +367,20 @@ const struct tcpc_config_t tcpc_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
+
+/* USBC TCPC configuration for port 1 on USB3 board */
+static const struct tcpc_config_t tcpc_config_p1_usb3 = {
+	.bus_type = EC_BUS_TYPE_I2C,
+	.i2c_info = {
+		.port = I2C_PORT_USB_C1,
+		.addr_flags = PS8751_I2C_ADDR1_FLAGS,
+	},
+	.flags = TCPC_FLAGS_TCPCI_V2_0,
+	.drv = &ps8xxx_tcpm_drv,
+	.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
+};
+
+static enum usb_db_id usb_db_type = USB_DB_NONE;
 
 /******************************************************************************/
 /* USBC PPC configuration */
@@ -363,6 +413,19 @@ struct usb_mux usb_muxes[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 
+const struct bb_usb_control bb_controls[] = {
+	[USBC_PORT_C0] = {
+		/* USB-C port 0 doesn't have a retimer */
+	},
+	[USBC_PORT_C1] = {
+		.shared_nvm = false,
+		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
+		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
+		.force_power_gpio = GPIO_USB_C1_RT_FORCE_PWR,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
+
 struct usb_retimer usb_retimers[] = {
 	[USBC_PORT_C0] = {
 		/* USB-C port 0 doesn't have a retimer */
@@ -371,16 +434,16 @@ struct usb_retimer usb_retimers[] = {
 		.driver = &bb_usb_retimer,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
-		.shared_nvm = false,
-		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
-		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
-		.force_power_gpio = GPIO_USB_C1_RT_FORCE_PWR,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_retimers) == USBC_PORT_COUNT);
 
 static void baseboard_tcpc_init(void)
 {
+	/* Only reset TCPC if not sysjump */
+	if (!system_jumped_to_this_image())
+		board_reset_pd_mcu();
+
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
@@ -393,7 +456,7 @@ static void baseboard_tcpc_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
 }
-DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_CHIPSET);
 
 /******************************************************************************/
 /* PPC support routines */
@@ -411,9 +474,42 @@ void ppc_interrupt(enum gpio_signal signal)
 
 /******************************************************************************/
 /* TCPC support routines */
+static void ps8815_reset(void)
+{
+	int val;
+
+	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 0);
+	msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS,
+			   PS8815_PWR_H_RST_H_DELAY_MS));
+	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 1);
+	msleep(PS8815_FW_INIT_DELAY_MS);
+
+	/*
+	 * b/144397088
+	 * ps8815 firmware 0x01 needs special configuration
+	 */
+
+	CPRINTS("%s: patching ps8815 registers", __func__);
+
+	if (i2c_read8(I2C_PORT_USB_C1,
+		      PS8751_I2C_ADDR1_P2_FLAGS, 0x0f, &val) == EC_SUCCESS)
+		CPRINTS("ps8815: reg 0x0f was %02x", val);
+
+	if (i2c_write8(I2C_PORT_USB_C1,
+		       PS8751_I2C_ADDR1_P2_FLAGS, 0x0f, 0x31) == EC_SUCCESS)
+		CPRINTS("ps8815: reg 0x0f set to 0x31");
+
+	if (i2c_read8(I2C_PORT_USB_C1,
+		      PS8751_I2C_ADDR1_P2_FLAGS, 0x0f, &val) == EC_SUCCESS)
+		CPRINTS("ps8815: reg 0x0f now %02x", val);
+}
+
 void board_reset_pd_mcu(void)
 {
 	/* No reset available for TCPC on port 0 */
+	/* Daughterboard specific reset for port 1 */
+	if (usb_db_type == USB_DB_USB3)
+		ps8815_reset();
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -546,3 +642,82 @@ __override void board_icl_tgl_all_sys_pwrgood(void)
 	msleep(50);
 }
 
+static void baseboard_init(void)
+{
+	/* Illuminate motherboard and daughter board LEDs equally.
+	 * TODO(b/139554899): Illuminate only the LED next to the active
+	 * charging port.
+	 */
+	pwm_enable(PWM_CH_LED4_SIDESEL, 1);
+	pwm_set_duty(PWM_CH_LED4_SIDESEL, 50);
+}
+DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT);
+
+/*
+ * Set up support for the USB3 daughterboard:
+ *   Parade PS8815 TCPC (integrated retimer)
+ *   Diodes PI3USB9201 BC 1.2 chip (same as USB4 board)
+ *   Silergy SYV682A PPC (same as USB4 board)
+ */
+static void config_db_usb3(void)
+{
+	tcpc_config[USBC_PORT_C1] = tcpc_config_p1_usb3;
+	/* USB-C port 1 has an integrated retimer */
+	memset(&usb_retimers[USBC_PORT_C1], 0,
+	       sizeof(usb_retimers[USBC_PORT_C1]));
+}
+
+static uint8_t board_id;
+
+uint8_t get_board_id(void)
+{
+	return board_id;
+}
+
+/*
+ * Read CBI from i2c eeprom and initialize variables for board variants
+ *
+ * Example for configuring for a USB3 DB:
+ *   ectool cbi set 6 2 4 10
+ */
+static void cbi_init(void)
+{
+	uint32_t cbi_val;
+	uint32_t usb_db_val;
+
+	/* Board ID */
+	if (cbi_get_board_version(&cbi_val) != EC_SUCCESS ||
+	    cbi_val > UINT8_MAX)
+		CPRINTS("CBI: Read Board ID failed");
+	else
+		board_id = cbi_val;
+
+	CPRINTS("Board ID: %d", board_id);
+
+	/* FW config */
+
+	if (cbi_get_fw_config(&cbi_val) != EC_SUCCESS) {
+		CPRINTS("CBI: Read FW config failed, assuming USB4");
+		usb_db_val = USB_DB_USB4;
+	} else {
+		usb_db_val = CBI_FW_CONFIG_USB_DB_TYPE(cbi_val);
+	}
+
+	switch (usb_db_val) {
+	case USB_DB_NONE:
+		CPRINTS("Daughterboard type: None");
+		break;
+	case USB_DB_USB4:
+		CPRINTS("Daughterboard type: USB4");
+		break;
+	case USB_DB_USB3:
+		config_db_usb3();
+		CPRINTS("Daughterboard type: USB3");
+		break;
+	default:
+		CPRINTS("Daughterboard ID %d not supported", usb_db_val);
+		usb_db_val = USB_DB_NONE;
+	}
+	usb_db_type = usb_db_val;
+}
+DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_FIRST);

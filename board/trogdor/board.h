@@ -13,6 +13,7 @@
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
 #define CONFIG_USB_PD_DEBUG_LEVEL 3
 #define CONFIG_CMD_AP_RESET_LOG
+#define CONFIG_CMD_POWERINDEBUG
 #define CONFIG_HOSTCMD_AP_RESET
 
 /*
@@ -99,13 +100,8 @@
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DISCHARGE_PPC
 #define CONFIG_USB_PD_DUAL_ROLE
-/*
- * TODO(b/145723652): Add back the following CONFIG's after we enable
- * the PD software sync to update the PS8805 firmware.
- *
- * #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
- * #define CONFIG_USB_PD_TCPC_LOW_POWER
- */
+#define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
@@ -115,7 +111,6 @@
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_5V_EN_CUSTOM
-#define CONFIG_USB_MUX_VIRTUAL
 #define CONFIG_USBC_PPC_SN5S330
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_VCONN
@@ -206,6 +201,8 @@ enum power_signal {
 	SC7180_PMIC_FAULT_L,
 	SC7180_POWER_GOOD,
 	SC7180_WARM_RESET,
+	SC7180_AP_SUSPEND,
+	SC7180_DEPRECATED_AP_RST_REQ,
 	/* Number of power signals */
 	POWER_SIGNAL_COUNT
 };
@@ -237,6 +234,7 @@ int board_is_sourcing_vbus(int port);
 int board_vbus_sink_enable(int port, int enable);
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
+void board_set_tcpc_power_mode(int port, int mode);
 
 #endif /* !defined(__ASSEMBLER__) */
 

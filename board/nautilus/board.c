@@ -20,6 +20,7 @@
 #include "driver/accelgyro_bmi160.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/baro_bmp280.h"
+#include "driver/charger/isl923x.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
@@ -192,6 +193,16 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
         GPIO_USB1_ENABLE,
 };
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 void board_reset_pd_mcu(void)
 {
@@ -616,7 +627,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .rot_standard_ref = &lid_standard_ref,
 	 .min_frequency = BMA255_ACCEL_MIN_FREQ,
 	 .max_frequency = BMA255_ACCEL_MAX_FREQ,
-	 .default_range = 2, /* g, to support tablet mode */
+	 .default_range = 2, /* g, to support lid angle calculation. */
 	 .config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
@@ -642,7 +653,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
-	 .default_range = 2, /* g, to support tablet mode  */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {

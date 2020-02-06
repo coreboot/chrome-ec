@@ -146,6 +146,8 @@
 #define CONFIG_USBC_PPC_AOZ1380
 #define CONFIG_USBC_PPC_NX20P3483
 #define CONFIG_USBC_RETIMER_PI3DPX1207
+#define CONFIG_USBC_RETIMER_PS8802
+#define CONFIG_USBC_RETIMER_PS8818
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
@@ -193,7 +195,9 @@
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
 #define I2C_PORT_TCPC0		NPCX_I2C_PORT0_0
+#define I2C_PORT_USBA0		NPCX_I2C_PORT0_0
 #define I2C_PORT_TCPC1		NPCX_I2C_PORT1_0
+#define I2C_PORT_USBA1		NPCX_I2C_PORT1_0
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT2_0
 #define I2C_PORT_CHARGER	I2C_PORT_BATTERY
 #define I2C_PORT_USB_MUX	NPCX_I2C_PORT3_0
@@ -219,6 +223,11 @@
 #define CONFIG_ACCEL_FIFO_SIZE 256
 /* Depends on how fast the AP boots and typical ODRs. */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+
+/* Audio */
+#define CONFIG_AUDIO_CODEC
+#define CONFIG_AUDIO_CODEC_DMIC
+#define CONFIG_AUDIO_CODEC_I2S_RX
 
 #ifndef __ASSEMBLER__
 
@@ -278,6 +287,23 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
+/* Private
+ * Main intent is to indicate the retimer type attached
+ * but is also needed to determine the HPD from the port
+ */
+enum zork_c1_retimer {
+	C1_RETIMER_UNKNOWN,
+	C1_RETIMER_PS8802,
+	C1_RETIMER_PS8818,
+};
+extern enum zork_c1_retimer zork_c1_retimer;
+
+#define PORT_TO_HPD(port) ((port == 0) \
+	? GPIO_USB_C0_HPD \
+	: (zork_c1_retimer == C1_RETIMER_PS8802) \
+		? GPIO_DP1_HPD \
+		: GPIO_DP2_HPD)
+
 /*
  * Matrix to rotate accelerators into the standard reference frame.  The default
  * is the identity which is correct for the reference design.  Variations of
@@ -311,8 +337,6 @@ void board_update_sensor_config_from_sku(void);
 #ifdef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
 int board_tcpc_fast_role_swap_enable(int port, int enable);
 #endif
-
-#define PORT_TO_HPD(port) ((port) ? GPIO_DP2_HPD : GPIO_USB_C0_HPD)
 
 #endif /* !__ASSEMBLER__ */
 

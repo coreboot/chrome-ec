@@ -30,13 +30,14 @@ GPIO_INT(SLP_S3_L,             PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
 #endif
 GPIO_INT(PG_PP950_VCCIO_OD,    PIN(1, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SLP_S0_L,             PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(CPU_C10_GATE_L,       PIN(6, 7), GPIO_INT_BOTH, power_signal_interrupt)
+GPIO_INT(CPU_C10_GATE_L,       PIN(6, 7), GPIO_INT_BOTH, c10_gate_interrupt)
 GPIO_INT(IMVP8_VRRDY_OD,       PIN(1, 6), GPIO_INT_BOTH, power_signal_interrupt)
 
 /* Other interrupts */
 GPIO_INT(USB_C0_TCPPC_INT_ODL, PIN(E, 0), GPIO_INT_FALLING, ppc_interrupt)
 GPIO_INT(USB_C0_TCPC_INT_ODL,  PIN(6, 2), GPIO_INT_FALLING, tcpc_alert_event)
 GPIO_INT(H1_EC_RECOVERY_BTN_ODL, PIN(2, 4), GPIO_INT_BOTH, button_interrupt)
+GPIO_INT(BJ_ADP_PRESENT_L,     PIN(8, 2), GPIO_INT_BOTH | GPIO_PULL_UP, adp_connect_interrupt)
 
 /* Port power control interrupts */
 GPIO_INT(HDMI_CONN0_OC_ODL,    PIN(0, 7), GPIO_INT_BOTH, port_ocp_interrupt)
@@ -61,7 +62,7 @@ GPIO(SYS_RST_ODL,              PIN(C, 5), GPIO_ODR_HIGH)
 GPIO(EN_PP5000_A,              PIN(A, 4), GPIO_OUT_LOW)
 GPIO(EN_PP3300_INA_H1_EC_ODL,  PIN(5, 7), GPIO_ODR_HIGH)
 GPIO(EN_PP1800_A,              PIN(1, 5), GPIO_OUT_LOW)
-GPIO(VCCST_PG_OD,              PIN(1, 4), GPIO_ODR_HIGH)
+GPIO(VCCST_PG_OD,              PIN(1, 4), GPIO_ODR_LOW)
 GPIO(EN_S0_RAILS,              PIN(1, 1), GPIO_OUT_LOW)
 GPIO(EN_ROA_RAILS,             PIN(A, 3), GPIO_OUT_LOW)
 GPIO(EN_PP950_VCCIO,           PIN(1, 0), GPIO_OUT_LOW)
@@ -70,7 +71,6 @@ GPIO(EN_IMVP8_VR,              PIN(F, 4), GPIO_OUT_LOW)
 
 /* Barreljack */
 GPIO(EN_PPVAR_BJ_ADP_L,        PIN(0, 4), GPIO_OUT_LOW)
-GPIO(BJ_ADP_PRESENT_L,         PIN(8, 2), GPIO_INPUT)
 
 /* USB type A */
 GPIO(EN_PP5000_USB_VBUS,       PIN(8, 3), GPIO_OUT_LOW)
@@ -83,7 +83,14 @@ GPIO(USB_C0_TCPC_RST,          PIN(9, 7), GPIO_OUT_LOW)
 GPIO(M2_SSD_PLN,               PIN(A, 0), GPIO_INPUT)
 GPIO(EC_ENTERING_RW,           PIN(E, 3), GPIO_OUT_LOW)
 GPIO(CCD_MODE_ODL,             PIN(E, 5), GPIO_ODR_HIGH)
-GPIO(EN_PP_MST_OD,             PIN(9, 6), GPIO_ODR_LOW)
+GPIO(EN_PP_MST_OD,             PIN(9, 6), GPIO_ODR_HIGH)
+
+/* HDMI/CEC */
+GPIO(EN_PP5000_HDMI,           PIN(5, 0), GPIO_OUT_LOW)
+GPIO(HDMI_CONN0_CEC_OUT,       PIN(C, 2), GPIO_ODR_HIGH)
+GPIO(HDMI_CONN0_CEC_IN,        PIN(B, 1), GPIO_INPUT)
+GPIO(HDMI_CONN1_CEC_OUT,       PIN(6, 0), GPIO_ODR_HIGH)
+GPIO(HDMI_CONN1_CEC_IN,        PIN(9, 5), GPIO_INPUT)
 
 /* I2C pins - Alternate function below configures I2C module on these pins */
 GPIO(I2C0_SCL,                 PIN(B, 5), GPIO_INPUT)           /* EC_I2C_INA_SCL */
@@ -142,13 +149,10 @@ UNUSED(PIN(3, 2))						/* E5  NC */
 UNUSED(PIN(D, 6))						/* F6  NC */
 UNUSED(PIN(3, 5))						/* F5  NC */
 UNUSED(PIN(5, 6))						/* M2  NC */
-UNUSED(PIN(5, 0))						/* G4  NC */
 UNUSED(PIN(D, 2))						/* C11 NC */
 UNUSED(PIN(D, 3))						/* E9  NC */
 UNUSED(PIN(8, 6))						/* J8  NC */
 UNUSED(PIN(7, 5))						/* J6  NC */
-UNUSED(PIN(C, 2))						/* A12 NC */
-UNUSED(PIN(6, 0))						/* G5  NC */
 UNUSED(PIN(9, 3))						/* M11 NC */
 UNUSED(PIN(7, 2))						/* H6  NC */
 UNUSED(PIN(F, 1))						/* G3  NC */

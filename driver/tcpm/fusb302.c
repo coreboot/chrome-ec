@@ -11,6 +11,7 @@
 #include "fusb302.h"
 #include "task.h"
 #include "hooks.h"
+#include "tcpci.h"
 #include "tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
@@ -351,6 +352,9 @@ static int fusb302_tcpm_select_rp_value(int port, int rp)
 	int rv;
 	uint8_t vnc, rd;
 
+	/* Keep track of current RP value */
+	tcpci_set_cached_rp(port, rp);
+
 	rv = tcpc_read(port, TCPC_REG_CONTROL0, &reg);
 	if (rv)
 		return rv;
@@ -382,6 +386,9 @@ static int fusb302_tcpm_select_rp_value(int port, int rp)
 static int fusb302_tcpm_init(int port)
 {
 	int reg;
+
+	/* Start with an unknown connection */
+	tcpci_set_cached_pull(port, TYPEC_CC_OPEN);
 
 	/* set default */
 	state[port].cc_polarity = -1;
@@ -485,6 +492,9 @@ static int fusb302_tcpm_set_cc(int port, int pull)
 {
 	int reg;
 
+	/* Keep track of current CC pull value */
+	tcpci_set_cached_pull(port, pull);
+
 	/* NOTE: FUSB302 toggles a single pull-up between CC1 and CC2 */
 	/* NOTE: FUSB302 Does not support Ra. */
 	switch (pull) {
@@ -553,10 +563,20 @@ static int fusb302_tcpm_set_cc(int port, int pull)
 	return 0;
 }
 
-static int fusb302_tcpm_set_polarity(int port, int polarity)
+static int fusb302_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	/* Port polarity : 0 => CC1 is CC line, 1 => CC2 is CC line */
 	int reg;
+
+	/*
+	 * TCPCI sets the CC lines based on polarity.  If it is set to
+	 * no connection then both CC lines are driven, otherwise only
+	 * one is driven.  This driver does not appear to do this.  If
+	 * that changes, this would be the location you would want to
+	 * adjust the CC lines for the current polarity
+	 */
+	if (polarity == POLARITY_NONE)
+		return EC_SUCCESS;
 
 	tcpc_read(port, TCPC_REG_SWITCHES0, &reg);
 
@@ -566,7 +586,7 @@ static int fusb302_tcpm_set_polarity(int port, int polarity)
 
 	if (state[port].vconn_enabled) {
 		/* set VCONN switch to be non-CC line */
-		if (polarity)
+		if (polarity_rm_dts(polarity))
 			reg |= TCPC_REG_SWITCHES0_VCONN_CC1;
 		else
 			reg |= TCPC_REG_SWITCHES0_VCONN_CC2;
@@ -577,7 +597,7 @@ static int fusb302_tcpm_set_polarity(int port, int polarity)
 	reg &= ~TCPC_REG_SWITCHES0_MEAS_CC2;
 
 	/* set rx polarity */
-	if (polarity)
+	if (polarity_rm_dts(polarity))
 		reg |= TCPC_REG_SWITCHES0_MEAS_CC2;
 	else
 		reg |= TCPC_REG_SWITCHES0_MEAS_CC1;
@@ -591,7 +611,7 @@ static int fusb302_tcpm_set_polarity(int port, int polarity)
 	reg &= ~TCPC_REG_SWITCHES1_TXCC2_EN;
 
 	/* set tx polarity */
-	if (polarity)
+	if (polarity_rm_dts(polarity))
 		reg |= TCPC_REG_SWITCHES1_TXCC2_EN;
 	else
 		reg |= TCPC_REG_SWITCHES1_TXCC1_EN;
@@ -1058,7 +1078,7 @@ static int fusb302_tcpm_enter_low_power_mode(int port)
 		mode = TCPC_REG_CONTROL2_MODE_UFP;
 		break;
 	case PD_DRP_FREEZE:
-		mode = pd_get_role(port) == PD_ROLE_SINK ?
+		mode = pd_get_power_role(port) == PD_ROLE_SINK ?
 			TCPC_REG_CONTROL2_MODE_UFP :
 			TCPC_REG_CONTROL2_MODE_DFP;
 		break;

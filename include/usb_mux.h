@@ -17,7 +17,7 @@
  * USB-C mux state
  *
  * A bitwise combination of the USB_PD_MUX_* flags.
- * The bottom 2 bits also correspond to the typec_mux enum type.
+ * Note: this is 8 bits right now to make ec_response_usb_pd_mux_info size.
  */
 typedef uint8_t mux_state_t;
 
@@ -28,23 +28,6 @@ typedef uint8_t mux_state_t;
 #define MUX_PORT_AND_ADDR(port, addr) ((port << 8) | (addr & 0xFF))
 #define MUX_PORT(port) (usb_muxes[port].port_addr >> 8)
 #define MUX_ADDR(port) (usb_muxes[port].port_addr & 0xFF)
-
-/* Mux state attributes */
-/* TODO: Directly use USB_PD_MUX_* everywhere and remove these 3 defines */
-#define MUX_USB_ENABLED        USB_PD_MUX_USB_ENABLED
-#define MUX_DP_ENABLED         USB_PD_MUX_DP_ENABLED
-#define MUX_POLARITY_INVERTED  USB_PD_MUX_POLARITY_INVERTED
-#define MUX_SAFE_MODE          USB_PD_MUX_SAFE_MODE
-
-/* Mux modes, decoded to attributes */
-enum typec_mux {
-	TYPEC_MUX_NONE = 0,                /* Open switch */
-	TYPEC_MUX_USB  = MUX_USB_ENABLED,  /* USB only */
-	TYPEC_MUX_DP   = MUX_DP_ENABLED,   /* DP only */
-	TYPEC_MUX_DOCK = MUX_USB_ENABLED | /* Both USB and DP */
-			 MUX_DP_ENABLED,
-	TYPEC_MUX_SAFE = MUX_SAFE_MODE,    /* Safe mode */
-};
 
 /* Mux driver function pointers */
 struct usb_mux_driver {
@@ -126,8 +109,9 @@ struct usb_mux {
 
 /* Supported USB mux drivers */
 extern const struct usb_mux_driver amd_fp5_usb_mux_driver;
+extern const struct usb_mux_driver anx7440_usb_mux_driver;
 extern const struct usb_mux_driver it5205_usb_mux_driver;
-extern const struct usb_mux_driver pi3usb30532_usb_mux_driver;
+extern const struct usb_mux_driver pi3usb3x532_usb_mux_driver;
 extern const struct usb_mux_driver ps874x_usb_mux_driver;
 extern const struct usb_mux_driver tcpm_usb_mux_driver;
 extern const struct usb_mux_driver virtual_usb_mux_driver;
@@ -186,21 +170,19 @@ struct usb_retimer {
 
 	/* I2C port and slave address */
 	const int i2c_port;
-	const uint16_t i2c_addr_flags;
-
-	/* NVM flag if shared with multiple retimers */
-	const bool shared_nvm;
-
-	/* Retimer control GPIOs */
-	const enum gpio_signal gpio_enable;     /* Retimer enable */
-	const enum gpio_signal gpio_dp_enable;  /* DP Mode enable */
-
-	const enum gpio_signal usb_ls_en_gpio;  /* Load switch enable */
-	const enum gpio_signal retimer_rst_gpio;/* Retimer reset */
-	const enum gpio_signal force_power_gpio;/* Force power (active/low) */
+	uint16_t i2c_addr_flags;
 
 	/* Driver interfaces for this retimer */
 	const struct usb_retimer_driver *driver;
+
+	/*
+	 * USB retimer board specific tune on set mux_state.
+	 *
+	 * @param port usb port of retimer (not port_addr)
+	 * @param mux_state State to set retimer mode to.
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*tune)(int port, mux_state_t mux_state);
 };
 
 /*
@@ -260,7 +242,7 @@ void usb_mux_init(int port);
  * @param usb_config usb2.0 selected function.
  * @param polarity plug polarity (0=CC1, 1=CC2).
  */
-void usb_mux_set(int port, enum typec_mux mux_mode,
+void usb_mux_set(int port, mux_state_t mux_mode,
 		 enum usb_switch usb_config, int polarity);
 
 /**
@@ -283,4 +265,14 @@ mux_state_t usb_mux_get(int port);
  * @param port port number.
  */
 void usb_mux_flip(int port);
+
+/**
+ * Update the hot-plug event.
+ *
+ * @param port port number.
+ * @param hpd_lvl HPD level.
+ * @param hpd_irq HPD IRQ.
+ */
+void usb_mux_hpd_update(int port, int hpd_lvl, int hpd_irq);
+
 #endif

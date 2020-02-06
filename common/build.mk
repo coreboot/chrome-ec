@@ -101,7 +101,8 @@ common-$(CONFIG_LID_ANGLE)+=motion_lid.o math_util.o
 common-$(CONFIG_LID_ANGLE_UPDATE)+=lid_angle.o
 common-$(CONFIG_LID_SWITCH)+=lid_switch.o
 common-$(CONFIG_HOSTCMD_X86)+=acpi.o port80.o ec_features.o
-common-$(CONFIG_MAG_CALIBRATE)+= mag_cal.o math_util.o vec3.o mat33.o mat44.o
+common-$(CONFIG_MAG_CALIBRATE)+= mag_cal.o math_util.o vec3.o mat33.o mat44.o \
+	kasa.o
 common-$(CONFIG_MKBP_EVENT)+=mkbp_event.o
 common-$(CONFIG_ONEWIRE)+=onewire.o
 common-$(CONFIG_PECI_COMMON)+=peci.o
@@ -119,6 +120,8 @@ common-$(CONFIG_ROLLBACK)+=rollback.o
 common-$(CONFIG_RWSIG)+=rwsig.o vboot/common.o
 common-$(CONFIG_RWSIG_TYPE_RWSIG)+=vboot/vb21_lib.o
 common-$(CONFIG_MATH_UTIL)+=math_util.o
+common-$(CONFIG_ONLINE_CALIB)+=stillness_detector.o kasa.o math_util.o \
+	mat44.o vec3.o
 common-$(CONFIG_SHA1)+= sha1.o
 common-$(CONFIG_SHA256)+=sha256.o
 common-$(CONFIG_SOFTWARE_CLZ)+=clz.o
@@ -141,10 +144,12 @@ common-$(CONFIG_USB_CONSOLE_STREAM)+=usb_console_stream.o
 common-$(CONFIG_USB_I2C)+=usb_i2c.o
 common-$(CONFIG_USB_PORT_POWER_DUMB)+=usb_port_power_dumb.o
 common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o
+common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o usb_pd_host_cmd.o \
+	usb_pd_console_cmd.o
 ifeq ($(CONFIG_USB_SM_FRAMEWORK),)
 common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o
 endif
+common-$(CONFIG_USB_PD_ALT_MODE_DFP)+=usb_pd_alt_mode_dfp.o
 common-$(CONFIG_USB_PD_LOGGING)+=event_log.o pd_log.o
 common-$(CONFIG_USB_PD_TCPC)+=usb_pd_tcpc.o
 common-$(CONFIG_USB_UPDATE)+=usb_update.o update_fw.o
@@ -191,6 +196,26 @@ $(out)/RW/common/aes-gcm.o: CFLAGS+=-std=c99 -Wno-declaration-after-statement
 $(out)/RO/common/aes-gcm.o: CFLAGS+=-std=c99 -Wno-declaration-after-statement
 
 ifneq ($(CONFIG_BOOTBLOCK),)
+
+ifdef BOOTBLOCK
+
+# verify the file size is less than or equal to DEFAULT_BOOTBLOCK_SIZE
+$(shell test `stat -c "%s" "$(BOOTBLOCK)"` -le "$(DEFAULT_BOOTBLOCK_SIZE)")
+ifneq ($(.SHELLSTATUS),0)
+$(error bootblock $(BOOTBLOCK) larger than $(DEFAULT_BOOTBLOCK_SIZE) bytes)
+endif
+
+else
+
+# generate a dummy bootblock file
+BOOTBLOCK := $(out)/.dummy-bootblock
+
+.PHONY: $(out)/.dummy-bootblock
+$(out)/.dummy-bootblock:
+	@dd if=/dev/zero of=$@ bs=1 count=$(DEFAULT_BOOTBLOCK_SIZE) status=none
+
+endif # BOOTBLOCK
+
 build-util-bin += gen_emmc_transfer_data
 
 # Bootblock is only packed in RO image.
@@ -274,6 +299,11 @@ $(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: $(out)/cryptoc/libcryptoc.a
 # Host test executables (including fuzz tests).
 $(out)/$(PROJECT).exe: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
 $(out)/$(PROJECT).exe: $(out)/cryptoc/libcryptoc.a
+# On-device tests.
+test-targets=$(foreach test,$(test-list-y),\
+	$(out)/RW/$(test).RW.elf $(out)/RO/$(test).RO.elf)
+$(test-targets): LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
+$(test-targets): $(out)/cryptoc/libcryptoc.a
 endif
 
 include $(_common_dir)fpsensor/build.mk

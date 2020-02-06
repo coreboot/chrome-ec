@@ -30,6 +30,9 @@ GPIO_INT(DSW_PWROK,            PIN(C, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PG_EC_ALL_SYS_PWRGD,  PIN(F, 4),  GPIO_INT_BOTH, power_signal_interrupt)
 
 /* Sensor Interrupts */
+GPIO_INT(EC_CAM_VSYN_SLP_S0IX, PIN(7, 2), GPIO_INT_RISING, sync_interrupt)
+GPIO_INT(EC_ALS_RGB_INT_L,     PIN(D, 4), GPIO_INT_FALLING, tcs3400_interrupt)
+GPIO_INT(TABLET_MODE_L,        PIN(9, 5), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 
 /* USB-C interrupts */
 GPIO_INT(USB_C0_TCPC_INT_ODL,	PIN(E, 0), GPIO_INT_BOTH, tcpc_alert_event)
@@ -91,20 +94,15 @@ GPIO(SYS_RST_ODL,              PIN(C, 5), GPIO_ODR_HIGH)
 GPIO(EC_PCH_INT_ODL,           PIN(D, 6), GPIO_ODR_HIGH) /* TODO - b/140557015 - implement with MKBD sensor events */
 
 /* USB and USBC Signals */
-GPIO(EN_PP3300_AG,		PIN(8, 5), GPIO_OUT_LOW)
 
-/* TODO - b/145560203 route USB_C1_RT_RST_ODL to EC */
-UNIMPLEMENTED(USB_C1_RT_RST_ODL)
+/* TODO(b/148243971): update PIN for next build */
+GPIO(USB_C1_RT_RST_ODL,		PIN(3, 2), GPIO_ODR_LOW)	/* USB_C1 Reset */
 /* Don't have a load switch for retimer */
 UNIMPLEMENTED(USB_C1_LS_EN)
 /* Retimer Force Power enable is connected to AP */
 UNIMPLEMENTED(USB_C1_RT_FORCE_PWR)
 
 /* Misc Signals */
-/* This selects between an LED module on the motherboard and one on the daughter
- * board, to be controlled by LED{1,2,3}. Select the one on the motherboard by
- * default. */
-GPIO(LED_SIDESEL_4_L,          PIN(6, 0), GPIO_OUT_LOW)
 
 /*
  * eDP backlight - both PCH and EC have enable pins that must be high
@@ -142,7 +140,11 @@ ALTERNATE(PIN_MASK(D, BIT(1) | BIT(0)), 0, MODULE_I2C, 0)                       
 ALTERNATE(PIN_MASK(3, BIT(3) | BIT(6)), 0, MODULE_I2C, 0)                            /* I2C5 */
 ALTERNATE(PIN_MASK(B, BIT(3) | BIT(2)), 0, MODULE_I2C, 0)                            /* I2C7 */
 
-ALTERNATE(PIN_MASK(C, BIT(2) | BIT(3) | BIT(4)), 0, MODULE_PWM, 0)                   /* LED{3,2,1}_L */
+/* This selects between an LED module on the motherboard and one on the daughter
+ * board, to be controlled by LED_{1,2,3}_L. PWM allows driving both modules at
+ * the same time. */
+ALTERNATE(PIN_MASK(6, BIT(0)), 0, MODULE_PWM, 0)                                     /* LED_SIDESEL_4_L */
+ALTERNATE(PIN_MASK(C, BIT(2) | BIT(3) | BIT(4)), 0, MODULE_PWM, 0)                   /* LED_{3,2,1}_L */
 
 /* Fan signals */
 GPIO(EN_PP5000_FAN,            PIN(6, 1), GPIO_OUT_LOW)
@@ -158,6 +160,7 @@ GPIO(EC_KSO_02_INV, PIN(1, 7),                        GPIO_OUT_LOW)  /* KSO_02 *
 ALTERNATE(PIN_MASK(1, 0x7F), 0, MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH) /* KSO_03-09 */
 ALTERNATE(PIN_MASK(0, 0xF0), 0, MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH) /* KSO_10-13 */
 ALTERNATE(PIN_MASK(8, 0x04), 0, MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH) /* KSO_14 */
+ALTERNATE(PIN_MASK(8, BIT(0)), 0, MODULE_PWM, 0)                     /* EC_KB_BL_PWM */
 
 /* UART */
 ALTERNATE(PIN_MASK(6, BIT(5) | BIT(4)), 0, MODULE_UART, 0)                           /* UART from EC to Servo */

@@ -400,7 +400,13 @@
 /*****************************************************************************/
 /* Battery config */
 
-/* Support a simple battery. */
+/*
+ * Support battery management and interrogation.
+ *
+ * This is implied by CONFIG_BATTERY_<device> (below); if not enabled and
+ * CONFIG_BATTERY_PRESENT_CUSTOM is also disabled, the board is assumed to not
+ * have or support a battery.
+ */
 #undef CONFIG_BATTERY
 
 /*
@@ -447,21 +453,20 @@
 #undef CONFIG_BATTERY_HW_PRESENT_CUSTOM
 
 /*
- * If defined, the charger will check for battery presence before attempting
- * to communicate with it. This avoids the 30 second delay when booting
- * without a battery present. Do not use with CONFIG_BATTERY_PRESENT_GPIO.
+ * battery_is_present() support.
  *
- * Replace the default battery_is_present() function with a board-specific
- * implementation in board.c
+ * Choice of battery driver normally determines the implementation of
+ * battery_is_present(); it is also possible to provide a board-specific
+ * implementation or note its presence from a GPIO level.
+ *
+ * If CONFIG_BATTERY is not enabled, a stub implementation that always returns
+ * "not present" is provided unless CONFIG_BATTERY_PRESENT_CUSTOM is enabled.
+ *
+ * These options are mutually exclusive.
  */
+/* The board provides a custom battery_is_present() implementation. */
 #undef CONFIG_BATTERY_PRESENT_CUSTOM
-
-/*
- * If defined, GPIO which is driven low when battery is present.
- * Charger will check for battery presence before attempting to communicate
- * with it. This avoids the 30 second delay when booting without a battery
- * present. Do not use with CONFIG_BATTERY_PRESENT_CUSTOM.
- */
+/* Battery is present if the GPIO named by this define reads logic-low. */
 #undef CONFIG_BATTERY_PRESENT_GPIO
 
 /*
@@ -772,25 +777,27 @@
 
 /* Compile charger-specific code for these chargers (pick at most one) */
 #undef CONFIG_CHARGER_BD9995X
-#undef CONFIG_CHARGER_BQ24707A
 #undef CONFIG_CHARGER_BQ24715
-#undef CONFIG_CHARGER_BQ24725
-#undef CONFIG_CHARGER_BQ24735
-#undef CONFIG_CHARGER_BQ24738
 #undef CONFIG_CHARGER_BQ24770
 #undef CONFIG_CHARGER_BQ24773
-#undef CONFIG_CHARGER_BQ25703
 #undef CONFIG_CHARGER_BQ25710
-#undef CONFIG_CHARGER_BQ25890
-#undef CONFIG_CHARGER_BQ25892
-#undef CONFIG_CHARGER_BQ25895
 #undef CONFIG_CHARGER_ISL9237
 #undef CONFIG_CHARGER_ISL9238
 #undef CONFIG_CHARGER_ISL9241
 #undef CONFIG_CHARGER_MT6370
+#undef CONFIG_CHARGER_RAA489000
 #undef CONFIG_CHARGER_RT9466
 #undef CONFIG_CHARGER_RT9467
 #undef CONFIG_CHARGER_SY21612
+
+/* Allow run-time completion of the charger driver structure */
+#undef CONFIG_CHARGER_RUNTIME_CONFIG
+
+/*
+ * Board has only one charger chip (default, undef when board contains multiple
+ * charger chips
+ */
+#define CONFIG_CHARGER_SINGLE_CHIP
 
 /*
  * Enable the CHG_EN at initialization to turn-on the BGATE which allows voltage
@@ -812,19 +819,6 @@
  * get the battery temperature from the charger.
  */
 #undef CONFIG_CHARGER_BATTERY_TSENSE
-
-/*
- * BQ2589x IR Compensation settings.
- * Should be the combination of BQ2589X_IR_TREG_xxxC, BQ2589X_IR_VCLAMP_yyyMV
- * and  BQ2589X_IR_BAT_COMP_zzzMOHM.
- */
-#undef CONFIG_CHARGER_BQ2589X_IR_COMP
-/*
- * BQ2589x 5V boost current limit and voltage.
- * Should be the combination of BQ2589X_BOOSTV_MV(voltage) and
- * BQ2589X_BOOST_LIM_xxxMA.
- */
-#undef CONFIG_CHARGER_BQ2589X_BOOST
 
 /*
  * Board specific charging current limit, in mA.  If defined, the charge state
@@ -857,16 +851,6 @@
  * or via charger_get_system_power function.
  */
 #undef CONFIG_CHARGER_PSYS_READ
-
-/*
- * Board specific charging current termination limit, in mA.  If defined and
- * charger supports setting termination current it should be set during charger
- * init.
- *
- * TODO(tbroch): Only valid for bq2589x currently.  Configure defaults for other
- * charger ICs that support termination currents.
- */
-#undef CONFIG_CHARGER_TERM_CURRENT_LIMIT
 
 /*
  * Board supports discharge mode.  In this mode, the battery will discharge
@@ -1096,6 +1080,7 @@
 #undef CONFIG_CHIPSET_ECDRIVEN		/* Dummy power module */
 #undef CONFIG_CHIPSET_GEMINILAKE	/* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE		/* Intel Icelake (x86) */
+#undef CONFIG_CHIPSET_JASPERLAKE	/* Intel Jasperlake (x86) */
 #undef CONFIG_CHIPSET_MT817X		/* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183		/* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_RK3288		/* Rockchip rk3288 */
@@ -1108,7 +1093,6 @@
 
 /* Shared chipset support; automatically gets defined below. */
 #undef CONFIG_CHIPSET_APL_GLK		/* Apollolake & Geminilake */
-#undef CONFIG_CHIPSET_ICL_TGL		/* Icelake & Tigerlake */
 
 /* Support chipset throttling */
 #undef CONFIG_CHIPSET_CAN_THROTTLE
@@ -1261,6 +1245,7 @@
 #define CONFIG_CMD_PWR_AVG
 #define CONFIG_CMD_POWER_AP
 #undef  CONFIG_CMD_PPC_DUMP
+#undef  CONFIG_CMD_PS2
 #undef  CONFIG_CMD_RAND
 #define CONFIG_CMD_REGULATOR
 #undef  CONFIG_CMD_RTC
@@ -1640,6 +1625,9 @@
 
 /* Percentage to which all fans are set at initiation */
 #define CONFIG_FAN_INIT_SPEED 100
+
+/* Allow board custom fan control */
+#undef CONFIG_CUSTOM_FAN_CONTROL
 
 /* Support fan control while in low-power idle */
 #undef CONFIG_FAN_DSLEEP
@@ -2546,6 +2534,11 @@
 
 /*****************************************************************************/
 
+/*
+ * Enable IT8801 pwm module.
+ */
+#undef CONFIG_IO_EXPANDER_IT8801_PWM
+
 /*****************************************************************************/
 
 /* Support common LED interface */
@@ -2762,6 +2755,15 @@
 
 /* Need for a math library */
 #undef CONFIG_MATH_UTIL
+
+/* Include sensor online calibration (requires CONFIG_FPU) */
+#undef CONFIG_ONLINE_CALIB
+
+/*
+ * Duration after which an entry in the temperature cache is considered stale.
+ * Defaults to 5 minutes if not set.
+ */
+#undef CONFIG_TEMP_CACHE_STALE_THRES
 
 /* Include code to do online compass calibration */
 #undef CONFIG_MAG_CALIBRATE
@@ -3005,6 +3007,17 @@
  * On x86 systems, define this option if the CPU_PROCHOT signal is active low.
  */
 #undef CONFIG_CPU_PROCHOT_ACTIVE_LOW
+
+/* Support PS/2 interface */
+#undef CONFIG_PS2
+
+/*
+ * Define this option to enable programmable voltage detector which will
+ * trigger an interrupt when the voltage drops below a threshold specified
+ * by the PVD_THRESHOLD which is a chip specific voltage threshold that
+ * must be defined in board.h.
+ */
+#undef CONFIG_PVD
 
 /*****************************************************************************/
 /* Support PWM control */
@@ -3472,6 +3485,7 @@
 #undef CONFIG_TEMP_SENSOR_G753		/* G753 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_G781		/* G781 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_G782		/* G782 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_OTI502	/* OTI502 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_SB_TSI	/* SB_TSI sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP006	/* TI TMP006 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP411	/* TI TMP411 sensor, on I2C bus */
@@ -3832,8 +3846,30 @@
 /* Enable TCPC to enter low power mode */
 #undef CONFIG_USB_PD_TCPC_LOW_POWER
 
+/* Define EC and TCPC modules are in one integrated chip */
+#undef CONFIG_USB_PD_TCPC_ON_CHIP
+
 /* Enable the encoding of msg SOP* in bits 31-28 of 32-bit msg header type */
 #undef CONFIG_USB_PD_DECODE_SOP
+
+/*
+ * The USB4 specification defines compatibility support for USB4 products to
+ * interact with existing Thunderbolt 3 products. Enable this config to enter
+ * into Thunderbolt-compatible mode between two port partners.
+ */
+#undef CONFIG_USB_PD_TBT_COMPAT_MODE
+
+/* Enable to enter into USB4 mode between two port partners */
+#undef CONFIG_USB_PD_USB4
+
+/* Enable if the board supports USB3.2 devices */
+#undef CONFIG_USB_PD_USB32
+
+/* Enable if the board is Thunderbolt Gen 3 capable */
+#undef CONFIG_USB_PD_TBT_GEN3_CAPABLE
+
+/* Enable PCIE tunneling if Thunderbolt-Compatible mode is enabled*/
+#undef CONFIG_USB_PD_PCIE_TUNNELING
 
 /*
  * Track VBUS level in TCPC module. This will only be needed if we're acting
@@ -3861,8 +3897,10 @@
 #undef CONFIG_USB_PD_TCPM_NCT38XX
 #undef CONFIG_USB_PD_TCPM_PS8751
 #undef CONFIG_USB_PD_TCPM_PS8805
+#undef CONFIG_USB_PD_TCPM_PS8815
 #undef CONFIG_USB_PD_TCPM_MT6370
 #undef CONFIG_USB_PD_TCPM_TUSB422
+#undef CONFIG_USB_PD_TCPM_RAA489000
 
 /*
  * Type-C retimer mux configuration tends to be set on a specific
@@ -3877,7 +3915,10 @@
  * Type-C retimer drivers to be used.
  */
 #undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_NB7V904M
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
+#undef CONFIG_USBC_RETIMER_PS8802
+#undef CONFIG_USBC_RETIMER_PS8818
 
 /*
  * Adds an EC console command to erase the ANX7447 OCM flash.
@@ -4223,11 +4264,20 @@
 /* Support the AMD FP5 USB/DP Mux */
 #undef CONFIG_USB_MUX_AMD_FP5
 
+/*
+ * Support the Analogix ANX7440 USB Type-C Active mux with
+ * Integrated Re-timers for USB3.1/DisplayPort.
+ */
+#undef CONFIG_USB_MUX_ANX7440
+
 /* Support the ITE IT5205 Type-C USB alternate mode mux. */
 #undef CONFIG_USB_MUX_IT5205
 
 /* Support the Pericom PI3USB30532 USB3.0/DP1.2 Matrix Switch */
 #undef CONFIG_USB_MUX_PI3USB30532
+
+/* Support the Pericom PI3USB31532 USB3.1/DP1.4 Matrix Switch */
+#undef CONFIG_USB_MUX_PI3USB31532
 
 /* Support the Parade PS8740 Type-C Redriving Switch */
 #undef CONFIG_USB_MUX_PS8740
@@ -4271,6 +4321,15 @@
 
 /* Support early firmware selection */
 #undef CONFIG_VBOOT_EFS
+
+/* Offset of RW-A image in writable storage when using EFS. */
+#undef CONFIG_RW_A_STORAGE_OFF
+/* Offset of RW-A signature. */
+#undef CONFIG_RW_A_SIGN_STORAGE_OFF
+/* Offset of RW-B image in writable storage when using EFS. */
+#undef CONFIG_RW_B_STORAGE_OFF
+/* Offset of RW-B signature. */
+#undef CONFIG_RW_B_SIGN_STORAGE_OFF
 
 /* Support computing hash of code for verified boot */
 #undef CONFIG_VBOOT_HASH
@@ -4342,9 +4401,6 @@
 
 /* WiFi power control signal is active-low. */
 #undef CONFIG_WLAN_POWER_ACTIVE_LOW
-
-/* Support Wake-on-Voice */
-#undef CONFIG_WAKE_ON_VOICE
 
 /*
  * Write protect signal is active-high.  If this is defined, there must be a
@@ -4724,11 +4780,21 @@
 
 /*****************************************************************************/
 /*
+ * Define CONFIG_USB_PD_TCPC_ON_CHIP if we use ITE83XX series TCPM driver
+ * on the board.
+ */
+#if defined(CONFIG_USB_PD_TCPM_ITE83XX) ||  \
+	defined(CONFIG_USB_PD_TCPM_ITE8XXX2)
+#define CONFIG_USB_PD_TCPC_ON_CHIP
+#endif
+
+/*****************************************************************************/
+/*
  * Define CONFIG_CHARGER_NARROW_VDC for chargers that use a Narrow VDC power
  * architecture.
  */
 #if defined(CONFIG_CHARGER_ISL9237) || defined(CONFIG_CHARGER_ISL9238) || \
-	defined(CONFIG_CHARGER_ISL9241)
+	defined(CONFIG_CHARGER_ISL9241) || defined(CONFIG_CHARGER_RAA489000)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
 
@@ -4795,7 +4861,9 @@
  * will not have to include it in their own board/baseboard.h file.
  */
 #if	defined(CONFIG_USBC_RETIMER_INTEL_BB) || \
-	defined(CONFIG_USBC_RETIMER_PI3DPX1207)
+	defined(CONFIG_USBC_RETIMER_PI3DPX1207) || \
+	defined(CONFIG_USBC_RETIMER_PS8802) || \
+	defined(CONFIG_USBC_RETIMER_PS8818)
 #define CONFIG_USBC_MUX_RETIMER
 #endif
 
@@ -4832,6 +4900,7 @@
 #undef CONFIG_CHIPSET_COMETLAKE
 #undef CONFIG_CHIPSET_GEMINILAKE
 #undef CONFIG_CHIPSET_ICELAKE
+#undef CONFIG_CHIPSET_JASPERLAKE
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_RK3399
@@ -4931,9 +5000,9 @@
 #define CONFIG_CHIPSET_APL_GLK
 #endif
 
-#if defined(CONFIG_CHIPSET_ICELAKE) || \
+#if defined(CONFIG_CHIPSET_JASPERLAKE) || \
 	defined(CONFIG_CHIPSET_TIGERLAKE)
-#define CONFIG_CHIPSET_ICL_TGL
+#define CONFIG_CHIPSET_ICELAKE
 #endif
 
 #if defined(CONFIG_CHIPSET_APL_GLK)
@@ -4947,15 +5016,13 @@
 	defined(CONFIG_CHIPSET_COMETLAKE_DISCRETE) || \
 	defined(CONFIG_CHIPSET_GEMINILAKE) || \
 	defined(CONFIG_CHIPSET_ICELAKE) || \
-	defined(CONFIG_CHIPSET_SKYLAKE) || \
-	defined(CONFIG_CHIPSET_TIGERLAKE)
+	defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_POWER_COMMON
 #endif
 
 #if defined(CONFIG_CHIPSET_CANNONLAKE) || \
 	defined(CONFIG_CHIPSET_ICELAKE) || \
-	defined(CONFIG_CHIPSET_SKYLAKE) || \
-	defined(CONFIG_CHIPSET_TIGERLAKE)
+	defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #endif
 
@@ -4992,6 +5059,22 @@
 #ifdef CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
 #define CONFIG_SEVEN_SEG_DISPLAY
 #endif /* CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY */
+
+/*****************************************************************************/
+/* Enable PCIE tunneling if the board supports Thunderbolt-Compatible mode */
+#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
+#define CONFIG_USB_PD_PCIE_TUNNELING
+#define CONFIG_USB_PD_TBT_GEN3_CAPABLE
+#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
+
+/*****************************************************************************/
+/*
+ * The board is Gen3 compatible and supports USB3.2 devices if it supports
+ * USB4 mode.
+ */
+#ifdef CONFIG_USB_PD_USB4
+#define CONFIG_USB_PD_USB32
+#endif /* CONFIG_USB_PD_USB4 */
 
 /*
  * Apply fuzzer and test config overrides last, since fuzzers and tests need to
@@ -5117,7 +5200,25 @@
 #if !defined(CONFIG_ACCEL_FIFO_SIZE) || !defined(CONFIG_ACCEL_FIFO_THRES)
 #error "Using CONFIG_ACCEL_FIFO, must define _SIZE and _THRES"
 #endif
+
+#ifndef CONFIG_TEMP_CACHE_STALE_THRES
+#ifdef CONFIG_ONLINE_CALIB
+/*
+ * Boards may choose to leave this to default and just turn on online
+ * calibration, in which case we'll set the threshold to 5 minutes.
+ */
+#define CONFIG_TEMP_CACHE_STALE_THRES (5 * MINUTE)
+#else
+/*
+ * Boards that use the FIFO and not the online calibration can just leave this
+ * at 0.
+ */
+#define CONFIG_TEMP_CACHE_STALE_THRES 0
+#endif /* CONFIG_ONLINE_CALIB */
+#endif /* !CONFIG_TEMP_CACHE_STALE_THRES */
+
 #endif /* CONFIG_ACCEL_FIFO */
+
 
 /*
  * If USB PD Discharge is enabled, verify that CONFIG_USB_PD_DISCHARGE_GPIO
@@ -5144,6 +5245,10 @@
 
 #ifdef CONFIG_SMBUS_PEC
 #define CONFIG_CRC8
+#endif
+
+#if defined(CONFIG_ONLINE_CALIB) && !defined(CONFIG_FPU)
+#error "Online calibration requires CONFIG_FPU"
 #endif
 
 #endif  /* __CROS_EC_CONFIG_H */

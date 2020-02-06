@@ -10,6 +10,7 @@
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
+#include "chipset.h"
 #include "common.h"
 #include "cros_board_info.h"
 #include "driver/ina3221.h"
@@ -26,6 +27,7 @@
 #include "host_command.h"
 #include "lid_switch.h"
 #include "power.h"
+#include "power/cometlake-discrete.h"
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
@@ -76,17 +78,15 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
+/* Called when the charge manager has switched to a new port. */
 void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
 {
-	charge_set_input_current_limit(MAX(charge_ma,
-					   CONFIG_CHARGER_INPUT_CURRENT),
-				       charge_mv);
-}
-
-int charge_set_input_current_limit(int ma, int mv)
-{
-	return EC_SUCCESS;
+	/* Blink alert if insufficient power per system_can_boot_ap(). */
+	int insufficient_power =
+		(charge_ma * charge_mv) <
+		(CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON * 1000);
+	led_alert(insufficient_power);
 }
 
 #include "port-sm.c"
@@ -143,6 +143,69 @@ static void port_ocp_interrupt(enum gpio_signal signal)
 {
 	hook_call_deferred(&update_port_limits_data, 0);
 }
+
+/******************************************************************************/
+/*
+ * Barrel jack power supply handling
+ *
+ * EN_PPVAR_BJ_ADP_L must default active to ensure we can power on when the
+ * barrel jack is connected, and the USB-C port can bring the EC up fine in
+ * dead-battery mode. Both the USB-C and barrel jack switches do reverse
+ * protection, so we're safe to turn one on then the other off- but we should
+ * only do that if the system is off since it might still brown out.
+ */
+#define ADP_DEBOUNCE_MS		1000  /* Debounce time for BJ plug/unplug */
+/* Debounced connection state of the barrel jack */
+static int8_t adp_connected = -1;
+static void adp_connect_deferred(void)
+{
+	struct charge_port_info pi = { 0 };
+	int connected = !gpio_get_level(GPIO_BJ_ADP_PRESENT_L);
+
+	/* Debounce */
+	if (connected == adp_connected)
+		return;
+	if (connected) {
+		pi.voltage = 19000;
+		/*
+		 * TODO(b:143975429) set current according to SKU.
+		 * Different SKUs will ship with different power bricks
+		 * that have varying power, though setting this to the
+		 * maximum current available on any SKU may be okay
+		 * (assume the included brick is sufficient to run the
+		 * system at max power and over-reporting available
+		 * power will have no effect).
+		 */
+		pi.current = 4740;
+	}
+	charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
+				     DEDICATED_CHARGE_PORT, &pi);
+	adp_connected = connected;
+}
+DECLARE_DEFERRED(adp_connect_deferred);
+
+/* IRQ for BJ plug/unplug. It shouldn't be called if BJ is the power source. */
+void adp_connect_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&adp_connect_deferred_data, ADP_DEBOUNCE_MS * MSEC);
+}
+
+static void adp_state_init(void)
+{
+	/*
+	 * Initialize all charge suppliers to 0. The charge manager waits until
+	 * all ports have reported in before doing anything.
+	 */
+	for (int i = 0; i < CHARGE_PORT_COUNT; i++) {
+		for (int j = 0; j < CHARGE_SUPPLIER_COUNT; j++)
+			charge_manager_update_charge(j, i, NULL);
+	}
+
+	/* Report charge state from the barrel jack. */
+	adp_connect_deferred();
+}
+DECLARE_HOOK(HOOK_INIT, adp_state_init, HOOK_PRIO_CHARGE_MANAGER_INIT + 1);
+
 
 #include "gpio_list.h" /* Must come after other header files. */
 
@@ -222,7 +285,7 @@ const struct adc_t adc_channels[] = {
 		.name = "VBUS",
 		.input_ch = NPCX_ADC_CH4,
 		.factor_mul = ADC_MAX_VOLT * 39,
-		.factor_div = (ADC_READ_MAX + 1) / 5,
+		.factor_div = (ADC_READ_MAX + 1) * 5,
 	},
 	[ADC_PPVAR_IMON] = {  /* 500 mV/A */
 		.name = "PPVAR_IMON",
@@ -329,7 +392,13 @@ const unsigned int ina3221_count = ARRAY_SIZE(ina3221);
 
 static void board_init(void)
 {
+	uint8_t *memmap_batt_flags;
+
 	update_port_limits();
+
+	/* Always claim AC is online, because we don't have a battery. */
+	memmap_batt_flags = host_get_memmap(EC_MEMMAP_BATT_FLAG);
+	*memmap_batt_flags |= EC_BATT_FLAG_AC_PRESENT;
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -355,6 +424,17 @@ static void board_tcpc_init(void)
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image())
 		board_reset_pd_mcu();
+	/* Enable TCPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_TCPPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
+	/* Enable other overcurrent interrupts */
+	gpio_enable_interrupt(GPIO_HDMI_CONN0_OC_ODL);
+	gpio_enable_interrupt(GPIO_HDMI_CONN1_OC_ODL);
+	gpio_enable_interrupt(GPIO_USB_A0_OC_ODL);
+	gpio_enable_interrupt(GPIO_USB_A1_OC_ODL);
+	gpio_enable_interrupt(GPIO_USB_A2_OC_ODL);
+	gpio_enable_interrupt(GPIO_USB_A3_OC_ODL);
+	gpio_enable_interrupt(GPIO_USB_A4_OC_ODL);
 
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
@@ -378,9 +458,67 @@ void board_reset_pd_mcu(void)
 		msleep(BOARD_TCPC_C0_RESET_POST_DELAY);
 }
 
-/* TODO: set the active charge port */
 int board_set_active_charge_port(int port)
 {
+	CPRINTS("Requested charge port change to %d", port);
+
+	/*
+	 * The charge manager may ask us to switch to no charger if we're
+	 * running off USB-C only but upstream doesn't support PD. It requires
+	 * that we accept this switch otherwise it triggers an assert and EC
+	 * reset; it's not possible to boot the AP anyway, but we want to avoid
+	 * resetting the EC so we can continue to do the "low power" LED blink.
+	 */
+	if (port == CHARGE_PORT_NONE)
+		return EC_SUCCESS;
+
+	if (port < 0 || CHARGE_PORT_COUNT <= port)
+		return EC_ERROR_INVAL;
+
+	if (port == charge_manager_get_active_charge_port())
+		return EC_SUCCESS;
+
+	/* Don't charge from a source port */
+	if (board_vbus_source_enabled(port))
+		return EC_ERROR_INVAL;
+
+	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		int bj_active, bj_requested;
+
+		if (charge_manager_get_active_charge_port() != CHARGE_PORT_NONE)
+			/* Change is only permitted while the system is off */
+			return EC_ERROR_INVAL;
+
+		/*
+		 * Current setting is no charge port but the AP is on, so the
+		 * charge manager is out of sync (probably because we're
+		 * reinitializing after sysjump). Reject requests that aren't
+		 * in sync with our outputs.
+		 */
+		bj_active = !gpio_get_level(GPIO_EN_PPVAR_BJ_ADP_L);
+		bj_requested = port == CHARGE_PORT_BARRELJACK;
+		if (bj_active != bj_requested)
+			return EC_ERROR_INVAL;
+	}
+
+	CPRINTS("New charger p%d", port);
+
+	switch (port) {
+	case CHARGE_PORT_TYPEC0:
+		/* TODO(b/143975429) need to touch the PD controller? */
+		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_L, 1);
+		break;
+	case CHARGE_PORT_BARRELJACK:
+		/* Make sure BJ adapter is sourcing power */
+		if (gpio_get_level(GPIO_BJ_ADP_PRESENT_L))
+			return EC_ERROR_INVAL;
+		/* TODO(b/143975429) need to touch the PD controller? */
+		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_L, 0);
+		break;
+	default:
+		return EC_ERROR_INVAL;
+	}
+
 	return EC_SUCCESS;
 }
 
@@ -391,3 +529,43 @@ void board_overcurrent_event(int port, int is_overcurrented)
 		return;
 	usbc_overcurrent = is_overcurrented;
 }
+
+int extpower_is_present(void)
+{
+	return adp_connected;
+}
+
+static uint16_t board_version;
+
+static void load_board_info(void)
+{
+	/*
+	 * Load board info from CBI to control per-device configuration.
+	 *
+	 * If unset it's safe to treat the board as a proto, just C10 gating
+	 * won't be enabled.
+	 */
+	uint32_t val;
+
+	if (cbi_get_board_version(&val) == EC_SUCCESS && val <= UINT16_MAX)
+		board_version = val;
+	CPRINTS("Board Version: 0x%04x", board_version);
+}
+DECLARE_HOOK(HOOK_INIT, load_board_info, HOOK_PRIO_INIT_I2C + 1);
+
+int board_is_c10_gate_enabled(void)
+{
+	/*
+	 * Puff proto drives EN_PP5000_HDMI from EN_S0_RAILS so we cannot gate
+	 * core rails while in S0 because HDMI should remain powered.
+	 * EN_PP5000_HDMI is a separate EC output on all other boards.
+	 */
+	return board_version != 0;
+}
+
+void board_enable_s0_rails(int enable)
+{
+	/* This output isn't connected on protos; safe to set anyway. */
+	gpio_set_level(GPIO_EN_PP5000_HDMI, enable);
+}
+

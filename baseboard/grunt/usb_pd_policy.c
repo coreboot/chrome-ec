@@ -80,7 +80,7 @@ int board_vbus_source_enabled(int port)
 
 /* ----------------- Vendor Defined Messages ------------------ */
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-static enum typec_mux svdm_dp_mux_mode(int port)
+mux_state_t svdm_dp_mux_mode(int port)
 {
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	int pin_mode = pd_dfp_dp_get_pin_mode(port, dp_status[port]);
@@ -89,9 +89,9 @@ static enum typec_mux svdm_dp_mux_mode(int port)
 	 * supported.
 	 */
 	if ((pin_mode & MODE_DP_PIN_MF_MASK) && mf_pref)
-		return TYPEC_MUX_DOCK;
+		return USB_PD_MUX_DOCK;
 	else
-		return TYPEC_MUX_DP;
+		return USB_PD_MUX_DP_ENABLED;
 }
 
 __override int svdm_dp_config(int port, uint32_t *payload)
@@ -99,7 +99,7 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	int pin_mode = pd_dfp_dp_get_pin_mode(port, dp_status[port]);
-	enum typec_mux mux_mode = svdm_dp_mux_mode(port);
+	mux_state_t mux_mode = svdm_dp_mux_mode(port);
 
 	if (!pin_mode)
 		return 0;
@@ -108,13 +108,14 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 
 	/*
 	 * Place the USB Type-C pins that are to be re-configured to DisplayPort
-	 * Configuration into the Safe state. For TYPEC_MUX_DOCK, the superspeed
-	 * signals can remain connected. For TYPEC_MUX_DP, disconnect the
-	 * superspeed signals here, before the pins are re-configured to
-	 * DisplayPort (in svdm_dp_post_config, when we receive the config ack).
+	 * Configuration into the Safe state. For USB_PD_MUX_DOCK, the
+	 * superspeed signals can remain connected. For USB_PD_MUX_DP_ENABLED,
+	 * disconnect the superspeed signals here, before the pins are
+	 * re-configured to DisplayPort (in svdm_dp_post_config, when we receive
+	 * the config ack).
 	 */
-	if (mux_mode == TYPEC_MUX_DP)
-		usb_mux_set(port, TYPEC_MUX_NONE, USB_SWITCH_CONNECT,
+	if (mux_mode == USB_PD_MUX_DP_ENABLED)
+		usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_CONNECT,
 			    pd_get_polarity(port));
 
 	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
@@ -124,12 +125,6 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 				2);            /* UFP connected */
 	return 2;
 };
-
-/*
- * timestamp of the next possible toggle to ensure the 2-ms spacing
- * between IRQ_HPD.
- */
-static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #define PORT_TO_HPD(port) ((port) ? GPIO_USB_C1_DP_HPD : GPIO_USB_C0_DP_HPD)
 __override void svdm_dp_post_config(int port)
@@ -148,7 +143,7 @@ __override void svdm_dp_post_config(int port)
 	gpio_set_level(PORT_TO_HPD(port), 1);
 
 	/* set the minimum time delay (2ms) for the next HPD IRQ */
-	hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
+	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
 	mux->hpd_update(port, 1, 0);
 }
 

@@ -20,8 +20,10 @@
 #include "driver/accel_kx022.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/als_opt3001.h"
+#include "driver/charger/isl923x.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/temp_sensor/tmp432.h"
+#include "driver/usb_mux/pi3usb3x532.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -149,6 +151,25 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT);
 
+#if BOARD_REV == OAK_REV1
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = I2C_ADDR_CHARGER_FLAGS,
+		.drv = &bq2477x_drv,
+	},
+};
+#else
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+#endif /* OAK_REV1 */
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
 /*
  * Temperature sensors data; must be in same order as enum temp_sensor_id.
  * Sensor index and name must match those present in coreboot:
@@ -176,13 +197,15 @@ BUILD_ASSERT(ARRAY_SIZE(als) == ALS_COUNT);
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0x54,
-		.driver    = &pi3usb30532_usb_mux_driver,
+		.port_addr = MUX_PORT_AND_ADDR(I2C_PORT_USB_MUX,
+					       PI3USB3X532_I2C_ADDR0),
+		.driver    = &pi3usb3x532_usb_mux_driver,
 	},
 #if (BOARD_REV <= OAK_REV4)
 	{
-		.port_addr = 0x55,
-		.driver    = &pi3usb30532_usb_mux_driver,
+		.port_addr = MUX_PORT_AND_ADDR(I2C_PORT_USB_MUX,
+					       PI3USB3X532_I2C_ADDR1),
+		.driver    = &pi3usb3x532_usb_mux_driver,
 	},
 #else
 	{
@@ -472,7 +495,7 @@ void board_set_ap_reset(int asserted)
 /**
  * Check VBUS state and trigger USB BC1.2 charger.
  */
-void vbus_task(void)
+void vbus_task(void *u)
 {
 	struct {
 		uint8_t interrupt;
@@ -529,7 +552,7 @@ void vbus_task(void)
 	}
 }
 #else
-void vbus_task(void)
+void vbus_task(void *u)
 {
 	while (1)
 		task_wait_event(-1);
@@ -649,7 +672,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(0),
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 2,  /* g, enough for laptop. */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
 		.config = {
@@ -691,7 +714,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 		.rot_standard_ref = NULL, /* Identity matrix. */
-		.default_range = 2, /* g, enough for laptop. */
+		.default_range = 2, /* g, to support lid angle calculation. */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
 		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {

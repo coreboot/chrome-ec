@@ -48,11 +48,16 @@
  *
  * Transition S5->S3 only involves turning on the DRAM power rails which are
  * controlled directly from the PCH, so this condition doesn't require any
- * special code- just check that the DRAM rails are good.
+ * special code, except this collection of signals is also polled in POWER_S3
+ * and POWER_S0 states.
+ *
+ * During normal shutdown the PCH will turn off the DRAM rails before the EC
+ * notices, so if this collection includes those rails a normal shutdown will be
+ * treated as a power failure so the system immediately drops to G3 rather than
+ * doing an orderly shutdown. This must only include those signals that are
+ * EC-controlled, not those controlled by the PCH.
  */
-#define IN_PGOOD_ALL_CORE                                                     \
-	(CHIPSET_G3S5_POWERUP_SIGNAL | POWER_SIGNAL_MASK(PP2500_DRAM_PGOOD) | \
-	 POWER_SIGNAL_MASK(PP1200_DRAM_PGOOD))
+#define IN_PGOOD_ALL_CORE CHIPSET_G3S5_POWERUP_SIGNAL
 
 /*
  * intel_x86 power mask for S0 all-OK.
@@ -60,8 +65,9 @@
  * This is only used on power task init to check whether the system is powered
  * up and already in S0, to correctly handle switching from RO to RW firmware.
  */
-#define IN_ALL_S0                                       \
-	(IN_PGOOD_ALL_CORE | IN_ALL_PM_SLP_DEASSERTED)
+#define IN_ALL_S0                                                   \
+	(IN_PGOOD_ALL_CORE | POWER_SIGNAL_MASK(PP2500_DRAM_PGOOD) | \
+	 POWER_SIGNAL_MASK(PP1200_DRAM_PGOOD) | IN_ALL_PM_SLP_DEASSERTED)
 
 #define CHARGER_INITIALIZED_DELAY_MS 100
 #define CHARGER_INITIALIZED_TRIES 40
@@ -90,5 +96,42 @@ enum power_signal {
 	/* Number of X86 signals */
 	POWER_SIGNAL_COUNT
 };
+
+/*
+ * Board-specific enable for any additional rails in S0.
+ *
+ * Input 0 to turn off, 1 to turn on.
+ */
+void board_enable_s0_rails(int enable);
+
+/*
+ * Board-specific flag for whether EN_S0_RAILS can be turned off when
+ * CPU_C10_GATED is asserted by the PCH.
+ *
+ * Return 0 if EN_S0_RAILS must be left on when in S0, even if the PCH asserts
+ * the C10 gate.
+ *
+ * If this can ever return 1, the CPU_C10_GATE_L input from the PCH must also
+ * be configured to call c10_gate_interrupt() rather than
+ * power_signal_interrupt() in order to actually control the relevant core
+ * rails.
+ *
+ * TODO: it is safe to remove this function and assume C10 gating is enabled if
+ * support for rev0 puff boards is no longer required- it was added only for the
+ * benefit of those boards.
+ */
+int board_is_c10_gate_enabled(void);
+
+/*
+ * Special interrupt for CPU_C10_GATE_L handling.
+ *
+ * Response time on resume from C10 has very strict timing requirements- no more
+ * than 65 uS to turn on, and the load switches are specified to turn on in 65
+ * uS max at 1V (30 uS typical). This means the response to changes on the C10
+ * gate input must be as fast as possible to meet PCH timing requirements- much
+ * faster than doing this handling in the power state machine can achieve
+ * (hundreds of microseconds).
+ */
+void c10_gate_interrupt(enum gpio_signal signal);
 
 #endif /* __CROS_EC_COMETLAKE_DISCRETE_H */

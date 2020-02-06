@@ -131,10 +131,11 @@
 #else /* SECTION_IS_RO */
 /* RO verifies the RW partition signature */
 #define CONFIG_RSA
-#define CONFIG_RSA_KEY_SIZE 3072
-#define CONFIG_RSA_EXPONENT_3
 #define CONFIG_RWSIG
 #endif
+
+#define CONFIG_RSA_KEY_SIZE 3072
+#define CONFIG_RSA_EXPONENT_3
 #define CONFIG_RWSIG_TYPE_RWSIG
 
 /* RW does slow compute, RO does slow flash erase. */
@@ -166,6 +167,13 @@
 #define CONFIG_CMD_FLASH
 #define CONFIG_CMD_SPI_XFER
 
+#ifdef SECTION_IS_RW
+/*
+ * Mitigating the effects of b/146428434.
+ */
+#define APPLY_RESET_LOOP_FIX
+#endif
+
 #ifndef __ASSEMBLER__
 
 /* Timer selection */
@@ -175,6 +183,9 @@
 #include "gpio_signal.h"
 
 void fps_event(enum gpio_signal signal);
+
+/* Defined in ro_workarounds.c */
+void wp_event(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

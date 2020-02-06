@@ -389,8 +389,9 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0x54,
-		.driver = &pi3usb30532_usb_mux_driver,
+		.port_addr = MUX_PORT_AND_ADDR(I2C_PORT_USB_MUX,
+					       PI3USB3X532_I2C_ADDR0),
+		.driver = &pi3usb3x532_usb_mux_driver,
 	},
 	{
 		.port_addr = 0x10,
@@ -934,7 +935,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(
 			CONFIG_SPI_ACCEL_PORT),
 		.rot_standard_ref = NULL, /* Identity matrix. */
-		.default_range = 2,  /* g, enough for laptop. */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
 		.config = {

@@ -486,21 +486,6 @@ static struct policy_engine {
  */
 static unsigned int max_request_mv = PD_MAX_VOLTAGE_MV;
 
-/*
- * Private VDM utility functions
- */
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-static int validate_mode_request(struct svdm_amode_data *modep,
-						uint16_t svid, int opos);
-static void dfp_consume_attention(int port, uint32_t *payload);
-static void dfp_consume_identity(int port, int cnt, uint32_t *payload);
-static void dfp_consume_svids(int port, int cnt, uint32_t *payload);
-static int dfp_discover_modes(int port, uint32_t *payload);
-static void dfp_consume_modes(int port, int cnt, uint32_t *payload);
-static int get_mode_idx(int port, uint16_t svid);
-static struct svdm_amode_data *get_modep(int port, uint16_t svid);
-#endif
-
 test_export_static enum usb_pe_state get_state_pe(const int port);
 test_export_static void set_state_pe(const int port,
 				     const enum usb_pe_state new_state);
@@ -511,11 +496,11 @@ static void pe_init(int port)
 	pe[port].dpm_request = 0;
 	pe[port].source_cap_timer = TIMER_DISABLED;
 	pe[port].no_response_timer = TIMER_DISABLED;
-	pe[port].data_role = tc_get_data_role(port);
+	pe[port].data_role = pd_get_data_role(port);
 
 	tc_pd_connection(port, 0);
 
-	if (tc_get_power_role(port) == PD_ROLE_SOURCE)
+	if (pd_get_power_role(port) == PD_ROLE_SOURCE)
 		set_state_pe(port, PE_SRC_STARTUP);
 	else
 		set_state_pe(port, PE_SNK_STARTUP);
@@ -597,7 +582,7 @@ void pe_got_hard_reset(int port)
 	 *  PE_SNK_Transition_to_default state when:
 	 *  1) Hard Reset Signaling is detected.
 	 */
-	pe[port].power_role = tc_get_power_role(port);
+	pe[port].power_role = pd_get_power_role(port);
 
 	if (pe[port].power_role == PD_ROLE_SOURCE)
 		set_state_pe(port, PE_SRC_HARD_RESET_RECEIVED);
@@ -877,7 +862,7 @@ static void pe_send_request_msg(int port)
 	pd_build_request(pe[port].src_cap_cnt, pe[port].src_caps,
 		pe[port].vpd_vdo, &rdo, &curr_limit,
 		&supply_voltage, charging && max_request_allowed ?
-		PD_REQUEST_MAX : PD_REQUEST_VSAFE5V, max_request_mv);
+		PD_REQUEST_MAX : PD_REQUEST_VSAFE5V, max_request_mv, port);
 
 	CPRINTF("C%d Req [%d] %dmV %dmA", port, RDO_POS(rdo),
 					supply_voltage, curr_limit);
@@ -899,7 +884,7 @@ static void pe_update_pdo_flags(int port, uint32_t pdo)
 #ifdef CONFIG_CHARGE_MANAGER
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 	int charge_whitelisted =
-		(tc_get_power_role(port) == PD_ROLE_SINK &&
+		(pd_get_power_role(port) == PD_ROLE_SINK &&
 			pd_charge_from_device(pd_get_identity_vid(port),
 			pd_get_identity_pid(port)));
 #else
@@ -1092,7 +1077,7 @@ static void pe_src_startup_entry(int port)
 	prl_reset(port);
 
 	/* Set initial data role */
-	pe[port].data_role = tc_get_data_role(port);
+	pe[port].data_role = pd_get_data_role(port);
 
 	/* Set initial power role */
 	pe[port].power_role = PD_ROLE_SOURCE;
@@ -1840,7 +1825,7 @@ static void pe_snk_startup_entry(int port)
 	prl_reset(port);
 
 	/* Set initial data role */
-	pe[port].data_role = tc_get_data_role(port);
+	pe[port].data_role = pd_get_data_role(port);
 
 	/* Set initial power role */
 	pe[port].power_role = PD_ROLE_SINK;
@@ -2863,11 +2848,11 @@ static void pe_drs_change_entry(int port)
 static void pe_drs_change_run(int port)
 {
 	/* Wait until the data role is changed */
-	if (pe[port].data_role == tc_get_data_role(port))
+	if (pe[port].data_role == pd_get_data_role(port))
 		return;
 
 	/* Update the data role */
-	pe[port].data_role = tc_get_data_role(port);
+	pe[port].data_role = pd_get_data_role(port);
 
 	if (pe[port].data_role == PD_ROLE_DFP)
 		PE_CLR_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP);
@@ -3062,7 +3047,7 @@ static void pe_prs_src_snk_wait_source_on_run(int port)
 		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 
 		/* Update pe power role */
-		pe[port].power_role = tc_get_power_role(port);
+		pe[port].power_role = pd_get_power_role(port);
 		pe[port].ps_source_timer = get_time().val + PD_T_PS_SOURCE_ON;
 	}
 
@@ -3306,7 +3291,7 @@ static void pe_prs_snk_src_source_on_run(int port)
 			return;
 
 		/* update pe power role */
-		pe[port].power_role = tc_get_power_role(port);
+		pe[port].power_role = pd_get_power_role(port);
 		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
 		/* reset timer so PD_CTRL_PS_RDY isn't sent again */
 		pe[port].ps_source_timer = TIMER_DISABLED;
@@ -3624,7 +3609,8 @@ static void pe_do_port_discovery_run(int port)
 {
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 	uint32_t *payload = (uint32_t *)emsg[port].buf;
-	struct svdm_amode_data *modep = get_modep(port, PD_VDO_VID(payload[0]));
+	struct svdm_amode_data *modep =
+				pd_get_amode_data(port, PD_VDO_VID(payload[0]));
 	int ret = 0;
 
 	if (!PE_CHK_FLAG(port,
@@ -3834,7 +3820,7 @@ static void pe_vdm_request_exit(int port)
 	PE_CLR_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS);
 }
 
-enum idh_ptype get_usb_pd_mux_cable_type(int port)
+enum idh_ptype get_usb_pd_cable_type(int port)
 {
 	if (pe[port].passive_cable_vdo != PD_VDO_INVALID)
 		return IDH_PTYPE_PCABLE;
@@ -3869,7 +3855,7 @@ static void pe_vdm_acked_entry(int port)
 		int cnt = PD_HEADER_CNT(emsg[port].header);
 		struct svdm_amode_data *modep;
 
-		modep = get_modep(port, PD_VDO_VID(payload[0]));
+		modep = pd_get_amode_data(port, PD_VDO_VID(payload[0]));
 #endif
 
 		switch (vdo_cmd) {
@@ -4587,7 +4573,6 @@ void pd_set_vbus_discharge(int port, int enable)
 }
 
 /* VDM utility functions */
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
 static void pd_usb_billboard_deferred(void)
 {
 #if defined(CONFIG_USB_PD_ALT_MODE) && !defined(CONFIG_USB_PD_ALT_MODE_DFP) \
@@ -4611,465 +4596,18 @@ void pd_dfp_pe_init(int port)
 }
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-static void dfp_consume_identity(int port, int cnt, uint32_t *payload)
+struct pd_policy *pd_get_am_policy(int port)
 {
-	int ptype = PD_IDH_PTYPE(payload[VDO_I(IDH)]);
-	size_t identity_size = MIN(sizeof(pe[port].am_policy.identity),
-				(cnt - 1) * sizeof(uint32_t));
-
-	pd_dfp_pe_init(port);
-	memcpy(&pe[port].am_policy.identity, payload + 1, identity_size);
-
-	switch (ptype) {
-	case IDH_PTYPE_AMA:
-/* Leave vbus ON if the following macro is false */
-#if defined(CONFIG_USB_PD_DUAL_ROLE) && defined(CONFIG_USBC_VCONN_SWAP)
-		/* Adapter is requesting vconn, try to supply it */
-		if (PD_VDO_AMA_VCONN_REQ(payload[VDO_I(AMA)]))
-			tc_vconn_on(port);
-
-		/* Only disable vbus if vconn was requested */
-		if (PD_VDO_AMA_VCONN_REQ(payload[VDO_I(AMA)]) &&
-				!PD_VDO_AMA_VBUS_REQ(payload[VDO_I(AMA)]))
-			pd_power_supply_reset(port);
-#endif
-		break;
-	default:
-		break;
-	}
+	return &pe[port].am_policy;
 }
 
-static void dfp_consume_svids(int port, int cnt, uint32_t *payload)
+void pd_set_dfp_enter_mode_flag(int port, bool set)
 {
-	int i;
-	uint32_t *ptr = payload + 1;
-	int vdo = 1;
-	uint16_t svid0, svid1;
-
-	for (i = pe[port].am_policy.svid_cnt;
-				i < pe[port].am_policy.svid_cnt + 12; i += 2) {
-		if (i == SVID_DISCOVERY_MAX) {
-			CPRINTF("ERR:SVIDCNT\n");
-			break;
-		}
-		/*
-		 * Verify we're still within the valid packet (count will be one
-		 * for the VDM header + xVDOs)
-		 */
-		if (vdo >= cnt)
-			break;
-
-		svid0 = PD_VDO_SVID_SVID0(*ptr);
-		if (!svid0)
-			break;
-		pe[port].am_policy.svids[i].svid = svid0;
-		pe[port].am_policy.svid_cnt++;
-
-		svid1 = PD_VDO_SVID_SVID1(*ptr);
-		if (!svid1)
-			break;
-		pe[port].am_policy.svids[i + 1].svid = svid1;
-		pe[port].am_policy.svid_cnt++;
-		ptr++;
-		vdo++;
-	}
-
-	/* TODO(tbroch) need to re-issue discover svids if > 12 */
-	if (i && ((i % 12) == 0))
-		CPRINTF("ERR:SVID+12\n");
+	if (set)
+		PE_SET_FLAG(port, PE_FLAGS_MODAL_OPERATION);
+	else
+		PE_CLR_FLAG(port, PE_FLAGS_MODAL_OPERATION);
 }
-
-static int dfp_discover_modes(int port, uint32_t *payload)
-{
-	uint16_t svid =
-		pe[port].am_policy.svids[pe[port].am_policy.svid_idx].svid;
-
-	if (pe[port].am_policy.svid_idx >= pe[port].am_policy.svid_cnt)
-		return 0;
-
-	payload[0] = VDO(svid, 1, CMD_DISCOVER_MODES);
-
-	return 1;
-}
-
-static void dfp_consume_modes(int port, int cnt, uint32_t *payload)
-{
-	int idx = pe[port].am_policy.svid_idx;
-
-	pe[port].am_policy.svids[idx].mode_cnt = cnt - 1;
-
-	if (pe[port].am_policy.svids[idx].mode_cnt < 0) {
-		CPRINTF("ERR:NOMODE\n");
-	} else {
-		memcpy(
-		pe[port].am_policy.svids[pe[port].am_policy.svid_idx].mode_vdo,
-		&payload[1],
-		sizeof(uint32_t) * pe[port].am_policy.svids[idx].mode_cnt);
-	}
-
-	pe[port].am_policy.svid_idx++;
-}
-
-static int get_mode_idx(int port, uint16_t svid)
-{
-	int i;
-
-	for (i = 0; i < PD_AMODE_COUNT; i++) {
-		if (pe[port].am_policy.amodes[i].fx->svid == svid)
-			return i;
-	}
-
-	return -1;
-}
-
-static struct svdm_amode_data *get_modep(int port, uint16_t svid)
-{
-	int idx = get_mode_idx(port, svid);
-
-	return (idx == -1) ? NULL : &pe[port].am_policy.amodes[idx];
-}
-
-int pd_alt_mode(int port, uint16_t svid)
-{
-	struct svdm_amode_data *modep = get_modep(port, svid);
-
-	return (modep) ? modep->opos : -1;
-}
-
-int allocate_mode(int port, uint16_t svid)
-{
-	int i, j;
-	struct svdm_amode_data *modep;
-	int mode_idx = get_mode_idx(port, svid);
-
-	if (mode_idx != -1)
-		return mode_idx;
-
-	/* There's no space to enter another mode */
-	if (pe[port].am_policy.amode_idx == PD_AMODE_COUNT) {
-		CPRINTF("ERR:NO AMODE SPACE\n");
-		return -1;
-	}
-
-	/* Allocate ...  if SVID == 0 enter default supported policy */
-	for (i = 0; i < supported_modes_cnt; i++) {
-		if (!&supported_modes[i])
-			continue;
-
-		for (j = 0; j < pe[port].am_policy.svid_cnt; j++) {
-			struct svdm_svid_data *svidp =
-						&pe[port].am_policy.svids[j];
-
-			if ((svidp->svid != supported_modes[i].svid) ||
-					(svid && (svidp->svid != svid)))
-				continue;
-
-			modep =
-		&pe[port].am_policy.amodes[pe[port].am_policy.amode_idx];
-			modep->fx = &supported_modes[i];
-			modep->data = &pe[port].am_policy.svids[j];
-			pe[port].am_policy.amode_idx++;
-			return pe[port].am_policy.amode_idx - 1;
-		}
-	}
-	return -1;
-}
-
-uint32_t pd_dfp_enter_mode(int port, uint16_t svid, int opos)
-{
-	int mode_idx = allocate_mode(port, svid);
-	struct svdm_amode_data *modep;
-	uint32_t mode_caps;
-
-	if (mode_idx == -1)
-		return 0;
-
-	modep = &pe[port].am_policy.amodes[mode_idx];
-
-	if (!opos) {
-		/* choose the lowest as default */
-		modep->opos = 1;
-	} else if (opos <= modep->data->mode_cnt) {
-		modep->opos = opos;
-	} else {
-		CPRINTF("opos error\n");
-		return 0;
-	}
-
-	mode_caps = modep->data->mode_vdo[modep->opos - 1];
-	if (modep->fx->enter(port, mode_caps) == -1)
-		return 0;
-
-	PE_SET_FLAG(port, PE_FLAGS_MODAL_OPERATION);
-
-	/* SVDM to send to UFP for mode entry */
-	return VDO(modep->fx->svid, 1, CMD_ENTER_MODE | VDO_OPOS(modep->opos));
-}
-
-static int validate_mode_request(struct svdm_amode_data *modep,
-					uint16_t svid, int opos)
-{
-	if (!modep->fx)
-		return 0;
-
-	if (svid != modep->fx->svid) {
-		CPRINTF("ERR:svid r:0x%04x != c:0x%04x\n",
-			svid, modep->fx->svid);
-		return 0;
-	}
-
-	if (opos != modep->opos) {
-		CPRINTF("ERR:opos r:%d != c:%d\n",
-			opos, modep->opos);
-		return 0;
-	}
-
-	return 1;
-}
-
-static void dfp_consume_attention(int port, uint32_t *payload)
-{
-	uint16_t svid = PD_VDO_VID(payload[0]);
-	int opos = PD_VDO_OPOS(payload[0]);
-	struct svdm_amode_data *modep = get_modep(port, svid);
-
-	if (!modep || !validate_mode_request(modep, svid, opos))
-		return;
-
-	if (modep->fx->attention)
-		modep->fx->attention(port, payload);
-}
-#endif
-/*
- * This algorithm defaults to choosing higher pin config over lower ones in
- * order to prefer multi-function if desired.
- *
- *  NAME | SIGNALING | OUTPUT TYPE | MULTI-FUNCTION | PIN CONFIG
- * -------------------------------------------------------------
- *  A    |  USB G2   |  ?          | no             | 00_0001
- *  B    |  USB G2   |  ?          | yes            | 00_0010
- *  C    |  DP       |  CONVERTED  | no             | 00_0100
- *  D    |  PD       |  CONVERTED  | yes            | 00_1000
- *  E    |  DP       |  DP         | no             | 01_0000
- *  F    |  PD       |  DP         | yes            | 10_0000
- *
- * if UFP has NOT asserted multi-function preferred code masks away B/D/F
- * leaving only A/C/E.  For single-output dongles that should leave only one
- * possible pin config depending on whether its a converter DP->(VGA|HDMI) or DP
- * output.  If UFP is a USB-C receptacle it may assert C/D/E/F.  The DFP USB-C
- * receptacle must always choose C/D in those cases.
- */
-int pd_dfp_dp_get_pin_mode(int port, uint32_t status)
-{
-	struct svdm_amode_data *modep = get_modep(port, USB_SID_DISPLAYPORT);
-	uint32_t mode_caps;
-	uint32_t pin_caps;
-
-	if (!modep)
-		return 0;
-
-	mode_caps = modep->data->mode_vdo[modep->opos - 1];
-
-	/* TODO(crosbug.com/p/39656) revisit with DFP that can be a sink */
-	pin_caps = PD_DP_PIN_CAPS(mode_caps);
-
-	/* if don't want multi-function then ignore those pin configs */
-	if (!PD_VDO_DPSTS_MF_PREF(status))
-		pin_caps &= ~MODE_DP_PIN_MF_MASK;
-
-	/* TODO(crosbug.com/p/39656) revisit if DFP drives USB Gen 2 signals */
-	pin_caps &= ~MODE_DP_PIN_BR2_MASK;
-
-	/* if C/D present they have precedence over E/F for USB-C->USB-C */
-	if (pin_caps & (MODE_DP_PIN_C | MODE_DP_PIN_D))
-		pin_caps &= ~(MODE_DP_PIN_E | MODE_DP_PIN_F);
-
-	/* get_next_bit returns undefined for zero */
-	if (!pin_caps)
-		return 0;
-
-	return 1 << get_next_bit(&pin_caps);
-}
-
-int pd_dfp_exit_mode(int port, uint16_t svid, int opos)
-{
-	struct svdm_amode_data *modep;
-	int idx;
-
-
-	/*
-	 * Empty svid signals we should reset DFP VDM state by exiting all
-	 * entered modes then clearing state.  This occurs when we've
-	 * disconnected or for hard reset.
-	 */
-	if (!svid) {
-		for (idx = 0; idx < PD_AMODE_COUNT; idx++)
-			if (pe[port].am_policy.amodes[idx].fx)
-				pe[port].am_policy.amodes[idx].fx->exit(port);
-
-		pd_dfp_pe_init(port);
-		return 0;
-	}
-
-	/*
-	 * TODO(crosbug.com/p/33946) : below needs revisited to allow multiple
-	 * mode exit.  Additionally it should honor OPOS == 7 as DFP's request
-	 * to exit all modes.  We currently don't have any UFPs that support
-	 * multiple modes on one SVID.
-	 */
-	modep = get_modep(port, svid);
-	if (!modep || !validate_mode_request(modep, svid, opos))
-		return 0;
-
-	/* call DFPs exit function */
-	modep->fx->exit(port);
-
-	PE_CLR_FLAG(port, PE_FLAGS_MODAL_OPERATION);
-
-	/* exit the mode */
-	modep->opos = 0;
-
-	return 1;
-}
-
-uint16_t pd_get_identity_vid(int port)
-{
-	return PD_IDH_VID(pe[port].am_policy.identity[0]);
-}
-
-uint16_t pd_get_identity_pid(int port)
-{
-	return PD_PRODUCT_PID(pe[port].am_policy.identity[2]);
-}
-
-
-#ifdef CONFIG_CMD_USB_PD_PE
-static void dump_pe(int port)
-{
-	const char * const idh_ptype_names[]  = {
-		"UNDEF", "Hub", "Periph", "PCable", "ACable", "AMA",
-		"RSV6", "RSV7"};
-
-	int i, j, idh_ptype;
-	struct svdm_amode_data *modep;
-	uint32_t mode_caps;
-
-	if (pe[port].am_policy.identity[0] == 0) {
-		ccprintf("No identity discovered yet.\n");
-		return;
-	}
-	idh_ptype = PD_IDH_PTYPE(pe[port].am_policy.identity[0]);
-	ccprintf("IDENT:\n");
-	ccprintf("\t[ID Header] %08x :: %s, VID:%04x\n",
-				pe[port].am_policy.identity[0],
-				idh_ptype_names[idh_ptype],
-				pd_get_identity_vid(port));
-	ccprintf("\t[Cert Stat] %08x\n", pe[port].am_policy.identity[1]);
-	for (i = 2; i < ARRAY_SIZE(pe[port].am_policy.identity); i++) {
-		ccprintf("\t");
-		if (pe[port].am_policy.identity[i])
-			ccprintf("[%d] %08x ", i,
-					pe[port].am_policy.identity[i]);
-	}
-	ccprintf("\n");
-
-	if (pe[port].am_policy.svid_cnt < 1) {
-		ccprintf("No SVIDS discovered yet.\n");
-		return;
-	}
-
-	for (i = 0; i < pe[port].am_policy.svid_cnt; i++) {
-		ccprintf("SVID[%d]: %04x MODES:", i,
-					pe[port].am_policy.svids[i].svid);
-		for (j = 0; j < pe[port].am_policy.svids[j].mode_cnt; j++)
-			ccprintf(" [%d] %08x", j + 1,
-			 pe[port].am_policy.svids[i].mode_vdo[j]);
-		ccprintf("\n");
-		modep = get_modep(port, pe[port].am_policy.svids[i].svid);
-		if (modep) {
-			mode_caps = modep->data->mode_vdo[modep->opos - 1];
-			ccprintf("MODE[%d]: svid:%04x caps:%08x\n", modep->opos,
-				 modep->fx->svid, mode_caps);
-		}
-	}
-}
-
-static int command_pe(int argc, char **argv)
-{
-	int port;
-	char *e;
-
-	if (argc < 3)
-		return EC_ERROR_PARAM_COUNT;
-
-	/* command: pe <port> <subcmd> <args> */
-	port = strtoi(argv[1], &e, 10);
-	if (*e || port >= board_get_usb_pd_port_count())
-		return EC_ERROR_PARAM2;
-	if (!strncasecmp(argv[2], "dump", 4))
-		dump_pe(port);
-
-	return EC_SUCCESS;
-}
-
-DECLARE_CONSOLE_COMMAND(pe, command_pe,
-			"<port> dump",
-			"USB PE");
-#endif /* CONFIG_CMD_USB_PD_PE */
-
-static enum ec_status hc_remote_pd_discovery(struct host_cmd_handler_args *args)
-{
-	const uint8_t *port = args->params;
-	struct ec_params_usb_pd_discovery_entry *r = args->response;
-
-	if (*port >= board_get_usb_pd_port_count())
-		return EC_RES_INVALID_PARAM;
-
-	r->vid = pd_get_identity_vid(*port);
-	r->ptype = PD_IDH_PTYPE(pe[*port].am_policy.identity[0]);
-
-	/* pid only included if vid is assigned */
-	if (r->vid)
-		r->pid = PD_PRODUCT_PID(pe[*port].am_policy.identity[2]);
-
-	args->response_size = sizeof(*r);
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DISCOVERY,
-		hc_remote_pd_discovery,
-		EC_VER_MASK(0));
-
-static enum ec_status hc_remote_pd_get_amode(struct host_cmd_handler_args *args)
-{
-	struct svdm_amode_data *modep;
-	const struct ec_params_usb_pd_get_mode_request *p = args->params;
-	struct ec_params_usb_pd_get_mode_response *r = args->response;
-
-	if (p->port >= board_get_usb_pd_port_count())
-		return EC_RES_INVALID_PARAM;
-
-	/* no more to send */
-	if (p->svid_idx >= pe[p->port].am_policy.svid_cnt) {
-		r->svid = 0;
-		args->response_size = sizeof(r->svid);
-		return EC_RES_SUCCESS;
-	}
-
-	r->svid = pe[p->port].am_policy.svids[p->svid_idx].svid;
-	r->opos = 0;
-	memcpy(r->vdo, pe[p->port].am_policy.svids[p->svid_idx].mode_vdo, 24);
-	modep = get_modep(p->port, r->svid);
-
-	if (modep)
-		r->opos = pd_alt_mode(p->port, r->svid);
-
-	args->response_size = sizeof(*r);
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_USB_PD_GET_AMODE,
-	hc_remote_pd_get_amode,
-	EC_VER_MASK(0));
-
 #endif /* CONFIG_USB_PD_ALT_MODE_DFP */
 
 static const struct usb_state pe_states[] = {

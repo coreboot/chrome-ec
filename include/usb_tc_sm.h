@@ -9,11 +9,18 @@
 #define __CROS_EC_USB_TC_H
 
 #include "usb_sm.h"
+#include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
 #define TC_SET_FLAG(port, flag) atomic_or(&tc[port].flags, (flag))
 #define TC_CLR_FLAG(port, flag) atomic_clear(&tc[port].flags, (flag))
 #define TC_CHK_FLAG(port, flag) (tc[port].flags & (flag))
+
+enum try_src_override_t {
+	TRY_SRC_OVERRIDE_OFF,
+	TRY_SRC_OVERRIDE_ON,
+	TRY_SRC_NO_OVERRIDE
+};
 
 /*
  * Type C supply voltage (mV)
@@ -46,22 +53,6 @@ int tc_is_attached_src(int port);
  * @return 1 if in attached source state, else 0
  */
 int tc_is_attached_snk(int port);
-
-/**
- * Get current data role
- *
- * @param port USB-C port number
- * @return PD data role
- */
-enum pd_data_role tc_get_data_role(int port);
-
-/**
- * Get current power role
- *
- * @param port USB-C port number
- * @return PD power role
- */
-enum pd_power_role tc_get_power_role(int port);
 
 /**
  * Get cable plug setting. This should be constant per build. This replaces
@@ -279,7 +270,7 @@ void pd_request_vconn_swap_off(int port);
  * @param cc2 value of CC2 set by tcpm_get_cc
  * @return 0 if cc1 is connected, else 1 for cc2
  */
-enum pd_cc_polarity_type get_snk_polarity(enum tcpc_cc_voltage_status cc1,
+enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2);
 
 /**
@@ -323,13 +314,6 @@ void tc_event_check(int port, int evt);
 void tc_run(const int port);
 
 /**
- * Attempt to activate VCONN
- *
- * @param port USB-C port number
- */
-void tc_vconn_on(int port);
-
-/**
  * Start error recovery
  *
  * @param port USB-C port number
@@ -356,6 +340,47 @@ void tc_start_event_loop(int port);
  * @param port USB-C port number
  */
 void tc_pause_event_loop(int port);
+
+/**
+ * Allow system to override the control of TrySrc
+ *
+ * @param en	TRY_SRC_OVERRIDE_OFF - Force TrySrc OFF
+ *		TRY_SRC_OVERRIDE_ON - Force TrySrc ON
+ *		TRY_SRC_NO_OVERRIDE - Allow state machine to control TrySrc
+ */
+void tc_try_src_override(enum try_src_override_t ov);
+
+/**
+ * Get state of try_src_override
+ *
+ * @return	TRY_SRC_OVERRIDE_OFF - TrySrc is forced OFF
+ *		TRY_SRC_OVERRIDE_ON - TrySrc is forced ON
+ *		TRY_SRC_NO_OVERRIDE - TypeC state machine controls TrySrc
+ */
+enum try_src_override_t tc_get_try_src_override(void);
+
+/**
+ * Returns the name of the current typeC state
+ *
+ * @param port USB-C port number
+ * @return name of current typeC state
+ */
+const char *tc_get_current_state(int port);
+
+/**
+ * Returns the flag mask of the typeC state machine
+ *
+ * @param port USB-C port number
+ * @return flag mask of the typeC state machine
+ */
+uint32_t tc_get_flags(int port);
+
+/*
+ * Prints the rw hash and sysjump image string.
+ *
+ * @param port USB-C port number
+ */
+void tc_print_dev_info(int port);
 
 #ifdef CONFIG_USB_TYPEC_CTVPD
 

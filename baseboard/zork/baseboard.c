@@ -19,12 +19,17 @@
 #include "driver/accel_kx022.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/bc12/pi3usb9201.h"
+#include "driver/charger/isl9241.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/retimer/pi3dpx1207.h"
+#include "driver/retimer/ps8802.h"
+#include "driver/retimer/ps8811.h"
+#include "driver/retimer/ps8818.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
+#include "driver/usb_mux/amd_fp5.h"
 #include "ec_commands.h"
 #include "extpower.h"
 #include "fan.h"
@@ -56,6 +61,8 @@
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+#define SAFE_RESET_VBUS_MV 5000
 
 const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_LID_OPEN,
@@ -225,6 +232,15 @@ struct ppc_config_t ppc_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
+		.drv = &isl9241_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 void ppc_interrupt(enum gpio_signal signal)
 {
@@ -457,27 +473,324 @@ void bc12_interrupt(enum gpio_signal signal)
 	}
 }
 
+/*****************************************************************************
+ * USB-A Retimer tuning
+ */
+
+/* PS8811 gain tuning */
+static void ps8811_tuning_init(void)
+{
+	int rv;
+
+	/* USB-A0 can run with default settings */
+
+	/* USB-A1 needs to increase gain to get over MB/DB connector */
+	rv = i2c_write8(I2C_PORT_USBA1,
+			PS8811_I2C_ADDR_FLAGS + PS8811_REG_PAGE1,
+			PS8811_REG1_USB_BEQ_LEVEL,
+			PS8811_BEQ_I2C_LEVEL_UP_13DB |
+			PS8811_BEQ_PIN_LEVEL_UP_18DB);
+	if (rv) {
+		CPRINTSUSB("C1: PS8811 not present or failing to set gain");
+		return;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, ps8811_tuning_init, HOOK_PRIO_INIT_I2C + 1);
+
+/*****************************************************************************
+ * Custom Zork USB-C1 Retimer/MUX driver
+ */
+
+/*
+ * PS8802 set mux tuning.
+ * Adds in board specific gain and DP lane count configuration
+ */
+static int ps8802_tune_mux(int port, mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+
+	/* Make sure the PS8802 is awake */
+	rv = ps8802_i2c_wake(port);
+	if (rv)
+		return rv;
+
+	/* USB specific config */
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		/* Boost the USB gain */
+		rv = ps8802_i2c_field_update16(port,
+					PS8802_REG_PAGE2,
+					PS8802_REG2_USB_SSEQ_LEVEL,
+					PS8802_USBEQ_LEVEL_UP_MASK,
+					PS8802_USBEQ_LEVEL_UP_19DB);
+		if (rv)
+			return rv;
+	}
+
+	/* DP specific config */
+	if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		/* Boost the DP gain */
+		rv = ps8802_i2c_field_update8(port,
+					PS8802_REG_PAGE2,
+					PS8802_REG2_DPEQ_LEVEL,
+					PS8802_DPEQ_LEVEL_UP_MASK,
+					PS8802_DPEQ_LEVEL_UP_19DB);
+		if (rv)
+			return rv;
+
+		/* Enable IN_HPD on the DB */
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
+	} else {
+		/* Disable IN_HPD on the DB */
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
+	}
+
+	return rv;
+}
+
+/*
+ * PS8818 set mux tuning.
+ * Adds in board specific gain and DP lane count configuration
+ */
+static int ps8818_tune_mux(int port, mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+
+	/* USB specific config */
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		/* Boost the USB gain */
+		rv = ps8818_i2c_field_update8(port,
+					PS8818_REG_PAGE1,
+					PS8818_REG1_APTX1EQ_10G_LEVEL,
+					PS8818_EQ_LEVEL_UP_MASK,
+					PS8818_EQ_LEVEL_UP_19DB);
+		if (rv)
+			return rv;
+
+		rv = ps8818_i2c_field_update8(port,
+					PS8818_REG_PAGE1,
+					PS8818_REG1_APTX2EQ_10G_LEVEL,
+					PS8818_EQ_LEVEL_UP_MASK,
+					PS8818_EQ_LEVEL_UP_19DB);
+		if (rv)
+			return rv;
+
+		rv = ps8818_i2c_field_update8(port,
+					PS8818_REG_PAGE1,
+					PS8818_REG1_APTX1EQ_5G_LEVEL,
+					PS8818_EQ_LEVEL_UP_MASK,
+					PS8818_EQ_LEVEL_UP_19DB);
+		if (rv)
+			return rv;
+
+		rv = ps8818_i2c_field_update8(port,
+					PS8818_REG_PAGE1,
+					PS8818_REG1_APTX2EQ_5G_LEVEL,
+					PS8818_EQ_LEVEL_UP_MASK,
+					PS8818_EQ_LEVEL_UP_19DB);
+		if (rv)
+			return rv;
+	}
+
+	/* DP specific config */
+	if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		/* Boost the DP gain */
+		rv = ps8818_i2c_field_update8(port,
+					PS8818_REG_PAGE1,
+					PS8818_REG1_DPEQ_LEVEL,
+					PS8818_DPEQ_LEVEL_UP_MASK,
+					PS8818_DPEQ_LEVEL_UP_19DB);
+		if (rv)
+			return rv;
+
+		/* Enable IN_HPD on the DB */
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
+	} else {
+		/* Disable IN_HPD on the DB */
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
+	}
+
+	return rv;
+}
+
+/*
+ * FP5 is a true MUX but being used as a secondary MUX. Don't want to
+ * send FLIP or this will cause a double flip
+ */
+static int zork_c1_retimer_set_mux(int port, mux_state_t mux_state)
+{
+	return amd_fp5_usb_retimer.set(port,
+				mux_state & ~USB_PD_MUX_POLARITY_INVERTED);
+}
+
+const struct usb_retimer_driver zork_c1_usb_retimer = {
+	/* Secondary MUX/Retimer only needs the set mux interface */
+	.set = zork_c1_retimer_set_mux,
+};
+
+struct usb_retimer usb_retimers[] = {
+	[USBC_PORT_C0] = {
+		.driver = &pi3dpx1207_usb_retimer,
+		.i2c_port = I2C_PORT_TCPC0,
+		.i2c_addr_flags = PI3DPX1207_I2C_ADDR_FLAGS,
+	},
+	[USBC_PORT_C1] = {
+		/*
+		 * The driver is left off until we detect the
+		 * hardware present. Once the hardware has been
+		 * detected, the driver will be set to the
+		 * detected hardware driver table.
+		 */
+		.i2c_port = I2C_PORT_TCPC1,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(usb_retimers) == USBC_PORT_COUNT);
+
+/*
+ * To support both OPT1 DB with PS8818 retimer, and OPT3 DB with PS8802
+ * retimer,  Try both, and remember the first one that succeeds.
+ *
+ * TODO(b:147593660) Cleanup of retimers as muxes in a more
+ * generalized mechanism
+ */
+enum zork_c1_retimer zork_c1_retimer = C1_RETIMER_UNKNOWN;
+static int zork_c1_detect(int port, int err_if_power_off)
+{
+	int rv;
+
+	/*
+	 * Retimers are not powered in G3 so return success if setting mux to
+	 * none and error otherwise.
+	 */
+	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+		return (err_if_power_off) ? EC_ERROR_NOT_POWERED
+					  : EC_SUCCESS;
+
+	/*
+	 * Identifying a PS8818 is faster than the PS8802,
+	 * so do it first.
+	 */
+	usb_retimers[port].i2c_addr_flags = PS8818_I2C_ADDR_FLAGS;
+	rv = ps8818_detect(port);
+	if (rv == EC_SUCCESS) {
+		zork_c1_retimer = C1_RETIMER_PS8818;
+		ccprints("C1 PS8818 detected");
+
+		/* Main MUX is FP5, secondary MUX is PS8818 */
+		usb_muxes[USBC_PORT_C1].driver = &amd_fp5_usb_mux_driver;
+		usb_retimers[USBC_PORT_C1].driver = &ps8818_usb_retimer;
+		usb_retimers[USBC_PORT_C1].tune = &ps8818_tune_mux;
+		return rv;
+	}
+
+	usb_retimers[port].i2c_addr_flags = PS8802_I2C_ADDR_FLAGS;
+	rv = ps8802_detect(port);
+	if (rv == EC_SUCCESS) {
+		zork_c1_retimer = C1_RETIMER_PS8802;
+		ccprints("C1 PS8802 detected");
+
+		/* Main MUX is PS8802, secondary MUX is modified FP5 */
+		usb_muxes[USBC_PORT_C1].driver = &ps8802_usb_mux_driver;
+		usb_retimers[USBC_PORT_C1].driver = &zork_c1_usb_retimer;
+		usb_retimers[USBC_PORT_C1].tune = &ps8802_tune_mux;
+	}
+
+	return rv;
+}
+
+/*
+ * We start off not sure which configuration we are using.  We set
+ * the interface to be this special primary MUX driver in order to
+ * determine the actual hardware and then we patch the jump tables
+ * to go to the actual drivers instead.
+ */
+static int zork_c1_init_mux(int port)
+{
+	/* Try to detect, but don't give an error if no power */
+	return zork_c1_detect(port, 0);
+}
+
+static int zork_c1_set_mux(int port, mux_state_t mux_state)
+{
+	int rv;
+
+	/*
+	 * Try to detect, give an error if we are setting to a
+	 * MUX value that is not NONE when we have no power.
+	 */
+	rv = zork_c1_detect(port, mux_state != USB_PD_MUX_NONE);
+	if (rv)
+		return rv;
+
+	/*
+	 * If we detected the hardware, then call the real routine.
+	 * We only do this one time, after that time we will go direct
+	 * and avoid this special driver.
+	 */
+	if (zork_c1_retimer != C1_RETIMER_UNKNOWN)
+		rv = usb_muxes[port].driver->set(port, mux_state);
+
+	return rv;
+}
+
+static int zork_c1_get_mux(int port, mux_state_t *mux_state)
+{
+	int rv;
+
+	/* Try to detect the hardware */
+	rv = zork_c1_detect(port, 1);
+	if (rv) {
+		/*
+		 * Not powered is MUX_NONE, so change the values
+		 * and make it a good status
+		 */
+		if (rv == EC_ERROR_NOT_POWERED) {
+			*mux_state = USB_PD_MUX_NONE;
+			rv = EC_SUCCESS;
+		}
+		return rv;
+	}
+
+	/*
+	 * If we detected the hardware, then call the real routine.
+	 * We only do this one time, after that time we will go direct
+	 * and avoid this special driver.
+	 */
+	if (zork_c1_retimer != C1_RETIMER_UNKNOWN)
+		rv = usb_muxes[port].driver->get(port, mux_state);
+
+	return rv;
+}
+
+const struct pi3dpx1207_usb_control pi3dpx1207_controls[] = {
+	[USBC_PORT_C0] = {
+		.enable_gpio = IOEX_USB_C0_DATA_EN,
+		.dp_enable_gpio = GPIO_USB_C0_IN_HPD,
+	},
+	[USBC_PORT_C1] = {
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(pi3dpx1207_controls) == USBC_PORT_COUNT);
+
+const struct usb_mux_driver zork_c1_usb_mux_driver = {
+	.init = zork_c1_init_mux,
+	.set = zork_c1_set_mux,
+	.get = zork_c1_get_mux,
+};
+
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.driver = &amd_fp5_usb_mux_driver,
 	},
 	[USBC_PORT_C1] = {
-		.driver = &amd_fp5_usb_mux_driver,
+		/*
+		 * This is the detection driver. Once the hardware
+		 * has been detected, the driver will change to the
+		 * detected hardware driver table.
+		 */
+		.driver = &zork_c1_usb_mux_driver,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
-
-struct usb_retimer usb_retimers[USBC_PORT_COUNT] = {
-	[USBC_PORT_C0] = {
-		.driver = &pi3dpx1207_usb_retimer,
-		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr_flags = PI3DPX1207_I2C_ADDR_FLAGS,
-		.gpio_enable = IOEX_USB_C0_DATA_EN,
-		.gpio_dp_enable = GPIO_USB_C0_IN_HPD,
-	},
-	[USBC_PORT_C1] = {
-	},
-};
 
 struct ioexpander_config_t ioex_config[] = {
 	[USBC_PORT_C0] = {
@@ -678,18 +991,6 @@ static void setup_fans(void)
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
-mat33_fp_t zork_base_standard_ref = {
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
-
-mat33_fp_t lid_standard_ref = {
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(1),  0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
-
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
 static struct bmi160_drv_data_t g_bmi160_data;
@@ -707,7 +1008,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_kx022_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-	 .rot_standard_ref = (const mat33_fp_t *)&lid_standard_ref,
+	 .rot_standard_ref = NULL,
 	 .default_range = 2, /* g, enough for laptop. */
 	 .min_frequency = KX022_ACCEL_MIN_FREQ,
 	 .max_frequency = KX022_ACCEL_MAX_FREQ,
@@ -736,7 +1037,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 2, /* g, enough for laptop */
-	 .rot_standard_ref = (const mat33_fp_t *)&zork_base_standard_ref,
+	 .rot_standard_ref = NULL,
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
 	 .config = {
@@ -764,7 +1065,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = (const mat33_fp_t *)&zork_base_standard_ref,
+	 .rot_standard_ref = NULL,
 	 .min_frequency = BMI160_GYRO_MIN_FREQ,
 	 .max_frequency = BMI160_GYRO_MAX_FREQ,
 	},
@@ -782,7 +1083,8 @@ void lid_angle_peripheral_enable(int enable)
 }
 #endif
 
-static uint32_t sku_id;
+/* Unprovisioned magic value. */
+static uint32_t sku_id = 0x7fffffff;
 
 static void cbi_init(void)
 {
@@ -846,3 +1148,22 @@ static void baseboard_init(void)
 	setup_fans();
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT);
+
+void board_hibernate(void)
+{
+	int port;
+
+	/*
+	 * If we are charging, then drop the Vbus level down to 5V to ensure
+	 * that we don't get locked out of the 6.8V OVLO for our PPCs in
+	 * dead-battery mode. This is needed when the TCPC/PPC rails go away.
+	 * (b/79218851, b/143778351, b/147007265)
+	 */
+	port = charge_manager_get_active_charge_port();
+	if (port != CHARGE_PORT_NONE) {
+		pd_request_source_voltage(port, SAFE_RESET_VBUS_MV);
+
+		/* Give PD task and PPC chip time to get to 5V */
+		msleep(300);
+	}
+}

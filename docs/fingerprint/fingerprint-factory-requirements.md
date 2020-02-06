@@ -7,8 +7,8 @@ fingerprint sensor.
 
 ## Contact
 
-For questions regarding this document, please contact the [Chrome OS
-Fingerprint Team].
+For questions regarding this document, please contact the
+[Chrome OS Fingerprint Team].
 
 ## Terminology
 
@@ -43,6 +43,30 @@ that Chrome OS supports unibuild, there may be multiple firmware binaries in the
 directory since multiple sensors may be used across a single "board" (e.g., the
 `hatch` board can use either `bloonchipper` or `dartmonkey`).
 
+The correct firmware type to use for a given board can be discovered with the
+[Chrome OS Config] tool:
+
+```bash
+(dut) $ cros_config /fingerprint board
+dartmonkey
+```
+
+OR
+
+```bash
+(chroot) $  cros_config_host -c /build/<BOARD>/usr/share/chromeos-config/yaml/config.yaml -m <MODEL> get /fingerprint board
+dartmonkey
+```
+
+The corresponding firmware for the above command would be
+`/opt/google/biod/fw/dartmonkey_*.bin`.
+
+*** note
+**NOTE**: If you get an empty response when running the above commands, the
+Chrome OS Config settings may not have been updated for the Chrome OS board.
+See the instructions on [updating Chrome OS Config] for fingerprint.
+***
+
 Note that the fingerprint team continuously releases updates to the firmware, so
 SIEs should watch for version changes in ToT if they are maintaining a separate
 factory branch.
@@ -51,9 +75,10 @@ factory branch.
 
 When the FPMCU is completely blank a low-level flashing tool must be used to
 program an initial version of the FPMCU firmware. It’s possible to use the
-`flash_fp_mcu` script as this low-level flashing tool, though since it requires
-the AP and is not necessarily robust against failures, it is not recommended to
-be used.
+[`flash_fp_mcu`] script as this low-level flashing tool, though since it
+requires the AP and is not necessarily robust against failures, it is not
+recommended for mass-production. More details about [`flash_fp_mcu`] are in the
+[Fingerprint flashing documentation].
 
 The initial version of the FPMCU firmware should be flashed either by the module
 house or by the factory. Once an initial version of the FPMCU firmware has been
@@ -62,6 +87,13 @@ startup and handles updating the FPMCU firmware to match the version that is in
 the rootfs. Note that this update process can take around 30 seconds; if that
 length of time is an issue then the factory or module house should pre-flash the
 latest firmware beforehand.
+
+*** note
+**NOTE**: If the FPMCU is not flashed in the factory as part of development
+builds (EVT, etc.), it's possible for developers (or Chromestop) to manually
+run [`flash_fp_mcu`], as long as they can disable [hardware write protect].
+Obviously this only applies during development, not mass production.
+***
 
 ## biod and timberslide
 
@@ -78,7 +110,7 @@ device).
 `timberslide` is the daemon that periodically sends commands to the FPMCU to
 read the latest FPMCU logs. It writes the results to `/var/log/cros_fp.log`. It
 should be fine to leave running during tests, though it should be stopped before
-running the `flash_fp_mcu` script, since that script erases the entire FPMCU:
+running the [`flash_fp_mcu`] script, since that script erases the entire FPMCU:
 
 ```bash
 (dut) $ stop timberslide LOG_PATH=/sys/kernel/debug/cros_fp/console_log
@@ -444,6 +476,7 @@ Wrote /tmp/fp.1.png (14025 bytes)
 ```
 
 [Software Write Protect]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/docs/write_protection.md#Software-Write-Protect
+[hardware write protect]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/docs/write_protection.md#hw_wp
 [FPC1025: Module Test Specification]: http://go/cros-fingerprint-fpc1025-module-test-spec
 [FPC1145: Module Test Specification]: http://go/cros-fingerprint-fpc1145-module-test-spec
 [FPC In-Device Test Specification]: http://go/cros-fingerprint-fpc-indevice-test-spec
@@ -455,4 +488,7 @@ Wrote /tmp/fp.1.png (14025 bytes)
 [rubber_finger_present]: https://chromium.googlesource.com/chromiumos/platform/factory/+/d23ebc7eeb074760e8a720e3acac4cfe4073b2ae/py/test/pytests/fingerprint_mcu.py#330
 [Chrome OS Fingerprint Team]: http://go/cros-fingerprint-docs
 [Factory Fingerprint Sensor Testing for `nocturne`]: http://go/fingerprint-factory-testing-nocturne
-
+[`flash_fp_mcu`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/util/flash_fp_mcu
+[Fingerprint flashing documentation]: ./fingerprint.md#factory-rma-dev-updates
+[Chrome OS Config]: https://chromium.googlesource.com/chromiumos/platform2/+/master/chromeos-config/README.md
+[updating Chrome OS Config]: ./fingerprint.md#update-chromeos-config

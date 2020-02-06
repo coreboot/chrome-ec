@@ -16,14 +16,6 @@
 
 #define CONFIG_POWER_BUTTON
 
-/*
- * USB ID
- * TODO(b/140578872): Figure out what volteer's is.
- * This is allocated specifically for Zork:Trembyle
- * http://google3/hardware/standards/usb/
- */
-#define CONFIG_USB_PID 0x503E
-
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
@@ -58,7 +50,7 @@
  * which purpose.
  */
 #define GPIO_AC_PRESENT			GPIO_ACOK_OD
-#define GPIO_EC_INT_L			EC_PCH_INT_ODL
+#define GPIO_EC_INT_L			GPIO_EC_PCH_INT_ODL
 #define GPIO_EN_PP5000			GPIO_EN_PP5000_A
 #define GPIO_ENTERING_RW		GPIO_EC_ENTERING_RW
 #define GPIO_LID_OPEN			GPIO_EC_LID_OPEN
@@ -79,6 +71,7 @@
 #define GPIO_USB_C1_BC12_INT_ODL	GPIO_USB_C1_MIX_INT_ODL
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
+#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 #ifndef __ASSEMBLER__
 

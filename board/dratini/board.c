@@ -209,7 +209,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &lid_standard_ref,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode */
+		.default_range = 2, /* g, enough for lid angle calculation. */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -236,7 +236,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode  */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 10000 | ROUND_UP_FLAG,
@@ -330,22 +330,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(70),
-};
-
-const static struct ec_thermal_config thermal_b = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(73),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(75),
 	},
 	.temp_host_release = {
@@ -353,8 +338,23 @@ const static struct ec_thermal_config thermal_b = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 		[EC_TEMP_THRESH_HALT] = 0,
 	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_off = C_TO_K(40),
+	.temp_fan_max = C_TO_K(70),
+};
+
+const static struct ec_thermal_config thermal_b = {
+	.temp_host = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(68),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(70),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = 0,
+	},
+	.temp_fan_off = C_TO_K(40),
+	.temp_fan_max = C_TO_K(55),
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
@@ -369,15 +369,17 @@ static void setup_fans(void)
  * Returns true for boards that are convertible into tablet mode, and
  * false for clamshells.
  */
-static bool board_is_convertible(void)
+bool board_is_convertible(void)
 {
 	uint8_t sku_id = get_board_sku();
 
 	/*
-	 * Dragonair (SKU 21 ,22 and 23) is a convertible. Dratini is not.
+	 * Dragonair (SKU 21 ,22, 23 and 24) is a convertible.
+	 * Dratini is not.
 	 * Unprovisioned SKU 255.
 	 */
-	return sku_id == 21 || sku_id == 22 || sku_id == 23 || sku_id == 255;
+	return sku_id == 21 || sku_id == 22 || sku_id == 23 ||
+		sku_id == 24 || sku_id == 255;
 }
 
 static void board_update_sensor_config_from_sku(void)
@@ -421,11 +423,12 @@ bool board_has_kb_backlight(void)
 	uint8_t sku_id = get_board_sku();
 	/*
 	 * SKUs have keyboard backlight.
-	 * Dratini: 2, 3
-	 * Dragonair: 22
+	 * Dratini: 2, 3, 5, 8
+	 * Dragonair: 22, 24
 	 * Unprovisioned: 255
 	 */
-	return sku_id == 2 || sku_id == 3 || sku_id == 22 || sku_id == 255;
+	return sku_id == 2 || sku_id == 3 || sku_id == 5 || sku_id == 8 ||
+		sku_id == 22 || sku_id == 24 || sku_id == 255;
 }
 
 __override uint32_t board_override_feature_flags0(uint32_t flags0)

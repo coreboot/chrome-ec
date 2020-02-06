@@ -24,7 +24,6 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
-#include "i2c_bitbang.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -64,14 +63,10 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"other", 1, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{"other", 1, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA,
+		.flags = I2C_PORT_FLAG_DYNAMIC_SPEED},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
-
-const struct i2c_port_t i2c_bitbang_ports[] = {
-	{"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
-};
-const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
 
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
@@ -251,6 +246,9 @@ static void board_init(void)
 	/* Enable interrupt from PMIC. */
 	gpio_enable_interrupt(GPIO_PMIC_EC_RESETB);
 
+	/* reduce mt6370 db and bl driving capacity */
+	mt6370_reduce_db_bl_driving();
+
 	/* Display bias settings. */
 	mt6370_db_set_voltages(6000, 5800, 5800);
 
@@ -262,6 +260,21 @@ static void board_init(void)
 	mt6370_backlight_set_dim(MT6370_BLDIM_DEFAULT * 3 / 4);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+/*
+ * Re-configure i2c-2 to 100kHz for EVT devices, this must execute after
+ * i2c_init (in main()) and before battery fuel gauge access the battery
+ * (i.e. HOOK_PRIO_I2C + 1).
+ *
+ * Note that stm32f0 don't run adc_init in hooks, so we can safely call
+ * board_get_version() before HOOK_PRIO_INIT_ADC(=HOOK_PRIO_DEFAULT).
+ */
+static void board_i2c_init(void)
+{
+	if (board_get_version() < 2)
+		i2c_set_freq(1,  I2C_FREQ_100KHZ);
+}
+DECLARE_HOOK(HOOK_INIT, board_i2c_init, HOOK_PRIO_INIT_I2C);
 
 /* Motion sensors */
 /* Mutexes */
@@ -292,7 +305,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	 .rot_standard_ref = &lid_standard_ref,
-	 .default_range = 4,  /* g */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = LSM6DSM_ODR_MIN_VAL,
 	 .max_frequency = LSM6DSM_ODR_MAX_VAL,
 	 .config = {
@@ -343,6 +356,7 @@ void usb_charger_set_switches(int port, enum usb_switch setting)
  */
 int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 {
+	int voltage;
 	/*
 	 * Though we have a more tolerant range (3.9V~13.4V), setting 4400 to
 	 * prevent from a bad charger crashed.
@@ -353,7 +367,10 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	 * try to raise this value to 4600.  (when it says it read 4400, it is
 	 * actually close to 4600)
 	 */
-	return charger_get_vbus_voltage(port) < 4400;
+	if (charger_get_vbus_voltage(port, &voltage))
+		voltage = 0;
+
+	return voltage < 4400;
 }
 
 __override int board_charge_port_is_sink(int port)
@@ -376,9 +393,4 @@ void board_fill_source_power_info(int port,
 	r->meas.current_max = 1500;
 	r->meas.current_lim = 1500;
 	r->max_power = r->meas.voltage_now * r->meas.current_max;
-}
-
-int board_get_battery_i2c(void)
-{
-	return board_get_version() >= 2 ? 2 : 1;
 }

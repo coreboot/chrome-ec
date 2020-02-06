@@ -145,7 +145,8 @@ BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
  * action is required- power-good signals will not change, just the relevant
  * load switches (which are specified to meet the platform's minimum turn-on
  * time when CPU_C10_GATED is deasserted again) are turned off. This gating is
- * done asynchronously.
+ * done asynchronously directly in the interrupt handler because its timing is
+ * very tight.
  *
  * For further reference, Figure 421 and Table 370 in the Comet Lake U PDG
  * summarizes platform power rail requirements in a reasonably easy-to-digest
@@ -161,6 +162,7 @@ BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
  */
 static void shutdown_s0_rails(void)
 {
+	board_enable_s0_rails(0);
 	/*
 	 * Deassert VCCST_PG as early as possible to satisfy tCPU22; VDDQ is
 	 * derived directly from SLP_S3.
@@ -200,21 +202,11 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 	report_ap_reset(reason);
 
 	shutdown_s0_rails();
-	/* S3 is automatic based on SLP_S3 driving memory rails */
+	/* S3->S5 is automatic based on SLP_S3 driving memory rails. */
 	shutdown_s5_rails();
 }
 
-void chipset_handle_espi_reset_assert(void)
-{
-	/*
-	 * If eSPI_Reset# pin is asserted without SLP_SUS# being asserted, then
-	 * it means that there is an unexpected power loss (global reset
-	 * event). In this case, check if shutdown was being forced by pressing
-	 * power button. If yes, release power button.
-	 */
-	if ((power_get_signals() & IN_PGOOD_ALL_CORE))
-		power_button_pch_release();
-}
+void chipset_handle_espi_reset_assert(void) {}
 
 enum power_state chipset_force_g3(void)
 {
@@ -278,14 +270,13 @@ static enum power_state pgood_timeout(enum power_state new_state)
  */
 enum power_state power_handle_state(enum power_state state)
 {
-	/*
-	 * TODO(b/144719399) gate PP1050_STG and PP1200_PLLOC when C10 asserted
-	 * Puff proto also gates HDMI power on EN_S0_RAILS so for that board
-	 * we do not gate them since HDMI should remain powered.
-	 */
-
 	switch (state) {
 	case POWER_G3S5:
+		if (intel_x86_wait_power_up_ok() != EC_SUCCESS) {
+			chipset_force_shutdown(
+				CHIPSET_SHUTDOWN_BATTERY_INHIBIT);
+			return POWER_G3;
+		}
 		/* Power-up steps 2a-2h. */
 #ifdef CONFIG_POWER_PP5000_CONTROL
 		power_5v_enable(task_get_current(), 1);
@@ -335,10 +326,22 @@ enum power_state power_handle_state(enum power_state state)
 			return pgood_timeout(POWER_S3S5);
 		msleep(2);
 		gpio_set_level(GPIO_EC_PCH_PWROK, 1);
+
+		board_enable_s0_rails(1);
 		break;
 
 	case POWER_S0S3:
 		shutdown_s0_rails();
+		break;
+
+	case POWER_S5:
+		/*
+		 * Return to G3 if S5 rails are not on, probably because of
+		 * a forced power-off.
+		 */
+		if ((power_get_signals() & CHIPSET_G3S5_POWERUP_SIGNAL) !=
+		    CHIPSET_G3S5_POWERUP_SIGNAL)
+			return POWER_S5G3;
 		break;
 
 	default:
@@ -350,4 +353,38 @@ enum power_state power_handle_state(enum power_state state)
 	 * bookkeeping.
 	 */
 	return common_intel_x86_power_handle_state(state);
+}
+
+#ifdef CONFIG_VBOOT_EFS
+/*
+ * Called in main() to ensure chipset power is sane.
+ *
+ * This may be useful because EC reset could happen under unexpected
+ * conditions and we want to ensure that if the AP is wedged for some
+ * reason (for instance) we unwedge it before continuing.
+ *
+ * Because power sequencing here is all EC-controlled and this is called
+ * as part of the init sequence, we don't need to do anything- EC reset
+ * implies power sequencing is all-off and we don't have any external
+ * PMIC to synchronize state with.
+ */
+void chipset_handle_reboot(void) {}
+#endif /* CONFIG_VBOOT_EFS */
+
+void c10_gate_interrupt(enum gpio_signal signal)
+{
+	/*
+	 * Per PDG, gate VccSTG and VCCIO on (SLP_S3_L && CPU_C10_GATE_L).
+	 *
+	 * When in S3 we let the state machine do it since timing is less
+	 * critical; when in S0/S0ix we do it here because timing is very
+	 * tight.
+	 */
+	if (board_is_c10_gate_enabled() && gpio_get_level(GPIO_SLP_S3_L)) {
+		int enable_core = gpio_get_level(GPIO_CPU_C10_GATE_L);
+
+		gpio_set_level(GPIO_EN_S0_RAILS, enable_core);
+	}
+
+	return power_signal_interrupt(signal);
 }

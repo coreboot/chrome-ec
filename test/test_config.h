@@ -65,6 +65,15 @@
 #define CONFIG_MATH_UTIL
 #endif
 
+#ifdef TEST_MAG_CAL
+#define CONFIG_MAG_CALIBRATE
+#endif
+
+#ifdef TEST_STILLNESS_DETECTOR
+#define CONFIG_FPU
+#define CONFIG_ONLINE_CALIB
+#endif
+
 #ifdef TEST_FLOAT
 #define CONFIG_FPU
 #define CONFIG_MAG_CALIBRATE
@@ -86,6 +95,13 @@
 #define CONFIG_ACCEL_FIFO
 #define CONFIG_ACCEL_FIFO_SIZE 256
 #define CONFIG_ACCEL_FIFO_THRES 10
+#define CONFIG_ONLINE_CALIB
+#define CONFIG_TEMP_CACHE_STALE_THRES (1 * SECOND)
+#endif
+
+#ifdef TEST_KASA
+#define CONFIG_FPU
+#define CONFIG_ONLINE_CALIB
 #endif
 
 #if defined(TEST_MOTION_LID) || defined(TEST_MOTION_ANGLE) || \

@@ -22,6 +22,7 @@
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 
 /* EC Defines */
+#define CONFIG_LTO
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
 #define CONFIG_CROS_BOARD_INFO
@@ -31,6 +32,7 @@
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
 #define CONFIG_VOLUME_BUTTONS
+#define CONFIG_LOW_POWER_IDLE
 
 /* Host communication */
 #define CONFIG_HOSTCMD_ESPI
@@ -58,8 +60,47 @@
 #define CONFIG_KEYBOARD_KEYPAD
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI2
+#define CONFIG_PWM_KBLIGHT
+
 
 /* Sensors */
+#define CONFIG_TABLET_MODE
+#define CONFIG_GMR_TABLET_MODE
+
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+#define CONFIG_ACCEL_INTERRUPTS
+
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
+/* FIFO size is in power of 2. */
+#define CONFIG_ACCEL_FIFO_SIZE 256
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+
+/* Sensor console commands */
+#define CONFIG_CMD_ACCELS
+#define CONFIG_CMD_ACCEL_INFO
+
+/* BMA253 accelerometer in base */
+#define CONFIG_ACCEL_BMA255
+
+/* Camera VSYNC */
+#define CONFIG_SYNC
+#define CONFIG_SYNC_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
+
+/* TCS3400 ALS */
+#define CONFIG_ALS
+#define ALS_COUNT		1
+#define CONFIG_ALS_TCS3400
+#define CONFIG_ALS_TCS3400_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
+
+/* Sensors without hardware FIFO are in forced mode */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
 
 /* Thermal features */
 #define CONFIG_FANS			FAN_CH_COUNT
@@ -103,6 +144,12 @@
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PE_SM
 #define CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
+#else
+/*
+ * PD 3.0 is always enabled by the TCPMv2 stack, so it's only explicitly
+ * enabled when using the TCPMv1 stack
+ */
+#define CONFIG_USB_PD_REV30
 #endif
 
 #define CONFIG_USB_POWER_DELIVERY
@@ -112,10 +159,16 @@
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT		TYPEC_RP_3A0
 #define CONFIG_USB_PD_PORT_MAX_COUNT			2
+#define CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
 /* TODO: b/145250123: Enabling low-power mode breaks USB SNK detection */
 #undef CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TCPM_TUSB422	/* USBC port C0 */
+#define CONFIG_USB_PD_TCPM_PS8815	/* USBC port USB3 DB */
+#define CONFIG_USB_PD_TCPM_MUX
+#define CONFIG_CMD_PD_CONTROL		/* Needed for TCPC FW update */
+#define CONFIG_CMD_USB_PD_PE
+
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
 #define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
@@ -136,6 +189,23 @@
 
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
+
+/* Enabling SOP* communication */
+#define CONFIG_CMD_USB_PD_CABLE
+#define CONFIG_USB_PD_DECODE_SOP
+
+/* Enabling Thunderbolt-compatible mode */
+#define CONFIG_USB_PD_TBT_COMPAT_MODE
+
+/* Enabling USB4 mode */
+#define CONFIG_USB_PD_USB4
+
+/*
+ * USB ID
+ * This is allocated specifically for Volteer
+ * http://google3/hardware/standards/usb/
+ */
+#define CONFIG_USB_PID 0x503E
 
 /* TODO: b/144165680 - measure and check these values on Volteer */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
@@ -190,7 +260,9 @@ enum pwm_channel {
 	PWM_CH_LED1_BLUE = 0,
 	PWM_CH_LED2_GREEN,
 	PWM_CH_LED3_RED,
+	PWM_CH_LED4_SIDESEL,
 	PWM_CH_FAN,
+	PWM_CH_KBLIGHT,
 	PWM_CH_COUNT
 };
 
@@ -220,12 +292,39 @@ enum usbc_port {
 	USBC_PORT_COUNT
 };
 
+enum sensor_id {
+	LID_ACCEL = 0,
+	CLEAR_ALS,
+	RGB_ALS,
+	VSYNC,
+	SENSOR_COUNT,
+};
+
+/*
+ * Daughterboard type is encoded in the lower 4 bits
+ * of the FW_CONFIG CBI tag.
+ */
+
+enum usb_db_id {
+	USB_DB_NONE = 0,
+	USB_DB_USB4 = 1,
+	USB_DB_USB3 = 2,
+	USB_DB_COUNT
+};
+
+#define CBI_FW_CONFIG_USB_DB_MASK	0x0f
+#define CBI_FW_CONFIG_USB_DB_SHIFT	0
+#define CBI_FW_CONFIG_USB_DB_TYPE(bits) \
+	(((bits) & CBI_FW_CONFIG_USB_DB_MASK) >> CBI_FW_CONFIG_USB_DB_SHIFT)
+
 void board_reset_pd_mcu(void);
 
 /* Common definition for the USB PD interrupt handlers. */
 void ppc_interrupt(enum gpio_signal signal);
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
+
+unsigned char get_board_id(void);
 
 #endif /* !__ASSEMBLER__ */
 

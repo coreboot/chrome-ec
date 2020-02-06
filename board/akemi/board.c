@@ -42,6 +42,7 @@
 #include "usb_pd.h"
 #include "usbc_ppc.h"
 #include "util.h"
+#include "battery_smart.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -200,7 +201,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 4, /* g */
+		.default_range = 2, /* g */
 		.min_frequency = LIS2DW12_ODR_MIN_VAL,
 		.max_frequency = LIS2DW12_ODR_MAX_VAL,
 		.config = {
@@ -230,7 +231,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 4,  /* g */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 		.config = {
@@ -389,3 +390,45 @@ __override uint32_t board_override_feature_flags0(uint32_t flags0)
 	else
 		return flags0;
 }
+
+/* Battery functions */
+#define SB_OPTIONALMFG_FUNCTION2        0x26
+#define QUICK_CHARGE_SUPPORT            0x01
+#define QUICK_CHARGE_ENABLE             0x02
+
+#define SB_QUICK_CHARGE_ENABLE          1
+#define SB_QUICK_CHARGE_DISABLE         0
+
+static void sb_quick_charge_mode(int enable)
+{
+	int val, rv;
+
+	rv = sb_read(SB_OPTIONALMFG_FUNCTION2, &val);
+	if (rv)
+		return;
+
+	if (val & QUICK_CHARGE_SUPPORT) {
+		if (enable)
+			val |= QUICK_CHARGE_ENABLE;
+		else
+			val &= ~QUICK_CHARGE_ENABLE;
+
+		sb_write(SB_OPTIONALMFG_FUNCTION2, val);
+	}
+}
+
+/* Called on AP S5 -> S0 transition */
+static void board_chipset_startup(void)
+{
+	/* Normal charge current */
+	sb_quick_charge_mode(SB_QUICK_CHARGE_DISABLE);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_INIT_I2C+1);
+
+/* Called on AP S0 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	/* Quick charge current */
+	sb_quick_charge_mode(SB_QUICK_CHARGE_ENABLE);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);

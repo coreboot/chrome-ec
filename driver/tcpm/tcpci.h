@@ -8,6 +8,7 @@
 #ifndef __CROS_EC_USB_PD_TCPM_TCPCI_H
 #define __CROS_EC_USB_PD_TCPM_TCPCI_H
 
+#include "config.h"
 #include "tcpm.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
@@ -42,6 +43,8 @@
 #define TCPC_REG_ALERT_MASK        0x12
 #define TCPC_REG_POWER_STATUS_MASK 0x14
 #define TCPC_REG_FAULT_STATUS_MASK 0x15
+#define TCPC_REG_EXTENDED_STATUS_MASK 0x16
+#define TCPC_REG_ALERT_EXTENDED_MASK 0x17
 
 #define TCPC_REG_CONFIG_STD_OUTPUT 0x18
 #define TCPC_REG_CONFIG_STD_OUTPUT_MUX_MASK          (3 << 2)
@@ -53,15 +56,27 @@
 #define TCPC_REG_TCPC_CTRL         0x19
 #define TCPC_REG_TCPC_CTRL_SET(polarity) (polarity)
 #define TCPC_REG_TCPC_CTRL_POLARITY(reg) ((reg) & 0x1)
+/*
+ * In TCPCI Rev 2.0, this bit must be set this to generate CC status alerts when
+ * a connection is found.
+ */
+#define TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT  (BIT(6))
 
 #define TCPC_REG_ROLE_CTRL         0x1a
+#define TCPC_REG_ROLE_CTRL_DRP_MASK                    BIT(6)
+#define TCPC_REG_ROLE_CTRL_RP_MASK                     (BIT(5)|BIT(4))
+#define TCPC_REG_ROLE_CTRL_CC2_MASK                    (BIT(3)|BIT(2))
+#define TCPC_REG_ROLE_CTRL_CC1_MASK                    (BIT(1)|BIT(0))
 #define TCPC_REG_ROLE_CTRL_SET(drp, rp, cc1, cc2) \
 		((drp) << 6 | (rp) << 4 | (cc2) << 2 | (cc1))
-#define TCPC_REG_ROLE_CTRL_DRP(reg) (((reg) & 0x40) >> 6)
-#define TCPC_REG_ROLE_CTRL_RP_MASK  0x30
-#define TCPC_REG_ROLE_CTRL_RP(reg)  (((reg) & TCPC_REG_ROLE_CTRL_RP_MASK) >> 4)
-#define TCPC_REG_ROLE_CTRL_CC2(reg) (((reg) & 0xc) >> 2)
-#define TCPC_REG_ROLE_CTRL_CC1(reg) ((reg) & 0x3)
+#define TCPC_REG_ROLE_CTRL_DRP(reg) \
+		(((reg) & TCPC_REG_ROLE_CTRL_DRP_MASK) >> 6)
+#define TCPC_REG_ROLE_CTRL_RP(reg) \
+		(((reg) & TCPC_REG_ROLE_CTRL_RP_MASK) >> 4)
+#define TCPC_REG_ROLE_CTRL_CC2(reg) \
+		(((reg) & TCPC_REG_ROLE_CTRL_CC2_MASK) >> 2)
+#define TCPC_REG_ROLE_CTRL_CC1(reg) \
+		((reg) & TCPC_REG_ROLE_CTRL_CC1_MASK)
 
 #define TCPC_REG_FAULT_CTRL        0x1b
 #define TCPC_REG_FAULT_CTRL_VBUS_OVP_FAULT_DIS         BIT(1)
@@ -75,16 +90,25 @@
 #define TCPC_REG_POWER_CTRL_VCONN(reg)    ((reg) & 0x1)
 
 #define TCPC_REG_CC_STATUS         0x1d
-#define TCPC_REG_CC_STATUS_LOOK4CONNECTION(reg) ((reg & 0x20) >> 5)
+#define TCPC_REG_CC_STATUS_LOOK4CONNECTION_MASK        BIT(5)
+#define TCPC_REG_CC_STATUS_CONNECT_RESULT_MASK         BIT(4)
+#define TCPC_REG_CC_STATUS_CC2_STATE_MASK              (BIT(3)|BIT(2))
+#define TCPC_REG_CC_STATUS_CC1_STATE_MASK              (BIT(1)|BIT(0))
 #define TCPC_REG_CC_STATUS_SET(term, cc1, cc2) \
 		((term) << 4 | ((cc2) & 0x3) << 2 | ((cc1) & 0x3))
-#define TCPC_REG_CC_STATUS_TERM(reg) (((reg) & 0x10) >> 4)
-#define TCPC_REG_CC_STATUS_CC2(reg)  (((reg) & 0xc) >> 2)
-#define TCPC_REG_CC_STATUS_CC1(reg)  ((reg) & 0x3)
+#define TCPC_REG_CC_STATUS_LOOK4CONNECTION(reg) \
+		((reg & TCPC_REG_CC_STATUS_LOOK4CONNECTION_MASK) >> 5)
+#define TCPC_REG_CC_STATUS_TERM(reg) \
+		(((reg) & TCPC_REG_CC_STATUS_CONNECT_RESULT_MASK) >> 4)
+#define TCPC_REG_CC_STATUS_CC2(reg) \
+		(((reg) & TCPC_REG_CC_STATUS_CC2_STATE_MASK) >> 2)
+#define TCPC_REG_CC_STATUS_CC1(reg) \
+		((reg) & TCPC_REG_CC_STATUS_CC1_STATE_MASK)
 
 #define TCPC_REG_POWER_STATUS      0x1e
 #define TCPC_REG_POWER_STATUS_MASK_ALL  0xff
 #define TCPC_REG_POWER_STATUS_UNINIT    BIT(6)
+#define TCPC_REG_POWER_STATUS_SOURCING_VBUS BIT(4)
 #define TCPC_REG_POWER_STATUS_VBUS_DET  BIT(3)
 #define TCPC_REG_POWER_STATUS_VBUS_PRES BIT(2)
 
@@ -132,11 +156,19 @@
 #define TCPC_REG_RX_DETECT         0x2f
 #define TCPC_REG_RX_DETECT_SOP_HRST_MASK 0x21
 #define TCPC_REG_RX_DETECT_SOP_SOPP_SOPPP_HRST_MASK 0x27
+
+/* TCPCI Rev 1.0 receive registers */
 #define TCPC_REG_RX_BYTE_CNT       0x30
 #define TCPC_REG_RX_BUF_FRAME_TYPE 0x31
-
 #define TCPC_REG_RX_HDR            0x32
 #define TCPC_REG_RX_DATA           0x34 /* through 0x4f */
+
+/*
+ * In TCPCI Rev 2.0, the RECEIVE_BUFFER is comprised of three sets of registers:
+ * READABLE_BYTE_COUNT, RX_BUF_FRAME_TYPE and RX_BUF_BYTE_x. These registers can
+ * only be accessed by reading at a common register address 30h.
+ */
+#define TCPC_REG_RX_BUFFER         0x30
 
 #define TCPC_REG_TRANSMIT          0x50
 #define TCPC_REG_TRANSMIT_SET_WITH_RETRY(type) \
@@ -145,9 +177,18 @@
 #define TCPC_REG_TRANSMIT_RETRY(reg) (((reg) & 0x30) >> 4)
 #define TCPC_REG_TRANSMIT_TYPE(reg)  ((reg) & 0x7)
 
+/* TCPCI Rev 1.0 transmit registers */
 #define TCPC_REG_TX_BYTE_CNT       0x51
 #define TCPC_REG_TX_HDR            0x52
 #define TCPC_REG_TX_DATA           0x54 /* through 0x6f */
+
+/*
+ * In TCPCI Rev 2.0, the TRANSMIT_BUFFER holds the I2C_WRITE_BYTE_COUNT and the
+ * portion of the SOP* USB PD message payload (including the header and/or the
+ * data bytes) most recently written by the TCPM in TX_BUF_BYTE_x. TX_BUF_BYTE_x
+ * is “hidden” and can only be accessed by writing to register address 51h
+ */
+#define TCPC_REG_TX_BUFFER         0x51
 
 #define TCPC_REG_VBUS_VOLTAGE                0x70
 #define TCPC_REG_VBUS_SINK_DISCONNECT_THRESH 0x72
@@ -158,6 +199,11 @@
 extern const struct tcpm_drv tcpci_tcpm_drv;
 extern const struct usb_mux_driver tcpci_tcpm_usb_mux_driver;
 
+void tcpci_set_cached_rp(int port, int rp);
+int tcpci_get_cached_rp(int port);
+void tcpci_set_cached_pull(int port, enum tcpc_cc_pull pull);
+enum tcpc_cc_pull tcpci_get_cached_pull(int port);
+
 void tcpci_tcpc_alert(int port);
 int tcpci_tcpm_init(int port);
 int tcpci_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
@@ -165,7 +211,7 @@ int tcpci_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 int tcpci_tcpm_get_vbus_level(int port);
 int tcpci_tcpm_select_rp_value(int port, int rp);
 int tcpci_tcpm_set_cc(int port, int pull);
-int tcpci_tcpm_set_polarity(int port, int polarity);
+int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity);
 int tcpci_tcpm_set_vconn(int port, int enable);
 int tcpci_tcpm_set_msg_header(int port, int power_role, int data_role);
 int tcpci_tcpm_set_rx_enable(int port, int enable);

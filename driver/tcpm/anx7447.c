@@ -370,7 +370,7 @@ static int anx7447_init(int port)
 	 * If this TCPC is not also the MUX then don't initialize to NONE
 	 */
 	if (!(usb_muxes[port].flags & USB_MUX_FLAG_NOT_TCPC))
-		rv |= anx7447_mux_set(port, TYPEC_MUX_NONE);
+		rv |= anx7447_mux_set(port, USB_PD_MUX_NONE);
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
 	return rv;
@@ -504,11 +504,11 @@ static int anx7447_mux_init(int port)
 	anx7447_hpd_output_en(port);
 
 	/*
-	 * ANX initializes its muxes to (MUX_USB_ENABLED | MUX_DP_ENABLED)
-	 * when reinitialized, we need to force initialize it to
-	 * TYPEC_MUX_NONE
+	 * ANX initializes its muxes to (USB_PD_MUX_USB_ENABLED |
+	 * USB_PD_MUX_DP_ENABLED) when reinitialized, we need to force
+	 * initialize it to USB_PD_MUX_NONE
 	 */
-	return anx7447_mux_set(port, TYPEC_MUX_NONE);
+	return anx7447_mux_set(port, USB_PD_MUX_NONE);
 }
 
 #ifdef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
@@ -562,39 +562,39 @@ static int anx7447_mux_set(int port, mux_state_t mux_state)
 	int sw_sel = 0x00, aux_sw = 0x00;
 	int rv;
 
-	cc_direction = mux_state & MUX_POLARITY_INVERTED;
-	mux_type = mux_state & TYPEC_MUX_DOCK;
+	cc_direction = mux_state & USB_PD_MUX_POLARITY_INVERTED;
+	mux_type = mux_state & USB_PD_MUX_DOCK;
 	CPRINTS("C%d mux_state = 0x%x, mux_type = 0x%x",
 		port, mux_state, mux_type);
 	if (cc_direction == 0) {
 		/* cc1 connection */
-		if (mux_type == TYPEC_MUX_DOCK) {
+		if (mux_type == USB_PD_MUX_DOCK) {
 			/* ml0-a10/11, ml1-b2/b3, sstx-a2/a3, ssrx-b10/11 */
 			sw_sel = 0x21;
 			/* aux+ <-> sbu1, aux- <-> sbu2 */
 			aux_sw = 0x03;
-		} else if (mux_type == TYPEC_MUX_DP) {
+		} else if (mux_type == USB_PD_MUX_DP_ENABLED) {
 			/* ml0-a10/11, ml1-b2/b3, ml2-a2/a3, ml3-b10/11 */
 			sw_sel = 0x09;
 			/* aux+ <-> sbu1, aux- <-> sbu2 */
 			aux_sw = 0x03;
-		} else if (mux_type == TYPEC_MUX_USB) {
+		} else if (mux_type == USB_PD_MUX_USB_ENABLED) {
 			/* ssrxp<->b11, ssrxn<->b10, sstxp<->a2, sstxn<->a3 */
 			sw_sel = 0x20;
 		}
 	} else {
 		/* cc2 connection */
-		if (mux_type == TYPEC_MUX_DOCK) {
+		if (mux_type == USB_PD_MUX_DOCK) {
 			/* ml0-b10/11, ml1-a2/b3, sstx-b2/a3, ssrx-a10/11 */
 			sw_sel = 0x12;
 			/* aux+ <-> sbu2, aux- <-> sbu1 */
 			aux_sw = 0x0C;
-		} else if (mux_type == TYPEC_MUX_DP) {
+		} else if (mux_type == USB_PD_MUX_DP_ENABLED) {
 			/* ml0-b10/11, ml1-a2/b3, ml2-b2/a3, ml3-a10/11 */
 			sw_sel = 0x06;
 			/* aux+ <-> sbu2, aux- <-> sbu1 */
 			aux_sw = 0x0C;
-		} else if (mux_type == TYPEC_MUX_USB) {
+		} else if (mux_type == USB_PD_MUX_USB_ENABLED) {
 			/* ssrxp<->a11, ssrxn<->a10, sstxp<->b2, sstxn<->b3 */
 			sw_sel = 0x10;
 		}
@@ -618,7 +618,7 @@ static int anx7447_mux_set(int port, mux_state_t mux_state)
 	 * DP and Dock mode: after configured the Mux, change the Mux to
 	 * normal mode, otherwise: keep safe mode.
 	 */
-	if (mux_type != TYPEC_MUX_NONE) {
+	if (mux_type != USB_PD_MUX_NONE) {
 		anx7447_configure_aux_src(port, 1);
 		anx7447_mux_safemode(port, 0);
 	} else
@@ -637,7 +637,35 @@ static int anx7447_mux_get(int port, mux_state_t *mux_state)
 }
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
-/* ANX7447 is a TCPCI compatible port controller */
+/* Override for tcpci_tcpm_set_cc */
+static int anx7447_set_cc(int port, int pull)
+{
+	int rp;
+
+	rp = tcpci_get_cached_rp(port);
+
+	/* Set manual control, and set both CC lines to the same pull */
+	return tcpc_write(port, TCPC_REG_ROLE_CTRL,
+			  TCPC_REG_ROLE_CTRL_SET(0, rp, pull, pull));
+}
+
+/* Override for tcpci_tcpm_set_polarity */
+static int anx7447_set_polarity(int port, enum tcpc_cc_polarity polarity)
+{
+	return tcpc_update8(port,
+			    TCPC_REG_TCPC_CTRL,
+			    TCPC_REG_TCPC_CTRL_SET(1),
+			    polarity_rm_dts(polarity)
+					? MASK_SET : MASK_CLR);
+}
+
+/*
+ * ANX7447 is a TCPCI compatible port controller, with some caveats.
+ * It seems to require both CC lines to be set always, instead of just
+ * one at a time, according to TCPCI spec.  Thus, now that the TCPCI
+ * driver more closely follows the spec, this driver requires
+ * overrides for set_cc and set_polarity.
+ */
 const struct tcpm_drv anx7447_tcpm_drv = {
 	.init			= &anx7447_init,
 	.release		= &anx7447_release,
@@ -646,8 +674,8 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
 #endif
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
-	.set_cc			= &tcpci_tcpm_set_cc,
-	.set_polarity		= &tcpci_tcpm_set_polarity,
+	.set_cc			= &anx7447_set_cc,
+	.set_polarity		= &anx7447_set_polarity,
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,

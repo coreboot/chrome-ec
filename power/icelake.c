@@ -8,6 +8,7 @@
 #include "chipset.h"
 #include "console.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "intel_x86.h"
 #include "power.h"
 #include "power_button.h"
@@ -71,6 +72,16 @@ const struct power_signal_info power_signal_list[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
+__overridable int intel_x86_get_pg_ec_dsw_pwrok(void)
+{
+	return gpio_get_level(GPIO_PG_EC_DSW_PWROK);
+}
+
+__overridable int intel_x86_get_pg_ec_all_sys_pwrgd(void)
+{
+	return gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD);
+}
+
 void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
 	int timeout_ms = 50;
@@ -98,7 +109,7 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 	 * power_wait_signals_timeout()
 	 */
 	/* Now wait for DSW_PWROK and  RSMRST_ODL to go away. */
-	while (gpio_get_level(GPIO_PG_EC_DSW_PWROK) &&
+	while (intel_x86_get_pg_ec_dsw_pwrok() &&
 	       gpio_get_level(GPIO_PG_EC_RSMRST_ODL) && (timeout_ms > 0)) {
 		msleep(1);
 		timeout_ms--;
@@ -149,11 +160,19 @@ static void enable_pp5000_rail(void)
 
 }
 
+#ifdef CONFIG_CHIPSET_JASPERLAKE
+static void assert_ec_ap_vccst_pwrgd(void)
+{
+	GPIO_SET_LEVEL(GPIO_EC_AP_VCCST_PWRGD_OD, 1);
+}
+DECLARE_DEFERRED(assert_ec_ap_vccst_pwrgd);
+#endif /* CONFIG_CHIPSET_JASPERLAKE */
+
 enum power_state power_handle_state(enum power_state state)
 {
-	int dswpwrok_in = gpio_get_level(GPIO_PG_EC_DSW_PWROK);
+	int dswpwrok_in = intel_x86_get_pg_ec_dsw_pwrok();
 	static int dswpwrok_out = -1;
-	int all_sys_pwrgd_in;
+	int all_sys_pwrgd_in = intel_x86_get_pg_ec_all_sys_pwrgd();
 	int all_sys_pwrgd_out;
 
 	/* Pass-through DSW_PWROK to ICL. */
@@ -167,6 +186,19 @@ enum power_state power_handle_state(enum power_state state)
 		GPIO_SET_LEVEL(GPIO_PCH_DSW_PWROK, dswpwrok_in);
 		dswpwrok_out = dswpwrok_in;
 	}
+
+#ifdef CONFIG_CHIPSET_JASPERLAKE
+	/*
+	 * Assert VCCST power good when ALL_SYS_PWRGD is received with a 2ms
+	 * delay minimum.
+	 */
+	if (all_sys_pwrgd_in && !gpio_get_level(GPIO_EC_AP_VCCST_PWRGD_OD)) {
+		hook_call_deferred(&assert_ec_ap_vccst_pwrgd_data, 2 * MSEC);
+	} else if (!all_sys_pwrgd_in &&
+		   gpio_get_level(GPIO_EC_AP_VCCST_PWRGD_OD)) {
+		GPIO_SET_LEVEL(GPIO_EC_AP_VCCST_PWRGD_OD, 0);
+	}
+#endif /* CONFIG_CHIPSET_JASPERLAKE */
 
 	common_intel_x86_handle_rsmrst(state);
 
@@ -189,7 +221,7 @@ enum power_state power_handle_state(enum power_state state)
 			break;
 
 		/* Pass thru DSWPWROK again since we changed it. */
-		dswpwrok_in = gpio_get_level(GPIO_PG_EC_DSW_PWROK);
+		dswpwrok_in = intel_x86_get_pg_ec_dsw_pwrok();
 		/*
 		 * A minimum 10 msec delay is required between PP3300_A being
 		 * stable and the DSW_PWROK signal being passed to the PCH.
@@ -224,13 +256,23 @@ enum power_state power_handle_state(enum power_state state)
 			return POWER_S5G3;
 		break;
 
+#ifdef CONFIG_CHIPSET_JASPERLAKE
+	case POWER_S3S0:
+		GPIO_SET_LEVEL(GPIO_EN_VCCIO_EXT, 1);
+		break;
+
+	case POWER_S0S3:
+		GPIO_SET_LEVEL(GPIO_EN_VCCIO_EXT, 0);
+		break;
+#endif /* CONFIG_CHIPSET_JASPERLAKE */
+
 	case POWER_S0:
 		/*
 		 * Check value of PG_EC_ALL_SYS_PWRGD to see if PCH_SYS_PWROK
 		 * needs to be changed. If it's low->high transition, call board
 		 * specific handling if provided.
 		 */
-		all_sys_pwrgd_in = gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD);
+		all_sys_pwrgd_in = intel_x86_get_pg_ec_all_sys_pwrgd();
 		all_sys_pwrgd_out = gpio_get_level(GPIO_PCH_SYS_PWROK);
 
 		if (all_sys_pwrgd_in != all_sys_pwrgd_out) {

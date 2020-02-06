@@ -5,6 +5,7 @@
 
 /* System module for Chrome EC : hardware specific implementation */
 
+#include "bkpdata.h"
 #include "clock.h"
 #include "console.h"
 #include "cpu.h"
@@ -31,103 +32,9 @@
 #define BDCR_ENABLE_MASK (BDCR_ENABLE_VALUE | BDCR_RTCSEL_MASK | \
 			STM32_RCC_BDCR_BDRST)
 
-/* We use 16-bit BKP / BBRAM entries. */
-#define STM32_BKP_ENTRIES (STM32_BKP_BYTES / 2)
-
-/*
- * Use 32-bit for reset flags, if we have space for it:
- *  - 2 indexes are used unconditionally (SCRATCHPAD and SAVED_RESET_FLAGS)
- *  - VBNV_CONTEXT requires 8 indexes, so a total of 10 (which is the total
- *    number of entries on some STM32 variants).
- *  - Other config options are not a problem (they only take a few entries)
- *
- * Given this, we can only add an extra entry for the top 16-bit of reset flags
- * if VBNV_CONTEXT is not enabled, or if we have more than 10 entries.
- */
-#if !defined(CONFIG_HOSTCMD_VBNV_CONTEXT) || STM32_BKP_ENTRIES > 10
-#define CONFIG_STM32_RESET_FLAGS_EXTENDED
-#endif
-
-enum bkpdata_index {
-	BKPDATA_INDEX_SCRATCHPAD,	     /* General-purpose scratchpad */
-	BKPDATA_INDEX_SAVED_RESET_FLAGS,     /* Saved reset flags */
-#ifdef CONFIG_STM32_RESET_FLAGS_EXTENDED
-	BKPDATA_INDEX_SAVED_RESET_FLAGS_2,   /* Saved reset flags (cont) */
-#endif
-#ifdef CONFIG_HOSTCMD_VBNV_CONTEXT
-	BKPDATA_INDEX_VBNV_CONTEXT0,
-	BKPDATA_INDEX_VBNV_CONTEXT1,
-	BKPDATA_INDEX_VBNV_CONTEXT2,
-	BKPDATA_INDEX_VBNV_CONTEXT3,
-	BKPDATA_INDEX_VBNV_CONTEXT4,
-	BKPDATA_INDEX_VBNV_CONTEXT5,
-	BKPDATA_INDEX_VBNV_CONTEXT6,
-	BKPDATA_INDEX_VBNV_CONTEXT7,
-#endif
-#ifdef CONFIG_SOFTWARE_PANIC
-	BKPDATA_INDEX_SAVED_PANIC_REASON,    /* Saved panic reason */
-	BKPDATA_INDEX_SAVED_PANIC_INFO,      /* Saved panic data */
-	BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, /* Saved panic exception code */
-#endif
-#ifdef CONFIG_USB_PD_DUAL_ROLE
-	BKPDATA_INDEX_PD0,		     /* USB-PD saved port0 state */
-	BKPDATA_INDEX_PD1,		     /* USB-PD saved port1 state */
-	BKPDATA_INDEX_PD2,		     /* USB-PD saved port2 state */
-#endif
-	BKPDATA_COUNT
-};
-BUILD_ASSERT(STM32_BKP_ENTRIES >= BKPDATA_COUNT);
-
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT <= 3);
 #endif
-
-/**
- * Read backup register at specified index.
- *
- * @return The value of the register or 0 if invalid index.
- */
-static uint16_t bkpdata_read(enum bkpdata_index index)
-{
-	if (index < 0 || index >= STM32_BKP_ENTRIES)
-		return 0;
-
-	if (index & 1)
-		return STM32_BKP_DATA(index >> 1) >> 16;
-	else
-		return STM32_BKP_DATA(index >> 1) & 0xFFFF;
-}
-
-/**
- * Write hibernate register at specified index.
- *
- * @return nonzero if error.
- */
-static int bkpdata_write(enum bkpdata_index index, uint16_t value)
-{
-	static struct mutex bkpdata_write_mutex;
-
-	if (index < 0 || index >= STM32_BKP_ENTRIES)
-		return EC_ERROR_INVAL;
-
-	/*
-	 * Two entries share a single 32-bit register, lock mutex to prevent
-	 * read/mask/write races.
-	 */
-	mutex_lock(&bkpdata_write_mutex);
-	if (index & 1) {
-		uint32_t val = STM32_BKP_DATA(index >> 1);
-		val = (val & 0x0000FFFF) | (value << 16);
-		STM32_BKP_DATA(index >> 1) = val;
-	} else {
-		uint32_t val = STM32_BKP_DATA(index >> 1);
-		val = (val & 0xFFFF0000) | value;
-		STM32_BKP_DATA(index >> 1) = val;
-	}
-	mutex_unlock(&bkpdata_write_mutex);
-
-	return EC_SUCCESS;
-}
 
 void __no_hibernate(uint32_t seconds, uint32_t microseconds)
 {
@@ -167,23 +74,16 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 
 static void check_reset_cause(void)
 {
-	uint32_t flags = bkpdata_read(BKPDATA_INDEX_SAVED_RESET_FLAGS);
+	uint32_t flags = bkpdata_read_reset_flags();
 	uint32_t raw_cause = STM32_RCC_RESET_CAUSE;
 	uint32_t pwr_status = STM32_PWR_RESET_CAUSE;
-
-#ifdef CONFIG_STM32_RESET_FLAGS_EXTENDED
-	flags |= bkpdata_read(BKPDATA_INDEX_SAVED_RESET_FLAGS_2) << 16;
-#endif
 
 	/* Clear the hardware reset cause by setting the RMVF bit */
 	STM32_RCC_RESET_CAUSE |= RESET_CAUSE_RMVF;
 	/* Clear SBF in PWR_CSR */
 	STM32_PWR_RESET_CAUSE_CLR |= RESET_CAUSE_SBF_CLR;
 	/* Clear saved reset flags */
-	bkpdata_write(BKPDATA_INDEX_SAVED_RESET_FLAGS, 0);
-#ifdef CONFIG_STM32_RESET_FLAGS_EXTENDED
-	bkpdata_write(BKPDATA_INDEX_SAVED_RESET_FLAGS_2, 0);
-#endif
+	bkpdata_write_reset_flags(0);
 
 	if (raw_cause & RESET_CAUSE_WDG) {
 		/*
@@ -248,7 +148,14 @@ void chip_pre_init(void)
 	apb2fz_reg =
 		STM32_RCC_PB2_TIM15 | STM32_RCC_PB2_TIM16 | STM32_RCC_PB2_TIM17;
 #elif defined(CHIP_FAMILY_STM32F4)
-	/* TODO(nsanders): Implement this if someone needs jtag. */
+	apb1fz_reg =
+		STM32_RCC_PB1_TIM2  | STM32_RCC_PB1_TIM3  | STM32_RCC_PB1_TIM4 |
+		STM32_RCC_PB1_TIM5  | STM32_RCC_PB1_TIM6  | STM32_RCC_PB1_TIM7 |
+		STM32_RCC_PB1_TIM12 | STM32_RCC_PB1_TIM13 | STM32_RCC_PB1_TIM14|
+		STM32_RCC_PB1_RTC   | STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
+	apb2fz_reg =
+		STM32_RCC_PB2_TIM1  | STM32_RCC_PB2_TIM8  | STM32_RCC_PB2_TIM9 |
+		STM32_RCC_PB2_TIM10 | STM32_RCC_PB2_TIM11;
 #elif defined(CHIP_FAMILY_STM32L4)
 	apb1fz_reg =
 		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 | STM32_RCC_PB1_TIM4 |
@@ -270,6 +177,38 @@ void chip_pre_init(void)
 	if (apb2fz_reg)
 		STM32_DBGMCU_APB2FZ |= apb2fz_reg;
 }
+
+#ifdef CONFIG_PVD
+/* Configures the programmable voltage detector to monitor for brown out conditions. */
+static void configure_pvd(void)
+{
+	/* Clear Interrupt Enable Mask Register. */
+	STM32_EXTI_IMR &= ~EXTI_PVD_EVENT;
+
+	/* Clear Rising and Falling Trigger Selection Registers. */
+	STM32_EXTI_RTSR &= ~EXTI_PVD_EVENT;
+	STM32_EXTI_FTSR &= ~EXTI_PVD_EVENT;
+
+	/* Clear the value of the PVD Level Selection. */
+	STM32_PWR_CR &= ~STM32_PWD_PVD_LS_MASK;
+
+	/* Set the new value of the PVD Level Selection. */
+	STM32_PWR_CR |= STM32_PWD_PVD_LS(PVD_THRESHOLD);
+
+	/* Enable Power Clock. */
+	STM32_RCC_APB1ENR |= STM32_RCC_PB1_PWREN;
+
+	/* Configure the NVIC for PVD. */
+	task_enable_irq(STM32_IRQ_PVD);
+
+	/* Configure interrupt mode. */
+	STM32_EXTI_IMR |= EXTI_PVD_EVENT;
+	STM32_EXTI_RTSR |= EXTI_PVD_EVENT;
+
+	/* Enable the PVD Output. */
+	STM32_PWR_CR |= STM32_PWR_PVDE;
+}
+#endif
 
 void system_pre_init(void)
 {
@@ -349,6 +288,10 @@ void system_pre_init(void)
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, 0);
 	}
 #endif
+
+#ifdef CONFIG_PVD
+	configure_pvd();
+#endif
 }
 
 void system_reset(int flags)
@@ -357,6 +300,13 @@ void system_reset(int flags)
 
 	/* Disable interrupts to avoid task swaps during reboot */
 	interrupt_disable();
+
+	/*
+	 * TODO(crbug.com/1045283): Change this part of code to use
+	 * system_encode_save_flags, like all other system_reset functions.
+	 *
+	 * system_encode_save_flags(flags, &save_flags);
+	 */
 
 	/* Save current reset reasons if necessary */
 	if (flags & SYSTEM_RESET_PRESERVE_FLAGS)
@@ -372,14 +322,9 @@ void system_reset(int flags)
 #ifdef CONFIG_STM32_RESET_FLAGS_EXTENDED
 	if (flags & SYSTEM_RESET_AP_WATCHDOG)
 		save_flags |= EC_RESET_FLAG_AP_WATCHDOG;
-
-	bkpdata_write(BKPDATA_INDEX_SAVED_RESET_FLAGS, save_flags & 0xffff);
-	bkpdata_write(BKPDATA_INDEX_SAVED_RESET_FLAGS_2, save_flags >> 16);
-#else
-	/* Reset flags are 32-bits, but BBRAM entry is only 16 bits. */
-	ASSERT(!(save_flags >> 16));
-	bkpdata_write(BKPDATA_INDEX_SAVED_RESET_FLAGS, save_flags);
 #endif
+
+	bkpdata_write_reset_flags(save_flags);
 
 	if (flags & SYSTEM_RESET_HARD) {
 #ifdef CONFIG_SOFTWARE_PANIC
@@ -470,7 +415,9 @@ void system_reset(int flags)
 				udelay(10000);
 			}
 		}
-		CPU_NVIC_APINT = 0x05fa0004;
+
+		/* Request a soft system reset from the core. */
+		CPU_NVIC_APINT = CPU_NVIC_APINT_KEY_WR | CPU_NVIC_APINT_SYSRST;
 	}
 
 	/* Spin and wait for reboot; should never return */
@@ -510,29 +457,6 @@ int system_get_chip_unique_id(uint8_t **id)
 {
 	*id = (uint8_t *)STM32_UNIQUE_ID_ADDRESS;
 	return STM32_UNIQUE_ID_LENGTH;
-}
-
-static int bkpdata_index_lookup(enum system_bbram_idx idx, int *msb)
-{
-	*msb = 0;
-
-#ifdef CONFIG_HOSTCMD_VBNV_CONTEXT
-	if (idx >= SYSTEM_BBRAM_IDX_VBNVBLOCK0 &&
-	    idx <= SYSTEM_BBRAM_IDX_VBNVBLOCK15) {
-		*msb = (idx - SYSTEM_BBRAM_IDX_VBNVBLOCK0) % 2;
-		return BKPDATA_INDEX_VBNV_CONTEXT0 +
-		       (idx - SYSTEM_BBRAM_IDX_VBNVBLOCK0) / 2;
-	}
-#endif
-#ifdef CONFIG_USB_PD_DUAL_ROLE
-	if (idx == SYSTEM_BBRAM_IDX_PD0)
-		return BKPDATA_INDEX_PD0;
-	if (idx == SYSTEM_BBRAM_IDX_PD1)
-		return BKPDATA_INDEX_PD1;
-	if (idx == SYSTEM_BBRAM_IDX_PD2)
-		return BKPDATA_INDEX_PD2;
-#endif
-	return -1;
 }
 
 int system_get_bbram(enum system_bbram_idx idx, uint8_t *value)

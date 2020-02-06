@@ -42,10 +42,36 @@ static int syv682x_is_sourcing_vbus(int port)
 	return flags[port] & SYV682X_FLAGS_SOURCE_ENABLED;
 }
 
+static int syv682x_discharge_vbus(int port, int enable)
+{
+	int regval;
+	int rv;
+
+	rv = read_reg(port, SYV682X_CONTROL_2_REG, &regval);
+	if (rv)
+		return rv;
+
+	if (enable)
+		regval |= SYV682X_CONTROL_2_FDSG;
+	else
+		regval &= ~SYV682X_CONTROL_2_FDSG;
+
+	return write_reg(port, SYV682X_CONTROL_2_REG, regval);
+}
+
 static int syv682x_vbus_sink_enable(int port, int enable)
 {
 	int regval;
 	int rv;
+
+	/*
+	 * Force Discharge mode must be off in sink mode
+	 */
+	if (enable) {
+		rv = syv682x_discharge_vbus(port, 0);
+		if (rv)
+			return rv;
+	}
 
 	/*
 	 * For sink mode need to make sure high voltage power path is connected
@@ -193,23 +219,6 @@ static int syv682x_set_vbus_source_current_limit(int port,
 	return write_reg(port, SYV682X_CONTROL_1_REG, regval);
 }
 
-static int syv682x_discharge_vbus(int port, int enable)
-{
-	int regval;
-	int rv;
-
-	rv = read_reg(port, SYV682X_CONTROL_2_REG, &regval);
-	if (rv)
-		return rv;
-
-	if (enable)
-		regval |= SYV682X_CONTROL_2_FDSG;
-	else
-		regval &= ~SYV682X_CONTROL_2_FDSG;
-
-	return write_reg(port, SYV682X_CONTROL_2_REG, regval);
-}
-
 #ifdef CONFIG_USBC_PPC_POLARITY
 static int syv682x_set_polarity(int port, int polarity)
 {
@@ -302,11 +311,14 @@ static int syv682x_init(int port)
 		return rv;
 
 	/* Check if this if dead battery case */
-	rv = read_reg(port, SYV682X_CONTROL_1_REG, &regval);
+	rv = read_reg(port, SYV682X_STATUS_REG, &regval);
 	if (rv)
 		return rv;
 	if (regval & SYV682X_STATUS_VSAFE_0V) {
 		/* Not dead battery case, so disable channel */
+		rv = read_reg(port, SYV682X_CONTROL_1_REG, &regval);
+		if (rv)
+			return rv;
 		regval |= SYV682X_CONTROL_1_PWR_ENB;
 		rv = write_reg(port, SYV682X_CONTROL_1_REG, regval);
 		if (rv)

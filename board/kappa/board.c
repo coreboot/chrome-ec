@@ -27,13 +27,12 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "i2c_bitbang.h"
 #include "it8801.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
-#include "pwm.h"
-#include "pwm_chip.h"
 #include "registers.h"
 #include "spi.h"
 #include "system.h"
@@ -71,6 +70,11 @@ const struct i2c_port_t i2c_ports[] = {
 	{"other", 1, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+const struct i2c_port_t i2c_bitbang_ports[] = {
+	{"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
+};
+const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
 
 #define BC12_I2C_ADDR PI3USB9201_I2C_ADDR_3
 
@@ -112,6 +116,13 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
 	},
 };
+/******************************************************************************/
+const struct it8801_pwm_t it8801_pwm_channels[] = {
+	[PWM_CH_LED_AMBER] = { 1 },
+	[PWM_LED_NO_CHANNEL] = { -1 },
+	[PWM_CH_LED_WHITE] = { 3 },
+};
+BUILD_ASSERT(ARRAY_SIZE(it8801_pwm_channels) == PWM_CH_COUNT);
 
 /******************************************************************************/
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
@@ -280,8 +291,3 @@ static void board_chipset_shutdown(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
-int board_get_charger_i2c(void)
-{
-	/* TODO(b:138415463): confirm the bus allocation for future builds */
-	return board_get_version() == 1 ? 2 : 1;
-}

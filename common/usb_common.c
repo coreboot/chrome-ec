@@ -13,7 +13,9 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
+#include "ec_commands.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "system.h"
 #include "task.h"
 #include "usb_common.h"
@@ -63,12 +65,15 @@ struct pd_pref_config_t __maybe_unused pd_pref_config;
  * DTS		USB-C @ 3 A	    Rp3A0  RpUSB
  */
 
-typec_current_t usb_get_typec_current_limit(enum pd_cc_polarity_type polarity,
+typec_current_t usb_get_typec_current_limit(enum tcpc_cc_polarity polarity,
 	enum tcpc_cc_voltage_status cc1, enum tcpc_cc_voltage_status cc2)
 {
 	typec_current_t charge = 0;
-	enum tcpc_cc_voltage_status cc = polarity ? cc2 : cc1;
-	enum tcpc_cc_voltage_status cc_alt = polarity ? cc1 : cc2;
+	enum tcpc_cc_voltage_status cc;
+	enum tcpc_cc_voltage_status cc_alt;
+
+	cc = polarity_rm_dts(polarity) ? cc2 : cc1;
+	cc_alt = polarity_rm_dts(polarity) ? cc1 : cc2;
 
 	switch (cc) {
 	case TYPEC_CC_VOLT_RP_3_0:
@@ -96,16 +101,32 @@ typec_current_t usb_get_typec_current_limit(enum pd_cc_polarity_type polarity,
 	return charge;
 }
 
-enum pd_cc_polarity_type get_snk_polarity(enum tcpc_cc_voltage_status cc1,
+enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2)
 {
+	if (cc_is_open(cc1, cc2))
+		return POLARITY_NONE;
+
 	/* The following assumes:
 	 *
 	 * TYPEC_CC_VOLT_RP_3_0 > TYPEC_CC_VOLT_RP_1_5
 	 * TYPEC_CC_VOLT_RP_1_5 > TYPEC_CC_VOLT_RP_DEF
 	 * TYPEC_CC_VOLT_RP_DEF > TYPEC_CC_VOLT_OPEN
 	 */
-	return cc2 > cc1;
+	if (cc_is_src_dbg_acc(cc1, cc2))
+		return (cc1 > cc2) ? POLARITY_CC1_DTS : POLARITY_CC2_DTS;
+
+	return (cc1 > cc2) ? POLARITY_CC1 : POLARITY_CC2;
+}
+
+enum tcpc_cc_polarity get_src_polarity(enum tcpc_cc_voltage_status cc1,
+	enum tcpc_cc_voltage_status cc2)
+{
+	if (cc_is_open(cc1, cc2) ||
+	    cc_is_snk_dbg_acc(cc1, cc2))
+		return POLARITY_NONE;
+
+	return (cc1 == TYPEC_CC_VOLT_RD) ? POLARITY_CC1 : POLARITY_CC2;
 }
 
 enum pd_cc_states pd_get_cc_state(
@@ -278,7 +299,7 @@ void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv)
 void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 			int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
 			uint32_t *mv, enum pd_request_type req_type,
-			uint32_t max_request_mv)
+			uint32_t max_request_mv, int port)
 {
 	uint32_t pdo;
 	int pdo_index, flags = 0;
@@ -365,6 +386,23 @@ void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 		*rdo = RDO_BATT(pdo_index + 1, mw, max_or_min_mw, flags);
 	} else {
 		*rdo = RDO_FIXED(pdo_index + 1, *ma, max_or_min_ma, flags);
+	}
+
+	/*
+	 * Ref: USB Power Delivery Specification
+	 * (Revision 3.0, Version 2.0 / Revision 2.0, Version 1.3)
+	 * 6.4.2.4 USB Communications Capable
+	 * 6.4.2.5 No USB Suspend
+	 *
+	 * If the port partner is capable of USB communication set the
+	 * USB Communications Capable flag.
+	 * If the port partner is sink device do not suspend USB as the
+	 * power can be used for charging.
+	 */
+	if (pd_get_partner_usb_comm_capable(port)) {
+		*rdo |= RDO_COMM_CAP;
+		if (pd_get_power_role(port) == PD_ROLE_SINK)
+			*rdo |= RDO_NO_SUSPEND;
 	}
 }
 #endif
@@ -455,6 +493,57 @@ enum pd_drp_next_states drp_auto_toggle_next_state(
 	}
 }
 
+mux_state_t get_mux_mode_to_set(int port)
+{
+	/*
+	 * If the SoC is down, then we disconnect the MUX to save power since
+	 * no one cares about the data lines.
+	 */
+	if (IS_ENABLED(CONFIG_POWER_COMMON) &&
+	    chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF))
+		return USB_PD_MUX_NONE;
+
+	/*
+	 * When PD stack is disconnected, then mux should be disconnected, which
+	 * is also what happens in the set_state disconnection code. Once the
+	 * PD state machine progresses out of disconnect, the MUX state will
+	 * be set correctly again.
+	 */
+	if (pd_is_disconnected(port))
+		return USB_PD_MUX_NONE;
+
+	/* If new data role isn't DFP & we only support DFP, also disconnect. */
+	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
+	    IS_ENABLED(CONFIG_USBC_SS_MUX_DFP_ONLY) &&
+	    pd_get_data_role(port) != PD_ROLE_DFP)
+		return USB_PD_MUX_NONE;
+
+	/*
+	 * If the power role is sink and the partner device is not capable
+	 * of USB communication then disconnect.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
+	    pd_get_power_role(port) == PD_ROLE_SINK &&
+	    !pd_get_partner_usb_comm_capable(port))
+		return USB_PD_MUX_NONE;
+
+	/* Otherwise connect mux since we are in S3+ */
+	return USB_PD_MUX_USB_ENABLED;
+}
+
+void set_usb_mux_with_current_data_role(int port)
+{
+	if (IS_ENABLED(CONFIG_USBC_SS_MUX)) {
+		mux_state_t mux_mode = get_mux_mode_to_set(port);
+		enum usb_switch usb_switch_mode =
+				(mux_mode == USB_PD_MUX_NONE) ?
+				USB_SWITCH_DISCONNECT : USB_SWITCH_CONNECT;
+
+		usb_mux_set(port, mux_mode, usb_switch_mode,
+				pd_get_polarity(port));
+	}
+}
+
 #ifdef CONFIG_USBC_PPC
 
 static void pd_send_hard_reset(int port)
@@ -519,13 +608,15 @@ __overridable int pd_board_checks(void)
 	return EC_SUCCESS;
 }
 
-__overridable int pd_check_data_swap(int port, int data_role)
+__overridable int pd_check_data_swap(int port,
+	enum pd_data_role data_role)
 {
 	/* Allow data swap if we are a UFP, otherwise don't allow. */
 	return (data_role == PD_ROLE_UFP) ? 1 : 0;
 }
 
-__overridable void pd_check_dr_role(int port, int dr_role, int flags)
+__overridable void pd_check_dr_role(int port,
+	enum pd_data_role dr_role, int flags)
 {
 	/* If UFP, try to switch to DFP */
 	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_UFP)
@@ -541,13 +632,14 @@ __overridable int pd_check_power_swap(int port)
 	 */
 	if (pd_get_dual_role(port) == PD_DRP_TOGGLE_ON)
 		return 1;
-	else if (pd_get_role(port) == PD_ROLE_SOURCE)
+	else if (pd_get_power_role(port) == PD_ROLE_SOURCE)
 		return 1;
 
 	return 0;
 }
 
-__overridable void pd_check_pr_role(int port, int pr_role, int flags)
+__overridable void pd_check_pr_role(int port,
+	enum pd_power_role pr_role, int flags)
 {
 	/*
 	 * If partner is dual-role power and dualrole toggling is on, consider
@@ -568,8 +660,20 @@ __overridable void pd_check_pr_role(int port, int pr_role, int flags)
 	}
 }
 
-__overridable void pd_execute_data_swap(int port, int data_role)
+__overridable void pd_execute_data_swap(int port,
+	enum pd_data_role data_role)
 {
+}
+
+__overridable void pd_try_execute_vconn_swap(int port, int flags)
+{
+	/*
+	 * If partner is dual-role power and vconn swap is enabled, consider
+	 * if vconn swapping is necessary.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
+	    IS_ENABLED(CONFIG_USBC_VCONN_SWAP))
+		pd_try_vconn_src(port);
 }
 
 __overridable int pd_is_valid_input_voltage(int mv)
@@ -678,6 +782,23 @@ __overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 }
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
+/*
+ * Before entering into alternate mode, state of the USB-C MUX
+ * needs to be in safe mode.
+ * Ref: USB Type-C Cable and Connector Specification
+ * Section E.2.2 Alternate Mode Electrical Requirements
+ */
+void usb_mux_set_safe_mode(int port)
+{
+	usb_mux_set(port, IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) ?
+		USB_PD_MUX_SAFE_MODE : USB_PD_MUX_NONE,
+		USB_SWITCH_CONNECT, pd_get_polarity(port));
+
+	/* Isolate the SBU lines. */
+	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
+		ppc_set_sbu(port, 0);
+}
+
 __overridable const struct svdm_response svdm_rsp = {
 	.identity = NULL,
 	.svids = NULL,
@@ -692,13 +813,8 @@ __overridable void svdm_safe_dp_mode(int port)
 	/* make DP interface safe until configure */
 	dp_flags[port] = 0;
 	dp_status[port] = 0;
-	usb_mux_set(port, IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) ?
-		TYPEC_MUX_SAFE : TYPEC_MUX_NONE,
-		USB_SWITCH_CONNECT, pd_get_polarity(port));
 
-	/* Isolate the SBU lines. */
-	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-		ppc_set_sbu(port, 0);
+	usb_mux_set_safe_mode(port);
 }
 
 __overridable int svdm_enter_dp_mode(int port, uint32_t mode_caps)
@@ -762,7 +878,7 @@ __overridable int svdm_dp_config(int port, uint32_t *payload)
 	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	uint8_t pin_mode = get_dp_pin_mode(port);
-	enum typec_mux mux_mode;
+	mux_state_t mux_mode;
 
 	if (!pin_mode)
 		return 0;
@@ -772,7 +888,7 @@ __overridable int svdm_dp_config(int port, uint32_t *payload)
 	 * supported.
 	 */
 	mux_mode = ((pin_mode & MODE_DP_PIN_MF_MASK) && mf_pref) ?
-		TYPEC_MUX_DOCK : TYPEC_MUX_DP;
+		USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED;
 	CPRINTS("pin_mode: %x, mf: %d, mux: %d", pin_mode, mf_pref, mux_mode);
 
 	/* Connect the SBU and USB lines to the connector. */
@@ -790,18 +906,17 @@ __overridable int svdm_dp_config(int port, uint32_t *payload)
 
 /*
  * timestamp of the next possible toggle to ensure the 2-ms spacing
- * between IRQ_HPD.
+ * between IRQ_HPD.  Since this is used in overridable functions, this
+ * has to be global.
  */
-STATIC_IF(CONFIG_USB_PD_DP_HPD_GPIO)
-	uint64_t hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
+uint64_t svdm_hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
+
 #ifndef PORT_TO_HPD
 #define PORT_TO_HPD(port) ((port) ? GPIO_USB_C1_DP_HPD : GPIO_USB_C0_DP_HPD)
 #endif /* PORT_TO_HPD */
 
 __overridable void svdm_dp_post_config(int port)
 {
-	const struct usb_mux *mux = &usb_muxes[port];
-
 	dp_flags[port] |= DP_FLAGS_DP_ON;
 	if (!(dp_flags[port] & DP_FLAGS_HPD_HI_PENDING))
 		return;
@@ -810,11 +925,10 @@ __overridable void svdm_dp_post_config(int port)
 	gpio_set_level(PORT_TO_HPD(port), 1);
 
 	/* set the minimum time delay (2ms) for the next HPD IRQ */
-	hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
+	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
 #endif /* CONFIG_USB_PD_DP_HPD_GPIO */
 
-	if (mux->hpd_update)
-		mux->hpd_update(port, 1, 0);
+	usb_mux_hpd_update(port, 1, 0);
 
 #ifdef USB_PD_PORT_TCPC_MST
 	if (port == USB_PD_PORT_TCPC_MST)
@@ -826,7 +940,6 @@ __overridable int svdm_dp_attention(int port, uint32_t *payload)
 {
 	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
 	int irq = PD_VDO_DPSTS_HPD_IRQ(payload[1]);
-	const struct usb_mux *mux = &usb_muxes[port];
 #ifdef CONFIG_USB_PD_DP_HPD_GPIO
 	enum gpio_signal hpd = PORT_TO_HPD(port);
 	int cur_lvl = gpio_get_level(hpd);
@@ -854,8 +967,8 @@ __overridable int svdm_dp_attention(int port, uint32_t *payload)
 	if (irq & cur_lvl) {
 		uint64_t now = get_time().val;
 		/* wait for the minimum spacing between IRQ_HPD if needed */
-		if (now < hpd_deadline[port])
-			usleep(hpd_deadline[port] - now);
+		if (now < svdm_hpd_deadline[port])
+			usleep(svdm_hpd_deadline[port] - now);
 
 		/* generate IRQ_HPD pulse */
 		gpio_set_level(hpd, 0);
@@ -863,7 +976,8 @@ __overridable int svdm_dp_attention(int port, uint32_t *payload)
 		gpio_set_level(hpd, 1);
 
 		/* set the minimum time delay (2ms) for the next HPD IRQ */
-		hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
+		svdm_hpd_deadline[port] = get_time().val +
+			HPD_USTREAM_DEBOUNCE_LVL;
 	} else if (irq & !lvl) {
 		/*
 		 * IRQ can only be generated when the level is high, because
@@ -874,12 +988,12 @@ __overridable int svdm_dp_attention(int port, uint32_t *payload)
 	} else {
 		gpio_set_level(hpd, lvl);
 		/* set the minimum time delay (2ms) for the next HPD IRQ */
-		hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
+		svdm_hpd_deadline[port] = get_time().val +
+			HPD_USTREAM_DEBOUNCE_LVL;
 	}
 #endif /* CONFIG_USB_PD_DP_HPD_GPIO */
 
-	if (mux->hpd_update)
-		mux->hpd_update(port, lvl, irq);
+	usb_mux_hpd_update(port, lvl, irq);
 
 #ifdef USB_PD_PORT_TCPC_MST
 	if (port == USB_PD_PORT_TCPC_MST)
@@ -892,14 +1006,11 @@ __overridable int svdm_dp_attention(int port, uint32_t *payload)
 
 __overridable void svdm_exit_dp_mode(int port)
 {
-	const struct usb_mux *mux = &usb_muxes[port];
-
 	svdm_safe_dp_mode(port);
 #ifdef CONFIG_USB_PD_DP_HPD_GPIO
 	gpio_set_level(PORT_TO_HPD(port), 0);
 #endif /* CONFIG_USB_PD_DP_HPD_GPIO */
-	if (mux->hpd_update)
-		mux->hpd_update(port, 0, 0);
+	usb_mux_hpd_update(port, 0, 0);
 #ifdef USB_PD_PORT_TCPC_MST
 	if (port == USB_PD_PORT_TCPC_MST)
 		baseboard_mst_enable_control(port, 0);
@@ -936,6 +1047,32 @@ __overridable int svdm_gfu_attention(int port, uint32_t *payload)
 	return 0;
 }
 
+#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
+__overridable int svdm_tbt_compat_enter_mode(int port, uint32_t mode_caps)
+{
+	return 0;
+}
+
+__overridable void svdm_tbt_compat_exit_mode(int port)
+{
+}
+
+__overridable int svdm_tbt_compat_status(int port, uint32_t *payload)
+{
+	return 0;
+}
+
+__overridable int svdm_tbt_compat_config(int port, uint32_t *payload)
+{
+	return 0;
+}
+
+__overridable int svdm_tbt_compat_attention(int port, uint32_t *payload)
+{
+	return 0;
+}
+#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
+
 const struct svdm_amode_fx supported_modes[] = {
 	{
 		.svid = USB_SID_DISPLAYPORT,
@@ -954,7 +1091,17 @@ const struct svdm_amode_fx supported_modes[] = {
 		.config = &svdm_gfu_config,
 		.attention = &svdm_gfu_attention,
 		.exit = &svdm_exit_gfu_mode,
-	}
+	},
+#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
+	{
+		.svid = USB_VID_INTEL,
+		.enter = &svdm_tbt_compat_enter_mode,
+		.status = &svdm_tbt_compat_status,
+		.config = &svdm_tbt_compat_config,
+		.attention = &svdm_tbt_compat_attention,
+		.exit = &svdm_tbt_compat_exit_mode,
+	},
+#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
 };
 const int supported_modes_cnt = ARRAY_SIZE(supported_modes);
 #endif /* CONFIG_USB_PD_ALT_MODE_DFP */

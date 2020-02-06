@@ -9,9 +9,11 @@
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "charger.h"
 #include "chipset.h"
 #include "extpower.h"
 #include "driver/accelgyro_bmi160.h"
+#include "driver/charger/isl923x.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -43,6 +45,7 @@ static void vbus1_evt(enum gpio_signal signal);
 static void usb0_evt(enum gpio_signal signal);
 static void usb1_evt(enum gpio_signal signal);
 static void ppc_interrupt(enum gpio_signal signal);
+static void board_connect_c0_sbu(enum gpio_signal s);
 
 #include "gpio_list.h"
 
@@ -101,6 +104,21 @@ static void ppc_interrupt(enum gpio_signal signal)
 	default:
 		break;
 	}
+}
+
+static void board_connect_c0_sbu_deferred(void)
+{
+	/*
+	 * If CCD_MODE_ODL asserts, it means there's a debug accessory connected
+	 * and we should enable the SBU FETs.
+	 */
+	ppc_set_sbu(0, 1);
+}
+DECLARE_DEFERRED(board_connect_c0_sbu_deferred);
+
+static void board_connect_c0_sbu(enum gpio_signal s)
+{
+	hook_call_deferred(&board_connect_c0_sbu_deferred_data, 0);
 }
 
 /* Wake-up pins for hibernate */
@@ -187,6 +205,14 @@ const struct power_signal_info power_signal_list[] = {
 		GPIO_WARM_RESET_L,
 		POWER_SIGNAL_ACTIVE_HIGH,
 		"WARM_RESET_L"},
+	[SC7180_AP_SUSPEND] = {
+		GPIO_AP_SUSPEND,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"AP_SUSPEND"},
+	[SC7180_DEPRECATED_AP_RST_REQ] = {
+		GPIO_DEPRECATED_AP_RST_REQ,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"DEPRECATED_AP_RST_REQ"},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
@@ -244,56 +270,18 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 /*
  * Port-0/1 USB mux driver.
  *
- * The USB mux is handled by TCPC chip and the HPD is handled by AP.
- * Redirect to tcpci_tcpm_usb_mux_driver but override the get() function
- * to check the HPD_IRQ mask from virtual_usb_mux_driver.
- *
- * Both port 0 and 1 use the same TCPC part.
+ * The USB mux is handled by TCPC chip and the HPD update is through a GPIO
+ * to AP. But the TCPC chip is also needed to know the HPD status; otherwise,
+ * the mux misbehaves.
  */
-
-static int port_usb_mux_init(int port)
-{
-	return tcpci_tcpm_usb_mux_driver.init(port);
-}
-
-static int port_usb_mux_set(int i2c_addr, mux_state_t mux_state)
-{
-	return tcpci_tcpm_usb_mux_driver.set(i2c_addr, mux_state);
-}
-
-static int port_usb_mux_get(int port, mux_state_t *mux_state)
-{
-	int rv;
-	mux_state_t virtual_mux_state;
-
-	rv = tcpci_tcpm_usb_mux_driver.get(port, mux_state);
-	rv |= virtual_usb_mux_driver.get(port, &virtual_mux_state);
-
-	if (virtual_mux_state & USB_PD_MUX_HPD_IRQ)
-		*mux_state |= USB_PD_MUX_HPD_IRQ;
-	return rv;
-}
-
-static int port_usb_mux_enter_low_power(int port)
-{
-	return tcpci_tcpm_usb_mux_driver.enter_low_power_mode(port);
-}
-
-const struct usb_mux_driver port_usb_mux_driver = {
-	.init = &port_usb_mux_init,
-	.set = &port_usb_mux_set,
-	.get = &port_usb_mux_get,
-	.enter_low_power_mode = &port_usb_mux_enter_low_power,
-};
-
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.driver = &port_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.driver = &ps8xxx_usb_mux_driver,
+		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
 	{
-		.driver = &port_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.driver = &ps8xxx_usb_mux_driver,
+		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	}
 };
 
@@ -313,6 +301,16 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT);
 
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
 /* Initialize board. */
 static void board_init(void)
 {
@@ -326,6 +324,13 @@ static void board_init(void)
 
 	/* Enable interrupt for BMI160 sensor */
 	gpio_enable_interrupt(GPIO_ACCEL_GYRO_INT_L);
+
+	/*
+	 * The H1 SBU line for CCD are behind PPC chip. The PPC internal FETs
+	 * for SBU may be disconnected after DP alt mode is off. Should enable
+	 * the CCD_MODE_ODL interrupt to make sure the SBU FETs are connected.
+	 */
+	gpio_enable_interrupt(GPIO_CCD_MODE_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -385,12 +390,24 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
 void board_reset_pd_mcu(void)
 {
-	/* Assert reset */
+	cprints(CC_USB, "Resetting TCPCs...");
+	cflush();
+
 	gpio_set_level(GPIO_USB_C0_PD_RST_L, 0);
 	gpio_set_level(GPIO_USB_C1_PD_RST_ODL, 0);
 	msleep(PS8XXX_RESET_DELAY_MS);
 	gpio_set_level(GPIO_USB_C0_PD_RST_L, 1);
 	gpio_set_level(GPIO_USB_C1_PD_RST_ODL, 1);
+	msleep(PS8805_FW_INIT_DELAY_MS);
+}
+
+void board_set_tcpc_power_mode(int port, int mode)
+{
+	/* Ignore the "mode" to turn the chip on.  We can only do a reset. */
+	if (mode)
+		return;
+
+	board_reset_pd_mcu();
 }
 
 int board_vbus_sink_enable(int port, int enable)
@@ -529,7 +546,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 4,  /* g */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
 	 .config = {

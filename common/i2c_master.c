@@ -14,6 +14,7 @@
 #include "gpio.h"
 #include "i2c.h"
 #include "i2c_bitbang.h"
+#include "i2c_private.h"
 #include "system.h"
 #include "task.h"
 #include "usb_pd.h"
@@ -449,19 +450,16 @@ int i2c_update8(const int port,
 		const enum mask_update_action action)
 {
 	int rv;
-	int val, oldval;
+	int val;
 
-	rv = i2c_read8(port, slave_addr_flags, offset, &oldval);
+	rv = i2c_read8(port, slave_addr_flags, offset, &val);
 	if (rv)
 		return rv;
 
-	val = (action == MASK_SET) ? oldval | mask
-				   : oldval & ~mask;
+	val = (action == MASK_SET) ? val | mask
+				   : val & ~mask;
 
-	if (val != oldval)
-		return i2c_write8(port, slave_addr_flags, offset, val);
-
-	return EC_SUCCESS;
+	return i2c_write8(port, slave_addr_flags, offset, val);
 }
 
 int i2c_update16(const int port,
@@ -471,19 +469,16 @@ int i2c_update16(const int port,
 		 const enum mask_update_action action)
 {
 	int rv;
-	int val, oldval;
+	int val;
 
-	rv = i2c_read16(port, slave_addr_flags, offset, &oldval);
+	rv = i2c_read16(port, slave_addr_flags, offset, &val);
 	if (rv)
 		return rv;
 
-	val = (action == MASK_SET) ? oldval | mask
-				   : oldval & ~mask;
+	val = (action == MASK_SET) ? val | mask
+				   : val & ~mask;
 
-	if (val != oldval)
-		return i2c_write16(port, slave_addr_flags, offset, val);
-
-	return EC_SUCCESS;
+	return i2c_write16(port, slave_addr_flags, offset, val);
 }
 
 int i2c_field_update8(const int port,
@@ -493,18 +488,15 @@ int i2c_field_update8(const int port,
 		      const uint8_t set_value)
 {
 	int rv;
-	int val, oldval;
+	int val;
 
-	rv = i2c_read8(port, slave_addr_flags, offset, &oldval);
+	rv = i2c_read8(port, slave_addr_flags, offset, &val);
 	if (rv)
 		return rv;
 
-	val = (oldval & (~field_mask)) | set_value;
+	val = (val & (~field_mask)) | set_value;
 
-	if (val != oldval)
-		return i2c_write8(port, slave_addr_flags, offset, val);
-
-	return EC_SUCCESS;
+	return i2c_write8(port, slave_addr_flags, offset, val);
 }
 
 int i2c_field_update16(const int port,
@@ -514,18 +506,15 @@ int i2c_field_update16(const int port,
 		       const uint16_t set_value)
 {
 	int rv;
-	int val, oldval;
+	int val;
 
-	rv = i2c_read16(port, slave_addr_flags, offset, &oldval);
+	rv = i2c_read16(port, slave_addr_flags, offset, &val);
 	if (rv)
 		return rv;
 
-	val = (oldval & (~field_mask)) | set_value;
+	val = (val & (~field_mask)) | set_value;
 
-	if (val != oldval)
-		return i2c_write16(port, slave_addr_flags, offset, val);
-
-	return EC_SUCCESS;
+	return i2c_write16(port, slave_addr_flags, offset, val);
 }
 
 int i2c_read_offset16(const int port,
@@ -983,6 +972,24 @@ unwedge_done:
 	i2c_raw_mode(port, 0);
 
 	return ret;
+}
+
+int i2c_set_freq(int port, enum i2c_freq freq)
+{
+	int ret;
+
+	if (!(get_i2c_port(port)->flags & I2C_PORT_FLAG_DYNAMIC_SPEED))
+		return EC_ERROR_INVAL;
+
+	i2c_lock(port, 1);
+	ret = chip_i2c_set_freq(port, freq);
+	i2c_lock(port, 0);
+	return ret;
+}
+
+enum i2c_freq i2c_get_freq(int port)
+{
+	return chip_i2c_get_freq(port);
 }
 
 /*****************************************************************************/

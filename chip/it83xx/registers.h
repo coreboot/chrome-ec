@@ -1205,6 +1205,8 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 /* Shared Memory Flash Interface Bridge (SMFI) */
 #define IT83XX_SMFI_BASE  0x00F01000
 
+#define IT83XX_SMFI_SMECCS      REG8(IT83XX_SMFI_BASE+0x20)
+#define IT83XX_SMFI_MASK_HOSTWA 	BIT(5)
 #define IT83XX_SMFI_HRAMWC      REG8(IT83XX_SMFI_BASE+0x5A)
 #define IT83XX_SMFI_HRAMW0BA    REG8(IT83XX_SMFI_BASE+0x5B)
 #define IT83XX_SMFI_HRAMW1BA    REG8(IT83XX_SMFI_BASE+0x5C)
@@ -1545,7 +1547,6 @@ enum i2c_channels {
 enum usbpd_port {
 	USBPD_PORT_A,
 	USBPD_PORT_B,
-	USBPD_PORT_COUNT,
 };
 
 #define USB_VID_ITE 0x048d

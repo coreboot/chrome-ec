@@ -22,7 +22,7 @@
 #include "cometlake.h"
 #elif defined(CONFIG_CHIPSET_COMETLAKE_DISCRETE)
 #include "cometlake-discrete.h"
-#elif defined(CONFIG_CHIPSET_ICL_TGL)
+#elif defined(CONFIG_CHIPSET_ICELAKE)
 #include "icelake.h"
 #elif defined(CONFIG_CHIPSET_SKYLAKE)
 #include "skylake.h"
@@ -61,5 +61,34 @@ enum power_state chipset_force_g3(void);
  * @return power_state New chipset state.
  */
 enum power_state common_intel_x86_power_handle_state(enum power_state state);
+
+/**
+ * Wait for power-up to be allowed based on available power.
+ *
+ * This delays G3->S5 until there is enough power to boot the AP, waiting
+ * first until the charger (if any) is ready, then for there to be sufficient
+ * power.
+ *
+ * In case of error, the caller should not allow power-up past G3.
+ *
+ * @return EC_SUCCESS if OK.
+ */
+enum ec_error_list intel_x86_wait_power_up_ok(void);
+
+/**
+ * Get the value of PG_EC_DSW_PWROK.
+ *
+ * The default implementation is just to return the GPIO.  But if a
+ * board doesn't have that GPIO, they may override this function.
+ */
+__override_proto int intel_x86_get_pg_ec_dsw_pwrok(void);
+
+/**
+ * Get the value of PG_EC_ALL_SYS_PWRGD.
+ *
+ * The default implementation is just to return the GPIO.  But if a
+ * board doesn't have that GPIO, they may override this function.
+ */
+__override_proto int intel_x86_get_pg_ec_all_sys_pwrgd(void);
 
 #endif /* __CROS_EC_INTEL_X86_H */

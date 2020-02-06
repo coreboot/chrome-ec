@@ -18,25 +18,29 @@ Development for other [EC]s is often done in a similar manner, but some of them
 have their own standalone development or evaluation kits that don't require the
 use of [servo].
 
-You will need an [FPMCU reference board](#fpmcu-board) and a
+You will need an [FPMCU reference board](#fpmcu-dev-board) and a
 [servo debugger](#servo).
 
-### FPMCU board
+### FPMCU board {#fpmcu-dev-board}
 
 The Fingerprint MCU (FPMCU) board has the MCU that handles all
 fingerprint-related functionality (matching, encryption, etc). The fingerprint
 sensor itself connects to the FPMCU board.
 
-This FPMCU board is the Bloonchipper Rev 0.1. |
---------------------------------------------- |
-![Bloonchipper board]                         |
+This FPMCU board is the Dragonclaw Rev 0.2. |
+--------------------------------------------|
+![Dragonclaw board]                         |
+
 
 *** note
-NOTE: Some FPMCU boards need a rework in order to work properly with
-servo. This fix is visible in the green box above.
+**Googlers**: You can pick up the Dragonclaw development board at Chromestop.
+**Partners**: You can request a Dragonclaw development board from Google.
+***
 
-See the [Bloonchipper Servo Fix](#bloonchipper-servo-fix) section for more
-detail.
+*** note
+Dragonclaw Rev 0.2 needs a [rework](#dragonclaw-rev-0.2-rework) for the FPC
+sensor to work while being powered through Servo. All of the boards at Chromestop
+have already been reworked.
 ***
 
 This FPMCU board is the Dartmonkey Rev 0.1. |
@@ -52,8 +56,9 @@ debug a running program. It supports SPI, UART, I2C, as well as JTAG/SWD.
 
 There are two different servo debugger setups supported, the
 [Servo Micro](#servo-micro) and the [Servo V2 + Yoshi](#servo-v2-yoshi). The
-servo micro is recommended for its simplicity, but currently lack builtin
-JTAG/SWD support for single step debugging.
+servo micro is recommended for its simplicity. It lacks builtin JTAG/SWD support
+for single step debugging, but Dragonclaw v0.2 has an [SWD
+connector](#servo-micro-swd) that can be used.
 
 | [Servo Micro](#servo-micro) | [ServoV2 + Yoshi](#servo-v2-yoshi)        |
 | --------------------------- | ----------------------------------------- |
@@ -71,11 +76,16 @@ interface with the FPMCU board.
 As you can see below, one end connects to the FPMCU board and the other connect
 to the developer's computer over micro USB.
 
-![Servo Micro with Bloonchipper]
+![Servo Micro with Dragonclaw]
 
 *** note
 For more information about Servo Micro, see [Servo Micro Info].
 ***
+
+#### Using SWD (Optional) {#servo-micro-swd}
+
+Instructions for setup are described in [Fingerprint Debugging].
+
 
 ### Servo V2 + Yoshi
 
@@ -122,11 +132,6 @@ development machine.
     FPMCU board.
 
     ![Connect Yoshi Flex to FPMCU board] ![Another image]
-
-    *** note
-    Newer FPMCU boards require the ribbon cable to connect in the
-    reverse direction.
-    ***
 
 3.  Connect the fingerprint sensor to the header on the FPMCU board.
 
@@ -314,7 +319,7 @@ Start a fingerprint enrollment:
 > fpenroll
 ```
 
-The Bloonchipper reference board has an onboard INA that monitors the voltage
+The Dragonclaw reference board has an onboard INA that monitors the voltage
 and power draw of the MCU and FP Sensor independently.
 
 Signal Name   | Description
@@ -372,7 +377,7 @@ to access the necessary repo.
 
 ## Working with Chromebooks
 
-Chromebooks have an FPMCU (e.g., Bloonchipper) board attached to the
+Chromebooks have an FPMCU (e.g., Dragonclaw) board attached to the
 motherboard. You can use the device to run `ectool` commands and test the
 fingerprint sensor from the UI.
 
@@ -428,9 +433,21 @@ From the DUT, flash the firmware you copied:
 
 ## Troubleshooting
 
-### Bloonchipper Servo Fix
+### Dragonclaw Rev 0.2 Rework {#dragonclaw-rev-0.2-rework}
 
-Bloonchipper Rev 0.1 has a known issue with UART and JTAG. Most notably, this
+*** note
+**NOTE**: All Dragonclaw v0.2 boards have been reworked, so it is not necessary to perform the rework yourself.
+***
+Dragonclaw **Rev 0.2** has two load switches (`U4` and `U6`) that enable the
+1.8V power rail from the servo connector or motherboard connector. However,
+this switch is not compatible with 1.8V, so will always output 0V.
+
+The [rework document][Dragonclaw Rev 0.2 1.8V Rework] describes replacing these
+two switches with ones compatible with 1.8V.
+
+### Dragonclaw Rev 0.1 Servo Fix
+
+Dragonclaw **Rev 0.1** has a known issue with UART and JTAG. Most notably, this
 issue causes servo micro to fail to program the FPMCU over UART.
 
 This issue can be fixed with the following rework steps:
@@ -438,7 +455,7 @@ This issue can be fixed with the following rework steps:
 *   Connect servo header pin 13 to pin 18
 *   Connect servo header pin 13 to pin 29
 
-![Bloonchipper servo fix diagram]
+![Dragonclaw servo fix diagram]
 
 ### Verify that servo and debugger are connected to USB {#servo-connected}
 
@@ -511,16 +528,17 @@ https://crbug.com/992082.
 [Git and Gerrit Intro for Chromium OS]: https://chromium.googlesource.com/chromiumos/docs/+/master/git_and_gerrit_intro.md
 [Installing Chromium]: https://chromium.googlesource.com/chromiumos/docs/+/master/developer_guide.md#installing-chromium-os-on-your-device
 [FPMCU documentation]: ./fingerprint.md
+[Fingerprint Debugging]: ./fingerprint-debugging.md
 
 <!-- Images -->
 
 [Servo Micro]: ../images/servo_micro.jpg
-[Servo Micro with Bloonchipper]: ../images/servomicro_dragonclaw.jpg
+[Servo Micro with Dragonclaw]: ../images/servomicro_dragonclaw.jpg
 [Servo v2]: ../images/servo_v2.jpg
 [Standard Yoshi Flex]: ../images/yoshi_flex.jpg
 [Yoshi Flex Reworked to Support SWD]: ../images/yoshi_flex_swd_rework.jpg
-[Bloonchipper board]: ../images/dragonclaw_withfix.jpg
-[Bloonchipper servo fix diagram]: ../images/dragonclaw_servo_fix.jpg
+[Dragonclaw board]: ../images/dragonclaw_rev_0.2.jpg
+[Dragonclaw servo fix diagram]: ../images/dragonclaw_servo_fix.jpg
 [Connect USB to Servo]: ../images/servo_v2_with_micro_usb.jpg
 [Connect Yoshi Flex]: ../images/servo_v2_with_yoshi_flex.jpg
 [Another Yoshi Flex image]: ../images/servo_v2_with_yoshi_flex2.jpg
@@ -528,3 +546,9 @@ https://crbug.com/992082.
 [Another image]: ../images/dragonclaw_yoshi_flex_header2.jpg
 [Connect SWD Debugger]: ../images/servo_v2_jtag_header.jpg
 [Dartmonkey board]: ../images/dartmonkey.jpg
+
+<!-- If you make changes to the docs below make sure to regenerate the JPEGs by
+     appending "export/pdf" to the Google Drive link. -->
+
+<!-- https://docs.google.com/drawings/d/1YhOUD-Qf69NUdugT6n0cX7o7CWvb5begcdmJwv7ch6I -->
+[Dragonclaw Rev 0.2 1.8V Rework]: https://github.com/coreboot/chrome-ec/blob/master/docs/images/dragonclaw_rev_0.2_1.8v_load_switch_rework.pdf

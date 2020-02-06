@@ -133,7 +133,6 @@ enum power_off_event_t {
  */
 enum power_on_event_t {
 	POWER_ON_CANCEL,
-	POWER_ON_BY_IN_POWER_GOOD,
 	POWER_ON_BY_AUTO_POWER_ON,
 	POWER_ON_BY_LID_OPEN,
 	POWER_ON_BY_POWER_BUTTON_PRESSED,
@@ -148,19 +147,6 @@ static void request_cold_reset(void)
 {
 	power_request = POWER_REQ_RESET;
 	task_wake(TASK_ID_CHIPSET);
-}
-
-/* AP-requested reset GPIO interrupt handlers */
-static void chipset_reset_request_handler(void)
-{
-	CPRINTS("AP wants reset");
-	chipset_reset(CHIPSET_RESET_AP_REQ);
-}
-DECLARE_DEFERRED(chipset_reset_request_handler);
-
-void chipset_reset_request_interrupt(enum gpio_signal signal)
-{
-	hook_call_deferred(&chipset_reset_request_handler_data, 0);
 }
 
 void chipset_warm_reset_interrupt(enum gpio_signal signal)
@@ -185,19 +171,8 @@ void chipset_warm_reset_interrupt(enum gpio_signal signal)
 				       GPIO_SEL_1P8V | GPIO_OUT_HIGH);
 			gpio_set_flags(GPIO_AP_RST_L, GPIO_INT_BOTH |
 				       GPIO_SEL_1P8V | GPIO_OUT_LOW);
-		} else {
-			/*
-			 * The pull-up rail POWER_GOOD drops.
-			 *
-			 * High-Z both AP_RST_L and PS_HOLD to restore their
-			 * states.
-			 */
-			gpio_set_flags(GPIO_AP_RST_L, GPIO_INT_BOTH |
-				       GPIO_SEL_1P8V);
-			gpio_set_flags(GPIO_PS_HOLD, GPIO_INT_BOTH |
-				       GPIO_SEL_1P8V);
-			ap_rst_overdriven = 0;
 		}
+		/* Ignore the else clause, the pull-up rail drops. */
 	} else {
 		if (ap_rst_overdriven) {
 			/*
@@ -209,11 +184,29 @@ void chipset_warm_reset_interrupt(enum gpio_signal signal)
 			 * POWER_GOOD drop that triggers an interrupt to
 			 * high-Z both AP_RST_L and PS_HOLD.
 			 */
+			CPRINTS("Long warm reset ended, "
+				"cold resetting to restore sanity.");
 			request_cold_reset();
 		}
 		/* If not overdriven, just a normal power-up, do nothing. */
 	}
+	power_signal_interrupt(signal);
+}
 
+void chipset_power_good_interrupt(enum gpio_signal signal)
+{
+	if (!gpio_get_level(GPIO_POWER_GOOD) && ap_rst_overdriven) {
+		/*
+		 * POWER_GOOD is the pull-up rail of WARM_RESET_L.
+		 * When POWER_GOOD drops, high-Z both AP_RST_L and PS_HOLD
+		 * to restore their states.
+		 */
+		gpio_set_flags(GPIO_AP_RST_L, GPIO_INT_BOTH |
+			       GPIO_SEL_1P8V);
+		gpio_set_flags(GPIO_PS_HOLD, GPIO_INT_BOTH |
+			       GPIO_SEL_1P8V);
+		ap_rst_overdriven = 0;
+	}
 	power_signal_interrupt(signal);
 }
 
@@ -411,7 +404,6 @@ enum power_state power_chipset_init(void)
 	uint32_t reset_flags = system_get_reset_flags();
 
 	/* Enable interrupts */
-	gpio_enable_interrupt(GPIO_AP_RST_REQ);
 	gpio_enable_interrupt(GPIO_WARM_RESET_L);
 	gpio_enable_interrupt(GPIO_POWER_GOOD);
 
@@ -563,28 +555,15 @@ static void power_on(void)
  */
 static uint8_t check_for_power_on_event(void)
 {
-	int ap_off_flag;
-
-	ap_off_flag = system_get_reset_flags() & EC_RESET_FLAG_AP_OFF;
-	system_clear_reset_flags(EC_RESET_FLAG_AP_OFF);
-	/* check if system is already ON */
-	if (power_get_signals() & IN_POWER_GOOD) {
-		if (ap_off_flag) {
-			CPRINTS("system is on, but EC_RESET_FLAG_AP_OFF is on");
-			return POWER_ON_CANCEL;
-		}
-		CPRINTS("system is on, thus clear auto_power_on");
-		/* no need to arrange another power on */
-		auto_power_on = 0;
-		return POWER_ON_BY_IN_POWER_GOOD;
-	}
-	if (ap_off_flag) {
-		CPRINTS("EC_RESET_FLAG_AP_OFF is on");
-		power_off();
-		return POWER_ON_CANCEL;
+	if (power_request == POWER_REQ_ON) {
+		power_request = POWER_REQ_NONE;
+		return POWER_ON_BY_POWER_REQ_ON;
 	}
 
-	CPRINTS("POWER_GOOD is not asserted");
+	if (power_request == POWER_REQ_RESET) {
+		power_request = POWER_REQ_NONE;
+		return POWER_ON_BY_POWER_REQ_RESET;
+	}
 
 	/* power on requested at EC startup for recovery */
 	if (auto_power_on) {
@@ -602,16 +581,6 @@ static uint8_t check_for_power_on_event(void)
 	if (power_button_is_pressed())
 		return POWER_ON_BY_POWER_BUTTON_PRESSED;
 
-	if (power_request == POWER_REQ_ON) {
-		power_request = POWER_REQ_NONE;
-		return POWER_ON_BY_POWER_REQ_ON;
-	}
-
-	if (power_request == POWER_REQ_RESET) {
-		power_request = POWER_REQ_NONE;
-		return POWER_ON_BY_POWER_REQ_RESET;
-	}
-
 	return POWER_OFF_CANCEL;
 }
 
@@ -628,12 +597,7 @@ static uint8_t check_for_power_off_event(void)
 	timestamp_t now;
 	int pressed = 0;
 
-	/*
-	 * Check for power button press.
-	 */
-	if (power_button_is_pressed()) {
-		pressed = POWER_OFF_BY_POWER_BUTTON_PRESSED;
-	} else if (power_request == POWER_REQ_OFF) {
+	if (power_request == POWER_REQ_OFF) {
 		power_request = POWER_REQ_NONE;
 		return POWER_OFF_BY_POWER_REQ_OFF;
 	} else if (power_request == POWER_REQ_RESET) {
@@ -643,6 +607,12 @@ static uint8_t check_for_power_off_event(void)
 		 */
 		return POWER_OFF_BY_POWER_REQ_RESET;
 	}
+
+	/*
+	 * Check for power button press.
+	 */
+	if (power_button_is_pressed())
+		pressed = POWER_OFF_BY_POWER_BUTTON_PRESSED;
 
 	now = get_time();
 	if (pressed) {
@@ -723,8 +693,10 @@ void chipset_reset(enum chipset_reset_reason reason)
 	rv = power_wait_signals_timeout(IN_AP_RST_ASSERTED,
 					PMIC_POWER_AP_RESPONSE_TIMEOUT);
 	/* Exception case: PMIC not work as expected, request a cold reset */
-	if (rv != EC_SUCCESS)
+	if (rv != EC_SUCCESS) {
+		CPRINTS("AP refuses to warm reset. Cold resetting.");
 		request_cold_reset();
+	}
 }
 
 /**

@@ -120,7 +120,18 @@ struct usb_spi_config {
 	uint16_t *buffer;
 	usb_uint *rx_ram;
 	usb_uint *tx_ram;
+
+	/* Flags. See USB_SPI_CONFIG_FLAGS_* for definitions */
+	uint32_t flags;
 };
+
+/*
+ * Use when you want the SPI subsystem to be enabled even when the USB SPI
+ * endpoint is not enabled by the host. This means that when this firmware
+ * enables SPI, then the HW SPI module is enabled (i.e. SPE bit is set) until
+ * this firmware disables the SPI module; it ignores the host's enables state.
+ */
+#define USB_SPI_CONFIG_FLAGS_IGNORE_HOST_SIDE_ENABLE BIT(0)
 
 /*
  * Convenience macro for defining a USB SPI bridge driver.
@@ -133,10 +144,14 @@ struct usb_spi_config {
  *
  * ENDPOINT is the index of the USB bulk endpoint used for receiving and
  * transmitting bytes.
+ *
+ * FLAGS encodes different run-time control parameters. See
+ * USB_SPI_CONFIG_FLAGS_* for definitions.
  */
 #define USB_SPI_CONFIG(NAME,						\
 		       INTERFACE,					\
-		       ENDPOINT)					\
+		       ENDPOINT,					\
+		       FLAGS)						\
 	static uint16_t CONCAT2(NAME, _buffer_)[USB_MAX_PACKET_SIZE / 2]; \
 	static usb_uint CONCAT2(NAME, _ep_rx_buffer_)[USB_MAX_PACKET_SIZE / 2] __usb_ram; \
 	static usb_uint CONCAT2(NAME, _ep_tx_buffer_)[USB_MAX_PACKET_SIZE / 2] __usb_ram; \
@@ -155,6 +170,7 @@ struct usb_spi_config {
 		.buffer    = CONCAT2(NAME, _buffer_),			\
 		.rx_ram    = CONCAT2(NAME, _ep_rx_buffer_),		\
 		.tx_ram    = CONCAT2(NAME, _ep_tx_buffer_),		\
+		.flags     = FLAGS,		\
 	};								\
 	const struct usb_interface_descriptor				\
 	USB_IFACE_DESC(INTERFACE) = {					\

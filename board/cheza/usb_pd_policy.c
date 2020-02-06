@@ -21,7 +21,8 @@ int pd_check_vconn_swap(int port)
 	return 1;
 }
 
-__override void pd_execute_data_swap(int port, int data_role)
+__override void pd_execute_data_swap(int port,
+				     enum pd_data_role data_role)
 {
 	int enable = (data_role == PD_ROLE_UFP);
 	int type;
@@ -189,10 +190,12 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 		 */
 		gpio_set_level(GPIO_USBC_MUX_CONF1, port == 1);
 
-		usb_mux_set(port, mf_pref ? TYPEC_MUX_DOCK : TYPEC_MUX_DP,
+		usb_mux_set(port, mf_pref ?
+			    USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED,
 			    USB_SWITCH_CONNECT, pd_get_polarity(port));
 	} else {
-		usb_mux_set(port, mf_pref ? TYPEC_MUX_USB : TYPEC_MUX_NONE,
+		usb_mux_set(port, mf_pref ?
+			    USB_PD_MUX_USB_ENABLED : USB_PD_MUX_NONE,
 			    USB_SWITCH_CONNECT, pd_get_polarity(port));
 	}
 
