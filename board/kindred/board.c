@@ -411,7 +411,7 @@ static void board_gpio_set_pp5000(void)
 
 }
 
-static bool board_is_convertible(void)
+bool board_is_convertible(void)
 {
 	uint8_t sku_id = get_board_sku();
 	/* SKU ID of Kled : 1, 2, 3, 4 */
