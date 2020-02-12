@@ -38,11 +38,11 @@ extern "C" {
 
 #define U2F_POINT_UNCOMPRESSED 0x04 // Uncompressed point format
 
-typedef struct {
+struct u2f_ec_point {
 	uint8_t pointFormat; // Point type
 	uint8_t x[U2F_EC_KEY_SIZE]; // X-value
 	uint8_t y[U2F_EC_KEY_SIZE]; // Y-value
-} U2F_EC_POINT;
+};
 
 // Request Flags.
 
@@ -52,41 +52,41 @@ typedef struct {
 
 // TODO(louiscollard): Add Descriptions.
 
-typedef struct {
+struct u2f_generate_req {
 	uint8_t appId[U2F_APPID_SIZE]; // Application id
 	uint8_t userSecret[U2F_P256_SIZE];
 	uint8_t flags;
-} U2F_GENERATE_REQ;
+};
 
-typedef struct {
-	U2F_EC_POINT pubKey; // Generated public key
+struct u2f_generate_resp {
+	struct u2f_ec_point pubKey; // Generated public key
 	uint8_t keyHandle[U2F_FIXED_KH_SIZE]; // Key handle
-} U2F_GENERATE_RESP;
+};
 
-typedef struct {
+struct u2f_sign_req {
 	uint8_t appId[U2F_APPID_SIZE]; // Application id
 	uint8_t userSecret[U2F_P256_SIZE];
 	uint8_t keyHandle[U2F_FIXED_KH_SIZE]; // Key handle
 	uint8_t hash[U2F_P256_SIZE];
 	uint8_t flags;
-} U2F_SIGN_REQ;
+};
 
-typedef struct {
+struct u2f_sign_resp {
 	uint8_t sig_r[U2F_P256_SIZE]; // Signature
 	uint8_t sig_s[U2F_P256_SIZE]; // Signature
-} U2F_SIGN_RESP;
+};
 
-typedef struct {
+struct u2f_attest_req {
 	uint8_t userSecret[U2F_P256_SIZE];
 	uint8_t format;
 	uint8_t dataLen;
 	uint8_t data[U2F_MAX_ATTEST_SIZE];
-} U2F_ATTEST_REQ;
+};
 
-typedef struct {
+struct u2f_attest_resp {
 	uint8_t sig_r[U2F_P256_SIZE];
 	uint8_t sig_s[U2F_P256_SIZE];
-} U2F_ATTEST_RESP;
+};
 
 // Command status responses
 
