@@ -35,11 +35,11 @@ static void deinterleave64(const uint8_t *in, uint8_t *a, uint8_t *b)
 }
 
 /* (un)wrap w/ the origin dependent KEK. */
-static int wrap_kh(const uint8_t *origin, const uint8_t *in,
-		   uint8_t *out, enum encrypt_mode mode)
+static int wrap_kh(const uint8_t *origin, const uint8_t *in, uint8_t *out,
+		   enum encrypt_mode mode)
 {
 	uint8_t kek[SHA256_DIGEST_SIZE];
-	uint8_t iv[AES_BLOCK_LEN] = {0};
+	uint8_t iv[AES_BLOCK_LEN] = { 0 };
 	int i;
 
 	/* KEK derivation */
@@ -56,7 +56,7 @@ static int wrap_kh(const uint8_t *origin, const uint8_t *in,
 }
 
 static int individual_cert(const p256_int *d, const p256_int *pk_x,
-			   const p256_int *pk_y,  uint8_t *cert, const int n)
+			   const p256_int *pk_y, uint8_t *cert, const int n)
 {
 	p256_int *serial;
 
@@ -75,15 +75,13 @@ int g2f_attestation_cert(uint8_t *buf)
 		return 0;
 
 	/* Note that max length is not currently respected here. */
-	return individual_cert(&d, &pk_x, &pk_y,
-			       buf, G2F_ATTESTATION_CERT_MAX_LEN);
+	return individual_cert(&d, &pk_x, &pk_y, buf,
+			       G2F_ATTESTATION_CERT_MAX_LEN);
 }
 
 /* U2F GENERATE command  */
-static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code,
-				       void *buf,
-				       size_t input_size,
-				       size_t *response_size)
+static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
+				       size_t input_size, size_t *response_size)
 {
 	U2F_GENERATE_REQ *req = buf;
 	U2F_GENERATE_RESP *resp;
@@ -149,7 +147,8 @@ static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code,
 DECLARE_VENDOR_COMMAND(VENDOR_CC_U2F_GENERATE, u2f_generate);
 
 static int verify_kh_pubkey(const uint8_t *key_handle,
-			    const U2F_EC_POINT *public_key, int *matches) {
+			    const U2F_EC_POINT *public_key, int *matches)
+{
 	int rc;
 	U2F_EC_POINT kh_pubkey;
 	p256_int od, opk_x, opk_y;
@@ -163,8 +162,8 @@ static int verify_kh_pubkey(const uint8_t *key_handle,
 	p256_to_bin(&opk_y, kh_pubkey.y);
 	kh_pubkey.pointFormat = U2F_POINT_UNCOMPRESSED;
 
-	*matches =
-		safe_memcmp(&kh_pubkey, public_key, sizeof(U2F_EC_POINT)) == 0;
+	*matches = safe_memcmp(&kh_pubkey, public_key, sizeof(U2F_EC_POINT)) ==
+		   0;
 
 	return EC_SUCCESS;
 }
@@ -216,10 +215,8 @@ static int verify_legacy_kh_owned(const uint8_t *app_id,
 BUILD_ASSERT(sizeof(U2F_SIGN_RESP) <= sizeof(U2F_SIGN_REQ));
 
 /* U2F SIGN command */
-static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code,
-				   void *buf,
-				   size_t input_size,
-				   size_t *response_size)
+static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
+				   size_t input_size, size_t *response_size)
 {
 	const U2F_SIGN_REQ *req = buf;
 	U2F_SIGN_RESP *resp;
@@ -322,7 +319,7 @@ static inline int u2f_attest_verify_reg_resp(const uint8_t *user_secret,
 					     uint8_t data_size,
 					     const uint8_t *data)
 {
-	struct G2F_REGISTER_MSG *msg = (void *) data;
+	struct G2F_REGISTER_MSG *msg = (void *)data;
 	int verified;
 
 	if (data_size != sizeof(struct G2F_REGISTER_MSG))
@@ -348,10 +345,8 @@ static inline int u2f_attest_verify_reg_resp(const uint8_t *user_secret,
 	return VENDOR_RC_SUCCESS;
 }
 
-static int u2f_attest_verify(const uint8_t *user_secret,
-			     uint8_t format,
-			     uint8_t data_size,
-			     const uint8_t *data)
+static int u2f_attest_verify(const uint8_t *user_secret, uint8_t format,
+			     uint8_t data_size, const uint8_t *data)
 {
 	switch (format) {
 	case U2F_ATTEST_FORMAT_REG_RESP:
@@ -372,10 +367,8 @@ static inline size_t u2f_attest_format_size(uint8_t format)
 }
 
 /* U2F ATTEST command */
-static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code,
-				     void *buf,
-				     size_t input_size,
-				     size_t *response_size)
+static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code, void *buf,
+				     size_t input_size, size_t *response_size)
 {
 	const U2F_ATTEST_REQ *req = buf;
 	U2F_ATTEST_RESP *resp;
@@ -401,10 +394,8 @@ static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code,
 	    response_buf_size < sizeof(*resp))
 		return VENDOR_RC_BOGUS_ARGS;
 
-	verify_ret = u2f_attest_verify(req->userSecret,
-				       req->format,
-				       req->dataLen,
-				       req->data);
+	verify_ret = u2f_attest_verify(req->userSecret, req->format,
+				       req->dataLen, req->data);
 
 	if (verify_ret != VENDOR_RC_SUCCESS)
 		return verify_ret;
