@@ -83,8 +83,8 @@ int g2f_attestation_cert(uint8_t *buf)
 static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
 				       size_t input_size, size_t *response_size)
 {
-	U2F_GENERATE_REQ *req = buf;
-	U2F_GENERATE_RESP *resp;
+	struct u2f_generate_req *req = buf;
+	struct u2f_generate_resp *resp;
 
 	/* Origin keypair */
 	uint8_t od_seed[P256_NBYTES];
@@ -100,8 +100,8 @@ static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
 
 	*response_size = 0;
 
-	if (input_size != sizeof(U2F_GENERATE_REQ) ||
-	    response_buf_size < sizeof(U2F_GENERATE_RESP))
+	if (input_size != sizeof(struct u2f_generate_req) ||
+	    response_buf_size < sizeof(struct u2f_generate_resp))
 		return VENDOR_RC_BOGUS_ARGS;
 
 	/* Maybe enforce user presence, w/ optional consume */
@@ -147,10 +147,10 @@ static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
 DECLARE_VENDOR_COMMAND(VENDOR_CC_U2F_GENERATE, u2f_generate);
 
 static int verify_kh_pubkey(const uint8_t *key_handle,
-			    const U2F_EC_POINT *public_key, int *matches)
+			    const struct u2f_ec_point *public_key, int *matches)
 {
 	int rc;
-	U2F_EC_POINT kh_pubkey;
+	struct u2f_ec_point kh_pubkey;
 	p256_int od, opk_x, opk_y;
 
 	rc = u2f_origin_user_keypair(key_handle, &od, &opk_x, &opk_y);
@@ -162,8 +162,8 @@ static int verify_kh_pubkey(const uint8_t *key_handle,
 	p256_to_bin(&opk_y, kh_pubkey.y);
 	kh_pubkey.pointFormat = U2F_POINT_UNCOMPRESSED;
 
-	*matches = safe_memcmp(&kh_pubkey, public_key, sizeof(U2F_EC_POINT)) ==
-		   0;
+	*matches = safe_memcmp(&kh_pubkey, public_key,
+			       sizeof(struct u2f_ec_point)) == 0;
 
 	return EC_SUCCESS;
 }
@@ -212,14 +212,14 @@ static int verify_legacy_kh_owned(const uint8_t *app_id,
 }
 
 /* Below, we depend on the response not being larger than than the request. */
-BUILD_ASSERT(sizeof(U2F_SIGN_RESP) <= sizeof(U2F_SIGN_REQ));
+BUILD_ASSERT(sizeof(struct u2f_sign_resp) <= sizeof(struct u2f_sign_req));
 
 /* U2F SIGN command */
 static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
 				   size_t input_size, size_t *response_size)
 {
-	const U2F_SIGN_REQ *req = buf;
-	U2F_SIGN_RESP *resp;
+	const struct u2f_sign_req *req = buf;
+	struct u2f_sign_resp *resp;
 
 	struct drbg_ctx ctx;
 
@@ -239,7 +239,7 @@ static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
 	/* Response is smaller than request, so no need to check this. */
 	*response_size = 0;
 
-	if (input_size != sizeof(U2F_SIGN_REQ))
+	if (input_size != sizeof(struct u2f_sign_req))
 		return VENDOR_RC_BOGUS_ARGS;
 
 	if (verify_kh_owned(req->userSecret, req->appId, req->keyHandle,
@@ -307,22 +307,22 @@ static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_U2F_SIGN, u2f_sign);
 
-struct G2F_REGISTER_MSG {
+struct g2f_register_msg {
 	uint8_t reserved;
 	uint8_t app_id[U2F_APPID_SIZE];
 	uint8_t challenge[U2F_CHAL_SIZE];
 	uint8_t key_handle[U2F_APPID_SIZE + sizeof(p256_int)];
-	U2F_EC_POINT public_key;
+	struct u2f_ec_point public_key;
 };
 
 static inline int u2f_attest_verify_reg_resp(const uint8_t *user_secret,
 					     uint8_t data_size,
 					     const uint8_t *data)
 {
-	struct G2F_REGISTER_MSG *msg = (void *)data;
+	struct g2f_register_msg *msg = (void *)data;
 	int verified;
 
-	if (data_size != sizeof(struct G2F_REGISTER_MSG))
+	if (data_size != sizeof(struct g2f_register_msg))
 		return VENDOR_RC_NOT_ALLOWED;
 
 	if (msg->reserved != 0)
@@ -360,7 +360,7 @@ static inline size_t u2f_attest_format_size(uint8_t format)
 {
 	switch (format) {
 	case U2F_ATTEST_FORMAT_REG_RESP:
-		return sizeof(struct G2F_REGISTER_MSG);
+		return sizeof(struct g2f_register_msg);
 	default:
 		return 0;
 	}
@@ -370,8 +370,8 @@ static inline size_t u2f_attest_format_size(uint8_t format)
 static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code, void *buf,
 				     size_t input_size, size_t *response_size)
 {
-	const U2F_ATTEST_REQ *req = buf;
-	U2F_ATTEST_RESP *resp;
+	const struct u2f_attest_req *req = buf;
+	struct u2f_attest_resp *resp;
 
 	int verify_ret;
 
@@ -388,9 +388,10 @@ static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code, void *buf,
 
 	*response_size = 0;
 
-	if (input_size < offsetof(U2F_ATTEST_REQ, data) ||
-	    input_size < (offsetof(U2F_ATTEST_REQ, data) + req->dataLen) ||
-	    input_size > sizeof(U2F_ATTEST_REQ) ||
+	if (input_size < offsetof(struct u2f_attest_req, data) ||
+	    input_size <
+		    (offsetof(struct u2f_attest_req, data) + req->dataLen) ||
+	    input_size > sizeof(struct u2f_attest_req) ||
 	    response_buf_size < sizeof(*resp))
 		return VENDOR_RC_BOGUS_ARGS;
 
