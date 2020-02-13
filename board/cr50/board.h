@@ -338,6 +338,12 @@ int board_fwmp_allows_unlock(void);
 int board_vboot_dev_mode_enabled(void);
 void board_reboot_ap(void);
 void board_reboot_ec(void);
+/**
+ * Reboot the EC
+ * @param usec_delay  microseconds to delay in rebooting EC.
+ *                    negative input shall be disregarded.
+ */
+void board_reboot_ec_deferred(int usec_delay);
 void board_closed_loop_reset(void);
 int board_wipe_tpm(int reset_required);
 int board_is_first_factory_boot(void);
@@ -376,18 +382,6 @@ void board_start_ite_sync(void);
 void board_unwedge_i2cs(void);
 
 int board_in_prod_mode(void);
-
-/* GPIO Interrupt handler for GPIO_EC_PACKET_MODE_EN rising edge */
-void ec_comm_packet_mode_en(enum gpio_signal unsed);
-
-/* GPIO Interrupt handler for GPIO_EC_PACKET_MODE_DIS falling edge */
-void ec_comm_packet_mode_dis(enum gpio_signal unsed);
-
-/*
- * Return True if the given UART is in packet mode, in which EC-CR50
- * communication is on-going.
- */
-int ec_comm_is_uart_in_packet_mode(int uart);
 
 #endif /* !__ASSEMBLER__ */
 
