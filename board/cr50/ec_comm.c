@@ -6,6 +6,7 @@
  */
 #include "common.h"
 #include "console.h"
+#include "ec_comm.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "system.h"
@@ -43,6 +44,12 @@ static void ec_comm_init_(void)
 		ec_comm_packet_mode_en(GPIO_EC_PACKET_MODE_EN);
 }
 DECLARE_HOOK(HOOK_INIT, ec_comm_init_, HOOK_PRIO_DEFAULT + 1);
+
+int ec_comm_process_packet(uint8_t ch)
+{
+	/* TODO(b:141143112): Implement this */
+	return 0;
+}
 
 void ec_comm_packet_mode_en(enum gpio_signal unsed)
 {

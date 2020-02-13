@@ -8,7 +8,9 @@
 #include "common.h"
 #include "vb21_struct.h"
 #include "rsa.h"
+#include "sha256.h"
 
+#define CR50_COMM_VERSION               0x00
 #define CR50_COMM_PREAMBLE              0xec
 #define MIN_LENGTH_PREAMBLE             4
 #define CR50_COMM_MAGIC_CHAR0           'E'
@@ -28,11 +30,12 @@
 struct cr50_comm_packet {
 	/* Header */
 	uint16_t magic;	/* CR50_COMM_MAGIC_WORD */
+	uint8_t version;/* Struct version. 4MSB=Major. 4LSB=Minor. */
 	uint8_t crc;	/* checksum computed from all bytes after crc */
-	uint16_t cmd;	/* CR50_COMM_CMD_* if it is sent by EC. */
-			/* CR50_COMM_RESPONSE(X) if it is sent by CR50. */
-	uint8_t size;	/* size of 'data[]' member. */
-	uint8_t data[];	/* payload */
+	uint16_t cmd;	/* CR50_COMM_CMD_* if EC sends */
+			/* CR50_COMM_RESPONSE(X) if CR50 sends. */
+	uint8_t size;	/* Size of 'data[]' member. */
+	uint8_t data[];	/* Payload */
 } __packed;
 
 #define CR50_COMM_MAX_DATA_SIZE         32
@@ -52,8 +55,10 @@ struct cr50_comm_packet {
 #define CR50_COMM_ERROR_CRC             CR50_COMM_RESPONSE(0x03)
 #define CR50_COMM_ERROR_SIZE            CR50_COMM_RESPONSE(0x04)
 #define CR50_COMM_ERROR_TIMEOUT         CR50_COMM_RESPONSE(0x05)
-#define CR50_COMM_ERROR_HASH_MISMATCH   CR50_COMM_RESPONSE(0x06)
-#define CR50_COMM_ERROR_UNDEFINED_CMD   CR50_COMM_RESPONSE(0x07)
+#define CR50_COMM_ERROR_UNDEFINED_CMD   CR50_COMM_RESPONSE(0x06)
+#define CR50_COMM_ERROR_BAD_PAYLOAD     CR50_COMM_RESPONSE(0x07)
+#define CR50_COMM_ERROR_STRUCT_VERSION  CR50_COMM_RESPONSE(0x08)
+#define CR50_COMM_ERROR_NVMEM           CR50_COMM_RESPONSE(0x09)
 
 /*
  * BIT(0) : NO_BOOT flag
@@ -62,9 +67,6 @@ struct cr50_comm_packet {
 enum ec_efs_boot_mode {
 	EC_EFS_BOOT_MODE_NORMAL           = 0x00,
 	EC_EFS_BOOT_MODE_NO_BOOT          = 0x01,
-	EC_EFS_BOOT_MODE_RECOVERY         = 0x02,
-	EC_EFS_BOOT_MODE_NO_BOOT_RECOVERY = 0x03,
-	EC_EFS_BOOT_MODE_RESET            = 0xff,
 
 	/* boot_mode is uint8_t */
 	EC_EFS_BOOT_MODE_LIMIT            = 255,

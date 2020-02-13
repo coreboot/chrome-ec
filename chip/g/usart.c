@@ -3,6 +3,9 @@
  * found in the LICENSE file.
  */
 
+#ifdef BOARD_CR50
+#include "ec_comm.h"
+#endif
 #include "queue.h"
 #include "queue_policies.h"
 #ifdef CONFIG_STREAM_SIGNATURE

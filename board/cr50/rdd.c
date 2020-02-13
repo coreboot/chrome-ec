@@ -6,6 +6,7 @@
 #include "case_closed_debug.h"  /* For ccd_ext_is_enabled() */
 #include "ccd_config.h"
 #include "console.h"
+#include "ec_comm.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"

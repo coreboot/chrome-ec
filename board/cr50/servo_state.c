@@ -6,6 +6,7 @@
  */
 #include "common.h"
 #include "console.h"
+#include "ec_comm.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "uart_bitbang.h"
