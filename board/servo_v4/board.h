@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /*
  * Board Versions:
  * Versions are designated by the PCB color and consist of red, blue, and
@@ -30,6 +32,10 @@
 /* Optional features */
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
+#define CONFIG_PVD
+/* See 'Programmable voltage detector characteristics' in the STM32F072x8 Datasheet.
+   PVD Threshold 1 corresponds to a falling voltage threshold of min:2.09V, max:2.27V. */
+#define PVD_THRESHOLD     (1)
 
 /* USB Configuration */
 #define CONFIG_USB
@@ -103,10 +109,11 @@
 #undef  CONFIG_CHARGE_MANAGER_SAFE_MODE
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_CMD_PD
+#define CONFIG_USB_PD_CUSTOM_PDO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DYNAMIC_SRC_CAP
 #define CONFIG_USB_PD_INTERNAL_COMP
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
 #undef CONFIG_USB_PD_PULLUP

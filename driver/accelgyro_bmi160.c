@@ -506,8 +506,10 @@ static int get_offset(const struct motion_sensor_t *s,
 				  BMI160_OFFSET_ACC70 + i, &val);
 			if (val > 0x7f)
 				val = -256 + val;
-			v[i] = val * BMI160_OFFSET_ACC_MULTI_MG /
-				BMI160_OFFSET_ACC_DIV_MG;
+			v[i] = round_divide(
+				(int64_t)val * BMI160_OFFSET_ACC_MULTI_MG,
+				BMI160_OFFSET_ACC_DIV_MG);
+
 		}
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
@@ -526,8 +528,9 @@ static int get_offset(const struct motion_sensor_t *s,
 			val |= ((val98 >> (2 * i)) & 0x3) << 8;
 			if (val > 0x1ff)
 				val = -1024 + val;
-			v[i] = val * BMI160_OFFSET_GYRO_MULTI_MDS /
-				BMI160_OFFSET_GYRO_DIV_MDS;
+			v[i] = round_divide(
+				(int64_t)val * BMI160_OFFSET_GYRO_MULTI_MDS,
+				BMI160_OFFSET_GYRO_DIV_MDS);
 		}
 		break;
 #ifdef CONFIG_MAG_BMI160_BMM150
@@ -565,8 +568,9 @@ static int set_offset(const struct motion_sensor_t *s,
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
 		for (i = X; i <= Z; i++) {
-			val = v[i] * BMI160_OFFSET_ACC_DIV_MG /
-				BMI160_OFFSET_ACC_MULTI_MG;
+			val = round_divide(
+				(int64_t)v[i] * BMI160_OFFSET_ACC_DIV_MG,
+				BMI160_OFFSET_ACC_MULTI_MG);
 			if (val > 127)
 				val = 127;
 			if (val < -128)
@@ -582,8 +586,9 @@ static int set_offset(const struct motion_sensor_t *s,
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
 		for (i = X; i <= Z; i++) {
-			val = v[i] * BMI160_OFFSET_GYRO_DIV_MDS /
-				BMI160_OFFSET_GYRO_MULTI_MDS;
+			val = round_divide(
+				(int64_t)v[i] * BMI160_OFFSET_GYRO_DIV_MDS,
+				BMI160_OFFSET_GYRO_MULTI_MDS);
 			if (val > 511)
 				val = 511;
 			if (val < -512)
@@ -772,7 +777,7 @@ int manage_activity(const struct motion_sensor_t *s,
 		break;
 	}
 #endif
-#ifdef CONFIG_GESTURE_SENSOR_BATTERY_TAP
+#ifdef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
 	case MOTIONSENSE_ACTIVITY_DOUBLE_TAP: {
 		int tmp;
 		/* Set double tap interrupt */
@@ -1059,7 +1064,7 @@ static int config_interrupt(const struct motion_sensor_t *s)
 	raw_write8(s->port, s->i2c_spi_addr_flags,
 		   BMI160_CMD_REG, BMI160_CMD_INT_RESET);
 
-#ifdef CONFIG_GESTURE_SENSOR_BATTERY_TAP
+#ifdef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
 	raw_write8(s->port, s->i2c_spi_addr_flags,
 		   BMI160_INT_TAP_0,
 		   BMI160_TAP_DUR(s, CONFIG_GESTURE_TAP_MAX_INTERSTICE_T));
@@ -1099,7 +1104,7 @@ static int config_interrupt(const struct motion_sensor_t *s)
 #ifdef CONFIG_GESTURE_SIGMO
 	tmp |= BMI160_INT_ANYMOTION;
 #endif
-#ifdef CONFIG_GESTURE_SENSOR_BATTERY_TAP
+#ifdef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
 	tmp |= BMI160_INT_D_TAP;
 #endif
 #ifdef CONFIG_BMI160_ORIENTATION_SENSOR
@@ -1207,7 +1212,7 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 		if (rv)
 			return rv;
 
-#ifdef CONFIG_GESTURE_SENSOR_BATTERY_TAP
+#ifdef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
 		if (interrupt & BMI160_D_TAP_INT)
 			*event |= TASK_EVENT_MOTION_ACTIVITY_INTERRUPT(
 					MOTIONSENSE_ACTIVITY_DOUBLE_TAP);
@@ -1268,6 +1273,11 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 	return EC_SUCCESS;
 }
 
+static int read_temp(const struct motion_sensor_t *s, int *temp_ptr)
+{
+	return bmi160_get_sensor_temp(s - motion_sensors, temp_ptr);
+}
+
 static int init(const struct motion_sensor_t *s)
 {
 	int ret = 0, tmp, i;
@@ -1311,7 +1321,7 @@ static int init(const struct motion_sensor_t *s)
 		data->disabled_activities |=
 			1 << MOTIONSENSE_ACTIVITY_SIG_MOTION;
 #endif
-#ifdef CONFIG_GESTURE_SENSOR_BATTERY_TAP
+#ifdef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
 		data->disabled_activities |=
 			1 << MOTIONSENSE_ACTIVITY_DOUBLE_TAP;
 #endif
@@ -1449,6 +1459,7 @@ const struct accelgyro_drv bmi160_drv = {
 	.set_scale = set_scale,
 	.get_offset = get_offset,
 	.perform_calib = perform_calib,
+	.read_temp = read_temp,
 #ifdef CONFIG_ACCEL_INTERRUPTS
 	.irq_handler = irq_handler,
 #endif

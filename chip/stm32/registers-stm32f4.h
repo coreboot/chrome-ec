@@ -521,10 +521,19 @@
 #define STM32_RCC_APB2RSTR              REG32(STM32_RCC_BASE + 0x24)
 
 #define STM32_RCC_AHB1ENR               REG32(STM32_RCC_BASE + 0x30)
+#define STM32_RCC_AHB1ENR_GPIO_PORTA	BIT(0)
+#define STM32_RCC_AHB1ENR_GPIO_PORTB	BIT(1)
+#define STM32_RCC_AHB1ENR_GPIO_PORTC	BIT(2)
+#define STM32_RCC_AHB1ENR_GPIO_PORTD	BIT(3)
+#define STM32_RCC_AHB1ENR_GPIO_PORTE	BIT(4)
+#define STM32_RCC_AHB1ENR_GPIO_PORTF	BIT(5)
+#define STM32_RCC_AHB1ENR_GPIO_PORTG	BIT(6)
+#define STM32_RCC_AHB1ENR_GPIO_PORTH	BIT(7)
 #define STM32_RCC_AHB1ENR_GPIOMASK	(0xff << 0)
 #define STM32_RCC_AHB1ENR_BKPSRAMEN	BIT(18)
 #define STM32_RCC_AHB1ENR_DMA1EN	BIT(21)
 #define STM32_RCC_AHB1ENR_DMA2EN	BIT(22)
+
 /* TODO(nsanders): normalize naming.*/
 #define STM32_RCC_HB1_DMA1		BIT(21)
 #define STM32_RCC_HB1_DMA2		BIT(22)
@@ -560,6 +569,8 @@
 #define STM32_RCC_CSR_LSION		BIT(0)
 #define STM32_RCC_CSR_LSIRDY		BIT(1)
 
+#define STM32_RCC_PB2_TIM1		BIT(0)
+#define STM32_RCC_PB2_TIM8		BIT(1)
 #define STM32_RCC_PB2_TIM9		BIT(16)
 #define STM32_RCC_PB2_TIM10		BIT(17)
 #define STM32_RCC_PB2_TIM11		BIT(18)
@@ -576,23 +587,24 @@
 #define STM32_SYSCFG_CFGR               REG32(STM32_SYSCFG_BASE + 0x2C)
 
 
-/* Peripheral bits for RCC_APB/AHB and DBGMCU regs */
+/* Peripheral bits for RCC_APB/AHB regs */
 #define STM32_RCC_PB2_USART1		BIT(4)
 
 /* Reset causes definitions */
 /* Reset causes in RCC CSR register */
 #define STM32_RCC_RESET_CAUSE STM32_RCC_CSR
-#define  RESET_CAUSE_WDG                0x60000000
-#define  RESET_CAUSE_SFT                0x10000000
-#define  RESET_CAUSE_POR                0x08000000
-#define  RESET_CAUSE_PIN                0x04000000
-#define  RESET_CAUSE_OTHER              0xfe000000
-#define  RESET_CAUSE_RMVF               0x01000000
+#define  RESET_CAUSE_WDG                (BIT(30)|BIT(29))
+#define  RESET_CAUSE_SFT                BIT(28)
+#define  RESET_CAUSE_POR                BIT(27)
+#define  RESET_CAUSE_PIN                BIT(26)
+#define  RESET_CAUSE_OTHER              (BIT(31)|BIT(30)|BIT(29)|BIT(28)| \
+					 BIT(27)|BIT(26)|BIT(25))
+#define  RESET_CAUSE_RMVF                BIT(24)
 /* Power cause in PWR CSR register */
 #define STM32_PWR_RESET_CAUSE STM32_PWR_CSR
+#define  RESET_CAUSE_SBF                BIT(1)
 #define STM32_PWR_RESET_CAUSE_CLR STM32_PWR_CR
-#define  RESET_CAUSE_SBF                0x00000002
-#define  RESET_CAUSE_SBF_CLR            0x00000004
+#define  RESET_CAUSE_SBF_CLR            BIT(3)
 
 /* --- Watchdogs --- */
 
@@ -680,9 +692,43 @@ typedef volatile struct stm32_spi_regs stm32_spi_regs_t;
 #define STM32_SPI_SR_BSY		BIT(7)
 #define STM32_SPI_SR_FRLVL		(3 << 9)
 #define STM32_SPI_SR_FTLVL		(3 << 11)
+
 /* --- Debug --- */
+
+#define  STM32_DBGMCU_CR_SLEEP                      BIT(0)
+#define  STM32_DBGMCU_CR_STOP                       BIT(1)
+#define  STM32_DBGMCU_CR_STBY                       BIT(2)
+#define  STM32_DBGMCU_CR_TRACE_MASK                 (BIT(5)|BIT(6)|BIT(7))
+#define   STM32_DBGMCU_CR_TRACE_EN                   BIT(5)
+#define   STM32_DBGMCU_CR_TRACE_MODE_ASYNC           0
+#define   STM32_DBGMCU_CR_TRACE_MODE_SYNC1           BIT(6)
+#define   STM32_DBGMCU_CR_TRACE_MODE_SYNC2           BIT(7)
+#define   STM32_DBGMCU_CR_TRACE_MODE_SYNC4           (BIT(6)|BIT(7))
 #define STM32_DBGMCU_APB1FZ         REG32(STM32_DBGMCU_BASE + 0x08)
+#define  STM32_DBGMCU_APB1FZ_TIM2                   BIT(0)
+#define  STM32_DBGMCU_APB1FZ_TIM3                   BIT(1)
+#define  STM32_DBGMCU_APB1FZ_TIM4                   BIT(2)
+#define  STM32_DBGMCU_APB1FZ_TIM5                   BIT(3)
+#define  STM32_DBGMCU_APB1FZ_TIM6                   BIT(4)
+#define  STM32_DBGMCU_APB1FZ_TIM7                   BIT(5)
+#define  STM32_DBGMCU_APB1FZ_TIM12                  BIT(6)
+#define  STM32_DBGMCU_APB1FZ_TIM13                  BIT(7)
+#define  STM32_DBGMCU_APB1FZ_TIM14                  BIT(8)
+#define  STM32_DBGMCU_APB1FZ_RTC                    BIT(10)
+#define  STM32_DBGMCU_APB1FZ_WWDG                   BIT(11)
+#define  STM32_DBGMCU_APB1FZ_IWDG                   BIT(12)
+#define  STM32_DBGMCU_APB1FZ_I2C1_SMBUS_TIMEOUT     BIT(21)
+#define  STM32_DBGMCU_APB1FZ_I2C2_SMBUS_TIMEOUT     BIT(22)
+#define  STM32_DBGMCU_APB1FZ_I2C3_SMBUS_TIMEOUT     BIT(23)
+#define  STM32_DBGMCU_APB1FZ_I2CFMP_SMBUS_TIMEOUT   BIT(24)
+#define  STM32_DBGMCU_APB1FZ_CAN1                   BIT(25)
+#define  STM32_DBGMCU_APB1FZ_CAN2                   BIT(26)
 #define STM32_DBGMCU_APB2FZ         REG32(STM32_DBGMCU_BASE + 0x0C)
+#define  STM32_DBGMCU_APB2FZ_TIM1                   BIT(0)
+#define  STM32_DBGMCU_APB2FZ_TIM8                   BIT(1)
+#define  STM32_DBGMCU_APB2FZ_TIM9                   BIT(16)
+#define  STM32_DBGMCU_APB2FZ_TIM10                  BIT(17)
+#define  STM32_DBGMCU_APB2FZ_TIM11                  BIT(18)
 
 /* --- Flash --- */
 #define STM32_FLASH_ACR             REG32(STM32_FLASH_REGS_BASE + 0x00)

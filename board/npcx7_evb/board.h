@@ -28,7 +28,8 @@
 #define CONFIG_I2C
 /* Features of eSPI */
 #define CONFIG_HOSTCMD_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS /* Use VW signals instead of GPIOs */
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 
 /* Optional features */
 #define CONFIG_ENABLE_JTAG_SELECTION
@@ -78,7 +79,9 @@
 #define CONFIG_HIBERNATE_PSL /* Use PSL (Power Switch Logic) for hibernate */
 #define CONFIG_CLOCK_SRC_EXTERNAL /* Use external 32kHz OSC as LFCLK source */
 #if defined(CHIP_VARIANT_NPCX7M7WB) || defined(CHIP_VARIANT_NPCX7M7WC)
-#define CONFIG_WAKE_ON_VOICE /* Use Audio front-end for Wake-on-Voice */
+#define CONFIG_AUDIO_CODEC
+#define CONFIG_AUDIO_CODEC_DMIC
+#define CONFIG_AUDIO_CODEC_I2S_RX /* Use Audio front-end for Wake-on-Voice */
 #endif
 #undef CONFIG_FANS /* Remove fan application */
 #define CONFIG_FANS 0

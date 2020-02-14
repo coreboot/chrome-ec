@@ -27,11 +27,6 @@
 #error Must define a VARIANT_KUKUI_BATTERY
 #endif /* VARIANT_KUKUI_BATTERY */
 
-#ifndef VARIANT_KUKUI_BATTERY_SMART
-#define CONFIG_I2C_VIRTUAL_BATTERY
-#define CONFIG_I2C_PASSTHRU_RESTRICTED
-#endif
-
 /*
  * Variant charger defines, pick one:
  * VARIANT_KUKUI_CHARGER_MT6370
@@ -47,12 +42,19 @@
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+/*
+ * The Maximum input voltage is 13.5V, need another 5% tolerance.
+ * 12.85V * 1.05 = 13.5V
+ */
+#define PD_MAX_VOLTAGE_MV 12850
+#define CONFIG_USB_PD_PREFER_MV
 #elif defined(VARIANT_KUKUI_CHARGER_ISL9238)
 #define CONFIG_CHARGER_ISL9238
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20 /* BOARD_RS1 */
 #define CONFIG_CHARGER_SENSE_RESISTOR 10 /* BOARD_RS2 */
 #define CONFIG_CHARGER_OTG
 #define CONFIG_CHARGE_RAMP_HW
+#define PD_MAX_VOLTAGE_MV 20000
 #else
 #error Must define a VARIANT_KUKUI_CHARGER
 #endif /* VARIANT_KUKUI_CHARGER */
@@ -70,6 +72,11 @@
 #define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
 #define DEDICATED_CHARGE_PORT 1
 #endif /* VARIANT_KUKUI_POGO_DOCK */
+
+#ifdef VARIANT_KUKUI_POGO_KEYBOARD
+#define CONFIG_DETACHABLE_BASE
+#define CONFIG_BASE_ATTACHED_SWITCH
+#endif
 
 /*
  * Define this flag if board controls dp mux via gpio pins USB_C0_DP_OE_L and
@@ -89,6 +96,8 @@
 #undef  CONFIG_HIBERNATE
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
+#define CONFIG_I2C_VIRTUAL_BATTERY
+#define CONFIG_I2C_PASSTHRU_RESTRICTED
 #define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_POWER_COMMON
@@ -153,7 +162,6 @@
 
 /* To be able to indicate the device is in tablet mode. */
 #define CONFIG_TABLET_MODE
-#define CONFIG_TABLET_MODE_SWITCH
 #define GPIO_LID_OPEN GPIO_HALL_INT_L
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
@@ -163,6 +171,10 @@
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 #endif /* VARIANT_KUKUI_NO_SENSORS */
 
+#ifndef VARIANT_KUKUI_TABLET_PWRBTN
+#define POWERBTN_BOOT_DELAY 0
+#endif
+
 /* USB PD config */
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_USB_POWER_DELIVERY
@@ -170,7 +182,7 @@
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #define CONFIG_USB_PD_5V_EN_CUSTOM
@@ -184,15 +196,12 @@
 #define CONFIG_BATTERY_PRESENT_CUSTOM
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 
-#define PD_OPERATING_POWER_MW 15000
 #define PD_MAX_POWER_MW       ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
+#ifdef BOARD_KODAMA
+#define PD_MAX_CURRENT_MA     2000
+#else
 #define PD_MAX_CURRENT_MA     3000
-
-/*
- * The Maximum input voltage is 13.5V, need another 5% tolerance.
- * 12.85V * 1.05 = 13.5V
- */
-#define PD_MAX_VOLTAGE_MV     12850
+#endif
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 50000  /* us */
@@ -241,6 +250,10 @@
 #ifdef VARIANT_KUKUI_DP_MUX_GPIO
 void board_set_dp_mux_control(int output_enable, int polarity);
 #endif /* VARIANT_KUKUI_DP_MUX_GPIO */
+
+/* If POGO pin is providing power. */
+int kukui_pogo_extpower_present(void);
+
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __CROS_EC_BASEBOARD_H */

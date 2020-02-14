@@ -536,8 +536,7 @@ extern "C" {
 	(EC_LPC_STATUS_FROM_HOST | EC_LPC_STATUS_PROCESSING)
 
 /*
- * Host command response codes (16-bit).  Note that response codes should be
- * stored in a uint16_t rather than directly in a value of this type.
+ * Host command response codes (16-bit).
  */
 enum ec_status {
 	EC_RES_SUCCESS = 0,
@@ -561,7 +560,10 @@ enum ec_status {
 	EC_RES_INVALID_HEADER_CRC = 18,      /* Header CRC invalid */
 	EC_RES_INVALID_DATA_CRC = 19,        /* Data CRC invalid */
 	EC_RES_DUP_UNAVAILABLE = 20,         /* Can't resend response */
-};
+
+	EC_RES_MAX = UINT16_MAX		/**< Force enum to be 16 bits */
+} __packed;
+BUILD_ASSERT(sizeof(enum ec_status) == sizeof(uint16_t));
 
 /*
  * Host event codes.  Note these are 1-based, not 0-based, because ACPI query
@@ -1783,6 +1785,48 @@ struct ec_response_rand_num {
 
 BUILD_ASSERT(sizeof(struct ec_response_rand_num) == 0);
 
+/**
+ * Get information about the key used to sign the RW firmware.
+ * For more details on the fields, see "struct vb21_packed_key".
+ */
+#define EC_CMD_RWSIG_INFO 0x001B
+#define EC_VER_RWSIG_INFO 0
+
+#define VBOOT2_KEY_ID_BYTES 20
+
+#ifdef CHROMIUM_EC
+/* Don't force external projects to depend on the vboot headers. */
+#include "vb21_struct.h"
+BUILD_ASSERT(sizeof(struct vb2_id) == VBOOT2_KEY_ID_BYTES);
+#endif
+
+struct ec_response_rwsig_info {
+	/**
+	 * Signature algorithm used by the key
+	 * (enum vb2_signature_algorithm).
+	 */
+	uint16_t sig_alg;
+
+	/**
+	 * Hash digest algorithm used with the key
+	 * (enum vb2_hash_algorithm).
+	 */
+	uint16_t hash_alg;
+
+	/** Key version. */
+	uint32_t key_version;
+
+	/** Key ID (struct vb2_id). */
+	uint8_t key_id[VBOOT2_KEY_ID_BYTES];
+
+	uint8_t key_is_valid;
+
+	/** Alignment padding. */
+	uint8_t reserved[3];
+} __ec_align4;
+
+BUILD_ASSERT(sizeof(struct ec_response_rwsig_info) == 32);
+
 /*****************************************************************************/
 /* PWM commands */
 
@@ -2773,6 +2817,11 @@ struct ec_params_motion_sense {
 	};
 } __ec_todo_packed;
 
+enum motion_sense_cmd_info_flags {
+	/* The sensor supports online calibration */
+	MOTION_SENSE_CMD_INFO_FLAG_ONLINE_CALIB = BIT(0),
+};
+
 struct ec_response_motion_sense {
 	union {
 		/* Used for MOTIONSENSE_CMD_DUMP */
@@ -2822,6 +2871,33 @@ struct ec_response_motion_sense {
 			/* Max number of sensor events that could be in fifo */
 			uint32_t fifo_max_event_count;
 		} info_3;
+
+		/* Used for MOTIONSENSE_CMD_INFO version 4 */
+		struct __ec_align4 {
+			/* Should be element of enum motionsensor_type. */
+			uint8_t type;
+
+			/* Should be element of enum motionsensor_location. */
+			uint8_t location;
+
+			/* Should be element of enum motionsensor_chip. */
+			uint8_t chip;
+
+			/* Minimum sensor sampling frequency */
+			uint32_t min_frequency;
+
+			/* Maximum sensor sampling frequency */
+			uint32_t max_frequency;
+
+			/* Max number of sensor events that could be in fifo */
+			uint32_t fifo_max_event_count;
+
+			/*
+			 * Should be elements of
+			 * enum motion_sense_cmd_info_flags
+			 */
+			uint32_t flags;
+		} info_4;
 
 		/* Used for MOTIONSENSE_CMD_DATA */
 		struct ec_response_motion_sensor_data data;
@@ -4605,6 +4681,9 @@ struct ec_response_sb_fw_update {
  * Entering Verified Boot Mode Command
  * Default mode is VBOOT_MODE_NORMAL if EC did not receive this command.
  * Valid Modes are: normal, developer, and recovery.
+ *
+ * EC no longer needs to know what mode vboot has entered,
+ * so this command is deprecated.  (See chromium:1014379.)
  */
 #define EC_CMD_ENTERING_MODE 0x00B6
 
@@ -5139,7 +5218,7 @@ struct ec_params_usb_pd_control {
 #define PD_CTRL_RESP_ROLE_DR_POWER      BIT(3) /* Partner is dualrole power */
 #define PD_CTRL_RESP_ROLE_DR_DATA       BIT(4) /* Partner is dualrole data */
 #define PD_CTRL_RESP_ROLE_USB_COMM      BIT(5) /* Partner USB comm capable */
-#define PD_CTRL_RESP_ROLE_EXT_POWERED   BIT(6) /* Partner externally powerd */
+#define PD_CTRL_RESP_ROLE_UNCONSTRAINED BIT(6) /* Partner unconstrained power */
 
 struct ec_response_usb_pd_control {
 	uint8_t enabled;
@@ -5160,19 +5239,29 @@ enum pd_cc_states {
 	PD_CC_NONE = 0,			/* No port partner attached */
 
 	/* From DFP perspective */
+	PD_CC_UFP_NONE = 1,		/* No UFP accessory connected */
 	PD_CC_UFP_AUDIO_ACC = 2,	/* UFP Audio accessory connected */
 	PD_CC_UFP_DEBUG_ACC = 3,	/* UFP Debug accessory connected */
 	PD_CC_UFP_ATTACHED = 4,		/* Plain UFP attached */
 
 	/* From UFP perspective */
-	PD_CC_DFP_DEBUG_ACC = 6,	/* DFP debug accessory connected */
 	PD_CC_DFP_ATTACHED = 5,		/* Plain DFP attached */
+	PD_CC_DFP_DEBUG_ACC = 6,	/* DFP debug accessory connected */
 };
 
-#define USBC_CABLE_TYPE_UNDEF   0 /* Undefined */
-#define USBC_CABLE_TYPE_PASSIVE 3 /* Passive cable attached */
-#define USBC_CABLE_TYPE_ACTIVE  4 /* Active cable attached */
+/* Active/Passive Cable */
+#define USB_PD_CTRL_ACTIVE_CABLE        BIT(0)
+/* Optical/Non-optical cable */
+#define USB_PD_CTRL_OPTICAL_CABLE       BIT(1)
+/* 3rd Gen TBT device (or AMA)/2nd gen tbt Adapter */
+#define USB_PD_CTRL_TBT_LEGACY_ADAPTER  BIT(2)
+/* Active Link Uni-Direction */
+#define USB_PD_CTRL_ACTIVE_LINK_UNIDIR  BIT(3)
 
+/*
+ * Underdevelopement :
+ * Please remove this tag if using _v2 outside platform/ec
+ */
 struct ec_response_usb_pd_control_v2 {
 	uint8_t enabled;
 	uint8_t role;
@@ -5180,7 +5269,10 @@ struct ec_response_usb_pd_control_v2 {
 	char state[32];
 	uint8_t cc_state;	/* enum pd_cc_states representing cc state */
 	uint8_t dp_mode;	/* Current DP pin mode (MODE_DP_PIN_[A-E]) */
-	uint8_t cable_type;	/* USBC_CABLE_TYPE_*cable_type */
+	uint8_t reserved;	/* Reserved for future use */
+	uint8_t control_flags;	/* USB_PD_CTRL_*flags */
+	uint8_t cable_speed;	/* TBT_SS_* cable speed */
+	uint8_t cable_gen;	/* TBT_GEN3_* cable rounded support */
 } __ec_align1;
 
 #define EC_CMD_USB_PD_PORTS 0x0102
@@ -5301,7 +5393,7 @@ struct ec_params_usb_pd_discovery_entry {
 enum usb_pd_override_ports {
 	OVERRIDE_DONT_CHARGE = -2,
 	OVERRIDE_OFF = -1,
-	/* [0, CONFIG_USB_PD_PORT_COUNT): Port# */
+	/* [0, CONFIG_USB_PD_PORT_MAX_COUNT): Port# */
 };
 
 struct ec_params_charge_port_override {
@@ -5462,12 +5554,18 @@ struct ec_params_usb_pd_mux_info {
 } __ec_align1;
 
 /* Flags representing mux state */
-#define USB_PD_MUX_USB_ENABLED       BIT(0) /* USB connected */
-#define USB_PD_MUX_DP_ENABLED        BIT(1) /* DP connected */
-#define USB_PD_MUX_POLARITY_INVERTED BIT(2) /* CC line Polarity inverted */
-#define USB_PD_MUX_HPD_IRQ           BIT(3) /* HPD IRQ is asserted */
-#define USB_PD_MUX_HPD_LVL           BIT(4) /* HPD level is asserted */
-#define USB_PD_MUX_SAFE_MODE         BIT(5) /* DP is in safe mode */
+#define USB_PD_MUX_NONE               0      /* Open switch */
+#define USB_PD_MUX_USB_ENABLED        BIT(0) /* USB connected */
+#define USB_PD_MUX_DP_ENABLED         BIT(1) /* DP connected */
+#define USB_PD_MUX_POLARITY_INVERTED  BIT(2) /* CC line Polarity inverted */
+#define USB_PD_MUX_HPD_IRQ            BIT(3) /* HPD IRQ is asserted */
+#define USB_PD_MUX_HPD_LVL            BIT(4) /* HPD level is asserted */
+#define USB_PD_MUX_SAFE_MODE          BIT(5) /* DP is in safe mode */
+#define USB_PD_MUX_TBT_COMPAT_ENABLED BIT(6) /* TBT compat enabled */
+#define USB_PD_MUX_USB4_ENABLED       BIT(7) /* USB4 enabled */
+
+/* USB-C Dock connected */
+#define USB_PD_MUX_DOCK		(USB_PD_MUX_USB_ENABLED | USB_PD_MUX_DP_ENABLED)
 
 struct ec_response_usb_pd_mux_info {
 	uint8_t flags; /* USB_PD_MUX_*-encoded USB mux state */
@@ -5554,6 +5652,7 @@ enum cbi_data_tag {
 	CBI_TAG_DRAM_PART_NUM = 3, /* variable length ascii, nul terminated. */
 	CBI_TAG_OEM_NAME = 4,      /* variable length ascii, nul terminated. */
 	CBI_TAG_MODEL_ID = 5,      /* uint32_t or smaller */
+	CBI_TAG_FW_CONFIG = 6,     /* uint32_t bit field */
 	CBI_TAG_COUNT,
 };
 
@@ -5760,6 +5859,86 @@ struct ec_response_locate_chip {
 		struct ec_i2c_info i2c_info;
 	};
 } __ec_align2;
+
+/*
+ * Reboot AP on G3
+ *
+ * This command is used for validation purpose, where the AP needs to be
+ * returned back to S0 state from G3 state without using the servo to trigger
+ * wake events.For this,there is no request or response struct.
+ *
+ * Order of command usage:
+ * ectool reboot_ap_on_g3 && shutdown -h now
+ */
+#define EC_CMD_REBOOT_AP_ON_G3 0x0127
+
+/*****************************************************************************/
+/* Get PD port capabilities
+ *
+ * Returns the following static *capabilities* of the given port:
+ * 1) Power role: source, sink, or dual. It is not anticipated that
+ *    future CrOS devices would ever be only a source, so the options are
+ *    sink or dual.
+ * 2) Try-power role: source, sink, or none (practically speaking, I don't
+ *    believe any CrOS device would support Try.SNK, so this would be source
+ *    or none).
+ * 3) Data role: dfp, ufp, or dual. This will probably only be DFP or dual
+ *    for CrOS devices.
+ */
+#define EC_CMD_GET_PD_PORT_CAPS 0x0128
+
+enum ec_pd_power_role_caps {
+	EC_PD_POWER_ROLE_SOURCE = 0,
+	EC_PD_POWER_ROLE_SINK = 1,
+	EC_PD_POWER_ROLE_DUAL = 2,
+};
+
+enum ec_pd_try_power_role_caps {
+	EC_PD_TRY_POWER_ROLE_NONE = 0,
+	EC_PD_TRY_POWER_ROLE_SINK = 1,
+	EC_PD_TRY_POWER_ROLE_SOURCE = 2,
+};
+
+enum ec_pd_data_role_caps {
+	EC_PD_DATA_ROLE_DFP = 0,
+	EC_PD_DATA_ROLE_UFP = 1,
+	EC_PD_DATA_ROLE_DUAL = 2,
+};
+
+/* From: power_manager/power_supply_properties.proto */
+enum ec_pd_port_location {
+	/* The location of the port is unknown, or there's only one port. */
+	EC_PD_PORT_LOCATION_UNKNOWN = 0,
+
+	/*
+	 * Various positions on the device. The first word describes the side of
+	 * the device where the port is located while the second clarifies the
+	 * position. For example, LEFT_BACK means the farthest-back port on the
+	 * left side, while BACK_LEFT means the leftmost port on the back of the
+	 * device.
+	 */
+	EC_PD_PORT_LOCATION_LEFT        = 1,
+	EC_PD_PORT_LOCATION_RIGHT       = 2,
+	EC_PD_PORT_LOCATION_BACK        = 3,
+	EC_PD_PORT_LOCATION_FRONT       = 4,
+	EC_PD_PORT_LOCATION_LEFT_FRONT  = 5,
+	EC_PD_PORT_LOCATION_LEFT_BACK   = 6,
+	EC_PD_PORT_LOCATION_RIGHT_FRONT = 7,
+	EC_PD_PORT_LOCATION_RIGHT_BACK  = 8,
+	EC_PD_PORT_LOCATION_BACK_LEFT   = 9,
+	EC_PD_PORT_LOCATION_BACK_RIGHT  = 10,
+};
+
+struct ec_params_get_pd_port_caps {
+	uint8_t port;		/* Which port to interrogate */
+} __ec_align1;
+
+struct ec_response_get_pd_port_caps {
+	uint8_t pd_power_role_cap;	/* enum ec_pd_power_role_caps */
+	uint8_t pd_try_power_role_cap;	/* enum ec_pd_try_power_role_caps */
+	uint8_t pd_data_role_cap;	/* enum ec_pd_data_role_caps */
+	uint8_t pd_port_location;	/* enum ec_pd_port_location */
+} __ec_align1;
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

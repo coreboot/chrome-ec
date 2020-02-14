@@ -20,9 +20,34 @@
 #define BATTERY_NO_RESPONSE_TIMEOUT	(1000*MSEC)
 
 static int fake_state_of_charge = -1;
+static int fake_temperature = -1;
+
+static int battery_supports_pec(void)
+{
+	static int supports_pec = -1;
+
+	if (!IS_ENABLED(CONFIG_SMBUS_PEC))
+		return 0;
+
+	if (supports_pec < 0) {
+		int spec_info;
+		int rv = i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR_FLAGS,
+				    SB_SPECIFICATION_INFO, &spec_info);
+		/* failed, assuming not support and try again later */
+		if (rv)
+			return 0;
+
+		supports_pec = (BATTERY_SPEC_VERSION(spec_info) ==
+				BATTERY_SPEC_VER_1_1_WITH_PEC);
+		CPRINTS("battery supports pec: %d", supports_pec);
+	}
+	return supports_pec;
+}
 
 test_mockable int sb_read(int cmd, int *param)
 {
+	uint16_t addr_flags = BATTERY_ADDR_FLAGS;
+
 #ifdef CONFIG_BATTERY_CUT_OFF
 	/*
 	 * Some batteries would wake up after cut-off if we talk to it.
@@ -30,13 +55,16 @@ test_mockable int sb_read(int cmd, int *param)
 	if (battery_is_cut_off())
 		return EC_RES_ACCESS_DENIED;
 #endif
+	if (battery_supports_pec())
+		addr_flags |= I2C_FLAG_PEC;
 
-	return i2c_read16(I2C_PORT_BATTERY, BATTERY_ADDR_FLAGS,
-			  cmd, param);
+	return i2c_read16(I2C_PORT_BATTERY, addr_flags, cmd, param);
 }
 
 test_mockable int sb_write(int cmd, int param)
 {
+	uint16_t addr_flags = BATTERY_ADDR_FLAGS;
+
 #ifdef CONFIG_BATTERY_CUT_OFF
 	/*
 	 * Some batteries would wake up after cut-off if we talk to it.
@@ -44,13 +72,16 @@ test_mockable int sb_write(int cmd, int param)
 	if (battery_is_cut_off())
 		return EC_RES_ACCESS_DENIED;
 #endif
+	if (battery_supports_pec())
+		addr_flags |= I2C_FLAG_PEC;
 
-	return i2c_write16(I2C_PORT_BATTERY, BATTERY_ADDR_FLAGS,
-			   cmd, param);
+	return i2c_write16(I2C_PORT_BATTERY, addr_flags, cmd, param);
 }
 
 int sb_read_string(int offset, uint8_t *data, int len)
 {
+	uint16_t addr_flags = BATTERY_ADDR_FLAGS;
+
 #ifdef CONFIG_BATTERY_CUT_OFF
 	/*
 	 * Some batteries would wake up after cut-off if we talk to it.
@@ -58,9 +89,10 @@ int sb_read_string(int offset, uint8_t *data, int len)
 	if (battery_is_cut_off())
 		return EC_RES_ACCESS_DENIED;
 #endif
+	if (battery_supports_pec())
+		addr_flags |= I2C_FLAG_PEC;
 
-	return i2c_read_string(I2C_PORT_BATTERY, BATTERY_ADDR_FLAGS,
-			       offset, data, len);
+	return i2c_read_string(I2C_PORT_BATTERY, addr_flags, offset, data, len);
 }
 
 int sb_read_mfgacc(int cmd, int block, uint8_t *data, int len)
@@ -95,6 +127,8 @@ int sb_read_mfgacc(int cmd, int block, uint8_t *data, int len)
 
 int sb_write_block(int reg, const uint8_t *val, int len)
 {
+	uint16_t addr_flags = BATTERY_ADDR_FLAGS;
+
 #ifdef CONFIG_BATTERY_CUT_OFF
 	/*
 	 * Some batteries would wake up after cut-off if we talk to it.
@@ -103,9 +137,11 @@ int sb_write_block(int reg, const uint8_t *val, int len)
 		return EC_RES_ACCESS_DENIED;
 #endif
 
+	if (battery_supports_pec())
+		addr_flags |= I2C_FLAG_PEC;
+
 	/* TODO: implement smbus_write_block. */
-	return i2c_write_block(I2C_PORT_BATTERY, BATTERY_ADDR_FLAGS,
-			       reg, val, len);
+	return i2c_write_block(I2C_PORT_BATTERY, addr_flags, reg, val, len);
 }
 
 int battery_get_mode(int *mode)
@@ -311,8 +347,13 @@ void battery_get_params(struct batt_params *batt)
 	struct batt_params batt_new = {0};
 	int v;
 
-	if (sb_read(SB_TEMPERATURE, &batt_new.temperature))
+	if (sb_read(SB_TEMPERATURE, &batt_new.temperature)
+			&& fake_temperature < 0)
 		batt_new.flags |= BATT_FLAG_BAD_TEMPERATURE;
+
+	/* If temperature is faked, override with faked data */
+	if (fake_temperature >= 0)
+		batt_new.temperature = fake_temperature;
 
 	if (sb_read(SB_RELATIVE_STATE_OF_CHARGE, &batt_new.state_of_charge)
 	    && fake_state_of_charge < 0)
@@ -384,7 +425,11 @@ void battery_get_params(struct batt_params *batt)
 			batt_new.state_of_charge < BATTERY_LEVEL_FULL) ||
 		(batt_new.desired_voltage == 0 &&
 			batt_new.desired_current == 0 &&
+#ifdef CONFIG_BATTERY_DEAD_UNTIL_VALUE
+			batt_new.state_of_charge < CONFIG_BATTERY_DEAD_UNTIL_VALUE)))
+#else
 			batt_new.state_of_charge == 0)))
+#endif
 #else
 	    batt_new.desired_voltage &&
 	    batt_new.desired_current &&
@@ -398,6 +443,7 @@ void battery_get_params(struct batt_params *batt)
 #ifdef HAS_TASK_HOSTCMD
 	/* if there is no host, we don't care about compensation */
 	battery_compensate_params(&batt_new);
+	board_battery_compensate_params(&batt_new);
 #endif
 
 	/* Update visible battery parameters */
@@ -448,6 +494,29 @@ static int command_battfake(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(battfake, command_battfake,
 			"percent (-1 = use real level)",
 			"Set fake battery level");
+
+static int command_batttempfake(int argc, char **argv)
+{
+	char *e;
+	int t;
+
+	if (argc == 2) {
+		t = strtoi(argv[1], &e, 0);
+		if (*e || t < -1 || t > 5000)
+			return EC_ERROR_PARAM1;
+
+		fake_temperature = t;
+	}
+
+	if (fake_temperature >= 0)
+		ccprintf("Fake batt temperature %d.%d K\n",
+			 fake_temperature / 10, fake_temperature % 10);
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(batttempfake, command_batttempfake,
+			"temperature (-1 = use real temperature)",
+			"Set fake battery temperature in deciKelvin (2731 = 273.1 K = 0 deg C)");
 #endif
 
 #ifdef CONFIG_CMD_BATT_MFG_ACCESS

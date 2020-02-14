@@ -255,6 +255,9 @@ const char help_str[] =
 	"  reboot_ec <RO|RW|cold|hibernate|hibernate-clear-ap-off|disable-jump>"
 			" [at-shutdown|switch-slot]\n"
 	"      Reboot EC to RO or RW\n"
+	"  reboot_ap_on_g3\n"
+	"      Requests that the EC will automatically reboot the AP the next time\n"
+	"      we enter the G3 power state.\n"
 	"  rollbackinfo\n"
 	"      Print rollback block information\n"
 	"  rtcget\n"
@@ -267,9 +270,14 @@ const char help_str[] =
 	"      Set real-time clock alarm to go off in <sec> seconds\n"
 	"  rwhashpd <dev_id> <HASH[0] ... <HASH[4]>\n"
 	"      Set entry in PD MCU's device rw_hash table.\n"
-	"  rwsigaction\n"
+	"  rwsig <info|dump|action|status> ...\n"
+	"      info: get all info about rwsig\n"
+	"      dump: show individual rwsig field\n"
+	"      action: Control the behavior of RWSIG task.\n"
+	"      status: Run RW signature verification and get status.\n{"
+	"  rwsigaction (DEPRECATED; use \"rwsig action\")\n"
 	"      Control the behavior of RWSIG task.\n"
-	"  rwsigstatus\n"
+	"  rwsigstatus (DEPRECATED; use \"rwsig status\"\n"
 	"      Run RW signature verification and get status.\n"
 	"  sertest\n"
 	"      Serial output test for COM2\n"
@@ -1090,6 +1098,13 @@ int cmd_reboot_ec(int argc, char *argv[])
 	return (rv < 0 ? rv : 0);
 }
 
+int cmd_reboot_ap_on_g3(int argc, char *argv[])
+{
+	int rv;
+
+	rv = ec_command(EC_CMD_REBOOT_AP_ON_G3, 0, NULL, 0, NULL, 0);
+	return (rv < 0 ? rv : 0);
+}
 
 int cmd_flash_info(int argc, char *argv[])
 {
@@ -1454,23 +1469,172 @@ int cmd_rwsig_status(int argc, char *argv[])
 	return 0;
 }
 
-int cmd_rwsig_action(int argc, char *argv[])
+static int rwsig_action(const char *command)
 {
 	struct ec_params_rwsig_action req;
 
-	if (argc < 2) {
-		fprintf(stderr, "Usage: %s abort | continue\n", argv[0]);
-		return -1;
-	}
-
-	if (!strcasecmp(argv[1], "abort"))
+	if (!strcasecmp(command, "abort"))
 		req.action = RWSIG_ACTION_ABORT;
-	else if (!strcasecmp(argv[1], "continue"))
+	else if (!strcasecmp(command, "continue"))
 		req.action = RWSIG_ACTION_CONTINUE;
 	else
 		return -1;
 
 	return ec_command(EC_CMD_RWSIG_ACTION, 0, &req, sizeof(req), NULL, 0);
+}
+
+int cmd_rwsig_action_legacy(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s [abort | continue]\n", argv[0]);
+		return -1;
+	}
+
+	return rwsig_action(argv[1]);
+}
+
+int cmd_rwsig_action(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "Usage: ectool rwsig action [abort | "
+				"continue]\n");
+		return -1;
+	}
+
+	return rwsig_action(argv[1]);
+}
+
+enum rwsig_info_fields {
+	RWSIG_INFO_FIELD_SIG_ALG = BIT(0),
+	RWSIG_INFO_FIELD_KEY_VERSION = BIT(1),
+	RWSIG_INFO_FIELD_HASH_ALG = BIT(2),
+	RWSIG_INFO_FIELD_KEY_IS_VALID = BIT(3),
+	RWSIG_INFO_FIELD_KEY_ID = BIT(4),
+	RWSIG_INFO_FIELD_ALL = RWSIG_INFO_FIELD_SIG_ALG |
+		RWSIG_INFO_FIELD_KEY_VERSION | RWSIG_INFO_FIELD_HASH_ALG |
+		RWSIG_INFO_FIELD_KEY_IS_VALID | RWSIG_INFO_FIELD_KEY_ID
+};
+
+static int rwsig_info(enum rwsig_info_fields fields)
+{
+	int i;
+	int rv;
+	struct ec_response_rwsig_info r;
+	bool print_prefix = false;
+
+	rv = ec_command(EC_CMD_RWSIG_INFO, EC_VER_RWSIG_INFO, NULL, 0, &r,
+			sizeof(r));
+	if (rv < 0) {
+		fprintf(stderr, "rwsig info command failed\n");
+		return -1;
+	}
+
+	if ((fields & RWSIG_INFO_FIELD_ALL) == RWSIG_INFO_FIELD_ALL)
+		print_prefix = true;
+
+	if (fields & RWSIG_INFO_FIELD_SIG_ALG) {
+		if (print_prefix)
+			printf("sig_alg: ");
+
+		printf("%d\n", r.sig_alg);
+	}
+	if (fields & RWSIG_INFO_FIELD_KEY_VERSION) {
+		if (print_prefix)
+			printf("key_version: ");
+
+		printf("%d\n", r.key_version);
+	}
+	if (fields & RWSIG_INFO_FIELD_HASH_ALG) {
+		if (print_prefix)
+			printf("hash_alg: ");
+
+		printf("%d\n", r.hash_alg);
+	}
+	if (fields & RWSIG_INFO_FIELD_KEY_IS_VALID) {
+		if (print_prefix)
+			printf("key_is_valid: ");
+
+		printf("%d\n", r.key_is_valid);
+	}
+	if (fields & RWSIG_INFO_FIELD_KEY_ID) {
+		if (print_prefix)
+			printf("key_id: ");
+
+		for (i = 0; i < sizeof(r.key_id); i++)
+			printf("%x", r.key_id[i]);
+		printf("\n");
+	}
+
+	return 0;
+}
+
+static int cmd_rwsig_info(int argc, char *argv[])
+{
+	int i;
+
+	struct rwsig_dump_cmds {
+		const char *cmd;
+		enum rwsig_info_fields field;
+	};
+
+	struct rwsig_dump_cmds cmd_map[] = {
+		{ "sig_alg", RWSIG_INFO_FIELD_SIG_ALG },
+		{ "key_version", RWSIG_INFO_FIELD_KEY_VERSION },
+		{ "hash_alg", RWSIG_INFO_FIELD_HASH_ALG },
+		{ "key_valid", RWSIG_INFO_FIELD_KEY_IS_VALID },
+		{ "key_id", RWSIG_INFO_FIELD_KEY_ID },
+	};
+
+	if (argc == 0)
+		return -1;
+
+	if (strcmp(argv[0], "info") == 0)
+		return rwsig_info(RWSIG_INFO_FIELD_ALL);
+
+	if (strcmp(argv[0], "dump") == 0) {
+		if (argc != 2) {
+			fprintf(stderr,
+				"Usage: rwsig dump "
+				"[sig_alg|key_version|hash_alg|key_valid|key_id]\n");
+			return -1;
+		}
+		for (i = 0; i < ARRAY_SIZE(cmd_map); i++)
+			if (strcmp(argv[1], cmd_map[i].cmd) == 0)
+				return rwsig_info(cmd_map[i].field);
+
+		return -1;
+	}
+
+	return -1;
+}
+
+int cmd_rwsig(int argc, char **argv)
+{
+	struct rwsig_subcommand {
+		const char *subcommand;
+		int (*handler)(int argc, char *argv[]);
+	};
+
+	const struct rwsig_subcommand rwsig_subcommands[] = {
+		{ "info", cmd_rwsig_info },
+		{ "dump", cmd_rwsig_info },
+		{ "action", cmd_rwsig_action },
+		{ "status", cmd_rwsig_status }
+	};
+
+	int i;
+
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s <info|dump|action|status>\n",
+			argv[0]);
+		return -1;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(rwsig_subcommands); i++)
+		if (strcmp(argv[1], rwsig_subcommands[i].subcommand) == 0)
+			return rwsig_subcommands[i].handler(--argc, &argv[1]);
+
+	return -1;
 }
 
 int cmd_rollback_info(int argc, char *argv[])
@@ -4469,7 +4633,7 @@ static const struct {
 		sizeof(struct ec_response_motion_sensor_data) *
 		ECTOOL_MAX_SENSOR
 	},
-	ST_BOTH_SIZES(info_3),
+	{ ST_PRM_SIZE(info_3), ST_RSP_SIZE(info_4) },
 	ST_BOTH_SIZES(ec_rate),
 	ST_BOTH_SIZES(sensor_odr),
 	ST_BOTH_SIZES(sensor_range),
@@ -4746,11 +4910,15 @@ static int cmd_motionsense(int argc, char **argv)
 
 		if (version >= 3) {
 			printf("Min Frequency:              %d mHz\n",
-					resp->info_3.min_frequency);
+				resp->info_3.min_frequency);
 			printf("Max Frequency:              %d mHz\n",
-					resp->info_3.max_frequency);
+				resp->info_3.max_frequency);
 			printf("FIFO Max Event Count:       %d\n",
-					resp->info_3.fifo_max_event_count);
+				resp->info_3.fifo_max_event_count);
+		}
+		if (version >= 4) {
+			printf("Flags:                      %d\n",
+			       resp->info_4.flags);
 		}
 		return 0;
 	}
@@ -5560,8 +5728,43 @@ int cmd_usb_pd(int argc, char *argv[])
 					printf("UNKNOWN");
 				printf("\n");
 			}
-		}
 
+			printf("Cable type:%s\n",
+				r_v2->control_flags & USB_PD_CTRL_ACTIVE_CABLE ?
+					"Active" : "Passive");
+
+			printf("TBT Adapter type:%s\n",
+				r_v2->control_flags &
+				USB_PD_CTRL_TBT_LEGACY_ADAPTER ?
+					"Legacy" : "Gen3");
+
+			printf("Optical Cable:%s\n",
+				r_v2->control_flags &
+				USB_PD_CTRL_OPTICAL_CABLE ? "True" : "False");
+
+			printf("Link LSRX Communication:%s-directional\n",
+				r_v2->control_flags &
+				USB_PD_CTRL_ACTIVE_LINK_UNIDIR ? "Uni" : "Bi");
+
+			printf("TBT Cable Speed:");
+			switch (r_v2->cable_speed) {
+			case TBT_SS_U31_GEN1:
+				printf("TBT Gen1");
+				break;
+			case TBT_SS_U32_GEN1_GEN2:
+				printf("TBT Gen1 and TBT Gen2");
+				break;
+			case TBT_SS_TBT_GEN3:
+				printf("TBT Gen3");
+				break;
+			default:
+				printf("UNKNOWN");
+			}
+			printf("\n");
+
+			printf("Rounded support: 3rd Gen %srounded support\n",
+				r_v2->cable_gen ? "and 4th Gen " : "");
+		}
 		/* If connected to a PD device, then print port partner info */
 		if ((r_v1->enabled & PD_CTRL_RESP_ENABLED_CONNECTED) &&
 		    (r_v1->enabled & PD_CTRL_RESP_ENABLED_PD_CAPABLE))
@@ -5572,8 +5775,8 @@ int cmd_usb_pd(int argc, char *argv[])
 					" DR data\n" : "",
 				(r_v1->role & PD_CTRL_RESP_ROLE_USB_COMM) ?
 					" USB capable\n" : "",
-				(r_v1->role & PD_CTRL_RESP_ROLE_EXT_POWERED) ?
-					" Externally powered\n" : "");
+				(r_v1->role & PD_CTRL_RESP_ROLE_UNCONSTRAINED) ?
+					" Unconstrained power\n" : "");
 	}
 	return 0;
 }
@@ -5673,6 +5876,8 @@ int cmd_usb_pd_mux_info(int argc, char *argv[])
 		printf("HPD_IRQ=%d ", !!(r.flags & USB_PD_MUX_HPD_IRQ));
 		printf("HPD_LVL=%d ", !!(r.flags & USB_PD_MUX_HPD_LVL));
 		printf("SAFE=%d ", !!(r.flags & USB_PD_MUX_SAFE_MODE));
+		printf("TBT=%d ", !!(r.flags & USB_PD_MUX_TBT_COMPAT_ENABLED));
+		printf("USB4=%d ", !!(r.flags & USB_PD_MUX_USB4_ENABLED));
 		printf("\n");
 	}
 
@@ -7378,6 +7583,7 @@ static void cmd_cbi_help(char *cmd)
 	"      3: DRAM_PART_NUM (string)\n"
 	"      4: OEM_NAME (string)\n"
 	"      5: MODEL_ID\n"
+	"      6: FW_CONFIG\n"
 	"    <size> is the size of the data in byte. It should be zero for\n"
 	"      string types.\n"
 	"    <value/string> is an integer or a string to be set\n"
@@ -7419,8 +7625,8 @@ static int cmd_cbi(int argc, char *argv[])
 
 	if (!strcasecmp(argv[1], "get")) {
 		struct ec_params_get_cbi p = { 0 };
-		uint8_t *r;
 		int i;
+
 		p.tag = tag;
 		if (argc > 3) {
 			p.flag = strtol(argv[3], &e, 0);
@@ -7439,17 +7645,25 @@ static int cmd_cbi(int argc, char *argv[])
 			fprintf(stderr, "Invalid size: %d\n", rv);
 			return -1;
 		}
-		r = ec_inbuf;
 		if (cmd_cbi_is_string_field(tag)) {
-			printf("%.*s", rv, (const char *)r);
+			printf("%.*s", rv, (const char *)ec_inbuf);
 		} else {
-			if (rv <= sizeof(uint32_t))
-				printf("As integer: %u (0x%x)\n", r[0], r[0]);
+			const uint8_t * const buffer = ec_inbuf;
+
+			if (rv <= sizeof(uint32_t)) {
+				uint32_t int_value = 0;
+
+				for (i = 0; i < rv; i++)
+					int_value |= buffer[i] << (i * 8);
+
+				printf("As uint: %u (0x%x)\n", int_value,
+				       int_value);
+			}
 			printf("As binary:");
 			for (i = 0; i < rv; i++) {
 				if (i % 32 == 31)
 					printf("\n");
-				printf(" %02x", r[i]);
+				printf(" %02x", buffer[i]);
 			}
 		}
 		printf("\n");
@@ -8068,6 +8282,8 @@ static int cmd_mkbp_get(int argc, char *argv[])
 		supported = r.buttons;
 	else if (p.event_type == EC_MKBP_EVENT_SWITCH)
 		supported = r.switches;
+	else
+		return -1;
 
 	p.info_type = EC_MKBP_INFO_CURRENT;
 	rv = ec_command(EC_CMD_MKBP_INFO, 0, &p, sizeof(p), &r,
@@ -9228,7 +9444,8 @@ const struct command commands[] = {
 	{"rtcset", cmd_rtc_set},
 	{"rtcsetalarm", cmd_rtc_set_alarm},
 	{"rwhashpd", cmd_rw_hash_pd},
-	{"rwsigaction", cmd_rwsig_action},
+	{"rwsig", cmd_rwsig},
+	{"rwsigaction", cmd_rwsig_action_legacy},
 	{"rwsigstatus", cmd_rwsig_status},
 	{"sertest", cmd_serial_test},
 	{"stress", cmd_stress_test},
@@ -9252,6 +9469,7 @@ const struct command commands[] = {
 	{"version", cmd_version},
 	{"waitevent", cmd_wait_event},
 	{"wireless", cmd_wireless},
+	{"reboot_ap_on_g3", cmd_reboot_ap_on_g3},
 	{NULL, NULL}
 };
 

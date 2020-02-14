@@ -7,7 +7,9 @@
 
 #include "common.h"
 #include "console.h"
+#ifdef CONFIG_LIBCRYPTOC
 #include "cryptoc/util.h"
+#endif
 #include "flash.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -195,32 +197,6 @@ failed:
 	return ret;
 }
 #endif
-
-int rollback_lock(void)
-{
-	int ret;
-
-	/* Already locked */
-	if (flash_get_protect() & EC_FLASH_PROTECT_ROLLBACK_NOW)
-		return EC_SUCCESS;
-
-	CPRINTS("Protecting rollback");
-
-	/* This may do nothing if WP is not enabled, or RO is not protected. */
-	ret = flash_set_protect(EC_FLASH_PROTECT_ROLLBACK_AT_BOOT, -1);
-
-	if (!(flash_get_protect() & EC_FLASH_PROTECT_ROLLBACK_NOW) &&
-	      flash_get_protect() & EC_FLASH_PROTECT_ROLLBACK_AT_BOOT) {
-		/*
-		 * If flash protection is still not enabled (some chips may
-		 * be able to enable it immediately), reboot.
-		 */
-		cflush();
-		system_reset(SYSTEM_RESET_HARD | SYSTEM_RESET_PRESERVE_FLAGS);
-	}
-
-	return ret;
-}
 
 #ifdef CONFIG_ROLLBACK_UPDATE
 

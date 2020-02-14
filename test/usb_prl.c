@@ -95,8 +95,8 @@ static uint32_t test_data[] = {
 static struct pd_prl {
 	int rev;
 	int pd_enable;
-	int power_role;
-	int data_role;
+	enum pd_power_role power_role;
+	enum pd_data_role data_role;
 	int msg_tx_id;
 	int msg_rx_id;
 
@@ -106,7 +106,7 @@ static struct pd_prl {
 	int mock_pe_got_hard_reset;
 	int mock_pe_message_received;
 	int mock_got_soft_reset;
-} pd_port[CONFIG_USB_PD_PORT_COUNT];
+} pd_port[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static void init_port(int port, int rev)
 {
@@ -184,12 +184,6 @@ static void cycle_through_state_machine(int port, uint32_t num, uint32_t time)
 	for (i = 0; i < num; i++) {
 		task_wake(PD_PORT_TO_TASK_ID(port));
 		task_wait_event(time);
-		/*
-		 * Ensure that the PD task actually ran otherwise loop again.
-		 * This can happen for slow/overloaded cpus (e.g. cq machine).
-		 */
-		if (TASK_EVENT_WAKE & pending_pd_task_events(port))
-			--i;
 	}
 }
 
@@ -720,17 +714,22 @@ static void enable_prl(int port, int en)
 	/* Init PRL */
 	cycle_through_state_machine(port, 10, MSEC);
 
-	prl_set_rev(port, pd_port[port].rev);
+	prl_set_rev(port, TCPC_TX_SOP, pd_port[port].rev);
 }
 
-int tc_get_power_role(int port)
+enum pd_power_role pd_get_power_role(int port)
 {
 	return pd_port[port].power_role;
 }
 
-int tc_get_data_role(int port)
+enum pd_data_role pd_get_data_role(int port)
 {
 	return pd_port[port].data_role;
+}
+
+enum pd_cable_plug tc_get_cable_plug(int port)
+{
+	return PD_PLUG_FROM_DFP_UFP;
 }
 
 void pe_report_error(int port, enum pe_error e)

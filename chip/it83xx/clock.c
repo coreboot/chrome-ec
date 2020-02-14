@@ -141,6 +141,30 @@ void __ram_code clock_ec_pll_ctrl(enum ec_pll_ctrl mode)
 	IT83XX_ECPM_PLLCTRL = mode;
 	/* for deep doze / sleep mode */
 	IT83XX_ECPM_PLLCTRL = mode;
+
+#ifdef IT83XX_CHIP_FLASH_NO_DEEP_POWER_DOWN
+	/*
+	 * WORKAROUND: this workaround is used to fix EC gets stuck in low power
+	 * mode when WRST# is asserted.
+	 *
+	 * By default, flash will go into deep power down mode automatically
+	 * when EC is in low power mode. But we got an issue on IT83202BX that
+	 * flash won't be able to wake up correctly when WRST# is asserted
+	 * under this condition.
+	 * This issue might cause cold reset failure so we fix it.
+	 *
+	 * NOTE: this fix will increase power number about 40uA in low power
+	 * mode.
+	 */
+	if (mode == EC_PLL_DOZE)
+		IT83XX_SMFI_SMECCS &= ~IT83XX_SMFI_MASK_HOSTWA;
+	else
+		/*
+		 * Don't send deep power down mode command to flash when EC in
+		 * low power mode.
+		 */
+		IT83XX_SMFI_SMECCS |= IT83XX_SMFI_MASK_HOSTWA;
+#endif
 	/*
 	 * barrier: ensure low power mode setting is taken into control
 	 * register before standby instruction.
@@ -383,13 +407,22 @@ static void clock_htimer_enable(void)
 
 static int clock_allow_low_power_idle(void)
 {
+	/*
+	 * Avoiding using low frequency clock run the same count as awaken in
+	 * sleep mode, so don't go to sleep mode before timer reload count.
+	 */
 	if (!(IT83XX_ETWD_ETXCTRL(EVENT_EXT_TIMER) & BIT(0)))
 		return 0;
 
+	/* If timer interrupt status is set, don't go to sleep mode. */
 	if (*et_ctrl_regs[EVENT_EXT_TIMER].isr &
 		et_ctrl_regs[EVENT_EXT_TIMER].mask)
 		return 0;
 
+	/*
+	 * If timer is less than 250us to expire, then we don't go to sleep
+	 * mode.
+	 */
 #ifdef IT83XX_EXT_OBSERVATION_REG_READ_TWO_TIMES
 	if (EVENT_TIMER_COUNT_TO_US(ext_observation_reg_read(EVENT_EXT_TIMER)) <
 #else
@@ -398,11 +431,17 @@ static int clock_allow_low_power_idle(void)
 		SLEEP_SET_HTIMER_DELAY_USEC)
 		return 0;
 
+	/*
+	 * We calculate 32bit free clock overflow counts for 64bit value,
+	 * if clock almost reach overflow, we don't go to sleep mode for
+	 * avoiding miss overflow count.
+	 */
 	sleep_mode_t0 = get_time();
 	if ((sleep_mode_t0.le.lo > (0xffffffff - SLEEP_FTIMER_SKIP_USEC)) ||
 		(sleep_mode_t0.le.lo < SLEEP_FTIMER_SKIP_USEC))
 		return 0;
 
+	/* If we are waked up by console, then keep awake at least 5s. */
 	if (sleep_mode_t0.val < console_expire_time.val)
 		return 0;
 
@@ -441,7 +480,12 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	}
 	/* bit5: watchdog is disabled. */
 	IT83XX_ETWD_ETWCTRL |= BIT(5);
-	/* Setup GPIOs for hibernate */
+
+	/*
+	 * Setup GPIOs for hibernate.  On some boards, it's possible that this
+	 * may not return at all.  On those boards, power to the EC is likely
+	 * being turn off entirely.
+	 */
 	if (board_hibernate_late)
 		board_hibernate_late();
 
@@ -466,7 +510,7 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	 * Disable integrated pd modules in hibernate for
 	 * better power consumption.
 	 */
-	for (i = 0; i < USBPD_PORT_COUNT; i++)
+	for (i = 0; i < IT83XX_USBPD_PHY_PORT_COUNT; i++)
 		it83xx_disable_pd_module(i);
 #endif
 

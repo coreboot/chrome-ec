@@ -604,14 +604,19 @@ const char *system_get_build_info(void)
  * header address is passed (the other one is set to zero), only the valid
  * header is considered when updating INFO1.
  */
-static void update_rollback_mask(const struct SignedHeader *header_a,
-				 const struct SignedHeader *header_b)
+static void update_rollback_mask(uint32_t addr_a, uint32_t addr_b,
+				 uint32_t info_base_offset)
 {
 #ifndef CR50_DEV
+	const struct SignedHeader *header_a;
+	const struct SignedHeader *header_b;
 	int updated_words_count = 0;
 	int i;
 	int write_enabled = 0;
 	uint32_t header_mask = 0;
+
+	header_a = (const struct SignedHeader *)addr_a;
+	header_b = (const struct SignedHeader *)addr_b;
 
 	/*
 	 * The infomap field in the image header has a matching space in the
@@ -659,7 +664,7 @@ static void update_rollback_mask(const struct SignedHeader *header_a,
 			break;
 		}
 
-		byte_offset = (INFO_MAX + i) * sizeof(uint32_t);
+		byte_offset = info_base_offset + i * sizeof(uint32_t);
 
 		if (flash_physical_info_read_word(byte_offset, &word) !=
 		    EC_SUCCESS) {
@@ -696,56 +701,71 @@ static void update_rollback_mask(const struct SignedHeader *header_a,
 
 void system_update_rollback_mask_with_active_img(void)
 {
-	update_rollback_mask((const struct SignedHeader *)
-			     get_program_memory_addr(system_get_image_copy()),
-			     0);
+	update_rollback_mask(
+		get_program_memory_addr(system_get_ro_image_copy()), 0,
+		INFO_RO_MAP_OFFSET);
+	update_rollback_mask(get_program_memory_addr(system_get_image_copy()),
+			     0, INFO_RW_MAP_OFFSET);
 }
 
 void system_update_rollback_mask_with_both_imgs(void)
 {
-	update_rollback_mask((const struct SignedHeader *)
-			     get_program_memory_addr(SYSTEM_IMAGE_RW),
-			     (const struct SignedHeader *)
-			     get_program_memory_addr(SYSTEM_IMAGE_RW_B));
+	update_rollback_mask(get_program_memory_addr(SYSTEM_IMAGE_RO),
+			     get_program_memory_addr(SYSTEM_IMAGE_RO_B),
+			     INFO_RO_MAP_OFFSET);
+	update_rollback_mask(get_program_memory_addr(SYSTEM_IMAGE_RW),
+			     get_program_memory_addr(SYSTEM_IMAGE_RW_B),
+			     INFO_RW_MAP_OFFSET);
 }
 
 void system_get_rollback_bits(char *value, size_t value_size)
 {
-	int info_count;
 	int i;
+	size_t str_offset = 0;
 	struct {
-		int count;
-		const struct SignedHeader *h;
+		uint32_t info_map_offset;
+		uint32_t image_types[2];
 	} headers[] = {
-		{.h = (const struct SignedHeader *)
-		 get_program_memory_addr(SYSTEM_IMAGE_RW)},
-
-		{.h = (const struct SignedHeader *)
-		 get_program_memory_addr(SYSTEM_IMAGE_RW_B)},
+		{ .info_map_offset = INFO_RO_MAP_OFFSET,
+		  .image_types = { SYSTEM_IMAGE_RO, SYSTEM_IMAGE_RO_B } },
+		{ .info_map_offset = INFO_RW_MAP_OFFSET,
+		  .image_types = { SYSTEM_IMAGE_RW, SYSTEM_IMAGE_RW_B } }
 	};
-
-	for (i = 0; i < INFO_MAX; i++) {
-		uint32_t w;
-
-		flash_physical_info_read_word(INFO_RW_MAP_OFFSET +
-					      i * sizeof(uint32_t),
-					      &w);
-		if (w)
-			break;
-	}
-	info_count = i;
 
 	for (i = 0; i < ARRAY_SIZE(headers); i++) {
 		int j;
 
-		for (j = 0; j < INFO_MAX; j++)
-			if (headers[i].h->infomap[j/32] & (1 << (j%32)))
-				break;
-		headers[i].count = j;
-	}
+		/* First see how many bits are cleared in the INFO space. */
+		for (j = 0; j < INFO_MAX; j++) {
+			uint32_t w;
 
-	snprintf(value, value_size, "%d/%d/%d", info_count,
-		 headers[0].count, headers[1].count);
+			flash_physical_info_read_word(
+				headers[i].info_map_offset +
+					j * sizeof(uint32_t),
+				&w);
+			if (w)
+				break;
+		}
+		/* Count of INFO space bits. */
+		str_offset += snprintf(value + str_offset,
+				       value_size - str_offset, " %d", j);
+
+		/* Iterate over two sections, A and B. */
+		for (j = 0; j < ARRAY_SIZE(headers[i].image_types); j++) {
+			int k;
+			const struct SignedHeader *sh;
+
+			sh = (const struct SignedHeader *)
+				get_program_memory_addr(
+					headers[i].image_types[j]);
+			for (k = 0; k < INFO_MAX; k++)
+				if (sh->infomap[k/32] & (1 << (k%32)))
+					break;
+			str_offset += snprintf(value + str_offset,
+					       value_size - str_offset, "/%d",
+					       k);
+		}
+	}
 }
 
 #ifdef CONFIG_EXTENDED_VERSION_INFO

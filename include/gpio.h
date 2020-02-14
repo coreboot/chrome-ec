@@ -9,8 +9,10 @@
 #define __CROS_EC_GPIO_H
 
 #include "common.h"
+#include "console.h"
 
 /* Flag definitions for gpio_info and gpio_alt_func */
+#define GPIO_FLAG_NONE     0       /* No flag needed, default setting */
 /* The following are valid for both gpio_info and gpio_alt_func: */
 #define GPIO_OPEN_DRAIN    BIT(0)  /* Output type is open-drain */
 #define GPIO_PULL_UP       BIT(1)  /* Enable on-chip pullup */
@@ -64,6 +66,21 @@ enum gpio_signal {
 };
 #endif /* __CROS_EC_GPIO_SIGNAL_H */
 
+/* Alternate functions for GPIOs */
+enum gpio_alternate_func {
+	GPIO_ALT_FUNC_NONE = -1,
+	GPIO_ALT_FUNC_DEFAULT,
+	GPIO_ALT_FUNC_1,
+	GPIO_ALT_FUNC_2,
+	GPIO_ALT_FUNC_3,
+	GPIO_ALT_FUNC_4,
+	GPIO_ALT_FUNC_5,
+	GPIO_ALT_FUNC_6,
+	GPIO_ALT_FUNC_7,
+
+	GPIO_ALT_FUNC_MAX = 63,
+};
+
 /* GPIO signal definition structure, for use by board.c */
 struct gpio_info {
 	/* Signal name */
@@ -81,6 +98,19 @@ struct gpio_info {
 
 /* Signal information from board.c.  Must match order from enum gpio_signal. */
 extern const struct gpio_info gpio_list[];
+
+/* Unused pin definition structure. */
+struct unused_pin_info {
+	/* Port base address */
+	uint32_t port;
+
+	/* Bitmask on that port (1 << N) */
+	uint32_t mask;
+};
+
+/* Unused pin information. */
+extern const struct unused_pin_info unused_pin_list[];
+extern const int unused_pin_count;
 
 /* Interrupt handler table for those GPIOs which have IRQ handlers.
  *
@@ -195,8 +225,28 @@ int gpio_get_default_flags(enum gpio_signal signal);
  * Set the value of a signal.
  *
  * @param signal	Signal to set
- * @param value		New value for signal (0 = low, != high */
+ * @param value		New value for signal (0 = low, 1 = high)
+ */
 void gpio_set_level(enum gpio_signal signal, int value);
+
+/**
+ * Set the value of a signal and log to the console.
+ *
+ * @param channel	Output channel
+ * @param signal	Signal to set
+ * @param value		New value for signal (0 = low, 1 = high)
+ */
+void gpio_set_level_verbose(enum console_channel channel,
+			    enum gpio_signal signal, int value);
+
+/**
+ * Set the value of a signal that could be either a local GPIO or an IO
+ * expander GPIO.
+ *
+ * @param signal	GPIO_* or IOEX_* signal to set
+ * @param value		New value for signal (0 = low, 1 = high)
+ */
+void gpio_or_ioex_set_level(int signal, int value);
 
 /**
  * Reset the GPIO flags and alternate function state
@@ -268,10 +318,11 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags);
  *
  * @param port		GPIO port to set (GPIO_*)
  * @param mask		Bitmask of pins on that port to affect
- * @param func		Alternate function; if <0, configures the specified
- *			GPIOs for normal GPIO operation.
+ * @param func		Alternate function; if GPIO_ALT_FUNC_NONE, configures
+ *                      the specified GPIOs for normal GPIO operation.
  */
-void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func);
+void gpio_set_alternate_function(uint32_t port, uint32_t mask,
+				enum gpio_alternate_func func);
 
 #ifdef CONFIG_GPIO_POWER_DOWN
 /**
@@ -282,5 +333,14 @@ void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func);
  */
 int gpio_power_down_module(enum module_id id);
 #endif
+
+/*
+ * Check if signal is a valid GPIO signal, and not IO expander (enum
+ * ioex_signal) or eSPI virtual wire (enum espi_vw_signal).
+ *
+ * @param signal	GPIO or IOEX or VW signal
+ * @return		1 if signal is GPIO else return 0
+ */
+int signal_is_gpio(int signal);
 
 #endif  /* __CROS_EC_GPIO_H */

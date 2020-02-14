@@ -3,16 +3,29 @@
  * found in the LICENSE file.
  */
 
-/* Meowth Fingerprint MCU configuration */
+/*
+ * STM32H743 + FPC 1145 Fingerprint MCU configuration
+ *
+ * Alternate names that share this same board file:
+ *   nocturne_fp
+ *   nami_fp
+ *   dartmonkey
+ *   dragontalon
+ */
 
 #ifndef __BOARD_H
 #define __BOARD_H
 
+#undef CONFIG_SYSTEM_UNLOCKED
+
 /*
- * TODO(b/73337313) remove this config,
- * once the write-protection scheme is decided and validated.
+ * These allow console commands to be flagged as restricted.
+ * Restricted commands will only be permitted to run when
+ * console_is_restricted() returns false.
+ * See console_is_restricted's definition in board.c.
  */
-#define CONFIG_SYSTEM_UNLOCKED
+#define CONFIG_CONSOLE_COMMAND_FLAGS
+#define CONFIG_RESTRICTED_CONSOLE_COMMANDS
 
 /*
  * Flash layout: we redefine the sections offsets and sizes as we want to
@@ -118,10 +131,11 @@
 #else /* SECTION_IS_RO */
 /* RO verifies the RW partition signature */
 #define CONFIG_RSA
-#define CONFIG_RSA_KEY_SIZE 3072
-#define CONFIG_RSA_EXPONENT_3
 #define CONFIG_RWSIG
 #endif
+
+#define CONFIG_RSA_KEY_SIZE 3072
+#define CONFIG_RSA_EXPONENT_3
 #define CONFIG_RWSIG_TYPE_RWSIG
 
 /* RW does slow compute, RO does slow flash erase. */
@@ -153,6 +167,13 @@
 #define CONFIG_CMD_FLASH
 #define CONFIG_CMD_SPI_XFER
 
+#ifdef SECTION_IS_RW
+/*
+ * Mitigating the effects of b/146428434.
+ */
+#define APPLY_RESET_LOOP_FIX
+#endif
+
 #ifndef __ASSEMBLER__
 
 /* Timer selection */
@@ -162,6 +183,9 @@
 #include "gpio_signal.h"
 
 void fps_event(enum gpio_signal signal);
+
+/* Defined in ro_workarounds.c */
+void wp_event(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

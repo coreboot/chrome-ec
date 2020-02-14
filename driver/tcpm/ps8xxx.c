@@ -9,6 +9,7 @@
  * Supported TCPCs:
  * - PS8751
  * - PS8805
+ * - PS8815
  */
 
 #include "common.h"
@@ -19,7 +20,8 @@
 #include "usb_pd.h"
 
 #if !defined(CONFIG_USB_PD_TCPM_PS8751) && \
-	!defined(CONFIG_USB_PD_TCPM_PS8805)
+	!defined(CONFIG_USB_PD_TCPM_PS8805) && \
+	!defined(CONFIG_USB_PD_TCPM_PS8815)
 #error "Unsupported PS8xxx TCPC."
 #endif
 
@@ -36,7 +38,7 @@
  * timestamp of the next possible toggle to ensure the 2-ms spacing
  * between IRQ_HPD.
  */
-static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_COUNT];
+static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static int dp_set_hpd(int port, int enable)
 {
@@ -155,6 +157,13 @@ static int ps8xxx_get_chip_info(int port, int live,
 		(*chip_info)->fw_version_number = val;
 	}
 
+	/* Treat unexpected values as error (FW not initiated from reset) */
+	if (live && (
+	    (*chip_info)->vendor_id != PS8XXX_VENDOR_ID ||
+	    (*chip_info)->product_id != PS8XXX_PRODUCT_ID ||
+	    (*chip_info)->fw_version_number == 0))
+		return EC_ERROR_UNKNOWN;
+
 #if defined(CONFIG_USB_PD_TCPM_PS8751) && \
 	defined(CONFIG_USB_PD_VBUS_DETECT_TCPC)
 	/*
@@ -170,10 +179,19 @@ static int ps8xxx_get_chip_info(int port, int live,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 static int ps8xxx_enter_low_power_mode(int port)
 {
-	return EC_SUCCESS;
+	/*
+	 * PS8751 has the auto sleep function that enters low power mode on
+	 * its own in ~2 seconds. Other chips don't have it. Stub it out for
+	 * PS8751.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8751))
+		return EC_SUCCESS;
+
+	return tcpci_enter_low_power_mode(port);
 }
 #endif
 
+#if defined(CONFIG_USB_PD_TCPM_PS8751) || defined(CONFIG_USB_PD_TCPM_PS8805)
 /*
  * DCI is enabled by default and burns about 40 mW when the port is in
  * USB2 mode or when a C-to-A dongle is attached, so force it off.
@@ -196,31 +214,26 @@ static int ps8xxx_addr_dci_disable(int port, int i2c_addr, int i2c_reg)
 	}
 	return EC_SUCCESS;
 }
+#endif /* CONFIG_USB_PD_TCPM_PS8751 || CONFIG_USB_PD_TCPM_PS8805 */
+
+#ifdef CONFIG_USB_PD_TCPM_PS8815
+static int ps8xxx_dci_disable(int port)
+{
+	/* DCI is disabled on the ps8815 */
+	return EC_SUCCESS;
+}
+#endif /* CONFIG_USB_PD_TCPM_PS8815 */
 
 #ifdef CONFIG_USB_PD_TCPM_PS8805
 static int ps8xxx_dci_disable(int port)
 {
-	int status, e;
 	int p1_addr;
 
-	status = tcpc_write(port, PS8XXX_REG_I2C_DEBUGGING_ENABLE,
-			    PS8XXX_REG_I2C_DEBUGGING_ENABLE_ON);
-	if (status != EC_SUCCESS)
-		return status;
-
+	/* DCI registers are always accessible on PS8805 */
 	p1_addr = tcpc_config[port].i2c_info.addr_flags -
 		(PS8751_I2C_ADDR1_FLAGS - PS8751_I2C_ADDR1_P1_FLAGS);
-	status = ps8xxx_addr_dci_disable(port, p1_addr,
-					 PS8805_P1_REG_MUX_USB_DCI_CFG);
-
-	e = tcpc_write(port, PS8XXX_REG_I2C_DEBUGGING_ENABLE,
-		       PS8XXX_REG_I2C_DEBUGGING_ENABLE_OFF);
-	if (e != EC_SUCCESS) {
-		if (status == EC_SUCCESS)
-			status = e;
-	}
-
-	return status;
+	return ps8xxx_addr_dci_disable(port, p1_addr,
+				       PS8805_P1_REG_MUX_USB_DCI_CFG);
 }
 #endif /* CONFIG_USB_PD_TCPM_PS8805 */
 
@@ -246,10 +259,41 @@ static int ps8xxx_tcpm_init(int port)
 	return ps8xxx_dci_disable(port);
 }
 
+static int ps8xxx_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
+			 enum tcpc_cc_voltage_status *cc2)
+{
+	int rv;
+	int status;
+
+	/*
+	 * TODO(twawrzynczak): remove this workaround when no
+	 * longer needed, see b/147684491.
+	 *
+	 * This is a workaround for what appears to be a bug in PS8751 firmware
+	 * version 0x44.
+	 *
+	 * With nothing connected to the port, sometimes after DRP is disabled,
+	 * the CC_STATUS register reads the CC state incorrectly (reading it
+	 * as though a port partner is detected), which ends up confusing
+	 * our TCPM.  The workaround for this seems to be a short sleep and
+	 * then re-reading the CC state.  In other words, the issue shows up
+	 * as a short glitch or transient, which a dummy read and then a short
+	 * delay will allow the transient to disappear.
+	 */
+	rv = tcpc_read(port, TCPC_REG_CC_STATUS, &status);
+	if (rv)
+		return rv;
+
+	/* Derived empirically */
+	usleep(300);
+
+	return tcpci_tcpm_get_cc(port, cc1, cc2);
+}
+
 const struct tcpm_drv ps8xxx_tcpm_drv = {
 	.init			= &ps8xxx_tcpm_init,
 	.release		= &ps8xxx_tcpm_release,
-	.get_cc			= &tcpci_tcpm_get_cc,
+	.get_cc			= &ps8xxx_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
 	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
 #endif

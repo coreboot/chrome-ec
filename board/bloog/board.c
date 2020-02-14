@@ -110,10 +110,16 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* Matrix to rotate accelrator into standard reference frame */
-const mat33_fp_t lid_standrd_ref = {
+const mat33_fp_t lid_a_cover_ref = {
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0,  FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+const mat33_fp_t lid_b_cover_ref = {
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0,  FLOAT_TO_FP(1)}
 };
 
 const mat33_fp_t base_standard_ref = {
@@ -124,7 +130,7 @@ const mat33_fp_t base_standard_ref = {
 
 /* sensor private data */
 static struct kionix_accel_data kx022_data;
-static struct lsm6dsm_data lsm6dsm_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -139,8 +145,10 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &kx022_data,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-		.rot_standard_ref = &lid_standrd_ref,
+		.rot_standard_ref = &lid_a_cover_ref,
 		.default_range = 2, /* g */
+		.min_frequency = KX022_ACCEL_MIN_FREQ,
+		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -168,7 +176,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 2,  /* g */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 		.config = {
@@ -217,11 +225,12 @@ int board_is_convertible(void)
 	/*
 	 * Bloog: 33, 34, 35, 36
 	 * Blooguard: 49, 50, 51, 52
+	 * Bipship: 53, 54
 	 * Unprovisioned: 255
 	 */
 	return sku_id == 33 || sku_id == 34 || sku_id == 35 || sku_id == 36
 		|| sku_id == 49 || sku_id == 50 || sku_id == 51 || sku_id == 52
-		|| sku_id == 255;
+		|| sku_id == 53 || sku_id == 54 || sku_id == 255;
 }
 
 static void board_update_sensor_config_from_sku(void)
@@ -230,6 +239,11 @@ static void board_update_sensor_config_from_sku(void)
 		motion_sensor_count = ARRAY_SIZE(motion_sensors);
 		/* Enable Base Accel interrupt */
 		gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+
+		/* Override sensor marix for Bipship. */
+		if (sku_id == 53 || sku_id == 54)
+			motion_sensors[LID_ACCEL].rot_standard_ref =
+				&lid_b_cover_ref;
 	} else {
 		motion_sensor_count = 0;
 		gmr_tablet_switch_disable();
@@ -305,26 +319,21 @@ const int keyboard_factory_scan_pins_used =
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC, !is_overcurrented);
 }
 
-uint32_t board_override_feature_flags0(uint32_t flags0)
+__override uint32_t board_override_feature_flags0(uint32_t flags0)
 {
 	/*
 	 * Remove keyboard backlight feature for devices that don't support it.
 	 */
 	if (sku_id == 33 || sku_id == 36 || sku_id == 51 ||
-		sku_id == 52 || sku_id == 66 || sku_id == 68)
+		sku_id == 52 || sku_id == 53 || sku_id == 66 || sku_id == 68)
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
 	else
 		return flags0;
-}
-
-uint32_t board_override_feature_flags1(uint32_t flags1)
-{
-	return flags1;
 }

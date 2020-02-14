@@ -10,6 +10,7 @@
 #include "charge_ramp.h"
 #include "charge_state.h"
 #include "charger.h"
+#include "charger_mt6370.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -62,7 +63,8 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"other", 1, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{"other", 1, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA,
+		.flags = I2C_PORT_FLAG_DYNAMIC_SPEED},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -80,7 +82,7 @@ const struct spi_device_t spi_devices[] = {
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 
 /******************************************************************************/
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -89,6 +91,11 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		},
 		.drv = &mt6370_tcpm_drv,
 	},
+};
+
+struct mt6370_thermal_bound thermal_bound = {
+	.target = 75,
+	.err = 4,
 };
 
 static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
@@ -100,7 +107,22 @@ static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
 	host_set_single_event(EC_HOST_EVENT_USB_MUX);
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+
+__override const struct rt946x_init_setting *board_rt946x_init_setting(void)
+{
+	static const struct rt946x_init_setting battery_init_setting = {
+		.eoc_current = 150,
+		.mivr = 4000,
+		.ircmp_vclamp = 32,
+		.ircmp_res = 25,
+		.boost_voltage = 5050,
+		.boost_current = 1500,
+	};
+
+	return &battery_init_setting;
+}
+
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.port_addr = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
@@ -125,7 +147,7 @@ int board_set_active_charge_port(int charge_port)
 	CPRINTS("New chg p%d", charge_port);
 
 	/* ignore all request when discharge mode is on */
-	if (force_discharge)
+	if (force_discharge && charge_port != CHARGE_PORT_NONE)
 		return EC_SUCCESS;
 
 	switch (charge_port) {
@@ -163,12 +185,15 @@ int board_discharge_on_ac(int enable)
 			port = charge_manager_get_active_charge_port();
 	}
 
-	ret = board_set_active_charge_port(port);
+	ret = charger_discharge_on_ac(enable);
 	if (ret)
 		return ret;
-	force_discharge = enable;
 
-	return charger_discharge_on_ac(enable);
+	if (force_discharge && !enable)
+		rt946x_toggle_bc12_detection();
+
+	force_discharge = enable;
+	return board_set_active_charge_port(port);
 }
 
 int extpower_is_present(void)
@@ -204,9 +229,6 @@ static void board_init(void)
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 1);
 	}
 
-	/* Set SPI1 PB13/14/15 pins to high speed */
-	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xfc000000;
-
 	/* Enable TCPC alert interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
 
@@ -224,6 +246,9 @@ static void board_init(void)
 	/* Enable interrupt from PMIC. */
 	gpio_enable_interrupt(GPIO_PMIC_EC_RESETB);
 
+	/* reduce mt6370 db and bl driving capacity */
+	mt6370_reduce_db_bl_driving();
+
 	/* Display bias settings. */
 	mt6370_db_set_voltages(6000, 5800, 5800);
 
@@ -236,17 +261,32 @@ static void board_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
+/*
+ * Re-configure i2c-2 to 100kHz for EVT devices, this must execute after
+ * i2c_init (in main()) and before battery fuel gauge access the battery
+ * (i.e. HOOK_PRIO_I2C + 1).
+ *
+ * Note that stm32f0 don't run adc_init in hooks, so we can safely call
+ * board_get_version() before HOOK_PRIO_INIT_ADC(=HOOK_PRIO_DEFAULT).
+ */
+static void board_i2c_init(void)
+{
+	if (board_get_version() < 2)
+		i2c_set_freq(1,  I2C_FREQ_100KHZ);
+}
+DECLARE_HOOK(HOOK_INIT, board_i2c_init, HOOK_PRIO_INIT_I2C);
+
 /* Motion sensors */
 /* Mutexes */
 #ifdef SECTION_IS_RW
 static struct mutex g_lid_mutex;
 
-static struct lsm6dsm_data lsm6dsm_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Matrix to rotate accelerometer into standard reference frame */
 static const mat33_fp_t lid_standard_ref = {
+	{0, FLOAT_TO_FP(1), 0},
 	{FLOAT_TO_FP(-1), 0, 0},
-	{0, FLOAT_TO_FP(-1), 0},
 	{0, 0, FLOAT_TO_FP(1)}
 };
 
@@ -265,7 +305,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	 .rot_standard_ref = &lid_standard_ref,
-	 .default_range = 4,  /* g */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = LSM6DSM_ODR_MIN_VAL,
 	 .max_frequency = LSM6DSM_ODR_MAX_VAL,
 	 .config = {
@@ -316,6 +356,7 @@ void usb_charger_set_switches(int port, enum usb_switch setting)
  */
 int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 {
+	int voltage;
 	/*
 	 * Though we have a more tolerant range (3.9V~13.4V), setting 4400 to
 	 * prevent from a bad charger crashed.
@@ -326,7 +367,10 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	 * try to raise this value to 4600.  (when it says it read 4400, it is
 	 * actually close to 4600)
 	 */
-	return charger_get_vbus_voltage(port) < 4400;
+	if (charger_get_vbus_voltage(port, &voltage))
+		voltage = 0;
+
+	return voltage < 4400;
 }
 
 __override int board_charge_port_is_sink(int port)

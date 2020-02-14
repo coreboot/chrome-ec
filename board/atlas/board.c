@@ -15,6 +15,7 @@
 #include "console.h"
 #include "driver/als_opt3001.h"
 #include "driver/pmic_bd99992gw.h"
+#include "driver/charger/isl923x.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
@@ -151,8 +152,19 @@ const struct i2c_port_t i2c_ports[]  = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+/* Charger Chips */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		/* left port */
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -177,7 +189,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
@@ -210,7 +222,7 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
 		const struct usb_mux *mux = &usb_muxes[port];
 
 		mux->hpd_update(port, 0, 0);
@@ -482,17 +494,17 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* charge port is a physical port */
 	int is_real_port = (charge_port >= 0 &&
-			    charge_port < CONFIG_USB_PD_PORT_COUNT);
+			    charge_port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/* check if we are sourcing VBUS on the port */
 	int is_source = gpio_get_level(charge_port == 0 ?
 			GPIO_USB_C0_5V_EN : GPIO_USB_C1_5V_EN);
 
 	if (is_real_port && is_source) {
-		CPRINTF("No charging on source port p%d is ", charge_port);
+		CPRINTS("No charging from p%d", charge_port);
 		return EC_ERROR_INVAL;
 	}
 
-	CPRINTF("New chg p%d", charge_port);
+	CPRINTS("New chg p%d", charge_port);
 
 	if (charge_port == CHARGE_PORT_NONE) {
 		/* Disable both ports */
@@ -510,6 +522,22 @@ int board_set_active_charge_port(int charge_port)
 	return EC_SUCCESS;
 }
 
+/*
+ * Limit the input current to 95% negotiated limit,
+ * to account for the charger chip margin.
+ */
+
+static int charger_derate(int current)
+{
+	return current * 95 / 100;
+}
+
+static void board_charger_init(void)
+{
+	charger_set_input_current(charger_derate(PD_MAX_CURRENT_MA));
+}
+DECLARE_HOOK(HOOK_INIT, board_charger_init, HOOK_PRIO_DEFAULT);
+
 /**
  * Set the charge limit based upon desired maximum.
  *
@@ -521,11 +549,7 @@ int board_set_active_charge_port(int charge_port)
 void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
 {
-	/*
-	 * Limit the input current to 95% negotiated limit,
-	 * to account for the charger chip margin.
-	 */
-	charge_ma = (charge_ma * 95) / 100;
+	charge_ma = charger_derate(charge_ma);
 	charge_set_input_current_limit(MAX(charge_ma,
 				   CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }

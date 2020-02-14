@@ -67,7 +67,12 @@ struct host_packet {
 	 */
 	void (*send_response)(struct host_packet *pkt);
 
-	/* Input request data */
+	/*
+	 * Input request data. If request and response buffers overlap,
+	 * then request_temp must be non-null and be large enough to store the
+	 * entire request buffer. The request_temp buffer will then be used
+	 * as the buffer passed into the command handlers.
+	 */
 	const void *request;
 
 	/*
@@ -315,16 +320,6 @@ int pd_get_active_charge_port(void);
 int pd_host_command(int command, int version,
 		    const void *outdata, int outsize,
 		    void *indata, int insize);
-
-
-/**
- * EC: Get verify boot mode
- * @return vboot_mode as the following:
- *    VBOOT_MODE_NORMAL    - normal mode
- *    VBOOT_MODE_DEVELOPER - developer mode
- *    VBOOT_MODE_RECOVERY  - recovery mode
- */
-int host_get_vboot_mode(void);
 
 /*
  * Sends an emulated sysrq to the host, used by button-based debug mode.

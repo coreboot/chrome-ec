@@ -141,7 +141,7 @@
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MT6370
 #define CONFIG_USB_PD_TCPM_TCPCI
@@ -151,6 +151,7 @@
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_PD_COMM_LOCKED
+#define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USBC_DISABLE_CHARGE_FROM_RP_DEF
 #ifdef SECTION_IS_RO
 #define CONFIG_USB_PD_DEBUG_LEVEL 0
@@ -335,6 +336,8 @@ int board_read_id(enum adc_channel, const struct mv_to_id *table, int size);
 extern uint8_t board_version;
 extern uint8_t oem;
 extern uint32_t sku;
+
+#define PORT_TO_HPD(port) GPIO_USB_C0_HPD_OD
 
 #endif /* !__ASSEMBLER__ */
 

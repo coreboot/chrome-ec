@@ -17,6 +17,7 @@
 #include "driver/tcpm/anx7447.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
+#include "driver/temp_sensor/g753.h"
 #include "ec_commands.h"
 #include "extpower.h"
 #include "fan.h"
@@ -41,6 +42,7 @@
 #include "usb_pd.h"
 #include "usbc_ppc.h"
 #include "util.h"
+#include "battery_smart.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -119,7 +121,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /******************************************************************************/
 /* USB-C TPCP Configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -139,7 +141,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.driver = &anx7447_usb_mux_driver,
 		.hpd_update = &anx7447_tcpc_update_hpd_status,
@@ -171,20 +173,15 @@ static struct mutex g_lid_mutex;
 /* Lid accel private data */
 static struct stprivate_data g_lis2dwl_data;
 /* Base accel private data */
-static struct lsm6dsm_data lsm6dsm_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
-/*
- * TODO(b/124337208): P0 boards don't have this sensor mounted so the rotation
- * matrix can't be tested properly. This needs to be revisited after EVT to make
- * sure the rotaiton matrix for the lid sensor is correct.
- */
 static const mat33_fp_t lid_standard_ref = {
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
@@ -204,7 +201,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 4, /* g */
+		.default_range = 2, /* g */
 		.min_frequency = LIS2DW12_ODR_MIN_VAL,
 		.max_frequency = LIS2DW12_ODR_MAX_VAL,
 		.config = {
@@ -234,7 +231,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 4,  /* g */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 		.config = {
@@ -291,7 +288,7 @@ const struct fan_rpm fan_rpm_0 = {
 	.rpm_max = 6900,
 };
 
-struct fan_t fans[FAN_CH_COUNT] = {
+const struct fan_t fans[FAN_CH_COUNT] = {
 	[FAN_CH_0] = { .conf = &fan_conf_0, .rpm = &fan_rpm_0, },
 };
 
@@ -321,6 +318,11 @@ const struct temp_sensor_t temp_sensors[] = {
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_51k1_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_2,
+				 .action_delay_sec = 1},
+	[TEMP_SENSOR_3] = {.name = "Temp3",
+				 .type = TEMP_SENSOR_TYPE_CPU,
+				 .read = g753_get_val,
+				 .idx = 0,
 				 .action_delay_sec = 1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
@@ -367,9 +369,66 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC_ODL, !is_overcurrented);
 }
+
+__override uint32_t board_override_feature_flags0(uint32_t flags0)
+{
+	uint8_t sku = get_board_sku();
+	/*
+	 * Check if the current sku id does not support keyboard backlight
+	 * and return the feature flag without EC_FEATURE_PWM_KEYB
+	 * sku_id = 1/2 - without keyboard backlight
+	 * sku_id = 3/4 - with keyboard backlight
+	 */
+	if (sku == 1 || sku == 2)
+		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
+	else
+		return flags0;
+}
+
+/* Battery functions */
+#define SB_OPTIONALMFG_FUNCTION2        0x26
+#define QUICK_CHARGE_SUPPORT            0x01
+#define QUICK_CHARGE_ENABLE             0x02
+
+#define SB_QUICK_CHARGE_ENABLE          1
+#define SB_QUICK_CHARGE_DISABLE         0
+
+static void sb_quick_charge_mode(int enable)
+{
+	int val, rv;
+
+	rv = sb_read(SB_OPTIONALMFG_FUNCTION2, &val);
+	if (rv)
+		return;
+
+	if (val & QUICK_CHARGE_SUPPORT) {
+		if (enable)
+			val |= QUICK_CHARGE_ENABLE;
+		else
+			val &= ~QUICK_CHARGE_ENABLE;
+
+		sb_write(SB_OPTIONALMFG_FUNCTION2, val);
+	}
+}
+
+/* Called on AP S5 -> S0 transition */
+static void board_chipset_startup(void)
+{
+	/* Normal charge current */
+	sb_quick_charge_mode(SB_QUICK_CHARGE_DISABLE);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_INIT_I2C+1);
+
+/* Called on AP S0 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	/* Quick charge current */
+	sb_quick_charge_mode(SB_QUICK_CHARGE_ENABLE);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);

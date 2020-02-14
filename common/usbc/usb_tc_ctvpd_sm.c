@@ -15,8 +15,8 @@
 /* USB Type-C CTVPD module */
 
 #ifdef CONFIG_COMMON_RUNTIME
-#define CPRINTF(format, args...) cprintf(CC_HOOK, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_HOOK, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 #else /* CONFIG_COMMON_RUNTIME */
 #define CPRINTF(format, args...)
 #define CPRINTS(format, args...)
@@ -29,9 +29,6 @@
 #define SUPPORT_TIMER_RESET_REQUEST  1
 #define SUPPORT_TIMER_RESET_COMPLETE 2
 
-/* Constant used to force an initial debounce cycle */
-#define PD_CC_UNSET -1
-
 /**
  * This is the Type-C Port object that contains information needed to
  * implement a Charge Through VCONN Powered Device.
@@ -39,10 +36,6 @@
 static struct type_c {
 	/* state machine context */
 	struct sm_ctx ctx;
-	/* current port power role (VPD, SOURCE or SINK) */
-	uint8_t power_role;
-	/* current port data role (DFP or UFP) */
-	uint8_t data_role;
 	/* Higher-level power deliver state machines are enabled if true. */
 	uint8_t pd_enable;
 	/* port flags, see TC_FLAGS_* */
@@ -76,7 +69,7 @@ static struct type_c {
 	/* The cc state */
 	enum pd_cc_states cc_state;
 	uint64_t next_role_swap;
-} tc[CONFIG_USB_PD_PORT_COUNT];
+} tc[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* List of all TypeC-level states */
 enum usb_tc_state {
@@ -141,15 +134,25 @@ static void set_state_tc(const int port, enum usb_tc_state new_state);
 
 /* Public TypeC functions */
 
-int tc_get_power_role(int port)
+enum pd_power_role pd_get_power_role(int port)
 {
-	return tc[port].power_role;
+	/* Vconn power device is always the sink */
+	return PD_ROLE_SINK;
 }
 
-int tc_get_data_role(int port)
+enum pd_cable_plug tc_get_cable_plug(int port)
 {
-	return tc[port].data_role;
+	/* Vconn power device is always the cable */
+	return PD_PLUG_FROM_CABLE;
 }
+
+enum pd_data_role pd_get_data_role(int port)
+{
+	/* Vconn power device doesn't have a data role, but UFP matches SNK */
+	return PD_ROLE_UFP;
+}
+
+/* Note tc_set_power_role and tc_set_data_role are unimplemented */
 
 uint8_t tc_get_polarity(int port)
 {
@@ -160,11 +163,6 @@ uint8_t tc_get_polarity(int port)
 uint8_t tc_get_pd_enabled(int port)
 {
 	return tc[port].pd_enable;
-}
-
-void tc_set_power_role(int port, int role)
-{
-	tc[port].power_role = role;
 }
 
 void tc_reset_support_timer(int port)
@@ -185,8 +183,6 @@ void tc_state_init(int port)
 
 	/* Disable pd state machines */
 	tc[port].pd_enable = 0;
-	tc[port].power_role = PD_PLUG_CABLE_VPD;
-	tc[port].data_role = 0; /* Reserved for VPD */
 	tc[port].billboard_presented = 0;
 	tc[port].flags = 0;
 }

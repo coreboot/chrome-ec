@@ -6,11 +6,13 @@
 /* Intel BASEBOARD-RVP USB MUX specific configuration */
 
 #include "common.h"
+#include "anx7440.h"
+#include "timer.h"
 #include "usb_mux.h"
 
 /* USB muxes Configuration */
 #ifdef CONFIG_USB_MUX_VIRTUAL
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[TYPE_C_PORT_0] = {
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
@@ -22,5 +24,21 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 #endif /* HAS_TASK_PD_C1 */
 };
-BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_COUNT);
+BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
 #endif /* CONFIG_USB_MUX_VIRTUAL */
+
+#ifdef CONFIG_USB_MUX_ANX7440
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	[TYPE_C_PORT_0] = {
+		.port_addr = I2C_ADDR_USB_MUX0_FLAGS,
+		.driver = &anx7440_usb_mux_driver,
+	},
+#ifdef HAS_TASK_PD_C1
+	[TYPE_C_PORT_1] = {
+		.port_addr = I2C_ADDR_USB_MUX1_FLAGS,
+		.driver = &anx7440_usb_mux_driver,
+	},
+#endif /* HAS_TASK_PD_C1 */
+};
+BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
+#endif /* CONFIG_USB_MUX_ANX7440 */

@@ -113,8 +113,8 @@ enum ceil_requestor {
 	CEIL_REQUESTOR_COUNT,
 };
 
-#define CHARGE_PORT_COUNT \
-		(CONFIG_USB_PD_PORT_COUNT + CONFIG_DEDICATED_CHARGE_PORT_COUNT)
+#define CHARGE_PORT_COUNT (CONFIG_USB_PD_PORT_MAX_COUNT + \
+			   CONFIG_DEDICATED_CHARGE_PORT_COUNT)
 #if (CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0)
 
 /**
@@ -133,7 +133,7 @@ enum ceil_requestor {
  */
 #if !defined(DEDICATED_CHARGE_PORT)
 #error "DEDICATED_CHARGE_PORT must be defined"
-#elif DEDICATED_CHARGE_PORT < CONFIG_USB_PD_PORT_COUNT
+#elif DEDICATED_CHARGE_PORT < CONFIG_USB_PD_PORT_MAX_COUNT
 #error "DEDICATED_CHARGE_PORT must larger than pd port numbers"
 #endif /* !defined(DEDICATED_CHARGE_PORT) */
 
@@ -205,6 +205,13 @@ int charge_manager_get_charger_current(void);
  * @return	Charger voltage (mV) or CHARGE_VOLTAGE_UNINITIALIZED.
  */
 int charge_manager_get_charger_voltage(void);
+
+/**
+ * Get the charger supplier.
+ *
+ * @return	enum charge_supplier
+ */
+enum charge_supplier charge_manager_get_supplier(void);
 
 #ifdef CONFIG_USB_PD_LOGGING
 /* Save power state log entry for the given port */

@@ -23,6 +23,7 @@
 #include "driver/accel_bma2x2.h"
 #include "driver/accel_kionix.h"
 #include "driver/baro_bmp280.h"
+#include "driver/charger/isl923x.h"
 #include "driver/led/lm3509.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -228,7 +229,7 @@ const struct i2c_port_t i2c_ports[]  = {
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_PS8751] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -258,7 +259,7 @@ static int ps8751_tune_mux(int port)
 	return EC_SUCCESS;
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_PS8751] = {
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
@@ -281,6 +282,16 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT);
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 void board_reset_pd_mcu(void)
 {
@@ -320,7 +331,7 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
 		const struct usb_mux *mux = &usb_muxes[port];
 		mux->hpd_update(port, 0, 0);
 	}
@@ -640,7 +651,7 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* charge port is a physical port */
 	int is_real_port = (charge_port >= 0 &&
-			    charge_port < CONFIG_USB_PD_PORT_COUNT);
+			    charge_port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/* check if we are sourcing VBUS on the port */
 	/* dnojiri: revisit */
 	int is_source = gpio_get_level(charge_port == 0 ?
@@ -755,7 +766,7 @@ const struct motion_sensor_t lid_accel_1 = {
 	.rot_standard_ref = &rotation_x180_z90,
 	.min_frequency = KX022_ACCEL_MIN_FREQ,
 	.max_frequency = KX022_ACCEL_MAX_FREQ,
-	.default_range = 2, /* g, to support tablet mode */
+	.default_range = 2, /* g, to support lid angle calculation. */
 	.config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
@@ -783,7 +794,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &lid_standard_ref,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode */
+		.default_range = 2, /* g, to support lid angle calculation. */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -811,7 +822,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode  */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -1035,6 +1046,23 @@ static void board_init(void)
 #endif
 
 	isl923x_set_ac_prochot(3328 /* mA */);
+
+	switch (oem) {
+	case PROJECT_VAYNE:
+		isl923x_set_dc_prochot(11008 /* mA */);
+		break;
+	case PROJECT_PANTHEON:
+		isl923x_set_dc_prochot(9984 /* mA */);
+		break;
+	case PROJECT_SONA:
+		isl923x_set_dc_prochot(5888 /* mA */);
+		break;
+	case PROJECT_NAMI:
+	case PROJECT_AKALI:
+	/* default 4096mA 0x1000 */
+	default:
+		break;
+	}
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

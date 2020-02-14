@@ -11,11 +11,13 @@
 #include "chipset.h"
 #include "console.h"
 #include "cros_board_info.h"
+#include "driver/charger/bq25710.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/anx7447.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
+#include "ec_commands.h"
 #include "espi.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -74,10 +76,27 @@ const struct i2c_port_t i2c_ports[] = {
 	{"ppc0",    I2C_PORT_PPC0,    100, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
 	{"tcpc1",   I2C_PORT_TCPC1,   100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
 	{"tcpc0",   I2C_PORT_TCPC0,   100, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
+#ifdef BOARD_AKEMI
+	{"thermal", I2C_PORT_THERMAL, 400, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
+#endif
+#ifdef BOARD_JINLON
+	{"thermal", I2C_PORT_THERMAL, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
+#endif
 	{"power",   I2C_PORT_POWER,   100, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
 	{"eeprom",  I2C_PORT_EEPROM,  100, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+/******************************************************************************/
+/* Charger Chip Configuration */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = BQ25710_SMBUS_ADDR1_FLAGS,
+		.drv = &bq25710_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /******************************************************************************/
 /* Chipset callbacks/hooks */
@@ -139,7 +158,7 @@ void board_hibernate(void)
 	 * if it is later connected to ensure that AC_PRESENT
 	 * will wake up the EC from this state
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; ++port)
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
 		ppc_vbus_sink_enable(port, 1);
 
 	/*
@@ -152,7 +171,7 @@ void board_hibernate(void)
 
 /******************************************************************************/
 /* USB-C PPC Configuration */
-struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_COUNT] = {
+struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.i2c_port = I2C_PORT_PPC0,
 		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
@@ -251,7 +270,7 @@ void board_reset_pd_mcu(void)
 int board_set_active_charge_port(int port)
 {
 	int is_valid_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 
 	if (!is_valid_port && port != CHARGE_PORT_NONE)
@@ -381,3 +400,15 @@ static void cbi_init(void)
 	CPRINTS("Board ID: %d", board_id);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
+
+__override enum ec_pd_port_location board_get_pd_port_location(int port)
+{
+	switch (port) {
+	case 0:
+		return EC_PD_PORT_LOCATION_LEFT_BACK;
+	case 1:
+		return EC_PD_PORT_LOCATION_RIGHT_BACK;
+	default:
+		return EC_PD_PORT_LOCATION_UNKNOWN;
+	}
+}

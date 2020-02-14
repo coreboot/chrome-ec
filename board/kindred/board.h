@@ -22,11 +22,11 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
-#define CONFIG_EC_FEATURE_BOARD_OVERRIDE
-
 /* Keyboard features */
 #define CONFIG_PWM
 #define CONFIG_PWM_KBLIGHT
+/* support factory keyboard test */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 
 /* Sensors */
 /* BMI160 Base accel/gyro */
@@ -46,6 +46,7 @@
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_TCPM_ANX7447
+#define CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
 #define CONFIG_USB_PD_TCPM_PS8751
 #define BOARD_TCPC_C0_RESET_HOLD_DELAY ANX74XX_RESET_HOLD_MS
 #define BOARD_TCPC_C0_RESET_POST_DELAY ANX74XX_RESET_HOLD_MS
@@ -114,7 +115,6 @@
 #define GPIO_EN_PP5000		GPIO_EN_PP5000_A
 
 #ifndef __ASSEMBLER__
-
 #include "gpio_signal.h"
 #include "registers.h"
 
@@ -170,6 +170,9 @@ enum battery_type {
 
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
+
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
 
 #endif /* !__ASSEMBLER__ */
 

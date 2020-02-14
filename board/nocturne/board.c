@@ -16,6 +16,7 @@
 #include "compile_time_macros.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/als_opt3001.h"
+#include "driver/charger/isl923x.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/sync.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -192,7 +193,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ALS_GYRO,
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 4, /* g */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
 		.config = {
@@ -298,7 +299,7 @@ struct ppc_config_t ppc_chips[] = {
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -317,7 +318,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
@@ -328,6 +329,16 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
 };
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 void board_chipset_startup(void)
 {
@@ -573,7 +584,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	int lvl;
 
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the levels are inverted because the pin is active low. */
@@ -674,6 +685,7 @@ void board_reset_pd_mcu(void)
 	gpio_set_level(GPIO_USB_PD_RST_L, 0);
 	msleep(10); /* TODO(aaboagye): Verify min hold time. */
 	gpio_set_level(GPIO_USB_PD_RST_L, 1);
+	msleep(PS8805_FW_INIT_DELAY_MS);
 }
 
 void board_set_tcpc_power_mode(int port, int mode)
@@ -688,7 +700,7 @@ void board_set_tcpc_power_mode(int port, int mode)
 int board_set_active_charge_port(int port)
 {
 	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 	int rv;
 	int old_port;

@@ -35,11 +35,13 @@
  * address that is pertinent to its use.
  */
 #define I2C_ADDR_MASK		0x03FF
+#define I2C_FLAG_PEC		BIT(13)
 #define I2C_FLAG_BIG_ENDIAN	BIT(14)
 /* BIT(15) SPI_FLAG - used in motion_sense to overload address */
 #define I2C_FLAG_ADDR_IS_SPI	BIT(15)
 
 #define I2C_GET_ADDR(addr_flags)	((addr_flags) & I2C_ADDR_MASK)
+#define I2C_USE_PEC(addr_flags)		((addr_flags) & I2C_FLAG_PEC)
 #define I2C_IS_BIG_ENDIAN(addr_flags)	((addr_flags) & I2C_FLAG_BIG_ENDIAN)
 
 /*
@@ -64,6 +66,9 @@
 /* The size of the header for a version 3 response packet sent over I2C. */
 #define I2C_RESPONSE_HEADER_SIZE 2
 
+/* This port allows changing speed at runtime */
+#define I2C_PORT_FLAG_DYNAMIC_SPEED	BIT(0)
+
 /*
  * Supported I2C CLK frequencies.
  * TODO(crbug.com/549286): Use this enum in i2c_port_t.
@@ -75,9 +80,28 @@ enum i2c_freq {
 	I2C_FREQ_COUNT,
 };
 
+/*
+ * I2C mask update actions.
+ *      MASK_SET will OR the mask into the old value
+ *      MASK_CLR will AND the ~mask from the old value
+ */
+enum mask_update_action {
+	MASK_CLR,
+	MASK_SET
+};
+
 struct i2c_info_t {
 	uint16_t port;	/* Physical port for device */
 	uint16_t addr_flags;
+};
+
+struct i2c_port_t; /* forward declaration */
+
+struct i2c_drv {
+	int (*xfer)(const struct i2c_port_t *i2c_port,
+		    const uint16_t slave_addr_flags,
+		    const uint8_t *out, int out_size,
+		    uint8_t *in, int in_size, int flags);
 };
 
 /* Data structure to define I2C port configuration. */
@@ -91,6 +115,8 @@ struct i2c_port_t {
 	 * If the function is not defined, the default value is true. */
 	int (*passthru_allowed)(const struct i2c_port_t *port,
 				uint16_t addr_flags);
+	const struct i2c_drv *drv;
+	uint16_t flags;       /* I2C_PORT_FLAG_* flags */
 };
 
 extern const struct i2c_port_t i2c_ports[];
@@ -172,27 +198,6 @@ int i2c_xfer_unlocked(const int port,
 #define I2C_LINE_SCL_HIGH BIT(0)
 #define I2C_LINE_SDA_HIGH BIT(1)
 #define I2C_LINE_IDLE (I2C_LINE_SCL_HIGH | I2C_LINE_SDA_HIGH)
-
-/**
- * Chip-level function to transmit one block of raw data, then receive one
- * block of raw data.
- *
- * This is a low-level chip-dependent function and should only be called by
- * i2c_xfer().
- *
- * @param port		Port to access
- * @param slave_addr	Slave device address
- * @param out		Data to send
- * @param out_size	Number of bytes to send
- * @param in		Destination buffer for received data
- * @param in_size	Number of bytes to receive
- * @param flags		Flags (see I2C_XFER_* above)
- * @return EC_SUCCESS, or non-zero if error.
- */
-int chip_i2c_xfer(const int port,
-		  const uint16_t slave_addr_flags,
-		  const uint8_t *out, int out_size,
-		  uint8_t *in, int in_size, int flags);
 
 /**
  * Return raw I/O line levels (I2C_LINE_*) for a port when port is in alternate
@@ -333,6 +338,47 @@ int i2c_write8(const int port,
 	       int offset, int data);
 
 /**
+ * Read, modify, write an i2c register to the slave at 7-bit slave address
+ * <slave_addr_flags>, at the specified 8-bit <offset> in the slave's
+ * address space.  The <action> will specify whether this is setting the
+ * <mask> bit value(s) or clearing them. If the value to be written is the
+ * same as the original value of the register, the write will not be
+ * performed.
+ */
+int i2c_update8(const int port,
+		const uint16_t slave_addr_flags,
+		const int offset,
+		const uint8_t mask,
+		const enum mask_update_action action);
+
+int i2c_update16(const int port,
+		 const uint16_t slave_addr_flags,
+		 const int offset,
+		 const uint16_t mask,
+		 const enum mask_update_action action);
+
+/**
+ * Read, modify, write field of an i2c register to the slave at 7-bit
+ * slave address <slave_addr_flags>, at the specified 8-bit <offset> in
+ * the slave's address space.  The register will be read, the <field_mask>
+ * will be cleared and then the <set_value> will be set.  The field mask
+ * and the set value do not have to be in the same bit locations.  If the
+ * new value is not the same as the original value, the new value will be
+ * written back out to the device, otherwise no write will be performed.
+ */
+int i2c_field_update8(const int port,
+		      const uint16_t slave_addr_flags,
+		      const int offset,
+		      const uint8_t field_mask,
+		      const uint8_t set_value);
+
+int i2c_field_update16(const int port,
+		       const uint16_t slave_addr_flags,
+		       const int offset,
+		       const uint16_t field_mask,
+		       const uint16_t set_value);
+
+/**
  * Read one or two bytes data from the slave at 7-bit slave address
  * * <slaveaddr>, at 16-bit <offset> in the slave's address space.
  */
@@ -447,9 +493,15 @@ enum ec_status i2c_get_protocol_info(struct host_cmd_handler_args *args);
 void i2c_data_received(int port, uint8_t *buf, int len);
 int i2c_set_response(int port, uint8_t *buf, int len);
 
+/*
+ * Initialize i2c master controller. Automatically called at board boot
+ * if CONFIG_I2C_MASTER is defined.
+ */
+void i2c_init(void);
+
 /**
  * Initialize i2c master ports. This function can be called for cases where i2c
- * ports are not initialized by default via a hook call.
+ * ports are not initialized by default from main.c.
  */
 void i2cm_init(void);
 
@@ -510,5 +562,25 @@ void i2c_end_xfer_notify(const int port,
  */
 void i2c_trace_notify(int port, uint16_t slave_addr_flags,
 		      int direction, const uint8_t *data, size_t size);
+
+/**
+ * Set bus speed. Only support for ports with I2C_PORT_FLAG_DYNAMIC_SPEED
+ * flag.
+ *
+ * @param port:		Port to access
+ * @param freq:		Bus speed.
+ *
+ * @return EC_SUCCESS, or non-zero if error.
+ */
+int i2c_set_freq(int port, enum i2c_freq freq);
+
+/**
+ * Chip level function to get bus speed.
+ *
+ * @param port:		Port to access
+ *
+ * @return Bus speed
+ */
+enum i2c_freq i2c_get_freq(int port);
 
 #endif  /* __CROS_EC_I2C_H */

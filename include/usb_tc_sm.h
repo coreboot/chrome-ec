@@ -9,11 +9,18 @@
 #define __CROS_EC_USB_TC_H
 
 #include "usb_sm.h"
+#include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
 #define TC_SET_FLAG(port, flag) atomic_or(&tc[port].flags, (flag))
 #define TC_CLR_FLAG(port, flag) atomic_clear(&tc[port].flags, (flag))
 #define TC_CHK_FLAG(port, flag) (tc[port].flags & (flag))
+
+enum try_src_override_t {
+	TRY_SRC_OVERRIDE_OFF,
+	TRY_SRC_OVERRIDE_ON,
+	TRY_SRC_NO_OVERRIDE
+};
 
 /*
  * Type C supply voltage (mV)
@@ -48,20 +55,13 @@ int tc_is_attached_src(int port);
 int tc_is_attached_snk(int port);
 
 /**
- * Get current data role
+ * Get cable plug setting. This should be constant per build. This replaces
+ * the power role bit in PD header for SOP' and SOP" packets.
  *
  * @param port USB-C port number
- * @return 0 for ufp, 1 for dfp, 2 for disconnected
+ * @return PD cable plug setting
  */
-int tc_get_data_role(int port);
-
-/**
- * Get current power role
- *
- * @param port USB-C port number
- * @return 0 for sink, 1 for source or vpd
- */
-int tc_get_power_role(int port);
+enum pd_cable_plug tc_get_cable_plug(int port);
 
 /**
  * Get current polarity
@@ -86,7 +86,7 @@ uint8_t tc_get_pd_enabled(int port);
  * @param port USB-C port number
  * @param role power role
  */
-void tc_set_power_role(int port, int role);
+void tc_set_power_role(int port, enum pd_power_role role);
 
 /**
  * Set the data role
@@ -94,7 +94,7 @@ void tc_set_power_role(int port, int role);
  * @param port USB-C port number
  * @param role data role
  */
-void tc_set_data_role(int port, int role);
+void tc_set_data_role(int port, enum pd_data_role role);
 
 /**
  * Sets the USB Mux depending on current data role
@@ -117,12 +117,12 @@ void tc_partner_dr_power(int port, int en);
 
 /**
  * Policy Engine informs the Type-C state machine if the port partner
- * has external power
+ * has unconstrained power
  *
  * @param port USB_C port number
- * @param en   1 if port partner has external power, else 0
+ * @param en   1 if port partner has unconstrained power, else 0
  */
-void tc_partner_extpower(int port, int en);
+void tc_partner_unconstrainedpower(int port, int en);
 
 /**
  * Policy Engine informs the Type-C state machine if the port partner
@@ -166,6 +166,14 @@ void tc_prs_src_snk_assert_rd(int port);
  * @param port USB_C port number
  */
 void tc_prs_snk_src_assert_rp(int port);
+
+/**
+ * Informs the Type-C State Machine that a Power Role Swap is starting.
+ * This function is called from the Policy Engine.
+ *
+ * @parm port USB_C port number
+ */
+void tc_request_power_swap(int port);
 
 /**
  * Informs the Type-C State Machine that a Power Role Swap is complete.
@@ -262,7 +270,7 @@ void pd_request_vconn_swap_off(int port);
  * @param cc2 value of CC2 set by tcpm_get_cc
  * @return 0 if cc1 is connected, else 1 for cc2
  */
-enum pd_cc_polarity_type get_snk_polarity(enum tcpc_cc_voltage_status cc1,
+enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2);
 
 /**
@@ -306,13 +314,6 @@ void tc_event_check(int port, int evt);
 void tc_run(const int port);
 
 /**
- * Attempt to activate VCONN
- *
- * @param port USB-C port number
- */
-void tc_vconn_on(int port);
-
-/**
  * Start error recovery
  *
  * @param port USB-C port number
@@ -325,6 +326,61 @@ void tc_start_error_recovery(int port);
  * @param port USB-C port number
  */
 void tc_hard_reset(int port);
+
+/**
+ * Start the state machine event loop
+ *
+ * @param port USB-C port number
+ */
+void tc_start_event_loop(int port);
+
+/**
+ * Pauses the state machine event loop
+ *
+ * @param port USB-C port number
+ */
+void tc_pause_event_loop(int port);
+
+/**
+ * Allow system to override the control of TrySrc
+ *
+ * @param en	TRY_SRC_OVERRIDE_OFF - Force TrySrc OFF
+ *		TRY_SRC_OVERRIDE_ON - Force TrySrc ON
+ *		TRY_SRC_NO_OVERRIDE - Allow state machine to control TrySrc
+ */
+void tc_try_src_override(enum try_src_override_t ov);
+
+/**
+ * Get state of try_src_override
+ *
+ * @return	TRY_SRC_OVERRIDE_OFF - TrySrc is forced OFF
+ *		TRY_SRC_OVERRIDE_ON - TrySrc is forced ON
+ *		TRY_SRC_NO_OVERRIDE - TypeC state machine controls TrySrc
+ */
+enum try_src_override_t tc_get_try_src_override(void);
+
+/**
+ * Returns the name of the current typeC state
+ *
+ * @param port USB-C port number
+ * @return name of current typeC state
+ */
+const char *tc_get_current_state(int port);
+
+/**
+ * Returns the flag mask of the typeC state machine
+ *
+ * @param port USB-C port number
+ * @return flag mask of the typeC state machine
+ */
+uint32_t tc_get_flags(int port);
+
+/*
+ * Prints the rw hash and sysjump image string.
+ *
+ * @param port USB-C port number
+ */
+void tc_print_dev_info(int port);
 
 #ifdef CONFIG_USB_TYPEC_CTVPD
 

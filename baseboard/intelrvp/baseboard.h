@@ -31,6 +31,7 @@
 #define CONFIG_CMD_CHARGER_DUMP
 #define CONFIG_CMD_KEYBOARD
 #define CONFIG_CMD_USB_PD_CABLE
+#define CONFIG_CMD_USB_PD_PE
 
 /* Port80 display */
 #define CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
@@ -70,6 +71,10 @@
 	#define CONFIG_CHARGE_RAMP_HW
 #endif
 
+/* Enable USB-PD REV 3.0 */
+#define CONFIG_USB_PD_REV30
+#define CONFIG_USB_PID 0x8086
+
 /* USB PD config */
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
@@ -90,7 +95,8 @@
 /* SoC / PCH */
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_HOSTCMD_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_HOST_EVENT
 #define CONFIG_POWER_BUTTON
@@ -142,6 +148,8 @@
 #include "gpio_signal.h"
 #include "module_id.h"
 #include "registers.h"
+
+enum tcpc_rp_value;
 
 /* PWM channels */
 enum pwm_channel {
@@ -229,7 +237,7 @@ void vbus0_evt(enum gpio_signal signal);
 void vbus1_evt(enum gpio_signal signal);
 void board_charging_enable(int port, int enable);
 void board_vbus_enable(int port, int enable);
-void board_set_vbus_source_current_limit(int port, int rp);
+void board_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp);
 int ioexpander_read_intelrvp_version(int *port0, int *port1);
 void board_dc_jack_interrupt(enum gpio_signal signal);
 

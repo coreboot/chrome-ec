@@ -483,15 +483,15 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	/* Disable interrupt */
 	interrupt_disable();
 
+	/* Unlock & stop watchdog */
+	watchdog_stop_and_unlock();
+
 	/* ITIM event module disable */
 	CLEAR_BIT(NPCX_ITCTS(ITIM_EVENT_NO), NPCX_ITCTS_ITEN);
 	/* ITIM time module disable */
 	CLEAR_BIT(NPCX_ITCTS(ITIM32), NPCX_ITCTS_ITEN);
 	/* ITIM watchdog warn module disable */
 	CLEAR_BIT(NPCX_ITCTS(ITIM_WDG_NO), NPCX_ITCTS_ITEN);
-
-	/* Unlock & stop watchdog */
-	watchdog_stop_and_unlock();
 
 	/* Initialize watchdog */
 	NPCX_TWCFG = 0; /* Select T0IN clock as watchdog prescaler clock */
@@ -509,8 +509,10 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	system_set_gpios_and_wakeup_inputs_hibernate();
 
 	/*
-	 * Give the board a chance to do any late stage hibernation work.
-	 * This is likely going to configure GPIOs for hibernation.
+	 * Give the board a chance to do any late stage hibernation work.  This
+	 * is likely going to configure GPIOs for hibernation.  On some boards,
+	 * it's possible that this may not return at all.  On those boards,
+	 * power to the EC is likely being turn off entirely.
 	 */
 	if (board_hibernate_late)
 		board_hibernate_late();

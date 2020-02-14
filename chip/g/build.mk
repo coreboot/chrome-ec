@@ -9,12 +9,10 @@ CFLAGS_CPU+=-march=armv7-m -mcpu=cortex-m3
 
 ifeq ($(CONFIG_DCRYPTO),y)
 INCLUDE_ROOT := $(abspath ./include)
-CRYPTOCLIB := $(realpath ../../third_party/cryptoc)
 CPPFLAGS += -I$(abspath .)
 CPPFLAGS += -I$(abspath ./builtin)
 CPPFLAGS += -I$(abspath ./chip/$(CHIP))
 CPPFLAGS += -I$(INCLUDE_ROOT)
-CPPFLAGS += -I$(CRYPTOCLIB)/include
 endif
 
 # Required chip modules
@@ -179,7 +177,7 @@ ifeq ($(H1_DEVIDS),)
 # Signing with non-secret test key.
 CR50_RW_KEY = loader-testkey-A.pem
 # Make sure manifset Key ID field matches the actual key.
-DUM := $(shell sed 's/1187158727/764428053/' $(MANIFEST) > $(SIGNER_MANIFEST))
+DUM := $(shell sed 's/860844255/-764428053/' $(MANIFEST) > $(SIGNER_MANIFEST))
 else
 # The private key comes from the sighing fob.
 CR50_RW_KEY = cr50_rom0-dev-blsign.pem.pub
@@ -229,19 +227,5 @@ endif  # H1_DEVIDS defined
 ifneq ($(CHIP_MK_INCLUDED_ONCE),)
 $(out)/RW/ec.RW_B.flat: $(out)/RW/ec.RW.flat
 $(out)/RW/ec.RW.flat $(out)/RW/ec.RW_B.flat: SIGNER_EXTRAS = $(RW_SIGNER_EXTRAS)
-
-ifeq ($(CONFIG_DCRYPTO),y)
-
-CRYPTOC_OBJS = $(shell find $(out)/cryptoc -name '*.o')
-$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: LDFLAGS_EXTRA += $(CRYPTOC_OBJS)
-$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: cryptoc_objs
-
-
-# Force the external build each time, so it can look for changed sources.
-.PHONY: cryptoc_objs
-cryptoc_objs:
-	$(MAKE) obj=$(realpath $(out))/cryptoc SUPPORT_UNALIGNED=1 \
-		CONFIG_UPTO_SHA512=$(CONFIG_UPTO_SHA512) -C $(CRYPTOCLIB) objs
-endif   # end CONFIG_DCRYPTO
 
 endif   # CHIP_MK_INCLUDED_ONCE is nonempty

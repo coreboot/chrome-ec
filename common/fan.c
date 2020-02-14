@@ -6,6 +6,7 @@
 /* Basic Chrome OS fan control */
 
 #include "assert.h"
+#include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "fan.h"
@@ -19,6 +20,11 @@
 /* True if we're listening to the thermal control task. False if we're setting
  * things manually. */
 static int thermal_control_enabled[CONFIG_FANS];
+
+int is_thermal_control_enabled(int idx)
+{
+	return thermal_control_enabled[idx];
+}
 
 #ifdef CONFIG_FAN_UPDATE_PERIOD
 /* Should we ignore the fans for a while? */
@@ -72,7 +78,7 @@ test_mockable void fan_set_percent_needed(int fan, int pct)
 {
 	int actual_rpm, new_rpm;
 
-	if (!thermal_control_enabled[fan])
+	if (!is_thermal_control_enabled(fan))
 		return;
 
 #ifdef CONFIG_FAN_UPDATE_PERIOD
@@ -195,7 +201,7 @@ static int cc_faninfo(int argc, char **argv)
 		ccprintf("%sMode:   %s\n", leader,
 			 fan_get_rpm_mode(FAN_CH(fan)) ? "rpm" : "duty");
 		ccprintf("%sAuto:   %s\n", leader,
-			 thermal_control_enabled[fan] ? "yes" : "no");
+			 is_thermal_control_enabled(fan) ? "yes" : "no");
 		ccprintf("%sEnable: %s\n", leader,
 			 fan_get_enabled(FAN_CH(fan)) ? "yes" : "no");
 		is_pgood = is_powered(fan);
@@ -317,7 +323,7 @@ int dptf_get_fan_duty_target(void)
 	if (fan_count == 0)
 		return -1;
 
-	if (thermal_control_enabled[fan] || fan_get_rpm_mode(FAN_CH(fan)))
+	if (is_thermal_control_enabled(fan) || fan_get_rpm_mode(FAN_CH(fan)))
 		return -1;
 
 	return fan_get_duty(FAN_CH(fan));
@@ -551,7 +557,7 @@ static void pwm_fan_preserve_state(void)
 	/* TODO(crosbug.com/p/23530): Still treating all fans as one. */
 	if (fan_get_enabled(FAN_CH(fan)))
 		state.flag |= FAN_STATE_FLAG_ENABLED;
-	if (thermal_control_enabled[fan])
+	if (is_thermal_control_enabled(fan))
 		state.flag |= FAN_STATE_FLAG_THERMAL;
 	state.rpm = fan_get_rpm_target(FAN_CH(fan));
 
@@ -601,7 +607,11 @@ static void pwm_fan_start(void)
 	 * Upon booting to S0, if needed AP will disable/throttle it using
 	 * host commands.
 	 */
-	pwm_fan_control(1);
+	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ON))
+		pwm_fan_control(1);
 }
+/* On Fizz, CHIPSET_RESUME isn't triggered when AP warm resets.
+ * So we hook CHIPSET_RESET instead.
+ */
 DECLARE_HOOK(HOOK_CHIPSET_RESET, pwm_fan_start, HOOK_PRIO_FIRST);
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, pwm_fan_start, HOOK_PRIO_DEFAULT);

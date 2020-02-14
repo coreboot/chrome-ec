@@ -45,6 +45,7 @@
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_TCPM_ANX7447
+#define CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
 #define CONFIG_USB_PD_TCPM_PS8751
 #define BOARD_TCPC_C0_RESET_HOLD_DELAY ANX74XX_RESET_HOLD_MS
 #define BOARD_TCPC_C0_RESET_POST_DELAY ANX74XX_RESET_HOLD_MS
@@ -87,6 +88,7 @@
 #define CONFIG_THERMISTOR
 #define CONFIG_THROTTLE_AP
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
+#define CONFIG_TEMP_SENSOR_G753
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -143,6 +145,7 @@ enum mft_channel {
 enum temp_sensor_id {
 	TEMP_SENSOR_1,
 	TEMP_SENSOR_2,
+	TEMP_SENSOR_3,
 	TEMP_SENSOR_COUNT
 };
 

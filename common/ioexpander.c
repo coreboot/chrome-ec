@@ -16,8 +16,12 @@
 
 static uint8_t last_val[(IOEX_COUNT + 7) / 8];
 
-static int last_val_changed(int i, int v)
+static int last_val_changed(enum ioex_signal signal, int v)
 {
+	const int i = signal - IOEX_SIGNAL_START;
+
+	ASSERT(signal_is_ioex(signal));
+
 	if (v && !(last_val[i / 8] & (BIT(i % 8)))) {
 		last_val[i / 8] |= BIT(i % 8);
 		return 1;
@@ -29,13 +33,25 @@ static int last_val_changed(int i, int v)
 	}
 }
 
+int signal_is_ioex(int signal)
+{
+	return ((signal >= IOEX_SIGNAL_START) && (signal < IOEX_SIGNAL_END));
+}
+
+static const struct ioex_info *ioex_get_signal_info(enum ioex_signal signal)
+{
+	ASSERT(signal_is_ioex(signal));
+
+	return ioex_list + signal - IOEX_SIGNAL_START;
+}
+
 static int ioex_is_valid_interrupt_signal(enum ioex_signal signal)
 {
 	const struct ioexpander_drv *drv;
-	const struct ioex_info *g = ioex_list + signal;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
 
 	/* Fail if no interrupt handler */
-	if (signal >= ioex_ih_count)
+	if (signal - IOEX_SIGNAL_START >= ioex_ih_count)
 		return EC_ERROR_PARAM1;
 
 	drv = ioex_config[g->ioex].drv;
@@ -53,7 +69,7 @@ static int ioex_is_valid_interrupt_signal(enum ioex_signal signal)
 int ioex_enable_interrupt(enum ioex_signal signal)
 {
 	int rv;
-	const struct ioex_info *g = ioex_list + signal;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
 	const struct ioexpander_drv *drv;
 
 	rv = ioex_is_valid_interrupt_signal(signal);
@@ -68,7 +84,7 @@ int ioex_disable_interrupt(enum ioex_signal signal)
 {
 	int rv;
 	const struct ioexpander_drv *drv;
-	const struct ioex_info *g = ioex_list + signal;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
 
 	rv = ioex_is_valid_interrupt_signal(signal);
 	if (rv != EC_SUCCESS)
@@ -92,7 +108,7 @@ int ioex_set_flags_by_mask(int ioex, int port, int mask, int flags)
 
 int ioex_get_flags(enum ioex_signal signal, int *flags)
 {
-	const struct ioex_info *g = ioex_list + signal;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
 
 	return ioex_config[g->ioex].drv->get_flags_by_mask(g->ioex,
 						g->port, g->mask, flags);
@@ -100,7 +116,7 @@ int ioex_get_flags(enum ioex_signal signal, int *flags)
 
 int ioex_set_flags(enum ioex_signal signal, int flags)
 {
-	const struct ioex_info *g = ioex_list + signal;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
 
 	return ioex_config[g->ioex].drv->set_flags_by_mask(g->ioex,
 						g->port, g->mask, flags);
@@ -108,7 +124,7 @@ int ioex_set_flags(enum ioex_signal signal, int flags)
 
 int ioex_get_level(enum ioex_signal signal, int *val)
 {
-	const struct ioex_info *g = ioex_list + signal;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
 
 	return ioex_config[g->ioex].drv->get_level(g->ioex, g->port,
 							g->mask, val);
@@ -116,7 +132,7 @@ int ioex_get_level(enum ioex_signal signal, int *val)
 
 int ioex_set_level(enum ioex_signal signal, int value)
 {
-	const struct ioex_info *g = ioex_list + signal;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
 
 	return ioex_config[g->ioex].drv->set_level(g->ioex, g->port,
 							g->mask, value);
@@ -155,7 +171,9 @@ DECLARE_HOOK(HOOK_INIT, ioex_init_default, HOOK_PRIO_INIT_I2C + 1);
 
 const char *ioex_get_name(enum ioex_signal signal)
 {
-	return ioex_list[signal].name;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
+
+	return g->name;
 }
 
 static void print_ioex_info(int io)
@@ -191,7 +209,9 @@ static void print_ioex_info(int io)
 
 int ioex_get_default_flags(enum ioex_signal signal)
 {
-	return ioex_list[signal].flags;
+	const struct ioex_info *g = ioex_get_signal_info(signal);
+
+	return g->flags;
 }
 
 /* IO expander commands */
@@ -200,21 +220,21 @@ static enum ioex_signal find_ioex_by_name(const char *name)
 	int i;
 
 	if (!name)
-		return IOEX_COUNT;
+		return -1;
 
-	for (i = 0; i < IOEX_COUNT; i++) {
+	for (i = IOEX_SIGNAL_START; i < IOEX_SIGNAL_END; i++) {
 		if (!strcasecmp(name, ioex_get_name(i)))
 			return i;
 	}
 
-	return IOEX_COUNT;
+	return -1;
 }
 
 static enum ec_error_list ioex_set(const char *name, int value)
 {
 	enum ioex_signal signal = find_ioex_by_name(name);
 
-	if (signal == IOEX_COUNT)
+	if (signal == -1)
 		return EC_ERROR_INVAL;
 
 	if (!(ioex_get_default_flags(signal) & GPIO_OUTPUT))
@@ -251,7 +271,7 @@ static int command_ioex_get(int argc, char **argv)
 	/* If a signal is specified, print only that one */
 	if (argc == 2) {
 		i = find_ioex_by_name(argv[1]);
-		if (i == IOEX_COUNT)
+		if (i == -1)
 			return EC_ERROR_PARAM1;
 		print_ioex_info(i);
 
@@ -259,7 +279,7 @@ static int command_ioex_get(int argc, char **argv)
 	}
 
 	/* Otherwise print them all */
-	for (i = 0; i < IOEX_COUNT; i++)
+	for (i = IOEX_SIGNAL_START; i < IOEX_SIGNAL_END; i++)
 		print_ioex_info(i);
 
 	return EC_SUCCESS;

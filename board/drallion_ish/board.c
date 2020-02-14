@@ -38,14 +38,14 @@ static struct mutex g_lid_mag_mutex;
 static struct mutex g_base_mutex;
 
 /* sensor private data */
-static struct lsm6dsm_data lsm6dsm_a_data;
+static struct lsm6dsm_data lsm6dsm_a_data = LSM6DSM_DATA;
 static struct stprivate_data g_lis2dh_data;
 static struct lis2mdl_private_data lis2mdl_a_data;
 
-/* Matrix to rotate lid sensor into standard reference frame */
-const mat33_fp_t lid_rot_ref = {
+/* Matrix to rotate base sensor into standard reference frame */
+const mat33_fp_t base_rot_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0,  FLOAT_TO_FP(1)}
 };
 
@@ -65,8 +65,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.rot_standard_ref = &lid_rot_ref,
-		.default_range = 4,  /* g */
+		.rot_standard_ref = NULL,
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 		.config = {
@@ -96,7 +96,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = &lid_rot_ref,
+		.rot_standard_ref = NULL,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 	},
@@ -112,7 +112,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_lis2dh_data,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LNG2DM_ADDR0_FLAGS,
-		.rot_standard_ref = NULL, /* Identity matrix */
+		.rot_standard_ref = &base_rot_ref,
 		/* We only use 2g because its resolution is only 8-bits */
 		.default_range = 2, /* g */
 		.min_frequency = LIS2DH_ODR_MIN_VAL,
@@ -141,18 +141,13 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LIS2MDL_ADDR_FLAGS,
 		.default_range = 1 << 11,	/* 16LSB / uT, fixed  */
-		.rot_standard_ref = &lid_rot_ref,
+		.rot_standard_ref = NULL,
 		.min_frequency = LIS2MDL_ODR_MIN_VAL,
 		.max_frequency = LIS2MDL_ODR_MAX_VAL,
 	},
 };
 
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-int board_sensor_at_360(void)
-{
-	return lid_is_open();
-}
 
 /* Initialize board. */
 static void board_init(void)

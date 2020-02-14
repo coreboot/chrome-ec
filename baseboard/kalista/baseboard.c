@@ -118,7 +118,7 @@ const struct fan_rpm fan_rpm_0 = {
 	.rpm_max = 4900,
 };
 
-struct fan_t fans[] = {
+const struct fan_t fans[] = {
 	[FAN_CH_0] = { .conf = &fan_conf_0, .rpm = &fan_rpm_0, },
 };
 BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
@@ -138,7 +138,7 @@ const struct i2c_port_t i2c_ports[]  = {
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	/* Alert is active-low, push-pull */
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -157,7 +157,7 @@ static int ps8751_tune_mux(int port)
 	return EC_SUCCESS;
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
@@ -202,7 +202,7 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
 		const struct usb_mux *mux = &usb_muxes[port];
 		mux->hpd_update(port, 0, 0);
 	}
@@ -404,11 +404,6 @@ static void board_extpower(void)
 	gpio_set_level(GPIO_PCH_ACPRESENT, extpower_is_present());
 }
 DECLARE_HOOK(HOOK_AC_CHANGE, board_extpower, HOOK_PRIO_DEFAULT);
-
-enum battery_present battery_is_present(void)
-{
-	return BP_NO;
-}
 
 int64_t get_time_dsw_pwrok(void)
 {

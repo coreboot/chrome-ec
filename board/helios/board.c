@@ -148,7 +148,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /******************************************************************************/
 /* USB-C TPCP Configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -167,7 +167,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
@@ -202,12 +202,6 @@ static struct bmi160_drv_data_t g_bmi160_data;
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
 
-static struct opt3001_drv_data_t g_opt3001_data = {
-	.scale = 1,
-	.uscale = 0,
-	.offset = 0,
-};
-
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
@@ -236,7 +230,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &lid_standard_ref,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode */
+		.default_range = 2, /* g, to support lid angle calculation. */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -263,7 +257,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode  */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 10000 | ROUND_UP_FLAG,
@@ -291,36 +285,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.min_frequency = BMI160_GYRO_MIN_FREQ,
 		.max_frequency = BMI160_GYRO_MAX_FREQ,
 	},
-
-	[LID_ALS] = {
-		.name = "Light",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_OPT3001,
-		.type = MOTIONSENSE_TYPE_LIGHT,
-		.location = MOTIONSENSE_LOC_LID,
-		.drv = &opt3001_drv,
-		.drv_data = &g_opt3001_data,
-		.port = I2C_PORT_ACCEL,
-		.i2c_spi_addr_flags = OPT3001_I2C_ADDR_FLAGS,
-		.rot_standard_ref = NULL,
-		.default_range = 0x2b11a1,
-		.min_frequency = OPT3001_LIGHT_MIN_FREQ,
-		.max_frequency = OPT3001_LIGHT_MAX_FREQ,
-		.config = {
-			/* Run ALS sensor in S0 */
-			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 1000,
-			},
-		},
-	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-/* ALS instances when LPC mapping is needed. Each entry directs to a sensor. */
-const struct motion_sensor_t *motion_als_sensors[] = {
-	&motion_sensors[LID_ALS],
-};
-BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
 /******************************************************************************/
 /* Physical fans. These are logically separate from pwm_channels. */
@@ -339,7 +305,7 @@ const struct fan_rpm fan_rpm_0 = {
 	.rpm_max = 6900,
 };
 
-struct fan_t fans[FAN_CH_COUNT] = {
+const struct fan_t fans[FAN_CH_COUNT] = {
 	[FAN_CH_0] = { .conf = &fan_conf_0, .rpm = &fan_rpm_0, },
 };
 
@@ -387,26 +353,20 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-
-/* Helios Temperature sensors */
-/*
- * TODO(b/124316213): These setting need to be reviewed and set appropriately
- * for Helios. They matter when the EC is controlling the fan as opposed to DPTF
- * control.
- */
+/* Helios temperature control thresholds */
 const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(90),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(60),
 		[EC_TEMP_THRESH_HALT] = 0,
 	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_off = C_TO_K(65),
+	.temp_fan_max = C_TO_K(80),
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
@@ -429,7 +389,7 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */
@@ -438,7 +398,14 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 int board_tcpc_post_init(int port)
 {
-	return port == USB_PD_PORT_TCPC_1 ?
-		tcpc_write(port, PS8XXX_REG_MUX_USB_C2SS_HS_THRESHOLD, 0x80) :
-		EC_SUCCESS;
+	int rv = EC_SUCCESS;
+
+	if (port == USB_PD_PORT_TCPC_0)
+		/* Set MUX_DP_EQ to 3.6dB (0x98) */
+		rv = tcpc_write(port, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	else if (port == USB_PD_PORT_TCPC_1)
+		rv = tcpc_write(port,
+				PS8XXX_REG_MUX_USB_C2SS_HS_THRESHOLD, 0x80);
+
+	return rv;
 }

@@ -18,6 +18,7 @@
 #include "driver/accel_kxcj9.h"
 #include "driver/accelgyro_lsm6ds0.h"
 #include "driver/als_isl29035.h"
+#include "driver/charger/bq24773.h"
 #include "driver/temp_sensor/tmp006.h"
 #include "extpower.h"
 #include "fan.h"
@@ -118,7 +119,7 @@ const struct fan_rpm fan_rpm_0 = {
 	.rpm_max = 6350,
 };
 
-struct fan_t fans[] = {
+const struct fan_t fans[] = {
 	{ .conf = &fan_conf_0, .rpm = &fan_rpm_0, },
 	{ .conf = &fan_conf_1, .rpm = &fan_rpm_0, },
 };
@@ -131,6 +132,16 @@ const struct i2c_port_t i2c_ports[] = {
 	{"thermal",  5, 100, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+/* Charger chips */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = I2C_ADDR_CHARGER_FLAGS,
+		.drv = &bq2477x_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 #define TEMP_U40_REG_ADDR_FLAGS		(0x40 | I2C_FLAG_BIG_ENDIAN)
 #define TEMP_U41_REG_ADDR_FLAGS		(0x44 | I2C_FLAG_BIG_ENDIAN)
@@ -334,7 +345,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .i2c_spi_addr_flags = LSM6DS0_ADDR1_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 2,  /* g, enough for laptop. */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = LSM6DS0_ACCEL_MIN_FREQ,
 	 .max_frequency = LSM6DS0_ACCEL_MAX_FREQ,
 	 .config = {
@@ -366,7 +377,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .i2c_spi_addr_flags = KXCJ9_ADDR0_FLAGS,
 	 .rot_standard_ref = &lid_standard_ref,
-	 .default_range = 2,  /* g, enough for laptop. */
+	 .default_range = 2,  /* g, to support lid angle calculation. */
 	 .min_frequency = KXCJ9_ACCEL_MIN_FREQ,
 	 .max_frequency = KXCJ9_ACCEL_MAX_FREQ,
 	 .config = {
@@ -389,7 +400,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .i2c_spi_addr_flags = LSM6DS0_ADDR1_FLAGS,
 	 .rot_standard_ref = NULL,
-	 .default_range = 2000,  /* g, enough for laptop. */
+	 .default_range = 2000,  /* dps, enough for laptop. */
 	 .min_frequency = LSM6DS0_GYRO_MIN_FREQ,
 	 .max_frequency = LSM6DS0_GYRO_MAX_FREQ,
 	},

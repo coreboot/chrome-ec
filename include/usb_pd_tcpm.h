@@ -17,9 +17,6 @@
 /* Time to wait for TCPC to complete transmit */
 #define PD_T_TCPC_TX_TIMEOUT  (100*MSEC)
 
-/* Number of valid Transmit Types */
-#define NUM_XMIT_TYPES (TCPC_TX_SOP_DEBUG_PRIME_PRIME + 1)
-
 enum usbpd_cc_pin {
 	USBPD_CC_PIN_1,
 	USBPD_CC_PIN_2,
@@ -52,6 +49,47 @@ enum tcpc_rp_value {
 	TYPEC_RP_RESERVED = 3,
 };
 
+enum tcpc_cc_polarity {
+	/*
+	 * _NONE: either disconnected or connected to a SNK Debug
+	 * Accessory
+	 */
+	POLARITY_NONE = -1,
+
+	/*
+	 * _CCx: is used to indicate the polarity while not connected to
+	 * a Debug Accessory.  Only one CC line will assert a resistor and
+	 * the other will be open.
+	 */
+	POLARITY_CC1 = 0,
+	POLARITY_CC2 = 1,
+
+	/*
+	 * CCx_DTS is used to indicate the polarity while connected to a
+	 * SRC Debug Accessory.  Assert resistors on both lines.
+	 */
+	POLARITY_CC1_DTS = 2,
+	POLARITY_CC2_DTS = 3,
+
+	/*
+	 * The current TCPC code relies on these specific POLARITY values.
+	 * Adding in a check to verify if the list grows for any reason
+	 * that this will give a hint that other places need to be
+	 * adjusted.
+	 */
+	POLARITY_COUNT
+};
+
+/**
+ * Returns whether the polarity without the DTS extension
+ */
+static inline enum tcpc_cc_polarity polarity_rm_dts(
+	enum tcpc_cc_polarity polarity)
+{
+	BUILD_ASSERT(POLARITY_COUNT == 4);
+	return (polarity == POLARITY_NONE) ? polarity : polarity & BIT(0);
+}
+
 enum tcpm_transmit_type {
 	TCPC_TX_SOP = 0,
 	TCPC_TX_SOP_PRIME = 1,
@@ -62,6 +100,9 @@ enum tcpm_transmit_type {
 	TCPC_TX_CABLE_RESET = 6,
 	TCPC_TX_BIST_MODE_2 = 7
 };
+
+/* Number of valid Transmit Types */
+#define NUM_SOP_STAR_TYPES (TCPC_TX_SOP_DEBUG_PRIME_PRIME + 1)
 
 enum tcpc_transmit_complete {
 	TCPC_TX_UNSET = -1,
@@ -95,6 +136,15 @@ static inline int cc_is_snk_dbg_acc(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2)
 {
 	return cc1 == TYPEC_CC_VOLT_RD && cc2 == TYPEC_CC_VOLT_RD;
+}
+
+/**
+ * Returns true if we detect the port partner is a src debug accessory.
+ */
+static inline int cc_is_src_dbg_acc(enum tcpc_cc_voltage_status cc1,
+	enum tcpc_cc_voltage_status cc2)
+{
+	return cc_is_rp(cc1) && cc_is_rp(cc2);
 }
 
 /**
@@ -189,17 +239,17 @@ struct tcpm_drv {
 	 * Set polarity
 	 *
 	 * @param port Type-C port number
-	 * @param polarity 0=> transmit on CC1, 1=> transmit on CC2
+	 * @param polarity port polarity
 	 *
 	 * @return EC_SUCCESS or error
 	 */
-	int (*set_polarity)(int port, int polarity);
+	int (*set_polarity)(int port, enum tcpc_cc_polarity polarity);
 
 	/**
 	 * Set Vconn.
 	 *
 	 * @param port Type-C port number
-	 * @param polarity Polarity of the CC line to read
+	 * @param enable Enable/Disable Vconn
 	 *
 	 * @return EC_SUCCESS or error
 	 */
@@ -265,6 +315,15 @@ struct tcpm_drv {
 	 * @param enable Discharge enable or disable
 	 */
 	void (*tcpc_discharge_vbus)(int port, int enable);
+
+	/**
+	 * Auto Discharge Disconnect
+	 *
+	 * @param port Type-C port number
+	 * @param enable Auto Discharge enable or disable
+	 */
+	void (*tcpc_enable_auto_discharge_disconnect)(int port,
+						      int enable);
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	/**
@@ -340,10 +399,12 @@ struct tcpm_drv {
  * Bit 0 --> Polarity for TCPC alert. Set to 1 if alert is active high.
  * Bit 1 --> Set to 1 if TCPC alert line is open-drain instead of push-pull.
  * Bit 2 --> Polarity for TCPC reset. Set to 1 if reset line is active high.
+ * Bit 3 --> Set to 1 if TCPC is using TCPCI Version 2.0
  */
 #define TCPC_FLAGS_ALERT_ACTIVE_HIGH	BIT(0)
 #define TCPC_FLAGS_ALERT_OD		BIT(1)
 #define TCPC_FLAGS_RESET_ACTIVE_HIGH	BIT(2)
+#define TCPC_FLAGS_TCPCI_V2_0           BIT(3)
 
 struct tcpc_config_t {
 	enum ec_bus_type bus_type;	/* enum ec_bus_type */
@@ -425,5 +486,14 @@ int board_tcpc_post_init(int port) __attribute__((weak));
  *
  */
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled);
+
+/**
+ * Get the VBUS voltage from TCPC
+ *
+ * @param port Type-C port number
+ *
+ * @return VBUS voltage in mV.
+ */
+int tcpc_get_vbus_voltage(int port);
 
 #endif /* __CROS_EC_USB_PD_TCPM_H */

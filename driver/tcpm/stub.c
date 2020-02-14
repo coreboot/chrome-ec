@@ -63,7 +63,7 @@ int tcpm_set_cc(int port, int pull)
 	return tcpc_set_cc(port, pull);
 }
 
-int tcpm_set_polarity(int port, int polarity)
+int tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	return tcpc_set_polarity(port, polarity);
 }
@@ -87,6 +87,10 @@ static int tcpm_alert_status(int port, int *alert)
 int tcpm_set_rx_enable(int port, int enable)
 {
 	return tcpc_set_rx_enable(port, enable);
+}
+
+void tcpm_enable_auto_discharge_disconnect(int port, int enable)
+{
 }
 
 int tcpm_has_pending_message(int port)

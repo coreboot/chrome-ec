@@ -6,6 +6,8 @@
 /* Intel TGL-U-RVP-ITE board-specific configuration */
 
 #include "button.h"
+#include "charger.h"
+#include "driver/charger/isl9241.h"
 #include "extpower.h"
 #include "i2c.h"
 #include "intc.h"
@@ -71,7 +73,7 @@ const struct tcpc_gpio_config_t tcpc_gpios[] = {
 		},
 	},
 };
-BUILD_ASSERT(ARRAY_SIZE(tcpc_gpios) == CONFIG_USB_PD_PORT_COUNT);
+BUILD_ASSERT(ARRAY_SIZE(tcpc_gpios) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
@@ -105,6 +107,17 @@ const struct i2c_port_t i2c_ports[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(i2c_ports) == I2C_CHAN_COUNT);
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+/* Charger Chips */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
+		.drv = &isl9241_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /*
  * Returns board information (board id[7:0] and Fab id[15:8]) on success

@@ -14,6 +14,7 @@
 #include "extpower.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/als_opt3001.h"
+#include "driver/charger/isl923x.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/anx74xx.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -255,7 +256,7 @@ struct ppc_config_t ppc_chips[] = {
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	/* Alert is active-low, open-drain */
 	[USB_PD_PORT_ANX3429] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -275,6 +276,16 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 		.drv = &ps8xxx_tcpm_drv,
 	},
 };
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /*
  * Port-0 USB mux driver.
@@ -354,7 +365,7 @@ const struct usb_mux_driver port1_usb_mux_driver = {
 	.enter_low_power_mode = &port1_usb_mux_enter_low_power,
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.driver = &port0_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
@@ -417,7 +428,7 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
 		const struct usb_mux *mux = &usb_muxes[port];
 
 		mux->hpd_update(port, 0, 0);
@@ -534,7 +545,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 int board_set_active_charge_port(int port)
 {
 	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 	int rv;
 
@@ -545,7 +556,7 @@ int board_set_active_charge_port(int port)
 
 	if (port == CHARGE_PORT_NONE) {
 		/* Disable all ports. */
-		for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 			rv = board_vbus_sink_enable(i, 0);
 			if (rv) {
 				CPRINTS("Disabling p%d sink path failed.", i);
@@ -566,7 +577,7 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		if (i == port)
 			continue;
 
@@ -651,7 +662,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 4,  /* g */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
 	 .config = {

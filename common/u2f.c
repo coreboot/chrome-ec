@@ -71,9 +71,6 @@ int g2f_attestation_cert(uint8_t *buf)
 {
 	p256_int d, pk_x, pk_y;
 
-	if (!use_g2f())
-		return 0;
-
 	if (g2f_individual_keypair(&d, &pk_x, &pk_y))
 		return 0;
 
@@ -150,6 +147,27 @@ static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code,
 	return VENDOR_RC_SUCCESS;
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_U2F_GENERATE, u2f_generate);
+
+static int verify_kh_pubkey(const uint8_t *key_handle,
+			    const U2F_EC_POINT *public_key, int *matches) {
+	int rc;
+	U2F_EC_POINT kh_pubkey;
+	p256_int od, opk_x, opk_y;
+
+	rc = u2f_origin_user_keypair(key_handle, &od, &opk_x, &opk_y);
+	if (rc != EC_SUCCESS)
+		return rc;
+
+	/* Reconstruct the public key. */
+	p256_to_bin(&opk_x, kh_pubkey.x);
+	p256_to_bin(&opk_y, kh_pubkey.y);
+	kh_pubkey.pointFormat = U2F_POINT_UNCOMPRESSED;
+
+	*matches =
+		safe_memcmp(&kh_pubkey, public_key, sizeof(U2F_EC_POINT)) == 0;
+
+	return EC_SUCCESS;
+}
 
 static int verify_kh_owned(const uint8_t *user_secret, const uint8_t *app_id,
 			   const uint8_t *key_handle, int *owned)
@@ -305,16 +323,26 @@ static inline int u2f_attest_verify_reg_resp(const uint8_t *user_secret,
 					     const uint8_t *data)
 {
 	struct G2F_REGISTER_MSG *msg = (void *) data;
-	int kh_owned;
+	int verified;
 
 	if (data_size != sizeof(struct G2F_REGISTER_MSG))
 		return VENDOR_RC_NOT_ALLOWED;
 
+	if (msg->reserved != 0)
+		return VENDOR_RC_NOT_ALLOWED;
+
 	if (verify_kh_owned(user_secret, msg->app_id, msg->key_handle,
-			    &kh_owned) != EC_SUCCESS)
+			    &verified) != EC_SUCCESS)
 		return VENDOR_RC_INTERNAL_ERROR;
 
-	if (!kh_owned)
+	if (!verified)
+		return VENDOR_RC_NOT_ALLOWED;
+
+	if (verify_kh_pubkey(msg->key_handle, &msg->public_key, &verified) !=
+	    EC_SUCCESS)
+		return VENDOR_RC_INTERNAL_ERROR;
+
+	if (!verified)
 		return VENDOR_RC_NOT_ALLOWED;
 
 	return VENDOR_RC_SUCCESS;
@@ -367,8 +395,8 @@ static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code,
 
 	*response_size = 0;
 
-	if (input_size < 2 ||
-	    input_size < (2 + req->dataLen) ||
+	if (input_size < offsetof(U2F_ATTEST_REQ, data) ||
+	    input_size < (offsetof(U2F_ATTEST_REQ, data) + req->dataLen) ||
 	    input_size > sizeof(U2F_ATTEST_REQ) ||
 	    response_buf_size < sizeof(*resp))
 		return VENDOR_RC_BOGUS_ARGS;

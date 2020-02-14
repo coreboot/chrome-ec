@@ -112,7 +112,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /******************************************************************************/
 /* USB-C TPCP Configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -131,7 +131,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
@@ -143,7 +143,7 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 };
 
 /* BC 1.2 chip Configuration */
-const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.chip_enable_pin = GPIO_USB_C0_BC12_VBUS_ON,
 		.chg_det_pin = GPIO_USB_C0_BC12_CHG_DET_L,
@@ -178,44 +178,45 @@ static struct als_drv_data_t g_tcs3400_data = {
 	.als_cal.offset = 0,
 	.als_cal.channel_scale = {
 		.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kc from VPD */
-		.cover_scale = ALS_CHANNEL_SCALE(1.0),     /* CT */
+		.cover_scale = ALS_CHANNEL_SCALE(0.74),     /* CT */
 	},
 };
 
 static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
-	.rgb_cal[X] = {
-		.offset = 30, /* 30.38576102 */
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0.31818327),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0.28786817),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0.14603897),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(-0.12542082),
+	.calibration.rgb_cal[X] = {
+		.offset = 3, /* 3.0350726 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.34710205),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(1.72064361),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-0.95427326),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.20677441),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kr */
-			.cover_scale = ALS_CHANNEL_SCALE(0.3507)
+			.cover_scale = ALS_CHANNEL_SCALE(0.5)
 		}
 	},
-	.rgb_cal[Y] = {
-		.offset = 45, /* 45.0467605 */
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0.26764916),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0.26510278),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0.19007195),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(-0.12512564),
+	.calibration.rgb_cal[Y] = {
+		.offset = 7, /* 6.50411397 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.40729596),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(1.82527267),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-1.01523751),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.20903764),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kg */
 			.cover_scale = ALS_CHANNEL_SCALE(1.0)
 		},
 	},
-	.rgb_cal[Z] = {
-		.offset = 22, /* 22.5644134 */
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.0682575),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0.15594184),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0.53616239),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(-0.13502391),
+	.calibration.rgb_cal[Z] = {
+		.offset = -4, /* -4.13932233 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-2.35802533),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(-0.19742447),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0.13837045),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(1.07436207),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kb */
-			.cover_scale = ALS_CHANNEL_SCALE(0.5759)
+			.cover_scale = ALS_CHANNEL_SCALE(1.44)
 		}
 	},
+	.calibration.irt = FLOAT_TO_FP(0.35),
 	.saturation.again = TCS_DEFAULT_AGAIN,
 	.saturation.atime = TCS_DEFAULT_ATIME,
 };
@@ -224,17 +225,6 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
-
-/*
- * TODO(b/124337208): P0 boards don't have this sensor mounted so the rotation
- * matrix can't be tested properly. This needs to be revisited after EVT to make
- * sure the rotaiton matrix for the lid sensor is correct.
- */
-static const mat33_fp_t lid_standard_ref = {
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
@@ -250,10 +240,10 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_bma255_data,
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
-		.rot_standard_ref = &lid_standard_ref,
+		.rot_standard_ref = NULL,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode */
+		.default_range = 2, /* g, to support lid angle calculation. */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -280,7 +270,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI160_ACCEL_MIN_FREQ,
 		.max_frequency = BMI160_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode  */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 10000 | ROUND_UP_FLAG,
@@ -405,22 +395,22 @@ const struct adc_t adc_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1] = {.name = "Temp1",
+	[TEMP_SENSOR_1] = {.name = "Ambient",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_1,
 				 .action_delay_sec = 1},
-	[TEMP_SENSOR_2] = {.name = "Temp2",
+	[TEMP_SENSOR_2] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_2,
 				 .action_delay_sec = 1},
-	[TEMP_SENSOR_3] = {.name = "Temp3",
+	[TEMP_SENSOR_3] = {.name = "IA",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_3,
 				 .action_delay_sec = 1},
-	[TEMP_SENSOR_4] = {.name = "Temp4",
+	[TEMP_SENSOR_4] = {.name = "GT",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
 				 .idx = ADC_TEMP_SENSOR_4,
@@ -473,7 +463,7 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* Sanity check the port. */
-	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_COUNT))
+	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
 	/* Note that the level is inverted because the pin is active low. */

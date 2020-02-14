@@ -13,6 +13,7 @@
 #include "queue_policies.h"
 #include "registers.h"
 #include "spi.h"
+#include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "update_fw.h"
@@ -234,6 +235,74 @@ static int command_uart_baud(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(baud, command_uart_baud,
 			"usart[2|3|4] rate",
 			"Set baud rate on uart");
+
+/******************************************************************************
+ * Hold the usart pins low while disabling it, or return it to normal.
+ */
+static int command_hold_usart_low(int argc, char **argv)
+{
+	/* Each bit represents if that port rx is being held low */
+	static int usart_status;
+
+	int usart_mask;
+	enum gpio_signal rx;
+
+	if (argc > 3 || argc < 2)
+		return EC_ERROR_PARAM_COUNT;
+
+	if (!strcasecmp(argv[1], "usart2")) {
+		usart_mask = 1 << 2;
+		rx = GPIO_USART2_SERVO_RX_DUT_TX;
+	} else if (!strcasecmp(argv[1], "usart3")) {
+		usart_mask = 1 << 3;
+		rx = GPIO_USART3_SERVO_RX_DUT_TX;
+	} else if (!strcasecmp(argv[1], "usart4")) {
+		usart_mask = 1 << 4;
+		rx = GPIO_USART4_SERVO_RX_DUT_TX;
+	} else {
+		return EC_ERROR_PARAM1;
+	}
+
+	/* Updating the status of this port */
+	if (argc == 3) {
+		char *e;
+		const int hold_low = strtoi(argv[2], &e, 0);
+
+		if (*e || (hold_low < 0) || (hold_low > 1))
+			return EC_ERROR_PARAM2;
+
+		if (!!(usart_status & usart_mask) == hold_low) {
+			/* Do nothing since there is no change */
+		} else if (hold_low) {
+			/*
+			 * No need to shutdown UART, just de-mux the RX pin from
+			 * UART and change it to a GPIO temporarily.
+			 */
+			gpio_config_pin(MODULE_USART, rx, 0);
+			gpio_set_flags(rx, GPIO_OUT_LOW);
+
+			/* Update global uart state */
+			usart_status |= usart_mask;
+		} else {
+			/*
+			 * Mux the RX pin back to GPIO mode
+			 */
+			gpio_config_pin(MODULE_USART, rx, 1);
+
+			/* Update global uart state */
+			usart_status &= ~usart_mask;
+		}
+	}
+
+	/* Print status for get and set case. */
+	ccprintf("USART status: %s\n",
+			usart_status & usart_mask ? "held low" : "normal");
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(hold_usart_low, command_hold_usart_low,
+			"usart[2|3|4] [0|1]?",
+			"Get/set the hold-low state for usart port");
 
 /******************************************************************************
  * Commands for sending the magic non-I2C handshake over I2C bus wires to an
@@ -590,7 +659,7 @@ void usb_spi_board_disable(struct usb_spi_config const *config)
 	gpio_config_module(MODULE_SPI_FLASH, 0);
 }
 
-USB_SPI_CONFIG(usb_spi, USB_IFACE_SPI, USB_EP_SPI);
+USB_SPI_CONFIG(usb_spi, USB_IFACE_SPI, USB_EP_SPI, 0);
 
 /******************************************************************************
  * Support I2C bridging over USB.
@@ -604,6 +673,15 @@ const struct i2c_port_t i2c_ports[] = {
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 int usb_i2c_board_is_enabled(void) { return 1; }
+
+void pvd_interrupt(void) {
+	/* Clear Pending Register */
+	STM32_EXTI_PR = EXTI_PVD_EVENT;
+	/* Handle recovery by rebooting the system */
+	system_reset(0);
+}
+
+DECLARE_IRQ(STM32_IRQ_PVD, pvd_interrupt, HOOK_PRIO_FIRST);
 
 /******************************************************************************
  * Initialize board.
@@ -643,7 +721,27 @@ static void board_init(void)
 	gpio_set_level(GPIO_JTAG_BUFIN_EN_L, 0);
 	gpio_set_level(GPIO_SERVO_JTAG_TDO_BUFFER_EN, 1);
 	gpio_set_level(GPIO_SERVO_JTAG_TDO_SEL, 1);
-	gpio_set_flags(GPIO_UART3_RX_JTAG_BUFFER_TO_SERVO_TDO, GPIO_ALTERNATE);
-	gpio_set_flags(GPIO_UART3_TX_SERVO_JTAG_TCK, GPIO_ALTERNATE);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+/******************************************************************************
+ * Turn down USART before jumping to RW.
+ */
+static void board_jump(void)
+{
+	/*
+	 * If we don't shutdown the USARTs before jumping to RW, then when early
+	 * RW tries to set the GPIOs to input (or anything other than alternate)
+	 * the jump fail on some servo micros.
+	 *
+	 * It also make sense to shut them down since RW will reinitialize them
+	 * in board_init above.
+	 */
+	usart_shutdown(&usart2);
+	usart_shutdown(&usart3);
+	usart_shutdown(&usart4);
+
+	/* Shutdown other hardware modules and let RW reinitialize them */
+	usb_spi_enable(&usb_spi, 0);
+}
+DECLARE_HOOK(HOOK_SYSJUMP, board_jump, HOOK_PRIO_DEFAULT);

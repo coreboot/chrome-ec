@@ -242,6 +242,15 @@ const uint32_t i2c_ctrl_slave_addrs[I2C_CONTROLLER_COUNT] = {
 	0, 0, 0, 0,
 };
 
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = BD9995X_ADDR_FLAGS,
+		.drv = &bd9995x_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
 /* Return the two slave addresses the specified
  * controller will respond to when controller
  * is acting as a slave.
@@ -337,7 +346,7 @@ struct i2c_stress_test i2c_stress_tests[] = {
 const int i2c_test_dev_used = ARRAY_SIZE(i2c_stress_tests);
 #endif /* CONFIG_CMD_I2C_STRESS_TEST */
 
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ANX74XX] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -414,7 +423,7 @@ static int ps8751_tune_mux(int port)
  * tcpc_config array. The tcpc_config array contains the actual EC I2C
  * port, device slave address, and a function pointer into the driver code.
  */
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ANX74XX] = {
 		.driver = &anx74xx_tcpm_usb_mux_driver,
 		.hpd_update = &anx74xx_tcpc_update_hpd_status,
@@ -529,7 +538,7 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
 		const struct usb_mux *mux = &usb_muxes[port];
 
 		mux->hpd_update(port, 0, 0);
@@ -781,7 +790,12 @@ int board_is_consuming_full_charge(void)
  */
 int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 {
-	return charger_get_vbus_voltage(port) < BD9995X_BC12_MIN_VOLTAGE;
+	int voltage;
+
+	if (charger_get_vbus_voltage(port, &voltage))
+		voltage = 0;
+
+	return voltage < BD9995X_BC12_MIN_VOLTAGE;
 }
 
 static void enable_input_devices(void)
@@ -963,7 +977,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_LID_ACCEL,
 	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 	 .rot_standard_ref = NULL, /* Identity matrix. */
-	 .default_range = 2, /* g, enough for laptop. */
+	 .default_range = 2, /* g, to support lid angle calculation. */
 	 .min_frequency = KX022_ACCEL_MIN_FREQ,
 	 .max_frequency = KX022_ACCEL_MAX_FREQ,
 	 .config = {
@@ -990,7 +1004,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_GYRO,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 2,  /* g, enough for laptop. */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
 	 .config = {

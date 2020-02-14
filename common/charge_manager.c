@@ -8,6 +8,7 @@
 #include "battery.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
+#include "charge_state_v2.h"
 #include "charger.h"
 #include "console.h"
 #include "gpio.h"
@@ -103,11 +104,11 @@ static int override_port = OVERRIDE_OFF;
 static int delayed_override_port = OVERRIDE_OFF;
 static timestamp_t delayed_override_deadline;
 
-static uint8_t source_port_rp[CONFIG_USB_PD_PORT_COUNT];
+static uint8_t source_port_rp[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #ifdef CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT
 /* 3A on one port and 1.5A on the rest */
-BUILD_ASSERT(CONFIG_USB_PD_PORT_COUNT * 1500 + 1500 <=
+BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT * 1500 + 1500 <=
 	     CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT);
 #endif
 
@@ -140,7 +141,7 @@ enum charge_manager_change_type {
 
 static int is_pd_port(int port)
 {
-	return 0 <= port && port < CONFIG_USB_PD_PORT_COUNT;
+	return port >= 0 && port < board_get_usb_pd_port_count();
 }
 
 static int is_sink(int port)
@@ -148,7 +149,26 @@ static int is_sink(int port)
 	if (!is_pd_port(port))
 		return board_charge_port_is_sink(port);
 
-	return pd_get_role(port) == PD_ROLE_SINK;
+	return pd_get_power_role(port) == PD_ROLE_SINK;
+}
+
+/**
+ * Some of the SKUs in certain boards have less number of USB PD ports than
+ * defined in CONFIG_USB_PD_PORT_MAX_COUNT. With the charge port configuration
+ * for DEDICATED_PORT towards the end, this will lead to holes in the static
+ * configuration. The ports that fall in that hole are invalid and this function
+ * is used to check the validity of the ports.
+ */
+static int is_valid_port(int port)
+{
+	if (port < 0 || port >= CHARGE_PORT_COUNT)
+		return 0;
+
+	/* Check if the port falls in the hole */
+	if (port >= board_get_usb_pd_port_count() &&
+	    port < CONFIG_USB_PD_PORT_MAX_COUNT)
+		return 0;
+	return 1;
 }
 
 #ifndef TEST_BUILD
@@ -190,6 +210,8 @@ static void charge_manager_init(void)
 	int i, j;
 
 	for (i = 0; i < CHARGE_PORT_COUNT; ++i) {
+		if (!is_valid_port(i))
+			continue;
 		for (j = 0; j < CHARGE_SUPPLIER_COUNT; ++j) {
 			available_charge[j][i].current =
 				CHARGE_CURRENT_UNINITIALIZED;
@@ -221,14 +243,17 @@ static int charge_manager_is_seeded(void)
 	if (is_seeded)
 		return 1;
 
-	for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i)
-		for (j = 0; j < CHARGE_PORT_COUNT; ++j)
+	for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i) {
+		for (j = 0; j < CHARGE_PORT_COUNT; ++j) {
+			if (!is_valid_port(j))
+				continue;
 			if (available_charge[i][j].current ==
 			    CHARGE_CURRENT_UNINITIALIZED ||
 			    available_charge[i][j].voltage ==
 			    CHARGE_VOLTAGE_UNINITIALIZED)
 				return 0;
-
+		}
+	}
 	is_seeded = 1;
 	return 1;
 }
@@ -434,7 +459,14 @@ static void charge_manager_fill_power_info(int port,
 			r->meas.voltage_now = 5000;
 		else {
 #if defined(CONFIG_USB_PD_VBUS_MEASURE_CHARGER)
-			r->meas.voltage_now = charger_get_vbus_voltage(port);
+			int voltage;
+
+			if (charger_get_vbus_voltage(port, &voltage))
+				r->meas.voltage_now = 0;
+			else
+				r->meas.voltage_now = voltage;
+#elif defined(CONFIG_USB_PD_VBUS_MEASURE_TCPC)
+			r->meas.voltage_now = tcpc_get_vbus_voltage(port);
 #elif defined(CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT)
 			r->meas.voltage_now =
 				adc_read_channel(board_get_vbus_adc(port));
@@ -506,6 +538,9 @@ static int charge_manager_get_ceil(int port)
 	int ceil = CHARGE_CEIL_NONE;
 	int val, i;
 
+	if (!is_valid_port(port))
+		return ceil;
+
 	for (i = 0; i < CEIL_REQUESTOR_COUNT; ++i) {
 		val = charge_ceil[port][i];
 		if (val != CHARGE_CEIL_NONE &&
@@ -544,6 +579,10 @@ static void charge_manager_get_best_charge_port(int *new_port,
 		 */
 		for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i)
 			for (j = 0; j < CHARGE_PORT_COUNT; ++j) {
+				/* Skip this port if it is not valid. */
+				if (!is_valid_port(j))
+					continue;
+
 				/*
 				 * Skip this supplier if there is no
 				 * available charge.
@@ -761,7 +800,7 @@ static void charge_manager_refresh(void)
 	if (updated_old_port != CHARGE_PORT_NONE)
 		save_log[updated_old_port] = 1;
 
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; ++i)
+	for (i = 0; i < board_get_usb_pd_port_count(); ++i)
 		if (save_log[i])
 			charge_manager_save_log(i);
 #endif
@@ -813,6 +852,11 @@ static void charge_manager_make_change(enum charge_manager_change_type change,
 {
 	int i;
 	int clear_override = 0;
+
+	if (!is_valid_port(port)) {
+		CPRINTS("%s: p%d invalid", __func__, port);
+		return;
+	}
 
 	/* Determine if this is a change which can affect charge status */
 	switch (change) {
@@ -913,6 +957,9 @@ void pd_set_input_current_limit(int port, uint32_t max_ma,
 {
 	struct charge_port_info charge;
 
+	if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV))
+		charge_reset_stable_current();
+
 	charge.current = max_ma;
 	charge.voltage = supply_voltage;
 	charge_manager_update_charge(CHARGE_SUPPLIER_PD, port, &charge);
@@ -1008,6 +1055,9 @@ void charge_manager_leave_safe_mode(void)
 
 void charge_manager_set_ceil(int port, enum ceil_requestor requestor, int ceil)
 {
+	if (!is_valid_port(port))
+		return;
+
 	if (charge_ceil[port][requestor] != ceil) {
 		charge_ceil[port][requestor] = ceil;
 		if (port == charge_port && charge_manager_is_seeded())
@@ -1095,6 +1145,11 @@ int charge_manager_get_charger_voltage(void)
 	return charge_voltage;
 }
 
+enum charge_supplier charge_manager_get_supplier(void)
+{
+	return charge_supplier;
+}
+
 int charge_manager_get_power_limit_uw(void)
 {
 	int current_ma = charge_current;
@@ -1111,7 +1166,7 @@ int charge_manager_get_power_limit_uw(void)
 
 /* Bitmap of ports used as power source */
 static volatile uint32_t source_port_bitmap;
-BUILD_ASSERT(sizeof(source_port_bitmap)*8 >= CONFIG_USB_PD_PORT_COUNT);
+BUILD_ASSERT(sizeof(source_port_bitmap)*8 >= CONFIG_USB_PD_PORT_MAX_COUNT);
 
 static inline int has_other_active_source(int port)
 {
@@ -1138,7 +1193,7 @@ static int can_supply_max_current(int port)
 	if (!is_active_source(port))
 		/* Non-active ports don't get 3A */
 		return 0;
-	for (p = 0; p < CONFIG_USB_PD_PORT_COUNT; p++) {
+	for (p = 0; p < board_get_usb_pd_port_count(); p++) {
 		if (p == port)
 			continue;
 		if (source_port_rp[p] ==
@@ -1166,7 +1221,7 @@ void charge_manager_source_port(int port, int enable)
 		return;
 
 	/* Set port limit according to policy */
-	for (p = 0; p < CONFIG_USB_PD_PORT_COUNT; p++) {
+	for (p = 0; p < board_get_usb_pd_port_count(); p++) {
 		rp = can_supply_max_current(p) ?
 				CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT :
 				CONFIG_USB_PD_PULLUP;
@@ -1206,6 +1261,11 @@ static enum ec_status hc_pd_power_info(struct host_cmd_handler_args *args)
 	if (port == PD_POWER_CHARGING_PORT)
 		port = charge_port;
 
+	/*
+	 * Not checking for invalid port here, because it might break existing
+	 * contract with ectool users. The invalid ports will have the response
+	 * voltage, current and power parameters set to 0.
+	 */
 	if (port >= CHARGE_PORT_COUNT)
 		return EC_RES_INVALID_PARAM;
 
@@ -1309,7 +1369,7 @@ static void charge_manager_set_external_power_limit(int current_lim,
 	if (voltage_lim == EC_POWER_LIMIT_NONE)
 		voltage_lim = PD_MAX_VOLTAGE_MV;
 
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; ++port) {
+	for (port = 0; port < board_get_usb_pd_port_count(); ++port) {
 		charge_manager_set_ceil(port, CEIL_REQUESTOR_HOST, current_lim);
 		pd_set_external_voltage_limit(port, voltage_lim);
 	}

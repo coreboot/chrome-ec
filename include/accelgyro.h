@@ -7,6 +7,7 @@
 #define __CROS_EC_ACCELGYRO_H
 
 #include "motion_sense.h"
+#include "math_util.h"
 
 /* Header file for accelerometer / gyro drivers. */
 
@@ -36,6 +37,15 @@ struct accelgyro_drv {
 	 * @return EC_SUCCESS if successful, non-zero if error.
 	 */
 	int (*read)(const struct motion_sensor_t *s, intv3_t v);
+
+	/**
+	 * Read the sensor's current internal temperature.
+	 *
+	 * @param s Pointer to sensor data.
+	 * @param temp Pointer to store temperature in degrees Kelvin.
+	 * @return EC_SUCCESS if successful, non-zero if error.
+	 */
+	int (*read_temp)(const struct motion_sensor_t *s, int *temp);
 
 	/**
 	 * Setter and getter methods for the sensor range. The sensor range
@@ -198,7 +208,7 @@ struct als_calibration_t {
 };
 
 /* RGB ALS Calibration Data */
-struct rgb_calibration_t {
+struct rgb_channel_calibration_t {
 	/*
 	 * Each channel has scaling factor for normalization & cover
 	 */
@@ -209,6 +219,13 @@ struct rgb_calibration_t {
 
 	/* Clear, R, G, and B coefficients for this channel */
 	fp_t coeff[COEFF_CHANNEL_COUNT];
+};
+
+struct rgb_calibration_t {
+	struct rgb_channel_calibration_t rgb_cal[RGB_CHANNEL_COUNT];
+
+	/* incandecent scaling factor */
+	fp_t irt;
 };
 
 /* als driver data */

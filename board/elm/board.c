@@ -17,6 +17,7 @@
 #include "console.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
+#include "driver/charger/isl923x.h"
 #include "driver/tcpm/anx7688.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -123,7 +124,7 @@ const struct spi_device_t spi_devices[] = {
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 
 /* TCPC */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
@@ -162,11 +163,20 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.driver    = &anx7688_usb_mux_driver,
 	},
 };
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /**
  * Reset PD MCU
@@ -291,7 +301,7 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* charge port is a physical port */
 	int is_real_port = (charge_port >= 0 &&
-			    charge_port < CONFIG_USB_PD_PORT_COUNT);
+			    charge_port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/* check if we are source VBUS on the port */
 	int source = gpio_get_level(GPIO_USB_C0_5V_EN);
 
@@ -471,7 +481,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_kx022_data[0],
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(0),
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 2, /* g, enough for laptop. */
+		.default_range = 2, /* g, enough for lid angle calculation. */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
 		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {
@@ -494,7 +504,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_kx022_data[1],
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(1),
 		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 2, /* g, enough for laptop. */
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
 		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {

@@ -33,14 +33,14 @@
   "tag": "00000000000000000000000000000000000000000000000000000000",
 
   // cros_loader uses b1-dev key as key to verify RW with
-  "keyid": -1187158727,  // b1-dev key
+  "keyid": 860844255,  // b1-dev, RO 0.0.11 key
 
   "p4cl": 177,  // P4 sync cl for XML we link against. 177 == 0xb1.
 
   "timestamp": 0,
   "epoch": 0,  // FWR diversification contributor, 32 bits.
   "major": 4,  // FW2_HIK_CHAIN counter.
-  "minor": 23,  // Mostly harmless version field.
+  "minor": 24,  // Mostly harmless version field.
   "applysec": -1,  // Mask to and with fuse BROM_APPLYSEC.
   "config1": 13,  // Which BROM_CONFIG1 actions to take before launching.
   "err_response": 0,  // Mask to or with fuse BROM_ERR_RESPONSE.

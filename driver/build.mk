@@ -6,6 +6,9 @@
 # Drivers for off-chip devices
 #
 
+# Note that this variable includes the trailing "/"
+_driver_cur_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
+
 # Accelerometers
 driver-$(CONFIG_ACCEL_BMA255)+=accel_bma2x2.o
 driver-$(CONFIG_ACCEL_KXCJ9)+=accel_kionix.o
@@ -51,34 +54,31 @@ driver-$(CONFIG_BATTERY_MM8013)+=battery/mm8013.o
 
 # Battery charger ICs
 driver-$(CONFIG_CHARGER_BD9995X)+=charger/bd9995x.o
-driver-$(CONFIG_CHARGER_BQ24192)+=charger/bq24192.o
-driver-$(CONFIG_CHARGER_BQ24707A)+=charger/bq24707a.o
 driver-$(CONFIG_CHARGER_BQ24715)+=charger/bq24715.o
-driver-$(CONFIG_CHARGER_BQ24725)+=charger/bq24725.o
-driver-$(CONFIG_CHARGER_BQ24735)+=charger/bq24735.o
-driver-$(CONFIG_CHARGER_BQ24738)+=charger/bq24738.o
 driver-$(CONFIG_CHARGER_BQ24770)+=charger/bq24773.o
 driver-$(CONFIG_CHARGER_BQ24773)+=charger/bq24773.o
-driver-$(CONFIG_CHARGER_BQ25703)+=charger/bq25703.o
 driver-$(CONFIG_CHARGER_BQ25710)+=charger/bq25710.o
-driver-$(CONFIG_CHARGER_BQ25890)+=charger/bq2589x.o
-driver-$(CONFIG_CHARGER_BQ25892)+=charger/bq2589x.o
-driver-$(CONFIG_CHARGER_BQ25895)+=charger/bq2589x.o
 driver-$(CONFIG_CHARGER_ISL9237)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_ISL9238)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_ISL9241)+=charger/isl9241.o
 driver-$(CONFIG_CHARGER_MT6370)+=charger/rt946x.o
+driver-$(CONFIG_CHARGER_RAA489000)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_RT9466)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_RT9467)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_SY21612)+=charger/sy21612.o
 
+# Fingerprint Sensors
+include $(_driver_cur_dir)fingerprint/build.mk
+
 # I/O expander
-driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander_pca9534.o
-driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander_nct38xx.o
+driver-$(CONFIG_IO_EXPANDER_IT8801)+=ioexpander/it8801.o
+driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
+driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander/ioexpander_nct38xx.o
 
 
 # Current/Power monitor
 driver-$(CONFIG_INA219)$(CONFIG_INA231)+=ina2xx.o
+driver-$(CONFIG_INA3221)+=ina3221.o
 
 # LED drivers
 driver-$(CONFIG_LED_DRIVER_DS2413)+=led/ds2413.o
@@ -98,8 +98,10 @@ driver-$(CONFIG_TEMP_SENSOR_ADT7481)+=temp_sensor/adt7481.o
 driver-$(CONFIG_TEMP_SENSOR_BD99992GW)+=temp_sensor/bd99992gw.o
 driver-$(CONFIG_TEMP_SENSOR_EC_ADC)+=temp_sensor/ec_adc.o
 driver-$(CONFIG_TEMP_SENSOR_F75303)+=temp_sensor/f75303.o
+driver-$(CONFIG_TEMP_SENSOR_G753)+=temp_sensor/g753.o
 driver-$(CONFIG_TEMP_SENSOR_G781)+=temp_sensor/g78x.o
 driver-$(CONFIG_TEMP_SENSOR_G782)+=temp_sensor/g78x.o
+driver-$(CONFIG_TEMP_SENSOR_OTI502)+=temp_sensor/oti502.o
 driver-$(CONFIG_TEMP_SENSOR_SB_TSI)+=temp_sensor/sb_tsi.o
 driver-$(CONFIG_TEMP_SENSOR_TMP006)+=temp_sensor/tmp006.o
 driver-$(CONFIG_TEMP_SENSOR_TMP112)+=temp_sensor/tmp112.o
@@ -127,18 +129,27 @@ driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7447)+=tcpm/anx7447.o
 driver-$(CONFIG_USB_PD_TCPM_PS8751)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8805)+=tcpm/ps8xxx.o
+driver-$(CONFIG_USB_PD_TCPM_PS8815)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_TUSB422)+=tcpm/tusb422.o
 driver-$(CONFIG_USB_PD_TCPM_NCT38XX)+=tcpm/nct38xx.o
+driver-$(CONFIG_USB_PD_TCPM_RAA489000)+=tcpm/raa489000.o
 
 # Type-C Retimer drivers
-driver-$(CONFIG_USB_PD_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
+driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
+driver-$(CONFIG_USBC_RETIMER_NB7V904M)+=retimer/nb7v904m.o
+driver-$(CONFIG_USBC_RETIMER_PI3DPX1207)+=retimer/pi3dpx1207.o
+driver-$(CONFIG_USBC_RETIMER_PS8802)+=retimer/ps8802.o
+driver-$(CONFIG_USBC_RETIMER_PS8818)+=retimer/ps8818.o
 
 # USB mux high-level driver
 driver-$(CONFIG_USBC_SS_MUX)+=usb_mux/usb_mux.o
 
 # USB muxes
+driver-$(CONFIG_USB_MUX_AMD_FP5)+=usb_mux/amd_fp5.o
+driver-$(CONFIG_USB_MUX_ANX7440)+=usb_mux/anx7440.o
 driver-$(CONFIG_USB_MUX_IT5205)+=usb_mux/it5205.o
-driver-$(CONFIG_USB_MUX_PI3USB30532)+=usb_mux/pi3usb30532.o
+driver-$(CONFIG_USB_MUX_PI3USB30532)+=usb_mux/pi3usb3x532.o
+driver-$(CONFIG_USB_MUX_PI3USB31532)+=usb_mux/pi3usb3x532.o
 driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps874x.o
 driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps874x.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o

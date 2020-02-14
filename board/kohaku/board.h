@@ -26,6 +26,9 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
+/* Don't wake up from suspend on any MKBP event */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK 0
+
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
 
@@ -112,7 +115,8 @@
  * TODO(b/133444665): Revisit this threshold once peak power consumption tuning
  * for the AP is completed.
  */
-#define CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA 8192
+#define CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA 6144
+#define CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS
 
 /* Volume Button feature */
 #define CONFIG_VOLUME_BUTTONS

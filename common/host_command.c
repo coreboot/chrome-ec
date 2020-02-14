@@ -33,9 +33,6 @@
 
 static struct host_cmd_handler_args *pending_args;
 
-/* Verify Boot Mode */
-static int g_vboot_mode;
-
 #ifndef CONFIG_HOSTCMD_X86
 /*
  * Simulated memory map.  Must be word-aligned, because some of the elements
@@ -96,11 +93,6 @@ uint8_t *host_get_memmap(int offset)
 #else
 	return host_memmap + offset;
 #endif
-}
-
-int host_get_vboot_mode(void)
-{
-	return g_vboot_mode;
 }
 
 test_mockable void host_send_response(struct host_cmd_handler_args *args)
@@ -681,6 +673,20 @@ uint16_t host_command_process(struct host_cmd_handler_args *args)
 	if (hcdebug)
 		host_command_debug_request(args);
 
+	/*
+	 * Pre-emptively clear the entire response buffer so we do not
+	 * have any left over contents from previous host commands.
+	 * For example, this prevents the last portion of a char array buffer
+	 * from containing data from the last host command if the string does
+	 * not take the entire width of the char array buffer.
+	 *
+	 * Note that if request and response buffers pointed to the same memory
+	 * location, then the chip implementation already needed to provide a
+	 * request_temp buffer in which the request data was already copied
+	 * by this point (see host_packet_receive function).
+	 */
+	memset(args->response, 0, args->response_max);
+
 #ifdef CONFIG_HOSTCMD_PD
 	if (args->command >= EC_CMD_PASSTHRU_OFFSET(1) &&
 	    args->command <= EC_CMD_PASSTHRU_MAX(1)) {
@@ -752,18 +758,6 @@ DECLARE_HOST_COMMAND(EC_CMD_RESEND_RESPONSE,
 		     host_command_resend_response,
 		     EC_VER_MASK(0));
 #endif /* CONFIG_HOST_COMMAND_STATUS */
-
-static enum ec_status
-host_command_entering_mode(struct host_cmd_handler_args *args)
-{
-	struct ec_params_entering_mode *param =
-		(struct ec_params_entering_mode *)args->params;
-	args->response_size = 0;
-	g_vboot_mode = param->vboot_mode;
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_ENTERING_MODE,
-		host_command_entering_mode, EC_VER_MASK(0));
 
 /* Returns what we tell it to. */
 static enum ec_status

@@ -28,6 +28,7 @@ CFLAGS += -I../../../../third_party/cryptoc/include
 CFLAGS += -I../../board/cr50
 CFLAGS += -I../../chip/g
 CFLAGS += -I../../chip/g/dcrypto
+CFLAGS += -I../../fuzz
 CFLAGS += -I../../include
 CFLAGS += -I..
 CFLAGS += -I../..
@@ -36,6 +37,7 @@ CFLAGS += -Itestlib
 CFLAGS += -DLIBFTDI1=1
 CFLAGS += -c
 CFLAGS += -DCR50_NO_BN_ASM
+CFLAGS += -I../../fuzz
 TARGET = ftdi_spi_tpm
 
 .PRECIOUS: $(obj)/ftdi_spi_tpm_wrap.c

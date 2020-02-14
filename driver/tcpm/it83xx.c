@@ -12,6 +12,7 @@
 #include "registers.h"
 #include "system.h"
 #include "task.h"
+#include "tcpci.h"
 #include "timer.h"
 #include "util.h"
 #include "usb_pd.h"
@@ -34,7 +35,7 @@ const struct usbpd_ctrl_t usbpd_ctrl_regs[] = {
 	{&IT83XX_GPIO_GPCRF4, &IT83XX_GPIO_GPCRF5, IT83XX_IRQ_USBPD0},
 	{&IT83XX_GPIO_GPCRH1, &IT83XX_GPIO_GPCRH2, IT83XX_IRQ_USBPD1},
 };
-BUILD_ASSERT(ARRAY_SIZE(usbpd_ctrl_regs) == USBPD_PORT_COUNT);
+BUILD_ASSERT(ARRAY_SIZE(usbpd_ctrl_regs) == IT83XX_USBPD_PHY_PORT_COUNT);
 
 /*
  * This function disables integrated pd module and enables 5.1K resistor for
@@ -418,6 +419,9 @@ static int it83xx_set_cc(enum usbpd_port port, int pull)
 
 static int it83xx_tcpm_init(int port)
 {
+	/* Start with an unknown connection */
+	tcpci_set_cached_pull(port, TYPEC_CC_OPEN);
+
 	/* Initialize physical layer */
 	it83xx_init(port, PD_ROLE_DEFAULT(port));
 
@@ -441,6 +445,10 @@ static int it83xx_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 static int it83xx_tcpm_select_rp_value(int port, int rp_sel)
 {
 	uint8_t rp;
+
+	/* Keep track of current RP value */
+	tcpci_set_cached_rp(port, rp_sel);
+
 	/*
 	 * bit[3-2]: CC output current (when Rp selected)
 	 *       00: reserved
@@ -467,11 +475,24 @@ static int it83xx_tcpm_select_rp_value(int port, int rp_sel)
 
 static int it83xx_tcpm_set_cc(int port, int pull)
 {
+	/* Keep track of current CC pull value */
+	tcpci_set_cached_pull(port, pull);
+
 	return it83xx_set_cc(port, pull);
 }
 
-static int it83xx_tcpm_set_polarity(int port, int polarity)
+static int it83xx_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
+	/*
+	 * TCPCI sets the CC lines based on polarity.  If it is set to
+	 * no connection then both CC lines are driven, otherwise only
+	 * one is driven.  This driver does not appear to do this.  If
+	 * that changes, this would be the location you would want to
+	 * adjust the CC lines for the current polarity
+	 */
+	if (polarity == POLARITY_NONE)
+		return EC_SUCCESS;
+
 	it83xx_select_polarity(port, polarity);
 
 	return EC_SUCCESS;
@@ -525,7 +546,14 @@ static int it83xx_tcpm_set_vconn(int port, int enable)
 
 static int it83xx_tcpm_set_msg_header(int port, int power_role, int data_role)
 {
-	it83xx_set_power_role(port, power_role);
+	/* PD_ROLE_SINK 0, PD_ROLE_SOURCE 1 */
+	if (power_role == PD_ROLE_SOURCE)
+		/* bit0: source */
+		SET_MASK(IT83XX_USBPD_PDMSR(port), BIT(0));
+	else
+		/* bit0: sink */
+		CLEAR_MASK(IT83XX_USBPD_PDMSR(port), BIT(0));
+
 	it83xx_set_data_role(port, data_role);
 
 	return EC_SUCCESS;
@@ -543,12 +571,13 @@ static int it83xx_tcpm_set_rx_enable(int port, int enable)
 		USBPD_DISABLE_BMC_PHY(port);
 	}
 
-	/* If any PD port is connected, then disable deep sleep */
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; ++i)
-		if (IT83XX_USBPD_GCR(i) | USBPD_REG_MASK_BMC_PHY)
+	/* If any PD port Rx is enabled, then disable deep sleep */
+	for (i = 0; i < board_get_usb_pd_port_count(); ++i) {
+		if (IT83XX_USBPD_GCR(i) & USBPD_REG_MASK_BMC_PHY)
 			break;
+	}
 
-	if (i == CONFIG_USB_PD_PORT_COUNT)
+	if (i == board_get_usb_pd_port_count())
 		enable_sleep(SLEEP_MASK_USB_PD);
 	else
 		disable_sleep(SLEEP_MASK_USB_PD);

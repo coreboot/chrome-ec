@@ -49,19 +49,13 @@ static struct mutex g_base_mutex_1;
 /* Lid accel private data */
 static struct stprivate_data g_lis2dwl_data;
 /* Base accel private data */
-static struct lsm6dsm_data g_lsm6dsm_data;
+static struct lsm6dsm_data g_lsm6dsm_data = LSM6DSM_DATA;
 
 
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t lsm6dsm_base_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
-
-static const mat33_fp_t lis2dwl_lid_standard_ref = {
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
@@ -82,8 +76,8 @@ struct motion_sensor_t lid_accel_1 = {
 	.drv_data = &g_lis2dwl_data,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
-	.rot_standard_ref = &lis2dwl_lid_standard_ref,
-	.default_range = 4, /* g */
+	.rot_standard_ref = NULL,
+	.default_range = 2, /* g */
 	.min_frequency = LIS2DW12_ODR_MIN_VAL,
 	.max_frequency = LIS2DW12_ODR_MAX_VAL,
 	.config = {
@@ -113,7 +107,7 @@ struct motion_sensor_t base_accel_1 = {
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	.rot_standard_ref = &lsm6dsm_base_standard_ref,
-	.default_range = 4,  /* g */
+	.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	.min_frequency = LSM6DSM_ODR_MIN_VAL,
 	.max_frequency = LSM6DSM_ODR_MAX_VAL,
 	.config = {
@@ -171,7 +165,6 @@ void board_update_sensor_config_from_sku(void)
 			motion_sensors[BASE_GYRO] = base_gyro_1;
 		} else{
 			/*Need to change matrix for treeya*/
-			motion_sensors[LID_ACCEL].rot_standard_ref = &treeya_standard_ref;
 			motion_sensors[BASE_ACCEL].rot_standard_ref = &treeya_standard_ref;
 			motion_sensors[BASE_GYRO].rot_standard_ref = &treeya_standard_ref;
 		}

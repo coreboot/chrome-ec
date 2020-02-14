@@ -78,6 +78,9 @@ static void print_spoof_mode_status(int id);
 /* Flags to control whether to send an ODR change event for a sensor */
 static uint32_t odr_event_required;
 
+/* Whether or not the FIFO interrupt should be enabled (set from the AP). */
+__maybe_unused static int fifo_int_enabled;
+
 static inline int motion_sensor_in_forced_mode(
 		const struct motion_sensor_t *sensor)
 {
@@ -680,7 +683,7 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 		int flush_pending = atomic_read_clear(&sensor->flush_pending);
 
 		for (; flush_pending > 0; flush_pending--) {
-			motion_sense_insert_async_event(
+			motion_sense_fifo_insert_async_event(
 				sensor, ASYNC_EVENT_FLUSH);
 		}
 	}
@@ -690,7 +693,7 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 		motion_sense_set_data_rate(sensor);
 		motion_sense_set_motion_intervals();
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO))
-			motion_sense_insert_async_event(
+			motion_sense_fifo_insert_async_event(
 				sensor, ASYNC_EVENT_ODR);
 	}
 	return ret;
@@ -727,7 +730,7 @@ static void check_and_queue_gestures(uint32_t *event)
 	/* Run gesture recognition engine */
 	gesture_calc(event);
 #endif
-#ifdef CONFIG_GESTURE_SENSOR_BATTERY_TAP
+#ifdef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
 	if (*event & TASK_EVENT_MOTION_ACTIVITY_INTERRUPT(
 				MOTIONSENSE_ACTIVITY_DOUBLE_TAP)) {
 #ifdef CONFIG_GESTURE_HOST_DETECTION
@@ -738,7 +741,11 @@ static void check_and_queue_gestures(uint32_t *event)
 		 * AP is ignoring double tap event, do no wake up and no
 		 * automatic disable.
 		 */
+#ifdef CONFIG_GESTURE_SENSOR_DOUBLE_TAP_FOR_HOST
+		vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP;
+#else
 		vector.flags = 0;
+#endif
 		vector.activity = MOTIONSENSE_ACTIVITY_DOUBLE_TAP;
 		vector.state = 1; /* triggered */
 		vector.sensor_num = MOTION_SENSE_ACTIVITY_SENSOR_ID;
@@ -838,8 +845,10 @@ void motion_sense_task(void *u)
 	set_present(lpc_status);
 #endif
 
-	if (IS_ENABLED(CONFIG_ACCEL_FIFO))
+	if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
+		motion_sense_fifo_init();
 		ts_last_int = get_time();
+	}
 
 	while (1) {
 		ts_begin_task = get_time();
@@ -901,25 +910,18 @@ void motion_sense_task(void *u)
 		 * - we haven't done it for a while.
 		 */
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO) &&
-		    (motion_sense_fifo_is_wake_up_needed() ||
+		    (motion_sense_fifo_wake_up_needed() ||
 		     event & (TASK_EVENT_MOTION_ODR_CHANGE |
 			      TASK_EVENT_MOTION_FLUSH_PENDING) ||
+		     motion_sense_fifo_over_thres() ||
 		     (ap_event_interval > 0 &&
 		      time_after(ts_begin_task.le.lo,
 				 ts_last_int.le.lo + ap_event_interval)))) {
 			if ((event & TASK_EVENT_MOTION_FLUSH_PENDING) == 0) {
-				motion_sense_fifo_stage_timestamp(
+				motion_sense_fifo_add_timestamp(
 					__hw_clock_source_read());
-				motion_sense_fifo_commit_data();
 			}
 			ts_last_int = ts_begin_task;
-			/*
-			 * Count the number of event the AP is allowed to
-			 * collect.
-			 */
-			mutex_lock(&g_sensor_mutex);
-			fifo_queue_count = queue_count(&motion_sense_fifo);
-			mutex_unlock(&g_sensor_mutex);
 #ifdef CONFIG_MKBP_EVENT
 			/*
 			 * Send an event if we know we are in S0 and the kernel
@@ -929,9 +931,9 @@ void motion_sense_task(void *u)
 			 */
 			if ((fifo_int_enabled &&
 			     sensor_active == SENSOR_ACTIVE_S0) ||
-			    wake_up_needed) {
+			    motion_sense_fifo_wake_up_needed()) {
 				mkbp_send_event(EC_MKBP_EVENT_SENSOR_FIFO);
-				wake_up_needed = 0;
+				motion_sense_fifo_reset_wake_up_needed();
 			}
 #endif /* CONFIG_MKBP_EVENT */
 		}
@@ -1075,13 +1077,20 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 
 		out->info.location = sensor->location;
 		out->info.chip = sensor->chip;
+		if (args->version < 3)
+			args->response_size = sizeof(out->info);
 		if (args->version >= 3) {
 			out->info_3.min_frequency = sensor->min_frequency;
 			out->info_3.max_frequency = sensor->max_frequency;
 			out->info_3.fifo_max_event_count = MAX_FIFO_EVENT_COUNT;
 			args->response_size = sizeof(out->info_3);
-		} else {
-			args->response_size = sizeof(out->info);
+		}
+		if (args->version >= 4) {
+			if (IS_ENABLED(CONFIG_ONLINE_CALIB) &&
+			    sensor->drv->read_temp)
+				out->info_4.flags |=
+					MOTION_SENSE_CMD_INFO_FLAG_ONLINE_CALIB;
+			args->response_size = sizeof(out->info_4);
 		}
 		break;
 
@@ -1266,12 +1275,11 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			args->response_size = sizeof(out->fifo_info);
 			break;
 		}
-		motion_sense_get_fifo_info(&out->fifo_info);
+		motion_sense_fifo_get_info(&out->fifo_info, 1);
 		for (i = 0; i < motion_sensor_count; i++) {
 			out->fifo_info.lost[i] = motion_sensors[i].lost;
 			motion_sensors[i].lost = 0;
 		}
-		motion_sense_fifo_lost = 0;
 		args->response_size = sizeof(out->fifo_info) +
 			sizeof(uint16_t) * motion_sensor_count;
 		break;
@@ -1279,17 +1287,12 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 	case MOTIONSENSE_CMD_FIFO_READ:
 		if (!IS_ENABLED(CONFIG_ACCEL_FIFO))
 			return EC_RES_INVALID_PARAM;
-		mutex_lock(&g_sensor_mutex);
-		reported = MIN((args->response_max - sizeof(out->fifo_read)) /
-			       motion_sense_fifo.unit_bytes,
-			       MIN(queue_count(&motion_sense_fifo),
-				   in->fifo_read.max_data_vector));
-		reported = queue_remove_units(&motion_sense_fifo,
-				out->fifo_read.data, reported);
-		mutex_unlock(&g_sensor_mutex);
-		out->fifo_read.number_data = reported;
-		args->response_size = sizeof(out->fifo_read) + reported *
-			motion_sense_fifo.unit_bytes;
+		out->fifo_read.number_data = motion_sense_fifo_read(
+			args->response_max - sizeof(out->fifo_read),
+			in->fifo_read.max_data_vector,
+			out->fifo_read.data,
+			&(args->response_size));
+		args->response_size += sizeof(out->fifo_read);
 		break;
 	case MOTIONSENSE_CMD_FIFO_INT_ENABLE:
 		if (!IS_ENABLED(CONFIG_ACCEL_FIFO))
@@ -1420,9 +1423,9 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
-DECLARE_HOST_COMMAND(EC_CMD_MOTION_SENSE_CMD,
-		     host_cmd_motion_sense,
-		     EC_VER_MASK(1) | EC_VER_MASK(2) | EC_VER_MASK(3));
+DECLARE_HOST_COMMAND(EC_CMD_MOTION_SENSE_CMD, host_cmd_motion_sense,
+		     EC_VER_MASK(1) | EC_VER_MASK(2) | EC_VER_MASK(3) |
+			     EC_VER_MASK(4));
 
 /*****************************************************************************/
 /* Console commands */
@@ -1562,6 +1565,9 @@ static int command_accel_data_rate(int argc, char **argv)
 		sensor->config[SENSOR_CONFIG_AP].odr = 0;
 		sensor->config[config_id].odr =
 			data | (round ? ROUND_UP_FLAG : 0);
+
+		atomic_or(&odr_event_required,
+			  1 << (sensor - motion_sensors));
 		task_set_event(TASK_ID_MOTIONSENSE,
 				TASK_EVENT_MOTION_ODR_CHANGE, 0);
 	} else {

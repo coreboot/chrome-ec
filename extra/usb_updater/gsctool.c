@@ -296,6 +296,8 @@ static const struct option_container cmd_line_options[] = {
 	 "Set or clear CCD password. Use 'clear:<cur password>' to clear it"},
 	{{"post_reset", no_argument, NULL, 'p'},
 	 "Request post reset after transfer"},
+	{{"force_ro", no_argument, NULL, 'q'},
+	 "Force inactive RO update"},
 	{{"sn_rma_inc", required_argument, NULL, 'R'},
 	 "RMA_INC%Increment SN RMA count by RMA_INC. RMA_INC should be 0-7."},
 	{{"rma_auth", optional_argument, NULL, 'r'},
@@ -1013,7 +1015,8 @@ static void pick_sections(struct transfer_descriptor *td)
 		 * Is it newer in the new image than the running RO section on
 		 * the device?
 		 */
-		if (a_newer_than_b(&sections[i].shv, &targ.shv[0]))
+		if (a_newer_than_b(&sections[i].shv, &targ.shv[0]) ||
+		    td->force_ro)
 			sections[i].ustatus = needed;
 	}
 }
@@ -1164,12 +1167,33 @@ static void send_done(struct usb_endpoint *uep)
 	do_xfer(uep, &out, sizeof(out), &out, 1, 0, NULL);
 }
 
+/*
+ * Old cr50 images fail the update if sections are sent out of order. They
+ * require each block to have an offset greater than the block that was sent
+ * before. RO has a lower offset than RW, so old cr50 images reject RO if it's
+ * sent right after RW.
+ * This offset restriction expires after 60 seconds. Delay the RO update long
+ * enough for cr50 to not care that it has a lower offset than RW.
+ *
+ * Make the delay 65 seconds instead of 60 to cover differences in the speed of
+ * H1's clock and the host clock.
+ */
+#define NEXT_SECTION_DELAY 65
+
+/* Support for flashing RO immediately after RW was added in 0.3.20/0.4.20. */
+static int supports_reordered_section_updates(struct signed_header_version *rw)
+{
+	return (rw->epoch || rw->major > 4 ||
+		(rw->major >= 3 && rw->minor >= 20));
+}
+
 /* Returns number of successfully transmitted image sections. */
 static int transfer_image(struct transfer_descriptor *td,
 			       uint8_t *data, size_t data_len)
 {
 	size_t j;
 	int num_txed_sections = 0;
+	int needs_delay = !supports_reordered_section_updates(&targ.shv[1]);
 
 	/*
 	 * In case both RO and RW updates are required, make sure the RW
@@ -1190,6 +1214,20 @@ static int transfer_image(struct transfer_descriptor *td,
 
 			if (sections[i].ustatus != needed)
 				break;
+			if (num_txed_sections && needs_delay) {
+				/*
+				 * Delays more than 5 seconds cause the update
+				 * to timeout. End the update before the delay
+				 * and set it up after to recover from the
+				 * timeout.
+				 */
+				if (td->ep_type == usb_xfer)
+					send_done(&td->uep);
+				printf("Waiting %ds for %s update.\n",
+				       NEXT_SECTION_DELAY, sections[i].name);
+				sleep(NEXT_SECTION_DELAY);
+				setup_connection(td);
+			}
 
 			transfer_section(td,
 					 data + sections[i].offset,
@@ -2725,6 +2763,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'O':
 			openbox_desc_file = optarg;
+			break;
+		case 'q':
+			td.force_ro = 1;
 			break;
 		case 'r':
 			rma = 1;

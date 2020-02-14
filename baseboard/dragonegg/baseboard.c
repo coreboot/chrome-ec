@@ -9,6 +9,7 @@
 #include "chipset.h"
 #include "console.h"
 #include "driver/bc12/max14637.h"
+#include "driver/charger/bq25710.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/syv682x.h"
@@ -79,6 +80,16 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+/* Charger Chips */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = BQ25710_SMBUS_ADDR1_FLAGS,
+		.drv = &bq25710_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
 /******************************************************************************/
 /* Chipset callbacks/hooks */
 
@@ -137,7 +148,7 @@ void board_hibernate(void)
 }
 /******************************************************************************/
 /* USB-C TPCP Configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
 		.bus_type = EC_BUS_TYPE_EMBEDDED,
 		/* TCPC is embedded within EC so no i2c config needed */
@@ -168,7 +179,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
 
 /******************************************************************************/
 /* USB-C PPC Configuration */
-struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_COUNT] = {
+struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
 		.i2c_port = I2C_PORT_USBC0,
 		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
@@ -189,7 +200,7 @@ struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_COUNT] = {
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
@@ -209,7 +220,7 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
 
 /******************************************************************************/
 /* BC 1.2 chip Configuration */
-const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.chip_enable_pin = GPIO_USB_C0_BC12_VBUS_ON_ODL,
 		.chg_det_pin = GPIO_USB_C0_BC12_CHG_MAX,
@@ -284,7 +295,7 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 int board_set_active_charge_port(int port)
 {
 	int is_valid_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 
 	if (!is_valid_port && port != CHARGE_PORT_NONE)

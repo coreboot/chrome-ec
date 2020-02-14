@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /* 48 MHz SYSCLK clock frequency */
 #define CPU_CLOCK 48000000
 
@@ -30,6 +32,10 @@
 /* Optional features */
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
+#define CONFIG_PVD
+/* See 'Programmable voltage detector characteristics' in the STM32F072x8 Datasheet.
+   PVD Threshold 1 corresponds to a falling voltage threshold of min:2.09V, max:2.27V. */
+#define PVD_THRESHOLD     (1)
 
 /* USB Configuration */
 #define CONFIG_USB
@@ -129,6 +135,10 @@
 #define TIM_CLOCK32 2
 
 #include "gpio_signal.h"
+
+/* GPIO signal mapping */
+#define GPIO_USART4_SERVO_TX_DUT_RX GPIO_UART3_TX_SERVO_JTAG_TCK
+#define GPIO_USART4_SERVO_RX_DUT_TX GPIO_UART3_RX_JTAG_BUFFER_TO_SERVO_TDO
 
 /* USB string indexes */
 enum usb_strings {

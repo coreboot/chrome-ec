@@ -17,7 +17,7 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
-#define PDO_FIXED_FLAGS (PDO_FIXED_EXTERNAL | PDO_FIXED_DATA_SWAP)
+#define PDO_FIXED_FLAGS (PDO_FIXED_UNCONSTRAINED | PDO_FIXED_DATA_SWAP)
 
 const uint32_t pd_src_pdo[] = {
 		PDO_FIXED(5000,  3000, PDO_FIXED_FLAGS),
@@ -44,16 +44,6 @@ void pd_set_input_current_limit(int port, uint32_t max_ma,
 	gpio_set_level(GPIO_LED_B_L, !blue);
 }
 
-int pd_is_valid_input_voltage(int mv)
-{
-	/* Any voltage less than the max is allowed */
-	return 1;
-}
-
-void pd_transition_voltage(int idx)
-{
-}
-
 int pd_set_power_supply_ready(int port)
 {
 	return EC_SUCCESS; /* we are ready */
@@ -69,37 +59,32 @@ int pd_snk_is_vbus_provided(int port)
 	return (gpio_get_level(GPIO_VBUS_ALERT_L) == 0);
 }
 
-int pd_board_checks(void)
-{
-	return EC_SUCCESS;
-}
-
-int pd_check_power_swap(int port)
+__override int pd_check_power_swap(int port)
 {
 	/* Always refuse power swap */
 	return 0;
 }
 
-int pd_check_data_swap(int port, int data_role)
+__override int pd_check_data_swap(int port,
+				  enum pd_data_role data_role)
 {
 	/* Always allow data swap */
 	return 1;
 }
 
-void pd_check_pr_role(int port, int pr_role, int flags)
+__override void pd_check_pr_role(int port,
+				 enum pd_power_role pr_role,
+				 int flags)
 {
 }
 
-void pd_check_dr_role(int port, int dr_role, int flags)
+__override void pd_check_dr_role(int port,
+				 enum pd_data_role dr_role,
+				 int flags)
 {
 }
 
-void pd_execute_data_swap(int port, int data_role)
-{
-	/* Do nothing */
-}
-
-int pd_custom_vdm(int port, int cnt, uint32_t *payload,
+__override int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 		  uint32_t **rpayload)
 {
 	return 0;

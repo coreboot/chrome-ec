@@ -30,35 +30,46 @@ static enum charge_state prv_chstate = PWR_STATE_INIT;
 static void kukui_led_set_battery(void)
 {
 	enum charge_state chstate;
+	static uint8_t prv_r, prv_g, prv_b;
 	uint8_t br[EC_LED_COLOR_COUNT] = { 0 };
 
 	chstate = charge_get_state();
 
-	if (prv_chstate == chstate)
+	if (prv_chstate == chstate &&
+		chstate != PWR_STATE_DISCHARGE)
 		return;
 
 	prv_chstate = chstate;
 
 	switch (chstate) {
 	case PWR_STATE_CHARGE:
-		/* Always indicate when charging, even in suspend. */
+		/* RGB(current, duty) = (4mA,1/32)*/
 		br[EC_LED_COLOR_BLUE] = 1;
 		break;
 	case PWR_STATE_DISCHARGE:
-		if (charge_get_percent() <= 10)
+		/* display SoC 10% = real battery SoC 13%*/
+		if (charge_get_percent() <= 13)
 			br[EC_LED_COLOR_RED] = 1;
-		break;
-	case PWR_STATE_ERROR:
-		br[EC_LED_COLOR_RED] = 1;
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
 		br[EC_LED_COLOR_GREEN] = 1;
+		break;
+	case PWR_STATE_ERROR:
+		br[EC_LED_COLOR_RED] = 1;
 		break;
 	default:
 		/* Other states don't alter LED behavior */
 		return;
 	}
 
+	if (prv_r == br[EC_LED_COLOR_RED] &&
+	    prv_g == br[EC_LED_COLOR_GREEN] &&
+	    prv_b == br[EC_LED_COLOR_BLUE])
+		return;
+
+	prv_r = br[EC_LED_COLOR_RED];
+	prv_g = br[EC_LED_COLOR_GREEN];
+	prv_b = br[EC_LED_COLOR_BLUE];
 	led_set_brightness(EC_LED_ID_BATTERY_LED, br);
 }
 
@@ -102,6 +113,23 @@ static void led_reset_auto_control(void)
 {
 	prv_chstate = PWR_STATE_INIT;
 }
+
+static void krane_led_init(void)
+{
+	const enum mt6370_led_dim_mode dim = MT6370_LED_DIM_MODE_PWM;
+	const enum mt6370_led_pwm_freq freq = MT6370_LED_PWM_FREQ1000;
+	mt6370_led_set_color(0);
+	mt6370_led_set_dim_mode(LED_RED, dim);
+	mt6370_led_set_dim_mode(LED_GREEN, dim);
+	mt6370_led_set_dim_mode(LED_BLUE, dim);
+	mt6370_led_set_pwm_frequency(LED_RED, freq);
+	mt6370_led_set_pwm_frequency(LED_GREEN, freq);
+	mt6370_led_set_pwm_frequency(LED_BLUE, freq);
+	mt6370_led_set_pwm_dim_duty(LED_RED, 0);
+	mt6370_led_set_pwm_dim_duty(LED_GREEN, 0);
+	mt6370_led_set_pwm_dim_duty(LED_BLUE, 0);
+}
+DECLARE_HOOK(HOOK_INIT, krane_led_init, HOOK_PRIO_DEFAULT);
 
 /* Called by hook task every 1 sec */
 static void led_second(void)

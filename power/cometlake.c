@@ -20,34 +20,35 @@
 /* Power signals list. Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
 	[X86_SLP_S0_DEASSERTED] = {
-		GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED",
+		.gpio = GPIO_PCH_SLP_S0_L,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH |
+			POWER_SIGNAL_DISABLE_AT_BOOT,
+		.name = "SLP_S0_DEASSERTED",
 	},
 	[X86_SLP_S3_DEASSERTED] = {
-		SLP_S3_SIGNAL_L,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"SLP_S3_DEASSERTED",
+		.gpio = SLP_S3_SIGNAL_L,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "SLP_S3_DEASSERTED",
 	},
 	[X86_SLP_S4_DEASSERTED] = {
-		SLP_S4_SIGNAL_L,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"SLP_S4_DEASSERTED",
+		.gpio = SLP_S4_SIGNAL_L,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "SLP_S4_DEASSERTED",
 	},
 	[X86_RSMRST_L_PGOOD] = {
-		GPIO_RSMRST_L_PGOOD,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"RSMRST_L_PGOOD",
+		.gpio = GPIO_RSMRST_L_PGOOD,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "RSMRST_L_PGOOD",
 	},
-	[PP5000_A_PGOOD] = {
-		GPIO_PP5000_A_PG_OD,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"PP5000_A_PGOOD",
+	[X86_PP5000_A_PGOOD] = {
+		.gpio = GPIO_PP5000_A_PG_OD,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "PP5000_A_PGOOD",
 	},
-	[ALL_SYS_PGOOD] = {
-		GPIO_PG_EC_ALL_SYS_PWRGD,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"ALL_SYS_PWRGD",
+	[X86_ALL_SYS_PGOOD] = {
+		.gpio = GPIO_PG_EC_ALL_SYS_PWRGD,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "ALL_SYS_PWRGD",
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
@@ -110,6 +111,12 @@ enum power_state chipset_force_g3(void)
 	return POWER_G3;
 }
 
+/* Default no action, overwrite it in board.c if necessary*/
+__attribute__((weak)) void all_sys_pgood_check_reboot(void)
+{
+	return;
+}
+
 /* Called by APL power state machine when transitioning from G3 to S5 */
 void chipset_pre_init_callback(void)
 {
@@ -128,6 +135,11 @@ void chipset_pre_init_callback(void)
 	 * power_wait_signals() as PP5000_A_PGOOD is included in the
 	 * CHIPSET_G3S5_POWERUP_SIGNAL macro.
 	 */
+
+	/* For b:143440730, system might hang-up before enter S0/S3. Check
+	 * GPIO_ALL_SYS_PGOOD here to make sure it will trigger every time.
+	 */
+	all_sys_pgood_check_reboot();
 }
 
 enum power_state power_handle_state(enum power_state state)

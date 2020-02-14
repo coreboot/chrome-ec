@@ -154,7 +154,7 @@ static void discharge_voltage(int target_volt)
 
 /* ----------------------- USB Power delivery policy ---------------------- */
 
-#define PDO_FIXED_FLAGS (PDO_FIXED_EXTERNAL | PDO_FIXED_DATA_SWAP)
+#define PDO_FIXED_FLAGS (PDO_FIXED_UNCONSTRAINED | PDO_FIXED_DATA_SWAP)
 
 /* Voltage indexes for the PDOs */
 enum volt_idx {
@@ -273,22 +273,28 @@ void pd_power_supply_reset(int port)
 	}
 }
 
-int pd_check_data_swap(int port, int data_role)
+int pd_check_data_swap(int port,
+		       enum pd_data_role data_role)
 {
 	/* Allow data swap if we are a DFP, otherwise don't allow */
 	return (data_role == PD_ROLE_DFP) ? 1 : 0;
 }
 
-void pd_execute_data_swap(int port, int data_role)
+void pd_execute_data_swap(int port,
+			  enum pd_data_role data_role)
 {
 	/* Do nothing */
 }
 
-void pd_check_pr_role(int port, int pr_role, int flags)
+void pd_check_pr_role(int port,
+		      enum pd_power_role pr_role,
+		      int flags)
 {
 }
 
-void pd_check_dr_role(int port, int dr_role, int flags)
+void pd_check_dr_role(int port,
+		      enum pd_data_role dr_role,
+		      int flags)
 {
 	/* If DFP, try to switch to UFP */
 	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_DFP)
@@ -524,7 +530,7 @@ const struct svdm_response svdm_rsp = {
 	.exit_mode = &svdm_exit_mode,
 };
 
-int pd_custom_vdm(int port, int cnt, uint32_t *payload,
+__override int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 		  uint32_t **rpayload)
 {
 	int cmd = PD_VDO_CMD(payload[0]);

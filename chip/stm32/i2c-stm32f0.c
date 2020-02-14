@@ -12,6 +12,7 @@
 #include "host_command.h"
 #include "hwtimer.h"
 #include "i2c.h"
+#include "i2c_private.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
@@ -112,22 +113,39 @@ static const uint32_t timingr_regs[I2C_CLK_SRC_COUNT][I2C_FREQ_COUNT] = {
 	},
 };
 
-static void i2c_set_freq_port(const struct i2c_port_t *p,
-			      enum stm32_i2c_clk_src src,
-			      enum i2c_freq freq)
+int chip_i2c_set_freq(int port, enum i2c_freq freq)
 {
-	int port = p->port;
-	const uint32_t *regs = timingr_regs[src];
+	enum stm32_i2c_clk_src src = I2C_CLK_SRC_48MHZ;
+
+#if defined(CONFIG_HOSTCMD_I2C_SLAVE_ADDR_FLAGS) && \
+	defined(CONFIG_LOW_POWER_IDLE) && \
+	(I2C_PORT_EC == STM32_I2C1_PORT)
+	if (port == STM32_I2C1_PORT) {
+		/*
+		 * Use HSI (8MHz) for i2c clock. This allows smooth wakeup
+		 * from STOP mode since HSI is only clock running immediately
+		 * upon exit from STOP mode.
+		 */
+		src = I2C_CLK_SRC_8MHZ;
+	}
+#endif
 
 	/* Disable port */
 	STM32_I2C_CR1(port) = 0;
 	STM32_I2C_CR2(port) = 0;
 	/* Set clock frequency */
-	STM32_I2C_TIMINGR(port) = regs[freq];
+	STM32_I2C_TIMINGR(port) = timingr_regs[src][freq];
 	/* Enable port */
 	STM32_I2C_CR1(port) = STM32_I2C_CR1_PE;
 
 	pdata[port].freq = freq;
+
+	return EC_SUCCESS;
+}
+
+enum i2c_freq chip_i2c_get_freq(int port)
+{
+	return pdata[port].freq;
 }
 
 /**
@@ -135,10 +153,10 @@ static void i2c_set_freq_port(const struct i2c_port_t *p,
  *
  * @param p		the I2c port
  */
-static void i2c_init_port(const struct i2c_port_t *p)
+static int i2c_init_port(const struct i2c_port_t *p)
 {
 	int port = p->port;
-	enum stm32_i2c_clk_src src = I2C_CLK_SRC_48MHZ;
+	int ret = EC_SUCCESS;
 	enum i2c_freq freq;
 
 	/* Enable clocks to I2C modules if necessary */
@@ -147,15 +165,14 @@ static void i2c_init_port(const struct i2c_port_t *p)
 
 	if (port == STM32_I2C1_PORT) {
 #if defined(CONFIG_HOSTCMD_I2C_SLAVE_ADDR_FLAGS) && \
-defined(CONFIG_LOW_POWER_IDLE) && \
-(I2C_PORT_EC == STM32_I2C1_PORT)
+	defined(CONFIG_LOW_POWER_IDLE) && \
+	(I2C_PORT_EC == STM32_I2C1_PORT)
 		/*
 		 * Use HSI (8MHz) for i2c clock. This allows smooth wakeup
 		 * from STOP mode since HSI is only clock running immediately
 		 * upon exit from STOP mode.
 		 */
 		STM32_RCC_CFGR3 &= ~0x10;
-		src = I2C_CLK_SRC_8MHZ;
 #else
 		/* Use SYSCLK for i2c clock. */
 		STM32_RCC_CFGR3 |= 0x10;
@@ -179,13 +196,16 @@ defined(CONFIG_LOW_POWER_IDLE) && \
 	default: /* unknown speed, defaults to 100kBps */
 		CPRINTS("I2C bad speed %d kBps", p->kbps);
 		freq = I2C_FREQ_100KHZ;
+		ret = EC_ERROR_INVAL;
 	}
 
 	/* Set up initial bus frequencies */
-	i2c_set_freq_port(p, src, freq);
+	chip_i2c_set_freq(p->port, freq);
 
 	/* Set up default timeout */
 	i2c_set_timeout(port, 0);
+
+	return ret;
 }
 
 /*****************************************************************************/
@@ -447,8 +467,25 @@ int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
 
 	/* Clear status */
 	if (xfer_start) {
+		uint32_t cr2 = STM32_I2C_CR2(port);
+
 		STM32_I2C_ICR(port) = STM32_I2C_ICR_ALL;
 		STM32_I2C_CR2(port) = 0;
+		if (cr2 & STM32_I2C_CR2_RELOAD) {
+			/*
+			 * If I2C_XFER_START flag is on and we've set RELOAD=1
+			 * in previous chip_i2c_xfer() call. Then we are
+			 * probably in the middle of an i2c transaction.
+			 *
+			 * In this case, we need to clear the RELOAD bit and
+			 * wait for Transfer Complete (TC) flag, to make sure
+			 * the chip is not expecting another NBYTES data, And
+			 * send repeated-start correctly.
+			 */
+			rv = wait_isr(port, STM32_I2C_ISR_TC);
+			if (rv)
+				goto xfer_exit;
+		}
 	}
 
 	if (out_bytes || !in_bytes) {
@@ -580,7 +617,7 @@ int i2c_get_line_levels(int port)
 		(i2c_raw_get_scl(port) ? I2C_LINE_SCL_HIGH : 0);
 }
 
-static void i2c_init(void)
+void i2c_init(void)
 {
 	const struct i2c_port_t *p = i2c_ports;
 	int i;
@@ -613,5 +650,4 @@ static void i2c_init(void)
 	task_enable_irq(IRQ_SLAVE);
 #endif
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);
 

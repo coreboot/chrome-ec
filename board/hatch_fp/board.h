@@ -3,12 +3,28 @@
  * found in the LICENSE file.
  */
 
-/* Hatch Fingerprint MCU configuration */
+/*
+ * STM32F412 + FPC 1025 Fingerprint MCU configuration
+ *
+ * Alternate names that share this same board file:
+ *   hatch_fp
+ *   bloonchipper
+ *   dragonclaw
+ */
 
 #ifndef __BOARD_H
 #define __BOARD_H
 
-#define CONFIG_SYSTEM_UNLOCKED
+#undef CONFIG_SYSTEM_UNLOCKED
+
+/*
+ * These allow console commands to be flagged as restricted.
+ * Restricted commands will only be permitted to run when
+ * console_is_restricted() returns false.
+ * See console_is_restricted's definition in board.c.
+ */
+#define CONFIG_CONSOLE_COMMAND_FLAGS
+#define CONFIG_RESTRICTED_CONSOLE_COMMANDS
 
 /*
  * Flash layout: we redefine the sections offsets and sizes as we want to
@@ -133,10 +149,11 @@
 #else /* SECTION_IS_RO */
 /* RO verifies the RW partition signature */
 #define CONFIG_RSA
-#define CONFIG_RSA_KEY_SIZE 3072
-#define CONFIG_RSA_EXPONENT_3
 #define CONFIG_RWSIG
 #endif
+
+#define CONFIG_RSA_KEY_SIZE 3072
+#define CONFIG_RSA_EXPONENT_3
 #define CONFIG_RWSIG_TYPE_RWSIG
 
 /* RW does slow compute, RO does slow flash erase. */
