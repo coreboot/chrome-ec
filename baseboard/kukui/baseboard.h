@@ -141,11 +141,7 @@
 #define CONFIG_SPI
 #define CONFIG_SWITCH
 
-#ifdef SECTION_IS_RO
-#undef CONFIG_SYSTEM_UNLOCKED /* Disabled in RO to save space */
-#else
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
-#endif
+#undef CONFIG_SYSTEM_UNLOCKED /* Disable dangerous commands for testing */
 
 /* Bootblock */
 #ifdef SECTION_IS_RO
