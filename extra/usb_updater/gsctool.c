@@ -268,6 +268,8 @@ static const struct option_container cmd_line_options[] = {
 	 "Report running Cr50 firmware versions"},
 	{{"factory", required_argument, NULL, 'F'},
 	 "[enable|disable]%Control factory mode"},
+	{{"getbootmode", no_argument, NULL, 'g'},
+	 "Get the system boot mode"},
 	{{"help", no_argument, NULL, 'h'},
 	 "Show this message"},
 	{{"ccd_info", no_argument, NULL, 'I'},
@@ -2003,6 +2005,43 @@ static void process_wp(struct transfer_descriptor *td)
 		"forced disabled");
 }
 
+static int process_get_boot_mode(struct transfer_descriptor *td)
+{
+	size_t response_size;
+	uint8_t response;
+	const char * const desc = "Getting boot mode";
+	int rv = 0;
+
+	response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_BOOT_MODE, NULL, 0,
+				 &response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d in %s\n", rv, desc);
+		return update_error;
+	}
+	if (response_size != 1) {
+		fprintf(stderr, "Unexpected response size %zd while %s\n",
+			response_size, desc);
+		return update_error;
+	}
+
+	/* Print the response and meaning, as in 'enum boot_mode'. */
+	printf("Boot mode = 0x%02x: ", response);
+	switch (response) {
+	case 0x00:
+		printf("NORMAL\n");
+		break;
+	case 0x01:
+		printf("NO_BOOT\n");
+		break;
+	default:
+		fprintf(stderr, "unknown boot mode\n");
+		return update_error;
+	}
+
+	return 0;
+}
 
 void process_bid(struct transfer_descriptor *td,
 		 enum board_id_action bid_action,
@@ -2644,6 +2683,7 @@ int main(int argc, char *argv[])
 	int get_flog = 0;
 	uint32_t prev_log_entry = 0;
 	int wp = 0;
+	int get_boot_mode = 0;
 	int try_all_transfer = 0;
 	int tpm_mode = 0;
 	bool show_machine_output = false;
@@ -2671,6 +2711,7 @@ int main(int argc, char *argv[])
 		{ 'b', &binary_vers },
 		{ 'c', &corrupt_inactive_rw },
 		{ 'f', &show_fw_ver },
+		{ 'g', &get_boot_mode},
 		{ 'I', &ccd_info },
 		{ 'k', &ccd_lock },
 		{ 'o', &ccd_open },
@@ -2855,6 +2896,7 @@ int main(int argc, char *argv[])
 	    !ccd_open &&
 	    !ccd_unlock &&
 	    !corrupt_inactive_rw &&
+	    !get_boot_mode &&
 	    !get_flog &&
 	    !get_endorsement_seed &&
 	    !factory_mode &&
@@ -2894,11 +2936,11 @@ int main(int argc, char *argv[])
 
 	if (((bid_action != bid_none) + !!rma + !!password + !!ccd_open +
 	     !!ccd_unlock + !!ccd_lock + !!ccd_info + !!get_flog +
-	     !!openbox_desc_file + !!factory_mode + !!wp +
+	     !!get_boot_mode + !!openbox_desc_file + !!factory_mode + !!wp +
 	     !!get_endorsement_seed) > 1) {
 		fprintf(stderr,
 			"ERROR: options"
-			"-e, -F, -I, -i, -k, -L, -O, -o, -P, -r, -U and -w "
+			"-e, -F, -g, -I, -i, -k, -L, -O, -o, -P, -r, -U and -w "
 			"are mutually exclusive\n");
 		exit(update_error);
 	}
@@ -2960,6 +3002,9 @@ int main(int argc, char *argv[])
 
 	if (sn_inc_rma)
 		process_sn_inc_rma(&td, sn_inc_rma_arg);
+
+	if (get_boot_mode)
+		exit(process_get_boot_mode(&td));
 
 	if (get_flog)
 		process_get_flog(&td, prev_log_entry);
