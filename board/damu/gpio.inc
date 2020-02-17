@@ -35,11 +35,12 @@ GPIO_INT(BC12_EC_INT_ODL,   PIN(C, 9),  GPIO_INT_FALLING,
          bc12_interrupt)
 GPIO_INT(AP_EC_WATCHDOG_L,  PIN(D, 2),  GPIO_INT_FALLING,
          chipset_watchdog_interrupt)
+GPIO_INT(TABLET_MODE_L,     PIN(B, 11), GPIO_INT_BOTH,
+         gmr_tablet_switch_isr)
 
 /* Unimplemented interrupts */
 GPIO(KB_INT_ODL,           PIN(A, 8),  GPIO_INPUT)
 GPIO(ALS_RGB_INT_ODL,      PIN(C, 10), GPIO_INPUT)
-GPIO(TABLET_MODE_L,        PIN(B, 11), GPIO_INPUT)
 
 /* Reset pins */
 GPIO(AP_SYS_RST_L,         PIN(C, 11), GPIO_OUT_LOW)
