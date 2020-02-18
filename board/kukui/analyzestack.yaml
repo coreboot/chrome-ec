@@ -1,3 +1,263 @@
+add:
+# TCPC functions, see mt6370_tcpm_drv struct.
+  tcpm_init[driver/tcpm/tcpm.h:121]:
+    - mt6370_init
+  tcpm_release[driver/tcpm/tcpm.h:134]:
+    - tcpci_tcpm_release
+  tcpm_select_rp_value[driver/tcpm/tcpm.h:150]:
+    - tcpci_tcpm_select_rp_value
+  tcpm_set_msg_header[driver/tcpm/tcpm.h:170]:
+    - tcpci_tcpm_set_msg_header
+  tcpm_enable_drp_toggle[driver/tcpm/tcpm.h:227]:
+    - tcpci_tcpc_drp_toggle
+  tcpm_enter_low_power_mode[driver/tcpm/tcpm.h:234]:
+    - mt6370_enter_low_power_mode
+  tcpm_transmit[driver/tcpm/tcpm.h:188]:
+    - tcpci_tcpm_transmit
+  tcpm_get_chip_info[driver/tcpm/tcpm.h:256]:
+    - tcpci_get_chip_info
+  tcpm_get_cc[driver/tcpm/tcpm.h:140]:
+    - mt6370_get_cc
+  tcpm_set_rx_enable[driver/tcpm/tcpm.h:176]:
+    - tcpci_tcpm_set_rx_enable
+  tcpm_set_vconn[driver/tcpm/tcpm.h:165]:
+    - tcpci_tcpm_set_vconn
+  tcpm_set_polarity[driver/tcpm/tcpm.h:160]:
+    - mt6370_set_polarity
+  tcpm_set_cc[driver/tcpm/tcpm.h:155]:
+    - mt6370_set_cc
+  tcpm_get_vbus_level[driver/tcpm/tcpm.h:145]:
+    - tcpci_tcpm_get_vbus_level
+  tcpm_enqueue_message[driver/tcpm/tcpci.c:468]:
+    - tcpci_tcpm_get_message_raw
+# USB mux, see it5205_usb_mux_driver
+  usb_mux_flip[driver/usb_mux/usb_mux.c:164]: #get
+    - it5205_set_mux
+  usb_mux_flip[driver/usb_mux/usb_mux.c:175]: #set
+    - it5205_get_mux
+  usb_mux_init[driver/usb_mux/usb_mux.c:65]: #init
+    - it5205_init
+  usb_mux_init[driver/usb_mux/usb_mux.c:76]: # board_init
+    - None
+  enter_low_power_mode[driver/usb_mux/usb_mux.c:43]:
+    - it5205_enter_low_power_mode
+  usb_mux_set[driver/usb_mux/usb_mux.c:113]:
+    - it5205_set_mux
+  hc_usb_pd_mux_info[driver/usb_mux/usb_mux.c:241]:
+    - it5205_get_mux
+  usb_mux_get[driver/usb_mux/usb_mux.c:141]:
+    - it5205_get_mux
+# usb_mux hpd_update
+  svdm_dp_post_config[baseboard/kukui/usb_pd_policy.c:200]:
+   - board_hpd_update
+  svdm_exit_dp_mode[baseboard/kukui/usb_pd_policy.c:263]:
+   - board_hpd_update
+  svdm_dp_attention[baseboard/kukui/usb_pd_policy.c:219]:
+   - board_hpd_update
+# USB PD policy, see struct svdm_amode_fx
+  pd_svdm[common/usb_pd_policy.c:766]:
+   - svdm_dp_status
+   - svdm_gfu_status
+  pd_svdm[common/usb_pd_policy.c:777]:
+   - svdm_dp_config
+   - svdm_gfu_config
+  pd_svdm[common/usb_pd_policy.c:783]:
+   - svdm_dp_post_config
+  pd_dfp_enter_mode[common/usb_pd_policy.c:440]:
+   - svdm_enter_dp_mode
+   - svdm_enter_gfu_mode
+  pd_dfp_exit_mode[common/usb_pd_policy.c:544]:
+   - svdm_exit_dp_mode
+   - svdm_exit_gfu_mode
+  dfp_consume_attention[common/usb_pd_policy.c:478]:
+   - svdm_dp_attention
+   - svdm_gfu_attention
+  pd_dfp_exit_mode[common/usb_pd_policy.c:561]:
+   - svdm_exit_dp_mode
+   - svdm_exit_gfu_mode
+# Motion sense: bmi160 and tcs3400_drv, tcs3400_rgb_drv
+  motion_sense_set_data_rate[common/motion_sense.c:156]: # set_data_rate
+   - tcs3400_set_data_rate
+   - tcs3400_rgb_set_data_rate
+   - set_data_rate[driver/accelgyro_bmi160.c]
+  motion_sense_set_data_rate[common/motion_sense.c:175]: # get_data_rate
+   - tcs3400_get_data_rate
+   - tcs3400_rgb_get_data_rate
+   - get_data_rate[driver/accelgyro_bmi160.c]
+  motion_sense_set_data_rate[common/motion_sense.c:184]: # get_data_rate
+   - tcs3400_get_data_rate
+   - tcs3400_rgb_get_data_rate
+   - get_data_rate[driver/accelgyro_bmi160.c]
+  motion_sense_set_motion_intervals[common/motion_sense.c:302]: # get_data_rate
+   - tcs3400_get_data_rate
+   - tcs3400_rgb_get_data_rate
+   - get_data_rate[driver/accelgyro_bmi160.c]
+  motion_sense_set_ec_rate_from_ap[common/motion_sense.c:196]: # get_data_rate
+   - tcs3400_get_data_rate
+   - tcs3400_rgb_get_data_rate
+   - get_data_rate[driver/accelgyro_bmi160.c]
+  motion_sense_init[common/motion_sense.c:327]: # init
+   - tcs3400_init
+   - tcs3400_rgb_init
+   - init[driver/accelgyro_bmi160.c]
+  sensor_init_done[common/motion_sense.c:353]: # get_range
+   - tcs3400_get_range
+   - get_range[driver/accelgyro_bmi160.c]
+  motion_sense_shutdown[common/motion_sense.c:431]: # list_activities
+   - list_activities[driver/accelgyro_bmi160.c]
+  motion_sense_shutdown[common/motion_sense.c:437]: # manage_activity
+   - manage_activity[driver/accelgyro_bmi160.c]
+  motion_sense_shutdown[common/motion_sense.c:440]: # manage_activity
+   - manage_activity[driver/accelgyro_bmi160.c]
+  motion_sense_read[common/motion_sense.c:589]: # read
+   - tcs3400_read
+   - tcs3400_rgb_read
+   - read[driver/accelgyro_bmi160.c]
+  motion_sense_read[common/motion_sense.c:576]: # get_data_rate
+   - tcs3400_get_data_rate
+   - tcs3400_rgb_get_data_rate
+   - get_data_rate[driver/accelgyro_bmi160.c]
+  motion_sense_process[common/motion_sense.c:667]: # irq_handler
+   - tcs3400_irq_handler
+   - irq_handler[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1153]: # set_range
+   - tcs3400_set_range
+   - set_range[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1164]: # get_range
+   - tcs3400_get_range
+   - get_range[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1179]: # set_offset
+   - tcs3400_set_offset
+   - tcs3400_rgb_set_offset
+   - set_offset[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1207]: # set_scale
+   - tcs3400_set_scale
+   - tcs3400_rgb_set_scale
+   - set_scale[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1233]: # perform_calib
+   - tcs3400_perform_calib
+   - perform_calib[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1237]: # get_offset
+   - tcs3400_get_offset
+   - tcs3400_rgb_get_offset
+   - get_offset[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1313]: # list_activities
+   - list_activities[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1333]: # list_activities
+   - list_activities[driver/accelgyro_bmi160.c]
+  host_cmd_motion_sense[common/motion_sense.c:1337]: # manage_activity
+   - manage_activity[driver/accelgyro_bmi160.c]
+  command_accelrange[common/motion_sense.c:1455]: # set_range
+   - tcs3400_set_range
+   - set_range[driver/accelgyro_bmi160.c]
+  command_accelrange[common/motion_sense.c:1460]: # get_range
+   - tcs3400_get_range
+   - get_range[driver/accelgyro_bmi160.c]
+  command_accelresolution[common/motion_sense.c:1504]: # set_resolution
+    - None
+  command_accelresolution[common/motion_sense.c:1508]: # get_resolution
+   - get_resolution[driver/accelgyro_bmi160.c]
+  command_accel_data_rate[common/motion_sense.c:1560]: # get_data_rate
+   - tcs3400_get_data_rate
+   - tcs3400_rgb_get_data_rate
+   - get_data_rate[driver/accelgyro_bmi160.c]
+  command_accel_read_xyz[common/motion_sense.c:1595]: # read
+   - tcs3400_read
+   - tcs3400_rgb_read
+   - read[driver/accelgyro_bmi160.c]
+  config_interrupt[driver/accelgyro_bmi160.c:1073]: # get_range
+   - get_range[driver/accelgyro_bmi160.c]
+
+# Core
+  handle_command[common/console.c:248]:
+    - { name: __cmds, stride: 16, offset: 4 }
+  hook_task[common/hooks.c:200]:
+    - { name: __deferred_funcs, stride: 4, offset: 0 }
+    - { name: __hooks_second, stride: 8, offset: 0 }
+    - { name: __hooks_tick, stride: 8, offset: 0 }
+  # Note: This assumes worse case, where all hook functions can be called from
+  # any hook_notify call
+  # Generate using `grep hooks_.*_end build/kukui/R*/ec.R*.smap |
+  #   sed -e 's/.*\(__hooks.*\)_end/    - { name: \1, stride: 8, offset: 0 }/' |
+  #   sort -u`
+  hook_notify[common/hooks.c:130]:
+    - { name: __hooks_ac_change, stride: 8, offset: 0 }
+    - { name: __hooks_base_attached_change, stride: 8, offset: 0 }
+    - { name: __hooks_battery_soc_change, stride: 8, offset: 0 }
+    - { name: __hooks_chipset_pre_init, stride: 8, offset: 0 }
+    - { name: __hooks_chipset_reset, stride: 8, offset: 0 }
+    - { name: __hooks_chipset_resume, stride: 8, offset: 0 }
+    - { name: __hooks_chipset_shutdown, stride: 8, offset: 0 }
+    - { name: __hooks_chipset_startup, stride: 8, offset: 0 }
+    - { name: __hooks_chipset_suspend, stride: 8, offset: 0 }
+    - { name: __hooks_freq_change, stride: 8, offset: 0 }
+    - { name: __hooks_lid_change, stride: 8, offset: 0 }
+    - { name: __hooks_pre_freq_change, stride: 8, offset: 0 }
+    - { name: __hooks_pwrbtn_change, stride: 8, offset: 0 }
+    - { name: __hooks_sysjump, stride: 8, offset: 0 }
+    - { name: __hooks_tablet_mode_change, stride: 8, offset: 0 }
+    - { name: __hooks_usb_pd_connect, stride: 8, offset: 0 }
+    - { name: __hooks_usb_pd_disconnect, stride: 8, offset: 0 }
+  mkbp_get_next_event[common/mkbp_event.c:369]:
+    - { name:  __mkbp_evt_srcs, stride: 8, offset: 4 }
+  host_command_process[common/host_command.c:708]:
+    - { name: __hcmds, stride: 12, offset: 0 }
+  vfnprintf:
+    # This covers all the addchar in vfnprintf, but stackanalyzer does not
+    # realize that...
+    - __tx_char
+  host_send_response[common/host_command.c:153]: # send_response
+    - spi_send_response
+  host_packet_respond[common/host_command.c:240]:
+    - spi_send_response_packet
+# Misc
+  i2c_command_passthru[common/i2c_master.c:991]:
+    - None
+  cprints[common/console_output.c:108]:
+    - None # I'm not sure what this is?!
+  chip_i2c_xfer_with_notify[common/i2c_master.c:112]: # i2c_port->drv->xfer
+   - i2c_bitbang_xfer
+  default_handler[core/cortex-m0/init.S:100]:
+   - exception_panic
+  rt946x_enable_hz[driver/charger/rt946x.c:370]:
+   - rt946x_set_bit
+   - rt946x_clr_bit
+  gpio_interrupt[chip/stm32/gpio.c:154]:
+   - None
+
 remove:
 # Remove all callsites pointing to panic_assert_fail.
 - panic_assert_fail
+
+# Remove paths that make no sense
+# HOOK_USB_PD_DISCONNECT
+- [ pd_request_power_swap, set_state.lto_priv.196, hook_notify,
+    [ debug_mode_handle, motion_sense_shutdown, rt946x_usb_connect,
+      system_common_shutdown, board_charge_termination] ]
+# HOOK_AC_CHANGE/HOOK_BATTERY_SOC_CHANGE
+- [ [ check_ac_state, charger_task ], hook_notify,
+    [ debug_mode_handle, motion_sense_shutdown, rt946x_usb_connect, system_common_shutdown] ]
+# HOOK_LID_CHANGE
+- [ [ lid_switch_open, lid_switch_close ], hook_notify,
+    [ motion_sense_shutdown, system_common_shutdown] ]
+# HOOK_BASE_ATTACHED_CHANGE
+- [ base_set_state, hook_notify, system_common_shutdown ]
+# HOOK_POWER_BUTTON_CHANGE
+- [ power_button_change_deferred, hook_notify,
+    [ motion_sense_shutdown, system_common_shutdown] ]
+# HOOK_SECOND
+- [ hook_task, hook_notify, [ motion_sense_shutdown, system_common_shutdown] ]
+# HOOK_SYSJUMP
+- [ jump_to_image, hook_notify,
+    [ debug_mode_handle, motion_sense_shutdown, rt946x_usb_connect, system_common_shutdown] ]
+- [ pd_request_power_swap, set_state, hook_notify, panic_init ]
+# set_state(port, PD_STATE_SRC/SNK_SWAP_INIT); will not call these functions
+- [ pd_request_power_swap, set_state,
+    [ pd_dfp_exit_mode, usb_mux_set, pd_power_supply_reset, tcpm_set_vconn ] ]
+- [ [ pd_request_data_swap, pd_request_vconn_swap ] , set_state, pd_power_supply_reset ]
+# All sensors will be shut down in S5
+- [ motion_sense_shutdown, motion_sense_switch_sensor_rate,
+    [ motion_sense_set_data_rate, motion_sense_init ] ]
+# HOOK_CHIPSET_PRE_INIT, HOOK_CHIPSET_STARTUP, HOOK_CHIPSET_RESUME,
+# HOOK_CHIPSET_SUSPEND, HOOK_CHIPSET_SHUTDOWN
+- [ chipset_task, hook_notify, [ rt946x_usb_connect, debug_mode_handle ] ]
