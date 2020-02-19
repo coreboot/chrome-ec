@@ -61,7 +61,7 @@ static int load_ec_hash_(uint8_t * const ec_hash)
 	uint8_t crc;
 
 	if (read_tpm_nvmem(KERNEL_NV_INDEX, secdata_size,
-			   (void *)&secdata) != tpm_read_success)
+			   (void *)&secdata) != TPM_READ_SUCCESS)
 		return EC_ERROR_VBOOT_DATA_UNDERSIZED;
 
 	/*
