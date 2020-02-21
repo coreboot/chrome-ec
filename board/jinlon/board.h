@@ -26,6 +26,7 @@
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_KEYBOARD_FACTORY_TEST
+#define CONFIG_KEYBOARD_VIVALDI
 
 /*
  * Jinlon's battery takes several seconds to come back out of its disconnect
