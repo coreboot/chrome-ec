@@ -45,4 +45,7 @@ void keyboard_host_write(int data, int is_cmd);
 enum ec_error_list keyboard_scancode_callback(uint16_t *make_code,
 					      int8_t pressed);
 
+__override_proto
+const struct ec_response_keybd_config *board_vivaldi_keybd_config(void);
+
 #endif  /* __CROS_EC_KEYBOARD_8042_H */
