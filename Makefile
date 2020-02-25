@@ -339,7 +339,26 @@ ifeq ($(CONFIG_SHAREDLIB),y)
 ro-objs := $(filter-out %_sharedlib.o, $(ro-objs))
 endif
 ro-deps := $(addsuffix .d, $(ro-objs))
+ifeq ($(CONFIG_EXTRACT_PRINTF_STRINGS),)
 rw-deps := $(addsuffix .d, $(rw-objs))
+else
+
+# See docs/packetized-console.md for details.
+
+s-src = chip/g/ite_sync.S core/cortex-m/init.S core/cortex-m/ldivmod.S \
+  core/cortex-m/switch.S core/cortex-m/uldivmod.S
+s-objs := $(patsubst %.S,$(out)/RW/%.o,$(s-src))
+
+rw-ep-objs := $(filter-out $(s-objs), $(rw-objs))
+rw-es := $(patsubst %.o,%.E,$(rw-ep-objs))
+rw-eps := $(patsubst %.o,%.Ep,$(rw-ep-objs))
+rw-deps := $(patsubst %.o,%.E.d,$(rw-objs))
+
+$(rw-eps) $(out)/RW/str_blob: $(rw-es)
+	${Q}util/util_precompile.py -o $(out)/RW/str_blob $(rw-es)
+
+$(rw-objs): $(out)/RW/str_blob $(rw-eps)
+endif
 
 deps := $(ro-deps) $(rw-deps) $(deps-y)
 

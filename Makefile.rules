@@ -83,6 +83,9 @@ cmd_run_fuzz = build/host/$*/$*.exe -seed=1 -runs=1 $(silent) \
 cmd_exe = $(CC) $(ro-objs) $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_c_to_o = $(CC) $(C_WARN) $(CFLAGS) -MMD -MP -MF $@.d -c $< \
 		-MT $(@D)/$(@F) -o $(@D)/$(@F)
+cmd_c_to_e = $(CC) $(C_WARN) $(CFLAGS) -MMD -MP -MF $@.d -E $< \
+		-MT $(@D)/$(@F) -o $(@D)/$(@F)
+cmd_ep_to_o = $(CC) $(C_WARN) $(CFLAGS) -x c -c $< -o $(@D)/$(@F)
 cmd_cxx_to_o = $(CXX) -std=c++11 $(CFLAGS) $(CXXFLAGS) -MMD -MP -MF $@.d -c $< \
 		      -MT $(@D)/$(@F) -o $(@D)/$(@F)
 cmd_c_to_build = $(BUILDCC) $(BUILD_CFLAGS) \
@@ -482,9 +485,19 @@ $(out)/RO/%.o.cmd:%.c
 	$(file > $@,$(subst .o.cmd,.o,$(cmd_c_to_o)))
 $(out)/RO/%.o:%.c
 	$(call quiet,c_to_o,CC     )
+ifeq ($(CONFIG_EXTRACT_PRINTF_STRINGS),)
 $(out)/RW/%.o:%.c
 	$(call quiet,c_to_o,CC     )
+$(rw-objs): | $(out)/ec_version.h
+else
 
+$(out)/RW/%.o:$(out)/RW/%.Ep
+	$(call quiet,ep_to_o,EO     )
+$(out)/RW/%.E:%.c
+	$(call quiet,c_to_e,CE     )
+
+$(rw-es): | $(out)/ec_version.h
+endif
 $(out)/RO/%.o:%.cc
 	$(call quiet,cxx_to_o,CXX    )
 $(out)/RW/%.o:%.cc
@@ -537,7 +550,6 @@ endif
 # that truly depend on ec_version.h will have that information encoded in their
 # .d file.
 $(ro-objs): | $(out)/ec_version.h
-$(rw-objs): | $(out)/ec_version.h
 $(sharedlib-objs): | $(out)/ec_version.h
 
 $(out)/ec_version.h:

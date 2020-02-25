@@ -1411,6 +1411,9 @@
 /* Enable verbose output to UART console and extra timestamp print precision. */
 #define CONFIG_CONSOLE_VERBOSE
 
+/* Trigger building the image with all format strings extracted. */
+#undef CONFIG_EXTRACT_PRINTF_STRINGS
+
 /*
  * Enable EC-CR50 communication (a.k.a. EC-EFS2). This is for CR50 config only.
  */
