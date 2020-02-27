@@ -16,9 +16,8 @@ build-art := $(foreach u,$(build-util-art),$(out)/$(u))
 build-srcs := $(foreach u,$(build-util-bin),$(sort $($(u)-objs:%.o=util/%.c) $(wildcard util/$(u).c)))
 host-srcs := $(foreach u,$(host-util-bin),$(sort $($(u)-objs:%.o=util/%.c) $(wildcard util/$(u).c)))
 
-# Don't do a build test on the following boards:
-skip_boards = OWNERS host kevin gru chell glados chell_pd glados_pd
-boards := $(filter-out $(skip_boards),$(notdir $(wildcard board/* private*/board/*)))
+# For servo branch, only build boards that matter
+boards := c2d2 servo_micro servo_v4 sweetberry
 
 # Create output directories if necessary
 _common_dir_create := $(foreach d,$(common_dirs) $(common-dirs-y),\
