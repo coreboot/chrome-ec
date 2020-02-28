@@ -10,6 +10,7 @@
 #include "util.h"
 #include "watchdog.h"
 
+#ifndef SECTION_IS_RO
 /*
  * Microseconds time to drain entire UART_TX console buffer at 115200 b/s, 10
  * bits per character.
@@ -100,3 +101,4 @@ DECLARE_SAFE_CONSOLE_COMMAND(chargen, command_chargen,
 			     "UART console,\nrepeating every 'seq_length' "
 			     "characters, up to 'num_chars' total."
 	);
+#endif  /* !SECTION_IS_RO */
