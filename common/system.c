@@ -612,7 +612,7 @@ enum system_image_copy_t system_get_active_copy(void)
 
 enum system_image_copy_t system_get_update_copy(void)
 {
-#ifdef CONFIG_VBOOT_EFS
+#ifdef CONFIG_VBOOT_EFS		/* Not needed for EFS2, which is single-slot. */
 	return system_get_active_copy() == SYSTEM_IMAGE_RW_A ?
 			SYSTEM_IMAGE_RW_B : SYSTEM_IMAGE_RW_A;
 #else
@@ -1560,6 +1560,27 @@ __overridable int board_write_serial(const char *serialno)
 }
 #endif  /* CONFIG_SERIALNO_LEN */
 
+#ifdef CONFIG_MAC_ADDR_LEN
+/* By default, read MAC address from flash, can be overridden. */
+__overridable const char *board_read_mac_addr(void)
+{
+	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
+	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
+		return flash_read_pstate_mac_addr();
+	else
+		return "";
+}
+
+/* By default, write MAC address from flash, can be overridden. */
+__overridable int board_write_mac_addr(const char *mac_addr)
+{
+	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
+	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
+		return flash_write_pstate_mac_addr(mac_addr);
+	else
+		return EC_ERROR_UNIMPLEMENTED;
+}
+#endif  /* CONFIG_MAC_ADDR_LEN */
 
 __attribute__((weak))
 void clock_enable_module(enum module_id module, int enable)

@@ -394,13 +394,11 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_1] = {.name = "Temp1",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_1},
 	[TEMP_SENSOR_2] = {.name = "Temp2",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_2},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -491,4 +489,11 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC_ODL, !is_overcurrented);
+}
+
+bool board_is_convertible(void)
+{
+	const uint8_t sku = get_board_sku();
+
+	return (sku == 255);
 }

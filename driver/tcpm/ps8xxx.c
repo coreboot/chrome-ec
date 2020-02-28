@@ -133,6 +133,46 @@ static int ps8xxx_tcpm_release(int port)
 	return tcpci_tcpm_release(port);
 }
 
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+static int ps8xxx_tcpc_drp_toggle(int port)
+{
+	int rv;
+	int status;
+	int opposite_pull;
+
+	/*
+	 * Workaround for PS8805/PS8815, which can't restart Connection
+	 * Detection if the partner already presents pull. Now starts with
+	 * the opposite pull. Check b/149570002.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8805) ||
+	    IS_ENABLED(CONFIG_USB_PD_TCPM_PS8815)) {
+		/* Check CC_STATUS for the current pull */
+		rv = tcpc_read(port, TCPC_REG_CC_STATUS, &status);
+		if (status & TCPC_REG_CC_STATUS_CONNECT_RESULT_MASK) {
+			/* Current pull: Rd */
+			opposite_pull = TYPEC_CC_RP;
+		} else {
+			/* Current pull: Rp */
+			opposite_pull = TYPEC_CC_RD;
+		}
+
+		/* Set auto drp toggle, starting with the opposite pull */
+		rv |= tcpci_set_role_ctrl(port, 1, TYPEC_RP_USB, opposite_pull);
+
+		/* Set Look4Connection command */
+		rv |= tcpc_write(port, TCPC_REG_COMMAND,
+				 TCPC_REG_COMMAND_LOOK4CONNECTION);
+
+		return rv;
+	} else {
+		return tcpci_tcpc_drp_toggle(port);
+	}
+}
+#endif
+
+
+
 static int ps8xxx_get_chip_info(int port, int live,
 			struct ec_response_pd_chip_info_v1 **chip_info)
 {
@@ -259,27 +299,28 @@ static int ps8xxx_tcpm_init(int port)
 	return ps8xxx_dci_disable(port);
 }
 
-static int ps8xxx_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
+#ifdef CONFIG_USB_PD_TCPM_PS8751
+/*
+ * TODO(twawrzynczak): Remove this workaround when no
+ * longer needed.  See: https://issuetracker.google.com/147684491
+ *
+ * This is a workaround for what appears to be a bug in PS8751 firmware
+ * version 0x44.  (Does the bug exist in other PS8751 firmware versions?
+ * Should this workaround be limited to only 0x44?)
+ *
+ * With nothing connected to the port, sometimes after DRP is disabled,
+ * the CC_STATUS register reads the CC state incorrectly (reading it
+ * as though a port partner is detected), which ends up confusing
+ * our TCPM.  The workaround for this seems to be a short sleep and
+ * then re-reading the CC state.  In other words, the issue shows up
+ * as a short glitch or transient, which a dummy read and then a short
+ * delay will allow the transient to disappear.
+ */
+static int ps8751_get_gcc(int port, enum tcpc_cc_voltage_status *cc1,
 			 enum tcpc_cc_voltage_status *cc2)
 {
 	int rv;
 	int status;
-
-	/*
-	 * TODO(twawrzynczak): remove this workaround when no
-	 * longer needed, see b/147684491.
-	 *
-	 * This is a workaround for what appears to be a bug in PS8751 firmware
-	 * version 0x44.
-	 *
-	 * With nothing connected to the port, sometimes after DRP is disabled,
-	 * the CC_STATUS register reads the CC state incorrectly (reading it
-	 * as though a port partner is detected), which ends up confusing
-	 * our TCPM.  The workaround for this seems to be a short sleep and
-	 * then re-reading the CC state.  In other words, the issue shows up
-	 * as a short glitch or transient, which a dummy read and then a short
-	 * delay will allow the transient to disappear.
-	 */
 	rv = tcpc_read(port, TCPC_REG_CC_STATUS, &status);
 	if (rv)
 		return rv;
@@ -289,11 +330,16 @@ static int ps8xxx_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 
 	return tcpci_tcpm_get_cc(port, cc1, cc2);
 }
+#endif
 
 const struct tcpm_drv ps8xxx_tcpm_drv = {
 	.init			= &ps8xxx_tcpm_init,
 	.release		= &ps8xxx_tcpm_release,
-	.get_cc			= &ps8xxx_get_cc,
+#ifdef CONFIG_USB_PD_TCPM_PS8751
+	.get_cc			= &ps8751_get_gcc,
+#else
+	.get_cc			= &tcpci_tcpm_get_cc,
+#endif
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
 	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
 #endif
@@ -310,7 +356,7 @@ const struct tcpm_drv ps8xxx_tcpm_drv = {
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-	.drp_toggle		= &tcpci_tcpc_drp_toggle,
+	.drp_toggle		= &ps8xxx_tcpc_drp_toggle,
 #endif
 #ifdef CONFIG_USBC_PPC
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,

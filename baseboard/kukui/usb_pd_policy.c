@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "charge_state_v2.h"
 #include "charger.h"
 #include "console.h"
 #include "gpio.h"
@@ -49,7 +50,10 @@ int pd_set_power_supply_ready(int port)
 	/* Provide VBUS */
 	vbus_en = 1;
 
-	charger_enable_otg_power(1);
+	if (IS_ENABLED(VARIANT_KUKUI_CHARGER_ISL9238))
+		charge_set_output_current_limit(3300, 5000);
+	else
+		charger_enable_otg_power(1);
 
 	gpio_set_level(GPIO_EN_USBC_CHARGE_L, 1);
 	gpio_set_level(GPIO_EN_PP5000_USBC, 1);
@@ -74,7 +78,11 @@ void pd_power_supply_reset(int port)
 	if (prev_en)
 		pd_set_vbus_discharge(port, 1);
 
-	charger_enable_otg_power(0);
+	if (IS_ENABLED(VARIANT_KUKUI_CHARGER_ISL9238))
+		charge_set_output_current_limit(0, 0);
+	else
+		charger_enable_otg_power(0);
+
 	gpio_set_level(GPIO_EN_PP5000_USBC, 0);
 
 	/* notify host of power info change */
@@ -97,13 +105,23 @@ __overridable int board_has_virtual_mux(void)
 	return IS_ENABLED(CONFIG_USB_MUX_VIRTUAL);
 }
 
+static void board_usb_mux_set(int port, mux_state_t mux_mode,
+		 enum usb_switch usb_mode, int polarity)
+{
+	usb_mux_set(port, mux_mode, usb_mode, polarity);
+
+	if (!board_has_virtual_mux())
+		/* b:149181702: Inform AP of DP status */
+		host_set_single_event(EC_HOST_EVENT_USB_MUX);
+}
+
 __override void svdm_safe_dp_mode(int port)
 {
 	/* make DP interface safe until configure */
 	dp_flags[port] = 0;
 	dp_status[port] = 0;
-	usb_mux_set(port, USB_PD_MUX_NONE,
-		    USB_SWITCH_CONNECT, board_get_polarity(port));
+	board_usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_CONNECT,
+			  board_get_polarity(port));
 }
 
 __override int svdm_enter_dp_mode(int port, uint32_t mode_caps)
@@ -144,12 +162,12 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 		return 0;
 
 	if (board_has_virtual_mux())
-		usb_mux_set(port, USB_PD_MUX_DP_ENABLED, USB_SWITCH_CONNECT,
-			    board_get_polarity(port));
+		board_usb_mux_set(port, USB_PD_MUX_DP_ENABLED,
+				  USB_SWITCH_CONNECT, board_get_polarity(port));
 	else
-		usb_mux_set(port, mf_pref ?
-			    USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED,
-			    USB_SWITCH_CONNECT, board_get_polarity(port));
+		board_usb_mux_set(
+			port, mf_pref ? USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED,
+			USB_SWITCH_CONNECT, board_get_polarity(port));
 
 	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
 			 CMD_DP_CONFIG | VDO_OPOS(opos));

@@ -47,6 +47,8 @@
 
 #define CONFIG_USB_SERIALNO
 #define DEFAULT_SERIALNO "Uninitialized"
+#define CONFIG_MAC_ADDR
+#define DEFAULT_MAC_ADDR "Uninitialized"
 
 /* USB interface indexes (use define rather than enum to expand them) */
 #define USB_IFACE_CONSOLE	0
@@ -76,6 +78,7 @@
 #undef CONFIG_HIBERNATE
 
 /* Remove console commands / features for flash / RAM savings */
+#undef CONFIG_USB_PD_HOST_CMD
 #undef CONFIG_CONSOLE_CMDHELP
 #undef CONFIG_CONSOLE_HISTORY
 #undef CONFIG_CMD_CRASH
@@ -108,6 +111,7 @@
 #define CONFIG_CHARGE_MANAGER
 #undef  CONFIG_CHARGE_MANAGER_SAFE_MODE
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_CMD_PD
 #define CONFIG_USB_PD_CUSTOM_PDO
 #define CONFIG_USB_PD_DUAL_ROLE

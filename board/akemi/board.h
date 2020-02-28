@@ -11,9 +11,6 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-
 #define CONFIG_POWER_BUTTON
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
@@ -44,6 +41,7 @@
 #define CONFIG_LID_ANGLE_UPDATE
 
 /* USB Type C and USB PD defines */
+#define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_TCPM_ANX7447
 #define CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
 #define CONFIG_USB_PD_TCPM_PS8751
@@ -74,6 +72,17 @@
  * for the AP is completed.
  */
 #define CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA 8192
+
+/* TI gauge IC 500ms WDT timeout setting under battery sleep mode
+ * induced battery cut-off, under the following conditions:
+ * 1. SMBus communication on FC is once per minute which allows
+ * battery entering sleep mode;
+ * 2. System load < 10mA and accumulate 5 hours will trigger battery
+ * simulation and result in a 500ms WDT timeout. So change charge
+ * max sleep time from once/minute to once/10 seconds to prevent
+ * battery entering sleep mode. See b/133375756 and b/148822924.
+ */
+#define CHARGE_MAX_SLEEP_USEC (10 * SECOND)
 
 /* Volume Button feature */
 #define CONFIG_VOLUME_BUTTONS

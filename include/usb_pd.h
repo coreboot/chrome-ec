@@ -952,6 +952,11 @@ enum pd_data_role pd_get_data_role(int port);
  */
 enum pd_power_role pd_get_power_role(int port);
 
+/*
+ * Return true if PD is capable of trying as source else false
+ */
+bool pd_is_try_source_capable(void);
+
 /**
  * Request for VCONN swap
  *
@@ -1244,12 +1249,6 @@ enum pd_msg_type {
 /** Schedules the interrupt handler for the TCPC on a high priority task. */
 void schedule_deferred_pd_interrupt(int port);
 
-/* Request types for pd_build_request() */
-enum pd_request_type {
-	PD_REQUEST_VSAFE5V,
-	PD_REQUEST_MAX,
-};
-
 #ifdef CONFIG_USB_PD_REV30
 /**
  * Get current PD Revision
@@ -1365,7 +1364,7 @@ int pd_check_requested_voltage(uint32_t rdo, const int port);
  * @param pdo_cnt the total number of source PDOs.
  * @return EC_SUCCESS if request is ok , <0 else.
  */
-int pd_board_check_request(uint32_t rdo, int pdo_cnt);
+__override_proto int pd_board_check_request(uint32_t rdo, int pdo_cnt);
 
 /**
  * Select a new output voltage.
@@ -1774,11 +1773,21 @@ bool is_transmit_msg_sop_prime(int port);
 
 /*
  * Return the pointer to PD alternate mode policy
+ * Note: Caller function can mutate the data in this structure.
  *
  * @param port  USB-C port number
  * @return      pointer to PD alternate mode policy
  */
 struct pd_policy *pd_get_am_policy(int port);
+
+/*
+ * Return the pointer to PD cable attributes
+ * Note: Caller function can mutate the data in this structure.
+ *
+ * @param port  USB-C port number
+ * @return      pointer to PD cable attributes
+ */
+struct pd_cable *pd_get_cable_attributes(int port);
 
 /**
  * Set DFP enter mode flags if available
@@ -2172,9 +2181,9 @@ int pd_rx_started(int port);
 /**
  * Suspend the PD task.
  * @param port USB-C port number
- * @param enable pass 0 to resume, anything else to suspend
+ * @param suspend pass 0 to resume, anything else to suspend
  */
-void pd_set_suspend(int port, int enable);
+void pd_set_suspend(int port, int suspend);
 
 /**
  * Resume the PD task for a port after a period of time has elapsed.
@@ -2388,6 +2397,16 @@ const uint32_t * const pd_get_src_caps(int port);
 uint8_t pd_get_src_cap_cnt(int port);
 
 /**
+ * Set the source caps list & count
+ *
+ * @param port     USB-C port number
+ * @param cnt      Source caps count
+ * @param src_caps Pointer to source caps
+ *
+ */
+void pd_set_src_caps(int port, int cnt, uint32_t *src_caps);
+
+/**
  * Return true if partner port is capable of communication over USB data
  * lines.
  *
@@ -2439,14 +2458,22 @@ static inline uint8_t board_get_usb_pd_port_count(void)
  *
  * @param port USB-C port number
  */
-int pd_partner_is_ufp(int port);
+bool pd_partner_is_ufp(int port);
 
 /**
  * Return true if specified PD port is debug accessory.
  *
  * @param port USB-C port number
  */
-int pd_is_debug_acc(int port);
+bool pd_is_debug_acc(int port);
+
+/**
+ * Sets the polarity of the port
+ *
+ * @param port USB-C port number
+ * @param polarity 0 for CC1, else 1 for CC2
+ */
+void pd_set_polarity(int port, enum tcpc_cc_polarity polarity);
 
 /*
  * Notify the AP that we have entered into DisplayPort Alternate Mode.  This

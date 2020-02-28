@@ -6,6 +6,7 @@
 /* Volteer family-specific configuration */
 #include "adc_chip.h"
 #include "bb_retimer.h"
+#include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "cros_board_info.h"
@@ -127,16 +128,14 @@ const struct i2c_port_t i2c_ports[] = {
 	{
 		.name = "usb_c0",
 		.port = I2C_PORT_USB_C0,
-		/* TODO: design supports 1 MHz, set to 100 KHz for bringup */
-		.kbps = 100,
+		.kbps = 1000,
 		.scl = GPIO_EC_I2C1_USB_C0_SCL,
 		.sda = GPIO_EC_I2C1_USB_C0_SDA,
 	},
 	{
 		.name = "usb_c1",
 		.port = I2C_PORT_USB_C1,
-		/* TODO: design supports 1 MHz, set to 100 KHz for bringup */
-		.kbps = 100,
+		.kbps = 1000,
 		.scl = GPIO_EC_I2C2_USB_C1_SCL,
 		.sda = GPIO_EC_I2C2_USB_C1_SDA,
 	},
@@ -269,23 +268,19 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_1_CHARGER] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1_CHARGER,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_1_CHARGER},
 	[TEMP_SENSOR_2_PP3300_REGULATOR] = {.name = "PP3300 Regulator",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2_PP3300_REGULATOR,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_2_PP3300_REGULATOR},
 	[TEMP_SENSOR_3_DDR_SOC] = {.name = "DDR and SOC",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_3_DDR_SOC,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_3_DDR_SOC},
 	[TEMP_SENSOR_4_FAN] = {.name = "Fan",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_4_FAN,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_4_FAN},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -375,7 +370,7 @@ static const struct tcpc_config_t tcpc_config_p1_usb3 = {
 		.port = I2C_PORT_USB_C1,
 		.addr_flags = PS8751_I2C_ADDR1_FLAGS,
 	},
-	.flags = TCPC_FLAGS_TCPCI_V2_0,
+	.flags = TCPC_FLAGS_TCPCI_REV2_0,
 	.drv = &ps8xxx_tcpm_drv,
 	.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 };
@@ -413,7 +408,7 @@ struct usb_mux usb_muxes[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 
-const struct bb_usb_control bb_controls[] = {
+struct bb_usb_control bb_controls[] = {
 	[USBC_PORT_C0] = {
 		/* USB-C port 0 doesn't have a retimer */
 	},
@@ -474,14 +469,16 @@ void ppc_interrupt(enum gpio_signal signal)
 
 /******************************************************************************/
 /* TCPC support routines */
+static enum gpio_signal ps8xxx_rst_odl = GPIO_USB_C1_RT_RST_ODL;
+
 static void ps8815_reset(void)
 {
 	int val;
 
-	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 0);
+	gpio_set_level(ps8xxx_rst_odl, 0);
 	msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS,
 			   PS8815_PWR_H_RST_H_DELAY_MS));
-	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 1);
+	gpio_set_level(ps8xxx_rst_odl, 1);
 	msleep(PS8815_FW_INIT_DELAY_MS);
 
 	/*
@@ -667,6 +664,26 @@ static void config_db_usb3(void)
 	       sizeof(usb_retimers[USBC_PORT_C1]));
 }
 
+/*
+ * Reconfigure Volteer GPIOs based on the board ID
+ */
+static void config_volteer_gpios(void)
+{
+	/* Legacy support for the first board build */
+	if (get_board_id() == 0) {
+		CPRINTS("Configuring GPIOs for board ID 0");
+
+		/* Reassign USB_C1_RT_RST_ODL */
+		bb_controls[USBC_PORT_C1].retimer_rst_gpio =
+			GPIO_USB_C1_RT_RST_ODL_BOARDID_0;
+		ps8xxx_rst_odl = GPIO_USB_C1_RT_RST_ODL_BOARDID_0;
+
+		/* Reassign EC_VOLUP_BTN_ODL */
+		button_reassign_gpio(BUTTON_VOLUME_UP,
+			GPIO_EC_VOLUP_BTN_ODL_BOARDID_0);
+	}
+}
+
 static uint8_t board_id;
 
 uint8_t get_board_id(void)
@@ -693,6 +710,8 @@ static void cbi_init(void)
 		board_id = cbi_val;
 
 	CPRINTS("Board ID: %d", board_id);
+
+	config_volteer_gpios();
 
 	/* FW config */
 

@@ -53,115 +53,29 @@ void pd_notify_dp_alt_mode_entry(void)
 }
 #endif /* CONFIG_MKBP_EVENT */
 
-int pd_check_requested_voltage(uint32_t rdo, const int port)
-{
-	int max_ma = rdo & 0x3FF;
-	int op_ma = (rdo >> 10) & 0x3FF;
-	int idx = RDO_POS(rdo);
-	uint32_t pdo;
-	uint32_t pdo_ma;
-#if defined(CONFIG_USB_PD_DYNAMIC_SRC_CAP) || \
-		defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
-	const uint32_t *src_pdo;
-	const int pdo_cnt = charge_manager_get_source_pdo(&src_pdo, port);
-#else
-	const uint32_t *src_pdo = pd_src_pdo;
-	const int pdo_cnt = pd_src_pdo_cnt;
-#endif
-
-	/* Board specific check for this request */
-	if (pd_board_check_request(rdo, pdo_cnt))
-		return EC_ERROR_INVAL;
-
-	/* check current ... */
-	pdo = src_pdo[idx - 1];
-	pdo_ma = (pdo & 0x3ff);
-	if (op_ma > pdo_ma)
-		return EC_ERROR_INVAL; /* too much op current */
-	if (max_ma > pdo_ma && !(rdo & RDO_CAP_MISMATCH))
-		return EC_ERROR_INVAL; /* too much max current */
-
-	CPRINTF("Requested %d mV %d mA (for %d/%d mA)\n",
-		 ((pdo >> 10) & 0x3ff) * 50, (pdo & 0x3ff) * 10,
-		 op_ma * 10, max_ma * 10);
-
-	/* Accept the requested voltage */
-	return EC_SUCCESS;
-}
-
-__attribute__((weak)) int pd_board_check_request(uint32_t rdo, int pdo_cnt)
-{
-	int idx = RDO_POS(rdo);
-
-	/* Check for invalid index */
-	return (!idx || idx > pdo_cnt) ?
-		EC_ERROR_INVAL : EC_SUCCESS;
-}
-
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 /* Last received source cap */
 static uint32_t pd_src_caps[CONFIG_USB_PD_PORT_MAX_COUNT][PDO_MAX_OBJECTS];
 static uint8_t pd_src_cap_cnt[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-/* Cap on the max voltage requested as a sink (in millivolts) */
-static unsigned max_request_mv = PD_MAX_VOLTAGE_MV; /* no cap */
-
 const uint32_t * const pd_get_src_caps(int port)
 {
-	ASSERT(port < CONFIG_USB_PD_PORT_MAX_COUNT);
-
 	return pd_src_caps[port];
+}
+
+void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
+{
+	int i;
+
+	pd_src_cap_cnt[port] = cnt;
+
+	for (i = 0; i < cnt; i++)
+		pd_src_caps[port][i] = *src_caps++;
 }
 
 uint8_t pd_get_src_cap_cnt(int port)
 {
-	ASSERT(port < CONFIG_USB_PD_PORT_MAX_COUNT);
-
 	return pd_src_cap_cnt[port];
-}
-
-void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
-{
-#ifdef CONFIG_CHARGE_MANAGER
-	uint32_t ma, mv, pdo;
-#endif
-	int i;
-
-	pd_src_cap_cnt[port] = cnt;
-	for (i = 0; i < cnt; i++)
-		pd_src_caps[port][i] = *src_caps++;
-
-#ifdef CONFIG_CHARGE_MANAGER
-	/* Get max power info that we could request */
-	pd_find_pdo_index(pd_get_src_cap_cnt(port), pd_get_src_caps(port),
-						PD_MAX_VOLTAGE_MV, &pdo);
-	pd_extract_pdo_power(pdo, &ma, &mv);
-
-	/* Set max. limit, but apply 500mA ceiling */
-	charge_manager_set_ceil(port, CEIL_REQUESTOR_PD, PD_MIN_MA);
-	pd_set_input_current_limit(port, ma, mv);
-#endif
-}
-
-void pd_set_max_voltage(unsigned mv)
-{
-	max_request_mv = mv;
-}
-
-unsigned pd_get_max_voltage(void)
-{
-	return max_request_mv;
-}
-
-int pd_charge_from_device(uint16_t vid, uint16_t pid)
-{
-	/* TODO: rewrite into table if we get more of these */
-	/*
-	 * White-list Apple charge-through accessory since it doesn't set
-	 * unconstrained bit, but we still need to charge from it when
-	 * we are a sink.
-	 */
-	return (vid == USB_VID_APPLE && (pid == 0x1012 || pid == 0x1013));
 }
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
 
@@ -254,11 +168,9 @@ enum pd_msg_type pd_msg_tx_type(int port, enum pd_data_role data_role,
 
 void reset_pd_cable(int port)
 {
-	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP)) {
-		memset(&cable[port], 0, sizeof(cable[port]));
-		cable[port].last_sop_p_msg_id = INVALID_MSG_ID_COUNTER;
-		cable[port].last_sop_p_p_msg_id = INVALID_MSG_ID_COUNTER;
-	}
+	memset(&cable[port], 0, sizeof(cable[port]));
+	cable[port].last_sop_p_msg_id = INVALID_MSG_ID_COUNTER;
+	cable[port].last_sop_p_p_msg_id = INVALID_MSG_ID_COUNTER;
 }
 
 enum idh_ptype get_usb_pd_cable_type(int port)
@@ -694,6 +606,11 @@ struct pd_policy *pd_get_am_policy(int port)
 /* Note: Enter mode flag is not needed by TCPMv1 */
 void pd_set_dfp_enter_mode_flag(int port, bool set)
 {
+}
+
+struct pd_cable *pd_get_cable_attributes(int port)
+{
+	return &cable[port];
 }
 
 /*
@@ -1180,114 +1097,6 @@ int pd_svdm(int port, int cnt, uint32_t *payload, uint32_t **rpayload,
 
 #endif /* CONFIG_USB_PD_ALT_MODE */
 
-#ifdef CONFIG_CMD_USB_PD_CABLE
-static const char * const cable_type[] = {
-	[IDH_PTYPE_PCABLE] = "Passive",
-	[IDH_PTYPE_ACABLE] = "Active",
-};
-
-static const char * const cable_curr[] = {
-	[USB_VBUS_CUR_3A] = "3A",
-	[USB_VBUS_CUR_5A] = "5A",
-};
-
-static int command_cable(int argc, char **argv)
-{
-	int port;
-	char *e;
-
-	if (argc < 2)
-		return EC_ERROR_PARAM_COUNT;
-	port = strtoi(argv[1], &e, 0);
-	if (*e || port >= board_get_usb_pd_port_count())
-		return EC_ERROR_PARAM2;
-
-	if (!cable[port].is_identified) {
-		ccprintf("Cable not identified.\n");
-		return EC_SUCCESS;
-	}
-
-	ccprintf("Cable Type: ");
-	if (cable[port].type != IDH_PTYPE_PCABLE &&
-		cable[port].type != IDH_PTYPE_ACABLE) {
-		ccprintf("Not Emark Cable\n");
-		return EC_SUCCESS;
-	}
-	ccprintf("%s\n", cable_type[cable[port].type]);
-
-	/* Cable revision */
-	ccprintf("Cable Rev: %d.0\n", cable[port].rev + 1);
-
-	/*
-	 * For rev 2.0, rev 3.0 active and passive cables have same bits for
-	 * connector type (Bit 19:18) and current handling capability bit 6:5
-	 */
-	ccprintf("Connector Type: %d\n", cable[port].attr.p_rev20.connector);
-
-	if (cable[port].attr.p_rev20.vbus_cur) {
-		ccprintf("Cable Current: %s\n",
-		   cable[port].attr.p_rev20.vbus_cur > ARRAY_SIZE(cable_curr) ?
-		   "Invalid" : cable_curr[cable[port].attr.p_rev20.vbus_cur]);
-	} else
-		ccprintf("Cable Current: Invalid\n");
-
-	/*
-	 * For Rev 3.0 passive cables and Rev 2.0 active and passive cables,
-	 * USB Superspeed Signaling support have same bits 2:0
-	 */
-	if (cable[port].type == IDH_PTYPE_PCABLE)
-		ccprintf("USB Superspeed Signaling support: %d\n",
-			cable[port].attr.p_rev20.ss);
-
-	/*
-	 * For Rev 3.0 active cables and Rev 2.0 active and passive cables,
-	 * SOP" controller preset have same bit 3
-	 */
-	if (cable[port].type == IDH_PTYPE_ACABLE)
-		ccprintf("SOP'' Controller: %s present\n",
-			cable[port].attr.a_rev20.sop_p_p ? "" : "Not");
-
-	if (cable[port].rev == PD_REV30) {
-		/*
-		 * For Rev 3.0 active and passive cables, Max Vbus vtg have
-		 * same bits 10:9.
-		 */
-		ccprintf("Max vbus voltage: %d\n",
-			20 + 10 * cable[port].attr.p_rev30.vbus_max);
-
-		/* For Rev 3.0 Active cables */
-		if (cable[port].type == IDH_PTYPE_ACABLE) {
-			ccprintf("SS signaling: USB_SS_GEN%u\n",
-				cable[port].attr2.a2_rev30.usb_gen ? 2 : 1);
-			ccprintf("Number of SS lanes supported: %u\n",
-				cable[port].attr2.a2_rev30.usb_lanes);
-		}
-	}
-	return EC_SUCCESS;
-}
-
-DECLARE_CONSOLE_COMMAND(pdcable, command_cable,
-			"<port>",
-			"Cable Characteristics");
-#endif /* CONFIG_CMD_USB_PD_CABLE */
-
-static void pd_usb_billboard_deferred(void)
-{
-#if defined(CONFIG_USB_PD_ALT_MODE) && !defined(CONFIG_USB_PD_ALT_MODE_DFP) \
-	&& !defined(CONFIG_USB_PD_SIMPLE_DFP) && defined(CONFIG_USB_BOS)
-
-	/*
-	 * TODO(tbroch)
-	 * 1. Will we have multiple type-C port UFPs
-	 * 2. Will there be other modes applicable to DFPs besides DP
-	 */
-	if (!pd_alt_mode(0, USB_SID_DISPLAYPORT))
-		usb_connect();
-
-#endif
-}
-DECLARE_DEFERRED(pd_usb_billboard_deferred);
-
 #define FW_RW_END (CONFIG_EC_WRITABLE_STORAGE_OFF + \
 		   CONFIG_RW_STORAGE_OFF + CONFIG_RW_SIZE)
 
@@ -1386,28 +1195,3 @@ int pd_custom_flash_vdm(int port, int cnt, uint32_t *payload)
 	}
 	return rsize;
 }
-
-#ifdef CONFIG_USB_PD_DISCHARGE
-void pd_set_vbus_discharge(int port, int enable)
-{
-	static struct mutex discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-	mutex_lock(&discharge_lock[port]);
-	enable &= !board_vbus_source_enabled(port);
-#ifdef CONFIG_USB_PD_DISCHARGE_GPIO
-	if (!port)
-		gpio_set_level(GPIO_USB_C0_DISCHARGE, enable);
-#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
-	else
-		gpio_set_level(GPIO_USB_C1_DISCHARGE, enable);
-#endif /* CONFIG_USB_PD_PORT_MAX_COUNT */
-#elif defined(CONFIG_USB_PD_DISCHARGE_TCPC)
-	tcpc_discharge_vbus(port, enable);
-#elif defined(CONFIG_USB_PD_DISCHARGE_PPC)
-	ppc_discharge_vbus(port, enable);
-#else
-#error "PD discharge implementation not defined"
-#endif
-	mutex_unlock(&discharge_lock[port]);
-}
-#endif /* CONFIG_USB_PD_DISCHARGE */

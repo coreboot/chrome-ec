@@ -398,23 +398,19 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_1] = {.name = "Ambient",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_1},
 	[TEMP_SENSOR_2] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_2},
 	[TEMP_SENSOR_3] = {.name = "IA",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_3,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_3},
 	[TEMP_SENSOR_4] = {.name = "GT",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_4,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_4},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -468,4 +464,22 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC_ODL, !is_overcurrented);
+}
+
+int board_tcpc_post_init(int port)
+{
+	int rv = EC_SUCCESS;
+
+	if (port == USB_PD_PORT_TCPC_0)
+		/* Set MUX_DP_EQ to 3.6dB (0x98) */
+		rv = tcpc_write(port, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+
+	return rv;
+}
+
+bool board_is_convertible(void)
+{
+	const uint8_t sku = get_board_sku();
+
+	return (sku == 255) || (sku == 1);
 }

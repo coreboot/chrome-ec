@@ -8,6 +8,11 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#if (defined(VARIANT_ZORK_TREMBYLE) \
+	+ defined(VARIANT_ZORK_DALBOZ)) != 1
+#error Must choose VARIANT_ZORK_TREMBYLE or VARIANT_ZORK_DALBOZ
+#endif
+
 /* NPCX7 config */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 #define NPCX_TACH_SEL2    0  /* No tach. */
@@ -17,6 +22,8 @@
 #define CONFIG_FLASH_SIZE (512 * 1024)
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40 /* Internal SPI flash type. */
+
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_HOSTCMD) | CC_MASK(CC_PWM)))
 
 /*
  * Enable 1 slot of secure temporary storage to support
@@ -35,6 +42,7 @@
 #define CONFIG_HOSTCMD_SKUID
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
+#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
 #define CONFIG_PWM
 #define CONFIG_PWM_KBLIGHT
@@ -76,10 +84,12 @@
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 
-#define CONFIG_FANS FAN_CH_COUNT
-#undef CONFIG_FAN_INIT_SPEED
-#define CONFIG_FAN_INIT_SPEED 50
-#define CONFIG_THROTTLE_AP
+#ifdef VARIANT_ZORK_TREMBYLE
+	#define CONFIG_FANS FAN_CH_COUNT
+	#undef CONFIG_FAN_INIT_SPEED
+	#define CONFIG_FAN_INIT_SPEED 50
+	#define CONFIG_THROTTLE_AP
+#endif
 
 #define CONFIG_LED_COMMON
 #define CONFIG_CMD_LEDTEST
@@ -110,16 +120,16 @@
  */
 #define CONFIG_USB_PID 0x5040
 
-/* TODO(b/142284905): Enable new PD stack */
-#if 0
-/* Enable the new USB-C PD stack */
+/* Enable the TCPMv2 PD stack */
 #define CONFIG_USB_PE_SM
 #define CONFIG_USB_PRL_SM
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
+#define CONFIG_USB_PD_DECODE_SOP
 #define CONFIG_USB_TYPEC_SM
 #define CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
+
+ /* Enable TCPMv2 Fast Role Swap */
 #define CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
-#endif
 
 #define CONFIG_CMD_PD_CONTROL
 #define CONFIG_USB_CHARGER
@@ -168,7 +178,7 @@
 #define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		45000
+#define PD_MAX_POWER_MW		60000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
@@ -256,22 +266,10 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-enum pwm_channel {
-	PWM_CH_KBLIGHT = 0,
-	PWM_CH_FAN,
-	PWM_CH_COUNT
-};
-
 enum fan_channel {
 	FAN_CH_0 = 0,
 	/* Number of FAN channels */
 	FAN_CH_COUNT,
-};
-
-enum mft_channel {
-	MFT_CH_0 = 0,
-	/* Number of MFT channels */
-	MFT_CH_COUNT,
 };
 
 enum usbc_port {
@@ -298,11 +296,17 @@ enum zork_c1_retimer {
 };
 extern enum zork_c1_retimer zork_c1_retimer;
 
-#define PORT_TO_HPD(port) ((port == 0) \
-	? GPIO_USB_C0_HPD \
-	: (zork_c1_retimer == C1_RETIMER_PS8802) \
-		? GPIO_DP1_HPD \
-		: GPIO_DP2_HPD)
+#if defined(VARIANT_ZORK_TREMBYLE)
+	#define PORT_TO_HPD(port) ((port == 0) \
+		? GPIO_USB_C0_HPD \
+		: (zork_c1_retimer == C1_RETIMER_PS8802) \
+			? GPIO_DP1_HPD \
+			: GPIO_DP2_HPD)
+#elif defined(VARIANT_ZORK_DALBOZ)
+	#define PORT_TO_HPD(port) ((port == 0) \
+		? GPIO_USB3_C0_DP2_HPD \
+		: GPIO_DP1_HPD)
+#endif
 
 /*
  * Matrix to rotate accelerators into the standard reference frame.  The default
@@ -330,6 +334,8 @@ void board_reset_pd_mcu(void);
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
+void hdmi_hpd_interrupt(enum ioex_signal signal);
+void mst_hpd_interrupt(enum ioex_signal signal);
 
 int board_is_convertible(void);
 void board_update_sensor_config_from_sku(void);

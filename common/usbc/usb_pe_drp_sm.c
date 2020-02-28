@@ -272,6 +272,8 @@ static const char * const pe_state_names[] = {
 	[PE_WAIT_FOR_ERROR_RECOVERY] = "PE_Wait_For_Error_Recovery",
 	[PE_BIST] = "PE_Bist",
 	[PE_DR_SNK_GET_SINK_CAP] = "PE_DR_SNK_Get_Sink_Cap",
+	/* Super States */
+	[PE_PRS_FRS_SHARED] = "SS:PE_PRS_FRS_SHARED",
 };
 #endif
 
@@ -335,10 +337,10 @@ static struct policy_engine {
 
 	/* VDO */
 
+	/* TODO (b/148834626): Enable eMarker cable detection */
+	struct pd_cable cable;
+
 	/* PD_VDO_INVALID is used when there is an invalid VDO */
-	int32_t active_cable_vdo1;
-	int32_t active_cable_vdo2;
-	int32_t passive_cable_vdo;
 	int32_t ama_vdo;
 	int32_t vpd_vdo;
 	/* alternate mode policy*/
@@ -479,12 +481,6 @@ static struct policy_engine {
 	int src_cap_cnt;
 
 } pe[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-/*
- * As a sink, this is the max voltage (in millivolts) we can request
- * before getting source caps
- */
-static unsigned int max_request_mv = PD_MAX_VOLTAGE_MV;
 
 test_export_static enum usb_pe_state get_state_pe(const int port);
 test_export_static void set_state_pe(const int port,
@@ -841,28 +837,10 @@ static void pe_send_request_msg(int port)
 	uint32_t rdo;
 	uint32_t curr_limit;
 	uint32_t supply_voltage;
-	int charging;
-	int max_request_allowed;
-
-	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
-		charging = (charge_manager_get_active_charge_port() == port);
-	else
-		charging = 1;
-
-	if (IS_ENABLED(CONFIG_USB_PD_CHECK_MAX_REQUEST_ALLOWED))
-		max_request_allowed = pd_is_max_request_allowed();
-	else
-		max_request_allowed = 1;
 
 	/* Build and send request RDO */
-	/*
-	 * If this port is not actively charging or we are not allowed to
-	 * request the max voltage, then select vSafe5V
-	 */
-	pd_build_request(pe[port].src_cap_cnt, pe[port].src_caps,
-		pe[port].vpd_vdo, &rdo, &curr_limit,
-		&supply_voltage, charging && max_request_allowed ?
-		PD_REQUEST_MAX : PD_REQUEST_VSAFE5V, max_request_mv, port);
+	pd_build_request(pe[port].vpd_vdo, &rdo, &curr_limit,
+			&supply_voltage, port);
 
 	CPRINTF("C%d Req [%d] %dmV %dmA", port, RDO_POS(rdo),
 					supply_voltage, curr_limit);
@@ -942,15 +920,6 @@ void pd_request_power_swap(int port)
 int pd_is_port_partner_dualrole(int port)
 {
 	return PE_CHK_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
-}
-
-int pd_board_check_request(uint32_t rdo, int pdo_cnt)
-{
-	int idx = RDO_POS(rdo);
-
-	/* Check for invalid index */
-	return (!idx || idx > pdo_cnt) ?
-		EC_ERROR_INVAL : EC_SUCCESS;
 }
 
 static void pe_prl_execute_hard_reset(int port)
@@ -1064,9 +1033,9 @@ static void pe_src_startup_entry(int port)
 	print_current_state(port);
 
 	/* Initialize VDOs to default values */
-	pe[port].active_cable_vdo1 = PD_VDO_INVALID;
-	pe[port].active_cable_vdo2 = PD_VDO_INVALID;
-	pe[port].passive_cable_vdo = PD_VDO_INVALID;
+	memset(&pe[port].cable, 0, sizeof(pe[port].cable));
+	pe[port].cable.last_sop_p_msg_id = INVALID_MSG_ID_COUNTER;
+	pe[port].cable.last_sop_p_p_msg_id = INVALID_MSG_ID_COUNTER;
 	pe[port].ama_vdo = PD_VDO_INVALID;
 	pe[port].vpd_vdo = PD_VDO_INVALID;
 
@@ -3822,12 +3791,7 @@ static void pe_vdm_request_exit(int port)
 
 enum idh_ptype get_usb_pd_cable_type(int port)
 {
-	if (pe[port].passive_cable_vdo != PD_VDO_INVALID)
-		return IDH_PTYPE_PCABLE;
-	else if (pe[port].active_cable_vdo1 != PD_VDO_INVALID)
-		return IDH_PTYPE_ACABLE;
-	else
-		return IDH_PTYPE_UNDEF;
+	return pe[port].cable.type;
 }
 
 /**
@@ -4449,146 +4413,25 @@ static void pe_dr_snk_get_sink_cap_run(int port)
 		set_state_pe(port, PE_SNK_READY);
 }
 
-/* Policy Engine utility functions */
-int pd_check_requested_voltage(uint32_t rdo, const int port)
+const uint32_t * const pd_get_src_caps(int port)
 {
-	int max_ma = rdo & 0x3FF;
-	int op_ma = (rdo >> 10) & 0x3FF;
-	int idx = RDO_POS(rdo);
-	uint32_t pdo;
-	uint32_t pdo_ma;
-#if defined(CONFIG_USB_PD_DYNAMIC_SRC_CAP) || \
-		defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
-	const uint32_t *src_pdo;
-	const int pdo_cnt = charge_manager_get_source_pdo(&src_pdo, port);
-#else
-	const uint32_t *src_pdo = pd_src_pdo;
-	const int pdo_cnt = pd_src_pdo_cnt;
-#endif
-
-	/* Board specific check for this request */
-	if (pd_board_check_request(rdo, pdo_cnt))
-		return EC_ERROR_INVAL;
-
-	/* check current ... */
-	pdo = src_pdo[idx - 1];
-	pdo_ma = (pdo & 0x3ff);
-
-	if (op_ma > pdo_ma)
-		return EC_ERROR_INVAL; /* too much op current */
-
-	if (max_ma > pdo_ma && !(rdo & RDO_CAP_MISMATCH))
-		return EC_ERROR_INVAL; /* too much max current */
-
-	CPRINTF("Requested %d mV %d mA (for %d/%d mA)\n",
-		 ((pdo >> 10) & 0x3ff) * 50, (pdo & 0x3ff) * 10,
-		 op_ma * 10, max_ma * 10);
-
-	/* Accept the requested voltage */
-	return EC_SUCCESS;
+	return pe[port].src_caps;
 }
 
-void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
+void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
 {
-#ifdef CONFIG_CHARGE_MANAGER
-	uint32_t ma, mv, pdo;
-#endif
 	int i;
 
 	pe[port].src_cap_cnt = cnt;
+
 	for (i = 0; i < cnt; i++)
 		pe[port].src_caps[i] = *src_caps++;
-
-#ifdef CONFIG_CHARGE_MANAGER
-	/* Get max power info that we could request */
-	pd_find_pdo_index(pe[port].src_cap_cnt, pe[port].src_caps,
-						PD_MAX_VOLTAGE_MV, &pdo);
-	pd_extract_pdo_power(pdo, &ma, &mv);
-	/* Set max. limit, but apply 500mA ceiling */
-	charge_manager_set_ceil(port, CEIL_REQUESTOR_PD, PD_MIN_MA);
-	pd_set_input_current_limit(port, ma, mv);
-#endif
 }
 
-void pd_set_max_voltage(unsigned int mv)
+uint8_t pd_get_src_cap_cnt(int port)
 {
-	max_request_mv = mv;
+	return pe[port].src_cap_cnt;
 }
-
-unsigned int pd_get_max_voltage(void)
-{
-	return max_request_mv;
-}
-
-int pd_charge_from_device(uint16_t vid, uint16_t pid)
-{
-	/* TODO: rewrite into table if we get more of these */
-	/*
-	 * White-list Apple charge-through accessory since it doesn't set
-	 * unconstrained bit, but we still need to charge from it when
-	 * we are a sink.
-	 */
-	return (vid == USB_VID_APPLE &&
-			(pid == USB_PID1_APPLE || pid == USB_PID2_APPLE));
-}
-
-void pd_set_vbus_discharge(int port, int enable)
-{
-	static struct mutex discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-	if (port >= board_get_usb_pd_port_count())
-		return;
-
-	mutex_lock(&discharge_lock[port]);
-	enable &= !board_vbus_source_enabled(port);
-
-	if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_GPIO)) {
-		switch (port) {
-#if defined(CONFIG_USB_PD_DISCHARGE_GPIO) && CONFIG_USB_PD_PORT_MAX_COUNT >= 3
-		case 2:
-			gpio_set_level(GPIO_USB_C2_DISCHARGE, enable);
-			break;
-#endif
-#if defined(CONFIG_USB_PD_DISCHARGE_GPIO) && CONFIG_USB_PD_PORT_MAX_COUNT >= 2
-		case 1:
-			gpio_set_level(GPIO_USB_C1_DISCHARGE, enable);
-			break;
-#endif
-#if defined(CONFIG_USB_PD_DISCHARGE_GPIO) && CONFIG_USB_PD_PORT_MAX_COUNT >= 1
-		case 0:
-			gpio_set_level(GPIO_USB_C0_DISCHARGE, enable);
-			break;
-#endif
-		default:
-			CPRINTF("Could not discharge port %d via GPIO", port);
-			break;
-		}
-	} else if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_TCPC)) {
-		tcpc_discharge_vbus(port, enable);
-	} else if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_PPC)) {
-		ppc_discharge_vbus(port, enable);
-	}
-
-	mutex_unlock(&discharge_lock[port]);
-}
-
-/* VDM utility functions */
-static void pd_usb_billboard_deferred(void)
-{
-#if defined(CONFIG_USB_PD_ALT_MODE) && !defined(CONFIG_USB_PD_ALT_MODE_DFP) \
-	&& !defined(CONFIG_USB_PD_SIMPLE_DFP) && defined(CONFIG_USB_BOS)
-
-	/*
-	 * TODO(tbroch)
-	 * 1. Will we have multiple type-C port UFPs
-	 * 2. Will there be other modes applicable to DFPs besides DP
-	 */
-	if (!pd_alt_mode(0, USB_SID_DISPLAYPORT))
-		usb_connect();
-
-#endif
-}
-DECLARE_DEFERRED(pd_usb_billboard_deferred);
 
 void pd_dfp_pe_init(int port)
 {
@@ -4599,6 +4442,11 @@ void pd_dfp_pe_init(int port)
 struct pd_policy *pd_get_am_policy(int port)
 {
 	return &pe[port].am_policy;
+}
+
+struct pd_cable *pd_get_cable_attributes(int port)
+{
+	return &pe[port].cable;
 }
 
 void pd_set_dfp_enter_mode_flag(int port, bool set)
@@ -4866,6 +4714,7 @@ const struct test_sm_data test_pe_sm_data[] = {
 		.names_size = ARRAY_SIZE(pe_state_names),
 	},
 };
+BUILD_ASSERT(ARRAY_SIZE(pe_states) == ARRAY_SIZE(pe_state_names));
 const int test_pe_sm_data_size = ARRAY_SIZE(test_pe_sm_data);
 
 void pe_set_flag(int port, int flag)

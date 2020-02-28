@@ -15,8 +15,6 @@
 #include "compile_time_macros.h"
 #include "console.h"
 #include "cros_board_info.h"
-#include "driver/accel_kionix.h"
-#include "driver/accel_kx022.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl9241.h"
@@ -24,7 +22,6 @@
 #include "driver/ppc/nx20p348x.h"
 #include "driver/retimer/pi3dpx1207.h"
 #include "driver/retimer/ps8802.h"
-#include "driver/retimer/ps8811.h"
 #include "driver/retimer/ps8818.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/nct38xx.h"
@@ -32,8 +29,6 @@
 #include "driver/usb_mux/amd_fp5.h"
 #include "ec_commands.h"
 #include "extpower.h"
-#include "fan.h"
-#include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "ioexpander.h"
@@ -174,50 +169,6 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-const struct pwm_t pwm_channels[] = {
-	[PWM_CH_KBLIGHT] = {
-		.channel = 3,
-		.flags = PWM_CONFIG_DSLEEP,
-		.freq = 100,
-	},
-	[PWM_CH_FAN] = {
-		.channel = 2,
-		.flags = PWM_CONFIG_OPEN_DRAIN,
-		.freq = 25000,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
-
-/* Physical fans. These are logically separate from pwm_channels. */
-const struct fan_conf fan_conf_0 = {
-	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
-	.pgood_gpio = -1,
-	.enable_gpio = -1,
-};
-const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3100,
-	.rpm_start = 3100,
-	.rpm_max = 6900,
-};
-const struct fan_t fans[] = {
-	[FAN_CH_0] = {
-		.conf = &fan_conf_0,
-		.rpm = &fan_rpm_0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
-
-/* MFT channels. These are logically separate from pwm_channels. */
-const struct mft_t mft_channels[] = {
-	[MFT_CH_0] = {
-		.module = NPCX_MFT_MODULE_1,
-		.clk_src = TCKC_LFCLK,
-		.pwm_id = PWM_CH_FAN,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
-
 struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		/* Device does not talk I2C */
@@ -320,6 +271,7 @@ const struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		},
 		.drv = &nct38xx_tcpm_drv,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -328,6 +280,7 @@ const struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		},
 		.drv = &nct38xx_tcpm_drv,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -359,6 +312,12 @@ void baseboard_tcpc_init(void)
 	/* Enable BC 1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+
+	/* Enable HPD interrupts */
+	ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
+#ifdef VARIANT_ZORK_TREMBYLE
+	ioex_enable_interrupt(IOEX_MST_HPD_OUT);
+#endif
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -472,30 +431,6 @@ void bc12_interrupt(enum gpio_signal signal)
 		break;
 	}
 }
-
-/*****************************************************************************
- * USB-A Retimer tuning
- */
-
-/* PS8811 gain tuning */
-static void ps8811_tuning_init(void)
-{
-	int rv;
-
-	/* USB-A0 can run with default settings */
-
-	/* USB-A1 needs to increase gain to get over MB/DB connector */
-	rv = i2c_write8(I2C_PORT_USBA1,
-			PS8811_I2C_ADDR_FLAGS + PS8811_REG_PAGE1,
-			PS8811_REG1_USB_BEQ_LEVEL,
-			PS8811_BEQ_I2C_LEVEL_UP_13DB |
-			PS8811_BEQ_PIN_LEVEL_UP_18DB);
-	if (rv) {
-		CPRINTSUSB("C1: PS8811 not present or failing to set gain");
-		return;
-	}
-}
-DECLARE_HOOK(HOOK_INIT, ps8811_tuning_init, HOOK_PRIO_INIT_I2C + 1);
 
 /*****************************************************************************
  * Custom Zork USB-C1 Retimer/MUX driver
@@ -763,8 +698,10 @@ static int zork_c1_get_mux(int port, mux_state_t *mux_state)
 
 const struct pi3dpx1207_usb_control pi3dpx1207_controls[] = {
 	[USBC_PORT_C0] = {
+#ifdef VARIANT_ZORK_TREMBYLE
 		.enable_gpio = IOEX_USB_C0_DATA_EN,
 		.dp_enable_gpio = GPIO_USB_C0_IN_HPD,
+#endif
 	},
 	[USBC_PORT_C1] = {
 	},
@@ -893,18 +830,6 @@ static int board_get_temp(int idx, int *temp_k)
 	/* idx is the sensor index set below in temp_sensors[] */
 	switch (idx) {
 	case TEMP_SENSOR_CHARGER:
-		/* TODO: b/143598098
-		 * Revision 1.6 of the schematic will put this
-		 * thermistor on power rail EC_A instead of
-		 * PP3300_A.  This will make the charger circuit
-		 * temperature available even when the AP is not
-		 * powered and the check will no longer be needed
-		 */
-
-		/* thermistor is not powered in G3 */
-		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
-			return EC_ERROR_NOT_POWERED;
-
 		channel = ADC_TEMP_SENSOR_CHARGER;
 		break;
 	case TEMP_SENSOR_SOC:
@@ -933,147 +858,21 @@ const struct temp_sensor_t temp_sensors[] = {
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = board_get_temp,
 		.idx = TEMP_SENSOR_CHARGER,
-		.action_delay_sec = 1,
 	},
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = board_get_temp,
 		.idx = TEMP_SENSOR_SOC,
-		.action_delay_sec = 5,
 	},
 	[TEMP_SENSOR_CPU] = {
 		.name = "CPU",
 		.type = TEMP_SENSOR_TYPE_CPU,
 		.read = sb_tsi_get_val,
 		.idx = 0,
-		.action_delay_sec = 4,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-const static struct ec_thermal_config thermal_thermistor = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
-};
-
-const static struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(95),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
-};
-
-struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
-
-static void setup_fans(void)
-{
-	thermal_params[TEMP_SENSOR_CHARGER] = thermal_thermistor;
-	thermal_params[TEMP_SENSOR_SOC] = thermal_thermistor;
-	thermal_params[TEMP_SENSOR_CPU] = thermal_cpu;
-}
-
-#ifdef HAS_TASK_MOTIONSENSE
-
-/* Motion sensors */
-static struct mutex g_lid_mutex;
-static struct mutex g_base_mutex;
-
-/* sensor private data */
-static struct kionix_accel_data g_kx022_data;
-static struct bmi160_drv_data_t g_bmi160_data;
-
-/* TODO(gcc >= 5.0) Remove the casts to const pointer at rot_standard_ref */
-struct motion_sensor_t motion_sensors[] = {
-	[LID_ACCEL] = {
-	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_KX022,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
-	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_kx022_data,
-	 .port = I2C_PORT_SENSOR,
-	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-	 .rot_standard_ref = NULL,
-	 .default_range = 2, /* g, enough for laptop. */
-	 .min_frequency = KX022_ACCEL_MIN_FREQ,
-	 .max_frequency = KX022_ACCEL_MAX_FREQ,
-	 .config = {
-		 /* EC use accel for angle detection */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100,
-		 },
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-		},
-	 },
-	},
-
-	[BASE_ACCEL] = {
-	 .name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmi160_drv,
-	 .mutex = &g_base_mutex,
-	 .drv_data = &g_bmi160_data,
-	 .port = I2C_PORT_SENSOR,
-	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
-	 .rot_standard_ref = NULL,
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
-	 .config = {
-		 /* EC use accel for angle detection */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100,
-		 },
-		 /* EC use accel for angle detection */
-		 [SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-		 },
-	 },
-	},
-
-	[BASE_GYRO] = {
-	 .name = "Base Gyro",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
-	 .type = MOTIONSENSE_TYPE_GYRO,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmi160_drv,
-	 .mutex = &g_base_mutex,
-	 .drv_data = &g_bmi160_data,
-	 .port = I2C_PORT_SENSOR,
-	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = NULL,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
-	},
-};
-
-unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-#endif /* HAS_TASK_MOTIONSENSE */
 
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
@@ -1142,13 +941,6 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	}
 }
 
-static void baseboard_init(void)
-{
-	/* Initialize Fans */
-	setup_fans();
-}
-DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT);
-
 void board_hibernate(void)
 {
 	int port;
@@ -1166,4 +958,21 @@ void board_hibernate(void)
 		/* Give PD task and PPC chip time to get to 5V */
 		msleep(300);
 	}
+}
+
+static void hdmi_hpd_handler(void)
+{
+	int hpd = 0;
+
+	/* Pass HPD through from DB OPT1 HDMI connector to AP's DP1. */
+	ioex_get_level(IOEX_HDMI_CONN_HPD_3V3_DB, &hpd);
+	gpio_set_level(GPIO_DP1_HPD, hpd);
+	ccprints("HDMI HPD %d", hpd);
+}
+DECLARE_DEFERRED(hdmi_hpd_handler);
+
+void hdmi_hpd_interrupt(enum ioex_signal signal)
+{
+	/* Debounce for 2 msec. */
+	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }

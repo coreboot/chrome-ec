@@ -121,7 +121,7 @@ common-$(CONFIG_RWSIG)+=rwsig.o vboot/common.o
 common-$(CONFIG_RWSIG_TYPE_RWSIG)+=vboot/vb21_lib.o
 common-$(CONFIG_MATH_UTIL)+=math_util.o
 common-$(CONFIG_ONLINE_CALIB)+=stillness_detector.o kasa.o math_util.o \
-	mat44.o vec3.o
+	mat44.o vec3.o newton_fit.o accel_cal.o online_calibration.o
 common-$(CONFIG_SHA1)+= sha1.o
 common-$(CONFIG_SHA256)+=sha256.o
 common-$(CONFIG_SOFTWARE_CLZ)+=clz.o
@@ -144,10 +144,14 @@ common-$(CONFIG_USB_CONSOLE_STREAM)+=usb_console_stream.o
 common-$(CONFIG_USB_I2C)+=usb_i2c.o
 common-$(CONFIG_USB_PORT_POWER_DUMB)+=usb_port_power_dumb.o
 common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o usb_pd_host_cmd.o \
-	usb_pd_console_cmd.o
-ifeq ($(CONFIG_USB_SM_FRAMEWORK),)
+ifneq ($(CONFIG_USB_POWER_DELIVERY),)
+common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o
+ifneq ($(CONFIG_USB_PD_TCPMV1),)
 common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o
+endif
+common-$(CONFIG_USB_PD_DUAL_ROLE)+=usb_pd_dual_role.o
+common-$(CONFIG_USB_PD_HOST_CMD)+=usb_pd_host_cmd.o
+common-$(CONFIG_USB_PD_CONSOLE_CMD)+=usb_pd_console_cmd.o
 endif
 common-$(CONFIG_USB_PD_ALT_MODE_DFP)+=usb_pd_alt_mode_dfp.o
 common-$(CONFIG_USB_PD_LOGGING)+=event_log.o pd_log.o
@@ -155,6 +159,7 @@ common-$(CONFIG_USB_PD_TCPC)+=usb_pd_tcpc.o
 common-$(CONFIG_USB_UPDATE)+=usb_update.o update_fw.o
 common-$(CONFIG_USBC_PPC)+=usbc_ppc.o
 common-$(CONFIG_VBOOT_EFS)+=vboot/vboot.o
+common-$(CONFIG_VBOOT_EFS2)+=vboot/efs2.o
 common-$(CONFIG_VBOOT_HASH)+=sha256.o vboot_hash.o
 common-$(CONFIG_VOLUME_BUTTONS)+=button.o
 common-$(CONFIG_VSTORE)+=vstore.o
@@ -288,8 +293,7 @@ CRYPTOC_LDFLAGS := -L$(out)/cryptoc -lcryptoc
 # Force the external build each time, so it can look for changed sources.
 .PHONY: $(out)/cryptoc/libcryptoc.a
 $(out)/cryptoc/libcryptoc.a:
-	$(MAKE) obj=$(realpath $(out))/cryptoc SUPPORT_UNALIGNED=1 \
-		CONFIG_UPTO_SHA512=$(CONFIG_UPTO_SHA512) -C $(CRYPTOCLIB)
+	+$(call quiet,libcryptoc,MAKE   )
 
 # Link RO and RW against cryptoc.
 $(out)/RO/ec.RO.elf $(out)/RO/ec.RO_B.elf: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)

@@ -69,7 +69,16 @@ enum scancode_set_list {
  */
 static struct mutex to_host_mutex;
 
-static struct queue const to_host = QUEUE_NULL(16, uint8_t);
+/* Queue command/data from the host */
+enum {
+	CHAN_KBD = 0,
+};
+struct data_byte {
+	uint8_t chan;
+	uint8_t byte;
+};
+
+static struct queue const to_host = QUEUE_NULL(16, struct data_byte);
 
 /* Queue command/data from the host */
 enum {
@@ -94,10 +103,12 @@ struct host_byte {
  */
 static struct queue const from_host = QUEUE_NULL(8, struct host_byte);
 
-static int i8042_irq_enabled;
+static int i8042_keyboard_irq_enabled;
+static int i8042_aux_irq_enabled;
 
 /* i8042 global settings */
 static int keyboard_enabled;	/* default the keyboard is disabled. */
+static int aux_chan_enabled;	/* default the mouse is disabled. */
 static int keystroke_enabled;	/* output keystrokes */
 static uint8_t resend_command[MAX_SCAN_CODE_LEN];
 static uint8_t resend_command_len;
@@ -207,9 +218,21 @@ static void keyboard_enable_irq(int enable)
 {
 	CPRINTS("KB IRQ %s", enable ? "enable" : "disable");
 
-	i8042_irq_enabled = enable;
+	i8042_keyboard_irq_enabled = enable;
 	if (enable)
 		lpc_keyboard_resume_irq();
+}
+
+/**
+ * Enable mouse IRQ generation.
+ *
+ * @param enable	Enable (!=0) or disable (0) IRQ generation.
+ */
+static void aux_enable_irq(int enable)
+{
+	CPRINTS("AUX IRQ %s", enable ? "enable" : "disable");
+
+	i8042_aux_irq_enabled = enable;
 }
 
 /**
@@ -221,10 +244,13 @@ static void keyboard_enable_irq(int enable)
  *
  * @param len		Number of bytes to send to the host
  * @param to_host	Data to send
+ * @param chan		Channel to send data on
  */
-static void i8042_send_to_host(int len, const uint8_t *bytes)
+static void i8042_send_to_host(int len, const uint8_t *bytes,
+			       uint8_t chan)
 {
 	int i;
+	struct data_byte data;
 
 	for (i = 0; i < len; i++)
 		kblog_put('s', bytes[i]);
@@ -233,7 +259,11 @@ static void i8042_send_to_host(int len, const uint8_t *bytes)
 	mutex_lock(&to_host_mutex);
 	if (queue_space(&to_host) >= len) {
 		kblog_put('t', to_host.state->tail);
-		queue_add_units(&to_host, bytes, len);
+		for (i = 0; i < len; i++) {
+			data.chan = chan;
+			data.byte = bytes[i];
+			queue_add_unit(&to_host, &data);
+		}
 	}
 	mutex_unlock(&to_host_mutex);
 
@@ -399,7 +429,7 @@ void keyboard_state_changed(int row, int col, int is_pressed)
 	if (ret == EC_SUCCESS) {
 		ASSERT(len > 0);
 		if (keystroke_enabled)
-			i8042_send_to_host(len, scan_code);
+			i8042_send_to_host(len, scan_code, CHAN_KBD);
 	}
 
 	if (is_pressed) {
@@ -429,6 +459,16 @@ static void keyboard_enable(int enable)
 		CPRINTS("KB disable");
 
 	keyboard_enabled = enable;
+}
+
+static void aux_enable(int enable)
+{
+	if (!aux_chan_enabled && enable)
+		CPRINTS("AUX enabled");
+	else if (aux_chan_enabled && !enable)
+		CPRINTS("AUX disabled");
+
+	aux_chan_enabled = enable;
 }
 
 static uint8_t read_ctl_ram(uint8_t addr)
@@ -462,9 +502,14 @@ static void update_ctl_ram(uint8_t addr, uint8_t data)
 		/* Enable IRQ before enable keyboard (queue chars to host) */
 		if (!(orig & I8042_ENIRQ1) && (data & I8042_ENIRQ1))
 			keyboard_enable_irq(1);
+		if (!(orig & I8042_ENIRQ12) && (data & I8042_ENIRQ12))
+			aux_enable_irq(1);
 
 		/* Handle the I8042_KBD_DIS bit */
 		keyboard_enable(!(data & I8042_KBD_DIS));
+
+		/* Handle the I8042_AUX_DIS bit */
+		aux_enable(!(data & I8042_AUX_DIS));
 
 		/*
 		 * Disable IRQ after disable keyboard so that every char must
@@ -472,6 +517,8 @@ static void update_ctl_ram(uint8_t addr, uint8_t data)
 		 */
 		if ((orig & I8042_ENIRQ1) && !(data & I8042_ENIRQ1))
 			keyboard_enable_irq(0);
+		if ((orig & I8042_ENIRQ12) && !(data & I8042_ENIRQ12))
+			aux_enable_irq(0);
 	}
 }
 
@@ -773,6 +820,7 @@ static void i8042_handle_from_host(void)
 	struct host_byte h;
 	int ret_len;
 	uint8_t output[MAX_SCAN_CODE_LEN];
+	uint8_t chan = CHAN_KBD;
 
 	while (queue_remove_unit(&from_host, &h)) {
 		if (h.type == HOST_COMMAND)
@@ -780,7 +828,7 @@ static void i8042_handle_from_host(void)
 		else
 			ret_len = handle_keyboard_data(h.byte, output);
 
-		i8042_send_to_host(ret_len, output);
+		i8042_send_to_host(ret_len, output, chan);
 	}
 }
 
@@ -797,7 +845,7 @@ void keyboard_protocol_task(void *u)
 
 		while (1) {
 			timestamp_t t = get_time();
-			uint8_t chr;
+			struct data_byte entry;
 
 			/* Handle typematic */
 			if (!typematic_len) {
@@ -807,7 +855,8 @@ void keyboard_protocol_task(void *u)
 				/* Ready for next typematic keystroke */
 				if (keystroke_enabled)
 					i8042_send_to_host(typematic_len,
-							   typematic_scan_code);
+							   typematic_scan_code,
+							   CHAN_KBD);
 				typematic_deadline.val = t.val +
 					typematic_inter_delay;
 				wait = typematic_inter_delay;
@@ -826,7 +875,7 @@ void keyboard_protocol_task(void *u)
 			/* Handle data waiting for host */
 			if (lpc_keyboard_has_char()) {
 				/* If interrupts disabled, nothing we can do */
-				if (!i8042_irq_enabled)
+				if (!i8042_keyboard_irq_enabled)
 					break;
 
 				/* Give the host a little longer to respond */
@@ -848,11 +897,12 @@ void keyboard_protocol_task(void *u)
 
 			/* Get a char from buffer. */
 			kblog_put('k', to_host.state->head);
-			queue_remove_unit(&to_host, &chr);
-			kblog_put('K', chr);
+			queue_remove_unit(&to_host, &entry);
+			kblog_put('K', entry.byte);
 
 			/* Write to host. */
-			lpc_keyboard_put_char(chr, i8042_irq_enabled);
+			lpc_keyboard_put_char(entry.byte,
+					      i8042_keyboard_irq_enabled);
 			retries = 0;
 		}
 	}
@@ -896,7 +946,7 @@ test_mockable void keyboard_update_button(enum keyboard_button_type button,
 	}
 
 	if (keystroke_enabled) {
-		i8042_send_to_host(len, scan_code);
+		i8042_send_to_host(len, scan_code, CHAN_KBD);
 		task_wake(TASK_ID_KEYPROTO);
 	}
 }
@@ -1045,9 +1095,11 @@ static int command_8042_internal(int argc, char **argv)
 	int i;
 
 	ccprintf("data_port_state=%d\n", data_port_state);
-	ccprintf("i8042_irq_enabled=%d\n", i8042_irq_enabled);
+	ccprintf("i8042_keyboard_irq_enabled=%d\n", i8042_keyboard_irq_enabled);
+	ccprintf("i8042_aux_irq_enabled=%d\n", i8042_aux_irq_enabled);
 	ccprintf("keyboard_enabled=%d\n", keyboard_enabled);
 	ccprintf("keystroke_enabled=%d\n", keystroke_enabled);
+	ccprintf("aux_chan_enabled=%d\n", aux_chan_enabled);
 
 	ccprintf("resend_command[]={");
 	for (i = 0; i < resend_command_len; i++)
@@ -1069,11 +1121,11 @@ static int command_8042_internal(int argc, char **argv)
 
 	ccprintf("to_host[]={");
 	for (i = 0; i < queue_count(&to_host); ++i) {
-		uint8_t entry;
+		struct data_byte entry;
 
 		queue_peek_units(&to_host, &entry, i, 1);
 
-		ccprintf("0x%02x, ", entry);
+		ccprintf("0x%02x, ", entry.byte);
 	}
 	ccprintf("}\n");
 

@@ -22,7 +22,7 @@
  * Variant EC defines. Pick one:
  * VARIANT_DEDEDE_EC_NPCX796FC
  */
-#ifdef VARIANT_DEDEDE_EC_NPCX796FC
+#if defined(VARIANT_DEDEDE_EC_NPCX796FC)
 	/* NPCX7 config */
 	#define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 	#define NPCX_TACH_SEL2    0  /* No tach. */
@@ -32,6 +32,17 @@
 	#define CONFIG_FLASH_SIZE (512 * 1024)
 	#define CONFIG_SPI_FLASH_REGS
 	#define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
+#elif defined(VARIANT_DEDEDE_EC_IT8320)
+	/* Flash clock must be > (50Mhz / 2) */
+	#define CONFIG_IT83XX_FLASH_CLOCK_48MHZ
+
+	#define I2C_PORT_EEPROM		IT83XX_I2C_CH_A
+	#define I2C_PORT_BATTERY	IT83XX_I2C_CH_B
+	#define I2C_PORT_SENSOR		IT83XX_I2C_CH_C
+	#define I2C_PORT_SUB_USB_C1	IT83XX_I2C_CH_E
+	#define I2C_PORT_USB_C0		IT83XX_I2C_CH_F
+
+	#define I2C_ADDR_EEPROM_FLAGS	0x50
 #else
 #error "Must define a VARIANT_DEDEDE_EC!"
 #endif
@@ -75,6 +86,7 @@
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
 #define CONFIG_LOW_POWER_IDLE
+#define CONFIG_POWER_PP5000_CONTROL
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
@@ -106,12 +118,17 @@
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 
+/* Backlight */
+#define CONFIG_BACKLIGHT_LID
+#define GPIO_ENABLE_BACKLIGHT   GPIO_EN_BL_OD
+
 /* PWM */
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_PWM
 #define CONFIG_PWM
 
 /* SoC */
+#define CONFIG_BOARD_HAS_AFTER_RSMRST
 #define CONFIG_BOARD_HAS_RTC_RESET
 #define CONFIG_CHIPSET_JASPERLAKE
 #define CONFIG_POWER_BUTTON
@@ -152,7 +169,7 @@
 #define CONFIG_USB_PD_DECODE_SOP
 #define CONFIG_USB_PID 0x5042
 #define CONFIG_USB_POWER_DELIVERY
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
 
 /* Define typical operating power and max power. */
@@ -170,6 +187,21 @@
 
 #include "common.h"
 #include "gpio_signal.h"
+
+/* Common enums */
+#if defined(VARIANT_DEDEDE_EC_NPCX796FC)
+#elif defined(VARIANT_DEDEDE_EC_IT8320)
+	enum adc_channel {
+		ADC_VSNS_PP3300_A,     /* ADC0 */
+		ADC_TEMP_SENSOR_1,     /* ADC2 */
+		ADC_TEMP_SENSOR_2,     /* ADC3 */
+		ADC_SUB_ANALOG,        /* ADC13 */
+		ADC_CH_COUNT
+	};
+#else
+#error "Must define a VARIANT_DEDEDE_EC!"
+#endif
+
 
 /* Reset all TCPCs */
 void board_reset_pd_mcu(void);

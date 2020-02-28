@@ -236,6 +236,9 @@
  */
 #undef CONFIG_SYNC_INT_EVENT
 
+/* Compile chip support for digital-to-analog converter */
+#undef CONFIG_DAC
+
 /* Compile chip support for analog-to-digital convertor */
 #undef CONFIG_ADC
 
@@ -632,6 +635,12 @@
 #undef CONFIG_BOARD_HAS_RTC_RESET
 
 /*
+ * Call board_after_rsmrst(state) after passing RSMRST# to the AP.  This is for
+ * board workarounds that are required just after RSMRST is passed to the AP.
+ */
+#undef CONFIG_BOARD_HAS_AFTER_RSMRST
+
+/*
  * Call board_before_rsmrst(state) before passing RSMRST# to the AP.
  * This is for board workarounds that are required after rails are up
  * but before the AP is out of reset.
@@ -717,6 +726,11 @@
  * and not keys in the keyboard matrix.
  */
 #undef CONFIG_VOLUME_BUTTONS
+
+/*
+ * Allow runtime configuration of the buttons[] array
+ */
+#undef CONFIG_BUTTONS_RUNTIME_CONFIG
 
 /* Support V1 CCD configuration */
 #undef CONFIG_CASE_CLOSED_DEBUG_V1
@@ -890,31 +904,20 @@
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 
 /*
- * Define to use Power Delivery State Machine Framework. Along with
- * CONFIG_USB_SM_FRAMEWORK, you must ensure the follow options are defined to
- * use the new statemachine for USB-C:
- *
- * CONFIG_USB_TYPEC_SM (defined by default)
- * CONFIG_USB_PRL_SM (defined by default)
- * One of CONFIG_USB_PE_* policy engine options.
- */
-#undef CONFIG_USB_SM_FRAMEWORK
-
-/*
  * Define to enable Type-C State Machine. Must be enabled
- * with CONFIG_USB_SM_FRAMEWORK
+ * with CONFIG_USB_PD_TCPMV2
  */
 #define CONFIG_USB_TYPEC_SM
 
 /*
  * Define to enable Protocol Layer State Machine. Must be enabled
- * with CONFIG_USB_SM_FRAMEWORK and CONFIG_USB_TYPEC_SM
+ * with CONFIG_USB_PD_TCPMV2 and CONFIG_USB_TYPEC_SM
  */
 #define CONFIG_USB_PRL_SM
 
 /*
  * Define to enable Policy Engine State Machine. Must be enabled
- * with CONFIG_USB_SM_FRAMEWORK and CONFIG_USB_TYPEC_SM
+ * with CONFIG_USB_SM_PD_TCPMV2 and CONFIG_USB_TYPEC_SM
  */
 #define CONFIG_USB_PE_SM
 
@@ -2320,6 +2323,12 @@
  */
 #undef CONFIG_SMBUS_PEC
 
+/*
+ * Add hosts-side support for entering programming mode for I2C ITE ECs.
+ * Must define ite_dfu_config_t for configuration in board file.
+ */
+#undef CONFIG_ITE_FLASH_SUPPORT
+
 /*****************************************************************************/
 /* IPI configuration.  Support mt_scp only for now. */
 
@@ -2765,6 +2774,22 @@
  */
 #undef CONFIG_TEMP_CACHE_STALE_THRES
 
+/* Set minimum temperature for accelerometer calibration. */
+#undef CONFIG_ACCEL_CAL_MIN_TEMP
+
+/* Set maximum temperature for accelerometer calibration. */
+#undef CONFIG_ACCEL_CAL_MAX_TEMP
+
+/* Set threshold radius for using the Kasa algorithm in accelerometer bias
+ * calculation (g).
+ */
+#undef CONFIG_ACCEL_CAL_KASA_RADIUS_THRES
+
+/* Set threshold radius for using the Newton fit algorithm in accelerometer
+ * bias calculation (g).
+ */
+#undef CONFIG_ACCEL_CAL_NEWTON_RADIUS_THRES
+
 /* Include code to do online compass calibration */
 #undef CONFIG_MAG_CALIBRATE
 
@@ -3168,6 +3193,12 @@
 
 /* Size of the serial number if needed */
 #undef CONFIG_SERIALNO_LEN
+
+/* Support programmable Mac address field. */
+#undef CONFIG_MAC_ADDR
+
+/* Size of the MAC address field if needed. */
+#undef CONFIG_MAC_ADDR_LEN
 
 /****************************************************************************/
 /* Shared objects library. */
@@ -3697,8 +3728,39 @@
 /*****************************************************************************/
 /* USB PD config */
 
-/* Include all USB Power Delivery modules */
+/*
+ * Enables USB Power Delivery
+ *
+ * When this config option is enabled, one of the following must be enabled:
+ *	CONFIG_USB_PD_TCPMV1 - legacy power delivery state machine
+ *	CONFIG_USB_PD_TCPMV2 - current power delivery state machine
+ */
 #undef CONFIG_USB_POWER_DELIVERY
+
+/*
+ * Enables the Legacy power delivery state machine.
+ * NOTE: Should not be used for new designs.
+ */
+#undef CONFIG_USB_PD_TCPMV1
+
+/*
+ * Enables Version 2 of the Power Delivery state machine
+ *
+ * Along with CONFIG_USB_PD_TCPMV2, you must ensure the follow
+ * options are defined to use the new statemachine for USB-C:
+ *
+ *	CONFIG_USB_PD_DECODE_SOP
+ *	CONFIG_USB_TYPEC_SM (defined by default)
+ *	CONFIG_USB_PRL_SM (defined by default)
+ *	One of CONFIG_USB_PE_* policy engine options.
+ */
+#undef CONFIG_USB_PD_TCPMV2
+
+/* Enables PD Console commands */
+#define CONFIG_USB_PD_CONSOLE_CMD
+
+/* Enables PD Host commands */
+#define CONFIG_USB_PD_HOST_CMD
 
 /* Support for USB PD alternate mode */
 #undef CONFIG_USB_PD_ALT_MODE
@@ -3888,7 +3950,7 @@
 #undef CONFIG_USB_PD_TCPM_STUB
 #undef CONFIG_USB_PD_TCPM_TCPCI
 #undef CONFIG_USB_PD_TCPM_FUSB302
-#undef CONFIG_USB_PD_TCPM_ITE83XX
+#undef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #undef CONFIG_USB_PD_TCPM_ANX3429
 #undef CONFIG_USB_PD_TCPM_ANX740X
 #undef CONFIG_USB_PD_TCPM_ANX741X
@@ -3901,6 +3963,15 @@
 #undef CONFIG_USB_PD_TCPM_MT6370
 #undef CONFIG_USB_PD_TCPM_TUSB422
 #undef CONFIG_USB_PD_TCPM_RAA489000
+
+/*
+ * Defined automatically by chip and depends on chip. This guards the onboard
+ * TCPM driver, but CONFIG_USB_PD_TCPM_ITE_ON_CHIP needs to be defined in
+ * board.h for either of these driver to actually be included in the final
+ * image.
+ */
+#undef CONFIG_USB_PD_TCPM_DRIVER_IT83XX
+#undef CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2
 
 /*
  * Type-C retimer mux configuration tends to be set on a specific
@@ -3919,6 +3990,10 @@
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
 #undef CONFIG_USBC_RETIMER_PS8802
 #undef CONFIG_USBC_RETIMER_PS8818
+#undef CONFIG_USBC_RETIMER_TUSB544
+
+/* Allow run-time configuration of the Burnside Bridge driver structure */
+#undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 
 /*
  * Adds an EC console command to erase the ANX7447 OCM flash.
@@ -4319,8 +4394,14 @@
 
 /*****************************************************************************/
 
-/* Support early firmware selection */
+/*
+ * Support early firmware selection
+ *
+ * EFS1 is being deprecated. EFS2 is faster, doesn't need two slots, and
+ * supports rollback protection.
+ */
 #undef CONFIG_VBOOT_EFS
+#undef CONFIG_VBOOT_EFS2
 
 /* Offset of RW-A image in writable storage when using EFS. */
 #undef CONFIG_RW_A_STORAGE_OFF
@@ -4493,6 +4574,12 @@
 #undef CONFIG_ISH_D0I3_MIN_USEC
 
 /*
+ * Define the following if the new specific power management processing
+ * after ISH 5.4 is used.
+ */
+#undef CONFIG_ISH_NEW_PM
+
+/*
  * Define the following in order to perform power management reset
  * prep IRQ setup when entering a new state
  */
@@ -4555,6 +4642,24 @@
 
 #if defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && !defined(CONFIG_HOSTCMD_ESPI)
 #error Must enable eSPI to enable virtual wires.
+#endif
+
+/******************************************************************************/
+/*
+ * If CONFIG_USB_POWER_DELIVERY is enabled, make sure either
+ * CONFIG_USB_PD_TCPMV1 or CONFIG_USB_PD_TCPMV2 is enabled but not both. Also
+ * make sure CONFIG_USB_PD_DECODE_SOP is enabled with CONFIG_USB_PD_TCPMV2
+ */
+#ifdef CONFIG_USB_POWER_DELIVERY
+#if defined(CONFIG_USB_PD_TCPMV1) && defined(CONFIG_USB_PD_TCPMV2)
+#error Only one version of the USB PD State Machine can be enabled.
+#endif
+#if !defined(CONFIG_USB_PD_TCPMV1) && !defined(CONFIG_USB_PD_TCPMV2)
+#error Please enable CONFIG_USB_PD_TCPMV1 or CONFIG_USB_PD_TCPMV2.
+#endif
+#if defined(CONFIG_USB_PD_TCPMV2) && !defined(CONFIG_USB_PD_DECODE_SOP)
+#error CONFIG_USB_PD_DECODE_SOP must be enabled with the TCPMV2 PD state machine
+#endif
 #endif
 
 /******************************************************************************/
@@ -4780,11 +4885,10 @@
 
 /*****************************************************************************/
 /*
- * Define CONFIG_USB_PD_TCPC_ON_CHIP if we use ITE83XX series TCPM driver
+ * Define CONFIG_USB_PD_TCPC_ON_CHIP if we use ITE series TCPM driver
  * on the board.
  */
-#if defined(CONFIG_USB_PD_TCPM_ITE83XX) ||  \
-	defined(CONFIG_USB_PD_TCPM_ITE8XXX2)
+#ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPC_ON_CHIP
 #endif
 
@@ -5096,6 +5200,10 @@
 #define CONFIG_SERIALNO_LEN 28
 #endif
 
+#ifdef CONFIG_MAC_ADDR
+#define CONFIG_MAC_ADDR_LEN 20
+#endif
+
 #ifndef CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ
 #define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ \
 	CONFIG_EC_MAX_SENSOR_FREQ_DEFAULT_MILLIHZ
@@ -5250,5 +5358,24 @@
 #if defined(CONFIG_ONLINE_CALIB) && !defined(CONFIG_FPU)
 #error "Online calibration requires CONFIG_FPU"
 #endif
+
+/* Set default values for accelerometer calibration if not defined. */
+#ifdef CONFIG_ONLINE_CALIB
+#ifndef CONFIG_ACCEL_CAL_MIN_TEMP
+#define CONFIG_ACCEL_CAL_MIN_TEMP 0.0f
+#endif
+
+#ifndef CONFIG_ACCEL_CAL_MAX_TEMP
+#define CONFIG_ACCEL_CAL_MAX_TEMP 45.0f
+#endif
+
+#ifndef CONFIG_ACCEL_CAL_KASA_RADIUS_THRES
+#define CONFIG_ACCEL_CAL_KASA_RADIUS_THRES 0.001f
+#endif
+
+#ifndef CONFIG_ACCEL_CAL_NEWTON_RADIUS_THRES
+#define CONFIG_ACCEL_CAL_NEWTON_RADIUS_THRES 0.001f
+#endif
+#endif /* CONFIG_ONLINE_CALIB */
 
 #endif  /* __CROS_EC_CONFIG_H */

@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define VARIANT_ZORK_TREMBYLE
+
 #include "baseboard.h"
 
 /*
@@ -15,10 +17,13 @@
  * TODO: Remove this config before production.
  */
 #define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_BRINGUP
 #define CONFIG_I2C_DEBUG
 
 #define CONFIG_MKBP_USE_GPIO
+
+#undef CONFIG_LED_ONOFF_STATES
+/* Battery */
+#define CONFIG_BATTERY_LEVEL_NEAR_FULL 91
 
 /* Motion sensing drivers */
 #define CONFIG_ACCELGYRO_BMI160
@@ -67,6 +72,19 @@ enum battery_type {
 	BATTERY_SUNWODA,
 	BATTERY_LGC,
 	BATTERY_TYPE_COUNT,
+};
+
+enum mft_channel {
+	MFT_CH_0 = 0,
+	/* Number of MFT channels */
+	MFT_CH_COUNT,
+};
+
+enum pwm_channel {
+	PWM_CH_KBLIGHT = 0,
+	PWM_CH_FAN,
+	PWM_CH_POWER_LED,
+	PWM_CH_COUNT
 };
 
 #endif /* !__ASSEMBLER__ */

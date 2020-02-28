@@ -368,7 +368,7 @@ static void it83xx_init(enum usbpd_port port, int role)
 	 * is enable).
 	 */
 	IT83XX_USBPD_TCDCR(port) = USBPD_REG_PLUG_IN_OUT_DETECT_STAT;
-#endif //IT83XX_INTC_PLUG_IN_SUPPORT
+#endif
 	IT83XX_USBPD_CCPSR(port) = 0xff;
 	/* cc connect */
 	IT83XX_USBPD_CCCSR(port) = 0;
@@ -483,16 +483,6 @@ static int it83xx_tcpm_set_cc(int port, int pull)
 
 static int it83xx_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
-	/*
-	 * TCPCI sets the CC lines based on polarity.  If it is set to
-	 * no connection then both CC lines are driven, otherwise only
-	 * one is driven.  This driver does not appear to do this.  If
-	 * that changes, this would be the location you would want to
-	 * adjust the CC lines for the current polarity
-	 */
-	if (polarity == POLARITY_NONE)
-		return EC_SUCCESS;
-
 	it83xx_select_polarity(port, polarity);
 
 	return EC_SUCCESS;
@@ -637,13 +627,14 @@ static int it83xx_tcpm_get_chip_info(int port, int live,
 static void it83xx_tcpm_sw_reset(void)
 {
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
+
 #ifdef IT83XX_INTC_PLUG_IN_SUPPORT
 	/*
 	 * Enable detect type-c plug in interrupt, since the pd task has
 	 * detected a type-c physical disconnected.
 	 */
 	IT83XX_USBPD_TCDCR(port) &= ~USBPD_REG_PLUG_IN_OUT_DETECT_DISABLE;
-#endif //IT83XX_INTC_PLUG_IN_SUPPORT
+#endif
 	/* exit BIST test data mode */
 	USBPD_SW_RESET(port);
 }

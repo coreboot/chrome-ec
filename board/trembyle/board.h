@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define VARIANT_ZORK_TREMBYLE
+
 #include "baseboard.h"
 
 /*
@@ -15,7 +17,6 @@
  * TODO: Remove this config before production.
  */
 #define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_BRINGUP
 #define CONFIG_I2C_DEBUG
 
 #define CONFIG_MKBP_USE_GPIO
@@ -63,6 +64,18 @@ extern enum gpio_signal GPIO_PCH_SYS_PWROK;
 enum battery_type {
 	BATTERY_AP18F4M,
 	BATTERY_TYPE_COUNT,
+};
+
+enum mft_channel {
+	MFT_CH_0 = 0,
+	/* Number of MFT channels */
+	MFT_CH_COUNT,
+};
+
+enum pwm_channel {
+	PWM_CH_KBLIGHT = 0,
+	PWM_CH_FAN,
+	PWM_CH_COUNT
 };
 
 #endif /* !__ASSEMBLER__ */

@@ -326,23 +326,19 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_1] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_1},
 	[TEMP_SENSOR_2] = {.name = "5v Reg",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_2},
 	[TEMP_SENSOR_3] = {.name = "CPU",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_3,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_3},
 	[TEMP_SENSOR_4] = {.name = "IR Sensor",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = oti502_get_val,
-				 .idx = OTI502_IDX_OBJECT,
-				 .action_delay_sec = 1},
+				 .idx = OTI502_IDX_OBJECT},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -431,3 +427,11 @@ const int keyboard_factory_scan_pins[][2] = {
 const int keyboard_factory_scan_pins_used =
 			ARRAY_SIZE(keyboard_factory_scan_pins);
 #endif
+
+bool board_is_convertible(void)
+{
+	const uint8_t sku = get_board_sku();
+
+	return (sku == 255) || (sku == 1) || (sku == 2) || (sku == 21) ||
+		(sku == 22);
+}

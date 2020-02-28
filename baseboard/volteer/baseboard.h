@@ -32,6 +32,7 @@
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
 #define CONFIG_VOLUME_BUTTONS
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
 #define CONFIG_LOW_POWER_IDLE
 
 /* Host communication */
@@ -123,6 +124,15 @@
 #define CONFIG_USB_CHARGER
 #define CONFIG_BC12_DETECT_PI3USB9201
 
+/*
+ * Don't allow the system to boot to S0 when the battery is low and unable to
+ * communicate on locked systems (which haven't PD negotiated)
+ */
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			3
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC		1
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		15001
+
 /* Common battery defines */
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BATTERY_FUEL_GAUGE
@@ -139,7 +149,7 @@
 /* Enable the new USB-C PD stack */
 /* TODO: b/145756626 - re-enable once all blocking issues resolved */
 #if 0
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_TYPEC_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PE_SM
@@ -153,6 +163,7 @@
 #endif
 
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DISCHARGE_PPC
@@ -215,6 +226,7 @@
 /* Retimer */
 #define CONFIG_USBC_MUX_RETIMER
 #define CONFIG_USBC_RETIMER_INTEL_BB
+#define CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 #define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
 
 /*

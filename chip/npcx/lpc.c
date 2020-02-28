@@ -13,6 +13,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "i8042_protocol.h"
 #include "keyboard_protocol.h"
 #include "lpc.h"
 #include "lpc_chip.h"
@@ -316,6 +317,7 @@ void lpc_keyboard_put_char(uint8_t chr, int send_irq)
 /* Put a char to host buffer by HIMDO */
 void lpc_mouse_put_char(uint8_t chr)
 {
+	NPCX_HIKMST |= I8042_AUX_DATA;
 	NPCX_HIMDO = chr;
 	CPRINTS("Mouse put %02x", chr);
 
@@ -511,11 +513,16 @@ static void handle_host_write(int is_cmd)
 /* KB controller input buffer full ISR */
 void lpc_kbc_ibf_interrupt(void)
 {
+	uint8_t ibf;
 	/* If "command" input 0, else 1*/
-	if (lpc_keyboard_input_pending())
-		keyboard_host_write(NPCX_HIKMDI, (NPCX_HIKMST & 0x08) ? 1 : 0);
-	CPRINTS("ibf isr %02x", NPCX_HIKMDI);
-	task_wake(TASK_ID_KEYPROTO);
+	if (lpc_keyboard_input_pending()) {
+		ibf = NPCX_HIKMDI;
+		keyboard_host_write(ibf, (NPCX_HIKMST & 0x08) ? 1 : 0);
+		CPRINTS("ibf isr %02x", ibf);
+		task_wake(TASK_ID_KEYPROTO);
+	} else {
+		CPRINTS("ibf isr spurious");
+	}
 }
 DECLARE_IRQ(NPCX_IRQ_KBC_IBF, lpc_kbc_ibf_interrupt, 4);
 
@@ -527,6 +534,9 @@ void lpc_kbc_obe_interrupt(void)
 	task_disable_irq(NPCX_IRQ_KBC_OBE);
 
 	CPRINTS("obe isr %02x", NPCX_HIKMST);
+
+	NPCX_HIKMST &= ~I8042_AUX_DATA;
+
 	task_wake(TASK_ID_KEYPROTO);
 }
 DECLARE_IRQ(NPCX_IRQ_KBC_OBE, lpc_kbc_obe_interrupt, 4);
@@ -783,12 +793,12 @@ static void lpc_init(void)
 	/*
 	 * Init KBC
 	 * Clear OBF status flag,
-	 * IBF(K&M) INT enable, OBE(K&M) empty INT enable ,
+	 * IBF(K&M) INT enable,
 	 * OBF Mouse Full INT enable and OBF KB Full INT enable
 	 */
 #ifdef HAS_TASK_KEYPROTO
 	lpc_keyboard_clear_buffer();
-	NPCX_HICTRL = 0x0F;
+	NPCX_HICTRL = 0x0B;
 #endif
 
 	/*

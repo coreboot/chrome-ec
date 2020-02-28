@@ -72,6 +72,7 @@
 #ifdef TEST_STILLNESS_DETECTOR
 #define CONFIG_FPU
 #define CONFIG_ONLINE_CALIB
+#define CONFIG_TEMP_CACHE_STALE_THRES (5 * SECOND)
 #endif
 
 #ifdef TEST_FLOAT
@@ -84,7 +85,8 @@
 #define CONFIG_MAG_CALIBRATE
 #endif
 
-#ifdef TEST_FPSENSOR
+#if defined(TEST_FPSENSOR) || defined(TEST_FPSENSOR_STATE) || \
+	defined(TEST_FPSENSOR_CRYPTO)
 #define CONFIG_AES
 #define CONFIG_AES_GCM
 #define CONFIG_ROLLBACK_SECRET_SIZE 32
@@ -95,8 +97,6 @@
 #define CONFIG_ACCEL_FIFO
 #define CONFIG_ACCEL_FIFO_SIZE 256
 #define CONFIG_ACCEL_FIFO_THRES 10
-#define CONFIG_ONLINE_CALIB
-#define CONFIG_TEMP_CACHE_STALE_THRES (1 * SECOND)
 #endif
 
 #ifdef TEST_KASA
@@ -104,8 +104,35 @@
 #define CONFIG_ONLINE_CALIB
 #endif
 
-#if defined(TEST_MOTION_LID) || defined(TEST_MOTION_ANGLE) || \
-	defined(TEST_MOTION_ANGLE_TABLET) || defined(TEST_MOTION_SENSE_FIFO)
+#ifdef TEST_ACCEL_CAL
+#define CONFIG_FPU
+#define CONFIG_ONLINE_CALIB
+#define CONFIG_ACCEL_CAL_MIN_TEMP 20.0f
+#define CONFIG_ACCEL_CAL_MAX_TEMP 40.0f
+#define CONFIG_ACCEL_CAL_KASA_RADIUS_THRES 0.1f
+#define CONFIG_ACCEL_CAL_NEWTON_RADIUS_THRES 0.1f
+#endif
+
+#ifdef TEST_NEWTON_FIT
+#define CONFIG_FPU
+#define CONFIG_ONLINE_CALIB
+#endif
+
+#ifdef TEST_ONLINE_CALIBRATION
+#define CONFIG_GPU
+#define CONFIG_ONLINE_CALIB
+#endif
+
+#if defined(CONFIG_ONLINE_CALIB) && \
+	!defined(CONFIG_TEMP_CACHE_STALE_THRES)
+#define CONFIG_TEMP_CACHE_STALE_THRES (1 * SECOND)
+#endif /* CONFIG_ONLINE_CALIB && !CONFIG_TEMP_CACHE_STALE_THRES */
+
+#if defined(TEST_MOTION_LID) || \
+	defined(TEST_MOTION_ANGLE) || \
+	defined(TEST_MOTION_ANGLE_TABLET) || \
+	defined(TEST_MOTION_SENSE_FIFO) || \
+	defined(CONFIG_ONLINE_CALIB)
 enum sensor_id {
 	BASE,
 	LID,
@@ -254,6 +281,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #ifdef TEST_USB_COMMON
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
@@ -266,7 +294,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #endif
 
 #if defined(TEST_USB_SM_FRAMEWORK_H2)
@@ -274,7 +302,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #endif
 
 #if defined(TEST_USB_SM_FRAMEWORK_H1)
@@ -282,7 +310,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #endif
 
 #if defined(TEST_USB_SM_FRAMEWORK_H0)
@@ -290,12 +318,12 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #endif
 
 #if defined(TEST_USB_PRL)
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
 #define CONFIG_USB_PRL_SM
@@ -313,7 +341,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PID 0x5036
 #define CONFIG_USB_POWER_DELIVERY
 #undef CONFIG_USB_PRL_SM
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #undef CONFIG_USB_TYPEC_SM
 #define CONFIG_USBC_VCONN
 #define PD_VCONN_SWAP_DELAY 5000 /* us */
@@ -335,7 +363,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define VPD_GND_IMPEDANCE 33
 
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PE_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_TYPEC_SM
@@ -358,7 +386,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_TYPEC_SM
-#define CONFIG_USB_SM_FRAMEWORK
+#define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
@@ -369,6 +397,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #ifdef TEST_USB_PD_INT
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_TCPC
@@ -380,6 +409,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #if defined(TEST_USB_PD) || defined(TEST_USB_PD_GIVEBACK) || \
 	defined(TEST_USB_PD_REV30)
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC

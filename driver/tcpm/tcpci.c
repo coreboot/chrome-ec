@@ -359,32 +359,17 @@ int tcpci_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 
 int tcpci_tcpm_set_cc(int port, int pull)
 {
-	int cc1, cc2;
-	enum tcpc_cc_polarity polarity;
-
-	cc1 = cc2 = pull;
-
 	/* Keep track of current CC pull value */
 	tcpci_set_cached_pull(port, pull);
-
-	/*
-	 * Only drive one CC line when attached crbug.com/951681
-	 * and drive both when unattached.
-	 */
-	polarity = pd_get_polarity(port);
-	if (polarity == POLARITY_CC1)
-		cc2 = TYPEC_CC_OPEN;
-	else if (polarity == POLARITY_CC2)
-		cc1 = TYPEC_CC_OPEN;
 
 	return tcpc_write(port, TCPC_REG_ROLE_CTRL,
 			  TCPC_REG_ROLE_CTRL_SET(0,
 						 tcpci_get_cached_rp(port),
-						 cc1, cc2));
+						 pull, pull));
 }
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-static int set_role_ctrl(int port, int toggle, int rp, int pull)
+int tcpci_set_role_ctrl(int port, int toggle, int rp, int pull)
 {
 	return tcpc_write(port, TCPC_REG_ROLE_CTRL,
 			  TCPC_REG_ROLE_CTRL_SET(toggle, rp, pull, pull));
@@ -395,7 +380,7 @@ int tcpci_tcpc_drp_toggle(int port)
 	int rv;
 
 	/* Set auto drp toggle */
-	rv = set_role_ctrl(port, 1, TYPEC_RP_USB, TYPEC_CC_RD);
+	rv = tcpci_set_role_ctrl(port, 1, TYPEC_RP_USB, TYPEC_CC_RD);
 
 	/* Set Look4Connection command */
 	rv |= tcpc_write(port, TCPC_REG_COMMAND,
@@ -414,20 +399,6 @@ int tcpci_enter_low_power_mode(int port)
 
 int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
-	int rv;
-
-	/*
-	 * TCPCI sets the CC lines based on polarity.  If it is set to
-	 * no connection or SRC Debug Accessory then both CC lines are
-	 * driven, otherwise only one is driven.
-	 */
-	rv = tcpm_set_cc(port, tcpci_get_cached_pull(port));
-	if (rv)
-		return rv;
-
-	if (polarity == POLARITY_NONE)
-		return EC_SUCCESS;
-
 	return tcpc_update8(port,
 			    TCPC_REG_TCPC_CTRL,
 			    TCPC_REG_TCPC_CTRL_SET(1),
@@ -549,8 +520,8 @@ struct cached_tcpm_message {
 	uint32_t payload[7];
 };
 
-static int tcpci_v2_0_tcpm_get_message_raw(int port, uint32_t *payload,
-					    int *head)
+static int tcpci_rev2_0_tcpm_get_message_raw(int port, uint32_t *payload,
+					     int *head)
 {
 	int rv = 0, cnt, reg = TCPC_REG_RX_BUFFER;
 	int frm;
@@ -597,8 +568,8 @@ clear:
 	return rv;
 }
 
-static int tcpci_v1_0_tcpm_get_message_raw(int port, uint32_t *payload,
-					   int *head)
+static int tcpci_rev1_0_tcpm_get_message_raw(int port, uint32_t *payload,
+					     int *head)
 {
 	int rv, cnt, reg = TCPC_REG_RX_DATA;
 #ifdef CONFIG_USB_PD_DECODE_SOP
@@ -646,10 +617,10 @@ clear:
 
 int tcpci_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 {
-	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0)
-		return tcpci_v2_0_tcpm_get_message_raw(port, payload, head);
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0)
+		return tcpci_rev2_0_tcpm_get_message_raw(port, payload, head);
 
-	return tcpci_v1_0_tcpm_get_message_raw(port, payload, head);
+	return tcpci_rev1_0_tcpm_get_message_raw(port, payload, head);
 }
 
 /* Cache depth needs to be power of 2 */
@@ -755,9 +726,9 @@ int tcpci_tcpm_transmit(int port, enum tcpm_transmit_type type,
 			TCPC_REG_TRANSMIT_SET_WITHOUT_RETRY(type));
 	}
 
-	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0) {
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) {
 		/*
-		 * In TCPCI v2.0, TX_BYTE_CNT and TX_BUF_BYTE_X are the same
+		 * In TCPCI Rev 2.0, TX_BYTE_CNT and TX_BUF_BYTE_X are the same
 		 * register.
 		 */
 		reg = TCPC_REG_TX_BUFFER;
@@ -1086,7 +1057,7 @@ int tcpci_tcpm_init(int port)
 	 * TCPC_CONTROL.EnableLooking4ConnectionAlert bit, TCPC by default masks
 	 * Alert assertion when CC_STATUS.Looking4Connection changes state.
 	 */
-	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0) {
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) {
 		error = tcpc_read(port, TCPC_REG_TCPC_CTRL, &regval);
 		regval |= TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT;
 		error |= tcpc_write(port, TCPC_REG_TCPC_CTRL, regval);
@@ -1094,7 +1065,11 @@ int tcpci_tcpm_init(int port)
 			CPRINTS("C%d: Failed to init TCPC_CTRL!", port);
 	}
 
-	tcpc_write16(port, TCPC_REG_ALERT, 0xffff);
+	/*
+	 * Handle and clear any alerts, since we might be coming out of low
+	 * power mode in response to an alert interrupt from the TCPC.
+	 */
+	tcpc_alert(port);
 	/* Initialize power_status_mask */
 	init_power_status_mask(port);
 	/* Update VBUS status */

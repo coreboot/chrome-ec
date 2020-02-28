@@ -36,6 +36,7 @@
 #include "registers.h"
 #include "spi.h"
 #include "system.h"
+#include "tablet_mode.h"
 #include "task.h"
 #include "tcpm.h"
 #include "timer.h"
@@ -94,12 +95,20 @@ struct keyboard_scan_config keyscan_config = {
 	.output_settle_us = 35,
 	.debounce_down_us = 5 * MSEC,
 	.debounce_up_us = 40 * MSEC,
-	.scan_period_us = 3 * MSEC,
-	.min_post_scan_delay_us = 1000,
+	.scan_period_us = 10 * MSEC,
+	.min_post_scan_delay_us = 10 * MSEC,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
 		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
+	},
+};
+
+struct ioexpander_config_t ioex_config[CONFIG_IO_EXPANDER_PORT_COUNT] = {
+	[0] = {
+		.i2c_host_port = I2C_PORT_IO_EXPANDER_IT8801,
+		.i2c_slave_addr = IT8801_I2C_ADDR,
+		.drv = &it8801_ioexpander_drv,
 	},
 };
 
@@ -116,13 +125,6 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
 	},
 };
-/******************************************************************************/
-const struct it8801_pwm_t it8801_pwm_channels[] = {
-	[PWM_CH_LED_AMBER] = { 1 },
-	[PWM_LED_NO_CHANNEL] = { -1 },
-	[PWM_CH_LED_WHITE] = { 3 },
-};
-BUILD_ASSERT(ARRAY_SIZE(it8801_pwm_channels) == PWM_CH_COUNT);
 
 /******************************************************************************/
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
@@ -270,12 +272,6 @@ struct motion_sensor_t motion_sensors[] = {
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 #endif /* SECTION_IS_RW */
-
-/* TODO(b:138640167): config charger correctly */
-int charger_is_sourcing_otg_power(int port)
-{
-	return 0;
-}
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)

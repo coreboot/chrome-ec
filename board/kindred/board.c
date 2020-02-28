@@ -49,7 +49,6 @@
 
 static void check_reboot_deferred(void);
 DECLARE_DEFERRED(check_reboot_deferred);
-static int system_in_resume_state = 0;
 
 /* GPIO to enable/disable the USB Type-A port. */
 const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
@@ -333,18 +332,15 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_1] = {.name = "Temp1",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_1},
 	[TEMP_SENSOR_2] = {.name = "Temp2",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_2},
 	[TEMP_SENSOR_3] = {.name = "Temp3",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_3,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_3},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -412,7 +408,7 @@ static void board_gpio_set_pp5000(void)
 
 }
 
-static bool board_is_convertible(void)
+bool board_is_convertible(void)
 {
 	uint8_t sku_id = get_board_sku();
 	/* SKU ID of Kled : 1, 2, 3, 4 */
@@ -484,19 +480,17 @@ __override uint32_t board_override_feature_flags0(uint32_t flags0)
 
 void all_sys_pgood_check_reboot(void)
 {
-	system_in_resume_state = 1;
 	hook_call_deferred(&check_reboot_deferred_data, 3000 * MSEC);
 }
 
-static void all_sys_pgood_reset_reboot(void)
+__override void board_chipset_forced_shutdown(void)
 {
-	system_in_resume_state = 0;
+	hook_call_deferred(&check_reboot_deferred_data, -1);
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, all_sys_pgood_reset_reboot, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_forced_shutdown, HOOK_PRIO_DEFAULT);
 
 static void check_reboot_deferred(void)
 {
-	if (!gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD) && system_in_resume_state == 1) {
+	if (!gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD))
 		system_reset(SYSTEM_RESET_MANUALLY_TRIGGERED);
-	}
 }

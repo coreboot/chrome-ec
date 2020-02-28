@@ -136,7 +136,7 @@ enum pd_dual_role_states drp_state[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		CONFIG_USB_PD_INITIAL_DRP_STATE};
 
 /* Enable variable for Try.SRC states */
-static uint8_t pd_try_src_enable;
+static bool pd_try_src_enable;
 #endif
 
 #ifdef CONFIG_USB_PD_REV30
@@ -380,39 +380,6 @@ void pd_vbus_low(int port)
 }
 #endif
 
-int pd_is_vbus_present(int port)
-{
-#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	return tcpm_get_vbus_level(port);
-#else
-	return pd_snk_is_vbus_provided(port);
-#endif
-}
-
-/**
- * This function checks the current CC status of the port partner
- * and returns true if the attached partner is UFP.
- */
-int pd_partner_is_ufp(int port)
-{
-	return pd[port].cc_state == PD_CC_UFP_ATTACHED ||
-	       pd[port].cc_state == PD_CC_UFP_DEBUG_ACC ||
-	       pd[port].cc_state == PD_CC_UFP_AUDIO_ACC;
-}
-
-int pd_is_debug_acc(int port)
-{
-	return pd[port].cc_state == PD_CC_UFP_DEBUG_ACC ||
-	       pd[port].cc_state == PD_CC_DFP_DEBUG_ACC;
-}
-
-static void set_polarity(int port, enum tcpc_cc_polarity polarity)
-{
-	tcpm_set_polarity(port, polarity);
-#ifdef CONFIG_USBC_PPC_POLARITY
-	ppc_set_polarity(port, polarity);
-#endif /* defined(CONFIG_USBC_PPC_POLARITY) */
-}
 
 #ifdef CONFIG_USBC_VCONN
 static void set_vconn(int port, int enable)
@@ -866,22 +833,9 @@ static inline void set_state(int port, enum pd_states next_state)
 		/* Invalidate message IDs. */
 		invalidate_last_message_id(port);
 
-		if (not_auto_toggling) {
-			/*
-			 * On disconnect set the resistor on both CC lines so
-			 * we can detect a connection with either polarity.
-			 * If we are in dual role toggle, then this will happen
-			 * automatically as it needs, so don't adjust the role
-			 * in that case.
-			 */
-			pd[port].polarity = POLARITY_NONE;
-			if (tcpm_set_polarity(port, POLARITY_NONE))
-				CPRINTS("C%d failed to set polarity",
-					port);
-
+		if (not_auto_toggling)
 			/* Disable Auto Discharge Disconnect */
 			tcpm_enable_auto_discharge_disconnect(port, 0);
-		}
 
 		/* detect USB PD cc disconnect */
 		if (IS_ENABLED(CONFIG_COMMON_RUNTIME))
@@ -1481,42 +1435,11 @@ static int pd_send_request_msg(int port, int always_send_request)
 	uint32_t rdo, curr_limit, supply_voltage;
 	int res;
 
-#ifdef CONFIG_CHARGE_MANAGER
-	/*
-	 * If this port is the current charge port, or if there isn't an active
-	 * charge port, set this value to true. If CHARGE_PORT_NONE isn't
-	 * considered, then there can be a race condition in PD negotiation and
-	 * the charge manager which forces an incorrect request for
-	 * vSafe5V. This can then lead to a brownout condition when the input
-	 * current limit gets incorrectly set to 0.5A.
-	 */
-	int charging_allowed = ((charge_manager_get_active_charge_port() ==
-				 port) ||
-				(charge_manager_get_active_charge_port() ==
-				 CHARGE_PORT_NONE));
-#else
-	const int charging_allowed = 1;
-#endif
-
-#ifdef CONFIG_USB_PD_CHECK_MAX_REQUEST_ALLOWED
-	int max_request_allowed = pd_is_max_request_allowed();
-#else
-	const int max_request_allowed = 1;
-#endif
-
 	/* Clear new power request */
 	pd[port].new_power_request = 0;
 
 	/* Build and send request RDO */
-	/*
-	 * If currently charging on a different port, or we are not allowed to
-	 * request the max voltage, then select vSafe5V
-	 */
-	pd_build_request(pd_get_src_cap_cnt(port), pd_get_src_caps(port), 0,
-		&rdo, &curr_limit, &supply_voltage,
-		charging_allowed && max_request_allowed ?
-		PD_REQUEST_MAX : PD_REQUEST_VSAFE5V,
-		pd_get_max_voltage(), port);
+	pd_build_request(0, &rdo, &curr_limit, &supply_voltage, port);
 
 	if (!always_send_request) {
 		/* Don't re-request the same voltage */
@@ -2457,46 +2380,8 @@ enum pd_dual_role_states pd_get_dual_role(int port)
 static void pd_update_try_source(void)
 {
 	int i;
-	int try_src = 0;
-	int batt_soc = usb_get_battery_soc();
 
-	try_src = 0;
-	for (i = 0; i < board_get_usb_pd_port_count(); i++)
-		try_src |= drp_state[i] == PD_DRP_TOGGLE_ON;
-
-	/*
-	 * Enable try source when dual-role toggling AND battery is present
-	 * and at some minimum percentage.
-	 */
-	pd_try_src_enable = try_src &&
-			    batt_soc >= CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC;
-
-#ifdef CONFIG_BATTERY_REVIVE_DISCONNECT
-	/*
-	 * Don't attempt Try.Src if the battery is in the disconnect state.  The
-	 * discharge FET may not be enabled and so attempting Try.Src may cut
-	 * off our only power source at the time.
-	 */
-	pd_try_src_enable &= (battery_get_disconnect_state() ==
-			      BATTERY_NOT_DISCONNECTED);
-#elif defined(CONFIG_BATTERY_PRESENT_CUSTOM) ||	\
-	defined(CONFIG_BATTERY_PRESENT_GPIO)
-	/*
-	 * When battery is cutoff in ship mode it may not be reliable to
-	 * check if battery is present with its state of charge.
-	 * Also check if battery is initialized and ready to provide power.
-	 */
-	pd_try_src_enable &= (battery_is_present() == BP_YES);
-#endif /* CONFIG_BATTERY_PRESENT_[CUSTOM|GPIO] */
-
-#if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
-	/*
-	 * Since a dedicated charge port can source power allow PD
-	 * trying as source.
-	 */
-	pd_try_src_enable |= (charge_manager_get_active_charge_port() ==
-			     CHARGE_SUPPLIER_DEDICATED);
-#endif /* CONFIG_DEDICATED_CHARGE_PORT_COUNT */
+	pd_try_src_enable = pd_is_try_source_capable();
 
 	/*
 	 * Clear this flag to cover case where a TrySrc
@@ -2813,13 +2698,10 @@ static void pd_init_tasks(void)
 #if defined(CONFIG_USB_PD_COMM_DISABLED)
 	enable = 0;
 #elif defined(CONFIG_USB_PD_COMM_LOCKED)
-	/* Disable PD communication at init if we're in RO and locked. */
-	if (!system_is_in_rw() && system_is_locked())
+	/* Disable PD communication if we're in RO, WP is enabled, and EFS
+	 * didn't register NO_BOOT. */
+	if (!system_is_in_rw() && system_is_locked() && !vboot_allow_usb_pd())
 		enable = 0;
-#ifdef CONFIG_VBOOT_EFS
-	if (vboot_need_pd_comm())
-		enable = 1;
-#endif
 #endif
 	for (i = 0; i < board_get_usb_pd_port_count(); i++)
 		pd_comm_enabled[i] = enable;
@@ -3010,9 +2892,6 @@ void pd_task(void *u)
 	pd[port].flags |= PD_FLAGS_LPM_ENGAGED;
 #endif
 
-	/* Start as not connected */
-	pd[port].polarity = POLARITY_NONE;
-
 #ifdef CONFIG_COMMON_RUNTIME
 	pd_init_tasks();
 #endif
@@ -3023,7 +2902,21 @@ void pd_task(void *u)
 	 */
 	pd_power_supply_reset(port);
 #ifdef CONFIG_USBC_VCONN
-	set_vconn(port, 0);
+#ifdef CONFIG_USB_PD_DUAL_ROLE
+	/*
+	 * If we were previously a sink but also the VCONN source, we should
+	 * still continue to source VCONN. Otherwise, we should turn off VCONN
+	 * since we are also going to turn off VBUS.
+	 */
+	if (pd_comm_is_enabled(port) &&
+	    (pd_get_saved_port_flags(port, &saved_flgs) == EC_SUCCESS) &&
+	    ((saved_flgs & PD_BBRMFLG_POWER_ROLE) == PD_ROLE_SINK) &&
+	    (saved_flgs & PD_BBRMFLG_EXPLICIT_CONTRACT) &&
+	    (saved_flgs & PD_BBRMFLG_VCONN_ROLE))
+		set_vconn(port, 1);
+	else
+#endif
+		set_vconn(port, 0);
 #endif
 
 	/* Initialize TCPM driver and wait for TCPC to be ready */
@@ -3283,7 +3176,7 @@ void pd_task(void *u)
 #endif
 			     (PD_ROLE_DEFAULT(port) == PD_ROLE_SOURCE &&
 			     pd[port].task_state == PD_STATE_SRC_READY))) {
-				set_polarity(port, pd[port].polarity);
+				pd_set_polarity(port, pd[port].polarity);
 				tcpm_set_msg_header(port, pd[port].power_role,
 						    pd[port].data_role);
 				tcpm_set_rx_enable(port, 1);
@@ -3509,7 +3402,7 @@ void pd_task(void *u)
 					pd[port].polarity =
 						get_src_polarity(cc1, cc2);
 				}
-				set_polarity(port, pd[port].polarity);
+				pd_set_polarity(port, pd[port].polarity);
 
 				/* initial data role for source is DFP */
 				pd_set_data_role(port, PD_ROLE_DFP);
@@ -4166,7 +4059,7 @@ void pd_task(void *u)
 			if (IS_ENABLED(CONFIG_COMMON_RUNTIME))
 				hook_notify(HOOK_USB_PD_CONNECT);
 			pd[port].polarity = get_snk_polarity(cc1, cc2);
-			set_polarity(port, pd[port].polarity);
+			pd_set_polarity(port, pd[port].polarity);
 			/* reset message ID  on connection */
 			pd[port].msg_id = 0;
 			/* initial data role for sink is UFP */
@@ -5060,20 +4953,20 @@ static void pd_control_resume(int port)
 }
 
 /*
- * (enable=1) request pd_task transition to the suspended state.  hang
+ * (suspend=1) request pd_task transition to the suspended state.  hang
  * around for a while until we observe the state change.  this can
  * take a while (like 300ms) on startup when pd_task is sleeping in
  * tcpci_tcpm_init.
  *
- * (enable=0) force pd_task out of the suspended state and into the
+ * (suspend=0) force pd_task out of the suspended state and into the
  * port's default state.
  */
 
-void pd_set_suspend(int port, int enable)
+void pd_set_suspend(int port, int suspend)
 {
 	int tries = 300;
 
-	if (enable) {
+	if (suspend) {
 		pd[port].req_suspend_state = 1;
 		do {
 			task_wake(PD_PORT_TO_TASK_ID(port));
@@ -5088,29 +4981,6 @@ void pd_set_suspend(int port, int enable)
 	}
 }
 
-#ifdef CONFIG_USB_PD_TCPM_TCPCI
-static uint32_t pd_ports_to_resume;
-static void resume_pd_port(void)
-{
-	uint32_t port;
-	uint32_t suspended_ports = atomic_read_clear(&pd_ports_to_resume);
-
-	while (suspended_ports) {
-		port = __builtin_ctz(suspended_ports);
-		suspended_ports &= ~BIT(port);
-		pd_set_suspend(port, 0);
-	}
-}
-DECLARE_DEFERRED(resume_pd_port);
-
-void pd_deferred_resume(int port)
-{
-	atomic_or(&pd_ports_to_resume, 1 << port);
-	hook_call_deferred(&resume_pd_port_data, 5 * SECOND);
-}
-
-#endif  /* CONFIG_USB_PD_DEFERRED_RESUME */
-
 int pd_is_port_enabled(int port)
 {
 	switch (pd[port].task_state) {
@@ -5121,84 +4991,6 @@ int pd_is_port_enabled(int port)
 		return 1;
 	}
 }
-
-#if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
-static int hex8tou32(char *str, uint32_t *val)
-{
-	char *ptr = str;
-	uint32_t tmp = 0;
-
-	while (*ptr) {
-		char c = *ptr++;
-		if (c >= '0' && c <= '9')
-			tmp = (tmp << 4) + (c - '0');
-		else if (c >= 'A' && c <= 'F')
-			tmp = (tmp << 4) + (c - 'A' + 10);
-		else if (c >= 'a' && c <= 'f')
-			tmp = (tmp << 4) + (c - 'a' + 10);
-		else
-			return EC_ERROR_INVAL;
-	}
-	if (ptr != str + 8)
-		return EC_ERROR_INVAL;
-	*val = tmp;
-	return EC_SUCCESS;
-}
-
-static int remote_flashing(int argc, char **argv)
-{
-	int port, cnt, cmd;
-	uint32_t data[VDO_MAX_SIZE-1];
-	char *e;
-	static int flash_offset[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-	if (argc < 4 || argc > (VDO_MAX_SIZE + 4 - 1))
-		return EC_ERROR_PARAM_COUNT;
-
-	port = strtoi(argv[1], &e, 10);
-	if (*e || port >= board_get_usb_pd_port_count())
-		return EC_ERROR_PARAM2;
-
-	cnt = 0;
-	if (!strcasecmp(argv[3], "erase")) {
-		cmd = VDO_CMD_FLASH_ERASE;
-		flash_offset[port] = 0;
-		ccprintf("ERASE ...");
-	} else if (!strcasecmp(argv[3], "reboot")) {
-		cmd = VDO_CMD_REBOOT;
-		ccprintf("REBOOT ...");
-	} else if (!strcasecmp(argv[3], "signature")) {
-		cmd = VDO_CMD_ERASE_SIG;
-		ccprintf("ERASE SIG ...");
-	} else if (!strcasecmp(argv[3], "info")) {
-		cmd = VDO_CMD_READ_INFO;
-		ccprintf("INFO...");
-	} else if (!strcasecmp(argv[3], "version")) {
-		cmd = VDO_CMD_VERSION;
-		ccprintf("VERSION...");
-	} else {
-		int i;
-		argc -= 3;
-		for (i = 0; i < argc; i++)
-			if (hex8tou32(argv[i+3], data + i))
-				return EC_ERROR_INVAL;
-		cmd = VDO_CMD_FLASH_WRITE;
-		cnt = argc;
-		ccprintf("WRITE %d @%04x ...", argc * 4,
-			 flash_offset[port]);
-		flash_offset[port] += argc * 4;
-	}
-
-	pd_send_vdm(port, USB_VID_GOOGLE, cmd, data, cnt);
-
-	/* Wait until VDM is done */
-	while (pd[port].vdm_state > 0)
-		task_wait_event(100*MSEC);
-
-	ccprintf("DONE %d\n", pd[port].vdm_state);
-	return EC_SUCCESS;
-}
-#endif /* defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH) */
 
 #if defined(CONFIG_USB_PD_ALT_MODE) && !defined(CONFIG_USB_PD_ALT_MODE_DFP)
 void pd_send_hpd(int port, enum hpd_event hpd)

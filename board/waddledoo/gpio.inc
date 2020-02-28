@@ -22,7 +22,7 @@ GPIO_INT(VCCIN_AUX_VID0,	 PIN(F, 4), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal
 GPIO_INT(PG_VCCIO_EXT_OD,	 PIN(B, 0), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PG_PP5000_U_OD,	 PIN(E, 2), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PG_DRAM_OD,		 PIN(E, 4), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(PG_PP1050_ST_OD,	 PIN(4, 2), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
+GPIO_INT(PG_PP1050_ST_OD,	 PIN(4, 2), GPIO_INT_BOTH, power_signal_interrupt)
 
 /* USB-C interrupts */
 GPIO_INT(USB_C0_INT_ODL,	 PIN(6, 2), GPIO_INT_FALLING | GPIO_PULL_UP, usb_c0_interrupt)
@@ -59,7 +59,8 @@ GPIO(EC_SUB_IO_2,  PIN(3, 4), GPIO_OUT_LOW)
 
 /* Misc Enables */
 GPIO(EN_VCCIO_EXT,   PIN(6, 1), GPIO_OUT_LOW)
-GPIO(EN_VCCST,	     PIN(A, 7), GPIO_OUT_LOW)
+/* TODO(b:149775160) - Modify if needed if we ever use this signal. */
+GPIO(EN_VCCST,	     PIN(A, 7), GPIO_INPUT)
 GPIO(EN_PP3300_PEN,  PIN(6, 3), GPIO_OUT_LOW)
 GPIO(EN_PP3300_A,    PIN(0, 3), GPIO_OUT_LOW)
 GPIO(EN_PP5000_U,    PIN(7, 3), GPIO_OUT_LOW)

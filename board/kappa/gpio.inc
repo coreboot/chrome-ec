@@ -35,10 +35,13 @@ GPIO_INT(BC12_EC_INT_ODL,   PIN(C, 9),  GPIO_INT_FALLING,
          bc12_interrupt)
 GPIO_INT(IT8801_SMB_INT,    PIN(A, 8),  GPIO_INT_FALLING | GPIO_PULL_UP,
          io_expander_it8801_interrupt) /* KB_INT_ODL */
+GPIO_INT(AP_EC_WATCHDOG_L,  PIN(D, 2),  GPIO_INT_FALLING,
+         chipset_watchdog_interrupt)
+GPIO_INT(TABLET_MODE_L,     PIN(B, 11), GPIO_INT_BOTH,
+         gmr_tablet_switch_isr)
 
 /* Unimplemented interrupts */
 GPIO(ALS_RGB_INT_ODL,      PIN(C, 10), GPIO_INPUT)
-GPIO(TABLET_MODE_L,        PIN(B, 11), GPIO_INPUT)
 
 /* Reset pins */
 GPIO(AP_SYS_RST_L,         PIN(C, 11), GPIO_OUT_LOW)
@@ -67,7 +70,6 @@ GPIO(CCD_MODE_ODL,         PIN(A, 1),  GPIO_INPUT)
 
 /* Other output pins */
 GPIO(EC_BATT_PRES_ODL,     PIN(A, 7),  GPIO_INPUT)
-GPIO(AP_EC_WATCHDOG_L,     PIN(D, 2),  GPIO_ODR_HIGH)
 GPIO(EC_BL_EN_OD,          PIN(A, 13), GPIO_ODR_HIGH)
 GPIO(EN_USBA_5V,           PIN(C, 14), GPIO_OUT_LOW)
 GPIO(EC_SENSOR_SPI_MISO,   PIN(C, 2),  GPIO_INPUT)
@@ -81,6 +83,9 @@ GPIO(USB_C0_HPD_OD,        PIN(F, 1),  GPIO_ODR_LOW)
 GPIO(BOOTBLOCK_EN_L,       PIN(C, 1),  GPIO_ODR_HIGH)
 GPIO(EN_PP1800_S5_L,       PIN(A, 14), GPIO_OUT_LOW)
 GPIO(USB_C0_DISCHARGE,     PIN(B, 6),  GPIO_OUT_LOW)
+
+IOEX(BAT_LED_AMBER_L,      EXPIN(0, 1, 2), GPIO_OUT_HIGH)
+IOEX(BAT_LED_WHITE_L,      EXPIN(0, 1, 4), GPIO_OUT_HIGH)
 
 /*
  * TODO(b:138352732): On IT88801 expander, To be readded once IT8801 driver and

@@ -50,6 +50,31 @@ struct pd_pref_config_t {
 	enum pd_pref_type type;
 };
 
+/*
+ * This function converts an 8 character ascii string with hex digits, without
+ * the 0x prefix, into a signed 32-bit number.
+ *
+ * @param str pointer to hex string to convert
+ * @param val pointer to where the integer version is stored
+ * @return EC_SUCCSSS on success else EC_ERROR_INVAL on failure
+ */
+int hex8tou32(char *str, uint32_t *val);
+
+/*
+ * Flash a USB PD device using the ChromeOS Vendor Defined Command.
+ *
+ * @param argc number arguments in argv. Must be greater than 3.
+ * @param argv [1] is the usb port
+ *             [2] unused
+ *             [3] is the command {"erase", "rebooot", "signature",
+ *                                 "info", "version", "write"}
+ *             [4] if command was "write", then this will be the
+ *                 start of the data that will be written.
+ * @return EC_SUCCESS on success, else EC_ERROR_PARAM_COUNT or EC_ERROR_PARAM2
+ *         on failure.
+ */
+int remote_flashing(int argc, char **argv);
+
 /* Returns the battery percentage [0-100] of the system. */
 int usb_get_battery_soc(void);
 
@@ -110,19 +135,14 @@ void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv);
 /**
  * Decide which PDO to choose from the source capabilities.
  *
- * @param src_cap_cnt
- * @param src_caps
+ * @param vpd_vdo VPD VDO
  * @param rdo  requested Request Data Object.
  * @param ma  selected current limit (stored on success)
  * @param mv  selected supply voltage (stored on success)
- * @param req_type request type
- * @param max_request_mv max voltage a sink can request before getting
- *			source caps
  * @param port USB-C port number
  */
-void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
-	int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma, uint32_t *mv,
-	enum pd_request_type req_type, uint32_t max_request_mv, int port);
+void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
+			uint32_t *mv, int port);
 
 /**
  * Notifies a task that is waiting on a system jump, that it's complete.

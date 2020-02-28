@@ -70,6 +70,10 @@
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+
+/* Don't wake up from suspend on any MKBP event */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK 0
+
 /* I2C_PORT_ACCEL needs to be defined for i2c transactions */
 #define I2C_PORT_ACCEL I2C_PORT_SENSOR
 
@@ -116,6 +120,7 @@
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_TCPC_LOW_POWER
@@ -196,6 +201,7 @@ unsigned char get_board_sku(void);
 unsigned char get_board_id(void);
 void board_reset_pd_mcu(void);
 void baseboard_mst_enable_control(enum mst_source, int level);
+bool board_is_convertible(void);
 
 /* Check with variant about battery presence. */
 enum battery_present variant_battery_present(void);

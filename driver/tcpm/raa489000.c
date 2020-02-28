@@ -83,9 +83,12 @@ int raa489000_init(int port)
 	if (rv)
 		CPRINTS("c%d: failed to set PD PHY setting1", port);
 
-	/* Enable VBUS auto discharge. needed to goodcrc */
+	/*
+	 * Disable VBUS auto discharge, we'll turn it on later as its needed to
+	 * goodcrc.
+	 */
 	rv = tcpc_read(port, TCPC_REG_POWER_CTRL, &regval);
-	regval |= TCPC_REG_POWER_CTRL_AUTO_DISCHARGE_DISCONNECT;
+	regval &= ~TCPC_REG_POWER_CTRL_AUTO_DISCHARGE_DISCONNECT;
 	rv |= tcpc_write(port, TCPC_REG_POWER_CTRL, regval);
 	if (rv)
 		CPRINTS("c%d: failed to set auto discharge", port);
@@ -97,10 +100,13 @@ int raa489000_init(int port)
 
 	/* Enable the correct TCPCI interface version */
 	rv = tcpc_read16(port, RAA489000_TCPC_SETTING1, &regval);
-	if (!(tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0))
+	if (!(tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0))
 		regval |= RAA489000_TCPCV1_0_EN;
 	else
 		regval &= ~RAA489000_TCPCV1_0_EN;
+
+	/* Allow the TCPC to control VBUS. */
+	regval |= RAA489000_TCPC_PWR_CNTRL;
 	rv = tcpc_write16(port, RAA489000_TCPC_SETTING1, regval);
 	if (rv)
 		CPRINTS("c%d: failed to set TCPCIv1.0 mode", port);
@@ -151,4 +157,6 @@ const struct tcpm_drv raa489000_tcpm_drv = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode   = &tcpci_enter_low_power_mode,
 #endif
+	.tcpc_enable_auto_discharge_disconnect =
+	&tcpci_tcpc_enable_auto_discharge_disconnect,
 };

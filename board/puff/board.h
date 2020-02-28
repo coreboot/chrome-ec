@@ -107,6 +107,8 @@
 #undef CONFIG_CMD_MMAPINFO
 #endif
 
+#undef CONFIG_CONSOLE_CMDHELP
+
 /* Don't generate host command debug by default */
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
@@ -163,11 +165,8 @@
 #undef CONFIG_CHARGE_MANAGER_SAFE_MODE
 
 /* USB type C */
-/* TODO: (b/147255678) Use TCPMv2 */
-#if 0
-#define CONFIG_USB_SM_FRAMEWORK
-#endif
-
+#define CONFIG_USB_PD_TCPMV2 /* Use TCPMv2 */
+#define CONFIG_USB_PD_DECODE_SOP
 #undef CONFIG_USB_CHARGER
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PID		0x5040
@@ -264,7 +263,7 @@ enum temp_sensor_id {
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
 void led_alert(int enable);
-void led_critical(void);
+void show_critical_error(void);
 
 #endif /* !__ASSEMBLER__ */
 

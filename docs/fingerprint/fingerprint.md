@@ -95,23 +95,7 @@ prevent you from uploading.
 
 ## Building and running unit tests
 
-List available unit tests:
-
-```bash
-(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp print-host-tests
-```
-
-Build and run a specific unit test:
-
-```bash
-(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp run-fpsensor
-```
-
-Build and run all unit tests:
-
-```bash
-(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp runhosttests -j
-```
+See the [Unit Tests] documentation for details on how to [run the unit tests].
 
 ## Build ectool
 
@@ -122,7 +106,7 @@ Build and run all unit tests:
 ## Build and run the `host_command` fuzz test
 
 ```bash
-(chroot) ~/trunk/src/platform/ec $ make BOARD=nocturne_fp run-host_command_fuzz
+(chroot) ~/trunk/src/platform/ec $ make run-host_command_fuzz
 ```
 
 ## Logs
@@ -326,6 +310,20 @@ To enable the `USE` flag, update the `make.defaults` for the [Chrome OS board].
 See the [`make.defaults` for the Hatch board][hatch make.defaults] as an
 example.
 
+#### Verifying biod is installed in the rootfs
+
+After enabling the `biod` [`USE` flag] and building the `biod` package for your
+target [Chrome OS board], the `biod` binary should be in the build directory:
+
+```bash
+(chroot) $ emerge-<BOARD> biod
+```
+
+```bash
+(chroot) $ ls /build/<BOARD>/usr/bin/biod
+/build/<BOARD>/usr/bin/biod
+```
+
 ### Update FPMCU_FIRMWARE
 
 `FPMCU_FIRMWARE` should be set to the set of fingerprint firmware that should be
@@ -336,7 +334,7 @@ built and installed for the [Chrome OS board].
 
 The `biod` ebuild uses the resulting [`USE` flags] to
 [determine which FPMCU release firmware to build][biod release firmware] and the
-`chromeos-firmware-fpmcu` ebuild uses the resulting [`USE` flags] to
+[`chromeos-firmware-fpmcu` ebuild] uses the resulting [`USE` flags] to
 [determine which firmware to install][firmware ebuild] to the rootfs in
 `/opt/google/biod/fw`.
 
@@ -345,6 +343,29 @@ Possible values for `FPMCU_FIRMWARE` can be found by looking at the
 correspond to the [FPMCU hardware](#hardware).
 
 See the [Hatch baseboard `make.defaults`] for an example.
+
+#### Verifying FPMCU firmware is installed in the rootfs
+
+Once you have added the `FPMCU_FIRMWARE` flag and rebuilt the
+[`chromeos-firmware-fpmcu` ebuild], the firmware will show up in the the chroot:
+
+*** note
+**NOTE**: This requires access to the [internal manifest].
+***
+
+```bash
+(chroot) $ emerge-<BOARD> chromeos-firmware-fpmcu
+```
+
+```bash
+(chroot) $ ls /build/<BOARD>/opt/google/biod/fw
+bloonchipper_v2.0.2626-3c315108.bin  dartmonkey_v2.0.2887-311310808.bin
+```
+
+The above output assumes you selected the `bloonchipper` and `dartmonkey`
+firmware by setting `FPMCU_FIRMWARE="bloonchipper dartmonkey"`.
+The actual version numbers displayed will not necessarily match since the
+firmware is constantly updated.
 
 ### Update Chrome OS Config {#update-chromeos-config}
 
@@ -408,5 +429,9 @@ detail.
 [`USE` flag]: https://devmanual.gentoo.org/general-concepts/use-flags/index.html
 [`USE` flags]: https://devmanual.gentoo.org/general-concepts/use-flags/index.html
 [biod release firmware]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/4ea72b588af3394cb9fd1c330dcf726472183dfd/chromeos-base/biod/biod-9999.ebuild#49
+[`chromeos-firmware-fpmcu` ebuild]: https://chrome-internal.googlesource.com/chromeos/overlays/chromeos-overlay/+/refs/heads/master/chromeos-base/chromeos-firmware-fpmcu/chromeos-firmware-fpmcu-9999.ebuild
 [firmware ebuild]: https://chrome-internal.googlesource.com/chromeos/overlays/chromeos-overlay/+/refs/heads/master/chromeos-base/chromeos-firmware-fpmcu/chromeos-firmware-fpmcu-9999.ebuild#40
 [`chromeos-fpmcu-release*` ebuilds]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/master/sys-firmware
+[internal manifest]: https://chromium.googlesource.com/chromiumos/docs/+/master/developer_guide.md#get-the-source-code
+[Unit Tests]: ../unit_tests.md
+[run the unit tests]: ../unit_tests.md#running
