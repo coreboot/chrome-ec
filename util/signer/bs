@@ -12,6 +12,7 @@ set -e
 set -u
 
 progname=$(basename $0)
+EC_ROOT="$(readlink -f "$(dirname $0)/../..")"
 
 OD="/usr/bin/od"
 
@@ -205,7 +206,6 @@ fi
 
 : ${CR50_BOARD_ID=}
 : ${H1_DEVIDS=}
-EC_ROOT="${CROS_WORKON_SRCROOT}/src/platform/ec"
 EC_BIN_ROOT="${EC_ROOT}/util/signer"
 
 do_hex=
