@@ -208,7 +208,7 @@ static void verify_and_jump(void)
 		enable_pd();
 		break;
 	case CR50_COMM_SUCCESS:
-		rv = system_run_image_copy(SYSTEM_IMAGE_RW);
+		rv = system_run_image_copy(EC_IMAGE_RW);
 		CPRINTS("Failed to jump (0x%x)", rv);
 		show_critical_error();
 		break;
@@ -249,8 +249,10 @@ void vboot_main(void)
 		return;
 	}
 
-	if (is_manual_recovery()) {
-		CPRINTS("In recovery mode");
+	if (is_manual_recovery() ||
+	    (system_get_reset_flags() & EC_RESET_FLAG_STAY_IN_RO)) {
+		if (is_manual_recovery())
+			CPRINTS("In recovery mode");
 		if (!IS_ENABLED(CONFIG_BATTERY)
 				&& !IS_ENABLED(HAS_TASK_KEYSCAN)) {
 			/*

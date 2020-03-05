@@ -104,9 +104,15 @@ main() {
     (cr50)
       dir_list+=( ../../third_party/tpm2 ../../third_party/cryptoc )
       ;;
-    (*_fp|dartmonkey|bloonchipper)
+    (*_fp|*dartmonkey|*bloonchipper)
+      if [[ -d ../../third_party/cryptoc ]]; then
+        dir_list+=( ../../third_party/cryptoc )
+      fi
       if [[ -d ./private ]]; then
         dir_list+=( ./private )
+      fi
+      if [[ -d ./private/fingerprint/fpc ]]; then
+        dir_list+=( ./private/fingerprint/fpc )
       fi
       ;;
   esac

@@ -1050,10 +1050,22 @@ struct ec_response_hello {
 /* Get version number */
 #define EC_CMD_GET_VERSION 0x0002
 
-enum ec_current_image {
+#ifndef CHROMIUM_EC
+/*
+ * enum ec_current_image is deprecated and replaced by enum ec_image. This
+ * macro exists for backwards compatibility of external projects until they
+ * have been updated: b/149987779.
+ */
+#define ec_current_image ec_image
+#endif
+
+enum ec_image {
 	EC_IMAGE_UNKNOWN = 0,
 	EC_IMAGE_RO,
-	EC_IMAGE_RW
+	EC_IMAGE_RW,
+	EC_IMAGE_RW_A = EC_IMAGE_RW,
+	EC_IMAGE_RO_B,
+	EC_IMAGE_RW_B
 };
 
 /**
@@ -1061,7 +1073,7 @@ enum ec_current_image {
  * @version_string_ro: Null-terminated RO firmware version string.
  * @version_string_rw: Null-terminated RW firmware version string.
  * @reserved: Unused bytes; was previously RW-B firmware version string.
- * @current_image: One of ec_current_image.
+ * @current_image: One of ec_image.
  */
 struct ec_response_get_version {
 	char version_string_ro[32];
@@ -1826,6 +1838,26 @@ struct ec_response_rwsig_info {
 } __ec_align4;
 
 BUILD_ASSERT(sizeof(struct ec_response_rwsig_info) == 32);
+
+/**
+ * Get information about the system, such as reset flags, locked state, etc.
+ */
+#define EC_CMD_SYSINFO 0x001C
+#define EC_VER_SYSINFO 0
+
+enum sysinfo_flags {
+	SYSTEM_IS_LOCKED = BIT(0),
+	SYSTEM_IS_FORCE_LOCKED = BIT(1),
+	SYSTEM_JUMP_ENABLED = BIT(2),
+	SYSTEM_JUMPED_TO_CURRENT_IMAGE = BIT(3),
+	SYSTEM_REBOOT_AT_SHUTDOWN = BIT(4)
+};
+
+struct ec_response_sysinfo {
+	uint32_t reset_flags;		/**< EC_RESET_FLAG_* flags */
+	uint32_t current_image;		/**< enum ec_current_image */
+	uint32_t flags;			/**< enum sysinfo_flags */
+} __ec_align4;
 
 /*****************************************************************************/
 /* PWM commands */
@@ -5368,7 +5400,7 @@ struct ec_params_usb_pd_rw_hash_entry {
 				  * TODO(rspangler) but it's not aligned!
 				  * Should have been reserved[2].
 				  */
-	uint32_t current_image;  /* One of ec_current_image */
+	uint32_t current_image;  /* One of ec_image */
 } __ec_align1;
 
 /* Read USB-PD Accessory info */
@@ -5714,6 +5746,9 @@ struct ec_params_set_cbi {
 #define EC_RESET_FLAG_RBOX        BIT(16)  /* Fixed Reset Functionality */
 #define EC_RESET_FLAG_SECURITY    BIT(17)  /* Security threat */
 #define EC_RESET_FLAG_AP_WATCHDOG BIT(18)  /* AP experienced a watchdog reset */
+#define EC_RESET_FLAG_STAY_IN_RO  BIT(19)  /* Do not select RW in EFS. This
+					    * enables PD in RO for Chromebox.
+					    */
 
 struct ec_response_uptime_info {
 	/*

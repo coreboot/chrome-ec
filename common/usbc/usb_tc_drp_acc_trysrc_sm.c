@@ -253,7 +253,7 @@ static struct type_c {
 	/* Attached ChromeOS device id, RW hash, and current RO / RW image */
 	uint16_t dev_id;
 	uint32_t dev_rw_hash[PD_RW_HASH_SIZE/4];
-	enum ec_current_image current_image;
+	enum ec_image current_image;
 } tc[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Port dual-role state */
@@ -573,8 +573,8 @@ void tc_print_dev_info(int port)
 	for (i = 0; i < PD_RW_HASH_SIZE / 4; i++)
 		ccprintf("%08x ", tc[port].dev_rw_hash[i]);
 
-	ccprintf("\nImage %s\n", system_image_copy_t_to_string(
-		(enum system_image_copy_t)tc[port].current_image));
+	ccprintf("\nImage %s\n", ec_image_to_string(
+		tc[port].current_image));
 }
 
 int tc_is_attached_src(int port)
@@ -1888,6 +1888,21 @@ static void tc_attached_snk_run(const int port)
 {
 #ifdef CONFIG_USB_PE_SM
 	/*
+	 * On device power ON, when charging from a Dock that has DP, enter any
+	 * alt modes by briefly transitioning the Unattached.SNK state. This has
+	 * no impact when charging from a regular charger.
+	 *
+	 * TODO(b/149662829): Implement a better solution for re-entering
+	 * alt modes after a reboot.
+	 */
+	if (TC_CHK_FLAG(port, TC_FLAGS_POWER_STATE_CHANGE) &&
+				chipset_in_state(CHIPSET_STATE_ON)) {
+		TC_CLR_FLAG(port, TC_FLAGS_POWER_STATE_CHANGE);
+		set_state_tc(port, TC_UNATTACHED_SNK);
+		return;
+	}
+
+	/*
 	 * Perform Hard Reset
 	 */
 	if (TC_CHK_FLAG(port, TC_FLAGS_HARD_RESET)) {
@@ -2818,10 +2833,10 @@ static void tc_drp_auto_toggle_run(const int port)
 		set_state_tc(port, PD_DEFAULT_STATE(port));
 		break;
 	case DRP_TC_UNATTACHED_SNK:
-		set_state_tc(port, TC_ATTACH_WAIT_SNK);
+		set_state_tc(port, TC_UNATTACHED_SNK);
 		break;
 	case DRP_TC_UNATTACHED_SRC:
-		set_state_tc(port, TC_ATTACH_WAIT_SRC);
+		set_state_tc(port, TC_UNATTACHED_SRC);
 		break;
 	case DRP_TC_DRP_AUTO_TOGGLE:
 		/*
