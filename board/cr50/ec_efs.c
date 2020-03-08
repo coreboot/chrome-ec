@@ -181,7 +181,7 @@ uint16_t ec_efs_set_boot_mode(const char * const data, const uint8_t size)
 
 	boot_mode = data[0];
 
-	if (boot_mode != EC_EFS_BOOT_MODE_NORMAL) {
+	if (ec_efs_ctx.boot_mode != EC_EFS_BOOT_MODE_NORMAL) {
 		board_reboot_ec_deferred(0);
 		return 0;
 	}
