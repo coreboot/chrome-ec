@@ -51,6 +51,7 @@ common-$(CONFIG_CURVE25519)+=curve25519-generic.o
 endif
 common-$(CONFIG_DEVICE_STATE)+=device_state.o
 common-$(CONFIG_DPTF)+=dptf.o
+common-$(CONFIG_EC_EFS_SUPPORT)+=ec_comm.o ec_efs.o
 common-$(CONFIG_EXTENSION_COMMAND)+=extension.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
 common-$(CONFIG_FANS)+=fan.o pwm.o
