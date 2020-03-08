@@ -7,6 +7,7 @@
 
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <termio.h>
 #include <unistd.h>
 
@@ -15,6 +16,7 @@
 #include "task.h"
 #include "test_util.h"
 #include "uart.h"
+#include "uartn.h"
 #include "util.h"
 
 static int stopped = 1;
@@ -28,34 +30,69 @@ static int char_available;
 static struct queue const cached_char = QUEUE_NULL(INPUT_BUFFER_SIZE, char);
 
 #define CONSOLE_CAPTURE_SIZE 2048
-static char capture_buf[CONSOLE_CAPTURE_SIZE];
-static int capture_size;
-static int capture_enabled;
+static struct {
+	char buf[CONSOLE_CAPTURE_SIZE];
+	int size;
+	int enabled;
+} uart_capture[UART_COUNT];
 
-void test_capture_console(int enabled)
+
+static void putch_into_captured_buf(int uart, char c, int is_last)
 {
-	if (enabled == capture_enabled)
+	uart_capture[uart].buf[uart_capture[uart].size] = c;
+	if (!is_last)
+		uart_capture[uart].size++;
+}
+
+void test_capture_uartn(int uart, int enabled)
+{
+	if (uart >= UART_COUNT) {
+		fprintf(stderr, "Unknown UART port accessed: %d\n", uart);
+		exit(1);
+	}
+
+	if (enabled == uart_capture[uart].enabled)
 		return;
 
 	if (enabled)
-		capture_size = 0;
+		uart_capture[uart].size = 0;
 	else
-		capture_buf[capture_size] = '\0';
+		putch_into_captured_buf(uart, '\0', 1);
 
-	capture_enabled = enabled;
+	uart_capture[uart].enabled = enabled;
 }
 
-static void test_capture_char(char c)
+void test_capture_console(int enabled)
 {
-	if (capture_size == CONSOLE_CAPTURE_SIZE)
-		return;
-	capture_buf[capture_size++] = c;
+	test_capture_uartn(UART_DEFAULT, enabled);
 }
 
+static void test_capture_char(int uart, char c)
+{
+	if (uart >= UART_COUNT) {
+		fprintf(stderr, "Unknown UART port accessed: %d\n", uart);
+		exit(1);
+	}
+
+	if (uart_capture[uart].size == CONSOLE_CAPTURE_SIZE)
+		return;
+
+	putch_into_captured_buf(uart, c, 0);
+}
+
+const char *test_get_captured_uartn(int uart)
+{
+	if (uart >= UART_COUNT) {
+		fprintf(stderr, "Unknown UART port accessed: %d\n", uart);
+		exit(1);
+	}
+
+	return uart_capture[uart].buf;
+}
 
 const char *test_get_captured_console(void)
 {
-	return (const char *)capture_buf;
+	return test_get_captured_uartn(UART_DEFAULT);
 }
 
 static void uart_interrupt(void)
@@ -87,7 +124,7 @@ int uart_tx_stopped(void)
 
 void uart_tx_flush(void)
 {
-	/* Nothing */
+	uartn_tx_flush(UART_DEFAULT);
 }
 
 int uart_tx_ready(void)
@@ -102,10 +139,7 @@ int uart_rx_available(void)
 
 void uart_write_char(char c)
 {
-	if (capture_enabled)
-		test_capture_char(c);
-	printf("%c", c);
-	fflush(stdout);
+	uartn_write_char(UART_DEFAULT, c);
 }
 
 int uart_read_char(void)
@@ -169,4 +203,20 @@ void uart_init(void)
 	pthread_create(&input_thread, NULL, uart_monitor_stdin, NULL);
 	stopped = 1;  /* Not transmitting yet */
 	init_done = 1;
+}
+
+test_mockable void uartn_tx_flush(int uart_unused)
+{
+	/* Nothing */
+}
+
+test_mockable void uartn_write_char(int uart, char c)
+{
+	if (uart_capture[uart].enabled)
+		test_capture_char(uart, c);
+
+	if (uart == UART_DEFAULT) {
+		printf("%c", c);
+		fflush(stdout);
+	}
 }

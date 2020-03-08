@@ -208,6 +208,11 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_PORT_COUNT 2
 #endif
 
+#ifdef TEST_EC_COMM
+#define CONFIG_CRC8
+#define CONFIG_EC_EFS_SUPPORT
+#endif
+
 #if defined(TEST_NVMEM) || defined(TEST_NVMEM_VARS)
 #define CONFIG_CRC8
 #define CONFIG_FLASH_ERASED_VALUE32 (-1U)

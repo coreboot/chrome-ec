@@ -280,3 +280,10 @@ void ec_efs_print_status(void)
 		 HEX_BUF(ec_efs_ctx.hash, SHA256_DIGEST_SIZE));
 #endif
 }
+
+#ifdef BOARD_HOST
+uint8_t ec_efs_get_boot_mode(void)
+{
+	return ec_efs_ctx.boot_mode;
+}
+#endif
