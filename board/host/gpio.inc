@@ -16,6 +16,11 @@ GPIO_INT(VOLUME_UP_L,          PIN(0, 4), GPIO_INT_BOTH, button_interrupt)
 GPIO_INT(CHARGE_DONE,          PIN(0, 5), GPIO_INT_BOTH, inductive_charging_interrupt)
 /* Fingerprint */
 GPIO_INT(FPS_INT,              PIN(0, 14), GPIO_INT_RISING, fps_event)
+/* GPIOs for EC-CR50 communication */
+GPIO_INT(EC_PACKET_MODE_EN,    PIN(0, 16), GPIO_INT_RISING,
+	 ec_comm_packet_mode_en)
+GPIO_INT(EC_PACKET_MODE_DIS,   PIN(0, 17), GPIO_INT_FALLING,
+	 ec_comm_packet_mode_dis)
 
 GPIO(EC_INT_L,             PIN(0, 6), 0)
 GPIO(WP,                   PIN(0, 7), 0)

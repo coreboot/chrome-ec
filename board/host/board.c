@@ -5,6 +5,7 @@
 /* Emulator board-specific configuration */
 
 #include "button.h"
+#include "ec_comm.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "host_command.h"
@@ -89,3 +90,27 @@ int board_get_entropy(void *buffer, int len)
 	return 1;
 }
 #endif
+
+test_mockable void ccd_update_state(void)
+{
+
+}
+
+test_mockable void ec_comm_packet_mode_en(enum gpio_signal unsed)
+{
+
+}
+
+test_mockable void ec_comm_packet_mode_dis(enum gpio_signal unsed)
+{
+
+}
+
+int board_has_ec_cr50_comm_support(void)
+{
+#ifdef CONFIG_EC_EFS_SUPPORT
+	return 1;
+#else
+	return 0;
+#endif
+}
