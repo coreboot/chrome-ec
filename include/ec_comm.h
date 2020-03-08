@@ -42,4 +42,9 @@ void ec_efs_refresh(void);
 /* print EC-EFS status */
 void ec_efs_print_status(void);
 
+#ifdef BOARD_HOST
+/* return the current boot mode. For test purpose only. */
+uint8_t ec_efs_get_boot_mode(void);
+#endif
+
 #endif /* __CROS_EC_COMM_H */
