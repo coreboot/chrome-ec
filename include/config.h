@@ -1411,6 +1411,11 @@
 /* Enable verbose output to UART console and extra timestamp print precision. */
 #define CONFIG_CONSOLE_VERBOSE
 
+/*
+ * Enable EC-CR50 communication (a.k.a. EC-EFS2). This is for CR50 config only.
+ */
+#undef CONFIG_EC_EFS_SUPPORT
+
 /*****************************************************************************/
 /* Support for EC-EC communication */
 
