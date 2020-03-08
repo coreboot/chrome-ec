@@ -861,6 +861,11 @@
 #define CONFIG_CONSOLE_VERBOSE
 
 /*
+ * Enable EC-CR50 communication (a.k.a. EC-EFS2). This is for CR50 config only.
+ */
+#undef CONFIG_EC_EFS_SUPPORT
+
+/*
  * Enable the experimental console.
  *
  * NOTE: If you enable this experimental console, you will need to run the
