@@ -14,7 +14,6 @@
 #include "task.h"
 #include "timer.h"
 #include "uartn.h"
-#include "usart.h"
 #include "vboot.h"
 
 #define CPRINTS(format, args...) cprints(CC_TASK, "EC-COMM: " format, ## args)
