@@ -262,7 +262,7 @@ void ec_efs_refresh(void)
 		ec_efs_ctx.hash_is_loaded = 1;
 	} else {
 		ec_efs_ctx.hash_is_loaded = 0;
-		cprints(CC_SYSTEM, "load_ec_hash error: 0x%x\n", rv);
+		cprints(CC_SYSTEM, "load_ec_hash error: 0x%x", rv);
 	}
 	ec_efs_ctx.secdata_error_code = rv;
 }
