@@ -857,7 +857,7 @@ static void board_init(void)
 	 * HOOK_INIT, not at +1.0 seconds.
 	 */
 }
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_INIT_CR50_BOARD);
 
 /**
  * Hook for CCD config loaded/changed.
