@@ -76,7 +76,7 @@ static void ec_comm_init_(void)
 	if (gpio_get_level(GPIO_EC_PACKET_MODE_EN))
 		ec_comm_packet_mode_en(GPIO_EC_PACKET_MODE_EN);
 }
-DECLARE_HOOK(HOOK_INIT, ec_comm_init_, HOOK_PRIO_DEFAULT + 1);
+DECLARE_HOOK(HOOK_INIT, ec_comm_init_, HOOK_PRIO_INIT_EC_CR50_COMM);
 
 /*
  * Process the received packet.
