@@ -281,6 +281,16 @@ void ec_efs_print_status(void)
 #endif
 }
 
+#ifdef CR50_RELAXED
+void ec_efs_corrupt_hash(void)
+{
+	int i;
+
+	for (i = 0; i < SHA256_DIGEST_SIZE; i++)
+		ec_efs_ctx.hash[i] = ~ec_efs_ctx.hash[i] + 0x01;
+}
+#endif
+
 #ifdef BOARD_HOST
 uint8_t ec_efs_get_boot_mode(void)
 {
