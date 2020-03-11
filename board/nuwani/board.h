@@ -68,6 +68,7 @@ enum battery_type {
 	BATTERY_SMP_1,
 	BATTERY_LGC_1,
 	BATTERY_CEL_1,
+	BATTERY_AEC,
 	BATTERY_TYPE_COUNT,
 };
 

@@ -116,7 +116,6 @@ const struct board_batt_params board_battery_info[] = {
 			.discharging_max_c	= 60,
 		},
 	},
-
 	/* SMP L19M3PG1 */
 	[BATTERY_SMP_1] = {
 		.fuel_gauge = {
@@ -145,7 +144,6 @@ const struct board_batt_params board_battery_info[] = {
 			.discharging_max_c	= 73,
 		},
 	},
-
 	/* LGC  L19L3PG1 */
 	[BATTERY_LGC_1] = {
 		.fuel_gauge = {
@@ -174,7 +172,6 @@ const struct board_batt_params board_battery_info[] = {
 			.discharging_max_c	= 73,
 		},
 	},
-
 	/* Celxpert  L19C3PG1 */
 	[BATTERY_CEL_1] = {
 		.fuel_gauge = {
@@ -201,6 +198,34 @@ const struct board_batt_params board_battery_info[] = {
 			.charging_max_c		= 50,
 			.discharging_min_c	= -20,
 			.discharging_max_c	= 70,
+		},
+	},
+	/* GuoGuang 50Wh/38Wh Battery Information */
+	[BATTERY_AEC] = {
+		.fuel_gauge = {
+			.manuf_name = "AEC",
+			.ship_mode = {
+				.reg_addr = 0x0,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x2000,
+				.disconnect_val = 0x2000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= 13050,
+			.voltage_normal		= 11400, /* mV */
+			.voltage_min		= 9000, /* mV */
+			.precharge_current	= 200,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 50,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= -20,
+			.discharging_max_c	= 60,
 		},
 	},
 };
