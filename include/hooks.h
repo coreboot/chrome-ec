@@ -51,6 +51,18 @@ enum hook_priority {
 
 	HOOK_PRIO_INIT_ADC = HOOK_PRIO_DEFAULT,
 
+	/*
+	 * Priorities for CR50 modules.
+	 * HOOK_PRIO_INIT_CR50_BOARD is for board_init() in board/cr50/board.c
+	 * which calls nvmem_init().
+	 * ec_efs_init() should not be called prior to board_init().
+	 * ec_comm_init() should not be called prior to ec_efs_init().
+	 */
+	HOOK_PRIO_INIT_CR50_BOARD = HOOK_PRIO_DEFAULT,
+	HOOK_PRIO_INIT_EC_EFS = HOOK_PRIO_INIT_CR50_BOARD + 1,
+	HOOK_PRIO_INIT_EC_CR50_COMM = HOOK_PRIO_INIT_EC_EFS + 1,
+
+
 	/* Specific values to lump temperature-related hooks together */
 	HOOK_PRIO_TEMP_SENSOR = 6000,
 	/* After all sensors have been polled */
