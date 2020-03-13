@@ -3566,7 +3566,6 @@
  * Enable touchpad FW update over USB update protocol, and define touchpad
  * virtual address and size.
  */
-#undef CONFIG_TOUCHPAD_VIRTUAL_OFF
 #undef CONFIG_TOUCHPAD_VIRTUAL_SIZE
 
 /*
@@ -4064,12 +4063,6 @@
 /* Support USB HID interface. */
 #undef CONFIG_USB_HID
 
-/* Support USB HID keyboard interface. */
-#undef CONFIG_USB_HID_KEYBOARD
-
-/* Support USB HID keyboard backlight. */
-#undef CONFIG_USB_HID_KEYBOARD_BACKLIGHT
-
 /* Support USB HID touchpad interface. */
 #undef CONFIG_USB_HID_TOUCHPAD
 
@@ -4332,14 +4325,6 @@
 /* Firmware updates using other than HC channel(s). */
 #undef CONFIG_NON_HC_FW_UPDATE
 #undef CONFIG_USB_FW_UPDATE
-/* A different config for the same update. TODO(vbendeb): dedupe these */
-#undef CONFIG_USB_UPDATE
-
-/* Add support for pairing over the USB update interface. */
-#undef CONFIG_USB_PAIRING
-
-/* Add support for reading UART buffer from USB update interface. */
-#undef CONFIG_USB_CONSOLE_READ
 
 /* PDU size for fw update over USB (or TPM). */
 #define CONFIG_UPDATE_PDU_SIZE 1024
