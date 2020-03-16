@@ -31,15 +31,15 @@
 
 #define CPU_NVIC_CCR           CPUREG(0xe000ed14)
 #define CPU_NVIC_SHCSR         CPUREG(0xe000ed24)
-#define CPU_NVIC_MMFS          CPUREG(0xe000ed28)
+#define CPU_NVIC_CFSR          CPUREG(0xe000ed28)
 #define CPU_NVIC_HFSR          CPUREG(0xe000ed2c)
 #define CPU_NVIC_DFSR          CPUREG(0xe000ed30)
 #define CPU_NVIC_MFAR          CPUREG(0xe000ed34)
 #define CPU_NVIC_BFAR          CPUREG(0xe000ed38)
 
 enum {
-	CPU_NVIC_MMFS_BFARVALID		= 1 << 15,
-	CPU_NVIC_MMFS_MFARVALID		= 1 << 7,
+	CPU_NVIC_CFSR_BFARVALID		= 1 << 15,
+	CPU_NVIC_CFSR_MFARVALID		= 1 << 7,
 
 	CPU_NVIC_CCR_ICACHE		= 1 << 17,
 	CPU_NVIC_CCR_DCACHE		= 1 << 16,

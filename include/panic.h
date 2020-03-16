@@ -53,7 +53,7 @@ struct cortex_panic_data {
 	/* See cortex_panic_frame_registers enum for more information */
 	uint32_t frame[NUM_CORTEX_PANIC_FRAME_REGISTERS];
 
-	uint32_t mmfs;
+	uint32_t cfsr;
 	uint32_t bfar;
 	uint32_t mfar;
 	uint32_t shcsr;
