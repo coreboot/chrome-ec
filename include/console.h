@@ -225,6 +225,37 @@ void console_has_input(void);
 			 (CONFIG_CONSOLE_COMMAND_FLAGS_DEFAULT &	\
 			  ~CMD_FLAG_RESTRICTED))
 
-#endif	/* HAS_TASK_CONSOLE */
+#endif /* HAS_TASK_CONSOLE */
 
-#endif  /* __CROS_EC_CONSOLE_H */
+/*
+ * Packet mode console interface functions, with fixed number of parameters,
+ * replacing cprint/cprints/cputs in the source code.
+ *
+ * All converted parameters are typecast to uintptr_t. The uint32_t parameter
+ * is a mask of up to eight 4 bit fields describing each present parameter
+ * type. This allows the packet building function to properly re-cast the
+ * uintptr_t parameters.
+ */
+int cmsg0(enum console_channel chan, int str_index);
+int cmsg1(enum console_channel chan, int str_index, uint32_t mask,
+	  uintptr_t p1);
+int cmsg2(enum console_channel chan, int str_index, uint32_t mask, uintptr_t p1,
+	  uintptr_t p2);
+int cmsg3(enum console_channel chan, int str_index, uint32_t mask, uintptr_t p1,
+	  uintptr_t p2, uintptr_t p3);
+int cmsg4(enum console_channel chan, int str_index, uint32_t mask, uintptr_t p1,
+	  uintptr_t p2, uintptr_t p3, uintptr_t p4);
+int cmsg5(enum console_channel chan, int str_index, uint32_t mask, uintptr_t p1,
+	  uintptr_t p2, uintptr_t p3, uintptr_t p4, uintptr_t p5);
+int cmsg6(enum console_channel chan, int str_index, uint32_t mask, uintptr_t p1,
+	  uintptr_t p2, uintptr_t p3, uintptr_t p4, uintptr_t p5, uintptr_t p6);
+int cmsg7(enum console_channel chan, int str_index, uint32_t mask, uintptr_t p1,
+	  uintptr_t p2, uintptr_t p3, uintptr_t p4, uintptr_t p5, uintptr_t p6,
+	  uintptr_t p7);
+int cmsg8(enum console_channel chan, int str_index, uint32_t mask, uintptr_t p1,
+	  uintptr_t p2, uintptr_t p3, uintptr_t p4, uintptr_t p5, uintptr_t p6,
+	  uintptr_t p7, uintptr_t p8);
+
+extern uint32_t channel_mask;
+
+#endif /* __CROS_EC_CONSOLE_H */

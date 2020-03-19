@@ -68,6 +68,7 @@ common-$(CONFIG_DPTF)+=dptf.o
 common-$(CONFIG_EC_EFS_SUPPORT)+=ec_comm.o ec_efs.o
 common-$(CONFIG_EC_EC_COMM_MASTER)+=ec_ec_comm_master.o
 common-$(CONFIG_EC_EC_COMM_SLAVE)+=ec_ec_comm_slave.o
+common-$(CONFIG_EXTRACT_PRINTF_STRINGS)+=cmsg.o
 common-$(CONFIG_HOSTCMD_ESPI)+=espi.o
 common-$(CONFIG_EXTENSION_COMMAND)+=extension.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o

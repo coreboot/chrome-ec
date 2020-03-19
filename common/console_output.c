@@ -15,7 +15,7 @@
 #ifndef CC_DEFAULT
 #define CC_DEFAULT CC_ALL
 #endif
-static uint32_t channel_mask = CC_DEFAULT;
+uint32_t channel_mask = CC_DEFAULT;
 static uint32_t channel_mask_saved = CC_DEFAULT;
 
 /*
