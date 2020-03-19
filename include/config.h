@@ -2707,6 +2707,9 @@
 /* Enable USB serial console module. */
 #undef CONFIG_USB_CONSOLE
 
+/* Require explicit enable call vs. active at time zero. */
+#undef CONFIG_USB_CONSOLE_DEFAULT_DISABLED
+
 /*
  * Enable USB serial console module using usb stream config.
  * NOTE: CONFIG_USB_CONSOLE and CONFIG_USB_CONSOLE_STREAM should be defined
