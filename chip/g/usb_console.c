@@ -11,6 +11,7 @@
 #include "printf.h"
 #include "queue.h"
 #include "registers.h"
+#include "stdbool.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -21,21 +22,25 @@
 #define CPRINTF(format, args...) cprintf(CC_USB, format, ## args)
 #define USB_CONSOLE_TIMEOUT_US (30 * MSEC)
 
-static int last_tx_ok = 1;
+static bool last_tx_ok = true;
 
-static int is_reset;
+static bool is_reset;
 
+#if defined(CONFIG_USB_CONSOLE_DEFAULT_DISABLED)
+static bool is_enabled;
+#else
 /*
  * Start enabled, so we can queue early debug output before the board gets
  * around to calling usb_console_enable().
  */
-static int is_enabled = 1;
+static bool is_enabled = true;
+#endif
 
 /*
  * But start read-only, so we don't accept console input until we explicitly
  * decide that we're ready for it.
  */
-static int is_readonly = 1;
+static bool is_readonly = true;
 
 /* USB-Serial descriptors */
 const struct usb_interface_descriptor USB_IFACE_DESC(USB_IFACE_CONSOLE) =
@@ -387,6 +392,6 @@ int usb_vprintf(const char *format, va_list args)
 
 void usb_console_enable(int enabled, int readonly)
 {
-	is_enabled = enabled;
-	is_readonly = readonly;
+	is_enabled = !!enabled;
+	is_readonly = !!readonly;
 }
