@@ -7,20 +7,7 @@
 #include "Global.h"
 #include "CryptoEngine.h"
 
-CRYPT_RESULT _cpri__C_2_2_KeyExchange(
-  TPMS_ECC_POINT * outZ1,       //   OUT: a computed point
-  TPMS_ECC_POINT * outZ2,       //   OUT: and optional second point
-  TPM_ECC_CURVE curveId,        //   IN: the curve for the computations
-  TPM_ALG_ID scheme,            //   IN: the key exchange scheme
-  TPM2B_ECC_PARAMETER * dsA,    //   IN: static private TPM key
-  TPM2B_ECC_PARAMETER * deA,    //   IN: ephemeral private TPM key
-  TPMS_ECC_POINT * QsB,         //   IN: static public party B key
-  TPMS_ECC_POINT * QeB          //   IN: ephemeral public party B key
-  )
-{
-  ecprintf("%s called\n", __func__);
-  return CRYPT_FAIL;
-}
+#include "console.h"
 
 CRYPT_RESULT _cpri__DrbgGetPutState(
   GET_PUT direction,
@@ -42,7 +29,7 @@ CRYPT_RESULT _cpri__EccCommitCompute(
   TPM2B_ECC_PARAMETER * r       //   IN: the computed r value (required)
   )
 {
-  ecprintf("%s called\n", __func__);
+	ccprintf("%s called\n", __func__);
   return CRYPT_FAIL;
 }
 
@@ -70,7 +57,7 @@ CRYPT_RESULT _math__Div(
   TPM2B * r                     //   OUT: remainder
   )
 {
-  ecprintf("%s called\n", __func__);
+	ccprintf("%s called\n", __func__);
   return CRYPT_FAIL;
 }
 
@@ -93,7 +80,7 @@ void __assert_func(
    *
    * TODO(vbendeb): investigate and fix TPM2 library assert handling.
    */
-  ecprintf("Failure in %s, func %s, line %d:\n%s\n",
+	ccprintf("Failure in %s, func %s, line %d:\n%s\n",
            file,
 	   s_failFunction ? (const char *)&s_failFunction : func,
 	   s_failLine ? s_failLine : line,
