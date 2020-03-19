@@ -9,8 +9,10 @@
 #define __CROS_EC_UART_H
 
 #include <stdarg.h>  /* For va_list */
+
 #include "common.h"
 #include "gpio.h"
+#include "stddef.h"
 
 /**
  * Initialize the UART module.
@@ -352,9 +354,12 @@ int uart_console_read_buffer(uint8_t type,
 			     uint16_t dest_size,
 			     uint16_t *write_count);
 
-#endif  /* __CROS_EC_UART_H */
-
 /**
  * Initialize tx buffer head and tail
  */
 void uart_init_buffer(void);
+
+/* Return the size of the free room in the UART TX circular buffer. */
+size_t uart_buffer_room(void);
+
+#endif  /* __CROS_EC_UART_H */

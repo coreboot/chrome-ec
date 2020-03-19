@@ -279,10 +279,7 @@ static void console_init(void)
 
 static int console_putc(int c)
 {
-	int rv1 = uart_putc(c);
-	int rv2 = usb_putc(c);
-
-	return rv1 == EC_SUCCESS ? rv2 : rv1;
+	return ccprintf("%c", c);
 }
 
 #ifndef CONFIG_EXPERIMENTAL_CONSOLE

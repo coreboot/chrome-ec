@@ -162,6 +162,21 @@ static int __tx_char(void *context, int c)
 #endif
 }
 
+size_t usb_buffer_room(void)
+{
+	if (!is_enabled)
+		return 0;
+
+	return queue_space(&tx_q);
+}
+
+int usb_put(const char *s, int len)
+{
+	QUEUE_ADD_UNITS(&tx_q, s, len);
+	handle_output();
+	return EC_SUCCESS;
+}
+
 /*
  * Public USB console implementation below.
  */

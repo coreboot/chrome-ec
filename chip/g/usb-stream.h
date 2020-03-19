@@ -75,6 +75,20 @@ extern struct producer_ops const usb_stream_producer_ops;
 #endif
 
 /*
+ * When in packet mode, the terminal application (Acroterm) constantly times
+ * out if the deferred function is used in the USB transmit path.
+ *
+ * The below allows to exclude the console channel from the set using the
+ * deferred function when in packet console mode.
+ */
+#ifdef CONFIG_EXTRACT_PRINTF_STRINGS
+#define UART_CONSOLE_CHANNEL(x)  (((x) == USB_EP_AP) || ((x) == USB_EP_EC))
+#else
+#define UART_CONSOLE_CHANNEL(x)  (((x) == USB_EP_AP) || ((x) == USB_EP_EC) || \
+				  ((x) == USB_EP_CONSOLE))
+#endif
+
+/*
  * Convenience macro for defining USB streams and their associated state and
  * buffers.
  *
@@ -136,9 +150,7 @@ extern struct producer_ops const usb_stream_producer_ops;
 	static size_t CONCAT2(NAME, _tx_handled);			\
 	struct usb_stream_config const NAME = {				\
 		.endpoint     = ENDPOINT,				\
-		.is_uart_console = ((ENDPOINT == USB_EP_EC) ||		\
-				    (ENDPOINT == USB_EP_CONSOLE) ||	\
-				    (ENDPOINT == USB_EP_AP)),		\
+		.is_uart_console = UART_CONSOLE_CHANNEL(ENDPOINT),	\
 		.tx_in_progress = &CONCAT2(NAME, _tx_in_progress_),	\
 		.kicker_running = &CONCAT2(NAME, _kicker_running_),	\
 		.is_reset     = &CONCAT2(NAME, _is_reset_),		\

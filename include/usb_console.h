@@ -62,6 +62,12 @@ uint32_t usb_console_crc(void);
  */
 void usb_console_enable(int enabled, int readonly);
 
+/* Return the size of the free room in the USB TX circular buffer. */
+size_t usb_buffer_room(void);
+
+/* Send characters to the USB channel. */
+int usb_put(const char *str, int count);
+
 #define usb_va_start va_start
 #define usb_va_end va_end
 #else

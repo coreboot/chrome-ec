@@ -37,6 +37,8 @@ BUILD_ASSERT(ARRAY_SIZE(channel_names) == CC_CHANNEL_COUNT);
 BUILD_ASSERT(CC_CHANNEL_COUNT <= 8*sizeof(uint32_t));
 #endif /* CONFIG_CONSOLE_CHANNEL */
 
+#ifndef CONFIG_EXTRACT_PRINTF_STRINGS
+
 /*****************************************************************************/
 /* Channel-based console output */
 
@@ -106,6 +108,7 @@ int cprints(enum console_channel channel, const char *format, ...)
 	r = cputs(channel, "]\n");
 	return r ? r : rv;
 }
+#endif /* ^^^^^^^^ CONFIG_EXTRACT_PRINTF_STRINGS NOT defined. */
 
 void cflush(void)
 {
