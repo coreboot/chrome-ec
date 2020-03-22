@@ -43,6 +43,7 @@ board-y =  board.o
 board-y += ap_state.o
 board-y += closed_source_set1.o
 board-y += ec_state.o
+board-y += int_ap_extension.o
 board-y += power_button.o
 board-y += servo_state.o
 board-y += ap_uart_state.o
