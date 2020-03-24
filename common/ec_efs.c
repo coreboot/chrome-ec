@@ -7,10 +7,16 @@
 #include "common.h"
 #include "console.h"
 #include "ec_comm.h"
+#include "ccd_config.h"
 #include "crc8.h"
 #include "ec_commands.h"
 #include "extension.h"
 #include "hooks.h"
+#ifndef BOARD_HOST
+#include "Global.h"
+#include "NV_fp.h"
+#include "nvmem.h"
+#endif
 #include "registers.h"
 #include "system.h"
 #include "tpm_nvmem.h"
@@ -288,15 +294,47 @@ void ec_efs_print_status(void)
 #endif
 }
 
-#ifdef CR50_RELAXED
-void ec_efs_corrupt_hash(void)
+enum ec_error_list ec_efs_corrupt_hash(void)
 {
+#ifndef BOARD_HOST
+	struct vb2_secdata_kernel secdata;
+	const uint8_t secdata_size = sizeof(struct vb2_secdata_kernel);
+	TPM_HANDLE object_handle;
+	NV_INDEX nvIndex;
+	uint8_t size_to_crc;
 	int i;
 
+	/* Check CCD is opened */
+	if (ccd_get_state() != CCD_STATE_OPENED) {
+		ccprintf("CCD is not opened\n");
+		return EC_ERROR_ACCESS_DENIED;
+	}
+
+	/* Read the kernel secdata */
+	if (read_tpm_nvmem(KERNEL_NV_INDEX, secdata_size,
+			   (void *)&secdata) != TPM_READ_SUCCESS)
+		return EC_ERROR_VBOOT_DATA_UNDERSIZED;
+
+	/* Modify hash */
 	for (i = 0; i < SHA256_DIGEST_SIZE; i++)
-		ec_efs_ctx.hash[i] = ~ec_efs_ctx.hash[i] + 0x01;
-}
+		secdata.ec_hash[i] = ~ec_efs_ctx.hash[i] + 0x01;
+
+	size_to_crc = secdata_size -
+		      offsetof(struct vb2_secdata_kernel, crc8) -
+		      sizeof(secdata.crc8);
+	secdata.crc8 = crc8((uint8_t *)&secdata.reserved0, size_to_crc);
+
+	/* Corrupt KERNEL_NV_INDEX in nvmem cache. */
+	object_handle = HR_NV_INDEX + KERNEL_NV_INDEX;
+	NvGetIndexInfo(object_handle, &nvIndex);
+	NvWriteIndexData(object_handle, &nvIndex, 0, secdata_size, &secdata);
+	nvmem_unlock_cache(1);
+
+	/* Reload the corrupted ECRW-hash from kernel secdata. */
+	ec_efs_refresh();
 #endif
+	return EC_SUCCESS;
+}
 
 #ifdef BOARD_HOST
 uint8_t ec_efs_get_boot_mode(void)

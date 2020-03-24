@@ -42,7 +42,7 @@ void ec_efs_refresh(void);
 /* print EC-EFS status */
 void ec_efs_print_status(void);
 /* corrupt ECRW hash */
-void ec_efs_corrupt_hash(void);
+enum ec_error_list ec_efs_corrupt_hash(void);
 
 #ifdef BOARD_HOST
 /* return the current boot mode. For test purpose only. */
