@@ -5,7 +5,9 @@
 # found in the LICENSE file.
 'Unit tests for util_precompile.py'
 
+import os
 import pickle
+import tempfile
 import unittest
 import zlib
 
@@ -137,6 +139,50 @@ class TestUtilPrecompile(unittest.TestCase):
             else:
                 self.fail('did not find "%s" in the dictionary')
 
+    def test_incremental_blob(self):
+        """Verify that string blob is properly extended.
+
+        When invoked with an existing blob, util_precompile.py is supposed to
+        re-use existing strings and only add new ones.
+
+        Create a test file with a set of strings, generate the blob, then
+        create another test file, with an extra string inserted in the
+        beginning and verify, generate the blob again, and verify that the
+        resulting blob has the strings at expected indices.
+        """
+        first_string_set = ('format string #1',
+                            'format string #2',
+                            'format_strint #3')
+
+        second_string_set = ('format string #4',) + first_string_set
+        with tempfile.TemporaryDirectory(prefix='test_uc') as td:
+            source_code = os.path.join(td, 'src.E')
+            lock_file = os.path.join(td, 'lock')
+            blob = os.path.join(td, 'blob')
+            util_precompile.FMT_DICT = {}
+
+            def prepare_source_code(file_name, strings):
+                'Generate test .E file given a list of text strings'
+                with open(file_name, 'w') as sf:
+                    for string in strings:
+                        sf.write(' cprintf(CHAN, "%s");\n' % string)
+
+            prepare_source_code(source_code, first_string_set)
+            util_precompile.main(['_', '-o', blob, '-l',
+                                  lock_file, source_code])
+            prepare_source_code(source_code, second_string_set)
+            util_precompile.FMT_DICT = {}
+            util_precompile.main(['_', '-o', blob, '-l',
+                                  lock_file, source_code])
+
+            # Verify that strings in the blob are at the expected indices.
+            # The first set strings should have lower indices.
+            for i, string in enumerate(first_string_set):
+                self.assertEqual(util_precompile.FMT_DICT.get(string, None), i)
+            # The second set strings should have higher indices.
+            string = second_string_set[0]
+            i = len(second_string_set) - 1
+            self.assertEqual(util_precompile.FMT_DICT.get(string, None), i)
 
     def test_drop_escapes(self):
         'Verify proper conversion of escape characters'
@@ -146,6 +192,7 @@ class TestUtilPrecompile(unittest.TestCase):
                     'line \x1a with two hex escapes \x1b\n'))
         for i, o in insouts:
             self.assertEqual(o, util_precompile.drop_escapes(i))
+
 
 if __name__ == '__main__':
     unittest.main()
