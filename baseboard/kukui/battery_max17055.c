@@ -153,14 +153,7 @@ int charger_profile_override(struct charge_state_data *curr)
 		int desired_current; /* mA */
 		int desired_voltage; /* mV */
 	} temp_zones[BATTERY_COUNT][TEMP_ZONE_COUNT] = {
-		[BATTERY_SIMPLO] = {
-			/* TEMP_ZONE_0 */
-			{BATTERY_SIMPLO_CHARGE_MIN_TEMP * 10, 150, 1772, 4376},
-			/* TEMP_ZONE_1 */
-			{150, 450, 4020, 4376},
-			/* TEMP_ZONE_2 */
-			{450, BATTERY_SIMPLO_CHARGE_MAX_TEMP * 10, 3350, 4300},
-		},
+#ifdef BOARD_KAKADU
 		[BATTERY_ATL] = {
 			/* TEMP_ZONE_0 */
 			{BATTERY_ATL_CHARGE_MIN_TEMP * 10, 50, 719, 4370},
@@ -171,6 +164,16 @@ int charger_profile_override(struct charge_state_data *curr)
 			/* TEMP_ZONE_3 */
 			{450, BATTERY_ATL_CHARGE_MAX_TEMP * 10, 2516, 4100},
 		},
+#else
+		[BATTERY_SIMPLO] = {
+			/* TEMP_ZONE_0 */
+			{BATTERY_SIMPLO_CHARGE_MIN_TEMP * 10, 150, 1772, 4376},
+			/* TEMP_ZONE_1 */
+			{150, 450, 4020, 4376},
+			/* TEMP_ZONE_2 */
+			{450, BATTERY_SIMPLO_CHARGE_MAX_TEMP * 10, 3350, 4300},
+		},
+#endif
 	};
 	BUILD_ASSERT(ARRAY_SIZE(temp_zones[BATT_ID]) == TEMP_ZONE_COUNT);
 	BUILD_ASSERT(ARRAY_SIZE(temp_zones) == BATTERY_COUNT);
