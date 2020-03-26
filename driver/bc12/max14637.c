@@ -135,7 +135,7 @@ static void detect_or_power_down_ic(const int port)
 		/* Turn on the 5V rail to allow the chip to be powered. */
 		power_5v_enable(task_get_current(), 1);
 #endif
-		if (pd_get_power_role(port) == PD_ROLE_SINK)
+		if (pd_get_role(port) == PD_ROLE_SINK)
 			bc12_detect(port);
 	} else {
 		/* Let charge manager know there's no more charge available. */
