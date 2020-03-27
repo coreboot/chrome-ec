@@ -36,6 +36,11 @@ static struct ec_efs_context_ {
 	uint8_t hash[SHA256_DIGEST_SIZE];	/* EC-RW digest */
 } ec_efs_ctx;
 
+static const char * const boot_mode_name_[] = {
+	"NORMAL",
+	"NO_BOOT",
+};
+
 /*
  * Change the boot mode
  *
@@ -274,6 +279,8 @@ void ec_efs_print_status(void)
 		 ec_efs_ctx.hash_is_loaded ? "" : "UN");
 	ccprintf("secdata_error_code : 0x%08x\n",
 		 ec_efs_ctx.secdata_error_code);
+	ccprintf("boot_mode          : %s\n",
+		 boot_mode_name_[ec_efs_ctx.boot_mode]);
 
 #ifdef CR50_RELAXED
 	ccprintf("ec_hash_secdata    : %ph\n",
