@@ -10,7 +10,7 @@
 #include "button.h"
 #include "common.h"
 #include "cros_board_info.h"
-#include "driver/accel_bma2x2.h"
+#include "driver/accel_lis2ds.h"
 #include "driver/accelgyro_bmi160.h"
 #include "driver/als_bh1730.h"
 #include "driver/als_tcs3400.h"
@@ -165,8 +165,20 @@ static struct mutex g_lid_mutex;
 /* Base accel private data */
 static struct bmi160_drv_data_t g_bmi160_data;
 
+<<<<<<< HEAD   (92b319 nightfury: remove lid als/rgb sensor and camera sync)
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
+=======
+/* Base light sensor private data */
+static struct opt3001_drv_data_t g_opt3001_data = {
+	.scale = 1,
+	.uscale = 0,
+	.offset = 0,
+};
+
+/* LIS2DS private data */
+static struct stprivate_data g_lis2ds_data;
+>>>>>>> CHANGE (e3c9d2 nightfury: enable lid accelerometer lis2ds12)
 
 /* BH1730 private data */
 struct bh1730_drv_data_t g_bh1730_data;
@@ -193,17 +205,17 @@ struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_BMA255,
+		.chip = MOTIONSENSE_CHIP_LIS2DS,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_LID,
-		.drv = &bma2x2_accel_drv,
+		.drv = &lis2ds_drv,
 		.mutex = &g_lid_mutex,
-		.drv_data = &g_bma255_data,
+		.drv_data = &g_lis2ds_data,
 		.port = I2C_PORT_ACCEL,
-		.i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
+		.i2c_spi_addr_flags = LIS2DS_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
-		.min_frequency = BMA255_ACCEL_MIN_FREQ,
-		.max_frequency = BMA255_ACCEL_MAX_FREQ,
+		.min_frequency = LIS2DS_ODR_MIN_VAL,
+		.max_frequency = LIS2DS_ODR_MAX_VAL,
 		.default_range = 2, /* g, to support lid angle calculation. */
 		.config = {
 			/* EC use accel for angle detection */
