@@ -3860,6 +3860,17 @@
 #include "config_chip.h"
 #include "board.h"
 
+/*
+ * Define BMI macro when BMI160 is defined
+ * TODO(chingkang): replace all BMI160 macro by BMI.
+ */
+#ifdef CONFIG_MAG_BMI160_BMM150
+#define CONFIG_MAG_BMI_BMM150
+#endif
+#ifdef CONFIG_MAG_BMI160_LIS2MDL
+#define CONFIG_MAG_BMI_LIS2MDL
+#endif
+
 /******************************************************************************/
 /*
  * Automatically define CONFIG_HOSTCMD_X86 if either child option is defined.

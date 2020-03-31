@@ -11,22 +11,6 @@
 #include "accelgyro.h"
 #include "mag_bmm150.h"
 
-/*
- * The addr field of motion_sensor support both SPI and I2C:
- *
- * +-------------------------------+---+
- * |    7 bit i2c address          | 0 |
- * +-------------------------------+---+
- * Or
- * +-------------------------------+---+
- * |    SPI device ID              | 1 |
- * +-------------------------------+---+
- */
-#define BMI160_SET_SPI_ADDRESS(_addr) (((_addr) << 1) | 1)
-#define BMI160_IS_SPI(_addr)        ((_addr) & 1)
-#define BMI160_SPI_ADDRESS(_addr)   ((_addr) >> 1)
-#define BMI160_I2C_ADDRESS(_addr)   (_addr)
-
 /* I2C addresses */
 #define BMI160_ADDR0             0xd0
 #define BMI160_ADDR1             0xd2
@@ -140,12 +124,7 @@
 #define BMI160_FIFO_LENGTH_1   0x23
 #define BMI160_FIFO_LENGTH_MASK    ((1 << 11) - 1)
 #define BMI160_FIFO_DATA       0x24
-enum fifo_header {
-	BMI160_EMPTY = 0x80,
-	BMI160_SKIP = 0x40,
-	BMI160_TIME = 0x44,
-	BMI160_CONFIG = 0x48
-};
+
 
 #define BMI160_FH_MODE_MASK    0xc0
 #define BMI160_FH_PARM_OFFSET    2
@@ -427,8 +406,6 @@ enum fifo_header {
 #define BMI160_FF_DATA_LEN_GYR          6
 #define BMI160_FF_DATA_LEN_MAG          8
 
-/* Sensor resolution in number of bits. This sensor has fixed resolution. */
-#define BMI160_RESOLUTION      16
 
 /* Min and Max sampling frequency in mHz */
 #define BMI160_ACCEL_MIN_FREQ 12500
@@ -437,18 +414,6 @@ enum fifo_header {
 #define BMI160_GYRO_MAX_FREQ MOTION_MAX_SENSOR_FREQUENCY(3200000, 100000)
 
 extern const struct accelgyro_drv bmi160_drv;
-
-enum bmi160_running_mode {
-	STANDARD_UI_9DOF_FIFO          = 0,
-	STANDARD_UI_IMU_FIFO           = 1,
-	STANDARD_UI_IMU                = 2,
-	STANDARD_UI_ADVANCEPOWERSAVE   = 3,
-	ACCEL_PEDOMETER                = 4,
-	APPLICATION_HEAD_TRACKING      = 5,
-	APPLICATION_NAVIGATION         = 6,
-	APPLICATION_REMOTE_CONTROL     = 7,
-	APPLICATION_INDOOR_NAVIGATION  = 8,
-};
 
 #define BMI160_FLAG_SEC_I2C_ENABLED    (1 << 0)
 #define BMI160_FIFO_FLAG_OFFSET        4
@@ -469,27 +434,6 @@ struct bmi160_drv_data_t {
 #endif
 
 };
-
-#define BMI160_GET_DATA(_s) \
-	((struct bmi160_drv_data_t *)(_s)->drv_data)
-#define BMI160_GET_SAVED_DATA(_s) \
-	(&BMI160_GET_DATA(_s)->saved_data[(_s)->type])
-
-#ifdef CONFIG_BMI160_ORIENTATION_SENSOR
-#define ORIENTATION_CHANGED(_sensor) \
-	(BMI160_GET_DATA(_sensor)->orientation != \
-	BMI160_GET_DATA(_sensor)->last_orientation)
-
-#define GET_ORIENTATION(_sensor) \
-	(BMI160_GET_DATA(_sensor)->orientation)
-
-#define SET_ORIENTATION(_sensor, _val) \
-	(BMI160_GET_DATA(_sensor)->orientation = _val)
-
-#define SET_ORIENTATION_UPDATED(_sensor) \
-	(BMI160_GET_DATA(_sensor)->last_orientation = \
-	BMI160_GET_DATA(_sensor)->orientation)
-#endif
 
 void bmi160_interrupt(enum gpio_signal signal);
 
