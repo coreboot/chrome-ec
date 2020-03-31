@@ -20,35 +20,66 @@
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
 
+#if defined(CONFIG_ACCELGYRO_BMI260) && !defined(CONFIG_ACCELGYRO_BMI160)
+#define V(s_) 1
+#elif defined(CONFIG_ACCELGYRO_BMI160) && !defined(CONFIG_ACCELGYRO_BMI260)
+#define V(s_) 0
+#else
+#define V(s_) ((s_)->chip == MOTIONSENSE_CHIP_BMI260)
+#endif
+/* Index for which table to use. */
+#if !defined(CONFIG_ACCELGYRO_BMI160) || !defined(CONFIG_ACCELGYRO_BMI260)
+#define T(s_) 0
+#else
+#define T(s_) V(s_)
+#endif
+
 /* List of range values in +/-G's and their associated register values. */
-const struct bmi_accel_param_pair g_ranges[4] = {
-	{2, BMI160_GSEL_2G},
-	{4, BMI160_GSEL_4G},
-	{8, BMI160_GSEL_8G},
-	{16, BMI160_GSEL_16G}
+const struct bmi_accel_param_pair g_ranges[][4] = {
+#ifdef CONFIG_ACCELGYRO_BMI160
+	{ {2,  BMI160_GSEL_2G},
+	  {4,  BMI160_GSEL_4G},
+	  {8,  BMI160_GSEL_8G},
+	  {16, BMI160_GSEL_16G} },
+#endif
+#ifdef CONFIG_ACCELGYRO_BMI260
+	{ {2,  BMI260_GSEL_2G},
+	  {4,  BMI260_GSEL_4G},
+	  {8,  BMI260_GSEL_8G},
+	  {16, BMI260_GSEL_16G} },
+#endif
 };
 
 /*
  * List of angular rate range values in +/-dps's
  * and their associated register values.
  */
-const struct bmi_accel_param_pair dps_ranges[5] = {
-	{125, BMI160_DPS_SEL_125},
-	{250, BMI160_DPS_SEL_250},
-	{500, BMI160_DPS_SEL_500},
-	{1000, BMI160_DPS_SEL_1000},
-	{2000, BMI160_DPS_SEL_2000}
+const struct bmi_accel_param_pair dps_ranges[][5] = {
+#ifdef CONFIG_ACCELGYRO_BMI160
+	{ {125,  BMI160_DPS_SEL_125},
+	  {250,  BMI160_DPS_SEL_250},
+	  {500,  BMI160_DPS_SEL_500},
+	  {1000, BMI160_DPS_SEL_1000},
+	  {2000, BMI160_DPS_SEL_2000} },
+#endif
+#ifdef CONFIG_ACCELGYRO_BMI260
+	{ {125,  BMI260_DPS_SEL_125},
+	  {250,  BMI260_DPS_SEL_250},
+	  {500,  BMI260_DPS_SEL_500},
+	  {1000, BMI260_DPS_SEL_1000},
+	  {2000, BMI260_DPS_SEL_2000} },
+#endif
 };
 
 int bmi_get_xyz_reg(const struct motion_sensor_t *s)
 {
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		return BMI_ACC_DATA;
+		return BMI_ACC_DATA(V(s));
 	case MOTIONSENSE_TYPE_GYRO:
-		return BMI_GYR_DATA;
+		return BMI_GYR_DATA(V(s));
 	case MOTIONSENSE_TYPE_MAG:
-		return BMI_AUX_DATA;
+		return BMI_AUX_DATA(V(s));
 	default:
 		return -1;
 	}
@@ -59,13 +90,12 @@ const struct bmi_accel_param_pair *bmi_get_range_table(
 {
 	if (s->type == MOTIONSENSE_TYPE_ACCEL) {
 		if (psize)
-			*psize = ARRAY_SIZE(g_ranges);
-		return g_ranges;
+			*psize = ARRAY_SIZE(g_ranges[T(s)]);
+		return g_ranges[T(s)];
 	}
 	if (psize)
-		*psize = ARRAY_SIZE(dps_ranges);
-	return dps_ranges;
-
+		*psize = ARRAY_SIZE(dps_ranges[T(s)]);
+	return dps_ranges[T(s)];
 }
 
 /**
@@ -422,21 +452,28 @@ int bmi_load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 		 * Flush potential left over:
 		 * When sensor is resumed, we won't read old data.
 		 */
-		bmi_write8(s->port, s->addr, BMI_CMD_REG,
-				BMI_CMD_FIFO_FLUSH);
+		bmi_write8(s->port, s->addr,
+			   BMI_CMD_REG(V(s)), BMI_CMD_FIFO_FLUSH);
 		return EC_SUCCESS;
 	}
 
-	bmi_read_n(s->port, s->addr, BMI_FIFO_LENGTH_0,
-			(uint8_t *)&length, sizeof(length));
-	length &= BMI_FIFO_LENGTH_MASK;
+	bmi_read_n(s->port, s->addr,
+		   BMI_FIFO_LENGTH_0(V(s)),
+		   (uint8_t *)&length, sizeof(length));
+	length &= BMI_FIFO_LENGTH_MASK(V(s));
 
 	/*
 	 * We have not requested timestamp, no extra frame to read.
 	 * if we have too much to read, read the whole buffer.
 	 */
 	if (length == 0) {
-		CPRINTS("unexpected empty FIFO");
+		/*
+		 * Disable this message on BMI260, due to this seems to always
+		 * happen after we complete to read the data.
+		 * TODO(chingkang): check why this happen on BMI260.
+		 */
+		if (V(s) == 0)
+			CPRINTS("unexpected empty FIFO");
 		return EC_SUCCESS;
 	}
 
@@ -447,9 +484,9 @@ int bmi_load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 		CPRINTS("unexpected large FIFO: %d", length);
 	length = MIN(length, sizeof(bmi_buffer));
 
+	bmi_read_n(s->port, s->addr,
+		   BMI_FIFO_DATA(V(s)), bmi_buffer, length);
 
-	bmi_read_n(s->port, s->addr, BMI_FIFO_DATA, bmi_buffer,
-			length);
 	beginning = *(uint32_t *)bmi_buffer;
 	ep = bmi_buffer + length;
 	/*
@@ -494,7 +531,7 @@ int bmi_load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 				CPRINTS("Unknown header: 0x%02x @ %d",
 						hdr, bp - bmi_buffer);
 				bmi_write8(s->port, s->addr,
-						BMI_CMD_REG,
+						BMI_CMD_REG(V(s)),
 						BMI_CMD_FIFO_FLUSH);
 				return EC_ERROR_NOT_HANDLED;
 			}
@@ -510,7 +547,10 @@ int bmi_load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 			CPRINTS("@ %d - %d, config change: 0x%02x",
 					bp - bmi_buffer, length, *bp);
 			bp++;
-			state = FIFO_HEADER;
+			if (V(s))
+				state = FIFO_DATA_TIME;
+			else
+				state = FIFO_HEADER;
 			break;
 		case FIFO_DATA_TIME:
 			if (bp + 3 > ep) {
@@ -576,7 +616,7 @@ int bmi_get_offset(const struct motion_sensor_t *s,
 			int16_t    *offset,
 			int16_t    *temp)
 {
-	int i, val98;
+	int i;
 	intv3_t v;
 
 	switch (s->type) {
@@ -589,8 +629,6 @@ int bmi_get_offset(const struct motion_sensor_t *s,
 		bmi_accel_get_offset(s, v);
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
-		/* Read the MSB first */
-		bmi_read8(s->port, s->addr, BMI_OFFSET_EN_GYR98, &val98);
 		/*
 		 * The offset of the gyroscope off_gyr_[xyz] is a 10 bit
 		 * two-complement number in units of 0.061 °/s.
@@ -651,8 +689,8 @@ int bmi_enable_fifo(const struct motion_sensor_t *s, int enable)
 	int ret;
 
 	/* FIFO start/stop collecting events */
-	ret = bmi_enable_reg8(s, BMI_FIFO_CONFIG_1,
-			      BMI_FIFO_SENSOR_EN(s->type), enable);
+	ret = bmi_enable_reg8(s, BMI_FIFO_CONFIG_1(V(s)),
+			      BMI_FIFO_SENSOR_EN(V(s), s->type), enable);
 	if (ret)
 		return ret;
 
@@ -669,7 +707,8 @@ int bmi_read(const struct motion_sensor_t *s, intv3_t v)
 	uint8_t data[6];
 	int ret, status = 0;
 
-	ret = bmi_read8(s->port, s->addr, BMI_STATUS, &status);
+	ret = bmi_read8(s->port, s->addr,
+			BMI_STATUS(V(s)), &status);
 	if (ret != EC_SUCCESS)
 		return ret;
 
@@ -707,7 +746,7 @@ int bmi_get_sensor_temp(int idx, int *temp_ptr)
 	int ret;
 
 	ret = bmi_read_n(s->port, s->addr,
-			 BMI_TEMPERATURE_0,
+			 BMI_TEMPERATURE_0(V(s)),
 			 (uint8_t *)&temp, sizeof(temp));
 
 	if (ret || temp == BMI_INVALID_TEMP)
@@ -759,7 +798,7 @@ void bmi_accel_get_offset(const struct motion_sensor_t *accel, intv3_t v)
 
 	for (i = X; i <= Z; i++) {
 		bmi_read8(accel->port, accel->addr,
-			  BMI_OFFSET_ACC70 + i, &val);
+			  BMI_OFFSET_ACC70(V(accel)) + i, &val);
 		if (val > 0x7f)
 			val = -256 + val;
 		v[i] = round_divide(
@@ -775,10 +814,11 @@ void bmi_gyro_get_offset(const struct motion_sensor_t *gyro, intv3_t v)
 
 	/* Read the MSB first */
 	bmi_read8(gyro->port, gyro->addr,
-		  BMI_OFFSET_EN_GYR98, &val98);
+		  BMI_OFFSET_EN_GYR98(V(gyro)), &val98);
 	for (i = X; i <= Z; i++) {
 		bmi_read8(gyro->port, gyro->addr,
-			  BMI_OFFSET_GYR70 + i, &val);
+			  BMI_OFFSET_GYR70(V(gyro)) + i, &val);
+
 		val |= ((val98 >> (2 * i)) & 0x3) << 8;
 		if (val > 0x1ff)
 			val = -1024 + val;
@@ -803,7 +843,7 @@ void bmi_set_accel_offset(const struct motion_sensor_t *accel, intv3_t v)
 		if (val < 0)
 			val = 256 + val;
 		bmi_write8(accel->port, accel->addr,
-			   BMI_OFFSET_ACC70 + i, val);
+			   BMI_OFFSET_ACC70(V(accel)) + i, val);
 	}
 }
 
@@ -822,8 +862,9 @@ void bmi_set_gyro_offset(const struct motion_sensor_t *gyro, intv3_t v,
 			val = -512;
 		if (val < 0)
 			val = 1024 + val;
+
 		bmi_write8(gyro->port, gyro->addr,
-			   BMI_OFFSET_GYR70 + i, val & 0xFF);
+			   BMI_OFFSET_GYR70(V(gyro)) + i, val & 0xFF);
 		*val98_ptr &= ~(0x3 << (2 * i));
 		*val98_ptr |= (val >> 8) << (2 * i);
 	}
