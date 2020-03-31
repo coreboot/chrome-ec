@@ -1089,9 +1089,9 @@ class Cr50Packet(Packet):
             if str_param.search(token):
                 if data[0] == 0xff:
                     # This is a function name.
-                    index = uint_struct.unpack_from(data[1:])[0]
+                    index = short_struct.unpack_from(data[1:])[0]
                     st = self.strings[index]
-                    data = data[5:]
+                    data = data[3:]
                 else:
                     eos = data.find(0)
                     param = data[:eos].decode('ascii')

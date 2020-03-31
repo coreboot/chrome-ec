@@ -88,7 +88,8 @@ enum param_types {
 	 * Parameter is an int, the number of the function name string in the
 	 * dictionary prepared by util_precompile.py. Since it is passed as a
 	 * %s parameter, to allow the terminal to tell the difference this
-	 * value is sent as 5 bytes, first 0xff and then the function number.
+	 * value is sent as 3 bytes, first 0xff and then the two byte function
+	 * name string index.
 	 */
 	PARAM_FUNC_NAME = 6,
 	/*
@@ -117,6 +118,7 @@ static void copy_params(uint32_t mask, uintptr_t params[],
 	enum param_types param_type;
 	uintptr_t param;
 	uint64_t t;
+	uint16_t func_num;
 
 	while ((param_type = mask & 0xf) != 0) {
 		const uint8_t ff = 0xff;
@@ -127,7 +129,10 @@ static void copy_params(uint32_t mask, uintptr_t params[],
 		switch (param_type) {
 		case PARAM_FUNC_NAME:
 			cmputc(&ff, sizeof(ff));
-			/* fallthrough. */
+			func_num = param;
+			cmputc((const void *) &func_num, sizeof(func_num));
+			break;
+
 		case PARAM_INT:
 		case PARAM_PTR:
 			cmputc((const void *)&param, sizeof(param));
@@ -265,8 +270,10 @@ static int zz_msg(enum console_channel chan, int str_index, uint32_t fmt_mask,
 	while (param_type) {
 		switch (param_type) {
 		case PARAM_FUNC_NAME:
-			total_param_length += 1;
-			/* Falltrhough. */
+			/* 0xff and the 2 byte function name index.*/
+			total_param_length += 3;
+			break;
+
 		case PARAM_INT:
 		case PARAM_PTR:
 			total_param_length += sizeof(uintptr_t);
