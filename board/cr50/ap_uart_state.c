@@ -4,11 +4,13 @@
  *
  * AP UART state machine
  */
+#include "case_closed_debug.h"
 #include "ccd_config.h"
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "timer.h"
 #include "uart_bitbang.h"
 #include "uartn.h"
 
@@ -93,7 +95,7 @@ void ap_detect_asserted(enum gpio_signal signal)
 /**
  * Detect state machine
  */
-static void ap_uart_detect(void)
+static void ap_uart_poll(void)
 {
 	/* Disable interrupts if we had them on for debouncing */
 	gpio_disable_interrupt(GPIO_DETECT_AP_UART);
@@ -130,4 +132,27 @@ static void ap_uart_detect(void)
 	else
 		set_state(DEVICE_STATE_DEBOUNCING);
 }
-DECLARE_HOOK(HOOK_SECOND, ap_uart_detect, HOOK_PRIO_DEFAULT);
+
+static void ap_uart_detect(void);
+DECLARE_DEFERRED(ap_uart_detect);
+
+static void ap_uart_detect(void)
+{
+	ap_uart_poll();
+
+	/*
+	 * Some platforms require that the H1 reacts to the AP shutting down
+	 * within 100 ms.
+	 *
+	 * It takes up to three polls to detect AP shutdown, hence let's limit
+	 * poll interval to 33 ms when CCD is active.
+	 *
+	 * UART is shut off unconditionally when CCD is inactive, no need to
+	 * poll too often in that case, as increased poll frequency causes
+	 * increased power consumption.
+	 */
+	hook_call_deferred(&ap_uart_detect_data, ccd_ext_is_enabled() ?
+			   33 * MSEC : SECOND);
+}
+
+DECLARE_HOOK(HOOK_INIT, ap_uart_detect, HOOK_PRIO_DEFAULT);
