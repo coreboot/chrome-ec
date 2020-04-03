@@ -146,10 +146,10 @@ struct motion_sensor_t base_gyro_1 = {
 
 static int board_use_st_sensor(void)
 {
-	/* sku_id 0xa8-0xa9 use ST sensors */
+	/* Nuwani sku_id 0xd0-0xdf use ST sensors */
 	uint32_t sku_id = system_get_sku_id();
 
-	return sku_id == 0xa8 || sku_id == 0xa9;
+	return ((sku_id >= 0xd0) && (sku_id <= 0xdf));
 }
 
 /* treeya board will use two sets of lid/base sensor, we need update
@@ -158,7 +158,7 @@ static int board_use_st_sensor(void)
 void board_update_sensor_config_from_sku(void)
 {
 	if (board_is_convertible()) {
-		/* sku_id a8-a9 use ST sensors */
+		/* Nuwani sku_id 0xd0-0xdf use ST sensors */
 		if (board_use_st_sensor()) {
 			motion_sensors[LID_ACCEL] = lid_accel_1;
 			motion_sensors[BASE_ACCEL] = base_accel_1;
