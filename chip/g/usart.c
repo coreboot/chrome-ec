@@ -164,26 +164,6 @@ void get_data_from_usb(struct usart_config const *config)
 	struct queue const *uart_out = config->consumer.queue;
 	int c;
 
-#ifdef BOARD_CR50
-	if (config->uart == UART_EC) {
-		/*
-		 * If USB-to-UART bridging is disabled, do not forward data.
-		 * Otherwise, data could be pushed into UART TX FIFO, and
-		 * transferred to EC eventually once EC-CR50 communication
-		 * enables EC UART.
-		 */
-		if (!ec_bridge_tx_enabled_)
-			return;
-
-		/*
-		 * If EC-CR50 communication is on-going, then let's not forward
-		 * console input to EC for now.
-		 */
-		if (ec_comm_is_uart_in_packet_mode(UART_EC))
-			return;
-	}
-#endif  /* BOARD_CR50 */
-
 	/* Copy output from buffer until TX fifo full or output buffer empty */
 	while (queue_count(uart_out) && QUEUE_REMOVE_UNITS(uart_out, &c, 1))
 		uartn_write_char(config->uart, c);
@@ -222,7 +202,7 @@ void send_data_to_usb(struct usart_config const *config)
 			if (ec_comm_process_packet(ch))
 				continue;
 
-			if ((count != q_room) && ec_bridge_enabled_) {
+			if ((count != q_room) && uart_ec_bridge_is_enabled()) {
 				uart_in->buffer[tail] = ch;
 				tail = (tail + 1) & mask;
 				count++;
@@ -237,7 +217,7 @@ void send_data_to_usb(struct usart_config const *config)
 	 * If UART-to-USB bridging is not allowed, do not put any output
 	 * data to uart_in queue.
 	 */
-	if ((uart == UART_EC) && !ec_bridge_enabled_)
+	if ((uart == UART_EC) && !uart_ec_bridge_is_enabled())
 		return;
 #endif  /* BOARD_CR50 */
 
@@ -266,6 +246,35 @@ static void uart_written(struct consumer const *consumer, size_t count)
 		return;
 	}
 #endif
+
+#ifdef BOARD_CR50
+	if (config->uart == UART_EC) {
+		/*
+		 * If USB-to-UART bridging is disabled, do not forward data.
+		 * Otherwise, data could be pushed into UART TX FIFO, and
+		 * transferred to EC eventually once EC-CR50 communication
+		 * enables EC UART.
+		 */
+		if (!uart_ec_bridge_tx_is_enabled()) {
+			/*
+			 * Empty the RX queue, so that host won't suffer from
+			 * congestion. Also, if data remains in the queue, then
+			 * they might be transferred when UART TX gets enabled
+			 * in future.
+			 */
+			queue_advance_head(consumer->queue,
+					   queue_count(consumer->queue));
+			return;
+		}
+
+		/*
+		 * If EC-CR50 communication is on-going, then let's not forward
+		 * console input to EC for now.
+		 */
+		if (ec_comm_is_uart_in_packet_mode(UART_EC))
+			return;
+	}
+#endif  /* BOARD_CR50 */
 
 	if (uartn_tx_ready(config->uart) && queue_count(consumer->queue))
 		uartn_tx_start(config->uart);
