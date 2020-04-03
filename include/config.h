@@ -2472,11 +2472,6 @@
 #define CONFIG_KEYBOARD_RUNTIME_KEYS
 
 /*
- * Allow the keyboard scan code set tables to be modified at runtime.
- */
-#undef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-
-/*
  * Allow board-specific 8042 keyboard callback when a key state is changed.
  */
 #undef CONFIG_KEYBOARD_SCANCODE_CALLBACK
