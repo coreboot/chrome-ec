@@ -268,6 +268,9 @@ void ec_efs_refresh(void)
 {
 	int rv;
 
+	if (!board_has_ec_cr50_comm_support())
+		return;
+
 	rv = load_ec_hash_(ec_efs_ctx.hash);
 	if (rv == EC_SUCCESS) {
 		ec_efs_ctx.hash_is_loaded = 1;
