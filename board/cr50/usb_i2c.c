@@ -11,11 +11,14 @@
 #include "i2c.h"
 #include "rdd.h"
 #include "registers.h"
+#include "stdbool.h"
 #include "system.h"
 #include "timer.h"
 #include "usb_i2c.h"
 
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
+
+static bool usb_i2c_enabled;
 
 int usb_i2c_board_is_enabled(void)
 {
@@ -23,13 +26,7 @@ int usb_i2c_board_is_enabled(void)
 	if (!board_has_ina_support())
 		return 0;
 
-	/*
-	 * Note that this signal requires an external pullup, because this is
-	 * one of the real open drain pins; we cannot pull it up or drive it
-	 * high.  On test boards without the pullup, this will mis-detect as
-	 * enabled.
-	 */
-	return !gpio_get_level(GPIO_EN_PP3300_INA_L);
+	return usb_i2c_enabled;
 }
 
 static void ina_disconnect(void)
@@ -45,6 +42,7 @@ static void ina_disconnect(void)
 
 	/* Disable power to INA chips */
 	gpio_set_level(GPIO_EN_PP3300_INA_L, 1);
+	usb_i2c_enabled = false;
 }
 
 static void ina_connect(void)
@@ -71,6 +69,7 @@ static void ina_connect(void)
 	 * lines are connected.
 	 */
 	i2cm_init();
+	usb_i2c_enabled = true;
 }
 
 void usb_i2c_board_disable(void)
