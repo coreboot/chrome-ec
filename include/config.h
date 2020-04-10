@@ -1414,6 +1414,9 @@
 /* Trigger building the image with all format strings extracted. */
 #undef CONFIG_EXTRACT_PRINTF_STRINGS
 
+/* Include AP RO verification support. */
+#undef CONFIG_AP_RO_VERIFICATION
+
 /*
  * Enable EC-CR50 communication (a.k.a. EC-EFS2). This is for CR50 config only.
  */
