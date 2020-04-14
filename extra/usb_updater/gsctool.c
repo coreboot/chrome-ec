@@ -321,8 +321,8 @@ static const struct option_container cmd_line_options[] = {
 	 "Enable debug messages"},
 	{{"version", no_argument, NULL, 'v'},
 	 "Report this utility version"},
-	{{"wp", no_argument, NULL, 'w'},
-	 "Get the current wp setting"}
+	{{"wp", optional_argument, NULL, 'w'},
+	 "[enable] Get the current WP setting or enable WP"}
 };
 
 /* Helper to print debug messages when verbose flag is specified. */
@@ -1972,7 +1972,7 @@ static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
 		poll_for_pp(td, VENDOR_CC_CCD, CCDV_PP_POLL_OPEN);
 }
 
-static void process_wp(struct transfer_descriptor *td)
+static void process_wp(struct transfer_descriptor *td, enum wp_options wp)
 {
 	size_t response_size;
 	uint8_t response;
@@ -1982,10 +1982,25 @@ static void process_wp(struct transfer_descriptor *td)
 
 	printf("Getting WP\n");
 
-	rv = send_vendor_command(td, VENDOR_CC_WP, NULL, 0,
-				 &response, &response_size);
+	if (wp == WP_ENABLE) {
+		uint8_t command = WP_ENABLE;
+
+		rv = send_vendor_command(td, VENDOR_CC_WP, &command,
+					 sizeof(command),
+					 &response, &response_size);
+	} else {
+		rv = send_vendor_command(td, VENDOR_CC_WP, NULL, 0,
+					 &response, &response_size);
+	}
+
 	if (rv != VENDOR_RC_SUCCESS) {
-		fprintf(stderr, "Error %d getting write protect\n", rv);
+		fprintf(stderr, "Error %d %sting write protect\n",
+			rv, (wp == WP_ENABLE) ? "set" : "get");
+		if (wp == WP_ENABLE) {
+			fprintf(stderr,
+				"Early Cr50 versions do not support setting WP"
+				"\n");
+		}
 		exit(update_error);
 	}
 	if (response_size != sizeof(response)) {
@@ -2682,7 +2697,7 @@ int main(int argc, char *argv[])
 	int ccd_info = 0;
 	int get_flog = 0;
 	uint32_t prev_log_entry = 0;
-	int wp = 0;
+	enum wp_options wp = WP_NONE;
 	int get_boot_mode = 0;
 	int try_all_transfer = 0;
 	int tpm_mode = 0;
@@ -2720,7 +2735,6 @@ int main(int argc, char *argv[])
 		{ 'U', &ccd_unlock },
 		{ 'u', &td.upstart_mode },
 		{ 'V', &verbose_mode },
-		{ 'w', &wp },
 		{},
 	};
 
@@ -2855,6 +2869,18 @@ int main(int argc, char *argv[])
 		case 'v':
 			report_version();  /* This will call exit(). */
 			break;
+		case 'w':
+			if (!optarg) {
+				wp = WP_CHECK;
+				break;
+			}
+			if (!strcasecmp(optarg, "enable")) {
+				wp = WP_ENABLE;
+				break;
+			}
+			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
+			errorcnt++;
+			break;
 		case 0:				/* auto-handled option */
 			break;
 		case '?':
@@ -2908,7 +2934,7 @@ int main(int argc, char *argv[])
 	    !openbox_desc_file &&
 	    !tstamp &&
 	    !tpm_mode &&
-	    !wp) {
+	    (wp == WP_NONE)) {
 		if (optind >= argc) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
@@ -2936,8 +2962,8 @@ int main(int argc, char *argv[])
 
 	if (((bid_action != bid_none) + !!rma + !!password + !!ccd_open +
 	     !!ccd_unlock + !!ccd_lock + !!ccd_info + !!get_flog +
-	     !!get_boot_mode + !!openbox_desc_file + !!factory_mode + !!wp +
-	     !!get_endorsement_seed) > 1) {
+	     !!get_boot_mode + !!openbox_desc_file + !!factory_mode +
+	     (wp != WP_NONE) + !!get_endorsement_seed) > 1) {
 		fprintf(stderr,
 			"ERROR: options"
 			"-e, -F, -g, -I, -i, -k, -L, -O, -o, -P, -r, -U and -w "
@@ -2982,8 +3008,8 @@ int main(int argc, char *argv[])
 
 	if (factory_mode)
 		process_factory_mode(&td, factory_mode_arg);
-	if (wp)
-		process_wp(&td);
+	if (wp != WP_NONE)
+		process_wp(&td, wp);
 
 	if (corrupt_inactive_rw)
 		invalidate_inactive_rw(&td);
