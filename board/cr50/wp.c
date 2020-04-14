@@ -129,8 +129,17 @@ static enum vendor_cmd_rc vc_set_wp(enum vendor_cmd_cc code,
 
 	*response_size = 0;
 	/* There shouldn't be any args */
-	if (input_size)
+	if (input_size > 1)
 		return VENDOR_RC_BOGUS_ARGS;
+
+	if (input_size == 1) {
+		uint8_t *cmd = buf;
+
+		if (*cmd != WP_ENABLE)
+			return VENDOR_RC_BOGUS_ARGS;
+
+		set_wp_state(1);
+	}
 
 	/* Get current wp settings */
 	if (board_forcing_wp())
