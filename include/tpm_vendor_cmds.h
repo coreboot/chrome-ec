@@ -198,6 +198,13 @@ enum vendor_cmd_rc {
 	VENDOR_RC_ERR = 0x500,
 };
 
+/* VENDOR_CC_WP options, only WP_ENABLE is accepted. */
+enum wp_options {
+	WP_NONE,
+	WP_CHECK,
+	WP_ENABLE
+};
+
 /*
  * The TPMv2 Spec mandates that vendor-specific command codes have bit 29 set,
  * while bits 15-0 indicate the command. All other bits should be zero.
