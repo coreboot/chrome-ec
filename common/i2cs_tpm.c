@@ -84,6 +84,8 @@ static uint32_t i2cs_fifo_adjust_count;
 /* Used to track number of write mismatch errors */
 static uint32_t i2cs_write_error_count;
 
+static bool int_ap_extension_enabled_;
+
 static void process_read_access(uint16_t reg_size,
 				uint16_t tpm_reg, uint8_t *data)
 {
@@ -202,6 +204,11 @@ static void wr_complete_handler(void *i2cs_data, size_t i2cs_data_size)
 		process_write_access(reg_size, tpm_reg,
 				     data, i2cs_data_size);
 
+	if (assert_int_ap()) {
+		gpio_enable_interrupt(GPIO_MONITOR_I2CS_SDA);
+		return;
+	}
+
 	/*
 	 * Since cr50 does not provide i2c clock stretching, we need some
 	 * onther means of flow controlling the host. Let's generate a pulse
@@ -209,26 +216,35 @@ static void wr_complete_handler(void *i2cs_data, size_t i2cs_data_size)
 	 */
 	gpio_set_level(GPIO_INT_AP_L, 0);
 
-	/*
-	 * This is to meet the AP requirement of minimum 4 usec
-	 *  duration of INT_AP_L assertion.
-	 *
-	 * TODO(b/130515803): Ideally, this should be improved
-	 * to support any duration requirement in future.
-	 */
 	tick_delay(2);
 
 	gpio_set_level(GPIO_INT_AP_L, 1);
 }
 
+void i2cs_sda_isr(enum gpio_signal signal)
+{
+	gpio_disable_interrupt(GPIO_MONITOR_I2CS_SDA);
+
+	deassert_int_ap();
+}
+
 static void i2cs_if_stop(void)
 {
+	if (int_ap_extension_enabled_)
+		int_ap_extension_stop_pulse();
+
 	i2cs_register_write_complete_handler(NULL);
 }
 
 static void i2cs_if_start(void)
 {
 	i2cs_register_write_complete_handler(wr_complete_handler);
+}
+
+/* Function that sets up for I2CS to enable INT_AP_L extension. */
+static void i2cs_int_ap_extension_enable_(void)
+{
+	int_ap_extension_enabled_ = true;
 }
 
 static void i2cs_if_register(void)
@@ -239,6 +255,13 @@ static void i2cs_if_register(void)
 	tpm_register_interface(i2cs_if_start, i2cs_if_stop);
 	i2cs_fifo_adjust_count = 0;
 	i2cs_write_error_count = 0;
+
+	int_ap_register(i2cs_int_ap_extension_enable_);
+
+	/*
+	 * TODO: if TPM_BOARD_CFG has INT_AP extension enabled, then call
+	 * int_ap_extension_enable(), and set int_ap_extension_enabled_ true.
+	 */
 }
 DECLARE_HOOK(HOOK_INIT, i2cs_if_register, HOOK_PRIO_LAST);
 

@@ -110,6 +110,15 @@ GPIO_INT(DETECT_TPM_RST_L_ASSERTED, PIN(1, 4),  GPIO_INT_FALLING,
          tpm_rst_asserted)
 
 /*
+ * A GPIO to sample the current state of the I2CS SDA line, allowing to detect
+ * the 'wedged I2C bus' condition.
+ *
+ * Also, it works to detect an I2C transaction during extended INT_AP_L
+ * assertion.
+ */
+GPIO_INT(MONITOR_I2CS_SDA, PIN(1, 6), GPIO_INT_LOW, i2cs_sda_isr)
+
+/*
  * These GPIOs are to enable or disable EC-CR50 communication.
  * NOTE: If these are changed, you must update the information in board.c
  *       and ec_comm.c
@@ -186,12 +195,6 @@ GPIO(STRAP_B0,        PIN(1, 14), GPIO_INPUT)
 GPIO(STRAP_B1,        PIN(1, 15), GPIO_INPUT)
 
 GPIO(UNWEDGE_I2CS_SCL, PIN(1, 5), GPIO_OUT_HIGH)
-
-/*
- * A GPIO to sample the current state of the I2CS SDA line, allowing to detect
- * the 'wedged I2C bus' condition.
- */
-GPIO(MONITOR_I2CS_SDA, PIN(1, 6), GPIO_INPUT)
 
 /*
  * If you change the names of EN_PP3300_INA_L, I2C_SCL_INA, or I2C_SDA_INA,
