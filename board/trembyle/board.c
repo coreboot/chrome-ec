@@ -6,7 +6,7 @@
 /* Trembyle board configuration */
 
 #include "button.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "lid_switch.h"

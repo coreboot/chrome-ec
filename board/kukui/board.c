@@ -14,7 +14,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/als_tcs3400.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/rt946x.h"
@@ -350,7 +350,7 @@ DECLARE_HOOK(HOOK_INIT, board_rev_init, HOOK_PRIO_INIT_ADC + 1);
 #ifndef VARIANT_KUKUI_NO_SENSORS
 static struct mutex g_lid_mutex;
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* TCS3400 private data */
 static struct als_drv_data_t g_tcs3400_data = {
@@ -421,14 +421,14 @@ static const mat33_fp_t lid_standard_ref = {
 };
 #endif /* BOARD_KUKUI */
 
-#ifdef CONFIG_MAG_BMI160_BMM150
+#ifdef CONFIG_MAG_BMI_BMM150
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t mag_standard_ref = {
 	{0, FLOAT_TO_FP(-1), 0},
 	{FLOAT_TO_FP(-1), 0, 0},
 	{0, 0, FLOAT_TO_FP(-1)}
 };
-#endif /* CONFIG_MAG_BMI160_BMM150 */
+#endif /* CONFIG_MAG_BMI_BMM150 */
 
 struct motion_sensor_t motion_sensors[] = {
 	/*
@@ -449,8 +449,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &lid_standard_ref,
 	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* Enable accel in S0 */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -472,10 +472,10 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &lid_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
-#ifdef CONFIG_MAG_BMI160_BMM150
+#ifdef CONFIG_MAG_BMI_BMM150
 	[LID_MAG] = {
 	 .name = "Lid Mag",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
@@ -492,7 +492,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .min_frequency = BMM150_MAG_MIN_FREQ,
 	 .max_frequency = BMM150_MAG_MAX_FREQ(SPECIAL),
 	},
-#endif /* CONFIG_MAG_BMI160_BMM150 */
+#endif /* CONFIG_MAG_BMI_BMM150 */
 	[CLEAR_ALS] = {
 	 .name = "Clear Light",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
