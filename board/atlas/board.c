@@ -566,7 +566,7 @@ int board_get_version(void)
 /* Base Sensor mutex */
 static struct mutex g_base_mutex;
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 static struct opt3001_drv_data_t g_opt3001_data = {
 	.scale = 1,
 	.uscale = 0,

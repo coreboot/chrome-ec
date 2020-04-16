@@ -17,7 +17,7 @@
 #include "charger.h"
 #include "chipset.h"
 #include "console.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/baro_bmp280.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -617,7 +617,7 @@ int board_get_version(void)
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
@@ -674,8 +674,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .addr = BMI160_ADDR0,
 	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .default_range = 2, /* g, to support tablet mode  */
 	 .config = {
 		/* EC use accel for angle detection */
@@ -702,8 +702,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);

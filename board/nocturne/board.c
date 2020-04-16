@@ -14,7 +14,7 @@
 #include "common.h"
 #include "console.h"
 #include "compile_time_macros.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/als_opt3001.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/sync.h"
@@ -163,7 +163,7 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 static struct mutex g_lid_mutex;
 
 /* Sensor driver data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 static struct opt3001_drv_data_t g_opt3001_data = {
 	.scale = 1,
 	.uscale = 0,
@@ -190,9 +190,9 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ALS_GYRO,
 		.addr = BMI160_ADDR0,
 		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 4, /* g */
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.config = {
 			/* EC setup accel for chrome usage */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -214,8 +214,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.addr = BMI160_ADDR0,
 		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 1000, /* dps */
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 
 	[LID_ALS] = {

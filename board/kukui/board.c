@@ -13,8 +13,8 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accelgyro_bmi160.h"
 #include "driver/battery/max17055.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/charger/rt946x.h"
 #include "driver/sync.h"
 #include "driver/tcpm/mt6370.h"
@@ -334,7 +334,7 @@ int board_get_version(void)
 #ifdef SECTION_IS_RW
 static struct mutex g_base_mutex;
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* Matrix to rotate accelerometer into standard reference frame */
 const mat33_fp_t base_standard_ref = {
@@ -349,6 +349,7 @@ const mat33_fp_t mag_standard_ref = {
 	{ 0,  FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
+
 
 struct motion_sensor_t motion_sensors[] = {
 	/*
@@ -367,10 +368,10 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_ACCEL,
 	 .addr = BMI160_ADDR0,
-	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 4,  /* g */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .rot_standard_ref = &&base_standard_ref,
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* Enable accel in S0 */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -391,9 +392,9 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_ACCEL,
 	 .addr = BMI160_ADDR0,
 	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .rot_standard_ref = &&base_standard_ref,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 	[LID_MAG] = {
 	 .name = "Lid Mag",

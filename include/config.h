@@ -86,14 +86,14 @@
 #undef CONFIG_MAG_LIS2MDL
 #undef CONFIG_MAG_BMM150
 
-/* Presence of a Bosh Sensortec BMM150 magnetometer behind a BMI160. */
-#undef CONFIG_MAG_BMI160_BMM150
+/* Presence of a Bosh Sensortec BMM150 magnetometer behind a BMIxxx. */
+#undef CONFIG_MAG_BMI_BMM150
 
 /* Presence of a Bosh Sensortec BMM150 magnetometer behind a LSM6DSM. */
 #undef CONFIG_MAG_LSM6DSM_BMM150
 
-/* Presence of a ST LIS2MDL magnetometer behind a BMI160. */
-#undef CONFIG_MAG_BMI160_LIS2MDL
+/* Presence of a ST LIS2MDL magnetometer behind a BMIxxx. */
+#undef CONFIG_MAG_BMI_LIS2MDL
 
 /* Presence of a ST LIS2MDL magnetometer behind a LSM6DSM. */
 #undef CONFIG_MAG_LSM6DSM_LIS2MDL

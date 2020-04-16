@@ -407,33 +407,11 @@
 #define BMI160_FF_DATA_LEN_MAG          8
 
 
-/* Min and Max sampling frequency in mHz */
-#define BMI160_ACCEL_MIN_FREQ 12500
-#define BMI160_ACCEL_MAX_FREQ MOTION_MAX_SENSOR_FREQUENCY(1600000, 100000)
-#define BMI160_GYRO_MIN_FREQ  25000
-#define BMI160_GYRO_MAX_FREQ MOTION_MAX_SENSOR_FREQUENCY(3200000, 100000)
-
 extern const struct accelgyro_drv bmi160_drv;
 
 #define BMI160_FLAG_SEC_I2C_ENABLED    (1 << 0)
 #define BMI160_FIFO_FLAG_OFFSET        4
 #define BMI160_FIFO_ALL_MASK           7
-
-struct bmi160_drv_data_t {
-	struct accelgyro_saved_data_t saved_data[3];
-	uint8_t              flags;
-	uint8_t              enabled_activities;
-	uint8_t              disabled_activities;
-#ifdef CONFIG_MAG_BMI160_BMM150
-	struct bmm150_private_data compass;
-#endif
-#ifdef CONFIG_BMI160_ORIENTATION_SENSOR
-	uint8_t raw_orientation;
-	enum motionsensor_orientation orientation;
-	enum motionsensor_orientation last_orientation;
-#endif
-
-};
 
 void bmi160_interrupt(enum gpio_signal signal);
 

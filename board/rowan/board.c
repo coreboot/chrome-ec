@@ -443,7 +443,7 @@ const mat33_fp_t lid_standard_ref = {
 	{ 0,  0, FLOAT_TO_FP(1)}
 };
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	/*

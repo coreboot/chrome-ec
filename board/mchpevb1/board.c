@@ -23,7 +23,7 @@
 #include "driver/als_opt3001.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/tcpm/tcpci.h"
 #include "extpower.h"
 #include "gpio_chip.h"
@@ -915,7 +915,7 @@ DECLARE_HOOK(HOOK_SECOND, board_one_sec, HOOK_PRIO_DEFAULT);
 
 static struct mutex g_base_mutex;
 /* BMI160 private data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 #ifdef CONFIG_ACCEL_KX022
 static struct mutex g_lid_mutex;
@@ -941,8 +941,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_SET_SPI_ADDRESS(CONFIG_SPI_ACCEL_PORT),
 	 .rot_standard_ref = NULL, /* Identity matrix. */
 	 .default_range = 2,  /* g, enough for laptop. */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -964,8 +964,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .addr = BMI160_SET_SPI_ADDRESS(CONFIG_SPI_ACCEL_PORT),
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = NULL, /* Identity Matrix. */
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 #ifdef CONFIG_ACCEL_KX022
 	{.name = "Lid Accel",
