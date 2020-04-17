@@ -72,19 +72,20 @@ enable=
     zip-builtin-not-iterating,
 
 disable=
-    too-many-lines,
-    too-many-branches,
-    too-many-statements,
-    too-few-public-methods,
-    too-many-instance-attributes,
-    too-many-public-methods,
-    too-many-locals,
-    too-many-arguments,
-    locally-enabled,
-    locally-disabled,
-    fixme,
     bad-continuation,
+    fixme,
     invalid-name,
+    locally-disabled,
+    locally-enabled,
+    missing-print-function,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-branches,
+    too-many-instance-attributes,
+    too-many-lines,
+    too-many-locals,
+    too-many-public-methods,
+    too-many-statements,
 
 [REPORTS]
 
