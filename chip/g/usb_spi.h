@@ -8,6 +8,7 @@
 /* USB SPI driver for Chrome EC */
 
 #include "compile_time_macros.h"
+#include "cryptoc/sha256.h"
 #include "hooks.h"
 #include "queue.h"
 #include "queue_policies.h"
@@ -239,7 +240,11 @@ int usb_spi_interface(struct usb_spi_config const *config,
  * usb_spi_board_enable should return EC_SUCCESS on success or an error
  * otherwise.
  */
-int usb_spi_board_enable(struct usb_spi_config const *config);
-void usb_spi_board_disable(struct usb_spi_config const *config);
+int usb_spi_board_enable(int host);
+void usb_spi_board_disable(void);
+
+int usb_spi_sha256_start(HASH_CTX *ctx);
+int usb_spi_sha256_update(HASH_CTX *ctx, uint32_t offset, uint32_t size);
+void usb_spi_sha256_final(HASH_CTX *ctx, void *digest, size_t digest_size);
 
 #endif /* __CROS_EC_USB_SPI_H */
