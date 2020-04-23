@@ -7,8 +7,8 @@
 #include "crypto_api.h"
 #include "dcrypto.h"
 
-void app_compute_hash(uint8_t *p_buf, size_t num_bytes,
-		  uint8_t *p_hash, size_t hash_len)
+void app_compute_hash(const void *p_buf, size_t num_bytes, void *p_hash,
+		      size_t hash_len)
 {
 	uint8_t sha1_digest[SHA_DIGEST_SIZE];
 
@@ -16,12 +16,12 @@ void app_compute_hash(uint8_t *p_buf, size_t num_bytes,
 	 * Use the built in dcrypto engine to generate the sha1 hash of the
 	 * buffer.
 	 */
-	DCRYPTO_SHA1_hash((uint8_t *)p_buf, num_bytes, sha1_digest);
+	DCRYPTO_SHA1_hash(p_buf, num_bytes, sha1_digest);
 
 	memcpy(p_hash, sha1_digest, MIN(hash_len, sizeof(sha1_digest)));
 
 	if (hash_len > sizeof(sha1_digest))
-		memset(p_hash + sizeof(sha1_digest), 0,
+		memset((uint8_t *)p_hash + sizeof(sha1_digest), 0,
 		       hash_len - sizeof(sha1_digest));
 }
 

@@ -148,7 +148,7 @@ int usb_pdu_valid(struct upgrade_command *cmd_body,  size_t cmd_size)
 					       cmd.block_base);
 
 	/* Check if the block was received properly. */
-	DCRYPTO_SHA1_hash((uint8_t *)&cmd_body->block_base,
+	DCRYPTO_SHA1_hash(&cmd_body->block_base,
 			  body_size + sizeof(cmd_body->block_base),
 			  sha1_digest);
 	if (memcmp(sha1_digest, &cmd_body->block_digest,

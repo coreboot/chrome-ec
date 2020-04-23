@@ -323,7 +323,7 @@ static int command_loop(struct test_info *pinfo)
 	 * Prepare the hash of the original data to be able to verify
 	 * results.
 	 */
-	DCRYPTO_SHA1_hash((uint8_t *)(pinfo->p), pinfo->test_blob_size, sha);
+	DCRYPTO_SHA1_hash(pinfo->p, pinfo->test_blob_size, sha);
 
 	/* Use the hash as an IV for the cipher. */
 	memcpy(sha_after, sha, sizeof(sha_after));
@@ -369,8 +369,7 @@ static int command_loop(struct test_info *pinfo)
 			return EC_ERROR_UNKNOWN;
 		}
 
-		DCRYPTO_SHA1_hash((uint8_t *)(pinfo->p),
-				  pinfo->test_blob_size, sha_after);
+		DCRYPTO_SHA1_hash(pinfo->p, pinfo->test_blob_size, sha_after);
 		if (memcmp(sha, sha_after, sizeof(sha))) {
 			ccprintf("\n"
 				 "sha1 before and after mismatch, %d to go!\n",
