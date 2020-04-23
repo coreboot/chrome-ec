@@ -62,8 +62,8 @@ int app_cipher(const void *salt_p, void *out_p, const void *in_p, size_t size)
 	return 1;
 }
 
-void app_compute_hash(uint8_t *p_buf, size_t num_bytes,
-		      uint8_t *p_hash, size_t hash_bytes)
+void app_compute_hash(const void *p_buf, size_t num_bytes, void *p_hash,
+		      size_t hash_bytes)
 {
 	uint32_t crc;
 	uint32_t *p_data;
@@ -94,7 +94,7 @@ void app_compute_hash(uint8_t *p_buf, size_t num_bytes,
 	for (n = 0; n < hash_bytes; n += sizeof(crc)) {
 		size_t copy_bytes = MIN(sizeof(crc), hash_bytes - n);
 
-		memcpy(p_hash + n, &crc, copy_bytes);
+		memcpy((uint8_t *)p_hash + n, &crc, copy_bytes);
 	}
 }
 
