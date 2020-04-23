@@ -74,9 +74,10 @@ void usb_spi_deferred(struct usb_spi_config const *config)
 
 	if (enabled ^ config->state->enabled) {
 		if (enabled)
-			rv = usb_spi_board_enable(config);
+			rv = usb_spi_board_enable(config->state->enabled_host);
+
 		else
-			usb_spi_board_disable(config);
+			usb_spi_board_disable();
 
 		/* Only update our state if we were successful. */
 		if (rv == EC_SUCCESS)

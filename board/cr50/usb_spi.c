@@ -5,7 +5,6 @@
 
 #include "byteorder.h"
 #include "ccd_config.h"
-#include "cryptoc/sha256.h"
 #include "console.h"
 #include "dcrypto.h"
 #include "extension.h"
@@ -21,6 +20,7 @@
 #include "tpm_registers.h"
 #include "tpm_vendor_cmds.h"
 #include "usb_spi.h"
+#include "watchdog.h"
 
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
 
@@ -229,10 +229,8 @@ static void disable_spi_pinmux(void)
 /*****************************************************************************/
 /* USB SPI methods */
 
-int usb_spi_board_enable(struct usb_spi_config const *config)
+int usb_spi_board_enable(int host)
 {
-	int host = config->state->enabled_host;
-
 	/* Make sure we're allowed to enable the requested device */
 	if (host == USB_SPI_EC) {
 		if (!ccd_is_cap_enabled(CCD_CAP_EC_FLASH)) {
@@ -269,7 +267,7 @@ int usb_spi_board_enable(struct usb_spi_config const *config)
 	return EC_SUCCESS;
 }
 
-void usb_spi_board_disable(struct usb_spi_config const *config)
+void usb_spi_board_disable(void)
 {
 	CPRINTS("%s", __func__);
 
@@ -336,7 +334,8 @@ int usb_spi_interface(struct usb_spi_config const *config,
  *
  * @return EC_SUCCESS, or non-zero if any error.
  */
-int spi_read_chunk(uint8_t *buf_usr, unsigned int offset, unsigned int bytes)
+static int spi_read_chunk(uint8_t *buf_usr, unsigned int offset,
+			  unsigned int bytes)
 {
 	uint8_t cmd[4];
 
@@ -580,51 +579,77 @@ static enum vendor_cmd_rc spi_hash_dump(uint8_t *dest, uint32_t offset,
 	return VENDOR_RC_SUCCESS;
 }
 
-static enum vendor_cmd_rc spi_hash_sha256(uint8_t *dest, uint32_t offset,
-					  uint32_t size)
+int usb_spi_sha256_start(HASH_CTX *ctx)
 {
-	HASH_CTX sha;
-	uint8_t data[SPI_HASH_CHUNK_SIZE];
-	int chunk_size = SPI_HASH_CHUNK_SIZE;
-	int chunks = 0;
-
-	/* Fail if we don't own the bus */
 	if (get_spi_bus_user() != SPI_BUS_USER_HASH) {
 		CPRINTS("%s: not enabled", __func__);
-		return VENDOR_RC_NOT_ALLOWED;
+		return EC_ERROR_BUSY;
 	}
 
-	/* Bump inactivity timer to turn hashing mode off */
-	hook_call_deferred(&spi_hash_inactive_timeout_data,
-			   SPI_HASH_TIMEOUT_US);
+	DCRYPTO_SHA256_init(ctx, 0);
 
-	if (size > MAX_SPI_HASH_SIZE)
-		return VENDOR_RC_BOGUS_ARGS;
+	return EC_SUCCESS;
+}
 
-	CPRINTS("%s: 0x%x 0x%x", __func__, offset, size);
+int usb_spi_sha256_update(HASH_CTX *ctx, uint32_t offset, uint32_t size)
+{
+	uint8_t data[SPI_HASH_CHUNK_SIZE];
 
-	DCRYPTO_SHA256_init(&sha, 0);
+	while (size) {
+		const int this_chunk = MIN(size, SPI_HASH_CHUNK_SIZE);
 
-	for (chunks = 0; size > 0; chunks++) {
-		int this_chunk = MIN(size, chunk_size);
 		/* Read the data */
 		if (spi_read_chunk(data, offset, this_chunk) != EC_SUCCESS) {
 			CPRINTS("%s: read error at 0x%x", __func__, offset);
 			return VENDOR_RC_READ_FLASH_FAIL;
 		}
-
 		/* Update hash */
-		HASH_update(&sha, data, this_chunk);
+		HASH_update(ctx, data, this_chunk);
 
-		/* Give other things a chance to happen */
-		if (!(chunks % 128))
+		/* Kick the watchdog every 128 chunks. */
+		if (((size / SPI_HASH_CHUNK_SIZE) % 128) == 127) {
 			msleep(1);
+			watchdog_reload();
+		}
 
 		size -= this_chunk;
 		offset += this_chunk;
 	}
+	return EC_SUCCESS;
+}
 
-	memcpy(dest, HASH_final(&sha), SHA256_DIGEST_SIZE);
+void usb_spi_sha256_final(HASH_CTX *ctx, void *digest, size_t digest_size)
+{
+	size_t copy_size;
+
+	copy_size = MIN(digest_size, SHA256_DIGEST_SIZE);
+	memcpy(digest, HASH_final(ctx), copy_size);
+
+	if (copy_size < digest_size)
+		memset((uint8_t *)digest + copy_size, 0,
+		       digest_size - copy_size);
+}
+
+static enum vendor_cmd_rc spi_hash_sha256(uint8_t *dest, uint32_t offset,
+					  uint32_t size)
+{
+	HASH_CTX sha;
+
+	CPRINTS("%s: 0x%x 0x%x", __func__, offset, size);
+	if (size > MAX_SPI_HASH_SIZE)
+		return VENDOR_RC_BOGUS_ARGS;
+
+	/* Bump inactivity timer to turn hashing mode off */
+	hook_call_deferred(&spi_hash_inactive_timeout_data,
+			   SPI_HASH_TIMEOUT_US);
+
+	if (usb_spi_sha256_start(&sha) != EC_SUCCESS)
+		return VENDOR_RC_INTERNAL_ERROR;
+
+	if (usb_spi_sha256_update(&sha, offset, size) != EC_SUCCESS)
+		return VENDOR_RC_READ_FLASH_FAIL;
+
+	usb_spi_sha256_final(&sha, dest, SHA256_DIGEST_SIZE);
 
 	CPRINTS("%s: done", __func__);
 	return VENDOR_RC_SUCCESS;
