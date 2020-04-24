@@ -62,6 +62,9 @@ class ApRoTpmResponseError(Exception):
 
 VENDOR_CC_SEED_AP_RO_CHECK = 54
 
+# Code returned by Cr50 if a vendor command is not supported.
+VENDOR_RC_NO_SUCH_COMMAND_ERROR = 0x57f
+
 # The tag and format are the same for command and response.
 TPM_TAG = 0x8001
 HEADER_FMT = '>H2LH'
@@ -347,9 +350,10 @@ def send_to_cr50(ranges, digest):
     channel = TpmChannel()
     channel.write(p.packet())
     tpm_response = Cr50TpmResponse(channel.read(), subcmd)
-    if tpm_response.rc:
+    # Return payload value if present, if not - the header RC value.
+    if tpm_response.payload:
         return int(tpm_response.payload[0])
-    return 0
+    return tpm_response.rc
 
 
 def read_fmap(tmpd):
@@ -476,14 +480,20 @@ def calculate_hash(ro_file, ranges):
     return sha256.digest()
 
 
+usage_str = """
+%s: [-v] <range>|<fmap_area> [<range>|<fmap_area>...]
+         <range>: two colon separated hex values, AP flash area offset and size
+         <fmap_area>: symbolic name of the area as reported by dump_fmap
+         All ranges and fmap areas must fit into the WP_RO FMAP area
+"""  % sys.argv[0].split('/')[-1]
+
 def get_args(args):
     """Prepare argument parser and retrieve command line arguments.
 
     Returns the parser object with a namespace with all present optional
     arguments set.
     """
-    parser = argparse.ArgumentParser(description='AP RO Hashing utility')
-
+    parser = argparse.ArgumentParser(usage=usage_str)
     parser.add_argument(
         '--verbose', '-v',
         type=bool,
@@ -495,6 +505,17 @@ def get_args(args):
 
 def main(args):
     'Main function, receives a list of strings, command line arguments'
+
+    # Map of possible error codes returned by Cr50 (both vendor command and
+    # subcommand level errors) into strings.
+    error_codes = {
+        1 : 'Vendor command too short',
+        2 : 'Vendor command size mismatch',
+        3 : 'Bad offset value',
+        4 : 'Bad range size',
+        5 : 'Already programmed',
+        VENDOR_RC_NO_SUCH_COMMAND_ERROR : 'Insufficient C50 version',
+    }
 
     nsp, rest = get_args(args)
 
@@ -548,7 +569,11 @@ def main(args):
 
     rv = send_to_cr50(ranges, digest)
     if rv != 0:
-        LOG.error('Cr50 returned error %d' % rv)
+        err_str = error_codes.get(rv, 'Unknown')
+        LOG.error('Cr50 returned %s%x (%s)' % (
+            # Add 0x prefix if value exceeds 9.
+            '0x' if rv > 9 else '',
+            rv, err_str))
         return rv
     print('SUCCEEDED')
     return 0
