@@ -160,6 +160,14 @@
 	(CONFIG_PROGRAM_MEMORY_BASE + CHIP_RO_B_MEM_OFF + CONFIG_RO_SIZE -     \
 	 CONFIG_FLASH_LOG_SPACE)
 
+/* Space reserved for RO hashes */
+#define AP_RO_DATA_SPACE_SIZE CONFIG_FLASH_BANK_SIZE
+#define AP_RO_DATA_SPACE_ADDR (CONFIG_FLASH_LOG_BASE - AP_RO_DATA_SPACE_SIZE)
+
+/* Maximum space available for the RO image */
+#define MAX_RO_CODE_SIZE (CONFIG_RO_SIZE - CONFIG_FLASH_LOG_SPACE - \
+			  AP_RO_DATA_SPACE_SIZE)
+
 /* Use software crypto (libcryptoc). */
 #define CONFIG_LIBCRYPTOC
 #endif /* __CROS_EC_CONFIG_CHIP_H */
