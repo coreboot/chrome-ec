@@ -26,6 +26,7 @@ ifneq ($(CORE),cortex-m)
 common-$(CONFIG_AES)+=aes.o
 endif
 common-$(CONFIG_AES_GCM)+=aes-gcm.o
+common-$(CONFIG_AP_RO_VERIFICATION)+=ap_ro_integrity_check.o
 common-$(CONFIG_CMD_ADC)+=adc.o
 common-$(HAS_TASK_ALS)+=als.o
 common-$(CONFIG_AP_HANG_DETECT)+=ap_hang_detect.o

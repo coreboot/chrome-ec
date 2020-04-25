@@ -68,6 +68,16 @@ static uint8_t new_gang_mode;
 static void spi_hash_inactive_timeout(void);
 DECLARE_DEFERRED(spi_hash_inactive_timeout);
 
+/*
+ * Set to true when AP RO verification shortcut is enabled. Helps to prevent
+ * concurrent USB SPI operations over CCD.
+ */
+static bool shortcut_active_;
+bool usb_spi_shortcut_active(void)
+{
+	return shortcut_active_;
+}
+
 /*****************************************************************************/
 /*
  * Mutex and variable for tracking whether the SPI bus is used by the USB
@@ -200,6 +210,12 @@ static void enable_spi_pinmux(void)
 		gpio_get_level(GPIO_AP_FLASH_SELECT) ? "AP" : "EC");
 
 	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+
+	/*
+	 * Need to provide enough time for the SPI bus to stabilize
+	 * (b/154966209).
+	 */
+	msleep(2);
 }
 
 /**
@@ -467,6 +483,39 @@ static void spi_hash_pp_done(void)
 
 	CPRINTS("%s: %s", __func__,
 		(spi_hash_device == USB_SPI_AP ? "AP" : "EC"));
+}
+
+void enable_ap_spi_hash_shortcut(void)
+{
+	/*
+	 * This is a big hammer, invoked when the Chrome OS device is
+	 * processing the EC reset. Even if SPI bus was in use when the
+	 * operator triggered the AP RO hash verification it should be
+	 * released and re-acquired now.
+	 */
+	enum spi_bus_user_t curr_user;
+
+	shortcut_active_ = true;
+
+	curr_user = get_spi_bus_user();
+	if (curr_user != SPI_BUS_USER_NONE)
+		set_spi_bus_user(curr_user, 0);
+
+	/*
+	 * Simulate successful completion of physical presence detection
+	 * required to allow the AP flash hash check. This function is invoked
+	 * when the operator entered the appropriate sequence on the device
+	 * keyboard, so physical presence is already established.
+	 */
+	new_device = USB_SPI_AP;
+	spi_hash_pp_done();
+}
+
+void disable_ap_spi_hash_shortcut(void)
+{
+	spi_hash_disable();
+
+	shortcut_active_ = false;
 }
 
 /* Process vendor subcommand dealing with Physical presence polling. */

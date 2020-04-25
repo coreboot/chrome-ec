@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "ap_ro_integrity_check.h"
 #include "console.h"
 #include "extension.h"
 #include "gpio.h"
@@ -145,11 +146,13 @@ static int rctd_poll_handler(void)
 	if (!ref_last_state)
 		return 1;
 
-	CPRINTS("Esc press registered");
-	if (++ref_press_count != PRESS_COUNT)
+	if (++ref_press_count != PRESS_COUNT) {
+		CPRINTS("Refresh press registered");
 		return 1;
+	}
 
 	CPRINTS("RO Validation triggered");
+	validate_ap_ro();
 	return 0;
 }
 
