@@ -243,6 +243,18 @@ int usb_spi_interface(struct usb_spi_config const *config,
 int usb_spi_board_enable(int host);
 void usb_spi_board_disable(void);
 
+#ifdef CONFIG_AP_RO_VERIFICATION
+/* Returns true if AP RO verification is in progress. */
+bool usb_spi_shortcut_active(void);
+#else
+/* Make sure other than Cr50 boards build fine. */
+static inline bool usb_spi_shortcut_active(void) { return false; }
+#endif
+
+/* Functions to use to fast track AP RO flash verification. */
+void enable_ap_spi_hash_shortcut(void);
+void disable_ap_spi_hash_shortcut(void);
+
 int usb_spi_sha256_start(HASH_CTX *ctx);
 int usb_spi_sha256_update(HASH_CTX *ctx, uint32_t offset, uint32_t size);
 void usb_spi_sha256_final(HASH_CTX *ctx, void *digest, size_t digest_size);

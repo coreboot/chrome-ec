@@ -106,7 +106,7 @@ void usb_spi_deferred(struct usb_spi_config const *config)
 	    (!write_count && read_count == (uint8_t)SPI_READBACK_ALL))
 		return;
 
-	if (!config->state->enabled) {
+	if (!config->state->enabled || usb_spi_shortcut_active()) {
 		res = USB_SPI_DISABLED;
 	} else if (write_count > USB_SPI_MAX_WRITE_COUNT ||
 		   write_count != (count - HEADER_SIZE)) {

@@ -17,6 +17,7 @@ common-$(CONFIG_ACCEL_LIS2DH)+=math_util.o
 common-$(CONFIG_ACCEL_KXCJ9)+=math_util.o
 common-$(CONFIG_ACCEL_KX022)+=math_util.o
 common-$(CONFIG_ADC)+=adc.o
+common-$(CONFIG_AP_RO_VERIFICATION)+=ap_ro_integrity_check.o
 common-$(HAS_TASK_ALS)+=als.o
 common-$(CONFIG_AP_HANG_DETECT)+=ap_hang_detect.o
 common-$(CONFIG_BACKLIGHT_LID)+=backlight_lid.o
