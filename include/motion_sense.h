@@ -46,9 +46,9 @@ enum sensor_config {
 #define BASE_ODR(_odr) ((_odr) & ~ROUND_UP_FLAG)
 
 #ifdef CONFIG_ACCEL_FIFO
-#define SENSOR_MAX_FIFO_EVENT_COUNT  CONFIG_ACCEL_FIFO
+#define MAX_FIFO_EVENT_COUNT  CONFIG_ACCEL_FIFO
 #else
-#define SENSOR_MAX_FIFO_EVENT_COUNT  0
+#define MAX_FIFO_EVENT_COUNT  0
 #endif
 
 struct motion_data_t {
