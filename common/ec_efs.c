@@ -139,8 +139,10 @@ static enum vendor_cmd_rc vc_get_boot_mode_(struct vendor_cmd_params *p)
 {
 	uint8_t *buffer;
 
-	if (!board_has_ec_cr50_comm_support())
+	if (!board_has_ec_cr50_comm_support()) {
+		p->out_size = 0;
 		return VENDOR_RC_NO_SUCH_SUBCOMMAND;
+	}
 
 	buffer = (uint8_t *)p->buffer;
 	buffer[0] = (uint8_t)ec_efs_ctx.boot_mode;
@@ -158,6 +160,8 @@ DECLARE_VENDOR_COMMAND_P(VENDOR_CC_GET_BOOT_MODE, vc_get_boot_mode_);
  */
 static enum vendor_cmd_rc vc_reset_ec_(struct vendor_cmd_params *p)
 {
+	p->out_size = 0;
+
 	if (!board_has_ec_cr50_comm_support())
 		return VENDOR_RC_NO_SUCH_SUBCOMMAND;
 
