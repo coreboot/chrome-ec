@@ -310,9 +310,15 @@ static void sps_advance_rx(int port, int data_size)
  * passed to the callback, the callback is called one last time with zero data
  * size and the CS indication, this allows the client to delineate received
  * packets.
+ *
+ * Returns a Boolean indicating if data was seen during the most recent CS
+ * assertion. When 1, it indicates to the caller that the confirmation
+ * pulse to the AP needs to be generated.
  */
-static void sps_rx_interrupt(uint32_t port, int cs_deasserted)
+static uint32_t sps_rx_interrupt(uint32_t port, int cs_deasserted)
 {
+	uint32_t pulse_needed = 0;
+
 	for (;;) {
 		uint8_t *received_data = NULL;
 		size_t data_size;
@@ -336,30 +342,18 @@ static void sps_rx_interrupt(uint32_t port, int cs_deasserted)
 	if (cs_deasserted) {
 		if (seen_data) {
 			sps_rx_handler(NULL, 0, 1);
-
-			/*
-			 * Signal the AP that this SPI frame processing is
-			 * completed.
-			 */
-			gpio_set_level(GPIO_INT_AP_L, 0);
-
-			/*
-			 * This is to meet the AP requirement of minimum 4 usec
-			 *  duration of INT_AP_L assertion.
-			 *
-			 * TODO(b/130515803): Ideally, this should be improved
-			 * to support any duration requirement in future.
-			 */
-			tick_delay(2);
-
-			gpio_set_level(GPIO_INT_AP_L, 1);
 			seen_data = 0;
+			pulse_needed = 1;
 		}
 	}
+
+	return pulse_needed;
 }
 
 static void sps_cs_deassert_interrupt(uint32_t port)
 {
+	uint32_t pulse_needed;
+
 	if (sps_cs_asserted()) {
 		/*
 		 * we must have been slow, this is the next CS assertion after
@@ -387,7 +381,7 @@ static void sps_cs_deassert_interrupt(uint32_t port)
 	}
 
 	/* Make sure the receive FIFO is drained. */
-	sps_rx_interrupt(port, 1);
+	pulse_needed = sps_rx_interrupt(port, 1);
 	GWRITE_FIELD(SPS, ISTATE_CLR, CS_DEASSERT, 1);
 	GWRITE_FIELD(SPS, FIFO_CTRL, TXFIFO_EN, 0);
 
@@ -396,6 +390,25 @@ static void sps_cs_deassert_interrupt(uint32_t port)
 	 * by clocking out any bytes left over from this one.
 	 */
 	GREG32(SPS, TXFIFO_WPTR) = GREG32(SPS, TXFIFO_RPTR);
+
+	if (pulse_needed) {
+		/*
+		 * Signal the AP that this SPI frame processing is
+		 * completed.
+		 */
+		gpio_set_level(GPIO_INT_AP_L, 0);
+
+		/*
+		 * This is to meet the AP requirement of minimum 4 usec
+		 *  duration of INT_AP_L assertion.
+		 *
+		 * TODO(b/130515803): Ideally, this should be improved
+		 * to support any duration requirement in future.
+		 */
+		tick_delay(2);
+
+		gpio_set_level(GPIO_INT_AP_L, 1);
+	}
 }
 
 void _sps0_interrupt(void)
