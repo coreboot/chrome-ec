@@ -15,6 +15,14 @@
 #define USB_CHARGER_VOLTAGE_MV  5000
 /* USB charger minimum current */
 #define USB_CHARGER_MIN_CURR_MA 500
+/*
+ * USB charger maximum current
+ *
+ * The USB Type-C specification limits the maximum amount of current from BC 1.2
+ * suppliers to 1.5A.  Technically, proprietary methods are not allowed, but we
+ * will continue to allow those.
+ */
+#define USB_CHARGER_MAX_CURR_MA 1500
 
 /**
  * Set USB charge mode for the port.
