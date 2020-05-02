@@ -44,14 +44,14 @@ static const struct accel_param_pair ranges[] = {
 
 /* List of ODR values in mHz and their associated register values. */
 static const struct accel_param_pair datarates[] = {
-	{781,     BMA2x2_BW_7_81HZ},
-	{1563,    BMA2x2_BW_15_63HZ},
-	{3125,    BMA2x2_BW_31_25HZ},
-	{6250,    BMA2x2_BW_62_50HZ},
-	{12500,   BMA2x2_BW_125HZ},
-	{25000,   BMA2x2_BW_250HZ},
-	{50000,   BMA2x2_BW_500HZ},
-	{100000,  BMA2x2_BW_1000HZ},
+	{7810,     BMA2x2_BW_7_81HZ},
+	{15630,    BMA2x2_BW_15_63HZ},
+	{31250,    BMA2x2_BW_31_25HZ},
+	{62500,    BMA2x2_BW_62_50HZ},
+	{125000,   BMA2x2_BW_125HZ},
+	{250000,   BMA2x2_BW_250HZ},
+	{500000,   BMA2x2_BW_500HZ},
+	{1000000,  BMA2x2_BW_1000HZ},
 };
 
 /**
