@@ -11,7 +11,7 @@
 #include "common.h"
 #include "cros_board_info.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/als_tcs3400.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
@@ -46,6 +46,9 @@
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+static void check_reboot_deferred(void);
+DECLARE_DEFERRED(check_reboot_deferred);
 
 /* GPIO to enable/disable the USB Type-A port. */
 const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
@@ -86,9 +89,24 @@ static void tcpc_alert_event(enum gpio_signal signal)
 	schedule_deferred_pd_interrupt(port);
 }
 
+static void control_mst_power(void)
+{
+	baseboard_mst_enable_control(MST_HDMI,
+				     gpio_get_level(GPIO_HDMI_CONN_HPD));
+}
+DECLARE_DEFERRED(control_mst_power);
+
 static void hdmi_hpd_interrupt(enum gpio_signal signal)
 {
-	baseboard_mst_enable_control(MST_HDMI, gpio_get_level(signal));
+	/*
+	 * When the HPD goes high, enable the MST hub right away,
+	 * but debounce the low signal for 2 seconds to avoid transient low
+	 * pulses on the HPD signal.
+	 */
+	if (gpio_get_level(signal))
+		hook_call_deferred(&control_mst_power_data, 0);
+	else
+		hook_call_deferred(&control_mst_power_data, 2 * SECOND);
 }
 
 static void bc12_interrupt(enum gpio_signal signal)
@@ -178,7 +196,7 @@ static struct mutex g_base_mutex;
 static struct mutex g_lid_mutex;
 
 /* Base accel private data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
@@ -236,8 +254,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
@@ -263,8 +281,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
@@ -330,7 +348,7 @@ const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(73),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
@@ -400,6 +418,13 @@ static void board_init(void)
 {
 	/* Initialize Fans */
 	setup_fans();
+
+	/*
+	 * If HDMI is plugged in at boot, the interrupt may have been missed,
+	 * so check if the MST hub needs to be powered now.
+	 */
+	control_mst_power();
+
 	/* Enable HDMI HPD interrupt. */
 	gpio_enable_interrupt(GPIO_HDMI_CONN_HPD);
 
@@ -455,3 +480,37 @@ const int keyboard_factory_scan_pins[][2] = {
 const int keyboard_factory_scan_pins_used =
 			ARRAY_SIZE(keyboard_factory_scan_pins);
 #endif
+
+/* Disable HDMI power while AP is suspended / off */
+static void disable_hdmi(void)
+{
+	gpio_set_level(GPIO_EN_HDMI, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, disable_hdmi, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, disable_hdmi, HOOK_PRIO_DEFAULT);
+
+/* Enable HDMI power while AP is active */
+static void enable_hdmi(void)
+{
+	gpio_set_level(GPIO_EN_HDMI, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, enable_hdmi, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, enable_hdmi, HOOK_PRIO_DEFAULT);
+
+void all_sys_pgood_check_reboot(void)
+{
+	hook_call_deferred(&check_reboot_deferred_data, 3000 * MSEC);
+}
+
+__override void board_chipset_forced_shutdown(void)
+{
+	hook_call_deferred(&check_reboot_deferred_data, -1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_forced_shutdown,
+	HOOK_PRIO_DEFAULT);
+
+static void check_reboot_deferred(void)
+{
+	if (!gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD))
+		system_reset(SYSTEM_RESET_MANUALLY_TRIGGERED);
+}

@@ -42,7 +42,7 @@
 #include "config-stm32f76x.h"
 #elif defined(CHIP_FAMILY_STM32F4)
 /* STM32F4 family */
-#include "config-stm32f446.h"
+#include "config-stm32f4.h"
 #elif defined(CHIP_VARIANT_STM32F373)
 #include "config-stm32f373.h"
 #elif defined(CHIP_VARIANT_STM32F09X)
@@ -97,7 +97,7 @@
 #define SMALLER_TASK_STACK_SIZE 384
 
 /* Default task stack size */
-#define TASK_STACK_SIZE 488
+#define TASK_STACK_SIZE 512
 
 /* Larger task stack size, for hook task */
 #define LARGER_TASK_STACK_SIZE 640

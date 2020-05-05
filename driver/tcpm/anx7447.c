@@ -93,7 +93,7 @@ static inline int anx7447_reg_read(int port, int reg, int *val)
 	return rv;
 }
 
-void anx7447_hpd_mode_en(int port)
+void anx7447_hpd_mode_init(int port)
 {
 	int reg, rv;
 
@@ -101,7 +101,13 @@ void anx7447_hpd_mode_en(int port)
 	if (rv)
 		return;
 
-	reg |= ANX7447_REG_HPD_MODE;
+	/*
+	 * Set ANX7447_REG_HPD_MODE bit as 0, then the TCPC will generate the
+	 * HPD pulse from internal timer (by using ANX7447_REG_HPD_IRQ0)
+	 * instead of using the ANX7447_REG_HPD_OUT to set the HPD IRQ signal.
+	 */
+	reg &= ~(ANX7447_REG_HPD_MODE | ANX7447_REG_HPD_PLUG |
+		 ANX7447_REG_HPD_UNPLUG);
 	anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
 }
 
@@ -125,10 +131,18 @@ void anx7447_set_hpd_level(int port, int hpd_lvl)
 	if (rv)
 		return;
 
-	if (hpd_lvl)
-		reg |= ANX7447_REG_HPD_OUT;
-	else
-		reg &= ~ANX7447_REG_HPD_OUT;
+	/*
+	 * When ANX7447_REG_HPD_MODE is 1, use ANX7447_REG_HPD_OUT
+	 * to generate HPD event, otherwise use ANX7447_REG_HPD_UNPLUG
+	 * and ANX7447_REG_HPD_PLUG.
+	 */
+	if (hpd_lvl) {
+		reg &= ~ANX7447_REG_HPD_UNPLUG;
+		reg |= ANX7447_REG_HPD_PLUG;
+	} else {
+		reg &= ~ANX7447_REG_HPD_PLUG;
+		reg |= ANX7447_REG_HPD_UNPLUG;
+	}
 	anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
 }
 
@@ -340,6 +354,15 @@ static int anx7447_init(int port)
 	if (rv)
 		return rv;
 
+	/*
+	 * Specifically disable voltage alarms, as VBUS_VOLTAGE_ALARM_HI may
+	 * trigger repeatedly despite being masked (b/153989733)
+	 */
+	rv = tcpc_update16(port, TCPC_REG_POWER_CTRL,
+			   TCPC_REG_POWER_CTRL_VBUS_VOL_MONITOR_DIS, MASK_SET);
+	if (rv)
+		return rv;
+
 	/* ADC enable, use to monitor VBUS voltage */
 	rv = tcpc_read(port, ANX7447_REG_ADC_CTRL_1, &reg);
 	if (rv)
@@ -483,11 +506,15 @@ void anx7447_tcpc_update_hpd_status(const struct usb_mux *me,
 		if (now < hpd_deadline[port])
 			usleep(hpd_deadline[port] - now);
 
+		/*
+		 * For generate hardware HPD IRQ, need clear bit
+		 * ANX7447_REG_HPD_IRQ0 first, then set it. This bit is not
+		 * write clear.
+		 */
 		anx7447_reg_read(port, ANX7447_REG_HPD_CTRL_0, &reg);
-		reg &= ~ANX7447_REG_HPD_OUT;
+		reg &= ~ANX7447_REG_HPD_IRQ0;
 		anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
-		usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
-		reg |= ANX7447_REG_HPD_OUT;
+		reg |= ANX7447_REG_HPD_IRQ0;
 		anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
 	}
 	/* enforce 2-ms delay between HPD pulses */
@@ -510,7 +537,7 @@ static int anx7447_mux_init(const struct usb_mux *me)
 	memset(&mux[port], 0, sizeof(struct anx_usb_mux));
 
 	/* init hpd status */
-	anx7447_hpd_mode_en(port);
+	anx7447_hpd_mode_init(port);
 	anx7447_set_hpd_level(port, 0);
 	anx7447_hpd_output_en(port);
 
@@ -652,10 +679,47 @@ static int anx7447_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
 }
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+static int anx7447_tcpc_drp_toggle(int port)
+{
+	int rv, reg;
+
+	rv = tcpc_read(port, ANX7447_REG_ANALOG_CTRL_10, &reg);
+	if (rv)
+		return rv;
+	/*
+	 * When using Look4Connection command to toggle CC under normal mode
+	 * the CABLE_DET_DIG shall be clear first.
+	 */
+	if (reg & ANX7447_REG_CABLE_DET_DIG) {
+		reg &= ~ANX7447_REG_CABLE_DET_DIG;
+		rv = tcpc_write(port, ANX7447_REG_ANALOG_CTRL_10, reg);
+		if (rv)
+			return rv;
+	}
+
+	return tcpci_tcpc_drp_toggle(port);
+}
+#endif
+
 /* Override for tcpci_tcpm_set_cc */
 static int anx7447_set_cc(int port, int pull)
 {
-	int rp;
+	int rp, reg;
+
+	rp = tcpc_read(port, ANX7447_REG_ANALOG_CTRL_10, &reg);
+	if (rp)
+		return rp;
+	/*
+	 * When setting CC status, should be confirm that the CC toggling
+	 * process is stopped, the CABLE_DET_DIG shall be set to one.
+	 */
+	if ((reg & ANX7447_REG_CABLE_DET_DIG) == 0) {
+		reg |= ANX7447_REG_CABLE_DET_DIG;
+		rp = tcpc_write(port, ANX7447_REG_ANALOG_CTRL_10, reg);
+		if (rp)
+			return rp;
+	}
 
 	rp = tcpci_get_cached_rp(port);
 
@@ -702,7 +766,7 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-	.drp_toggle		= &tcpci_tcpc_drp_toggle,
+	.drp_toggle		= anx7447_tcpc_drp_toggle,
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
 #ifdef CONFIG_USBC_PPC

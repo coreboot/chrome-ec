@@ -14,7 +14,7 @@
 #include "common.h"
 #include "console.h"
 #include "compile_time_macros.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/als_opt3001.h"
 #include "driver/charger/isl923x.h"
 #include "driver/ppc/sn5s330.h"
@@ -116,17 +116,17 @@ const struct adc_t adc_channels[] = {
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
 const struct pwm_t pwm_channels[] = {
 	[PWM_CH_DB0_LED_RED] =   { 3, PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-				   2400 },
+				   986 },
 	[PWM_CH_DB0_LED_GREEN] = { 0, PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-				   2400 },
+				   986 },
 	[PWM_CH_DB0_LED_BLUE] =  { 2, PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-				   2400 },
+				   986 },
 	[PWM_CH_DB1_LED_RED] =   { 7, PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-				   2400 },
+				   986 },
 	[PWM_CH_DB1_LED_GREEN] = { 5, PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-				   2400 },
+				   986 },
 	[PWM_CH_DB1_LED_BLUE] =  { 6, PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-				   2400 },
+				   986 },
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
@@ -166,7 +166,7 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 static struct mutex g_lid_mutex;
 
 /* Sensor driver data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 static struct opt3001_drv_data_t g_opt3001_data = {
 	.scale = 1,
 	.uscale = 0,
@@ -194,8 +194,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.config = {
 			/* EC setup accel for chrome usage */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -217,8 +217,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 1000, /* dps */
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 
 	[LID_ALS] = {
@@ -306,7 +306,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 			.port = I2C_PORT_USB_C0,
 			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
 		},
-		.drv = &tcpci_tcpm_drv,
+		.drv = &ps8xxx_tcpm_drv,
 	},
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -314,7 +314,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 			.port = I2C_PORT_USB_C1,
 			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
 		},
-		.drv = &tcpci_tcpm_drv,
+		.drv = &ps8xxx_tcpm_drv,
 	},
 };
 
@@ -345,10 +345,6 @@ const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 void board_chipset_startup(void)
 {
 	gpio_set_level(GPIO_EN_5V, 1);
-	gpio_set_level(GPIO_PP3300_NVME_EN, 1);
-	msleep(2);
-	gpio_set_level(GPIO_PP1800_NVME_EN, 1);
-	gpio_set_level(GPIO_PPVAR_NVME_CORE_EN, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 
@@ -371,10 +367,6 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 void board_chipset_shutdown(void)
 {
 	gpio_set_level(GPIO_EN_5V, 0);
-	gpio_set_level(GPIO_PPVAR_NVME_CORE_EN, 0);
-	gpio_set_level(GPIO_PP1800_NVME_EN, 0);
-	msleep(2);
-	gpio_set_level(GPIO_PP3300_NVME_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
@@ -476,15 +468,6 @@ static void board_pmic_disable_slp_s0_vr_decay(void)
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x34, 0x2a);
 
 	/*
-	 * V100ACNT:
-	 * Bits 7:6 (00) - Disable low power mode on SLP_S0# assertion
-	 * Bits 5:4 (01) - Nominal voltage 1.0V
-	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
-	 * Bits 1:0 (10) - VR set to AUTO operating mode
-	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x37, 0x1a);
-
-	/*
 	 * V085ACNT:
 	 * Bits 7:6 (00) - Disable low power mode on SLP_S0# assertion
 	 * Bits 5:4 (10) - Nominal voltage 0.85V
@@ -513,15 +496,6 @@ static void board_pmic_enable_slp_s0_vr_decay(void)
 	 * Bits 1:0 (10) - VR set to AUTO operating mode
 	 */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x34, 0x6a);
-
-	/*
-	 * V100ACNT:
-	 * Bits 7:6 (01) - Enable low power mode on SLP_S0# assertion
-	 * Bits 5:4 (01) - Nominal voltage 1.0V
-	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
-	 * Bits 1:0 (10) - VR set to AUTO operating mode
-	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x37, 0x5a);
 
 	/*
 	 * V085ACNT:
@@ -557,6 +531,9 @@ static void board_pmic_init(void)
 
 	/* Enable active discharge (100 ohms) on V33A_PCH and V1.8A. */
 	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x3D, 0x5);
+
+	/* Enable active discharge (500 ohms) on 1.8U and (100 ohms) 1.2U. */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x3E, 0xD0);
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
 
@@ -634,6 +611,22 @@ const struct temp_sensor_t temp_sensors[] = {
 	{"Gyro", TEMP_SENSOR_TYPE_BOARD, read_gyro_sensor_temp, LID_GYRO}
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
+
+/*
+ * Thermal limits for each temp sensor. All temps are in degrees K. Must be in
+ * same order as enum temp_sensor_id. To always ignore any temp, use 0.
+ */
+struct ec_thermal_config thermal_params[] = {
+	/* {Twarn, Thigh, Thalt}, fan_off, fan_max */
+	{{0,          0, 0}, {0, 0, 0}, 0, 0}, /* Battery */
+	{{0,          0, 0}, {0, 0, 0}, 0, 0}, /* Ambient */
+	{{0,          0, 0}, {0, 0, 0}, 0, 0}, /* Charger */
+	{{0, C_TO_K(52), 0}, {0, 0, 0}, 0, 0}, /* DRAM */
+	{{0,          0, 0}, {0, 0, 0}, 0, 0}, /* eMMC */
+	{{0,          0, 0}, {0, 0, 0}, 0, 0}  /* Gyro */
+};
+BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
 
 /*
  * Check if PMIC fault registers indicate VR fault. If yes, print out fault

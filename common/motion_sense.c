@@ -21,6 +21,7 @@
 #include "motion_sense.h"
 #include "motion_sense_fifo.h"
 #include "motion_lid.h"
+#include "online_calibration.h"
 #include "power.h"
 #include "queue.h"
 #include "tablet_mode.h"
@@ -1312,6 +1313,22 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			return EC_RES_INVALID_PARAM;
 		}
 		break;
+	case MOTIONSENSE_CMD_ONLINE_CALIB_READ:
+		if (!IS_ENABLED(CONFIG_ONLINE_CALIB))
+			return EC_RES_INVALID_PARAM;
+		sensor = host_sensor_id_to_real_sensor(
+			in->online_calib_read.sensor_num);
+		if (sensor == NULL)
+			return EC_RES_INVALID_PARAM;
+
+
+		args->response_size =
+			online_calibration_read(
+				(int)(sensor - motion_sensors),
+				out->online_calib_read.data)
+			? sizeof(struct ec_response_online_calibration_data)
+			: 0;
+		break;
 #ifdef CONFIG_GESTURE_HOST_DETECTION
 	case MOTIONSENSE_CMD_LIST_ACTIVITIES: {
 		uint32_t enabled, disabled, mask, i;
@@ -1427,7 +1444,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 
 DECLARE_HOST_COMMAND(EC_CMD_MOTION_SENSE_CMD, host_cmd_motion_sense,
 		     EC_VER_MASK(1) | EC_VER_MASK(2) | EC_VER_MASK(3) |
-			     EC_VER_MASK(4));
+		     EC_VER_MASK(4));
 
 /*****************************************************************************/
 /* Console commands */

@@ -98,9 +98,6 @@ static int chip_i2c_xfer_with_notify(const int port,
 	uint16_t addr_flags = slave_addr_flags;
 	const struct i2c_port_t *i2c_port = get_i2c_port(port);
 
-	if (IS_ENABLED(CONFIG_I2C_DEBUG))
-		i2c_trace_notify(port, slave_addr_flags, 0, out, out_size);
-
 	if (IS_ENABLED(CONFIG_I2C_XFER_BOARD_CALLBACK))
 		i2c_start_xfer_notify(port, slave_addr_flags);
 
@@ -120,8 +117,10 @@ static int chip_i2c_xfer_with_notify(const int port,
 	if (IS_ENABLED(CONFIG_I2C_XFER_BOARD_CALLBACK))
 		i2c_end_xfer_notify(port, slave_addr_flags);
 
-	if (IS_ENABLED(CONFIG_I2C_DEBUG))
-		i2c_trace_notify(port, slave_addr_flags, 1, in, in_size);
+	if (IS_ENABLED(CONFIG_I2C_DEBUG)) {
+		i2c_trace_notify(port, slave_addr_flags, out, out_size,
+				 in, in_size);
+	}
 
 	return ret;
 }
@@ -1350,6 +1349,7 @@ static int command_scan(int argc, char **argv)
 {
 	int port;
 	char *e;
+	const struct i2c_port_t *i2c_port;
 
 	if (argc == 1) {
 		for (port = 0; port < i2c_ports_used; port++)
@@ -1365,10 +1365,15 @@ static int command_scan(int argc, char **argv)
 
 
 	port = strtoi(argv[1], &e, 0);
-	if ((*e) || (port >= i2c_ports_used))
+	if (*e)
 		return EC_ERROR_PARAM2;
 
-	scan_bus(i2c_ports[port].port, i2c_ports[port].name);
+	i2c_port = get_i2c_port(port);
+	if (!i2c_port)
+		return EC_ERROR_PARAM2;
+
+	scan_bus(port, i2c_port->name);
+
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(i2cscan, command_scan,

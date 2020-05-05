@@ -8,6 +8,7 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "button.h"
+#include "cbi_ec_fw_config.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "charge_state_v2.h"
@@ -15,20 +16,20 @@
 #include "compile_time_macros.h"
 #include "console.h"
 #include "cros_board_info.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/bc12/pi3usb9201.h"
-#include "driver/charger/isl9241.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
+#include "driver/retimer/pi3hdx1204.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
+#include "driver/temp_sensor/tmp432.h"
 #include "driver/usb_mux/amd_fp5.h"
 #include "ec_commands.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "ioexpander.h"
-#include "ioexpander_nct38xx.h"
 #include "i2c.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
@@ -105,66 +106,6 @@ const struct power_signal_info power_signal_list[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
-const struct i2c_port_t i2c_ports[] = {
-	{
-		.name = "tcpc0",
-		.port = I2C_PORT_TCPC0,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_USB_A0_C0_SCL,
-		.sda = GPIO_EC_I2C_USB_A0_C0_SDA,
-	},
-	{
-		.name = "tcpc1",
-		.port = I2C_PORT_TCPC1,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_USB_A1_C1_SCL,
-		.sda = GPIO_EC_I2C_USB_A1_C1_SDA,
-	},
-	{
-		.name = "power",
-		.port = I2C_PORT_BATTERY,
-		.kbps = 100,
-		.scl = GPIO_EC_I2C_POWER_SCL,
-		.sda = GPIO_EC_I2C_POWER_SDA,
-	},
-	{
-		.name = "ap_mux",
-		.port = I2C_PORT_USB_AP_MUX,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_USBC_AP_MUX_SCL,
-		.sda = GPIO_EC_I2C_USBC_AP_MUX_SDA,
-	},
-	{
-		.name = "thermal",
-		.port = I2C_PORT_THERMAL,
-		.kbps = 400,
-		.scl = GPIO_FCH_SIC,
-		.sda = GPIO_FCH_SID,
-	},
-	{
-		.name = "sensor",
-		.port = I2C_PORT_SENSOR,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_SENSOR_CBI_SCL,
-		.sda = GPIO_EC_I2C_SENSOR_CBI_SDA,
-	},
-	{
-		.name = "ap_audio",
-		.port = I2C_PORT_AP_AUDIO,
-		.kbps = 400,
-		.scl = GPIO_FCH_I2C_AUDIO_SCL,
-		.sda = GPIO_FCH_I2C_AUDIO_SDA,
-	},
-	{
-		.name = "ap_hdmi",
-		.port = I2C_PORT_AP_HDMI,
-		.kbps = 400,
-		.scl = GPIO_FCH_I2C_HDMI_HUB_3V3_SCL,
-		.sda = GPIO_FCH_I2C_HDMI_HUB_3V3_SDA,
-	},
-};
-const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
-
 struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		/* Device does not talk I2C */
@@ -179,15 +120,6 @@ struct ppc_config_t ppc_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-const struct charger_config_t chg_chips[] = {
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
-		.drv = &isl9241_drv,
-	},
-};
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 void ppc_interrupt(enum gpio_signal signal)
 {
@@ -294,28 +226,6 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
-
-void baseboard_tcpc_init(void)
-{
-	/* Enable PPC interrupts. */
-	gpio_enable_interrupt(GPIO_USB_C0_PPC_FAULT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
-
-	/* Enable TCPC interrupts. */
-	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
-
-	/* Enable BC 1.2 interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
-
-	/* Enable HPD interrupts */
-	ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
-#ifdef VARIANT_ZORK_TREMBYLE
-	ioex_enable_interrupt(IOEX_MST_HPD_OUT);
-#endif
-}
-DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
 /*
  * In the AOZ1380 PPC, there are no programmable features.  We use
@@ -428,26 +338,6 @@ void bc12_interrupt(enum gpio_signal signal)
 	}
 }
 
-struct ioexpander_config_t ioex_config[] = {
-	[USBC_PORT_C0] = {
-		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
-		.drv = &nct38xx_ioexpander_drv,
-	},
-	[USBC_PORT_C1] = {
-		.i2c_host_port = I2C_PORT_TCPC1,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
-		.drv = &nct38xx_ioexpander_drv,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(ioex_config) == USBC_PORT_COUNT);
-BUILD_ASSERT(CONFIG_IO_EXPANDER_PORT_COUNT == USBC_PORT_COUNT);
-
-const int usb_port_enable[USB_PORT_COUNT] = {
-	IOEX_EN_USB_A0_5V,
-	IOEX_EN_USB_A1_5V_DB,
-};
-
 static void baseboard_chipset_suspend(void)
 {
 	/* Disable display and keyboard backlights. */
@@ -475,8 +365,13 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 
 /* Keyboard scan setting */
 struct keyboard_scan_config keyscan_config = {
-	/* Extra delay when KSO2 is tied to Cr50. */
-	.output_settle_us = 60,
+	/*
+	 * F3 key scan cycle completed but scan input is not
+	 * charging to logic high when EC start scan next
+	 * column for "T" key, so we set .output_settle_us
+	 * to 80us
+	 */
+	.output_settle_us = 80,
 	.debounce_down_us = 6 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 1500,
@@ -570,19 +465,32 @@ const struct temp_sensor_t temp_sensors[] = {
 		.read = sb_tsi_get_val,
 		.idx = 0,
 	},
+#ifdef BOARD_MORPHIUS
+	[TEMP_SENSOR_5V_REGULATOR] = {
+		.name = "5V_REGULATOR",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = tmp432_get_val,
+		.idx = TMP432_IDX_LOCAL,
+	},
+#endif
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
 {
-	if (board_is_convertible())
+	if (ec_config_has_lid_angle_tablet_mode())
 		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
 #endif
 
 /* Unprovisioned magic value. */
 static uint32_t sku_id = 0x7fffffff;
+
+uint32_t system_get_sku_id(void)
+{
+	return sku_id;
+}
 
 static void cbi_init(void)
 {
@@ -597,31 +505,22 @@ static void cbi_init(void)
 		sku_id = val;
 	ccprints("SKU: %d (0x%x)", sku_id, sku_id);
 
-#ifdef HAS_TASK_MOTIONSENSE
-	board_update_sensor_config_from_sku();
-#endif
-
+	/* FW config */
+	val = get_cbi_fw_config();
+	if (val == UNINITIALIZED_FW_CONFIG)
+		ccprints("FW Config: not set in cbi");
+	else
+		ccprints("FW Config: %d (0x%x)", val, val);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
-
-uint32_t system_get_sku_id(void)
-{
-	return sku_id;
-}
 
 /*
  * Returns 1 for boards that are convertible into tablet mode, and zero for
  * clamshells.
  */
-int board_is_convertible(void)
-{
-	/* TODO: Add convertible SKU values */
-	return 0;
-}
-
 int board_is_lid_angle_tablet_mode(void)
 {
-	return board_is_convertible();
+	return ec_config_has_lid_angle_tablet_mode();
 }
 
 void board_overcurrent_event(int port, int is_overcurrented)
@@ -675,3 +574,16 @@ void hdmi_hpd_interrupt(enum ioex_signal signal)
 	/* Debounce for 2 msec. */
 	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }
+
+static void pi3hdx1204_retimer_power(void)
+{
+	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
+		int enable = chipset_in_or_transitioning_to_state(
+			CHIPSET_STATE_ON);
+		pi3hdx1204_enable(I2C_PORT_TCPC1,
+				  PI3HDX1204_I2C_ADDR_FLAGS,
+				  enable);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, pi3hdx1204_retimer_power, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, pi3hdx1204_retimer_power, HOOK_PRIO_DEFAULT);

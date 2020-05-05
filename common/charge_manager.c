@@ -414,10 +414,19 @@ static void charge_manager_fill_power_info(int port,
 		/*
 		 * Report unknown charger CHARGE_DETECT_DELAY after supplier
 		 * change since PD negotiation may take time.
+		 *
+		 * Do not debounce on batteryless systems because
+		 * USB_CHG_TYPE_UNKNOWN implies the system is still on battery
+		 * while some kind of negotiation happens, but by the time the
+		 * host might request this in a battery-free configuration we
+		 * must be stable (if not, the system is either up or about to
+		 * lose power again).
 		 */
+#ifdef CONFIG_BATTERY
 		if (get_time().val < registration_time[port].val +
 				     CHARGE_DETECT_DELAY)
 			r->type = USB_CHG_TYPE_UNKNOWN;
+#endif
 
 #if defined(HAS_TASK_CHG_RAMP) || defined(CONFIG_CHARGE_RAMP_HW)
 		/* Read ramped current if active charging port */
@@ -695,6 +704,10 @@ static void charge_manager_refresh(void)
 	}
 
 	active_charge_port_initialized = 1;
+
+	/* Set the active charger chip based upon the selected charge port. */
+	if (IS_ENABLED(CONFIG_OCPC))
+		charge_set_active_chg_chip(new_port);
 
 	/*
 	 * Clear override if it wasn't selected as the 'best' port -- it means

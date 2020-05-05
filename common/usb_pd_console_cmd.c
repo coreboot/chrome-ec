@@ -16,43 +16,52 @@ static void dump_pe(int port)
 	int i, j, idh_ptype;
 	struct svdm_amode_data *modep;
 	uint32_t mode_caps;
-	struct pd_policy *pe = pd_get_am_policy(port);
-	const char * const idh_ptype_names[]  = {
+	struct pd_discovery *disc = pd_get_am_discovery(port);
+	const union disc_ident_ack *resp;
+	enum tcpm_transmit_type type;
+
+	static const char * const idh_ptype_names[]  = {
 		"UNDEF", "Hub", "Periph", "PCable", "ACable", "AMA",
 		"RSV6", "RSV7"};
+	static const char * const tx_names[] = {"SOP", "SOP'", "SOP''"};
 
-	if (pe->identity[0] == 0) {
-		ccprintf("No identity discovered yet.\n");
-		return;
+	for (type = TCPC_TX_SOP; type < DISCOVERY_TYPE_COUNT; type++) {
+		resp = pd_get_identity_response(port, type);
+		if (pd_get_identity_discovery(port, type) != PD_DISC_COMPLETE) {
+			ccprintf("No %s identity discovered yet.\n",
+								tx_names[type]);
+			continue;
+		}
+
+		idh_ptype = resp->idh.product_type;
+		ccprintf("IDENT %s:\n", tx_names[type]);
+		ccprintf("\t[ID Header] %08x :: %s, VID:%04x\n",
+			 resp->raw_value[0],
+			 idh_ptype_names[idh_ptype],
+			 resp->idh.usb_vendor_id);
+
+		ccprintf("\t[Cert Stat] %08x\n", resp->cert.xid);
+		for (i = 2; i < ARRAY_SIZE(resp->raw_value); i++) {
+			ccprintf("\t");
+			if (resp->raw_value[i])
+				ccprintf("[%d] %08x ", i, resp->raw_value[i]);
+		}
+		ccprintf("\n");
 	}
 
-	idh_ptype = PD_IDH_PTYPE(pe->identity[0]);
-	ccprintf("IDENT:\n");
-	ccprintf("\t[ID Header] %08x :: %s, VID:%04x\n",
-				pe->identity[0],
-				idh_ptype_names[idh_ptype],
-				pd_get_identity_vid(port));
-
-	ccprintf("\t[Cert Stat] %08x\n", pe->identity[1]);
-	for (i = 2; i < ARRAY_SIZE(pe->identity); i++) {
-		ccprintf("\t");
-		if (pe->identity[i])
-			ccprintf("[%d] %08x ", i, pe->identity[i]);
-	}
-	ccprintf("\n");
-
-	if (pe->svid_cnt < 1) {
+	if (disc->svid_cnt < 1) {
 		ccprintf("No SVIDS discovered yet.\n");
 		return;
 	}
 
-	for (i = 0; i < pe->svid_cnt; i++) {
-		ccprintf("SVID[%d]: %04x MODES:", i, pe->svids[i].svid);
-		for (j = 0; j < pe->svids[j].mode_cnt; j++)
-			ccprintf(" [%d] %08x", j + 1, pe->svids[i].mode_vdo[j]);
+	for (i = 0; i < disc->svid_cnt; i++) {
+		ccprintf("SVID[%d]: %04x MODES:", i, disc->svids[i].svid);
+		for (j = 0; j < disc->svids[j].mode_cnt; j++)
+			ccprintf(" [%d] %08x", j + 1,
+						disc->svids[i].mode_vdo[j]);
 		ccprintf("\n");
 
-		modep = pd_get_amode_data(port, pe->svids[i].svid);
+		modep = pd_get_amode_data(port, disc->svids[i].svid);
 		if (modep) {
 			mode_caps = modep->data->mode_vdo[modep->opos - 1];
 			ccprintf("MODE[%d]: svid:%04x caps:%08x\n", modep->opos,

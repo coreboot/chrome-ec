@@ -7,22 +7,34 @@
 #include "common.h"
 #include "console.h"
 #include "driver/ppc/syv682x.h"
+#include "hooks.h"
 #include "i2c.h"
+#include "system.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
+#include "usb_pd.h"
 #include "util.h"
 
-#define SYV682X_FLAGS_SOURCE_ENABLED BIT(0)
+#define SYV682X_FLAGS_SOURCE_ENABLED	BIT(0)
 /* 0 -> CC1, 1 -> CC2 */
-#define SYV682X_FLAGS_CC_POLARITY BIT(1)
-#define SYV682X_FLAGS_VBUS_PRESENT BIT(2)
+#define SYV682X_FLAGS_CC_POLARITY	BIT(1)
+#define SYV682X_FLAGS_VBUS_PRESENT	BIT(2)
+#define SYV682X_FLAGS_OCP		BIT(3)
+#define SYV682X_FLAGS_OVP		BIT(4)
+#define SYV682X_FLAGS_TSD		BIT(5)
+#define SYV682X_FLAGS_RVS		BIT(6)
+#define SYV682X_FLAGS_VCONN_OCP		BIT(7)
+
+static uint32_t irq_pending; /* Bitmask of ports signaling an interrupt. */
 static uint8_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #define SYV682X_VBUS_DET_THRESH_MV		4000
 /* Longest time that can be programmed in DSG_TIME field */
 #define SYV682X_MAX_VBUS_DISCHARGE_TIME_MS	400
+/* Delay between checks when polling the interrupt registers */
+#define INTERRUPT_DELAY_MS 10
 
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
@@ -82,7 +94,7 @@ static int write_reg(uint8_t port, int reg, int regval)
 
 static int syv682x_is_sourcing_vbus(int port)
 {
-	return flags[port] & SYV682X_FLAGS_SOURCE_ENABLED;
+	return !!(flags[port] & SYV682X_FLAGS_SOURCE_ENABLED);
 }
 
 static int syv682x_discharge_vbus(int port, int enable)
@@ -91,6 +103,69 @@ static int syv682x_discharge_vbus(int port, int enable)
 	 * Smart discharge mode is enabled, nothing to do
 	 */
 	return EC_SUCCESS;
+}
+
+/* Filter interrupts with rising edge trigger */
+static bool syv682x_interrupt_filter(int port, int regval, int regmask,
+				     int flagmask)
+{
+	if (regval & regmask) {
+		if (!(flags[port] & flagmask)) {
+			flags[port] |= flagmask;
+			return true;
+		}
+	} else {
+		flags[port] &= ~flagmask;
+	}
+	return false;
+}
+
+/*
+ * Two status registers can trigger the ALERT_L pin, STATUS and CONTROL_4
+ * These registers are clear on read if the condition has been cleared.
+ * The ALERT_L pin will not de-assert if the alert condition has not been
+ * cleared. Since they are clear on read, we should check the alerts whenever we
+ * read these registers to avoid race conditions.
+ */
+static void syv682x_handle_status_interrupt(int port, int regval)
+{
+	/* These conditions automatically turn off VBUS sourcing */
+	if (regval &
+	    (SYV682X_STATUS_OC_5V | SYV682X_STATUS_OVP | SYV682X_STATUS_TSD)) {
+		flags[port] &= ~SYV682X_FLAGS_SOURCE_ENABLED;
+	}
+
+	/* Handle OC and thermal shutdown the same */
+	if (syv682x_interrupt_filter(port, regval,
+				     (SYV682X_STATUS_OC_HV |
+				      SYV682X_STATUS_OC_5V |
+				      SYV682X_STATUS_TSD),
+				     SYV682X_FLAGS_OCP)) {
+		pd_handle_overcurrent(port);
+	}
+
+	/* No PD handler for VBUS OVP/RVS events */
+	if (syv682x_interrupt_filter(port, regval, SYV682X_STATUS_OVP,
+				     SYV682X_FLAGS_OVP)) {
+		CPRINTS("ppc p%d: VBUS OVP!", port);
+	}
+	if (syv682x_interrupt_filter(port, regval, SYV682X_STATUS_RVS,
+				     SYV682X_FLAGS_RVS)) {
+		CPRINTS("ppc p%d: VBUS Reverse Voltage!", port);
+	}
+}
+
+static void syv682x_handle_control_4_interrupt(int port, int regval)
+{
+	if (syv682x_interrupt_filter(port, regval, SYV682X_CONTROL_4_VCONN_OCP,
+				     SYV682X_FLAGS_VCONN_OCP)) {
+		CPRINTS("ppc p%d: VCONN OC!", port);
+	}
+
+	/* This should never happen unless something really bad happened */
+	if (regval & SYV682X_CONTROL_4_VBAT_OVP) {
+		CPRINTS("ppc p%d: VBAT OVP!", port);
+	}
 }
 
 static int syv682x_vbus_sink_enable(int port, int enable)
@@ -119,6 +194,7 @@ static int syv682x_vbus_sink_enable(int port, int enable)
 		/* Select Sink mode and turn on the channel */
 		regval &= ~(SYV682X_CONTROL_1_HV_DR |
 			    SYV682X_CONTROL_1_PWR_ENB);
+		flags[port] &= ~SYV682X_FLAGS_SOURCE_ENABLED;
 	} else {
 		/*
 		 * No need to change the voltage path or channel direction. But,
@@ -138,6 +214,12 @@ static int syv682x_is_vbus_present(int port)
 
 	if (read_reg(port, SYV682X_STATUS_REG, &val))
 		return vbus;
+	/*
+	 * The status register interrupt bits are clear on read, check
+	 * register value to see if there are interrupts to avoid race
+	 * conditions with the interrupt handler
+	 */
+	syv682x_handle_status_interrupt(port, val);
 
 	/*
 	 * VBUS is considered present if VSafe5V is detected or neither VSafe5V
@@ -164,7 +246,6 @@ static int syv682x_vbus_source_enable(int port, int enable)
 {
 	int regval;
 	int rv;
-
 	/*
 	 * For source mode need to make sure 5V power path is connected
 	 * and source mode is selected.
@@ -275,6 +356,12 @@ static int syv682x_set_vconn(int port, int enable)
 	rv = read_reg(port, SYV682X_CONTROL_4_REG, &regval);
 	if (rv)
 		return rv;
+	/*
+	 * The control4 register interrupt bits are clear on read, check
+	 * register value to see if there are interrupts to avoid race
+	 * conditions with the interrupt handler
+	 */
+	syv682x_handle_control_4_interrupt(port, regval);
 
 	if (enable)
 		regval |= flags[port] & SYV682X_FLAGS_CC_POLARITY ?
@@ -313,11 +400,67 @@ static int syv682x_dump(int port)
 }
 #endif /* defined(CONFIG_CMD_PPC_DUMP) */
 
-static int syv682x_init(int port)
+static void syv682x_interrupt_delayed(int port, int delay);
+
+static void syv682x_handle_interrupt(int port)
+{
+	int control4;
+	int status;
+
+	/* Both interrupt registers are clear on read */
+	read_reg(port, SYV682X_CONTROL_4_REG, &control4);
+	syv682x_handle_control_4_interrupt(port, control4);
+
+	read_reg(port, SYV682X_STATUS_REG, &status);
+	syv682x_handle_status_interrupt(port, status);
+
+	/*
+	 * Since ALERT_L is level-triggered, check the alert status and repeat
+	 * until all interrupts are cleared. This will not spam indefinitely on
+	 * OCP, but may on OVP, RVS, or TSD
+	 */
+
+	if (IS_ENABLED(CONFIG_USBC_PPC_DEDICATED_INT) &&
+	    ppc_get_alert_status(port)) {
+		syv682x_interrupt_delayed(port, INTERRUPT_DELAY_MS);
+	} else {
+		read_reg(port, SYV682X_CONTROL_4_REG, &control4);
+		read_reg(port, SYV682X_STATUS_REG, &status);
+		if (status & SYV682X_STATUS_INT_MASK ||
+		    control4 & SYV682X_CONTROL_4_INT_MASK) {
+			syv682x_interrupt_delayed(port, INTERRUPT_DELAY_MS);
+		}
+	}
+}
+
+static void syv682x_irq_deferred(void)
+{
+	int i;
+	uint32_t pending = atomic_read_clear(&irq_pending);
+
+	for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		if (BIT(i) & pending)
+			syv682x_handle_interrupt(i);
+}
+DECLARE_DEFERRED(syv682x_irq_deferred);
+
+static void syv682x_interrupt_delayed(int port, int delay)
+{
+	atomic_or(&irq_pending, BIT(port));
+	hook_call_deferred(&syv682x_irq_deferred_data, delay * MSEC);
+}
+
+void syv682x_interrupt(int port)
+{
+	/* FRS timings require <15ms response to an FRS event */
+	syv682x_interrupt_delayed(port, 0);
+}
+
+static int syv682x_reset(int port)
 {
 	int rv;
-	int regval;
 
+	CPRINTS("p%d: PPC SW reset", port);
 	/*
 	 * Reset all I2C registers to default values because the SYV682x does
 	 * not provide a pin reset.  The SYV682X_RST_REG bit is self-clearing.
@@ -331,35 +474,56 @@ static int syv682x_init(int port)
 	if (rv)
 		return rv;
 
-	rv = read_reg(port, SYV682X_CONTROL_2_REG, &regval);
-	if (rv)
-		return rv;
+	return EC_SUCCESS;
+}
+
+static bool syv682x_is_sink(uint8_t control_1)
+{
 	/*
-	 * Enable smart discharge mode.  The SYV682 automatically discharges
-	 * under the following conditions: UVLO (under voltage lockout), channel
-	 * shutdown, over current, over voltage, thermal shutdown
+	 * The SYV682 integrates power paths: 5V and HV (high voltage).
+	 * The SYV682 can source either 5V or HV, but only sinks on the HV path.
+	 *
+	 * PD analyzer without a device connected confirms the SYV682 acts as
+	 * a source under these conditions:
+	 *	HV_DR && !CH_SEL:	source 5V
+	 *	HV_DR && CH_SEL:	source 15V
+	 *	!HV_DR && !CH_SEL:	source 5V
+	 *
+	 * The SYV682 is only a sink when !HV_DR && CH_SEL
 	 */
-	regval |= SYV682X_CONTROL_2_SDSG;
-	rv = write_reg(port, SYV682X_CONTROL_2_REG, regval);
+	if (!(control_1 & SYV682X_CONTROL_1_PWR_ENB)
+		&& !(control_1 & SYV682X_CONTROL_1_HV_DR)
+		&& (control_1 & SYV682X_CONTROL_1_CH_SEL))
+		return true;
+
+	return false;
+}
+
+static int syv682x_init(int port)
+{
+	int rv;
+	int regval;
+	int status, control_1;
+
+	rv = read_reg(port, SYV682X_STATUS_REG, &status);
 	if (rv)
 		return rv;
 
-	/* Select max voltage for OVP */
-	rv = read_reg(port, SYV682X_CONTROL_3_REG, &regval);
-	if (rv)
-		return rv;
-	regval &= ~SYV682X_OVP_MASK;
-	regval |= (SYV682X_OVP_23_7 << SYV682X_OVP_BIT_SHIFT);
-	rv = write_reg(port, SYV682X_CONTROL_3_REG, regval);
+	rv = read_reg(port, SYV682X_CONTROL_1_REG, &control_1);
 	if (rv)
 		return rv;
 
-	/* Check if this if dead battery case */
-	rv = read_reg(port, SYV682X_STATUS_REG, &regval);
-	if (rv)
-		return rv;
-	if (regval & SYV682X_STATUS_VSAFE_0V) {
-		/* Not dead battery case, so disable channel */
+	if (!syv682x_is_sink(control_1)
+		|| (status & SYV682X_STATUS_VSAFE_0V)) {
+		/*
+		 * PPC is not configured as a sink or there is no VBUS present.
+		 * It's safe to perform a full register reset.
+		 */
+		rv = syv682x_reset(port);
+		if (rv)
+			return rv;
+
+		/* Disable both power paths */
 		rv = read_reg(port, SYV682X_CONTROL_1_REG, &regval);
 		if (rv)
 			return rv;
@@ -368,16 +532,42 @@ static int syv682x_init(int port)
 		if (rv)
 			return rv;
 	} else {
-		syv682x_vbus_sink_enable(port, 1);
+		/* Dead battery mode, or an existing PD contract is in place */
+		rv = syv682x_vbus_sink_enable(port, 1);
+		if (rv)
+			return rv;
 	}
 
-	rv = read_reg(port, SYV682X_CONTROL_4_REG, &regval);
+	/*
+	 * Set Control Reg 2 to defaults, plus enable smart discharge mode.
+	 * The SYV682 automatically discharges under the following conditions:
+	 * UVLO (under voltage lockout), channel shutdown, over current, over
+	 * voltage, and thermal shutdown
+	 */
+	regval = (SYV682X_OC_DELAY_10MS << SYV682X_OC_DELAY_SHIFT)
+		| (SYV682X_DSG_TIME_200MS << SYV682X_DSG_TIME_SHIFT)
+		| (SYV682X_DSG_RON_200_OHM << SYV682X_DSG_RON_SHIFT)
+		| SYV682X_CONTROL_2_SDSG;
+	rv = write_reg(port, SYV682X_CONTROL_2_REG, regval);
 	if (rv)
 		return rv;
-	/* Remove Rd and connect CC1/CC2 lines to TCPC */
-	regval |= SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS;
-	/* Disable Fast Role Swap (FRS) */
-	regval |= SYV682X_CONTROL_4_CC_FRS;
+
+	/*
+	 * Always set the over voltage setting to the maximum to support
+	 * sinking from a 20V PD charger. The common PPC code doesn't provide
+	 * any hooks for indicating what the currently negotiated voltage is.
+	 */
+	regval = (SYV682X_OVP_23_7 << SYV682X_OVP_BIT_SHIFT);
+	rv = write_reg(port, SYV682X_CONTROL_3_REG, regval);
+	if (rv)
+		return rv;
+
+	/*
+	 * Remove Rd, connect CC1/CC2 lines to TCPC, and disable fast role
+	 * swap.
+	 */
+	regval = SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS
+		| SYV682X_CONTROL_4_CC_FRS;
 	rv = write_reg(port, SYV682X_CONTROL_4_REG, regval);
 	if (rv)
 		return rv;

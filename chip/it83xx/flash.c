@@ -53,7 +53,7 @@
 /* immu cache size is 8K bytes. */
 #define IMMU_SIZE                 0x2000
 
-#if CONFIG_FLASH_SIZE == 0x80000
+#if (CONFIG_FLASH_SIZE == 0x80000) && defined(CHIP_CORE_NDS32)
 /* Apply workaround of the issue (b:111808417) */
 #define IMMU_CACHE_TAG_INVALID
 #endif
@@ -641,7 +641,15 @@ static void flash_code_static_dma(void)
 	 */
 	IT83XX_SMFI_SCAR2L = FLASH_DMA_START & 0xFF;
 	IT83XX_SMFI_SCAR2M = (FLASH_DMA_START >> 8) & 0xFF;
+#ifdef IT83XX_DAM_ADDR_BIT19_AT_REG_SCARXH_BIT7
+	IT83XX_SMFI_SCAR2H = (FLASH_DMA_START >> 16) & 0x7;
+	if (FLASH_DMA_START & BIT(19))
+		IT83XX_SMFI_SCAR2H |= BIT(7);
+	else
+		IT83XX_SMFI_SCAR2H &= ~BIT(7);
+#else
 	IT83XX_SMFI_SCAR2H = (FLASH_DMA_START >> 16) & 0x0F;
+#endif
 	/*
 	 * Validate Direct-map SRAM function by programming
 	 * register SCARx bit20=0

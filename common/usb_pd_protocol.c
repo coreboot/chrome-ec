@@ -33,19 +33,30 @@
 #include "version.h"
 #include "vboot.h"
 
+/* Flags to clear on a disconnect */
+#define PD_FLAGS_RESET_ON_DISCONNECT_MASK (PD_FLAGS_PARTNER_DR_POWER | \
+					   PD_FLAGS_PARTNER_DR_DATA | \
+					   PD_FLAGS_CHECK_IDENTITY | \
+					   PD_FLAGS_SNK_CAP_RECVD | \
+					   PD_FLAGS_TCPC_DRP_TOGGLE | \
+					   PD_FLAGS_EXPLICIT_CONTRACT | \
+					   PD_FLAGS_PREVIOUS_PD_CONN | \
+					   PD_FLAGS_CHECK_PR_ROLE | \
+					   PD_FLAGS_CHECK_DR_ROLE | \
+					   PD_FLAGS_PARTNER_UNCONSTR | \
+					   PD_FLAGS_VCONN_ON | \
+					   PD_FLAGS_TRY_SRC | \
+					   PD_FLAGS_PARTNER_USB_COMM | \
+					   PD_FLAGS_UPDATE_SRC_CAPS | \
+					   PD_FLAGS_TS_DTS_PARTNER | \
+					   PD_FLAGS_SNK_WAITING_BATT | \
+					   PD_FLAGS_CHECK_VCONN_STATE)
+
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT <= EC_USB_PD_MAX_PORTS);
-
-/*
- * If we are trying to upgrade the TCPC port that is supplying power, then we
- * need to ensure that the battery has enough charge for the upgrade. 100mAh
- * is about 5% of most batteries, and it should be enough charge to get us
- * through the EC jump to RW and PD upgrade.
- */
-#define MIN_BATTERY_FOR_TCPC_UPGRADE_MAH 100 /* mAH */
 
 /*
  * Debug log level - higher number == more log
@@ -167,11 +178,6 @@ static const uint8_t vdo_ver[] = {
 #define VDO_VER(v) vdo_ver[v]
 #else
 #define VDO_VER(v) VDM_VER10
-#endif
-
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-/* Tracker for which task is waiting on sysjump prep to finish */
-static volatile task_id_t sysjump_task_waiting = TASK_ID_INVALID;
 #endif
 
 static struct pd_protocol {
@@ -309,6 +315,16 @@ int pd_comm_is_enabled(int port)
 #endif
 }
 
+bool pd_alt_mode_capable(int port)
+{
+	/*
+	 * PD is alternate mode capable only if PD communication is enabled and
+	 * the port is not suspended.
+	 */
+	return pd_comm_is_enabled(port) &&
+		!(pd[port].task_state == PD_STATE_SUSPENDED);
+}
+
 static inline void set_state_timeout(int port,
 				     uint64_t timeout,
 				     enum pd_states timeout_state)
@@ -323,9 +339,18 @@ int pd_get_rev(int port)
 	return pd[port].rev;
 }
 
-int pd_get_vdo_ver(int port)
+int pd_get_vdo_ver(int port, enum tcpm_transmit_type type)
 {
 	return vdo_ver[pd[port].rev];
+}
+#else
+int pd_get_rev(int port)
+{
+	return PD_REV20;
+}
+int pd_get_vdo_ver(int port, enum tcpm_transmit_type type)
+{
+	return VDM_VER10;
 }
 #endif
 
@@ -582,58 +607,6 @@ static int reset_device_and_notify(int port)
 }
 
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
-
-#ifdef CONFIG_USB_PD_DUAL_ROLE
-static int get_bbram_idx(int port)
-{
-	switch (port) {
-	case 2:
-		return SYSTEM_BBRAM_IDX_PD2;
-	case 1:
-		return SYSTEM_BBRAM_IDX_PD1;
-	case 0:
-		return SYSTEM_BBRAM_IDX_PD0;
-	default:
-		return -1;
-	}
-}
-
-static int pd_get_saved_port_flags(int port, uint8_t *flags)
-{
-	if (system_get_bbram(get_bbram_idx(port), flags) != EC_SUCCESS) {
-#ifndef CHIP_HOST
-		CPRINTS("PD NVRAM FAIL");
-#endif
-		return EC_ERROR_UNKNOWN;
-	}
-
-	return EC_SUCCESS;
-}
-
-static void pd_set_saved_port_flags(int port, uint8_t flags)
-{
-	if (system_set_bbram(get_bbram_idx(port), flags) != EC_SUCCESS) {
-#ifndef CHIP_HOST
-		CPRINTS("PD NVRAM FAIL");
-#endif
-	}
-}
-
-static void pd_update_saved_port_flags(int port, uint8_t flag, uint8_t val)
-{
-	uint8_t saved_flags;
-
-	if (pd_get_saved_port_flags(port, &saved_flags) != EC_SUCCESS)
-		return;
-
-	if (val)
-		saved_flags |= flag;
-	else
-		saved_flags &= ~flag;
-
-	pd_set_saved_port_flags(port, saved_flags);
-}
-#endif /* defined(CONFIG_USB_PD_DUAL_ROLE) */
 
 /**
  * Invalidate last message received at the port when the port gets disconnected
@@ -1295,7 +1268,7 @@ bool pd_is_disconnected(int port)
 		;
 }
 
-static void pd_set_data_role(int port, int role)
+static void pd_set_data_role(int port, enum pd_data_role role)
 {
 	pd[port].data_role = role;
 #ifdef CONFIG_USB_PD_DUAL_ROLE
@@ -1366,9 +1339,10 @@ void pd_execute_hard_reset(int port)
 		pd_power_supply_reset(port);
 	}
 
-	/* Set initial data role (matching power role) */
-	pd_set_data_role(port, pd[port].power_role);
 	if (pd[port].power_role == PD_ROLE_SINK) {
+		/* Initial data role for sink is UFP */
+		pd_set_data_role(port, PD_ROLE_UFP);
+
 		/* Clear the input current limit */
 		pd_set_input_current_limit(port, 0, 0);
 #ifdef CONFIG_CHARGE_MANAGER
@@ -1390,7 +1364,11 @@ void pd_execute_hard_reset(int port)
 
 		set_state(port, PD_STATE_SNK_HARD_RESET_RECOVER);
 		return;
+	} else {
+		/* Initial data role for source is DFP */
+		pd_set_data_role(port, PD_ROLE_DFP);
 	}
+
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
 
 	if (!hard_rst_tx)
@@ -2169,8 +2147,7 @@ static void pd_vdm_send_state_machine(int port)
 {
 	int res;
 	uint16_t header;
-	enum pd_msg_type msg_type =
-		pd_msg_tx_type(port, pd[port].data_role, pd[port].flags);
+	enum pd_msg_type msg_type = pd_msg_tx_type(port);
 
 	switch (pd[port].vdm_state) {
 	case VDM_STATE_READY:
@@ -2284,6 +2261,11 @@ static void pd_vdm_send_state_machine(int port)
 			pd[port].vdm_state = VDM_STATE_ERR_TMOUT;
 		}
 		break;
+	case VDM_STATE_ERR_SEND:
+		/* Sending the VDM failed, so try again. */
+		CPRINTF("C%d VDMretry\n", port);
+		pd[port].vdm_state = VDM_STATE_READY;
+		break;
 	default:
 		break;
 	}
@@ -2338,33 +2320,39 @@ void pd_dev_get_rw_hash(int port, uint16_t *dev_id, uint8_t *rw_hash,
 		memcpy(rw_hash, pd[port].dev_rw_hash, PD_RW_HASH_SIZE);
 }
 
-#if defined(CONFIG_POWER_COMMON) || defined(CONFIG_USB_PD_ALT_MODE_DFP)
-static void exit_dp_mode(int port)
+__maybe_unused static void exit_supported_alt_mode(int port)
 {
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	int i;
 
-	if (opos <= 0)
+	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
 		return;
 
-	CPRINTS("C%d Exiting DP mode", port);
-	if (!pd_dfp_exit_mode(port, USB_SID_DISPLAYPORT, opos))
-		return;
-	pd_send_vdm(port, USB_SID_DISPLAYPORT,
-		    CMD_EXIT_MODE | VDO_OPOS(opos), NULL, 0);
-	pd_vdm_send_state_machine(port);
-	/* Have to wait for ACK */
-#endif /* CONFIG_USB_PD_ALT_MODE_DFP */
+	for (i = 0; i < supported_modes_cnt; i++) {
+		int opos = pd_alt_mode(port, supported_modes[i].svid);
+
+		if (opos > 0 &&
+		    pd_dfp_exit_mode(port, supported_modes[i].svid, opos)) {
+			CPRINTS("C%d Exiting ALT mode with SVID = 0x%x", port,
+				supported_modes[i].svid);
+			pd_send_vdm(port, supported_modes[i].svid,
+				    CMD_EXIT_MODE | VDO_OPOS(opos), NULL, 0);
+			/* Wait for an ACK from port-partner */
+			pd_vdm_send_state_machine(port);
+		}
+	}
 }
-#endif /* CONFIG_POWER_COMMON */
 
 #ifdef CONFIG_POWER_COMMON
 static void handle_new_power_state(int port)
 {
-	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF))
-		/* The SoC will negotiated DP mode again when it boots up */
-		exit_dp_mode(port);
 
+	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF)) {
+		/*
+		 * The SoC will negotiate the alternate mode again when
+		 * it boots up.
+		 */
+		exit_supported_alt_mode(port);
+	}
 	/* Ensure mux is set properly after chipset transition */
 	set_usb_mux_with_current_data_role(port);
 }
@@ -3050,7 +3038,7 @@ void pd_task(void *u)
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 	/* Initialize PD Policy engine */
-	pd_dfp_pe_init(port);
+	pd_dfp_discovery_init(port);
 #endif
 
 #ifdef CONFIG_CHARGE_MANAGER
@@ -3101,9 +3089,8 @@ void pd_task(void *u)
 
 #if defined(CONFIG_USB_PD_ALT_MODE_DFP)
 		if (evt & PD_EVENT_SYSJUMP) {
-			exit_dp_mode(port);
-			notify_sysjump_ready(&sysjump_task_waiting);
-
+			exit_supported_alt_mode(port);
+			notify_sysjump_ready();
 		}
 #endif
 
@@ -3237,10 +3224,8 @@ void pd_task(void *u)
 			 * TCPC otherwise we might wake it up.
 			 */
 			if (pd[port].flags & PD_FLAGS_LPM_REQUESTED &&
-			    !(evt & PD_EVENT_CC)) {
-				timeout = -1;
+			    !(evt & PD_EVENT_CC))
 				break;
-			}
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
 			tcpm_get_cc(port, &cc1, &cc2);
@@ -3883,8 +3868,7 @@ void pd_task(void *u)
 
 				if (evt & PD_EVENT_SYSJUMP)
 					/* Nothing to do for sysjump prep */
-					notify_sysjump_ready(
-							&sysjump_task_waiting);
+					notify_sysjump_ready();
 #else
 				task_wait_event(-1);
 #endif
@@ -3924,10 +3908,8 @@ void pd_task(void *u)
 			 * TCPC otherwise we might wake it up.
 			 */
 			if (pd[port].flags & PD_FLAGS_LPM_REQUESTED &&
-			    !(evt & PD_EVENT_CC)) {
-				timeout = -1;
+			    !(evt & PD_EVENT_CC))
 				break;
-			}
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
 			tcpm_get_cc(port, &cc1, &cc2);
@@ -4727,7 +4709,6 @@ void pd_task(void *u)
 				 */
 				tcpm_enable_drp_toggle(port);
 				pd[port].flags |= PD_FLAGS_TCPC_DRP_TOGGLE;
-				timeout = -1;
 				set_state(port, PD_STATE_DRP_AUTO_TOGGLE);
 			}
 
@@ -4909,29 +4890,6 @@ static void pd_chipset_shutdown(void)
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pd_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
-
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-void pd_prepare_sysjump(void)
-{
-	int i;
-
-	/* Exit modes before sysjump so we can cleanly enter again later */
-	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		/*
-		 * We can't be in an alternate mode if PD comm is disabled or
-		 * the port is suspended, so no need to send the event
-		 */
-		if (!pd_comm_is_enabled(i) ||
-				pd[i].task_state == PD_STATE_SUSPENDED)
-			continue;
-
-		sysjump_task_waiting = task_get_current();
-		task_set_event(PD_PORT_TO_TASK_ID(i), PD_EVENT_SYSJUMP, 0);
-		task_wait_event_mask(TASK_EVENT_SYSJUMP_READY, -1);
-		sysjump_task_waiting = TASK_ID_INVALID;
-	}
-}
-#endif
 
 #ifdef CONFIG_COMMON_RUNTIME
 
@@ -5427,84 +5385,5 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_FW_UPDATE,
 
 #endif /* HAS_TASK_HOSTCMD */
 
-#ifdef CONFIG_CMD_PD_CONTROL
-
-static enum ec_status pd_control(struct host_cmd_handler_args *args)
-{
-	static int pd_control_disabled[CONFIG_USB_PD_PORT_MAX_COUNT];
-	const struct ec_params_pd_control *cmd = args->params;
-	int enable = 0;
-
-	if (cmd->chip >= board_get_usb_pd_port_count())
-		return EC_RES_INVALID_PARAM;
-
-	/* Always allow disable command */
-	if (cmd->subcmd == PD_CONTROL_DISABLE) {
-		pd_control_disabled[cmd->chip] = 1;
-		return EC_RES_SUCCESS;
-	}
-
-	if (pd_control_disabled[cmd->chip])
-		return EC_RES_ACCESS_DENIED;
-
-	if (cmd->subcmd == PD_SUSPEND) {
-		/*
-		 * The AP is requesting to suspend PD traffic on the EC so it
-		 * can perform a firmware upgrade. If Vbus is present on the
-		 * connector (it is either a source or sink), then we will
-		 * prevent the upgrade if there is not enough battery to finish
-		 * the upgrade. We cannot rely on the EC's active charger data
-		 * as the EC just rebooted into RW and has not necessarily
-		 * picked the active charger yet.
-		 */
-#ifdef HAS_TASK_CHARGER
-		if (pd_is_vbus_present(cmd->chip)) {
-			struct batt_params batt = { 0 };
-			/*
-			 * The charger task has not re-initialized, so we need
-			 * to ask the battery directly.
-			 */
-			battery_get_params(&batt);
-			if (batt.remaining_capacity <
-				    MIN_BATTERY_FOR_TCPC_UPGRADE_MAH ||
-			    batt.flags & BATT_FLAG_BAD_REMAINING_CAPACITY) {
-				CPRINTS("C%d: Cannot suspend for upgrade, not "
-					"enough battery (%dmAh)!",
-					cmd->chip, batt.remaining_capacity);
-				return EC_RES_BUSY;
-			}
-		}
-#else
-		if (pd_is_vbus_present(cmd->chip)) {
-			CPRINTS("C%d: Cannot suspend for upgrade, Vbus "
-				"present!",
-				cmd->chip);
-			return EC_RES_BUSY;
-		}
-#endif
-		enable = 0;
-	} else if (cmd->subcmd == PD_RESUME) {
-		enable = 1;
-	} else if (cmd->subcmd == PD_RESET) {
-#ifdef HAS_TASK_PDCMD
-		board_reset_pd_mcu();
-#else
-		return EC_RES_INVALID_COMMAND;
-#endif
-	} else if (cmd->subcmd == PD_CHIP_ON && board_set_tcpc_power_mode) {
-		board_set_tcpc_power_mode(cmd->chip, 1);
-		return EC_RES_SUCCESS;
-	} else {
-		return EC_RES_INVALID_COMMAND;
-	}
-
-	pd_comm_enable(cmd->chip, enable);
-	pd_set_suspend(cmd->chip, !enable);
-
-	return EC_RES_SUCCESS;
-}
-
-DECLARE_HOST_COMMAND(EC_CMD_PD_CONTROL, pd_control, EC_VER_MASK(0));
-#endif /* CONFIG_CMD_PD_CONTROL */
 
 #endif /* CONFIG_COMMON_RUNTIME */

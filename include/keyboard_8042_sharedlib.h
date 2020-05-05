@@ -17,12 +17,20 @@ struct button_8042_t {
 	int repeat;
 };
 
-/* The standard Chrome OS keyboard matrix table. */
-#ifdef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-extern uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS];
-#else
-extern const uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS];
-#endif
+/**
+ * Get the standard Chrome OS keyboard matrix set 2 scanset
+ * @param row	Row number
+ * @param col	Column number
+ * @return	0 on error, scanset for the (row,col) if successful
+ **/
+uint16_t get_scancode_set2(uint8_t row, uint8_t col);
+/**
+ * Set the standard Chrome OS keyboard matrix set 2 scanset
+ * @param row	Row number
+ * @param col	Column number
+ * @param val	Value to set
+ **/
+void set_scancode_set2(uint8_t row, uint8_t col, uint16_t val);
 
 /* Translation from scan code set 2 to set 1. */
 extern const uint8_t scancode_translate_table[];
@@ -68,12 +76,27 @@ enum keycap_long_label_idx {
 	KLLI_MAX
 };
 
-extern const char * const keycap_long_label[];
-#ifdef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-extern char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS];
-#else
-extern const char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS];
-#endif
+/**
+ * Get the keycap "long version" label
+ * @param idx	Index into keycap_long_label_idx[]
+ * @return	"UNKNOWN" on error, long label for idx if successful
+ */
+const char *get_keycap_long_label(uint8_t idx);
+
+/**
+ * Get the keycap label
+ * @param row	Row number
+ * @param col	Column number
+ * @return	KLLI_UNKNO on error, label for the (row,col) if successful
+ */
+char get_keycap_label(uint8_t row, uint8_t col);
+/**
+ * Set the keycap label
+ * @param row	Row number
+ * @param col	Column number
+ * @param val	Value to set
+ */
+void set_keycap_label(uint8_t row, uint8_t col, char val);
 #endif
 
 /* Button scancodes (Power, Volume Down, Volume Up, etc.) */
@@ -94,14 +117,39 @@ enum scancode_values {
 	SCANCODE_B = 0x0032,
 	SCANCODE_T = 0x002c,
 
-	SCANCODE_F1 = 0x0005,
-	SCANCODE_F2 = 0x0006,
-	SCANCODE_F3 = 0x0004,
-	SCANCODE_F4 = 0x000c,
-	SCANCODE_F5 = 0x0003,
-	SCANCODE_F6 = 0x000b,
-	SCANCODE_F7 = 0x0083,
-	SCANCODE_F8 = 0x000a,
+	SCANCODE_F1 = 0x0005,	/* Translates to 3b in codeset 1 */
+	SCANCODE_F2 = 0x0006,	/* Translates to 3c in codeset 1 */
+	SCANCODE_F3 = 0x0004,	/* Translates to 3d in codeset 1 */
+	SCANCODE_F4 = 0x000c,	/* Translates to 3e in codeset 1 */
+	SCANCODE_F5 = 0x0003,	/* Translates to 3f in codeset 1 */
+	SCANCODE_F6 = 0x000b,	/* Translates to 40 in codeset 1 */
+	SCANCODE_F7 = 0x0083,	/* Translates to 41 in codeset 1 */
+	SCANCODE_F8 = 0x000a,	/* Translates to 42 in codeset 1 */
+	SCANCODE_F9 = 0x0001,	/* Translates to 43 in codeset 1 */
+	SCANCODE_F10 = 0x0009,	/* Translates to 44 in codeset 1 */
+	SCANCODE_F11 = 0x0078,	/* Translates to 57 in codeset 1 */
+	SCANCODE_F12 = 0x0007,	/* Translates to 58 in codeset 1 */
+	SCANCODE_F13 = 0x000f,	/* Translates to 59 in codeset 1 */
+	SCANCODE_F14 = 0x0017,	/* Translates to 5a in codeset 1 */
+	SCANCODE_F15 = 0x001f,	/* Translates to 5b in codeset 1 */
+
+	SCANCODE_BACK =	0xe038,			/* e06a in codeset 1 */
+	SCANCODE_REFRESH = 0xe020,		/* e067 in codeset 1 */
+	SCANCODE_FORWARD = 0xe030,		/* e069 in codeset 1 */
+	SCANCODE_FULLSCREEN = 0xe01d,		/* e011 in codeset 1 */
+	SCANCODE_OVERVIEW = 0xe024,		/* e012 in codeset 1 */
+	SCANCODE_SNAPSHOT = 0xe02d,		/* e013 in codeset 1 */
+	SCANCODE_BRIGHTNESS_DOWN = 0xe02c,	/* e014 in codeset 1 */
+	SCANCODE_BRIGHTNESS_UP = 0xe035,	/* e015 in codeset 1 */
+	SCANCODE_PRIVACY_SCRN_TOGGLE = 0xe03c,	/* e016 in codeset 1 */
+	SCANCODE_VOLUME_MUTE = 0xe023,		/* e020 in codeset 1 */
+	SCANCODE_VOLUME_DOWN = 0xe021,		/* e02e in codeset 1 */
+	SCANCODE_VOLUME_UP = 0xe032,		/* e030 in codeset 1 */
+	SCANCODE_KBD_BKLIGHT_DOWN = 0xe043,	/* e017 in codeset 1 */
+	SCANCODE_KBD_BKLIGHT_UP = 0xe044,	/* e018 in codeset 1 */
+	SCANCODE_NEXT_TRACK = 0xe04d,		/* e019 in codeset 1 */
+	SCANCODE_PREV_TRACK = 0xe015,		/* e010 in codeset 1 */
+	SCANCODE_PLAY_PAUSE = 0xe054,		/* e01a in codeset 1 */
 
 	SCANCODE_UP = 0xe075,
 	SCANCODE_DOWN = 0xe072,
@@ -118,8 +166,6 @@ enum scancode_values {
 	SCANCODE_MENU = 0xe02f,
 
 	SCANCODE_POWER = 0xe037,
-	SCANCODE_VOLUME_DOWN = 0xe021,
-	SCANCODE_VOLUME_UP = 0xe032,
 
 	SCANCODE_NUMLOCK = 0x0077,
 	SCANCODE_CAPSLOCK = 0x0058,

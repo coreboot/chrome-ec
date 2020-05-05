@@ -46,6 +46,25 @@ enum sm_local_state {
 	SM_PAUSED,
 };
 
+/*
+ * A state machine can use these debug levels to regulate the amount of debug
+ * information printed on the EC console
+ *
+ * The states currently defined are
+ *   Level 0: disabled
+ *   Level 1: state names
+ *
+ * Note that higher log level causes timing changes and thus may affect
+ * performance.
+ */
+enum debug_level {
+	DEBUG_DISABLE,
+	DEBUG_LEVEL_1,
+	DEBUG_LEVEL_2,
+	DEBUG_LEVEL_3,
+	DEBUG_LEVEL_MAX = DEBUG_LEVEL_3
+};
+
 /**
  * Changes a state machines state. This handles exiting the previous state and
  * entering the target state. A common parent state will not exited nor be

@@ -98,7 +98,7 @@ void pe_got_hard_reset(int port)
 	/* No implementation needed by this policy engine */
 }
 
-void pe_report_error(int port, enum pe_error e)
+void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 {
 	/* No implementation needed by this policy engine */
 }
@@ -115,9 +115,9 @@ void pe_message_sent(int port)
 
 static void pe_request_run(const int port)
 {
-	uint32_t *payload = (uint32_t *)emsg[port].buf;
-	uint32_t header = emsg[port].header;
-	uint32_t vdo = payload[0];
+	uint32_t *payload = (uint32_t *)tx_emsg[port].buf;
+	uint32_t header = rx_emsg[port].header;
+	uint32_t vdo = *(uint32_t *)rx_emsg[port].buf;
 
 	if (pe[port].flags & PE_FLAGS_MSG_RECEIVED) {
 		pe[port].flags &= ~PE_FLAGS_MSG_RECEIVED;
@@ -139,7 +139,7 @@ static void pe_request_run(const int port)
 		if (PD_VDO_CMD(vdo) != CMD_DISCOVER_IDENT)
 			return;
 
-#ifdef CONFIG_USB_TYPEC_CTVPD
+#ifdef CONFIG_USB_CTVPD
 		/*
 		 * We have a valid DISCOVER IDENTITY message.
 		 * Attempt to reset support timer
@@ -179,7 +179,7 @@ static void pe_request_run(const int port)
 			VPD_MAX_VBUS_20V,
 			VPD_VBUS_IMP(VPD_VBUS_IMPEDANCE),
 			VPD_GND_IMP(VPD_GND_IMPEDANCE),
-#ifdef CONFIG_USB_TYPEC_CTVPD
+#ifdef CONFIG_USB_CTVPD
 			VPD_CTS_SUPPORTED
 #else
 			VPD_CTS_NOT_SUPPORTED
@@ -187,7 +187,7 @@ static void pe_request_run(const int port)
 		);
 
 		/* 20 bytes, 5 data objects */
-		emsg[port].len = 20;
+		tx_emsg[port].len = 20;
 
 		/* Set to highest revision supported by both ports. */
 		prl_set_rev(port, TCPC_TX_SOP_PRIME,

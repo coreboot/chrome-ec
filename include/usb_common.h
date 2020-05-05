@@ -8,7 +8,6 @@
 /* Functions that are shared between old and new PD stacks */
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
-#include "task_id.h"
 
 enum pd_drp_next_states {
 	DRP_TC_DEFAULT,
@@ -146,12 +145,8 @@ void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
 
 /**
  * Notifies a task that is waiting on a system jump, that it's complete.
- *
- * @param sysjump_task_waiting  indicates if the task is waiting on the
- *				system jump.
  */
-void notify_sysjump_ready(volatile const task_id_t * const
-	sysjump_task_waiting);
+void notify_sysjump_ready(void);
 
 /**
  * Set USB MUX with current data role
@@ -159,4 +154,22 @@ void notify_sysjump_ready(volatile const task_id_t * const
  * @param port USB-C port number
  */
 void set_usb_mux_with_current_data_role(int port);
+
+/**
+ * Get the PD flags stored in BB Ram
+ *
+ * @param port USB-C port number
+ * @param flags pointer where flags are written to
+ * @return EC_SUCCESS on success
+ */
+int pd_get_saved_port_flags(int port, uint8_t *flags);
+
+/**
+ * Update the flag in BB Ram with the give value
+ *
+ * @param port USB-C port number
+ * @param flag BB Ram flag to update
+ * @param do_set value written to the BB Ram flag
+ */
+void pd_update_saved_port_flags(int port, uint8_t flag, uint8_t do_set);
 #endif /* __CROS_EC_USB_COMMON_H */

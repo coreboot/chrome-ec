@@ -9,6 +9,6 @@
 CHIP:=it83xx
 CHIP_FAMILY:=it8320
 CHIP_VARIANT:=it8320dx
+BASEBOARD:=ite_evb
 
 board-y=board.o
-board-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_policy.o

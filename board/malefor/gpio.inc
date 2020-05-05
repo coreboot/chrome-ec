@@ -31,7 +31,7 @@ GPIO_INT(PG_EC_ALL_SYS_PWRGD,  PIN(F, 4),  GPIO_INT_BOTH, power_signal_interrupt
 
 /* Sensor Interrupts */
 GPIO_INT(EC_CAM_VSYN_SLP_S0IX, PIN(7, 2), GPIO_INT_RISING, sync_interrupt)
-GPIO_INT(EC_ALS_RGB_INT_L,     PIN(D, 4), GPIO_INT_FALLING, tcs3400_interrupt)
+GPIO_INT(EC_IMU_INT_L,         PIN(5, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V, lsm6dsm_interrupt)
 GPIO_INT(TABLET_MODE_L,        PIN(9, 5), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 
 /* USB-C interrupts */
@@ -48,18 +48,12 @@ GPIO_INT(USB_C1_MIX_INT_ODL,	PIN(0, 3), GPIO_INT_BOTH, bc12_interrupt)
 
 /* Volume button interrupts */
 GPIO_INT(EC_VOLDN_BTN_ODL,		PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-/*
- * EC_VOLUP_BTN_ODL moved from GPIO75 to GPIO97 on boards with board ID >=1.
- * GPIO97/EN_PP1050_BYPASS is DNS on board ID 0, and GPIO75 will be used once
- * EFS support is added.
- * TODO (b/149858568): remove board ID=0 support.
- */
-GPIO_INT(EC_VOLUP_BTN_ODL_BOARDID_0,	PIN(7, 5), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 GPIO_INT(EC_VOLUP_BTN_ODL,		PIN(9, 7), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 
 /* Power Sequencing Signals */
 GPIO(EN_PP3300_A,              PIN(A, 3), GPIO_OUT_LOW)
 GPIO(EN_PP5000_A,              PIN(A, 4), GPIO_OUT_LOW)
+GPIO(EN_PPVAR_VCCIN,           PIN(4, 3), GPIO_OUT_LOW) /* Enables VCCIN IMPV9 */
 /* The EC does not buffer this signal on Volteer. */
 UNIMPLEMENTED(PCH_DSW_PWROK)
 
@@ -94,19 +88,12 @@ GPIO(EC_PCH_RTCRST,            PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_ODL,          PIN(7, 4), GPIO_ODR_HIGH)
 GPIO(EC_ENTERING_RW,           PIN(E, 3), GPIO_OUT_LOW)
 GPIO(EC_PROCHOT_ODL,           PIN(6, 3), GPIO_ODR_HIGH)
+UNIMPLEMENTED(EC_PROCHOT_IN_L)
 GPIO(SYS_RST_ODL,              PIN(C, 5), GPIO_ODR_HIGH)
 
 GPIO(EC_PCH_INT_ODL,           PIN(B, 0), GPIO_ODR_HIGH)
 
 /* USB and USBC Signals */
-
-/*
- * USB_C1 moved from GPIO32 to GPIO83 on boards with board ID >=1.
- * GPIO83/EN_PP1800_A is DNS on board ID 0 and GPIO32 is N/C on board ID >=1
- * so it's safe to define GPIOs compatible with both designs.
- * TODO (b/149858568): remove board ID=0 support.
- */
-GPIO(USB_C1_RT_RST_ODL_BOARDID_0,	PIN(3, 2), GPIO_ODR_LOW) /* USB_C1 Reset on boards without board ID */
 GPIO(USB_C1_RT_RST_ODL,			PIN(8, 3), GPIO_ODR_LOW) /* USB_C1 Reset on boards board ID >=1 */
 
 /* Don't have a load switch for retimer */
@@ -144,6 +131,11 @@ GPIO(EC_BATT_PRES_ODL, 		PIN(E, 1), GPIO_INPUT)
 GPIO(USB_C0_DP_HPD,		PIN(F, 3), GPIO_INPUT)
 GPIO(USB_C1_DP_HPD,		PIN(7, 0), GPIO_INPUT)
 
+/* LED */
+GPIO(LED_1_L,	 PIN(C, 4), GPIO_OUT_HIGH)	/* Battery - Green LED */
+GPIO(LED_2_L,	 PIN(C, 3), GPIO_OUT_HIGH)	/* Battery - Red LED */
+GPIO(LED_3_L,	 PIN(C, 2), GPIO_OUT_HIGH)	/* Power - White LED */
+
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(B, BIT(5) | BIT(4)), 0, MODULE_I2C, (GPIO_INPUT | GPIO_SEL_1P8V)) /* I2C0 */
 ALTERNATE(PIN_MASK(9, BIT(0) | BIT(2) | BIT(1)), 0, MODULE_I2C, 0)                   /* I2C1 SCL / I2C2 */
@@ -156,7 +148,6 @@ ALTERNATE(PIN_MASK(B, BIT(3) | BIT(2)), 0, MODULE_I2C, 0)                       
  * board, to be controlled by LED_{1,2,3}_L. PWM allows driving both modules at
  * the same time. */
 ALTERNATE(PIN_MASK(6, BIT(0)), 0, MODULE_PWM, 0)                                     /* LED_SIDESEL_4_L */
-ALTERNATE(PIN_MASK(C, BIT(2) | BIT(3) | BIT(4)), 0, MODULE_PWM, 0)                   /* LED_{3,2,1}_L */
 
 /* Fan signals */
 GPIO(EN_PP5000_FAN,            PIN(6, 1), GPIO_OUT_LOW)

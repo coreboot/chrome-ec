@@ -737,9 +737,6 @@ static int anx74xx_tcpm_set_cc(int port, int pull)
 	int rv = EC_SUCCESS;
 	int reg;
 
-	/* Keep track of current CC pull value */
-	tcpci_set_cached_pull(port, pull);
-
 	/* Enable CC software Control */
 	rv = anx74xx_cc_software_ctrl(port, 1);
 	if (rv)
@@ -1017,7 +1014,7 @@ void anx74xx_tcpc_alert(int port)
 	if (reg & ANX74XX_REG_EXT_SOP)
 		msg_sop[port] = PD_MSG_SOP;
 	else if (reg & ANX74XX_REG_EXT_SOP_PRIME)
-		msg_sop[port] = PD_MSG_SOPP;
+		msg_sop[port] = PD_MSG_SOP_PRIME;
 #endif
 
 	/* Check for Hard Reset done bit */
@@ -1032,7 +1029,7 @@ void anx74xx_tcpc_alert(int port)
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	if (reg & ANX74XX_REG_EXT_SOP_PRIME_PRIME)
-		msg_sop[port] = PD_MSG_SOPPP;
+		msg_sop[port] = PD_MSG_SOP_PRIME_PRIME;
 #endif
 
 	if (reg & ANX74XX_REG_EXT_HARD_RST) {
@@ -1045,9 +1042,6 @@ void anx74xx_tcpc_alert(int port)
 static int anx74xx_tcpm_init(int port)
 {
 	int rv = 0, reg;
-
-	/* Start with an unknown connection */
-	tcpci_set_cached_pull(port, TYPEC_CC_OPEN);
 
 	memset(&anx[port], 0, sizeof(struct anx_state));
 	/* Bring chip in normal mode to work */

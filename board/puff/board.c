@@ -12,6 +12,7 @@
 #include "charge_state_v2.h"
 #include "chipset.h"
 #include "common.h"
+#include "core/cortex-m/cpu.h"
 #include "cros_board_info.h"
 #include "driver/ina3221.h"
 #include "driver/ppc/sn5s330.h"
@@ -51,6 +52,11 @@ static void ppc_interrupt(enum gpio_signal signal)
 {
 	if (signal == GPIO_USB_C0_TCPPC_INT_ODL)
 		sn5s330_interrupt(0);
+}
+
+int ppc_get_alert_status(int port)
+{
+	return gpio_get_level(GPIO_USB_C0_TCPPC_INT_ODL) == 0;
 }
 
 static void tcpc_alert_event(enum gpio_signal signal)
@@ -341,9 +347,9 @@ const struct fan_conf fan_conf_0 = {
 };
 
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3200,
-	.rpm_start = 3200,
-	.rpm_max = 6500,
+	.rpm_min = 2400,
+	.rpm_start = 2400,
+	.rpm_max = 4000,
 };
 
 const struct fan_t fans[] = {
@@ -354,7 +360,7 @@ BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
 /******************************************************************************/
 /* MFT channels. These are logically separate from pwm_channels. */
 const struct mft_t mft_channels[] = {
-	[MFT_CH_0] = {NPCX_MFT_MODULE_1, TCKC_LFCLK, PWM_CH_FAN},
+	[MFT_CH_0] = {NPCX_MFT_MODULE_2, TCKC_LFCLK, PWM_CH_FAN},
 };
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
@@ -393,7 +399,22 @@ static void board_init(void)
 {
 	uint8_t *memmap_batt_flags;
 
+	/* Increase priority of C10 gate interrupts to minimize latency.
+	 *
+	 * We assume that GPIO_CPU_C10_GATE_L is on GPIO6.7, which is on
+	 * the WKINTH_1 IRQ.
+	 */
+	const int c10_gpio_irq = NPCX_IRQ_WKINTH_1;
+	const int c10_gpio_prio = 2;
+	const uint32_t prio_shift = c10_gpio_irq % 4 * 8 + 5;
+
+	CPU_NVIC_PRI(c10_gpio_irq / 4) =
+		(CPU_NVIC_PRI(c10_gpio_irq / 4) &
+		 ~(0x7 << prio_shift)) |
+		(c10_gpio_prio << prio_shift);
+
 	update_port_limits();
+	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT_L);
 
 	/* Always claim AC is online, because we don't have a battery. */
 	memmap_batt_flags = host_get_memmap(EC_MEMMAP_BATT_FLAG);

@@ -10,6 +10,7 @@
 
 #define VARIANT_ZORK_TREMBYLE
 
+#include <stdbool.h>
 #include "baseboard.h"
 
 /*
@@ -19,15 +20,15 @@
 #define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_I2C_DEBUG
 
+#define CONFIG_USBC_RETIMER_PI3DPX1207
 #define CONFIG_MKBP_USE_GPIO
-
-#undef CONFIG_LED_ONOFF_STATES
-/* Battery */
-#define CONFIG_BATTERY_LEVEL_NEAR_FULL 91
-
 #define CONFIG_8042_AUX
 #define CONFIG_PS2
 #define CONFIG_CMD_PS2
+
+#undef CONFIG_LED_ONOFF_STATES
+#define CONFIG_BATTERY_LEVEL_NEAR_FULL 91
+
 /* Motion sensing drivers */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
@@ -36,7 +37,10 @@
 #define CONFIG_ACCEL_KX022
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+#define CONFIG_FAN_RPM_CUSTOM
 #define CONFIG_TABLET_MODE
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR_TMP432
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
@@ -44,15 +48,18 @@
 
 /* GPIO mapping from board specific name to EC common name. */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
+#define CONFIG_SCI_GPIO			GPIO_EC_FCH_SCI_ODL
 #define GPIO_AC_PRESENT			GPIO_ACOK_OD
 #define GPIO_CPU_PROCHOT		GPIO_PROCHOT_ODL
 #define GPIO_EC_INT_L			GPIO_EC_AP_INT_ODL
 #define GPIO_ENABLE_BACKLIGHT_L		GPIO_EC_EDP_BL_DISABLE
 #define GPIO_ENTERING_RW		GPIO_EC_ENTERING_RW
 #define GPIO_KBD_KSO2			GPIO_EC_KSO_02_INV
+#define GPIO_PCH_PWRBTN_L		GPIO_EC_FCH_PWR_BTN_L
 #define GPIO_PCH_RSMRST_L		GPIO_EC_FCH_RSMRST_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
 #define GPIO_PCH_SLP_S5_L		GPIO_SLP_S5_L
+#define GPIO_PCH_SYS_PWROK		GPIO_EC_FCH_PWROK
 #define GPIO_PCH_WAKE_L			GPIO_EC_FCH_WAKE_L
 #define GPIO_POWER_BUTTON_L		GPIO_EC_PWR_BTN_ODL
 #define GPIO_S0_PGOOD			GPIO_S0_PWROK_OD
@@ -62,13 +69,12 @@
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
 
+/* I2C mapping from board specific function*/
+#define I2C_PORT_THERMAL	I2C_PORT_AP_HDMI
+
 #ifndef __ASSEMBLER__
 
 void ps2_pwr_en_interrupt(enum gpio_signal signal);
-
-/* These GPIOs moved. Temporarily detect and support the V0 HW. */
-extern enum gpio_signal GPIO_PCH_PWRBTN_L;
-extern enum gpio_signal GPIO_PCH_SYS_PWROK;
 
 enum battery_type {
 	BATTERY_SMP,
@@ -89,6 +95,93 @@ enum pwm_channel {
 	PWM_CH_POWER_LED,
 	PWM_CH_COUNT
 };
+
+
+/*****************************************************************************
+ * CBI EC FW Configuration
+ */
+#include "cbi_ec_fw_config.h"
+
+/**
+ * MORPHIUS_MB_USBAC
+ *	USB-A0  Speed: 5 Gbps
+ *		Retimer: none
+ *	USB-C0  Speed: 5 Gbps
+ *		Retimer: PI3DPX1207
+ *		TCPC: NCT3807
+ *		PPC: AOZ1380
+ *		IOEX: TCPC
+ */
+enum ec_cfg_usb_mb_type {
+	MORPHIUS_MB_USBAC = 0,
+};
+
+/**
+ * MORPHIUS_DB_T_OPT1_USBC_HDMI
+ *	USB-A1  none
+ *	USB-C1  Speed: 5 Gbps
+ *		Retimer: PS8818
+ *		TCPC: NCT3807
+ *		PPC: NX20P3483
+ *		IOEX: TCPC
+ *	HDMI    Exists: yes
+ *		Retimer: PI3HDX1204
+ *		MST Hub: none
+ *
+ * MORPHIUS_DB_T_OPT3_USBC_HDMI_MSTHUB
+ *	USB-A1  none
+ *	USB-C1  Speed: 5 Gbps
+ *		Retimer: PS8802
+ *		TCPC: NCT3807
+ *		PPC: NX20P3483
+ *		IOEX: TCPC
+ *	HDMI    Exists: yes
+ *		Retimer: none
+ *		MST Hub: RTD2141B
+ */
+enum ec_cfg_usb_db_type {
+	MORPHIUS_DB_T_OPT1_USBC_HDMI = 0,
+	MORPHIUS_DB_T_OPT3_USBC_HDMI_MSTHUB = 1,
+};
+
+
+#define HAS_USBC1_RETIMER_PS8802 \
+			(BIT(MORPHIUS_DB_T_OPT3_USBC_HDMI_MSTHUB))
+
+static inline bool ec_config_has_usbc1_retimer_ps8802(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_USBC1_RETIMER_PS8802);
+}
+
+#define HAS_USBC1_RETIMER_PS8818 \
+			(BIT(MORPHIUS_DB_T_OPT1_USBC_HDMI))
+
+static inline bool ec_config_has_usbc1_retimer_ps8818(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_USBC1_RETIMER_PS8818);
+}
+
+#define HAS_HDMI_RETIMER_PI3HDX1204 \
+			(BIT(MORPHIUS_DB_T_OPT1_USBC_HDMI))
+
+static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_HDMI_RETIMER_PI3HDX1204);
+}
+
+#define PORT_TO_HPD(port) ((port == 0) \
+	? GPIO_USB_C0_HPD \
+	: (ec_config_has_usbc1_retimer_ps8802()) \
+		? GPIO_DP1_HPD \
+		: GPIO_DP2_HPD)
+
+extern const struct usb_mux usbc0_pi3dpx1207_usb_retimer;
+extern const struct usb_mux usbc1_ps8802;
+extern const struct usb_mux usbc1_ps8818;
+extern struct usb_mux usbc1_amd_fp5_usb_mux;
 
 #endif /* !__ASSEMBLER__ */
 

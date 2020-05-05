@@ -17,7 +17,7 @@
 #include "cros_board_info.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/bc12/max14637.h"
 #include "driver/charger/isl923x.h"
 #include "driver/ppc/sn5s330.h"
@@ -485,8 +485,13 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 
 /* Keyboard scan setting */
 struct keyboard_scan_config keyscan_config = {
-	/* Extra delay when KSO2 is tied to Cr50. */
-	.output_settle_us = 60,
+	/*
+	 * F3 key scan cycle completed but scan input is not
+	 * charging to logic high when EC start scan next
+	 * column for "T" key, so we set .output_settle_us
+	 * to 80us
+	 */
+	.output_settle_us = 80,
 	.debounce_down_us = 6 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 1500,
@@ -560,7 +565,7 @@ static struct mutex g_base_mutex;
 
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* TODO(gcc >= 5.0) Remove the casts to const pointer at rot_standard_ref */
 struct motion_sensor_t motion_sensors[] = {
@@ -605,8 +610,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 2, /* g, enough for laptop */
 	 .rot_standard_ref = NULL,
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -633,8 +638,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = NULL,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 

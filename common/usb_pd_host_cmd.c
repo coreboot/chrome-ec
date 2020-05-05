@@ -7,15 +7,25 @@
 
 #include <string.h>
 
+#include "battery.h"
+#include "charge_manager.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "host_command.h"
 #include "tcpm.h"
 #include "usb_mux.h"
-#include "usb_pd.h"
 #include "usb_pd_tcpm.h"
+#include "usb_pd.h"
 
 #ifdef CONFIG_COMMON_RUNTIME
+/*
+ * If we are trying to upgrade the TCPC port that is supplying power, then we
+ * need to ensure that the battery has enough charge for the upgrade. 100mAh
+ * is about 5% of most batteries, and it should be enough charge to get us
+ * through the EC jump to RW and PD upgrade.
+ */
+#define MIN_BATTERY_FOR_TCPC_UPGRADE_MAH 100 /* mAH */
+
 struct ec_params_usb_pd_rw_hash_entry rw_hash_table[RW_HASH_ENTRIES];
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -74,8 +84,7 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_RW_HASH_ENTRY,
 		     EC_VER_MASK(0));
 #endif /* CONFIG_HOSTCMD_RWHASHPD */
 
-#ifndef CONFIG_USB_PD_TCPC
-#ifdef CONFIG_EC_CMD_PD_CHIP_INFO
+#if defined(CONFIG_EC_CMD_PD_CHIP_INFO) && !defined(CONFIG_USB_PD_TCPC)
 static enum ec_status hc_remote_pd_chip_info(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_pd_chip_info *p = args->params;
@@ -102,8 +111,7 @@ static enum ec_status hc_remote_pd_chip_info(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_PD_CHIP_INFO,
 		     hc_remote_pd_chip_info,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
-#endif /* CONFIG_EC_CMD_PD_CHIP_INFO */
-#endif /* CONFIG_USB_PD_TCPC */
+#endif /* CONFIG_EC_CMD_PD_CHIP_INFO && !CONFIG_USB_PD_TCPC */
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 static enum ec_status hc_remote_pd_set_amode(struct host_cmd_handler_args *args)
@@ -347,12 +355,12 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 		else
 			r_v2->state[0] = '\0';
 
-		if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
-			r_v2->dp_mode = get_dp_pin_mode(p->port);
-
 		r_v2->control_flags = get_pd_control_flags(p->port);
-		r_v2->cable_speed = get_tbt_cable_speed(p->port);
-		r_v2->cable_gen = get_tbt_rounded_support(p->port);
+		if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
+			r_v2->dp_mode = get_dp_pin_mode(p->port);
+			r_v2->cable_speed = get_tbt_cable_speed(p->port);
+			r_v2->cable_gen = get_tbt_rounded_support(p->port);
+		}
 
 		if (args->version == 1)
 			args->response_size = sizeof(*r_v1);
@@ -369,6 +377,94 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_CONTROL,
 		     hc_usb_pd_control,
 		     EC_VER_MASK(0) | EC_VER_MASK(1) | EC_VER_MASK(2));
 #endif /* CONFIG_COMMON_RUNTIME */
+
+#if defined(CONFIG_HOSTCMD_FLASHPD) && defined(CONFIG_USB_PD_TCPMV2)
+static enum ec_status hc_remote_flash(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_usb_pd_fw_update *p = args->params;
+	int port = p->port;
+	int rv = EC_RES_SUCCESS;
+	const uint32_t *data = &(p->size) + 1;
+	int i, size;
+
+	if (port >= board_get_usb_pd_port_count())
+		return EC_RES_INVALID_PARAM;
+
+	if (p->size + sizeof(*p) > args->params_size)
+		return EC_RES_INVALID_PARAM;
+
+#if defined(CONFIG_CHARGE_MANAGER) && defined(CONFIG_BATTERY) && \
+	(defined(CONFIG_BATTERY_PRESENT_CUSTOM) ||   \
+	 defined(CONFIG_BATTERY_PRESENT_GPIO))
+	/*
+	 * Do not allow PD firmware update if no battery and this port
+	 * is sinking power, because we will lose power.
+	 */
+	if (battery_is_present() != BP_YES &&
+			charge_manager_get_active_charge_port() == port)
+		return EC_RES_UNAVAILABLE;
+#endif
+
+	switch (p->cmd) {
+	case USB_PD_FW_REBOOT:
+		pd_send_vdm(port, USB_VID_GOOGLE, VDO_CMD_REBOOT, NULL, 0);
+		/*
+		 * Return immediately to free pending i2c bus.  Host needs to
+		 * manage this delay.
+		 */
+		return EC_RES_SUCCESS;
+
+	case USB_PD_FW_FLASH_ERASE:
+		pd_send_vdm(port, USB_VID_GOOGLE, VDO_CMD_FLASH_ERASE, NULL, 0);
+		/*
+		 * Return immediately.  Host needs to manage delays here which
+		 * can be as long as 1.2 seconds on 64KB RW flash.
+		 */
+		return EC_RES_SUCCESS;
+
+	case USB_PD_FW_ERASE_SIG:
+		pd_send_vdm(port, USB_VID_GOOGLE, VDO_CMD_ERASE_SIG, NULL, 0);
+		break;
+
+	case USB_PD_FW_FLASH_WRITE:
+		/* Data size must be a multiple of 4 */
+		if (!p->size || p->size % 4)
+			return EC_RES_INVALID_PARAM;
+
+		size = p->size / 4;
+		for (i = 0; i < size; i += VDO_MAX_SIZE - 1) {
+			pd_send_vdm(port, USB_VID_GOOGLE, VDO_CMD_FLASH_WRITE,
+				data + i, MIN(size - i, VDO_MAX_SIZE - 1));
+		}
+		return EC_RES_SUCCESS;
+
+	default:
+		return EC_RES_INVALID_PARAM;
+	}
+
+	return rv;
+}
+DECLARE_HOST_COMMAND(EC_CMD_USB_PD_FW_UPDATE,
+			hc_remote_flash,
+			EC_VER_MASK(0));
+#endif /* CONFIG_HOSTCMD_FLASHPD && CONFIG_USB_PD_TCPMV2 */
+
+#ifdef CONFIG_HOSTCMD_EVENTS
+void pd_notify_dp_alt_mode_entry(void)
+{
+	/*
+	 * Note: EC_HOST_EVENT_PD_MCU may be a more appropriate host event to
+	 * send, but we do not send that here because there are other cases
+	 * where we send EC_HOST_EVENT_PD_MCU such as charger insertion or
+	 * removal.  Currently, those do not wake the system up, but
+	 * EC_HOST_EVENT_MODE_CHANGE does.  If we made the system wake up on
+	 * EC_HOST_EVENT_PD_MCU, we would be turning the internal display on on
+	 * every charger insertion/removal, which is not desired.
+	 */
+	CPRINTS("Notifying AP of DP Alt Mode Entry...");
+	host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
+}
+#endif /* CONFIG_HOSTCMD_EVENTS */
 
 __overridable enum ec_pd_port_location board_get_pd_port_location(int port)
 {
@@ -396,8 +492,8 @@ static enum ec_status hc_get_pd_port_caps(struct host_cmd_handler_args *args)
 	else
 		r->pd_try_power_role_cap = EC_PD_TRY_POWER_ROLE_NONE;
 
-	if (IS_ENABLED(CONFIG_USB_TYPEC_VPD) ||
-	    IS_ENABLED(CONFIG_USB_TYPEC_CTVPD))
+	if (IS_ENABLED(CONFIG_USB_VPD) ||
+	    IS_ENABLED(CONFIG_USB_CTVPD))
 		r->pd_data_role_cap = EC_PD_DATA_ROLE_UFP;
 	else
 		r->pd_data_role_cap = EC_PD_DATA_ROLE_DUAL;
@@ -412,5 +508,84 @@ static enum ec_status hc_get_pd_port_caps(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_GET_PD_PORT_CAPS,
 		     hc_get_pd_port_caps,
 		     EC_VER_MASK(0));
+
+#ifdef CONFIG_CMD_PD_CONTROL
+static enum ec_status pd_control(struct host_cmd_handler_args *args)
+{
+	static int pd_control_disabled[CONFIG_USB_PD_PORT_MAX_COUNT];
+	const struct ec_params_pd_control *cmd = args->params;
+	int enable = 0;
+
+	if (cmd->chip >= board_get_usb_pd_port_count())
+		return EC_RES_INVALID_PARAM;
+
+	/* Always allow disable command */
+	if (cmd->subcmd == PD_CONTROL_DISABLE) {
+		pd_control_disabled[cmd->chip] = 1;
+		return EC_RES_SUCCESS;
+	}
+
+	if (pd_control_disabled[cmd->chip])
+		return EC_RES_ACCESS_DENIED;
+
+	if (cmd->subcmd == PD_SUSPEND) {
+		/*
+		 * The AP is requesting to suspend PD traffic on the EC so it
+		 * can perform a firmware upgrade. If Vbus is present on the
+		 * connector (it is either a source or sink), then we will
+		 * prevent the upgrade if there is not enough battery to finish
+		 * the upgrade. We cannot rely on the EC's active charger data
+		 * as the EC just rebooted into RW and has not necessarily
+		 * picked the active charger yet.
+		 */
+#ifdef HAS_TASK_CHARGER
+		if (pd_is_vbus_present(cmd->chip)) {
+			struct batt_params batt = { 0 };
+			/*
+			 * The charger task has not re-initialized, so we need
+			 * to ask the battery directly.
+			 */
+			battery_get_params(&batt);
+			if (batt.remaining_capacity <
+				    MIN_BATTERY_FOR_TCPC_UPGRADE_MAH ||
+			    batt.flags & BATT_FLAG_BAD_REMAINING_CAPACITY) {
+				CPRINTS("C%d: Cannot suspend for upgrade, not "
+					"enough battery (%dmAh)!",
+					cmd->chip, batt.remaining_capacity);
+				return EC_RES_BUSY;
+			}
+		}
+#else
+		if (pd_is_vbus_present(cmd->chip)) {
+			CPRINTS("C%d: Cannot suspend for upgrade, Vbus "
+				"present!",
+				cmd->chip);
+			return EC_RES_BUSY;
+		}
+#endif
+		enable = 0;
+	} else if (cmd->subcmd == PD_RESUME) {
+		enable = 1;
+	} else if (cmd->subcmd == PD_RESET) {
+#ifdef HAS_TASK_PDCMD
+		board_reset_pd_mcu();
+#else
+		return EC_RES_INVALID_COMMAND;
+#endif
+	} else if (cmd->subcmd == PD_CHIP_ON && board_set_tcpc_power_mode) {
+		board_set_tcpc_power_mode(cmd->chip, 1);
+		return EC_RES_SUCCESS;
+	} else {
+		return EC_RES_INVALID_COMMAND;
+	}
+
+	pd_comm_enable(cmd->chip, enable);
+	pd_set_suspend(cmd->chip, !enable);
+
+	return EC_RES_SUCCESS;
+}
+
+DECLARE_HOST_COMMAND(EC_CMD_PD_CONTROL, pd_control, EC_VER_MASK(0));
+#endif /* CONFIG_CMD_PD_CONTROL */
 
 #endif /* HAS_TASK_HOSTCMD */

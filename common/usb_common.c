@@ -36,6 +36,10 @@
 #define CPRINTF(format, args...)
 #endif
 
+__overridable void board_vbus_present_change(void)
+{
+}
+
 #if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
 int hex8tou32(char *str, uint32_t *val)
 {
@@ -228,17 +232,8 @@ enum pd_cc_states pd_get_cc_state(
 
 /**
  * This function checks the current CC status of the port partner
- * and returns true if the attached partner is UFP.
+ * and returns true if the attached partner is debug accessory.
  */
-bool pd_partner_is_ufp(int port)
-{
-	enum pd_cc_states cc_state = pd_get_task_cc_state(port);
-
-	return cc_state == PD_CC_UFP_ATTACHED ||
-		cc_state == PD_CC_UFP_DEBUG_ACC ||
-		cc_state == PD_CC_UFP_AUDIO_ACC;
-}
-
 bool pd_is_debug_acc(int port)
 {
 	enum pd_cc_states cc_state = pd_get_task_cc_state(port);
@@ -426,12 +421,12 @@ void set_usb_mux_with_current_data_role(int port)
 	}
 }
 
-#ifdef CONFIG_USBC_PPC
-
 static void pd_send_hard_reset(int port)
 {
 	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SEND_HARD_RESET, 0);
 }
+
+#ifdef CONFIG_USBC_PPC
 
 static uint32_t port_oc_reset_req;
 
@@ -478,12 +473,12 @@ void pd_handle_overcurrent(int port)
 	hook_call_deferred(&re_enable_ports_data, SECOND);
 }
 
-void pd_handle_cc_overvoltage(int port)
+#endif /* CONFIG_USBC_PPC */
+
+__maybe_unused void pd_handle_cc_overvoltage(int port)
 {
 	pd_send_hard_reset(port);
 }
-
-#endif /* CONFIG_USBC_PPC */
 
 __overridable int pd_board_checks(void)
 {
@@ -495,14 +490,6 @@ __overridable int pd_check_data_swap(int port,
 {
 	/* Allow data swap if we are a UFP, otherwise don't allow. */
 	return (data_role == PD_ROLE_UFP) ? 1 : 0;
-}
-
-__overridable void pd_check_dr_role(int port,
-	enum pd_data_role dr_role, int flags)
-{
-	/* If UFP, try to switch to DFP */
-	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_UFP)
-		pd_request_data_swap(port);
 }
 
 __overridable int pd_check_power_swap(int port)
@@ -518,28 +505,6 @@ __overridable int pd_check_power_swap(int port)
 		return 1;
 
 	return 0;
-}
-
-__overridable void pd_check_pr_role(int port,
-	enum pd_power_role pr_role, int flags)
-{
-	/*
-	 * If partner is dual-role power and dualrole toggling is on, consider
-	 * if a power swap is necessary.
-	 */
-	if ((flags & PD_FLAGS_PARTNER_DR_POWER) &&
-	    pd_get_dual_role(port) == PD_DRP_TOGGLE_ON) {
-		/*
-		 * If we are a sink and partner is not unconstrained, then
-		 * swap to become a source. If we are source and partner is
-		 * unconstrained, swap to become a sink.
-		 */
-		int partner_unconstrained = flags & PD_FLAGS_PARTNER_UNCONSTR;
-
-		if ((!partner_unconstrained && pr_role == PD_ROLE_SINK) ||
-		     (partner_unconstrained && pr_role == PD_ROLE_SOURCE))
-			pd_request_power_swap(port);
-	}
 }
 
 __overridable void pd_execute_data_swap(int port,
@@ -597,6 +562,8 @@ const int pd_snk_pdo_cnt = ARRAY_SIZE(pd_snk_pdo);
 #endif /* CONFIG_USB_PD_CUSTOM_PDO */
 
 /* ----------------- Vendor Defined Messages ------------------ */
+#if defined(CONFIG_USB_PE_SM) && !defined(CONFIG_USB_VPD) && \
+	!defined(CONFIG_USB_CTVPD)
 __overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 				uint32_t **rpayload)
 {
@@ -659,6 +626,7 @@ __overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 
 	return 0;
 }
+#endif /* CONFIG_USB_PE_SM && !CONFIG_USB_VPD && !CONFIG_USB_CTVPD */
 
 __overridable bool vboot_allow_usb_pd(void)
 {

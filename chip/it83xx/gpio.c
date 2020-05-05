@@ -666,18 +666,20 @@ void gpio_pre_init(void)
 
 	IT83XX_GPIO_GCR = 0x06;
 
+#if IT83XX_USBPD_PHY_PORT_COUNT < CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT
+#error "ITE pd active port count should be less than physical port count !"
+#endif
 	/*
-	 * To prevent cc pins leakage ...
-	 * If we don't use ITE TCPC: disable all ITE port cc modules.
+	 * To prevent cc pins leakage and cc pins can be used as gpio,
+	 * disable board not active ITE TCPC port cc modules.
 	 */
-	if (!IS_ENABLED(CONFIG_USB_PD_TCPM_ITE_ON_CHIP)) {
-		for (i = 0; i < IT83XX_USBPD_PHY_PORT_COUNT; i++) {
-			it83xx_disable_cc_module(i);
-			/* Dis-connect 5.1K dead battery resistor to CC */
-			IT83XX_USBPD_CCPSR(i) |=
-				(USBPD_REG_MASK_DISCONNECT_5_1K_CC2_DB |
-				 USBPD_REG_MASK_DISCONNECT_5_1K_CC1_DB);
-		}
+	for (i = CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT;
+	     i < IT83XX_USBPD_PHY_PORT_COUNT; i++) {
+		it83xx_disable_cc_module(i);
+		/* Dis-connect 5.1K dead battery resistor to CC */
+		IT83XX_USBPD_CCPSR(i) |=
+			(USBPD_REG_MASK_DISCONNECT_5_1K_CC2_DB |
+			 USBPD_REG_MASK_DISCONNECT_5_1K_CC1_DB);
 	}
 
 #ifndef CONFIG_USB
@@ -708,6 +710,32 @@ void gpio_pre_init(void)
 	 */
 	IT83XX_VBATPC_BGPOPSCR = 0x0;
 #endif
+
+	/*
+	 * On IT81202 (128-pins package), the pins of GPIO group K and L aren't
+	 * bonding with pad. So we configure these pins as internal pull-down
+	 * at default to prevent leakage current due to floating.
+	 */
+	if (IS_ENABLED(IT83XX_GPIO_GROUP_K_L_DEFAULT_PULL_DOWN)) {
+		for (i = 0; i < 8; i++) {
+			IT83XX_GPIO_CTRL(GPIO_K, i) = (GPCR_PORT_PIN_MODE_INPUT
+				| GPCR_PORT_PIN_MODE_PULLDOWN);
+			IT83XX_GPIO_CTRL(GPIO_L, i) = (GPCR_PORT_PIN_MODE_INPUT
+				| GPCR_PORT_PIN_MODE_PULLDOWN);
+		}
+	}
+
+	/*
+	 * On IT81202/IT81302, the GPIOH7 isn't bonding with pad and is left
+	 * floating internally. We need to enable internal pull-down for the pin
+	 * to prevent leakage current, but IT81202/IT81302 doesn't have the
+	 * capability to pull it down. We can only set it as output low,
+	 * so we enable output low for it at initialization to prevent leakage.
+	 */
+	if (IS_ENABLED(IT83XX_GPIO_H7_DEFAULT_OUTPUT_LOW)) {
+		IT83XX_GPIO_CTRL(GPIO_H, 7) = GPCR_PORT_PIN_MODE_OUTPUT;
+		IT83XX_GPIO_DATA(GPIO_H) &= ~BIT(7);
+	}
 
 	for (i = 0; i < GPIO_COUNT; i++, g++) {
 		flags = g->flags;

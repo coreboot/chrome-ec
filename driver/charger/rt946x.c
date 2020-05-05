@@ -672,7 +672,7 @@ static enum ec_error_list rt946x_enable_otg_power(int chgnum, int enabled)
 		(chgnum, RT946X_REG_CHGCTRL1, RT946X_MASK_OPA_MODE);
 }
 
-int charger_is_sourcing_otg_power(int port)
+static int rt946x_is_sourcing_otg_power(int chgnum, int port)
 {
 	int val;
 
@@ -1167,6 +1167,11 @@ static int mt6370_get_charger_type(int chgnum)
 #endif
 }
 
+/*
+ * The USB Type-C specification limits the maximum amount of current from BC 1.2
+ * suppliers to 1.5A.  Technically, proprietary methods are not allowed, but we
+ * will continue to allow those.
+ */
 static int mt6370_get_bc12_ilim(int charge_supplier)
 {
 	switch (charge_supplier) {
@@ -1175,21 +1180,11 @@ static int mt6370_get_bc12_ilim(int charge_supplier)
 	case MT6370_CHG_TYPE_APPLE_1_0A_CHARGER:
 		return 1000;
 	case MT6370_CHG_TYPE_APPLE_2_1A_CHARGER:
-		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
-		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
-			return 2100;
 	case MT6370_CHG_TYPE_APPLE_2_4A_CHARGER:
-		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
-		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
-			return 2400;
 	case MT6370_CHG_TYPE_DCP:
-		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
-		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
-			/* A conservative value to prevent a bad charger. */
-			return RT946X_AICR_TYP2MAX(2000);
 	case MT6370_CHG_TYPE_CDP:
 	case MT6370_CHG_TYPE_SAMSUNG_CHARGER:
-		return 1500;
+		return USB_CHARGER_MAX_CURR_MA;
 	case MT6370_CHG_TYPE_SDP:
 	default:
 		return USB_CHARGER_MIN_CURR_MA;
@@ -1222,10 +1217,10 @@ static int rt946x_get_bc12_ilim(int charge_supplier)
 		if (IS_ENABLED(CONFIG_CHARGE_RAMP_SW) ||
 		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
 			/* A conservative value to prevent a bad charger. */
-			return RT946X_AICR_TYP2MAX(2000);
+			return RT946X_AICR_TYP2MAX(USB_CHARGER_MAX_CURR_MA);
 		/* fallback */
 	case CHARGE_SUPPLIER_BC12_CDP:
-		return 1500;
+		return USB_CHARGER_MAX_CURR_MA;
 	case CHARGE_SUPPLIER_BC12_SDP:
 	default:
 		return USB_CHARGER_MIN_CURR_MA;
@@ -1333,7 +1328,7 @@ int rt946x_get_adc(enum rt946x_adc_in_sel adc_sel, int *adc_val)
 		goto out;
 
 	if (adc_sel == MT6370_ADC_IBUS) {
-		rv = charger_get_input_current(&aicr);
+		rv = charger_get_input_current(CHARGER_SOLO, &aicr);
 		if (rv)
 			goto out;
 	}
@@ -1880,6 +1875,7 @@ const struct charger_drv rt946x_drv = {
 	.get_status = &rt946x_get_status,
 	.set_mode = &rt946x_set_mode,
 	.enable_otg_power = &rt946x_enable_otg_power,
+	.is_sourcing_otg_power = &rt946x_is_sourcing_otg_power,
 	.get_current = &rt946x_get_current,
 	.set_current = &rt946x_set_current,
 	.get_voltage = &rt946x_get_voltage,

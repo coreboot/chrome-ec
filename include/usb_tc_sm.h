@@ -237,9 +237,7 @@ int tc_check_vconn_swap(int port);
  * Checks if VCONN is being sourced.
  *
  * @param port USB_C port number
- * @return 1 if vconn is being sourced, 0 if it's not, and -1 if
- *         can't answer at this time. -1 is returned if the current
- *         Type-C state is not Attached.SRC or Attached.SNK.
+ * @return 1 if vconn is being sourced, 0 if it's not.
  */
 int tc_is_vconn_src(int port);
 
@@ -306,6 +304,13 @@ void tc_event_check(int port, int evt);
 void tc_run(const int port);
 
 /**
+ * Sets the debug level for the TC layer
+ *
+ * @param level debug level
+ */
+void tc_set_debug_level(enum debug_level level);
+
+/**
  * Start error recovery
  *
  * @param port USB-C port number
@@ -317,7 +322,24 @@ void tc_start_error_recovery(int port);
  *
  * @param port USB-C port number
  */
-void tc_hard_reset(int port);
+void tc_hard_reset_request(int port);
+
+/**
+ * Hard Reset was sent and we are required to remain attached until we have
+ * restored our connection for the TypeC port.
+ * A call to tc_hard_reset_allow_unattach will allow the connection to go
+ * to an unattached state
+ *
+ * @param port USB-C port number
+ */
+void tc_hard_reset_allow_unattach(int port);
+
+/**
+ * Hard Reset is complete for the TypeC port
+ *
+ * @param port USB-C port number
+ */
+void tc_hard_reset_complete(int port);
 
 /**
  * Start the state machine event loop
@@ -367,14 +389,7 @@ const char *tc_get_current_state(int port);
  */
 uint32_t tc_get_flags(int port);
 
-/*
- * Prints the rw hash and sysjump image string.
- *
- * @param port USB-C port number
- */
-void tc_print_dev_info(int port);
-
-#ifdef CONFIG_USB_TYPEC_CTVPD
+#ifdef CONFIG_USB_CTVPD
 
 /**
  * Resets the charge-through support timer. This can be
@@ -391,6 +406,6 @@ void tc_reset_support_timer(int port);
  *
  */
 void tc_ctvpd_detected(int port);
-#endif /* CONFIG_USB_TYPEC_CTVPD */
+#endif /* CONFIG_USB_CTVPD */
 #endif /* __CROS_EC_USB_TC_H */
 

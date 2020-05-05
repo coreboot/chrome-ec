@@ -42,6 +42,12 @@
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+
+/* TCPC MT6370 */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
+#define PD_VCONN_SWAP_DELAY 5000 /* us */
+
 /*
  * The Maximum input voltage is 13.5V, need another 5% tolerance.
  * 12.85V * 1.05 = 13.5V
@@ -54,6 +60,12 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR 10 /* BOARD_RS2 */
 #define CONFIG_CHARGER_OTG
 #define CONFIG_CHARGE_RAMP_HW
+
+/* TCPC FUSB302 */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY  160000  /* us */
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
+#define PD_VCONN_SWAP_DELAY 5000 /* us */
+
 #define PD_MAX_VOLTAGE_MV 20000
 #else
 #error Must define a VARIANT_KUKUI_CHARGER
@@ -77,6 +89,24 @@
 #define CONFIG_DETACHABLE_BASE
 #define CONFIG_BASE_ATTACHED_SWITCH
 #endif
+
+/* define this if the board is jacuzzi family */
+#ifdef VARIANT_KUKUI_JACUZZI
+#define CONFIG_IO_EXPANDER
+#define CONFIG_IO_EXPANDER_IT8801
+#define CONFIG_IO_EXPANDER_PORT_COUNT 1
+#define CONFIG_KEYBOARD_DEBUG
+#define CONFIG_KEYBOARD_NOT_RAW
+#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_KEYBOARD_COL2_INVERTED
+
+#define CONFIG_GMR_TABLET_MODE
+#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
+#define CONFIG_TABLET_MODE_SWITCH
+
+#define PD_OPERATING_POWER_MW 30000
+#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
+#endif /* VARIANT_KUKUI_JACUZZI */
 
 /*
  * Define this flag if board controls dp mux via gpio pins USB_C0_DP_OE_L and
@@ -203,10 +233,6 @@
 #else
 #define PD_MAX_CURRENT_MA     3000
 #endif
-
-#define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY 50000  /* us */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /* Timer selection */
 #define TIM_CLOCK32  2

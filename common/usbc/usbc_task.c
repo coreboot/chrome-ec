@@ -34,6 +34,9 @@
 
 #define USBC_EVENT_TIMEOUT (5 * MSEC)
 
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+
 static uint8_t paused[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 int tc_restart_tcpc(int port)
@@ -48,8 +51,14 @@ void tc_pause_event_loop(int port)
 
 void tc_start_event_loop(int port)
 {
-	paused[port] = 0;
-	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
+	/*
+	 * Only generate TASK_EVENT_WAKE event if state
+	 * machine is transitioning to un-paused
+	 */
+	if (paused[port]) {
+		paused[port] = 0;
+		task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
+	}
 }
 
 /* High-priority interrupt tasks implementations */
@@ -70,6 +79,14 @@ void schedule_deferred_pd_interrupt(const int port)
 }
 
 /*
+ * Theoretically, we may need to support up to 400 USB-PD packets per second for
+ * intensive operations such as FW update over PD.  This value has tested well
+ * preventing watchdog resets with a single bad port partner plugged in.
+ */
+#define ALERT_STORM_MAX_COUNT   400
+#define ALERT_STORM_INTERVAL    SECOND
+
+/*
  * Main task entry point that handles PD interrupts for a single port
  *
  * @param p The PD port number for which to handle interrupts (pointer is
@@ -79,6 +96,10 @@ void pd_interrupt_handler_task(void *p)
 {
 	const int port = (int) p;
 	const int port_mask = (PD_STATUS_TCPC_ALERT_0 << port);
+	struct {
+		int count;
+		timestamp_t time;
+	} storm_tracker[CONFIG_USB_PD_PORT_MAX_COUNT] = {};
 
 	ASSERT(port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 
@@ -100,8 +121,33 @@ void pd_interrupt_handler_task(void *p)
 			 * PD_PROCESS_INTERRUPT to check if we missed anything.
 			 */
 			while ((tcpc_get_alert_status() & port_mask) &&
-					pd_is_port_enabled(port))
+					pd_is_port_enabled(port)) {
+				timestamp_t now;
+
 				tcpc_alert(port);
+
+				now = get_time();
+				if (timestamp_expired(storm_tracker[port].time,
+						      &now)) {
+					/* Reset timer into future */
+					storm_tracker[port].time.val =
+						now.val + ALERT_STORM_INTERVAL;
+
+					/*
+					 * Start at 1 since we are processing an
+					 * interrupt right now
+					 */
+					storm_tracker[port].count = 1;
+				} else if (++storm_tracker[port].count >
+							ALERT_STORM_MAX_COUNT) {
+					CPRINTS("C%d: Interrupt storm detected."
+						" Disabling port temporarily",
+						port);
+
+					pd_set_suspend(port, 1);
+					pd_deferred_resume(port);
+				}
+			}
 		}
 	}
 }
@@ -111,7 +157,8 @@ void pd_task(void *u)
 {
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
 
-	tc_state_init(port);
+	if (IS_ENABLED(CONFIG_USB_TYPEC_SM))
+		tc_state_init(port);
 
 	if (IS_ENABLED(CONFIG_USBC_PPC))
 		ppc_init(port);
@@ -135,7 +182,8 @@ void pd_task(void *u)
 						: USBC_EVENT_TIMEOUT);
 
 		/* handle events that affect the state machine as a whole */
-		tc_event_check(port, evt);
+		if (IS_ENABLED(CONFIG_USB_TYPEC_SM))
+			tc_event_check(port, evt);
 
 		/*
 		 * run port controller task to check CC and/or read incoming
@@ -144,15 +192,16 @@ void pd_task(void *u)
 		if (IS_ENABLED(CONFIG_USB_PD_TCPC))
 			tcpc_run(port, evt);
 
+		/* Run policy engine state machine */
 		if (IS_ENABLED(CONFIG_USB_PE_SM))
-			/* Run policy engine state machine */
 			pe_run(port, evt, tc_get_pd_enabled(port));
 
+		/* Run protocol state machine */
 		if (IS_ENABLED(CONFIG_USB_PRL_SM))
-			/* Run protocol state machine */
 			prl_run(port, evt, tc_get_pd_enabled(port));
 
 		/* Run TypeC state machine */
-		tc_run(port);
+		if (IS_ENABLED(CONFIG_USB_TYPEC_SM))
+			tc_run(port);
 	}
 }

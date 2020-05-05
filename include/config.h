@@ -82,6 +82,7 @@
  */
 #undef CONFIG_ACCEL_LIS2DE
 #undef CONFIG_ACCEL_LIS2DH
+#undef CONFIG_ACCEL_LIS2DS
 #undef CONFIG_ACCEL_LNG2DM
 #undef CONFIG_ACCEL_LIS2D_COMMON
 
@@ -107,6 +108,7 @@
 #undef CONFIG_ACCEL_LIS2DW_AS_BASE
 
 #undef CONFIG_ACCELGYRO_BMI160
+#undef CONFIG_ACCELGYRO_BMI260
 #undef CONFIG_ACCELGYRO_LSM6DS0
 /* Use CONFIG_ACCELGYRO_LSM6DSM for LSM6DSL, LSM6DSM, and/or LSM6DS3 */
 #undef CONFIG_ACCELGYRO_LSM6DSM
@@ -132,14 +134,14 @@
 #undef CONFIG_MAG_LIS2MDL
 #undef CONFIG_MAG_BMM150
 
-/* Presence of a Bosh Sensortec BMM150 magnetometer behind a BMI160. */
-#undef CONFIG_MAG_BMI160_BMM150
+/* Presence of a Bosh Sensortec BMM150 magnetometer behind a BMIxxx. */
+#undef CONFIG_MAG_BMI_BMM150
 
 /* Presence of a Bosh Sensortec BMM150 magnetometer behind a LSM6DSM. */
 #undef CONFIG_MAG_LSM6DSM_BMM150
 
-/* Presence of a ST LIS2MDL magnetometer behind a BMI160. */
-#undef CONFIG_MAG_BMI160_LIS2MDL
+/* Presence of a ST LIS2MDL magnetometer behind a BMIxxx. */
+#undef CONFIG_MAG_BMI_LIS2MDL
 
 /* Presence of a ST LIS2MDL magnetometer behind a LSM6DSM. */
 #undef CONFIG_MAG_LSM6DSM_LIS2MDL
@@ -147,14 +149,14 @@
 /* Specify barometer attached */
 #undef CONFIG_BARO_BMP280
 
-/* When set, it indicates a secondary sensor is attached behind a BMI160. */
-#undef CONFIG_BMI160_SEC_I2C
+/* When set, it indicates a secondary sensor is attached behind a BMIxxx. */
+#undef CONFIG_BMI_SEC_I2C
 
 /* When set, it indicates a secondary sensor is attached behind a LSM6DSM/L. */
 #undef CONFIG_LSM6DSM_SEC_I2C
 
-/* Support for BMI160 hardware orientation sensor */
-#undef CONFIG_BMI160_ORIENTATION_SENSOR
+/* Support for BMIxxx hardware orientation sensor */
+#undef CONFIG_BMI_ORIENTATION_SENSOR
 
 /* Support for KIONIX KX022 hardware orientation sensor */
 #undef CONFIG_KX022_ORIENTATION_SENSOR
@@ -163,7 +165,7 @@
 #undef CONFIG_ACCELGYRO_SEC_ADDR_FLAGS
 
 /*
- * Define if either CONFIG_BMI160_ORIENTATION_SUPPORT or
+ * Define if either CONFIG_BMI_ORIENTATION_SUPPORT or
  * CONFIG_KX022_ORIENTATION_SUPPORT is set.
  */
 #undef CONFIG_ORIENTATION_SENSOR
@@ -187,8 +189,9 @@
  */
 #undef CONFIG_ACCEL_STD_REF_FRAME_OLD
 
-/* Set when INT2 is an ouptut */
+/* Set when INT2 is an output */
 #undef CONFIG_ACCELGYRO_BMI160_INT2_OUTPUT
+#undef CONFIG_ACCELGYRO_BMI260_INT2_OUTPUT
 
 /* Specify type of Gyrometers attached. */
 #undef CONFIG_GYRO_L3GD20H
@@ -248,6 +251,9 @@
  */
 #undef CONFIG_ADC_SAMPLE_TIME
 
+/* Support voltage comparator */
+#undef CONFIG_ADC_VOLTAGE_COMPARATOR
+
 /* Include the ADC analog watchdog feature in the ADC code */
 #define CONFIG_ADC_WATCHDOG
 
@@ -306,8 +312,10 @@
  * Must be within TASK_EVENT_MOTION_INTERRUPT_MASK.
  */
 #undef CONFIG_ACCELGYRO_BMI160_INT_EVENT
+#undef CONFIG_ACCELGYRO_BMI260_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
+#undef CONFIG_ACCEL_LIS2DS_INT_EVENT
 #undef CONFIG_ACCEL_LIS2DW12_INT_EVENT
 #undef CONFIG_ALS_SI114X_INT_EVENT
 #undef CONFIG_ALS_TCS3400_INT_EVENT
@@ -372,9 +380,6 @@
 #undef CONFIG_AUDIO_CODEC_WOV_AUDIO_BUF_TYPE
 #undef CONFIG_AUDIO_CODEC_WOV_LANG_BUF_LEN
 #undef CONFIG_AUDIO_CODEC_WOV_LANG_BUF_TYPE
-
-/* Allow proprietary communication protocols' extensions. */
-#undef CONFIG_EXTENSION_COMMAND
 
 /*
  * Support controlling the display backlight based on the state of the lid
@@ -597,6 +602,11 @@
 #define CONFIG_BATT_HOST_FULL_FACTOR		94
 
 /*
+ * Smart battery pass-through host commands.
+ */
+#undef CONFIG_SB_PASSTHROUGH
+
+/*
  * Expose some data when it is needed.
  * For example, battery disconnect state
  */
@@ -633,19 +643,6 @@
 
 /* EC has GPIOs to allow board to reset RTC */
 #undef CONFIG_BOARD_HAS_RTC_RESET
-
-/*
- * Call board_after_rsmrst(state) after passing RSMRST# to the AP.  This is for
- * board workarounds that are required just after RSMRST is passed to the AP.
- */
-#undef CONFIG_BOARD_HAS_AFTER_RSMRST
-
-/*
- * Call board_before_rsmrst(state) before passing RSMRST# to the AP.
- * This is for board workarounds that are required after rails are up
- * but before the AP is out of reset.
- */
-#undef CONFIG_BOARD_HAS_BEFORE_RSMRST
 
 /*
  * Call board_config_post_gpio_init() after GPIOs are initialized.  See
@@ -732,12 +729,13 @@
  */
 #undef CONFIG_BUTTONS_RUNTIME_CONFIG
 
-/* Support V1 CCD configuration */
-#undef CONFIG_CASE_CLOSED_DEBUG_V1
-/* Allow unsafe debugging functionality in V1 configuration */
-#undef CONFIG_CASE_CLOSED_DEBUG_V1_UNSAFE
-/* Loosen Open restrictions for prePVT devices */
-#undef CONFIG_CCD_OPEN_PREPVT
+/* Support simulation of a button press using EC tool command */
+#undef CONFIG_HOSTCMD_BUTTON
+/*
+ * Configuration for button simulation i.e. dependent on
+ * CONFIG_HOSTCMD_BUTTON or CONFIG_CMD_BUTTON config.
+ */
+#undef CONFIG_SIMULATED_BUTTON
 
 /*
  * Capsense chip has buttons, too.
@@ -800,7 +798,9 @@
 #undef CONFIG_CHARGER_RAA489000
 #undef CONFIG_CHARGER_RT9466
 #undef CONFIG_CHARGER_RT9467
+#undef CONFIG_CHARGER_SM5803
 #undef CONFIG_CHARGER_SY21612
+
 
 /* Allow run-time completion of the charger driver structure */
 #undef CONFIG_CHARGER_RUNTIME_CONFIG
@@ -900,30 +900,6 @@
  * to keep the bq25710 in performance mode when the AP is in S0.
  */
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
-
-/*
- * Define to enable Type-C State Machine. Must be enabled
- * with CONFIG_USB_PD_TCPMV2
- */
-#define CONFIG_USB_TYPEC_SM
-
-/*
- * Define to enable Protocol Layer State Machine. Must be enabled
- * with CONFIG_USB_PD_TCPMV2 and CONFIG_USB_TYPEC_SM
- */
-#define CONFIG_USB_PRL_SM
-
-/*
- * Define to enable Policy Engine State Machine. Must be enabled
- * with CONFIG_USB_SM_PD_TCPMV2 and CONFIG_USB_TYPEC_SM
- */
-#define CONFIG_USB_PE_SM
-
-/*
- * Define to enable Policy Engine State Machine. This is an override
- * that is used to just pull in PE for unit testing.
- */
-#undef CONFIG_TEST_USB_PE_SM
 
 /*
  * Board specific maximum input current limit, in mA.
@@ -1034,6 +1010,16 @@
 
 /* Charger enable GPIO is active low */
 #undef CONFIG_CHARGER_EN_ACTIVE_LOW
+
+/*
+ * OCPC - One Charger IC Per Type-C
+ *
+ * Define this if the board may have multiple charger ICs in the system.  The
+ * assumption is that that primary charger is index 0 and is the charger IC
+ * connected to the battery FET.  Additionally, `chgnum` is assumed to be the
+ * same as the charge port index.
+ */
+#undef CONFIG_OCPC
 
 /* Enable trickle charging */
 #undef CONFIG_TRICKLE_CHARGING
@@ -1173,6 +1159,22 @@
 
 /*****************************************************************************/
 /*
+ * Example functionality that is used to test boards.
+ */
+
+/*
+ * Enable the blink example.
+ *
+ * LEDs are used to count in binary.
+ *
+ * Required Configuration:
+ * - CONFIG_BLINK_LEDS        --> List of LEDs (gpio enum names) to use as bits
+ */
+#undef  CONFIG_BLINK
+#undef  CONFIG_BLINK_LEDS                     /* Ex: GPIO_LED1, GPIO_LED2 */
+
+/*****************************************************************************/
+/*
  * Optional console commands
  *
  * Defining these options will enable the corresponding command on the EC
@@ -1192,7 +1194,6 @@
 #define CONFIG_CMD_RETIMER
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
-#undef  CONFIG_CMD_CCD_DISABLE  /* 'ccd disable' subcommand */
 #undef  CONFIG_CMD_CHARGEN
 #define CONFIG_CMD_CHARGER
 #undef  CONFIG_CMD_CHARGER_ADC_AMON_BMON
@@ -1431,42 +1432,6 @@
 /* Include CRC-8 utility function */
 #undef CONFIG_CRC8
 
-/*
- * When enabled, build in support for software & hardware crypto;
- * only supported on CR50.
- *
- * If this is enabled on the host board, a minimal implementation is included to
- * allow fuzzing targets to fuzz code that depends on dcrypto.
- */
-#undef CONFIG_DCRYPTO
-/*
- * This provides struct definitions and function declarations that can be
- * implemented by unit tests for testing code that depends on dcrypto.
- * This should not be set at the same time as CONFIG_DCRYPTO.
- */
-#undef CONFIG_DCRYPTO_MOCK
-
-/*
- * When enabled, RSA 2048 bit keygen gets a 40% performance boost,
- * at the cost of 2184 bytes of image size increase.
- */
-#undef CONFIG_DCRYPTO_RSA_SPEEDUP
-
-/*
- * When enabled build support for SHA-384/512, requires CONFIG_DCRYPTO.
- */
-#undef CONFIG_UPTO_SHA512
-
-/*
- * When enabled ignore version et al during fw upgrade for chip/g.
- */
-#undef CONFIG_IGNORE_G_UPDATE_CHECKS
-
-/*
- * Enable console shell command 'alerts' that prints chip alerts statistics.
- */
-#undef CONFIG_ENABLE_H1_ALERTS_CONSOLE
-
 /*****************************************************************************/
 /*
  * Debugging config
@@ -1530,7 +1495,7 @@
  *	r8 :00000000 r9 :200013de r10:00000000 r11:00000000
  *	r12:00000000 sp :200009a0 lr :08002b85 pc :08003a8a
  *	Precise data bus error, Forced hard fault, Vector catch, bfar = 60000000
- *	mmfs = 00008200, shcsr = 00000000, hfsr = 40000000, dfsr = 00000008
+ *	cfsr = 00008200, shcsr = 00000000, hfsr = 40000000, dfsr = 00000008
  *
  * If this is not defined, only a register dump will be printed.
  *
@@ -1605,9 +1570,6 @@
 
 /* Default debounce time for external power signal */
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 30
-
-/* Add support for CCD factory mode */
-#undef CONFIG_FACTORY_MODE
 
 /*****************************************************************************/
 /* Number of cooling fans. Undef if none. */
@@ -1767,34 +1729,6 @@
 #undef CONFIG_FP_SENSOR_FPC1025
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
-
-/*****************************************************************************/
-/* NvMem Configuration */
-/* Enable NV Memory module within flash */
-#undef CONFIG_FLASH_NVMEM
-/* Offset to start of NvMem area from base of flash */
-#undef CONFIG_FLASH_NVMEM_OFFSET_A
-#undef CONFIG_FLASH_NVMEM_OFFSET_B
-/* Address of start of Nvmem area */
-#undef CONFIG_FLASH_NVMEM_BASE_A
-#undef CONFIG_FLASH_NVMEM_BASE_B
-
-/* Flash offsets for the 'new' (as of 1/2019) nvmem storage scheme. */
-#undef CONFIG_FLASH_NEW_NVMEM_BASE_A
-#undef CONFIG_FLASH_NEW_NVMEM_BASE_B
-
-/* Size in bytes of NvMem area */
-#undef CONFIG_FLASH_NVMEM_SIZE
-
-/* Enable <key,value> variable support (requires CONFIG_FLASH_NVMEM) */
-#undef CONFIG_FLASH_NVMEM_VARS
-/*
- * We already have to define nvmem_user_sizes[] to specify the order and size
- * of the user regions. CONFIG_FLASH_NVMEM_VARS looks for two symbols to
- * specify the region number and size for the variable region.
- */
-#undef CONFIG_FLASH_NVMEM_VARS_USER_NUM
-#undef CONFIG_FLASH_NVMEM_VARS_USER_SIZE
 
 /*****************************************************************************/
 
@@ -2209,7 +2143,6 @@
 #undef CONFIG_I2C
 #undef CONFIG_I2C_DEBUG
 #undef CONFIG_I2C_DEBUG_PASSTHRU
-#undef CONFIG_I2C_PASSTHROUGH
 #undef CONFIG_I2C_PASSTHRU_RESTRICTED
 #undef CONFIG_I2C_VIRTUAL_BATTERY
 
@@ -2308,6 +2241,9 @@
  * This option also enables error checking function on smart batteries.
  */
 #undef CONFIG_SMBUS_PEC
+
+/* Support I2C HID touchpad interface. */
+#undef CONFIG_I2C_HID_TOUCHPAD
 
 /*
  * Add hosts-side support for entering programming mode for I2C ITE ECs.
@@ -2444,6 +2380,17 @@
 /* Compile code for 8042 keyboard protocol */
 #undef CONFIG_KEYBOARD_PROTOCOL_8042
 
+/*
+ * Enable code for chromeos vivaldi keyboard (standard for new chromeos devices)
+ * This config only takes effect if CONFIG_KEYBOARD_PROTOCOL_8042 is selected. A
+ * chromeos device is Vivaldi compatible if the keyboard matrix complies with:
+ * go/vivaldi-matrix
+ * Vivaldi code enables:
+ *  - A response to EC_CMD_GET_KEYBD_CONFIG command from coreboot
+ *  - Boards can specify their custom layout for top keys.
+ */
+#define CONFIG_KEYBOARD_VIVALDI
+
 /* Compile code for MKBP keyboard protocol */
 #undef CONFIG_KEYBOARD_PROTOCOL_MKBP
 
@@ -2485,9 +2432,18 @@
 #define CONFIG_KEYBOARD_RUNTIME_KEYS
 
 /*
- * Allow the keyboard scan code set tables to be modified at runtime.
+ * Allow the board layer keyboard customization. If define, the board layer
+ * needs to implement:
+ * 1. the function board_keyboard_drive_col() which is used to control
+ *    the refresh key column.
+ * 2. the scancode_set2 and keycap_label array
+ * 3. keyboard_customization.h which is similar to keyboard_config.h
+ *
+ * Note that if your board has the standard chromeos keyboard layout other
+ * than the top row, and you are looking only for top row customization, then
+ * you should be looking at overriding board_vivaldi_keybd_config() instead.
  */
-#undef CONFIG_KEYBOARD_SCANCODE_MUTABLE
+#undef CONFIG_KEYBOARD_CUSTOMIZATION
 
 /*
  * Allow board-specific 8042 keyboard callback when a key state is changed.
@@ -2904,19 +2860,6 @@
  */
 #undef CONFIG_PECI_TJMAX
 
-/* Support physical presence detection (via a physical button) */
-#undef CONFIG_PHYSICAL_PRESENCE
-
-/* Enable (unsafe!) developer debug features for physical presence */
-#undef CONFIG_PHYSICAL_PRESENCE_DEBUG_UNSAFE
-
-/*****************************************************************************/
-/* PinWeaver config
- * A feature which exchanges a low entropy secret with rate limits for a high
- * entropy secret. This enables a set of vendor specific commands for Cr50.
- */
-#undef CONFIG_PINWEAVER
-
 /*****************************************************************************/
 /* PMU config */
 
@@ -3025,6 +2968,8 @@
 
 /*
  * On x86 systems, define this option if the CPU_PROCHOT signal is active low.
+ * This setting also applies to monitoring the PROCHOT input if provided by
+ * the board.
  */
 #undef CONFIG_CPU_PROCHOT_ACTIVE_LOW
 
@@ -3109,12 +3054,6 @@
 #undef CONFIG_DATA_RAM_SIZE
 #undef CONFIG_RAM_SIZE
 #undef CONFIG_ROM_SIZE
-
-/* Enable rbox peripheral */
-#undef CONFIG_RBOX
-
-/* Enable rbox wakeup */
-#undef CONFIG_RBOX_WAKEUP
 
 /* Support IR357x Link voltage regulator debugging / reprogramming */
 #undef CONFIG_REGULATOR_IR357X
@@ -3216,9 +3155,6 @@
 /* Allow the board to use a GPIO for the SCI# signal. */
 #undef CONFIG_SCI_GPIO
 
-/* Support computing SHA-1 hash */
-#undef CONFIG_SHA1
-
 /* Support computing of other hash sizes (without the VBOOT code) */
 #undef CONFIG_SHA256
 
@@ -3254,14 +3190,6 @@
 
 /* Support deprecated SPI protocol version 2. */
 #undef CONFIG_SPI_PROTOCOL_V2
-
-/*
- * Support SPI Slave interfaces. The first board supporting this is cr50 and
- * in its parlance SPI_SLAVE is called SPS. This convention might be
- * reconsidered later, and the use of "SPI" in different config options needs
- * to be cleaned up. (crbug.com/512613).
- */
-#undef CONFIG_SPS
 
 /* Define the SPI port to use to access SPI accelerometer */
 #undef CONFIG_SPI_ACCEL_PORT
@@ -3341,9 +3269,6 @@
  * Define to 0x03 for both controllers.
  */
 #undef CONFIG_MCHP_GPSPI
-
-/* Support testing SPI slave controller driver. */
-#undef CONFIG_SPS_TEST
 
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE
@@ -3515,6 +3440,7 @@
 #undef CONFIG_TEMP_SENSOR_TMP432	/* TI TMP432 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP468	/* TI TMP468 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_F75303	/* Fintek  F75303 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_AMD_R19ME4070	/* AMD_R19ME4070 sensor, on I2C bus */
 
 /* Compile common code for thermistor support */
 #undef CONFIG_THERMISTOR
@@ -3616,12 +3542,6 @@
 #undef CONFIG_TOUCHPAD_HASH_FW
 
 /*****************************************************************************/
-/* TPM-like configuration */
-
-/* Speak to the TPM 2.0 hardware protocol on the I2C slave interface */
-#undef CONFIG_TPM_I2CS
-
-/*****************************************************************************/
 /* USART stream config */
 #undef CONFIG_STREAM_USART
 
@@ -3633,10 +3553,6 @@
 #undef CONFIG_STREAM_USART2
 #undef CONFIG_STREAM_USART3
 #undef CONFIG_STREAM_USART4
-
-/*****************************************************************************/
-/* U2F config: second factor authentication */
-#undef CONFIG_U2F
 
 /*****************************************************************************/
 /* USB stream config */
@@ -3733,15 +3649,38 @@
 /*
  * Enables Version 2 of the Power Delivery state machine
  *
- * Along with CONFIG_USB_PD_TCPMV2, you must ensure the follow
- * options are defined to use the new statemachine for USB-C:
- *
- *	CONFIG_USB_PD_DECODE_SOP
- *	CONFIG_USB_TYPEC_SM (defined by default)
- *	CONFIG_USB_PRL_SM (defined by default)
- *	One of CONFIG_USB_PE_* policy engine options.
+ * Along with CONFIG_USB_PD_TCPMV2, you must ensure a device type is also
+ * enabled otherwise an error will be emitted.
  */
 #undef CONFIG_USB_PD_TCPMV2
+
+/*
+ * Device Types for TCPMv2.
+ *
+ * Exactly one must be defined when CONFIG_USB_PD_TCPMV2 is defined.
+ *
+ * VPD - Vconn Powered Device
+ * CTVPD - Charge Through Vconn Powered Device
+ * DRP_ACC_TRYSRC - Dual Role Port, Audio Accessory, and Try.SRC Device
+ */
+#undef CONFIG_USB_VPD
+#undef CONFIG_USB_CTVPD
+#undef CONFIG_USB_DRP_ACC_TRYSRC
+
+/*
+ * TCPMv2 statemachine layers
+ *
+ * All layers are defined by default. To opt-out, you must undef in your board.
+ * Also these defines don't take effect unless CONFIG_USB_PD_TCPMV2 is also
+ * defined.
+ *
+ * TYPEC_SM - Type-C deals with CC lines voltage level connections
+ * PRL_SM - Protocol handles flow and chunking TX and RX messages
+ * PE - Policy Engine handles PD communication flow
+ */
+#define CONFIG_USB_TYPEC_SM
+#define CONFIG_USB_PRL_SM
+#define CONFIG_USB_PE_SM
 
 /* Enables PD Console commands */
 #define CONFIG_USB_PD_CONSOLE_CMD
@@ -3851,7 +3790,20 @@
 /* Define if this board, operating as a sink, can give power back to a source */
 #undef CONFIG_USB_PD_GIVE_BACK
 
-/* Enable USB PD Rev3.0 features */
+/*
+ * Enable USB PD Rev2.0 features only
+ * NOTE:
+ *   This flag is only used with TCPMv2. The TCPMv2 stack defaults to PD3.0
+ *   and this flag disabled PD3.0 features.
+ */
+#undef CONFIG_USB_PD_REV20
+
+/*
+ * Enable USB PD Rev3.0 features
+ * NOTE:
+ *    This flag is only used with TCPMv1. The TCPMv1 stack defaults to PD2.0
+ *    and this flag enabled PD3.0 features.
+ */
 #undef CONFIG_USB_PD_REV30
 
 /* Major and Minor ChromeOS specific PD device Hardware IDs. */
@@ -3882,6 +3834,12 @@
 
 /* Number of USB PD ports */
 #undef CONFIG_USB_PD_PORT_MAX_COUNT
+
+/*
+ * Number of ITE USB PD active ports
+ * NOTE: The active port usage should follow the order of ITE TCPC port index.
+ */
+#undef CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT
 
 /* Simple DFP, such as power adapter, will not send discovery VDM on connect */
 #undef CONFIG_USB_PD_SIMPLE_DFP
@@ -3966,6 +3924,7 @@
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_NB7V904M
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
+#undef CONFIG_USBC_RETIMER_PI3HDX1204
 #undef CONFIG_USBC_RETIMER_PS8802
 #undef CONFIG_USBC_RETIMER_PS8818
 #undef CONFIG_USBC_RETIMER_TUSB544
@@ -4059,15 +4018,6 @@
  * If defined, must also define `struct pd_pref_config_t pd_pref_config`.
  */
 #undef CONFIG_USB_PD_PREFER_MV
-
-/* Type-C VCONN Powered Device */
-#undef CONFIG_USB_TYPEC_VPD
-
-/* Type-C Charge Through VCONN Powered Device */
-#undef CONFIG_USB_TYPEC_CTVPD
-
-/* Type-C DRP with Accessory and Try.SRC */
-#undef CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
 
 /* Type-C Fast Role Swap */
 #undef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
@@ -4221,9 +4171,6 @@
 /* Disable automatic initialization of USB peripheral */
 #undef CONFIG_USB_INHIBIT_INIT
 
-/* Support control of multiple PHY */
-#undef CONFIG_USB_SELECT_PHY
-
 /* Support simple control of power to the device's USB ports */
 #undef CONFIG_USB_PORT_POWER_DUMB
 
@@ -4233,6 +4180,11 @@
  * negotiation of supplying more power to peripherals.
  */
 #undef CONFIG_USB_PORT_POWER_SMART
+
+/*
+ * GPIOs to enable USB port power have non-const configuration.
+ */
+#undef CONFIG_USB_PORT_ENABLE_DYNAMIC
 
 /*
  * Support smart power control to the device's USB ports, however only CDP and
@@ -4332,6 +4284,9 @@
 
 /* Support the Parade PS8740 Type-C Redriving Switch */
 #undef CONFIG_USB_MUX_PS8740
+
+/* Support the Parade PS8742 Type-C Redriving Switch */
+#undef CONFIG_USB_MUX_PS8742
 
 /* Support the Parade PS8743 Type-C Redriving Switch */
 #undef CONFIG_USB_MUX_PS8743
@@ -4504,12 +4459,6 @@
 #undef CONFIG_EXTENDED_VERSION_INFO
 
 /*
- * Define this if board ID support is required. For g chip based boards it
- * allows to nail different images to different boards.
- */
-#undef CONFIG_BOARD_ID_SUPPORT
-
-/*
  * Define this to enable Cros Board Info support. I2C_EEPROM_PORT and
  * I2C_EEPROM_ADDR must be defined as well.
  */
@@ -4578,6 +4527,18 @@
  */
 #undef CONFIG_INTEL_VIRTUAL_MUX
 
+/*
+ * TEST ONLY defines (CONFIG_TEST_*)
+ *
+ * Used to include files for unit and other builds tests.
+ */
+
+ /* Define to enable Policy Engine State Machine. */
+#undef CONFIG_TEST_USB_PE_SM
+
+/* Define to enable USB State Machine framework. */
+#undef CONFIG_TEST_SM
+
 /*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
@@ -4626,6 +4587,19 @@
 #endif
 #if defined(CONFIG_USB_PD_TCPMV2) && !defined(CONFIG_USB_PD_DECODE_SOP)
 #error CONFIG_USB_PD_DECODE_SOP must be enabled with the TCPMV2 PD state machine
+#endif
+#endif
+
+
+/******************************************************************************/
+/*
+ * Ensure that CONFIG_USB_PD_TCPMV2 is being used with exactly one device type
+ */
+#ifdef CONFIG_USB_PD_TCPMV2
+#if defined(CONFIG_USB_VPD) + \
+	defined(CONFIG_USB_CTVPD) + \
+	defined(CONFIG_USB_DRP_ACC_TRYSRC) != 1
+#error Must define exactly one CONFIG_USB_ device type.
 #endif
 #endif
 
@@ -4793,7 +4767,7 @@
 /******************************************************************************/
 /* Set generic orientation config if a specific orientation config is set. */
 #if defined(CONFIG_KX022_ORIENTATION_SENSOR) || \
-	defined(CONFIG_BMI160_ORIENTATION_SENSOR)
+	defined(CONFIG_BMI_ORIENTATION_SENSOR)
 #ifndef CONFIG_ACCEL_FIFO
 #error CONFIG_ACCEL_FIFO must be defined to use hw orientation sensor support
 #endif
@@ -4865,7 +4839,8 @@
  * architecture.
  */
 #if defined(CONFIG_CHARGER_ISL9237) || defined(CONFIG_CHARGER_ISL9238) || \
-	defined(CONFIG_CHARGER_ISL9241) || defined(CONFIG_CHARGER_RAA489000)
+	defined(CONFIG_CHARGER_ISL9241) || \
+	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
 
@@ -5168,10 +5143,10 @@
 	CONFIG_EC_MAX_SENSOR_FREQ_DEFAULT_MILLIHZ
 #endif
 
-/* Enable BMI160 secondary port if needed. */
-#if defined(CONFIG_MAG_BMI160_BMM150) || \
-	defined(CONFIG_MAG_BMI160_LIS2MDL)
-#define CONFIG_BMI160_SEC_I2C
+/* Enable BMI secondary port if needed. */
+#if defined(CONFIG_MAG_BMI_BMM150) || \
+	defined(CONFIG_MAG_BMI_LIS2MDL)
+#define CONFIG_BMI_SEC_I2C
 #endif
 
 /* Enable LSM2MDL secondary port if needed. */
@@ -5181,7 +5156,7 @@
 #endif
 
 /* Load LIS2MDL driver if needed */
-#if defined(CONFIG_MAG_BMI160_LIS2MDL) || \
+#if defined(CONFIG_MAG_BMI_LIS2MDL) || \
 	defined(CONFIG_MAG_LSM6DSM_LIS2MDL)
 #define CONFIG_MAG_LIS2MDL
 #ifndef CONFIG_ACCELGYRO_SEC_ADDR_FLAGS
@@ -5190,7 +5165,7 @@
 #endif
 
 /* Load BMM150 driver if needed */
-#if defined(CONFIG_MAG_BMI160_BMM150) || \
+#if defined(CONFIG_MAG_BMI_BMM150) || \
 	defined(CONFIG_MAG_LSM6DSM_BMM150)
 #define CONFIG_MAG_BMM150
 #ifndef CONFIG_ACCELGYRO_SEC_ADDR_FLAGS
@@ -5336,5 +5311,14 @@
 #define CONFIG_ACCEL_CAL_NEWTON_RADIUS_THRES 0.001f
 #endif
 #endif /* CONFIG_ONLINE_CALIB */
+
+/*
+ *  Vivaldi keyboard code to be enabled only if board has selected
+ *  CONFIG_KEYBOARD_PROTOCOL_8042 and not disabled CONFIG_KEYBOARD_VIVALDI
+ *  explicitly
+ */
+#ifndef CONFIG_KEYBOARD_PROTOCOL_8042
+#undef CONFIG_KEYBOARD_VIVALDI
+#endif
 
 #endif  /* __CROS_EC_CONFIG_H */

@@ -15,16 +15,14 @@
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/syv682x.h"
 #include "driver/tcpm/ps8xxx.h"
+#include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tusb422.h"
 #include "driver/temp_sensor/thermistor.h"
-#include "fan.h"
-#include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "icelake.h"
 #include "keyboard_scan.h"
-#include "pwm.h"
-#include "pwm_chip.h"
 #include "system.h"
 #include "task.h"
 #include "temp_sensor.h"
@@ -116,54 +114,6 @@ struct keyboard_scan_config keyscan_config = {
 };
 
 /******************************************************************************/
-/* I2C port map configuration */
-const struct i2c_port_t i2c_ports[] = {
-	{
-		.name = "sensor",
-		.port = I2C_PORT_SENSOR,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C0_SENSOR_SCL,
-		.sda = GPIO_EC_I2C0_SENSOR_SDA,
-	},
-	{
-		.name = "usb_c0",
-		.port = I2C_PORT_USB_C0,
-		.kbps = 1000,
-		.scl = GPIO_EC_I2C1_USB_C0_SCL,
-		.sda = GPIO_EC_I2C1_USB_C0_SDA,
-	},
-	{
-		.name = "usb_c1",
-		.port = I2C_PORT_USB_C1,
-		.kbps = 1000,
-		.scl = GPIO_EC_I2C2_USB_C1_SCL,
-		.sda = GPIO_EC_I2C2_USB_C1_SDA,
-	},
-	{
-		.name = "usb_1_mix",
-		.port = I2C_PORT_USB_1_MIX,
-		.kbps = 100,
-		.scl = GPIO_EC_I2C3_USB_1_MIX_SCL,
-		.sda = GPIO_EC_I2C3_USB_1_MIX_SDA,
-	},
-	{
-		.name = "power",
-		.port = I2C_PORT_POWER,
-		.kbps = 100,
-		.scl = GPIO_EC_I2C5_POWER_SCL,
-		.sda = GPIO_EC_I2C5_POWER_SDA,
-	},
-	{
-		.name = "eeprom",
-		.port = I2C_PORT_EEPROM,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C7_EEPROM_SCL,
-		.sda = GPIO_EC_I2C7_EEPROM_SDA,
-	},
-};
-const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
-
-/******************************************************************************/
 /* Charger Chip Configuration */
 const struct charger_config_t chg_chips[] = {
 	{
@@ -175,92 +125,47 @@ const struct charger_config_t chg_chips[] = {
 
 const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
-
 /******************************************************************************/
-/* PWM configuration */
-const struct pwm_t pwm_channels[] = {
-	[PWM_CH_LED1_BLUE] = {
-		.channel = 2,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 2400,
-	},
-	[PWM_CH_LED2_GREEN] = {
-		.channel = 0,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 2400,
-	},
-	[PWM_CH_LED3_RED] = {
-		.channel = 1,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 2400,
-	},
-	[PWM_CH_LED4_SIDESEL] = {
-		.channel = 7,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		/* Run at a higher frequency than the color PWM signals to avoid
-		 * timing-based color shifts.
-		 */
-		.freq = 4800,
-	},
-	[PWM_CH_FAN] = {
-		.channel = 5,
-		.flags = PWM_CONFIG_OPEN_DRAIN,
-		.freq = 25000
-	},
-	[PWM_CH_KBLIGHT] = {
-		.channel = 3,
-		.flags = 0,
-		/*
-		 * Set PWM frequency to multiple of 50 Hz and 60 Hz to prevent
-		 * flicker. Higher frequencies consume similar average power to
-		 * lower PWM frequencies, but higher frequencies record a much
-		 * lower maximum power.
-		 */
-		.freq = 2400,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
-
-/******************************************************************************/
-/* Physical fans. These are logically separate from pwm_channels. */
-
-const struct fan_conf fan_conf_0 = {
-	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
-	.pgood_gpio = -1,
-	.enable_gpio = GPIO_EN_PP5000_FAN,
-};
-
 /*
- * Fan specs from datasheet:
- * Max speed 5900 rpm (+/- 7%), minimum duty cycle 30%.
- * Minimum speed not specified by RPM. Set minimum RPM to max speed (with
- * margin) x 30%.
- *    5900 x 1.07 x 0.30 = 1894, round up to 1900
+ * PWROK signal configuration, see the PWROK Generation Flow Diagram (Figure
+ * 235) in the Tiger Lake Platform Design Guide for the list of potential
+ * signals.
+ *
+ * Volteer uses this power sequence:
+ *	GPIO_EN_PPVAR_VCCIN - Turns on the VCCIN rail. Also used as a delay to
+ *		the VCCST_PWRGD input to the AP so this signal must be delayed
+ *		5 ms to meet the tCPU00 timing requirement.
+ *	GPIO_EC_PCH_SYS_PWROK - Asserts the SYS_PWROK input to the AP. Delayed
+ *		a total of 50 ms after ALL_SYS_PWRGD input is asserted. See
+ *		b/144478941 for full discussion.
+ *
+ * Volteer does not provide direct EC control for the VCCST_PWRGD and PCH_PWROK
+ * signals. If your board adds these signals to the EC, copy this array
+ * to your board.c file and modify as needed.
  */
-const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 1900,
-	.rpm_start = 1900,
-	.rpm_max = 5900,
-};
-
-const struct fan_t fans[FAN_CH_COUNT] = {
-	[FAN_CH_0] = {
-		.conf = &fan_conf_0,
-		.rpm = &fan_rpm_0,
+const struct intel_x86_pwrok_signal pwrok_signal_assert_list[] = {
+	{
+		.gpio = GPIO_EN_PPVAR_VCCIN,
+		.delay_ms = 5,
+	},
+	{
+		.gpio = GPIO_EC_PCH_SYS_PWROK,
+		.delay_ms = 50 - 5,
 	},
 };
+const int pwrok_signal_assert_count = ARRAY_SIZE(pwrok_signal_assert_list);
 
-/******************************************************************************/
-/* MFT channels. These are logically separate from pwm_channels. */
-const struct mft_t mft_channels[] = {
-	[MFT_CH_0] = {
-		.module = NPCX_MFT_MODULE_1,
-		.clk_src = TCKC_LFCLK,
-		.pwm_id = PWM_CH_FAN,
+const struct intel_x86_pwrok_signal pwrok_signal_deassert_list[] = {
+	/* No delays needed during S0 exit */
+	{
+		.gpio = GPIO_EC_PCH_SYS_PWROK,
+	},
+	/* Turn off VCCIN last */
+	{
+		.gpio = GPIO_EN_PPVAR_VCCIN,
 	},
 };
-BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
+const int pwrok_signal_deassert_count = ARRAY_SIZE(pwrok_signal_deassert_list);
 
 /******************************************************************************/
 /* Temperature sensor configuration */
@@ -375,6 +280,25 @@ static const struct tcpc_config_t tcpc_config_p1_usb3 = {
 	.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 };
 
+/*
+ * USB3 DB mux configuration - the top level mux still needs to be set to the
+ * virutal_usb_mux_driver so the AP gets notified of mux changes and updates
+ * the TCSS configuration on state changes.
+ */
+static const struct usb_mux usbc1_usb3_db_retimer = {
+	.usb_port = USBC_PORT_C1,
+	.driver = &tcpci_tcpm_usb_mux_driver,
+	.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+	.next_mux = NULL,
+};
+
+static const struct usb_mux mux_config_p1_usb3 = {
+	.usb_port = USBC_PORT_C1,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
+	.next_mux = &usbc1_usb3_db_retimer,
+};
+
 static enum usb_db_id usb_db_type = USB_DB_NONE;
 
 /******************************************************************************/
@@ -396,7 +320,7 @@ unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc1_usb_retimer = {
+struct usb_mux usbc1_usb4_db_retimer = {
 	.usb_port = USBC_PORT_C1,
 	.driver = &bb_usb_retimer,
 	.i2c_port = I2C_PORT_USB_1_MIX,
@@ -412,7 +336,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb_retimer,
+		.next_mux = &usbc1_usb4_db_retimer,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -458,7 +382,8 @@ void ppc_interrupt(enum gpio_signal signal)
 	case GPIO_USB_C0_PPC_INT_ODL:
 		sn5s330_interrupt(USBC_PORT_C0);
 		break;
-
+	case GPIO_USB_C1_PPC_INT_ODL:
+		syv682x_interrupt(USBC_PORT_C1);
 	default:
 		break;
 	}
@@ -466,7 +391,7 @@ void ppc_interrupt(enum gpio_signal signal)
 
 /******************************************************************************/
 /* TCPC support routines */
-static enum gpio_signal ps8xxx_rst_odl = GPIO_USB_C1_RT_RST_ODL;
+enum gpio_signal ps8xxx_rst_odl = GPIO_USB_C1_RT_RST_ODL;
 
 static void ps8815_reset(void)
 {
@@ -502,8 +427,10 @@ void board_reset_pd_mcu(void)
 {
 	/* No reset available for TCPC on port 0 */
 	/* Daughterboard specific reset for port 1 */
-	if (usb_db_type == USB_DB_USB3)
+	if (usb_db_type == USB_DB_USB3) {
 		ps8815_reset();
+		usb_mux_hpd_update(USBC_PORT_C1, 0, 0);
+	}
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -519,6 +446,14 @@ uint16_t tcpc_get_alert_status(void)
 		status |= PD_STATUS_TCPC_ALERT_1;
 
 	return status;
+}
+
+int ppc_get_alert_status(int port)
+{
+	if (port == USBC_PORT_C0)
+		return gpio_get_level(GPIO_USB_C0_PPC_INT_ODL) == 0;
+	else
+		return gpio_get_level(GPIO_USB_C1_PPC_INT_ODL) == 0;
 }
 
 void tcpc_alert_event(enum gpio_signal signal)
@@ -626,24 +561,10 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	/* TODO: b/140561826 - check correct operation for Volteer */
 }
 
-/*
- * Delay assertion of PCH_SYS_PWROK from assertion of the PG_EC_ALL_SYS_PWRGD
- * input. This ensures PCH_SYS_PWROK is asserted only after all rails have
- * stabilized. See b/144478941 for full discussion.
- */
-__override void board_icl_tgl_all_sys_pwrgood(void)
-{
-	msleep(50);
-}
-
 static void baseboard_init(void)
 {
-	/* Illuminate motherboard and daughter board LEDs equally.
-	 * TODO(b/139554899): Illuminate only the LED next to the active
-	 * charging port.
-	 */
-	pwm_enable(PWM_CH_LED4_SIDESEL, 1);
-	pwm_set_duty(PWM_CH_LED4_SIDESEL, 50);
+	/* Enable monitoring of the PROCHOT input to the EC */
+	gpio_enable_interrupt(GPIO_EC_PROCHOT_IN_L);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT);
 
@@ -656,28 +577,7 @@ DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT);
 static void config_db_usb3(void)
 {
 	tcpc_config[USBC_PORT_C1] = tcpc_config_p1_usb3;
-	/* USB-C port 1 has an integrated retimer */
-	usb_muxes[USBC_PORT_C1].next_mux = NULL;
-}
-
-/*
- * Reconfigure Volteer GPIOs based on the board ID
- */
-static void config_volteer_gpios(void)
-{
-	/* Legacy support for the first board build */
-	if (get_board_id() == 0) {
-		CPRINTS("Configuring GPIOs for board ID 0");
-
-		/* Reassign USB_C1_RT_RST_ODL */
-		bb_controls[USBC_PORT_C1].retimer_rst_gpio =
-			GPIO_USB_C1_RT_RST_ODL_BOARDID_0;
-		ps8xxx_rst_odl = GPIO_USB_C1_RT_RST_ODL_BOARDID_0;
-
-		/* Reassign EC_VOLUP_BTN_ODL */
-		button_reassign_gpio(BUTTON_VOLUME_UP,
-			GPIO_EC_VOLUP_BTN_ODL_BOARDID_0);
-	}
+	usb_muxes[USBC_PORT_C1] = mux_config_p1_usb3;
 }
 
 static uint8_t board_id;
@@ -685,6 +585,10 @@ static uint8_t board_id;
 uint8_t get_board_id(void)
 {
 	return board_id;
+}
+
+__overridable void config_volteer_gpios(void)
+{
 }
 
 /*

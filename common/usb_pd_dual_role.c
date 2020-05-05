@@ -7,6 +7,7 @@
 
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "system.h"
 #include "usb_common.h"
 #include "usb_pd.h"
 #include "util.h"
@@ -381,13 +382,57 @@ bool pd_is_try_source_capable(void)
 
 #if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
 	/*
-	 * Since a dedicated charge port can source power allow PD
-	 * trying as source.
+	 * If a dedicated supplier is present, power is not a concern and
+	 * therefore always allow Try.Src.
 	 */
-	new_try_src |= (charge_manager_get_active_charge_port() ==
+	new_try_src |= (charge_manager_get_supplier() ==
 			     CHARGE_SUPPLIER_DEDICATED);
 #endif /* CONFIG_DEDICATED_CHARGE_PORT_COUNT */
 
 	return new_try_src;
 }
 #endif /* CONFIG_USB_PD_TRY_SRC */
+
+static int get_bbram_idx(uint8_t port)
+{
+	if (port < MAX_SYSTEM_BBRAM_IDX_PD_PORTS)
+		return (port + SYSTEM_BBRAM_IDX_PD0);
+
+	return -1;
+}
+
+int pd_get_saved_port_flags(int port, uint8_t *flags)
+{
+	if (system_get_bbram(get_bbram_idx(port), flags) != EC_SUCCESS) {
+#ifndef CHIP_HOST
+		ccprintf("PD NVRAM FAIL");
+#endif
+		return EC_ERROR_UNKNOWN;
+	}
+
+	return EC_SUCCESS;
+}
+
+static void pd_set_saved_port_flags(int port, uint8_t flags)
+{
+	if (system_set_bbram(get_bbram_idx(port), flags) != EC_SUCCESS) {
+#ifndef CHIP_HOST
+		ccprintf("PD NVRAM FAIL");
+#endif
+	}
+}
+
+void pd_update_saved_port_flags(int port, uint8_t flag, uint8_t do_set)
+{
+	uint8_t saved_flags;
+
+	if (pd_get_saved_port_flags(port, &saved_flags) != EC_SUCCESS)
+		return;
+
+	if (do_set)
+		saved_flags |= flag;
+	else
+		saved_flags &= ~flag;
+
+	pd_set_saved_port_flags(port, saved_flags);
+}

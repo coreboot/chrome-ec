@@ -14,7 +14,7 @@
 #include "common.h"
 #include "compile_time_macros.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/retimer/nb7v904m.h"
@@ -33,6 +33,7 @@
 #include "power_button.h"
 #include "stdbool.h"
 #include "switch.h"
+#include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
 #include "usb_mux.h"
@@ -77,12 +78,24 @@ void board_init(void)
 
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
 	gpio_enable_interrupt(GPIO_SUB_USB_C1_INT_ODL);
+	/* Enable gpio interrupt for base accelgyro sensor */
+	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 
 	/* Turn on 5V if the system is on, otherwise turn it off. */
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND);
 	board_power_5v_enable(on);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+void board_hibernate(void)
+{
+	/*
+	 * Both charger ICs need to be put into their "low power mode" before
+	 * entering the Z-state.
+	 */
+	raa489000_hibernate(1);
+	raa489000_hibernate(0);
+}
 
 void board_reset_pd_mcu(void)
 {
@@ -92,6 +105,42 @@ void board_reset_pd_mcu(void)
 	 */
 }
 
+static void reconfigure_5v_gpio(void)
+{
+	/*
+	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
+	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
+	 * instead for those boards.  Note that this breaks the volume up button
+	 * functionality.
+	 */
+	if (system_get_board_version() < 0) {
+		CPRINTS("old board - remapping 5V en");
+		gpio_set_flags(GPIO_VOLUP_BTN_ODL, GPIO_OUT_LOW);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, reconfigure_5v_gpio, HOOK_PRIO_INIT_I2C+1);
+
+static void set_5v_gpio(int level)
+{
+	int version;
+	enum gpio_signal gpio;
+
+	/*
+	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
+	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
+	 * instead for those boards.  Note that this breaks the volume up button
+	 * functionality.
+	 */
+	version = system_get_board_version();
+
+	/*
+	 * If the CBI EEPROM wasn't formatted, assume it's a very early board.
+	 */
+	gpio = version < 0 ? GPIO_VOLUP_BTN_ODL : GPIO_EN_PP5000;
+
+	gpio_set_level(gpio, level);
+}
+
 __override void board_power_5v_enable(int enable)
 {
 	/*
@@ -99,7 +148,7 @@ __override void board_power_5v_enable(int enable)
 	 * generated locally on the sub board and we need to set the comparator
 	 * polarity on the sub board charger IC.
 	 */
-	gpio_set_level(GPIO_EN_PP5000, !!enable);
+	set_5v_gpio(!!enable);
 	if (isl923x_set_comparator_inversion(1, !!enable))
 		CPRINTS("Failed to %sable sub rails!", enable ? "en" : "dis");
 
@@ -194,7 +243,7 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 static struct accelgyro_saved_data_t g_bma253_data;
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -234,8 +283,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = NULL,
 		.default_range = 4,
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 13000 | ROUND_UP_FLAG,
@@ -260,8 +309,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = NULL,
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 	[VSYNC] = {
 		.name = "Camera VSYNC",

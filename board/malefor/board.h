@@ -19,9 +19,33 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
+/* LED defines */
+#define CONFIG_LED_POWER_LED
+#define CONFIG_LED_ONOFF_STATES
+
 /* Keyboard features */
 
 /* Sensors */
+#define CONFIG_ACCEL_LIS2DE             /* Lid accel */
+#define CONFIG_ACCELGYRO_LSM6DSM        /* Base accel */
+
+/* Sensors without hardware FIFO are in forced mode */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	BIT(LID_ACCEL)
+
+/*
+ * TODO: b/152434719 - Malefor will support 360-degree rotation of the
+ * lid on some SKUs, these macros will be enabled once covers are ready.
+ */
+#if 0
+#define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
+#endif
+
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* USB Type C and USB PD defines */
 /*
@@ -73,14 +97,47 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
 #define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
+/* I2C Bus Configuration */
+#define CONFIG_I2C
+#define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
+#define I2C_PORT_USB_C0		NPCX_I2C_PORT1_0
+#define I2C_PORT_USB_C1		NPCX_I2C_PORT2_0
+#define I2C_PORT_USB_1_MIX	NPCX_I2C_PORT3_0
+#define I2C_PORT_POWER		NPCX_I2C_PORT5_0
+#define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
+
+#define I2C_PORT_BATTERY	I2C_PORT_POWER
+#define I2C_PORT_CHARGER	I2C_PORT_EEPROM
+
+#define I2C_ADDR_EEPROM_FLAGS	0x50
+#define CONFIG_I2C_MASTER
+
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
 #include "registers.h"
 
 enum battery_type {
-	BATTERY_LGC011,
+	BATTERY_SMP,
+	BATTERY_LGC,
+	BATTERY_SUNWODA,
 	BATTERY_TYPE_COUNT,
+};
+
+enum pwm_channel {
+	PWM_CH_LED4_SIDESEL = 0,
+	PWM_CH_FAN,
+	PWM_CH_KBLIGHT,
+	PWM_CH_COUNT
+};
+
+enum sensor_id {
+	LID_ACCEL = 0,
+	BASE_ACCEL,
+	BASE_GYRO,
+	VSYNC,
+	SENSOR_COUNT,
 };
 
 /* TODO: b/143375057 - Remove this code after power on. */

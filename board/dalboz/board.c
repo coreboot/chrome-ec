@@ -3,15 +3,19 @@
  * found in the LICENSE file.
  */
 
-/* Trembyle board configuration */
-
+#include "battery_smart.h"
 #include "button.h"
+#include "cros_board_info.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_lsm6dsm.h"
+#include "driver/ioexpander/pcal6408.h"
+#include "driver/usb_mux/ps8740.h"
+#include "driver/usb_mux/ps8743.h"
 #include "extpower.h"
 #include "fan.h"
 #include "fan_chip.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -19,8 +23,20 @@
 #include "pwm_chip.h"
 #include "switch.h"
 #include "system.h"
+#include "tablet_mode.h"
 #include "task.h"
 #include "usb_charge.h"
+
+/* This I2C moved. Temporarily detect and support the V0 HW. */
+int I2C_PORT_BATTERY = I2C_PORT_BATTERY_V1;
+
+/* Interrupt handler varies with DB option. */
+void (*c1_tcpc_config_interrupt)(enum gpio_signal signal) = tcpc_alert_event;
+
+void c1_tcpc_interrupt(enum gpio_signal signal)
+{
+	c1_tcpc_config_interrupt(signal);
+}
 
 #include "gpio_list.h"
 
@@ -127,11 +143,100 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 #endif /* HAS_TASK_MOTIONSENSE */
 
-void board_update_sensor_config_from_sku(void)
+/* These IO expander GPIOs vary with DB option. */
+enum gpio_signal IOEX_USB_A1_RETIMER_EN = IOEX_USB_A1_RETIMER_EN_OPT1;
+enum gpio_signal IOEX_USB_A1_CHARGE_EN_DB_L = IOEX_USB_A1_CHARGE_EN_DB_L_OPT1;
+
+static void pcal6408_handler(void)
 {
-	/* Enable Gyro interrupts */
-	gpio_enable_interrupt(GPIO_6AXIS_INT_L);
+	pcal6408_ioex_event_handler(IOEX_HDMI_PCAL6408);
 }
+DECLARE_DEFERRED(pcal6408_handler);
+
+void pcal6408_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&pcal6408_handler_data, 0);
+}
+
+static int board_ps8743_mux_set(const struct usb_mux *me,
+				mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+	int reg = 0;
+
+	rv = ps8743_read(me, PS8743_REG_MODE, &reg);
+	if (rv)
+		return rv;
+
+	/* Disable FLIP pin, enable I2C control. */
+	reg |= PS8743_MODE_FLIP_REG_CONTROL;
+	/* Disable CE_USB pin, enable I2C control. */
+	reg |= PS8743_MODE_USB_REG_CONTROL;
+	/* Disable CE_DP pin, enable I2C control. */
+	reg |= PS8743_MODE_DP_REG_CONTROL;
+
+	return ps8743_write(me, PS8743_REG_MODE, reg);
+}
+
+static void setup_fw_config(void)
+{
+	uint32_t board_version = 0;
+
+	if (cbi_get_board_version(&board_version) == EC_SUCCESS
+	    && board_version >= 2) {
+		ccprints("PS8743 USB MUX");
+		usb_muxes[USBC_PORT_C1].i2c_addr_flags = PS8743_I2C_ADDR1_FLAG;
+		usb_muxes[USBC_PORT_C1].driver = &ps8743_usb_mux_driver;
+		usb_muxes[USBC_PORT_C1].board_set = &board_ps8743_mux_set;
+	} else {
+		ccprints("PS8740 USB MUX");
+		usb_muxes[USBC_PORT_C1].i2c_addr_flags = PS8740_I2C_ADDR0_FLAG;
+		usb_muxes[USBC_PORT_C1].driver = &ps8740_usb_mux_driver;
+	}
+
+	if (ec_config_get_usb_db() == DALBOZ_DB_D_OPT2_USBA_HDMI) {
+		ccprints("DB OPT2 HDMI");
+		ioex_config[IOEX_HDMI_PCAL6408].flags = 0;
+		ioex_init(IOEX_HDMI_PCAL6408);
+		IOEX_USB_A1_RETIMER_EN = IOEX_USB_A1_RETIMER_EN_OPT2;
+		IOEX_USB_A1_CHARGE_EN_DB_L = IOEX_USB_A1_CHARGE_EN_DB_L_OPT2;
+		usb_port_enable[USBA_PORT_A1] = IOEX_EN_USB_A1_5V_DB_OPT2;
+		c1_tcpc_config_interrupt = pcal6408_interrupt;
+		ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
+	} else {
+		ccprints("DB OPT1 USBC");
+		ioex_config[IOEX_C1_NCT3807].flags = 0;
+		ioex_init(IOEX_C1_NCT3807);
+		IOEX_USB_A1_RETIMER_EN = IOEX_USB_A1_RETIMER_EN_OPT1;
+		IOEX_USB_A1_CHARGE_EN_DB_L = IOEX_USB_A1_CHARGE_EN_DB_L_OPT1;
+		usb_port_enable[USBA_PORT_A1] = IOEX_EN_USB_A1_5V_DB_OPT1;
+		c1_tcpc_config_interrupt = tcpc_alert_event;
+	}
+
+	/* Enable PPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_PPC_FAULT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
+
+	/* Enable TCPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
+
+	/* Enable BC 1.2 interrupts */
+	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+
+	if (ec_config_has_lid_angle_tablet_mode()) {
+		/* Enable Gyro interrupts */
+		gpio_enable_interrupt(GPIO_6AXIS_INT_L);
+	} else {
+		motion_sensor_count = 0;
+		/* Device is clamshell only */
+		tablet_set_mode(0);
+		/* Gyro is not present, don't allow line to float */
+		gpio_set_flags(GPIO_6AXIS_INT_L, GPIO_INPUT | GPIO_PULL_DOWN);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 
 const struct pwm_t pwm_channels[] = {
 	[PWM_CH_KBLIGHT] = {
@@ -141,3 +246,20 @@ const struct pwm_t pwm_channels[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+/*
+ * If the battery is found on the V0 I2C port then re-map the battery port.
+ * Use HOOK_PRIO_INIT_I2C so we re-map before init_battery_type() and
+ * charger_chips_init() want to talk to the battery.
+ */
+static void check_v0_battery(void)
+{
+	int status;
+
+	if (i2c_read16(I2C_PORT_BATTERY_V0, BATTERY_ADDR_FLAGS,
+			SB_BATTERY_STATUS, &status) == EC_SUCCESS) {
+		ccprints("V0 HW detected");
+		I2C_PORT_BATTERY = I2C_PORT_BATTERY_V0;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, check_v0_battery, HOOK_PRIO_INIT_I2C);

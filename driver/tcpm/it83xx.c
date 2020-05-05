@@ -139,6 +139,11 @@ static int it83xx_tcpm_get_message_raw(int port, uint32_t *buf, int *head)
 	/* check data message */
 	if (cnt)
 		memcpy(buf, (uint32_t *)&IT83XX_USBPD_RDO0(port), cnt * 4);
+
+	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP)) {
+		int type = USBPD_REG_GET_SOP_TYPE_RX(IT83XX_USBPD_MRSR(port));
+		*head |= PD_HEADER_SOP(type);
+	}
 	/*
 	 * Note: clear RX done interrupt after get the data.
 	 * If clear this bit, USBPD receives next packet
@@ -419,9 +424,6 @@ static int it83xx_set_cc(enum usbpd_port port, int pull)
 
 static int it83xx_tcpm_init(int port)
 {
-	/* Start with an unknown connection */
-	tcpci_set_cached_pull(port, TYPEC_CC_OPEN);
-
 	/* Initialize physical layer */
 	it83xx_init(port, PD_ROLE_DEFAULT(port));
 
@@ -475,15 +477,16 @@ static int it83xx_tcpm_select_rp_value(int port, int rp_sel)
 
 static int it83xx_tcpm_set_cc(int port, int pull)
 {
-	/* Keep track of current CC pull value */
-	tcpci_set_cached_pull(port, pull);
-
 	return it83xx_set_cc(port, pull);
 }
 
 static int it83xx_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
-	it83xx_select_polarity(port, polarity);
+	enum usbpd_cc_pin cc_pin =
+		(polarity == POLARITY_CC1 || polarity == POLARITY_CC1_DTS) ?
+		USBPD_CC_PIN_1 : USBPD_CC_PIN_2;
+
+	it83xx_select_polarity(port, cc_pin);
 
 	return EC_SUCCESS;
 }

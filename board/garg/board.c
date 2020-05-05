@@ -14,7 +14,7 @@
 #include "common.h"
 #include "cros_board_info.h"
 #include "driver/accel_kionix.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/charger/bd9995x.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/tcpm/anx7447.h"
@@ -129,7 +129,7 @@ const mat33_fp_t base_standard_ref = {
 
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -172,8 +172,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -200,8 +200,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 
@@ -299,7 +299,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 uint8_t board_get_usb_pd_port_count(void)
 {
 	/* HDMI SKU has one USB PD port */
-	if (sku_id == 9)
+	if (sku_id == 9 || sku_id == 19 || sku_id == 50)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }

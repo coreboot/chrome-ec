@@ -11,7 +11,7 @@
 #include "common.h"
 #include "cros_board_info.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/als_tcs3400.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
@@ -25,6 +25,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "keyboard_8042.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -46,6 +47,9 @@
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+static void check_reboot_deferred(void);
+DECLARE_DEFERRED(check_reboot_deferred);
 
 /* GPIO to enable/disable the USB Type-A port. */
 const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
@@ -179,7 +183,7 @@ static struct mutex g_base_mutex;
 static struct mutex g_lid_mutex;
 
 /* Base accel private data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
@@ -237,8 +241,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
@@ -264,8 +268,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
@@ -350,12 +354,10 @@ const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
 	},
 	.temp_fan_off = C_TO_K(25),
 	.temp_fan_max = C_TO_K(70),
@@ -365,7 +367,7 @@ const static struct ec_thermal_config thermal_b = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(86),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
@@ -389,6 +391,66 @@ static void board_update_sensor_config_from_sku(void)
 	motion_sensor_count = ARRAY_SIZE(motion_sensors);
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+}
+
+static const struct ec_response_keybd_config keybd1 = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_KBD_BKLIGHT_DOWN,	/* T8 */
+		TK_KBD_BKLIGHT_UP,	/* T9 */
+		TK_PLAY_PAUSE,		/* T10 */
+		TK_VOL_MUTE,		/* T11 */
+		TK_VOL_DOWN,		/* T12 */
+		TK_VOL_UP,		/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+static const struct ec_response_keybd_config keybd2 = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_PRIVACY_SCRN_TOGGLE,	/* T8 */
+		TK_KBD_BKLIGHT_DOWN,	/* T9 */
+		TK_KBD_BKLIGHT_UP,	/* T10 */
+		TK_VOL_MUTE,		/* T11 */
+		TK_VOL_DOWN,		/* T12 */
+		TK_VOL_UP,		/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override const struct ec_response_keybd_config
+*board_vivaldi_keybd_config(void)
+{
+	/*
+	 * Future boards should use fw_config instead of SKU ID
+	 * to make such decisions.
+	 */
+	switch (get_board_sku()) {
+	case 1:
+	case 21:
+		return &keybd1;
+	case 2:
+	case 22:
+		return &keybd2;
+	default:
+		cprints(CC_KEYBOARD, "Error! Unknown VIVLADI keyboard layout!");
+	}
+	return NULL;
 }
 
 static void board_init(void)
@@ -436,4 +498,23 @@ bool board_is_convertible(void)
 
 	return (sku == 255) || (sku == 1) || (sku == 2) || (sku == 21) ||
 		(sku == 22);
+}
+
+
+void all_sys_pgood_check_reboot(void)
+{
+	hook_call_deferred(&check_reboot_deferred_data, 3000 * MSEC);
+}
+
+__override void board_chipset_forced_shutdown(void)
+{
+	hook_call_deferred(&check_reboot_deferred_data, -1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_forced_shutdown,
+	HOOK_PRIO_DEFAULT);
+
+static void check_reboot_deferred(void)
+{
+	if (!gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD))
+		system_reset(SYSTEM_RESET_MANUALLY_TRIGGERED);
 }

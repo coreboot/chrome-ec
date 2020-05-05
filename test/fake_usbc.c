@@ -84,7 +84,13 @@ int tc_is_vconn_src(int port)
 	return 0;
 }
 
-void tc_hard_reset(int port)
+void tc_hard_reset_request(int port)
+{}
+
+void tc_hard_reset_allow_unattach(int port)
+{}
+
+void tc_hard_reset_complete(int port)
 {}
 
 void tc_partner_dr_data(int port, int en)
@@ -126,23 +132,21 @@ __overridable void tc_start_error_recovery(int port)
 __overridable void tc_snk_power_off(int port)
 {}
 
-int pd_dev_store_rw_hash(int port, uint16_t dev_id, uint32_t *rw_hash,
-			 uint32_t ec_image)
+__overridable void pe_invalidate_explicit_contract(int port)
 {
-	return 0;
 }
 
-enum pd_dual_role_states pd_get_dual_role(int port)
+__overridable enum pd_dual_role_states pd_get_dual_role(int port)
 {
 	return PD_DRP_TOGGLE_ON;
 }
 
-void pd_dev_get_rw_hash(int port, uint16_t *dev_id, uint8_t *rw_hash,
-			uint32_t *current_image)
+__overridable void pd_dev_get_rw_hash(int port, uint16_t *dev_id,
+		uint8_t *rw_hash, uint32_t *current_image)
 {
 }
 
-int pd_comm_is_enabled(int port)
+__overridable int pd_comm_is_enabled(int port)
 {
 	return 0;
 }
@@ -178,17 +182,25 @@ uint8_t pd_get_src_cap_cnt(int port)
 }
 #endif
 
-#ifndef CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
+#if !defined(CONFIG_USB_DRP_ACC_TRYSRC) && \
+	!defined(CONFIG_USB_CTVPD)
+int pd_is_connected(int port)
+{
+	return true;
+}
+
 bool pd_is_disconnected(int port)
 {
 	return false;
 }
+#endif /* !CONFIG_USB_DRP_ACC_TRYSRC && !CONFIG_USB_CTVPD */
 
-void pd_set_dual_role(int port, enum pd_dual_role_states state)
+#ifndef CONFIG_USB_DRP_ACC_TRYSRC
+__overridable void pd_set_dual_role(int port, enum pd_dual_role_states state)
 {
 }
 
-enum tcpc_cc_polarity pd_get_polarity(int port)
+__overridable enum tcpc_cc_polarity pd_get_polarity(int port)
 {
 	return POLARITY_CC1;
 }
@@ -213,11 +225,6 @@ enum pd_cc_states pd_get_task_cc_state(int port)
 	return PD_CC_NONE;
 }
 
-int pd_is_connected(int port)
-{
-	return true;
-}
-
 bool pd_get_partner_unconstr_power(int port)
 {
 	return 0;
@@ -227,4 +234,4 @@ const char *pd_get_task_state_name(int port)
 {
 	return NULL;
 }
-#endif /* CONFIG_USB_TYPEC_DRP_ACC_TRYSRC */
+#endif /* CONFIG_USB_DRP_ACC_TRYSRC */
