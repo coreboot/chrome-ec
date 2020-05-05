@@ -189,12 +189,14 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
+		.usb_port = 0,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
 	{
+		.usb_port = 1,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
@@ -209,8 +211,6 @@ void board_reset_pd_mcu(void)
 
 void board_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image())
 		board_reset_pd_mcu();
@@ -222,11 +222,8 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
@@ -248,16 +245,16 @@ uint16_t tcpc_get_alert_status(void)
 }
 
 const struct temp_sensor_t temp_sensors[] = {
-	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_get_battery_temp, 0, 4},
+	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_get_battery_temp, 0},
 	/* BD99992GW temp sensors are only readable in S0 */
 	{"Ambient", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM0, 4},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM0},
 	{"Charger", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM1, 4},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM1},
 	{"DRAM", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM2, 4},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM2},
 	{"eMMC", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM3, 4},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM3},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -534,7 +531,8 @@ static int charger_derate(int current)
 
 static void board_charger_init(void)
 {
-	charger_set_input_current(charger_derate(PD_MAX_CURRENT_MA));
+	charger_set_input_current(CHARGER_SOLO, charger_derate
+				  (PD_MAX_CURRENT_MA));
 }
 DECLARE_HOOK(HOOK_INIT, board_charger_init, HOOK_PRIO_DEFAULT);
 

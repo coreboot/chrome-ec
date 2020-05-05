@@ -25,6 +25,8 @@
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
 
+#define CONFIG_TEMP_SENSOR_AMD_R19ME4070
+
 /* Sensors */
 /* BMI160 Base accel/gyro */
 #define CONFIG_ACCEL_INTERRUPTS
@@ -46,6 +48,9 @@
 #define CONFIG_ALS_TCS3400_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 #define I2C_PORT_ALS      I2C_PORT_SENSOR
+
+/* GPU features */
+#define I2C_PORT_GPU                    NPCX_I2C_PORT4_1
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_COMM_LOCKED
@@ -86,7 +91,8 @@
 #define GPIO_VOLUME_DOWN_L GPIO_EC_VOLDN_BTN_ODL
 
 /* Fan features */
-#define CONFIG_FANS 1
+#define CONFIG_FANS 2
+#define CONFIG_CUSTOM_FAN_CONTROL
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 50
 #define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_A_RAILS
@@ -145,24 +151,28 @@ enum sensor_id {
 enum pwm_channel {
 	PWM_CH_KBLIGHT,
 	PWM_CH_FAN,
+	PWM_CH_FAN2,
 	PWM_CH_COUNT
 };
 
 enum fan_channel {
 	FAN_CH_0 = 0,
+	FAN_CH_1,
 	/* Number of FAN channels */
 	FAN_CH_COUNT,
 };
 
 enum mft_channel {
 	MFT_CH_0 = 0,
+	MFT_CH_1,
 	/* Number of MFT channels */
 	MFT_CH_COUNT,
 };
 
 enum temp_sensor_id {
-	TEMP_SENSOR_1,
-	TEMP_SENSOR_2,
+	TEMP_CHARGER,
+	TEMP_5V,
+	TEMP_GPU,
 	TEMP_SENSOR_COUNT
 };
 
@@ -174,9 +184,13 @@ enum battery_type {
 };
 
 
+#undef PD_OPERATING_POWER_MW
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
-#define PD_MAX_CURRENT_MA	3000
+#undef PD_MAX_POWER_MW
+#define PD_MAX_POWER_MW		100000
+#undef PD_MAX_CURRENT_MA
+#define PD_MAX_CURRENT_MA	5000
+#undef PD_MAX_VOLTAGE_MV
 #define PD_MAX_VOLTAGE_MV	20000
 
 #endif /* !__ASSEMBLER__ */

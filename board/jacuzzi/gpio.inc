@@ -35,10 +35,13 @@ GPIO_INT(BC12_EC_INT_ODL,   PIN(C, 9),  GPIO_INT_FALLING,
          bc12_interrupt)
 GPIO_INT(IT8801_SMB_INT,    PIN(A, 8),  GPIO_INT_FALLING | GPIO_PULL_UP,
          io_expander_it8801_interrupt) /* KB_INT_ODL */
+GPIO_INT(AP_EC_WATCHDOG_L,  PIN(D, 2),  GPIO_INT_FALLING,
+         chipset_watchdog_interrupt)
+GPIO_INT(TABLET_MODE_L,     PIN(B, 11), GPIO_INT_BOTH,
+         gmr_tablet_switch_isr)
 
 /* Unimplemented interrupts */
 GPIO(ALS_RGB_INT_ODL,      PIN(C, 10), GPIO_INPUT)
-GPIO(TABLET_MODE_L,        PIN(B, 11), GPIO_INPUT)
 
 /* Reset pins */
 GPIO(AP_SYS_RST_L,         PIN(C, 11), GPIO_OUT_LOW)
@@ -67,7 +70,6 @@ GPIO(CCD_MODE_ODL,         PIN(A, 1),  GPIO_INPUT)
 
 /* Other output pins */
 GPIO(EC_BATT_PRES_ODL,     PIN(A, 7),  GPIO_INPUT)
-GPIO(AP_EC_WATCHDOG_L,     PIN(D, 2),  GPIO_ODR_HIGH)
 GPIO(EC_BL_EN_OD,          PIN(A, 13), GPIO_ODR_HIGH)
 GPIO(EN_USBA_5V,           PIN(C, 14), GPIO_OUT_LOW)
 GPIO(EC_SENSOR_SPI_MISO,   PIN(C, 2),  GPIO_INPUT)
@@ -80,6 +82,10 @@ GPIO(EC_BOARD_ID_EN_L,     PIN(C, 15), GPIO_ODR_HIGH) /* EC_BOARD_ID_EN_ODL */
 GPIO(USB_C0_HPD_OD,        PIN(F, 1),  GPIO_ODR_LOW)
 GPIO(BOOTBLOCK_EN_L,       PIN(C, 1),  GPIO_ODR_HIGH)
 GPIO(USB_C0_DISCHARGE,     PIN(B, 6),  GPIO_OUT_LOW)
+
+IOEX(LED_BLUE,             EXPIN(0, 1, 4), GPIO_OUT_HIGH)      /* LED BLUE */
+IOEX(LED_GREEN,            EXPIN(0, 1, 3), GPIO_OUT_HIGH)      /* LED GREEN */
+IOEX(LED_ORANGE,           EXPIN(0, 1, 2), GPIO_OUT_HIGH)      /* LED ORANGE */
 
 #ifdef BOARD_JACUZZI
 GPIO(LID_ACCEL_INT_ODL, PIN(A, 14), GPIO_INPUT)
@@ -111,11 +117,10 @@ ALTERNATE(PIN_MASK(B, 0x0038), 0, MODULE_SPI,        0)
 ALTERNATE(PIN_MASK(A, 0x8000), 0, MODULE_SPI,        0)
 
 /* SPI2 */
-#ifdef VARIANT_KUKUI_NO_SENSORS
+/* Shared between slave for emmc and master for bmi160 */
+/* They're mutually exclusive with gpio_config_module. */
 /* EMMC SPI SLAVE: PB13/14/15 */
 ALTERNATE(PIN_MASK(B, 0xE000), 0, MODULE_SPI_FLASH,  0)
-#else
 /* SENSORS SPI MASTER: PB10, PB12, PC2, PC3 */
 ALTERNATE(PIN_MASK(B, 0x0400), 5, MODULE_SPI_MASTER, 0)
 ALTERNATE(PIN_MASK(C, 0x000C), 1, MODULE_SPI_MASTER, 0)
-#endif /* VARIANT_KUKUI_NO_SENSORS */

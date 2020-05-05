@@ -21,11 +21,18 @@
 #define CONFIG_HOSTCMD_ESPI
 
 #undef CONFIG_UART_TX_BUF_SIZE
-#define CONFIG_UART_TX_BUF_SIZE 4096
+#define CONFIG_UART_TX_BUF_SIZE 2048
 
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_KEYBOARD_FACTORY_TEST
+
+/*
+ * Dratini's battery takes several seconds to come back out of its disconnect
+ * state (~4 seconds, but give it 6 for margin).
+ */
+#undef  CONFIG_POWER_BUTTON_INIT_TIMEOUT
+#define CONFIG_POWER_BUTTON_INIT_TIMEOUT 6
 
 /* Sensors */
 /* BMI160 Base accel/gyro */

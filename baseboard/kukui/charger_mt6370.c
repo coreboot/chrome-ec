@@ -58,7 +58,7 @@ static timestamp_t thermal_wait_until;
 /* input current bound when charger throttled */
 static int throttled_ma = PD_MAX_CURRENT_MA;
 /* charge_ma in last board_set_charge_limit call */
-static int prev_charge_ma;
+static int prev_charge_limit;
 /* charge_mv in last board_set_charge_limit call */
 static int prev_charge_mv;
 
@@ -99,7 +99,8 @@ static void battery_thermal_control(struct charge_state_data *curr)
 		skip_reset = 1;
 		thermal_wait_until.val = 0;
 		throttled_ma = PD_MAX_CURRENT_MA;
-		board_set_charge_limit_throttle(prev_charge_ma, prev_charge_mv);
+		board_set_charge_limit_throttle(prev_charge_limit,
+						prev_charge_mv);
 		return;
 	}
 
@@ -116,7 +117,7 @@ static void battery_thermal_control(struct charge_state_data *curr)
 		return;
 
 	/* If we fail to read input curr limit, skip for this cycle. */
-	if (charger_get_input_current(&input_current))
+	if (charger_get_input_current(CHARGER_SOLO, &input_current))
 		return;
 
 	/*
@@ -136,10 +137,19 @@ static void battery_thermal_control(struct charge_state_data *curr)
 	 * PID algorithm (https://en.wikipedia.org/wiki/PID_controller),
 	 * and operates on only P value.
 	 */
-	throttled_ma =
-		MIN(PD_MAX_CURRENT_MA,
-		    input_current + k_p * (thermal_bound.target - jc_temp));
-	board_set_charge_limit_throttle(throttled_ma, prev_charge_mv);
+	throttled_ma = MIN(
+		PD_MAX_CURRENT_MA,
+		/*
+		 * Should not pass the previously set input current by
+		 * charger manager.  This value might be related the charger's
+		 * capability.
+		 */
+		MIN(prev_charge_limit,
+		    input_current + k_p * (thermal_bound.target - jc_temp)));
+
+	/* If the input current doesn't change, just skip. */
+	if (throttled_ma != input_current)
+		board_set_charge_limit_throttle(throttled_ma, prev_charge_mv);
 
 thermal_exit:
 	thermal_wait_until.val = get_time().val + (3 * SECOND);
@@ -243,6 +253,15 @@ update_charge:
 	prev_stable_current = stable_current;
 }
 
+#ifdef CONFIG_BATTERY_SMART
+static void charge_enable_eoc_and_te(void)
+{
+	rt946x_enable_charge_eoc(1);
+	rt946x_enable_charge_termination(1);
+}
+DECLARE_DEFERRED(charge_enable_eoc_and_te);
+#endif
+
 void mt6370_charger_profile_override(struct charge_state_data *curr)
 {
 	static int previous_chg_limit_mv;
@@ -251,6 +270,46 @@ void mt6370_charger_profile_override(struct charge_state_data *curr)
 	battery_desired_curr_dynamic(curr);
 
 	battery_thermal_control(curr);
+
+#ifdef CONFIG_BATTERY_SMART
+	/*
+	 * SMP battery uses HW pre-charge circuit and pre-charge current is
+	 * limited to ~50mA. Once the charge current is lower than IEOC level
+	 * within CHG_TEDG_EOC, and TE is enabled, the charging power path will
+	 * be turned off. Disable EOC and TE when battery stays over discharge
+	 * state, otherwise enable EOC and TE.
+	 */
+	if (!(curr->batt.flags & BATT_FLAG_BAD_VOLTAGE)) {
+		const struct battery_info *batt_info = battery_get_info();
+		static int normal_charge_lock, over_discharge_lock;
+
+		if (curr->batt.voltage < batt_info->voltage_min) {
+			normal_charge_lock = 0;
+
+			if (!over_discharge_lock && curr->state == ST_CHARGE) {
+				over_discharge_lock = 1;
+				rt946x_enable_charge_eoc(0);
+				rt946x_enable_charge_termination(0);
+			}
+		} else {
+			over_discharge_lock = 0;
+
+			if (!normal_charge_lock) {
+				normal_charge_lock = 1;
+				/*
+				 * b/148045048: When the battery is activated
+				 * in shutdown mode, the adapter cannot boot
+				 * DUT automatically. It's a workaround to
+				 * delay 4.5 second to enable charger EOC
+				 * and TE function.
+				 */
+				hook_call_deferred(
+						&charge_enable_eoc_and_te_data,
+						(4.5 * SECOND));
+			}
+		}
+	}
+#endif
 
 	/* Limit input (=VBUS) to 5V when soc > 85% and charge current < 1A. */
 	if (!(curr->batt.flags & BATT_FLAG_BAD_CURRENT) &&
@@ -283,6 +342,7 @@ void mt6370_charger_profile_override(struct charge_state_data *curr)
 
 }
 
+#ifndef CONFIG_BATTERY_SMART
 static void board_charge_termination(void)
 {
 	static uint8_t te;
@@ -295,11 +355,12 @@ static void board_charge_termination(void)
 DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE,
 	     board_charge_termination,
 	     HOOK_PRIO_DEFAULT);
+#endif
 
 void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
 {
-	prev_charge_ma = charge_ma;
+	prev_charge_limit = charge_ma;
 	prev_charge_mv = charge_mv;
 	board_set_charge_limit_throttle(charge_ma, charge_mv);
 }

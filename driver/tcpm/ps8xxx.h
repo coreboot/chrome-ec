@@ -2,6 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include "usb_mux.h"
 
 /* Parade Tech Type-C port controller */
 
@@ -93,12 +94,11 @@
 #endif
 
 extern const struct tcpm_drv ps8xxx_tcpm_drv;
-void ps8xxx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq);
+void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
+				   int hpd_lvl, int hpd_irq);
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
 extern struct i2c_stress_test_dev ps8xxx_i2c_stress_test_dev;
 #endif /* defined(CONFIG_CMD_I2C_STRESS_TEST_TCPC) */
-
-extern const struct usb_mux_driver ps8xxx_usb_mux_driver;
 
 #endif /* defined(__CROS_EC_USB_PD_TCPM_PS8XXX_H) */

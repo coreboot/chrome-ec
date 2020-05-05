@@ -8,6 +8,7 @@
 #ifndef __CROS_EC_USB_PE_H
 #define __CROS_EC_USB_PE_H
 
+#include "usb_pd_tcpm.h"
 #include "usb_sm.h"
 
 /* Policy Engine Receive and Transmit Errors */
@@ -35,6 +36,13 @@ enum pe_dpm_request {
 	DPM_REQUEST_DISCOVER_IDENTITY   = BIT(9),
 	DPM_REQUEST_EXIT_DP_MODE        = BIT(10),
 	DPM_REQUEST_SVDM                = BIT(11),
+	DPM_REQUEST_BIST_RX             = BIT(12),
+	DPM_REQUEST_BIST_TX             = BIT(13),
+	DPM_REQUEST_SNK_STARTUP         = BIT(14),
+	DPM_REQUEST_SRC_STARTUP         = BIT(15),
+	DPM_REQUEST_HARD_RESET_SEND     = BIT(16),
+	DPM_REQUEST_SOFT_RESET_SEND     = BIT(17),
+	DPM_REQUEST_PORT_DISCOVERY      = BIT(18),
 };
 
 /**
@@ -45,6 +53,13 @@ enum pe_dpm_request {
  * @param en   0 to disable the machine, 1 to enable the machine
  */
 void pe_run(int port, int evt, int en);
+
+/**
+ * Sets the debug level for the PRL layer
+ *
+ * @param level debug level
+ */
+void pe_set_debug_level(enum debug_level level);
 
 /**
  * Informs the Policy Engine that a message was successfully sent
@@ -58,8 +73,9 @@ void pe_message_sent(int port);
  *
  * @param port USB-C port number
  * @param  e    error
+ * @param type  port address where error was generated
  */
-void pe_report_error(int port, enum pe_error e);
+void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type);
 
 /**
  * Called by the Protocol Layer to informs the Policy Engine
@@ -89,13 +105,6 @@ void pe_got_soft_reset(int port);
  * @param port USB-C port number
  */
 void pe_hard_reset_sent(int port);
-
-/**
- * Informs the Policy Engine that a Fast Role Swap signal was detected
- *
- * @param port USB-C port number
- */
-void pe_got_frs_signal(int port);
 
 /**
  * Exit DP mode
@@ -134,18 +143,6 @@ void pe_ps_reset_complete(int port);
 void pe_vconn_swap_complete(int port);
 
 /**
- * Instructs the Policy Engine to send a Vendor Defined Message
- *
- * @param port  USB-C port number
- * @param vid   Vendor ID
- * @param cmd   Vendor Defined Command
- * @param data  Vendor Defined Data
- * @param count Size of Vendor Defined Data in 32-bit objects
- */
-void pe_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
-				int count);
-
-/**
  * Indicates if an explicit contract is in place
  *
  * @param port  USB-C port number
@@ -170,5 +167,17 @@ void pe_dpm_request(int port, enum pe_dpm_request req);
  */
 int pd_is_port_partner_dualrole(int port);
 
+/*
+ * Informs the Policy Engine that a sysjump has occurred
+ */
+void pe_set_sysjump(void);
+
+/*
+ * Informs the Policy Engine that it should invalidate the
+ * explicit contract.
+ *
+ * @param port USB-C port number
+ */
+void pe_invalidate_explicit_contract(int port);
 #endif /* __CROS_EC_USB_PE_H */
 

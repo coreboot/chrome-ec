@@ -12,11 +12,9 @@
 #include "libsharedobjs.h"
 #include "util.h"
 
+#ifndef CONFIG_KEYBOARD_CUSTOMIZATION
 /* The standard Chrome OS keyboard matrix table in scan code set 2. */
-#ifndef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-SHAREDLIB(const
-#endif
-uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
+static uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 	{0x0000, 0x0000, 0x0014, 0xe01f, 0xe014, 0xe007, 0x0000, 0x0000},
 	{0xe01f, 0x0076, 0x000d, 0x000e, 0x001c, 0x001a, 0x0016, 0x0015},
 	{0x0005, 0x000c, 0x0004, 0x0006, 0x0023, 0x0021, 0x0026, 0x0024},
@@ -37,11 +35,22 @@ uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 	{0xe04a, 0x007c, 0x007b, 0x0074, 0x0071, 0x0073, 0x006b, 0x0070},
 	{0x006c, 0x0075, 0x007d, 0x0079, 0x007a, 0x0072, 0x0069, 0xe05a},
 #endif
+};
+
+uint16_t get_scancode_set2(uint8_t row, uint8_t col)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		return scancode_set2[col][row];
+	return 0;
 }
-#ifndef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-)
-#endif
-;
+
+void set_scancode_set2(uint8_t row, uint8_t col, uint16_t val)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		scancode_set2[col][row] = val;
+}
+
+#endif /* CONFIG_KEYBOARD_CUSTOMIZATION */
 
 /*
  * The translation table from scan code set 2 to set 1.
@@ -72,24 +81,29 @@ SHAREDLIB(const uint8_t scancode_translate_table[128] = {
 
 #ifdef CONFIG_KEYBOARD_DEBUG
 SHAREDLIB(const
-char * const keycap_long_label[KLLI_MAX & KEYCAP_LONG_LABEL_INDEX_BITMASK] = {
+static char * const keycap_long_label[KLLI_MAX & KEYCAP_LONG_LABEL_INDEX_BITMASK] = {
 	"UNKNOWN", "F1",    "F2",    "F3",
 	"F4",      "F5",    "F6",    "F7",
 	"F8",      "F9",    "F10",   "F11",
-	"F12",     "F13",   "RSVD",  "RSVD",
+	"F12",     "F13",   "F14",   "F15",
 	"L-ALT",   "R-ALT", "L-CTR", "R-CTR",
 	"L-SHT",   "R-SHT", "ENTER", "SPACE",
 	"B-SPC",   "TAB",   "SEARC", "LEFT",
 	"RIGHT",   "DOWN",  "UP",    "ESC",
 });
 
-#ifndef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-SHAREDLIB(const
-#endif
-char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
-	{KLLI_UNKNO, KLLI_UNKNO, KLLI_L_CTR, KLLI_UNKNO,
+const char *get_keycap_long_label(uint8_t idx)
+{
+	if (idx < ARRAY_SIZE(keycap_long_label))
+		return keycap_long_label[idx];
+	return "UNKNOWN";
+}
+
+#ifndef CONFIG_KEYBOARD_CUSTOMIZATION
+static char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
+	{KLLI_UNKNO, KLLI_UNKNO, KLLI_L_CTR, KLLI_SEARC,
 			KLLI_R_CTR, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO},
-	{KLLI_SEARC, KLLI_ESC,   KLLI_TAB,   '~',
+	{KLLI_F11,   KLLI_ESC,   KLLI_TAB,   '~',
 			'a',        'z',        '1',        'q'},
 	{KLLI_F1,    KLLI_F4,    KLLI_F3,    KLLI_F2,
 			'd',        'c',        '3',        'e'},
@@ -97,7 +111,7 @@ char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 			'f',        'v',        '4',        'r'},
 	{KLLI_F10,   KLLI_F7,    KLLI_F6,    KLLI_F5,
 			's',        'x',        '2',        'w'},
-	{KLLI_UNKNO, KLLI_UNKNO, ']',        KLLI_UNKNO,
+	{KLLI_UNKNO, KLLI_F12,   ']',        KLLI_F13,
 			'k',        ',',        '8',        'i'},
 	{'n',        'h',        'y',        '6',
 			'j',        'm',        '7',        'u'},
@@ -105,11 +119,11 @@ char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 			KLLI_UNKNO, KLLI_L_SHT, KLLI_UNKNO, KLLI_R_SHT},
 	{'=',        '\'',       '[',        '-',
 			';',        '/',        '0',        'p'},
-	{KLLI_UNKNO, KLLI_F9,    KLLI_F8,    KLLI_UNKNO,
+	{KLLI_F14,   KLLI_F9,    KLLI_F8,    KLLI_UNKNO,
 			'|',        '.',        '9',        'o'},
 	{KLLI_R_ALT, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
 			KLLI_UNKNO, KLLI_UNKNO, KLLI_L_ALT, KLLI_UNKNO},
-	{KLLI_UNKNO, KLLI_B_SPC, KLLI_UNKNO, '\\',
+	{KLLI_F15,   KLLI_B_SPC, KLLI_UNKNO, '\\',
 			KLLI_ENTER, KLLI_SPACE, KLLI_DOWN,  KLLI_UP},
 	{KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
 			KLLI_UNKNO, KLLI_UNKNO, KLLI_RIGHT, KLLI_LEFT},
@@ -120,12 +134,22 @@ char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 	{KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
 			KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO},
 #endif
+};
+
+char get_keycap_label(uint8_t row, uint8_t col)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		return keycap_label[col][row];
+	return KLLI_UNKNO;
 }
-#ifndef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-)
-#endif
-;
-#endif
+
+void set_keycap_label(uint8_t row, uint8_t col, char val)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		keycap_label[col][row] = val;
+}
+#endif /* CONFIG_KEYBOARD_CUSTOMIZATION */
+#endif /* CONFIG_KEYBOARD_DEBUG */
 
 uint8_t scancode_translate_set2_to_1(uint8_t code)
 {

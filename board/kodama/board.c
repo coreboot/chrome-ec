@@ -24,6 +24,7 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
+#include "i2c_bitbang.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -68,6 +69,11 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+const struct i2c_port_t i2c_bitbang_ports[] = {
+	{"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
+};
+const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
+
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
 	{GPIO_AP_IN_SLEEP_L,   POWER_SIGNAL_ACTIVE_LOW,  "AP_IN_S3_L"},
@@ -98,7 +104,8 @@ struct mt6370_thermal_bound thermal_bound = {
 	.err = 4,
 };
 
-static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
+static void board_hpd_status(const struct usb_mux *me,
+			     int hpd_lvl, int hpd_irq)
 {
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
@@ -122,9 +129,11 @@ __override const struct rt946x_init_setting *board_rt946x_init_setting(void)
 	return &battery_init_setting;
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = IT5205_I2C_ADDR1_FLAGS,
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
 		.hpd_update = &board_hpd_status,
 	},
@@ -162,7 +171,7 @@ int board_set_active_charge_port(int charge_port)
 		 * even when battery is disconnected, keep VBAT rail on but
 		 * set the charging current to minimum.
 		 */
-		charger_set_current(0);
+		charger_set_current(CHARGER_SOLO, 0);
 		break;
 	default:
 		panic("Invalid charge port\n");
@@ -220,8 +229,20 @@ int pd_snk_is_vbus_provided(int port)
 	return rt946x_is_vbus_ready();
 }
 
+#define CHARGER_I2C_ADDR_FLAGS RT946X_ADDR_FLAGS
+
 static void board_init(void)
 {
+#ifdef SECTION_IS_RW
+	int val;
+
+	i2c_read8(I2C_PORT_CHARGER, CHARGER_I2C_ADDR_FLAGS,
+			RT946X_REG_CHGCTRL1, &val);
+	val &= RT946X_MASK_OPA_MODE;
+	i2c_write8(I2C_PORT_CHARGER, CHARGER_I2C_ADDR_FLAGS,
+		RT946X_REG_CHGCTRL1, (val | RT946X_MASK_STAT_EN));
+#endif
+
 	/* If the reset cause is external, pulse PMIC force reset. */
 	if (system_get_reset_flags() == EC_RESET_FLAG_RESET_PIN) {
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 0);
@@ -373,24 +394,7 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	return voltage < 4400;
 }
 
-__override int board_charge_port_is_sink(int port)
+int board_get_battery_i2c(void)
 {
-	/* TODO(b:128386458): Check POGO_ADC_INT_L */
-	return 1;
-}
-
-__override int board_charge_port_is_connected(int port)
-{
-	return gpio_get_level(GPIO_POGO_VBUS_PRESENT);
-}
-
-__override
-void board_fill_source_power_info(int port,
-				  struct ec_response_usb_pd_power_info *r)
-{
-	r->meas.voltage_now = 3300;
-	r->meas.voltage_max = 3300;
-	r->meas.current_max = 1500;
-	r->meas.current_lim = 1500;
-	r->max_power = r->meas.voltage_now * r->meas.current_max;
+	return board_get_version() >= 2 ? 2 : 1;
 }

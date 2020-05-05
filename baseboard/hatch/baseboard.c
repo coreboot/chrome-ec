@@ -64,7 +64,7 @@ struct keyboard_scan_config keyscan_config = {
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
-		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0x1c, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
 	},
 };
@@ -72,15 +72,22 @@ struct keyboard_scan_config keyscan_config = {
 /******************************************************************************/
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
+#ifdef CONFIG_ACCEL_FIFO
 	{"sensor",  I2C_PORT_SENSOR,  100, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
+#endif
 	{"ppc0",    I2C_PORT_PPC0,    100, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"tcpc1",   I2C_PORT_TCPC1,   100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0,   100, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
+	{"tcpc1",   I2C_PORT_TCPC1,   400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+#endif
+	{"tcpc0",   I2C_PORT_TCPC0,   400, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
 #ifdef BOARD_AKEMI
 	{"thermal", I2C_PORT_THERMAL, 400, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
 #endif
 #ifdef BOARD_JINLON
 	{"thermal", I2C_PORT_THERMAL, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
+#endif
+#ifdef BOARD_MUSHU
+	{"gpu_temp", I2C_PORT_THERMAL, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
 #endif
 	{"power",   I2C_PORT_POWER,   100, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
 	{"eeprom",  I2C_PORT_EEPROM,  100, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
@@ -177,12 +184,13 @@ struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
 		.drv = &sn5s330_drv
 	},
-
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	[USB_PD_PORT_TCPC_1] = {
 		.i2c_port = I2C_PORT_TCPC1,
 		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
 		.drv = &sn5s330_drv
 	},
+#endif
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
@@ -195,15 +203,19 @@ void baseboard_tcpc_init(void)
 
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
-
 	/* Enable TCPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
-
 	/* Enable BC 1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
+
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
+	/* Enable PPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
+	/* Enable TCPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
+	/* Enable BC 1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+#endif
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -223,12 +235,14 @@ uint16_t tcpc_get_alert_status(void)
 			status |= PD_STATUS_TCPC_ALERT_0;
 	}
 
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	if (!gpio_get_level(GPIO_USB_C1_TCPC_INT_ODL)) {
 		level = !!(tcpc_config[USB_PD_PORT_TCPC_1].flags &
 			   TCPC_FLAGS_RESET_ACTIVE_HIGH);
 		if (gpio_get_level(GPIO_USB_C1_TCPC_RST) != level)
 			status |= PD_STATUS_TCPC_ALERT_1;
 	}
+#endif
 
 	return status;
 }
@@ -261,10 +275,12 @@ void board_reset_pd_mcu(void)
 		      BOARD_TCPC_C0_RESET_HOLD_DELAY,
 		      BOARD_TCPC_C0_RESET_POST_DELAY);
 
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	/* Reset TCPC1 */
 	reset_pd_port(USB_PD_PORT_TCPC_1, GPIO_USB_C1_TCPC_RST,
 		      BOARD_TCPC_C1_RESET_HOLD_DELAY,
 		      BOARD_TCPC_C1_RESET_POST_DELAY);
+#endif
 }
 
 int board_set_active_charge_port(int port)
@@ -325,8 +341,13 @@ int ppc_get_alert_status(int port)
 {
 	if (port == USB_PD_PORT_TCPC_0)
 		return gpio_get_level(GPIO_USB_C0_PPC_INT_ODL) == 0;
-	else
-		return gpio_get_level(GPIO_USB_C1_PPC_INT_ODL) == 0;
+	return port == USB_PD_PORT_TCPC_0 ?
+		gpio_get_level(GPIO_USB_C0_PPC_INT_ODL) == 0 :
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
+		gpio_get_level(GPIO_USB_C1_PPC_INT_ODL) == 0;
+#else
+		EC_SUCCESS;
+#endif
 }
 
 void board_set_charge_limit(int port, int supplier, int charge_ma,
@@ -355,10 +376,11 @@ void baseboard_mst_enable_control(enum mst_source src, int level)
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
 {
-	/* TODO(b/125936966): Need to add SKU dependency for convertibles */
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		enable = 0;
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+	if (board_is_convertible()) {
+		if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+			enable = 0;
+		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+	}
 }
 #endif
 

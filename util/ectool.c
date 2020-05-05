@@ -16,7 +16,6 @@
 #include <signal.h>
 #include <stdbool.h>
 
-#include "anx74xx.h"
 #include "battery.h"
 #include "comm-host.h"
 #include "chipset.h"
@@ -31,7 +30,6 @@
 #include "lock/gec_lock.h"
 #include "misc_util.h"
 #include "panic.h"
-#include "ps8xxx.h"
 #include "usb_pd.h"
 
 /* Maximum flash size (16 MB, conservative) */
@@ -82,6 +80,8 @@ const char help_str[] =
 	"      Read or write board-specific battery parameter\n"
 	"  boardversion\n"
 	"      Prints the board version\n"
+	"  button [vup|vdown|rec] <Delay-ms>\n"
+	"      Simulates button press.\n"
 	"  cbi\n"
 	"      Get/Set Cros Board Info\n"
 	"  chargecurrentlimit\n"
@@ -283,6 +283,8 @@ const char help_str[] =
 	"      Serial output test for COM2\n"
 	"  stress [reboot] [help]\n"
 	"      Stress test the ec host command interface.\n"
+	"  sysinfo [flags|reset_flags|firmware_copy]\n"
+	"      Display system info.\n"
 	"  switches\n"
 	"      Prints current EC switch positions\n"
 	"  temps <sensorid>\n"
@@ -324,7 +326,7 @@ const char help_str[] =
 	"      Enable/disable WLAN/Bluetooth radio\n"
 	"";
 
-/* Note: depends on enum system_image_copy_t */
+/* Note: depends on enum ec_image */
 static const char * const image_names[] = {"unknown", "RO", "RW"};
 
 /* Note: depends on enum ec_led_colors */
@@ -764,6 +766,7 @@ static const char * const ec_feature_names[] = {
 		"Tight timestamp for sensors events",
 	[EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS] =
 		"Refined tablet mode hysteresis",
+	[EC_FEATURE_EFS2] = "Early Firmware Selection v2",
 	[EC_FEATURE_ISH] = "Intel Integrated Sensor Hub",
 };
 
@@ -1104,6 +1107,58 @@ int cmd_reboot_ap_on_g3(int argc, char *argv[])
 
 	rv = ec_command(EC_CMD_REBOOT_AP_ON_G3, 0, NULL, 0, NULL, 0);
 	return (rv < 0 ? rv : 0);
+}
+
+int cmd_button(int argc, char *argv[])
+{
+	struct ec_params_button p;
+	char *e;
+	int argv_idx;
+	int button = KEYBOARD_BUTTON_COUNT;
+	int rv;
+
+	if (argc < 2) {
+		fprintf(stderr, "Invalid num param %d.\n", argc);
+		return -1;
+	}
+
+	p.press_ms = 50;
+	p.btn_mask = 0;
+
+	for (argv_idx = 1; argv_idx < argc; argv_idx++) {
+		if (!strcasecmp(argv[argv_idx], "vup"))
+			button = KEYBOARD_BUTTON_VOLUME_UP;
+		else if (!strcasecmp(argv[argv_idx], "vdown"))
+			button = KEYBOARD_BUTTON_VOLUME_DOWN;
+		else if (!strcasecmp(argv[argv_idx], "rec"))
+			button = KEYBOARD_BUTTON_RECOVERY;
+		else {
+			/* If last parameter check if it is an integer. */
+			if (argv_idx == argc - 1) {
+				p.press_ms = strtol(argv[argv_idx], &e, 0);
+				/* If integer, break out of the loop. */
+				if (!*e)
+					break;
+			}
+			button = KEYBOARD_BUTTON_COUNT;
+		}
+
+		if (button == KEYBOARD_BUTTON_COUNT) {
+			fprintf(stderr, "Invalid button input.\n");
+			return -1;
+		}
+
+		p.btn_mask |= (1 << button);
+	}
+	if (!p.btn_mask)
+		return 0;
+
+	rv = ec_command(EC_CMD_BUTTON, 0, &p, sizeof(p), NULL, 0);
+	if (rv < 0)
+		return rv;
+
+	printf("Button(s) %d set to %d ms\n", p.btn_mask, p.press_ms);
+	return 0;
 }
 
 int cmd_flash_info(int argc, char *argv[])
@@ -1634,6 +1689,83 @@ int cmd_rwsig(int argc, char **argv)
 		if (strcmp(argv[1], rwsig_subcommands[i].subcommand) == 0)
 			return rwsig_subcommands[i].handler(--argc, &argv[1]);
 
+	return -1;
+}
+
+enum sysinfo_fields {
+	SYSINFO_FIELD_RESET_FLAGS = BIT(0),
+	SYSINFO_FIELD_CURRENT_IMAGE = BIT(1),
+	SYSINFO_FIELD_FLAGS = BIT(2),
+	SYSINFO_INFO_FIELD_ALL = SYSINFO_FIELD_RESET_FLAGS |
+				 SYSINFO_FIELD_CURRENT_IMAGE |
+				 SYSINFO_FIELD_FLAGS
+};
+
+static int sysinfo(struct ec_response_sysinfo *info)
+{
+	struct ec_response_sysinfo r;
+	int rv;
+
+	rv = ec_command(EC_CMD_SYSINFO, 0, NULL, 0, &r, sizeof(r));
+	if (rv < 0) {
+		fprintf(stderr, "ERROR: EC_CMD_SYSINFO failed: %d\n", rv);
+		return rv;
+	}
+
+	return 0;
+}
+
+int cmd_sysinfo(int argc, char **argv)
+{
+	struct ec_response_sysinfo r;
+	enum sysinfo_fields fields = 0;
+	bool print_prefix = false;
+
+	if (argc != 1 && argc != 2)
+		goto sysinfo_error_usage;
+
+	if (argc == 1) {
+		fields = SYSINFO_INFO_FIELD_ALL;
+		print_prefix = true;
+	} else if (argc == 2) {
+		if (strcmp(argv[1], "flags") == 0)
+			fields = SYSINFO_FIELD_FLAGS;
+		else if (strcmp(argv[1], "reset_flags") == 0)
+			fields = SYSINFO_FIELD_RESET_FLAGS;
+		else if (strcmp(argv[1], "firmware_copy") == 0)
+			fields = SYSINFO_FIELD_CURRENT_IMAGE;
+		else
+			goto sysinfo_error_usage;
+	}
+
+	if (sysinfo(&r) != 0)
+		return -1;
+
+	if (fields & SYSINFO_FIELD_RESET_FLAGS) {
+		if (print_prefix)
+			printf("Reset flags: ");
+		printf("0x%08x\n", r.reset_flags);
+	}
+
+	if (fields & SYSINFO_FIELD_FLAGS) {
+		if (print_prefix)
+			printf("Flags: ");
+		printf("0x%08x\n", r.flags);
+
+	}
+
+	if (fields & SYSINFO_FIELD_CURRENT_IMAGE) {
+		if (print_prefix)
+			printf("Firmware copy: ");
+		printf("%d\n", r.current_image);
+	}
+
+	return 0;
+
+sysinfo_error_usage:
+	fprintf(stderr, "Usage: %s "
+			"[flags|reset_flags|firmware_copy]\n",
+		argv[0]);
 	return -1;
 }
 
@@ -4633,7 +4765,7 @@ static const struct {
 		sizeof(struct ec_response_motion_sensor_data) *
 		ECTOOL_MAX_SENSOR
 	},
-	{ ST_PRM_SIZE(info_3), ST_RSP_SIZE(info_4) },
+	ST_BOTH_SIZES(info_4),
 	ST_BOTH_SIZES(ec_rate),
 	ST_BOTH_SIZES(sensor_odr),
 	ST_BOTH_SIZES(sensor_range),
@@ -4654,6 +4786,7 @@ static const struct {
 	ST_BOTH_SIZES(spoof),
 	ST_BOTH_SIZES(tablet_mode_threshold),
 	ST_BOTH_SIZES(sensor_scale),
+	ST_BOTH_SIZES(online_calib_read),
 };
 BUILD_ASSERT(ARRAY_SIZE(ms_command_sizes) == MOTIONSENSE_NUM_CMDS);
 
@@ -4903,6 +5036,12 @@ static int cmd_motionsense(int argc, char **argv)
 			break;
 		case MOTIONSENSE_CHIP_LIS2DWL:
 			printf("lis2dwl\n");
+			break;
+		case MOTIONSENSE_CHIP_LIS2DS:
+			printf("lis2ds\n");
+			break;
+		case MOTIONSENSE_CHIP_BMI260:
+			printf("bmi260\n");
 			break;
 		default:
 			printf("unknown\n");
@@ -7584,6 +7723,7 @@ static void cmd_cbi_help(char *cmd)
 	"      4: OEM_NAME (string)\n"
 	"      5: MODEL_ID\n"
 	"      6: FW_CONFIG\n"
+	"      7: PCB_VENDOR\n"
 	"    <size> is the size of the data in byte. It should be zero for\n"
 	"      string types.\n"
 	"    <value/string> is an integer or a string to be set\n"
@@ -9350,6 +9490,7 @@ const struct command commands[] = {
 	{"batterycutoff", cmd_battery_cut_off},
 	{"batteryparam", cmd_battery_vendor_param},
 	{"boardversion", cmd_board_version},
+	{"button", cmd_button},
 	{"cbi", cmd_cbi},
 	{"chargecurrentlimit", cmd_charge_current_limit},
 	{"chargecontrol", cmd_charge_control},
@@ -9449,6 +9590,7 @@ const struct command commands[] = {
 	{"rwsigstatus", cmd_rwsig_status},
 	{"sertest", cmd_serial_test},
 	{"stress", cmd_stress_test},
+	{"sysinfo", cmd_sysinfo},
 	{"port80flood", cmd_port_80_flood},
 	{"switches", cmd_switches},
 	{"temps", cmd_temperature},

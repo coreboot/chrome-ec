@@ -166,6 +166,20 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, baseboard_chipset_shutdown,
 /* Called by APL power state machine when transitioning to G3. */
 void chipset_do_shutdown(void)
 {
+#ifdef VARIANT_OCTOPUS_EC_ITE8320
+	/*
+	 * We want the processor to be reset before dropping the PP3300_A rail
+	 * below, otherwise the PP3300_LDO and PP3300_EC rails can be overloaded
+	 */
+	if (gpio_get_level(GPIO_PCH_SLP_S4_L)) {
+		/* assert RSMRST to PCH */
+		gpio_set_level(GPIO_PCH_RSMRST_L, 0);
+		/* Wait SLP_S4 goes low; would rather watchdog than continue */
+		while (gpio_get_level(GPIO_PCH_SLP_S4_L))
+			;
+	}
+#endif
+
 	/* Disable PMIC */
 	gpio_set_level(GPIO_PMIC_EN, 0);
 
@@ -216,8 +230,6 @@ enum adc_channel board_get_vbus_adc(int port)
 
 void baseboard_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image())
 		board_reset_pd_mcu();
@@ -226,11 +238,8 @@ void baseboard_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 /* Called after the cbi_init (via +2) */
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 2);

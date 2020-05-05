@@ -21,6 +21,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "icelake.h"
 #include "keyboard_scan.h"
 #include "power.h"
 #include "timer.h"
@@ -89,6 +90,18 @@ const struct charger_config_t chg_chips[] = {
 	},
 };
 const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
+/******************************************************************************/
+/* PWROK signal configuration */
+/*
+ * On Dragonegg the ALL_SYS_PWRGD, VCCST_PWRGD, PCH_PWROK, and SYS_PWROK
+ * signals are handled by the board. No EC control needed.
+ */
+const struct intel_x86_pwrok_signal pwrok_signal_assert_list[] = {};
+const int pwrok_signal_assert_count = ARRAY_SIZE(pwrok_signal_assert_list);
+
+const struct intel_x86_pwrok_signal pwrok_signal_deassert_list[] = {};
+const int pwrok_signal_deassert_count = ARRAY_SIZE(pwrok_signal_assert_list);
 
 /******************************************************************************/
 /* Chipset callbacks/hooks */
@@ -200,19 +213,21 @@ struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
+		.usb_port = USB_PD_PORT_ITE_0,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
 	},
 
 	[USB_PD_PORT_ITE_1] = {
+		.usb_port = USB_PD_PORT_ITE_1,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
 	},
 
 	[USB_PD_PORT_TUSB422_2] = {
-		.port_addr = 0,
+		.usb_port = USB_PD_PORT_TUSB422_2,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
 	},

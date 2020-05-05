@@ -51,12 +51,6 @@ enum tcpc_rp_value {
 
 enum tcpc_cc_polarity {
 	/*
-	 * _NONE: either disconnected or connected to a SNK Debug
-	 * Accessory
-	 */
-	POLARITY_NONE = -1,
-
-	/*
 	 * _CCx: is used to indicate the polarity while not connected to
 	 * a Debug Accessory.  Only one CC line will assert a resistor and
 	 * the other will be open.
@@ -87,7 +81,7 @@ static inline enum tcpc_cc_polarity polarity_rm_dts(
 	enum tcpc_cc_polarity polarity)
 {
 	BUILD_ASSERT(POLARITY_COUNT == 4);
-	return (polarity == POLARITY_NONE) ? polarity : polarity & BIT(0);
+	return polarity & BIT(0);
 }
 
 enum tcpm_transmit_type {
@@ -98,7 +92,8 @@ enum tcpm_transmit_type {
 	TCPC_TX_SOP_DEBUG_PRIME_PRIME = 4,
 	TCPC_TX_HARD_RESET = 5,
 	TCPC_TX_CABLE_RESET = 6,
-	TCPC_TX_BIST_MODE_2 = 7
+	TCPC_TX_BIST_MODE_2 = 7,
+	TCPC_TX_INVALID = 0xf,
 };
 
 /* Number of valid Transmit Types */
@@ -325,6 +320,26 @@ struct tcpm_drv {
 	void (*tcpc_enable_auto_discharge_disconnect)(int port,
 						      int enable);
 
+	/**
+	 * Set connection
+	 * If this is a disconnect, set the ROLE_CONTROL, otherwise
+	 * this is a new connection. May have to handle differently
+	 * if we were performing auto-toggle. Allow a driver to do
+	 * any work required to leave the unattached auto-toggle mode
+	 * as well as setting the CC lines.  If auto-toggle is not
+	 * being used or was not the cause of the new connection
+	 * detection then set both CC lines to the passed pull.
+	 *
+	 * @param port Type-C port number
+	 * @param pull enum tcpc_cc_pull of CC lines
+	 * @param connect Connect(1) or Disconnect(0)
+	 *
+	 * @return EC_SUCCESS or error
+	 */
+	int (*set_connection)(int port,
+			      enum tcpc_cc_pull pull,
+			      int connect);
+
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	/**
 	 * Enable TCPC auto DRP toggling.
@@ -391,6 +406,16 @@ struct tcpm_drv {
 	 * @param enable FRS enable (true) disable (false)
 	 */
 	 void (*set_frs_enable)(int port, int enable);
+
+	/**
+	 * Handle TCPCI Faults
+	 *
+	 * @param port Type-C port number
+	 * @param fault TCPCI fault status value
+	 *
+	 * @return EC_SUCCESS or error
+	 */
+	 int (*handle_fault)(int port, int fault);
 };
 
 /*
@@ -399,12 +424,12 @@ struct tcpm_drv {
  * Bit 0 --> Polarity for TCPC alert. Set to 1 if alert is active high.
  * Bit 1 --> Set to 1 if TCPC alert line is open-drain instead of push-pull.
  * Bit 2 --> Polarity for TCPC reset. Set to 1 if reset line is active high.
- * Bit 3 --> Set to 1 if TCPC is using TCPCI Version 2.0
+ * Bit 3 --> Set to 1 if TCPC is using TCPCI Revision 2.0
  */
 #define TCPC_FLAGS_ALERT_ACTIVE_HIGH	BIT(0)
 #define TCPC_FLAGS_ALERT_OD		BIT(1)
 #define TCPC_FLAGS_RESET_ACTIVE_HIGH	BIT(2)
-#define TCPC_FLAGS_TCPCI_V2_0           BIT(3)
+#define TCPC_FLAGS_TCPCI_REV2_0		BIT(3)
 
 struct tcpc_config_t {
 	enum ec_bus_type bus_type;	/* enum ec_bus_type */

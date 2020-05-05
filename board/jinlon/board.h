@@ -11,9 +11,11 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+#define CONFIG_DPTF_MULTI_PROFILE
 #define CONFIG_POWER_BUTTON
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 #undef CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
@@ -26,6 +28,13 @@
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_KEYBOARD_FACTORY_TEST
+
+/*
+ * Jinlon's battery takes several seconds to come back out of its disconnect
+ * state (~4 seconds, but give it 6 for margin).
+ */
+#undef  CONFIG_POWER_BUTTON_INIT_TIMEOUT
+#define CONFIG_POWER_BUTTON_INIT_TIMEOUT 6
 
 /* Sensors */
 /* BMI160 Base accel/gyro */
@@ -88,6 +97,7 @@
 #define CONFIG_CUSTOM_FAN_CONTROL
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 50
+#define RPM_DEVIATION 1
 #define CONFIG_TEMP_SENSOR_OTI502
 #define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_A_RAILS
 #define CONFIG_THERMISTOR

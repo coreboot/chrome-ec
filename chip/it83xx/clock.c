@@ -459,11 +459,13 @@ void clock_cpu_standby(void)
 	if (IS_ENABLED(CHIP_CORE_NDS32)) {
 		asm("standby wake_grant");
 	} else if (IS_ENABLED(CHIP_CORE_RISCV)) {
-		/*
-		 * TODO(b:142029177): we have to enable interrupts before
-		 * standby instruction on IT8xxx2 series.
-		 */
-		interrupt_enable();
+		if (!IS_ENABLED(IT83XX_RISCV_WAKEUP_CPU_WITHOUT_INT_ENABLED))
+			/*
+			 * we have to enable interrupts before
+			 * standby instruction on IT83202 bx version.
+			 */
+			interrupt_enable();
+
 		asm("wfi");
 	}
 }
@@ -505,14 +507,23 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 		ext_timer_start(FREE_EXT_TIMER_L, 0);
 	}
 
-#ifdef CONFIG_USB_PD_TCPM_ITE83XX
-	/*
-	 * Disable integrated pd modules in hibernate for
-	 * better power consumption.
-	 */
-	for (i = 0; i < IT83XX_USBPD_PHY_PORT_COUNT; i++)
-		it83xx_disable_pd_module(i);
-#endif
+	if (IS_ENABLED(CONFIG_USB_PD_TCPM_ITE_ON_CHIP)) {
+		/*
+		 * Disable active pd modules in hibernate for
+		 * better power consumption.
+		 */
+		for (i = 0; i < CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT; i++)
+			it83xx_disable_pd_module(i);
+	}
+
+	if (IS_ENABLED(CONFIG_ADC_VOLTAGE_COMPARATOR)) {
+		/*
+		 * Disable all voltage comparator modules in hibernate
+		 * for better power consumption.
+		 */
+		for (i = CHIP_VCMP0; i < CHIP_VCMP_COUNT; i++)
+			vcmp_enable(i, 0);
+	}
 
 	for (i = 0; i < hibernate_wake_pins_used; ++i)
 		gpio_enable_interrupt(hibernate_wake_pins[i]);

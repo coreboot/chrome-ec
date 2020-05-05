@@ -16,12 +16,13 @@
 extern "C" {
 #endif
 
+#ifdef CHROMIUM_EC
 /*
  * CHROMIUM_EC is defined by the Makefile system of Chromium EC repository.
  * It is used to not include macros that may cause conflicts in foreign
  * projects (refer to crbug.com/984623).
  */
-#ifdef CHROMIUM_EC
+
 /*
  * Include common.h for CONFIG_HOSTCMD_ALIGNED, if it's defined. This
  * generates more efficient code for accessing request/response structures on
@@ -31,8 +32,18 @@ extern "C" {
 #include "compile_time_macros.h"
 
 #else
-
 #define BUILD_ASSERT(_cond)
+#endif  /* CHROMIUM_EC */
+
+#ifdef __KERNEL__
+#include <linux/limits.h>
+#else
+/*
+ * Defines macros that may be needed but are for sure defined by the linux
+ * kernel. This section is removed when cros_ec_commands.h is generated (by
+ * util/make_linux_ec_commands_h.sh).
+ * cros_ec_commands.h looks more integrated to the kernel.
+ */
 
 #ifndef BIT
 #define BIT(nr)         (1UL << (nr))
@@ -42,7 +53,7 @@ extern "C" {
 #define BIT_ULL(nr)     (1ULL << (nr))
 #endif
 
-#endif  /* CHROMIUM_EC */
+#endif  /* __KERNEL__ */
 
 /*
  * Current version of this protocol
@@ -1050,10 +1061,22 @@ struct ec_response_hello {
 /* Get version number */
 #define EC_CMD_GET_VERSION 0x0002
 
-enum ec_current_image {
+#if !defined(CHROMIUM_EC) && !defined(__KERNEL__)
+/*
+ * enum ec_current_image is deprecated and replaced by enum ec_image. This
+ * macro exists for backwards compatibility of external projects until they
+ * have been updated: b/149987779.
+ */
+#define ec_current_image ec_image
+#endif
+
+enum ec_image {
 	EC_IMAGE_UNKNOWN = 0,
 	EC_IMAGE_RO,
-	EC_IMAGE_RW
+	EC_IMAGE_RW,
+	EC_IMAGE_RW_A = EC_IMAGE_RW,
+	EC_IMAGE_RO_B,
+	EC_IMAGE_RW_B
 };
 
 /**
@@ -1061,7 +1084,7 @@ enum ec_current_image {
  * @version_string_ro: Null-terminated RO firmware version string.
  * @version_string_rw: Null-terminated RW firmware version string.
  * @reserved: Unused bytes; was previously RW-B firmware version string.
- * @current_image: One of ec_current_image.
+ * @current_image: One of ec_image.
  */
 struct ec_response_get_version {
 	char version_string_ro[32];
@@ -1367,6 +1390,12 @@ enum ec_feature_code {
 	 * MOTIONSENSE_CMD_TABLET_MODE_LID_ANGLE.
 	 */
 	EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS = 37,
+	/*
+	 * Early Firmware Selection ver.2. Enabled by CONFIG_VBOOT_EFS2.
+	 * Note this is a RO feature. So, a query (EC_CMD_GET_FEATURES) should
+	 * be sent to RO to be precise.
+	 */
+	EC_FEATURE_EFS2 = 38,
 	/* The MCU is a System Companion Processor (SCP). */
 	EC_FEATURE_SCP = 39,
 	/* The MCU is an Integrated Sensor Hub */
@@ -1826,6 +1855,26 @@ struct ec_response_rwsig_info {
 } __ec_align4;
 
 BUILD_ASSERT(sizeof(struct ec_response_rwsig_info) == 32);
+
+/**
+ * Get information about the system, such as reset flags, locked state, etc.
+ */
+#define EC_CMD_SYSINFO 0x001C
+#define EC_VER_SYSINFO 0
+
+enum sysinfo_flags {
+	SYSTEM_IS_LOCKED = BIT(0),
+	SYSTEM_IS_FORCE_LOCKED = BIT(1),
+	SYSTEM_JUMP_ENABLED = BIT(2),
+	SYSTEM_JUMPED_TO_CURRENT_IMAGE = BIT(3),
+	SYSTEM_REBOOT_AT_SHUTDOWN = BIT(4)
+};
+
+struct ec_response_sysinfo {
+	uint32_t reset_flags;		/**< EC_RESET_FLAG_* flags */
+	uint32_t current_image;		/**< enum ec_current_image */
+	uint32_t flags;			/**< enum sysinfo_flags */
+} __ec_align4;
 
 /*****************************************************************************/
 /* PWM commands */
@@ -2431,7 +2480,7 @@ enum motionsense_command {
 
 	/*
 	 * Sensor Offset command is a setter/getter command for the offset
-	 * used for calibration.
+	 * used for factory calibration.
 	 * The offsets can be calculated by the host, or via
 	 * PERFORM_CALIB command.
 	 */
@@ -2475,6 +2524,11 @@ enum motionsense_command {
 	 * scale.
 	 */
 	MOTIONSENSE_CMD_SENSOR_SCALE = 18,
+
+	/*
+	 * Read the current online calibration values (if available).
+	 */
+	MOTIONSENSE_CMD_ONLINE_CALIB_READ = 19,
 
 	/* Number of motionsense sub-commands. */
 	MOTIONSENSE_NUM_CMDS
@@ -2527,6 +2581,8 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_TCS3400 = 20,
 	MOTIONSENSE_CHIP_LIS2DW12 = 21,
 	MOTIONSENSE_CHIP_LIS2DWL = 22,
+	MOTIONSENSE_CHIP_LIS2DS = 23,
+	MOTIONSENSE_CHIP_BMI260 = 24,
 	MOTIONSENSE_CHIP_MAX,
 };
 
@@ -2558,6 +2614,12 @@ struct ec_response_motion_sensor_data {
 		};
 	};
 } __ec_todo_packed;
+
+/* Response to AP reporting calibration data for a given sensor. */
+struct ec_response_online_calibration_data {
+	/** The calibration values. */
+	int16_t data[3];
+};
 
 /* Note: used in ec_response_get_next_data */
 struct ec_response_motion_sense_fifo_info {
@@ -2672,7 +2734,7 @@ struct ec_params_motion_sense {
 		 */
 		struct __ec_todo_unpacked {
 			uint8_t sensor_num;
-		} info, info_3, data, fifo_flush, list_activities;
+		} info, info_3, info_4, data, fifo_flush, list_activities;
 
 		/*
 		 * Used for MOTIONSENSE_CMD_PERFORM_CALIB:
@@ -2682,6 +2744,7 @@ struct ec_params_motion_sense {
 			uint8_t sensor_num;
 			uint8_t enable;
 		} perform_calib;
+
 		/*
 		 * Used for MOTIONSENSE_CMD_EC_RATE, MOTIONSENSE_CMD_SENSOR_ODR
 		 * and MOTIONSENSE_CMD_SENSOR_RANGE.
@@ -2814,6 +2877,15 @@ struct ec_params_motion_sense {
 			 */
 			int16_t hys_degree;
 		} tablet_mode_threshold;
+
+		/*
+		 * Used for MOTIONSENSE_CMD_ONLINE_CALIB_READ:
+		 * Allow reading a single sensor's online calibration value.
+		 */
+		struct __ec_todo_unpacked {
+			uint8_t sensor_num;
+		} online_calib_read;
+
 	};
 } __ec_todo_packed;
 
@@ -2933,6 +3005,8 @@ struct ec_response_motion_sense {
 		struct ec_response_motion_sense_fifo_info fifo_info, fifo_flush;
 
 		struct ec_response_motion_sense_fifo_data fifo_read;
+
+		struct ec_response_online_calibration_data online_calib_read;
 
 		struct __ec_todo_packed {
 			uint16_t reserved;
@@ -3590,6 +3664,9 @@ enum ec_mkbp_event {
 
 	/* We have entered DisplayPort Alternate Mode on a Type-C port. */
 	EC_MKBP_EVENT_DP_ALT_MODE_ENTERED = 10,
+
+	/* New online calibration values are available. */
+	EC_MKBP_EVENT_ONLINE_CALIBRATION = 11,
 
 	/* Number of MKBP events */
 	EC_MKBP_EVENT_COUNT,
@@ -4368,6 +4445,7 @@ struct ec_params_charge_state {
 			uint32_t value;		/* value to set */
 		} set_param;
 	};
+	uint8_t chgnum;				/* Version 1 supports chgnum */
 } __ec_todo_packed;
 
 struct ec_response_charge_state {
@@ -5368,7 +5446,7 @@ struct ec_params_usb_pd_rw_hash_entry {
 				  * TODO(rspangler) but it's not aligned!
 				  * Should have been reserved[2].
 				  */
-	uint32_t current_image;  /* One of ec_current_image */
+	uint32_t current_image;  /* One of ec_image */
 } __ec_align1;
 
 /* Read USB-PD Accessory info */
@@ -5653,6 +5731,7 @@ enum cbi_data_tag {
 	CBI_TAG_OEM_NAME = 4,      /* variable length ascii, nul terminated. */
 	CBI_TAG_MODEL_ID = 5,      /* uint32_t or smaller */
 	CBI_TAG_FW_CONFIG = 6,     /* uint32_t bit field */
+	CBI_TAG_PCB_SUPPLIER = 7,  /* uint32_t or smaller */
 	CBI_TAG_COUNT,
 };
 
@@ -5714,6 +5793,9 @@ struct ec_params_set_cbi {
 #define EC_RESET_FLAG_RBOX        BIT(16)  /* Fixed Reset Functionality */
 #define EC_RESET_FLAG_SECURITY    BIT(17)  /* Security threat */
 #define EC_RESET_FLAG_AP_WATCHDOG BIT(18)  /* AP experienced a watchdog reset */
+#define EC_RESET_FLAG_STAY_IN_RO  BIT(19)  /* Do not select RW in EFS. This
+					    * enables PD in RO for Chromebox.
+					    */
 
 struct ec_response_uptime_info {
 	/*
@@ -5938,6 +6020,121 @@ struct ec_response_get_pd_port_caps {
 	uint8_t pd_try_power_role_cap;	/* enum ec_pd_try_power_role_caps */
 	uint8_t pd_data_role_cap;	/* enum ec_pd_data_role_caps */
 	uint8_t pd_port_location;	/* enum ec_pd_port_location */
+} __ec_align1;
+
+/*****************************************************************************/
+/*
+ * Button press simulation
+ *
+ * This command is used to simulate a button press.
+ * Supported commands are vup(volume up) vdown(volume down) & rec(recovery)
+ * Time duration for which button needs to be pressed is an optional parameter.
+ *
+ * NOTE: This is only available on unlocked devices for testing purposes only.
+ */
+#define EC_CMD_BUTTON 0x0129
+
+struct ec_params_button {
+	/* Button mask aligned to enum keyboard_button_type */
+	uint32_t  btn_mask;
+
+	/* Duration in milliseconds button needs to be pressed */
+	uint32_t  press_ms;
+} __ec_align1;
+
+enum keyboard_button_type {
+	KEYBOARD_BUTTON_POWER       = 0,
+	KEYBOARD_BUTTON_VOLUME_DOWN = 1,
+	KEYBOARD_BUTTON_VOLUME_UP   = 2,
+	KEYBOARD_BUTTON_RECOVERY    = 3,
+	KEYBOARD_BUTTON_CAPSENSE_1  = 4,
+	KEYBOARD_BUTTON_CAPSENSE_2  = 5,
+	KEYBOARD_BUTTON_CAPSENSE_3  = 6,
+	KEYBOARD_BUTTON_CAPSENSE_4  = 7,
+	KEYBOARD_BUTTON_CAPSENSE_5  = 8,
+	KEYBOARD_BUTTON_CAPSENSE_6  = 9,
+	KEYBOARD_BUTTON_CAPSENSE_7  = 10,
+	KEYBOARD_BUTTON_CAPSENSE_8  = 11,
+
+	KEYBOARD_BUTTON_COUNT
+};
+
+/*****************************************************************************/
+/*
+ *  "Get the Keyboard Config". An EC implementing this command is expected to be
+ *  vivaldi capable, i.e. can send action codes for the top row keys.
+ *  Additionally, capability to send function codes for the same keys is
+ *  optional and acceptable.
+ *
+ *  Note: If the top row can generate both function and action codes by
+ *  using a dedicated Fn key, it does not matter whether the key sends
+ *  "function" or "action" codes by default. In both cases, the response
+ *  for this command will look the same.
+ */
+#define EC_CMD_GET_KEYBD_CONFIG 0x012A
+
+/* Possible values for the top row keys */
+enum action_key {
+	TK_ABSENT = 0,
+	TK_BACK = 1,
+	TK_FORWARD = 2,
+	TK_REFRESH = 3,
+	TK_FULLSCREEN = 4,
+	TK_OVERVIEW = 5,
+	TK_BRIGHTNESS_DOWN = 6,
+	TK_BRIGHTNESS_UP = 7,
+	TK_VOL_MUTE = 8,
+	TK_VOL_DOWN = 9,
+	TK_VOL_UP = 10,
+	TK_SNAPSHOT = 11,
+	TK_PRIVACY_SCRN_TOGGLE = 12,
+	TK_KBD_BKLIGHT_DOWN = 13,
+	TK_KBD_BKLIGHT_UP = 14,
+	TK_PLAY_PAUSE = 15,
+	TK_NEXT_TRACK = 16,
+	TK_PREV_TRACK = 17,
+};
+
+/*
+ * Max & Min number of top row keys, excluding Esc and Screenlock keys.
+ * If this needs to change, please create a new version of the command.
+ */
+#define MAX_TOP_ROW_KEYS 15
+#define MIN_TOP_ROW_KEYS 10
+
+/*
+ * Is the keyboard capable of sending function keys *in addition to*
+ * action keys. This is possible for e.g. if the keyboard has a
+ * dedicated Fn key.
+ */
+#define KEYBD_CAP_FUNCTION_KEYS		BIT(0)
+/*
+ * Whether the keyboard has a dedicated numeric keyboard.
+ */
+#define KEYBD_CAP_NUMERIC_KEYPAD	BIT(1)
+/*
+ * Whether the keyboard has a screenlock key.
+ */
+#define KEYBD_CAP_SCRNLOCK_KEY		BIT(2)
+
+struct ec_response_keybd_config {
+	/*
+	 *  Number of top row keys, excluding Esc and Screenlock.
+	 *  If this is 0, all Vivaldi keyboard code is disabled.
+	 *  (i.e. does not expose any tables to the kernel).
+	 */
+	uint8_t num_top_row_keys;
+
+	/*
+	 *  The action keys in the top row, in order from left to right.
+	 *  The values are filled from enum action_key. Esc and Screenlock
+	 *  keys are not considered part of top row keys.
+	 */
+	uint8_t action_keys[MAX_TOP_ROW_KEYS];
+
+	/* Capability flags */
+	uint8_t capabilities;
+
 } __ec_align1;
 
 /*****************************************************************************/

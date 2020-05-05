@@ -44,7 +44,11 @@
 #define IN_ALL_S0		(IN_PGOOD_S0 & ~IN_SUSPEND_ASSERTED)
 
 /* Long power key press to force shutdown in S0. go/crosdebug */
+#ifdef VARIANT_KUKUI_JACUZZI
+#define FORCED_SHUTDOWN_DELAY	(8 * SECOND)
+#else
 #define FORCED_SHUTDOWN_DELAY	(10 * SECOND)
+#endif
 
 /* Long power key press to boot from S5/G3 state. */
 #ifndef POWERBTN_BOOT_DELAY
@@ -108,6 +112,7 @@ static const struct power_seq_op s3s5_power_seq[] = {
 };
 
 static int forcing_shutdown;
+static int boot_from_cutoff;
 
 void chipset_reset_request_interrupt(enum gpio_signal signal)
 {
@@ -201,6 +206,9 @@ enum power_state power_chipset_init(void)
 	} else {
 		/* Auto-power on */
 		chipset_exit_hard_off();
+
+		if (system_get_reset_flags() == EC_RESET_FLAG_RESET_PIN)
+			boot_from_cutoff = 1;
 	}
 
 	/* Start from S5 if the PMIC is already up. */
@@ -280,6 +288,8 @@ enum power_state power_handle_state(enum power_state state)
 		break;
 
 	case POWER_S5:
+		boot_from_cutoff = 0;
+
 		/*
 		 * If AP initiated shutdown, PMIC is off, and we can transition
 		 * to G3 immediately.
@@ -330,6 +340,25 @@ enum power_state power_handle_state(enum power_state state)
 	case POWER_G3S5:
 		forcing_shutdown = 0;
 
+#ifdef CONFIG_BATTERY_SMART
+		/*
+		 * b:148045048: With the adapter to activate the smart battery
+		 * which is shutdown mode, will enable PMIC during activation
+		 * and have heavy loading, which will prevent the system from
+		 * powering on. Delay to boot system until the smart battry
+		 * is ready.
+		 */
+		if (battery_hw_present() && boot_from_cutoff) {
+			static int total_sleep_ms;
+
+			if (total_sleep_ms < 4000) {
+				msleep(10);
+				total_sleep_ms += 10;
+				return POWER_G3S5;
+			}
+		}
+#endif
+
 #if CONFIG_CHIPSET_POWER_SEQ_VERSION == 1
 		hook_call_deferred(&deassert_en_pp1800_s5_l_data, -1);
 #endif
@@ -360,7 +389,7 @@ enum power_state power_handle_state(enum power_state state)
 		}
 
 		/* If EC is in RW, or has already booted once, reboot to RO. */
-		if (system_get_image_copy() != SYSTEM_IMAGE_RO || booted) {
+		if (system_get_image_copy() != EC_IMAGE_RO || booted) {
 			/*
 			 * TODO(b:109850749): How quickly does the EC come back
 			 * up? Would IN_PGOOD_PMIC be ready by the time we are

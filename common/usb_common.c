@@ -9,15 +9,18 @@
  */
 
 #include "atomic.h"
+#include "charge_manager.h"
 #include "charge_state.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "hooks.h"
+#include "stdbool.h"
 #include "host_command.h"
 #include "system.h"
 #include "task.h"
+#include "usb_api.h"
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
@@ -32,6 +35,90 @@
 #define CPRINTS(format, args...)
 #define CPRINTF(format, args...)
 #endif
+
+__overridable void board_vbus_present_change(void)
+{
+}
+
+#if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
+int hex8tou32(char *str, uint32_t *val)
+{
+	char *ptr = str;
+	uint32_t tmp = 0;
+
+	while (*ptr) {
+		char c = *ptr++;
+
+		if (c >= '0' && c <= '9')
+			tmp = (tmp << 4) + (c - '0');
+		else if (c >= 'A' && c <= 'F')
+			tmp = (tmp << 4) + (c - 'A' + 10);
+		else if (c >= 'a' && c <= 'f')
+			tmp = (tmp << 4) + (c - 'a' + 10);
+		else
+			return EC_ERROR_INVAL;
+	}
+	if (ptr != str + 8)
+		return EC_ERROR_INVAL;
+	*val = tmp;
+	return EC_SUCCESS;
+}
+
+int remote_flashing(int argc, char **argv)
+{
+	int port, cnt, cmd;
+	uint32_t data[VDO_MAX_SIZE-1];
+	char *e;
+	static int flash_offset[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+	if (argc < 4 || argc > (VDO_MAX_SIZE + 4 - 1))
+		return EC_ERROR_PARAM_COUNT;
+
+	port = strtoi(argv[1], &e, 10);
+	if (*e || port >= board_get_usb_pd_port_count())
+		return EC_ERROR_PARAM2;
+
+	cnt = 0;
+	if (!strcasecmp(argv[3], "erase")) {
+		cmd = VDO_CMD_FLASH_ERASE;
+		flash_offset[port] = 0;
+		ccprintf("ERASE ...");
+	} else if (!strcasecmp(argv[3], "reboot")) {
+		cmd = VDO_CMD_REBOOT;
+		ccprintf("REBOOT ...");
+	} else if (!strcasecmp(argv[3], "signature")) {
+		cmd = VDO_CMD_ERASE_SIG;
+		ccprintf("ERASE SIG ...");
+	} else if (!strcasecmp(argv[3], "info")) {
+		cmd = VDO_CMD_READ_INFO;
+		ccprintf("INFO...");
+	} else if (!strcasecmp(argv[3], "version")) {
+		cmd = VDO_CMD_VERSION;
+		ccprintf("VERSION...");
+	} else {
+		int i;
+
+		argc -= 3;
+		for (i = 0; i < argc; i++)
+			if (hex8tou32(argv[i+3], data + i))
+				return EC_ERROR_INVAL;
+		cmd = VDO_CMD_FLASH_WRITE;
+		cnt = argc;
+		ccprintf("WRITE %d @%04x ...", argc * 4,
+			 flash_offset[port]);
+		flash_offset[port] += argc * 4;
+	}
+
+	pd_send_vdm(port, USB_VID_GOOGLE, cmd, data, cnt);
+
+	/* Wait until VDM is done */
+	while (pd[port].vdm_state > 0)
+		task_wait_event(100*MSEC);
+
+	ccprintf("DONE %d\n", pd[port].vdm_state);
+	return EC_SUCCESS;
+}
+#endif /* defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH) */
 
 int usb_get_battery_soc(void)
 {
@@ -48,9 +135,6 @@ int usb_get_battery_soc(void)
 	defined(PD_PREFER_HIGH_VOLTAGE) > 1
 #error "PD preferred voltage strategy should be mutually exclusive."
 #endif
-
-STATIC_IF_NOT(CONFIG_USB_PD_PREFER_MV)
-struct pd_pref_config_t __maybe_unused pd_pref_config;
 
 /*
  * CC values for regular sources and Debug sources (aka DTS)
@@ -104,9 +188,6 @@ typec_current_t usb_get_typec_current_limit(enum tcpc_cc_polarity polarity,
 enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2)
 {
-	if (cc_is_open(cc1, cc2))
-		return POLARITY_NONE;
-
 	/* The following assumes:
 	 *
 	 * TYPEC_CC_VOLT_RP_3_0 > TYPEC_CC_VOLT_RP_1_5
@@ -122,10 +203,6 @@ enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
 enum tcpc_cc_polarity get_src_polarity(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2)
 {
-	if (cc_is_open(cc1, cc2) ||
-	    cc_is_snk_dbg_acc(cc1, cc2))
-		return POLARITY_NONE;
-
 	return (cc1 == TYPEC_CC_VOLT_RD) ? POLARITY_CC1 : POLARITY_CC2;
 }
 
@@ -153,272 +230,72 @@ enum pd_cc_states pd_get_cc_state(
 	return PD_CC_NONE;
 }
 
-/*
- * Zinger implements a board specific usb policy that does not define
- * PD_MAX_VOLTAGE_MV and PD_OPERATING_POWER_MW. And in turn, does not
- * use the following functions.
+/**
+ * This function checks the current CC status of the port partner
+ * and returns true if the attached partner is debug accessory.
  */
-#if defined(PD_MAX_VOLTAGE_MV) && defined(PD_OPERATING_POWER_MW)
-int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t * const src_caps,
-					int max_mv, uint32_t *selected_pdo)
+bool pd_is_debug_acc(int port)
 {
-	int i, uw, mv;
-	int ret = 0;
-	int cur_uw = 0;
-	int has_preferred_pdo;
-	int prefer_cur;
-	int desired_uw = 0;
-	const int prefer_mv = pd_pref_config.mv;
-	const int type = pd_pref_config.type;
+	enum pd_cc_states cc_state = pd_get_task_cc_state(port);
 
-	int __attribute__((unused)) cur_mv = 0;
-
-	if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV))
-		desired_uw = charge_get_plt_plus_bat_desired_mw() * 1000;
-
-	/* max voltage is always limited by this boards max request */
-	max_mv = MIN(max_mv, PD_MAX_VOLTAGE_MV);
-
-	/* Get max power that is under our max voltage input */
-	for (i = 0; i < src_cap_cnt; i++) {
-		/* its an unsupported Augmented PDO (PD3.0) */
-		if ((src_caps[i] & PDO_TYPE_MASK) == PDO_TYPE_AUGMENTED)
-			continue;
-
-		mv = ((src_caps[i] >> 10) & 0x3FF) * 50;
-		/* Skip invalid voltage */
-		if (!mv)
-			continue;
-		/* Skip any voltage not supported by this board */
-		if (!pd_is_valid_input_voltage(mv))
-			continue;
-
-		if ((src_caps[i] & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) {
-			uw = 250000 * (src_caps[i] & 0x3FF);
-		} else {
-			int ma = (src_caps[i] & 0x3FF) * 10;
-
-			ma = MIN(ma, PD_MAX_CURRENT_MA);
-			uw = ma * mv;
-		}
-
-		if (mv > max_mv)
-			continue;
-		uw = MIN(uw, PD_MAX_POWER_MW * 1000);
-		prefer_cur = 0;
-
-		/* Apply special rules in favor of voltage  */
-		if (IS_ENABLED(PD_PREFER_LOW_VOLTAGE)) {
-			if (uw == cur_uw && mv < cur_mv)
-				prefer_cur = 1;
-		} else if (IS_ENABLED(PD_PREFER_HIGH_VOLTAGE)) {
-			if (uw == cur_uw && mv > cur_mv)
-				prefer_cur = 1;
-		} else if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV)) {
-			/* Pick if the PDO provides more than desired. */
-			if (uw >= desired_uw) {
-				/* pick if cur_uw is less than desired watt */
-				if (cur_uw < desired_uw)
-					prefer_cur = 1;
-				else if (type == PD_PREFER_BUCK) {
-					/*
-					 * pick the smallest mV above prefer_mv
-					 */
-					if (mv >= prefer_mv && mv < cur_mv)
-						prefer_cur = 1;
-					/*
-					 * pick if cur_mv is less than
-					 * prefer_mv, and we have higher mV
-					 */
-					else if (cur_mv < prefer_mv &&
-						 mv > cur_mv)
-						prefer_cur = 1;
-				} else if (type == PD_PREFER_BOOST) {
-					/*
-					 * pick the largest mV below prefer_mv
-					 */
-					if (mv <= prefer_mv && mv > cur_mv)
-						prefer_cur = 1;
-					/*
-					 * pick if cur_mv is larger than
-					 * prefer_mv, and we have lower mV
-					 */
-					else if (cur_mv > prefer_mv &&
-						 mv < cur_mv)
-						prefer_cur = 1;
-				}
-			/*
-			 * pick the largest power if we don't see one staisfy
-			 * desired power
-			 */
-			} else if (cur_uw == 0 || uw > cur_uw) {
-				prefer_cur = 1;
-			}
-		}
-
-		/* Prefer higher power, except for tiebreaker */
-		has_preferred_pdo =
-			prefer_cur ||
-			(!IS_ENABLED(CONFIG_USB_PD_PREFER_MV) && uw > cur_uw);
-
-		if (has_preferred_pdo) {
-			ret = i;
-			cur_uw = uw;
-			cur_mv = mv;
-		}
-	}
-
-	if (selected_pdo)
-		*selected_pdo = src_caps[ret];
-
-	return ret;
+	return cc_state == PD_CC_UFP_DEBUG_ACC ||
+		cc_state == PD_CC_DFP_DEBUG_ACC;
 }
 
-void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv)
+void pd_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
-	int max_ma, uw;
+	tcpm_set_polarity(port, polarity);
 
-	*mv = ((pdo >> 10) & 0x3FF) * 50;
-
-	if (*mv == 0) {
-		*ma = 0;
-		return;
-	}
-
-	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) {
-		uw = 250000 * (pdo & 0x3FF);
-		max_ma = 1000 * MIN(1000 * uw, PD_MAX_POWER_MW) / *mv;
-	} else {
-		max_ma = 10 * (pdo & 0x3FF);
-		max_ma = MIN(max_ma, PD_MAX_POWER_MW * 1000 / *mv);
-	}
-
-	*ma = MIN(max_ma, PD_MAX_CURRENT_MA);
+	if (IS_ENABLED(CONFIG_USBC_PPC_POLARITY))
+		ppc_set_polarity(port, polarity);
 }
 
-void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
-			int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
-			uint32_t *mv, enum pd_request_type req_type,
-			uint32_t max_request_mv, int port)
+__overridable int pd_board_check_request(uint32_t rdo, int pdo_cnt)
 {
+	return EC_SUCCESS;
+}
+
+int pd_check_requested_voltage(uint32_t rdo, const int port)
+{
+	int max_ma = rdo & 0x3FF;
+	int op_ma = (rdo >> 10) & 0x3FF;
+	int idx = RDO_POS(rdo);
 	uint32_t pdo;
-	int pdo_index, flags = 0;
-	int uw;
-	int max_or_min_ma;
-	int max_or_min_mw;
-	int max_vbus;
-	int vpd_vbus_dcr;
-	int vpd_gnd_dcr;
-
-	if (req_type == PD_REQUEST_VSAFE5V) {
-		/* src cap 0 should be vSafe5V */
-		pdo_index = 0;
-		pdo = src_caps[0];
-	} else {
-		/* find pdo index for max voltage we can request */
-		pdo_index = pd_find_pdo_index(src_cap_cnt, src_caps,
-						max_request_mv, &pdo);
-	}
-
-	pd_extract_pdo_power(pdo, ma, mv);
-
-	/*
-	 * Adjust VBUS current if CTVPD device was detected.
-	 */
-	if (vpd_vdo > 0) {
-		max_vbus = VPD_VDO_MAX_VBUS(vpd_vdo);
-		vpd_vbus_dcr = VPD_VDO_VBUS_IMP(vpd_vdo) << 1;
-		vpd_gnd_dcr = VPD_VDO_GND_IMP(vpd_vdo);
-
-		/*
-		 * Valid max_vbus values:
-		 *   00b - 20000 mV
-		 *   01b - 30000 mV
-		 *   10b - 40000 mV
-		 *   11b - 50000 mV
-		 */
-		max_vbus = 20000 + max_vbus * 10000;
-		if (*mv > max_vbus)
-			*mv = max_vbus;
-
-		/*
-		 * 5000 mA cable: 150 = 750000 / 50000
-		 * 3000 mA cable: 250 = 750000 / 30000
-		 */
-		if (*ma > 3000)
-			*ma = 750000 / (150 + vpd_vbus_dcr + vpd_gnd_dcr);
-		else
-			*ma = 750000 / (250 + vpd_vbus_dcr + vpd_gnd_dcr);
-	}
-
-	uw = *ma * *mv;
-	/* Mismatch bit set if less power offered than the operating power */
-	if (uw < (1000 * PD_OPERATING_POWER_MW))
-		flags |= RDO_CAP_MISMATCH;
-
-#ifdef CONFIG_USB_PD_GIVE_BACK
-		/* Tell source we are give back capable. */
-		flags |= RDO_GIVE_BACK;
-
-		/*
-		 * BATTERY PDO: Inform the source that the sink will reduce
-		 * power to this minimum level on receipt of a GotoMin Request.
-		 */
-		max_or_min_mw = PD_MIN_POWER_MW;
-
-		/*
-		 * FIXED or VARIABLE PDO: Inform the source that the sink will
-		 * reduce current to this minimum level on receipt of a GotoMin
-		 * Request.
-		 */
-		max_or_min_ma = PD_MIN_CURRENT_MA;
+	uint32_t pdo_ma;
+#if defined(CONFIG_USB_PD_DYNAMIC_SRC_CAP) || \
+		defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
+	const uint32_t *src_pdo;
+	const int pdo_cnt = charge_manager_get_source_pdo(&src_pdo, port);
 #else
-		/*
-		 * Can't give back, so set maximum current and power to
-		 * operating level.
-		 */
-		max_or_min_ma = *ma;
-		max_or_min_mw = uw / 1000;
+	const uint32_t *src_pdo = pd_src_pdo;
+	const int pdo_cnt = pd_src_pdo_cnt;
 #endif
 
-	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) {
-		int mw = uw / 1000;
-		*rdo = RDO_BATT(pdo_index + 1, mw, max_or_min_mw, flags);
-	} else {
-		*rdo = RDO_FIXED(pdo_index + 1, *ma, max_or_min_ma, flags);
-	}
+	/* Check for invalid index */
+	if (!idx || idx > pdo_cnt)
+		return EC_ERROR_INVAL;
 
-	/*
-	 * Ref: USB Power Delivery Specification
-	 * (Revision 3.0, Version 2.0 / Revision 2.0, Version 1.3)
-	 * 6.4.2.4 USB Communications Capable
-	 * 6.4.2.5 No USB Suspend
-	 *
-	 * If the port partner is capable of USB communication set the
-	 * USB Communications Capable flag.
-	 * If the port partner is sink device do not suspend USB as the
-	 * power can be used for charging.
-	 */
-	if (pd_get_partner_usb_comm_capable(port)) {
-		*rdo |= RDO_COMM_CAP;
-		if (pd_get_power_role(port) == PD_ROLE_SINK)
-			*rdo |= RDO_NO_SUSPEND;
-	}
+	/* Board specific check for this request */
+	if (pd_board_check_request(rdo, pdo_cnt))
+		return EC_ERROR_INVAL;
+
+	/* check current ... */
+	pdo = src_pdo[idx - 1];
+	pdo_ma = (pdo & 0x3ff);
+
+	if (op_ma > pdo_ma)
+		return EC_ERROR_INVAL; /* too much op current */
+
+	if (max_ma > pdo_ma && !(rdo & RDO_CAP_MISMATCH))
+		return EC_ERROR_INVAL; /* too much max current */
+
+	CPRINTF("Requested %d mV %d mA (for %d/%d mA)\n",
+		 ((pdo >> 10) & 0x3ff) * 50, (pdo & 0x3ff) * 10,
+		 op_ma * 10, max_ma * 10);
+
+	/* Accept the requested voltage */
+	return EC_SUCCESS;
 }
-#endif
-
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-void notify_sysjump_ready(volatile const task_id_t * const sysjump_task_waiting)
-{
-	/*
-	 * If event was set from pd_prepare_sysjump, wake the
-	 * task waiting on us to complete.
-	 */
-	if (*sysjump_task_waiting != TASK_ID_INVALID)
-		task_set_event(*sysjump_task_waiting,
-						TASK_EVENT_SYSJUMP_READY, 0);
-}
-#endif
 
 __attribute__((weak)) uint8_t board_get_usb_pd_port_count(void)
 {
@@ -544,12 +421,12 @@ void set_usb_mux_with_current_data_role(int port)
 	}
 }
 
-#ifdef CONFIG_USBC_PPC
-
 static void pd_send_hard_reset(int port)
 {
 	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SEND_HARD_RESET, 0);
 }
+
+#ifdef CONFIG_USBC_PPC
 
 static uint32_t port_oc_reset_req;
 
@@ -596,12 +473,12 @@ void pd_handle_overcurrent(int port)
 	hook_call_deferred(&re_enable_ports_data, SECOND);
 }
 
-void pd_handle_cc_overvoltage(int port)
+#endif /* CONFIG_USBC_PPC */
+
+__maybe_unused void pd_handle_cc_overvoltage(int port)
 {
 	pd_send_hard_reset(port);
 }
-
-#endif /* CONFIG_USBC_PPC */
 
 __overridable int pd_board_checks(void)
 {
@@ -613,14 +490,6 @@ __overridable int pd_check_data_swap(int port,
 {
 	/* Allow data swap if we are a UFP, otherwise don't allow. */
 	return (data_role == PD_ROLE_UFP) ? 1 : 0;
-}
-
-__overridable void pd_check_dr_role(int port,
-	enum pd_data_role dr_role, int flags)
-{
-	/* If UFP, try to switch to DFP */
-	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_UFP)
-		pd_request_data_swap(port);
 }
 
 __overridable int pd_check_power_swap(int port)
@@ -636,28 +505,6 @@ __overridable int pd_check_power_swap(int port)
 		return 1;
 
 	return 0;
-}
-
-__overridable void pd_check_pr_role(int port,
-	enum pd_power_role pr_role, int flags)
-{
-	/*
-	 * If partner is dual-role power and dualrole toggling is on, consider
-	 * if a power swap is necessary.
-	 */
-	if ((flags & PD_FLAGS_PARTNER_DR_POWER) &&
-	    pd_get_dual_role(port) == PD_DRP_TOGGLE_ON) {
-		/*
-		 * If we are a sink and partner is not unconstrained, then
-		 * swap to become a source. If we are source and partner is
-		 * unconstrained, swap to become a sink.
-		 */
-		int partner_unconstrained = flags & PD_FLAGS_PARTNER_UNCONSTR;
-
-		if ((!partner_unconstrained && pr_role == PD_ROLE_SINK) ||
-		     (partner_unconstrained && pr_role == PD_ROLE_SOURCE))
-			pd_request_power_swap(port);
-	}
 }
 
 __overridable void pd_execute_data_swap(int port,
@@ -715,6 +562,8 @@ const int pd_snk_pdo_cnt = ARRAY_SIZE(pd_snk_pdo);
 #endif /* CONFIG_USB_PD_CUSTOM_PDO */
 
 /* ----------------- Vendor Defined Messages ------------------ */
+#if defined(CONFIG_USB_PE_SM) && !defined(CONFIG_USB_VPD) && \
+	!defined(CONFIG_USB_CTVPD)
 __overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 				uint32_t **rpayload)
 {
@@ -739,12 +588,9 @@ __overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 			dev_id = VDO_INFO_HW_DEV_ID(payload[6]);
 			is_rw = VDO_INFO_IS_RW(payload[6]);
 
-			is_latest = pd_dev_store_rw_hash(port,
-							 dev_id,
-							 payload + 1,
-							 is_rw ?
-							 SYSTEM_IMAGE_RW :
-							 SYSTEM_IMAGE_RO);
+			is_latest = pd_dev_store_rw_hash(
+				port, dev_id, payload + 1,
+				is_rw ? EC_IMAGE_RW : EC_IMAGE_RO);
 
 			/*
 			 * Send update host event unless our RW hash is
@@ -761,7 +607,7 @@ __overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 		} else if (cnt == 6) {
 			/* really old devices don't have last byte */
 			pd_dev_store_rw_hash(port, dev_id, payload + 1,
-					     SYSTEM_IMAGE_UNKNOWN);
+					     EC_IMAGE_UNKNOWN);
 		}
 		break;
 	case VDO_CMD_CURRENT:
@@ -780,328 +626,97 @@ __overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 
 	return 0;
 }
+#endif /* CONFIG_USB_PE_SM && !CONFIG_USB_VPD && !CONFIG_USB_CTVPD */
 
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-/*
- * Before entering into alternate mode, state of the USB-C MUX
- * needs to be in safe mode.
- * Ref: USB Type-C Cable and Connector Specification
- * Section E.2.2 Alternate Mode Electrical Requirements
- */
-void usb_mux_set_safe_mode(int port)
+__overridable bool vboot_allow_usb_pd(void)
 {
-	usb_mux_set(port, IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) ?
-		USB_PD_MUX_SAFE_MODE : USB_PD_MUX_NONE,
-		USB_SWITCH_CONNECT, pd_get_polarity(port));
-
-	/* Isolate the SBU lines. */
-	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-		ppc_set_sbu(port, 0);
+	return false;
 }
 
-__overridable const struct svdm_response svdm_rsp = {
-	.identity = NULL,
-	.svids = NULL,
-	.modes = NULL,
-};
-
-int dp_flags[CONFIG_USB_PD_PORT_MAX_COUNT];
-uint32_t dp_status[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-__overridable void svdm_safe_dp_mode(int port)
+/* VDM utility functions */
+static void pd_usb_billboard_deferred(void)
 {
-	/* make DP interface safe until configure */
-	dp_flags[port] = 0;
-	dp_status[port] = 0;
-
-	usb_mux_set_safe_mode(port);
-}
-
-__overridable int svdm_enter_dp_mode(int port, uint32_t mode_caps)
-{
-	/*
-	 * Don't enter the mode if the SoC is off.
-	 *
-	 * There's no need to enter the mode while the SoC is off; we'll
-	 * actually enter the mode on the chipset resume hook.  Entering DP Alt
-	 * Mode twice will confuse some monitors and require and unplug/replug
-	 * to get them to work again.  The DP Alt Mode on USB-C spec says that
-	 * if we don't need to maintain HPD connectivity info in a low power
-	 * mode, then we shall exit DP Alt Mode.  (This is why we don't enter
-	 * when the SoC is off as opposed to suspend where adding a display
-	 * could cause a wake up.)
-	 */
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		return -1;
-
-	/* Only enter mode if device is DFP_D capable */
-	if (mode_caps & MODE_DP_SNK) {
-		svdm_safe_dp_mode(port);
-
-		if (IS_ENABLED(CONFIG_MKBP_EVENT) &&
-		    chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
-			/*
-			 * Wake the system up since we're entering DP AltMode.
-			 */
-			pd_notify_dp_alt_mode_entry();
-
-		return 0;
+	if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE) &&
+		!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP) &&
+		!IS_ENABLED(CONFIG_USB_PD_SIMPLE_DFP) &&
+		IS_ENABLED(CONFIG_USB_BOS)) {
+		/*
+		 * TODO(tbroch)
+		 * 1. Will we have multiple type-C port UFPs
+		 * 2. Will there be other modes applicable to DFPs besides DP
+		 */
+		if (!pd_alt_mode(0, USB_SID_DISPLAYPORT))
+			usb_connect();
 	}
+}
+DECLARE_DEFERRED(pd_usb_billboard_deferred);
 
-	return -1;
+#ifdef CONFIG_USB_PD_DISCHARGE
+static void gpio_discharge_vbus(int port, int enable)
+{
+#ifdef CONFIG_USB_PD_DISCHARGE_GPIO
+	enum gpio_signal dischg_gpio[] = {
+		GPIO_USB_C0_DISCHARGE,
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
+		GPIO_USB_C1_DISCHARGE,
+#endif
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 2
+		GPIO_USB_C2_DISCHARGE,
+#endif
+	};
+	BUILD_ASSERT(ARRAY_SIZE(dischg_gpio) == CONFIG_USB_PD_PORT_MAX_COUNT);
+
+	gpio_set_level(dischg_gpio[port], enable);
+#endif /* CONFIG_USB_PD_DISCHARGE_GPIO */
 }
 
-__overridable int svdm_dp_status(int port, uint32_t *payload)
+void pd_set_vbus_discharge(int port, int enable)
 {
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	static struct mutex discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
-			 CMD_DP_STATUS | VDO_OPOS(opos));
-	payload[1] = VDO_DP_STATUS(0, /* HPD IRQ  ... not applicable */
-				   0, /* HPD level ... not applicable */
-				   0, /* exit DP? ... no */
-				   0, /* usb mode? ... no */
-				   0, /* multi-function ... no */
-				   (!!(dp_flags[port] & DP_FLAGS_DP_ON)),
-				   0, /* power low? ... no */
-				   (!!DP_FLAGS_DP_ON));
-	return 2;
-};
-
-__overridable uint8_t get_dp_pin_mode(int port)
-{
-	return pd_dfp_dp_get_pin_mode(port, dp_status[port]);
-}
-
-__overridable int svdm_dp_config(int port, uint32_t *payload)
-{
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
-	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
-	uint8_t pin_mode = get_dp_pin_mode(port);
-	mux_state_t mux_mode;
-
-	if (!pin_mode)
-		return 0;
-
-	/*
-	 * Multi-function operation is only allowed if that pin config is
-	 * supported.
-	 */
-	mux_mode = ((pin_mode & MODE_DP_PIN_MF_MASK) && mf_pref) ?
-		USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED;
-	CPRINTS("pin_mode: %x, mf: %d, mux: %d", pin_mode, mf_pref, mux_mode);
-
-	/* Connect the SBU and USB lines to the connector. */
-	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-		ppc_set_sbu(port, 1);
-	usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT, pd_get_polarity(port));
-
-	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
-			 CMD_DP_CONFIG | VDO_OPOS(opos));
-	payload[1] = VDO_DP_CFG(pin_mode,      /* pin mode */
-				1,	       /* DPv1.3 signaling */
-				2);	       /* UFP connected */
-	return 2;
-};
-
-/*
- * timestamp of the next possible toggle to ensure the 2-ms spacing
- * between IRQ_HPD.  Since this is used in overridable functions, this
- * has to be global.
- */
-uint64_t svdm_hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-#ifndef PORT_TO_HPD
-#define PORT_TO_HPD(port) ((port) ? GPIO_USB_C1_DP_HPD : GPIO_USB_C0_DP_HPD)
-#endif /* PORT_TO_HPD */
-
-__overridable void svdm_dp_post_config(int port)
-{
-	dp_flags[port] |= DP_FLAGS_DP_ON;
-	if (!(dp_flags[port] & DP_FLAGS_HPD_HI_PENDING))
+	if (port >= board_get_usb_pd_port_count())
 		return;
 
-#ifdef CONFIG_USB_PD_DP_HPD_GPIO
-	gpio_set_level(PORT_TO_HPD(port), 1);
+	mutex_lock(&discharge_lock[port]);
+	enable &= !board_vbus_source_enabled(port);
 
-	/* set the minimum time delay (2ms) for the next HPD IRQ */
-	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
-#endif /* CONFIG_USB_PD_DP_HPD_GPIO */
+	if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_GPIO))
+		gpio_discharge_vbus(port, enable);
+	else if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_TCPC))
+		tcpc_discharge_vbus(port, enable);
+	else if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_PPC))
+		ppc_discharge_vbus(port, enable);
 
-	usb_mux_hpd_update(port, 1, 0);
-
-#ifdef USB_PD_PORT_TCPC_MST
-	if (port == USB_PD_PORT_TCPC_MST)
-		baseboard_mst_enable_control(port, 1);
-#endif
+	mutex_unlock(&discharge_lock[port]);
 }
+#endif /* CONFIG_USB_PD_DISCHARGE */
 
-__overridable int svdm_dp_attention(int port, uint32_t *payload)
+#ifdef CONFIG_USB_PD_TCPM_TCPCI
+static uint32_t pd_ports_to_resume;
+static void resume_pd_port(void)
 {
-	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
-	int irq = PD_VDO_DPSTS_HPD_IRQ(payload[1]);
-#ifdef CONFIG_USB_PD_DP_HPD_GPIO
-	enum gpio_signal hpd = PORT_TO_HPD(port);
-	int cur_lvl = gpio_get_level(hpd);
-#endif /* CONFIG_USB_PD_DP_HPD_GPIO */
+	uint32_t port;
+	uint32_t suspended_ports = atomic_read_clear(&pd_ports_to_resume);
 
-	dp_status[port] = payload[1];
-
-	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) &&
-	    (irq || lvl))
-		/*
-		 * Wake up the AP.  IRQ or level high indicates a DP sink is now
-		 * present.
-		 */
-		if (IS_ENABLED(CONFIG_MKBP_EVENT))
-			pd_notify_dp_alt_mode_entry();
-
-	/* Its initial DP status message prior to config */
-	if (!(dp_flags[port] & DP_FLAGS_DP_ON)) {
-		if (lvl)
-			dp_flags[port] |= DP_FLAGS_HPD_HI_PENDING;
-		return 1;
+	while (suspended_ports) {
+		port = __builtin_ctz(suspended_ports);
+		suspended_ports &= ~BIT(port);
+		pd_set_suspend(port, 0);
 	}
-
-#ifdef CONFIG_USB_PD_DP_HPD_GPIO
-	if (irq & cur_lvl) {
-		uint64_t now = get_time().val;
-		/* wait for the minimum spacing between IRQ_HPD if needed */
-		if (now < svdm_hpd_deadline[port])
-			usleep(svdm_hpd_deadline[port] - now);
-
-		/* generate IRQ_HPD pulse */
-		gpio_set_level(hpd, 0);
-		usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
-		gpio_set_level(hpd, 1);
-
-		/* set the minimum time delay (2ms) for the next HPD IRQ */
-		svdm_hpd_deadline[port] = get_time().val +
-			HPD_USTREAM_DEBOUNCE_LVL;
-	} else if (irq & !lvl) {
-		/*
-		 * IRQ can only be generated when the level is high, because
-		 * the IRQ is signaled by a short low pulse from the high level.
-		 */
-		CPRINTF("ERR:HPD:IRQ&LOW\n");
-		return 0; /* nak */
-	} else {
-		gpio_set_level(hpd, lvl);
-		/* set the minimum time delay (2ms) for the next HPD IRQ */
-		svdm_hpd_deadline[port] = get_time().val +
-			HPD_USTREAM_DEBOUNCE_LVL;
-	}
-#endif /* CONFIG_USB_PD_DP_HPD_GPIO */
-
-	usb_mux_hpd_update(port, lvl, irq);
-
-#ifdef USB_PD_PORT_TCPC_MST
-	if (port == USB_PD_PORT_TCPC_MST)
-		baseboard_mst_enable_control(port, lvl);
-#endif
-
-	/* ack */
-	return 1;
 }
+DECLARE_DEFERRED(resume_pd_port);
 
-__overridable void svdm_exit_dp_mode(int port)
+void pd_deferred_resume(int port)
 {
-	svdm_safe_dp_mode(port);
-#ifdef CONFIG_USB_PD_DP_HPD_GPIO
-	gpio_set_level(PORT_TO_HPD(port), 0);
-#endif /* CONFIG_USB_PD_DP_HPD_GPIO */
-	usb_mux_hpd_update(port, 0, 0);
-#ifdef USB_PD_PORT_TCPC_MST
-	if (port == USB_PD_PORT_TCPC_MST)
-		baseboard_mst_enable_control(port, 0);
-#endif
+	atomic_or(&pd_ports_to_resume, 1 << port);
+	hook_call_deferred(&resume_pd_port_data, 5 * SECOND);
 }
+#endif /* CONFIG_USB_PD_TCPM_TCPCI */
 
-__overridable int svdm_enter_gfu_mode(int port, uint32_t mode_caps)
+int pd_is_vbus_present(int port)
 {
-	/* Always enter GFU mode */
-	return 0;
+	if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC))
+		return tcpm_get_vbus_level(port);
+	else
+		return pd_snk_is_vbus_provided(port);
 }
-
-__overridable void svdm_exit_gfu_mode(int port)
-{
-}
-
-__overridable int svdm_gfu_status(int port, uint32_t *payload)
-{
-	/*
-	 * This is called after enter mode is successful, send unstructured
-	 * VDM to read info.
-	 */
-	pd_send_vdm(port, USB_VID_GOOGLE, VDO_CMD_READ_INFO, NULL, 0);
-	return 0;
-}
-
-__overridable int svdm_gfu_config(int port, uint32_t *payload)
-{
-	return 0;
-}
-
-__overridable int svdm_gfu_attention(int port, uint32_t *payload)
-{
-	return 0;
-}
-
-#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
-__overridable int svdm_tbt_compat_enter_mode(int port, uint32_t mode_caps)
-{
-	return 0;
-}
-
-__overridable void svdm_tbt_compat_exit_mode(int port)
-{
-}
-
-__overridable int svdm_tbt_compat_status(int port, uint32_t *payload)
-{
-	return 0;
-}
-
-__overridable int svdm_tbt_compat_config(int port, uint32_t *payload)
-{
-	return 0;
-}
-
-__overridable int svdm_tbt_compat_attention(int port, uint32_t *payload)
-{
-	return 0;
-}
-#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
-
-const struct svdm_amode_fx supported_modes[] = {
-	{
-		.svid = USB_SID_DISPLAYPORT,
-		.enter = &svdm_enter_dp_mode,
-		.status = &svdm_dp_status,
-		.config = &svdm_dp_config,
-		.post_config = &svdm_dp_post_config,
-		.attention = &svdm_dp_attention,
-		.exit = &svdm_exit_dp_mode,
-	},
-
-	{
-		.svid = USB_VID_GOOGLE,
-		.enter = &svdm_enter_gfu_mode,
-		.status = &svdm_gfu_status,
-		.config = &svdm_gfu_config,
-		.attention = &svdm_gfu_attention,
-		.exit = &svdm_exit_gfu_mode,
-	},
-#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
-	{
-		.svid = USB_VID_INTEL,
-		.enter = &svdm_tbt_compat_enter_mode,
-		.status = &svdm_tbt_compat_status,
-		.config = &svdm_tbt_compat_config,
-		.attention = &svdm_tbt_compat_attention,
-		.exit = &svdm_tbt_compat_exit_mode,
-	},
-#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
-};
-const int supported_modes_cnt = ARRAY_SIZE(supported_modes);
-#endif /* CONFIG_USB_PD_ALT_MODE_DFP */

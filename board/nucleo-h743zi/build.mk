@@ -4,12 +4,17 @@
 #
 # Board specific files build
 
-# the IC is STmicro STM32H743
-CHIP:=stm32
-CHIP_FAMILY:=stm32h7
-CHIP_VARIANT:=stm32h7x3
+BASEBOARD:=nucleo-h743zi
 
 board-y=board.o
 
 # Enable on device tests
-test-list-y=aes sha256 sha256_unrolled
+test-list-y=\
+       aes \
+       compile_time_macros \
+       crc32 \
+       mutex \
+       pingpong \
+       rtc \
+       sha256 \
+       sha256_unrolled \

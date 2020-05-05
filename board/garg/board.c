@@ -14,7 +14,7 @@
 #include "common.h"
 #include "cros_board_info.h"
 #include "driver/accel_kionix.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/charger/bd9995x.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/tcpm/anx7447.h"
@@ -103,18 +103,15 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_BATTERY] = {.name = "Battery",
 				 .type = TEMP_SENSOR_TYPE_BATTERY,
 				 .read = charge_get_battery_temp,
-				 .idx = 0,
-				 .action_delay_sec = 1},
+				 .idx = 0},
 	[TEMP_SENSOR_AMBIENT] = {.name = "Ambient",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_51k1_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_AMB,
-				 .action_delay_sec = 5},
+				 .idx = ADC_TEMP_SENSOR_AMB},
 	[TEMP_SENSOR_CHARGER] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_13k7_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_CHARGER,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_CHARGER},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -132,7 +129,7 @@ const mat33_fp_t base_standard_ref = {
 
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -175,8 +172,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -203,8 +200,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 
@@ -213,10 +210,10 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 static int board_is_convertible(void)
 {
 	/*
-	 * Garg360: 37
+	 * Garg360: 37, 38
 	 * Unprovisioned: 255
 	 */
-	return sku_id == 37 || sku_id == 255;
+	return sku_id == 37 || sku_id == 38 || sku_id == 255;
 }
 
 static void board_update_sensor_config_from_sku(void)
@@ -302,7 +299,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 uint8_t board_get_usb_pd_port_count(void)
 {
 	/* HDMI SKU has one USB PD port */
-	if (sku_id == 9)
+	if (sku_id == 9 || sku_id == 19 || sku_id == 50)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }

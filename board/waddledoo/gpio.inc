@@ -12,17 +12,17 @@
 
 /* Power Interrupts */
 GPIO_INT(SLP_S0_L,		 PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(SLP_S3_L,		 PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
+GPIO_INT(SLP_S3_L,		 PIN(A, 5), GPIO_INT_BOTH, baseboard_all_sys_pgood_interrupt)
 GPIO_INT(SLP_S4_L,		 PIN(D, 4), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SLP_SUS_L,		 PIN(D, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(RSMRST_PWRGD_L,	 PIN(C, 6), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(VCCIN_AUX_VID1,	 PIN(C, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(CPU_C10_GATE_L,	 PIN(6, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(VCCIN_AUX_VID0,	 PIN(F, 4), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)
-GPIO_INT(PG_VCCIO_EXT_OD,	 PIN(B, 0), GPIO_INT_BOTH, power_signal_interrupt)
+GPIO_INT(PG_VCCIO_EXT_OD,	 PIN(B, 0), GPIO_INT_BOTH, baseboard_all_sys_pgood_interrupt)
 GPIO_INT(PG_PP5000_U_OD,	 PIN(E, 2), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(PG_DRAM_OD,		 PIN(E, 4), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(PG_PP1050_ST_OD,	 PIN(4, 2), GPIO_INT_BOTH | GPIO_PULL_UP, power_signal_interrupt)
+GPIO_INT(PG_DRAM_OD,		 PIN(E, 4), GPIO_INT_BOTH, baseboard_all_sys_pgood_interrupt)
+GPIO_INT(PG_PP1050_ST_OD,	 PIN(4, 2), GPIO_INT_BOTH, power_signal_interrupt)
 
 /* USB-C interrupts */
 GPIO_INT(USB_C0_INT_ODL,	 PIN(6, 2), GPIO_INT_FALLING | GPIO_PULL_UP, usb_c0_interrupt)
@@ -31,8 +31,7 @@ GPIO_INT(SUB_USB_C1_INT_ODL,	 PIN(F, 5), GPIO_INT_FALLING | GPIO_PULL_UP, sub_us
 /* Button interrupts */
 GPIO_INT(H1_EC_PWR_BTN_ODL,	 PIN(0, 1), GPIO_INT_BOTH | GPIO_PULL_UP, power_button_interrupt)
 GPIO_INT(VOLDN_BTN_ODL,		 PIN(4, 0), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-/* TODO(b:147257497) Fix this and EN_PP5000_U before board rev 0. */
-GPIO_INT(VOLUP_BTN_ODL,		 PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
+GPIO_INT(VOLUP_BTN_ODL,		 PIN(7, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 
 /* Other interrupts */
 GPIO_INT(LID_OPEN,		 PIN(D, 2), GPIO_INT_BOTH, lid_interrupt)
@@ -59,10 +58,11 @@ GPIO(EC_SUB_IO_2,  PIN(3, 4), GPIO_OUT_LOW)
 
 /* Misc Enables */
 GPIO(EN_VCCIO_EXT,   PIN(6, 1), GPIO_OUT_LOW)
-GPIO(EN_VCCST,	     PIN(A, 7), GPIO_OUT_LOW)
+/* TODO(b:149775160) - Modify if needed if we ever use this signal. */
+GPIO(EN_VCCST,	     PIN(A, 7), GPIO_INPUT)
 GPIO(EN_PP3300_PEN,  PIN(6, 3), GPIO_OUT_LOW)
 GPIO(EN_PP3300_A,    PIN(0, 3), GPIO_OUT_LOW)
-GPIO(EN_PP5000_U,    PIN(7, 3), GPIO_OUT_LOW)
+GPIO(EN_PP5000_U,    PIN(A, 4), GPIO_OUT_LOW)
 GPIO(EN_SLP_Z,	     PIN(8, 3), GPIO_OUT_LOW)
 GPIO(EN_KB_BL,	     PIN(6, 0), GPIO_OUT_LOW)
 GPIO(EN_BL_OD,	     PIN(D, 3), GPIO_ODR_LOW)
@@ -78,7 +78,7 @@ GPIO(EC_AP_DPWROK,	     PIN(A, 3), GPIO_OUT_LOW)
 GPIO(EC_AP_PCH_PWROK_OD,     PIN(9, 4), GPIO_ODR_LOW)
 GPIO(EC_AP_VCCST_PWRGD_OD,   PIN(B, 1), GPIO_ODR_LOW)
 GPIO(EC_AP_SYS_PWROK,	     PIN(0, 2), GPIO_OUT_LOW)
-GPIO(EC_AP_MKBP_INT_L,	     PIN(7, 0), GPIO_OUT_HIGH)
+GPIO(EC_AP_MKBP_INT_L,	     PIN(7, 0), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_ODL,	     PIN(F, 1), GPIO_ODR_HIGH | GPIO_SEL_1P8V)
 GPIO(EC_ENTERING_RW,	     PIN(E, 3), GPIO_OUT_LOW)
 GPIO(ALL_SYS_PWRGD,	     PIN(A, 0), GPIO_OUT_LOW)

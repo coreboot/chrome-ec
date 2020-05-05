@@ -12,7 +12,7 @@
 #include "charge_state.h"
 #include "chipset.h"
 #include "extpower.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/als_opt3001.h"
 #include "driver/charger/isl923x.h"
 #include "driver/ppc/sn5s330.h"
@@ -294,23 +294,23 @@ const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
  * Redirect to anx74xx_tcpm_usb_mux_driver but override the get() function
  * to check the HPD_IRQ mask from virtual_usb_mux_driver.
  */
-static int port0_usb_mux_init(int port)
+static int port0_usb_mux_init(const struct usb_mux *me)
 {
-	return anx74xx_tcpm_usb_mux_driver.init(port);
+	return anx74xx_tcpm_usb_mux_driver.init(me);
 }
 
-static int port0_usb_mux_set(int i2c_addr, mux_state_t mux_state)
+static int port0_usb_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 {
-	return anx74xx_tcpm_usb_mux_driver.set(i2c_addr, mux_state);
+	return anx74xx_tcpm_usb_mux_driver.set(me, mux_state);
 }
 
-static int port0_usb_mux_get(int port, mux_state_t *mux_state)
+static int port0_usb_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
 {
 	int rv;
 	mux_state_t virtual_mux_state;
 
-	rv = anx74xx_tcpm_usb_mux_driver.get(port, mux_state);
-	rv |= virtual_usb_mux_driver.get(port, &virtual_mux_state);
+	rv = anx74xx_tcpm_usb_mux_driver.get(me, mux_state);
+	rv |= virtual_usb_mux_driver.get(me, &virtual_mux_state);
 
 	if (virtual_mux_state & USB_PD_MUX_HPD_IRQ)
 		*mux_state |= USB_PD_MUX_HPD_IRQ;
@@ -330,32 +330,32 @@ const struct usb_mux_driver port0_usb_mux_driver = {
  * Redirect to tcpci_tcpm_usb_mux_driver but override the get() function
  * to check the HPD_IRQ mask from virtual_usb_mux_driver.
  */
-static int port1_usb_mux_init(int port)
+static int port1_usb_mux_init(const struct usb_mux *me)
 {
-	return tcpci_tcpm_usb_mux_driver.init(port);
+	return tcpci_tcpm_usb_mux_driver.init(me);
 }
 
-static int port1_usb_mux_set(int i2c_addr, mux_state_t mux_state)
+static int port1_usb_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 {
-	return tcpci_tcpm_usb_mux_driver.set(i2c_addr, mux_state);
+	return tcpci_tcpm_usb_mux_driver.set(me, mux_state);
 }
 
-static int port1_usb_mux_get(int port, mux_state_t *mux_state)
+static int port1_usb_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
 {
 	int rv;
 	mux_state_t virtual_mux_state;
 
-	rv = tcpci_tcpm_usb_mux_driver.get(port, mux_state);
-	rv |= virtual_usb_mux_driver.get(port, &virtual_mux_state);
+	rv = tcpci_tcpm_usb_mux_driver.get(me, mux_state);
+	rv |= virtual_usb_mux_driver.get(me, &virtual_mux_state);
 
 	if (virtual_mux_state & USB_PD_MUX_HPD_IRQ)
 		*mux_state |= USB_PD_MUX_HPD_IRQ;
 	return rv;
 }
 
-static int port1_usb_mux_enter_low_power(int port)
+static int port1_usb_mux_enter_low_power(const struct usb_mux *me)
 {
-	return tcpci_tcpm_usb_mux_driver.enter_low_power_mode(port);
+	return tcpci_tcpm_usb_mux_driver.enter_low_power_mode(me);
 }
 
 const struct usb_mux_driver port1_usb_mux_driver = {
@@ -365,12 +365,14 @@ const struct usb_mux_driver port1_usb_mux_driver = {
 	.enter_low_power_mode = &port1_usb_mux_enter_low_power,
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
+		.usb_port = 0,
 		.driver = &port0_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
 	},
 	{
+		.usb_port = 1,
 		.driver = &port1_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
 	}
@@ -406,8 +408,6 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 void board_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image()) {
 		/* TODO(crosbug.com/p/61098): How long do we need to wait? */
@@ -428,11 +428,8 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
@@ -630,7 +627,7 @@ uint16_t tcpc_get_alert_status(void)
 /* Mutexes */
 static struct mutex g_lid_mutex;
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 static struct opt3001_drv_data_t g_opt3001_data = {
 	.scale = 1,
 	.uscale = 0,
@@ -663,8 +660,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 [SENSOR_CONFIG_EC_S0] = {
 			 .odr = 10000 | ROUND_UP_FLAG,
@@ -684,8 +681,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 	[LID_ALS] = {
 	 .name = "Light",

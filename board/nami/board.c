@@ -19,7 +19,7 @@
 #include "console.h"
 #include "cros_board_info.h"
 #include "driver/pmic_tps650x30.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/accel_kionix.h"
 #include "driver/baro_bmp280.h"
@@ -252,19 +252,21 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-static int ps8751_tune_mux(int port)
+static int ps8751_tune_mux(const struct usb_mux *me)
 {
 	/* 0x98 sets lower EQ of DP port (3.6db) */
-	mux_write(port, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	mux_write(me, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
 	return EC_SUCCESS;
 }
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_PS8751] = {
+		.usb_port = USB_PD_PORT_PS8751,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
 	[USB_PD_PORT_ANX7447] = {
+		.usb_port = USB_PD_PORT_ANX7447,
 		.driver = &anx7447_usb_mux_driver,
 		.hpd_update = &anx7447_tcpc_update_hpd_status,
 	}
@@ -314,8 +316,6 @@ void board_reset_pd_mcu(void)
 
 void board_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image())
 		board_reset_pd_mcu();
@@ -331,10 +331,8 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 2);
 
@@ -360,11 +358,11 @@ uint16_t tcpc_get_alert_status(void)
  */
 const struct temp_sensor_t temp_sensors[TEMP_SENSOR_COUNT] = {
 	{"F75303_Local", TEMP_SENSOR_TYPE_BOARD, f75303_get_val,
-		F75303_IDX_LOCAL, 4},
+		F75303_IDX_LOCAL},
 	{"F75303_Remote1", TEMP_SENSOR_TYPE_CPU, f75303_get_val,
-		F75303_IDX_REMOTE1, 4},
+		F75303_IDX_REMOTE1},
 	{"F75303_Remote2", TEMP_SENSOR_TYPE_BOARD, f75303_get_val,
-		F75303_IDX_REMOTE2, 4},
+		F75303_IDX_REMOTE2},
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
@@ -727,7 +725,7 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* Lid accel private data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 static struct kionix_accel_data g_kx022_data;
 
 /* BMA255 private data */
@@ -820,8 +818,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			/* EC use accel for angle detection */
@@ -849,8 +847,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
@@ -1036,26 +1034,29 @@ static void board_init(void)
 		/* No need to swap scancode_set2[0][3] and [1][0] because both
 		 * are mapped to search key. */
 	}
-	if (sku & SKU_ID_MASK_UK2)
+	if (sku & SKU_ID_MASK_UK2) {
 		/*
 		 * Observed on Shyvana with UK keyboard,
 		 *   \|:     0x0061->0x61->0x56
 		 *   r-ctrl: 0xe014->0x14->0x1d
 		 */
-		swap(scancode_set2[0][4], scancode_set2[7][2]);
+		uint16_t tmp = get_scancode_set2(4, 0);
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
+		set_scancode_set2(2, 7, tmp);
+	}
 #endif
 
-	isl923x_set_ac_prochot(3328 /* mA */);
+	isl923x_set_ac_prochot(CHARGER_SOLO, 3328 /* mA */);
 
 	switch (oem) {
 	case PROJECT_VAYNE:
-		isl923x_set_dc_prochot(11008 /* mA */);
+		isl923x_set_dc_prochot(CHARGER_SOLO, 11008 /* mA */);
 		break;
 	case PROJECT_PANTHEON:
-		isl923x_set_dc_prochot(9984 /* mA */);
+		isl923x_set_dc_prochot(CHARGER_SOLO, 9984 /* mA */);
 		break;
 	case PROJECT_SONA:
-		isl923x_set_dc_prochot(5888 /* mA */);
+		isl923x_set_dc_prochot(CHARGER_SOLO, 5888 /* mA */);
 		break;
 	case PROJECT_NAMI:
 	case PROJECT_AKALI:

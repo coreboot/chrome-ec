@@ -8,7 +8,6 @@
 #include "console.h"
 #include "consumer.h"
 #include "curve25519.h"
-#include "extension.h"
 #include "flash.h"
 #include "queue_policies.h"
 #include "host_command.h"
@@ -253,7 +252,7 @@ static int try_vendor_command(struct consumer const *consumer, size_t count)
 				response = EC_RES_ERROR;
 			}
 #else
-			system_run_image_copy(SYSTEM_IMAGE_RW);
+			system_run_image_copy(EC_IMAGE_RW);
 #endif
 			break;
 #ifdef CONFIG_RWSIG

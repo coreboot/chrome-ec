@@ -10,6 +10,7 @@
 #include "test_util.h"
 #include "timer.h"
 #include "usb_emsg.h"
+#include "usb_mux.h"
 #include "usb_pe.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
@@ -26,6 +27,7 @@ const struct svdm_response svdm_rsp = {
 };
 
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT];
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 int board_vbus_source_enabled(int port)
 {
@@ -34,6 +36,21 @@ int board_vbus_source_enabled(int port)
 void tc_request_power_swap(int port)
 {
 	/* Do nothing */
+}
+
+void pd_set_vbus_discharge(int port, int enable)
+{
+	gpio_set_level(GPIO_USB_C0_DISCHARGE, enable);
+}
+
+uint8_t tc_get_pd_enabled(int port)
+{
+	return 1;
+}
+
+bool pd_alt_mode_capable(int port)
+{
+	return 1;
 }
 
 /**
@@ -47,9 +64,11 @@ static int test_pe_frs(void)
 
 	/*
 	 * FRS will only trigger when we are SNK, with an Explicit
-	 * contract.  So set this state up manually
+	 * contract.  So set this state up manually.  Also ensure any
+	 * background tasks (ex. discovery) aren't running.
 	 */
 	tc_prs_src_snk_assert_rd(PORT0);
+	pe_set_flag(PORT0, PE_FLAGS_DISCOVER_PORT_IDENTITY_DONE);
 	pe_set_flag(PORT0, PE_FLAGS_EXPLICIT_CONTRACT);
 	set_state_pe(PORT0, PE_SNK_READY);
 	pe_run(PORT0, EVT_IGNORED, ENABLED);
@@ -58,7 +77,7 @@ static int test_pe_frs(void)
 	/*
 	 * Trigger the Fast Role Switch from simulated ISR
 	 */
-	pe_got_frs_signal(PORT0);
+	pd_got_frs_signal(PORT0);
 	TEST_ASSERT(pe_chk_flag(PORT0, PE_FLAGS_FAST_ROLE_SWAP_SIGNALED));
 
 	/*
@@ -80,7 +99,7 @@ static int test_pe_frs(void)
 	/*
 	 * Accept the partners PS_RDY control message
 	 */
-	emsg[PORT0].header = PD_HEADER(PD_CTRL_ACCEPT, 0, 0, 0, 0, 0, 0);
+	rx_emsg[PORT0].header = PD_HEADER(PD_CTRL_ACCEPT, 0, 0, 0, 0, 0, 0);
 	pe_set_flag(PORT0, PE_FLAGS_MSG_RECEIVED);
 	pe_run(PORT0, EVT_IGNORED, ENABLED);
 	TEST_ASSERT(!pe_chk_flag(PORT0, PE_FLAGS_MSG_RECEIVED));
@@ -90,7 +109,7 @@ static int test_pe_frs(void)
 	/*
 	 * Send back our PS_RDY
 	 */
-	emsg[PORT0].header = PD_HEADER(PD_CTRL_PS_RDY, 0, 0, 0, 0, 0, 0);
+	rx_emsg[PORT0].header = PD_HEADER(PD_CTRL_PS_RDY, 0, 0, 0, 0, 0, 0);
 	pe_set_flag(PORT0, PE_FLAGS_MSG_RECEIVED);
 	TEST_ASSERT(!tc_is_attached_src(PORT0));
 	pe_run(PORT0, EVT_IGNORED, ENABLED);

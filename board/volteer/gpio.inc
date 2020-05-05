@@ -30,6 +30,7 @@ GPIO_INT(DSW_PWROK,            PIN(C, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PG_EC_ALL_SYS_PWRGD,  PIN(F, 4),  GPIO_INT_BOTH, power_signal_interrupt)
 
 /* Sensor Interrupts */
+GPIO_INT(EC_IMU_INT_L,         PIN(5, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V, bmi260_interrupt)
 GPIO_INT(EC_CAM_VSYN_SLP_S0IX, PIN(7, 2), GPIO_INT_RISING, sync_interrupt)
 GPIO_INT(EC_ALS_RGB_INT_L,     PIN(D, 4), GPIO_INT_FALLING, tcs3400_interrupt)
 GPIO_INT(TABLET_MODE_L,        PIN(9, 5), GPIO_INT_BOTH, gmr_tablet_switch_isr)
@@ -47,12 +48,20 @@ GPIO_INT(USB_C1_MIX_INT_ODL,	PIN(0, 3), GPIO_INT_BOTH, bc12_interrupt)
 /* HDMI interrupts */
 
 /* Volume button interrupts */
-GPIO_INT(EC_VOLDN_BTN_ODL,     PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-GPIO_INT(EC_VOLUP_BTN_ODL,     PIN(7, 5), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
+GPIO_INT(EC_VOLDN_BTN_ODL,		PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
+/*
+ * EC_VOLUP_BTN_ODL moved from GPIO75 to GPIO97 on boards with board ID >=1.
+ * GPIO97/EN_PP1050_BYPASS is DNS on board ID 0, and GPIO75 will be used once
+ * EFS support is added.
+ * TODO (b/149858568): remove board ID=0 support.
+ */
+GPIO_INT(EC_VOLUP_BTN_ODL_BOARDID_0,	PIN(7, 5), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
+GPIO_INT(EC_VOLUP_BTN_ODL,		PIN(9, 7), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 
 /* Power Sequencing Signals */
 GPIO(EN_PP3300_A,              PIN(A, 3), GPIO_OUT_LOW)
 GPIO(EN_PP5000_A,              PIN(A, 4), GPIO_OUT_LOW)
+GPIO(EN_PPVAR_VCCIN,           PIN(4, 3), GPIO_OUT_LOW) /* Enables VCCIN IMPV9 */
 /* The EC does not buffer this signal on Volteer. */
 UNIMPLEMENTED(PCH_DSW_PWROK)
 
@@ -61,11 +70,9 @@ UNIMPLEMENTED(PCH_DSW_PWROK)
 GPIO(EN_DRAM_VDDQ,		PIN(F, 2), GPIO_OUT_LOW)
 GPIO(EN_PP1050_STG,		PIN(C, 0), GPIO_OUT_LOW)
 GPIO(EN_PP5000_USB_AG,		PIN(A, 7), GPIO_OUT_LOW)
-GPIO(EN_PP1800_A,		PIN(8, 3), GPIO_OUT_LOW)
 GPIO(EN_PPVAR_VCCIN_AUX,	PIN(8, 1), GPIO_OUT_LOW)
 GPIO(EN_PP1050_ST_S0,		PIN(3, 4), GPIO_OUT_LOW)
 GPIO(EN_VNN_BYPASS,		PIN(B, 0), GPIO_OUT_LOW)
-GPIO(EN_PP1050_BYPASS,		PIN(9, 7), GPIO_OUT_LOW)
 GPIO(EN_DRAM_VDD1,		PIN(9, 6), GPIO_OUT_LOW)
 #endif
 
@@ -89,14 +96,22 @@ GPIO(EC_PCH_RTCRST,            PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_ODL,          PIN(7, 4), GPIO_ODR_HIGH)
 GPIO(EC_ENTERING_RW,           PIN(E, 3), GPIO_OUT_LOW)
 GPIO(EC_PROCHOT_ODL,           PIN(6, 3), GPIO_ODR_HIGH)
+GPIO_INT(EC_PROCHOT_IN_L,      PIN(F, 0), GPIO_INT_BOTH, throttle_ap_prochot_input_interrupt)
 GPIO(SYS_RST_ODL,              PIN(C, 5), GPIO_ODR_HIGH)
 
-GPIO(EC_PCH_INT_ODL,           PIN(D, 6), GPIO_ODR_HIGH) /* TODO - b/140557015 - implement with MKBD sensor events */
+GPIO(EC_PCH_INT_ODL,           PIN(B, 0), GPIO_ODR_HIGH)
 
 /* USB and USBC Signals */
 
-/* TODO(b/148243971): update PIN for next build */
-GPIO(USB_C1_RT_RST_ODL,		PIN(3, 2), GPIO_ODR_LOW)	/* USB_C1 Reset */
+/*
+ * USB_C1 moved from GPIO32 to GPIO83 on boards with board ID >=1.
+ * GPIO83/EN_PP1800_A is DNS on board ID 0 and GPIO32 is N/C on board ID >=1
+ * so it's safe to define GPIOs compatible with both designs.
+ * TODO (b/149858568): remove board ID=0 support.
+ */
+GPIO(USB_C1_RT_RST_ODL_BOARDID_0,	PIN(3, 2), GPIO_ODR_LOW) /* USB_C1 Reset on boards without board ID */
+GPIO(USB_C1_RT_RST_ODL,			PIN(8, 3), GPIO_ODR_LOW) /* USB_C1 Reset on boards board ID >=1 */
+
 /* Don't have a load switch for retimer */
 UNIMPLEMENTED(USB_C1_LS_EN)
 /* Retimer Force Power enable is connected to AP */

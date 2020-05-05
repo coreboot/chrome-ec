@@ -32,9 +32,6 @@ static int mt6370_init(int port)
 {
 	int rv, val;
 
-	/* Start with an unknown connection */
-	tcpci_set_cached_pull(port, TYPEC_CC_OPEN);
-
 	rv = tcpc_read(port, MT6370_REG_IDLE_CTRL, &val);
 
 	/* Only do soft-reset in shipping mode. (b:122017882) */
@@ -141,9 +138,6 @@ static int mt6370_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 
 static int mt6370_set_cc(int port, int pull)
 {
-	/* Keep track of current CC pull value */
-	tcpci_set_cached_pull(port, pull);
-
 	if (pull == TYPEC_CC_RD)
 		mt6370_init_cc_params(port, TYPEC_CC_VOLT_RP_DEF);
 	return tcpci_tcpm_set_cc(port, pull);
@@ -168,16 +162,6 @@ static int mt6370_enter_low_power_mode(int port)
 static int mt6370_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	enum tcpc_cc_voltage_status cc1, cc2;
-
-	/*
-	 * TCPCI sets the CC lines based on polarity.  If it is set to
-	 * no connection then both CC lines are driven, otherwise only
-	 * one is driven.  This driver does not appear to do this.  If
-	 * that changes, this would be the location you would want to
-	 * adjust the CC lines for the current polarity
-	 */
-	if (polarity == POLARITY_NONE)
-		return EC_SUCCESS;
 
 	mt6370_polarity = polarity;
 	mt6370_get_cc(port, &cc1, &cc2);

@@ -23,7 +23,7 @@
 #include "driver/als_opt3001.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/tcpm/tcpci.h"
 #include "extpower.h"
 #include "gpio_chip.h"
@@ -389,13 +389,16 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = MUX_PORT_AND_ADDR(I2C_PORT_USB_MUX,
-					       PI3USB3X532_I2C_ADDR0),
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
 		.driver = &pi3usb3x532_usb_mux_driver,
 	},
 	{
-		.port_addr = 0x10,
-		.driver = &ps874x_usb_mux_driver,
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = 0x10,
+		.driver = &ps8740_usb_mux_driver,
 	}
 };
 #endif
@@ -451,9 +454,9 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  * a static global in this module.
  */
 const struct temp_sensor_t temp_sensors[] = {
-	{"Battery", TEMP_SENSOR_TYPE_BATTERY, sb_temp, 0, 4},
-	{"Ambient", TEMP_SENSOR_TYPE_BOARD, ds1624_get_val, 0, 4},
-	{"Case", TEMP_SENSOR_TYPE_CASE, therm_get_val, (int)ADC_CASE, 4},
+	{"Battery", TEMP_SENSOR_TYPE_BATTERY, sb_temp, 0},
+	{"Ambient", TEMP_SENSOR_TYPE_BOARD, ds1624_get_val, 0},
+	{"Case", TEMP_SENSOR_TYPE_CASE, therm_get_val, (int)ADC_CASE},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 #endif
@@ -908,7 +911,7 @@ DECLARE_HOOK(HOOK_SECOND, board_one_sec, HOOK_PRIO_DEFAULT);
 
 static struct mutex g_base_mutex;
 /* BMI160 private data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 #ifdef CONFIG_ACCEL_KX022
 static struct mutex g_lid_mutex;
@@ -936,8 +939,8 @@ struct motion_sensor_t motion_sensors[] = {
 			CONFIG_SPI_ACCEL_PORT),
 		.rot_standard_ref = NULL, /* Identity matrix. */
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -961,8 +964,8 @@ struct motion_sensor_t motion_sensors[] = {
 			CONFIG_SPI_ACCEL_PORT),
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = NULL, /* Identity Matrix. */
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 #ifdef CONFIG_ACCEL_KX022
 	[LID_ACCEL] = {

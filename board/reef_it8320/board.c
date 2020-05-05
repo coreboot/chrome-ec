@@ -146,10 +146,12 @@ const enum gpio_signal hibernate_wake_pins[] = {
 
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
-static void it83xx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
+static void it83xx_tcpc_update_hpd_status(const struct usb_mux *me,
+					  int hpd_lvl, int hpd_irq)
 {
 	enum gpio_signal gpio =
-		port ? GPIO_USB_C1_HPD_1P8_ODL : GPIO_USB_C0_HPD_1P8_ODL;
+		me->usb_port ? GPIO_USB_C1_HPD_1P8_ODL
+			     : GPIO_USB_C0_HPD_1P8_ODL;
 
 	hpd_lvl = !hpd_lvl;
 
@@ -161,16 +163,19 @@ static void it83xx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
 	}
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = MUX_PORT_AND_ADDR(I2C_PORT_USB_MUX,
-					       PI3USB3X532_I2C_ADDR0),
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
 		.driver = &pi3usb3x532_usb_mux_driver,
 		.hpd_update = &it83xx_tcpc_update_hpd_status,
 	},
 	{
-		.port_addr = 0x10,
-		.driver = &ps874x_usb_mux_driver,
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = 0x10,
+		.driver = &ps8740_usb_mux_driver,
 		.hpd_update = &it83xx_tcpc_update_hpd_status,
 	},
 };
@@ -183,18 +188,15 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_BATTERY] = {.name = "Battery",
 				 .type = TEMP_SENSOR_TYPE_BATTERY,
 				 .read = charge_get_battery_temp,
-				 .idx = 0,
-				 .action_delay_sec = 1},
+				 .idx = 0},
 	[TEMP_SENSOR_AMBIENT] = {.name = "Ambient",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_51k1_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_AMB,
-				 .action_delay_sec = 5},
+				 .idx = ADC_TEMP_SENSOR_AMB},
 	[TEMP_SENSOR_CHARGER] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_13k7_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_CHARGER,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_CHARGER},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -248,8 +250,6 @@ static void board_set_tablet_mode(void)
 /* Initialize board. */
 static void board_init(void)
 {
-	int port;
-
 	board_set_tablet_mode();
 	/* Enable charger interrupts */
 	gpio_enable_interrupt(GPIO_CHARGER_INT_L);
@@ -258,8 +258,8 @@ static void board_init(void)
 	* Initialize HPD to low; after sysjump SOC needs to see
 	* HPD pulse to enable video path
 	*/
-	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++)
-		usb_muxes[port].hpd_update(port, 0, 0);
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_INIT_I2C + 1);
 

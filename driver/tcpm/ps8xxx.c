@@ -17,6 +17,7 @@
 #include "tcpci.h"
 #include "tcpm.h"
 #include "timer.h"
+#include "usb_mux.h"
 #include "usb_pd.h"
 
 #if !defined(CONFIG_USB_PD_TCPM_PS8751) && \
@@ -34,46 +35,57 @@
 
 #endif
 
+#ifdef CONFIG_USB_PD_TCPM_PS8751
+/* PS8751 cannot run with PD 3.0 (see b/148554997 for details) */
+#if (defined(CONFIG_USB_PD_TCPMV1) && defined(CONFIG_USB_PD_REV30)) || \
+	(defined(CONFIG_USB_PD_TCPMV2) && !defined(CONFIG_USB_PD_REV20))
+#error "PS8751 cannot run with PD 3.0.  Fall back to using PD 2.0"
+#endif
+
+#endif /* CONFIG_USB_PD_TCPM_PS8751 */
+
 /*
  * timestamp of the next possible toggle to ensure the 2-ms spacing
  * between IRQ_HPD.
  */
 static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-static int dp_set_hpd(int port, int enable)
+static int dp_set_hpd(const struct usb_mux *me, int enable)
 {
 	int reg;
 	int rv;
 
-	rv = mux_read(port, MUX_IN_HPD_ASSERTION_REG, &reg);
+	rv = mux_read(me, MUX_IN_HPD_ASSERTION_REG, &reg);
 	if (rv)
 		return rv;
 	if (enable)
 		reg |= IN_HPD;
 	else
 		reg &= ~IN_HPD;
-	return mux_write(port, MUX_IN_HPD_ASSERTION_REG, reg);
+	return mux_write(me, MUX_IN_HPD_ASSERTION_REG, reg);
 }
 
-static int dp_set_irq(int port, int enable)
+static int dp_set_irq(const struct usb_mux *me, int enable)
 {
-
 	int reg;
 	int rv;
 
-	rv = mux_read(port, MUX_IN_HPD_ASSERTION_REG, &reg);
+	rv = mux_read(me, MUX_IN_HPD_ASSERTION_REG, &reg);
 	if (rv)
 		return rv;
 	if (enable)
 		reg |= HPD_IRQ;
 	else
 		reg &= ~HPD_IRQ;
-	return mux_write(port, MUX_IN_HPD_ASSERTION_REG, reg);
+	return mux_write(me, MUX_IN_HPD_ASSERTION_REG, reg);
 }
 
-void ps8xxx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
+void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
+				   int hpd_lvl, int hpd_irq)
 {
-	dp_set_hpd(port, hpd_lvl);
+	int port = me->usb_port;
+
+	dp_set_hpd(me, hpd_lvl);
 
 	if (hpd_irq) {
 		uint64_t now = get_time().val;
@@ -81,9 +93,9 @@ void ps8xxx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
 		if (now < hpd_deadline[port])
 			usleep(hpd_deadline[port] - now);
 
-		dp_set_irq(port, 0);
+		dp_set_irq(me, 0);
 		usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
-		dp_set_irq(port, hpd_irq);
+		dp_set_irq(me, hpd_irq);
 	}
 	/* enforce 2-ms delay between HPD pulses */
 	hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
@@ -132,6 +144,46 @@ static int ps8xxx_tcpm_release(int port)
 
 	return tcpci_tcpm_release(port);
 }
+
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+static int ps8xxx_tcpc_drp_toggle(int port)
+{
+	int rv;
+	int status;
+	int opposite_pull;
+
+	/*
+	 * Workaround for PS8805/PS8815, which can't restart Connection
+	 * Detection if the partner already presents pull. Now starts with
+	 * the opposite pull. Check b/149570002.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8805) ||
+	    IS_ENABLED(CONFIG_USB_PD_TCPM_PS8815)) {
+		/* Check CC_STATUS for the current pull */
+		rv = tcpc_read(port, TCPC_REG_CC_STATUS, &status);
+		if (status & TCPC_REG_CC_STATUS_CONNECT_RESULT_MASK) {
+			/* Current pull: Rd */
+			opposite_pull = TYPEC_CC_RP;
+		} else {
+			/* Current pull: Rp */
+			opposite_pull = TYPEC_CC_RD;
+		}
+
+		/* Set auto drp toggle, starting with the opposite pull */
+		rv |= tcpci_set_role_ctrl(port, 1, TYPEC_RP_USB, opposite_pull);
+
+		/* Set Look4Connection command */
+		rv |= tcpc_write(port, TCPC_REG_COMMAND,
+				 TCPC_REG_COMMAND_LOOK4CONNECTION);
+
+		return rv;
+	} else {
+		return tcpci_tcpc_drp_toggle(port);
+	}
+}
+#endif
+
+
 
 static int ps8xxx_get_chip_info(int port, int live,
 			struct ec_response_pd_chip_info_v1 **chip_info)
@@ -259,27 +311,28 @@ static int ps8xxx_tcpm_init(int port)
 	return ps8xxx_dci_disable(port);
 }
 
-static int ps8xxx_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
+#ifdef CONFIG_USB_PD_TCPM_PS8751
+/*
+ * TODO(twawrzynczak): Remove this workaround when no
+ * longer needed.  See: https://issuetracker.google.com/147684491
+ *
+ * This is a workaround for what appears to be a bug in PS8751 firmware
+ * version 0x44.  (Does the bug exist in other PS8751 firmware versions?
+ * Should this workaround be limited to only 0x44?)
+ *
+ * With nothing connected to the port, sometimes after DRP is disabled,
+ * the CC_STATUS register reads the CC state incorrectly (reading it
+ * as though a port partner is detected), which ends up confusing
+ * our TCPM.  The workaround for this seems to be a short sleep and
+ * then re-reading the CC state.  In other words, the issue shows up
+ * as a short glitch or transient, which a dummy read and then a short
+ * delay will allow the transient to disappear.
+ */
+static int ps8751_get_gcc(int port, enum tcpc_cc_voltage_status *cc1,
 			 enum tcpc_cc_voltage_status *cc2)
 {
 	int rv;
 	int status;
-
-	/*
-	 * TODO(twawrzynczak): remove this workaround when no
-	 * longer needed, see b/147684491.
-	 *
-	 * This is a workaround for what appears to be a bug in PS8751 firmware
-	 * version 0x44.
-	 *
-	 * With nothing connected to the port, sometimes after DRP is disabled,
-	 * the CC_STATUS register reads the CC state incorrectly (reading it
-	 * as though a port partner is detected), which ends up confusing
-	 * our TCPM.  The workaround for this seems to be a short sleep and
-	 * then re-reading the CC state.  In other words, the issue shows up
-	 * as a short glitch or transient, which a dummy read and then a short
-	 * delay will allow the transient to disappear.
-	 */
 	rv = tcpc_read(port, TCPC_REG_CC_STATUS, &status);
 	if (rv)
 		return rv;
@@ -289,11 +342,16 @@ static int ps8xxx_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 
 	return tcpci_tcpm_get_cc(port, cc1, cc2);
 }
+#endif
 
 const struct tcpm_drv ps8xxx_tcpm_drv = {
 	.init			= &ps8xxx_tcpm_init,
 	.release		= &ps8xxx_tcpm_release,
-	.get_cc			= &ps8xxx_get_cc,
+#ifdef CONFIG_USB_PD_TCPM_PS8751
+	.get_cc			= &ps8751_get_gcc,
+#else
+	.get_cc			= &tcpci_tcpm_get_cc,
+#endif
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
 	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
 #endif
@@ -310,7 +368,7 @@ const struct tcpm_drv ps8xxx_tcpm_drv = {
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-	.drp_toggle		= &tcpci_tcpc_drp_toggle,
+	.drp_toggle		= &ps8xxx_tcpc_drp_toggle,
 #endif
 #ifdef CONFIG_USBC_PPC
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
@@ -333,33 +391,3 @@ struct i2c_stress_test_dev ps8xxx_i2c_stress_test_dev = {
 	.i2c_write = &tcpc_i2c_write,
 };
 #endif /* CONFIG_CMD_I2C_STRESS_TEST_TCPC */
-
-static int ps8xxx_mux_init(int port)
-{
-	tcpci_tcpm_mux_init(port);
-
-	/* If this MUX is also the TCPC, then skip init */
-	if (!(usb_muxes[port].flags & USB_MUX_FLAG_NOT_TCPC))
-		return EC_SUCCESS;
-
-	/* We always want to be a sink when this device is only being used as a mux
-	 * to support external peripherals better.
-	 */
-	return mux_write(port, TCPC_REG_ROLE_CTRL,
-		TCPC_REG_ROLE_CTRL_SET(0, 1, TYPEC_CC_RD, TYPEC_CC_RD));
-}
-
-static int ps8xxx_mux_enter_low_power_mode(int port)
-{
-	mux_write(port, TCPC_REG_ROLE_CTRL,
-		TCPC_REG_ROLE_CTRL_SET(0, 0, TYPEC_CC_RP, TYPEC_CC_RP));
-	return tcpci_tcpm_mux_enter_low_power(port);
-}
-
-/* This is meant for mux-only applications */
-const struct usb_mux_driver ps8xxx_usb_mux_driver = {
-	.init = &ps8xxx_mux_init,
-	.set = &tcpci_tcpm_mux_set,
-	.get = &tcpci_tcpm_mux_get,
-	.enter_low_power_mode = &ps8xxx_mux_enter_low_power_mode,
-};

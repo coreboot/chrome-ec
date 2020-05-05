@@ -9,8 +9,9 @@
 #define __CROS_EC_ITE_EC_H
 
 /* USB PD config */
-#define CONFIG_USB_PD_TCPM_ITE83XX
+#define CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_VBUS_DETECT_GPIO
+#define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
 
 /* Optional feature - used by ITE */
 #define CONFIG_IT83XX_FLASH_CLOCK_48MHZ

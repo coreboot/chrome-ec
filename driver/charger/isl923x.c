@@ -15,6 +15,7 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "isl923x.h"
+#include "ocpc.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
@@ -110,13 +111,24 @@ static enum ec_error_list isl923x_get_input_current(int chgnum,
 						    int *input_current)
 {
 	int rv;
+	int regval;
 	int reg;
 
-	rv = raw_read16(chgnum, ISL923X_REG_ADAPTER_CURRENT1, &reg);
+	if (IS_ENABLED(CONFIG_CHARGER_RAA489000))
+		reg = RAA489000_REG_ADC_INPUT_CURRENT;
+	else
+		reg = ISL923X_REG_ADAPTER_CURRENT1;
+
+	rv = raw_read16(chgnum, reg, &regval);
 	if (rv)
 		return rv;
 
-	*input_current = AC_REG_TO_CURRENT(reg);
+	if (IS_ENABLED(CONFIG_CHARGER_RAA489000)) {
+		/* LSB is 22.2mA */
+		regval *= 22;
+	}
+
+	*input_current = AC_REG_TO_CURRENT(regval);
 	return EC_SUCCESS;
 }
 
@@ -315,7 +327,7 @@ static enum ec_error_list isl923x_post_init(int chgnum)
 	return EC_SUCCESS;
 }
 
-int isl923x_set_ac_prochot(uint16_t ma)
+int isl923x_set_ac_prochot(int chgnum, uint16_t ma)
 {
 	int rv;
 
@@ -324,13 +336,13 @@ int isl923x_set_ac_prochot(uint16_t ma)
 		return EC_ERROR_INVAL;
 	}
 
-	rv = raw_write16(CHARGER_SOLO, ISL923X_REG_PROCHOT_AC, ma);
+	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_AC, ma);
 	if (rv)
 		CPRINTS("%s set_ac_prochot failed (%d)", CHARGER_NAME, rv);
 	return rv;
 }
 
-int isl923x_set_dc_prochot(uint16_t ma)
+int isl923x_set_dc_prochot(int chgnum, uint16_t ma)
 {
 	int rv;
 
@@ -339,9 +351,34 @@ int isl923x_set_dc_prochot(uint16_t ma)
 		return EC_ERROR_INVAL;
 	}
 
-	rv = raw_write16(CHARGER_SOLO, ISL923X_REG_PROCHOT_DC, ma);
+	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_DC, ma);
 	if (rv)
 		CPRINTS("%s set_dc_prochot failed (%d)", CHARGER_NAME, rv);
+	return rv;
+}
+
+int isl923x_set_comparator_inversion(int chgnum, int invert)
+{
+	int rv;
+	int regval;
+
+	rv = i2c_read16(chg_chips[chgnum].i2c_port,
+			chg_chips[chgnum].i2c_addr_flags,
+			ISL923X_REG_CONTROL2, &regval);
+	if (invert)
+		regval |= ISL923X_C2_INVERT_CMOUT;
+	else
+		regval &= ~ISL923X_C2_INVERT_CMOUT;
+
+	if (!rv)
+		rv |= i2c_write16(chg_chips[chgnum].i2c_port,
+				  chg_chips[chgnum].i2c_addr_flags,
+				  ISL923X_REG_CONTROL2, regval);
+
+	if (rv)
+		CPRINTS("%s (%d) set_comparator_inversion failed (rv: %d)",
+			CHARGER_NAME, chgnum, rv);
+
 	return rv;
 }
 
@@ -450,8 +487,13 @@ static void isl923x_init(int chgnum)
 		 * loop issues with 2S batteries, and 2) it will automatically
 		 * get disabled as soon as we manually set the current limit
 		 * anyway.
+		 *
+		 * Note: This bit is inverted on the RAA489000.
 		 */
-		reg |= ISL9238_C3_DISABLE_AUTO_CHARING;
+		if (IS_ENABLED(CONFIG_CHARGER_RAA489000))
+			reg &= ~ISL9238_C3_DISABLE_AUTO_CHARING;
+		else
+			reg |= ISL9238_C3_DISABLE_AUTO_CHARING;
 		if (raw_write16(chgnum, ISL9238_REG_CONTROL3, reg))
 			goto init_fail;
 
@@ -500,6 +542,94 @@ out:
 	mutex_unlock(&control1_mutex);
 	return rv;
 }
+
+#ifdef CONFIG_CHARGER_RAA489000
+void raa489000_hibernate(int chgnum)
+{
+	int rv, regval;
+
+	if ((chgnum < 0) || (chgnum > chg_cnt)) {
+		CPRINTS("%s: Invalid chgnum! (%d)", __func__, chgnum);
+		return;
+	}
+
+	rv = raw_read16(chgnum, ISL923X_REG_CONTROL0, &regval);
+	if (!rv) {
+		/* set BGATE to normal operation */
+		regval &= ~RAA489000_C0_BGATE_FORCE_ON;
+
+		/* set normal charge pump operation */
+		regval &= ~RAA489000_C0_EN_CHG_PUMPS_TO_100PCT;
+
+		rv = raw_write16(chgnum, ISL923X_REG_CONTROL0, regval);
+	}
+	if (rv)
+		CPRINTS("%s(%d): Failed to set Control0!", __func__, chgnum);
+
+	rv = raw_read16(chgnum, ISL923X_REG_CONTROL1, &regval);
+	if (!rv) {
+		/* Disable Supplemental support */
+		regval &= ~RAA489000_C1_ENABLE_SUPP_SUPPORT_MODE;
+
+		/* Force BGATE off */
+		if (IS_ENABLED(CONFIG_OCPC) && (chgnum == PRIMARY_CHARGER)) {
+			/* This is needed in the Z-state */
+			CPRINTS("%s(%d): Skip disable BFET", __func__, chgnum);
+		} else {
+			regval |= RAA489000_C1_BGATE_FORCE_OFF;
+		}
+
+		/* Disable AMON/BMON */
+		regval |= ISL923X_C1_DISABLE_MON;
+
+		/* Disable PSYS */
+		regval &= ~ISL923X_C1_ENABLE_PSYS;
+
+		rv = raw_write16(chgnum, ISL923X_REG_CONTROL1, regval);
+	}
+	if (rv)
+		CPRINTS("%s(%d): Failed to set Control1!", __func__, chgnum);
+
+	rv = raw_read16(chgnum, ISL9238_REG_CONTROL3, &regval);
+	if (!rv) {
+		/* ADC is active only when adapter plugged in */
+		regval &= ~RAA489000_ENABLE_ADC;
+
+		rv = raw_write16(chgnum, ISL9238_REG_CONTROL3, regval);
+	}
+	if (rv)
+		CPRINTS("%s(%d): Failed to set Control3!", __func__, chgnum);
+
+	rv = raw_read16(chgnum, ISL9238_REG_CONTROL4, &regval);
+	if (!rv) {
+		/* Disable GP comparator for battery only mode */
+		regval |= RAA489000_C4_DISABLE_GP_CMP;
+
+		rv = raw_write16(chgnum, ISL9238_REG_CONTROL4, regval);
+	}
+	if (rv)
+		CPRINTS("%s(%d):Failed to set Control4!", __func__, chgnum);
+
+	if (IS_ENABLED(CONFIG_OCPC) && (chgnum == PRIMARY_CHARGER)) {
+		/* The LDO is needed in the Z-state */
+		CPRINTS("%s(%d): Skip disable MCU LDO", __func__, chgnum);
+	} else {
+		rv = raw_read16(chgnum, RAA489000_REG_CONTROL8, &regval);
+		if (!rv) {
+			/* Disable MCU LDO in battery state */
+			regval |= RAA489000_C8_MCU_LDO_BAT_STATE_DISABLE;
+
+			rv = raw_write16(chgnum, RAA489000_REG_CONTROL8,
+					 regval);
+		}
+		if (rv)
+			CPRINTS("%s(%d):Failed to set Control8!", __func__,
+				chgnum);
+	}
+
+	cflush();
+}
+#endif /* CONFIG_CHARGER_RAA489000 */
 
 /*****************************************************************************/
 /* Hardware current ramping */

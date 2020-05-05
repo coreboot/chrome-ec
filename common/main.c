@@ -82,7 +82,7 @@ test_mockable __keep int main(void)
 	board_config_post_gpio_init();
 #endif
 	/*
-	 * Initialize interrupts, but don't enable any of them.  Note that
+	 * Initialize tasks, but don't enable any of them.  Note that
 	 * task scheduling is not enabled until task_start() below.
 	 */
 	task_pre_init();
@@ -195,12 +195,13 @@ test_mockable __keep int main(void)
 	button_init();
 #endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON | CONFIG_VOLUME_BUTTONS) */
 
-#if defined(CONFIG_VBOOT_EFS)
+#if defined(CONFIG_VBOOT_EFS) || defined(CONFIG_VBOOT_EFS2)
 	/*
 	 * Execute PMIC reset in case we're here after watchdog reset to unwedge
 	 * AP. This has to be done here because vboot_main may jump to RW.
 	 */
-	chipset_handle_reboot();
+	if (IS_ENABLED(CONFIG_CHIPSET_HAS_PLATFORM_PMIC_RESET))
+		chipset_handle_reboot();
 	/*
 	 * For RO, it behaves as follows:
 	 *   In recovery, it enables PD communication and returns.
@@ -214,7 +215,7 @@ test_mockable __keep int main(void)
 	 *
 	 * Only the Read-Only firmware needs to do the signature check.
 	 */
-	if (system_get_image_copy() == SYSTEM_IMAGE_RO) {
+	if (system_get_image_copy() == EC_IMAGE_RO) {
 #if defined(CONFIG_RWSIG_DONT_CHECK_ON_PIN_RESET)
 		/*
 		 * If system was reset by reset-pin, do not jump and wait for

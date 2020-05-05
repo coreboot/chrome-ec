@@ -84,8 +84,20 @@
 /* Wait for polling if the switchcap outputs good voltage */
 #define SWITCHCAP_PG_CHECK_WAIT		(5 * MSEC)
 
-/* Delay between power-on the system and power-on the PMIC */
-#define SYSTEM_POWER_ON_DELAY		(10 * MSEC)
+/*
+ * Delay between power-on the system and power-on the PMIC.
+ * Some latest PMIC firmware needs this delay longer, for doing a cold
+ * reboot. Did an experiment; it should be 100ms+. Set it with margin.
+ */
+#define SYSTEM_POWER_ON_DELAY		(110 * MSEC)
+
+/*
+ * Delay between the PMIC power drop and power-off the system.
+ * Qualcomm measured the entire POFF duration is around 70ms. Setting
+ * this delay to 70ms is more than enough, as the PMIC power drop is in
+ * the middle of POFF duration.
+ */
+#define PMIC_POWER_OFF_DELAY		(70 * MSEC)
 
 /* TODO(crosbug.com/p/25047): move to HOOK_POWER_BUTTON_CHANGE */
 /* 1 if the power button was pressed last time we checked */
@@ -420,6 +432,8 @@ enum power_state power_chipset_init(void)
 		if (power_get_signals() & IN_POWER_GOOD) {
 			CPRINTS("SOC ON");
 			init_power_state = POWER_S0;
+			/* Disable idle task deep sleep when in S0 */
+			disable_sleep(SLEEP_MASK_AP_RUN);
 		} else {
 			CPRINTS("SOC OFF");
 			init_power_state = POWER_G3;
@@ -462,6 +476,7 @@ static void power_off(void)
 
 	/* Do a graceful way to shutdown PMIC/AP first */
 	set_pmic_pwron(0);
+	usleep(PMIC_POWER_OFF_DELAY);
 
 	/* Disable signal interrupts, as they are floating when switchcap off */
 	power_signal_disable_interrupt(GPIO_AP_RST_L);
@@ -558,12 +573,12 @@ static uint8_t check_for_power_on_event(void)
 	if (power_request == POWER_REQ_ON) {
 		power_request = POWER_REQ_NONE;
 		return POWER_ON_BY_POWER_REQ_ON;
-	}
-
-	if (power_request == POWER_REQ_RESET) {
+	} else if (power_request == POWER_REQ_RESET) {
 		power_request = POWER_REQ_NONE;
 		return POWER_ON_BY_POWER_REQ_RESET;
 	}
+	/* Clear invalid request */
+	power_request = POWER_REQ_NONE;
 
 	/* power on requested at EC startup for recovery */
 	if (auto_power_on) {
@@ -607,6 +622,8 @@ static uint8_t check_for_power_off_event(void)
 		 */
 		return POWER_OFF_BY_POWER_REQ_RESET;
 	}
+	/* Clear invalid request */
+	power_request = POWER_REQ_NONE;
 
 	/*
 	 * Check for power button press.

@@ -387,9 +387,6 @@ static int fusb302_tcpm_init(int port)
 {
 	int reg;
 
-	/* Start with an unknown connection */
-	tcpci_set_cached_pull(port, TYPEC_CC_OPEN);
-
 	/* set default */
 	state[port].cc_polarity = -1;
 
@@ -492,9 +489,6 @@ static int fusb302_tcpm_set_cc(int port, int pull)
 {
 	int reg;
 
-	/* Keep track of current CC pull value */
-	tcpci_set_cached_pull(port, pull);
-
 	/* NOTE: FUSB302 toggles a single pull-up between CC1 and CC2 */
 	/* NOTE: FUSB302 Does not support Ra. */
 	switch (pull) {
@@ -567,16 +561,6 @@ static int fusb302_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	/* Port polarity : 0 => CC1 is CC line, 1 => CC2 is CC line */
 	int reg;
-
-	/*
-	 * TCPCI sets the CC lines based on polarity.  If it is set to
-	 * no connection then both CC lines are driven, otherwise only
-	 * one is driven.  This driver does not appear to do this.  If
-	 * that changes, this would be the location you would want to
-	 * adjust the CC lines for the current polarity
-	 */
-	if (polarity == POLARITY_NONE)
-		return EC_SUCCESS;
 
 	tcpc_read(port, TCPC_REG_SWITCHES0, &reg);
 
@@ -840,9 +824,9 @@ static int fusb302_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 			return EC_ERROR_UNKNOWN;
 
 		if (reg & TCPC_REG_STATUS1_RXSOP1)
-			*head |= PD_HEADER_SOP(PD_MSG_SOPP);
+			*head |= PD_HEADER_SOP(PD_MSG_SOP_PRIME);
 		else if (reg & TCPC_REG_STATUS1_RXSOP2)
-			*head |= PD_HEADER_SOP(PD_MSG_SOPPP);
+			*head |= PD_HEADER_SOP(PD_MSG_SOP_PRIME_PRIME);
 	}
 #endif
 

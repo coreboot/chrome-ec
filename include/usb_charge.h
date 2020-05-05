@@ -15,6 +15,32 @@
 #define USB_CHARGER_VOLTAGE_MV  5000
 /* USB charger minimum current */
 #define USB_CHARGER_MIN_CURR_MA 500
+/*
+ * USB charger maximum current
+ *
+ * The USB Type-C specification limits the maximum amount of current from BC 1.2
+ * suppliers to 1.5A.  Technically, proprietary methods are not allowed, but we
+ * will continue to allow those.
+ */
+#define USB_CHARGER_MAX_CURR_MA 1500
+
+#define USB_SYSJUMP_TAG 0x5550 /* "UP" - Usb Port */
+#define USB_HOOK_VERSION 1
+
+#ifdef CONFIG_USB_PORT_POWER_SMART
+#define USB_PORT_ENABLE_COUNT CONFIG_USB_PORT_POWER_SMART_PORT_COUNT
+#elif defined(CONFIG_USB_PORT_POWER_DUMB)
+#define USB_PORT_ENABLE_COUNT USB_PORT_COUNT
+#endif
+
+/* GPIOs to enable/disable USB ports. Board specific. */
+#ifdef USB_PORT_ENABLE_COUNT
+#ifdef CONFIG_USB_PORT_ENABLE_DYNAMIC
+extern int usb_port_enable[USB_PORT_ENABLE_COUNT];
+#else
+extern const int usb_port_enable[USB_PORT_ENABLE_COUNT];
+#endif
+#endif /* USB_PORT_ENABLE_COUNT */
 
 /**
  * Set USB charge mode for the port.

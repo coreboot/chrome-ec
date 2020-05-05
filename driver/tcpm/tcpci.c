@@ -16,6 +16,7 @@
 #include "tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
+#include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
@@ -30,9 +31,8 @@ static int rx_en[CONFIG_USB_PD_PORT_MAX_COUNT];
 #endif
 static int tcpc_vbus[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-/* Cached RP/PULL role values */
+/* Cached RP role values */
 static int cached_rp[CONFIG_USB_PD_PORT_MAX_COUNT];
-static enum tcpc_cc_pull cached_pull[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 int tcpc_addr_write(int port, int i2c_addr, int reg, int val)
@@ -195,16 +195,6 @@ int tcpci_get_cached_rp(int port)
 	return cached_rp[port];
 }
 
-void tcpci_set_cached_pull(int port, enum tcpc_cc_pull pull)
-{
-	cached_pull[port] = pull;
-}
-
-enum tcpc_cc_pull tcpci_get_cached_pull(int port)
-{
-	return cached_pull[port];
-}
-
 static int init_alert_mask(int port)
 {
 	int rv;
@@ -359,32 +349,14 @@ int tcpci_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 
 int tcpci_tcpm_set_cc(int port, int pull)
 {
-	int cc1, cc2;
-	enum tcpc_cc_polarity polarity;
-
-	cc1 = cc2 = pull;
-
-	/* Keep track of current CC pull value */
-	tcpci_set_cached_pull(port, pull);
-
-	/*
-	 * Only drive one CC line when attached crbug.com/951681
-	 * and drive both when unattached.
-	 */
-	polarity = pd_get_polarity(port);
-	if (polarity == POLARITY_CC1)
-		cc2 = TYPEC_CC_OPEN;
-	else if (polarity == POLARITY_CC2)
-		cc1 = TYPEC_CC_OPEN;
-
 	return tcpc_write(port, TCPC_REG_ROLE_CTRL,
 			  TCPC_REG_ROLE_CTRL_SET(0,
 						 tcpci_get_cached_rp(port),
-						 cc1, cc2));
+						 pull, pull));
 }
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-static int set_role_ctrl(int port, int toggle, int rp, int pull)
+int tcpci_set_role_ctrl(int port, int toggle, int rp, int pull)
 {
 	return tcpc_write(port, TCPC_REG_ROLE_CTRL,
 			  TCPC_REG_ROLE_CTRL_SET(toggle, rp, pull, pull));
@@ -393,14 +365,147 @@ static int set_role_ctrl(int port, int toggle, int rp, int pull)
 int tcpci_tcpc_drp_toggle(int port)
 {
 	int rv;
+	/*
+	 * Set auto drp toggle
+	 * NOTE: This should be done according to the last connection
+	 * that we are disconnecting from. TCPCI Rev 2 spec figures
+	 * 4-21 and 4-22 show:
+	 *     SNK => DRP should set CC lines to Rd/Rd
+	 *     SRC => DRP should set CC lines to Rp/Rp
+	 * The function tcpci_tcpc_set_connection performs this action
+	 * and it may be wise as chips can use this to make this the
+	 * standard and remove this set_role_ctrl call.
+	 */
+	rv = tcpci_set_role_ctrl(port, 1, tcpci_get_cached_rp(port), TYPEC_CC_RD);
+	if (rv)
+		return rv;
 
-	/* Set auto drp toggle */
-	rv = set_role_ctrl(port, 1, TYPEC_RP_USB, TYPEC_CC_RD);
+	/* Set up to catch LOOK4CONNECTION alerts */
+	rv = tcpc_update8(port,
+			  TCPC_REG_TCPC_CTRL,
+			  TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT,
+			  MASK_SET);
+	if (rv)
+		return rv;
 
 	/* Set Look4Connection command */
-	rv |= tcpc_write(port, TCPC_REG_COMMAND,
-			 TCPC_REG_COMMAND_LOOK4CONNECTION);
+	rv = tcpc_write(port, TCPC_REG_COMMAND,
+			TCPC_REG_COMMAND_LOOK4CONNECTION);
 
+	return rv;
+}
+
+int tcpci_tcpc_set_connection(int port,
+			      enum tcpc_cc_pull pull,
+			      int connect)
+{
+	int rv;
+	int role;
+
+	/*
+	 * Disconnecting will set the following and then return
+	 *     Set RC.DRP=1b (DRP)
+	 *     Set RC.RpValue=00b (smallest Rp to save power)
+	 *     Set RC.CC1=pull (Rd or Rp)
+	 *     Set RC.CC2=pull (Rd or Rp)
+	 */
+	if (!connect) {
+		tcpci_set_role_ctrl(port, 1, TYPEC_RP_USB, pull);
+		return EC_SUCCESS;
+	}
+
+	/* Get the ROLE CONTROL value */
+	rv = tcpc_read(port, TCPC_REG_ROLE_CTRL, &role);
+	if (rv)
+		return rv;
+
+	if (role & TCPC_REG_ROLE_CTRL_DRP_MASK) {
+		enum tcpc_cc_pull cc1_pull, cc2_pull;
+		enum tcpc_cc_voltage_status cc1, cc2;
+
+		enum tcpc_cc_polarity polarity;
+
+		/*
+		 * If DRP is set, the CC pins shall stay in
+		 * Potential_Connect_as_Src or Potential_Connect_as_Sink
+		 * until directed otherwise.
+		 *
+		 * Set RC.CC1 & RC.CC2 per potential decision
+		 * Set RC.DRP=0
+		 */
+		rv = tcpm_get_cc(port, &cc1, &cc2);
+		if (rv)
+			return rv;
+
+		switch (cc1) {
+		case TYPEC_CC_VOLT_OPEN:
+			cc1_pull = TYPEC_CC_OPEN;
+			break;
+		case TYPEC_CC_VOLT_RA:
+			cc1_pull = TYPEC_CC_RA;
+			break;
+		case TYPEC_CC_VOLT_RD:
+			cc1_pull = TYPEC_CC_RP;
+			break;
+		case TYPEC_CC_VOLT_RP_DEF:
+		case TYPEC_CC_VOLT_RP_1_5:
+		case TYPEC_CC_VOLT_RP_3_0:
+			cc1_pull = TYPEC_CC_RD;
+			break;
+		default:
+			return EC_ERROR_UNKNOWN;
+		}
+
+		switch (cc2) {
+		case TYPEC_CC_VOLT_OPEN:
+			cc2_pull = TYPEC_CC_OPEN;
+			break;
+		case TYPEC_CC_VOLT_RA:
+			cc2_pull = TYPEC_CC_RA;
+			break;
+		case TYPEC_CC_VOLT_RD:
+			cc2_pull = TYPEC_CC_RP;
+			break;
+		case TYPEC_CC_VOLT_RP_DEF:
+		case TYPEC_CC_VOLT_RP_1_5:
+		case TYPEC_CC_VOLT_RP_3_0:
+			cc2_pull = TYPEC_CC_RD;
+			break;
+		default:
+			return EC_ERROR_UNKNOWN;
+		}
+
+		/* Set the CC lines */
+		rv = tcpc_write(port, TCPC_REG_ROLE_CTRL,
+				TCPC_REG_ROLE_CTRL_SET(0,
+						CONFIG_USB_PD_PULLUP,
+						cc1_pull, cc2_pull));
+		if (rv)
+			return rv;
+
+		/* Set TCPC_CONTROl.PlugOrientation */
+		if (pull == TYPEC_CC_RD)
+			polarity = polarity_rm_dts(
+					get_snk_polarity(cc1, cc2));
+		else
+			polarity = get_src_polarity(cc1, cc2);
+
+		rv = tcpc_update8(port, TCPC_REG_TCPC_CTRL,
+				  TCPC_REG_TCPC_CTRL_SET(1),
+				  (polarity == POLARITY_CC1) ? MASK_CLR
+							     : MASK_SET);
+	} else {
+		/*
+		 * DRP is not set. This would happen if DRP is not enabled or
+		 * was turned off and we did not have a connection.  We have
+		 * to manually turn off that we are looking for a connection
+		 * and set both CC lines to the pull value.
+		 */
+		rv = tcpc_update8(port,
+				  TCPC_REG_TCPC_CTRL,
+				  TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT,
+				  MASK_CLR);
+	}
 	return rv;
 }
 #endif
@@ -414,20 +519,6 @@ int tcpci_enter_low_power_mode(int port)
 
 int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
-	int rv;
-
-	/*
-	 * TCPCI sets the CC lines based on polarity.  If it is set to
-	 * no connection or SRC Debug Accessory then both CC lines are
-	 * driven, otherwise only one is driven.
-	 */
-	rv = tcpm_set_cc(port, tcpci_get_cached_pull(port));
-	if (rv)
-		return rv;
-
-	if (polarity == POLARITY_NONE)
-		return EC_SUCCESS;
-
 	return tcpc_update8(port,
 			    TCPC_REG_TCPC_CTRL,
 			    TCPC_REG_TCPC_CTRL_SET(1),
@@ -549,8 +640,8 @@ struct cached_tcpm_message {
 	uint32_t payload[7];
 };
 
-static int tcpci_v2_0_tcpm_get_message_raw(int port, uint32_t *payload,
-					    int *head)
+static int tcpci_rev2_0_tcpm_get_message_raw(int port, uint32_t *payload,
+					     int *head)
 {
 	int rv = 0, cnt, reg = TCPC_REG_RX_BUFFER;
 	int frm;
@@ -582,7 +673,7 @@ static int tcpci_v2_0_tcpm_get_message_raw(int port, uint32_t *payload,
 
 	/* Encode message address in bits 31 to 28 */
 	*head &= 0x0000ffff;
-	*head |= PD_HEADER_SOP(frm & 7);
+	*head |= PD_HEADER_SOP(frm);
 
 	if (rv == EC_SUCCESS && cnt > 0) {
 		tcpc_xfer_unlocked(port, NULL, 0, (uint8_t *)payload, cnt,
@@ -597,8 +688,8 @@ clear:
 	return rv;
 }
 
-static int tcpci_v1_0_tcpm_get_message_raw(int port, uint32_t *payload,
-					   int *head)
+static int tcpci_rev1_0_tcpm_get_message_raw(int port, uint32_t *payload,
+					     int *head)
 {
 	int rv, cnt, reg = TCPC_REG_RX_DATA;
 #ifdef CONFIG_USB_PD_DECODE_SOP
@@ -631,7 +722,7 @@ static int tcpci_v1_0_tcpm_get_message_raw(int port, uint32_t *payload,
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	/* Encode message address in bits 31 to 28 */
 	*head &= 0x0000ffff;
-	*head |= PD_HEADER_SOP(frm & 7);
+	*head |= PD_HEADER_SOP(frm);
 #endif
 	if (rv == EC_SUCCESS && cnt > 0) {
 		tcpc_read_block(port, reg, (uint8_t *)payload, cnt);
@@ -646,10 +737,10 @@ clear:
 
 int tcpci_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 {
-	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0)
-		return tcpci_v2_0_tcpm_get_message_raw(port, payload, head);
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0)
+		return tcpci_rev2_0_tcpm_get_message_raw(port, payload, head);
 
-	return tcpci_v1_0_tcpm_get_message_raw(port, payload, head);
+	return tcpci_rev1_0_tcpm_get_message_raw(port, payload, head);
 }
 
 /* Cache depth needs to be power of 2 */
@@ -755,9 +846,9 @@ int tcpci_tcpm_transmit(int port, enum tcpm_transmit_type type,
 			TCPC_REG_TRANSMIT_SET_WITHOUT_RETRY(type));
 	}
 
-	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0) {
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) {
 		/*
-		 * In TCPCI v2.0, TX_BYTE_CNT and TX_BUF_BYTE_X are the same
+		 * In TCPCI Rev 2.0, TX_BYTE_CNT and TX_BUF_BYTE_X are the same
 		 * register.
 		 */
 		reg = TCPC_REG_TX_BUFFER;
@@ -816,11 +907,8 @@ int tcpci_tcpm_transmit(int port, enum tcpm_transmit_type type,
 				TCPC_REG_TRANSMIT_SET_WITH_RETRY(type));
 }
 
-#ifndef CONFIG_USB_PD_TCPC_LOW_POWER
 /*
- * Returns true if TCPC has reset based on reading mask registers. Only need to
- * check this if the TCPC low power mode (LPM) code isn't compiled in because
- * LPM will automatically reset the device when the TCPC exits LPM.
+ * Returns true if TCPC has reset based on reading mask registers.
  */
 static int register_mask_reset(int port)
 {
@@ -838,7 +926,6 @@ static int register_mask_reset(int port)
 
 	return 0;
 }
-#endif
 
 static int tcpci_get_fault(int port, int *fault)
 {
@@ -847,13 +934,25 @@ static int tcpci_get_fault(int port, int *fault)
 
 static int tcpci_handle_fault(int port, int fault)
 {
+	int rv = EC_SUCCESS;
+
 	CPRINTS("C%d FAULT 0x%02X detected", port, fault);
-	return EC_SUCCESS;
+
+	if (tcpc_config[port].drv->handle_fault)
+		rv = tcpc_config[port].drv->handle_fault(port, fault);
+
+	return rv;
 }
 
 static int tcpci_clear_fault(int port, int fault)
 {
-	return tcpc_write(port, TCPC_REG_FAULT_STATUS, fault);
+	int rv;
+
+	rv = tcpc_write(port, TCPC_REG_FAULT_STATUS, fault);
+	if (rv)
+		return rv;
+
+	return tcpc_write16(port, TCPC_REG_ALERT, TCPC_REG_ALERT_FAULT);
 }
 
 /*
@@ -864,23 +963,24 @@ static int tcpci_clear_fault(int port, int fault)
 
 void tcpci_tcpc_alert(int port)
 {
-	int status = 0;
+	int alert = 0;
 	int alert_ext = 0;
 	int failed_attempts;
 	uint32_t pd_event = 0;
 
 	/* Read the Alert register from the TCPC */
-	tcpm_alert_status(port, &status);
+	tcpm_alert_status(port, &alert);
 
 	/* Get Extended Alert register if needed */
-	if (status & TCPC_REG_ALERT_ALERT_EXT)
+	if (alert & TCPC_REG_ALERT_ALERT_EXT)
 		tcpm_alert_ext_status(port, &alert_ext);
 
 	/* Clear any pending faults */
-	if (status & TCPC_REG_ALERT_FAULT) {
+	if (alert & TCPC_REG_ALERT_FAULT) {
 		int fault;
 
 		if (tcpci_get_fault(port, &fault) == EC_SUCCESS &&
+		    fault != 0 &&
 		    tcpci_handle_fault(port, fault) == EC_SUCCESS &&
 		    tcpci_clear_fault(port, fault) == EC_SUCCESS)
 			CPRINTS("C%d FAULT 0x%02X handled", port, fault);
@@ -891,17 +991,17 @@ void tcpci_tcpc_alert(int port)
 	 * completion events. This will send an event to the PD tasks
 	 * immediately
 	 */
-	if (status & TCPC_REG_ALERT_TX_COMPLETE)
-		pd_transmit_complete(port, status & TCPC_REG_ALERT_TX_SUCCESS ?
+	if (alert & TCPC_REG_ALERT_TX_COMPLETE)
+		pd_transmit_complete(port, alert & TCPC_REG_ALERT_TX_SUCCESS ?
 					   TCPC_TX_COMPLETE_SUCCESS :
 					   TCPC_TX_COMPLETE_FAILED);
 
 	/* Pull all RX messages from TCPC into EC memory */
 	failed_attempts = 0;
-	while (status & TCPC_REG_ALERT_RX_STATUS) {
+	while (alert & TCPC_REG_ALERT_RX_STATUS) {
 		if (tcpm_enqueue_message(port))
 			++failed_attempts;
-		if (tcpm_alert_status(port, &status))
+		if (tcpm_alert_status(port, &alert))
 			++failed_attempts;
 
 		/* Ensure we don't loop endlessly */
@@ -920,14 +1020,32 @@ void tcpci_tcpc_alert(int port)
 	}
 
 	/* Clear all pending alert bits */
-	if (status)
-		tcpc_write16(port, TCPC_REG_ALERT, status);
+	if (alert)
+		tcpc_write16(port, TCPC_REG_ALERT, alert);
 
-	if (status & TCPC_REG_ALERT_CC_STATUS) {
-		/* CC status changed, wake task */
-		pd_event |= PD_EVENT_CC;
+	if (alert & TCPC_REG_ALERT_CC_STATUS) {
+		if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE)) {
+			enum tcpc_cc_voltage_status cc1;
+			enum tcpc_cc_voltage_status cc2;
+
+			/*
+			 * Some TCPCs generate CC Alerts when
+			 * drp auto toggle is active and nothing
+			 * is connected to the port. So, get the
+			 * CC line status and only generate a
+			 * PD_EVENT_CC if something is connected.
+			 */
+			tcpci_tcpm_get_cc(port, &cc1, &cc2);
+			if (cc1 != TYPEC_CC_VOLT_OPEN ||
+			    cc2 != TYPEC_CC_VOLT_OPEN)
+				/* CC status cchanged, wake task */
+				pd_event |= PD_EVENT_CC;
+		} else {
+			/* CC status changed, wake task */
+			pd_event |= PD_EVENT_CC;
+		}
 	}
-	if (status & TCPC_REG_ALERT_POWER_STATUS) {
+	if (alert & TCPC_REG_ALERT_POWER_STATUS) {
 		int reg = 0;
 		/* Read Power Status register */
 		tcpci_tcpm_get_power_status(port, &reg);
@@ -939,27 +1057,37 @@ void tcpci_tcpc_alert(int port)
 		usb_charger_vbus_change(port, tcpc_vbus[port]);
 		pd_event |= TASK_EVENT_WAKE;
 #endif /* CONFIG_USB_PD_VBUS_DETECT_TCPC && CONFIG_USB_CHARGER */
+		if (reg & TCPC_REG_POWER_STATUS_VBUS_DET)
+			board_vbus_present_change();
 	}
-	if (status & TCPC_REG_ALERT_RX_HARD_RST) {
+
+	if (alert & TCPC_REG_ALERT_RX_HARD_RST) {
 		/* hard reset received */
+		CPRINTS("C%d Hard Reset received", port);
 		pd_execute_hard_reset(port);
 		pd_event |= TASK_EVENT_WAKE;
 	}
+
+	/* USB TCPCI Spec R2 V1.1 Section 4.7.3 Step 2
+	 *
+	 * The TCPC asserts both ALERT.TransmitSOP*MessageSuccessful and
+	 * ALERT.TransmitSOP*MessageFailed regardless of the outcome of the
+	 * transmission and asserts the Alert# pin.
+	 */
+	if (alert & TCPC_REG_ALERT_TX_SUCCESS &&
+	    alert & TCPC_REG_ALERT_TX_FAILED)
+		CPRINTS("C%d Hard Reset sent", port);
 
 	if (IS_ENABLED(CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP)
 	    && (alert_ext & TCPC_REG_ALERT_EXT_SNK_FRS))
 		pd_got_frs_signal(port);
 
-#ifndef CONFIG_USB_PD_TCPC_LOW_POWER
 	/*
 	 * Check registers to see if we can tell that the TCPC has reset. If
-	 * so, perform a tcpc_init. This only needs to happen for devices that
-	 * don't support low power mode as the transition from low power mode
-	 * will automatically reset the device.
+	 * so, perform a tcpc_init.
 	 */
 	if (register_mask_reset(port))
 		pd_event |= PD_EVENT_TCPC_RESET;
-#endif
 
 	/*
 	 * Wait until all possible TCPC accesses in this function are complete
@@ -1059,10 +1187,6 @@ int tcpci_tcpm_init(int port)
 	int error;
 	int power_status;
 	int tries = TCPM_INIT_TRIES;
-	int regval;
-
-	/* Start with an unknown connection */
-	tcpci_set_cached_pull(port, TYPEC_CC_OPEN);
 
 	if (port >= board_get_usb_pd_port_count())
 		return EC_ERROR_INVAL;
@@ -1086,15 +1210,19 @@ int tcpci_tcpm_init(int port)
 	 * TCPC_CONTROL.EnableLooking4ConnectionAlert bit, TCPC by default masks
 	 * Alert assertion when CC_STATUS.Looking4Connection changes state.
 	 */
-	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0) {
-		error = tcpc_read(port, TCPC_REG_TCPC_CTRL, &regval);
-		regval |= TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT;
-		error |= tcpc_write(port, TCPC_REG_TCPC_CTRL, regval);
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) {
+		error = tcpc_update8(port, TCPC_REG_TCPC_CTRL,
+				TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT,
+				MASK_SET);
 		if (error)
 			CPRINTS("C%d: Failed to init TCPC_CTRL!", port);
 	}
 
-	tcpc_write16(port, TCPC_REG_ALERT, 0xffff);
+	/*
+	 * Handle and clear any alerts, since we might be coming out of low
+	 * power mode in response to an alert interrupt from the TCPC.
+	 */
+	tcpc_alert(port);
 	/* Initialize power_status_mask */
 	init_power_status_mask(port);
 	/* Update VBUS status */
@@ -1124,19 +1252,19 @@ int tcpci_tcpm_init(int port)
  * via mux init because tcpc_init won't run for the device. This is borrowed
  * from tcpc_init.
  */
-int tcpci_tcpm_mux_init(int port)
+int tcpci_tcpm_mux_init(const struct usb_mux *me)
 {
 	int error;
 	int power_status;
 	int tries = TCPM_INIT_TRIES;
 
 	/* If this MUX is also the TCPC, then skip init */
-	if (!(usb_muxes[port].flags & USB_MUX_FLAG_NOT_TCPC))
+	if (!(me->flags & USB_MUX_FLAG_NOT_TCPC))
 		return EC_SUCCESS;
 
 	/* Wait for the device to exit low power state */
 	while (1) {
-		error = mux_read(port, TCPC_REG_POWER_STATUS, &power_status);
+		error = mux_read(me, TCPC_REG_POWER_STATUS, &power_status);
 		/*
 		 * If read succeeds and the uninitialized bit is clear, then
 		 * initialization is complete.
@@ -1149,28 +1277,28 @@ int tcpci_tcpm_mux_init(int port)
 	}
 
 	/* Turn off all alerts and acknowledge any pending IRQ */
-	error = mux_write16(port, TCPC_REG_ALERT_MASK, 0);
-	error |= mux_write16(port, TCPC_REG_ALERT, 0xffff);
+	error = mux_write16(me, TCPC_REG_ALERT_MASK, 0);
+	error |= mux_write16(me, TCPC_REG_ALERT, 0xffff);
 
 	return error ? EC_ERROR_UNKNOWN : EC_SUCCESS;
 }
 
-int tcpci_tcpm_mux_enter_low_power(int port)
+static int tcpci_tcpm_mux_enter_low_power(const struct usb_mux *me)
 {
 	/* If this MUX is also the TCPC, then skip low power */
-	if (!(usb_muxes[port].flags & USB_MUX_FLAG_NOT_TCPC))
+	if (!(me->flags & USB_MUX_FLAG_NOT_TCPC))
 		return EC_SUCCESS;
 
-	return mux_write(port, TCPC_REG_COMMAND, TCPC_REG_COMMAND_I2CIDLE);
+	return mux_write(me, TCPC_REG_COMMAND, TCPC_REG_COMMAND_I2CIDLE);
 }
 
-int tcpci_tcpm_mux_set(int port, mux_state_t mux_state)
+int tcpci_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 {
-	int reg = 0;
 	int rv;
+	int reg = 0;
 
 	/* Parameter is port only */
-	rv = mux_read(port, TCPC_REG_CONFIG_STD_OUTPUT, &reg);
+	rv = mux_read(me, TCPC_REG_CONFIG_STD_OUTPUT, &reg);
 	if (rv != EC_SUCCESS)
 		return rv;
 
@@ -1184,20 +1312,19 @@ int tcpci_tcpm_mux_set(int port, mux_state_t mux_state)
 		reg |= TCPC_REG_CONFIG_STD_OUTPUT_CONNECTOR_FLIPPED;
 
 	/* Parameter is port only */
-	return mux_write(port, TCPC_REG_CONFIG_STD_OUTPUT, reg);
+	return mux_write(me, TCPC_REG_CONFIG_STD_OUTPUT, reg);
 }
 
 /* Reads control register and updates mux_state accordingly */
-int tcpci_tcpm_mux_get(int port, mux_state_t *mux_state)
+int tcpci_tcpm_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
 {
-	int reg = 0;
 	int rv;
+	int reg = 0;
 
 	*mux_state = 0;
 
 	/* Parameter is port only */
-	rv = mux_read(port, TCPC_REG_CONFIG_STD_OUTPUT, &reg);
-
+	rv = mux_read(me, TCPC_REG_CONFIG_STD_OUTPUT, &reg);
 	if (rv != EC_SUCCESS)
 		return rv;
 

@@ -10,6 +10,10 @@
 
 #include "common.h"
 
+#ifdef CONFIG_KEYBOARD_CUSTOMIZATION
+/* include the board layer keyboard header file */
+#include "keyboard_customization.h"
+#else /* CONFIG_KEYBOARD_CUSTOMIZATION */
 #ifdef CONFIG_KEYBOARD_LANGUAGE_ID
 /* Keyboard matrix support for language ID pins */
 #define KEYBOARD_IDS 2
@@ -65,9 +69,8 @@ extern uint8_t keyboard_cols;
 #define KEYBOARD_COL_RIGHT_ALT	10
 #define KEYBOARD_ROW_RIGHT_ALT	0
 #define KEYBOARD_MASK_RIGHT_ALT	KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_RIGHT_ALT)
-#define KEYBOARD_COL_VOL_UP	4
-#define KEYBOARD_ROW_VOL_UP	0
-#define KEYBOARD_MASK_VOL_UP	KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_VOL_UP)
+#define KEYBOARD_DEFAULT_COL_VOL_UP	4
+#define KEYBOARD_DEFAULT_ROW_VOL_UP	0
 #define KEYBOARD_COL_LEFT_CTRL  0
 #define KEYBOARD_ROW_LEFT_CTRL  2
 #define KEYBOARD_MASK_LEFT_CTRL KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_LEFT_CTRL)
@@ -95,4 +98,5 @@ extern uint8_t keyboard_cols;
 #define KEYBOARD_MASK_PWRBTN	KEYBOARD_ROW_TO_MASK(3)
 #endif
 
+#endif /* CONFIG_KEYBOARD_CUSTOMIZATION */
 #endif  /* __CROS_EC_KEYBOARD_CONFIG_H */

@@ -14,8 +14,9 @@ driver-$(CONFIG_ACCEL_BMA255)+=accel_bma2x2.o
 driver-$(CONFIG_ACCEL_KXCJ9)+=accel_kionix.o
 driver-$(CONFIG_ACCEL_KX022)+=accel_kionix.o
 driver-$(CONFIG_ACCELGYRO_LSM6DS0)+=accelgyro_lsm6ds0.o
-driver-$(CONFIG_ACCELGYRO_BMI160)+=accelgyro_bmi160.o
-driver-$(CONFIG_MAG_BMI160_BMM150)+=mag_bmm150.o
+driver-$(CONFIG_ACCELGYRO_BMI160)+=accelgyro_bmi160.o accelgyro_bmi_common.o
+driver-$(CONFIG_ACCELGYRO_BMI260)+=accelgyro_bmi260.o accelgyro_bmi_common.o
+driver-$(CONFIG_MAG_BMI_BMM150)+=mag_bmm150.o
 driver-$(CONFIG_ACCELGYRO_LSM6DSM)+=accelgyro_lsm6dsm.o stm_mems_common.o
 driver-$(CONFIG_ACCELGYRO_LSM6DSO)+=accelgyro_lsm6dso.o stm_mems_common.o
 driver-$(CONFIG_ACCEL_LIS2D_COMMON)+=accel_lis2dh.o stm_mems_common.o
@@ -23,6 +24,7 @@ driver-$(CONFIG_MAG_LIS2MDL)+=mag_lis2mdl.o
 driver-$(CONFIG_SENSORHUB_LSM6DSM)+=sensorhub_lsm6dsm.o
 driver-$(CONFIG_SYNC)+=sync.o
 driver-$(CONFIG_ACCEL_LIS2DW_COMMON)+=accel_lis2dw12.o stm_mems_common.o
+driver-$(CONFIG_ACCEL_LIS2DS)+=accel_lis2ds.o stm_mems_common.o
 
 # BC1.2 Charger Detection Devices
 driver-$(CONFIG_BC12_DETECT_MAX14637)+=bc12/max14637.o
@@ -66,6 +68,7 @@ driver-$(CONFIG_CHARGER_RAA489000)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_RT9466)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_RT9467)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_SY21612)+=charger/sy21612.o
+driver-$(CONFIG_CHARGER_SM5803)+=charger/sm5803.o
 
 # Fingerprint Sensors
 include $(_driver_cur_dir)fingerprint/build.mk
@@ -74,6 +77,7 @@ include $(_driver_cur_dir)fingerprint/build.mk
 driver-$(CONFIG_IO_EXPANDER_IT8801)+=ioexpander/it8801.o
 driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
 driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander/ioexpander_nct38xx.o
+driver-$(CONFIG_IO_EXPANDER_PCAL6408)+=ioexpander/pcal6408.o
 
 
 # Current/Power monitor
@@ -108,6 +112,7 @@ driver-$(CONFIG_TEMP_SENSOR_TMP112)+=temp_sensor/tmp112.o
 driver-$(CONFIG_TEMP_SENSOR_TMP411)+=temp_sensor/tmp411.o
 driver-$(CONFIG_TEMP_SENSOR_TMP432)+=temp_sensor/tmp432.o
 driver-$(CONFIG_TEMP_SENSOR_TMP468)+=temp_sensor/tmp468.o
+driver-$(CONFIG_TEMP_SENSOR_AMD_R19ME4070)+=temp_sensor/amd_r19me4070.o
 
 # Touchpads
 driver-$(CONFIG_TOUCHPAD_GT7288)+=touchpad_gt7288.o
@@ -123,7 +128,10 @@ driver-$(CONFIG_USB_PD_TCPM_STUB)+=tcpm/stub.o
 driver-$(CONFIG_USB_PD_TCPM_TCPCI)+=tcpm/tcpci.o
 driver-$(CONFIG_USB_PD_TCPM_FUSB302)+=tcpm/fusb302.o
 driver-$(CONFIG_USB_PD_TCPM_MT6370)+=tcpm/mt6370.o
-driver-$(CONFIG_USB_PD_TCPM_ITE83XX)+=tcpm/it83xx.o
+ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
+driver-$(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)+=tcpm/it83xx.o
+driver-$(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2)+=tcpm/it8xxx2.o
+endif
 driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7447)+=tcpm/anx7447.o
@@ -138,8 +146,10 @@ driver-$(CONFIG_USB_PD_TCPM_RAA489000)+=tcpm/raa489000.o
 driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
 driver-$(CONFIG_USBC_RETIMER_NB7V904M)+=retimer/nb7v904m.o
 driver-$(CONFIG_USBC_RETIMER_PI3DPX1207)+=retimer/pi3dpx1207.o
+driver-$(CONFIG_USBC_RETIMER_PI3HDX1204)+=retimer/pi3hdx1204.o
 driver-$(CONFIG_USBC_RETIMER_PS8802)+=retimer/ps8802.o
 driver-$(CONFIG_USBC_RETIMER_PS8818)+=retimer/ps8818.o
+driver-$(CONFIG_USBC_RETIMER_TUSB544)+=retimer/tusb544.o
 
 # USB mux high-level driver
 driver-$(CONFIG_USBC_SS_MUX)+=usb_mux/usb_mux.o
@@ -150,8 +160,9 @@ driver-$(CONFIG_USB_MUX_ANX7440)+=usb_mux/anx7440.o
 driver-$(CONFIG_USB_MUX_IT5205)+=usb_mux/it5205.o
 driver-$(CONFIG_USB_MUX_PI3USB30532)+=usb_mux/pi3usb3x532.o
 driver-$(CONFIG_USB_MUX_PI3USB31532)+=usb_mux/pi3usb3x532.o
-driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps874x.o
-driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps874x.o
+driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps8740.o
+driver-$(CONFIG_USB_MUX_PS8742)+=usb_mux/ps8740.o
+driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps8743.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
 
 # Type-C Power Path Controllers (PPC)

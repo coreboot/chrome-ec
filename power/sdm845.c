@@ -416,6 +416,8 @@ enum power_state power_chipset_init(void)
 		if (power_get_signals() & IN_POWER_GOOD) {
 			CPRINTS("SOC ON");
 			init_power_state = POWER_S0;
+			/* Disable idle task deep sleep when in S0 */
+			disable_sleep(SLEEP_MASK_AP_RUN);
 		} else {
 			CPRINTS("SOC OFF");
 			init_power_state = POWER_G3;
@@ -559,12 +561,12 @@ static uint8_t check_for_power_on_event(void)
 	if (power_request == POWER_REQ_ON) {
 		power_request = POWER_REQ_NONE;
 		return POWER_ON_BY_POWER_REQ_ON;
-	}
-
-	if (power_request == POWER_REQ_RESET) {
+	} else if (power_request == POWER_REQ_RESET) {
 		power_request = POWER_REQ_NONE;
 		return POWER_ON_BY_POWER_REQ_RESET;
 	}
+	/* Clear invalid request */
+	power_request = POWER_REQ_NONE;
 
 	/* check if system is already ON */
 	if (power_get_signals() & IN_POWER_GOOD) {
@@ -627,6 +629,8 @@ static uint8_t check_for_power_off_event(void)
 		 */
 		return POWER_OFF_BY_POWER_REQ_RESET;
 	}
+	/* Clear invalid request */
+	power_request = POWER_REQ_NONE;
 
 	/*
 	 * Check for power button press.

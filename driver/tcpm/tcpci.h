@@ -220,7 +220,10 @@ int tcpci_tcpm_transmit(int port, enum tcpm_transmit_type type,
 			uint16_t header, const uint32_t *data);
 int tcpci_tcpm_release(int port);
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+int tcpci_set_role_ctrl(int port, int toggle, int rp, int pull);
 int tcpci_tcpc_drp_toggle(int port);
+int tcpci_tcpc_set_connection(int port, enum tcpc_cc_pull pull,
+			      int connect);
 #endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 int tcpci_enter_low_power_mode(int port);
@@ -230,10 +233,9 @@ void tcpci_tcpc_discharge_vbus(int port, int enable);
 #endif
 void tcpci_tcpc_enable_auto_discharge_disconnect(int port, int enable);
 
-int tcpci_tcpm_mux_init(int i2c_addr);
-int tcpci_tcpm_mux_set(int i2c_addr, mux_state_t mux_state);
-int tcpci_tcpm_mux_get(int i2c_addr, mux_state_t *mux_state);
-int tcpci_tcpm_mux_enter_low_power(int port);
+int tcpci_tcpm_mux_init(const struct usb_mux *me);
+int tcpci_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state);
+int tcpci_tcpm_mux_get(const struct usb_mux *me, mux_state_t *mux_state);
 int tcpci_get_chip_info(int port, int live,
 			struct ec_response_pd_chip_info_v1 **chip_info);
 #ifdef CONFIG_USBC_PPC

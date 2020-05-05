@@ -11,7 +11,7 @@
 #include "common.h"
 #include "cros_board_info.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/als_tcs3400.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
@@ -42,6 +42,7 @@
 #include "usb_pd.h"
 #include "usbc_ppc.h"
 #include "util.h"
+#include "driver/temp_sensor/amd_r19me4070.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -120,6 +121,8 @@ const struct pwm_t pwm_channels[] = {
 	[PWM_CH_KBLIGHT]   = { .channel = 3, .flags = 0, .freq = 10000 },
 	[PWM_CH_FAN] = {.channel = 5, .flags = PWM_CONFIG_OPEN_DRAIN,
 			.freq = 25000},
+	[PWM_CH_FAN2] = {.channel = 6, .flags = PWM_CONFIG_OPEN_DRAIN,
+			.freq = 25000},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
@@ -145,12 +148,14 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
+		.usb_port = USB_PD_PORT_TCPC_0,
 		.driver = &anx7447_usb_mux_driver,
 		.hpd_update = &anx7447_tcpc_update_hpd_status,
 	},
 	[USB_PD_PORT_TCPC_1] = {
+		.usb_port = USB_PD_PORT_TCPC_1,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	}
@@ -175,7 +180,7 @@ static struct mutex g_base_mutex;
 static struct mutex g_lid_mutex;
 
 /* Base accel private data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
@@ -221,8 +226,8 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
 /*
@@ -276,8 +281,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_ACCEL,
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
 		.default_range = 2, /* g, to support tablet mode  */
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
@@ -303,8 +308,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 
 	[CLEAR_ALS] = {
@@ -363,6 +368,12 @@ const struct fan_conf fan_conf_0 = {
 	.enable_gpio = GPIO_EN_PP5000_FAN,
 };
 
+const struct fan_conf fan_conf_1 = {
+	.flags = FAN_USE_RPM_MODE,
+	.ch = MFT_CH_1,	/* Use MFT id to control fan */
+	.pgood_gpio = -1,
+	.enable_gpio = GPIO_EN_PP5000_FAN,
+};
 /* Default */
 const struct fan_rpm fan_rpm_0 = {
 	.rpm_min = 3100,
@@ -370,37 +381,46 @@ const struct fan_rpm fan_rpm_0 = {
 	.rpm_max = 6900,
 };
 
+const struct fan_rpm fan_rpm_1 = {
+	.rpm_min = 2000,
+	.rpm_start = 2000,
+	.rpm_max = 4100,
+};
 const struct fan_t fans[FAN_CH_COUNT] = {
 	[FAN_CH_0] = { .conf = &fan_conf_0, .rpm = &fan_rpm_0, },
+	[FAN_CH_1] = { .conf = &fan_conf_1, .rpm = &fan_rpm_1, },
 };
 
 /******************************************************************************/
 /* MFT channels. These are logically separate from pwm_channels. */
 const struct mft_t mft_channels[] = {
 	[MFT_CH_0] = {NPCX_MFT_MODULE_1, TCKC_LFCLK, PWM_CH_FAN},
+	[MFT_CH_1] = {NPCX_MFT_MODULE_2, TCKC_LFCLK, PWM_CH_FAN2},
 };
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
 /* ADC channels */
 const struct adc_t adc_channels[] = {
 	[ADC_TEMP_SENSOR_1] = {
-		"TEMP_AMB", NPCX_ADC_CH0, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
+		"TEMP_CHARGER", NPCX_ADC_CH0, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
 	[ADC_TEMP_SENSOR_2] = {
-		"TEMP_CHARGER", NPCX_ADC_CH1, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
+		"TEMP_5V", NPCX_ADC_CH1, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1] = {.name = "Temp1",
+	[TEMP_CHARGER] = {.name = "CHARGER",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1,
-				 .action_delay_sec = 1},
-	[TEMP_SENSOR_2] = {.name = "Temp2",
+				 .idx = ADC_TEMP_SENSOR_1},
+	[TEMP_5V] = {.name = "5V",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_2},
+	[TEMP_GPU] = {.name = "GPU",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_R19ME4070,
+				 .idx = R19ME4070_LOCAL},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -426,12 +446,29 @@ const static struct ec_thermal_config thermal_a = {
 	.temp_fan_max = C_TO_K(50),
 };
 
+const static struct ec_thermal_config thermal_b = {
+	.temp_host = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = 0,
+	},
+	.temp_fan_off = C_TO_K(0),
+	.temp_fan_max = C_TO_K(70),
+};
+
+
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
 static void setup_fans(void)
 {
-	thermal_params[TEMP_SENSOR_1] = thermal_a;
-	thermal_params[TEMP_SENSOR_2] = thermal_a;
+	thermal_params[TEMP_CHARGER] = thermal_a;
+	thermal_params[TEMP_5V] = thermal_a;
+	thermal_params[TEMP_GPU] = thermal_b;
 }
 
 /* Sets the gpio flags correct taking into account warm resets */
@@ -491,4 +528,11 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 	/* Note that the level is inverted because the pin is active low. */
 	gpio_set_level(GPIO_USB_C_OC_ODL, !is_overcurrented);
+}
+
+bool board_is_convertible(void)
+{
+	const uint8_t sku = get_board_sku();
+
+	return (sku == 255);
 }

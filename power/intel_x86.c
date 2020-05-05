@@ -595,6 +595,14 @@ void intel_x86_rsmrst_signal_interrupt(enum gpio_signal signal)
 	power_signal_interrupt(signal);
 }
 
+__overridable void board_before_rsmrst(int rsmrst)
+{
+}
+
+__overridable void board_after_rsmrst(int rsmrst)
+{
+}
+
 void common_intel_x86_handle_rsmrst(enum power_state state)
 {
 	/*
@@ -608,9 +616,7 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 	if (rsmrst_in == rsmrst_out)
 		return;
 
-#ifdef CONFIG_BOARD_HAS_BEFORE_RSMRST
 	board_before_rsmrst(rsmrst_in);
-#endif
 
 #ifdef CONFIG_CHIPSET_APL_GLK
 	/* Only passthrough RSMRST_L de-assertion on power up */
@@ -628,6 +634,8 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 	gpio_set_level(GPIO_PCH_RSMRST_L, rsmrst_in);
 
 	CPRINTS("Pass through GPIO_RSMRST_L_PGOOD: %d", rsmrst_in);
+
+	board_after_rsmrst(rsmrst_in);
 }
 
 #ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
@@ -675,6 +683,15 @@ __override void power_chipset_handle_host_sleep_event(
 
 #endif
 
+__overridable void intel_x86_sys_reset_delay(void)
+{
+	/*
+	 * Debounce time for SYS_RESET_L is 16 ms. Wait twice that period
+	 * to be safe.
+	 */
+	udelay(32 * MSEC);
+}
+
 void chipset_reset(enum chipset_reset_reason reason)
 {
 	/*
@@ -700,11 +717,7 @@ void chipset_reset(enum chipset_reset_reason reason)
 	report_ap_reset(reason);
 
 	gpio_set_level(GPIO_SYS_RESET_L, 0);
-	/*
-	 * Debounce time for SYS_RESET_L is 16 ms. Wait twice that period
-	 * to be safe.
-	 */
-	udelay(32 * MSEC);
+	intel_x86_sys_reset_delay();
 	gpio_set_level(GPIO_SYS_RESET_L, 1);
 }
 
@@ -737,7 +750,7 @@ enum ec_error_list intel_x86_wait_power_up_ok(void)
 	power_up_inhibited = 0;
 #endif
 
-#ifdef CONFIG_VBOOT_EFS
+#if defined(CONFIG_VBOOT_EFS) || defined(CONFIG_VBOOT_EFS2)
 	/*
 	 * We have to test power readiness here (instead of S5->S3)
 	 * because when entering S5, EC enables EC_ROP_SLP_SUS pin

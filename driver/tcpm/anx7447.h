@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include "usb_mux.h"
+
 /* USB Power delivery port management */
 
 #ifndef __CROS_EC_USB_PD_TCPM_ANX7447_H
@@ -25,6 +27,9 @@
 #define ANX7447_REG_HPD_CTRL_0		0x7E
 #define ANX7447_REG_HPD_MODE		0x01
 #define ANX7447_REG_HPD_OUT		0x02
+#define ANX7447_REG_HPD_IRQ0		0x04
+#define ANX7447_REG_HPD_PLUG		0x08
+#define ANX7447_REG_HPD_UNPLUG		0x10
 
 #define ANX7447_REG_HPD_DEGLITCH_H	0x80
 #define ANX7447_REG_HPD_OEN		0x40
@@ -39,6 +44,8 @@
 #define ANX7447_REG_VCONN_OCP_440mA	0x0C
 
 #define ANX7447_REG_ANALOG_CTRL_10	0xAA
+#define ANX7447_REG_CABLE_DET_DIG	0x40
+
 #define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_MASK	0x38
 #define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_19US	0x00
 #define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_38US	0x08
@@ -127,8 +134,9 @@ void anx7447_hpd_output_en(int port);
 
 extern const struct tcpm_drv anx7447_tcpm_drv;
 extern const struct usb_mux_driver anx7447_usb_mux_driver;
-void anx7447_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq);
 void anx7447_tcpc_clear_hpd_status(int port);
+void anx7447_tcpc_update_hpd_status(const struct usb_mux *me,
+				    int hpd_lvl, int hpd_irq);
 
 /**
  * Erase OCM flash if it's not empty

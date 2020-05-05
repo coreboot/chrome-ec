@@ -48,7 +48,7 @@ struct anx_usb_mux {
 	int state;
 };
 
-static int anx7447_mux_set(int port, mux_state_t mux_state);
+static int anx7447_mux_set(const struct usb_mux *me, mux_state_t mux_state);
 
 static struct anx_state anx[CONFIG_USB_PD_PORT_MAX_COUNT];
 static struct anx_usb_mux mux[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -93,7 +93,7 @@ static inline int anx7447_reg_read(int port, int reg, int *val)
 	return rv;
 }
 
-void anx7447_hpd_mode_en(int port)
+void anx7447_hpd_mode_init(int port)
 {
 	int reg, rv;
 
@@ -101,7 +101,13 @@ void anx7447_hpd_mode_en(int port)
 	if (rv)
 		return;
 
-	reg |= ANX7447_REG_HPD_MODE;
+	/*
+	 * Set ANX7447_REG_HPD_MODE bit as 0, then the TCPC will generate the
+	 * HPD pulse from internal timer (by using ANX7447_REG_HPD_IRQ0)
+	 * instead of using the ANX7447_REG_HPD_OUT to set the HPD IRQ signal.
+	 */
+	reg &= ~(ANX7447_REG_HPD_MODE | ANX7447_REG_HPD_PLUG |
+		 ANX7447_REG_HPD_UNPLUG);
 	anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
 }
 
@@ -125,10 +131,18 @@ void anx7447_set_hpd_level(int port, int hpd_lvl)
 	if (rv)
 		return;
 
-	if (hpd_lvl)
-		reg |= ANX7447_REG_HPD_OUT;
-	else
-		reg &= ~ANX7447_REG_HPD_OUT;
+	/*
+	 * When ANX7447_REG_HPD_MODE is 1, use ANX7447_REG_HPD_OUT
+	 * to generate HPD event, otherwise use ANX7447_REG_HPD_UNPLUG
+	 * and ANX7447_REG_HPD_PLUG.
+	 */
+	if (hpd_lvl) {
+		reg &= ~ANX7447_REG_HPD_UNPLUG;
+		reg |= ANX7447_REG_HPD_PLUG;
+	} else {
+		reg &= ~ANX7447_REG_HPD_PLUG;
+		reg |= ANX7447_REG_HPD_UNPLUG;
+	}
 	anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
 }
 
@@ -285,6 +299,7 @@ DECLARE_CONSOLE_COMMAND(anx_ocm, command_anx_ocm,
 static int anx7447_init(int port)
 {
 	int rv, reg, i;
+	const struct usb_mux *me = &usb_muxes[port];
 
 	ASSERT(port < CONFIG_USB_PD_PORT_MAX_COUNT);
 
@@ -339,6 +354,15 @@ static int anx7447_init(int port)
 	if (rv)
 		return rv;
 
+	/*
+	 * Specifically disable voltage alarms, as VBUS_VOLTAGE_ALARM_HI may
+	 * trigger repeatedly despite being masked (b/153989733)
+	 */
+	rv = tcpc_update16(port, TCPC_REG_POWER_CTRL,
+			   TCPC_REG_POWER_CTRL_VBUS_VOL_MONITOR_DIS, MASK_SET);
+	if (rv)
+		return rv;
+
 	/* ADC enable, use to monitor VBUS voltage */
 	rv = tcpc_read(port, ANX7447_REG_ADC_CTRL_1, &reg);
 	if (rv)
@@ -363,14 +387,20 @@ static int anx7447_init(int port)
 	reg &= ~ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_MASK;
 	reg |= ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_2430US;
 	rv = tcpc_write(port, ANX7447_REG_ANALOG_CTRL_10, reg);
+	if (rv)
+		return rv;
 
 #ifdef CONFIG_USB_PD_TCPM_MUX
 	/*
 	 * Run mux_set() here for considering CCD(Case-Closed Debugging) case
 	 * If this TCPC is not also the MUX then don't initialize to NONE
 	 */
-	if (!(usb_muxes[port].flags & USB_MUX_FLAG_NOT_TCPC))
-		rv |= anx7447_mux_set(port, USB_PD_MUX_NONE);
+	while ((me != NULL) && (me->driver != &anx7447_usb_mux_driver))
+		me = me->next_mux;
+
+	if (me != NULL &&
+	    !(me->flags & USB_MUX_FLAG_NOT_TCPC))
+		rv = anx7447_mux_set(me, USB_PD_MUX_NONE);
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
 	return rv;
@@ -453,9 +483,11 @@ static void anx7447_tcpc_alert(int port)
  */
 static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-void anx7447_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
+void anx7447_tcpc_update_hpd_status(const struct usb_mux *me,
+				    int hpd_lvl, int hpd_irq)
 {
 	int reg = 0;
+	int port = me->usb_port;
 
 	/*
 	 * All calls within this method need to update to a mux_read/write calls
@@ -464,7 +496,7 @@ void anx7447_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
 	 * it doesn't have a re-driver). If that changes, we need to update this
 	 * code.
 	 */
-	ASSERT(!(usb_muxes[port].flags & USB_MUX_FLAG_NOT_TCPC));
+	ASSERT(!(me->flags & USB_MUX_FLAG_NOT_TCPC));
 
 	anx7447_set_hpd_level(port, hpd_lvl);
 
@@ -474,11 +506,15 @@ void anx7447_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
 		if (now < hpd_deadline[port])
 			usleep(hpd_deadline[port] - now);
 
+		/*
+		 * For generate hardware HPD IRQ, need clear bit
+		 * ANX7447_REG_HPD_IRQ0 first, then set it. This bit is not
+		 * write clear.
+		 */
 		anx7447_reg_read(port, ANX7447_REG_HPD_CTRL_0, &reg);
-		reg &= ~ANX7447_REG_HPD_OUT;
+		reg &= ~ANX7447_REG_HPD_IRQ0;
 		anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
-		usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
-		reg |= ANX7447_REG_HPD_OUT;
+		reg |= ANX7447_REG_HPD_IRQ0;
 		anx7447_reg_write(port, ANX7447_REG_HPD_CTRL_0, reg);
 	}
 	/* enforce 2-ms delay between HPD pulses */
@@ -492,14 +528,16 @@ void anx7447_tcpc_clear_hpd_status(int port)
 }
 
 #ifdef CONFIG_USB_PD_TCPM_MUX
-static int anx7447_mux_init(int port)
+static int anx7447_mux_init(const struct usb_mux *me)
 {
+	int port = me->usb_port;
+
 	ASSERT(port < CONFIG_USB_PD_PORT_MAX_COUNT);
 
 	memset(&mux[port], 0, sizeof(struct anx_usb_mux));
 
 	/* init hpd status */
-	anx7447_hpd_mode_en(port);
+	anx7447_hpd_mode_init(port);
 	anx7447_set_hpd_level(port, 0);
 	anx7447_hpd_output_en(port);
 
@@ -508,41 +546,42 @@ static int anx7447_mux_init(int port)
 	 * USB_PD_MUX_DP_ENABLED) when reinitialized, we need to force
 	 * initialize it to USB_PD_MUX_NONE
 	 */
-	return anx7447_mux_set(port, USB_PD_MUX_NONE);
+	return anx7447_mux_set(me, USB_PD_MUX_NONE);
 }
 
 #ifdef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
-static void anx7447_mux_safemode(int port, int on_off)
+static void anx7447_mux_safemode(const struct usb_mux *me, int on_off)
 {
 	int reg;
 
-	mux_read(port, ANX7447_REG_ANALOG_CTRL_9, &reg);
+	mux_read(me, ANX7447_REG_ANALOG_CTRL_9, &reg);
 
 	if (on_off)
 		reg |= ANX7447_REG_SAFE_MODE;
 	else
 		reg &= ~(ANX7447_REG_SAFE_MODE);
 
-	mux_write(port, ANX7447_REG_ANALOG_CTRL_9, reg);
+	mux_write(me, ANX7447_REG_ANALOG_CTRL_9, reg);
 	CPRINTS("C%d set mux to safemode %s, reg = 0x%x",
-		port, (on_off) ? "on" : "off", reg);
+		me->usb_port, (on_off) ? "on" : "off", reg);
 }
 
-static inline void anx7447_configure_aux_src(int port, int on_off)
+static inline void anx7447_configure_aux_src(const struct usb_mux *me,
+					     int on_off)
 {
 	int reg;
 
-	mux_read(port, ANX7447_REG_ANALOG_CTRL_9, &reg);
+	mux_read(me, ANX7447_REG_ANALOG_CTRL_9, &reg);
 
 	if (on_off)
 		reg |= ANX7447_REG_R_AUX_RES_PULL_SRC;
 	else
 		reg &= ~(ANX7447_REG_R_AUX_RES_PULL_SRC);
 
-	mux_write(port, ANX7447_REG_ANALOG_CTRL_9, reg);
+	mux_write(me, ANX7447_REG_ANALOG_CTRL_9, reg);
 
 	CPRINTS("C%d set aux_src to %s, reg = 0x%x",
-		port, (on_off) ? "on" : "off", reg);
+		me->usb_port, (on_off) ? "on" : "off", reg);
 }
 #endif
 
@@ -555,12 +594,13 @@ static inline void anx7447_configure_aux_src(int port, int on_off)
  *
  * a2, a3, a10, a11, b2, b3, b10, b11 are pins on the USB-C connector.
  */
-static int anx7447_mux_set(int port, mux_state_t mux_state)
+static int anx7447_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 {
 	int cc_direction;
 	mux_state_t mux_type;
 	int sw_sel = 0x00, aux_sw = 0x00;
 	int rv;
+	int port = me->usb_port;
 
 	cc_direction = mux_state & USB_PD_MUX_POLARITY_INVERTED;
 	mux_type = mux_state & USB_PD_MUX_DOCK;
@@ -605,11 +645,11 @@ static int anx7447_mux_set(int port, mux_state_t mux_state)
 	 * first. After the  mux configured, should set mux to normal mode.
 	 */
 #ifdef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
-	anx7447_mux_safemode(port, 1);
+	anx7447_mux_safemode(me, 1);
 #endif
-	rv = mux_write(port, ANX7447_REG_TCPC_SWITCH_0, sw_sel);
-	rv |= mux_write(port, ANX7447_REG_TCPC_SWITCH_1, sw_sel);
-	rv |= mux_write(port, ANX7447_REG_TCPC_AUX_SWITCH, aux_sw);
+	rv = mux_write(me, ANX7447_REG_TCPC_SWITCH_0, sw_sel);
+	rv |= mux_write(me, ANX7447_REG_TCPC_SWITCH_1, sw_sel);
+	rv |= mux_write(me, ANX7447_REG_TCPC_AUX_SWITCH, aux_sw);
 
 	mux[port].state = mux_state;
 
@@ -619,28 +659,67 @@ static int anx7447_mux_set(int port, mux_state_t mux_state)
 	 * normal mode, otherwise: keep safe mode.
 	 */
 	if (mux_type != USB_PD_MUX_NONE) {
-		anx7447_configure_aux_src(port, 1);
-		anx7447_mux_safemode(port, 0);
+		anx7447_configure_aux_src(me, 1);
+		anx7447_mux_safemode(me, 0);
 	} else
-		anx7447_configure_aux_src(port, 0);
+		anx7447_configure_aux_src(me, 0);
 #endif
 
 	return rv;
 }
 
 /* current mux state */
-static int anx7447_mux_get(int port, mux_state_t *mux_state)
+static int anx7447_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
 {
+	int port = me->usb_port;
+
 	*mux_state = mux[port].state;
 
 	return EC_SUCCESS;
 }
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
+#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+static int anx7447_tcpc_drp_toggle(int port)
+{
+	int rv, reg;
+
+	rv = tcpc_read(port, ANX7447_REG_ANALOG_CTRL_10, &reg);
+	if (rv)
+		return rv;
+	/*
+	 * When using Look4Connection command to toggle CC under normal mode
+	 * the CABLE_DET_DIG shall be clear first.
+	 */
+	if (reg & ANX7447_REG_CABLE_DET_DIG) {
+		reg &= ~ANX7447_REG_CABLE_DET_DIG;
+		rv = tcpc_write(port, ANX7447_REG_ANALOG_CTRL_10, reg);
+		if (rv)
+			return rv;
+	}
+
+	return tcpci_tcpc_drp_toggle(port);
+}
+#endif
+
 /* Override for tcpci_tcpm_set_cc */
 static int anx7447_set_cc(int port, int pull)
 {
-	int rp;
+	int rp, reg;
+
+	rp = tcpc_read(port, ANX7447_REG_ANALOG_CTRL_10, &reg);
+	if (rp)
+		return rp;
+	/*
+	 * When setting CC status, should be confirm that the CC toggling
+	 * process is stopped, the CABLE_DET_DIG shall be set to one.
+	 */
+	if ((reg & ANX7447_REG_CABLE_DET_DIG) == 0) {
+		reg |= ANX7447_REG_CABLE_DET_DIG;
+		rp = tcpc_write(port, ANX7447_REG_ANALOG_CTRL_10, reg);
+		if (rp)
+			return rp;
+	}
 
 	rp = tcpci_get_cached_rp(port);
 
@@ -650,7 +729,8 @@ static int anx7447_set_cc(int port, int pull)
 }
 
 /* Override for tcpci_tcpm_set_polarity */
-static int anx7447_set_polarity(int port, enum tcpc_cc_polarity polarity)
+static int anx7447_set_polarity(int port,
+				enum tcpc_cc_polarity polarity)
 {
 	return tcpc_update8(port,
 			    TCPC_REG_TCPC_CTRL,
@@ -686,7 +766,7 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-	.drp_toggle		= &tcpci_tcpc_drp_toggle,
+	.drp_toggle		= anx7447_tcpc_drp_toggle,
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
 #ifdef CONFIG_USBC_PPC

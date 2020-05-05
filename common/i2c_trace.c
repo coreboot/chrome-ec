@@ -24,13 +24,11 @@ struct i2c_trace_range {
 static struct i2c_trace_range trace_entries[8];
 
 void i2c_trace_notify(int port, uint16_t slave_addr_flags,
-		      int direction, const uint8_t *data, size_t size)
+		      const uint8_t *out_data, size_t out_size,
+		      const uint8_t *in_data, size_t in_size)
 {
 	size_t i;
 	uint16_t addr = I2C_GET_ADDR(slave_addr_flags);
-
-	if (size == 0)
-		return;
 
 	for (i = 0; i < ARRAY_SIZE(trace_entries); i++)
 		if (trace_entries[i].enabled
@@ -41,27 +39,35 @@ void i2c_trace_notify(int port, uint16_t slave_addr_flags,
 	return;
 
 trace_enabled:
-	CPRINTF("i2c: %s %d:0x%X ",
-		direction ? "read" : "write",
-		port,
-		addr);
-	for (i = 0; i < size; i++)
-		CPRINTF("%02X ", data[i]);
+	CPRINTF("i2c: %d:0x%X ", port, addr);
+	if (out_size) {
+		CPRINTF("wr ");
+		for (i = 0; i < out_size; i++)
+			CPRINTF("0x%02X ", out_data[i]);
+	}
+	if (in_size) {
+		CPRINTF("  rd ");
+		for (i = 0; i < in_size; i++)
+			CPRINTF("0x%02X ", in_data[i]);
+	}
 	CPRINTF("\n");
 }
 
 static int command_i2ctrace_list(void)
 {
 	size_t i;
+	const struct i2c_port_t *i2c_port;
 
-	ccprintf("id port address\n");
-	ccprintf("-- ---- -------\n");
+	ccprintf("id port       address\n");
+	ccprintf("-- ----       -------\n");
 
 	for (i = 0; i < ARRAY_SIZE(trace_entries); i++) {
 		if (trace_entries[i].enabled) {
-			ccprintf("%2d %4d 0x%X",
+			i2c_port = get_i2c_port(trace_entries[i].port);
+			ccprintf("%-2zd %d %-8s 0x%X",
 				 i,
 				 trace_entries[i].port,
+				 i2c_port->name,
 				 trace_entries[i].slave_addr_lo);
 			if (trace_entries[i].slave_addr_hi
 			    != trace_entries[i].slave_addr_lo)
@@ -89,7 +95,7 @@ static int command_i2ctrace_enable(int port, int slave_addr_lo,
 	struct i2c_trace_range *t;
 	struct i2c_trace_range *new_entry = NULL;
 
-	if (port >= i2c_ports_used)
+	if (!get_i2c_port(port))
 		return EC_ERROR_PARAM2;
 
 	if (slave_addr_lo > slave_addr_hi)

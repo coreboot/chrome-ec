@@ -78,9 +78,12 @@
 #undef CONFIG_USB_PD_TCPC_LOW_POWER
 #undef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
-#define CONFIG_USB_PD_TCPM_ITE83XX	/* C0 & C1 TCPC: ITE EC */
+#define CONFIG_USB_PD_TCPM_ITE_ON_CHIP	/* C0 & C1 TCPC: ITE EC */
 #define CONFIG_USB_PD_TCPM_TUSB422	/* C1 TCPC: TUSB422 */
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
+#define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
+
 /*
  * TODO (b/111281797): DragonEgg has 3 ports. Only adding support for the port
  * on the MLB for now. In addition, this config option will likely move to

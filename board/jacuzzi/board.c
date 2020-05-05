@@ -15,7 +15,7 @@
 #include "common.h"
 #include "console.h"
 #include "driver/accel_kionix.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/battery/max17055.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
@@ -36,6 +36,7 @@
 #include "registers.h"
 #include "spi.h"
 #include "system.h"
+#include "tablet_mode.h"
 #include "task.h"
 #include "tcpm.h"
 #include "timer.h"
@@ -98,12 +99,20 @@ struct keyboard_scan_config keyscan_config = {
 	.output_settle_us = 35,
 	.debounce_down_us = 5 * MSEC,
 	.debounce_up_us = 40 * MSEC,
-	.scan_period_us = 3 * MSEC,
-	.min_post_scan_delay_us = 1000,
+	.scan_period_us = 10 * MSEC,
+	.min_post_scan_delay_us = 10 * MSEC,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
 		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
+	},
+};
+
+struct ioexpander_config_t ioex_config[CONFIG_IO_EXPANDER_PORT_COUNT] = {
+	[0] = {
+		.i2c_host_port = I2C_PORT_IO_EXPANDER_IT8801,
+		.i2c_slave_addr = IT8801_I2C_ADDR,
+		.drv = &it8801_ioexpander_drv,
 	},
 };
 
@@ -122,14 +131,6 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 };
 
 /******************************************************************************/
-const struct it8801_pwm_t it8801_pwm_channels[] = {
-	[PWM_CH_LED_RED] = { 1 },
-	[PWM_CH_LED_GREEN] = { 2 },
-	[PWM_CH_LED_BLUE] = { 3 },
-};
-BUILD_ASSERT(ARRAY_SIZE(it8801_pwm_channels) == PWM_CH_COUNT);
-
-/******************************************************************************/
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -141,7 +142,8 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
+static void board_hpd_status(const struct usb_mux *me,
+			     int hpd_lvl, int hpd_irq)
 {
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
@@ -150,10 +152,11 @@ static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
 	host_set_single_event(EC_HOST_EVENT_USB_MUX);
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		/* Driver uses I2C_PORT_USB_MUX as I2C port */
-		.port_addr = IT5205_I2C_ADDR1_FLAGS,
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
 		.hpd_update = &board_hpd_status,
 	},
@@ -208,7 +211,7 @@ int board_set_active_charge_port(int charge_port)
 		 * even when battery is disconnected, keep VBAT rail on but
 		 * set the charging current to minimum.
 		 */
-		charger_set_current(0);
+		charger_set_current(CHARGER_SOLO, 0);
 		break;
 	default:
 		panic("Invalid charge port\n");
@@ -261,17 +264,24 @@ void bc12_interrupt(enum gpio_signal signal)
 #ifndef VARIANT_KUKUI_NO_SENSORS
 static void board_spi_enable(void)
 {
-	cputs(CC_ACCEL, "board_spi_enable");
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	/*
+	 * Pin mux spi peripheral away from emmc, since RO might have
+	 * left them there.
+	 */
+	gpio_config_module(MODULE_SPI_FLASH, 0);
 
-	/* Enable clocks to SPI2 module */
+	/* Enable clocks to SPI2 module. */
 	STM32_RCC_APB1ENR |= STM32_RCC_PB1_SPI2;
 
-	/* Reset SPI2 */
+	/* Reset SPI2 to clear state left over from the emmc slave. */
 	STM32_RCC_APB1RSTR |= STM32_RCC_PB1_SPI2;
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
+	/* Reinitialize spi peripheral. */
 	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+
+	/* Pin mux spi peripheral toward the sensor. */
+	gpio_config_module(MODULE_SPI_MASTER, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP,
 	     board_spi_enable,
@@ -279,14 +289,14 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP,
 
 static void board_spi_disable(void)
 {
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
-
-	/* Disable clocks to SPI2 module */
-	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
-
-	gpio_config_module(MODULE_SPI_MASTER, 0);
+	/* Set pins to a state calming the sensor down. */
 	gpio_set_flags(GPIO_EC_SENSOR_SPI_CK, GPIO_OUT_LOW);
 	gpio_set_level(GPIO_EC_SENSOR_SPI_CK, 0);
+	gpio_config_module(MODULE_SPI_MASTER, 0);
+
+	/* Disable spi peripheral and clocks. */
+	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
+	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
 	     board_spi_disable,
@@ -329,14 +339,14 @@ static struct mutex g_base_mutex;
 
 /* Rotation matrixes */
 static const mat33_fp_t base_standard_ref = {
+	{FLOAT_TO_FP(1), 0, 0},
 	{0, FLOAT_TO_FP(1), 0},
-	{FLOAT_TO_FP(-1), 0, 0},
 	{0, 0, FLOAT_TO_FP(1)}
 };
 
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -381,8 +391,8 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 2,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* EC use accel for angle detection */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -409,19 +419,13 @@ struct motion_sensor_t motion_sensors[] = {
 	 .i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 #endif /* !VARIANT_KUKUI_NO_SENSORS */
-
-/* TODO(b:138640167): config charger correctly */
-int charger_is_sourcing_otg_power(int port)
-{
-	return 0;
-}
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)

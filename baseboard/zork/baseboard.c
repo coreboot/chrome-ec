@@ -8,6 +8,7 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "button.h"
+#include "cbi_ec_fw_config.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "charge_state_v2.h"
@@ -15,29 +16,20 @@
 #include "compile_time_macros.h"
 #include "console.h"
 #include "cros_board_info.h"
-#include "driver/accel_kionix.h"
-#include "driver/accel_kx022.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/bc12/pi3usb9201.h"
-#include "driver/charger/isl9241.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
-#include "driver/retimer/pi3dpx1207.h"
-#include "driver/retimer/ps8802.h"
-#include "driver/retimer/ps8811.h"
-#include "driver/retimer/ps8818.h"
-#include "driver/tcpm/ps8xxx.h"
+#include "driver/retimer/pi3hdx1204.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
+#include "driver/temp_sensor/tmp432.h"
 #include "driver/usb_mux/amd_fp5.h"
 #include "ec_commands.h"
 #include "extpower.h"
-#include "fan.h"
-#include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "ioexpander.h"
-#include "ioexpander_nct38xx.h"
 #include "i2c.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
@@ -114,110 +106,6 @@ const struct power_signal_info power_signal_list[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
-const struct i2c_port_t i2c_ports[] = {
-	{
-		.name = "tcpc0",
-		.port = I2C_PORT_TCPC0,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_USB_A0_C0_SCL,
-		.sda = GPIO_EC_I2C_USB_A0_C0_SDA,
-	},
-	{
-		.name = "tcpc1",
-		.port = I2C_PORT_TCPC1,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_USB_A1_C1_SCL,
-		.sda = GPIO_EC_I2C_USB_A1_C1_SDA,
-	},
-	{
-		.name = "power",
-		.port = I2C_PORT_BATTERY,
-		.kbps = 100,
-		.scl = GPIO_EC_I2C_POWER_SCL,
-		.sda = GPIO_EC_I2C_POWER_SDA,
-	},
-	{
-		.name = "mux",
-		.port = I2C_PORT_USB_MUX,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_USBC_AP_MUX_SCL,
-		.sda = GPIO_EC_I2C_USBC_AP_MUX_SDA,
-	},
-	{
-		.name = "thermal",
-		.port = I2C_PORT_THERMAL,
-		.kbps = 400,
-		.scl = GPIO_FCH_SIC,
-		.sda = GPIO_FCH_SID,
-	},
-	{
-		.name = "sensor",
-		.port = I2C_PORT_SENSOR,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_SENSOR_CBI_SCL,
-		.sda = GPIO_EC_I2C_SENSOR_CBI_SDA,
-	},
-	{
-		.name = "ap_audio",
-		.port = I2C_PORT_AP_AUDIO,
-		.kbps = 400,
-		.scl = GPIO_FCH_I2C_AUDIO_SCL,
-		.sda = GPIO_FCH_I2C_AUDIO_SDA,
-	},
-	{
-		.name = "ap_hdmi",
-		.port = I2C_PORT_AP_HDMI,
-		.kbps = 400,
-		.scl = GPIO_FCH_I2C_HDMI_HUB_3V3_SCL,
-		.sda = GPIO_FCH_I2C_HDMI_HUB_3V3_SDA,
-	},
-};
-const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
-
-const struct pwm_t pwm_channels[] = {
-	[PWM_CH_KBLIGHT] = {
-		.channel = 3,
-		.flags = PWM_CONFIG_DSLEEP,
-		.freq = 100,
-	},
-	[PWM_CH_FAN] = {
-		.channel = 2,
-		.flags = PWM_CONFIG_OPEN_DRAIN,
-		.freq = 25000,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
-
-/* Physical fans. These are logically separate from pwm_channels. */
-const struct fan_conf fan_conf_0 = {
-	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
-	.pgood_gpio = -1,
-	.enable_gpio = -1,
-};
-const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3100,
-	.rpm_start = 3100,
-	.rpm_max = 6900,
-};
-const struct fan_t fans[] = {
-	[FAN_CH_0] = {
-		.conf = &fan_conf_0,
-		.rpm = &fan_rpm_0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
-
-/* MFT channels. These are logically separate from pwm_channels. */
-const struct mft_t mft_channels[] = {
-	[MFT_CH_0] = {
-		.module = NPCX_MFT_MODULE_1,
-		.clk_src = TCKC_LFCLK,
-		.pwm_id = PWM_CH_FAN,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
-
 struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		/* Device does not talk I2C */
@@ -232,15 +120,6 @@ struct ppc_config_t ppc_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-const struct charger_config_t chg_chips[] = {
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
-		.drv = &isl9241_drv,
-	},
-};
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 void ppc_interrupt(enum gpio_signal signal)
 {
@@ -320,6 +199,7 @@ const struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		},
 		.drv = &nct38xx_tcpm_drv,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -328,6 +208,7 @@ const struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		},
 		.drv = &nct38xx_tcpm_drv,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -345,22 +226,6 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
-
-void baseboard_tcpc_init(void)
-{
-	/* Enable PPC interrupts. */
-	gpio_enable_interrupt(GPIO_USB_C0_PPC_FAULT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
-
-	/* Enable TCPC interrupts. */
-	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
-
-	/* Enable BC 1.2 interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
-}
-DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
 /*
  * In the AOZ1380 PPC, there are no programmable features.  We use
@@ -473,345 +338,6 @@ void bc12_interrupt(enum gpio_signal signal)
 	}
 }
 
-/*****************************************************************************
- * USB-A Retimer tuning
- */
-
-/* PS8811 gain tuning */
-static void ps8811_tuning_init(void)
-{
-	int rv;
-
-	/* USB-A0 can run with default settings */
-
-	/* USB-A1 needs to increase gain to get over MB/DB connector */
-	rv = i2c_write8(I2C_PORT_USBA1,
-			PS8811_I2C_ADDR_FLAGS + PS8811_REG_PAGE1,
-			PS8811_REG1_USB_BEQ_LEVEL,
-			PS8811_BEQ_I2C_LEVEL_UP_13DB |
-			PS8811_BEQ_PIN_LEVEL_UP_18DB);
-	if (rv) {
-		CPRINTSUSB("C1: PS8811 not present or failing to set gain");
-		return;
-	}
-}
-DECLARE_HOOK(HOOK_INIT, ps8811_tuning_init, HOOK_PRIO_INIT_I2C + 1);
-
-/*****************************************************************************
- * Custom Zork USB-C1 Retimer/MUX driver
- */
-
-/*
- * PS8802 set mux tuning.
- * Adds in board specific gain and DP lane count configuration
- */
-static int ps8802_tune_mux(int port, mux_state_t mux_state)
-{
-	int rv = EC_SUCCESS;
-
-	/* Make sure the PS8802 is awake */
-	rv = ps8802_i2c_wake(port);
-	if (rv)
-		return rv;
-
-	/* USB specific config */
-	if (mux_state & USB_PD_MUX_USB_ENABLED) {
-		/* Boost the USB gain */
-		rv = ps8802_i2c_field_update16(port,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_USB_SSEQ_LEVEL,
-					PS8802_USBEQ_LEVEL_UP_MASK,
-					PS8802_USBEQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-	}
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
-		/* Boost the DP gain */
-		rv = ps8802_i2c_field_update8(port,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_DPEQ_LEVEL,
-					PS8802_DPEQ_LEVEL_UP_MASK,
-					PS8802_DPEQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		/* Enable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
-	} else {
-		/* Disable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
-	}
-
-	return rv;
-}
-
-/*
- * PS8818 set mux tuning.
- * Adds in board specific gain and DP lane count configuration
- */
-static int ps8818_tune_mux(int port, mux_state_t mux_state)
-{
-	int rv = EC_SUCCESS;
-
-	/* USB specific config */
-	if (mux_state & USB_PD_MUX_USB_ENABLED) {
-		/* Boost the USB gain */
-		rv = ps8818_i2c_field_update8(port,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(port,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(port,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(port,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-	}
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
-		/* Boost the DP gain */
-		rv = ps8818_i2c_field_update8(port,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_DPEQ_LEVEL,
-					PS8818_DPEQ_LEVEL_UP_MASK,
-					PS8818_DPEQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		/* Enable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
-	} else {
-		/* Disable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
-	}
-
-	return rv;
-}
-
-/*
- * FP5 is a true MUX but being used as a secondary MUX. Don't want to
- * send FLIP or this will cause a double flip
- */
-static int zork_c1_retimer_set_mux(int port, mux_state_t mux_state)
-{
-	return amd_fp5_usb_retimer.set(port,
-				mux_state & ~USB_PD_MUX_POLARITY_INVERTED);
-}
-
-const struct usb_retimer_driver zork_c1_usb_retimer = {
-	/* Secondary MUX/Retimer only needs the set mux interface */
-	.set = zork_c1_retimer_set_mux,
-};
-
-struct usb_retimer usb_retimers[] = {
-	[USBC_PORT_C0] = {
-		.driver = &pi3dpx1207_usb_retimer,
-		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr_flags = PI3DPX1207_I2C_ADDR_FLAGS,
-	},
-	[USBC_PORT_C1] = {
-		/*
-		 * The driver is left off until we detect the
-		 * hardware present. Once the hardware has been
-		 * detected, the driver will be set to the
-		 * detected hardware driver table.
-		 */
-		.i2c_port = I2C_PORT_TCPC1,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(usb_retimers) == USBC_PORT_COUNT);
-
-/*
- * To support both OPT1 DB with PS8818 retimer, and OPT3 DB with PS8802
- * retimer,  Try both, and remember the first one that succeeds.
- *
- * TODO(b:147593660) Cleanup of retimers as muxes in a more
- * generalized mechanism
- */
-enum zork_c1_retimer zork_c1_retimer = C1_RETIMER_UNKNOWN;
-static int zork_c1_detect(int port, int err_if_power_off)
-{
-	int rv;
-
-	/*
-	 * Retimers are not powered in G3 so return success if setting mux to
-	 * none and error otherwise.
-	 */
-	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
-		return (err_if_power_off) ? EC_ERROR_NOT_POWERED
-					  : EC_SUCCESS;
-
-	/*
-	 * Identifying a PS8818 is faster than the PS8802,
-	 * so do it first.
-	 */
-	usb_retimers[port].i2c_addr_flags = PS8818_I2C_ADDR_FLAGS;
-	rv = ps8818_detect(port);
-	if (rv == EC_SUCCESS) {
-		zork_c1_retimer = C1_RETIMER_PS8818;
-		ccprints("C1 PS8818 detected");
-
-		/* Main MUX is FP5, secondary MUX is PS8818 */
-		usb_muxes[USBC_PORT_C1].driver = &amd_fp5_usb_mux_driver;
-		usb_retimers[USBC_PORT_C1].driver = &ps8818_usb_retimer;
-		usb_retimers[USBC_PORT_C1].tune = &ps8818_tune_mux;
-		return rv;
-	}
-
-	usb_retimers[port].i2c_addr_flags = PS8802_I2C_ADDR_FLAGS;
-	rv = ps8802_detect(port);
-	if (rv == EC_SUCCESS) {
-		zork_c1_retimer = C1_RETIMER_PS8802;
-		ccprints("C1 PS8802 detected");
-
-		/* Main MUX is PS8802, secondary MUX is modified FP5 */
-		usb_muxes[USBC_PORT_C1].driver = &ps8802_usb_mux_driver;
-		usb_retimers[USBC_PORT_C1].driver = &zork_c1_usb_retimer;
-		usb_retimers[USBC_PORT_C1].tune = &ps8802_tune_mux;
-	}
-
-	return rv;
-}
-
-/*
- * We start off not sure which configuration we are using.  We set
- * the interface to be this special primary MUX driver in order to
- * determine the actual hardware and then we patch the jump tables
- * to go to the actual drivers instead.
- */
-static int zork_c1_init_mux(int port)
-{
-	/* Try to detect, but don't give an error if no power */
-	return zork_c1_detect(port, 0);
-}
-
-static int zork_c1_set_mux(int port, mux_state_t mux_state)
-{
-	int rv;
-
-	/*
-	 * Try to detect, give an error if we are setting to a
-	 * MUX value that is not NONE when we have no power.
-	 */
-	rv = zork_c1_detect(port, mux_state != USB_PD_MUX_NONE);
-	if (rv)
-		return rv;
-
-	/*
-	 * If we detected the hardware, then call the real routine.
-	 * We only do this one time, after that time we will go direct
-	 * and avoid this special driver.
-	 */
-	if (zork_c1_retimer != C1_RETIMER_UNKNOWN)
-		rv = usb_muxes[port].driver->set(port, mux_state);
-
-	return rv;
-}
-
-static int zork_c1_get_mux(int port, mux_state_t *mux_state)
-{
-	int rv;
-
-	/* Try to detect the hardware */
-	rv = zork_c1_detect(port, 1);
-	if (rv) {
-		/*
-		 * Not powered is MUX_NONE, so change the values
-		 * and make it a good status
-		 */
-		if (rv == EC_ERROR_NOT_POWERED) {
-			*mux_state = USB_PD_MUX_NONE;
-			rv = EC_SUCCESS;
-		}
-		return rv;
-	}
-
-	/*
-	 * If we detected the hardware, then call the real routine.
-	 * We only do this one time, after that time we will go direct
-	 * and avoid this special driver.
-	 */
-	if (zork_c1_retimer != C1_RETIMER_UNKNOWN)
-		rv = usb_muxes[port].driver->get(port, mux_state);
-
-	return rv;
-}
-
-const struct pi3dpx1207_usb_control pi3dpx1207_controls[] = {
-	[USBC_PORT_C0] = {
-		.enable_gpio = IOEX_USB_C0_DATA_EN,
-		.dp_enable_gpio = GPIO_USB_C0_IN_HPD,
-	},
-	[USBC_PORT_C1] = {
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pi3dpx1207_controls) == USBC_PORT_COUNT);
-
-const struct usb_mux_driver zork_c1_usb_mux_driver = {
-	.init = zork_c1_init_mux,
-	.set = zork_c1_set_mux,
-	.get = zork_c1_get_mux,
-};
-
-struct usb_mux usb_muxes[] = {
-	[USBC_PORT_C0] = {
-		.driver = &amd_fp5_usb_mux_driver,
-	},
-	[USBC_PORT_C1] = {
-		/*
-		 * This is the detection driver. Once the hardware
-		 * has been detected, the driver will change to the
-		 * detected hardware driver table.
-		 */
-		.driver = &zork_c1_usb_mux_driver,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
-
-struct ioexpander_config_t ioex_config[] = {
-	[USBC_PORT_C0] = {
-		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
-		.drv = &nct38xx_ioexpander_drv,
-	},
-	[USBC_PORT_C1] = {
-		.i2c_host_port = I2C_PORT_TCPC1,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
-		.drv = &nct38xx_ioexpander_drv,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(ioex_config) == USBC_PORT_COUNT);
-BUILD_ASSERT(CONFIG_IO_EXPANDER_PORT_COUNT == USBC_PORT_COUNT);
-
-const int usb_port_enable[USB_PORT_COUNT] = {
-	IOEX_EN_USB_A0_5V,
-	IOEX_EN_USB_A1_5V_DB,
-};
-
 static void baseboard_chipset_suspend(void)
 {
 	/* Disable display and keyboard backlights. */
@@ -839,8 +365,13 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 
 /* Keyboard scan setting */
 struct keyboard_scan_config keyscan_config = {
-	/* Extra delay when KSO2 is tied to Cr50. */
-	.output_settle_us = 60,
+	/*
+	 * F3 key scan cycle completed but scan input is not
+	 * charging to logic high when EC start scan next
+	 * column for "T" key, so we set .output_settle_us
+	 * to 80us
+	 */
+	.output_settle_us = 80,
 	.debounce_down_us = 6 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 1500,
@@ -893,18 +424,6 @@ static int board_get_temp(int idx, int *temp_k)
 	/* idx is the sensor index set below in temp_sensors[] */
 	switch (idx) {
 	case TEMP_SENSOR_CHARGER:
-		/* TODO: b/143598098
-		 * Revision 1.6 of the schematic will put this
-		 * thermistor on power rail EC_A instead of
-		 * PP3300_A.  This will make the charger circuit
-		 * temperature available even when the AP is not
-		 * powered and the check will no longer be needed
-		 */
-
-		/* thermistor is not powered in G3 */
-		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
-			return EC_ERROR_NOT_POWERED;
-
 		channel = ADC_TEMP_SENSOR_CHARGER;
 		break;
 	case TEMP_SENSOR_SOC:
@@ -933,158 +452,45 @@ const struct temp_sensor_t temp_sensors[] = {
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = board_get_temp,
 		.idx = TEMP_SENSOR_CHARGER,
-		.action_delay_sec = 1,
 	},
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = board_get_temp,
 		.idx = TEMP_SENSOR_SOC,
-		.action_delay_sec = 5,
 	},
 	[TEMP_SENSOR_CPU] = {
 		.name = "CPU",
 		.type = TEMP_SENSOR_TYPE_CPU,
 		.read = sb_tsi_get_val,
 		.idx = 0,
-		.action_delay_sec = 4,
 	},
+#ifdef BOARD_MORPHIUS
+	[TEMP_SENSOR_5V_REGULATOR] = {
+		.name = "5V_REGULATOR",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = tmp432_get_val,
+		.idx = TMP432_IDX_LOCAL,
+	},
+#endif
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-const static struct ec_thermal_config thermal_thermistor = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
-};
-
-const static struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(95),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
-};
-
-struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
-
-static void setup_fans(void)
-{
-	thermal_params[TEMP_SENSOR_CHARGER] = thermal_thermistor;
-	thermal_params[TEMP_SENSOR_SOC] = thermal_thermistor;
-	thermal_params[TEMP_SENSOR_CPU] = thermal_cpu;
-}
-
-#ifdef HAS_TASK_MOTIONSENSE
-
-/* Motion sensors */
-static struct mutex g_lid_mutex;
-static struct mutex g_base_mutex;
-
-/* sensor private data */
-static struct kionix_accel_data g_kx022_data;
-static struct bmi160_drv_data_t g_bmi160_data;
-
-/* TODO(gcc >= 5.0) Remove the casts to const pointer at rot_standard_ref */
-struct motion_sensor_t motion_sensors[] = {
-	[LID_ACCEL] = {
-	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_KX022,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
-	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_kx022_data,
-	 .port = I2C_PORT_SENSOR,
-	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-	 .rot_standard_ref = NULL,
-	 .default_range = 2, /* g, enough for laptop. */
-	 .min_frequency = KX022_ACCEL_MIN_FREQ,
-	 .max_frequency = KX022_ACCEL_MAX_FREQ,
-	 .config = {
-		 /* EC use accel for angle detection */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100,
-		 },
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-		},
-	 },
-	},
-
-	[BASE_ACCEL] = {
-	 .name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmi160_drv,
-	 .mutex = &g_base_mutex,
-	 .drv_data = &g_bmi160_data,
-	 .port = I2C_PORT_SENSOR,
-	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
-	 .rot_standard_ref = NULL,
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
-	 .config = {
-		 /* EC use accel for angle detection */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100,
-		 },
-		 /* EC use accel for angle detection */
-		 [SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-		 },
-	 },
-	},
-
-	[BASE_GYRO] = {
-	 .name = "Base Gyro",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
-	 .type = MOTIONSENSE_TYPE_GYRO,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmi160_drv,
-	 .mutex = &g_base_mutex,
-	 .drv_data = &g_bmi160_data,
-	 .port = I2C_PORT_SENSOR,
-	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = NULL,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
-	},
-};
-
-unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-#endif /* HAS_TASK_MOTIONSENSE */
 
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
 {
-	if (board_is_convertible())
+	if (ec_config_has_lid_angle_tablet_mode())
 		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
 #endif
 
 /* Unprovisioned magic value. */
 static uint32_t sku_id = 0x7fffffff;
+
+uint32_t system_get_sku_id(void)
+{
+	return sku_id;
+}
 
 static void cbi_init(void)
 {
@@ -1099,31 +505,22 @@ static void cbi_init(void)
 		sku_id = val;
 	ccprints("SKU: %d (0x%x)", sku_id, sku_id);
 
-#ifdef HAS_TASK_MOTIONSENSE
-	board_update_sensor_config_from_sku();
-#endif
-
+	/* FW config */
+	val = get_cbi_fw_config();
+	if (val == UNINITIALIZED_FW_CONFIG)
+		ccprints("FW Config: not set in cbi");
+	else
+		ccprints("FW Config: %d (0x%x)", val, val);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
-
-uint32_t system_get_sku_id(void)
-{
-	return sku_id;
-}
 
 /*
  * Returns 1 for boards that are convertible into tablet mode, and zero for
  * clamshells.
  */
-int board_is_convertible(void)
-{
-	/* TODO: Add convertible SKU values */
-	return 0;
-}
-
 int board_is_lid_angle_tablet_mode(void)
 {
-	return board_is_convertible();
+	return ec_config_has_lid_angle_tablet_mode();
 }
 
 void board_overcurrent_event(int port, int is_overcurrented)
@@ -1141,13 +538,6 @@ void board_overcurrent_event(int port, int is_overcurrented)
 		break;
 	}
 }
-
-static void baseboard_init(void)
-{
-	/* Initialize Fans */
-	setup_fans();
-}
-DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT);
 
 void board_hibernate(void)
 {
@@ -1167,3 +557,33 @@ void board_hibernate(void)
 		msleep(300);
 	}
 }
+
+static void hdmi_hpd_handler(void)
+{
+	int hpd = 0;
+
+	/* Pass HPD through from DB OPT1 HDMI connector to AP's DP1. */
+	ioex_get_level(IOEX_HDMI_CONN_HPD_3V3_DB, &hpd);
+	gpio_set_level(GPIO_DP1_HPD, hpd);
+	ccprints("HDMI HPD %d", hpd);
+}
+DECLARE_DEFERRED(hdmi_hpd_handler);
+
+void hdmi_hpd_interrupt(enum ioex_signal signal)
+{
+	/* Debounce for 2 msec. */
+	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
+}
+
+static void pi3hdx1204_retimer_power(void)
+{
+	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
+		int enable = chipset_in_or_transitioning_to_state(
+			CHIPSET_STATE_ON);
+		pi3hdx1204_enable(I2C_PORT_TCPC1,
+				  PI3HDX1204_I2C_ADDR_FLAGS,
+				  enable);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, pi3hdx1204_retimer_power, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, pi3hdx1204_retimer_power, HOOK_PRIO_DEFAULT);

@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "common.h"
 #include "compile_time_macros.h"
+#include "ec_commands.h"
 #include "ec_version.h"
 #include "stddef.h"
 #include "system.h"
@@ -26,6 +27,7 @@ const struct image_data __keep current_image_data
 	.rollback_version = CONFIG_ROLLBACK_VERSION,
 	.cookie2 = CROS_EC_IMAGE_DATA_COOKIE2,
 };
+BUILD_ASSERT(sizeof(CROS_EC_VERSION32) <= 32);
 
 const char build_info[] __keep __attribute__((section(".rodata.buildinfo"))) =
 	VERSION " " DATE " " BUILDER;
@@ -61,7 +63,7 @@ static int get_num_commits(const struct image_data *data)
 
 }
 
-int ver_get_num_commits(enum system_image_copy_t copy)
+int ver_get_num_commits(enum ec_image copy)
 {
 	const struct image_data *data;
 	if (IS_ENABLED(CONFIG_COMMON_RUNTIME))

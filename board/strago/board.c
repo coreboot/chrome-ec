@@ -141,10 +141,11 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT);
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = MUX_PORT_AND_ADDR(I2C_PORT_USB_MUX,
-					       PI3USB3X532_I2C_ADDR1),
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = PI3USB3X532_I2C_ADDR1,
 		.driver = &pi3usb3x532_usb_mux_driver,
 	},
 };
@@ -161,13 +162,13 @@ const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
  */
 const struct temp_sensor_t temp_sensors[] = {
 	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_LOCAL, 4},
+		TMP432_IDX_LOCAL},
 	{"TMP432_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_REMOTE1, 4},
+		TMP432_IDX_REMOTE1},
 	{"TMP432_Sensor_2", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_REMOTE2, 4},
+		TMP432_IDX_REMOTE2},
 	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_get_battery_temp,
-		0, 4},
+		0},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 

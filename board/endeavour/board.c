@@ -109,9 +109,9 @@ const int usb_port_enable[USB_PORT_COUNT] = {
  */
 const struct temp_sensor_t temp_sensors[] = {
 	{"TMP431_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-			TMP432_IDX_LOCAL, 4},
+			TMP432_IDX_LOCAL},
 	{"TMP431_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-			TMP432_IDX_REMOTE1, 4},
+			TMP432_IDX_REMOTE1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -296,7 +296,7 @@ int64_t get_time_dsw_pwrok(void)
 
 const struct pwm_t pwm_channels[] = {
 	[PWM_CH_LED_RED]  = { 3, PWM_CONFIG_DSLEEP, 100 },
-	[PWM_CH_LED_BLUE] = { 5, PWM_CONFIG_DSLEEP, 100 },
+	[PWM_CH_LED_WHITE] = { 5, PWM_CONFIG_DSLEEP, 100 },
 	[PWM_CH_FAN] = {4, PWM_CONFIG_OPEN_DRAIN, 25000},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);

@@ -188,7 +188,7 @@ In all of the following commands, replace `<BOARD>` in the command with
 Run `servod`:
 
 ```bash
-(chroot) $ sudo servod --board=<BOARD> --config <BOARD>_rev0.1.xml
+(chroot) $ sudo servod --board=<BOARD>
 ```
 
 You should see something like this. Leave it running:
@@ -283,6 +283,11 @@ Flash the firmware file:
 (chroot) $ ./util/flash_ec --board=<BOARD> --image=./build/<BOARD>/ec.bin
 ```
 
+Prepare a serial terminal in your chroot:
+```bash
+(chroot) $ sudo emerge screen
+```
+
 Connect to the UART pty:
 
 ```bash
@@ -319,20 +324,27 @@ Start a fingerprint enrollment:
 > fpenroll
 ```
 
-The Dragonclaw reference board has an onboard INA that monitors the voltage
-and power draw of the MCU and FP Sensor independently.
+### Measuring Power
 
-Signal Name   | Description
-------------- | -------------------------------------
-pp3300_dx_mcu | 3.3V supplying the MCU
-pp3300_dx_fp  | 3.3V supplying the fingerprint sensor
-pp1800_dx_fp  | 1.8V supplying the fingerprint sensor
+The Dragonclaw reference board has an onboard INA that monitors the voltage and
+power draw of the MCU and FP Sensor independently.
+
+Signal Name     | Description
+--------------- | -------------------------------------
+`pp3300_dx_mcu` | 3.3V supplying the MCU
+`pp3300_dx_fp`  | 3.3V supplying the fingerprint sensor
+`pp1800_dx_fp`  | 1.8V supplying the fingerprint sensor
 
 You can monitor all power and voltages by using the following command:
 
 ```bash
-(chroot) $ watch -n0.5 dut-control pp3300_dx_mcu_mv pp3300_dx_fp_mv \
-pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
+(chroot) $ watch -n0.5 dut-control pp3300_dx_mcu_mv pp3300_dx_fp_mv pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
+```
+
+You can get a summary of the power over `N` seconds with:
+
+```bash
+(chroot) $ dut-control -t N pp3300_dx_mcu_mv pp3300_dx_fp_mv pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
 ```
 
 *** note
@@ -373,7 +385,48 @@ If your partnership agreement requires non-public code sharing you will need to
 register for an account on the [Internal Gerrit]. Refer to the
 [Gerrit Credentials Setup] page for details. Once you register for an internal
 account, your contact at Google can make sure you have the necessary permissions
-to access the necessary repo.
+to access the private repository.
+
+*** note
+**NOTE**: In order to use a private repository you will have to manually add it
+to the repo manifest file before running `repo sync`. Check with your contact
+at Google for the exact values to use below:
+
+**`(outside) $ ~/chromiumos/.repo/manifests/default.xml`**
+
+```xml
+<project remote="cros-internal"
+         path="CHECK WITH GOOGLE"
+         groups="firmware"
+         name="CHECK WITH GOOGLE" />
+```
+
+**`(outside) $ ~/chromiumos/.repo/manifests/remote.xml`**
+
+```xml
+<remote name="cros-internal"
+        fetch="https://chrome-internal.googlesource.com"
+        review="https://chrome-internal-review.googlesource.com" />
+```
+***
+
+### Tracking Issues and Communication
+
+Development issue tracking and communication is done through the
+[Partner Issue Tracker]. You will use your [Partner Domain] account to access
+the [Partner Issue Tracker]. If you do not already have a [Partner Domain]
+account, please request one from your Google contact.
+
+In order to make sure that you receive email notifications for issues, please
+make sure that you [set up email forwarding] and set your
+[notification settings] appropriately. Communication should primarily be done
+through the [Partner Issue Tracker] and not email so that it can be more easily
+tracked by multiple people and a record is preserved for posterity.
+
+[Partner Issue Tracker]: https://developers.google.com/issue-tracker/guides/partner-access
+[Partner Domain]: https://developers.google.com/issue-tracker/guides/partner-domains
+[set up email forwarding]: https://developers.google.com/issue-tracker/guides/partner-domains#email_forwarding
+[notification settings]: https://developers.google.com/issue-tracker/guides/set-notification-preferences
 
 ## Working with Chromebooks
 
@@ -490,12 +543,6 @@ Make sure that this interface is disabled:
 ```bash
 (chroot) $ dut-control usbpd_ec3po_interp_connect:off
 ```
-
-### "Sweetberry" board fails to build
-
-If you're trying to run `make buildall -j` in the EC codebase and the build
-fails when trying to build the "sweetberry" board, see this bug:
-https://crbug.com/992082.
 
 ### FPMCU console commands
 

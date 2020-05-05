@@ -50,6 +50,7 @@ enum hook_priority {
 	HOOK_PRIO_CHARGE_MANAGER_INIT = HOOK_PRIO_FIRST + 12,
 
 	HOOK_PRIO_INIT_ADC = HOOK_PRIO_DEFAULT,
+	HOOK_PRIO_INIT_DAC = HOOK_PRIO_DEFAULT,
 
 	/* Specific values to lump temperature-related hooks together */
 	HOOK_PRIO_TEMP_SENSOR = 6000,
@@ -175,15 +176,6 @@ enum hook_type {
 	 * Hook routines are called from the charger task.
 	 */
 	HOOK_BATTERY_SOC_CHANGE,
-
-#ifdef CONFIG_CASE_CLOSED_DEBUG_V1
-	/*
-	 * Case-closed debugging configuration changed.
-	 *
-	 * Hook routines are called from the TICK, console, or TPM task.
-	 */
-	HOOK_CCD_CHANGE,
-#endif
 
 #ifdef CONFIG_USB_SUSPEND
 	/*

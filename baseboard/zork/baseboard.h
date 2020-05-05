@@ -8,6 +8,11 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#if (defined(VARIANT_ZORK_TREMBYLE) \
+	+ defined(VARIANT_ZORK_DALBOZ)) != 1
+#error Must choose VARIANT_ZORK_TREMBYLE or VARIANT_ZORK_DALBOZ
+#endif
+
 /* NPCX7 config */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 #define NPCX_TACH_SEL2    0  /* No tach. */
@@ -17,6 +22,8 @@
 #define CONFIG_FLASH_SIZE (512 * 1024)
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40 /* Internal SPI flash type. */
+
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_HOSTCMD) | CC_MASK(CC_PWM)))
 
 /*
  * Enable 1 slot of secure temporary storage to support
@@ -35,6 +42,7 @@
 #define CONFIG_HOSTCMD_SKUID
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
+#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
 #define CONFIG_PWM
 #define CONFIG_PWM_KBLIGHT
@@ -76,10 +84,12 @@
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 
-#define CONFIG_FANS FAN_CH_COUNT
-#undef CONFIG_FAN_INIT_SPEED
-#define CONFIG_FAN_INIT_SPEED 50
-#define CONFIG_THROTTLE_AP
+#ifdef VARIANT_ZORK_TREMBYLE
+	#define CONFIG_FANS FAN_CH_COUNT
+	#undef CONFIG_FAN_INIT_SPEED
+	#define CONFIG_FAN_INIT_SPEED 50
+	#define CONFIG_THROTTLE_AP
+#endif
 
 #define CONFIG_LED_COMMON
 #define CONFIG_CMD_LEDTEST
@@ -96,7 +106,6 @@
 
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_NCT38XX
-#define CONFIG_IO_EXPANDER_PORT_COUNT USBC_PORT_COUNT
 
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
@@ -110,15 +119,18 @@
  */
 #define CONFIG_USB_PID 0x5040
 
-/* TODO(b/142284905): Enable new PD stack */
-#if 0
-/* Enable the new USB-C PD stack */
-#define CONFIG_USB_PE_SM
-#define CONFIG_USB_PRL_SM
-#define CONFIG_USB_SM_FRAMEWORK
-#define CONFIG_USB_TYPEC_SM
-#define CONFIG_USB_TYPEC_DRP_ACC_TRYSRC
-#define CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
+/* Enable the TCPMv2 PD stack */
+#define CONFIG_USB_PD_TCPMV2
+
+#ifndef CONFIG_USB_PD_TCPMV2
+	#define CONFIG_USB_PD_TCPMV1
+#else
+	#define CONFIG_USB_PD_DECODE_SOP
+	#define CONFIG_USB_DRP_ACC_TRYSRC
+
+	 /* Enable TCPMv2 Fast Role Swap */
+	 /* Turn off until FRSwap is working */
+	#undef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
 #endif
 
 #define CONFIG_CMD_PD_CONTROL
@@ -127,7 +139,6 @@
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_COMM_LOCKED
-#define CONFIG_USB_PD_DISCHARGE_PPC
 #define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
@@ -137,7 +148,6 @@
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
-#define CONFIG_USB_PD_TCPM_PS8751
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
@@ -145,17 +155,28 @@
 #define CONFIG_USBC_PPC_SBU
 #define CONFIG_USBC_PPC_AOZ1380
 #define CONFIG_USBC_PPC_NX20P3483
-#define CONFIG_USBC_RETIMER_PI3DPX1207
-#define CONFIG_USBC_RETIMER_PS8802
-#define CONFIG_USBC_RETIMER_PS8818
+#define CONFIG_USBC_RETIMER_PI3HDX1204
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_MUX_AMD_FP5
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
+
+#if defined(VARIANT_ZORK_TREMBYLE)
+	#define CONFIG_USBC_RETIMER_PS8802
+	#define CONFIG_USBC_RETIMER_PS8818
+	#define CONFIG_IO_EXPANDER_PORT_COUNT USBC_PORT_COUNT
+#elif defined(VARIANT_ZORK_DALBOZ)
+	#define CONFIG_USB_MUX_PS8740
+	#define CONFIG_USB_MUX_PS8743
+	#define CONFIG_IO_EXPANDER_PCAL6408
+	#define CONFIG_IO_EXPANDER_PORT_COUNT IOEX_PORT_COUNT
+	#define CONFIG_USB_PORT_ENABLE_DYNAMIC
+#endif
 
 /* USB-A config */
-#define USB_PORT_COUNT 2
+#define USB_PORT_COUNT USBA_PORT_COUNT
 #define CONFIG_USB_PORT_POWER_SMART
 #define CONFIG_USB_PORT_POWER_SMART_CDP_SDP_ONLY
 #define CONFIG_USB_PORT_POWER_SMART_DEFAULT_MODE USB_CHARGE_MODE_CDP
@@ -168,7 +189,7 @@
 #define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		45000
+#define PD_MAX_POWER_MW		60000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
@@ -198,15 +219,24 @@
 #define I2C_PORT_USBA0		NPCX_I2C_PORT0_0
 #define I2C_PORT_TCPC1		NPCX_I2C_PORT1_0
 #define I2C_PORT_USBA1		NPCX_I2C_PORT1_0
-#define I2C_PORT_BATTERY	NPCX_I2C_PORT2_0
-#define I2C_PORT_CHARGER	I2C_PORT_BATTERY
-#define I2C_PORT_USB_MUX	NPCX_I2C_PORT3_0
-#define I2C_PORT_THERMAL	NPCX_I2C_PORT4_1
+#define I2C_PORT_USB_AP_MUX	NPCX_I2C_PORT3_0
+#define I2C_PORT_THERMAL_AP	NPCX_I2C_PORT4_1
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT5_0
 #define I2C_PORT_ACCEL		I2C_PORT_SENSOR
 #define I2C_PORT_EEPROM		I2C_PORT_SENSOR
 #define I2C_PORT_AP_AUDIO	NPCX_I2C_PORT6_1
-#define I2C_PORT_AP_HDMI	NPCX_I2C_PORT7_0
+
+#if defined(VARIANT_ZORK_TREMBYLE)
+	#define CONFIG_CHARGER_RUNTIME_CONFIG
+	#define I2C_PORT_BATTERY	NPCX_I2C_PORT2_0
+	#define I2C_PORT_CHARGER_V0	NPCX_I2C_PORT2_0
+	#define I2C_PORT_CHARGER_V1	NPCX_I2C_PORT4_1
+	#define I2C_PORT_AP_HDMI	NPCX_I2C_PORT7_0
+#elif defined(VARIANT_ZORK_DALBOZ)
+	#define I2C_PORT_BATTERY_V0	NPCX_I2C_PORT2_0
+	#define I2C_PORT_BATTERY_V1	NPCX_I2C_PORT7_0
+	#define I2C_PORT_CHARGER	NPCX_I2C_PORT2_0
+#endif
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 
@@ -228,6 +258,9 @@
 #define CONFIG_AUDIO_CODEC
 #define CONFIG_AUDIO_CODEC_DMIC
 #define CONFIG_AUDIO_CODEC_I2S_RX
+
+/* CLI COMMAND */
+#define CONFIG_CMD_CHARGEN
 
 #ifndef __ASSEMBLER__
 
@@ -253,13 +286,10 @@ enum temp_sensor_id {
 	TEMP_SENSOR_CHARGER = 0,
 	TEMP_SENSOR_SOC,
 	TEMP_SENSOR_CPU,
+#ifdef BOARD_MORPHIUS
+	TEMP_SENSOR_5V_REGULATOR,
+#endif
 	TEMP_SENSOR_COUNT
-};
-
-enum pwm_channel {
-	PWM_CH_KBLIGHT = 0,
-	PWM_CH_FAN,
-	PWM_CH_COUNT
 };
 
 enum fan_channel {
@@ -268,10 +298,10 @@ enum fan_channel {
 	FAN_CH_COUNT,
 };
 
-enum mft_channel {
-	MFT_CH_0 = 0,
-	/* Number of MFT channels */
-	MFT_CH_COUNT,
+enum usba_port {
+	USBA_PORT_A0 = 0,
+	USBA_PORT_A1,
+	USBA_PORT_COUNT
 };
 
 enum usbc_port {
@@ -287,22 +317,18 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
-/* Private
- * Main intent is to indicate the retimer type attached
- * but is also needed to determine the HPD from the port
- */
-enum zork_c1_retimer {
-	C1_RETIMER_UNKNOWN,
-	C1_RETIMER_PS8802,
-	C1_RETIMER_PS8818,
-};
-extern enum zork_c1_retimer zork_c1_retimer;
+#if defined(VARIANT_ZORK_DALBOZ)
+	enum ioex_port {
+		IOEX_C0_NCT3807 = 0,
+		IOEX_C1_NCT3807,
+		IOEX_HDMI_PCAL6408,
+		IOEX_PORT_COUNT
+	};
 
-#define PORT_TO_HPD(port) ((port == 0) \
-	? GPIO_USB_C0_HPD \
-	: (zork_c1_retimer == C1_RETIMER_PS8802) \
-		? GPIO_DP1_HPD \
-		: GPIO_DP2_HPD)
+	#define PORT_TO_HPD(port) ((port == 0) \
+		? GPIO_USB3_C0_DP2_HPD \
+		: GPIO_DP1_HPD)
+#endif
 
 /*
  * Matrix to rotate accelerators into the standard reference frame.  The default
@@ -330,9 +356,8 @@ void board_reset_pd_mcu(void);
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
-
-int board_is_convertible(void);
-void board_update_sensor_config_from_sku(void);
+void hdmi_hpd_interrupt(enum ioex_signal signal);
+void mst_hpd_interrupt(enum ioex_signal signal);
 
 #ifdef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
 int board_tcpc_fast_role_swap_enable(int port, int enable);

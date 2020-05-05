@@ -5,6 +5,7 @@
  * Renesas RAA489000 TCPC driver
  */
 
+#include "charge_manager.h"
 #include "common.h"
 #include "console.h"
 #include "driver/charger/isl923x.h"
@@ -20,7 +21,9 @@ int raa489000_init(int port)
 {
 	int rv;
 	int regval;
+	int device_id;
 	int i2c_port;
+	struct charge_port_info chg = { 0 };
 
 	/* Perform unlock sequence */
 	rv = tcpc_write16(port, 0xAA, 0xDAA0);
@@ -32,6 +35,27 @@ int raa489000_init(int port)
 	rv = tcpc_write16(port, 0xAA, 0x0D0B);
 	if (rv)
 		CPRINTS("c%d: failed unlock step3", port);
+
+	device_id = -1;
+	rv = tcpc_read16(port, TCPC_REG_BCD_DEV, &device_id);
+	if (rv)
+		CPRINTS("C%d: Failed to read DEV_ID", port);
+	CPRINTS("%s(%d): DEVICE_ID=%d", __func__, port, device_id);
+
+	if (device_id > 1) {
+		/*
+		 * A1 silicon has a DEVICE_ID of 1.  For B0 and newer, we need
+		 * allow the TCPC to control VBUS in order to start VBUS ADC
+		 * sampling.  This is a requirement to clear the TCPC
+		 * initialization status but in POWER_STATUS.  Otherwise, the
+		 * common TCPCI init will fail. (See b/154191301)
+		 */
+		rv = tcpc_read16(port, RAA489000_TCPC_SETTING1, &regval);
+		regval |= RAA489000_TCPC_PWR_CNTRL;
+		rv = tcpc_write16(port, RAA489000_TCPC_SETTING1, regval);
+		if (rv)
+			CPRINTS("C%d: failed to set TCPC power control", port);
+	}
 
 	/* Note: registers may not be ready until TCPCI init succeeds */
 	rv = tcpci_tcpm_init(port);
@@ -83,9 +107,12 @@ int raa489000_init(int port)
 	if (rv)
 		CPRINTS("c%d: failed to set PD PHY setting1", port);
 
-	/* Enable VBUS auto discharge. needed to goodcrc */
+	/*
+	 * Disable VBUS auto discharge, we'll turn it on later as its needed to
+	 * goodcrc.
+	 */
 	rv = tcpc_read(port, TCPC_REG_POWER_CTRL, &regval);
-	regval |= TCPC_REG_POWER_CTRL_AUTO_DISCHARGE_DISCONNECT;
+	regval &= ~TCPC_REG_POWER_CTRL_AUTO_DISCHARGE_DISCONNECT;
 	rv |= tcpc_write(port, TCPC_REG_POWER_CTRL, regval);
 	if (rv)
 		CPRINTS("c%d: failed to set auto discharge", port);
@@ -97,13 +124,33 @@ int raa489000_init(int port)
 
 	/* Enable the correct TCPCI interface version */
 	rv = tcpc_read16(port, RAA489000_TCPC_SETTING1, &regval);
-	if (!(tcpc_config[port].flags & TCPC_FLAGS_TCPCI_V2_0))
+	if (!(tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0))
 		regval |= RAA489000_TCPCV1_0_EN;
 	else
 		regval &= ~RAA489000_TCPCV1_0_EN;
+
+	if (device_id <= 1) {
+		/* Allow the TCPC to control VBUS. */
+		regval |= RAA489000_TCPC_PWR_CNTRL;
+	}
+
 	rv = tcpc_write16(port, RAA489000_TCPC_SETTING1, regval);
 	if (rv)
 		CPRINTS("c%d: failed to set TCPCIv1.0 mode", port);
+
+	/*
+	 * If VBUS is present, start sinking from it if we haven't already
+	 * chosen a charge port.  This is *kinda hacky* doing it here, but we
+	 * must start sinking VBUS now, otherwise the board may die if there is
+	 * no battery connected. (See b/150702984)
+	 */
+	if (pd_snk_is_vbus_provided(port) &&
+	    charge_manager_get_active_charge_port() == CHARGE_PORT_NONE) {
+		chg.current = 500;
+		chg.voltage = 5000;
+		charge_manager_update_charge(CHARGE_SUPPLIER_VBUS, port, &chg);
+		board_set_active_charge_port(port);
+	}
 
 	return rv;
 }
@@ -151,4 +198,6 @@ const struct tcpm_drv raa489000_tcpm_drv = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode   = &tcpci_enter_low_power_mode,
 #endif
+	.tcpc_enable_auto_discharge_disconnect =
+	&tcpci_tcpc_enable_auto_discharge_disconnect,
 };

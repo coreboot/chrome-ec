@@ -9,6 +9,11 @@
  * Pin names follow the schematic, and are aliased to other names if necessary.
  * Note: Those with interrupt handlers must be declared first. */
 
+/* Latency on this interrupt is extremely critical, so it comes first to ensure
+ * it gets placed first in gpio_wui_table so gpio_interrupt() needs to do
+ * minimal scanning. */
+GPIO_INT(CPU_C10_GATE_L,       PIN(6, 7), GPIO_INT_BOTH, c10_gate_interrupt)
+
 /* Wake Source interrupts */
 GPIO_INT(EC_WP_ODL,            PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)
 GPIO_INT(H1_EC_PWR_BTN_ODL,    PIN(0, 1), GPIO_INT_BOTH, power_button_interrupt)
@@ -30,7 +35,6 @@ GPIO_INT(SLP_S3_L,             PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
 #endif
 GPIO_INT(PG_PP950_VCCIO_OD,    PIN(1, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SLP_S0_L,             PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(CPU_C10_GATE_L,       PIN(6, 7), GPIO_INT_BOTH, c10_gate_interrupt)
 GPIO_INT(IMVP8_VRRDY_OD,       PIN(1, 6), GPIO_INT_BOTH, power_signal_interrupt)
 
 /* Other interrupts */
@@ -84,13 +88,14 @@ GPIO(M2_SSD_PLN,               PIN(A, 0), GPIO_INPUT)
 GPIO(EC_ENTERING_RW,           PIN(E, 3), GPIO_OUT_LOW)
 GPIO(CCD_MODE_ODL,             PIN(E, 5), GPIO_ODR_HIGH)
 GPIO(EN_PP_MST_OD,             PIN(9, 6), GPIO_ODR_HIGH)
+GPIO(PACKET_MODE_EN,           PIN(7, 5), GPIO_OUT_LOW)
 
 /* HDMI/CEC */
 GPIO(EN_PP5000_HDMI,           PIN(5, 0), GPIO_OUT_LOW)
-GPIO(HDMI_CONN0_CEC_OUT,       PIN(C, 2), GPIO_ODR_HIGH)
-GPIO(HDMI_CONN0_CEC_IN,        PIN(B, 1), GPIO_INPUT)
-GPIO(HDMI_CONN1_CEC_OUT,       PIN(6, 0), GPIO_ODR_HIGH)
-GPIO(HDMI_CONN1_CEC_IN,        PIN(9, 5), GPIO_INPUT)
+GPIO(HDMI_CONN0_CEC_OUT,       PIN(B, 1), GPIO_ODR_HIGH)
+GPIO(HDMI_CONN0_CEC_IN,        PIN(4, 0), GPIO_INPUT)
+GPIO(HDMI_CONN1_CEC_OUT,       PIN(9, 5), GPIO_ODR_HIGH)
+GPIO(HDMI_CONN1_CEC_IN,        PIN(D, 3), GPIO_INPUT)
 
 /* I2C pins - Alternate function below configures I2C module on these pins */
 GPIO(I2C0_SCL,                 PIN(B, 5), GPIO_INPUT)           /* EC_I2C_INA_SCL */
@@ -116,7 +121,7 @@ ALTERNATE(PIN_MASK(B, 0x0C), 0, MODULE_I2C, 0)                  /* I2C7 */
 ALTERNATE(PIN_MASK(C, 0x08), 0, MODULE_PWM, 0)                  /* PWM0 - Red Led */
 ALTERNATE(PIN_MASK(C, 0x10), 0, MODULE_PWM, 0)                  /* PWM2 - Green Led */
 ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)                  /* PWM5 - Fan 1 */
-ALTERNATE(PIN_MASK(4, 0x01), 0, MODULE_PWM, 0)                  /* TA1 - Fan Tachometer */
+ALTERNATE(PIN_MASK(7, 0x08), 0, MODULE_PWM, 0)                  /* TA2 - Fan Tachometer */
 
 /* ADC */
 ALTERNATE(PIN_MASK(4, 0x3E), 0, MODULE_ADC, 0)                  /* ADC0-4 */
@@ -131,9 +136,9 @@ UNUSED(PIN(1, 3))						/* EC_GP_SEL1_ODL */
 UNUSED(PIN(F, 2))						/* EC_I2C_RFU_SDA */
 UNUSED(PIN(F, 3))						/* EC_I2C_RFU_SCL */
 UNUSED(PIN(C, 0))						/* FAN_PWM_2 */
-UNUSED(PIN(7, 3))						/* FAN_SPEED_TACH_2 */
 UNUSED(PIN(8, 0))						/* LED_BLUE_L */
 UNUSED(PIN(4, 2))						/* TEMP_SENSOR_3 */
+UNUSED(PIN(C, 2))						/* A12 NC */
 UNUSED(PIN(9, 2))						/* K8  NC */
 UNUSED(PIN(9, 1))						/* L8  NC */
 UNUSED(PIN(1, 2))						/* C6  NC */
@@ -150,9 +155,7 @@ UNUSED(PIN(D, 6))						/* F6  NC */
 UNUSED(PIN(3, 5))						/* F5  NC */
 UNUSED(PIN(5, 6))						/* M2  NC */
 UNUSED(PIN(D, 2))						/* C11 NC */
-UNUSED(PIN(D, 3))						/* E9  NC */
 UNUSED(PIN(8, 6))						/* J8  NC */
-UNUSED(PIN(7, 5))						/* J6  NC */
 UNUSED(PIN(9, 3))						/* M11 NC */
 UNUSED(PIN(7, 2))						/* H6  NC */
 UNUSED(PIN(F, 1))						/* G3  NC */

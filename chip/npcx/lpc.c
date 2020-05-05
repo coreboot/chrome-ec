@@ -13,6 +13,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "i8042_protocol.h"
 #include "keyboard_protocol.h"
 #include "lpc.h"
 #include "lpc_chip.h"
@@ -313,11 +314,17 @@ void lpc_keyboard_put_char(uint8_t chr, int send_irq)
 	}
 }
 
-/* Put a char to host buffer by HIMDO */
-void lpc_mouse_put_char(uint8_t chr)
+/* Put an aux char to host buffer by HIMDO and assert status bit 5. */
+void lpc_aux_put_char(uint8_t chr, int send_irq)
 {
+	if (send_irq)
+		SET_BIT(NPCX_HICTRL, NPCX_HICTRL_OBFMIE);
+	else
+		CLEAR_BIT(NPCX_HICTRL, NPCX_HICTRL_OBFMIE);
+
+	NPCX_HIKMST |= I8042_AUX_DATA;
 	NPCX_HIMDO = chr;
-	CPRINTS("Mouse put %02x", chr);
+	CPRINTS("AUX put %02x", chr);
 
 	/* Enable OBE interrupt to detect host read data out */
 	SET_BIT(NPCX_HICTRL, NPCX_HICTRL_OBECIE);
@@ -511,11 +518,16 @@ static void handle_host_write(int is_cmd)
 /* KB controller input buffer full ISR */
 void lpc_kbc_ibf_interrupt(void)
 {
+	uint8_t ibf;
 	/* If "command" input 0, else 1*/
-	if (lpc_keyboard_input_pending())
-		keyboard_host_write(NPCX_HIKMDI, (NPCX_HIKMST & 0x08) ? 1 : 0);
-	CPRINTS("ibf isr %02x", NPCX_HIKMDI);
-	task_wake(TASK_ID_KEYPROTO);
+	if (lpc_keyboard_input_pending()) {
+		ibf = NPCX_HIKMDI;
+		keyboard_host_write(ibf, (NPCX_HIKMST & 0x08) ? 1 : 0);
+		CPRINTS("ibf isr %02x", ibf);
+		task_wake(TASK_ID_KEYPROTO);
+	} else {
+		CPRINTS("ibf isr spurious");
+	}
 }
 DECLARE_IRQ(NPCX_IRQ_KBC_IBF, lpc_kbc_ibf_interrupt, 4);
 
@@ -527,6 +539,9 @@ void lpc_kbc_obe_interrupt(void)
 	task_disable_irq(NPCX_IRQ_KBC_OBE);
 
 	CPRINTS("obe isr %02x", NPCX_HIKMST);
+
+	NPCX_HIKMST &= ~I8042_AUX_DATA;
+
 	task_wake(TASK_ID_KEYPROTO);
 }
 DECLARE_IRQ(NPCX_IRQ_KBC_OBE, lpc_kbc_obe_interrupt, 4);
@@ -769,7 +784,6 @@ static void lpc_init(void)
 
 	/* Turn on PMC2 for Host Command usage */
 	SET_BIT(NPCX_HIPMCTL(PMC_HOST_CMD), 0);
-	SET_BIT(NPCX_HIPMCTL(PMC_HOST_CMD), 1);
 
 	/*
 	 * Set required control value (avoid setting HOSTWAIT bit at this stage)
@@ -783,19 +797,19 @@ static void lpc_init(void)
 	/*
 	 * Init KBC
 	 * Clear OBF status flag,
-	 * IBF(K&M) INT enable, OBE(K&M) empty INT enable ,
+	 * IBF(K&M) INT enable,
 	 * OBF Mouse Full INT enable and OBF KB Full INT enable
 	 */
 #ifdef HAS_TASK_KEYPROTO
 	lpc_keyboard_clear_buffer();
-	NPCX_HICTRL = 0x0F;
+	NPCX_HICTRL = 0x0B;
 #endif
 
 	/*
 	 * Turn on enhance mode on PM channel-1,
-	 * enable OBE/IBF core interrupt
+	 * enable IBF core interrupt
 	 */
-	NPCX_HIPMCTL(PMC_ACPI) |= 0x83;
+	NPCX_HIPMCTL(PMC_ACPI) |= 0x81;
 	/* Normally Polarity IRQ1,12 type (level + high) setting */
 	NPCX_HIIRQC = 0x00;
 

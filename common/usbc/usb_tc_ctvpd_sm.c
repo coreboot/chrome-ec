@@ -222,6 +222,19 @@ test_mockable_static void print_current_state(const int port)
 	CPRINTS("C%d: %s", port, tc_state_names[get_state_tc(port)]);
 }
 
+int pd_is_connected(int port)
+{
+	return (get_state_tc(port) == TC_ATTACHED_SNK) ||
+			(get_state_tc(port) == TC_ATTACHED_SRC) ||
+			(get_state_tc(port) == TC_CT_ATTACHED_UNSUPPORTED) ||
+			(get_state_tc(port) == TC_CT_ATTACHED_VPD);
+}
+
+bool pd_is_disconnected(int port)
+{
+	return !pd_is_connected(port);
+}
+
 /**
  * Disabled
  *
@@ -418,7 +431,7 @@ static void tc_attached_snk_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	set_polarity(port, 0);
+	pd_set_polarity(port, 0);
 
 	/*
 	 * This state can only be entered from states AttachWait.SNK
@@ -679,7 +692,7 @@ static void tc_attached_src_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	set_polarity(port, 0);
+	pd_set_polarity(port, 0);
 
 	/* Connect Charge-Through VBUS to Host VBUS */
 	vpd_vbus_pass_en(1);
@@ -879,7 +892,7 @@ static void tc_ct_try_snk_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	set_polarity(port, 0);
+	pd_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 	tc[port].next_role_swap = get_time().val + PD_T_DRP_TRY;
@@ -975,7 +988,7 @@ static void tc_ct_attach_wait_unsupported_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	set_polarity(port, 0);
+	pd_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 }
@@ -1105,7 +1118,7 @@ static void tc_ct_unattached_unsupported_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	set_polarity(port, 0);
+	pd_set_polarity(port, 0);
 
 	tc[port].next_role_swap = get_time().val + PD_T_DRP_SRC;
 }
@@ -1173,7 +1186,7 @@ static void tc_ct_unattached_vpd_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	set_polarity(port, 0);
+	pd_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 }
@@ -1380,7 +1393,7 @@ static void tc_ct_attach_wait_vpd_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	set_polarity(port, 0);
+	pd_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 }

@@ -37,7 +37,7 @@ void pd_power_supply_reset(int port)
 	ppc_vbus_source_enable(port, 0);
 
 	/* Enable discharge if we were previously sourcing 5V */
-	if (prev_en)
+	if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE) && prev_en)
 		pd_set_vbus_discharge(port, 1);
 
 #ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
@@ -58,7 +58,8 @@ int pd_set_power_supply_ready(int port)
 	if (rv)
 		return rv;
 
-	pd_set_vbus_discharge(port, 0);
+	if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE))
+		pd_set_vbus_discharge(port, 0);
 
 	/* Provide Vbus. */
 	rv = ppc_vbus_source_enable(port, 1);
@@ -136,8 +137,6 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 
 __override void svdm_dp_post_config(int port)
 {
-	const struct usb_mux * const mux = &usb_muxes[port];
-
 	/* Connect the SBU and USB lines to the connector. */
 	ppc_set_sbu(port, 1);
 	usb_mux_set(port, svdm_dp_mux_mode(port), USB_SWITCH_CONNECT,
@@ -152,14 +151,11 @@ __override void svdm_dp_post_config(int port)
 	/* set the minimum time delay (2ms) for the next HPD IRQ */
 	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
 
-	if (mux->hpd_update)
-		mux->hpd_update(port, 1, 0);
+	usb_mux_hpd_update(port, 1, 0);
 }
 
 __override void svdm_exit_dp_mode(int port)
 {
-	const struct usb_mux * const mux = &usb_muxes[port];
-
 	dp_flags[port] = 0;
 	dp_status[port] = 0;
 
@@ -167,7 +163,6 @@ __override void svdm_exit_dp_mode(int port)
 		    pd_get_polarity(port));
 	gpio_set_level(PORT_TO_HPD(port), 0);
 
-	if (mux->hpd_update)
-		mux->hpd_update(port, 0, 0);
+	usb_mux_hpd_update(port, 0, 0);
 }
 #endif /* CONFIG_USB_PD_ALT_MODE_DFP */

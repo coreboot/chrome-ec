@@ -185,15 +185,16 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-static int ps8751_tune_mux(int port)
+static int ps8751_tune_mux(const struct usb_mux *me)
 {
 	/* 0x98 sets lower EQ of DP port (4.5db) */
-	mux_write(port, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	mux_write(me, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
 	return EC_SUCCESS;
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
+		.usb_port = 0,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 		.board_init = &ps8751_tune_mux,
@@ -217,7 +218,7 @@ void board_reset_pd_mcu(void)
 
 void board_tcpc_init(void)
 {
-	int port, reg;
+	int reg;
 
 	/* This needs to be executed only once per boot. It could be run by RO
 	 * if we boot in recovery mode. It could be run by RW if we boot in
@@ -238,10 +239,8 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
@@ -266,9 +265,9 @@ uint16_t tcpc_get_alert_status(void)
  */
 const struct temp_sensor_t temp_sensors[] = {
 	{"TMP431_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-			TMP432_IDX_LOCAL, 4},
+			TMP432_IDX_LOCAL},
 	{"TMP431_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-			TMP432_IDX_REMOTE1, 4},
+			TMP432_IDX_REMOTE1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -618,10 +617,21 @@ static const struct fan_step fan_table2[] = {
 	{.on = 87, .off = 81, .rpm = 3900},
 	{.on = 98, .off = 91, .rpm = 5000},
 };
+static const struct fan_step fan_table3[] = {
+	{.on =  0, .off =  1, .rpm = 0},
+	{.on = 36, .off = 22, .rpm = 2500},
+	{.on = 54, .off = 49, .rpm = 3200},
+	{.on = 61, .off = 56, .rpm = 3500},
+	{.on = 68, .off = 63, .rpm = 3900},
+	{.on = 75, .off = 69, .rpm = 4500},
+	{.on = 82, .off = 76, .rpm = 5100},
+	{.on = 92, .off = 85, .rpm = 5400},
+};
 /* All fan tables must have the same number of levels */
 #define NUM_FAN_LEVELS ARRAY_SIZE(fan_table0)
 BUILD_ASSERT(ARRAY_SIZE(fan_table1) == NUM_FAN_LEVELS);
 BUILD_ASSERT(ARRAY_SIZE(fan_table2) == NUM_FAN_LEVELS);
+BUILD_ASSERT(ARRAY_SIZE(fan_table3) == NUM_FAN_LEVELS);
 
 static void setup_fan(void)
 {
@@ -646,6 +656,10 @@ static void setup_fan(void)
 		break;
 	case OEM_JAX:
 		fan_set_count(0);
+		break;
+	case OEM_EXCELSIOR:
+		fans[FAN_CH_0].rpm = &fan_rpm_0;
+		fan_table = fan_table3;
 		break;
 	}
 }
@@ -713,6 +727,7 @@ static void setup_bj(void)
 	case OEM_WUKONG_N:
 	case OEM_WUKONG_A:
 	case OEM_WUKONG_M:
+	case OEM_EXCELSIOR:
 		bj = (BJ_ADAPTER_90W_MASK & BIT(sku)) ?
 			BJ_90W_19V : BJ_65W_19V;
 		break;

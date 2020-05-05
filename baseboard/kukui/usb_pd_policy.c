@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include "charge_manager.h"
+#include "charge_state_v2.h"
 #include "charger.h"
 #include "console.h"
 #include "gpio.h"
@@ -49,7 +51,15 @@ int pd_set_power_supply_ready(int port)
 	/* Provide VBUS */
 	vbus_en = 1;
 
-	charger_enable_otg_power(1);
+#ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
+	/* Ensure we advertise the proper available current quota */
+	charge_manager_source_port(port, 1);
+#endif /* defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT) */
+
+	if (IS_ENABLED(VARIANT_KUKUI_CHARGER_ISL9238))
+		charge_set_output_current_limit(3300, 5000);
+	else
+		charger_enable_otg_power(1);
 
 	gpio_set_level(GPIO_EN_USBC_CHARGE_L, 1);
 	gpio_set_level(GPIO_EN_PP5000_USBC, 1);
@@ -74,7 +84,16 @@ void pd_power_supply_reset(int port)
 	if (prev_en)
 		pd_set_vbus_discharge(port, 1);
 
-	charger_enable_otg_power(0);
+#ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
+	/* Give back the current quota we are no longer using */
+	charge_manager_source_port(port, 0);
+#endif /* defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT) */
+
+	if (IS_ENABLED(VARIANT_KUKUI_CHARGER_ISL9238))
+		charge_set_output_current_limit(0, 0);
+	else
+		charger_enable_otg_power(0);
+
 	gpio_set_level(GPIO_EN_PP5000_USBC, 0);
 
 	/* notify host of power info change */
@@ -97,13 +116,23 @@ __overridable int board_has_virtual_mux(void)
 	return IS_ENABLED(CONFIG_USB_MUX_VIRTUAL);
 }
 
+static void board_usb_mux_set(int port, mux_state_t mux_mode,
+		 enum usb_switch usb_mode, int polarity)
+{
+	usb_mux_set(port, mux_mode, usb_mode, polarity);
+
+	if (!board_has_virtual_mux())
+		/* b:149181702: Inform AP of DP status */
+		host_set_single_event(EC_HOST_EVENT_USB_MUX);
+}
+
 __override void svdm_safe_dp_mode(int port)
 {
 	/* make DP interface safe until configure */
 	dp_flags[port] = 0;
 	dp_status[port] = 0;
-	usb_mux_set(port, USB_PD_MUX_NONE,
-		    USB_SWITCH_CONNECT, board_get_polarity(port));
+	board_usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_CONNECT,
+			  board_get_polarity(port));
 }
 
 __override int svdm_enter_dp_mode(int port, uint32_t mode_caps)
@@ -144,12 +173,12 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 		return 0;
 
 	if (board_has_virtual_mux())
-		usb_mux_set(port, USB_PD_MUX_DP_ENABLED, USB_SWITCH_CONNECT,
-			    board_get_polarity(port));
+		board_usb_mux_set(port, USB_PD_MUX_DP_ENABLED,
+				  USB_SWITCH_CONNECT, board_get_polarity(port));
 	else
-		usb_mux_set(port, mf_pref ?
-			    USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED,
-			    USB_SWITCH_CONNECT, board_get_polarity(port));
+		board_usb_mux_set(
+			port, mf_pref ? USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED,
+			USB_SWITCH_CONNECT, board_get_polarity(port));
 
 	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
 			 CMD_DP_CONFIG | VDO_OPOS(opos));
@@ -161,8 +190,6 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 
 __override void svdm_dp_post_config(int port)
 {
-	const struct usb_mux * const mux = &usb_muxes[port];
-
 	dp_flags[port] |= DP_FLAGS_DP_ON;
 	if (!(dp_flags[port] & DP_FLAGS_HPD_HI_PENDING))
 		return;
@@ -174,7 +201,8 @@ __override void svdm_dp_post_config(int port)
 
 	/* set the minimum time delay (2ms) for the next HPD IRQ */
 	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
-	mux->hpd_update(port, 1, 0);
+
+	usb_mux_hpd_update(port, 1, 0);
 }
 
 __override int svdm_dp_attention(int port, uint32_t *payload)
@@ -182,7 +210,6 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 	int cur_lvl = gpio_get_level(GPIO_USB_C0_HPD_OD);
 	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
 	int irq = PD_VDO_DPSTS_HPD_IRQ(payload[1]);
-	const struct usb_mux * const mux = &usb_muxes[port];
 
 	dp_status[port] = payload[1];
 
@@ -193,7 +220,7 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 		return 1;
 	}
 
-	mux->hpd_update(port, lvl, irq);
+	usb_mux_hpd_update(port, lvl, irq);
 
 	if (irq & cur_lvl) {
 		uint64_t now = get_time().val;
@@ -232,13 +259,11 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 
 __override void svdm_exit_dp_mode(int port)
 {
-	const struct usb_mux * const mux = &usb_muxes[port];
-
 	svdm_safe_dp_mode(port);
 	gpio_set_level(GPIO_USB_C0_HPD_OD, 0);
 #ifdef VARIANT_KUKUI_DP_MUX_GPIO
 	board_set_dp_mux_control(0, 0);
 #endif
-	mux->hpd_update(port, 0, 0);
+	usb_mux_hpd_update(port, 0, 0);
 }
 #endif /* CONFIG_USB_PD_ALT_MODE_DFP */
