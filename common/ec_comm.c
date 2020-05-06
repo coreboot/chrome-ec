@@ -317,11 +317,6 @@ void ec_comm_block(int block)
  */
 static int command_ec_comm(int argc, char **argv)
 {
-	if (!board_has_ec_cr50_comm_support()) {
-		ccprintf("No EC-CR50 comm support\n");
-		return EC_ERROR_INVAL;
-	}
-
 	if (argc > 1) {
 		if (!strcasecmp(argv[1], "corrupt")) {
 			int result = ec_efs_corrupt_hash();
