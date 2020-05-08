@@ -21,7 +21,6 @@
 #include "mpu.h"
 #endif
 #include "panic.h"
-#include "shared_mem.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
@@ -879,19 +878,15 @@ DECLARE_CONSOLE_COMMAND(hibernate, command_hibernate,
 static void print_build_string(void)
 {
 	const char *full_build_string;
-	char *p;
+	const char *p;
 	char symbol;
-	char *next;
-	int index;
-	size_t len;
 	int seen_colonv;
 
 	ccprintf("Build:   ");
 	full_build_string = system_get_build_info();
 
-	len = strlen(full_build_string);
 	/* 50 characters or less, will fit into the terminal line. */
-	if (len < 50) {
+	if (strlen(full_build_string) < 50) {
 		ccprintf("%s\n", full_build_string);
 		return;
 	}
@@ -901,41 +896,24 @@ static void print_build_string(void)
 	 * space (this is where the main version ends), and then on each space
 	 * after the ":v" substring, this is where subcomponent versions are
 	 * separated.
-	 *
-	 * To avoid invoking ccprintf() for one character at a time let's
-	 * create a mutable copy and modify it to print in multiple lines.
 	 */
-	if (shared_mem_acquire(len + 1, &p) != EC_SUCCESS) {
-		/*
-		 * Should never happen, but if it does let's
-		 * just print it in single line.
-		 */
-		ccprintf("%s\n", full_build_string);
-		return;
-	}
-
-	memcpy(p, full_build_string, len + 1);
-	next = p;
-	index = 0;
+	p = full_build_string;
 	seen_colonv = 1;
 
-	do {
-		symbol = next[index++];
+	symbol = *p++;
+	while (symbol) {
 		if ((symbol == ' ') && seen_colonv) {
-			next[index - 1] = '\0';
 			seen_colonv = 0;
 			/* Indent each line under 'Build:    ' */
-			ccprintf("%s\n         ", next);
-			next += index;
-			index = 0;
-			continue;
+			ccprintf("\n         ");
+		} else {
+			if ((symbol == ':') && (*p == 'v'))
+				seen_colonv = 1;
+			ccprintf("%c", symbol);
 		}
-		if ((symbol == ':') && (next[index] == 'v'))
-			seen_colonv = 1;
-	} while (symbol);
-	ccprintf("%s\n", next);
-
-	shared_mem_release(p);
+		symbol = *p++;
+	}
+	ccprintf("\n");
 }
 
 static int command_version(int argc, char **argv)

@@ -142,10 +142,6 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_TRNG_TEST = 51,
 
-	/* EC EFS(Early Firmware Selection) commands */
-	VENDOR_CC_GET_BOOT_MODE = 52,
-	VENDOR_CC_RESET_EC = 53,
-
 	LAST_VENDOR_COMMAND = 65535,
 };
 

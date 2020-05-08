@@ -8,15 +8,15 @@
 #define __EC_BOARD_CR50_TPM_NVMEM_OPS_H
 
 enum tpm_read_rv {
-	TPM_READ_SUCCESS,
-	TPM_READ_NOT_FOUND,
-	TPM_READ_TOO_SMALL,
+	tpm_read_success,
+	tpm_read_not_found,
+	tpm_read_too_small
 };
 
 enum tpm_write_rv {
-	TPM_WRITE_CREATED,
-	TPM_WRITE_UPDATED,
-	TPM_WRITE_FAIL,
+	tpm_write_created,
+	tpm_write_updated,
+	tpm_write_fail
 };
 
 enum tpm_nv_hidden_object {

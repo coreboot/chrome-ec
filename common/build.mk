@@ -51,7 +51,6 @@ common-$(CONFIG_CURVE25519)+=curve25519-generic.o
 endif
 common-$(CONFIG_DEVICE_STATE)+=device_state.o
 common-$(CONFIG_DPTF)+=dptf.o
-common-$(CONFIG_EC_EFS_SUPPORT)+=ec_comm.o ec_efs.o
 common-$(CONFIG_EXTENSION_COMMAND)+=extension.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
 common-$(CONFIG_FANS)+=fan.o pwm.o
@@ -116,6 +115,7 @@ common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
 common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o
 common-$(CONFIG_USB_PD_LOGGING)+=event_log.o pd_log.o
 common-$(CONFIG_USB_PD_TCPC)+=usb_pd_tcpc.o
+common-$(CONFIG_USB_UPDATE)+=usb_update.o update_fw.o
 common-$(CONFIG_VBOOT_HASH)+=sha256.o vboot_hash.o
 common-$(CONFIG_VSTORE)+=vstore.o
 common-$(CONFIG_WEBUSB_URL)+=webusb_desc.o

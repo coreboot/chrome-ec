@@ -446,11 +446,11 @@ int board_fwmp_allows_unlock(void)
 		allows_unlock = 0;
 		break;
 
-	case TPM_READ_NOT_FOUND:
+	case tpm_read_not_found:
 		allows_unlock = 1;
 		break;
 
-	case TPM_READ_SUCCESS:
+	case tpm_read_success:
 		allows_unlock = !lock_enforced(&fwmp);
 		break;
 	}
@@ -465,7 +465,7 @@ int board_fwmp_fips_mode_enabled(void)
 {
 	struct RollbackSpaceFirmware fw;
 
-	if (TPM_READ_SUCCESS ==
+	if (tpm_read_success ==
 	    read_tpm_nvmem(FIRMWARE_NV_INDEX, sizeof(fw), &fw)) {
 		return !!(fw.flags & FWMP_DEV_FIPS_MODE);
 	}
@@ -478,7 +478,7 @@ int board_vboot_dev_mode_enabled(void)
 {
 	struct RollbackSpaceFirmware fw;
 
-	if (TPM_READ_SUCCESS ==
+	if (tpm_read_success ==
 	    read_tpm_nvmem(FIRMWARE_NV_INDEX, sizeof(fw), &fw)) {
 		return !!(fw.flags & FIRMWARE_FLAG_DEV_MODE);
 	}

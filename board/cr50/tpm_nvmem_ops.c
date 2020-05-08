@@ -28,7 +28,7 @@ enum tpm_read_rv read_tpm_nvmem(uint16_t obj_index,
 	handle_addr = NvEarlyStageFindHandle(object_handle);
 	if (!handle_addr) {
 		CPRINTF("%s: object at 0x%x not found\n", __func__, obj_index);
-		return TPM_READ_NOT_FOUND;
+		return tpm_read_not_found;
 	}
 
 	/* Get properties of this index as stored in nvmem. */
@@ -47,14 +47,14 @@ enum tpm_read_rv read_tpm_nvmem(uint16_t obj_index,
 	if (obj_size > nvIndex.publicArea.dataSize) {
 		CPRINTF("%s: object at 0x%x is smaller than %d\n",
 			__func__, obj_index, obj_size);
-		return TPM_READ_TOO_SMALL;
+		return tpm_read_too_small;
 	}
 
 	/* Perform the read. */
 	NvReadIndexData(object_handle, &nvIndex, handle_addr, 0, obj_size,
 			   obj_value);
 
-	return TPM_READ_SUCCESS;
+	return tpm_read_success;
 }
 
 enum tpm_read_rv read_tpm_nvmem_hidden(uint16_t object_index,
@@ -64,9 +64,9 @@ enum tpm_read_rv read_tpm_nvmem_hidden(uint16_t object_index,
 	if (NvGetHiddenObject(HR_HIDDEN | object_index,
 			      object_size,
 			      obj_value) == TPM_RC_SUCCESS) {
-		return TPM_READ_SUCCESS;
+		return tpm_read_success;
 	} else {
-		return TPM_READ_NOT_FOUND;
+		return tpm_read_not_found;
 	}
 }
 
@@ -75,7 +75,7 @@ enum tpm_write_rv write_tpm_nvmem_hidden(uint16_t object_index,
 					 void *obj_value,
 					 int commit)
 {
-	enum tpm_write_rv ret = TPM_WRITE_FAIL;
+	enum tpm_write_rv ret = tpm_write_fail;
 
 	uint32_t handle = object_index | HR_HIDDEN;
 
@@ -83,15 +83,15 @@ enum tpm_write_rv write_tpm_nvmem_hidden(uint16_t object_index,
 	    NvAddHiddenObject(handle,
 			      object_size,
 			      obj_value) == TPM_RC_SUCCESS) {
-		ret = TPM_WRITE_CREATED;
+		ret = tpm_write_created;
 	} else if (NvWriteHiddenObject(handle,
 				       object_size,
 				       obj_value) == TPM_RC_SUCCESS) {
-		ret = TPM_WRITE_UPDATED;
+		ret = tpm_write_updated;
 	}
 
 	if (commit && !NvCommit())
-		ret = TPM_WRITE_FAIL;
+		ret = tpm_write_fail;
 
 	return ret;
 }

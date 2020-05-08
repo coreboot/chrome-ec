@@ -23,7 +23,6 @@
  *	SCRATCH17 - deep sleep count
  *	SCRATCH18 - Preserving USB_DCFG through deep sleep
  *	SCRATCH19 - Preserving USB data sequencing PID through deep sleep
- *	SCRATCH20 - Preserving EC-EFS context
  *
  * PWRDN_SCRATCH 28 - 31 - Reserved for boot rom
  */

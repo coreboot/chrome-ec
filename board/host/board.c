@@ -5,7 +5,6 @@
 /* Emulator board-specific configuration */
 
 #include "button.h"
-#include "ec_comm.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "host_command.h"
@@ -68,27 +67,3 @@ const struct i2c_port_t i2c_ports[] = {
 
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 #endif
-
-test_mockable void ccd_update_state(void)
-{
-
-}
-
-test_mockable void ec_comm_packet_mode_en(enum gpio_signal unsed)
-{
-
-}
-
-test_mockable void ec_comm_packet_mode_dis(enum gpio_signal unsed)
-{
-
-}
-
-int board_has_ec_cr50_comm_support(void)
-{
-#ifdef CONFIG_EC_EFS_SUPPORT
-	return 1;
-#else
-	return 0;
-#endif
-}

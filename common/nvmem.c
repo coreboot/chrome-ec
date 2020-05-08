@@ -106,8 +106,11 @@ static int nvmem_save(void)
 
 	rv = new_nvmem_save();
 
-	nvmem_unlock_cache(rv == EC_SUCCESS);
+	if (rv == EC_SUCCESS)
+		nvmem_act_partition = NVMEM_NOT_INITIALIZED;
 
+	nvmem_mutex.write_in_progress = 0;
+	nvmem_release_cache();
 	return rv;
 }
 
@@ -503,13 +506,4 @@ void nvmem_clear_cache(void)
 	nvmem_wipe_cache();
 
 	nvmem_save();
-}
-
-void nvmem_unlock_cache(int init_act_partition)
-{
-	if (init_act_partition)
-		nvmem_act_partition = NVMEM_NOT_INITIALIZED;
-
-	nvmem_mutex.write_in_progress = 0;
-	nvmem_release_cache();
 }

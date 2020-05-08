@@ -87,7 +87,7 @@ static int load_state(struct u2f_state *state)
 	}
 
 	if (read_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK, sizeof(state->salt_kek),
-				  state->salt_kek) == TPM_READ_NOT_FOUND) {
+				  state->salt_kek) == tpm_read_not_found) {
 		/*
 		 * Not found means that we have not used u2f before,
 		 * or not used it with updated fw that resets kek seed
@@ -114,13 +114,13 @@ static int load_state(struct u2f_state *state)
 		if (write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK,
 					   sizeof(state->salt_kek),
 					   state->salt_kek,
-					   1 /* commit */) != TPM_WRITE_CREATED)
+					   1 /* commit */) != tpm_write_created)
 			return 0;
 	}
 
 	if (read_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KH_SALT,
 				  sizeof(state->salt_kh),
-				  state->salt_kh) == TPM_READ_NOT_FOUND) {
+				  state->salt_kh) == tpm_read_not_found) {
 		/*
 		 * We have never used u2f before - generate
 		 * new seed.
@@ -131,7 +131,7 @@ static int load_state(struct u2f_state *state)
 		if (write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KH_SALT,
 					   sizeof(state->salt_kh),
 					   state->salt_kh,
-					   1 /* commit */) != TPM_WRITE_CREATED)
+					   1 /* commit */) != tpm_write_created)
 			return 0;
 	}
 
@@ -285,7 +285,7 @@ int u2f_gen_kek_seed(int commit)
 		return EC_ERROR_HW_INTERNAL;
 
 	if (write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK, sizeof(state->salt_kek),
-				   state->salt_kek, commit) == TPM_WRITE_FAIL)
+				   state->salt_kek, commit) == tpm_write_fail)
 		return EC_ERROR_UNKNOWN;
 
 	return EC_SUCCESS;

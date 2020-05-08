@@ -6,7 +6,6 @@
  */
 #include "common.h"
 #include "console.h"
-#include "ec_comm.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "uart_bitbang.h"
@@ -145,18 +144,6 @@ static void servo_detect(void)
 	gpio_disable_interrupt(GPIO_DETECT_SERVO);
 
 	if (state == DEVICE_STATE_IGNORED)
-		return;
-
-	/*
-	 * During EC-CR50 communication, do not change servo state because
-	 * GPIO_DETECT_SERVO (DIOB5) is not available. Return now, and
-	 * let it try to detect in the next second.
-	 *
-	 * Note: Though servo is not detectable, we do not want to change
-	 *       servo_state as UNDETECTABLE, otherwise "servo_is_connected()"
-	 *       might return false while servo is connected.
-	 */
-	if (ec_comm_is_uart_in_packet_mode(UART_EC))
 		return;
 
 	/* If we're driving EC UART TX, we can't detect servo */

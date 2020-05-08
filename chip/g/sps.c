@@ -255,8 +255,10 @@ static void sps_init(void)
 	GWRITE_FIELD(PINMUX, DIOA10_CTL, IE, 0); /* SPS_MISO */
 	GWRITE_FIELD(PINMUX, DIOA12_CTL, IE, 1); /* SPS_CS_L */
 
-	/* Configure the SPS_CS_L signal, DIOA12, as wake falling */
-	gpio_set_wakepin(GPIO_STRAP_B1, GPIO_HIB_WAKE_FALLING);
+	/* Allow SPS_CS_L to wake from sleep */
+	GWRITE_FIELD(PINMUX, EXITEN0, DIOA12, 1);   /* enable powerdown exit */
+	GWRITE_FIELD(PINMUX, EXITEDGE0, DIOA12, 1); /* edge sensitive */
+	GWRITE_FIELD(PINMUX, EXITINV0, DIOA12, 1);  /* wake on low */
 }
 DECLARE_HOOK(HOOK_INIT, sps_init, HOOK_PRIO_DEFAULT);
 

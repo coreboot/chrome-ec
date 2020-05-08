@@ -3,9 +3,6 @@
  * found in the LICENSE file.
  */
 
-#ifdef BOARD_CR50
-#include "ec_comm.h"
-#endif
 #include "queue.h"
 #include "queue_policies.h"
 #ifdef CONFIG_STREAM_SIGNATURE
@@ -132,33 +129,6 @@ USB_STREAM_CONFIG(ec_usb,
 		  ec_uart_to_usb)
 #endif
 
-#ifdef BOARD_CR50
-static uint8_t ec_bridge_enabled_;
-static uint8_t ec_bridge_tx_enabled_;
-
-void uart_ec_bridge_enable(int enable, int write)
-{
-	write = enable && write;
-
-	if (write && !ec_bridge_tx_enabled_)
-		task_trigger_irq(GC_IRQNUM_UART2_TXINT);
-
-	ec_bridge_enabled_ = enable;
-	ec_bridge_tx_enabled_ = write;
-}
-
-int uart_ec_bridge_is_enabled(void)
-{
-	return !!ec_bridge_enabled_;
-}
-
-int uart_ec_bridge_tx_is_enabled(void)
-{
-	return !!ec_bridge_tx_enabled_;
-}
-
-#endif  /* BOARD_CR50 */
-
 void get_data_from_usb(struct usart_config const *config)
 {
 	struct queue const *uart_out = config->consumer.queue;
@@ -184,42 +154,12 @@ void send_data_to_usb(struct usart_config const *config)
 
 	q_room = queue_space(uart_in);
 
+	if (!q_room)
+		return;
+
 	mask = uart_in->buffer_units_mask;
 	tail = uart_in->state->tail & mask;
 	count = 0;
-
-#ifdef BOARD_CR50
-	if (ec_comm_is_uart_in_packet_mode(uart)) {
-		/*
-		 * Even if UART-to-USB data queue is full (count == q_room),
-		 * It should drain UART queue, so that an EC packet
-		 * can be processed. In this case, EC console data
-		 * shall be lost anyway.
-		 */
-		while (uartn_rx_available(uart)) {
-			uint8_t ch = uartn_read_char(uart);
-
-			if (ec_comm_process_packet(ch))
-				continue;
-
-			if ((count != q_room) && uart_ec_bridge_is_enabled()) {
-				uart_in->buffer[tail] = ch;
-				tail = (tail + 1) & mask;
-				count++;
-			}
-		}
-		if (count)
-			queue_advance_tail(uart_in, count);
-		return;
-	}
-
-	/*
-	 * If UART-to-USB bridging is not allowed, do not put any output
-	 * data to uart_in queue.
-	 */
-	if ((uart == UART_EC) && !uart_ec_bridge_is_enabled())
-		return;
-#endif  /* BOARD_CR50 */
 
 	while ((count != q_room) && uartn_rx_available(uart)) {
 		uart_in->buffer[tail] = uartn_read_char(uart);
@@ -246,35 +186,6 @@ static void uart_written(struct consumer const *consumer, size_t count)
 		return;
 	}
 #endif
-
-#ifdef BOARD_CR50
-	if (config->uart == UART_EC) {
-		/*
-		 * If USB-to-UART bridging is disabled, do not forward data.
-		 * Otherwise, data could be pushed into UART TX FIFO, and
-		 * transferred to EC eventually once EC-CR50 communication
-		 * enables EC UART.
-		 */
-		if (!uart_ec_bridge_tx_is_enabled()) {
-			/*
-			 * Empty the RX queue, so that host won't suffer from
-			 * congestion. Also, if data remains in the queue, then
-			 * they might be transferred when UART TX gets enabled
-			 * in future.
-			 */
-			queue_advance_head(consumer->queue,
-					   queue_count(consumer->queue));
-			return;
-		}
-
-		/*
-		 * If EC-CR50 communication is on-going, then let's not forward
-		 * console input to EC for now.
-		 */
-		if (ec_comm_is_uart_in_packet_mode(UART_EC))
-			return;
-	}
-#endif  /* BOARD_CR50 */
 
 	if (uartn_tx_ready(config->uart) && queue_count(consumer->queue))
 		uartn_tx_start(config->uart);

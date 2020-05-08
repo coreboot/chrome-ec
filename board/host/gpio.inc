@@ -14,11 +14,6 @@ GPIO_INT(AC_PRESENT,           PIN(0, 2), GPIO_INT_BOTH, extpower_interrupt)
 GPIO_INT(BUTTON_VOLUME_DOWN_L, PIN(0, 3), GPIO_INT_BOTH, button_interrupt)
 GPIO_INT(BUTTON_VOLUME_UP,     PIN(0, 4), GPIO_INT_BOTH, button_interrupt)
 GPIO_INT(CHARGE_DONE,          PIN(0, 5), GPIO_INT_BOTH, inductive_charging_interrupt)
-/* GPIOs for EC-CR50 communication */
-GPIO_INT(EC_PACKET_MODE_EN,    PIN(0, 16), GPIO_INT_RISING,
-	 ec_comm_packet_mode_en)
-GPIO_INT(EC_PACKET_MODE_DIS,   PIN(0, 17), GPIO_INT_FALLING,
-	 ec_comm_packet_mode_dis)
 
 GPIO(EC_INT_L,             PIN(0, 6), 0)
 GPIO(WP,                   PIN(0, 7), 0)

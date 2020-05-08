@@ -74,13 +74,4 @@ void get_data_from_usb(struct usart_config const *config);
 /* Helper for UART bitbang mode. */
 extern struct usart_config const ec_uart;
 
-/* Change EC UART-USB Bridge status */
-void uart_ec_bridge_enable(int enabled, int write);
-
-/* Return non-zero if EC UART-USB Bridge is enabled, or 0 otherwise */
-int uart_ec_bridge_is_enabled(void);
-
-/* Return non-zero if EC UART-USB Bridge is readwritable, or 0 otherwise */
-int uart_ec_bridge_tx_is_enabled(void);
-
 #endif  /* __CROS_FORWARD_UART_H */

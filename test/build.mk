@@ -31,7 +31,6 @@ else
 test-list-host = base32
 test-list-host += console_edit
 test-list-host += crc32
-test-list-host += ec_comm
 test-list-host += extpwr_gpio
 test-list-host += flash
 test-list-host += flash_log
@@ -64,7 +63,6 @@ charge_manager_drp_charging-y=charge_manager.o
 charge_ramp-y+=charge_ramp.o
 console_edit-y=console_edit.o
 crc32-y=crc32.o
-ec_comm-y=ec_comm.o
 extpwr_gpio-y=extpwr_gpio.o
 fan-y=fan.o
 flash-y=flash.o

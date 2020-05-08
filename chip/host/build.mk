@@ -8,8 +8,8 @@
 
 CORE:=host
 
-chip-y=clock.o flash.o gpio.o i2c.o lpc.o persistence.o reboot.o registers.o \
-       system.o uart.o
+chip-y=system.o gpio.o uart.o persistence.o flash.o lpc.o reboot.o i2c.o \
+	clock.o
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 chip-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_phy.o
 

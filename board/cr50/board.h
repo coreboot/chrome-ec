@@ -336,12 +336,6 @@ int board_fwmp_allows_unlock(void);
 int board_vboot_dev_mode_enabled(void);
 void board_reboot_ap(void);
 void board_reboot_ec(void);
-/**
- * Reboot the EC
- * @param usec_delay  microseconds to delay in rebooting EC.
- *                    negative input shall be disregarded.
- */
-void board_reboot_ec_deferred(int usec_delay);
 void board_closed_loop_reset(void);
 int board_wipe_tpm(int reset_required);
 int board_is_first_factory_boot(void);
@@ -406,7 +400,6 @@ int board_in_prod_mode(void);
 #define UART_CR50	0
 #define UART_AP		1
 #define UART_EC		2
-#define UART_NULL	0xff
 
 #define UARTN UART_CR50
 
@@ -443,8 +436,6 @@ enum nvmem_users {
 #define CONFIG_RMA_AUTH
 #define CONFIG_FACTORY_MODE
 #define CONFIG_RNG
-
-#define CONFIG_EC_EFS_SUPPORT
 
 #define CONFIG_ENABLE_H1_ALERTS
 

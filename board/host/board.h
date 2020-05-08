@@ -72,23 +72,7 @@ extern const int supplier_priority[];
 #define PD_MIN_CURRENT_MA     500
 #define PD_MIN_POWER_MW       7500
 
-/* UART indexes (use define rather than enum to expand them) */
-enum {
-	UART_DEFAULT = 0,
-	UART_CR50 = 0,
-	UART_AP = 1,
-	UART_EC = 2,
-	UART_COUNT,
-
-	UART_NULL = 0xff,
-};
-
 /* Let the tests always check the other NVMEM slot. */
 static inline int board_nvmem_legacy_check_needed(void){ return 1; }
-
-/* Mock functions for EC-CR50 communication test */
-int board_has_ec_cr50_comm_support(void);
-void board_reboot_ec_deferred(int usec_delay);
-void ccd_update_state(void);
 
 #endif /* __CROS_EC_BOARD_H */
