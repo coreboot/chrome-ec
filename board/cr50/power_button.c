@@ -119,14 +119,29 @@ static int rctd_poll_handler(void)
 	} else {
 		/* Have this been running longer than the timeout? */
 		if ((get_time().le.lo - rctd_start_time) > RCTD_CUTOFF_TIME) {
-			CPRINTS("Timeout, no RO check triggered");
+			if (ref_press_count) {
+				/*
+				 * Report timeout only in case the process
+				 * started.
+				 */
+				ap_ro_add_flash_event(APROF_CHECK_TIMED_OUT);
+				CPRINTS("Timeout, no RO check triggered");
+			}
 			return 0;
 		}
 	}
 
 
 	if ((dior_state & GC_RBOX_CHECK_INPUT_PWRB_IN_MASK) != 0) {
-		CPRINTS("Power button released, RO Check Detection stopped");
+		if (ref_press_count) {
+			/*
+			 * Report interruption only in case the process
+			 * started.
+			 */
+			CPRINTS("Power button released, "
+				"RO Check Detection stopped");
+			ap_ro_add_flash_event(APROF_CHECK_STOPPED);
+		}
 		return 0;
 	}
 
@@ -147,11 +162,13 @@ static int rctd_poll_handler(void)
 		return 1;
 
 	if (++ref_press_count != PRESS_COUNT) {
+		ap_ro_add_flash_event(APROF_REFRESH_PRESSED);
 		CPRINTS("Refresh press registered");
 		return 1;
 	}
 
 	CPRINTS("RO Validation triggered");
+	ap_ro_add_flash_event(APROF_CHECK_TRIGGERED);
 	validate_ap_ro();
 	return 0;
 }

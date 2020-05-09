@@ -20,7 +20,8 @@ enum flash_event_type {
 	FE_LOG_NVMEM = 5,     /* NVMEM failure, variable structure. */
 	FE_LOG_TPM_WIPE_ERROR = 6,     /* Failed to wipe the TPM */
 	FE_LOG_TRNG_STALL = 7,     /* Stall while retrieving a random number. */
-
+	FE_LOG_DCRYPTO_FAILURE = 8, /* Dcrypto had to be reset. */
+	FE_LOG_AP_RO_VERIFICATION = 9, /* AP RO verification events. */
 	/*
 	 * Fixed padding value makes it easier to parse log space
 	 * snapshots.
@@ -82,6 +83,23 @@ struct nvmem_failure_payload {
 		uint16_t underrun_size; /* How many bytes short. */
 		uint8_t last_obj_type;
 	} __packed;
+} __packed;
+
+
+/* AP RO verification events. */
+enum ap_ro_verification_ev {
+	APROF_REFRESH_PRESSED = 0,
+	APROF_CHECK_STOPPED = 1,
+	APROF_CHECK_TIMED_OUT = 2,
+	APROF_CHECK_TRIGGERED = 3,
+	APROF_SPACE_NOT_PROGRAMMED = 4,
+	APROF_SPACE_INVALID = 5,
+	APROF_CHECK_FAILED = 6,
+	APROF_CHECK_SUCCEEDED = 7,
+};
+
+struct ap_ro_entry_payload {
+	enum ap_ro_verification_ev event : 8;
 } __packed;
 
 /* Returned in the "type" field, when there is no entry available */

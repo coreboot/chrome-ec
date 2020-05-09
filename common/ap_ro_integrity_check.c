@@ -5,6 +5,7 @@
  * Code supporting AP RO verification.
  */
 
+#include "ap_ro_integrity_check.h"
 #include "console.h"
 #include "crypto_api.h"
 #include "extension.h"
@@ -176,12 +177,15 @@ int validate_ap_ro(void)
 
 	if (p_chk->header.num_ranges == (uint16_t)~0) {
 		CPRINTS("%s: RO verification not programmed", __func__);
+		ap_ro_add_flash_event(APROF_SPACE_NOT_PROGRAMMED);
 		return EC_ERROR_INVAL;
 	}
 
 	/* Is the contents intact? */
-	if (verify_ap_ro_check_space() != EC_SUCCESS)
+	if (verify_ap_ro_check_space() != EC_SUCCESS) {
+		ap_ro_add_flash_event(APROF_SPACE_INVALID);
 		return EC_ERROR_INVAL; /* No verification possible. */
+	}
 
 	enable_ap_spi_hash_shortcut();
 	usb_spi_sha256_start(&ctx);
@@ -204,14 +208,24 @@ int validate_ap_ro(void)
 		CPRINTS("Stored digest %ph",
 			HEX_BUF(p_chk->payload.digest,
 				sizeof(p_chk->payload.digest)));
+		ap_ro_add_flash_event(APROF_CHECK_FAILED);
 		rv = EC_ERROR_CRC;
 	} else {
+		ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
 		rv = EC_SUCCESS;
 		CPRINTS("AP RO verification SUCCEEDED!");
 	}
 	disable_ap_spi_hash_shortcut();
 
 	return rv;
+}
+
+void ap_ro_add_flash_event(enum ap_ro_verification_ev event)
+{
+	struct ap_ro_entry_payload ev;
+
+	ev.event = event;
+	flash_log_add_event(FE_LOG_AP_RO_VERIFICATION, sizeof(ev), &ev);
 }
 
 static int ap_ro_info_cmd(int argc, char **argv)
