@@ -2463,11 +2463,15 @@ static int process_get_flog(struct transfer_descriptor *td, uint32_t prev_stamp)
 	int rv;
 	const int max_retries = 3;
 	int retries = max_retries;
+	bool time_zone_reported = false;
 
 	while (retries--) {
 		union entry_u entry;
 		size_t resp_size;
 		size_t i;
+		struct tm loc_time;
+		time_t entry_epoch;
+		char date_str[25];
 
 		resp_size = sizeof(entry);
 		rv = send_vendor_command(td, VENDOR_CC_POP_LOG_ENTRY,
@@ -2489,7 +2493,18 @@ static int process_get_flog(struct transfer_descriptor *td, uint32_t prev_stamp)
 			return 0;
 
 		memcpy(&prev_stamp, &entry.r.timestamp, sizeof(prev_stamp));
-		printf("%10u:%02x", prev_stamp, entry.r.type);
+		entry_epoch = prev_stamp;
+		localtime_r(&entry_epoch, &loc_time);
+
+		if (!time_zone_reported) {
+			strftime(date_str, sizeof(date_str), "%Z", &loc_time);
+			printf("Log time zone is %s\n", date_str);
+			time_zone_reported = true;
+		}
+
+		/* Date format is MMM DD YY HH:mm:ss */
+		strftime(date_str, sizeof(date_str), "%b %d %y %T", &loc_time);
+		printf("%s : %02x", date_str, entry.r.type);
 		for (i = 0; i < FLASH_LOG_PAYLOAD_SIZE(entry.r.size); i++)
 			printf(" %02x", entry.r.payload[i]);
 		printf("\n");
