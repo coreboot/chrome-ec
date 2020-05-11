@@ -144,9 +144,6 @@ static void vivaldi_init(void)
 			if (key == TK_VOL_UP)
 				set_vol_up_key(row, col);
 
-		} else {
-			/* Disable the mask */
-			*mask &= ~BIT(row);
 		}
 	}
 }
