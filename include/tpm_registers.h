@@ -104,9 +104,10 @@ struct tpm_cmd_header {
 void tpm_alt_extension(struct tpm_cmd_header *tpmh, size_t buffer_size);
 
 /*
- * The only TPM2 command we care about on the driver level, see
+ * The only TPM2 commands we care about on the driver level, see
  * crosbug.com/p/55667 for detals.
  */
+#define TPM2_PCR_Extend		0x00000182
 #define TPM2_PCR_Read		0x0000017e
 #define TPM2_Startup		0x00000144
 
