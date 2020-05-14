@@ -284,15 +284,8 @@ static void sps_init(void)
 	gpio_set_wakepin(GPIO_STRAP_B1, GPIO_HIB_WAKE_FALLING);
 
 	int_ap_register(sps_int_ap_extension_enable_);
-
-	/*
-	 * TODO: if TPM_BOARD_CFG has INT_AP extension enabled, then call
-	 * int_ap_extension_enable().
-	 */
 }
-DECLARE_HOOK(HOOK_INIT, sps_init, HOOK_PRIO_DEFAULT);
-
-
+DECLARE_HOOK(HOOK_INIT, sps_init, HOOK_PRIO_INIT_CR50_BOARD - 1);
 
 /*****************************************************************************/
 /* Interrupt handler stuff */
