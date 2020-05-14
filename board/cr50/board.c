@@ -763,6 +763,15 @@ static void maybe_trigger_ite_sync(void)
 	generate_ite_sync();
 }
 
+static void process_board_cfg(void)
+{
+	uint32_t tpm_board_cfg = board_cfg_reg_read();
+
+	if (tpm_board_cfg & BOARD_CFG_LONG_INT_AP_BIT)
+		int_ap_extension_enable();
+}
+DECLARE_DEFERRED(process_board_cfg);
+
 /* Initialize board. */
 static void board_init(void)
 {
@@ -856,6 +865,8 @@ static void board_init(void)
 	 * machines run in HOOK_SECOND, which first triggers right after
 	 * HOOK_INIT, not at +1.0 seconds.
 	 */
+
+	process_board_cfg();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_INIT_CR50_BOARD);
 
@@ -1803,6 +1814,9 @@ void board_cfg_reg_write(uint32_t value)
 
 	/* Store the tpm_board_cfg in power-down scratch. */
 	GREG32(PMU, PWRDN_SCRATCH21) = value|BOARD_CFG_LOCKED_BIT;
+
+	/* Process board_configuration change in a deferred function */
+	hook_call_deferred(&process_board_cfg_data, 0);
 }
 
 uint32_t board_cfg_reg_read(void)
