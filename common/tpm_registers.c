@@ -85,6 +85,7 @@
 #define TPM_DID_VID	    (0xf00)
 #define TPM_RID		    (0xf04)
 #define TPM_FW_VER	    (0xf90)
+#define TPM_BOARD_CFG	    (0xfe0)
 
 #define GOOGLE_VID 0x1ae0
 #define GOOGLE_DID 0x0028
@@ -417,6 +418,17 @@ static void fifo_reg_write(const uint8_t *data, uint32_t data_size)
 	tpm_.regs.sts &= ~expect;
 }
 
+/* Collect received data and write that value on TPM_BOARD_CFG register. */
+static void board_cfg_reg_write_(const uint8_t *data, uint32_t data_size)
+{
+	uint32_t value = 0;
+
+	data_size = MIN(data_size, sizeof(value));
+	memcpy(&value, data, data_size);
+
+	board_cfg_reg_write(value);
+}
+
 /* TODO: data_size is between 1 and 64, but is not trustworthy! Don't write
  * past the end of any actual registers if data_size is larger than the spec
  * allows. */
@@ -445,6 +457,9 @@ void tpm_register_put(uint32_t regaddr, const uint8_t *data, uint32_t data_size)
 	case TPM_FW_VER:
 		/* Reset read byte count */
 		tpm_fw_ver_index = 0;
+		break;
+	case TPM_BOARD_CFG:
+		board_cfg_reg_write_(data, data_size);
 		break;
 	default:
 		CPRINTF("%s(0x%06x, %d bytes:", __func__, regaddr, data_size);
@@ -538,6 +553,9 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 				/* Not in a valid state, just stuff 0s */
 				*dest++ = 0;
 		}
+		break;
+	case TPM_BOARD_CFG:
+		copy_bytes(dest, data_size, board_cfg_reg_read());
 		break;
 	default:
 		CPRINTS("%s(0x%06x, %d) => ??", __func__, regaddr, data_size);
@@ -1033,6 +1051,13 @@ void tpm_task(void *u)
 			 */
 			if (command_code == TPM2_PCR_Read)
 				system_process_retry_counter();
+			else if (command_code == TPM2_PCR_Extend)
+				/*
+				 * Cr50 recognizes BIOS-RO exit indirectly
+				 * by this command.
+				 */
+				board_cfg_reg_write_disable();
+
 #ifdef CONFIG_EXTENSION_COMMAND
 			if (!IS_CUSTOM_CODE(command_code))
 #endif

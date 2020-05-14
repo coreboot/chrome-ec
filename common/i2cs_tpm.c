@@ -77,6 +77,7 @@ static const struct i2c_tpm_reg_map i2c_to_tpm[] = {
 	{0xa, 4, 0x14},  /* TPM TPM_INTF_CAPABILITY */
 	{0xe, 1, 0xf04}, /* TPM RID */
 	{0xf, 0, 0xf90}, /* TPM_FW_VER */
+	{0x1c, 4, 0xfe0}, /* TPM_BOARD_CFG */
 };
 
 /* Used to track number of times i2cs hw read fifo was adjusted */

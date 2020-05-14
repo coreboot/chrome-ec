@@ -1779,3 +1779,33 @@ int board_nvmem_legacy_check_needed(void)
 
 	return (h->major_ <= 2) || (h->minor_ <= 18);
 }
+
+/*
+ * TPM_BOARD_CFG write is allowed from TPM reset until TPM2_PCR_Extend command
+ * is requested.
+ */
+static bool board_cfg_reg_write_disabled_;
+
+void board_cfg_reg_write_disable(void)
+{
+	board_cfg_reg_write_disabled_ = true;
+}
+
+void board_cfg_reg_write(uint32_t value)
+{
+	/*
+	 * If BIOS requested TPM2_PCR_Extended command already or
+	 * PWRDN_SCRATCH21 is already written, then do not allow the register
+	 * write but return.
+	 */
+	if (GREG32(PMU, PWRDN_SCRATCH21) || board_cfg_reg_write_disabled_)
+		return;
+
+	/* Store the tpm_board_cfg in power-down scratch. */
+	GREG32(PMU, PWRDN_SCRATCH21) = value|BOARD_CFG_LOCKED_BIT;
+}
+
+uint32_t board_cfg_reg_read(void)
+{
+	return GREG32(PMU, PWRDN_SCRATCH21);
+}
