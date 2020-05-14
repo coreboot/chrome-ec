@@ -6,6 +6,8 @@
 #ifndef __CROS_EC_GPIO_SIGNAL_H
 #define __CROS_EC_GPIO_SIGNAL_H
 
+#include "compile_time_macros.h"
+
 #define GPIO(name, pin, flags) GPIO_##name,
 #define UNIMPLEMENTED(name) GPIO_##name,
 #define GPIO_INT(name, pin, flags, signal) GPIO_##name,
