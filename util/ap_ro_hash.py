@@ -514,6 +514,9 @@ def main(args):
         3 : 'Bad offset value',
         4 : 'Bad range size',
         5 : 'Already programmed',
+        6 : 'Flash write failed',
+        7 : 'BID programmed',
+        8 : 'Flash erase failed',
         VENDOR_RC_NO_SUCH_COMMAND_ERROR : 'Insufficient C50 version',
     }
 
@@ -545,9 +548,6 @@ def main(args):
                 continue
             ranges.append(fmap[arg])
 
-        if not ranges:
-            raise ApRoHashCmdLineError('no hashing ranges specified')
-
         error_msg = ''
         if bad_ranges:
             error_msg += 'Ranges %s not valid\n' % ' '.join(bad_ranges)
@@ -555,13 +555,18 @@ def main(args):
             error_msg += ('Section(s) "%s" not in FMAP\n' %
                           '" "'.join(bad_section_names))
 
-        # Make sure the list is sorted by the first element.
-        ranges.sort(key=lambda x: x[0])
+        if ranges:
+            # Make sure the list is sorted by the first element.
+            ranges.sort(key=lambda x: x[0])
 
-        # Make sure ranges do not overlap and fall into the WP_RO section.
-        error_msg += verify_ranges(ranges, fmap['WP_RO'])
+            # Make sure ranges do not overlap and fall into the WP_RO section.
+            error_msg += verify_ranges(ranges, fmap['WP_RO'])
+
         if error_msg:
             raise ApRoHashCmdLineError(error_msg)
+
+        if not ranges:
+            raise ApRoHashCmdLineError('no hashing ranges specified')
 
         ro_check_file = os.path.join(tmpd, 'ro_check.bin')
         read_ro_ranges(ro_check_file, tmpd, ranges)
