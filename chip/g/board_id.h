@@ -68,4 +68,12 @@ int board_id_is_blank(const struct board_id *id);
  * @return True if the board id type and type_inv are 0xffffffff.
  */
 int board_id_type_is_blank(const struct board_id *id);
+
+/**
+ * Check if board id space in INFO1 is erased.
+ *
+ * @return True if INFO1 board ID space is erased, False otherwise.
+ */
+int board_id_is_erased(void);
+
 #endif  /* ! __EC_CHIP_G_BOARD_ID_H */
