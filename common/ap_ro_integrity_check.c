@@ -76,6 +76,7 @@ enum ap_ro_check_vc_errors {
 	ARCVE_BAD_OFFSET = 3,
 	ARCVE_BAD_RANGE_SIZE = 4,
 	ARCVE_ALREADY_PROGRAMMED = 5,
+	ARCVE_FLASH_WRITE_FAILED = 6,
 };
 
 static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
@@ -88,6 +89,7 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 	uint32_t i;
 	uint8_t *response = buf;
 	size_t prog_size;
+	int rv;
 
 	*response_size = 1; /* Just in case there is an error. */
 
@@ -134,10 +136,16 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 			 sizeof(check_header.checksum));
 
 	flash_open_ro_window(h1_flash_offset_, prog_size);
-	flash_physical_write(h1_flash_offset_, sizeof(check_header),
-			     (char *)&check_header);
-	flash_physical_write(h1_flash_offset_ + sizeof(check_header),
-			     input_size, buf);
+	rv = flash_physical_write(h1_flash_offset_, sizeof(check_header),
+				  (char *)&check_header);
+	if (rv == EC_SUCCESS)
+		rv = flash_physical_write(h1_flash_offset_ +
+						  sizeof(check_header),
+					  input_size, buf);
+	if (rv != EC_SUCCESS) {
+		*response = ARCVE_FLASH_WRITE_FAILED;
+		return VENDOR_RC_WRITE_FLASH_FAIL;
+	}
 
 	*response_size = 0;
 	return VENDOR_RC_SUCCESS;
