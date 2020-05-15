@@ -14,25 +14,6 @@
 #define CPRINTF(format, args...) cprintf(CC_CCD, format, ## args)
 
 
-static int board_id_is_erased(void)
-{
-	struct board_id id;
-	/*
-	 * If we can't read the board id for some reason, return 0 just to be
-	 * safe
-	 */
-	if (read_board_id(&id) != EC_SUCCESS) {
-		CPRINTS("%s: BID read error", __func__);
-		return 0;
-	}
-
-	if (board_id_is_blank(&id)) {
-		CPRINTS("BID erased");
-		return 1;
-	}
-	return 0;
-}
-
 static int inactive_image_is_guc_image(void)
 {
 	enum system_image_copy_t inactive_copy;
