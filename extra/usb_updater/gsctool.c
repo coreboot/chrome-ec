@@ -272,6 +272,8 @@ static const struct option_container cmd_line_options[] = {
 	 "Get the system boot mode"},
 	{{"help", no_argument, NULL, 'h'},
 	 "Show this message"},
+	{{"erase_ap_ro_hash", no_argument, NULL, 'H'},
+	 "Erase AP RO hash (possible only if Board ID is not set)"},
 	{{"ccd_info", no_argument, NULL, 'I'},
 	 "Get information about CCD state"},
 	{{"board_id", optional_argument, NULL, 'i'},
@@ -1331,6 +1333,49 @@ static void invalidate_inactive_rw(struct transfer_descriptor *td)
 	}
 
 	fprintf(stderr, "*%s: Error %#x\n", __func__, rv);
+	exit(update_error);
+}
+
+static void process_erase_ap_ro_hash(struct transfer_descriptor *td)
+{
+	/* Try erasing AP RO hash, could fail if board ID is programmed. */
+	uint32_t rv;
+	uint8_t response;
+	size_t response_size;
+	char error_details[30];
+
+	response_size = sizeof(response);
+	rv = send_vendor_command(td, VENDOR_CC_SEED_AP_RO_CHECK,
+				 NULL, 0, &response, &response_size);
+	if (!rv) {
+		printf("AP RO hash erased\n");
+		exit(0);
+	}
+
+	if (response_size == sizeof(response)) {
+		switch (response) {
+		case ARCVE_FLASH_ERASE_FAILED:
+			snprintf(error_details, sizeof(error_details),
+				 "erase failure");
+			break;
+		case ARCVE_BID_PROGRAMMED:
+			snprintf(error_details, sizeof(error_details),
+				 "BID already programmed");
+			break;
+		default:
+			snprintf(error_details, sizeof(error_details),
+				 "Unexpected error rc %d, response %d",
+				 rv, response);
+			break;
+		}
+	} else {
+		snprintf(error_details, sizeof(error_details),
+			 "misconfigured response, rc=%d, size %zd",
+			 rv, response_size);
+	}
+
+	fprintf(stderr, "Error: %s\n", error_details);
+
 	exit(update_error);
 }
 
@@ -2731,6 +2776,7 @@ int main(int argc, char *argv[])
 	uint8_t sn_bits_arg[SN_BITS_SIZE];
 	int sn_inc_rma = 0;
 	uint8_t sn_inc_rma_arg;
+	int erase_ap_ro_hash = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -2742,6 +2788,7 @@ int main(int argc, char *argv[])
 		{ 'c', &corrupt_inactive_rw },
 		{ 'f', &show_fw_ver },
 		{ 'g', &get_boot_mode},
+		{ 'H', &erase_ap_ro_hash},
 		{ 'I', &ccd_info },
 		{ 'k', &ccd_lock },
 		{ 'o', &ccd_open },
@@ -2941,6 +2988,7 @@ int main(int argc, char *argv[])
 	    !get_flog &&
 	    !get_endorsement_seed &&
 	    !factory_mode &&
+	    !erase_ap_ro_hash &&
 	    !password &&
 	    !rma &&
 	    !show_fw_ver &&
@@ -2978,11 +3026,12 @@ int main(int argc, char *argv[])
 	if (((bid_action != bid_none) + !!rma + !!password + !!ccd_open +
 	     !!ccd_unlock + !!ccd_lock + !!ccd_info + !!get_flog +
 	     !!get_boot_mode + !!openbox_desc_file + !!factory_mode +
-	     (wp != WP_NONE) + !!get_endorsement_seed) > 1) {
+	     (wp != WP_NONE) + !!get_endorsement_seed +
+	     !!erase_ap_ro_hash) > 1) {
 		fprintf(stderr,
 			"ERROR: options"
-			"-e, -F, -g, -I, -i, -k, -L, -O, -o, -P, -r, -U and -w "
-			"are mutually exclusive\n");
+			"-e, -F, -g, -H, -I, -i, -k, -L, -O, -o, -P, -r, -U"
+			" and -w are mutually exclusive\n");
 		exit(update_error);
 	}
 
@@ -3049,6 +3098,9 @@ int main(int argc, char *argv[])
 
 	if (get_flog)
 		process_get_flog(&td, prev_log_entry);
+
+	if (erase_ap_ro_hash)
+		process_erase_ap_ro_hash(&td);
 
 	if (data || show_fw_ver) {
 
