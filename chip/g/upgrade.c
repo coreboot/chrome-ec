@@ -36,6 +36,8 @@ static int header_restored(uint32_t offset)
 {
 	struct SignedHeader *header;
 	uint32_t new_size;
+	int rv;
+	bool ro_header;
 
 	header = (struct SignedHeader *)(CONFIG_PROGRAM_MEMORY_BASE + offset);
 
@@ -51,13 +53,20 @@ static int header_restored(uint32_t offset)
 	if (new_size > CONFIG_RW_SIZE)
 		return 0;
 
-	if ((offset == CONFIG_RO_MEM_OFF) || (offset == CHIP_RO_B_MEM_OFF))
+	ro_header = (offset == CONFIG_RO_MEM_OFF) ||
+		    (offset == CHIP_RO_B_MEM_OFF);
+	if (ro_header)
 		flash_open_ro_window(offset, sizeof(struct SignedHeader));
 
-	return flash_physical_write(offset + offsetof(struct SignedHeader,
-						      image_size),
-				    sizeof(header->image_size),
-				    (char *)&new_size) == EC_SUCCESS;
+	/* rv is set to TRUE on success. */
+	rv = flash_physical_write(offset + offsetof(struct SignedHeader,
+						    image_size),
+				  sizeof(header->image_size),
+				  (char *)&new_size) == EC_SUCCESS;
+	if (ro_header)
+		flash_close_ro_window();
+
+	return rv;
 }
 
 /*

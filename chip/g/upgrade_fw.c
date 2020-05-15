@@ -114,13 +114,16 @@ static uint8_t check_update_chunk(uint32_t block_offset, size_t body_size)
 		if (block_offset == valid_sections.ro_base_offset) {
 			uint32_t base;
 			uint32_t size;
+			int rv;
 
 			base = valid_sections.ro_base_offset;
 			size = valid_sections.ro_top_offset -
 				valid_sections.ro_base_offset;
 			/* backup RO area write access needs to be enabled. */
 			flash_open_ro_window(base, size);
-			if (flash_physical_erase(base, size) != EC_SUCCESS) {
+			rv = flash_physical_erase(base, size);
+			flash_close_ro_window();
+			if (rv != EC_SUCCESS) {
 				CPRINTF("%s:%d erase failure of 0x%x..+0x%x\n",
 					__func__, __LINE__, base, size);
 				return UPGRADE_ERASE_FAILURE;
@@ -399,6 +402,7 @@ void fw_upgrade_command_handler(void *body,
 	uint8_t *error_code = body;  /* Cache the address for code clarity. */
 	size_t body_size;
 	uint32_t block_offset;
+	int rv;
 
 	*response_size = 1; /* One byte response unless this is a start PDU. */
 
@@ -506,8 +510,15 @@ void fw_upgrade_command_handler(void *body,
 	}
 
 	CPRINTF("at 0x%x\n", block_offset + CONFIG_PROGRAM_MEMORY_BASE);
-	if (flash_physical_write(block_offset, body_size, upgrade_data)
-	    != EC_SUCCESS) {
+	if (block_offset < valid_sections.ro_top_offset)
+		flash_open_ro_window(valid_sections.ro_base_offset,
+				     valid_sections.ro_top_offset -
+					     valid_sections.ro_base_offset);
+	rv = flash_physical_write(block_offset, body_size, upgrade_data);
+	if (block_offset < valid_sections.ro_top_offset)
+		flash_close_ro_window();
+
+	if (rv != EC_SUCCESS) {
 		*error_code = UPGRADE_WRITE_FAILURE;
 		CPRINTF("%s:%d upgrade write error\n",	__func__, __LINE__);
 		return;
