@@ -142,6 +142,8 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 		rv = flash_physical_write(h1_flash_offset_ +
 						  sizeof(check_header),
 					  input_size, buf);
+	flash_close_ro_window();
+
 	if (rv != EC_SUCCESS) {
 		*response = ARCVE_FLASH_WRITE_FAILED;
 		return VENDOR_RC_WRITE_FLASH_FAIL;
@@ -258,6 +260,7 @@ static int ap_ro_info_cmd(int argc, char **argv)
 		 */
 		flash_open_ro_window(h1_flash_offset_, AP_RO_DATA_SPACE_SIZE);
 		flash_physical_erase(h1_flash_offset_, AP_RO_DATA_SPACE_SIZE);
+		flash_close_ro_window();
 	}
 #endif
 	if ((p_chk->header.num_ranges == (uint16_t)~0) &&

@@ -464,6 +464,11 @@ void flash_open_ro_window(uint32_t offset, size_t size_b)
 	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, WR_EN, 1);
 }
 
+void flash_close_ro_window(void)
+{
+	GWRITE_FIELD(GLOBALSEC, FLASH_REGION6_CTRL, WR_EN, 0);
+}
+
 #ifdef CR50_DEV
 /*
  * The seed is the first 32 bytes of the manufacture state space. That is all
