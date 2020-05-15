@@ -6,6 +6,7 @@
  */
 
 #include "ap_ro_integrity_check.h"
+#include "board_id.h"
 #include "console.h"
 #include "crypto_api.h"
 #include "extension.h"
@@ -77,7 +78,24 @@ enum ap_ro_check_vc_errors {
 	ARCVE_BAD_RANGE_SIZE = 4,
 	ARCVE_ALREADY_PROGRAMMED = 5,
 	ARCVE_FLASH_WRITE_FAILED = 6,
+	ARCVE_BID_PROGRAMMED = 7,
+	ARCVE_FLASH_ERASE_FAILED = 8,
 };
+
+static int ap_ro_erase_hash(void)
+{
+	int rv;
+
+	/*
+	 * TODO(vbendeb): Make this a partial erase, use refactored
+	 * Board ID space partial erase.
+	 */
+	flash_open_ro_window(h1_flash_offset_, AP_RO_DATA_SPACE_SIZE);
+	rv = flash_physical_erase(h1_flash_offset_, AP_RO_DATA_SPACE_SIZE);
+	flash_close_ro_window();
+
+	return rv;
+}
 
 static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 					      void *buf, size_t input_size,
@@ -92,6 +110,23 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 	int rv;
 
 	*response_size = 1; /* Just in case there is an error. */
+
+	/* Neither write nor erase are allowed once Board ID is programmed. */
+	if (!board_id_is_erased()) {
+		*response = ARCVE_BID_PROGRAMMED;
+		return VENDOR_RC_NOT_ALLOWED;
+	}
+
+	if (input_size == 0) {
+		/* Empty payload is a request to erase the hash. */
+		if (ap_ro_erase_hash() != EC_SUCCESS) {
+			*response = ARCVE_FLASH_ERASE_FAILED;
+			return VENDOR_RC_INTERNAL_ERROR;
+		}
+
+		*response_size = 0;
+		return EC_SUCCESS;
+	}
 
 	/* There should be at least one range and the hash. */
 	if (input_size < (SHA256_DIGEST_SIZE + sizeof(struct flash_range))) {
@@ -254,13 +289,7 @@ static int ap_ro_info_cmd(int argc, char **argv)
 	if (argc == max_args) {
 		if (strcasecmp(argv[1], "erase"))
 			return EC_ERROR_PARAM1;
-		/*
-		 * TODO(vbendeb): Make this a partial erase, use refactored
-		 * Board ID space partial erase.
-		 */
-		flash_open_ro_window(h1_flash_offset_, AP_RO_DATA_SPACE_SIZE);
-		flash_physical_erase(h1_flash_offset_, AP_RO_DATA_SPACE_SIZE);
-		flash_close_ro_window();
+		ap_ro_erase_hash();
 	}
 #endif
 	if ((p_chk->header.num_ranges == (uint16_t)~0) &&
