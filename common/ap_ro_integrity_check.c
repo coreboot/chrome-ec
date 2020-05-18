@@ -70,18 +70,6 @@ struct ap_ro_check {
 static const struct ap_ro_check *p_chk =
 	(const struct ap_ro_check *)AP_RO_DATA_SPACE_ADDR;
 
-/* Errors recognized and returned by the vendor command handler. */
-enum ap_ro_check_vc_errors {
-	ARCVE_TOO_SHORT = 1,
-	ARCVE_BAD_PAYLOAD_SIZE = 2,
-	ARCVE_BAD_OFFSET = 3,
-	ARCVE_BAD_RANGE_SIZE = 4,
-	ARCVE_ALREADY_PROGRAMMED = 5,
-	ARCVE_FLASH_WRITE_FAILED = 6,
-	ARCVE_BID_PROGRAMMED = 7,
-	ARCVE_FLASH_ERASE_FAILED = 8,
-};
-
 static int ap_ro_erase_hash(void)
 {
 	int rv;
