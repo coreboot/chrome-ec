@@ -241,6 +241,21 @@ enum vendor_cc_spi_hash_request_flags {
 	SPI_HASH_FLAG_EC_GANG = BIT(0),
 };
 
+/*
+ * Errors recognized and returned by the VENDOR_CC_SEED_AP_RO_CHECK vendor
+ * command handler.
+ */
+enum ap_ro_check_vc_errors {
+	ARCVE_TOO_SHORT = 1,
+	ARCVE_BAD_PAYLOAD_SIZE = 2,
+	ARCVE_BAD_OFFSET = 3,
+	ARCVE_BAD_RANGE_SIZE = 4,
+	ARCVE_ALREADY_PROGRAMMED = 5,
+	ARCVE_FLASH_WRITE_FAILED = 6,
+	ARCVE_BID_PROGRAMMED = 7,
+	ARCVE_FLASH_ERASE_FAILED = 8,
+};
+
 /* Structure for VENDOR_CC_SPI_HASH request which follows tpm_header */
 struct vendor_cc_spi_hash_request {
 	uint8_t subcmd;		/* See vendor_cc_spi_hash_request_subcmd */
