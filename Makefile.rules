@@ -411,7 +411,9 @@ $(out)/RW/%.o:%.S
 # Conditionally force the rebuilding of ec_version.h only if it would be
 # changed.
 old_version_hash := $(shell cat $(out)/ec_version.h 2> /dev/null | md5sum -)
-new_version_hash := $(shell BOARD=$(BOARD) ./util/getversion.sh | md5sum -)
+new_version_hash := $(shell BOARD=$(BOARD) CR50_DEV=$(CR50_DEV) \
+  CR50_SQA=$(CR50_SQA) CRYPTO_TEST=$(CRYPTO_TEST) \
+     ./util/getversion.sh | md5sum -)
 
 ifneq ($(old_version_hash),$(new_version_hash))
 .PHONY: $(out)/ec_version.h

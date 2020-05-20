@@ -861,6 +861,11 @@
 #define CONFIG_CONSOLE_VERBOSE
 
 /*
+ * Enable EC-CR50 communication (a.k.a. EC-EFS2). This is for CR50 config only.
+ */
+#undef CONFIG_EC_EFS_SUPPORT
+
+/*
  * Enable the experimental console.
  *
  * NOTE: If you enable this experimental console, you will need to run the
@@ -2702,6 +2707,9 @@
 /* Enable USB serial console module. */
 #undef CONFIG_USB_CONSOLE
 
+/* Require explicit enable call vs. active at time zero. */
+#undef CONFIG_USB_CONSOLE_DEFAULT_DISABLED
+
 /*
  * Enable USB serial console module using usb stream config.
  * NOTE: CONFIG_USB_CONSOLE and CONFIG_USB_CONSOLE_STREAM should be defined
@@ -2717,9 +2725,6 @@
 
 /* Support USB HID interface. */
 #undef CONFIG_USB_HID
-
-/* Support USB HID keyboard interface. */
-#undef CONFIG_USB_HID_KEYBOARD
 
 /* Support USB HID touchpad interface. */
 #undef CONFIG_USB_HID_TOUCHPAD
@@ -2956,11 +2961,6 @@
 /* Firmware updates using other than HC channel(s). */
 #undef CONFIG_NON_HC_FW_UPDATE
 #undef CONFIG_USB_FW_UPDATE
-/* A different config for the same update. TODO(vbendeb): dedup these */
-#undef CONFIG_USB_UPDATE
-
-/* Add support for pairing over the USB update interface. */
-#undef CONFIG_USB_PAIRING
 
 /* PDU size for fw update over USB (or TPM). */
 #define CONFIG_UPDATE_PDU_SIZE 1024

@@ -14,9 +14,12 @@
 
 #include "Platform.h"
 #include "PlatformData.h"
+#include "TPM_Types.h"
 #include "TpmError.h"
 #include "assert.h"
+#include "ec_comm.h"
 #include "nvmem.h"
+#include "tpm_nvmem.h"
 
 /* Local state */
 static struct {
@@ -187,4 +190,10 @@ void _plat__ClearNvAvail(void)
 {
 	local_state.s_NvIsAvailable = FALSE;
 	return;
+}
+
+void _plat__NvInformIndexDataChanged(unsigned int handle)
+{
+	if (handle == (HR_NV_INDEX + KERNEL_NV_INDEX))
+		ec_efs_refresh();
 }

@@ -175,6 +175,11 @@ void test_chipset_on(void);
 /* Simulates chipset power off */
 void test_chipset_off(void);
 
+/* Start/stop capturing a specific UART output */
+void test_capture_uartn(int uart, int enabled);
+/* Get captured a specific UART output */
+const char *test_get_captured_uartn(int uart);
+
 /* Start/stop capturing console output */
 void test_capture_console(int enabled);
 

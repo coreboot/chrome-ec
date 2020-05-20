@@ -9,6 +9,7 @@
 #include "console.h"
 #include "gpio.h"
 #include "host_command.h"
+#include "printf.h"
 #include "system.h"
 #include "util.h"
 
@@ -79,30 +80,39 @@ static enum ec_error_list set(const char *name, int value)
 
 static void print_gpio_info(int gpio)
 {
-	int changed, v, flags;
+	int changed, v;
+	char flags_str[33];
 
 	if (!gpio_is_implemented(gpio))
 		return;  /* Skip unsupported signals */
 
 	v = gpio_get_level(gpio);
 #ifdef CONFIG_CMD_GPIO_EXTENDED
-	flags = gpio_get_flags(gpio);
+	{
+		int flags;
+
+		flags = gpio_get_flags(gpio);
+		snprintf(flags_str, sizeof(flags_str),
+			 "%s%s%s%s%s%s%s%s%s%s%s",
+			 flags & GPIO_INPUT ? "I " : "",
+			 flags & GPIO_OUTPUT ? "O " : "",
+			 flags & GPIO_LOW ? "L " : "",
+			 flags & GPIO_HIGH ? "H " : "",
+			 flags & GPIO_ANALOG ? "A " : "",
+			 flags & GPIO_OPEN_DRAIN ? "ODR " : "",
+			 flags & GPIO_PULL_UP ? "PU " : "",
+			 flags & GPIO_PULL_DOWN ? "PD " : "",
+			 flags & GPIO_ALTERNATE ? "ALT " : "",
+			 flags & GPIO_SEL_1P8V ? "1P8 " : "",
+			 flags & GPIO_LOCKED ? "LCK " : "");
+	}
 #else
-	flags = 0;
+	flags_str[0] = 0;
 #endif
 	changed = last_val_changed(gpio, v);
 
-	ccprintf("  %d%c %s%s%s%s%s%s%s%s%s%s\n", v, (changed ? '*' : ' '),
-		 (flags & GPIO_INPUT ? "I " : ""),
-		 (flags & GPIO_OUTPUT ? "O " : ""),
-		 (flags & GPIO_LOW ? "L " : ""),
-		 (flags & GPIO_HIGH ? "H " : ""),
-		 (flags & GPIO_ANALOG ? "A " : ""),
-		 (flags & GPIO_OPEN_DRAIN ? "ODR " : ""),
-		 (flags & GPIO_PULL_UP ? "PU " : ""),
-		 (flags & GPIO_PULL_DOWN ? "PD " : ""),
-		 (flags & GPIO_ALTERNATE ? "ALT " : ""),
-		 gpio_get_name(gpio));
+	ccprintf("  %d%c %s%s\n", v,
+		 (changed ? '*' : ' '), flags_str, gpio_get_name(gpio));
 
 	/* Flush console to avoid truncating output */
 	cflush();

@@ -210,10 +210,18 @@ void *nvmem_cache_base(enum nvmem_users user);
  */
 void nvmem_clear_cache(void);
 
+void nvmem_wipe_cache(void);
+
+/*
+ * Unlock nvmem mutex lock.
+ *
+ * @param init_act_partition: boolean to request to initialize active nvmem
+ *                            partition status or not.
+ */
+void nvmem_unlock_cache(int init_act_partition);
+
 #ifdef __cplusplus
 }
 #endif
-
-void nvmem_wipe_cache(void);
 
 #endif /* __CROS_EC_NVMEM_UTILS_H */

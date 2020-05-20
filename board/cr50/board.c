@@ -9,6 +9,7 @@
 #include "common.h"
 #include "console.h"
 #include "dcrypto/dcrypto.h"
+#include "ec_comm.h"
 #include "ec_version.h"
 #include "endian.h"
 #include "extension.h"
@@ -460,12 +461,18 @@ static void init_ac_detect(void)
 /*****************************************************************************/
 
 /*
- * There's no way to trigger on both rising and falling edges, so force a
- * compiler error if we try. The workaround is to use the pinmux to connect
- * two GPIOs to the same input and configure each one for a separate edge.
+ * There's no way to have more than one trigger condition on a GPIO,
+ * so force a compiler error if we try. The workaround is to use the pinmux to
+ * connect as many GPIOs as the number of required trigger conditions to the
+ * same input and configure each one for a separate condition.
+ */
+#define GPIO_INT_COND(x) ((x) & GPIO_INT_ANY & ~GPIO_INPUT)
+/*
+ * Checks flags has only one bit set among GPIO_INT_F_RISING,
+ * GPIO_INT_F_FALLING, GPIO_INT_F_LOW, GPIO_INT_F_HIGH.
  */
 #define GPIO_INT(name, pin, flags, signal)	\
-	BUILD_ASSERT(((flags) & GPIO_INT_BOTH) != GPIO_INT_BOTH);
+	BUILD_ASSERT((GPIO_INT_COND(flags) & (GPIO_INT_COND(flags) - 1)) == 0);
 #include "gpio.wrap"
 
 /**
@@ -570,9 +577,10 @@ void board_configure_deep_sleep_wakepins(void)
 	 * not being used and reenable them in their init functions on
 	 * resume.
 	 */
-	GWRITE_FIELD(PINMUX, EXITEN0, DIOA12, 0); /* SPS_CS_L */
-	GWRITE_FIELD(PINMUX, EXITEN0, DIOA1, 0);  /* I2CS_SDA */
-	GWRITE_FIELD(PINMUX, EXITEN0, DIOA9, 0);  /* I2CS_SCL */
+	gpio_set_wakepin(GPIO_STRAP_B1, 0); /* SPS_CS_L */
+	gpio_set_wakepin(GPIO_STRAP_A0, 0); /* I2CS_SDA */
+	gpio_set_wakepin(GPIO_STRAP_A1, 0); /* I2CS_SCL */
+
 
 	/* Remove the pulldown on EC uart tx and disable the input */
 	GWRITE_FIELD(PINMUX, DIOB5_CTL, PD, 0);
@@ -588,25 +596,16 @@ void board_configure_deep_sleep_wakepins(void)
 	 * resuming from deep sleep the TPM will be reset. Cr50 doesn't need to
 	 * read the low value and then reset.
 	 */
-	if (board_use_plt_rst()) {
-		/* Configure plt_rst_l to wake on high */
-		/* Disable plt_rst_l as a wake pin */
-		GWRITE_FIELD(PINMUX, EXITEN0, DIOM3, 0);
-		/* Reconfigure the pin */
-		GWRITE_FIELD(PINMUX, EXITEDGE0, DIOM3, 0); /* level sensitive */
-		GWRITE_FIELD(PINMUX, EXITINV0, DIOM3, 0);  /* wake on high */
-		/* enable powerdown exit */
-		GWRITE_FIELD(PINMUX, EXITEN0, DIOM3, 1);
-	} else {
-		/* Configure plt_rst_l to wake on high */
-		/* Disable sys_rst_l as a wake pin */
-		GWRITE_FIELD(PINMUX, EXITEN0, DIOM0, 0);
-		/* Reconfigure the pin */
-		GWRITE_FIELD(PINMUX, EXITEDGE0, DIOM0, 0); /* level sensitive */
-		GWRITE_FIELD(PINMUX, EXITINV0, DIOM0, 0);  /* wake on high */
-		/* enable powerdown exit */
-		GWRITE_FIELD(PINMUX, EXITEN0, DIOM0, 1);
-	}
+
+	/*
+	 * Configure plt_rst_l (DIOM3) or sys_rst_(DIOM0) to wake on high.
+	 * Note: the pinmux with GPIO_TPM_RST_L is configured in
+	 *       configure_board_specific_gpios().
+	 */
+	gpio_set_wakepin(GPIO_TPM_RST_L, GPIO_HIB_WAKE_HIGH);
+
+	if (board_has_ec_cr50_comm_support())
+		gpio_set_wakepin(GPIO_EC_PACKET_MODE_EN, GPIO_HIB_WAKE_HIGH);
 }
 
 static void deferred_tpm_rst_isr(void);
@@ -638,22 +637,6 @@ static void configure_board_specific_gpios(void)
 
 		/* Enable the input */
 		GWRITE_FIELD(PINMUX, DIOM3_CTL, IE, 1);
-
-		/*
-		 * Make plt_rst_l routed to DIOM3 a low level sensitive wake
-		 * source. This way when a plt_rst_l pulse comes along while
-		 * H1 is in sleep, the H1 wakes from sleep first, enabling all
-		 * necessary clocks, and becomes ready to generate an
-		 * interrupt on the rising edge of plt_rst_l.
-		 *
-		 * It takes at most 150 us to wake up, and the pulse is at
-		 * least 1ms long.
-		 */
-		GWRITE_FIELD(PINMUX, EXITEDGE0, DIOM3, 0);
-		GWRITE_FIELD(PINMUX, EXITINV0, DIOM3, 1);
-
-		/* Enable powerdown exit on DIOM3 */
-		GWRITE_FIELD(PINMUX, EXITEN0, DIOM3, 1);
 	} else {
 		/* Use sys_rst_l as the tpm reset signal. */
 		/* Select for TPM_RST_L */
@@ -662,14 +645,19 @@ static void configure_board_specific_gpios(void)
 		GWRITE(PINMUX, GPIO1_GPIO4_SEL, GC_PINMUX_DIOM0_SEL);
 		/* Enable the input */
 		GWRITE_FIELD(PINMUX, DIOM0_CTL, IE, 1);
-
-		/* Set to be level sensitive */
-		GWRITE_FIELD(PINMUX, EXITEDGE0, DIOM0, 0);
-		/* wake on low */
-		GWRITE_FIELD(PINMUX, EXITINV0, DIOM0, 1);
-		/* Enable powerdown exit on DIOM0 */
-		GWRITE_FIELD(PINMUX, EXITEN0, DIOM0, 1);
 	}
+	/*
+	 * Now that TPM_RST_L has been connected to the right signal, enable it
+	 * as wake_low. This way when a tpm_rst_l pulse comes along while H1 is
+	 * in sleep, the H1 wakes from sleep first, enabling all necessary
+	 * clocks, and becomes ready to generate an interrupt on the rising edge
+	 * of tpm_rst_l.
+	 *
+	 * It takes at most 150 us to wake up, and the pulse is at
+	 * least 1ms long.
+	 */
+	gpio_set_wakepin(GPIO_TPM_RST_L, GPIO_HIB_WAKE_LOW);
+
 	/* Connect the correct pin to the lid open/recovery switch gpio. */
 	switch (board_get_ccd_rec_lid_pin()) {
 	case BOARD_CCD_REC_LID_PIN_DIOA1:
@@ -704,16 +692,21 @@ static void configure_board_specific_gpios(void)
 		GWRITE(PINMUX, DIOB4_SEL, GC_PINMUX_GPIO0_GPIO2_SEL);
 		GWRITE(PINMUX, GPIO0_GPIO2_SEL, GC_PINMUX_DIOB4_SEL);
 
-		/* Enable the input */
+		/* Enable the input for DIOB4 */
 		GWRITE_FIELD(PINMUX, DIOB4_CTL, IE, 1);
+
+		/* Connect GPIO_EC_PACKET_MODE_EN to DIOB3 as input. */
+		GWRITE(PINMUX, GPIO1_GPIO7_SEL, GC_PINMUX_DIOB3_SEL);
+		/* Connect GPIO_EC_PACKET_MODE_DIS to DIOB3 as input. */
+		GWRITE(PINMUX, GPIO1_GPIO8_SEL, GC_PINMUX_DIOB3_SEL);
 	} else {
 		/* Connect GPIO_AP_FLASH_SELECT to DIOB3. */
 		GWRITE(PINMUX, DIOB3_SEL, GC_PINMUX_GPIO0_GPIO2_SEL);
 		GWRITE(PINMUX, GPIO0_GPIO2_SEL, GC_PINMUX_DIOB3_SEL);
-
-		/* Enable the input */
-		GWRITE_FIELD(PINMUX, DIOB3_CTL, IE, 1);
 	}
+	/* Enable the input for DIOB3 */
+	GWRITE_FIELD(PINMUX, DIOB3_CTL, IE, 1);
+
 }
 
 static uint8_t mismatched_board_id;
@@ -864,7 +857,7 @@ static void board_init(void)
 	 * HOOK_INIT, not at +1.0 seconds.
 	 */
 }
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_INIT_CR50_BOARD);
 
 /**
  * Hook for CCD config loaded/changed.
@@ -1053,6 +1046,12 @@ void board_reboot_ec(void)
 }
 DECLARE_DEFERRED(board_reboot_ec);
 
+void board_reboot_ec_deferred(int32_t usec_delay)
+{
+	if (usec_delay >= 0)
+		hook_call_deferred(&board_reboot_ec_data, usec_delay);
+}
+
 /*
  * This interrupt handler will be called if the RBOX key combo is detected.
  */
@@ -1149,6 +1148,8 @@ void assert_ec_rst(void)
 	/* Prevent bit bang interrupt storm. */
 	if (uart_bitbang_is_enabled())
 		task_disable_irq(bitbang_config.rx_irq);
+	else if (board_has_ec_cr50_comm_support())
+		ec_efs_reset();
 
 	wait_ec_rst(1);
 
@@ -1522,15 +1523,10 @@ void i2cs_set_pinmux(void)
 	 */
 	GWRITE(PINMUX, GPIO0_GPIO14_SEL, GC_PINMUX_DIOA1_SEL);
 
-	/* Allow I2CS_SCL to wake from sleep */
-	GWRITE_FIELD(PINMUX, EXITEDGE0, DIOA9, 1); /* edge sensitive */
-	GWRITE_FIELD(PINMUX, EXITINV0, DIOA9, 1);  /* wake on low */
-	GWRITE_FIELD(PINMUX, EXITEN0, DIOA9, 1);   /* enable powerdown exit */
-
-	/* Allow I2CS_SDA to wake from sleep */
-	GWRITE_FIELD(PINMUX, EXITEDGE0, DIOA1, 1); /* edge sensitive */
-	GWRITE_FIELD(PINMUX, EXITINV0, DIOA1, 1);  /* wake on low */
-	GWRITE_FIELD(PINMUX, EXITEN0, DIOA1, 1);   /* enable powerdown exit */
+	/* Configure the I2CS_SDA signal, DIOA1, as wake falling */
+	gpio_set_wakepin(GPIO_STRAP_A0, GPIO_HIB_WAKE_FALLING);
+	/* Configure the I2CS_SCL signal, DIOA9, as wake falling */
+	gpio_set_wakepin(GPIO_STRAP_A1, GPIO_HIB_WAKE_FALLING);
 }
 
 static int command_sysinfo(int argc, char **argv)

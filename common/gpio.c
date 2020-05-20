@@ -168,4 +168,10 @@ int gpio_get_ternary(enum gpio_signal signal)
 	return pu && !pd ? 2 : pd;
 }
 
+__attribute__((weak)) void gpio_set_wakepin(enum gpio_signal signal,
+					    uint32_t flags)
+{
+	/* Some chips may need their own implementations */
+}
+
 /*****************************************************************************/

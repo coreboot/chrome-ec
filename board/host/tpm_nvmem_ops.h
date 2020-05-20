@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 The Chromium OS Authors. All rights reserved.
+ * Copyright 2020 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -27,20 +27,5 @@ enum tpm_nv_hidden_object {
 enum tpm_read_rv read_tpm_nvmem(uint16_t object_index,
 				uint16_t object_size,
 				void *obj_value);
-
-/*
- * The following functions must only be called from the TPM task,
- * and only after TPM initialization is complete (specifically,
- * after NvInitStatic).
- */
-
-enum tpm_read_rv read_tpm_nvmem_hidden(uint16_t object_index,
-				       uint16_t object_size,
-				       void *obj_value);
-
-enum tpm_write_rv write_tpm_nvmem_hidden(uint16_t object_index,
-					 uint16_t object_size,
-					 void *obj_value,
-					 int commit);
 
 #endif  /* ! __EC_BOARD_CR50_TPM_NVMEM_OPS_H */

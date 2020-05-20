@@ -50,6 +50,7 @@
  * GPIO0.0   int_ap_l
  * GPIO0.1   ec_flash_select
  * GPIO0.2   ap_flash_select
+ * GPIO0.3   DIOM4 used for physical presence
  * GPIO0.4   sys_rst_l_out
  * GPIO0.5   ccd_mode_l
  * GPIO0.6   batt_pres_l
@@ -69,6 +70,8 @@
  * GPIO1.4   detect_tpm_rst_asserted
  * GPIO1.5   unwedge_i2cs_scl
  * GPIO1.6   monitor_i2cs_sda
+ * GPIO1.7   ec_packet_mode_en
+ * GPIO1.8   ec_packet_mode_dis
  * GPIO1.10  rec_lid_switch
  * GPIO1.11  ec_tx_cr50_rx_in
  * GPIO1.12  strap_a0
@@ -105,6 +108,15 @@ GPIO_INT(DETECT_SERVO,    PIN(1, 3),  GPIO_INT_HIGH | GPIO_PULL_DOWN,
  */
 GPIO_INT(DETECT_TPM_RST_L_ASSERTED, PIN(1, 4),  GPIO_INT_FALLING,
          tpm_rst_asserted)
+
+/*
+ * These GPIOs are to enable or disable EC-CR50 communication.
+ * NOTE: If these are changed, you must update the information in board.c
+ *       and ec_comm.c
+ */
+GPIO_INT(EC_PACKET_MODE_EN, PIN(1, 7), GPIO_INT_RISING, ec_comm_packet_mode_en)
+GPIO_INT(EC_PACKET_MODE_DIS, PIN(1, 8), GPIO_INT_FALLING,
+	 ec_comm_packet_mode_dis)
 
 /*****************************************************************************/
 /* NON STANDARD INTERRUPT GPIOs - handlers defined and configured in board.c */
@@ -150,6 +162,12 @@ GPIO(BATT_PRES_L,     PIN(0, 6), GPIO_INPUT)
 GPIO(SPI_MOSI,        PIN(0, 7), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(SPI_CLK,         PIN(0, 8), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(SPI_CS_L,        PIN(0, 9), GPIO_INPUT)
+
+/*
+ * Generic pulled up input used for physical presence indication on some
+ * devices.
+ */
+GPIO(DIOM4,           PIN(0, 3), GPIO_INPUT)
 
 /* Used during *chip* factory process. */
 GPIO(DIOB4,           PIN(0, 10), GPIO_INPUT | GPIO_PULL_DOWN)
@@ -220,6 +238,9 @@ UNIMPLEMENTED(ENTERING_RW)
 
 /* GPIOs - mark outputs as inputs too, to read back from the driven pad */
 PINMUX(GPIO(INT_AP_L),        A5, DIO_INPUT)
+
+PINMUX(GPIO(DIOM4), M4, DIO_INPUT | GPIO_PULL_UP)
+
 PINMUX(GPIO(EC_FLASH_SELECT), B2, DIO_INPUT)
 PINMUX(GPIO(MONITOR_I2CS_SDA), A1, GPIO_INPUT)
 
