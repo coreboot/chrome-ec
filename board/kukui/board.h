@@ -46,6 +46,9 @@
 #undef CONFIG_CHARGER_MT6370_BC12_GPIO
 #endif
 
+/* b/155337959: Allow krane drain 5V/2A on DCP. */
+#define USB_CHARGER_MAX_CURR_MA 2000
+
 /* Motion Sensors */
 #ifdef SECTION_IS_RW
 #ifndef BOARD_KRANE
