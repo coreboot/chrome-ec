@@ -18,6 +18,7 @@
 #include "ina231s.h"
 #include "ioexpanders.h"
 #include "pathsel.h"
+#include "pi3usb9201.h"
 #include "queue_policies.h"
 #include "registers.h"
 #include "spi.h"
@@ -386,6 +387,7 @@ static void board_init(void)
 	init_ioexpanders();
 	init_dacs();
 	init_tusb1064(1);
+	init_pi3usb9201();
 
 	/* Clear BBRAM, we don't want any PD state carried over on reset. */
 	system_set_bbram(SYSTEM_BBRAM_IDX_PD0, 0);
