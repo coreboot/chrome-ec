@@ -60,6 +60,71 @@ static void power_button_press_enable_interrupt(int enable)
 #ifdef CONFIG_AP_RO_VERIFICATION
 
 /*
+ * A hook used to keep the EC in reset, no matter what keys the user presses,
+ * the only way out is the Cr50 reboot, most likely through power cycle by
+ * battery cutoff.
+ *
+ * Cr50 console over SuzyQ would still be available in case the user has the
+ * cable and wants to see what happens with the system. The easiest way to see
+ * the system is in this state to run the 'flog' command and examine the flash
+ * log.
+ */
+static void keep_ec_in_reset(void);
+static bool ap_ro_verification_failed_;
+
+DECLARE_DEFERRED(keep_ec_in_reset);
+
+static void keep_ec_in_reset(void)
+{
+	if (!ap_ro_verification_failed_) {
+		enable_sleep(SLEEP_MASK_AP_RO_VERIFICATION);
+		return;
+	}
+
+	assert_ec_rst();
+	hook_call_deferred(&keep_ec_in_reset_data, 100 * MSEC);
+}
+
+static int ver_state_cmd(int argc, char **argv)
+{
+#ifdef CR50_DEV
+	int const max_args = 2;
+#else
+	int const max_args = 1;
+#endif
+
+	if (argc > max_args)
+		return EC_ERROR_PARAM_COUNT;
+#ifdef CR50_DEV
+	if (argc == max_args) {
+		if (strcasecmp(argv[1], "clear"))
+			return EC_ERROR_PARAM1;
+		if (ap_ro_verification_failed_) {
+			ap_ro_verification_failed_ = false;
+			deassert_ec_rst();
+		}
+	}
+#endif
+	ccprintf("%sAP RO verification failure detected\n",
+		 ap_ro_verification_failed_ ? "" : "NO ");
+
+	return EC_SUCCESS;
+}
+DECLARE_SAFE_CONSOLE_COMMAND(ver_state, ver_state_cmd,
+#ifdef CR50_DEV
+			     "[clear]",
+			     "Display and/or clear AP RO validation state"
+#else
+			     "", "Display AP RO validation state"
+#endif
+);
+
+int ec_rst_override(void)
+{
+	return ap_ro_verification_failed_;
+}
+
+/*
  * Implement sequence detecting trigger for starting AP RO verification.
  *
  * 'RCTD' is short for 'RO check trigger detection'.
@@ -169,7 +234,14 @@ static int rctd_poll_handler(void)
 
 	CPRINTS("RO Validation triggered");
 	ap_ro_add_flash_event(APROF_CHECK_TRIGGERED);
-	validate_ap_ro();
+
+	if (validate_ap_ro() == EC_ERROR_CRC) {
+		/* Validation failed, no go. */
+		ap_ro_verification_failed_ = true;
+		disable_sleep(SLEEP_MASK_AP_RO_VERIFICATION);
+		keep_ec_in_reset();
+	}
+
 	return 0;
 }
 

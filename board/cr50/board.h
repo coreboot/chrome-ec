@@ -364,6 +364,12 @@ int ec_is_rx_allowed(void);
 int servo_is_connected(void);
 
 /*
+ * Returns nonzero value if EC reset line is taken over and should not be
+ * touched by the 'standard' EC reset functions.
+ */
+int ec_rst_override(void);
+
+/*
  * Assert INT_AP_L to acknowledge AP that cr50 is ready for next TPM command.
  * NOTE: must be called by ISR only.
  *
