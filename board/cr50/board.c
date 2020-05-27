@@ -1175,6 +1175,12 @@ void assert_ec_rst(void)
 
 void deassert_ec_rst(void)
 {
+	if (ec_rst_override()) {
+		ccprintf("EC un-reset blocked, try powercycle or Cr50 reboot."
+			 "\n");
+		return;
+	}
+
 	wait_ec_rst(0);
 
 	if (uart_bitbang_is_enabled())
