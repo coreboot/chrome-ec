@@ -8,6 +8,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "registers.h"
+#include "spi_chip.h"
 #include "timer.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
@@ -112,13 +113,12 @@ int board_get_version(void)
 	return version;
 }
 
-static void baseboard_spi_init(void)
+__override void board_set_stm32_spi_pin_speed(void)
 {
 	/* Set SPI PA15,PB3/4/5/13/14/15 pins to high speed */
 	STM32_GPIO_OSPEEDR(GPIO_A) |= 0xc0000000;
 	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xfc000fc0;
 }
-DECLARE_HOOK(HOOK_INIT, baseboard_spi_init, HOOK_PRIO_INIT_SPI + 1);
 
 int board_allow_i2c_passthru(int port)
 {

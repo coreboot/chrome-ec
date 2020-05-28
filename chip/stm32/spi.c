@@ -18,6 +18,7 @@
 #include "link_defs.h"
 #include "registers.h"
 #include "spi.h"
+#include "spi_chip.h"
 #include "stm32-dma.h"
 #include "system.h"
 #include "timer.h"
@@ -652,6 +653,12 @@ static void spi_chipset_shutdown(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, spi_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
+__overridable void board_set_stm32_spi_pin_speed(void)
+{
+	/* Default pins: PA4/5/6/7. */
+	STM32_GPIO_OSPEEDR(GPIO_A) |= 0xff00;
+}
+
 static void spi_init(void)
 {
 	stm32_spi_regs_t *spi = STM32_SPI1_REGS;
@@ -664,8 +671,8 @@ static void spi_init(void)
 	STM32_RCC_APB2RSTR |= STM32_RCC_PB2_SPI1;
 	STM32_RCC_APB2RSTR &= ~STM32_RCC_PB2_SPI1;
 
-	/* 40 MHz pin speed */
-	STM32_GPIO_OSPEEDR(GPIO_A) |= 0xff00;
+	/* Config SPI GPIO to high speed. This varies from board to board. */
+	board_set_stm32_spi_pin_speed();
 
 	/* Enable clocks to SPI1 module */
 	STM32_RCC_APB2ENR |= STM32_RCC_PB2_SPI1;
