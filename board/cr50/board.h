@@ -424,6 +424,8 @@ enum nvmem_users {
 #define CONFIG_FLASH_NVMEM_VARS_USER_NUM NVMEM_CR50
 #define CONFIG_RW_B
 
+#define CONFIG_AP_RO_VERIFICATION
+
 /* Firmware upgrade options. */
 #define CONFIG_NON_HC_FW_UPDATE
 #define CONFIG_USB_FW_UPDATE
