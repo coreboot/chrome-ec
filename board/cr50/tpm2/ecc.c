@@ -30,27 +30,51 @@ static int check_p256_param(const TPM2B_ECC_PARAMETER *a)
 	return a->b.size == sizeof(p256_int);
 }
 
-static int check_p256_point(const TPMS_ECC_POINT *a)
+static int check_p256_param_in_range(const TPM2B_ECC_PARAMETER *a)
 {
-	return check_p256_param(&a->x) &&
-		check_p256_param(&a->y);
+	return a->b.size <= sizeof(p256_int);
+}
+
+static int check_p256_point_in_range(const TPMS_ECC_POINT *a)
+{
+	return check_p256_param_in_range(&a->x) &&
+	       check_p256_param_in_range(&a->y);
+}
+
+static void append_zeros_to_p256_param(TPM2B_ECC_PARAMETER *a)
+{
+	while (a->b.size < sizeof(p256_int)) {
+		a->b.buffer[a->b.size] = 0;
+		a->b.size++;
+	}
+}
+
+static void append_zeros_to_p256_point(TPMS_ECC_POINT *a)
+{
+	append_zeros_to_p256_param(&a->x);
+	append_zeros_to_p256_param(&a->y);
 }
 
 BOOL _cpri__EccIsPointOnCurve(TPM_ECC_CURVE curve_id, TPMS_ECC_POINT *q)
 {
 	int result;
+	int x_size = q->x.b.size;
+	int y_size = q->y.b.size;
 
 	switch (curve_id) {
 	case TPM_ECC_NIST_P256:
-		if (!check_p256_point(q))
+		if (!check_p256_point_in_range(q))
 			return FALSE;
 
 		reverse_tpm2b(&q->x.b);
 		reverse_tpm2b(&q->y.b);
+		append_zeros_to_p256_point(q);
 
 		result = dcrypto_p256_is_valid_point((p256_int *) q->x.b.buffer,
 					(p256_int *) q->y.b.buffer);
 
+		q->x.b.size = x_size;
+		q->y.b.size = y_size;
 		reverse_tpm2b(&q->x.b);
 		reverse_tpm2b(&q->y.b);
 
@@ -81,9 +105,7 @@ CRYPT_RESULT _cpri__EccPointMultiply(
 			return CRYPT_PARAMETER;
 		if (n1 != NULL && !check_p256_param(n1))
 			return CRYPT_PARAMETER;
-		if (in != NULL &&
-			(!check_p256_point(in) ||
-				!_cpri__EccIsPointOnCurve(curve_id, in)))
+		if (in != NULL && !_cpri__EccIsPointOnCurve(curve_id, in))
 			return CRYPT_POINT;
 		if (n2 != NULL && !check_p256_param(n2))
 			return CRYPT_PARAMETER;
@@ -98,9 +120,13 @@ CRYPT_RESULT _cpri__EccPointMultiply(
 
 			reverse_tpm2b(&n1->b);
 		} else {
+			const int x_size = in->x.b.size;
+			const int y_size = in->y.b.size;
+
 			reverse_tpm2b(&n2->b);
 			reverse_tpm2b(&in->x.b);
 			reverse_tpm2b(&in->y.b);
+			append_zeros_to_p256_point(in);
 
 			result = DCRYPTO_p256_point_mul(
 				(p256_int *) out->x.b.buffer,
@@ -110,6 +136,8 @@ CRYPT_RESULT _cpri__EccPointMultiply(
 				(p256_int *) in->y.b.buffer);
 
 			reverse_tpm2b(&n2->b);
+			in->x.b.size = x_size;
+			in->y.b.size = y_size;
 			reverse_tpm2b(&in->x.b);
 			reverse_tpm2b(&in->y.b);
 		}
