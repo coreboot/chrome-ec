@@ -19,11 +19,13 @@ endif
 obj = ../../build/tpm_test
 src = .
 SWIG = /usr/bin/swig
+PYTHON_VERSION = $(shell python3 -c 'import sys; print("%d.%d" % \
+( sys.version_info.major, sys.version_info.minor))')
 
 vpath %c $(src) ../../chip/g/dcrypto $(src)/testlib
 
 CFLAGS = -fPIC
-CFLAGS += -I /usr/include/python2.7
+CFLAGS += -I /usr/include/python$(PYTHON_VERSION)
 CFLAGS += -I../../../../third_party/cryptoc/include
 CFLAGS += -I../../board/cr50
 CFLAGS += -I../../chip/g
@@ -68,7 +70,7 @@ $(obj)/_$(TARGET).so: $(OBJS) $(obj)/$(TARGET).py
 
 $(obj)/%_wrap.c: $(src)/%.i
 	$(call echo,"  SWIG    $(notdir $@)")
-	$(Q)swig -python -outdir $(obj) -o $@ $<
+	$(Q)$(SWIG) -python -outdir $(obj) -o $@ $<
 
 clean:
 	@rm -rf $(obj)/
