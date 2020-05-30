@@ -101,7 +101,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 struct mt6370_thermal_bound thermal_bound = {
-	.target = 80,
+	.target = 90,
 	.err = 4,
 };
 
@@ -118,7 +118,7 @@ static void board_hpd_update(const struct usb_mux *me,
 __override const struct rt946x_init_setting *board_rt946x_init_setting(void)
 {
 	static const struct rt946x_init_setting battery_init_setting = {
-		.eoc_current = 140,
+		.eoc_current = 500,
 		.mivr = 4000,
 		.ircmp_vclamp = 32,
 		.ircmp_res = 25,
@@ -226,7 +226,9 @@ int extpower_is_present(void)
 	if (board_vbus_source_enabled(CHARGE_PORT_USB_C))
 		usb_c_extpower_present = 0;
 	else
-		usb_c_extpower_present = tcpm_get_vbus_level(CHARGE_PORT_USB_C);
+		usb_c_extpower_present = tcpm_check_vbus_level(
+							CHARGE_PORT_USB_C,
+							VBUS_PRESENT);
 
 	return usb_c_extpower_present;
 }
@@ -383,10 +385,6 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 #endif /* VARIANT_KUKUI_NO_SENSORS */
-
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-}
 
 /*
  * Return if VBUS is sagging too low

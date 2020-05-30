@@ -860,12 +860,15 @@ static int anx74xx_tcpm_set_rx_enable(int port, int enable)
 }
 
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-static int anx74xx_tcpm_get_vbus_level(int port)
+static bool anx74xx_tcpm_check_vbus_level(int port, enum vbus_level level)
 {
 	int reg = 0;
 
 	tcpc_read(port, ANX74XX_REG_ANALOG_STATUS, &reg);
-	return ((reg & ANX74XX_REG_VBUS_STATUS) ? 1 : 0);
+	if (level == VBUS_PRESENT)
+		return ((reg & ANX74XX_REG_VBUS_STATUS) ? 1 : 0);
+	else
+		return ((reg & ANX74XX_REG_VBUS_STATUS) ? 0 : 1);
 }
 #endif
 
@@ -1155,7 +1158,7 @@ const struct tcpm_drv anx74xx_tcpm_drv = {
 	.release		= &anx74xx_tcpm_release,
 	.get_cc			= &anx74xx_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &anx74xx_tcpm_get_vbus_level,
+	.check_vbus_level	= &anx74xx_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &anx74xx_tcpm_select_rp_value,
 	.set_cc			= &anx74xx_tcpm_set_cc,

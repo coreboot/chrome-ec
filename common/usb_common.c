@@ -713,10 +713,65 @@ void pd_deferred_resume(int port)
 }
 #endif /* CONFIG_USB_PD_TCPM_TCPCI */
 
-int pd_is_vbus_present(int port)
+bool pd_check_vbus_level(int port, enum vbus_level level)
 {
 	if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC))
-		return tcpm_get_vbus_level(port);
-	else
+		return tcpm_check_vbus_level(port, level);
+	else if (level == VBUS_PRESENT)
 		return pd_snk_is_vbus_provided(port);
+	else
+		return !pd_snk_is_vbus_provided(port);
 }
+
+int pd_is_vbus_present(int port)
+{
+	return pd_check_vbus_level(port, VBUS_PRESENT);
+}
+
+#ifdef CONFIG_CMD_TCPC_DUMP
+/*
+ * Dump TCPC registers.
+ */
+void tcpc_dump_registers(int port, const struct tcpc_reg_dump_map *reg,
+			  int count)
+{
+	int i, val;
+
+	for (i = 0; i < count; i++, reg++) {
+		switch (reg->size) {
+		case 1:
+			tcpc_read(port, reg->addr, &val);
+			ccprintf("  %-30s(0x%02x) =   0x%02x\n",
+				reg->name, reg->addr, (uint8_t)val);
+			break;
+		case 2:
+			tcpc_read16(port, reg->addr, &val);
+			ccprintf("  %-30s(0x%02x) = 0x%04x\n",
+				reg->name, reg->addr, (uint16_t)val);
+			break;
+		}
+		cflush();
+	}
+
+}
+
+static int command_tcpc_dump(int argc, char **argv)
+{
+	int port;
+
+	if (argc < 2)
+		return EC_ERROR_PARAM_COUNT;
+
+	port = atoi(argv[1]);
+	if ((port < 0) || (port >= board_get_usb_pd_port_count())) {
+		CPRINTS("%s(%d) Invalid port!", __func__, port);
+		return EC_ERROR_INVAL;
+	}
+	/* Dump TCPC registers. */
+	tcpm_dump_registers(port);
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(tcpci_dump, command_tcpc_dump, "<Type-C port>",
+			"dump the TCPC regs");
+#endif /* defined(CONFIG_CMD_TCPC_DUMP) */

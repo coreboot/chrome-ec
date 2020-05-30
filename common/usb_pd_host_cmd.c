@@ -7,6 +7,7 @@
 
 #include <string.h>
 
+#include "atomic.h"
 #include "battery.h"
 #include "charge_manager.h"
 #include "console.h"
@@ -178,15 +179,16 @@ static enum ec_status hc_remote_pd_get_amode(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 
 	/* no more to send */
-	if (p->svid_idx >= pd_get_svid_count(p->port)) {
+	/* TODO(b/148528713): Use TCPMv2's separate storage for SOP'. */
+	if (p->svid_idx >= pd_get_svid_count(p->port, TCPC_TX_SOP)) {
 		r->svid = 0;
 		args->response_size = sizeof(r->svid);
 		return EC_RES_SUCCESS;
 	}
 
-	r->svid = pd_get_svid(p->port, p->svid_idx);
+	r->svid = pd_get_svid(p->port, p->svid_idx, TCPC_TX_SOP);
 	r->opos = 0;
-	memcpy(r->vdo, pd_get_mode_vdo(p->port, p->svid_idx),
+	memcpy(r->vdo, pd_get_mode_vdo(p->port, p->svid_idx, TCPC_TX_SOP),
 		sizeof(uint32_t) * PDO_MODES);
 	modep = pd_get_amode_data(p->port, r->svid);
 
@@ -509,7 +511,7 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_PD_PORT_CAPS,
 		     hc_get_pd_port_caps,
 		     EC_VER_MASK(0));
 
-#ifdef CONFIG_CMD_PD_CONTROL
+#ifdef CONFIG_HOSTCMD_PD_CONTROL
 static enum ec_status pd_control(struct host_cmd_handler_args *args)
 {
 	static int pd_control_disabled[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -584,8 +586,42 @@ static enum ec_status pd_control(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-
 DECLARE_HOST_COMMAND(EC_CMD_PD_CONTROL, pd_control, EC_VER_MASK(0));
-#endif /* CONFIG_CMD_PD_CONTROL */
+#endif /* CONFIG_HOSTCMD_PD_CONTROL */
+
+#if !defined(CONFIG_USB_PD_TCPM_STUB) && !defined(TEST_BUILD)
+/*
+ * PD host event status for host command
+ * Note: this variable must be aligned on 4-byte boundary because we pass the
+ * address to atomic_ functions which use assembly to access them.
+ */
+static uint32_t pd_host_event_status __aligned(4);
+
+static enum ec_status
+hc_pd_host_event_status(struct host_cmd_handler_args *args)
+{
+	struct ec_response_host_event_status *r = args->response;
+
+	/* Read and clear the host event status to return to AP */
+	r->status = atomic_read_clear(&pd_host_event_status);
+
+	args->response_size = sizeof(*r);
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PD_HOST_EVENT_STATUS, hc_pd_host_event_status,
+		     EC_VER_MASK(0));
+
+/* Send host event up to AP */
+void pd_send_host_event(int mask)
+{
+	/* mask must be set */
+	if (!mask)
+		return;
+
+	atomic_or(&pd_host_event_status, mask);
+	/* interrupt the AP */
+	host_set_single_event(EC_HOST_EVENT_PD_MCU);
+}
+#endif /* ! CONFIG_USB_PD_TCPM_STUB && ! TEST_BUILD */
 
 #endif /* HAS_TASK_HOSTCMD */

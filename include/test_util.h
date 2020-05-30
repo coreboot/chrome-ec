@@ -47,7 +47,7 @@
 		__auto_type _a = (a);                                       \
 		__auto_type _b = (b);                                       \
 		if (!(_a op _b)) {                                          \
-			ccprintf("%d: ASSERSION failed: %s " #op " %s\n",   \
+			ccprintf("%d: ASSERTION failed: %s " #op " %s\n",   \
 				 __LINE__, #a, #b);                         \
 			ccprintf("\t\tEVAL: " fmt " " #op " " fmt "\n",     \
 				 _a, _b);                                   \
@@ -139,7 +139,7 @@ void before_test(void);
 void after_test(void);
 
 /* Test entry point */
-void run_test(void);
+void run_test(int argc, char **argv);
 
 /* Test entry point for fuzzing tests. */
 int test_fuzz_one_input(const uint8_t *data, unsigned int size);

@@ -27,3 +27,5 @@
 "security",
 "ap-watchdog",
 "stay-in-ro",
+"efs",
+"ap-idle",

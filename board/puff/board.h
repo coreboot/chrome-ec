@@ -29,6 +29,8 @@
 #define CONFIG_BOARD_HAS_RTC_RESET
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_DEDICATED_RECOVERY_BUTTON
+#define CONFIG_DEDICATED_RECOVERY_BUTTON_2
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
 /* TODO: (b/143496253) re-enable CEC */
 /* #define CONFIG_CEC */
 #define CONFIG_CRC8
@@ -59,10 +61,10 @@
 #define CONFIG_CMD_CHARGEN
 #undef CONFIG_CMD_FASTCHARGE
 #undef CONFIG_CMD_KEYBOARD
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_HOSTCMD_PD_CONTROL
 #undef CONFIG_CMD_PWR_AVG
 #define CONFIG_CMD_PPC_DUMP
-#define CONFIG_CMD_TCPCI_DUMP
+#define CONFIG_CMD_TCPC_DUMP
 #ifdef SECTION_IS_RO
 /* Reduce RO size by removing less-relevant commands. */
 #undef CONFIG_CMD_APTHROTTLE
@@ -130,6 +132,7 @@
 
 /* USB type C */
 #define CONFIG_USB_PD_TCPMV2 /* Use TCPMv2 */
+#define CONFIG_USB_PD_REV30 /* Enable PD 3.0 functionality */
 #define CONFIG_USB_PD_DECODE_SOP
 #undef CONFIG_USB_CHARGER
 #define CONFIG_USB_POWER_DELIVERY
@@ -228,13 +231,27 @@ void board_set_tcpc_power_mode(int port, int mode);
 void led_alert(int enable);
 void show_critical_error(void);
 
+/*
+ * Barrel-jack power (1 bit)
+ */
+enum ec_cfg_bj_power_type {
+	BJ_POWER_65W = 0,
+	BJ_POWER_90W = 1,
+};
+#define EC_CFG_BJ_POWER_L		0
+#define EC_CFG_BJ_POWER_H		0
+#define EC_CFG_BJ_POWER_MASK GENMASK(EC_CFG_BJ_POWER_H, EC_CFG_BJ_POWER_L)
+
+enum ec_cfg_bj_power_type ec_config_get_bj_power(void);
+
 #endif /* !__ASSEMBLER__ */
 
 /* Pin renaming */
 #define GPIO_WP_L               GPIO_EC_WP_ODL
 #define GPIO_PP5000_A_PG_OD     GPIO_PG_PP5000_A_OD
 #define GPIO_EN_PP5000		GPIO_EN_PP5000_A
-#define GPIO_RECOVERY_L         GPIO_H1_EC_RECOVERY_BTN_ODL
+#define GPIO_RECOVERY_L         GPIO_EC_RECOVERY_BTN_ODL
+#define GPIO_RECOVERY_L_2       GPIO_H1_EC_RECOVERY_BTN_ODL
 #define GPIO_POWER_BUTTON_L	GPIO_H1_EC_PWR_BTN_ODL
 #define GPIO_PCH_WAKE_L		GPIO_EC_PCH_WAKE_ODL
 #define GPIO_PCH_PWRBTN_L	GPIO_EC_PCH_PWR_BTN_ODL

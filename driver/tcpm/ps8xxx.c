@@ -37,8 +37,7 @@
 
 #ifdef CONFIG_USB_PD_TCPM_PS8751
 /* PS8751 cannot run with PD 3.0 (see b/148554997 for details) */
-#if (defined(CONFIG_USB_PD_TCPMV1) && defined(CONFIG_USB_PD_REV30)) || \
-	(defined(CONFIG_USB_PD_TCPMV2) && !defined(CONFIG_USB_PD_REV20))
+#if defined(CONFIG_USB_PD_REV30)
 #error "PS8751 cannot run with PD 3.0.  Fall back to using PD 2.0"
 #endif
 
@@ -353,7 +352,7 @@ const struct tcpm_drv ps8xxx_tcpm_drv = {
 	.get_cc			= &tcpci_tcpm_get_cc,
 #endif
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
+	.check_vbus_level	= &tcpci_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
 	.set_cc			= &tcpci_tcpm_set_cc,

@@ -232,7 +232,6 @@ int tc_src_power_on(int port);
  */
 int tc_check_vconn_swap(int port);
 
-#ifdef CONFIG_USBC_VCONN
 /**
  * Checks if VCONN is being sourced.
  *
@@ -258,8 +257,6 @@ void pd_request_vconn_swap_on(int port);
  * @param port USB_C port number
  */
 void pd_request_vconn_swap_off(int port);
-#endif
-
 
 /**
  * Returns the polarity of a Sink.
@@ -323,16 +320,6 @@ void tc_start_error_recovery(int port);
  * @param port USB-C port number
  */
 void tc_hard_reset_request(int port);
-
-/**
- * Hard Reset was sent and we are required to remain attached until we have
- * restored our connection for the TypeC port.
- * A call to tc_hard_reset_allow_unattach will allow the connection to go
- * to an unattached state
- *
- * @param port USB-C port number
- */
-void tc_hard_reset_allow_unattach(int port);
 
 /**
  * Hard Reset is complete for the TypeC port

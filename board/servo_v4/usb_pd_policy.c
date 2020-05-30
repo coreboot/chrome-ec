@@ -38,30 +38,30 @@
 #define VBUS_UNCHANGED(curr, pend, new) (curr == new && pend == new)
 
 /* Macros to config the PD role */
-#define CONFIG_SET_CLEAR(c, set, clear) ((c | (set)) & ~(clear))
-#define CONFIG_SRC(c) CONFIG_SET_CLEAR(c, \
+#define CONF_SET_CLEAR(c, set, clear) ((c | (set)) & ~(clear))
+#define CONF_SRC(c) CONF_SET_CLEAR(c, \
 				CC_DISABLE_DTS | CC_ALLOW_SRC, \
 				CC_ENABLE_DRP | CC_SNK_WITH_PD)
-#define CONFIG_SNK(c) CONFIG_SET_CLEAR(c, \
+#define CONF_SNK(c) CONF_SET_CLEAR(c, \
 				CC_DISABLE_DTS, \
 				CC_ALLOW_SRC | CC_ENABLE_DRP | CC_SNK_WITH_PD)
-#define CONFIG_PDSNK(c) CONFIG_SET_CLEAR(c, \
+#define CONF_PDSNK(c) CONF_SET_CLEAR(c, \
 				CC_DISABLE_DTS | CC_SNK_WITH_PD, \
 				CC_ALLOW_SRC | CC_ENABLE_DRP)
-#define CONFIG_DRP(c) CONFIG_SET_CLEAR(c, \
+#define CONF_DRP(c) CONF_SET_CLEAR(c, \
 				CC_DISABLE_DTS | CC_ALLOW_SRC | CC_ENABLE_DRP, \
 				CC_SNK_WITH_PD)
-#define CONFIG_SRCDTS(c) CONFIG_SET_CLEAR(c, \
+#define CONF_SRCDTS(c) CONF_SET_CLEAR(c, \
 				CC_ALLOW_SRC, \
 				CC_ENABLE_DRP | CC_DISABLE_DTS | CC_SNK_WITH_PD)
-#define CONFIG_SNKDTS(c) CONFIG_SET_CLEAR(c, \
+#define CONF_SNKDTS(c) CONF_SET_CLEAR(c, \
 				0, \
 				CC_ALLOW_SRC | CC_ENABLE_DRP | \
 				CC_DISABLE_DTS | CC_SNK_WITH_PD)
-#define CONFIG_PDSNKDTS(c) CONFIG_SET_CLEAR(c, \
+#define CONF_PDSNKDTS(c) CONF_SET_CLEAR(c, \
 				CC_SNK_WITH_PD, \
 				CC_ALLOW_SRC | CC_ENABLE_DRP | CC_DISABLE_DTS)
-#define CONFIG_DRPDTS(c) CONFIG_SET_CLEAR(c, \
+#define CONF_DRPDTS(c) CONF_SET_CLEAR(c, \
 				CC_ALLOW_SRC | CC_ENABLE_DRP, \
 				CC_DISABLE_DTS | CC_SNK_WITH_PD)
 
@@ -761,6 +761,38 @@ __override void pd_check_dr_role(int port,
 
 
 /* ----------------- Vendor Defined Messages ------------------ */
+/*
+ * DP alt-mode config, user configurable.
+ * Default is the mode disabled, supporting the C and D pin assignment,
+ * multi-function preferred, and a plug.
+ */
+static int alt_dp_config = (ALT_DP_PIN_C | ALT_DP_PIN_D | ALT_DP_MF_PREF |
+			    ALT_DP_PLUG);
+
+/**
+ * Get the pins based on the user config.
+ */
+static int alt_dp_config_pins(void)
+{
+	int pins = 0;
+
+	if (alt_dp_config & ALT_DP_PIN_C)
+		pins |= MODE_DP_PIN_C;
+	if (alt_dp_config & ALT_DP_PIN_D)
+		pins |= MODE_DP_PIN_D;
+	if (alt_dp_config & ALT_DP_PIN_E)
+		pins |= MODE_DP_PIN_E;
+	return pins;
+}
+
+/**
+ * Get the cable outlet value (plug or receptacle) based on the user config.
+ */
+static int alt_dp_config_cable(void)
+{
+	return (alt_dp_config & ALT_DP_PLUG) ? CABLE_PLUG : CABLE_RECEPTACLE;
+}
+
 const uint32_t vdo_idh = VDO_IDH(0, /* data caps as USB host */
 				 1, /* data caps as USB device */
 				 IDH_PTYPE_AMA, /* Alternate mode */
@@ -779,16 +811,7 @@ const uint32_t vdo_ama = VDO_AMA(CONFIG_USB_PD_IDENTITY_HW_VERS,
 
 static int svdm_response_identity(int port, uint32_t *payload)
 {
-	/*
-	 * TODO(b/137219603): Make whether servo supports DP alt-mode
-	 * configurable, like through a console command.
-	 *
-	 * This version is to check if a monitor is plugged to the mini-DP port
-	 * to decide if DP alt-mode is supported or not. So no alt-mode
-	 * supported if no monitor is plugged before plugging the servo Type-C
-	 * cable to DUT. This way doesn't affect PD FAFT results.
-	 */
-	int dp_supported = gpio_get_level(GPIO_DP_HPD);
+	int dp_supported = (alt_dp_config & ALT_DP_ENABLE) != 0;
 
 	if (dp_supported) {
 		payload[VDO_I(IDH)] = vdo_idh;
@@ -813,21 +836,19 @@ static int svdm_response_svids(int port, uint32_t *payload)
 /*
  * The Type-C demux PS8742 supports pin assignment C, D, and E. Response the DP
  * capabilities with supporting all of them.
- *
- * TODO(b/137219603): Make this pin assignment and plug/receptacle configurable
- * by a console command that some tests can check different dongle behaviors.
  */
-const uint32_t vdo_dp_mode[MODE_CNT] =  {
-	VDO_MODE_DP(0,             /* UFP pin cfg supported: none */
-		    MODE_DP_PIN_C | MODE_DP_PIN_D | MODE_DP_PIN_E, /* DFP pin */
-		    1,             /* no usb2.0 signalling in AMode */
-		    CABLE_PLUG,    /* Its a plug */
-		    MODE_DP_V13,   /* DPv1.3 Support, no Gen2 */
-		    MODE_DP_SNK)   /* Its a sink only */
-};
+uint32_t vdo_dp_mode[MODE_CNT];
 
 static int svdm_response_modes(int port, uint32_t *payload)
 {
+	vdo_dp_mode[0] =
+		VDO_MODE_DP(0,             /* UFP pin cfg supported: none */
+			    alt_dp_config_pins(),  /* DFP pin */
+			    1,             /* no usb2.0 signalling in AMode */
+			    alt_dp_config_cable(), /* plug or receptacle */
+			    MODE_DP_V13,   /* DPv1.3 Support, no Gen2 */
+			    MODE_DP_SNK);  /* Its a sink only */
+
 	/* CCD uses the SBU lines; don't enable DP when dts-mode enabled */
 	if (!(cc_config & CC_DISABLE_DTS))
 		return 0; /* NAK */
@@ -879,26 +900,31 @@ static void set_typec_mux(int pin_cfg)
 		   value);
 }
 
+static int get_hpd_level(void)
+{
+	if (alt_dp_config & ALT_DP_OVERRIDE_HPD)
+		return (alt_dp_config & ALT_DP_HPD_LVL) != 0;
+	else
+		return gpio_get_level(GPIO_DP_HPD);
+}
+
 static int dp_status(int port, uint32_t *payload)
 {
 	int opos = PD_VDO_OPOS(payload[0]);
-	int hpd = gpio_get_level(GPIO_DP_HPD);
+	int hpd = get_hpd_level();
 
 	if (opos != OPOS)
 		return 0;  /* NAK */
 
-	/*
-	 * TODO(b/137219603): Make the Multi-Function Preferred bit
-	 * configurable by a console command.
-	 */
-	payload[1] = VDO_DP_STATUS(0,                /* IRQ_HPD */
-				   hpd,              /* HPD_HI|LOW */
-				   0,                /* request exit DP */
-				   0,                /* request exit USB */
-				   1,                /* MF pref */
-				   is_typec_dp_muxed(),
-				   0,                /* power low */
-				   0x2);
+	payload[1] = VDO_DP_STATUS(
+		0,                /* IRQ_HPD */
+		hpd,              /* HPD_HI|LOW */
+		0,                /* request exit DP */
+		0,                /* request exit USB */
+		(alt_dp_config & ALT_DP_MF_PREF) != 0,  /* MF pref */
+		is_typec_dp_muxed(),
+		0,                /* power low */
+		hpd ? 0x2 : 0);
 	return 2;
 }
 
@@ -1024,9 +1050,12 @@ static void do_cc(int cc_config_new)
 		if ((cc_config & ~cc_config_new) & CC_DISABLE_DTS) {
 			/* DTS-disabled -> DTS-enabled */
 			ccd_enable(1);
+			ext_hpd_detection_enable(0);
 		} else if ((cc_config_new & ~cc_config) & CC_DISABLE_DTS) {
 			/* DTS-enabled -> DTS-disabled */
 			ccd_enable(0);
+			if (!(alt_dp_config & ALT_DP_OVERRIDE_HPD))
+				ext_hpd_detection_enable(1);
 		}
 
 		/* Accept new cc_config value */
@@ -1079,21 +1108,21 @@ static int command_cc(int argc, char **argv)
 	} else {
 		cc_config_new &= ~CC_DETACH;
 		if (!strcasecmp(argv[1], "src"))
-			cc_config_new = CONFIG_SRC(cc_config_new);
+			cc_config_new = CONF_SRC(cc_config_new);
 		else if (!strcasecmp(argv[1], "snk"))
-			cc_config_new = CONFIG_SNK(cc_config_new);
+			cc_config_new = CONF_SNK(cc_config_new);
 		else if (!strcasecmp(argv[1], "pdsnk"))
-			cc_config_new = CONFIG_PDSNK(cc_config_new);
+			cc_config_new = CONF_PDSNK(cc_config_new);
 		else if (!strcasecmp(argv[1], "drp"))
-			cc_config_new = CONFIG_DRP(cc_config_new);
+			cc_config_new = CONF_DRP(cc_config_new);
 		else if (!strcasecmp(argv[1], "srcdts"))
-			cc_config_new = CONFIG_SRCDTS(cc_config_new);
+			cc_config_new = CONF_SRCDTS(cc_config_new);
 		else if (!strcasecmp(argv[1], "snkdts"))
-			cc_config_new = CONFIG_SNKDTS(cc_config_new);
+			cc_config_new = CONF_SNKDTS(cc_config_new);
 		else if (!strcasecmp(argv[1], "pdsnkdts"))
-			cc_config_new = CONFIG_PDSNKDTS(cc_config_new);
+			cc_config_new = CONF_PDSNKDTS(cc_config_new);
 		else if (!strcasecmp(argv[1], "drpdts"))
-			cc_config_new = CONFIG_DRPDTS(cc_config_new);
+			cc_config_new = CONF_DRPDTS(cc_config_new);
 		else
 			return EC_ERROR_PARAM2;
 	}
@@ -1180,28 +1209,143 @@ DECLARE_CONSOLE_COMMAND(ada_srccaps, cmd_ada_srccaps,
 			"",
 			"Print adapter SrcCap");
 
+static void chg_pd_disconnect(void)
+{
+	/* Clear charger PDO on CHG port disconnected. */
+	if (pd_is_disconnected(CHG))
+		pd_set_src_caps(CHG, 0, NULL);
+}
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, chg_pd_disconnect, HOOK_PRIO_DEFAULT);
+
+static int cmd_dp_action(int argc, char *argv[])
+{
+	int i;
+	char *e;
+
+	if (argc < 1)
+		return EC_ERROR_PARAM_COUNT;
+
+	if (argc == 1) {
+		CPRINTS("DP alt-mode: %s",
+			(alt_dp_config & ALT_DP_ENABLE) ? "enable" : "disable");
+	}
+
+	if (!strcasecmp(argv[1], "enable")) {
+		alt_dp_config |= ALT_DP_ENABLE;
+	} else if (!strcasecmp(argv[1], "disable")) {
+		alt_dp_config &= ~ALT_DP_ENABLE;
+	} else if (!strcasecmp(argv[1], "pins")) {
+		if (argc >= 3) {
+			alt_dp_config &= ~(ALT_DP_PIN_C | ALT_DP_PIN_D |
+					   ALT_DP_PIN_E);
+			for (i = 0; i < 3; i++) {
+				if (!argv[2][i])
+					break;
+
+				switch (argv[2][i]) {
+				case 'c':
+				case 'C':
+					alt_dp_config |= ALT_DP_PIN_C;
+					break;
+				case 'd':
+				case 'D':
+					alt_dp_config |= ALT_DP_PIN_D;
+					break;
+				case 'e':
+				case 'E':
+					alt_dp_config |= ALT_DP_PIN_E;
+					break;
+				}
+			}
+		}
+		CPRINTS("Pins: %s%s%s",
+			(alt_dp_config & ALT_DP_PIN_C) ? "C" : "",
+			(alt_dp_config & ALT_DP_PIN_D) ? "D" : "",
+			(alt_dp_config & ALT_DP_PIN_E) ? "E" : "");
+	} else if (!strcasecmp(argv[1], "mf")) {
+		if (argc >= 3) {
+			i = strtoi(argv[2], &e, 10);
+			if (*e)
+				return EC_ERROR_PARAM3;
+			if (i)
+				alt_dp_config |= ALT_DP_MF_PREF;
+			else
+				alt_dp_config &= ~ALT_DP_MF_PREF;
+		}
+		CPRINTS("MF pref: %d", (alt_dp_config & ALT_DP_MF_PREF) != 0);
+	} else if (!strcasecmp(argv[1], "plug")) {
+		if (argc >= 3) {
+			i = strtoi(argv[2], &e, 10);
+			if (*e)
+				return EC_ERROR_PARAM3;
+			if (i)
+				alt_dp_config |= ALT_DP_PLUG;
+			else
+				alt_dp_config &= ~ALT_DP_PLUG;
+		}
+		CPRINTS("Plug or receptacle: %d",
+			(alt_dp_config & ALT_DP_PLUG) != 0);
+	} else if (!strcasecmp(argv[1], "hpd")) {
+		if (argc >= 3) {
+			if (!strncasecmp(argv[2], "ext", 3)) {
+				alt_dp_config &= ~ALT_DP_OVERRIDE_HPD;
+				ext_hpd_detection_enable(1);
+			} else if (!strncasecmp(argv[2], "h", 1)) {
+				alt_dp_config |= ALT_DP_OVERRIDE_HPD;
+				alt_dp_config |= ALT_DP_HPD_LVL;
+				/*
+				 * Modify the HPD to high. Need to enable the
+				 * external HPD signal monitoring. A monitor
+				 * may send a IRQ at any time to notify DUT.
+				 */
+				ext_hpd_detection_enable(1);
+				pd_send_hpd(DUT, hpd_high);
+			} else if (!strncasecmp(argv[2], "l", 1)) {
+				alt_dp_config |= ALT_DP_OVERRIDE_HPD;
+				alt_dp_config &= ~ALT_DP_HPD_LVL;
+				ext_hpd_detection_enable(0);
+				pd_send_hpd(DUT, hpd_low);
+			} else if (!strcasecmp(argv[2], "irq")) {
+				pd_send_hpd(DUT, hpd_irq);
+			}
+		}
+		CPRINTS("HPD source: %s",
+			(alt_dp_config & ALT_DP_OVERRIDE_HPD) ? "overridden"
+							      : "external");
+		CPRINTS("HPD level: %d", get_hpd_level());
+	}  else if (!strcasecmp(argv[1], "help")) {
+		CPRINTS("Usage: usbc_action dp [enable|disable|hpd|mf|pins|"
+			"plug]");
+	}
+
+	return EC_SUCCESS;
+}
+
 static int cmd_usbc_action(int argc, char *argv[])
 {
+	if (argc >= 2 && !strcasecmp(argv[1], "dp"))
+		return cmd_dp_action(argc - 1, &argv[1]);
+
 	if (argc != 2 && argc != 3)
 		return EC_ERROR_PARAM_COUNT;
 
 	/* TODO(b:140256624): drop *v command if we migrate to chg cmd. */
 	if (!strcasecmp(argv[1], "5v")) {
-		do_cc(CONFIG_SRC(cc_config));
+		do_cc(CONF_SRC(cc_config));
 		user_limited_max_mv = 5000;
 		update_ports();
 	} else if (!strcasecmp(argv[1], "12v")) {
-		do_cc(CONFIG_SRC(cc_config));
+		do_cc(CONF_SRC(cc_config));
 		user_limited_max_mv = 12000;
 		update_ports();
 	} else if (!strcasecmp(argv[1], "20v")) {
-		do_cc(CONFIG_SRC(cc_config));
+		do_cc(CONF_SRC(cc_config));
 		user_limited_max_mv = 20000;
 		update_ports();
 	} else if (!strcasecmp(argv[1], "dev")) {
 		/* Set the limit back to original */
 		user_limited_max_mv = 20000;
-		do_cc(CONFIG_PDSNK(cc_config));
+		do_cc(CONF_PDSNK(cc_config));
 	} else if (!strcasecmp(argv[1], "pol0")) {
 		do_cc(cc_config & ~CC_POLARITY);
 	} else if (!strcasecmp(argv[1], "pol1")) {
@@ -1223,7 +1367,7 @@ static int cmd_usbc_action(int argc, char *argv[])
 			return EC_ERROR_PARAM2;
 
 		user_limited_max_mv = sink_v * 1000;
-		do_cc(CONFIG_SRC(cc_config));
+		do_cc(CONF_SRC(cc_config));
 		update_ports();
 		/*
 		 * TODO(b:140256624): servod captures 'chg SRC' keyword to
@@ -1238,5 +1382,5 @@ static int cmd_usbc_action(int argc, char *argv[])
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(usbc_action, cmd_usbc_action,
-			"5v|12v|20v|dev|pol0|pol1|drp|chg x(x=voltage)",
+			"5v|12v|20v|dev|pol0|pol1|drp|dp|chg x(x=voltage)",
 			"Set Servo v4 type-C port state");

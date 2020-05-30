@@ -355,7 +355,7 @@ static void baseboard_chipset_resume(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
 
-void board_set_charge_limit(int port, int supplier, int charge_ma,
+__overridable void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
 {
 	charge_set_input_current_limit(MAX(charge_ma,
@@ -523,6 +523,17 @@ int board_is_lid_angle_tablet_mode(void)
 	return ec_config_has_lid_angle_tablet_mode();
 }
 
+__override uint32_t board_override_feature_flags0(uint32_t flags0)
+{
+	/*
+	 * Remove keyboard backlight feature for devices that don't support it.
+	 */
+	if (ec_config_has_pwm_keyboard_backlight() == PWM_KEYBOARD_BACKLIGHT_NO)
+		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
+	else
+		return flags0;
+}
+
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	switch (port) {
@@ -574,6 +585,13 @@ void hdmi_hpd_interrupt(enum ioex_signal signal)
 	/* Debounce for 2 msec. */
 	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }
+
+const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
+	.eq_ch0_ch1_offset = PI3HDX1204_EQ_DB710,
+	.eq_ch2_ch3_offset = PI3HDX1204_EQ_DB710,
+	.vod_offset = PI3HDX1204_VOD_115_ALL_CHANNELS,
+	.de_offset = PI3HDX1204_DE_DB_MINUS5,
+};
 
 static void pi3hdx1204_retimer_power(void)
 {

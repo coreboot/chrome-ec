@@ -26,13 +26,14 @@
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
 #define CONFIG_CROS_BOARD_INFO
+#define CONFIG_DPTF
+#define CONFIG_FPU
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_PWM
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
 #define CONFIG_VOLUME_BUTTONS
-#define CONFIG_BUTTONS_RUNTIME_CONFIG
 #define CONFIG_LOW_POWER_IDLE
 
 /* Host communication */
@@ -131,6 +132,10 @@
 /* Common LED defines */
 #define CONFIG_LED_COMMON
 
+/* EDP back-light control defines */
+#define CONFIG_BACKLIGHT_LID
+#define GPIO_ENABLE_BACKLIGHT   GPIO_EC_EDP_BL_EN
+
 /* USB Type C and USB PD defines */
 /* Enable the new USB-C PD stack */
 /* TODO: b/145756626 - re-enable once all blocking issues resolved */
@@ -145,7 +150,7 @@
 #define CONFIG_USB_PD_REV30
 #endif
 
-#define CONFIG_CMD_TCPCI_DUMP
+#define CONFIG_CMD_TCPC_DUMP
 
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_TCPMV1
@@ -162,7 +167,7 @@
 #define CONFIG_USB_PD_TCPM_TUSB422	/* USBC port C0 */
 #define CONFIG_USB_PD_TCPM_PS8815	/* USBC port USB3 DB */
 #define CONFIG_USB_PD_TCPM_MUX
-#define CONFIG_CMD_PD_CONTROL		/* Needed for TCPC FW update */
+#define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
 #define CONFIG_CMD_USB_PD_PE
 
 #define CONFIG_USB_PD_TRY_SRC
@@ -279,6 +284,21 @@ enum usb_db_id {
 #define CBI_FW_CONFIG_USB_DB_TYPE(bits) \
 	(((bits) & CBI_FW_CONFIG_USB_DB_MASK) >> CBI_FW_CONFIG_USB_DB_SHIFT)
 
+/*
+ * Tablet Mode (1 bit)
+ *
+ * ec_config_has_tablet_mode() will return 1 is present or 0
+ */
+enum ec_cfg_tablet_mode_type {
+	TABLET_MODE_NO = 0,
+	TABLET_MODE_YES = 1,
+};
+#define EC_CFG_TABLET_MODE_L		11
+#define EC_CFG_TABLET_MODE_H		11
+#define EC_CFG_TABLET_MODE_MASK \
+				GENMASK(EC_CFG_TABLET_MODE_H,\
+					EC_CFG_TABLET_MODE_L)
+
 extern enum gpio_signal ps8xxx_rst_odl;
 
 void board_reset_pd_mcu(void);
@@ -296,6 +316,8 @@ unsigned char get_board_id(void);
  * different board build phases.
  */
 __override_proto void config_volteer_gpios(void);
+
+enum ec_cfg_tablet_mode_type ec_config_has_tablet_mode(void);
 
 #endif /* !__ASSEMBLER__ */
 

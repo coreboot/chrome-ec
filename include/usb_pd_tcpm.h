@@ -8,6 +8,7 @@
 #ifndef __CROS_EC_USB_PD_TCPM_H
 #define __CROS_EC_USB_PD_TCPM_H
 
+#include <stdbool.h>
 #include "ec_commands.h"
 #include "i2c.h"
 
@@ -106,6 +107,12 @@ enum tcpc_transmit_complete {
 	TCPC_TX_COMPLETE_FAILED =    2,
 };
 
+/* USB-C PD Vbus levels */
+enum vbus_level {
+	VBUS_SAFE0V,
+	VBUS_PRESENT,
+};
+
 /**
  * Returns whether the sink has detected a Rp resistor on the other side.
  */
@@ -202,13 +209,14 @@ struct tcpm_drv {
 		enum tcpc_cc_voltage_status *cc2);
 
 	/**
-	 * Read VBUS
+	 * Check VBUS level
 	 *
 	 * @param port Type-C port number
+	 * @param level safe level voltage to check against
 	 *
-	 * @return 0 => VBUS not detected, 1 => VBUS detected
+	 * @return False => VBUS not at level, True => VBUS at level
 	 */
-	int (*get_vbus_level)(int port);
+	bool (*check_vbus_level)(int port, enum vbus_level level);
 
 	/**
 	 * Set the value of the CC pull-up used when we are a source.
@@ -416,6 +424,15 @@ struct tcpm_drv {
 	 * @return EC_SUCCESS or error
 	 */
 	 int (*handle_fault)(int port, int fault);
+
+#ifdef CONFIG_CMD_TCPC_DUMP
+	/**
+	 * Dump TCPC registers
+	 *
+	 * @param port Type-C port number
+	 */
+	 void (*dump_registers)(int port);
+#endif /* defined(CONFIG_CMD_TCPC_DUMP) */
 };
 
 /*
@@ -521,4 +538,30 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled);
  */
 int tcpc_get_vbus_voltage(int port);
 
+#ifdef CONFIG_CMD_TCPC_DUMP
+struct tcpc_reg_dump_map {
+	uint8_t		addr;
+	uint8_t		size;
+	const char	*name;
+};
+
+/**
+ * Dump the standard TCPC registers.
+ *
+ * @param port Type-C port number
+ *
+ */
+void tcpc_dump_std_registers(int port);
+
+/**
+ * Dump chip specific TCPC registers.
+ *
+ * @param port Type-C port number
+ * @param pointer to table of registers and names
+ * @param count of registers to dump
+ *
+ */
+void tcpc_dump_registers(int port, const struct tcpc_reg_dump_map *reg,
+			  int count);
+#endif
 #endif /* __CROS_EC_USB_PD_TCPM_H */

@@ -42,6 +42,8 @@ static uint32_t irq_pending; /* Bitmask of chips with interrupts pending */
 
 static struct mutex flow1_access_lock[CHARGER_NUM];
 
+static int charger_vbus[CHARGER_NUM];
+
 static int sm5803_is_sourcing_otg_power(int chgnum, int port);
 
 static inline enum ec_error_list chg_read8(int chgnum, int offset, int *value)
@@ -84,6 +86,11 @@ static inline enum ec_error_list main_write8(int chgnum, int offset, int value)
 	return i2c_write8(chg_chips[chgnum].i2c_port,
 			 SM5803_ADDR_MAIN_FLAGS,
 			 offset, value);
+}
+
+int sm5803_is_vbus_present(int chgnum)
+{
+	return charger_vbus[chgnum];
 }
 
 enum ec_error_list sm5803_configure_gpio0(int chgnum,
@@ -181,11 +188,9 @@ static void sm5803_init(int chgnum)
 	enum ec_error_list rv;
 	int reg;
 
-	/* --- Special register init ---
-	 * Only for early silicon, and can be removed later
-	 *
-	 * Can be run with CHG_EN set to 1 if Vbus is present and Vsys is
-	 * stable.  Otherwise, clear CHG_EN for init process.
+	/*
+	 * If a charger is not currently present, disable switching per OCPC
+	 * requirements
 	 */
 	rv = main_read8(chgnum, SM5803_REG_STATUS1, &reg);
 	if (rv == EC_SUCCESS) {
@@ -196,6 +201,8 @@ static void sm5803_init(int chgnum)
 			 */
 			rv = chg_write8(chgnum, SM5803_FLOW1_CHG_EN,
 					0);
+		} else {
+			charger_vbus[chgnum] = 1;
 		}
 	} else {
 		CPRINTS("%s %d: Failed to read status during init",
@@ -203,61 +210,67 @@ static void sm5803_init(int chgnum)
 		return;
 	}
 
-	rv |= main_write8(chgnum, 0x20, 0x08);
-	rv |= main_write8(chgnum, 0x30, 0xC0);
-	rv |= main_write8(chgnum, 0x80, 0x01);
+	rv |= main_read8(chgnum, SM5803_REG_CHIP_ID, &reg);
+	if (reg == 0x02) {
+		/* --- Special register init ---
+		 * For early silicon (ID 2) with 3S batteries
+		 */
+		rv |= main_write8(chgnum, 0x20, 0x08);
+		rv |= main_write8(chgnum, 0x30, 0xC0);
+		rv |= main_write8(chgnum, 0x80, 0x01);
 
-	rv |= meas_write8(chgnum, 0x08, 0xC2);
+		rv |= meas_write8(chgnum, 0x08, 0xC2);
 
-	rv |= chg_write8(chgnum, 0x1D, 0x40);
-	rv |= chg_write8(chgnum, 0x1F, 0x09);
+		rv |= chg_write8(chgnum, 0x1D, 0x40);
+		rv |= chg_write8(chgnum, 0x1F, 0x09);
 
-	rv |= chg_write8(chgnum, 0x22, 0xB3);
-	rv |= chg_write8(chgnum, 0x23, 0x81);
-	rv |= chg_write8(chgnum, 0x28, 0xB7);
+		rv |= chg_write8(chgnum, 0x22, 0xB3);
+		rv |= chg_write8(chgnum, 0x23, 0x81);
+		rv |= chg_write8(chgnum, 0x28, 0xB7);
 
-	rv |= chg_write8(chgnum, 0x4A, 0x82);
-	rv |= chg_write8(chgnum, 0x4B, 0xA3);
-	rv |= chg_write8(chgnum, 0x4C, 0xA8);
-	rv |= chg_write8(chgnum, 0x4D, 0xCA);
-	rv |= chg_write8(chgnum, 0x4E, 0x07);
-	rv |= chg_write8(chgnum, 0x4F, 0xFF);
+		rv |= chg_write8(chgnum, 0x4A, 0x82);
+		rv |= chg_write8(chgnum, 0x4B, 0xA3);
+		rv |= chg_write8(chgnum, 0x4C, 0xA8);
+		rv |= chg_write8(chgnum, 0x4D, 0xCA);
+		rv |= chg_write8(chgnum, 0x4E, 0x07);
+		rv |= chg_write8(chgnum, 0x4F, 0xFF);
 
-	rv |= chg_write8(chgnum, 0x50, 0x98);
-	rv |= chg_write8(chgnum, 0x51, 0x00);
-	rv |= chg_write8(chgnum, 0x52, 0x77);
-	rv |= chg_write8(chgnum, 0x53, 0xD4);
-	rv |= chg_write8(chgnum, 0x54, 0x03);
-	rv |= chg_write8(chgnum, 0x55, 0xF1);
-	rv |= chg_write8(chgnum, 0x56, 0xFF);
-	rv |= chg_write8(chgnum, 0x57, 0x03);
-	rv |= chg_write8(chgnum, 0x58, 0xF1);
-	rv |= chg_write8(chgnum, 0x59, 0xFF);
-	rv |= chg_write8(chgnum, 0x5A, 0x10);
-	rv |= chg_write8(chgnum, 0x5B, 0x00);
-	rv |= chg_write8(chgnum, 0x5C, 0x5B);
-	rv |= chg_write8(chgnum, 0x5D, 0xB0);
-	rv |= chg_write8(chgnum, 0x5E, 0x3C);
-	rv |= chg_write8(chgnum, 0x5F, 0x3C);
+		rv |= chg_write8(chgnum, 0x50, 0x98);
+		rv |= chg_write8(chgnum, 0x51, 0x00);
+		rv |= chg_write8(chgnum, 0x52, 0x77);
+		rv |= chg_write8(chgnum, 0x53, 0xD2);
+		rv |= chg_write8(chgnum, 0x54, 0x02);
+		rv |= chg_write8(chgnum, 0x55, 0xD1);
+		rv |= chg_write8(chgnum, 0x56, 0x7F);
+		rv |= chg_write8(chgnum, 0x57, 0x02);
+		rv |= chg_write8(chgnum, 0x58, 0xD1);
+		rv |= chg_write8(chgnum, 0x59, 0x7F);
+		rv |= chg_write8(chgnum, 0x5A, 0x13);
+		rv |= chg_write8(chgnum, 0x5B, 0x50);
+		rv |= chg_write8(chgnum, 0x5C, 0x5B);
+		rv |= chg_write8(chgnum, 0x5D, 0xB0);
+		rv |= chg_write8(chgnum, 0x5E, 0x3C);
+		rv |= chg_write8(chgnum, 0x5F, 0x3C);
 
-	rv |= chg_write8(chgnum, 0x60, 0x55);
-	rv |= chg_write8(chgnum, 0x61, 0x20);
-	rv |= chg_write8(chgnum, 0x65, 0x3E);
-	rv |= chg_write8(chgnum, 0x66, 0x36);
-	rv |= chg_write8(chgnum, 0x67, 0x64);
-	rv |= chg_write8(chgnum, 0x68, 0x88);
-	rv |= chg_write8(chgnum, 0x69, 0xC7);
+		rv |= chg_write8(chgnum, 0x60, 0x44);
+		rv |= chg_write8(chgnum, 0x61, 0x20);
+		rv |= chg_write8(chgnum, 0x65, 0x35);
+		rv |= chg_write8(chgnum, 0x66, 0x29);
+		rv |= chg_write8(chgnum, 0x67, 0x64);
+		rv |= chg_write8(chgnum, 0x68, 0x88);
+		rv |= chg_write8(chgnum, 0x69, 0xC7);
 
-	/* --- End special register init section --- */
+		/* Inits to access page 0x37 and enable trickle charging */
+		rv |= main_write8(chgnum, 0x1F, 0x01);
+		rv |= i2c_update8(chg_chips[chgnum].i2c_port, 0x37,
+				  0x8E, BIT(5), MASK_SET);
+		rv |= main_write8(chgnum, 0x1F, 0x00);
+	}
 
 	/* Set default input current */
 	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_INPUT_CURRENT)
 		& SM5803_CHG_ILIM_RAW;
 	rv = chg_write8(chgnum, SM5803_REG_CHG_ILIM, reg);
-
-	/* Configure TINT and Vbus interrupts to fire */
-	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, SM5803_INT2_TINT
-						      | SM5803_INT2_VBUS);
 
 	/* Set Vbus interrupt levels for 3.5V and 4.0V */
 	rv |= meas_write8(chgnum, SM5803_REG_VBUS_LOW_TH,
@@ -271,6 +284,12 @@ static void sm5803_init(int chgnum)
 	rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
 						SM5803_TINT_LOW_LEVEL);
 
+	/*
+	 * Configure TINT and Vbus interrupts to fire after thresholds are
+	 * configured
+	 */
+	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, SM5803_INT2_TINT
+						      | SM5803_INT2_VBUS);
 	/*
 	 * Configure CHG_ENABLE to only be set through I2C by setting
 	 * HOST_MODE_EN bit (all other register bits are 0 by default)
@@ -321,9 +340,11 @@ void sm5803_handle_interrupt(int chgnum)
 				!sm5803_is_sourcing_otg_power(chgnum, chgnum)) {
 		rv = meas_read8(chgnum, SM5803_REG_VBUS_MEAS_MSB, &meas_reg);
 		if (meas_reg <= SM5803_VBUS_LOW_LEVEL) {
+			charger_vbus[chgnum] = 0;
 			usb_charger_vbus_change(chgnum, 0);
 			board_vbus_present_change();
 		} else if (meas_reg >= SM5803_VBUS_HIGH_LEVEL) {
+			charger_vbus[chgnum] = 1;
 			usb_charger_vbus_change(chgnum, 1);
 			board_vbus_present_change();
 		} else {
@@ -497,7 +518,7 @@ static enum ec_error_list sm5803_get_vbus_voltage(int chgnum, int port,
 	volt_bits |= reg & SM5803_VBUS_MEAS_LSB;
 
 	/* Vbus ADC is in 23.4 mV steps */
-	*voltage = (int)((float)volt_bits * 23.4f);
+	*voltage = (volt_bits * 234) / 10;
 	return rv;
 }
 

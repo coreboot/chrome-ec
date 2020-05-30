@@ -715,8 +715,11 @@
  * volume buttons, a dedicated recovery button is not needed.  This is intended
  * because if a board has volume buttons, they can do everything a dedicated
  * recovery button can do.
+ * For various reasons, on some platforms there may be multiple recovery inputs.
+ * See b/149967026.
  */
 #undef CONFIG_DEDICATED_RECOVERY_BUTTON
+#undef CONFIG_DEDICATED_RECOVERY_BUTTON_2
 
 /*
  * The board has volume up and volume down buttons.  Note, these are *buttons*
@@ -1070,6 +1073,7 @@
 #undef CONFIG_CHIPSET_JASPERLAKE	/* Intel Jasperlake (x86) */
 #undef CONFIG_CHIPSET_MT817X		/* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183		/* MediaTek MT8183 */
+#undef CONFIG_CHIPSET_MT8192		/* MediaTek MT8192 */
 #undef CONFIG_CHIPSET_RK3288		/* Rockchip rk3288 */
 #undef CONFIG_CHIPSET_RK3399		/* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE		/* Intel Skylake (x86) */
@@ -1214,6 +1218,7 @@
 #undef  CONFIG_CMD_FLASH_LOG
 #undef  CONFIG_CMD_FLASH_TRISTATE
 #undef  CONFIG_CMD_FORCETIME
+#undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
 #undef  CONFIG_CMD_GPIO_EXTENDED
 #undef  CONFIG_CMD_GSV
@@ -1243,7 +1248,6 @@
 #define CONFIG_CMD_MEM
 #define CONFIG_CMD_MMAPINFO
 #define CONFIG_CMD_PD
-#undef  CONFIG_CMD_PD_CONTROL
 #undef  CONFIG_CMD_PD_DEV_DUMP_INFO
 #undef  CONFIG_CMD_PD_FLASH
 #define CONFIG_CMD_PECI
@@ -1257,6 +1261,7 @@
 #undef  CONFIG_CMD_PS2
 #undef  CONFIG_CMD_RAND
 #define CONFIG_CMD_REGULATOR
+#undef  CONFIG_CMD_RESET_FLAGS
 #undef  CONFIG_CMD_RTC
 #undef  CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
@@ -1275,7 +1280,7 @@
 #define CONFIG_CMD_SYSLOCK
 #undef  CONFIG_CMD_TASK_RESET
 #undef  CONFIG_CMD_TASKREADY
-#undef  CONFIG_CMD_TCPCI_DUMP
+#undef  CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_TEMP_SENSOR
 #define CONFIG_CMD_TIMERINFO
 #define CONFIG_CMD_TYPEC
@@ -2071,6 +2076,9 @@
 
 /* Flash commands over PD */
 #define CONFIG_HOSTCMD_FLASHPD
+
+/* Host command to control USB-PD chip */
+#undef CONFIG_HOSTCMD_PD_CONTROL
 
 /* Set entry in PD MCU's device rw_hash table */
 #define CONFIG_HOSTCMD_RWHASHPD
@@ -3791,18 +3799,8 @@
 #undef CONFIG_USB_PD_GIVE_BACK
 
 /*
- * Enable USB PD Rev2.0 features only
- * NOTE:
- *   This flag is only used with TCPMv2. The TCPMv2 stack defaults to PD3.0
- *   and this flag disabled PD3.0 features.
- */
-#undef CONFIG_USB_PD_REV20
-
-/*
- * Enable USB PD Rev3.0 features
- * NOTE:
- *    This flag is only used with TCPMv1. The TCPMv1 stack defaults to PD2.0
- *    and this flag enabled PD3.0 features.
+ * PD Rev2.0 functionality is enabled by default. Defining this macro
+ * enables PD Rev3.0 functionality.
  */
 #undef CONFIG_USB_PD_REV30
 
@@ -4111,6 +4109,15 @@
  * of just VBUS changes.
  */
 #undef CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER
+
+/*
+ * Board only needs one bc12 driver. This includes the case that has multiple
+ * chips that use the same driver. Enabled by default.
+ *
+ * If undefined, board should define a bc12_ports array which associates
+ * each port to its bc12 driver.
+ */
+#define CONFIG_BC12_SINGLE_DRIVER
 
 /* External BC1.2 charger detection devices. */
 #undef CONFIG_BC12_DETECT_MAX14637
@@ -4483,6 +4490,11 @@
 #undef CONFIG_ISH_PM_D3
 
 /*
+ * Define the following if the ip accessible power gating is required.
+ */
+#undef CONFIG_ISH_IPAPG
+
+/*
  * Define the following to the number of uSeconds of elapsed time that is
  * required to enter D0I2 and D0I3, if they are supported
  */
@@ -4589,7 +4601,6 @@
 #error CONFIG_USB_PD_DECODE_SOP must be enabled with the TCPMV2 PD state machine
 #endif
 #endif
-
 
 /******************************************************************************/
 /*
@@ -4936,6 +4947,7 @@
 #undef CONFIG_CHIPSET_JASPERLAKE
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
+#undef CONFIG_CHIPSET_MT8192
 #undef CONFIG_CHIPSET_RK3399
 #undef CONFIG_CHIPSET_RK3288
 #undef CONFIG_CHIPSET_SDM845

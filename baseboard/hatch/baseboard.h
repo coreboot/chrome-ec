@@ -60,7 +60,6 @@
 
 /* Common Keyboard Defines */
 #define CONFIG_CMD_KEYBOARD
-#define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_KEYPAD
 #define CONFIG_KEYBOARD_PROTOCOL_8042
@@ -148,7 +147,7 @@
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USBC_PPC_DEDICATED_INT
 
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_CMD_PPC_DUMP
 
 /* Include CLI command needed to support CCD testing. */

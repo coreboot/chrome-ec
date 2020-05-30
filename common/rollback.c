@@ -17,6 +17,7 @@
 #include "mpu.h"
 #endif
 #include "rollback.h"
+#include "rollback_private.h"
 #include "sha256.h"
 #include "system.h"
 #include "task.h"
@@ -28,20 +29,6 @@
 
 /* Number of rollback regions */
 #define ROLLBACK_REGIONS 2
-
-/*
- * Note: Do not change this structure without also updating
- * common/firmware_image.S .image.ROLLBACK section.
- */
-struct rollback_data {
-	int32_t id; /* Incrementing number to indicate which region to use. */
-	int32_t rollback_min_version;
-#ifdef CONFIG_ROLLBACK_SECRET_SIZE
-	uint8_t secret[CONFIG_ROLLBACK_SECRET_SIZE];
-#endif
-	/* cookie must always be last, as it validates the rest of the data. */
-	uint32_t cookie;
-};
 
 static int get_rollback_offset(int region)
 {
@@ -103,7 +90,7 @@ static void clear_rollback(struct rollback_data *data)
 #endif
 }
 
-static int read_rollback(int region, struct rollback_data *data)
+int read_rollback(int region, struct rollback_data *data)
 {
 	int offset;
 	int ret = EC_SUCCESS;
@@ -202,7 +189,7 @@ failed:
 
 #ifdef CONFIG_ROLLBACK_SECRET_SIZE
 static int add_entropy(uint8_t *dst, const uint8_t *src,
-			uint8_t *add, unsigned int add_len)
+		       const uint8_t *add, unsigned int add_len)
 {
 	int ret = 0;
 #ifdef CONFIG_SHA256
@@ -254,7 +241,7 @@ failed:
  * @return EC_SUCCESS on success, EC_ERROR_* on error.
  */
 static int rollback_update(int32_t next_min_version,
-			   uint8_t *entropy, unsigned int length)
+			   const uint8_t *entropy, unsigned int length)
 {
 	/*
 	 * When doing flash_write operation, the data needs to be in blocks
@@ -337,12 +324,13 @@ static int rollback_update(int32_t next_min_version,
 		goto out;
 	}
 
+	unlock_rollback();
 	if (flash_erase(offset, erase_size)) {
 		ret = EC_ERROR_UNKNOWN;
+		lock_rollback();
 		goto out;
 	}
 
-	unlock_rollback();
 	ret = flash_write(offset, sizeof(block), block);
 	lock_rollback();
 
@@ -356,7 +344,7 @@ int rollback_update_version(int32_t next_min_version)
 	return rollback_update(next_min_version, NULL, 0);
 }
 
-int rollback_add_entropy(uint8_t *data, unsigned int len)
+int rollback_add_entropy(const uint8_t *data, unsigned int len)
 {
 	return rollback_update(-1, data, len);
 }

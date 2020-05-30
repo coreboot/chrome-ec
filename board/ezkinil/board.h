@@ -62,6 +62,7 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
+#define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
 
 #ifndef __ASSEMBLER__
 
@@ -167,6 +168,15 @@ static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 {
 	return !!(BIT(ec_config_get_usb_db()) &
 		  HAS_HDMI_RETIMER_PI3HDX1204);
+}
+
+#define HAS_HDMI_CONN_HPD \
+			(BIT(EZKINIL_DB_T_OPT1_USBC_HDMI))
+
+static inline bool ec_config_has_hdmi_conn_hpd(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_HDMI_CONN_HPD);
 }
 
 /* TODO: Fill in with GPIO values */

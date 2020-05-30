@@ -52,8 +52,13 @@ int chip_trigger_irq(int irq);
 void chip_init_irqs(void);
 
 /**
- * Return interrupt number of software interrupt.
+ * Return external interrupt number.
  */
-int get_sw_int(void);
+int chip_get_ec_int(void);
+
+/**
+ * Return group number of the given external interrupt number.
+ */
+int chip_get_intc_group(int irq);
 
 #endif /* __CROS_EC_IRQ_CHIP_H */

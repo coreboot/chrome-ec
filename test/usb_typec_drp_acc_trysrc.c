@@ -2,7 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
- * Test USB Type-C VPD and CTVPD module.
+ * Test USB Type-C Dual Role Port, Audio Accessory, and Try.SRC Device module.
  */
 #include "charge_manager.h"
 #include "mock/tcpc_mock.h"
@@ -162,6 +162,14 @@ __maybe_unused static int test_polarity_cc1_default(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_DEF;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.vbus_level = 1;
+
+	/*
+	 * In this test we are expecting value of polarity, which is set by
+	 * default for tcpc mock. Initialize it with something else, in order
+	 * to catch possible errors.
+	 */
+	mock_tcpc.last.polarity = POLARITY_COUNT;
+
 	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
 
 	/* Before tCCDebounce elapses, we should SRC */
@@ -607,7 +615,7 @@ void before_test(void)
 	mock_tcpc.should_print_call = true;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	test_reset();
 

@@ -41,6 +41,7 @@
 #include "thermistor.h"
 #include "uart.h"
 #include "usb_charge.h"
+#include "usb_common.h"
 #include "usb_pd.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -172,17 +173,16 @@ static void adp_connect_deferred(void)
 	if (connected == adp_connected)
 		return;
 	if (connected) {
-		pi.voltage = 19000;
-		/*
-		 * TODO(b:143975429) set current according to SKU.
-		 * Different SKUs will ship with different power bricks
-		 * that have varying power, though setting this to the
-		 * maximum current available on any SKU may be okay
-		 * (assume the included brick is sufficient to run the
-		 * system at max power and over-reporting available
-		 * power will have no effect).
-		 */
-		pi.current = 4740;
+		switch (ec_config_get_bj_power()) {
+		case BJ_POWER_65W:
+			pi.voltage = 19000;
+			pi.current = 3420;
+			break;
+		case BJ_POWER_90W:
+			pi.voltage = 19000;
+			pi.current = 4740;
+			break;
+		}
 	}
 	charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
 				     DEDICATED_CHARGE_PORT, &pi);
@@ -261,11 +261,11 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 /******************************************************************************/
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
-	{"ina",     I2C_PORT_INA,     100, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
-	{"ppc0",    I2C_PORT_PPC0,    100, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0,   100, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
-	{"power",   I2C_PORT_POWER,   100, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
-	{"eeprom",  I2C_PORT_EEPROM,  100, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
+	{"ina",     I2C_PORT_INA,     400, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
+	{"ppc0",    I2C_PORT_PPC0,    400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
+	{"tcpc0",   I2C_PORT_TCPC0,   400, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
+	{"power",   I2C_PORT_POWER,   400, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
+	{"eeprom",  I2C_PORT_EEPROM,  400, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -395,23 +395,49 @@ const struct ina3221_t ina3221[] = {
 };
 const unsigned int ina3221_count = ARRAY_SIZE(ina3221);
 
+static uint16_t board_version;
+static uint32_t fw_config;
+
+static void cbi_init(void)
+{
+	/*
+	 * Load board info from CBI to control per-device configuration.
+	 *
+	 * If unset it's safe to treat the board as a proto, just C10 gating
+	 * won't be enabled.
+	 */
+	uint32_t val;
+
+	if (cbi_get_board_version(&val) == EC_SUCCESS && val <= UINT16_MAX)
+		board_version = val;
+	if (cbi_get_fw_config(&val) == EC_SUCCESS)
+		fw_config = val;
+	CPRINTS("Board Version: %d, F/W config: 0x%08x",
+		board_version, fw_config);
+}
+DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
+
 static void board_init(void)
 {
 	uint8_t *memmap_batt_flags;
 
-	/* Increase priority of C10 gate interrupts to minimize latency.
+	/* Override some GPIO interrupt priorities.
 	 *
-	 * We assume that GPIO_CPU_C10_GATE_L is on GPIO6.7, which is on
-	 * the WKINTH_1 IRQ.
+	 * These interrupts are timing-critical for AP power sequencing, so we
+	 * increase their NVIC priority from the default of 3. This affects
+	 * whole MIWU groups of 8 GPIOs since they share an IRQ.
+	 *
+	 * Latency at the default priority level can be hundreds of
+	 * microseconds while other equal-priority IRQs are serviced, so GPIOs
+	 * requiring faster response must be higher priority.
 	 */
-	const int c10_gpio_irq = NPCX_IRQ_WKINTH_1;
-	const int c10_gpio_prio = 2;
-	const uint32_t prio_shift = c10_gpio_irq % 4 * 8 + 5;
-
-	CPU_NVIC_PRI(c10_gpio_irq / 4) =
-		(CPU_NVIC_PRI(c10_gpio_irq / 4) &
-		 ~(0x7 << prio_shift)) |
-		(c10_gpio_prio << prio_shift);
+	/* CPU_C10_GATE_L on GPIO6.7: must be ~instant for ~60us response. */
+	cpu_set_interrupt_priority(NPCX_IRQ_WKINTH_1, 1);
+	/*
+	 * slp_s3_interrupt (GPIOA.5 on WKINTC_0) must respond within 200us
+	 * (tPLT18); less critical than the C10 gate.
+	 */
+	cpu_set_interrupt_priority(NPCX_IRQ_WKINTC_0, 2);
 
 	update_port_limits();
 	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT_L);
@@ -419,6 +445,13 @@ static void board_init(void)
 	/* Always claim AC is online, because we don't have a battery. */
 	memmap_batt_flags = host_get_memmap(EC_MEMMAP_BATT_FLAG);
 	*memmap_batt_flags |= EC_BATT_FLAG_AC_PRESENT;
+	/*
+	 * For board version < 2, the directly connected recovery
+	 * button is not available.
+	 */
+	if (board_version < 2)
+		button_disable_gpio(GPIO_EC_RECOVERY_BTN_ODL);
+
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -476,6 +509,9 @@ void board_reset_pd_mcu(void)
 	gpio_set_level(GPIO_USB_C0_TCPC_RST, !level);
 	if (BOARD_TCPC_C0_RESET_POST_DELAY)
 		msleep(BOARD_TCPC_C0_RESET_POST_DELAY);
+	/* Reset any saved state for previous connections. */
+	pd_update_saved_port_flags(USB_PD_PORT_TCPC_0,
+		PD_BBRMFLG_EXPLICIT_CONTRACT, 0);
 }
 
 int board_set_active_charge_port(int port)
@@ -555,24 +591,6 @@ int extpower_is_present(void)
 	return adp_connected;
 }
 
-static uint16_t board_version;
-
-static void load_board_info(void)
-{
-	/*
-	 * Load board info from CBI to control per-device configuration.
-	 *
-	 * If unset it's safe to treat the board as a proto, just C10 gating
-	 * won't be enabled.
-	 */
-	uint32_t val;
-
-	if (cbi_get_board_version(&val) == EC_SUCCESS && val <= UINT16_MAX)
-		board_version = val;
-	CPRINTS("Board Version: 0x%04x", board_version);
-}
-DECLARE_HOOK(HOOK_INIT, load_board_info, HOOK_PRIO_INIT_I2C + 1);
-
 int board_is_c10_gate_enabled(void)
 {
 	/*
@@ -589,3 +607,7 @@ void board_enable_s0_rails(int enable)
 	gpio_set_level(GPIO_EN_PP5000_HDMI, enable);
 }
 
+enum ec_cfg_bj_power_type ec_config_get_bj_power(void)
+{
+	return ((fw_config & EC_CFG_BJ_POWER_MASK) >> EC_CFG_BJ_POWER_L);
+}

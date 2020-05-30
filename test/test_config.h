@@ -132,7 +132,6 @@
 #endif
 
 #ifdef TEST_ONLINE_CALIBRATION
-#define CONFIG_GPU
 #define CONFIG_ONLINE_CALIB
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
@@ -315,6 +314,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #if defined(TEST_USB_PRL)
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
+#define CONFIG_USB_PD_REV30
 #define CONFIG_USB_PD_TCPMV2
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
@@ -334,6 +334,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PID 0x5036
 #define CONFIG_USB_POWER_DELIVERY
 #undef CONFIG_USB_PRL_SM
+#define CONFIG_USB_PD_REV30
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PD_DECODE_SOP
 #undef CONFIG_USB_TYPEC_SM
@@ -360,6 +361,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define VPD_GND_IMPEDANCE 33
 
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
+#define CONFIG_USB_PD_REV30
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PE_SM
 #define CONFIG_USB_PRL_SM

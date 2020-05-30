@@ -6,14 +6,10 @@
 /* Task scheduling / events module for Chrome EC operating system */
 
 #include "atomic.h"
-#include "common.h"
 #include "console.h"
 #include "cpu.h"
-#include "hwtimer_chip.h"
-#include "intc.h"
 #include "irq_chip.h"
 #include "link_defs.h"
-#include "registers.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -62,6 +58,10 @@ static uint32_t irq_dist[CONFIG_IRQ_COUNT];  /* Distribution of IRQ calls */
 
 extern int __task_start(void);
 
+#if defined(CHIP_FAMILY_IT83XX)
+extern void clock_sleep_mode_wakeup_isr(void);
+#endif
+
 #ifndef CONFIG_LOW_POWER_IDLE
 /* Idle task.  Executed when no tasks are ready to be scheduled. */
 void __idle(void)
@@ -74,9 +74,13 @@ void __idle(void)
 	cprints(CC_TASK, "idle task started");
 
 	while (1) {
+#if defined(CHIP_FAMILY_IT83XX)
 		/* doze mode */
 		IT83XX_ECPM_PLLCTRL = EC_PLL_DOZE;
 		clock_cpu_standby();
+#else
+		asm("wfi");
+#endif
 	}
 }
 #endif /* !CONFIG_LOW_POWER_IDLE */
@@ -163,7 +167,7 @@ int start_called;  /* Has task swapping started */
 /* in interrupt context */
 static int in_interrupt;
 /* Interrupt number of EC modules */
-static volatile int ec_int;
+volatile int ec_int;
 /* Interrupt group of EC INTC modules */
 volatile int ec_int_group;
 /* interrupt number of sw interrupt */
@@ -219,14 +223,6 @@ uint32_t * __ram_code task_get_event_bitmap(task_id_t tskid)
 int task_start_called(void)
 {
 	return start_called;
-}
-
-int __ram_code get_sw_int(void)
-{
-	/* If this is a SW interrupt */
-	if (get_mcause() == 11)
-		return sw_int_num;
-	return 0;
 }
 
 /**
@@ -309,13 +305,6 @@ void __ram_code update_exc_start_time(void)
 #endif
 }
 
-#ifdef CHIP_FAMILY_IT83XX
-int __ram_code intc_get_ec_int(void)
-{
-	return ec_int;
-}
-#endif
-
 void __ram_code start_irq_handler(void)
 {
 	/* save a0, a1, and a2 for syscall */
@@ -328,11 +317,11 @@ void __ram_code start_irq_handler(void)
 
 	/* If this is a SW interrupt */
 	if (get_mcause() == 11) {
-		ec_int = get_sw_int();
+		ec_int = sw_int_num;
 		ec_int_group = 16;
 	} else {
 		/* Determine interrupt number */
-		ec_int = IT83XX_INTC_AIVCT - 0x10;
+		ec_int = chip_get_ec_int();
 		ec_int_group = chip_get_intc_group(ec_int);
 	}
 

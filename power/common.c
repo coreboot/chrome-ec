@@ -186,11 +186,16 @@ int power_wait_signals(uint32_t want)
 
 int power_wait_signals_timeout(uint32_t want, int timeout)
 {
+	return power_wait_mask_signals_timeout(want, want, timeout);
+}
+
+int power_wait_mask_signals_timeout(uint32_t want, uint32_t mask, int timeout)
+{
 	in_want = want;
-	if (!want)
+	if (!mask)
 		return EC_SUCCESS;
 
-	while ((in_signals & in_want) != in_want) {
+	while ((in_signals & mask) != in_want) {
 		if (task_wait_event(timeout) == TASK_EVENT_TIMER) {
 			power_update_signals();
 			return EC_ERROR_TIMEOUT;
@@ -343,6 +348,12 @@ static enum power_state power_common_state(enum power_state state)
 						     &target, now)) {
 			case CRITICAL_SHUTDOWN_HIBERNATE:
 				CPRINTS("Hibernate due to G3 idle");
+				if (IS_ENABLED(CONFIG_VBOOT_EFS2)) {
+					uint32_t reset_flags;
+					reset_flags = chip_read_reset_flags() |
+						EC_RESET_FLAG_AP_OFF;
+					chip_save_reset_flags(reset_flags);
+				}
 				system_hibernate(0, 0);
 				break;
 #ifdef CONFIG_BATTERY_CUT_OFF

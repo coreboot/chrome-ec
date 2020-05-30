@@ -210,6 +210,11 @@ static void bc12_power_down(int port)
 	 * supplier type that was most recently detected.
 	 */
 	bc12_update_supplier(CHARGE_SUPPLIER_NONE, port, NULL);
+
+	/* There's nothing else to do if the part is always powered. */
+	if (pi3usb9201_bc12_chips[port].flags & PI3USB9201_ALWAYS_POWERED)
+		return;
+
 #if defined(CONFIG_POWER_PP5000_CONTROL) && defined(HAS_TASK_CHIPSET)
 	/* Indicate PP5000_A rail is not required by USB_CHG task. */
 	power_5v_enable(task_get_current(), 0);
@@ -218,18 +223,23 @@ static void bc12_power_down(int port)
 
 static void bc12_power_up(int port)
 {
-#if defined(CONFIG_POWER_PP5000_CONTROL) && defined(HAS_TASK_CHIPSET)
-	/* Turn on the 5V rail to allow the chip to be powered. */
-	power_5v_enable(task_get_current(), 1);
-	/* Give the pi3usb9201 time so it's ready to receive i2c messages */
-	msleep(1);
-#endif
+	if (IS_ENABLED(CONFIG_POWER_PP5000_CONTROL) &&
+	    IS_ENABLED(HAS_TASK_CHIPSET) &&
+	    !(pi3usb9201_bc12_chips[port].flags & PI3USB9201_ALWAYS_POWERED)) {
+		/* Turn on the 5V rail to allow the chip to be powered. */
+		power_5v_enable(task_get_current(), 1);
+		/*
+		 * Give the pi3usb9201 time so it's ready to receive i2c
+		 * messages
+		 */
+		msleep(1);
+	}
+
 	pi3usb9201_interrupt_mask(port, 1);
 }
 
-void usb_charger_task(void *u)
+static void pi3usb9201_usb_charger_task(const int port)
 {
-	int port = (task_get_current() == TASK_ID_USB_CHG_P0 ? 0 : 1);
 	uint32_t evt;
 	int i;
 
@@ -325,16 +335,8 @@ void usb_charger_task(void *u)
 	}
 }
 
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-	/*
-	 * Switches are controlled automatically based on whether the port is
-	 * acting as a source or as sink and the result of BC1.2 detection.
-	 */
-}
-
 #if defined(CONFIG_CHARGE_RAMP_SW) || defined(CONFIG_CHARGE_RAMP_HW)
-int usb_charger_ramp_allowed(int supplier)
+static int pi3usb9201_ramp_allowed(int supplier)
 {
 	/* Don't allow ramp if charge supplier is OTHER, SDP, or NONE */
 	return !(supplier == CHARGE_SUPPLIER_OTHER ||
@@ -342,7 +344,7 @@ int usb_charger_ramp_allowed(int supplier)
 		 supplier == CHARGE_SUPPLIER_NONE);
 }
 
-int usb_charger_ramp_max(int supplier, int sup_curr)
+static int pi3usb9201_ramp_max(int supplier, int sup_curr)
 {
 	/*
 	 * Use the level from the bc12_chg_limits table above except for
@@ -362,3 +364,20 @@ int usb_charger_ramp_max(int supplier, int sup_curr)
 	}
 }
 #endif /* CONFIG_CHARGE_RAMP_SW || CONFIG_CHARGE_RAMP_HW */
+
+const struct bc12_drv pi3usb9201_drv = {
+	.usb_charger_task = pi3usb9201_usb_charger_task,
+#if defined(CONFIG_CHARGE_RAMP_SW) || defined(CONFIG_CHARGE_RAMP_HW)
+	.ramp_allowed = pi3usb9201_ramp_allowed,
+	.ramp_max = pi3usb9201_ramp_max,
+#endif /* CONFIG_CHARGE_RAMP_SW || CONFIG_CHARGE_RAMP_HW */
+};
+
+#ifdef CONFIG_BC12_SINGLE_DRIVER
+/* provide a default bc12_ports[] for backward compatibility */
+struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
+	[0 ... (CHARGE_PORT_COUNT - 1)] = {
+		.drv = &pi3usb9201_drv,
+	}
+};
+#endif /* CONFIG_BC12_SINGLE_DRIVER */

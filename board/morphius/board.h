@@ -41,6 +41,7 @@
 #define CONFIG_TABLET_MODE
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PWR_A
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
@@ -68,6 +69,7 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
+#define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
 
 /* I2C mapping from board specific function*/
 #define I2C_PORT_THERMAL	I2C_PORT_AP_HDMI
@@ -170,6 +172,24 @@ static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 {
 	return !!(BIT(ec_config_get_usb_db()) &
 		  HAS_HDMI_RETIMER_PI3HDX1204);
+}
+
+#define HAS_MST_HUB_RTD2141B \
+			(BIT(MORPHIUS_DB_T_OPT3_USBC_HDMI_MSTHUB))
+
+static inline bool ec_config_has_mst_hub_rtd2141b(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_MST_HUB_RTD2141B);
+}
+
+#define HAS_HDMI_CONN_HPD \
+			(BIT(MORPHIUS_DB_T_OPT1_USBC_HDMI))
+
+static inline bool ec_config_has_hdmi_conn_hpd(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_HDMI_CONN_HPD);
 }
 
 #define PORT_TO_HPD(port) ((port == 0) \

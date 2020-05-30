@@ -24,6 +24,7 @@
 #define TCPC_REG_ALERT_MASK_ALL     0xffff
 #define TCPC_REG_ALERT_VENDOR_DEF   BIT(15)
 #define TCPC_REG_ALERT_ALERT_EXT    BIT(14)
+#define TCPC_REG_ALERT_EXT_STATUS   BIT(13)
 #define TCPC_REG_ALERT_VBUS_DISCNCT BIT(11)
 #define TCPC_REG_ALERT_RX_BUF_OVF   BIT(10)
 #define TCPC_REG_ALERT_FAULT        BIT(9)
@@ -43,7 +44,7 @@
 #define TCPC_REG_ALERT_MASK        0x12
 #define TCPC_REG_POWER_STATUS_MASK 0x14
 #define TCPC_REG_FAULT_STATUS_MASK 0x15
-#define TCPC_REG_EXTENDED_STATUS_MASK 0x16
+#define TCPC_REG_EXT_STATUS_MASK   0x16
 #define TCPC_REG_ALERT_EXTENDED_MASK 0x17
 
 #define TCPC_REG_CONFIG_STD_OUTPUT 0x18
@@ -121,6 +122,9 @@
 #define TCPC_REG_FAULT_STATUS_VBUS_OVER_VOLTAGE         BIT(2)
 #define TCPC_REG_FAULT_STATUS_VCONN_OVER_CURRENT        BIT(1)
 #define TCPC_REG_FAULT_STATUS_I2C_INTERFACE_ERR         BIT(0)
+
+#define TCPC_REG_EXT_STATUS        0x20
+#define TCPC_REG_EXT_STATUS_SAFE0V   BIT(0)
 
 #define TCPC_REG_ALERT_EXT         0x21
 #define TCPC_REG_ALERT_EXT_TIMER_EXPIRED        BIT(2)
@@ -208,7 +212,7 @@ void tcpci_tcpc_alert(int port);
 int tcpci_tcpm_init(int port);
 int tcpci_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 	enum tcpc_cc_voltage_status *cc2);
-int tcpci_tcpm_get_vbus_level(int port);
+bool tcpci_tcpm_check_vbus_level(int port, enum vbus_level level);
 int tcpci_tcpm_select_rp_value(int port, int rp);
 int tcpci_tcpm_set_cc(int port, int pull);
 int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity);
@@ -222,8 +226,7 @@ int tcpci_tcpm_release(int port);
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 int tcpci_set_role_ctrl(int port, int toggle, int rp, int pull);
 int tcpci_tcpc_drp_toggle(int port);
-int tcpci_tcpc_set_connection(int port, enum tcpc_cc_pull pull,
-			      int connect);
+int tcpci_tcpc_set_connection(int port, enum tcpc_cc_pull pull, int connect);
 #endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 int tcpci_enter_low_power_mode(int port);

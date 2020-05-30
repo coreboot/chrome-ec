@@ -14,6 +14,8 @@
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
+#define CONFIG_VBOOT_EFS2
+
 #define CONFIG_POWER_BUTTON
 
 #undef CONFIG_UART_TX_BUF_SIZE
@@ -45,6 +47,11 @@
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK \
 	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+
+#define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
+#define CONFIG_LID_ANGLE_SENSOR_BASE		BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID		LID_ACCEL
 
 /* USB Type C and USB PD defines */
 /*
@@ -84,6 +91,7 @@
 #define GPIO_ENTERING_RW		GPIO_EC_ENTERING_RW
 #define GPIO_LID_OPEN			GPIO_EC_LID_OPEN
 #define GPIO_KBD_KSO2			GPIO_EC_KSO_02_INV
+#define GPIO_PACKET_MODE_EN		GPIO_UART2_EC_RX
 #define GPIO_PCH_WAKE_L			GPIO_EC_PCH_WAKE_ODL
 #define GPIO_PCH_PWRBTN_L		GPIO_EC_PCH_PWR_BTN_ODL
 #define GPIO_PCH_RSMRST_L		GPIO_EC_PCH_RSMRST_ODL

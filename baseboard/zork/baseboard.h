@@ -23,7 +23,7 @@
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40 /* Internal SPI flash type. */
 
-#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_HOSTCMD) | CC_MASK(CC_PWM)))
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_HOSTCMD)))
 
 /*
  * Enable 1 slot of secure temporary storage to support
@@ -48,6 +48,7 @@
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR_NCP15WB
+#define CONFIG_VBOOT_EFS2
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VOLUME_BUTTONS
 
@@ -110,6 +111,7 @@
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
+#undef  CONFIG_KEYBOARD_VIVALDI
 
 /*
  * USB ID
@@ -118,6 +120,8 @@
  * http://google3/hardware/standards/usb/
  */
 #define CONFIG_USB_PID 0x5040
+
+#define CONFIG_USB_PD_REV30
 
 /* Enable the TCPMv2 PD stack */
 #define CONFIG_USB_PD_TCPMV2
@@ -133,7 +137,8 @@
 	#undef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
 #endif
 
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_HOSTCMD_PD_CONTROL
+#define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_USB_CHARGER
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_ALT_MODE

@@ -4,6 +4,7 @@
  */
 
 #include "button.h"
+#include "charge_state_v2.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
@@ -320,6 +321,9 @@ void setup_fw_config(void)
 	gpio_enable_interrupt(GPIO_6AXIS_INT_L);
 
 	setup_mux();
+
+	if (ec_config_has_hdmi_conn_hpd())
+		ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
 }
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 
@@ -453,4 +457,18 @@ int fan_percent_to_rpm(int fan, int pct)
 			fan_table[current_level].rpm);
 
 	return fan_table[current_level].rpm;
+}
+
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+			int max_ma, int charge_mv)
+{
+	/*
+	 * Limit the input current to 95% negotiated limit,
+	 * to account for the charger chip margin.
+	 */
+	charge_ma = charge_ma * 95 / 100;
+
+	charge_set_input_current_limit(MAX(charge_ma,
+				CONFIG_CHARGER_INPUT_CURRENT),
+				charge_mv);
 }

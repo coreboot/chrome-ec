@@ -193,7 +193,7 @@ static void ps8811_tuning_init(void)
 		CPRINTSUSB("C1: PS8811 not detected");
 	}
 }
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, ps8811_tuning_init, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, ps8811_tuning_init, HOOK_PRIO_DEFAULT);
 
 static void ps8811_retimer_off(void)
 {
@@ -201,7 +201,7 @@ static void ps8811_retimer_off(void)
 	ioex_set_level(IOEX_USB_A0_RETIMER_EN, 0);
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, ps8811_retimer_off, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, ps8811_retimer_off, HOOK_PRIO_DEFAULT);
 
 /*****************************************************************************
  * USB-C MUX/Retimer dynamic configuration
@@ -308,6 +308,12 @@ void setup_fw_config(void)
 	gpio_enable_interrupt(GPIO_6AXIS_INT_L);
 
 	setup_mux();
+
+	if (ec_config_has_mst_hub_rtd2141b())
+		ioex_enable_interrupt(IOEX_MST_HPD_OUT);
+
+	if (ec_config_has_hdmi_conn_hpd())
+		ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
 }
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 
@@ -323,9 +329,9 @@ const struct fan_conf fan_conf_0 = {
 	.enable_gpio = -1,
 };
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3100,
-	.rpm_start = 3100,
-	.rpm_max = 6900,
+	.rpm_min = 3000,
+	.rpm_start = 3000,
+	.rpm_max = 4900,
 };
 const struct fan_t fans[] = {
 	[FAN_CH_0] = {
@@ -337,26 +343,26 @@ BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
 
 const static struct ec_thermal_config thermal_thermistor = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(92),
 	},
 	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 	},
 	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_max = C_TO_K(58),
 };
 
 const static struct ec_thermal_config thermal_cpu = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(95),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(92),
 	},
 	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 	},
 	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_max = C_TO_K(58),
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
@@ -368,3 +374,34 @@ static void setup_fans(void)
 	thermal_params[TEMP_SENSOR_CPU] = thermal_cpu;
 }
 DECLARE_HOOK(HOOK_INIT, setup_fans, HOOK_PRIO_DEFAULT);
+
+/*****************************************************************************
+ * MST hub
+ */
+
+static void mst_hpd_handler(void)
+{
+	int hpd = 0;
+
+	/*
+	 * Ensure level on GPIO_DP1_HPD matches IOEX_MST_HPD_OUT, in case
+	 * we got out of sync.
+	 */
+	ioex_get_level(IOEX_MST_HPD_OUT, &hpd);
+	gpio_set_level(GPIO_DP1_HPD, hpd);
+	ccprints("MST HPD %d", hpd);
+}
+DECLARE_DEFERRED(mst_hpd_handler);
+
+void mst_hpd_interrupt(enum ioex_signal signal)
+{
+	/*
+	 * Goal is to pass HPD through from DB OPT3 MST hub to AP's DP1.
+	 * Immediately invert GPIO_DP1_HPD, to pass through the edge on
+	 * IOEX_MST_HPD_OUT. Then check level after 2 msec debounce.
+	 */
+	int hpd = !gpio_get_level(GPIO_DP1_HPD);
+
+	gpio_set_level(GPIO_DP1_HPD, hpd);
+	hook_call_deferred(&mst_hpd_handler_data, (2 * MSEC));
+}

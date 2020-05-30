@@ -218,7 +218,7 @@ int extpower_is_present(void)
 	if (board_vbus_source_enabled(0))
 		return 0;
 	else
-		return tcpm_get_vbus_level(0);
+		return tcpm_check_vbus_level(0, VBUS_PRESENT);
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -460,14 +460,4 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 int board_allow_i2c_passthru(int port)
 {
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
-}
-
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-	/*
-	 * There is no USB2 switch anywhere on this board. But based
-	 * on the discussion in b:65446459, RK3399's USB PHY is powered
-	 * off when USB charging port detection is going on, so things
-	 * should mostly work without a USB2 switch.
-	 */
 }

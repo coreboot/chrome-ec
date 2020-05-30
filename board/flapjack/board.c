@@ -366,7 +366,7 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 
 int extpower_is_present(void)
 {
-	return tcpm_get_vbus_level(0);
+	return tcpm_check_vbus_level(0, VBUS_PRESENT);
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -624,10 +624,6 @@ BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 int board_allow_i2c_passthru(int port)
 {
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
-}
-
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
 }
 
 int board_get_fod(uint8_t **fod)

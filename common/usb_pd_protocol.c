@@ -2353,6 +2353,12 @@ static void handle_new_power_state(int port)
 		 */
 		exit_supported_alt_mode(port);
 	}
+#ifdef CONFIG_USBC_VCONN_SWAP
+	else {
+		/* Request for Vconn Swap */
+		pd_try_vconn_src(port);
+	}
+#endif
 	/* Ensure mux is set properly after chipset transition */
 	set_usb_mux_with_current_data_role(port);
 }
@@ -5092,6 +5098,11 @@ static int command_pd(int argc, char **argv)
 	}
 #endif
 #endif
+	else if (!strcasecmp(argv[1], "version")) {
+		ccprintf("%d\n", PD_STACK_VERSION);
+		return EC_SUCCESS;
+	}
+
 	/* command: pd <port> <subcmd> [args] */
 	port = strtoi(argv[1], &e, 10);
 	if (argc < 3)
@@ -5258,7 +5269,8 @@ static int command_pd(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(pd, command_pd,
-			"dump"
+			"version"
+			"|dump"
 #ifdef CONFIG_USB_PD_TRY_SRC
 			"|trysrc"
 #endif

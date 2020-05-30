@@ -29,6 +29,13 @@
 static int vconn_en[CONFIG_USB_PD_PORT_MAX_COUNT];
 static int rx_en[CONFIG_USB_PD_PORT_MAX_COUNT];
 #endif
+
+/*
+ * Last reported VBus Level
+ *
+ * BIT(VBUS_SAFE0V) will indicate if in SAFE0V
+ * BIT(VBUS_PRESENT) will indicate if in PRESENT
+ */
 static int tcpc_vbus[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Cached RP role values */
@@ -211,6 +218,11 @@ static int init_alert_mask(int port)
 		| TCPC_REG_ALERT_POWER_STATUS
 #endif
 		;
+
+	/* TCPCI Rev2 includes SAFE0V alerts */
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0)
+		mask |= TCPC_REG_ALERT_EXT_STATUS;
+
 	/* Set the alert mask in TCPC */
 	rv = tcpc_write16(port, TCPC_REG_ALERT_MASK, mask);
 
@@ -590,17 +602,25 @@ static int tcpm_alert_ext_status(int port, int *alert_ext)
 	return tcpc_read(port, TCPC_REG_ALERT_EXT, alert_ext);
 }
 
+static int tcpm_ext_status(int port, int *ext_status)
+{
+	/* Read TCPC Extended Status register */
+	return tcpc_read(port, TCPC_REG_EXT_STATUS, ext_status);
+}
+
 int tcpci_tcpm_set_rx_enable(int port, int enable)
 {
 	int detect_sop_en = 0;
+
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	/* save rx_on */
+	rx_en[port] = enable;
+#endif
 
 	if (enable) {
 		detect_sop_en = TCPC_REG_RX_DETECT_SOP_HRST_MASK;
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
-		/* save rx_on */
-		rx_en[port] = enable;
-
 		/*
 		 * Only the VCONN Source is allowed to communicate
 		 * with the Cable Plugs.
@@ -629,9 +649,28 @@ void tcpci_tcpc_fast_role_swap_enable(int port, int enable)
 #endif
 
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-int tcpci_tcpm_get_vbus_level(int port)
+bool tcpci_tcpm_check_vbus_level(int port, enum vbus_level level)
 {
-	return tcpc_vbus[port];
+	if (level == VBUS_SAFE0V) {
+		/*
+		 * Alerts only tell us when Safe0V is entered, have
+		 * to poll when requesting to see if we left it and
+		 * have not yet entered Safe5V
+		 */
+		if ((tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) &&
+		    (tcpc_vbus[port] & BIT(VBUS_SAFE0V))) {
+			int ext_status = 0;
+
+			/* Determine if we left Safe0V */
+			tcpm_ext_status(port, &ext_status);
+			if (!(ext_status & TCPC_REG_EXT_STATUS_SAFE0V))
+				tcpc_vbus[port] &= ~BIT(VBUS_SAFE0V);
+		}
+
+		return !!(tcpc_vbus[port] & BIT(VBUS_SAFE0V));
+	} else {
+		return !!(tcpc_vbus[port] & BIT(VBUS_PRESENT));
+	}
 }
 #endif
 
@@ -744,7 +783,8 @@ int tcpci_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 }
 
 /* Cache depth needs to be power of 2 */
-#define CACHE_DEPTH BIT(2)
+/* TODO: Keep track of the high water mark */
+#define CACHE_DEPTH BIT(3)
 #define CACHE_DEPTH_MASK (CACHE_DEPTH - 1)
 
 struct queue {
@@ -955,6 +995,69 @@ static int tcpci_clear_fault(int port, int fault)
 	return tcpc_write16(port, TCPC_REG_ALERT, TCPC_REG_ALERT_FAULT);
 }
 
+static void tcpci_check_vbus_changed(int port, int alert, uint32_t *pd_event)
+{
+	/*
+	 * Check for VBus change
+	 */
+	/* TCPCI Rev2 includes Safe0V detection */
+	if ((tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) &&
+	    (alert & TCPC_REG_ALERT_EXT_STATUS)) {
+		int ext_status = 0;
+
+		/* Determine if Safe0V was detected */
+		tcpm_ext_status(port, &ext_status);
+		if (ext_status & TCPC_REG_EXT_STATUS_SAFE0V) {
+			/*
+			 * We have been notified of Safe0V.
+			 * Disable AutoDischargeDisconnect
+			 */
+			tcpm_enable_auto_discharge_disconnect(port, 0);
+
+			/* Safe0V and not Safe5V */
+			tcpc_vbus[port] = BIT(VBUS_SAFE0V);
+		}
+	}
+
+	if (alert & TCPC_REG_ALERT_POWER_STATUS) {
+		int pwr_status = 0;
+
+		/* Determine reason for power status change */
+		tcpci_tcpm_get_power_status(port, &pwr_status);
+		if (pwr_status & TCPC_REG_POWER_STATUS_VBUS_PRES)
+			/* Safe5V and not Safe0V */
+			tcpc_vbus[port] = BIT(VBUS_PRESENT);
+		else if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0)
+			/* TCPCI Rev2 detects Safe0V, so just clear Safe5V */
+			tcpc_vbus[port] &= ~BIT(VBUS_PRESENT);
+		else {
+			/*
+			 * TCPCI Rev1 can not detect Safe0V, so treat this
+			 * like a Safe0V detection.
+			 */
+			/* Disable AutoDischargeDisconnect */
+			if (tcpc_vbus[port] & BIT(VBUS_PRESENT))
+				tcpm_enable_auto_discharge_disconnect(port, 0);
+
+			/* Safe0V and not Safe5V */
+			tcpc_vbus[port] = BIT(VBUS_SAFE0V);
+		}
+
+		if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC)
+			&& IS_ENABLED(CONFIG_USB_CHARGER)) {
+			/* Update charge manager with new VBUS state */
+			usb_charger_vbus_change(port,
+				!!(tcpc_vbus[port] & BIT(VBUS_PRESENT)));
+
+			if (pd_event)
+				*pd_event |= TASK_EVENT_WAKE;
+		}
+
+		if (pwr_status & TCPC_REG_POWER_STATUS_VBUS_DET)
+			board_vbus_present_change();
+	}
+}
+
 /*
  * Don't let the TCPC try to pull from the RX buffer forever. We typical only
  * have 1 or 2 messages waiting.
@@ -1045,22 +1148,10 @@ void tcpci_tcpc_alert(int port)
 			pd_event |= PD_EVENT_CC;
 		}
 	}
-	if (alert & TCPC_REG_ALERT_POWER_STATUS) {
-		int reg = 0;
-		/* Read Power Status register */
-		tcpci_tcpm_get_power_status(port, &reg);
-		/* Update VBUS status */
-		tcpc_vbus[port] = reg &
-			TCPC_REG_POWER_STATUS_VBUS_PRES ? 1 : 0;
-#if defined(CONFIG_USB_PD_VBUS_DETECT_TCPC) && defined(CONFIG_USB_CHARGER)
-		/* Update charge manager with new VBUS state */
-		usb_charger_vbus_change(port, tcpc_vbus[port]);
-		pd_event |= TASK_EVENT_WAKE;
-#endif /* CONFIG_USB_PD_VBUS_DETECT_TCPC && CONFIG_USB_CHARGER */
-		if (reg & TCPC_REG_POWER_STATUS_VBUS_DET)
-			board_vbus_present_change();
-	}
 
+	tcpci_check_vbus_changed(port, alert, &pd_event);
+
+	/* Check for Hard Reset received */
 	if (alert & TCPC_REG_ALERT_RX_HARD_RST) {
 		/* hard reset received */
 		CPRINTS("C%d Hard Reset received", port);
@@ -1192,7 +1283,7 @@ int tcpci_tcpm_init(int port)
 		return EC_ERROR_INVAL;
 
 	while (1) {
-		error = tcpc_read(port, TCPC_REG_POWER_STATUS, &power_status);
+		error = tcpci_tcpm_get_power_status(port, &power_status);
 		/*
 		 * If read succeeds and the uninitialized bit is clear, then
 		 * initialization is complete, clear all alert bits and write
@@ -1225,16 +1316,35 @@ int tcpci_tcpm_init(int port)
 	tcpc_alert(port);
 	/* Initialize power_status_mask */
 	init_power_status_mask(port);
-	/* Update VBUS status */
-	tcpc_vbus[port] = power_status &
-			TCPC_REG_POWER_STATUS_VBUS_PRES ? 1 : 0;
-#if defined(CONFIG_USB_PD_VBUS_DETECT_TCPC) && defined(CONFIG_USB_CHARGER)
+
+	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) {
+		int ext_status = 0;
+
+		/* Read Extended Status register */
+		tcpm_ext_status(port, &ext_status);
+		/* Initial level, set appropriately */
+		if (power_status & TCPC_REG_POWER_STATUS_VBUS_PRES)
+			tcpc_vbus[port] = BIT(VBUS_PRESENT);
+		else if (ext_status & TCPC_REG_EXT_STATUS_SAFE0V)
+			tcpc_vbus[port] = BIT(VBUS_SAFE0V);
+		else
+			tcpc_vbus[port] = 0;
+	} else {
+		/* Initial level, set appropriately */
+		tcpc_vbus[port] = (power_status &
+				   TCPC_REG_POWER_STATUS_VBUS_PRES)
+					? BIT(VBUS_PRESENT)
+					: BIT(VBUS_SAFE0V);
+	}
+
 	/*
-	 * Set Vbus change now in case the TCPC doesn't send a power status
-	 * changed interrupt for it later.
+	 * Force an update to the VBUS status in case the TCPC doesn't send a
+	 * power status changed interrupt later.
 	 */
-	usb_charger_vbus_change(port, tcpc_vbus[port]);
-#endif
+	tcpci_check_vbus_changed(port,
+		TCPC_REG_ALERT_POWER_STATUS | TCPC_REG_ALERT_EXT_STATUS,
+		NULL);
+
 	error = init_alert_mask(port);
 	if (error)
 		return error;
@@ -1347,106 +1457,210 @@ const struct usb_mux_driver tcpci_tcpm_usb_mux_driver = {
 
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
-#ifdef CONFIG_CMD_TCPCI_DUMP
-struct tcpci_reg {
-	const char	*name;
-	uint8_t		size;
+#ifdef CONFIG_CMD_TCPC_DUMP
+static const struct tcpc_reg_dump_map tcpc_regs[] = {
+	{
+		.addr = TCPC_REG_VENDOR_ID,
+		.name = "VENDOR_ID",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_PRODUCT_ID,
+		.name = "PRODUCT_ID",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_BCD_DEV,
+		.name = "BCD_DEV",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_TC_REV,
+		.name = "TC_REV",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_PD_REV,
+		.name = "PD_REV",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_PD_INT_REV,
+		.name = "PD_INT_REV",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_ALERT,
+		.name = "ALERT",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_ALERT_MASK,
+		.name = "ALERT_MASK",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_POWER_STATUS_MASK,
+		.name = "POWER_STATUS_MASK",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_FAULT_STATUS_MASK,
+		.name = "FAULT_STATUS_MASK",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_EXT_STATUS_MASK,
+		.name = "EXT_STATUS_MASK",
+		.size = 1
+	},
+	{
+		.addr = TCPC_REG_ALERT_EXTENDED_MASK,
+		.name = "ALERT_EXTENDED_MASK",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_CONFIG_STD_OUTPUT,
+		.name = "CONFIG_STD_OUTPUT",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_TCPC_CTRL,
+		.name = "TCPC_CTRL",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_ROLE_CTRL,
+		.name = "ROLE_CTRL",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_FAULT_CTRL,
+		.name = "FAULT_CTRL",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_POWER_CTRL,
+		.name = "POWER_CTRL",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_CC_STATUS,
+		.name = "CC_STATUS",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_POWER_STATUS,
+		.name = "POWER_STATUS",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_FAULT_STATUS,
+		.name = "FAULT_STATUS",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_EXT_STATUS,
+		.name = "EXT_STATUS",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_ALERT_EXT,
+		.name = "ALERT_EXT",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_DEV_CAP_1,
+		.name = "DEV_CAP_1",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_DEV_CAP_2,
+		.name = "DEV_CAP_2",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_STD_INPUT_CAP,
+		.name = "STD_INPUT_CAP",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_STD_OUTPUT_CAP,
+		.name = "STD_OUTPUT_CAP",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_CONFIG_EXT_1,
+		.name = "CONFIG_EXT_1",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_MSG_HDR_INFO,
+		.name = "MSG_HDR_INFO",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_RX_DETECT,
+		.name = "RX_DETECT",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_RX_BYTE_CNT,
+		.name = "RX_BYTE_CNT",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_RX_BUF_FRAME_TYPE,
+		.name = "RX_BUF_FRAME_TYPE",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_TRANSMIT,
+		.name = "TRANSMIT",
+		.size = 1,
+	},
+	{
+		.addr = TCPC_REG_VBUS_VOLTAGE,
+		.name = "VBUS_VOLTAGE",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_VBUS_SINK_DISCONNECT_THRESH,
+		.name = "VBUS_SINK_DISCONNECT_THRESH",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_VBUS_STOP_DISCHARGE_THRESH,
+		.name = "VBUS_STOP_DISCHARGE_THRESH",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_VBUS_VOLTAGE_ALARM_HI_CFG,
+		.name = "VBUS_VOLTAGE_ALARM_HI_CFG",
+		.size = 2,
+	},
+	{
+		.addr = TCPC_REG_VBUS_VOLTAGE_ALARM_LO_CFG,
+		.name = "VBUS_VOLTAGE_ALARM_LO_CFG",
+		.size = 2,
+	},
 };
 
-#define TCPCI_REG(reg_name, reg_size)	\
-	[reg_name] = { .name = #reg_name, .size = (reg_size) }
-
-static const struct tcpci_reg tcpci_regs[] = {
-	TCPCI_REG(TCPC_REG_VENDOR_ID, 2),
-	TCPCI_REG(TCPC_REG_PRODUCT_ID, 2),
-	TCPCI_REG(TCPC_REG_BCD_DEV, 2),
-	TCPCI_REG(TCPC_REG_TC_REV, 2),
-	TCPCI_REG(TCPC_REG_PD_REV, 2),
-	TCPCI_REG(TCPC_REG_PD_INT_REV, 2),
-	TCPCI_REG(TCPC_REG_ALERT, 2),
-	TCPCI_REG(TCPC_REG_ALERT_MASK, 2),
-	TCPCI_REG(TCPC_REG_POWER_STATUS_MASK, 1),
-	TCPCI_REG(TCPC_REG_FAULT_STATUS_MASK, 1),
-	TCPCI_REG(TCPC_REG_EXTENDED_STATUS_MASK, 1),
-	TCPCI_REG(TCPC_REG_ALERT_EXTENDED_MASK, 1),
-	TCPCI_REG(TCPC_REG_CONFIG_STD_OUTPUT, 1),
-	TCPCI_REG(TCPC_REG_TCPC_CTRL, 1),
-	TCPCI_REG(TCPC_REG_ROLE_CTRL, 1),
-	TCPCI_REG(TCPC_REG_FAULT_CTRL, 1),
-	TCPCI_REG(TCPC_REG_POWER_CTRL, 1),
-	TCPCI_REG(TCPC_REG_CC_STATUS, 1),
-	TCPCI_REG(TCPC_REG_POWER_STATUS, 1),
-	TCPCI_REG(TCPC_REG_FAULT_STATUS, 1),
-	TCPCI_REG(TCPC_REG_ALERT_EXT, 1),
-	TCPCI_REG(TCPC_REG_DEV_CAP_1, 2),
-	TCPCI_REG(TCPC_REG_DEV_CAP_2, 2),
-	TCPCI_REG(TCPC_REG_STD_INPUT_CAP, 1),
-	TCPCI_REG(TCPC_REG_STD_OUTPUT_CAP, 1),
-	TCPCI_REG(TCPC_REG_CONFIG_EXT_1, 1),
-	TCPCI_REG(TCPC_REG_MSG_HDR_INFO, 1),
-	TCPCI_REG(TCPC_REG_RX_DETECT, 1),
-	TCPCI_REG(TCPC_REG_RX_BYTE_CNT, 1),
-	TCPCI_REG(TCPC_REG_RX_BUF_FRAME_TYPE, 1),
-	TCPCI_REG(TCPC_REG_TRANSMIT, 1),
-	TCPCI_REG(TCPC_REG_VBUS_VOLTAGE, 2),
-	TCPCI_REG(TCPC_REG_VBUS_SINK_DISCONNECT_THRESH, 2),
-	TCPCI_REG(TCPC_REG_VBUS_STOP_DISCHARGE_THRESH, 2),
-	TCPCI_REG(TCPC_REG_VBUS_VOLTAGE_ALARM_HI_CFG, 2),
-	TCPCI_REG(TCPC_REG_VBUS_VOLTAGE_ALARM_LO_CFG, 2),
-};
-
-static int command_tcpci_dump(int argc, char **argv)
+/*
+ * Dump standard TCPC registers.
+ */
+void tcpc_dump_std_registers(int port)
 {
-	int port;
-	int i;
-	int val;
-
-	if (argc < 2)
-		return EC_ERROR_PARAM_COUNT;
-
-	port = atoi(argv[1]);
-	if ((port < 0) || (port >= board_get_usb_pd_port_count())) {
-		CPRINTS("%s(%d) Invalid port!", __func__, port);
-		return EC_ERROR_INVAL;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(tcpci_regs); i++) {
-		switch (tcpci_regs[i].size) {
-		case 1:
-			tcpc_read(port, i, &val);
-			ccprintf("  %-38s(0x%02x) =   0x%02x\n",
-				tcpci_regs[i].name, i, (uint8_t)val);
-			break;
-		case 2:
-			tcpc_read16(port, i, &val);
-			ccprintf("  %-38s(0x%02x) = 0x%04x\n",
-				tcpci_regs[i].name, i, (uint16_t)val);
-			break;
-		default:
-			/*
-			 * The tcpci_regs[] array is indexed by the register
-			 * offset. Unused registers are zero initialized so we
-			 * skip any entries that have the size field set to
-			 * zero.
-			 */
-			break;
-		}
-		cflush();
-	}
-
-	return EC_SUCCESS;
+	tcpc_dump_registers(port, tcpc_regs, ARRAY_SIZE(tcpc_regs));
 }
-DECLARE_CONSOLE_COMMAND(tcpci_dump, command_tcpci_dump, "<Type-C port>",
-			"dump the TCPCI regs");
-#endif /* defined(CONFIG_CMD_TCPCI_DUMP) */
-
+#endif
 
 const struct tcpm_drv tcpci_tcpm_drv = {
 	.init			= &tcpci_tcpm_init,
 	.release		= &tcpci_tcpm_release,
 	.get_cc			= &tcpci_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
+	.check_vbus_level	= &tcpci_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
 	.set_cc			= &tcpci_tcpm_set_cc,
@@ -1470,5 +1684,8 @@ const struct tcpm_drv tcpci_tcpm_drv = {
 #endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
+#endif
+#ifdef CONFIG_CMD_TCPC_DUMP
+	.dump_registers		= &tcpc_dump_std_registers,
 #endif
 };

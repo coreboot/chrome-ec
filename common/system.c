@@ -239,7 +239,7 @@ void system_clear_reset_flags(uint32_t flags)
 	reset_flags &= ~flags;
 }
 
-void system_print_reset_flags(void)
+static void print_reset_flags(uint32_t flags)
 {
 	int count = 0;
 	int i;
@@ -247,13 +247,13 @@ void system_print_reset_flags(void)
 		#include "reset_flag_desc.inc"
 	};
 
-	if (!reset_flags) {
+	if (!flags) {
 		CPUTS("unknown");
 		return;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(reset_flag_descs); i++) {
-		if (reset_flags & BIT(i)) {
+		if (flags & BIT(i)) {
 			if (count++)
 				CPUTS(" ");
 
@@ -261,7 +261,7 @@ void system_print_reset_flags(void)
 		}
 	}
 
-	if (reset_flags >= BIT(i)) {
+	if (flags >= BIT(i)) {
 		if (count)
 			CPUTS(" ");
 
@@ -269,9 +269,20 @@ void system_print_reset_flags(void)
 	}
 }
 
+void system_print_reset_flags(void)
+{
+	print_reset_flags(reset_flags);
+}
+
 int system_jumped_to_this_image(void)
 {
 	return jumped_to_image;
+}
+
+int system_jumped_late(void)
+{
+	return !(reset_flags & EC_RESET_FLAG_EFS)
+			&& (reset_flags & EC_RESET_FLAG_SYSJUMP);
 }
 
 int system_add_jump_tag(uint16_t tag, int version, int size, const void *data)
@@ -501,9 +512,13 @@ static void jump_to_image(uintptr_t init_addr)
 	 * RO, EC won't jump to RW, pd_prepare_sysjump is not needed. Even if
 	 * PD is enabled because the device is not write protected, EFS2 jumps
 	 * to RW before PD tasks start. So, there is no states to clean up.
+	 *
+	 *  Even if EFS2 is enabled, late sysjump can happen when secdata
+	 *  kernel is missing or a communication error happens. So, we need to
+	 *  check whether PD tasks have started (instead of VBOOT_EFS2, which
+	 *  is static).
 	 */
-	if (!IS_ENABLED(CONFIG_VBOOT_EFS2) &&
-			IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
+	if (task_start_called() && IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
 		/* Note: must be before i2c module is locked down */
 		pd_prepare_sysjump();
 
@@ -787,13 +802,9 @@ void system_common_pre_init(void)
 	jdata = (struct jump_data *)(addr - sizeof(struct jump_data));
 
 	/*
-	 * Check jump data if this is a jump between images.  Jumps all show up
-	 * as an unknown reset reason, because we jumped directly from one
-	 * image to another without actually triggering a chip reset.
+	 * Check jump data if this is a jump between images.
 	 */
-	if (jdata->magic == JUMP_DATA_MAGIC &&
-	    jdata->version >= 1 &&
-	    reset_flags == 0) {
+	if (jdata->magic == JUMP_DATA_MAGIC && jdata->version >= 1) {
 		/* Change in jump data struct size between the previous image
 		 * and this one. */
 		int delta;
@@ -1226,6 +1237,8 @@ static int command_reboot(int argc, char **argv)
 		} else if (!strcasecmp(argv[i], "ap-off-in-ro")) {
 			flags |= (SYSTEM_RESET_LEAVE_AP_OFF |
 				  SYSTEM_RESET_STAY_IN_RO);
+		} else if (!strcasecmp(argv[i], "ro")) {
+			flags |= SYSTEM_RESET_STAY_IN_RO;
 		} else if (!strcasecmp(argv[i], "cancel")) {
 			reboot_at_shutdown = EC_REBOOT_CANCEL;
 			return EC_SUCCESS;
@@ -1250,7 +1263,8 @@ static int command_reboot(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(
 	reboot, command_reboot,
-	"[hard|soft] [preserve] [ap-off] [wait-ext] [cancel] [ap-off-in-ro]",
+	"[hard|soft] [preserve] [ap-off] [wait-ext] [cancel] [ap-off-in-ro]"
+	" [ro]",
 	"Reboot the EC");
 
 #ifdef CONFIG_CMD_SYSLOCK
@@ -1344,6 +1358,18 @@ DECLARE_CONSOLE_COMMAND(sysrq, command_sysrq,
 			"[key]",
 			"Simulate sysrq press (default: x)");
 #endif /* CONFIG_EMULATED_SYSRQ */
+
+#ifdef CONFIG_CMD_RESET_FLAGS
+static int command_rflags(int argc, char **argv)
+{
+	print_reset_flags(chip_read_reset_flags());
+	ccprintf("\n");
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(rflags, command_rflags,
+			NULL,
+			"Print reset flags saved in non-volatile memory");
+#endif
 
 /*****************************************************************************/
 /* Host commands */

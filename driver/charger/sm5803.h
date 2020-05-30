@@ -15,6 +15,8 @@
 
 /* Main registers (address 0x30) */
 
+#define SM5803_REG_CHIP_ID		0x00
+
 #define SM5803_REG_STATUS1		0x01
 #define SM5803_STATUS1_VSYS_OK		BIT(0)
 #define SM5803_STATUS1_VPWR_OK		BIT(1)
@@ -113,8 +115,8 @@ enum sm5803_gpio0_modes {
 #define SM5803_GPADCC1_TINT_EN		BIT(7)
 
 /* Note: Threshold registers all assume lower 2 bits are 0 */
-#define SM5803_REG_VBUS_LOW_TH		0x1B
-#define SM5803_REG_VBUS_HIGH_TH		0x2B
+#define SM5803_REG_VBUS_LOW_TH		0x1A
+#define SM5803_REG_VBUS_HIGH_TH		0x2A
 #define SM5803_REG_TINT_LOW_TH		0x1D
 #define SM5803_REG_TINT_HIGH_TH		0x2D
 
@@ -235,6 +237,9 @@ enum sm5803_gpio0_modes {
 #define INPUT_I_MAX 3100
 #define INPUT_I_MIN 0
 #define INPUT_I_STEP SM5803_CURRENT_STEP
+
+/* Expose cached Vbus presence */
+int sm5803_is_vbus_present(int chgnum);
 
 /* Expose functions to control charger's GPIO and CHG_DET configuration */
 enum ec_error_list sm5803_configure_gpio0(int chgnum,

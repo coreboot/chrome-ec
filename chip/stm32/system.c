@@ -73,9 +73,19 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	__enter_hibernate(seconds, microseconds);
 }
 
+uint32_t chip_read_reset_flags(void)
+{
+	return bkpdata_read_reset_flags();
+}
+
+void chip_save_reset_flags(uint32_t flags)
+{
+	bkpdata_write_reset_flags(flags);
+}
+
 static void check_reset_cause(void)
 {
-	uint32_t flags = bkpdata_read_reset_flags();
+	uint32_t flags = chip_read_reset_flags();
 	uint32_t raw_cause = STM32_RCC_RESET_CAUSE;
 	uint32_t pwr_status = STM32_PWR_RESET_CAUSE;
 
@@ -84,7 +94,7 @@ static void check_reset_cause(void)
 	/* Clear SBF in PWR_CSR */
 	STM32_PWR_RESET_CAUSE_CLR |= RESET_CAUSE_SBF_CLR;
 	/* Clear saved reset flags */
-	bkpdata_write_reset_flags(0);
+	chip_save_reset_flags(0);
 
 	if (raw_cause & RESET_CAUSE_WDG) {
 		/*
@@ -333,12 +343,16 @@ void system_reset(int flags)
 	if (flags & SYSTEM_RESET_HARD)
 		save_flags |= EC_RESET_FLAG_HARD;
 
+	/* Add in stay in RO flag into saved flags. */
+	if (flags & SYSTEM_RESET_STAY_IN_RO)
+		save_flags |= EC_RESET_FLAG_STAY_IN_RO;
+
 #ifdef CONFIG_STM32_RESET_FLAGS_EXTENDED
 	if (flags & SYSTEM_RESET_AP_WATCHDOG)
 		save_flags |= EC_RESET_FLAG_AP_WATCHDOG;
 #endif
 
-	bkpdata_write_reset_flags(save_flags);
+	chip_save_reset_flags(save_flags);
 
 	if (flags & SYSTEM_RESET_HARD) {
 #ifdef CONFIG_SOFTWARE_PANIC
