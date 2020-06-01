@@ -1444,7 +1444,6 @@ void pd_execute_hard_reset(int port)
 
 static void execute_soft_reset(int port)
 {
-	pd[port].msg_id = 0;
 	invalidate_last_message_id(port);
 	set_state(port, DUAL_ROLE_IF_ELSE(port, PD_STATE_SNK_DISCOVERY,
 						PD_STATE_SRC_DISCOVERY));
@@ -1960,6 +1959,7 @@ static void handle_ctrl_request(int port, uint16_t head,
 		break;
 	case PD_CTRL_SOFT_RESET:
 		execute_soft_reset(port);
+		pd[port].msg_id = 0;
 		/* We are done, acknowledge with an Accept packet */
 		send_control(port, PD_CTRL_ACCEPT);
 		break;
