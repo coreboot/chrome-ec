@@ -65,7 +65,7 @@ enum clock_rates {
 #define NULL_CONTEXT_ERROR_MSG	"NULL MPSSE context pointer!"
 #define SPI_TRANSFER_SIZE	512
 #define SPI_RW_SIZE		(63 * 1024)
-#define SETUP_DELAY		25000
+#define SETUP_DELAY		100000
 #define LATENCY_MS		2
 #define USB_TIMEOUT		120000
 #define CHUNK_SIZE		65535
@@ -385,6 +385,12 @@ static struct mpsse_context *OpenIndex(int vid,
 	 * might have been sent during set up.
 	 */
 	ftdi_usb_purge_buffers(&mpsse->ftdi);
+
+	printf("Using FTDI vid=%x, pid=%x", vid, pid);
+	if (NULL != serial)
+		printf(" serial=%s\n", serial);
+	else
+		printf("\n");
 
 	return mpsse;
 }
