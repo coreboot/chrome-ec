@@ -117,9 +117,6 @@
 #define CONFIG_CMD_FLASH_LOG
 #define CONFIG_PHYSICAL_PRESENCE_DEBUG_UNSAFE
 #endif
-#if defined(CR50_DEV) || defined(CR50_SQA)
-#define CR50_RELAXED
-#endif
 
 #define CONFIG_USB_PID 0x5014
 #define CONFIG_USB_SELF_POWERED

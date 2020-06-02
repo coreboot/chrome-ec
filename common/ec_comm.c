@@ -243,7 +243,7 @@ int ec_comm_process_packet(uint8_t ch)
 	if (response) {
 		transfer_response_to_ec_(response);
 
-#ifdef CR50_RELAXED
+#ifdef CR50_DEV
 		CPRINTS("decoded a packet");
 		CPRINTS("header  : 0x%ph",
 			HEX_BUF((uint8_t *)&ec_comm_ctx.ph,
@@ -343,10 +343,10 @@ static int command_ec_comm(int argc, char **argv)
 	ccprintf("preamble_count     : %d\n", ec_comm_ctx.preamble_count);
 	ccprintf("bytes_received     : %d\n", ec_comm_ctx.bytes_received);
 	ccprintf("bytes_expected     : %d\n", ec_comm_ctx.bytes_expected);
-#ifdef CR50_RELAXED
+#ifdef CR50_DEV
 	ccprintf("packet:\n");
 	hexdump((uint8_t *)ec_comm_ctx.packet, CR50_COMM_MAX_PACKET_SIZE);
-#endif  /* CR50_RELAXED */
+#endif  /* CR50_DEV */
 	ccprintf("response           : 0x%04x\n", ec_comm_ctx.last_resp);
 	ccprintf("\n");
 	ec_efs_print_status();

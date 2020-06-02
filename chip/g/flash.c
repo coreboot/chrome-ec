@@ -199,7 +199,7 @@ static int do_flash_op(enum flash_op op, int is_info_bank,
 	/* What are we doing? */
 	switch (op) {
 	case OP_ERASE_BLOCK:
-#ifndef CR50_RELAXED
+#ifndef CR50_DEV
 		if (is_info_bank)
 			/* Erasing the INFO bank from the RW section is
 			 * unsupported. */
@@ -530,8 +530,7 @@ static enum vendor_cmd_rc vc_endorsement_seed(enum vendor_cmd_cc code,
 	return rv;
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_ENDORSEMENT_SEED, vc_endorsement_seed);
-#endif
-#ifdef CR50_RELAXED
+
 static int command_erase_flash_info(int argc, char **argv)
 {
 	int i;
@@ -554,50 +553,11 @@ static int command_erase_flash_info(int argc, char **argv)
 			goto exit;
 		}
 	}
-
-#ifdef CR50_SQA
-	/*
-	 * SQA images erase INFO1 RW mask, but do not allow erasing board ID.
-	 *
-	 * If compiled with CR50_SQA=1, board ID flags will set to zero, if
-	 * compiled with CR50_SQA=2 or greater, board ID flags can be set to
-	 * an arbitrary value passed in on the command line, but guaranteeing
-	 * not to lock out the currently running image.
-	 */
-	{
-		uint32_t flags = 0;
-#if CR50_SQA > 1
-		if (argc > 1) {
-			char *e;
-
-			flags = strtoi(argv[1], &e, 0);
-			if (*e) {
-				rv = EC_ERROR_PARAM1;
-				goto exit;
-			}
-		}
-#endif
-		if (board_id_is_blank(&info1->board_space.bid)) {
-			ccprintf("BID is erased. Not modifying flags\n");
-		} else {
-			ccprintf("setting BID flags to %x\n", flags);
-			info1->board_space.bid.flags = flags;
-		}
-		if (check_board_id_vs_header(&info1->board_space.bid,
-					     get_current_image_header())) {
-			ccprintf("Flags %x would lock out current image\n",
-				 flags);
-			rv = EC_ERROR_PARAM1;
-			goto exit;
-		}
-	}
-#else  /* CR50_SQA   ^^^^^^ defined    vvvvvvv Not defined. */
 	/*
 	 * This must be CR50_DEV=1 image, just erase the board information
 	 * space.
 	 */
 	memset(&info1->board_space, 0xff, sizeof(info1->board_space));
-#endif /* CR50_SQA Not defined. */
 
 	memset(info1->rw_info_map, 0xff, sizeof(info1->rw_info_map));
 
@@ -625,10 +585,5 @@ static int command_erase_flash_info(int argc, char **argv)
 	return rv;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(eraseflashinfo, command_erase_flash_info,
-#if defined(CR50_SQA) && (CR50_SQA > 1)
-			     "[bid flags]",
-			     "Erase INFO1 flash space and set Board ID flags");
-#else
 			     "", "Erase INFO1 flash space");
-#endif
 #endif

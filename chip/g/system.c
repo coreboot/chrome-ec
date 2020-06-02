@@ -607,7 +607,7 @@ const char *system_get_build_info(void)
 static void update_rollback_mask(uint32_t addr_a, uint32_t addr_b,
 				 uint32_t info_base_offset)
 {
-#ifndef CR50_RELAXED
+#ifndef CR50_DEV
 	const struct SignedHeader *header_a;
 	const struct SignedHeader *header_b;
 	int updated_words_count = 0;
@@ -696,7 +696,7 @@ static void update_rollback_mask(uint32_t addr_a, uint32_t addr_b,
 
 	flash_info_write_disable();
 	CPRINTS("updated %d info map words", updated_words_count);
-#endif  /*  CR50_RELAXED ^^^^^^^^ NOT defined. */
+#endif  /*  CR50_DEV ^^^^^^^^ NOT defined. */
 }
 
 void system_update_rollback_mask_with_active_img(void)

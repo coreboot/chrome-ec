@@ -18,7 +18,7 @@ ifeq ($(BOARD_MK_INCLUDED_ONCE),)
 
 # List of variables which can be defined in the environment or set in the make
 # command line.
-ENV_VARS := CR50_DEV CR50_SQA CRYPTO_TEST H1_RED_BOARD
+ENV_VARS := CR50_DEV CRYPTO_TEST H1_RED_BOARD
 
 ifneq ($(CRYPTO_TEST),)
 CPPFLAGS += -DCRYPTO_TEST_SETUP

@@ -281,7 +281,7 @@ void ec_efs_print_status(void)
 	ccprintf("boot_mode          : %s\n",
 		 boot_mode_name_[ec_efs_ctx.boot_mode]);
 
-#ifdef CR50_RELAXED
+#ifdef CR50_DEV
 	ccprintf("ec_hash_secdata    : %ph\n",
 		 HEX_BUF(ec_efs_ctx.hash, SHA256_DIGEST_SIZE));
 #endif
