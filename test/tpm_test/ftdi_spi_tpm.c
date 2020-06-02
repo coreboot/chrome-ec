@@ -86,7 +86,7 @@ void FtdiStop(void)
 static void FtdiSpiPoke(void)
 {
 	Start(mpsse_);
-	usleep(1000);
+	usleep(10000);
 	Stop(mpsse_);
 	usleep(60000);
 }
@@ -248,7 +248,7 @@ int FtdiSpiInit(uint32_t freq, int enable_debug)
 	freq = (freq / (100 * 1000)) * 100 * 1000;
 
 	printf("Starting MPSSE at %d kHz\n", freq / 1000);
-	mpsse_ = MPSSE(freq, MSB, NULL);
+	mpsse_ = MPSSE(freq, MSB, getenv("ISERIAL"));
 	if (!mpsse_)
 		return false;
 
@@ -257,6 +257,7 @@ int FtdiSpiInit(uint32_t freq, int enable_debug)
 
 	FtdiSpiPoke();
 
+	printf("Reading TPM_DID_VID register\n");
 	FtdiReadReg(TPM_DID_VID_REG, sizeof(did_vid), &did_vid);
 
 	vid = did_vid & 0xffff;
@@ -264,7 +265,7 @@ int FtdiSpiInit(uint32_t freq, int enable_debug)
 		fprintf(stderr, "unknown did_vid: %#x\n", did_vid);
 		return false;
 	}
-
+	printf("Claiming TPM locality zero.\n");
 	/* Try claiming locality zero. */
 	FtdiReadReg(TPM_ACCESS_REG, sizeof(cmd), &cmd);
 	if ((cmd & (activeLocality & tpmRegValidSts)) ==
