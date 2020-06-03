@@ -152,6 +152,7 @@ const uint8_t *DCRYPTO_SHA512_hash(const void *data, uint32_t n,
  */
 void DCRYPTO_HMAC_SHA256_init(LITE_HMAC_CTX *ctx, const void *key,
 			unsigned int len);
+/* DCRYPTO HMAC-SHA256 final */
 const uint8_t *DCRYPTO_HMAC_final(LITE_HMAC_CTX *ctx);
 
 /*
