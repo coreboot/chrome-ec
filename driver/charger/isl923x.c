@@ -23,6 +23,10 @@
 #error "ISL9237/8 is a NVDC charger, please enable CONFIG_CHARGER_NARROW_VDC."
 #endif
 
+#if defined(CONFIG_CHARGER_ISL9238) || defined(CONFIG_CHARGER_ISL9238C)
+#define CHARGER_ISL9238X
+#endif
+
 #define DEFAULT_R_AC 20
 #define DEFAULT_R_SNS 10
 #define R_AC CONFIG_CHARGER_SENSE_RESISTOR_AC
@@ -110,7 +114,7 @@ int charger_get_input_current(int *input_current)
 	return EC_SUCCESS;
 }
 
-#if defined(CONFIG_CHARGER_OTG) && defined(CONFIG_CHARGER_ISL9238)
+#if defined(CONFIG_CHARGER_OTG) && defined(CHARGER_ISL9238X)
 int charger_enable_otg_power(int enabled)
 {
 	int rv, control1;
@@ -159,7 +163,7 @@ int charger_set_otg_current_voltage(int output_current, int output_voltage)
 	/* Set current. */
 	return raw_write16(ISL923X_REG_OTG_CURRENT, current_reg);
 }
-#endif /* CONFIG_CHARGER_OTG && CONFIG_CHARGER_ISL9238 */
+#endif /* CONFIG_CHARGER_OTG && CHARGER_ISL9238X */
 
 int charger_manufacturer_id(int *id)
 {
@@ -379,6 +383,17 @@ static void isl923x_init(void)
 	reg = (4439 / ISL9238_INPUT_VOLTAGE_REF_STEP)
 		<< ISL9238_INPUT_VOLTAGE_REF_SHIFT;
 
+	if (IS_ENABLED(CONFIG_CHARGER_ISL9238C)) {
+		/* b/155366741: enable slew rate control */
+		if (raw_read16(ISL9238C_REG_CONTROL6, &reg))
+			goto init_fail;
+
+		reg |= ISL9238C_C6_SLEW_RATE_CONTROL;
+
+		if (raw_write16(ISL9238C_REG_CONTROL6, reg))
+			goto init_fail;
+	}
+
 	if (raw_write16(ISL9238_REG_INPUT_VOLTAGE, reg))
 		goto init_fail;
 #endif /* defined(CONFIG_CHARGER_ISL9237) */
@@ -393,36 +408,36 @@ static void isl923x_init(void)
 		goto init_fail;
 #endif /* defined(CONFIG_CHARGE_RAMP_HW) */
 
-#ifdef CONFIG_CHARGER_ISL9238
-	/*
-	 * Don't reread the prog pin and don't reload the ILIM on ACIN.
-	 */
-	if (raw_read16(ISL9238_REG_CONTROL3, &reg))
-		goto init_fail;
-	reg |= ISL9238_C3_NO_RELOAD_ACLIM_ON_ACIN |
-		ISL9238_C3_NO_REREAD_PROG_PIN;
-	/*
-	 * Disable autonomous charging initially since 1) it causes boot loop
-	 * issues with 2S batteries, and 2) it will automatically get disabled
-	 * as soon as we manually set the current limit anyway.
-	 */
-	reg |= ISL9238_C3_DISABLE_AUTO_CHARING;
-	if (raw_write16(ISL9238_REG_CONTROL3, reg))
-		goto init_fail;
+	if (IS_ENABLED(CHARGER_ISL9238X)) {
+		/*
+		 * Don't reread the prog pin and don't reload the ILIM on ACIN.
+		 */
+		if (raw_read16(ISL9238_REG_CONTROL3, &reg))
+			goto init_fail;
+		reg |= ISL9238_C3_NO_RELOAD_ACLIM_ON_ACIN |
+			ISL9238_C3_NO_REREAD_PROG_PIN;
+		/*
+		 * Disable autonomous charging initially since 1) it causes boot loop
+		 * issues with 2S batteries, and 2) it will automatically get disabled
+		 * as soon as we manually set the current limit anyway.
+		 */
+		reg |= ISL9238_C3_DISABLE_AUTO_CHARING;
+		if (raw_write16(ISL9238_REG_CONTROL3, reg))
+			goto init_fail;
 
-	/*
-	 * No need to proceed with the rest of init if we sysjump'd to this
-	 * image as the input current limit has already been set.
-	 */
-	if (system_jumped_to_this_image())
-		return;
+		/*
+		 * No need to proceed with the rest of init if we sysjump'd to this
+		 * image as the input current limit has already been set.
+		 */
+		if (system_jumped_to_this_image())
+			return;
 
-	/*
-	 * Initialize the input current limit to the board's default.
-	 */
-	if (charger_set_input_current(CONFIG_CHARGER_INPUT_CURRENT))
-		goto init_fail;
-#endif /* defined(CONFIG_CHARGER_ISL9238) */
+		/*
+		 * Initialize the input current limit to the board's default.
+		 */
+		if (charger_set_input_current(CONFIG_CHARGER_INPUT_CURRENT))
+			goto init_fail;
+	}
 
 	return;
 init_fail:
@@ -599,22 +614,20 @@ static int print_amon_bmon(enum amon_bmon amon, int direction,
 {
 	int adc, curr, reg, ret;
 
-#ifdef CONFIG_CHARGER_ISL9238
-	ret = i2c_read16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER_FLAGS,
-			 ISL9238_REG_CONTROL3, &reg);
-	if (ret)
-		return ret;
+	if (IS_ENABLED(CHARGER_ISL9238X)) {
+		ret = raw_read16(ISL9238_REG_CONTROL3, &reg);
+		if (ret)
+			return ret;
 
-	/* Switch direction */
-	if (direction)
-		reg |= ISL9238_C3_AMON_BMON_DIRECTION;
-	else
-		reg &= ~ISL9238_C3_AMON_BMON_DIRECTION;
-	ret = i2c_write16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER_FLAGS,
-			  ISL9238_REG_CONTROL3, reg);
-	if (ret)
-		return ret;
-#endif
+		/* Switch direction */
+		if (direction)
+			reg |= ISL9238_C3_AMON_BMON_DIRECTION;
+		else
+			reg &= ~ISL9238_C3_AMON_BMON_DIRECTION;
+		ret = raw_write16(ISL9238_REG_CONTROL3, reg);
+		if (ret)
+			return ret;
+	}
 
 	mutex_lock(&control1_mutex);
 
@@ -660,35 +673,29 @@ static int console_command_amon_bmon(int argc, char **argv)
 	if (argc >= 2) {
 		print_ac = (argv[1][0] == 'a');
 		print_battery = (argv[1][0] == 'b');
-#ifdef CONFIG_CHARGER_ISL9238
-		if (argv[1][1] != '\0') {
+		if (IS_ENABLED(CHARGER_ISL9238X) && argv[1][1] != '\0') {
 			print_charge = (argv[1][1] == 'c');
 			print_discharge = (argv[1][1] == 'd');
 		}
-#endif
 	}
 
 	if (print_ac) {
 		if (print_charge)
 			ret |= print_amon_bmon(AMON, 0,
 					CONFIG_CHARGER_SENSE_RESISTOR_AC);
-#ifdef CONFIG_CHARGER_ISL9238
-		if (print_discharge)
+		if (IS_ENABLED(CHARGER_ISL9238X) && print_discharge)
 			ret |= print_amon_bmon(AMON, 1,
 					CONFIG_CHARGER_SENSE_RESISTOR_AC);
-#endif
 	}
 
 	if (print_battery) {
-#ifdef CONFIG_CHARGER_ISL9238
-		if (print_charge)
+		if (IS_ENABLED(CHARGER_ISL9238X) && print_charge)
 			ret |= print_amon_bmon(BMON, 0,
 					/*
 					 * charging current monitor has
 					 * 2x amplification factor
 					 */
-					2*CONFIG_CHARGER_SENSE_RESISTOR);
-#endif
+					2 * CONFIG_CHARGER_SENSE_RESISTOR);
 		if (print_discharge)
 			ret |= print_amon_bmon(BMON, 1,
 					CONFIG_CHARGER_SENSE_RESISTOR);
@@ -727,11 +734,12 @@ static void dump_reg_range(int low, int high)
 static int command_isl923x_dump(int argc, char **argv)
 {
 	dump_reg_range(0x14, 0x15);
+	if (IS_ENABLED(CONFIG_CHARGER_ISL9238C))
+		dump_reg_range(0x37, 0x37);
 	dump_reg_range(0x38, 0x3F);
 	dump_reg_range(0x47, 0x4A);
-#ifdef CONFIG_CHARGER_ISL9238
-	dump_reg_range(0x4B, 0x4E);
-#endif /* CONFIG_CHARGER_ISL9238 */
+	if (IS_ENABLED(CHARGER_ISL9238X))
+		dump_reg_range(0x4B, 0x4E);
 	dump_reg_range(0xFE, 0xFF);
 
 	return EC_SUCCESS;
