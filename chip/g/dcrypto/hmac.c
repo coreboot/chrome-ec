@@ -21,7 +21,7 @@ static void hmac_sha256_init(LITE_HMAC_CTX *ctx, const void *key,
 
 	memset(&ctx->opad[0], 0, SHA256_BLOCK_SIZE);
 
-	if (len > sizeof(ctx->opad)) {
+	if (len > SHA256_BLOCK_SIZE) {
 		DCRYPTO_SHA256_init(&ctx->hash, 0);
 		HASH_update(&ctx->hash, key, len);
 		memcpy(&ctx->opad[0], HASH_final(&ctx->hash),
