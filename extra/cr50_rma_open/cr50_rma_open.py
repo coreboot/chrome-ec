@@ -472,7 +472,7 @@ class RMAOpen(object):
         """Returns True if running version is older than target_ver."""
         target_ver_fields = [int(field) for field in target_ver.split('.')]
         for i, field in enumerate(self.running_ver_fields):
-            if field > int(target_ver_fields[i]):
+            if field > target_ver_fields[i]:
                 return False
         return True
 
