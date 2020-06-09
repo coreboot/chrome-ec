@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 # Copyright 2015 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -16,4 +16,4 @@ ECIES = 6
 DRBG_TEST = 50
 # The same exception class used by all tpmtest modules.
 class TpmTestError(Exception):
-  pass
+    """TpmTestError exception class"""

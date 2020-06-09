@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 # Copyright 2016 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -13,7 +13,7 @@ import utils
 
 
 _HKDF_OPCODES = {
-    'TEST_RFC': 0x00,
+  'TEST_RFC': 0x00,
 }
 
 
@@ -37,12 +37,12 @@ _HKDF_CMD_FORMAT = '{op:c}{sl:s}{salt}{ikml:s}{ikm}{infol:s}{info}{okml:s}'
 
 
 def _rfc_test_cmd(salt, ikm, info, okml):
-  op = _HKDF_OPCODES['TEST_RFC']
-  return _HKDF_CMD_FORMAT.format(op=op,
-                                 sl=pack('>H', len(salt)), salt=salt,
-                                 ikml=pack('>H', len(ikm)), ikm=ikm,
-                                 infol=pack('>H', len(info)), info=info,
-                                 okml=pack('>H', okml))
+    hkdf_op = _HKDF_OPCODES['TEST_RFC']
+    return _HKDF_CMD_FORMAT.format(op=hkdf_op,
+                                   sl=pack('>H', len(salt)), salt=salt,
+                                   ikml=pack('>H', len(ikm)), ikm=ikm,
+                                   infol=pack('>H', len(info)), info=info,
+                                   okml=pack('>H', okml))
 
 
 #
@@ -56,8 +56,8 @@ _RFC_TEST_INPUTS = (
     ('3cb25f25faacd57a90434f64d0362f2a'
      '2d2d0a90cf1a5a4c5db02d56ecc4c5bf'
      '34007208d5b887185865'),
-      'BASIC',
-   ),
+    'BASIC',
+  ),
   (
     ('000102030405060708090a0b0c0d0e0f'
      '101112131415161718191a1b1c1d1e1f'
@@ -80,8 +80,8 @@ _RFC_TEST_INPUTS = (
      'da3275600c2f09b8367793a9aca3db71'
      'cc30c58179ec3e87c14c01d5c1f3434f'
      '1d87'),
-      'LONG INPUTS',
-   ),
+    'LONG INPUTS',
+  ),
   (
     '0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b',
     '',
@@ -89,24 +89,25 @@ _RFC_TEST_INPUTS = (
     ('8da4e775a563c18f715f802a063c5a31'
      'b8a11f5c5ee1879ec3454e5f3c738d2d'
      '9d201395faa4b61a96c8'),
-      'ZERO SALT/INFO',
-   )
+    'ZERO SALT/INFO',
+  )
 )
 
 
 def _rfc_tests(tpm):
-  for data in _RFC_TEST_INPUTS:
-    IKM, salt, info, OKM = map(a2b, data[:-1])
-    test_name = 'HKDF:SHA256:%s' % data[-1]
-    cmd = _rfc_test_cmd(salt, IKM, info, len(OKM))
-    wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.HKDF, cmd))
-    result = tpm.unwrap_ext_response(subcmd.HKDF, wrapped_response)
+    for data in _RFC_TEST_INPUTS:
+        ikm, salt, info, okm = map(a2b, data[:-1])
+        test_name = 'HKDF:SHA256:%s' % data[-1]
+        cmd = _rfc_test_cmd(salt, ikm, info, len(okm))
+        wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.HKDF, cmd))
+        result = tpm.unwrap_ext_response(subcmd.HKDF, wrapped_response)
 
-    if result != OKM:
-      raise subcmd.TpmTestError('%s error:%s%s' % (
-          test_name, utils.hex_dump(result), utils.hex_dump(OKM)))
-    print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
+        if result != okm:
+            raise subcmd.TpmTestError('%s error:%s%s' % (
+              test_name, utils.hex_dump(result), utils.hex_dump(okm)))
+        print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
 
 
 def hkdf_test(tpm):
-  _rfc_tests(tpm)
+    """Run HKDF tests"""
+    _rfc_tests(tpm)
