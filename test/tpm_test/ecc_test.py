@@ -36,7 +36,7 @@ _SIGN_MODE = {
 
 # TPM2 ALG codes.
 _HASH = {
-  'NONE': 0x00,
+  'NONE': 0x10,
   'SHA1': 0x04,
   'SHA256': 0x0B
 }
