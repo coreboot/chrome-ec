@@ -67,7 +67,7 @@ static void ec_comm_init_(void)
 	if (!board_has_ec_cr50_comm_support())
 		return;
 
-	CPRINTS("Initializtion");
+	CPRINTS("Initialization");
 
 	gpio_enable_interrupt(GPIO_EC_PACKET_MODE_EN);
 	gpio_enable_interrupt(GPIO_EC_PACKET_MODE_DIS);
