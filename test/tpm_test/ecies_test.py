@@ -1,10 +1,9 @@
-#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 # Copyright 2016 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Module for testing ECIES using extended commands."""
-from binascii import b2a_hex as b2a
 from binascii import a2b_hex as a2b
 from struct import pack
 
@@ -19,7 +18,7 @@ _ECIES_OPCODES = {
 #
 # Command format.
 #
-# WIDTH	        FIELD
+# WIDTH         FIELD
 # 1             OP
 # 1             MSB IN LEN
 # 1             LSB IN LEN
@@ -40,7 +39,8 @@ _ECIES_OPCODES = {
 # 1             LSB INFO LEN
 # INFO_LEN      INFO
 #
-_ECIES_CMD_FORMAT = '{o:c}{inl:s}{input}{al:s}{iv}{xl:s}{x}{yl:s}{y}{sl:s}{s}{il:s}{i}'
+_ECIES_CMD_FORMAT = ('{o:c}{inl:s}{input}{al:s}{iv}'
+                     '{xl:s}{x}{yl:s}{y}{sl:s}{s}{il:s}{i}')
 
 
 _DEFAULT_SALT = 'Salt!'
@@ -168,66 +168,72 @@ _ECIES_COMPAT_INPUTS = (
   )
 )
 
+# pylint: disable=too-many-arguments
+def _encrypt_cmd(auth, in_data, init_vec, pubx, puby, salt, info):
+    ecies_op = _ECIES_OPCODES['ENCRYPT']
+    return _ECIES_CMD_FORMAT.format(o=ecies_op,
+                                    inl=pack('>H', len(auth+in_data)),
+                                    input=auth+in_data,
+                                    al=pack('>H', len(auth)), iv=init_vec,
+                                    xl=pack('>H', len(pubx)), x=pubx,
+                                    yl=pack('>H', len(puby)), y=puby,
+                                    sl=pack('>H', len(salt)), s=salt,
+                                    il=pack('>H', len(info)), i=info)
 
-def _encrypt_cmd(auth, input, iv, pubx, puby, salt, info):
-  op = _ECIES_OPCODES['ENCRYPT']
-  return _ECIES_CMD_FORMAT.format(o=op, inl=pack('>H', len(auth+input)), input=auth+input,
-                                  al=pack('>H', len(auth)), iv=iv,
-                                  xl=pack('>H', len(pubx)), x=pubx,
-                                  yl=pack('>H', len(puby)), y=puby,
-                                  sl=pack('>H', len(salt)), s=salt,
-                                  il=pack('>H', len(info)), i=info)
+# pylint: disable=too-many-arguments
+def _decrypt_cmd(auth, in_data, init_vec, tag, salt, info):
+    ecies_op = _ECIES_OPCODES['DECRYPT']
+    return _ECIES_CMD_FORMAT.format(o=ecies_op, inl=pack('>H', len(in_data)),
+                                    input=in_data,
+                                    al=pack('>H', len(auth)), iv=init_vec,
+                                    xl=pack('>H', len(tag)), x=tag,
+                                    yl=pack('>H', 0), y='',
+                                    sl=pack('>H', len(salt)), s=salt,
+                                    il=pack('>H', len(info)), i=info)
 
-
-def _decrypt_cmd(auth, input, iv, d, salt, info):
-  op = _ECIES_OPCODES['DECRYPT']
-  return _ECIES_CMD_FORMAT.format(o=op, inl=pack('>H', len(input)), input=input,
-                                  al=pack('>H', len(auth)), iv=iv,
-                                  xl=pack('>H', len(d)), x=d,
-                                  yl=pack('>H', 0), y='',
-                                  sl=pack('>H', len(salt)), s=salt,
-                                  il=pack('>H', len(info)), i=info)
-
-
+# pylint: disable=too-many-locals
 def _ecies_test(tpm):
-  for data in _ECIES_INPUTS:
-    auth, input, iv, d, pubx, puby, salt, info = data[:-1]
-    test_name = 'ECIES-TEST:%s' % data[-1]
-    cmd = _encrypt_cmd(auth, input, iv, pubx, puby, salt, info)
-    wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECIES, cmd))
-    encrypted = tpm.unwrap_ext_response(subcmd.ECIES, wrapped_response)
-    # check length of encrypted.
-    if not encrypted:
-      raise subcmd.TpmTestError('%s error:%s' % (
-          test_name, 'null encrypted'))
+    for data in _ECIES_INPUTS:
+        auth, in_data, init_vec, tag, pubx, puby, salt, info = data[:-1]
+        test_name = 'ECIES-TEST:%s' % data[-1]
+        cmd = _encrypt_cmd(auth, in_data, init_vec, pubx, puby, salt, info)
+        wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECIES, cmd))
+        encrypted = tpm.unwrap_ext_response(subcmd.ECIES, wrapped_response)
+        # check length of encrypted.
+        if not encrypted:
+            raise subcmd.TpmTestError('%s error:%s' %
+                                      (test_name, 'null encrypted'))
 
-    cmd = _decrypt_cmd(auth, encrypted, iv, d, salt, info)
-    wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECIES, cmd))
-    decrypted = tpm.unwrap_ext_response(subcmd.ECIES, wrapped_response)
+        cmd = _decrypt_cmd(auth, encrypted, init_vec, tag, salt, info)
+        wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECIES, cmd))
+        decrypted = tpm.unwrap_ext_response(subcmd.ECIES, wrapped_response)
 
-    expected = auth + input
-    if decrypted != expected:
-      raise subcmd.TpmTestError('%s error:%s:%s' % (
-          test_name, utils.hex_dump(decrypted), utils.hex_dump(expected)))
-    print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
+        expected = auth + in_data
+        if decrypted != expected:
+            raise subcmd.TpmTestError('%s error:%s:%s' %
+                                      (test_name, utils.hex_dump(decrypted),
+                                       utils.hex_dump(expected)))
+        print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
 
 
 def _compat_test(tpm):
-  for data in _ECIES_COMPAT_INPUTS:
-    auth, plaintext, iv, ciphertext, d, salt, info = data[:-1]
-    test_name = 'ECIES-TEST:%s' % data[-1]
+    for data in _ECIES_COMPAT_INPUTS:
+        auth, plaintext, init_vec, ciphertext, tag, salt, info = data[:-1]
+        test_name = 'ECIES-TEST:%s' % data[-1]
 
-    cmd = _decrypt_cmd(auth, ciphertext, iv, d, salt, info)
-    wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECIES, cmd))
-    decrypted = tpm.unwrap_ext_response(subcmd.ECIES, wrapped_response)
+        cmd = _decrypt_cmd(auth, ciphertext, init_vec, tag, salt, info)
+        wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECIES, cmd))
+        decrypted = tpm.unwrap_ext_response(subcmd.ECIES, wrapped_response)
 
-    expected = auth + plaintext
-    if decrypted != expected:
-      raise subcmd.TpmTestError('%s error:%s:%s' % (
-          test_name, utils.hex_dump(decrypted), utils.hex_dump(expected)))
-    print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
+        expected = auth + plaintext
+        if decrypted != expected:
+            raise subcmd.TpmTestError('%s error:%s:%s' %
+                                      (test_name, utils.hex_dump(decrypted),
+                                       utils.hex_dump(expected)))
+        print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
 
 
 def ecies_test(tpm):
-  _ecies_test(tpm)
-  _compat_test(tpm)
+    """Run ECIES cryptographic tests"""
+    _ecies_test(tpm)
+    _compat_test(tpm)
