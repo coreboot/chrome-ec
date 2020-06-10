@@ -64,8 +64,8 @@ def get_attribute(tdesc, attr_name, required=True):
     text = text.replace(' ', '')
 
     # Convert hex-text to little-endian binary (in 4-byte word chunks)
-    value = ''
-    for block in range(len(text)/8):
+    value = b''
+    for block in range(len(text)//8):
         try:
             value += struct.pack('<I', int('0x%s' % text[8*block:8*(block+1)],
                                            16))
@@ -76,7 +76,8 @@ def get_attribute(tdesc, attr_name, required=True):
 
     # Unpack remaining hex text, without introducing a zero pad.
     for block in range(-1, -(len(text) % 8), -1):
-        value += chr(int(text[2*block:len(text) + (2*block)+2], 16))
+        value += int(text[2*block:len(text) +\
+                 (2*block)+2], 16).to_bytes(1, 'big')
 
     return value
 
@@ -134,19 +135,27 @@ def crypto_run(node_name, op_type, key, init_vec, aad, in_text, out_text, tpm):
     except KeyError:
         raise subcmd.TpmTestError('unrecognizable mode in node "%s"' %
                                   node_name)
+    # Command structure, shared out of band with the test driver running
+    # on the host:
+    #
+    # field       |    size  |              note
+    # ================================================================
+    # mode        |    1     | 0 - decrypt, 1 - encrypt
+    # cipher_mode |    1     | as per aes_test_cipher_mode
+    # key_len     |    1     | key size in bytes (16, 24 or 32)
+    # key         | key len  | key to use
+    # iv_len      |    1     | either 0 or 16
+    # iv          | 0 or 16  | as defined by iv_len
+    # aad_len     |  <= 127  | additional authentication data length
+    # aad         |  aad_len | additional authentication data
+    # text_len    |    2     | size of the text to process, big endian
+    # text        | text_len | text to encrypt/decrypt
+    cmd = op_type.to_bytes(1, 'big') + submode.to_bytes(1, 'big') +\
+          len(key).to_bytes(1, 'big') +  key +\
+          len(init_vec).to_bytes(1, 'big') + init_vec +\
+          len(aad).to_bytes(1, 'big') + aad +\
+          len(in_text).to_bytes(2, 'big') + in_text
 
-    cmd = '%c' % op_type    # Encrypt or decrypt
-    cmd += '%c' % submode   # A particular type of a generic algorithm.
-    cmd += '%c' % len(key)
-    cmd += key
-    cmd += '%c' % len(init_vec)
-    if init_vec:
-        cmd += init_vec
-    cmd += '%c' % len(aad)
-    if aad:
-        cmd += aad
-    cmd += struct.pack('>H', len(in_text))
-    cmd += in_text
     if tpm.debug_enabled():
         print('%d:%d cmd size' % (op_type, mode_cmd),
               len(cmd), utils.hex_dump(cmd))
@@ -191,11 +200,15 @@ def crypto_test(tdesc, tpm):
           node_name,
           ''.join('%2.2x' % ord(x) for x in key)))
     init_vec = get_attribute(tdesc, 'iv', required=False)
+    if isinstance(init_vec, str):
+        init_vec = bytes(init_vec, 'ascii')
     if init_vec and not node_name.startswith('AES:GCM') and len(init_vec) != 16:
         raise subcmd.TpmTestError('wrong iv size "%s:%s"' % (
           node_name,
           ''.join('%2.2x' % ord(x) for x in init_vec)))
     clear_text = get_attribute(tdesc, 'clear_text', required=False)
+    if isinstance(clear_text, str):
+        clear_text = bytes(clear_text, 'ascii')
     if clear_text:
         clear_text_len = get_attribute(tdesc, 'clear_text_len', required=False)
         if clear_text_len:
@@ -205,17 +218,25 @@ def crypto_test(tdesc, tpm):
     if tpm.debug_enabled():
         print('clear text size', len(clear_text))
     cipher_text = get_attribute(tdesc, 'cipher_text', required=False)
+    if isinstance(cipher_text, str):
+        cipher_text = bytes(cipher_text, 'ascii')
     if clear_text_len:
         cipher_text = cipher_text[:int(clear_text_len)]
     tag = get_attribute(tdesc, 'tag', required=False)
-    aad = get_attribute(tdesc, 'aad', required=False)
+    if isinstance(tag, str):
+        tag = bytes(tag, 'ascii')
+
+    aad = get_attribute(tdesc, 'aad', required=False) or b''
+    if isinstance(aad, str):
+        aad = bytes(aad, 'ascii')
     if aad:
         aad_len = get_attribute(tdesc, 'aad_len', required=False)
         if aad_len:
             aad = aad[:int(aad_len)]
     real_cipher_text = crypto_run(node_name, ENCRYPT, key, init_vec,
-                                  aad or '', clear_text, cipher_text + tag, tpm)
-    crypto_run(node_name, DECRYPT, key, init_vec, aad or '',
+                                  aad, clear_text,
+                                  cipher_text + tag, tpm)
+    crypto_run(node_name, DECRYPT, key, init_vec, aad,
                real_cipher_text[:len(real_cipher_text) - len(tag)],
                clear_text + tag, tpm)
     print(utils.cursor_back() + 'SUCCESS: %s' % node_name)

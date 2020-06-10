@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Copyright 2016 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
@@ -6,8 +6,6 @@
 
 """Module for generating AES test vectors."""
 
-from binascii import b2a_hex as b2a
-from itertools import izip_longest
 import os
 from Crypto.Cipher import AES
 
@@ -41,12 +39,15 @@ def h2be(v):
     Convert input big-endian byte-string to 4-byte segmented
     little-endian words.  Pad-bytes (if necessary) are the empty string.
     """
-    word = [iter(v)] * 4
-    return ''.join([
-        ''.join(b[::-1]) for b in izip_longest(*word, fillvalue='')
-    ])
+    out = b''
+    while v:
+        out += int.from_bytes(v[:4].ljust(4, bytes([0])), 'big')\
+                  .to_bytes(4, 'little')[4-len(v[:4]):]
+        v = v[4:]
+    return out
 
 
+print('<crypto_tests>')
 for mode in [AES.MODE_CBC, AES.MODE_CFB, AES.MODE_OFB]:
     for key_bytes in [16, 24, 32]:
         test_num = 0
@@ -58,7 +59,7 @@ for mode in [AES.MODE_CBC, AES.MODE_CFB, AES.MODE_OFB]:
 
             actual_pt_len = pt_len
             if pt_len % 16:
-                pt_len = 16 * ((pt_len / 16) + 1)
+                pt_len = 16 * ((pt_len // 16) + 1)
 
             key = os.urandom(key_bytes)
             iv = os.urandom(16)
@@ -69,11 +70,11 @@ for mode in [AES.MODE_CBC, AES.MODE_CFB, AES.MODE_OFB]:
             obj = AES.new(key, mode=mode, IV=iv, segment_size=128)
 
             assert obj.decrypt(ct)[:pt_len] == pt
-
-            print template.format(mode=modes[mode],
+            print(template.format(mode=modes[mode],
                                   key_bits=str(key_bytes * 8),
                                   test_num=str(test_num),
-                                  pt=b2a(h2be(pt[:actual_pt_len])),
-                                  key=b2a(h2be(key)),
-                                  ct=b2a(h2be(ct[:actual_pt_len])),
-                                  iv=b2a(h2be(iv))),
+                                  pt=h2be(pt[:actual_pt_len]).hex(),
+                                  key=h2be(key).hex(),
+                                  ct=h2be(ct[:actual_pt_len]).hex(),
+                                  iv=h2be(iv).hex()))
+print('</crypto_tests>')

@@ -30,7 +30,7 @@ def hex_dump(binstr):
     i = 0
     while i < len(binstr):
         strsize = min(16, len(binstr) - i)
-        hexstr = ' '.join('%2.2x' % ord(x) for x in binstr[i:i+strsize])
+        hexstr = ' '.join('%2.2x' % x for x in binstr[i:i+strsize])
         dump_lines.append(hexstr)
         i += strsize
     dump_lines.append('')

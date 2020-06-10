@@ -10,7 +10,6 @@ from __future__ import print_function
 import hashlib
 import hmac
 import struct
-
 import subcmd
 import utils
 
@@ -30,8 +29,8 @@ ALG_SHA384 = 2
 ALG_SHA512 = 3
 
 # A standard empty response to HASH extended commands.
-EMPTY_RESPONSE = ''.join('%c' % x for x in (0x80, 0x01, 0x00, 0x00, 0x00, 0x0c,
-                                            0x00, 0x00, 0x00, 0x00, 0x00, 0x01))
+EMPTY_RESPONSE = bytes([0x80, 0x01, 0x00, 0x00, 0x00, 0x0c,
+                        0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
 TEST_INPUTS = (
   # Hash cmd    alg      handle  hmac_key           text
   (CMD_HMAC_SW, ALG_SHA256, 0, 'hmac_key1', 'some text, this time for sw hmac'),
@@ -118,21 +117,19 @@ def hash_test(tpm):
 
     for test in TEST_INPUTS:
         hash_cmd, hash_alg, handle, hmac_key, text = test
+        text = bytes(text, 'ascii')
+        hmac_key = bytes(hmac_key, 'ascii')
         mode_name = cmd_map[hash_cmd]
         alg_name, hash_func = alg_map[hash_alg]
 
         test_name = '%s:%s:%d' % (mode_name, alg_name, handle)
 
-        cmd = '%c' % hash_cmd
-        cmd += '%c' % hash_alg
-        cmd += '%c' % handle   # Ignored for single shots
-
-        cmd += struct.pack('>H', len(text))
-        cmd += text
+        cmd = struct.pack('>BBBH', hash_cmd, hash_alg, handle,
+                      len(text)) + text
         # for HMAC add key
         if hash_cmd in (CMD_HMAC_SW, CMD_HMAC_HW):
-            cmd += struct.pack('>H', len(hmac_key))
-            cmd += hmac_key
+            cmd += len(hmac_key).to_bytes(2, 'big') + hmac_key
+
         wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.HASH, cmd))
         if hash_cmd in (CMD_HASH_START, CMD_HASH_CONT):
             if hash_cmd == CMD_HASH_START:
@@ -149,7 +146,7 @@ def hash_test(tpm):
         elif hash_cmd == CMD_HASH:
             hash_context = hash_func()
         elif hash_cmd in (CMD_HMAC_SW, CMD_HMAC_HW):
-            hash_context = hmac.new(bytes(hmac_key), digestmod=hash_func)
+            hash_context = hmac.new(hmac_key, digestmod=hash_func)
         else:
             raise subcmd.TpmTestError('Unknown command %d' % hash_cmd)
         hash_context.update(text)

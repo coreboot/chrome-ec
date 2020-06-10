@@ -45,7 +45,7 @@ def upgrade(tpm):
     else:
         raise subcmd.TpmTestError('Unknown base address 0x%x' % base)
     fname = os.path.join(os.path.dirname(__file__), '../..', fname)
-    data = open(fname, 'r').read()[:2000]
+    data = open(fname, 'rb').read()[:2000]
     transferred = 0
     block_size = 1024
 
@@ -60,7 +60,7 @@ def upgrade(tpm):
         resp = tpm.unwrap_ext_response(subcmd.FW_UPGRADE,
                                        tpm.command(tpm.wrap_ext_command(
                                          subcmd.FW_UPGRADE, cmd)))
-        code = ord(resp[0])
+        code = resp[0]
         if code:
             raise subcmd.TpmTestError('%x - resp %d' % (base, code))
         base += tx_size

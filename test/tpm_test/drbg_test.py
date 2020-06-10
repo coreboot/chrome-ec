@@ -8,17 +8,16 @@
 from __future__ import print_function
 
 from binascii import a2b_hex as a2b
-from struct import pack
 
 import subcmd
 import utils
 
 
 # A standard empty response to DRBG extended commands.
-EMPTY_DRBG_RESPONSE = ''.join('%c' % x for x in (0x80, 0x01,
-                                                 0x00, 0x00, 0x00, 0x0c,
-                                                 0x00, 0x00, 0x00, 0x00,
-                                                 0x00, subcmd.DRBG_TEST))
+EMPTY_DRBG_RESPONSE = bytes([0x80, 0x01,
+                             0x00, 0x00, 0x00, 0x0c,
+                             0x00, 0x00, 0x00, 0x00,
+                             0x00, subcmd.DRBG_TEST])
 
 DRBG_INIT = 0
 DRBG_RESEED = 1
@@ -48,25 +47,41 @@ TEST_INPUTS = (
   (DRBG_GENERATE,
    ('85D011A3B36AC6B25A792F213A1C22C80BFD1C5B47BCA04CD0D9834BB466447B',
     'B03863C42C9396B4936D83A551871A424C5A8EDBDC9D1E0E8E89710D58B5CA1E')),
-
 )
 
-_DRBG_INIT_FORMAT = '{op:c}{p0l:s}{p0}{p1l:s}{p1}{p2l:s}{p2}'
-def _drbg_init_cmd(operation, entropy, nonce, perso):
-    return _DRBG_INIT_FORMAT.format(op=operation,
-                                    p0l=pack('>H', len(entropy)), p0=entropy,
-                                    p1l=pack('>H', len(nonce)), p1=nonce,
-                                    p2l=pack('>H', len(perso)), p2=perso)
+# DRBG_TEST command structure:
+#
+# field       |    size  |              note
+# ==========================================================================
+# mode        |    1     | 0 - DRBG_INIT, 1 - DRBG_RESEED, 2 - DRBG_GENERATE
+# p0_len      |    2     | size of first input in bytes
+# p0          |  p0_len  | entropy for INIT & SEED, input for GENERATE
+# p1_len      |    2     | size of second input in bytes (for INIT & RESEED)
+#             |          | or size of expected output for GENERATE
+# p1          |  p1_len  | nonce for INIT & SEED
+# p2_len      |    2     | size of third input in bytes for DRBG_INIT
+# p2          |  p2_len  | personalization for INIT & SEED
+#
+# DRBG_INIT (entropy, nonce, perso)
+# DRBG_RESEED (entropy, additional input 1, additional input 2)
+# DRBG_INIT and DRBG_RESEED returns empty response
+# (up to a maximum of 128 bytes)
+# DRBG_INIT and DRBG_RESEED commands follow same format
+def _drbg_init_cmd(drbg_op, entropy, nonce, perso):
+    return drbg_op.to_bytes(1, 'big') +\
+          len(entropy).to_bytes(2, 'big') + entropy +\
+          len(nonce).to_bytes(2, 'big') + nonce +\
+          len(perso).to_bytes(2, 'big') + perso
 
-_DRBG_GEN_FORMAT = '{op:c}{p0l:s}{p0}{p1l:s}'
-
+# DRBG_GENERATE (p0_len, p0 - additional input 1, p1_len - size of output)
+# DRBG_GENERATE returns p1_len bytes of generated data
 def _drbg_gen_cmd(inp, out):
     outlen = len(out)
     if outlen == 0:
         outlen = 32 # if we don't care about output value, still need to have it
-    return _DRBG_GEN_FORMAT.format(op=DRBG_GENERATE,
-                                   p0l=pack('>H', len(inp)), p0=inp,
-                                   p1l=pack('>H', outlen))
+    return DRBG_GENERATE.to_bytes(1, 'big') +\
+          len(inp).to_bytes(2, 'big') + inp +\
+          outlen.to_bytes(2, 'big')
 
 
 def drbg_test(tpm):

@@ -49,5 +49,5 @@ def trng_test(tpm):
                 raise subcmd.TpmTestError("Unexpected response to \'%s\': %s" %
                                           ('trng', utils.hex_dump(response)))
             out_file.write(response[12:])
-            print('%s %d%%\r' % (utils.cursor_back(), (block/10)), end='')
+            print('%s %d%%\r' % (utils.cursor_back(), (block//10)), end='')
     print('%sSUCCESS: %s' % (utils.cursor_back(), 'trng'))
