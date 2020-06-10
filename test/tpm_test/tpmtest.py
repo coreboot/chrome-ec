@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Copyright 2015 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
@@ -35,7 +35,7 @@ import upgrade_test
 EXT_CMD = 0xbaccd00a
 
 
-class TPM(object):
+class TPM:
     """TPM accessor class.
 
     Object of this class allows to send valid and extended TPM commands (using
@@ -67,7 +67,7 @@ class TPM(object):
         """
 
         (tag, size, cmd_code, _) = struct.unpack_from(
-          self.HEADER_FMT, data_blob + '  ')
+          self.HEADER_FMT, data_blob + b'  ')
         prefix = 'Misformatted blob: '
         if tag not in (0x8001, 0x8002):
             raise subcmd.TpmTestError(prefix + 'bad tag value 0x%4.4x' % tag)
@@ -186,9 +186,10 @@ def main():
         rsa_test.rsa_test(tpm_object)
         upgrade_test.upgrade(tpm_object)
     except subcmd.TpmTestError as tpm_exc:
-        exc_file, exc_line = traceback.extract_tb(sys.exc_traceback)[-1][:2]
-        print('\nError in %s:%s: ' % (os.path.basename(exc_file), exc_line),
-              tpm_exc)
+        _, _, exc_traceback = sys.exc_info()
+        exc_file, exc_line = traceback.extract_tb(exc_traceback)[-1][:2]
+        print('\nError in %s:%s: ' % (os.path.basename(exc_file),
+              exc_line), tpm_exc)
         if debug_needed:
             traceback.print_exc()
         sys.exit(1)

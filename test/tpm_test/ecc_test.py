@@ -74,106 +74,69 @@ PKEY = ('fc441e07744e48f109b7e66b29482f7b'
 # QY             QX_LEN
 #
 # Command formats:
-#
+
 # TEST_SIGN:
 # OP | CURVE_ID | SIGN_MODE | HASHING | DIGEST_LEN | DIGEST
 #    @returns 0/1 | R_LEN | R | S_LEN | S
-_TEST_SIGN = '{o:c}{c:c}{s:c}{h:c}{dl:s}{dig}'
+def _sign_cmd(curve_id, hash_func, sign_mode, msg):
+    digest = hash_func(msg).digest()
+    return struct.pack('>BBBBH', _ECC_OPCODES['SIGN'], curve_id, sign_mode,
+                      _HASH['NONE'], len(digest)) + digest
 
-# TEST_SIGN_ANY:
-# OP | CURVE_ID | SIGN_MODE | HASHING | DIGEST_LEN | DIGEST | D_LEN | D
-#    @returns 0/1 | R_LEN | R | S_LEN | S
-_TEST_SIGN_ANY = '{o:c}{c:c}{s:c}{h:c}{dl:s}{dig}{pl:s}{pk}'
-
-#
 # TEST_VERIFY:
 # OP | CURVE_ID | SIGN_MODE | HASHING | R_LEN | R | S_LEN | S
 #   DIGEST_LEN | DIGEST
 #    @returns 1 if successful
-_TEST_VERIFY = '{o:c}{c:c}{sm:c}{h:c}{rs}{dl:s}{dig}'
+# below we assume sig = [R_LEN | R | S_LEN | S] as it came from SIGN
+def _verify_cmd(curve_id, hash_func, sign_mode, msg, sig):
+    digest = hash_func(msg).digest()
+    return struct.pack('>BBBB', _ECC_OPCODES['VERIFY'], curve_id, sign_mode,
+                      _HASH['NONE']) + sig +\
+                      len(digest).to_bytes(2, 'big') + digest
+
+# TEST_SIGN_ANY:
+# OP | CURVE_ID | SIGN_MODE | HASHING | DIGEST_LEN | DIGEST | D_LEN | D
+#    @returns 0/1 | R_LEN | R | S_LEN | S
+def _sign_any_cmd(curve_id, hash_func, sign_mode, msg, pkey):
+    digest = hash_func(msg).digest()
+    return struct.pack('>BBBBH', _ECC_OPCODES['SIGN_ANY'], curve_id, sign_mode,
+                      _HASH['NONE'], len(digest)) + digest +\
+                        len(pkey).to_bytes(2, 'big') + pkey
 
 # TEST_VERIFY_ANY:
 # OP | CURVE_ID | SIGN_MODE | HASHING | R_LEN | R | S_LEN | S |
 #   DIGEST_LEN | DIGEST | QX_LEN | QX | QY_LEN | QY
 #    @returns 1 if successful
-_TEST_VERIFY_ANY = _TEST_VERIFY + '{qxl:s}{qx}{qyl:s}{qy}'
-
-# TEST_KEYDERIVE:
-# OP | CURVE_ID | SEED_LEN | SEED
-#    @returns 1 if successful
-#
-_TEST_KEYDERIVE = '{o:c}{c:c}{ml:s}{msg}'
+# pylint: disable=too-many-arguments
+def _verify_any_cmd(curve_id, hash_func, sign_mode, msg, sig, q_x, q_y):
+    digest = hash_func(msg).digest()
+    return struct.pack('>BBBB', _ECC_OPCODES['VERIFY_ANY'], curve_id, sign_mode,
+                      _HASH['NONE']) + sig +\
+                      len(digest).to_bytes(2, 'big') + digest +\
+                      len(q_x).to_bytes(2, 'big') + q_x+ \
+                      len(q_y).to_bytes(2, 'big') + q_y
 
 # TEST_POINT:
 # OP | CURVE_ID | QX_LEN | QX | QY_LEN | QY
 #    @returns 1 if point is on curve
-
-_TEST_POINT = '{o:c}{c:c}{qxl:s}{qx}{qyl:s}{qy}'
+def _test_point_cmd(curve_id, q_x, q_y):
+    return struct.pack('>BB', _ECC_OPCODES['TEST_POINT'], curve_id) +\
+          len(q_x).to_bytes(2, 'big') + q_x+ \
+          len(q_y).to_bytes(2, 'big') + q_y
 
 #
 # TEST_KEYGEN:
 # OP | CURVE_ID
 #    @returns 0/1 | D_LEN | D | QX_LEN | QX | QY_LEN | QY
-#
-_TEST_KEYGEN = '{o:c}{c:c}'
-
-def _sign_cmd(curve_id, hash_func, sign_mode, msg):
-    ecc_op = _ECC_OPCODES['SIGN']
-    digest = hash_func(msg).digest()
-    digest_len = len(digest)
-    return _TEST_SIGN.format(o=ecc_op, c=curve_id, s=sign_mode,
-                             h=_HASH['SHA256'],
-                             dl=struct.pack('>H', digest_len), dig=digest)
-
-def _sign_any_cmd(curve_id, hash_func, sign_mode, msg, pkey):
-    ecc_op = _ECC_OPCODES['SIGN_ANY']
-    digest = hash_func(msg).digest()
-    digest_len = len(digest)
-    return _TEST_SIGN_ANY.format(o=ecc_op, c=curve_id, s=sign_mode,
-                                 h=_HASH['SHA256'],
-                                 dl=struct.pack('>H', digest_len), dig=digest,
-                                 pl=struct.pack('>H', len(pkey)), pk=pkey)
-
-
-def _verify_cmd(curve_id, hash_func, sign_mode, msg, sig):
-    ecc_op = _ECC_OPCODES['VERIFY']
-    digest = hash_func(msg).digest()
-    digest_len = len(digest)
-    return _TEST_VERIFY.format(o=ecc_op, c=curve_id, sm=sign_mode,
-                               h=_HASH['SHA256'],
-                               rs=sig,
-                               dl=struct.pack('>H', digest_len),
-                               dig=digest)
-
-# pylint: disable=too-many-arguments
-def _verify_any_cmd(curve_id, hash_func, sign_mode, msg, sig, q_x, q_y):
-    ecc_op = _ECC_OPCODES['VERIFY_ANY']
-    digest = hash_func(msg).digest()
-    digest_len = len(digest)
-    return _TEST_VERIFY_ANY.format(o=ecc_op, c=curve_id, sm=sign_mode,
-                                   h=_HASH['SHA256'],
-                                   rs=sig,
-                                   dl=struct.pack('>H', digest_len), dig=digest,
-                                   qxl=struct.pack('>H', len(q_x)), qx=q_x,
-                                   qyl=struct.pack('>H', len(q_y)), qy=q_y)
-
-def _test_point_cmd(curve_id, q_x, q_y):
-    ecc_op = _ECC_OPCODES['TEST_POINT']
-    return _TEST_POINT.format(o=ecc_op, c=curve_id,
-                              qxl=struct.pack('>H', len(q_x)), qx=q_x,
-                              qyl=struct.pack('>H', len(q_y)), qy=q_y)
-
 def _keygen_cmd(curve_id):
-    ecc_op = _ECC_OPCODES['KEYGEN']
-    return _TEST_KEYGEN.format(o=ecc_op, c=curve_id)
+    return struct.pack('>BB', _ECC_OPCODES['KEYGEN'], curve_id)
 
-
+# TEST_KEYDERIVE:
+# OP | CURVE_ID | SEED_LEN | SEED
+#    @returns 1 if successful
 def _keyderive_cmd(curve_id, seed):
-    ecc_op = _ECC_OPCODES['KEYDERIVE']
-    seed_len = len(seed)
-    return _TEST_KEYDERIVE.format(o=ecc_op, c=curve_id,
-                                  ml=struct.pack('>H', seed_len), msg=seed)
-
+    return struct.pack('>BBH', _ECC_OPCODES['KEYDERIVE'], curve_id,
+                       len(seed)) + seed
 
 _SIGN_INPUTS = (
   ('NIST-P256', 'ECDSA'),
@@ -192,7 +155,7 @@ _KEYDERIVE_INPUTS = (
 
 
 def _sign_test(tpm):
-    msg = 'Hello CR50'
+    msg = b'Hello CR50'
 
     for data in _SIGN_INPUTS:
         curve_id, sign_mode = data
@@ -200,7 +163,7 @@ def _sign_test(tpm):
         cmd = _sign_cmd(_ECC_CURVES[curve_id], _HASH_FUNC[curve_id],
                         _SIGN_MODE[sign_mode], msg)
         wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
-        expected = '\x01'
+        expected = b'\x01'
         signature = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
         if signature[:1] != expected:
             raise subcmd.TpmTestError('%s error:%s:%s' % (
@@ -218,7 +181,7 @@ def _sign_test(tpm):
         print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
 
 def _sign_test_any(tpm):
-    msg = 'Hello CR50'
+    msg = b'Hello CR50'
 
     for data in _SIGN_INPUTS:
         curve_id, sign_mode = data
@@ -226,7 +189,7 @@ def _sign_test_any(tpm):
         cmd = _sign_any_cmd(_ECC_CURVES[curve_id], _HASH_FUNC[curve_id],
                             _SIGN_MODE[sign_mode], msg, a2b(PKEY))
         wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
-        expected = '\x01'
+        expected = b'\x01'
         signature = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
         if signature[:1] != expected:
             raise subcmd.TpmTestError('%s error:%s:%s' % (
@@ -250,7 +213,7 @@ def _point_test(tpm):
                           a2b(NIST_P256_QX), a2b(NIST_P256_QY))
     wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
     verified = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
-    expected = '\x01'
+    expected = b'\x01'
     if verified != expected:
         raise subcmd.TpmTestError('%s error:%s:%s' % (
           test_name, utils.hex_dump(verified), utils.hex_dump(expected)))
@@ -263,7 +226,7 @@ def _keygen_test(tpm):
         cmd = _keygen_cmd(_ECC_CURVES[curve_id])
         wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
         valid = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
-        expected = '\x01'
+        expected = b'\x01'
         if valid[:1] != expected:
             raise subcmd.TpmTestError('%s error:%s:%s' % (
               test_name, utils.hex_dump(valid[:1]), utils.hex_dump(expected)))
@@ -278,7 +241,7 @@ def _keyderive_test(tpm):
         cmd = _keyderive_cmd(_ECC_CURVES[curve_id], seed)
         wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
         valid = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
-        expected = '\x01'
+        expected = b'\x01'
         if valid != expected:
             raise subcmd.TpmTestError('%s error:%s:%s' % (
               test_name, utils.hex_dump(valid), utils.hex_dump(expected)))
