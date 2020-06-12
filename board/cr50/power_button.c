@@ -85,7 +85,7 @@ static void keep_ec_in_reset(void)
 	hook_call_deferred(&keep_ec_in_reset_data, 100 * MSEC);
 }
 
-static int ver_state_cmd(int argc, char **argv)
+static int ap_ro_ver_state_cmd(int argc, char **argv)
 {
 #ifdef CR50_DEV
 	int const max_args = 2;
@@ -110,7 +110,7 @@ static int ver_state_cmd(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(ver_state, ver_state_cmd,
+DECLARE_SAFE_CONSOLE_COMMAND(ap_ro_verstate, ap_ro_ver_state_cmd,
 #ifdef CR50_DEV
 			     "[clear]",
 			     "Display and/or clear AP RO validation state"
