@@ -130,6 +130,11 @@ struct drbg_ctx {
 /*
  * NIST SP 800-90A HMAC DRBG.
  */
+enum hmac_result {
+	HMAC_DRBG_SUCCESS = 0,
+	HMAC_DRBG_INVALID_PARAM = 1,
+	HMAC_DRBG_RESEED_REQUIRED = 2
+};
 
 /* Standard initialization. */
 void hmac_drbg_init(struct drbg_ctx *ctx,
@@ -146,11 +151,11 @@ void hmac_drbg_reseed(struct drbg_ctx *ctx,
 		      const void *p0, size_t p0_len,
 		      const void *p1, size_t p1_len,
 		      const void *p2, size_t p2_len);
-int hmac_drbg_generate(struct drbg_ctx *ctx,
-		       void *out, size_t out_len,
-		       const void *input, size_t input_len);
+enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx, void *out,
+				    size_t out_len, const void *input,
+				    size_t input_len);
 /* Generate p256, with no additional input. */
-void hmac_drbg_generate_p256(struct drbg_ctx *ctx, p256_int *k_out);
+enum hmac_result hmac_drbg_generate_p256(struct drbg_ctx *ctx, p256_int *k_out);
 void drbg_exit(struct drbg_ctx *ctx);
 
 /*

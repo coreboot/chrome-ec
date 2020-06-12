@@ -107,14 +107,19 @@ void hmac_drbg_reseed(struct drbg_ctx *ctx,
 	ctx->reseed_counter = 1;
 }
 
-int hmac_drbg_generate(struct drbg_ctx *ctx,
+enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx,
 		       void *out, size_t out_len,
 		       const void *input, size_t input_len)
 {
-	/* TODO(louiscollard): Assert maximum output length? */
+	/* According to NIST SP 800-90A rev 1 B.2
+	 * Maximum number of bits per request = 7500 bits
+	 * Reseed_interval = 10 000 requests.
+	 */
+	if (out_len > 7500 / 8)
+		return HMAC_DRBG_INVALID_PARAM;
 
-	if (ctx->reseed_counter >= 10000)
-		return 2;
+	if (ctx->reseed_counter++ >= 10000)
+		return HMAC_DRBG_RESEED_REQUIRED;
 
 	if (input_len)
 		update(ctx, input, input_len, NULL, 0, NULL, 0);
@@ -130,16 +135,13 @@ int hmac_drbg_generate(struct drbg_ctx *ctx,
 	}
 
 	update(ctx, input, input_len, NULL, 0, NULL, 0);
-	ctx->reseed_counter++;
 
-	return 0;
+	return HMAC_DRBG_SUCCESS;
 }
 
-void hmac_drbg_generate_p256(struct drbg_ctx *ctx, p256_int *k_out)
+enum hmac_result hmac_drbg_generate_p256(struct drbg_ctx *ctx, p256_int *k_out)
 {
-	hmac_drbg_generate(ctx,
-			   k_out->a, sizeof(k_out->a),
-			   NULL, 0);
+	return hmac_drbg_generate(ctx, k_out->a, sizeof(k_out->a), NULL, 0);
 }
 
 void drbg_exit(struct drbg_ctx *ctx)
