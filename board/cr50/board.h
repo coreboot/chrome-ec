@@ -89,6 +89,9 @@
 /* Also use the cr50 as a second factor authentication */
 #define CONFIG_U2F
 
+#undef CONFIG_FIPS_RSA2048
+#undef CONFIG_FIPS_SW_HMAC_DRBG
+
 /* USB configuration */
 #define CONFIG_USB
 #define CONFIG_USB_CONSOLE_STREAM

@@ -48,6 +48,7 @@ board-y += power_button.o
 board-y += servo_state.o
 board-y += ap_uart_state.o
 board-y += factory_mode.o
+board-y += fips.o
 board-y += fips_rand.o
 board-${CONFIG_RDD} += rdd.o
 board-${CONFIG_USB_SPI} += usb_spi.o

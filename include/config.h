@@ -5086,4 +5086,9 @@
 #define CONFIG_CRC8
 #endif
 
+/* Run RSA 2048 known-answer test (+30 ms) */
+#undef CONFIG_FIPS_RSA2048
+/* Run software HMAC_DRBG-SHA256 known-answer test (+40 ms) */
+#undef CONFIG_FIPS_SW_HMAC_DRBG
+
 #endif  /* __CROS_EC_CONFIG_H */

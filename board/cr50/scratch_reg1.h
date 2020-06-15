@@ -91,12 +91,6 @@
 #define BOARD_EC_CR50_COMM_SUPPORT        BIT(21)
 
 /*
- * Indicates successful completion of FIPS power up
- * tests earlier. Reduces wake up time after sleep.
- */
-#define BOARD_FIPS_POWERUP_DONE       BIT(22)
-
-/*
  * Bits to store which pin is used for the ccd recovery switch/lid open signal.
  */
 #define BOARD_CCD_REC_LID_PIN_SHIFT       22
@@ -105,6 +99,11 @@
 #define BOARD_CCD_REC_LID_PIN_DIOA9       (2 << BOARD_CCD_REC_LID_PIN_SHIFT)
 #define BOARD_CCD_REC_LID_PIN_DIOA12      (3 << BOARD_CCD_REC_LID_PIN_SHIFT)
 
+/*
+ * Indicates successful completion of FIPS power up
+ * tests earlier. Reduces wake up time after sleep.
+ */
+#define BOARD_FIPS_POWERUP_DONE       BIT(24)
 
 /*
  * Macro to capture all properties related to board strapping pins. This must be

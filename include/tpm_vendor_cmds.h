@@ -149,6 +149,8 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_SEED_AP_RO_CHECK = 54,
 
+	VENDOR_CC_FIPS_CMD = 55,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
