@@ -151,6 +151,16 @@ void cflush(void);
 void console_has_input(void);
 
 /**
+ * Disable console output by disabling all channels
+ */
+void console_disable_output(void);
+
+/**
+ * Enable console output to default channels
+ */
+void console_enable_output(void);
+
+/**
  * Register a console command handler.
  *
  * @param name          Command name; must not be the beginning of another
