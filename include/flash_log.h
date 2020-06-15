@@ -16,12 +16,15 @@ enum flash_event_type {
 	FE_LOG_CORRUPTED = 1,
 	FE_TPM_I2C_ERROR = 2,
 	FE_LOG_OVERFLOWS = 3, /* A single byte, overflow counter. */
-	FE_LOG_LOCKS = 4,     /* A single byte, lock failures counter. */
-	FE_LOG_NVMEM = 5,     /* NVMEM failure, variable structure. */
-	FE_LOG_TPM_WIPE_ERROR = 6,     /* Failed to wipe the TPM */
-	FE_LOG_TRNG_STALL = 7,     /* Stall while retrieving a random number. */
+	FE_LOG_LOCKS = 4, /* A single byte, lock failures counter. */
+	FE_LOG_NVMEM = 5, /* NVMEM failure, variable structure. */
+	FE_LOG_TPM_WIPE_ERROR = 6, /* Failed to wipe the TPM */
+	FE_LOG_TRNG_STALL = 7, /* Stall while retrieving a random number. */
 	FE_LOG_DCRYPTO_FAILURE = 8, /* Dcrypto had to be reset. */
 	FE_LOG_AP_RO_VERIFICATION = 9, /* AP RO verification events. */
+	FE_LOG_FIPS_FAILURE = 10, /* Error during continuous and/or known-answer
+				   * tests for FIPS 140-2/3
+				   */
 	/*
 	 * Fixed padding value makes it easier to parse log space
 	 * snapshots.
