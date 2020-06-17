@@ -855,6 +855,11 @@ void system_common_pre_init(void)
 	}
 }
 
+int system_is_manual_recovery(void)
+{
+	return host_is_event_set(EC_HOST_EVENT_KEYBOARD_RECOVERY);
+}
+
 /**
  * Handle a pending reboot command.
  */
@@ -898,9 +903,9 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 			return EC_ERROR_INVAL;
 
 		if (IS_ENABLED(CONFIG_POWER_BUTTON_INIT_IDLE)) {
-			CPRINTS("Clearing AP_OFF");
+			CPRINTS("Clearing AP_IDLE");
 			chip_save_reset_flags(chip_read_reset_flags() &
-					      ~EC_RESET_FLAG_AP_OFF);
+					      ~EC_RESET_FLAG_AP_IDLE);
 		}
 		/* Intentional fall-through */
 	case EC_REBOOT_HIBERNATE:
@@ -925,7 +930,8 @@ static void system_common_shutdown(void)
 		CPRINTF("Reboot at shutdown: %d\n", reboot_at_shutdown);
 	handle_pending_reboot(reboot_at_shutdown);
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, system_common_shutdown, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN_COMPLETE, system_common_shutdown,
+	     HOOK_PRIO_DEFAULT);
 
 /*****************************************************************************/
 /* Console and Host Commands */

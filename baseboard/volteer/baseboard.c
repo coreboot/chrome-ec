@@ -193,9 +193,6 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 /* EC thermal management configuration */
 
 /*
- * TODO: b/144941023 - revisit thermal limits with each board spin.
- */
-/*
  * Tiger Lake specifies 100 C as maximum TDP temperature.  THRMTRIP# occurs at
  * 130 C.  However, sensor is located next to DDR, so we need to use the lower
  * DDR temperature limit (85 C)
@@ -220,7 +217,8 @@ const static struct ec_thermal_config thermal_cpu = {
  * Charger max recommended temperature 100C, max absolute temperature 125C
  * PP3300 regulator: operating range -40 C to 145 C
  *
- * Inductors: waiting on info from hardware team, assuming 80 C for now
+ * Inductors: limit of 125c
+ * PCB: limit is 80c
  */
 const static struct ec_thermal_config thermal_inductor = {
 	.temp_host = {
@@ -275,7 +273,7 @@ static const struct tcpc_config_t tcpc_config_p1_usb3 = {
 		.port = I2C_PORT_USB_C1,
 		.addr_flags = PS8751_I2C_ADDR1_FLAGS,
 	},
-	.flags = TCPC_FLAGS_TCPCI_REV2_0,
+	.flags = TCPC_FLAGS_TCPCI_REV2_0 | TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
 	.drv = &ps8xxx_tcpm_drv,
 	.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 };
@@ -494,8 +492,6 @@ void bc12_interrupt(enum gpio_signal signal)
 
 int board_set_active_charge_port(int port)
 {
-	/* TODO: b/140561826 - check correct operation for Volteer */
-
 	int is_valid_port = (port >= 0 &&
 			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
@@ -558,7 +554,15 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 
 void board_overcurrent_event(int port, int is_overcurrented)
 {
-	/* TODO: b/140561826 - check correct operation for Volteer */
+	/* Note that the level is inverted because the pin is active low. */
+	switch (port) {
+	case USBC_PORT_C0:
+		gpio_set_level(GPIO_USB_C0_OC_ODL, !is_overcurrented);
+		break;
+	case USBC_PORT_C1:
+		gpio_set_level(GPIO_USB_C1_OC_ODL, !is_overcurrented);
+		break;
+	}
 }
 
 static void baseboard_init(void)
@@ -588,6 +592,11 @@ uint8_t get_board_id(void)
 	return board_id;
 }
 
+enum usb_db_id get_usb_db_type(void)
+{
+	return usb_db_type;
+}
+
 uint32_t get_fw_config(void)
 {
 	return fw_config;
@@ -606,6 +615,7 @@ __overridable void config_volteer_gpios(void)
 {
 }
 
+static const char *db_type_prefix = "USB DB type: ";
 /*
  * Read CBI from i2c eeprom and initialize variables for board variants
  *
@@ -631,7 +641,7 @@ static void cbi_init(void)
 	/* FW config */
 	if (cbi_get_fw_config(&cbi_val) != EC_SUCCESS) {
 		CPRINTS("CBI: Read FW config failed, assuming USB4");
-		usb_db_val = USB_DB_USB4;
+		usb_db_val = USB_DB_USB4_GEN2;
 	} else {
 		fw_config = cbi_val;
 		usb_db_val = CBI_FW_CONFIG_USB_DB_TYPE(cbi_val);
@@ -639,17 +649,20 @@ static void cbi_init(void)
 
 	switch (usb_db_val) {
 	case USB_DB_NONE:
-		CPRINTS("Daughterboard type: None");
+		CPRINTS("%sNone", db_type_prefix);
 		break;
-	case USB_DB_USB4:
-		CPRINTS("Daughterboard type: USB4");
+	case USB_DB_USB4_GEN2:
+		CPRINTS("%sUSB4 Gen1/2", db_type_prefix);
+		break;
+	case USB_DB_USB4_GEN3:
+		CPRINTS("%sUSB4 Gen3", db_type_prefix);
 		break;
 	case USB_DB_USB3:
 		config_db_usb3();
-		CPRINTS("Daughterboard type: USB3");
+		CPRINTS("%sUSB3", db_type_prefix);
 		break;
 	default:
-		CPRINTS("Daughterboard ID %d not supported", usb_db_val);
+		CPRINTS("%sID %d not supported", db_type_prefix, usb_db_val);
 		usb_db_val = USB_DB_NONE;
 	}
 	usb_db_type = usb_db_val;

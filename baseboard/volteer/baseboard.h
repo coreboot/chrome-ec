@@ -85,11 +85,6 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
-/* Camera VSYNC */
-#define CONFIG_SYNC
-#define CONFIG_SYNC_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
-
 /* Thermal features */
 #define CONFIG_FANS			FAN_CH_COUNT
 #define CONFIG_TEMP_SENSOR
@@ -169,6 +164,9 @@
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
 #define CONFIG_CMD_USB_PD_PE
+
+/* Enable USB3.2 DRD */
+#define CONFIG_USB_PD_USB32_DRD
 
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
@@ -274,8 +272,9 @@ enum usbc_port {
 
 enum usb_db_id {
 	USB_DB_NONE = 0,
-	USB_DB_USB4 = 1,
+	USB_DB_USB4_GEN2 = 1,
 	USB_DB_USB3 = 2,
+	USB_DB_USB4_GEN3 = 3,
 	USB_DB_COUNT
 };
 
@@ -309,6 +308,7 @@ void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 
 unsigned char get_board_id(void);
+enum usb_db_id get_usb_db_type(void);
 
 /**
  * Configure GPIOs based on the CBI board version.  Boards in the Volteer

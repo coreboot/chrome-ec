@@ -63,6 +63,8 @@ int pd_set_power_supply_ready(int port)
 
 	gpio_set_level(GPIO_EN_USBC_CHARGE_L, 1);
 	gpio_set_level(GPIO_EN_PP5000_USBC, 1);
+	if (IS_ENABLED(CONFIG_CHARGER_OTG) && IS_ENABLED(CONFIG_CHARGER_ISL9238C))
+		charger_set_current(CHARGER_SOLO, 0);
 
 	/* notify host of power info change */
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
@@ -158,7 +160,7 @@ __override int svdm_enter_dp_mode(int port, uint32_t mode_caps)
 
 __override int svdm_dp_config(int port, uint32_t *payload)
 {
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 	int status = dp_status[port];
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	int pin_mode;

@@ -3,12 +3,15 @@
  * found in the LICENSE file.
  */
 
+#include "adc.h"
+#include "adc_chip.h"
 #include "button.h"
 #include "charge_state_v2.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "driver/retimer/tusb544.h"
+#include "driver/temp_sensor/sb_tsi.h"
 #include "driver/usb_mux/amd_fp5.h"
 #include "driver/usb_mux/ps8743.h"
 #include "extpower.h"
@@ -24,6 +27,7 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
+#include "temp_sensor.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 
@@ -156,20 +160,26 @@ const struct mft_t mft_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
 /*****************************************************************************
- * USB-A Retimer
+ * Retimers
  */
 
-static void usba_retimer_on(void)
+static void retimers_on(void)
 {
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
-}
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, usba_retimer_on, HOOK_PRIO_DEFAULT);
 
-static void usba_retimer_off(void)
+	/* hdmi retimer power on */
+	ioex_set_level(IOEX_HDMI_POWER_EN_DB, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, retimers_on, HOOK_PRIO_DEFAULT);
+
+static void retimers_off(void)
 {
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
+
+	/* hdmi retimer power off */
+	ioex_set_level(IOEX_HDMI_POWER_EN_DB, 0);
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usba_retimer_off, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, retimers_off, HOOK_PRIO_DEFAULT);
 
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
@@ -269,31 +279,14 @@ static int board_tusb544_mux_set(const struct usb_mux *me,
 static int board_ps8743_mux_set(const struct usb_mux *me,
 				mux_state_t mux_state)
 {
-	int rv = EC_SUCCESS;
-	int reg = 0;
-
-	rv = ps8743_read(me, PS8743_REG_MODE, &reg);
-	if (rv)
-		return rv;
-
-	/* Disable FLIP pin, enable I2C control. */
-	reg |= PS8743_MODE_FLIP_REG_CONTROL;
-	/* Disable CE_DP pin, enable I2C control. */
-	reg |= PS8743_MODE_DP_REG_CONTROL;
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
+	if (mux_state & USB_PD_MUX_DP_ENABLED)
 		/* Enable IN_HPD on the DB */
 		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
-		/* Disable USB mode on DB */
-		ioex_set_level(IOEX_USB_C1_DATA_EN, 0);
-	} else {
+	else
 		/* Disable IN_HPD on the DB */
 		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
-		/* Enable USB mode on DB */
-		ioex_set_level(IOEX_USB_C1_DATA_EN, 1);
-	}
-	return ps8743_write(me, PS8743_REG_MODE, reg);
+
+	return EC_SUCCESS;
 }
 
 const struct usb_mux usbc1_tusb544 = {
@@ -323,9 +316,31 @@ void setup_fw_config(void)
 	setup_mux();
 
 	if (ec_config_has_hdmi_conn_hpd())
-		ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
+		gpio_enable_interrupt(GPIO_DP1_HPD_EC_IN);
 }
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
+
+static void hdmi_hpd_handler(void)
+{
+	/* Pass HPD through from DB OPT1 HDMI connector to AP's DP1. */
+	int hpd = gpio_get_level(GPIO_DP1_HPD_EC_IN);
+
+	gpio_set_level(GPIO_DP1_HPD, hpd);
+	ccprints("HDMI HPD %d", hpd);
+	pi3hdx1204_retimer_power();
+}
+DECLARE_DEFERRED(hdmi_hpd_handler);
+
+void hdmi_hpd_interrupt(enum gpio_signal signal)
+{
+	/* Debounce for 2 msec. */
+	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
+}
+
+__override int check_hdmi_hpd_status(void)
+{
+	return gpio_get_level(GPIO_DP1_HPD_EC_IN);
+}
 
 /*****************************************************************************
  * Fan
@@ -350,6 +365,46 @@ const struct fan_t fans[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
+
+const struct adc_t adc_channels[] = {
+	[ADC_TEMP_SENSOR_CHARGER] = {
+		.name = "CHARGER",
+		.input_ch = NPCX_ADC_CH2,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_SOC] = {
+		.name = "SOC",
+		.input_ch = NPCX_ADC_CH3,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+const struct temp_sensor_t temp_sensors[] = {
+	[TEMP_SENSOR_CHARGER] = {
+		.name = "Charger",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = TEMP_SENSOR_CHARGER,
+	},
+	[TEMP_SENSOR_SOC] = {
+		.name = "SOC",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = TEMP_SENSOR_SOC,
+	},
+	[TEMP_SENSOR_CPU] = {
+		.name = "CPU",
+		.type = TEMP_SENSOR_TYPE_CPU,
+		.read = sb_tsi_get_val,
+		.idx = 0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 const static struct ec_thermal_config thermal_thermistor = {
 	.temp_host = {

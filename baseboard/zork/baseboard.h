@@ -144,12 +144,12 @@
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_COMM_LOCKED
+#define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
-#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
@@ -159,25 +159,25 @@
 #define CONFIG_USBC_PPC
 #define CONFIG_USBC_PPC_SBU
 #define CONFIG_USBC_PPC_AOZ1380
-#define CONFIG_USBC_PPC_NX20P3483
 #define CONFIG_USBC_RETIMER_PI3HDX1204
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_MUX_AMD_FP5
-#define CONFIG_USB_MUX_RUNTIME_CONFIG
 
 #if defined(VARIANT_ZORK_TREMBYLE)
+	#define CONFIG_USB_PD_PORT_MAX_COUNT 2
+	#define CONFIG_USBC_PPC_NX20P3483
 	#define CONFIG_USBC_RETIMER_PS8802
 	#define CONFIG_USBC_RETIMER_PS8818
 	#define CONFIG_IO_EXPANDER_PORT_COUNT USBC_PORT_COUNT
+	#define CONFIG_USB_MUX_RUNTIME_CONFIG
+	/* USB-A config */
+	#define GPIO_USB1_ILIM_SEL IOEX_USB_A0_CHARGE_EN_L
+	#define GPIO_USB2_ILIM_SEL IOEX_USB_A1_CHARGE_EN_DB_L
 #elif defined(VARIANT_ZORK_DALBOZ)
-	#define CONFIG_USB_MUX_PS8740
-	#define CONFIG_USB_MUX_PS8743
-	#define CONFIG_IO_EXPANDER_PCAL6408
 	#define CONFIG_IO_EXPANDER_PORT_COUNT IOEX_PORT_COUNT
-	#define CONFIG_USB_PORT_ENABLE_DYNAMIC
 #endif
 
 /* USB-A config */
@@ -186,8 +186,6 @@
 #define CONFIG_USB_PORT_POWER_SMART_CDP_SDP_ONLY
 #define CONFIG_USB_PORT_POWER_SMART_DEFAULT_MODE USB_CHARGE_MODE_CDP
 #define CONFIG_USB_PORT_POWER_SMART_INVERTED
-#define GPIO_USB1_ILIM_SEL IOEX_USB_A0_CHARGE_EN_L
-#define GPIO_USB2_ILIM_SEL IOEX_USB_A1_CHARGE_EN_DB_L
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
@@ -273,28 +271,12 @@
 #include "math_util.h"
 #include "registers.h"
 
-enum adc_channel {
-	ADC_TEMP_SENSOR_CHARGER,
-	ADC_TEMP_SENSOR_SOC,
-	ADC_CH_COUNT
-};
-
 enum power_signal {
 	X86_SLP_S3_N,
 	X86_SLP_S5_N,
 	X86_S0_PGOOD,
 	X86_S5_PGOOD,
 	POWER_SIGNAL_COUNT
-};
-
-enum temp_sensor_id {
-	TEMP_SENSOR_CHARGER = 0,
-	TEMP_SENSOR_SOC,
-	TEMP_SENSOR_CPU,
-#ifdef BOARD_MORPHIUS
-	TEMP_SENSOR_5V_REGULATOR,
-#endif
-	TEMP_SENSOR_COUNT
 };
 
 enum fan_channel {
@@ -309,11 +291,13 @@ enum usba_port {
 	USBA_PORT_COUNT
 };
 
+#ifdef VARIANT_ZORK_TREMBYLE
 enum usbc_port {
 	USBC_PORT_C0 = 0,
 	USBC_PORT_C1,
 	USBC_PORT_COUNT
 };
+#endif
 
 enum sensor_id {
 	LID_ACCEL,
@@ -321,19 +305,6 @@ enum sensor_id {
 	BASE_GYRO,
 	SENSOR_COUNT,
 };
-
-#if defined(VARIANT_ZORK_DALBOZ)
-	enum ioex_port {
-		IOEX_C0_NCT3807 = 0,
-		IOEX_C1_NCT3807,
-		IOEX_HDMI_PCAL6408,
-		IOEX_PORT_COUNT
-	};
-
-	#define PORT_TO_HPD(port) ((port == 0) \
-		? GPIO_USB3_C0_DP2_HPD \
-		: GPIO_DP1_HPD)
-#endif
 
 /*
  * Matrix to rotate accelerators into the standard reference frame.  The default
@@ -352,21 +323,29 @@ enum sensor_id {
  */
 extern mat33_fp_t zork_base_standard_ref;
 
+extern const struct thermistor_info thermistor_info;
+
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
 
+void mst_hpd_interrupt(enum ioex_signal signal);
+
+#ifdef VARIANT_ZORK_TREMBYLE
 void board_reset_pd_mcu(void);
 
 /* Common definition for the USB PD interrupt handlers. */
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
-void hdmi_hpd_interrupt(enum ioex_signal signal);
-void mst_hpd_interrupt(enum ioex_signal signal);
+#endif
 
 #ifdef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
 int board_tcpc_fast_role_swap_enable(int port, int enable);
 #endif
+
+void pi3hdx1204_retimer_power(void);
+__override_proto int check_hdmi_hpd_status(void);
+int board_get_temp(int idx, int *temp_k);
 
 #endif /* !__ASSEMBLER__ */
 

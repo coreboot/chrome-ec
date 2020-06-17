@@ -472,7 +472,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .active_mask = SENSOR_ACTIVE_S0_S3_S5,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
+	 .location = MOTIONSENSE_LOC_BASE,
 	 .drv = &bmi160_drv,
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
@@ -493,7 +493,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .active_mask = SENSOR_ACTIVE_S0_S3_S5,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_GYRO,
-	 .location = MOTIONSENSE_LOC_LID,
+	 .location = MOTIONSENSE_LOC_BASE,
 	 .drv = &bmi160_drv,
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
@@ -511,14 +511,18 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 /* This callback disables keyboard when convertibles are fully open */
 void lid_angle_peripheral_enable(int enable)
 {
-	/*
-	 * If the lid is in tablet position via other sensors,
-	 * ignore the lid angle, which might be faulty then
-	 * disable keyboard.
-	 */
-	if (tablet_get_mode())
-		enable = 0;
+	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_s0)
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	}
 }
 #endif

@@ -34,7 +34,7 @@ enum pe_dpm_request {
 	DPM_REQUEST_SOURCE_CAP          = BIT(7),
 	DPM_REQUEST_NEW_POWER_LEVEL     = BIT(8),
 	DPM_REQUEST_EXIT_DP_MODE        = BIT(9),
-	DPM_REQUEST_SVDM                = BIT(10),
+	DPM_REQUEST_VDM                 = BIT(10),
 	DPM_REQUEST_BIST_RX             = BIT(11),
 	DPM_REQUEST_BIST_TX             = BIT(12),
 	DPM_REQUEST_SNK_STARTUP         = BIT(13),
@@ -178,5 +178,16 @@ void pe_set_sysjump(void);
  * @param port USB-C port number
  */
 void pe_invalidate_explicit_contract(int port);
+
+/*
+ * Return true if the PE is is within an atomic
+ * messaging sequence that it initiated with a SOP* port partner.
+ *
+ * Note the PRL layer polls this instead of using AMS_START and AMS_END
+ * notification from the PE that is called out by the spec
+ *
+ * @param port USB-C port number
+ */
+bool pe_in_local_ams(int port);
 #endif /* __CROS_EC_USB_PE_H */
 

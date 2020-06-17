@@ -342,11 +342,33 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 int extpower_is_present(void)
 {
+	return pd_check_vbus_level(0, VBUS_PRESENT) ||
+	       pd_check_vbus_level(1, VBUS_PRESENT);
+}
+
+__override void ocpc_get_pid_constants(int *kp, int *kp_div,
+				       int *ki, int *ki_div,
+				       int *kd, int *kd_div)
+{
 	/*
-	 * TODO(b:146651593) We can likely use the charger IC to determine VBUS
-	 * presence.
+	 * Early boards need different constants due to a change in charger IC
+	 * silicon revision.
 	 */
-	return pd_snk_is_vbus_provided(0) || pd_snk_is_vbus_provided(1);
+	if (system_get_board_version() >= 0) {
+		*kp = 1;
+		*kp_div = 128;
+		*ki = 1;
+		*ki_div = 1024;
+		*kd = 0;
+		*kd_div = 1;
+	} else {
+		*kp = 1;
+		*kp_div = 4;
+		*ki = 1;
+		*ki_div = 15;
+		*kd = 1;
+		*kd_div = 10;
+	}
 }
 
 int pd_snk_is_vbus_provided(int port)

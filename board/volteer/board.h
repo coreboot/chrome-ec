@@ -21,6 +21,9 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
+/* Chipset features */
+#define CONFIG_POWER_PP5000_CONTROL
+
 /* LED defines */
 #define CONFIG_LED_PWM
 /* Although there are 2 LEDs, they are both controlled by the same lines. */
@@ -72,6 +75,9 @@
 #define CONFIG_USB_PD_USB4
 
 /* USB Type A Features */
+#define USB_PORT_COUNT			1
+#define CONFIG_USB_PORT_POWER_DUMB
+
 
 /* BC 1.2 */
 
@@ -152,7 +158,6 @@ enum sensor_id {
 	BASE_GYRO,
 	CLEAR_ALS,
 	RGB_ALS,
-	VSYNC,
 	SENSOR_COUNT,
 };
 

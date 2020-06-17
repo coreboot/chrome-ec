@@ -125,7 +125,7 @@ static enum ec_status hc_remote_pd_set_amode(struct host_cmd_handler_args *args)
 
 	switch (p->cmd) {
 	case PD_EXIT_MODE:
-		if (pd_dfp_exit_mode(p->port, p->svid, p->opos))
+		if (pd_dfp_exit_mode(p->port, TCPC_TX_SOP, p->svid, p->opos))
 			pd_send_vdm(p->port, p->svid,
 				    CMD_EXIT_MODE | VDO_OPOS(p->opos), NULL, 0);
 		else {
@@ -134,7 +134,7 @@ static enum ec_status hc_remote_pd_set_amode(struct host_cmd_handler_args *args)
 		}
 		break;
 	case PD_ENTER_MODE:
-		if (pd_dfp_enter_mode(p->port, p->svid, p->opos))
+		if (pd_dfp_enter_mode(p->port, TCPC_TX_SOP, p->svid, p->opos))
 			pd_send_vdm(p->port, p->svid, CMD_ENTER_MODE |
 				    VDO_OPOS(p->opos), NULL, 0);
 		break;
@@ -190,10 +190,10 @@ static enum ec_status hc_remote_pd_get_amode(struct host_cmd_handler_args *args)
 	r->opos = 0;
 	memcpy(r->vdo, pd_get_mode_vdo(p->port, p->svid_idx, TCPC_TX_SOP),
 		sizeof(uint32_t) * PDO_MODES);
-	modep = pd_get_amode_data(p->port, r->svid);
+	modep = pd_get_amode_data(p->port, TCPC_TX_SOP, r->svid);
 
 	if (modep)
-		r->opos = pd_alt_mode(p->port, r->svid);
+		r->opos = pd_alt_mode(p->port, TCPC_TX_SOP, r->svid);
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
@@ -296,6 +296,7 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 	struct ec_response_usb_pd_control_v1 *r_v1 = args->response;
 	struct ec_response_usb_pd_control *r = args->response;
 	const char *task_state_name;
+	mux_state_t mux_state;
 
 	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
@@ -360,8 +361,16 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 		r_v2->control_flags = get_pd_control_flags(p->port);
 		if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
 			r_v2->dp_mode = get_dp_pin_mode(p->port);
-			r_v2->cable_speed = get_tbt_cable_speed(p->port);
-			r_v2->cable_gen = get_tbt_rounded_support(p->port);
+			mux_state = usb_mux_get(p->port);
+			if (mux_state & USB_PD_MUX_USB4_ENABLED) {
+				r_v2->cable_speed =
+					get_usb4_cable_speed(p->port);
+			} else if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED) {
+				r_v2->cable_speed =
+					get_tbt_cable_speed(p->port);
+				r_v2->cable_gen =
+					get_tbt_rounded_support(p->port);
+			}
 		}
 
 		if (args->version == 1)

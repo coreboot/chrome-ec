@@ -795,7 +795,8 @@
 #undef CONFIG_CHARGER_BQ24773
 #undef CONFIG_CHARGER_BQ25710
 #undef CONFIG_CHARGER_ISL9237
-#undef CONFIG_CHARGER_ISL9238
+#undef CONFIG_CHARGER_ISL9238 /* For ISL9238 A/B */
+#undef CONFIG_CHARGER_ISL9238C
 #undef CONFIG_CHARGER_ISL9241
 #undef CONFIG_CHARGER_MT6370
 #undef CONFIG_CHARGER_RAA489000
@@ -1023,6 +1024,14 @@
  * same as the charge port index.
  */
 #undef CONFIG_OCPC
+
+/*
+ * Boards using OCPC must define this value in order to seed the starting board
+ * battery and system resistance between the secondary charger IC and the
+ * battery.  This should be at a minimum the Rds(on) resistance of the BFET plus
+ * the series sense resistor.
+ */
+#undef CONFIG_OCPC_DEF_RBATT_MOHMS
 
 /* Enable trickle charging */
 #undef CONFIG_TRICKLE_CHARGING
@@ -3567,6 +3576,22 @@
 #undef CONFIG_STREAM_USB
 
 /*****************************************************************************/
+/* UART HOST COMMAND config */
+
+/* Includes USART as host command interface */
+#undef CONFIG_USART_HOST_COMMAND
+
+/* Pointer to USART HW config of physical instance */
+#undef CONFIG_UART_HOST_COMMAND_HW
+
+/*
+ * USART baudrate for host command interface.
+ * Typically configured at 3000000 to handle use cases
+ * like firmware download and big packets in a reasonable time.
+ */
+#undef CONFIG_UART_HOST_COMMAND_BAUD_RATE
+
+/*****************************************************************************/
 /* UART config */
 
 /* Baud rate for UARTs */
@@ -3655,6 +3680,12 @@
 #undef CONFIG_USB_PD_TCPMV1
 
 /*
+ * Enables PD protocol state names in the TPCMv1 console output.
+ * Disable to save ~900 bytes in flash space.
+ */
+#define CONFIG_USB_PD_TCPMV1_DEBUG
+
+/*
  * Enables Version 2 of the Power Delivery state machine
  *
  * Along with CONFIG_USB_PD_TCPMV2, you must ensure a device type is also
@@ -3704,6 +3735,12 @@
 
 /* HPD is sent to the GPU from the EC via a GPIO */
 #undef CONFIG_USB_PD_DP_HPD_GPIO
+
+/*
+ * HPD is sent to the GPU from the EC via a GPIO, and the HPD GPIO level has
+ * to be handled separately.
+ */
+#undef CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
 
 /* Check if max voltage request is allowed before each request */
 #undef CONFIG_USB_PD_CHECK_MAX_REQUEST_ALLOWED
@@ -3867,8 +3904,11 @@
 /* Enable to enter into USB4 mode between two port partners */
 #undef CONFIG_USB_PD_USB4
 
-/* Enable if the board supports USB3.2 devices */
-#undef CONFIG_USB_PD_USB32
+/* Enable if port is cable of operating as an USB4 device */
+#undef CONFIG_USB_PD_USB4_DRD
+
+/* Enable if port is cable of operating as an USB3.2 device */
+#undef CONFIG_USB_PD_USB32_DRD
 
 /* Enable if the board is Thunderbolt Gen 3 capable */
 #undef CONFIG_USB_PD_TBT_GEN3_CAPABLE
@@ -3901,6 +3941,7 @@
 #undef CONFIG_USB_PD_TCPM_ANX7688
 #undef CONFIG_USB_PD_TCPM_NCT38XX
 #undef CONFIG_USB_PD_TCPM_PS8751
+#undef CONFIG_USB_PD_TCPM_PS8705
 #undef CONFIG_USB_PD_TCPM_PS8805
 #undef CONFIG_USB_PD_TCPM_PS8815
 #undef CONFIG_USB_PD_TCPM_MT6370
@@ -4337,6 +4378,9 @@
  *
  * EFS1 is being deprecated. EFS2 is faster, doesn't need two slots, and
  * supports rollback protection.
+ *
+ * EFS2 runs in the system task (a.k.a. main) and the hook task (for shutdown
+ * hook). Their stack sizes must be big enough for sha256.
  */
 #undef CONFIG_VBOOT_EFS
 #undef CONFIG_VBOOT_EFS2
@@ -4850,7 +4894,7 @@
  * architecture.
  */
 #if defined(CONFIG_CHARGER_ISL9237) || defined(CONFIG_CHARGER_ISL9238) || \
-	defined(CONFIG_CHARGER_ISL9241) || \
+	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
@@ -4897,6 +4941,12 @@
 	defined(CONFIG_USB_PD_DISCHARGE_TCPC) || \
 	defined(CONFIG_USB_PD_DISCHARGE_PPC)
 #define CONFIG_USB_PD_DISCHARGE
+#endif
+
+/*****************************************************************************/
+/* Define derived config options for DP HPD GPIO */
+#ifdef CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
+#define CONFIG_USB_PD_DP_HPD_GPIO
 #endif
 
 /*****************************************************************************/
@@ -5118,13 +5168,6 @@
 #endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
 
 /*****************************************************************************/
-/*
- * The board is Gen3 compatible and supports USB3.2 devices if it supports
- * USB4 mode.
- */
-#ifdef CONFIG_USB_PD_USB4
-#define CONFIG_USB_PD_USB32
-#endif /* CONFIG_USB_PD_USB4 */
 
 /*
  * Apply fuzzer and test config overrides last, since fuzzers and tests need to

@@ -32,16 +32,6 @@
 	#define CONFIG_FLASH_SIZE (512 * 1024)
 	#define CONFIG_SPI_FLASH_REGS
 	#define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
-
-	/* USB defines specific to external TCPCs */
-	#define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-	#define CONFIG_USB_PD_VBUS_DETECT_TCPC
-	#define CONFIG_USB_PD_DISCHARGE_TCPC
-	/* #define CONFIG_USB_PD_TCPC_LOW_POWER */
-
-	/* Variant references the TCPCs to determine Vbus sourcing */
-	#define CONFIG_USB_PD_5V_EN_CUSTOM
-
 #elif defined(VARIANT_DEDEDE_EC_IT8320)
 	/* Flash clock must be > (50Mhz / 2) */
 	#define CONFIG_IT83XX_FLASH_CLOCK_48MHZ
@@ -129,7 +119,6 @@
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 15001
 #define CONFIG_USB_CHARGER
 #define CONFIG_TRICKLE_CHARGING
-#undef  CONFIG_CHARGER_SINGLE_CHIP
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_COL2_INVERTED
@@ -169,7 +158,6 @@
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
-#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_REV30
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_TCPCI
@@ -228,12 +216,6 @@
 #else
 #error "Must define a VARIANT_DEDEDE_EC!"
 #endif
-
-enum chg_id {
-	CHARGER_PRIMARY,
-	CHARGER_SECONDARY,
-	CHARGER_NUM,
-};
 
 /* Interrupt handler for signals that are used to generate ALL_SYS_PGOOD. */
 void baseboard_all_sys_pgood_interrupt(enum gpio_signal signal);

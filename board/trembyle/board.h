@@ -63,6 +63,12 @@
 
 #ifndef __ASSEMBLER__
 
+enum adc_channel {
+	ADC_TEMP_SENSOR_CHARGER,
+	ADC_TEMP_SENSOR_SOC,
+	ADC_CH_COUNT
+};
+
 enum battery_type {
 	BATTERY_AP18F4M,
 	BATTERY_TYPE_COUNT,
@@ -78,6 +84,13 @@ enum pwm_channel {
 	PWM_CH_KBLIGHT = 0,
 	PWM_CH_FAN,
 	PWM_CH_COUNT
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_CHARGER = 0,
+	TEMP_SENSOR_SOC,
+	TEMP_SENSOR_CPU,
+	TEMP_SENSOR_COUNT
 };
 
 
@@ -200,6 +213,8 @@ extern const struct usb_mux usbc0_pi3dpx1207_usb_retimer;
 extern const struct usb_mux usbc1_ps8802;
 extern const struct usb_mux usbc1_ps8818;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
+
+void hdmi_hpd_interrupt(enum ioex_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

@@ -205,18 +205,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = NULL,
 		.default_range = 0x10000, /* scale = 1x, uscale = 0 */
 	},
-
-	[VSYNC] = {
-		.name = "Camera VSYNC",
-		.active_mask = SENSOR_ACTIVE_S0,
-		.chip = MOTIONSENSE_CHIP_GPIO,
-		.type = MOTIONSENSE_TYPE_SYNC,
-		.location = MOTIONSENSE_LOC_CAMERA,
-		.drv = &sync_drv,
-		.default_range = 0,
-		.min_frequency = 0,
-		.max_frequency = 1,
-	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
@@ -230,8 +218,6 @@ static void baseboard_sensors_init(void)
 {
 	/* Note - BMA253 interrupt unused by EC */
 
-	/* Enable gpio interrupt for camera vsync */
-	gpio_enable_interrupt(GPIO_EC_CAM_VSYN_SLP_S0IX);
 	/* Enable interrupt for the TCS3400 color light sensor */
 	gpio_enable_interrupt(GPIO_EC_ALS_RGB_INT_L);
 	/* Enable interrupt for the BMI260 accel/gyro sensor */
@@ -242,14 +228,18 @@ DECLARE_HOOK(HOOK_INIT, baseboard_sensors_init, HOOK_PRIO_DEFAULT);
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
 {
-	/*
-	 * If the lid is in tablet position via other sensors,
-	 * ignore the lid angle, which might be faulty then
-	 * disable keyboard.
-	 */
-	if (tablet_get_mode())
-		enable = 0;
+	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_s0)
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	}
 }
 #endif

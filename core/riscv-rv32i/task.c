@@ -165,7 +165,7 @@ static uint32_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
 int start_called;  /* Has task swapping started */
 
 /* in interrupt context */
-static int in_interrupt;
+static volatile int in_interrupt;
 /* Interrupt number of EC modules */
 volatile int ec_int;
 /* Interrupt group of EC INTC modules */
@@ -202,6 +202,12 @@ void __ram_code interrupt_enable(void)
 inline int in_interrupt_context(void)
 {
 	return in_interrupt;
+}
+
+int in_soft_interrupt_context(void)
+{
+	/* group 16 is reserved for soft-irq */
+	return in_interrupt_context() && ec_int_group == 16;
 }
 
 task_id_t __ram_code task_get_current(void)
@@ -320,8 +326,13 @@ void __ram_code start_irq_handler(void)
 		ec_int = sw_int_num;
 		ec_int_group = 16;
 	} else {
-		/* Determine interrupt number */
+		/*
+		 * Determine interrupt number.
+		 * -1 if it cannot find the corresponding interrupt source.
+		 */
 		ec_int = chip_get_ec_int();
+		if (ec_int == -1)
+			goto error;
 		ec_int_group = chip_get_intc_group(ec_int);
 	}
 
@@ -338,6 +349,10 @@ void __ram_code start_irq_handler(void)
 	if ((ec_int > 0) && (ec_int < ARRAY_SIZE(irq_dist)))
 		irq_dist[ec_int]++;
 #endif
+
+error:
+	/* cannot use return statement because a0 has been used */
+	asm volatile ("add t0, zero, %0" :: "r"(ec_int));
 
 	/* restore a0, a1, and a2 */
 	asm volatile ("lw a0, 0(sp)");

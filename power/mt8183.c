@@ -109,6 +109,9 @@ static const struct power_seq_op s3s5_power_seq[] = {
 	{ GPIO_AP_SYS_RST_L, 0, 0 },
 	/* Assert watchdog to PMIC (there may be a 1.6ms debounce) */
 	{ GPIO_PMIC_WATCHDOG_L, 0, 3 },
+#ifdef BOARD_KAKADU
+        { GPIO_USB_C0_VCONN_EN_OD, 0, 0 },
+#endif
 };
 
 static int forcing_shutdown;
@@ -485,6 +488,9 @@ enum power_state power_handle_state(enum power_state state)
 
 		gpio_disable_interrupt(GPIO_AP_EC_WATCHDOG_L);
 		power_seq_run(s3s5_power_seq, ARRAY_SIZE(s3s5_power_seq));
+
+		/* Call hooks after we remove power rails */
+		hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 
 		/* Start shutting down */
 		return POWER_S5;

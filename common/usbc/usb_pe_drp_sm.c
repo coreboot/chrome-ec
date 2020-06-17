@@ -17,6 +17,8 @@
 #include "tcpm.h"
 #include "util.h"
 #include "usb_common.h"
+#include "usb_dp_alt_mode.h"
+#include "usb_pd_dpm.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
@@ -216,6 +218,7 @@ enum usb_pe_state {
 	PE_DRS_SEND_SWAP,
 	PE_PRS_SRC_SNK_EVALUATE_SWAP,
 	PE_PRS_SRC_SNK_TRANSITION_TO_OFF,
+	PE_PRS_SRC_SNK_ASSERT_RD,
 	PE_PRS_SRC_SNK_WAIT_SOURCE_ON,
 	PE_PRS_SRC_SNK_SEND_SWAP,
 	PE_PRS_SNK_SRC_EVALUATE_SWAP,
@@ -229,7 +232,6 @@ enum usb_pe_state {
 	PE_VCS_TURN_ON_VCONN_SWAP,
 	PE_VCS_TURN_OFF_VCONN_SWAP,
 	PE_VCS_SEND_PS_RDY_SWAP,
-	PE_DO_PORT_DISCOVERY,
 	PE_VDM_SEND_REQUEST,
 	PE_VDM_IDENTITY_REQUEST_CBL,
 	PE_INIT_PORT_VDM_IDENTITY_REQUEST,
@@ -306,6 +308,7 @@ static const char * const pe_state_names[] = {
 	[PE_DRS_SEND_SWAP] = "PE_DRS_Send_Swap",
 	[PE_PRS_SRC_SNK_EVALUATE_SWAP] = "PE_PRS_SRC_SNK_Evaluate_Swap",
 	[PE_PRS_SRC_SNK_TRANSITION_TO_OFF] = "PE_PRS_SRC_SNK_Transition_To_Off",
+	[PE_PRS_SRC_SNK_ASSERT_RD] = "PE_PRS_SRC_SNK_Assert_Rd",
 	[PE_PRS_SRC_SNK_WAIT_SOURCE_ON] = "PE_PRS_SRC_SNK_Wait_Source_On",
 	[PE_PRS_SRC_SNK_SEND_SWAP] = "PE_PRS_SRC_SNK_Send_Swap",
 	[PE_PRS_SNK_SRC_EVALUATE_SWAP] = "PE_PRS_SNK_SRC_Evaluate_Swap",
@@ -319,7 +322,6 @@ static const char * const pe_state_names[] = {
 	[PE_VCS_TURN_ON_VCONN_SWAP] = "PE_VCS_Turn_On_Vconn_Swap",
 	[PE_VCS_TURN_OFF_VCONN_SWAP] = "PE_VCS_Turn_Off_Vconn_Swap",
 	[PE_VCS_SEND_PS_RDY_SWAP] = "PE_VCS_Send_Ps_Rdy_Swap",
-	[PE_DO_PORT_DISCOVERY] = "PE_Do_Port_Discovery",
 	[PE_VDM_SEND_REQUEST] = "PE_VDM_Send_Request",
 	[PE_VDM_IDENTITY_REQUEST_CBL] = "PE_VDM_Identity_Request_Cbl",
 	[PE_INIT_PORT_VDM_IDENTITY_REQUEST] =
@@ -385,27 +387,6 @@ void pe_set_frs_enable(int port, int enable);
 #endif /* CONFIG_USB_PD_REV30 */
 
 /*
- * NOTE:
- *	DO_PORT_DISCOVERY_START is not actually a vdm command. It is used
- *	to start the port partner discovery process.
- * TODO(b/150611251): Replace with states using new VDM send parent
- */
-enum vdm_cmd {
-	DO_PORT_DISCOVERY_START,
-	DISCOVER_IDENTITY,
-	DISCOVER_SVIDS,
-	DISCOVER_MODES,
-	ENTER_MODE,
-	EXIT_MODE,
-	ATTENTION,
-};
-
-enum port_partner {
-	PORT,
-	CABLE,
-};
-
-/*
  * This enum is used to implement a state machine consisting of at most
  * 3 states, inside a Policy Engine State.
  */
@@ -462,14 +443,16 @@ static struct policy_engine {
 	int32_t vpd_vdo;
 	/* Alternate mode discovery results */
 	struct pd_discovery discovery[DISCOVERY_TYPE_COUNT];
+	/* Active alternate modes */
+	struct partner_active_modes partner_amodes[AMODE_TYPE_COUNT];
+	/* Alternate mode object position */
+	int8_t alt_opos;
 
 	/* Partner type to send */
 	enum tcpm_transmit_type tx_type;
 
 	/* VDM - used to send information to shared VDM Request state */
 	/* TODO(b/150611251): Remove when all VDMs use shared parent */
-	enum port_partner partner_type;
-	uint32_t vdm_cmd;
 	uint32_t vdm_cnt;
 	uint32_t vdm_data[VDO_HDR_SIZE + VDO_MAX_SIZE];
 
@@ -637,6 +620,36 @@ int pd_get_vdo_ver(int port, enum tcpm_transmit_type type)
 		return VDM_VER20;
 }
 
+static inline void send_data_msg(int port, enum tcpm_transmit_type type,
+				 enum pd_data_msg_type msg)
+{
+	/* Clear any previous TX status before sending a new message */
+	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+	prl_send_data_msg(port, type, msg);
+}
+
+static __maybe_unused inline void send_ext_data_msg(
+	int port, enum tcpm_transmit_type type, enum pd_ext_msg_type msg)
+{
+	/* Clear any previous TX status before sending a new message */
+	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+	prl_send_ext_data_msg(port, type, msg);
+}
+
+static inline void send_ctrl_msg(int port, enum tcpm_transmit_type type,
+				 enum pd_ctrl_msg_type msg)
+{
+	/* Clear any previous TX status before sending a new message */
+	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+	prl_send_ctrl_msg(port, type, msg);
+}
+
+/* Compile-time insurance to ensure this code does not call into prl directly */
+#define prl_send_data_msg DO_NOT_USE
+#define prl_send_ext_data_msg DO_NOT_USE
+#define prl_send_ctrl_msg DO_NOT_USE
+
+
 static void pe_init(int port)
 {
 	pe[port].flags = 0;
@@ -657,6 +670,11 @@ static void pe_init(int port)
 int pe_is_running(int port)
 {
 	return local_state[port] == SM_RUN;
+}
+
+bool pe_in_local_ams(int port)
+{
+	return !!PE_CHK_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 }
 
 void pe_set_debug_level(enum debug_level debug_level)
@@ -799,6 +817,16 @@ static void pe_set_frs_enable(int port, int enable)
 }
 #endif /* CONFIG_USB_PD_REV30 */
 
+void pe_set_explicit_contract(int port)
+{
+	PE_SET_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT);
+	pd_update_saved_port_flags(port, PD_BBRMFLG_EXPLICIT_CONTRACT, 1);
+
+	/* Set Rp for collision avoidance */
+	if (IS_ENABLED(CONFIG_USB_PD_REV30))
+		typec_update_cc(port);
+}
+
 void pe_invalidate_explicit_contract(int port)
 {
 	if (IS_ENABLED(CONFIG_USB_PD_REV30))
@@ -806,6 +834,10 @@ void pe_invalidate_explicit_contract(int port)
 
 	PE_CLR_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT);
 	pd_update_saved_port_flags(port, PD_BBRMFLG_EXPLICIT_CONTRACT, 0);
+
+	/* Set Rp for current limit */
+	if (IS_ENABLED(CONFIG_USB_PD_REV30))
+		typec_update_cc(port);
 }
 
 /*
@@ -938,7 +970,6 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 	 * Error during an Interruptible AMS.
 	 */
 	else {
-		PE_SET_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
 		if (pe[port].power_role == PD_ROLE_SINK)
 			set_state_pe(port, PE_SNK_READY);
 		else
@@ -990,8 +1021,6 @@ void pe_message_sent(int port)
 void pd_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
 						int count)
 {
-	pe[port].partner_type = PORT;
-
 	/* Copy VDM Header */
 	pe[port].vdm_data[0] = VDO(vid, ((vid & USB_SID_PD) == USB_SID_PD) ?
 				1 : (PD_VDO_CMD(cmd) <= CMD_ATTENTION),
@@ -1009,19 +1038,42 @@ void pd_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
 void pe_exit_dp_mode(int port)
 {
 	if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-		int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+		int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 
 		if (opos <= 0)
 			return;
 
+		/*
+		 * TODO: Delay deleting the data until after the
+		 * the EXIT_MODE message is sent.
+		 * Unfortunately the callers of this function expect
+		 * the mode to be cleaned up before return.
+		 */
 		CPRINTS("C%d Exiting DP mode", port);
-		if (!pd_dfp_exit_mode(port, USB_SID_DISPLAYPORT, opos))
+		if (!pd_dfp_exit_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT,
+					opos))
 			return;
 
-		pd_send_vdm(port, USB_SID_DISPLAYPORT,
-				CMD_EXIT_MODE | VDO_OPOS(opos), NULL, 0);
+		/*
+		 * Save the opos to be used with the message.
+		 * Request a message to be sent to exit the mode.
+		 */
+		pe[port].alt_opos = opos;
+		pe_dpm_request(port, DPM_REQUEST_EXIT_DP_MODE);
 	}
 }
+
+static void pe_handle_detach(void)
+{
+	const int port = TASK_ID_TO_PD_PORT(task_get_current());
+
+	/*
+	 * PD 3.0 Section 8.3.3.3.8
+	 * Note: The HardResetCounter is reset on a power cycle or Detach.
+	 */
+	pe[port].hard_reset_counter = 0;
+}
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, pe_handle_detach, HOOK_PRIO_DEFAULT);
 
 /*
  * Private functions
@@ -1093,6 +1145,34 @@ static bool common_src_snk_dpm_requests(int port)
 						PD_T_DISCOVER_IDENTITY;
 		}
 		return true;
+	} else if (PE_CHK_DPM_REQUEST(port,
+				     DPM_REQUEST_EXIT_DP_MODE)) {
+		PE_CLR_DPM_REQUEST(port,
+					DPM_REQUEST_EXIT_DP_MODE);
+		/*
+		 * Init VDM CMD_EXIT_MODE message.
+		 * alt_opos must be set with the opos to be sent.
+		 * TODO: Convert this to use DPM_REQUEST_VDM.
+		 */
+		pe[port].tx_type = TCPC_TX_SOP;
+		pe[port].vdm_data[0] = VDO(
+					USB_SID_DISPLAYPORT,
+					1, /* structured */
+					VDO_SVDM_VERS(
+					    pd_get_vdo_ver(port, TCPC_TX_SOP)) |
+					VDO_OPOS(pe[port].alt_opos) |
+					VDO_CMDT(CMDT_INIT) |
+					CMD_EXIT_MODE);
+		pe[port].vdm_cnt = 1;
+		set_state_pe(port, PE_VDM_REQUEST);
+		return true;
+
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_VDM)) {
+		PE_CLR_DPM_REQUEST(port, DPM_REQUEST_VDM);
+
+		/* Send previously set up SVDM. */
+		set_state_pe(port, PE_VDM_REQUEST);
+		return true;
 	}
 
 	return false;
@@ -1132,13 +1212,13 @@ static void send_source_cap(int port)
 
 	if (src_pdo_cnt == 0) {
 		/* No source capabilities defined, sink only */
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
 	}
 
 	tx_emsg[port].len = src_pdo_cnt * 4;
 	memcpy(tx_emsg[port].buf, (uint8_t *)src_pdo, tx_emsg[port].len);
 
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_SOURCE_CAP);
+	send_data_msg(port, TCPC_TX_SOP, PD_DATA_SOURCE_CAP);
 }
 
 /*
@@ -1166,7 +1246,7 @@ static void pe_send_request_msg(int port)
 	tx_emsg[port].len = 4;
 
 	memcpy(tx_emsg[port].buf, (uint8_t *)&rdo, tx_emsg[port].len);
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_REQUEST);
+	send_data_msg(port, TCPC_TX_SOP, PD_DATA_REQUEST);
 }
 
 static void pe_update_pdo_flags(int port, uint32_t pdo)
@@ -1332,21 +1412,25 @@ static bool pe_attempt_port_discovery(int port)
 			pe[port].tx_type = TCPC_TX_SOP_PRIME;
 			set_state_pe(port, PE_INIT_VDM_MODES_REQUEST);
 			return true;
-		/*
-		 * Note: determine if next VDM can be sent by taking advantage
-		 * of discovery following the VDM command enum ordering.
-		 * Remove once do_port_discovery can be removed.
-		 */
-		} else if (pe_can_send_sop_vdm(port, pe[port].vdm_cmd + 1)) {
-			PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-			set_state_pe(port, PE_DO_PORT_DISCOVERY);
-			return true;
 		}
 	}
 
 	return false;
 }
 #endif
+
+bool pd_setup_vdm_request(int port, enum tcpm_transmit_type tx_type,
+		uint32_t *vdm, uint32_t vdo_cnt)
+{
+	if (vdo_cnt < VDO_HDR_SIZE || vdo_cnt > VDO_MAX_SIZE)
+		return false;
+
+	pe[port].tx_type = tx_type;
+	memcpy(pe[port].vdm_data, vdm, vdo_cnt * sizeof(*vdm));
+	pe[port].vdm_cnt = vdo_cnt;
+
+	return true;
+}
 
 int pd_dev_store_rw_hash(int port, uint16_t dev_id, uint32_t *rw_hash,
 					uint32_t current_image)
@@ -1748,9 +1832,9 @@ static void pe_src_transition_supply_entry(int port)
 	/* Send a GotoMin Message or otherwise an Accept Message */
 	if (PE_CHK_FLAG(port, PE_FLAGS_ACCEPT)) {
 		PE_CLR_FLAG(port, PE_FLAGS_ACCEPT);
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
 	} else {
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_GOTO_MIN);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_GOTO_MIN);
 	}
 
 }
@@ -1783,9 +1867,8 @@ static void pe_src_transition_supply_run(int port)
 			PE_CLR_FLAG(port, PE_FLAGS_PS_READY);
 			/* NOTE: Second pass through this code block */
 			/* Explicit Contract is now in place */
-			PE_SET_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT);
-			pd_update_saved_port_flags(port,
-				PD_BBRMFLG_EXPLICIT_CONTRACT, 1);
+			pe_set_explicit_contract(port);
+
 			/*
 			 * Set first message flag to trigger a wait and add
 			 * jitter delay when operating in PD2.0 mode.
@@ -1796,7 +1879,7 @@ static void pe_src_transition_supply_run(int port)
 		} else {
 			/* NOTE: First pass through this code block */
 			/* Send PS_RDY message */
-			prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
+			send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
 			PE_SET_FLAG(port, PE_FLAGS_PS_READY);
 		}
 
@@ -1820,19 +1903,8 @@ static void pe_src_ready_entry(int port)
 {
 	print_current_state(port);
 
+	/* Ensure any atomic message sequence is properly cleaned up */
 	PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-
-	/*
-	 * If the transition into PE_SRC_Ready is the result of Protocol Error
-	 * that has not caused a Soft Reset (see Section 8.3.3.4.1) then the
-	 * notification to the Protocol Layer of the end of the AMS Shall Not
-	 * be sent since there is a Message to be processed.
-	 */
-	if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
-		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
-	} else {
-		prl_end_ams(port);
-	}
 
 	/*
 	 * Wait and add jitter if we are operating in PD2.0 mode and no messages
@@ -2017,21 +2089,10 @@ static void pe_src_ready_run(int port)
 
 			return;
 		}
+
+		/* No DPM requests; attempt mode entry if needed */
+		dpm_attempt_mode_entry(port);
 	}
-}
-
-static void pe_src_ready_exit(int port)
-{
-	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-
-	/*
-	 * If the Source is initiating an AMS then the Policy Engine Shall
-	 * notify the Protocol Layer that the first Message in an AMS will
-	 * follow.
-	 */
-	if (PE_CHK_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS))
-		prl_start_ams(port);
-
 }
 
 /**
@@ -2064,7 +2125,7 @@ static void pe_src_capability_response_entry(int port)
 
 	/* NOTE: Wait messaging should be implemented. */
 
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
 }
 
 static void pe_src_capability_response_run(int port)
@@ -2444,9 +2505,7 @@ static void pe_snk_select_capability_run(int port)
 			 */
 			if (type == PD_CTRL_ACCEPT) {
 				/* explicit contract is now in place */
-				PE_SET_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT);
-				pd_update_saved_port_flags(port,
-					PD_BBRMFLG_EXPLICIT_CONTRACT, 1);
+				pe_set_explicit_contract(port);
 
 				set_state_pe(port, PE_SNK_TRANSITION_SINK);
 
@@ -2582,9 +2641,8 @@ static void pe_snk_ready_entry(int port)
 {
 	print_current_state(port);
 
+	/* Ensure any atomic message sequence is properly cleaned up */
 	PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-	prl_end_ams(port);
-
 	/*
 	 * On entry to the PE_SNK_Ready state as the result of a wait,
 	 * then do the following:
@@ -2788,17 +2846,10 @@ static void pe_snk_ready_run(int port)
 
 			return;
 		}
-	}
-}
 
-static void pe_snk_ready_exit(int port)
-{
-	/*
-	 * If the Sink is initiating an AMS then notify the Protocol Layer
-	 * that the first Message in the AMS will follow
-	 */
-	if (PE_CHK_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS))
-		prl_start_ams(port);
+		/* No DPM requests; attempt mode entry if needed */
+		dpm_attempt_mode_entry(port);
+	}
 }
 
 /**
@@ -2889,7 +2940,7 @@ static void pe_snk_get_source_cap_entry(int port)
 
 	/* Send a Get_Source_Cap Message */
 	tx_emsg[port].len = 0;
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_GET_SOURCE_CAP);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_GET_SOURCE_CAP);
 }
 
 static void pe_snk_get_source_cap_run(int port)
@@ -2930,7 +2981,7 @@ static void pe_send_soft_reset_run(int port)
 		 * unexpected incoming message type
 		 */
 		/* Send Soft Reset message */
-		prl_send_ctrl_msg(port,
+		send_ctrl_msg(port,
 			pe[port].soft_reset_sop, PD_CTRL_SOFT_RESET);
 
 		/* Initialize and run SenderResponseTimer */
@@ -2978,12 +3029,6 @@ static void pe_send_soft_reset_run(int port)
 
 }
 
-static void pe_send_soft_reset_exit(int port)
-{
-	/* Clear TX Complete Flag */
-	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-}
-
 /**
  * PE_SNK_Soft_Reset and PE_SNK_Soft_Reset
  */
@@ -2993,7 +3038,7 @@ static void pe_soft_reset_entry(int port)
 
 	pe[port].sender_response_timer = TIMER_DISABLED;
 
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
 }
 
 static void  pe_soft_reset_run(int port)
@@ -3030,9 +3075,9 @@ static void pe_send_not_supported_entry(int port)
 
 	/* Request the Protocol Layer to send a Not_Supported Message. */
 	if (prl_get_rev(port, TCPC_TX_SOP) > PD_REV20)
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_NOT_SUPPORTED);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_NOT_SUPPORTED);
 	else
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
 }
 
 static void pe_send_not_supported_run(int port)
@@ -3053,7 +3098,7 @@ static void pe_send_not_supported_run(int port)
 static void pe_src_ping_entry(int port)
 {
 	print_current_state(port);
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PING);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PING);
 }
 
 static void pe_src_ping_run(int port)
@@ -3145,7 +3190,7 @@ static void pe_give_battery_cap_entry(int port)
 	/* Extended Battery Cap data is 9 bytes */
 	tx_emsg[port].len = 9;
 
-	prl_send_ext_data_msg(port, TCPC_TX_SOP, PD_EXT_BATTERY_CAP);
+	send_ext_data_msg(port, TCPC_TX_SOP, PD_EXT_BATTERY_CAP);
 }
 
 static void pe_give_battery_cap_run(int port)
@@ -3222,7 +3267,7 @@ static void pe_give_battery_status_entry(int port)
 	/* Battery Status data is 4 bytes */
 	tx_emsg[port].len = 4;
 
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_BATTERY_STATUS);
+	send_data_msg(port, TCPC_TX_SOP, PD_DATA_BATTERY_STATUS);
 }
 
 static void pe_give_battery_status_run(int port)
@@ -3248,13 +3293,13 @@ static void pe_drs_evaluate_swap_entry(int port)
 		 * PE_DRS_UFP_DFP_Evaluate_Swap and
 		 * PE_DRS_DFP_UFP_Evaluate_Swap states embedded here.
 		 */
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
 	} else {
 		/*
 		 * PE_DRS_UFP_DFP_Reject_Swap and PE_DRS_DFP_UFP_Reject_Swap
 		 * states embedded here.
 		 */
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
 	}
 }
 
@@ -3329,7 +3374,7 @@ static void pe_drs_send_swap_entry(int port)
 	 * states embedded here.
 	 */
 	/* Request the Protocol Layer to send a DR_Swap Message */
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_DR_SWAP);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_DR_SWAP);
 
 	pe[port].sender_response_timer = TIMER_DISABLED;
 }
@@ -3416,12 +3461,12 @@ static void pe_prs_src_snk_evaluate_swap_entry(int port)
 
 	if (!pd_check_power_swap(port)) {
 		/* PE_PRS_SRC_SNK_Reject_PR_Swap state embedded here */
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
 	} else {
 		tc_request_power_swap(port);
 		/* PE_PRS_SRC_SNK_Accept_Swap state embedded here */
 		PE_SET_FLAG(port, PE_FLAGS_ACCEPT);
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
 	}
 }
 
@@ -3452,8 +3497,12 @@ static void pe_prs_src_snk_transition_to_off_entry(int port)
 {
 	print_current_state(port);
 
-	/* Tell TypeC to swap from Attached.SRC to Attached.SNK */
-	tc_prs_src_snk_assert_rd(port);
+	/* Contract is invalid */
+	pe_invalidate_explicit_contract(port);
+
+	/* Tell TypeC to power off the source */
+	tc_src_power_off(port);
+
 	pe[port].ps_source_timer =
 			get_time().val + PD_POWER_SUPPLY_TURN_OFF_DELAY;
 }
@@ -3461,15 +3510,27 @@ static void pe_prs_src_snk_transition_to_off_entry(int port)
 static void pe_prs_src_snk_transition_to_off_run(int port)
 {
 	/* Give time for supply to power off */
-	if (get_time().val < pe[port].ps_source_timer)
-		return;
+	if (get_time().val > pe[port].ps_source_timer &&
+	    pd_check_vbus_level(port, VBUS_SAFE0V))
+		set_state_pe(port, PE_PRS_SRC_SNK_ASSERT_RD);
+}
 
+/**
+ * PE_PRS_SRC_SNK_Assert_Rd
+ */
+static void pe_prs_src_snk_assert_rd_entry(int port)
+{
+	print_current_state(port);
+
+	/* Tell TypeC to swap from Attached.SRC to Attached.SNK */
+	tc_prs_src_snk_assert_rd(port);
+}
+
+static void pe_prs_src_snk_assert_rd_run(int port)
+{
 	/* Wait until Rd is asserted */
-	if (tc_is_attached_snk(port)) {
-		/* Contract is invalid */
-		pe_invalidate_explicit_contract(port);
+	if (tc_is_attached_snk(port))
 		set_state_pe(port, PE_PRS_SRC_SNK_WAIT_SOURCE_ON);
-	}
 }
 
 /**
@@ -3478,7 +3539,7 @@ static void pe_prs_src_snk_transition_to_off_run(int port)
 static void pe_prs_src_snk_wait_source_on_entry(int port)
 {
 	print_current_state(port);
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
 	pe[port].ps_source_timer = TIMER_DISABLED;
 }
 
@@ -3534,7 +3595,8 @@ static void pe_prs_src_snk_wait_source_on_run(int port)
 
 static void pe_prs_src_snk_wait_source_on_exit(int port)
 {
-	tc_pr_swap_complete(port);
+	tc_pr_swap_complete(port,
+			    PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE));
 }
 
 /**
@@ -3545,7 +3607,7 @@ static void pe_prs_src_snk_send_swap_entry(int port)
 	print_current_state(port);
 
 	/* Request the Protocol Layer to send a PR_Swap Message. */
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PR_SWAP);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PR_SWAP);
 
 	/* Start the SenderResponseTimer */
 	pe[port].sender_response_timer =
@@ -3594,12 +3656,6 @@ static void pe_prs_src_snk_send_swap_run(int port)
 	}
 }
 
-static void pe_prs_src_snk_send_swap_exit(int port)
-{
-	/* Clear TX Complete Flag if set */
-	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-}
-
 /**
  * PE_PRS_SNK_SRC_Evaluate_Swap
  */
@@ -3609,12 +3665,12 @@ static void pe_prs_snk_src_evaluate_swap_entry(int port)
 
 	if (!pd_check_power_swap(port)) {
 		/* PE_PRS_SNK_SRC_Reject_Swap state embedded here */
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
 	} else {
 		tc_request_power_swap(port);
 		/* PE_PRS_SNK_SRC_Accept_Swap state embedded here */
 		PE_SET_FLAG(port, PE_FLAGS_ACCEPT);
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
 	}
 }
 
@@ -3746,7 +3802,7 @@ static void pe_prs_snk_src_source_on_run(int port)
 
 		/* update pe power role */
 		pe[port].power_role = pd_get_power_role(port);
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
 		/* reset timer so PD_CTRL_PS_RDY isn't sent again */
 		pe[port].ps_source_timer = TIMER_DISABLED;
 	}
@@ -3771,7 +3827,8 @@ static void pe_prs_snk_src_source_on_run(int port)
 
 static void pe_prs_snk_src_source_on_exit(int port)
 {
-	tc_pr_swap_complete(port);
+	tc_pr_swap_complete(port,
+			    PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE));
 }
 
 /**
@@ -3794,13 +3851,13 @@ static void pe_prs_snk_src_send_swap_entry(int port)
 	 *     Request the Protocol Layer to send a FR_Swap Message.
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_REV30)) {
-		prl_send_ctrl_msg(port,
+		send_ctrl_msg(port,
 			TCPC_TX_SOP,
 			PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH)
 				? PD_CTRL_FR_SWAP
 				: PD_CTRL_PR_SWAP);
 	} else {
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PR_SWAP);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PR_SWAP);
 	}
 
 	/* Start the SenderResponseTimer */
@@ -3864,12 +3921,6 @@ static void pe_prs_snk_src_send_swap_run(int port)
 	}
 }
 
-static void pe_prs_snk_src_send_swap_exit(int port)
-{
-	/* Clear TX Complete Flag if set */
-	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-}
-
 #ifdef CONFIG_USB_PD_REV30
 /**
  * PE_FRS_SNK_SRC_Start_AMS
@@ -3882,7 +3933,7 @@ static void pe_frs_snk_src_start_ams_entry(int port)
 	pe_invalidate_explicit_contract(port);
 
 	/* Inform Protocol Layer this is start of AMS */
-	prl_start_ams(port);
+	PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 
 	/* Shared PRS/FRS code, indicate FRS path */
 	PE_SET_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH);
@@ -3933,7 +3984,7 @@ static void pe_bist_tx_entry(int port)
 	 * this Continuous BIST Mode being enabled.
 	 */
 	if (mode == BIST_CARRIER_MODE_2) {
-		prl_send_ctrl_msg(port, TCPC_TX_BIST_MODE_2, 0);
+		send_ctrl_msg(port, TCPC_TX_BIST_MODE_2, 0);
 		pe[port].bist_cont_mode_timer =
 					get_time().val + PD_T_BIST_CONT_MODE;
 	}
@@ -3979,7 +4030,7 @@ static void pe_bist_rx_entry(int port)
 
 	tx_emsg[port].len = sizeof(bdo);
 	memcpy(tx_emsg[port].buf, (uint8_t *)&bdo, tx_emsg[port].len);
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_BIST);
+	send_data_msg(port, TCPC_TX_SOP, PD_DATA_BIST);
 
 	/* Delay at least enough for partner to finish BIST */
 	pe[port].bist_cont_mode_timer =
@@ -4007,7 +4058,7 @@ static void pe_snk_give_sink_cap_entry(int port)
 	/* Send a Sink_Capabilities Message */
 	tx_emsg[port].len = pd_snk_pdo_cnt * 4;
 	memcpy(tx_emsg[port].buf, (uint8_t *)pd_snk_pdo, tx_emsg[port].len);
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_SINK_CAP);
+	send_data_msg(port, TCPC_TX_SOP, PD_DATA_SINK_CAP);
 }
 
 static void pe_snk_give_sink_cap_run(int port)
@@ -4056,7 +4107,7 @@ static void pe_handle_custom_vdm_request_entry(int port)
 	if (rlen > 0) {
 		tx_emsg[port].len = rlen * 4;
 		memcpy(tx_emsg[port].buf, (uint8_t *)rdata, tx_emsg[port].len);
-		prl_send_data_msg(port, sop, PD_DATA_VENDOR_DEF);
+		send_data_msg(port, sop, PD_DATA_VENDOR_DEF);
 	}
 }
 
@@ -4080,122 +4131,6 @@ static void pe_handle_custom_vdm_request_run(int port)
 static void pe_handle_custom_vdm_request_exit(int port)
 {
 	PE_CLR_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS);
-}
-
-/**
- * PE_DO_PORT_Discovery
- *
- * NOTE: Port Discovery Policy
- *	To discover a port partner, Vendor Defined Messages (VDMs) are
- *	sent to the port partner. The sequence of commands are
- *	sent in the following order:
- *		1) CMD_DISCOVER_IDENT
- *		2) CMD_DISCOVER_SVID
- *		3) CMD_DISCOVER_MODES
- *		4) CMD_ENTER_MODE
- *		5) CMD_DP_STATUS
- *		6) CMD_DP_CONFIG
- *
- *	If a the port partner replies with BUSY, the sequence is resent
- *	N_DISCOVER_IDENTITY_COUNT times before giving up.
- */
-static void pe_do_port_discovery_entry(int port)
-{
-	print_current_state(port);
-
-	pe[port].partner_type = PORT;
-	pe[port].vdm_cnt = 0;
-}
-
-static void pe_do_port_discovery_run(int port)
-{
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-	uint32_t *payload = (uint32_t *)rx_emsg[port].buf;
-	struct svdm_amode_data *modep =
-				pd_get_amode_data(port, PD_VDO_VID(payload[0]));
-	int ret = 0;
-
-	if (!PE_CHK_FLAG(port,
-		PE_FLAGS_VDM_REQUEST_NAKED | PE_FLAGS_VDM_REQUEST_BUSY)) {
-		switch (pe[port].vdm_cmd) {
-		case DO_PORT_DISCOVERY_START:
-			pe[port].vdm_cmd = CMD_DISCOVER_IDENT;
-			pe[port].vdm_data[0] = 0;
-			ret = 1;
-			break;
-		case CMD_DISCOVER_IDENT:
-			pe[port].vdm_cmd = CMD_DISCOVER_SVID;
-			pe[port].vdm_data[0] = 0;
-			ret = 1;
-			break;
-		case CMD_DISCOVER_SVID:
-			pe[port].vdm_cmd = CMD_DISCOVER_MODES;
-			ret = dfp_discover_modes(port, pe[port].vdm_data);
-			break;
-		case CMD_DISCOVER_MODES:
-			pe[port].vdm_cmd = CMD_ENTER_MODE;
-			pe[port].vdm_data[0] = pd_dfp_enter_mode(port, 0, 0);
-			if (pe[port].vdm_data[0])
-				ret = 1;
-			break;
-		case CMD_ENTER_MODE:
-			pe[port].vdm_cmd = CMD_DP_STATUS;
-			if (modep && modep->opos) {
-				ret = modep->fx->status(port,
-						pe[port].vdm_data);
-				pe[port].vdm_data[0] |=
-						PD_VDO_OPOS(modep->opos);
-			}
-			break;
-		case CMD_DP_STATUS:
-			pe[port].vdm_cmd = CMD_DP_CONFIG;
-			if (modep && modep->opos)
-				ret = modep->fx->config(port,
-							pe[port].vdm_data);
-			break;
-		case CMD_DP_CONFIG:
-			PE_SET_FLAG(port, PE_FLAGS_DISCOVER_PORT_IDENTITY_DONE);
-			break;
-		case CMD_EXIT_MODE:
-			/* Do nothing */
-			break;
-		case CMD_ATTENTION:
-			/* Do nothing */
-			break;
-		}
-	}
-
-	if (ret == 0) {
-		if (PE_CHK_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED))
-			PE_SET_FLAG(port, PE_FLAGS_DISCOVER_PORT_IDENTITY_DONE);
-
-		if (pe[port].power_role == PD_ROLE_SOURCE)
-			set_state_pe(port, PE_SRC_READY);
-		else
-			set_state_pe(port, PE_SNK_READY);
-	} else {
-		PE_CLR_FLAG(port, PE_FLAGS_VDM_REQUEST_BUSY);
-
-		/*
-		 * Copy Vendor Defined Message (VDM) Header into
-		 * message buffer
-		 */
-		if (pe[port].vdm_data[0] == 0)
-			pe[port].vdm_data[0] = VDO(
-					USB_SID_PD,
-					1, /* structured */
-					VDO_SVDM_VERS(
-					    pd_get_vdo_ver(port, TCPC_TX_SOP)) |
-					pe[port].vdm_cmd);
-
-		pe[port].vdm_data[0] |= VDO_CMDT(CMDT_INIT);
-		pe[port].vdm_data[0] |= VDO_SVDM_VERS(pd_get_vdo_ver(port,
-								  TCPC_TX_SOP));
-
-		pe[port].vdm_cnt = ret;
-		set_state_pe(port, PE_VDM_REQUEST);
-	}
-#endif
 }
 
 /**
@@ -4229,7 +4164,8 @@ static void pe_vdm_send_request_run(int port)
 	 */
 	if (get_time().val > pe[port].vdm_response_timer) {
 		CPRINTF("VDM %s Response Timeout\n",
-				pe[port].partner_type ? "Cable" : "Port");
+				pe[port].tx_type == TCPC_TX_SOP ?
+				"Port" : "Cable");
 		/*
 		 * Flag timeout so child state can mark appropriate discovery
 		 * item as failed.
@@ -4246,8 +4182,65 @@ static void pe_vdm_send_request_exit(int port)
 	 * Clear TX complete in case child called set_state_pe() before parent
 	 * could process transmission
 	 */
-	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 	PE_CLR_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS);
+}
+
+static enum pd_discovery_state pe_discovery_vdm_request_run_common(int port,
+		uint8_t min_data_objects)
+{
+	uint32_t *payload;
+	int sop;
+	uint8_t type;
+	uint8_t cnt;
+	uint8_t ext;
+
+	/* Retrieve the message information */
+	payload = (uint32_t *)rx_emsg[port].buf;
+	sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
+	type = PD_HEADER_TYPE(rx_emsg[port].header);
+	cnt = PD_HEADER_CNT(rx_emsg[port].header);
+	ext = PD_HEADER_EXT(rx_emsg[port].header);
+
+	if (sop == pe[port].tx_type && type == PD_DATA_VENDOR_DEF && cnt >= 1
+			&& ext == 0) {
+		if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_ACK &&
+				cnt >= min_data_objects) {
+			/* Handle ACKs in state-specific code. */
+			return PD_DISC_COMPLETE;
+		} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_NAK) {
+			/* Handle NAKs in state-specific code. */
+			return PD_DISC_FAIL;
+		} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_BUSY) {
+			/*
+			 * Don't fill in the discovery field so we re-probe in
+			 * tVDMBusy
+			 */
+			CPRINTS("C%d: Partner BUSY, request will be retried",
+					port);
+			pe[port].discover_identity_timer =
+					get_time().val + PD_T_VDM_BUSY;
+			return PD_DISC_NEEDED;
+		}
+
+		/*
+		 * Partner gave us an incorrect size or command; mark discovery
+		 * as failed.
+		 */
+		CPRINTS("C%d: Unexpected VDM response: 0x%04x 0x%04x",
+				port, rx_emsg[port].header, payload[0]);
+		return PD_DISC_FAIL;
+	} else if (sop == pe[port].tx_type && ext == 0 && cnt == 0 &&
+			type == PD_CTRL_NOT_SUPPORTED) {
+		/*
+		 * A NAK would be more expected here, but Not Supported is still
+		 * allowed with the same meaning.
+		 */
+		return PD_DISC_FAIL;
+	}
+
+	/* Unexpected Message Received. Src.Ready or Snk.Ready can handle it. */
+	PE_SET_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+	return PD_DISC_NEEDED;
 }
 
 /**
@@ -4266,7 +4259,10 @@ static void pe_vdm_identity_request_cbl_entry(int port)
 			CMD_DISCOVER_IDENT);
 	tx_emsg[port].len = sizeof(uint32_t);
 
-	prl_send_data_msg(port, TCPC_TX_SOP_PRIME, PD_DATA_VENDOR_DEF);
+	send_data_msg(port, TCPC_TX_SOP_PRIME, PD_DATA_VENDOR_DEF);
+
+	/* PE_VDM_SEND_REQUEST (the parent state) uses this field. */
+	pe[port].tx_type = TCPC_TX_SOP_PRIME;
 
 	pe[port].discover_identity_counter++;
 }
@@ -4431,7 +4427,10 @@ static void pe_init_port_vdm_identity_request_entry(int port)
 			CMD_DISCOVER_IDENT);
 	tx_emsg[port].len = sizeof(uint32_t);
 
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_VENDOR_DEF);
+	send_data_msg(port, TCPC_TX_SOP, PD_DATA_VENDOR_DEF);
+
+	/* PE_VDM_SEND_REQUEST (the parent state) uses this field. */
+	pe[port].tx_type = TCPC_TX_SOP;
 }
 
 static void pe_init_port_vdm_identity_request_run(int port)
@@ -4465,12 +4464,6 @@ static void pe_init_port_vdm_identity_request_run(int port)
 				 * PE_INIT_PORT_VDM_Identity_ACKed embedded here
 				 */
 				dfp_consume_identity(port, cnt, payload);
-
-				/*
-				 * TODO(b:152419850): Fake vdm_cmd for now to
-				 * ensure existing discovery process continues.
-				 */
-				pe[port].vdm_cmd = DISCOVER_IDENTITY;
 			} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_NAK) {
 				/*
 				 * PE_INIT_PORT_VDM_Identity_NAKed embedded here
@@ -4563,81 +4556,43 @@ static void pe_init_vdm_svids_request_entry(int port)
 			CMD_DISCOVER_SVID);
 	tx_emsg[port].len = sizeof(uint32_t);
 
-	prl_send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
+	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
 }
 
 static void pe_init_vdm_svids_request_run(int port)
 {
 	uint32_t *payload;
 	int sop;
-	uint8_t type;
 	uint8_t cnt;
-	uint8_t ext;
+	enum pd_discovery_state response_result;
 
 	/* No message received */
 	if (!PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED))
 		return;
-
 	PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+
+	/*
+	 * Valid Discover SVIDs ACKs should have at least 2 objects (VDM header,
+	 * SVID VDO).
+	 */
+	response_result = pe_discovery_vdm_request_run_common(port, 2);
 
 	/* Retrieve the message information */
 	payload = (uint32_t *)rx_emsg[port].buf;
 	sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
-	type = PD_HEADER_TYPE(rx_emsg[port].header);
 	cnt = PD_HEADER_CNT(rx_emsg[port].header);
-	ext = PD_HEADER_EXT(rx_emsg[port].header);
 
-	if (sop == pe[port].tx_type && type == PD_DATA_VENDOR_DEF && cnt > 0 &&
-			ext == 0) {
-		/*
-		 * Valid Discover SVIDs ACKs should have at least 2 objects
-		 * (VDM header, SVID VDO).
-		 */
-		if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_ACK &&
-							cnt >= 2) {
-			/* PE_INIT_VDM_SVIDs_ACKed embedded here */
-			dfp_consume_svids(port, sop, cnt, payload);
-			/*
-			 * TODO(b:152419850): Fake vdm_cmd for now to ensure
-			 * existing discovery process continues.
-			 */
-			pe[port].vdm_cmd = DISCOVER_SVIDS;
-		} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_NAK) {
-			/* PE_INIT_VDM_SVIDs_NAKed embedded here */
-			pd_set_svids_discovery(port, sop, PD_DISC_FAIL);
-		} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_BUSY) {
-			/*
-			 * Don't fill in the discovery field so we
-			 * re-probe in tVDMBusy
-			 */
-			CPRINTS("C%d: Partner Busy, Discover SVIDs will be "
-					"re-tried", port);
-			pe[port].discover_identity_timer =
-					get_time().val + PD_T_VDM_BUSY;
-		} else {
-			/*
-			 * Partner gave us an incorrect size or command,
-			 * mark discovery as failed
-			 */
-			pd_set_svids_discovery(port, sop, PD_DISC_FAIL);
-			CPRINTS("C%d: Unexpected DiscSVID response: 0x%04x "
-					"0x%04x",
-					port, rx_emsg[port].header, payload[0]);
-		}
-	} else if (sop == pe[port].tx_type && ext == 0 && cnt == 0 &&
-			type == PD_CTRL_NOT_SUPPORTED) {
-		/*
-		 * A NAK would be more expected here, but Not Supported is still
-		 * allowed with the same meaning.
-		 */
+	if (response_result == PD_DISC_COMPLETE) {
+		/* PE_INIT_VDM_SVIDs_ACKed embedded here */
+		dfp_consume_svids(port, sop, cnt, payload);
+	} else if (response_result == PD_DISC_FAIL) {
+		/* PE_INIT_VDM_SVIDs_NAKed embedded here */
 		pd_set_svids_discovery(port, sop, PD_DISC_FAIL);
-	} else {
-		/*
-		 * Unexpected Message Received. Src.Ready or Snk.Ready can
-		 * handle it.
-		 */
-		PE_SET_FLAG(port, PE_FLAGS_MSG_RECEIVED);
 	}
+	/*
+	 * If the received message doesn't change the discovery state, there is
+	 * nothing to do but return to the ready previous state.
+	 */
 
 	/* Return to calling state (PE_{SRC,SNK}_Ready) */
 	set_state_pe(port, get_last_state_pe(port));
@@ -4686,90 +4641,50 @@ static void pe_init_vdm_modes_request_entry(int port)
 			CMD_DISCOVER_MODES);
 	tx_emsg[port].len = sizeof(uint32_t);
 
-	prl_send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
+	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
 }
 
 static void pe_init_vdm_modes_request_run(int port)
 {
 	uint32_t *payload;
 	int sop;
-	uint8_t type;
 	uint8_t cnt;
-	uint8_t ext;
 	struct svid_mode_data *mode_data =
 		pd_get_next_mode(port, pe[port].tx_type);
 	uint16_t requested_svid;
+	enum pd_discovery_state response_result;
 
 	/* No message received */
 	if (!PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED))
 		return;
+	PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
 
 	assert(mode_data);
 	assert(mode_data->discovery == PD_DISC_NEEDED);
 	requested_svid = mode_data->svid;
 
+	/*
+	 * Valid Discover Modes responses should have at least 2 objects (VDM
+	 * header and at least one mode VDO).
+	 */
+	response_result = pe_discovery_vdm_request_run_common(port, 2);
+
 	/* Retrieve the message information */
 	payload = (uint32_t *)rx_emsg[port].buf;
 	sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
-	type = PD_HEADER_TYPE(rx_emsg[port].header);
 	cnt = PD_HEADER_CNT(rx_emsg[port].header);
-	ext = PD_HEADER_EXT(rx_emsg[port].header);
 
-	PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
-
-	if (sop == pe[port].tx_type && type == PD_DATA_VENDOR_DEF &&
-						cnt >= 2 && ext == 0) {
-		/*
-		 * Valid Discover Modes responses should have at least 2 objects
-		 * (VDM header and at least one mode VDO).
-		 */
-		if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_ACK) {
-			/* PE_INIT_VDM_Modes_ACKed embedded here */
-			dfp_consume_modes(port, sop, cnt, payload);
-			/*
-			 * TODO(b:152419850): Fake vdm_cmd for now to
-			 * ensure existing discovery process continues.
-			 */
-			pe[port].vdm_cmd = DISCOVER_MODES;
-		} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_NAK) {
-			/* PE_INIT_VDM_Modes_NAKed embedded here */
-			pd_set_modes_discovery(port, sop,
-					requested_svid, PD_DISC_FAIL);
-		} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_BUSY) {
-			/*
-			 * Don't fill in the discovery field so we
-			 * re-probe in tVDMBusy
-			 */
-			CPRINTS("C%d: Partner Busy, Discover Modes will be "
-					"re-tried", port);
-			pe[port].discover_identity_timer =
-					get_time().val + PD_T_VDM_BUSY;
-		} else {
-			/*
-			 * Partner gave us an incorrect size or command,
-			 * mark discovery as failed
-			 */
-			pd_set_modes_discovery(port, sop,
-					requested_svid, PD_DISC_FAIL);
-			CPRINTS("C%d: Unexpected Discover Modes response: "
-					"0x%04x 0x%04x",
-					port, rx_emsg[port].header,
-					payload[0]);
-		}
-	} else if (sop == pe[port].tx_type && ext == 0 && cnt == 0 &&
-			type == PD_CTRL_NOT_SUPPORTED) {
-		/*
-		 * A NAK would be more expected here, but Not Supported is still
-		 * allowed with the same meaning.
-		 */
-		pd_set_svids_discovery(port, sop, PD_DISC_FAIL);
-	} else {
-		/*
-		 * Unexpected Message Received. Src.Ready or Snk.Ready can
-		 * handle it.
-		 */
-		PE_SET_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+	if (response_result == PD_DISC_COMPLETE) {
+		/* PE_INIT_VDM_Modes embedded here */
+		dfp_consume_modes(port, sop, cnt, payload);
+	} else if (response_result == PD_DISC_FAIL) {
+		/* PE_INIT_VDM_Modes embedded here */
+		pd_set_modes_discovery(port, sop, requested_svid, PD_DISC_FAIL);
 	}
+	/*
+	 * If the received message doesn't change the discovery state, there is
+	 * nothing to do but return to the ready previous state.
+	 */
 
 	/* Return to calling state (PE_{SRC,SNK}_Ready) */
 	set_state_pe(port, get_last_state_pe(port));
@@ -4790,6 +4705,12 @@ static void pe_vdm_request_entry(int port)
 {
 	print_current_state(port);
 
+	if (pe[port].tx_type == TCPC_TX_INVALID) {
+		CPRINTS("C%d: TX type expected to be set, returning", port);
+		set_state_pe(port, get_last_state_pe(port));
+		return;
+	}
+
 	/* All VDM sequences are Interruptible */
 	PE_SET_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS);
 
@@ -4803,7 +4724,7 @@ static void pe_vdm_request_entry(int port)
 		tx_emsg[port].len = pe[port].vdm_cnt * 4;
 	}
 
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_VENDOR_DEF);
+	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
 
 	pe[port].vdm_response_timer = TIMER_DISABLED;
 }
@@ -4816,6 +4737,7 @@ static void pe_vdm_request_run(int port)
 		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 
 		/* Start no response timer */
+		/* TODO(b/155890173): Support DPM-supplied timeout */
 		pe[port].vdm_response_timer =
 			get_time().val + PD_T_VDM_SNDR_RSP;
 	}
@@ -4837,28 +4759,22 @@ static void pe_vdm_request_run(int port)
 		cnt = PD_HEADER_CNT(rx_emsg[port].header);
 		ext = PD_HEADER_EXT(rx_emsg[port].header);
 
-		if ((sop == TCPC_TX_SOP || sop == TCPC_TX_SOP_PRIME) &&
-				type == PD_DATA_VENDOR_DEF && cnt > 0 &&
-				ext == 0) {
+		if (sop == pe[port].tx_type && type == PD_DATA_VENDOR_DEF &&
+				cnt > 0 && ext == 0) {
 			if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_ACK) {
 				set_state_pe(port, PE_VDM_ACKED);
 				return;
-			} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_NAK ||
-				PD_VDO_CMDT(payload[0]) == CMDT_RSP_BUSY) {
-				if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_NAK)
-					PE_SET_FLAG(port,
-						PE_FLAGS_VDM_REQUEST_NAKED);
-				else
-					PE_SET_FLAG(port,
-						PE_FLAGS_VDM_REQUEST_BUSY);
+			} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_NAK) {
+				PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED);
+			} else if (PD_VDO_CMDT(payload[0]) == CMDT_RSP_BUSY) {
+				PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_BUSY);
 			}
 		} else {
-			if ((sop == TCPC_TX_SOP || sop == TCPC_TX_SOP_PRIME) &&
-				type == PD_CTRL_NOT_SUPPORTED && cnt == 0 &&
-				ext == 0) {
-				/* Do not continue port discovery */
-				PE_SET_FLAG(port,
-					PE_FLAGS_DISCOVER_PORT_IDENTITY_DONE);
+			if (sop == pe[port].tx_type &&
+					type == PD_CTRL_NOT_SUPPORTED &&
+					cnt == 0 && ext == 0) {
+				/* Equivalent meaning to a NAK */
+				PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED);
 			} else {
 				/* Unexpected Message Received. */
 
@@ -4891,25 +4807,38 @@ static void pe_vdm_request_run(int port)
 		PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_BUSY);
 	} else if (get_time().val > pe[port].vdm_response_timer) {
 		CPRINTF("C%d: VDM %s Response Timeout\n", port,
-				pe[port].partner_type ? "Cable" : "Port");
+				pe[port].tx_type == TCPC_TX_SOP
+				? "Port" : "Cable");
 
 		PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED);
 	}
 
+	/*
+	 * Because Not Supported messages or response timeouts are treated as
+	 * NAKs, there may not be a NAK message to parse. Extract the needed
+	 * information from the sent VDM.
+	 */
+	if (PE_CHK_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED)) {
+		PE_SET_FLAG(port, PE_FLAGS_DISCOVER_PORT_IDENTITY_DONE);
+
+		dpm_vdm_naked(port, pe[port].tx_type,
+				PD_VDO_VID(pe[port].vdm_data[0]),
+				PD_VDO_CMD(pe[port].vdm_data[0]));
+	}
+
+
 	if (PE_CHK_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED |
 					PE_FLAGS_VDM_REQUEST_BUSY)) {
-		/* Return to previous state */
-		if (get_last_state_pe(port) == PE_DO_PORT_DISCOVERY)
-			set_state_pe(port, PE_DO_PORT_DISCOVERY);
-		else if (pe[port].power_role == PD_ROLE_SOURCE)
-			set_state_pe(port, PE_SRC_READY);
-		else
-			set_state_pe(port, PE_SNK_READY);
+		/* Return to previous Ready state */
+		set_state_pe(port, get_last_state_pe(port));
 	}
 }
 
 static void pe_vdm_request_exit(int port)
 {
+	/* Invalidate TX type so that it must be set before next call */
+	pe[port].tx_type = TCPC_TX_INVALID;
+
 	PE_CLR_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS);
 }
 
@@ -4918,71 +4847,32 @@ static void pe_vdm_request_exit(int port)
  */
 static void pe_vdm_acked_entry(int port)
 {
-	uint32_t *payload;
-	uint8_t vdo_cmd;
 	int sop;
+	int vdo_count;
+	uint32_t *payload;
+	uint16_t svid;
+	uint8_t vdo_cmd;
 
 	print_current_state(port);
 
 	/* Get the message */
-	payload = (uint32_t *)rx_emsg[port].buf;
-	vdo_cmd = PD_VDO_CMD(payload[0]);
 	sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
+	vdo_count = PD_HEADER_CNT(rx_emsg[port].header);
+	payload = (uint32_t *)rx_emsg[port].buf;
+	svid = PD_VDO_VID(payload[0]);
+	vdo_cmd = PD_VDO_CMD(payload[0]);
 
-	if (sop == TCPC_TX_SOP) {
-		/*
-		 * Handle Message From Port Partner
-		 */
 
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-		int cnt = PD_HEADER_CNT(rx_emsg[port].header);
-		struct svdm_amode_data *modep;
+	/* vdo_count must have been >= 1 to get into this state. */
+	dpm_vdm_acked(port, sop, vdo_count, payload);
 
-		modep = pd_get_amode_data(port, PD_VDO_VID(payload[0]));
-#endif
-
-		switch (vdo_cmd) {
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-		case CMD_DISCOVER_IDENT:
-			dfp_consume_identity(port, cnt, payload);
-#ifdef CONFIG_CHARGE_MANAGER
-			if (pd_charge_from_device(pd_get_identity_vid(port),
-						pd_get_identity_pid(port))) {
-				charge_manager_update_dualrole(port,
-								CAP_DEDICATED);
-			}
-#endif
-			break;
-		case CMD_DISCOVER_SVID:
-			dfp_consume_svids(port, TCPC_TX_SOP, cnt, payload);
-			break;
-		case CMD_DISCOVER_MODES:
-			dfp_consume_modes(port, TCPC_TX_SOP, cnt, payload);
-			break;
-		case CMD_ENTER_MODE:
-			break;
-		case CMD_DP_STATUS:
-			/*
-			 * DP status response & UFP's DP attention have same
-			 * payload
-			 */
-			dfp_consume_attention(port, payload);
-			break;
-		case CMD_DP_CONFIG:
-			if (modep && modep->opos && modep->fx->post_config)
-				modep->fx->post_config(port);
-			break;
-		case CMD_EXIT_MODE:
-			/* Do nothing */
-			break;
-#endif
-		case CMD_ATTENTION:
-			/* Do nothing */
-			break;
-		default:
-			CPRINTF("ERR:CMD:%d\n", vdo_cmd);
-		}
-	}
+	/*
+	 * TODO(b/155890173): Respect distinction between discovery and mode
+	 * entry in flags.
+	 */
+	if (sop == TCPC_TX_SOP && svid == USB_SID_DISPLAYPORT &&
+			vdo_cmd == CMD_DP_CONFIG)
+		PE_SET_FLAG(port, PE_FLAGS_DISCOVER_PORT_IDENTITY_DONE);
 
 	if (pe[port].power_role == PD_ROLE_SOURCE) {
 		set_state_pe(port, PE_SRC_READY);
@@ -5015,7 +4905,7 @@ static void pe_vdm_response_entry(int port)
 	rx_payload[0] &= ~VDO_CMDT_MASK;
 
 	if (cmd_type != CMDT_INIT) {
-		CPRINTF("ERR:CMDT:%d\n", vdo_cmd);
+		CPRINTF("ERR:CMDT:%d:%d\n", cmd_type, vdo_cmd);
 
 		if (pe[port].power_role == PD_ROLE_SOURCE)
 			set_state_pe(port, PE_SRC_READY);
@@ -5107,7 +4997,7 @@ static void pe_vdm_response_entry(int port)
 
 	/* Send ACK, NAK, or BUSY */
 	tx_emsg[port].len = ret;
-	prl_send_data_msg(port, TCPC_TX_SOP, PD_DATA_VENDOR_DEF);
+	send_data_msg(port, TCPC_TX_SOP, PD_DATA_VENDOR_DEF);
 }
 
 static void pe_vdm_response_run(int port)
@@ -5156,18 +5046,18 @@ static void pe_vcs_evaluate_swap_entry(int port)
 	/* DPM rejects a VCONN Swap and port is not a VCONN source*/
 	if (!tc_check_vconn_swap(port) && tc_is_vconn_src(port) < 1) {
 		/* NOTE: PE_VCS_Reject_Swap State embedded here */
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_REJECT);
 	}
 	/* Port is not ready to perform a VCONN swap */
 	else if (tc_is_vconn_src(port) < 0) {
 		/* NOTE: PE_VCS_Reject_Swap State embedded here */
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_WAIT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_WAIT);
 	}
 	/* Port is ready to perform a VCONN swap */
 	else {
 		/* NOTE: PE_VCS_Accept_Swap State embedded here */
 		PE_SET_FLAG(port, PE_FLAGS_ACCEPT);
-		prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_ACCEPT);
 	}
 }
 
@@ -5207,7 +5097,7 @@ static void pe_vcs_send_swap_entry(int port)
 	print_current_state(port);
 
 	/* Send a VCONN_Swap Message */
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_VCONN_SWAP);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_VCONN_SWAP);
 
 	pe[port].sender_response_timer = TIMER_DISABLED;
 }
@@ -5418,7 +5308,7 @@ static void pe_vcs_send_ps_rdy_swap_entry(int port)
 	print_current_state(port);
 
 	/* Send a PS_RDY Message */
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
 	pe[port].sub = PE_SUB0;
 }
 
@@ -5435,7 +5325,7 @@ static void pe_vcs_send_ps_rdy_swap_run(int port)
 		if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
 			PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 
-			prl_send_ctrl_msg(port, TCPC_TX_SOP_PRIME,
+			send_ctrl_msg(port, TCPC_TX_SOP_PRIME,
 					  PD_CTRL_SOFT_RESET);
 			pe[port].sub = PE_SUB1;
 		}
@@ -5497,7 +5387,7 @@ static void pe_dr_snk_get_sink_cap_entry(int port)
 	print_current_state(port);
 
 	/* Send a Get Sink Cap Message */
-	prl_send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_GET_SINK_CAP);
+	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_GET_SINK_CAP);
 
 	/* Don't start the timer until message sent */
 	pe[port].sender_response_timer = 0;
@@ -5612,12 +5502,24 @@ uint8_t pd_get_src_cap_cnt(int port)
 void pd_dfp_discovery_init(int port)
 {
 	memset(&pe[port].discovery, 0, sizeof(pe[port].discovery));
+	memset(pe[port].partner_amodes, 0, sizeof(pe[port].partner_amodes));
+
+	/* Reset the DPM and DP modules to enable alternate mode entry. */
+	dpm_init(port);
+	dp_init(port);
 }
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 struct pd_discovery *pd_get_am_discovery(int port, enum tcpm_transmit_type type)
 {
 	return &pe[port].discovery[type];
+}
+
+struct partner_active_modes *pd_get_partner_active_modes(int port,
+		enum tcpm_transmit_type type)
+{
+	assert(type < AMODE_TYPE_COUNT);
+	return &pe[port].partner_amodes[type];
 }
 
 struct pd_cable *pd_get_cable_attributes(int port)
@@ -5666,7 +5568,6 @@ static const struct usb_state pe_states[] = {
 	[PE_SRC_READY] = {
 		.entry = pe_src_ready_entry,
 		.run   = pe_src_ready_run,
-		.exit  = pe_src_ready_exit,
 	},
 	[PE_SRC_DISABLED] = {
 		.entry = pe_src_disabled_entry,
@@ -5709,7 +5610,6 @@ static const struct usb_state pe_states[] = {
 	[PE_SNK_READY] = {
 		.entry = pe_snk_ready_entry,
 		.run   = pe_snk_ready_run,
-		.exit  = pe_snk_ready_exit,
 	},
 	[PE_SNK_HARD_RESET] = {
 		.entry = pe_snk_hard_reset_entry,
@@ -5735,7 +5635,6 @@ static const struct usb_state pe_states[] = {
 	[PE_SEND_SOFT_RESET] = {
 		.entry = pe_send_soft_reset_entry,
 		.run = pe_send_soft_reset_run,
-		.exit = pe_send_soft_reset_exit,
 	},
 	[PE_SOFT_RESET] = {
 		.entry = pe_soft_reset_entry,
@@ -5779,6 +5678,10 @@ static const struct usb_state pe_states[] = {
 		.entry = pe_prs_src_snk_transition_to_off_entry,
 		.run   = pe_prs_src_snk_transition_to_off_run,
 	},
+	[PE_PRS_SRC_SNK_ASSERT_RD] = {
+		.entry = pe_prs_src_snk_assert_rd_entry,
+		.run   = pe_prs_src_snk_assert_rd_run,
+	},
 	[PE_PRS_SRC_SNK_WAIT_SOURCE_ON] = {
 		.entry = pe_prs_src_snk_wait_source_on_entry,
 		.run   = pe_prs_src_snk_wait_source_on_run,
@@ -5787,7 +5690,6 @@ static const struct usb_state pe_states[] = {
 	[PE_PRS_SRC_SNK_SEND_SWAP] = {
 		.entry = pe_prs_src_snk_send_swap_entry,
 		.run   = pe_prs_src_snk_send_swap_run,
-		.exit  = pe_prs_src_snk_send_swap_exit,
 	},
 	[PE_PRS_SNK_SRC_EVALUATE_SWAP] = {
 		.entry = pe_prs_snk_src_evaluate_swap_entry,
@@ -5826,7 +5728,6 @@ static const struct usb_state pe_states[] = {
 	[PE_PRS_SNK_SRC_SEND_SWAP] = {
 		.entry = pe_prs_snk_src_send_swap_entry,
 		.run   = pe_prs_snk_src_send_swap_run,
-		.exit  = pe_prs_snk_src_send_swap_exit,
 #ifdef CONFIG_USB_PD_REV30
 		.parent = &pe_states[PE_PRS_FRS_SHARED],
 #endif /* CONFIG_USB_PD_REV30 */
@@ -5863,10 +5764,6 @@ static const struct usb_state pe_states[] = {
 		.run   = pe_vcs_send_ps_rdy_swap_run,
 	},
 #endif /* CONFIG_USBC_VCONN */
-	[PE_DO_PORT_DISCOVERY] = {
-		.entry = pe_do_port_discovery_entry,
-		.run   = pe_do_port_discovery_run,
-	},
 	[PE_VDM_SEND_REQUEST] = {
 		.entry = pe_vdm_send_request_entry,
 		.run   = pe_vdm_send_request_run,

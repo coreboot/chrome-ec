@@ -5,12 +5,16 @@
 
 /* Morphius board configuration */
 
+#include "adc.h"
+#include "adc_chip.h"
 #include "battery_smart.h"
 #include "button.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "driver/retimer/pi3dpx1207.h"
+#include "driver/temp_sensor/sb_tsi.h"
+#include "driver/temp_sensor/tmp432.h"
 #include "driver/usb_mux/amd_fp5.h"
 #include "extpower.h"
 #include "gpio.h"
@@ -27,6 +31,7 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
+#include "temp_sensor.h"
 #include "usb_mux.h"
 #include "usb_charge.h"
 
@@ -140,8 +145,6 @@ static void trackpoint_reset_deferred(void)
 	gpio_set_level(GPIO_EC_PS2_RESET, 1);
 	msleep(2);
 	gpio_set_level(GPIO_EC_PS2_RESET, 0);
-	msleep(10);
-	ps2_enable_channel(NPCX_PS2_CH0, 1, send_aux_data_to_host);
 	msleep(10);
 }
 DECLARE_DEFERRED(trackpoint_reset_deferred);
@@ -292,6 +295,8 @@ void setup_fw_config(void)
 	/* Enable PS2 power interrupts */
 	gpio_enable_interrupt(GPIO_EN_PWR_TOUCHPAD_PS2);
 
+	ps2_enable_channel(NPCX_PS2_CH0, 1, send_aux_data_to_host);
+
 	setup_mux();
 
 	if (ec_config_has_mst_hub_rtd2141b())
@@ -325,6 +330,52 @@ const struct fan_t fans[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
+
+const struct adc_t adc_channels[] = {
+	[ADC_TEMP_SENSOR_CHARGER] = {
+		.name = "CHARGER",
+		.input_ch = NPCX_ADC_CH2,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_SOC] = {
+		.name = "SOC",
+		.input_ch = NPCX_ADC_CH3,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+const struct temp_sensor_t temp_sensors[] = {
+	[TEMP_SENSOR_CHARGER] = {
+		.name = "Charger",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = TEMP_SENSOR_CHARGER,
+	},
+	[TEMP_SENSOR_SOC] = {
+		.name = "SOC",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = TEMP_SENSOR_SOC,
+	},
+	[TEMP_SENSOR_CPU] = {
+		.name = "CPU",
+		.type = TEMP_SENSOR_TYPE_CPU,
+		.read = sb_tsi_get_val,
+		.idx = 0,
+	},
+	[TEMP_SENSOR_5V_REGULATOR] = {
+		.name = "5V_REGULATOR",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = tmp432_get_val,
+		.idx = TMP432_IDX_LOCAL,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 const static struct ec_thermal_config thermal_thermistor = {
 	.temp_host = {
@@ -487,4 +538,21 @@ void mst_hpd_interrupt(enum ioex_signal signal)
 
 	gpio_set_level(GPIO_DP1_HPD, hpd);
 	hook_call_deferred(&mst_hpd_handler_data, (2 * MSEC));
+}
+
+static void hdmi_hpd_handler(void)
+{
+	int hpd = 0;
+
+	/* Pass HPD through from DB OPT1 HDMI connector to AP's DP1. */
+	ioex_get_level(IOEX_HDMI_CONN_HPD_3V3_DB, &hpd);
+	gpio_set_level(GPIO_DP1_HPD, hpd);
+	ccprints("HDMI HPD %d", hpd);
+}
+DECLARE_DEFERRED(hdmi_hpd_handler);
+
+void hdmi_hpd_interrupt(enum ioex_signal signal)
+{
+	/* Debounce for 2 msec. */
+	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }

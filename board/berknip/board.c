@@ -5,12 +5,15 @@
 
 /* Berknip board configuration */
 
+#include "adc.h"
+#include "adc_chip.h"
 #include "button.h"
 #include "cbi_ec_fw_config.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "driver/retimer/tusb544.h"
+#include "driver/temp_sensor/sb_tsi.h"
 #include "driver/usb_mux/amd_fp5.h"
 #include "driver/usb_mux/ps8743.h"
 #include "extpower.h"
@@ -26,6 +29,8 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
+#include "temp_sensor.h"
+#include "thermistor.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 
@@ -148,6 +153,37 @@ const struct mft_t mft_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
+/*
+ * USB C0 port SBU mux use standalone PI3USB221
+ * chip and it need a board specific driver.
+ * Overall, it will use chained mux framework.
+ */
+static int pi3usb221_set_mux(const struct usb_mux *me, mux_state_t mux_state)
+{
+	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 0);
+	else
+		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
+	return EC_SUCCESS;
+}
+/*
+ * .init is not necessary here because it has nothing
+ * to do. Primary mux will handle mux state so .get is
+ * not needed as well. usb_mux.c can handle the situation
+ * properly.
+ */
+const struct usb_mux_driver usbc0_sbu_mux_driver = {
+	.set = pi3usb221_set_mux,
+};
+/*
+ * Since PI3USB221 is not a i2c device, .i2c_port and
+ * .i2c_addr_flags are not required here.
+ */
+const struct usb_mux usbc0_sbu_mux = {
+	.usb_port = USBC_PORT_C0,
+	.driver = &usbc0_sbu_mux_driver,
+};
+
 /*****************************************************************************
  * USB-C MUX/Retimer dynamic configuration
  */
@@ -190,6 +226,7 @@ struct usb_mux usb_muxes[] = {
 		.i2c_port = I2C_PORT_USB_AP_MUX,
 		.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
 		.driver = &amd_fp5_usb_mux_driver,
+		.next_mux = &usbc0_sbu_mux,
 	},
 	[USBC_PORT_C1] = {
 		/* Filled in dynamically at startup */
@@ -213,31 +250,14 @@ static int board_tusb544_mux_set(const struct usb_mux *me,
 static int board_ps8743_mux_set(const struct usb_mux *me,
 				mux_state_t mux_state)
 {
-	int rv = EC_SUCCESS;
-	int reg = 0;
-
-	rv = ps8743_read(me, PS8743_REG_MODE, &reg);
-	if (rv)
-		return rv;
-
-	/* Disable FLIP pin, enable I2C control. */
-	reg |= PS8743_MODE_FLIP_REG_CONTROL;
-	/* Disable CE_DP pin, enable I2C control. */
-	reg |= PS8743_MODE_DP_REG_CONTROL;
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
+	if (mux_state & USB_PD_MUX_DP_ENABLED)
 		/* Enable IN_HPD on the DB */
 		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
-		/* Disable USB mode on DB */
-		ioex_set_level(IOEX_USB_C1_DATA_EN, 0);
-	} else {
+	else
 		/* Disable IN_HPD on the DB */
 		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
-		/* Enable USB mode on DB */
-		ioex_set_level(IOEX_USB_C1_DATA_EN, 1);
-	}
-	return ps8743_write(me, PS8743_REG_MODE, reg);
+
+	return EC_SUCCESS;
 }
 
 const struct usb_mux usbc1_tusb544 = {
@@ -297,6 +317,93 @@ const struct fan_t fans[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
+
+__override int board_get_temp(int idx, int *temp_k)
+{
+	int mv;
+	int temp_c;
+	enum adc_channel channel;
+
+	/* idx is the sensor index set in board temp_sensors[] */
+	switch (idx) {
+	case TEMP_SENSOR_CHARGER:
+		channel = ADC_TEMP_SENSOR_CHARGER;
+		break;
+	case TEMP_SENSOR_SOC:
+		/* thermistor is not powered in G3 */
+		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			return EC_ERROR_NOT_POWERED;
+
+		channel = ADC_TEMP_SENSOR_SOC;
+		break;
+	case TEMP_SENSOR_5V_REGULATOR:
+		channel = ADC_TEMP_SENSOR_5V_REGULATOR;
+		break;
+	default:
+		return EC_ERROR_INVAL;
+	}
+
+	mv = adc_read_channel(channel);
+	if (mv < 0)
+		return EC_ERROR_INVAL;
+
+	temp_c = thermistor_linear_interpolate(mv, &thermistor_info);
+	*temp_k = C_TO_K(temp_c);
+	return EC_SUCCESS;
+}
+
+const struct adc_t adc_channels[] = {
+	[ADC_TEMP_SENSOR_5V_REGULATOR] = {
+		.name = "5V_REGULATOR",
+		.input_ch = NPCX_ADC_CH0,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_CHARGER] = {
+		.name = "CHARGER",
+		.input_ch = NPCX_ADC_CH2,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_SOC] = {
+		.name = "SOC",
+		.input_ch = NPCX_ADC_CH3,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+const struct temp_sensor_t temp_sensors[] = {
+	[TEMP_SENSOR_CHARGER] = {
+		.name = "Charger",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = TEMP_SENSOR_CHARGER,
+	},
+	[TEMP_SENSOR_SOC] = {
+		.name = "SOC",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = TEMP_SENSOR_SOC,
+	},
+	[TEMP_SENSOR_CPU] = {
+		.name = "CPU",
+		.type = TEMP_SENSOR_TYPE_CPU,
+		.read = sb_tsi_get_val,
+		.idx = 0,
+	},
+	[TEMP_SENSOR_5V_REGULATOR] = {
+		.name = "5V_REGULATOR",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = TEMP_SENSOR_5V_REGULATOR,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 const static struct ec_thermal_config thermal_thermistor = {
 	.temp_host = {
@@ -362,3 +469,38 @@ void mst_hpd_interrupt(enum ioex_signal signal)
 	gpio_set_level(GPIO_DP1_HPD, hpd);
 	hook_call_deferred(&mst_hpd_handler_data, (2 * MSEC));
 }
+
+static void hdmi_hpd_handler(void)
+{
+	int hpd = 0;
+
+	/* Pass HPD through from DB OPT1 HDMI connector to AP's DP1. */
+	ioex_get_level(IOEX_HDMI_CONN_HPD_3V3_DB, &hpd);
+	gpio_set_level(GPIO_DP1_HPD, hpd);
+	ccprints("HDMI HPD %d", hpd);
+}
+DECLARE_DEFERRED(hdmi_hpd_handler);
+
+void hdmi_hpd_interrupt(enum ioex_signal signal)
+{
+	/* Debounce for 2 msec. */
+	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
+}
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ * The connector has 24 pins total, and there is no pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+		{0, 5}, {1, 1}, {1, 0}, {0, 6}, {0, 7},
+		{1, 4}, {1, 3}, {1, 6}, {1, 7}, {3, 1},
+		{2, 0}, {1, 5}, {2, 6}, {2, 7}, {2, 1},
+		{2, 4}, {2, 5}, {1, 2}, {2, 3}, {2, 2},
+		{3, 0}, {-1, -1}, {-1, -1}, {-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+			ARRAY_SIZE(keyboard_factory_scan_pins);
+#endif

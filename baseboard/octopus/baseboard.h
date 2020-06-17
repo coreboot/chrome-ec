@@ -92,6 +92,7 @@
 #define CONFIG_DPTF
 #define CONFIG_BOARD_HAS_RTC_RESET
 #define CONFIG_LED_ONOFF_STATES
+#define CONFIG_CMD_CHARGEN
 
 /* Port80 -- allow larger buffer for port80 messages */
 #undef CONFIG_PORT80_HISTORY_LEN
@@ -184,6 +185,8 @@
 #endif /* VARIANT_OCTOPUS_USBC */
 
 /* Common USB-C defines */
+#define USB_PD_PORT_TCPC_0	0
+#define USB_PD_PORT_TCPC_1	1
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2

@@ -71,6 +71,7 @@ common-$(CONFIG_EC_EC_COMM_MASTER)+=ec_ec_comm_master.o
 common-$(CONFIG_EC_EC_COMM_SLAVE)+=ec_ec_comm_slave.o
 common-$(CONFIG_HOSTCMD_ESPI)+=espi.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
+common-$(CONFIG_EXTPOWER)+=extpower_common.o
 common-$(CONFIG_FANS)+=fan.o pwm.o
 common-$(CONFIG_FLASH)+=flash.o
 common-$(CONFIG_FMAP)+=fmap.o
@@ -102,6 +103,7 @@ common-$(CONFIG_HOSTCMD_X86)+=acpi.o port80.o ec_features.o
 common-$(CONFIG_MAG_CALIBRATE)+= mag_cal.o math_util.o vec3.o mat33.o mat44.o \
 	kasa.o
 common-$(CONFIG_MKBP_EVENT)+=mkbp_event.o
+common-$(CONFIG_OCPC)+=ocpc.o
 common-$(CONFIG_ONEWIRE)+=onewire.o
 common-$(CONFIG_PECI_COMMON)+=peci.o
 common-$(CONFIG_POWER_BUTTON)+=power_button.o
@@ -117,7 +119,8 @@ common-$(CONFIG_RWSIG_TYPE_RWSIG)+=vboot/vb21_lib.o
 common-$(CONFIG_MATH_UTIL)+=math_util.o
 common-$(CONFIG_ONLINE_CALIB)+=stillness_detector.o kasa.o math_util.o \
 	mat44.o vec3.o newton_fit.o accel_cal.o online_calibration.o \
-	mkbp_event.o
+	mkbp_event.o mag_cal.o math_util.o mat33.o
+common-$(CONFIG_SHA1)+= sha1.o
 common-$(CONFIG_SHA256)+=sha256.o
 common-$(CONFIG_SOFTWARE_CLZ)+=clz.o
 common-$(CONFIG_SOFTWARE_CTZ)+=ctz.o

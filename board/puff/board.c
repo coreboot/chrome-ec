@@ -161,6 +161,24 @@ static void port_ocp_interrupt(enum gpio_signal signal)
  * protection, so we're safe to turn one on then the other off- but we should
  * only do that if the system is off since it might still brown out.
  */
+
+/*
+ * Barrel-jack power adapter ratings.
+ */
+static const struct {
+	int voltage;
+	int current;
+} bj_power[] = {
+	{ /* 0 - 65W (also default) */
+	.voltage = 19000,
+	.current = 3420
+	},
+	{ /* 1 - 90W */
+	.voltage = 19000,
+	.current = 4740
+	},
+};
+
 #define ADP_DEBOUNCE_MS		1000  /* Debounce time for BJ plug/unplug */
 /* Debounced connection state of the barrel jack */
 static int8_t adp_connected = -1;
@@ -173,16 +191,10 @@ static void adp_connect_deferred(void)
 	if (connected == adp_connected)
 		return;
 	if (connected) {
-		switch (ec_config_get_bj_power()) {
-		case BJ_POWER_65W:
-			pi.voltage = 19000;
-			pi.current = 3420;
-			break;
-		case BJ_POWER_90W:
-			pi.voltage = 19000;
-			pi.current = 4740;
-			break;
-		}
+		unsigned int bj = ec_config_get_bj_power();
+
+		pi.voltage = bj_power[bj].voltage;
+		pi.current = bj_power[bj].current;
 	}
 	charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
 				     DEDICATED_CHARGE_PORT, &pi);
@@ -347,9 +359,9 @@ const struct fan_conf fan_conf_0 = {
 };
 
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 2400,
-	.rpm_start = 2400,
-	.rpm_max = 4000,
+	.rpm_min = 2500,
+	.rpm_start = 2500,
+	.rpm_max = 5000,
 };
 
 const struct fan_t fans[] = {
@@ -369,16 +381,16 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(75),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(90),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(55),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 		[EC_TEMP_THRESH_HALT] = 0,
 	},
 	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(55),
+	.temp_fan_max = C_TO_K(60),
 };
 
 struct ec_thermal_config thermal_params[] = {
@@ -396,6 +408,7 @@ const struct ina3221_t ina3221[] = {
 const unsigned int ina3221_count = ARRAY_SIZE(ina3221);
 
 static uint16_t board_version;
+static uint32_t sku_id;
 static uint32_t fw_config;
 
 static void cbi_init(void)
@@ -410,10 +423,26 @@ static void cbi_init(void)
 
 	if (cbi_get_board_version(&val) == EC_SUCCESS && val <= UINT16_MAX)
 		board_version = val;
+	if (cbi_get_sku_id(&val) == EC_SUCCESS)
+		sku_id = val;
 	if (cbi_get_fw_config(&val) == EC_SUCCESS)
 		fw_config = val;
-	CPRINTS("Board Version: %d, F/W config: 0x%08x",
-		board_version, fw_config);
+	else if (board_version == 1 || board_version == 2) {
+		/* Hack to set the barrel-jack adapter using SKU ID */
+		switch (sku_id) {
+		case 0x00000001:
+		case 0x00000002:
+		case 0x01000001:
+		case 0x01000003:
+		case 0x01000004:
+		case 0x02000000:
+			fw_config = 0x1;
+			break;
+		}
+		CPRINTS("F/W config NOT SET, defaulting to 0x%08x", fw_config);
+	}
+	CPRINTS("Board Version: %d, SKU ID: 0x%08x, F/W config: 0x%08x",
+		board_version, sku_id, fw_config);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -474,8 +503,13 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 /* Power Delivery and charging functions */
 static void board_tcpc_init(void)
 {
-	/* Only reset TCPC if not sysjump */
-	if (!system_jumped_to_this_image())
+	/*
+	 * Reset TCPC if we have had a system reset.
+	 * With EFSv2, it is possible to be in RW without
+	 * having reset the TCPC.
+	 */
+	if (system_get_reset_flags() &
+	    (EC_RESET_FLAG_RESET_PIN | EC_RESET_FLAG_POWER_ON))
 		board_reset_pd_mcu();
 	/* Enable TCPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_TCPPC_INT_ODL);
@@ -500,7 +534,6 @@ int64_t get_time_dsw_pwrok(void)
 
 void board_reset_pd_mcu(void)
 {
-	/* Maybe should only reset if we are powered off barreljack */
 	int level = !!(tcpc_config[USB_PD_PORT_TCPC_0].flags &
 		       TCPC_FLAGS_RESET_ACTIVE_HIGH);
 
@@ -607,7 +640,12 @@ void board_enable_s0_rails(int enable)
 	gpio_set_level(GPIO_EN_PP5000_HDMI, enable);
 }
 
-enum ec_cfg_bj_power_type ec_config_get_bj_power(void)
+unsigned int ec_config_get_bj_power(void)
 {
-	return ((fw_config & EC_CFG_BJ_POWER_MASK) >> EC_CFG_BJ_POWER_L);
+	unsigned int bj =
+		(fw_config & EC_CFG_BJ_POWER_MASK) >> EC_CFG_BJ_POWER_L;
+	/* Out of range value defaults to 0 */
+	if (bj >= ARRAY_SIZE(bj_power))
+		bj = 0;
+	return bj;
 }

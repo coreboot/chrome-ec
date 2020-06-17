@@ -348,10 +348,11 @@ static enum power_state power_common_state(enum power_state state)
 						     &target, now)) {
 			case CRITICAL_SHUTDOWN_HIBERNATE:
 				CPRINTS("Hibernate due to G3 idle");
-				if (IS_ENABLED(CONFIG_VBOOT_EFS2)) {
+				if (IS_ENABLED(CONFIG_EXTPOWER_GPIO) &&
+						IS_ENABLED(CONFIG_VBOOT_EFS2)) {
 					uint32_t reset_flags;
 					reset_flags = chip_read_reset_flags() |
-						EC_RESET_FLAG_AP_OFF;
+						EC_RESET_FLAG_AP_IDLE;
 					chip_save_reset_flags(reset_flags);
 				}
 				system_hibernate(0, 0);
@@ -768,7 +769,7 @@ static int command_powerinfo(int argc, char **argv)
 	 * Print power state in same format as state machine.  This is
 	 * used by FAFT tests, so must match exactly.
 	 */
-	ccprints("power state %d = %s, in 0x%04x",
+	ccprintf("power state %d = %s, in 0x%04x\n",
 		 state, state_names[state], in_signals);
 
 	return EC_SUCCESS;

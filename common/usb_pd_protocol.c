@@ -257,6 +257,8 @@ static struct pd_protocol {
 	timestamp_t vdm_timeout;
 	/* next Vendor Defined Message to send */
 	uint32_t vdo_data[VDO_MAX_SIZE];
+	/* type of transmit message (SOP/SOP'/SOP'') */
+	enum tcpm_transmit_type xmit_type;
 	uint8_t vdo_count;
 	/* VDO to retry if UFP responder replied busy. */
 	uint32_t vdo_retry;
@@ -283,7 +285,7 @@ static struct pd_protocol {
 	uint64_t hard_reset_complete_timer;
 } pd[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-#ifdef CONFIG_COMMON_RUNTIME
+#ifdef CONFIG_USB_PD_TCPMV1_DEBUG
 static const char * const pd_state_names[] = {
 	"DISABLED", "SUSPENDED",
 	"SNK_DISCONNECTED", "SNK_DISCONNECTED_DEBOUNCE",
@@ -641,17 +643,18 @@ static bool consume_sop_repeat_message(int port, uint8_t msg_id)
  * using SOP* Packets Shall maintain copies of the last MessageID for
  * each type of SOP* it uses.
  */
-static bool consume_repeat_message(int port, uint16_t msg_header)
+static bool consume_repeat_message(int port, uint32_t msg_header)
 {
 	uint8_t msg_id = PD_HEADER_ID(msg_header);
+	enum tcpm_transmit_type sop = PD_HEADER_GET_SOP(msg_header);
 
 	/* If repeat message ignore, except softreset control request. */
 	if (PD_HEADER_TYPE(msg_header) == PD_CTRL_SOFT_RESET &&
 	    PD_HEADER_CNT(msg_header) == 0) {
 		return false;
-	} else if (is_transmit_msg_sop_prime(port)) {
+	} else if (sop == TCPC_TX_SOP_PRIME) {
 		return consume_sop_prime_repeat_msg(port, msg_id);
-	} else if (is_transmit_msg_sop_prime_prime(port)) {
+	} else if (sop == TCPC_TX_SOP_PRIME_PRIME) {
 		return consume_sop_prime_prime_repeat_msg(port, msg_id);
 	} else {
 		return consume_sop_repeat_message(port, msg_id);
@@ -788,7 +791,7 @@ static inline void set_state(int port, enum pd_states next_state)
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
 #endif
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-		pd_dfp_exit_mode(port, 0, 0);
+		pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
 #endif
 		/*
 		 * Indicate that the port is disconnected by setting role to
@@ -836,10 +839,12 @@ static inline void set_state(int port, enum pd_states next_state)
 		disable_sleep(SLEEP_MASK_USB_PD);
 #endif
 
+#ifdef CONFIG_USB_PD_TCPMV1_DEBUG
 	if (debug_level > 0)
 		CPRINTF("C%d st%d %s\n", port, next_state,
 					 pd_state_names[next_state]);
 	else
+#endif
 		CPRINTF("C%d st%d\n", port, next_state);
 }
 
@@ -1210,20 +1215,23 @@ static int send_bist_cmd(int port)
 #endif
 
 static void queue_vdm(int port, uint32_t *header, const uint32_t *data,
-			     int data_cnt)
+			     int data_cnt, enum tcpm_transmit_type type)
 {
 	pd[port].vdo_count = data_cnt + 1;
 	pd[port].vdo_data[0] = header[0];
-	memcpy(&pd[port].vdo_data[1], data, sizeof(uint32_t) * data_cnt);
+	pd[port].xmit_type = type;
+	memcpy(&pd[port].vdo_data[1], data,
+		sizeof(uint32_t) * data_cnt);
 	/* Set ready, pd task will actually send */
 	pd[port].vdm_state = VDM_STATE_READY;
 }
 
 static void handle_vdm_request(int port, int cnt, uint32_t *payload,
-				uint16_t head)
+				uint32_t head)
 {
 	int rlen = 0;
 	uint32_t *rdata;
+	enum tcpm_transmit_type rtype = TCPC_TX_SOP;
 
 	if (pd[port].vdm_state == VDM_STATE_BUSY) {
 		/* If UFP responded busy retry after timeout */
@@ -1246,14 +1254,15 @@ static void handle_vdm_request(int port, int cnt, uint32_t *payload,
 	}
 
 	if (PD_VDO_SVDM(payload[0]))
-		rlen = pd_svdm(port, cnt, payload, &rdata, head);
+		rlen = pd_svdm(port, cnt, payload, &rdata, head, &rtype);
 	else
 		rlen = pd_custom_vdm(port, cnt, payload, &rdata);
 
 	if (rlen > 0) {
-		queue_vdm(port, rdata, &rdata[1], rlen - 1);
+		queue_vdm(port, rdata, &rdata[1], rlen - 1, rtype);
 		return;
 	}
+
 	if (debug_level >= 2)
 		CPRINTF("C%d Unhandled VDM VID %04x CMD %04x\n",
 			port, PD_VDO_VID(payload[0]), payload[0] & 0xFFFF);
@@ -1316,7 +1325,7 @@ void pd_execute_hard_reset(int port)
 	pd[port].msg_id = 0;
 	invalidate_last_message_id(port);
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-	pd_dfp_exit_mode(port, 0, 0);
+	pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
 #endif
 
 #ifdef CONFIG_USB_PD_REV30
@@ -1385,7 +1394,6 @@ void pd_execute_hard_reset(int port)
 
 static void execute_soft_reset(int port)
 {
-	pd[port].msg_id = 0;
 	invalidate_last_message_id(port);
 	set_state(port, DUAL_ROLE_IF_ELSE(port, PD_STATE_SNK_DISCOVERY,
 						PD_STATE_SRC_DISCOVERY));
@@ -1502,7 +1510,7 @@ static void pd_update_pdo_flags(int port, uint32_t pdo)
 #endif
 }
 
-static void handle_data_request(int port, uint16_t head,
+static void handle_data_request(int port, uint32_t head,
 		uint32_t *payload)
 {
 	int type = PD_HEADER_TYPE(head);
@@ -1671,7 +1679,7 @@ static void pd_dr_swap(int port)
 	pd[port].flags |= PD_FLAGS_CHECK_IDENTITY;
 }
 
-static void handle_ctrl_request(int port, uint16_t head,
+static void handle_ctrl_request(int port, uint32_t head,
 		uint32_t *payload)
 {
 	int type = PD_HEADER_TYPE(head);
@@ -1725,6 +1733,7 @@ static void handle_ctrl_request(int port, uint16_t head,
 		} else if (pd[port].task_state == PD_STATE_SRC_SWAP_STANDBY) {
 			/* reset message ID and swap roles */
 			pd[port].msg_id = 0;
+			invalidate_last_message_id(port);
 			pd_set_power_role(port, PD_ROLE_SINK);
 			pd_update_roles(port);
 			/*
@@ -1906,6 +1915,7 @@ static void handle_ctrl_request(int port, uint16_t head,
 		break;
 	case PD_CTRL_SOFT_RESET:
 		execute_soft_reset(port);
+		pd[port].msg_id = 0;
 		/* We are done, acknowledge with an Accept packet */
 		send_control(port, PD_CTRL_ACCEPT);
 		break;
@@ -1988,7 +1998,7 @@ static void handle_ext_request(int port, uint16_t head, uint32_t *payload)
 }
 #endif
 
-static void handle_request(int port, uint16_t head,
+static void handle_request(int port, uint32_t head,
 		uint32_t *payload)
 {
 	int cnt = PD_HEADER_CNT(head);
@@ -2067,7 +2077,7 @@ void pd_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
 #ifdef CONFIG_USB_PD_REV30
 	pd[port].vdo_data[0] |= VDO_SVDM_VERS(vdo_ver[pd[port].rev]);
 #endif
-	queue_vdm(port, pd[port].vdo_data, data, count);
+	queue_vdm(port, pd[port].vdo_data, data, count, TCPC_TX_SOP);
 
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
@@ -2121,12 +2131,17 @@ static void exit_tbt_mode_sop_prime(int port)
 	if (!IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE))
 		return;
 
-	opos =  pd_alt_mode(port, USB_VID_INTEL);
+	opos = pd_alt_mode(port, TCPC_TX_SOP, USB_VID_INTEL);
 	if (opos <= 0)
 		return;
 
 	CPRINTS("C%d Cable exiting TBT Compat mode", port);
-	if (!pd_dfp_exit_mode(port, USB_VID_INTEL, opos))
+	/*
+	 * Note: TCPMv2 contemplates separate discovery structures for each SOP
+	 * type. TCPMv1 only uses one discovery structure, so all accesses
+	 * specify TCPC_TX_SOP.
+	 */
+	if (!pd_dfp_exit_mode(port, TCPC_TX_SOP, USB_VID_INTEL, opos))
 		return;
 
 	header = PD_HEADER(PD_DATA_VENDOR_DEF, pd[port].power_role,
@@ -2147,7 +2162,7 @@ static void pd_vdm_send_state_machine(int port)
 {
 	int res;
 	uint16_t header;
-	enum pd_msg_type msg_type = pd_msg_tx_type(port);
+	enum tcpm_transmit_type msg_type = pd[port].xmit_type;
 
 	switch (pd[port].vdm_state) {
 	case VDM_STATE_READY:
@@ -2175,8 +2190,8 @@ static void pd_vdm_send_state_machine(int port)
 		 * data role swap takes place during source and sink
 		 * negotiation and in case of failure, a soft reset is issued.
 		 */
-		if ((msg_type == PD_MSG_SOP_PRIME) ||
-		    (msg_type == PD_MSG_SOP_PRIME_PRIME)) {
+		if ((msg_type == TCPC_TX_SOP_PRIME) ||
+		    (msg_type == TCPC_TX_SOP_PRIME_PRIME)) {
 			/* Prepare SOP'/SOP'' header and send VDM */
 			header = PD_HEADER(
 				PD_DATA_VENDOR_DEF,
@@ -2186,13 +2201,8 @@ static void pd_vdm_send_state_machine(int port)
 				(int)pd[port].vdo_count,
 				pd_get_rev(port),
 				0);
-			res = pd_transmit(port,
-					  (msg_type == PD_MSG_SOP_PRIME) ?
-					  TCPC_TX_SOP_PRIME :
-					  TCPC_TX_SOP_PRIME_PRIME,
-					  header,
-					  pd[port].vdo_data,
-					  AMS_START);
+			res = pd_transmit(port, msg_type, header,
+					  pd[port].vdo_data, AMS_START);
 			/*
 			 * In the case of SOP', if there is no response from
 			 * the cable, it's a non-emark cable and therefore the
@@ -2215,10 +2225,10 @@ static void pd_vdm_send_state_machine(int port)
 						   (int)pd[port].vdo_count,
 						   pd_get_rev(port), 0);
 
-				if ((msg_type == PD_MSG_SOP_PRIME_PRIME) &&
+				if ((msg_type == TCPC_TX_SOP_PRIME_PRIME) &&
 				     IS_ENABLED(CONFIG_USBC_SS_MUX)) {
 					exit_tbt_mode_sop_prime(port);
-				} else if (msg_type == PD_MSG_SOP_PRIME) {
+				} else if (msg_type == TCPC_TX_SOP_PRIME) {
 					pd[port].vdo_data[0] = VDO(USB_SID_PD,
 						1, CMD_DISCOVER_SVID);
 				}
@@ -2328,10 +2338,12 @@ __maybe_unused static void exit_supported_alt_mode(int port)
 		return;
 
 	for (i = 0; i < supported_modes_cnt; i++) {
-		int opos = pd_alt_mode(port, supported_modes[i].svid);
+		int opos = pd_alt_mode(port, TCPC_TX_SOP,
+				supported_modes[i].svid);
 
 		if (opos > 0 &&
-		    pd_dfp_exit_mode(port, supported_modes[i].svid, opos)) {
+		    pd_dfp_exit_mode(
+			    port, TCPC_TX_SOP, supported_modes[i].svid, opos)) {
 			CPRINTS("C%d Exiting ALT mode with SVID = 0x%x", port,
 				supported_modes[i].svid);
 			pd_send_vdm(port, supported_modes[i].svid,
@@ -2568,11 +2580,11 @@ uint8_t pd_get_task_state(int port)
 
 const char *pd_get_task_state_name(int port)
 {
-#ifdef CONFIG_COMMON_RUNTIME
+#ifdef CONFIG_USB_PD_TCPMV1_DEBUG
 	if (debug_level > 0)
 		return pd_state_names[pd[port].task_state];
 #endif
-	return NULL;
+	return "";
 }
 
 bool pd_get_vconn_state(int port)
@@ -2810,7 +2822,7 @@ void pd_interrupt_handler_task(void *p)
 
 static void pd_send_enter_usb(int port, int *timeout)
 {
-	uint32_t usb4_payload = get_enter_usb_msg_payload(port);
+	uint32_t usb4_payload;
 	uint16_t header;
 	int res;
 
@@ -2818,8 +2830,12 @@ static void pd_send_enter_usb(int port, int *timeout)
 	 * TODO: Enable Enter USB for cables (SOP').
 	 * This is needed for active cables
 	 */
-	if (!IS_ENABLED(CONFIG_USBC_SS_MUX) || !IS_ENABLED(CONFIG_USB_PD_USB4))
+	if (!IS_ENABLED(CONFIG_USBC_SS_MUX) ||
+	    !IS_ENABLED(CONFIG_USB_PD_USB4) ||
+	    !IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
 		return;
+
+	usb4_payload = get_enter_usb_msg_payload(port);
 
 	header = PD_HEADER(PD_DATA_ENTER_USB,
 		pd[port].power_role,
@@ -2850,7 +2866,7 @@ static void pd_send_enter_usb(int port, int *timeout)
 
 void pd_task(void *u)
 {
-	int head;
+	uint32_t head;
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
 	uint32_t payload[7];
 	int timeout = 10*MSEC;
@@ -3592,6 +3608,7 @@ void pd_task(void *u)
 		case PD_STATE_SRC_POWERED:
 			/* Switch to the new requested voltage */
 			if (pd[port].last_state != pd[port].task_state) {
+				pd[port].flags |= PD_FLAGS_CHECK_VCONN_STATE;
 				pd_transition_voltage(pd[port].requested_idx);
 				set_state_timeout(
 					port,
@@ -3680,17 +3697,8 @@ void pd_task(void *u)
 				pd_check_pr_role(port, PD_ROLE_SOURCE,
 						 pd[port].flags);
 				pd[port].flags &= ~PD_FLAGS_CHECK_PR_ROLE;
-				/*
-				 * USB PD  version 1.3 section 2.6.1:
-				 * During Explicit contract the Sink can
-				 * initiate or receive a request an exchange
-				 * of VCONN Source. Hence, enable Vconn swap
-				 * during explicit contract.
-				 */
-				pd[port].flags |= PD_FLAGS_CHECK_VCONN_STATE;
-
-				break;
 			}
+
 
 			/* Check data role policy, which may trigger a swap */
 			if (pd[port].flags & PD_FLAGS_CHECK_DR_ROLE) {
@@ -3702,6 +3710,14 @@ void pd_task(void *u)
 
 			/* Check for Vconn source, which may trigger a swap */
 			if (pd[port].flags & PD_FLAGS_CHECK_VCONN_STATE) {
+				/*
+				 * Ref: Section 2.6.1 of both
+				 * USB-PD Spec Revision 2.0, Version 1.3 &
+				 * USB-PD Spec Revision 3.0, Version 2.0
+				 * During Explicit contract the Sink can
+				 * initiate or receive a request an exchange
+				 * of VCONN Source.
+				 */
 				pd_try_execute_vconn_swap(port,
 							  pd[port].flags);
 				pd[port].flags &= ~PD_FLAGS_CHECK_VCONN_STATE;
@@ -4252,6 +4268,7 @@ void pd_task(void *u)
 		case PD_STATE_SNK_REQUESTED:
 			/* Wait for ACCEPT or REJECT */
 			if (pd[port].last_state != pd[port].task_state) {
+				pd[port].flags |= PD_FLAGS_CHECK_VCONN_STATE;
 				hard_reset_count = 0;
 				set_state_timeout(port,
 						  get_time().val +
@@ -4302,14 +4319,6 @@ void pd_task(void *u)
 				pd_check_pr_role(port, PD_ROLE_SINK,
 						 pd[port].flags);
 				pd[port].flags &= ~PD_FLAGS_CHECK_PR_ROLE;
-				/*
-				 * USB PD  version 1.3 section 2.6.2:
-				 * During Explicit contract the Sink can
-				 * initiate or receive a request an exchange
-				 * of VCONN Source. Hence, enable Vconn swap
-				 * during explicit contract.
-				 */
-				pd[port].flags |= PD_FLAGS_CHECK_VCONN_STATE;
 				break;
 			}
 
@@ -4323,6 +4332,14 @@ void pd_task(void *u)
 
 			/* Check for Vconn source, which may trigger a swap */
 			if (pd[port].flags & PD_FLAGS_CHECK_VCONN_STATE) {
+				/*
+				 * Ref: Section 2.6.2 of both
+				 * USB-PD Spec Revision 2.0, Version 1.3 &
+				 * USB-PD Spec Revision 3.0, Version 2.0
+				 * During Explicit contract the Sink can
+				 * initiate or receive a request an exchange
+				 * of VCONN Source.
+				 */
 				pd_try_execute_vconn_swap(port,
 							  pd[port].flags);
 				pd[port].flags &= ~PD_FLAGS_CHECK_VCONN_STATE;
@@ -4960,7 +4977,7 @@ int pd_is_port_enabled(int port)
 void pd_send_hpd(int port, enum hpd_event hpd)
 {
 	uint32_t data[1];
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 	if (!opos)
 		return;
 
@@ -5259,8 +5276,7 @@ static int command_pd(int argc, char **argv)
 			pd[port].data_role == PD_ROLE_DFP ? "DFP" : "UFP",
 			(pd[port].flags & PD_FLAGS_VCONN_ON) ? "-VC" : "",
 			pd[port].task_state,
-			debug_level > 0 ?
-				pd_state_names[pd[port].task_state] : "",
+			debug_level > 0 ? pd_get_task_state_name(port) : "",
 			pd[port].flags);
 	} else {
 		return EC_ERROR_PARAM1;

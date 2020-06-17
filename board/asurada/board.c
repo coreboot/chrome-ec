@@ -12,10 +12,14 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
+#include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/charger/isl923x.h"
 #include "driver/ppc/syv682x.h"
 #include "driver/tcpm/it83xx_pd.h"
+#include "driver/temp_sensor/thermistor.h"
+#include "driver/usb_mux/it5205.h"
+#include "driver/usb_mux/ps8743.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -27,9 +31,11 @@
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
+#include "spi.h"
 #include "switch.h"
 #include "tablet_mode.h"
 #include "task.h"
+#include "temp_sensor.h"
 #include "timer.h"
 #include "uart.h"
 #include "usb_mux.h"
@@ -99,6 +105,10 @@ static void board_init(void)
 	/* Set PWM of PWRLED to 5%. */
 	pwm_set_duty(PWM_CH_PWRLED, 5);
 	pwm_enable(PWM_CH_PWRLED, 1);
+
+	/* Enable motion sensor interrupt */
+	gpio_enable_interrupt(GPIO_BASE_IMU_INT_L);
+	gpio_enable_interrupt(GPIO_LID_ACCEL_INT_L);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -114,15 +124,37 @@ DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 /* ADC channels. Must be in the exactly same order as in enum adc_channel. */
 const struct adc_t adc_channels[] = {
 	/* Convert to mV (3000mV/1024). */
-	{"TEMP_SENSOR_SUBPMIC", 3000, 1024, 0, CHIP_ADC_CH0},
-	{"BOARD_ID_0", 3000, 1024, 0, CHIP_ADC_CH1},
-	{"BOARD_ID_1", 3000, 1024, 0, CHIP_ADC_CH2},
-	{"TEMP_SENSOR_AMB", 3000, 1024, 0, CHIP_ADC_CH3},
-	{"TEMP_SENSOR_CHARGER", 3000, 1024, 0, CHIP_ADC_CH5},
-	{"CHARGER_PMON", 3000, 1024, 0, CHIP_ADC_CH6},
-	{"TEMP_SENSOR_AP", 3000, 1024, 0, CHIP_ADC_CH7},
+	{"TEMP_SENSOR_SUBPMIC", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0,
+	 CHIP_ADC_CH0},
+	{"BOARD_ID_0", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH1},
+	{"BOARD_ID_1", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH2},
+	{"TEMP_SENSOR_AMB", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH3},
+	{"TEMP_SENSOR_CHARGER", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0,
+	 CHIP_ADC_CH5},
+	{"CHARGER_PMON", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH6},
+	{"TEMP_SENSOR_AP", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH7},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+const struct temp_sensor_t temp_sensors[] = {
+	[TEMP_SENSOR_SUBPMIC] = {.name = "SubPMIC",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_51k1_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_SUBPMIC},
+	[TEMP_SENSOR_AMB]     = {.name = "Ambient",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_51k1_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_AMB},
+	[TEMP_SENSOR_CHARGER] = {.name = "Charger",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_51k1_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_CHARGER},
+	[TEMP_SENSOR_AP]      = {.name = "AP",
+				 .type = TEMP_SENSOR_TYPE_CPU,
+				 .read = get_temp_3v3_51k1_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_AP},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /* Keyboard scan setting */
 struct keyboard_scan_config keyscan_config = {
@@ -238,8 +270,49 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
+static int board_ps8743_mux_set(const struct usb_mux *me,
+				mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+	int reg = 0;
+
+	rv = ps8743_read(me, PS8743_REG_MODE, &reg);
+	if (rv)
+		return rv;
+
+	/* Disable FLIP pin, enable I2C control. */
+	reg |= PS8743_MODE_FLIP_REG_CONTROL;
+	/* Disable CE_USB pin, enable I2C control. */
+	reg |= PS8743_MODE_USB_REG_CONTROL;
+	/* Disable CE_DP pin, enable I2C control. */
+	reg |= PS8743_MODE_DP_REG_CONTROL;
+
+	/*
+	 * DP specific config
+	 *
+	 * Enable/Disable IN_HPD on the DB.
+	 */
+	gpio_set_level(GPIO_USB_C1_DP_IN_HPD,
+		       mux_state & USB_PD_MUX_DP_ENABLED);
+
+	return ps8743_write(me, PS8743_REG_MODE, reg);
+}
+
 /* USB Mux */
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX0,
+		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
+		.driver = &it5205_usb_mux_driver,
+	},
+	{
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_MUX1,
+		.i2c_addr_flags = PS8743_I2C_ADDR0_FLAG,
+		.driver = &ps8743_usb_mux_driver,
+		.board_set = &board_ps8743_mux_set,
+	},
 };
 
 uint16_t tcpc_get_alert_status(void)
@@ -327,6 +400,20 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 {
 }
 
+/* Called on AP S3 -> S0 transition */
+static void board_chipset_resume(void)
+{
+	gpio_set_level(GPIO_EC_BL_EN_OD, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S0 -> S3 transition */
+static void board_chipset_suspend(void)
+{
+	gpio_set_level(GPIO_EC_BL_EN_OD, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
 /* Sub-board */
 
 static enum board_sub_board board_get_sub_board(void)
@@ -370,18 +457,40 @@ __override uint8_t board_get_usb_pd_port_count(void)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 }
 
+/* Lid */
+#ifndef TEST_BUILD
+/* This callback disables keyboard when convertibles are fully open */
+void lid_angle_peripheral_enable(int enable)
+{
+	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
+
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_s0)
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	}
+}
+#endif
+
 /* Sensor */
 
 static struct mutex g_base_mutex;
+static struct mutex g_lid_mutex;
 
 static struct bmi_drv_data_t g_bmi160_data;
+static struct stprivate_data g_lis2dwl_data;
 
 /* Matrix to rotate accelerometer into standard reference frame */
-/* TODO: update the matrix after we have assembled unit */
 static const mat33_fp_t base_standard_ref = {
 	{FLOAT_TO_FP(-1), 0, 0},
-	{0, FLOAT_TO_FP(-1), 0},
-	{0, 0, FLOAT_TO_FP(1)},
+	{0, FLOAT_TO_FP(1), 0},
+	{0, 0, FLOAT_TO_FP(-1)},
 };
 
 /* Matrix to rotate accelrator into standard reference frame */
@@ -427,7 +536,7 @@ struct motion_sensor_t motion_sensors[] = {
 		},
 	},
 	[BASE_GYRO] = {
-		.name = "Gyro",
+		.name = "Base Gyro",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
 		.chip = MOTIONSENSE_CHIP_BMI160,
 		.type = MOTIONSENSE_TYPE_GYRO,
@@ -443,7 +552,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 	[BASE_MAG] = {
-		.name = "Lid Mag",
+		.name = "Base Mag",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
 		.chip = MOTIONSENSE_CHIP_BMI160,
 		.type = MOTIONSENSE_TYPE_MAG,
@@ -457,6 +566,34 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &mag_standard_ref,
 		.min_frequency = BMM150_MAG_MIN_FREQ,
 		.max_frequency = BMM150_MAG_MAX_FREQ(SPECIAL),
+	},
+	[LID_ACCEL] = {
+		.name = "Lid Accel",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_LIS2DWL,
+		.type = MOTIONSENSE_TYPE_ACCEL,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &lis2dw12_drv,
+		.mutex = &g_lid_mutex,
+		.drv_data = &g_lis2dwl_data,
+		.int_signal = GPIO_LID_ACCEL_INT_L,
+		.port = I2C_PORT_ACCEL,
+		.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
+		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
+		.rot_standard_ref = NULL, /* identity matrix */
+		.default_range = 2, /* g */
+		.min_frequency = LIS2DW12_ODR_MIN_VAL,
+		.max_frequency = LIS2DW12_ODR_MAX_VAL,
+		.config = {
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 12500 | ROUND_UP_FLAG,
+			},
+			/* Sensor on for lid angle detection */
+			[SENSOR_CONFIG_EC_S3] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+			},
+		},
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);

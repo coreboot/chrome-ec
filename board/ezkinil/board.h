@@ -63,8 +63,15 @@
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
 #define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
+#define GPIO_DP1_HPD			GPIO_EC_DP1_HPD
 
 #ifndef __ASSEMBLER__
+
+enum adc_channel {
+	ADC_TEMP_SENSOR_CHARGER,
+	ADC_TEMP_SENSOR_SOC,
+	ADC_CH_COUNT
+};
 
 enum battery_type {
 	BATTERY_AP19B8M,
@@ -82,6 +89,13 @@ enum pwm_channel {
 	PWM_CH_KBLIGHT = 0,
 	PWM_CH_FAN,
 	PWM_CH_COUNT
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_CHARGER = 0,
+	TEMP_SENSOR_SOC,
+	TEMP_SENSOR_CPU,
+	TEMP_SENSOR_COUNT
 };
 
 
@@ -189,6 +203,8 @@ static inline bool ec_config_has_hdmi_conn_hpd(void)
 extern const struct usb_mux usbc1_tusb544;
 extern const struct usb_mux usbc1_ps8743;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
+
+void hdmi_hpd_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

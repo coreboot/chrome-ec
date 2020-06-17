@@ -105,7 +105,7 @@ void tc_partner_usb_comm(int port, int en)
 void tc_pd_connection(int port, int en)
 {}
 
-void tc_pr_swap_complete(int port)
+void tc_pr_swap_complete(int port, bool success)
 {}
 
 void tc_prs_snk_src_assert_rp(int port)
@@ -119,6 +119,9 @@ void tc_prs_src_snk_assert_rd(int port)
 	attached_snk = 1;
 	attached_src = 0;
 }
+
+void tc_src_power_off(int port)
+{}
 
 void tc_set_timeout(int port, uint64_t timeout)
 {}
@@ -232,3 +235,53 @@ const char *pd_get_task_state_name(int port)
 	return NULL;
 }
 #endif /* CONFIG_USB_DRP_ACC_TRYSRC */
+
+void dp_init(int port)
+{
+}
+
+void dp_vdm_acked(int port, int cmd)
+{
+}
+
+void dp_reset_next_command(int port)
+{
+}
+
+void dpm_init(int port)
+{
+}
+
+void dpm_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
+		uint32_t *vdm)
+{
+}
+
+void dpm_vdm_naked(int port, enum tcpm_transmit_type type, uint16_t svid,
+		uint8_t vdm_cmd)
+{
+}
+
+void dpm_set_mode_entry_done(int port)
+{
+}
+
+void dpm_attempt_mode_entry(int port)
+{
+}
+
+static enum tcpc_rp_value lcl_rp;
+__overridable void typec_select_src_current_limit_rp(int port,
+						  enum tcpc_rp_value rp)
+{
+	lcl_rp = rp;
+}
+__overridable void typec_select_src_collision_rp(int port,
+						 enum tcpc_rp_value rp)
+{
+	lcl_rp = rp;
+}
+__overridable int typec_update_cc(int port)
+{
+	return EC_SUCCESS;
+}

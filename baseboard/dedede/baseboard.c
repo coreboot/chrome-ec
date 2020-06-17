@@ -106,14 +106,8 @@ __override void board_vbus_present_change(void)
 	static int last_extpower_present;
 	int extpower_present = extpower_is_present();
 
-	if (last_extpower_present ^ extpower_present) {
-		hook_notify(HOOK_AC_CHANGE);
-
-		if (extpower_present)
-			host_set_single_event(EC_HOST_EVENT_AC_CONNECTED);
-		else
-			host_set_single_event(EC_HOST_EVENT_AC_DISCONNECTED);
-	}
+	if (last_extpower_present ^ extpower_present)
+		extpower_handle_update(extpower_present);
 
 	last_extpower_present = extpower_present;
 }
@@ -132,6 +126,12 @@ __override int intel_x86_get_pg_ec_dsw_pwrok(void)
 
 __override int intel_x86_get_pg_ec_all_sys_pwrgd(void)
 {
+	/*
+	 * SLP_S3_L is a qualifying input signal to ALL_SYS_PWRGD logic.
+	 * So ensure ALL_SYS_PWRGD remains LOW during SLP_S3_L assertion.
+	 */
+	if (!gpio_get_level(GPIO_SLP_S3_L))
+		return 0;
 	/*
 	 * ALL_SYS_PWRGD is an AND of DRAM PGOOD, VCCST PGOOD, and VCCIO_EXT
 	 * PGOOD.
