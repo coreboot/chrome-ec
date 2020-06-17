@@ -1853,7 +1853,7 @@ int board_nvmem_legacy_check_needed(void)
 
 	h = (const struct SignedHeader *)get_program_memory_addr(other_rw);
 
-	return (h->major_ <= 2) || (h->minor_ <= 18);
+	return (h->major_ <= 2) || ((h->major_ <= 4) && (h->minor_ <= 18));
 }
 
 /*
