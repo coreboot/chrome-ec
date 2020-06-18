@@ -33,10 +33,10 @@
 
 /**
  * Attempts to read TRNG_EMPTY before reporting a stall.
- * Practically data should be available in less than 400
+ * Practically data should be available in less than 777
  * cycles under normal conditions.
  */
-#define TRNG_EMPTY_COUNT 400
+#define TRNG_EMPTY_COUNT 777
 
 void init_trng(void)
 {
