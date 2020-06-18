@@ -20,7 +20,8 @@ TRNG_SAMPLE_COUNT = 1000000 # NIST require at least 1000000 of 8-bit samples
 # field     |    size  |                  note
 # ===================================================================
 # text_len  |    2     | number of bytes to read, big endian
-# type      |    1     | 0 = TRNG, other values reserved for extensions
+# type      |    1     | 0 = TRNG, 1 = FIPS TRNG, 2 = FIPS DRBG
+#           |          | other values reserved for extensions
 def get_random_command(size, trng_op):
     """Encode get_random command"""
     return struct.pack(TRNG_TEST_FMT, size, trng_op)
@@ -68,7 +69,7 @@ def trng_test(tpm, trng_output, trng_mode, tsb=1):
         subcmd.TpmTestError: on unexpected target responses
     """
 
-    if trng_mode not in [0]:
+    if trng_mode not in [0, 1, 2]:
         raise subcmd.TpmTestError('Unknown random source: %d' % trng_mode)
 
     # minimal recommended by NIST is 1000 samples per block
