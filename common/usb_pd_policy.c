@@ -119,16 +119,23 @@ uint8_t pd_get_src_cap_cnt(int port)
 	return pd_src_cap_cnt[port];
 }
 
+void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
+{
+	int i;
+
+	pd_src_cap_cnt[port] = cnt;
+
+	for (i = 0; i < cnt; i++)
+		pd_src_caps[port][i] = *src_caps++;
+}
+
 void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
 {
 #ifdef CONFIG_CHARGE_MANAGER
 	uint32_t ma, mv, pdo;
 #endif
-	int i;
 
-	pd_src_cap_cnt[port] = cnt;
-	for (i = 0; i < cnt; i++)
-		pd_src_caps[port][i] = *src_caps++;
+	pd_set_src_caps(port, cnt, src_caps);
 
 #ifdef CONFIG_CHARGE_MANAGER
 	/* Get max power info that we could request */

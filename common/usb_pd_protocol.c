@@ -1307,7 +1307,7 @@ static void handle_vdm_request(int port, int cnt, uint32_t *payload)
 			port, PD_VDO_VID(payload[0]), payload[0] & 0xFFFF);
 }
 
-static __maybe_unused int pd_is_disconnected(int port)
+int pd_is_disconnected(int port)
 {
 	return pd[port].task_state == PD_STATE_SRC_DISCONNECTED
 #ifdef CONFIG_USB_PD_DUAL_ROLE
