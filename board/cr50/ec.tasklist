@@ -6,7 +6,15 @@
 /**
  * See CONFIG_TASK_LIST in config.h for details.
  */
+
+#ifdef CRYPTO_TEST_SETUP
+/* some crypto testing console commands require larger stack */
+#define CONSOLE_STACK_SIZE (CONFIG_STACK_SIZE + 512)
+#else
+#define CONSOLE_STACK_SIZE CONFIG_STACK_SIZE
+#endif
+
 #define CONFIG_TASK_LIST \
 	TASK_ALWAYS(HOOKS, hook_task, NULL, CONFIG_STACK_SIZE) \
 	TASK_NOTEST(TPM, tpm_task, NULL, 8192) \
-	TASK_ALWAYS(CONSOLE, console_task, NULL, CONFIG_STACK_SIZE)
+	TASK_ALWAYS(CONSOLE, console_task, NULL, CONSOLE_STACK_SIZE)
