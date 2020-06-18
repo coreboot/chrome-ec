@@ -66,6 +66,9 @@ extern "C" {
 #define DIV_ROUND_UP(x, y) (((x) + ((y) - 1)) / (y))
 #define DIV_ROUND_NEAREST(x, y) (((x) + ((y) / 2)) / (y))
 
+/* Convert number of bits to number of 32-bit words */
+#define BITS_TO_WORDS(x) (((x) + 31) / 32)
+
 /*
  * Swap two variables (requires c99)
  *
