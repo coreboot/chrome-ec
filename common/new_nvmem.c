@@ -2995,13 +2995,7 @@ static void dump_contents(const struct nn_container *ch)
 	ccprintf("\n");
 }
 
-/*
- * Clear tpm data from nvmem. First fill up the current top page with erased
- * objects, then compact the flash storage, removing all TPM related objects.
- * This would guarantee that all pages where TPM objecs were stored would be
- * erased.
- */
-int nvmem_erase_tpm_data(void)
+int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 {
 	const uint8_t *key;
 	const uint8_t *val;
@@ -3024,6 +3018,31 @@ int nvmem_erase_tpm_data(void)
 		    (ch->container_type != NN_OBJ_TPM_EVICTABLE))
 			continue;
 
+		/* If not all TPM objects need to be erased. */
+		if (objs_to_erase) {
+			uint32_t curent_obj;
+			const uint32_t *obj;
+
+			/* Index of the current NVMEM object. */
+			memcpy(&curent_obj, ch + 1, sizeof(curent_obj));
+
+			/*
+			 * Iterate over indices of the subset of objects which
+			 * need to be erased.
+			 */
+			obj = objs_to_erase;
+			do {
+				if (curent_obj == *obj)
+					break;
+			} while (*(++obj));
+
+			/*
+			 * If current NVMEM object is not in the list, do not
+			 * erase it.
+			 */
+			if (!*obj)
+				continue;
+		}
 		delete_object(&at, ch);
 	}
 

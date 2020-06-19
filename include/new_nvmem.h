@@ -134,7 +134,24 @@ struct access_tracker {
 enum ec_error_list new_nvmem_init(void);
 enum ec_error_list new_nvmem_migrate(unsigned int nvmem_act_partition);
 enum ec_error_list new_nvmem_save(void);
-int nvmem_erase_tpm_data(void);
+
+/*
+ * nvmem_erase_tpm_data_selective
+ *
+ * Delete from NVMEM TPM NVMEM objects listed in the zero terminated array of
+ * indices. If the pointer to the array is NULL - delete all TPM objects.
+ *
+ * Once deletion is completed, fill up the current top page with erased
+ * objects, then compact the flash storage. This will ensure that the NVMEM
+ * does not contain erased instances of deleted objects.
+ */
+int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase);
+
+/* Erase all TMP NVMEM objects. */
+static inline int nvmem_erase_tpm_data(void)
+{
+	return nvmem_erase_tpm_data_selective(NULL);
+}
 
 #if defined(TEST_BUILD) && !defined(TEST_FUZZ)
 #define NVMEM_TEST_BUILD
