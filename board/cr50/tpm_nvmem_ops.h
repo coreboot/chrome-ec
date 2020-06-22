@@ -43,4 +43,7 @@ enum tpm_write_rv write_tpm_nvmem_hidden(uint16_t object_index,
 					 void *obj_value,
 					 int commit);
 
+/* return size of hidden nvmem object, 0 if not found */
+size_t read_tpm_nvmem_size(uint16_t obj_index);
+
 #endif  /* ! __EC_BOARD_CR50_TPM_NVMEM_OPS_H */
