@@ -13,6 +13,7 @@
 #include "common.h"
 #include "registers.h"
 
+
 /* DMA channel options */
 struct dma_option {
 	enum dma_channel channel;	/* DMA channel */

@@ -5,7 +5,6 @@
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
-#include <stdbool.h>
 
 #define CONFIG_LTO
 
@@ -156,7 +155,7 @@
 #define CONFIG_HW_SPECIFIC_UDELAY
 
 #ifndef __ASSEMBLER__
-
+#include "common.h"
 #include "gpio_signal.h"
 
 /* USB string indexes */
