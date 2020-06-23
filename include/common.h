@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_COMMON_H
 #define __CROS_EC_COMMON_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <inttypes.h>
 

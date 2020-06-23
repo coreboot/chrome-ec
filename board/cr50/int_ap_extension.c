@@ -9,7 +9,6 @@
 #include "console.h"
 #include "gpio.h"
 #include "registers.h"
-#include "stdbool.h"
 #include "task.h"
 #include "timer.h"
 
