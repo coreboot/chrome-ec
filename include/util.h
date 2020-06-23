@@ -13,8 +13,6 @@
 #include "panic.h"
 
 #include "builtin/assert.h"         /* For ASSERT(). */
-#include <stdbool.h>
-#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {

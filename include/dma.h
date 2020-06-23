@@ -13,7 +13,6 @@
 #include "common.h"
 #include "registers.h"
 
-#include <stdbool.h>
 
 /* DMA channel options */
 struct dma_option {
