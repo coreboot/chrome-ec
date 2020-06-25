@@ -43,14 +43,6 @@ _HASH_FUNC = {
   'NIST-P256': hashlib.sha256
 }
 
-NIST_P256_QX = ('12c3d6a2679ca8ee3c4d927f204ed5bc'
-                'b4577a04b0ac02b2a36ab3e9e10781de')
-NIST_P256_QY = ('5c85ad7413971172fca5738fee9d0e7b'
-                'c59ffd8a626d689bc6cca4b58665521d')
-
-PKEY = ('fc441e07744e48f109b7e66b29482f7b'
-        '7e3ec91fa27fd4870991b289fea0d20a')
-
 #
 # Field size:
 # FIELD          LENGTH
@@ -180,14 +172,52 @@ def _sign_test(tpm):
               utils.hex_dump(expected)))
         print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
 
+
+# tuples of (d = pkey, x, y)
+P256_POINTS = (
+  ('fc441e07744e48f109b7e66b29482f7b7e3ec91fa27fd4870991b289fea0d20a',
+   '12c3d6a2679ca8ee3c4d927f204ed5bcb4577a04b0ac02b2a36ab3e9e10781de',
+   '5c85ad7413971172fca5738fee9d0e7bc59ffd8a626d689bc6cca4b58665521d'),
+  ('0d7841823ef146c3fc533397ce349e7423c9c0fc6d2bd5864cb8c3c4a28387b3',
+   '108072a654ffc96d948e4593d632055cd7dee6a1d9d9377c1a1a642565a51cb0',
+   '0716a5bbc736ffb97ef78d612055bb7187ed90bce82918ea07a4eb7ecd572ea7'),
+  ('00fda48d4e3e1fe4afa320bfed836b4cdccccecf6fdbdb05b986801a5654cc09',
+   '9a38b6ca7263068fe65ce570a6625263179223ab177f502f204c2c7ac4d8586e',
+   'f1b1a398c21c02c7fe4a8252952005d0a7686ca3cfe05501f9879be160503562'),
+  ('b72d249ee3610c9119dfb4a2d6925172d4b162b70c3c850256e70565df384e2f',
+   '0011bf6d971e1c1f7d87056ca978e02cc860bb0ba05b86039f84d6902d04e66e',
+   '5077a07410161fb449009baf0c010077254543fceb062d02c72349dfebeedd48'),
+  ('b72d249ee3610c9119dfb4a2d6925172d4b162b70c3c850256e70565df384e2f',
+   '0011bf6d971e1c1f7d87056ca978e02cc860bb0ba05b86039f84d6902d04e66e',
+   '5077a07410161fb449009baf0c010077254543fceb062d02c72349dfebeedd48'),
+  ('15fcbfecee4c9f4a769d74226e8ffe86d4deb5e35d704d2bd465c02051c7d3d6',
+   '42b2006a77f9687c0a2ae6ba2ad114b27fb53cfdc1dd49ebcd9e398a3cd6e12b',
+   '0091ee137d5946416f7cab8f825f8537af38a57713f19e3555fd0e9a16935fad'),
+  ('27a1fc7e676ec9a598f75259c5030bcc95ad7bd2a91d4d8cffa5f390f33cef00',
+   'ab99caa4908e426554e86f71086d14ac99ded8ed23cea72f9bece8062d2d3d8f',
+   'ee5524ccb2872c58d6d22295efff9d091c5e52866e5c494df1d14509bcab1e00'),
+# points with zero bytes removed:
+  ('fda48d4e3e1fe4afa320bfed836b4cdccccecf6fdbdb05b986801a5654cc09',
+   '9a38b6ca7263068fe65ce570a6625263179223ab177f502f204c2c7ac4d8586e',
+   'f1b1a398c21c02c7fe4a8252952005d0a7686ca3cfe05501f9879be160503562'),
+  ('b72d249ee3610c9119dfb4a2d6925172d4b162b70c3c850256e70565df384e2f',
+   '11bf6d971e1c1f7d87056ca978e02cc860bb0ba05b86039f84d6902d04e66e',
+   '5077a07410161fb449009baf0c010077254543fceb062d02c72349dfebeedd48'),
+  ('15fcbfecee4c9f4a769d74226e8ffe86d4deb5e35d704d2bd465c02051c7d3d6',
+   '42b2006a77f9687c0a2ae6ba2ad114b27fb53cfdc1dd49ebcd9e398a3cd6e12b',
+   '91ee137d5946416f7cab8f825f8537af38a57713f19e3555fd0e9a16935fad')
+   )
+
 def _sign_test_any(tpm):
     msg = b'Hello CR50'
-
-    for data in _SIGN_INPUTS:
-        curve_id, sign_mode = data
-        test_name = 'ECC-SIGN, Q:%s:%s' % data
+    curve_id = 'NIST-P256'
+    sign_mode = 'ECDSA'
+    counter = 1
+    for data in P256_POINTS:
+        d, x, y = data
+        test_name = 'ECC-SIGN, Q:%s:%s %d' % (curve_id, sign_mode, counter)
         cmd = _sign_any_cmd(_ECC_CURVES[curve_id], _HASH_FUNC[curve_id],
-                            _SIGN_MODE[sign_mode], msg, a2b(PKEY))
+                            _SIGN_MODE[sign_mode], msg, a2b(d))
         wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
         expected = b'\x01'
         signature = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
@@ -198,7 +228,7 @@ def _sign_test_any(tpm):
         # make sure properly supplied Q.x, Q.y works
         cmd = _verify_any_cmd(_ECC_CURVES[curve_id], _HASH_FUNC[curve_id],
                               _SIGN_MODE[sign_mode], msg, signature[1:],
-                              a2b(NIST_P256_QX), a2b(NIST_P256_QY))
+                              a2b(x), a2b(y))
         wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
         verified = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
         if verified[:1] != expected:
@@ -206,30 +236,46 @@ def _sign_test_any(tpm):
               test_name, utils.hex_dump(verified[:1]),
               utils.hex_dump(expected)))
         print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
+        counter += 1
 
 def _point_test(tpm):
-    test_name = 'POINT-TEST: NIST-P256'
-    cmd = _test_point_cmd(_ECC_CURVES['NIST-P256'],
-                          a2b(NIST_P256_QX), a2b(NIST_P256_QY))
-    wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
-    verified = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
-    expected = b'\x01'
-    if verified != expected:
-        raise subcmd.TpmTestError('%s error:%s:%s' % (
-          test_name, utils.hex_dump(verified), utils.hex_dump(expected)))
-    print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
+    curve_id = 'NIST-P256'
+    counter = 1
+    for data in P256_POINTS:
+        test_name = 'POINT-TEST, Q:%s: %d' % (curve_id, counter)
+        _, x, y = data
+        cmd = _test_point_cmd(_ECC_CURVES[curve_id], a2b(x), a2b(y))
+        wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
+        verified = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
+        expected = b'\x01'
+        if verified != expected:
+            raise subcmd.TpmTestError('%s error:%s:%s' % (
+              test_name, utils.hex_dump(verified), utils.hex_dump(expected)))
+        print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
+        counter += 1
 
 def _keygen_test(tpm):
     for data in _KEYGEN_INPUTS:
         curve_id, = data
         test_name = 'ECC-KEYGEN:%s' % data
         cmd = _keygen_cmd(_ECC_CURVES[curve_id])
-        wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC, cmd))
-        valid = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
-        expected = b'\x01'
-        if valid[:1] != expected:
-            raise subcmd.TpmTestError('%s error:%s:%s' % (
-              test_name, utils.hex_dump(valid[:1]), utils.hex_dump(expected)))
+        counter = 1
+        while counter < 100:
+            wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.ECC,
+                                                               cmd))
+            valid = tpm.unwrap_ext_response(subcmd.ECC, wrapped_response)
+            expected = b'\x01'
+            if valid[:1] != expected:
+                raise subcmd.TpmTestError('%s error:%s:%s' % (
+                    test_name, utils.hex_dump(valid[:1]),
+                    utils.hex_dump(expected)))
+            counter += 1
+            # print keys where x or y starts with zero
+            if valid[37:38] == b'\x00' or valid[71:72] == b'\x00':
+                print('d=', valid[3:35].hex())
+                print('x=', valid[37:69].hex())
+                print('y=', valid[71:103].hex())
+
         print('%sSUCCESS: %s' % (utils.cursor_back(), test_name))
 
 
