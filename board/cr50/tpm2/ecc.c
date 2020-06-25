@@ -273,16 +273,19 @@ CRYPT_RESULT _cpri__SignEcc(
 		return CRYPT_PARAMETER;
 
 	switch (scheme) {
-	case TPM_ALG_ECDSA:
-		if (!check_p256_param(d))
+	case TPM_ALG_ECDSA: {
+		const UINT16 d_size = d->b.size;
+
+		if (!check_p256_param_in_range(d))
 			return CRYPT_PARAMETER;
-		/* Trucate / zero-pad the digest as appropriate. */
+		/* Truncate / zero-pad the digest as appropriate. */
 		memset(digest_local, 0, sizeof(digest_local));
 		memcpy(digest_local + sizeof(digest_local) - digest_len,
 			digest->buffer, digest_len);
 		p256_from_bin(digest_local, &p256_digest);
 
 		reverse_tpm2b(&d->b);
+		append_zeros_to_p256_param(d);
 
 		hmac_drbg_init_rand(&drbg, 512);
 		result = dcrypto_p256_ecdsa_sign(&drbg,
@@ -290,6 +293,7 @@ CRYPT_RESULT _cpri__SignEcc(
 				&p256_digest,
 				(p256_int *) r->b.buffer,
 				(p256_int *) s->b.buffer);
+		d->b.size = d_size;
 		reverse_tpm2b(&d->b);
 
 		r->b.size = sizeof(p256_int);
@@ -301,6 +305,7 @@ CRYPT_RESULT _cpri__SignEcc(
 			return CRYPT_SUCCESS;
 		else
 			return CRYPT_FAIL;
+	}
 	default:
 		return CRYPT_PARAMETER;
 	}
@@ -320,8 +325,13 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 		return CRYPT_PARAMETER;
 
 	switch (scheme) {
-	case TPM_ALG_ECDSA:
-		/* Trucate / zero-pad the digest as appropriate. */
+	case TPM_ALG_ECDSA: {
+		const UINT16 qx_size = q->x.b.size;
+		const UINT16 qy_size = q->y.b.size;
+		const UINT16 r_size = r->b.size;
+		const UINT16 s_size = s->b.size;
+
+		/* Truncate / zero-pad the digest as appropriate. */
 		memset(digest_local, 0, sizeof(digest_local));
 		memcpy(digest_local + sizeof(digest_local) - digest_len,
 			digest->buffer, digest_len);
@@ -329,9 +339,13 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 
 		reverse_tpm2b(&q->x.b);
 		reverse_tpm2b(&q->y.b);
+		append_zeros_to_p256_point(q);
 
 		reverse_tpm2b(&r->b);
+		append_zeros_to_p256_param(r);
+
 		reverse_tpm2b(&s->b);
+		append_zeros_to_p256_param(s);
 
 		result = dcrypto_p256_ecdsa_verify(
 			(p256_int *) q->x.b.buffer,
@@ -340,16 +354,21 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 			(p256_int *) r->b.buffer,
 			(p256_int *) s->b.buffer);
 
+		/* restore original size */
+		q->x.b.size = qx_size;
+		q->y.b.size = qy_size;
 		reverse_tpm2b(&q->x.b);
 		reverse_tpm2b(&q->y.b);
-
+		r->b.size = r_size;
 		reverse_tpm2b(&r->b);
+		s->b.size = s_size;
 		reverse_tpm2b(&s->b);
 
 		if (result)
 			return CRYPT_SUCCESS;
 		else
 			return CRYPT_FAIL;
+	}
 	default:
 		return CRYPT_PARAMETER;
 	}
