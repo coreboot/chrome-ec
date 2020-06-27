@@ -211,8 +211,7 @@ static int ps8xxx_dci_disable(int port)
 	int p1_addr;
 
 	/* DCI registers are always accessible on PS8805 */
-	p1_addr = tcpc_config[port].i2c_info.addr -
-		(PS8751_I2C_ADDR1 - PS8751_I2C_ADDR1_P1);
+	p1_addr = PS8751_P3_TO_P1(tcpc_config[port].i2c_info.addr);
 	return ps8xxx_addr_dci_disable(port, p1_addr,
 				       PS8805_P1_REG_MUX_USB_DCI_CFG);
 }
@@ -237,8 +236,7 @@ static int ps8xxx_dci_disable(int port)
 			     PS8XXX_REG_I2C_DEBUGGING_ENABLE_ON);
 
 	/* Disable Auto DCI */
-	p1_addr = p3_addr -
-			(PS8751_I2C_ADDR1 - PS8751_I2C_ADDR1_P1);
+	p1_addr = PS8751_P3_TO_P1(p3_addr);
 	rv = ps8xxx_addr_dci_disable(port, p1_addr,
 				     PS8705_P1_REG_MUX_USB_DCI_CFG);
 

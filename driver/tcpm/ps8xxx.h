@@ -15,6 +15,8 @@
 #define PS8751_I2C_ADDR3          0x56
 #define PS8751_I2C_ADDR4          0x96
 
+#define PS8751_P3_TO_P1(p3)	((p3) - 4)
+
 /* Minimum Delay for reset assertion */
 #define PS8XXX_RESET_DELAY_MS 1
 
