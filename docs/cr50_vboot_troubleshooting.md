@@ -202,22 +202,29 @@ Saleae application in the trace analysis mode.
 A few detailed snapshots of this trace are shown below (click to expand):
 
 ### Full boot sequence
-[![Full boot sequence](./images/typical_boot.png)](./images/typical_boot.png) shows communications between AP
-an H1 during a typical Chrome OS boot: first a flurry of communications
-between Coreboot and the H1, then some time spent verifying and loading
-various firmware stages, then a block of communications between Depthcarge and
-the H1.
+
+[![Full boot sequence](./images/typical_boot.png)][1] shows communications
+between AP an H1 during a typical Chrome OS boot: first a flurry of
+communications between Coreboot and the H1, then some time spent verifying and
+loading various firmware stages, then a block of communications between
+Depthcarge and the H1.
 
 ### Typical read sequence
-[![Typical read sequence](./images/typical_read.png)](./images/typical_read.png) shows the 4 byte header
-where the read of four bytes from register address 0xd40f00 is requested. The
-TPM is not ready and sends all zeros on the MISO line for three cycles, then
-sends a byte of 01 and then the AP reads four bytes of the actual register
-value (0xe01a2800). Then, after H1 is ready to accept the next SPI transaction
-it generates a pulse on AP\_INT\_L.
+
+[![Typical read sequence](./images/typical_read.png)][2] shows the 4 byte
+header where the read of four bytes from register address 0xd40f00 is
+requested. The TPM is not ready and sends all zeros on the MISO line for three
+cycles, then sends a byte of 01 and then the AP reads four bytes of the actual
+register value (0xe01a2800). Then, after H1 is ready to accept the next SPI
+transaction it generates a pulse on AP\_INT\_L.
 
 ### Read with wake pulse sequence
-[![Read with wake pulse](./images/read_with_wake_pulse.png)](./images/read_with_wake_pulse.png) is an example of a
-case where the AP toggles the CS line first, without sending any data, and
-then in 100 us starts the actual SPI transaction completed with the AP\_INT\_L
-pulse.
+
+[![Read with wake pulse](./images/read_with_wake_pulse.png)][3] is an example
+of a case where the AP toggles the CS line first, without sending any data,
+and then in 100 us starts the actual SPI transaction completed with the
+AP\_INT\_L pulse.
+
+[1]:https://drive.google.com/file/d/16Z_Nw1e6z5akUnyLZyI8ivfT5frxKPQh/view
+[2]:https://drive.google.com/file/d/1weBd6kBiXoQ0I3TGmbpiHZm0dimByYnI/view
+[3]:https://drive.google.com/file/d/13ZSP3up4leG0Etqo4A_gkFK1MeptGDCw/view
