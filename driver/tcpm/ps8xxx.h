@@ -47,6 +47,8 @@
 #define IN_HPD  (1 << 0)
 #define HPD_IRQ (1 << 1)
 
+#define PS8XXX_P1_REG_MUX_USB_DCI_CFG           0x4B
+
 #if defined(CONFIG_USB_PD_TCPM_PS8751)
 /* Vendor defined registers */
 #define PS8XXX_PRODUCT_ID 0x8751
@@ -59,12 +61,18 @@
 #define PS8XXX_REG_MUX_USB_C2SS_HS_THRESHOLD    0xE8
 #define PS8751_REG_MUX_USB_DCI_CFG              0xED
 
+#elif defined(CONFIG_USB_PD_TCPM_PS8755)
+/* Vendor defined registers */
+/* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned */
+#define PS8XXX_PRODUCT_ID 0x8755
+
+#define FW_VER_REG                              0x82
+
 #elif defined(CONFIG_USB_PD_TCPM_PS8705)
 /* Vendor defined registers */
 /* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned */
 #define PS8XXX_PRODUCT_ID 0x8705
 
-#define PS8705_P1_REG_MUX_USB_DCI_CFG           0x4B
 /* NOTE: The revision will read as 0x00 if the firmware has malfunctioned. */
 #define FW_VER_REG                              0x82
 
@@ -73,7 +81,6 @@
 /* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned */
 #define PS8XXX_PRODUCT_ID 0x8805
 
-#define PS8805_P1_REG_MUX_USB_DCI_CFG           0x4B
 #define FW_VER_REG                              0x82
 
 #elif defined(CONFIG_USB_PD_TCPM_PS8815)
