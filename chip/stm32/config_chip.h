@@ -104,6 +104,8 @@
 
 /* Even bigger */
 #define VENTI_TASK_STACK_SIZE 768
+#define ULTRA_TASK_STACK_SIZE 1056
+#define TRENTA_TASK_STACK_SIZE 1184
 
 /* Interval between HOOK_TICK notifications */
 #define HOOK_TICK_INTERVAL_MS 500
