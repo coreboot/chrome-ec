@@ -143,24 +143,24 @@ int pd_board_checks(void)
 int pd_check_power_swap(int port)
 {
 	/*
-	 * Allow power swap as long as we are acting as a dual role device,
-	 * otherwise assume our role is fixed (not in S0 or console command
-	 * to fix our role).
+	 * Allow power swap if we are acting as a dual role device.  If we are
+	 * not acting as dual role (ex. suspended), then only allow power swap
+	 * if we are sourcing when we could be sinking.
 	 */
-	return pd_get_dual_role() == PD_DRP_TOGGLE_ON ? 1 : 0;
+	if (pd_get_dual_role() == PD_DRP_TOGGLE_ON)
+		return 1;
+	else if (pd_get_role(port) == PD_ROLE_SOURCE)
+		return 1;
+
+	return 0;
 }
 
 int pd_check_data_swap(int port, int data_role)
 {
 	/*
 	 * Allow data swap if we are a UFP, otherwise don't allow.
-	 *
-	 * When we are still in the Read-Only firmware, avoid swapping roles
-	 * so we don't jump in RW as a SNK/DFP and potentially confuse the
-	 * power supply by sending a soft-reset with wrong data role.
 	 */
-	return (data_role == PD_ROLE_UFP) &&
-	       (system_get_image_copy() != SYSTEM_IMAGE_RO) ? 1 : 0;
+	return (data_role == PD_ROLE_UFP);
 }
 
 int pd_check_vconn_swap(int port)
@@ -206,10 +206,10 @@ void pd_check_dr_role(int port, int dr_role, int flags)
 {
 	/* If UFP, try to switch to DFP */
 	if ((flags & PD_FLAGS_PARTNER_DR_DATA) &&
-			dr_role == PD_ROLE_UFP &&
-			system_get_image_copy() != SYSTEM_IMAGE_RO)
+			dr_role == PD_ROLE_UFP)
 		pd_request_data_swap(port);
 }
+
 /* ----------------- Vendor Defined Messages ------------------ */
 const struct svdm_response svdm_rsp = {
 	.identity = NULL,
