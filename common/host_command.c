@@ -684,6 +684,17 @@ uint16_t host_command_process(struct host_cmd_handler_args *args)
 
 	if (hcdebug)
 		host_command_debug_request(args);
+	else
+		/*
+		 * b:156027159: add delay between receiving request and sending
+		 * response if we disable hcdebug. This delay
+		 * may relief errors on STM32F0's SPI controller.
+		 * STM32F0 with SPI DMA will sometime keep sending the last byte
+		 * when the whole DMA buffered is transferred. From the
+		 * experimenta, it seems adding delay between MOSI and MISO
+		 * lines could workaround the issue.
+		 */
+		udelay(150);
 
 #ifdef CONFIG_HOSTCMD_PD
 	if (args->command >= EC_CMD_PASSTHRU_OFFSET(1) &&
