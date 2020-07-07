@@ -903,6 +903,7 @@ void pd_execute_hard_reset(int port)
 		CPRINTF("C%d HARD RST RX\n", port);
 
 	pd[port].msg_id = 0;
+	tcpm_set_rx_enable(port, 0);
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
 	pd_dfp_exit_mode(port, 0, 0);
 #endif
@@ -2239,6 +2240,9 @@ void pd_task(void *u)
 		}
 #endif
 
+		if (evt & PD_EVENT_RX_HARD_RESET)
+			pd_execute_hard_reset(port);
+
 		/* process any potential incoming message */
 		incoming_packet = evt & PD_EVENT_RX;
 		if (incoming_packet) {
@@ -2919,16 +2923,6 @@ void pd_task(void *u)
 			}
 			if (pd_is_vbus_present(port) &&
 			    snk_hard_reset_vbus_off) {
-#ifdef CONFIG_USB_PD_TCPM_TCPCI
-				/*
-				 * After transmitting hard reset, TCPM writes
-				 * to RECEIVE_MESSAGE register to enable
-				 * PD message passing.
-				 */
-				if (pd_comm_is_enabled(port))
-					tcpm_set_rx_enable(port, 1);
-#endif /* CONFIG_USB_PD_TCPM_TCPCI */
-
 				/* VBUS went high again */
 				set_state(port, PD_STATE_SNK_DISCOVERY);
 				timeout = 10*MSEC;
@@ -2944,6 +2938,17 @@ void pd_task(void *u)
 			/* Wait for source cap expired only if we are enabled */
 			if ((pd[port].last_state != pd[port].task_state)
 			    && pd_comm_is_enabled(port)) {
+#ifdef CONFIG_USB_PD_TCPM_TCPCI
+				/*
+				 * If we come from hard reset recover state,
+				 * then we can process the source capabilities
+				 * form partner now, so enable PHY layer
+				 * receiving function.
+				 */
+				if (pd[port].last_state ==
+				    PD_STATE_SNK_HARD_RESET_RECOVER)
+					tcpm_set_rx_enable(port, 1);
+#endif /* CONFIG_USB_PD_TCPM_TCPCI */
 				/*
 				 * If VBUS has never been low, and we timeout
 				 * waiting for source cap, try a soft reset
