@@ -320,8 +320,7 @@ void tcpci_tcpc_alert(int port)
 	}
 	if (status & TCPC_REG_ALERT_RX_HARD_RST) {
 		/* hard reset received */
-		pd_execute_hard_reset(port);
-		task_wake(PD_PORT_TO_TASK_ID(port));
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_RX_HARD_RESET, 0);
 	}
 	if (status & TCPC_REG_ALERT_TX_COMPLETE) {
 		/* transmit complete */
