@@ -37,6 +37,12 @@
 /* Timeout for auto-disabling SPI hash device, in microseconds */
 #define SPI_HASH_TIMEOUT_US (60 * SECOND)
 
+/*
+ * If True, don't touch the reset signals while setting up AP usb spi. This
+ * doesn't affect spi hash.
+ */
+static uint8_t usb_spi_custom_reset;
+
 /* Current device for SPI hashing */
 static uint8_t spi_hash_device = USB_SPI_DISABLE;
 
@@ -148,7 +154,7 @@ static enum spi_bus_user_t get_spi_bus_user(void)
 /*****************************************************************************/
 /* Methods to enable / disable the SPI bus and pin mux */
 
-static void disable_ec_ap_spi(void)
+static void disable_ec_ap_spi(uint8_t custom_reset)
 {
 	int was_ap_spi_en = gpio_get_level(GPIO_AP_FLASH_SELECT);
 
@@ -162,8 +168,15 @@ static void disable_ec_ap_spi(void)
 		 * held in reset.  Therefore, it needs to be released here.
 		 */
 		gpio_set_level(GPIO_AP_FLASH_SELECT, 0);
-		deassert_ec_rst();
-		deassert_sys_rst();
+		/*
+		 * Some boards require special EC_RST_L SYS_RST_L behavior.
+		 * Don't touch the signals if the user requested custom reset
+		 * behavior.
+		 */
+		if (!custom_reset) {
+			deassert_ec_rst();
+			deassert_sys_rst();
+		}
 	}
 }
 
@@ -180,7 +193,7 @@ static void enable_ec_spi(void)
 	 */
 }
 
-static void enable_ap_spi(void)
+static void enable_ap_spi(uint8_t custom_reset)
 {
 	/* Select AP flash */
 	gpio_set_level(GPIO_AP_FLASH_SELECT, 1);
@@ -189,8 +202,11 @@ static void enable_ap_spi(void)
 	/*
 	 * On some systems SYS_RST_L is not level sensitive, so the only way to
 	 * be sure we're holding the AP in reset is to hold the EC in reset.
+	 * Don't touch the reset signals if the user requested a custom reset
+	 * setup.
 	 */
-	assert_ec_rst();
+	if (!custom_reset)
+		assert_ec_rst();
 }
 
 /**
@@ -247,9 +263,12 @@ static void disable_spi_pinmux(void)
 /*****************************************************************************/
 /* USB SPI methods */
 
-int usb_spi_board_enable(int host)
+/*
+ * Check that the CCD capability for the host is enabled and the SPI bus isn't
+ * active.
+ */
+static int usb_spi_check_host_accessible(int host)
 {
-	/* Make sure we're allowed to enable the requested device */
 	if (host == USB_SPI_EC) {
 		if (!ccd_is_cap_enabled(CCD_CAP_EC_FLASH)) {
 			CPRINTS("%s: EC access denied", __func__);
@@ -269,8 +288,20 @@ int usb_spi_board_enable(int host)
 		CPRINTS("%s: bus in use", __func__);
 		return EC_ERROR_BUSY;
 	}
+	return EC_SUCCESS;
+}
 
-	disable_ec_ap_spi();
+int usb_spi_board_enable(int host)
+{
+	/* Make sure we're allowed to enable the requested device */
+	int rv = usb_spi_check_host_accessible(host);
+
+	if (rv != EC_SUCCESS) {
+		usb_spi_custom_reset = 0;
+		return rv;
+	}
+
+	disable_ec_ap_spi(usb_spi_custom_reset);
 
 	/*
 	 * Only need to check EC vs. AP, because other hosts were ruled out
@@ -279,7 +310,7 @@ int usb_spi_board_enable(int host)
 	if (host == USB_SPI_EC)
 		enable_ec_spi();
 	else
-		enable_ap_spi();
+		enable_ap_spi(usb_spi_custom_reset);
 
 	enable_spi_pinmux();
 	return EC_SUCCESS;
@@ -294,7 +325,8 @@ void usb_spi_board_disable(void)
 		return;
 
 	disable_spi_pinmux();
-	disable_ec_ap_spi();
+	disable_ec_ap_spi(usb_spi_custom_reset);
+	usb_spi_custom_reset = 0;
 	set_spi_bus_user(SPI_BUS_USER_USB, 0);
 }
 
@@ -315,13 +347,20 @@ int usb_spi_interface(struct usb_spi_config const *config,
 		return 1;
 
 	switch (req->bRequest) {
+	case USB_SPI_REQ_ENABLE_AP_CUSTOM:
+		usb_spi_custom_reset = 1;
+		config->state->enabled_host = USB_SPI_AP;
+		break;
 	case USB_SPI_REQ_ENABLE_AP:
+		usb_spi_custom_reset = 0;
 		config->state->enabled_host = USB_SPI_AP;
 		break;
 	case USB_SPI_REQ_ENABLE_EC:
+		usb_spi_custom_reset = 0;
 		config->state->enabled_host = USB_SPI_EC;
 		break;
 	case USB_SPI_REQ_ENABLE:
+		usb_spi_custom_reset = 0;
 		CPRINTS("%s: Must specify target", __func__);
 		/* Fall through... */
 	case USB_SPI_REQ_DISABLE:
@@ -411,7 +450,7 @@ static enum vendor_cmd_rc spi_hash_disable(void)
 
 	/* Disable the SPI bus and chip select */
 	disable_spi_pinmux();
-	disable_ec_ap_spi();
+	disable_ec_ap_spi(0);
 
 	/* Stop the EC device, if it was active */
 	spi_hash_stop_ec_device();
@@ -450,14 +489,14 @@ static void spi_hash_pp_done(void)
 
 	/* Clear previous enable if needed */
 	if (spi_hash_device != USB_SPI_DISABLE)
-		disable_ec_ap_spi();
+		disable_ec_ap_spi(0);
 
 	/* Set up new device */
 	if (spi_hash_new_device == USB_SPI_AP) {
 		/* Stop the EC device, if it was previously active */
 		spi_hash_stop_ec_device();
 
-		enable_ap_spi();
+		enable_ap_spi(0);
 	} else {
 		/* Force the EC into reset and enable EC SPI bus */
 		assert_ec_rst();
