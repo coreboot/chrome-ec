@@ -62,8 +62,8 @@ static uint8_t use_npcx_gang_mode;
  * Device and gang mode selected by last spihash command, for use by
  * spi_hash_pp_done().
  */
-static uint8_t new_device;
-static uint8_t new_gang_mode;
+static uint8_t spi_hash_new_device;
+static uint8_t spi_hash_new_gang_mode;
 
 static void spi_hash_inactive_timeout(void);
 DECLARE_DEFERRED(spi_hash_inactive_timeout);
@@ -416,8 +416,8 @@ static enum vendor_cmd_rc spi_hash_disable(void)
 
 	/* Release the bus */
 	spi_hash_device = USB_SPI_DISABLE;
-	new_device = USB_SPI_DISABLE;
-	new_gang_mode = 0;
+	spi_hash_new_device = USB_SPI_DISABLE;
+	spi_hash_new_gang_mode = 0;
 	set_spi_bus_user(SPI_BUS_USER_HASH, 0);
 
 	/* Disable inactivity timer to turn hashing mode off */
@@ -451,7 +451,7 @@ static void spi_hash_pp_done(void)
 		disable_ec_ap_spi();
 
 	/* Set up new device */
-	if (new_device == USB_SPI_AP) {
+	if (spi_hash_new_device == USB_SPI_AP) {
 		/* Stop the EC device, if it was previously active */
 		spi_hash_stop_ec_device();
 
@@ -467,7 +467,7 @@ static void spi_hash_pp_done(void)
 		 * to the EC's GP_SEL_ODL signal, which is what enables gang
 		 * programmer mode.
 		 */
-		if (new_gang_mode) {
+		if (spi_hash_new_gang_mode) {
 			usleep(200);
 			deassert_ec_rst();
 			use_npcx_gang_mode = 1;
@@ -475,7 +475,7 @@ static void spi_hash_pp_done(void)
 	}
 
 	enable_spi_pinmux();
-	spi_hash_device = new_device;
+	spi_hash_device = spi_hash_new_device;
 
 	/* Start inactivity timer to turn hashing mode off */
 	hook_call_deferred(&spi_hash_inactive_timeout_data,
@@ -507,7 +507,7 @@ void enable_ap_spi_hash_shortcut(void)
 	 * when the operator entered the appropriate sequence on the device
 	 * keyboard, so physical presence is already established.
 	 */
-	new_device = USB_SPI_AP;
+	spi_hash_new_device = USB_SPI_AP;
 	spi_hash_pp_done();
 }
 
@@ -565,8 +565,8 @@ static enum vendor_cmd_rc spi_hash_set_device(int dev, int gang_mode,
 	if (!(ccd_is_cap_enabled(CCD_CAP_FLASH_READ)))
 		return VENDOR_RC_NOT_ALLOWED;
 
-	new_device = dev;
-	new_gang_mode = gang_mode;
+	spi_hash_new_device = dev;
+	spi_hash_new_gang_mode = gang_mode;
 
 	/* Handle enabling */
 	if (spi_hash_device == USB_SPI_DISABLE &&
