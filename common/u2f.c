@@ -339,7 +339,7 @@ static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
 						  &req->keyHandle, &kh_owned);
 	} else if (input_size == sizeof(struct u2f_sign_versioned_req)) {
 		version = req_versioned->keyHandle.version;
-		key_handle = (uint8_t *)&req->keyHandle;
+		key_handle = (uint8_t *)&req_versioned->keyHandle;
 		hash = req_versioned->hash;
 		flags = req_versioned->flags;
 		kh_size = sizeof(struct u2f_versioned_key_handle);
