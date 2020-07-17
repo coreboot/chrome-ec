@@ -133,4 +133,10 @@ struct accelgyro_saved_data_t {
 	int range;
 };
 
+#define SENSOR_APPLY_DIV_SCALE(_input, _scale) \
+	(((_input) * (uint64_t)MOTION_SENSE_DEFAULT_SCALE) / (_scale))
+
+#define SENSOR_APPLY_SCALE(_input, _scale) \
+	(((_input) * (_scale)) / MOTION_SENSE_DEFAULT_SCALE)
+
 #endif /* __CROS_EC_ACCELGYRO_H */
