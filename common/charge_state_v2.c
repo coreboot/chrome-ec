@@ -2367,7 +2367,12 @@ int charge_set_input_current_limit(int ma, int mv)
 #endif
 }
 
-#ifndef TEST_BUILD
+#ifdef CONFIG_USB_PD_PREFER_MV
+bool charge_is_current_stable(void)
+{
+	return get_time().val >= stable_ts.val;
+}
+
 int charge_get_plt_plus_bat_desired_mw(void)
 {
 	/*
