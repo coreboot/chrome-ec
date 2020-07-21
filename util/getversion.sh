@@ -82,6 +82,7 @@ main() {
   local gitdate
   local global_dirty
   local most_recent_file
+  local root
   local timestamp
   local tool_ver
   local values
@@ -94,15 +95,24 @@ main() {
   global_dirty=    # set if any of the component repos is 'dirty'.
   dir_list=( . )   # list of component directories, always includes the EC tree
 
-  case "${BOARD}" in
-    (cr50)
-      dir_list+=( ../../third_party/tpm2 ../../third_party/cryptoc )
-      ;;
-    (*_fp)
-      dir_list+=( ./private )
-      ;;
-  esac
-
+  if [[ -n ${BOARD} ]]; then
+    case "${BOARD}" in
+      (cr50)
+        dir_list+=( ../../third_party/tpm2 ../../third_party/cryptoc )
+        ;;
+      (*_fp)
+        dir_list+=( ./private )
+        ;;
+      (*)
+        # For private-crX boards add their git root and cryptoc.
+        for root in private-cr5*; do
+          if [[ -d "${root}/board/${BOARD}" ]]; then
+            dir_list+=( "${root}" ../../third_party/cryptoc )
+          fi
+        done
+        ;;
+    esac
+  fi
   # Create a combined version string for all component directories.
   for git_dir in ${dir_list[@]}; do
     pushd "${git_dir}" > /dev/null
