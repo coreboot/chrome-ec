@@ -215,7 +215,7 @@ HEX_NAME := $(shell printf "$(BOARD)" | /usr/bin/awk -F_ ' \
 	 {if (NF == 2) \
 	     { printf($$1" "toupper($$2)) } \
 	   else \
-	     { printf } \
+	     { printf($$0) } \
 	  }' | xxd -ps)
 # This many zeros in the tag field need to be replaced.
 HEX_LEN  := $(shell printf $(HEX_NAME) | wc -c)
