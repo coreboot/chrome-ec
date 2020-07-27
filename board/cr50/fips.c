@@ -757,17 +757,18 @@ static int cmd_fips_status(int argc, char **argv)
 	if (argc == 2) {
 		if (!strncmp(argv[1], "on", 2))
 			fips_set_policy(true);
-#ifdef CR50_DEV
-		else if (!strncmp(argv[1], "off", 3))
-			fips_set_policy(false);
-#endif
 		else if (!strncmp(argv[1], "test", 4)) {
 			fips_print_test_time(fips_power_up_tests());
 			fips_print_mode();
-		} else if (!strncmp(argv[1], "trng", 4))
+		}
+#ifdef CR50_DEV
+		else if (!strncmp(argv[1], "off", 3))
+			fips_set_policy(false);
+		else if (!strncmp(argv[1], "trng", 4))
 			fips_break_cmd = FIPS_BREAK_TRNG;
 		else if (!strncmp(argv[1], "sha", 3))
 			fips_break_cmd = FIPS_BREAK_SHA256;
+#endif
 	}
 	return 0;
 }
@@ -776,7 +777,7 @@ DECLARE_SAFE_CONSOLE_COMMAND(fips, cmd_fips_status,
 #ifdef CR50_DEV
 	"[on | off | test | trng | sha]",
 #else
-	"[on | test | trng | sha]",
+	"[on | test]",
 #endif
 	"Report or change FIPS status, run tests, simulate errors");
 
@@ -814,7 +815,7 @@ static enum vendor_cmd_rc fips_cmd(enum vendor_cmd_cc code, void *buf,
 		memcpy(buf, &fips_reverse, sizeof(fips_reverse));
 		*response_size = sizeof(fips_reverse);
 		break;
-#ifdef CRYPTO_TEST_SETUP
+#ifdef CR50_DEV
 	case FIPS_CMD_BREAK_TRNG:
 		fips_break_cmd = FIPS_BREAK_TRNG;
 		break;
