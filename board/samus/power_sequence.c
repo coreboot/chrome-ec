@@ -62,7 +62,7 @@
 		   IN_ALL_PM_SLP_DEASSERTED)
 
 static int throttle_cpu;      /* Throttle CPU? */
-static int pause_in_s5;	      /* Pause in S5 when shutting down? */
+static int pause_in_s5 = 1;   /* Pause in S5 when shutting down? */
 static uint32_t pp5000_in_g3; /* Turn PP5000 on in G3? */
 
 void chipset_force_shutdown(void)
