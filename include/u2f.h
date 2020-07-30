@@ -53,24 +53,15 @@ struct u2f_ec_point {
 
 #define U2F_KH_VERSION_1 0x01
 
-#define U2F_AUTHORIZATION_SALT_SIZE 16
-
 struct u2f_key_handle {
 	uint8_t origin_seed[U2F_P256_SIZE];
 	uint8_t hmac[U2F_P256_SIZE];
 };
 
-struct u2f_versioned_key_handle_header {
+struct u2f_versioned_key_handle {
 	uint8_t version;
 	uint8_t origin_seed[U2F_P256_SIZE];
-	uint8_t kh_hmac[U2F_P256_SIZE];
-};
-
-struct u2f_versioned_key_handle {
-	struct u2f_versioned_key_handle_header header;
-	/* Optionally checked in u2f_sign. */
-	uint8_t authorization_salt[U2F_AUTHORIZATION_SALT_SIZE];
-	uint8_t authorization_hmac[U2F_P256_SIZE];
+	uint8_t hmac[U2F_P256_SIZE];
 };
 
 /* TODO(louiscollard): Add Descriptions. */
@@ -79,11 +70,6 @@ struct u2f_generate_req {
 	uint8_t appId[U2F_APPID_SIZE]; /* Application id */
 	uint8_t userSecret[U2F_P256_SIZE];
 	uint8_t flags;
-	/*
-	 * If generating versioned KH, derive an hmac from it and append to
-	 * the key handle. Otherwise unused.
-	 */
-	uint8_t authTimeSecretHash[U2F_P256_SIZE];
 };
 
 struct u2f_generate_resp {
@@ -107,7 +93,6 @@ struct u2f_sign_req {
 struct u2f_sign_versioned_req {
 	uint8_t appId[U2F_APPID_SIZE]; /* Application id */
 	uint8_t userSecret[U2F_P256_SIZE];
-	uint8_t authTimeSecret[U2F_P256_SIZE];
 	uint8_t hash[U2F_P256_SIZE];
 	uint8_t flags;
 	struct u2f_versioned_key_handle keyHandle;

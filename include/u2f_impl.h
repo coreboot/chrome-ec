@@ -76,14 +76,13 @@ int u2f_origin_user_keyhandle(const uint8_t *origin, const uint8_t *user,
  * @param user pointer to user secret
  * @param seed pointer to origin-specific random seed
  * @param version the version byte to pack; should be greater than 0.
- * @param key_handle_header buffer to hold the output key handle header
+ * @param key_handle buffer to hold the output key handle
  *
  * @return EC_SUCCESS if a valid keypair was created.
  */
 int u2f_origin_user_versioned_keyhandle(
 	const uint8_t *origin, const uint8_t *user, const uint8_t *seed,
-	uint8_t version,
-	struct u2f_versioned_key_handle_header *key_handle_header);
+	uint8_t version, struct u2f_versioned_key_handle *key_handle);
 
 /**
  * Generate an origin and user-specific ECDSA keypair from the specified
@@ -101,13 +100,6 @@ int u2f_origin_user_versioned_keyhandle(
  */
 int u2f_origin_user_keypair(const uint8_t *key_handle, size_t key_handle_size,
 			    p256_int *d, p256_int *pk_x, p256_int *pk_y);
-
-/**
- * Derive an hmac from the given salt and hash. The seed is to make sure the
- * hmac is different for different key handles of one user.
- */
-int u2f_authorization_hmac(const uint8_t *authorization_salt,
-			   const uint8_t *auth_time_secret_hash, uint8_t *hmac);
 
 /***
  * Generate a hardware derived 256b private key.
