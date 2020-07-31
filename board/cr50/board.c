@@ -194,22 +194,17 @@ int board_get_ccd_rec_lid_pin(void)
 
 bool board_fips_power_up_done(void)
 {
-	return !!(board_properties & BOARD_FIPS_POWERUP_DONE);
+	return !!(GREG32(PMU, PWRDN_SCRATCH22) == BOARD_FIPS_POWERUP_DONE);
 }
 
 /* Set status of FIPS power-up tests. */
 void board_set_fips_policy_test(bool asserted)
 {
 	/* Enable writing to the long life register */
-	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 1);
-
 	if (asserted)
-		GREG32(PMU, LONG_LIFE_SCRATCH1) |= BOARD_FIPS_POWERUP_DONE;
+		GREG32(PMU, PWRDN_SCRATCH22) = BOARD_FIPS_POWERUP_DONE;
 	else
-		GREG32(PMU, LONG_LIFE_SCRATCH1) &= ~BOARD_FIPS_POWERUP_DONE;
-
-	/* Disable writing to the long life register */
-	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 0);
+		GREG32(PMU, PWRDN_SCRATCH22) = 0;
 }
 
 /* Get header address of the backup RW copy. */

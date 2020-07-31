@@ -102,8 +102,10 @@
 /*
  * Indicates successful completion of FIPS power up
  * tests earlier. Reduces wake up time after sleep.
+ * Stored in PWRDN_SCRATCH22 and use multiple bits to harden against
+ * fault injection.
  */
-#define BOARD_FIPS_POWERUP_DONE       BIT(24)
+#define BOARD_FIPS_POWERUP_DONE       0xAA556633
 
 /*
  * Macro to capture all properties related to board strapping pins. This must be
