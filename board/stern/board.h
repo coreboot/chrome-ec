@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Configuration for Kukui */
+/* Configuration for Stern */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -28,13 +28,13 @@
 
 #define CONFIG_CHARGER_PSYS
 
-#define CONFIG_CHARGER_RUNTIME_CONFIG
-
 #define CONFIG_BC12_DETECT_PI3USB9201
 
 #define CONFIG_EXTPOWER_GPIO
 #undef CONFIG_EXTPOWER_DEBOUNCE_MS
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 200
+
+#undef CONFIG_SYSTEM_UNLOCKED
 
 #define CONFIG_I2C_BITBANG
 #undef I2C_BITBANG_PORT_COUNT

@@ -15,7 +15,7 @@
 #include "common.h"
 #include "console.h"
 #include "driver/accel_lis2dw12.h"
-#include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_bmi160.h"
 #include "driver/battery/max17055.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
@@ -140,8 +140,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-static void board_hpd_status(const struct usb_mux *me,
-			     int hpd_lvl, int hpd_irq)
+static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
 {
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
@@ -150,31 +149,14 @@ static void board_hpd_status(const struct usb_mux *me,
 	host_set_single_event(EC_HOST_EVENT_USB_MUX);
 }
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX,
-		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
+		/* Driver uses I2C_PORT_USB_MUX as I2C port */
+		.port_addr = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
 		.hpd_update = &board_hpd_status,
 	},
 };
-
-/* Charger config.  Start i2c address at 1, update during runtime */
-struct charger_config_t chg_chips[] = {
-	{
-		.i2c_port = 1,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
-};
-
-/* Board version depends on ADCs, so init i2c port after ADC */
-static void charger_config_complete(void)
-{
-	chg_chips[0].i2c_port = board_get_charger_i2c();
-}
-DECLARE_HOOK(HOOK_INIT, charger_config_complete, HOOK_PRIO_INIT_ADC + 1);
 
 uint16_t tcpc_get_alert_status(void)
 {
@@ -208,7 +190,7 @@ int board_set_active_charge_port(int charge_port)
 		 * even when battery is disconnected, keep VBAT rail on but
 		 * set the charging current to minimum.
 		 */
-		charger_set_current(CHARGER_SOLO, 0);
+		charger_set_current(0);
 		break;
 	default:
 		panic("Invalid charge port\n");
@@ -351,7 +333,7 @@ static const mat33_fp_t lid_standard_ref = {
 /* Lid accel private data */
 static struct stprivate_data g_lis2dwl_data;
 /* Base accel private data */
-static struct bmi_drv_data_t g_bmi160_data;
+static struct bmi160_drv_data_t g_bmi160_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -398,8 +380,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 		.rot_standard_ref = &base_standard_ref,
 		.default_range = 2,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-		.min_frequency = BMI_ACCEL_MIN_FREQ,
-		.max_frequency = BMI_ACCEL_MAX_FREQ,
+		.min_frequency = BMI160_ACCEL_MIN_FREQ,
+		.max_frequency = BMI160_ACCEL_MAX_FREQ,
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -426,8 +408,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI_GYRO_MIN_FREQ,
-		.max_frequency = BMI_GYRO_MAX_FREQ,
+		.min_frequency = BMI160_GYRO_MIN_FREQ,
+		.max_frequency = BMI160_GYRO_MAX_FREQ,
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
