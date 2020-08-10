@@ -5,10 +5,8 @@
 
 #include "adc.h"
 #include "adc_chip.h"
-#include "console.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "host_command.h"
 #include "registers.h"
 #include "spi_chip.h"
 #include "timer.h"
@@ -126,23 +124,3 @@ int board_allow_i2c_passthru(int port)
 {
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
 }
-
-#ifdef SECTION_IS_RW
-
-static void hc_off_deferred(void)
-{
-	host_set_debug(0);
-	CPRINTS("HC off");
-}
-DECLARE_DEFERRED(hc_off_deferred);
-
-/* b:156027159: turn on HC for 5 seconds on sysjumping to RW.  */
-static void baseboard_hc_init(void)
-{
-	host_set_debug(1);
-	CPRINTS("HC on");
-
-	hook_call_deferred(&hc_off_deferred_data, 5 * SECOND);
-}
-DECLARE_HOOK(HOOK_INIT, baseboard_hc_init, HOOK_PRIO_DEFAULT);
-#endif /* SECTION_IS_RW */

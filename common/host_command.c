@@ -628,10 +628,6 @@ DECLARE_HOOK(HOOK_SYSJUMP,
 }
 #endif /* CONFIG_SUPPRESSED_HOST_COMMANDS */
 
-void host_set_debug(int en) {
-	hcdebug = en ? HCDEBUG_NORMAL : HCDEBUG_OFF;
-}
-
 /**
  * Print debug output for the host command request, before it's processed.
  *

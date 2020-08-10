@@ -185,13 +185,6 @@ host_event_t host_get_events(void);
  */
 int host_is_event_set(enum host_event_code event);
 
-/**
- * Enable/disable HC debug mode.
- *
- * @param en		1 for enable HC normal debug mode, 0 for off.
- */
-void host_set_debug(int en);
-
 #ifdef CONFIG_HOSTCMD_X86
 
 /*
