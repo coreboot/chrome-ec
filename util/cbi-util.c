@@ -40,6 +40,7 @@ enum {
 	OPT_MODEL_ID,
 	OPT_FW_CONFIG,
 	OPT_PCB_SUPPLIER,
+	OPT_SSFC,
 	OPT_SIZE,
 	OPT_ERASE_BYTE,
 	OPT_SHOW_ALL,
@@ -56,6 +57,7 @@ static const struct option opts_create[] = {
 	{"model_id", 1, 0, OPT_MODEL_ID},
 	{"fw_config", 1, 0, OPT_FW_CONFIG},
 	{"pcb_supplier", 1, 0, OPT_PCB_SUPPLIER},
+	{"ssfc", 1, 0, OPT_SSFC},
 	{"size", 1, 0, OPT_SIZE},
 	{"erase_byte", 1, 0, OPT_ERASE_BYTE},
 	{NULL, 0, 0, 0}
@@ -77,6 +79,7 @@ static const char *field_name[] = {
 	"MODEL_ID",
 	"FW_CONFIG",
 	"PCB_SUPPLIER",
+	"SSFC",
 };
 BUILD_ASSERT(ARRAY_SIZE(field_name) == CBI_TAG_COUNT);
 
@@ -100,6 +103,7 @@ const char help_create[] =
 	"  --model_id <value>         Model ID\n"
 	"  --fw_config <value>        Firmware configuration bit-field\n"
 	"  --pcb_supplier <value>     PCB supplier\n"
+	"  --ssfc <value>             Second Source Factory Cache bit-field\n"
 	"\n"
 	"<value> must be a positive integer <= 0XFFFFFFFF and field size can\n"
 	"    be optionally specified by <value:size> notation: e.g. 0xabcd:4.\n"
@@ -259,6 +263,7 @@ static int cmd_create(int argc, char **argv)
 		struct integer_field model;
 		struct integer_field fw_config;
 		struct integer_field pcb_supplier;
+		struct integer_field ssfc;
 		const char *dram_part_num;
 		const char *oem_name;
 	} bi;
@@ -336,6 +341,10 @@ static int cmd_create(int argc, char **argv)
 			if (parse_integer_field(optarg, &bi.pcb_supplier))
 				return -1;
 			break;
+		case OPT_SSFC:
+			if (parse_integer_field(optarg, &bi.ssfc))
+				return -1;
+			break;
 		}
 	}
 
@@ -366,6 +375,7 @@ static int cmd_create(int argc, char **argv)
 			 bi.fw_config.size);
 	p = cbi_set_data(p, CBI_TAG_PCB_SUPPLIER, &bi.pcb_supplier.val,
 			bi.pcb_supplier.size);
+	p = cbi_set_data(p, CBI_TAG_SSFC, &bi.ssfc.val, bi.ssfc.size);
 	if (bi.dram_part_num != NULL) {
 		p = cbi_set_data(p, CBI_TAG_DRAM_PART_NUM, bi.dram_part_num,
 				strlen(bi.dram_part_num) + 1);
@@ -497,6 +507,7 @@ static int cmd_show(int argc, char **argv)
 	print_integer(buf, CBI_TAG_MODEL_ID);
 	print_integer(buf, CBI_TAG_FW_CONFIG);
 	print_integer(buf, CBI_TAG_PCB_SUPPLIER);
+	print_integer(buf, CBI_TAG_SSFC);
 	print_string(buf, CBI_TAG_DRAM_PART_NUM);
 	print_string(buf, CBI_TAG_OEM_NAME);
 
