@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+ * Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -161,6 +161,48 @@ static int spi_master_initialize(int port)
 		if ((spi_devices[i].port == port) &&
 		    (div < spi_devices[i].div))
 			div = spi_devices[i].div;
+
+	/*
+	 * STM32F412
+	 * Section 26.3.5 Slave select (NSS) pin management and Figure 276
+	 * https://www.st.com/resource/en/reference_manual/dm00180369.pdf#page=817
+	 *
+	 * The documentation in this section is a bit confusing, so here's a
+	 * summary based on discussion with ST:
+	 *
+	 * Software NSS management (SSM = 1):
+	 *   - In master mode, the NSS output is deactivated. You need to use a
+	 *     GPIO in output mode for slave select. This is generally used for
+	 *     multi-slave operation, but you can also use it for single slave
+	 *     operation. In this case, you should make sure to configure a GPIO
+	 *     for NSS, but *not* activate the SPI alternate function on that
+	 *     same pin since that will enable hardware NSS management (see
+	 *     below).
+	 *   - In slave mode, the NSS input level is equal to the SSI bit value.
+	 *
+	 * Hardware NSS management (SSM = 0):
+	 *   - In slave mode, when NSS pin is detected low the slave (MCU) is
+	 *     selected.
+	 *   - In master mode, there are two configurations, depending on the
+	 *     SSOE bit in register SPIx_CR1.
+	 *       - NSS output enable (SSM=0, SSOE=1):
+	 *         The MCU (master) drives NSS low as soon as SPI is enabled
+	 *         (SPE=1) and releases it when SPI is disabled (SPE=0).
+	 *
+	 *       - NSS output disable (SSM=0, SSOE=0):
+	 *         Allows multimaster capability. The MCU (master) drives NSS
+	 *         low.  If another master tries to takes control of the bus and
+	 *         NSS is pulled low, a mode fault is generated and the MCU
+	 *         changes to slave mode.
+	 *
+	 *   - NSS output disable (SSM=0, SSOE=0): if the MCU is acting as
+	 *     master on the bus, this config allows multimaster capability. If
+	 *     the NSS pin is pulled low in this mode, the SPI enters master
+	 *     mode fault state and the device is automatically reconfigured in
+	 *     slave mode.  In slave mode, the NSS pin works as a standard "chip
+	 *     select" input and the slave is selected while NSS lin is at low
+	 *     level.
+	 */
 	spi->cr1 = STM32_SPI_CR1_MSTR | STM32_SPI_CR1_SSM | STM32_SPI_CR1_SSI |
 		(div << 3);
 
@@ -170,7 +212,14 @@ static int spi_master_initialize(int port)
 #endif
 	/*
 	 * Configure 8-bit datasize, set FRXTH, enable DMA,
-	 * and enable NSS output
+	 * and set data size (applies to STM32F0 only).
+	 *
+	 * STM32F412:
+	 * https://www.st.com/resource/en/reference_manual/dm00180369.pdf#page=852
+	 *
+	 *
+	 * STM32F0:
+	 * https://www.st.com/resource/en/reference_manual/dm00031936.pdf#page=803
 	 */
 	spi->cr2 = STM32_SPI_CR2_TXDMAEN | STM32_SPI_CR2_RXDMAEN |
 			STM32_SPI_CR2_FRXTH | STM32_SPI_CR2_DATASIZE(8);
@@ -179,12 +228,15 @@ static int spi_master_initialize(int port)
 	spi->cr1 |= STM32_SPI_CR1_BIDIMODE | STM32_SPI_CR1_BIDIOE;
 #endif
 
+	/* Drive Chip Select high for all ports before turning on SPI module */
 	for (i = 0; i < spi_devices_used; i++) {
 		if (spi_devices[i].port != port)
 			continue;
-		/* Drive SS high */
 		gpio_set_level(spi_devices[i].gpio_cs, 1);
 	}
+
+	/* Enable SPI hardware module. This will actively drive the CLK pin */
+	spi->cr1 |= STM32_SPI_CR1_SPE;
 
 	/* Set flag */
 	spi_enabled[port] = 1;
@@ -208,7 +260,7 @@ static int spi_master_shutdown(int port)
 	dma_disable(dma_tx_option[port].channel);
 	dma_disable(dma_rx_option[port].channel);
 
-	/* Disable SPI */
+	/* Disable SPI. Let the CLK pin float. */
 	spi->cr1 &= ~STM32_SPI_CR1_SPE;
 
 	spi_clear_rx_fifo(spi);
@@ -248,10 +300,9 @@ static int spi_dma_start(int port, const uint8_t *txdata,
 	return EC_SUCCESS;
 }
 
-static int dma_is_enabled(const struct dma_option *option)
+static bool dma_is_enabled_(const struct dma_option *option)
 {
-	/* dma_bytes_done() returns 0 if channel is not enabled */
-	return dma_bytes_done(dma_get_channel(option->channel), -1);
+	return dma_is_enabled(dma_get_channel(option->channel));
 }
 
 static int spi_dma_wait(int port)
@@ -259,7 +310,7 @@ static int spi_dma_wait(int port)
 	int rv = EC_SUCCESS;
 
 	/* Wait for DMA transmission to complete */
-	if (dma_is_enabled(&dma_tx_option[port])) {
+	if (dma_is_enabled_(&dma_tx_option[port])) {
 		/*
 		 * In TX mode, SPI only generates clock when we write to FIFO.
 		 * Therefore, even though `dma_wait` polls with interval 0.1ms,
@@ -273,7 +324,7 @@ static int spi_dma_wait(int port)
 	}
 
 	/* Wait for DMA reception to complete */
-	if (dma_is_enabled(&dma_rx_option[port])) {
+	if (dma_is_enabled_(&dma_rx_option[port])) {
 		/*
 		 * Because `dma_wait` polls with interval 0.1ms, we will read at
 		 * least ~100 bytes (with 8MHz clock).  If you don't want this
@@ -301,6 +352,10 @@ int spi_transaction_async(const struct spi_device_t *spi_device,
 	stm32_spi_regs_t *spi = SPI_REGS[port];
 	char *buf = NULL;
 
+	/* We should not ever be called when disabled, but fail early if so. */
+	if (!spi_enabled[port])
+		return EC_ERROR_BUSY;
+
 #ifndef CONFIG_SPI_HALFDUPLEX
 	if (rxlen == SPI_READBACK_ALL) {
 		buf = rxdata;
@@ -324,7 +379,6 @@ int spi_transaction_async(const struct spi_device_t *spi_device,
 #ifdef CONFIG_SPI_HALFDUPLEX
 	spi->cr1 |= STM32_SPI_CR1_BIDIOE;
 #endif
-	spi->cr1 |= STM32_SPI_CR1_SPE;
 
 	if (full_readback)
 		return EC_SUCCESS;
@@ -335,8 +389,6 @@ int spi_transaction_async(const struct spi_device_t *spi_device,
 
 	spi_clear_tx_fifo(spi);
 
-	spi->cr1 &= ~STM32_SPI_CR1_SPE;
-
 	if (rxlen) {
 		rv = spi_dma_start(port, buf, rxdata, rxlen);
 		if (rv != EC_SUCCESS)
@@ -344,7 +396,6 @@ int spi_transaction_async(const struct spi_device_t *spi_device,
 #ifdef CONFIG_SPI_HALFDUPLEX
 		spi->cr1 &= ~STM32_SPI_CR1_BIDIOE;
 #endif
-		spi->cr1 |= STM32_SPI_CR1_SPE;
 	}
 
 err_free:
@@ -358,9 +409,7 @@ err_free:
 int spi_transaction_flush(const struct spi_device_t *spi_device)
 {
 	int rv = spi_dma_wait(spi_device->port);
-	stm32_spi_regs_t *spi = SPI_REGS[spi_device->port];
 
-	spi->cr1 &= ~STM32_SPI_CR1_SPE;
 	/* Drive SS high */
 	gpio_set_level(spi_device->gpio_cs, 1);
 

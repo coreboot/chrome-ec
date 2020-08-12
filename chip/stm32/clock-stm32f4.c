@@ -34,12 +34,12 @@
 #define RTC_PREDIV_S (RTC_FREQ - 1)
 #define US_PER_RTC_TICK (1000000 / RTC_FREQ)
 
-int32_t rtc_ssr_to_us(uint32_t rtcss)
+int32_t rtcss_to_us(uint32_t rtcss)
 {
 	return ((RTC_PREDIV_S - rtcss) * US_PER_RTC_TICK);
 }
 
-uint32_t us_to_rtc_ssr(int32_t us)
+uint32_t us_to_rtcss(int32_t us)
 {
 	return (RTC_PREDIV_S - (us / US_PER_RTC_TICK));
 }
@@ -164,7 +164,6 @@ void config_hispeed_clock(void)
 		;
 
 	/* Setup RTC Clock input */
-	STM32_RCC_BDCR |= STM32_RCC_BDCR_BDRST;
 #ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	STM32_RCC_BDCR = STM32_RCC_BDCR_RTCEN | BDCR_RTCSEL(BDCR_SRC_HSE);
 #else
@@ -227,10 +226,13 @@ void clock_enable_module(enum module_id module, int enable)
 				  STM32_RCC_I2C3EN | STM32_RCC_FMPI2C4EN);
 		}
 		return;
+	} else if (module == MODULE_ADC) {
+		if (enable)
+			STM32_RCC_APB2ENR |= STM32_RCC_APB2ENR_ADC1EN;
+		else
+			STM32_RCC_APB2ENR &= ~STM32_RCC_APB2ENR_ADC1EN;
+		return;
 	}
-
-	CPRINTS("Module %d is not supported for clock %s\n",
-		module, enable ? "enable" : "disable");
 }
 
 void rtc_init(void)
@@ -261,3 +263,31 @@ void rtc_init(void)
 
 	rtc_lock_regs();
 }
+
+#if defined(CONFIG_CMD_RTC) || defined(CONFIG_HOSTCMD_RTC)
+void rtc_set(uint32_t sec)
+{
+	struct rtc_time_reg rtc;
+
+	sec_to_rtc(sec, &rtc);
+	rtc_unlock_regs();
+
+	/* Disable alarm */
+	STM32_RTC_CR &= ~STM32_RTC_CR_ALRAE;
+
+	/* Enter RTC initialize mode */
+	STM32_RTC_ISR |= STM32_RTC_ISR_INIT;
+	while (!(STM32_RTC_ISR & STM32_RTC_ISR_INITF))
+		;
+
+	/* Set clock prescalars */
+	STM32_RTC_PRER = (RTC_PREDIV_A << 16) | RTC_PREDIV_S;
+
+	STM32_RTC_TR = rtc.rtc_tr;
+	STM32_RTC_DR = rtc.rtc_dr;
+	/* Start RTC timer */
+	STM32_RTC_ISR &= ~STM32_RTC_ISR_INIT;
+
+	rtc_lock_regs();
+}
+#endif

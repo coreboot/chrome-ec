@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -67,7 +67,12 @@ struct host_packet {
 	 */
 	void (*send_response)(struct host_packet *pkt);
 
-	/* Input request data */
+	/*
+	 * Input request data. If request and response buffers overlap,
+	 * then request_temp must be non-null and be large enough to store the
+	 * entire request buffer. The request_temp buffer will then be used
+	 * as the buffer passed into the command handlers.
+	 */
 	const void *request;
 
 	/*
@@ -125,8 +130,10 @@ struct host_command {
 
 #ifdef CONFIG_HOST_EVENT64
 typedef uint64_t host_event_t;
-#define HOST_EVENT_CPRINTS(str, e)	CPRINTS("%s 0x%016lx", str, e)
-#define HOST_EVENT_CCPRINTF(str, e)	ccprintf("%s 0x%016lx\n", str, e)
+#define HOST_EVENT_CPRINTS(str, e)	CPRINTS("%s 0x%016" PRIx64, str, e)
+#define HOST_EVENT_CCPRINTF(str, e) \
+	ccprintf("%s 0x%016" PRIx64 "\n", str, e)
+
 #else
 typedef uint32_t host_event_t;
 #define HOST_EVENT_CPRINTS(str, e)	CPRINTS("%s 0x%08x", str, e)
@@ -155,7 +162,6 @@ uint8_t *host_get_memmap(int offset);
  */
 uint16_t host_command_process(struct host_cmd_handler_args *args);
 
-#ifdef CONFIG_HOSTCMD_EVENTS
 /**
  * Set a single host event.
  *
@@ -204,7 +210,6 @@ int get_lazy_wake_mask(enum power_state state, host_event_t *mask);
  * @return 1 if active wake mask set by host else return 0
  */
 uint8_t lpc_is_active_wm_set_by_host(void);
-#endif
 #endif
 
 /**
@@ -315,16 +320,6 @@ int pd_get_active_charge_port(void);
 int pd_host_command(int command, int version,
 		    const void *outdata, int outsize,
 		    void *indata, int insize);
-
-
-/**
- * EC: Get verify boot mode
- * @return vboot_mode as the following:
- *    VBOOT_MODE_NORMAL    - normal mode
- *    VBOOT_MODE_DEVELOPER - developer mode
- *    VBOOT_MODE_RECOVERY  - recovery mode
- */
-int host_get_vboot_mode(void);
 
 /*
  * Sends an emulated sysrq to the host, used by button-based debug mode.

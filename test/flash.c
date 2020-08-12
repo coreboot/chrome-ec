@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -287,7 +287,7 @@ static int test_overwrite_current(void)
 	uint32_t offset, size;
 
 	/* Test that we cannot overwrite current image */
-	if (system_get_image_copy() == SYSTEM_IMAGE_RO) {
+	if (system_get_image_copy() == EC_IMAGE_RO) {
 		offset = CONFIG_RO_STORAGE_OFF;
 		size = CONFIG_RO_SIZE;
 	} else {
@@ -498,7 +498,7 @@ int task_test(void *data)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	msleep(30); /* Wait for TASK_ID_TEST to initialize */
 	task_wake(TASK_ID_TEST);

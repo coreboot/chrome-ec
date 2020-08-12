@@ -13,6 +13,16 @@
  */
 
 /*
+ * By default, enable all console messages excepted HC, ACPI and event:
+ * The sensor stack is generating a lot of activity.
+ */
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#define CONFIG_SUPPRESSED_HOST_COMMANDS \
+	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_USB_PD_DISCOVERY,\
+	EC_CMD_USB_PD_POWER_INFO, EC_CMD_PD_GET_LOG_ENTRY, \
+	EC_CMD_MOTION_SENSE_CMD, EC_CMD_GET_NEXT_EVENT
+
+/*
  * Variant EC defines. Pick one:
  * VARIANT_OCTOPUS_EC_NPCX796FB
  * VARIANT_OCTOPUS_EC_ITE8320
@@ -37,7 +47,10 @@
 	#define I2C_PORT_EEPROM		NPCX_I2C_PORT3_0
 	#define I2C_PORT_CHARGER	NPCX_I2C_PORT4_1
 	#define I2C_PORT_SENSOR		NPCX_I2C_PORT7_0
-	#define I2C_ADDR_EEPROM		0xA0
+	#define I2C_ADDR_EEPROM_FLAGS	0x50
+
+	/* Enable PSL hibernate mode. */
+	#define CONFIG_HIBERNATE_PSL
 
 	/* EC variant determines USB-C variant */
 	#define VARIANT_OCTOPUS_USBC_STANDALONE_TCPCS
@@ -56,7 +69,8 @@
 	#define I2C_PORT_USBC1		IT83XX_I2C_CH_E
 	#define I2C_PORT_USB_MUX	I2C_PORT_USBC0	/* For MUX driver */
 	#define I2C_PORT_EEPROM		IT83XX_I2C_CH_F
-	#define I2C_ADDR_EEPROM		0xA0
+	#define I2C_ADDR_EEPROM_FLAGS	0x50
+	#define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
 
 	/* EC variant determines USB-C variant */
 	#define VARIANT_OCTOPUS_USBC_ITE_EC_TCPCS
@@ -67,6 +81,7 @@
 /* Common EC defines */
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
+#define CONFIG_I2C_BUS_MAY_BE_UNPOWERED
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
@@ -74,7 +89,10 @@
 #define CONFIG_CROS_BOARD_INFO
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_LOW_POWER_IDLE
-#define CONFIG_PWM
+#define CONFIG_DPTF
+#define CONFIG_BOARD_HAS_RTC_RESET
+#define CONFIG_LED_ONOFF_STATES
+#define CONFIG_CMD_CHARGEN
 
 /* Port80 -- allow larger buffer for port80 messages */
 #undef CONFIG_PORT80_HISTORY_LEN
@@ -119,7 +137,6 @@
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_CHARGER
-#define CONFIG_CHARGER_V2
 #define CONFIG_CHARGER_INPUT_CURRENT 512 /* Allow low-current USB charging */
 #define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 1
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
@@ -147,8 +164,9 @@
 #if defined(VARIANT_OCTOPUS_USBC_STANDALONE_TCPCS)
 	#define CONFIG_USB_PD_TCPC_LOW_POWER
 	#define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#if !defined(VARIANT_OCTOPUS_TCPC_0_PS8751)
 	#define CONFIG_USB_PD_TCPM_ANX7447	/* C0 TCPC: ANX7447QN */
-	#define CONFIG_USB_PD_TCPM_ANX7447_OCM_ERASE_COMMAND
+#endif
 	#define CONFIG_USB_PD_TCPM_PS8751	/* C1 TCPC: PS8751 */
 	#define CONFIG_USB_PD_VBUS_DETECT_TCPC
 	#define CONFIG_USBC_PPC_NX20P3483
@@ -156,20 +174,26 @@
 	#undef CONFIG_USB_PD_TCPC_LOW_POWER
 	#undef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	#define CONFIG_USB_PD_VBUS_DETECT_PPC
-	#define CONFIG_USB_PD_TCPM_ITE83XX	/* C0 & C1 TCPC: ITE EC */
+	#define CONFIG_USB_PD_TCPM_ITE_ON_CHIP	/* C0 & C1 TCPC: ITE EC */
 	#define CONFIG_USB_MUX_IT5205		/* C0 MUX: IT5205 */
 	#define CONFIG_USB_PD_TCPM_PS8751	/* C1 Mux: PS8751 */
-	#define CONFIG_USB_PD_TCPM_TCPCI_MUX_ONLY
 	#define CONFIG_USBC_PPC_SN5S330		/* C0 & C1 PPC: each SN5S330 */
 	#define CONFIG_USBC_PPC_VCONN
+	#define CONFIG_USBC_PPC_DEDICATED_INT
 #else
 	#error Must define a VARIANT_OCTOPUS_USBC
 #endif /* VARIANT_OCTOPUS_USBC */
 
 /* Common USB-C defines */
+#define USB_PD_PORT_TCPC_0	0
+#define USB_PD_PORT_TCPC_1	1
+#define CONFIG_USB_PID 0x5046
+
+#define CONFIG_USB_DRP_ACC_TRYSRC
+#define CONFIG_USB_PD_DECODE_SOP
 #define CONFIG_USB_POWER_DELIVERY
-#define CONFIG_USB_PD_PORT_COUNT 2
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
+#define CONFIG_USB_PD_TCPMV2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_ALT_MODE
@@ -180,11 +204,11 @@
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
-#define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
+#define CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_TCPCI
-#define CONFIG_BC12_DETECT_BQ24392
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_BC12_DETECT_MAX14637
+#define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_CMD_PPC_DUMP
 
 /* TODO(b/76218141): Use correct PD delay values */
@@ -207,6 +231,7 @@
 #define CONFIG_USB_PORT_POWER_SMART
 #define CONFIG_USB_PORT_POWER_SMART_CDP_SDP_ONLY
 #define CONFIG_USB_PORT_POWER_SMART_DEFAULT_MODE USB_CHARGE_MODE_CDP
+#define CONFIG_USB_PORT_POWER_SMART_INVERTED
 #define GPIO_USB1_ILIM_SEL GPIO_USB_A0_CHARGE_EN_L
 #define GPIO_USB2_ILIM_SEL GPIO_USB_A1_CHARGE_EN_L
 
@@ -237,32 +262,52 @@
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI2
-#define CONFIG_PWM_KBLIGHT
+
+/*******************************************************************************
+ * Sensor Config
+ */
+
+/* Common Sensor Defines */
+#define CONFIG_TABLET_MODE
+#define CONFIG_GMR_TABLET_MODE
+#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
+/*
+ * Slew rate on the PP1800_SENSOR load switch requires a short delay on startup.
+ */
+#undef  CONFIG_MOTION_SENSE_RESUME_DELAY_US
+#define CONFIG_MOTION_SENSE_RESUME_DELAY_US (10 * MSEC)
+
+#ifndef VARIANT_OCTOPUS_NO_SENSORS
+/*
+ * Interrupt and fifo are only used for base accelerometer
+ * and the lid sensor is polled real-time (in forced mode).
+ */
+#define CONFIG_ACCEL_INTERRUPTS
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
+/* Power of 2 - Too large of a fifo causes too much timestamp jitter */
+#define CONFIG_ACCEL_FIFO_SIZE 256
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+#endif /* VARIANT_OCTOPUS_NO_SENSORS */
+
+/*
+ * Sensor stack in EC/Kernel depends on a hardware interrupt pin from EC->AP, so
+ * do not define CONFIG_MKBP_USE_HOST_EVENT since all octopus boards use
+ * hardware pin to send interrupt from EC -> AP (except casta).
+ */
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO
 
 #ifndef __ASSEMBLER__
 
-enum power_signal {
-#ifdef CONFIG_POWER_S0IX
-	X86_SLP_S0_N,		/* PCH  -> SLP_S0_L */
-#endif
-	X86_SLP_S3_N,		/* PCH  -> SLP_S3_L */
-	X86_SLP_S4_N,		/* PCH  -> SLP_S4_L */
-	X86_SUSPWRDNACK,	/* PCH  -> SUSPWRDNACK */
-
-	X86_ALL_SYS_PG,		/* PMIC -> PMIC_EC_PWROK_OD */
-	X86_RSMRST_N,		/* PMIC -> PMIC_EC_RSMRST_ODL */
-	X86_PGOOD_PP3300,	/* PMIC -> PP3300_PG_OD */
-	X86_PGOOD_PP5000,	/* PMIC -> PP5000_PG_OD */
-
-	/* Number of X86 signals */
-	POWER_SIGNAL_COUNT
-};
+#include "gpio_signal.h"
 
 /* Forward declare common (within octopus) board-specific functions */
 void board_reset_pd_mcu(void);
 
-#ifdef VARIANT_OCTOPUS_USBC_ITE_EC_TCPCS
-void board_pd_vconn_ctrl(int port, int cc_pin, int enabled);
+#ifdef VARIANT_OCTOPUS_USBC_STANDALONE_TCPCS
+void tcpc_alert_event(enum gpio_signal signal);
 #endif
 
 #endif /* !__ASSEMBLER__ */

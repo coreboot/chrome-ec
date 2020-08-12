@@ -12,6 +12,7 @@
 #include "console.h"
 #include "driver/sync.h"
 #include "hwtimer.h"
+#include "motion_sense_fifo.h"
 #include "queue.h"
 #include "task.h"
 #include "util.h"
@@ -40,7 +41,7 @@ struct ec_response_motion_sensor_data vector =
 	{.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP, .data = {0, 0, 0} };
 int sync_enabled;
 
-static int sync_read(const struct motion_sensor_t *s, vector_3_t v)
+static int sync_read(const struct motion_sensor_t *s, intv3_t v)
 {
 	v[0] = next_event.counter;
 	return EC_SUCCESS;
@@ -88,8 +89,10 @@ static int motion_irq_handler(struct motion_sensor_t *s, uint32_t *event)
 
 	while (queue_remove_unit(&sync_event_queue, &sync_event)) {
 		vector.data[X] = sync_event.counter;
-		motion_sense_fifo_add_data(&vector, s, 1, sync_event.timestamp);
+		motion_sense_fifo_stage_data(
+			&vector, s, 1, sync_event.timestamp);
 	}
+	motion_sense_fifo_commit_data();
 
 	return EC_SUCCESS;
 }

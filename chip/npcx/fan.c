@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -89,7 +89,7 @@ static int rpm_pre[FAN_CH_COUNT];
 	((fan_status[ch].mft_freq * 60 / PULSES_ROUND) / MAX((tach), 1))
 
 /* MFT TCNT default count */
-#define TACHO_MAX_CNT ((1 << 16) - 1)
+#define TACHO_MAX_CNT (BIT(16) - 1)
 
 /* Margin of target rpm */
 #define RPM_MARGIN(rpm_target) (((rpm_target) * RPM_DEVIATION) / 100)
@@ -235,7 +235,7 @@ static int fan_all_disabled(void)
 {
 	int ch;
 
-	for (ch = 0; ch < CONFIG_FANS; ch++)
+	for (ch = 0; ch < fan_get_count(); ch++)
 		if (fan_status[ch].auto_status != FAN_STATUS_STOPPED)
 			return 0;
 	return 1;
@@ -519,11 +519,8 @@ enum fan_status fan_get_status(int ch)
  */
 int fan_is_stalled(int ch)
 {
-	/* if fan is enabled but we didn't detect any tacho */
-	if (fan_get_enabled(ch) && fan_status[ch].cur_state == TACHO_UNDERFLOW)
-		return 1;
-	else
-		return 0;
+	return fan_get_enabled(ch) && fan_get_duty(ch) &&
+			fan_status[ch].cur_state == TACHO_UNDERFLOW;
 }
 
 /**

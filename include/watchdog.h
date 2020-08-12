@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -37,6 +37,13 @@ void watchdog_trace(uint32_t excep_lr, uint32_t excep_sp);
  * called when the watchdog is close to firing.
  */
 void watchdog_warning_irq(void);
+
+/**
+ * We cannot unlock the watchdog timer within 3 watch dog ticks of
+ * touching it per the datasheet. This is around 100ms so we should
+ * protect against this.
+ */
+void watchdog_stop_and_unlock(void);
 
 /* Reload the watchdog counter */
 #ifdef CONFIG_WATCHDOG

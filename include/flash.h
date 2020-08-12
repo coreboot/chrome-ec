@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -46,6 +46,10 @@ int flash_bank_count(int offset, int size);
  */
 int flash_bank_size(int bank);
 
+int flash_bank_start_offset(int bank);
+
+int flash_bank_erase_size(int bank);
+
 /* Number of physical flash banks */
 #define PHYSICAL_BANKS  CONFIG_FLASH_MULTIPLE_REGION
 
@@ -88,9 +92,15 @@ int flash_bank_size(int bank);
 /*
  * ROLLBACK region offset and size in units of flash banks.
  */
+#ifdef CONFIG_FLASH_MULTIPLE_REGION
+#define ROLLBACK_BANK_OFFSET	flash_bank_index(CONFIG_ROLLBACK_OFF)
+#define ROLLBACK_BANK_COUNT	\
+	flash_bank_count(CONFIG_ROLLBACK_OFF, CONFIG_ROLLBACK_SIZE)
+#else
 #define ROLLBACK_BANK_OFFSET	(CONFIG_ROLLBACK_OFF / CONFIG_FLASH_BANK_SIZE)
 #define ROLLBACK_BANK_COUNT	(CONFIG_ROLLBACK_SIZE / CONFIG_FLASH_BANK_SIZE)
-#endif
+#endif	/* CONFIG_FLASH_MULTIPLE_REGION */
+#endif	/* CONFIG_ROLLBACK */
 
 /* This enum is useful to identify different regions during verification. */
 enum flash_region {
@@ -332,6 +342,25 @@ const char *flash_read_pstate_serial(void);
  * @return success status.
  */
 int flash_write_pstate_serial(const char *serialno);
+
+/**
+ * Get the MAC address from flash.
+ *
+ * @return char * ascii MAC address string.
+ *     Format: "01:23:45:67:89:AB"
+ *     NULL if error.
+ */
+const char *flash_read_pstate_mac_addr(void);
+
+/**
+ * Set the MAC address in flash.
+ *
+ * @param mac_addr	ascii MAC address string.
+ *     Format: "01:23:45:67:89:AB"
+ *
+ * @return success status.
+ */
+int flash_write_pstate_mac_addr(const char *mac_addr);
 
 /**
  * Lock or unlock HW necessary for mapped storage read.

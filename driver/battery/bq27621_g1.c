@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -13,7 +13,7 @@
 #include "util.h"
 #include "timer.h"
 
-#define BQ27621_ADDR                        0xaa
+#define BQ27621_ADDR_FLAGS                  0x55
 #define BQ27621_TYPE_ID                     0x0621
 
 #define REG_CTRL                            0x00
@@ -470,11 +470,6 @@ int battery_design_capacity(int *capacity)
 }
 
 int battery_time_at_rate(int rate, int *minutes)
-{
-	return EC_ERROR_UNIMPLEMENTED;
-}
-
-int battery_manufacturer_name(char *dest, int size)
 {
 	return EC_ERROR_UNIMPLEMENTED;
 }

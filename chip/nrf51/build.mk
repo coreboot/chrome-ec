@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+# Copyright 2014 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -21,4 +21,6 @@ chip-$(CONFIG_BLUETOOTH_LE)+=radio.o bluetooth_le.o
 chip-$(CONFIG_BLUETOOTH_LE_RADIO_TEST)+=radio_test.o
 chip-$(CONFIG_COMMON_TIMER)+=hwtimer.o clock.o
 chip-$(CONFIG_I2C)+=i2c.o
+ifndef CONFIG_KEYBOARD_NOT_RAW
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
+endif

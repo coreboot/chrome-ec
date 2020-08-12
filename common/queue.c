@@ -1,11 +1,14 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
  * Queue data structure implementation.
  */
+#include "console.h"
 #include "queue.h"
 #include "util.h"
+
+#define CPRINTS(format, args...) cprints(CC_MOTION_SENSE, format, ## args)
 
 static void queue_action_null(struct queue_policy const *policy, size_t count)
 {
@@ -18,7 +21,6 @@ struct queue_policy const queue_policy_null = {
 
 void queue_init(struct queue const *q)
 {
-	ASSERT(POWER_OF_TWO(q->buffer_units));
 	ASSERT(q->policy);
 	ASSERT(q->policy->add);
 	ASSERT(q->policy->remove);
@@ -68,31 +70,37 @@ int queue_is_full(struct queue const *q)
  *          |****************|
  */
 
-struct queue_chunk queue_get_write_chunk(struct queue const *q)
+struct queue_chunk queue_get_write_chunk(struct queue const *q, size_t offset)
 {
-	size_t head = q->state->head & (q->buffer_units - 1);
-	size_t tail = q->state->tail & (q->buffer_units - 1);
-	size_t last = (queue_is_full(q) ? tail : /* Full           */
-		       ((tail < head) ? head :   /* Wrapped        */
-			q->buffer_units));       /* Normal | Empty */
+	size_t head = q->state->head & q->buffer_units_mask;
+	size_t tail = (q->state->tail + offset) & q->buffer_units_mask;
+	size_t last = (tail < head) ? head :   /* Wrapped        */
+			q->buffer_units;       /* Normal | Empty */
+
+	/* Make sure that the offset doesn't exceed free space. */
+	if (queue_space(q) <= offset)
+		return ((struct queue_chunk) {
+			.count = 0,
+			.buffer = NULL,
+		});
 
 	return ((struct queue_chunk) {
-		.length = (last - tail) * q->unit_bytes,
-		.buffer = q->buffer + tail * q->unit_bytes,
+		.count = last - tail,
+		.buffer = q->buffer + (tail * q->unit_bytes),
 	});
 }
 
 struct queue_chunk queue_get_read_chunk(struct queue const *q)
 {
-	size_t head = q->state->head & (q->buffer_units - 1);
-	size_t tail = q->state->tail & (q->buffer_units - 1);
+	size_t head = q->state->head & q->buffer_units_mask;
+	size_t tail = q->state->tail & q->buffer_units_mask;
 	size_t last = (queue_is_empty(q) ? head : /* Empty          */
 		       ((head < tail) ? tail :    /* Normal         */
 			q->buffer_units));        /* Wrapped | Full */
 
 	return ((struct queue_chunk) {
-		.length = (last - head) * q->unit_bytes,
-		.buffer = q->buffer + head * q->unit_bytes,
+		.count = (last - head),
+		.buffer = q->buffer + (head * q->unit_bytes),
 	});
 }
 
@@ -120,7 +128,7 @@ size_t queue_advance_tail(struct queue const *q, size_t count)
 
 size_t queue_add_unit(struct queue const *q, const void *src)
 {
-	size_t tail = q->state->tail & (q->buffer_units - 1);
+	size_t tail = q->state->tail & q->buffer_units_mask;
 
 	if (queue_space(q) == 0)
 		return 0;
@@ -146,7 +154,7 @@ size_t queue_add_memcpy(struct queue const *q,
 					size_t n))
 {
 	size_t transfer = MIN(count, queue_space(q));
-	size_t tail     = q->state->tail & (q->buffer_units - 1);
+	size_t tail     = q->state->tail & q->buffer_units_mask;
 	size_t first    = MIN(transfer, q->buffer_units - tail);
 
 	memcpy(q->buffer + tail * q->unit_bytes,
@@ -183,7 +191,7 @@ static void queue_read_safe(struct queue const *q,
 
 size_t queue_remove_unit(struct queue const *q, void *dest)
 {
-	size_t head = q->state->head & (q->buffer_units - 1);
+	size_t head = q->state->head & q->buffer_units_mask;
 
 	if (queue_count(q) == 0)
 		return 0;
@@ -209,7 +217,7 @@ size_t queue_remove_memcpy(struct queue const *q,
 					   size_t n))
 {
 	size_t transfer = MIN(count, queue_count(q));
-	size_t head     = q->state->head & (q->buffer_units - 1);
+	size_t head     = q->state->head & q->buffer_units_mask;
 
 	queue_read_safe(q, dest, head, transfer, memcpy);
 
@@ -236,10 +244,53 @@ size_t queue_peek_memcpy(struct queue const *q,
 	size_t transfer  = MIN(count, available - i);
 
 	if (i < available) {
-		size_t head = (q->state->head + i) & (q->buffer_units - 1);
+		size_t head = (q->state->head + i) & q->buffer_units_mask;
 
 		queue_read_safe(q, dest, head, transfer, memcpy);
 	}
 
 	return transfer;
+}
+
+void queue_begin(struct queue const *q, struct queue_iterator *it)
+{
+	if (queue_is_empty(q))
+		it->ptr = NULL;
+	else
+		it->ptr = q->buffer + (q->state->head & q->buffer_units_mask) *
+			q->unit_bytes;
+	it->_state.offset = 0;
+	it->_state.head = q->state->head;
+	it->_state.tail = q->state->tail;
+}
+
+void queue_next(struct queue const *q, struct queue_iterator *it)
+{
+	uint8_t *ptr = (uint8_t *)it->ptr;
+
+	/* Check if anything changed since the iterator was created. */
+	if (it->_state.head != q->state->head ||
+	    it->_state.tail != q->state->tail) {
+		CPRINTS("Concurrent modification error, queue has changed while"
+			" iterating. The iterator is now invalid.");
+		it->ptr = NULL;
+		return;
+	}
+
+	/* Check if iterator is already at end. */
+	if (ptr == NULL ||
+	    it->_state.head + it->_state.offset == it->_state.tail)
+		return;
+
+	it->_state.offset++;
+	/* Check if we've reached the end. */
+	if (it->_state.head + it->_state.offset == it->_state.tail) {
+		it->ptr = NULL;
+		return;
+	}
+
+	ptr = q->buffer +
+	      (((it->_state.head + it->_state.offset) & q->buffer_units_mask) *
+	       q->unit_bytes);
+	it->ptr = (void *)ptr;
 }

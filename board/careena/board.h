@@ -8,6 +8,9 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define VARIANT_GRUNT_TCPC_0_ANX3429
+#define VARIANT_GRUNT_NO_SENSORS
+
 #include "baseboard.h"
 
 /*
@@ -18,7 +21,7 @@
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
+#define CONFIG_MKBP_USE_HOST_EVENT
 
 #define CONFIG_LED_COMMON
 #define CONFIG_CMD_LEDTEST
@@ -41,6 +44,7 @@ enum battery_type {
 	BATTERY_SAMSUNG_SDI,
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_ATL,
+	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_TYPE_COUNT,
 };
 

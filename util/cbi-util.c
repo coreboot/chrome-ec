@@ -20,11 +20,10 @@
 #include "cros_board_info.h"
 #include "crc8.h"
 
-#define ARGS_MASK_BOARD_VERSION		(1 << 0)
-#define ARGS_MASK_FILENAME		(1 << 1)
-#define ARGS_MASK_OEM_ID		(1 << 2)
-#define ARGS_MASK_SIZE			(1 << 3)
-#define ARGS_MASK_SKU_ID		(1 << 4)
+#define ARGS_MASK_BOARD_VERSION		BIT(0)
+#define ARGS_MASK_FILENAME		BIT(1)
+#define ARGS_MASK_SIZE			BIT(2)
+#define ARGS_MASK_SKU_ID		BIT(3)
 
 /* TODO: Set it by macro */
 const char cmd_name[] = "cbi-util";
@@ -36,6 +35,10 @@ enum {
 	OPT_OEM_ID,
 	OPT_SKU_ID,
 	OPT_DRAM_PART_NUM,
+	OPT_OEM_NAME,
+	OPT_MODEL_ID,
+	OPT_FW_CONFIG,
+	OPT_PCB_SUPPLIER,
 	OPT_SIZE,
 	OPT_ERASE_BYTE,
 	OPT_SHOW_ALL,
@@ -48,6 +51,10 @@ static const struct option opts_create[] = {
 	{"oem_id", 1, 0, OPT_OEM_ID},
 	{"sku_id", 1, 0, OPT_SKU_ID},
 	{"dram_part_num", 1, 0, OPT_DRAM_PART_NUM},
+	{"oem_name", 1, 0, OPT_OEM_NAME},
+	{"model_id", 1, 0, OPT_MODEL_ID},
+	{"fw_config", 1, 0, OPT_FW_CONFIG},
+	{"pcb_supplier", 1, 0, OPT_PCB_SUPPLIER},
 	{"size", 1, 0, OPT_SIZE},
 	{"erase_byte", 1, 0, OPT_ERASE_BYTE},
 	{NULL, 0, 0, 0}
@@ -64,7 +71,11 @@ static const char *field_name[] = {
 	"BOARD_VERSION",
 	"OEM_ID",
 	"SKU_ID",
-	"DRAM_PART_NUM"
+	"DRAM_PART_NUM",
+	"OEM_NAME",
+	"MODEL_ID",
+	"FW_CONFIG",
+	"PCB_SUPPLIER",
 };
 BUILD_ASSERT(ARRAY_SIZE(field_name) == CBI_TAG_COUNT);
 
@@ -72,19 +83,25 @@ const char help_create[] =
 	"\n"
 	"'%s create [ARGS]' creates an EEPROM image file.\n"
 	"Required ARGS are:\n"
-	"  --file <file>               Path to output file\n"
-	"  --board_version <value>     Board version\n"
-	"  --oem_id <value>            OEM ID\n"
-	"  --sku_id <value>            SKU ID\n"
-	"  --size <size>               Size of output file in bytes\n"
-	"<value> must be a positive integer <= 0XFFFFFFFF and field size can\n"
-	"be optionally specified by <value:size> notation: e.g. 0xabcd:4.\n"
-	"<value> can be a string for DRAM PART NUM.\n"
-	"<size> must be a positive integer <= 0XFFFF.\n"
+	"  --file <file>              Path to output file\n"
+	"  --board_version <value>    Board version\n"
+	"  --sku_id <value>           SKU ID\n"
+	"  --size <size>              Size of output file in bytes\n"
+	"\n"
 	"Optional ARGS are:\n"
-	"  --dram_part_num <value>     DRAM PART NUM\n"
+	"  --dram_part_num <string>   DRAM PART NUM\n"
+	"  --oem_id <value>           OEM ID\n"
+	"  --oem_name <string>        OEM NAME\n"
 	"  --erase_byte <uint8>       Byte used for empty space. Default:0xff\n"
 	"  --format_version <uint16>  Data format version\n"
+	"  --model_id <value>         Model ID\n"
+	"  --fw_config <value>        Firmware configuration bit-field\n"
+	"  --pcb_supplier <value>     PCB supplier\n"
+	"\n"
+	"<value> must be a positive integer <= 0XFFFFFFFF and field size can\n"
+	"    be optionally specified by <value:size> notation: e.g. 0xabcd:4.\n"
+	"<size> must be a positive integer <= 0XFFFF.\n"
+	"<string> is a string\n"
 	"\n";
 
 const char help_show[] =
@@ -236,7 +253,11 @@ static int cmd_create(int argc, char **argv)
 		struct integer_field ver;
 		struct integer_field oem;
 		struct integer_field sku;
+		struct integer_field model;
+		struct integer_field fw_config;
+		struct integer_field pcb_supplier;
 		const char *dram_part_num;
+		const char *oem_name;
 	} bi;
 	struct cbi_header *h;
 	int rv;
@@ -278,7 +299,6 @@ static int cmd_create(int argc, char **argv)
 		case OPT_OEM_ID:
 			if (parse_integer_field(optarg, &bi.oem))
 				return -1;
-			set_mask |= ARGS_MASK_OEM_ID;
 			break;
 		case OPT_SIZE:
 			val = strtoul(optarg, &e, 0);
@@ -297,11 +317,26 @@ static int cmd_create(int argc, char **argv)
 		case OPT_DRAM_PART_NUM:
 			bi.dram_part_num = optarg;
 			break;
+		case OPT_OEM_NAME:
+			bi.oem_name = optarg;
+			break;
+		case OPT_MODEL_ID:
+			if (parse_integer_field(optarg, &bi.model))
+				return -1;
+			break;
+		case OPT_FW_CONFIG:
+			if (parse_integer_field(optarg, &bi.fw_config))
+				return -1;
+			break;
+		case OPT_PCB_SUPPLIER:
+			if (parse_integer_field(optarg, &bi.pcb_supplier))
+				return -1;
+			break;
 		}
 	}
 
 	if (set_mask != (ARGS_MASK_BOARD_VERSION | ARGS_MASK_FILENAME |
-			ARGS_MASK_OEM_ID | ARGS_MASK_SIZE | ARGS_MASK_SKU_ID)) {
+			ARGS_MASK_SIZE | ARGS_MASK_SKU_ID)) {
 		fprintf(stderr, "Missing required arguments\n");
 		print_help_create();
 		return -1;
@@ -322,20 +357,24 @@ static int cmd_create(int argc, char **argv)
 	p = cbi_set_data(p, CBI_TAG_BOARD_VERSION, &bi.ver.val, bi.ver.size);
 	p = cbi_set_data(p, CBI_TAG_OEM_ID, &bi.oem.val, bi.oem.size);
 	p = cbi_set_data(p, CBI_TAG_SKU_ID, &bi.sku.val, bi.sku.size);
-	if (bi.dram_part_num != NULL) {
-		p = cbi_set_data(p, CBI_TAG_DRAM_PART_NUM, bi.dram_part_num,
-				strlen(bi.dram_part_num) + 1);
-	}
+	p = cbi_set_data(p, CBI_TAG_MODEL_ID, &bi.model.val, bi.model.size);
+	p = cbi_set_data(p, CBI_TAG_FW_CONFIG, &bi.fw_config.val,
+			 bi.fw_config.size);
+	p = cbi_set_data(p, CBI_TAG_PCB_SUPPLIER, &bi.pcb_supplier.val,
+			bi.pcb_supplier.size);
+	p = cbi_set_string(p, CBI_TAG_DRAM_PART_NUM, bi.dram_part_num);
+	p = cbi_set_string(p, CBI_TAG_OEM_NAME, bi.oem_name);
+
 	h->total_size = p - cbi;
 	h->crc = cbi_crc8(h);
 
 	/* Output image */
 	rv = write_file(filename, cbi, size);
+	free(cbi);
 	if (rv) {
 		fprintf(stderr, "Unable to write CBI image to %s\n", filename);
 		return rv;
 	}
-	free(cbi);
 
 	fprintf(stderr, "CBI image is created successfully\n");
 
@@ -430,11 +469,13 @@ static int cmd_show(int argc, char **argv)
 
 	if (memcmp(h->magic, cbi_magic, sizeof(cbi_magic))) {
 		fprintf(stderr, "Invalid Magic\n");
+		free(buf);
 		return -1;
 	}
 
 	if (cbi_crc8(h) != h->crc) {
 		fprintf(stderr, "Invalid CRC\n");
+		free(buf);
 		return -1;
 	}
 
@@ -445,7 +486,11 @@ static int cmd_show(int argc, char **argv)
 	print_integer(buf, CBI_TAG_BOARD_VERSION);
 	print_integer(buf, CBI_TAG_OEM_ID);
 	print_integer(buf, CBI_TAG_SKU_ID);
+	print_integer(buf, CBI_TAG_MODEL_ID);
+	print_integer(buf, CBI_TAG_FW_CONFIG);
 	print_string(buf, CBI_TAG_DRAM_PART_NUM);
+	print_string(buf, CBI_TAG_OEM_NAME);
+	print_integer(buf, CBI_TAG_PCB_SUPPLIER);
 
 	free(buf);
 

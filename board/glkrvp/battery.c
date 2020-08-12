@@ -8,16 +8,16 @@
 #include "battery.h"
 #include "charger_profile_override.h"
 #include "console.h"
-#include "ioexpander_pca9555.h"
+#include "pca9555.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
 
 #define I2C_PORT_PCA555_BATT_PRESENT_GPIO	NPCX_I2C_PORT0_0
-#define I2C_ADDR_PCA555_BATT_PRESENT_GPIO	0x42
+#define I2C_ADDR_PCA555_BATT_PRESENT_GPIO_FLAGS	0x21
 #define PCA555_BATT_PRESENT_GPIO_READ(reg, data) \
-		pca9555_read(I2C_PORT_PCA555_BATT_PRESENT_GPIO, \
-			I2C_ADDR_PCA555_BATT_PRESENT_GPIO, (reg), (data))
+	pca9555_read(I2C_PORT_PCA555_BATT_PRESENT_GPIO,			\
+		     I2C_ADDR_PCA555_BATT_PRESENT_GPIO_FLAGS, (reg), (data))
 
 /* Shutdown mode parameter to write to manufacturer access register */
 #define SB_SHUTDOWN_DATA        0x0010

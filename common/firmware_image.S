@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -16,6 +16,8 @@
 #define STRINGIFY(name)  STRINGIFY0(name)
 #define FW_IMAGE(sect,suffix) \
 	STRINGIFY(FW_FILE(FINAL_OUTDIR,PROJECT,sect,suffix,))
+#define FW_IMAGE_DRAM(sect,suffix) \
+	STRINGIFY(FW_FILE(FINAL_OUTDIR,PROJECT,sect,suffix,.dram))
 #define FW_IMAGE_SIGN(sect,suffix) \
 	STRINGIFY(FW_FILE(FINAL_OUTDIR,PROJECT,sect,suffix,.sig))
 
@@ -54,6 +56,12 @@
 #ifdef CONFIG_RWSIG_TYPE_RWSIG
 .section .image.RW.sign, "a"
 .incbin FW_IMAGE_SIGN(RW,)
+#endif
+
+#ifdef CONFIG_DRAM_BASE
+/* Read Write firmware in DRAM */
+.section .image.RW.dram, "ax"
+.incbin FW_IMAGE_DRAM(RW,)
 #endif
 
 #ifdef CONFIG_RW_B

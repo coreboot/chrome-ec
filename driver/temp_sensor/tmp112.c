@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,12 +20,14 @@ static int temp_val_local;
 
 static int raw_read16(const int offset, int *data_ptr)
 {
-	return i2c_read16(I2C_PORT_THERMAL, TMP112_I2C_ADDR, offset, data_ptr);
+	return i2c_read16(I2C_PORT_THERMAL, TMP112_I2C_ADDR_FLAGS,
+			  offset, data_ptr);
 }
 
 static int raw_write16(const int offset, int data)
 {
-	return i2c_write16(I2C_PORT_THERMAL, TMP112_I2C_ADDR, offset, data);
+	return i2c_write16(I2C_PORT_THERMAL, TMP112_I2C_ADDR_FLAGS,
+			   offset, data);
 }
 
 static int get_temp(int *temp_ptr)
@@ -74,7 +76,7 @@ static void tmp112_init(void)
 	set_mask = (3 << 5);
 
 	/* not oneshot mode */
-	clr_mask = (1 << 7);
+	clr_mask = BIT(7);
 
 	raw_read16(TMP112_REG_CONF, &tmp);
 	raw_write16(TMP112_REG_CONF, (tmp & ~clr_mask) | set_mask);

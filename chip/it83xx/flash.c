@@ -8,6 +8,7 @@
 #include "flash.h"
 #include "flash_chip.h"
 #include "host_command.h"
+#include "intc.h"
 #include "system.h"
 #include "util.h"
 #include "watchdog.h"
@@ -19,10 +20,24 @@
 #define FLASH_DMA_START ((uint32_t) &__flash_dma_start)
 #define FLASH_DMA_CODE __attribute__((section(".flash_direct_map")))
 
-#define FLASH_SECTOR_ERASE_SIZE       0x00000400
+/* erase size of sector is 1KB or 4KB */
+#define FLASH_SECTOR_ERASE_SIZE CONFIG_FLASH_ERASE_SIZE
 
+#ifdef IT83XX_CHIP_FLASH_IS_KGD
+/* page program command  */
+#define FLASH_CMD_PAGE_WRITE    0x2
+/* ector erase command (erase size is 4KB) */
+#define FLASH_CMD_SECTOR_ERASE  0x20
+/* command for flash write */
+#define FLASH_CMD_WRITE         FLASH_CMD_PAGE_WRITE
+#else
+/* Auto address increment programming */
+#define FLASH_CMD_AAI_WORD      0xAD
 /* Flash sector erase (1K bytes) command */
-#define FLASH_CMD_SECTOR_ERASE 0xD7
+#define FLASH_CMD_SECTOR_ERASE  0xD7
+/* command for flash write */
+#define FLASH_CMD_WRITE         FLASH_CMD_AAI_WORD
+#endif
 /* Write status register */
 #define FLASH_CMD_WRSR         0x01
 /* Write disable */
@@ -31,8 +46,17 @@
 #define FLASH_CMD_WREN         0x06
 /* Read status register */
 #define FLASH_CMD_RS           0x05
-/* Auto address increment programming */
-#define FLASH_CMD_AAI_WORD     0xAD
+
+#define FLASH_TEXT_START ((uint32_t) &__flash_text_start)
+/* The default tag index of immu. */
+#define IMMU_TAG_INDEX_BY_DEFAULT 0x7E000
+/* immu cache size is 8K bytes. */
+#define IMMU_SIZE                 0x2000
+
+#if (CONFIG_FLASH_SIZE == 0x80000) && defined(CHIP_CORE_NDS32)
+/* Apply workaround of the issue (b:111808417) */
+#define IMMU_CACHE_TAG_INVALID
+#endif
 
 static int stuck_locked;
 static int inconsistent_locked;
@@ -79,30 +103,58 @@ enum dlm_address_view {
 	SCAR12_ILM12_DLM12 = 0x8C000, /* DLM ~ 0x8CFFF immu cache */
 };
 
-void FLASH_DMA_CODE dma_reset_immu(void)
+void FLASH_DMA_CODE dma_reset_immu(int fill_immu)
 {
 	/* Immu tag sram reset */
 	IT83XX_GCTRL_MCCR |= 0x10;
 	/* Make sure the immu(dynamic cache) is reset */
-	asm volatile ("dsb");
+	data_serialization_barrier();
+
 	IT83XX_GCTRL_MCCR &= ~0x10;
-	asm volatile ("dsb");
+	data_serialization_barrier();
+
+#ifdef IMMU_CACHE_TAG_INVALID
+	/*
+	 * Workaround for (b:111808417):
+	 * After immu reset, we will fill the immu cache with 8KB data
+	 * that are outside address 0x7e000 ~ 0x7ffff.
+	 * When CPU tries to fetch contents from address 0x7e000 ~ 0x7ffff,
+	 * immu will re-fetch the missing contents inside 0x7e000 ~ 0x7ffff.
+	 */
+	if (fill_immu) {
+		volatile int immu __unused;
+		const uint32_t *ptr = (uint32_t *)FLASH_TEXT_START;
+		int i = 0;
+
+		while (i < IMMU_SIZE) {
+			immu = *ptr++;
+			i += sizeof(*ptr);
+		}
+	}
+#endif
 }
 
 void FLASH_DMA_CODE dma_flash_follow_mode(void)
 {
-	/* Enter follow mode and FSCE# high level */
-	IT83XX_SMFI_ECINDAR3 = 0x4F;
+	/*
+	 * ECINDAR3-0 are EC-indirect memory address registers.
+	 *
+	 * Enter follow mode by writing 0xf to low nibble of ECINDAR3 register,
+	 * and set high nibble as 0x4 to select internal flash.
+	 */
+	IT83XX_SMFI_ECINDAR3 = (EC_INDIRECT_READ_INTERNAL_FLASH | 0xf);
+	/* Set FSCE# as high level by writing 0 to address xfff_fe00h */
 	IT83XX_SMFI_ECINDAR2 = 0xFF;
 	IT83XX_SMFI_ECINDAR1 = 0xFE;
 	IT83XX_SMFI_ECINDAR0 = 0x00;
+	/* EC-indirect memory data register */
 	IT83XX_SMFI_ECINDDR = 0x00;
 }
 
 void FLASH_DMA_CODE dma_flash_follow_mode_exit(void)
 {
-	/* Exit follow mode */
-	IT83XX_SMFI_ECINDAR3 = 0x00;
+	/* Exit follow mode, and keep the setting of selecting internal flash */
+	IT83XX_SMFI_ECINDAR3 = EC_INDIRECT_READ_INTERNAL_FLASH;
 	IT83XX_SMFI_ECINDAR2 = 0x00;
 }
 
@@ -209,16 +261,48 @@ void FLASH_DMA_CODE dma_flash_cmd_erase(int addr, int cmd)
 	dma_flash_follow_mode_exit();
 }
 
-void FLASH_DMA_CODE dma_flash_cmd_aai_write(int addr, int wlen, uint8_t *wbuf)
+void FLASH_DMA_CODE dma_flash_cmd_write(int addr, int wlen, uint8_t *wbuf)
 {
 	int i;
-	uint8_t aai_write[] = {FLASH_CMD_AAI_WORD, ((addr >> 16) & 0xFF),
+	uint8_t flash_write[] = {FLASH_CMD_WRITE, ((addr >> 16) & 0xFF),
 				((addr >> 8) & 0xFF), (addr & 0xFF)};
 
 	/* enter EC-indirect follow mode */
 	dma_flash_follow_mode();
-	/* send aai word command */
-	dma_flash_transaction(sizeof(aai_write), aai_write, 0, NULL, 0);
+	/* send flash write command (aai word or page program) */
+	dma_flash_transaction(sizeof(flash_write), flash_write, 0, NULL, 0);
+#ifdef IT83XX_CHIP_FLASH_IS_KGD
+	for (i = 0; i < wlen; i++) {
+		/* send data byte */
+		dma_flash_write_dat(wbuf[i]);
+
+		/*
+		 * we want to restart the write sequence every IDEAL_SIZE
+		 * chunk worth of data.
+		 */
+		if (!(++addr % CONFIG_FLASH_WRITE_IDEAL_SIZE)) {
+			uint8_t w_en[] = {FLASH_CMD_WREN};
+
+			dma_flash_fsce_high();
+			/* make sure busy bit cleared. */
+			dma_flash_cmd_read_status(FLASH_SR_BUSY,
+							FLASH_SR_NO_BUSY);
+			/* send write enable command */
+			dma_flash_transaction(sizeof(w_en), w_en, 0, NULL, 1);
+			/* make sure busy bit cleared and write enabled. */
+			dma_flash_cmd_read_status(FLASH_SR_ALL, FLASH_SR_WEL);
+			/* re-send write command */
+			flash_write[1] = (addr >> 16) & 0xff;
+			flash_write[2] = (addr >> 8) & 0xff;
+			flash_write[3] = addr & 0xff;
+			dma_flash_transaction(sizeof(flash_write), flash_write,
+				0, NULL, 0);
+		}
+	}
+	dma_flash_fsce_high();
+	/* make sure busy bit cleared. */
+	dma_flash_cmd_read_status(FLASH_SR_BUSY, FLASH_SR_NO_BUSY);
+#else
 	for (i = 0; i < wlen; i += 2) {
 		dma_flash_write_dat(wbuf[i]);
 		dma_flash_write_dat(wbuf[i + 1]);
@@ -227,15 +311,16 @@ void FLASH_DMA_CODE dma_flash_cmd_aai_write(int addr, int wlen, uint8_t *wbuf)
 		dma_flash_cmd_read_status(FLASH_SR_BUSY, FLASH_SR_NO_BUSY);
 		/* resend aai word command without address field */
 		if ((i + 2) < wlen)
-			dma_flash_transaction(1, aai_write, 0, NULL, 0);
+			dma_flash_transaction(1, flash_write, 0, NULL, 0);
 	}
+#endif
 	/* exit EC-indirect follow mode */
 	dma_flash_follow_mode_exit();
 }
 
 uint8_t FLASH_DMA_CODE dma_flash_indirect_fast_read(int addr)
 {
-	IT83XX_SMFI_ECINDAR3 = 0x40;
+	IT83XX_SMFI_ECINDAR3 = EC_INDIRECT_READ_INTERNAL_FLASH;
 	IT83XX_SMFI_ECINDAR2 = (addr >> 16) & 0xFF;
 	IT83XX_SMFI_ECINDAR1 = (addr >> 8) & 0xFF;
 	IT83XX_SMFI_ECINDAR0 = (addr & 0xFF);
@@ -266,10 +351,10 @@ int FLASH_DMA_CODE dma_flash_verify(int addr, int size, const char *data)
 	return EC_SUCCESS;
 }
 
-void FLASH_DMA_CODE dma_flash_aai_write(int addr, int wlen, const char *wbuf)
+void FLASH_DMA_CODE dma_flash_write(int addr, int wlen, const char *wbuf)
 {
 	dma_flash_cmd_write_enable();
-	dma_flash_cmd_aai_write(addr, wlen, (uint8_t *)wbuf);
+	dma_flash_cmd_write(addr, wlen, (uint8_t *)wbuf);
 	dma_flash_cmd_write_disable();
 }
 
@@ -366,8 +451,15 @@ int FLASH_DMA_CODE flash_physical_write(int offset, int size, const char *data)
 	 */
 	interrupt_disable();
 
-	dma_flash_aai_write(offset, size, data);
-	dma_reset_immu();
+	dma_flash_write(offset, size, data);
+	dma_reset_immu((offset + size) >= IMMU_TAG_INDEX_BY_DEFAULT);
+	/*
+	 * Internal flash of N8 or RISC-V core is ILM(Instruction Local Memory)
+	 * mapped, but RISC-V's ILM base address is 0x80000000.
+	 *
+	 * Ensure that we will get the ILM address of a flash offset.
+	 */
+	offset |= CONFIG_MAPPED_STORAGE_BASE;
 	ret = dma_flash_verify(offset, size, data);
 
 	interrupt_enable();
@@ -400,12 +492,14 @@ int FLASH_DMA_CODE flash_physical_erase(int offset, int size)
 	 */
 	interrupt_disable();
 
-	/* Always use sector erase command (1K bytes) */
+	/* Always use sector erase command (1K or 4K bytes) */
 	for (; size > 0; size -= FLASH_SECTOR_ERASE_SIZE) {
 		dma_flash_erase(offset, FLASH_CMD_SECTOR_ERASE);
 		offset += FLASH_SECTOR_ERASE_SIZE;
 	}
-	dma_reset_immu();
+	dma_reset_immu((v_addr + v_size) >= IMMU_TAG_INDEX_BY_DEFAULT);
+	/* get the ILM address of a flash offset. */
+	v_addr |= CONFIG_MAPPED_STORAGE_BASE;
 	ret = dma_flash_verify(v_addr, v_size, NULL);
 
 	interrupt_enable();
@@ -528,12 +622,16 @@ static void flash_code_static_dma(void)
 	interrupt_disable();
 
 	/* invalid static DMA first */
+	if (IS_ENABLED(CHIP_CORE_RISCV))
+		IT83XX_GCTRL_RVILMCR0 &= ~ILMCR_ILM2_ENABLE;
 	IT83XX_SMFI_SCAR2H = 0x08;
 
 	/* Copy to DLM */
 	IT83XX_GCTRL_MCCR2 |= 0x20;
-	memcpy((void *)SCAR2_ILM2_DLM14, (const void *)FLASH_DMA_START,
+	memcpy((void *)CHIP_RAMCODE_BASE, (const void *)FLASH_DMA_START,
 		IT83XX_ILM_BLOCK_SIZE);
+	if (IS_ENABLED(CHIP_CORE_RISCV))
+		IT83XX_GCTRL_RVILMCR0 |= ILMCR_ILM2_ENABLE;
 	IT83XX_GCTRL_MCCR2 &= ~0x20;
 
 	/*
@@ -543,7 +641,15 @@ static void flash_code_static_dma(void)
 	 */
 	IT83XX_SMFI_SCAR2L = FLASH_DMA_START & 0xFF;
 	IT83XX_SMFI_SCAR2M = (FLASH_DMA_START >> 8) & 0xFF;
+#ifdef IT83XX_DAM_ADDR_BIT19_AT_REG_SCARXH_BIT7
+	IT83XX_SMFI_SCAR2H = (FLASH_DMA_START >> 16) & 0x7;
+	if (FLASH_DMA_START & BIT(19))
+		IT83XX_SMFI_SCAR2H |= BIT(7);
+	else
+		IT83XX_SMFI_SCAR2H &= ~BIT(7);
+#else
 	IT83XX_SMFI_SCAR2H = (FLASH_DMA_START >> 16) & 0x0F;
+#endif
 	/*
 	 * Validate Direct-map SRAM function by programming
 	 * register SCARx bit20=0
@@ -564,6 +670,10 @@ int flash_pre_init(void)
 {
 	int32_t reset_flags, prot_flags, unwanted_prot_flags;
 
+	/* By default, select internal flash for indirect fast read. */
+	IT83XX_SMFI_ECINDAR3 = EC_INDIRECT_READ_INTERNAL_FLASH;
+	if (IS_ENABLED(IT83XX_CHIP_FLASH_IS_KGD))
+		IT83XX_SMFI_FLHCTRL6R |= IT83XX_SMFI_MASK_ECINDPP;
 	flash_code_static_dma();
 
 	reset_flags = system_get_reset_flags();
@@ -575,7 +685,7 @@ int flash_pre_init(void)
 	 * If we have already jumped between images, an earlier image could
 	 * have applied write protection.  Nothing additional needs to be done.
 	 */
-	if (reset_flags & RESET_FLAG_SYSJUMP)
+	if (reset_flags & EC_RESET_FLAG_SYSJUMP)
 		return EC_SUCCESS;
 
 	if (prot_flags & EC_FLASH_PROTECT_GPIO_ASSERTED) {
@@ -615,7 +725,7 @@ int flash_pre_init(void)
 	 * write-protect.  If it didn't, then the flash write protect registers
 	 * have been permanently committed and we can't fix that.
 	 */
-	if (reset_flags & RESET_FLAG_POWER_ON) {
+	if (reset_flags & EC_RESET_FLAG_POWER_ON) {
 		stuck_locked = 1;
 		return EC_ERROR_ACCESS_DENIED;
 	} else {

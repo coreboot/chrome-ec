@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -94,19 +94,19 @@ DECLARE_IRQ(STM32_IRQ_TIM2, tim2_interrupt, 1);
 static void zinger_config_hispeed_clock(void)
 {
 	/* Ensure that HSI8 is ON */
-	if (!(STM32_RCC_CR & (1 << 1))) {
+	if (!(STM32_RCC_CR & BIT(1))) {
 		/* Enable HSI */
-		STM32_RCC_CR |= 1 << 0;
+		STM32_RCC_CR |= BIT(0);
 		/* Wait for HSI to be ready */
-		while (!(STM32_RCC_CR & (1 << 1)))
+		while (!(STM32_RCC_CR & BIT(1)))
 			;
 	}
 	/* PLLSRC = HSI, PLLMUL = x12 (x HSI/2) = 48Mhz */
 	STM32_RCC_CFGR = 0x00288000;
 	/* Enable PLL */
-	STM32_RCC_CR |= 1 << 24;
+	STM32_RCC_CR |= BIT(24);
 	/* Wait for PLL to be ready */
-	while (!(STM32_RCC_CR & (1 << 25)))
+	while (!(STM32_RCC_CR & BIT(25)))
 			;
 
 	/* switch SYSCLK to PLL */
@@ -145,7 +145,6 @@ uint32_t task_wait_event(int timeout_us)
 	uint32_t evt;
 	timestamp_t t0, t1;
 	struct rtc_time_reg rtc0, rtc1;
-	int rtc_diff;
 
 	t1.val = get_time().val + timeout_us;
 
@@ -180,7 +179,7 @@ uint32_t task_wait_event(int timeout_us)
 			CPU_SCB_SYSCTRL |= 0x4;
 
 			set_rtc_alarm(0, timeout_us - STOP_MODE_LATENCY,
-				      &rtc0);
+				      &rtc0, 0);
 
 			asm volatile("wfi");
 
@@ -190,8 +189,7 @@ uint32_t task_wait_event(int timeout_us)
 
 			/* fast forward timer according to RTC counter */
 			reset_rtc_alarm(&rtc1);
-			rtc_diff = get_rtc_diff(&rtc0, &rtc1);
-			t0.val = t0.val + rtc_diff;
+			t0.val += get_rtc_diff(&rtc0, &rtc1);
 			force_time(t0);
 		}
 
@@ -260,16 +258,17 @@ void system_reset(int flags)
 void exception_panic(void) __attribute__((naked));
 void exception_panic(void)
 {
-	asm volatile(
 #ifdef CONFIG_DEBUG_PRINTF
+	asm volatile(
 		"mov r0, %0\n"
+		/* TODO: Should this be SP_process instead of SP_main? */
 		"mov r3, sp\n"
 		"ldr r1, [r3, #6*4]\n" /* retrieve exception PC */
 		"ldr r2, [r3, #5*4]\n" /* retrieve exception LR */
 		"bl debug_printf\n"
-#endif
-		"b cpu_reset\n"
 	: : "r"("PANIC PC=%08x LR=%08x\n\n"));
+#endif
+	cpu_reset();
 }
 
 void panic_reboot(void)
@@ -278,12 +277,12 @@ void panic_reboot(void)
 	cpu_reset();
 }
 
-enum system_image_copy_t system_get_image_copy(void)
+enum ec_image system_get_image_copy(void)
 {
 	if (is_ro_mode())
-		return SYSTEM_IMAGE_RO;
+		return EC_IMAGE_RO;
 	else
-		return SYSTEM_IMAGE_RW;
+		return EC_IMAGE_RW;
 }
 
 /* --- stubs --- */

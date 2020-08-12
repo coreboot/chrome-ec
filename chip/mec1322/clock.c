@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -103,8 +103,8 @@ DECLARE_HOOK(HOOK_INIT, clock_turbo_disable, HOOK_PRIO_INIT_VBOOT_HASH + 1);
  */
 static void htimer_init(void)
 {
-	MEC1322_INT_BLK_EN |= 1 << 17;
-	MEC1322_INT_ENABLE(17) |= 1 << 20;  /* GIRQ=17, aggregator bit = 20 */
+	MEC1322_INT_BLK_EN |= BIT(17);
+	MEC1322_INT_ENABLE(17) |= BIT(20);  /* GIRQ=17, aggregator bit = 20 */
 	MEC1322_HTIMER_PRELOAD = 0;  /* disable at beginning */
 
 	task_enable_irq(MEC1322_IRQ_HTIMER);
@@ -426,9 +426,9 @@ static int command_idle_stats(int argc, char **argv)
 	ccprintf("Num idle calls that sleep:           %d\n", idle_sleep_cnt);
 	ccprintf("Num idle calls that deep-sleep:      %d\n", idle_dsleep_cnt);
 
-	ccprintf("Total Time spent in deep-sleep(sec): %.6ld(s)\n",
+	ccprintf("Total Time spent in deep-sleep(sec): %.6lld(s)\n",
 						total_idle_dsleep_time_us);
-	ccprintf("Total time on:                       %.6lds\n\n", ts.val);
+	ccprintf("Total time on:                       %.6llds\n\n", ts.val);
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats,

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,7 +20,7 @@
  */
 struct usart_state {
 	/*
-	 * Counter of bytes receieved and then dropped because of lack of space
+	 * Counter of bytes received and then dropped because of lack of space
 	 * in the RX queue.
 	 */
 	uint32_t rx_dropped;
@@ -134,9 +134,9 @@ struct usart_config {
 	int baud;
 
 	/* Other flags (rx/tx inversion, half-duplex). */
-#define USART_CONFIG_FLAG_RX_INV (1 << 0)
-#define USART_CONFIG_FLAG_TX_INV (1 << 1)
-#define USART_CONFIG_FLAG_HDSEL (1 << 2)
+#define USART_CONFIG_FLAG_RX_INV BIT(0)
+#define USART_CONFIG_FLAG_TX_INV BIT(1)
+#define USART_CONFIG_FLAG_HDSEL BIT(2)
 	unsigned int flags;
 
 	struct consumer consumer;
@@ -197,12 +197,20 @@ void usart_shutdown(struct usart_config const *config);
 void usart_interrupt(struct usart_config const *config);
 
 /*
+ * Trigger tx interrupt to process tx data. Calling this function will set
+ * TXIEIE of USART HW instance and trigger associated IRQ.
+ */
+void usart_tx_start(struct usart_config const *config);
+
+/*
  * These are HW specific baud rate calculation and setting functions that the
  * peripheral variant code uses during initialization and clock frequency
  * change.  The baud rate divisor input frequency is passed in Hertz.
  */
-void usart_set_baud_f0_l(struct usart_config const *config, int frequency_hz);
-void usart_set_baud_f(struct usart_config const *config, int frequency_hz);
+void usart_set_baud_f0_l(struct usart_config const *config, int baud,
+			int frequency_hz);
+void usart_set_baud_f(struct usart_config const *config, int baud,
+		int frequency_hz);
 
 /*
  * Allow specification of parity for this usart.
@@ -215,6 +223,13 @@ void usart_set_parity(struct usart_config const *config, int parity);
  * parity is 0: none, 1: odd, 2: even.
  */
 int usart_get_parity(struct usart_config const *config);
+
+/*
+ * Set baud rate for this usart. Note that baud rate will get reset on
+ * core frequency change, so this only makes sense if the board never
+ * goes to deep idle.
+ */
+void usart_set_baud(struct usart_config const *config, int baud);
 
 /*
  * Different families provide different ways of clearing the transmit complete
@@ -245,5 +260,12 @@ struct usart_configs {
 };
 
 struct usart_configs usart_get_configs(void);
+
+/*
+ * This usart_tx structure contains function pointer to interrupt
+ * handler implemented to send host response. Generic queue based
+ * interrupt handler is not used for usart host transport.
+ */
+extern struct usart_tx const usart_host_command_tx_interrupt;
 
 #endif /* __CROS_EC_USART_H */

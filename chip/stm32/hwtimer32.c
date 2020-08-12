@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -78,7 +78,7 @@ void __hw_timer_enable_clock(int n, int enable)
 		reg = &STM32_RCC_APB2ENR;
 		mask = STM32_RCC_PB2_TIM1;
 	}
-#elif defined(CHIP_FAMILY_STM32L)
+#elif defined(CHIP_FAMILY_STM32L) || defined(CHIP_FAMILY_STM32F4)
 	if (n >= 9 && n <= 11) {
 		reg = &STM32_RCC_APB2ENR;
 		mask = STM32_RCC_PB2_TIM9 << (n - 9);

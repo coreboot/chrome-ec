@@ -6,16 +6,18 @@
 /* Intel GLK-RVP board-specific configuration */
 
 #include "button.h"
+#include "charger.h"
 #include "chipset.h"
 #include "console.h"
+#include "driver/charger/isl923x.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
-#include "ioexpander_pca9555.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
+#include "pca9555.h"
 #include "power.h"
 #include "power_button.h"
 #include "spi.h"
@@ -29,34 +31,19 @@
 #include "gpio_list.h"
 
 #define I2C_PORT_PCA555_PMIC_GPIO	NPCX_I2C_PORT0_0
-#define I2C_ADDR_PCA555_PMIC_GPIO	0x42
+#define I2C_ADDR_PCA555_PMIC_GPIO_FLAGS	0x21
 #define PCA555_PMIC_GPIO_WRITE(reg, data) \
 		pca9555_write(I2C_PORT_PCA555_PMIC_GPIO, \
-			I2C_ADDR_PCA555_PMIC_GPIO, (reg), (data))
+			I2C_ADDR_PCA555_PMIC_GPIO_FLAGS, (reg), (data))
 #define PCA555_PMIC_GPIO_READ(reg, data) \
 		pca9555_read(I2C_PORT_PCA555_PMIC_GPIO, \
-			I2C_ADDR_PCA555_PMIC_GPIO, (reg), (data))
+			I2C_ADDR_PCA555_PMIC_GPIO_FLAGS, (reg), (data))
 
 #define I2C_PORT_PCA555_BOARD_ID_GPIO	NPCX_I2C_PORT0_0
-#define I2C_ADDR_PCA555_BOARD_ID_GPIO	0x40
+#define I2C_ADDR_PCA555_BOARD_ID_GPIO_FLAGS	0x20
 #define PCA555_BOARD_ID_GPIO_READ(reg, data) \
 		pca9555_read(I2C_PORT_PCA555_BOARD_ID_GPIO, \
-			I2C_ADDR_PCA555_BOARD_ID_GPIO, (reg), (data))
-
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-	{GPIO_RSMRST_L_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L"},
-	{GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-	{GPIO_PCH_SLP_S3_L, POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{GPIO_PCH_SLP_S4_L, POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_SUSPWRNACK,     POWER_SIGNAL_ACTIVE_HIGH,
-		"SUSPWRNACK_DEASSERTED"},
-
-	{GPIO_ALL_SYS_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "ALL_SYS_PGOOD"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
+			I2C_ADDR_PCA555_BOARD_ID_GPIO_FLAGS, (reg), (data))
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
@@ -67,6 +54,17 @@ const struct i2c_port_t i2c_ports[] = {
 	{"charger",   NPCX_I2C_PORT3_0, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+/* Charger chips */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* Wake-up pins for hibernate */
 const enum gpio_signal hibernate_wake_pins[] = {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -34,10 +34,10 @@ void vbus_event(enum gpio_signal signal)
 void board_config_pre_init(void)
 {
 	/* enable SYSCFG clock */
-	STM32_RCC_APB2ENR |= 1 << 0;
+	STM32_RCC_APB2ENR |= BIT(0);
 	/* Remap USART DMA to match the USART driver and TIM2 DMA */
-	STM32_SYSCFG_CFGR1 |= (1 << 9) | (1 << 10) /* Remap USART1 RX/TX DMA */
-			   |  (1 << 29);/* Remap TIM2 DMA */
+	STM32_SYSCFG_CFGR1 |= BIT(9) | BIT(10) /* Remap USART1 RX/TX DMA */
+			   |  BIT(29);/* Remap TIM2 DMA */
 	/* 40 MHz pin speed on UART PA9/PA10 */
 	STM32_GPIO_OSPEEDR(GPIO_A) |= 0x003C0000;
 	/* 40 MHz pin speed on TX clock out PB9 */

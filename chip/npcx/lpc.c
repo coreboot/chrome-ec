@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -13,16 +13,15 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
-#include "hwtimer_chip.h"
+#include "i8042_protocol.h"
 #include "keyboard_protocol.h"
 #include "lpc.h"
 #include "lpc_chip.h"
 #include "port80.h"
-#include "pwm.h"
 #include "registers.h"
 #include "system.h"
+#include "sib_chip.h"
 #include "task.h"
-#include "timer.h"
 #include "uart.h"
 #include "util.h"
 #include "system_chip.h"
@@ -39,24 +38,6 @@
 /* PM channel definitions */
 #define PMC_ACPI     PM_CHAN_1
 #define PMC_HOST_CMD PM_CHAN_2
-
-/* Super-IO index and register definitions */
-#define SIO_OFFSET      0x4E
-#define INDEX_SID       0x20
-#define INDEX_CHPREV    0x24
-#define INDEX_SRID      0x27
-
-/*
- * Timeout to wait for host transaction to be completed.
- *
- * For eSPI - it is 200 us.
- * For LPC - it is 5 us.
- */
-#ifdef CONFIG_HOSTCMD_ESPI
-#define LPC_HOST_TRANSACTION_TIMEOUT_US 200
-#else
-#define LPC_HOST_TRANSACTION_TIMEOUT_US 5
-#endif
 
 static struct	host_packet lpc_packet;
 static struct	host_cmd_handler_args host_cmd_args;
@@ -319,7 +300,7 @@ int lpc_keyboard_input_pending(void)
 	return (NPCX_HIKMST&0x02) ? 1 : 0;
 }
 
-/* Put a char to host buffer and send IRQ if specified. */
+/* Put a char to host buffer by HIKDO and send IRQ if specified. */
 void lpc_keyboard_put_char(uint8_t chr, int send_irq)
 {
 	NPCX_HIKDO = chr;
@@ -333,79 +314,21 @@ void lpc_keyboard_put_char(uint8_t chr, int send_irq)
 	}
 }
 
-/*
- * Check host read is not in-progress and no timeout
- */
-static void lpc_sib_wait_host_read_done(void)
+/* Put an aux char to host buffer by HIMDO and assert status bit 5. */
+void lpc_aux_put_char(uint8_t chr, int send_irq)
 {
-	timestamp_t deadline, start;
+	if (send_irq)
+		SET_BIT(NPCX_HICTRL, NPCX_HICTRL_OBFMIE);
+	else
+		CLEAR_BIT(NPCX_HICTRL, NPCX_HICTRL_OBFMIE);
 
-	start = get_time();
-	deadline.val = start.val + LPC_HOST_TRANSACTION_TIMEOUT_US;
-	while (IS_BIT_SET(NPCX_SIBCTRL, NPCX_SIBCTRL_CSRD)) {
-		if (timestamp_expired(deadline, NULL)) {
-			CPRINTS("Unexpected time of host read transaction");
-			break;
-		}
-		/* Handle ITIM32 overflow condition */
-		__hw_clock_handle_overflow(start.le.hi);
-	}
-}
+	NPCX_HIKMST |= I8042_AUX_DATA;
+	NPCX_HIMDO = chr;
+	CPRINTS("AUX put %02x", chr);
 
-/*
- * Check host write is not in-progress and no timeout
- */
-static void lpc_sib_wait_host_write_done(void)
-{
-	timestamp_t deadline, start;
-
-	start = get_time();
-	deadline.val = start.val + LPC_HOST_TRANSACTION_TIMEOUT_US;
-	while (IS_BIT_SET(NPCX_SIBCTRL, NPCX_SIBCTRL_CSWR)) {
-		if (timestamp_expired(deadline, NULL)) {
-			CPRINTS("Unexpected time of host write transaction");
-			break;
-		}
-		/* Handle ITIM32 overflow condition */
-		__hw_clock_handle_overflow(start.le.hi);
-	}
-}
-
-/* Emulate host to read Keyboard I/O */
-uint8_t lpc_sib_read_kbc_reg(uint8_t io_offset)
-{
-	uint8_t data_value;
-
-	/* Disable interrupts */
-	interrupt_disable();
-
-	/* Lock host keyboard module */
-	SET_BIT(NPCX_LKSIOHA, NPCX_LKSIOHA_LKHIKBD);
-	/* Verify Core read/write to host modules is not in progress */
-	lpc_sib_wait_host_read_done();
-	lpc_sib_wait_host_write_done();
-	/* Enable Core access to keyboard module */
-	SET_BIT(NPCX_CRSMAE, NPCX_CRSMAE_HIKBDAE);
-
-	/* Specify the io_offset A0 = 0. the index register is accessed */
-	NPCX_IHIOA = io_offset;
-
-	/* Start a Core read from host module */
-	SET_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSRD);
-	/* Wait while Core read operation is in progress */
-	lpc_sib_wait_host_read_done();
-	/* Read the data */
-	data_value = NPCX_IHD;
-
-	/* Disable Core access to keyboard module */
-	CLEAR_BIT(NPCX_CRSMAE, NPCX_CRSMAE_HIKBDAE);
-	/* unlock host keyboard module */
-	CLEAR_BIT(NPCX_LKSIOHA, NPCX_LKSIOHA_LKHIKBD);
-
-	/* Enable interrupts */
-	interrupt_enable();
-
-	return data_value;
+	/* Enable OBE interrupt to detect host read data out */
+	SET_BIT(NPCX_HICTRL, NPCX_HICTRL_OBECIE);
+	task_enable_irq(NPCX_IRQ_KBC_OBE);
 }
 
 void lpc_keyboard_clear_buffer(void)
@@ -423,7 +346,7 @@ void lpc_keyboard_clear_buffer(void)
 		 * Emulate a host read to clear these two flags and also
 		 * deassert IRQ1
 		 */
-		lpc_sib_read_kbc_reg(0x0);
+		sib_read_kbc_reg(0x0);
 	}
 #else
 	/* Make sure the previous TOH and IRQ has been sent out. */
@@ -595,11 +518,16 @@ static void handle_host_write(int is_cmd)
 /* KB controller input buffer full ISR */
 void lpc_kbc_ibf_interrupt(void)
 {
+	uint8_t ibf;
 	/* If "command" input 0, else 1*/
-	if (lpc_keyboard_input_pending())
-		keyboard_host_write(NPCX_HIKMDI, (NPCX_HIKMST & 0x08) ? 1 : 0);
-	CPRINTS("ibf isr %02x", NPCX_HIKMDI);
-	task_wake(TASK_ID_KEYPROTO);
+	if (lpc_keyboard_input_pending()) {
+		ibf = NPCX_HIKMDI;
+		keyboard_host_write(ibf, (NPCX_HIKMST & 0x08) ? 1 : 0);
+		CPRINTS("ibf isr %02x", ibf);
+		task_wake(TASK_ID_KEYPROTO);
+	} else {
+		CPRINTS("ibf isr spurious");
+	}
 }
 DECLARE_IRQ(NPCX_IRQ_KBC_IBF, lpc_kbc_ibf_interrupt, 4);
 
@@ -611,6 +539,9 @@ void lpc_kbc_obe_interrupt(void)
 	task_disable_irq(NPCX_IRQ_KBC_OBE);
 
 	CPRINTS("obe isr %02x", NPCX_HIKMST);
+
+	NPCX_HIKMST &= ~I8042_AUX_DATA;
+
 	task_wake(TASK_ID_KEYPROTO);
 }
 DECLARE_IRQ(NPCX_IRQ_KBC_OBE, lpc_kbc_obe_interrupt, 4);
@@ -671,86 +602,6 @@ static void lpc_sysjump(void)
 }
 DECLARE_HOOK(HOOK_SYSJUMP, lpc_sysjump, HOOK_PRIO_DEFAULT);
 
-/* Super-IO read/write function */
-void lpc_sib_write_reg(uint8_t io_offset, uint8_t index_value,
-		uint8_t io_data)
-{
-	/* Disable interrupts */
-	interrupt_disable();
-
-	/* Lock host CFG module */
-	SET_BIT(NPCX_LKSIOHA, NPCX_LKSIOHA_LKCFG);
-	/* Enable Core access to CFG module */
-	SET_BIT(NPCX_CRSMAE, NPCX_CRSMAE_CFGAE);
-	/* Verify Core read/write to host modules is not in progress */
-	lpc_sib_wait_host_read_done();
-	lpc_sib_wait_host_write_done();
-
-	/* Specify the io_offset A0 = 0. the index register is accessed */
-	NPCX_IHIOA = io_offset;
-	/* Write the data. This starts the write access to the host module */
-	NPCX_IHD = index_value;
-	/* Wait while Core write operation is in progress */
-	lpc_sib_wait_host_write_done();
-
-	/* Specify the io_offset A0 = 1. the data register is accessed */
-	NPCX_IHIOA = io_offset+1;
-	/* Write the data. This starts the write access to the host module */
-	NPCX_IHD = io_data;
-	/* Wait while Core write operation is in progress */
-	lpc_sib_wait_host_write_done();
-
-	/* Disable Core access to CFG module */
-	CLEAR_BIT(NPCX_CRSMAE, NPCX_CRSMAE_CFGAE);
-	/* unlock host CFG  module */
-	CLEAR_BIT(NPCX_LKSIOHA, NPCX_LKSIOHA_LKCFG);
-
-	/* Enable interrupts */
-	interrupt_enable();
-}
-
-uint8_t lpc_sib_read_reg(uint8_t io_offset, uint8_t index_value)
-{
-	uint8_t data_value;
-
-	/* Disable interrupts */
-	interrupt_disable();
-
-	/* Lock host CFG module */
-	SET_BIT(NPCX_LKSIOHA, NPCX_LKSIOHA_LKCFG);
-	/* Enable Core access to CFG module */
-	SET_BIT(NPCX_CRSMAE, NPCX_CRSMAE_CFGAE);
-	/* Verify Core read/write to host modules is not in progress */
-	lpc_sib_wait_host_read_done();
-	lpc_sib_wait_host_write_done();
-
-	/* Specify the io_offset A0 = 0. the index register is accessed */
-	NPCX_IHIOA = io_offset;
-	/* Write the data. This starts the write access to the host module */
-	NPCX_IHD = index_value;
-	/* Wait while Core write operation is in progress */
-	lpc_sib_wait_host_write_done();
-
-	/* Specify the io_offset A0 = 1. the data register is accessed */
-	NPCX_IHIOA = io_offset+1;
-	/* Start a Core read from host module */
-	SET_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSRD);
-	/* Wait while Core read operation is in progress */
-	lpc_sib_wait_host_read_done();
-	/* Read the data */
-	data_value = NPCX_IHD;
-
-	/* Disable Core access to CFG module */
-	CLEAR_BIT(NPCX_CRSMAE, NPCX_CRSMAE_CFGAE);
-	/* unlock host CFG  module */
-	CLEAR_BIT(NPCX_LKSIOHA, NPCX_LKSIOHA_LKCFG);
-
-	/* Enable interrupts */
-	interrupt_enable();
-
-	return data_value;
-}
-
 /* For LPC host register initial via SIB module */
 void host_register_init(void)
 {
@@ -758,41 +609,48 @@ void host_register_init(void)
 	SET_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSAE);
 
 	/* enable ACPI*/
-	lpc_sib_write_reg(SIO_OFFSET, 0x07, 0x11);
-	lpc_sib_write_reg(SIO_OFFSET, 0x30, 0x01);
+	sib_write_reg(SIO_OFFSET, 0x07, 0x11);
+	sib_write_reg(SIO_OFFSET, 0x30, 0x01);
 
-	/* enable KBC*/
+	/* Enable kbc and mouse */
 #ifdef HAS_TASK_KEYPROTO
-	lpc_sib_write_reg(SIO_OFFSET, 0x07, 0x06);
-	lpc_sib_write_reg(SIO_OFFSET, 0x30, 0x01);
+	/* LDN = 0x06 : keyboard */
+	sib_write_reg(SIO_OFFSET, 0x07, 0x06);
+	sib_write_reg(SIO_OFFSET, 0x30, 0x01);
+
+	/* LDN = 0x05 : mouse */
+	if (IS_ENABLED(CONFIG_PS2)) {
+		sib_write_reg(SIO_OFFSET, 0x07, 0x05);
+		sib_write_reg(SIO_OFFSET, 0x30, 0x01);
+	}
 #endif
 
 	/* Setting PMC2 */
 	/* LDN register = 0x12(PMC2) */
-	lpc_sib_write_reg(SIO_OFFSET, 0x07, 0x12);
+	sib_write_reg(SIO_OFFSET, 0x07, 0x12);
 	/* CMD port is 0x200 */
-	lpc_sib_write_reg(SIO_OFFSET, 0x60, 0x02);
-	lpc_sib_write_reg(SIO_OFFSET, 0x61, 0x00);
+	sib_write_reg(SIO_OFFSET, 0x60, 0x02);
+	sib_write_reg(SIO_OFFSET, 0x61, 0x00);
 	/* Data port is 0x204 */
-	lpc_sib_write_reg(SIO_OFFSET, 0x62, 0x02);
-	lpc_sib_write_reg(SIO_OFFSET, 0x63, 0x04);
+	sib_write_reg(SIO_OFFSET, 0x62, 0x02);
+	sib_write_reg(SIO_OFFSET, 0x63, 0x04);
 	/* enable PMC2 */
-	lpc_sib_write_reg(SIO_OFFSET, 0x30, 0x01);
+	sib_write_reg(SIO_OFFSET, 0x30, 0x01);
 
 	/* Setting SHM */
 	/* LDN register = 0x0F(SHM) */
-	lpc_sib_write_reg(SIO_OFFSET, 0x07, 0x0F);
+	sib_write_reg(SIO_OFFSET, 0x07, 0x0F);
 	/* WIN1&2 mapping to IO */
-	lpc_sib_write_reg(SIO_OFFSET, 0xF1,
-			lpc_sib_read_reg(SIO_OFFSET, 0xF1) | 0x30);
+	sib_write_reg(SIO_OFFSET, 0xF1,
+			sib_read_reg(SIO_OFFSET, 0xF1) | 0x30);
 	/* WIN1 as Host Command on the IO:0x0800 */
-	lpc_sib_write_reg(SIO_OFFSET, 0xF5, 0x08);
-	lpc_sib_write_reg(SIO_OFFSET, 0xF4, 0x00);
+	sib_write_reg(SIO_OFFSET, 0xF5, 0x08);
+	sib_write_reg(SIO_OFFSET, 0xF4, 0x00);
 	/* WIN2 as MEMMAP on the IO:0x900 */
-	lpc_sib_write_reg(SIO_OFFSET, 0xF9, 0x09);
-	lpc_sib_write_reg(SIO_OFFSET, 0xF8, 0x00);
+	sib_write_reg(SIO_OFFSET, 0xF9, 0x09);
+	sib_write_reg(SIO_OFFSET, 0xF8, 0x00);
 	/* enable SHM */
-	lpc_sib_write_reg(SIO_OFFSET, 0x30, 0x01);
+	sib_write_reg(SIO_OFFSET, 0x30, 0x01);
 
 	CPRINTS("Host settings are done!");
 
@@ -901,8 +759,6 @@ static void lpc_init(void)
 
 	/* Don't stall SHM transactions */
 	NPCX_SHM_CTL = NPCX_SHM_CTL & ~0x40;
-	/* Semaphore and Indirect access disable */
-	NPCX_SHCFG = 0xE0;
 	/* Disable Protect Win1&2*/
 	NPCX_WIN_WR_PROT(0) = 0;
 	NPCX_WIN_WR_PROT(1) = 0;
@@ -928,7 +784,6 @@ static void lpc_init(void)
 
 	/* Turn on PMC2 for Host Command usage */
 	SET_BIT(NPCX_HIPMCTL(PMC_HOST_CMD), 0);
-	SET_BIT(NPCX_HIPMCTL(PMC_HOST_CMD), 1);
 
 	/*
 	 * Set required control value (avoid setting HOSTWAIT bit at this stage)
@@ -942,19 +797,19 @@ static void lpc_init(void)
 	/*
 	 * Init KBC
 	 * Clear OBF status flag,
-	 * IBF(K&M) INT enable, OBE(K&M) empty INT enable ,
+	 * IBF(K&M) INT enable,
 	 * OBF Mouse Full INT enable and OBF KB Full INT enable
 	 */
 #ifdef HAS_TASK_KEYPROTO
 	lpc_keyboard_clear_buffer();
-	NPCX_HICTRL = 0x0F;
+	NPCX_HICTRL = 0x0B;
 #endif
 
 	/*
 	 * Turn on enhance mode on PM channel-1,
-	 * enable OBE/IBF core interrupt
+	 * enable IBF core interrupt
 	 */
-	NPCX_HIPMCTL(PMC_ACPI) |= 0x83;
+	NPCX_HIPMCTL(PMC_ACPI) |= 0x81;
 	/* Normally Polarity IRQ1,12 type (level + high) setting */
 	NPCX_HIIRQC = 0x00;
 
@@ -983,7 +838,7 @@ static void lpc_init(void)
 	CLEAR_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SMIPOL);
 	/* Set SMIB/SCIB to make sure SMI/SCI are high at init */
 	NPCX_HIPMIC(PMC_ACPI) = NPCX_HIPMIC(PMC_ACPI)
-			| (1 << NPCX_HIPMIC_SMIB) | (1 << NPCX_HIPMIC_SCIB);
+			| BIT(NPCX_HIPMIC_SMIB) | BIT(NPCX_HIPMIC_SCIB);
 #ifndef CONFIG_SCI_GPIO
 	/*
 	 * Allow SMI/SCI generated from PM module.
@@ -1043,7 +898,7 @@ static enum ec_status lpc_get_protocol_info(struct host_cmd_handler_args *args)
 	struct ec_response_get_protocol_info *r = args->response;
 
 	memset(r, 0, sizeof(*r));
-	r->protocol_versions = (1 << 3);
+	r->protocol_versions = BIT(3);
 	r->max_request_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->max_response_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->flags = 0;

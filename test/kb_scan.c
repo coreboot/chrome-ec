@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  * Copyright 2013 Google Inc.
@@ -31,7 +31,7 @@
 		old = fifo_add_count; \
 	} while (0)
 
-static uint8_t mock_state[KEYBOARD_COLS];
+static uint8_t mock_state[KEYBOARD_COLS_MAX];
 static int column_driven;
 static int fifo_add_count;
 static int lid_open;
@@ -39,6 +39,15 @@ static int lid_open;
 static int hibernated;
 static int reset_called;
 #endif
+
+/*
+ * Helper method to wake a given task, and provide immediate opportunity to run.
+ */
+static void task_wake_then_sleep_1ms(int task_id)
+{
+	task_wake(task_id);
+	msleep(1);
+}
 
 #ifdef CONFIG_LID_SWITCH
 int lid_is_open(void)
@@ -60,7 +69,7 @@ int keyboard_raw_read_rows(void)
 	if (column_driven == KEYBOARD_COLUMN_NONE) {
 		return 0;
 	} else if (column_driven == KEYBOARD_COLUMN_ALL) {
-		for (i = 0; i < KEYBOARD_COLS; ++i)
+		for (i = 0; i < KEYBOARD_COLS_MAX; ++i)
 			r |= mock_state[i];
 		return r;
 	} else {
@@ -195,59 +204,83 @@ static int deghost_test(void)
 static int debounce_test(void)
 {
 	int old_count = fifo_add_count;
-	mock_key(1, 1, 1);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(1, 1, 0);
-	task_wake(TASK_ID_KEYSCAN);
-	CHECK_KEY_COUNT(old_count, 0);
+	int i;
 
+	/* One brief keypress is detected. */
+	msleep(40);
 	mock_key(1, 1, 1);
-	task_wake(TASK_ID_KEYSCAN);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 	mock_key(1, 1, 0);
-	task_wake(TASK_ID_KEYSCAN);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
+	CHECK_KEY_COUNT(old_count, 2);
+
+	/* Brief bounce, followed by continuous press is detected as one. */
+	msleep(40);
 	mock_key(1, 1, 1);
-	task_wake(TASK_ID_KEYSCAN);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
+	mock_key(1, 1, 0);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
+	mock_key(1, 1, 1);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 	CHECK_KEY_COUNT(old_count, 1);
 
+	/* Brief lifting, then re-presseing is detected as new keypress. */
+	msleep(40);
 	mock_key(1, 1, 0);
-	task_wake(TASK_ID_KEYSCAN);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 	mock_key(1, 1, 1);
-	task_wake(TASK_ID_KEYSCAN);
-	CHECK_KEY_COUNT(old_count, 0);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
+	CHECK_KEY_COUNT(old_count, 2);
 
-	mock_key(2, 2, 1);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(2, 2, 0);
-	task_wake(TASK_ID_KEYSCAN);
-	CHECK_KEY_COUNT(old_count, 0);
-
-	mock_key(2, 2, 1);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(2, 2, 0);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(2, 2, 1);
-	task_wake(TASK_ID_KEYSCAN);
-	CHECK_KEY_COUNT(old_count, 1);
-
+	/* One bouncy re-contact while lifting is ignored. */
+	msleep(40);
 	mock_key(1, 1, 0);
-	task_wake(TASK_ID_KEYSCAN);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 	mock_key(1, 1, 1);
-	task_wake(TASK_ID_KEYSCAN);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 	mock_key(1, 1, 0);
-	task_wake(TASK_ID_KEYSCAN);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 	CHECK_KEY_COUNT(old_count, 1);
 
-	mock_key(2, 2, 0);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(2, 2, 1);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(2, 2, 0);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(2, 2, 1);
-	task_wake(TASK_ID_KEYSCAN);
-	mock_key(2, 2, 0);
-	task_wake(TASK_ID_KEYSCAN);
+	/*
+	 * Debounce interval of first key is not affected by continued
+	 * activity of other keys.
+	 */
+	msleep(40);
+	/* Push the first key */
+	mock_key(0, 1, 0);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
+	/*
+	 * Push down each subsequent key, until all 8 are pressed, each
+	 * time bouncing the former one once.
+	 */
+	for (i = 1 ; i < 8; i++) {
+		mock_key(i, 1, 1);
+		task_wake(TASK_ID_KEYSCAN);
+		msleep(3);
+		mock_key(i - 1, 1, 0);
+		task_wake(TASK_ID_KEYSCAN);
+		msleep(1);
+		mock_key(i - 1, 1, 1);
+		task_wake(TASK_ID_KEYSCAN);
+		msleep(1);
+	}
+	/* Verify that the bounces were. ignored */
+	CHECK_KEY_COUNT(old_count, 8);
+	/*
+	 * Now briefly lift and re-press the first one, which should now be past
+	 * its debounce interval
+	 */
+	mock_key(0, 1, 0);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 	CHECK_KEY_COUNT(old_count, 1);
+	mock_key(0, 1, 1);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
+	CHECK_KEY_COUNT(old_count, 1);
+	/* For good measure, release all keys before proceeding. */
+	for (i = 0; i < 8; i++)
+		mock_key(i, 1, 0);
+	task_wake_then_sleep_1ms(TASK_ID_KEYSCAN);
 
 	return EC_SUCCESS;
 }
@@ -256,12 +289,17 @@ static int simulate_key_test(void)
 {
 	int old_count;
 
+	task_wake(TASK_ID_KEYSCAN);
+	msleep(40); /* Wait for debouncing to settle */
+
 	old_count = fifo_add_count;
 	host_command_simulate(1, 1, 1);
 	TEST_ASSERT(fifo_add_count > old_count);
+	msleep(40);
 	old_count = fifo_add_count;
 	host_command_simulate(1, 1, 0);
 	TEST_ASSERT(fifo_add_count > old_count);
+	msleep(40);
 
 	return EC_SUCCESS;
 }
@@ -330,8 +368,11 @@ static int runtime_key_test(void)
 #ifdef CONFIG_LID_SWITCH
 static int lid_test(void)
 {
+	msleep(40); /* Allow debounce to settle */
+
 	lid_open = 0;
 	hook_notify(HOOK_LID_CHANGE);
+	msleep(1); /* Allow hooks to run */
 	mock_key(1, 1, 1);
 	TEST_ASSERT(expect_no_keychange() == EC_SUCCESS);
 	mock_key(1, 1, 0);
@@ -339,6 +380,7 @@ static int lid_test(void)
 
 	lid_open = 1;
 	hook_notify(HOOK_LID_CHANGE);
+	msleep(1); /* Allow hooks to run */
 	mock_key(1, 1, 1);
 	TEST_ASSERT(expect_keychange() == EC_SUCCESS);
 	mock_key(1, 1, 0);
@@ -365,12 +407,12 @@ void test_init(void)
 	if (state & TEST_STATE_MASK(TEST_STATE_STEP_2)) {
 		/* Power-F3-ESC */
 		system_set_reset_flags(system_get_reset_flags() |
-				       RESET_FLAG_RESET_PIN);
+				       EC_RESET_FLAG_RESET_PIN);
 		mock_key(1, 1, 1);
 	} else if (state & TEST_STATE_MASK(TEST_STATE_STEP_3)) {
 		/* Power-F3-Down */
 		system_set_reset_flags(system_get_reset_flags() |
-				       RESET_FLAG_RESET_PIN);
+				       EC_RESET_FLAG_RESET_PIN);
 		mock_key(6, 11, 1);
 	}
 }
@@ -441,7 +483,7 @@ int test_task(void *data)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	msleep(30); /* Wait for TASK_ID_TEST to initialize */
 	task_wake(TASK_ID_TEST);

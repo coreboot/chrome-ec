@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -160,9 +160,9 @@ enum ec2i_access {
 
 enum ec2i_status_mask {
 	/* 1: EC read-access is still processing. */
-	EC2I_STATUS_CRIB = (1 << 1),
+	EC2I_STATUS_CRIB = BIT(1),
 	/* 1: EC write-access is still processing with IHD register. */
-	EC2I_STATUS_CWIB = (1 << 2),
+	EC2I_STATUS_CWIB = BIT(2),
 	EC2I_STATUS_ALL  = (EC2I_STATUS_CRIB | EC2I_STATUS_CWIB),
 };
 
@@ -179,7 +179,7 @@ static enum ec2i_message ec2i_write_pnpcfg(enum ec2i_access sel, uint8_t data)
 	int rv = EC_ERROR_UNKNOWN;
 
 	/* bit1 : VCC power on */
-	if (IT83XX_SWUC_SWCTL1 & (1 << 1)) {
+	if (IT83XX_SWUC_SWCTL1 & BIT(1)) {
 		/*
 		 * Wait that both CRIB and CWIB bits in IBCTL register
 		 * are cleared.
@@ -191,15 +191,15 @@ static enum ec2i_message ec2i_write_pnpcfg(enum ec2i_access sel, uint8_t data)
 			/* Write the data to IHD register */
 			IT83XX_EC2I_IHD = data;
 			/* Enable EC access to the PNPCFG registers */
-			IT83XX_EC2I_IBMAE |= (1 << 0);
+			IT83XX_EC2I_IBMAE |= BIT(0);
 			/* bit0: EC to I-Bus access enabled. */
-			IT83XX_EC2I_IBCTL |= (1 << 0);
+			IT83XX_EC2I_IBCTL |= BIT(0);
 			/* Wait the CWIB bit in IBCTL cleared. */
 			rv = ec2i_wait_status_bit_cleared(EC2I_STATUS_CWIB);
 			/* Disable EC access to the PNPCFG registers. */
-			IT83XX_EC2I_IBMAE &= ~(1 << 0);
+			IT83XX_EC2I_IBMAE &= ~BIT(0);
 			/* Disable EC to I-Bus access. */
-			IT83XX_EC2I_IBCTL &= ~(1 << 0);
+			IT83XX_EC2I_IBCTL &= ~BIT(0);
 		}
 	}
 
@@ -212,7 +212,7 @@ static enum ec2i_message ec2i_read_pnpcfg(enum ec2i_access sel)
 	uint8_t ihd = 0;
 
 	/* bit1 : VCC power on */
-	if (IT83XX_SWUC_SWCTL1 & (1 << 1)) {
+	if (IT83XX_SWUC_SWCTL1 & BIT(1)) {
 		/*
 		 * Wait that both CRIB and CWIB bits in IBCTL register
 		 * are cleared.
@@ -222,19 +222,19 @@ static enum ec2i_message ec2i_read_pnpcfg(enum ec2i_access sel)
 			/* Set indirect host I/O offset. */
 			IT83XX_EC2I_IHIOA = sel;
 			/* Enable EC access to the PNPCFG registers */
-			IT83XX_EC2I_IBMAE |= (1 << 0);
+			IT83XX_EC2I_IBMAE |= BIT(0);
 			/* bit1: a read-action */
-			IT83XX_EC2I_IBCTL |= (1 << 1);
+			IT83XX_EC2I_IBCTL |= BIT(1);
 			/* bit0: EC to I-Bus access enabled. */
-			IT83XX_EC2I_IBCTL |= (1 << 0);
+			IT83XX_EC2I_IBCTL |= BIT(0);
 			/* Wait the CRIB bit in IBCTL cleared. */
 			rv = ec2i_wait_status_bit_cleared(EC2I_STATUS_CRIB);
 			/* Read the data from IHD register */
 			ihd = IT83XX_EC2I_IHD;
 			/* Disable EC access to the PNPCFG registers. */
-			IT83XX_EC2I_IBMAE &= ~(1 << 0);
+			IT83XX_EC2I_IBMAE &= ~BIT(0);
 			/* Disable EC to I-Bus access. */
-			IT83XX_EC2I_IBCTL &= ~(1 << 0);
+			IT83XX_EC2I_IBCTL &= ~BIT(0);
 		}
 	}
 
@@ -284,7 +284,7 @@ static void pnpcfg_configure(const struct ec2i_t *settings, size_t entries)
 	for (i = 0; i < entries; i++) {
 		if (ec2i_write(settings[i].index_port, settings[i].data_port) ==
 		    EC2I_WRITE_ERROR) {
-			ccprints("Failed to apply %d", i);
+			ccprints("Failed to apply %zd", i);
 			break;
 		}
 	}

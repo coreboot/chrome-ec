@@ -12,7 +12,6 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "lid_switch.h"
-#include "lpc.h"
 #include "power.h"
 #include "power_button.h"
 #include "system.h"
@@ -68,35 +67,64 @@ void chipset_reset(enum chipset_reset_reason reason)
 void chipset_throttle_cpu(int throttle)
 {
 	CPRINTS("%s(%d)", __func__, throttle);
-#ifdef CONFIG_CPU_PROCHOT_ACTIVE_LOW
-	throttle = !throttle;
-#endif /* CONFIG_CPU_PROCHOT_ACTIVE_LOW */
+	if (IS_ENABLED(CONFIG_CPU_PROCHOT_ACTIVE_LOW))
+		throttle = !throttle;
+
 	if (chipset_in_state(CHIPSET_STATE_ON))
 		gpio_set_level(GPIO_CPU_PROCHOT, throttle);
 }
 
+void chipset_handle_espi_reset_assert(void)
+{
+	/*
+	 * eSPI_Reset# pin being asserted without RSMRST# being asserted
+	 * means there is an unexpected power loss (global reset event).
+	 * In this case, check if the shutdown is forced by the EC (due
+	 * to battery, thermal, or console command). The forced shutdown
+	 * initiates a power button press that we need to release.
+	 *
+	 * NOTE: S5_PGOOD input is passed through to the RSMRST# output to
+	 * the AP.
+	 */
+	if ((power_get_signals() & IN_S5_PGOOD) && forcing_shutdown) {
+		power_button_pch_release();
+		forcing_shutdown = 0;
+	}
+}
+
 enum power_state power_chipset_init(void)
 {
+	CPRINTS("%s: power_signal=0x%x", __func__, power_get_signals());
+
 	/* Pause in S5 when shutting down. */
 	power_set_pause_in_s5(1);
 
+	if (!system_jumped_to_this_image())
+		return POWER_G3;
 	/*
-	 * If we're switching between images without rebooting, see if the x86
-	 * is already powered on; if so, leave it there instead of cycling
-	 * through G3.
+	 * We are here as RW. We need to handle the following cases:
+	 *
+	 * 1. Late sysjump by software sync. AP is in S0.
+	 * 2. Shutting down in recovery mode then sysjump by EFS2. AP is in S5
+	 *    and expected to sequence down.
+	 * 3. Rebooting from recovery mode then sysjump by EFS2. AP is in S5
+	 *    and expected to sequence up.
+	 * 4. RO jumps to RW from main() by EFS2. (a.k.a. power on reset, cold
+	 *    reset). AP is in G3.
 	 */
-	if (system_jumped_to_this_image()) {
-		if (gpio_get_level(GPIO_S0_PGOOD)) {
-			/* Disable idle task deep sleep when in S0. */
-			disable_sleep(SLEEP_MASK_AP_RUN);
-
-			CPRINTS("already in S0");
-			return POWER_S0;
-		}
-
-		CPRINTS("forcing G3");
-		chipset_force_g3();
+	if (gpio_get_level(GPIO_S0_PGOOD)) {
+		/* case #1. Disable idle task deep sleep when in S0. */
+		disable_sleep(SLEEP_MASK_AP_RUN);
+		CPRINTS("already in S0");
+		return POWER_S0;
 	}
+	if (power_get_signals() & IN_S5_PGOOD) {
+		/* case #2 & #3 */
+		CPRINTS("already in S5");
+		return POWER_S5;
+	}
+	/* case #4 */
+	chipset_force_g3();
 	return POWER_G3;
 }
 
@@ -153,13 +181,12 @@ enum power_state power_handle_state(enum power_state state)
 		/* Enable system power ("*_A" rails) in S5. */
 		gpio_set_level(GPIO_EN_PWR_A, 1);
 
-#ifdef CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
 		/*
 		 * Callback to do pre-initialization within the context of
 		 * chipset task.
 		 */
-		chipset_pre_init_callback();
-#endif
+		if (IS_ENABLED(CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK))
+			chipset_pre_init_callback();
 
 		if (power_wait_signals(IN_S5_PGOOD)) {
 			chipset_force_g3();
@@ -255,6 +282,9 @@ enum power_state power_handle_state(enum power_state state)
 
 		/* Disable wireless */
 		wireless_set_state(WIRELESS_OFF);
+
+		/* Call hooks after we remove power rails */
+		hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 
 		return POWER_S5;
 

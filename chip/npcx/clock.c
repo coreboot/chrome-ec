@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -96,19 +96,26 @@ void clock_init(void)
 #endif
 
 	/*
-	 * Configure frequency multiplier M/N values according to
-	 * the requested OSC_CLK (Unit:Hz).
+	 * Resting the OSC_CLK (even to the same value) will make the clock
+	 * unstable for a little which can affect peripheral communication like
+	 * eSPI. Skip this if not needed (e.g. RW jump)
 	 */
-	NPCX_HFCGN  = HFCGN;
-	NPCX_HFCGML = HFCGML;
-	NPCX_HFCGMH = HFCGMH;
+	if (NPCX_HFCGN != HFCGN || NPCX_HFCGML != HFCGML
+				|| NPCX_HFCGMH != HFCGMH) {
+		/*
+		 * Configure frequency multiplier M/N values according to
+		 * the requested OSC_CLK (Unit:Hz).
+		 */
+		NPCX_HFCGN  = HFCGN;
+		NPCX_HFCGML = HFCGML;
+		NPCX_HFCGMH = HFCGMH;
 
-	/* Load M and N values into the frequency multiplier */
-	SET_BIT(NPCX_HFCGCTRL, NPCX_HFCGCTRL_LOAD);
-
-	/* Wait for stable */
-	while (IS_BIT_SET(NPCX_HFCGCTRL, NPCX_HFCGCTRL_CLK_CHNG))
-		;
+		/* Load M and N values into the frequency multiplier */
+		SET_BIT(NPCX_HFCGCTRL, NPCX_HFCGCTRL_LOAD);
+		/* Wait for stable */
+		while (IS_BIT_SET(NPCX_HFCGCTRL, NPCX_HFCGCTRL_CLK_CHNG))
+			;
+	}
 
 	/* Set all clock prescalers of core and peripherals. */
 #if defined(CHIP_FAMILY_NPCX5)
@@ -160,15 +167,27 @@ void clock_turbo(void)
 	 * CORE_CLK > 66MHz, we also need to set AHB6DIV and FIUDIV as 1.
 	 */
 	NPCX_HFCGP = 0x01;
-	NPCX_HFCBCD = (1 << 4);
+	NPCX_HFCBCD = BIT(4);
 }
 
-void clock_turbo_disable(void)
+void clock_normal(void)
 {
 	/* Set CORE_CLK (CPU), AHB6_CLK and FIU_CLK back to original values. */
 	NPCX_HFCGP = ((FPRED << 4) | AHB6DIV);
 	NPCX_HFCBCD = (FIUDIV << 4);
 }
+
+void clock_enable_module(enum module_id module, int enable)
+{
+	/* Assume we have a single task using MODULE_FAST_CPU */
+	if (module == MODULE_FAST_CPU) {
+		if (enable)
+			clock_turbo();
+		else
+			clock_normal();
+	}
+}
+
 #endif
 
 /**
@@ -427,9 +446,9 @@ static int command_idle_stats(int argc, char **argv)
 
 	ccprintf("Num idle calls that sleep:           %d\n", idle_sleep_cnt);
 	ccprintf("Num idle calls that deep-sleep:      %d\n", idle_dsleep_cnt);
-	ccprintf("Time spent in deep-sleep:            %.6lds\n",
+	ccprintf("Time spent in deep-sleep:            %.6llds\n",
 			idle_dsleep_time_us);
-	ccprintf("Total time on:                       %.6lds\n", ts.val);
+	ccprintf("Total time on:                       %.6llds\n", ts.val);
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats,

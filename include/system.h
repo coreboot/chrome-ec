@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,44 +10,14 @@
 
 #include "atomic.h"
 #include "common.h"
+#include "compile_time_macros.h"
 #include "console.h"
+#include "ec_commands.h"
 #include "timer.h"
 
-/* Reset causes */
-#define RESET_FLAG_OTHER       (1 << 0)   /* Other known reason */
-#define RESET_FLAG_RESET_PIN   (1 << 1)   /* Reset pin asserted */
-#define RESET_FLAG_BROWNOUT    (1 << 2)   /* Brownout */
-#define RESET_FLAG_POWER_ON    (1 << 3)   /* Power-on reset */
-#define RESET_FLAG_WATCHDOG    (1 << 4)   /* Watchdog timer reset */
-#define RESET_FLAG_SOFT        (1 << 5)   /* Soft reset trigger by core */
-#define RESET_FLAG_HIBERNATE   (1 << 6)   /* Wake from hibernate */
-#define RESET_FLAG_RTC_ALARM   (1 << 7)   /* RTC alarm wake */
-#define RESET_FLAG_WAKE_PIN    (1 << 8)   /* Wake pin triggered wake */
-#define RESET_FLAG_LOW_BATTERY (1 << 9)   /* Low battery triggered wake */
-#define RESET_FLAG_SYSJUMP     (1 << 10)  /* Jumped directly to this image */
-#define RESET_FLAG_HARD        (1 << 11)  /* Hard reset from software */
-#define RESET_FLAG_AP_OFF      (1 << 12)  /* Do not power on AP */
-#define RESET_FLAG_PRESERVED   (1 << 13)  /* Some reset flags preserved from
-					   * previous boot */
-#define RESET_FLAG_USB_RESUME  (1 << 14)  /* USB resume triggered wake */
-#define RESET_FLAG_RDD         (1 << 15)  /* USB Type-C debug cable */
-#define RESET_FLAG_RBOX        (1 << 16)  /* Fixed Reset Functionality */
-#define RESET_FLAG_SECURITY    (1 << 17)  /* Security threat */
-
-/* Per chip implementation to save/read raw RESET_FLAG_ flags. */
-void chip_save_reset_flags(int flags);
+/* Per chip implementation to save/read raw EC_RESET_FLAG_ flags. */
+void chip_save_reset_flags(uint32_t flags);
 uint32_t chip_read_reset_flags(void);
-
-/* System images */
-enum system_image_copy_t {
-	SYSTEM_IMAGE_UNKNOWN = 0,
-	SYSTEM_IMAGE_RO,
-	SYSTEM_IMAGE_RW,
-	SYSTEM_IMAGE_RW_A = SYSTEM_IMAGE_RW,
-	/* Some systems may have these too */
-	SYSTEM_IMAGE_RO_B,
-	SYSTEM_IMAGE_RW_B,
-};
 
 /**
  * Checks if running image is RW or not
@@ -69,6 +39,20 @@ void system_pre_init(void);
 void system_common_pre_init(void);
 
 /**
+ * Checks if manual recovery is detected or not
+ *
+ * @return Non zero if manual recovery is detected or zero otherwise.
+ */
+int system_is_manual_recovery(void);
+
+/**
+ * System common re-initialization; called to reset persistent state
+ * left by system_common_pre_init().  This is useful for testing
+ * scenarios calling system_common_pre_init() multiple times.
+ */
+__test_only void system_common_reset_state(void);
+
+/**
  * Set up flags that should be saved to battery backed RAM.
  *
  * @param reset_flags - flags passed into system_reset
@@ -79,7 +63,7 @@ void system_encode_save_flags(int reset_flags, uint32_t *save_flags);
 /**
  * Get the reset flags.
  *
- * @return Reset flags (RESET_FLAG_*), or 0 if the cause is unknown.
+ * @return Reset flags (EC_RESET_FLAG_*), or 0 if the cause is unknown.
  */
 uint32_t system_get_reset_flags(void);
 
@@ -123,13 +107,13 @@ void system_disable_jump(void);
 /**
  * Return the image copy which is currently running.
  */
-enum system_image_copy_t system_get_image_copy(void);
+enum ec_image system_get_image_copy(void);
 
 /**
  * Return the active RO image copy so that if we're in RW, we can know how we
  * got there. Only needed when there are multiple RO images.
  */
-enum system_image_copy_t system_get_ro_image_copy(void);
+enum ec_image system_get_ro_image_copy(void);
 
 /**
  * Return the program memory address where the image copy begins or should
@@ -137,14 +121,26 @@ enum system_image_copy_t system_get_ro_image_copy(void);
  * reside at the location returned. Returns INVALID_ADDR if the image copy is
  * not supported.
  */
-uintptr_t get_program_memory_addr(enum system_image_copy_t copy);
+uintptr_t get_program_memory_addr(enum ec_image copy);
 #define INVALID_ADDR ((uintptr_t)0xffffffff)
 
 /**
  * Return non-zero if the system has switched between image copies at least
  * once since the last real boot.
+ *
+ * You probably need to call system_jumped_late instead if you're trying to
+ * avoid initializing something again in RW.
  */
 int system_jumped_to_this_image(void);
+
+/**
+ * Return non-zero if late (legacy) sysjump occurred.
+ *
+ * This happens when EFS failed but RO still jumped to RW late on AP's request.
+ * This is typically called to avoid running some code twice (once in RO and
+ * again in RW).
+ */
+int system_jumped_late(void);
 
 /**
  * Preserve data across a jump between images.
@@ -192,7 +188,7 @@ const char *system_get_image_copy_string(void);
 /**
  * Return a text description of the passed image copy parameter.
  */
-const char *system_image_copy_t_to_string(enum system_image_copy_t copy);
+const char *ec_image_to_string(enum ec_image copy);
 
 /**
  * Return the number of bytes used in the specified image.
@@ -203,12 +199,12 @@ const char *system_image_copy_t_to_string(enum system_image_copy_t copy);
  * @return actual image size in bytes, 0 if the image contains no content or
  * error.
  */
-int system_get_image_used(enum system_image_copy_t copy);
+int system_get_image_used(enum ec_image copy);
 
 /**
  * Jump to the specified image copy.
  */
-int system_run_image_copy(enum system_image_copy_t copy);
+int system_run_image_copy(enum ec_image copy);
 
 /**
  * Get the rollback version for an image
@@ -217,7 +213,15 @@ int system_run_image_copy(enum system_image_copy_t copy);
  *			to get the version for the currently running image.
  * @return The rollback version, negative value on error.
  */
-int32_t system_get_rollback_version(enum system_image_copy_t copy);
+int32_t system_get_rollback_version(enum ec_image copy);
+
+/**
+ * Get the image data of an image
+ *
+ * @param copy	Image copy to get the version of.
+ * @return	Image data
+ */
+const struct image_data *system_get_image_data(enum ec_image copy);
 
 /**
  * Get the version string for an image
@@ -227,7 +231,7 @@ int32_t system_get_rollback_version(enum system_image_copy_t copy);
  * @return The version string for the image copy, or an empty string if
  * error.
  */
-const char *system_get_version(enum system_image_copy_t copy);
+const char *system_get_version(enum ec_image copy);
 
 /**
  * Get the SKU ID for a device
@@ -255,25 +259,33 @@ const char *system_get_build_info(void);
  * Hard reset.  Cuts power to the entire system.  If not present, does a soft
  * reset which just resets the core and on-chip peripherals.
  */
-#define SYSTEM_RESET_HARD               (1 << 0)
+#define SYSTEM_RESET_HARD               BIT(0)
 /*
  * Preserve existing reset flags.  Used by flash pre-init when it discovers it
  * needs to do a hard reset to clear write protect registers.
  */
-#define SYSTEM_RESET_PRESERVE_FLAGS     (1 << 1)
+#define SYSTEM_RESET_PRESERVE_FLAGS     BIT(1)
 /*
  * Leave AP off on next reboot, instead of powering it on to do EC software
  * sync.
  */
-#define SYSTEM_RESET_LEAVE_AP_OFF       (1 << 2)
+#define SYSTEM_RESET_LEAVE_AP_OFF       BIT(2)
 /*
  * Indicate that this was a manually triggered reset.
  */
-#define SYSTEM_RESET_MANUALLY_TRIGGERED (1 << 3)
+#define SYSTEM_RESET_MANUALLY_TRIGGERED BIT(3)
 /*
  * Wait for reset pin to be driven, rather that resetting ourselves.
  */
-#define SYSTEM_RESET_WAIT_EXT           (1 << 4)
+#define SYSTEM_RESET_WAIT_EXT           BIT(4)
+/*
+ * Indicate that this reset was triggered by an AP watchdog
+ */
+#define SYSTEM_RESET_AP_WATCHDOG        BIT(5)
+/*
+ * Stay in RO next reboot, instead of potentially selecting RW during EFS.
+ */
+#define SYSTEM_RESET_STAY_IN_RO         BIT(6)
 
 /**
  * Reset the system.
@@ -321,13 +333,27 @@ int system_get_chip_unique_id(uint8_t **id);
  * Optional board-level callback functions to read a unique serial number per
  * chip. Default implementation reads from flash/otp (flash/otp_read_serial).
  */
-const char *board_read_serial(void) __attribute__((weak));
+__override_proto const char *board_read_serial(void);
 
 /**
  * Optional board-level callback functions to write a unique serial number per
  * chip. Default implementation reads from flash/otp (flash/otp_write_serial).
  */
-int board_write_serial(const char *serial) __attribute__((weak));
+__override_proto int board_write_serial(const char *serial);
+
+
+/**
+ * Optional board-level callback functions to read a unique MAC address per
+ * chip. Default implementation reads from flash.
+ */
+__override_proto const char *board_read_mac_addr(void);
+
+/**
+ * Optional board-level callback functions to write a unique MAC address per
+ * chip. Default implementation reads from flash.
+ */
+__override_proto int board_write_mac_addr(const char *mac_addr);
+
 /*
  * Common bbram entries. Chips don't necessarily need to implement
  * all of these, error will be returned from system_get/set_bbram if
@@ -347,6 +373,9 @@ enum system_bbram_idx {
 	SYSTEM_BBRAM_IDX_PD2,
 	SYSTEM_BBRAM_IDX_TRY_SLOT,
 };
+
+/* Maximum number of bbram indexes allotted for PD port state data */
+#define MAX_SYSTEM_BBRAM_IDX_PD_PORTS 3
 
 /**
  * Get/Set byte in battery-backed storage.
@@ -387,24 +416,25 @@ void board_hibernate_late(void) __attribute__((weak));
 /* Minimum duration to get proper hibernation */
 #define SYSTEM_HIB_MINIMUM_DURATION 0, 150000
 
+#ifdef CONFIG_RTC
 /**
  * Read the real-time clock.
  *
  * @return The real-time clock value as a timestamp.
  */
 timestamp_t system_get_rtc(void);
+#endif /* defined(CONFIG_RTC) */
 
 /**
  * Print out the current real-time clock value to the console.
  *
  * @param channel	Console channel to print on.
  */
-/* TODO(aaboagye): Replace this with CONFIG_RTC eventually. */
-#ifdef CONFIG_CMD_RTC
+#ifdef CONFIG_RTC
 void print_system_rtc(enum console_channel channel);
 #else
 static inline void print_system_rtc(enum console_channel channel) { }
-#endif /* !defined(CONFIG_CMD_RTC) */
+#endif /* !defined(CONFIG_RTC) */
 
 /**
  * Enable hibernate interrupt
@@ -416,31 +446,32 @@ enum {
 	/*
 	 * Sleep masks to prevent going in to deep sleep.
 	 */
-	SLEEP_MASK_AP_RUN     = (1 << 0), /* the main CPU is running */
-	SLEEP_MASK_UART       = (1 << 1), /* UART communication ongoing */
-	SLEEP_MASK_I2C_MASTER = (1 << 2), /* I2C master communication ongoing */
-	SLEEP_MASK_CHARGING   = (1 << 3), /* Charging loop ongoing */
-	SLEEP_MASK_USB_PWR    = (1 << 4), /* USB power loop ongoing */
-	SLEEP_MASK_USB_PD     = (1 << 5), /* USB PD device connected */
-	SLEEP_MASK_SPI        = (1 << 6), /* SPI communications ongoing */
-	SLEEP_MASK_I2C_SLAVE  = (1 << 7), /* I2C slave communication ongoing */
-	SLEEP_MASK_FAN        = (1 << 8), /* Fan control loop ongoing */
-	SLEEP_MASK_USB_DEVICE = (1 << 9), /* Generic USB device in use */
-	SLEEP_MASK_PWM        = (1 << 10), /* PWM output is enabled */
-	SLEEP_MASK_PHYSICAL_PRESENCE  = (1 << 11), /* Physical presence
+	SLEEP_MASK_AP_RUN     = BIT(0), /* the main CPU is running */
+	SLEEP_MASK_UART       = BIT(1), /* UART communication ongoing */
+	SLEEP_MASK_I2C_MASTER = BIT(2), /* I2C master communication ongoing */
+	SLEEP_MASK_CHARGING   = BIT(3), /* Charging loop ongoing */
+	SLEEP_MASK_USB_PWR    = BIT(4), /* USB power loop ongoing */
+	SLEEP_MASK_USB_PD     = BIT(5), /* USB PD device connected */
+	SLEEP_MASK_SPI        = BIT(6), /* SPI communications ongoing */
+	SLEEP_MASK_I2C_SLAVE  = BIT(7), /* I2C slave communication ongoing */
+	SLEEP_MASK_FAN        = BIT(8), /* Fan control loop ongoing */
+	SLEEP_MASK_USB_DEVICE = BIT(9), /* Generic USB device in use */
+	SLEEP_MASK_PWM        = BIT(10), /* PWM output is enabled */
+	SLEEP_MASK_PHYSICAL_PRESENCE  = BIT(11), /* Physical presence
 						    * detection ongoing */
-	SLEEP_MASK_PLL        = (1 << 12), /* High-speed PLL in-use */
-	SLEEP_MASK_ADC        = (1 << 13), /* ADC conversion ongoing */
-	SLEEP_MASK_FORCE_NO_DSLEEP    = (1 << 15), /* Force disable. */
+	SLEEP_MASK_PLL        = BIT(12), /* High-speed PLL in-use */
+	SLEEP_MASK_ADC        = BIT(13), /* ADC conversion ongoing */
+	SLEEP_MASK_EMMC       = BIT(14), /* eMMC emulation ongoing */
+	SLEEP_MASK_FORCE_NO_DSLEEP    = BIT(15), /* Force disable. */
 
 
 	/*
 	 * Sleep masks to prevent using slow speed clock in deep sleep.
 	 */
-	SLEEP_MASK_JTAG     = (1 << 16), /* JTAG is in use. */
-	SLEEP_MASK_CONSOLE  = (1 << 17), /* Console is in use. */
+	SLEEP_MASK_JTAG     = BIT(16), /* JTAG is in use. */
+	SLEEP_MASK_CONSOLE  = BIT(17), /* Console is in use. */
 
-	SLEEP_MASK_FORCE_NO_LOW_SPEED = (1 << 31)  /* Force disable. */
+	SLEEP_MASK_FORCE_NO_LOW_SPEED = BIT(31)  /* Force disable. */
 };
 
 /*
@@ -518,7 +549,7 @@ void delay_sleep_by(uint32_t us);
 
 /*
  **
- * Funtctions to control deep sleep behavior. When disabled - the device never
+ * Functions to control deep sleep behavior. When disabled - the device never
  * falls into deep sleep (the lowest power consumption state exit of which
  * usually happens through the regular reset vector with just a few bits of
  * state preserved).
@@ -543,7 +574,6 @@ void system_set_rtc_alarm(uint32_t seconds, uint32_t microseconds);
  */
 void system_reset_rtc_alarm(void);
 
-#ifdef CONFIG_EXTERNAL_STORAGE
 /**
  * Return address of little FW to prepare for sysjump
  *
@@ -562,7 +592,7 @@ uint32_t system_get_lfw_address(void);
  *
  * @param copy		Region - (RO/RW) to use in code ram
  */
-void system_set_image_copy(enum system_image_copy_t copy);
+void system_set_image_copy(enum ec_image copy);
 
 /**
  * Return which region is used in Code RAM
@@ -570,18 +600,14 @@ void system_set_image_copy(enum system_image_copy_t copy);
  * Note: This feature is used for code ram arch
  *
  */
-enum system_image_copy_t system_get_shrspi_image_copy(void);
+enum ec_image system_get_shrspi_image_copy(void);
 
-#endif
-
-#ifdef CONFIG_FW_RESET_VECTOR
 /**
  * Determine reset vector will be jumped to the assigned address.
  *
  * @return The address of the reset vector for RO/RW firmware image jump.
  */
 uintptr_t system_get_fw_reset_vector(uintptr_t base);
-#endif
 
 /**
  * Check if the EC is warm booting.
@@ -613,14 +639,14 @@ int system_can_boot_ap(void);
  *
  * @return Active copy index
  */
-enum system_image_copy_t system_get_active_copy(void);
+enum ec_image system_get_active_copy(void);
 
 /**
  * Get updatable (non-active) image copy
  *
  * @return Updatable copy index
  */
-enum system_image_copy_t system_get_update_copy(void);
+enum ec_image system_get_update_copy(void);
 
 /**
  * Set active image copy
@@ -628,7 +654,7 @@ enum system_image_copy_t system_get_update_copy(void);
  * @param copy Copy id to be activated.
  * @return     Non-zero if error.
  */
-int system_set_active_copy(enum system_image_copy_t copy);
+int system_set_active_copy(enum ec_image copy);
 
 /**
  * Get flash offset of a RW copy
@@ -636,6 +662,6 @@ int system_set_active_copy(enum system_image_copy_t copy);
  * @param copy Copy index to get the flash offset of.
  * @return     Flash offset of the slot storing <copy>
  */
-uint32_t flash_get_rw_offset(enum system_image_copy_t copy);
+uint32_t flash_get_rw_offset(enum ec_image copy);
 
 #endif  /* __CROS_EC_SYSTEM_H */

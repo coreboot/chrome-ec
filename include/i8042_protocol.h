@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -33,7 +33,7 @@
 #define I8042_CMD_SET_A_KEY_T   0xfb
 #define I8042_CMD_SET_A_KEY_MR  0xfc
 #define I8042_CMD_SET_A_KEY_M   0xfd
-#define I8042_CMD_RESET_BAT     0xff
+#define I8042_CMD_RESET         0xff
 #define I8042_CMD_RESEND        0xfe
 
 /* port 0x64 */
@@ -66,7 +66,6 @@
 #define I8042_PULSE_END         0xff
 
 /* port 0x60 return value */
-#define I8042_RET_BAT           0xaa
 #define I8042_RET_EMUL0         0xe0
 #define I8042_RET_EMUL1         0xe1
 #define I8042_RET_ECHO          0xee
@@ -80,11 +79,14 @@
 #define I8042_RET_ERR           0xff
 
 /* port 64 - command byte bits */
-#define I8042_XLATE             (1 << 6)
-#define I8042_AUX_DIS           (1 << 5)
-#define I8042_KBD_DIS           (1 << 4)
-#define I8042_SYS_FLAG          (1 << 2)
-#define I8042_ENIRQ12           (1 << 1)
-#define I8042_ENIRQ1            (1 << 0)
+#define I8042_XLATE             BIT(6)
+#define I8042_AUX_DIS           BIT(5)
+#define I8042_KBD_DIS           BIT(4)
+#define I8042_SYS_FLAG          BIT(2)
+#define I8042_ENIRQ12           BIT(1)
+#define I8042_ENIRQ1            BIT(0)
+
+/* Status Flags */
+#define I8042_AUX_DATA		BIT(5)
 
 #endif /* __CROS_EC_I8042_PROTOCOL_H */

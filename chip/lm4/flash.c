@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,7 +17,7 @@
 #define FLASH_FWB_BYTES (FLASH_FWB_WORDS * 4)
 
 #define BANK_SHIFT 5 /* bank registers have 32bits each, 2^32 */
-#define BANK_MASK ((1 << BANK_SHIFT) - 1) /* 5 bits */
+#define BANK_MASK (BIT(BANK_SHIFT) - 1) /* 5 bits */
 #define F_BANK(b) ((b) >> BANK_SHIFT)
 #define F_BIT(b) (1 << ((b) & BANK_MASK))
 
@@ -243,7 +243,7 @@ int flash_pre_init(void)
 	 * If we have already jumped between images, an earlier image could
 	 * have applied write protection.  Nothing additional needs to be done.
 	 */
-	if (reset_flags & RESET_FLAG_SYSJUMP)
+	if (reset_flags & EC_RESET_FLAG_SYSJUMP)
 		return EC_SUCCESS;
 
 	if (prot_flags & EC_FLASH_PROTECT_GPIO_ASSERTED) {
@@ -280,7 +280,7 @@ int flash_pre_init(void)
 	 * write-protect.  If it didn't, then the flash write protect registers
 	 * have been permanently committed and we can't fix that.
 	 */
-	if (reset_flags & RESET_FLAG_POWER_ON) {
+	if (reset_flags & EC_RESET_FLAG_POWER_ON) {
 		stuck_locked = 1;
 		return EC_ERROR_ACCESS_DENIED;
 	}

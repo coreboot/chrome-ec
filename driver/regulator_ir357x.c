@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -16,8 +16,8 @@
 #define CPUTS(outstr) cputs(CC_CHIPSET, outstr)
 #define CPRINTF(format, args...) cprintf(CC_CHIPSET, format, ## args)
 
-/* 8-bit I2C address */
-#define IR357x_I2C_ADDR (0x8 << 1)
+/* I2C address */
+#define IR357x_I2C_ADDR_FLAGS 0x08
 
 struct ir_setting {
 	uint8_t reg;

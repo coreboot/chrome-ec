@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+ * Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -137,7 +137,7 @@ static void print_led_set(FILE *fp, uint8_t led)
 
 	fprintf(fp, "{");
 	for (i = 0; i < NUM_LEDS; i++)
-		if (led & (1 << i)) {
+		if (led & BIT(i)) {
 			if (!first)
 				fprintf(fp, ",");
 			fprintf(fp, "%d", i);
@@ -396,7 +396,7 @@ static void fixup_symbols(struct safe_lightbar_program *prog)
 				}
 			}
 			if (j >= EC_LB_PROG_LEN)
-				Error("Can't find label %s from line %d\n", j);
+				Error("Can't find label %s\n", reloc_label[i]);
 		}
 	}
 }

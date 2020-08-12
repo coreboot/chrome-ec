@@ -8,7 +8,7 @@
 #include "battery.h"
 #include "charger_profile_override.h"
 #include "console.h"
-#include "ioexpander_pca9555.h"
+#include "pca9555.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
@@ -200,7 +200,7 @@ enum battery_present battery_hw_present(void)
 	int rv;
 
 	rv = pca9555_read(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-			I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+			I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
 			PCA9555_CMD_INPUT_PORT_0, &data);
 
 	/* GPIO is low when the battery is physically present */

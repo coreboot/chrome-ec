@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /*
  * Board Versions:
  * Versions are designated by the PCB color and consist of red, blue, and
@@ -30,17 +32,27 @@
 /* Optional features */
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
+#define CONFIG_PVD
+/* See 'Programmable voltage detector characteristics' in the STM32F072x8 Datasheet.
+   PVD Threshold 1 corresponds to a falling voltage threshold of min:2.09V, max:2.27V. */
+#define PVD_THRESHOLD     (1)
 
 /* USB Configuration */
 #define CONFIG_USB
 #define CONFIG_USB_PID 0x501b
 #define CONFIG_USB_CONSOLE
 #define CONFIG_USB_UPDATE
+#define CONFIG_USB_BCD_DEV 0x0001 /* v 0.01 */
+
+#define CONFIG_USB_PD_IDENTITY_HW_VERS 1
+#define CONFIG_USB_PD_IDENTITY_SW_VERS 1
 
 #define CONFIG_USB_SELF_POWERED
 
 #define CONFIG_USB_SERIALNO
 #define DEFAULT_SERIALNO "Uninitialized"
+#define CONFIG_MAC_ADDR
+#define DEFAULT_MAC_ADDR "Uninitialized"
 
 /* USB interface indexes (use define rather than enum to expand them) */
 #define USB_IFACE_CONSOLE	0
@@ -67,10 +79,22 @@
 /* This is not actually an EC so disable some features. */
 #undef CONFIG_WATCHDOG_HELP
 #undef CONFIG_LID_SWITCH
+#undef CONFIG_HIBERNATE
 
 /* Remove console commands / features for flash / RAM savings */
+#undef CONFIG_USB_PD_HOST_CMD
 #undef CONFIG_CONSOLE_CMDHELP
+#undef CONFIG_CONSOLE_HISTORY
 #undef CONFIG_CMD_CRASH
+#undef CONFIG_CMD_ACCELSPOOF
+#undef CONFIG_CMD_FASTCHARGE
+#undef CONFIG_CMD_FLASHINFO
+#undef CONFIG_CMD_GETTIME
+#undef CONFIG_CMD_MEM
+#undef CONFIG_CMD_SHMEM
+#undef CONFIG_CMD_SYSLOCK
+#undef CONFIG_CMD_TIMERINFO
+#undef CONFIG_CMD_WAITMS
 
 /* Enable control of I2C over USB */
 #define CONFIG_USB_I2C
@@ -80,6 +104,7 @@
 
 /* PD features */
 #define CONFIG_ADC
+#undef  CONFIG_ADC_WATCHDOG
 #define CONFIG_BOARD_PRE_INIT
 /*
  * If task profiling is enabled then the rx falling edge detection interrupts
@@ -90,11 +115,14 @@
 #define CONFIG_CHARGE_MANAGER
 #undef  CONFIG_CHARGE_MANAGER_SAFE_MODE
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_CMD_PD
+#define CONFIG_USB_PD_CUSTOM_PDO
+#define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DYNAMIC_SRC_CAP
 #define CONFIG_USB_PD_INTERNAL_COMP
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
 #undef CONFIG_USB_PD_PULLUP
@@ -122,6 +150,15 @@
 #define PD_MAX_POWER_MW       60000
 #define PD_MAX_CURRENT_MA     3000
 #define PD_MAX_VOLTAGE_MV     20000
+/*
+ * Define PDO selection logic for SourceCap.
+ * On a 45W PD charger, it might provide PDOs with 15V/3A and 20V/2.25A.
+ * In this case, pd_find_pdo_index() would always prefer 15V/3A rather than
+ * 20V/2.25A and such that the 20V PDO will be disappeared when servo-v4
+ * advertise the SrcCap. We define PD_PREFER_HIGH_VOLTAGE so that all the
+ * PDOs could be advertised by servo-v4.
+ */
+#define PD_PREFER_HIGH_VOLTAGE
 
 /*
  * Allow dangerous commands all the time, since we don't have a write protect
@@ -214,6 +251,13 @@ int pd_set_rp_rd(int port, int cc_pull, int rp_value);
  * @return HW ID version
  */
 int board_get_version(void);
+
+/**
+ * Enable or disable external HPD detection
+ *
+ * @param enable Enable external HPD detection if true, otherwise disable
+ */
+void ext_hpd_detection_enable(int enable);
 
 /**
  * Enable or disable CCD

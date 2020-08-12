@@ -18,12 +18,6 @@
 
 #define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
 
-/*
- * The count number of the counter for 25 ms register.
- * The 25 ms register is calculated by (count number *1.024 kHz).
- */
-#define I2C_CLK_LOW_TIMEOUT  255 /* ~=249 ms */
-
 /* Default maximum time we allow for an I2C transfer */
 #define I2C_TIMEOUT_DEFAULT_US (100 * MSEC)
 
@@ -112,7 +106,7 @@ enum i2c_reset_cause {
 };
 
 struct i2c_ch_freq {
-	int kpbs;
+	int kbps;
 	uint8_t freq_set;
 };
 
@@ -200,7 +194,7 @@ struct i2c_port_data {
 	int widx;            /* Index into output data */
 	int ridx;            /* Index into input data */
 	int err;             /* Error code, if any */
-	uint8_t addr;        /* address of device */
+	uint8_t addr_8bit;   /* address of device */
 	uint32_t timeout_us; /* Transaction timeout, or 0 to use default */
 	uint8_t freq;        /* Frequency setting */
 
@@ -280,7 +274,7 @@ static void i2c_w2r_change_direction(int p)
 }
 
 static void i2c_pio_trans_data(int p, enum enhanced_i2c_transfer_direct direct,
-				uint8_t data, int first_byte)
+			       uint8_t data, int first_byte)
 {
 	struct i2c_port_data *pd = pdata + p;
 	int p_ch;
@@ -292,7 +286,7 @@ static void i2c_pio_trans_data(int p, enum enhanced_i2c_transfer_direct direct,
 	if (first_byte) {
 		/* First byte must be slave address. */
 		IT83XX_I2C_DTR(p_ch) =
-			data | (direct == RX_DIRECT ? (1 << 0) : 0);
+			data | (direct == RX_DIRECT ? BIT(0) : 0);
 		/* start or repeat start signal. */
 		IT83XX_I2C_CTR(p_ch) = E_START_ID;
 	} else {
@@ -325,7 +319,7 @@ static int i2c_tran_write(int p)
 		 * bit0, Direction of the host transfer.
 		 * bit[1:7}, Address of the targeted slave.
 		 */
-		IT83XX_SMB_TRASLA(p) = pd->addr;
+		IT83XX_SMB_TRASLA(p) = pd->addr_8bit;
 		/* Send first byte */
 		IT83XX_SMB_HOBDB(p) = *(pd->out++);
 		pd->widx++;
@@ -385,7 +379,7 @@ static int i2c_tran_read(int p)
 		 * bit0, Direction of the host transfer.
 		 * bit[1:7}, Address of the targeted slave.
 		 */
-		IT83XX_SMB_TRASLA(p) = pd->addr | 0x01;
+		IT83XX_SMB_TRASLA(p) = pd->addr_8bit | 0x01;
 		/* clear start flag */
 		pd->flags &= ~I2C_XFER_START;
 		/*
@@ -457,7 +451,7 @@ static void enhanced_i2c_start(int p)
 	 */
 	IT83XX_I2C_TOR(p_ch) = I2C_CLK_LOW_TIMEOUT;
 	/* bit1: Enable enhanced i2c module */
-	IT83XX_I2C_CTR1(p_ch) = (1 << 1);
+	IT83XX_I2C_CTR1(p_ch) = BIT(1);
 }
 
 static int enhanced_i2c_tran_write(int p)
@@ -474,7 +468,7 @@ static int enhanced_i2c_tran_write(int p)
 		pd->flags &= ~I2C_XFER_START;
 		enhanced_i2c_start(p);
 		/* Send ID */
-		i2c_pio_trans_data(p, TX_DIRECT, pd->addr, 1);
+		i2c_pio_trans_data(p, TX_DIRECT, pd->addr_8bit, 1);
 	} else {
 		/* Host has completed the transmission of a byte */
 		if (pd->widx < pd->out_size) {
@@ -494,7 +488,8 @@ static int enhanced_i2c_tran_write(int p)
 				/* Write to read protocol */
 				pd->i2ccs = I2C_CH_REPEAT_START;
 				/* Repeat Start */
-				i2c_pio_trans_data(p, RX_DIRECT, pd->addr, 1);
+				i2c_pio_trans_data(p, RX_DIRECT,
+						   pd->addr_8bit, 1);
 			} else {
 				if (pd->flags & I2C_XFER_STOP) {
 					IT83XX_I2C_CTR(p_ch) = E_FINISH;
@@ -526,7 +521,7 @@ static int enhanced_i2c_tran_read(int p)
 		/* Direct read  */
 		pd->i2ccs = I2C_CH_WAIT_READ;
 		/* Send ID */
-		i2c_pio_trans_data(p, RX_DIRECT, pd->addr, 1);
+		i2c_pio_trans_data(p, RX_DIRECT, pd->addr_8bit, 1);
 	} else {
 		if (pd->i2ccs) {
 			if (pd->i2ccs == I2C_CH_REPEAT_START) {
@@ -543,7 +538,8 @@ static int enhanced_i2c_tran_read(int p)
 				/* Write to read */
 				pd->i2ccs = I2C_CH_WAIT_READ;
 				/* Send ID */
-				i2c_pio_trans_data(p, RX_DIRECT, pd->addr, 1);
+				i2c_pio_trans_data(p, RX_DIRECT,
+						   pd->addr_8bit, 1);
 				task_enable_irq(i2c_ctrl_regs[p].irq);
 			}
 		} else {
@@ -645,8 +641,9 @@ int i2c_is_busy(int port)
 	return (IT83XX_I2C_STR(p_ch) & E_HOSTA_BB);
 }
 
-int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
-	     uint8_t *in, int in_size, int flags)
+int chip_i2c_xfer(int port, uint16_t slave_addr_flags,
+		  const uint8_t *out, int out_size,
+		  uint8_t *in, int in_size, int flags)
 {
 	struct i2c_port_data *pd = pdata + port;
 	uint32_t events = 0;
@@ -668,15 +665,21 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 	pd->widx = 0;
 	pd->ridx = 0;
 	pd->err = 0;
-	pd->addr = slave_addr;
+	pd->addr_8bit = I2C_GET_ADDR(slave_addr_flags) << 1;
 
 	/* Make sure we're in a good state to start */
 	if ((flags & I2C_XFER_START) && (i2c_is_busy(port)
 		|| (i2c_get_line_levels(port) != I2C_LINE_IDLE))) {
+
 		/* Attempt to unwedge the port. */
-		i2c_unwedge(port);
+		pd->err = i2c_unwedge(port);
+
 		/* reset i2c port */
 		i2c_reset(port, I2C_RC_NO_IDLE_FOR_START);
+
+		/* Return if port is still wedged */
+		if (pd->err)
+			return pd->err;
 	}
 
 	pd->task_waiting = task_get_current();
@@ -782,7 +785,7 @@ static void i2c_freq_changed(void)
 		freq = i2c_ports[i].kbps;
 		if (i2c_ports[i].port < I2C_STANDARD_PORT_COUNT) {
 			for (f = ARRAY_SIZE(i2c_freq_select) - 1; f >= 0; f--) {
-				if (freq >= i2c_freq_select[f].kpbs) {
+				if (freq >= i2c_freq_select[f].kbps) {
 					IT83XX_SMB_SCLKTS(i2c_ports[i].port) =
 						i2c_freq_select[f].freq_set;
 					break;
@@ -825,7 +828,7 @@ static void i2c_freq_changed(void)
 }
 DECLARE_HOOK(HOOK_FREQ_CHANGE, i2c_freq_changed, HOOK_PRIO_DEFAULT);
 
-static void i2c_init(void)
+void i2c_init(void)
 {
 	int i, p, p_ch;
 
@@ -900,4 +903,3 @@ static void i2c_init(void)
 		i2c_set_timeout(i, 0);
 	}
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);

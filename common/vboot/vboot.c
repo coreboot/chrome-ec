@@ -10,12 +10,14 @@
 #include "battery.h"
 #include "charge_manager.h"
 #include "chipset.h"
+#include "clock.h"
 #include "console.h"
 #include "flash.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "rsa.h"
 #include "rwsig.h"
+#include "stdbool.h"
 #include "sha256.h"
 #include "shared_mem.h"
 #include "system.h"
@@ -31,21 +33,7 @@ static int has_matrix_keyboard(void)
 	return 0;
 }
 
-static int is_efs_supported(void)
-{
-#ifdef CONFIG_VBOOT_EFS
-	return 1;
-#else
-	return 0;
-#endif
-}
-
-static int is_low_power_ap_boot_supported(void)
-{
-	return 0;
-}
-
-static int verify_slot(enum system_image_copy_t slot)
+static int verify_slot(enum ec_image slot)
 {
 	const struct vb21_packed_key *vb21_key;
 	const struct vb21_signature *vb21_sig;
@@ -55,7 +43,7 @@ static int verify_slot(enum system_image_copy_t slot)
 	int len;
 	int rv;
 
-	CPRINTS("Verifying %s", system_image_copy_t_to_string(slot));
+	CPRINTS("Verifying %s", ec_image_to_string(slot));
 
 	vb21_key = (const struct vb21_packed_key *)(
 			CONFIG_MAPPED_STORAGE_BASE +
@@ -69,7 +57,7 @@ static int verify_slot(enum system_image_copy_t slot)
 	key = (const struct rsa_public_key *)
 		((const uint8_t *)vb21_key + vb21_key->key_offset);
 
-	if (slot == SYSTEM_IMAGE_RW_A) {
+	if (slot == EC_IMAGE_RW_A) {
 		data = (const uint8_t *)(CONFIG_MAPPED_STORAGE_BASE +
 				CONFIG_EC_WRITABLE_STORAGE_OFF +
 				CONFIG_RW_A_STORAGE_OFF);
@@ -107,7 +95,7 @@ static int verify_slot(enum system_image_copy_t slot)
 		return EC_ERROR_INVAL;
 	}
 
-	CPRINTS("Verified %s", system_image_copy_t_to_string(slot));
+	CPRINTS("Verified %s", ec_image_to_string(slot));
 
 	return EC_SUCCESS;
 }
@@ -115,7 +103,7 @@ static int verify_slot(enum system_image_copy_t slot)
 static enum ec_status hc_verify_slot(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_efs_verify *p = args->params;
-	enum system_image_copy_t slot;
+	enum ec_image slot;
 
 	switch (p->region) {
 	case EC_FLASH_REGION_ACTIVE:
@@ -133,7 +121,7 @@ DECLARE_HOST_COMMAND(EC_CMD_EFS_VERIFY, hc_verify_slot, EC_VER_MASK(0));
 
 static int verify_and_jump(void)
 {
-	enum system_image_copy_t slot;
+	enum ec_image slot;
 	int rv;
 
 	/* 1. Decide which slot to try */
@@ -156,7 +144,7 @@ static int verify_and_jump(void)
 		 * will catch it and request recovery after a few attempts. */
 		if (system_set_active_copy(slot))
 			CPRINTS("Failed to activate %s",
-				system_image_copy_t_to_string(slot));
+				ec_image_to_string(slot));
 	}
 
 	/* 3. Jump (and reboot) */
@@ -167,25 +155,19 @@ static int verify_and_jump(void)
 }
 
 /* Request more power: charging battery or more powerful AC adapter */
-static void request_power(void)
+__overridable void show_power_shortage(void)
 {
 	CPRINTS("%s", __func__);
 }
 
-static void request_recovery(void)
+__overridable void show_critical_error(void)
 {
 	CPRINTS("%s", __func__);
-	led_critical();
 }
 
-static int is_manual_recovery(void)
-{
-	return host_is_event_set(EC_HOST_EVENT_KEYBOARD_RECOVERY);
-}
+static bool pd_comm_enabled;
 
-static int pd_comm_enabled;
-
-int vboot_need_pd_comm(void)
+bool vboot_allow_usb_pd(void)
 {
 	return pd_comm_enabled;
 }
@@ -201,7 +183,7 @@ void vboot_main(void)
 		 * provide enough power.
 		 */
 		CPRINTS("Already in RW. Wait for power...");
-		request_power();
+		show_power_shortage();
 		return;
 	}
 
@@ -213,14 +195,17 @@ void vboot_main(void)
 		 * though PD communication is enabled.
 		 */
 		CPRINTS("HW-WP not asserted.");
-		request_power();
+		show_power_shortage();
 		return;
 	}
 
-	if (is_manual_recovery()) {
-		CPRINTS("Manual recovery");
+	if (system_is_manual_recovery() ||
+	    (system_get_reset_flags() & EC_RESET_FLAG_STAY_IN_RO)) {
+		if (system_is_manual_recovery())
+			CPRINTS("Manual recovery");
+
 		if (battery_is_present() || has_matrix_keyboard()) {
-			request_power();
+			show_power_shortage();
 			return;
 		}
 		/* We don't request_power because we don't want to assume all
@@ -229,23 +214,15 @@ void vboot_main(void)
 		 * don't gain meaningful advantage on devices without a matrix
 		 * keyboard */
 		CPRINTS("Enable PD comm");
-		pd_comm_enabled = 1;
+		pd_comm_enabled = true;
 		return;
 	}
 
-	if (!is_efs_supported()) {
-		if (is_low_power_ap_boot_supported())
-			/* If a device supports this feature, AP's boot power
-			 * threshold should be set low. That will let EC-RO
-			 * boot AP and softsync take care of RW verification. */
-			return;
-		request_power();
-		return;
-	}
-
+	clock_enable_module(MODULE_FAST_CPU, 1);
 	/* If successful, this won't return. */
 	verify_and_jump();
+	clock_enable_module(MODULE_FAST_CPU, 0);
 
 	/* Failed to jump. Need recovery. */
-	request_recovery();
+	show_critical_error();
 }

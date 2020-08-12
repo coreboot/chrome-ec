@@ -34,12 +34,14 @@ static int has_power(void)
 
 static int raw_read8(const int offset, int *data_ptr)
 {
-	return i2c_read8(I2C_PORT_THERMAL, ADT7481_I2C_ADDR, offset, data_ptr);
+	return i2c_read8(I2C_PORT_THERMAL, ADT7481_I2C_ADDR_FLAGS,
+			 offset, data_ptr);
 }
 
 static int raw_write8(const int offset, int data)
 {
-	return i2c_write8(I2C_PORT_THERMAL, ADT7481_I2C_ADDR, offset, data);
+	return i2c_write8(I2C_PORT_THERMAL, ADT7481_I2C_ADDR_FLAGS,
+			  offset, data);
 }
 
 static int get_temp(const int offset, int *temp_ptr)
@@ -246,16 +248,16 @@ static int print_status(void)
 	ccprintf("\n");
 
 	if (raw_read8(ADT7481_STATUS1_R, &value) == EC_SUCCESS)
-		ccprintf("STATUS1:  %08b\n", value);
+		ccprintf("STATUS1:  %pb\n", BINARY_VALUE(value, 8));
 
 	if (raw_read8(ADT7481_STATUS2_R, &value) == EC_SUCCESS)
-		ccprintf("STATUS2:  %08b\n", value);
+		ccprintf("STATUS2:  %pb\n", BINARY_VALUE(value, 8));
 
 	if (raw_read8(ADT7481_CONFIGURATION1_R, &value) == EC_SUCCESS)
-		ccprintf("CONFIG1: %08b\n", value);
+		ccprintf("CONFIG1: %pb\n", BINARY_VALUE(value, 8));
 
 	if (raw_read8(ADT7481_CONFIGURATION2, &value) == EC_SUCCESS)
-		ccprintf("CONFIG2: %08b\n", value);
+		ccprintf("CONFIG2: %pb\n", BINARY_VALUE(value, 8));
 
 	return EC_SUCCESS;
 }
@@ -305,7 +307,8 @@ static int command_adt7481(int argc, char **argv)
 		rv = raw_read8(offset, &data);
 		if (rv < 0)
 			return rv;
-		ccprintf("Byte at offset 0x%02x is %08b\n", offset, data);
+		ccprintf("Byte at offset 0x%02x is %pb\n",
+			 offset, BINARY_VALUE(data, 8));
 		return rv;
 	}
 

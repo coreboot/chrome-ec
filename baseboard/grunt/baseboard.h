@@ -8,6 +8,11 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#if (defined(VARIANT_GRUNT_TCPC_0_ANX3429) \
+	+ defined(VARIANT_GRUNT_TCPC_0_ANX3447)) != 1
+#error Must choose VARIANT_GRUNT_TCPC_0_ANX3429 or VARIANT_GRUNT_TCPC_0_ANX3447
+#endif
+
 /* NPCX7 config */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 #define NPCX_TACH_SEL2    0  /* No tach. */
@@ -29,21 +34,23 @@
 #define CONFIG_ADC
 #define CONFIG_BACKLIGHT_LID
 #define CONFIG_BACKLIGHT_LID_ACTIVE_LOW
-#define CONFIG_BOARD_VERSION_GPIO
-#define CONFIG_EC_FEATURE_BOARD_OVERRIDE
+#define CONFIG_BOARD_VERSION_CUSTOM
+#define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_HOSTCMD_LPC
 #define CONFIG_HOSTCMD_SKUID
-#define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_I2C
+#define CONFIG_I2C_BUS_MAY_BE_UNPOWERED
 #define CONFIG_I2C_MASTER
+#define CONFIG_LOW_POWER_IDLE
+#define CONFIG_LOW_POWER_S0
+#define CONFIG_LTO
 #define CONFIG_PWM
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR_NCP15WB
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VOLUME_BUTTONS
-#define CONFIG_LTO
 
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_FUEL_GAUGE
@@ -51,9 +58,8 @@
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_SMART
 
-#define CONFIG_BC12_DETECT_BQ24392
+#define CONFIG_BC12_DETECT_MAX14637
 #define CONFIG_CHARGER
-#define CONFIG_CHARGER_V2
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 
@@ -69,7 +75,6 @@
  */
 #define CONFIG_CHARGER_INPUT_CURRENT 512
 #define CONFIG_CHARGER_ISL9238
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 1
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 #define CONFIG_CHARGE_RAMP_HW
@@ -89,31 +94,43 @@
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 
+/*
+ * On power-on, H1 releases the EC from reset but then quickly asserts and
+ * releases the reset a second time. This means the EC sees 2 resets:
+ * (1) power-on reset, (2) reset-pin reset. This config will
+ * allow the second reset to be treated as a power-on.
+ */
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
+
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
-#define CONFIG_KEYBOARD_REFRESH_ROW3
-#define CONFIG_KEYBOARD_IGNORE_REFRESH_BOOT_KEY
-#define CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI3
 
 #define CONFIG_USB_POWER_DELIVERY
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_USB_PD_TCPMV1
+#define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_DISCHARGE_PPC
+#define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC_LOW_POWER
+#ifdef VARIANT_GRUNT_TCPC_0_ANX3429
 #define CONFIG_USB_PD_TCPM_ANX3429
+#elif defined(VARIANT_GRUNT_TCPC_0_ANX3447)
+#define CONFIG_USB_PD_TCPM_ANX7447
+#endif
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_PS8751
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
 #define CONFIG_USBC_PPC_SN5S330
+#define CONFIG_USBC_PPC_DEDICATED_INT
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
@@ -123,57 +140,58 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 #define USB_PORT_COUNT 2
 
-/* TODO(b/69683108): Use correct PD delay values */
-#define PD_POWER_SUPPLY_TURN_ON_DELAY	30000  /* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000 /* us */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 #define PD_VCONN_SWAP_DELAY		5000 /* us */
 
-/* TODO(b/69683178): Use correct PD power values */
 #define PD_OPERATING_POWER_MW	15000
 #define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
+
+/*
+ * Minimum conditions to start AP and perform swsync.  Note that when the
+ * charger is connected via USB-PD analog signaling, the boot will proceed
+ * regardless.
+ */
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 3
+
+/*
+ * Require PD negotiation to be complete when we are in a low-battery condition
+ * prior to releasing depthcharge to the kernel.
+ */
+#define CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW 15001
+#define CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT 3
+
+/* Increase length of history buffer for port80 messages. */
+#undef CONFIG_PORT80_HISTORY_LEN
+#define CONFIG_PORT80_HISTORY_LEN 256
 
 #define I2C_PORT_BATTERY	I2C_PORT_POWER
 #define I2C_PORT_CHARGER	I2C_PORT_POWER
 #define I2C_PORT_POWER		NPCX_I2C_PORT0_0
 #define I2C_PORT_TCPC0		NPCX_I2C_PORT1_0
 #define I2C_PORT_TCPC1		NPCX_I2C_PORT2_0
-#define I2C_PORT_THERMAL	NPCX_I2C_PORT3_0
+#define I2C_PORT_THERMAL_AP	NPCX_I2C_PORT3_0
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT7_0
 /* Accelerometer and Gyroscope are the same device. */
 #define I2C_PORT_ACCEL		I2C_PORT_SENSOR
 
 /* Sensors */
 #define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_HOST_EVENT
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT TASK_EVENT_CUSTOM(4)
-#define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_ACCEL_KX022
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-#define CONFIG_TABLET_MODE
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_TABLET_MODE
-#define CONFIG_LID_ANGLE_INVALID_CHECK
-#define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
-/*
- * Slew rate on the PP1800_SENSOR load switch requires a short delay on startup.
- */
-#undef  CONFIG_MOTION_SENSE_RESUME_DELAY_US
-#define CONFIG_MOTION_SENSE_RESUME_DELAY_US (10 * MSEC)
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 /* Thermal */
 #define CONFIG_TEMP_SENSOR_SB_TSI
 
+#ifndef VARIANT_GRUNT_NO_SENSORS
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
 /* FIFO size is a power of 2. */
-#define CONFIG_ACCEL_FIFO 1024  /* TODO(teravest): Check this value. */
-
+#define CONFIG_ACCEL_FIFO_SIZE 256
 /* Depends on how fast the AP boots and typical ODRs. */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+#endif /* VARIANT_GRUNT_NO_SENSORS */
 
 #define USB_PD_PORT_ANX74XX	0
 #define USB_PD_PORT_PS8751	1
@@ -212,6 +230,7 @@ enum sensor_id {
 	LID_ACCEL,
 	BASE_ACCEL,
 	BASE_GYRO,
+	SENSOR_COUNT,
 };
 
 /*
@@ -229,12 +248,21 @@ enum sensor_id {
  * Boards within the Grunt family may need to modify this definition at
  * board_init() time.
  */
-extern matrix_3x3_t grunt_base_standard_ref;
+extern mat33_fp_t grunt_base_standard_ref;
 
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
 
 void board_reset_pd_mcu(void);
+
+/* Common definition for the USB PD interrupt handlers. */
+void tcpc_alert_event(enum gpio_signal signal);
+void ppc_interrupt(enum gpio_signal signal);
+void anx74xx_cable_det_interrupt(enum gpio_signal signal);
+
+int board_get_version(void);
+int board_is_convertible(void);
+void board_update_sensor_config_from_sku(void);
 
 #endif /* !__ASSEMBLER__ */
 

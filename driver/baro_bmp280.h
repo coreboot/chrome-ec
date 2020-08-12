@@ -74,8 +74,9 @@
  * Bit 1 of 7-bit address: 0 - If SDO is connected to GND
  * Bit 1 of 7-bit address: 1 - If SDO is connected to Vddio
  */
-#define BMP280_I2C_ADDRESS1		((0x76) << 1)
-#define BMP280_I2C_ADDRESS2		((0x77) << 1)
+#define BMP280_I2C_ADDRESS1_FLAGS	0x76
+#define BMP280_I2C_ADDRESS2_FLAGS	0x77
+
 /*
  *     CHIP ID
  */
@@ -144,8 +145,8 @@
  */
 #define BMP280_COMPUTE_TIME \
 	((T_INIT_MAX + T_MEASURE_PER_OSRS_MAX * \
-	  (((1 << BMP280_OVERSAMP_TEMP) >> 1) + \
-	   ((1 << BMP280_OVERSAMP_PRES) >> 1)) + \
+	  ((BIT(BMP280_OVERSAMP_TEMP) >> 1) + \
+	   (BIT(BMP280_OVERSAMP_PRES) >> 1)) + \
 	  (BMP280_OVERSAMP_PRES ? T_SETUP_PRESSURE_MAX : 0) + 15) / 16)
 
 /*
@@ -166,6 +167,9 @@
  */
 #define BMP280_BARO_MIN_FREQ  75000
 #define BMP280_BARO_MAX_FREQ  87000
+#if (CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ <= BMP280_BARO_MAX_FREQ)
+#error "EC too slow for accelerometer"
+#endif
 
 /**************************************************************/
 /*	STRUCTURE and ENUM DEFINITIONS                        */

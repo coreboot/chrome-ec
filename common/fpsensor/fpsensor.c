@@ -11,6 +11,7 @@
 #include "ec_commands.h"
 #include "fpsensor.h"
 #include "fpsensor_crypto.h"
+#include "fpsensor_detect.h"
 #include "fpsensor_private.h"
 #include "fpsensor_state.h"
 #include "gpio.h"
@@ -108,7 +109,7 @@ static uint32_t fp_process_enroll(void)
 	if (res < 0)
 		return EC_MKBP_FP_ENROLL
 		     | EC_MKBP_FP_ERRCODE(EC_MKBP_FP_ERR_ENROLL_INTERNAL);
-	templ_dirty |= (1 << templ_valid);
+	templ_dirty |= BIT(templ_valid);
 	if (percent == 100) {
 		res = fp_enrollment_finish(fp_template[templ_valid]);
 		if (res) {
@@ -199,9 +200,8 @@ void fp_task(void)
 {
 	int timeout_us = -1;
 
-	/* configure the SPI controller (also ensure that CS_N is high) */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
-	spi_enable(CONFIG_SPI_FP_PORT, 1);
+	CPRINTS("FP_SENSOR_SEL: %s",
+		fp_sensor_type_to_str(get_fp_sensor_type()));
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	/* Reset and initialize the sensor IC */
@@ -475,7 +475,7 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 			CPRINTS("fgr%d: Failed to encrypt template", fgr);
 			return EC_RES_UNAVAILABLE;
 		}
-		templ_dirty &= ~(1 << fgr);
+		templ_dirty &= ~BIT(fgr);
 	}
 	memcpy(out, fp_enc_buffer + offset, size);
 	args->response_size = size;
@@ -650,6 +650,23 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_TEMPLATE, fp_command_template, EC_VER_MASK(0));
  * TMPF=$(mktemp)
  * ascii-xfr -rdv ${TMPF}
  * display ${TMPF}
+ *
+ * Alternative (if you're using screen as your terminal):
+ *
+ * From *outside* the chroot:
+ *
+ * Install ascii-xfr: sudo apt-get install minicom
+ * Install imagemagick: sudo apt-get install imagemagick
+ *
+ * Add the following to your ${HOME}/.screenrc:
+ *
+ * zmodem catch
+ * zmodem recvcmd '!!! bash -c "ascii-xfr -rdv /tmp/finger.pgm && display /tmp/finger.pgm"'
+ *
+ * From *outside the chroot*, use screen to connect to UART console:
+ *
+ * sudo screen -c ${HOME}/.screenrc /dev/pts/NN 115200
+ *
  */
 static void upload_pgm_image(uint8_t *frame)
 {
@@ -657,20 +674,20 @@ static void upload_pgm_image(uint8_t *frame)
 	uint8_t *ptr = frame;
 
 	/* fake Z-modem ZRQINIT signature */
-	ccprintf("#IGNORE for ZModem\r**\030B00");
-	msleep(100); /* let the download program start */
+	CPRINTF("#IGNORE for ZModem\r**\030B00");
+	msleep(2000); /* let the download program start */
 	/* Print 8-bpp PGM ASCII header */
-	ccprintf("P2\n%d %d\n255\n", FP_SENSOR_RES_X, FP_SENSOR_RES_Y);
+	CPRINTF("P2\n%d %d\n255\n", FP_SENSOR_RES_X, FP_SENSOR_RES_Y);
 
 	for (y = 0; y < FP_SENSOR_RES_Y; y++) {
 		watchdog_reload();
 		for (x = 0; x < FP_SENSOR_RES_X; x++, ptr++)
-			ccprintf("%d ", *ptr);
-		ccputs("\n");
+			CPRINTF("%d ", *ptr);
+		CPRINTF("\n");
 		cflush();
 	}
 
-	ccprintf("\x04"); /* End Of Transmission */
+	CPRINTF("\x04"); /* End Of Transmission */
 }
 
 static enum ec_error_list fp_console_action(uint32_t mode)
@@ -694,7 +711,7 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 
 	while (tries--) {
 		if (!(sensor_mode & FP_MODE_ANY_CAPTURE)) {
-			ccprintf("done (events:%x)\n", fp_events);
+			CPRINTS("done (events:%x)", fp_events);
 			return 0;
 		}
 		usleep(100 * MSEC);
@@ -708,6 +725,10 @@ int command_fpcapture(int argc, char **argv)
 	uint32_t mode;
 	enum ec_error_list rc;
 
+	/*
+	 * TODO(b/142944002): Remove this redundant check for system_is_locked
+	 * once we have unit-tests/integration-tests in place.
+	 */
 	if (system_is_locked())
 		return EC_ERROR_ACCESS_DENIED;
 
@@ -727,7 +748,9 @@ int command_fpcapture(int argc, char **argv)
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND(fpcapture, command_fpcapture, "", "");
+DECLARE_CONSOLE_COMMAND_FLAGS(fpcapture, command_fpcapture, NULL,
+			      "Capture fingerprint in PGM format",
+			      CMD_FLAG_RESTRICTED);
 
 int command_fpenroll(int argc, char **argv)
 {
@@ -737,6 +760,10 @@ int command_fpenroll(int argc, char **argv)
 	static const char * const enroll_str[] = {"OK", "Low Quality",
 						  "Immobile", "Low Coverage"};
 
+	/*
+	 * TODO(b/142944002): Remove this redundant check for system_is_locked
+	 * once we have unit-tests/integration-tests in place.
+	 */
 	if (system_is_locked())
 		return EC_ERROR_ACCESS_DENIED;
 
@@ -749,8 +776,8 @@ int command_fpenroll(int argc, char **argv)
 			break;
 		event = atomic_read_clear(&fp_events);
 		percent = EC_MKBP_FP_ENROLL_PROGRESS(event);
-		ccprintf("Enroll capture: %s (%d%%)\n",
-			 enroll_str[EC_MKBP_FP_ERRCODE(event) & 3], percent);
+		CPRINTS("Enroll capture: %s (%d%%)",
+			enroll_str[EC_MKBP_FP_ERRCODE(event) & 3], percent);
 		/* wait for finger release between captures */
 		sensor_mode = FP_MODE_ENROLL_SESSION | FP_MODE_FINGER_UP;
 		task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_UPDATE_CONFIG, 0);
@@ -762,7 +789,9 @@ int command_fpenroll(int argc, char **argv)
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND(fpenroll, command_fpenroll, "", "");
+DECLARE_CONSOLE_COMMAND_FLAGS(fpenroll, command_fpenroll, NULL,
+			      "Enroll a new fingerprint",
+			      CMD_FLAG_RESTRICTED);
 
 
 int command_fpmatch(int argc, char **argv)
@@ -773,14 +802,15 @@ int command_fpmatch(int argc, char **argv)
 	if (rc == EC_SUCCESS && event & EC_MKBP_FP_MATCH) {
 		uint32_t errcode = EC_MKBP_FP_ERRCODE(event);
 
-		ccprintf("Match: %s (%d)\n",
-			 errcode & EC_MKBP_FP_ERR_MATCH_YES ? "YES" : "NO",
-			 errcode);
+		CPRINTS("Match: %s (%d)",
+			errcode & EC_MKBP_FP_ERR_MATCH_YES ? "YES" : "NO",
+			errcode);
 	}
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND(fpmatch, command_fpmatch, "", "");
+DECLARE_CONSOLE_COMMAND(fpmatch, command_fpmatch, NULL,
+			"Run match algorithm against finger");
 
 int command_fpclear(int argc, char **argv)
 {
@@ -797,6 +827,7 @@ int command_fpclear(int argc, char **argv)
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND(fpclear, command_fpclear, "", "");
+DECLARE_CONSOLE_COMMAND(fpclear, command_fpclear, NULL,
+			"Clear fingerprint sensor context");
 
 #endif /* CONFIG_CMD_FPSENSOR_DEBUG */

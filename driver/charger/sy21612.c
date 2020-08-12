@@ -22,7 +22,7 @@ static int sy21612_clear_set_reg(int reg, int clear, int set)
 {
 	int val, old_val, rv;
 
-	rv = i2c_read8(I2C_PORT_SY21612, SY21612_ADDR, reg, &old_val);
+	rv = i2c_read8(I2C_PORT_SY21612, SY21612_ADDR_FLAGS, reg, &old_val);
 	if (rv)
 		return rv;
 
@@ -31,14 +31,15 @@ static int sy21612_clear_set_reg(int reg, int clear, int set)
 	val |= set;
 
 	if (val != old_val || clear || set)
-		rv = i2c_write8(I2C_PORT_SY21612, SY21612_ADDR, reg, val);
+		rv = i2c_write8(I2C_PORT_SY21612, SY21612_ADDR_FLAGS,
+				reg, val);
 
 	return rv;
 }
 
 static int sy21612_read(int reg, int *val)
 {
-	return i2c_read8(I2C_PORT_SY21612, SY21612_ADDR, reg, val);
+	return i2c_read8(I2C_PORT_SY21612, SY21612_ADDR_FLAGS, reg, val);
 }
 
 int sy21612_enable_regulator(int enable)
@@ -198,7 +199,7 @@ static int command_sy21612(int argc, char **argv)
 		if (rv)
 			ccprintf(" x (%d)\n", rv);
 		else
-			ccprintf("%02x - %08b\n", val, val);
+			ccprintf("%02x - %pb\n", val, BINARY_VALUE(val, 8));
 	}
 
 	ccprintf("vbat voltage: %d mV\n", sy21612_get_vbat_voltage());

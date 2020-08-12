@@ -13,9 +13,9 @@
 #include "charge_state.h"
 #include "chipset.h"
 #include "console.h"
-#include "driver/accelgyro_bmi160.h"
 #include "driver/als_opt3001.h"
 #include "driver/pmic_bd99992gw.h"
+#include "driver/charger/isl923x.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
@@ -51,33 +51,23 @@
 
 static void tcpc_alert_event(enum gpio_signal signal)
 {
-	if ((signal == GPIO_USB_C0_PD_INT_ODL) &&
-	    !gpio_get_level(GPIO_USB_C0_PD_RST_L))
-		return;
-	else if ((signal == GPIO_USB_C1_PD_INT_ODL) &&
-		 !gpio_get_level(GPIO_USB_C1_PD_RST_L))
-		return;
+	int port = -1;
 
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	switch (signal) {
+	case GPIO_USB_C0_PD_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_PD_INT_ODL:
+		port = 1;
+		break;
+	default:
+		return;
+	}
+
+	schedule_deferred_pd_interrupt(port);
 }
 
 #include "gpio_list.h"
-
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-	{GPIO_SLP_S0_L,
-	 POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-	 "SLP_S0_DEASSERTED"},
-	{VW_SLP_S3_L,		POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{VW_SLP_S4_L,		POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_PCH_SLP_SUS_L,	POWER_SIGNAL_ACTIVE_HIGH, "SLP_SUS_DEASSERTED"},
-	{GPIO_RSMRST_L_PGOOD,	POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L_PGOOD"},
-	{GPIO_PMIC_DPWROK,	POWER_SIGNAL_ACTIVE_HIGH, "PMIC_DPWROK"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* Keyboard scan. Increase output_settle_us to 80us from default 50us. */
 struct keyboard_scan_config keyscan_config = {
@@ -113,9 +103,9 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* Hibernate wake configuration */
 const enum gpio_signal hibernate_wake_pins[] = {
-	GPIO_AC_PRESENT,
+	GPIO_ROP_EC_ACOK,
 	GPIO_LID_OPEN,
-	GPIO_POWER_BUTTON_L,
+	GPIO_MECH_PWR_BTN_ODL,
 };
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
@@ -151,45 +141,62 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 const struct i2c_port_t i2c_ports[]  = {
 	{"power",   I2C_PORT_POWER,   100,
 	 GPIO_EC_I2C0_POWER_SCL,      GPIO_EC_I2C0_POWER_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0,   400,
+	{"tcpc0",   I2C_PORT_TCPC0,   1000,
 	 GPIO_EC_I2C1_USB_C0_SCL,     GPIO_EC_I2C1_USB_C0_SDA},
-	{"tcpc1",   I2C_PORT_TCPC1,   400,
+	{"tcpc1",   I2C_PORT_TCPC1,   1000,
 	 GPIO_EC_I2C2_USB_C1_SCL,     GPIO_EC_I2C2_USB_C1_SDA},
 	{"sensor",  I2C_PORT_SENSOR,  100,
 	 GPIO_EC_I2C3_SENSOR_3V3_SCL, GPIO_EC_I2C3_SENSOR_3V3_SDA},
 	{"battery", I2C_PORT_BATTERY, 100,
 	 GPIO_EC_I2C4_BATTERY_SCL,    GPIO_EC_I2C4_BATTERY_SDA},
-	{"gyro",    I2C_PORT_GYRO,    100,
-	 GPIO_EC_I2C5_GYRO_SCL,       GPIO_EC_I2C5_GYRO_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-/* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+/* Charger Chips */
+const struct charger_config_t chg_chips[] = {
 	{
-		/* left port */
-		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = I2C_ADDR_TCPC,
-		.drv = &ps8xxx_tcpm_drv,
-		.pol = TCPC_ALERT_ACTIVE_LOW
-	},
-	{
-		/* right port */
-		.i2c_host_port = I2C_PORT_TCPC1,
-		.i2c_slave_addr = I2C_ADDR_TCPC,
-		.drv = &ps8xxx_tcpm_drv,
-		.pol = TCPC_ALERT_ACTIVE_LOW
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
+/* TCPC mux configuration */
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0,
+		/* left port */
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC0,
+			.addr_flags = I2C_ADDR_TCPC_FLAGS,
+		},
+		.drv = &ps8xxx_tcpm_drv,
+		/* Alert is active-low, push-pull */
+		.flags = 0,
+	},
+	{
+		/* right port */
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC1,
+			.addr_flags = I2C_ADDR_TCPC_FLAGS,
+		},
+		.drv = &ps8xxx_tcpm_drv,
+		/* Alert is active-low, push-pull */
+		.flags = 0,
+	},
+};
+
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.usb_port = 0,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
 	{
-		.port_addr = 1,
+		.usb_port = 1,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
@@ -204,8 +211,6 @@ void board_reset_pd_mcu(void)
 
 void board_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image())
 		board_reset_pd_mcu();
@@ -217,11 +222,8 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
@@ -243,17 +245,16 @@ uint16_t tcpc_get_alert_status(void)
 }
 
 const struct temp_sensor_t temp_sensors[] = {
-	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_get_battery_temp, 0, 4},
+	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_get_battery_temp, 0},
 	/* BD99992GW temp sensors are only readable in S0 */
 	{"Ambient", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM0, 4},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM0},
 	{"Charger", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM1, 4},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM1},
 	{"DRAM", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM2, 4},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM2},
 	{"eMMC", TEMP_SENSOR_TYPE_BOARD, bd99992gw_get_val,
-	 BD99992GW_ADC_CHANNEL_SYSTHERM3, 4},
-	{"gyro", TEMP_SENSOR_TYPE_BOARD, bmi160_get_sensor_temp, BASE_GYRO, 1},
+	 BD99992GW_ADC_CHANNEL_SYSTHERM3},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -269,29 +270,34 @@ static void board_report_pmic_fault(const char *str)
 	uint32_t info;
 
 	/* RESETIRQ1 -- Bit 4: VRFAULT */
-	if (i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x8, &vrfault)
-	    != EC_SUCCESS)
+	if (i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		      BD99992GW_REG_RESETIRQ1, &vrfault) != EC_SUCCESS)
 		return;
 
-	if (!(vrfault & (1 << 4)))
+	if (!(vrfault & BIT(4)))
 		return;
 
 	/* VRFAULT has occurred, print VRFAULT status bits. */
 
 	/* PWRSTAT1 */
-	i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x16, &pwrstat1);
+	i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		  BD99992GW_REG_PWRSTAT1, &pwrstat1);
 
 	/* PWRSTAT2 */
-	i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x17, &pwrstat2);
+	i2c_read8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		  BD99992GW_REG_PWRSTAT2, &pwrstat2);
 
 	CPRINTS("PMIC VRFAULT: %s", str);
 	CPRINTS("PMIC VRFAULT: PWRSTAT1=0x%02x PWRSTAT2=0x%02x", pwrstat1,
 		pwrstat2);
 
 	/* Clear all faults -- Write 1 to clear. */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x8, (1 << 4));
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x16, pwrstat1);
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x17, pwrstat2);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_RESETIRQ1, BIT(4));
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_PWRSTAT1, pwrstat1);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_PWRSTAT2, pwrstat2);
 
 	/*
 	 * Status of the fault registers can be checked in the OS by looking at
@@ -306,11 +312,12 @@ static void board_pmic_disable_slp_s0_vr_decay(void)
 	/*
 	 * VCCIOCNT:
 	 * Bit 6    (0)   - Disable decay of VCCIO on SLP_S0# assertion
-	 * Bits 5:4 (00)  - Nominal output voltage: 0.850V
+	 * Bits 5:4 (11)  - Nominal output voltage: 0.850V
 	 * Bits 3:2 (10)  - VR set to AUTO on SLP_S0# de-assertion
 	 * Bits 1:0 (10)  - VR set to AUTO operating mode
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x30, 0x3a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_VCCIOCNT, 0x3a);
 
 	/*
 	 * V18ACNT:
@@ -319,25 +326,18 @@ static void board_pmic_disable_slp_s0_vr_decay(void)
 	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
 	 * Bits 1:0 (10) - VR set to AUTO operating mode
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x34, 0x2a);
-
-	/*
-	 * V100ACNT:
-	 * Bits 7:6 (00) - Disable low power mode on SLP_S0# assertion
-	 * Bits 5:4 (01) - Nominal voltage 1.0V
-	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
-	 * Bits 1:0 (10) - VR set to AUTO operating mode
-	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x37, 0x1a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_V18ACNT, 0x2a);
 
 	/*
 	 * V085ACNT:
 	 * Bits 7:6 (00) - Disable low power mode on SLP_S0# assertion
-	 * Bits 5:4 (11) - Nominal voltage 0.85V
+	 * Bits 5:4 (10) - Nominal voltage 0.85V
 	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
 	 * Bits 1:0 (10) - VR set to AUTO operating mode
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x2a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_V085ACNT, 0x2a);
 }
 
 static void board_pmic_enable_slp_s0_vr_decay(void)
@@ -345,11 +345,12 @@ static void board_pmic_enable_slp_s0_vr_decay(void)
 	/*
 	 * VCCIOCNT:
 	 * Bit 6    (1)   - Enable decay of VCCIO on SLP_S0# assertion
-	 * Bits 5:4 (00)  - Nominal output voltage: 0.850V
+	 * Bits 5:4 (11)  - Nominal output voltage: 0.850V
 	 * Bits 3:2 (10)  - VR set to AUTO on SLP_S0# de-assertion
 	 * Bits 1:0 (10)  - VR set to AUTO operating mode
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x30, 0x7a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_VCCIOCNT, 0x7a);
 
 	/*
 	 * V18ACNT:
@@ -358,28 +359,22 @@ static void board_pmic_enable_slp_s0_vr_decay(void)
 	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
 	 * Bits 1:0 (10) - VR set to AUTO operating mode
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x34, 0x6a);
-
-	/*
-	 * V100ACNT:
-	 * Bits 7:6 (01) - Enable low power mode on SLP_S0# assertion
-	 * Bits 5:4 (01) - Nominal voltage 1.0V
-	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
-	 * Bits 1:0 (10) - VR set to AUTO operating mode
-	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x37, 0x5a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_V18ACNT, 0x6a);
 
 	/*
 	 * V085ACNT:
 	 * Bits 7:6 (01) - Enable low power mode on SLP_S0# assertion
-	 * Bits 5:4 (11) - Nominal voltage 0.85V
+	 * Bits 5:4 (10) - Nominal voltage 0.85V
 	 * Bits 3:2 (10) - VR set to AUTO on SLP_S0# de-assertion
 	 * Bits 1:0 (10) - VR set to AUTO operating mode
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x6a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_V085ACNT, 0x6a);
 }
 
-void power_board_handle_host_sleep_event(enum host_sleep_event state)
+__override void power_board_handle_host_sleep_event(
+		enum host_sleep_event state)
 {
 	if (state == HOST_SLEEP_EVENT_S0IX_SUSPEND)
 		board_pmic_enable_slp_s0_vr_decay();
@@ -392,28 +387,49 @@ static void board_pmic_init(void)
 	board_report_pmic_fault("SYSJUMP");
 
 	/* Clear power source events */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x04, 0xff);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_PWRSRCINT, 0xff);
 
 	/* Disable power button shutdown timer */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x14, 0x00);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_PBCONFIG, 0x00);
 
 	if (system_jumped_to_this_image())
 		return;
 
-	/* DISCHGCNT2 - enable 100 ohm discharge on V3.3A and V1.8A */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3d, 0x05);
-
-	/* DISCHGCNT3 - enable 100 ohm discharge on V1.00A */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3e, 0x04);
+	/* DISCHGCNT1 - enable 100 ohm discharge on VCCIO */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_DISCHGCNT1, 0x01);
 
 	/*
-	 * Set V085ACNT / V0.85A Control Register:
-	 * Nominal output = 0.85V.
+	 * DISCHGCNT2 - enable 100 ohm discharge on
+	 * V5.0A, V3.3DSW, V3.3A and V1.8A
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x2a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_DISCHGCNT2, 0x55);
+
+	/*
+	 * DISCHGCNT3 - enable 500 ohm discharge on
+	 * V1.8U_2.5U
+	 * DISCHGCNT3 - enable 100 ohm discharge on
+	 * V12U, V1.00A, V0.85A
+	 */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_DISCHGCNT3, 0xd5);
+
+	/* DISCHGCNT4 - enable 100 ohm discharge on V33S, V18S, V100S */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_DISCHGCNT4, 0x15);
 
 	/* VRMODECTRL - disable low-power mode for all rails */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x1f);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_VRMODECTRL, 0x1f);
+
+	/* V5ADS3CNT - boost V5A_DS3 by 2% */
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+		   BD99992GW_REG_V5ADS3CNT, 0x1a);
+
+	board_pmic_disable_slp_s0_vr_decay();
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
 
@@ -433,7 +449,7 @@ void board_hibernate(void)
 	system_enter_psl_mode();
 
 	/* Cut off DSW power via the ROP PMIC. */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992,
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
 		   BD99992GW_REG_SDWNCTRL, BD99992GW_SDWNCTRL_SWDN);
 
 	/* Wait for power to be cut. */
@@ -444,11 +460,16 @@ void board_hibernate(void)
 /* Initialize board. */
 static void board_init(void)
 {
+	if (system_get_board_version() < ATLAS_REV_FIXED_EC_WP) {
+		int dflags;
+
+		CPRINTS("Applying EC_WP_L workaround");
+		dflags = gpio_get_default_flags(GPIO_EC_WP_L);
+		gpio_set_flags(GPIO_EC_WP_L, dflags | GPIO_PULL_UP);
+	}
+
 	/* Provide AC status to the PCH */
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
-
-	/* Enable interrupts from BMI160 sensor. */
-	gpio_enable_interrupt(GPIO_ACCELGYRO3_INT_L);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -470,17 +491,17 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* charge port is a physical port */
 	int is_real_port = (charge_port >= 0 &&
-			    charge_port < CONFIG_USB_PD_PORT_COUNT);
+			    charge_port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/* check if we are sourcing VBUS on the port */
 	int is_source = gpio_get_level(charge_port == 0 ?
 			GPIO_USB_C0_5V_EN : GPIO_USB_C1_5V_EN);
 
 	if (is_real_port && is_source) {
-		CPRINTF("No charging on source port p%d is ", charge_port);
+		CPRINTS("No charging from p%d", charge_port);
 		return EC_ERROR_INVAL;
 	}
 
-	CPRINTF("New chg p%d", charge_port);
+	CPRINTS("New chg p%d", charge_port);
 
 	if (charge_port == CHARGE_PORT_NONE) {
 		/* Disable both ports */
@@ -498,6 +519,23 @@ int board_set_active_charge_port(int charge_port)
 	return EC_SUCCESS;
 }
 
+/*
+ * Limit the input current to 95% negotiated limit,
+ * to account for the charger chip margin.
+ */
+
+static int charger_derate(int current)
+{
+	return current * 95 / 100;
+}
+
+static void board_charger_init(void)
+{
+	charger_set_input_current(CHARGER_SOLO, charger_derate
+				  (PD_MAX_CURRENT_MA));
+}
+DECLARE_HOOK(HOOK_INIT, board_charger_init, HOOK_PRIO_DEFAULT);
+
 /**
  * Set the charge limit based upon desired maximum.
  *
@@ -509,25 +547,19 @@ int board_set_active_charge_port(int charge_port)
 void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
 {
-	/*
-	 * Limit the input current to 95% negotiated limit,
-	 * to account for the charger chip margin.
-	 */
-	charge_ma = (charge_ma * 95) / 100;
+	charge_ma = charger_derate(charge_ma);
 	charge_set_input_current_limit(MAX(charge_ma,
 				   CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 static void board_chipset_suspend(void)
 {
-	gpio_set_level(GPIO_ENABLE_BACKLIGHT, 0);
 	gpio_set_level(GPIO_KBD_BL_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
 static void board_chipset_resume(void)
 {
-	gpio_set_level(GPIO_ENABLE_BACKLIGHT, 1);
 	gpio_set_level(GPIO_KBD_BL_EN, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
@@ -560,65 +592,13 @@ int board_get_version(void)
 	return ver;
 }
 
-/* Base Sensor mutex */
-static struct mutex g_base_mutex;
-
-static struct bmi160_drv_data_t g_bmi160_data;
 static struct opt3001_drv_data_t g_opt3001_data = {
 	.scale = 1,
 	.uscale = 0,
 	.offset = 0,
 };
 
-/* Matrix to rotate accelrator into standard reference frame */
-const matrix_3x3_t base_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0,  FLOAT_TO_FP(1), 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
-};
-
 struct motion_sensor_t motion_sensors[] = {
-	[BASE_ACCEL] = {
-		.name = "Base Accel",
-		.active_mask = SENSOR_ACTIVE_S0_S3_S5,
-		.chip = MOTIONSENSE_CHIP_BMI160,
-		.type = MOTIONSENSE_TYPE_ACCEL,
-		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &bmi160_drv,
-		.mutex = &g_base_mutex,
-		.drv_data = &g_bmi160_data,
-		.port = I2C_PORT_GYRO,
-		.addr = BMI160_ADDR0,
-		.rot_standard_ref = &base_standard_ref,
-		.default_range = 2,  /* g, enough for laptop. */
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
-		.config = {
-			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 10000 | ROUND_UP_FLAG,
-				.ec_rate = 100 * MSEC,
-			},
-			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
-			},
-		},
-	},
-	[BASE_GYRO] = {
-		.name = "Base Gyro",
-		.active_mask = SENSOR_ACTIVE_S0_S3_S5,
-		.chip = MOTIONSENSE_CHIP_BMI160,
-		.type = MOTIONSENSE_TYPE_GYRO,
-		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &bmi160_drv,
-		.mutex = &g_base_mutex,
-		.drv_data = &g_bmi160_data,
-		.port = I2C_PORT_GYRO,
-		.addr = BMI160_ADDR0,
-		.default_range = 1000, /* dps */
-		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
-	},
 	[LID_ALS] = {
 		.name = "Light",
 		.active_mask = SENSOR_ACTIVE_S0,
@@ -628,9 +608,9 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &opt3001_drv,
 		.drv_data = &g_opt3001_data,
 		.port = I2C_PORT_SENSOR,
-		.addr = OPT3001_I2C_ADDR,
+		.i2c_spi_addr_flags = OPT3001_I2C_ADDR_FLAGS,
 		.rot_standard_ref = NULL,
-		.default_range = 0x10000, /* scale = 1; uscale = 0 */
+		.default_range = 0x2b11a1, /* from nocturne */
 		.min_frequency = OPT3001_LIGHT_MIN_FREQ,
 		.max_frequency = OPT3001_LIGHT_MAX_FREQ,
 		.config = {

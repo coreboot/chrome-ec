@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -32,14 +32,14 @@
 void fan_set_enabled(int ch, int enabled)
 {
 	if (enabled)
-		LM4_FAN_FANCTL |= (1 << ch);
+		LM4_FAN_FANCTL |= BIT(ch);
 	else
-		LM4_FAN_FANCTL &= ~(1 << ch);
+		LM4_FAN_FANCTL &= ~BIT(ch);
 }
 
 int fan_get_enabled(int ch)
 {
-	return (LM4_FAN_FANCTL & (1 << ch)) ? 1 : 0;
+	return (LM4_FAN_FANCTL & BIT(ch)) ? 1 : 0;
 }
 
 void fan_set_duty(int ch, int percent)

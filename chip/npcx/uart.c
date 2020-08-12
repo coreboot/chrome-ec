@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -123,10 +123,14 @@ void uart_tx_start(void)
 
 void uart_tx_stop(void)
 {
+#ifdef NPCX_UART_FIFO_SUPPORT
+	uartn_tx_stop(CONSOLE_UART, 0);
+#else
 	uint8_t sleep_ena;
 
 	sleep_ena = (pad == UART_DEFAULT_PAD) ? 1 : 0;
 	uartn_tx_stop(CONSOLE_UART, sleep_ena);
+#endif
 }
 
 void uart_tx_flush(void)
@@ -194,6 +198,14 @@ void uart_ec_interrupt(void)
 				uart_tx_stop();
 		}
 		return;
+	}
+#endif
+#ifdef NPCX_UART_FIFO_SUPPORT
+	if (!uartn_tx_in_progress(CONSOLE_UART)) {
+		if (uart_buffer_empty()) {
+			uartn_enable_tx_complete_int(CONSOLE_UART, 0);
+			enable_sleep(SLEEP_MASK_UART);
+		}
 	}
 #endif
 

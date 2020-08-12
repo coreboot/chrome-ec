@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -36,6 +36,11 @@ test_mockable int chipset_in_state(int state_mask)
 	return state_mask & chipset_state;
 }
 
+test_mockable int chipset_in_or_transitioning_to_state(int state_mask)
+{
+	return state_mask & chipset_state;
+}
+
 void test_chipset_on(void)
 {
 	if (chipset_in_state(CHIPSET_STATE_ON))
@@ -66,5 +71,6 @@ test_mockable void chipset_task(void)
 		power_off_req = 0;
 		chipset_state = CHIPSET_STATE_SOFT_OFF;
 		hook_notify(HOOK_CHIPSET_SHUTDOWN);
+		hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 	}
 }

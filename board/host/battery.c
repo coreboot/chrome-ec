@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -14,13 +14,14 @@
 
 static uint16_t mock_smart_battery[SB_MANUFACTURER_DATA + 1];
 
-int sb_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+int sb_i2c_xfer(int port, uint16_t slave_addr_flags,
+		const uint8_t *out, int out_size,
 		uint8_t *in, int in_size, int flags)
 {
 	if (out_size == 0)
 		return EC_SUCCESS;
 
-	if (port != I2C_PORT_BATTERY || slave_addr != BATTERY_ADDR)
+	if (port != I2C_PORT_BATTERY || slave_addr_flags != BATTERY_ADDR_FLAGS)
 		return EC_ERROR_INVAL;
 	if (out[0]  >= ARRAY_SIZE(mock_smart_battery))
 		return EC_ERROR_UNIMPLEMENTED;

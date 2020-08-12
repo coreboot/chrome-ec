@@ -42,9 +42,9 @@ char *yes_no(int val)
 	return val ? "YES" : "NO";
 }
 
-enum system_image_copy_t system_get_image_copy(void)
+enum ec_image system_get_image_copy(void)
 {
-	return SYSTEM_IMAGE_RW;
+	return EC_IMAGE_RW;
 }
 
 static void write_title(FILE *vif)
@@ -115,10 +115,10 @@ static int is_snk(void)
 #endif
 }
 
-static int is_extpwr(void)
+static int is_unconstrained(void)
 {
 	if (is_src())
-		return !!(src_pdo[0] & PDO_FIXED_EXTERNAL);
+		return !!(src_pdo[0] & PDO_FIXED_UNCONSTRAINED);
 	else
 		return 0;
 }
@@ -274,6 +274,7 @@ static uint32_t bcddevice_sop(void)
 }
 
 /* Application exits on failure */
+__attribute__((__format__(__printf__, 2, 3)))
 static void append(char **buf, const char *fmt, ...)
 {
 	va_list ap1, ap2;
@@ -448,7 +449,8 @@ static int gen_vif(const char *name, const char *board,
 				dr_swap_to_dfp_supported());
 	fprintf(vif, "DR_Swap_To_UFP_Supported: %s\r\n",
 				dr_swap_to_ufp_supported());
-	fprintf(vif, "Unconstrained_Powered: %s\r\n", yes_no(is_extpwr()));
+	fprintf(vif, "Unconstrained_Powered: %s\r\n",
+				yes_no(is_unconstrained()));
 	fprintf(vif, "VCONN_Swap_To_On_Supported: %s\r\n", vconn_swap());
 	fprintf(vif, "VCONN_Swap_To_Off_Supported: %s\r\n", vconn_swap());
 	fprintf(vif, "Responds_To_Discov_SOP: YES\r\n");
@@ -517,6 +519,7 @@ static int gen_vif(const char *name, const char *board,
 			pwr = write_pdo_to_buf(&buf, src_pdo[i], SRC, i+1);
 			if (pwr < 0) {
 				fprintf(stderr, "ERROR: Out of memory.\n");
+				fclose(vif);
 				return 1;
 			}
 
@@ -547,6 +550,7 @@ static int gen_vif(const char *name, const char *board,
 
 			if (pwr < 0) {
 				fprintf(stderr, "ERROR: Out of memory.\n");
+				fclose(vif);
 				return 1;
 			}
 

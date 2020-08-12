@@ -17,6 +17,7 @@
 #include "console.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
+#include "driver/charger/isl923x.h"
 #include "driver/tcpm/anx7688.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/temp_sensor/tmp432.h"
@@ -57,10 +58,7 @@
 
 void pd_mcu_interrupt(enum gpio_signal signal)
 {
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with PD MCU to determine interrupt cause */
-	host_command_pd_send_status(0);
-#endif
+	schedule_deferred_pd_interrupt(0 /* port */);
 }
 
 void deferred_reset_pd_mcu(void);
@@ -95,13 +93,16 @@ const struct adc_t adc_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
-int anx7688_passthru_allowed(const struct i2c_port_t *port, uint16_t address)
+int anx7688_passthru_allowed(const struct i2c_port_t *port,
+			     const uint16_t addr_flags)
 {
+	uint16_t addr = I2C_GET_ADDR(addr_flags);
+
 	/* Allow access to 0x2c (TCPC) */
-	if (address == 0x2c)
+	if (addr == 0x2c)
 		return 1;
 
-	CPRINTF("Passthru rejected on %x", address);
+	CPRINTF("Passthru rejected on %x", addr);
 
 	return 0;
 }
@@ -123,8 +124,15 @@ const struct spi_device_t spi_devices[] = {
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 
 /* TCPC */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	{I2C_PORT_TCPC, CONFIG_TCPC_I2C_BASE_ADDR, &anx7688_tcpm_drv},
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC,
+			.addr_flags = CONFIG_TCPC_I2C_BASE_ADDR_FLAGS,
+		},
+		.drv = &anx7688_tcpm_drv,
+	},
 };
 
 struct pi3usb9281_config pi3usb9281_chips[] = {
@@ -144,23 +152,32 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 const struct temp_sensor_t temp_sensors[] = {
 #ifdef CONFIG_TEMP_SENSOR_TMP432
 	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_LOCAL, 4},
+		TMP432_IDX_LOCAL},
 	{"TMP432_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_REMOTE1, 4},
+		TMP432_IDX_REMOTE1},
 	{"TMP432_Sensor_2", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-		TMP432_IDX_REMOTE2, 4},
+		TMP432_IDX_REMOTE2},
 #endif
 	{"Battery", TEMP_SENSOR_TYPE_BATTERY, charge_get_battery_temp,
-		0, 4},
+		0},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0, /* port idx */
+		.usb_port = 0,
 		.driver    = &anx7688_usb_mux_driver,
 	},
 };
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /**
  * Reset PD MCU
@@ -285,7 +302,7 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* charge port is a physical port */
 	int is_real_port = (charge_port >= 0 &&
-			    charge_port < CONFIG_USB_PD_PORT_COUNT);
+			    charge_port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/* check if we are source VBUS on the port */
 	int source = gpio_get_level(GPIO_USB_C0_5V_EN);
 
@@ -438,13 +455,13 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 static struct mutex g_kx022_mutex[2];
 
 /* Matrix to rotate accelerometer into standard reference frame */
-const matrix_3x3_t base_standard_ref = {
+const mat33_fp_t base_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0,  0},
 	{ 0,  FLOAT_TO_FP(1),  0},
 	{ 0,  0, FLOAT_TO_FP(-1)}
 };
 
-const matrix_3x3_t lid_standard_ref = {
+const mat33_fp_t lid_standard_ref = {
 	{ FLOAT_TO_FP(1),  0,  0},
 	{ 0, FLOAT_TO_FP(-1),  0},
 	{ 0,  0, FLOAT_TO_FP(-1)}
@@ -454,50 +471,53 @@ const matrix_3x3_t lid_standard_ref = {
 struct kionix_accel_data g_kx022_data[2];
 
 struct motion_sensor_t motion_sensors[] = {
-	{.name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_KX022,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &kionix_accel_drv,
-	 .mutex = &g_kx022_mutex[0],
-	 .drv_data = &g_kx022_data[0],
-	 .addr = 1, /* SPI, device ID 0 */
-	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 2, /* g, enough for laptop. */
-	 .min_frequency = KX022_ACCEL_MIN_FREQ,
-	 .max_frequency = KX022_ACCEL_MAX_FREQ,
-	 .config = {
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
+	[BASE_ACCEL] = {
+		.name = "Base Accel",
+		.active_mask = SENSOR_ACTIVE_S0,
+		.chip = MOTIONSENSE_CHIP_KX022,
+		.type = MOTIONSENSE_TYPE_ACCEL,
+		.location = MOTIONSENSE_LOC_BASE,
+		.drv = &kionix_accel_drv,
+		.mutex = &g_kx022_mutex[0],
+		.drv_data = &g_kx022_data[0],
+		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(0),
+		.rot_standard_ref = &base_standard_ref,
+		.default_range = 2, /* g, enough for lid angle calculation. */
+		.min_frequency = KX022_ACCEL_MIN_FREQ,
+		.max_frequency = KX022_ACCEL_MAX_FREQ,
+		.config = {
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+				.ec_rate = 100 * MSEC,
+			},
 		},
-	 },
 	},
 
-	{.name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0,
-	 .chip = MOTIONSENSE_CHIP_KX022,
-	 .type = MOTIONSENSE_TYPE_ACCEL,
-	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
-	 .mutex = &g_kx022_mutex[1],
-	 .drv_data = &g_kx022_data[1],
-	 .addr = 3, /* SPI, device ID 1 */
-	 .rot_standard_ref = &lid_standard_ref,
-	 .default_range = 2, /* g, enough for laptop. */
-	 .min_frequency = KX022_ACCEL_MIN_FREQ,
-	 .max_frequency = KX022_ACCEL_MAX_FREQ,
-	 .config = {
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
+	[LID_ACCEL] = {
+		.name = "Lid Accel",
+		.active_mask = SENSOR_ACTIVE_S0,
+		.chip = MOTIONSENSE_CHIP_KX022,
+		.type = MOTIONSENSE_TYPE_ACCEL,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &kionix_accel_drv,
+		.mutex = &g_kx022_mutex[1],
+		.drv_data = &g_kx022_data[1],
+		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(1),
+		.rot_standard_ref = &lid_standard_ref,
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+		.min_frequency = KX022_ACCEL_MIN_FREQ,
+		.max_frequency = KX022_ACCEL_MAX_FREQ,
+		.config = {
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+				.ec_rate = 100 * MSEC,
+			},
 		},
-	 },
 	},
 };
+
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 void lid_angle_peripheral_enable(int enable)

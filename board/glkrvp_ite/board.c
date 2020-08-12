@@ -7,17 +7,19 @@
 
 #include "button.h"
 #include "chipset.h"
+#include "charger.h"
 #include "console.h"
+#include "driver/charger/isl923x.h"
 #include "ec2i_chip.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
-#include "ioexpander_pca9555.h"
 #include "intc.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
+#include "pca9555.h"
 #include "power.h"
 #include "power_button.h"
 #include "spi.h"
@@ -31,22 +33,7 @@
 #include "gpio_list.h"
 
 #define I2C_PORT_PCA555_BOARD_ID_GPIO	IT83XX_I2C_CH_C
-#define I2C_ADDR_PCA555_BOARD_ID_GPIO	0x40
-
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-	{GPIO_RSMRST_L_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L"},
-	{GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-	{GPIO_PCH_SLP_S3_L, POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{GPIO_PCH_SLP_S4_L, POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_SUSPWRNACK,     POWER_SIGNAL_ACTIVE_HIGH,
-		"SUSPWRNACK_DEASSERTED"},
-
-	{GPIO_ALL_SYS_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "ALL_SYS_PGOOD"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
+#define I2C_ADDR_PCA555_BOARD_ID_GPIO_FLAGS	0x20
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
@@ -56,6 +43,17 @@ const struct i2c_port_t i2c_ports[] = {
 	{"ext_io",  IT83XX_I2C_CH_E, 400, GPIO_I2C_E_SCL, GPIO_I2C_E_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+/* Charger Chips */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* Wake-up pins for hibernate */
 const enum gpio_signal hibernate_wake_pins[] = {
@@ -71,7 +69,7 @@ void chipset_pre_init_callback(void)
 	int data;
 
 	if (pca9555_read(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
 		PCA9555_CMD_OUTPUT_PORT_0, &data))
 		return;
 
@@ -86,7 +84,7 @@ void chipset_pre_init_callback(void)
 	/* Enable SOC_3P3_EN_L: Set the Output port O0.1 to low level */
 	data &= ~PCA9555_IO_1;
 	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
 		PCA9555_CMD_OUTPUT_PORT_0, data);
 
 	/* TODO: Find out from the spec */
@@ -94,7 +92,8 @@ void chipset_pre_init_callback(void)
 
 	/* Enable PMIC_EN: Set the Output port O0.0 to high level */
 	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO, PCA9555_CMD_OUTPUT_PORT_0,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
+		PCA9555_CMD_OUTPUT_PORT_0,
 		data | PCA9555_IO_0);
 }
 
@@ -121,14 +120,14 @@ void chipset_do_shutdown(void)
 	int data;
 
 	if (pca9555_read(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
 		PCA9555_CMD_OUTPUT_PORT_0, &data))
 		return;
 
 	/* Disable SOC_3P3_EN_L: Set the Output port O0.1 to high level */
 	data |= PCA9555_IO_1;
 	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
 		PCA9555_CMD_OUTPUT_PORT_0, data);
 
 	/* TODO: Find out from the spec */
@@ -136,7 +135,8 @@ void chipset_do_shutdown(void)
 
 	/* Disable PMIC_EN: Set the Output port O0.0 to low level */
 	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO, PCA9555_CMD_OUTPUT_PORT_0,
+		I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
+		PCA9555_CMD_OUTPUT_PORT_0,
 		data & ~PCA9555_IO_0);
 }
 
@@ -161,7 +161,8 @@ int board_get_version(void)
 	int data;
 
 	if (pca9555_read(I2C_PORT_PCA555_BOARD_ID_GPIO,
-		I2C_ADDR_PCA555_BOARD_ID_GPIO, PCA9555_CMD_INPUT_PORT_1, &data))
+			 I2C_ADDR_PCA555_BOARD_ID_GPIO_FLAGS,
+			 PCA9555_CMD_INPUT_PORT_1, &data))
 		return -1;
 
 	return data & 0x0f;
@@ -179,8 +180,8 @@ static void pmic_init(void)
 	 * Configure Port O0.1 as Output port - SOC_3P3_EN_L
 	 */
 	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
-		PCA9555_CMD_CONFIGURATION_PORT_0, 0xfc);
+		      I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
+		      PCA9555_CMD_CONFIGURATION_PORT_0, 0xfc);
 
 	/*
 	 * Set the Output port O0.0 to low level - PMIC_EN
@@ -190,8 +191,8 @@ static void pmic_init(void)
 	 * configure the SOC_3P3_EN_L to high level.
 	 */
 	pca9555_write(I2C_PORT_PCA555_PMIC_BATT_GPIO,
-		I2C_ADDR_PCA555_PMIC_BATT_GPIO,
-		PCA9555_CMD_OUTPUT_PORT_0, 0xfe);
+		      I2C_ADDR_PCA555_PMIC_BATT_GPIO_FLAGS,
+		      PCA9555_CMD_OUTPUT_PORT_0, 0xfe);
 }
 DECLARE_HOOK(HOOK_INIT, pmic_init, HOOK_PRIO_INIT_I2C + 1);
 

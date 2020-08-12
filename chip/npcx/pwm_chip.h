@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,5 +20,8 @@ struct pwm_t {
 
 extern const struct pwm_t pwm_channels[];
 void pwm_config(enum pwm_channel ch);
+
+/* Npcx PWM maximum duty cycle value */
+#define NPCX_PWM_MAX_RAW_DUTY (UINT16_MAX - 1)
 
 #endif /* __CROS_EC_PWM_CHIP_H */

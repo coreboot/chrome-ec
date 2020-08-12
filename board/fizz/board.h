@@ -50,6 +50,9 @@
 #define CEC_GPIO_IN  GPIO_CEC_IN
 #define CEC_GPIO_PULL_UP GPIO_CEC_PULL_UP
 #define CONFIG_FANS 1
+#undef CONFIG_FAN_INIT_SPEED
+#define CONFIG_FAN_INIT_SPEED 50
+#define CONFIG_FAN_DYNAMIC
 #define CONFIG_FAN_RPM_CUSTOM
 #define CONFIG_THROTTLE_AP
 #define CONFIG_CHIPSET_CAN_THROTTLE
@@ -66,19 +69,15 @@
 #define CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_HOSTCMD_ESPI
-/*
- * Eve and Poppy all have wires from GPIO to PCH but
- * CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS is defined. So, those GPIOs are not used
- * by EC.
- */
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 
 /* Charger */
 #define CONFIG_CHARGE_MANAGER
 
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 50000
 
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_EXTPOWER_GPIO
 #undef  CONFIG_EXTPOWER_DEBOUNCE_MS
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 1000
@@ -97,11 +96,12 @@
 #undef  CONFIG_USB_CHARGER		/* dnojiri: verify */
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_CUSTOM_PDO
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_VBUS_DETECT_GPIO
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
@@ -109,6 +109,7 @@
 #define CONFIG_USB_PD_TCPM_PS8751
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
@@ -137,8 +138,8 @@
 #define I2C_PORT_THERMAL	NPCX_I2C_PORT3
 
 /* I2C addresses */
-#define I2C_ADDR_TCPC0		0x16
-#define I2C_ADDR_EEPROM		0xa0
+#define I2C_ADDR_TCPC0_FLAGS		0x0b
+#define I2C_ADDR_EEPROM_FLAGS		0x50
 
 /* Verify and jump to RW image on boot */
 #define CONFIG_VBOOT_EFS
@@ -191,20 +192,9 @@ enum charge_port {
 	CHARGE_PORT_BARRELJACK,
 };
 
-enum power_signal {
-	X86_SLP_S0_DEASSERTED,
-	X86_SLP_S3_DEASSERTED,
-	X86_SLP_S4_DEASSERTED,
-	X86_SLP_SUS_DEASSERTED,
-	X86_RSMRST_L_PGOOD,
-	X86_PMIC_DPWROK,
-	POWER_SIGNAL_COUNT
-};
-
 enum temp_sensor_id {
 	TEMP_SENSOR_CHARGER,	/* BD99992GW SYSTHERM1 */
 	TEMP_SENSOR_DRAM,	/* BD99992GW SYSTHERM2 */
-	TEMP_SENSOR_EMMC,	/* BD99992GW SYSTHERM3 */
 	TEMP_SENSOR_COUNT
 };
 
@@ -241,6 +231,8 @@ enum OEM_ID {
 	OEM_WUKONG_A = 4,
 	OEM_WUKONG_M = 5,
 	OEM_BLEEMO = 6,
+	OEM_JAX = 8,
+	OEM_EXCELSIOR = 10,
 	/* Number of OEM IDs */
 	OEM_COUNT
 };
@@ -266,7 +258,6 @@ enum OEM_ID {
 /* Board specific handlers */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
-int board_get_battery_soc(void);
 void led_alert(int enable);
 void led_critical(void);
 

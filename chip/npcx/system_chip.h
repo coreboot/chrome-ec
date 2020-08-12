@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,8 +9,8 @@
 #define __CROS_EC_SYSTEM_CHIP_H
 
 /* Flags for BBRM_DATA_INDEX_WAKE */
-#define HIBERNATE_WAKE_MTC        (1 << 0)  /* MTC alarm */
-#define HIBERNATE_WAKE_PIN        (1 << 1)  /* Wake pin */
+#define HIBERNATE_WAKE_MTC        BIT(0)  /* MTC alarm */
+#define HIBERNATE_WAKE_PIN        BIT(1)  /* Wake pin */
 
 /* Indices for battery-backed ram (BBRAM) data position */
 enum bbram_data_index {
@@ -30,8 +30,11 @@ enum bbram_data_index {
 	BBRM_DATA_INDEX_PANIC_BKUP = 36,       /* Panic data (index 35-63)*/
 };
 
-/* Issue a watchdog reset*/
+/* Issue a watchdog reset */
 void system_watchdog_reset(void);
+
+/* Stops the watchdog timer and unlocks configuration. */
+void watchdog_stop_and_unlock(void);
 
 /*
  * Configure the specific memory addresses in the the MPU

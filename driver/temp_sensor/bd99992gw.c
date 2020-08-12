@@ -39,18 +39,20 @@ static enum bd99992gw_adc_channel
 static int raw_read8(const int offset, int *data_ptr)
 {
 	int ret;
-	ret = i2c_read8(I2C_PORT_THERMAL, BD99992GW_I2C_ADDR, offset, data_ptr);
+	ret = i2c_read8(I2C_PORT_THERMAL, BD99992GW_I2C_ADDR_FLAGS,
+			offset, data_ptr);
 	if (ret != EC_SUCCESS)
-		CPRINTS("bd99992gw read fail %d\n", ret);
+		CPRINTS("bd99992gw read fail %d", ret);
 	return ret;
 }
 
 static int raw_write8(const int offset, int data)
 {
 	int ret;
-	ret = i2c_write8(I2C_PORT_THERMAL, BD99992GW_I2C_ADDR, offset, data);
+	ret = i2c_write8(I2C_PORT_THERMAL, BD99992GW_I2C_ADDR_FLAGS,
+			 offset, data);
 	if (ret != EC_SUCCESS)
-		CPRINTS("bd99992gw write fail %d\n", ret);
+		CPRINTS("bd99992gw write fail %d", ret);
 	return ret;
 }
 
@@ -136,7 +138,7 @@ int bd99992gw_get_val(int idx, int *temp_ptr)
 	/* Make sure we found it */
 	if (i == ARRAY_SIZE(active_channels) ||
 	    active_channels[i] != idx) {
-		CPRINTS("Bad ADC channel %d\n", idx);
+		CPRINTS("Bad ADC channel %d", idx);
 		return EC_ERROR_INVAL;
 	}
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -22,6 +22,7 @@
 #include "lpc_chip.h"
 #include "ec_commands.h"
 #include "host_command.h"
+#include "hwtimer_chip.h"
 
 #if !(DEBUG_GPIO)
 #define CPUTS(...)
@@ -77,30 +78,57 @@ struct gpio_lvol_item {
 /* Constants for GPIO low-voltage mapping */
 const struct gpio_lvol_item gpio_lvol_table[] = NPCX_LVOL_TABLE;
 
-
 /*****************************************************************************/
 /* Internal functions */
 
-static int gpio_match(uint8_t port, uint8_t mask, struct npcx_gpio gpio)
+static int gpio_match(uint8_t port, uint8_t bit, struct npcx_gpio gpio)
 {
-	return (gpio.valid && (gpio.port == port) && ((1 << gpio.bit) == mask));
+	return (gpio.valid && (gpio.port == port) && (gpio.bit == bit));
 }
 
-static int gpio_alt_sel(uint8_t port, uint8_t bit, int8_t func)
+#ifdef CONFIG_CMD_GPIO_EXTENDED
+static uint8_t gpio_is_alt_sel(uint8_t port, uint8_t bit)
+{
+	struct gpio_alt_map const *map;
+	uint8_t alt_mask, devalt;
+
+	for (map = ARRAY_BEGIN(gpio_alt_table);
+	     map < ARRAY_END(gpio_alt_table);
+	     map++) {
+		if (gpio_match(port, bit, map->gpio)) {
+			alt_mask = 1 << map->alt.bit;
+			devalt = NPCX_DEVALT(map->alt.group);
+			/*
+			 * alt.inverted == 0:
+			 *   !!(devalt & alt_mask) == 0 -> GPIO
+			 *   !!(devalt & alt_mask) == 1 -> Alternate
+			 * alt.inverted == 1:
+			 *   !!(devalt & alt_mask) == 0 -> Alternate
+			 *   !!(devalt & alt_mask) == 1 -> GPIO
+			 */
+			return !!(devalt & alt_mask) ^ map->alt.inverted;
+		}
+	}
+	return 0;
+}
+#endif
+
+static int gpio_alt_sel(uint8_t port, uint8_t bit,
+			enum gpio_alternate_func func)
 {
 	struct gpio_alt_map const *map;
 
 	for (map = ARRAY_BEGIN(gpio_alt_table);
 	     map < ARRAY_END(gpio_alt_table);
 	     map++) {
-		if (gpio_match(port, 1 << bit, map->gpio)) {
+		if (gpio_match(port, bit, map->gpio)) {
 			uint8_t alt_mask = 1 << map->alt.bit;
 
 			/*
-			 * func < 0          -> GPIO functionality
+			 * func < GPIO_ALT_FUNC_DEFAULT -> GPIO functionality
 			 * map->alt.inverted -> Set DEVALT bit for GPIO
 			 */
-			if ((func < 0) ^ map->alt.inverted)
+			if ((func < GPIO_ALT_FUNC_DEFAULT) ^ map->alt.inverted)
 				NPCX_DEVALT(map->alt.group) &= ~alt_mask;
 			else
 				NPCX_DEVALT(map->alt.group) |=  alt_mask;
@@ -109,7 +137,7 @@ static int gpio_alt_sel(uint8_t port, uint8_t bit, int8_t func)
 		}
 	}
 
-	if (func > 0)
+	if (func > GPIO_ALT_FUNC_DEFAULT)
 		CPRINTS("Warn! No alter func in port%d, pin%d", port, bit);
 
 	return -1;
@@ -175,16 +203,33 @@ static void gpio_interrupt_type_sel(enum gpio_signal signal, uint32_t flags)
 	/* No support analog mode */
 }
 
-/* Select low voltage detection level */
-void gpio_low_voltage_level_sel(uint8_t port, uint8_t mask, uint8_t low_voltage)
+#ifdef CONFIG_CMD_GPIO_EXTENDED
+static uint8_t gpio_is_low_voltage_level_sel(uint8_t port, uint8_t bit)
 {
 	int i, j;
 
 	for (i = 0; i < ARRAY_SIZE(gpio_lvol_table); i++) {
 		const struct npcx_gpio *gpio = gpio_lvol_table[i].lvol_gpio;
 
-		for (j = 0; j < ARRAY_SIZE(gpio_lvol_table[0].lvol_gpio); j++)
-			if (gpio_match(port, mask, gpio[j])) {
+		for (j = 0; j < ARRAY_SIZE(gpio_lvol_table[0].lvol_gpio); j++) {
+			if (gpio_match(port, bit, gpio[j]))
+				return IS_BIT_SET(NPCX_LV_GPIO_CTL(i), j);
+		}
+	}
+	return 0;
+}
+#endif
+
+/* Select low voltage detection level */
+void gpio_low_voltage_level_sel(uint8_t port, uint8_t bit, uint8_t low_voltage)
+{
+	int i, j;
+
+	for (i = 0; i < ARRAY_SIZE(gpio_lvol_table); i++) {
+		const struct npcx_gpio *gpio = gpio_lvol_table[i].lvol_gpio;
+
+		for (j = 0; j < ARRAY_SIZE(gpio_lvol_table[0].lvol_gpio); j++) {
+			if (gpio_match(port, bit, gpio[j])) {
 				if (low_voltage)
 					/* Select vol-detect level for 1.8V */
 					SET_BIT(NPCX_LV_GPIO_CTL(i), j);
@@ -193,14 +238,25 @@ void gpio_low_voltage_level_sel(uint8_t port, uint8_t mask, uint8_t low_voltage)
 					CLEAR_BIT(NPCX_LV_GPIO_CTL(i), j);
 				return;
 			}
-
+		}
 	}
 
 	if (low_voltage)
-		CPRINTS("Warn! No low voltage support in port%d, mask%d\n",
-								port, mask);
+		CPRINTS("Warn! No low voltage support in port:0x%x, bit:%d",
+								port, bit);
 }
 
+/* Set the low voltage detection level by mask */
+static void gpio_low_vol_sel_by_mask(uint8_t p, uint8_t mask, uint8_t low_vol)
+{
+	int bit;
+	uint32_t lv_mask = mask;
+
+	while (lv_mask) {
+		bit = get_next_bit(&lv_mask);
+		gpio_low_voltage_level_sel(p, bit, low_vol);
+	};
+}
 /* The bypass of low voltage IOs for better power consumption */
 #ifdef CONFIG_LOW_POWER_IDLE
 static int gpio_is_i2c_pin(enum gpio_signal signal)
@@ -251,29 +307,73 @@ BUILD_ASSERT(ARRAY_SIZE(gpio_lvol_table[0].lvol_gpio) == 8);
 /*****************************************************************************/
 /* IC specific low-level driver */
 
-void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func)
+void gpio_set_alternate_function(uint32_t port, uint32_t mask,
+				enum gpio_alternate_func func)
 {
 	/* Enable alternative pins by func*/
 	int pin;
 
 	/* check each bit from mask  */
 	for (pin = 0; pin < 8; pin++)
-		if (mask & (1 << pin))
+		if (mask & BIT(pin))
 			gpio_alt_sel(port, pin, func);
 }
 
 test_mockable int gpio_get_level(enum gpio_signal signal)
 {
+	ASSERT(signal_is_gpio(signal));
+
 	return !!(NPCX_PDIN(gpio_list[signal].port) & gpio_list[signal].mask);
 }
 
 void gpio_set_level(enum gpio_signal signal, int value)
 {
+	ASSERT(signal_is_gpio(signal));
+
 	if (value)
 		NPCX_PDOUT(gpio_list[signal].port) |=  gpio_list[signal].mask;
 	else
 		NPCX_PDOUT(gpio_list[signal].port) &= ~gpio_list[signal].mask;
 }
+
+#ifdef CONFIG_GPIO_GET_EXTENDED
+int gpio_get_flags_by_mask(uint32_t port, uint32_t mask)
+{
+	uint32_t flags = 0;
+
+	if (NPCX_PDIR(port) & mask)
+		flags |= GPIO_OUTPUT;
+	else
+		flags |= GPIO_INPUT;
+
+	if (NPCX_PDIN(port) & mask)
+		flags |= GPIO_HIGH;
+	else
+		flags |= GPIO_LOW;
+
+	if (NPCX_PTYPE(port) & mask)
+		flags |= GPIO_OPEN_DRAIN;
+
+	/* If internal pulling is enabled */
+	if (NPCX_PPULL(port) & mask) {
+		if (NPCX_PPUD(port) & mask)
+			flags |= GPIO_PULL_DOWN;
+		else
+			flags |= GPIO_PULL_UP;
+	}
+
+	if (gpio_is_alt_sel(port, GPIO_MASK_TO_NUM(mask)))
+		flags |= GPIO_ALTERNATE;
+
+	if (gpio_is_low_voltage_level_sel(port, GPIO_MASK_TO_NUM(mask)))
+		flags |= GPIO_SEL_1P8V;
+
+	if (NPCX_PLOCK_CTL(port) & mask)
+		flags |= GPIO_LOCKED;
+
+	return flags;
+}
+#endif
 
 void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 {
@@ -299,8 +399,14 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 
 	/* Select pull-up/down of GPIO 0:pull-up 1:pull-down */
 	if (flags & GPIO_PULL_UP) {
-		NPCX_PPUD(port)  &= ~mask;
-		NPCX_PPULL(port) |= mask; /* enable pull down/up */
+		if (flags & GPIO_SEL_1P8V) {
+			CPRINTS("Warn! enable internal PU and low voltage mode"
+					" at the same time is illegal. port 0x%x, mask 0x%x",
+					port, mask);
+		} else {
+			NPCX_PPUD(port)  &= ~mask;
+			NPCX_PPULL(port) |= mask; /* enable pull down/up */
+		}
 	} else if (flags & GPIO_PULL_DOWN) {
 		NPCX_PPUD(port)  |= mask;
 		NPCX_PPULL(port) |= mask; /* enable pull down/up */
@@ -312,14 +418,12 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 	/* 1.8V low voltage select */
 	if (flags & GPIO_SEL_1P8V) {
 		/*
-		 * Set IO type to open-drain & disable internal pulling
-		 * before selecting low-voltage level
+		 * Set IO type to open-drain before selecting low-voltage level
 		 */
 		NPCX_PTYPE(port) |= mask;
-		NPCX_PPULL(port) &= ~mask;
-		gpio_low_voltage_level_sel(port, mask, 1);
+		gpio_low_vol_sel_by_mask(port, mask, 1);
 	} else
-		gpio_low_voltage_level_sel(port, mask, 0);
+		gpio_low_vol_sel_by_mask(port, mask, 0);
 
 	/* Set up interrupt type */
 	if (flags & GPIO_INT_ANY) {
@@ -402,6 +506,23 @@ void gpio_pre_init(void)
 	system_check_bbram_on_reset();
 	is_warm = system_is_reboot_warm();
 
+	/*
+	 * On power-on of some boards, H1 releases the EC from reset but then
+	 * quickly asserts and releases the reset a second time. This means the
+	 * EC sees 2 resets: (1) power-on reset, (2) reset-pin reset. If we add
+	 * a delay between reset (1) and configuring GPIO output levels, then
+	 * reset (2) will happen before the end of the delay so we avoid extra
+	 * output toggles.
+	 *
+	 * Make sure to set up the timer before using udelay().
+	 */
+	if (IS_ENABLED(CONFIG_BOARD_RESET_AFTER_POWER_ON) &&
+	    system_get_reset_flags() & EC_RESET_FLAG_INITIAL_PWR) {
+		__hw_early_init_hwtimer(0);
+		udelay(2 * SECOND);
+		/* Shouldn't get here, but proceeding anyway... */
+	}
+
 #ifdef CHIP_FAMILY_NPCX7
 	/*
 	 * TODO: Set bit 7 of DEVCNT again for npcx7 series. Please see Errata
@@ -464,7 +585,8 @@ void gpio_pre_init(void)
 		 * configured as a GPIO, and not left in its default state,
 		 * which may or may not be as a GPIO.
 		 */
-		gpio_set_alternate_function(g->port, g->mask, -1);
+		gpio_set_alternate_function(g->port, g->mask,
+					GPIO_ALT_FUNC_NONE);
 	}
 
 	/* The bypass of low voltage IOs for better power consumption */
@@ -690,3 +812,100 @@ DECLARE_IRQ(NPCX_IRQ_WKINTFG_2,     __gpio_wk2fg_interrupt, 3);
 #endif
 
 #undef GPIO_IRQ_FUNC
+#if DEBUG_GPIO && defined(CONFIG_LOW_POWER_IDLE)
+/*
+ * Command used to disable input buffer of gpios one by one to
+ * investigate power consumption
+ */
+static int command_gpiodisable(int argc, char **argv)
+{
+	uint8_t i;
+	uint8_t offset;
+	const uint8_t non_isr_gpio_num = GPIO_COUNT - GPIO_IH_COUNT;
+	const struct gpio_info *g_list;
+	int flags;
+	static uint8_t idx = 0;
+	int num = -1;
+	int enable;
+	char *e;
+
+	if (argc == 2) {
+		if (!strcasecmp(argv[1], "info")) {
+			offset = idx + GPIO_IH_COUNT;
+			g_list = gpio_list + offset;
+			flags = g_list->flags;
+
+			ccprintf("Total GPIO declaration: %d\n", GPIO_COUNT);
+			ccprintf("Total Non-ISR GPIO declaration: %d\n",
+						non_isr_gpio_num);
+			ccprintf("Next GPIO Num to check by ");
+			ccprintf("\"gpiodisable next\"\n");
+			ccprintf("  offset: %d\n", offset);
+			ccprintf("  current GPIO name: %s\n", g_list->name);
+			ccprintf("  current GPIO flags: 0x%08x\n", flags);
+			return EC_SUCCESS;
+		}
+		/* List all non-ISR GPIOs in gpio.inc */
+		if (!strcasecmp(argv[1], "list")) {
+			for (i = GPIO_IH_COUNT; i < GPIO_COUNT; i++)
+				ccprintf("%d: %s\n", i, gpio_get_name(i));
+			return EC_SUCCESS;
+		}
+
+		if (!strcasecmp(argv[1], "next")) {
+			while (1) {
+				if (idx == non_isr_gpio_num)
+					break;
+
+				offset = idx + GPIO_IH_COUNT;
+				g_list = gpio_list + offset;
+				flags = g_list->flags;
+				ccprintf("current GPIO : %d %s --> ",
+							offset, g_list->name);
+				if (gpio_is_i2c_pin(offset)) {
+					ccprintf("Ignore I2C pin!\n");
+					idx++;
+					continue;
+				} else if (flags & GPIO_SEL_1P8V) {
+					ccprintf("Ignore 1v8 pin!\n");
+					idx++;
+					continue;
+				} else {
+					if ((flags & GPIO_INPUT) ||
+						    (flags & GPIO_OPEN_DRAIN)) {
+						ccprintf("Disable WKINEN!\n");
+						gpio_enable_wake_up_input(
+								offset, 0);
+						idx++;
+						break;
+					}
+					ccprintf("Not Input or OpenDrain\n");
+					idx++;
+					continue;
+				}
+			};
+			if (idx == non_isr_gpio_num) {
+				ccprintf("End of GPIO list, reset index!\n");
+				idx = 0;
+			};
+			return EC_SUCCESS;
+		}
+	}
+	if (argc == 3) {
+		num = strtoi(argv[1], &e, 0);
+		if (*e || num < GPIO_IH_COUNT || num >= GPIO_COUNT)
+			return EC_ERROR_PARAM1;
+
+		if (parse_bool(argv[2], &enable))
+			gpio_enable_wake_up_input(num, enable ? 1 : 0);
+		else
+			return EC_ERROR_PARAM2;
+
+		return EC_SUCCESS;
+	}
+	return EC_ERROR_INVAL;
+}
+DECLARE_CONSOLE_COMMAND(gpiodisable, command_gpiodisable,
+		"info/list/next/<num> on|off",
+		"Disable GPIO input buffer to investigate power consumption");
+#endif

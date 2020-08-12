@@ -35,7 +35,7 @@ static struct pd_physical {
 	int last_edge_written;
 	uint8_t out_msg[PD_BIT_LEN / 5];
 	int verified_idx;
-} pd_phy[CONFIG_USB_PD_PORT_COUNT];
+} pd_phy[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static const uint16_t enc4b5b[] = {
 	0x1E, 0x09, 0x14, 0x15, 0x0A, 0x0B, 0x0E, 0x0F, 0x12, 0x13, 0x16,
@@ -90,6 +90,22 @@ void pd_test_rx_msg_append_sop(int port)
 	pd_test_rx_msg_append_kcode(port, PD_SYNC1);
 	pd_test_rx_msg_append_kcode(port, PD_SYNC1);
 	pd_test_rx_msg_append_kcode(port, PD_SYNC2);
+}
+
+void pd_test_rx_msg_append_sop_prime(int port)
+{
+	pd_test_rx_msg_append_kcode(port, PD_SYNC1);
+	pd_test_rx_msg_append_kcode(port, PD_SYNC1);
+	pd_test_rx_msg_append_kcode(port, PD_SYNC3);
+	pd_test_rx_msg_append_kcode(port, PD_SYNC3);
+}
+
+void pd_test_rx_msg_append_sop_prime_prime(int port)
+{
+	pd_test_rx_msg_append_kcode(port, PD_SYNC1);
+	pd_test_rx_msg_append_kcode(port, PD_SYNC3);
+	pd_test_rx_msg_append_kcode(port, PD_SYNC1);
+	pd_test_rx_msg_append_kcode(port, PD_SYNC3);
 }
 
 void pd_test_rx_msg_append_eop(int port)
@@ -150,6 +166,24 @@ int pd_test_tx_msg_verify_sop(int port)
 	       pd_test_tx_msg_verify_kcode(port, PD_SYNC1) &&
 	       pd_test_tx_msg_verify_kcode(port, PD_SYNC1) &&
 	       pd_test_tx_msg_verify_kcode(port, PD_SYNC2);
+}
+
+int pd_test_tx_msg_verify_sop_prime(int port)
+{
+	crc32_init();
+	return pd_test_tx_msg_verify_kcode(port, PD_SYNC1) &&
+	       pd_test_tx_msg_verify_kcode(port, PD_SYNC1) &&
+	       pd_test_tx_msg_verify_kcode(port, PD_SYNC3) &&
+	       pd_test_tx_msg_verify_kcode(port, PD_SYNC3);
+}
+
+int pd_test_tx_msg_verify_sop_prime_prime(int port)
+{
+	crc32_init();
+	return pd_test_tx_msg_verify_kcode(port, PD_SYNC1) &&
+	       pd_test_tx_msg_verify_kcode(port, PD_SYNC3) &&
+	       pd_test_tx_msg_verify_kcode(port, PD_SYNC1) &&
+	       pd_test_tx_msg_verify_kcode(port, PD_SYNC3);
 }
 
 int pd_test_tx_msg_verify_eop(int port)
@@ -225,7 +259,7 @@ static uint8_t decode_bmc(uint32_t val10)
 	for (i = 0; i < 5; ++i)
 		if (!!(val10 & (1 << (2 * i))) !=
 		    !!(val10 & (1 << (2 * i + 1))))
-			ret |= (1 << i);
+			ret |= BIT(i);
 	return ret;
 }
 
@@ -309,7 +343,13 @@ void pd_rx_enable_monitoring(int port)
 
 void pd_rx_disable_monitoring(int port)
 {
-	ASSERT(pd_phy[port].hw_init_done);
+	/*
+	 * We disabled RX monitoring in TCPMv1 in set_state when
+	 * transitioning from suspended to disconnected, but we only
+	 * reinitialize after we have fully transitioned to disconnected. Don't
+	 * assert that hw_init_done here since we have "valid" code that
+	 * requires hw_init_done to be false when a port is suspended.
+	 */
 	pd_phy[port].rx_monitoring = 0;
 }
 
@@ -318,7 +358,7 @@ void pd_hw_release(int port)
 	pd_phy[port].hw_init_done = 0;
 }
 
-void pd_hw_init(int port, int role)
+void pd_hw_init(int port, enum pd_power_role role)
 {
 	pd_config_init(port, role);
 	pd_phy[port].hw_init_done = 1;

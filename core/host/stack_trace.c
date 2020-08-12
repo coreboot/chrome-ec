@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -44,6 +44,7 @@ static void __attribute__((noinline)) _task_dump_trace_impl(int offset)
 
 	for (i = 0; i < sz - offset; ++i) {
 		fprintf(stderr, "#%-2d %s\n", i, messages[i]);
+		/* %p is correct (as opposed to %pP) since this is the host */
 		sprintf(buf, "addr2line %p -e %s",
 			trace[i + offset], __get_prog_name());
 		file = popen(buf, "r");

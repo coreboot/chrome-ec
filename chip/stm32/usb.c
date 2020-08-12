@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -351,7 +351,7 @@ static void ep0_event(enum usb_ep_event evt)
 	if (evt != USB_EVENT_RESET)
 		return;
 
-	STM32_USB_EP(0) = (1 << 9) /* control EP */ |
+	STM32_USB_EP(0) = BIT(9) /* control EP */ |
 			  (2 << 4) /* TX NAK */ |
 			  (3 << 12) /* RX VALID */;
 
@@ -409,13 +409,19 @@ static void usb_suspend(void)
 	hook_call_deferred(&usb_pm_change_notify_hooks_data, 0);
 }
 
+/*
+ * SOF was received (set in interrupt), reset in usb_resume in the
+ * unexpected state case.
+ */
+static volatile int sof_received;
+
 static void usb_resume_deferred(void)
 {
 	uint32_t state = (STM32_USB_FNR & STM32_USB_FNR_RXDP_RXDM_MASK)
 		>> STM32_USB_FNR_RXDP_RXDM_SHIFT;
 
-	CPRINTF("RSMd %d %04x\n", state, STM32_USB_CNTR);
-	if (state == 2 || state == 3)
+	CPRINTF("RSMd %d %04x %d\n", state, STM32_USB_CNTR, sof_received);
+	if (sof_received == 0 && (state == 2 || state == 3))
 		usb_suspend();
 	else
 		hook_call_deferred(&usb_pm_change_notify_hooks_data, 0);
@@ -447,10 +453,17 @@ static void usb_resume(void)
 	 * reset condition for 20ms, so reading D+/D- after ~3ms should be safe
 	 * (there is no chance we end up sampling during a bus transaction).
 	 */
-	if (state == 2 || state == 3)
+	if (state == 2 || state == 3) {
+		/*
+		 * This function is already called from interrupt context so
+		 * there is no risk of race here.
+		 */
+		sof_received = 0;
+		STM32_USB_CNTR |= STM32_USB_CNTR_SOFM;
 		hook_call_deferred(&usb_resume_deferred_data, 3 * MSEC);
-	else
+	} else {
 		hook_call_deferred(&usb_pm_change_notify_hooks_data, 0);
+	}
 }
 
 #ifdef CONFIG_USB_REMOTE_WAKEUP
@@ -593,7 +606,7 @@ static void usb_interrupt_handle_wake(uint16_t status)
 	if (good || state == 3 || esof_count <= -USB_RESUME_TIMEOUT_MS) {
 		int ep;
 
-		STM32_USB_CNTR &= ~(STM32_USB_CNTR_ESOFM | STM32_USB_CNTR_SOFM);
+		STM32_USB_CNTR &= ~STM32_USB_CNTR_ESOFM;
 		usb_wake_done = 1;
 		if (!good) {
 			CPRINTF("wake error: cnt=%d state=%d\n",
@@ -618,6 +631,15 @@ void usb_interrupt(void)
 		usb_reset();
 
 #ifdef CONFIG_USB_SUSPEND
+	if (status & STM32_USB_ISTR_SOF) {
+		sof_received = 1;
+		/*
+		 * The wake handler also only cares about the _first_ SOF that
+		 * is received, so we can disable that interrupt.
+		 */
+		STM32_USB_CNTR &= ~STM32_USB_CNTR_SOFM;
+	}
+
 #ifdef CONFIG_USB_REMOTE_WAKEUP
 	if (status & (STM32_USB_ISTR_ESOF | STM32_USB_ISTR_SOF) &&
 			!usb_wake_done)
@@ -673,8 +695,8 @@ void usb_init(void)
 	STM32_USB_BTABLE = 0;
 
 	/* EXTI18 is USB wake up interrupt */
-	/* STM32_EXTI_RTSR |= 1 << 18; */
-	/* STM32_EXTI_IMR |= 1 << 18; */
+	/* STM32_EXTI_RTSR |= BIT(18); */
+	/* STM32_EXTI_IMR |= BIT(18); */
 
 	/* Enable interrupt handlers */
 	task_enable_irq(STM32_IRQ_USB_LP);
@@ -875,4 +897,62 @@ static int command_serialno(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(serialno, command_serialno,
 	"load/set [value]",
 	"Read and write USB serial number");
+
 #endif  /* CONFIG_USB_SERIALNO */
+
+#ifdef CONFIG_MAC_ADDR
+
+/* Save MAC address into pstate region. */
+static int usb_save_mac_addr(const char *mac_addr)
+{
+	int rv;
+
+	if (!mac_addr) {
+		return EC_ERROR_INVAL;
+	}
+
+	/* Save this new MAC address to flash. */
+	rv = board_write_mac_addr(mac_addr);
+	if (rv) {
+		return rv;
+	}
+
+	/* Load this new MAC address to memory. */
+	if (board_read_mac_addr() != NULL) {
+		return EC_SUCCESS;
+	} else {
+		return EC_ERROR_UNKNOWN;
+	}
+}
+
+static int command_macaddr(int argc, char **argv)
+{
+	const char* buf;
+	int rv = EC_SUCCESS;
+
+	if (argc != 1) {
+		if ((strcasecmp(argv[1], "set") == 0) &&
+		    (argc == 3)) {
+			ccprintf("Saving MAC address\n");
+			rv = usb_save_mac_addr(argv[2]);
+		} else if ((strcasecmp(argv[1], "load") == 0) &&
+			   (argc == 2)) {
+			ccprintf("Loading MAC address\n");
+		} else {
+			return EC_ERROR_INVAL;
+		}
+	}
+
+	buf = board_read_mac_addr();
+	if (buf == NULL) {
+		buf = DEFAULT_MAC_ADDR;
+	}
+	ccprintf("MAC address: %s\n", buf);
+	return rv;
+}
+
+DECLARE_CONSOLE_COMMAND(macaddr, command_macaddr,
+	"load/set [value]",
+	"Read and write MAC address");
+
+#endif  /* CONFIG_MAC_ADDR */

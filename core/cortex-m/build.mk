@@ -1,13 +1,15 @@
 # -*- makefile -*-
-# Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+# Copyright 2012 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
 # Cortex-M4 core OS files build
 #
 
-# Select ARMv7-m bare-metal toolchain
-$(call set-option,CROSS_COMPILE,$(CROSS_COMPILE_arm),arm-none-eabi-)
+# Use coreboot-sdk
+$(call set-option,CROSS_COMPILE,\
+	$(CROSS_COMPILE_arm),\
+	/opt/coreboot-sdk/bin/arm-eabi-)
 
 # FPU compilation flags
 CFLAGS_FPU-$(CONFIG_FPU)=-mfpu=fpv4-sp-d16 -mfloat-abi=hard

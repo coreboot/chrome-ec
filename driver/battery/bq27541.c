@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -12,7 +12,7 @@
 #include "i2c.h"
 #include "util.h"
 
-#define BQ27541_ADDR                0xaa
+#define BQ27541_ADDR_FLAGS          0x55
 #define BQ27541_TYPE_ID             0x0541
 #define BQ27741_TYPE_ID             0x0741
 #define BQ27742_TYPE_ID             0x0742
@@ -153,13 +153,6 @@ int battery_time_at_rate(int rate, int *minutes)
 	if (rv)
 		return rv;
 	return bq27541_read(REG_AT_RATE_TIME_TO_EMPTY, minutes);
-}
-
-int battery_manufacturer_name(char *dest, int size)
-{
-	strzcpy(dest, "<unkn>", size);
-
-	return EC_SUCCESS;
 }
 
 int battery_device_chemistry(char *dest, int size)
@@ -312,7 +305,7 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 		rv = bq27541_read(REG_PROTECTOR, &val);
 		if (rv)
 			return BATTERY_DISCONNECT_ERROR;
-		if (!(val & (1 << 6))) {
+		if (!(val & BIT(6))) {
 			not_disconnected = 1;
 			return BATTERY_NOT_DISCONNECTED;
 		}

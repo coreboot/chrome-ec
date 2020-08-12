@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -67,7 +67,7 @@ enum tap_states {
 
 /* Tap sensor to use */
 static struct motion_sensor_t *sensor =
-&motion_sensors[CONFIG_GESTURE_SENSOR_BATTERY_TAP];
+&motion_sensors[CONFIG_GESTURE_SENSOR_DOUBLE_TAP];
 
 /* Tap state information */
 static int history_z[MAX_WINDOW];  /* Changes in Z */
@@ -261,14 +261,15 @@ static int gesture_tap_for_battery(void)
 			CPRINTS("tap st %d->%d, error div by 0",
 				state_p, state);
 		else
-			CPRINTF("[%T tap st %d->%d, st_cnt %-3d ",
-				state_p, state, state_cnt);
-			CPRINTF("Z_in:Z_out %-3d, Z_in:XY_in %-3d ",
+			CPRINTS("tap st %d->%d, st_cnt %-3d "
+				"Z_in:Z_out %-3d, Z_in:XY_in %-3d "
+				"dZ_in %-8.3d, dZ_in_max %-8.3d, "
+				"dZ_out %-8.3d",
+				state_p, state, state_cnt,
 				delta_z_inner / delta_z_outer,
-				delta_z_inner / delta_xy_inner);
-			CPRINTF("dZ_in %-8.3d, dZ_in_max %-8.3d, "
-				"dZ_out %-8.3d]\n",
-				delta_z_inner, delta_z_inner_max,
+				delta_z_inner / delta_xy_inner,
+				delta_z_inner,
+				delta_z_inner_max,
 				delta_z_outer);
 	}
 

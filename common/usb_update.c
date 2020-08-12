@@ -8,7 +8,6 @@
 #include "console.h"
 #include "consumer.h"
 #include "curve25519.h"
-#include "extension.h"
 #include "flash.h"
 #include "queue_policies.h"
 #include "host_command.h"
@@ -22,6 +21,7 @@
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USB, format, ## args)
 
 /*
  * This file is an adaptation layer between the USB interface and the firmware
@@ -222,7 +222,8 @@ static int try_vendor_command(struct consumer const *consumer, size_t count)
 
 		switch (subcommand) {
 		case UPDATE_EXTRA_CMD_IMMEDIATE_RESET:
-			CPRINTS("Rebooting!\n\n\n");
+			CPRINTS("Rebooting!");
+			CPRINTF("\n\n");
 			cflush();
 			system_reset(SYSTEM_RESET_MANUALLY_TRIGGERED);
 			/* Unreachable, unless something bad happens. */
@@ -251,7 +252,7 @@ static int try_vendor_command(struct consumer const *consumer, size_t count)
 				response = EC_RES_ERROR;
 			}
 #else
-			system_run_image_copy(SYSTEM_IMAGE_RW);
+			system_run_image_copy(EC_IMAGE_RW);
 #endif
 			break;
 #ifdef CONFIG_RWSIG

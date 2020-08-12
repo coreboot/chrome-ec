@@ -48,7 +48,6 @@
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER
-#define CONFIG_CHARGER_V2
 #define CONFIG_CHARGER_BD9995X
 #define CONFIG_CHARGER_BD9995X_CHGEN
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
@@ -76,7 +75,7 @@
 #define CONFIG_TABLET_MODE
 
 /* USB PD config */
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DUAL_ROLE
@@ -84,7 +83,7 @@
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX  /* for both PS8751 and ANX3429 */
@@ -93,6 +92,7 @@
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_COMM_LOCKED
 
 #define CONFIG_USBC_SS_MUX
@@ -133,7 +133,6 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR_NCP15WB
 #define CONFIG_DPTF
-#define CONFIG_DPTF_DEVICE_ORIENTATION
 #define CONFIG_SCI_GPIO GPIO_PCH_SCI_L
 #define CONFIG_VOLUME_BUTTONS
 #define GPIO_VOLUME_DOWN_L GPIO_EC_VOLDN_BTN_ODL
@@ -203,8 +202,8 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_MAG_BMI160_BMM150
-#define BMI160_SEC_ADDR BMM150_ADDR0	/* 8-bit address */
+#define CONFIG_MAG_BMI_BMM150
+#define CONFIG_ACCELGYRO_SEC_ADDR_FLAGS BMM150_ADDR0_FLAGS
 #define CONFIG_MAG_CALIBRATE
 #define CONFIG_ACCEL_KX022
 #define CONFIG_ALS_OPT3001
@@ -214,11 +213,12 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
 /* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 1024
-
+#define CONFIG_ACCEL_FIFO_SIZE 1024
 /* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
 
 #ifndef __ASSEMBLER__
@@ -239,23 +239,6 @@ enum pwm_channel {
 	PWM_CH_LED_RED,
 	/* Number of PWM channels */
 	PWM_CH_COUNT
-};
-
-enum power_signal {
-#ifdef CONFIG_POWER_S0IX
-	X86_SLP_S0_N,
-#endif
-	X86_RSMRST_N,
-	X86_SLP_S3_N,
-	X86_SLP_S4_N,
-	X86_SUSPWRDNACK,
-
-	X86_ALL_SYS_PG,		/* PMIC_EC_PWROK_OD */
-	X86_PGOOD_PP3300,	/* GPIO_PP3300_PG */
-	X86_PGOOD_PP5000,	/* GPIO_PP5000_PG */
-
-	/* Number of X86 signals */
-	POWER_SIGNAL_COUNT
 };
 
 enum temp_sensor_id {
@@ -287,6 +270,7 @@ enum sensor_id {
 	BASE_MAG,
 	BASE_BARO,
 	LID_ALS,	/* firmware-reef-9042.B doesn't have this */
+	SENSOR_COUNT,
 };
 
 enum reef_board_version {
@@ -344,7 +328,7 @@ uint16_t board_i2c_slave_addrs(int controller);
  */
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK \
-	((1 << LID_ACCEL) | (1 << BASE_BARO) | (1 << LID_ALS))
+	(BIT(LID_ACCEL) | BIT(BASE_BARO) | BIT(LID_ALS))
 
 #endif /* !__ASSEMBLER__ */
 

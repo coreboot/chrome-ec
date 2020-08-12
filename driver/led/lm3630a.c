@@ -11,17 +11,19 @@
 #include "timer.h"
 
 
-/* 8-bit I2C address */
-#define LM3630A_I2C_ADDR (0x36 << 1)
+/* I2C address */
+#define LM3630A_I2C_ADDR_FLAGS 0x36
 
 static inline int lm3630a_write(uint8_t reg, uint8_t val)
 {
-	return i2c_write8(I2C_PORT_KBLIGHT, LM3630A_I2C_ADDR, reg, val);
+	return i2c_write8(I2C_PORT_KBLIGHT, LM3630A_I2C_ADDR_FLAGS,
+			  reg, val);
 }
 
 static inline int lm3630a_read(uint8_t reg, int *val)
 {
-	return i2c_read8(I2C_PORT_KBLIGHT, LM3630A_I2C_ADDR, reg, val);
+	return i2c_read8(I2C_PORT_KBLIGHT, LM3630A_I2C_ADDR_FLAGS,
+			 reg, val);
 }
 
 static void deferred_lm3630a_poweron(void)
@@ -38,6 +40,12 @@ DECLARE_DEFERRED(deferred_lm3630a_poweron);
 int lm3630a_poweron(void)
 {
 	int ret = 0;
+
+	/*
+	 * LM3630A will NAK I2C transactions for 1ms (tWAIT in the datasheet)
+	 * after HWEN asserted or after SW reset.
+	 */
+	msleep(1);
 
 	/* Sample PWM every 8 periods. */
 	ret |= lm3630a_write(LM3630A_REG_FILTER_STRENGTH, 0x3);

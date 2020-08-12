@@ -1,13 +1,12 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* System module for emulator */
 
-#include <stdlib.h>
-
 #include "common.h"
+#include "ec_commands.h"
 #include "host_test.h"
 #include "panic.h"
 #include "persistence.h"
@@ -16,13 +15,16 @@
 #include "timer.h"
 #include "util.h"
 
+// Forward declaration from <stdlib.h> to avoid declaration conflicts.
+void exit(int);
+
 #define SHARED_MEM_SIZE 0x2000 /* bytes */
 #define RAM_DATA_SIZE (sizeof(struct panic_data) + 512) /* bytes */
 uint8_t __shared_mem_buf[SHARED_MEM_SIZE + RAM_DATA_SIZE];
 
 static char *__ram_data = __shared_mem_buf + SHARED_MEM_SIZE;
 
-static enum system_image_copy_t __running_copy;
+static enum ec_image __running_copy;
 
 static void ramdata_set_persistent(void)
 {
@@ -75,7 +77,7 @@ static uint32_t get_image_copy(void)
 	uint32_t ret;
 
 	if (f == NULL)
-		return SYSTEM_IMAGE_UNKNOWN;
+		return EC_IMAGE_UNKNOWN;
 	fread(&ret, sizeof(ret), 1, f);
 	release_persistent_storage(f);
 	remove_persistent_storage("image_copy");
@@ -99,7 +101,7 @@ static uint32_t load_reset_flags(void)
 	uint32_t ret;
 
 	if (f == NULL)
-		return RESET_FLAG_POWER_ON;
+		return EC_RESET_FLAG_POWER_ON;
 	fread(&ret, sizeof(ret), 1, f);
 	release_persistent_storage(f);
 	remove_persistent_storage("reset_flags");
@@ -140,11 +142,11 @@ test_mockable void system_reset(int flags)
 {
 	uint32_t save_flags = 0;
 	if (flags & SYSTEM_RESET_PRESERVE_FLAGS)
-		save_flags = system_get_reset_flags() | RESET_FLAG_PRESERVED;
+		save_flags = system_get_reset_flags() | EC_RESET_FLAG_PRESERVED;
 	if (flags & SYSTEM_RESET_LEAVE_AP_OFF)
-		save_flags |= RESET_FLAG_AP_OFF;
+		save_flags |= EC_RESET_FLAG_AP_OFF;
 	if (flags & SYSTEM_RESET_HARD)
-		save_flags |= RESET_FLAG_HARD;
+		save_flags |= EC_RESET_FLAG_HARD;
 	if (save_flags)
 		save_reset_flags(save_flags);
 	emulator_reboot();
@@ -157,7 +159,7 @@ test_mockable void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	if (board_hibernate)
 		board_hibernate();
 
-	save_reset_flags(RESET_FLAG_HIBERNATE);
+	save_reset_flags(EC_RESET_FLAG_HIBERNATE);
 
 	if (!seconds && !microseconds)
 		exit(EXIT_CODE_HIBERNATE);
@@ -175,7 +177,7 @@ test_mockable int system_is_locked(void)
 
 #ifdef TEST_FUZZ
 /* When fuzzing, do not allow sysjumps. */
-int system_run_image_copy(enum system_image_copy_t copy)
+int system_run_image_copy(enum ec_image copy)
 {
 	ccprints("Emulator would sysjump here. Fuzzing: doing nothing.");
 	return EC_ERROR_UNKNOWN;
@@ -207,7 +209,7 @@ int system_set_bbram(enum system_bbram_idx idx, uint8_t value)
 	return EC_ERROR_UNIMPLEMENTED;
 }
 
-enum system_image_copy_t system_get_image_copy(void)
+enum ec_image system_get_image_copy(void)
 {
 	return __running_copy;
 }
@@ -249,13 +251,13 @@ static void __jump_resetvec(void)
 
 static void __ro_jump_resetvec(void)
 {
-	set_image_copy(SYSTEM_IMAGE_RO);
+	set_image_copy(EC_IMAGE_RO);
 	__jump_resetvec();
 }
 
 static void __rw_jump_resetvec(void)
 {
-	set_image_copy(SYSTEM_IMAGE_RW);
+	set_image_copy(EC_IMAGE_RW);
 	__jump_resetvec();
 }
 
@@ -268,8 +270,8 @@ void system_pre_init(void)
 
 	ramdata_get_persistent();
 	__running_copy = get_image_copy();
-	if (__running_copy == SYSTEM_IMAGE_UNKNOWN) {
-		__running_copy = SYSTEM_IMAGE_RO;
+	if (__running_copy == EC_IMAGE_UNKNOWN) {
+		__running_copy = EC_IMAGE_RO;
 		system_set_reset_flags(load_reset_flags());
 	}
 

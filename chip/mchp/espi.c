@@ -578,7 +578,7 @@ static void espi_pc_flush(void)
 void espi_vw_power_signal_interrupt(enum espi_vw_signal signal)
 {
 	CPRINTS("eSPI power signal interrupt for VW %d", signal);
-	trace1(0, ESPI, 0, "eSPI pwr intr VW %d", (signal - VW_SIGNAL_BASE));
+	trace1(0, ESPI, 0, "eSPI pwr intr VW %d", (signal - VW_SIGNAL_START));
 	power_signal_interrupt((enum gpio_signal) signal);
 }
 
@@ -595,7 +595,8 @@ void espi_vw_power_signal_interrupt(enum espi_vw_signal signal)
  */
 int espi_vw_set_wire(enum espi_vw_signal signal, uint8_t level)
 {
-	uint8_t tidx, ridx, src_num;
+	int tidx;
+	uint8_t ridx, src_num;
 
 	tidx = espi_vw_get_signal_index(signal);
 
@@ -624,7 +625,7 @@ int espi_vw_set_wire(enum espi_vw_signal signal, uint8_t level)
 	CPRINTS("eSPI VW Set Wire %s = %d",
 		espi_vw_get_wire_name(signal), level);
 	trace2(0, ESPI, 0, "VW SetWire[%d] = %d",
-	       ((uint32_t)signal - VW_SIGNAL_BASE), level);
+	       ((uint32_t)signal - VW_SIGNAL_START), level);
 #endif
 
 	return EC_SUCCESS;
@@ -671,8 +672,8 @@ static int espi_vw_s2m_set_w4m(uint32_t ridx, uint32_t src_num,
  */
 int espi_vw_pulse_wire(enum espi_vw_signal signal, int pulse_level)
 {
-	int rc;
-	uint8_t tidx, ridx, src_num, level;
+	int rc, tidx;
+	uint8_t ridx, src_num, level;
 
 	tidx = espi_vw_get_signal_index(signal);
 
@@ -720,8 +721,8 @@ int espi_vw_pulse_wire(enum espi_vw_signal signal, int pulse_level)
  */
 int espi_vw_get_wire(enum espi_vw_signal signal)
 {
-	int vw;
-	uint8_t tidx, ridx, src_num;
+	int vw, tidx;
+	uint8_t ridx, src_num;
 
 	vw = 0;
 	tidx = espi_vw_get_signal_index(signal);
@@ -734,7 +735,7 @@ int espi_vw_get_wire(enum espi_vw_signal signal)
 		CPRINTS("VW GetWire %s = %d",
 			espi_vw_get_wire_name(signal), vw);
 		trace2(0, ESPI, 0, "VW GetWire[%d] = %d",
-		       ((uint32_t)signal - VW_SIGNAL_BASE), vw);
+		       ((uint32_t)signal - VW_SIGNAL_START), vw);
 #endif
 	}
 
@@ -749,7 +750,8 @@ int espi_vw_get_wire(enum espi_vw_signal signal)
  */
 int espi_vw_enable_wire_int(enum espi_vw_signal signal)
 {
-	uint8_t tidx, ridx, src_num, girq_num, bpos;
+	int tidx;
+	uint8_t ridx, src_num, girq_num, bpos;
 
 	tidx = espi_vw_get_signal_index(signal);
 
@@ -763,7 +765,7 @@ int espi_vw_enable_wire_int(enum espi_vw_signal signal)
 	CPRINTS("VW IntrEn for VW[%s]",
 		espi_vw_get_wire_name(signal));
 	trace1(0, ESPI, 0, "VW IntrEn for VW[%d]",
-	       ((uint32_t)signal - VW_SIGNAL_BASE));
+	       ((uint32_t)signal - VW_SIGNAL_START));
 #endif
 
 	ridx = vw_info_tbl[tidx].reg_idx;
@@ -799,7 +801,8 @@ int espi_vw_enable_wire_int(enum espi_vw_signal signal)
  */
 int espi_vw_disable_wire_int(enum espi_vw_signal signal)
 {
-	uint8_t tidx, ridx, src_num, bpos;
+	int tidx;
+	uint8_t ridx, src_num, bpos;
 
 	tidx = espi_vw_get_signal_index(signal);
 
@@ -813,7 +816,7 @@ int espi_vw_disable_wire_int(enum espi_vw_signal signal)
 	CPRINTS("VW IntrDis for VW[%s]",
 		espi_vw_get_wire_name(signal));
 	trace1(0, ESPI, 0, "VW IntrDis for VW[%d]",
-	       (signal - VW_SIGNAL_BASE));
+	       (signal - VW_SIGNAL_START));
 #endif
 
 	ridx = vw_info_tbl[tidx].reg_idx;
@@ -1426,7 +1429,7 @@ void espi_init(void)
 		<< MCHP_ESPI_CAP1_IO_BITPOS);
 #endif
 
-#ifdef CONFIG_HOSTCMD_ESPI_PLTRST_IS_VWIRE
+#ifdef CONFIG_HOSTCMD_ESPI
 	MCHP_ESPI_IO_PLTRST_SRC = MCHP_ESPI_PLTRST_SRC_VW;
 #else
 	MCHP_ESPI_IO_PLTRST_SRC = MCHP_ESPI_PLTRST_SRC_PIN;

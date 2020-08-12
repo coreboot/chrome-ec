@@ -3,17 +3,52 @@
  * found in the LICENSE file.
  */
 
-/* Header for tablet_mode.c */
+#ifndef __CROS_EC_TABLET_MODE_H
+#define __CROS_EC_TABLET_MODE_H
 
-/* Return 1 if in tablet mode, 0 otherwise */
+/**
+ * Get tablet mode state
+ *
+ * Return 1 if in tablet mode, 0 otherwise
+ */
 int tablet_get_mode(void);
+
+/**
+ * Set tablet mode state
+ *
+ * @param mode 1: tablet mode. 0 clamshell mode.
+ */
 void tablet_set_mode(int mode);
 
 /**
- * Interrupt service routine for tablet switch.
+ * Disable tablet mode
+ */
+void tablet_disable(void);
+
+/**
+ * Interrupt service routine for gmr sensor.
  *
- * TABLET_MODE_GPIO_L must be defined.
+ * GMR_TABLET_MODE_GPIO_L must be defined.
  *
  * @param signal: GPIO signal
  */
-void tablet_mode_isr(enum gpio_signal signal);
+void gmr_tablet_switch_isr(enum gpio_signal signal);
+
+/**
+ * Disables the interrupt on GPIO connected to gmr sensor. Additionally, it
+ * disables the tablet mode switch sub-system and turns off tablet mode. This
+ * is useful when the same firmware is shared between convertible and clamshell
+ * devices to turn off gmr sensor's tablet mode detection on clamshell.
+ */
+void gmr_tablet_switch_disable(void);
+
+/**
+ * This must be defined when CONFIG_GMR_TABLET_MODE_CUSTOM is defined. This
+ * allows a board to override the default behavior that determines if the
+ * 360 sensor is active: !gpio_get_level(GMR_TABLET_MODE_GPIO_L).
+ *
+ * Returns 1 if the 360 sensor is active; otherwise 0.
+ */
+int board_sensor_at_360(void);
+
+#endif  /* __CROS_EC_TABLET_MODE_H */

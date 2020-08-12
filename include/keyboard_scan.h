@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,6 +9,7 @@
 #define __CROS_EC_KEYBOARD_SCAN_H
 
 #include "common.h"
+#include "compile_time_macros.h"
 #include "keyboard_config.h"
 
 struct keyboard_scan_config {
@@ -30,7 +31,7 @@ struct keyboard_scan_config {
 	/* Revert to interrupt mode after no keyboard activity for this long */
 	uint32_t poll_timeout_us;
 	/* Mask with 1 bits only for keys that actually exist */
-	uint8_t actual_key_mask[KEYBOARD_COLS];
+	uint8_t actual_key_mask[KEYBOARD_COLS_MAX];
 };
 
 /**
@@ -51,9 +52,9 @@ extern struct keyboard_scan_config keyscan_config;
 enum boot_key {
 	/* No keys other than keyboard-controlled reset keys */
 	BOOT_KEY_NONE = 0,
-	BOOT_KEY_ESC = (1 << 0),
-	BOOT_KEY_DOWN_ARROW = (1 << 1),
-	BOOT_KEY_LEFT_SHIFT = (1 << 2),
+	BOOT_KEY_ESC = BIT(0),
+	BOOT_KEY_DOWN_ARROW = BIT(1),
+	BOOT_KEY_LEFT_SHIFT = BIT(2),
 };
 
 #if defined(HAS_TASK_KEYSCAN) && defined(CONFIG_KEYBOARD_BOOT_KEYS)
@@ -78,7 +79,7 @@ static inline uint32_t keyboard_scan_get_boot_keys(void)
 
 /**
  * Return a pointer to the current debounced keyboard matrix state, which is
- * KEYBOARD_COLS bytes long.
+ * KEYBOARD_COLS_MAX bytes long.
  */
 const uint8_t *keyboard_scan_get_state(void);
 
@@ -126,6 +127,12 @@ void keyboard_suppress_noise(void);
  * the number of bits actually used is the supported keyboard layout.
  */
 int keyboard_get_keyboard_id(void);
+#endif
+
+#ifdef CONFIG_KEYBOARD_RUNTIME_KEYS
+void set_vol_up_key(uint8_t row, uint8_t col);
+#else
+static inline void set_vol_up_key(uint8_t row, uint8_t col) {}
 #endif
 
 #endif  /* __CROS_EC_KEYBOARD_SCAN_H */

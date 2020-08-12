@@ -23,7 +23,9 @@ GPIO_INT(WP_L,			PIN(A, 1), GPIO_INT_BOTH,			switch_interrupt)
 GPIO_INT(VOLUME_DOWN_L,		PIN(7, 0), GPIO_INT_BOTH | GPIO_PULL_UP,	button_interrupt)
 GPIO_INT(VOLUME_UP_L,		PIN(7, 5), GPIO_INT_BOTH | GPIO_PULL_UP,	button_interrupt)
 GPIO_INT(USB_C0_CABLE_DET,	PIN(3, 7), GPIO_INT_RISING,			anx74xx_cable_det_interrupt)
-GPIO_INT(6AXIS_INT_L,		PIN(8, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V,	bmi160_interrupt)
+
+/* GPIO_INT_BOTH is required for PSL wake from hibernate, but we don't need an interrupt handler. */
+GPIO(EC_RST_ODL,		PIN(0, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH | GPIO_LOCKED)
 
 GPIO(EN_PWR_A,			PIN(E, 2), GPIO_OUT_LOW)			/* Enable Power */
 GPIO(EN_PP1800_SENSOR,		PIN(6, 7), GPIO_OUT_LOW)			/* Enable Power */
@@ -39,9 +41,6 @@ GPIO(PCH_SYS_PWROK,		PIN(D, 6), GPIO_OUT_LOW)			/* Power OK to SOC */
 GPIO(CPU_PROCHOT,		PIN(3, 4), GPIO_INPUT | GPIO_SEL_1P8V)		/* PROCHOT to SOC */
 GPIO(APU_ALERT_L,		PIN(A, 2), GPIO_INPUT)				/* Alert to SOC */
 GPIO(3AXIS_INT_L,		PIN(5, 0), GPIO_INPUT | GPIO_SEL_1P8V)		/* 3 Axis Accel */
-
-/* We don't have 5V rail control but the BQ24392 driver expects the GPIO */
-UNIMPLEMENTED(EN_PP5000)
 
 GPIO(BAT_LED_AMBER_L,		PIN(C, 3), GPIO_OUT_HIGH)
 GPIO(BAT_LED_WHITE_L,		PIN(C, 4), GPIO_OUT_HIGH)
@@ -110,5 +109,7 @@ ALTERNATE(PIN_MASK(1, 0x7F), 0, MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH)		/* KSO_03-
 ALTERNATE(PIN_MASK(0, 0xE0), 0, MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH)		/* KSO_10-12 */
 
 /* Power Switch Logic (PSL) inputs */
-ALTERNATE(PIN_MASK(0, 0x03), 0, MODULE_PMU, 0)					/* GPIO00, GPIO01 */
-ALTERNATE(PIN_MASK(D, 0x04), 0, MODULE_PMU, 0)					/* GPIOD2 */
+ALTERNATE(PIN_MASK(0, 0x07), 0, MODULE_PMU, 0)					/* GPIO00 = AC_PRESENT,
+										   GPIO01 = POWER_BUTTON_L,
+										   GPIO02 = EC_RST_ODL */
+ALTERNATE(PIN_MASK(D, 0x04), 0, MODULE_PMU, 0)					/* GPIOD2 = LID_OPEN */

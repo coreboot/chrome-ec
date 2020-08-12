@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -244,7 +244,7 @@ void __hw_timer_enable_clock(int n, int enable)
 		reg = &STM32_RCC_APB2ENR;
 		mask = STM32_RCC_PB2_TIM1;
 	}
-#elif defined(CHIP_FAMILY_STM32L)
+#elif defined(CHIP_FAMILY_STM32L) || defined(CHIP_FAMILY_STM32F4)
 	if (n >= 9 && n <= 11) {
 		reg = &STM32_RCC_APB2ENR;
 		mask = STM32_RCC_PB2_TIM9 << (n - 9);
@@ -414,7 +414,7 @@ void hwtimer_setup_watchdog(void)
 	 * Timer configuration : Down counter, counter disabled, update
 	 * event only on overflow.
 	 */
-	timer->cr1 = 0x0014 | (1 << 7);
+	timer->cr1 = 0x0014 | BIT(7);
 
 	/* TIM (slave mode) uses TIM_CLOCK_LSB as internal trigger */
 	timer->smcr = 0x0007 | (TSMAP(TIM_WATCHDOG, TIM_CLOCK_LSB) << 4);
@@ -426,7 +426,7 @@ void hwtimer_setup_watchdog(void)
 	 * to obtain the number of times TIM_CLOCK_LSB can overflow before we
 	 * generate an interrupt.
 	 */
-	timer->arr = timer->cnt = CONFIG_AUX_TIMER_PERIOD_MS * MSEC / (1 << 16);
+	timer->arr = timer->cnt = CONFIG_AUX_TIMER_PERIOD_MS * MSEC / BIT(16);
 
 	/* count on every TIM_CLOCK_LSB overflow */
 	timer->psc = 0;
@@ -451,4 +451,4 @@ void hwtimer_reset_watchdog(void)
 	timer->cnt = timer->arr;
 }
 
-#endif  /* defined(CONFIG_WATCHDOG) */
+#endif  /* defined(CONFIG_WATCHDOG_HELP) */

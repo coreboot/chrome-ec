@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -64,7 +64,7 @@ static inline void spi_enable_clock(int port)
 #define TIM_TX_CCR_IDX(p) ((p) ? TIM_TX_CCR_C1 : TIM_TX_CCR_C0)
 #define TIM_RX_CCR_IDX(p) ((p) ? TIM_RX_CCR_C1 : TIM_RX_CCR_C0)
 #define TIM_CCR_CS  1
-#define EXTI_COMP_MASK(p) ((p) ? (1<<22) : (1 << 21))
+#define EXTI_COMP_MASK(p) ((p) ? BIT(22) : BIT(21))
 #define IRQ_COMP STM32_IRQ_COMP
 /* triggers packet detection on comparator falling edge */
 #define EXTI_XTSR STM32_EXTI_FTSR
@@ -93,12 +93,12 @@ static inline void pd_tx_spi_reset(int port)
 {
 	if (port == 0) {
 		/* Reset SPI2 */
-		STM32_RCC_APB1RSTR |= (1 << 14);
-		STM32_RCC_APB1RSTR &= ~(1 << 14);
+		STM32_RCC_APB1RSTR |= BIT(14);
+		STM32_RCC_APB1RSTR &= ~BIT(14);
 	} else {
 		/* Reset SPI1 */
-		STM32_RCC_APB2RSTR |= (1 << 12);
-		STM32_RCC_APB2RSTR &= ~(1 << 12);
+		STM32_RCC_APB2RSTR |= BIT(12);
+		STM32_RCC_APB2RSTR &= ~BIT(12);
 	}
 }
 
@@ -243,7 +243,7 @@ static inline void pd_config_init(int port, uint8_t power_role)
 	pd_tx_init();
 
 	/* Reset mux ... for NONE polarity doesn't matter */
-	usb_mux_set(port, TYPEC_MUX_NONE, USB_SWITCH_DISCONNECT, 0);
+	usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_DISCONNECT, 0);
 
 	if (port == 0) {
 			gpio_set_level(GPIO_USB_C0_CC1_VCONN1_EN_L, 1);

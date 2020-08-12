@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -159,7 +159,7 @@ static void allow_max_request(void)
 	int prochot_status;
 	if (charge_circuit_state == CHARGE_CIRCUIT_WEDGED) {
 		/* Read PROCHOT status register to clear it */
-		i2c_read8(I2C_PORT_CHARGER, BQ24773_ADDR,
+		i2c_read8(I2C_PORT_CHARGER, BQ24773_ADDR_FLAGS,
 			  BQ24773_PROCHOT_STATUS, &prochot_status);
 		charge_circuit_state = CHARGE_CIRCUIT_OK;
 	}
@@ -301,8 +301,8 @@ static void check_charge_wedged(void)
 
 	if (charge_circuit_state == CHARGE_CIRCUIT_OK) {
 		/* Check PROCHOT warning */
-		rv = i2c_read8(I2C_PORT_CHARGER, BQ24773_ADDR,
-				BQ24773_PROCHOT_STATUS, &prochot_status);
+		rv = i2c_read8(I2C_PORT_CHARGER, BQ24773_ADDR_FLAGS,
+			       BQ24773_PROCHOT_STATUS, &prochot_status);
 		if (rv)
 			prochot_status = 0;
 
@@ -412,15 +412,7 @@ void extpower_task(void)
 			extpower_board_hacks(extpower, extpower_prev);
 			extpower_prev = extpower;
 
-			hook_notify(HOOK_AC_CHANGE);
-
-			/* Forward notification to host */
-			if (extpower)
-				host_set_single_event(
-						EC_HOST_EVENT_AC_CONNECTED);
-			else
-				host_set_single_event(
-						EC_HOST_EVENT_AC_DISCONNECTED);
+			extpower_handle_update(extpower);
 		}
 	}
 }

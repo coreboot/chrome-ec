@@ -100,10 +100,10 @@ void timer_init(void)
 	uint32_t val = 0;
 
 	/* Ensure timer is not running */
-	MCHP_TMR32_CTL(0) &= ~(1 << 5);
+	MCHP_TMR32_CTL(0) &= ~BIT(5);
 
 	/* Enable timer */
-	MCHP_TMR32_CTL(0) |= (1 << 0);
+	MCHP_TMR32_CTL(0) |= BIT(0);
 
 	val = MCHP_TMR32_CTL(0);
 
@@ -119,10 +119,10 @@ void timer_init(void)
 	MCHP_TMR32_CNT(0) = 0xffffffff;
 
 	/* Auto restart */
-	MCHP_TMR32_CTL(0) |= (1 << 3);
+	MCHP_TMR32_CTL(0) |= BIT(3);
 
 	/* Start counting in timer 0 */
-	MCHP_TMR32_CTL(0) |= (1 << 5);
+	MCHP_TMR32_CTL(0) |= BIT(5);
 
 }
 
@@ -246,7 +246,7 @@ void uart_write_c(char c)
 		uart_write_c('\r');
 
 	/* Wait for space in transmit FIFO. */
-	while (!(MCHP_UART_LSR(0) & (1 << 5)))
+	while (!(MCHP_UART_LSR(0) & BIT(5)))
 		;
 	MCHP_UART_TB(0) = c;
 }
@@ -282,31 +282,31 @@ void jump_to_image(uintptr_t init_addr)
 void uart_init(void)
 {
 	/* Set UART to reset on VCC1_RESET instaed of nSIO_RESET */
-	MCHP_UART_CFG(0) &= ~(1 << 1);
+	MCHP_UART_CFG(0) &= ~BIT(1);
 
 	/* Baud rate = 115200. 1.8432MHz clock. Divisor = 1 */
 
 	/* Set CLK_SRC = 0 */
-	MCHP_UART_CFG(0) &= ~(1 << 0);
+	MCHP_UART_CFG(0) &= ~BIT(0);
 
 	/* Set DLAB = 1 */
-	MCHP_UART_LCR(0) |= (1 << 7);
+	MCHP_UART_LCR(0) |= BIT(7);
 
 	/* PBRG0/PBRG1 */
 	MCHP_UART_PBRG0(0) = 1;
 	MCHP_UART_PBRG1(0) = 0;
 
 	/* Set DLAB = 0 */
-	MCHP_UART_LCR(0) &= ~(1 << 7);
+	MCHP_UART_LCR(0) &= ~BIT(7);
 
 	/* Set word length to 8-bit */
-	MCHP_UART_LCR(0) |= (1 << 0) | (1 << 1);
+	MCHP_UART_LCR(0) |= BIT(0) | BIT(1);
 
 	/* Enable FIFO */
-	MCHP_UART_FCR(0) = (1 << 0);
+	MCHP_UART_FCR(0) = BIT(0);
 
 	/* Activate UART */
-	MCHP_UART_ACT(0) |= (1 << 0);
+	MCHP_UART_ACT(0) |= BIT(0);
 
 	gpio_config_module(MODULE_UART, 1);
 }
@@ -327,10 +327,10 @@ void system_init(void)
 
 	if (rst_sts || wdt_sts)
 		MCHP_VBAT_RAM(MCHP_IMAGETYPE_IDX)
-					= SYSTEM_IMAGE_UNKNOWN;
+					= EC_IMAGE_UNKNOWN;
 }
 
-enum system_image_copy_t system_get_image_copy(void)
+enum ec_image system_get_image_copy(void)
 {
 	return MCHP_VBAT_RAM(MCHP_IMAGETYPE_IDX);
 }
@@ -343,8 +343,8 @@ enum system_image_copy_t system_get_image_copy(void)
  * LFW checks reset type:
  *   VTR POR, chip reset, WDT reset then set VBAT Load type to Unknown.
  * LFW reads VBAT Load type:
- *   SYSTEM_IMAGE_RO then read EC_RO from SPI flash and jump into it.
- *   SYSTEM_IMAGE_RO then read EC_RW from SPI flash and jump into it.
+ *   EC_IMAGE_RO then read EC_RO from SPI flash and jump into it.
+ *   EC_IMAGE_RO then read EC_RW from SPI flash and jump into it.
  *   Other then jump into EC image loaded by Boot-ROM.
  */
 void lfw_main(void)
@@ -388,7 +388,7 @@ void lfw_main(void)
 	uart_puts("\n");
 
 	switch (system_get_image_copy()) {
-	case SYSTEM_IMAGE_RW:
+	case EC_IMAGE_RW:
 		trace0(0, LFW, 0, "LFW EC_RW Load");
 		uart_puts("lfw-RW load\n");
 
@@ -396,7 +396,7 @@ void lfw_main(void)
 		spi_image_load(CONFIG_EC_WRITABLE_STORAGE_OFF +
 			       CONFIG_RW_STORAGE_OFF);
 		break;
-	case SYSTEM_IMAGE_RO:
+	case EC_IMAGE_RO:
 		trace0(0, LFW, 0, "LFW EC_RO Load");
 		uart_puts("lfw-RO load\n");
 
@@ -408,8 +408,7 @@ void lfw_main(void)
 		trace0(0, LFW, 0, "LFW default: use EC_RO loaded by BootROM");
 		uart_puts("lfw-default case\n");
 
-		MCHP_VBAT_RAM(MCHP_IMAGETYPE_IDX) =
-							SYSTEM_IMAGE_RO;
+		MCHP_VBAT_RAM(MCHP_IMAGETYPE_IDX) = EC_IMAGE_RO;
 
 		init_addr = CONFIG_RO_MEM_OFF + CONFIG_PROGRAM_MEMORY_BASE;
 	}

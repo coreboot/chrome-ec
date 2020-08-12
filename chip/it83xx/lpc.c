@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -103,7 +103,7 @@ static void pm_put_data_out(enum lpc_pm_ch ch, uint8_t out)
 static void pm_clear_ibf(enum lpc_pm_ch ch)
 {
 	/* bit7, write-1 clear IBF */
-	IT83XX_PMC_PMIE(ch) |= (1 << 7);
+	IT83XX_PMC_PMIE(ch) |= BIT(7);
 }
 
 #ifdef CONFIG_KEYBOARD_IRQ_GPIO
@@ -340,8 +340,8 @@ void lpc_keyboard_clear_buffer(void)
 	uint32_t int_mask = get_int_mask();
 	interrupt_disable();
 	/* bit6, write-1 clear OBF */
-	IT83XX_KBC_KBHICR |= (1 << 6);
-	IT83XX_KBC_KBHICR &= ~(1 << 6);
+	IT83XX_KBC_KBHICR |= BIT(6);
+	IT83XX_KBC_KBHICR &= ~BIT(6);
 	set_int_mask(int_mask);
 }
 
@@ -392,8 +392,8 @@ void lpc_kbc_ibf_interrupt(void)
 		keyboard_host_write(IT83XX_KBC_KBHIDIR,
 			(IT83XX_KBC_KBHISR & 0x08) ? 1 : 0);
 		/* bit7, write-1 clear IBF */
-		IT83XX_KBC_KBHICR |= (1 << 7);
-		IT83XX_KBC_KBHICR &= ~(1 << 7);
+		IT83XX_KBC_KBHICR |= BIT(7);
+		IT83XX_KBC_KBHICR &= ~BIT(7);
 	}
 
 	task_clear_pending_irq(IT83XX_IRQ_KBC_IN);
@@ -602,6 +602,17 @@ static void lpc_init(void)
 	memset(lpc_host_args, 0, sizeof(*lpc_host_args));
 
 	/* Host LPC I/O cycle mapping to RAM */
+#ifdef IT83XX_H2RAM_REMAPPING
+	/*
+	 * On it8xxx2 series, host I/O cycles are mapped to the first block
+	 * (0x80080000~0x80080fff) at default, and it is adjustable.
+	 * We should set the correct offset depends on the base address of
+	 * H2RAM section, so EC will be able to receive/handle commands from
+	 * host.
+	 */
+	IT83XX_GCTRL_H2ROFSR =
+		(CONFIG_H2RAM_BASE - CONFIG_RAM_BASE) / CONFIG_H2RAM_SIZE;
+#endif
 	/*
 	 * bit[4], H2RAM through LPC IO cycle.
 	 * bit[1], H2RAM window 1 enabled.
@@ -745,7 +756,7 @@ static enum ec_status lpc_get_protocol_info(struct host_cmd_handler_args *args)
 	struct ec_response_get_protocol_info *r = args->response;
 
 	memset(r, 0, sizeof(*r));
-	r->protocol_versions = (1 << 3);
+	r->protocol_versions = BIT(3);
 	r->max_request_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->max_response_packet_size = EC_LPC_HOST_PACKET_SIZE;
 	r->flags = 0;

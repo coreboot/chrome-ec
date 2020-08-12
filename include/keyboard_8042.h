@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -44,5 +44,28 @@ void keyboard_host_write(int data, int is_cmd);
  */
 enum ec_error_list keyboard_scancode_callback(uint16_t *make_code,
 					      int8_t pressed);
+
+/**
+ * Send aux response data to host.
+ *
+ * @param data	Aux response to send to host.
+ */
+void send_aux_data_to_host(uint8_t data);
+
+/**
+ * Send aux data to device.
+ *
+ * @param data	Aux data to send to device.
+ */
+void send_aux_data_to_device(uint8_t data);
+
+/*
+ * This function can help change the keyboard top row layout as presented to the
+ * AP. If changing the position of the "Refresh" key from T3, you may also need
+ * to change KEYBOARD_ROW_REFRESH accordingly so that recovery mode can work on
+ * the EC side of things (also see related CONFIG_KEYBOARD_REFRESH_ROW3)
+ */
+__override_proto
+const struct ec_response_keybd_config *board_vivaldi_keybd_config(void);
 
 #endif  /* __CROS_EC_KEYBOARD_8042_H */

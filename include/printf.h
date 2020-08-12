@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -35,14 +35,13 @@
  * useful for printing times, voltages, and currents.
  *
  * Length may be:
- *   - 'l' = integer is 64-bit instead of native 32-bit
+ *   - 'l'  = DEPRECATED, do not use (see crbug.com/984041)
+ *   - 'll' = integer is 64-bit
+ *   - 'z'  = integer is sizeof(size_t)
  *
  * Type may be:
  *   - 'c' - character
  *   - 's' - null-terminated ASCII string
- *   - 'h' - binary data, print as hex; precision is length of data in bytes.
- *           So "%.8h" prints 8 bytes of binary data
- *   - 'p' - pointer
  *   - 'd' - signed integer
  *   - 'i' - signed integer if CONFIG_PRINTF_LEGACY_LI_FORMAT is set (ignore l)
  *   - 'u' - unsigned integer
@@ -51,9 +50,15 @@
  *   - 'b' - unsigned integer, print as binary
  *
  * Special format codes:
- *   - "%T" - current time in seconds - interpreted as "%.6T" for precision.
- *           This does NOT use up any arguments.
+ *   - '%ph' - binary data, print as hex; Use HEX_BUF(buffer, size) to encode
+ *             parameters.
+ *   - '%pP' - raw pointer.
+ *   - "%pT" - current time in seconds - interpreted as "%.6T" for precision.
+ *           Supply PRINTF_TIMESTAMP_NOW to use the current time, or supply a
+ *           pointer to a 64-bit timestamp to print.
  */
+
+#ifndef HIDE_EC_STDLIB
 
 /**
  * Print formatted output to a function, like vfprintf()
@@ -66,10 +71,10 @@
  * @param context	Context pointer to pass to addchar()
  * @param format	Format string (see above for acceptable formats)
  * @param args		Parameters
- * @return EC_SUCCESS, or non-zero if output was truncated.
+ * @return EC_SUCCESS, or EC_ERROR_OVERFLOW if the output was truncated.
  */
-int vfnprintf(int (*addchar)(void *context, int c), void *context,
-	      const char *format, va_list args);
+__stdlib_compat int vfnprintf(int (*addchar)(void *context, int c),
+			      void *context, const char *format, va_list args);
 
 /**
  * Print formatted outut to a string.
@@ -79,12 +84,13 @@ int vfnprintf(int (*addchar)(void *context, int c), void *context,
  * @param str		Destination string
  * @param size		Size of destination in bytes
  * @param format	Format string
- * @return EC_SUCCESS, or non-zero if output was truncated.
+ * @return EC_SUCCESS, or EC_ERROR_OVERFLOW if the output was truncated.
  */
-int snprintf(char *str, int size, const char *format, ...);
+__attribute__((__format__(__printf__, 3, 4)))
+__stdlib_compat int snprintf(char *str, int size, const char *format, ...);
 
 /**
- * Print formatted outut to a string.
+ * Print formatted output to a string.
  *
  * Guarantees null-termination if size!=0.
  *
@@ -92,8 +98,12 @@ int snprintf(char *str, int size, const char *format, ...);
  * @param size		Size of destination in bytes
  * @param format	Format string
  * @param args		Parameters
- * @return EC_SUCCESS, or non-zero if output was truncated.
+ * @return The string length written to str, or a negative value on error.
+ *         The negative values can be -EC_ERROR_INVAL or -EC_ERROR_OVERFLOW.
  */
-int vsnprintf(char *str, int size, const char *format, va_list args);
+__stdlib_compat int vsnprintf(char *str, int size, const char *format,
+			      va_list args);
+
+#endif  /* !HIDE_EC_STDLIB */
 
 #endif  /* __CROS_EC_PRINTF_H */

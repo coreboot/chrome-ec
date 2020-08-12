@@ -146,14 +146,14 @@ static enum table_case decode_table_10_7(uint32_t doepint)
 
 /* For STATUS/OUT: Use two DMA descriptors, each with one-packet buffers */
 #define NUM_OUT_BUFFERS 2
-static uint8_t ep0_setup_buf[USB_MAX_PACKET_SIZE];
+static uint8_t __aligned(4) ep0_setup_buf[USB_MAX_PACKET_SIZE];
 
 /* For IN: Several DMA descriptors, all pointing into one large buffer, so that
  * we can return the configuration descriptor as one big blob.
  */
 #define NUM_IN_PACKETS_AT_ONCE 4
 #define IN_BUF_SIZE (NUM_IN_PACKETS_AT_ONCE * USB_MAX_PACKET_SIZE)
-static uint8_t ep0_in_buf[IN_BUF_SIZE];
+static uint8_t __aligned(4) ep0_in_buf[IN_BUF_SIZE];
 
 struct dwc_usb_ep ep0_ctl = {
 	.max_packet = USB_MAX_PACKET_SIZE,
@@ -232,7 +232,8 @@ int usb_write_ep(uint32_t ep_num, int len, void *data)
 	struct dwc_usb_ep *ep = usb_ctl.ep[ep_num];
 
 	if (GR_USB_DIEPCTL(ep_num) & DXEPCTL_EPENA) {
-		CPRINTS("usb_write_ep ep%d: FAIL: tx already in progress!");
+		CPRINTS("usb_write_ep ep%d: FAIL: tx already in progress!",
+			ep_num);
 		return 0;
 	}
 

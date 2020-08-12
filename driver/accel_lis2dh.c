@@ -4,7 +4,8 @@
  */
 
 /**
- * LIS2DH/LIS2DH12 accelerometer module for Chrome EC 3D digital accelerometer
+ * Accelerometer module driver for Chrome EC 3D digital accelerometers:
+ * LIS2DH/LIS2DH12/LNG2DM
  */
 
 #include "accelgyro.h"
@@ -20,6 +21,7 @@
 #include "driver/stm_mems_common.h"
 
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
+#define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 
 /**
@@ -51,8 +53,10 @@ static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 		normalized_range = 2;
 	}
 
-	/* Lock accel resource to prevent another task from attempting
-	 * to write accel parameters until we are done */
+	/*
+	 * Lock accel resource to prevent another task from attempting
+	 * to write accel parameters until we are done.
+	 */
 	mutex_lock(s->mutex);
 	err = st_write_data_with_mask(s, LIS2DH_CTRL4_ADDR, LIS2DH_FS_MASK,
 				      val);
@@ -96,8 +100,7 @@ static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 		normalized_rate = LIS2DH_REG_TO_NORMALIZE(reg_val);
 	}
 
-	if (normalized_rate > MIN(LIS2DH_ODR_MAX_VAL,
-				CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ) ||
+	if (normalized_rate > LIS2DH_ODR_MAX_VAL ||
 	    normalized_rate < LIS2DH_ODR_MIN_VAL)
 		return EC_RES_INVALID_PARAM;
 
@@ -119,9 +122,10 @@ static int is_data_ready(const struct motion_sensor_t *s, int *ready)
 {
 	int ret, tmp;
 
-	ret = st_raw_read8(s->port, s->addr, LIS2DH_STATUS_REG, &tmp);
+	ret = st_raw_read8(s->port, s->i2c_spi_addr_flags,
+			   LIS2DH_STATUS_REG, &tmp);
 	if (ret != EC_SUCCESS) {
-		CPRINTF("[%T %s type:0x%X RS Error]", s->name, s->type);
+		CPRINTS("%s type:0x%X RS Error", s->name, s->type);
 		return ret;
 	}
 
@@ -130,7 +134,7 @@ static int is_data_ready(const struct motion_sensor_t *s, int *ready)
 	return EC_SUCCESS;
 }
 
-static int read(const struct motion_sensor_t *s, vector_3_t v)
+static int read(const struct motion_sensor_t *s, intv3_t v)
 {
 	uint8_t raw[OUT_XYZ_SIZE];
 	int ret, tmp = 0;
@@ -151,11 +155,10 @@ static int read(const struct motion_sensor_t *s, vector_3_t v)
 	}
 
 	/* Read output data bytes starting at LIS2DH_OUT_X_L_ADDR */
-	ret = st_raw_read_n(s->port, s->addr, LIS2DH_OUT_X_L_ADDR, raw,
-			 OUT_XYZ_SIZE);
+	ret = st_raw_read_n(s->port, s->i2c_spi_addr_flags,
+			    LIS2DH_OUT_X_L_ADDR, raw, OUT_XYZ_SIZE);
 	if (ret != EC_SUCCESS) {
-		CPRINTF("[%T %s type:0x%X RD XYZ Error]",
-			s->name, s->type);
+		CPRINTS("%s type:0x%X RD XYZ Error", s->name, s->type);
 		return ret;
 	}
 
@@ -178,7 +181,8 @@ static int init(const struct motion_sensor_t *s)
 	 * complete boot procedure.
 	 */
 	do {
-		ret = st_raw_read8(s->port, s->addr, LIS2DH_WHO_AM_I_REG, &tmp);
+		ret = st_raw_read8(s->port, s->i2c_spi_addr_flags,
+				   LIS2DH_WHO_AM_I_REG, &tmp);
 		if (ret != EC_SUCCESS) {
 			udelay(10);
 			count--;
@@ -194,38 +198,39 @@ static int init(const struct motion_sensor_t *s)
 		return EC_ERROR_ACCESS_DENIED;
 
 	mutex_lock(s->mutex);
-	/* Device can be re-initialized after a reboot so any control
-	 * register must be restored to it's default
+	/*
+	 * Device can be re-initialized after a reboot so any control
+	 * register must be restored to it's default.
 	 */
 	/* Enable all accel axes data and clear old settings */
-	ret = st_raw_write8(s->port, s->addr, LIS2DH_CTRL1_ADDR,
-			 LIS2DH_ENABLE_ALL_AXES);
+	ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+			    LIS2DH_CTRL1_ADDR, LIS2DH_ENABLE_ALL_AXES);
 	if (ret != EC_SUCCESS)
 		goto err_unlock;
 
-	ret = st_raw_write8(s->port, s->addr, LIS2DH_CTRL2_ADDR,
-			 LIS2DH_CTRL2_RESET_VAL);
+	ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+			    LIS2DH_CTRL2_ADDR, LIS2DH_CTRL2_RESET_VAL);
 	if (ret != EC_SUCCESS)
 		goto err_unlock;
 
-	ret = st_raw_write8(s->port, s->addr, LIS2DH_CTRL3_ADDR,
-			 LIS2DH_CTRL3_RESET_VAL);
+	ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+			    LIS2DH_CTRL3_ADDR, LIS2DH_CTRL3_RESET_VAL);
 	if (ret != EC_SUCCESS)
 		goto err_unlock;
 
 	/* Enable BDU */
-	ret = st_raw_write8(s->port, s->addr, LIS2DH_CTRL4_ADDR,
-			 LIS2DH_BDU_MASK);
+	ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+			    LIS2DH_CTRL4_ADDR, LIS2DH_BDU_MASK);
 	if (ret != EC_SUCCESS)
 		goto err_unlock;
 
-	ret = st_raw_write8(s->port, s->addr, LIS2DH_CTRL5_ADDR,
-			 LIS2DH_CTRL5_RESET_VAL);
+	ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+			    LIS2DH_CTRL5_ADDR, LIS2DH_CTRL5_RESET_VAL);
 	if (ret != EC_SUCCESS)
 		goto err_unlock;
 
-	ret = st_raw_write8(s->port, s->addr, LIS2DH_CTRL6_ADDR,
-			 LIS2DH_CTRL6_RESET_VAL);
+	ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+			    LIS2DH_CTRL6_ADDR, LIS2DH_CTRL6_RESET_VAL);
 	if (ret != EC_SUCCESS)
 		goto err_unlock;
 
@@ -237,8 +242,8 @@ static int init(const struct motion_sensor_t *s)
 	return sensor_init_done(s);
 
 err_unlock:
-	CPRINTF("[%T %s: MS Init type:0x%X Error]\n", s->name, s->type);
 	mutex_unlock(s->mutex);
+	CPRINTS("%s: MS Init type:0x%X Error", s->name, s->type);
 
 	return ret;
 }
@@ -253,5 +258,4 @@ const struct accelgyro_drv lis2dh_drv = {
 	.get_data_rate = st_get_data_rate,
 	.set_offset = st_set_offset,
 	.get_offset = st_get_offset,
-	.perform_calib = NULL,
 };

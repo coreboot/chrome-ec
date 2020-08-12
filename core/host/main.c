@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -85,7 +85,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	 * We lose the program name as LLVM fuzzer takes over main function:
 	 * make up one.
 	 */
-	static const char *name = "ec-fuzz";
+	static const char *name = STRINGIFY(PROJECT)".exe";
 
 	if (!initialized) {
 		__prog_name = name;
@@ -93,6 +93,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		initialized = 1;
 		/* We can't sleep yet, busy loop waiting for tasks to start. */
 		wait_for_task_started_nosleep();
+		/* Let tasks settle. */
+		msleep(50 * MSEC);
 	}
 
 	return test_fuzz_one_input(data, size);

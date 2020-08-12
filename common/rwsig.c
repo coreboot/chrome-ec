@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,6 +21,7 @@
 #include "usb_pd.h"
 #include "util.h"
 #include "vb21_struct.h"
+#include "vboot.h"
 #include "version.h"
 
 /* Console output macros */
@@ -66,7 +67,7 @@ void rwsig_jump_now(void)
 	/* When system is locked, only boot to RW if all flash is protected. */
 	if (!system_is_locked() ||
 	    flash_get_protect() & EC_FLASH_PROTECT_ALL_NOW)
-		system_run_image_copy(SYSTEM_IMAGE_RW);
+		system_run_image_copy(EC_IMAGE_RW);
 }
 
 /*
@@ -119,7 +120,7 @@ int rwsig_check_signature(void)
 	CPRINTS("Verifying RW image...");
 
 #ifdef CONFIG_ROLLBACK
-	rw_rollback_version = system_get_rollback_version(SYSTEM_IMAGE_RW);
+	rw_rollback_version = system_get_rollback_version(EC_IMAGE_RW);
 	min_rollback_version = rollback_get_minimum_version();
 
 	if (rw_rollback_version < 0 || min_rollback_version < 0 ||
@@ -142,7 +143,7 @@ int rwsig_check_signature(void)
 	sig = (const uint8_t *)CONFIG_RW_SIG_ADDR;
 	rwlen = CONFIG_RW_SIZE - CONFIG_RW_SIG_SIZE;
 #elif defined(CONFIG_RWSIG_TYPE_RWSIG)
-	vb21_key = (const struct vb21_packed_key *)CONFIG_RO_PUBKEY_ADDR;
+	vb21_key = vb21_get_packed_key();
 	vb21_sig = (const struct vb21_signature *)CONFIG_RW_SIG_ADDR;
 
 	if (vb21_key->c.magic != VB21_MAGIC_PACKED_KEY ||
@@ -241,8 +242,8 @@ out:
 }
 
 #ifdef HAS_TASK_RWSIG
-#define TASK_EVENT_ABORT TASK_EVENT_CUSTOM(1)
-#define TASK_EVENT_CONTINUE TASK_EVENT_CUSTOM(2)
+#define TASK_EVENT_ABORT TASK_EVENT_CUSTOM_BIT(0)
+#define TASK_EVENT_CONTINUE TASK_EVENT_CUSTOM_BIT(1)
 
 static enum rwsig_status rwsig_status;
 
@@ -265,8 +266,14 @@ void rwsig_task(void *u)
 {
 	uint32_t evt;
 
-	if (system_get_image_copy() != SYSTEM_IMAGE_RO)
+	if (system_get_image_copy() != EC_IMAGE_RO)
 		goto exit;
+
+	/* Stay in RO if we were asked to when reset. */
+	if (system_get_reset_flags() & EC_RESET_FLAG_STAY_IN_RO) {
+		rwsig_status = RWSIG_ABORTED;
+		goto exit;
+	}
 
 	rwsig_status = RWSIG_IN_PROGRESS;
 	if (!rwsig_check_signature()) {

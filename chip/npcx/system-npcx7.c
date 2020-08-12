@@ -7,6 +7,8 @@
 #include "common.h"
 #include "console.h"
 #include "cpu.h"
+#include "ec_commands.h"
+#include "hooks.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
@@ -16,9 +18,13 @@
 #include "system_chip.h"
 #include "rom_chip.h"
 
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+
 /* Macros for last 32K ram block */
 #define LAST_RAM_BLK ((NPCX_RAM_SIZE / (32 * 1024)) - 1)
-#define RAM_PD_MASK  (~(1 << LAST_RAM_BLK))
+/* Higher bits are reserved and need to be masked */
+#define RAM_PD_MASK  (~BIT(LAST_RAM_BLK))
 
 /*****************************************************************************/
 /* IC specific low-level driver depends on chip series */
@@ -107,7 +113,7 @@ __enter_hibernate_in_last_block(void)
 	 * for better power consumption.
 	 */
 	NPCX_RAM_PD(0) = RAM_PD_MASK & 0xFF;
-	NPCX_RAM_PD(1) = RAM_PD_MASK >> 8;
+	NPCX_RAM_PD(1) = (RAM_PD_MASK >> 8) & 0x0F;
 
 	/* Set deep idle mode */
 	NPCX_PMCSR = 0x6;
@@ -158,3 +164,13 @@ void __hibernate_npcx_series(void)
 #endif
 }
 
+#if defined(CONFIG_HIBERNATE_PSL)
+static void report_psl_wake_source(void)
+{
+	if (!(system_get_reset_flags() & EC_RESET_FLAG_HIBERNATE))
+		return;
+
+	CPRINTS("PSL_CTS: 0x%x", NPCX_GLUE_PSL_CTS & 0xf);
+}
+DECLARE_HOOK(HOOK_INIT, report_psl_wake_source, HOOK_PRIO_DEFAULT);
+#endif

@@ -7,6 +7,9 @@
 
 CONSOLE_CHANNEL(CC_COMMAND,      "command")
 CONSOLE_CHANNEL(CC_ACCEL,        "accel")
+#ifdef CONFIG_AUDIO_CODEC
+CONSOLE_CHANNEL(CC_AUDIO_CODEC,  "audio_codec")
+#endif
 #ifdef CONFIG_BLUETOOTH_LE
 CONSOLE_CHANNEL(CC_BLUETOOTH_LE, "bluetooth_le")
 #ifdef CONFIG_BLUETOOTH_LL_DEBUG
@@ -19,12 +22,6 @@ CONSOLE_CHANNEL(CC_BLUETOOTH_HCI,"bluetooth_hci")
 #ifdef CONFIG_CEC
 CONSOLE_CHANNEL(CC_CEC, "cec")
 #endif
-#ifdef CONFIG_EXTENSION_COMMAND
-CONSOLE_CHANNEL(CC_EXTENSION,    "extension")
-#endif
-#if defined(CONFIG_PHYSICAL_PRESENCE)
-CONSOLE_CHANNEL(CC_CCD,          "ccd")
-#endif
 CONSOLE_CHANNEL(CC_CHARGER,      "charger")
 #ifdef HAS_TASK_CHIPSET
 CONSOLE_CHANNEL(CC_CHIPSET,      "chipset")
@@ -36,7 +33,7 @@ CONSOLE_CHANNEL(CC_DMA,          "dma")
 #if defined(CONFIG_DEVICE_EVENT) || defined(CONFIG_HOSTCMD_EVENTS)
 CONSOLE_CHANNEL(CC_EVENTS,       "events")
 #endif
-#ifdef HAS_TASK_FPSENSOR
+#if defined(HAS_TASK_FPSENSOR) || defined(CONFIG_FP_SENSOR)
 CONSOLE_CHANNEL(CC_FP,           "fingerprint")
 #endif
 #ifdef CONFIG_GESTURE_SW_DETECTION
@@ -49,6 +46,9 @@ CONSOLE_CHANNEL(CC_HOSTCMD,      "hostcmd")
 #ifdef CONFIG_I2C
 CONSOLE_CHANNEL(CC_I2C,          "i2c")
 #endif
+#ifdef CONFIG_IPI
+CONSOLE_CHANNEL(CC_IPI,          "ipi")
+#endif
 CONSOLE_CHANNEL(CC_KEYBOARD,     "keyboard")
 #ifdef HAS_TASK_KEYSCAN
 CONSOLE_CHANNEL(CC_KEYSCAN,      "keyscan")
@@ -59,7 +59,11 @@ CONSOLE_CHANNEL(CC_LIDANGLE,     "lidangle")
 #ifdef HAS_TASK_LIGHTBAR
 CONSOLE_CHANNEL(CC_LIGHTBAR,     "lightbar")
 #endif
-#ifdef CONFIG_HOSTCMD_X86
+/*
+   Use CC_LPC for any host communication channels to x86,
+   like LPC, eSPI, or IPC...
+ */
+#if defined(CONFIG_HOSTCMD_X86) || defined(HAS_TASK_IPC_MNG) || defined(HAS_TASK_HECI_RX)
 CONSOLE_CHANNEL(CC_LPC,          "lpc")
 #endif
 CONSOLE_CHANNEL(CC_MOTION_LID,   "motionlid")
@@ -68,16 +72,13 @@ CONSOLE_CHANNEL(CC_MOTION_SENSE, "motionsense")
 CONSOLE_CHANNEL(CC_PD_HOST_CMD,  "pdhostcm")
 #endif
 CONSOLE_CHANNEL(CC_PORT80,       "port80")
+#ifdef CONFIG_PS2
+CONSOLE_CHANNEL(CC_PS2,          "ps2")
+#endif
 #if defined(CONFIG_PWM) || defined(CONFIG_FANS)
 CONSOLE_CHANNEL(CC_PWM,          "pwm")
 #endif
 CONSOLE_CHANNEL(CC_SPI,          "spi")
-#ifdef CONFIG_RBOX
-CONSOLE_CHANNEL(CC_RBOX,         "rbox")
-#endif
-#ifdef CONFIG_SPS
-CONSOLE_CHANNEL(CC_SPS,          "sps")
-#endif
 #if defined(CONFIG_SWITCH) || defined(CONFIG_LID_SWITCH)
 CONSOLE_CHANNEL(CC_SWITCH,       "switch")
 #endif
@@ -93,16 +94,10 @@ CONSOLE_CHANNEL(CC_DPTF,         "dptf")
 CONSOLE_CHANNEL(CC_ALS,		 "als")
 #endif
 CONSOLE_CHANNEL(CC_THERMAL,      "thermal")
-#ifdef CHIP_G
-CONSOLE_CHANNEL(CC_TPM,          "tpm")
-#endif
 CONSOLE_CHANNEL(CC_USB,          "usb")
 CONSOLE_CHANNEL(CC_USBCHARGE,    "usbcharge")
 #if defined(CONFIG_USB_POWER_DELIVERY) || defined(CONFIG_USB_PD_TCPC)
 CONSOLE_CHANNEL(CC_USBPD,        "usbpd")
 #endif
 CONSOLE_CHANNEL(CC_VBOOT,        "vboot")
-#ifdef CONFIG_WAKE_ON_VOICE
-CONSOLE_CHANNEL(CC_WOV,          "wov")
-#endif
 CONSOLE_CHANNEL(CC_HOOK,         "hook")

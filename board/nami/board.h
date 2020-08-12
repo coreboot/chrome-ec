@@ -24,7 +24,6 @@
 #define CONFIG_CROS_BOARD_INFO
 #define CONFIG_CASE_CLOSED_DEBUG_EXTERNAL
 #define CONFIG_DPTF
-#define CONFIG_DPTF_DEVICE_ORIENTATION
 #define CONFIG_FLASH_SIZE 0x80000
 #define CONFIG_FPU
 #define CONFIG_I2C
@@ -32,6 +31,7 @@
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
+#define CONFIG_KEYBOARD_KEYPAD
 #define CONFIG_LED_COMMON
 #define CONFIG_LID_SWITCH
 #define CONFIG_LOW_POWER_IDLE
@@ -55,6 +55,7 @@
 #define CONFIG_FANS 1
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 50
+#define CONFIG_FAN_DYNAMIC
 #define CONFIG_THROTTLE_AP
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_SUPPRESSED_HOST_COMMANDS \
@@ -76,7 +77,8 @@
 #define CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_HOSTCMD_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 #define CONFIG_HOSTCMD_FLASH_SPI_INFO
 
 /* Battery */
@@ -87,13 +89,14 @@
 #define CONFIG_BATTERY_SMART
 #define CONFIG_PWR_STATE_DISCHARGE_FULL
 #define CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD
+#undef  CONFIG_BATT_HOST_FULL_FACTOR
+#define CONFIG_BATT_HOST_FULL_FACTOR	100
 
 /* Charger */
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGE_RAMP_HW /* This, or just RAMP? */
-
+#define CONFIG_CHARGE_MANAGER_EXTERNAL_POWER_LIMIT
 #define CONFIG_CHARGER
-#define CONFIG_CHARGER_V2
 #define CONFIG_CHARGER_ISL9238
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT 512
@@ -110,7 +113,7 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 #define CONFIG_CMD_CHARGER_ADC_AMON_BMON
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_EXTPOWER_GPIO
 #undef  CONFIG_EXTPOWER_DEBOUNCE_MS
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 1000
@@ -140,23 +143,22 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 #define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_TABLET_MODE
-#define CONFIG_LID_ANGLE_INVALID_CHECK
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 /* KB backlight driver */
 #define CONFIG_LED_DRIVER_LM3509
 
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
 /* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 512
-
+#define CONFIG_ACCEL_FIFO_SIZE 512
 /* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
-#define CONFIG_TABLET_SWITCH
-#define TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
+#define CONFIG_GMR_TABLET_MODE
+#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 
 /* USB */
 #define CONFIG_USB_CHARGER
@@ -168,7 +170,8 @@
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
-#define CONFIG_USB_PD_PORT_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#define CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT 4500
 #define CONFIG_USB_PD_VBUS_DETECT_GPIO
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
@@ -178,9 +181,11 @@
 #define CONFIG_USB_PD_TCPM_PS8751
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
 
 
 /* BC 1.2 charger */
@@ -208,25 +213,18 @@
 #define I2C_PORT_ALS		NPCX_I2C_PORT3
 
 /* I2C addresses */
-#define I2C_ADDR_MP2949		0x40
-#define I2C_ADDR_EEPROM		0xa0
+#define I2C_ADDR_MP2949_FLAGS	0x20
+#define I2C_ADDR_EEPROM_FLAGS	0x50
 
 #ifndef __ASSEMBLER__
 
+/* support factory keyboard test */
+#define CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+
 #include "gpio_signal.h"
 #include "registers.h"
-
-enum power_signal {
-#ifdef CONFIG_POWER_S0IX
-	X86_SLP_S0_DEASSERTED,
-#endif
-	X86_SLP_S3_DEASSERTED,
-	X86_SLP_S4_DEASSERTED,
-	X86_SLP_SUS_DEASSERTED,
-	X86_RSMRST_L_PGOOD,
-	X86_PMIC_DPWROK,
-	POWER_SIGNAL_COUNT,
-};
 
 enum temp_sensor_id {
 	TEMP_SENSOR_LOCAL = 0,
@@ -247,6 +245,7 @@ enum sensor_id {
 	BASE_ACCEL,
 	BASE_GYRO,
 	LID_ALS,
+	SENSOR_COUNT,
 };
 
 enum adc_channel {
@@ -286,7 +285,18 @@ enum oem_id {
 	PROJECT_COUNT,
 };
 
-#define SKU_ID_MASK_CONVERTIBLE	(1 << 9)
+enum model_id {
+	/* Sona variants */
+	MODEL_SYNDRA = 1,
+	/* Akali variants */
+	MODEL_EKKO = 1,
+	MODEL_BARD = 2,
+};
+
+#define SKU_ID_MASK_KBLIGHT	BIT(0)
+#define SKU_ID_MASK_CONVERTIBLE	BIT(9)
+#define SKU_ID_MASK_KEYPAD	BIT(15)
+#define SKU_ID_MASK_UK2		BIT(18)
 
 /* TODO(crosbug.com/p/61098): Verify the numbers below. */
 /*
@@ -310,12 +320,16 @@ void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
 
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK ((1 << LID_ACCEL) | (1 << LID_ALS))
+#define CONFIG_ACCEL_FORCE_MODE_MASK (BIT(LID_ACCEL) | BIT(LID_ALS))
 
 /* These should be referenced only after  HOOK_INIT:HOOK_PRIO_INIT_I2C+1. */
 extern uint16_t board_version;
 extern uint8_t oem;
-extern uint16_t sku;
+extern uint32_t sku;
+extern uint8_t model;
+
+/* SKU_ID[24:31] are dedicated to OEM customization */
+#define CBI_SKU_CUSTOM_FIELD(val)	((val) >> 24)
 
 #endif /* !__ASSEMBLER__ */
 

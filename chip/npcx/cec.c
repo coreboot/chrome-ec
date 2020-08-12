@@ -4,6 +4,7 @@
  */
 
 #include "atomic.h"
+#include "cec.h"
 #include "clock_chip.h"
 #include "console.h"
 #include "ec_commands.h"
@@ -33,7 +34,7 @@
 #endif
 
 /* Notification from interrupt to CEC task that data has been received */
-#define TASK_EVENT_RECEIVED_DATA TASK_EVENT_CUSTOM(1 << 0)
+#define TASK_EVENT_RECEIVED_DATA TASK_EVENT_CUSTOM_BIT(0)
 
 /* CEC broadcast address. Also the highest possible CEC address */
 #define CEC_BROADCAST_ADDR 15
@@ -46,15 +47,6 @@
  * five resends attempts
  */
 #define CEC_MAX_RESENDS 5
-
-/* Size of circular buffer used to store incoming CEC messages */
-#define CEC_CIRCBUF_SIZE 20
-#if CEC_CIRCBUF_SIZE < MAX_CEC_MSG_LEN + 1
-#error "Buffer must fit at least a CEC message and a length byte"
-#endif
-#if CEC_CIRCBUF_SIZE > 255
-#error "Buffer size must not exceed 255 since offsets are uint8_t"
-#endif
 
 /*
  * Free time timing (us). Our free-time is calculated from the end of
@@ -190,39 +182,13 @@ enum cap_edge {
 	CAP_EDGE_RISING
 };
 
-/* CEC message during transfer */
-struct cec_msg_transfer {
-	/* The CEC message */
-	uint8_t buf[MAX_CEC_MSG_LEN];
-	/* Bit offset  */
-	uint8_t bit;
-	/* Byte offset */
-	uint8_t byte;
-};
-
-/*
- * Circular buffer of completed incoming CEC messages
- * ready to be read out by AP
- */
-struct cec_rx_cb {
-	/* Cicular buffer data  */
-	uint8_t buf[CEC_CIRCBUF_SIZE];
-	/*
-	 * Write offset. Updated from interrupt context when we
-	 * have received a complete message.
-	 */
-	uint8_t write_offset;
-	/* Read offset. Updated when AP sends CEC read command */
-	uint8_t read_offset;
-};
-
 /* Receive buffer and states */
 struct cec_rx {
 	/*
 	 * The current incoming message being parsed. Copied to
-	 * circular buffer upon completion
+	 * receive queue upon completion
 	 */
-	struct cec_msg_transfer msgt;
+	struct cec_msg_transfer transfer;
 	/* End of Message received from source? */
 	uint8_t eom;
 	/* A follower NAK:ed a broadcast transfer */
@@ -239,7 +205,7 @@ struct cec_rx {
 /* Transfer buffer and states */
 struct cec_tx {
 	/* Outgoing message */
-	struct cec_msg_transfer msgt;
+	struct cec_msg_transfer transfer;
 	/* Message length */
 	uint8_t len;
 	/* Number of resends attempted in current send */
@@ -259,8 +225,8 @@ static enum cec_state cec_state;
 /* Parameters and buffers for follower (receiver) state */
 static struct cec_rx cec_rx;
 
-/* Circular buffer of completed incoming */
-static struct cec_rx_cb cec_rx_cb;
+/* Queue of completed incoming CEC messages */
+static struct cec_rx_queue cec_rx_queue;
 
 /* Parameters and buffer for initiator (sender) state */
 static struct cec_tx cec_tx;
@@ -287,12 +253,6 @@ static uint32_t cec_events;
 
 /* APB1 frequency. Store divided by 10k to avoid some runtime divisions */
 static uint32_t apb1_freq_div_10k;
-
-/*
- * Mutex for the read-offset of the circular buffer. Needed since the
- * buffer is read and flushed from different contexts
- */
-static struct mutex circbuf_readoffset_mutex;
 
 static void send_mkbp_event(uint32_t event)
 {
@@ -374,123 +334,6 @@ static void tmr2_stop(void)
 	SET_FIELD(NPCX_TCKC(mdl), NPCX_TCKC_C2CSEL_FIELD, 0);
 }
 
-static int msgt_get_bit(const struct cec_msg_transfer *msgt)
-{
-	if (msgt->byte >= MAX_CEC_MSG_LEN)
-		return 0;
-
-	return msgt->buf[msgt->byte] & (0x80 >> msgt->bit);
-}
-
-static void msgt_set_bit(struct cec_msg_transfer *msgt, int val)
-{
-	uint8_t bit_flag;
-
-	if (msgt->byte >= MAX_CEC_MSG_LEN)
-		return;
-	bit_flag = 0x80 >> msgt->bit;
-	msgt->buf[msgt->byte] &= ~bit_flag;
-	if (val)
-		msgt->buf[msgt->byte] |= bit_flag;
-}
-
-static void msgt_inc_bit(struct cec_msg_transfer *msgt)
-{
-	if (++(msgt->bit) == 8) {
-		if (msgt->byte >= MAX_CEC_MSG_LEN)
-			return;
-		msgt->bit = 0;
-		msgt->byte++;
-	}
-}
-
-static int msgt_is_eom(const struct cec_msg_transfer *msgt, int len)
-{
-	if (msgt->bit)
-		return 0;
-	return (msgt->byte == len);
-}
-
-static void rx_circbuf_flush(struct cec_rx_cb *cb)
-{
-	mutex_lock(&circbuf_readoffset_mutex);
-	cb->read_offset = 0;
-	mutex_unlock(&circbuf_readoffset_mutex);
-	cb->write_offset = 0;
-}
-
-static int rx_circbuf_push(struct cec_rx_cb *cb, uint8_t *msg, uint8_t msg_len)
-{
-	int i;
-	uint32_t offset;
-
-	if (msg_len > MAX_CEC_MSG_LEN || msg_len == 0)
-		return EC_ERROR_INVAL;
-
-	offset = cb->write_offset;
-	/* Fill in message length last, if successful. Set to zero for now */
-	cb->buf[offset] = 0;
-	offset = (offset + 1) % CEC_CIRCBUF_SIZE;
-
-	for (i = 0 ; i < msg_len; i++) {
-		if (offset == cb->read_offset) {
-			/* Buffer full */
-			return EC_ERROR_OVERFLOW;
-		}
-
-		cb->buf[offset] = msg[i];
-		offset = (offset + 1) % CEC_CIRCBUF_SIZE;
-	}
-
-	/*
-	 * Don't commit if we caught up with read-offset
-	 * since that would indicate an empty buffer
-	 */
-	if (offset == cb->read_offset) {
-		/* Buffer full */
-		return EC_ERROR_OVERFLOW;
-	}
-
-	/* Commit the push */
-	cb->buf[cb->write_offset] = msg_len;
-	cb->write_offset = offset;
-
-	return EC_SUCCESS;
-}
-
-static int rx_circbuf_pop(struct cec_rx_cb *cb, uint8_t *msg, uint8_t *msg_len)
-{
-	int i;
-
-	mutex_lock(&circbuf_readoffset_mutex);
-	if (cb->read_offset == cb->write_offset) {
-		/* Circular buffer empty */
-		mutex_unlock(&circbuf_readoffset_mutex);
-		*msg_len = 0;
-		return -1;
-	}
-
-	/* The first byte in the buffer is the message length */
-	*msg_len = cb->buf[cb->read_offset];
-	if (*msg_len == 0 || *msg_len > MAX_CEC_MSG_LEN) {
-		mutex_unlock(&circbuf_readoffset_mutex);
-		*msg_len = 0;
-		CPRINTF("Invalid CEC msg size: %u\n", *msg_len);
-		return -1;
-	}
-
-	cb->read_offset = (cb->read_offset + 1) % CEC_CIRCBUF_SIZE;
-	for (i = 0; i < *msg_len; i++) {
-		msg[i] = cb->buf[cb->read_offset];
-		cb->read_offset = (cb->read_offset + 1) % CEC_CIRCBUF_SIZE;
-
-	}
-
-	mutex_unlock(&circbuf_readoffset_mutex);
-
-	return 0;
-}
-
 void enter_state(enum cec_state new_state)
 {
 	int gpio = -1, timeout = -1;
@@ -503,16 +346,16 @@ void enter_state(enum cec_state new_state)
 		gpio = 1;
 		memset(&cec_rx, 0, sizeof(struct cec_rx));
 		memset(&cec_tx, 0, sizeof(struct cec_tx));
-		memset(&cec_rx_cb, 0, sizeof(struct cec_rx_cb));
+		memset(&cec_rx_queue, 0, sizeof(struct cec_rx_queue));
 		cap_charge = 0;
 		cap_delay = 0;
 		cec_events = 0;
 		break;
 	case CEC_STATE_IDLE:
-		cec_tx.msgt.bit = 0;
-		cec_tx.msgt.byte = 0;
-		cec_rx.msgt.bit = 0;
-		cec_rx.msgt.byte = 0;
+		cec_tx.transfer.bit = 0;
+		cec_tx.transfer.byte = 0;
+		cec_rx.transfer.bit = 0;
+		cec_rx.transfer.byte = 0;
 		if (cec_tx.len > 0) {
 			/* Execute a postponed send */
 			enter_state(CEC_STATE_INITIATOR_FREE_TIME);
@@ -535,8 +378,8 @@ void enter_state(enum cec_state new_state)
 		break;
 	case CEC_STATE_INITIATOR_START_LOW:
 		cec_tx.present_initiator = 1;
-		cec_tx.msgt.bit = 0;
-		cec_tx.msgt.byte = 0;
+		cec_tx.transfer.bit = 0;
+		cec_tx.transfer.byte = 0;
 		gpio = 0;
 		timeout = START_BIT_LOW_TICKS;
 		break;
@@ -549,25 +392,27 @@ void enter_state(enum cec_state new_state)
 	case CEC_STATE_INITIATOR_HEADER_DEST_LOW:
 	case CEC_STATE_INITIATOR_DATA_LOW:
 		gpio = 0;
-		timeout = DATA_LOW(msgt_get_bit(&cec_tx.msgt));
+		timeout = DATA_LOW(cec_transfer_get_bit(&cec_tx.transfer));
 		break;
 	case CEC_STATE_INITIATOR_HEADER_INIT_HIGH:
 		gpio = 1;
 		cap_edge = CAP_EDGE_FALLING;
-		timeout = DATA_HIGH(msgt_get_bit(&cec_tx.msgt));
+		timeout = DATA_HIGH(cec_transfer_get_bit(&cec_tx.transfer));
 		break;
 	case CEC_STATE_INITIATOR_HEADER_DEST_HIGH:
 	case CEC_STATE_INITIATOR_DATA_HIGH:
 		gpio = 1;
-		timeout = DATA_HIGH(msgt_get_bit(&cec_tx.msgt));
+		timeout = DATA_HIGH(cec_transfer_get_bit(&cec_tx.transfer));
 		break;
 	case CEC_STATE_INITIATOR_EOM_LOW:
 		gpio = 0;
-		timeout = DATA_LOW(msgt_is_eom(&cec_tx.msgt, cec_tx.len));
+		timeout = DATA_LOW(cec_transfer_is_eom(&cec_tx.transfer,
+						       cec_tx.len));
 		break;
 	case CEC_STATE_INITIATOR_EOM_HIGH:
 		gpio = 1;
-		timeout = DATA_HIGH(msgt_is_eom(&cec_tx.msgt, cec_tx.len));
+		timeout = DATA_HIGH(cec_transfer_is_eom(&cec_tx.transfer,
+							cec_tx.len));
 		break;
 	case CEC_STATE_INITIATOR_ACK_LOW:
 		gpio = 0;
@@ -581,7 +426,7 @@ void enter_state(enum cec_state new_state)
 		break;
 	case CEC_STATE_INITIATOR_ACK_VERIFY:
 		cec_tx.ack = !gpio_get_level(CEC_GPIO_OUT);
-		if ((cec_tx.msgt.buf[0] & 0x0f) == CEC_BROADCAST_ADDR) {
+		if ((cec_tx.transfer.buf[0] & 0x0f) == CEC_BROADCAST_ADDR) {
 			/*
 			 * We are sending a broadcast. Any follower can
 			 * can NAK a broadcast message the same way they
@@ -626,7 +471,7 @@ void enter_state(enum cec_state new_state)
 		timeout = CAP_DATA_HIGH_TICKS;
 		break;
 	case CEC_STATE_FOLLOWER_ACK_LOW:
-		addr = cec_rx.msgt.buf[0] & 0x0f;
+		addr = cec_rx.transfer.buf[0] & 0x0f;
 		if (addr == cec_addr) {
 			/* Destination is our address */
 			gpio = 0;
@@ -643,7 +488,7 @@ void enter_state(enum cec_state new_state)
 		 * We are at safe sample time. A broadcast frame is considered
 		 * lost if any follower pulls the line low
 		 */
-		if ((cec_rx.msgt.buf[0] & 0x0f) == CEC_BROADCAST_ADDR)
+		if ((cec_rx.transfer.buf[0] & 0x0f) == CEC_BROADCAST_ADDR)
 			cec_rx.broadcast_nak = !gpio_get_level(CEC_GPIO_OUT);
 		else
 			cec_rx.broadcast_nak = 0;
@@ -656,8 +501,8 @@ void enter_state(enum cec_state new_state)
 		break;
 	case CEC_STATE_FOLLOWER_ACK_FINISH:
 		gpio = 1;
-		if (cec_rx.eom || cec_rx.msgt.byte >= MAX_CEC_MSG_LEN) {
-			addr = cec_rx.msgt.buf[0] & 0x0f;
+		if (cec_rx.eom || cec_rx.transfer.byte >= MAX_CEC_MSG_LEN) {
+			addr = cec_rx.transfer.buf[0] & 0x0f;
 			if (addr == cec_addr || addr == CEC_BROADCAST_ADDR) {
 				task_set_event(TASK_ID_CEC,
 					       TASK_EVENT_RECEIVED_DATA, 0);
@@ -708,8 +553,8 @@ static void cec_event_timeout(void)
 		enter_state(CEC_STATE_INITIATOR_HEADER_INIT_HIGH);
 		break;
 	case CEC_STATE_INITIATOR_HEADER_INIT_HIGH:
-		msgt_inc_bit(&cec_tx.msgt);
-		if (cec_tx.msgt.bit == 4)
+		cec_transfer_inc_bit(&cec_tx.transfer);
+		if (cec_tx.transfer.bit == 4)
 			enter_state(CEC_STATE_INITIATOR_HEADER_DEST_LOW);
 		else
 			enter_state(CEC_STATE_INITIATOR_HEADER_INIT_LOW);
@@ -718,8 +563,8 @@ static void cec_event_timeout(void)
 		enter_state(CEC_STATE_INITIATOR_HEADER_DEST_HIGH);
 		break;
 	case CEC_STATE_INITIATOR_HEADER_DEST_HIGH:
-		msgt_inc_bit(&cec_tx.msgt);
-		if (cec_tx.msgt.byte == 1)
+		cec_transfer_inc_bit(&cec_tx.transfer);
+		if (cec_tx.transfer.byte == 1)
 			enter_state(CEC_STATE_INITIATOR_EOM_LOW);
 		else
 			enter_state(CEC_STATE_INITIATOR_HEADER_DEST_LOW);
@@ -738,7 +583,8 @@ static void cec_event_timeout(void)
 		break;
 	case CEC_STATE_INITIATOR_ACK_VERIFY:
 		if (cec_tx.ack) {
-			if (!msgt_is_eom(&cec_tx.msgt, cec_tx.len)) {
+			if (!cec_transfer_is_eom(&cec_tx.transfer,
+						 cec_tx.len)) {
 				/* More data in this frame */
 				enter_state(CEC_STATE_INITIATOR_DATA_LOW);
 			} else {
@@ -766,8 +612,8 @@ static void cec_event_timeout(void)
 		enter_state(CEC_STATE_INITIATOR_DATA_HIGH);
 		break;
 	case CEC_STATE_INITIATOR_DATA_HIGH:
-		msgt_inc_bit(&cec_tx.msgt);
-		if (cec_tx.msgt.bit == 0)
+		cec_transfer_inc_bit(&cec_tx.transfer);
+		if (cec_tx.transfer.bit == 0)
 			enter_state(CEC_STATE_INITIATOR_EOM_LOW);
 		else
 			enter_state(CEC_STATE_INITIATOR_DATA_LOW);
@@ -816,8 +662,8 @@ static void cec_event_cap(void)
 		 * A falling edge during free-time, postpone
 		 * this send and listen
 		 */
-		cec_tx.msgt.bit = 0;
-		cec_tx.msgt.byte = 0;
+		cec_tx.transfer.bit = 0;
+		cec_tx.transfer.byte = 0;
 		enter_state(CEC_STATE_FOLLOWER_START_LOW);
 		break;
 	case CEC_STATE_FOLLOWER_START_LOW:
@@ -845,11 +691,11 @@ static void cec_event_cap(void)
 		t = tmr_cap_get();
 		if (VALID_LOW(DATA_ZERO, t)) {
 			cec_rx.low_ticks = t;
-			msgt_set_bit(&cec_rx.msgt, 0);
+			cec_transfer_set_bit(&cec_rx.transfer, 0);
 			enter_state(cec_state + 1);
 		} else if (VALID_LOW(DATA_ONE, t)) {
 			cec_rx.low_ticks = t;
-			msgt_set_bit(&cec_rx.msgt, 1);
+			cec_transfer_set_bit(&cec_rx.transfer, 1);
 			enter_state(cec_state + 1);
 		} else {
 			enter_state(CEC_STATE_IDLE);
@@ -857,10 +703,10 @@ static void cec_event_cap(void)
 		break;
 	case CEC_STATE_FOLLOWER_HEADER_INIT_HIGH:
 		t = tmr_cap_get();
-		data = msgt_get_bit(&cec_rx.msgt);
+		data = cec_transfer_get_bit(&cec_rx.transfer);
 		if (VALID_DATA_HIGH(data, cec_rx.low_ticks, t)) {
-			msgt_inc_bit(&cec_rx.msgt);
-			if (cec_rx.msgt.bit == 4)
+			cec_transfer_inc_bit(&cec_rx.transfer);
+			if (cec_rx.transfer.bit == 4)
 				enter_state(CEC_STATE_FOLLOWER_HEADER_DEST_LOW);
 			else
 				enter_state(CEC_STATE_FOLLOWER_HEADER_INIT_LOW);
@@ -870,10 +716,10 @@ static void cec_event_cap(void)
 		break;
 	case CEC_STATE_FOLLOWER_HEADER_DEST_HIGH:
 		t = tmr_cap_get();
-		data = msgt_get_bit(&cec_rx.msgt);
+		data = cec_transfer_get_bit(&cec_rx.transfer);
 		if (VALID_DATA_HIGH(data, cec_rx.low_ticks, t)) {
-			msgt_inc_bit(&cec_rx.msgt);
-			if (cec_rx.msgt.bit == 0)
+			cec_transfer_inc_bit(&cec_rx.transfer);
+			if (cec_rx.transfer.bit == 0)
 				enter_state(CEC_STATE_FOLLOWER_EOM_LOW);
 			else
 				enter_state(CEC_STATE_FOLLOWER_HEADER_DEST_LOW);
@@ -911,10 +757,10 @@ static void cec_event_cap(void)
 		break;
 	case CEC_STATE_FOLLOWER_DATA_HIGH:
 		t = tmr_cap_get();
-		data = msgt_get_bit(&cec_rx.msgt);
+		data = cec_transfer_get_bit(&cec_rx.transfer);
 		if (VALID_DATA_HIGH(data, cec_rx.low_ticks, t)) {
-			msgt_inc_bit(&cec_rx.msgt);
-			if (cec_rx.msgt.bit == 0)
+			cec_transfer_inc_bit(&cec_rx.transfer);
+			if (cec_rx.transfer.bit == 0)
 				enter_state(CEC_STATE_FOLLOWER_EOM_LOW);
 			else
 				enter_state(CEC_STATE_FOLLOWER_DATA_LOW);
@@ -945,7 +791,7 @@ void cec_isr(void)
 	/* Retrieve events NPCX_TECTRL_TAXND */
 	events = GET_FIELD(NPCX_TECTRL(mdl), FIELD(0, 4));
 
-	if (events & (1 << NPCX_TECTRL_TAPND)) {
+	if (events & BIT(NPCX_TECTRL_TAPND)) {
 		/* Capture event */
 		cec_event_cap();
 	} else {
@@ -955,11 +801,11 @@ void cec_isr(void)
 		 * happening, since we will get both events in the
 		 * edge-trigger case
 		 */
-		if (events & (1 << NPCX_TECTRL_TCPND))
+		if (events & BIT(NPCX_TECTRL_TCPND))
 			cec_event_timeout();
 	}
 	/* Oneshot timer, a transfer has been initiated from AP */
-	if (events & (1 << NPCX_TECTRL_TDPND)) {
+	if (events & BIT(NPCX_TECTRL_TDPND)) {
 		tmr2_stop();
 		cec_event_tx();
 	}
@@ -982,7 +828,7 @@ static int cec_send(const uint8_t *msg, uint8_t len)
 	for (i = 0; i < len && i < MAX_CEC_MSG_LEN; i++)
 		CPRINTS(" 0x%02x", msg[i]);
 
-	memcpy(cec_tx.msgt.buf, msg, len);
+	memcpy(cec_tx.transfer.buf, msg, len);
 
 	/* Elevate to interrupt context */
 	tmr2_start(0);
@@ -1130,7 +976,7 @@ static int cec_get_next_msg(uint8_t *out)
 	int rv;
 	uint8_t msg_len, msg[MAX_CEC_MSG_LEN];
 
-	rv = rx_circbuf_pop(&cec_rx_cb, msg, &msg_len);
+	rv = cec_rx_queue_pop(&cec_rx_queue, msg, &msg_len);
 	if (rv != 0)
 		return EC_RES_UNAVAILABLE;
 
@@ -1157,6 +1003,12 @@ static void cec_init(void)
 	/* Enable capture TCNT1 into TCRA and preset TCNT1. */
 	SET_BIT(NPCX_TMCTRL(mdl), NPCX_TMCTRL_TAEN);
 
+	/* If RO doesn't set it, RW needs to set it explicitly. */
+	gpio_set_level(CEC_GPIO_PULL_UP, 1);
+
+	/* Ensure the CEC bus is not pulled low by default on startup. */
+	gpio_set_level(CEC_GPIO_OUT, 1);
+
 	CPRINTS("CEC initialized");
 }
 DECLARE_HOOK(HOOK_INIT, cec_init, HOOK_PRIO_LAST);
@@ -1171,14 +1023,15 @@ void cec_task(void *unused)
 	while (1) {
 		events = task_wait_event(-1);
 		if (events & TASK_EVENT_RECEIVED_DATA) {
-			rv = rx_circbuf_push(&cec_rx_cb, cec_rx.msgt.buf,
-					     cec_rx.msgt.byte);
+			rv = cec_rx_queue_push(&cec_rx_queue,
+					       cec_rx.transfer.buf,
+					       cec_rx.transfer.byte);
 			if (rv == EC_ERROR_OVERFLOW) {
-				/* Buffer full, prefer the most recent msg */
-				rx_circbuf_flush(&cec_rx_cb);
-				rv = rx_circbuf_push(&cec_rx_cb,
-						     cec_rx.msgt.buf,
-						     cec_rx.msgt.byte);
+				/* Queue full, prefer the most recent msg */
+				cec_rx_queue_flush(&cec_rx_queue);
+				rv = cec_rx_queue_push(&cec_rx_queue,
+						       cec_rx.transfer.buf,
+						       cec_rx.transfer.byte);
 			}
 			if (rv == EC_SUCCESS)
 				mkbp_send_event(EC_MKBP_EVENT_CEC_MESSAGE);

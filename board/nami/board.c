@@ -8,6 +8,7 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "anx7447.h"
+#include "battery.h"
 #include "board_config.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -18,10 +19,11 @@
 #include "console.h"
 #include "cros_board_info.h"
 #include "driver/pmic_tps650x30.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/accel_kionix.h"
 #include "driver/baro_bmp280.h"
+#include "driver/charger/isl923x.h"
 #include "driver/led/lm3509.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -33,7 +35,10 @@
 #include "host_command.h"
 #include "i2c.h"
 #include "isl923x.h"
+#include "keyboard_8042_sharedlib.h"
 #include "keyboard_backlight.h"
+#include "keyboard_config.h"
+#include "keyboard_raw.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "math_util.h"
@@ -69,21 +74,43 @@
 
 uint16_t board_version;
 uint8_t oem = PROJECT_NAMI;
-uint16_t sku;
+uint32_t sku;
+uint8_t model;
+
+/*
+ * We have total 30 pins for keyboard connecter {-1, -1} mean
+ * the N/A pin that don't consider it and reserve index 0 area
+ * that we don't have pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
+	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
+	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
+	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
+	{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1},
+	{-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 static void tcpc_alert_event(enum gpio_signal signal)
 {
-	if ((signal == GPIO_USB_C0_PD_INT_ODL) &&
-	    !gpio_get_level(GPIO_USB_C0_PD_RST_L))
-		return;
-	else if ((signal == GPIO_USB_C1_PD_INT_ODL) &&
-		 gpio_get_level(GPIO_USB_C1_PD_RST))
-		return;
+	int port = -1;
 
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	switch (signal) {
+	case GPIO_USB_C0_PD_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_PD_INT_ODL:
+		port = 1;
+		break;
+	default:
+		return;
+	}
+
+	schedule_deferred_pd_interrupt(port);
 }
 
 /* Set PD discharge whenever VBUS detection is high (i.e. below threshold). */
@@ -121,21 +148,6 @@ void usb1_evt(enum gpio_signal signal)
 }
 
 #include "gpio_list.h"
-
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-#ifdef CONFIG_POWER_S0IX
-	{GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-#endif
-	{VW_SLP_S3_L,		POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{VW_SLP_S4_L,		POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_PCH_SLP_SUS_L,	POWER_SIGNAL_ACTIVE_HIGH, "SLP_SUS_DEASSERTED"},
-	{GPIO_RSMRST_L_PGOOD,	POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L_PGOOD"},
-	{GPIO_PMIC_DPWROK,	POWER_SIGNAL_ACTIVE_HIGH, "PMIC_DPWROK"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* ADC channels */
 const struct adc_t adc_channels[] = {
@@ -188,6 +200,12 @@ const struct fan_rpm fan_rpm_3 = {
 	.rpm_max = 5500,
 };
 
+const struct fan_rpm fan_rpm_4 = {
+	.rpm_min = 2400,
+	.rpm_start = 2400,
+	.rpm_max = 4500,
+};
+
 struct fan_t fans[FAN_CH_COUNT] = {
 	[FAN_CH_0] = { .conf = &fan_conf_0, .rpm = &fan_rpm_0, },
 };
@@ -211,29 +229,44 @@ const struct i2c_port_t i2c_ports[]  = {
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_PS8751] = {
-		.i2c_host_port = NPCX_I2C_PORT0_0,
-		.i2c_slave_addr = PS8751_I2C_ADDR1,
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = NPCX_I2C_PORT0_0,
+			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
+		},
 		.drv = &ps8xxx_tcpm_drv,
-		.pol = TCPC_ALERT_ACTIVE_LOW,
+		/* Alert is active-low, push-pull */
+		.flags = 0,
 	},
 	[USB_PD_PORT_ANX7447] = {
-		.i2c_host_port = NPCX_I2C_PORT0_1,
-		.i2c_slave_addr = AN7447_TCPC3_I2C_ADDR, /* Verified on v1.1 */
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = NPCX_I2C_PORT0_1,
+			.addr_flags = AN7447_TCPC3_I2C_ADDR_FLAGS,
+		},
 		.drv = &anx7447_tcpm_drv,
-		.pol = TCPC_ALERT_ACTIVE_LOW,
+		/* Alert is active-low, push-pull */
+		.flags = 0,
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
-	{
-		.port_addr = USB_PD_PORT_PS8751,
+static int ps8751_tune_mux(const struct usb_mux *me)
+{
+	/* 0x98 sets lower EQ of DP port (3.6db) */
+	mux_write(me, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	return EC_SUCCESS;
+}
+
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	[USB_PD_PORT_PS8751] = {
+		.usb_port = USB_PD_PORT_PS8751,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
-	{
-		.port_addr = USB_PD_PORT_ANX7447,
+	[USB_PD_PORT_ANX7447] = {
+		.usb_port = USB_PD_PORT_ANX7447,
 		.driver = &anx7447_usb_mux_driver,
 		.hpd_update = &anx7447_tcpc_update_hpd_status,
 	}
@@ -251,6 +284,16 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT);
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 void board_reset_pd_mcu(void)
 {
@@ -273,8 +316,6 @@ void board_reset_pd_mcu(void)
 
 void board_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image())
 		board_reset_pd_mcu();
@@ -283,14 +324,15 @@ void board_tcpc_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_PD_INT_ODL);
 
+	if (oem == PROJECT_SONA && model != MODEL_SYNDRA)
+		usb_muxes[USB_PD_PORT_PS8751].board_init = ps8751_tune_mux;
+
 	/*
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 2);
 
@@ -316,11 +358,11 @@ uint16_t tcpc_get_alert_status(void)
  */
 const struct temp_sensor_t temp_sensors[TEMP_SENSOR_COUNT] = {
 	{"F75303_Local", TEMP_SENSOR_TYPE_BOARD, f75303_get_val,
-		F75303_IDX_LOCAL, 4},
+		F75303_IDX_LOCAL},
 	{"F75303_Remote1", TEMP_SENSOR_TYPE_CPU, f75303_get_val,
-		F75303_IDX_REMOTE1, 4},
+		F75303_IDX_REMOTE1},
 	{"F75303_Remote2", TEMP_SENSOR_TYPE_BOARD, f75303_get_val,
-		F75303_IDX_REMOTE2, 4},
+		F75303_IDX_REMOTE2},
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
@@ -378,7 +420,7 @@ const static struct ec_thermal_config thermal_c1 = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(66),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(71),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
@@ -394,7 +436,7 @@ const static struct ec_thermal_config thermal_c2 = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(74),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(79),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(82),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
@@ -454,9 +496,11 @@ const static struct ec_thermal_config thermal_d2 = {
 };
 
 #define I2C_PMIC_READ(reg, data) \
-		i2c_read8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1, (reg), (data))
+		i2c_read8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1_FLAGS,\
+			  (reg), (data))
 #define I2C_PMIC_WRITE(reg, data) \
-		i2c_write8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1, (reg), (data))
+		i2c_write8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1_FLAGS,\
+			   (reg), (data))
 
 static void board_pmic_init(void)
 {
@@ -605,7 +649,7 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* charge port is a physical port */
 	int is_real_port = (charge_port >= 0 &&
-			    charge_port < CONFIG_USB_PD_PORT_COUNT);
+			    charge_port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/* check if we are sourcing VBUS on the port */
 	/* dnojiri: revisit */
 	int is_source = gpio_get_level(charge_port == 0 ?
@@ -643,7 +687,12 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 	 * Limit the input current to 96% negotiated limit,
 	 * to account for the charger chip margin.
 	 */
-	charge_ma = charge_ma * 96 / 100;
+	int factor = 96;
+
+	if (oem == PROJECT_AKALI &&
+		(model == MODEL_EKKO || model == MODEL_BARD))
+		factor = 95;
+	charge_ma = charge_ma * factor / 100;
 	charge_set_input_current_limit(
 			MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT),
 			charge_mv);
@@ -676,26 +725,26 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* Lid accel private data */
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
 static struct kionix_accel_data g_kx022_data;
 
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
-const matrix_3x3_t base_standard_ref = {
+const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
-const matrix_3x3_t lid_standard_ref = {
+const mat33_fp_t lid_standard_ref = {
 	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
-const matrix_3x3_t rotation_x180_z90 = {
+const mat33_fp_t rotation_x180_z90 = {
 	{ 0, FLOAT_TO_FP(-1), 0 },
 	{ FLOAT_TO_FP(-1), 0, 0 },
 	{ 0, 0, FLOAT_TO_FP(-1) }
@@ -711,11 +760,11 @@ const struct motion_sensor_t lid_accel_1 = {
 	.mutex = &g_lid_mutex,
 	.drv_data = &g_kx022_data,
 	.port = I2C_PORT_ACCEL,
-	.addr = KX022_ADDR1,
+	.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 	.rot_standard_ref = &rotation_x180_z90,
 	.min_frequency = KX022_ACCEL_MIN_FREQ,
 	.max_frequency = KX022_ACCEL_MAX_FREQ,
-	.default_range = 2, /* g, to support tablet mode */
+	.default_range = 2, /* g, to support lid angle calculation. */
 	.config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
@@ -739,11 +788,11 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = &g_bma255_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMA2x2_I2C_ADDR1,
+		.i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode */
+		.default_range = 2, /* g, to support lid angle calculation. */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -767,11 +816,11 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMI160_ADDR0,
+		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_ACCEL_MIN_FREQ,
-		.max_frequency = BMI160_ACCEL_MAX_FREQ,
-		.default_range = 2, /* g, to support tablet mode  */
+		.min_frequency = BMI_ACCEL_MIN_FREQ,
+		.max_frequency = BMI_ACCEL_MAX_FREQ,
+		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -795,11 +844,11 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.addr = BMI160_ADDR0,
+		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI160_GYRO_MIN_FREQ,
-		.max_frequency = BMI160_GYRO_MAX_FREQ,
+		.min_frequency = BMI_GYRO_MIN_FREQ,
+		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
@@ -856,7 +905,10 @@ static void setup_fans(void)
 {
 	switch (oem) {
 	case PROJECT_SONA:
-		fans[FAN_CH_0].rpm = &fan_rpm_1;
+		if (model == MODEL_SYNDRA)
+			fans[FAN_CH_0].rpm = &fan_rpm_4;
+		else
+			fans[FAN_CH_0].rpm = &fan_rpm_1;
 		thermal_params[TEMP_SENSOR_REMOTE1] = thermal_b1;
 		thermal_params[TEMP_SENSOR_REMOTE2] = thermal_b2;
 		break;
@@ -894,9 +946,13 @@ static void cbi_init(void)
 		oem = val;
 	CPRINTS("OEM: %d", oem);
 
-	if (cbi_get_sku_id(&val) == EC_SUCCESS && val <= UINT16_MAX)
+	if (cbi_get_sku_id(&val) == EC_SUCCESS)
 		sku = val;
-	CPRINTS("SKU: 0x%04x", sku);
+	CPRINTS("SKU: 0x%08x", sku);
+
+	if (cbi_get_model_id(&val) == EC_SUCCESS)
+		model = val;
+	CPRINTS("MODEL: 0x%08x", model);
 
 	if (board_version < 0x300)
 		/* Previous boards have GPIO42 connected to TP_INT_CONN */
@@ -907,44 +963,6 @@ static void cbi_init(void)
 	setup_fans();
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
-
-static void board_init(void)
-{
-	int reg;
-
-	/*
-	 * This enables pull-down on F_DIO1 (SPI MISO), and F_DIO0 (SPI MOSI),
-	 * whenever the EC is not doing SPI flash transactions. This avoids
-	 * floating SPI buffer input (MISO), which causes power leakage (see
-	 * b/64797021).
-	 */
-	NPCX_PUPD_EN1 |= (1 << NPCX_DEVPU1_F_SPI_PUD_EN);
-
-	/* Provide AC status to the PCH */
-	gpio_set_level(GPIO_PCH_ACPRESENT, extpower_is_present());
-
-	/* Reduce Buck-boost mode switching frequency to reduce heat */
-	if (i2c_read16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER,
-		       ISL9238_REG_CONTROL3, &reg) == EC_SUCCESS) {
-		reg |= ISL9238_C3_BB_SWITCHING_PERIOD;
-		if (i2c_write16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER,
-			    ISL9238_REG_CONTROL3, reg))
-			CPRINTF("Failed to set isl9238\n");
-	}
-
-	/* Enable VBUS interrupt */
-	gpio_enable_interrupt(GPIO_USB_C0_VBUS_WAKE_L);
-	gpio_enable_interrupt(GPIO_USB_C1_VBUS_WAKE_L);
-
-	/* Enable pericom BC1.2 interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
-	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
-
-	/* Enable Accel/Gyro interrupt for convertibles. */
-	if (sku & SKU_ID_MASK_CONVERTIBLE)
-		gpio_enable_interrupt(GPIO_ACCELGYRO3_INT_L);
-}
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 /* Keyboard scan setting */
 struct keyboard_scan_config keyscan_config = {
@@ -962,9 +980,92 @@ struct keyboard_scan_config keyscan_config = {
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
 		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
-		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
+		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff,  /* full set */
 	},
 };
+
+static void board_init(void)
+{
+	int reg;
+
+	/*
+	 * This enables pull-down on F_DIO1 (SPI MISO), and F_DIO0 (SPI MOSI),
+	 * whenever the EC is not doing SPI flash transactions. This avoids
+	 * floating SPI buffer input (MISO), which causes power leakage (see
+	 * b/64797021).
+	 */
+	NPCX_PUPD_EN1 |= BIT(NPCX_DEVPU1_F_SPI_PUD_EN);
+
+	/* Provide AC status to the PCH */
+	gpio_set_level(GPIO_PCH_ACPRESENT, extpower_is_present());
+
+	/* Reduce Buck-boost mode switching frequency to reduce heat */
+	if (i2c_read16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER_FLAGS,
+		       ISL9238_REG_CONTROL3, &reg) == EC_SUCCESS) {
+		reg |= ISL9238_C3_BB_SWITCHING_PERIOD;
+		if (i2c_write16(I2C_PORT_CHARGER, I2C_ADDR_CHARGER_FLAGS,
+			    ISL9238_REG_CONTROL3, reg))
+			CPRINTF("Failed to set isl9238\n");
+	}
+
+	/* Enable VBUS interrupt */
+	gpio_enable_interrupt(GPIO_USB_C0_VBUS_WAKE_L);
+	gpio_enable_interrupt(GPIO_USB_C1_VBUS_WAKE_L);
+
+	/* Enable pericom BC1.2 interrupts */
+	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
+	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
+
+	/* Enable Accel/Gyro interrupt for convertibles. */
+	if (sku & SKU_ID_MASK_CONVERTIBLE)
+		gpio_enable_interrupt(GPIO_ACCELGYRO3_INT_L);
+
+#ifndef TEST_BUILD
+	/* Disable scanning KSO13 & 14 if keypad isn't present. */
+	if (!(sku & SKU_ID_MASK_KEYPAD)) {
+		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);
+		keyscan_config.actual_key_mask[11] = 0xfa;
+		keyscan_config.actual_key_mask[12] = 0xca;
+	}
+	if (oem == PROJECT_AKALI && model == MODEL_BARD) {
+		/* Search key is moved to col=0,row=3 */
+		keyscan_config.actual_key_mask[0] = 0x1c;
+		keyscan_config.actual_key_mask[1] = 0xfe;
+		/* No need to swap scancode_set2[0][3] and [1][0] because both
+		 * are mapped to search key. */
+	}
+	if (sku & SKU_ID_MASK_UK2) {
+		/*
+		 * Observed on Shyvana with UK keyboard,
+		 *   \|:     0x0061->0x61->0x56
+		 *   r-ctrl: 0xe014->0x14->0x1d
+		 */
+		uint16_t tmp = get_scancode_set2(4, 0);
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
+		set_scancode_set2(2, 7, tmp);
+	}
+#endif
+
+	isl923x_set_ac_prochot(CHARGER_SOLO, 3328 /* mA */);
+
+	switch (oem) {
+	case PROJECT_VAYNE:
+		isl923x_set_dc_prochot(CHARGER_SOLO, 11008 /* mA */);
+		break;
+	case PROJECT_PANTHEON:
+		isl923x_set_dc_prochot(CHARGER_SOLO, 9984 /* mA */);
+		break;
+	case PROJECT_SONA:
+		isl923x_set_dc_prochot(CHARGER_SOLO, 5888 /* mA */);
+		break;
+	case PROJECT_NAMI:
+	case PROJECT_AKALI:
+	/* default 4096mA 0x1000 */
+	default:
+		break;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 int board_is_lid_angle_tablet_mode(void)
 {
@@ -974,6 +1075,9 @@ int board_is_lid_angle_tablet_mode(void)
 
 void board_kblight_init(void)
 {
+	if (!(sku & SKU_ID_MASK_KBLIGHT))
+		return;
+
 	switch (oem) {
 	default:
 	case PROJECT_NAMI:
@@ -983,9 +1087,27 @@ void board_kblight_init(void)
 		kblight_register(&kblight_lm3509);
 		break;
 	case PROJECT_SONA:
-		if (sku == 0x3AE2)
-			break;
 		kblight_register(&kblight_pwm);
 		break;
 	}
+}
+
+enum critical_shutdown board_critical_shutdown_check(
+		struct charge_state_data *curr)
+{
+	if (oem == PROJECT_VAYNE)
+		return CRITICAL_SHUTDOWN_CUTOFF;
+	else
+		return CRITICAL_SHUTDOWN_HIBERNATE;
+
+}
+
+uint8_t board_set_battery_level_shutdown(void)
+{
+	if (oem == PROJECT_VAYNE)
+		/* We match the shutdown threshold with Powerd's.
+		 * 4 + 1 = 5% because Powerd uses '<=' while EC uses '<'. */
+		return CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE + 1;
+	else
+		return BATTERY_LEVEL_SHUTDOWN;
 }

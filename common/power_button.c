@@ -1,10 +1,11 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* Power button module for Chrome EC */
 
+#include "button.h"
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
@@ -13,6 +14,7 @@
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power_button.h"
+#include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -22,24 +24,25 @@
 #define CPRINTS(format, args...) cprints(CC_SWITCH, format, ## args)
 
 /* By default the power button is active low */
-#ifndef CONFIG_POWER_BUTTON_ACTIVE_STATE
-#define CONFIG_POWER_BUTTON_ACTIVE_STATE 0
+#ifndef CONFIG_POWER_BUTTON_FLAGS
+#define CONFIG_POWER_BUTTON_FLAGS 0
 #endif
-
-#define PWRBTN_DEBOUNCE_US (30 * MSEC)  /* Debounce time for power button */
 
 static int debounced_power_pressed;	/* Debounced power button state */
 static int simulate_power_pressed;
 static volatile int power_button_is_stable = 1;
 
-/**
- * Return non-zero if power button signal asserted at hardware input.
- *
- */
+static const struct button_config power_button = {
+	.name = "power button",
+	.gpio = GPIO_POWER_BUTTON_L,
+	.debounce_us = BUTTON_DEBOUNCE_US,
+	.flags = CONFIG_POWER_BUTTON_FLAGS,
+};
+
 int power_button_signal_asserted(void)
 {
-	return !!(gpio_get_level(GPIO_POWER_BUTTON_L)
-		 == CONFIG_POWER_BUTTON_ACTIVE_STATE);
+	return !!(gpio_get_level(power_button.gpio)
+		== (power_button.flags & BUTTON_FLAG_ACTIVE_HIGH) ? 1 : 0);
 }
 
 /**
@@ -70,13 +73,6 @@ int power_button_is_pressed(void)
 	return debounced_power_pressed;
 }
 
-/**
- * Wait for the power button to be released
- *
- * @param timeout_us Timeout in microseconds, or -1 to wait forever
- * @return EC_SUCCESS if ok, or
- *         EC_ERROR_TIMEOUT if power button failed to release
- */
 int power_button_wait_for_release(int timeout_us)
 {
 	timestamp_t deadline;
@@ -91,12 +87,12 @@ int power_button_wait_for_release(int timeout_us)
 		} else if (timestamp_expired(deadline, &now) ||
 			(task_wait_event(deadline.val - now.val) ==
 			TASK_EVENT_TIMER)) {
-			CPRINTS("power button not released in time");
+			CPRINTS("%s not released in time", power_button.name);
 			return EC_ERROR_TIMEOUT;
 		}
 	}
 
-	CPRINTS("power button released in time");
+	CPRINTS("%s released in time", power_button.name);
 	return EC_SUCCESS;
 }
 
@@ -109,9 +105,39 @@ static void power_button_init(void)
 		debounced_power_pressed = 1;
 
 	/* Enable interrupts, now that we've initialized */
-	gpio_enable_interrupt(GPIO_POWER_BUTTON_L);
+	gpio_enable_interrupt(power_button.gpio);
 }
 DECLARE_HOOK(HOOK_INIT, power_button_init, HOOK_PRIO_INIT_POWER_BUTTON);
+
+#ifdef CONFIG_POWER_BUTTON_INIT_IDLE
+/*
+ * Set/clear AP_IDLE flag. It's set when the system gracefully shuts down and
+ * it's cleared when the system boots up. The result is the system tries to
+ * go back to the previous state upon AC plug-in. If the system uncleanly
+ * shuts down, it boots immediately. If the system shuts down gracefully,
+ * it'll stay at S5 and wait for power button press.
+ */
+static void pb_chipset_startup(void)
+{
+	chip_save_reset_flags(chip_read_reset_flags() & ~EC_RESET_FLAG_AP_IDLE);
+	system_clear_reset_flags(EC_RESET_FLAG_AP_IDLE);
+	CPRINTS("Cleared AP_IDLE flag");
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pb_chipset_startup, HOOK_PRIO_DEFAULT);
+
+static void pb_chipset_shutdown(void)
+{
+	chip_save_reset_flags(chip_read_reset_flags() | EC_RESET_FLAG_AP_IDLE);
+	system_set_reset_flags(EC_RESET_FLAG_AP_IDLE);
+	CPRINTS("Saved AP_IDLE flag");
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pb_chipset_shutdown,
+	     /*
+	      * Slightly higher than handle_pending_reboot because
+	      * it may clear AP_IDLE flag.
+	      */
+	     HOOK_PRIO_DEFAULT - 1);
+#endif
 
 /**
  * Handle debounced power button changing state.
@@ -133,7 +159,8 @@ static void power_button_change_deferred(void)
 	debounced_power_pressed = new_pressed;
 	power_button_is_stable = 1;
 
-	CPRINTS("power button %s", new_pressed ? "pressed" : "released");
+	CPRINTS("%s %s",
+		power_button.name, new_pressed ? "pressed" : "released");
 
 	/* Call hooks */
 	hook_notify(HOOK_POWER_BUTTON_CHANGE);
@@ -157,7 +184,7 @@ void power_button_interrupt(enum gpio_signal signal)
 	/* Reset power button debounce time */
 	power_button_is_stable = 0;
 	hook_call_deferred(&power_button_change_deferred_data,
-			   PWRBTN_DEBOUNCE_US);
+			   power_button.debounce_us);
 }
 
 /*****************************************************************************/
@@ -174,7 +201,7 @@ static int command_powerbtn(int argc, char **argv)
 			return EC_ERROR_PARAM1;
 	}
 
-	ccprintf("Simulating %d ms power button press.\n", ms);
+	ccprintf("Simulating %d ms %s press.\n", ms, power_button.name);
 	simulate_power_pressed = 1;
 	power_button_is_stable = 0;
 	hook_call_deferred(&power_button_change_deferred_data, 0);
@@ -182,7 +209,7 @@ static int command_powerbtn(int argc, char **argv)
 	if (ms > 0)
 		msleep(ms);
 
-	ccprintf("Simulating power button release.\n");
+	ccprintf("Simulating %s release.\n", power_button.name);
 	simulate_power_pressed = 0;
 	power_button_is_stable = 0;
 	hook_call_deferred(&power_button_change_deferred_data, 0);

@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include "usb_mux.h"
+
 /* USB Power delivery port management */
 
 #ifndef __CROS_EC_USB_PD_TCPM_ANX7447_H
@@ -22,12 +24,22 @@
 #define ANX7447_REG_ADCFSM_EN		0x20
 
 /* Registers: SPI slave address used */
+#define ANX7447_REG_INTP_SOURCE_0	0x67
+
 #define ANX7447_REG_HPD_CTRL_0		0x7E
 #define ANX7447_REG_HPD_MODE		0x01
 #define ANX7447_REG_HPD_OUT		0x02
+#define ANX7447_REG_HPD_IRQ0		0x04
+#define ANX7447_REG_HPD_PLUG		0x08
+#define ANX7447_REG_HPD_UNPLUG		0x10
 
 #define ANX7447_REG_HPD_DEGLITCH_H	0x80
+#define ANX7447_REG_HPD_DETECT		0x80
 #define ANX7447_REG_HPD_OEN		0x40
+
+#define ANX7447_REG_PAD_INTP_CTRL	0x85
+
+#define ANX7447_REG_INTP_MASK_0		0x86
 
 #define ANX7447_REG_INTP_CTRL_0		0x9E
 
@@ -37,6 +49,23 @@
 #define ANX7447_REG_VCONN_OCP_310mA	0x04
 #define ANX7447_REG_VCONN_OCP_370mA	0x08
 #define ANX7447_REG_VCONN_OCP_440mA	0x0C
+
+#define ANX7447_REG_ANALOG_CTRL_10	0xAA
+#define ANX7447_REG_CABLE_DET_DIG	0x40
+
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_MASK	0x38
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_19US	0x00
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_38US	0x08
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_76US    0x10
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_152US   0x18
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_303US   0x20
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_607US	0x28
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_1210US	0x30
+#define ANX7447_REG_R_VCONN_PWR_PRT_INRUSH_TIME_2430US	0x38
+
+#define ANX7447_REG_ANALOG_CTRL_9	0xA9
+#define ANX7447_REG_SAFE_MODE		0x80
+#define ANX7447_REG_R_AUX_RES_PULL_SRC	0x20
 
 /*
  * This section of defines are only required to support the config option
@@ -80,19 +109,28 @@
 /* End of defines used for CONFIG_USB_PD_TCPM_ANX7447_OCM_ERASE_COMMAND */
 
 struct anx7447_i2c_addr {
-	int tcpc_slave_addr;
-	int spi_slave_addr;
+	uint16_t	tcpc_slave_addr_flags;
+	uint16_t	spi_slave_addr_flags;
 };
 
-#define AN7447_TCPC0_I2C_ADDR 0x58
-#define AN7447_TCPC1_I2C_ADDR 0x56
-#define AN7447_TCPC2_I2C_ADDR 0x54
-#define AN7447_TCPC3_I2C_ADDR 0x52
+#define AN7447_TCPC0_I2C_ADDR_FLAGS	0x2C
+#define AN7447_TCPC1_I2C_ADDR_FLAGS	0x2B
+#define AN7447_TCPC2_I2C_ADDR_FLAGS	0x2A
+#define AN7447_TCPC3_I2C_ADDR_FLAGS	0x29
 
-#define AN7447_SPI0_I2C_ADDR 0x7E
-#define AN7447_SPI1_I2C_ADDR 0x6E
-#define AN7447_SPI2_I2C_ADDR 0x64
-#define AN7447_SPI3_I2C_ADDR 0x62
+#define AN7447_SPI0_I2C_ADDR_FLAGS	0x3F
+#define AN7447_SPI1_I2C_ADDR_FLAGS	0x37
+#define AN7447_SPI2_I2C_ADDR_FLAGS	0x32
+#define AN7447_SPI3_I2C_ADDR_FLAGS	0x31
+
+/*
+ * Time TEST_R must be held high for a reset
+ */
+#define ANX74XX_RESET_HOLD_MS	1
+/*
+ * Time after TEST_R reset to wait for eFuse loading
+ */
+#define ANX74XX_RESET_FINISH_MS	2
 
 int anx7447_set_power_supply_ready(int port);
 int anx7447_power_supply_reset(int port);
@@ -103,8 +141,9 @@ void anx7447_hpd_output_en(int port);
 
 extern const struct tcpm_drv anx7447_tcpm_drv;
 extern const struct usb_mux_driver anx7447_usb_mux_driver;
-void anx7447_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq);
 void anx7447_tcpc_clear_hpd_status(int port);
+void anx7447_tcpc_update_hpd_status(const struct usb_mux *me,
+				    int hpd_lvl, int hpd_irq);
 
 /**
  * Erase OCM flash if it's not empty

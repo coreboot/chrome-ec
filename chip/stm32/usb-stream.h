@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -277,6 +277,13 @@ enum usb_usart {
 	USB_USART_REQ_BAUD = 2,
 	USB_USART_SET_BAUD = 3,
 };
+
+/*
+ * baud rate is req/set in multiples of 100, to avoid overflowing
+ * 16-bit integer.
+ */
+#define USB_USART_BAUD_MULTIPLIER 100
+
 int usb_usart_interface(struct usb_stream_config const *config,
 		    struct usart_config const *usart,
 		    int interface, usb_uint *rx_buf, usb_uint *tx_buf);

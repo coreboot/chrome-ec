@@ -1,10 +1,11 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* Button module for Chrome EC */
 
+#include "atomic.h"
 #include "button.h"
 #include "chipset.h"
 #include "common.h"
@@ -33,8 +34,15 @@ static struct button_state_t __bss_slow state[BUTTON_COUNT];
 
 static uint64_t __bss_slow next_deferred_time;
 
-#ifdef CONFIG_CMD_BUTTON
-static int siml_btn_presd;
+#if defined(CONFIG_CMD_BUTTON) || defined(CONFIG_HOSTCMD_BUTTON)
+#define CONFIG_SIMULATED_BUTTON
+#endif
+
+#ifdef CONFIG_SIMULATED_BUTTON
+/* Bitmask to keep track of simulated state of each button.
+ * Bit numbers are aligned to enum button.
+ */
+static int sim_button_state;
 
 /*
  * Flip state of associated button type in sim_button_state bitmask.
@@ -53,18 +61,7 @@ static int siml_btn_presd;
  */
 static int simulated_button_pressed(const struct button_config *button)
 {
-	/* bitmask to keep track of simulated state of each button */
-	static int sim_button_state;
-	int button_mask = 1 << button->type;
-	int ret_val;
-
-	/* flip the state of the button */
-	sim_button_state = sim_button_state ^ button_mask;
-	ret_val = !!(sim_button_state & button_mask);
-	/* adjustment for active high/lo */
-	if (!(button->flags & BUTTON_FLAG_ACTIVE_HIGH))
-		ret_val = !ret_val;
-	return ret_val;
+	return !!(sim_button_state & BIT(button->type));
 }
 #endif
 
@@ -73,14 +70,17 @@ static int simulated_button_pressed(const struct button_config *button)
  */
 static int raw_button_pressed(const struct button_config *button)
 {
-	int raw_value =
-#ifdef CONFIG_CMD_BUTTON
-			siml_btn_presd ?
-			simulated_button_pressed(button) :
+	int physical_value = 0;
+	int simulated_value = 0;
+	if (!(button->flags & BUTTON_FLAG_DISABLED)) {
+		physical_value = (!!gpio_get_level(button->gpio) ==
+				!!(button->flags & BUTTON_FLAG_ACTIVE_HIGH));
+#ifdef CONFIG_SIMULATED_BUTTON
+		simulated_value = simulated_button_pressed(button);
 #endif
-			gpio_get_level(button->gpio);
-	return button->flags & BUTTON_FLAG_ACTIVE_HIGH ?
-				       raw_value : !raw_value;
+	}
+
+	return (simulated_value || physical_value);
 }
 
 #ifdef CONFIG_BUTTON_TRIGGERED_RECOVERY
@@ -110,15 +110,23 @@ static void button_blink_hw_reinit_led(void)
 
 /*
  * Whether recovery button (or combination of equivalent buttons) is pressed
+ * If a dedicated recovery button is used, any of the buttons can be pressed,
+ * otherwise, all the buttons must be pressed.
  */
 static int is_recovery_button_pressed(void)
 {
-	int i;
+	int i, pressed;
 	for (i = 0; i < recovery_buttons_count; i++) {
-		if (!raw_button_pressed(recovery_buttons[i]))
-			return 0;
+		pressed = raw_button_pressed(recovery_buttons[i]);
+		if (IS_ENABLED(CONFIG_DEDICATED_RECOVERY_BUTTON)) {
+			if (pressed)
+				return 1;
+		} else {
+			if (!pressed)
+				return 0;
+		}
 	}
-	return 1;
+	return IS_ENABLED(CONFIG_DEDICATED_RECOVERY_BUTTON) ? 0 : 1;
 }
 
 /*
@@ -178,13 +186,21 @@ static int is_recovery_boot(void)
 	if (system_jumped_to_this_image())
 		return 0;
 	if (!(system_get_reset_flags() &
-	    (RESET_FLAG_RESET_PIN | RESET_FLAG_POWER_ON)))
+	    (EC_RESET_FLAG_RESET_PIN | EC_RESET_FLAG_POWER_ON)))
 		return 0;
 	if (!is_recovery_button_pressed())
 		return 0;
 	return 1;
 }
 #endif /* CONFIG_BUTTON_TRIGGERED_RECOVERY */
+
+static void button_reset(enum button button_type,
+	const struct button_config *button)
+{
+	state[button_type].debounced_pressed = raw_button_pressed(button);
+	state[button_type].debounce_time = 0;
+	gpio_enable_interrupt(button->gpio);
+}
 
 /*
  * Button initialization.
@@ -195,20 +211,48 @@ void button_init(void)
 
 	CPRINTS("init buttons");
 	next_deferred_time = 0;
-	for (i = 0; i < BUTTON_COUNT; i++) {
-		state[i].debounced_pressed = raw_button_pressed(&buttons[i]);
-		state[i].debounce_time = 0;
-		gpio_enable_interrupt(buttons[i].gpio);
-	}
+	for (i = 0; i < BUTTON_COUNT; i++)
+		button_reset(i, &buttons[i]);
 
 #ifdef CONFIG_BUTTON_TRIGGERED_RECOVERY
 	if (is_recovery_boot()) {
-		system_clear_reset_flags(RESET_FLAG_AP_OFF);
+		system_clear_reset_flags(EC_RESET_FLAG_AP_OFF);
 		host_set_single_event(EC_HOST_EVENT_KEYBOARD_RECOVERY);
 		button_check_hw_reinit_required();
 	}
 #endif /* defined(CONFIG_BUTTON_TRIGGERED_RECOVERY) */
 }
+
+#ifdef CONFIG_BUTTONS_RUNTIME_CONFIG
+int button_reassign_gpio(enum button button_type, enum gpio_signal gpio)
+{
+	if (button_type >= BUTTON_COUNT)
+		return EC_ERROR_INVAL;
+
+	/* Disable currently assigned interrupt */
+	gpio_disable_interrupt(buttons[button_type].gpio);
+
+	/* Reconfigure GPIO and enable the new interrupt */
+	buttons[button_type].gpio = gpio;
+	button_reset(button_type, &buttons[button_type]);
+
+	return EC_SUCCESS;
+}
+
+int button_disable_gpio(enum button button_type)
+{
+	if (button_type >= BUTTON_COUNT)
+		return EC_ERROR_INVAL;
+
+	/* Disable GPIO interrupt */
+	gpio_disable_interrupt(buttons[button_type].gpio);
+	/* Mark button as disabled */
+	buttons[button_type].flags |= BUTTON_FLAG_DISABLED;
+
+	return EC_SUCCESS;
+}
+#endif
+
 
 /*
  * Handle debounced button changing state.
@@ -287,7 +331,8 @@ void button_interrupt(enum gpio_signal signal)
 	uint64_t time_now = get_time().val;
 
 	for (i = 0; i < BUTTON_COUNT; i++) {
-		if (buttons[i].gpio != signal)
+		if (buttons[i].gpio != signal ||
+		    (buttons[i].flags & BUTTON_FLAG_DISABLED))
 			continue;
 
 		state[i].debounce_time = time_now + buttons[i].debounce_us;
@@ -301,7 +346,7 @@ void button_interrupt(enum gpio_signal signal)
 	}
 }
 
-#ifdef CONFIG_CMD_BUTTON
+#ifdef CONFIG_SIMULATED_BUTTON
 static int button_present(enum keyboard_button_type type)
 {
 	int i;
@@ -316,17 +361,54 @@ static int button_present(enum keyboard_button_type type)
 static void button_interrupt_simulate(int button)
 {
 	button_interrupt(buttons[button].gpio);
-	usleep(buttons[button].debounce_us >> 2);
-	button_interrupt(buttons[button].gpio);
 }
 
+static void simulate_button_release_deferred(void)
+{
+	int button_idx;
+
+	/* Release the button */
+	for (button_idx = 0; button_idx < BUTTON_COUNT; button_idx++) {
+		/* Check state for button pressed */
+		if (sim_button_state & BIT(buttons[button_idx].type)) {
+			/* Set state of the button as released */
+			atomic_clear(&sim_button_state,
+					BIT(buttons[button_idx].type));
+
+			button_interrupt_simulate(button_idx);
+		}
+	}
+}
+DECLARE_DEFERRED(simulate_button_release_deferred);
+
+static void simulate_button(uint32_t button_mask, int press_ms)
+{
+	int button_idx;
+
+	/* Press the button */
+	for (button_idx = 0; button_idx < BUTTON_COUNT; button_idx++) {
+		if (button_mask & BIT(button_idx)) {
+			/* Set state of the button as pressed */
+			atomic_or(&sim_button_state,
+					BIT(buttons[button_idx].type));
+
+			button_interrupt_simulate(button_idx);
+		}
+	}
+
+	/* Defer the button release for specified duration */
+	hook_call_deferred(&simulate_button_release_deferred_data,
+				press_ms * MSEC);
+}
+#endif /* #ifdef CONFIG_SIMULATED_BUTTON */
+
+#ifdef CONFIG_CMD_BUTTON
 static int console_command_button(int argc, char **argv)
 {
 	int press_ms = 50;
 	char *e;
 	int argv_idx;
-	int button;
-	int button_idx;
+	int button = BUTTON_COUNT;
 	uint32_t button_mask = 0;
 
 	if (argc < 2)
@@ -353,38 +435,45 @@ static int console_command_button(int argc, char **argv)
 		if (button == BUTTON_COUNT)
 			return EC_ERROR_PARAM1 + argv_idx - 1;
 
-		button_mask |= (1 << button);
+		button_mask |= BIT(button);
 	}
 
 	if (!button_mask)
 		return EC_SUCCESS;
 
-	siml_btn_presd = 1;
+	simulate_button(button_mask, press_ms);
 
-	/* Press the button(s) */
-	for (button_idx = 0; button_idx < BUTTON_COUNT; button_idx++)
-		if (button_mask & (1 << button_idx))
-			button_interrupt_simulate(button_idx);
-
-	/* Hold the button(s) */
-	if (press_ms > 0)
-		msleep(press_ms);
-
-	/* Release the button(s) */
-	for (button_idx = 0; button_idx < BUTTON_COUNT; button_idx++)
-		if (button_mask & (1 << button_idx))
-			button_interrupt_simulate(button_idx);
-
-	/* Wait till button processing is finished */
-	msleep(100);
-
-	siml_btn_presd = 0;
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(button, console_command_button,
-			"vup|vdown msec",
+			"vup|vdown|rec msec",
 			"Simulate button press");
-#endif
+#endif /* CONFIG_CMD_BUTTON */
+
+#ifdef CONFIG_HOSTCMD_BUTTON
+static enum ec_status host_command_button(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_button *p = args->params;
+	int idx;
+	uint32_t button_mask = 0;
+
+	/* Only available on unlocked systems */
+	if (system_is_locked())
+		return EC_RES_ACCESS_DENIED;
+
+	for (idx = 0; idx < KEYBOARD_BUTTON_COUNT; idx++) {
+		if (p->btn_mask & BIT(idx))
+			button_mask |= BIT(button_present(idx));
+	}
+
+	simulate_button(button_mask, p->press_ms);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_BUTTON, host_command_button, EC_VER_MASK(0));
+
+#endif /* CONFIG_HOSTCMD_BUTTON */
+
 
 #ifdef CONFIG_EMULATED_SYSRQ
 
@@ -437,9 +526,9 @@ enum debug_state {
 	STATE_WARM_RESET_EXEC,
 };
 
-#define DEBUG_BTN_POWER         (1 << 0)
-#define DEBUG_BTN_VOL_UP        (1 << 1)
-#define DEBUG_BTN_VOL_DN        (1 << 2)
+#define DEBUG_BTN_POWER         BIT(0)
+#define DEBUG_BTN_VOL_UP        BIT(1)
+#define DEBUG_BTN_VOL_DN        BIT(2)
 #define DEBUG_TIMEOUT           (10 * SECOND)
 
 static enum debug_state curr_debug_state = STATE_DEBUG_NONE;
@@ -471,11 +560,13 @@ static int debug_button_pressed(int mask)
 	return debug_button_mask() == mask;
 }
 
+#ifdef CONFIG_LED_COMMON
 static int debug_mode_blink_led(void)
 {
 	return ((curr_debug_state != STATE_DEBUG_NONE) &&
 		(curr_debug_state != STATE_DEBUG_CHECK));
 }
+#endif
 
 static void debug_mode_transition(enum debug_state next_state)
 {
@@ -721,13 +812,17 @@ DECLARE_HOOK(HOOK_TICK, debug_led_tick, HOOK_PRIO_DEFAULT);
 #error "A dedicated recovery button is not needed if you have volume buttons."
 #endif /* defined(CONFIG_VOLUME_BUTTONS && CONFIG_DEDICATED_RECOVERY_BUTTON) */
 
+#ifndef CONFIG_BUTTONS_RUNTIME_CONFIG
 const struct button_config buttons[BUTTON_COUNT] = {
+#else
+struct button_config buttons[BUTTON_COUNT] = {
+#endif
 #ifdef CONFIG_VOLUME_BUTTONS
 	[BUTTON_VOLUME_UP] = {
 		.name = "Volume Up",
 		.type = KEYBOARD_BUTTON_VOLUME_UP,
 		.gpio = GPIO_VOLUME_UP_L,
-		.debounce_us = 30 * MSEC,
+		.debounce_us = BUTTON_DEBOUNCE_US,
 		.flags = 0,
 	},
 
@@ -735,7 +830,7 @@ const struct button_config buttons[BUTTON_COUNT] = {
 		.name = "Volume Down",
 		.type = KEYBOARD_BUTTON_VOLUME_DOWN,
 		.gpio = GPIO_VOLUME_DOWN_L,
-		.debounce_us = 30 * MSEC,
+		.debounce_us = BUTTON_DEBOUNCE_US,
 		.flags = 0,
 	},
 
@@ -744,9 +839,18 @@ const struct button_config buttons[BUTTON_COUNT] = {
 		.name = "Recovery",
 		.type = KEYBOARD_BUTTON_RECOVERY,
 		.gpio = GPIO_RECOVERY_L,
-		.debounce_us = 30 * MSEC,
+		.debounce_us = BUTTON_DEBOUNCE_US,
+		.flags = 0,
+	},
+#ifdef CONFIG_DEDICATED_RECOVERY_BUTTON_2
+	[BUTTON_RECOVERY_2] = {
+		.name = "Recovery2",
+		.type = KEYBOARD_BUTTON_RECOVERY,
+		.gpio = GPIO_RECOVERY_L_2,
+		.debounce_us = BUTTON_DEBOUNCE_US,
 		.flags = 0,
 	}
+#endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON_2) */
 #endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON) */
 };
 
@@ -754,6 +858,10 @@ const struct button_config buttons[BUTTON_COUNT] = {
 const struct button_config *recovery_buttons[] = {
 #ifdef CONFIG_DEDICATED_RECOVERY_BUTTON
 	&buttons[BUTTON_RECOVERY],
+
+#ifdef CONFIG_DEDICATED_RECOVERY_BUTTON_2
+	&buttons[BUTTON_RECOVERY_2],
+#endif /* defined(CONFIG_BUTTON_TRIGGERED_RECOVERY_2) */
 
 #elif defined(CONFIG_VOLUME_BUTTONS)
 	&buttons[BUTTON_VOLUME_DOWN],

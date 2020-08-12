@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,16 +9,23 @@
 #define __CROS_EC_TASK_H
 
 #include "common.h"
+#include "compile_time_macros.h"
 #include "task_id.h"
 
 /* Task event bitmasks */
-/* Tasks may use the bits in TASK_EVENT_CUSTOM for their own events */
-#define TASK_EVENT_CUSTOM(x)	(x & 0x0003ffff)
+/* Tasks may use the bits in TASK_EVENT_CUSTOM_BIT for their own events */
+#define TASK_EVENT_CUSTOM_BIT(x) BUILD_CHECK_INLINE(BIT(x), BIT(x) & 0x0ffff)
 
-#define TASK_EVENT_PD_AWAKE	(1 << 18)
+/* Used to signal that sysjump preparation has completed */
+#define TASK_EVENT_SYSJUMP_READY BIT(16)
+
+/* Used to signal that IPC layer is available for sending new data */
+#define TASK_EVENT_IPC_READY	BIT(17)
+
+#define TASK_EVENT_PD_AWAKE	BIT(18)
 
 /* npcx peci event */
-#define TASK_EVENT_PECI_DONE	(1 << 19)
+#define TASK_EVENT_PECI_DONE	BIT(19)
 
 /* I2C tx/rx interrupt handler completion event. */
 #ifdef CHIP_STM32
@@ -32,17 +39,20 @@
 #endif
 #endif
 #else
-#define TASK_EVENT_I2C_IDLE	(1 << 20)
+#define TASK_EVENT_I2C_IDLE	BIT(20)
+#define TASK_EVENT_PS2_DONE	BIT(21)
 #endif
 
 /* DMA transmit complete event */
-#define TASK_EVENT_DMA_TC       (1 << 26)
+#define TASK_EVENT_DMA_TC       BIT(26)
 /* ADC interrupt handler event */
-#define TASK_EVENT_ADC_DONE	(1 << 27)
+#define TASK_EVENT_ADC_DONE	BIT(27)
+/* task_reset() that was requested has been completed */
+#define TASK_EVENT_RESET_DONE   BIT(28)
 /* task_wake() called on task */
-#define TASK_EVENT_WAKE		(1 << 29)
+#define TASK_EVENT_WAKE		BIT(29)
 /* Mutex unlocking */
-#define TASK_EVENT_MUTEX	(1 << 30)
+#define TASK_EVENT_MUTEX	BIT(30)
 /*
  * Timer expired.  For example, task_wait_event() timed out before receiving
  * another event.
@@ -69,6 +79,11 @@ void interrupt_enable(void);
  * Return true if we are in interrupt context.
  */
 int in_interrupt_context(void);
+
+/**
+ * Return true if we are in software interrupt context.
+ */
+int in_soft_interrupt_context(void);
 
 /**
  * Return current interrupt mask. Meaning is chip-specific and
@@ -220,6 +235,18 @@ void task_clear_fp_used(void);
 void task_enable_all_tasks(void);
 
 /**
+ * Enable a task.
+ */
+void task_enable_task(task_id_t tskid);
+
+/**
+ * Disable a task.
+ *
+ * If the task disable itself, this will cause an immediate reschedule.
+ */
+void task_disable_task(task_id_t tskid);
+
+/**
  * Enable an interrupt.
  */
 void task_enable_irq(int irq);
@@ -233,6 +260,55 @@ void task_disable_irq(int irq);
  * Software-trigger an interrupt.
  */
 void task_trigger_irq(int irq);
+
+/*
+ * A task that supports resets may call this to indicate that it may be reset
+ * at any point between this call and the next call to task_disable_resets().
+ *
+ * Calling this function will trigger any resets that were requested while
+ * resets were disabled.
+ *
+ * It is not expected for this to be called if resets are already enabled.
+ */
+void task_enable_resets(void);
+
+/*
+ * A task that supports resets may call this to indicate that it may not be
+ * reset until the next call to task_enable_resets(). Any calls to task_reset()
+ * during this time will cause a reset request to be queued, and executed
+ * the next time task_enable_resets() is called.
+ *
+ * Must not be called if resets are already disabled.
+ */
+void task_disable_resets(void);
+
+/*
+ * If the current task was reset, completes the reset operation.
+ *
+ * Returns a non-zero value if the task was reset; tasks with state outside
+ * of the stack should perform any necessary cleanup immediately after calling
+ * this function.
+ *
+ * Tasks that support reset must call this function once at startup before
+ * doing anything else.
+ *
+ * Must only be called once at task startup.
+ */
+int task_reset_cleanup(void);
+
+/*
+ * Resets the specified task, which must not be the current task,
+ * to initial state.
+ *
+ * Returns EC_SUCCESS, or EC_ERROR_INVAL if the specified task does
+ * not support resets.
+ *
+ * If wait is true, blocks until the task has been reset. Otherwise,
+ * returns immediately - in this case the task reset may be delayed until
+ * that task can be safely reset. The duration of this delay depends on the
+ * task implementation.
+ */
+int task_reset(task_id_t id, int wait);
 
 /**
  * Clear a pending interrupt.
@@ -268,6 +344,23 @@ void mutex_unlock(struct mutex *mtx);
 struct irq_priority {
 	uint8_t irq;
 	uint8_t priority;
+};
+
+/*
+ * Some cores may make use of this struct for mapping irqs to handlers
+ * for DECLARE_IRQ in a linker-script defined section.
+ */
+struct irq_def {
+	int irq;
+
+	/* The routine which was declared as an IRQ */
+	void (*routine)(void);
+
+	/*
+	 * The routine usually needs wrapped so the core can handle it
+	 * as an IRQ.
+	 */
+	void (*handler)(void);
 };
 
 /*

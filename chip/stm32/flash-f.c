@@ -5,10 +5,12 @@
 
 /* Common flash memory module for STM32F and STM32F0 */
 
+#include <stdbool.h>
 #include "battery.h"
 #include "console.h"
 #include "clock.h"
 #include "flash.h"
+#include "flash-f.h"
 #include "hooks.h"
 #include "registers.h"
 #include "panic.h"
@@ -17,6 +19,9 @@
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
+
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 /*
  * Approximate number of CPU cycles per iteration of the loop when polling
@@ -35,6 +40,19 @@
 /* 20ms < tERASE < 40ms on F0/F3, for 1K / 2K sector size. */
 #define FLASH_ERASE_TIMEOUT_US 40000
 
+#if defined(CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE)
+#if !defined(CHIP_FAMILY_STM32F4)
+#error "CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE should work with all STM32F "
+"series chips, but has not been tested"
+#endif /* !CHIP_FAMILY_STM32F4 */
+#endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
+
+/* Forward declarations */
+#if defined(CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE)
+static enum flash_rdp_level flash_physical_get_rdp_level(void);
+static int flash_physical_set_rdp_level(enum flash_rdp_level level);
+#endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
+
 static inline int calculate_flash_timeout(void)
 {
 	return (FLASH_WRITE_TIMEOUT_US *
@@ -49,6 +67,68 @@ static int wait_busy(void)
 	return (timeout > 0) ? EC_SUCCESS : EC_ERROR_TIMEOUT;
 }
 
+
+void unlock_flash_control_register(void)
+{
+	STM32_FLASH_KEYR = FLASH_KEYR_KEY1;
+	STM32_FLASH_KEYR = FLASH_KEYR_KEY2;
+}
+
+void unlock_flash_option_bytes(void)
+{
+	STM32_FLASH_OPTKEYR = FLASH_OPTKEYR_KEY1;
+	STM32_FLASH_OPTKEYR = FLASH_OPTKEYR_KEY2;
+}
+
+void disable_flash_option_bytes(void)
+{
+	ignore_bus_fault(1);
+	/*
+	 * Writing anything other than the pre-defined keys to the option key
+	 * register results in a bus fault and the register being locked until
+	 * reboot (even with a further correct key write).
+	 */
+	STM32_FLASH_OPTKEYR = 0xffffffff;
+	ignore_bus_fault(0);
+}
+
+void disable_flash_control_register(void)
+{
+	ignore_bus_fault(1);
+	/*
+	 * Writing anything other than the pre-defined keys to the key
+	 * register results in a bus fault and the register being locked until
+	 * reboot (even with a further correct key write).
+	 */
+	STM32_FLASH_KEYR = 0xffffffff;
+	ignore_bus_fault(0);
+}
+
+void lock_flash_control_register(void)
+{
+#if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3)
+	/* FLASH_CR_OPTWRE was set by writing the keys in unlock(). */
+	STM32_FLASH_CR &= ~FLASH_CR_OPTWRE;
+#endif
+	STM32_FLASH_CR |= FLASH_CR_LOCK;
+}
+
+void lock_flash_option_bytes(void)
+{
+#if !(defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3))
+	STM32_FLASH_OPTCR |= FLASH_OPTLOCK;
+#endif
+}
+
+bool flash_option_bytes_locked(void)
+{
+	return !!STM32_FLASH_OPT_LOCKED;
+}
+
+bool flash_control_register_locked(void)
+{
+	return !!(STM32_FLASH_CR & FLASH_CR_LOCK);
+}
 
 /*
  * We at least unlock the control register lock.
@@ -68,20 +148,17 @@ static int unlock(int locks)
 	ignore_bus_fault(1);
 
 	/* Always unlock CR if needed */
-	if (STM32_FLASH_CR & FLASH_CR_LOCK) {
-		STM32_FLASH_KEYR = FLASH_KEYR_KEY1;
-		STM32_FLASH_KEYR = FLASH_KEYR_KEY2;
-	}
+	if (flash_control_register_locked())
+		unlock_flash_control_register();
+
 	/* unlock option memory if required */
-	if ((locks & OPT_LOCK) && STM32_FLASH_OPT_LOCKED) {
-		STM32_FLASH_OPTKEYR = FLASH_OPTKEYR_KEY1;
-		STM32_FLASH_OPTKEYR = FLASH_OPTKEYR_KEY2;
-	}
+	if ((locks & OPT_LOCK) && flash_option_bytes_locked())
+		unlock_flash_option_bytes();
 
 	/* Re-enable bus fault handler */
 	ignore_bus_fault(0);
 
-	if ((locks & OPT_LOCK) && STM32_FLASH_OPT_LOCKED)
+	if ((locks & OPT_LOCK) && flash_option_bytes_locked())
 		return EC_ERROR_UNKNOWN;
 	if (STM32_FLASH_CR & FLASH_CR_LOCK)
 		return EC_ERROR_UNKNOWN;
@@ -90,11 +167,7 @@ static int unlock(int locks)
 
 static void lock(void)
 {
-#if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3)
-	/* FLASH_CR_OPTWRE was set by writing the keys in unlock(). */
-	STM32_FLASH_CR &= ~FLASH_CR_OPTWRE;
-#endif
-	STM32_FLASH_CR |= FLASH_CR_LOCK;
+	lock_flash_control_register();
 }
 
 #ifdef CHIP_FAMILY_STM32F4
@@ -247,6 +320,23 @@ static int write_optb(int byte, uint8_t value)
 	return EC_SUCCESS;
 }
 #endif
+
+#if defined(CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE)
+/**
+ * @return true if RDP (read protection) Level 1 or 2 enabled, false otherwise
+ */
+bool is_flash_rdp_enabled(void)
+{
+	enum flash_rdp_level level = flash_physical_get_rdp_level();
+
+	if (level == FLASH_RDP_LEVEL_INVALID) {
+		CPRINTS("ERROR: unable to read RDP level");
+		return false;
+	}
+
+	return level != FLASH_RDP_LEVEL_0;
+}
+#endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
 
 /*****************************************************************************/
 /* Physical layer APIs */
@@ -421,6 +511,28 @@ static int flash_physical_get_protect_at_boot(int block)
 	return !(STM32_OPTB_WP & STM32_OPTB_nWRP(block));
 }
 
+static int flash_physical_protect_at_boot_update_rdp_pstate(uint32_t new_flags)
+{
+#if defined(CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE)
+	int rv = EC_SUCCESS;
+
+	bool rdp_enable = (new_flags & EC_FLASH_PROTECT_RO_AT_BOOT) != 0;
+
+	/*
+	 * This is intentionally a one-way latch. Once we have enabled RDP
+	 * Level 1, we will only allow going back to Level 0 using the
+	 * bootloader (e.g., "stm32mon -U") since transitioning from Level 1 to
+	 * Level 0 triggers a mass erase.
+	 */
+	if (rdp_enable)
+		rv = flash_physical_set_rdp_level(FLASH_RDP_LEVEL_1);
+
+	return rv;
+#else
+	return EC_SUCCESS;
+#endif
+}
+
 int flash_physical_protect_at_boot(uint32_t new_flags)
 {
 	int block;
@@ -442,17 +554,18 @@ int flash_physical_protect_at_boot(uint32_t new_flags)
 #endif
 
 		if (protect)
-			val &= ~(1 << block);
+			val &= ~BIT(block);
 		else
 			val |= 1 << block;
 	}
 	if (original_val != val) {
-		write_optb(STM32_FLASH_nWRP_ALL,
-			   val << STM32_FLASH_nWRP_OFFSET);
+		int rv = write_optb(STM32_FLASH_nWRP_ALL,
+				    val << STM32_FLASH_nWRP_OFFSET);
+		if (rv != EC_SUCCESS)
+			return rv;
 	}
 
-
-	return EC_SUCCESS;
+	return flash_physical_protect_at_boot_update_rdp_pstate(new_flags);
 }
 
 static void unprotect_all_blocks(void)
@@ -545,6 +658,68 @@ static int registers_need_reset(void)
 	return 0;
 }
 
+#if defined(CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE)
+/**
+ * Set Flash RDP (read protection) level.
+ *
+ * @note Does not take effect until reset.
+ *
+ * @param level new RDP (read protection) level to set
+ * @return EC_SUCCESS on success, other on failure
+ */
+int flash_physical_set_rdp_level(enum flash_rdp_level level)
+{
+	uint32_t reg_level;
+
+	switch (level) {
+	case FLASH_RDP_LEVEL_0:
+		/*
+		 * Asserting by default since we don't want to inadvertently
+		 * go from Level 1 to Level 0, which triggers a mass erase.
+		 * Remove assert if you want to use it.
+		 */
+		ASSERT(false);
+		reg_level = FLASH_OPTCR_RDP_LEVEL_0;
+		break;
+	case FLASH_RDP_LEVEL_1:
+		reg_level = FLASH_OPTCR_RDP_LEVEL_1;
+		break;
+	case FLASH_RDP_LEVEL_2:
+		/*
+		 * Asserting by default since it's permanent (there is no
+		 * way to reverse). Remove assert if you want to use it.
+		 */
+		ASSERT(false);
+		reg_level = FLASH_OPTCR_RDP_LEVEL_2;
+		break;
+	default:
+		return EC_ERROR_INVAL;
+	}
+
+	return write_optb(FLASH_OPTCR_RDP_MASK, reg_level);
+}
+
+/**
+ * @return On success, current flash read protection level.
+ *         On failure, FLASH_RDP_LEVEL_INVALID
+ */
+enum flash_rdp_level flash_physical_get_rdp_level(void)
+{
+	uint32_t level = (STM32_FLASH_OPTCR & FLASH_OPTCR_RDP_MASK);
+
+	switch (level) {
+	case FLASH_OPTCR_RDP_LEVEL_0:
+		return FLASH_RDP_LEVEL_0;
+	case FLASH_OPTCR_RDP_LEVEL_1:
+		return FLASH_RDP_LEVEL_1;
+	case FLASH_OPTCR_RDP_LEVEL_2:
+		return FLASH_RDP_LEVEL_2;
+	default:
+		return FLASH_RDP_LEVEL_INVALID;
+	}
+}
+#endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
+
 /*****************************************************************************/
 /* High-level APIs */
 
@@ -570,10 +745,15 @@ int flash_pre_init(void)
 	 * If we have already jumped between images, an earlier image could
 	 * have applied write protection. Nothing additional needs to be done.
 	 */
-	if (reset_flags & RESET_FLAG_SYSJUMP)
+	if (reset_flags & EC_RESET_FLAG_SYSJUMP)
 		return EC_SUCCESS;
 
 	if (prot_flags & EC_FLASH_PROTECT_GPIO_ASSERTED) {
+		if (prot_flags & EC_FLASH_PROTECT_RO_NOW) {
+			/* Enable physical protection for RO (0 means RO). */
+			flash_physical_protect_now(0);
+		}
+
 		if ((prot_flags & EC_FLASH_PROTECT_RO_AT_BOOT) &&
 		    !(prot_flags & EC_FLASH_PROTECT_RO_NOW)) {
 			/*

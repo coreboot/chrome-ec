@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -27,8 +27,8 @@ void dma_disable(enum dma_channel channel)
 {
 	mec1322_dma_chan_t *chan = dma_get_channel(channel);
 
-	if (chan->ctrl & (1 << 0))
-		chan->ctrl &= ~(1 << 0);
+	if (chan->ctrl & BIT(0))
+		chan->ctrl &= ~BIT(0);
 
 	if (chan->act == 1)
 		chan->act = 0;
@@ -42,9 +42,9 @@ void dma_disable_all(void)
 	for (ch = 0; ch < MEC1322_DMAC_COUNT; ch++) {
 		mec1322_dma_chan_t *chan = dma_get_channel(ch);
 		/* Abort any current transfer. */
-		chan->ctrl |= (1 << 25);
+		chan->ctrl |= BIT(25);
 		/* Disable the channel. */
-		chan->ctrl &= ~(1 << 0);
+		chan->ctrl &= ~BIT(0);
 		chan->act = 0;
 	}
 
@@ -69,8 +69,8 @@ static void prepare_channel(mec1322_dma_chan_t *chan, unsigned count,
 {
 	int xfer_size = (flags >> 20) & 0x7;
 
-	if (chan->ctrl & (1 << 0))
-		chan->ctrl &= ~(1 << 0);
+	if (chan->ctrl & BIT(0))
+		chan->ctrl &= ~BIT(0);
 
 	chan->act |= 0x1;
 	chan->dev = (uint32_t)periph;
@@ -81,7 +81,7 @@ static void prepare_channel(mec1322_dma_chan_t *chan, unsigned count,
 
 void dma_go(mec1322_dma_chan_t *chan)
 {
-	/* Flush data in write buffer so that DMA can get the lastest data */
+	/* Flush data in write buffer so that DMA can get the latest data */
 	asm volatile("dsb;");
 
 	/* Fire it up */
@@ -119,9 +119,12 @@ int dma_bytes_done(mec1322_dma_chan_t *chan, int orig_count)
 {
 	int xfer_size = (chan->ctrl >> 20) & 0x7;
 
-	if (!(chan->ctrl & MEC1322_DMA_RUN))
-		return 0;
 	return orig_count - (chan->mem_end - chan->mem_start) / xfer_size;
+}
+
+bool dma_is_enabled(mec1322_dma_chan_t *chan)
+{
+	return (chan->ctrl & MEC1322_DMA_RUN);
 }
 
 void dma_init(void)

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -167,7 +167,7 @@ bss_loop:
 	lwi  $r1, [$r0]
 	la $r0, _data_end
 	lwi  $r2, [$r0]
-	la $r0, _ro_end
+	la $r0, _data_lma_start
 	lwi  $r0, [$r0]
 data_loop:
 	lwi.bi $r3, [$r0], 4
@@ -208,6 +208,17 @@ unhandled_irq:
 
 .global excep_handler
 excep_handler:
+#ifdef CONFIG_FPU
+	/*
+	 * We have to restore ALU so that we can continue the next
+	 * sequence if arithmetic instructions are used.
+	 * (Apply to floating point division by zero)
+	 */
+	sethi   $gp, 0x80
+	ori     $gp, $gp,0x9
+	mtsr    $gp, $dlmb
+	dsb
+#endif
 	/* safety: reload GP even though it should be already set */
 	la $gp, _SDA_BASE_
 	/* save r0 to free one register */
@@ -216,17 +227,6 @@ excep_handler:
 	la      $r0, saved_regs + 4
 	smw.bim $r1, [$r0], $r10, 0
 	smw.bim $r15,[$r0], $r15, 0xF
-#ifdef CONFIG_FPU
-	/*
-	 * We have to restore ALU so that we can continue the next
-	 * sequence if arithmetic instructions are used.
-	 * (Apply to floating point division by zero)
-	 */
-	sethi   $r4, 0x80
-	ori     $r4, $r4,0x9
-	mtsr    $r4, $dlmb
-	dsb
-#endif
 	/* put a sane stack pointer */
 	la $sp, stack_end
 	/* add IPC, IPSW to the context */
@@ -251,8 +251,8 @@ _data_start:
 .long __data_start
 _data_end:
 .long __data_end
-_ro_end:
-.long __ro_end
+_data_lma_start:
+.long __data_lma_start
 
 /* Reserve space for system stack */
 .section .bss.system_stack

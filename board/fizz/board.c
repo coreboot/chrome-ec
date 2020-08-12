@@ -60,13 +60,7 @@ static uint8_t sku;
 
 static void tcpc_alert_event(enum gpio_signal signal)
 {
-	if (!gpio_get_level(GPIO_USB_C0_PD_RST_ODL))
-		return;
-
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	schedule_deferred_pd_interrupt(0 /* port */);
 }
 
 #define ADP_DEBOUNCE_MS		1000  /* Debounce time for BJ plug/unplug */
@@ -122,22 +116,6 @@ void vbus0_evt(enum gpio_signal signal)
 }
 
 #include "gpio_list.h"
-
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-	{GPIO_PCH_SLP_S0_L,	POWER_SIGNAL_ACTIVE_HIGH, "SLP_S0_DEASSERTED"},
-#ifdef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
-	{VW_SLP_S3_L,		POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{VW_SLP_S4_L,		POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-#else
-	{GPIO_PCH_SLP_S3_L,	POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{GPIO_PCH_SLP_S4_L,	POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-#endif
-	{GPIO_PCH_SLP_SUS_L,	POWER_SIGNAL_ACTIVE_HIGH, "SLP_SUS_DEASSERTED"},
-	{GPIO_RSMRST_L_PGOOD,	POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L_PGOOD"},
-	{GPIO_PMIC_DPWROK,	POWER_SIGNAL_ACTIVE_HIGH, "PMIC_DPWROK"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* Hibernate wake configuration */
 const enum gpio_signal hibernate_wake_pins[] = {
@@ -196,22 +174,27 @@ const struct i2c_port_t i2c_ports[]  = {
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	{NPCX_I2C_PORT0_0, I2C_ADDR_TCPC0, &ps8xxx_tcpm_drv,
-			TCPC_ALERT_ACTIVE_LOW},
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = NPCX_I2C_PORT0_0,
+			.addr_flags = I2C_ADDR_TCPC0_FLAGS,
+		},
+		.drv = &ps8xxx_tcpm_drv,
+	},
 };
 
-static int ps8751_tune_mux(const struct usb_mux *mux)
+static int ps8751_tune_mux(const struct usb_mux *me)
 {
 	/* 0x98 sets lower EQ of DP port (4.5db) */
-	i2c_write8(I2C_PORT_TCPC0, I2C_ADDR_TCPC0,
-			   PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	mux_write(me, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
 	return EC_SUCCESS;
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0,
+		.usb_port = 0,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 		.board_init = &ps8751_tune_mux,
@@ -235,7 +218,7 @@ void board_reset_pd_mcu(void)
 
 void board_tcpc_init(void)
 {
-	int port, reg;
+	int reg;
 
 	/* This needs to be executed only once per boot. It could be run by RO
 	 * if we boot in recovery mode. It could be run by RW if we boot in
@@ -247,7 +230,7 @@ void board_tcpc_init(void)
 	 * TCPM_INIT will fail due to not able to access PS8751.
 	 * Note PS8751 A3 will wake on any I2C access.
 	 */
-	i2c_read8(I2C_PORT_TCPC0, I2C_ADDR_TCPC0, 0xA0, &reg);
+	i2c_read8(I2C_PORT_TCPC0, I2C_ADDR_TCPC0_FLAGS, 0xA0, &reg);
 
 	/* Enable TCPC interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
@@ -256,10 +239,8 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
@@ -276,17 +257,17 @@ uint16_t tcpc_get_alert_status(void)
 }
 
 /*
+ * TMP431 has one local and one remote sensor.
+ *
  * Temperature sensors data; must be in same order as enum temp_sensor_id.
  * Sensor index and name must match those present in coreboot:
  *     src/mainboard/google/${board}/acpi/dptf.asl
  */
 const struct temp_sensor_t temp_sensors[] = {
-	{"TMP432_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-			TMP432_IDX_LOCAL, 4},
-	{"TMP432_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-			TMP432_IDX_REMOTE1, 4},
-	{"TMP432_Sensor_2", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
-			TMP432_IDX_REMOTE2, 4},
+	{"TMP431_Internal", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+			TMP432_IDX_LOCAL},
+	{"TMP431_Sensor_1", TEMP_SENSOR_TYPE_BOARD, tmp432_get_val,
+			TMP432_IDX_REMOTE1},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -300,18 +281,17 @@ struct ec_thermal_config thermal_params[] = {
 	 * fan_off, fan_max
 	 */
 	{{0, C_TO_K(80), C_TO_K(81)}, {0, C_TO_K(78), 0},
-		C_TO_K(4), C_TO_K(76)},	/* TMP432_Internal */
-	{{0, 0, 0}, {0, 0, 0}, 0, 0},	/* TMP432_Sensor_1 */
-	{{0, 0, 0}, {0, 0, 0}, 0, 0},	/* TMP432_Sensor_2 */
+		C_TO_K(4), C_TO_K(76)},	/* TMP431_Internal */
+	{{0, 0, 0}, {0, 0, 0}, 0, 0},	/* TMP431_Sensor_1 */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
 /* Initialize PMIC */
 #define I2C_PMIC_READ(reg, data) \
-		i2c_read8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1, (reg), (data))
+	i2c_read8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1_FLAGS, (reg), (data))
 
 #define I2C_PMIC_WRITE(reg, data) \
-		i2c_write8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1, (reg), (data))
+	i2c_write8(I2C_PORT_PMIC, TPS650X30_I2C_ADDR1_FLAGS, (reg), (data))
 
 static void board_pmic_init(void)
 {
@@ -439,6 +419,15 @@ static void board_pmic_init(void)
 	 * [5:4] : 00b Vnom + 3%. (default: 10b 0%)
 	 */
 	err = I2C_PMIC_WRITE(TPS650X30_REG_V33ADSWCNT, 0x0A);
+	if (err)
+		goto pmic_error;
+
+	/*
+	 * V100ACNT Register Field Description. Default: 0x2A
+	 * [1:0] : 11b Forced PWM Operation.
+	 * [5:4] : 01b Output Voltage Select Vnom (1V)
+	 */
+	err = I2C_PMIC_WRITE(TPS650X30_REG_V100ACNT, 0x1B);
 	if (err)
 		goto pmic_error;
 
@@ -576,12 +565,6 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 	gpio_set_level(GPIO_TYPE_C_60W, p60w);
 }
 
-enum battery_present battery_is_present(void)
-{
-	/* The GPIO is low when the battery is present */
-	return BP_NO;
-}
-
 int64_t get_time_dsw_pwrok(void)
 {
 	/* DSW_PWROK is turned on before EC was powered. */
@@ -634,27 +617,21 @@ static const struct fan_step fan_table2[] = {
 	{.on = 87, .off = 81, .rpm = 3900},
 	{.on = 98, .off = 91, .rpm = 5000},
 };
+static const struct fan_step fan_table3[] = {
+	{.on =  0, .off =  1, .rpm = 0},
+	{.on = 36, .off = 22, .rpm = 2500},
+	{.on = 54, .off = 49, .rpm = 3200},
+	{.on = 61, .off = 56, .rpm = 3500},
+	{.on = 68, .off = 63, .rpm = 3900},
+	{.on = 75, .off = 69, .rpm = 4500},
+	{.on = 82, .off = 76, .rpm = 5100},
+	{.on = 92, .off = 85, .rpm = 5400},
+};
 /* All fan tables must have the same number of levels */
 #define NUM_FAN_LEVELS ARRAY_SIZE(fan_table0)
 BUILD_ASSERT(ARRAY_SIZE(fan_table1) == NUM_FAN_LEVELS);
 BUILD_ASSERT(ARRAY_SIZE(fan_table2) == NUM_FAN_LEVELS);
-
-static void cbi_init(void)
-{
-	uint32_t val;
-	if (cbi_get_board_version(&val) == EC_SUCCESS && val <= UINT16_MAX)
-		board_version = val;
-	CPRINTS("Board Version: 0x%04x", board_version);
-
-	if (cbi_get_oem_id(&val) == EC_SUCCESS && val < OEM_COUNT)
-		oem = val;
-	CPRINTS("OEM: %d", oem);
-
-	if (cbi_get_sku_id(&val) == EC_SUCCESS && val <= UINT8_MAX)
-		sku = val;
-	CPRINTS("SKU: 0x%02x", sku);
-}
-DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
+BUILD_ASSERT(ARRAY_SIZE(fan_table3) == NUM_FAN_LEVELS);
 
 static void setup_fan(void)
 {
@@ -677,8 +654,34 @@ static void setup_fan(void)
 		fans[FAN_CH_0].rpm = &fan_rpm_0;
 		fan_table = fan_table2;
 		break;
+	case OEM_JAX:
+		fan_set_count(0);
+		break;
+	case OEM_EXCELSIOR:
+		fans[FAN_CH_0].rpm = &fan_rpm_0;
+		fan_table = fan_table3;
+		break;
 	}
 }
+
+static void cbi_init(void)
+{
+	uint32_t val;
+	if (cbi_get_board_version(&val) == EC_SUCCESS && val <= UINT16_MAX)
+		board_version = val;
+	CPRINTS("Board Version: 0x%04x", board_version);
+
+	if (cbi_get_oem_id(&val) == EC_SUCCESS && val < OEM_COUNT)
+		oem = val;
+	CPRINTS("OEM: %d", oem);
+
+	if (cbi_get_sku_id(&val) == EC_SUCCESS && val <= UINT8_MAX)
+		sku = val;
+	CPRINTS("SKU: 0x%02x", sku);
+
+	setup_fan();
+}
+DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
 /* List of BJ adapters shipped with Fizz or its variants */
 enum bj_adapter {
@@ -707,7 +710,7 @@ static const struct charge_port_info bj_adapters[] = {
  * KBL-U Celeron 3965	7	65
  * KBL-U Celeron 3865	0	65
  */
-#define BJ_ADAPTER_90W_MASK (1 << 4 | 1 << 5 | 1 << 6)
+#define BJ_ADAPTER_90W_MASK (BIT(4) | BIT(5) | BIT(6))
 
 static void setup_bj(void)
 {
@@ -715,7 +718,7 @@ static void setup_bj(void)
 
 	switch (oem) {
 	case OEM_KENCH:
-		bj = (BJ_ADAPTER_90W_MASK & (1 << sku)) ?
+		bj = (BJ_ADAPTER_90W_MASK & BIT(sku)) ?
 			BJ_90W_19P5V : BJ_65W_19P5V;
 		break;
 	case OEM_TEEMO:
@@ -724,11 +727,15 @@ static void setup_bj(void)
 	case OEM_WUKONG_N:
 	case OEM_WUKONG_A:
 	case OEM_WUKONG_M:
-		bj = (BJ_ADAPTER_90W_MASK & (1 << sku)) ?
+	case OEM_EXCELSIOR:
+		bj = (BJ_ADAPTER_90W_MASK & BIT(sku)) ?
 			BJ_90W_19V : BJ_65W_19V;
 		break;
+	case OEM_JAX:
+		bj = BJ_65W_19V;
+		break;
 	default:
-		bj = (BJ_ADAPTER_90W_MASK & (1 << sku)) ?
+		bj = (BJ_ADAPTER_90W_MASK & BIT(sku)) ?
 			BJ_90W_19P5V : BJ_65W_19P5V;
 		break;
 	}
@@ -750,13 +757,12 @@ static void setup_bj(void)
 static void board_charge_manager_init(void)
 {
 	enum charge_port port;
-	struct charge_port_info cpi = { 0 };
 	int i, j;
 
 	/* Initialize all charge suppliers to 0 */
 	for (i = 0; i < CHARGE_PORT_COUNT; i++) {
 		for (j = 0; j < CHARGE_SUPPLIER_COUNT; j++)
-			charge_manager_update_charge(j, i, &cpi);
+			charge_manager_update_charge(j, i, NULL);
 	}
 
 	port = gpio_get_level(GPIO_ADP_IN_L) ?
@@ -779,8 +785,6 @@ DECLARE_HOOK(HOOK_INIT, board_charge_manager_init,
 
 static void board_init(void)
 {
-	setup_fan();
-
 	/* Provide AC status to the PCH */
 	board_extpower();
 
@@ -823,16 +827,8 @@ int fan_percent_to_rpm(int fan, int pct)
 
 	if (fan_table[current_level].rpm !=
 		fan_get_rpm_target(FAN_CH(fan)))
-		cprintf(CC_THERMAL, "[%T Setting fan RPM to %d]\n",
+		cprints(CC_THERMAL, "Setting fan RPM to %d",
 			fan_table[current_level].rpm);
 
 	return fan_table[current_level].rpm;
-}
-
-void board_rtc_reset(void)
-{
-	CPRINTS("Asserting RTCRST# to PCH");
-	gpio_set_level(GPIO_PCH_RTCRST, 1);
-	udelay(100);
-	gpio_set_level(GPIO_PCH_RTCRST, 0);
 }

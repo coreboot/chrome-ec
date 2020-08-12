@@ -24,11 +24,13 @@ static int bh1730_convert_to_lux(uint32_t data0_1)
 	uint16_t data1 = data0_1 >> 16;
 	uint32_t d0_1k = data0 * 1000;
 	uint32_t d1_1k = data1 * 1000;
-	uint32_t d_temp = d1_1k / d0_1k;
+	uint32_t d_temp;
 	uint32_t d_lux;
 
 	if (data0 == 0)
 		return 0;
+	else
+		d_temp = d1_1k / data0;
 
 	if(d_temp < BH1730_LUXTH1_1K) {
 		d0_1k = BH1730_LUXTH1_D0_1K * data0;
@@ -55,14 +57,15 @@ static int bh1730_convert_to_lux(uint32_t data0_1)
 /**
  * Read BH1730 light sensor data.
  */
-static int bh1730_read_lux(const struct motion_sensor_t *s, vector_3_t v)
+static int bh1730_read_lux(const struct motion_sensor_t *s, intv3_t v)
 {
 	struct bh1730_drv_data_t *drv_data = BH1730_GET_DATA(s);
 	int ret;
 	int data0_1;
 
 	/* read data0 and data1 from sensor */
-	ret = i2c_read32(s->port, s->addr, BH1730_DATA0LOW, &data0_1);
+	ret = i2c_read32(s->port, s->i2c_spi_addr_flags,
+			 BH1730_DATA0LOW, &data0_1);
 	if (ret != EC_SUCCESS) {
 		CPRINTF("bh1730_read_lux - fail %d\n", ret);
 		return ret;
@@ -136,9 +139,10 @@ static int bh1730_init(const struct motion_sensor_t *s)
 	int ret;
 
 	/* power and measurement bit high */
-	ret = i2c_write8(s->port, s->addr,
+	ret = i2c_write8(s->port, s->i2c_spi_addr_flags,
 			BH1730_CONTROL,
-			BH1730_CONTROL_POWER_ENABLE|BH1730_CONTROL_ADC_EN_ENABLE);
+			BH1730_CONTROL_POWER_ENABLE
+			      | BH1730_CONTROL_ADC_EN_ENABLE);
 
 	if (ret != EC_SUCCESS) {
 		CPRINTF("bh1730_init_sensor - enable fail %d\n", ret);
@@ -146,13 +150,15 @@ static int bh1730_init(const struct motion_sensor_t *s)
 	}
 
 	/* set timing */
-	ret = i2c_write8(s->port, s->addr, BH1730_TIMING, BH1730_CONF_ITIME);
+	ret = i2c_write8(s->port, s->i2c_spi_addr_flags,
+			 BH1730_TIMING, BH1730_CONF_ITIME);
 	if (ret != EC_SUCCESS) {
 		CPRINTF("bh1730_init_sensor - time fail %d\n", ret);
 		return ret;
 	}
 	/* set ADC gain */
-	ret = i2c_write8(s->port, s->addr, BH1730_GAIN, BH1730_CONF_GAIN);
+	ret = i2c_write8(s->port, s->i2c_spi_addr_flags,
+			 BH1730_GAIN, BH1730_CONF_GAIN);
 
 	if (ret != EC_SUCCESS) {
 		CPRINTF("bh1730_init_sensor - gain fail %d\n", ret);

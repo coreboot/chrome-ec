@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -37,10 +37,17 @@ static uint8_t __bss_slow acpi_mem_test;
 #ifdef CONFIG_DPTF
 static int __bss_slow dptf_temp_sensor_id;	/* last sensor ID written */
 static int __bss_slow dptf_temp_threshold;	/* last threshold written */
-#endif
 
-#ifdef CONFIG_USB_PORT_POWER_DUMB
-extern const int usb_port_enable[USB_PORT_COUNT];
+/*
+ * Current DPTF profile number.
+ * This is by default initialized to 1 if multi-profile DPTF is not supported.
+ * If multi-profile DPTF is supported, this is by default initialized to 2 under
+ * the assumption that profile #2 corresponds to lower thresholds and is a safer
+ * profile to use until board or some EC driver sets the appropriate profile for
+ * device mode.
+ */
+static int current_dptf_profile = DPTF_PROFILE_DEFAULT;
+
 #endif
 
 /*
@@ -80,6 +87,43 @@ static void acpi_disable_burst_deferred(void)
 	CPUTS("ACPI missed burst disable?");
 }
 DECLARE_DEFERRED(acpi_disable_burst_deferred);
+
+#ifdef CONFIG_DPTF
+
+static int acpi_dptf_is_profile_valid(int n)
+{
+#ifdef CONFIG_DPTF_MULTI_PROFILE
+	if ((n < DPTF_PROFILE_VALID_FIRST) || (n > DPTF_PROFILE_VALID_LAST))
+		return EC_ERROR_INVAL;
+#else
+	if (n != DPTF_PROFILE_DEFAULT)
+		return EC_ERROR_INVAL;
+#endif
+
+	return EC_SUCCESS;
+}
+
+int acpi_dptf_set_profile_num(int n)
+{
+	int ret = acpi_dptf_is_profile_valid(n);
+
+	if (ret == EC_SUCCESS) {
+		current_dptf_profile = n;
+		if (IS_ENABLED(CONFIG_DPTF_MULTI_PROFILE) &&
+		    IS_ENABLED(CONFIG_HOSTCMD_EVENTS)) {
+			/* Notify kernel to update DPTF profile */
+			host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
+		}
+	}
+	return ret;
+}
+
+int acpi_dptf_get_profile_num(void)
+{
+	return current_dptf_profile;
+}
+
+#endif
 
 /* Read memmapped data, returns read data or 0xff on error. */
 static int acpi_read(uint8_t addr)
@@ -152,7 +196,7 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 		case EC_ACPI_MEM_TEST_COMPLIMENT:
 			result = 0xff - acpi_mem_test;
 			break;
-#ifdef CONFIG_PWM_KBLIGHT
+#ifdef CONFIG_KEYBOARD_BACKLIGHT
 		case EC_ACPI_MEM_KEYBOARD_BACKLIGHT:
 			result = kblight_get();
 			break;
@@ -178,10 +222,16 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 #endif
 
 		case EC_ACPI_MEM_DEVICE_ORIENTATION:
-#ifdef CONFIG_DPTF_DEVICE_ORIENTATION
-			result = tablet_get_mode();
-#else
 			result = 0;
+
+#ifdef CONFIG_TABLET_MODE
+			result = tablet_get_mode() << EC_ACPI_MEM_TBMD_SHIFT;
+#endif
+
+#ifdef CONFIG_DPTF
+			result |= (acpi_dptf_get_profile_num() &
+				   EC_ACPI_MEM_DDPN_MASK)
+				<< EC_ACPI_MEM_DDPN_SHIFT;
 #endif
 			break;
 
@@ -252,14 +302,15 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 			battery_memmap_set_index(data);
 			break;
 #endif
-#ifdef CONFIG_PWM_KBLIGHT
+#ifdef CONFIG_KEYBOARD_BACKLIGHT
 		case EC_ACPI_MEM_KEYBOARD_BACKLIGHT:
 			/*
 			 * Debug output with CR not newline, because the host
 			 * does a lot of keyboard backlights and it scrolls the
 			 * debug console.
 			 */
-			CPRINTF("\r[%T ACPI kblight %d]", data);
+			CPRINTF("\r[%pT ACPI kblight %d]",
+				PRINTF_TIMESTAMP_NOW, data);
 			kblight_set(data);
 			break;
 #endif
@@ -313,7 +364,8 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 				if (mode_field & 1)
 					mode = USB_CHARGE_MODE_ENABLED;
 
-				if (usb_charge_set_mode(i, mode)) {
+				if (usb_charge_set_mode(i, mode,
+				    USB_ALLOW_SUSPEND_CHARGE)) {
 					CPRINTS("ERROR: could not set charge "
 						"mode of USB port p%d to %d",
 						i, mode);

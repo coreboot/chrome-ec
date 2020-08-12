@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Copyright 2013 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -22,4 +22,5 @@ LDFLAGS_EXTRA+=-flto
 endif
 
 core-y=cpu.o init.o panic.o task.o switch.o __muldi3.o math.o __builtin.o
+core-y+=__divdi3.o __udivdi3.o
 core-$(CONFIG_FPU)+=__libsoftfpu.o

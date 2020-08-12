@@ -24,7 +24,7 @@
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
 #define PDO_FIXED_FLAGS_EXT (PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP |\
-			     PDO_FIXED_COMM_CAP | PDO_FIXED_EXTERNAL)
+			     PDO_FIXED_COMM_CAP | PDO_FIXED_UNCONSTRAINED)
 
 #define PDO_FIXED_FLAGS (PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP |\
 			 PDO_FIXED_COMM_CAP)
@@ -123,25 +123,31 @@ int pd_check_power_swap(int port)
 	return 0;
 }
 
-int pd_check_data_swap(int port, int data_role)
+int pd_check_data_swap(int port,
+		       enum pd_data_role data_role)
 {
 	/* We can swap to UFP */
 	return data_role == PD_ROLE_DFP;
 }
 
-void pd_execute_data_swap(int port, int data_role)
+void pd_execute_data_swap(int port,
+			  enum pd_data_role data_role)
 {
 	/* TODO: turn on pp5000, pp3300 */
 }
 
-void pd_check_pr_role(int port, int pr_role, int flags)
+void pd_check_pr_role(int port,
+		      enum pd_power_role pr_role,
+		      int flags)
 {
-	if (pr_role == PD_ROLE_UFP && !gpio_get_level(GPIO_AC_PRESENT_L))
+	if (pr_role == PD_ROLE_SINK && !gpio_get_level(GPIO_AC_PRESENT_L))
 		pd_request_power_swap(port);
 
 }
 
-void pd_check_dr_role(int port, int dr_role, int flags)
+void pd_check_dr_role(int port,
+		      enum pd_data_role dr_role,
+		      int flags)
 {
 	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_DFP)
 		pd_request_data_swap(port);
@@ -260,8 +266,11 @@ static int svdm_enter_mode(int port, uint32_t *payload)
 	return rv;
 }
 
-int pd_alt_mode(int port, uint16_t svid)
+int pd_alt_mode(int port, enum tcpm_transmit_type type, uint16_t svid)
 {
+	if (type != TCPC_TX_SOP)
+		return 0;
+
 	if (svid == USB_SID_DISPLAYPORT)
 		return alt_mode[PD_AMODE_DISPLAYPORT];
 	else if (svid == USB_VID_GOOGLE)

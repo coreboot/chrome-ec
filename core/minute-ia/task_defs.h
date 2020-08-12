@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,8 +6,25 @@
 #ifndef __CROS_EC_TASK_DEFS_H
 #define __CROS_EC_TASK_DEFS_H
 
-#define FPU_CTX_SZ		108 /* 28 bytes header + 80 bytes registers */
-#define FPU_CTX_OFFSET		20  /* offsetof(task_, fp_ctx) */
+#ifdef CONFIG_FPU
+#define FPU_CTX_SZ		108  /* 28 bytes header + 80 bytes registers */
+#define USE_FPU_OFFSET		20   /* offsetof(task_, use_fpu */
+#define FPU_CTX_OFFSET		24   /* offsetof(task_, fp_ctx) */
+
+/*
+ * defines for inline asm
+ */
+#ifndef __ASSEMBLER__
+#include "common.h"
+
+#define USE_FPU_OFFSET_STR	STRINGIFY(USE_FPU_OFFSET)	/* "20" */
+#define FPU_CTX_OFFSET_STR	STRINGIFY(FPU_CTX_OFFSET)	/* "24" */
+
+asm (".equ USE_FPU_OFFSET, "USE_FPU_OFFSET_STR);
+asm (".equ FPU_CTX_OFFSET, "FPU_CTX_OFFSET_STR);
+
+#endif
+#endif /* CONFIG_FPU */
 
 #ifndef __ASSEMBLER__
 typedef union {
@@ -21,13 +38,15 @@ typedef union {
 		uint64_t runtime;	/* Time spent in task */
 		uint32_t *stack;	/* Start of stack */
 #ifdef CONFIG_FPU
+		uint32_t use_fpu;	/* set if task uses FPU */
 		uint8_t fp_ctx[FPU_CTX_SZ]; /* x87 FPU context */
 #endif
 	};
 } task_;
 
-int __task_start(int *task_stack_ready);
+int __task_start(int *start_called);
 void __switchto(void);
+void sw_irq_handler(void);
 
 /* Only the IF bit is set so tasks start with interrupts enabled. */
 #define INITIAL_EFLAGS		(0x200UL)

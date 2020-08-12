@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,6 +23,7 @@ static uint8_t exti_events[16];
 void gpio_pre_init(void)
 {
 	const struct gpio_info *g = gpio_list;
+	const struct unused_pin_info *u = unused_pin_list;
 	int is_warm = system_is_reboot_warm();
 	int i;
 
@@ -35,6 +36,9 @@ void gpio_pre_init(void)
 
 	/* Delay 1 APB clock cycle after the clock is enabled */
 	clock_wait_bus_cycles(BUS_APB, 1);
+
+	/* Disable all GPIO EXTINTs (EXTINT0..15) left enabled after sysjump. */
+	STM32_EXTI_IMR &= ~0xFFFF;
 
 	if (!is_warm)
 		gpio_enable_clocks();
@@ -55,6 +59,19 @@ void gpio_pre_init(void)
 
 		/* Set up GPIO based on flags */
 		gpio_set_flags_by_mask(g->port, g->mask, flags);
+	}
+
+	/* Configure optional unused pins for low power optimization. */
+	for (i = 0; i < unused_pin_count; i++, u++) {
+		/*
+		 * Configure unused pins as ANALOG INPUT to save power.
+		 * For more info, please see
+		 * "USING STM32F4 MCU POWER MODES WITH BEST DYNAMIC EFFICIENCY"
+		 * ("AN4365") section 1.2.6 and section 7.3.12 of the STM32F412
+		 * reference manual.
+		 */
+		if (IS_ENABLED(CHIP_FAMILY_STM32F4))
+			gpio_set_flags_by_mask(u->port, u->mask, GPIO_ANALOG);
 	}
 }
 
@@ -105,12 +122,17 @@ int gpio_enable_interrupt(enum gpio_signal signal)
 int gpio_disable_interrupt(enum gpio_signal signal)
 {
 	const struct gpio_info *g = gpio_list + signal;
+	uint32_t bit;
 
 	/* Fail if not implemented or no interrupt handler */
 	if (!g->mask || signal >= GPIO_IH_COUNT)
 		return EC_ERROR_INVAL;
 
 	STM32_EXTI_IMR &= ~g->mask;
+
+	bit = GPIO_MASK_TO_NUM(g->mask);
+
+	exti_events[bit] = 0;
 
 	return EC_SUCCESS;
 }

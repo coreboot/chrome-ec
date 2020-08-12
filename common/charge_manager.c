@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,6 +8,7 @@
 #include "battery.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
+#include "charge_state_v2.h"
 #include "charger.h"
 #include "console.h"
 #include "gpio.h"
@@ -28,8 +29,23 @@
 #define POWER_SWAP_TIMEOUT (PD_T_SRC_RECOVER_MAX + PD_T_SRC_TURN_ON + \
 			    PD_T_SAFE_0V + 500 * MSEC)
 
-/* Charge supplier priority: lower number indicates higher priority. */
-test_mockable const int supplier_priority[] = {
+/*
+ * Default charge supplier priority
+ *
+ * - Always pick dedicated charge if present since that is the best product
+ *   decision.
+ * - Pick PD negotiated chargers over everything else since they have the most
+ *   power potential and they may not currently be negotiated at a high power.
+ *   (and they can at least provide 15W)
+ * - Pick Type-C which supplier current >= 1.5A, which has higher prioirty
+ *   than the BC1.2 and Type-C with current under 1.5A. (USB-C spec 1.3
+ *   Table 4-17: TYPEC 3.0A, 1.5A > BC1.2 > TYPEC under 1.5A)
+ * - Then pick among the propreitary and BC1.2 chargers which ever has the
+ *   highest available power.
+ * - Last, pick one from the rest suppliers.  Also note that some boards assume
+ *   wireless suppliers as low priority.
+ */
+__overridable const int supplier_priority[] = {
 #if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
 	[CHARGE_SUPPLIER_DEDICATED] = 0,
 #endif
@@ -37,13 +53,20 @@ test_mockable const int supplier_priority[] = {
 	[CHARGE_SUPPLIER_TYPEC] = 2,
 	[CHARGE_SUPPLIER_TYPEC_DTS] = 2,
 #ifdef CHARGE_MANAGER_BC12
-	[CHARGE_SUPPLIER_PROPRIETARY] = 2,
+	[CHARGE_SUPPLIER_PROPRIETARY] = 3,
 	[CHARGE_SUPPLIER_BC12_DCP] = 3,
-	[CHARGE_SUPPLIER_BC12_CDP] = 4,
-	[CHARGE_SUPPLIER_BC12_SDP] = 5,
-	[CHARGE_SUPPLIER_OTHER] = 6,
-	[CHARGE_SUPPLIER_VBUS] = 7
+	[CHARGE_SUPPLIER_BC12_CDP] = 3,
+	[CHARGE_SUPPLIER_BC12_SDP] = 3,
+	[CHARGE_SUPPLIER_TYPEC_UNDER_1_5A] = 4,
+	[CHARGE_SUPPLIER_OTHER] = 4,
+	[CHARGE_SUPPLIER_VBUS] = 4,
 #endif
+#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
+	[CHARGE_SUPPLIER_WPC_BPP] = 5,
+	[CHARGE_SUPPLIER_WPC_EPP] = 5,
+	[CHARGE_SUPPLIER_WPC_GPP] = 5,
+#endif
+
 };
 BUILD_ASSERT(ARRAY_SIZE(supplier_priority) == CHARGE_SUPPLIER_COUNT);
 
@@ -81,12 +104,13 @@ static int override_port = OVERRIDE_OFF;
 static int delayed_override_port = OVERRIDE_OFF;
 static timestamp_t delayed_override_deadline;
 
-#ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
-/* Bitmap of ports used as power source */
-static volatile uint32_t source_port_bitmap;
-BUILD_ASSERT(sizeof(source_port_bitmap)*8 >= CONFIG_USB_PD_PORT_COUNT);
+static uint8_t source_port_rp[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+#ifdef CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT
+/* 3A on one port and 1.5A on the rest */
+BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT * 1500 + 1500 <=
+	     CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT);
 #endif
-static uint8_t source_port_last_rp[CONFIG_USB_PD_PORT_COUNT];
 
 /*
  * charge_manager initially operates in safe mode until asked to leave (through
@@ -117,23 +141,42 @@ enum charge_manager_change_type {
 
 static int is_pd_port(int port)
 {
-	return 0 <= port && port < CONFIG_USB_PD_PORT_COUNT;
+	return port >= 0 && port < board_get_usb_pd_port_count();
 }
 
 static int is_sink(int port)
 {
 	if (!is_pd_port(port))
-		/* Dedicated port is sink-only */
-		return 1;
-	return pd_get_role(port) == PD_ROLE_SINK;
+		return board_charge_port_is_sink(port);
+
+	return pd_get_power_role(port) == PD_ROLE_SINK;
+}
+
+/**
+ * Some of the SKUs in certain boards have less number of USB PD ports than
+ * defined in CONFIG_USB_PD_PORT_MAX_COUNT. With the charge port configuration
+ * for DEDICATED_PORT towards the end, this will lead to holes in the static
+ * configuration. The ports that fall in that hole are invalid and this function
+ * is used to check the validity of the ports.
+ */
+static int is_valid_port(int port)
+{
+	if (port < 0 || port >= CHARGE_PORT_COUNT)
+		return 0;
+
+	/* Check if the port falls in the hole */
+	if (port >= board_get_usb_pd_port_count() &&
+	    port < CONFIG_USB_PD_PORT_MAX_COUNT)
+		return 0;
+	return 1;
 }
 
 #ifndef TEST_BUILD
 static int is_connected(int port)
 {
 	if (!is_pd_port(port))
-		/* Dedicated port is always connected */
-		return 1;
+		return board_charge_port_is_connected(port);
+
 	return pd_is_connected(port);
 }
 #endif /* !TEST_BUILD */
@@ -152,7 +195,7 @@ static int is_connected(int port)
  */
 static int charge_manager_spoof_dualrole_capability(void)
 {
-	return (system_get_image_copy() == SYSTEM_IMAGE_RO &&
+	return (system_get_image_copy() == EC_IMAGE_RO &&
 		system_is_locked()) || !left_safe_mode;
 
 }
@@ -167,6 +210,8 @@ static void charge_manager_init(void)
 	int i, j;
 
 	for (i = 0; i < CHARGE_PORT_COUNT; ++i) {
+		if (!is_valid_port(i))
+			continue;
 		for (j = 0; j < CHARGE_SUPPLIER_COUNT; ++j) {
 			available_charge[j][i].current =
 				CHARGE_CURRENT_UNINITIALIZED;
@@ -178,7 +223,7 @@ static void charge_manager_init(void)
 		if (!is_pd_port(i))
 			dualrole_capability[i] = CAP_DEDICATED;
 		if (is_pd_port(i))
-			source_port_last_rp[i] = CONFIG_USB_PD_PULLUP;
+			source_port_rp[i] = CONFIG_USB_PD_PULLUP;
 	}
 }
 DECLARE_HOOK(HOOK_INIT, charge_manager_init, HOOK_PRIO_CHARGE_MANAGER_INIT);
@@ -198,14 +243,17 @@ static int charge_manager_is_seeded(void)
 	if (is_seeded)
 		return 1;
 
-	for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i)
-		for (j = 0; j < CHARGE_PORT_COUNT; ++j)
+	for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i) {
+		for (j = 0; j < CHARGE_PORT_COUNT; ++j) {
+			if (!is_valid_port(j))
+				continue;
 			if (available_charge[i][j].current ==
 			    CHARGE_CURRENT_UNINITIALIZED ||
 			    available_charge[i][j].voltage ==
 			    CHARGE_VOLTAGE_UNINITIALIZED)
 				return 0;
-
+		}
+	}
 	is_seeded = 1;
 	return 1;
 }
@@ -222,7 +270,7 @@ static int charge_manager_get_source_current(int port)
 	if (!is_pd_port(port))
 		return 0;
 
-	switch (source_port_last_rp[port]) {
+	switch (source_port_rp[port]) {
 	case TYPEC_RP_3A0:
 		return 3000;
 	case TYPEC_RP_1A5:
@@ -231,6 +279,35 @@ static int charge_manager_get_source_current(int port)
 	default:
 		return 500;
 	}
+}
+
+/*
+ * Find a supplier considering available current, voltage, power, and priority.
+ */
+static enum charge_supplier find_supplier(int port, enum charge_supplier sup,
+					  int min_cur)
+{
+	int i;
+	for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i) {
+		if (available_charge[i][port].current <= min_cur ||
+		    available_charge[i][port].voltage <= 0)
+			/* Doesn't meet volt or current requirement. Skip it. */
+			continue;
+		if (sup == CHARGE_SUPPLIER_NONE)
+			/* Haven't found any yet. Take it unconditionally. */
+			sup = i;
+		else if (supplier_priority[sup] < supplier_priority[i])
+			/* There is already a higher priority supplier. */
+			continue;
+		else if (supplier_priority[i] < supplier_priority[sup])
+			/* This has a higher priority. Take it. */
+			sup = i;
+		else if (POWER(available_charge[i][port]) >
+			 POWER(available_charge[sup][port]))
+			/* Priority is tie. Take it if power is higher. */
+			sup = i;
+	}
+	return sup;
 }
 
 /**
@@ -243,24 +320,17 @@ static void charge_manager_fill_power_info(int port,
 	struct ec_response_usb_pd_power_info *r)
 {
 	int sup = CHARGE_SUPPLIER_NONE;
-	int i;
 
 	/* Determine supplier information to show. */
-	if (port == charge_port)
+	if (port == charge_port) {
 		sup = charge_supplier;
-	else
-		/* Find highest priority supplier */
-		for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i)
-			if (available_charge[i][port].current > 0 &&
-			    available_charge[i][port].voltage > 0 &&
-			    (sup == CHARGE_SUPPLIER_NONE ||
-			     supplier_priority[i] <
-			     supplier_priority[sup] ||
-			    (supplier_priority[i] ==
-			     supplier_priority[sup] &&
-			     POWER(available_charge[i][port]) >
-			     POWER(available_charge[sup][port]))))
-				sup = i;
+	} else {
+		/* Consider available current */
+		sup = find_supplier(port, sup, 0);
+		if (sup == CHARGE_SUPPLIER_NONE)
+			/* Ignore available current */
+			sup = find_supplier(port, sup, -1);
+	}
 
 	/* Fill in power role */
 	if (charge_port == port)
@@ -277,12 +347,18 @@ static void charge_manager_fill_power_info(int port,
 
 	if (sup == CHARGE_SUPPLIER_NONE ||
 	    r->role == USB_PD_PORT_POWER_SOURCE) {
-		r->type = USB_CHG_TYPE_NONE;
-		r->meas.voltage_max = 0;
-		r->meas.voltage_now = r->role == USB_PD_PORT_POWER_SOURCE ? 5000
-									  : 0;
-		r->meas.current_max = charge_manager_get_source_current(port);
-		r->max_power = 0;
+		if (is_pd_port(port)) {
+			r->type = USB_CHG_TYPE_NONE;
+			r->meas.voltage_max = 0;
+			r->meas.voltage_now =
+				r->role == USB_PD_PORT_POWER_SOURCE ? 5000 : 0;
+			r->meas.current_max =
+				charge_manager_get_source_current(port);
+			r->max_power = 0;
+		} else {
+			r->type = USB_CHG_TYPE_NONE;
+			board_fill_source_power_info(port, r);
+		}
 	} else {
 		int use_ramp_current;
 		switch (sup) {
@@ -310,28 +386,52 @@ static void charge_manager_fill_power_info(int port,
 			r->type = USB_CHG_TYPE_VBUS;
 			break;
 #endif
+#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
+		/*
+		 * Todo:need kernel add wpc device node in power_supply
+		 * before that use USB_CHG_TYPE_PROPRIETARY to present WPC.
+		 */
+		case CHARGE_SUPPLIER_WPC_BPP:
+		case CHARGE_SUPPLIER_WPC_EPP:
+		case CHARGE_SUPPLIER_WPC_GPP:
+			r->type = USB_CHG_TYPE_PROPRIETARY;
+			break;
+#endif
 #if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
 		case CHARGE_SUPPLIER_DEDICATED:
 			r->type = USB_CHG_TYPE_DEDICATED;
 			break;
 #endif
 		default:
+#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
+			r->type = USB_CHG_TYPE_VBUS;
+#else
 			r->type = USB_CHG_TYPE_OTHER;
+#endif
 		}
 		r->meas.voltage_max = available_charge[sup][port].voltage;
 
 		/*
 		 * Report unknown charger CHARGE_DETECT_DELAY after supplier
 		 * change since PD negotiation may take time.
+		 *
+		 * Do not debounce on batteryless systems because
+		 * USB_CHG_TYPE_UNKNOWN implies the system is still on battery
+		 * while some kind of negotiation happens, but by the time the
+		 * host might request this in a battery-free configuration we
+		 * must be stable (if not, the system is either up or about to
+		 * lose power again).
 		 */
+#ifdef CONFIG_BATTERY
 		if (get_time().val < registration_time[port].val +
 				     CHARGE_DETECT_DELAY)
 			r->type = USB_CHG_TYPE_UNKNOWN;
+#endif
 
 #if defined(HAS_TASK_CHG_RAMP) || defined(CONFIG_CHARGE_RAMP_HW)
 		/* Read ramped current if active charging port */
 		use_ramp_current =
-			(charge_port == port) && chg_ramp_allowed(sup);
+			(charge_port == port) && chg_ramp_allowed(port, sup);
 #else
 		use_ramp_current = 0;
 #endif
@@ -349,7 +449,7 @@ static void charge_manager_fill_power_info(int port,
 			 * available charge current.
 			 */
 			r->meas.current_max = chg_ramp_is_stable() ?
-				r->meas.current_lim : chg_ramp_max(sup,
+				r->meas.current_lim : chg_ramp_max(port, sup,
 					available_charge[sup][port].current);
 
 			r->max_power =
@@ -368,7 +468,14 @@ static void charge_manager_fill_power_info(int port,
 			r->meas.voltage_now = 5000;
 		else {
 #if defined(CONFIG_USB_PD_VBUS_MEASURE_CHARGER)
-			r->meas.voltage_now = charger_get_vbus_voltage(port);
+			int voltage;
+
+			if (charger_get_vbus_voltage(port, &voltage))
+				r->meas.voltage_now = 0;
+			else
+				r->meas.voltage_now = voltage;
+#elif defined(CONFIG_USB_PD_VBUS_MEASURE_TCPC)
+			r->meas.voltage_now = tcpc_get_vbus_voltage(port);
 #elif defined(CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT)
 			r->meas.voltage_now =
 				adc_read_channel(board_get_vbus_adc(port));
@@ -440,6 +547,9 @@ static int charge_manager_get_ceil(int port)
 	int ceil = CHARGE_CEIL_NONE;
 	int val, i;
 
+	if (!is_valid_port(port))
+		return ceil;
+
 	for (i = 0; i < CEIL_REQUESTOR_COUNT; ++i) {
 		val = charge_ceil[port][i];
 		if (val != CHARGE_CEIL_NONE &&
@@ -478,6 +588,10 @@ static void charge_manager_get_best_charge_port(int *new_port,
 		 */
 		for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i)
 			for (j = 0; j < CHARGE_PORT_COUNT; ++j) {
+				/* Skip this port if it is not valid. */
+				if (!is_valid_port(j))
+					continue;
+
 				/*
 				 * Skip this supplier if there is no
 				 * available charge.
@@ -583,11 +697,17 @@ static void charge_manager_refresh(void)
 		 * Zero the available charge on the rejected port so that
 		 * it is no longer chosen.
 		 */
-		for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i)
+		for (i = 0; i < CHARGE_SUPPLIER_COUNT; ++i) {
 			available_charge[i][new_port].current = 0;
+			available_charge[i][new_port].voltage = 0;
+		}
 	}
 
 	active_charge_port_initialized = 1;
+
+	/* Set the active charger chip based upon the selected charge port. */
+	if (IS_ENABLED(CONFIG_OCPC))
+		charge_set_active_chg_chip(new_port);
 
 	/*
 	 * Clear override if it wasn't selected as the 'best' port -- it means
@@ -608,9 +728,9 @@ static void charge_manager_refresh(void)
 		 * Allow to set the maximum current value, so the hardware can
 		 * know the range of acceptable current values for its ramping.
 		 */
-		if (chg_ramp_allowed(new_supplier))
+		if (chg_ramp_allowed(new_port, new_supplier))
 			new_charge_current_uncapped =
-				chg_ramp_max(new_supplier,
+				chg_ramp_max(new_port, new_supplier,
 					     new_charge_current_uncapped);
 #endif /* CONFIG_CHARGE_RAMP_HW */
 		/* Enforce port charge ceiling. */
@@ -636,7 +756,7 @@ static void charge_manager_refresh(void)
 #else
 #ifdef CONFIG_CHARGE_RAMP_HW
 		/* Enable or disable charge ramp */
-		charger_set_hw_ramp(chg_ramp_allowed(new_supplier));
+		charger_set_hw_ramp(chg_ramp_allowed(new_port, new_supplier));
 #endif
 		board_set_charge_limit(new_port, new_supplier,
 					new_charge_current,
@@ -693,7 +813,7 @@ static void charge_manager_refresh(void)
 	if (updated_old_port != CHARGE_PORT_NONE)
 		save_log[updated_old_port] = 1;
 
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; ++i)
+	for (i = 0; i < board_get_usb_pd_port_count(); ++i)
 		if (save_log[i])
 			charge_manager_save_log(i);
 #endif
@@ -745,6 +865,11 @@ static void charge_manager_make_change(enum charge_manager_change_type change,
 {
 	int i;
 	int clear_override = 0;
+
+	if (!is_valid_port(port)) {
+		CPRINTS("%s: p%d invalid", __func__, port);
+		return;
+	}
 
 	/* Determine if this is a change which can affect charge status */
 	switch (change) {
@@ -845,6 +970,9 @@ void pd_set_input_current_limit(int port, uint32_t max_ma,
 {
 	struct charge_port_info charge;
 
+	if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV))
+		charge_reset_stable_current();
+
 	charge.current = max_ma;
 	charge.voltage = supply_voltage;
 	charge_manager_update_charge(CHARGE_SUPPLIER_PD, port, &charge);
@@ -854,7 +982,16 @@ void typec_set_input_current_limit(int port, typec_current_t max_ma,
 				   uint32_t supply_voltage)
 {
 	struct charge_port_info charge;
+	int i;
+	int supplier;
 	int dts = !!(max_ma & TYPEC_CURRENT_DTS_MASK);
+	static const enum charge_supplier typec_suppliers[] = {
+		CHARGE_SUPPLIER_TYPEC,
+		CHARGE_SUPPLIER_TYPEC_DTS,
+#ifdef CHARGE_MANAGER_BC12
+		CHARGE_SUPPLIER_TYPEC_UNDER_1_5A,
+#endif /* CHARGE_MANAGER_BC12 */
+	};
 
 	charge.current = max_ma & TYPEC_CURRENT_ILIM_MASK;
 	charge.voltage = supply_voltage;
@@ -867,30 +1004,47 @@ void typec_set_input_current_limit(int port, typec_current_t max_ma,
 	if (dts)
 		charge.current = MIN(charge.current, 500);
 #endif
-	charge_manager_update_charge(dts ? CHARGE_SUPPLIER_TYPEC_DTS :
-					   CHARGE_SUPPLIER_TYPEC,
-					   port, &charge);
+
+	supplier = dts ? CHARGE_SUPPLIER_TYPEC_DTS : CHARGE_SUPPLIER_TYPEC;
+
+#ifdef CHARGE_MANAGER_BC12
+	/*
+	 * According to USB-C spec 1.3 Table 4-17 "Precedence of power source
+	 * usage", the priority should be: USB-C 3.0A, 1.5A > BC1.2 > USB-C
+	 * under 1.5A.  Choosed the corresponding supplier type, according to
+	 * charge current, to update.
+	 */
+	if (charge.current < 1500)
+		supplier = CHARGE_SUPPLIER_TYPEC_UNDER_1_5A;
+#endif /* CHARGE_MANAGER_BC12 */
+
+	charge_manager_update_charge(supplier, port, &charge);
 
 	/*
-	 * Zero TYPEC / TYPEC-DTS when zero'ing the other, since they are
-	 * mutually exclusive and DTS status of port partner will no longer
-	 * be reflected on disconnect.
+	 * TYPEC / TYPEC-DTS / TYPEC-UNDER_1_5A should be mutually exclusive.
+	 * Zero'ing all the other suppliers.
 	 */
-	if (max_ma == 0 || supply_voltage == 0)
-		charge_manager_update_charge(dts ? CHARGE_SUPPLIER_TYPEC :
-						   CHARGE_SUPPLIER_TYPEC_DTS,
-						   port, &charge);
+	for (i = 0; i < ARRAY_SIZE(typec_suppliers); ++i)
+		if (supplier != typec_suppliers[i])
+			charge_manager_update_charge(typec_suppliers[i], port,
+						     NULL);
 }
 
 void charge_manager_update_charge(int supplier,
 				  int port,
 				  const struct charge_port_info *charge)
 {
+	struct charge_port_info zero = {0};
+	if (!charge)
+		charge = &zero;
 	charge_manager_make_change(CHANGE_CHARGE, supplier, port, charge);
 }
 
 void charge_manager_update_dualrole(int port, enum dualrole_capabilities cap)
 {
+	if (!is_pd_port(port))
+		return;
+
 	/* Ignore when capability is unchanged */
 	if (cap != dualrole_capability[port]) {
 		dualrole_capability[port] = cap;
@@ -914,6 +1068,9 @@ void charge_manager_leave_safe_mode(void)
 
 void charge_manager_set_ceil(int port, enum ceil_requestor requestor, int ceil)
 {
+	if (!is_valid_port(port))
+		return;
+
 	if (charge_ceil[port][requestor] != ceil) {
 		charge_ceil[port][requestor] = ceil;
 		if (port == charge_port && charge_manager_is_seeded())
@@ -1001,6 +1158,11 @@ int charge_manager_get_charger_voltage(void)
 	return charge_voltage;
 }
 
+enum charge_supplier charge_manager_get_supplier(void)
+{
+	return charge_supplier;
+}
+
 int charge_manager_get_power_limit_uw(void)
 {
 	int current_ma = charge_current;
@@ -1014,10 +1176,53 @@ int charge_manager_get_power_limit_uw(void)
 }
 
 #ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
+
+/* Bitmap of ports used as power source */
+static volatile uint32_t source_port_bitmap;
+BUILD_ASSERT(sizeof(source_port_bitmap)*8 >= CONFIG_USB_PD_PORT_MAX_COUNT);
+
+static inline int has_other_active_source(int port)
+{
+	return source_port_bitmap & ~BIT(port);
+}
+
+static inline int is_active_source(int port)
+{
+	return source_port_bitmap & BIT(port);
+}
+
+static int can_supply_max_current(int port)
+{
+#ifdef CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT
+	/*
+	 * This guarantees active 3A source continues to supply 3A.
+	 *
+	 * Since redistribution occurs sequentially, younger ports get
+	 * priority. Priority surfaces only when 3A source is released.
+	 * That is, when 3A source is released, the youngest active
+	 * port gets 3A.
+	 */
+	int p;
+	if (!is_active_source(port))
+		/* Non-active ports don't get 3A */
+		return 0;
+	for (p = 0; p < board_get_usb_pd_port_count(); p++) {
+		if (p == port)
+			continue;
+		if (source_port_rp[p] ==
+				CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
+			return 0;
+	}
+	return 1;
+#else
+	return is_active_source(port) && !has_other_active_source(port);
+#endif /* CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT */
+}
+
 void charge_manager_source_port(int port, int enable)
 {
 	uint32_t prev_bitmap = source_port_bitmap;
-	int p;
+	int p, rp;
 
 	if (enable)
 		atomic_or(&source_port_bitmap, 1 << port);
@@ -1029,15 +1234,11 @@ void charge_manager_source_port(int port, int enable)
 		return;
 
 	/* Set port limit according to policy */
-	for (p = 0; p < CONFIG_USB_PD_PORT_COUNT; p++) {
-		/*
-		 * if we are the only active source port or there is none,
-		 * advertise all the available power.
-		 */
-		int rp = (source_port_bitmap & ~(1 << p)) ? CONFIG_USB_PD_PULLUP
-			: CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT;
-
-		source_port_last_rp[p] = rp;
+	for (p = 0; p < board_get_usb_pd_port_count(); p++) {
+		rp = can_supply_max_current(p) ?
+				CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT :
+				CONFIG_USB_PD_PULLUP;
+		source_port_rp[p] = rp;
 
 #ifdef CONFIG_USB_PD_LOGGING
 		if (is_connected(p) && !is_sink(p))
@@ -1045,25 +1246,23 @@ void charge_manager_source_port(int port, int enable)
 #endif
 
 		typec_set_source_current_limit(p, rp);
-		tcpm_select_rp_value(p, rp);
+		if (IS_ENABLED(CONFIG_USB_PD_TCPMV2))
+			typec_select_src_current_limit_rp(p, rp);
+		else
+			tcpm_select_rp_value(p, rp);
 		pd_update_contract(p);
 	}
 }
 
 int charge_manager_get_source_pdo(const uint32_t **src_pdo, const int port)
 {
-	/* Are there any other connected sinks? */
-	if (source_port_bitmap & ~(1 << port)) {
-		*src_pdo = pd_src_pdo;
-		return pd_src_pdo_cnt;
+	if (can_supply_max_current(port)) {
+		*src_pdo = pd_src_pdo_max;
+		return pd_src_pdo_max_cnt;
 	}
 
-	/*
-	 * If not, send the maximum current since we're sourcing on only one
-	 * port.
-	 */
-	*src_pdo = pd_src_pdo_max;
-	return pd_src_pdo_max_cnt;
+	*src_pdo = pd_src_pdo;
+	return pd_src_pdo_cnt;
 }
 #endif /* CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT */
 
@@ -1078,6 +1277,11 @@ static enum ec_status hc_pd_power_info(struct host_cmd_handler_args *args)
 	if (port == PD_POWER_CHARGING_PORT)
 		port = charge_port;
 
+	/*
+	 * Not checking for invalid port here, because it might break existing
+	 * contract with ectool users. The invalid ports will have the response
+	 * voltage, current and power parameters set to 0.
+	 */
 	if (port >= CHARGE_PORT_COUNT)
 		return EC_RES_INVALID_PARAM;
 
@@ -1181,7 +1385,7 @@ static void charge_manager_set_external_power_limit(int current_lim,
 	if (voltage_lim == EC_POWER_LIMIT_NONE)
 		voltage_lim = PD_MAX_VOLTAGE_MV;
 
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; ++port) {
+	for (port = 0; port < board_get_usb_pd_port_count(); ++port) {
 		charge_manager_set_ceil(port, CEIL_REQUESTOR_HOST, current_lim);
 		pd_set_external_voltage_limit(port, voltage_lim);
 	}
@@ -1258,3 +1462,26 @@ static int charge_supplier_info(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(chgsup, charge_supplier_info,
 			NULL, "print chg supplier info");
 #endif
+
+__overridable
+int board_charge_port_is_sink(int port)
+{
+	return 1;
+}
+
+__overridable
+int board_charge_port_is_connected(int port)
+{
+	return 1;
+}
+
+__overridable
+void board_fill_source_power_info(int port,
+				  struct ec_response_usb_pd_power_info *r)
+{
+	r->meas.voltage_now = 0;
+	r->meas.voltage_max = 0;
+	r->meas.current_max = 0;
+	r->meas.current_lim = 0;
+	r->max_power = 0;
+}

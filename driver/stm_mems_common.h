@@ -34,34 +34,38 @@
 /**
  * Read single register
  */
-static inline int st_raw_read8(const int port, const int addr, const int reg,
-		     int *data_ptr)
+static inline int st_raw_read8(const int port,
+			       const uint16_t i2c_spi_addr_flags,
+			       const int reg, int *data_ptr)
 {
 	/* TODO: Implement SPI interface support */
-	return i2c_read8(port, addr, reg, data_ptr);
+	return i2c_read8(port, i2c_spi_addr_flags, reg, data_ptr);
 }
 
 /**
  * Write single register
  */
-static inline int st_raw_write8(const int port, const int addr, const int reg,
-		      int data)
+static inline int st_raw_write8(const int port,
+				const uint16_t i2c_spi_addr_flags,
+				const int reg, int data)
 {
 	/* TODO: Implement SPI interface support */
-	return i2c_write8(port, addr, reg, data);
+	return i2c_write8(port, i2c_spi_addr_flags, reg, data);
 }
 
 /**
  * st_raw_read_n - Read n bytes for read
  */
-int st_raw_read_n(const int port, const int addr, const uint8_t reg,
-	       uint8_t *data_ptr, const int len);
+int st_raw_read_n(const int port,
+		  const uint16_t i2c_spi_addr_flags,
+		  const uint8_t reg, uint8_t *data_ptr, const int len);
 
 /**
  * st_raw_read_n_noinc - Read n bytes for read (no auto inc address)
  */
-int st_raw_read_n_noinc(const int port, const int addr, const uint8_t reg,
-	       uint8_t *data_ptr, const int len);
+int st_raw_read_n_noinc(const int port,
+			const uint16_t i2c_spi_addr_flags,
+			const uint8_t reg, uint8_t *data_ptr, const int len);
 
  /**
  * st_write_data_with_mask - Write register with mask
@@ -109,7 +113,7 @@ int st_get_data_rate(const struct motion_sensor_t *s);
  * @v: vector
  * @data: LSB raw data
  */
-void st_normalize(const struct motion_sensor_t *s, vector_3_t v, uint8_t *data);
+void st_normalize(const struct motion_sensor_t *s, intv3_t v, uint8_t *data);
 
 /* Internal data structure for sensors */
 struct stprivate_data {

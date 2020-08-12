@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -80,22 +80,28 @@ int pd_check_power_swap(int port)
 	return 0;
 }
 
-int pd_check_data_swap(int port, int data_role)
+int pd_check_data_swap(int port,
+		       enum pd_data_role data_role)
 {
 	/* Always refuse data swap */
 	return 0;
 }
 
-void pd_execute_data_swap(int port, int data_role)
+void pd_execute_data_swap(int port,
+			  enum pd_data_role data_role)
 {
 	/* Do nothing */
 }
 
-void pd_check_pr_role(int port, int pr_role, int flags)
+void pd_check_pr_role(int port,
+		      enum pd_power_role pr_role,
+		      int flags)
 {
 }
 
-void pd_check_dr_role(int port, int dr_role, int flags)
+void pd_check_dr_role(int port,
+		      enum pd_data_role dr_role,
+		      int flags)
 {
 }
 /* ----------------- Vendor Defined Messages ------------------ */
@@ -213,8 +219,11 @@ static int svdm_enter_mode(int port, uint32_t *payload)
 	return rv;
 }
 
-int pd_alt_mode(int port, uint16_t svid)
+int pd_alt_mode(int port, enum tcpm_transmit_type type, uint16_t svid)
 {
+	if (type != TCPC_TX_SOP)
+		return 0;
+
 	if (svid == USB_SID_DISPLAYPORT)
 		return alt_mode[PD_AMODE_DISPLAYPORT];
 	else if (svid == USB_VID_GOOGLE)

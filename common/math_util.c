@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -86,10 +86,16 @@ static inline int int_sqrtf(fp_inter_t x)
 {
 	return sqrtf(x);
 }
+
+/* If the platform support FPU, just return sqrtf. */
+fp_t fp_sqrtf(fp_t x)
+{
+	return sqrtf(x);
+}
 #else
 static int int_sqrtf(fp_inter_t x)
 {
-	int rmax = 0x7fffffff;
+	int rmax = INT32_MAX;
 	int rmin = 0;
 
 	/* Short cut if x is 32-bit value */
@@ -124,9 +130,16 @@ static int int_sqrtf(fp_inter_t x)
 		}
 	}
 }
-#endif
 
-int vector_magnitude(const vector_3_t v)
+fp_t fp_sqrtf(fp_t x)
+{
+	fp_inter_t preshift_x = (fp_inter_t)x << FP_BITS;
+
+	return int_sqrtf(preshift_x);
+}
+#endif /* CONFIG_FPU */
+
+int vector_magnitude(const intv3_t v)
 {
 	fp_inter_t sum =   (fp_inter_t)v[0] * v[0] +
 			(fp_inter_t)v[1] * v[1] +
@@ -135,7 +148,29 @@ int vector_magnitude(const vector_3_t v)
 	return int_sqrtf(sum);
 }
 
-fp_t cosine_of_angle_diff(const vector_3_t v1, const vector_3_t v2)
+/* cross_product only works if the vectors magnitudes are around 1<<16. */
+void cross_product(const intv3_t v1, const intv3_t v2, intv3_t v)
+{
+	v[X] = (fp_inter_t)v1[Y] * v2[Z] - (fp_inter_t)v1[Z] * v2[Y];
+	v[Y] = (fp_inter_t)v1[Z] * v2[X] - (fp_inter_t)v1[X] * v2[Z];
+	v[Z] = (fp_inter_t)v1[X] * v2[Y] - (fp_inter_t)v1[Y] * v2[X];
+}
+
+fp_inter_t dot_product(const intv3_t v1, const intv3_t v2)
+{
+	return (fp_inter_t)v1[X] * v2[X] +
+	       (fp_inter_t)v1[Y] * v2[Y] +
+	       (fp_inter_t)v1[Z] * v2[Z];
+}
+
+void vector_scale(intv3_t v, fp_t s)
+{
+	v[X] = fp_mul(v[X], s);
+	v[Y] = fp_mul(v[Y], s);
+	v[Z] = fp_mul(v[Z], s);
+}
+
+fp_t cosine_of_angle_diff(const intv3_t v1, const intv3_t v2)
 {
 	fp_inter_t dotproduct;
 	fp_inter_t denominator;
@@ -144,10 +179,7 @@ fp_t cosine_of_angle_diff(const vector_3_t v1, const vector_3_t v2)
 	 * Angle between two vectors is acos(A dot B / |A|*|B|). To return
 	 * cosine of angle between vectors, then don't do acos operation.
 	 */
-
-	dotproduct =	(fp_inter_t)v1[0] * v2[0] +
-			(fp_inter_t)v1[1] * v2[1] +
-			(fp_inter_t)v1[2] * v2[2];
+	dotproduct = dot_product(v1, v2);
 
 	denominator = (fp_inter_t)vector_magnitude(v1) * vector_magnitude(v2);
 
@@ -176,13 +208,13 @@ fp_t cosine_of_angle_diff(const vector_3_t v1, const vector_3_t v2)
  * rotate a vector v
  *  - support input v and output res are the same vector
  */
-void rotate(const vector_3_t v, const matrix_3x3_t R, vector_3_t res)
+void rotate(const intv3_t v, const mat33_fp_t R, intv3_t res)
 {
 	fp_inter_t t[3];
 
 	if (R == NULL) {
 		if (v != res)
-			memcpy(res, v, sizeof(vector_3_t));
+			memcpy(res, v, sizeof(intv3_t));
 		return;
 	}
 
@@ -204,14 +236,14 @@ void rotate(const vector_3_t v, const matrix_3x3_t R, vector_3_t res)
 	res[2] = FP_TO_INT(t[2]);
 }
 
-void rotate_inv(const vector_3_t v, const matrix_3x3_t R, vector_3_t res)
+void rotate_inv(const intv3_t v, const mat33_fp_t R, intv3_t res)
 {
 	fp_inter_t t[3];
 	fp_t deter;
 
 	if (R == NULL) {
 		if (v != res)
-			memcpy(res, v, sizeof(vector_3_t));
+			memcpy(res, v, sizeof(intv3_t));
 		return;
 	}
 
@@ -252,4 +284,12 @@ void rotate_inv(const vector_3_t v, const matrix_3x3_t R, vector_3_t res)
 	res[0] = FP_TO_INT(fp_div(t[0], deter));
 	res[1] = FP_TO_INT(fp_div(t[1], deter));
 	res[2] = FP_TO_INT(fp_div(t[2], deter));
+}
+
+/* division that round to the nearest integer */
+int round_divide(int64_t dividend, int divisor)
+{
+	return (dividend > 0) ^ (divisor > 0) ?
+		(dividend - divisor / 2) / divisor :
+		(dividend + divisor / 2) / divisor;
 }

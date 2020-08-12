@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -11,17 +11,17 @@
 #include "timer.h"
 #include "util.h"
 
-/* 8-bit I2C address */
-#define LP5562_I2C_ADDR (0x30 << 1)
+/* I2C address */
+#define LP5562_I2C_ADDR_FLAGS 0x30
 
 inline int lp5562_write(uint8_t reg, uint8_t val)
 {
-	return i2c_write8(I2C_PORT_MASTER, LP5562_I2C_ADDR, reg, val);
+	return i2c_write8(I2C_PORT_MASTER, LP5562_I2C_ADDR_FLAGS, reg, val);
 }
 
 inline int lp5562_read(uint8_t reg, int *val)
 {
-	return i2c_read8(I2C_PORT_MASTER, LP5562_I2C_ADDR, reg, val);
+	return i2c_read8(I2C_PORT_MASTER, LP5562_I2C_ADDR_FLAGS, reg, val);
 }
 
 int lp5562_set_color(uint32_t rgb)

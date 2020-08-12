@@ -11,12 +11,18 @@
 #include "fusb302.h"
 #include "task.h"
 #include "hooks.h"
+#include "tcpci.h"
 #include "tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
 #include "util.h"
+
+#if defined(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE) || \
+	defined(CONFIG_USB_PD_DISCHARGE_TCPC)
+#error "Unsupported config options of fusb302 PD driver"
+#endif
 
 #define PACKET_IS_GOOD_CRC(head) (PD_HEADER_TYPE(head) == PD_CTRL_GOOD_CRC && \
 				 PD_HEADER_CNT(head) == 0)
@@ -29,7 +35,9 @@ static struct fusb302_chip_state {
 	int rx_enable;
 	uint8_t mdac_vnc;
 	uint8_t mdac_rd;
-} state[CONFIG_USB_PD_PORT_COUNT];
+} state[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+static struct mutex measure_lock;
 
 /*
  * Bring the FUSB302 out of reset after Hard Reset signaling. This will
@@ -91,11 +99,11 @@ static int convert_bc_lvl(int port, int bc_lvl)
 			ret = TYPEC_CC_VOLT_RD;
 	} else {
 		if (bc_lvl == 0x1)
-			ret = TYPEC_CC_VOLT_SNK_DEF;
+			ret = TYPEC_CC_VOLT_RP_DEF;
 		else if (bc_lvl == 0x2)
-			ret = TYPEC_CC_VOLT_SNK_1_5;
+			ret = TYPEC_CC_VOLT_RP_1_5;
 		else if (bc_lvl == 0x3)
-			ret = TYPEC_CC_VOLT_SNK_3_0;
+			ret = TYPEC_CC_VOLT_RP_3_0;
 	}
 
 	return ret;
@@ -106,6 +114,8 @@ static int measure_cc_pin_source(int port, int cc_measure)
 	int switches0_reg;
 	int reg;
 	int cc_lvl;
+
+	mutex_lock(&measure_lock);
 
 	/* Read status register */
 	tcpc_read(port, TCPC_REG_SWITCHES0, &reg);
@@ -154,11 +164,15 @@ static int measure_cc_pin_source(int port, int cc_measure)
 	/* Restore SWITCHES0 register to its value prior */
 	tcpc_write(port, TCPC_REG_SWITCHES0, switches0_reg);
 
+	mutex_unlock(&measure_lock);
+
 	return cc_lvl;
 }
 
 /* Determine cc pin state for source when in manual detect mode */
-static void detect_cc_pin_source_manual(int port, int *cc1_lvl, int *cc2_lvl)
+static void detect_cc_pin_source_manual(int port,
+	enum tcpc_cc_voltage_status *cc1_lvl,
+	enum tcpc_cc_voltage_status *cc2_lvl)
 {
 	int cc1_measure = TCPC_REG_SWITCHES0_MEAS_CC1;
 	int cc2_measure = TCPC_REG_SWITCHES0_MEAS_CC2;
@@ -178,13 +192,16 @@ static void detect_cc_pin_source_manual(int port, int *cc1_lvl, int *cc2_lvl)
 }
 
 /* Determine cc pin state for sink */
-static void detect_cc_pin_sink(int port, int *cc1, int *cc2)
+static void detect_cc_pin_sink(int port, enum tcpc_cc_voltage_status *cc1,
+	enum tcpc_cc_voltage_status *cc2)
 {
 	int reg;
 	int orig_meas_cc1;
 	int orig_meas_cc2;
 	int bc_lvl_cc1;
 	int bc_lvl_cc2;
+
+	mutex_lock(&measure_lock);
 
 	/*
 	 * Measure CC1 first.
@@ -256,6 +273,8 @@ static void detect_cc_pin_sink(int port, int *cc1, int *cc2)
 		reg &= ~TCPC_REG_SWITCHES0_MEAS_CC2;
 
 	tcpc_write(port, TCPC_REG_SWITCHES0, reg);
+
+	mutex_unlock(&measure_lock);
 }
 
 /* Parse header bytes for the size of packet */
@@ -332,6 +351,9 @@ static int fusb302_tcpm_select_rp_value(int port, int rp)
 	int reg;
 	int rv;
 	uint8_t vnc, rd;
+
+	/* Keep track of current RP value */
+	tcpci_set_cached_rp(port, rp);
 
 	rv = tcpc_read(port, TCPC_REG_CONTROL0, &reg);
 	if (rv)
@@ -426,7 +448,6 @@ static int fusb302_tcpm_init(int port)
 	tcpm_set_polarity(port, 0);
 	tcpm_set_vconn(port, 0);
 
-	/* Turn on the power! */
 	/* TODO: Reduce power consumption */
 	tcpc_write(port, TCPC_REG_POWER, TCPC_REG_POWER_PWR_ALL);
 
@@ -450,7 +471,8 @@ static int fusb302_tcpm_release(int port)
 	return EC_ERROR_UNIMPLEMENTED;
 }
 
-static int fusb302_tcpm_get_cc(int port, int *cc1, int *cc2)
+static int fusb302_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
+	enum tcpc_cc_voltage_status *cc2)
 {
 	if (state[port].pulling_up) {
 		/* Source mode? */
@@ -535,7 +557,7 @@ static int fusb302_tcpm_set_cc(int port, int pull)
 	return 0;
 }
 
-static int fusb302_tcpm_set_polarity(int port, int polarity)
+static int fusb302_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	/* Port polarity : 0 => CC1 is CC line, 1 => CC2 is CC line */
 	int reg;
@@ -548,7 +570,7 @@ static int fusb302_tcpm_set_polarity(int port, int polarity)
 
 	if (state[port].vconn_enabled) {
 		/* set VCONN switch to be non-CC line */
-		if (polarity)
+		if (polarity_rm_dts(polarity))
 			reg |= TCPC_REG_SWITCHES0_VCONN_CC1;
 		else
 			reg |= TCPC_REG_SWITCHES0_VCONN_CC2;
@@ -559,7 +581,7 @@ static int fusb302_tcpm_set_polarity(int port, int polarity)
 	reg &= ~TCPC_REG_SWITCHES0_MEAS_CC2;
 
 	/* set rx polarity */
-	if (polarity)
+	if (polarity_rm_dts(polarity))
 		reg |= TCPC_REG_SWITCHES0_MEAS_CC2;
 	else
 		reg |= TCPC_REG_SWITCHES0_MEAS_CC1;
@@ -573,7 +595,7 @@ static int fusb302_tcpm_set_polarity(int port, int polarity)
 	reg &= ~TCPC_REG_SWITCHES1_TXCC2_EN;
 
 	/* set tx polarity */
-	if (polarity)
+	if (polarity_rm_dts(polarity))
 		reg |= TCPC_REG_SWITCHES1_TXCC2_EN;
 	else
 		reg |= TCPC_REG_SWITCHES1_TXCC1_EN;
@@ -604,6 +626,17 @@ static int fusb302_tcpm_set_vconn(int port, int enable)
 	if (enable) {
 		/* set to saved polarity */
 		tcpm_set_polarity(port, state[port].cc_polarity);
+
+#ifdef CONFIG_USB_PD_DECODE_SOP
+		if (state[port].rx_enable) {
+			if (tcpc_read(port, TCPC_REG_CONTROL1, &reg))
+				return EC_ERROR_UNKNOWN;
+
+			reg |= (TCPC_REG_CONTROL1_ENSOP1 |
+				TCPC_REG_CONTROL1_ENSOP2);
+			tcpc_write(port, TCPC_REG_CONTROL1, reg);
+		}
+#endif
 	} else {
 
 		tcpc_read(port, TCPC_REG_SWITCHES0, &reg);
@@ -613,6 +646,17 @@ static int fusb302_tcpm_set_vconn(int port, int enable)
 		reg &= ~TCPC_REG_SWITCHES0_VCONN_CC2;
 
 		tcpc_write(port, TCPC_REG_SWITCHES0, reg);
+
+#ifdef CONFIG_USB_PD_DECODE_SOP
+		if (state[port].rx_enable) {
+			if (tcpc_read(port, TCPC_REG_CONTROL1, &reg))
+				return EC_ERROR_UNKNOWN;
+
+			reg &= ~(TCPC_REG_CONTROL1_ENSOP1 |
+				TCPC_REG_CONTROL1_ENSOP2);
+			tcpc_write(port, TCPC_REG_CONTROL1, reg);
+		}
+#endif
 	}
 
 	return 0;
@@ -684,6 +728,20 @@ static int fusb302_tcpm_set_rx_enable(int port, int enable)
 			tcpc_write(port, TCPC_REG_MASK,
 				   reg & ~TCPC_REG_MASK_BC_LVL);
 	}
+
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	/*
+	 * Only the VCONN Source is allowed to communicate
+	 * with the Cable Plugs.
+	 */
+	if (state[port].vconn_enabled) {
+		if (tcpc_read(port, TCPC_REG_CONTROL1, &reg))
+			return EC_ERROR_UNKNOWN;
+
+		reg |= (TCPC_REG_CONTROL1_ENSOP1 | TCPC_REG_CONTROL1_ENSOP2);
+		tcpc_write(port, TCPC_REG_CONTROL1, reg);
+	}
+#endif
 
 	fusb302_auto_goodcrc_enable(port, enable);
 
@@ -757,6 +815,20 @@ static int fusb302_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 		else
 			memcpy(payload, buf, len);
 	}
+
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	{
+		int reg;
+
+		if (tcpc_read(port, TCPC_REG_STATUS1, &reg))
+			return EC_ERROR_UNKNOWN;
+
+		if (reg & TCPC_REG_STATUS1_RXSOP1)
+			*head |= PD_HEADER_SOP(PD_MSG_SOP_PRIME);
+		else if (reg & TCPC_REG_STATUS1_RXSOP2)
+			*head |= PD_HEADER_SOP(PD_MSG_SOP_PRIME_PRIME);
+	}
+#endif
 
 	return rv;
 }
@@ -832,14 +904,17 @@ static int fusb302_tcpm_transmit(int port, enum tcpm_transmit_type type,
 }
 
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-static int fusb302_tcpm_get_vbus_level(int port)
+static bool fusb302_tcpm_check_vbus_level(int port, enum vbus_level level)
 {
 	int reg;
 
 	/* Read status register */
 	tcpc_read(port, TCPC_REG_STATUS0, &reg);
 
-	return (reg & TCPC_REG_STATUS0_VBUSOK) ? 1 : 0;
+	if (level == VBUS_PRESENT)
+		return (reg & TCPC_REG_STATUS0_VBUSOK) ? 1 : 0;
+	else
+		return (reg & TCPC_REG_STATUS0_VBUSOK) ? 0 : 1;
 }
 #endif
 
@@ -878,9 +953,10 @@ void fusb302_tcpc_alert(int port)
 		/* VBUS crossed threshold */
 #ifdef CONFIG_USB_CHARGER
 		usb_charger_vbus_change(port,
-					fusb302_tcpm_get_vbus_level(port));
+					fusb302_tcpm_check_vbus_level(port,
+							VBUS_PRESENT));
 #else
-		if (!fusb302_tcpm_get_vbus_level(port))
+		if (!fusb302_tcpm_check_vbus_level(port, VBUS_PRESENT))
 			pd_vbus_low(port);
 #endif
 		task_wake(PD_PORT_TO_TASK_ID(port));
@@ -948,12 +1024,134 @@ void tcpm_set_bist_test_data(int port)
 	tcpc_write(port, TCPC_REG_CONTROL3, reg);
 }
 
+#ifdef CONFIG_USB_PD_TCPC_LOW_POWER
+static int fusb302_set_toggle_mode(int port, int mode)
+{
+	int reg, rv;
+
+	rv = i2c_read8(tcpc_config[port].i2c_info.port,
+		tcpc_config[port].i2c_info.addr_flags,
+		TCPC_REG_CONTROL2, &reg);
+	if (rv)
+		return rv;
+
+	reg &= ~TCPC_REG_CONTROL2_MODE_MASK;
+	reg |= mode << TCPC_REG_CONTROL2_MODE_POS;
+	return i2c_write8(tcpc_config[port].i2c_info.port,
+		tcpc_config[port].i2c_info.addr_flags,
+		TCPC_REG_CONTROL2, reg);
+}
+
+static int fusb302_tcpm_enter_low_power_mode(int port)
+{
+	int reg, rv, mode = TCPC_REG_CONTROL2_MODE_DRP;
+
+	/**
+	 * vendor's suggested LPM flow:
+	 * - enable low power mode and set up other things
+	 * - sleep 250 us
+	 * - start toggling
+	 */
+	rv = i2c_write8(tcpc_config[port].i2c_info.port,
+			  tcpc_config[port].i2c_info.addr_flags,
+			  TCPC_REG_POWER, TCPC_REG_POWER_PWR_LOW);
+	if (rv)
+		return rv;
+
+	switch (pd_get_dual_role(port)) {
+	case PD_DRP_TOGGLE_ON:
+		mode = TCPC_REG_CONTROL2_MODE_DRP;
+		break;
+	case PD_DRP_TOGGLE_OFF:
+		mode = TCPC_REG_CONTROL2_MODE_UFP;
+		break;
+	case PD_DRP_FREEZE:
+		mode = pd_get_power_role(port) == PD_ROLE_SINK ?
+			TCPC_REG_CONTROL2_MODE_UFP :
+			TCPC_REG_CONTROL2_MODE_DFP;
+		break;
+	case PD_DRP_FORCE_SINK:
+		mode = TCPC_REG_CONTROL2_MODE_UFP;
+		break;
+	case PD_DRP_FORCE_SOURCE:
+		mode = TCPC_REG_CONTROL2_MODE_DFP;
+		break;
+	}
+	rv = fusb302_set_toggle_mode(port, mode);
+	if (rv)
+		return rv;
+
+	usleep(250);
+
+	rv = i2c_read8(tcpc_config[port].i2c_info.port,
+		tcpc_config[port].i2c_info.addr_flags,
+		TCPC_REG_CONTROL2, &reg);
+	if (rv)
+		return rv;
+	reg |= TCPC_REG_CONTROL2_TOGGLE;
+	return i2c_write8(tcpc_config[port].i2c_info.port,
+		tcpc_config[port].i2c_info.addr_flags,
+		TCPC_REG_CONTROL2, reg);
+}
+#endif
+
+/*
+ * Compare VBUS voltage with given mdac reference voltage.
+ * returns non-zero if VBUS voltage >= (mdac + 1) * 420 mV
+ */
+static int fusb302_compare_mdac(int port, int mdac)
+{
+	int orig_reg, status0;
+
+	mutex_lock(&measure_lock);
+
+	/* backup REG_MEASURE */
+	tcpc_read(port, TCPC_REG_MEASURE, &orig_reg);
+	/* set reg_measure bit 0~5 to mdac, and bit6 to 1(measure vbus) */
+	tcpc_write(port, TCPC_REG_MEASURE,
+		(mdac & TCPC_REG_MEASURE_MDAC_MASK) | TCPC_REG_MEASURE_VBUS);
+
+	/* Wait on measurement */
+	usleep(350);
+
+	/*
+	 * Read status register, if STATUS0_COMP=1 then vbus is higher than
+	 * (mdac + 1) * 0.42V
+	 */
+	tcpc_read(port, TCPC_REG_STATUS0, &status0);
+	/* write back original value */
+	tcpc_write(port, TCPC_REG_MEASURE, orig_reg);
+
+	mutex_unlock(&measure_lock);
+
+	return status0 & TCPC_REG_STATUS0_COMP;
+}
+
+int tcpc_get_vbus_voltage(int port)
+{
+	int mdac = 0, i;
+
+	/*
+	 * Implement by comparing VBUS with MDAC reference voltage, and binary
+	 * search the value of MDAC.
+	 *
+	 * MDAC register has 6 bits, so we can simply search 1 bit per
+	 * iteration, from MSB to LSB.
+	 */
+	for (i = 5; i >= 0; i--) {
+		if (fusb302_compare_mdac(port, mdac | BIT(i)))
+			mdac |= BIT(i);
+	}
+
+	return (mdac + 1) * 420;
+}
+
 const struct tcpm_drv fusb302_tcpm_drv = {
 	.init			= &fusb302_tcpm_init,
 	.release		= &fusb302_tcpm_release,
 	.get_cc			= &fusb302_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &fusb302_tcpm_get_vbus_level,
+	.check_vbus_level	= &fusb302_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &fusb302_tcpm_select_rp_value,
 	.set_cc			= &fusb302_tcpm_set_cc,
@@ -964,4 +1162,7 @@ const struct tcpm_drv fusb302_tcpm_drv = {
 	.get_message_raw	= &fusb302_tcpm_get_message_raw,
 	.transmit		= &fusb302_tcpm_transmit,
 	.tcpc_alert		= &fusb302_tcpc_alert,
+#ifdef CONFIG_USB_PD_TCPC_LOW_POWER
+	.enter_low_power_mode	= &fusb302_tcpm_enter_low_power_mode,
+#endif
 };

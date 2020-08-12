@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -12,6 +12,8 @@
 
 #include "common.h"
 #include "registers.h"
+
+#include <stdbool.h>
 
 /* DMA channel options */
 struct dma_option {
@@ -76,10 +78,17 @@ void dma_disable_all(void);
  *
  * @param chan		DMA channel to check, from dma_get_channel()
  * @param orig_count	Original number of bytes requested on channel
- * @return number of bytes completed on a channel, or 0 if this channel is
- *		not enabled
+ * @return number of bytes completed on a channel
  */
 int dma_bytes_done(dma_chan_t *chan, int orig_count);
+
+/**
+ * Check if DMA for a given channel is enabled.
+ *
+ * @param chan  DMA channel to check, from dma_get_channel()
+ * @return true if DMA is enabled on the channel, false otherwise
+ */
+bool dma_is_enabled(dma_chan_t *chan);
 
 /**
  * Start a previously-prepared dma channel

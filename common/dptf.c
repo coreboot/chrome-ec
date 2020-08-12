@@ -4,6 +4,7 @@
  */
 
 #include "atomic.h"
+#include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "dptf.h"
@@ -45,8 +46,8 @@ int dptf_query_next_sensor_event(void)
 	int id;
 
 	for (id = 0; id < TEMP_SENSOR_COUNT; id++)
-		if (dptf_seen & (1 << id)) {  /* atomic? */
-			atomic_clear(&dptf_seen, (1 << id));
+		if (dptf_seen & BIT(id)) {  /* atomic? */
+			atomic_clear(&dptf_seen, BIT(id));
 			return id;
 		}
 
@@ -54,10 +55,15 @@ int dptf_query_next_sensor_event(void)
 }
 
 /* Return true if any threshold transition occurs. */
-static int dpft_check_temp_threshold(int sensor_id, int temp)
+static int dptf_check_temp_threshold(int sensor_id, int temp)
 {
 	int tripped = 0;
 	int max, i;
+
+	if (sensor_id >= TEMP_SENSOR_COUNT) {
+		CPRINTS("DPTF: Invalid sensor ID");
+		return 0;
+	}
 
 	for (i = 0; i < DPTF_THRESHOLDS_PER_SENSOR; i++) {
 
@@ -73,13 +79,13 @@ static int dpft_check_temp_threshold(int sensor_id, int temp)
 		if (cond_went_true(&dptf_threshold[sensor_id][i].over)) {
 			CPRINTS("DPTF over threshold [%d][%d",
 				sensor_id, i);
-			atomic_or(&dptf_seen, (1 << sensor_id));
+			atomic_or(&dptf_seen, BIT(sensor_id));
 			tripped = 1;
 		}
 		if (cond_went_false(&dptf_threshold[sensor_id][i].over)) {
 			CPRINTS("DPTF under threshold [%d][%d",
 				sensor_id, i);
-			atomic_or(&dptf_seen, (1 << sensor_id));
+			atomic_or(&dptf_seen, BIT(sensor_id));
 			tripped = 1;
 		}
 	}
@@ -92,29 +98,22 @@ void dptf_set_temp_threshold(int sensor_id, int temp, int idx, int enable)
 	CPRINTS("DPTF sensor %d, threshold %d C, index %d, %sabled",
 		sensor_id, K_TO_C(temp), idx, enable ? "en" : "dis");
 
+	if ((sensor_id >= TEMP_SENSOR_COUNT) ||
+	    (idx >= DPTF_THRESHOLDS_PER_SENSOR)) {
+		CPRINTS("DPTF: Invalid sensor ID");
+		return;
+	}
+
 	if (enable) {
 		/* Don't update threshold condition if already enabled */
 		if (dptf_threshold[sensor_id][idx].temp == -1)
 			cond_init(&dptf_threshold[sensor_id][idx].over, 0);
 		dptf_threshold[sensor_id][idx].temp = temp;
-		atomic_clear(&dptf_seen, (1 << sensor_id));
+		atomic_clear(&dptf_seen, BIT(sensor_id));
 	} else {
 		dptf_threshold[sensor_id][idx].temp = -1;
 	}
 }
-
-#ifdef CONFIG_DPTF_DEVICE_ORIENTATION
-/*
- * When tablet mode changes, send an event to ACPI to retrieve
- * tablet mode value and send an event to the kernel.
- */
-static void dptf_tablet_mode_changed(void)
-{
-	host_set_single_event(EC_HOST_EVENT_MODE_CHANGE);
-}
-DECLARE_HOOK(HOOK_TABLET_MODE_CHANGE, dptf_tablet_mode_changed,
-	     HOOK_PRIO_DEFAULT);
-#endif
 
 /*****************************************************************************/
 /* EC-specific thermal controls */
@@ -142,7 +141,7 @@ static void thermal_control_dptf(void)
 		else
 			num_sensors_read++;
 		/* and check the dptf thresholds */
-		dptf_tripped |= dpft_check_temp_threshold(i, t);
+		dptf_tripped |= dptf_check_temp_threshold(i, t);
 	}
 
 	if (!num_sensors_read) {
@@ -158,7 +157,8 @@ static void thermal_control_dptf(void)
 		 * bus to the sensors; forcing a shutdown in that case would
 		 * merely hamper board bringup.
 		 */
-		smi_sensor_failure_warning();
+		if (!chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			smi_sensor_failure_warning();
 	}
 
 	/* Don't forget to signal any DPTF thresholds */

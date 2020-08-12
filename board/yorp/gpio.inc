@@ -38,7 +38,7 @@ GPIO_INT(ALL_SYS_PGOOD,	 PIN(F, 4), GPIO_INT_BOTH, power_signal_interrupt)	/* PM
 
 /* Other interrupts */
 GPIO_INT(WP_L,		 PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)		/* EC_WP_ODL */
-GPIO_INT(TABLET_MODE_L,	 PIN(8, 6), GPIO_INT_BOTH, tablet_mode_isr)
+GPIO_INT(TABLET_MODE_L,	 PIN(8, 6), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 
 GPIO_INT(BASE_SIXAXIS_INT_L,	PIN(5, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V, lsm6dsm_interrupt)
 GPIO(LID_ACCEL_INT_L,		PIN(5, 0), GPIO_INPUT | GPIO_SEL_1P8V)
@@ -54,6 +54,7 @@ GPIO(PCH_SLP_S0_L,	 PIN(A, 4), GPIO_INPUT)		/* SLP_S0_L */
  */
 GPIO(PLT_RST_L,		 PIN(C, 7), GPIO_INPUT)		/* Platform Reset from SoC */
 GPIO(SYS_RESET_L,	 PIN(3, 4), GPIO_ODR_HIGH)	/* SYS_RST_ODL */
+GPIO(PCH_RTCRST,	 PIN(7, 6), GPIO_OUT_LOW)	/* EC_PCH_RTCRST */
 
 GPIO(ENTERING_RW,	 PIN(E, 1), GPIO_OUT_LOW)	/* EC_ENTERING_RW */
 GPIO(PCH_WAKE_L,	 PIN(7, 4), GPIO_ODR_HIGH)	/* EC_PCH_WAKE_ODL */
@@ -85,8 +86,13 @@ GPIO(EC_BATT_PRES_L,	 PIN(E, 5), GPIO_INPUT)
  * being asserted. Also, it should be fine to have the EC in hibernate when H1
  * or servo wants to hold the EC in reset since VCC1 will be down and so entire
  * EC logic (except PSL) as well as AP will be in reset.
+ *
+ * We need to lock the setting so this gpio can't be reconfigured to overdrive
+ * the real reset signal. (This is the PSL input pin not the real reset pin).
  */
-GPIO(EC_RST_ODL,	PIN(0, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH)
+GPIO(EC_RST_ODL,	PIN(0, 2), GPIO_INT_BOTH |
+				   GPIO_HIB_WAKE_HIGH |
+				   GPIO_LOCKED)
 
 /*
  * PCH_PROCHOT_ODL is primarily for monitoring the PROCHOT# signal which is
@@ -126,6 +132,9 @@ GPIO(USB_C1_BC12_CHG_DET_L, PIN(E, 4), GPIO_INPUT)	/* C1 BC1.2 Detect */
 GPIO(USB_C1_HPD_1V8_ODL, PIN(C, 6), GPIO_INPUT |	/* C1 DP Hotplug Detect */
 				    GPIO_SEL_1P8V)
 
+/* Not implemented in hardware */
+UNIMPLEMENTED(USB_C0_PD_RST)
+
 /*
  * USB2_OTG_ID is 1.8V pin on the SoC side with an internal pull-up. However, it
  * 3.3V on the EC side. So, configure it as ODR so that the EC never drives it
@@ -144,12 +153,18 @@ GPIO(KB_BL_PWR_EN,	 PIN(6, 2), GPIO_OUT_LOW)
 /* Camera */
 GPIO(WFCAM_VSYNC,	 PIN(0, 3), GPIO_INPUT)	/* TP only */
 
+/* MKBP event synchronization */
+GPIO(EC_INT_L,		 PIN(9, 4), GPIO_ODR_HIGH)	/* EC_AP_INT_ODL */
+
 /* Overcurrent event to host */
 GPIO(USB_C_OC,      PIN(3, 6), GPIO_ODR_HIGH | GPIO_SEL_1P8V)
 
 /* Strap pins */
 GPIO(GPO66_NC,       PIN(6, 6), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(GPOB6_NC,       PIN(B, 6), GPIO_INPUT | GPIO_PULL_UP)
+
+/* Misc. */
+GPIO(CCD_MODE_ODL,   PIN(E, 3), GPIO_INPUT)
 
 /* Keyboard pins */
 ALTERNATE(PIN_MASK(3, 0x03), 0, MODULE_KEYBOARD_SCAN, GPIO_INPUT)	/* KSI_00-01 */

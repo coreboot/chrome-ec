@@ -18,9 +18,11 @@
 
 #ifdef TCPCI_I2C_SLAVE
 /* Convert TCPC address to type-C port number */
-#define TCPC_ADDR_TO_PORT(addr) (((addr) - CONFIG_TCPC_I2C_BASE_ADDR) >> 1)
+#define TCPC_ADDR_TO_PORT(addr) ((addr) \
+			- I2C_GET_ADDR(CONFIG_TCPC_I2C_BASE_ADDR_FLAGS))
 /* Check if the i2c address belongs to TCPC */
-#define ADDR_IS_TCPC(addr)      (((addr) & 0xfc) == CONFIG_TCPC_I2C_BASE_ADDR)
+#define ADDR_IS_TCPC(addr)      (((addr) & 0x7E) \
+			== I2C_GET_ADDR(CONFIG_TCPC_I2C_BASE_ADDR_FLAGS))
 #endif
 
 /**
@@ -46,7 +48,8 @@ void pd_vbus_evt_p1(enum gpio_signal signal);
 int tcpc_alert_status(int port, int *alert);
 int tcpc_alert_status_clear(int port, uint16_t mask);
 int tcpc_alert_mask_set(int port, uint16_t mask);
-int tcpc_get_cc(int port, int *cc1, int *cc2);
+int tcpc_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
+	enum tcpc_cc_voltage_status *cc2);
 int tcpc_select_rp_value(int port, int rp);
 int tcpc_set_cc(int port, int pull);
 int tcpc_set_polarity(int port, int polarity);

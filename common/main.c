@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -17,8 +17,10 @@
 #include "flash.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "lpc.h"
+#include "i2c.h"
 #include "keyboard_scan.h"
+#include "link_defs.h"
+#include "lpc.h"
 #ifdef CONFIG_MPU
 #include "mpu.h"
 #endif
@@ -38,15 +40,25 @@
 
 test_mockable __keep int main(void)
 {
-#ifdef CONFIG_REPLACE_LOADER_WITH_BSS_SLOW
-	/*
-	 * Now that we have started execution, we no longer need the loader.
-	 * Instead, variables placed in the .bss.slow section will use this
-	 * space.  Therefore, clear out this region now.
-	 */
-	memset((void *)(CONFIG_PROGRAM_MEMORY_BASE + CONFIG_LOADER_MEM_OFF), 0,
-	       CONFIG_LOADER_SIZE);
-#endif /* defined(CONFIG_REPLACE_LOADER_WITH_BSS_SLOW) */
+	int mpu_pre_init_rv = EC_SUCCESS;
+
+	if (IS_ENABLED(CONFIG_PRESERVE_LOGS)) {
+		/*
+		 * Initialize tx buffer head and tail. This needs to be done
+		 * before any updates of uart tx input because we need to
+		 * verify if the values remain the same after every EC reset.
+		 */
+		uart_init_buffer();
+
+		/*
+		 * Initialize reset logs. Needs to be done before any updates of
+		 * reset logs because we need to verify if the values remain
+		 * the same after every EC reset.
+		 */
+		if (IS_ENABLED(CONFIG_CMD_AP_RESET_LOG))
+			init_reset_log();
+	}
+
 	/*
 	 * Pre-initialization (pre-verified boot) stage.  Initialization at
 	 * this level should do as little as possible, because verified boot
@@ -63,7 +75,7 @@ test_mockable __keep int main(void)
 #endif
 
 #ifdef CONFIG_MPU
-	mpu_pre_init();
+	mpu_pre_init_rv = mpu_pre_init();
 #endif
 
 	gpio_pre_init();
@@ -72,7 +84,7 @@ test_mockable __keep int main(void)
 	board_config_post_gpio_init();
 #endif
 	/*
-	 * Initialize interrupts, but don't enable any of them.  Note that
+	 * Initialize tasks, but don't enable any of them.  Note that
 	 * task scheduling is not enabled until task_start() below.
 	 */
 	task_pre_init();
@@ -83,6 +95,14 @@ test_mockable __keep int main(void)
 	 */
 	system_pre_init();
 	system_common_pre_init();
+
+#ifdef CONFIG_DRAM_BASE
+	/* Now that DRAM is initialized, clear up DRAM .bss, copy .data over. */
+	memset(&__dram_bss_start, 0,
+	       (uintptr_t)(&__dram_bss_end) - (uintptr_t)(&__dram_bss_start));
+	memcpy(&__dram_data_start, &__dram_data_lma_start,
+	       (uintptr_t)(&__dram_data_end) - (uintptr_t)(&__dram_data_start));
+#endif
 
 #if defined(CONFIG_FLASH_PHYSICAL)
 	/*
@@ -115,19 +135,23 @@ test_mockable __keep int main(void)
 	/* Initialize UART.  Console output functions may now be used. */
 	uart_init();
 
+	/* We wait to report the failure until here where we have console. */
+	if (mpu_pre_init_rv != EC_SUCCESS)
+		panic("MPU init failed");
+
 	/* be less verbose if we boot for USB resume to meet spec timings */
-	if (!(system_get_reset_flags() & RESET_FLAG_USB_RESUME)) {
-		if (system_jumped_to_this_image()) {
+	if (!(system_get_reset_flags() & EC_RESET_FLAG_USB_RESUME)) {
+		CPUTS("\n");
+		if (system_jumped_to_this_image())
 			CPRINTS("UART initialized after sysjump");
-		} else {
-			CPUTS("\n\n--- UART initialized after reboot ---\n");
-			CPUTS("[Reset cause: ");
-			system_print_reset_flags();
-			CPUTS("]\n");
-		}
+		else
+			CPUTS("\n--- UART initialized after reboot ---\n");
 		CPRINTF("[Image: %s, %s]\n",
 			 system_get_image_copy_string(),
 			 system_get_build_info());
+		CPUTS("[Reset cause: ");
+		system_print_reset_flags();
+		CPUTS("]\n");
 	}
 
 #ifdef CONFIG_BRINGUP
@@ -163,6 +187,13 @@ test_mockable __keep int main(void)
 #ifdef CONFIG_HOSTCMD_X86
 	lpc_init_mask();
 #endif
+	if (IS_ENABLED(CONFIG_I2C_MASTER)) {
+		/*
+		 * Some devices (like the I2C keyboards, CBI) need I2C access
+		 * pretty early, so let's initialize the controller now.
+		 */
+		i2c_init();
+	}
 #ifdef HAS_TASK_KEYSCAN
 	keyboard_scan_init();
 #endif
@@ -170,12 +201,21 @@ test_mockable __keep int main(void)
 	button_init();
 #endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON | CONFIG_VOLUME_BUTTONS) */
 
-#if defined(CONFIG_VBOOT_EFS)
+	/* Make sure recovery boot won't be paused. */
+	if (IS_ENABLED(CONFIG_POWER_BUTTON_INIT_IDLE)
+			&& system_is_manual_recovery()
+			&& (system_get_reset_flags() & EC_RESET_FLAG_AP_IDLE)) {
+		CPRINTS("Clear AP_IDLE for recovery mode");
+		system_clear_reset_flags(EC_RESET_FLAG_AP_IDLE);
+	}
+
+#if defined(CONFIG_VBOOT_EFS) || defined(CONFIG_VBOOT_EFS2)
 	/*
 	 * Execute PMIC reset in case we're here after watchdog reset to unwedge
 	 * AP. This has to be done here because vboot_main may jump to RW.
 	 */
-	chipset_handle_reboot();
+	if (IS_ENABLED(CONFIG_CHIPSET_HAS_PLATFORM_PMIC_RESET))
+		chipset_handle_reboot();
 	/*
 	 * For RO, it behaves as follows:
 	 *   In recovery, it enables PD communication and returns.
@@ -189,15 +229,15 @@ test_mockable __keep int main(void)
 	 *
 	 * Only the Read-Only firmware needs to do the signature check.
 	 */
-	if (system_get_image_copy() == SYSTEM_IMAGE_RO) {
+	if (system_get_image_copy() == EC_IMAGE_RO) {
 #if defined(CONFIG_RWSIG_DONT_CHECK_ON_PIN_RESET)
 		/*
 		 * If system was reset by reset-pin, do not jump and wait for
 		 * command from host
 		 */
-		if (system_get_reset_flags() == RESET_FLAG_RESET_PIN) {
+		if (system_get_reset_flags() == EC_RESET_FLAG_RESET_PIN)
 			CPRINTS("Hard pin-reset detected, disable RW jump");
-		} else
+		else
 #endif
 		{
 			if (rwsig_check_signature())

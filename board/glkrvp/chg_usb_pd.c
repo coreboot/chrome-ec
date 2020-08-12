@@ -19,10 +19,10 @@
 #define PTN5110_EXT_GPIO_CONFIG		0x92
 #define PTN5110_EXT_GPIO_CONTROL	0x93
 
-#define PTN5110_EXT_GPIO_FRS_EN			(1 << 6)
-#define PTN5110_EXT_GPIO_EN_SRC			(1 << 5)
-#define PTN5110_EXT_GPIO_EN_SNK1		(1 << 4)
-#define PTN5110_EXT_GPIO_IILIM_5V_VBUS_L	(1 << 3)
+#define PTN5110_EXT_GPIO_FRS_EN			BIT(6)
+#define PTN5110_EXT_GPIO_EN_SRC			BIT(5)
+#define PTN5110_EXT_GPIO_EN_SNK1		BIT(4)
+#define PTN5110_EXT_GPIO_IILIM_5V_VBUS_L	BIT(3)
 
 enum glkrvp_charge_ports {
 	TYPE_C_PORT_0,
@@ -30,27 +30,40 @@ enum glkrvp_charge_ports {
 	DC_JACK_PORT_0 = DEDICATED_CHARGE_PORT,
 };
 
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	{NPCX_I2C_PORT7_0, 0xA0, &tcpci_tcpm_drv, TCPC_ALERT_ACTIVE_LOW},
-	{NPCX_I2C_PORT7_0, 0xA4, &tcpci_tcpm_drv, TCPC_ALERT_ACTIVE_LOW},
-};
-BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_COUNT);
-
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0x20,
-		.driver = &ps874x_usb_mux_driver,
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = NPCX_I2C_PORT7_0,
+			.addr_flags = 0x50,
+		},
+		.drv = &tcpci_tcpm_drv,
 	},
 	{
-		.port_addr = 0x22,
-		.driver = &ps874x_usb_mux_driver,
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = NPCX_I2C_PORT7_0,
+			.addr_flags = 0x52,
+		},
+		.drv = &tcpci_tcpm_drv,
 	},
 };
+BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
-/* TODO: Implement this function and move to appropriate file */
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-}
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = 0x10,
+		.driver = &ps8743_usb_mux_driver,
+	},
+	{
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = 0x11,
+		.driver = &ps8743_usb_mux_driver,
+	},
+};
 
 static int board_charger_port_is_sourcing_vbus(int port)
 {
@@ -91,10 +104,20 @@ void board_vbus_enable(int port, int enable)
 
 void tcpc_alert_event(enum gpio_signal signal)
 {
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	int port = -1;
+
+	switch (signal) {
+	case GPIO_USB_C0_PD_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_PD_INT_ODL:
+		port = 1;
+		break;
+	default:
+		return;
+	}
+
+	schedule_deferred_pd_interrupt(port);
 }
 
 void board_tcpc_init(void)
@@ -162,16 +185,11 @@ DECLARE_HOOK(HOOK_AC_CHANGE, board_dc_jack_handle, HOOK_PRIO_FIRST);
 static void board_charge_init(void)
 {
 	int port, supplier;
-	struct charge_port_info charge_init = {
-		.current = 0,
-		.voltage = USB_CHARGER_VOLTAGE_MV,
-	};
 
 	/* Initialize all charge suppliers to seed the charge manager */
 	for (port = 0; port < CHARGE_PORT_COUNT; port++) {
 		for (supplier = 0; supplier < CHARGE_SUPPLIER_COUNT; supplier++)
-			charge_manager_update_charge(supplier, port,
-				&charge_init);
+			charge_manager_update_charge(supplier, port, NULL);
 	}
 
 	board_dc_jack_handle();
@@ -180,16 +198,12 @@ DECLARE_HOOK(HOOK_INIT, board_charge_init, HOOK_PRIO_DEFAULT);
 
 int board_set_active_charge_port(int port)
 {
-	/* charge port is a realy physical port */
-	int is_real_port = (port >= 0 &&
-			port < CHARGE_PORT_COUNT);
-	/* check if we are source vbus on that port */
-	int source = board_charger_port_is_sourcing_vbus(port);
-
-	if (is_real_port && source) {
-		CPRINTS("Skip enable p%d", port);
-		return EC_ERROR_INVAL;
-	}
+	/* if it's a PD port and sourcing VBUS, don't enable */
+	if (port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT)
+		if (board_charger_port_is_sourcing_vbus(port)) {
+			CPRINTS("Skip enable p%d", port);
+			return EC_ERROR_INVAL;
+		}
 
 	/*
 	 * Do not enable Type-C port if the DC Jack is present.

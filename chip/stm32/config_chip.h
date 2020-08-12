@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -42,7 +42,7 @@
 #include "config-stm32f76x.h"
 #elif defined(CHIP_FAMILY_STM32F4)
 /* STM32F4 family */
-#include "config-stm32f446.h"
+#include "config-stm32f4.h"
 #elif defined(CHIP_VARIANT_STM32F373)
 #include "config-stm32f373.h"
 #elif defined(CHIP_VARIANT_STM32F09X)
@@ -73,6 +73,7 @@
 #define CONFIG_MAPPED_STORAGE_BASE CONFIG_PROGRAM_MEMORY_BASE
 
 #if !defined(CHIP_FAMILY_STM32F4) && \
+	!defined(CHIP_FAMILY_STM32F7) && \
 	!defined(CHIP_FAMILY_STM32H7) && \
 	!defined(CHIP_VARIANT_STM32F09X)
 /* Compute the rest of the flash params from these */
@@ -96,13 +97,20 @@
 #define SMALLER_TASK_STACK_SIZE 384
 
 /* Default task stack size */
-#define TASK_STACK_SIZE 488
+#define TASK_STACK_SIZE 512
 
 /* Larger task stack size, for hook task */
 #define LARGER_TASK_STACK_SIZE 640
 
 /* Even bigger */
 #define VENTI_TASK_STACK_SIZE 768
+
+/*
+ * Console stack size. For test builds, the console is used to interact with
+ * the test, and insufficient stack size causes console stack overflow after
+ * running the on-device tests.
+ */
+#define CONSOLE_TASK_STACK_SIZE 4096
 
 /* Interval between HOOK_TICK notifications */
 #define HOOK_TICK_INTERVAL_MS 500
@@ -117,6 +125,9 @@
 
 /* Use DMA */
 #define CONFIG_DMA
+
+/* STM32 features RTC (optional feature) */
+#define CONFIG_RTC
 
 /* Number of peripheral request signals per DMA channel */
 #define STM32_DMA_PERIPHERALS_PER_CHANNEL	4
@@ -137,7 +148,7 @@
 #define CONFIG_CHIP_PRE_INIT
 
 #define GPIO_NAME_BY_PIN(port, index) #port#index
-#define GPIO_PIN(port, index) GPIO_##port, (1 << index)
+#define GPIO_PIN(port, index) GPIO_##port, BIT(index)
 #define GPIO_PIN_MASK(p, m) .port = GPIO_##p, .mask = (m)
 
 /* Prescaler values for PLL. Currently used only by STM32L476. */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+ * Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,7 +11,10 @@
 #include "util.h"
 #include "version.h"
 
-/* FMAP structs. See http://code.google.com/p/flashmap/wiki/FmapSpec */
+/*
+ * FMAP structs.
+ * See https://chromium.googlesource.com/chromiumos/third_party/flashmap/+/master/lib/fmap.h
+ */
 #define FMAP_NAMELEN 32
 #define FMAP_SIGNATURE "__FMAP__"
 #define FMAP_SIGNATURE_SIZE 8
@@ -51,9 +54,9 @@ struct fmap_header {
 	uint16_t    fmap_nareas;
 } __packed;
 
-#define FMAP_AREA_STATIC      (1 << 0)	/* can be checksummed */
-#define FMAP_AREA_COMPRESSED  (1 << 1)  /* may be compressed */
-#define FMAP_AREA_RO          (1 << 2)  /* writes may fail */
+#define FMAP_AREA_STATIC      BIT(0)	/* can be checksummed */
+#define FMAP_AREA_COMPRESSED  BIT(1)  /* may be compressed */
+#define FMAP_AREA_RO          BIT(2)  /* writes may fail */
 
 struct fmap_area_header {
 	uint32_t area_offset;
@@ -108,14 +111,17 @@ const struct _ec_fmap {
 	/* RO Firmware */
 		{
 			/*
-			 * Range of RO firmware to be updated. Verified in
-			 * factory finalization by hash. Should not have
+			 * Range of RO firmware to be updated. EC_RO
+			 * section includes the bootloader section
+			 * because it may need to be updated/paired
+			 * with a different RO.  Verified in factory
+			 * finalization by hash. Should not have
 			 * volatile data (ex, calibration results).
 			 */
 			.area_name = "EC_RO",
 			.area_offset = CONFIG_EC_PROTECTED_STORAGE_OFF -
-				FMAP_REGION_START + CONFIG_RO_STORAGE_OFF,
-			.area_size = CONFIG_RO_SIZE,
+				FMAP_REGION_START,
+			.area_size = CONFIG_RO_SIZE + CONFIG_RO_STORAGE_OFF,
 			.area_flags = FMAP_AREA_STATIC | FMAP_AREA_RO,
 		},
 		{

@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python2
 # Copyright 2015 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -11,12 +11,12 @@ import binascii
 # pylint: disable=cros-logging-import
 import logging
 import mock
-import multiprocessing
 import tempfile
 import unittest
 
 import console
 import interpreter
+import threadproc_shim
 
 ESC_STRING = chr(console.ControlKey.ESC)
 
@@ -238,10 +238,10 @@ class TestConsoleEditingMethods(unittest.TestCase):
 
     # Create some dummy pipes.  These won't be used since we'll mock out sends
     # to the interpreter.
-    dummy_pipe_end_0, dummy_pipe_end_1 = multiprocessing.Pipe()
+    dummy_pipe_end_0, dummy_pipe_end_1 = threadproc_shim.Pipe()
     self.console = console.Console(self.tempfile.fileno(), self.tempfile,
                                    tempfile.TemporaryFile(),
-                                   dummy_pipe_end_0, dummy_pipe_end_1)
+                                   dummy_pipe_end_0, dummy_pipe_end_1, "EC")
 
     # Console editing methods are only valid for enhanced EC images, therefore
     # we have to assume that the "EC" we're talking to is enhanced.  By default,
@@ -249,9 +249,6 @@ class TestConsoleEditingMethods(unittest.TestCase):
     # which is why we have to override it here.
     self.console.enhanced_ec = True
     self.console.CheckForEnhancedECImage = mock.MagicMock(return_value=True)
-
-    # Mock out sends to the interpreter.
-    multiprocessing.Pipe.send = mock.MagicMock()
 
   def test_EnteringChars(self):
     """Verify that characters are echoed onto the console."""
@@ -1148,7 +1145,7 @@ class TestConsoleCompatibility(unittest.TestCase):
     dummy_pipe_end_0, dummy_pipe_end_1 = mock.MagicMock(), mock.MagicMock()
     self.console = console.Console(self.tempfile.fileno(), self.tempfile,
                                    tempfile.TemporaryFile(),
-                                   dummy_pipe_end_0, dummy_pipe_end_1)
+                                   dummy_pipe_end_0, dummy_pipe_end_1, "EC")
 
   @mock.patch('console.Console.CheckForEnhancedECImage')
   def test_ActAsPassThruInNonEnhancedMode(self, mock_check):
@@ -1418,7 +1415,7 @@ class TestOOBMConsoleCommands(unittest.TestCase):
     dummy_pipe_end_0, dummy_pipe_end_1 = mock.MagicMock(), mock.MagicMock()
     self.console = console.Console(self.tempfile.fileno(), self.tempfile,
                                    tempfile.TemporaryFile(),
-                                   dummy_pipe_end_0, dummy_pipe_end_1)
+                                   dummy_pipe_end_0, dummy_pipe_end_1, "EC")
     self.console.oobm_queue = mock.MagicMock()
 
   @mock.patch('console.Console.CheckForEnhancedECImage')

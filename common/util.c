@@ -1,13 +1,15 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* Utility functions for Chrome EC */
 
+#include "common.h"
+#include "console.h"
 #include "util.h"
 
-size_t strlen(const char *s)
+__stdlib_compat size_t strlen(const char *s)
 {
 	int len = 0;
 
@@ -18,7 +20,7 @@ size_t strlen(const char *s)
 }
 
 
-size_t strnlen(const char *s, size_t maxlen)
+__stdlib_compat size_t strnlen(const char *s, size_t maxlen)
 {
 	size_t len = 0;
 
@@ -30,35 +32,40 @@ size_t strnlen(const char *s, size_t maxlen)
 }
 
 
-int isspace(int c)
+__stdlib_compat int isspace(int c)
 {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
 
 
-int isdigit(int c)
+__stdlib_compat int isdigit(int c)
 {
 	return c >= '0' && c <= '9';
 }
 
 
-int isalpha(int c)
+__stdlib_compat int isalpha(int c)
 {
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
-int isprint(int c)
+__stdlib_compat int isupper(int c)
+{
+	return c >= 'A' && c <= 'Z';
+}
+
+__stdlib_compat int isprint(int c)
 {
 	return c >= ' ' && c <= '~';
 }
 
-int tolower(int c)
+__stdlib_compat int tolower(int c)
 {
 	return c >= 'A' && c <= 'Z' ? c + 'a' - 'A' : c;
 }
 
 
-int strcasecmp(const char *s1, const char *s2)
+__stdlib_compat int strcasecmp(const char *s1, const char *s2)
 {
 	int diff;
 
@@ -71,7 +78,7 @@ int strcasecmp(const char *s1, const char *s2)
 }
 
 
-int strncasecmp(const char *s1, const char *s2, size_t size)
+__stdlib_compat int strncasecmp(const char *s1, const char *s2, size_t size)
 {
 	int diff;
 
@@ -87,7 +94,32 @@ int strncasecmp(const char *s1, const char *s2, size_t size)
 }
 
 
-int atoi(const char *nptr)
+__stdlib_compat char *strstr(const char *s1, const char *s2)
+{
+	const char *p, *q, *r;
+	size_t len1 = strlen(s1);
+	size_t len2 = strlen(s2);
+
+	if (len1 == 0 || len2 == 0 || len1 < len2)
+		return NULL;
+
+	r = s1 + len1 - len2 + 1;
+	for (; s1 < r; s1++) {
+		if (*s1 == *s2) {
+			p = s1 + 1;
+			q = s2 + 1;
+			for (; q < s2 + len2;) {
+				if (*p++ != *q++)
+					break;
+			}
+			if (*q == '\0')
+				return (char *)s1;
+		}
+	}
+	return NULL;
+}
+
+__stdlib_compat int atoi(const char *nptr)
 {
 	int result = 0;
 	int neg = 0;
@@ -109,31 +141,37 @@ int atoi(const char *nptr)
 	return neg ? -result : result;
 }
 
+static int find_base(int base, int *c, const char **nptr) {
+	if ((base == 0 || base == 16) && *c == '0'
+	    && (**nptr == 'x' || **nptr == 'X')) {
+		*c = (*nptr)[1];
+		(*nptr) += 2;
+		base = 16;
+	} else if (base == 0) {
+		base = *c == '0' ? 8 : 10;
+	}
+	return base;
+}
+
 
 /* Like strtol(), but for integers */
-int strtoi(const char *nptr, char **endptr, int base)
+__stdlib_compat int strtoi(const char *nptr, char **endptr, int base)
 {
 	int result = 0;
 	int neg = 0;
 	int c = '\0';
 
-	if (endptr)
-		*endptr = (char *)nptr;
-
 	while ((c = *nptr++) && isspace(c))
 		;
 
-	if (c == '0' && *nptr == 'x') {
-		base = 16;
-		c = nptr[1];
-		nptr += 2;
-	} else if (base == 0) {
-		base = 10;
-		if (c == '-') {
-			neg = 1;
-			c = *nptr++;
-		}
+	if (c == '+') {
+		c = *nptr++;
+	} else if (c == '-') {
+		neg = 1;
+		c = *nptr++;
 	}
+
+	base = find_base(base, &c, &nptr);
 
 	while (c) {
 		if (c >= '0' && c < '0' + MIN(base, 10))
@@ -145,34 +183,31 @@ int strtoi(const char *nptr, char **endptr, int base)
 		else
 			break;
 
-		if (endptr)
-			*endptr = (char *)nptr;
 		c = *nptr++;
 	}
 
+	if (endptr)
+		*endptr = (char *)nptr - 1;
 	return neg ? -result : result;
 }
 
-uint64_t strtoul(const char *nptr, char **endptr, int base)
+__stdlib_compat uint64_t strtoul(const char *nptr, char **endptr, int base)
 {
 	uint64_t result = 0;
 	int c = '\0';
 
-	if (endptr)
-		*endptr = (char *)nptr;
-
 	while ((c = *nptr++) && isspace(c))
 		;
 
-	if (c == '0' && *nptr == 'x') {
-		base = 16;
-		c = nptr[1];
-		nptr += 2;
-	} else if (base == 0) {
-		base = 10;
-		if (c == '-')
-			return result;
+	if (c == '+') {
+		c = *nptr++;
+	} else if (c == '-') {
+		if (endptr)
+			*endptr = (char *)nptr - 1;
+		return result;
 	}
+	
+	base = find_base(base, &c, &nptr);
 
 	while (c) {
 		if (c >= '0' && c < '0' + MIN(base, 10))
@@ -184,15 +219,15 @@ uint64_t strtoul(const char *nptr, char **endptr, int base)
 		else
 			break;
 
-		if (endptr)
-			*endptr = (char *)nptr;
 		c = *nptr++;
 	}
 
+	if (endptr)
+		*endptr = (char *)nptr - 1;
 	return result;
 }
 
-int parse_bool(const char *s, int *dest)
+__stdlib_compat int parse_bool(const char *s, int *dest)
 {
 	/* off, disable, false, no */
 	if (!strcasecmp(s, "off") || !strncasecmp(s, "dis", 3) ||
@@ -212,7 +247,7 @@ int parse_bool(const char *s, int *dest)
 	return 0;
 }
 
-int memcmp(const void *s1, const void *s2, size_t len)
+__stdlib_compat int memcmp(const void *s1, const void *s2, size_t len)
 {
 	const char *sa = s1;
 	const char *sb = s2;
@@ -247,7 +282,8 @@ int safe_memcmp(const void *s1, const void *s2, size_t size)
 	return result != 0;
 }
 
-void *memcpy(void *dest, const void *src, size_t len)
+#if !(__has_feature(address_sanitizer) || __has_feature(memory_sanitizer))
+__stdlib_compat void *memcpy(void *dest, const void *src, size_t len)
 {
 	char *d = (char *)dest;
 	const char *s = (const char *)src;
@@ -289,9 +325,11 @@ void *memcpy(void *dest, const void *src, size_t len)
 
 	return dest;
 }
+#endif /* address_sanitizer || memory_sanitizer */
 
 
-void *memset(void *dest, int c, size_t len)
+#if !(__has_feature(address_sanitizer) || __has_feature(memory_sanitizer))
+__stdlib_compat __visible void *memset(void *dest, int c, size_t len)
 {
 	char *d = (char *)dest;
 	uint32_t cccc;
@@ -327,9 +365,11 @@ void *memset(void *dest, int c, size_t len)
 
 	return dest;
 }
+#endif /* address_sanitizer || memory_sanitizer */
 
 
-void *memmove(void *dest, const void *src, size_t len)
+#if !(__has_feature(address_sanitizer) || __has_feature(memory_sanitizer))
+__stdlib_compat void *memmove(void *dest, const void *src, size_t len)
 {
 	if ((uintptr_t)dest <= (uintptr_t)src ||
 	    (uintptr_t)dest >= (uintptr_t)src + len) {
@@ -379,9 +419,10 @@ void *memmove(void *dest, const void *src, size_t len)
 		return dest;
 	}
 }
+#endif /* address_sanitizer || memory_sanitizer */
 
 
-void *memchr(const void *buffer, int c, size_t n)
+__stdlib_compat void *memchr(const void *buffer, int c, size_t n)
 {
 	char *current = (char *)buffer;
 	char *end = current + n;
@@ -410,7 +451,7 @@ void reverse(void *dest, size_t len)
 }
 
 
-char *strzcpy(char *dest, const char *src, int len)
+__stdlib_compat char *strzcpy(char *dest, const char *src, int len)
 {
 	char *d = dest;
 	if (len <= 0)
@@ -424,7 +465,7 @@ char *strzcpy(char *dest, const char *src, int len)
 }
 
 
-char *strncpy(char *dest, const char *src, size_t n)
+__stdlib_compat char *strncpy(char *dest, const char *src, size_t n)
 {
 	char *d = dest;
 
@@ -438,7 +479,7 @@ char *strncpy(char *dest, const char *src, size_t n)
 }
 
 
-int strncmp(const char *s1, const char *s2, size_t n)
+__stdlib_compat int strncmp(const char *s1, const char *s2, size_t n)
 {
 	while (n--) {
 		if (*s1 != *s2)
@@ -500,7 +541,7 @@ int uint64divmod(uint64_t *n, int d)
 int get_next_bit(uint32_t *mask)
 {
 	int bit = 31 - __builtin_clz(*mask);
-	*mask &= ~(1 << bit);
+	*mask &= ~BIT(bit);
 	return bit;
 }
 
@@ -517,13 +558,21 @@ bool bytes_are_trivial(const uint8_t *buffer, size_t size)
 	return (result0 == 0) || (result1 == 0);
 }
 
+bool is_aligned(uint32_t addr, uint32_t align)
+{
+	if (!POWER_OF_TWO(align))
+		return false;
+
+	return (addr & (align - 1)) == 0;
+}
+
 /****************************************************************************/
 /* stateful conditional stuff */
 
 enum cond_internal_bits {
-	COND_CURR_MASK = (1 << 0),		/* current value */
-	COND_RISE_MASK = (1 << 1),		/* set if 0->1 */
-	COND_FALL_MASK = (1 << 2),		/* set if 1->0 */
+	COND_CURR_MASK = BIT(0),		/* current value */
+	COND_RISE_MASK = BIT(1),		/* set if 0->1 */
+	COND_FALL_MASK = BIT(2),		/* set if 1->0 */
 };
 
 void cond_init(cond_t *c, int val)
@@ -604,4 +653,29 @@ int parse_offset_size(int argc, char **argv, int shift,
 		return EC_ERROR_PARAM_COUNT;
 
 	return EC_SUCCESS;
+}
+
+void hexdump(const uint8_t *data, int len)
+{
+	int i, j;
+
+	if (!data || !len)
+		return;
+
+	for (i = 0; i < len; i += 16) {
+		/* Left column (Hex) */
+		for (j = i; j < i + 16; j++) {
+			if (j < len)
+				ccprintf(" %02x", data[j]);
+			else
+				ccprintf("   ");
+		}
+		/* Right column (ASCII) */
+		ccprintf(" |");
+		for (j = i; j < i + 16; j++) {
+			int c = j < len ? data[j] : ' ';
+			ccprintf("%c", isprint(c) ? c : '.');
+		}
+		ccprintf("|\n");
+	}
 }

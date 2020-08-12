@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,13 +16,13 @@
 #define TMP006_REG_DEVICE_ID       0xff
 
 /* I2C address components */
-#define TMP006_ADDR(PORT,REG) ((PORT << 16) + REG)
+#define TMP006_ADDR(PORT, REG) ((PORT << 16) + REG)
 #define TMP006_PORT(ADDR) (ADDR >> 16)
 #define TMP006_REG(ADDR) (ADDR & 0xffff)
 
 struct tmp006_t {
 	const char *name;
-	int addr;          /* I2C address formed by TMP006_ADDR macro. */
+	int addr_flags;	/* I2C address formed by TMP006_ADDR macro. */
 };
 
 /* Names and addresses of the sensors we have */

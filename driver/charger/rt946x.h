@@ -92,6 +92,15 @@
 #define RT946X_REG_CORECTRL1		0x01
 #define RT946X_REG_CORECTRL2		0x02
 #define RT946X_REG_CORECTRL_RST		RT946X_REG_CORECTRL2
+#define MT6370_REG_RSTPASCODE1		0x03
+#define MT6370_REG_RSTPASCODE2		0x04
+#define MT6370_REG_HIDDENPASCODE1	0x07
+#define MT6370_REG_HIDDENPASCODE2	0x08
+#define MT6370_REG_HIDDENPASCODE3	0x09
+#define MT6370_REG_HIDDENPASCODE4	0x0A
+#define MT6370_REG_IRQIND		0x0B
+#define MT6370_REG_IRQMASK		0x0C
+#define MT6370_REG_OSCCTRL		0x10
 #define RT946X_REG_CHGCTRL1		0x11
 #define RT946X_REG_CHGCTRL2		0x12
 #define RT946X_REG_CHGCTRL3		0x13
@@ -112,12 +121,18 @@
 #define MT6370_REG_DEVICETYPE		0x22
 #define RT946X_REG_DPDM1		MT6370_REG_DEVICETYPE
 #define MT6370_REG_USBSTATUS1		0x27
+#define MT6370_REG_QCSTATUS2		0x29
 #define RT946X_REG_CHGCTRL17		0X2B
 #define RT946X_REG_CHGCTRL18		0X2C
+#define RT946X_REG_CHGHIDDENCTRL7	0x36
+#define MT6370_REG_CHGHIDDENCTRL15	0x3E
 #define RT946X_REG_CHGSTAT		0X4A
 #define RT946X_REG_CHGNTC		0X4B
 #define RT946X_REG_ADCDATAH		0X4C
 #define RT946X_REG_ADCDATAL		0X4D
+/* FLED */
+#define MT6370_REG_FLEDEN		0x7E
+/* LDO */
 #define MT6370_REG_LDOCFG		0X80
 #define MT6370_REG_LDOVOUT		0X81
 /* RGB led */
@@ -133,7 +148,21 @@
 #define MT6370_REG_RGBCHRINDDIM		0x92
 #define MT6370_REG_RGBCHRINDCTRL	0x93
 
+/* backlight */
+#define MT6370_BACKLIGHT_BLEN		0xA0
+#define MT6370_BACKLIGHT_BLPWM		0xA2
+#define MT6370_BACKLIGHT_BLDIM2		0xA4
+#define MT6370_BACKLIGHT_BLDIM		0xA5
+
+/* Display bias */
+#define MT6370_REG_DBCTRL1		0XB0
+#define MT6370_REG_DBCTRL2		0XB1
+#define MT6370_REG_DBVBST		0XB2
+#define MT6370_REG_DBVPOS		0XB3
+#define MT6370_REG_DBVNEG		0XB4
+#define MT6370_REG_CHGIRQ1		0xC0
 #define RT946X_REG_DPDMIRQ		0xC6
+
 /* status event */
 #define MT6370_REG_CHGSTAT1		0xD0
 #define RT946X_REG_CHGSTATC		MT6370_REG_CHGSTAT1
@@ -171,6 +200,11 @@
 #define MT6370_REG_RGBMASK		0xED
 #define MT6370_REG_BLMASK		0xEE
 #define MT6370_REG_DBMASK		0xEF
+#define MT6370_REG_TM_PAS_CODE1		0xF0
+#define MT6370_REG_BANK			0xFF
+/* TM REGISTER */
+#define MT6370_TM_REG_BL3		0x34
+#define MT6370_TM_REG_DSV1		0x37
 #else
 #error "No suitable charger option defined"
 #endif
@@ -229,33 +263,68 @@
 
 /* ========== CORECTRL0 0x00 ============ */
 #define RT946X_SHIFT_RST	7
+#define RT946X_SHIFT_CHG_RST	6
+#define RT946X_SHIFT_FLED_RST	5
+#define RT946X_SHIFT_LDO_RST	4
+#define RT946X_SHIFT_RGB_RST	3
+#define RT946X_SHIFT_BL_RST	2
+#define RT946X_SHIFT_DB_RST	1
+#define RT946X_SHIFT_REG_RST	0
 
-#define RT946X_MASK_RST		(1 << RT946X_SHIFT_RST)
+#define RT946X_MASK_RST		BIT(RT946X_SHIFT_RST)
+#define RT946X_MASK_CHG_RST	BIT(RT946X_SHIFT_CHG_RST)
+#define RT946X_MASK_FLED_RST	BIT(RT946X_SHIFT_FLED_RST)
+#define RT946X_MASK_LDO_RST	BIT(RT946X_SHIFT_LDO_RST)
+#define RT946X_MASK_RGB_RST	BIT(RT946X_SHIFT_RGB_RST)
+#define RT946X_MASK_BL_RST	BIT(RT946X_SHIFT_BL_RST)
+#define RT946X_MASK_DB_RST	BIT(RT946X_SHIFT_DB_RST)
+#define RT946X_MASK_REG_RST	BIT(RT946X_SHIFT_REG_RST)
+#define RT946X_MASK_SOFT_RST                                                   \
+	(RT946X_MASK_CHG_RST | RT946X_MASK_FLED_RST | RT946X_MASK_LDO_RST |    \
+	 RT946X_MASK_RGB_RST | RT946X_MASK_BL_RST | RT946X_MASK_DB_RST |       \
+	 RT946X_MASK_REG_RST)
 
 /* ========== CHGCTRL1 0x01 ============ */
 #define RT946X_SHIFT_OPA_MODE   0
 #define RT946X_SHIFT_HZ_EN      2
+#define RT946X_SHIFT_STAT_EN	4
 
-#define RT946X_MASK_OPA_MODE	(1 << RT946X_SHIFT_OPA_MODE)
-#define RT946X_MASK_HZ_EN	(1 << RT946X_SHIFT_HZ_EN)
+#define RT946X_MASK_OPA_MODE	BIT(RT946X_SHIFT_OPA_MODE)
+#define RT946X_MASK_HZ_EN	BIT(RT946X_SHIFT_HZ_EN)
+#define RT946X_MASK_STAT_EN	BIT(RT946X_SHIFT_STAT_EN)
 
 /* ========== CHGCTRL2 0x02 ============ */
 #define RT946X_SHIFT_SHIP_MODE	7
 #define RT946X_SHIFT_TE		4
 #define RT946X_SHIFT_ILMTSEL	2
+#define RT946X_SHIFT_CFO_EN	1
 #define RT946X_SHIFT_CHG_EN	0
 
-#define RT946X_MASK_SHIP_MODE	(1 << RT946X_SHIFT_SHIP_MODE)
-#define RT946X_MASK_TE		(1 << RT946X_SHIFT_TE)
+#define RT946X_MASK_SHIP_MODE	BIT(RT946X_SHIFT_SHIP_MODE)
+#define RT946X_MASK_TE		BIT(RT946X_SHIFT_TE)
 #define RT946X_MASK_ILMTSEL	(0x3 << RT946X_SHIFT_ILMTSEL)
-#define RT946X_MASK_CHG_EN	(1 << RT946X_SHIFT_CHG_EN)
+#define RT946X_MASK_CFO_EN	BIT(RT946X_SHIFT_CFO_EN)
+#define RT946X_MASK_CHG_EN	BIT(RT946X_SHIFT_CHG_EN)
+
+/* ========== RSTPASCODE1 0x03 (mt6370) ============ */
+#define MT6370_MASK_RSTPASCODE1	0xA9
 
 /* ========== CHGCTRL3 0x03 ============ */
 #define RT946X_SHIFT_AICR	2
 #define RT946X_SHIFT_ILIMEN	0
 
 #define RT946X_MASK_AICR	(0x3F << RT946X_SHIFT_AICR)
-#define RT946X_MASK_ILIMEN	(1 << RT946X_SHIFT_ILIMEN)
+#define RT946X_MASK_ILIMEN	BIT(RT946X_SHIFT_ILIMEN)
+
+/*
+ * The accuracy of AICR is 7%.  So if AICR = 2150,
+ * then Max=2150, Typ=2000, Min=1860. And plus 25 since the AICR
+ * is 50ma a step.
+ */
+#define RT946X_AICR_TYP2MAX(x)	((x) * 107 / 100 + 25)
+
+/* ========== RSTPASCODE2 0x04 (mt6370) ============ */
+#define MT6370_MASK_RSTPASCODE2	0x96
 
 /* ========== CHGCTRL4 0x04 ============ */
 #define RT946X_SHIFT_CV	1
@@ -285,8 +354,10 @@
 #define RT946X_MASK_IPREC	(0xF << RT946X_SHIFT_IPREC)
 
 /* ========== CHGCTRL9 0x09 ============ */
+#define RT946X_SHIFT_EOC	3
 #define RT946X_SHIFT_IEOC	4
 
+#define RT946X_MASK_EOC		BIT(RT946X_SHIFT_EOC)
 #define RT946X_MASK_IEOC	(0xF << RT946X_SHIFT_IEOC)
 
 /* ========== CHGCTRL10 0x0A ============ */
@@ -296,59 +367,97 @@
 
 /* ========== CHGCTRL12 0x0C ============ */
 #define RT946X_SHIFT_TMR_EN	1
+#define MT6370_IRQ_MASK_ALL	0xFE
 
-#define RT946X_MASK_TMR_EN	(1 << RT946X_SHIFT_TMR_EN)
+#define RT946X_MASK_TMR_EN	BIT(RT946X_SHIFT_TMR_EN)
 
 /* ========== CHGCTRL13 0x0D ============ */
 #define RT946X_SHIFT_WDT_EN	7
 
-#define RT946X_MASK_WDT_EN	(1 << RT946X_SHIFT_WDT_EN)
+#define RT946X_MASK_WDT_EN	BIT(RT946X_SHIFT_WDT_EN)
 
 /* ========== CHGCTRL14 0x0E ============ */
 #define RT946X_SHIFT_AICLMEAS	7
 #define RT946X_SHIFT_AICLVTH	0
 
-#define RT946X_MASK_AICLMEAS	(1 << RT946X_SHIFT_AICLMEAS)
+#define RT946X_MASK_AICLMEAS	BIT(RT946X_SHIFT_AICLMEAS)
 #define RT946X_MASK_AICLVTH	0x07
 
 /* ========== CHGCTRL16 0x10 ============ */
 #define RT946X_SHIFT_JEITA_EN	4
 
-#define RT946X_MASK_JEITA_EN	(1 << RT946X_SHIFT_JEITA_EN)
+#define RT946X_MASK_JEITA_EN	BIT(RT946X_SHIFT_JEITA_EN)
 
 /* ========== CHGADC 0x11 ============ */
 #define RT946X_SHIFT_ADC_IN_SEL	4
 #define RT946X_SHIFT_ADC_START	0
 
 #define RT946X_MASK_ADC_IN_SEL	(0xF << RT946X_SHIFT_ADC_IN_SEL)
-#define RT946X_MASK_ADC_START	(1 << RT946X_SHIFT_ADC_START)
+#define RT946X_MASK_ADC_START	BIT(RT946X_SHIFT_ADC_START)
 
 /* ========== CHGDPDM1 0x12 (rt946x) DEVICETYPE 0x22 (mt6370) ============ */
 #define RT946X_SHIFT_USBCHGEN	7
+#define RT946X_SHIFT_DCDTIMEOUT	6
 #define RT946X_SHIFT_DCP	2
 #define RT946X_SHIFT_CDP	1
 #define RT946X_SHIFT_SDP	0
 
-#define RT946X_MASK_USBCHGEN	(1 << RT946X_SHIFT_USBCHGEN)
-#define RT946X_MASK_DCP		(1 << RT946X_SHIFT_DCP)
-#define RT946X_MASK_CDP		(1 << RT946X_SHIFT_CDP)
-#define RT946X_MASK_SDP		(1 << RT946X_SHIFT_SDP)
+#define RT946X_MASK_USBCHGEN	BIT(RT946X_SHIFT_USBCHGEN)
+#define RT946X_MASK_DCDTIMEOUT	BIT(RT946X_SHIFT_DCDTIMEOUT)
+#define RT946X_MASK_DCP		BIT(RT946X_SHIFT_DCP)
+#define RT946X_MASK_CDP		BIT(RT946X_SHIFT_CDP)
+#define RT946X_MASK_SDP		BIT(RT946X_SHIFT_SDP)
 
 #define RT946X_MASK_BC12_TYPE	(RT946X_MASK_DCP | \
 				 RT946X_MASK_CDP | \
 				 RT946X_MASK_SDP)
 
 /* ========== USBSTATUS1 0x27 (mt6370) ============ */
-#define MT6370_SHIFT_USB_STATUS	4
+#define MT6370_SHIFT_DCD_TIMEOUT 	2
+#define MT6370_SHIFT_USB_STATUS		4
 
 #define MT6370_MASK_USB_STATUS	0x70
 
-#define MT6370_CHG_TYPE_NOVBUS		0
-#define MT6370_CHG_TYPE_BUSY		1
-#define MT6370_CHG_TYPE_SDP		2
-#define MT6370_CHG_TYPE_SDPNSTD		3
-#define MT6370_CHG_TYPE_DCP		4
-#define MT6370_CHG_TYPE_CDP		5
+#define MT6370_CHG_TYPE_NOVBUS			0
+#define MT6370_CHG_TYPE_BUSY			1
+#define MT6370_CHG_TYPE_SDP			2
+#define MT6370_CHG_TYPE_SDPNSTD			3
+#define MT6370_CHG_TYPE_DCP			4
+#define MT6370_CHG_TYPE_CDP			5
+#define MT6370_CHG_TYPE_SAMSUNG_CHARGER		6
+#define MT6370_CHG_TYPE_APPLE_0_5A_CHARGER	7
+#define MT6370_CHG_TYPE_APPLE_1_0A_CHARGER	8
+#define MT6370_CHG_TYPE_APPLE_2_1A_CHARGER	9
+#define MT6370_CHG_TYPE_APPLE_2_4A_CHARGER	10
+
+#define MT6370_MASK_DCD_TIMEOUT		BIT(MT6370_SHIFT_DCD_TIMEOUT)
+
+/* ========== QCSTATUS2 0x29 (mt6370) ============ */
+#define MT6370_SHIFT_APP_OUT		5
+#define MT6370_SHIFT_SS_OUT		4
+#define MT6370_SHIFT_APP_REF		3
+#define MT6370_SHIFT_APP_DPDM_IN	2
+#define MT6370_SHIFT_APP_SS_PL		1
+#define MT6370_SHIFT_APP_SS_EN		0
+
+#define MT6370_MASK_APP_OUT	BIT(MT6370_SHIFT_APP_OUT)
+#define MT6370_MASK_SS_OUT	BIT(MT6370_SHIFT_SS_OUT)
+#define MT6370_MASK_APP_REF	BIT(MT6370_SHIFT_APP_REF)
+#define MT6370_MASK_APP_DPDM_IN	BIT(MT6370_SHIFT_APP_DPDM_IN)
+#define MT6370_MASK_APP_SS_PL	BIT(MT6370_SHIFT_APP_SS_PL)
+#define MT6370_MASK_APP_SS_EN	BIT(MT6370_SHIFT_APP_SS_EN)
+
+#define MT6360_MASK_CHECK_DPDM	(MT6370_MASK_APP_SS_EN | \
+				MT6370_MASK_APP_SS_PL | \
+				MT6370_MASK_APP_DPDM_IN | \
+				MT6370_MASK_APP_REF)
+
+/* ========= CHGHIDDENCTRL7 0x36 (mt6370) ======== */
+#define RT946X_ENABLE_VSYS_PROTECT		0x40
+
+#define RT946X_SHIFT_HIDDENCTRL7_VSYS_PROTECT	5
+#define RT946X_MASK_HIDDENCTRL7_VSYS_PROTECT \
+	(0x3 << RT946X_SHIFT_HIDDENCTRL7_VSYS_PROTECT)
 
 /* ========== CHGCTRL18 0x1A ============ */
 #define RT946X_SHIFT_IRCMP_RES		3
@@ -356,6 +465,10 @@
 
 #define RT946X_MASK_IRCMP_RES		(0x7 << RT946X_SHIFT_IRCMP_RES)
 #define RT946X_MASK_IRCMP_VCLAMP	(0x7 << RT946X_SHIFT_IRCMP_VCLAMP)
+
+/* ========== HIDDEN CTRL15 0x3E ============ */
+#define MT6370_SHIFT_ADC_TS_AUTO	0
+#define MT6370_MASK_ADC_TS_AUTO		BIT(MT6370_SHIFT_ADC_TS_AUTO)
 
 /* ========== DEVICE_ID 0x40 ============ */
 #define RT946X_MASK_VENDOR_ID	0xF0
@@ -366,7 +479,7 @@
 #define RT946X_SHIFT_ADC_STAT	0
 
 #define RT946X_MASK_CHG_STAT	(0x3 << RT946X_SHIFT_CHG_STAT)
-#define RT946X_MASK_ADC_STAT	(1 << RT946X_SHIFT_ADC_STAT)
+#define RT946X_MASK_ADC_STAT	BIT(RT946X_SHIFT_ADC_STAT)
 
 /* ========== CHGNTC 0x43 ============ */
 #define RT946X_SHIFT_BATNTC_FAULT	4
@@ -376,7 +489,7 @@
 /* ========== CHGSTATC 0x50 (rt946x) ============ */
 #define RT946X_SHIFT_PWR_RDY    7
 
-#define RT946X_MASK_PWR_RDY     (1 << RT946X_SHIFT_PWR_RDY)
+#define RT946X_MASK_PWR_RDY     BIT(RT946X_SHIFT_PWR_RDY)
 
 /* ========== CHGFAULT 0x51 (rt946x) ============ */
 #if defined(CONFIG_CHARGER_RT9466) || defined(CONFIG_CHARGER_RT9467)
@@ -385,10 +498,10 @@
 #define RT946X_SHIFT_CHG_VBATOV	6
 #define RT946X_SHIFT_CHG_VBUSOV	7
 
-#define RT946X_MASK_CHG_VSYSUV	(1 << RT946X_SHIFT_CHG_VSYSUV)
-#define RT946X_MASK_CHG_VSYSOV	(1 << RT946X_SHIFT_CHG_VSYSOV)
-#define RT946X_MASK_CHG_VBATOV	(1 << RT946X_SHIFT_CHG_VBATOV)
-#define RT946X_MASK_CHG_VBUSOV	(1 << RT946X_SHIFT_CHG_VBUSOV)
+#define RT946X_MASK_CHG_VSYSUV	BIT(RT946X_SHIFT_CHG_VSYSUV)
+#define RT946X_MASK_CHG_VSYSOV	BIT(RT946X_SHIFT_CHG_VSYSOV)
+#define RT946X_MASK_CHG_VBATOV	BIT(RT946X_SHIFT_CHG_VBATOV)
+#define RT946X_MASK_CHG_VBUSOV	BIT(RT946X_SHIFT_CHG_VBUSOV)
 #endif
 
 /* ========== DPDMIRQ 0x56 ============ */
@@ -396,21 +509,23 @@
 #define RT946X_SHIFT_DPDMIRQ_DETACH	1
 #define RT946X_SHIFT_DPDMIRQ_ATTACH	0
 
-#define RT946X_MASK_DPDMIRQ_DETACH	(1 << RT946X_SHIFT_DPDMIRQ_DETACH)
-#define RT946X_MASK_DPDMIRQ_ATTACH	(1 << RT946X_SHIFT_DPDMIRQ_ATTACH)
+#define RT946X_MASK_DPDMIRQ_DETACH	BIT(RT946X_SHIFT_DPDMIRQ_DETACH)
+#define RT946X_MASK_DPDMIRQ_ATTACH	BIT(RT946X_SHIFT_DPDMIRQ_ATTACH)
 #endif
 
+/* ========== FLED EN 0x7E (mt6370) ============ */
+#define MT6370_STROBE_EN_MASK		0x04
 
 /* ========== LDOCFG 0x80 (mt6370) ============ */
 #define MT6370_SHIFT_LDOCFG_OMS	6
 
-#define MT6370_MASK_LDOCFG_OMS		(1 << MT6370_SHIFT_LDOCFG_OMS)
+#define MT6370_MASK_LDOCFG_OMS		BIT(MT6370_SHIFT_LDOCFG_OMS)
 
 /* ========== LDOVOUT 0x81 (mt6370) ============ */
 #define MT6370_SHIFT_LDOVOUT_EN		7
 #define MT6370_SHIFT_LDOVOUT_VOUT	0
 
-#define MT6370_MASK_LDOVOUT_EN		(1 << MT6370_SHIFT_LDOVOUT_EN)
+#define MT6370_MASK_LDOVOUT_EN		BIT(MT6370_SHIFT_LDOVOUT_EN)
 #define MT6370_MASK_LDOVOUT_VOUT	(0xf << MT6370_SHIFT_LDOVOUT_VOUT)
 
 /* ========== RGBDIM 0x82/0x83/0x84 (mt6370) ============ */
@@ -429,9 +544,9 @@
 #define MT6370_SHIFT_RGB_ISNK3DIM	5
 #define MT6370_SHIFT_RGB_ISNKDIM_BASE	8
 
-#define MT6370_MASK_RGB_ISNK1DIM_EN	(1 << MT6370_SHIFT_RGB_ISNK1DIM)
-#define MT6370_MASK_RGB_ISNK2DIM_EN	(1 << MT6370_SHIFT_RGB_ISNK2DIM)
-#define MT6370_MASK_RGB_ISNK3DIM_EN	(1 << MT6370_SHIFT_RGB_ISNK3DIM)
+#define MT6370_MASK_RGB_ISNK1DIM_EN	BIT(MT6370_SHIFT_RGB_ISNK1DIM)
+#define MT6370_MASK_RGB_ISNK2DIM_EN	BIT(MT6370_SHIFT_RGB_ISNK2DIM)
+#define MT6370_MASK_RGB_ISNK3DIM_EN	BIT(MT6370_SHIFT_RGB_ISNK3DIM)
 #define MT6370_MASK_RGB_ISNK_ALL_EN	(MT6370_MASK_RGB_ISNK1DIM_EN | \
 					 MT6370_MASK_RGB_ISNK2DIM_EN | \
 					 MT6370_MASK_RGB_ISNK3DIM_EN)
@@ -445,6 +560,94 @@
 #define MT6370_MASK_RGBISNK_CURSEL	(0x7 << MT6370_SHIFT_RGBISNK_CURSEL)
 #define MT6370_MASK_RGBISNK_DIMFSEL	(0x7 << MT6370_SHIFT_RGBISNK_DIMFSEL)
 
+/* ========== DBCTRL1 (mt6370) ============ */
+#define MT6370_SHIFT_DB_EXT_EN		0
+#define MT6370_SHIFT_DB_PERIODIC_FIX	4
+#define MT6370_SHIFT_DB_SINGLE_PIN	5
+#define MT6370_SHIFT_DB_FREQ_PM		6
+#define MT6370_SHIFT_DB_PERIODIC_MODE	7
+
+#define MT6370_MASK_DB_EXT_EN		1
+#define MT6370_MASK_DB_PERIODIC_FIX	1
+#define MT6370_MASK_DB_SINGLE_PIN	1
+#define MT6370_MASK_DB_FREQ_PM		1
+#define MT6370_MASK_DB_PERIODIC_MODE	1
+
+/* ========== DBCTRL1 (mt6370) ============ */
+#define MT6370_MASK_DB_VNEG_DISC	BIT(2)
+#define MT6370_MASK_DB_VPOS_DISC	BIT(5)
+
+/* ========== DBVBST (mt6370) ============ */
+#define MT6370_SHIFT_DB_VBST		0
+
+#define MT6370_MASK_DB_VBST		0x3f
+
+#define MT6370_DB_VBST_MAX		6200
+#define MT6370_DB_VBST_MIN		4000
+#define MT6370_DB_VBST_STEP		50
+
+/* ========== DBVPOS (mt6370) ============ */
+#define MT6370_SHIFT_DB_VPOS		0
+
+#define MT6370_MASK_DB_VPOS		0x3f
+
+#define MT6370_DB_VPOS_MAX		6000
+#define MT6370_DB_VPOS_MIN		4000
+#define MT6370_DB_VPOS_STEP		50
+
+/* ========== DBVNEG (mt6370) ============ */
+#define MT6370_SHIFT_DB_VNEG		0
+
+#define MT6370_MASK_DB_VNEG		0x3f
+
+#define MT6370_DB_VNEG_MAX		6000
+#define MT6370_DB_VNEG_MIN		4000
+#define MT6370_DB_VNEG_STEP		50
+
+/* ========== BLEN 0xA0 (mt6370) ============ */
+#define MT6370_SHIFT_BLED_EXT_EN	7
+#define MT6370_SHIFT_BLED_EN		6
+#define MT6370_SHIFT_BLED_1CH_EN	5
+#define MT6370_SHIFT_BLED_2CH_EN	4
+#define MT6370_SHIFT_BLED_3CH_EN	3
+#define MT6370_SHIFT_BLED_4CH_EN	2
+#define MT6370_SHIFT_BLED_CODE		1
+#define MT6370_SHIFT_BLED_CONFIG	0
+
+#define MT6370_MASK_BLED_EXT_EN		BIT(MT6370_SHIFT_BLED_EXT_EN)
+#define MT6370_MASK_BLED_EN		BIT(MT6370_SHIFT_BLED_EN)
+#define MT6370_MASK_BLED_1CH_EN		BIT(MT6370_SHIFT_BLED_1CH_EN)
+#define MT6370_MASK_BLED_2CH_EN		BIT(MT6370_SHIFT_BLED_2CH_EN)
+#define MT6370_MASK_BLED_3CH_EN		BIT(MT6370_SHIFT_BLED_3CH_EN)
+#define MT6370_MASK_BLED_4CH_EN		BIT(MT6370_SHIFT_BLED_4CH_EN)
+
+#define MT6370_BLED_CODE_LINEAR		BIT(MT6370_SHIFT_BLED_CODE)
+#define MT6370_BLED_CODE_EXP		0
+
+#define MT6370_BLED_CONFIG_ACTIVE_HIGH	BIT(MT6370_SHIFT_BLED_CONFIG)
+#define MT6370_BLED_CONFIG_ACTIVE_LOW	0
+
+/* ========== BLPWM 0xA2 (mt6370) ============ */
+#define MT6370_SHIFT_BLPWM_BLED_PWM	7
+
+#define MT6370_MASK_BLPWM_BLED_PWM	BIT(MT6370_SHIFT_BLPWM_BLED_PWM)
+
+/* ========== BLDIM2 0xA4 (mt6370) ============ */
+#define MT6370_MASK_BLDIM2		0x7
+
+/* ========== BLDIM 0xA5 (mt6370) ============ */
+#define MT6370_SHIFT_BLDIM_MSB		3
+#define MT6370_MASK_BLDIM		0xff
+
+#define MT6370_BLDIM_DEFAULT		0x7ff
+
+/* ========== CHG_IRQ1 0xC0 (mt6370) ============ */
+#define MT6370_SHIFT_MIVR_EVT		6
+#define MT6370_MASK_MIVR_EVT		BIT(MT6370_SHIFT_MIVR_EVT)
+
+/* ========== CHGSTAT2 0xD0 (mt6370) ============ */
+#define MT6370_SHIFT_MIVR_STAT		6
+
 /* ========== CHGSTAT2 0xD1 (mt6370) ============ */
 #ifdef CONFIG_CHARGER_MT6370
 #define MT6370_SHIFT_CHG_VBUSOV_STAT	7
@@ -452,28 +655,66 @@
 
 #define RT946X_MASK_CHG_VBATOV		MT6370_SHIFT_CHG_VBATOV_STAT
 
-#define MT6370_MASK_CHG_VBUSOV_STAT	(1 << MT6370_SHIFT_CHG_VBUSOV_STAT)
-#define MT6370_MASK_CHG_VBATOV_STAT	(1 << MT6370_SHIFT_CHG_VBATOV_STAT)
+#define MT6370_MASK_CHG_VBUSOV_STAT	BIT(MT6370_SHIFT_CHG_VBUSOV_STAT)
+#define MT6370_MASK_CHG_VBATOV_STAT	BIT(MT6370_SHIFT_CHG_VBATOV_STAT)
 #endif
+
+/* ========== TM PAS CODE1 0xF0 (mt6370) ============ */
+#define MT6370_LEAVE_TM			0x00
+
+/* ========== BANK REG 0xFF (mt6370) ============ */
+#define MT6370_MASK_REG_TM		0x69
+
+/* ========== TM REG 0x34 (mt6370) ============ */
+#define MT6370_TM_MASK_BL3_SL		0xC0
+#define MT6370_TM_REDUCE_BL3_SL		0xC0
+
+/* ========== TM REG 0x37 (mt6370) ============ */
+#define MT6370_TM_MASK_DSV1_SL		0xC0
+#define MT6370_TM_REDUCE_DSV1_SL	0x00
+
+/* ADC unit/offset */
+#define MT6370_ADC_UNIT_VBUS_DIV5	25000	/* uV */
+#define MT6370_ADC_UNIT_VBUS_DIV2	10000	/* uV */
+#define MT6370_ADC_UNIT_VSYS		5000	/* uV */
+#define MT6370_ADC_UNIT_VBAT		5000	/* uV */
+#define MT6370_ADC_UNIT_TS_BAT		25	/* 0.01% */
+#define MT6370_ADC_UNIT_IBUS		50000	/* uA */
+#define MT6370_ADC_UNIT_IBAT		50000	/* uA */
+#define MT6370_ADC_UNIT_CHG_VDDP	5000	/* uV */
+#define MT6370_ADC_UNIT_TEMP_JC		2	/* degree */
+
+#define MT6370_ADC_OFFSET_VBUS_DIV5	0	/* mV */
+#define MT6370_ADC_OFFSET_VBUS_DIV2	0	/* mV */
+#define MT6370_ADC_OFFSET_VSYS		0	/* mV */
+#define MT6370_ADC_OFFSET_VBAT		0	/* mV */
+#define MT6370_ADC_OFFSET_TS_BAT	0	/* % */
+#define MT6370_ADC_OFFSET_IBUS		0	/* mA */
+#define MT6370_ADC_OFFSET_IBAT		0	/* mA */
+#define MT6370_ADC_OFFSET_CHG_VDDP	0	/* mV */
+#define MT6370_ADC_OFFSET_TEMP_JC	(-40)	/* degree */
 
 /* ========== Variant-specific configuration ============ */
 #if defined(CONFIG_CHARGER_RT9466)
 	#define RT946X_CHARGER_NAME	"rt9466"
 	#define RT946X_VENDOR_ID	0x80
-	#define RT946X_ADDR		(0x53 << 1)
+	#define RT946X_ADDR_FLAGS	0x53
 #elif defined(CONFIG_CHARGER_RT9467)
 	#define RT946X_CHARGER_NAME	"rt9467"
 	#define RT946X_VENDOR_ID	0x90
-	#define RT946X_ADDR		(0x5B << 1)
+	#define RT946X_ADDR_FLAGS	0x5B
 #elif defined(CONFIG_CHARGER_MT6370)
 	#define RT946X_CHARGER_NAME	"mt6370"
 	#define RT946X_VENDOR_ID	0xE0
-	#define RT946X_ADDR		(0x34 << 1)
+	#define RT946X_ADDR_FLAGS	0x34
 #else
 	#error "No suitable charger option defined"
 #endif
 
 /* RT946x specific interface functions */
+
+/* Power on reset */
+int rt946x_por_reset(void);
 
 /* Interrupt handler for rt946x */
 void rt946x_interrupt(enum gpio_signal signal);
@@ -498,6 +739,43 @@ int rt946x_cutoff_battery(void);
 
 /* Enable/Disable charge temination */
 int rt946x_enable_charge_termination(int en);
+
+/* Enable/Disable charge EOC */
+int rt946x_enable_charge_eoc(int en);
+
+enum rt946x_adc_in_sel {
+	RT946X_ADC_VBUS_DIV5 = 1,
+	RT946X_ADC_VBUS_DIV2,
+	MT6370_ADC_TS_BAT = 6,
+	MT6370_ADC_IBUS = 8,
+	MT6370_ADC_TEMP_JC = 12,
+	MT6370_ADC_MAX,
+};
+
+/**
+ * Read ADC channels
+ *
+ * @param adc_sel The ADC channel
+ * @param adc_val The read value
+ * @return EC_SUCCESS or EC_ERROR_*
+ */
+int rt946x_get_adc(enum rt946x_adc_in_sel adc_sel, int *adc_val);
+
+/**
+ * Toggle BC12 detection
+ *
+ * @return EC_SUCCESS or EC_ERROR_*
+ */
+int rt946x_toggle_bc12_detection(void);
+
+struct rt946x_init_setting {
+	uint16_t eoc_current;
+	uint16_t mivr;
+	uint16_t ircmp_vclamp;
+	uint16_t ircmp_res;
+	uint16_t boost_voltage;
+	uint16_t boost_current;
+};
 
 #ifdef CONFIG_CHARGER_MT6370
 
@@ -532,11 +810,40 @@ enum mt6370_led_pwm_freq {
 	MT6370_LED_PWM_FREQ1000 = 7 /* 1000 Hz */
 };
 
+/* Enable display bias external pin control. */
+int mt6370_db_external_control(int en);
+
+/**
+ * Set backlight LED dim.
+ *
+ * dim: A value from 0 to 2047.
+ * return: EC_SUCCESS on success, and EC_ERROR_* otherwise.
+ */
+int mt6370_backlight_set_dim(uint16_t dim);
+
+/**
+ * MT6370 display bias voltage settings.
+ *
+ * Set disaply bias voltages for the panel.
+ *
+ * vbst: VBST config in mv.
+ * vpos: VPOS config in mv.
+ * vneg: VNEG config in mv.
+ * return: EC_SUCCESS on succes, and EC_ERROR_* otherwise.
+ */
+int mt6370_db_set_voltages(int vbst, int vpos, int vneg);
+
 /* Set LED brightness */
 int mt6370_led_set_brightness(enum mt6370_led_index index, uint8_t brightness);
 
-/* Set LED Color */
-int mt6370_led_set_color(enum mt6370_led_index index);
+/**
+ * Set LED Color
+ *
+ * mask: Bitmap indicating 1=on 0=off for each LED. 000 = all off.
+ *       Combination of MT6370_MASK_RGB_ISNK1/2/3DIM_EN.
+ * return: EC_SUCCESS or EC_ERROR_* on error.
+ */
+int mt6370_led_set_color(uint8_t mask);
 
 /* Set LED dim mode, available modes: REGISTER, PWM, BREATH. */
 int mt6370_led_set_dim_mode(enum mt6370_led_index index,
@@ -548,6 +855,12 @@ int mt6370_led_set_pwm_dim_duty(enum mt6370_led_index index, uint8_t dim_duty);
 /* Set LED PWM mode frequency */
 int mt6370_led_set_pwm_frequency(enum mt6370_led_index index,
 				 enum mt6370_led_pwm_freq freq);
+
+/* Reduce mt6370 DB and BL driving capacity */
+int mt6370_reduce_db_bl_driving(void);
 #endif
+
+extern const struct charger_drv rt946x_drv;
+extern const struct bc12_drv rt946x_bc12_drv;
 
 #endif /* __CROS_EC_RT946X_H */

@@ -1,8 +1,8 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
- * Test lid switch.
+ * Test charge_state_v2 behavior
  */
 
 #include "battery_smart.h"
@@ -26,14 +26,19 @@ static int is_hibernated;
 static int override_voltage, override_current, override_usec;
 
 /* The simulation doesn't really hibernate, so we must reset this ourselves */
-extern timestamp_t shutdown_warning_time;
+extern timestamp_t shutdown_target_time;
 
 static void reset_mocks(void)
 {
 	mock_chipset_state = CHIPSET_STATE_ON;
 	is_shutdown = is_force_discharge = is_hibernated = 0;
 	override_voltage = override_current = override_usec = 0;
-	shutdown_warning_time.val = 0ULL;
+	shutdown_target_time.val = 0ULL;
+}
+
+int board_cut_off_battery(void)
+{
+	return EC_SUCCESS;
 }
 
 void chipset_force_shutdown(enum chipset_shutdown_reason reason)
@@ -175,7 +180,7 @@ static int test_charge_state(void)
 
 	/* Detach battery, charging error */
 	ccprintf("[CHARGING TEST] Detach battery\n");
-	TEST_ASSERT(test_detach_i2c(I2C_PORT_BATTERY, BATTERY_ADDR) ==
+	TEST_ASSERT(test_detach_i2c(I2C_PORT_BATTERY, BATTERY_ADDR_FLAGS) ==
 		    EC_SUCCESS);
 	msleep(BATTERY_DETACH_DELAY);
 	state = wait_charging_state();
@@ -183,7 +188,7 @@ static int test_charge_state(void)
 
 	/* Attach battery again, charging */
 	ccprintf("[CHARGING TEST] Attach battery\n");
-	test_attach_i2c(I2C_PORT_BATTERY, BATTERY_ADDR);
+	test_attach_i2c(I2C_PORT_BATTERY, BATTERY_ADDR_FLAGS);
 	/* And changing full capacity should trigger a host event */
 	ev_clear(EC_HOST_EVENT_BATTERY);
 	sb_write(SB_FULL_CHARGE_CAPACITY, 0xeff0);
@@ -341,6 +346,36 @@ static int test_high_temp_battery(void)
 	mock_chipset_state = CHIPSET_STATE_SOFT_OFF;
 	wait_charging_state();
 	TEST_ASSERT(is_hibernated);
+
+	return EC_SUCCESS;
+}
+
+static int test_cold_battery_with_ac(void)
+{
+	test_setup(1);
+
+	ccprintf("[CHARGING TEST] Cold battery no shutdown with AC\n");
+	ev_clear(EC_HOST_EVENT_BATTERY_SHUTDOWN);
+	sb_write(SB_TEMPERATURE, CELSIUS_TO_DECI_KELVIN(-90));
+	wait_charging_state();
+	sleep(CONFIG_BATTERY_CRITICAL_SHUTDOWN_TIMEOUT);
+	TEST_ASSERT(!is_shutdown);
+
+	return EC_SUCCESS;
+}
+
+static int test_cold_battery_no_ac(void)
+{
+	test_setup(0);
+
+	ccprintf("[CHARGING TEST] Cold battery shutdown when discharging\n");
+	ev_clear(EC_HOST_EVENT_BATTERY_SHUTDOWN);
+	sb_write(SB_TEMPERATURE, CELSIUS_TO_DECI_KELVIN(-90));
+	wait_charging_state();
+	TEST_ASSERT(ev_is_set(EC_HOST_EVENT_BATTERY_SHUTDOWN));
+	TEST_ASSERT(!is_shutdown);
+	sleep(CONFIG_BATTERY_CRITICAL_SHUTDOWN_TIMEOUT);
+	TEST_ASSERT(is_shutdown);
 
 	return EC_SUCCESS;
 }
@@ -678,11 +713,13 @@ static int test_low_battery_hostevents(void)
 
 
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	RUN_TEST(test_charge_state);
 	RUN_TEST(test_low_battery);
 	RUN_TEST(test_high_temp_battery);
+	RUN_TEST(test_cold_battery_with_ac);
+	RUN_TEST(test_cold_battery_no_ac);
 	RUN_TEST(test_external_funcs);
 	RUN_TEST(test_hc_charge_state);
 	RUN_TEST(test_hc_current_limit);

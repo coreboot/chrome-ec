@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -13,7 +13,7 @@
 static inline void crc32_init(void)
 {
 	/* switch on CRC controller */
-	STM32_RCC_AHBENR |= 1 << 6; /* switch on CRC controller */
+	STM32_RCC_AHBENR |= BIT(6); /* switch on CRC controller */
 	/* Delay 1 AHB clock cycle after the clock is enabled */
 	clock_wait_bus_cycles(BUS_AHB, 1);
 	/* reset CRC state */

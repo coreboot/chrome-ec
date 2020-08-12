@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,6 +9,39 @@
 #define __CROS_EC_CONSOLE_H
 
 #include "common.h"
+
+/*
+ * The EC code base has been using %h to print a hex buffer. Encode the
+ * parameters to do that in a pointer to a structure that's passed as the
+ * printf argument. This is done rather than something like %.123ph because
+ * the C standard doesn't allow flags, precision, and field width on %p.
+ */
+struct hex_buffer_params {
+	const void *buffer;
+	uint16_t size;
+};
+
+#define HEX_BUF(_buffer, _size) (&(const struct hex_buffer_params){ \
+	.buffer = (_buffer), \
+	.size = (_size) \
+})
+
+/*
+ * Define parameters to printing in binary: the value to print, and the number
+ * of digits to print.
+ */
+
+struct binary_print_params {
+	unsigned int value;
+	uint8_t count;
+};
+
+#define BINARY_VALUE(_value, _count) (&(const struct binary_print_params){ \
+	.value = (_value), \
+	.count = (_count) \
+})
+
+#define PRINTF_TIMESTAMP_NOW NULL
 
 /* Console command; used by DECLARE_CONSOLE_COMMAND macro. */
 struct console_command {
@@ -59,10 +92,10 @@ enum console_channel {
 };
 
 /* Mask in channel_mask for a particular channel */
-#define CC_MASK(channel)	(1UL << (channel))
+#define CC_MASK(channel)	(1U << (channel))
 
 /* Mask to use to enable all channels */
-#define CC_ALL			0xffffffffUL
+#define CC_ALL			0xffffffffU
 
 /**
  * Put a string to the console channel.
@@ -82,17 +115,19 @@ int cputs(enum console_channel channel, const char *outstr);
  *
  * @return non-zero if output was truncated.
  */
+__attribute__((__format__(__printf__, 2, 3)))
 int cprintf(enum console_channel channel, const char *format, ...);
 
 /**
  * Print formatted output with timestamp. This is like:
- *   cprintf(channel, "[%T " + format + "]\n", ...)
+ *   cprintf(channel, "[%pT " + format + "]\n", PRINTF_TIMESTAMP_NOW, ...)
  *
  * @param channel	Output channel
  * @param format	Format string; see printf.h for valid formatting codes
  *
  * @return non-zero if output was truncated.
  */
+__attribute__((__format__(__printf__, 2, 3)))
 int cprints(enum console_channel channel, const char *format, ...);
 
 /**
@@ -119,8 +154,9 @@ void console_has_input(void);
  * Register a console command handler.
  *
  * @param name          Command name; must not be the beginning of another
- *                      existing command name.  Note this is NOT in quotes
- *                      so it can be concatenated to form a struct name.
+ *                      existing command name.  Must be less than 15 characters
+ *                      long (excluding null terminator).  Note this is NOT in
+ *                      quotes so it can be concatenated to form a struct name.
  * @param routine       Command handling routine, of the form
  *                      int handler(int argc, char **argv)
  * @param argdesc       String describing arguments to command; NULL if none.
@@ -156,8 +192,8 @@ void console_has_input(void);
 /* This macro takes all possible args and discards the ones we don't use */
 #define _DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP, FLAGS)		\
 	static const char __con_cmd_label_##NAME[] = #NAME;		\
-	struct size_check##NAME {					\
-		int field[2 * (sizeof(__con_cmd_label_##NAME) < 16) - 1]; }; \
+	_Static_assert(sizeof(__con_cmd_label_##NAME) < 16,		\
+		       "command name '" #NAME "' is too long");		\
 	const struct console_command __keep __no_sanitize_address	\
 	__con_cmd_##NAME						\
 	__attribute__((section(".rodata.cmds." #NAME))) =		\

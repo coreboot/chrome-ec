@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -62,11 +62,11 @@ struct clock_gate_ctrl {
 static void clock_module_disable(void)
 {
 	/* bit0: FSPI interface tri-state */
-	IT83XX_SMFI_FLHCTRL3R |= (1 << 0);
+	IT83XX_SMFI_FLHCTRL3R |= BIT(0);
 	/* bit7: USB pad power-on disable */
-	IT83XX_GCTRL_PMER2 &= ~(1 << 7);
+	IT83XX_GCTRL_PMER2 &= ~BIT(7);
 	/* bit7: USB debug disable */
-	IT83XX_GCTRL_MCCR &= ~(1 << 7);
+	IT83XX_GCTRL_MCCR &= ~BIT(7);
 	clock_disable_peripheral((CGC_OFFSET_EGPC | CGC_OFFSET_CIR), 0, 0);
 	clock_disable_peripheral((CGC_OFFSET_SMBA | CGC_OFFSET_SMBB |
 		CGC_OFFSET_SMBC | CGC_OFFSET_SMBD | CGC_OFFSET_SMBE |
@@ -141,12 +141,40 @@ void __ram_code clock_ec_pll_ctrl(enum ec_pll_ctrl mode)
 	IT83XX_ECPM_PLLCTRL = mode;
 	/* for deep doze / sleep mode */
 	IT83XX_ECPM_PLLCTRL = mode;
-	asm volatile ("dsb");
+
+#ifdef IT83XX_CHIP_FLASH_NO_DEEP_POWER_DOWN
+	/*
+	 * WORKAROUND: this workaround is used to fix EC gets stuck in low power
+	 * mode when WRST# is asserted.
+	 *
+	 * By default, flash will go into deep power down mode automatically
+	 * when EC is in low power mode. But we got an issue on IT83202BX that
+	 * flash won't be able to wake up correctly when WRST# is asserted
+	 * under this condition.
+	 * This issue might cause cold reset failure so we fix it.
+	 *
+	 * NOTE: this fix will increase power number about 40uA in low power
+	 * mode.
+	 */
+	if (mode == EC_PLL_DOZE)
+		IT83XX_SMFI_SMECCS &= ~IT83XX_SMFI_MASK_HOSTWA;
+	else
+		/*
+		 * Don't send deep power down mode command to flash when EC in
+		 * low power mode.
+		 */
+		IT83XX_SMFI_SMECCS |= IT83XX_SMFI_MASK_HOSTWA;
+#endif
+	/*
+	 * barrier: ensure low power mode setting is taken into control
+	 * register before standby instruction.
+	 */
+	data_serialization_barrier();
 }
 
 void __ram_code clock_pll_changed(void)
 {
-	IT83XX_GCTRL_SSCR &= ~(1 << 0);
+	IT83XX_GCTRL_SSCR &= ~BIT(0);
 	/*
 	 * Update PLL settings.
 	 * Writing data to this register doesn't change the
@@ -163,12 +191,21 @@ void __ram_code clock_pll_changed(void)
 	IT83XX_ECPM_SCDCR3 = (pll_div_jtag << 4) | pll_div_ec;
 	/* EC sleep after standby instruction */
 	clock_ec_pll_ctrl(EC_PLL_SLEEP);
-	/* Global interrupt enable */
-	asm volatile ("setgie.e");
-	/* EC sleep */
-	asm("standby wake_grant");
-	/* Global interrupt disable */
-	asm volatile ("setgie.d");
+	if (IS_ENABLED(CHIP_CORE_NDS32)) {
+		/* Global interrupt enable */
+		asm volatile ("setgie.e");
+		/* EC sleep */
+		asm("standby wake_grant");
+		/* Global interrupt disable */
+		asm volatile ("setgie.d");
+	} else if (IS_ENABLED(CHIP_CORE_RISCV)) {
+		/* Global interrupt enable */
+		asm volatile ("csrsi mstatus, 0x8");
+		/* EC sleep */
+		asm("wfi");
+		/* Global interrupt disable */
+		asm volatile ("csrci mstatus, 0x8");
+	}
 	/* New FND clock frequency */
 	IT83XX_ECPM_SCDCR0 = (pll_div_fnd << 4);
 	/* EC doze after standby instruction */
@@ -199,11 +236,22 @@ static void clock_set_pll(enum pll_freq_idx idx)
 		 * We have to set chip select pin as input mode in order to
 		 * change PLL.
 		 */
-		IT83XX_GPIO_GPCRM5 = (IT83XX_GPIO_GPCRM5 & ~0xc0) | (1 << 7);
+		IT83XX_GPIO_GPCRM5 = (IT83XX_GPIO_GPCRM5 & ~0xc0) | BIT(7);
+#ifdef IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED
+		/*
+		 * On DX version, we have to disable eSPI pad before changing
+		 * PLL sequence or sequence will fail if CS# pin is low.
+		 */
+		espi_enable_pad(0);
+#endif
 #endif
 		/* Update PLL settings. */
 		clock_pll_changed();
 #ifdef CONFIG_HOSTCMD_ESPI
+#ifdef IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED
+		/* Enable eSPI pad after changing PLL sequence. */
+		espi_enable_pad(1);
+#endif
 		/* (b:70537592) Change back to ESPI CS# function. */
 		IT83XX_GPIO_GPCRM5 &= ~0xc0;
 #endif
@@ -251,6 +299,16 @@ void clock_init(void)
 	 */
 	IT83XX_GCTRL_RSTS = (IT83XX_GCTRL_RSTS & 0x3F) + 0x40;
 
+#if defined(IT83XX_ESPI_RESET_MODULE_BY_FW) && defined(CONFIG_HOSTCMD_ESPI)
+	/*
+	 * Because we don't support eSPI HW reset function (b/111480168) on DX
+	 * version, so we have to reset eSPI configurations during init to
+	 * ensure Host and EC are synchronized (especially for the field of
+	 * I/O mode)
+	 */
+	if (!system_jumped_to_this_image())
+		espi_fw_reset_module();
+#endif
 	/* Turn off auto clock gating. */
 	IT83XX_ECPM_AUTOCG = 0x00;
 
@@ -260,10 +318,10 @@ void clock_init(void)
 	clock_module_disable();
 
 #ifdef CONFIG_HOSTCMD_X86
-	IT83XX_WUC_WUESR4 = (1 << 2);
+	IT83XX_WUC_WUESR4 = BIT(2);
 	task_clear_pending_irq(IT83XX_IRQ_WKINTAD);
 	/* bit2, wake-up enable for LPC access */
-	IT83XX_WUC_WUENR4 |= (1 << 2);
+	IT83XX_WUC_WUENR4 |= BIT(2);
 #endif
 }
 
@@ -328,7 +386,7 @@ void clock_refresh_console_in_use(void)
 static void clock_event_timer_clock_change(enum ext_timer_clock_source clock,
 					uint32_t count)
 {
-	IT83XX_ETWD_ETXCTRL(EVENT_EXT_TIMER) &= ~(1 << 0);
+	IT83XX_ETWD_ETXCTRL(EVENT_EXT_TIMER) &= ~BIT(0);
 	IT83XX_ETWD_ETXPSR(EVENT_EXT_TIMER) = clock;
 	IT83XX_ETWD_ETXCNTLR(EVENT_EXT_TIMER) = count;
 	IT83XX_ETWD_ETXCTRL(EVENT_EXT_TIMER) |= 0x3;
@@ -339,38 +397,51 @@ static void clock_htimer_enable(void)
 	uint32_t c;
 
 	/* change event timer clock source to 32.768 KHz */
-#if 0
-	c = TIMER_CNT_8M_32P768K(IT83XX_ETWD_ETXCNTOR(EVENT_EXT_TIMER));
-#else
-	/* TODO(crosbug.com/p/55044) */
+#ifdef IT83XX_EXT_OBSERVATION_REG_READ_TWO_TIMES
 	c = TIMER_CNT_8M_32P768K(ext_observation_reg_read(EVENT_EXT_TIMER));
+#else
+	c = TIMER_CNT_8M_32P768K(IT83XX_ETWD_ETXCNTOR(EVENT_EXT_TIMER));
 #endif
 	clock_event_timer_clock_change(EXT_PSR_32P768K_HZ, c);
 }
 
 static int clock_allow_low_power_idle(void)
 {
-	if (!(IT83XX_ETWD_ETXCTRL(EVENT_EXT_TIMER) & (1 << 0)))
+	/*
+	 * Avoiding using low frequency clock run the same count as awaken in
+	 * sleep mode, so don't go to sleep mode before timer reload count.
+	 */
+	if (!(IT83XX_ETWD_ETXCTRL(EVENT_EXT_TIMER) & BIT(0)))
 		return 0;
 
+	/* If timer interrupt status is set, don't go to sleep mode. */
 	if (*et_ctrl_regs[EVENT_EXT_TIMER].isr &
 		et_ctrl_regs[EVENT_EXT_TIMER].mask)
 		return 0;
 
-#if 0
-	if (EVENT_TIMER_COUNT_TO_US(IT83XX_ETWD_ETXCNTOR(EVENT_EXT_TIMER)) <
-#else
-	/* TODO(crosbug.com/p/55044) */
+	/*
+	 * If timer is less than 250us to expire, then we don't go to sleep
+	 * mode.
+	 */
+#ifdef IT83XX_EXT_OBSERVATION_REG_READ_TWO_TIMES
 	if (EVENT_TIMER_COUNT_TO_US(ext_observation_reg_read(EVENT_EXT_TIMER)) <
+#else
+	if (EVENT_TIMER_COUNT_TO_US(IT83XX_ETWD_ETXCNTOR(EVENT_EXT_TIMER)) <
 #endif
 		SLEEP_SET_HTIMER_DELAY_USEC)
 		return 0;
 
+	/*
+	 * We calculate 32bit free clock overflow counts for 64bit value,
+	 * if clock almost reach overflow, we don't go to sleep mode for
+	 * avoiding miss overflow count.
+	 */
 	sleep_mode_t0 = get_time();
 	if ((sleep_mode_t0.le.lo > (0xffffffff - SLEEP_FTIMER_SKIP_USEC)) ||
 		(sleep_mode_t0.le.lo < SLEEP_FTIMER_SKIP_USEC))
 		return 0;
 
+	/* If we are waked up by console, then keep awake at least 5s. */
 	if (sleep_mode_t0.val < console_expire_time.val)
 		return 0;
 
@@ -380,6 +451,23 @@ static int clock_allow_low_power_idle(void)
 int clock_ec_wake_from_sleep(void)
 {
 	return ec_sleep;
+}
+
+void clock_cpu_standby(void)
+{
+	/* standby instruction */
+	if (IS_ENABLED(CHIP_CORE_NDS32)) {
+		asm("standby wake_grant");
+	} else if (IS_ENABLED(CHIP_CORE_RISCV)) {
+		if (!IS_ENABLED(IT83XX_RISCV_WAKEUP_CPU_WITHOUT_INT_ENABLED))
+			/*
+			 * we have to enable interrupts before
+			 * standby instruction on IT83202 bx version.
+			 */
+			interrupt_enable();
+
+		asm("wfi");
+	}
 }
 
 void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
@@ -393,8 +481,13 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 		chip_clear_pending_irq(i);
 	}
 	/* bit5: watchdog is disabled. */
-	IT83XX_ETWD_ETWCTRL |= (1 << 5);
-	/* Setup GPIOs for hibernate */
+	IT83XX_ETWD_ETWCTRL |= BIT(5);
+
+	/*
+	 * Setup GPIOs for hibernate.  On some boards, it's possible that this
+	 * may not return at all.  On those boards, power to the EC is likely
+	 * being turn off entirely.
+	 */
 	if (board_hibernate_late)
 		board_hibernate_late();
 
@@ -414,28 +507,41 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 		ext_timer_start(FREE_EXT_TIMER_L, 0);
 	}
 
-#ifdef CONFIG_USB_PD_TCPM_ITE83XX
-	/*
-	 * Disable integrated pd modules in hibernate for
-	 * better power consumption.
-	 */
-	for (i = 0; i < USBPD_PORT_COUNT; i++)
-		it83xx_disable_pd_module(i);
-#endif
+	if (IS_ENABLED(CONFIG_USB_PD_TCPM_ITE_ON_CHIP)) {
+		/*
+		 * Disable active pd modules in hibernate for
+		 * better power consumption.
+		 */
+		for (i = 0; i < CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT; i++)
+			it83xx_disable_pd_module(i);
+	}
+
+	if (IS_ENABLED(CONFIG_ADC_VOLTAGE_COMPARATOR)) {
+		/*
+		 * Disable all voltage comparator modules in hibernate
+		 * for better power consumption.
+		 */
+		for (i = CHIP_VCMP0; i < CHIP_VCMP_COUNT; i++)
+			vcmp_enable(i, 0);
+	}
 
 	for (i = 0; i < hibernate_wake_pins_used; ++i)
 		gpio_enable_interrupt(hibernate_wake_pins[i]);
 
 	/* EC sleep */
 	ec_sleep = 1;
+#if defined(IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED) && \
+defined(CONFIG_HOSTCMD_ESPI)
+	/* Disable eSPI pad. */
+	espi_enable_pad(0);
+#endif
 	clock_ec_pll_ctrl(EC_PLL_SLEEP);
 	interrupt_enable();
 	/* standby instruction */
-	asm("standby wake_grant");
+	clock_cpu_standby();
 
 	/* we should never reach that point */
-	while (1)
-		;
+	__builtin_unreachable();
 }
 
 void clock_sleep_mode_wakeup_isr(void)
@@ -443,8 +549,23 @@ void clock_sleep_mode_wakeup_isr(void)
 	uint32_t st_us, c;
 
 	/* trigger a reboot if wake up EC from sleep mode (system hibernate) */
-	if (clock_ec_wake_from_sleep())
+	if (clock_ec_wake_from_sleep()) {
+#if defined(IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED) && \
+defined(CONFIG_HOSTCMD_ESPI)
+		/*
+		 * Enable eSPI pad.
+		 * We will not need to enable eSPI pad here if Dx is able to
+		 * enable watchdog hardware reset function. But the function is
+		 * failed (b:111264984), so the following system reset is
+		 * software reset (PLL setting is not reset).
+		 * We will not go into the change PLL sequence on reboot if PLL
+		 * setting is the same, so the operation of enabling eSPI pad we
+		 * added in clock_set_pll() will not be applied.
+		 */
+		espi_enable_pad(1);
+#endif
 		system_reset(SYSTEM_RESET_HARD);
+	}
 
 	if (IT83XX_ECPM_PLLCTRL == EC_PLL_DEEP_DOZE) {
 		clock_ec_pll_ctrl(EC_PLL_DOZE);
@@ -462,7 +583,7 @@ void clock_sleep_mode_wakeup_isr(void)
 #ifdef CONFIG_HOSTCMD_X86
 		/* disable lpc access wui */
 		task_disable_irq(IT83XX_IRQ_WKINTAD);
-		IT83XX_WUC_WUESR4 = (1 << 2);
+		IT83XX_WUC_WUESR4 = BIT(2);
 		task_clear_pending_irq(IT83XX_IRQ_WKINTAD);
 #endif
 		/* disable uart wui */
@@ -495,7 +616,7 @@ void __idle(void)
 		/* Check if the EC can enter deep doze mode or not */
 		if (DEEP_SLEEP_ALLOWED && clock_allow_low_power_idle()) {
 			/* reset low power mode hw timer */
-			IT83XX_ETWD_ETXCTRL(LOW_POWER_EXT_TIMER) |= (1 << 1);
+			IT83XX_ETWD_ETXCTRL(LOW_POWER_EXT_TIMER) |= BIT(1);
 			sleep_mode_t0 = get_time();
 #ifdef CONFIG_HOSTCMD_X86
 			/* enable lpc access wui */
@@ -513,8 +634,7 @@ void __idle(void)
 			clock_ec_pll_ctrl(EC_PLL_DOZE);
 			idle_doze_cnt++;
 		}
-		/* standby instruction */
-		asm("standby wake_grant");
+		clock_cpu_standby();
 		interrupt_enable();
 	}
 }
@@ -532,9 +652,9 @@ static int command_idle_stats(int argc, char **argv)
 	ccprintf("Num idle calls that doze:            %d\n", idle_doze_cnt);
 	ccprintf("Num idle calls that sleep:           %d\n", idle_sleep_cnt);
 
-	ccprintf("Total Time spent in sleep(sec):      %.6ld(s)\n",
+	ccprintf("Total Time spent in sleep(sec):      %.6lld(s)\n",
 						total_idle_sleep_time_us);
-	ccprintf("Total time on:                       %.6lds\n\n", ts.val);
+	ccprintf("Total time on:                       %.6llds\n\n", ts.val);
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats,

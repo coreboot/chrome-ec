@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,7 +20,7 @@
 
 /* Depth of event timer */
 #define TICK_EVT_DEPTH         16 /* Depth of event timer Unit: bits */
-#define TICK_EVT_INTERVAL      (1 << TICK_EVT_DEPTH) /* Unit: us */
+#define TICK_EVT_INTERVAL      BIT(TICK_EVT_DEPTH) /* Unit: us */
 #define TICK_EVT_INTERVAL_MASK (TICK_EVT_INTERVAL - 1) /* Mask of interval */
 #define TICK_EVT_MAX_CNT     (TICK_EVT_INTERVAL - 1) /* Maximum event counter */
 
@@ -46,7 +46,7 @@ static volatile uint32_t cur_cnt_us_dbg;
 /* Internal functions */
 void init_hw_timer(int itim_no, enum ITIM_SOURCE_CLOCK_T source)
 {
-	/* Use internal 32K clock/APB2 for ITIM16 */
+	/* Select which clock to use for this timer */
 	UPDATE_BIT(NPCX_ITCTS(itim_no), NPCX_ITCTS_CKSEL,
 			source != ITIM_SOURCE_CLOCK_APB2);
 
@@ -89,7 +89,7 @@ void __hw_clock_event_set(uint32_t deadline)
 	 */
 	evt_cnt = FP_TO_INT((fp_inter_t)(evt_cnt_us) * inv_evt_tick);
 	if (evt_cnt > TICK_EVT_MAX_CNT) {
-		CPRINTS("Event overflow! 0x%08x, us is %d\r\n",
+		CPRINTS("Event overflow! 0x%08x, us is %d",
 				evt_cnt, evt_cnt_us);
 		evt_cnt = TICK_EVT_MAX_CNT;
 	}
@@ -303,7 +303,7 @@ static void update_prescaler(void)
 }
 DECLARE_HOOK(HOOK_FREQ_CHANGE, update_prescaler, HOOK_PRIO_DEFAULT);
 
-int __hw_clock_source_init(uint32_t start_t)
+void __hw_early_init_hwtimer(uint32_t start_t)
 {
 	/*
 	 * 1. Use ITIM16-1 as internal time reading
@@ -321,11 +321,19 @@ int __hw_clock_source_init(uint32_t start_t)
 	/* Set initial prescaler */
 	update_prescaler();
 
+	hw_clock_source_set_preload(start_t, 1);
+}
+
+/* Note that early_init_hwtimer() has already executed by this point */
+int __hw_clock_source_init(uint32_t start_t)
+{
 	/*
 	 * Override the count with the start value now that counting has
-	 * started.
+	 * started. Note that we may have already called this function from
+	 * gpio_pre_init(), but only in the case where we expected a reset, so
+	 * we should not get here in that case.
 	 */
-	hw_clock_source_set_preload(start_t, 1);
+	__hw_early_init_hwtimer(start_t);
 
 	/* Enable interrupt of ITIM */
 	task_enable_irq(NPCX_IRQ_ITIM32);

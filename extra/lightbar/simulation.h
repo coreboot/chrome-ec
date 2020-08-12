@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+ * Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -48,6 +48,8 @@ int fake_consolecmd_lightbar(int argc, char *argv[]);
 #define _BA0_(c, x) _BA1_(c, x)
 #define BUILD_ASSERT(cond) _BA0_(cond, __LINE__)
 
+#define BUILD_CHECK_INLINE(value, cond_true) ((value) / (!!(cond_true)))
+
 /* Number of elements in an array */
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -58,11 +60,11 @@ void cprints(int zero, const char *fmt, ...);
 #define strtoi strtol
 
 /* Task events */
-#define TASK_EVENT_CUSTOM(x)    (x & 0x0fffffff)
-#define TASK_EVENT_I2C_IDLE     0x10000000
-#define TASK_EVENT_WAKE         0x20000000
-#define TASK_EVENT_MUTEX        0x40000000
-#define TASK_EVENT_TIMER        0x80000000
+#define TASK_EVENT_CUSTOM_BIT(x) BUILD_CHECK_INLINE(BIT(x), BIT(x) & 0x0fffffff)
+#define TASK_EVENT_I2C_IDLE      0x10000000
+#define TASK_EVENT_WAKE          0x20000000
+#define TASK_EVENT_MUTEX         0x40000000
+#define TASK_EVENT_TIMER         0x80000000
 
 /* Time units in usecs */
 #define MSEC         1000

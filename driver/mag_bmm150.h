@@ -11,10 +11,10 @@
 #include "accelgyro.h"
 #include "mag_cal.h"
 
-#define BMM150_ADDR0             0x20
-#define BMM150_ADDR1             0x22
-#define BMM150_ADDR2             0x24
-#define BMM150_ADDR3             0x26
+#define BMM150_ADDR0_FLAGS       0x10
+#define BMM150_ADDR1_FLAGS       0x11
+#define BMM150_ADDR2_FLAGS       0x12
+#define BMM150_ADDR3_FLAGS       0x13
 
 #define BMM150_CHIP_ID           0x40
 #define BMM150_CHIP_ID_MAJOR     0x32
@@ -23,8 +23,8 @@
 
 #define BMM150_INT_STATUS        0x4a
 #define BMM150_PWR_CTRL          0x4b
-#define BMM150_SRST                  ((1 << 7) | (1 << 1))
-#define BMM150_PWR_ON                (1 << 0)
+#define BMM150_SRST                  (BIT(7) | BIT(1))
+#define BMM150_PWR_ON                BIT(0)
 
 #define BMM150_OP_CTRL           0x4c
 #define BMM150_OP_MODE_OFFSET    1
@@ -84,8 +84,12 @@
  *
  *  To be safe, declare only 75% of the value.
  */
-#define BMM150_MAG_MAX_FREQ(_preset) (750000000 / \
+#define __BMM150_MAG_MAX_FREQ(_preset) (750000000 / \
 	(145 * BMM150_REP(_preset, XY) + 500 *  BMM150_REP(_preset, Z) + 980))
+
+#if (__BMM150_MAG_MAX_FREQ(SPECIAL) > CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ)
+#error "EC too slow for magnetometer"
+#endif
 
 struct bmm150_comp_registers {
 	/* Local copy of the compensation registers. */
@@ -104,27 +108,41 @@ struct bmm150_comp_registers {
 };
 
 struct bmm150_private_data {
-	struct bmm150_comp_registers comp;
+	/* lsm6dsm_data union requires cal be first element */
 	struct mag_cal_t             cal;
+	struct bmm150_comp_registers comp;
 };
+
+#ifdef CONFIG_MAG_BMI_BMM150
+#include "accelgyro_bmi_common.h"
+
 #define BMM150_COMP_REG(_s) \
-	(&BMI160_GET_DATA(_s)->compass.comp)
+	(&BMI_GET_DATA(_s)->compass.comp)
 
 #define BMM150_CAL(_s) \
-	(&BMI160_GET_DATA(_s)->compass.cal)
+	(&BMI_GET_DATA(_s)->compass.cal)
+/*
+ * Behind a BMI, the BMM150 is in forced mode. Be sure to choose a frequency
+ * compatible with BMI.
+ */
+#define BMM150_MAG_MAX_FREQ(_preset) \
+	BMI_REG_TO_ODR(BMI_ODR_TO_REG(__BMM150_MAG_MAX_FREQ(_preset)))
+#else
+#define BMM150_MAG_MAX_FREQ(_preset) __BMM150_MAG_MAX_FREQ(_preset)
+#endif
 
 /* Specific initialization of BMM150 when behing BMI160 */
 int bmm150_init(const struct motion_sensor_t *s);
 
 /* Command to normalize and apply temperature compensation */
 void bmm150_normalize(const struct motion_sensor_t *s,
-		      vector_3_t v,
+		      intv3_t v,
 		      uint8_t *data);
 
 int bmm150_set_offset(const struct motion_sensor_t *s,
-		      const vector_3_t offset);
+		      const intv3_t offset);
 
 int bmm150_get_offset(const struct motion_sensor_t *s,
-		      vector_3_t   offset);
+		      intv3_t   offset);
 
 #endif /* __CROS_EC_MAG_BMM150_H */

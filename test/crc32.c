@@ -12,7 +12,7 @@
 #include "util.h"
 
 // test that static version matches context version
-static int test_static(void)
+static int test_static_version(void)
 {
 	uint32_t crc;
 	const uint32_t input = 0xdeadbeef;
@@ -63,11 +63,11 @@ static int test_kat0(void)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	test_reset();
 
-	RUN_TEST(test_static);
+	RUN_TEST(test_static_version);
 	RUN_TEST(test_8);
 	RUN_TEST(test_kat0);
 

@@ -46,44 +46,44 @@
 #define SPEED_100KHZ_IDLE_SCALING	0x01FC01EDul
 #define SPEED_100KHZ_TIMEOUT_SCALING	0x4B9CC2C7ul
 /* Status */
-#define STS_NBB (1 << 0) /* Bus busy */
-#define STS_LAB (1 << 1) /* Arbitration lost */
-#define STS_LRB (1 << 3) /* Last received bit */
-#define STS_BER (1 << 4) /* Bus error */
-#define STS_PIN (1 << 7) /* Pending interrupt */
+#define STS_NBB BIT(0) /* Bus busy */
+#define STS_LAB BIT(1) /* Arbitration lost */
+#define STS_LRB BIT(3) /* Last received bit */
+#define STS_BER BIT(4) /* Bus error */
+#define STS_PIN BIT(7) /* Pending interrupt */
 /* Control */
-#define CTRL_ACK (1 << 0) /* Acknowledge */
-#define CTRL_STO (1 << 1) /* STOP */
-#define CTRL_STA (1 << 2) /* START */
-#define CTRL_ENI (1 << 3) /* Enable interrupt */
-#define CTRL_ESO (1 << 6) /* Enable serial output */
-#define CTRL_PIN (1 << 7) /* Pending interrupt not */
+#define CTRL_ACK BIT(0) /* Acknowledge */
+#define CTRL_STO BIT(1) /* STOP */
+#define CTRL_STA BIT(2) /* START */
+#define CTRL_ENI BIT(3) /* Enable interrupt */
+#define CTRL_ESO BIT(6) /* Enable serial output */
+#define CTRL_PIN BIT(7) /* Pending interrupt not */
 /* Completion */
-#define COMP_DTEN	(1 << 2) /* enable device timeouts */
-#define COMP_MCEN	(1 << 3) /* enable master cumulative timeouts */
-#define COMP_SCEN	(1 << 4) /* enable slave cumulative timeouts */
-#define COMP_BIDEN	(1 << 5) /* enable Bus idle timeouts */
-#define COMP_IDLE	(1 << 29)  /* i2c bus is idle */
+#define COMP_DTEN	BIT(2) /* enable device timeouts */
+#define COMP_MCEN	BIT(3) /* enable master cumulative timeouts */
+#define COMP_SCEN	BIT(4) /* enable slave cumulative timeouts */
+#define COMP_BIDEN	BIT(5) /* enable Bus idle timeouts */
+#define COMP_IDLE	BIT(29)  /* i2c bus is idle */
 #define COMP_RW_BITS_MASK 0x3C /* R/W bits mask */
 /* Configuration */
 #define CFG_PORT_MASK	(0x0F)	/* port selection field */
-#define CFG_TCEN	(1 << 4) /* Enable HW bus timeouts */
-#define CFG_FEN		(1 << 8) /* enable input filtering */
-#define CFG_RESET	(1 << 9) /* reset controller */
-#define CFG_ENABLE	(1 << 10) /* enable controller */
-#define CFG_GC_DIS	(1 << 14) /* disable general call address */
-#define CFG_ENIDI	(1 << 29) /* Enable I2C idle interrupt */
+#define CFG_TCEN	BIT(4) /* Enable HW bus timeouts */
+#define CFG_FEN		BIT(8) /* enable input filtering */
+#define CFG_RESET	BIT(9) /* reset controller */
+#define CFG_ENABLE	BIT(10) /* enable controller */
+#define CFG_GC_DIS	BIT(14) /* disable general call address */
+#define CFG_ENIDI	BIT(29) /* Enable I2C idle interrupt */
 /* Enable network layer master done interrupt */
-#define CFG_ENMI	(1 << 30)
+#define CFG_ENMI	BIT(30)
 /* Enable network layer slave done interrupt */
-#define CFG_ENSI	(1 << 31)
+#define CFG_ENSI	BIT(31)
 /* Master Command */
-#define MCMD_MRUN		(1 << 0)
-#define MCMD_MPROCEED		(1 << 1)
-#define MCMD_START0		(1 << 8)
-#define MCMD_STARTN		(1 << 9)
-#define MCMD_STOP		(1 << 10)
-#define MCMD_READM		(1 << 12)
+#define MCMD_MRUN		BIT(0)
+#define MCMD_MPROCEED		BIT(1)
+#define MCMD_START0		BIT(8)
+#define MCMD_STARTN		BIT(9)
+#define MCMD_STOP		BIT(10)
+#define MCMD_READM		BIT(12)
 #define MCMD_WCNT_BITPOS	(16)
 #define MCMD_WCNT_MASK0		(0xFF)
 #define MCMD_WCNT_MASK		(0xFF << 16)
@@ -132,7 +132,7 @@ static struct {
 	uint32_t i2c_complete; /* ISR write */
 	uint32_t flags;
 	uint8_t port;
-	uint8_t slv_addr;
+	uint8_t slv_addr_8bit;
 	uint8_t ctrl;
 	uint8_t hwsts;
 	uint8_t hwsts2;
@@ -148,21 +148,21 @@ static const uint16_t i2c_controller_pcr[MCHP_I2C_CTRL_MAX] = {
 	MCHP_PCR_I2C3
 };
 
-static void i2c_ctrl_slp_en(int controller, int sleep_en)
-{
-	if ((controller < 0) || (controller > MCHP_I2C_CTRL_MAX))
-		return;
-	if (sleep_en)
-		MCHP_PCR_SLP_EN_DEV(i2c_controller_pcr[controller]);
-	else
-		MCHP_PCR_SLP_DIS_DEV(i2c_controller_pcr[controller]);
-}
-
 static int chip_i2c_is_controller_valid(int controller)
 {
 	if ((controller < 0) || (controller >= MCHP_I2C_CTRL_MAX))
 		return 0;
 	return 1;
+}
+
+static void i2c_ctrl_slp_en(int controller, int sleep_en)
+{
+	if (!chip_i2c_is_controller_valid(controller))
+		return;
+	if (sleep_en)
+		MCHP_PCR_SLP_EN_DEV(i2c_controller_pcr[controller]);
+	else
+		MCHP_PCR_SLP_DIS_DEV(i2c_controller_pcr[controller]);
 }
 
 uint32_t chip_i2c_get_ctx_flags(int port)
@@ -342,9 +342,9 @@ static void reset_controller(int controller)
 	int i;
 
 	/* Reset asserted for at least one AHB clock */
-	MCHP_I2C_CONFIG(controller) |= 1 << 9;
+	MCHP_I2C_CONFIG(controller) |= BIT(9);
 	MCHP_EC_ID_RO = 0;
-	MCHP_I2C_CONFIG(controller) &= ~(1 << 9);
+	MCHP_I2C_CONFIG(controller) &= ~BIT(9);
 
 	for (i = 0; i < i2c_ports_used; ++i)
 		if (controller == i2c_port_to_controller(i2c_ports[i].port)) {
@@ -464,9 +464,9 @@ static void select_port(int port, int controller)
 	if ((MCHP_I2C_CONFIG(controller) & 0x0f) == port_sel)
 		return;
 
-	MCHP_I2C_CONFIG(controller) |= 1 << 9;
+	MCHP_I2C_CONFIG(controller) |= BIT(9);
 	MCHP_EC_ID_RO = 0; /* dummy write to read-only as delay */
-	MCHP_I2C_CONFIG(controller) &= ~(1 << 9);
+	MCHP_I2C_CONFIG(controller) &= ~BIT(9);
 	configure_controller(controller, port_sel, i2c_ports[port].kbps);
 }
 
@@ -501,7 +501,7 @@ static int i2c_check_recover(int port, int controller)
 	if ((((reg & (STS_BER | STS_LAB)) || !(reg & STS_NBB)) ||
 			(lines != I2C_LINE_IDLE))) {
 		cdata[controller].flags |= (1ul << 16);
-		CPRINTS("I2C%d port%d recov status 0x%02x, SDA:SCL=0x%0x\n",
+		CPRINTS("I2C%d port%d recov status 0x%02x, SDA:SCL=0x%0x",
 			controller, port, reg, lines);
 		/* Attempt to unwedge the port. */
 		if (lines != I2C_LINE_IDLE)
@@ -545,7 +545,7 @@ static int i2c_mtx(int ctrl)
 	cdata[ctrl].flags |= (1ul << 1);
 	if (cdata[ctrl].xflags & I2C_XFER_START) {
 		cdata[ctrl].flags |= (1ul << 2);
-		MCHP_I2C_DATA(ctrl) = cdata[ctrl].slv_addr;
+		MCHP_I2C_DATA(ctrl) = cdata[ctrl].slv_addr_8bit;
 		/* Clock out the slave address, sending START bit */
 		MCHP_I2C_CTRL(ctrl) = CTRL_PIN | CTRL_ESO | CTRL_ENI |
 			CTRL_ACK | CTRL_STA;
@@ -629,7 +629,7 @@ static int i2c_mrx_start(int ctrl)
 		/* Repeated-START then address */
 		MCHP_I2C_CTRL(ctrl) = u8;
 	}
-	MCHP_I2C_DATA(ctrl) = cdata[ctrl].slv_addr | 0x01;
+	MCHP_I2C_DATA(ctrl) = cdata[ctrl].slv_addr_8bit | 0x01;
 	if (cdata[ctrl].transaction_state == I2C_TRANSACTION_STOPPED) {
 		cdata[ctrl].flags |= (1ul << 6);
 		/* address then START */
@@ -716,8 +716,9 @@ static int i2c_mrx_data(int ctrl)
 /*
  * Called from common/i2c_master
  */
-int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out,
-		int out_size, uint8_t *in, int in_size, int flags)
+int chip_i2c_xfer(int port, uint16_t slave_addr_flags,
+		  const uint8_t *out, int out_size,
+		  uint8_t *in, int in_size, int flags)
 {
 	int ctrl;
 	int ret_done;
@@ -739,8 +740,8 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out,
 	cdata[ctrl].hwsts2 = 0;
 	cdata[ctrl].hwsts3 = 0;
 	cdata[ctrl].hwsts4 = 0;
-	cdata[ctrl].port = (uint8_t)(port & 0xff);
-	cdata[ctrl].slv_addr = (uint8_t)(slave_addr & 0xff);
+	cdata[ctrl].port = port & 0xff;
+	cdata[ctrl].slv_addr_8bit = I2C_GET_ADDR(slave_addr_flags) << 1;
 	cdata[ctrl].out_size = out_size;
 	cdata[ctrl].outp = out;
 	cdata[ctrl].in_size = in_size;
@@ -877,7 +878,7 @@ void i2c_set_timeout(int port, uint32_t timeout)
  * If multiple ports are mapped to the same controller choose the
  * lowest speed.
  */
-static void i2c_init(void)
+void i2c_init(void)
 {
 	int i, controller, kbps;
 	int controller_kbps[MCHP_I2C_CTRL_MAX];
@@ -922,7 +923,7 @@ static void i2c_init(void)
 		i2c_set_timeout(i2c_ports[i].port, 0);
 	}
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);
+
 /*
  * Handle I2C interrupts.
  * I2C controller is configured to fire interrupts on

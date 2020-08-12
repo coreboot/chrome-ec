@@ -29,7 +29,7 @@ uint32_t log2(int32_t val)
 	return log2_mult * (val1 + val2)/2;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	const int loopcount = 512;
 
@@ -51,7 +51,7 @@ void run_test(void)
 		}
 		t1 = get_time();
 		if (i == 0)
-			ccprintf("Got %d bytes in %ld us\n",
+			ccprintf("Got %zd bytes in %" PRId64 " us\n",
 				sizeof(buffer), t1.val - t0.val);
 
 		for (j = 0; j < sizeof(buffer); j++)

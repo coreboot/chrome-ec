@@ -8,8 +8,12 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /* 48 MHz SYSCLK clock frequency */
 #define CPU_CLOCK 48000000
+
+#define CONFIG_BOARD_PRE_INIT
 
 /* Enable USART1,3,4 and USB streams */
 #define CONFIG_STREAM_USART
@@ -28,6 +32,10 @@
 /* Optional features */
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
+#define CONFIG_PVD
+/* See 'Programmable voltage detector characteristics' in the STM32F072x8 Datasheet.
+   PVD Threshold 1 corresponds to a falling voltage threshold of min:2.09V, max:2.27V. */
+#define PVD_THRESHOLD     (1)
 
 /* USB Configuration */
 #define CONFIG_USB
@@ -80,6 +88,14 @@
 #define CONFIG_I2C_MASTER
 #define I2C_PORT_MASTER 0
 
+/* See i2c_ite_flash_support.c for more information about these values */
+#define CONFIG_ITE_FLASH_SUPPORT
+#define CONFIG_I2C_XFER_LARGE_READ
+#undef CONFIG_USB_I2C_MAX_WRITE_COUNT
+#undef CONFIG_USB_I2C_MAX_READ_COUNT
+#define CONFIG_USB_I2C_MAX_WRITE_COUNT ((1<<9) - 4)
+#define CONFIG_USB_I2C_MAX_READ_COUNT ((1<<9) - 6)
+
 /*
  * Allow dangerous commands all the time, since we don't have a write protect
  * switch.
@@ -92,6 +108,10 @@
 #define TIM_CLOCK32 2
 
 #include "gpio_signal.h"
+
+/* GPIO signal mapping */
+#define GPIO_USART4_SERVO_TX_DUT_RX GPIO_UART3_TX_SERVO_JTAG_TCK
+#define GPIO_USART4_SERVO_RX_DUT_TX GPIO_UART3_RX_JTAG_BUFFER_TO_SERVO_TDO
 
 /* USB string indexes */
 enum usb_strings {

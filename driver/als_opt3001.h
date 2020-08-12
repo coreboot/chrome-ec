@@ -9,10 +9,10 @@
 #define __CROS_EC_ALS_OPT3001_H
 
 /* I2C interface */
-#define OPT3001_I2C_ADDR1		(0x44 << 1)
-#define OPT3001_I2C_ADDR2		(0x45 << 1)
-#define OPT3001_I2C_ADDR3		(0x46 << 1)
-#define OPT3001_I2C_ADDR4		(0x47 << 1)
+#define OPT3001_I2C_ADDR1_FLAGS		0x44
+#define OPT3001_I2C_ADDR2_FLAGS		0x45
+#define OPT3001_I2C_ADDR3_FLAGS		0x46
+#define OPT3001_I2C_ADDR4_FLAGS		0x47
 
 /* OPT3001 registers */
 #define OPT3001_REG_RESULT		0x00

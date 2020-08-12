@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+ * Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -14,7 +14,6 @@
 #include "dma.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "host_command.h"
 #include "link_defs.h"
 #include "registers.h"
 #include "spi.h"
@@ -41,11 +40,17 @@
 static const struct dma_option dma_tx_option = {
 	STM32_DMAC_SPI1_TX, (void *)&SPI_TXDR,
 	STM32_DMA_CCR_MSIZE_8_BIT | STM32_DMA_CCR_PSIZE_8_BIT
+#ifdef CHIP_FAMILY_STM32F4
+	| STM32_DMA_CCR_CHANNEL(STM32_SPI1_TX_REQ_CH)
+#endif
 };
 
 static const struct dma_option dma_rx_option = {
 	STM32_DMAC_SPI1_RX, (void *)&SPI_RXDR,
 	STM32_DMA_CCR_MSIZE_8_BIT | STM32_DMA_CCR_PSIZE_8_BIT
+#ifdef CHIP_FAMILY_STM32F4
+	| STM32_DMA_CCR_CHANNEL(STM32_SPI1_RX_REQ_CH)
+#endif
 };
 
 /*
@@ -99,7 +104,7 @@ static const uint8_t out_preamble[4] = {
  * times in order to make sure it actually stays at the repeating byte after DMA
  * ends.
  *
- * See crbug.com/31390
+ * See crosbug.com/p/31390
  */
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32L4)
 #define EC_SPI_PAST_END_LENGTH 4
@@ -267,7 +272,7 @@ static void reply(dma_chan_t *txdma,
  * Sends a byte over SPI without DMA
  *
  * This is mostly used when we want to relay status bytes to the AP while we're
- * recieving the message and we're thinking about it.
+ * receiving the message and we're thinking about it.
  *
  * @note It may be sent 0, 1, or >1 times, depending on whether the host clocks
  * the bus or not. Basically, the EC is saying "if you ask me what my status is,
@@ -279,7 +284,7 @@ static void reply(dma_chan_t *txdma,
  */
 static void tx_status(uint8_t byte)
 {
-	stm32_spi_regs_t *spi = STM32_SPI1_REGS;
+	stm32_spi_regs_t *spi __attribute__((unused)) = STM32_SPI1_REGS;
 
 	SPI_TXDR = byte;
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32L4)
@@ -302,7 +307,7 @@ static void tx_status(uint8_t byte)
  */
 static void setup_for_transaction(void)
 {
-	stm32_spi_regs_t *spi = STM32_SPI1_REGS;
+	stm32_spi_regs_t *spi __attribute__((unused)) = STM32_SPI1_REGS;
 	volatile uint8_t dummy __attribute__((unused));
 
 	/* clear this as soon as possible */
@@ -343,7 +348,7 @@ static void setup_for_transaction(void)
 #endif
 }
 
-/* Forward declaraction */
+/* Forward declaration */
 static void spi_init(void);
 
 /*
@@ -424,7 +429,7 @@ static void spi_send_response_packet(struct host_packet *pkt)
 	((uint8_t *)pkt->response)[pkt->response_size + 0] = EC_SPI_PAST_END;
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32L4)
 	/* Make sure we are going to be outputting it properly when the DMA
-	 * ends due to the TX FIFO bug on the F0. See crbug.com/31390
+	 * ends due to the TX FIFO bug on the F0. See crosbug.com/p/31390
 	 */
 	((uint8_t *)pkt->response)[pkt->response_size + 1] = EC_SPI_PAST_END;
 	((uint8_t *)pkt->response)[pkt->response_size + 2] = EC_SPI_PAST_END;
@@ -453,7 +458,7 @@ static void spi_send_response_packet(struct host_packet *pkt)
  * Handle an event on the NSS pin
  *
  * A falling edge of NSS indicates that the master is starting a new
- * transaction. A rising edge indicates that we have finsihed
+ * transaction. A rising edge indicates that we have finished.
  *
  * @param signal	GPIO signal for the NSS pin
  */
@@ -563,7 +568,7 @@ void spi_event(enum gpio_signal signal)
 
 #ifdef CHIP_FAMILY_STM32F0
 		CPRINTS("WARNING: Protocol version 2 is not supported on the F0"
-			" line due to crbug.com/31390");
+			" line due to crosbug.com/p/31390");
 #endif
 
 		args.version = in_msg[0] - EC_CMD_VERSION0;
@@ -667,7 +672,12 @@ static void spi_init(void)
 	/* Delay 1 APB clock cycle after the clock is enabled */
 	clock_wait_bus_cycles(BUS_APB, 1);
 
-	/* Select the right DMA request for the variants using it */
+	/*
+	 * Select the right DMA request for the variants using it.
+	 * This is not required for STM32F4 since the channel (aka request) is
+	 * set directly in the respective dma_option. In fact, it would be
+	 * overridden in dma-stm32f4::prepare_stream().
+	 */
 #ifdef CHIP_FAMILY_STM32L4
 	dma_select_channel(STM32_DMAC_SPI1_TX, 1);
 	dma_select_channel(STM32_DMAC_SPI1_RX, 1);
@@ -709,15 +719,15 @@ DECLARE_HOOK(HOOK_INIT, spi_init, HOOK_PRIO_INIT_SPI);
 /**
  * Get protocol information
  */
-static enum ec_status spi_get_protocol_info(struct host_cmd_handler_args *args)
+enum ec_status spi_get_protocol_info(struct host_cmd_handler_args *args)
 {
 	struct ec_response_get_protocol_info *r = args->response;
 
 	memset(r, 0, sizeof(*r));
 #ifdef CONFIG_SPI_PROTOCOL_V2
-	r->protocol_versions |= (1 << 2);
+	r->protocol_versions |= BIT(2);
 #endif
-	r->protocol_versions |= (1 << 3);
+	r->protocol_versions |= BIT(3);
 	r->max_request_packet_size = SPI_MAX_REQUEST_SIZE;
 	r->max_response_packet_size = SPI_MAX_RESPONSE_SIZE;
 	r->flags = EC_PROTOCOL_INFO_IN_PROGRESS_SUPPORTED;
@@ -726,6 +736,3 @@ static enum ec_status spi_get_protocol_info(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO,
-		     spi_get_protocol_info,
-		     EC_VER_MASK(0));

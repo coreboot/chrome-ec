@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -42,7 +42,8 @@ static int find_gpio_port_index(uint32_t port_base)
 	return -1;
 }
 
-void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func)
+void gpio_set_alternate_function(uint32_t port, uint32_t mask,
+				enum gpio_alternate_func func)
 {
 	int port_index = find_gpio_port_index(port);
 	int cgmask;
@@ -56,12 +57,12 @@ void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func)
 	clock_enable_peripheral(CGC_OFFSET_GPIO, cgmask,
 			CGC_MODE_RUN | CGC_MODE_SLEEP);
 
-	if (func >= 0) {
+	if (func != GPIO_ALT_FUNC_NONE) {
 		int pctlmask = 0;
 		int i;
 		/* Expand mask from bits to nibbles */
 		for (i = 0; i < 8; i++) {
-			if (mask & (1 << i))
+			if (mask & BIT(i))
 				pctlmask |= 1 << (4 * i);
 		}
 
@@ -191,7 +192,7 @@ static int gpio_port_to_clock_gate_mask(uint32_t gpio_port)
 {
 	int index = find_gpio_port_index(gpio_port);
 
-	return index >= 0 ? (1 << index) : 0;
+	return index >= 0 ? BIT(index) : 0;
 }
 #endif
 
@@ -261,7 +262,8 @@ void gpio_pre_init(void)
 		gpio_set_flags_by_mask(g->port, g->mask, flags);
 
 		/* Use as GPIO, not alternate function */
-		gpio_set_alternate_function(g->port, g->mask, -1);
+		gpio_set_alternate_function(g->port, g->mask,
+					GPIO_ALT_FUNC_NONE);
 	}
 
 #ifdef CONFIG_LOW_POWER_IDLE

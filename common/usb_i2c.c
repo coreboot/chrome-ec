@@ -22,13 +22,17 @@
 
 
 #define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
-#define MAX_BYTES_IN_ONE_READING 254
 
 
 USB_I2C_CONFIG(i2c,
 	       USB_IFACE_I2C,
 	       USB_STR_I2C_NAME,
 	       USB_EP_I2C)
+
+static int (*cros_cmd_handler)(void *data_in,
+			       size_t in_size,
+			       void *data_out,
+			       size_t out_size);
 
 static int16_t usb_i2c_map_error(int error)
 {
@@ -40,7 +44,12 @@ static int16_t usb_i2c_map_error(int error)
 	}
 }
 
-static uint8_t usb_i2c_read_packet(struct usb_i2c_config const *config)
+/*
+ * Return value should be large enough to accommodate the entire read queue
+ * buffer size. Let's use 4 bytes in case future designs have a lot of RAM and
+ * allow for large buffers.
+ */
+static uint32_t usb_i2c_read_packet(struct usb_i2c_config const *config)
 {
 	return QUEUE_REMOVE_UNITS(config->consumer.queue, config->buffer,
 		queue_count(config->consumer.queue));
@@ -54,35 +63,52 @@ static void usb_i2c_write_packet(struct usb_i2c_config const *config,
 
 static uint8_t usb_i2c_executable(struct usb_i2c_config const *config)
 {
-	/*
-	 * In order to support larger write payload, we need to peek
-	 * the queue to see if we need to wait for more data.
-	 */
+	static size_t expected_size;
 
-	uint8_t write_count;
+	if (!expected_size) {
+		uint8_t peek[4];
 
-	if (queue_peek_units(config->consumer.queue, &write_count, 2, 1) == 1
-		&& (write_count + 4) > queue_count(config->consumer.queue)) {
 		/*
-		 * Feed me more data, please.
-		 * Reuse the buffer in usb_i2c_config to send ACK packet.
+		 * In order to support larger write payload, we need to peek
+		 * the queue to see if we need to wait for more data.
 		 */
-		config->buffer[0] = USB_I2C_SUCCESS;
-		config->buffer[1] = 0;
-		usb_i2c_write_packet(config, 4);
-		return 0;
+		if (queue_peek_units(config->consumer.queue,
+				     peek, 0, sizeof(peek))
+		    != sizeof(peek)) {
+			/* Not enough data to calculate expected_size. */
+			return 0;
+		}
+		/*
+		 * The first four bytes of the packet will describe its
+		 * expected size.
+		 */
+		/* Header bytes  and extra rc bytes, if present. */
+		if (peek[3] & 0x80)
+			expected_size = 6;
+		else
+			expected_size = 4;
+
+		/* write count */
+		expected_size += (((size_t)peek[0] & 0xf0) << 4) | peek[2];
 	}
-	return 1;
+
+
+	if (queue_count(config->consumer.queue) >= expected_size) {
+		expected_size = 0;
+		return 1;
+	}
+
+	return 0;
 }
 
-void usb_i2c_execute(struct usb_i2c_config const *config)
+static void usb_i2c_execute(struct usb_i2c_config const *config)
 {
 	/* Payload is ready to execute. */
-	uint8_t count       = usb_i2c_read_packet(config);
-	int portindex       = (config->buffer[0] >> 0) & 0xff;
-	/* Convert 7-bit slave address to chromium EC 8-bit address. */
-	uint8_t slave_addr  = (config->buffer[0] >> 7) & 0xfe;
-	int write_count     = (config->buffer[1] >> 0) & 0xff;
+	uint32_t count      = usb_i2c_read_packet(config);
+	int portindex       = (config->buffer[0] >> 0) & 0xf;
+	uint16_t addr_flags = (config->buffer[0] >> 8) & 0x7f;
+	int write_count     = ((config->buffer[0] << 4) & 0xf00) |
+		((config->buffer[1] >> 0) & 0xff);
 	int read_count      = (config->buffer[1] >> 8) & 0xff;
 	int offset          = 0;    /* Offset for extended reading header. */
 
@@ -107,6 +133,18 @@ void usb_i2c_execute(struct usb_i2c_config const *config)
 		config->buffer[0] = USB_I2C_READ_COUNT_INVALID;
 	} else if (portindex >= i2c_ports_used) {
 		config->buffer[0] = USB_I2C_PORT_INVALID;
+	} else if (addr_flags == USB_I2C_CMD_ADDR_FLAGS) {
+		/*
+		 * This is a non-i2c command, invoke the handler if it has
+		 * been registered, if not - report the appropriate error.
+		 */
+		if (!cros_cmd_handler)
+			config->buffer[0] = USB_I2C_MISSING_HANDLER;
+		else
+			config->buffer[0] = cros_cmd_handler(config->buffer + 2,
+							     write_count,
+							     config->buffer + 2,
+							     read_count);
 	} else {
 		int ret;
 
@@ -116,12 +154,11 @@ void usb_i2c_execute(struct usb_i2c_config const *config)
 		 * knows about.  It should behave closer to
 		 * EC_CMD_I2C_PASSTHRU, which can protect ports and ranges.
 		 */
-		ret = i2c_xfer(i2c_ports[portindex].port,
-				 slave_addr,
-				 (uint8_t *)(config->buffer + 2) + offset,
-				 write_count,
-				 (uint8_t *)(config->buffer + 2),
-				 read_count);
+		ret = i2c_xfer(i2c_ports[portindex].port, addr_flags,
+			       (uint8_t *)(config->buffer + 2) + offset,
+			       write_count,
+			       (uint8_t *)(config->buffer + 2),
+			       read_count);
 		config->buffer[0] = usb_i2c_map_error(ret);
 	}
 	usb_i2c_write_packet(config, read_count + 4);
@@ -145,3 +182,15 @@ static void usb_i2c_written(struct consumer const *consumer, size_t count)
 struct consumer_ops const usb_i2c_consumer_ops = {
 	.written = usb_i2c_written,
 };
+
+int usb_i2c_register_cros_cmd_handler(int (*cmd_handler)
+				      (void *data_in,
+				       size_t in_size,
+				       void *data_out,
+				       size_t out_size))
+{
+	if (cros_cmd_handler)
+		return -1;
+	cros_cmd_handler = cmd_handler;
+	return 0;
+}

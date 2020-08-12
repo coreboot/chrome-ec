@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -42,6 +42,8 @@ extern const struct hook_data __hooks_chipset_suspend[];
 extern const struct hook_data __hooks_chipset_suspend_end[];
 extern const struct hook_data __hooks_chipset_shutdown[];
 extern const struct hook_data __hooks_chipset_shutdown_end[];
+extern const struct hook_data __hooks_chipset_shutdown_complete[];
+extern const struct hook_data __hooks_chipset_shutdown_complete_end[];
 extern const struct hook_data __hooks_chipset_reset[];
 extern const struct hook_data __hooks_chipset_reset_end[];
 extern const struct hook_data __hooks_ac_change[];
@@ -56,10 +58,6 @@ extern const struct hook_data __hooks_pwrbtn_change[];
 extern const struct hook_data __hooks_pwrbtn_change_end[];
 extern const struct hook_data __hooks_battery_soc_change[];
 extern const struct hook_data __hooks_battery_soc_change_end[];
-#ifdef CONFIG_CASE_CLOSED_DEBUG_V1
-extern const struct hook_data __hooks_ccd_change[];
-extern const struct hook_data __hooks_ccd_change_end[];
-#endif
 #ifdef CONFIG_USB_SUSPEND
 extern const struct hook_data __hooks_usb_change[];
 extern const struct hook_data __hooks_usb_change_end[];
@@ -68,6 +66,10 @@ extern const struct hook_data __hooks_tick[];
 extern const struct hook_data __hooks_tick_end[];
 extern const struct hook_data __hooks_second[];
 extern const struct hook_data __hooks_second_end[];
+extern const struct hook_data __hooks_usb_pd_disconnect[];
+extern const struct hook_data __hooks_usb_pd_disconnect_end[];
+extern const struct hook_data __hooks_usb_pd_connect[];
+extern const struct hook_data __hooks_usb_pd_connect_end[];
 
 /* Deferrable functions and firing times*/
 extern const struct deferred_data __deferred_funcs[];
@@ -91,6 +93,7 @@ extern const struct mkbp_event_source __mkbp_evt_srcs_end[];
 extern const struct irq_priority __irqprio[];
 extern const struct irq_priority __irqprio_end[];
 extern const void *__irqhandler[];
+extern const struct irq_def __irq_data[], __irq_data_end[];
 
 /* Shared memory buffer.  Use via shared_mem.h interface. */
 extern uint8_t __shared_mem_buf[];
@@ -102,15 +105,25 @@ extern uint8_t *__data_libtpm2_start;
 extern uint8_t *__data_libtpm2_end;
 
 /* Image sections. */
-extern const void *__ro_end;
+extern const void *__data_lma_start;
 extern const void *__data_start;
 extern const void *__data_end;
 
+/* DRAM image sections. */
+extern const void *__dram_data_lma_start;
+extern void *__dram_data_start;
+extern void *__dram_data_end;
+extern void *__dram_bss_start;
+extern void *__dram_bss_end;
+
 /* Helper for special chip-specific memory sections */
-#ifdef CONFIG_CHIP_MEMORY_REGIONS
+#if defined(CONFIG_CHIP_MEMORY_REGIONS) || defined(CONFIG_DRAM_BASE)
 #define __SECTION(name) __attribute__((section("." STRINGIFY(name) ".50_auto")))
+#define __SECTION_KEEP(name)                                                   \
+	__keep __attribute__((section("." STRINGIFY(name) ".keep.50_auto")))
 #else
 #define __SECTION(name)
+#define __SECTION_KEEP(name)
 #endif /* CONFIG_MEMORY_REGIONS */
 #ifdef CONFIG_CHIP_UNCACHED_REGION
 #define __uncached __SECTION(CONFIG_CHIP_UNCACHED_REGION)
@@ -119,3 +132,10 @@ extern const void *__data_end;
 #endif
 
 #endif /* __CROS_EC_LINK_DEFS_H */
+
+#ifdef CONFIG_PRESERVE_LOGS
+#define __preserved_logs(name)                                                 \
+	__attribute__((section(".preserved_logs." STRINGIFY(name))))
+#else
+#define __preserved_logs(name)
+#endif

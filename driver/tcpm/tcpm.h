@@ -22,68 +22,87 @@
 #endif
 
 #ifndef CONFIG_USB_PD_TCPC
-extern const struct tcpc_config_t tcpc_config[];
 
 /* I2C wrapper functions - get I2C port / slave addr from config struct. */
 #ifndef CONFIG_USB_PD_TCPC_LOW_POWER
-static inline int tcpc_write(int port, int reg, int val)
+static inline int tcpc_addr_write(int port, int i2c_addr, int reg, int val)
 {
-	return i2c_write8(tcpc_config[port].i2c_host_port,
-			  tcpc_config[port].i2c_slave_addr, reg, val);
+	return i2c_write8(tcpc_config[port].i2c_info.port,
+			  i2c_addr, reg, val);
 }
 
-static inline int tcpc_write16(int port, int reg, int val)
+static inline int tcpc_addr_write16(int port, int i2c_addr, int reg, int val)
 {
-	return i2c_write16(tcpc_config[port].i2c_host_port,
-			   tcpc_config[port].i2c_slave_addr, reg, val);
+	return i2c_write16(tcpc_config[port].i2c_info.port,
+			   i2c_addr, reg, val);
 }
 
-static inline int tcpc_read(int port, int reg, int *val)
+static inline int tcpc_addr_read(int port, int i2c_addr, int reg, int *val)
 {
-	return i2c_read8(tcpc_config[port].i2c_host_port,
-			 tcpc_config[port].i2c_slave_addr, reg, val);
+	return i2c_read8(tcpc_config[port].i2c_info.port,
+			 i2c_addr, reg, val);
 }
 
-static inline int tcpc_read16(int port, int reg, int *val)
+static inline int tcpc_addr_read16(int port, int i2c_addr, int reg, int *val)
 {
-	return i2c_read16(tcpc_config[port].i2c_host_port,
-			  tcpc_config[port].i2c_slave_addr, reg, val);
+	return i2c_read16(tcpc_config[port].i2c_info.port,
+			  i2c_addr, reg, val);
 }
 
 static inline int tcpc_xfer(int port, const uint8_t *out, int out_size,
 			    uint8_t *in, int in_size)
 {
-	return i2c_xfer(tcpc_config[port].i2c_host_port,
-			tcpc_config[port].i2c_slave_addr, out, out_size, in,
-			in_size);
+	return i2c_xfer(tcpc_config[port].i2c_info.port,
+			tcpc_config[port].i2c_info.addr_flags,
+			out, out_size, in, in_size);
 }
 
 static inline int tcpc_xfer_unlocked(int port, const uint8_t *out, int out_size,
 			    uint8_t *in, int in_size, int flags)
 {
-	return i2c_xfer_unlocked(tcpc_config[port].i2c_host_port,
-			tcpc_config[port].i2c_slave_addr, out, out_size, in,
-			in_size, flags);
+	return i2c_xfer_unlocked(tcpc_config[port].i2c_info.port,
+				 tcpc_config[port].i2c_info.addr_flags,
+				 out, out_size, in, in_size, flags);
 }
 
 static inline int tcpc_read_block(int port, int reg, uint8_t *in, int size)
 {
-	return i2c_read_block(tcpc_config[port].i2c_host_port,
-			tcpc_config[port].i2c_slave_addr, reg, in, size);
+	return i2c_read_block(tcpc_config[port].i2c_info.port,
+			      tcpc_config[port].i2c_info.addr_flags,
+			      reg, in, size);
 }
 
 static inline int tcpc_write_block(int port, int reg,
 		const uint8_t *out, int size)
 {
-	return i2c_write_block(tcpc_config[port].i2c_host_port,
-			tcpc_config[port].i2c_slave_addr, reg, out, size);
+	return i2c_write_block(tcpc_config[port].i2c_info.port,
+			       tcpc_config[port].i2c_info.addr_flags,
+			       reg, out, size);
+}
+
+static inline int tcpc_update8(int port, int reg,
+			       uint8_t mask,
+			       enum mask_update_action action)
+{
+	return i2c_update8(tcpc_config[port].i2c_info.port,
+			   tcpc_config[port].i2c_info.addr_flags,
+			   reg, mask, action);
+}
+
+static inline int tcpc_update16(int port, int reg,
+				uint16_t mask,
+				enum mask_update_action action)
+{
+	return i2c_update16(tcpc_config[port].i2c_info.port,
+			    tcpc_config[port].i2c_info.addr_flags,
+			    reg, mask, action);
 }
 
 #else /* !CONFIG_USB_PD_TCPC_LOW_POWER */
-int tcpc_write(int port, int reg, int val);
-int tcpc_write16(int port, int reg, int val);
-int tcpc_read(int port, int reg, int *val);
-int tcpc_read16(int port, int reg, int *val);
+int tcpc_addr_write(int port, int i2c_addr, int reg, int val);
+int tcpc_addr_write16(int port, int i2c_addr, int reg, int val);
+int tcpc_addr_read(int port, int i2c_addr, int reg, int *val);
+int tcpc_addr_read16(int port, int i2c_addr, int reg, int *val);
 int tcpc_read_block(int port, int reg, uint8_t *in, int size);
 int tcpc_write_block(int port, int reg, const uint8_t *out, int size);
 int tcpc_xfer(int port, const uint8_t *out, int out_size,
@@ -91,11 +110,40 @@ int tcpc_xfer(int port, const uint8_t *out, int out_size,
 int tcpc_xfer_unlocked(int port, const uint8_t *out, int out_size,
 		uint8_t *in, int in_size, int flags);
 
+int tcpc_update8(int port, int reg,
+		 uint8_t mask, enum mask_update_action action);
+int tcpc_update16(int port, int reg,
+		  uint16_t mask, enum mask_update_action action);
+
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
+
+static inline int tcpc_write(int port, int reg, int val)
+{
+	return tcpc_addr_write(port,
+			       tcpc_config[port].i2c_info.addr_flags, reg, val);
+}
+
+static inline int tcpc_write16(int port, int reg, int val)
+{
+	return tcpc_addr_write16(port,
+			tcpc_config[port].i2c_info.addr_flags, reg, val);
+}
+
+static inline int tcpc_read(int port, int reg, int *val)
+{
+	return tcpc_addr_read(port,
+			      tcpc_config[port].i2c_info.addr_flags, reg, val);
+}
+
+static inline int tcpc_read16(int port, int reg, int *val)
+{
+	return tcpc_addr_read16(port,
+			tcpc_config[port].i2c_info.addr_flags, reg, val);
+}
 
 static inline void tcpc_lock(int port, int lock)
 {
-	i2c_lock(tcpc_config[port].i2c_host_port, lock);
+	i2c_lock(tcpc_config[port].i2c_info.port, lock);
 }
 
 /* TCPM driver wrapper function */
@@ -119,14 +167,15 @@ static inline int tcpm_release(int port)
 	return tcpc_config[port].drv->release(port);
 }
 
-static inline int tcpm_get_cc(int port, int *cc1, int *cc2)
+static inline int tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
+	enum tcpc_cc_voltage_status *cc2)
 {
 	return tcpc_config[port].drv->get_cc(port, cc1, cc2);
 }
 
-static inline int tcpm_get_vbus_level(int port)
+static inline bool tcpm_check_vbus_level(int port, enum vbus_level level)
 {
-	return tcpc_config[port].drv->get_vbus_level(port);
+	return tcpc_config[port].drv->check_vbus_level(port, level);
 }
 
 static inline int tcpm_select_rp_value(int port, int rp)
@@ -139,7 +188,7 @@ static inline int tcpm_set_cc(int port, int pull)
 	return tcpc_config[port].drv->set_cc(port, pull);
 }
 
-static inline int tcpm_set_polarity(int port, int polarity)
+static inline int tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	return tcpc_config[port].drv->set_polarity(port, polarity);
 }
@@ -158,6 +207,14 @@ static inline int tcpm_set_msg_header(int port, int power_role, int data_role)
 static inline int tcpm_set_rx_enable(int port, int enable)
 {
 	return tcpc_config[port].drv->set_rx_enable(port, enable);
+}
+
+static inline void tcpm_enable_auto_discharge_disconnect(int port, int enable)
+{
+	const struct tcpm_drv *tcpc = tcpc_config[port].drv;
+
+	if (tcpc->tcpc_enable_auto_discharge_disconnect)
+		tcpc->tcpc_enable_auto_discharge_disconnect(port, enable);
 }
 
 /**
@@ -220,24 +277,24 @@ static inline int tcpm_enter_low_power_mode(int port)
 #endif
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
-static inline int tcpc_i2c_read(const int port, const int addr,
+static inline int tcpc_i2c_read(const int port, const uint16_t addr_flags,
 				const int reg, int *data)
 {
 	return tcpc_read(port, reg, data);
 }
 
-static inline int tcpc_i2c_write(const int port, const int addr,
+static inline int tcpc_i2c_write(const int port, const uint16_t addr_flags,
 				 const int reg, int data)
 {
 	return tcpc_write(port, reg, data);
 }
 #endif
 
-static inline int tcpm_get_chip_info(int port, int renew,
-				     struct ec_response_pd_chip_info **info)
+static inline int tcpm_get_chip_info(int port, int live,
+				     struct ec_response_pd_chip_info_v1 **info)
 {
 	if (tcpc_config[port].drv->get_chip_info)
-		return tcpc_config[port].drv->get_chip_info(port, renew, info);
+		return tcpc_config[port].drv->get_chip_info(port, live, info);
 	return EC_ERROR_UNIMPLEMENTED;
 }
 
@@ -261,16 +318,18 @@ int tcpm_init(int port);
  *
  * @return EC_SUCCESS or error
  */
-int tcpm_get_cc(int port, int *cc1, int *cc2);
+int tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
+	enum tcpc_cc_voltage_status *cc2);
 
 /**
- * Read VBUS
+ * Check VBUS level
  *
  * @param port Type-C port number
+ * @param level safe level voltage to check against
  *
- * @return 0 => VBUS not detected, 1 => VBUS detected
+ * @return False => VBUS not at level, True => VBUS at level
  */
-int tcpm_get_vbus_level(int port);
+bool tcpm_check_vbus_level(int port, enum vbus_level level);
 
 /**
  * Set the value of the CC pull-up used when we are a source.
@@ -296,17 +355,17 @@ int tcpm_set_cc(int port, int pull);
  * Set polarity
  *
  * @param port Type-C port number
- * @param polarity 0=> transmit on CC1, 1=> transmit on CC2
+ * @param polarity port polarity
  *
  * @return EC_SUCCESS or error
  */
-int tcpm_set_polarity(int port, int polarity);
+int tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity);
 
 /**
  * Set Vconn.
  *
  * @param port Type-C port number
- * @param polarity Polarity of the CC line to read
+ * @param enable Enable/Disable Vconn
  *
  * @return EC_SUCCESS or error
  */
@@ -332,6 +391,14 @@ int tcpm_set_msg_header(int port, int power_role, int data_role);
  * @return EC_SUCCESS or error
  */
 int tcpm_set_rx_enable(int port, int enable);
+
+/**
+ * Enable Auto Discharge Disconnect
+ *
+ * @param port Type-C port number
+ * @param enable true for enable, false for disable
+ */
+void tcpm_enable_auto_discharge_disconnect(int port, int enable);
 
 /**
  * Transmit PD message
@@ -378,5 +445,36 @@ int tcpm_has_pending_message(int port);
  * race conditions.
  */
 void tcpm_clear_pending_messages(int port);
+
+/**
+ * Enable/Disable TCPC Fast Role Swap detection
+ *
+ * @param port Type-C port number
+ * @param enable FRS enable (true) disable (false)
+ */
+static inline void tcpm_set_frs_enable(int port, int enable)
+{
+	const struct tcpm_drv *tcpc;
+
+	/*
+	 * set_frs_enable will be set to tcpci_tcp_fast_role_swap_enable
+	 * if it is handled by the tcpci for the tcpc chipset
+	 */
+	tcpc = tcpc_config[port].drv;
+	if (tcpc->set_frs_enable)
+		tcpc->set_frs_enable(port, enable);
+}
+
+#ifdef CONFIG_CMD_TCPC_DUMP
+static inline void tcpm_dump_registers(int port)
+{
+	const struct tcpm_drv *tcpc = tcpc_config[port].drv;
+
+	if (tcpc->dump_registers)
+		tcpc->dump_registers(port);
+	else
+		tcpc_dump_std_registers(port);
+}
+#endif /* defined(CONFIG_CMD_TCPC_DUMP) */
 
 #endif

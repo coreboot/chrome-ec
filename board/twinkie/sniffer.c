@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -32,7 +32,7 @@
 #define RX_COUNT (16 * EP_PAYLOAD_SIZE)
 
 /* Task event for the USB transfer interrupt */
-#define USB_EVENTS TASK_EVENT_CUSTOM(3)
+#define USB_EVENT TASK_EVENT_CUSTOM_BIT(0)
 
 /* Bitmap of enabled capture channels : CC1+CC2 by default */
 static uint8_t channel_mask = 0x3;
@@ -109,7 +109,7 @@ static void ep_tx(void)
 								 : EP_BUF_SIZE;
 	STM32_TOGGLE_EP(USB_EP_SNIFFER, EP_TX_MASK, EP_TX_VALID, 0);
 	/* wake up the processing */
-	task_set_event(TASK_ID_SNIFFER, 1 << b, 0);
+	task_set_event(TASK_ID_SNIFFER, USB_EVENT, 0);
 }
 
 static void ep_event(enum usb_ep_event evt)
@@ -218,7 +218,7 @@ void tim_dma_handler(void)
 	else
 		tim_rx1_handler(stat);
 	/* time to process the samples */
-	task_set_event(TASK_ID_SNIFFER, TASK_EVENT_CUSTOM(stat), 0);
+	task_set_event(TASK_ID_SNIFFER, USB_EVENT, 0);
 }
 DECLARE_IRQ(STM32_IRQ_DMA_CHANNEL_4_7, tim_dma_handler, 1);
 
@@ -256,7 +256,7 @@ static void rx_timer_init(int tim_id, timer_ctlr_t *tim, int ch_idx, int up_idx)
 void sniffer_init(void)
 {
 	/* remap TIM1 CH1/2/3 to DMA channel 6 */
-	STM32_SYSCFG_CFGR1 |= 1 << 28;
+	STM32_SYSCFG_CFGR1 |= BIT(28);
 
 	/* TIM1 CH1 for CC1 RX */
 	rx_timer_init(TIM_RX1, (void *)STM32_TIM_BASE(TIM_RX1),
@@ -266,7 +266,7 @@ void sniffer_init(void)
 		      TIM_RX2_CCR_IDX, 2);
 
 	/* turn on COMP/SYSCFG */
-	STM32_RCC_APB2ENR |= 1 << 0;
+	STM32_RCC_APB2ENR |= BIT(0);
 	STM32_COMP_CSR = STM32_COMP_CMP1EN | STM32_COMP_CMP1MODE_HSPEED |
 			 STM32_COMP_CMP1INSEL_VREF12 |
 			 STM32_COMP_CMP1OUTSEL_TIM1_IC1 |
@@ -301,7 +301,7 @@ void sniffer_task(void)
 		task_wait_event(-1);
 		/* send the available samples over USB if we have a buffer*/
 		while (filled_dma && free_usb) {
-			while (!(filled_dma & (1 << d))) {
+			while (!(filled_dma & BIT(d))) {
 				d = (d + 1) & 31;
 				off += EP_PAYLOAD_SIZE;
 				if (off >= RX_COUNT)

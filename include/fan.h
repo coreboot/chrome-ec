@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -33,12 +33,16 @@ struct fan_t {
 
 /* Values for .flags field */
 /*   Enable automatic RPM control using tach input */
-#define FAN_USE_RPM_MODE   (1 << 0)
+#define FAN_USE_RPM_MODE   BIT(0)
 /*   Require a higher duty cycle to start up than to keep running */
-#define FAN_USE_FAST_START (1 << 1)
+#define FAN_USE_FAST_START BIT(1)
 
 /* The list of fans is instantiated in board.c. */
+#ifdef CONFIG_FAN_DYNAMIC
 extern struct fan_t fans[];
+#else
+extern const struct fan_t fans[];
+#endif
 
 /* For convenience */
 #define FAN_CH(fan)	fans[fan].conf->ch
@@ -115,5 +119,11 @@ enum fan_status fan_get_status(int ch);
 
 /* Initialize the HW according to the desired flags */
 void fan_channel_setup(int ch, unsigned int flags);
+
+int fan_get_count(void);
+
+void fan_set_count(int count);
+
+int is_thermal_control_enabled(int idx);
 
 #endif  /* __CROS_EC_FAN_H */

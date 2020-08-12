@@ -22,7 +22,7 @@
 #ifndef __CROS_EC_ALS_SI114X_H
 #define __CROS_EC_ALS_SI114X_H
 
-#define SI114X_ADDR                     (0x5a << 1)
+#define SI114X_ADDR_FLAGS               0x5a
 
 #define SI114X_REG_PART_ID		0x00
 #define SI114X_SI1141_ID                     0x41
@@ -75,7 +75,7 @@
 #define SI114X_REG_PS2_DATA1		0x29
 #define SI114X_REG_PS3_DATA0		0x2a
 #define SI114X_REG_PS3_DATA1		0x2b
-#define SI114X_PS_INVERSION(_data) ((1 << 16) / (_data))
+#define SI114X_PS_INVERSION(_data) (BIT(16) / (_data))
 #define SI114X_REG_AUX_DATA0		0x2c
 #define SI114X_REG_AUX_DATA1		0x2d
 #define SI114X_REG_PARAM_RD		0x2e
@@ -219,6 +219,9 @@
 #define SI114X_PROX_MAX_FREQ            50000
 #define SI114X_LIGHT_MIN_FREQ           504
 #define SI114X_LIGHT_MAX_FREQ           50000
+#if (CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ <= SI114X_PROX_MAX_FREQ)
+#error "EC too slow for light sensor"
+#endif
 
 extern const struct accelgyro_drv si114x_drv;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,9 +7,9 @@
 #define __CROS_EC_CHARGE_MANAGER_H
 
 #include "common.h"
+#include "ec_commands.h"
 
 /* Charge port that indicates no active port */
-#define CHARGE_SUPPLIER_NONE -1
 #define CHARGE_PORT_NONE -1
 #define CHARGE_CEIL_NONE -1
 
@@ -31,6 +31,7 @@ defined(TEST_BUILD)
 
 /* Commonly-used charge suppliers listed in no particular order */
 enum charge_supplier {
+	CHARGE_SUPPLIER_NONE = -1,
 	CHARGE_SUPPLIER_PD,
 	CHARGE_SUPPLIER_TYPEC,
 	CHARGE_SUPPLIER_TYPEC_DTS,
@@ -39,14 +40,26 @@ enum charge_supplier {
 	CHARGE_SUPPLIER_BC12_CDP,
 	CHARGE_SUPPLIER_BC12_SDP,
 	CHARGE_SUPPLIER_PROPRIETARY,
+	CHARGE_SUPPLIER_TYPEC_UNDER_1_5A,
 	CHARGE_SUPPLIER_OTHER,
 	CHARGE_SUPPLIER_VBUS,
 #endif /* CHARGE_MANAGER_BC12 */
 #if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
 	CHARGE_SUPPLIER_DEDICATED,
 #endif
+#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
+	CHARGE_SUPPLIER_WPC_BPP,
+	CHARGE_SUPPLIER_WPC_EPP,
+	CHARGE_SUPPLIER_WPC_GPP,
+#endif
 	CHARGE_SUPPLIER_COUNT
 };
+
+/*
+ * Charge supplier priority: lower number indicates higher priority.
+ * Default priority is in charge_manager.c. It can be overridden by boards.
+ */
+extern const int supplier_priority[];
 
 /* Charge tasks report available current and voltage */
 struct charge_port_info {
@@ -57,9 +70,10 @@ struct charge_port_info {
 /**
  * Called by charging tasks to update their available charge.
  *
- * @param supplier		Charge supplier to update.
- * @param port			Charge port to update.
- * @param charge		Charge port current / voltage.
+ * @param supplier	Charge supplier to update.
+ * @param port		Charge port to update.
+ * @param charge	Charge port current / voltage. If NULL, current = 0
+ * 			voltage = 0 will be used.
  */
 void charge_manager_update_charge(int supplier,
 				  int port,
@@ -99,12 +113,31 @@ enum ceil_requestor {
 	CEIL_REQUESTOR_COUNT,
 };
 
-#define CHARGE_PORT_COUNT \
-		(CONFIG_USB_PD_PORT_COUNT + CONFIG_DEDICATED_CHARGE_PORT_COUNT)
-#if (CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0) && !defined(DEDICATED_CHARGE_PORT)
-#error "DEDICATED_CHARGE_PORT must be defined"
-#endif
+#define CHARGE_PORT_COUNT (CONFIG_USB_PD_PORT_MAX_COUNT + \
+			   CONFIG_DEDICATED_CHARGE_PORT_COUNT)
+#if (CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0)
 
+/**
+ * By default, dedicated port has following properties:
+ *
+ * - dedicated port is sink only.
+ * - dedicated port is always connected.
+ * - dedicated port is given highest priority (supplier type is always
+ *   CHARGE_SUPPLIER_DEDICATED).
+ * - dualrole capability of dedicated port is always CAP_DEDICATED.
+ * - there's only one dedicated port, its number is larger than PD port number.
+ *
+ * Sink property can be customized by implementing board_charge_port_is_sink()
+ * and board_fill_source_power_info().
+ * Connected can be customized by implementing board_charge_port_is_connected().
+ */
+#if !defined(DEDICATED_CHARGE_PORT)
+#error "DEDICATED_CHARGE_PORT must be defined"
+#elif DEDICATED_CHARGE_PORT < CONFIG_USB_PD_PORT_MAX_COUNT
+#error "DEDICATED_CHARGE_PORT must larger than pd port numbers"
+#endif /* !defined(DEDICATED_CHARGE_PORT) */
+
+#endif /* CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0 */
 
 /**
  * Update charge ceiling for a given port. The ceiling can be set independently
@@ -173,6 +206,13 @@ int charge_manager_get_charger_current(void);
  */
 int charge_manager_get_charger_voltage(void);
 
+/**
+ * Get the charger supplier.
+ *
+ * @return	enum charge_supplier
+ */
+enum charge_supplier charge_manager_get_supplier(void);
+
 #ifdef CONFIG_USB_PD_LOGGING
 /* Save power state log entry for the given port */
 void charge_manager_save_log(int port);
@@ -236,5 +276,33 @@ int board_vbus_source_enabled(int port);
  */
 enum adc_channel board_get_vbus_adc(int port);
 #endif /* CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT */
+
+/**
+ * Board specific callback to check if the given port is sink.
+ *
+ * @param port	Dedicated charge port.
+ * @return 1 if the port is sink.
+ */
+__override_proto int board_charge_port_is_sink(int port);
+
+/**
+ * Board specific callback to check if the given port is connected.
+ *
+ * @param port	Dedicated charge port.
+ * @return 1 if the port is connected.
+ */
+__override_proto int board_charge_port_is_connected(int port);
+
+/**
+ * Board specific callback to fill passed power_info structure with current info
+ * about the passed dedicate port.
+ * This function is responsible for filling r->meas.* and r->max_power.
+ *
+ * @param port	Dedicated charge port.
+ * @param r	USB PD power info to be updated.
+ */
+__override_proto
+void board_fill_source_power_info(int port,
+				  struct ec_response_usb_pd_power_info *r);
 
 #endif /* __CROS_EC_CHARGE_MANAGER_H */

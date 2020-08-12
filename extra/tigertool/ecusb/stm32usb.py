@@ -57,8 +57,10 @@ class Susb(object):
   def _find_device(self):
     """Set up the usb endpoint"""
     # Find the stm32.
-    dev_list = usb.core.find(idVendor=self._vendor, idProduct=self._product,
+    dev_g = usb.core.find(idVendor=self._vendor, idProduct=self._product,
                              find_all=True)
+    dev_list = list(dev_g)
+
     if not dev_list:
       raise SusbError('USB device not found')
 
@@ -66,7 +68,7 @@ class Susb(object):
     dev = None
     if self._serialname:
       for d in dev_list:
-        dev_serial = usb.util.get_string(d, 256, d.iSerialNumber)
+        dev_serial = usb.util.get_string(d, d.iSerialNumber)
         if dev_serial == self._serialname:
           dev = d
           break
@@ -84,6 +86,8 @@ class Susb(object):
       dev.set_configuration()
     except usb.core.USBError:
       pass
+
+    self._dev = dev
 
     # Get an endpoint instance.
     cfg = dev.get_active_configuration()
@@ -106,3 +110,6 @@ class Susb(object):
     write_ep_number = intf.bInterfaceNumber + self.WRITE_ENDPOINT
     write_ep = usb.util.find_descriptor(intf, bEndpointAddress=write_ep_number)
     self._write_ep = write_ep
+
+  def close(self):
+    usb.util.dispose_resources(self._dev)

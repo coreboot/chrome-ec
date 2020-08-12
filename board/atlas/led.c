@@ -17,15 +17,14 @@ const enum ec_led_id supported_led_ids[] = {
 };
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-/* We may not be using the blue channel long term. */
 struct pwm_led led_color_map[EC_LED_COLOR_COUNT] = {
 				/* Red, Green, Blue */
 	[EC_LED_COLOR_RED]    = {  70,   0,   0 },
 	[EC_LED_COLOR_GREEN]  = {   0,  35,   0 },
 	[EC_LED_COLOR_BLUE]   = {   0,   0, 100 },
 	[EC_LED_COLOR_YELLOW] = {  55,  15,   0 },
-	[EC_LED_COLOR_WHITE]  = {  50,  30,  15 },
-	[EC_LED_COLOR_AMBER]  = {  65,   5,   0 },
+	[EC_LED_COLOR_WHITE]  = {  62, 100,  31 },
+	[EC_LED_COLOR_AMBER]  = { 100,  31,   0 },
 };
 
 /*
@@ -36,15 +35,19 @@ struct pwm_led led_color_map[EC_LED_COLOR_COUNT] = {
 struct pwm_led pwm_leds[CONFIG_LED_PWM_COUNT] = {
 	[PWM_LED0] = {
 		/* left port LEDs */
-		PWM_CH_DB1_LED_RED,
-		PWM_CH_DB1_LED_GREEN,
-		PWM_CH_DB1_LED_BLUE,
+		.ch0 = PWM_CH_DB1_LED_RED,
+		.ch1 = PWM_CH_DB1_LED_GREEN,
+		.ch2 = PWM_CH_DB1_LED_BLUE,
+		.enable = &pwm_enable,
+		.set_duty = &pwm_set_duty,
 	},
 	[PWM_LED1] = {
 		/* right port LEDs */
-		PWM_CH_DB0_LED_RED,
-		PWM_CH_DB0_LED_GREEN,
-		PWM_CH_DB0_LED_BLUE,
+		.ch0 = PWM_CH_DB0_LED_RED,
+		.ch1 = PWM_CH_DB0_LED_GREEN,
+		.ch2 = PWM_CH_DB0_LED_BLUE,
+		.enable = &pwm_enable,
+		.set_duty = &pwm_set_duty,
 	},
 };
 

@@ -17,6 +17,7 @@
 #include "driver/charger/bd9995x.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/tcpm.h"
+#include "driver/usb_mux/pi3usb3x532.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -57,26 +58,6 @@
 
 #include "gpio_list.h"
 
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-#ifdef CONFIG_POWER_S0IX
-	{GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-#endif
-	{GPIO_RSMRST_L_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L"},
-	{GPIO_PCH_SLP_S3_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{GPIO_PCH_SLP_S4_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_SUSPWRNACK,     POWER_SIGNAL_ACTIVE_HIGH,
-	 "SUSPWRNACK_DEASSERTED"},
-
-	{GPIO_ALL_SYS_PGOOD,  POWER_SIGNAL_ACTIVE_HIGH, "ALL_SYS_PGOOD"},
-	{GPIO_PP3300_PG,      POWER_SIGNAL_ACTIVE_HIGH, "PP3300_PG"},
-	{GPIO_PP5000_PG,      POWER_SIGNAL_ACTIVE_HIGH, "PP5000_PG"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
-
-/* ADC channels */
 const struct adc_t adc_channels[] = {
 	/* Convert to mV (3000mV/1024). */
 	{"CHARGER",     3000, 1024, 0, CHIP_ADC_CH1}, /* GPI1 */
@@ -93,16 +74,22 @@ const struct i2c_port_t i2c_ports[]  = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	{-1, -1, &it83xx_tcpm_drv, 0},
-	{-1, -1, &it83xx_tcpm_drv, 0},
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.bus_type = EC_BUS_TYPE_EMBEDDED,
+		.drv = &it83xx_tcpm_drv
+	},
+	{
+		.bus_type = EC_BUS_TYPE_EMBEDDED,
+		.drv = &it83xx_tcpm_drv
+	},
 };
 
-void board_pd_vconn_ctrl(int port, int cc_pin, int enabled)
+void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 {
 	int cc1_enabled = 0, cc2_enabled = 0;
 
-	if (cc_pin)
+	if (cc_pin != USBPD_CC_PIN_1)
 		cc2_enabled = enabled;
 	else
 		cc1_enabled = enabled;
@@ -116,41 +103,6 @@ void board_pd_vconn_ctrl(int port, int cc_pin, int enabled)
 	}
 }
 
-/*
- * PD host event status for host command
- * Note: this variable must be aligned on 4-byte boundary because we pass the
- * address to atomic_ functions which use assembly to access them.
- */
-static uint32_t pd_host_event_status __aligned(4);
-
-static enum ec_status
-hc_pd_host_event_status(struct host_cmd_handler_args *args)
-{
-	struct ec_response_host_event_status *r = args->response;
-
-	/* Read and clear the host event status to return to AP */
-	r->status = atomic_read_clear(&pd_host_event_status);
-
-	args->response_size = sizeof(*r);
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_PD_HOST_EVENT_STATUS, hc_pd_host_event_status,
-		     EC_VER_MASK(0));
-
-#if defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD)
-/* Send host event up to AP */
-void pd_send_host_event(int mask)
-{
-	/* mask must be set */
-	if (!mask)
-		return;
-
-	atomic_or(&pd_host_event_status, mask);
-	/* interrupt the AP */
-	host_set_single_event(EC_HOST_EVENT_PD_MCU);
-}
-#endif
-
 const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_AC_PRESENT,
 	GPIO_LID_OPEN,
@@ -159,10 +111,12 @@ const enum gpio_signal hibernate_wake_pins[] = {
 
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
-static void it83xx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
+static void it83xx_tcpc_update_hpd_status(const struct usb_mux *me,
+					  int hpd_lvl, int hpd_irq)
 {
 	enum gpio_signal gpio =
-		port ? GPIO_USB_C1_HPD_1P8_ODL : GPIO_USB_C0_HPD_1P8_ODL;
+		me->usb_port ? GPIO_USB_C1_HPD_1P8_ODL
+			     : GPIO_USB_C0_HPD_1P8_ODL;
 
 	hpd_lvl = !hpd_lvl;
 
@@ -174,15 +128,19 @@ static void it83xx_tcpc_update_hpd_status(int port, int hpd_lvl, int hpd_irq)
 	}
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0xa8,
-		.driver = &pi3usb30532_usb_mux_driver,
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
+		.driver = &pi3usb3x532_usb_mux_driver,
 		.hpd_update = &it83xx_tcpc_update_hpd_status,
 	},
 	{
-		.port_addr = 0x20,
-		.driver = &ps874x_usb_mux_driver,
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = 0x10,
+		.driver = &ps8740_usb_mux_driver,
 		.hpd_update = &it83xx_tcpc_update_hpd_status,
 	},
 };
@@ -195,20 +153,26 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_BATTERY] = {.name = "Battery",
 				 .type = TEMP_SENSOR_TYPE_BATTERY,
 				 .read = charge_get_battery_temp,
-				 .idx = 0,
-				 .action_delay_sec = 1},
+				 .idx = 0},
 	[TEMP_SENSOR_AMBIENT] = {.name = "Ambient",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_51k1_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_AMB,
-				 .action_delay_sec = 5},
+				 .idx = ADC_TEMP_SENSOR_AMB},
 	[TEMP_SENSOR_CHARGER] = {.name = "Charger",
 				 .type = TEMP_SENSOR_TYPE_BOARD,
 				 .read = get_temp_3v3_13k7_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_CHARGER,
-				 .action_delay_sec = 1},
+				 .idx = ADC_TEMP_SENSOR_CHARGER},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
+
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = BD9995X_ADDR_FLAGS,
+		.drv = &bd9995x_drv,
+	},
+};
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* Called by APL power state machine when transitioning from G3 to S5 */
 void chipset_pre_init_callback(void)
@@ -251,8 +215,6 @@ static void board_set_tablet_mode(void)
 /* Initialize board. */
 static void board_init(void)
 {
-	int port;
-
 	board_set_tablet_mode();
 	/* Enable charger interrupts */
 	gpio_enable_interrupt(GPIO_CHARGER_INT_L);
@@ -261,8 +223,8 @@ static void board_init(void)
 	* Initialize HPD to low; after sysjump SOC needs to see
 	* HPD pulse to enable video path
 	*/
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++)
-		usb_muxes[port].hpd_update(port, 0, 0);
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -348,7 +310,12 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
  */
 int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 {
-	return charger_get_vbus_voltage(port) < BD9995X_BC12_MIN_VOLTAGE;
+	int voltage;
+
+	if (charger_get_vbus_voltage(port, &voltage))
+		voltage = 0;
+
+	return voltage < BD9995X_BC12_MIN_VOLTAGE;
 }
 
 /* Called on AP S5 -> S3 transition */

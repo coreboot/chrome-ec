@@ -22,10 +22,12 @@
 #define CONFIG_I2C_MASTER
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP /* Instead of 8042 protocol of keyboard */
+#define CONFIG_MKBP_USE_GPIO
 #define CONFIG_POWER_BUTTON
 #define CONFIG_VBOOT_HASH
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_BOARD_VERSION_GPIO
+#define CONFIG_ENABLE_JTAG_SELECTION
 
 /* Optional features for test commands */
 #define CONFIG_CMD_TASKREADY

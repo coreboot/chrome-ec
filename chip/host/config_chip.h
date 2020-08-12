@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,15 +9,21 @@
 #define __CROS_EC_CONFIG_CHIP_H
 
 /* Memory mapping */
+#if !defined(TEST_NVMEM) && !defined(TEST_CR50_FUZZ)
 #define CONFIG_FLASH_SIZE 0x00020000
+#define CONFIG_FLASH_BANK_SIZE 0x1000
+#else
+#define CONFIG_FLASH_SIZE (512 * 1024)
+#define CONFIG_FLASH_BANK_SIZE 0x800
+#endif
+
 extern char __host_flash[CONFIG_FLASH_SIZE];
 
-#define CONFIG_PROGRAM_MEMORY_BASE     ((uintptr_t)__host_flash)
-#define CONFIG_FLASH_BANK_SIZE         0x1000
-#define CONFIG_FLASH_ERASE_SIZE        0x0010  /* erase bank size */
-#define CONFIG_FLASH_WRITE_SIZE        0x0002  /* minimum write size */
-#define CONFIG_FLASH_WRITE_IDEAL_SIZE  0x0080  /* ideal write size */
-#define CONFIG_RAM_BASE                0x0 /* Not supported */
+#define CONFIG_PROGRAM_MEMORY_BASE ((uintptr_t)__host_flash)
+#define CONFIG_FLASH_ERASE_SIZE 0x0010	     /* erase bank size */
+#define CONFIG_FLASH_WRITE_SIZE 0x0002	     /* minimum write size */
+#define CONFIG_FLASH_WRITE_IDEAL_SIZE 0x0080 /* ideal write size */
+#define CONFIG_RAM_BASE 0x0		     /* Not supported */
 #define CONFIG_RAM_SIZE                0x0 /* Not supported */
 
 #define CONFIG_FPU
@@ -44,7 +50,7 @@ extern char __host_flash[CONFIG_FLASH_SIZE];
 /* Do NOT use common timer code which is designed for hardware counters. */
 #undef CONFIG_COMMON_TIMER
 
-#define GPIO_PIN(port, index) GPIO_##port, (1 << index)
+#define GPIO_PIN(port, index) GPIO_##port, BIT(index)
 #define GPIO_PIN_MASK(p, m) .port = GPIO_##p, .mask = (m)
 
 #define I2C_PORT_COUNT 1

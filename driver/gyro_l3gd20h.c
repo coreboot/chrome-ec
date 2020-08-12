@@ -17,6 +17,7 @@
 #include "util.h"
 
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
+#define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 
 /*
@@ -75,7 +76,7 @@ static inline int get_ctrl_reg(enum motionsensor_type type)
 
 static inline int get_xyz_reg(enum motionsensor_type type)
 {
-	return L3GD20_OUT_X_L | (1 << 7);
+	return L3GD20_OUT_X_L | BIT(7);
 }
 
 /**
@@ -240,8 +241,8 @@ static int set_data_rate(const struct motion_sensor_t *s,
 	if (ret != EC_SUCCESS)
 		goto gyro_cleanup;
 
-	val |= (1 << 4); /* high-pass filter enabled */
-	val |= (1 << 0); /* data in data reg are high-pass filtered */
+	val |= BIT(4); /* high-pass filter enabled */
+	val |= BIT(0); /* data in data reg are high-pass filtered */
 	ret = raw_write8(s->port, s->addr, L3GD20_CTRL_REG5, val);
 	if (ret != EC_SUCCESS)
 		goto gyro_cleanup;
@@ -301,7 +302,7 @@ static int is_data_ready(const struct motion_sensor_t *s, int *ready)
 	ret = raw_read8(s->port, s->addr, L3GD20_STATUS_REG, &tmp);
 
 	if (ret != EC_SUCCESS) {
-		CPRINTF("[%T %s type:0x%X RS Error]", s->name, s->type);
+		CPRINTS("%s type:0x%X RS Error", s->name, s->type);
 		return ret;
 	}
 
@@ -310,7 +311,7 @@ static int is_data_ready(const struct motion_sensor_t *s, int *ready)
 	return EC_SUCCESS;
 }
 
-static int read(const struct motion_sensor_t *s, vector_3_t v)
+static int read(const struct motion_sensor_t *s, intv3_t v)
 {
 	uint8_t raw[6];
 	uint8_t xyz_reg;
@@ -338,8 +339,7 @@ static int read(const struct motion_sensor_t *s, vector_3_t v)
 	i2c_block_read(s->port, s->addr, xyz_reg, raw, 6);
 
 	if (ret != EC_SUCCESS) {
-		CPRINTF("[%T %s type:0x%X RD XYZ Error]",
-			s->name, s->type);
+		CPRINTS("%s type:0x%X RD XYZ Error", s->name, s->type);
 		return ret;
 	}
 
@@ -382,11 +382,6 @@ static int init(const struct motion_sensor_t *s)
 	tmp |= L3GD20_BDU_ENABLE;
 	ret = raw_write8(s->port, s->addr, L3GD20_CTRL_REG4, tmp);
 	mutex_unlock(s->mutex);
-	if (ret)
-		return ret;
-
-	/* Config GYRO ODR */
-	ret = set_data_rate(s, s->default_range, 1);
 	if (ret)
 		return ret;
 

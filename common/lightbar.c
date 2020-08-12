@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+ * Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -418,15 +418,16 @@ static inline int cycle_010(uint8_t i)
  * the latest one. */
 static uint32_t pending_msg;
 /* And here's the task event that we use to trigger delivery. */
-#define PENDING_MSG 1
+#define PENDING_MSG TASK_EVENT_CUSTOM_BIT(0)
 
 /* Interruptible delay. */
-#define WAIT_OR_RET(A) do {				\
-		uint32_t msg = task_wait_event(A);	\
-		uint32_t p_msg = pending_msg;		\
-		if (TASK_EVENT_CUSTOM(msg) == PENDING_MSG &&	\
-		    p_msg != st.cur_seq)			\
-			return p_msg; } while (0)
+#define WAIT_OR_RET(A)                                                         \
+	do {                                                                   \
+		uint32_t msg = task_wait_event(A);                             \
+		uint32_t p_msg = pending_msg;                                  \
+		if (msg == PENDING_MSG && p_msg != st.cur_seq)                 \
+			return p_msg;                                          \
+	} while (0)
 
 /******************************************************************************/
 /* Here are the preprogrammed sequences. */
@@ -814,7 +815,7 @@ static uint32_t sequence_STOP(void)
 	uint32_t msg;
 
 	do {
-		msg = TASK_EVENT_CUSTOM(task_wait_event(-1));
+		msg = task_wait_event(-1);
 		CPRINTS("LB %s() got pending_msg %d", __func__, pending_msg);
 	} while (msg != PENDING_MSG || (
 			 pending_msg != LIGHTBAR_RUN &&
@@ -1322,7 +1323,7 @@ static uint32_t lightbyte_SET_COLOR_SINGLE(void)
 		return EC_RES_INVALID_PARAM;
 
 	for (i = 0; i < NUM_LEDS; i++)
-		if (led & (1 << i))
+		if (led & BIT(i))
 			led_desc[i][control][color] = value;
 
 	return EC_SUCCESS;
@@ -1350,7 +1351,7 @@ static uint32_t lightbyte_SET_COLOR_RGB(void)
 		return EC_RES_INVALID_PARAM;
 
 	for (i = 0; i < NUM_LEDS; i++)
-		if (led & (1 << i)) {
+		if (led & BIT(i)) {
 			led_desc[i][control][LB_COL_RED] = r;
 			led_desc[i][control][LB_COL_GREEN] = g;
 			led_desc[i][control][LB_COL_BLUE] = b;
@@ -1657,9 +1658,7 @@ void lightbar_sequence_f(enum lightbar_sequence num, const char *f)
 		CPRINTS("LB %s() requests %d %s", f, num,
 			lightbar_cmds[num].string);
 		pending_msg = num;
-		task_set_event(TASK_ID_LIGHTBAR,
-			       TASK_EVENT_CUSTOM(PENDING_MSG),
-			       0);
+		task_set_event(TASK_ID_LIGHTBAR, PENDING_MSG, 0);
 	} else
 		CPRINTS("LB %s() requests %d - ignored", f, num);
 }

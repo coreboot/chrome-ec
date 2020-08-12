@@ -31,7 +31,7 @@ struct pd_port_t {
 	int partner_role; /* -1 for none */
 	int partner_polarity;
 	int rev;
-} pd_port[CONFIG_USB_PD_PORT_COUNT];
+} pd_port[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static int give_back_called;
 
@@ -46,11 +46,6 @@ uint16_t pd_get_identity_vid(int port)
 uint16_t pd_get_identity_pid(int port)
 {
 	return 0;
-}
-
-enum battery_present battery_is_present(void)
-{
-	return BP_YES;
 }
 
 int battery_status(int *status)
@@ -147,7 +142,7 @@ static void init_ports(void)
 {
 	int i;
 
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; ++i) {
+	for (i = 0; i < board_get_usb_pd_port_count(); ++i) {
 		pd_port[i].host_mode = 0;
 		pd_port[i].partner_role = -1;
 		pd_port[i].has_vbus = 0;
@@ -653,6 +648,90 @@ static int test_request_with_wait(void)
 	return EC_SUCCESS;
 }
 
+static int test_request_with_wait_no_src_cap(void)
+{
+#ifdef CONFIG_USB_PD_GIVE_BACK
+	uint32_t expected_rdo = RDO_FIXED(1, 900, PD_MIN_CURRENT_MA,
+					RDO_CAP_MISMATCH | RDO_GIVE_BACK);
+#else
+	uint32_t expected_rdo = RDO_FIXED(1, 900, 900, RDO_CAP_MISMATCH);
+#endif
+	uint8_t port = PORT0;
+
+	plug_in_source(port, 0);
+	task_wake(PD_PORT_TO_TASK_ID(port));
+	task_wait_event(2 * PD_T_CC_DEBOUNCE + 100 * MSEC);
+	TEST_ASSERT(pd_port[port].polarity == 0);
+
+	/* We're in SNK_DISCOVERY now. Let's send the source cap. */
+	simulate_source_cap(port, 0);
+	task_wait_event(30 * MSEC);
+	TEST_ASSERT(verify_goodcrc(port,
+			PD_ROLE_SINK, pd_port[port].msg_rx_id));
+
+	/* Wait for the power request */
+	task_wake(PD_PORT_TO_TASK_ID(port));
+	task_wait_event(35 * MSEC); /* tSenderResponse: 24~30 ms */
+	inc_rx_id(port);
+
+	/* Process the request */
+	TEST_ASSERT(pd_test_tx_msg_verify_sop(port));
+	TEST_ASSERT(pd_test_tx_msg_verify_short(port,
+			PD_HEADER(PD_DATA_REQUEST, PD_ROLE_SINK, PD_ROLE_UFP,
+			pd_port[port].msg_tx_id, 1, pd_port[port].rev, 0)));
+	TEST_ASSERT(pd_test_tx_msg_verify_word(port, expected_rdo));
+	TEST_ASSERT(pd_test_tx_msg_verify_crc(port));
+	TEST_ASSERT(pd_test_tx_msg_verify_eop(port));
+
+	task_wake(PD_PORT_TO_TASK_ID(port));
+	task_wait_event(30 * MSEC);
+
+	/* Request is good. Send GoodCRC */
+	simulate_goodcrc(port, PD_ROLE_SOURCE, pd_port[port].msg_tx_id);
+	task_wake(PD_PORT_TO_TASK_ID(0));
+	task_wait_event(30 * MSEC);
+	inc_tx_id(port);
+
+	/* We're in SNK_REQUESTED. Send wait */
+	simulate_wait(port);
+	task_wait_event(30 * MSEC);
+	TEST_ASSERT(verify_goodcrc(0, PD_ROLE_SINK, pd_port[port].msg_rx_id));
+
+	task_wake(PD_PORT_TO_TASK_ID(port));
+	task_wait_event(30 * MSEC);
+	inc_rx_id(port);
+
+	/*
+	 * Some port partners do not send another SRC_CAP and expect us to send
+	 * another REQUEST 100ms after the WAIT.
+	 */
+	task_wake(PD_PORT_TO_TASK_ID(port));
+	task_wait_event(100 * MSEC); /* tSinkRequest: 100 ms */
+	inc_rx_id(port);
+
+	/* Process the request */
+	TEST_ASSERT(pd_test_tx_msg_verify_sop(port));
+	TEST_ASSERT(pd_test_tx_msg_verify_short(port,
+			PD_HEADER(PD_DATA_REQUEST, PD_ROLE_SINK, PD_ROLE_UFP,
+			pd_port[port].msg_tx_id, 1, pd_port[port].rev, 0)));
+	TEST_ASSERT(pd_test_tx_msg_verify_word(port, expected_rdo));
+	TEST_ASSERT(pd_test_tx_msg_verify_crc(port));
+	TEST_ASSERT(pd_test_tx_msg_verify_eop(port));
+
+	task_wake(PD_PORT_TO_TASK_ID(port));
+	task_wait_event(30 * MSEC);
+
+	/* Request was good. Send GoodCRC */
+	simulate_goodcrc(port, PD_ROLE_SOURCE, pd_port[port].msg_tx_id);
+	task_wake(PD_PORT_TO_TASK_ID(port));
+	task_wait_event(30 * MSEC);
+	inc_tx_id(port);
+
+	/* We're done */
+	unplug(port);
+	return EC_SUCCESS;
+}
+
 static int test_request_with_reject(void)
 {
 #ifdef CONFIG_USB_PD_GIVE_BACK
@@ -821,7 +900,7 @@ static int test_sink(void)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	test_reset();
 	init_ports();
@@ -831,6 +910,7 @@ void run_test(void)
 	RUN_TEST(test_request);
 	RUN_TEST(test_sink);
 	RUN_TEST(test_request_with_wait);
+	RUN_TEST(test_request_with_wait_no_src_cap);
 	RUN_TEST(test_request_with_wait_and_contract);
 	RUN_TEST(test_request_with_reject);
 

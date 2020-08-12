@@ -46,7 +46,7 @@
  */
 #define HWBANK_SIZE  (CONFIG_FLASH_SIZE / 2)
 #define BLOCKS_PER_HWBANK (HWBANK_SIZE / CONFIG_FLASH_ERASE_SIZE)
-#define BLOCKS_HWBANK_MASK ((1 << BLOCKS_PER_HWBANK) - 1)
+#define BLOCKS_HWBANK_MASK (BIT(BLOCKS_PER_HWBANK) - 1)
 
 /*
  * We can tune the power consumption vs erase/write speed
@@ -60,6 +60,16 @@ static int access_disabled;
 static int option_disabled;
 /* Is physical flash stuck protected? (avoid reboot loop) */
 static int stuck_locked;
+
+#define FLASH_SYSJUMP_TAG 0x5750 /* "WP" - Write Protect */
+#define FLASH_HOOK_VERSION 1
+
+/* The previous write protect state before sys jump */
+struct flash_wp_state {
+	int access_disabled;
+	int option_disabled;
+	int stuck_locked;
+};
 
 static inline int calculate_flash_timeout(void)
 {
@@ -161,6 +171,9 @@ static void protect_blocks(uint32_t blocks)
  * If RDP is not defined, use the option bytes RSS1 bit.
  * TODO(crbug.com/888104): Validate that using RSS1 for this purpose is safe.
  */
+#ifndef CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE
+#error "crbug.com/888104: Using RSS1 for write protect PSTATE may not be safe."
+#endif
 static int is_wp_enabled(void)
 {
 #ifdef CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE
@@ -358,7 +371,7 @@ int flash_physical_get_protect(int block)
 	int bank = block / BLOCKS_PER_HWBANK;
 	int index = block % BLOCKS_PER_HWBANK;
 
-	return !(STM32_FLASH_WPSN_CUR(bank) & (1 << index));
+	return !(STM32_FLASH_WPSN_CUR(bank) & BIT(index));
 }
 
 /*
@@ -451,6 +464,32 @@ uint32_t flash_physical_get_writable_flags(uint32_t cur_flags)
 	return ret;
 }
 
+int flash_physical_restore_state(void)
+{
+	uint32_t reset_flags = system_get_reset_flags();
+	int version, size;
+	const struct flash_wp_state *prev;
+
+	/*
+	 * If we have already jumped between images, an earlier image could
+	 * have applied write protection. We simply need to represent these
+         * irreversible flags to other components.
+	 */
+	if (reset_flags & EC_RESET_FLAG_SYSJUMP) {
+		prev = (const struct flash_wp_state *)system_get_jump_tag(
+				FLASH_SYSJUMP_TAG, &version, &size);
+		if (prev && version == FLASH_HOOK_VERSION &&
+		    size == sizeof(*prev)) {
+			access_disabled = prev->access_disabled;
+			option_disabled = prev->option_disabled;
+			stuck_locked = prev->stuck_locked;
+		}
+		return 1;
+	}
+
+	return 0;
+}
+
 int flash_pre_init(void)
 {
 	uint32_t reset_flags = system_get_reset_flags();
@@ -458,11 +497,14 @@ int flash_pre_init(void)
 	uint32_t unwanted_prot_flags = EC_FLASH_PROTECT_ALL_NOW |
 		EC_FLASH_PROTECT_ERROR_INCONSISTENT;
 
+	if (flash_physical_restore_state())
+		return EC_SUCCESS;
+
 	/*
 	 * If we have already jumped between images, an earlier image could
 	 * have applied write protection. Nothing additional needs to be done.
 	 */
-	if (reset_flags & RESET_FLAG_SYSJUMP)
+	if (reset_flags & EC_RESET_FLAG_SYSJUMP)
 		return EC_SUCCESS;
 
 	if (prot_flags & EC_FLASH_PROTECT_GPIO_ASSERTED) {
@@ -496,7 +538,7 @@ int flash_pre_init(void)
 	 * write-protect.  If it didn't, then the flash write protect registers
 	 * have been permanently committed and we can't fix that.
 	 */
-	if (reset_flags & RESET_FLAG_POWER_ON) {
+	if (reset_flags & EC_RESET_FLAG_POWER_ON) {
 		stuck_locked = 1;
 		return EC_ERROR_ACCESS_DENIED;
 	}
@@ -507,3 +549,19 @@ int flash_pre_init(void)
 	/* That doesn't return, so if we're still here that's an error */
 	return EC_ERROR_UNKNOWN;
 }
+
+/*****************************************************************************/
+/* Hooks */
+
+static void flash_preserve_state(void)
+{
+	const struct flash_wp_state state = {
+		.access_disabled = access_disabled,
+		.option_disabled = option_disabled,
+		.stuck_locked = stuck_locked,
+	};
+
+	system_add_jump_tag(FLASH_SYSJUMP_TAG, FLASH_HOOK_VERSION,
+			    sizeof(state), &state);
+}
+DECLARE_HOOK(HOOK_SYSJUMP, flash_preserve_state, HOOK_PRIO_DEFAULT);

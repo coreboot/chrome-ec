@@ -93,7 +93,8 @@ int pd_check_power_swap(int port)
 	return pd_get_dual_role(port) == PD_DRP_TOGGLE_ON ? 1 : 0;
 }
 
-int pd_check_data_swap(int port, int data_role)
+int pd_check_data_swap(int port,
+		       enum pd_data_role data_role)
 {
 	/* Allow data swap if we are a UFP, otherwise don't allow */
 	return (data_role == PD_ROLE_UFP) ? 1 : 0;
@@ -105,12 +106,15 @@ int pd_check_vconn_swap(int port)
 	return gpio_get_level(GPIO_PMIC_SLP_SUS_L);
 }
 
-void pd_execute_data_swap(int port, int data_role)
+void pd_execute_data_swap(int port,
+			  enum pd_data_role data_role)
 {
 	/* Do nothing */
 }
 
-void pd_check_pr_role(int port, int pr_role, int flags)
+void pd_check_pr_role(int port,
+		      enum pd_power_role pr_role,
+		      int flags)
 {
 	/*
 	 * If partner is dual-role power and dualrole toggling is on, consider
@@ -119,19 +123,21 @@ void pd_check_pr_role(int port, int pr_role, int flags)
 	if ((flags & PD_FLAGS_PARTNER_DR_POWER) &&
 	    pd_get_dual_role(port) == PD_DRP_TOGGLE_ON) {
 		/*
-		 * If we are a sink and partner is not externally powered, then
+		 * If we are a sink and partner is not unconstrained, then
 		 * swap to become a source. If we are source and partner is
-		 * externally powered, swap to become a sink.
+		 * unconstrained, swap to become a sink.
 		 */
-		int partner_extpower = flags & PD_FLAGS_PARTNER_EXTPOWER;
+		int partner_unconstrained = flags & PD_FLAGS_PARTNER_UNCONSTR;
 
-		if ((!partner_extpower && pr_role == PD_ROLE_SINK) ||
-		     (partner_extpower && pr_role == PD_ROLE_SOURCE))
+		if ((!partner_unconstrained && pr_role == PD_ROLE_SINK) ||
+		     (partner_unconstrained && pr_role == PD_ROLE_SOURCE))
 			pd_request_power_swap(port);
 	}
 }
 
-void pd_check_dr_role(int port, int dr_role, int flags)
+void pd_check_dr_role(int port,
+		      enum pd_data_role dr_role,
+		      int flags)
 {
 	/* If UFP, try to switch to DFP */
 	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_UFP)
@@ -176,7 +182,7 @@ int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 		} else if (cnt == 6) {
 			/* really old devices don't have last byte */
 			pd_dev_store_rw_hash(port, dev_id, payload + 1,
-					     SYSTEM_IMAGE_UNKNOWN);
+					     EC_IMAGE_UNKNOWN);
 		}
 		break;
 	case VDO_CMD_CURRENT:
@@ -196,16 +202,16 @@ int pd_custom_vdm(int port, int cnt, uint32_t *payload,
 }
 
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-static int dp_flags[CONFIG_USB_PD_PORT_COUNT];
+static int dp_flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 /* DP Status VDM as returned by UFP */
-static uint32_t dp_status[CONFIG_USB_PD_PORT_COUNT];
+static uint32_t dp_status[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static void svdm_safe_dp_mode(int port)
 {
 	/* make DP interface safe until configure */
 	dp_flags[port] = 0;
 	dp_status[port] = 0;
-	usb_mux_set(port, TYPEC_MUX_NONE,
+	usb_mux_set(port, USB_PD_MUX_NONE,
 		    USB_SWITCH_CONNECT, pd_get_polarity(port));
 }
 
@@ -222,7 +228,7 @@ static int svdm_enter_dp_mode(int port, uint32_t mode_caps)
 
 static int svdm_dp_status(int port, uint32_t *payload)
 {
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 
 	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
 			 CMD_DP_STATUS | VDO_OPOS(opos));
@@ -239,14 +245,14 @@ static int svdm_dp_status(int port, uint32_t *payload)
 
 static int svdm_dp_config(int port, uint32_t *payload)
 {
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	int pin_mode = pd_dfp_dp_get_pin_mode(port, dp_status[port]);
 
 	if (!pin_mode)
 		return 0;
 
-	usb_mux_set(port, mf_pref ? TYPEC_MUX_DOCK : TYPEC_MUX_DP,
+	usb_mux_set(port, mf_pref ? USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED,
 		    USB_SWITCH_CONNECT, pd_get_polarity(port));
 
 	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
@@ -257,14 +263,8 @@ static int svdm_dp_config(int port, uint32_t *payload)
 	return 2;
 };
 
-/*
- * timestamp of the next possible toggle to ensure the 2-ms spacing
- * between IRQ_HPD.
- */
-static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_COUNT];
-
 #define PORT_TO_HPD(port) ((port) ? GPIO_USB_C1_DP_HPD : GPIO_USB_C0_DP_HPD)
-static void svdm_dp_post_config(int port)
+__override void svdm_dp_post_config(int port)
 {
 	dp_flags[port] |= DP_FLAGS_DP_ON;
 	if (!(dp_flags[port] & DP_FLAGS_HPD_HI_PENDING))
@@ -273,10 +273,10 @@ static void svdm_dp_post_config(int port)
 	gpio_set_level(PORT_TO_HPD(port), 1);
 
 	/* set the minimum time delay (2ms) for the next HPD IRQ */
-	hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
+	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
 }
 
-static int svdm_dp_attention(int port, uint32_t *payload)
+__override int svdm_dp_attention(int port, uint32_t *payload)
 {
 	int cur_lvl;
 	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
@@ -296,8 +296,8 @@ static int svdm_dp_attention(int port, uint32_t *payload)
 	if (irq & cur_lvl) {
 		uint64_t now = get_time().val;
 		/* wait for the minimum spacing between IRQ_HPD if needed */
-		if (now < hpd_deadline[port])
-			usleep(hpd_deadline[port] - now);
+		if (now < svdm_hpd_deadline[port])
+			usleep(svdm_hpd_deadline[port] - now);
 
 		/* generate IRQ_HPD pulse */
 		gpio_set_level(hpd, 0);
@@ -305,14 +305,16 @@ static int svdm_dp_attention(int port, uint32_t *payload)
 		gpio_set_level(hpd, 1);
 
 		/* set the minimum time delay (2ms) for the next HPD IRQ */
-		hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
+		svdm_hpd_deadline[port] = get_time().val +
+			HPD_USTREAM_DEBOUNCE_LVL;
 	} else if (irq & !cur_lvl) {
 		CPRINTF("ERR:HPD:IRQ&LOW\n");
 		return 0; /* nak */
 	} else {
 		gpio_set_level(hpd, lvl);
 		/* set the minimum time delay (2ms) for the next HPD IRQ */
-		hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
+		svdm_hpd_deadline[port] = get_time().val +
+			HPD_USTREAM_DEBOUNCE_LVL;
 	}
 	/* ack */
 	return 1;

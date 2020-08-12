@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -7,21 +7,28 @@
 
 #include "config.h"
 #include "interrupts.h"
+#include "ia_structs.h"
+
+	.equ	CR0_NW,		(1 << 29)
+	.equ	CR0_CD,		(1 << 30)
+
 
 .global __idt
+.global __gdt
+.global __gdt_ptr
 
 # GDT is loaded by ISH ROM. The FW code retains the same GDT
 # and hence the same segment selector
 .set code_seg, 0x8
 
-.section .text.vecttable
+.section .data.vecttable
 
 # Macro that defines an interrupt descriptor
 .macro interrupt_descriptor
 	.word def_irq_low	# low 16 bits of default_int_handler
 	.word code_seg
 	.byte 0
-	.byte IDT_FLAGS
+	.byte IDT_DESC_FLAGS
 	.word def_irq_high	# high 16 bits of default_int_handler
 .endm
 
@@ -286,12 +293,45 @@ interrupt_descriptor
 interrupt_descriptor
 interrupt_descriptor		# 255
 
+__gdt:
+	# Entry 0: Null descriptor
+	.long 0x0
+	.long 0x0
+	# Entry 1: Code descriptor
+	# Base: 0x0
+	# Limit: 0xffffffff
+	# Flags: 0x9b (Code E/R, Present, DPL0, Acessed=1)
+	.long GEN_GDT_DESC_LO(0x0, 0xffffffff, GDT_DESC_CODE_FLAGS)
+	.long GEN_GDT_DESC_UP(0x0, 0xffffffff, GDT_DESC_CODE_FLAGS)
+	# Entry 2: Data descriptor
+	# Base: 0x0
+	# Limit: 0xffffffff
+	# Flags: 0x93 (Data R/W, Present, DPL0, Acessed=1)
+	.long GEN_GDT_DESC_LO(0x0, 0xffffffff, GDT_DESC_DATA_FLAGS)
+	.long GEN_GDT_DESC_UP(0x0, 0xffffffff, GDT_DESC_DATA_FLAGS)
+#if defined(CONFIG_ISH_PM_AONTASK)
+	# placeholder entries, will be updated by init_aon_task()
+	# in power_mgt.c
+	# Entry 3: placeholder TSS descriptor for main FW
+	.long 0x0
+	.long 0x0
+	# Entry 4: placeholder TSS descriptor for aontask
+	.long 0x0
+	.long 0x0
+	# Entry 5: placeholder LDT descriptor for aontask
+	.long 0x0
+	.long 0x0
+#endif
+
 #.section .data
 __idt_ptr:
 	.word 2047	# Table size in bytes, count from 0
 			# (8N - 1). N = 256 - the number of vectors
 	.long __idt	# Base address of IDT
 
+__gdt_ptr:
+	.word 24
+	.long __gdt
 
 .section .init
 .code32
@@ -316,8 +356,20 @@ reset:
 	# System stack is within .bss, already cleared
 	movl $stack_end, %esp
 
+	# Load GDT
+	lgdt __gdt_ptr
+
 	# Load IDT
 	lidt __idt_ptr
+
+	# Enable cache (CR0)
+	movl	%cr0, %eax
+	andl	$~(CR0_CD | CR0_NW), %eax
+	movl	%eax, %cr0
+
+	# Reset Task-Switched flag to prevent an ESC instruction such
+	# as fninit, from triggering a Device-not-available fault
+	clts
 
 #ifdef CONFIG_FPU
 	fninit

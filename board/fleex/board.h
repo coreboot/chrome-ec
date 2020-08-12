@@ -13,24 +13,29 @@
 #define VARIANT_OCTOPUS_CHARGER_ISL9238
 #include "baseboard.h"
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-
 /* EC console commands  */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
 #define CONFIG_LED_COMMON
+#define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
+
+/*
+ * Some fuel gagues will return 1% immediately, without the battery being
+ * charged to the point of being able to withstand Vbus loss, so re-set
+ * allowable Try.SRC level and reset level to 2%
+ */
+#undef CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC
+#define CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC 2
+
+#define CONFIG_USB_PD_RESET_MIN_BATT_SOC 2
 
 /* Sensors */
 #define CONFIG_ACCEL_LIS2DE		/* Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
-
-/* USB PD */
-#define CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
-#undef CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 /* Volume button */
 #define CONFIG_VOLUME_BUTTONS
@@ -42,23 +47,21 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
-#define CONFIG_TABLET_MODE
-#define CONFIG_TABLET_SWITCH
-#define TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
-
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_13K7_47K_4050B
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
-#define CONFIG_ACCEL_INTERRUPTS
-/* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 1024
-
-/* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_HOST_EVENT
+/* TI gauge IC 500ms WDT timeout setting under battery sleep mode
+ * induced battery cut-off, under the following conditions:
+ * 1. SMBus communication on FC is once per minute which allows
+ * battery entering sleep mode;
+ * 2. System load < 10mA and accumulate 5 hours will trigger battery
+ * simulation and result in a 500ms WDT timeout. So change charge
+ * max sleep time from once/minute to once/10 seconds to prevent
+ * battery entering sleep mode. See b/133375756.
+ */
+#define CHARGE_MAX_SLEEP_USEC (10 * SECOND)
 
 #define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
@@ -70,8 +73,8 @@
 enum adc_channel {
 	ADC_TEMP_SENSOR_AMB,		/* ADC0 */
 	ADC_TEMP_SENSOR_CHARGER,	/* ADC1 */
-	ADC_VBUS_C1,				/* ADC4 */
-	ADC_VBUS_C0,				/* ADC9 */
+	ADC_VBUS_C0,			/* ADC9 */
+	ADC_VBUS_C1,			/* ADC4 */
 	ADC_CH_COUNT
 };
 
@@ -98,8 +101,14 @@ enum sensor_id {
 /* List of possible batteries */
 enum battery_type {
 	BATTERY_BYD,
+	BATTERY_BYD16,
 	BATTERY_LGC,
+	BATTERY_LGC3,
 	BATTERY_SIMPLO,
+	BATTERY_SIMPLO_ATL,
+	BATTERY_SIMPLO_LS,
+	BATTERY_SWD_ATL,
+	BATTERY_SWD_COS,
 	BATTERY_TYPE_COUNT,
 };
 

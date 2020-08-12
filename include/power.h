@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -51,12 +51,12 @@ enum power_state {
  * +-----------------+------------------------------------+
  */
 
-#define POWER_SIGNAL_ACTIVE_STATE	(1 << 0)
+#define POWER_SIGNAL_ACTIVE_STATE	BIT(0)
 #define POWER_SIGNAL_ACTIVE_LOW	(0 << 0)
-#define POWER_SIGNAL_ACTIVE_HIGH	(1 << 0)
+#define POWER_SIGNAL_ACTIVE_HIGH	BIT(0)
 
-#define POWER_SIGNAL_INTR_STATE	(1 << 1)
-#define POWER_SIGNAL_DISABLE_AT_BOOT	(1 << 1)
+#define POWER_SIGNAL_INTR_STATE	BIT(1)
+#define POWER_SIGNAL_DISABLE_AT_BOOT	BIT(1)
 
 /* Information on an power signal */
 struct power_signal_info {
@@ -69,7 +69,11 @@ struct power_signal_info {
  * Each board must provide its signal list and a corresponding enum
  * power_signal.
  */
+#ifdef CONFIG_POWER_SIGNAL_RUNTIME_CONFIG
+extern struct power_signal_info power_signal_list[];
+#else
 extern const struct power_signal_info power_signal_list[];
+#endif
 
 /* Convert enum power_signal to a mask for signal functions */
 #define POWER_SIGNAL_MASK(signal) (1 << (signal))
@@ -87,6 +91,11 @@ uint32_t power_get_signals(void);
  * @return 1 if power signal is asserted, 0 otherwise.
  */
 int power_signal_is_asserted(const struct power_signal_info *s);
+
+/**
+ * Get the level of provided input signal.
+ */
+__overridable int power_signal_get_level(enum gpio_signal signal);
 
 /**
  * Enable interrupt for provided input signal.
@@ -111,7 +120,7 @@ int power_has_signals(uint32_t want);
 /**
  * Wait for power input signals to be present using default timeout
  *
- * @param want		Mask of signals which must be present (one or more
+ * @param want		Wanted signals which must be present (one or more
  *			POWER_SIGNAL_MASK()s).  If want=0, stops waiting for
  *			signals.
  * @return EC_SUCCESS when all inputs are present, or ERROR_TIMEOUT if timeout
@@ -122,7 +131,7 @@ int power_wait_signals(uint32_t want);
 /**
  * Wait for power input signals to be present
  *
- * @param want		Mask of signals which must be present (one or more
+ * @param want		Wanted signals which must be present (one or more
  *			POWER_SIGNAL_MASK()s).  If want=0, stops waiting for
  *			signals.
  * @param timeout       Timeout in usec to wait for signals to be present.
@@ -130,6 +139,21 @@ int power_wait_signals(uint32_t want);
  * before reaching the desired state.
  */
 int power_wait_signals_timeout(uint32_t want, int timeout);
+
+/**
+ * Wait for power input signals to be the desired state.
+ *
+ * @param want		Desired signals states. (one or more
+ *			POWER_SIGNAL_MASK()s). Signals can be presented or be
+ *			disappeared.
+ * @param mask		Masked signals that param 'want' cares.
+ * @param timeout	Timeout in usec to wait for signals be in the deisred
+ *			state.
+ * @return EC_SUCCESS when masked signals = wanted signals, or ERROR_TIMEOUT
+ * if timeout before reaching the desired state.
+ */
+int power_wait_mask_signals_timeout(uint32_t want, uint32_t mask, int timeout);
+
 
 /**
  * Set the low-level power chipset state.
@@ -143,7 +167,18 @@ void power_set_state(enum power_state new_state);
  *
  * @return Current chipset power state
  */
+#ifdef HAS_TASK_CHIPSET
 enum power_state power_get_state(void);
+#else
+static inline enum power_state power_get_state(void) {
+	return POWER_G3;
+}
+#endif
+
+/*
+ * Set the wake mask according to the current power state.
+ */
+void power_update_wake_mask(void);
 
 /**
  * Chipset-specific initialization
@@ -170,6 +205,17 @@ static inline void power_signal_interrupt(enum gpio_signal signal) { }
 #endif /* !HAS_TASK_CHIPSET */
 
 /**
+ * Interrupt handler for rsmrst signal GPIO. This interrupt handler should be
+ * used when there is a requirement to have minimum pass through delay between
+ * the rsmrst coming to the EC and the rsmrst that goes to the PCH for high->low
+ * transitions. Low->high transitions are still handled from within the chipset
+ * task power state machine.
+ *
+ * @param signal - The gpio signal that triggered the interrupt.
+ */
+void intel_x86_rsmrst_signal_interrupt(enum gpio_signal signal);
+
+/**
  * pause_in_s5 getter method.
  *
  * @return Whether we should pause in S5 when shutting down.
@@ -192,12 +238,28 @@ void power_set_pause_in_s5(int pause);
 enum host_sleep_event power_get_host_sleep_state(void);
 
 /**
+ * Set sleep state of host.
+ *
+ * @param state The new state to set.
+ */
+void power_set_host_sleep_state(enum host_sleep_event state);
+
+/* Context to pass to a host sleep command handler. */
+struct host_sleep_event_context {
+	uint32_t sleep_transitions; /* Number of sleep transitions observed */
+	uint16_t sleep_timeout_ms;  /* Timeout in milliseconds */
+};
+
+/**
  * Provide callback to allow chipset to take any action on host sleep event
  * command.
  *
  * @param state Current host sleep state updated by the host.
+ * @param ctx Possible sleep parameters and return values, depending on state.
  */
-void power_chipset_handle_host_sleep_event(enum host_sleep_event state);
+__override_proto void power_chipset_handle_host_sleep_event(
+		enum host_sleep_event state,
+		struct host_sleep_event_context *ctx);
 
 /**
  * Provide callback to allow board to take any action on host sleep event
@@ -205,7 +267,8 @@ void power_chipset_handle_host_sleep_event(enum host_sleep_event state);
  *
  * @param state Current host sleep state updated by the host.
  */
-void power_board_handle_host_sleep_event(enum host_sleep_event state);
+__override_proto void power_board_handle_host_sleep_event(
+		enum host_sleep_event state);
 
 /*
  * This is the default state of host sleep event. Calls to
@@ -224,6 +287,16 @@ void power_board_handle_host_sleep_event(enum host_sleep_event state);
 void power_reset_host_sleep_state(void);
 #endif /* CONFIG_POWER_S0IX */
 #endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */
+
+/**
+ * Board specific implementation to enable/disable the PP5000 rail.
+ *
+ * NOTE: The default implementation is to simply set GPIO_EN_PP5000.  If a
+ * board's implementation differs, they should implement this function.
+ *
+ * @param enable: 0 to disable PP5000 rail , otherwise enable PP5000 rail.
+ */
+__override_proto void board_power_5v_enable(int enable);
 
 /**
  * Enable/Disable the PP5000 rail.

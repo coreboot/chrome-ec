@@ -131,8 +131,8 @@ extern struct dwc_usb usb_ctl;
 #define GR_USB_GNPTXFSIZ              GR_USB_REG(GC_USB_GNPTXFSIZ_OFFSET)
 /*#define GR_USB_GGPIO                  GR_USB_REG(GC_USB_GGPIO_OFFSET)*/
 #define GR_USB_GCCFG                  GR_USB_REG(GC_USB_GCCFG_OFFSET)
-#define  GCCFG_VBDEN            (1 << 21)
-#define  GCCFG_PWRDWN           (1 << 16)
+#define  GCCFG_VBDEN            BIT(21)
+#define  GCCFG_PWRDWN           BIT(16)
 #define GR_USB_PCGCCTL                GR_USB_REG(GC_USB_PCGCCTL_OFFSET)
 
 #define GR_USB_GSNPSID                GR_USB_REG(GC_USB_GSNPSID_OFFSET)
@@ -156,9 +156,9 @@ extern struct dwc_usb usb_ctl;
 #define GR_USB_DTHRCTL                GR_USB_REG(GC_USB_DTHRCTL_OFFSET)
 #define  DTHRCTL_TXTHRLEN_6           (0x40 << 2)
 #define  DTHRCTL_RXTHRLEN_6           (0x40 << 17)
-#define  DTHRCTL_RXTHREN              (1 << 16)
-#define  DTHRCTL_ISOTHREN             (1 << 1)
-#define  DTHRCTL_NONISOTHREN          (1 << 0)
+#define  DTHRCTL_RXTHREN              BIT(16)
+#define  DTHRCTL_ISOTHREN             BIT(1)
+#define  DTHRCTL_NONISOTHREN          BIT(0)
 #define GR_USB_DIEPEMPMSK             GR_USB_REG(GC_USB_DIEPEMPMSK_OFFSET)
 
 #define GR_USB_EPIREG(off, n)         GR_USB_REG(0x900 + (n) * 0x20 + (off))
@@ -175,116 +175,116 @@ extern struct dwc_usb usb_ctl;
 #define GR_USB_DOEPDMA(n)             GR_USB_EPOREG(0x14, n)
 #define GR_USB_DOEPDMAB(n)            GR_USB_EPOREG(0x1c, n)
 
-#define GOTGCTL_BVALOEN               (1 << GC_USB_GOTGCTL_BVALIDOVEN_LSB)
-#define GOTGCTL_BVALOVAL              (1 << 7)
+#define GOTGCTL_BVALOEN               BIT(GC_USB_GOTGCTL_BVALIDOVEN_LSB)
+#define GOTGCTL_BVALOVAL              BIT(7)
 
 /* Bit 5 */
-#define GAHBCFG_DMA_EN                (1 << GC_USB_GAHBCFG_DMAEN_LSB)
+#define GAHBCFG_DMA_EN                BIT(GC_USB_GAHBCFG_DMAEN_LSB)
 /* Bit 1 */
-#define GAHBCFG_GLB_INTR_EN           (1 << GC_USB_GAHBCFG_GLBLINTRMSK_LSB)
+#define GAHBCFG_GLB_INTR_EN           BIT(GC_USB_GAHBCFG_GLBLINTRMSK_LSB)
 /* HS Burst Len */
 #define GAHBCFG_HBSTLEN_INCR4         (3 << GC_USB_GAHBCFG_HBSTLEN_LSB)
 /* Bit 7 */
 #define GAHBCFG_NP_TXF_EMP_LVL        (1 <<  GC_USB_GAHBCFG_NPTXFEMPLVL_LSB)
 #define GAHBCFG_TXFELVL               GAHBCFG_NP_TXF_EMP_LVL
-#define GAHBCFG_PTXFELVL              (1 << 8)
+#define GAHBCFG_PTXFELVL              BIT(8)
 
 #define GUSBCFG_TOUTCAL(n)            (((n) << GC_USB_GUSBCFG_TOUTCAL_LSB) \
 				       & GC_USB_GUSBCFG_TOUTCAL_MASK)
 #define GUSBCFG_USBTRDTIM(n)          (((n) << GC_USB_GUSBCFG_USBTRDTIM_LSB) \
 				       & GC_USB_GUSBCFG_USBTRDTIM_MASK)
 /* Force device mode */
-#define GUSBCFG_FDMOD                 (1 << GC_USB_GUSBCFG_FDMOD_LSB)
-#define GUSBCFG_PHYSEL                (1 << 6)
-#define GUSBCFG_SRPCAP                (1 << 8)
-#define GUSBCFG_HNPCAP                (1 << 9)
-#define GUSBCFG_ULPIFSLS              (1 << 17)
-#define GUSBCFG_ULPIAR                (1 << 18)
-#define GUSBCFG_ULPICSM               (1 << 19)
-#define GUSBCFG_ULPIEVBUSD            (1 << 20)
-#define GUSBCFG_ULPIEVBUSI            (1 << 21)
-#define GUSBCFG_TSDPS                 (1 << 22)
-#define GUSBCFG_PCCI                  (1 << 23)
-#define GUSBCFG_PTCI                  (1 << 24)
-#define GUSBCFG_ULPIIPD               (1 << 25)
-#define GUSBCFG_TSDPS                 (1 << 22)
+#define GUSBCFG_FDMOD                 BIT(GC_USB_GUSBCFG_FDMOD_LSB)
+#define GUSBCFG_PHYSEL                BIT(6)
+#define GUSBCFG_SRPCAP                BIT(8)
+#define GUSBCFG_HNPCAP                BIT(9)
+#define GUSBCFG_ULPIFSLS              BIT(17)
+#define GUSBCFG_ULPIAR                BIT(18)
+#define GUSBCFG_ULPICSM               BIT(19)
+#define GUSBCFG_ULPIEVBUSD            BIT(20)
+#define GUSBCFG_ULPIEVBUSI            BIT(21)
+#define GUSBCFG_TSDPS                 BIT(22)
+#define GUSBCFG_PCCI                  BIT(23)
+#define GUSBCFG_PTCI                  BIT(24)
+#define GUSBCFG_ULPIIPD               BIT(25)
+#define GUSBCFG_TSDPS                 BIT(22)
 
 
-#define GRSTCTL_CSFTRST               (1 << GC_USB_GRSTCTL_CSFTRST_LSB)
-#define GRSTCTL_AHBIDLE               (1 << GC_USB_GRSTCTL_AHBIDLE_LSB)
-#define GRSTCTL_TXFFLSH               (1 << GC_USB_GRSTCTL_TXFFLSH_LSB)
-#define GRSTCTL_RXFFLSH               (1 << GC_USB_GRSTCTL_RXFFLSH_LSB)
+#define GRSTCTL_CSFTRST               BIT(GC_USB_GRSTCTL_CSFTRST_LSB)
+#define GRSTCTL_AHBIDLE               BIT(GC_USB_GRSTCTL_AHBIDLE_LSB)
+#define GRSTCTL_TXFFLSH               BIT(GC_USB_GRSTCTL_TXFFLSH_LSB)
+#define GRSTCTL_RXFFLSH               BIT(GC_USB_GRSTCTL_RXFFLSH_LSB)
 #define GRSTCTL_TXFNUM(n)	\
 	(((n) << GC_USB_GRSTCTL_TXFNUM_LSB) & GC_USB_GRSTCTL_TXFNUM_MASK)
 
 #define DCFG_DEVSPD_HSULPI            (0 << GC_USB_DCFG_DEVSPD_LSB)
-#define DCFG_DEVSPD_FSULPI            (1 << GC_USB_DCFG_DEVSPD_LSB)
+#define DCFG_DEVSPD_FSULPI            BIT(GC_USB_DCFG_DEVSPD_LSB)
 #define DCFG_DEVSPD_FS48              (3 << GC_USB_DCFG_DEVSPD_LSB)
 #define DCFG_DEVADDR(a)	\
 	(((a) << GC_USB_DCFG_DEVADDR_LSB) & GC_USB_DCFG_DEVADDR_MASK)
-#define DCFG_NZLSOHSK                 (1 << GC_USB_DCFG_NZSTSOUTHSHK_LSB)
+#define DCFG_NZLSOHSK                 BIT(GC_USB_DCFG_NZSTSOUTHSHK_LSB)
 
-#define DCTL_SFTDISCON                (1 << GC_USB_DCTL_SFTDISCON_LSB)
-#define DCTL_CGOUTNAK                 (1 << GC_USB_DCTL_CGOUTNAK_LSB)
-#define DCTL_CGNPINNAK                (1 << GC_USB_DCTL_CGNPINNAK_LSB)
-#define DCTL_PWRONPRGDONE             (1 << GC_USB_DCTL_PWRONPRGDONE_LSB)
+#define DCTL_SFTDISCON                BIT(GC_USB_DCTL_SFTDISCON_LSB)
+#define DCTL_CGOUTNAK                 BIT(GC_USB_DCTL_CGOUTNAK_LSB)
+#define DCTL_CGNPINNAK                BIT(GC_USB_DCTL_CGNPINNAK_LSB)
+#define DCTL_PWRONPRGDONE             BIT(GC_USB_DCTL_PWRONPRGDONE_LSB)
 
 /* Device Endpoint Common IN Interrupt Mask bits */
-#define DIEPMSK_AHBERRMSK             (1 << GC_USB_DIEPMSK_AHBERRMSK_LSB)
-#define DIEPMSK_BNAININTRMSK          (1 << GC_USB_DIEPMSK_BNAININTRMSK_LSB)
-#define DIEPMSK_EPDISBLDMSK           (1 << GC_USB_DIEPMSK_EPDISBLDMSK_LSB)
-#define DIEPMSK_INEPNAKEFFMSK         (1 << GC_USB_DIEPMSK_INEPNAKEFFMSK_LSB)
-#define DIEPMSK_INTKNEPMISMSK         (1 << GC_USB_DIEPMSK_INTKNEPMISMSK_LSB)
-#define DIEPMSK_INTKNTXFEMPMSK        (1 << GC_USB_DIEPMSK_INTKNTXFEMPMSK_LSB)
-#define DIEPMSK_NAKMSK                (1 << GC_USB_DIEPMSK_NAKMSK_LSB)
-#define DIEPMSK_TIMEOUTMSK            (1 << GC_USB_DIEPMSK_TIMEOUTMSK_LSB)
-#define DIEPMSK_TXFIFOUNDRNMSK        (1 << GC_USB_DIEPMSK_TXFIFOUNDRNMSK_LSB)
-#define DIEPMSK_XFERCOMPLMSK          (1 << GC_USB_DIEPMSK_XFERCOMPLMSK_LSB)
+#define DIEPMSK_AHBERRMSK             BIT(GC_USB_DIEPMSK_AHBERRMSK_LSB)
+#define DIEPMSK_BNAININTRMSK          BIT(GC_USB_DIEPMSK_BNAININTRMSK_LSB)
+#define DIEPMSK_EPDISBLDMSK           BIT(GC_USB_DIEPMSK_EPDISBLDMSK_LSB)
+#define DIEPMSK_INEPNAKEFFMSK         BIT(GC_USB_DIEPMSK_INEPNAKEFFMSK_LSB)
+#define DIEPMSK_INTKNEPMISMSK         BIT(GC_USB_DIEPMSK_INTKNEPMISMSK_LSB)
+#define DIEPMSK_INTKNTXFEMPMSK        BIT(GC_USB_DIEPMSK_INTKNTXFEMPMSK_LSB)
+#define DIEPMSK_NAKMSK                BIT(GC_USB_DIEPMSK_NAKMSK_LSB)
+#define DIEPMSK_TIMEOUTMSK            BIT(GC_USB_DIEPMSK_TIMEOUTMSK_LSB)
+#define DIEPMSK_TXFIFOUNDRNMSK        BIT(GC_USB_DIEPMSK_TXFIFOUNDRNMSK_LSB)
+#define DIEPMSK_XFERCOMPLMSK          BIT(GC_USB_DIEPMSK_XFERCOMPLMSK_LSB)
 
 /* Device Endpoint Common OUT Interrupt Mask bits */
-#define DOEPMSK_AHBERRMSK             (1 << GC_USB_DOEPMSK_AHBERRMSK_LSB)
-#define DOEPMSK_BBLEERRMSK            (1 << GC_USB_DOEPMSK_BBLEERRMSK_LSB)
-#define DOEPMSK_BNAOUTINTRMSK         (1 << GC_USB_DOEPMSK_BNAOUTINTRMSK_LSB)
-#define DOEPMSK_EPDISBLDMSK           (1 << GC_USB_DOEPMSK_EPDISBLDMSK_LSB)
-#define DOEPMSK_NAKMSK                (1 << GC_USB_DOEPMSK_NAKMSK_LSB)
-#define DOEPMSK_NYETMSK               (1 << GC_USB_DOEPMSK_NYETMSK_LSB)
-#define DOEPMSK_OUTPKTERRMSK          (1 << GC_USB_DOEPMSK_OUTPKTERRMSK_LSB)
-#define DOEPMSK_OUTTKNEPDISMSK        (1 << GC_USB_DOEPMSK_OUTTKNEPDISMSK_LSB)
-#define DOEPMSK_SETUPMSK              (1 << GC_USB_DOEPMSK_SETUPMSK_LSB)
-#define DOEPMSK_STSPHSERCVDMSK        (1 << GC_USB_DOEPMSK_STSPHSERCVDMSK_LSB)
-#define DOEPMSK_XFERCOMPLMSK          (1 << GC_USB_DOEPMSK_XFERCOMPLMSK_LSB)
+#define DOEPMSK_AHBERRMSK             BIT(GC_USB_DOEPMSK_AHBERRMSK_LSB)
+#define DOEPMSK_BBLEERRMSK            BIT(GC_USB_DOEPMSK_BBLEERRMSK_LSB)
+#define DOEPMSK_BNAOUTINTRMSK         BIT(GC_USB_DOEPMSK_BNAOUTINTRMSK_LSB)
+#define DOEPMSK_EPDISBLDMSK           BIT(GC_USB_DOEPMSK_EPDISBLDMSK_LSB)
+#define DOEPMSK_NAKMSK                BIT(GC_USB_DOEPMSK_NAKMSK_LSB)
+#define DOEPMSK_NYETMSK               BIT(GC_USB_DOEPMSK_NYETMSK_LSB)
+#define DOEPMSK_OUTPKTERRMSK          BIT(GC_USB_DOEPMSK_OUTPKTERRMSK_LSB)
+#define DOEPMSK_OUTTKNEPDISMSK        BIT(GC_USB_DOEPMSK_OUTTKNEPDISMSK_LSB)
+#define DOEPMSK_SETUPMSK              BIT(GC_USB_DOEPMSK_SETUPMSK_LSB)
+#define DOEPMSK_STSPHSERCVDMSK        BIT(GC_USB_DOEPMSK_STSPHSERCVDMSK_LSB)
+#define DOEPMSK_XFERCOMPLMSK          BIT(GC_USB_DOEPMSK_XFERCOMPLMSK_LSB)
 
 /* Device Endpoint-n IN Interrupt Register bits */
-#define DIEPINT_AHBERR             (1 << GC_USB_DIEPINT0_AHBERR_LSB)
-#define DIEPINT_BBLEERR            (1 << GC_USB_DIEPINT0_BBLEERR_LSB)
-#define DIEPINT_BNAINTR            (1 << GC_USB_DIEPINT0_BNAINTR_LSB)
-#define DIEPINT_EPDISBLD           (1 << GC_USB_DIEPINT0_EPDISBLD_LSB)
-#define DIEPINT_INEPNAKEFF         (1 << GC_USB_DIEPINT0_INEPNAKEFF_LSB)
-#define DIEPINT_INTKNEPMIS         (1 << GC_USB_DIEPINT0_INTKNEPMIS_LSB)
-#define DIEPINT_INTKNTXFEMP        (1 << GC_USB_DIEPINT0_INTKNTXFEMP_LSB)
-#define DIEPINT_NAKINTRPT          (1 << GC_USB_DIEPINT0_NAKINTRPT_LSB)
-#define DIEPINT_NYETINTRPT         (1 << GC_USB_DIEPINT0_NYETINTRPT_LSB)
-#define DIEPINT_PKTDRPSTS          (1 << GC_USB_DIEPINT0_PKTDRPSTS_LSB)
-#define DIEPINT_TIMEOUT            (1 << GC_USB_DIEPINT0_TIMEOUT_LSB)
-#define DIEPINT_TXFEMP             (1 << GC_USB_DIEPINT0_TXFEMP_LSB)
-#define DIEPINT_TXFIFOUNDRN        (1 << GC_USB_DIEPINT0_TXFIFOUNDRN_LSB)
-#define DIEPINT_XFERCOMPL          (1 << GC_USB_DIEPINT0_XFERCOMPL_LSB)
+#define DIEPINT_AHBERR             BIT(GC_USB_DIEPINT0_AHBERR_LSB)
+#define DIEPINT_BBLEERR            BIT(GC_USB_DIEPINT0_BBLEERR_LSB)
+#define DIEPINT_BNAINTR            BIT(GC_USB_DIEPINT0_BNAINTR_LSB)
+#define DIEPINT_EPDISBLD           BIT(GC_USB_DIEPINT0_EPDISBLD_LSB)
+#define DIEPINT_INEPNAKEFF         BIT(GC_USB_DIEPINT0_INEPNAKEFF_LSB)
+#define DIEPINT_INTKNEPMIS         BIT(GC_USB_DIEPINT0_INTKNEPMIS_LSB)
+#define DIEPINT_INTKNTXFEMP        BIT(GC_USB_DIEPINT0_INTKNTXFEMP_LSB)
+#define DIEPINT_NAKINTRPT          BIT(GC_USB_DIEPINT0_NAKINTRPT_LSB)
+#define DIEPINT_NYETINTRPT         BIT(GC_USB_DIEPINT0_NYETINTRPT_LSB)
+#define DIEPINT_PKTDRPSTS          BIT(GC_USB_DIEPINT0_PKTDRPSTS_LSB)
+#define DIEPINT_TIMEOUT            BIT(GC_USB_DIEPINT0_TIMEOUT_LSB)
+#define DIEPINT_TXFEMP             BIT(GC_USB_DIEPINT0_TXFEMP_LSB)
+#define DIEPINT_TXFIFOUNDRN        BIT(GC_USB_DIEPINT0_TXFIFOUNDRN_LSB)
+#define DIEPINT_XFERCOMPL          BIT(GC_USB_DIEPINT0_XFERCOMPL_LSB)
 
 /* Device Endpoint-n OUT Interrupt Register bits */
-#define DOEPINT_AHBERR             (1 << GC_USB_DOEPINT0_AHBERR_LSB)
-#define DOEPINT_BACK2BACKSETUP     (1 << GC_USB_DOEPINT0_BACK2BACKSETUP_LSB)
-#define DOEPINT_BBLEERR            (1 << GC_USB_DOEPINT0_BBLEERR_LSB)
-#define DOEPINT_BNAINTR            (1 << GC_USB_DOEPINT0_BNAINTR_LSB)
-#define DOEPINT_EPDISBLD           (1 << GC_USB_DOEPINT0_EPDISBLD_LSB)
-#define DOEPINT_NAKINTRPT          (1 << GC_USB_DOEPINT0_NAKINTRPT_LSB)
-#define DOEPINT_NYETINTRPT         (1 << GC_USB_DOEPINT0_NYETINTRPT_LSB)
-#define DOEPINT_OUTPKTERR          (1 << GC_USB_DOEPINT0_OUTPKTERR_LSB)
-#define DOEPINT_OUTTKNEPDIS        (1 << GC_USB_DOEPINT0_OUTTKNEPDIS_LSB)
-#define DOEPINT_PKTDRPSTS          (1 << GC_USB_DOEPINT0_PKTDRPSTS_LSB)
-#define DOEPINT_SETUP              (1 << GC_USB_DOEPINT0_SETUP_LSB)
-#define DOEPINT_STSPHSERCVD        (1 << GC_USB_DOEPINT0_STSPHSERCVD_LSB)
-#define DOEPINT_STUPPKTRCVD        (1 << GC_USB_DOEPINT0_STUPPKTRCVD_LSB)
-#define DOEPINT_XFERCOMPL          (1 << GC_USB_DOEPINT0_XFERCOMPL_LSB)
+#define DOEPINT_AHBERR             BIT(GC_USB_DOEPINT0_AHBERR_LSB)
+#define DOEPINT_BACK2BACKSETUP     BIT(GC_USB_DOEPINT0_BACK2BACKSETUP_LSB)
+#define DOEPINT_BBLEERR            BIT(GC_USB_DOEPINT0_BBLEERR_LSB)
+#define DOEPINT_BNAINTR            BIT(GC_USB_DOEPINT0_BNAINTR_LSB)
+#define DOEPINT_EPDISBLD           BIT(GC_USB_DOEPINT0_EPDISBLD_LSB)
+#define DOEPINT_NAKINTRPT          BIT(GC_USB_DOEPINT0_NAKINTRPT_LSB)
+#define DOEPINT_NYETINTRPT         BIT(GC_USB_DOEPINT0_NYETINTRPT_LSB)
+#define DOEPINT_OUTPKTERR          BIT(GC_USB_DOEPINT0_OUTPKTERR_LSB)
+#define DOEPINT_OUTTKNEPDIS        BIT(GC_USB_DOEPINT0_OUTTKNEPDIS_LSB)
+#define DOEPINT_PKTDRPSTS          BIT(GC_USB_DOEPINT0_PKTDRPSTS_LSB)
+#define DOEPINT_SETUP              BIT(GC_USB_DOEPINT0_SETUP_LSB)
+#define DOEPINT_STSPHSERCVD        BIT(GC_USB_DOEPINT0_STSPHSERCVD_LSB)
+#define DOEPINT_STUPPKTRCVD        BIT(GC_USB_DOEPINT0_STUPPKTRCVD_LSB)
+#define DOEPINT_XFERCOMPL          BIT(GC_USB_DOEPINT0_XFERCOMPL_LSB)
 
 #define DXEPCTL_EPTYPE_CTRL           (0 << GC_USB_DIEPCTL0_EPTYPE_LSB)
 #define DXEPCTL_EPTYPE_ISO            (1 << GC_USB_DIEPCTL0_EPTYPE_LSB)
@@ -292,14 +292,14 @@ extern struct dwc_usb usb_ctl;
 #define DXEPCTL_EPTYPE_INT            (3 << GC_USB_DIEPCTL0_EPTYPE_LSB)
 #define DXEPCTL_EPTYPE_MASK           GC_USB_DIEPCTL0_EPTYPE_MASK
 #define DXEPCTL_TXFNUM(n)             ((n) << GC_USB_DIEPCTL1_TXFNUM_LSB)
-#define DXEPCTL_STALL                 (1 << GC_USB_DIEPCTL0_STALL_LSB)
-#define DXEPCTL_CNAK                  (1 << GC_USB_DIEPCTL0_CNAK_LSB)
-#define DXEPCTL_DPID                  (1 << GC_USB_DIEPCTL0_DPID_LSB)
-#define DXEPCTL_SNAK                  (1 << GC_USB_DIEPCTL0_SNAK_LSB)
-#define DXEPCTL_NAKSTS                (1 << GC_USB_DIEPCTL0_NAKSTS_LSB)
-#define DXEPCTL_EPENA                 (1 << GC_USB_DIEPCTL0_EPENA_LSB)
-#define DXEPCTL_EPDIS                 (1 << GC_USB_DIEPCTL0_EPDIS_LSB)
-#define DXEPCTL_USBACTEP              (1 << GC_USB_DIEPCTL0_USBACTEP_LSB)
+#define DXEPCTL_STALL                 BIT(GC_USB_DIEPCTL0_STALL_LSB)
+#define DXEPCTL_CNAK                  BIT(GC_USB_DIEPCTL0_CNAK_LSB)
+#define DXEPCTL_DPID                  BIT(GC_USB_DIEPCTL0_DPID_LSB)
+#define DXEPCTL_SNAK                  BIT(GC_USB_DIEPCTL0_SNAK_LSB)
+#define DXEPCTL_NAKSTS                BIT(GC_USB_DIEPCTL0_NAKSTS_LSB)
+#define DXEPCTL_EPENA                 BIT(GC_USB_DIEPCTL0_EPENA_LSB)
+#define DXEPCTL_EPDIS                 BIT(GC_USB_DIEPCTL0_EPDIS_LSB)
+#define DXEPCTL_USBACTEP              BIT(GC_USB_DIEPCTL0_USBACTEP_LSB)
 #define DXEPCTL_MPS64                 (0 << GC_USB_DIEPCTL0_MPS_LSB)
 #define DXEPCTL_MPS(cnt)              ((cnt) << GC_USB_DIEPCTL1_MPS_LSB)
 
@@ -313,12 +313,12 @@ extern struct dwc_usb usb_ctl;
 #define DOEPDMA_BS_HOST_BSY           (3 << 30)
 #define DOEPDMA_BS_MASK               (3 << 30)
 #define DOEPDMA_RXSTS_MASK            (3 << 28)
-#define DOEPDMA_LAST                  (1 << 27)
-#define DOEPDMA_SP                    (1 << 26)
-#define DOEPDMA_IOC                   (1 << 25)
-#define DOEPDMA_SR                    (1 << 24)
-#define DOEPDMA_MTRF                  (1 << 23)
-#define DOEPDMA_NAK                   (1 << 16)
+#define DOEPDMA_LAST                  BIT(27)
+#define DOEPDMA_SP                    BIT(26)
+#define DOEPDMA_IOC                   BIT(25)
+#define DOEPDMA_SR                    BIT(24)
+#define DOEPDMA_MTRF                  BIT(23)
+#define DOEPDMA_NAK                   BIT(16)
 #define DOEPDMA_RXBYTES(n)            (((n) & 0xFFFF) << 0)
 #define DOEPDMA_RXBYTES_MASK          (0xFFFF << 0)
 
@@ -328,9 +328,9 @@ extern struct dwc_usb usb_ctl;
 #define DIEPDMA_BS_HOST_BSY           (3 << 30)
 #define DIEPDMA_BS_MASK               (3 << 30)
 #define DIEPDMA_TXSTS_MASK            (3 << 28)
-#define DIEPDMA_LAST                  (1 << 27)
-#define DIEPDMA_SP                    (1 << 26)
-#define DIEPDMA_IOC                   (1 << 25)
+#define DIEPDMA_LAST                  BIT(27)
+#define DIEPDMA_SP                    BIT(26)
+#define DIEPDMA_IOC                   BIT(25)
 #define DIEPDMA_TXBYTES(n)            (((n) & 0xFFFF) << 0)
 #define DIEPDMA_TXBYTES_MASK          (0xFFFF << 0)
 
@@ -942,31 +942,31 @@ extern struct dwc_usb usb_ctl;
 #define GC_USB_GUSBCFG_TERMSELDLPULSE_OFFSET     0xc
 
 #define GC_USB_GUSBCFG_PCCI_LSB                  23
-#define GC_USB_GUSBCFG_PCCI_MASK                 (1 << 23)
+#define GC_USB_GUSBCFG_PCCI_MASK                 BIT(23)
 #define GC_USB_GUSBCFG_PCCI_SIZE                 0x1
 #define GC_USB_GUSBCFG_PCCI_DEFAULT              0x0
 #define GC_USB_GUSBCFG_PCCI_OFFSET               0xc
 
 #define GC_USB_GUSBCFG_PTCI_LSB                  24
-#define GC_USB_GUSBCFG_PTCI_MASK                 (1 << 24)
+#define GC_USB_GUSBCFG_PTCI_MASK                 BIT(24)
 #define GC_USB_GUSBCFG_PTCI_SIZE                 0x1
 #define GC_USB_GUSBCFG_PTCI_DEFAULT              0x0
 #define GC_USB_GUSBCFG_PTCI_OFFSET               0xc
 
 #define GC_USB_GUSBCFG_ULPIIPD_LSB               25
-#define GC_USB_GUSBCFG_ULPIIPD_MASK              (1 << 25)
+#define GC_USB_GUSBCFG_ULPIIPD_MASK              BIT(25)
 #define GC_USB_GUSBCFG_ULPIIPD_SIZE              0x1
 #define GC_USB_GUSBCFG_ULPIIPD_DEFAULT           0x0
 #define GC_USB_GUSBCFG_ULPIIPD_OFFSET            0xc
 
 #define GC_USB_GUSBCFG_FHMOD_LSB                 29
-#define GC_USB_GUSBCFG_FHMOD_MASK                (1 << 29)
+#define GC_USB_GUSBCFG_FHMOD_MASK                BIT(29)
 #define GC_USB_GUSBCFG_FHMOD_SIZE                0x1
 #define GC_USB_GUSBCFG_FHMOD_DEFAULT             0x0
 #define GC_USB_GUSBCFG_FHMOD_OFFSET              0xc
 
 #define GC_USB_GUSBCFG_FDMOD_LSB                 30
-#define GC_USB_GUSBCFG_FDMOD_MASK                (1 << 30)
+#define GC_USB_GUSBCFG_FDMOD_MASK                BIT(30)
 #define GC_USB_GUSBCFG_FDMOD_SIZE                0x1
 #define GC_USB_GUSBCFG_FDMOD_DEFAULT             0x0
 #define GC_USB_GUSBCFG_FDMOD_OFFSET              0xc

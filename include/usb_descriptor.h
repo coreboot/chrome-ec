@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -200,7 +200,7 @@ struct usb_endpoint_descriptor {
 #define USB_PROTOCOL_GOOGLE_UPDATE 0xff
 
 /* Double define for cr50 code freeze.
- * TODO(vbendeb): dedup this. */
+ * TODO(vbendeb): dedupe this. */
 #define USB_SUBCLASS_GOOGLE_CR50   0x53
 /* We can use any protocol we want */
 #define USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE 0xff
@@ -232,8 +232,8 @@ struct usb_endpoint_descriptor {
 
 /* Standard requests for bRequest field in a SETUP packet. */
 #define USB_REQ_GET_STATUS         0x00
-#define USB_REQ_GET_STATUS_SELF_POWERED  (1 << 0)
-#define USB_REQ_GET_STATUS_REMOTE_WAKEUP (1 << 1)
+#define USB_REQ_GET_STATUS_SELF_POWERED  BIT(0)
+#define USB_REQ_GET_STATUS_REMOTE_WAKEUP BIT(1)
 #define USB_REQ_CLEAR_FEATURE      0x01
 #define USB_REQ_SET_FEATURE        0x03
 #define USB_REQ_FEATURE_ENDPOINT_HALT        0x0000

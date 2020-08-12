@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -92,7 +92,7 @@ static void fail_and_clean_up(void)
 	test_fail();
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	uint32_t state = system_get_scratchpad();
 

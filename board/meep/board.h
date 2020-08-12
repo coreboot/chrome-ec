@@ -13,61 +13,46 @@
 #define VARIANT_OCTOPUS_CHARGER_ISL9238
 #include "baseboard.h"
 
-/* Enable PSL hibernate mode. */
-#define CONFIG_HIBERNATE_PSL
-
 #define CONFIG_VOLUME_BUTTONS
 #define GPIO_VOLUME_UP_L GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_VOLUME_DOWN_L GPIO_EC_VOLDN_BTN_ODL
-
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
 /* EC console commands  */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
 #define CONFIG_LED_COMMON
+#define CONFIG_LED_POWER_LED
 
 /* Sensors */
-/* TODO(b/111842131): confirm lid accelerometer matches yorp */
 #define CONFIG_ACCEL_KX022		/* Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
+
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
+
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
-#define CONFIG_LID_ANGLE_TABLET_MODE
-#define CONFIG_LID_ANGLE_INVALID_CHECK
-
-#define CONFIG_TABLET_MODE
-#define CONFIG_TABLET_SWITCH
-#define TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
-
+#define CONFIG_PWM
+#define CONFIG_PWM_KBLIGHT
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_13K7_47K_4050B
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
-#define CONFIG_DPTF
-#define CONFIG_DPTF_DEVICE_ORIENTATION
+#define CONFIG_KEYBOARD_FACTORY_TEST
 
-#define CONFIG_ACCEL_INTERRUPTS
-/* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO 1024
-
-/* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_HOST_EVENT
-
-#define OCTOPUS_BATT_FUEL_LOW_LED 10
+#define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 
 #define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* Additional PPC second source */
+#define CONFIG_USBC_PPC_SYV682X
 
 #ifndef __ASSEMBLER__
 
@@ -77,6 +62,8 @@
 enum adc_channel {
 	ADC_TEMP_SENSOR_AMB,		/* ADC0 */
 	ADC_TEMP_SENSOR_CHARGER,	/* ADC1 */
+	ADC_VBUS_C0,			/* ADC9 */
+	ADC_VBUS_C1,			/* ADC4 */
 	ADC_CH_COUNT
 };
 
@@ -107,8 +94,16 @@ enum battery_type {
 	BATTERY_SAMSUNG_SDI,
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_ATL,
+	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_TYPE_COUNT,
 };
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+#endif
+
+int board_is_convertible(void);
 
 #endif /* !__ASSEMBLER__ */
 

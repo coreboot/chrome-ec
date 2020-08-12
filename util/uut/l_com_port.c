@@ -102,7 +102,7 @@ void set_read_blocking(int dev_drv, bool block)
 	if (tcgetattr(dev_drv, &tty) != 0) {
 		display_color_msg(FAIL,
 			"set_read_blocking Error: %d Fail to get attribute "
-			"from Device number %lu.\n",
+			"from Device number %d.\n",
 			errno, dev_drv);
 		return;
 	}
@@ -113,7 +113,7 @@ void set_read_blocking(int dev_drv, bool block)
 	if (tcsetattr(dev_drv, TCSANOW, &tty) != 0) {
 		display_color_msg(FAIL,
 			"set_read_blocking Error: %d Fail to set attribute to "
-			"Device number %lu.\n",
+			"Device number %d.\n",
 			errno, dev_drv);
 	}
 }
@@ -147,7 +147,7 @@ bool com_config_uart(int h_dev_drv, struct comport_fields com_port_fields)
 	if (tcgetattr(h_dev_drv, &tty) != 0) {
 		display_color_msg(FAIL,
 			"com_config_uart Error: Fail to get attribute from "
-			"Device number %lu.\n",
+			"Device number %d.\n",
 			h_dev_drv);
 		return false;
 	}
@@ -200,6 +200,57 @@ bool com_config_uart(int h_dev_drv, struct comport_fields com_port_fields)
 	return true;
 }
 
+/**
+ * Drain the console RX buffer before programming. The device should be in
+ * programming mode and shouldn't be printing anything. Anything that's
+ * currently in the buffer could interfere with programming. discard_input
+ * will discard everything currently in the buffer. It prints any non zero
+ * characters and returns when the console is empty and ready for programming.
+ *
+ * This is the same as discard_input in stm32mon.
+ * TODO: create common library for initializing serial consoles.
+ */
+static void discard_input(int fd)
+{
+	uint8_t buffer[64];
+	int res, i;
+	int count_of_zeros;
+
+	/* Keep track of discarded zeros */
+	count_of_zeros = 0;
+	do {
+		res = read(fd, buffer, sizeof(buffer));
+		if (res > 0) {
+
+			/* Discard zeros in the beginning of the buffer. */
+			for (i = 0; i < res; i++)
+				if (buffer[i])
+					break;
+
+			count_of_zeros += i;
+			if (i == res) {
+				/* Only zeros, nothing to print out. */
+				continue;
+			}
+
+			/* Discard zeros in the end of the buffer. */
+			while (!buffer[res - 1]) {
+				count_of_zeros++;
+				res--;
+			}
+
+			printf("Recv[%d]:", res - i);
+			for (; i < res; i++)
+				printf("%02x ", buffer[i]);
+			printf("\n");
+		}
+	} while (res > 0);
+
+	if (count_of_zeros)
+		printf("%d zeros ignored\n", count_of_zeros);
+}
+
+
 /******************************************************************************
  * Function: int com_port_open()
  *
@@ -240,6 +291,12 @@ int com_port_open(const char *com_port_dev_name,
 		close(port_handler);
 		return INVALID_HANDLE_VALUE;
 	}
+
+	/*
+	 * Drain the console, so what ever is already in the EC console wont
+	 * interfere with programming.
+	 */
+	discard_input(port_handler);
 
 	return port_handler;
 }
@@ -332,9 +389,9 @@ uint32_t com_port_read_bin(int device_id, uint8_t *buffer, uint32_t buf_size)
 
 	if (read_bytes == -1) {
 		display_color_msg(FAIL,
-			"com_port_read_bin() Error: %d Device number %lu was not "
+			"%s() Error: %d Device number %u was not "
 			"opened, %s.\n",
-			errno, (uint32_t)device_id, strerror(errno));
+			__func__, errno, (uint32_t)device_id, strerror(errno));
 	}
 
 	return read_bytes;
@@ -366,8 +423,8 @@ uint32_t com_port_wait_read(int device_id)
 	ret_val = poll(&fds, 1, COMMAND_TIMEOUT);
 	if (ret_val < 0) {
 		display_color_msg(FAIL,
-			"com_port_wait_read() Error: %d Device number %lu %s\n",
-			errno, (uint32_t)device_id, strerror(errno));
+			"%s() Error: %d Device number %u %s\n",
+			__func__, errno, (uint32_t)device_id, strerror(errno));
 		return 0;
 	}
 
@@ -379,7 +436,7 @@ uint32_t com_port_wait_read(int device_id)
 		if (ioctl(device_id, FIONREAD, &bytes) < 0) {
 			display_color_msg(FAIL,
 				"com_port_wait_for_read() Error: %d Device number "
-				"%lu %s\n",
+				"%u %s\n",
 				errno, (uint32_t)device_id, strerror(errno));
 			return 0;
 		}

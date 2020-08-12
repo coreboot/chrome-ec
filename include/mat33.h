@@ -7,24 +7,25 @@
 
 #define __CROS_EC_MAT_33_H
 
-#include "vec3.h"
+#include "math_util.h"
 #include "util.h"
+#include "vec3.h"
 
-typedef float mat33_t[3][3];
-typedef size_t size3_t[3];
+typedef float mat33_float_t[3][3];
+typedef size_t sizev3_t[3];
 
-void init_zero_matrix(mat33_t A);
-void init_diagonal_matrix(mat33_t A, float x);
+void mat33_fp_init_zero(mat33_fp_t A);
+void mat33_fp_init_diagonal(mat33_fp_t A, fp_t x);
 
-void mat33_scalar_mul(mat33_t A, float c);
+void mat33_fp_scalar_mul(mat33_fp_t A, fp_t c);
 
-void mat33_swap_rows(mat33_t A, const size_t i, const size_t j);
+void mat33_fp_swap_rows(mat33_fp_t A, const size_t i, const size_t j);
 
-void mat33_get_eigenbasis(mat33_t S, vec3_t eigenvals, mat33_t eigenvecs);
+void mat33_fp_get_eigenbasis(mat33_fp_t S, fpv3_t eigenvals,
+			     mat33_fp_t eigenvecs);
 
-size_t mat33_maxind(mat33_t A, size_t k);
+size_t mat33_fp_maxind(mat33_fp_t A, size_t k);
 
-void mat33_rotate(mat33_t A, float c, float s,
-		  size_t k, size_t l, size_t i, size_t j);
-
+void mat33_fp_rotate(mat33_fp_t A, fp_t c, fp_t s,
+		     size_t k, size_t l, size_t i, size_t j);
 #endif  /* __CROS_EC_MAT_33_H */

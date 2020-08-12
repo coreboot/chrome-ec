@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,22 +21,22 @@
 #define I2C_CLOCK 16000000 /* 16 MHz */
 
 /* Status */
-#define STS_NBB (1 << 0) /* Bus busy */
-#define STS_LAB (1 << 1) /* Arbitration lost */
-#define STS_LRB (1 << 3) /* Last received bit */
-#define STS_BER (1 << 4) /* Bus error */
-#define STS_PIN (1 << 7) /* Pending interrupt */
+#define STS_NBB BIT(0) /* Bus busy */
+#define STS_LAB BIT(1) /* Arbitration lost */
+#define STS_LRB BIT(3) /* Last received bit */
+#define STS_BER BIT(4) /* Bus error */
+#define STS_PIN BIT(7) /* Pending interrupt */
 
 /* Control */
-#define CTRL_ACK (1 << 0) /* Acknowledge */
-#define CTRL_STO (1 << 1) /* STOP */
-#define CTRL_STA (1 << 2) /* START */
-#define CTRL_ENI (1 << 3) /* Enable interrupt */
-#define CTRL_ESO (1 << 6) /* Enable serial output */
-#define CTRL_PIN (1 << 7) /* Pending interrupt not */
+#define CTRL_ACK BIT(0) /* Acknowledge */
+#define CTRL_STO BIT(1) /* STOP */
+#define CTRL_STA BIT(2) /* START */
+#define CTRL_ENI BIT(3) /* Enable interrupt */
+#define CTRL_ESO BIT(6) /* Enable serial output */
+#define CTRL_PIN BIT(7) /* Pending interrupt not */
 
 /* Completion */
-#define COMP_IDLE (1 << 29)    /* i2c bus is idle */
+#define COMP_IDLE BIT(29)    /* i2c bus is idle */
 #define COMP_RW_BITS_MASK 0x3C /* R/W bits mask */
 
 /* Maximum transfer of a SMBUS block transfer */
@@ -116,21 +116,21 @@ static void configure_controller(int controller, int kbps)
 	configure_controller_speed(controller, kbps);
 	MEC1322_I2C_CTRL(controller) = CTRL_PIN | CTRL_ESO |
 				       CTRL_ACK | CTRL_ENI;
-	MEC1322_I2C_CONFIG(controller) |= 1 << 10; /* ENAB */
+	MEC1322_I2C_CONFIG(controller) |= BIT(10); /* ENAB */
 
 	/* Enable interrupt */
-	MEC1322_I2C_CONFIG(controller) |= 1 << 29; /* ENIDI */
-	MEC1322_INT_ENABLE(12) |= (1 << controller);
-	MEC1322_INT_BLK_EN |= 1 << 12;
+	MEC1322_I2C_CONFIG(controller) |= BIT(29); /* ENIDI */
+	MEC1322_INT_ENABLE(12) |= BIT(controller);
+	MEC1322_INT_BLK_EN |= BIT(12);
 }
 
 static void reset_controller(int controller)
 {
 	int i;
 
-	MEC1322_I2C_CONFIG(controller) |= 1 << 9;
+	MEC1322_I2C_CONFIG(controller) |= BIT(9);
 	udelay(100);
-	MEC1322_I2C_CONFIG(controller) &= ~(1 << 9);
+	MEC1322_I2C_CONFIG(controller) &= ~BIT(9);
 
 	for (i = 0; i < i2c_ports_used; ++i)
 		if (controller == i2c_port_to_controller(i2c_ports[i].port)) {
@@ -236,7 +236,9 @@ static inline void push_in_buf(uint8_t **in, uint8_t val, int skip)
 	}
 }
 
-int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+int chip_i2c_xfer(const int port,
+		  const uint16_t slave_addr_flags,
+		  const uint8_t *out, int out_size,
 		  uint8_t *in, int in_size, int flags)
 {
 	int i;
@@ -284,7 +286,9 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 
 	if (out_size) {
 		if (send_start) {
-			MEC1322_I2C_DATA(controller) = (uint8_t)slave_addr;
+			MEC1322_I2C_DATA(controller) =
+				(uint8_t)(I2C_GET_ADDR(slave_addr_flags)
+					  << 1);
 
 			/* Clock out the slave address, sending START bit */
 			MEC1322_I2C_CTRL(controller) = CTRL_PIN | CTRL_ESO |
@@ -327,8 +331,10 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 							       CTRL_ACK |
 							       CTRL_ENI;
 
-			MEC1322_I2C_DATA(controller) = (uint8_t)slave_addr
-						     | 0x01;
+			MEC1322_I2C_DATA(controller) =
+				(uint8_t)(I2C_GET_ADDR(slave_addr_flags)
+					  << 1)
+				| 0x01;
 
 			/* New transaction case, clock out slave address. */
 			if (cdata[controller].transaction_state ==
@@ -463,7 +469,7 @@ void i2c_set_timeout(int port, uint32_t timeout)
 		timeout ? timeout : I2C_TIMEOUT_DEFAULT_US;
 }
 
-static void i2c_init(void)
+void i2c_init(void)
 {
 	int i;
 	int controller;
@@ -494,7 +500,6 @@ static void i2c_init(void)
 		i2c_set_timeout(i2c_ports[i].port, 0);
 	}
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);
 
 static void handle_interrupt(int controller)
 {

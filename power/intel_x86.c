@@ -10,7 +10,6 @@
 #include "chipset.h"
 #include "console.h"
 #include "ec_commands.h"
-#include "espi.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "intel_x86.h"
@@ -23,20 +22,9 @@
 #include "vboot.h"
 #include "wireless.h"
 
-/* Chipset specific header files */
-/* Geminilake and apollolake use same power sequencing. */
-#ifdef CONFIG_CHIPSET_APL_GLK
-#include "apollolake.h"
-#elif defined(CONFIG_CHIPSET_CANNONLAKE)
-#include "cannonlake.h"
-#elif defined(CONFIG_CHIPSET_ICELAKE)
-#include "icelake.h"
-#elif defined(CONFIG_CHIPSET_SKYLAKE)
-#include "skylake.h"
-#endif
-
 /* Console output macros */
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHIPSET, format, ## args)
 
 enum sys_sleep_state {
 	SYS_SLEEP_S3,
@@ -47,13 +35,8 @@ enum sys_sleep_state {
 };
 
 static const int sleep_sig[] = {
-#ifdef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
-	[SYS_SLEEP_S3] = VW_SLP_S3_L,
-	[SYS_SLEEP_S4] = VW_SLP_S4_L,
-#else
-	[SYS_SLEEP_S3] = GPIO_PCH_SLP_S3_L,
-	[SYS_SLEEP_S4] = GPIO_PCH_SLP_S4_L,
-#endif
+	[SYS_SLEEP_S3] = SLP_S3_SIGNAL_L,
+	[SYS_SLEEP_S4] = SLP_S4_SIGNAL_L,
 #ifdef CONFIG_POWER_S0IX
 	[SYS_SLEEP_S0IX] = GPIO_PCH_SLP_S0_L,
 #endif
@@ -100,15 +83,18 @@ DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, power_up_inhibited_cb, HOOK_PRIO_DEFAULT);
 /* Get system sleep state through GPIOs or VWs */
 static inline int chipset_get_sleep_signal(enum sys_sleep_state state)
 {
-#ifdef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
-	if (espi_signal_is_vw(sleep_sig[state]))
-		return espi_vw_get_wire(sleep_sig[state]);
-	else
-#endif
-		return gpio_get_level(sleep_sig[state]);
+	return power_signal_get_level(sleep_sig[state]);
 }
 
 #ifdef CONFIG_BOARD_HAS_RTC_RESET
+static void intel_x86_rtc_reset(void)
+{
+	CPRINTS("Asserting RTCRST# to PCH");
+	gpio_set_level(GPIO_PCH_RTCRST, 1);
+	udelay(100);
+	gpio_set_level(GPIO_PCH_RTCRST, 0);
+}
+
 static enum power_state power_wait_s5_rtc_reset(void)
 {
 	static int s5_exit_tries;
@@ -122,7 +108,7 @@ static enum power_state power_wait_s5_rtc_reset(void)
 			chipset_force_g3();
 
 			/* Assert RTCRST# and retry 5 times */
-			board_rtc_reset();
+			intel_x86_rtc_reset();
 
 			if (++s5_exit_tries > 4) {
 				s5_exit_tries = 0;
@@ -140,6 +126,55 @@ static enum power_state power_wait_s5_rtc_reset(void)
 #endif
 
 #ifdef CONFIG_POWER_S0IX
+/*
+ * Backup copies of SCI and SMI mask to preserve across S0ix suspend/resume
+ * cycle. If the host uses S0ix, BIOS is not involved during suspend and resume
+ * operations and hence SCI/SMI masks are programmed only once during boot-up.
+ *
+ * These backup variables are set whenever host expresses its interest to
+ * enter S0ix and then lpc_host_event_mask for SCI and SMI are cleared. When
+ * host resumes from S0ix, masks from backup variables are copied over to
+ * lpc_host_event_mask for SCI and SMI.
+ */
+static host_event_t backup_sci_mask;
+static host_event_t backup_smi_mask;
+
+/*
+ * Clear host event masks for SMI and SCI when host is entering S0ix. This is
+ * done to prevent any SCI/SMI interrupts when the host is in suspend. Since
+ * BIOS is not involved in the suspend path, EC needs to take care of clearing
+ * these masks.
+ */
+static void lpc_s0ix_suspend_clear_masks(void)
+{
+	backup_sci_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SCI);
+	backup_smi_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SMI);
+
+	lpc_set_host_event_mask(LPC_HOST_EVENT_SCI, 0);
+	lpc_set_host_event_mask(LPC_HOST_EVENT_SMI, 0);
+}
+
+/*
+ * Restore host event masks for SMI and SCI when host exits S0ix. This is done
+ * because BIOS is not involved in the resume path and so EC needs to restore
+ * the masks from backup variables.
+ */
+static void lpc_s0ix_resume_restore_masks(void)
+{
+	/*
+	 * No need to restore SCI/SMI masks if both backup_sci_mask and
+	 * backup_smi_mask are zero. This indicates that there was a failure to
+	 * enter S0ix(SLP_S0# assertion) and hence SCI/SMI masks were never
+	 * backed up.
+	 */
+	if (!backup_sci_mask && !backup_smi_mask)
+		return;
+
+	lpc_set_host_event_mask(LPC_HOST_EVENT_SCI, backup_sci_mask);
+	lpc_set_host_event_mask(LPC_HOST_EVENT_SMI, backup_smi_mask);
+
+	backup_sci_mask = backup_smi_mask = 0;
+}
 
 enum s0ix_notify_type {
 	S0IX_NOTIFY_NONE,
@@ -154,6 +189,11 @@ static void s0ix_transition(int check_state, int hook_id)
 {
 	if (s0ix_notify != check_state)
 		return;
+
+	/* Clear masks before any hooks are run for suspend. */
+	if (s0ix_notify == S0IX_NOTIFY_SUSPEND)
+		lpc_s0ix_suspend_clear_masks();
+
 	hook_notify(hook_id);
 	s0ix_notify = S0IX_NOTIFY_NONE;
 }
@@ -168,7 +208,126 @@ static void handle_chipset_reset(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESET, handle_chipset_reset, HOOK_PRIO_FIRST);
 
-#endif
+#ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
+#ifdef CONFIG_POWER_S0IX_FAILURE_DETECTION
+
+static uint16_t slp_s0ix_timeout;
+static uint32_t slp_s0ix_transitions;
+
+static void s0ix_transition_timeout(void);
+DECLARE_DEFERRED(s0ix_transition_timeout);
+
+static void s0ix_increment_transition(void)
+{
+	if ((slp_s0ix_transitions & EC_HOST_RESUME_SLEEP_TRANSITIONS_MASK) <
+	    EC_HOST_RESUME_SLEEP_TRANSITIONS_MASK)
+		slp_s0ix_transitions += 1;
+}
+
+static void s0ix_suspend_transition(void)
+{
+	s0ix_increment_transition();
+	hook_call_deferred(&s0ix_transition_timeout_data, -1);
+}
+
+static void s0ix_resume_transition(void)
+{
+	s0ix_increment_transition();
+
+	/*
+	 * Start the timer again to ensure the AP doesn't get itself stuck in
+	 * a state where it's no longer in S0ix, but from the Linux perspective
+	 * is still suspended. Perhaps a bug in the SoC-internal periodic
+	 * housekeeping code might result in a situation like this.
+	 */
+	if (slp_s0ix_timeout)
+		hook_call_deferred(&s0ix_transition_timeout_data,
+				   (uint32_t)slp_s0ix_timeout * 1000);
+}
+
+static void s0ix_transition_timeout(void)
+{
+	/* Mark the timeout. */
+	slp_s0ix_transitions |= EC_HOST_RESUME_SLEEP_TIMEOUT;
+	hook_call_deferred(&s0ix_transition_timeout_data, -1);
+
+	/*
+	 * Wake up the AP so they don't just chill in a non-suspended state and
+	 * burn power. Overload a vaguely related event bit since event bits are
+	 * at a premium. If the system never entered S0ix, then manually set the
+	 * wake mask to pretend it did, so that the hang detect event wakes the
+	 * system.
+	 */
+	if (power_get_state() == POWER_S0) {
+		host_event_t s0ix_wake_mask;
+
+		get_lazy_wake_mask(POWER_S0ix, &s0ix_wake_mask);
+		lpc_set_host_event_mask(LPC_HOST_EVENT_WAKE, s0ix_wake_mask);
+	}
+
+	CPRINTS("Warning: Detected S0ix hang! Waking host up!");
+	host_set_single_event(EC_HOST_EVENT_HANG_DETECT);
+}
+
+static void s0ix_start_suspend(struct host_sleep_event_context *ctx)
+{
+	uint16_t timeout = ctx->sleep_timeout_ms;
+
+	slp_s0ix_transitions = 0;
+
+	/* Use zero internally to indicate no timeout. */
+	if (timeout == EC_HOST_SLEEP_TIMEOUT_DEFAULT) {
+		timeout = CONFIG_SLEEP_TIMEOUT_MS;
+
+	} else if (timeout == EC_HOST_SLEEP_TIMEOUT_INFINITE) {
+		slp_s0ix_timeout = 0;
+		return;
+	}
+
+	slp_s0ix_timeout = timeout;
+	hook_call_deferred(&s0ix_transition_timeout_data,
+			   (uint32_t)timeout * 1000);
+}
+
+static void s0ix_complete_resume(struct host_sleep_event_context *ctx)
+{
+	hook_call_deferred(&s0ix_transition_timeout_data, -1);
+	ctx->sleep_transitions = slp_s0ix_transitions;
+
+	/*
+	 * If s0ix timed out and never transitioned, then the wake mask was
+	 * modified to its s0ix state, so that the event wakes the system.
+	 * Explicitly restore the wake mask to its S0 state now.
+	 */
+	power_update_wake_mask();
+}
+
+static void s0ix_reset_tracking(void)
+{
+	slp_s0ix_transitions = 0;
+	slp_s0ix_timeout = 0;
+}
+
+#else /* !CONFIG_POWER_S0IX_FAILURE_DETECTION */
+
+#define s0ix_suspend_transition()
+#define s0ix_resume_transition()
+#define s0ix_start_suspend(_ctx)
+#define s0ix_complete_resume(_ctx)
+#define s0ix_reset_tracking()
+
+#endif /* CONFIG_POWER_S0IX_FAILURE_DETECTION */
+
+void power_reset_host_sleep_state(void)
+{
+	power_set_host_sleep_state(HOST_SLEEP_EVENT_DEFAULT_RESET);
+	s0ix_reset_tracking();
+	power_chipset_handle_host_sleep_event(HOST_SLEEP_EVENT_DEFAULT_RESET,
+					      NULL);
+}
+
+#endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */
+#endif /* CONFIG_POWER_S0IX */
 
 void chipset_throttle_cpu(int throttle)
 {
@@ -181,23 +340,35 @@ void chipset_throttle_cpu(int throttle)
 
 enum power_state power_chipset_init(void)
 {
+	CPRINTS("%s: power_signal=0x%x", __func__, power_get_signals());
+
+	if (!system_jumped_to_this_image())
+		return POWER_G3;
 	/*
-	 * If we're switching between images without rebooting, see if the x86
-	 * is already powered on; if so, leave it there instead of cycling
-	 * through G3.
+	 * We are here as RW. We need to handle the following cases:
+	 *
+	 * 1. Late sysjump by software sync. AP is in S0.
+	 * 2. Shutting down in recovery mode then sysjump by EFS2. AP is in S5
+	 *    and expected to sequence down.
+	 * 3. Rebooting from recovery mode then sysjump by EFS2. AP is in S5
+	 *    and expected to sequence up.
+	 * 4. RO jumps to RW from main() by EFS2. (a.k.a. power on reset, cold
+	 *    reset). AP is in G3.
 	 */
-	if (system_jumped_to_this_image()) {
-		if ((power_get_signals() & IN_ALL_S0) == IN_ALL_S0) {
-			/* Disable idle task deep sleep when in S0. */
-			disable_sleep(SLEEP_MASK_AP_RUN);
-			CPRINTS("already in S0");
-			return POWER_S0;
-		}
-
-		/* Force all signals to their G3 states */
-		chipset_force_g3();
+	if ((power_get_signals() & IN_ALL_S0) == IN_ALL_S0) {
+		/* case #1. Disable idle task deep sleep when in S0. */
+		disable_sleep(SLEEP_MASK_AP_RUN);
+		CPRINTS("already in S0");
+		return POWER_S0;
 	}
-
+	if ((power_get_signals() & CHIPSET_G3S5_POWERUP_SIGNAL)
+			== CHIPSET_G3S5_POWERUP_SIGNAL) {
+		/* case #2 & #3 */
+		CPRINTS("already in S5");
+		return POWER_S5;
+	}
+	/* case #4 */
+	chipset_force_g3();
 	return POWER_G3;
 }
 
@@ -273,47 +444,11 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 #endif
 
 	case POWER_G3S5:
-#ifdef CONFIG_CHARGER
-		{
-		int tries = 0;
-
-		/*
-		 * Allow charger to be initialized for upto defined tries,
-		 * in case we're trying to boot the AP with no battery.
-		 */
-		while ((tries < CHARGER_INITIALIZED_TRIES) &&
-		       is_power_up_inhibited()) {
-			msleep(CHARGER_INITIALIZED_DELAY_MS);
-			tries++;
-		}
-
-		/*
-		 * Return to G3 if battery level is too low. Set
-		 * power_up_inhibited in order to check the eligibility to boot
-		 * AP up after battery SOC changes.
-		 */
-		if (tries == CHARGER_INITIALIZED_TRIES) {
-			CPRINTS("power-up inhibited");
-			power_up_inhibited = 1;
+		if (intel_x86_wait_power_up_ok() != EC_SUCCESS) {
 			chipset_force_shutdown(
 				CHIPSET_SHUTDOWN_BATTERY_INHIBIT);
 			return POWER_G3;
 		}
-
-		power_up_inhibited = 0;
-		}
-#endif
-
-#ifdef CONFIG_VBOOT_EFS
-		/*
-		 * We have to test power readiness here (instead of S5->S3)
-		 * because when entering S5, EC enables EC_ROP_SLP_SUS pin
-		 * which causes (short-powered) system to brown out.
-		 */
-		while (!system_can_boot_ap())
-			msleep(200);
-#endif
-
 #ifdef CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
 		/*
 		 * Callback to do pre-initialization within the context of
@@ -403,11 +538,13 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 
 #ifdef CONFIG_POWER_S0IX
 	case POWER_S0S0ix:
+
 		/*
 		 * Call hooks only if we haven't notified listeners of S0ix
 		 * suspend.
 		 */
 		s0ix_transition(S0IX_NOTIFY_SUSPEND, HOOK_CHIPSET_SUSPEND);
+		s0ix_suspend_transition();
 
 		/*
 		 * Enable idle task deep sleep. Allow the low power idle task
@@ -423,6 +560,7 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 		 */
 		disable_sleep(SLEEP_MASK_AP_RUN);
 
+		s0ix_resume_transition();
 		return POWER_S0;
 #endif
 
@@ -432,6 +570,9 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 
 		/* Disable wireless */
 		wireless_set_state(WIRELESS_OFF);
+
+		/* Call hooks after we remove power rails */
+		hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 
 		/* Always enter into S5 state. The S5 state is required to
 		 * correctly handle global resets which have a bit of delay
@@ -450,6 +591,33 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 	return state;
 }
 
+void intel_x86_rsmrst_signal_interrupt(enum gpio_signal signal)
+{
+	int rsmrst_in = gpio_get_level(GPIO_RSMRST_L_PGOOD);
+	int rsmrst_out = gpio_get_level(GPIO_PCH_RSMRST_L);
+
+	/*
+	 * This function is called when rsmrst changes state. If rsmrst
+	 * has been asserted (high -> low) then pass this new state to PCH.
+	 */
+	if (!rsmrst_in && (rsmrst_in != rsmrst_out))
+		gpio_set_level(GPIO_PCH_RSMRST_L, rsmrst_in);
+
+	/*
+	 * Call the main power signal interrupt handler to wake up the chipset
+	 * task which handles low->high rsmrst pass through.
+	 */
+	power_signal_interrupt(signal);
+}
+
+__overridable void board_before_rsmrst(int rsmrst)
+{
+}
+
+__overridable void board_after_rsmrst(int rsmrst)
+{
+}
+
 void common_intel_x86_handle_rsmrst(enum power_state state)
 {
 	/*
@@ -463,9 +631,7 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 	if (rsmrst_in == rsmrst_out)
 		return;
 
-#ifdef CONFIG_BOARD_HAS_BEFORE_RSMRST
 	board_before_rsmrst(rsmrst_in);
-#endif
 
 #ifdef CONFIG_CHIPSET_APL_GLK
 	/* Only passthrough RSMRST_L de-assertion on power up */
@@ -483,58 +649,21 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 	gpio_set_level(GPIO_PCH_RSMRST_L, rsmrst_in);
 
 	CPRINTS("Pass through GPIO_RSMRST_L_PGOOD: %d", rsmrst_in);
+
+	board_after_rsmrst(rsmrst_in);
 }
 
 #ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 
-void __attribute__((weak))
-power_board_handle_host_sleep_event(enum host_sleep_event state)
+__overridable void power_board_handle_host_sleep_event(
+		enum host_sleep_event state)
 {
 	/* Default weak implementation -- no action required. */
 }
 
-#ifdef CONFIG_POWER_S0IX
-/*
- * Backup copies of SCI and SMI mask to preserve across S0ix suspend/resume
- * cycle. If the host uses S0ix, BIOS is not involved during suspend and resume
- * operations and hence SCI/SMI masks are programmed only once during boot-up.
- *
- * These backup variables are set whenever host expresses its interest to
- * enter S0ix and then lpc_host_event_mask for SCI and SMI are cleared. When
- * host resumes from S0ix, masks from backup variables are copied over to
- * lpc_host_event_mask for SCI and SMI.
- */
-static host_event_t backup_sci_mask;
-static host_event_t backup_smi_mask;
-
-/*
- * Clear host event masks for SMI and SCI when host is entering S0ix. This is
- * done to prevent any SCI/SMI interrupts when the host is in suspend. Since
- * BIOS is not involved in the suspend path, EC needs to take care of clearing
- * these masks.
- */
-static void lpc_s0ix_suspend_clear_masks(void)
-{
-	backup_sci_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SCI);
-	backup_smi_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SMI);
-
-	lpc_set_host_event_mask(LPC_HOST_EVENT_SCI, 0);
-	lpc_set_host_event_mask(LPC_HOST_EVENT_SMI, 0);
-}
-
-/*
- * Restore host event masks for SMI and SCI when host exits S0ix. This is done
- * because BIOS is not involved in the resume path and so EC needs to restore
- * the masks from backup variables.
- */
-static void lpc_s0ix_resume_restore_masks(void)
-{
-	lpc_set_host_event_mask(LPC_HOST_EVENT_SCI, backup_sci_mask);
-	lpc_set_host_event_mask(LPC_HOST_EVENT_SMI, backup_smi_mask);
-}
-#endif
-
-void power_chipset_handle_host_sleep_event(enum host_sleep_event state)
+__override void power_chipset_handle_host_sleep_event(
+		enum host_sleep_event state,
+		struct host_sleep_event_context *ctx)
 {
 	power_board_handle_host_sleep_event(state);
 
@@ -546,7 +675,8 @@ void power_chipset_handle_host_sleep_event(enum host_sleep_event state)
 		 * notification needs to be sent to listeners.
 		 */
 		s0ix_notify = S0IX_NOTIFY_SUSPEND;
-		lpc_s0ix_suspend_clear_masks();
+
+		s0ix_start_suspend(ctx);
 		power_signal_enable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	} else if (state == HOST_SLEEP_EVENT_S0IX_RESUME) {
 		/*
@@ -557,13 +687,25 @@ void power_chipset_handle_host_sleep_event(enum host_sleep_event state)
 		task_wake(TASK_ID_CHIPSET);
 		lpc_s0ix_resume_restore_masks();
 		power_signal_disable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
+		s0ix_complete_resume(ctx);
+
 	} else if (state == HOST_SLEEP_EVENT_DEFAULT_RESET) {
 		power_signal_disable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	}
 #endif
+
 }
 
 #endif
+
+__overridable void intel_x86_sys_reset_delay(void)
+{
+	/*
+	 * Debounce time for SYS_RESET_L is 16 ms. Wait twice that period
+	 * to be safe.
+	 */
+	udelay(32 * MSEC);
+}
 
 void chipset_reset(enum chipset_reset_reason reason)
 {
@@ -590,10 +732,48 @@ void chipset_reset(enum chipset_reset_reason reason)
 	report_ap_reset(reason);
 
 	gpio_set_level(GPIO_SYS_RESET_L, 0);
-	/*
-	 * Debounce time for SYS_RESET_L is 16 ms. Wait twice that period
-	 * to be safe.
-	 */
-	udelay(32 * MSEC);
+	intel_x86_sys_reset_delay();
 	gpio_set_level(GPIO_SYS_RESET_L, 1);
+}
+
+enum ec_error_list intel_x86_wait_power_up_ok(void)
+{
+#ifdef CONFIG_CHARGER
+	int tries = 0;
+
+	/*
+	 * Allow charger to be initialized for up to defined tries,
+	 * in case we're trying to boot the AP with no battery.
+	 */
+	while ((tries < CHARGER_INITIALIZED_TRIES) &&
+	       is_power_up_inhibited()) {
+		msleep(CHARGER_INITIALIZED_DELAY_MS);
+		tries++;
+	}
+
+	/*
+	 * Return to G3 if battery level is too low. Set
+	 * power_up_inhibited in order to check the eligibility to boot
+	 * AP up after battery SOC changes.
+	 */
+	if (tries == CHARGER_INITIALIZED_TRIES) {
+		CPRINTS("power-up inhibited");
+		power_up_inhibited = 1;
+		return EC_ERROR_TIMEOUT;
+	}
+
+	power_up_inhibited = 0;
+#endif
+
+#if defined(CONFIG_VBOOT_EFS) || defined(CONFIG_VBOOT_EFS2)
+	/*
+	 * We have to test power readiness here (instead of S5->S3)
+	 * because when entering S5, EC enables EC_ROP_SLP_SUS pin
+	 * which causes (short-powered) system to brown out.
+	 */
+	while (!system_can_boot_ap())
+		msleep(200);
+#endif
+
+	return EC_SUCCESS;
 }

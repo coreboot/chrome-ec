@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,22 +21,22 @@
 #define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
 
 /* Flags for writes to MCS */
-#define LM4_I2C_MCS_RUN   (1 << 0)
-#define LM4_I2C_MCS_START (1 << 1)
-#define LM4_I2C_MCS_STOP  (1 << 2)
-#define LM4_I2C_MCS_ACK   (1 << 3)
-#define LM4_I2C_MCS_HS    (1 << 4)
-#define LM4_I2C_MCS_QCMD  (1 << 5)
+#define LM4_I2C_MCS_RUN   BIT(0)
+#define LM4_I2C_MCS_START BIT(1)
+#define LM4_I2C_MCS_STOP  BIT(2)
+#define LM4_I2C_MCS_ACK   BIT(3)
+#define LM4_I2C_MCS_HS    BIT(4)
+#define LM4_I2C_MCS_QCMD  BIT(5)
 
 /* Flags for reads from MCS */
-#define LM4_I2C_MCS_BUSY   (1 << 0)
-#define LM4_I2C_MCS_ERROR  (1 << 1)
-#define LM4_I2C_MCS_ADRACK (1 << 2)
-#define LM4_I2C_MCS_DATACK (1 << 3)
-#define LM4_I2C_MCS_ARBLST (1 << 4)
-#define LM4_I2C_MCS_IDLE   (1 << 5)
-#define LM4_I2C_MCS_BUSBSY (1 << 6)
-#define LM4_I2C_MCS_CLKTO  (1 << 7)
+#define LM4_I2C_MCS_BUSY   BIT(0)
+#define LM4_I2C_MCS_ERROR  BIT(1)
+#define LM4_I2C_MCS_ADRACK BIT(2)
+#define LM4_I2C_MCS_DATACK BIT(3)
+#define LM4_I2C_MCS_ARBLST BIT(4)
+#define LM4_I2C_MCS_IDLE   BIT(5)
+#define LM4_I2C_MCS_BUSBSY BIT(6)
+#define LM4_I2C_MCS_CLKTO  BIT(7)
 
 /*
  * Minimum delay between resetting the port or sending a stop condition, and
@@ -165,7 +165,8 @@ int i2c_do_work(int port)
 	return 0;
 }
 
-int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
+		  const uint8_t *out, int out_size,
 		  uint8_t *in, int in_size, int flags)
 {
 	struct i2c_port_data *pd = pdata + port;
@@ -191,19 +192,19 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 		uint32_t tpr = LM4_I2C_MTPR(port);
 
 		CPRINTS("I2C%d Addr:%02X bad status 0x%02x, SCL=%d, SDA=%d",
-				port,
-				slave_addr,
-				reg_mcs,
-				i2c_get_line_levels(port) & I2C_LINE_SCL_HIGH,
-				i2c_get_line_levels(port) & I2C_LINE_SDA_HIGH);
+			port,
+			I2C_GET_ADDR(slave_addr_flags),
+			reg_mcs,
+			i2c_get_line_levels(port) & I2C_LINE_SCL_HIGH,
+			i2c_get_line_levels(port) & I2C_LINE_SDA_HIGH);
 
 		/* Attempt to unwedge the port. */
 		i2c_unwedge(port);
 
 		/* Clock timeout or arbitration lost.  Reset port to clear. */
-		atomic_or(LM4_SYSTEM_SRI2C_ADDR, (1 << port));
+		atomic_or(LM4_SYSTEM_SRI2C_ADDR, BIT(port));
 		clock_wait_cycles(3);
-		atomic_clear(LM4_SYSTEM_SRI2C_ADDR, (1 << port));
+		atomic_clear(LM4_SYSTEM_SRI2C_ADDR, BIT(port));
 		clock_wait_cycles(3);
 
 		/* Restore settings */
@@ -218,7 +219,7 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 	}
 
 	/* Set slave address for transmit */
-	LM4_I2C_MSA(port) = slave_addr & 0xff;
+	LM4_I2C_MSA(port) = (I2C_GET_ADDR(slave_addr_flags) << 1) & 0xff;
 
 	/* Enable interrupts */
 	pd->task_waiting = task_get_current();
@@ -298,7 +299,7 @@ int i2c_raw_get_sda(int port)
 
 int i2c_get_line_levels(int port)
 {
-	/* Conveniently, MBMON bit (1 << 1) is SDA and (1 << 0) is SCL. */
+	/* Conveniently, MBMON bit BIT(1) is SDA and BIT(0) is SCL. */
 	return LM4_I2C_MBMON(port) & 0x03;
 }
 
@@ -342,7 +343,7 @@ static void i2c_freq_changed(void)
 }
 DECLARE_HOOK(HOOK_FREQ_CHANGE, i2c_freq_changed, HOOK_PRIO_DEFAULT);
 
-static void i2c_init(void)
+void i2c_init(void)
 {
 	uint32_t mask = 0;
 	int i;
@@ -373,7 +374,6 @@ static void i2c_init(void)
 		i2c_set_timeout(i, 0);
 	}
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);
 
 /**
  * Handle an interrupt on the specified port.

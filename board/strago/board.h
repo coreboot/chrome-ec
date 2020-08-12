@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,6 +17,7 @@
 
 #define CONFIG_BOARD_VERSION_GPIO
 
+#undef CONFIG_KEYBOARD_VIVALDI
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_IRQ_GPIO GPIO_KBD_IRQ_L
 #undef CONFIG_KEYBOARD_KSO_BASE
@@ -28,6 +29,7 @@
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_EXTPOWER_GPIO
+#define CONFIG_LTO
 
 /* All data won't fit in data RAM.  So, moving boundary slightly. */
 #undef CONFIG_RO_SIZE
@@ -36,10 +38,13 @@
 #define CONFIG_USB_CHARGER
 #define CONFIG_USB_MUX_PI3USB30532
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
+#undef CONFIG_USB_PD_TCPMV1_DEBUG
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
-#define CONFIG_USB_PD_PORT_COUNT 1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_GPIO
@@ -68,7 +73,6 @@
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER
-#define CONFIG_CHARGER_V2
 #define CONFIG_CHARGER_BQ24770
 #define CONFIG_CHARGER_ILIM_PIN_DISABLED
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
@@ -88,9 +92,10 @@
 #define CONFIG_ACCEL_KXCJ9
 #undef CONFIG_CMD_ACCELS
 #undef CONFIG_CMD_ACCEL_INFO
+#undef CONFIG_CMD_ACCELSPOOF
 #define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE	0
-#define CONFIG_LID_ANGLE_SENSOR_LID	1
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
 /* Number of buttons */
 #define CONFIG_VOLUME_BUTTONS
@@ -100,6 +105,7 @@
 #define CONFIG_ADC
 
 /* Modules we want to exclude */
+#undef CONFIG_CMD_HCDEBUG
 #undef CONFIG_CMD_HASH
 #undef CONFIG_CMD_HOSTCMD
 #undef CONFIG_CMD_I2C_SCAN
@@ -169,6 +175,12 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
+enum sensor_id {
+	BASE_ACCEL,
+	LID_ACCEL,
+	SENSOR_COUNT,
+};
+
 /* Light sensors */
 enum als_id {
 	ALS_ISL29035 = 0,
@@ -192,6 +204,8 @@ enum als_id {
 
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);
+
+#define PORT_TO_HPD(port) (GPIO_USB_C0_DP_HPD)
 
 #endif /* !__ASSEMBLER__ */
 

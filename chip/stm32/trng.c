@@ -7,8 +7,10 @@
 
 #include "common.h"
 #include "console.h"
+#include "host_command.h"
 #include "panic.h"
 #include "registers.h"
+#include "system.h"
 #include "task.h"
 #include "trng.h"
 #include "util.h"
@@ -68,6 +70,11 @@ test_mockable void init_trng(void)
 	STM32_RCC_D2CCIP2R =
 		(STM32_RCC_D2CCIP2R & ~STM32_RCC_D2CCIP2_RNGSEL_MASK)
 			| STM32_RCC_D2CCIP2_RNGSEL_HSI48;
+#elif defined(CHIP_FAMILY_STM32F4)
+	/*
+	 * The RNG clock is the same as the SDIO/USB OTG clock, already set at
+	 * 48 MHz during clock initialisation. Nothing to do.
+	 */
 #else
 #error "Please add support for CONFIG_RNG on this chip family."
 #endif
@@ -85,10 +92,17 @@ test_mockable void exit_trng(void)
 	STM32_RCC_CRRCR &= ~STM32_RCC_CRRCR_HSI48ON;
 #elif defined(CHIP_FAMILY_STM32H7)
 	STM32_RCC_CR &= ~STM32_RCC_CR_HSI48ON;
+#elif defined(CHIP_FAMILY_STM32F4)
+	/* Nothing to do */
 #endif
 }
 
-#ifdef CONFIG_CMD_RAND
+#if defined(CONFIG_CMD_RAND)
+/*
+ * We want to avoid accidentally exposing debug commands in RO since we can't
+ * update RO once in production.
+ */
+#if defined(SECTION_IS_RW)
 static int command_rand(int argc, char **argv)
 {
 	uint8_t data[32];
@@ -97,10 +111,35 @@ static int command_rand(int argc, char **argv)
 	rand_bytes(data, sizeof(data));
 	exit_trng();
 
-	ccprintf("rand %.*h\n", sizeof(data), data);
+	ccprintf("rand %ph\n", HEX_BUF(data, sizeof(data)));
 
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(rand, command_rand,
 			NULL, "Output random bytes to console.");
-#endif
+
+static enum ec_status host_command_rand(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_rand_num *p = args->params;
+	struct ec_response_rand_num *r = args->response;
+	uint16_t num_rand_bytes = p->num_rand_bytes;
+
+	if (system_is_locked())
+		return EC_RES_ACCESS_DENIED;
+
+	if (num_rand_bytes > args->response_max)
+		return EC_RES_OVERFLOW;
+
+	init_trng();
+	rand_bytes(r->rand, num_rand_bytes);
+	exit_trng();
+
+	args->response_size = num_rand_bytes;
+
+	return EC_SUCCESS;
+}
+
+DECLARE_HOST_COMMAND(EC_CMD_RAND_NUM, host_command_rand,
+		     EC_VER_MASK(EC_VER_RAND_NUM));
+#endif /* SECTION_IS_RW */
+#endif /* CONFIG_CMD_RAND */

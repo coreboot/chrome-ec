@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -34,6 +34,14 @@ int lpc_keyboard_input_pending(void);
  * @param send_irq	If non-zero, asserts IRQ
  */
 void lpc_keyboard_put_char(uint8_t chr, int send_irq);
+
+/**
+ * Send an aux byte to host via keyboard port 0x60.
+ *
+ * @param chr		Byte to send
+ * @param send_irq	If non-zero, asserts IRQ
+ */
+void lpc_aux_put_char(uint8_t chr, int send_irq);
 
 /**
  * Clear the keyboard buffer.

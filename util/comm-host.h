@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -27,21 +27,36 @@ extern void *ec_inbuf;
 
 /* Interfaces to allow for comm_init() */
 enum comm_interface {
-	COMM_DEV = (1 << 0),
-	COMM_LPC = (1 << 1),
-	COMM_I2C = (1 << 2),
-	COMM_SERVO = (1 << 3),
+	COMM_DEV = BIT(0),
+	COMM_LPC = BIT(1),
+	COMM_I2C = BIT(2),
+	COMM_SERVO = BIT(3),
 	COMM_ALL = -1
 };
 
 /**
- * Perform initializations needed for subsequent requests
+ * Initialize alternative interfaces
  *
  * @param interfaces	Interfaces to try; use COMM_ALL to try all of them.
  * @param device_name For DEV option, the device file to use.
+ * @param i2c_bus For I2C option, the bus number to use (or -1 to autodetect).
  * @return 0 in case of success, or error code.
  */
-int comm_init(int interfaces, const char *device_name);
+int comm_init_alt(int interfaces, const char *device_name, int i2c_bus);
+
+/**
+ * Initialize dev interface
+ *
+ * @return 0 in case of success, or error code.
+ */
+int comm_init_dev(const char *device_name);
+
+/**
+ * Initialize input & output buffers
+ *
+ * @return 0 in case of success, or error code.
+ */
+int comm_init_buffer(void);
 
 /**
  * Send a command to the EC.  Returns the length of output data returned (0 if

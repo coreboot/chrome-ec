@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -43,7 +43,12 @@ static const char * const meanings[] = {
 	"INVALID_HEADER",
 	"REQUEST_TRUNCATED",
 	"RESPONSE_TOO_BIG",
-	"BUS_ERROR"
+	"BUS_ERROR",
+	"BUSY",
+	"INVALID_HEADER_VERSION",
+	"INVALID_HEADER_CRC",
+	"INVALID_DATA_CRC",
+	"DUP_UNAVAILABLE",
 };
 
 static const char *strresult(int i)

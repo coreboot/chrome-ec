@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,7 +20,6 @@
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_BQ24715
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
-#define CONFIG_CHARGER_V2
 #define CONFIG_CHIPSET_RK3288
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_FORCE_CONSOLE_RESUME
@@ -37,8 +36,9 @@
 #define CONFIG_LED_POWER_ACTIVE_LOW
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LOW_POWER_S0
+#define CONFIG_MKBP_USE_GPIO
 #define CONFIG_POWER_BUTTON
-#define CONFIG_POWER_BUTTON_ACTIVE_STATE 1
+#define CONFIG_POWER_BUTTON_FLAGS BUTTON_FLAG_ACTIVE_HIGH
 #define CONFIG_POWER_COMMON
 #define CONFIG_PWM
 #define CONFIG_SPI
@@ -48,10 +48,16 @@
 
 #define CONFIG_HOSTCMD_ALIGNED
 
+#define CONFIG_LTO
+
 #undef CONFIG_CONSOLE_CMDHELP
 #undef CONFIG_CONSOLE_HISTORY
 #undef CONFIG_SOFTWARE_PANIC
 #undef CONFIG_WATCHDOG_HELP
+#undef CONFIG_CMD_KEYBOARD
+
+/* Not enough RO flash space */
+#undef CONFIG_HOSTCMD_GET_UPTIME_INFO
 
 #define CONFIG_HIBERNATE_WAKEUP_PINS (STM32_PWR_CSR_EWUP1 | STM32_PWR_CSR_EWUP6)
 

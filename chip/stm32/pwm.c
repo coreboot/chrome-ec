@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,6 +6,7 @@
 /* PWM control module for STM32 */
 
 #include "clock.h"
+#include "clock-f.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "hwtimer.h"
@@ -43,7 +44,7 @@ static void pwm_configure(enum pwm_channel ch)
 	int frequency = pwm->frequency ? pwm->frequency : 100;
 	uint16_t ccer;
 
-	if (using_pwm & (1 << ch))
+	if (using_pwm & BIT(ch))
 		return;
 
 	/* Enable timer */
@@ -53,13 +54,13 @@ static void pwm_configure(enum pwm_channel ch)
 	tim->cr1 = 0x0000;
 
 	/*
-	 * CPU clock / PSC determines how fast the counter operates.
+	 * Timer clock / PSC determines how fast the counter operates.
 	 * ARR determines the wave period, CCRn determines duty cycle.
-	 * Thus, frequency = cpu_freq / PSC / ARR. so:
+	 * Thus, frequency = timer_freq / PSC / ARR. so:
 	 *
-	 *     frequency = cpu_freq / (cpu_freq/10000 + 1) / (99 + 1) = 100 Hz.
+	 * frequency = timer_freq / (timer_freq/10000 + 1) / (99 + 1) = 100 Hz.
 	 */
-	tim->psc = clock_get_freq() / (frequency * 100) - 1;
+	tim->psc = clock_get_timer_freq() / (frequency * 100) - 1;
 	tim->arr = 99;
 
 	if (pwm->channel <= 2) /* Channel ID starts from 1 */
@@ -69,9 +70,9 @@ static void pwm_configure(enum pwm_channel ch)
 
 	/* Output, PWM mode 1, preload enable */
 	if (pwm->channel & 0x1)
-		*ccmr = (6 << 4) | (1 << 3);
+		*ccmr = (6 << 4) | BIT(3);
 	else
-		*ccmr = (6 << 12) | (1 << 11);
+		*ccmr = (6 << 12) | BIT(11);
 
 	/* Output enable. Set active high/low. */
 	if (pwm->flags & PWM_CONFIG_ACTIVE_LOW)
@@ -90,13 +91,13 @@ static void pwm_configure(enum pwm_channel ch)
 	 * TODO(shawnn): BDTR is undocumented on STM32L. Verify this isn't
 	 * harmful on STM32L.
 	 */
-	tim->bdtr |= (1 << 15);
+	tim->bdtr |= BIT(15);
 
 	/* Generate update event to force loading of shadow registers */
 	tim->egr |= 1;
 
 	/* Enable auto-reload preload, start counting */
-	tim->cr1 |= (1 << 7) | (1 << 0);
+	tim->cr1 |= BIT(7) | BIT(0);
 
 	atomic_or(&using_pwm, 1 << ch);
 
@@ -109,11 +110,11 @@ static void pwm_disable(enum pwm_channel ch)
 	const struct pwm_t *pwm = pwm_channels + ch;
 	timer_ctlr_t *tim = (timer_ctlr_t *)(pwm->tim.base);
 
-	if ((using_pwm & (1 << ch)) == 0)
+	if ((using_pwm & BIT(ch)) == 0)
 		return;
 
 	/* Main output disable */
-	tim->bdtr &= ~(1 << 15);
+	tim->bdtr &= ~BIT(15);
 
 	/* Disable counter */
 	tim->cr1 &= ~0x1;
@@ -141,7 +142,7 @@ void pwm_enable(enum pwm_channel ch, int enabled)
 
 int pwm_get_enabled(enum pwm_channel ch)
 {
-	return using_pwm & (1 << ch);
+	return using_pwm & BIT(ch);
 }
 
 static void pwm_reconfigure(enum pwm_channel ch)

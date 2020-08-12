@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,7 +14,10 @@
 #define __CROS_EC_CHIPSET_H
 
 #include "common.h"
+#include "compile_time_macros.h"
+#include "ec_commands.h"
 #include "gpio.h"
+#include "stddef.h"
 
 /*
  * Chipset state mask
@@ -58,6 +61,8 @@ enum chipset_reset_reason {
 	CHIPSET_RESET_HANG_REBOOT,
 	/* Reset by EC console command */
 	CHIPSET_RESET_CONSOLE_CMD,
+	/* Reset by EC host command */
+	CHIPSET_RESET_HOST_CMD,
 	/* Keyboard module reset key combination */
 	CHIPSET_RESET_KB_SYSRESET,
 	/* Keyboard module warm reboot */
@@ -68,6 +73,8 @@ enum chipset_reset_reason {
 	CHIPSET_RESET_AP_REQ,
 	/* Reset as side-effect of startup sequence */
 	CHIPSET_RESET_INIT,
+	/* EC detected an AP watchdog event. */
+	CHIPSET_RESET_AP_WATCHDOG,
 	CHIPSET_RESET_COUNT,
 };
 
@@ -75,7 +82,7 @@ enum chipset_reset_reason {
  * Hard shutdowns are logged on the same path as resets.
  */
 enum chipset_shutdown_reason {
-	CHIPSET_SHUTDOWN_BEGIN = 1 << 15,
+	CHIPSET_SHUTDOWN_BEGIN = BIT(15),
 	CHIPSET_SHUTDOWN_POWERFAIL = CHIPSET_SHUTDOWN_BEGIN,
 	/* Forcing a shutdown as part of EC initialization */
 	CHIPSET_SHUTDOWN_INIT,
@@ -97,6 +104,12 @@ enum chipset_shutdown_reason {
 	CHIPSET_SHUTDOWN_BUTTON,
 
 	CHIPSET_SHUTDOWN_COUNT,
+};
+
+enum critical_shutdown {
+	CRITICAL_SHUTDOWN_IGNORE,
+	CRITICAL_SHUTDOWN_HIBERNATE,
+	CRITICAL_SHUTDOWN_CUTOFF,
 };
 
 #ifdef HAS_TASK_CHIPSET
@@ -164,10 +177,20 @@ void chipset_handle_espi_reset_assert(void);
  */
 void chipset_pre_init_callback(void);
 
+/**
+ * Initialize reset logs and next reset log.
+ */
+void init_reset_log(void);
+
 #else /* !HAS_TASK_CHIPSET */
 
 /* When no chipset is present, assume it is always off. */
 static inline int chipset_in_state(int state_mask)
+{
+	return state_mask & CHIPSET_STATE_ANY_OFF;
+}
+
+static inline int chipset_in_or_transitioning_to_state(int state_mask)
 {
 	return state_mask & CHIPSET_STATE_ANY_OFF;
 }
@@ -183,7 +206,11 @@ static inline void power_interrupt(enum gpio_signal signal) { }
 static inline void chipset_handle_espi_reset_assert(void) { }
 static inline void chipset_handle_reboot(void) { }
 static inline void chipset_reset_request_interrupt(enum gpio_signal signal) { }
-static inline void chipset_power_signal_interrupt(enum gpio_signal signal) { }
+static inline void chipset_warm_reset_interrupt(enum gpio_signal signal) { }
+static inline void chipset_power_good_interrupt(enum gpio_signal signal) { }
+static inline void chipset_watchdog_interrupt(enum gpio_signal signal) { }
+
+static inline void init_reset_log(void) { }
 
 #endif /* !HAS_TASK_CHIPSET */
 
@@ -202,18 +229,42 @@ void chipset_handle_reboot(void);
 /**
  * GPIO interrupt handler of reset request from AP.
  *
- * It is used in SDM845 chipset power sequence.
+ * It is used in SDM845/MT8183 chipset power sequence.
  */
 void chipset_reset_request_interrupt(enum gpio_signal signal);
 
 /**
- * Chipset-specific power signal interrupt, overrides the default one.
+ * GPIO interrupt handler of warm reset signal from servo or H1.
  *
- * It is used in SDM845, to handle the short-low-pulse during the reset
- * sequence which we don't consider it as a power-lost.
+ * It is used in Qualcomm chipset power sequence.
  */
-void chipset_power_signal_interrupt(enum gpio_signal signal);
+void chipset_warm_reset_interrupt(enum gpio_signal signal);
 
+/**
+ * GPIO interrupt handler of the power good signal (pull rail of warm reset).
+ *
+ * It is used in Qualcomm chipset power sequence.
+ */
+void chipset_power_good_interrupt(enum gpio_signal signal);
+
+/**
+ * GPIO interrupt handler of watchdog from AP.
+ *
+ * It is used in MT8183 chipset, where it must be setup to trigger on falling
+ * edge only.
+ */
+void chipset_watchdog_interrupt(enum gpio_signal signal);
+
+/**
+ * Callback which allows board to take custom action on G3 timer expiration
+ *
+ * @param last_shutdown_time Last shutdown time
+ * @param target             Expiration time. Can be modified by board.
+ * @param now                Current time
+ * @return Action to take
+ */
+__override_proto enum critical_shutdown board_system_is_idle(
+		uint64_t last_shutdown_time, uint64_t *target, uint64_t now);
 
 #ifdef CONFIG_CMD_AP_RESET_LOG
 
@@ -222,9 +273,28 @@ void chipset_power_signal_interrupt(enum gpio_signal signal);
  */
 void report_ap_reset(enum chipset_shutdown_reason reason);
 
+/**
+ * Get statistics about AP resets.
+ *
+ * @param reset_log_entries       Pointer to array of log entries.
+ * @param num_reset_log_entries   Number of items in reset_log_entries.
+ * @param resets_since_ec_boot    Number of AP resets since EC boot.
+ */
+test_mockable enum ec_error_list
+get_ap_reset_stats(struct ap_reset_log_entry *reset_log_entries,
+		   size_t num_reset_log_entries,
+		   uint32_t *resets_since_ec_boot);
+
 #else
 
 static inline void report_ap_reset(enum chipset_shutdown_reason reason) { }
+
+test_mockable_static_inline enum ec_error_list
+get_ap_reset_stats(struct ap_reset_log_entry *reset_log_entries,
+		   size_t num_reset_log_entries, uint32_t *resets_since_ec_boot)
+{
+	return EC_SUCCESS;
+}
 
 #endif /* !CONFIG_CMD_AP_RESET_LOG */
 

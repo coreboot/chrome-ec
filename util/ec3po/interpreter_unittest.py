@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python2
 # Copyright 2015 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -10,11 +10,11 @@ from __future__ import print_function
 # pylint: disable=cros-logging-import
 import logging
 import mock
-import multiprocessing
 import tempfile
 import unittest
 
 import interpreter
+import threadproc_shim
 
 class TestEnhancedECBehaviour(unittest.TestCase):
   """Test case to verify all enhanced EC interpretation tasks."""
@@ -29,8 +29,8 @@ class TestEnhancedECBehaviour(unittest.TestCase):
     self.tempfile = tempfile.NamedTemporaryFile()
 
     # Create the pipes that the interpreter will use.
-    self.cmd_pipe_user, self.cmd_pipe_itpr = multiprocessing.Pipe()
-    self.dbg_pipe_user, self.dbg_pipe_itpr = multiprocessing.Pipe(duplex=False)
+    self.cmd_pipe_user, self.cmd_pipe_itpr = threadproc_shim.Pipe()
+    self.dbg_pipe_user, self.dbg_pipe_itpr = threadproc_shim.Pipe(duplex=False)
 
     # Mock the open() function so we can inspect reads/writes to the EC.
     self.ec_uart_pty = mock.mock_open()
@@ -39,7 +39,8 @@ class TestEnhancedECBehaviour(unittest.TestCase):
       self.itpr = interpreter.Interpreter(self.tempfile.name,
                                           self.cmd_pipe_itpr,
                                           self.dbg_pipe_itpr,
-                                          log_level=logging.DEBUG)
+                                          log_level=logging.DEBUG,
+                                          name="EC")
 
   @mock.patch('interpreter.os')
   def test_HandlingCommandsThatProduceNoOutput(self, mock_os):
@@ -264,8 +265,8 @@ class TestUARTDisconnection(unittest.TestCase):
     self.tempfile = tempfile.NamedTemporaryFile()
 
     # Create the pipes that the interpreter will use.
-    self.cmd_pipe_user, self.cmd_pipe_itpr = multiprocessing.Pipe()
-    self.dbg_pipe_user, self.dbg_pipe_itpr = multiprocessing.Pipe(duplex=False)
+    self.cmd_pipe_user, self.cmd_pipe_itpr = threadproc_shim.Pipe()
+    self.dbg_pipe_user, self.dbg_pipe_itpr = threadproc_shim.Pipe(duplex=False)
 
     # Mock the open() function so we can inspect reads/writes to the EC.
     self.ec_uart_pty = mock.mock_open()
@@ -274,7 +275,8 @@ class TestUARTDisconnection(unittest.TestCase):
       self.itpr = interpreter.Interpreter(self.tempfile.name,
                                           self.cmd_pipe_itpr,
                                           self.dbg_pipe_itpr,
-                                          log_level=logging.DEBUG)
+                                          log_level=logging.DEBUG,
+                                          name="EC")
 
     # First, check that interpreter is initialized to connected.
     self.assertTrue(self.itpr.connected, ('The interpreter should be'

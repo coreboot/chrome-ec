@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,7 +19,10 @@
 #define CHARGE_POLL_PERIOD_CHARGE      (MSEC * 250)
 #define CHARGE_POLL_PERIOD_SHORT       (MSEC * 100)
 #define CHARGE_MIN_SLEEP_USEC          (MSEC * 50)
+/* If a board hasn't provided a max sleep, use 1 minute as default */
+#ifndef CHARGE_MAX_SLEEP_USEC
 #define CHARGE_MAX_SLEEP_USEC          MINUTE
+#endif
 
 /* Power states */
 enum charge_state {
@@ -47,11 +50,11 @@ enum charge_state {
 
 /* Charge state flags */
 /* Forcing idle state */
-#define CHARGE_FLAG_FORCE_IDLE (1 << 0)
+#define CHARGE_FLAG_FORCE_IDLE BIT(0)
 /* External (AC) power is present */
-#define CHARGE_FLAG_EXTERNAL_POWER (1 << 1)
+#define CHARGE_FLAG_EXTERNAL_POWER BIT(1)
 /* Battery is responsive */
-#define CHARGE_FLAG_BATT_RESPONSIVE (1 << 2)
+#define CHARGE_FLAG_BATT_RESPONSIVE BIT(2)
 
 /* Debugging constants, in the same order as enum charge_state. This string
  * table was moved here to sync with enum above.
@@ -86,10 +89,22 @@ int charge_keep_power_off(void);
  */
 uint32_t charge_get_flags(void);
 
+#if defined(CONFIG_CHARGER)
 /**
  * Return current battery charge percentage.
  */
 int charge_get_percent(void);
+#elif defined(CONFIG_BATTERY)
+/**
+ * Return current battery charge if not using charge manager sub-system.
+ */
+int board_get_battery_soc(void);
+#endif
+
+/**
+ * Return current display charge in 10ths of a percent (e.g. 1000 = 100.0%)
+ */
+int charge_get_display_charge(void);
 
 /**
  * Check if board is consuming full input current
@@ -134,8 +149,6 @@ const struct batt_params *charger_current_battery_params(void);
 
 
 /* Config Charger */
-#ifdef CONFIG_CHARGER_V2
 #include "charge_state_v2.h"
-#endif	/* CONFIG_CHARGER_V2 */
 
 #endif	/* __CROS_EC_CHARGE_STATE_H */

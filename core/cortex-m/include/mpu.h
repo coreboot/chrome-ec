@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,6 +10,11 @@
 
 #include "common.h"
 #include "config.h" /* chips might override MPU attribute settings */
+
+/*
+ * ARMv7-M SRAM region
+ */
+#define CORTEX_M_SRAM_BASE	0x20000000
 
 /*
  * Region assignment. 7 as the highest, a higher index has a higher priority.
@@ -42,22 +47,33 @@ enum mpu_region {
 #define MPU_SIZE		REG16(0xe000eda0)
 #define MPU_ATTR		REG16(0xe000eda2)
 
+/*
+ * See ARM v7-M Architecture Reference Manual
+ * Section B3.5.5 MPU Type Register, MPU_TYPE
+ */
 #define MPU_TYPE_UNIFIED_MASK	0x00FF0001
 #define MPU_TYPE_REG_COUNT(t)	(((t) >> 8) & 0xFF)
 
-#define MPU_CTRL_PRIVDEFEN	(1 << 2)
-#define MPU_CTRL_HFNMIENA	(1 << 1)
-#define MPU_CTRL_ENABLE		(1 << 0)
+#define MPU_CTRL_PRIVDEFEN	BIT(2)
+#define MPU_CTRL_HFNMIENA	BIT(1)
+#define MPU_CTRL_ENABLE		BIT(0)
+
+/*
+ * Minimum region size is 32 bytes, 5 bits of address space
+ */
+#define MPU_SIZE_BITS_MIN	5
 
 /*
  * XN (execute never) bit. It's bit 12 if accessed by halfword.
  *   0: XN off
  *   1: XN on
  */
-#define MPU_ATTR_XN		(1 << 12)
+#define MPU_ATTR_XN		BIT(12)
 
 /* AP bit. See table 3-5 of Stellaris LM4F232H5QC datasheet for details */
 #define MPU_ATTR_NO_NO (0 << 8)  /* previleged no access, unprev no access */
+#define MPU_ATTR_RW_NO (1 << 8)  /* previleged ReadWrite, unprev no access */
+#define MPU_ATTR_RW_RO (2 << 8)  /* previleged ReadWrite, unprev Read-only */
 #define MPU_ATTR_RW_RW (3 << 8)  /* previleged ReadWrite, unprev ReadWrite */
 #define MPU_ATTR_RO_NO (5 << 8)  /* previleged Read-only, unprev no access */
 
@@ -69,6 +85,14 @@ enum mpu_region {
 #ifndef MPU_ATTR_FLASH_MEMORY
 #define MPU_ATTR_FLASH_MEMORY   2  /* for flash memory */
 #endif
+
+/* Represent RW with at most 2 MPU regions. */
+#define MAX_RW_REGIONS 2
+struct mpu_rw_regions {
+	int num_regions;
+	uint32_t addr[MAX_RW_REGIONS];
+	uint32_t size[MAX_RW_REGIONS];
+};
 
 /**
  * Enable MPU

@@ -10,10 +10,16 @@
 
 /*
  * npcx7 EVB version:
- * 1 - for EVB version 1 which supports npcx7m6f/npcx7m6g
- * 2 - for EVB version 2 which supports npcx7m7wb/npcx7m6fb
+ * 1 - for EVB version 1 which supports npcx7m6g
+ * 2 - for EVB version 2 which supports npcx7m6f/npcx7m6fb/npcx7m6fc/npcx7m7wb
  */
+#if defined(CHIP_VARIANT_NPCX7M6G)
+#define BOARD_VERSION  1
+#elif defined(CHIP_VARIANT_NPCX7M6F) || defined(CHIP_VARIANT_NPCX7M6FB) || \
+	defined(CHIP_VARIANT_NPCX7M6FC) || defined(CHIP_VARIANT_NPCX7M7WB) || \
+	defined(CHIP_VARIANT_NPCX7M7WC)
 #define BOARD_VERSION  2
+#endif
 
 /* EC modules */
 #define CONFIG_ADC
@@ -22,9 +28,11 @@
 #define CONFIG_I2C
 /* Features of eSPI */
 #define CONFIG_HOSTCMD_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS /* Use VW signals instead of GPIOs */
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 
 /* Optional features */
+#define CONFIG_ENABLE_JTAG_SELECTION
 #define CONFIG_BOARD_VERSION_GPIO
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_I2C_MASTER
@@ -54,18 +62,27 @@
 #define CONFIG_FANS 1
 
 /* Internal spi-flash on npcx7 ec */
-#define CONFIG_FLASH_SIZE 0x00100000 /* 1MB internal spi flash */
 #define CONFIG_SPI_FLASH_PORT 0
 #define CONFIG_SPI_FLASH
 #define CONFIG_SPI_FLASH_REGS
+#if defined(CHIP_VARIANT_NPCX7M6FC) || defined(CHIP_VARIANT_NPCX7M7WC)
+#define CONFIG_SPI_FLASH_W25Q40 /* Internal spi flash type */
+#define CONFIG_FLASH_SIZE 0x00080000 /* 512 KB internal spi flash */
+#else
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal spi flash type */
+#define CONFIG_FLASH_SIZE 0x00100000 /* 1 MB internal spi flash */
+#endif
 
 /* New features on npcx7 ec */
 #define CONFIG_KEYBOARD_KSO_HIGH_DRIVE /* Quasi-bidirectional buf for KSOs */
 #if (BOARD_VERSION == 2)
 #define CONFIG_HIBERNATE_PSL /* Use PSL (Power Switch Logic) for hibernate */
 #define CONFIG_CLOCK_SRC_EXTERNAL /* Use external 32kHz OSC as LFCLK source */
-#define CONFIG_WAKE_ON_VOICE /* Use Audio front-end for Wake-on-Voice */
+#if defined(CHIP_VARIANT_NPCX7M7WB) || defined(CHIP_VARIANT_NPCX7M7WC)
+#define CONFIG_AUDIO_CODEC
+#define CONFIG_AUDIO_CODEC_DMIC
+#define CONFIG_AUDIO_CODEC_I2S_RX /* Use Audio front-end for Wake-on-Voice */
+#endif
 #undef CONFIG_FANS /* Remove fan application */
 #define CONFIG_FANS 0
 #else

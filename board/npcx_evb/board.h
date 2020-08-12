@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -30,6 +30,7 @@
 #define CONFIG_VBOOT_HASH
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_BOARD_VERSION_GPIO
+#define CONFIG_ENABLE_JTAG_SELECTION
 
 /* Optional features for test commands */
 #define CONFIG_CMD_TASKREADY

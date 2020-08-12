@@ -18,21 +18,21 @@
 #include "console.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "stddef.h"
 #include "task.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
 #include "usbc_ppc.h"
+#include "util.h"
 
 static void update_vbus_supplier(int port, int vbus_level)
 {
-	struct charge_port_info charge;
+	struct charge_port_info charge = {0};
 
-	charge.voltage = USB_CHARGER_VOLTAGE_MV;
-
-	if (vbus_level && !usb_charger_port_is_sourcing_vbus(port))
+	if (vbus_level && !usb_charger_port_is_sourcing_vbus(port)) {
+		charge.voltage = USB_CHARGER_VOLTAGE_MV;
 		charge.current = USB_CHARGER_MIN_CURR_MA;
-	else
-		charge.current = 0;
+	}
 
 	charge_manager_update_charge(CHARGE_SUPPLIER_VBUS, port, &charge);
 }
@@ -53,7 +53,7 @@ int usb_charger_port_is_sourcing_vbus(int port)
 {
 	if (port == 0)
 		return USB_5V_EN(0);
-#if CONFIG_USB_PD_PORT_COUNT >= 2
+#if CONFIG_USB_PD_PORT_MAX_COUNT >= 2
 	else if (port == 1)
 		return USB_5V_EN(1);
 #endif
@@ -82,32 +82,48 @@ void usb_charger_vbus_change(int port, int vbus_level)
 #endif
 }
 
+void usb_charger_reset_charge(int port)
+{
+	charge_manager_update_charge(CHARGE_SUPPLIER_PROPRIETARY,
+				     port, NULL);
+	charge_manager_update_charge(CHARGE_SUPPLIER_BC12_CDP,
+				     port, NULL);
+	charge_manager_update_charge(CHARGE_SUPPLIER_BC12_DCP,
+				     port, NULL);
+	charge_manager_update_charge(CHARGE_SUPPLIER_BC12_SDP,
+				     port, NULL);
+	charge_manager_update_charge(CHARGE_SUPPLIER_OTHER,
+				     port, NULL);
+#if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
+	charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
+				     port, NULL);
+#endif
+#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
+	charge_manager_update_charge(CHARGE_SUPPLIER_WPC_BPP,
+				     port, NULL);
+	charge_manager_update_charge(CHARGE_SUPPLIER_WPC_EPP,
+				     port, NULL);
+	charge_manager_update_charge(CHARGE_SUPPLIER_WPC_GPP,
+				     port, NULL);
+#endif
+
+}
+
 static void usb_charger_init(void)
 {
 	int i;
-	struct charge_port_info charge_none;
-
-	/* Initialize all charge suppliers */
-	charge_none.voltage = USB_CHARGER_VOLTAGE_MV;
-	charge_none.current = 0;
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
-		charge_manager_update_charge(CHARGE_SUPPLIER_PROPRIETARY,
-					     i,
-					     &charge_none);
-		charge_manager_update_charge(CHARGE_SUPPLIER_BC12_CDP,
-					     i,
-					     &charge_none);
-		charge_manager_update_charge(CHARGE_SUPPLIER_BC12_DCP,
-					     i,
-					     &charge_none);
-		charge_manager_update_charge(CHARGE_SUPPLIER_BC12_SDP,
-					     i,
-					     &charge_none);
-		charge_manager_update_charge(CHARGE_SUPPLIER_OTHER,
-					     i,
-					     &charge_none);
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
+		usb_charger_reset_charge(i);
 		/* Initialize VBUS supplier based on whether VBUS is present. */
 		update_vbus_supplier(i, pd_is_vbus_present(i));
 	}
 }
 DECLARE_HOOK(HOOK_INIT, usb_charger_init, HOOK_PRIO_CHARGE_MANAGER_INIT + 1);
+
+void usb_charger_task(void *u)
+{
+	int port = TASK_ID_TO_USB_CHG_PORT(task_get_current());
+
+	ASSERT(bc12_ports[port].drv->usb_charger_task);
+	bc12_ports[port].drv->usb_charger_task(port);
+}

@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,7 +8,7 @@
 
 #include "i2c.h"
 
-#define TMP112_I2C_ADDR 0x90 | I2C_FLAG_BIG_ENDIAN
+#define TMP112_I2C_ADDR_FLAGS (0x48 | I2C_FLAG_BIG_ENDIAN)
 
 #define TMP112_REG_TEMP	0x00
 #define TMP112_REG_CONF	0x01

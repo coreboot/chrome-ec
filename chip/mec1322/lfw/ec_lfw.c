@@ -48,10 +48,10 @@ void timer_init()
 	uint32_t val = 0;
 
 	/* Ensure timer is not running */
-	MEC1322_TMR32_CTL(0) &= ~(1 << 5);
+	MEC1322_TMR32_CTL(0) &= ~BIT(5);
 
 	/* Enable timer */
-	MEC1322_TMR32_CTL(0) |= (1 << 0);
+	MEC1322_TMR32_CTL(0) |= BIT(0);
 
 	val = MEC1322_TMR32_CTL(0);
 
@@ -67,10 +67,10 @@ void timer_init()
 	MEC1322_TMR32_CNT(0) = 0xffffffff;
 
 	/* Auto restart */
-	MEC1322_TMR32_CTL(0) |= (1 << 3);
+	MEC1322_TMR32_CTL(0) |= BIT(3);
 
 	/* Start counting in timer 0 */
-	MEC1322_TMR32_CTL(0) |= (1 << 5);
+	MEC1322_TMR32_CTL(0) |= BIT(5);
 
 }
 
@@ -146,7 +146,7 @@ void uart_write_c(char c)
 		uart_write_c('\r');
 
 	/* Wait for space in transmit FIFO. */
-	while (!(MEC1322_UART_LSR & (1 << 5)))
+	while (!(MEC1322_UART_LSR & BIT(5)))
 		;
 	MEC1322_UART_TB = c;
 }
@@ -181,31 +181,31 @@ void jump_to_image(uintptr_t init_addr)
 void uart_init(void)
 {
 	/* Set UART to reset on VCC1_RESET instaed of nSIO_RESET */
-	MEC1322_UART_CFG &= ~(1 << 1);
+	MEC1322_UART_CFG &= ~BIT(1);
 
 	/* Baud rate = 115200. 1.8432MHz clock. Divisor = 1 */
 
 	/* Set CLK_SRC = 0 */
-	MEC1322_UART_CFG &= ~(1 << 0);
+	MEC1322_UART_CFG &= ~BIT(0);
 
 	/* Set DLAB = 1 */
-	MEC1322_UART_LCR |= (1 << 7);
+	MEC1322_UART_LCR |= BIT(7);
 
 	/* PBRG0/PBRG1 */
 	MEC1322_UART_PBRG0 = 1;
 	MEC1322_UART_PBRG1 = 0;
 
 	/* Set DLAB = 0 */
-	MEC1322_UART_LCR &= ~(1 << 7);
+	MEC1322_UART_LCR &= ~BIT(7);
 
 	/* Set word length to 8-bit */
-	MEC1322_UART_LCR |= (1 << 0) | (1 << 1);
+	MEC1322_UART_LCR |= BIT(0) | BIT(1);
 
 	/* Enable FIFO */
-	MEC1322_UART_FCR = (1 << 0);
+	MEC1322_UART_FCR = BIT(0);
 
 	/* Activate UART */
-	MEC1322_UART_ACT |= (1 << 0);
+	MEC1322_UART_ACT |= BIT(0);
 
 	gpio_config_module(MODULE_UART, 1);
 }
@@ -218,11 +218,10 @@ void system_init(void)
 				MEC1322_PWR_RST_STS_VCC1;
 
 	if (rst_sts || wdt_sts)
-		MEC1322_VBAT_RAM(MEC1322_IMAGETYPE_IDX)
-					= SYSTEM_IMAGE_RO;
+		MEC1322_VBAT_RAM(MEC1322_IMAGETYPE_IDX) = EC_IMAGE_RO;
 }
 
-enum system_image_copy_t system_get_image_copy(void)
+enum ec_image system_get_image_copy(void)
 {
 	return MEC1322_VBAT_RAM(MEC1322_IMAGETYPE_IDX);
 }
@@ -260,20 +259,19 @@ void lfw_main()
 	uart_puts("\n");
 
 	switch (system_get_image_copy()) {
-	case SYSTEM_IMAGE_RW:
+	case EC_IMAGE_RW:
 		uart_puts("lfw-RW load\n");
 		init_addr = CONFIG_RW_MEM_OFF + CONFIG_PROGRAM_MEMORY_BASE;
 		spi_image_load(CONFIG_EC_WRITABLE_STORAGE_OFF +
 			       CONFIG_RW_STORAGE_OFF);
 		break;
-	case SYSTEM_IMAGE_RO:
+	case EC_IMAGE_RO:
 		uart_puts("lfw-RO load\n");
 		spi_image_load(CONFIG_EC_PROTECTED_STORAGE_OFF +
 			       CONFIG_RO_STORAGE_OFF);
 		/* fall through */
 	default:
-		MEC1322_VBAT_RAM(MEC1322_IMAGETYPE_IDX) =
-							SYSTEM_IMAGE_RO;
+		MEC1322_VBAT_RAM(MEC1322_IMAGETYPE_IDX) = EC_IMAGE_RO;
 		init_addr = CONFIG_RO_MEM_OFF + CONFIG_PROGRAM_MEMORY_BASE;
 	}
 

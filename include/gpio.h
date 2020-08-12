@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,32 +9,37 @@
 #define __CROS_EC_GPIO_H
 
 #include "common.h"
+#include "console.h"
 
 /* Flag definitions for gpio_info and gpio_alt_func */
+#define GPIO_FLAG_NONE     0       /* No flag needed, default setting */
 /* The following are valid for both gpio_info and gpio_alt_func: */
-#define GPIO_OPEN_DRAIN    (1 << 0)  /* Output type is open-drain */
-#define GPIO_PULL_UP       (1 << 1)  /* Enable on-chip pullup */
-#define GPIO_PULL_DOWN     (1 << 2)  /* Enable on-chip pulldown */
+#define GPIO_OPEN_DRAIN    BIT(0)  /* Output type is open-drain */
+#define GPIO_PULL_UP       BIT(1)  /* Enable on-chip pullup */
+#define GPIO_PULL_DOWN     BIT(2)  /* Enable on-chip pulldown */
 /* The following are valid for gpio_alt_func only */
-#define GPIO_ANALOG        (1 << 3)  /* Set pin to analog-mode */
+#define GPIO_ANALOG        BIT(3)  /* Set pin to analog-mode */
 /* The following are valid for gpio_info only */
-#define GPIO_INPUT         (1 << 4)  /* Input */
-#define GPIO_OUTPUT        (1 << 5)  /* Output */
-#define GPIO_LOW           (1 << 6)  /* If GPIO_OUTPUT, set level low */
-#define GPIO_HIGH          (1 << 7)  /* If GPIO_OUTPUT, set level high */
-#define GPIO_INT_F_RISING  (1 << 8)  /* Interrupt on rising edge */
-#define GPIO_INT_F_FALLING (1 << 9)  /* Interrupt on falling edge */
-#define GPIO_INT_F_LOW     (1 << 11) /* Interrupt on low level */
-#define GPIO_INT_F_HIGH    (1 << 12) /* Interrupt on high level */
-#define GPIO_DEFAULT       (1 << 13) /* Don't set up on boot */
-#define GPIO_INT_DSLEEP    (1 << 14) /* Interrupt in deep sleep */
-#define GPIO_INT_SHARED    (1 << 15) /* Shared among multiple pins */
-#define GPIO_SEL_1P8V      (1 << 16) /* Support 1.8v */
-#define GPIO_ALTERNATE     (1 << 17) /* GPIO used for alternate function. */
-#define GPIO_LOCKED        (1 << 18) /* Lock GPIO output and configuration */
-#define GPIO_HIB_WAKE_HIGH (1 << 19) /* Hibernate wake on high level */
+#define GPIO_INPUT         BIT(4)  /* Input */
+#define GPIO_OUTPUT        BIT(5)  /* Output */
+#define GPIO_LOW           BIT(6)  /* If GPIO_OUTPUT, set level low */
+#define GPIO_HIGH          BIT(7)  /* If GPIO_OUTPUT, set level high */
+#define GPIO_INT_F_RISING  BIT(8)  /* Interrupt on rising edge */
+#define GPIO_INT_F_FALLING BIT(9)  /* Interrupt on falling edge */
+#define GPIO_INT_F_LOW     BIT(11) /* Interrupt on low level */
+#define GPIO_INT_F_HIGH    BIT(12) /* Interrupt on high level */
+#define GPIO_DEFAULT       BIT(13) /* Don't set up on boot */
+#define GPIO_INT_DSLEEP    BIT(14) /* Interrupt in deep sleep */
+#define GPIO_INT_SHARED    BIT(15) /* Shared among multiple pins */
+#define GPIO_SEL_1P8V      BIT(16) /* Support 1.8v */
+#define GPIO_ALTERNATE     BIT(17) /* GPIO used for alternate function. */
+#define GPIO_LOCKED        BIT(18) /* Lock GPIO output and configuration */
+#define GPIO_HIB_WAKE_HIGH    BIT(19) /* Hibernate wake on high level */
+#define GPIO_HIB_WAKE_LOW     BIT(20) /* Hibernate wake on low level */
+#define GPIO_HIB_WAKE_RISING  BIT(21) /* Hibernate wake on rising edge */
+#define GPIO_HIB_WAKE_FALLING BIT(22) /* Hibernate wake on falling edge */
 #ifdef CONFIG_GPIO_POWER_DOWN
-#define GPIO_POWER_DOWN    (1 << 20) /* Pin and pad is powered off */
+#define GPIO_POWER_DOWN    BIT(23) /* Pin and pad is powered off */
 #endif
 
 /* Common flag combinations */
@@ -51,6 +56,8 @@
 #define GPIO_INT_LEVEL      (GPIO_INT_LOW | GPIO_INT_HIGH)
 #define GPIO_INT_ANY        (GPIO_INT_BOTH | GPIO_INT_LEVEL)
 #define GPIO_INT_BOTH_DSLEEP (GPIO_INT_BOTH | GPIO_INT_DSLEEP)
+#define GPIO_HIB_WAKE_MASK   (GPIO_HIB_WAKE_HIGH | GPIO_HIB_WAKE_LOW | \
+			      GPIO_HIB_WAKE_RISING|GPIO_HIB_WAKE_FALLING)
 
 /* Convert GPIO mask to GPIO number / index. */
 #define GPIO_MASK_TO_NUM(mask) (__fls(mask))
@@ -63,6 +70,21 @@ enum gpio_signal {
 	GPIO_COUNT
 };
 #endif /* __CROS_EC_GPIO_SIGNAL_H */
+
+/* Alternate functions for GPIOs */
+enum gpio_alternate_func {
+	GPIO_ALT_FUNC_NONE = -1,
+	GPIO_ALT_FUNC_DEFAULT,
+	GPIO_ALT_FUNC_1,
+	GPIO_ALT_FUNC_2,
+	GPIO_ALT_FUNC_3,
+	GPIO_ALT_FUNC_4,
+	GPIO_ALT_FUNC_5,
+	GPIO_ALT_FUNC_6,
+	GPIO_ALT_FUNC_7,
+
+	GPIO_ALT_FUNC_MAX = 63,
+};
 
 /* GPIO signal definition structure, for use by board.c */
 struct gpio_info {
@@ -81,6 +103,19 @@ struct gpio_info {
 
 /* Signal information from board.c.  Must match order from enum gpio_signal. */
 extern const struct gpio_info gpio_list[];
+
+/* Unused pin definition structure. */
+struct unused_pin_info {
+	/* Port base address */
+	uint32_t port;
+
+	/* Bitmask on that port (1 << N) */
+	uint32_t mask;
+};
+
+/* Unused pin information. */
+extern const struct unused_pin_info unused_pin_list[];
+extern const int unused_pin_count;
 
 /* Interrupt handler table for those GPIOs which have IRQ handlers.
  *
@@ -161,7 +196,11 @@ int gpio_is_implemented(enum gpio_signal signal);
  */
 void gpio_set_flags(enum gpio_signal signal, int flags);
 
-#ifdef CONFIG_CMD_GPIO_EXTENDED
+#if defined(CONFIG_CMD_GPIO_EXTENDED) && !defined(CONFIG_GPIO_GET_EXTENDED)
+#define CONFIG_GPIO_GET_EXTENDED
+#endif
+
+#ifdef CONFIG_GPIO_GET_EXTENDED
 /**
  * Get the current flags for a signal.
  *
@@ -191,8 +230,28 @@ int gpio_get_default_flags(enum gpio_signal signal);
  * Set the value of a signal.
  *
  * @param signal	Signal to set
- * @param value		New value for signal (0 = low, != high */
+ * @param value		New value for signal (0 = low, 1 = high)
+ */
 void gpio_set_level(enum gpio_signal signal, int value);
+
+/**
+ * Set the value of a signal and log to the console.
+ *
+ * @param channel	Output channel
+ * @param signal	Signal to set
+ * @param value		New value for signal (0 = low, 1 = high)
+ */
+void gpio_set_level_verbose(enum console_channel channel,
+			    enum gpio_signal signal, int value);
+
+/**
+ * Set the value of a signal that could be either a local GPIO or an IO
+ * expander GPIO.
+ *
+ * @param signal	GPIO_* or IOEX_* signal to set
+ * @param value		New value for signal (0 = low, 1 = high)
+ */
+void gpio_or_ioex_set_level(int signal, int value);
 
 /**
  * Reset the GPIO flags and alternate function state
@@ -264,10 +323,11 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags);
  *
  * @param port		GPIO port to set (GPIO_*)
  * @param mask		Bitmask of pins on that port to affect
- * @param func		Alternate function; if <0, configures the specified
- *			GPIOs for normal GPIO operation.
+ * @param func		Alternate function; if GPIO_ALT_FUNC_NONE, configures
+ *                      the specified GPIOs for normal GPIO operation.
  */
-void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func);
+void gpio_set_alternate_function(uint32_t port, uint32_t mask,
+				enum gpio_alternate_func func);
 
 #ifdef CONFIG_GPIO_POWER_DOWN
 /**
@@ -278,5 +338,25 @@ void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func);
  */
 int gpio_power_down_module(enum module_id id);
 #endif
+
+/*
+ * Check if signal is a valid GPIO signal, and not IO expander (enum
+ * ioex_signal) or eSPI virtual wire (enum espi_vw_signal).
+ *
+ * @param signal	GPIO or IOEX or VW signal
+ * @return		1 if signal is GPIO else return 0
+ */
+int signal_is_gpio(int signal);
+
+/**
+ * Configure a GPIO as wake source on a given condition and enable it, or
+ * disable it.
+ *
+ * @param signal       GPIO to enable to wake Cr50 up
+ * @param flags        Wake condition. Should be one among
+ *                     GPIO_HIB_WAKE_{HIGH, LOW, RISING, FALLING} to enable it
+ *                     as a wake pin. 0 to disable it.
+ */
+void gpio_set_wakepin(enum gpio_signal signal, uint32_t flags);
 
 #endif  /* __CROS_EC_GPIO_H */

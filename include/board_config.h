@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -34,7 +34,6 @@ void board_config_pre_init(void);
 void board_config_post_gpio_init(void);
 #endif
 
-#ifdef CONFIG_BOARD_HAS_BEFORE_RSMRST
 /**
  * Configure board before RSMRST# state change
  *
@@ -46,9 +45,20 @@ void board_config_post_gpio_init(void);
  * not get interrupts in time to handle workarounds.  For x86 platforms and
  * boards which support RSMRST# passthrough this hook will allow the board
  * to apply workarounds despite the PMIC sequencing.
+ *
+ * The default implementation does nothing.
  */
-void board_before_rsmrst(int rsmrst);
-#endif
+__override_proto void board_before_rsmrst(int rsmrst);
+
+/**
+ * Configure board after RSMRST# state change
+ *
+ * Similar to board_before_rsmrst, except this is called after passing RSMRST#
+ * to the AP.
+ *
+ * The default implementation does nothing.
+ */
+__override_proto void board_after_rsmrst(int rsmrst);
 
 /**
  * Configure chip early in main(), just after board_config_pre_init().
@@ -61,10 +71,11 @@ void board_before_rsmrst(int rsmrst);
  */
 void chip_pre_init(void);
 
-#ifdef CONFIG_EC_FEATURE_BOARD_OVERRIDE
-/* function for board specific overrides to default feature flags */
-uint32_t board_override_feature_flags0(uint32_t flags0);
-uint32_t board_override_feature_flags1(uint32_t flags1);
-#endif
+/*
+ * Allow board to override the feature bitmap provided through host command
+ * and ACPI.
+ */
+__override_proto uint32_t board_override_feature_flags0(uint32_t flags0);
+__override_proto uint32_t board_override_feature_flags1(uint32_t flags1);
 
 #endif /* __CROS_EC_BOARD_CONFIG_H */

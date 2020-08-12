@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 The Chromium OS Authors. All rights reserved.
+/* Copyright 2011 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,9 +21,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#pragma GCC diagnostic ignored "-Wstrict-prototypes"
 #include <ftdi.h>
-#pragma GCC diagnostic pop
 #include <getopt.h>
 #include <limits.h>
 #include <stdio.h>

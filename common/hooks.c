@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -41,6 +41,8 @@ static const struct hook_ptrs hook_list[] = {
 	{__hooks_chipset_resume, __hooks_chipset_resume_end},
 	{__hooks_chipset_suspend, __hooks_chipset_suspend_end},
 	{__hooks_chipset_shutdown, __hooks_chipset_shutdown_end},
+	{__hooks_chipset_shutdown_complete,
+	 __hooks_chipset_shutdown_complete_end},
 	{__hooks_chipset_reset, __hooks_chipset_reset_end},
 	{__hooks_ac_change, __hooks_ac_change_end},
 	{__hooks_lid_change, __hooks_lid_change_end},
@@ -48,14 +50,13 @@ static const struct hook_ptrs hook_list[] = {
 	{__hooks_base_attached_change, __hooks_base_attached_change_end},
 	{__hooks_pwrbtn_change, __hooks_pwrbtn_change_end},
 	{__hooks_battery_soc_change, __hooks_battery_soc_change_end},
-#ifdef CONFIG_CASE_CLOSED_DEBUG_V1
-	{__hooks_ccd_change, __hooks_ccd_change_end},
-#endif
 #ifdef CONFIG_USB_SUSPEND
 	{__hooks_usb_change, __hooks_usb_change_end},
 #endif
 	{__hooks_tick, __hooks_tick_end},
 	{__hooks_second, __hooks_second_end},
+	{__hooks_usb_pd_disconnect, __hooks_usb_pd_disconnect_end},
+	{__hooks_usb_pd_connect, __hooks_usb_pd_connect_end},
 };
 
 /* Times for deferrable functions */
@@ -188,7 +189,7 @@ void hook_task(void *u)
 		/* Handle deferred routines */
 		for (i = 0; i < DEFERRED_FUNCS_COUNT; i++) {
 			if (__deferred_until[i] && __deferred_until[i] < t) {
-				CPRINTS("hook call deferred 0x%p",
+				CPRINTS("hook call deferred 0x%pP",
 					__deferred_funcs[i].routine);
 				/*
 				 * Call deferred function.  Clear timer first,

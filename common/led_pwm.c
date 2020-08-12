@@ -55,6 +55,7 @@ static int get_led_id_color(enum pwm_led_id id, int color)
 void set_pwm_led_color(enum pwm_led_id id, int color)
 {
 	struct pwm_led duty = { 0 };
+	const struct pwm_led *led = &pwm_leds[id];
 
 	if ((id >= CONFIG_LED_PWM_COUNT) || (id < 0) ||
 	    (color >= EC_LED_COLOR_COUNT) || (color < -1))
@@ -66,12 +67,12 @@ void set_pwm_led_color(enum pwm_led_id id, int color)
 		duty.ch2 = led_color_map[color].ch2;
 	}
 
-	if (pwm_leds[id].ch0 != PWM_LED_NO_CHANNEL)
-		pwm_set_duty(pwm_leds[id].ch0, duty.ch0);
-	if (pwm_leds[id].ch1 != PWM_LED_NO_CHANNEL)
-		pwm_set_duty(pwm_leds[id].ch1, duty.ch1);
-	if (pwm_leds[id].ch2 != PWM_LED_NO_CHANNEL)
-		pwm_set_duty(pwm_leds[id].ch2, duty.ch2);
+	if (led->ch0 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+		led->set_duty(led->ch0, duty.ch0);
+	if (led->ch1 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+		led->set_duty(led->ch1, duty.ch1);
+	if (led->ch2 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+		led->set_duty(led->ch2, duty.ch2);
 }
 
 static void set_led_color(int color)
@@ -90,10 +91,32 @@ static void set_led_color(int color)
 #endif /* CONFIG_LED_PWM_COUNT >= 2 */
 }
 
+static void set_pwm_led_enable(enum pwm_led_id id, int enable)
+{
+	const struct pwm_led *led = &pwm_leds[id];
+
+	if ((id >= CONFIG_LED_PWM_COUNT) || (id < 0))
+		return;
+
+	if (led->ch0 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+		led->enable(led->ch0, enable);
+	if (led->ch1 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+		led->enable(led->ch1, enable);
+	if (led->ch2 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+		led->enable(led->ch2, enable);
+}
+
 static void init_leds_off(void)
 {
-	/* Turn off LEDs such that they are in a known state. */
+	/* Turn off LEDs such that they are in a known state with zero duty. */
 	set_led_color(-1);
+
+	/* Enable pwm modules for each channels of LEDs */
+	set_pwm_led_enable(PWM_LED0, 1);
+
+#if CONFIG_LED_PWM_COUNT >= 2
+	set_pwm_led_enable(PWM_LED1, 1);
+#endif /* CONFIG_LED_PWM_COUNT >= 2 */
 }
 DECLARE_HOOK(HOOK_INIT, init_leds_off, HOOK_PRIO_INIT_PWM + 1);
 
@@ -151,7 +174,8 @@ static int show_charge_state(void)
 	if (chg_st == PWR_STATE_CHARGE) {
 		led_is_pulsing = 0;
 		set_led_color(CONFIG_LED_PWM_CHARGE_COLOR);
-	} else if (chg_st == PWR_STATE_CHARGE_NEAR_FULL) {
+	} else if (chg_st == PWR_STATE_CHARGE_NEAR_FULL ||
+		   chg_st == PWR_STATE_DISCHARGE_FULL) {
 		led_is_pulsing = 0;
 		set_led_color(CONFIG_LED_PWM_NEAR_FULL_COLOR);
 	} else if ((battery_is_present() != BP_YES) ||
@@ -160,20 +184,20 @@ static int show_charge_state(void)
 		pulse_leds(CONFIG_LED_PWM_CHARGE_ERROR_COLOR, 1, 2);
 	} else {
 		/* Discharging or not charging. */
-#ifdef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
+#ifdef CONFIG_LED_PWM_CHARGE_STATE_ONLY
 		/*
-		 * If we only show the active charge port, the only reason we
+		 * If we only show the charge state, the only reason we
 		 * would pulse the LEDs is if we had an error.  If it no longer
 		 * exists, stop pulsing the LEDs.
 		 */
 		led_is_pulsing = 0;
-#endif /* CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY */
+#endif /* CONFIG_LED_PWM_CHARGE_STATE_ONLY */
 		return 0;
 	}
 	return 1;
 }
 
-#ifndef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
+#ifndef CONFIG_LED_PWM_CHARGE_STATE_ONLY
 static int show_battery_state(void)
 {
 	int batt_percentage = charge_get_percent();
@@ -213,7 +237,7 @@ static int show_chipset_state(void)
 	}
 	return 1;
 }
-#endif /* CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY */
+#endif /* CONFIG_LED_PWM_CHARGE_STATE_ONLY */
 
 static void update_leds(void)
 {
@@ -221,13 +245,13 @@ static void update_leds(void)
 	if (show_charge_state())
 		return;
 
-#ifndef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
+#ifndef CONFIG_LED_PWM_CHARGE_STATE_ONLY
 	if (show_battery_state())
 		return;
 
 	if (show_chipset_state())
 		return;
-#endif /* CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY */
+#endif /* CONFIG_LED_PWM_CHARGE_STATE_ONLY */
 
 	set_led_color(-1);
 }

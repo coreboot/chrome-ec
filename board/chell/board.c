@@ -34,7 +34,7 @@
 #include "uart.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
-#include "usb_mux_ps874x.h"
+#include "usb_mux/ps8740.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
@@ -42,7 +42,7 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-#define I2C_ADDR_BD99992 0x60
+#define I2C_ADDR_BD99992_FLAGS 0x30
 
 /* Exchange status with PD MCU. */
 static void pd_mcu_interrupt(enum gpio_signal signal)
@@ -79,21 +79,6 @@ void usb1_evt(enum gpio_signal signal)
 
 #include "gpio_list.h"
 
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-#ifdef CONFIG_POWER_S0IX
-	{GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-#endif
-	{GPIO_RSMRST_L_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_N_PWRGD"},
-	{GPIO_PCH_SLP_S3_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{GPIO_PCH_SLP_S4_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_PCH_SLP_SUS_L,  POWER_SIGNAL_ACTIVE_HIGH, "SLP_SUS_DEASSERTED"},
-	{GPIO_PMIC_DPWROK,    POWER_SIGNAL_ACTIVE_HIGH, "PMIC_DPWROK"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
-
 /* ADC channels */
 const struct adc_t adc_channels[] = {
 	/* Vbus sensing. Converted to mV, full ADC is equivalent to 30V. */
@@ -121,9 +106,24 @@ const struct i2c_port_t i2c_ports[]  = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	{I2C_PORT_TCPC, CONFIG_TCPC_I2C_BASE_ADDR, &tcpci_tcpm_drv},
-	{I2C_PORT_TCPC, CONFIG_TCPC_I2C_BASE_ADDR + 2, &tcpci_tcpm_drv},
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC,
+			.addr_flags = CONFIG_TCPC_I2C_BASE_ADDR_FLAGS,
+		},
+		.drv = &tcpci_tcpm_drv,
+	},
+	{
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC,
+			.addr_flags = CONFIG_TCPC_I2C_BASE_ADDR_FLAGS + 1,
+		},
+		.drv = &tcpci_tcpm_drv,
+
+	},
 };
 
 /* SPI devices */
@@ -171,26 +171,30 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT);
 
-static int ps874x_tune_mux(const struct usb_mux *mux)
+static int ps8740_tune_mux(int port)
 {
 	/* Apply same USB EQ settings to both Type-C mux */
-	ps874x_tune_usb_eq(mux->port_addr,
-			   PS874X_USB_EQ_TX_6_5_DB,
-			   PS874X_USB_EQ_RX_14_3_DB);
+	ps8740_tune_usb_eq(port,
+			   PS8740_USB_EQ_TX_6_5_DB,
+			   PS8740_USB_EQ_RX_14_3_DB);
 
 	return EC_SUCCESS;
 }
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.port_addr = 0x34,
-		.driver = &ps874x_usb_mux_driver,
-		.board_init = &ps874x_tune_mux,
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = 0x1A,
+		.driver = &ps8740_usb_mux_driver,
+		.board_init = &ps8740_tune_mux,
 	},
 	{
-		.port_addr = 0x20,
-		.driver = &ps874x_usb_mux_driver,
-		.board_init = &ps874x_tune_mux,
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_MUX,
+		.i2c_addr_flags = 0x10,
+		.driver = &ps8740_usb_mux_driver,
+		.board_init = &ps8740_tune_mux,
 	}
 };
 
@@ -202,14 +206,6 @@ void board_reset_pd_mcu(void)
 	gpio_set_level(GPIO_PD_RST_L, 0);
 	usleep(100);
 	gpio_set_level(GPIO_PD_RST_L, 1);
-}
-
-void board_rtc_reset(void)
-{
-	CPRINTS("Asserting RTCRST# to PCH");
-	gpio_set_level(GPIO_PCH_RTCRST, 1);
-	udelay(100);
-	gpio_set_level(GPIO_PCH_RTCRST, 0);
 }
 
 const struct temp_sensor_t temp_sensors[] = {
@@ -230,7 +226,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 static void board_pmic_init(void)
 {
 	/* DISCHGCNT3 - enable 100 ohm discharge on V1.00A */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3e, 0x04);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x3e, 0x04);
 
 	/*
 	 * No need to re-init below settings since they are present on all MP
@@ -240,23 +236,23 @@ static void board_pmic_init(void)
 		return;
 
 	/* Set CSDECAYEN / VCCIO decays to 0V at assertion of SLP_S0# */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x30, 0x4a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x30, 0x4a);
 
 	/*
 	 * Set V100ACNT / V1.00A Control Register:
 	 * Nominal output = 1.0V.
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x37, 0x1a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x37, 0x1a);
 
 	/*
 	 * Set V085ACNT / V0.85A Control Register:
 	 * Lower power mode = 0.7V.
 	 * Nominal output = 1.0V.
 	 */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x38, 0x7a);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x38, 0x7a);
 
 	/* VRMODECTRL - enable low-power mode for VCCIO and V0.85A */
-	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x3b, 0x18);
+	i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x3b, 0x18);
 }
 DECLARE_HOOK(HOOK_INIT, board_pmic_init, HOOK_PRIO_DEFAULT);
 
@@ -311,7 +307,7 @@ int board_set_active_charge_port(int charge_port)
 {
 	/* charge port is a realy physical port */
 	int is_real_port = (charge_port >= 0 &&
-			    charge_port < CONFIG_USB_PD_PORT_COUNT);
+			    charge_port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/* check if we are source vbus on that port */
 	int source = gpio_get_level(charge_port == 0 ? GPIO_USB_C0_5V_EN :
 						       GPIO_USB_C1_5V_EN);
@@ -394,7 +390,7 @@ void board_hibernate(void)
 	uart_flush_output();
 
 	/* Trigger PMIC shutdown. */
-	if (i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x49, 0x01)) {
+	if (i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS, 0x49, 0x01)) {
 		/*
 		 * If we can't tell the PMIC to shutdown, instead reset
 		 * and don't start the AP. Hopefully we'll be able to
@@ -411,7 +407,7 @@ void board_hibernate(void)
 
 /* Make the pmic re-sequence the power rails under these conditions. */
 #define PMIC_RESET_FLAGS \
-	(RESET_FLAG_WATCHDOG | RESET_FLAG_SOFT | RESET_FLAG_HARD)
+	(EC_RESET_FLAG_WATCHDOG | EC_RESET_FLAG_SOFT | EC_RESET_FLAG_HARD)
 static void board_handle_reboot(void)
 {
 	int flags;
@@ -426,8 +422,8 @@ static void board_handle_reboot(void)
 		return;
 
 	/* Preserve AP off request. */
-	if (flags & RESET_FLAG_AP_OFF)
-		chip_save_reset_flags(RESET_FLAG_AP_OFF);
+	if (flags & EC_RESET_FLAG_AP_OFF)
+		chip_save_reset_flags(EC_RESET_FLAG_AP_OFF);
 
 	ccprintf("Restarting system with PMIC.\n");
 	/* Flush console */
@@ -466,7 +462,8 @@ void chipset_set_pmic_slp_sus_l(int level)
 		if (!level)
 			msleep(25);
 
-		i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992, 0x43, val);
+		i2c_write8(I2C_PORT_PMIC, I2C_ADDR_BD99992_FLAGS,
+			   0x43, val);
 		previous_level = level;
 	}
 }

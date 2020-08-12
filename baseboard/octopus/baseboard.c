@@ -10,10 +10,14 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/bc12/bq24392.h"
+#include "driver/bc12/max14637.h"
+#include "driver/charger/isl923x.h"
 #include "driver/ppc/nx20p348x.h"
 #include "gpio.h"
 #include "hooks.h"
+#ifdef VARIANT_OCTOPUS_EC_ITE8320
+#include "intc.h"
+#endif
 #include "keyboard_scan.h"
 #include "power.h"
 #include "system.h"
@@ -25,42 +29,6 @@
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
-
-/******************************************************************************/
-/* Wake up pins */
-const enum gpio_signal hibernate_wake_pins[] = {
-	GPIO_LID_OPEN,
-	GPIO_AC_PRESENT,
-	GPIO_POWER_BUTTON_L,
-#if defined(VARIANT_OCTOPUS_EC_NPCX796FB) && defined(CONFIG_HIBERNATE_PSL)
-	/*
-	 * Enable EC_RST_ODL as a wake source if using NPCX EC variant and PSL
-	 * hibernate mode is enabled.
-	 */
-	GPIO_EC_RST_ODL,
-#endif
-};
-const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
-
-/******************************************************************************/
-/* Power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-#ifdef CONFIG_POWER_S0IX
-	{GPIO_PCH_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-#endif
-	{GPIO_PCH_SLP_S3_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S3_DEASSERTED"},
-	{GPIO_PCH_SLP_S4_L,   POWER_SIGNAL_ACTIVE_HIGH, "SLP_S4_DEASSERTED"},
-	{GPIO_SUSPWRDNACK,    POWER_SIGNAL_ACTIVE_HIGH,
-	 "SUSPWRDNACK_DEASSERTED"},
-
-	{GPIO_ALL_SYS_PGOOD,  POWER_SIGNAL_ACTIVE_HIGH, "ALL_SYS_PGOOD"},
-	{GPIO_RSMRST_L_PGOOD, POWER_SIGNAL_ACTIVE_HIGH, "RSMRST_L"},
-	{GPIO_PP3300_PG,      POWER_SIGNAL_ACTIVE_HIGH, "PP3300_PG"},
-	{GPIO_PP5000_PG,      POWER_SIGNAL_ACTIVE_HIGH, "PP5000_PG"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /******************************************************************************/
 /* Keyboard scan setting */
@@ -78,8 +46,13 @@ struct keyboard_scan_config keyscan_config = {
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
+#ifndef CONFIG_KEYBOARD_KEYPAD
 		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
+#else
+		0x1c, 0xfe, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff, /* full set */
+#endif
 	},
 };
 
@@ -92,18 +65,32 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 
 /******************************************************************************/
 /* BC 1.2 chip Configuration */
-const struct bq24392_config_t bq24392_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.chip_enable_pin = GPIO_USB_C0_BC12_VBUS_ON,
 		.chg_det_pin = GPIO_USB_C0_BC12_CHG_DET_L,
-		.flags = BQ24392_FLAGS_CHG_DET_ACTIVE_LOW,
+		.flags = MAX14637_FLAGS_CHG_DET_ACTIVE_LOW,
 	},
 	{
 		.chip_enable_pin = GPIO_USB_C1_BC12_VBUS_ON,
 		.chg_det_pin = GPIO_USB_C1_BC12_CHG_DET_L,
-		.flags = BQ24392_FLAGS_CHG_DET_ACTIVE_LOW,
+		.flags = MAX14637_FLAGS_CHG_DET_ACTIVE_LOW,
 	},
 };
+
+/******************************************************************************/
+/* Charger Chip Configuration */
+#ifdef VARIANT_OCTOPUS_CHARGER_ISL9238
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+#endif
 
 /******************************************************************************/
 /* Chipset callbacks/hooks */
@@ -111,6 +98,14 @@ const struct bq24392_config_t bq24392_config[CONFIG_USB_PD_PORT_COUNT] = {
 /* Called by APL power state machine when transitioning from G3 to S5 */
 void chipset_pre_init_callback(void)
 {
+#ifdef IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED
+	/*
+	 * Since we disable eSPI module for IT8320 part when system goes into G3
+	 * state, so we need to enable it at system startup.
+	 */
+	espi_enable_pad(1);
+#endif
+
 	/* Enable 5.0V and 3.3V rails, and wait for Power Good */
 	power_5v_enable(task_get_current(), 1);
 
@@ -171,6 +166,20 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, baseboard_chipset_shutdown,
 /* Called by APL power state machine when transitioning to G3. */
 void chipset_do_shutdown(void)
 {
+#ifdef VARIANT_OCTOPUS_EC_ITE8320
+	/*
+	 * We want the processor to be reset before dropping the PP3300_A rail
+	 * below, otherwise the PP3300_LDO and PP3300_EC rails can be overloaded
+	 */
+	if (gpio_get_level(GPIO_PCH_SLP_S4_L)) {
+		/* assert RSMRST to PCH */
+		gpio_set_level(GPIO_PCH_RSMRST_L, 0);
+		/* Wait SLP_S4 goes low; would rather watchdog than continue */
+		while (gpio_get_level(GPIO_PCH_SLP_S4_L))
+			;
+	}
+#endif
+
 	/* Disable PMIC */
 	gpio_set_level(GPIO_PMIC_EN, 0);
 
@@ -184,15 +193,43 @@ void chipset_do_shutdown(void)
 	gpio_set_level(GPIO_EN_PP3300, 0);
 	while (gpio_get_level(GPIO_PP3300_PG))
 		;
+
+#ifdef IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED
+	/*
+	 * The IT8320 part doesn't go into its lowest power state in idle task
+	 * when the eSPI module is on and CS# is asserted, so we need to
+	 * manually disable it.
+	 */
+	espi_enable_pad(0);
+#endif
+}
+
+int board_is_i2c_port_powered(int port)
+{
+	if (port != I2C_PORT_SENSOR)
+		return 1;
+
+	/* Sensor rails are off in S5/G3 */
+	return chipset_in_state(CHIPSET_STATE_ANY_OFF) ? 0 : 1;
 }
 
 /******************************************************************************/
 /* Power Delivery and charing functions */
 
+#ifdef CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
+enum adc_channel board_get_vbus_adc(int port)
+{
+	if (port == 0)
+		return  ADC_VBUS_C0;
+	if (port == 1)
+		return  ADC_VBUS_C1;
+	CPRINTSUSB("Unknown vbus adc port id: %d", port);
+	return ADC_VBUS_C0;
+}
+#endif /* CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT */
+
 void baseboard_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image())
 		board_reset_pd_mcu();
@@ -201,18 +238,16 @@ void baseboard_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < board_get_usb_pd_port_count(); ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
-DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
+/* Called after the cbi_init (via +2) */
+DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 2);
 
 int board_set_active_charge_port(int port)
 {
 	int is_valid_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < board_get_usb_pd_port_count());
 	int i;
 
 	if (!is_valid_port && port != CHARGE_PORT_NONE)
@@ -223,7 +258,8 @@ int board_set_active_charge_port(int port)
 		CPRINTSUSB("Disabling all charger ports");
 
 		/* Disable all ports. */
-		for (i = 0; i < ppc_cnt; i++) {
+		for (i = 0; (i < ppc_cnt) &&
+		    (i < board_get_usb_pd_port_count()); i++) {
 			/*
 			 * Do not return early if one fails otherwise we can
 			 * get into a boot loop assertion failure.
@@ -247,7 +283,8 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < ppc_cnt; i++) {
+	for (i = 0; (i < ppc_cnt) &&
+	    (i < board_get_usb_pd_port_count()); i++) {
 		if (i == port)
 			continue;
 
@@ -267,6 +304,13 @@ int board_set_active_charge_port(int port)
 void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
 {
+	/*
+	 * Empirically, the charger seems to draw a little more current that
+	 * it is set to, so we reduce our limit by 5%.
+	 */
+#ifdef VARIANT_OCTOPUS_CHARGER_ISL9238
+	charge_ma = (charge_ma * 95) / 100;
+#endif
 	charge_set_input_current_limit(MAX(charge_ma,
 					   CONFIG_CHARGER_INPUT_CURRENT),
 				       charge_mv);
@@ -279,8 +323,20 @@ void board_hibernate(void)
 	/*
 	 * To support hibernate called from console commands, ectool commands
 	 * and key sequence, shutdown the AP before hibernating.
+	 *
+	 * If board_hibernate() is called from within chipset task, then
+	 * chipset_do_shutdown needs to be called directly since
+	 * chipset_force_shutdown basically just sets wake event for chipset
+	 * task. But that will not help since chipset task is in board_hibernate
+	 * and never returns back to the power state machine to take down power
+	 * rails.
 	 */
-	chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
+#ifdef HAS_TASK_CHIPSET
+	if (task_get_current() == TASK_ID_CHIPSET)
+		chipset_do_shutdown();
+	else
+#endif
+		chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
 
 #ifdef CONFIG_USBC_PPC_NX20P3483
 	/*
@@ -294,15 +350,30 @@ void board_hibernate(void)
 		pd_request_source_voltage(port, NX20P348X_SAFE_RESET_VBUS_MV);
 #endif
 
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
-		/*
-		 * If Vbus isn't already on this port, then open the SNK path
-		 * to allow AC to pass through to the charger when connected.
-		 * This is need if the TCPC/PPC rails do not go away.
-		 * (b/79173959)
-		 */
-		if (!pd_is_vbus_present(port))
+	/*
+	 * If Vbus isn't already on this port, then we need to put the PPC into
+	 * low power mode or open the SNK FET based on which signals wake up
+	 * the EC from hibernate.
+	 */
+	for (port = 0; port < board_get_usb_pd_port_count(); port++) {
+		if (!pd_is_vbus_present(port)) {
+#ifdef VARIANT_OCTOPUS_EC_ITE8320
+			/*
+			 * ITE variant uses the PPC interrupts instead of
+			 * AC_PRESENT to wake up, so we do not need to enable
+			 * the SNK FETS.
+			 */
+			ppc_enter_low_power_mode(port);
+#else
+			/*
+			 * Open the SNK path to allow AC to pass through to the
+			 * charger when connected. This is need if the TCPC/PPC
+			 * rails do not go away and AC_PRESENT wakes up the EC
+			 * (b/79173959).
+			 */
 			ppc_vbus_sink_enable(port, 1);
+#endif
+		}
 	}
 
 	/*
@@ -310,5 +381,5 @@ void board_hibernate(void)
 	 * with any PD contract renegotiation, and tcpm to put TCPC into low
 	 * power mode if required.
 	 */
-	msleep(200);
+	msleep(300);
 }

@@ -6,6 +6,9 @@
 #ifndef __CROS_EC_USB_HW_H
 #define __CROS_EC_USB_HW_H
 
+#include <stddef.h>
+#include <stdint.h>
+
 /* Event types for the endpoint event handler. */
 enum usb_ep_event {
 	USB_EVENT_RESET,
@@ -30,6 +33,9 @@ extern usb_uint __usb_ram_start[];
 
 /* Attribute to define a buffer variable in USB RAM */
 #define __usb_ram __attribute__((section(".usb_ram.99_data")))
+
+/* Mask for the rx_count to identify the number of bytes in the buffer. */
+#define RX_COUNT_MASK (0x3ff)
 
 struct stm32_endpoint {
 	volatile usb_uint tx_addr;

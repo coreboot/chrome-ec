@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "gpio.h"
+#include "ioexpander.h"
 #include "registers.h"
 #include "timer.h"
 #include "util.h"
@@ -17,7 +18,7 @@ struct gpio_alt_func {
 	uint8_t module_id;
 
 	/* Alternate function number */
-	uint8_t func;
+	enum gpio_alternate_func func;
 
 	/* Port base address */
 	uint32_t port;
@@ -74,8 +75,8 @@ static int gpio_config_pins(enum module_id id, uint32_t port, uint32_t pin_mask,
 					af->port, (af->mask & pin_mask),
 					enable ? af->flags : GPIO_INPUT);
 			gpio_set_alternate_function(af->port,
-						    (af->mask & pin_mask),
-						    enable ? af->func : -1);
+				    (af->mask & pin_mask),
+				    enable ? af->func : GPIO_ALT_FUNC_NONE);
 			rv = EC_SUCCESS;
 			/* We're done here if we were just setting one port. */
 			if (port != GPIO_CONFIG_ALL_PORTS)
@@ -108,7 +109,7 @@ void gpio_set_flags(enum gpio_signal signal, int flags)
 	gpio_set_flags_by_mask(g->port, g->mask, flags);
 }
 
-#ifdef CONFIG_CMD_GPIO_EXTENDED
+#ifdef CONFIG_GPIO_GET_EXTENDED
 int gpio_get_flags(enum gpio_signal signal)
 {
 	const struct gpio_info *g = gpio_list + signal;
@@ -127,7 +128,7 @@ void gpio_reset(enum gpio_signal signal)
 	const struct gpio_info *g = gpio_list + signal;
 
 	gpio_set_flags_by_mask(g->port, g->mask, g->flags);
-	gpio_set_alternate_function(g->port, g->mask, -1);
+	gpio_set_alternate_function(g->port, g->mask, GPIO_ALT_FUNC_NONE);
 }
 
 const char *gpio_get_name(enum gpio_signal signal)
@@ -194,5 +195,33 @@ int gpio_power_down_module(enum module_id id)
 	return rv;
 }
 #endif /* #ifdef CONFIG_GPIO_POWER_DOWN */
+
+void gpio_set_level_verbose(enum console_channel channel,
+			    enum gpio_signal signal, int value)
+{
+	ASSERT(signal_is_gpio(signal));
+	cprints(channel, "Set %s: %d", gpio_get_name(signal), value);
+	gpio_set_level(signal, value);
+}
+
+void gpio_or_ioex_set_level(int signal, int value)
+{
+	if (IS_ENABLED(CONFIG_IO_EXPANDER) && signal_is_ioex(signal))
+		ioex_set_level(signal, value);
+	else
+		gpio_set_level(signal, value);
+}
+
+int signal_is_gpio(int signal)
+{
+	return ((signal >= GPIO_SIGNAL_START)
+		&& (signal < GPIO_SIGNAL_START + GPIO_COUNT));
+}
+
+__attribute__((weak)) void gpio_set_wakepin(enum gpio_signal signal,
+					    uint32_t flags)
+{
+	/* Some chips may need their own implementations */
+}
 
 /*****************************************************************************/

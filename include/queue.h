@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -8,6 +8,7 @@
 #define __CROS_EC_QUEUE_H
 
 #include "common.h"
+#include "util.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -75,6 +76,7 @@ struct queue {
 	struct queue_policy const *policy;
 
 	size_t  buffer_units; /* size of buffer (in units) */
+	size_t  buffer_units_mask; /* size of buffer (in units) - 1*/
 	size_t  unit_bytes;   /* size of unit   (in byte) */
 	uint8_t *buffer;
 };
@@ -88,7 +90,8 @@ struct queue {
 	((struct queue) {					\
 		.state        = &((struct queue_state){}),	\
 		.policy       = &POLICY,			\
-		.buffer_units = SIZE,				\
+		.buffer_units = BUILD_CHECK_INLINE(SIZE, POWER_OF_TWO(SIZE)), \
+		.buffer_units_mask = SIZE - 1,			\
 		.unit_bytes   = sizeof(TYPE),			\
 		.buffer       = (uint8_t *) &((TYPE[SIZE]){}),	\
 	})
@@ -108,28 +111,67 @@ size_t queue_space(struct queue const *q);
 /* Return TRUE if the queue is full. */
 int queue_is_full(struct queue const *q);
 
+struct queue_iterator_state {
+	size_t offset;
+	size_t head;
+	size_t tail;
+};
+
+struct queue_iterator {
+	void *ptr;
+	struct queue_iterator_state _state;
+};
+
+/**
+ * Get a pointer to the first element (the head).
+ *
+ * @param q Pointer to the queue.
+ * @param it Pointer to an Iterator that will point to the first element.
+ */
+void queue_begin(struct queue const *q, struct queue_iterator *it);
+
+/**
+ * Get a pointer to the next element in the queue given a current iterator.
+ *
+ * @param q Pointer to a constant queue to query.
+ * @param it The iterator to move forward.
+ */
+void queue_next(struct queue const *q, struct queue_iterator *it);
+
 /*
  * Chunk based queue access.  A queue_chunk is a contiguous region of queue
- * buffer bytes, not units.  It may represent either free space in the queue
- * or entries.
+ * buffer units.
  */
 struct queue_chunk {
-	size_t  length;
-	uint8_t *buffer;
+	size_t  count;
+	void *buffer;
 };
 
 /*
  * Return the largest contiguous block of free space from the tail of the
- * queue.  This may not be all of the available free space in the queue.  Once
- * some or all of the free space has been written to you must call
+ * queue + offset.  This may not be all of the available free space in the
+ * queue.  Once some or all of the free space has been written to you must call
  * queue_advance_tail to update the queue.  You do not need to fill all of the
  * free space returned before calling queue_advance_tail, and you may call
  * queue_advance tail multiple times for a single chunk.  But you must not
  * advance the tail more than the length of the chunk, or more than the actual
  * number of units that you have written to the free space represented by the
  * chunk.
+ *
+ * Since this function returns continuous space, offset will allow accessing
+ * writable memory that is wrapped. For example:
+ *
+ *  *: Used entry
+ *  -: Free space
+ *
+ *    H  T
+ * |--***---|
+ *
+ * A call to queue_get_write_chunk(&q, 0) will return 3 entries starting at T.
+ * To be able to also write the 2 leading writable indicies, we'll need to use
+ * queue_get_write_chunk(&q, 3), which will return 2 entries at queue index 0.
  */
-struct queue_chunk queue_get_write_chunk(struct queue const *q);
+struct queue_chunk queue_get_write_chunk(struct queue const *q, size_t offset);
 
 /*
  * Return the largest contiguous block of units from the head of the queue.

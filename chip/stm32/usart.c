@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -47,12 +47,12 @@ void usart_init(struct usart_config const *config)
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3) || \
     defined(CHIP_FAMILY_STM32L4)
 	if (config->flags & USART_CONFIG_FLAG_RX_INV)
-		cr2 |= (1 << 16);
+		cr2 |= BIT(16);
 	if (config->flags & USART_CONFIG_FLAG_TX_INV)
-		cr2 |= (1 << 17);
+		cr2 |= BIT(17);
 #endif
 	if (config->flags & USART_CONFIG_FLAG_HDSEL)
-		cr3 |= (1 << 3);
+		cr3 |= BIT(3);
 
 	STM32_USART_CR1(base) = 0x0000;
 	STM32_USART_CR2(base) = cr2;
@@ -86,9 +86,10 @@ void usart_shutdown(struct usart_config const *config)
 	config->hw->ops->disable(config);
 }
 
-void usart_set_baud_f0_l(struct usart_config const *config, int frequency_hz)
+void usart_set_baud_f0_l(struct usart_config const *config, int baud,
+			int frequency_hz)
 {
-	int      div  = DIV_ROUND_NEAREST(frequency_hz, config->baud);
+	int      div  = DIV_ROUND_NEAREST(frequency_hz, baud);
 	intptr_t base = config->hw->base;
 
 	if (div / 16 > 0) {
@@ -108,9 +109,10 @@ void usart_set_baud_f0_l(struct usart_config const *config, int frequency_hz)
 	}
 }
 
-void usart_set_baud_f(struct usart_config const *config, int frequency_hz)
+void usart_set_baud_f(struct usart_config const *config, int baud,
+		int frequency_hz)
 {
-	int div = DIV_ROUND_NEAREST(frequency_hz, config->baud);
+	int div = DIV_ROUND_NEAREST(frequency_hz, baud);
 
 	/* STM32F only supports x16 oversampling */
 	STM32_USART_BRR(config->hw->base) = div;

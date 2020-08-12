@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,7 +8,7 @@
 #ifndef __CROS_EC_TMP432_H
 #define __CROS_EC_TMP432_H
 
-#define TMP432_I2C_ADDR		0x98 /* 7-bit address is 0x4C */
+#define TMP432_I2C_ADDR_FLAGS		0x4C
 
 #define TMP432_IDX_LOCAL	0
 #define TMP432_IDX_REMOTE1	1
@@ -67,22 +67,22 @@
 #define TMP432_MANUFACTURER_ID		0xfe
 
 /* Config register bits */
-#define TMP432_CONFIG1_TEMP_RANGE	(1 << 2)
+#define TMP432_CONFIG1_TEMP_RANGE	BIT(2)
 /* TMP432_CONFIG1_MODE bit is use to enable THERM mode */
-#define TMP432_CONFIG1_MODE		(1 << 5)
-#define TMP432_CONFIG1_RUN_L		(1 << 6)
-#define TMP432_CONFIG1_ALERT_MASK_L	(1 << 7)
-#define TMP432_CONFIG2_RESISTANCE_CORRECTION	(1 << 2)
-#define TMP432_CONFIG2_LOCAL_ENABLE	(1 << 3)
-#define TMP432_CONFIG2_REMOTE1_ENABLE	(1 << 4)
-#define TMP432_CONFIG2_REMOTE2_ENABLE	(1 << 5)
+#define TMP432_CONFIG1_MODE		BIT(5)
+#define TMP432_CONFIG1_RUN_L		BIT(6)
+#define TMP432_CONFIG1_ALERT_MASK_L	BIT(7)
+#define TMP432_CONFIG2_RESISTANCE_CORRECTION	BIT(2)
+#define TMP432_CONFIG2_LOCAL_ENABLE	BIT(3)
+#define TMP432_CONFIG2_REMOTE1_ENABLE	BIT(4)
+#define TMP432_CONFIG2_REMOTE2_ENABLE	BIT(5)
 
 /* Status register bits */
-#define TMP432_STATUS_TEMP_THERM_ALARM	(1 << 1)
-#define TMP432_STATUS_OPEN		(1 << 2)
-#define TMP432_STATUS_TEMP_LOW_ALARM	(1 << 3)
-#define TMP432_STATUS_TEMP_HIGH_ALARM	(1 << 4)
-#define TMP432_STATUS_BUSY		(1 << 7)
+#define TMP432_STATUS_TEMP_THERM_ALARM	BIT(1)
+#define TMP432_STATUS_OPEN		BIT(2)
+#define TMP432_STATUS_TEMP_LOW_ALARM	BIT(3)
+#define TMP432_STATUS_TEMP_HIGH_ALARM	BIT(4)
+#define TMP432_STATUS_BUSY		BIT(7)
 
 /* Limintaions */
 #define TMP432_HYSTERESIS_HIGH_LIMIT	255

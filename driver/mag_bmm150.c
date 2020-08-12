@@ -17,8 +17,8 @@
 #include "timer.h"
 #include "util.h"
 
-#ifdef CONFIG_MAG_BMI160_BMM150
-#include "driver/accelgyro_bmi160.h"
+#ifdef CONFIG_MAG_BMI_BMM150
+#include "driver/accelgyro_bmi_common.h"
 #define raw_mag_read8 bmi160_sec_raw_read8
 #define raw_mag_write8 bmi160_sec_raw_write8
 #else
@@ -73,9 +73,9 @@
 
 #define BMI150_READ_16BIT_COM_REG(store_, addr_) do { \
 	int val; \
-	raw_mag_read8(s->port, s->addr, (addr_), &val); \
+	raw_mag_read8(s->port, s->i2c_spi_addr_flags, (addr_), &val); \
 	store_ = val; \
-	raw_mag_read8(s->port, s->addr, (addr_) + 1, &val); \
+	raw_mag_read8(s->port, s->i2c_spi_addr_flags, (addr_) + 1, &val); \
 	store_ |= (val << 8); \
 } while (0)
 
@@ -88,10 +88,12 @@ int bmm150_init(const struct motion_sensor_t *s)
 	struct mag_cal_t             *moc = BMM150_CAL(s);
 
 	/* Set the compass from Suspend to Sleep */
-	ret = raw_mag_write8(s->port, s->addr, BMM150_PWR_CTRL, BMM150_PWR_ON);
+	ret = raw_mag_write8(s->port, s->i2c_spi_addr_flags,
+			     BMM150_PWR_CTRL, BMM150_PWR_ON);
 	msleep(4);
 	/* Now we can read the device id */
-	ret = raw_mag_read8(s->port, s->addr, BMM150_CHIP_ID, &val);
+	ret = raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+			    BMM150_CHIP_ID, &val);
 	if (ret)
 		return EC_ERROR_UNKNOWN;
 
@@ -99,21 +101,27 @@ int bmm150_init(const struct motion_sensor_t *s)
 		return EC_ERROR_ACCESS_DENIED;
 
 	/* Read the private registers for compensation */
-	ret = raw_mag_read8(s->port, s->addr, BMM150_REGA_DIG_X1, &val);
+	ret = raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+			    BMM150_REGA_DIG_X1, &val);
 	if (ret)
 		return EC_ERROR_UNKNOWN;
 	regs->dig1[X] = val;
-	raw_mag_read8(s->port, s->addr, BMM150_REGA_DIG_Y1, &val);
+	raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+		      BMM150_REGA_DIG_Y1, &val);
 	regs->dig1[Y] = val;
-	raw_mag_read8(s->port, s->addr, BMM150_REGA_DIG_X2, &val);
+	raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+		      BMM150_REGA_DIG_X2, &val);
 	regs->dig2[X] = val;
-	raw_mag_read8(s->port, s->addr, BMM150_REGA_DIG_Y2, &val);
+	raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+		      BMM150_REGA_DIG_Y2, &val);
 	regs->dig2[Y] = val;
 
-	raw_mag_read8(s->port, s->addr, BMM150_REGA_DIG_XY1, &val);
+	raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+		      BMM150_REGA_DIG_XY1, &val);
 	regs->dig_xy1 = val;
 
-	raw_mag_read8(s->port, s->addr, BMM150_REGA_DIG_XY2, &val);
+	raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+		      BMM150_REGA_DIG_XY2, &val);
 	regs->dig_xy2 = val;
 
 	BMI150_READ_16BIT_COM_REG(regs->dig_z1, BMM150_REGA_DIG_Z1_LSB);
@@ -124,15 +132,20 @@ int bmm150_init(const struct motion_sensor_t *s)
 
 
 	/* Set the repetition in "Regular Preset" */
-	raw_mag_write8(s->port, s->addr, BMM150_REPXY, BMM150_REP(SPECIAL, XY));
-	raw_mag_write8(s->port, s->addr, BMM150_REPZ, BMM150_REP(SPECIAL, Z));
-	ret = raw_mag_read8(s->port, s->addr, BMM150_REPXY, &val);
-	ret = raw_mag_read8(s->port, s->addr, BMM150_REPZ, &val);
+	raw_mag_write8(s->port, s->i2c_spi_addr_flags,
+		       BMM150_REPXY, BMM150_REP(SPECIAL, XY));
+	raw_mag_write8(s->port, s->i2c_spi_addr_flags,
+		       BMM150_REPZ, BMM150_REP(SPECIAL, Z));
+	ret = raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+			    BMM150_REPXY, &val);
+	ret = raw_mag_read8(s->port, s->i2c_spi_addr_flags,
+			    BMM150_REPZ, &val);
 	/*
 	 * Set the compass forced mode, to sleep after each measure.
 	 */
-	ret = raw_mag_write8(s->port, s->addr, BMM150_OP_CTRL,
-			BMM150_OP_MODE_FORCED << BMM150_OP_MODE_OFFSET);
+	ret = raw_mag_write8(s->port, s->i2c_spi_addr_flags,
+			     BMM150_OP_CTRL,
+			     BMM150_OP_MODE_FORCED << BMM150_OP_MODE_OFFSET);
 
 	init_mag_cal(moc);
 	moc->radius = 0.0f;
@@ -140,8 +153,8 @@ int bmm150_init(const struct motion_sensor_t *s)
 }
 
 void bmm150_temp_compensate_xy(const struct motion_sensor_t *s,
-			       vector_3_t raw,
-			       vector_3_t comp,
+			       intv3_t raw,
+			       intv3_t comp,
 			       int r)
 {
 	int inter, axis;
@@ -149,7 +162,7 @@ void bmm150_temp_compensate_xy(const struct motion_sensor_t *s,
 	if (r == 0)
 		inter = 0;
 	else
-		inter = ((int)regs->dig_xyz1 << 14) / r - (1 << 14);
+		inter = ((int)regs->dig_xyz1 << 14) / r - BIT(14);
 
 	for (axis = X; axis <= Y; axis++) {
 		if (raw[axis] == BMM150_FLIP_OVERFLOW_ADCVAL) {
@@ -179,8 +192,8 @@ void bmm150_temp_compensate_xy(const struct motion_sensor_t *s,
 }
 
 void bmm150_temp_compensate_z(const struct motion_sensor_t *s,
-			      vector_3_t raw,
-			      vector_3_t comp,
+			      intv3_t raw,
+			      intv3_t comp,
 			      int r)
 {
 	int dividend, divisor;
@@ -195,31 +208,31 @@ void bmm150_temp_compensate_z(const struct motion_sensor_t *s,
 	 * ((z - dig_z4) * 131072 - dig_z3 * (r - dig_xyz1)) /
 	 * ((dig_z2 + dig_z1 * r / 32768) * 4);
 	 *
-	 * We spread 4 so we multiply by 131072 / 4 == (1<<15) only.
+	 * We spread 4 so we multiply by 131072 / 4 == BIT(15) only.
 	 */
 	dividend = (raw[Z] - (int)regs->dig_z4) << 15;
 	dividend -= (regs->dig_z3 * (r - (int)regs->dig_xyz1)) >> 2;
-	/* add 1 << 15 to round to next integer. */
-	divisor = (int)regs->dig_z1 * (r << 1) + (1 << 15);
+	/* add BIT(15) to round to next integer. */
+	divisor = (int)regs->dig_z1 * (r << 1) + BIT(15);
 	divisor >>= 16;
 	divisor += (int)regs->dig_z2;
 	comp[Z] = dividend / divisor;
-	if (comp[Z] > (1 << 15) || comp[Z] < -(1 << 15))
+	if (comp[Z] > BIT(15) || comp[Z] < -(BIT(15)))
 		comp[Z] = BMM150_OVERFLOW_OUTPUT;
 }
 
 void bmm150_normalize(const struct motion_sensor_t *s,
-		      vector_3_t v,
+		      intv3_t v,
 		      uint8_t *data)
 {
 	uint16_t r;
-	vector_3_t raw;
+	intv3_t raw;
 	struct mag_cal_t *cal = BMM150_CAL(s);
 
 	/* X and Y are two's complement 13 bits vectors */
 	raw[X] = ((int16_t)(data[0] | (data[1] << 8))) >> 3;
 	raw[Y] = ((int16_t)(data[2] | (data[3] << 8))) >> 3;
-	/* X and Y are two's complement 15 bits vectors */
+	/* Z are two's complement 15 bits vectors */
 	raw[Z] = ((int16_t)(data[4] | (data[5] << 8))) >> 1;
 
 	/* RHALL value to compensate with - unsigned 14 bits */
@@ -235,7 +248,7 @@ void bmm150_normalize(const struct motion_sensor_t *s,
 }
 
 int bmm150_set_offset(const struct motion_sensor_t *s,
-		      const vector_3_t offset)
+		      const intv3_t offset)
 {
 	struct mag_cal_t *cal = BMM150_CAL(s);
 	cal->bias[X] = offset[X];
@@ -245,7 +258,7 @@ int bmm150_set_offset(const struct motion_sensor_t *s,
 }
 
 int bmm150_get_offset(const struct motion_sensor_t *s,
-		      vector_3_t offset)
+		      intv3_t offset)
 {
 	struct mag_cal_t *cal = BMM150_CAL(s);
 	offset[X] = cal->bias[X];

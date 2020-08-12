@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -42,7 +42,7 @@ void usb_gpio_rx(struct usb_gpio_config const *config)
 	config->state->set_mask = set_mask;
 	config->state->clear_mask = clear_mask;
 
-	if ((btable_ep[config->endpoint].rx_count & 0x3ff) ==
+	if ((btable_ep[config->endpoint].rx_count & RX_COUNT_MASK) ==
 	    USB_GPIO_RX_PACKET_SIZE) {
 		for (i = 0; i < config->num_gpios; ++i, mask <<= 1) {
 			if (ignore_mask & mask)

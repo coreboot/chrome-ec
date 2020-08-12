@@ -16,11 +16,12 @@ from __future__ import print_function
 
 import binascii
 # pylint: disable=cros-logging-import
+import copy
 import logging
 import os
 import Queue
 import select
-import sys
+import traceback
 
 
 COMMAND_RETRIES = 3  # Number of attempts to retry a command.
@@ -48,12 +49,13 @@ class Interpreter(object):
     logger: A logger for this module.
     ec_uart_pty: An opened file object to the raw EC UART PTY.
     ec_uart_pty_name: A string containing the name of the raw EC UART PTY.
-    cmd_pipe: A multiprocessing.Connection object which represents the
-      Interpreter side of the command pipe.  This must be a bidirectional pipe.
-      Commands and responses will utilize this pipe.
-    dbg_pipe: A multiprocessing.Connection object which represents the
-      Interpreter side of the debug pipe. This must be a unidirectional pipe
-      with write capabilities.  EC debug output will utilize this pipe.
+    cmd_pipe: A socket.socket or multiprocessing.Connection object which
+      represents the Interpreter side of the command pipe.  This must be a
+      bidirectional pipe.  Commands and responses will utilize this pipe.
+    dbg_pipe: A socket.socket or multiprocessing.Connection object which
+      represents the Interpreter side of the debug pipe. This must be a
+      unidirectional pipe with write capabilities.  EC debug output will utilize
+      this pipe.
     cmd_retries: An integer representing the number of attempts the console
       should retry commands if it receives an error.
     log_level: An integer representing the numeric value of the log level.
@@ -73,23 +75,28 @@ class Interpreter(object):
     connected: A boolean indicating if the interpreter is actually connected to
       the UART and listening.
   """
-  def __init__(self, ec_uart_pty, cmd_pipe, dbg_pipe, log_level=logging.INFO):
+  def __init__(self, ec_uart_pty, cmd_pipe, dbg_pipe, log_level=logging.INFO,
+               name=None):
     """Intializes an Interpreter object with the provided args.
 
     Args:
       ec_uart_pty: A string representing the EC UART to connect to.
-      cmd_pipe: A multiprocessing.Connection object which represents the
-        Interpreter side of the command pipe.  This must be a bidirectional
-        pipe.  Commands and responses will utilize this pipe.
-      dbg_pipe: A multiprocessing.Connection object which represents the
-        Interpreter side of the debug pipe. This must be a unidirectional pipe
-        with write capabilities.  EC debug output will utilize this pipe.
+      cmd_pipe: A socket.socket or multiprocessing.Connection object which
+        represents the Interpreter side of the command pipe.  This must be a
+        bidirectional pipe.  Commands and responses will utilize this pipe.
+      dbg_pipe: A socket.socket or multiprocessing.Connection object which
+        represents the Interpreter side of the debug pipe. This must be a
+        unidirectional pipe with write capabilities.  EC debug output will
+        utilize this pipe.
       cmd_retries: An integer representing the number of attempts the console
         should retry commands if it receives an error.
       log_level: An optional integer representing the numeric value of the log
         level.  By default, the log level will be logging.INFO (20).
+      name: the console source name
     """
-    logger = logging.getLogger('EC3PO.Interpreter')
+    # Create a unique logger based on the interpreter name
+    interpreter_prefix = ('%s - ' % name) if name else ''
+    logger = logging.getLogger('%sEC3PO.Interpreter' % interpreter_prefix)
     self.logger = LoggerAdapter(logger, {'pty': ec_uart_pty})
     self.ec_uart_pty = open(ec_uart_pty, 'a+')
     self.ec_uart_pty_name = ec_uart_pty
@@ -195,15 +202,15 @@ class Interpreter(object):
           self.cmd_retries = COMMAND_RETRIES
           self.last_cmd = ''
         # Get the UART that the interpreter is attached to.
-        fd = self.ec_uart_pty
-        self.logger.debug('fd: %r', fd)
+        fileobj = self.ec_uart_pty
+        self.logger.debug('fileobj: %r', fileobj)
         # Remove the descriptor from the inputs and outputs.
-        self.inputs.remove(fd)
-        if fd in self.outputs:
-          self.outputs.remove(fd)
-        self.logger.debug('Removed fd. Remaining inputs: %r', self.inputs)
+        self.inputs.remove(fileobj)
+        if fileobj in self.outputs:
+          self.outputs.remove(fileobj)
+        self.logger.debug('Removed fileobj. Remaining inputs: %r', self.inputs)
         # Close the file.
-        fd.close()
+        fileobj.close()
         # Mark the interpreter as disconnected now.
         self.connected = False
         self.logger.debug('Disconnected from %s.', self.ec_uart_pty_name)
@@ -213,12 +220,12 @@ class Interpreter(object):
       if not self.connected:
         self.logger.debug('UART reconnect request.')
         # Reopen the PTY.
-        fd = open(self.ec_uart_pty_name, 'a+')
-        self.logger.debug('fd: %r', fd)
-        self.ec_uart_pty = fd
+        fileobj = open(self.ec_uart_pty_name, 'a+')
+        self.logger.debug('fileobj: %r', fileobj)
+        self.ec_uart_pty = fileobj
         # Add the descriptor to the inputs.
-        self.inputs.append(fd)
-        self.logger.debug('fd added. curr inputs: %r', self.inputs)
+        self.inputs.append(fileobj)
+        self.logger.debug('fileobj added. curr inputs: %r', self.inputs)
         # Mark the interpreter as connected now.
         self.connected = True
         self.logger.debug('Connected to %s.', self.ec_uart_pty_name)
@@ -345,7 +352,11 @@ class Interpreter(object):
     self.dbg_pipe.send(data)
 
   def HandleUserData(self):
-    """Handle any incoming commands from the user."""
+    """Handle any incoming commands from the user.
+
+    Raises:
+      EOFError: Allowed to propagate through from self.cmd_pipe.recv().
+    """
     self.logger.log(1, 'Command data available.  Begin processing.')
     data = self.cmd_pipe.recv()
     # Process the command.
@@ -374,7 +385,7 @@ def Crc8(data):
   return crc >> 8
 
 
-def StartLoop(interp):
+def StartLoop(interp, shutdown_pipe=None):
   """Starts an infinite loop of servicing the user and the EC.
 
   StartLoop checks to see if there are any commands to process, processing them
@@ -389,10 +400,25 @@ def StartLoop(interp):
 
   Args:
     interp: An Interpreter object that has been properly initialised.
+    shutdown_pipe: A file object for a pipe or equivalent that becomes readable
+      (not blocked) to indicate that the loop should exit.  Can be None to never
+      exit the loop.
   """
   try:
-    while True:
-      readable, writeable, _ = select.select(interp.inputs, interp.outputs, [])
+    # This is used instead of "break" to avoid exiting the loop in the middle of
+    # an iteration.
+    continue_looping = True
+
+    while continue_looping:
+      # The inputs list is created anew in each loop iteration because the
+      # Interpreter class sometimes modifies the interp.inputs list.
+      if shutdown_pipe is None:
+        inputs = interp.inputs
+      else:
+        inputs = list(interp.inputs)
+        inputs.append(shutdown_pipe)
+
+      readable, writeable, _ = select.select(inputs, interp.outputs, [])
 
       for obj in readable:
         # Handle any debug prints from the EC.
@@ -401,18 +427,36 @@ def StartLoop(interp):
 
         # Handle any commands from the user.
         elif obj is interp.cmd_pipe:
-          interp.HandleUserData()
+          try:
+            interp.HandleUserData()
+          except EOFError:
+            interp.logger.debug(
+                'ec3po interpreter received EOF from cmd_pipe in '
+                'HandleUserData()')
+            continue_looping = False
+
+        elif obj is shutdown_pipe:
+          interp.logger.debug(
+              'ec3po interpreter received shutdown pipe unblocked notification')
+          continue_looping = False
 
       for obj in writeable:
         # Send a command to the EC.
         if obj is interp.ec_uart_pty:
           interp.SendCmdToEC()
 
+  except KeyboardInterrupt:
+    pass
+
+  # TODO(crbug.com/894870): Stop suppressing all exceptions.
+  except:
+    traceback.print_exc()
+
   finally:
-    # Close pipes.
     interp.cmd_pipe.close()
     interp.dbg_pipe.close()
-    # Close file descriptor.
     interp.ec_uart_pty.close()
-    # Exit.
-    sys.exit(0)
+    if shutdown_pipe is not None:
+      shutdown_pipe.close()
+    interp.logger.debug('Exit ec3po interpreter loop for %s',
+                        interp.ec_uart_pty_name)

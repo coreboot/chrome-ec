@@ -272,7 +272,7 @@ static void do_xfer(struct usb_endpoint *uep, void *outbuf, int outlen,
 		actual = 0;
 		r = libusb_bulk_transfer(uep->devh, uep->ep_num,
 					 outbuf, outlen,
-					 &actual, 1000);
+					 &actual, 2000);
 		if (r < 0) {
 			USB_ERROR("libusb_bulk_transfer", r);
 			exit(update_error);
@@ -513,7 +513,7 @@ static int transfer_block(struct usb_endpoint *uep,
 	/* Now get the reply. */
 	r = libusb_bulk_transfer(uep->devh, uep->ep_num | 0x80,
 				 (void *) &reply, sizeof(reply),
-				 &actual, 1000);
+				 &actual, 5000);
 	if (r) {
 		if (r == -7) {
 			fprintf(stderr, "Timeout!\n");
@@ -1030,7 +1030,7 @@ static void read_console(struct transfer_descriptor *td)
 				break;
 			/* make sure it's null-terminated. */
 			response[response_size - 1] = 0;
-			printf((const char *)response);
+			printf("%s", (const char *)response);
 		}
 		nanosleep(&sleep_duration, NULL);
 	}

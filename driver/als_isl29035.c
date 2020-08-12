@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -9,7 +9,7 @@
 #include "i2c.h"
 
 /* I2C interface */
-#define ILS29035_I2C_ADDR       0x88
+#define ILS29035_I2C_ADDR_FLAGS	0x44
 #define ILS29035_REG_COMMAND_I  0
 #define ILS29035_REG_COMMAND_II 1
 #define ILS29035_REG_DATA_LSB   2
@@ -27,8 +27,8 @@ int isl29035_init(void)
 	 * zero, but it makes the hook/update code cleaner (we don't want to
 	 * wait 90ms to read on demand while processing hook callbacks).
 	 */
-	return i2c_write8(I2C_PORT_ALS, ILS29035_I2C_ADDR,
-			 ILS29035_REG_COMMAND_I, 0xa0);
+	return i2c_write8(I2C_PORT_ALS, ILS29035_I2C_ADDR_FLAGS,
+			  ILS29035_REG_COMMAND_I, 0xa0);
 }
 
 int isl29035_read_lux(int *lux, int af)
@@ -43,13 +43,13 @@ int isl29035_read_lux(int *lux, int af)
 	 */
 
 	/* Read lsb */
-	rv = i2c_read8(I2C_PORT_ALS, ILS29035_I2C_ADDR,
+	rv = i2c_read8(I2C_PORT_ALS, ILS29035_I2C_ADDR_FLAGS,
 		       ILS29035_REG_DATA_LSB, &lsb);
 	if (rv)
 		return rv;
 
 	/* Read msb */
-	rv = i2c_read8(I2C_PORT_ALS, ILS29035_I2C_ADDR,
+	rv = i2c_read8(I2C_PORT_ALS, ILS29035_I2C_ADDR_FLAGS,
 		       ILS29035_REG_DATA_MSB, &msb);
 	if (rv)
 		return rv;

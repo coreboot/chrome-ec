@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -33,8 +33,8 @@ static int fake_hibernate;
  * because it's the lowest clock rate we can still run 115200 baud serial
  * for the debug console.
  */
-#define MSI_2MHZ_CLOCK (1 << 21)
-#define MSI_1MHZ_CLOCK (1 << 20)
+#define MSI_2MHZ_CLOCK BIT(21)
+#define MSI_1MHZ_CLOCK BIT(20)
 
 enum clock_osc {
 	OSC_INIT = 0,	/* Uninitialized */
@@ -211,9 +211,9 @@ void clock_enable_module(enum module_id module, int enable)
 	int new_mask;
 
 	if (enable)
-		new_mask = clock_mask | (1 << module);
+		new_mask = clock_mask | BIT(module);
 	else
-		new_mask = clock_mask & ~(1 << module);
+		new_mask = clock_mask & ~BIT(module);
 
 	/* Only change clock if needed */
 	if ((!!new_mask) != (!!clock_mask)) {
@@ -281,7 +281,7 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	 *
 	 * A little hacky to do this here.
 	 */
-	for (i = GPIO_KB_OUT00; i < GPIO_KB_OUT00 + KEYBOARD_COLS; i++)
+	for (i = GPIO_KB_OUT00; i < GPIO_KB_OUT00 + KEYBOARD_COLS_MAX; i++)
 		gpio_set_flags(i, GPIO_INPUT);
 
 	ccprints("fake hibernate. waits for power button/lid/RTC/AC");

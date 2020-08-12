@@ -1,6 +1,6 @@
 /* -*- mode:c -*-
  *
- * Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+ * Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,27 +9,13 @@
  * Note: Those with interrupt handlers must be declared first. */
 
 GPIO_INT(POWER_BUTTON_L, PIN(E, 4), GPIO_INT_BOTH | GPIO_PULL_UP,   power_button_interrupt)
-#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#ifndef CONFIG_HOSTCMD_ESPI
 GPIO_INT(PCH_PLTRST_L,   PIN(E, 3), GPIO_INT_BOTH | GPIO_PULL_UP,   lpcrst_interrupt)
 #endif
 GPIO_INT(LID_OPEN,       PIN(E, 2), GPIO_INT_BOTH | GPIO_PULL_DOWN, lid_interrupt)
 GPIO_INT(WP_L,           PIN(E, 1), GPIO_INT_BOTH,                  switch_interrupt)         /* Write protect input */
 #ifdef CONFIG_LOW_POWER_IDLE
 GPIO_INT(UART1_RX,       PIN(B, 0), GPIO_INT_FALLING,               uart_deepsleep_interrupt) /* UART1 RX input */
-#endif
-
-#if IT83XX_PD_EVB
-GPIO(USBPD_HVLDO,             PIN(A, 1), GPIO_OUT_LOW)
-GPIO(USBPD_PORTB_CC1_VCONN,   PIN(A, 2), GPIO_OUT_LOW)
-GPIO(USBPD_PORTB_CC2_VCONN,   PIN(A, 3), GPIO_OUT_LOW)
-GPIO(USBPD_PORTB_VBUS_INPUT,  PIN(A, 4), GPIO_OUT_HIGH)
-GPIO(USBPD_PORTB_VBUS_OUTPUT, PIN(A, 5), GPIO_OUT_LOW)
-GPIO(USBPD_PORTB_VBUS_DROP,   PIN(A, 6), GPIO_OUT_LOW)
-GPIO(USBPD_PORTA_CC1_VCONN,   PIN(C, 4), GPIO_OUT_LOW)
-GPIO(USBPD_PORTA_CC2_VCONN,   PIN(C, 6), GPIO_OUT_LOW)
-GPIO(USBPD_PORTA_VBUS_INPUT,  PIN(D, 0), GPIO_OUT_HIGH)
-GPIO(USBPD_PORTA_VBUS_OUTPUT, PIN(D, 1), GPIO_OUT_LOW)
-GPIO(USBPD_PORTA_VBUS_DROP,   PIN(E, 5), GPIO_OUT_LOW)
 #endif
 
 GPIO(PCH_SMI_L,      PIN(D, 3), GPIO_OUT_HIGH)
@@ -70,10 +56,10 @@ ALTERNATE(PIN_MASK(B, 0x03), 1, MODULE_UART, GPIO_PULL_UP) /* UART1 */
 #ifdef CONFIG_UART_HOST
 ALTERNATE(PIN_MASK(H, 0x06), 1, MODULE_UART, 0)            /* UART2 */
 #endif
-ALTERNATE(PIN_MASK(A, 0x40), 3, MODULE_SPI, 0)             /* SSCK of SPI */
-ALTERNATE(PIN_MASK(C, 0x28), 3, MODULE_SPI, 0)             /* SMOSI/SMISO of SPI */
-ALTERNATE(PIN_MASK(G, 0x01), 3, MODULE_SPI, 0)             /* SSCE1# of SPI */
-ALTERNATE(PIN_MASK(G, 0x04), 3, MODULE_SPI, 0)             /* SSCE0# of SPI */
+ALTERNATE(PIN_MASK(A, 0x40), 3, MODULE_SPI_MASTER, 0)      /* SSCK of SPI */
+ALTERNATE(PIN_MASK(C, 0x28), 3, MODULE_SPI_MASTER, 0)      /* SMOSI/SMISO of SPI */
+ALTERNATE(PIN_MASK(G, 0x01), 3, MODULE_SPI_MASTER, 0)      /* SSCE1# of SPI */
+ALTERNATE(PIN_MASK(G, 0x04), 3, MODULE_SPI_MASTER, 0)      /* SSCE0# of SPI */
 ALTERNATE(PIN_MASK(A, 0x80), 1, MODULE_PWM, 0)             /* PWM7 for FAN1 */
 ALTERNATE(PIN_MASK(D, 0x40), 3, MODULE_PWM, 0)             /* TACH0A for FAN1 */
 ALTERNATE(PIN_MASK(B, 0x18), 1, MODULE_I2C, 0)             /* I2C A SCL/SDA */
@@ -85,3 +71,6 @@ ALTERNATE(PIN_MASK(C, 0x06), 1, MODULE_I2C, 0)             /* I2C B SCL/SDA */
 ALTERNATE(PIN_MASK(F, 0xC0), 1, MODULE_I2C, 0)             /* I2C C SCL/SDA */
 #endif
 ALTERNATE(PIN_MASK(E, 0x81), 1, MODULE_I2C, 0)             /* I2C E SCL/SDA E0/E7 */
+ALTERNATE(PIN_MASK(I, 0x03), 1, MODULE_ADC, 0)             /* ADC CH0, CH1 */
+ALTERNATE(PIN_MASK(L, 0x0F), 1, MODULE_ADC, 0)             /* ADC CH13-CH16 */
+ALTERNATE(PIN_MASK(J, 0x3C), 1, MODULE_DAC, 0)             /* DAC CH2.3.4.5 */

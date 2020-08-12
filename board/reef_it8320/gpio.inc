@@ -18,9 +18,9 @@ GPIO_INT(EC_VOLDN_BTN_ODL,	PIN(D, 6), GPIO_INT_BOTH | GPIO_PULL_UP, button_inter
 #ifdef CONFIG_POWER_S0IX
 GPIO_INT(PCH_SLP_S0_L,		PIN(B, 7), GPIO_INT_BOTH, power_signal_interrupt)				/* SLP_S0_L */
 #endif
-GPIO_INT(SUSPWRNACK,		PIN(E, 1), GPIO_INT_BOTH, power_signal_interrupt)	/* SUSPWRNACK */
+GPIO_INT(SUSPWRDNACK,		PIN(E, 1), GPIO_INT_BOTH, power_signal_interrupt)	/* SUSPWRNACK */
 GPIO_INT(LID_OPEN,		PIN(E, 2), GPIO_INT_BOTH, lid_interrupt)		/* LID_OPEN */
-#ifndef CONFIG_HOSTCMD_ESPI_VW_SLP_SIGNALS
+#ifndef CONFIG_HOSTCMD_ESPI
 GPIO_INT(PCH_PLTRST_L,   	PIN(E, 3), GPIO_INT_BOTH | GPIO_PULL_UP,  lpcrst_interrupt)	/* PLT_RST_L */
 #endif
 GPIO_INT(POWER_BUTTON_L,	PIN(E, 4), GPIO_INT_BOTH, power_button_interrupt)	/* MECH_PWR_BTN_ODL */
@@ -121,3 +121,4 @@ ALTERNATE(PIN_MASK(B, 0x18), 1, MODULE_I2C, 0)             /* I2C A SCL/SDA */
 ALTERNATE(PIN_MASK(C, 0x06), 1, MODULE_I2C, 0)             /* I2C B SCL/SDA */
 ALTERNATE(PIN_MASK(E, 0x81), 1, MODULE_I2C, 0)             /* I2C E SCL/SDA */
 ALTERNATE(PIN_MASK(F, 0xC0), 1, MODULE_I2C, 0)             /* I2C C SCL/SDA */
+ALTERNATE(PIN_MASK(I, 0x0E), 1, MODULE_ADC, 0)             /* ADC CH1-CH3 */

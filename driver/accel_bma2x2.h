@@ -12,6 +12,7 @@ extern const struct accelgyro_drv bma2x2_accel_drv;
 
 /* I2C ADDRESS DEFINITIONS    */
 /* The following definition of I2C address is used for the following sensors
+* BMA253
 * BMA255
 * BMA355
 * BMA280
@@ -22,16 +23,16 @@ extern const struct accelgyro_drv bma2x2_accel_drv;
 * BMA250E
 * BMA222E
 */
-#define BMA2x2_I2C_ADDR1                    0x30
-#define BMA2x2_I2C_ADDR2                    0x19
+#define BMA2x2_I2C_ADDR1_FLAGS              0x18
+#define BMA2x2_I2C_ADDR2_FLAGS              0x19
 
 /* The following definition of I2C address is used for the following sensors
 * BMC150
 * BMC056
 * BMC156
 */
-#define BMA2x2_I2C_ADDR3                    0x10
-#define BMA2x2_I2C_ADDR4                    0x11
+#define BMA2x2_I2C_ADDR3_FLAGS              0x10
+#define BMA2x2_I2C_ADDR4_FLAGS              0x11
 
 /*** Chip-specific registers ***/
 /* REGISTER ADDRESS DEFINITIONS */
@@ -73,22 +74,24 @@ extern const struct accelgyro_drv bma2x2_accel_drv;
 
 #define BMA2x2_BW_SELECT_ADDR               0x10
 #define BMA2x2_BW_MSK                   0x1F
-#define BMA2x2_BW_7_81HZ                0x08 /* LowPass 7.81HZ */
-#define BMA2x2_BW_15_63HZ               0x09 /* LowPass 15.63HZ */
-#define BMA2x2_BW_31_25HZ               0x0A /* LowPass 31.25HZ */
-#define BMA2x2_BW_62_50HZ               0x0B /* LowPass 62.50HZ */
+#define BMA2x2_BW_7_81HZ                0x08 /* LowPass   7.8125HZ */
+#define BMA2x2_BW_15_63HZ               0x09 /* LowPass  15.625HZ */
+#define BMA2x2_BW_31_25HZ               0x0A /* LowPass  31.25HZ */
+#define BMA2x2_BW_62_50HZ               0x0B /* LowPass  62.50HZ */
 #define BMA2x2_BW_125HZ                 0x0C /* LowPass 125HZ */
 #define BMA2x2_BW_250HZ                 0x0D /* LowPass 250HZ */
 #define BMA2x2_BW_500HZ                 0x0E /* LowPass 500HZ */
 #define BMA2x2_BW_1000HZ                0x0F /* LowPass 1000HZ */
 
 #define BMA2x2_BW_TO_REG(_bw) \
-	((_bw) < 125000 ? BMA2x2_BW_7_81HZ + __fls((_bw) / 7810) : \
-			  BMA2x2_BW_125HZ + __fls((_bw) / 125000))
+	((_bw) < 125000 ? \
+	 BMA2x2_BW_7_81HZ + __fls(((_bw) * 10) / 78125) : \
+	 BMA2x2_BW_125HZ + __fls((_bw) / 125000))
 
 #define  BMA2x2_REG_TO_BW(_reg) \
-	((_reg) < BMA2x2_BW_125HZ ? 7810 << ((_reg) - BMA2x2_BW_7_81HZ) : \
-				    125000 << ((_reg) - BMA2x2_BW_125HZ))
+	((_reg) < BMA2x2_BW_125HZ ? \
+	 (78125 << ((_reg) - BMA2x2_BW_7_81HZ)) / 10 : \
+	 125000 << ((_reg) - BMA2x2_BW_125HZ))
 
 #define BMA2x2_MODE_CTRL_ADDR               0x11
 #define BMA2x2_LOW_NOISE_CTRL_ADDR          0x12
@@ -160,5 +163,6 @@ extern const struct accelgyro_drv bma2x2_accel_drv;
 
 /* Min and Max sampling frequency in mHz */
 #define BMA255_ACCEL_MIN_FREQ           7810
-#define BMA255_ACCEL_MAX_FREQ           1000000
+#define BMA255_ACCEL_MAX_FREQ \
+	MOTION_MAX_SENSOR_FREQUENCY(1000000, 15625)
 #endif /* __CROS_EC_ACCEL_BMA2x2_H */

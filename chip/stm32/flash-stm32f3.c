@@ -5,8 +5,10 @@
 
 /* Flash memory module for stm32f3 and stm32f4 */
 
+#include <stdbool.h>
 #include "common.h"
 #include "flash.h"
+#include "flash-f.h"
 #include "hooks.h"
 #include "registers.h"
 #include "system.h"
@@ -43,7 +45,14 @@ struct ec_flash_bank const flash_bank_array[] = {
 };
 #elif defined(CHIP_FAMILY_STM32F4)
 /*
- * 8 "erase" sectors : 16KB/16KB/16KB/16KB/64KB/128KB/128KB/128KB
+ * STM32F412xE has 512 KB flash
+ *   8 "erase" sectors (512 KB) : 16KB/16KB/16KB/16KB/64KB/128KB/128KB/128KB
+ *
+ * STM32F412xG has 1 MB flash
+ *   12 "erase" sectors (1024 KB) :
+ *           16KB/16KB/16KB/16KB/64KB/128KB/128KB/128KB/128KB/128KB/128KB/128KB
+ *
+ * https://www.st.com/resource/en/datasheet/stm32f412cg.pdf
  */
 struct ec_flash_bank const flash_bank_array[] = {
 	{
@@ -88,7 +97,7 @@ int flash_physical_get_protect(int block)
 {
 	return (entire_flash_locked ||
 #if defined(CHIP_FAMILY_STM32F3)
-		!(STM32_FLASH_WRPR & (1 << block))
+		!(STM32_FLASH_WRPR & BIT(block))
 #elif defined(CHIP_FAMILY_STM32F4)
 		!(STM32_OPTB_WP & STM32_OPTB_nWRP(block))
 #endif
@@ -103,33 +112,26 @@ uint32_t flash_physical_get_protect_flags(void)
 	if (entire_flash_locked)
 		flags |= EC_FLASH_PROTECT_ALL_NOW;
 
+#if defined(CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE)
+	if (is_flash_rdp_enabled())
+		flags |= EC_FLASH_PROTECT_RO_AT_BOOT;
+#endif
+
 	return flags;
 }
 
 int flash_physical_protect_now(int all)
 {
 	if (all) {
-		/*
-		 * Lock by writing a wrong key to FLASH_KEYR. This triggers a
-		 * bus fault, so we need to disable bus fault handler while
-		 * doing this.
-		 *
-		 * This incorrect key fault causes the flash to become
-		 * permanenlty locked until reset, a correct keyring write
-		 * will not unlock it. In this way we can implement system
-		 * write protect.
-		 */
-		ignore_bus_fault(1);
-		STM32_FLASH_KEYR = 0xffffffff;
-		ignore_bus_fault(0);
-
+		disable_flash_control_register();
 		entire_flash_locked = 1;
 
 		return EC_SUCCESS;
 	}
 
-	/* No way to protect just the RO flash until next boot */
-	return EC_ERROR_INVAL;
+	disable_flash_option_bytes();
+
+	return EC_SUCCESS;
 }
 
 uint32_t flash_physical_get_valid_flags(void)
@@ -168,7 +170,7 @@ int flash_physical_restore_state(void)
 	 * If we have already jumped between images, an earlier image could
 	 * have applied write protection. Nothing additional needs to be done.
 	 */
-	if (reset_flags & RESET_FLAG_SYSJUMP) {
+	if (reset_flags & EC_RESET_FLAG_SYSJUMP) {
 		prev = (const struct flash_wp_state *)system_get_jump_tag(
 				FLASH_SYSJUMP_TAG, &version, &size);
 		if (prev && version == FLASH_HOOK_VERSION &&

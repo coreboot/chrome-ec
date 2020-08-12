@@ -1,9 +1,7 @@
-/* Copyright (c) 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-/* NPCX-specific WOV module for Chrome EC */
 
 #ifndef __CROS_EC_WOV_CHIP_H
 #define __CROS_EC_WOV_CHIP_H
@@ -207,7 +205,7 @@ struct wov_config {
 	int bit_depth;
 	enum wov_mic_source mic_src;
 	int left_chan_gain;
-	int rigth_chan_gain;
+	int right_chan_gain;
 	uint16_t i2s_start_delay_0;
 	uint16_t i2s_start_delay_1;
 	uint32_t i2s_clock;
@@ -338,6 +336,15 @@ enum wov_mic_source wov_get_mic_source(void);
 void wov_mute(int enable);
 
 /**
+ * Gets gain values
+ *
+ * @param   left_chan_gain  - address of left channel gain response.
+ * @param   right_chan_gain - address of right channel gain response.
+ * @return  None
+ */
+void wov_get_gain(int *left_chan_gain, int *right_chan_gain);
+
+/**
  * Sets gain
  *
  * @param		left_chan_gain	- Left channel gain.
@@ -390,17 +397,25 @@ int wov_set_vad_sensitivity(int sensitivity_db);
 int wov_get_vad_sensitivity(void);
 
 /**
- * Configure I2S bus. (Sample rate and size are determined via common
+ * Configure I2S bus format. (Sample rate and size are determined via common
  * config functions.)
  *
- * @param   i2s_clock - I2S clock frequency in Hz (needed in order to
- *                      configure the internal PLL for 12MHz)
  * @param   format    - one of the following: I2S mode, Right Justified mode,
  *                      Left Justified mode, PCM A Audio, PCM B Audio and
  *                      Time Division Multiplexing
  * @return  EC error code.
  */
-void wov_set_i2s_config(uint32_t i2s_clock, enum wov_dai_format format);
+void wov_set_i2s_fmt(enum wov_dai_format format);
+
+/**
+ * Configure I2S bus clock. (Sample rate and size are determined via common
+ * config functions.)
+ *
+ * @param   i2s_clock - I2S clock frequency in Hz (needed in order to
+ *                      configure the internal PLL for 12MHz)
+ * @return  EC error code.
+ */
+void wov_set_i2s_bclk(uint32_t i2s_clock);
 
 /**
  * Configure I2S bus. (Sample rate and size are determined via common
@@ -412,12 +427,12 @@ void wov_set_i2s_config(uint32_t i2s_clock, enum wov_dai_format format);
  *                      first bit (MSB) of channel 1 (right channel).
  *                      If channel 1 is not used set this field to -1.
  *
- * @param   flags     -  WOV_TDM_ADJACENT_TO_CH0 = (1 << 0).  There is a
+ * @param   flags     -  WOV_TDM_ADJACENT_TO_CH0 = BIT(0).  There is a
  *                       channel adjacent to channel 0, so float SDAT when
  *                       driving the last bit (LSB) of the channel during the
  *                       second half of the clock cycle to avoid bus contention.
  *
- *                       WOV_TDM_ADJACENT_TO_CH1 = (1 << 1). There is a channel
+ *                       WOV_TDM_ADJACENT_TO_CH1 = BIT(1). There is a channel
  *                       adjacent to channel 1.
  *
  * @return  EC error code.
@@ -572,15 +587,6 @@ void wov_stop_i2s_capture(void);
  * @return	None
  */
 void wov_cfifo_read_handler(uint32_t num_elements);
-
-/**
- * WoV interrupt handler.
- *
- * @param	None
- *
- * @return	None
- */
-void wov_interrupt_handler(void);
 
 /**
  * Sets data buffer for reading from core FIFO

@@ -191,7 +191,7 @@ struct shi_bus_parameters {
 #endif
 } shi_params;
 
-/* Forward declaraction */
+/* Forward declaration */
 static void shi_reset_prepare(void);
 static void shi_bad_received_data(void);
 static void shi_fill_out_status(uint8_t status);
@@ -661,7 +661,7 @@ void shi_int_handler(void)
 	/* SHI CS pin is asserted in EVSTAT2 */
 	if (IS_BIT_SET(stat2_reg, NPCX_EVSTAT2_CSNFE)) {
 		/* clear CSNFE bit */
-		NPCX_EVSTAT2 = (1 << NPCX_EVSTAT2_CSNFE);
+		NPCX_EVSTAT2 = BIT(NPCX_EVSTAT2_CSNFE);
 		DEBUG_CPRINTF("CSNFE-");
 		/*
 		 * BUSY bit is set when SHI_CS is asserted. If not, leave it for
@@ -688,7 +688,7 @@ void shi_int_handler(void)
 	 */
 	if (IS_BIT_SET(stat2_reg, NPCX_EVSTAT2_CSNRE)) {
 		/* Clear pending bit of CSNRE */
-		NPCX_EVSTAT2 = (1 << NPCX_EVSTAT2_CSNRE);
+		NPCX_EVSTAT2 = BIT(NPCX_EVSTAT2_CSNRE);
 #else
 	if (IS_BIT_SET(stat_reg, NPCX_EVSTAT_EOR)) {
 #endif
@@ -784,7 +784,7 @@ void shi_int_handler(void)
 	 */
 	if (IS_BIT_SET(stat2_reg, NPCX_EVSTAT2_IBHF2)) {
 		/* Clear IBHF2 */
-		NPCX_EVSTAT2 = (1 << NPCX_EVSTAT2_IBHF2);
+		NPCX_EVSTAT2 = BIT(NPCX_EVSTAT2_IBHF2);
 		DEBUG_CPRINTF("HDR-");
 		/* Disable second IBF interrupt and start to parse header */
 		shi_sec_ibf_int_enable(0);
@@ -972,6 +972,12 @@ static void shi_disable(void)
 	 * SHI_SDI SHI_SDO SHI_CS# SHI_SCLK are selected to GPIO
 	 */
 	CLEAR_BIT(NPCX_DEVALT(ALT_GROUP_C), NPCX_DEVALTC_SHI_SL);
+
+	/*
+	 * Allow deep sleep again in case CS dropped before ec was
+	 * informed in hook function and turn off SHI's interrupt in time.
+	 */
+	enable_sleep(SLEEP_MASK_SPI);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, shi_disable, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_SYSJUMP, shi_disable, HOOK_PRIO_DEFAULT);
@@ -1049,7 +1055,7 @@ static enum ec_status shi_get_protocol_info(struct host_cmd_handler_args *args)
 	struct ec_response_get_protocol_info *r = args->response;
 
 	memset(r, 0, sizeof(*r));
-	r->protocol_versions = (1 << 3);
+	r->protocol_versions = BIT(3);
 	r->max_request_packet_size = SHI_MAX_REQUEST_SIZE;
 	r->max_response_packet_size = SHI_MAX_RESPONSE_SIZE;
 	r->flags = EC_PROTOCOL_INFO_IN_PROGRESS_SUPPORTED;

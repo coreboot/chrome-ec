@@ -5,7 +5,6 @@
  * Test vboot
  */
 
-#include <stdlib.h>
 #include "common.h"
 #include "rsa.h"
 #include "test_util.h"
@@ -132,7 +131,7 @@ static int test_vboot(void)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	test_reset();
 

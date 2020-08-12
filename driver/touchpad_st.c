@@ -31,8 +31,8 @@
 #define CPRINTF(format, args...) cprintf(CC_TOUCHPAD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_TOUCHPAD, format, ## args)
 
-#define TASK_EVENT_POWER  TASK_EVENT_CUSTOM(1)
-#define TASK_EVENT_TP_UPDATED  TASK_EVENT_CUSTOM(2)
+#define TASK_EVENT_POWER  TASK_EVENT_CUSTOM_BIT(0)
+#define TASK_EVENT_TP_UPDATED  TASK_EVENT_CUSTOM_BIT(1)
 
 #define SPI (&(spi_devices[SPI_ST_TP_DEVICE_ID]))
 
@@ -55,26 +55,26 @@ static void touchpad_power_control(void);
  */
 static int system_state;
 
-#define SYSTEM_STATE_DEBUG_MODE		(1 << 0)
-#define SYSTEM_STATE_ENABLE_HEAT_MAP	(1 << 1)
-#define SYSTEM_STATE_ENABLE_DOME_SWITCH	(1 << 2)
-#define SYSTEM_STATE_ACTIVE_MODE	(1 << 3)
-#define SYSTEM_STATE_DOME_SWITCH_LEVEL	(1 << 4)
-#define SYSTEM_STATE_READY		(1 << 5)
+#define SYSTEM_STATE_DEBUG_MODE		BIT(0)
+#define SYSTEM_STATE_ENABLE_HEAT_MAP	BIT(1)
+#define SYSTEM_STATE_ENABLE_DOME_SWITCH	BIT(2)
+#define SYSTEM_STATE_ACTIVE_MODE	BIT(3)
+#define SYSTEM_STATE_DOME_SWITCH_LEVEL	BIT(4)
+#define SYSTEM_STATE_READY		BIT(5)
 
 /*
  * Pending action for touchpad.
  */
 static int tp_control;
 
-#define TP_CONTROL_SHALL_HALT		(1 << 0)
-#define TP_CONTROL_SHALL_RESET		(1 << 1)
-#define TP_CONTROL_SHALL_INIT		(1 << 2)
-#define TP_CONTROL_SHALL_INIT_FULL	(1 << 3)
-#define TP_CONTROL_SHALL_DUMP_ERROR	(1 << 4)
-#define TP_CONTROL_RESETTING		(1 << 5)
-#define TP_CONTROL_INIT			(1 << 6)
-#define TP_CONTROL_INIT_FULL		(1 << 7)
+#define TP_CONTROL_SHALL_HALT		BIT(0)
+#define TP_CONTROL_SHALL_RESET		BIT(1)
+#define TP_CONTROL_SHALL_INIT		BIT(2)
+#define TP_CONTROL_SHALL_INIT_FULL	BIT(3)
+#define TP_CONTROL_SHALL_DUMP_ERROR	BIT(4)
+#define TP_CONTROL_RESETTING		BIT(5)
+#define TP_CONTROL_INIT			BIT(6)
+#define TP_CONTROL_INIT_FULL		BIT(7)
 
 /*
  * Number of times we have reset the touchpad because of errors.
@@ -124,7 +124,7 @@ static struct {
 struct packet_header_t {
 	uint8_t index;
 
-#define HEADER_FLAGS_NEW_FRAME	(1 << 0)
+#define HEADER_FLAGS_NEW_FRAME	BIT(0)
 	uint8_t flags;
 } __packed;
 BUILD_ASSERT(sizeof(struct packet_header_t) < USB_ISO_PACKET_SIZE);
@@ -133,7 +133,7 @@ static struct packet_header_t packet_header;
 
 /* What will be sent to USB interface. */
 struct st_tp_usb_packet_t {
-#define USB_FRAME_FLAGS_BUTTON	(1 << 0)
+#define USB_FRAME_FLAGS_BUTTON	BIT(0)
 	/*
 	 * This will be true if user clicked on touchpad.
 	 * TODO(b/70482333): add corresponding code for button signal.
@@ -196,7 +196,7 @@ static int st_tp_parse_finger(struct usb_hid_touchpad_report *report,
 	if (event->evt_id ==  ST_TP_EVENT_ID_ENTER_POINTER)
 		touch_slot |= 1 << id;
 	else if (event->evt_id ==  ST_TP_EVENT_ID_LEAVE_POINTER)
-		touch_slot &= ~(1 << id);
+		touch_slot &= ~BIT(id);
 
 	/* We cannot report more fingers */
 	if (i >= ARRAY_SIZE(report->finger)) {
@@ -375,14 +375,14 @@ static int st_tp_update_system_state(int new_state, int mask)
 		};
 		if (new_state & SYSTEM_STATE_ENABLE_HEAT_MAP) {
 			CPRINTS("Heatmap enabled");
-			tx_buf[2] |= 1 << 0;
+			tx_buf[2] |= BIT(0);
 			need_locked_scan_mode = 1;
 		} else {
 			CPRINTS("Heatmap disabled");
 		}
 
 		if (new_state & SYSTEM_STATE_ENABLE_DOME_SWITCH)
-			tx_buf[2] |= 1 << 1;
+			tx_buf[2] |= BIT(1);
 		ret = spi_transaction(SPI, tx_buf, sizeof(tx_buf), NULL, 0);
 		if (ret)
 			return ret;
@@ -544,8 +544,10 @@ static int st_tp_read_system_info(int reload)
 	ST_TP_SHOW(chip0_ver);
 	ST_TP_SHOW(scr_tx_len);
 	ST_TP_SHOW(scr_rx_len);
-	ST_TP_SHOW(release_info);
+#define ST_TP_SHOW64(attr) CPRINTS(#attr ": %04llx", system_info.attr)
+	ST_TP_SHOW64(release_info);
 #undef ST_TP_SHOW
+#undef ST_TP_SHOW64
 	return ret;
 }
 
@@ -600,15 +602,16 @@ static void dump_memory(void)
 				(uint8_t *)&rx_buf, rx_len);
 
 		for (i = 0; i < rx_len - ST_TP_DUMMY_BYTE; i += 32) {
-			CPRINTF("%.4h %.4h %.4h %.4h %.4h %.4h %.4h %.4h\n",
-				rx_buf.bytes + i + 4 * 0,
-				rx_buf.bytes + i + 4 * 1,
-				rx_buf.bytes + i + 4 * 2,
-				rx_buf.bytes + i + 4 * 3,
-				rx_buf.bytes + i + 4 * 4,
-				rx_buf.bytes + i + 4 * 5,
-				rx_buf.bytes + i + 4 * 6,
-				rx_buf.bytes + i + 4 * 7);
+			CPRINTF("%ph %ph %ph %ph "
+				"%ph %ph %ph %ph\n",
+				HEX_BUF(rx_buf.bytes + i + 4 * 0, 4),
+				HEX_BUF(rx_buf.bytes + i + 4 * 1, 4),
+				HEX_BUF(rx_buf.bytes + i + 4 * 2, 4),
+				HEX_BUF(rx_buf.bytes + i + 4 * 3, 4),
+				HEX_BUF(rx_buf.bytes + i + 4 * 4, 4),
+				HEX_BUF(rx_buf.bytes + i + 4 * 5, 4),
+				HEX_BUF(rx_buf.bytes + i + 4 * 6, 4),
+				HEX_BUF(rx_buf.bytes + i + 4 * 7, 4));
 			msleep(8);
 		}
 	}
@@ -1264,7 +1267,7 @@ int touchpad_debug(const uint8_t *param, unsigned int param_size,
 		*data_size = 8;
 		st_tp_read_host_buffer_header();
 		memcpy(buf, rx_buf.bytes, *data_size);
-		CPRINTS("header: %.*h", *data_size, buf);
+		CPRINTS("header: %ph", HEX_BUF(buf, *data_size));
 		return EC_SUCCESS;
 	case ST_TP_DEBUG_CMD_READ_EVENTS:
 		num_events = st_tp_read_all_events(0);
@@ -1752,7 +1755,7 @@ static int st_tp_usb_set_interface(usb_uint alternate_setting,
 	if (alternate_setting == 1) {
 		if ((system_info.release_info & 0xFF) <
 		    ST_TP_MIN_HEATMAP_VERSION) {
-			CPRINTS("release version %04x doesn't support heatmap",
+			CPRINTS("release version %04llx doesn't support heatmap",
 				system_info.release_info);
 			/* Heatmap mode is not supported in this version. */
 			return -1;
@@ -1782,7 +1785,7 @@ static int get_heat_map_addr(void)
 }
 
 struct st_tp_interrupt_t {
-#define ST_TP_INT_FRAME_AVAILABLE	(1 << 0)
+#define ST_TP_INT_FRAME_AVAILABLE	BIT(0)
 	uint8_t flags;
 } __packed;
 

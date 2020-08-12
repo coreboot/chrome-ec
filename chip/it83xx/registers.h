@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -9,6 +9,7 @@
 #define __CROS_EC_REGISTERS_H
 
 #include "common.h"
+#include "compile_time_macros.h"
 
 #define __ram_code __attribute__((section(".ram_code")))
 
@@ -79,6 +80,7 @@
 #define IT83XX_IRQ_RTCT_ALARM1    56
 #define IT83XX_IRQ_RTCT_ALARM2    57
 #define IT83XX_IRQ_EXT_TIMER2     58
+#define IT83XX_IRQ_DEFERRED_SPI   59
 #define IT83XX_IRQ_TMR_A0         60
 #define IT83XX_IRQ_TMR_A1         61
 #define IT83XX_IRQ_TMR_B0         62
@@ -197,6 +199,7 @@
 #define IT83XX_IRQ_USBPD0         165
 #define IT83XX_IRQ_USBPD1         166
 /* Group 21 */
+#if defined(CHIP_FAMILY_IT8320)
 #define IT83XX_IRQ_WKO40          168
 #define IT83XX_IRQ_WKO45          169
 #define IT83XX_IRQ_WKO46          170
@@ -210,6 +213,65 @@
 #define IT83XX_IRQ_WKO150         177
 
 #define IT83XX_IRQ_COUNT          178
+#elif defined(CHIP_FAMILY_IT8XXX1) || defined(CHIP_FAMILY_IT8XXX2)
+/* Group 21 */
+#define IT83XX_IRQ_AUDIO_IF       170
+#define IT83XX_IRQ_SPI_SLAVE      171
+#define IT83XX_IRQ_DSP_ENGINE     172
+#define IT83XX_IRQ_NN_ENGINE      173
+#define IT83XX_IRQ_USBPD2         174
+#define IT83XX_IRQ_CRYPTO         175
+/* Group 22 */
+#define IT83XX_IRQ_WKO40          176
+#define IT83XX_IRQ_WKO45          177
+#define IT83XX_IRQ_WKO46          178
+#define IT83XX_IRQ_WKO144         179
+#define IT83XX_IRQ_WKO145         180
+#define IT83XX_IRQ_WKO146         181
+#define IT83XX_IRQ_WKO147         182
+#define IT83XX_IRQ_WKO148         183
+/* Group 23 */
+#define IT83XX_IRQ_WKO149         184
+#define IT83XX_IRQ_WKO150         185
+#define IT83XX_IRQ_SSPI1          191
+/* Group 24 */
+#define IT83XX_IRQ_XLPIN0         192
+#define IT83XX_IRQ_XLPIN1         193
+#define IT83XX_IRQ_XLPIN2         194
+#define IT83XX_IRQ_XLPIN3         195
+#define IT83XX_IRQ_XLPIN4         196
+#define IT83XX_IRQ_XLPIN5         197
+#define IT83XX_IRQ_WEEK_ALARM     199
+/* Group 25 */
+#define IT83XX_IRQ_GPO0           200
+#define IT83XX_IRQ_GPO1           201
+#define IT83XX_IRQ_GPO2           202
+#define IT83XX_IRQ_GPO3           203
+/* Group 26 */
+#define IT83XX_IRQ_GPP0           208
+#define IT83XX_IRQ_GPP1           209
+#define IT83XX_IRQ_GPP2           210
+#define IT83XX_IRQ_GPP3           211
+#define IT83XX_IRQ_GPP4           212
+#define IT83XX_IRQ_GPP5           213
+#define IT83XX_IRQ_GPP6           214
+/* Group 27 */
+#define IT83XX_IRQ_GPQ0           216
+#define IT83XX_IRQ_GPQ1           217
+#define IT83XX_IRQ_GPQ2           218
+#define IT83XX_IRQ_GPQ3           219
+#define IT83XX_IRQ_GPQ4           220
+#define IT83XX_IRQ_GPQ5           221
+/* Group 28 */
+#define IT83XX_IRQ_GPR0           224
+#define IT83XX_IRQ_GPR1           225
+#define IT83XX_IRQ_GPR2           226
+#define IT83XX_IRQ_GPR3           227
+#define IT83XX_IRQ_GPR4           228
+#define IT83XX_IRQ_GPR5           229
+
+#define IT83XX_IRQ_COUNT          230
+#endif /* !defined(CHIP_FAMILY_IT8320) */
 
 /* IRQ dispatching to CPU INT vectors */
 #define IT83XX_CPU_INT_IRQ_1       2
@@ -270,6 +332,7 @@
 #define IT83XX_CPU_INT_IRQ_56     10
 #define IT83XX_CPU_INT_IRQ_57     10
 #define IT83XX_CPU_INT_IRQ_58      3
+#define IT83XX_CPU_INT_IRQ_59     12
 #define IT83XX_CPU_INT_IRQ_60      3
 #define IT83XX_CPU_INT_IRQ_61      3
 #define IT83XX_CPU_INT_IRQ_62      3
@@ -377,14 +440,62 @@
 #define IT83XX_CPU_INT_IRQ_167    12
 #define IT83XX_CPU_INT_IRQ_168     2
 #define IT83XX_CPU_INT_IRQ_169     2
+#if defined(CHIP_FAMILY_IT8320)
 #define IT83XX_CPU_INT_IRQ_170     2
 #define IT83XX_CPU_INT_IRQ_171     2
 #define IT83XX_CPU_INT_IRQ_172     2
 #define IT83XX_CPU_INT_IRQ_173     2
 #define IT83XX_CPU_INT_IRQ_174     2
 #define IT83XX_CPU_INT_IRQ_175     2
+#elif defined(CHIP_FAMILY_IT8XXX1) || defined(CHIP_FAMILY_IT8XXX2)
+#define IT83XX_CPU_INT_IRQ_170    12
+#define IT83XX_CPU_INT_IRQ_171    12
+#define IT83XX_CPU_INT_IRQ_172    12
+#define IT83XX_CPU_INT_IRQ_173    12
+#define IT83XX_CPU_INT_IRQ_174    12
+#define IT83XX_CPU_INT_IRQ_175    12
+#endif
 #define IT83XX_CPU_INT_IRQ_176     2
 #define IT83XX_CPU_INT_IRQ_177     2
+#define IT83XX_CPU_INT_IRQ_178     2
+#define IT83XX_CPU_INT_IRQ_179     2
+#define IT83XX_CPU_INT_IRQ_180     2
+#define IT83XX_CPU_INT_IRQ_181     2
+#define IT83XX_CPU_INT_IRQ_182     2
+#define IT83XX_CPU_INT_IRQ_183     2
+#define IT83XX_CPU_INT_IRQ_184     2
+#define IT83XX_CPU_INT_IRQ_185     2
+#define IT83XX_CPU_INT_IRQ_191     2
+#define IT83XX_CPU_INT_IRQ_192     2
+#define IT83XX_CPU_INT_IRQ_193     2
+#define IT83XX_CPU_INT_IRQ_194     2
+#define IT83XX_CPU_INT_IRQ_195     2
+#define IT83XX_CPU_INT_IRQ_196     2
+#define IT83XX_CPU_INT_IRQ_197     2
+#define IT83XX_CPU_INT_IRQ_199     2
+#define IT83XX_CPU_INT_IRQ_200     2
+#define IT83XX_CPU_INT_IRQ_201     2
+#define IT83XX_CPU_INT_IRQ_202     2
+#define IT83XX_CPU_INT_IRQ_203     2
+#define IT83XX_CPU_INT_IRQ_208     2
+#define IT83XX_CPU_INT_IRQ_209     2
+#define IT83XX_CPU_INT_IRQ_210     2
+#define IT83XX_CPU_INT_IRQ_211     2
+#define IT83XX_CPU_INT_IRQ_212     2
+#define IT83XX_CPU_INT_IRQ_213     2
+#define IT83XX_CPU_INT_IRQ_214     2
+#define IT83XX_CPU_INT_IRQ_216     2
+#define IT83XX_CPU_INT_IRQ_217     2
+#define IT83XX_CPU_INT_IRQ_218     2
+#define IT83XX_CPU_INT_IRQ_219     2
+#define IT83XX_CPU_INT_IRQ_220     2
+#define IT83XX_CPU_INT_IRQ_221     2
+#define IT83XX_CPU_INT_IRQ_224     2
+#define IT83XX_CPU_INT_IRQ_225     2
+#define IT83XX_CPU_INT_IRQ_226     2
+#define IT83XX_CPU_INT_IRQ_227     2
+#define IT83XX_CPU_INT_IRQ_228     2
+#define IT83XX_CPU_INT_IRQ_229     2
 
 /* "Fake" IRQ to declare in readable fashion all WKO IRQ routed to INT#2 */
 #define CPU_INT_2_ALL_GPIOS      255
@@ -414,7 +525,7 @@
 #define CPU_INT(irq) CONCAT2(IT83XX_CPU_INT_IRQ_, irq)
 
 /* --- INTC --- */
-#define IT83XX_INTC_BASE    0x00F01100
+#define IT83XX_INTC_BASE    CHIP_EC_INTC_BASE
 
 #define IT83XX_INTC_REG(n)  REG8(IT83XX_INTC_BASE+(n))
 
@@ -443,6 +554,12 @@
 #define IT83XX_INTC_IER20   REG8(IT83XX_INTC_BASE+0x55)
 #define IT83XX_INTC_IER21   REG8(IT83XX_INTC_BASE+0x59)
 #define IT83XX_INTC_IER22   REG8(IT83XX_INTC_BASE+0x5d)
+#define IT83XX_INTC_IER23   REG8(IT83XX_INTC_BASE+0x91)
+#define IT83XX_INTC_IER24   REG8(IT83XX_INTC_BASE+0x95)
+#define IT83XX_INTC_IER25   REG8(IT83XX_INTC_BASE+0x99)
+#define IT83XX_INTC_IER26   REG8(IT83XX_INTC_BASE+0x9d)
+#define IT83XX_INTC_IER27   REG8(IT83XX_INTC_BASE+0xa1)
+#define IT83XX_INTC_IER28   REG8(IT83XX_INTC_BASE+0xa5)
 
 #define IT83XX_INTC_ISR0    REG8(IT83XX_INTC_BASE+0x00)
 #define IT83XX_INTC_ISR1    REG8(IT83XX_INTC_BASE+0x01)
@@ -467,6 +584,12 @@
 #define IT83XX_INTC_ISR20   REG8(IT83XX_INTC_BASE+0x54)
 #define IT83XX_INTC_ISR21   REG8(IT83XX_INTC_BASE+0x58)
 #define IT83XX_INTC_ISR22   REG8(IT83XX_INTC_BASE+0x5c)
+#define IT83XX_INTC_ISR23   REG8(IT83XX_INTC_BASE+0x90)
+#define IT83XX_INTC_ISR24   REG8(IT83XX_INTC_BASE+0x94)
+#define IT83XX_INTC_ISR25   REG8(IT83XX_INTC_BASE+0x98)
+#define IT83XX_INTC_ISR26   REG8(IT83XX_INTC_BASE+0x9c)
+#define IT83XX_INTC_ISR27   REG8(IT83XX_INTC_BASE+0xa0)
+#define IT83XX_INTC_ISR28   REG8(IT83XX_INTC_BASE+0xa4)
 
 #define IT83XX_INTC_IELMR10 REG8(IT83XX_INTC_BASE+0x2E)
 #define IT83XX_INTC_IPOLR10 REG8(IT83XX_INTC_BASE+0x2F)
@@ -536,6 +659,7 @@
 /* --- GPIO --- */
 
 #define IT83XX_GPIO_BASE  0x00F01600
+#define IT83XX_GPIO2_BASE 0x00F03E00
 
 #define IT83XX_GPIO_GCR         REG8(IT83XX_GPIO_BASE+0x00)
 #define IT83XX_GPIO_GCR_LPC_RST_B7      0x1
@@ -626,6 +750,8 @@
 #define IT83XX_GPIO_GPCRL1      REG8(IT83XX_GPIO_BASE+0x99)
 #define IT83XX_GPIO_GPCRL2      REG8(IT83XX_GPIO_BASE+0x9A)
 #define IT83XX_GPIO_GPCRL3      REG8(IT83XX_GPIO_BASE+0x9B)
+#define IT83XX_GPIO_GPCRP0      REG8(IT83XX_GPIO2_BASE+0x18)
+#define IT83XX_GPIO_GPCRP1      REG8(IT83XX_GPIO2_BASE+0x19)
 
 #define IT83XX_GPIO_GRC1        REG8(IT83XX_GPIO_BASE+0xF0)
 #define IT83XX_GPIO_GRC2        REG8(IT83XX_GPIO_BASE+0xF1)
@@ -645,11 +771,15 @@
 #define IT83XX_GPIO_GCR26       REG8(IT83XX_GPIO_BASE+0xD2)
 #define IT83XX_GPIO_GCR27       REG8(IT83XX_GPIO_BASE+0xD3)
 #define IT83XX_GPIO_GCR28       REG8(IT83XX_GPIO_BASE+0xD4)
+#define IT83XX_GPIO_GCR30       REG8(IT83XX_GPIO_BASE+0xED)
+#define IT83XX_GPIO_GCR31       REG8(IT83XX_GPIO_BASE+0xD5)
+#define IT83XX_GPIO_GCR32       REG8(IT83XX_GPIO_BASE+0xD6)
 
-#define IT83XX_GPIO_DATA_BASE        (IT83XX_GPIO_BASE + 0x00)
-#define IT83XX_GPIO_OUTPUT_TYPE_BASE (IT83XX_GPIO_BASE + 0x70)
+#define IT83XX_VBATPC_BGPOPSCR  REG8(IT83XX_GPIO2_BASE+0xF0)
+#define IT83XX_VBATPC_XLPIER    REG8(IT83XX_GPIO2_BASE+0xF5)
 
 enum {
+	/* GPIO group index */
 	GPIO_A = 0x1,
 	GPIO_B = 0x2,
 	GPIO_C = 0x3,
@@ -663,23 +793,78 @@ enum {
 	GPIO_K = 0xb,
 	GPIO_L = 0xc,
 	GPIO_M = 0xd,
+#if defined(CHIP_FAMILY_IT8XXX1) || defined(CHIP_FAMILY_IT8XXX2)
+	GPIO_O = 0xe,
+	GPIO_P = 0xf,
+	GPIO_Q = 0x10,
+	GPIO_R = 0x11,
+#endif
 	GPIO_PORT_COUNT,
 
 	/* NOTE: Support GPIO input only if KSO/KSI pins are used as GPIO. */
-	GPIO_KBS_OFF = 0x700,
 	/* KSI[7-0]  GPIO data mirror register. */
-	GPIO_KSI     = GPIO_KBS_OFF + 0x9,
+	GPIO_KSI,
 	/* KSO[15-8] GPIO data mirror register. */
-	GPIO_KSO_H   = GPIO_KBS_OFF + 0xc,
+	GPIO_KSO_H,
 	/* KSO[7-0]  GPIO data mirror register. */
-	GPIO_KSO_L   = GPIO_KBS_OFF + 0xf,
+	GPIO_KSO_L,
+	/* Compiler check COUNT and gpio_group_to_reg member cnt match or not */
+	COUNT,
 };
+
+struct gpio_reg_t {
+	/* GPIO port data register (bit mapping to pin) */
+	uint32_t reg_gpdr;
+	/* GPIO port data mirror register (bit mapping to pin) */
+	uint32_t reg_gpdmr;
+	/* GPIO port output type register (bit mapping to pin) */
+	uint32_t reg_gpotr;
+	/* GPIO port control register (byte mapping to pin) */
+	uint32_t reg_gpcr;
+};
+
+/* GPIO group index convert to GPIO data/output type/ctrl group address */
+static const struct gpio_reg_t gpio_group_to_reg[] = {
+	/*               GPDR(set),  GPDMR(get), GPOTR,      GPCR      */
+	[GPIO_A]     = { 0x00F01601, 0x00F01661, 0x00F01671, 0x00F01610 },
+	[GPIO_B]     = { 0x00F01602, 0x00F01662, 0x00F01672, 0x00F01618 },
+	[GPIO_C]     = { 0x00F01603, 0x00F01663, 0x00F01673, 0x00F01620 },
+	[GPIO_D]     = { 0x00F01604, 0x00F01664, 0x00F01674, 0x00F01628 },
+	[GPIO_E]     = { 0x00F01605, 0x00F01665, 0x00F01675, 0x00F01630 },
+	[GPIO_F]     = { 0x00F01606, 0x00F01666, 0x00F01676, 0x00F01638 },
+	[GPIO_G]     = { 0x00F01607, 0x00F01667, 0x00F01677, 0x00F01640 },
+	[GPIO_H]     = { 0x00F01608, 0x00F01668, 0x00F01678, 0x00F01648 },
+	[GPIO_I]     = { 0x00F01609, 0x00F01669, 0x00F01679, 0x00F01650 },
+	[GPIO_J]     = { 0x00F0160A, 0x00F0166A, 0x00F0167A, 0x00F01658 },
+	[GPIO_K]     = { 0x00F0160B, 0x00F0166B, 0x00F0167B, 0x00F01690 },
+	[GPIO_L]     = { 0x00F0160C, 0x00F0166C, 0x00F0167C, 0x00F01698 },
+	[GPIO_M]     = { 0x00F0160D, 0x00F0166D, 0x00F0167D, 0x00F016a0 },
+#if defined(CHIP_FAMILY_IT8XXX1) || defined(CHIP_FAMILY_IT8XXX2)
+	[GPIO_O]     = { 0x00F03E01, 0x00F03E61, 0x00F03E71, 0x00F03E10 },
+	[GPIO_P]     = { 0x00F03E02, 0x00F03E62, 0x00F03E72, 0x00F03E18 },
+	[GPIO_Q]     = { 0x00F03E03, 0x00F03E63, 0x00F03E73, 0x00F03E20 },
+	[GPIO_R]     = { 0x00F03E04, 0x00F03E64, 0x00F03E74, 0x00F03E28 },
+#endif
+	[GPIO_KSI]   = { 0x00F01D09, 0x00F01D09,         -1,         -1 },
+	[GPIO_KSO_H] = { 0x00F01D0C, 0x00F01D0C,         -1,         -1 },
+	[GPIO_KSO_L] = { 0x00F01D0F, 0x00F01D0F,         -1,         -1 },
+};
+BUILD_ASSERT(ARRAY_SIZE(gpio_group_to_reg) == (COUNT));
+
 #define DUMMY_GPIO_BANK GPIO_A
 
-#define IT83XX_GPIO_DATA(port)     REG8(IT83XX_GPIO_DATA_BASE + port)
-#define IT83XX_GPIO_GPOT(port)     REG8(IT83XX_GPIO_OUTPUT_TYPE_BASE + port)
-#define IT83XX_GPIO_CTRL(port_offset, pin_offset) \
-	REG8(IT83XX_GPIO_BASE + port_offset + pin_offset)
+#define IT83XX_GPIO_DATA(port)                 \
+	REG8(gpio_group_to_reg[port].reg_gpdr)
+#define IT83XX_GPIO_DATA_MIRROR(port)          \
+	REG8(gpio_group_to_reg[port].reg_gpdmr)
+#define IT83XX_GPIO_GPOT(port)                 \
+	REG8(gpio_group_to_reg[port].reg_gpotr)
+#define IT83XX_GPIO_CTRL(port, pin_offset)     \
+	REG8(gpio_group_to_reg[port].reg_gpcr + pin_offset)
+#define GPCR_PORT_PIN_MODE_INPUT          BIT(7)
+#define GPCR_PORT_PIN_MODE_OUTPUT         BIT(6)
+#define GPCR_PORT_PIN_MODE_PULLUP         BIT(2)
+#define GPCR_PORT_PIN_MODE_PULLDOWN       BIT(1)
 
 /* --- Clock and Power Management (ECPM) --- */
 
@@ -766,8 +951,14 @@ enum clock_gate_offsets {
 /* --- General Control (GCTRL) --- */
 #define IT83XX_GCTRL_BASE 0x00F02000
 
+#ifdef IT83XX_CHIP_ID_3BYTES
+#define IT83XX_GCTRL_CHIPID1      REG8(IT83XX_GCTRL_BASE+0x85)
+#define IT83XX_GCTRL_CHIPID2      REG8(IT83XX_GCTRL_BASE+0x86)
+#define IT83XX_GCTRL_CHIPID3      REG8(IT83XX_GCTRL_BASE+0x87)
+#else
 #define IT83XX_GCTRL_CHIPID1      REG8(IT83XX_GCTRL_BASE+0x00)
 #define IT83XX_GCTRL_CHIPID2      REG8(IT83XX_GCTRL_BASE+0x01)
+#endif
 #define IT83XX_GCTRL_CHIPVER      REG8(IT83XX_GCTRL_BASE+0x02)
 #define IT83XX_GCTRL_WNCKR        REG8(IT83XX_GCTRL_BASE+0x0B)
 #define IT83XX_GCTRL_RSTS         REG8(IT83XX_GCTRL_BASE+0x06)
@@ -776,6 +967,8 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_RSTDMMC      REG8(IT83XX_GCTRL_BASE+0x10)
 #define IT83XX_GCTRL_RSTC4        REG8(IT83XX_GCTRL_BASE+0x11)
 #define IT83XX_GCTRL_SPCTRL4      REG8(IT83XX_GCTRL_BASE+0x1C)
+#define IT83XX_GCTRL_MCCR3        REG8(IT83XX_GCTRL_BASE+0x20)
+#define IT83XX_GCTRL_SPISLVPFE    BIT(6)
 #define IT83XX_GCTRL_MCCR         REG8(IT83XX_GCTRL_BASE+0x30)
 #define IT83XX_GCTRL_PMER1        REG8(IT83XX_GCTRL_BASE+0x32)
 #define IT83XX_GCTRL_PMER2        REG8(IT83XX_GCTRL_BASE+0x33)
@@ -784,6 +977,12 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_MCCR2        REG8(IT83XX_GCTRL_BASE+0x44)
 #define IT83XX_GCTRL_SSCR         REG8(IT83XX_GCTRL_BASE+0x4A)
 #define IT83XX_GCTRL_ETWDUARTCR   REG8(IT83XX_GCTRL_BASE+0x4B)
+#define IT83XX_GCTRL_WMCR         REG8(IT83XX_GCTRL_BASE+0x4C)
+#define IT83XX_GCTRL_H2ROFSR      REG8(IT83XX_GCTRL_BASE+0x53)
+/* bit[0] = 0 or 1 : disable or enable ETWD hardware reset */
+#define ETWD_HW_RST_EN            BIT(0)
+#define IT83XX_GCTRL_RVILMCR0     REG8(IT83XX_GCTRL_BASE+0x5D)
+#define ILMCR_ILM2_ENABLE         BIT(2)
 #define IT83XX_GCTRL_EWPR0PFH(i)  REG8(IT83XX_GCTRL_BASE+0x60+i)
 #define IT83XX_GCTRL_EWPR0PFD(i)  REG8(IT83XX_GCTRL_BASE+0xA0+i)
 #define IT83XX_GCTRL_EWPR0PFEC(i) REG8(IT83XX_GCTRL_BASE+0xC0+i)
@@ -807,6 +1006,7 @@ enum clock_gate_offsets {
 #define IT83XX_PWM_PCSSGH       REG8(IT83XX_PWM_BASE+0x0D)
 #define IT83XX_PWM_CR256PCSSG   REG8(IT83XX_PWM_BASE+0x0E)
 #define IT83XX_PWM_PCSGR        REG8(IT83XX_PWM_BASE+0x0F)
+#define IT83XX_PWM_CTR1M        REG8(IT83XX_PWM_BASE+0x10)
 #define IT83XX_PWM_F1TLRR       REG8(IT83XX_PWM_BASE+0x1E)
 #define IT83XX_PWM_F1TMRR       REG8(IT83XX_PWM_BASE+0x1F)
 #define IT83XX_PWM_F2TLRR       REG8(IT83XX_PWM_BASE+0x20)
@@ -872,6 +1072,11 @@ enum clock_gate_offsets {
 #define IT83XX_ADC_ADCDVSTS     REG8(IT83XX_ADC_BASE+0x44)
 #define IT83XX_ADC_VCMPSTS      REG8(IT83XX_ADC_BASE+0x45)
 #define IT83XX_ADC_VCMP0CTL     REG8(IT83XX_ADC_BASE+0x46)
+#define ADC_VCMP_CMPEN              BIT(7)
+#define ADC_VCMP_CMPINTEN           BIT(6)
+#define ADC_VCMP_GREATER_THRESHOLD  BIT(5)
+#define ADC_VCMP_EDGE_TRIGGER       BIT(4)
+#define ADC_VCMP_GPIO_ACTIVE_LOW    BIT(3)
 #define IT83XX_ADC_CMP0THRDATM  REG8(IT83XX_ADC_BASE+0x47)
 #define IT83XX_ADC_CMP0THRDATL  REG8(IT83XX_ADC_BASE+0x48)
 #define IT83XX_ADC_VCMP1CTL     REG8(IT83XX_ADC_BASE+0x49)
@@ -893,6 +1098,30 @@ enum clock_gate_offsets {
 #define IT83XX_ADC_VCH16DATM    REG8(IT83XX_ADC_BASE+0x6A)
 #define IT83XX_ADC_VCH16DATL    REG8(IT83XX_ADC_BASE+0x6B)
 #define IT83XX_ADC_ADCDVSTS2    REG8(IT83XX_ADC_BASE+0x6C)
+#define IT83XX_ADC_VCMPSTS2     REG8(IT83XX_ADC_BASE+0x6D)
+#define IT83XX_ADC_VCMP3CTL     REG8(IT83XX_ADC_BASE+0x6E)
+#define IT83XX_ADC_CMP3THRDATM  REG8(IT83XX_ADC_BASE+0x6F)
+#define IT83XX_ADC_CMP3THRDATL  REG8(IT83XX_ADC_BASE+0x70)
+#define IT83XX_ADC_VCMP4CTL     REG8(IT83XX_ADC_BASE+0x71)
+#define IT83XX_ADC_CMP4THRDATM  REG8(IT83XX_ADC_BASE+0x72)
+#define IT83XX_ADC_CMP4THRDATL  REG8(IT83XX_ADC_BASE+0x73)
+#define IT83XX_ADC_VCMP5CTL     REG8(IT83XX_ADC_BASE+0x74)
+#define IT83XX_ADC_CMP5THRDATM  REG8(IT83XX_ADC_BASE+0x75)
+#define IT83XX_ADC_CMP5THRDATL  REG8(IT83XX_ADC_BASE+0x76)
+#define IT83XX_ADC_VCMP0CSELM   REG8(IT83XX_ADC_BASE+0x77)
+#define ADC_VCMP_VCMPCSELM          BIT(0)
+#define IT83XX_ADC_VCMP1CSELM   REG8(IT83XX_ADC_BASE+0x78)
+#define IT83XX_ADC_VCMP2CSELM   REG8(IT83XX_ADC_BASE+0x79)
+#define IT83XX_ADC_VCMP3CSELM   REG8(IT83XX_ADC_BASE+0x7A)
+#define IT83XX_ADC_VCMP4CSELM   REG8(IT83XX_ADC_BASE+0x7B)
+#define IT83XX_ADC_VCMP5CSELM   REG8(IT83XX_ADC_BASE+0x7C)
+
+/* Digital to Analog Converter (DAC) */
+#define IT83XX_DAC_BASE   0x00F01A00
+
+#define IT83XX_DAC_DACPDREG     REG8(IT83XX_DAC_BASE+0x01)
+#define IT83XX_DAC_POWDN(ch)    BIT(ch)
+#define IT83XX_DAC_DACDAT(ch)   REG8(IT83XX_DAC_BASE+0x02+ch)
 
 /* Keyboard Controller (KBC) */
 #define IT83XX_KBC_BASE   0x00F01300
@@ -1014,6 +1243,8 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 /* Shared Memory Flash Interface Bridge (SMFI) */
 #define IT83XX_SMFI_BASE  0x00F01000
 
+#define IT83XX_SMFI_SMECCS      REG8(IT83XX_SMFI_BASE+0x20)
+#define IT83XX_SMFI_MASK_HOSTWA 	BIT(5)
 #define IT83XX_SMFI_HRAMWC      REG8(IT83XX_SMFI_BASE+0x5A)
 #define IT83XX_SMFI_HRAMW0BA    REG8(IT83XX_SMFI_BASE+0x5B)
 #define IT83XX_SMFI_HRAMW1BA    REG8(IT83XX_SMFI_BASE+0x5C)
@@ -1030,12 +1261,16 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SMFI_ECINDAR1    REG8(IT83XX_SMFI_BASE+0x3C)
 #define IT83XX_SMFI_ECINDAR2    REG8(IT83XX_SMFI_BASE+0x3D)
 #define IT83XX_SMFI_ECINDAR3    REG8(IT83XX_SMFI_BASE+0x3E)
+#define EC_INDIRECT_READ_INTERNAL_FLASH BIT(6)
 #define IT83XX_SMFI_ECINDDR     REG8(IT83XX_SMFI_BASE+0x3F)
 #define IT83XX_SMFI_SCAR2L      REG8(IT83XX_SMFI_BASE+0x46)
 #define IT83XX_SMFI_SCAR2M      REG8(IT83XX_SMFI_BASE+0x47)
 #define IT83XX_SMFI_SCAR2H      REG8(IT83XX_SMFI_BASE+0x48)
 #define IT83XX_SMFI_FLHCTRL3R   REG8(IT83XX_SMFI_BASE+0x63)
 #define IT83XX_SMFI_STCDMACR    REG8(IT83XX_SMFI_BASE+0x80)
+#define IT83XX_SMFI_FLHCTRL6R   REG8(IT83XX_SMFI_BASE+0xA2)
+/* Enable EC-indirect page program command */
+#define IT83XX_SMFI_MASK_ECINDPP BIT(3)
 
 /* Serial Peripheral Interface (SSPI) */
 #define IT83XX_SSPI_BASE  0x00F02600
@@ -1045,6 +1280,48 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SSPI_SPICTRL2    REG8(IT83XX_SSPI_BASE+0x02)
 #define IT83XX_SSPI_SPISTS      REG8(IT83XX_SSPI_BASE+0x03)
 #define IT83XX_SSPI_SPICTRL3    REG8(IT83XX_SSPI_BASE+0x04)
+
+/* Serial Peripheral Interface (SPI) */
+#define IT83XX_SPI_BASE  0x00F03A00
+
+#define IT83XX_SPI_SPISGCR      REG8(IT83XX_SPI_BASE+0x00)
+#define IT83XX_SPI_SPISCEN         BIT(0)
+#define IT83XX_SPI_TXRXFAR      REG8(IT83XX_SPI_BASE+0x01)
+#define IT83XX_SPI_CPURXF2A        BIT(4)
+#define IT83XX_SPI_CPURXF1A        BIT(3)
+#define IT83XX_SPI_CPUTFA          BIT(1)
+#define IT83XX_SPI_TXFCR        REG8(IT83XX_SPI_BASE+0x02)
+#define IT83XX_SPI_TXFCMR          BIT(2)
+#define IT83XX_SPI_TXFR            BIT(1)
+#define IT83XX_SPI_TXFS            BIT(0)
+#define IT83XX_SPI_GCR2         REG8(IT83XX_SPI_BASE+0x03)
+#define IT83XX_SPI_RXF2OC          BIT(4)
+#define IT83XX_SPI_RXF1OC          BIT(3)
+#define IT83XX_SPI_RXFAR           BIT(0)
+#define IT83XX_SPI_IMR          REG8(IT83XX_SPI_BASE+0x04)
+#define IT83XX_SPI_RFFIM           BIT(7)
+#define IT83XX_SPI_EDIM            BIT(2)
+#define IT83XX_SPI_ISR          REG8(IT83XX_SPI_BASE+0x05)
+#define IT83XX_SPI_RXFIFOFULL      BIT(7)
+#define IT83XX_SPI_ENDDETECTINT    BIT(2)
+#define IT83XX_SPI_RXFSR        REG8(IT83XX_SPI_BASE+0x07)
+#define IT83XX_SPI_RXFFSM          (BIT(4) | BIT(3))
+#define IT83XX_SPI_RXF2FS          BIT(2)
+#define IT83XX_SPI_RXF1FS          BIT(1)
+#ifdef CHIP_VARIANT_IT83202BX
+#define IT83XX_SPI_SPISRDR      REG8(IT83XX_SPI_BASE+0x08)
+#else
+#define IT83XX_SPI_SPISRDR      REG8(IT83XX_SPI_BASE+0x0b)
+#endif
+#define IT83XX_SPI_CPUWTFDB0    REG32(IT83XX_SPI_BASE+0x08)
+#define IT83XX_SPI_FCR          REG8(IT83XX_SPI_BASE+0x09)
+#define IT83XX_SPI_SPISRTXF        BIT(2)
+#define IT83XX_SPI_RXFR            BIT(1)
+#define IT83XX_SPI_RXFCMR          BIT(0)
+#define IT83XX_SPI_RXFRDRB0     REG32(IT83XX_SPI_BASE+0x0C)
+#define IT83XX_SPI_FTCB0R       REG8(IT83XX_SPI_BASE+0x18)
+#define IT83XX_SPI_FTCB1R       REG8(IT83XX_SPI_BASE+0x19)
+#define IT83XX_SPI_HPR2         REG8(IT83XX_SPI_BASE+0x1E)
 
 /* Platform Environment Control Interface (PECI) */
 #define IT83XX_PECI_BASE  0x00F02C00
@@ -1064,6 +1341,12 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_PECI_RFCSV       REG8(IT83XX_PECI_BASE+0x0C)
 #define IT83XX_PECI_AWFCSV      REG8(IT83XX_PECI_BASE+0x0D)
 #define IT83XX_PECI_PADCTLR     REG8(IT83XX_PECI_BASE+0x0E)
+
+/*
+ * The count number of the counter for 25 ms register.
+ * The 25 ms register is calculated by (count number *1.024 kHz).
+ */
+#define I2C_CLK_LOW_TIMEOUT  255 /* ~=249 ms */
 
 /* SMBus/I2C Interface (SMB/I2C) */
 #define IT83XX_SMB_BASE   0x00F01C00
@@ -1091,6 +1374,21 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SMB_PECERC(ch)   REG8(IT83XX_SMB_BASE+0x47+(ch << 6))
 #define IT83XX_SMB_SMBPCTL(ch)  REG8(IT83XX_SMB_BASE+0x4A+(ch << 6))
 #define IT83XX_SMB_HOCTL2(ch)   REG8(IT83XX_SMB_BASE+0x50+(ch << 6))
+#define IT83XX_SMB_SLVEN        (1 << 5)
+#define IT83XX_SMB_RESLADR      REG8(IT83XX_SMB_BASE+0x48)
+#define IT83XX_SMB_SLDA         REG8(IT83XX_SMB_BASE+0x49)
+#define IT83XX_SMB_SLSTA        REG8(IT83XX_SMB_BASE+0x4B)
+#define IT83XX_SMB_SPDS         (1 << 5)
+#define IT83XX_SMB_RCS          (1 << 3)
+#define IT83XX_SMB_STS          (1 << 2)
+#define IT83XX_SMB_SDS          (1 << 1)
+#define IT83XX_SMB_SICR         REG8(IT83XX_SMB_BASE+0x4C)
+#define IT83XX_SMB_RESLADR2     REG8(IT83XX_SMB_BASE+0x51)
+#define IT83XX_SMB_ENADDR2      (1 << 7)
+#define IT83XX_SMB_SFFCTL       REG8(IT83XX_SMB_BASE+0x55)
+#define IT83XX_SMB_SAFE         (1 << 0)
+#define IT83XX_SMB_SFFSTA       REG8(IT83XX_SMB_BASE+0x56)
+#define IT83XX_SMB_SFFFULL      (1 << 6)
 
 /* BRAM */
 #define IT83XX_BRAM_BASE  0x00F02200
@@ -1105,11 +1403,12 @@ enum bram_indices {
 	BRAM_IDX_RESET_FLAGS2 = 2,
 	BRAM_IDX_RESET_FLAGS3 = 3,
 
-	/* PD state data for CONFIG_USB_PD_DUAL_ROLE uses 2 bytes */
+	/* PD state data for CONFIG_USB_PD_DUAL_ROLE uses 1 byte per port */
 	BRAM_IDX_PD0 =           4,
 	BRAM_IDX_PD1 =           5,
+	BRAM_IDX_PD2 =           6,
 
-	/* index 6 ~ 7 are reserved */
+	/* index 7 is reserved */
 
 	BRAM_IDX_SCRATCHPAD0  = 8,
 	BRAM_IDX_SCRATCHPAD1  = 9,
@@ -1158,11 +1457,40 @@ enum bram_indices {
 #define IT83XX_I2C_PSR(ch)           REG8(IT83XX_I2C_BASE+0x01+(ch << 7))
 #define IT83XX_I2C_HSPR(ch)          REG8(IT83XX_I2C_BASE+0x02+(ch << 7))
 #define IT83XX_I2C_STR(ch)           REG8(IT83XX_I2C_BASE+0x03+(ch << 7))
+#define IT83XX_I2C_BB                (1 << 5)
+#define IT83XX_I2C_TIME_OUT          (1 << 3)
+#define IT83XX_I2C_RW                (1 << 2)
+#define IT83XX_I2C_INTPEND           (1 << 1)
 #define IT83XX_I2C_DHTR(ch)          REG8(IT83XX_I2C_BASE+0x04+(ch << 7))
 #define IT83XX_I2C_TOR(ch)           REG8(IT83XX_I2C_BASE+0x05+(ch << 7))
 #define IT83XX_I2C_DTR(ch)           REG8(IT83XX_I2C_BASE+0x08+(ch << 7))
 #define IT83XX_I2C_CTR(ch)           REG8(IT83XX_I2C_BASE+0x09+(ch << 7))
+#define IT83XX_I2C_INTEN             (1 << 6)
+#define IT83XX_I2C_MODE              (1 << 5)
+#define IT83XX_I2C_STARST            (1 << 4)
+#define IT83XX_I2C_ACK               (1 << 3)
+#define IT83XX_I2C_HALT              (1 << 0)
 #define IT83XX_I2C_CTR1(ch)          REG8(IT83XX_I2C_BASE+0x0A+(ch << 7))
+#define IT83XX_I2C_COMQ_EN           (1 << 7)
+#define IT83XX_I2C_MDL_EN            (1 << 1)
+#define IT83XX_I2C_BYTE_CNT_L(ch)    REG8(IT83XX_I2C_BASE+0x0C+(ch << 7))
+#define IT83XX_I2C_IRQ_ST(ch)        REG8(IT83XX_I2C_BASE+0x0D+(ch << 7))
+#define IT83XX_I2C_IDW_CLR           (1 << 3)
+#define IT83XX_I2C_IDR_CLR           (1 << 2)
+#define IT83XX_I2C_SLVDATAFLG        (1 << 1)
+#define IT83XX_I2C_P_CLR             (1 << 0)
+#define IT83XX_I2C_IDR(ch)           REG8(IT83XX_I2C_BASE+0x06+(ch << 7))
+#define IT83XX_I2C_TOS(ch)           REG8(IT83XX_I2C_BASE+0x07+(ch << 7))
+#define IT83XX_I2C_CLK_STR           (1 << 7)
+#define IT83XX_I2C_IDR2(ch)          REG8(IT83XX_I2C_BASE+0x1F+(ch << 7))
+#define IT83XX_I2C_RAMHA(ch)         REG8(IT83XX_I2C_BASE+0x23+(ch << 7))
+#define IT83XX_I2C_RAMLA(ch)         REG8(IT83XX_I2C_BASE+0x24+(ch << 7))
+#define IT83XX_I2C_RAMHA2(ch)        REG8(IT83XX_I2C_BASE+0x2B+(ch << 7))
+#define IT83XX_I2C_RAMLA2(ch)        REG8(IT83XX_I2C_BASE+0x2C+(ch << 7))
+#define IT83XX_I2C_CMD_ADDH(ch)      REG8(IT83XX_I2C_BASE+0x25+(ch << 7))
+#define IT83XX_I2C_CMD_ADDL(ch)      REG8(IT83XX_I2C_BASE+0x26+(ch << 7))
+#define IT83XX_I2C_RAMH2A(ch)        REG8(IT83XX_I2C_BASE+0x50+(ch << 7))
+#define IT83XX_I2C_CMD_ADDH2(ch)     REG8(IT83XX_I2C_BASE+0x52+(ch << 7))
 
 enum i2c_channels {
 	IT83XX_I2C_CH_A,  /* GPIO.B3/B4 */
@@ -1172,88 +1500,6 @@ enum i2c_channels {
 	IT83XX_I2C_CH_E,  /* GPIO.E0/E7 */
 	IT83XX_I2C_CH_F,  /* GPIO.A4/A5 (for util/iteflash) */
 	IT83XX_I2C_PORT_COUNT,
-};
-
-/* USBPD Controller */
-#define IT83XX_USBPD_BASE(port)   (0x00F03700 + (0x100 * (port)))
-
-#define IT83XX_USBPD_GCR(p)       REG8(IT83XX_USBPD_BASE(p)+0x0)
-#define USBPD_REG_MASK_SW_RESET_BIT           (1 << 7)
-#define USBPD_REG_MASK_TYPE_C_DETECT_RESET    (1 << 6)
-#define USBPD_REG_MASK_BMC_PHY                (1 << 4)
-#define USBPD_REG_MASK_AUTO_SEND_SW_RESET     (1 << 3)
-#define USBPD_REG_MASK_AUTO_SEND_HW_RESET     (1 << 2)
-#define USBPD_REG_MASK_SNIFFER_MODE           (1 << 1)
-#define USBPD_REG_MASK_GLOBAL_ENABLE          (1 << 0)
-#define IT83XX_USBPD_PDMSR(p)     REG8(IT83XX_USBPD_BASE(p)+0x01)
-#define USBPD_REG_MASK_SOPPP_ENABLE           (1 << 7)
-#define USBPD_REG_MASK_SOPP_ENABLE            (1 << 6)
-#define USBPD_REG_MASK_SOP_ENABLE             (1 << 5)
-#define IT83XX_USBPD_CCGCR(p)     REG8(IT83XX_USBPD_BASE(p)+0x04)
-#define USBPD_REG_MASK_DISABLE_CC             (1 << 4)
-#define IT83XX_USBPD_CCCSR(p)     REG8(IT83XX_USBPD_BASE(p)+0x05)
-#ifdef IT83XX_USBPD_CC_VOLTAGE_DETECTOR_INDEPENDENT
-#define IT83XX_USBPD_REG_MASK_CC1_DISCONNECT  ((1 << 3) | (1 << 1))
-#define IT83XX_USBPD_REG_MASK_CC2_DISCONNECT  ((1 << 7) | (1 << 5))
-#else
-#define IT83XX_USBPD_REG_MASK_CC1_DISCONNECT  (1 << 3)
-#define IT83XX_USBPD_REG_MASK_CC2_DISCONNECT  (1 << 7)
-#endif
-#define USBPD_CC1_DISCONNECTED(p) \
-	((IT83XX_USBPD_CCCSR(p) | IT83XX_USBPD_REG_MASK_CC1_DISCONNECT) & \
-	~IT83XX_USBPD_REG_MASK_CC2_DISCONNECT)
-#define USBPD_CC2_DISCONNECTED(p) \
-	((IT83XX_USBPD_CCCSR(p) | IT83XX_USBPD_REG_MASK_CC2_DISCONNECT) & \
-	~IT83XX_USBPD_REG_MASK_CC1_DISCONNECT)
-
-#define IT83XX_USBPD_CCPSR(p)     REG8(IT83XX_USBPD_BASE(p)+0x06)
-#define USBPD_REG_MASK_DISCONNECT_POWER_CC2   (1 << 5)
-#define USBPD_REG_MASK_DISCONNECT_POWER_CC1   (1 << 1)
-#define IT83XX_USBPD_DFPVDR(p)    REG8(IT83XX_USBPD_BASE(p)+0x08)
-#define IT83XX_USBPD_UFPVDR(p)    REG8(IT83XX_USBPD_BASE(p)+0x09)
-#define IT83XX_USBPD_CCADCR(p)    REG8(IT83XX_USBPD_BASE(p)+0x0C)
-#define IT83XX_USBPD_ISR(p)       REG8(IT83XX_USBPD_BASE(p)+0x14)
-#define USBPD_REG_MASK_TYPE_C_DETECT           (1 << 7)
-#define USBPD_REG_MASK_CABLE_RESET_DETECT      (1 << 6)
-#define USBPD_REG_MASK_HARD_RESET_DETECT       (1 << 5)
-#define USBPD_REG_MASK_MSG_RX_DONE             (1 << 4)
-#define USBPD_REG_MASK_AUTO_SOFT_RESET_TX_DONE (1 << 3)
-#define USBPD_REG_MASK_HARD_RESET_TX_DONE      (1 << 2)
-#define USBPD_REG_MASK_MSG_TX_DONE             (1 << 1)
-#define USBPD_REG_MASK_TIMER_TIMEOUT           (1 << 0)
-#define IT83XX_USBPD_IMR(p)       REG8(IT83XX_USBPD_BASE(p)+0x15)
-#define IT83XX_USBPD_MTCR(p)      REG8(IT83XX_USBPD_BASE(p)+0x18)
-#define USBPD_REG_MASK_SW_RESET_TX_STAT        (1 << 3)
-#define USBPD_REG_MASK_TX_BUSY_STAT            (1 << 2)
-#define USBPD_REG_MASK_TX_DISCARD_STAT         (1 << 2)
-#define USBPD_REG_MASK_TX_ERR_STAT             (1 << 1)
-#define USBPD_REG_MASK_TX_START                (1 << 0)
-#define IT83XX_USBPD_MTSR0(p)     REG8(IT83XX_USBPD_BASE(p)+0x19)
-#define USBPD_REG_MASK_CABLE_ENABLE            (1 << 7)
-#define USBPD_REG_MASK_SEND_HW_RESET           (1 << 6)
-#define USBPD_REG_MASK_SEND_BIST_MODE_2        (1 << 5)
-#define IT83XX_USBPD_MTSR1(p)     REG8(IT83XX_USBPD_BASE(p)+0x1A)
-#define IT83XX_USBPD_VDMMCSR(p)   REG8(IT83XX_USBPD_BASE(p)+0x1B)
-#define IT83XX_USBPD_MRSR(p)      REG8(IT83XX_USBPD_BASE(p)+0x1C)
-#define USBPD_REG_MASK_RX_MSG_VALID            (1 << 0)
-#define IT83XX_USBPD_PEFSMR(p)    REG8(IT83XX_USBPD_BASE(p)+0x1D)
-#define IT83XX_USBPD_PES0R(p)     REG8(IT83XX_USBPD_BASE(p)+0x1E)
-#define IT83XX_USBPD_PES1R(p)     REG8(IT83XX_USBPD_BASE(p)+0x1F)
-#define IT83XX_USBPD_TDO(p)       REG32(IT83XX_USBPD_BASE(p)+0x20)
-#define IT83XX_USBPD_AGTMHLR(p)   REG8(IT83XX_USBPD_BASE(p)+0x3C)
-#define IT83XX_USBPD_AGTMHHR(p)   REG8(IT83XX_USBPD_BASE(p)+0x3D)
-#define IT83XX_USBPD_TMHLR(p)     REG8(IT83XX_USBPD_BASE(p)+0x3E)
-#define IT83XX_USBPD_TMHHR(p)     REG8(IT83XX_USBPD_BASE(p)+0x3F)
-#define IT83XX_USBPD_RDO0(p)      REG32(IT83XX_USBPD_BASE(p)+0x40)
-#define IT83XX_USBPD_RMH(p)       REG16(IT83XX_USBPD_BASE(p)+0x5E)
-#define IT83XX_USBPD_CCPSR0(p)    REG8(IT83XX_USBPD_BASE(p)+0x60)
-#define IT83XX_USBPD_BMCSR(p)     REG8(IT83XX_USBPD_BASE(p)+0x64)
-#define IT83XX_USBPD_PDMHSR(p)    REG8(IT83XX_USBPD_BASE(p)+0x65)
-
-enum usbpd_port {
-	USBPD_PORT_A,
-	USBPD_PORT_B,
-	USBPD_PORT_COUNT,
 };
 
 #define USB_VID_ITE 0x048d
@@ -1274,55 +1520,55 @@ enum usbpd_port {
 #define VW_VALID_FIELD(f)          ((f) << 4)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_2 0x2
-#define VW_IDX_2_SLP_S3            (1 << 0)
-#define VW_IDX_2_SLP_S4            (1 << 1)
-#define VW_IDX_2_SLP_S5            (1 << 2)
+#define VW_IDX_2_SLP_S3            BIT(0)
+#define VW_IDX_2_SLP_S4            BIT(1)
+#define VW_IDX_2_SLP_S5            BIT(2)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_3 0x3
-#define VW_IDX_3_SUS_STAT          (1 << 0)
-#define VW_IDX_3_PLTRST            (1 << 1)
-#define VW_IDX_3_OOB_RST_WARN      (1 << 2)
+#define VW_IDX_3_SUS_STAT          BIT(0)
+#define VW_IDX_3_PLTRST            BIT(1)
+#define VW_IDX_3_OOB_RST_WARN      BIT(2)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_4 0x4
-#define VW_IDX_4_OOB_RST_ACK       (1 << 0)
-#define VW_IDX_4_WAKE              (1 << 2)
-#define VW_IDX_4_PME               (1 << 3)
+#define VW_IDX_4_OOB_RST_ACK       BIT(0)
+#define VW_IDX_4_WAKE              BIT(2)
+#define VW_IDX_4_PME               BIT(3)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_5 0x5
-#define VW_IDX_5_SLAVE_BTLD_DONE   (1 << 0)
-#define VW_IDX_5_FATAL             (1 << 1)
-#define VW_IDX_5_NON_FATAL         (1 << 2)
-#define VW_IDX_5_SLAVE_BTLD_STATUS (1 << 3)
+#define VW_IDX_5_SLAVE_BTLD_DONE   BIT(0)
+#define VW_IDX_5_FATAL             BIT(1)
+#define VW_IDX_5_NON_FATAL         BIT(2)
+#define VW_IDX_5_SLAVE_BTLD_STATUS BIT(3)
 #define VW_IDX_5_BTLD_STATUS_DONE  (VW_IDX_5_SLAVE_BTLD_DONE | \
 					VW_IDX_5_SLAVE_BTLD_STATUS)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_6 0x6
-#define VW_IDX_6_SCI               (1 << 0)
-#define VW_IDX_6_SMI               (1 << 1)
-#define VW_IDX_6_RCIN              (1 << 2)
-#define VW_IDX_6_HOST_RST_ACK      (1 << 3)
+#define VW_IDX_6_SCI               BIT(0)
+#define VW_IDX_6_SMI               BIT(1)
+#define VW_IDX_6_RCIN              BIT(2)
+#define VW_IDX_6_HOST_RST_ACK      BIT(3)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_7 0x7
-#define VW_IDX_7_HOST_RST_WARN     (1 << 0)
+#define VW_IDX_7_HOST_RST_WARN     BIT(0)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_40 0x40
-#define VW_IDX_40_SUS_ACK           (1 << 0)
+#define VW_IDX_40_SUS_ACK           BIT(0)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_41 0x41
-#define VW_IDX_41_SUS_WARN          (1 << 0)
-#define VW_IDX_41_SUS_PWRDN_ACK     (1 << 1)
-#define VW_IDX_41_SLP_A             (1 << 3)
+#define VW_IDX_41_SUS_WARN          BIT(0)
+#define VW_IDX_41_SUS_PWRDN_ACK     BIT(1)
+#define VW_IDX_41_SLP_A             BIT(3)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_42 0x42
-#define VW_IDX_42_SLP_LAN           (1 << 0)
-#define VW_IDX_42_SLP_WLAN          (1 << 1)
+#define VW_IDX_42_SLP_LAN           BIT(0)
+#define VW_IDX_42_SLP_WLAN          BIT(1)
 
 #define ESPI_SYSTEM_EVENT_VW_IDX_43 0x43
 #define ESPI_SYSTEM_EVENT_VW_IDX_44 0x44
 #define ESPI_SYSTEM_EVENT_VW_IDX_47 0x47
 
 #define IT83XX_ESPI_VWCTRL0    REG8(IT83XX_ESPI_VW_BASE+0x90)
-#define ESPI_INTERRUPT_EVENT_PUT_PC (1 << 7)
+#define ESPI_INTERRUPT_EVENT_PUT_PC BIT(7)
 
 #define IT83XX_ESPI_VWCTRL1    REG8(IT83XX_ESPI_VW_BASE+0x91)
 #define IT83XX_ESPI_VWCTRL2    REG8(IT83XX_ESPI_VW_BASE+0x92)
@@ -1339,7 +1585,7 @@ enum usbpd_port {
 #define IT83XX_USB_BASE   0x00F02F00
 
 #define IT83XX_USB_P0MCR  REG8(IT83XX_USB_BASE+0xE4)
-#define USB_DP_DM_PULL_DOWN_EN (1 << 4)
+#define USB_DP_DM_PULL_DOWN_EN BIT(4)
 
 /* Wake pin definitions, defined at board-level */
 extern const enum gpio_signal hibernate_wake_pins[];
@@ -1348,7 +1594,6 @@ extern const int hibernate_wake_pins_used;
 /* --- MISC (not implemented yet) --- */
 
 #define IT83XX_PS2_BASE   0x00F01700
-#define IT83XX_DAC_BASE   0x00F01A00
 #define IT83XX_EGPIO_BASE 0x00F02100
 #define IT83XX_CIR_BASE   0x00F02300
 #define IT83XX_DBGR_BASE  0x00F02500

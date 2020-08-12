@@ -8,10 +8,15 @@
 #ifndef __CROS_EC_NX20P348X_H
 #define __CROS_EC_NX20P348X_H
 
-#define NX20P3483_ADDR0 0xE0
-#define NX20P3483_ADDR1 0xE2
-#define NX20P3483_ADDR2 0xE4
-#define NX20P3483_ADDR3 0xE6
+#define NX20P3483_ADDR0_FLAGS 0x70
+#define NX20P3483_ADDR1_FLAGS 0x71
+#define NX20P3483_ADDR2_FLAGS 0x72
+#define NX20P3483_ADDR3_FLAGS 0x73
+
+#define NX20P3481_ADDR0_FLAGS 0x74
+#define NX20P3481_ADDR1_FLAGS 0x75
+#define NX20P3481_ADDR2_FLAGS 0x76
+#define NX20P3481_ADDR3_FLAGS 0x77
 
 /*
  * This PPC hard-codes the over voltage protect of Vbus at 6.8V in dead-battery
@@ -35,23 +40,35 @@
 #define NX20P348X_DEVICE_CONTROL_REG		0x0B
 
 /* Device Control Register */
-#define NX20P348X_CTRL_FRS_AT (1 << 3)
-#define NX20P348X_CTRL_DB_EXIT (1 << 2)
-#define NX20P348X_CTRL_VBUSDIS_EN (1 << 1)
-#define NX20P348X_CTRL_LDO_SD (1 << 0)
+#define NX20P348X_CTRL_FRS_AT BIT(3)
+#define NX20P348X_CTRL_DB_EXIT BIT(2)
+#define NX20P348X_CTRL_VBUSDIS_EN BIT(1)
+#define NX20P348X_CTRL_LDO_SD BIT(0)
 
 /* Device Status Modes */
 #define NX20P348X_DEVICE_MODE_MASK 0x7
 #define NX20P348X_MODE_DEAD_BATTERY 0
-#define NX20P348X_MODE_HV_SNK  1
-#define NX20P348X_MODE_5V_SRC  2
-#define NX20P348X_MODE_HV_SRC  3
-#define NX20P348X_MODE_STANDBY 4
+/* After dead battery, mode values are different between 3481 and 3483 */
+#define NX20P3481_MODE_NORMAL  1
+#define NX20P3481_MODE_FRS  2
+#define NX20P3481_MODE_STANDBY 3
+
+#define NX20P3483_MODE_HV_SNK  1
+#define NX20P3483_MODE_5V_SRC  2
+#define NX20P3483_MODE_HV_SRC  3
+#define NX20P3483_MODE_STANDBY 4
+
+/* Switch Control Register */
+#define NX20P348X_SWITCH_CONTROL_HVSNK BIT(0)
+#define NX20P348X_SWITCH_CONTROL_HVSRC BIT(1)
+#define NX20P348X_SWITCH_CONTROL_5VSRC BIT(2)
 
 /* Switch Status Register */
-#define NX20P348X_HVSNK_STS (1 << 0)
-#define NX20P348X_HVSRC_STS (1 << 1)
-#define NX20P348X_5VSRC_STS (1 << 2)
+#define NX20P348X_HVSNK_STS BIT(0)
+#define NX20P348X_HVSRC_STS BIT(1)
+#define NX20P348X_5VSRC_STS BIT(2)
+#define NX20P348X_SWITCH_STATUS_DEBOUNCE_MSEC 25
+#define NX20P348X_SWITCH_STATUS_MASK 0x7
 
 /* Internal 5V VBUS Switch Current Limit Settings (min) */
 #define NX20P348X_ILIM_MASK 0xF
@@ -83,22 +100,23 @@
 #define NX20P348X_OVLO_23_0 6
 
 /* Interrupt 1 Register Bits */
-#define NX20P348X_INT1_DBEXIT_ERR (1 << 7)
-#define NX20P348X_INT1_OV_5VSRC   (1 << 4)
-#define NX20P348X_INT1_RCP_5VSRC  (1 << 3)
-#define NX20P348X_INT1_SC_5VSRC   (1 << 2)
-#define NX20P348X_INT1_OC_5VSRC   (1 << 1)
-#define NX20P348X_INT1_OTP        (1 << 0)
+#define NX20P348X_INT1_DBEXIT_ERR BIT(7)
+#define NX20P348X_INT1_FRS_DET    BIT(6)
+#define NX20P348X_INT1_OV_5VSRC   BIT(4)
+#define NX20P348X_INT1_RCP_5VSRC  BIT(3)
+#define NX20P348X_INT1_SC_5VSRC   BIT(2)
+#define NX20P348X_INT1_OC_5VSRC   BIT(1)
+#define NX20P348X_INT1_OTP        BIT(0)
 
 /* Interrupt 2 Register Bits */
-#define NX20P348X_INT2_EN_ERR     (1 << 7)
-#define NX20P348X_INT2_RCP_HVSNK  (1 << 6)
-#define NX20P348X_INT2_SC_HVSNK   (1 << 5)
-#define NX20P348X_INT2_OV_HVSNK   (1 << 4)
-#define NX20P348X_INT2_RCP_HVSRC  (1 << 3)
-#define NX20P348X_INT2_SC_HVSRC   (1 << 2)
-#define NX20P348X_INT2_OC_HVSRC   (1 << 1)
-#define NX20P348X_INT2_OV_HVSRC   (1 << 0)
+#define NX20P348X_INT2_EN_ERR     BIT(7)
+#define NX20P348X_INT2_RCP_HVSNK  BIT(6)
+#define NX20P348X_INT2_SC_HVSNK   BIT(5)
+#define NX20P348X_INT2_OV_HVSNK   BIT(4)
+#define NX20P348X_INT2_RCP_HVSRC  BIT(3)
+#define NX20P348X_INT2_SC_HVSRC   BIT(2)
+#define NX20P348X_INT2_OC_HVSRC   BIT(1)
+#define NX20P348X_INT2_OV_HVSRC   BIT(0)
 
 struct ppc_drv;
 extern const struct ppc_drv nx20p348x_drv;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -15,8 +15,8 @@
  * 7-bit address is 110101Xb. Where 'X' is determined
  * by the voltage on the ADDR pin.
  */
-#define LSM6DS0_ADDR0             0xd4
-#define LSM6DS0_ADDR1             0xd6
+#define LSM6DS0_ADDR0_FLAGS       0x6a
+#define LSM6DS0_ADDR1_FLAGS       0x6b
 
 /* who am I  */
 #define LSM6DS0_WHO_AM_I          0x68
@@ -72,7 +72,7 @@
 #define LSM6DS0_INT_GEN_DUR_G     0x37
 
 #define LSM6DS0_DPS_SEL_245     (0 << 3)
-#define LSM6DS0_DPS_SEL_500     (1 << 3)
+#define LSM6DS0_DPS_SEL_500     BIT(3)
 #define LSM6DS0_DPS_SEL_1000    (2 << 3)
 #define LSM6DS0_DPS_SEL_2000    (3 << 3)
 #define LSM6DS0_GSEL_2G         (0 << 3)
@@ -82,8 +82,8 @@
 #define LSM6DS0_RANGE_MASK      (3 << 3)
 
 #define LSM6DS0_ODR_PD          (0 << 5)
-#define LSM6DS0_ODR_10HZ        (1 << 5)
-#define LSM6DS0_ODR_15HZ        (1 << 5)
+#define LSM6DS0_ODR_10HZ        BIT(5)
+#define LSM6DS0_ODR_15HZ        BIT(5)
 #define LSM6DS0_ODR_50HZ        (2 << 5)
 #define LSM6DS0_ODR_59HZ        (2 << 5)
 #define LSM6DS0_ODR_119HZ       (3 << 5)
@@ -119,9 +119,10 @@ enum lsm6ds0_bdu {
 
 /* Min and Max sampling frequency in mHz */
 #define LSM6DS0_ACCEL_MIN_FREQ  14900
-#define LSM6DS0_ACCEL_MAX_FREQ  952000
+#define LSM6DS0_ACCEL_MAX_FREQ  MOTION_MAX_SENSOR_FREQUENCY(952000, 119000)
+
 #define LSM6DS0_GYRO_MIN_FREQ   14900
-#define LSM6DS0_GYRO_MAX_FREQ   952000
+#define LSM6DS0_GYRO_MAX_FREQ  MOTION_MAX_SENSOR_FREQUENCY(952000, 119000)
 
 extern const struct accelgyro_drv lsm6ds0_drv;
 struct lsm6ds0_data {

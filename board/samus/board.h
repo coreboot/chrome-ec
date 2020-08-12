@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -47,7 +47,6 @@
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_CHARGER
-#define CONFIG_CHARGER_V2
 #define CONFIG_CHARGER_BQ24773
 #define CONFIG_CHARGER_ILIM_PIN_DISABLED
 #define CONFIG_CHARGER_SENSE_RESISTOR 5
@@ -64,8 +63,6 @@
 #define CONFIG_GESTURE_SAMPLING_INTERVAL_MS 5
 #undef  CONFIG_HIBERNATE_DELAY_SEC
 #define CONFIG_HIBERNATE_DELAY_SEC (3600 * 24 * 7)
-#define CONFIG_HIBERNATE_BATT_PCT 10
-#define CONFIG_HIBERNATE_BATT_SEC (3600 * 24)
 #define CONFIG_HOSTCMD_PD
 #define CONFIG_HOSTCMD_PD_CHG_CTRL
 #define CONFIG_HOSTCMD_PD_PANIC
@@ -175,6 +172,13 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
+enum sensor_id {
+	BASE_ACCEL,
+	LID_ACCEL,
+	BASE_GYRO,
+	SENSOR_COUNT,
+};
+
 /* The number of TMP006 sensor chips on the board. */
 #define TMP006_COUNT 6
 
@@ -202,21 +206,21 @@ void bkboost_det_interrupt(enum gpio_signal signal);
 void jtag_interrupt(enum gpio_signal signal);
 
 /* Bit masks for turning on PP5000 rail in G3 */
-#define PP5000_IN_G3_AC       (1 << 0)
-#define PP5000_IN_G3_LIGHTBAR (1 << 1)
+#define PP5000_IN_G3_AC       BIT(0)
+#define PP5000_IN_G3_LIGHTBAR BIT(1)
 
 /* Enable/disable PP5000 rail mask in G3 */
 void set_pp5000_in_g3(int mask, int enable);
 
 /* Define for sensor tasks */
-#define CONFIG_GESTURE_SENSOR_BATTERY_TAP 0
+#define CONFIG_GESTURE_SENSOR_DOUBLE_TAP 0
 #define CONFIG_GESTURE_TAP_OUTER_WINDOW_T 200
 #define CONFIG_GESTURE_TAP_INNER_WINDOW_T 30
 #define CONFIG_GESTURE_TAP_MIN_INTERSTICE_T 120
 #define CONFIG_GESTURE_TAP_MAX_INTERSTICE_T 500
 
-#define CONFIG_LID_ANGLE_SENSOR_BASE 0
-#define CONFIG_LID_ANGLE_SENSOR_LID 1
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
 #endif /* !__ASSEMBLER__ */
 

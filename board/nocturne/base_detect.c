@@ -68,7 +68,7 @@ enum base_detect_state {
 	BASE_ATTACHED_DEBOUNCE,
 	BASE_ATTACHED,
 	BASE_DETACHED_DEBOUNCE,
-	/* Default for |forced_state|. Should be set only on |forced_state|. */
+	// Default for |forced_state|. Should be set only on |forced_state|.
 	BASE_NO_FORCED_STATE,
 };
 

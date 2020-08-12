@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,6 +9,9 @@
 #define __CROS_EC_BOARD_H
 
 /* Optional features */
+/* Default-yes, override to no by including fake_battery module. */
+#define CONFIG_BATTERY_PRESENT_CUSTOM
+#undef CONFIG_CMD_PD
 #define CONFIG_EXTPOWER_GPIO
 #undef CONFIG_FMAP
 #define CONFIG_POWER_BUTTON
@@ -22,6 +25,9 @@
 #define CONFIG_WP_ACTIVE_HIGH
 
 #define CONFIG_LIBCRYPTOC
+
+#define CONFIG_USB_PD_CUSTOM_PDO
+#define CONFIG_USB_PD_DUAL_ROLE
 
 #include "gpio_signal.h"
 
@@ -52,11 +58,9 @@ enum {
 	CHARGE_SUPPLIER_TEST7,
 	CHARGE_SUPPLIER_TEST8,
 	CHARGE_SUPPLIER_TEST9,
+	CHARGE_SUPPLIER_TEST10,
 	CHARGE_SUPPLIER_TEST_COUNT
 };
-
-/* Custom charge_manager priority table is defined in test code */
-extern const int supplier_priority[];
 
 /* Standard-current Rp */
 #define PD_SRC_VNC           PD_SRC_DEF_VNC_MV
@@ -74,5 +78,12 @@ extern const int supplier_priority[];
 
 #define PD_MIN_CURRENT_MA     500
 #define PD_MIN_POWER_MW       7500
+
+/* Configuration for fake Fingerprint Sensor */
+#define CONFIG_SPI_MASTER
+#define CONFIG_SPI_FP_PORT    1 /* SPI1: third master config */
+
+#define CONFIG_RNG
+void fps_event(enum gpio_signal signal);
 
 #endif /* __CROS_EC_BOARD_H */

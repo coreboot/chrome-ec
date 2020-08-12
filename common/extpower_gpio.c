@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -30,13 +30,8 @@ static void extpower_deferred(void)
 		return;
 
 	debounced_extpower_presence = extpower_presence;
-	hook_notify(HOOK_AC_CHANGE);
+	extpower_handle_update(extpower_presence);
 
-	/* Forward notification to host */
-	if (extpower_presence)
-		host_set_single_event(EC_HOST_EVENT_AC_CONNECTED);
-	else
-		host_set_single_event(EC_HOST_EVENT_AC_DISCONNECTED);
 }
 DECLARE_DEFERRED(extpower_deferred);
 

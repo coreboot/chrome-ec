@@ -3,18 +3,30 @@
  * found in the LICENSE file.
  */
 
-/* LIS2DH accelerometer module for Chrome EC */
+/* LIS2DH/LIS2DE/LNG2DM accelerometer module for Chrome EC */
 
 #ifndef __CROS_EC_ACCEL_LIS2DH_H
 #define __CROS_EC_ACCEL_LIS2DH_H
 
-#define LIS2DH_I2C_ADDR(__x)	(__x << 1)
+#include "driver/stm_mems_common.h"
 
-/* 7-bit address is 000110Xb. Where 'X' is determined
+/*
+ * LIS2DH/LIS2DE:
+ *
+ * 7-bit address is 0011 00X b. Where 'X' is determined
  * by the voltage on the ADDR pin
  */
-#define LIS2DH_ADDR0		LIS2DH_I2C_ADDR(0x18)
-#define LIS2DH_ADDR1		LIS2DH_I2C_ADDR(0x19)
+#define LIS2DH_ADDR0_FLAGS	0x18
+#define LIS2DH_ADDR1_FLAGS	0x19
+
+/*
+ * LNG2DM:
+ *
+ * 8-bit address is 0101 00XW b. Where 'X' is determined
+ * by the voltage on the ADDR pin, and 'W' is read write bit
+ */
+#define LNG2DM_ADDR0_FLAGS	0x28
+#define LNG2DM_ADDR1_FLAGS	0x29
 
 /* Who Am I  */
 #define LIS2DH_WHO_AM_I_REG	0x0f
@@ -77,7 +89,8 @@ enum lis2dh_odr {
 
 /* Absolute maximum rate for sensor */
 #define LIS2DH_ODR_MIN_VAL		1000
-#define LIS2DH_ODR_MAX_VAL		400000
+#define LIS2DH_ODR_MAX_VAL \
+	MOTION_MAX_SENSOR_FREQUENCY(400000, 25000)
 
 /* Return ODR reg value based on data rate set */
 #define LIS2DH_ODR_TO_REG(_odr) \
@@ -101,12 +114,15 @@ enum lis2dh_odr {
 /* FS reg value from Full Scale */
 #define LIS2DH_FS_TO_REG(_fs) (__fls(_fs) - 1)
 
-/* Sensor resolution in number of bits
+/*
+ * Sensor resolution in number of bits
+ *
  * lis2dh has variable precision (8/10/12 bits) depending Power Mode
  * selected, here Only Normal Power mode supported (10 bits).
- * But for lis2de, it has only one 8bit resolution.
+ *
+ * lis2de/lng2dm only support 8bit resolution.
  */
-#ifdef CONFIG_ACCEL_LIS2DE
+#if defined(CONFIG_ACCEL_LIS2DE) || defined(CONFIG_ACCEL_LNG2DM)
 #define LIS2DH_RESOLUTION       8
 #elif defined(CONFIG_ACCEL_LIS2DH)
 #define LIS2DH_RESOLUTION      	10

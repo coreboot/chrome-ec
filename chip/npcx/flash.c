@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -291,7 +291,11 @@ static int flash_set_status_for_prot(int reg1, int reg2)
 	 * internal spi-flash, protect it now before setting them.
 	 */
 #ifdef NPCX_INT_FLASH_SUPPORT
+#ifdef CONFIG_WP_ACTIVE_HIGH
+	flash_protect_int_flash(gpio_get_level(GPIO_WP));
+#else
 	flash_protect_int_flash(!gpio_get_level(GPIO_WP_L));
+#endif /*_CONFIG_WP_ACTIVE_HIGH_*/
 #endif
 
 	/* Lock physical flash operations */
@@ -344,7 +348,11 @@ static int flash_check_prot_reg(unsigned int offset, unsigned int bytes)
 	 * internal spi-flash, protect it now.
 	 */
 #ifdef NPCX_INT_FLASH_SUPPORT
+#ifdef CONFIG_WP_ACTIVE_HIGH
+	flash_protect_int_flash(gpio_get_level(GPIO_WP));
+#else
 	flash_protect_int_flash(!gpio_get_level(GPIO_WP_L));
+#endif /* CONFIG_WP_ACTIVE_HIGH */
 #endif
 
 	sr1 = flash_get_status1();
@@ -691,7 +699,11 @@ int flash_pre_init(void)
 	 * during ec initialization.
 	 */
 #ifdef NPCX_INT_FLASH_SUPPORT
+#ifdef CONFIG_WP_ACTIVE_HIGH
+	flash_protect_int_flash(gpio_get_level(GPIO_WP));
+#else
 	flash_protect_int_flash(!gpio_get_level(GPIO_WP_L));
+#endif /*CONFIG_WP_ACTIVE_HIGH */
 #endif
 
 #if !defined(NPCX_INT_FLASH_SUPPORT)
@@ -699,7 +711,7 @@ int flash_pre_init(void)
 	flash_pinmux(1);
 #endif
 
-#ifdef CONFIG_EXTERNAL_STORAGE
+#if defined(CONFIG_EXTERNAL_STORAGE) && !defined(NPCX_INT_FLASH_SUPPORT)
 	/* Disable tristate all the time */
 	CLEAR_BIT(NPCX_DEVCNT, NPCX_DEVCNT_F_SPI_TRIS);
 #endif

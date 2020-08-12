@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 
 #include "com_port.h"
+#include "compile_time_macros.h"
 #include "main.h"
 #include "misc_util.h"
 #include "opr.h"
@@ -26,6 +27,7 @@
 #define MAX_FILE_NAME_SIZE 512
 #define MAX_PARAM_SIZE 32
 #define MAX_MSG_SIZE 128
+#define MAX_SYNC_RETRIES 3
 
 /* Default values */
 #define DEFAULT_BAUD_RATE 115200
@@ -43,6 +45,12 @@
 #define FIRMWARE_START_ADDR    0x10090000
 /* Divide the ec firmware image into 4K byte */
 #define FIRMWARE_SEGMENT       0x1000
+/* Register address for chip ID */
+#define NPCX_SRID_CR           0x400C101C
+/* Register address for device ID */
+#define NPCX_DEVICE_ID_CR      0x400C1022
+#define NPCX_FLASH_BASE_ADDR   0x64000000
+
 /*---------------------------------------------------------------------------
  * Global variables
  *---------------------------------------------------------------------------
@@ -68,7 +76,50 @@ static uint32_t baudrate;
 static uint32_t dev_num;
 static uint32_t flash_offset;
 static bool auto_mode;
+static bool read_flash_flag;
 
+struct npcx_chip_info {
+	uint8_t device_id;
+	uint8_t chip_id;
+	uint32_t flash_size;
+};
+
+const static struct npcx_chip_info chip_info[] = {
+	{
+		/* NPCX796FA */
+		.device_id = 0x21,
+		.chip_id = 0x06,
+		.flash_size = 1024 * 1024,
+	},
+
+	{
+		/* NPCX796FB */
+		.device_id = 0x21,
+		.chip_id = 0x07,
+		.flash_size = 1024 * 1024,
+	},
+
+	{
+		/* NPCX797WB */
+		.device_id = 0x24,
+		.chip_id = 0x07,
+		.flash_size = 1024 * 1024,
+	},
+
+	{
+		/* NPCX796FC */
+		.device_id = 0x29,
+		.chip_id = 0x07,
+		.flash_size = 512 * 1024,
+	},
+
+	{
+		/* NPCX797WC */
+		.device_id = 0x2C,
+		.chip_id = 0x07,
+		.flash_size = 512 * 1024,
+	},
+};
 /*---------------------------------------------------------------------------
  * Functions prototypes
  *---------------------------------------------------------------------------
@@ -197,6 +248,29 @@ static bool image_auto_write(uint32_t offset, uint8_t *buffer,
 	return true;
 }
 
+static bool get_flash_size(uint32_t *flash_size)
+{
+	uint8_t dev_id, chip_id, i;
+
+	if (opr_read_chunk(&dev_id, NPCX_DEVICE_ID_CR, 1) != true)
+		return false;
+
+	if (opr_read_chunk(&chip_id, NPCX_SRID_CR, 1) != true)
+		return false;
+
+	for (i = 0; i < ARRAY_SIZE(chip_info); i++) {
+		if (chip_info[i].device_id == dev_id &&
+				chip_info[i].chip_id == chip_id) {
+			*flash_size = chip_info[i].flash_size;
+			return true;
+		}
+	}
+	printf("Unknown NPCX device ID:0x%02x chip ID:0x%02x\n",
+				dev_id, chip_id);
+
+	return false;
+}
+
 /*---------------------------------------------------------------------------
  * Function:	read_input_file
  *
@@ -252,9 +326,9 @@ int main(int argc, char *argv[])
 	char aux_buf[MAX_FILE_NAME_SIZE];
 	uint32_t size = 0;
 	uint32_t addr = 0;
-	uint32_t strip_size;
 	enum sync_result sr;
 	uint8_t *buffer;
+	int sync_cnt;
 
 	if (argc <= 1)
 		exit(EC_UNSUPPORTED_CMD_ERR);
@@ -268,6 +342,7 @@ int main(int argc, char *argv[])
 	verbose = true;
 	console = false;
 	auto_mode = false;
+	read_flash_flag = false;
 
 	param_parse_cmd_line(argc, argv);
 
@@ -291,13 +366,21 @@ int main(int argc, char *argv[])
 
 	/* Verify Host and Device are synchronized */
 	DISPLAY_MSG(("Performing a Host/Device synchronization check...\n"));
-	sr = opr_check_sync(baudrate);
-	if (sr != SR_OK) {
+	for (sync_cnt = 1; sync_cnt <= MAX_SYNC_RETRIES; sync_cnt++) {
+		sr = opr_check_sync(baudrate);
+		if (sr == SR_OK)
+			break;
+		/*
+		 * If it fails, try it again up to three times.
+		 * It might fail for garbage data drainage from H1, or
+		 * for timeout due to unstable data transfer yet.
+		 */
 		display_color_msg(FAIL,
-			"Host/Device synchronization failed, error = %lu.\n",
-			sr);
-		exit_uart_app(EC_SYNC_ERR);
+			"Host/Device synchronization failed, error = %d,"
+			" fail count = %d\n", sr, sync_cnt);
 	}
+	if (sync_cnt > MAX_SYNC_RETRIES)
+		exit_uart_app(EC_SYNC_ERR);
 
 	if (auto_mode) {
 		size = param_get_file_size(file_name);
@@ -308,19 +391,28 @@ int main(int argc, char *argv[])
 		if (!buffer)
 			exit_uart_app(EC_FILE_ERR);
 
-		/* Ignore the trailing white space to speed up writing */
-		strip_size = size;
-		while ((strip_size > 0) && (buffer[strip_size-1] == 0xFF))
-			strip_size--;
-
 		printf("Write file %s at %d with %d bytes\n",
-					file_name, flash_offset, strip_size);
-		if (image_auto_write(flash_offset, buffer, strip_size)) {
+					file_name, flash_offset, size);
+		if (image_auto_write(flash_offset, buffer, size)) {
 			printf("Flash Done.\n");
 			free(buffer);
 			exit_uart_app(EC_OK);
 		}
 		free(buffer);
+		exit_uart_app(-1);
+	}
+
+	if (read_flash_flag) {
+		uint32_t flash_size;
+
+		if (get_flash_size(&flash_size)) {
+			printf("Read %d bytes from flash...\n", flash_size);
+			opr_read_mem(file_name, NPCX_FLASH_BASE_ADDR,
+					flash_size);
+			exit_uart_app(EC_OK);
+		}
+
+		printf("Fail to read the flash size\n");
 		exit_uart_app(-1);
 	}
 
@@ -393,22 +485,23 @@ int main(int argc, char *argv[])
  */
 
 static const struct option long_opts[] = {
-	{"version",  0, 0, 'v'},
-	{"help",     0, 0, 'h'},
-	{"quiet",    0, 0, 'q'},
-	{"console",  0, 0, 'c'},
-	{"auto",     0, 0, 'A'},
-	{"baudrate", 1, 0, 'b'},
-	{"opr",      1, 0, 'o'},
-	{"port",     1, 0, 'p'},
-	{"file",     1, 0, 'f'},
-	{"addr",     1, 0, 'a'},
-	{"size",     1, 0, 's'},
-	{"offset",   1, 0, 'O'},
+	{"version",         0, 0, 'v'},
+	{"help",            0, 0, 'h'},
+	{"quiet",           0, 0, 'q'},
+	{"console",         0, 0, 'c'},
+	{"auto",            0, 0, 'A'},
+	{"read-flash",      0, 0, 'r'},
+	{"baudrate",        1, 0, 'b'},
+	{"opr",             1, 0, 'o'},
+	{"port",            1, 0, 'p'},
+	{"file",            1, 0, 'f'},
+	{"addr",            1, 0, 'a'},
+	{"size",            1, 0, 's'},
+	{"offset",          1, 0, 'O'},
 	{NULL,       0, 0, 0}
 };
 
-static char *short_opts = "vhqcAb:o:p:f:a:s:O:?";
+static char *short_opts = "vhqcArb:o:p:f:a:s:O:?";
 
 static void param_parse_cmd_line(int argc, char *argv[])
 {
@@ -434,6 +527,9 @@ static void param_parse_cmd_line(int argc, char *argv[])
 			break;
 		case 'A':
 			auto_mode = true;
+			break;
+		case 'r':
+			read_flash_flag = true;
 			break;
 		case 'b':
 			if (sscanf(optarg, "%du", &baudrate) == 0)
@@ -536,7 +632,7 @@ static uint32_t param_get_str_size(char *string)
 	/* Verify string is non-NULL */
 	if ((string == NULL) || (strlen(string) == 0)) {
 		display_color_msg(FAIL,
-			"ERROR: Zero length input string provided\n", string);
+			"ERROR: Zero length input string provided\n");
 		return 0;
 	}
 
@@ -581,6 +677,8 @@ static void tool_usage(void)
 	printf("  -A, --auto           - Enable auto mode. (default is off)\n");
 	printf("  -O, --offset <num>   - With --auto, assign the offset of");
 	printf(" flash where the image to be written.\n");
+	printf("  -r, --read-flash     - With --file=<file>, Read the whole"
+			" flash content and write it to <file>.\n");
 	printf("\n");
 	printf("Operation specific switches:\n");
 	printf("  -o, --opr   <name>   - Operation number (see list below)\n");

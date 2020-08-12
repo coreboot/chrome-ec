@@ -37,7 +37,9 @@
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
 
 /* Masks for power signals */
-#define IN_POWER_GOOD POWER_SIGNAL_MASK(SDM845_POWER_GOOD)
+#define IN_POWER_GOOD		POWER_SIGNAL_MASK(SDM845_POWER_GOOD)
+#define IN_AP_RST_ASSERTED	POWER_SIGNAL_MASK(SDM845_AP_RST_ASSERTED)
+
 
 /* Long power key press to force shutdown */
 #define DELAY_FORCE_SHUTDOWN		(8 * SECOND)
@@ -53,13 +55,22 @@
 #define DELAY_SHUTDOWN_ON_POWER_HOLD	(8 * SECOND)
 
 /*
- * After trigger PMIC power-on, how long it triggers AP to turn on.
- * Obversed that the worst case is ~150ms. Pick a safe vale.
+ * After trigger PMIC power sequence, how long it triggers AP to turn on
+ * or off. Observed that the worst case is ~150ms. Pick a safe vale.
  */
 #define PMIC_POWER_AP_RESPONSE_TIMEOUT	(350 * MSEC)
 
+/*
+ * After force off the switch cap, how long the PMIC/AP totally off.
+ * Observed that the worst case is 2s. Pick a safe vale.
+ */
+#define FORCE_OFF_RESPONSE_TIMEOUT	(4 * SECOND)
+
 /* Wait for polling the AP on signal */
 #define PMIC_POWER_AP_WAIT		(1 * MSEC)
+
+/* The length of an issued low pulse to the PM845_RESIN_L signal */
+#define PMIC_RESIN_PULSE_LENGTH		(20 * MSEC)
 
 /* The timeout of the check if the system can boot AP */
 #define CAN_BOOT_AP_CHECK_TIMEOUT	(500 * MSEC)
@@ -76,12 +87,6 @@
 /* Delay between power-on the system and power-on the PMIC */
 #define SYSTEM_POWER_ON_DELAY		(10 * MSEC)
 
-/* Delay between power-off the system and all things (PMIC/AP) expected off */
-#define SYSTEM_POWER_OFF_DELAY		(350 * MSEC)
-
-/* Delay to confirm the power lost */
-#define POWER_LOST_CONFIRM_DELAY        (350 * MSEC)
-
 /* TODO(crosbug.com/p/25047): move to HOOK_POWER_BUTTON_CHANGE */
 /* 1 if the power button was pressed last time we checked */
 static char power_button_was_pressed;
@@ -89,16 +94,8 @@ static char power_button_was_pressed;
 /* 1 if lid-open event has been detected */
 static char lid_opened;
 
-/*
- * 1 if power state is controlled by special functions, like a console command
- * or an interrupt handler, for bypassing POWER_GOOD lost trigger. It is
- * because these functions control the PMIC and AP power signals directly and
- * don't want to get preempted by the chipset state machine.
- */
-static uint8_t bypass_power_lost_trigger;
-
-/* The timestamp of the latest power lost */
-static timestamp_t latest_power_lost_time;
+/* 1 if AP_RST_L and PS_HOLD is overdriven by EC */
+static char ap_rst_overdriven;
 
 /* Time where we will power off, if power button still held down */
 static timestamp_t power_off_deadline;
@@ -110,6 +107,7 @@ enum power_request_t {
 	POWER_REQ_NONE,
 	POWER_REQ_OFF,
 	POWER_REQ_ON,
+	POWER_REQ_RESET,
 
 	POWER_REQ_COUNT,
 };
@@ -124,7 +122,8 @@ enum power_off_event_t {
 	POWER_OFF_BY_POWER_BUTTON_PRESSED,
 	POWER_OFF_BY_LONG_PRESS,
 	POWER_OFF_BY_POWER_GOOD_LOST,
-	POWER_OFF_BY_POWER_REQ,
+	POWER_OFF_BY_POWER_REQ_OFF,
+	POWER_OFF_BY_POWER_REQ_RESET,
 
 	POWER_OFF_EVENT_COUNT,
 };
@@ -138,10 +137,18 @@ enum power_on_event_t {
 	POWER_ON_BY_AUTO_POWER_ON,
 	POWER_ON_BY_LID_OPEN,
 	POWER_ON_BY_POWER_BUTTON_PRESSED,
-	POWER_ON_BY_POWER_REQ_NONE,
+	POWER_ON_BY_POWER_REQ_ON,
+	POWER_ON_BY_POWER_REQ_RESET,
 
 	POWER_ON_EVENT_COUNT,
 };
+
+/* Issue a request to initiate a reset sequence */
+static void request_cold_reset(void)
+{
+	power_request = POWER_REQ_RESET;
+	task_wake(TASK_ID_CHIPSET);
+}
 
 /* AP-requested reset GPIO interrupt handlers */
 static void chipset_reset_request_handler(void)
@@ -156,47 +163,58 @@ void chipset_reset_request_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&chipset_reset_request_handler_data, 0);
 }
 
-/* Confirm power lost if the POWER_GOOD signal keeps low for a while */
-static uint32_t chipset_is_power_lost(void)
+void chipset_warm_reset_interrupt(enum gpio_signal signal)
 {
 	/*
-	 * Current POWER_GOOD signal is lost and the latest power lost trigger
-	 * happened before the confirmation delay.
+	 * The warm_reset signal is pulled-up by a rail from PMIC. If the
+	 * warm_reset drops, it means:
+	 *  * Servo or Cr50 holds the signal, or
+	 *  * its pull-up rail POWER_GOOD drops.
 	 */
-	return (get_time().val - latest_power_lost_time.val >=
-		POWER_LOST_CONFIRM_DELAY) && !power_has_signals(IN_POWER_GOOD);
-}
-
-/* The deferred handler to save the power signal */
-static void deferred_power_signal_handler(void)
-{
-	/* Wake the chipset task to check the power lost duration */
-	task_wake(TASK_ID_CHIPSET);
-}
-DECLARE_DEFERRED(deferred_power_signal_handler);
-
-/**
- * Power signal interrupt, overrides the default one.
- *
- * It handles the short-low-pulse during the reset sequence which we don't
- * consider it as a power-lost.
- */
-void chipset_power_signal_interrupt(enum gpio_signal signal)
-{
-	/* Call the default power signal interrupt */
-	power_signal_interrupt(signal);
-
-	/*
-	 * It is the start of the low pulse, save the timestamp, wake the
-	 * chipset task after POWER_LOST_CONFIRM_DELAY in order to check if it
-	 * is a power-lost or a reset (short low-pulse).
-	 */
-	if (!(power_get_signals() & IN_POWER_GOOD)) {
-		/* Keep the timestamp just at the low pulse happens. */
-		latest_power_lost_time = get_time();
-		hook_call_deferred(&deferred_power_signal_handler_data,
-				   POWER_LOST_CONFIRM_DELAY);
+	if (!gpio_get_level(GPIO_WARM_RESET_L)) {
+		if (gpio_get_level(GPIO_POWER_GOOD)) {
+			/*
+			 * Servo or Cr50 holds the WARM_RESET_L signal.
+			 *
+			 * Overdrive AP_RST_L to hold AP. Overdrive PS_HOLD to
+			 * emulate AP being up to trick the PMIC into thinking
+			 * there’s nothing weird going on.
+			 */
+			ap_rst_overdriven = 1;
+			gpio_set_flags(GPIO_PS_HOLD, GPIO_INT_BOTH |
+				       GPIO_SEL_1P8V | GPIO_OUT_HIGH);
+			gpio_set_flags(GPIO_AP_RST_L, GPIO_INT_BOTH |
+				       GPIO_SEL_1P8V | GPIO_OUT_LOW);
+		} else {
+			/*
+			 * The pull-up rail POWER_GOOD drops.
+			 *
+			 * High-Z both AP_RST_L and PS_HOLD to restore their
+			 * states.
+			 */
+			gpio_set_flags(GPIO_AP_RST_L, GPIO_INT_BOTH |
+				       GPIO_SEL_1P8V);
+			gpio_set_flags(GPIO_PS_HOLD, GPIO_INT_BOTH |
+				       GPIO_SEL_1P8V);
+			ap_rst_overdriven = 0;
+		}
+	} else {
+		if (ap_rst_overdriven) {
+			/*
+			 * Servo or Cr50 releases the WARM_RESET_L signal.
+			 *
+			 * Cold reset the PMIC, doing S0->S5->S0 transition,
+			 * by issuing a request to initiate a reset sequence,
+			 * to recover the system. The transition to S5 makes
+			 * POWER_GOOD drop that triggers an interrupt to
+			 * high-Z both AP_RST_L and PS_HOLD.
+			 */
+			request_cold_reset();
+		}
+		/* If not overdriven, just a normal power-up, do nothing. */
 	}
+
+	power_signal_interrupt(signal);
 }
 
 static void sdm845_lid_event(void)
@@ -254,22 +272,6 @@ static void wait_switchcap_power_good(int enable)
 }
 
 /**
- * Set the state of the system power signals.
- *
- * The system power signals are the enable pins of SwitchCap and VBOB.
- * They control the power of the set of PMIC chips and the AP.
- *
- * @param enable	1 to enable or 0 to disable
- */
-static void set_system_power(int enable)
-{
-	CPRINTS("set_system_power(%d)", enable);
-	gpio_set_level(GPIO_SWITCHCAP_ON_L, enable);
-	wait_switchcap_power_good(enable);
-	gpio_set_level(GPIO_VBOB_EN, enable);
-}
-
-/**
  * Get the state of the system power signals.
  *
  * @return 1 if the system is powered, 0 if not
@@ -289,8 +291,8 @@ static int is_system_powered(void)
  */
 static int is_pmic_pwron(void)
 {
-	/* Use PS_HOLD to indicate PMIC/AP is on/off */
-	return gpio_get_level(GPIO_PS_HOLD);
+	/* Use POWER_GOOD to indicate PMIC/AP is on/off */
+	return gpio_get_level(GPIO_POWER_GOOD);
 }
 
 /**
@@ -298,8 +300,9 @@ static int is_pmic_pwron(void)
  *
  * @param enable	1 to wait the PMIC/AP on.
 			0 to wait the PMIC/AP off.
+ * @param timeout	Number of microsecond of timeout.
  */
-static void wait_pmic_pwron(int enable)
+static void wait_pmic_pwron(int enable, unsigned int timeout)
 {
 	timestamp_t poll_deadline;
 
@@ -308,7 +311,7 @@ static void wait_pmic_pwron(int enable)
 		return;
 
 	poll_deadline = get_time();
-	poll_deadline.val += PMIC_POWER_AP_RESPONSE_TIMEOUT;
+	poll_deadline.val += timeout;
 	while (enable != is_pmic_pwron() &&
 	       get_time().val < poll_deadline.val) {
 		usleep(PMIC_POWER_AP_WAIT);
@@ -324,6 +327,28 @@ static void wait_pmic_pwron(int enable)
 }
 
 /**
+ * Set the state of the system power signals.
+ *
+ * The system power signals are the enable pins of SwitchCap and VBOB.
+ * They control the power of the set of PMIC chips and the AP.
+ *
+ * @param enable	1 to enable or 0 to disable
+ */
+static void set_system_power(int enable)
+{
+	CPRINTS("%s(%d)", __func__, enable);
+	gpio_set_level(GPIO_SWITCHCAP_ON_L, enable);
+	wait_switchcap_power_good(enable);
+	gpio_set_level(GPIO_VBOB_EN, enable);
+	if (enable) {
+		usleep(SYSTEM_POWER_ON_DELAY);
+	} else {
+		/* Ensure POWER_GOOD drop to low if it is a forced shutdown */
+		wait_pmic_pwron(0, FORCE_OFF_RESPONSE_TIMEOUT);
+	}
+}
+
+/**
  * Set the PMIC/AP power-on state.
  *
  * It triggers the PMIC/AP power-on and power-off sequence.
@@ -333,7 +358,7 @@ static void wait_pmic_pwron(int enable)
  */
 static void set_pmic_pwron(int enable)
 {
-	CPRINTS("set_pmic_pwron(%d)", enable);
+	CPRINTS("%s(%d)", __func__, enable);
 
 	/* Check the PMIC/AP power state */
 	if (enable == is_pmic_pwron())
@@ -342,22 +367,18 @@ static void set_pmic_pwron(int enable)
 	/*
 	 * Power-on sequence:
 	 * 1. Hold down PMIC_KPD_PWR_ODL, which is a power-on trigger
-	 * 2. PM845 pulls up AP_RST_L signal to power-on SDM845
-	 * 3. SDM845 pulls up PS_HOLD signal
-	 * 4. Wait for PS_HOLD up
-	 * 5. Release PMIC_KPD_PWR_ODL
+	 * 2. PM845 supplies power to POWER_GOOD
+	 * 3. Release PMIC_KPD_PWR_ODL
 	 *
 	 * Power-off sequence:
 	 * 1. Hold down PMIC_KPD_PWR_ODL and PM845_RESIN_L, which is a power-off
 	 *    trigger (requiring reprogramming PMIC registers to make
 	 *    PMIC_KPD_PWR_ODL + PM845_RESIN_L as a shutdown trigger)
-	 * 2. PM845 pulls down AP_RST_L signal to power-off SDM845 (requreing
+	 * 2. PM845 stops supplying power to POWER_GOOD (requiring
 	 *    reprogramming PMIC to set the stage-1 and stage-2 reset timers to
 	 *    0 such that the pull down happens just after the deboucing time
 	 *    of the trigger, like 2ms)
-	 * 3. SDM845 pulls down PS_HOLD signal
-	 * 4. Wait for PS_HOLD down
-	 * 5. Release PMIC_KPD_PWR_ODL and PM845_RESIN_L
+	 * 3. Release PMIC_KPD_PWR_ODL and PM845_RESIN_L
 	 *
 	 * If the above PMIC registers not programmed or programmed wrong, it
 	 * falls back to the next functions, which cuts off the system power.
@@ -366,7 +387,7 @@ static void set_pmic_pwron(int enable)
 	gpio_set_level(GPIO_PMIC_KPD_PWR_ODL, 0);
 	if (!enable)
 		gpio_set_level(GPIO_PM845_RESIN_L, 0);
-	wait_pmic_pwron(enable);
+	wait_pmic_pwron(enable, PMIC_POWER_AP_RESPONSE_TIMEOUT);
 	gpio_set_level(GPIO_PMIC_KPD_PWR_ODL, 1);
 	if (!enable)
 		gpio_set_level(GPIO_PM845_RESIN_L, 1);
@@ -377,14 +398,16 @@ enum power_state power_chipset_init(void)
 	int init_power_state;
 	uint32_t reset_flags = system_get_reset_flags();
 
-	/* Enable reboot control input from AP */
+	/* Enable interrupts */
 	gpio_enable_interrupt(GPIO_AP_RST_REQ);
+	gpio_enable_interrupt(GPIO_WARM_RESET_L);
+	gpio_enable_interrupt(GPIO_POWER_GOOD);
 
 	/*
 	 * Force the AP shutdown unless we are doing SYSJUMP. Otherwise,
 	 * the AP could stay in strange state.
 	 */
-	if (!(reset_flags & RESET_FLAG_SYSJUMP)) {
+	if (!(reset_flags & EC_RESET_FLAG_SYSJUMP)) {
 		CPRINTS("not sysjump; forcing system shutdown");
 		set_system_power(0);
 		init_power_state = POWER_G3;
@@ -393,6 +416,8 @@ enum power_state power_chipset_init(void)
 		if (power_get_signals() & IN_POWER_GOOD) {
 			CPRINTS("SOC ON");
 			init_power_state = POWER_S0;
+			/* Disable idle task deep sleep when in S0 */
+			disable_sleep(SLEEP_MASK_AP_RUN);
 		} else {
 			CPRINTS("SOC OFF");
 			init_power_state = POWER_G3;
@@ -400,18 +425,21 @@ enum power_state power_chipset_init(void)
 	}
 
 	/* Leave power off only if requested by reset flags */
-	if (!(reset_flags & RESET_FLAG_AP_OFF) &&
-	    !(reset_flags & RESET_FLAG_SYSJUMP)) {
+	if (!(reset_flags & EC_RESET_FLAG_AP_OFF) &&
+	    !(reset_flags & EC_RESET_FLAG_SYSJUMP)) {
 		CPRINTS("auto_power_on set due to reset_flag 0x%x",
 			system_get_reset_flags());
 		auto_power_on = 1;
 	}
 
-	/*
-	 * TODO(crosbug.com/p/28289): Wait battery stable.
-	 * Some batteries use clock stretching feature, which requires
-	 * more time to be stable.
-	 */
+	if (battery_is_present() == BP_YES) {
+		/*
+		 * (crosbug.com/p/28289): Wait battery stable.
+		 * Some batteries use clock stretching feature, which requires
+		 * more time to be stable.
+		 */
+		battery_wait_for_stable();
+	}
 
 	return init_power_state;
 }
@@ -433,13 +461,15 @@ static void power_off(void)
 	/* Do a graceful way to shutdown PMIC/AP first */
 	set_pmic_pwron(0);
 
+	/* Disable signal interrupts, as they are floating when switchcap off */
+	power_signal_disable_interrupt(GPIO_AP_RST_L);
+	power_signal_disable_interrupt(GPIO_PMIC_FAULT_L);
+
 	/* Force to switch off all rails */
 	set_system_power(0);
 
-	/* Wait longer to ensure the PMIC/AP totally off */
-	usleep(SYSTEM_POWER_OFF_DELAY);
-
-	/* Turn off the 5V rail. */
+	/* Turn off the 3.3V and 5V rails. */
+	gpio_set_level(GPIO_EN_PP3300_A, 0);
 #ifdef CONFIG_POWER_PP5000_CONTROL
 	power_5v_enable(task_get_current(), 0);
 #else /* !defined(CONFIG_POWER_PP5000_CONTROL) */
@@ -449,6 +479,9 @@ static void power_off(void)
 	lid_opened = 0;
 	enable_sleep(SLEEP_MASK_AP_RUN);
 	CPRINTS("power shutdown complete");
+
+	/* Call hooks after we drop power rails */
+	hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 }
 
 /**
@@ -492,7 +525,8 @@ static void power_on(void)
 	 */
 	hook_notify(HOOK_CHIPSET_PRE_INIT);
 
-	/* Enable the 5V rail. */
+	/* Enable the 3.3V and 5V rail. */
+	gpio_set_level(GPIO_EN_PP3300_A, 1);
 #ifdef CONFIG_POWER_PP5000_CONTROL
 	power_5v_enable(task_get_current(), 1);
 #else /* !defined(CONFIG_POWER_PP5000_CONTROL) */
@@ -500,7 +534,11 @@ static void power_on(void)
 #endif /* defined(CONFIG_POWER_PP5000_CONTROL) */
 
 	set_system_power(1);
-	usleep(SYSTEM_POWER_ON_DELAY);
+
+	/* Enable signal interrupts */
+	power_signal_enable_interrupt(GPIO_AP_RST_L);
+	power_signal_enable_interrupt(GPIO_PMIC_FAULT_L);
+
 	set_pmic_pwron(1);
 
 	disable_sleep(SLEEP_MASK_AP_RUN);
@@ -516,16 +554,27 @@ static void power_on(void)
  *
  * @return non-zero if there has been a power-on event, 0 if not.
  */
-static int check_for_power_on_event(void)
+static uint8_t check_for_power_on_event(void)
 {
 	int ap_off_flag;
 
-	ap_off_flag = system_get_reset_flags() & RESET_FLAG_AP_OFF;
-	system_clear_reset_flags(RESET_FLAG_AP_OFF);
+	ap_off_flag = system_get_reset_flags() & EC_RESET_FLAG_AP_OFF;
+	system_clear_reset_flags(EC_RESET_FLAG_AP_OFF);
+
+	if (power_request == POWER_REQ_ON) {
+		power_request = POWER_REQ_NONE;
+		return POWER_ON_BY_POWER_REQ_ON;
+	} else if (power_request == POWER_REQ_RESET) {
+		power_request = POWER_REQ_NONE;
+		return POWER_ON_BY_POWER_REQ_RESET;
+	}
+	/* Clear invalid request */
+	power_request = POWER_REQ_NONE;
+
 	/* check if system is already ON */
 	if (power_get_signals() & IN_POWER_GOOD) {
 		if (ap_off_flag) {
-			CPRINTS("system is on, but RESET_FLAG_AP_OFF is on");
+			CPRINTS("system is on, but EC_RESET_FLAG_AP_OFF is on");
 			return POWER_ON_CANCEL;
 		}
 		CPRINTS("system is on, thus clear auto_power_on");
@@ -534,7 +583,7 @@ static int check_for_power_on_event(void)
 		return POWER_ON_BY_IN_POWER_GOOD;
 	}
 	if (ap_off_flag) {
-		CPRINTS("RESET_FLAG_AP_OFF is on");
+		CPRINTS("EC_RESET_FLAG_AP_OFF is on");
 		power_off();
 		return POWER_ON_CANCEL;
 	}
@@ -557,11 +606,6 @@ static int check_for_power_on_event(void)
 	if (power_button_is_pressed())
 		return POWER_ON_BY_POWER_BUTTON_PRESSED;
 
-	if (power_request == POWER_REQ_ON) {
-		power_request = POWER_REQ_NONE;
-		return POWER_ON_BY_POWER_REQ_NONE;
-	}
-
 	return POWER_OFF_CANCEL;
 }
 
@@ -573,21 +617,29 @@ static int check_for_power_on_event(void)
  *
  * @return non-zero if a shutdown should happen, 0 if not
  */
-static int check_for_power_off_event(void)
+static uint8_t check_for_power_off_event(void)
 {
 	timestamp_t now;
 	int pressed = 0;
 
+	if (power_request == POWER_REQ_OFF) {
+		power_request = POWER_REQ_NONE;
+		return POWER_OFF_BY_POWER_REQ_OFF;
+	} else if (power_request == POWER_REQ_RESET) {
+		/*
+		 * The power_request flag will be cleared later
+		 * in check_for_power_on_event() in S5.
+		 */
+		return POWER_OFF_BY_POWER_REQ_RESET;
+	}
+	/* Clear invalid request */
+	power_request = POWER_REQ_NONE;
+
 	/*
 	 * Check for power button press.
 	 */
-	if (power_button_is_pressed()) {
+	if (power_button_is_pressed())
 		pressed = POWER_OFF_BY_POWER_BUTTON_PRESSED;
-	} else if (power_request == POWER_REQ_OFF) {
-		power_request = POWER_REQ_NONE;
-		/* return non-zero for shudown down */
-		return POWER_OFF_BY_POWER_REQ;
-	}
 
 	now = get_time();
 	if (pressed) {
@@ -610,8 +662,8 @@ static int check_for_power_off_event(void)
 
 	power_button_was_pressed = pressed;
 
-	/* Power lost: shutdown immediately */
-	if (chipset_is_power_lost() && !bypass_power_lost_trigger) {
+	/* POWER_GOOD released by AP : shutdown immediately */
+	if (!power_has_signals(IN_POWER_GOOD)) {
 		if (power_button_was_pressed)
 			timer_cancel(TASK_ID_CHIPSET);
 
@@ -630,28 +682,40 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 	CPRINTS("%s(%d)", __func__, reason);
 	report_ap_reset(reason);
 
-	power_off();
-
-	/* Clean-up internal variable */
-	power_request = POWER_REQ_NONE;
+	/* Issue a request to initiate a power-off sequence */
+	power_request = POWER_REQ_OFF;
+	task_wake(TASK_ID_CHIPSET);
 }
 
 void chipset_reset(enum chipset_reset_reason reason)
 {
-	/*
-	 * Before we can reprogram the PMIC to make the PMIC RESIN_N pin as
-	 * reset pin and zero-latency. We do cold reset instead.
-	 */
+	int rv;
+
 	CPRINTS("%s(%d)", __func__, reason);
 	report_ap_reset(reason);
 
-	bypass_power_lost_trigger = 1;
-	power_off();
-	bypass_power_lost_trigger = 0;
+	/*
+	 * Warm reset sequence:
+	 * 1. Issue a low pulse to PM845_RESIN_L, which triggers PMIC
+	 *    to do a warm reset (requiring reprogramming PMIC registers
+	 *    to make PM845_RESIN_L as a warm reset trigger).
+	 * 2. PMIC then issues a low pulse to AP_RST_L to reset AP.
+	 *    EC monitors the signal to see any low pulse.
+	 *    2.1. If a low pulse found, done.
+	 *    2.2. If a low pulse not found (the above PMIC registers
+	 *         not programmed or programmed wrong), issue a request
+	 *         to initiate a cold reset power sequence.
+	 */
 
-	/* Issue a request to initiate a power-on sequence */
-	power_request = POWER_REQ_ON;
-	task_wake(TASK_ID_CHIPSET);
+	gpio_set_level(GPIO_PM845_RESIN_L, 0);
+	usleep(PMIC_RESIN_PULSE_LENGTH);
+	gpio_set_level(GPIO_PM845_RESIN_L, 1);
+
+	rv = power_wait_signals_timeout(IN_AP_RST_ASSERTED,
+					PMIC_POWER_AP_RESPONSE_TIMEOUT);
+	/* Exception case: PMIC not work as expected, request a cold reset */
+	if (rv != EC_SUCCESS)
+		request_cold_reset();
 }
 
 /**
@@ -662,8 +726,8 @@ void chipset_reset(enum chipset_reset_reason reason)
  */
 enum power_state power_handle_state(enum power_state state)
 {
-	int value;
-	static int boot_from_g3;
+	uint8_t value;
+	static uint8_t boot_from_g3, shutdown_from_s0;
 
 	switch (state) {
 	case POWER_G3:
@@ -690,35 +754,38 @@ enum power_state power_handle_state(enum power_state state)
 		break;
 
 	case POWER_S5S3:
+		/*
+		 * Wait for power button release before actually boot AP.
+		 * It may be a long-hold power button with volume buttons
+		 * to trigger the recovery button. We don't want AP up
+		 * during the long-hold.
+		 */
+		power_button_wait_for_release(-1);
+
 		power_on();
-		if (power_wait_signals(IN_POWER_GOOD) == EC_SUCCESS) {
-			CPRINTS("POWER_GOOD seen");
-			if (power_button_wait_for_release(
-					DELAY_SHUTDOWN_ON_POWER_HOLD) ==
-					EC_SUCCESS) {
-				power_button_was_pressed = 0;
-
-				/* Call hooks now that AP is running */
-				hook_notify(HOOK_CHIPSET_STARTUP);
-
-				return POWER_S3;
-			}
-			CPRINTS("long-press button, shutdown");
-			power_off();
-			/*
-			 * Since the AP may be up already, return S0S3
-			 * state to go through the suspend hook.
-			 */
-			return POWER_S0S3;
+		if (power_wait_signals(IN_POWER_GOOD) != EC_SUCCESS) {
+			CPRINTS("POWER_GOOD not seen in time");
+			set_system_power(0);
+			return POWER_S5;
 		}
-		CPRINTS("POWER_GOOD not seen in time");
-		set_system_power(0);
-		return POWER_S5;
+
+		CPRINTS("POWER_GOOD seen");
+		/* Call hooks now that AP is running */
+		hook_notify(HOOK_CHIPSET_STARTUP);
+		return POWER_S3;
 
 	case POWER_S3:
-		if (!(power_get_signals() & IN_POWER_GOOD))
-			return POWER_S3S5;
+		if (shutdown_from_s0) {
+			value = shutdown_from_s0;
+			shutdown_from_s0 = 0;
+		} else {
+			value = check_for_power_off_event();
+		}
 
+		if (value) {
+			CPRINTS("power off %d", value);
+			return POWER_S3S5;
+		}
 		/* Go to S3S0 directly, as don't know if it is in suspend */
 		return POWER_S3S0;
 
@@ -727,12 +794,9 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S0;
 
 	case POWER_S0:
-		value = check_for_power_off_event();
-		if (value) {
-			CPRINTS("power off %d", value);
-			power_off();
+		shutdown_from_s0 = check_for_power_off_event();
+		if (shutdown_from_s0)
 			return POWER_S0S3;
-		}
 		break;
 
 	case POWER_S0S3:
@@ -748,6 +812,11 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S3;
 
 	case POWER_S3S5:
+		power_off();
+		/*
+		 * Wait forever for the release of the power button; otherwise,
+		 * this power button press will then trigger a power-on in S5.
+		 */
 		power_button_wait_for_release(-1);
 		power_button_was_pressed = 0;
 		return POWER_S5;

@@ -12,32 +12,45 @@
 #include "libsharedobjs.h"
 #include "util.h"
 
+#ifndef CONFIG_KEYBOARD_CUSTOMIZATION
 /* The standard Chrome OS keyboard matrix table in scan code set 2. */
-#ifndef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-SHAREDLIB(const
+static uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
+	{0x0000, 0x0000, 0x0014, 0xe01f, 0xe014, 0xe007, 0x0000, 0x0000},
+	{0xe01f, 0x0076, 0x000d, 0x000e, 0x001c, 0x001a, 0x0016, 0x0015},
+	{0x0005, 0x000c, 0x0004, 0x0006, 0x0023, 0x0021, 0x0026, 0x0024},
+	{0x0032, 0x0034, 0x002c, 0x002e, 0x002b, 0x002a, 0x0025, 0x002d},
+	{0x0009, 0x0083, 0x000b, 0x0003, 0x001b, 0x0022, 0x001e, 0x001d},
+	{0x0051, 0x0000, 0x005b, 0x0000, 0x0042, 0x0041, 0x003e, 0x0043},
+	{0x0031, 0x0033, 0x0035, 0x0036, 0x003b, 0x003a, 0x003d, 0x003c},
+	{0x0000, 0x0000, 0x0061, 0x0000, 0x0000, 0x0012, 0x0000, 0x0059},
+	{0x0055, 0x0052, 0x0054, 0x004e, 0x004c, 0x004a, 0x0045, 0x004d},
+	{0x0000, 0x0001, 0x000a, 0x002f, 0x004b, 0x0049, 0x0046, 0x0044},
+	{0xe011, 0x0000, 0x006a, 0x0000, 0x005d, 0x0000, 0x0011, 0x0000},
+#ifndef CONFIG_KEYBOARD_KEYPAD
+	{0x0000, 0x0066, 0x0000, 0x005d, 0x005a, 0x0029, 0xe072, 0xe075},
+	{0x0000, 0x0064, 0x0000, 0x0067, 0x0000, 0x0000, 0xe074, 0xe06b},
+#else
+	{0x0000, 0x0066, 0xe071, 0x005d, 0x005a, 0x0029, 0xe072, 0xe075},
+	{0xe06c, 0x0064, 0xe07d, 0x0067, 0xe069, 0xe07a, 0xe074, 0xe06b},
+	{0xe04a, 0x007c, 0x007b, 0x0074, 0x0071, 0x0073, 0x006b, 0x0070},
+	{0x006c, 0x0075, 0x007d, 0x0079, 0x007a, 0x0072, 0x0069, 0xe05a},
 #endif
-uint16_t scancode_set2[KEYBOARD_ROWS][KEYBOARD_COLS] = {
-	{0x0000, 0xe01f, 0x0005, 0x0032, 0x0009, 0x0051, 0x0031, 0x0000, 0x0055,
-	 0x0000, 0xe011, 0x0000, 0x0000},
-	{0x0000, 0x0076, 0x000c, 0x0034, 0x0083, 0x0000, 0x0033, 0x0000, 0x0052,
-	 0x0001, 0x0000, 0x0066, 0x0064},
-	{0x0014, 0x000d, 0x0004, 0x002c, 0x000b, 0x005b, 0x0035, 0x0061, 0x0054,
-	 0x000a, 0x006a, 0x0000, 0x0000},
-	{0xe01f, 0x000e, 0x0006, 0x002e, 0x0003, 0x0000, 0x0036, 0x0000, 0x004e,
-	 0x002f, 0x0000, 0x005d, 0x0067},
-	{0xe014, 0x001c, 0x0023, 0x002b, 0x001b, 0x0042, 0x003b, 0x0000, 0x004c,
-	 0x004b, 0x005d, 0x005a, 0x0000},
-	{0xe007, 0x001a, 0x0021, 0x002a, 0x0022, 0x0041, 0x003a, 0x0012, 0x004a,
-	 0x0049, 0x0000, 0x0029, 0x0000},
-	{0x0000, 0x0016, 0x0026, 0x0025, 0x001e, 0x003e, 0x003d, 0x0000, 0x0045,
-	 0x0046, 0x0011, 0xe072, 0xe074},
-	{0x0000, 0x0015, 0x0024, 0x002d, 0x001d, 0x0043, 0x003c, 0x0059, 0x004d,
-	 0x0044, 0x0000, 0xe075, 0xe06b},
+};
+
+uint16_t get_scancode_set2(uint8_t row, uint8_t col)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		return scancode_set2[col][row];
+	return 0;
 }
-#ifndef CONFIG_KEYBOARD_SCANCODE_MUTABLE
-)
-#endif
-;
+
+void set_scancode_set2(uint8_t row, uint8_t col, uint16_t val)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		scancode_set2[col][row] = val;
+}
+
+#endif /* CONFIG_KEYBOARD_CUSTOMIZATION */
 
 /*
  * The translation table from scan code set 2 to set 1.
@@ -64,6 +77,79 @@ SHAREDLIB(const uint8_t scancode_translate_table[128] = {
 	0x52, 0x53, 0x50, 0x4c, 0x4d, 0x48, 0x01, 0x45,
 	0x57, 0x4e, 0x51, 0x4a, 0x37, 0x49, 0x46, 0x54,
 });
+
+
+#ifdef CONFIG_KEYBOARD_DEBUG
+SHAREDLIB(const
+static char * const keycap_long_label[KLLI_MAX & KEYCAP_LONG_LABEL_INDEX_BITMASK] = {
+	"UNKNOWN", "F1",    "F2",    "F3",
+	"F4",      "F5",    "F6",    "F7",
+	"F8",      "F9",    "F10",   "F11",
+	"F12",     "F13",   "F14",   "F15",
+	"L-ALT",   "R-ALT", "L-CTR", "R-CTR",
+	"L-SHT",   "R-SHT", "ENTER", "SPACE",
+	"B-SPC",   "TAB",   "SEARC", "LEFT",
+	"RIGHT",   "DOWN",  "UP",    "ESC",
+});
+
+const char *get_keycap_long_label(uint8_t idx)
+{
+	if (idx < ARRAY_SIZE(keycap_long_label))
+		return keycap_long_label[idx];
+	return "UNKNOWN";
+}
+
+#ifndef CONFIG_KEYBOARD_CUSTOMIZATION
+static char keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
+	{KLLI_UNKNO, KLLI_UNKNO, KLLI_L_CTR, KLLI_SEARC,
+			KLLI_R_CTR, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO},
+	{KLLI_F11,   KLLI_ESC,   KLLI_TAB,   '~',
+			'a',        'z',        '1',        'q'},
+	{KLLI_F1,    KLLI_F4,    KLLI_F3,    KLLI_F2,
+			'd',        'c',        '3',        'e'},
+	{'b',        'g',        't',        '5',
+			'f',        'v',        '4',        'r'},
+	{KLLI_F10,   KLLI_F7,    KLLI_F6,    KLLI_F5,
+			's',        'x',        '2',        'w'},
+	{KLLI_UNKNO, KLLI_F12,   ']',        KLLI_F13,
+			'k',        ',',        '8',        'i'},
+	{'n',        'h',        'y',        '6',
+			'j',        'm',        '7',        'u'},
+	{KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
+			KLLI_UNKNO, KLLI_L_SHT, KLLI_UNKNO, KLLI_R_SHT},
+	{'=',        '\'',       '[',        '-',
+			';',        '/',        '0',        'p'},
+	{KLLI_F14,   KLLI_F9,    KLLI_F8,    KLLI_UNKNO,
+			'|',        '.',        '9',        'o'},
+	{KLLI_R_ALT, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
+			KLLI_UNKNO, KLLI_UNKNO, KLLI_L_ALT, KLLI_UNKNO},
+	{KLLI_F15,   KLLI_B_SPC, KLLI_UNKNO, '\\',
+			KLLI_ENTER, KLLI_SPACE, KLLI_DOWN,  KLLI_UP},
+	{KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
+			KLLI_UNKNO, KLLI_UNKNO, KLLI_RIGHT, KLLI_LEFT},
+#ifdef CONFIG_KEYBOARD_KEYPAD
+	/* TODO: Populate these */
+	{KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
+			KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO},
+	{KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
+			KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO},
+#endif
+};
+
+char get_keycap_label(uint8_t row, uint8_t col)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		return keycap_label[col][row];
+	return KLLI_UNKNO;
+}
+
+void set_keycap_label(uint8_t row, uint8_t col, char val)
+{
+	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS)
+		keycap_label[col][row] = val;
+}
+#endif /* CONFIG_KEYBOARD_CUSTOMIZATION */
+#endif /* CONFIG_KEYBOARD_DEBUG */
 
 uint8_t scancode_translate_set2_to_1(uint8_t code)
 {

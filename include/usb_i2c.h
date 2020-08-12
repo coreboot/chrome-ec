@@ -14,6 +14,11 @@
 #define __CROS_USB_I2C_H
 
 /*
+ * This header file describes i2c encapsulation when communicated over USB.
+ *
+ * Note that current implementation assumes that there is only one instance of
+ * interface of this kind per device.
+ *
  * 2 forms of command are supported:
  *   - When write payload + header is larger than 64 bytes, which exceed the
  *     common USB packet (64 bytes), remaining payload should send without
@@ -23,18 +28,18 @@
  *     be defined properly based on the use cases.
  *
  *   - Read less than 128 (0x80) bytes.
- *   +------+------+----+----+---------------+
- *   | port | addr | wc | rc | write payload |
- *   +------+------+----+----+---------------+
- *   |  1B  |  1B  | 1B | 1B |  < 256 bytes  |
- *   +------+------+----+----+---------------+
+ *   +---------+------+----+----+---------------+
+ *   | wc/port | addr | wc | rc | write payload |
+ *   +---------+------+----+----+---------------+
+ *   |   1B    |  1B  | 1B | 1B |  < 256 bytes  |
+ *   +---------+------+----+----+---------------+
  *
  *   - Read less than 32768 (0x8000) bytes.
- *   +------+------+----+----+-----+----------+---------------+
- *   | port | addr | wc | rc | rc1 | reserved | write payload |
- *   +------+------+----+----+----------------+---------------+
- *   |  1B  |  1B  | 1B | 1B |  1B |    1B    |  < 256 bytes  |
- *   +------+------+----+----+----------------+---------------+
+ *   +---------+------+----+----+-----+----------+---------------+
+ *   | wc/port | addr | wc | rc | rc1 | reserved | write payload |
+ *   +---------+------+----+----+----------------+---------------+
+ *   |    1B   |  1B  | 1B | 1B |  1B |    1B    |  < 256 bytes  |
+ *   +---------+------+----+----+----------------+---------------+
  *
  *   - Special notes for rc and rc1:
  *     If the most significant bit in rc is set (rc >= 0x80), this indicates
@@ -43,7 +48,10 @@
  *     will be (rc1 << 7) | (rc & 0x7F).
  *
  *   Fields:
- *   - port: port address, 1 byte, i2c interface index.
+ *
+ *   - wc/port: 1 byte: 4 top bits are the 4 top bits of the 12 bit write
+ *         counter, the 4 bottom bits are the port address, i2c interface
+ *         index.
  *
  *   - addr: slave address, 1 byte, i2c 7-bit bus address.
  *
@@ -98,6 +106,8 @@ enum usb_i2c_error {
 	USB_I2C_READ_COUNT_INVALID  = 0x0004,
 	USB_I2C_PORT_INVALID        = 0x0005,
 	USB_I2C_DISABLED            = 0x0006,
+	USB_I2C_MISSING_HANDLER     = 0x0007,
+	USB_I2C_UNSUPPORTED_COMMAND = 0x0008,
 	USB_I2C_UNKNOWN_ERROR       = 0x8000,
 };
 
@@ -203,5 +213,22 @@ void usb_i2c_deferred(struct usb_i2c_config const *config);
  * @return 1 if enabled, 0 if disabled.
  */
 int usb_i2c_board_is_enabled(void);
+
+/*
+ * Special i2c address to use when the client is required to execute some
+ * command which does not directly involve the i2c master driver.
+ */
+#define USB_I2C_CMD_ADDR_FLAGS 0x78
+
+/*
+ * Function to call to register a handler for commands sent to the special i2c
+ * address above.
+ */
+int usb_i2c_register_cros_cmd_handler(int (*cmd_handler)
+				      (void *data_in,
+				       size_t in_size,
+				       void *data_out,
+				       size_t out_size));
+
 
 #endif  /* __CROS_USB_I2C_H */

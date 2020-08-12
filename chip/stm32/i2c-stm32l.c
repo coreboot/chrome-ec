@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -98,7 +98,7 @@ static int wait_sr1(int port, int mask)
  *
  * @return Non-zero if error.
  */
-static int send_start(int port, int slave_addr)
+static int send_start(int port, uint16_t slave_addr_8bit)
 {
 	int rv;
 
@@ -110,7 +110,7 @@ static int send_start(int port, int slave_addr)
 		return I2C_ERROR_FAILED_START;
 
 	/* Write slave address */
-	STM32_I2C_DR(port) = slave_addr & 0xff;
+	STM32_I2C_DR(port) = slave_addr_8bit & 0xff;
 	rv = wait_sr1(port, STM32_I2C_SR1_ADDR);
 	if (rv)
 		return rv;
@@ -164,9 +164,12 @@ static void i2c_init_port(const struct i2c_port_t *p)
 /*****************************************************************************/
 /* Interface */
 
-int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_bytes,
+int chip_i2c_xfer(const int port,
+		  const uint16_t slave_addr_flags,
+		  const uint8_t *out, int out_bytes,
 		  uint8_t *in, int in_bytes, int flags)
 {
+	int addr_8bit = I2C_GET_ADDR(slave_addr_flags) << 1;
 	int started = (flags & I2C_XFER_START) ? 0 : 1;
 	int rv = EC_SUCCESS;
 	int i;
@@ -193,7 +196,7 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_bytes,
 	/* No out bytes and no in bytes means just check for active */
 	if (out_bytes || !in_bytes) {
 		if (!started) {
-			rv = send_start(port, slave_addr);
+			rv = send_start(port, addr_8bit);
 			if (rv)
 				goto xfer_exit;
 		}
@@ -225,7 +228,7 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_bytes,
 			STM32_I2C_CR1(port) |= STM32_I2C_CR1_ACK;
 
 		if (!started) {
-			rv = send_start(port, slave_addr | 0x01);
+			rv = send_start(port, addr_8bit | 0x01);
 			if (rv)
 				goto xfer_exit;
 		}
@@ -399,7 +402,7 @@ static void i2c_freq_change_hook(void)
 }
 DECLARE_HOOK(HOOK_FREQ_CHANGE, i2c_freq_change_hook, HOOK_PRIO_DEFAULT);
 
-static void i2c_init(void)
+void i2c_init(void)
 {
 	const struct i2c_port_t *p = i2c_ports;
 	int i;
@@ -407,7 +410,6 @@ static void i2c_init(void)
 	for (i = 0; i < i2c_ports_used; i++, p++)
 		i2c_init_port(p);
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);
 
 /*****************************************************************************/
 /* Console commands */

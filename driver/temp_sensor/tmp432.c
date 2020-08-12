@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,7 +16,9 @@
 static int temp_val_local;
 static int temp_val_remote1;
 static int temp_val_remote2;
+#ifndef CONFIG_TEMP_SENSOR_POWER_GPIO
 static uint8_t is_sensor_shutdown;
+#endif
 static int fake_temp[TMP432_IDX_COUNT] = {-1, -1, -1};
 
 /**
@@ -35,12 +37,14 @@ static int has_power(void)
 
 static int raw_read8(const int offset, int *data_ptr)
 {
-	return i2c_read8(I2C_PORT_THERMAL, TMP432_I2C_ADDR, offset, data_ptr);
+	return i2c_read8(I2C_PORT_THERMAL, TMP432_I2C_ADDR_FLAGS,
+			 offset, data_ptr);
 }
 
 static int raw_write8(const int offset, int data)
 {
-	return i2c_write8(I2C_PORT_THERMAL, TMP432_I2C_ADDR, offset, data);
+	return i2c_write8(I2C_PORT_THERMAL, TMP432_I2C_ADDR_FLAGS,
+			  offset, data);
 }
 
 static int get_temp(const int offset, int *temp_ptr)
@@ -88,6 +92,7 @@ int tmp432_get_val(int idx, int *temp_ptr)
 	return EC_SUCCESS;
 }
 
+#ifndef CONFIG_TEMP_SENSOR_POWER_GPIO
 static int tmp432_shutdown(uint8_t want_shutdown)
 {
 	int ret, value;
@@ -117,6 +122,7 @@ static int tmp432_shutdown(uint8_t want_shutdown)
 	is_sensor_shutdown = want_shutdown;
 	return ret;
 }
+#endif
 
 static int tmp432_set_therm_mode(void)
 {
@@ -288,13 +294,13 @@ static int print_status(void)
 	ccprintf("\n");
 
 	if (raw_read8(TMP432_STATUS, &value) == EC_SUCCESS)
-		ccprintf("STATUS:  %08b\n", value);
+		ccprintf("STATUS:  %pb\n", BINARY_VALUE(value, 8));
 
 	if (raw_read8(TMP432_CONFIGURATION1_R, &value) == EC_SUCCESS)
-		ccprintf("CONFIG1: %08b\n", value);
+		ccprintf("CONFIG1: %pb\n", BINARY_VALUE(value, 8));
 
 	if (raw_read8(TMP432_CONFIGURATION2_R, &value) == EC_SUCCESS)
-		ccprintf("CONFIG2: %08b\n", value);
+		ccprintf("CONFIG2: %pb\n", BINARY_VALUE(value, 8));
 
 	return EC_SUCCESS;
 }
@@ -345,7 +351,8 @@ static int command_tmp432(int argc, char **argv)
 		rv = raw_read8(offset, &data);
 		if (rv < 0)
 			return rv;
-		ccprintf("Byte at offset 0x%02x is %08b\n", offset, data);
+		ccprintf("Byte at offset 0x%02x is %pb\n",
+			 offset, BINARY_VALUE(data, 8));
 		return rv;
 	}
 

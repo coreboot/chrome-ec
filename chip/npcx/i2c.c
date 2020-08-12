@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,9 +21,11 @@
 #if !(DEBUG_I2C)
 #define CPUTS(...)
 #define CPRINTS(...)
+#define CPRINTF(...)
 #else
 #define CPUTS(outstr) cputs(CC_I2C, outstr)
 #define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_I2C, format, ## args)
 #endif
 
 /* Timeout for device should be available after reset (SMBus spec. unit:ms) */
@@ -35,13 +37,40 @@
  */
 #define I2C_MIN_TIMEOUT 25
 
+/*
+ * I2C module that supports FIFO mode has 32 bytes Tx FIFO and
+ * 32 bytes Rx FIFO.
+ */
+#define NPCX_I2C_FIFO_MAX_SIZE    32
+
 /* Macro functions of I2C */
 #define I2C_START(ctrl) SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_START)
 #define I2C_STOP(ctrl)  SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_STOP)
 #define I2C_NACK(ctrl)  SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_ACK)
+/* I2C moudule automatically stall bus after sending slave address */
 #define I2C_STALL(ctrl) SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_STASTRE)
 #define I2C_WRITE_BYTE(ctrl, data) (NPCX_SMBSDA(ctrl) = data)
 #define I2C_READ_BYTE(ctrl, data)  (data = NPCX_SMBSDA(ctrl))
+#define I2C_TX_FIFO_OCCUPIED(ctrl) (NPCX_SMBTXF_STS(ctrl) & 0x3F)
+#define I2C_TX_FIFO_AVAILABLE(ctrl) \
+		(NPCX_I2C_FIFO_MAX_SIZE - I2C_TX_FIFO_OCCUPIED(ctrl))
+
+#define I2C_RX_FIFO_OCCUPIED(ctrl) (NPCX_SMBRXF_STS(ctrl) & 0x3F)
+#define I2C_RX_FIFO_AVAILABLE(ctrl) \
+			(NPCX_I2C_FIFO_MAX_SIZE - I2C_RX_FIFO_OCCUPIED(ctrl))
+/* Drive the SCL signal to low */
+#define I2C_SCL_STALL(ctrl) \
+		(NPCX_SMBCTL3(ctrl) = \
+			(NPCX_SMBCTL3(ctrl) & ~BIT(NPCX_SMBCTL3_SCL_LVL)) | \
+			 BIT(NPCX_SMBCTL3_SDA_LVL))
+/*
+ * Release the SCL signal to be pulled up to high level.
+ * Note: The SCL might be still driven low either by I2C module or external
+ * devices connected to ths bus.
+ */
+#define I2C_SCL_FREE(ctrl) \
+		(NPCX_SMBCTL3(ctrl) |= BIT(NPCX_SMBCTL3_SCL_LVL) | \
+			 BIT(NPCX_SMBCTL3_SDA_LVL))
 
 /* Error values that functions can return */
 enum smb_error {
@@ -84,14 +113,14 @@ struct i2c_status {
 	uint16_t              sz_txbuf;  /* Size of Tx buffer in bytes */
 	uint16_t              sz_rxbuf;  /* Size of rx buffer in bytes */
 	uint16_t              idx_buf;   /* Current index of Tx/Rx buffer */
-	uint8_t               slave_addr;/* Target slave address */
+	uint16_t              slave_addr_flags;/* Target slave address */
 	enum smb_oper_state_t oper_state;/* Smbus operation state */
 	enum smb_error        err_code;  /* Error code */
 	int                   task_waiting; /* Task waiting on controller */
 	uint32_t              timeout_us;/* Transaction timeout */
 };
 /* I2C controller state data array */
-struct i2c_status i2c_stsobjs[I2C_CONTROLLER_COUNT];
+static struct i2c_status i2c_stsobjs[I2C_CONTROLLER_COUNT];
 
 /* I2C timing setting */
 struct i2c_timing {
@@ -123,6 +152,10 @@ BUILD_ASSERT(ARRAY_SIZE(i2c_irqs) == I2C_CONTROLLER_COUNT);
 
 static void i2c_init_bus(int controller)
 {
+	/* Enable FIFO mode */
+	if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT))
+		SET_BIT(NPCX_SMBFIF_CTL(controller), NPCX_SMBFIF_CTL_FIFO_EN);
+
 	/* Enable module - before configuring CTL1 */
 	SET_BIT(NPCX_SMBCTL2(controller), NPCX_SMBCTL2_ENABLE);
 
@@ -199,10 +232,46 @@ static int i2c_reset(int controller)
 	return 1;
 }
 
+static void i2c_select_bank(int controller, int bank)
+{
+	if (bank)
+		SET_BIT(NPCX_SMBCTL3(controller), NPCX_SMBCTL3_BNK_SEL);
+	else
+		CLEAR_BIT(NPCX_SMBCTL3(controller), NPCX_SMBCTL3_BNK_SEL);
+}
+
+static void i2c_stall_bus(int controller, int stall)
+{
+	i2c_select_bank(controller, 0);
+	/*
+	 * Enable the writing to SCL_LVL and SDA_LVL bit in
+	 * SMBnCTL3 register. Then, firmware can set SCL_LVL to 0 to
+	 * stall the bus when needed. Note: this register should be
+	 * accessed when bank = 0.
+	 */
+	SET_BIT(NPCX_SMBCTL4(controller), NPCX_SMBCTL4_LVL_WE);
+	if (stall)
+		I2C_SCL_STALL(controller);
+	else
+		I2C_SCL_FREE(controller);
+	/*
+	 * Disable the writing to SCL_LVL and SDA_LVL bit in
+	 * SMBnCTL3 register. It will prevent form changing the level of
+	 * SCL/SDA when touching other bits in SMBnCTL3 register.
+	 */
+	CLEAR_BIT(NPCX_SMBCTL4(controller), NPCX_SMBCTL4_LVL_WE);
+	i2c_select_bank(controller, 1);
+}
+
 static void i2c_recovery(int controller, volatile struct i2c_status *p_status)
 {
-	CPRINTS("i2c %d recovery! error code is %d, current state is %d",
-			controller, p_status->err_code, p_status->oper_state);
+	cprintf(CC_I2C,
+		"i2c %d recovery! error code is %d, current state is %d\n",
+		controller, p_status->err_code, p_status->oper_state);
+
+	/* Make sure the bus is not stalled before exit. */
+	if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT))
+		i2c_stall_bus(controller, 0);
 
 	/* Abort data, wait for STOP condition completed. */
 	i2c_abort_data(controller);
@@ -215,16 +284,52 @@ static void i2c_recovery(int controller, volatile struct i2c_status *p_status)
 	p_status->oper_state = SMB_IDLE;
 }
 
+/*
+ * This function can be called in either single-byte mode or FIFO mode.
+ * In single-byte mode - it always write 1 byte to SMBSDA register at one time.
+ * In FIFO mode - write as many as available bytes in FIFO at one time.
+ */
+static void i2c_fifo_write_data(int controller)
+{
+	int len, fifo_avail, i;
+
+	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
+
+	len = 1;
+	if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT)) {
+		len = p_status->sz_txbuf - p_status->idx_buf;
+		fifo_avail = I2C_TX_FIFO_AVAILABLE(controller);
+		len = MIN(len, fifo_avail);
+	}
+	for (i = 0; i < len; i++) {
+		I2C_WRITE_BYTE(controller,
+				p_status->tx_buf[p_status->idx_buf++]);
+		CPRINTF("%02x ",
+				p_status->tx_buf[p_status->idx_buf - 1]);
+	}
+	CPRINTF("\n");
+}
+
 enum smb_error i2c_master_transaction(int controller)
 {
 	/* Set i2c mode to object */
 	int events = 0;
 	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
 
+	/* Switch to bank 1 to access I2C FIO registers */
+	if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT))
+		i2c_select_bank(controller, 1);
+
 	/* Assign current SMB status of controller */
 	if (p_status->oper_state == SMB_IDLE) {
 		/* New transaction */
 		p_status->oper_state = SMB_MASTER_START;
+		/* Clear FIFO and status bit */
+		if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT)) {
+			NPCX_SMBFIF_CTS(controller) =
+				BIT(NPCX_SMBFIF_CTS_RXF_TXE) |
+				BIT(NPCX_SMBFIF_CTS_CLR_FIFO);
+		}
 	} else if (p_status->oper_state == SMB_WRITE_SUSPEND) {
 		if (p_status->sz_txbuf == 0) {
 			/* Read bytes from next transaction */
@@ -233,33 +338,74 @@ enum smb_error i2c_master_transaction(int controller)
 		} else {
 			/* Continue to write the other bytes */
 			p_status->oper_state = SMB_WRITE_OPER;
-			I2C_WRITE_BYTE(controller,
-					p_status->tx_buf[p_status->idx_buf++]);
-			CPRINTS("-W(%02x)",
-					p_status->tx_buf[p_status->idx_buf-1]);
+			CPRINTS("-W");
+			/*
+			 * This function can be called in either single-byte
+			 * mode or FIFO mode.
+			 */
+			i2c_fifo_write_data(controller);
 		}
 	} else if (p_status->oper_state == SMB_READ_SUSPEND) {
-		/*
-		 * Do dummy read if read length is 1 and I2C_XFER_STOP is set
-		 * simultaneously.
-		 */
-		if (p_status->sz_rxbuf == 1 &&
-				(p_status->flags & I2C_XFER_STOP)) {
+		if (!IS_ENABLED(NPCX_I2C_FIFO_SUPPORT)) {
 			/*
-			 * Since SCL is released after reading last byte from
-			 * previous transaction, adding a dummy byte for next
-			 * transaction which let ec sets NACK bit in time is
-			 * necessary. Or i2c master cannot generate STOP
-			 * when the last byte is ACK during receiving.
+			 * Do dummy read if read length is 1 and I2C_XFER_STOP
+			 * is set simultaneously.
 			 */
-			p_status->sz_rxbuf++;
-			p_status->oper_state = SMB_DUMMY_READ_OPER;
-		} else
-			/* Need to read the other bytes from next transaction */
-			p_status->oper_state = SMB_READ_OPER;
+			if (p_status->sz_rxbuf == 1 &&
+					(p_status->flags & I2C_XFER_STOP)) {
+				/*
+				 * Since SCL is released after reading last
+				 * byte from previous transaction, adding a
+				 * dummy byte for next transaction which let
+				 * ec sets NACK bit in time is necessary.
+				 * Or i2c master cannot generate STOP
+				 * when the last byte is ACK during receiving.
+				 */
+				p_status->sz_rxbuf++;
+				p_status->oper_state = SMB_DUMMY_READ_OPER;
+			} else
+				/*
+				 * Need to read the other bytes from
+				 * next transaction
+				 */
+				p_status->oper_state = SMB_READ_OPER;
+		}
 	} else
 		cprintf(CC_I2C, "Unexpected i2c state machine! %d\n",
 				p_status->oper_state);
+
+	if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT)) {
+		if (p_status->sz_rxbuf > 0) {
+			if (p_status->sz_rxbuf > NPCX_I2C_FIFO_MAX_SIZE) {
+				/* Set RX threshold = FIFO_MAX_SIZE */
+				SET_FIELD(NPCX_SMBRXF_CTL(controller),
+						NPCX_SMBRXF_CTL_RX_THR,
+						NPCX_I2C_FIFO_MAX_SIZE);
+			} else {
+				/*
+				 * set RX threshold = remaining data bytes
+				 * (it should be <= FIFO_MAX_SIZE)
+				 */
+				SET_FIELD(NPCX_SMBRXF_CTL(controller),
+						NPCX_SMBRXF_CTL_RX_THR,
+						p_status->sz_rxbuf);
+				/*
+				 * Set LAST bit generate the NACK at the
+				 * last byte of the data group in FIFO
+				 */
+				if (p_status->flags & I2C_XFER_STOP) {
+					SET_BIT(NPCX_SMBRXF_CTL(controller),
+							NPCX_SMBRXF_CTL_LAST);
+				}
+			}
+
+			/* Free the stalled SCL signal */
+			if (p_status->oper_state == SMB_READ_SUSPEND) {
+				p_status->oper_state = SMB_READ_OPER;
+				i2c_stall_bus(controller, 0);
+			}
+		}
+	}
 
 	/* Generate a START condition */
 	if (p_status->oper_state == SMB_MASTER_START ||
@@ -277,6 +423,13 @@ enum smb_error i2c_master_transaction(int controller)
 
 	/* Disable event and error interrupts */
 	task_disable_irq(i2c_irqs[controller]);
+
+	/*
+	 * Accessing FIFO register is only needed during transaction.
+	 * Switch back to bank 0 at the end of transaction
+	 */
+	if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT))
+		i2c_select_bank(controller, 0);
 
 	/*
 	 * If Stall-After-Start mode is still enabled since NACK or BUS error
@@ -317,6 +470,11 @@ void i2c_done(int controller)
 		/* Issue a STOP condition on the bus */
 		I2C_STOP(controller);
 		CPUTS("-SP");
+		/* Clear RXF_TXE bit (RX FIFO full/TX FIFO empty) */
+		if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT))
+			NPCX_SMBFIF_CTS(controller) =
+						BIT(NPCX_SMBFIF_CTS_RXF_TXE);
+
 		/* Clear SDAST by writing dummy byte */
 		I2C_WRITE_BYTE(controller, 0xFF);
 	}
@@ -340,13 +498,170 @@ void i2c_done(int controller)
 	CPUTS("-END");
 }
 
+static void i2c_handle_receive(int controller)
+{
+	uint8_t data;
+	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
+
+	/* last byte is about to be read - end of transaction */
+	if (p_status->idx_buf == (p_status->sz_rxbuf - 1)) {
+		/* need to STOP or not */
+		if (p_status->flags & I2C_XFER_STOP) {
+			/* Stop should set before reading last byte */
+			I2C_STOP(controller);
+			CPUTS("-SP");
+		} else {
+			/*
+			 * Disable interrupt before i2c master read SDA
+			 * reg (stall SCL) and forbid SDAST generate
+			 * interrupt until starting other transactions
+			 */
+			task_disable_irq(i2c_irqs[controller]);
+		}
+	}
+	/* Check if byte-before-last is about to be read */
+	else if (p_status->idx_buf == (p_status->sz_rxbuf - 2)) {
+		/*
+		 * Set nack before reading byte-before-last,
+		 * so that nack will be generated after receive
+		 * of last byte
+		 */
+		if (p_status->flags & I2C_XFER_STOP) {
+			I2C_NACK(controller);
+			CPUTS("-GNA");
+		}
+	}
+
+	/* Read data for SMBSDA */
+	I2C_READ_BYTE(controller, data);
+	CPRINTS("-R(%02x)", data);
+
+	/* Read to buf. Skip last byte if meet SMB_DUMMY_READ_OPER */
+	if (p_status->oper_state == SMB_DUMMY_READ_OPER &&
+			p_status->idx_buf == (p_status->sz_rxbuf - 1))
+		p_status->idx_buf++;
+	else
+		p_status->rx_buf[p_status->idx_buf++] = data;
+
+	/* last byte is read - end of transaction */
+	if (p_status->idx_buf == p_status->sz_rxbuf) {
+		/* Set current status */
+		p_status->oper_state = (p_status->flags & I2C_XFER_STOP)
+				? SMB_IDLE : SMB_READ_SUSPEND;
+		/* Set error code */
+		p_status->err_code = SMB_OK;
+		/* Notify upper layer of missing data */
+		task_set_event(p_status->task_waiting,
+				TASK_EVENT_I2C_IDLE, 0);
+		CPUTS("-END");
+	}
+}
+
+static void i2c_fifo_read_data(int controller, uint8_t bytes_in_fifo)
+{
+	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
+
+	while (bytes_in_fifo--) {
+		uint8_t data;
+
+		data = NPCX_SMBSDA(controller);
+		p_status->rx_buf[p_status->idx_buf++] = data;
+		CPRINTF("%02x ", data);
+	}
+	CPRINTF("\n");
+}
+
+static void i2c_fifo_handle_receive(int controller)
+{
+	uint8_t bytes_in_fifo, remaining_bytes;
+
+	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
+
+	/*
+	 * Clear RX_THST bit (RX-FIFO Threshold Status).
+	 * It is set when RX_BYTES = RX_THR after being RX_BYTES < RX_THR
+	 */
+	SET_BIT(NPCX_SMBRXF_STS(controller), NPCX_SMBRXF_STS_RX_THST);
+	SET_BIT(NPCX_SMBFIF_CTS(controller), NPCX_SMBFIF_CTS_RXF_TXE);
+
+	bytes_in_fifo = I2C_RX_FIFO_OCCUPIED(controller);
+	remaining_bytes = p_status->sz_rxbuf - p_status->idx_buf;
+	if (remaining_bytes - bytes_in_fifo <= 0) {
+		/*
+		 * Last byte is about to be read - end of transaction.
+		 * Stop should be set before reading last byte.
+		 */
+		if (p_status->flags & I2C_XFER_STOP) {
+			I2C_STOP(controller);
+			CPUTS("-FSP");
+		} else {
+			task_disable_irq(i2c_irqs[controller]);
+			/*
+			 * The I2C bus will be freed from stalled and continue
+			 * to recevie data when reading data from FIFO.
+			 * Pull SCL signal down to stall the bus manually.
+			 * SCL signal will be freed when it gets a new I2C
+			 * transaction call from common layer.
+			 */
+			i2c_stall_bus(controller, 1);
+		}
+
+		CPRINTS("-LFR");
+		i2c_fifo_read_data(controller, remaining_bytes);
+	} else {
+		CPRINTS("-FR");
+		/*
+		 * The I2C bus will be freed from stalled and continue to
+		 * recevie data when reading data from FIFO.
+		 * This may caue driver cannot set the new Rx threshold in time.
+		 * Manually stall SCL signal until the new Rx threshold is set.
+		 */
+		i2c_stall_bus(controller, 1);
+		i2c_fifo_read_data(controller, bytes_in_fifo);
+		remaining_bytes = p_status->sz_rxbuf - p_status->idx_buf;
+		if (remaining_bytes > 0) {
+			if (remaining_bytes > NPCX_I2C_FIFO_MAX_SIZE) {
+				SET_FIELD(NPCX_SMBRXF_CTL(controller),
+						NPCX_SMBRXF_CTL_RX_THR,
+						NPCX_I2C_FIFO_MAX_SIZE);
+			} else {
+				SET_FIELD(NPCX_SMBRXF_CTL(controller),
+						NPCX_SMBRXF_CTL_RX_THR,
+						remaining_bytes);
+				if (p_status->flags & I2C_XFER_STOP) {
+					SET_BIT(NPCX_SMBRXF_CTL(controller),
+							NPCX_SMBRXF_CTL_LAST);
+					CPRINTS("-FGNA");
+				}
+			}
+
+		}
+		i2c_stall_bus(controller, 0);
+
+	}
+	/* last byte is read - end of transaction */
+	if (p_status->idx_buf == p_status->sz_rxbuf) {
+		/* Set current status */
+		p_status->oper_state = (p_status->flags & I2C_XFER_STOP)
+				? SMB_IDLE : SMB_READ_SUSPEND;
+		/* Set error code */
+		p_status->err_code = SMB_OK;
+		/* Notify upper layer of missing data */
+		task_set_event(p_status->task_waiting,
+				TASK_EVENT_I2C_IDLE, 0);
+		CPUTS("-END");
+	}
+
+}
+
 static void i2c_handle_sda_irq(int controller)
 {
 	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
+	uint8_t addr_8bit = I2C_GET_ADDR(p_status->slave_addr_flags) << 1;
+
 	/* 1 Issue Start is successful ie. write address byte */
 	if (p_status->oper_state == SMB_MASTER_START
 			|| p_status->oper_state == SMB_REPEAT_START) {
-		uint8_t addr = p_status->slave_addr;
 		/* Prepare address byte */
 		if (p_status->sz_txbuf == 0) {/* Receive mode */
 			p_status->oper_state = SMB_READ_OPER;
@@ -359,13 +674,13 @@ static void i2c_handle_sda_irq(int controller)
 				I2C_STALL(controller);
 
 			/* Write the address to the bus R bit*/
-			I2C_WRITE_BYTE(controller, (addr | 0x1));
-			CPRINTS("-ARR-0x%02x", addr);
+			I2C_WRITE_BYTE(controller, (addr_8bit | 0x1));
+			CPRINTS("-ARR-0x%02x", addr_8bit);
 		} else {/* Transmit mode */
 			p_status->oper_state = SMB_WRITE_OPER;
 			/* Write the address to the bus W bit*/
-			I2C_WRITE_BYTE(controller, addr);
-			CPRINTS("-ARW-0x%02x", addr);
+			I2C_WRITE_BYTE(controller, addr_8bit);
+			CPRINTS("-ARW-0x%02x", addr_8bit);
 		}
 		/* Completed handling START condition */
 		return;
@@ -379,7 +694,6 @@ static void i2c_handle_sda_irq(int controller)
 				i2c_done(controller);
 			/* need to restart & send slave address immediately */
 			else {
-				uint8_t addr_byte = p_status->slave_addr;
 				/*
 				 * Prepare address byte
 				 * and start to receive bytes
@@ -404,74 +718,28 @@ static void i2c_handle_sda_irq(int controller)
 					CPUTS("-GNA");
 				}
 				/* Write the address to the bus R bit*/
-				I2C_WRITE_BYTE(controller, (addr_byte | 0x1));
+				I2C_WRITE_BYTE(controller,
+					       (addr_8bit | 0x1));
 				CPUTS("-ARR");
 			}
 		}
 		/* write next byte (not last byte and not slave address */
 		else {
-			I2C_WRITE_BYTE(controller,
-					p_status->tx_buf[p_status->idx_buf++]);
-			CPRINTS("-W(%02x)",
-					p_status->tx_buf[p_status->idx_buf-1]);
+			/*
+			 * This function can be called in either single-byte
+			 * mode or FIFO mode.
+			 */
+			CPRINTS("-W");
+			i2c_fifo_write_data(controller);
 		}
 	}
 	/* 3 Handle master read operation (read or after a write operation) */
 	else if (p_status->oper_state == SMB_READ_OPER ||
 			p_status->oper_state == SMB_DUMMY_READ_OPER) {
-		uint8_t data;
-		/* last byte is about to be read - end of transaction */
-		if (p_status->idx_buf == (p_status->sz_rxbuf - 1)) {
-			/* need to STOP or not */
-			if (p_status->flags & I2C_XFER_STOP) {
-				/* Stop should set before reading last byte */
-				I2C_STOP(controller);
-				CPUTS("-SP");
-			} else {
-				/*
-				 * Disable interrupt before i2c master read SDA
-				 * reg (stall SCL) and forbid SDAST generate
-				 * interrupt until starting other transactions
-				 */
-				task_disable_irq(i2c_irqs[controller]);
-			}
-		}
-		/* Check if byte-before-last is about to be read */
-		else if (p_status->idx_buf == (p_status->sz_rxbuf - 2)) {
-			/*
-			 * Set nack before reading byte-before-last,
-			 * so that nack will be generated after receive
-			 * of last byte
-			 */
-			if (p_status->flags & I2C_XFER_STOP) {
-				I2C_NACK(controller);
-				CPUTS("-GNA");
-			}
-		}
-
-		/* Read data for SMBSDA */
-		I2C_READ_BYTE(controller, data);
-		CPRINTS("-R(%02x)", data);
-
-		/* Read to buf. Skip last byte if meet SMB_DUMMY_READ_OPER */
-		if (p_status->oper_state == SMB_DUMMY_READ_OPER &&
-				p_status->idx_buf == (p_status->sz_rxbuf - 1))
-			p_status->idx_buf++;
+		if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT))
+			i2c_fifo_handle_receive(controller);
 		else
-			p_status->rx_buf[p_status->idx_buf++] = data;
-
-		/* last byte is read - end of transaction */
-		if (p_status->idx_buf == p_status->sz_rxbuf) {
-			/* Set current status */
-			p_status->oper_state = (p_status->flags & I2C_XFER_STOP)
-					? SMB_IDLE : SMB_READ_SUSPEND;
-			/* Set error code */
-			p_status->err_code = SMB_OK;
-			/* Notify upper layer of missing data */
-			task_set_event(p_status->task_waiting,
-					TASK_EVENT_I2C_IDLE, 0);
-			CPUTS("-END");
-		}
+			i2c_handle_receive(controller);
 	}
 }
 
@@ -608,7 +876,9 @@ void i2c_set_timeout(int port, uint32_t timeout)
 		timeout ? timeout : I2C_TIMEOUT_DEFAULT_US;
 }
 
-int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+int chip_i2c_xfer(const int port,
+		  const uint16_t slave_addr_flags,
+		  const uint8_t *out, int out_size,
 		  uint8_t *in, int in_size, int flags)
 {
 	volatile struct i2c_status *p_status;
@@ -636,13 +906,8 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 	p_status->sz_txbuf    = out_size;
 	p_status->rx_buf      = in;
 	p_status->sz_rxbuf    = in_size;
-#if I2C_7BITS_ADDR
-	/* Set slave address from 7-bits to 8-bits */
-	p_status->slave_addr  = (slave_addr<<1);
-#else
-	/* Set slave address (8-bits) */
-	p_status->slave_addr  = slave_addr;
-#endif
+	p_status->slave_addr_flags = slave_addr_flags;
+
 	/* Reset index & error */
 	p_status->idx_buf     = 0;
 	p_status->err_code    = SMB_OK;
@@ -674,7 +939,7 @@ int chip_i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
 	/* Reset task ID */
 	p_status->task_waiting = TASK_ID_INVALID;
 
-	CPRINTS("-Err:0x%02x\n", p_status->err_code);
+	CPRINTS("-Err:0x%02x", p_status->err_code);
 
 	return (p_status->err_code == SMB_OK) ? EC_SUCCESS : EC_ERROR_UNKNOWN;
 }
@@ -744,25 +1009,28 @@ static void i2c_freq_changed(void)
 		int ctrl = i2c_port_to_controller(i2c_ports[i].port);
 		int scl_freq;
 
-		if (ctrl < 2)
-#if defined(CHIP_FAMILY_NPCX7)
-			/* SMB0/1 use APB3 clock */
-			freq = clock_get_apb3_freq();
-#else
-			/* SMB0/1 use core clock */
-			freq = clock_get_freq();
+#ifdef CHIP_FAMILY_NPCX7
+		/*
+		 * SMB0/1/4/5/6/7 use APB3 clock
+		 * SMB2/3 use APB2 clock
+		 */
+		freq = (ctrl < 2 || ctrl > 3) ?
+		       clock_get_apb3_freq() : clock_get_apb2_freq();
+#else /* CHIP_FAMILY_NPCX5 */
+		/*
+		 * SMB0/1 use core clock
+		 * SMB2/3 use APB2 clock
+		 */
+		freq = (ctrl < 2) ? clock_get_freq() : clock_get_apb2_freq();
 #endif
-		else
-			/* Other SMB controller use APB2 clock */
-			freq = clock_get_apb2_freq();
 
 		/*
 		 * Set SCL frequency by formula:
 		 * tSCL = 4 * SCLFRQ * tCLK
 		 * fSCL = fCLK / (4*SCLFRQ)
-		 * SCLFRQ = fSCL/(4*fSCL)
+		 * SCLFRQ = ceil(fCLK/(4*fSCL))
 		 */
-		scl_freq = (freq/1000) / (bus_freq*4); /* bus_freq is KHz */
+		scl_freq = DIV_ROUND_UP(freq, bus_freq*4000); /* Unit in bps */
 
 		/* Normal mode if i2c freq is under 100kHz */
 		if (bus_freq <= 100) {
@@ -776,7 +1044,7 @@ static void i2c_freq_changed(void)
 			int i2c_timing_used;
 
 			/* use Fast Mode */
-			SET_BIT(NPCX_SMBCTL3(ctrl)  , NPCX_SMBCTL3_400K);
+			SET_BIT(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_400K);
 			/*
 			 * Set SCLH(L)T and hold-time directly for best i2c
 			 * timing condition for all source clocks. Please refer
@@ -792,8 +1060,9 @@ static void i2c_freq_changed(void)
 				/* Set value from formula */
 				NPCX_SMBSCLLT(ctrl) = scl_freq;
 				NPCX_SMBSCLHT(ctrl) = scl_freq;
-				cprints(CC_I2C, "Warning: Use 400K or 1MHz",
-					"for better timing of I2c %d", ctrl);
+				cprints(CC_I2C,
+					"Warning: Use 400K or 1MHz for better timing of I2c %d",
+					ctrl);
 				continue;
 			}
 
@@ -808,14 +1077,15 @@ static void i2c_freq_changed(void)
 				}
 			}
 			if (j == i2c_timing_used)
-				cprints(CC_I2C, "Error: Please make sure src ",
-					"clock of i2c %d is supported", ctrl);
+				cprints(CC_I2C,
+					"Error: Please make sure src clock of i2c %d is supported",
+					ctrl);
 		}
 	}
 }
 DECLARE_HOOK(HOOK_FREQ_CHANGE, i2c_freq_changed, HOOK_PRIO_DEFAULT);
 
-static void i2c_init(void)
+void i2c_init(void)
 {
 	int i;
 
@@ -859,5 +1129,4 @@ static void i2c_init(void)
 		i2c_init_bus(ctrl);
 	}
 }
-DECLARE_HOOK(HOOK_INIT, i2c_init, HOOK_PRIO_INIT_I2C);
 

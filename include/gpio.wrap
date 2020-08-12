@@ -1,8 +1,35 @@
 /* -*- mode:c -*-
  *
- * Copyright (c) 2014 The Chromium OS Authors. All rights reserved.
+ * Copyright 2014 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
+ */
+
+/**
+ * @file gpio.wrap
+ * @brief Include the board specific *gpio.inc* file.
+ *
+ * This file is included in many different contexts.
+ * The macros defined outside of the file (before including)
+ * determine what parts of *gpio.inc* will be emitted.
+ *
+ * The following macros are available:
+ * - GPIO_INT
+ * - GPIO
+ * - IOEX_INT
+ * - IOEX
+ * - UNIMPLEMENTED
+ * - ALTERNATE
+ * - UNUSED
+ *
+ * @note You cannot have dependencies bewteen these macros. For example,
+ *       you cannot define GPIO_INT in terms of GPIO. All macros must be
+ *       independently evaluatable.
+ *       This is due to the reorganization mechanism at the bottom of this file.
+ *
+ * @see include/gpio_list.h
+ * @see common/gpio.c
+ * @see include/gpio_signal.h
  */
 
 #ifndef GPIO_PIN
@@ -13,8 +40,9 @@
 #error "Your architecture must define GPIO_PIN_MASK and it did not."
 #endif
 
-/*
- * The GPIO macro is used to define a new GPIO pin name and function.
+/**
+ * @def GPIO
+ * @brief The GPIO macro is used to define a new GPIO pin name and function.
  *
  * The name is used to populate the gpio_signal enum by first
  * prepending GPIO_ to the name.  It is also used to construct the
@@ -27,8 +55,9 @@
 #define GPIO(name, pin, flags)
 #endif
 
-/*
- * The GPIO_INT macro is used to define a GPIOs that have an IRQ handler.
+/**
+ * @def GPIO_INT
+ * @brief The GPIO_INT macro is used to define a GPIO that has an IRQ handler.
  *
  * The IRQ handler pointers are stored as elements in the gpio_irq_handlers
  * array.
@@ -37,8 +66,10 @@
 #define GPIO_INT(name, pin, flags, signal)
 #endif
 
-/*
- * The ALTERNATE macro is used associate a GPIO with an alternate function.
+/**
+ * @def ALTERNATE
+ * @brief The ALTERNATE macro is used associate a GPIO with an alternate
+ *        function.
  *
  * Alternate functions allow hardware peripherals access to GPIO pins.
  * Modules use gpio_config_module to enable and disable the alternate functions
@@ -54,8 +85,9 @@
 #define ALTERNATE(pinmask, function, module, flags)
 #endif
 
-/*
- * The UNIMPLEMENTED macro is used to define a GPIO that doesn't actually exist.
+/**
+ * @def UNIMPLEMENTED
+ * @brief The UNIMPLEMENTED macro is used to define a GPIO that doesn't actually exist.
  *
  * Some GPIO names are well known and used by generic code, ENTERING_RW and WP_L
  * are examples.  If a particular board doesn't have a GPIO assigned to such a
@@ -73,12 +105,204 @@
 #define UNIMPLEMENTED(name)
 #endif
 
+/**
+ * @def UNUSED
+ * @brief The UNUSED macro is used to define a pin as unused.
+ *
+ * This allows the chip specific code to provision these pins for
+ * the lowest power state.
+ * We don't want to automatically provision all unreferenced pins/ports
+ * as unused, since this may alter the behavior of existing firmwares in
+ * ways that may not be obvious to the developer.
+ */
+#ifndef UNUSED
+#define UNUSED(pin)
+#endif
+
+/**
+ * @def IOEX
+ * @brief The IOEX macro is used to define a new IO Expander GPIO pin.
+ *
+ * The name is used to populate enum ioex_signal by prepending "IOEX_".
+ */
+#ifndef IOEX
+#define IOEX(name, expin, flags)
+#endif
+
+/**
+ * @def IOEX_INT
+ * @brief The IOEX_INT macro is used to define a GPIOs that have an IRQ handler.
+ *
+ * The IRQ handler pointers are stored as elements in the ioex_irq_handlers
+ * array.
+ */
+#ifndef IOEX_INT
+#define IOEX_INT(name, expin, flags, handler)
+#endif
+
+/*
+ * RO/RW pin macro.
+ *
+ * Some boards may have very different pin configurations between RO and RW, and
+ * also may vary from revision to revision. The RO/RW pin macros can ease the
+ * maintenance effort.
+ */
+
+#ifdef SECTION_IS_RO
+#define GPIO_RO(name, pin, flags) GPIO(name, pin, flags)
+#define GPIO_RW(name, pin, flags)
+#define GPIO_INT_RO(name, pin, flags, signal) GPIO_INT(name, pin, flags, signal)
+#define GPIO_INT_RW(name, pin, flags, signal)
+#define ALTERNATE_RO(pinmask, function, module, flags) \
+		ALTERNATE(pinmask, function, module, flags)
+#define ALTERNATE_RW(pinmask, function, module, flags)
+#define UNIMPLEMENTED_RO(name) UNIMPLEMENTED(name)
+#define UNIMPLEMENTED_RW(name)
+#define UNUSED_RO(name) UNUSED(name)
+#define UNUSED_RW(name)
+#elif defined(SECTION_IS_RW)
+#define GPIO_RO(name, pin, flags)
+#define GPIO_RW(name, pin, flags) GPIO(name, pin, flags)
+#define GPIO_INT_RO(name, pin, flags, signal)
+#define GPIO_INT_RW(name, pin, flags, signal) GPIO_INT(name, pin, flags, signal)
+#define ALTERNATE_RO(pinmask, function, module, flags)
+#define ALTERNATE_RW(pinmask, function, module, flags) \
+		ALTERNATE(pinmask, function, module, flags)
+#define UNIMPLEMENTED_RO(name)
+#define UNIMPLEMENTED_RW(name) UNIMPLEMENTED(name)
+#define UNUSED_RO(name)
+#define UNUSED_RW(name) UNUSED(name)
+#else
+#define GPIO_RO(name, pin, flags) GPIO(name, pin, flags)
+#define GPIO_RW(name, pin, flags) GPIO(name, pin, flags)
+#define GPIO_INT_RO(name, pin, flags, signal) GPIO_INT(name, pin, flags, signal)
+#define GPIO_INT_RW(name, pin, flags, signal) GPIO_INT(name, pin, flags, signal)
+#define ALTERNATE_RO(pinmask, function, module, flags) \
+		ALTERNATE(pinmask, function, module, flags)
+#define ALTERNATE_RW(pinmask, function, module, flags) \
+		ALTERNATE(pinmask, function, module, flags)
+#define UNIMPLEMENTED_RO(name) UNIMPLEMENTED(name)
+#define UNIMPLEMENTED_RW(name) UNIMPLEMENTED(name)
+#define UNUSED_RO(name) UNUSED(name)
+#define UNUSED_RW(name) UNUSED(name)
+#endif
+
+
+/**
+ * Rearrange the gpio.inc declarations, such that we have the following order:
+ * - GPIO_INTs
+ * - GPIOs
+ * - IOEX_INTs
+ * - IOEXs
+ * - UNIMPLEMENTEDs
+ * - ALTERNATEs
+ * - UNUSEDs
+ *
+ * This allows the board to define these declaration in any way that is
+ * makes logical sense, while maintaining the following existing
+ * order invariants:
+ *
+ * - GPIO_INTs must be before GPIOs in gpio.inc. This is because their
+ *   enum values from gpio_signal.h are used as the index to the
+ *   gpio_irq_handlers table.
+ *   See crrev.com/c/263973 (gpio: Refactor IRQ handler pointer out of gpio_list)
+ * - IOEX_INTs must be before IOEXs in gpio.inc. This is because their
+ *   enum values from gpio_signal.h are used as the index to the
+ *   ioex_irq_handlers table.
+ *
+ * We want to rearrange the entres early in the gpio.inc process to ensure
+ * that all includers (gpio_signal.h and gpio_list.h) see the same ordering,
+ * since there is an implicit dependency.
+ *
+ * Note that this mechanism cannot handle dependencies between the provided
+ * macros. See the file header comment for more information.
+ */
+
+/* Stash away all macros and define to "blank" */
+#pragma push_macro("GPIO_INT")
+#pragma push_macro("GPIO")
+#pragma push_macro("IOEX_INT")
+#pragma push_macro("IOEX")
+#pragma push_macro("UNIMPLEMENTED")
+#pragma push_macro("ALTERNATE")
+#pragma push_macro("UNUSED")
+#undef GPIO_INT
+#undef GPIO
+#undef IOEX_INT
+#undef IOEX
+#undef UNIMPLEMENTED
+#undef ALTERNATE
+#undef UNUSED
+#define GPIO_INT(...)
+#define GPIO(...)
+#define IOEX_INT(...)
+#define IOEX(...)
+#define UNIMPLEMENTED(...)
+#define ALTERNATE(...)
+#define UNUSED(...)
+
+/* Capture GPIO_INTs */
+#pragma pop_macro("GPIO_INT")
 #include "gpio.inc"
+#undef GPIO_INT
+#define GPIO_INT(...)
+
+/* Capture GPIOs */
+#pragma pop_macro("GPIO")
+#include "gpio.inc"
+#undef GPIO
+#define GPIO(...)
+
+/* Capture IOEX_INTs */
+#pragma pop_macro("IOEX_INT")
+#include "gpio.inc"
+#undef IOEX_INT
+#define IOEX_INT(...)
+
+/* Capture IOEXs */
+#pragma pop_macro("IOEX")
+#include "gpio.inc"
+#undef IOEX
+#define IOEX(...)
+
+/* Capture UNIMPLEMENTEDs */
+#pragma pop_macro("UNIMPLEMENTED")
+#include "gpio.inc"
+#undef UNIMPLEMENTED
+#define UNIMPLEMENTED(...)
+
+/* Capture ALTERNATEs */
+#pragma pop_macro("ALTERNATE")
+#include "gpio.inc"
+#undef ALTERNATE
+#define ALTERNATE(...)
+
+/* Capture UNUSEDs */
+#pragma pop_macro("UNUSED")
+#include "gpio.inc"
+#undef UNUSED
+#define UNUSED(...)
+
 
 /*
  * Once the gpio.inc file has been included these macros are no longer needed.
+ * This allows the includer to redefine these macros and include this file
+ * again, within the same file.
  */
 #undef GPIO
+#undef GPIO_RO
+#undef GPIO_RW
 #undef GPIO_INT
+#undef GPIO_INT_RO
+#undef GPIO_INT_RW
+#undef IOEX
+#undef IOEX_INT
 #undef ALTERNATE
+#undef ALTERNATE_RO
+#undef ALTERNATE_RW
 #undef UNIMPLEMENTED
+#undef UNIMPLEMENTED_RO
+#undef UNIMPLEMENTED_RW
+#undef UNUSED
+#undef UNUSED_RO
+#undef UNUSED_RW

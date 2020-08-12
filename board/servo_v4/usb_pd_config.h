@@ -55,6 +55,24 @@
 /* use the hardware accelerator for CRC */
 #define CONFIG_HW_CRC
 
+/* Servo v4 CC configuration */
+#define CC_DETACH	BIT(0)   /* Emulate detach: both CC open */
+#define CC_DISABLE_DTS	BIT(1)   /* Apply resistors to single or both CC? */
+#define CC_ALLOW_SRC	BIT(2)   /* Allow charge through by policy? */
+#define CC_ENABLE_DRP	BIT(3)   /* Enable dual-role port */
+#define CC_SNK_WITH_PD	BIT(4)   /* Force enabling PD comm for sink role */
+#define CC_POLARITY	BIT(5)   /* CC polarity */
+
+/* Servo v4 DP alt-mode configuration */
+#define ALT_DP_ENABLE		BIT(0)   /* Enable DP alt-mode or not */
+#define ALT_DP_PIN_C		BIT(1)   /* Pin assignment C supported */
+#define ALT_DP_PIN_D		BIT(2)   /* Pin assignment D supported */
+#define ALT_DP_PIN_E		BIT(3)   /* Pin assignment E supported */
+#define ALT_DP_MF_PREF		BIT(4)   /* Multi-Function preferred */
+#define ALT_DP_PLUG		BIT(5)   /* Plug or receptacle */
+#define ALT_DP_OVERRIDE_HPD	BIT(6)   /* Override the HPD signal */
+#define ALT_DP_HPD_LVL		BIT(7)   /* HPD level if overridden */
+
 /* TX uses SPI1 on PB3-4 for CHG port, SPI2 on PB 13-14 for DUT port */
 #define SPI_REGS(p) ((p) ? STM32_SPI2_REGS : STM32_SPI1_REGS)
 static inline void spi_enable_clock(int port)
@@ -83,7 +101,7 @@ static inline void spi_enable_clock(int port)
  * EXTI line 22 is connected to the CMP2 output,
  * CHG uses CMP2, and DUT uses CMP1.
  */
-#define EXTI_COMP_MASK(p) ((p) ? (1<<21) : (1 << 22))
+#define EXTI_COMP_MASK(p) ((p) ? (1<<21) : BIT(22))
 
 #define IRQ_COMP STM32_IRQ_COMP
 /* triggers packet detection on comparator falling edge */
@@ -119,12 +137,12 @@ static inline void pd_tx_spi_reset(int port)
 {
 	if (port == 0) {
 		/* Reset SPI1 */
-		STM32_RCC_APB2RSTR |= (1 << 12);
-		STM32_RCC_APB2RSTR &= ~(1 << 12);
+		STM32_RCC_APB2RSTR |= BIT(12);
+		STM32_RCC_APB2RSTR &= ~BIT(12);
 	} else {
 		/* Reset SPI2 */
-		STM32_RCC_APB1RSTR |= (1 << 14);
-		STM32_RCC_APB1RSTR &= ~(1 << 14);
+		STM32_RCC_APB1RSTR |= BIT(14);
+		STM32_RCC_APB1RSTR &= ~BIT(14);
 	}
 }
 
@@ -265,8 +283,8 @@ static inline void pd_set_host_mode(int port, int enable)
 static inline void pd_config_init(int port, uint8_t power_role)
 {
 	/*
-	 * Set CC pull resistors, and charge_en and vbus_en GPIOs to match
-	 * the initial role.
+	 * Set CC pull resistors. The PD state machine will then transit and
+	 * enable VBUS after it detects valid voltages on CC lines.
 	 */
 	pd_set_host_mode(port, power_role);
 
@@ -275,17 +293,7 @@ static inline void pd_config_init(int port, uint8_t power_role)
 
 }
 
-static inline int pd_adc_read(int port, int cc)
-{
-	int mv;
-
-	if (port == 0)
-		mv = adc_read_channel(cc ? ADC_CHG_CC2_PD : ADC_CHG_CC1_PD);
-	else
-		mv = adc_read_channel(cc ? ADC_DUT_CC2_PD : ADC_DUT_CC1_PD);
-
-	return mv;
-}
+int pd_adc_read(int port, int cc);
 
 #endif /* __CROS_EC_USB_PD_CONFIG_H */
 

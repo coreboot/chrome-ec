@@ -6,12 +6,15 @@
 /* Cheza board-specific configuration */
 
 #include "adc_chip.h"
+#include "als.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "chipset.h"
 #include "extpower.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
+#include "driver/als_opt3001.h"
+#include "driver/charger/isl923x.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/anx74xx.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -48,16 +51,27 @@ static void usb0_evt(enum gpio_signal signal);
 static void usb1_evt(enum gpio_signal signal);
 static void ppc_interrupt(enum gpio_signal signal);
 static void anx74xx_cable_det_interrupt(enum gpio_signal signal);
+static void usb1_oc_evt(enum gpio_signal signal);
 
 #include "gpio_list.h"
 
 /* GPIO Interrupt Handlers */
 static void tcpc_alert_event(enum gpio_signal signal)
 {
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	int port = -1;
+
+	switch (signal) {
+	case GPIO_USB_C0_PD_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_PD_INT_ODL:
+		port = 1;
+		break;
+	default:
+		return;
+	}
+
+	schedule_deferred_pd_interrupt(port);
 }
 
 static void vbus0_evt(enum gpio_signal signal)
@@ -115,6 +129,28 @@ static void ppc_interrupt(enum gpio_signal signal)
 	sn5s330_interrupt(0);
 }
 
+static void usb1_oc_evt_deferred(void)
+{
+	/* Only port-1 has overcurrent GPIO interrupt */
+	board_overcurrent_event(1, 1);
+}
+DECLARE_DEFERRED(usb1_oc_evt_deferred);
+
+static void usb1_oc_evt(enum gpio_signal signal)
+{
+	/* Switch the context to handle the event */
+	hook_call_deferred(&usb1_oc_evt_deferred_data, 0);
+}
+
+/* Wake-up pins for hibernate */
+const enum gpio_signal hibernate_wake_pins[] = {
+	GPIO_LID_OPEN,
+	GPIO_AC_PRESENT,
+	GPIO_POWER_BUTTON_L,
+	GPIO_EC_RST_ODL,
+};
+const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
+
 /* ADC channels */
 const struct adc_t adc_channels[] = {
 	/* Base detection */
@@ -122,6 +158,14 @@ const struct adc_t adc_channels[] = {
 		"BASE_DET",
 		NPCX_ADC_CH0,
 		ADC_MAX_VOLT,
+		ADC_READ_MAX + 1,
+		0
+	},
+	/* Measure VBUS through a 1/10 voltage divider */
+	[ADC_VBUS] = {
+		"VBUS",
+		NPCX_ADC_CH1,
+		ADC_MAX_VOLT * 10,
 		ADC_READ_MAX + 1,
 		0
 	},
@@ -137,15 +181,15 @@ const struct adc_t adc_channels[] = {
 		0
 	},
 	/*
-	 * ISL9238 PSYS output is 1.44 uA/W over 12.4K resistor, to read
-	 * 0.8V @ 45 W, i.e. 56250 uW/mV. Using ADC_MAX_VOLT*56250 and
+	 * ISL9238 PSYS output is 1.44 uA/W over 5.6K resistor, to read
+	 * 0.8V @ 99 W, i.e. 124000 uW/mV. Using ADC_MAX_VOLT*124000 and
 	 * ADC_READ_MAX+1 as multiplier/divider leads to overflows, so we
 	 * only divide by 2 (enough to avoid precision issues).
 	 */
 	[ADC_PSYS] = {
 		"PSYS",
 		NPCX_ADC_CH3,
-		ADC_MAX_VOLT * 56250 * 2 / (ADC_READ_MAX + 1),
+		ADC_MAX_VOLT * 124000 * 2 / (ADC_READ_MAX + 1),
 		2,
 		0
 	},
@@ -160,22 +204,27 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 
 /* Power signal list. Must match order of enum power_signal. */
-/*
- * PMIC pulls up the AP_RST_L signal to power-on AP. Once AP is up, it then
- * pulls up the PS_HOLD signal.
- *
- *      +--> GPIO_AP_RST_L >--+
- *   PMIC                     AP
- *      +--< GPIO_PS_HOLD <---+
- *
- * When AP initiates shutdown, it pulls down the PS_HOLD signal to notify
- * PMIC. PMIC then pulls down the AP_RST_L.
- *
- * TODO(b/78455067): By far, we use the AP_RST_L signal to indicate AP in a
- * good state. Address the issue of AP-initiated warm reset.
- */
 const struct power_signal_info power_signal_list[] = {
-	{GPIO_AP_RST_L, POWER_SIGNAL_ACTIVE_HIGH, "POWER_GOOD"},
+	[SDM845_AP_RST_ASSERTED] = {
+		GPIO_AP_RST_L,
+		POWER_SIGNAL_ACTIVE_LOW | POWER_SIGNAL_DISABLE_AT_BOOT,
+		"AP_RST_ASSERTED"},
+	[SDM845_PS_HOLD] = {
+		GPIO_PS_HOLD,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"PS_HOLD"},
+	[SDM845_PMIC_FAULT_L] = {
+		GPIO_PMIC_FAULT_L,
+		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
+		"PMIC_FAULT_L"},
+	[SDM845_POWER_GOOD] = {
+		GPIO_POWER_GOOD,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"POWER_GOOD"},
+	[SDM845_WARM_RESET] = {
+		GPIO_WARM_RESET_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"WARM_RESET_L"},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
@@ -194,7 +243,7 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 struct ppc_config_t ppc_chips[] = {
 	{
 		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr = SN5S330_ADDR0,
+		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
 		.drv = &sn5s330_drv
 	},
 	/*
@@ -207,23 +256,125 @@ struct ppc_config_t ppc_chips[] = {
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 /* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
-	[USB_PD_PORT_ANX3429] = {I2C_PORT_TCPC0, 0x50, &anx74xx_tcpm_drv,
-				 TCPC_ALERT_ACTIVE_LOW},
-	[USB_PD_PORT_PS8751] = {I2C_PORT_TCPC1, 0x16, &ps8xxx_tcpm_drv,
-				TCPC_ALERT_ACTIVE_LOW},
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	/* Alert is active-low, open-drain */
+	[USB_PD_PORT_ANX3429] = {
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC0,
+			.addr_flags = 0x28,
+		},
+		.drv = &anx74xx_tcpm_drv,
+		.flags = TCPC_FLAGS_ALERT_OD,
+	},
+	[USB_PD_PORT_PS8751] = {
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC1,
+			.addr_flags = 0x0B,
+		},
+		.drv = &ps8xxx_tcpm_drv,
+	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
+const struct charger_config_t chg_chips[] = {
 	{
-		.port_addr = USB_PD_PORT_ANX3429,
-		.driver = &anx74xx_tcpm_usb_mux_driver,
-		.hpd_update = &anx74xx_tcpc_update_hpd_status,
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+};
+
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
+/*
+ * Port-0 USB mux driver.
+ *
+ * The USB mux is handled by TCPC chip and the HPD is handled by AP.
+ * Redirect to anx74xx_tcpm_usb_mux_driver but override the get() function
+ * to check the HPD_IRQ mask from virtual_usb_mux_driver.
+ */
+static int port0_usb_mux_init(const struct usb_mux *me)
+{
+	return anx74xx_tcpm_usb_mux_driver.init(me);
+}
+
+static int port0_usb_mux_set(const struct usb_mux *me, mux_state_t mux_state)
+{
+	return anx74xx_tcpm_usb_mux_driver.set(me, mux_state);
+}
+
+static int port0_usb_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
+{
+	int rv;
+	mux_state_t virtual_mux_state;
+
+	rv = anx74xx_tcpm_usb_mux_driver.get(me, mux_state);
+	rv |= virtual_usb_mux_driver.get(me, &virtual_mux_state);
+
+	if (virtual_mux_state & USB_PD_MUX_HPD_IRQ)
+		*mux_state |= USB_PD_MUX_HPD_IRQ;
+	return rv;
+}
+
+const struct usb_mux_driver port0_usb_mux_driver = {
+	.init = port0_usb_mux_init,
+	.set = port0_usb_mux_set,
+	.get = port0_usb_mux_get,
+};
+
+/*
+ * Port-1 USB mux driver.
+ *
+ * The USB mux is handled by TCPC chip and the HPD is handled by AP.
+ * Redirect to tcpci_tcpm_usb_mux_driver but override the get() function
+ * to check the HPD_IRQ mask from virtual_usb_mux_driver.
+ */
+static int port1_usb_mux_init(const struct usb_mux *me)
+{
+	return tcpci_tcpm_usb_mux_driver.init(me);
+}
+
+static int port1_usb_mux_set(const struct usb_mux *me, mux_state_t mux_state)
+{
+	return tcpci_tcpm_usb_mux_driver.set(me, mux_state);
+}
+
+static int port1_usb_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
+{
+	int rv;
+	mux_state_t virtual_mux_state;
+
+	rv = tcpci_tcpm_usb_mux_driver.get(me, mux_state);
+	rv |= virtual_usb_mux_driver.get(me, &virtual_mux_state);
+
+	if (virtual_mux_state & USB_PD_MUX_HPD_IRQ)
+		*mux_state |= USB_PD_MUX_HPD_IRQ;
+	return rv;
+}
+
+static int port1_usb_mux_enter_low_power(const struct usb_mux *me)
+{
+	return tcpci_tcpm_usb_mux_driver.enter_low_power_mode(me);
+}
+
+const struct usb_mux_driver port1_usb_mux_driver = {
+	.init = &port1_usb_mux_init,
+	.set = &port1_usb_mux_set,
+	.get = &port1_usb_mux_get,
+	.enter_low_power_mode = &port1_usb_mux_enter_low_power,
+};
+
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.usb_port = 0,
+		.driver = &port0_usb_mux_driver,
+		.hpd_update = &virtual_hpd_update,
 	},
 	{
-		.port_addr = USB_PD_PORT_PS8751,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.usb_port = 1,
+		.driver = &port1_usb_mux_driver,
+		.hpd_update = &virtual_hpd_update,
 	}
 };
 
@@ -257,8 +408,6 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 void board_tcpc_init(void)
 {
-	int port;
-
 	/* Only reset TCPC if not sysjump */
 	if (!system_jumped_to_this_image()) {
 		/* TODO(crosbug.com/p/61098): How long do we need to wait? */
@@ -279,14 +428,12 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (port = 0; port < CONFIG_USB_PD_PORT_COUNT; port++) {
-		const struct usb_mux *mux = &usb_muxes[port];
-
-		mux->hpd_update(port, 0, 0);
-	}
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+		usb_mux_hpd_update(port, 0, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
+/* Called on AP S0 -> S3 transition */
 static void board_chipset_suspend(void)
 {
 	/*
@@ -297,12 +444,30 @@ static void board_chipset_suspend(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
+/* Called on AP S3 -> S0 transition */
 static void board_chipset_resume(void)
 {
 	/* Turn on display backlight in S0. */
 	gpio_set_level(GPIO_ENABLE_BACKLIGHT, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S5 -> S3 transition */
+static void board_chipset_startup(void)
+{
+	gpio_set_flags(GPIO_USB_C1_OC_ODL, GPIO_INT_FALLING | GPIO_PULL_UP);
+	gpio_enable_interrupt(GPIO_USB_C1_OC_ODL);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S3 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	/* 5V is off in S5. Disable pull-up to prevent current leak. */
+	gpio_disable_interrupt(GPIO_USB_C1_OC_ODL);
+	gpio_set_flags(GPIO_USB_C1_OC_ODL, GPIO_INT_FALLING);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
 /**
  * Power on (or off) a single TCPC.
@@ -368,16 +533,16 @@ int board_is_sourcing_vbus(int port)
 	return EC_ERROR_INVAL;
 }
 
-void board_overcurrent_event(int port)
+void board_overcurrent_event(int port, int is_overcurrented)
 {
-	/* TODO(waihong): Notify AP? */
+	/* TODO(b/120231371): Notify AP */
 	CPRINTS("p%d: overcurrent!", port);
 }
 
 int board_set_active_charge_port(int port)
 {
 	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 	int rv;
 
@@ -388,7 +553,7 @@ int board_set_active_charge_port(int port)
 
 	if (port == CHARGE_PORT_NONE) {
 		/* Disable all ports. */
-		for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 			rv = board_vbus_sink_enable(i, 0);
 			if (rv) {
 				CPRINTS("Disabling p%d sink path failed.", i);
@@ -409,7 +574,7 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < CONFIG_USB_PD_PORT_COUNT; i++) {
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		if (i == port)
 			continue;
 
@@ -419,7 +584,7 @@ int board_set_active_charge_port(int port)
 
 	/* Enable requested charge port. */
 	if (board_vbus_sink_enable(port, 1)) {
-		CPRINTS("p%d: sink path enable failed.");
+		CPRINTS("p%d: sink path enable failed.", port);
 		return EC_ERROR_UNKNOWN;
 	}
 
@@ -462,10 +627,15 @@ uint16_t tcpc_get_alert_status(void)
 /* Mutexes */
 static struct mutex g_lid_mutex;
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct bmi_drv_data_t g_bmi160_data;
+static struct opt3001_drv_data_t g_opt3001_data = {
+	.scale = 1,
+	.uscale = 0,
+	.offset = 0,
+};
 
 /* Matrix to rotate accelerometer into standard reference frame */
-const matrix_3x3_t base_standard_ref = {
+const mat33_fp_t base_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0,  0},
 	{ 0,  FLOAT_TO_FP(-1),  0},
 	{ 0,  0, FLOAT_TO_FP(1)}
@@ -487,11 +657,11 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_lid_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
-	 .addr = BMI160_ADDR0,
+	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 4,  /* g */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
 		 [SENSOR_CONFIG_EC_S0] = {
 			 .odr = 10000 | ROUND_UP_FLAG,
@@ -508,11 +678,31 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_lid_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
-	 .addr = BMI160_ADDR0,
+	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
+	},
+	[LID_ALS] = {
+	 .name = "Light",
+	 .active_mask = SENSOR_ACTIVE_S0,
+	 .chip = MOTIONSENSE_CHIP_OPT3001,
+	 .type = MOTIONSENSE_TYPE_LIGHT,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &opt3001_drv,
+	 .drv_data = &g_opt3001_data,
+	 .port = I2C_PORT_SENSOR,
+	 .i2c_spi_addr_flags = OPT3001_I2C_ADDR_FLAGS,
+	 .rot_standard_ref = NULL,
+	 .default_range = 0x10000, /* scale = 1; uscale = 0 */
+	 .min_frequency = OPT3001_LIGHT_MIN_FREQ,
+	 .max_frequency = OPT3001_LIGHT_MAX_FREQ,
+	 .config = {
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 1000,
+		},
+	 },
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);

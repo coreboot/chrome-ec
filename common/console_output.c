@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -89,7 +89,7 @@ int cprints(enum console_channel channel, const char *format, ...)
 		return EC_SUCCESS;
 #endif
 
-	rv = cprintf(channel, "[%T ");
+	rv = cprintf(channel, "[%pT ", PRINTF_TIMESTAMP_NOW);
 
 	va_start(args, format);
 	r = uart_vprintf(format, args);

@@ -13,7 +13,6 @@
 #include "lpc.h"
 #include "panic.h"
 #include "power_button.h"
-#include "skylake.h"
 #include "system.h"
 #include "timer.h"
 
@@ -21,6 +20,43 @@
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
 
 static int forcing_shutdown;  /* Forced shutdown in progress? */
+
+/* Power signals list. Must match order of enum power_signal. */
+const struct power_signal_info power_signal_list[] = {
+#ifdef CONFIG_POWER_S0IX
+	[X86_SLP_S0_DEASSERTED] = {
+		GPIO_PCH_SLP_S0_L,
+		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
+		"SLP_S0_DEASSERTED",
+	},
+#endif
+	[X86_SLP_S3_DEASSERTED] = {
+		SLP_S3_SIGNAL_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"SLP_S3_DEASSERTED",
+	},
+	[X86_SLP_S4_DEASSERTED] = {
+		SLP_S4_SIGNAL_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"SLP_S4_DEASSERTED",
+	},
+	[X86_SLP_SUS_DEASSERTED] = {
+		GPIO_PCH_SLP_SUS_L,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"SLP_SUS_DEASSERTED",
+	},
+	[X86_RSMRST_L_PWRGD] = {
+		GPIO_RSMRST_L_PGOOD,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"RSMRST_N_PWRGD",
+	},
+	[X86_PMIC_DPWROK] = {
+		GPIO_PMIC_DPWROK,
+		POWER_SIGNAL_ACTIVE_HIGH,
+		"PMIC_DPWROK",
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 
 void chipset_force_shutdown(enum chipset_shutdown_reason reason)
@@ -122,18 +158,19 @@ void chipset_handle_reboot(void)
 	 * conditions are not met.
 	 */
 	if (!(flags &
-		(RESET_FLAG_WATCHDOG | RESET_FLAG_SOFT | RESET_FLAG_HARD)))
+		(EC_RESET_FLAG_WATCHDOG | EC_RESET_FLAG_SOFT |
+		 EC_RESET_FLAG_HARD)))
 		return;
 
 	/* Preserve AP off request. */
-	if (flags & RESET_FLAG_AP_OFF) {
+	if (flags & EC_RESET_FLAG_AP_OFF) {
 		/* Do not issue PMIC reset if board cannot save reset flags */
 		if (!board_has_working_reset_flags()) {
 			ccprintf("Skip PMIC reset due to board issue.\n");
 			cflush();
 			return;
 		}
-		chip_save_reset_flags(RESET_FLAG_AP_OFF);
+		chip_save_reset_flags(EC_RESET_FLAG_AP_OFF);
 	}
 
 #ifdef CONFIG_CHIP_PANIC_BACKUP
@@ -150,7 +187,8 @@ void chipset_handle_reboot(void)
 	while (1)
 		; /* wait here */
 }
-#ifndef CONFIG_VBOOT_EFS
+#if !defined(CONFIG_VBOOT_EFS) || !defined(CONFIG_VBOOT_EFS2)
+/* This is run in main for EFS1 & EFS2 */
 DECLARE_HOOK(HOOK_INIT, chipset_handle_reboot, HOOK_PRIO_FIRST);
 #endif
 #endif /* CONFIG_CHIPSET_HAS_PLATFORM_RESET */

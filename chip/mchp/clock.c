@@ -341,7 +341,7 @@ static void prepare_for_deep_sleep(void)
 	/* Enable assertion of DeepSleep signals
 	 * from the core when core enters sleep.
 	 */
-	CPU_SCB_SYSCTRL |= (1 << 2);
+	CPU_SCB_SYSCTRL |= BIT(2);
 
 	/* Stop timers */
 	MCHP_TMR32_CTL(0) &= ~1;
@@ -422,7 +422,7 @@ static void resume_from_deep_sleep(void)
 	MCHP_PCR_SYS_SLP_CTL = 0x00;  /* default */
 
 	/* Disable assertion of DeepSleep signal when core executes WFI */
-	CPU_SCB_SYSCTRL &= ~(1 << 2);
+	CPU_SCB_SYSCTRL &= ~BIT(2);
 
 #ifdef CONFIG_MCHP_DEEP_SLP_DEBUG
 	print_saved_regs();
@@ -483,7 +483,7 @@ static void resume_from_deep_sleep(void)
 #ifdef CONFIG_WATCHDOG
 #ifdef CONFIG_CHIPSET_DEBUG
 	/* enable WDG stall on active JTAG and do not start */
-	MCHP_WDG_CTL = (1 << 4);
+	MCHP_WDG_CTL = BIT(4);
 #else
 	MCHP_WDG_CTL |= 1;
 #endif
@@ -697,9 +697,9 @@ static int command_idle_stats(int argc, char **argv)
 	ccprintf("Num idle calls that deep-sleep:      %d\n",
 			idle_dsleep_cnt);
 
-	ccprintf("Total Time spent in deep-sleep(sec): %.6ld(s)\n",
+	ccprintf("Total Time spent in deep-sleep(sec): %.6lld(s)\n",
 			total_idle_dsleep_time_us);
-	ccprintf("Total time on:                       %.6lds\n\n",
+	ccprintf("Total time on:                       %.6llds\n\n",
 			ts.val);
 
 #ifdef CONFIG_MCHP_DEEP_SLP_DEBUG

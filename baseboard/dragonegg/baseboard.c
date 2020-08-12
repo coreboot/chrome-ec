@@ -8,14 +8,20 @@
 #include "charge_state_v2.h"
 #include "chipset.h"
 #include "console.h"
+#include "driver/bc12/max14637.h"
+#include "driver/charger/bq25710.h"
+#include "driver/ppc/nx20p348x.h"
 #include "driver/ppc/sn5s330.h"
+#include "driver/ppc/syv682x.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
+#include "driver/tcpm/tusb422.h"
 #include "espi.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "icelake.h"
 #include "keyboard_scan.h"
 #include "power.h"
 #include "timer.h"
@@ -25,6 +31,8 @@
 #include "util.h"
 
 #define USB_PD_PORT_ITE_0	0
+#define USB_PD_PORT_ITE_1	1
+#define USB_PD_PORT_TUSB422_2	2
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
@@ -73,30 +81,27 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-/* power signal list. */
-const struct power_signal_info power_signal_list[] = {
-	[X86_SLP_S0_DEASSERTED] = {GPIO_SLP_S0_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"SLP_S0_DEASSERTED"},
-#ifdef CONFIG_HOSTCMD_ESPI_VW_SIGNALS
-	[X86_SLP_S3_DEASSERTED] = {VW_SLP_S3_L, POWER_SIGNAL_ACTIVE_HIGH,
-				   "SLP_S3_DEASSERTED"},
-	[X86_SLP_S4_DEASSERTED] = {VW_SLP_S4_L, POWER_SIGNAL_ACTIVE_HIGH,
-				   "SLP_S4_DEASSERTED"},
-#else
-	[X86_SLP_S3_DEASSERTED] = {GPIO_SLP_S3_L, POWER_SIGNAL_ACTIVE_HIGH,
-				   "SLP_S3_DEASSERTED"},
-	[X86_SLP_S4_DEASSERTED] = {GPIO_SLP_S4_L, POWER_SIGNAL_ACTIVE_HIGH,
-				   "SLP_S4_DEASSERTED"},
-#endif
-	[X86_SLP_SUS_DEASSERTED] = {GPIO_SLP_SUS_L, POWER_SIGNAL_ACTIVE_HIGH,
-				    "SLP_SUS_DEASSERTED"},
-	[X86_RSMRST_L_PGOOD] = {GPIO_PG_EC_RSMRST_ODL, POWER_SIGNAL_ACTIVE_HIGH,
-				"RSMRST_L_PGOOD"},
-	[X86_DSW_DPWROK] = {GPIO_PG_EC_DSW_PWROK, POWER_SIGNAL_ACTIVE_HIGH,
-			    "DSW_DPWROK"},
+/* Charger Chips */
+const struct charger_config_t chg_chips[] = {
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = BQ25710_SMBUS_ADDR1_FLAGS,
+		.drv = &bq25710_drv,
+	},
 };
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
+const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+
+/******************************************************************************/
+/* PWROK signal configuration */
+/*
+ * On Dragonegg the ALL_SYS_PWRGD, VCCST_PWRGD, PCH_PWROK, and SYS_PWROK
+ * signals are handled by the board. No EC control needed.
+ */
+const struct intel_x86_pwrok_signal pwrok_signal_assert_list[] = {};
+const int pwrok_signal_assert_count = ARRAY_SIZE(pwrok_signal_assert_list);
+
+const struct intel_x86_pwrok_signal pwrok_signal_deassert_list[] = {};
+const int pwrok_signal_deassert_count = ARRAY_SIZE(pwrok_signal_assert_list);
 
 /******************************************************************************/
 /* Chipset callbacks/hooks */
@@ -156,30 +161,95 @@ void board_hibernate(void)
 }
 /******************************************************************************/
 /* USB-C TPCP Configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_COUNT] = {
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
+		.bus_type = EC_BUS_TYPE_EMBEDDED,
 		/* TCPC is embedded within EC so no i2c config needed */
 		.drv = &it83xx_tcpm_drv,
-		.pol = TCPC_ALERT_ACTIVE_LOW,
+		/* Alert is active-low, push-pull */
+		.flags = 0,
+	},
+
+	[USB_PD_PORT_ITE_1] = {
+		.bus_type = EC_BUS_TYPE_EMBEDDED,
+		/* TCPC is embedded within EC so no i2c config needed */
+		.drv = &it83xx_tcpm_drv,
+		/* Alert is active-low, push-pull */
+		.flags = 0,
+	},
+
+	[USB_PD_PORT_TUSB422_2] = {
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_USBC1C2,
+			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
+		},
+		.drv = &tusb422_tcpm_drv,
+		/* Alert is active-low, push-pull */
+		.flags = 0,
 	},
 };
 
 /******************************************************************************/
 /* USB-C PPC Configuration */
-struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_COUNT] = {
+struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ITE_0] = {
 		.i2c_port = I2C_PORT_USBC0,
-		.i2c_addr = SN5S330_ADDR0,
+		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
 		.drv = &sn5s330_drv
+	},
+
+	[USB_PD_PORT_ITE_1] = {
+		.i2c_port = I2C_PORT_USBC1C2,
+		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.drv = &syv682x_drv
+	},
+
+	[USB_PD_PORT_TUSB422_2] = {
+		.i2c_port = I2C_PORT_USBC1C2,
+		.i2c_addr_flags = NX20P3481_ADDR2_FLAGS,
+		.drv = &nx20p348x_drv,
 	},
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_COUNT] = {
-	{
-		.port_addr = 0,
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	[USB_PD_PORT_ITE_0] = {
+		.usb_port = USB_PD_PORT_ITE_0,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
+	},
+
+	[USB_PD_PORT_ITE_1] = {
+		.usb_port = USB_PD_PORT_ITE_1,
+		.driver = &virtual_usb_mux_driver,
+		.hpd_update = &virtual_hpd_update,
+	},
+
+	[USB_PD_PORT_TUSB422_2] = {
+		.usb_port = USB_PD_PORT_TUSB422_2,
+		.driver = &virtual_usb_mux_driver,
+		.hpd_update = &virtual_hpd_update,
+	},
+};
+
+/******************************************************************************/
+/* BC 1.2 chip Configuration */
+const struct max14637_config_t max14637_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.chip_enable_pin = GPIO_USB_C0_BC12_VBUS_ON_ODL,
+		.chg_det_pin = GPIO_USB_C0_BC12_CHG_MAX,
+		.flags = MAX14637_FLAGS_ENABLE_ACTIVE_LOW,
+	},
+	{
+		.chip_enable_pin = GPIO_USB_C1_BC12_VBUS_ON_ODL,
+		.chg_det_pin = GPIO_USB_C1_BC12_CHG_MAX,
+		.flags = MAX14637_FLAGS_ENABLE_ACTIVE_LOW,
+	},
+	{
+		.chip_enable_pin = GPIO_USB_C2_BC12_VBUS_ON_ODL,
+		.chg_det_pin = GPIO_USB_C2_BC12_CHG_MAX,
+		.flags = MAX14637_FLAGS_ENABLE_ACTIVE_LOW,
 	},
 };
 
@@ -189,18 +259,28 @@ void baseboard_tcpc_init(void)
 {
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_TCPPC_INT_L);
+	gpio_enable_interrupt(GPIO_USB_C2_TCPPC_INT_ODL);
+
+	/* Enable TCPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C2_TCPC_INT_ODL);
+
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
 uint16_t tcpc_get_alert_status(void)
 {
+	uint16_t status = 0;
 	/*
 	 * Since C0/C1 TCPC are embedded within EC, we don't need the PDCMD
 	 * tasks.The (embedded) TCPC status since chip driver code will
 	 * handles its own interrupts and forward the correct events to
 	 * the PD_C0 task. See it83xx/intc.c
 	 */
-	return 0;
+
+	if (!gpio_get_level(GPIO_USB_C2_TCPC_INT_ODL))
+		status = PD_STATUS_TCPC_ALERT_2;
+
+	return status;
 }
 
 /**
@@ -216,7 +296,7 @@ void board_reset_pd_mcu(void)
 	 * but it will get reset when the EC gets reset.
 	 */
 }
-void board_pd_vconn_ctrl(int port, int cc_pin, int enabled)
+void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 {
 	/*
 	 * We ignore the cc_pin because the polarity should already be set
@@ -230,12 +310,11 @@ void board_pd_vconn_ctrl(int port, int cc_pin, int enabled)
 int board_set_active_charge_port(int port)
 {
 	int is_valid_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_COUNT);
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 
 	if (!is_valid_port && port != CHARGE_PORT_NONE)
 		return EC_ERROR_INVAL;
-
 
 	if (port == CHARGE_PORT_NONE) {
 		CPRINTSUSB("Disabling all charger ports");

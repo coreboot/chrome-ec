@@ -1,9 +1,10 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 /* Emulator board-specific configuration */
 
+#include "battery.h"
 #include "button.h"
 #include "extpower.h"
 #include "gpio.h"
@@ -14,6 +15,7 @@
 #include "motion_sense.h"
 #include "motion_lid.h"
 #include "power_button.h"
+#include "spi.h"
 #include "temp_sensor.h"
 #include "timer.h"
 #include "util.h"
@@ -27,6 +29,11 @@
 
 #include "gpio_list.h"
 
+test_mockable enum battery_present battery_is_present(void)
+{
+	return BP_YES;
+}
+
 test_mockable_static int dummy_temp_get_val(int idx, int *temp_ptr)
 {
 	*temp_ptr = 0;
@@ -34,16 +41,20 @@ test_mockable_static int dummy_temp_get_val(int idx, int *temp_ptr)
 }
 
 const struct temp_sensor_t temp_sensors[] = {
-	{"CPU", TEMP_SENSOR_TYPE_CPU, dummy_temp_get_val, 0, 3},
-	{"Board", TEMP_SENSOR_TYPE_BOARD, dummy_temp_get_val, 1, 3},
-	{"Case", TEMP_SENSOR_TYPE_CASE, dummy_temp_get_val, 2, 0},
-	{"Battery", TEMP_SENSOR_TYPE_BOARD, dummy_temp_get_val, 3, 0},
+	{"CPU", TEMP_SENSOR_TYPE_CPU, dummy_temp_get_val, 0},
+	{"Board", TEMP_SENSOR_TYPE_BOARD, dummy_temp_get_val, 1},
+	{"Case", TEMP_SENSOR_TYPE_CASE, dummy_temp_get_val, 2},
+	{"Battery", TEMP_SENSOR_TYPE_BOARD, dummy_temp_get_val, 3},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 test_mockable void button_interrupt(enum gpio_signal signal)
 {
-};
+}
+
+test_mockable void fps_event(enum gpio_signal signal)
+{
+}
 
 #ifdef CONFIG_I2C
 /* I2C ports */
@@ -56,6 +67,16 @@ const struct i2c_port_t i2c_ports[] = {
 };
 
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+#endif
+
+#ifdef CONFIG_SPI_MASTER
+/* SPI devices */
+const struct spi_device_t spi_devices[] = {
+	/* Fingerprint sensor (SCLK at 4Mhz) */
+	{ CONFIG_SPI_FP_PORT, 3, GPIO_SPI1_NSS },
+};
+
+const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 #endif
 
 #ifdef TEST_BUILD

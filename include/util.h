@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,14 +16,20 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Standard macros / definitions */
+#define GENERIC_MAX(x, y) ((x) > (y) ? (x) : (y))
+#define GENERIC_MIN(x, y) ((x) < (y) ? (x) : (y))
 #ifndef MAX
 #define MAX(a, b)					\
 	({						\
 		__typeof__(a) temp_a = (a);		\
 		__typeof__(b) temp_b = (b);		\
 							\
-		temp_a > temp_b ? temp_a : temp_b;	\
+		GENERIC_MAX(temp_a, temp_b);		\
 	})
 #endif
 #ifndef MIN
@@ -32,12 +38,23 @@
 		__typeof__(a) temp_a = (a);		\
 		__typeof__(b) temp_b = (b);		\
 							\
-		temp_a < temp_b ? temp_a : temp_b;	\
+		GENERIC_MIN(temp_a, temp_b);		\
 	})
 #endif
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
+
+/**
+ * Ensure that value `v` is between `min` and `max`.
+ *
+ * @param v The value of interest.
+ * @param min The minimum allowed value for `v`.
+ * @param max The maximum allowed value for `v`.
+ * @return `v` if it is already between `min`/`max`, `min` if `v` was smaller
+ * than `min`, `max` if `v` was bigger than `max`.
+ */
+#define CLAMP(v, min, max) MIN(max, MAX(v, min))
 
 /*
  * Convert a pointer to a base struct into a pointer to the struct that
@@ -48,7 +65,10 @@
 	((type *)(((uint8_t *) pointer) - offsetof(type, member)))
 
 /* True of x is a power of two */
-#define POWER_OF_TWO(x) (x && !(x & (x - 1)))
+#define POWER_OF_TWO(x) ((x) && !((x) & ((x) - 1)))
+
+/* Macro to check if the value is in range */
+#define IN_RANGE(x, min, max) ((x) >= (min) && (x) < (max))
 
 /*
  * macros for integer division with various rounding variants
@@ -57,20 +77,46 @@
 #define DIV_ROUND_UP(x, y) (((x) + ((y) - 1)) / (y))
 #define DIV_ROUND_NEAREST(x, y) (((x) + ((y) / 2)) / (y))
 
+/*
+ * Swap two variables (requires c99)
+ *
+ * Swapping composites (e.g. a+b, x++) doesn't make sense. So, <a> and <b>
+ * can only be a variable (x) or a pointer reference (*x) without operator.
+ */
+#define swap(a, b) \
+	do { \
+		typeof(a) __t__; \
+		__t__ = a; \
+		a = b; \
+		b = __t__; \
+	} while (0)
+
+#ifndef HIDE_EC_STDLIB
+
 /* Standard library functions */
 int atoi(const char *nptr);
 int isdigit(int c);
 int isspace(int c);
 int isalpha(int c);
+int isupper(int c);
 int isprint(int c);
 int memcmp(const void *s1, const void *s2, size_t len);
-int safe_memcmp(const void *s1, const void *s2, size_t len);
 void *memcpy(void *dest, const void *src, size_t len);
-__visible void *memset(void *dest, int c, size_t len);
+void *memset(void *dest, int c, size_t len);
 void *memmove(void *dest, const void *src, size_t len);
 void *memchr(const void *buffer, int c, size_t n);
 int strcasecmp(const char *s1, const char *s2);
 int strncasecmp(const char *s1, const char *s2, size_t size);
+
+/**
+ * Find the first occurrence of the substring <s2> in the string <s1>
+ *
+ * @param s1	String where <s2> is searched.
+ * @param s2	Substring to be located in <s1>
+ * @return	Pointer to the located substring or NULL if not found.
+ */
+char *strstr(const char *s1, const char *s2);
+
 size_t strlen(const char *s);
 size_t strnlen(const char *s, size_t maxlen);
 char *strncpy(char *dest, const char *src, size_t n);
@@ -103,6 +149,12 @@ char *strzcpy(char *dest, const char *src, int len);
 int parse_bool(const char *s, int *dest);
 
 int tolower(int c);
+#endif  /* !HIDE_EC_STDLIB */
+
+/**
+ * Constant time implementation of memcmp to avoid timing side channels.
+ */
+int safe_memcmp(const void *s1, const void *s2, size_t len);
 
 /* 64-bit divide-and-modulo.  Does the equivalent of:
  *
@@ -133,6 +185,15 @@ int get_next_bit(uint32_t *mask);
  * @return true if |buffer| is full of 0x00 or 0xff, false otherwise.
  */
 bool bytes_are_trivial(const uint8_t *buffer, size_t size);
+
+/**
+ * Checks if address is power-of-two aligned to specified alignment.
+ *
+ * @param addr  address
+ * @param align power-of-two alignment
+ * @return true if addr is aligned to align, false otherwise
+ */
+bool is_aligned(uint32_t addr, uint32_t align);
 
 /**
  * Reverse's the byte-order of the provided buffer.
@@ -195,6 +256,19 @@ static inline int cond_went_true(cond_t *c) { return cond_went(c, 1); }
 int parse_offset_size(int argc, char **argv, int shift,
 			     int *offset, int *size);
 
+/**
+ * Print binary in hex and ASCII
+ *
+ * Sample output of hexdump(image_data.version, 30):
+ *
+ *   6e 61 6d 69 5f 76 32 2e 30 2e 37 37 34 2d 63 66 |nami_v2.0.774-cf|
+ *   34 62 64 33 34 38 30 00 00 00 00 00 00 00       |4bd3480.......  |
+ *
+ * @param data	Data to be dumped
+ * @param len	Size of data
+ */
+void hexdump(const uint8_t *data, int len);
+
 #ifdef CONFIG_ASSEMBLY_MULA32
 /*
  * Compute (a*b)+c[+d], where a, b, c[, d] are 32-bit integers, and the result
@@ -222,6 +296,10 @@ static inline uint64_t mulaa32(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 	ret += d;
 
 	return ret;
+}
+#endif
+
+#ifdef __cplusplus
 }
 #endif
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,6 +16,7 @@ enum module_id {
 	MODULE_CHIPSET,
 	MODULE_CLOCK,
 	MODULE_COMMAND,
+	MODULE_DAC,
 	MODULE_DMA,
 	MODULE_EXTPOWER,
 	MODULE_FAST_CPU,
@@ -34,6 +35,7 @@ enum module_id {
 	MODULE_PMU,
 	MODULE_PORT80,
 	MODULE_POWER_LED,
+	MODULE_PS2,
 	MODULE_PWM,
 	MODULE_RDD,
 	MODULE_RBOX,

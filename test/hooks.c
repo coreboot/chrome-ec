@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -134,7 +134,32 @@ static int test_deferred(void)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+static int repeating_deferred_count;
+static void deferred_repeating_func(void);
+DECLARE_DEFERRED(deferred_repeating_func);
+
+static void deferred_repeating_func(void)
+{
+	++repeating_deferred_count;
+
+	usleep(100 * MSEC);
+	if (repeating_deferred_count < 5)
+		hook_call_deferred(&deferred_repeating_func_data, SECOND);
+
+	usleep(100 * MSEC);
+}
+
+static int test_repeating_deferred(void)
+{
+	repeating_deferred_count = 0;
+	hook_call_deferred(&deferred_repeating_func_data, 0);
+	usleep(MINUTE);
+	TEST_EQ(repeating_deferred_count, 5, "%d");
+
+	return EC_SUCCESS;
+}
+
+void run_test(int argc, char **argv)
 {
 	test_reset();
 
@@ -142,6 +167,7 @@ void run_test(void)
 	RUN_TEST(test_ticks);
 	RUN_TEST(test_priority);
 	RUN_TEST(test_deferred);
+	RUN_TEST(test_repeating_deferred);
 
 	test_print_result();
 }

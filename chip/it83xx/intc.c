@@ -12,7 +12,7 @@
 #include "tcpm.h"
 #include "usb_pd.h"
 
-#ifdef CONFIG_USB_PD_TCPM_ITE83XX
+#if defined(CONFIG_USB_PD_TCPM_ITE_ON_CHIP)
 static void chip_pd_irq(enum usbpd_port port)
 {
 	task_clear_pending_irq(usbpd_ctrl_regs[port].irq);
@@ -23,21 +23,57 @@ static void chip_pd_irq(enum usbpd_port port)
 		IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_HARD_RESET_DETECT;
 		task_set_event(PD_PORT_TO_TASK_ID(port),
 			PD_EVENT_TCPC_RESET, 0);
-	} else {
-		if (USBPD_IS_RX_DONE(port)) {
-			tcpm_enqueue_message(port);
-			/* clear RX done interrupt */
-			IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_MSG_RX_DONE;
-		}
-		if (USBPD_IS_TX_DONE(port)) {
-			/* clear TX done interrupt */
-			IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_MSG_TX_DONE;
+	}
+
+	if (USBPD_IS_RX_DONE(port)) {
+		tcpm_enqueue_message(port);
+		/* clear RX done interrupt */
+		IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_MSG_RX_DONE;
+	}
+
+	if (USBPD_IS_TX_DONE(port)) {
+#ifdef CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2
+		it83xx_clear_tx_error_status(port);
+		/* check TX status, clear by TX_DONE status too */
+		if (USBPD_IS_TX_ERR(port))
+			it83xx_get_tx_error_status(port);
+#endif
+		/* clear TX done interrupt */
+		IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_MSG_TX_DONE;
+		task_set_event(PD_PORT_TO_TASK_ID(port),
+			TASK_EVENT_PHY_TX_DONE, 0);
+	}
+
+	if (IS_ENABLED(IT83XX_INTC_PLUG_IN_SUPPORT)) {
+		if (USBPD_IS_PLUG_IN_OUT_DETECT(port)) {
+			/*
+			 * When tcpc detect type-c plug in, then disable
+			 * this interrupt. Because any cc volt changes
+			 * (include pd negotiation) would trigger plug in
+			 * interrupt, frequently plug in interrupt and wakeup
+			 * pd task may cause task starvation or device dead
+			 * (ex.transmit lots SRC_Cap).
+			 *
+			 * When polling disconnect will enable detect type-c
+			 * plug in again.
+			 *
+			 * Clear detect type-c plug in interrupt status.
+			 */
+			IT83XX_USBPD_TCDCR(port) |=
+				(USBPD_REG_PLUG_IN_OUT_DETECT_DISABLE |
+				 USBPD_REG_PLUG_IN_OUT_DETECT_STAT);
 			task_set_event(PD_PORT_TO_TASK_ID(port),
-				TASK_EVENT_PHY_TX_DONE, 0);
+				PD_EVENT_CC, 0);
 		}
 	}
 }
 #endif
+
+int __ram_code intc_get_ec_int(void)
+{
+	extern volatile int ec_int;
+	return ec_int;
+}
 
 void intc_cpu_int_group_5(void)
 {
@@ -113,7 +149,7 @@ void intc_cpu_int_group_12(void)
 		espi_vw_interrupt();
 		break;
 #endif
-#ifdef CONFIG_USB_PD_TCPM_ITE83XX
+#ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 	case IT83XX_IRQ_USBPD0:
 		chip_pd_irq(USBPD_PORT_A);
 		break;
@@ -121,7 +157,17 @@ void intc_cpu_int_group_12(void)
 	case IT83XX_IRQ_USBPD1:
 		chip_pd_irq(USBPD_PORT_B);
 		break;
-#endif /* CONFIG_USB_PD_TCPM_ITE83XX */
+#ifdef CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2
+	case IT83XX_IRQ_USBPD2:
+		chip_pd_irq(USBPD_PORT_C);
+		break;
+#endif
+#endif
+#ifdef CONFIG_SPI
+	case IT83XX_IRQ_SPI_SLAVE:
+		spi_slv_int_handler();
+		break;
+#endif
 	default:
 		break;
 	}
@@ -138,6 +184,11 @@ void intc_cpu_int_group_7(void)
 	case IT83XX_IRQ_ADC:
 		adc_interrupt();
 		break;
+#ifdef CONFIG_ADC_VOLTAGE_COMPARATOR
+	case IT83XX_IRQ_V_COMP:
+		voltage_comparator_interrupt();
+		break;
+#endif
 #endif
 	default:
 		break;
@@ -151,9 +202,14 @@ void intc_cpu_int_group_6(void)
 	int intc_group_6 = intc_get_ec_int();
 
 	switch (intc_group_6) {
-#ifdef CONFIG_I2C
+#if defined(CONFIG_I2C_MASTER) || defined(CONFIG_I2C_SLAVE)
 	case IT83XX_IRQ_SMB_A:
-		i2c_interrupt(IT83XX_I2C_CH_A);
+#ifdef CONFIG_I2C_SLAVE
+		if (IT83XX_SMB_SFFCTL & IT83XX_SMB_SAFE)
+			i2c_slv_interrupt(IT83XX_I2C_CH_A);
+		else
+#endif
+			i2c_interrupt(IT83XX_I2C_CH_A);
 		break;
 
 	case IT83XX_IRQ_SMB_B:
@@ -165,15 +221,30 @@ void intc_cpu_int_group_6(void)
 		break;
 
 	case IT83XX_IRQ_SMB_D:
-		i2c_interrupt(IT83XX_I2C_CH_D);
+#ifdef CONFIG_I2C_SLAVE
+		if (!(IT83XX_I2C_CTR(3) & IT83XX_I2C_MODE))
+			i2c_slv_interrupt(IT83XX_I2C_CH_D);
+		else
+#endif
+			i2c_interrupt(IT83XX_I2C_CH_D);
 		break;
 
 	case IT83XX_IRQ_SMB_E:
-		i2c_interrupt(IT83XX_I2C_CH_E);
+#ifdef CONFIG_I2C_SLAVE
+		if (!(IT83XX_I2C_CTR(0) & IT83XX_I2C_MODE))
+			i2c_slv_interrupt(IT83XX_I2C_CH_E);
+		else
+#endif
+			i2c_interrupt(IT83XX_I2C_CH_E);
 		break;
 
 	case IT83XX_IRQ_SMB_F:
-		i2c_interrupt(IT83XX_I2C_CH_F);
+#ifdef CONFIG_I2C_SLAVE
+		if (!(IT83XX_I2C_CTR(1) & IT83XX_I2C_MODE))
+			i2c_slv_interrupt(IT83XX_I2C_CH_F);
+		else
+#endif
+			i2c_interrupt(IT83XX_I2C_CH_F);
 		break;
 #endif
 	default:

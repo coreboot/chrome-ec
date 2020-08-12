@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 The Chromium OS Authors. All rights reserved.
+/* Copyright 2011 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -35,7 +35,7 @@ typedef uint8_t task_id_t;
  * TASK_ID_<taskname> where <taskname> is the first parameter passed to the
  * TASK macro in the TASK_LIST file.
  */
-#define TASK(n, r, d, s) TASK_ID_##n,
+#define TASK(n, ...) TASK_ID_##n,
 enum {
 	TASK_ID_IDLE,
 	/* CONFIG_TASK_LIST is a macro coming from the BOARD_TASK_LIST file */

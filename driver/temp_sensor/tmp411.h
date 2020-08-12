@@ -1,4 +1,4 @@
-/* Copyright (c) 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,7 +8,7 @@
 #ifndef __CROS_EC_TMP411_H
 #define __CROS_EC_TMP411_H
 
-#define TMP411_I2C_ADDR		0x98 /* 7-bit address is 0x4C */
+#define TMP411_I2C_ADDR_FLAGS		0x4C
 
 #define TMP411_IDX_LOCAL	0
 #define TMP411_IDX_REMOTE1	1
@@ -67,20 +67,20 @@
 #define TMP411d_DEVICE_ID_VAL		0x12
 
 /* Config register bits */
-#define TMP411_CONFIG1_TEMP_RANGE	(1 << 2)
+#define TMP411_CONFIG1_TEMP_RANGE	BIT(2)
 /* TMP411_CONFIG1_MODE bit is use to enable THERM mode */
-#define TMP411_CONFIG1_MODE		(1 << 5)
-#define TMP411_CONFIG1_RUN_L		(1 << 6)
-#define TMP411_CONFIG1_ALERT_MASK_L	(1 << 7)
+#define TMP411_CONFIG1_MODE		BIT(5)
+#define TMP411_CONFIG1_RUN_L		BIT(6)
+#define TMP411_CONFIG1_ALERT_MASK_L	BIT(7)
 
 /* Status register bits */
-#define TMP411_STATUS_TEMP_THERM_ALARM	(1 << 1)
-#define TMP411_STATUS_OPEN		(1 << 2)
-#define TMP411_STATUS_TEMP_LOW_ALARM	(1 << 3)
-#define TMP411_STATUS_TEMP_HIGH_ALARM	(1 << 4)
-#define TMP411_STATUS_LOCAL_TEMP_LOW_ALARM	(1 << 5)
-#define TMP411_STATUS_LOCAL_TEMP_HIGH_ALARM	(1 << 6)
-#define TMP411_STATUS_BUSY		(1 << 7)
+#define TMP411_STATUS_TEMP_THERM_ALARM	BIT(1)
+#define TMP411_STATUS_OPEN		BIT(2)
+#define TMP411_STATUS_TEMP_LOW_ALARM	BIT(3)
+#define TMP411_STATUS_TEMP_HIGH_ALARM	BIT(4)
+#define TMP411_STATUS_LOCAL_TEMP_LOW_ALARM	BIT(5)
+#define TMP411_STATUS_LOCAL_TEMP_HIGH_ALARM	BIT(6)
+#define TMP411_STATUS_BUSY		BIT(7)
 
 /* Limits */
 #define TMP411_HYSTERESIS_HIGH_LIMIT	255
