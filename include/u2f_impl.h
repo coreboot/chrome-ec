@@ -30,30 +30,6 @@ enum touch_state pop_check_presence(int consume);
 /* ---- platform cryptography hooks ---- */
 
 /**
- * Generate an origin-specific ECDSA keypair.
- *
- * Calculates a diversified chip-unique 256b value.
- *
- * @param seed ptr to store 32-byte seed to regenerate this key on this chip
- * @param d pointer to ECDSA private key
- * @param pk_x pointer to public key point
- * @param pk_y pointer to public key point
- *
- * @return EC_SUCCESS if a valid keypair was created.
- */
-int u2f_origin_keypair(uint8_t *seed, p256_int *d,
-		       p256_int *pk_x, p256_int *pk_y);
-
-/**
- * Reconstitute the origin ECDSA private key from its seed.
- *
- * @param seed value returned by origin_keypair.
- * @param d ptr to store the retrieved private key.
- * @return EC_SUCCESS if we retrieved the key.
- */
-int u2f_origin_key(const uint8_t *seed, p256_int *d);
-
-/**
  * Pack the specified origin, user secret and origin-specific seed
  * into a key handle.
  *

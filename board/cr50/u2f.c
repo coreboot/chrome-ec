@@ -166,17 +166,6 @@ static int _derive_key(enum dcrypto_appid appid, const uint32_t input[8],
 	return result;
 }
 
-int u2f_origin_key(const uint8_t *seed, p256_int *d)
-{
-	uint32_t tmp[P256_NDIGITS];
-
-	memcpy(tmp, seed, sizeof(tmp));
-	if (!_derive_key(U2F_ORIGIN, tmp, tmp))
-		return EC_ERROR_UNKNOWN;
-	return DCRYPTO_p256_key_from_bytes(NULL, NULL, d,
-					   (const uint8_t *)tmp) == 0;
-}
-
 int u2f_origin_user_keyhandle(const uint8_t *origin, const uint8_t *user,
 			      const uint8_t *origin_seed,
 			      struct u2f_key_handle *key_handle)
