@@ -24,38 +24,6 @@
 #define AES_BLOCK_LEN 16
 #define KH_LEN 64
 
-/* De-interleave 64 bytes into two 32 arrays. */
-static void deinterleave64(const uint8_t *in, uint8_t *a, uint8_t *b)
-{
-	size_t i;
-
-	for (i = 0; i < 32; ++i) {
-		a[i] = in[2 * i + 0];
-		b[i] = in[2 * i + 1];
-	}
-}
-
-/* (un)wrap w/ the origin dependent KEK. */
-static int wrap_kh(const uint8_t *origin, const uint8_t *in, uint8_t *out,
-		   enum encrypt_mode mode)
-{
-	uint8_t kek[SHA256_DIGEST_SIZE];
-	uint8_t iv[AES_BLOCK_LEN] = { 0 };
-	int i;
-
-	/* KEK derivation */
-	if (u2f_gen_kek(origin, kek, sizeof(kek)))
-		return EC_ERROR_UNKNOWN;
-
-	DCRYPTO_aes_init(kek, 256, iv, CIPHER_MODE_CBC, mode);
-
-	for (i = 0; i < 4; i++)
-		DCRYPTO_aes_block(in + i * AES_BLOCK_LEN,
-				  out + i * AES_BLOCK_LEN);
-
-	return EC_SUCCESS;
-}
-
 static int individual_cert(const p256_int *d, const p256_int *pk_x,
 			   const p256_int *pk_y, uint8_t *cert, const int n)
 {
@@ -284,27 +252,6 @@ static int verify_versioned_kh_owned(
 	return rc;
 }
 
-static int verify_legacy_kh_owned(const uint8_t *app_id,
-				  const uint8_t *key_handle,
-				  uint8_t *origin_seed)
-{
-	uint8_t unwrapped_kh[KH_LEN];
-	uint8_t kh_app_id[U2F_APPID_SIZE];
-
-	p256_int app_id_p256;
-	p256_int kh_app_id_p256;
-
-	/* Unwrap key handle */
-	if (wrap_kh(app_id, key_handle, unwrapped_kh, DECRYPT_MODE))
-		return 0;
-	deinterleave64(unwrapped_kh, kh_app_id, origin_seed);
-
-	/* Return whether appId (i.e. origin) matches. */
-	p256_from_bin(app_id, &app_id_p256);
-	p256_from_bin(kh_app_id, &kh_app_id_p256);
-	return p256_cmp(&app_id_p256, &kh_app_id_p256) == 0;
-}
-
 /* Below, we depend on the response not being larger than than the request. */
 BUILD_ASSERT(sizeof(struct u2f_sign_resp) <= sizeof(struct u2f_sign_req));
 
@@ -324,14 +271,10 @@ static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
 	int kh_owned = 0;
 
 	/* Origin private key. */
-	uint8_t legacy_origin_seed[SHA256_DIGEST_SIZE];
 	p256_int origin_d;
 
 	/* Hash, and corresponding signature. */
 	p256_int h, r, s;
-
-	/* Whether the key handle uses the legacy key derivation scheme. */
-	int legacy_kh = 0;
 
 	/* Version of KH; 0 if KH is not versioned. */
 	uint8_t version;
@@ -369,26 +312,8 @@ static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
 	if (verify_owned_rc != EC_SUCCESS)
 		return VENDOR_RC_INTERNAL_ERROR;
 
-	if (!kh_owned) {
-		if ((flags & SIGN_LEGACY_KH) == 0)
-			return VENDOR_RC_PASSWORD_REQUIRED;
-
-		/* Legacy KH must be version 0. */
-		if (version != 0)
-			return VENDOR_RC_PASSWORD_REQUIRED;
-
-		/*
-		 * We have a key handle which is not valid for the new scheme,
-		 * but may be a valid legacy key handle, and we have been asked
-		 * to sign legacy key handles.
-		 */
-		if (verify_legacy_kh_owned(req->appId,
-					   (uint8_t *)&req->keyHandle,
-					   legacy_origin_seed))
-			legacy_kh = 1;
-		else
-			return VENDOR_RC_PASSWORD_REQUIRED;
-	}
+	if (!kh_owned)
+		return VENDOR_RC_PASSWORD_REQUIRED;
 
 	/* We might not actually need to sign anything. */
 	if ((flags & U2F_AUTH_CHECK_ONLY) == U2F_AUTH_CHECK_ONLY)
@@ -409,15 +334,9 @@ static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
 	}
 
 	/* Re-create origin-specific key. */
-	if (legacy_kh) {
-		if (u2f_origin_key(legacy_origin_seed, &origin_d) != EC_SUCCESS)
-			return VENDOR_RC_INTERNAL_ERROR;
-	} else {
-		if (u2f_origin_user_keypair(key_handle, keypair_input_size,
-					    &origin_d, NULL,
-					    NULL) != EC_SUCCESS)
-			return VENDOR_RC_INTERNAL_ERROR;
-	}
+	if (u2f_origin_user_keypair(key_handle, keypair_input_size, &origin_d,
+				    NULL, NULL) != EC_SUCCESS)
+		return VENDOR_RC_INTERNAL_ERROR;
 
 	/* Prepare hash to sign. */
 	p256_from_bin(hash, &h);
