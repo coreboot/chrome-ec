@@ -138,8 +138,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-static void board_hpd_status(const struct usb_mux *me,
-			     int hpd_lvl, int hpd_irq)
+static void board_hpd_status(int port, int hpd_lvl, int hpd_irq)
 {
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
@@ -148,11 +147,10 @@ static void board_hpd_status(const struct usb_mux *me,
 	host_set_single_event(EC_HOST_EVENT_USB_MUX);
 }
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX,
-		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
+		/* Driver uses I2C_PORT_USB_MUX as I2C port */
+		.port_addr = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
 		.hpd_update = &board_hpd_status,
 	},
