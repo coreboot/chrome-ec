@@ -34,7 +34,17 @@
 #define CONFIG_UART_TX_REQ_CH STM32_REQ_USART2_TX
 #define CONFIG_UART_RX_REQ_CH STM32_REQ_USART2_RX
 
-#define CONFIG_ACCELGYRO_BMI160
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCEL_INTERRUPTS
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT TASK_EVENT_CUSTOM(4)
+
+#define CONFIG_MKBP_EVENT
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+/* FIFO size is in power of 2. */
+#define CONFIG_ACCEL_FIFO 512
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
+
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 #define CONFIG_CMD_FLASH
