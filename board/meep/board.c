@@ -9,6 +9,7 @@
 #include "adc_chip.h"
 #include "battery.h"
 #include "button.h"
+#include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "common.h"
@@ -350,6 +351,22 @@ uint32_t board_override_feature_flags0(uint32_t flags0)
 uint32_t board_override_feature_flags1(uint32_t flags1)
 {
 	return flags1;
+}
+
+__override uint16_t board_get_ps8xxx_product_id(int port)
+{
+	/* Meep variant doesn't have ps8xxx product in the port 0 */
+	if (port == 0)
+		return 0;
+
+	switch (get_cbi_ssfc_tcpc_p1()) {
+	case TCPC_P1_PS8755:
+		return PS8755_PRODUCT_ID;
+	case TCPC_P1_DEFAULT:
+	case TCPC_P1_PS8751:
+	default:
+		return PS8751_PRODUCT_ID;
+	}
 }
 
 const struct ppc_config_t ppc_syv682x_port0 = {
