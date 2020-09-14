@@ -3,17 +3,17 @@
  * found in the LICENSE file.
  */
 
-/* Waddledee board-specific configuration */
+/* Boten board-specific configuration */
 
+#include "adc_chip.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
-#include "driver/accel_lis2dh.h"
+#include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
-#include "driver/sync.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "driver/tcpm/raa489000.h"
 #include "driver/tcpm/tcpci.h"
@@ -41,6 +41,11 @@
 
 #define CPRINTUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 
+static void hdmi_hpd_interrupt(enum gpio_signal s)
+{
+	gpio_set_level(GPIO_USB_C1_DP_HPD, !gpio_get_level(s));
+}
+
 static void usb_c0_interrupt(enum gpio_signal s)
 {
 	/*
@@ -60,6 +65,39 @@ static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
+/* ADC channels */
+const struct adc_t adc_channels[] = {
+	[ADC_VSNS_PP3300_A] = {
+		.name = "PP3300_A_PGOOD",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH0
+	},
+	[ADC_TEMP_SENSOR_1] = {
+		.name = "TEMP_SENSOR1",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH2
+	},
+	[ADC_TEMP_SENSOR_2] = {
+		.name = "TEMP_SENSOR2",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH3
+	},
+	[ADC_SUB_ANALOG] = {
+		.name = "SUB_ANALOG",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH13
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
 /* BC 1.2 chips */
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	{
@@ -77,7 +115,6 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &isl923x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* TCPCs */
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
@@ -108,6 +145,14 @@ void board_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+	gpio_enable_interrupt(GPIO_HDMI_HPD_SUB_ODL);
+
+	gpio_set_level(GPIO_HDMI_EN_SUB_ODL, 0);
+
+	/* Set LEDs luminance */
+	pwm_set_duty(PWM_CH_LED_RED, 70);
+	pwm_set_duty(PWM_CH_LED_GREEN, 70);
+	pwm_set_duty(PWM_CH_LED_WHITE, 70);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -141,11 +186,6 @@ uint16_t tcpc_get_alert_status(void)
 	}
 
 	return status;
-}
-
-int extpower_is_present(void)
-{
-	return pd_check_vbus_level(0, VBUS_PRESENT);
 }
 
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
@@ -220,7 +260,7 @@ const struct pwm_t pwm_channels[] = {
 		.freq_hz = 2400,
 	},
 
-	[PWM_CH_LED_BLUE] = {
+	[PWM_CH_LED_WHITE] = {
 		.channel = 3,
 		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
 		.freq_hz = 2400,
@@ -234,7 +274,7 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* Sensor Data */
-static struct stprivate_data g_lis2dh_data;
+static struct stprivate_data g_lis2dwl_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Drivers */
@@ -242,22 +282,21 @@ struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LIS2DE,
+		.chip = MOTIONSENSE_CHIP_LIS2DWL,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_LID,
-		.drv = &lis2dh_drv,
+		.drv = &lis2dw12_drv,
 		.mutex = &g_lid_mutex,
-		.drv_data = &g_lis2dh_data,
+		.drv_data = &g_lis2dwl_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LIS2DH_ADDR1_FLAGS,
+		.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
 		.rot_standard_ref = NULL,
 		.default_range = 2, /* g */
-		/* We only use 2g because its resolution is only 8-bits */
-		.min_frequency = LIS2DH_ODR_MIN_VAL,
-		.max_frequency = LIS2DH_ODR_MAX_VAL,
+		.min_frequency = LIS2DW12_ODR_MIN_VAL,
+		.max_frequency = LIS2DW12_ODR_MAX_VAL,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 10000 | ROUND_UP_FLAG,
+				.odr = 12500 | ROUND_UP_FLAG,
 			},
 			[SENSOR_CONFIG_EC_S3] = {
 				.odr = 10000 | ROUND_UP_FLAG,
@@ -311,17 +350,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = NULL,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
-	},
-	[VSYNC] = {
-		.name = "Camera VSYNC",
-		.active_mask = SENSOR_ACTIVE_S0,
-		.chip = MOTIONSENSE_CHIP_GPIO,
-		.type = MOTIONSENSE_TYPE_SYNC,
-		.location = MOTIONSENSE_LOC_CAMERA,
-		.drv = &sync_drv,
-		.default_range = 0,
-		.min_frequency = 0,
-		.max_frequency = 1,
 	},
 };
 

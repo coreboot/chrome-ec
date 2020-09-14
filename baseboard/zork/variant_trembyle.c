@@ -102,26 +102,6 @@ struct charger_config_t chg_chips[] = {
 		.drv = &isl9241_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
-
-/*
- * If the charger is found on the V0 I2C port then re-map the port.
- * Use HOOK_PRIO_INIT_I2C so we re-map before charger_chips_init()
- * talks to the charger. This relies on the V1 HW not using the ISL9241 address
- * on the V0 I2C port.
- * TODO(b/155214765): Remove this check once V0 HW is no longer used.
- */
-static void check_v0_charger(void)
-{
-	int id;
-
-	if (i2c_read16(I2C_PORT_CHARGER_V0, ISL9241_ADDR_FLAGS,
-			ISL9241_REG_MANUFACTURER_ID, &id) == EC_SUCCESS) {
-		ccprints("V0 charger HW detected");
-		chg_chips[0].i2c_port = I2C_PORT_CHARGER_V0;
-	}
-}
-DECLARE_HOOK(HOOK_INIT, check_v0_charger, HOOK_PRIO_INIT_I2C);
 
 /*****************************************************************************
  * TCPC
@@ -140,6 +120,10 @@ void baseboard_tcpc_init(void)
 	/* Enable BC 1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+
+	/* Enable SBU fault interrupts */
+	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
+	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_DB_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -158,7 +142,7 @@ struct ppc_config_t ppc_chips[] = {
 BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-void ppc_interrupt(enum gpio_signal signal)
+__overridable void ppc_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_PPC_FAULT_ODL:
@@ -343,7 +327,7 @@ void tcpc_alert_event(enum gpio_signal signal)
 }
 
 
-int board_tcpc_fast_role_swap_enable(int port, int enable)
+int board_pd_set_frs_enable(int port, int enable)
 {
 	int rv = EC_SUCCESS;
 
@@ -393,15 +377,6 @@ struct ioexpander_config_t ioex_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_IO_EXPANDER_PORT_COUNT == USBC_PORT_COUNT);
-
-/*****************************************************************************
- * USB-A Power
- */
-
-const int usb_port_enable[USBA_PORT_COUNT] = {
-	IOEX_EN_USB_A0_5V,
-	IOEX_EN_USB_A1_5V_DB,
-};
 
 /*****************************************************************************
  * Custom Zork USB-C1 Retimer/MUX driver
@@ -511,10 +486,10 @@ static int board_ps8818_mux_set(const struct usb_mux *me,
 			return rv;
 
 		/* Enable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
+		gpio_or_ioex_set_level(PORT_TO_HPD(1), 1);
 	} else {
 		/* Disable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
+		gpio_or_ioex_set_level(PORT_TO_HPD(1), 0);
 	}
 
 	return rv;
@@ -540,3 +515,26 @@ struct usb_mux usbc1_amd_fp5_usb_mux = {
 	.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
 	.driver = &amd_fp5_usb_mux_driver,
 };
+
+/*
+ * USB-C1 HPD may go through an IO expander, so we must use a custom HPD GPIO
+ * control function with CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM.
+ *
+ * TODO(b/165622386) revert to non-custom GPIO control when HPD is no longer on
+ * the IO expander in any variants.
+ */
+void svdm_set_hpd_gpio(int port, int en)
+{
+	gpio_or_ioex_set_level(PORT_TO_HPD(port), en);
+}
+
+int svdm_get_hpd_gpio(int port)
+{
+	int out;
+
+	if (gpio_or_ioex_get_level(PORT_TO_HPD(port), &out) != EC_SUCCESS) {
+		ccprints("Failed to read current HPD for port C%d", port);
+		return 0;
+	}
+	return out;
+}

@@ -252,6 +252,9 @@ void fp_task(void)
 			} else if (mode & FP_MODE_RESET_SENSOR) {
 				fp_reset_and_clear_context();
 				sensor_mode &= ~FP_MODE_RESET_SENSOR;
+			} else if (mode & FP_MODE_SENSOR_MAINTENANCE) {
+				fp_maintenance();
+				sensor_mode &= ~FP_MODE_SENSOR_MAINTENANCE;
 			} else {
 				fp_sensor_low_power();
 			}
@@ -829,5 +832,16 @@ int command_fpclear(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(fpclear, command_fpclear, NULL,
 			"Clear fingerprint sensor context");
+
+int command_fpmaintenance(int argc, char **argv)
+{
+#ifdef HAVE_FP_PRIVATE_DRIVER
+	return fp_maintenance();
+#else
+	return EC_SUCCESS;
+#endif /* #ifdef HAVE_FP_PRIVATE_DRIVER */
+}
+DECLARE_CONSOLE_COMMAND(fpmaintenance, command_fpmaintenance, NULL,
+			"Run fingerprint sensor maintenance");
 
 #endif /* CONFIG_CMD_FPSENSOR_DEBUG */

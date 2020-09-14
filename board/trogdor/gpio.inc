@@ -24,7 +24,7 @@ GPIO_INT(EC_VOLDN_BTN_ODL,  PIN(7, 0), GPIO_INT_BOTH | GPIO_PULL_UP, button_inte
 GPIO_INT(EC_VOLUP_BTN_ODL,  PIN(F, 2), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)  /* Volume Down button */
 GPIO_INT(EC_WP_ODL,         PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)  /* Write protection */
 GPIO_INT(LID_OPEN_EC,       PIN(D, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, lid_interrupt)  /* Lid open? */
-GPIO_INT(AP_RST_L,          PIN(C, 1), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)  /* PMIC to signal AP reset */
+GPIO_INT(AP_RST_L,          PIN(C, 1), GPIO_INT_BOTH | GPIO_SEL_1P8V, chipset_ap_rst_interrupt)  /* PMIC to signal AP reset */
 GPIO_INT(PS_HOLD,           PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt)  /* Indicate when AP triggers reset/shutdown */
 GPIO_INT(PMIC_FAULT_L,      PIN(A, 3), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)  /* Any PMIC fault? */
 GPIO_INT(AP_SUSPEND,        PIN(5, 7), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)  /* Suspend signal from PMIC */
@@ -57,9 +57,10 @@ GPIO(EC_ENTERING_RW,        PIN(E, 1), GPIO_OUT_LOW)   /* Indicate when EC is en
 GPIO(EC_BATT_PRES_ODL,      PIN(E, 5), GPIO_INPUT)     /* Battery Present */
 
 /* PMIC/AP 1.8V */
-GPIO(PM845_RESIN_L,         PIN(3, 2), GPIO_ODR_HIGH | GPIO_SEL_1P8V)  /* PMIC reset trigger */
+GPIO(PMIC_RESIN_L,          PIN(3, 2), GPIO_ODR_HIGH | GPIO_SEL_1P8V)  /* PMIC reset trigger */
 GPIO(PMIC_KPD_PWR_ODL,      PIN(D, 6), GPIO_ODR_HIGH | GPIO_SEL_1P8V)  /* PMIC power button */
 GPIO(EC_INT_L,              PIN(A, 2), GPIO_ODR_HIGH)  /* Interrupt line between AP and EC */
+GPIO(QSIP_ON,               PIN(5, 0), GPIO_OUT_LOW)   /* Not used, for non-switchcap testing */
 
 /* Power enables */
 GPIO(SWITCHCAP_ON,          PIN(D, 5), GPIO_OUT_LOW)   /* Enable switch cap */

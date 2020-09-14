@@ -104,14 +104,14 @@ int clock_get_timer_freq(void)
 
 void clock_wait_bus_cycles(enum bus_type bus, uint32_t cycles)
 {
-	volatile uint32_t dummy __attribute__((unused));
+	volatile uint32_t unused __attribute__((unused));
 
 	if (bus == BUS_AHB) {
 		while (cycles--)
-			dummy = STM32_GPIO_IDR(GPIO_A);
+			unused = STM32_GPIO_IDR(GPIO_A);
 	} else { /* APB */
 		while (cycles--)
-			dummy = STM32_USART_BRR(STM32_USART1_BASE);
+			unused = STM32_USART_BRR(STM32_USART1_BASE);
 	}
 }
 
@@ -265,12 +265,7 @@ static void clock_enable_osc(enum clock_osc osc, bool enabled)
 	}
 
 	/* Turn on the oscillator if not already on */
-	if (!(STM32_RCC_CR & ready)) {
-		STM32_RCC_CR |= on;
-		/* Wait until ready */
-		while (!(STM32_RCC_CR & ready))
-			;
-	}
+	wait_for_ready(&STM32_RCC_CR, on, ready);
 }
 
 static void clock_switch_osc(enum clock_osc osc)

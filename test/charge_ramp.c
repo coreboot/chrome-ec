@@ -37,6 +37,11 @@ static int charge_limit_ma;
 
 /* Mock functions */
 
+__override uint8_t board_get_usb_pd_port_count(void)
+{
+	return CONFIG_USB_PD_PORT_MAX_COUNT;
+}
+
 /* Override test_mockable implementations in charge_ramp module */
 int chg_ramp_allowed(int port, int supplier)
 {
@@ -54,7 +59,7 @@ int chg_ramp_max(int port, int supplier, int sup_curr)
 		return 3000;
 }
 
-/* Dummy bc12_ports[] array to make linker happy */
+/* Mock bc12_ports[] array to make linker happy */
 struct bc12_config bc12_ports[0];
 
 int charge_is_consuming_full_input_current(void)

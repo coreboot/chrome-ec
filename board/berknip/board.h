@@ -13,14 +13,9 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-/*
- * Allow dangerous commands.
- * TODO: Remove this config before production.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_I2C_DEBUG
-
 #define CONFIG_MKBP_USE_GPIO
+
+#define RPM_DEVIATION 1
 
 /* Motion sensing drivers */
 #define CONFIG_ACCELGYRO_BMI160
@@ -30,6 +25,7 @@
 #define CONFIG_ACCEL_KX022
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+#define CONFIG_FAN_RPM_CUSTOM
 #define CONFIG_TABLET_MODE
 #undef CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_COMMON
@@ -44,6 +40,8 @@
 #define CONFIG_USB_MUX_PS8743
 #define CONFIG_USBC_RETIMER_TUSB544
 #define TUSB544_I2C_ADDR_FLAGS1 0x0F
+
+#define CONFIG_POWER_SIGNAL_RUNTIME_CONFIG
 
 /* GPIO mapping from board specific name to EC common name. */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
@@ -61,7 +59,6 @@
 #define GPIO_PCH_SYS_PWROK		GPIO_EC_FCH_PWROK
 #define GPIO_PCH_WAKE_L			GPIO_EC_FCH_WAKE_L
 #define GPIO_POWER_BUTTON_L		GPIO_EC_PWR_BTN_ODL
-#define GPIO_S0_PGOOD			GPIO_S0_PWROK_OD
 #define GPIO_S5_PGOOD			GPIO_EC_PWROK_OD
 #define GPIO_SYS_RESET_L		GPIO_EC_SYS_RST_L
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
@@ -70,6 +67,9 @@
 #define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
 
 #ifndef __ASSEMBLER__
+
+/* This GPIOs moved. Temporarily detect and support the V0 HW. */
+extern enum gpio_signal GPIO_S0_PGOOD;
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_5V_REGULATOR,
@@ -104,6 +104,11 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
+enum usba_port {
+	USBA_PORT_A0 = 0,
+	USBA_PORT_A1,
+	USBA_PORT_COUNT
+};
 
 /*****************************************************************************
  * CBI EC FW Configuration
@@ -201,11 +206,8 @@ static inline bool ec_config_has_hdmi_conn_hpd(void)
 		  HAS_HDMI_CONN_HPD);
 }
 
-#define PORT_TO_HPD(port) ((port == 0) \
-	? GPIO_USB_C0_HPD \
-	: (ec_config_has_usbc1_retimer_ps8743()) \
-		? GPIO_DP1_HPD \
-		: GPIO_DP2_HPD)
+enum gpio_signal board_usbc_port_to_hpd_gpio(int port);
+#define PORT_TO_HPD(port) board_usbc_port_to_hpd_gpio(port)
 
 extern const struct usb_mux usbc1_tusb544;
 extern const struct usb_mux usbc1_ps8743;

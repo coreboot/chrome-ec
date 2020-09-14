@@ -84,7 +84,7 @@ void pe_run(int port, int evt, int en)
 void pe_message_received(int port)
 {
 	pe[port].flags |= PE_FLAGS_MSG_RECEIVED;
-	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SM, 0);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 /**
@@ -105,6 +105,11 @@ void pe_got_hard_reset(int port)
 }
 
 void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
+{
+	/* No implementation needed by this policy engine */
+}
+
+void pe_report_discard(int port)
 {
 	/* No implementation needed by this policy engine */
 }

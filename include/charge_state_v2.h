@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include <stdbool.h>
+
 #include "battery.h"
 #include "battery_smart.h"
 #include "charger.h"
@@ -53,11 +55,12 @@ struct charge_state_data {
  * Set the output current limit and voltage. This is used to provide power from
  * the charger chip ("OTG" mode).
  *
+ * @param chgnum Charger index to act upon
  * @param ma Maximum current to provide in mA (0 to disable output).
  * @param mv Voltage in mV (ignored if ma == 0).
  * @return EC_SUCCESS or error
  */
-int charge_set_output_current_limit(int ma, int mv);
+int charge_set_output_current_limit(int chgnum, int ma, int mv);
 
 /**
  * Set the charge input current limit. This value is stored and sent every
@@ -180,5 +183,12 @@ void charge_reset_stable_current(void);
  * @param us: sample stable current until us later.
  */
 void charge_reset_stable_current_us(uint64_t us);
+
+/**
+ * Check if the battery charging current is stable by examining the timestamp.
+ *
+ * @return true if stable timestamp expired, false otherwise.
+ */
+bool charge_is_current_stable(void);
 
 #endif /* __CROS_EC_CHARGE_STATE_V2_H */

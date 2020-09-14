@@ -4,7 +4,7 @@
 # found in the LICENSE file.
 
 # Device test binaries
-test-list-y ?= pingpong timer_calib timer_dos timer_jump mutex utils utils_str
+test-list-y ?= flash_write_protect pingpong timer_calib timer_dos timer_jump mutex utils utils_str
 #disable: powerdemo
 
 # Emulator tests
@@ -17,7 +17,9 @@ test-list-host += base32
 test-list-host += battery_get_params_smart
 test-list-host += bklight_lid
 test-list-host += bklight_passthru
+test-list-host += body_detection
 test-list-host += button
+test-list-host += cbi
 test-list-host += cec
 test-list-host += charge_manager
 test-list-host += charge_manager_drp_charging
@@ -34,6 +36,7 @@ test-list-host += fp
 test-list-host += fpsensor
 test-list-host += fpsensor_crypto
 test-list-host += fpsensor_state
+test-list-host += gyro_cal
 test-list-host += hooks
 test-list-host += host_command
 test-list-host += i2c_bitbang
@@ -86,8 +89,14 @@ test-list-host += usb_sm_framework_h0
 test-list-host += usb_typec_vpd
 test-list-host += usb_typec_ctvpd
 test-list-host += usb_typec_drp_acc_trysrc
+test-list-host += usb_prl_old
+test-list-host += usb_tcpmv2_tcpci
 test-list-host += usb_prl
+test-list-host += usb_prl_noextended
+test-list-host += usb_pe_drp_old
+test-list-host += usb_pe_drp_old_noextended
 test-list-host += usb_pe_drp
+test-list-host += usb_pe_drp_noextended
 test-list-host += utils
 test-list-host += utils_str
 test-list-host += vboot
@@ -116,7 +125,9 @@ base32-y=base32.o
 battery_get_params_smart-y=battery_get_params_smart.o
 bklight_lid-y=bklight_lid.o
 bklight_passthru-y=bklight_passthru.o
+body_detection-y=body_detection.o body_detection_data_literals.o motion_common.o
 button-y=button.o
+cbi-y=cbi.o
 cec-y=cec.o
 charge_manager-y=charge_manager.o
 charge_manager_drp_charging-y=charge_manager.o
@@ -133,6 +144,7 @@ flash_write_protect-y=flash_write_protect.o
 fpsensor-y=fpsensor.o
 fpsensor_crypto-y=fpsensor_crypto.o
 fpsensor_state-y=fpsensor_state.o
+gyro_cal-y=gyro_cal.o
 hooks-y=hooks.o
 host_command-y=host_command.o
 i2c_bitbang-y=i2c_bitbang.o
@@ -193,9 +205,14 @@ usb_typec_vpd-y=usb_typec_ctvpd.o vpd_api.o usb_sm_checks.o fake_usbc.o
 usb_typec_ctvpd-y=usb_typec_ctvpd.o vpd_api.o usb_sm_checks.o fake_usbc.o
 usb_typec_drp_acc_trysrc-y=usb_typec_drp_acc_trysrc.o vpd_api.o \
 	usb_sm_checks.o
-usb_prl-y=usb_prl.o usb_sm_checks.o fake_usbc.o
-usb_pe_drp-y=usb_pe_drp.o usb_sm_checks.o \
-	fake_battery.o fake_prl.o fake_usbc.o
+usb_prl_old-y=usb_prl_old.o usb_sm_checks.o fake_usbc.o
+usb_prl-y=usb_prl.o usb_sm_checks.o
+usb_prl_noextended-y=usb_prl_noextended.o usb_sm_checks.o fake_usbc.o
+usb_pe_drp_old-y=usb_pe_drp_old.o usb_sm_checks.o fake_usbc.o
+usb_pe_drp_old_noextended-y=usb_pe_drp_old.o usb_sm_checks.o fake_usbc.o
+usb_pe_drp-y=usb_pe_drp.o usb_sm_checks.o
+usb_pe_drp_noextended-y=usb_pe_drp_noextended.o usb_sm_checks.o
+usb_tcpmv2_tcpci-y=usb_tcpmv2_tcpci.o vpd_api.o usb_sm_checks.o
 utils-y=utils.o
 utils_str-y=utils_str.o
 vboot-y=vboot.o

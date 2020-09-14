@@ -57,14 +57,14 @@ int clock_get_timer_freq(void)
 
 void clock_wait_bus_cycles(enum bus_type bus, uint32_t cycles)
 {
-	volatile uint32_t dummy __attribute__((unused));
+	volatile uint32_t unused __attribute__((unused));
 
 	if (bus == BUS_AHB) {
 		while (cycles--)
-			dummy = STM32_DMA1_REGS->isr;
+			unused = STM32_DMA1_REGS->isr;
 	} else { /* APB */
 		while (cycles--)
-			dummy = STM32_USART_BRR(STM32_USART1_BASE);
+			unused = STM32_USART_BRR(STM32_USART1_BASE);
 	}
 }
 
@@ -86,13 +86,8 @@ static void clock_set_osc(enum clock_osc osc)
 	switch (osc) {
 	case OSC_HSI:
 		/* Ensure that HSI is ON */
-		if (!(STM32_RCC_CR & STM32_RCC_CR_HSIRDY)) {
-			/* Enable HSI */
-			STM32_RCC_CR |= STM32_RCC_CR_HSION;
-			/* Wait for HSI to be ready */
-			while (!(STM32_RCC_CR & STM32_RCC_CR_HSIRDY))
-				;
-		}
+		wait_for_ready(&STM32_RCC_CR,
+			       STM32_RCC_CR_HSION, STM32_RCC_CR_HSIRDY);
 
 		/* Disable LPSDSR */
 		STM32_PWR_CR &= ~STM32_PWR_CR_LPSDSR;
@@ -142,13 +137,8 @@ static void clock_set_osc(enum clock_osc osc)
 			(STM32_RCC_ICSCR & ~STM32_RCC_ICSCR_MSIRANGE_MASK) |
 			STM32_RCC_ICSCR_MSIRANGE_1MHZ;
 		/* Ensure that MSI is ON */
-		if (!(STM32_RCC_CR & STM32_RCC_CR_MSIRDY)) {
-			/* Enable MSI */
-			STM32_RCC_CR |= STM32_RCC_CR_MSION;
-			/* Wait for MSI to be ready */
-			while (!(STM32_RCC_CR & STM32_RCC_CR_MSIRDY))
-				;
-		}
+		wait_for_ready(&STM32_RCC_CR,
+			       STM32_RCC_CR_MSION, STM32_RCC_CR_MSIRDY);
 
 		/* Switch to MSI */
 		STM32_RCC_CFGR = STM32_RCC_CFGR_SW_MSI;

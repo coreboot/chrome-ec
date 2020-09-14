@@ -63,6 +63,7 @@
 #define CONFIG_CMD_ACCEL_INFO
 
 #define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
@@ -97,7 +98,6 @@ enum adc_channel {
 	/* Real ADC channels begin here */
 	ADC_BOARD_ID = 0,
 	ADC_EC_SKU_ID,
-	ADC_BATT_ID,
 	ADC_CH_COUNT
 };
 

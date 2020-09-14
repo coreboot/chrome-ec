@@ -10,6 +10,7 @@
 #include "button.h"
 #include "cbi_ec_fw_config.h"
 #include "charge_manager.h"
+#include "charge_ramp.h"
 #include "charge_state.h"
 #include "charge_state_v2.h"
 #include "common.h"
@@ -17,6 +18,7 @@
 #include "console.h"
 #include "cros_board_info.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/charger/isl9241.h"
 #include "driver/retimer/pi3hdx1204.h"
 #include "driver/usb_mux/amd_fp5.h"
 #include "ec_commands.h"
@@ -37,12 +39,20 @@
 #include "system.h"
 #include "task.h"
 #include "tcpci.h"
+#include "temp_sensor.h"
 #include "thermistor.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "util.h"
 
 #define SAFE_RESET_VBUS_MV 5000
+
+/*
+ * For legacy BC1.2 charging with CONFIG_CHARGE_RAMP_SW, ramp up input current
+ * until voltage drops to 4.5V. Don't go lower than this to be kind to the
+ * charger (see b/67964166).
+ */
+#define BC12_MIN_VOLTAGE 4500
 
 const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_LID_OPEN,
@@ -52,36 +62,12 @@ const enum gpio_signal hibernate_wake_pins[] = {
 };
 const int hibernate_wake_pins_used =  ARRAY_SIZE(hibernate_wake_pins);
 
-const struct power_signal_info power_signal_list[] = {
-	[X86_SLP_S3_N] = {
-		.gpio = GPIO_PCH_SLP_S3_L,
-		.flags = POWER_SIGNAL_ACTIVE_HIGH,
-		.name = "SLP_S3_DEASSERTED",
-	},
-	[X86_SLP_S5_N] = {
-		.gpio = GPIO_PCH_SLP_S5_L,
-		.flags = POWER_SIGNAL_ACTIVE_HIGH,
-		.name = "SLP_S5_DEASSERTED",
-	},
-	[X86_S0_PGOOD] = {
-		.gpio = GPIO_S0_PGOOD,
-		.flags = POWER_SIGNAL_ACTIVE_HIGH,
-		.name = "S0_PGOOD",
-	},
-	[X86_S5_PGOOD] = {
-		.gpio = GPIO_S5_PGOOD,
-		.flags = POWER_SIGNAL_ACTIVE_HIGH,
-		.name = "S5_PGOOD",
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
-
 /*
  * In the AOZ1380 PPC, there are no programmable features.  We use
  * the attached NCT3807 to control a GPIO to indicate 1A5 or 3A0
  * current limits.
  */
-int board_aoz1380_set_vbus_source_current_limit(int port,
+__overridable int board_aoz1380_set_vbus_source_current_limit(int port,
 						enum tcpc_rp_value rp)
 {
 	int rv;
@@ -170,72 +156,48 @@ const struct thermistor_info thermistor_info = {
 	.data = thermistor_data,
 };
 
-__overridable int board_get_temp(int idx, int *temp_k)
-{
-	int mv;
-	int temp_c;
-	enum adc_channel channel;
-
-	/* idx is the sensor index set in board temp_sensors[] */
-	switch (idx) {
-	case TEMP_SENSOR_CHARGER:
-		channel = ADC_TEMP_SENSOR_CHARGER;
-		break;
-	case TEMP_SENSOR_SOC:
-		/* thermistor is not powered in G3 */
-		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
-			return EC_ERROR_NOT_POWERED;
-
-		channel = ADC_TEMP_SENSOR_SOC;
-		break;
-	default:
-		return EC_ERROR_INVAL;
-	}
-
-	mv = adc_read_channel(channel);
-	if (mv < 0)
-		return EC_ERROR_INVAL;
-
-	temp_c = thermistor_linear_interpolate(mv, &thermistor_info);
-	*temp_k = C_TO_K(temp_c);
-	return EC_SUCCESS;
-}
-
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
 {
-	if (ec_config_has_lid_angle_tablet_mode())
-		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+	if (ec_config_has_lid_angle_tablet_mode()) {
+		int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
+
+		if (enable) {
+			keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+		} else {
+			/*
+			 * Ensure that the chipset is off before disabling the
+			 * keyboard. When the chipset is on, the EC keeps the
+			 * keyboard enabled and the AP decides whether to
+			 * ignore input devices or not.
+			 */
+			if (!chipset_in_s0)
+				keyboard_scan_enable(0,
+						     KB_SCAN_DISABLE_LID_ANGLE);
+		}
+	}
 }
 #endif
 
-/* Unprovisioned magic value. */
-static uint32_t sku_id = 0x7fffffff;
-
-uint32_t system_get_sku_id(void)
-{
-	return sku_id;
-}
-
 static void cbi_init(void)
 {
-	uint32_t board_version = 0;
 	uint32_t val;
 
 	if (cbi_get_board_version(&val) == EC_SUCCESS)
-		board_version = val;
-	ccprints("Board Version: %d (0x%x)", board_version, board_version);
+		ccprints("Board Version: %d (0x%x)", val, val);
+	else
+		ccprints("Board Version: not set in cbi");
 
 	if (cbi_get_sku_id(&val) == EC_SUCCESS)
-		sku_id = val;
-	ccprints("SKU: %d (0x%x)", sku_id, sku_id);
-
-	/* FW config */
-	val = get_cbi_fw_config();
-	if (val == UNINITIALIZED_FW_CONFIG)
-		ccprints("FW Config: not set in cbi");
+		ccprints("SKU ID: %d (0x%x)", val, val);
 	else
+		ccprints("SKU ID: not set in cbi");
+
+	val = get_cbi_fw_config();
+	if (val != UNINITIALIZED_FW_CONFIG)
 		ccprints("FW Config: %d (0x%x)", val, val);
+	else
+		ccprints("FW Config: not set in cbi");
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -291,15 +253,119 @@ const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
 	.de_offset = PI3HDX1204_DE_DB_MINUS5,
 };
 
-void pi3hdx1204_retimer_power(void)
+void sbu_fault_interrupt(enum ioex_signal signal)
 {
-	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
-		int enable = chipset_in_or_transitioning_to_state(
-			CHIPSET_STATE_ON) && check_hdmi_hpd_status();
-		pi3hdx1204_enable(I2C_PORT_TCPC1,
-				  PI3HDX1204_I2C_ADDR_FLAGS,
-				  enable);
-	}
+	int port = (signal == IOEX_USB_C0_SBU_FAULT_ODL) ? 0 : 1;
+
+	pd_handle_overcurrent(port);
 }
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, pi3hdx1204_retimer_power, HOOK_PRIO_DEFAULT);
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, pi3hdx1204_retimer_power, HOOK_PRIO_DEFAULT);
+
+static void set_ac_prochot(void)
+{
+	isl9241_set_ac_prochot(CHARGER_SOLO, ZORK_AC_PROCHOT_CURRENT_MA);
+}
+DECLARE_HOOK(HOOK_INIT, set_ac_prochot, HOOK_PRIO_DEFAULT);
+
+DECLARE_DEFERRED(board_print_temps);
+int temps_interval;
+
+void board_print_temps(void)
+{
+	int t, i;
+	int rv;
+
+	cprintf(CC_THERMAL, "[%pT ", PRINTF_TIMESTAMP_NOW);
+	for (i = 0; i < TEMP_SENSOR_COUNT; ++i) {
+		rv = temp_sensor_read(i, &t);
+		if (rv == EC_SUCCESS)
+			cprintf(CC_THERMAL, "%s=%dK (%dC) ",
+				temp_sensors[i].name, t, K_TO_C(t));
+	}
+	cprintf(CC_THERMAL, "]\n");
+
+	if (temps_interval > 0)
+		hook_call_deferred(&board_print_temps_data,
+				   temps_interval * SECOND);
+}
+
+static int command_temps_log(int argc, char **argv)
+{
+	char *e = NULL;
+
+	if (argc != 2)
+		return EC_ERROR_PARAM_COUNT;
+
+	temps_interval = strtoi(argv[1], &e, 0);
+	if (*e)
+		return EC_ERROR_PARAM1;
+
+	board_print_temps();
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(tempslog, command_temps_log,
+			"seconds",
+			"Print temp sensors periodically");
+/*
+ * b/163076059: Sometimes CONTROL1 reads as 0xFF03 for unknown reason
+ * when the state change from S0 to S3, but the second read will get
+ * the correct 0x0103. Retry CONTROL1 read before update learn mode
+ * to make sure write the correct value.
+ */
+__override int isl9241_update_learn_mode(int chgnum, int enable)
+{
+	int rv;
+	int i;
+	int reg;
+
+	/* Retry CONTROL1 read if high byte is 0xFF. */
+	for (i = 0; i < 10; i++) {
+		rv = isl9241_read(chgnum, ISL9241_REG_CONTROL1, &reg);
+		if (rv == EC_SUCCESS && (reg >> 8) != 0xFF)
+			break;
+		ccprints("isl9241 error: CONTROL1=0x%x (rv=%d i=%d)",
+			 reg, rv, i);
+		if (rv)
+			return rv;
+	}
+
+	if (enable)
+		reg |= ISL9241_CONTROL1_LEARN_MODE;
+	else
+		reg &= ~ISL9241_CONTROL1_LEARN_MODE;
+
+	return isl9241_write(chgnum, ISL9241_REG_CONTROL1, reg);
+}
+
+/*
+ * b/164921478: On G3->S5, wait for RSMRST_L to be deasserted before asserting
+ * PWRBTN_L.
+ */
+void board_pwrbtn_to_pch(int level)
+{
+	/* Add delay for G3 exit if asserting PWRBTN_L and S5_PGOOD is low. */
+	if (!level && !gpio_get_level(GPIO_S5_PGOOD)) {
+		/*
+		 * From measurement, wait 80 ms for RSMRST_L to rise after
+		 * S5_PGOOD.
+		 */
+		msleep(80);
+
+		if (!gpio_get_level(GPIO_S5_PGOOD))
+			ccprints("Error: pwrbtn S5_PGOOD low");
+	}
+	gpio_set_level(GPIO_PCH_PWRBTN_L, level);
+}
+
+/**
+ * Return if VBUS is sagging too low
+ */
+int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
+{
+	int voltage;
+
+	if (charger_get_vbus_voltage(port, &voltage))
+		voltage = 0;
+
+	return voltage < BC12_MIN_VOLTAGE;
+}

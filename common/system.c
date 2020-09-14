@@ -164,11 +164,16 @@ static uint32_t __attribute__((unused)) get_size(enum ec_image copy)
 
 int system_is_locked(void)
 {
+	static int is_locked = -1;
+
 	if (force_locked)
 		return 1;
+	if (is_locked != -1)
+		return is_locked;
 
 #ifdef CONFIG_SYSTEM_UNLOCKED
 	/* System is explicitly unlocked */
+	is_locked = 0;
 	return 0;
 
 #elif defined(CONFIG_FLASH)
@@ -177,13 +182,17 @@ int system_is_locked(void)
 	 * is not protected.
 	 */
 	if ((EC_FLASH_PROTECT_GPIO_ASSERTED | EC_FLASH_PROTECT_RO_NOW) &
-	    ~flash_get_protect())
+	    ~flash_get_protect()) {
+		is_locked = 0;
 		return 0;
+	}
 
 	/* If WP pin is asserted and lock is applied, we're locked */
+	is_locked = 1;
 	return 1;
 #else
 	/* Other configs are locked by default */
+	is_locked = 1;
 	return 1;
 #endif
 }
@@ -281,8 +290,7 @@ int system_jumped_to_this_image(void)
 
 int system_jumped_late(void)
 {
-	return !(reset_flags & EC_RESET_FLAG_EFS)
-			&& (reset_flags & EC_RESET_FLAG_SYSJUMP);
+	return !(reset_flags & EC_RESET_FLAG_EFS) && jumped_to_image;
 }
 
 int system_add_jump_tag(uint16_t tag, int version, int size, const void *data)
@@ -564,7 +572,8 @@ int system_is_in_rw(void)
 	return is_rw_image(system_get_image_copy());
 }
 
-test_mockable int system_run_image_copy(enum ec_image copy)
+static int system_run_image_copy_with_flags(enum ec_image copy,
+					    uint32_t add_reset_flags)
 {
 	uintptr_t base;
 	uintptr_t init_addr;
@@ -617,12 +626,20 @@ test_mockable int system_run_image_copy(enum ec_image copy)
 			return EC_ERROR_UNKNOWN;
 	}
 
+	system_set_reset_flags(add_reset_flags);
+
 	CPRINTS("Jumping to image %s", ec_image_to_string(copy));
 
 	jump_to_image(init_addr);
 
 	/* Should never get here */
 	return EC_ERROR_UNKNOWN;
+}
+
+test_mockable int system_run_image_copy(enum ec_image copy)
+{
+	/* No reset flags needed for most jumps */
+	return system_run_image_copy_with_flags(copy, 0);
 }
 
 enum ec_image system_get_active_copy(void)
@@ -869,27 +886,34 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	case EC_REBOOT_CANCEL:
 		return EC_SUCCESS;
 	case EC_REBOOT_JUMP_RO:
-		return system_run_image_copy(EC_IMAGE_RO);
+		return system_run_image_copy_with_flags(EC_IMAGE_RO,
+						EC_RESET_FLAG_STAY_IN_RO);
 	case EC_REBOOT_JUMP_RW:
 		return system_run_image_copy(system_get_active_copy());
 	case EC_REBOOT_COLD:
-#ifdef HAS_TASK_PDCMD
 		/*
 		 * Reboot the PD chip(s) as well, but first suspend the ports
 		 * if this board has PD tasks running so they don't query the
 		 * TCPCs while they reset.
 		 */
-#ifdef HAS_TASK_PD_C0
-		{
+		if (IS_ENABLED(HAS_TASK_PD_C0)) {
 			int port;
 
 			for (port = 0; port < board_get_usb_pd_port_count();
 			     port++)
 				pd_set_suspend(port, 1);
+
+			/*
+			 * Give enough time to apply CC Open and brown out if
+			 * we are running with out a battery.
+			 */
+			msleep(20);
 		}
-#endif
-		board_reset_pd_mcu();
-#endif
+
+		/* Reset external PD chips. */
+		if (IS_ENABLED(HAS_TASK_PDCMD) ||
+		    IS_ENABLED(CONFIG_HAS_TASK_PD_INT))
+			board_reset_pd_mcu();
 
 		cflush();
 		system_reset(SYSTEM_RESET_HARD);
@@ -1194,7 +1218,8 @@ static int command_sysjump(int argc, char **argv)
 
 	/* Handle named images */
 	if (!strcasecmp(argv[1], "RO"))
-		return system_run_image_copy(EC_IMAGE_RO);
+		return system_run_image_copy_with_flags(EC_IMAGE_RO,
+						EC_RESET_FLAG_STAY_IN_RO);
 	else if (!strcasecmp(argv[1], "RW") || !strcasecmp(argv[1], "A"))
 		return system_run_image_copy(EC_IMAGE_RW);
 	else if (!strcasecmp(argv[1], "B")) {

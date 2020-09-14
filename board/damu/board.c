@@ -62,7 +62,6 @@ static void tcpc_alert_event(enum gpio_signal signal)
 const struct adc_t adc_channels[] = {
 	[ADC_BOARD_ID] =  {"BOARD_ID",  3300, 4096, 0, STM32_AIN(10)},
 	[ADC_EC_SKU_ID] = {"EC_SKU_ID", 3300, 4096, 0, STM32_AIN(8)},
-	[ADC_BATT_ID] =   {"BATT_ID",   3300, 4096, 0, STM32_AIN(7)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -168,7 +167,6 @@ struct charger_config_t chg_chips[] = {
 		.drv = &isl923x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* Board version depends on ADCs, so init i2c port after ADC */
 static void charger_config_complete(void)
@@ -454,3 +452,16 @@ int board_get_charger_i2c(void)
 	/* TODO(b:138415463): confirm the bus allocation for future builds */
 	return board_get_version() == 1 ? 2 : 1;
 }
+
+/* Enable or disable input devices, based on chipset state and tablet mode */
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	/* If the lid is in 360 position, ignore the lid angle,
+	 * which might be faulty. Disable keyboard.
+	 */
+	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		enable = 0;
+	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+}
+#endif

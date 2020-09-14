@@ -84,6 +84,16 @@ SECTIONS
 		KEEP(*(.rodata.HOOK_CHIPSET_SUSPEND))
 		__hooks_chipset_suspend_end = .;
 
+#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+		__hooks_chipset_resume_init = .;
+		KEEP(*(.rodata.HOOK_CHIPSET_RESUME_INIT))
+		__hooks_chipset_resume_init_end = .;
+
+		__hooks_chipset_suspend_complete = .;
+		KEEP(*(.rodata.HOOK_CHIPSET_SUSPEND_COMPLETE))
+		__hooks_chipset_suspend_complete_end = .;
+#endif
+
 		__hooks_chipset_shutdown = .;
 		KEEP(*(.rodata.HOOK_CHIPSET_SHUTDOWN))
 		__hooks_chipset_shutdown_end = .;
@@ -148,6 +158,19 @@ SECTIONS
 
 		 . = ALIGN(4);
 		 KEEP(*(.rodata.*))
+
+#ifdef CONFIG_CHIP_INIT_ROM_REGION
+	ASSERT(0, "CONFIG_CHIP_INIT_ROM_REGION not supported by linker script")
+#endif /* CONFIG_CHIP_INIT_ROM_REGION */
+		/*
+		 * This linker file does not yet support a separate ROM resident
+		 * section. Ensure the corresponding data objects are linked
+		 * into the .rodata section.
+		 */
+		. = ALIGN(4);
+		__init_rom_start = .;
+		*(.init.rom)
+		__init_rom_end = .;
 	}
 
 	/*

@@ -11,13 +11,6 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-/*
- * Allow dangerous commands.
- * TODO: Remove this config before production.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_I2C_DEBUG
-
 #define CONFIG_MKBP_USE_GPIO
 #define CONFIG_FAN_RPM_CUSTOM
 
@@ -64,6 +57,7 @@
 #define GPIO_WP_L			GPIO_EC_WP_L
 #define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
 #define GPIO_DP1_HPD			GPIO_EC_DP1_HPD
+#define IOEX_HDMI_CONN_HPD_3V3_DB	IOEX_USB_C1_PPC_ILIM_3A_EN
 
 #ifndef __ASSEMBLER__
 
@@ -98,6 +92,11 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
+enum usba_port {
+	USBA_PORT_A0 = 0,
+	USBA_PORT_A1,
+	USBA_PORT_COUNT
+};
 
 /*****************************************************************************
  * CBI EC FW Configuration
@@ -205,6 +204,7 @@ extern const struct usb_mux usbc1_ps8743;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
 
 void hdmi_hpd_interrupt(enum gpio_signal signal);
+void hdmi_hpd_interrupt_v2(enum ioex_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

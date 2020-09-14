@@ -8,10 +8,13 @@
 #include "adc.h"
 #include "adc_chip.h"
 #include "button.h"
+#include "charger.h"
 #include "cbi_ec_fw_config.h"
+#include "cros_board_info.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
+#include "driver/retimer/pi3hdx1204.h"
 #include "driver/retimer/tusb544.h"
 #include "driver/temp_sensor/sb_tsi.h"
 #include "driver/usb_mux/amd_fp5.h"
@@ -153,6 +156,42 @@ const struct mft_t mft_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
+const int usb_port_enable[USBA_PORT_COUNT] = {
+	IOEX_EN_USB_A0_5V,
+	IOEX_EN_USB_A1_5V_DB,
+};
+
+/*****************************************************************************
+ * Board suspend / resume
+ */
+
+static void board_chipset_resume(void)
+{
+	ioex_set_level(IOEX_HDMI_DATA_EN_DB, 1);
+
+	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
+		ioex_set_level(IOEX_HDMI_POWER_EN_DB, 1);
+		msleep(PI3HDX1204_POWER_ON_DELAY_MS);
+		pi3hdx1204_enable(I2C_PORT_TCPC1,
+				  PI3HDX1204_I2C_ADDR_FLAGS,
+				  1);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+static void board_chipset_suspend(void)
+{
+	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
+		pi3hdx1204_enable(I2C_PORT_TCPC1,
+				  PI3HDX1204_I2C_ADDR_FLAGS,
+				  0);
+		ioex_set_level(IOEX_HDMI_POWER_EN_DB, 0);
+	}
+
+	ioex_set_level(IOEX_HDMI_DATA_EN_DB, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
 /*
  * USB C0 port SBU mux use standalone PI3USB221
  * chip and it need a board specific driver.
@@ -278,20 +317,48 @@ const struct usb_mux usbc1_ps8743 = {
 /*****************************************************************************
  * Use FW_CONFIG to set correct configuration.
  */
+enum gpio_signal GPIO_S0_PGOOD = GPIO_S0_PWROK_OD_V0;
+static uint32_t board_ver;
 
-void setup_fw_config(void)
+static void board_version_check(void)
+{
+	cbi_get_board_version(&board_ver);
+
+	if (board_ver <= 2)
+		chg_chips[0].i2c_port = I2C_PORT_CHARGER_V0;
+
+	if (board_ver == 2) {
+		power_signal_list[X86_S0_PGOOD].gpio = GPIO_S0_PWROK_OD_V1;
+		GPIO_S0_PGOOD = GPIO_S0_PWROK_OD_V1;
+	}
+}
+/*
+ * Use HOOK_PRIO_INIT_I2C so we re-map before charger_chips_init()
+ * talks to the charger.
+ */
+DECLARE_HOOK(HOOK_INIT, board_version_check, HOOK_PRIO_INIT_I2C);
+
+static void board_remap_gpio(void)
+{
+	if (board_ver >= 3) {
+		/*
+		 * TODO: remove code when older version_2
+		 * hardware is retired and no longer needed
+		 */
+		gpio_set_flags(GPIO_USB_C1_HPD_IN_DB_V1, GPIO_OUT_LOW);
+	}
+}
+
+static void setup_fw_config(void)
 {
 	/* Enable Gyro interrupts */
 	gpio_enable_interrupt(GPIO_6AXIS_INT_L);
 
 	setup_mux();
 
-	if (ec_config_has_mst_hub_rtd2141b())
-		ioex_enable_interrupt(IOEX_MST_HPD_OUT);
-
-	if (ec_config_has_hdmi_conn_hpd())
-		ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
+	board_remap_gpio();
 }
+/* Use HOOK_PRIO_INIT_I2C + 2 to be after ioex_init(). */
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 
 /*****************************************************************************
@@ -306,9 +373,9 @@ const struct fan_conf fan_conf_0 = {
 	.enable_gpio = -1,
 };
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3100,
-	.rpm_start = 3100,
-	.rpm_max = 6900,
+	.rpm_min = 3000,
+	.rpm_start = 3500,
+	.rpm_max = 6200,
 };
 const struct fan_t fans[] = {
 	[FAN_CH_0] = {
@@ -318,7 +385,7 @@ const struct fan_t fans[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
 
-__override int board_get_temp(int idx, int *temp_k)
+int board_get_temp(int idx, int *temp_k)
 {
 	int mv;
 	int temp_c;
@@ -337,6 +404,10 @@ __override int board_get_temp(int idx, int *temp_k)
 		channel = ADC_TEMP_SENSOR_SOC;
 		break;
 	case TEMP_SENSOR_5V_REGULATOR:
+		/* thermistor is not powered in G3 */
+		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			return EC_ERROR_NOT_POWERED;
+
 		channel = ADC_TEMP_SENSOR_5V_REGULATOR;
 		break;
 	default:
@@ -405,87 +476,125 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_thermistor = {
+const static struct ec_thermal_config thermal_thermistor_soc = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(73),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_off = C_TO_K(39),
+	.temp_fan_max = C_TO_K(60),
+};
+
+const static struct ec_thermal_config thermal_thermistor_charger = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(99),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(99),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(98),
+	},
+	.temp_fan_off = C_TO_K(98),
+	.temp_fan_max = C_TO_K(99),
+};
+
+const static struct ec_thermal_config thermal_thermistor_5v = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(60),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(99),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(50),
+	},
+	.temp_fan_off = C_TO_K(98),
+	.temp_fan_max = C_TO_K(99),
 };
 
 const static struct ec_thermal_config thermal_cpu = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(95),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(105),
 	},
 	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(99),
 	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_off = C_TO_K(105),
+	.temp_fan_max = C_TO_K(105),
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
+struct fan_step {
+	int on;
+	int off;
+	int rpm;
+};
+
+static const struct fan_step fan_table0[] = {
+	{.on =  0, .off =  5, .rpm = 0},
+	{.on = 29, .off =  5, .rpm = 3700},
+	{.on = 38, .off = 19, .rpm = 4000},
+	{.on = 48, .off = 33, .rpm = 4500},
+	{.on = 62, .off = 43, .rpm = 4800},
+	{.on = 76, .off = 52, .rpm = 5200},
+	{.on = 100, .off = 67, .rpm = 6200},
+};
+/* All fan tables must have the same number of levels */
+#define NUM_FAN_LEVELS ARRAY_SIZE(fan_table0)
+
+static const struct fan_step *fan_table = fan_table0;
+
+int fan_percent_to_rpm(int fan, int pct)
+{
+	static int current_level;
+	static int previous_pct;
+	int i;
+
+	/*
+	 * Compare the pct and previous pct, we have the three paths :
+	 *  1. decreasing path. (check the off point)
+	 *  2. increasing path. (check the on point)
+	 *  3. invariant path. (return the current RPM)
+	 */
+	if (pct < previous_pct) {
+		for (i = current_level; i >= 0; i--) {
+			if (pct <= fan_table[i].off)
+				current_level = i - 1;
+			else
+				break;
+		}
+	} else if (pct > previous_pct) {
+		for (i = current_level + 1; i < NUM_FAN_LEVELS; i++) {
+			if (pct >= fan_table[i].on)
+				current_level = i;
+			else
+				break;
+		}
+	}
+
+	if (current_level < 0)
+		current_level = 0;
+
+	previous_pct = pct;
+
+	if (fan_table[current_level].rpm !=
+		fan_get_rpm_target(FAN_CH(fan)))
+		cprints(CC_THERMAL, "Setting fan RPM to %d",
+			fan_table[current_level].rpm);
+
+	return fan_table[current_level].rpm;
+}
+
 static void setup_fans(void)
 {
-	thermal_params[TEMP_SENSOR_CHARGER] = thermal_thermistor;
-	thermal_params[TEMP_SENSOR_SOC] = thermal_thermistor;
+	thermal_params[TEMP_SENSOR_CHARGER] = thermal_thermistor_charger;
+	thermal_params[TEMP_SENSOR_SOC] = thermal_thermistor_soc;
 	thermal_params[TEMP_SENSOR_CPU] = thermal_cpu;
+	thermal_params[TEMP_SENSOR_5V_REGULATOR] = thermal_thermistor_5v;
 }
 DECLARE_HOOK(HOOK_INIT, setup_fans, HOOK_PRIO_DEFAULT);
-
-/*****************************************************************************
- * MST hub
- */
-
-static void mst_hpd_handler(void)
-{
-	int hpd = 0;
-
-	/*
-	 * Ensure level on GPIO_DP1_HPD matches IOEX_MST_HPD_OUT, in case
-	 * we got out of sync.
-	 */
-	ioex_get_level(IOEX_MST_HPD_OUT, &hpd);
-	gpio_set_level(GPIO_DP1_HPD, hpd);
-	ccprints("MST HPD %d", hpd);
-}
-DECLARE_DEFERRED(mst_hpd_handler);
-
-void mst_hpd_interrupt(enum ioex_signal signal)
-{
-	/*
-	 * Goal is to pass HPD through from DB OPT3 MST hub to AP's DP1.
-	 * Immediately invert GPIO_DP1_HPD, to pass through the edge on
-	 * IOEX_MST_HPD_OUT. Then check level after 2 msec debounce.
-	 */
-	int hpd = !gpio_get_level(GPIO_DP1_HPD);
-
-	gpio_set_level(GPIO_DP1_HPD, hpd);
-	hook_call_deferred(&mst_hpd_handler_data, (2 * MSEC));
-}
-
-static void hdmi_hpd_handler(void)
-{
-	int hpd = 0;
-
-	/* Pass HPD through from DB OPT1 HDMI connector to AP's DP1. */
-	ioex_get_level(IOEX_HDMI_CONN_HPD_3V3_DB, &hpd);
-	gpio_set_level(GPIO_DP1_HPD, hpd);
-	ccprints("HDMI HPD %d", hpd);
-}
-DECLARE_DEFERRED(hdmi_hpd_handler);
-
-void hdmi_hpd_interrupt(enum ioex_signal signal)
-{
-	/* Debounce for 2 msec. */
-	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
-}
 
 #ifdef CONFIG_KEYBOARD_FACTORY_TEST
 /*
@@ -504,3 +613,53 @@ const int keyboard_factory_scan_pins[][2] = {
 const int keyboard_factory_scan_pins_used =
 			ARRAY_SIZE(keyboard_factory_scan_pins);
 #endif
+
+/*****************************************************************************
+ * Power signals
+ */
+
+struct power_signal_info power_signal_list[] = {
+	[X86_SLP_S3_N] = {
+		.gpio = GPIO_PCH_SLP_S3_L,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "SLP_S3_DEASSERTED",
+	},
+	[X86_SLP_S5_N] = {
+		.gpio = GPIO_PCH_SLP_S5_L,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "SLP_S5_DEASSERTED",
+	},
+	[X86_S0_PGOOD] = {
+		.gpio = GPIO_S0_PWROK_OD_V0,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "S0_PGOOD",
+	},
+	[X86_S5_PGOOD] = {
+		.gpio = GPIO_S5_PGOOD,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "S5_PGOOD",
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
+
+enum gpio_signal board_usbc_port_to_hpd_gpio(int port)
+{
+	/* USB-C0 always uses USB_C0_HPD (= DP3_HPD). */
+	if (port == 0)
+		return GPIO_USB_C0_HPD;
+
+	/*
+	 * USB-C1 OPT3 DB
+	 *    version_2 uses GPIO_NO_HPD
+	 *    version_3 uses USB_C1_HPD_IN_DB_V1 via RTD2141B MST hub
+	 *    to drive AP HPD, EC drives MST hub HPD input
+	 *    from USB-PD messages..
+	 */
+	else if (ec_config_has_mst_hub_rtd2141b())
+		return (board_ver >= 3)
+				? GPIO_USB_C1_HPD_IN_DB_V1
+				: GPIO_NO_HPD;
+
+	/* USB-C1 OPT1 DB uses DP2_HPD. */
+	return GPIO_DP2_HPD;
+}

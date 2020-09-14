@@ -26,16 +26,12 @@
 	/* NPCX7 config */
 	#define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 	#define NPCX_TACH_SEL2    0  /* No tach. */
-	#define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 
 	/* Internal SPI flash on NPCX7 */
 	#define CONFIG_FLASH_SIZE (512 * 1024)
 	#define CONFIG_SPI_FLASH_REGS
 	#define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 #elif defined(VARIANT_DEDEDE_EC_IT8320)
-	/* Flash clock must be > (50Mhz / 2) */
-	#define CONFIG_IT83XX_FLASH_CLOCK_48MHZ
-
 	#define I2C_PORT_EEPROM		IT83XX_I2C_CH_A
 	#define I2C_PORT_BATTERY	IT83XX_I2C_CH_B
 	#define I2C_PORT_SENSOR		IT83XX_I2C_CH_C
@@ -82,6 +78,19 @@
 
 /* Common EC defines */
 
+/* Work around double CR50 reset by waiting in initial power on. */
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
+
+/* Optional console commands */
+#define CONFIG_CMD_CHARGER_DUMP
+
+/* Enable AP Reset command for TPM with old firmware version to detect it. */
+#define CONFIG_CMD_AP_RESET_LOG
+#define CONFIG_HOSTCMD_AP_RESET
+
+/* Enable i2ctrace command */
+#define CONFIG_I2C_DEBUG
+
 /* EC Modules */
 #define CONFIG_ADC
 #define CONFIG_CRC8
@@ -95,6 +104,7 @@
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
+#define CONFIG_VBOOT_EFS2
 
 /* Battery */
 #define CONFIG_BATTERY_CUT_OFF
@@ -114,6 +124,7 @@
 /* Charger */
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGER
+#define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT 256
 #define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 1
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 15001
@@ -128,10 +139,8 @@
 #define CONFIG_BACKLIGHT_LID
 #define GPIO_ENABLE_BACKLIGHT   GPIO_EN_BL_OD
 
-/* PWM */
+/* LED */
 #define CONFIG_LED_COMMON
-#define CONFIG_LED_PWM
-#define CONFIG_PWM
 
 /* SoC */
 #define CONFIG_BOARD_HAS_RTC_RESET
@@ -141,7 +150,7 @@
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define CONFIG_POWER_S0IX
-#define CONFIG_POWER_S0IX_FAILURE_DETECTION
+#define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 #define CONFIG_CPU_PROCHOT_ACTIVE_LOW
 
 /* USB Type-C */
@@ -162,14 +171,6 @@
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TRY_SRC
-/*
- * Don't attempt Try.Src if the battery is too low.  Even batteries which report
- * 1% state of charge can sometimes disable their discharge FET if the load is
- * too much.  Therefore, set this threshold a bit higher.  5% should leave
- * plenty of margin.
- */
-#undef CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC
-#define CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC 5
 /* #define CONFIG_USB_PD_VBUS_DETECT_CHARGER */
 #define CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 #define CONFIG_USB_PD_DECODE_SOP
@@ -177,6 +178,7 @@
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_DRP_ACC_TRYSRC
+#define CONFIG_HOSTCMD_PD_CONTROL
 
 /* UART COMMAND */
 #define CONFIG_CMD_CHARGEN
@@ -200,14 +202,6 @@
 /* Common enums */
 #if defined(VARIANT_DEDEDE_EC_NPCX796FC)
 #elif defined(VARIANT_DEDEDE_EC_IT8320)
-	enum adc_channel {
-		ADC_VSNS_PP3300_A,     /* ADC0 */
-		ADC_TEMP_SENSOR_1,     /* ADC2 */
-		ADC_TEMP_SENSOR_2,     /* ADC3 */
-		ADC_SUB_ANALOG,        /* ADC13 */
-		ADC_CH_COUNT
-	};
-
 	enum board_vcmp {
 		VCMP_SNS_PP3300_LOW,
 		VCMP_SNS_PP3300_HIGH,

@@ -30,7 +30,11 @@
 #undef  CONFIG_CHARGER_SINGLE_CHIP
 
 /* LED */
+#define CONFIG_LED_PWM
 #define CONFIG_LED_PWM_COUNT 1
+
+/* PWM */
+#define CONFIG_PWM
 
 /* Sensors */
 #define CONFIG_ACCEL_LIS2DE		/* Lid accel */
@@ -102,6 +106,15 @@ enum sensor_id {
 	BASE_GYRO,
 	VSYNC,
 	SENSOR_COUNT
+};
+
+/* ADC channels */
+enum adc_channel {
+	ADC_VSNS_PP3300_A,     /* ADC0 */
+	ADC_TEMP_SENSOR_1,     /* ADC2 */
+	ADC_TEMP_SENSOR_2,     /* ADC3 */
+	ADC_SUB_ANALOG,        /* ADC13 */
+	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {

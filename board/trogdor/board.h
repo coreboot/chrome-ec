@@ -36,6 +36,7 @@
 /* USB */
 #define CONFIG_USB_PD_TCPM_PS8805
 #define CONFIG_USBC_PPC_SN5S330
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 
 /* USB-A */
 #define USB_PORT_COUNT 1
@@ -73,6 +74,10 @@ enum pwm_channel {
 	PWM_CH_COUNT
 };
 
+/* Swithcap functions */
+void board_set_switchcap_power(int enable);
+int board_is_switchcap_enabled(void);
+int board_is_switchcap_power_good(void);
 /* Custom function to indicate if sourcing VBUS */
 int board_is_sourcing_vbus(int port);
 /* Enable VBUS sink for a given port */

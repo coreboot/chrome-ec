@@ -12,6 +12,7 @@
 #include "driver/ioexpander/pcal6408.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
+#include "driver/retimer/pi3hdx1204.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/usb_mux/amd_fp5.h"
 #include "driver/usb_mux/ps8740.h"
@@ -49,18 +50,24 @@ void c1_tcpc_interrupt(enum gpio_signal signal)
 	c1_tcpc_config_interrupt(signal);
 }
 
+/* Interrupt for C1 PPC with USB-C DB, HPD with HDMI DB. */
+void (*c1_ppc_config_interrupt)(enum gpio_signal signal) = ppc_interrupt;
+
+void c1_ppc_interrupt(enum gpio_signal signal)
+{
+	c1_ppc_config_interrupt(signal);
+}
+
 static void hdmi_hpd_handler(void)
 {
-	int hpd = 0;
-
 	/* Pass HPD through from DB OPT1 HDMI connector to AP's DP1. */
-	ioex_get_level(IOEX_HDMI_CONN_HPD_3V3_DB, &hpd);
+	int hpd = gpio_get_level(GPIO_USB_C1_PPC_INT_ODL);
 	gpio_set_level(GPIO_DP1_HPD, hpd);
 	ccprints("HDMI HPD %d", hpd);
 }
 DECLARE_DEFERRED(hdmi_hpd_handler);
 
-void hdmi_hpd_interrupt(enum ioex_signal signal)
+void hdmi_hpd_interrupt(enum gpio_signal signal)
 {
 	/* Debounce for 2 msec. */
 	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
@@ -186,6 +193,37 @@ void pcal6408_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&pcal6408_handler_data, 0);
 }
 
+/*****************************************************************************
+ * Board suspend / resume
+ */
+
+static void board_chipset_resume(void)
+{
+	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
+
+	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
+		ioex_set_level(IOEX_EN_PWR_HDMI_DB, 1);
+		msleep(PI3HDX1204_POWER_ON_DELAY_MS);
+		pi3hdx1204_enable(I2C_PORT_TCPC1,
+				  PI3HDX1204_I2C_ADDR_FLAGS,
+				  1);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+static void board_chipset_suspend(void)
+{
+	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
+
+	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
+		pi3hdx1204_enable(I2C_PORT_TCPC1,
+				  PI3HDX1204_I2C_ADDR_FLAGS,
+				  0);
+		ioex_set_level(IOEX_EN_PWR_HDMI_DB, 0);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
 static int board_ps8743_mux_set(const struct usb_mux *me,
 				mux_state_t mux_state)
 {
@@ -287,7 +325,12 @@ void ppc_interrupt(enum gpio_signal signal)
 		break;
 
 	case GPIO_USB_C1_PPC_INT_ODL:
-		nx20p348x_interrupt(USBC_PORT_C1);
+		/*
+		 * Sensitive only to falling edges; GPIO is configured for both
+		 * because this input may be used for HDMI HPD instead.
+		 */
+		if (!gpio_get_level(signal))
+			nx20p348x_interrupt(USBC_PORT_C1);
 		break;
 
 	default:
@@ -479,7 +522,7 @@ void bc12_interrupt(enum gpio_signal signal)
 	}
 }
 
-int board_tcpc_fast_role_swap_enable(int port, int enable)
+int board_pd_set_frs_enable(int port, int enable)
 {
 	int rv = EC_SUCCESS;
 
@@ -520,7 +563,7 @@ static void setup_fw_config(void)
 		IOEX_USB_A1_CHARGE_EN_DB_L = IOEX_USB_A1_CHARGE_EN_DB_L_OPT2;
 		usb_port_enable[USBA_PORT_A1] = IOEX_EN_USB_A1_5V_DB_OPT2;
 		c1_tcpc_config_interrupt = pcal6408_interrupt;
-		ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
+		c1_ppc_config_interrupt = hdmi_hpd_interrupt;
 	} else {
 		ccprints("DB OPT1 USBC");
 		ioex_config[IOEX_C1_NCT3807].flags = 0;
@@ -529,6 +572,7 @@ static void setup_fw_config(void)
 		IOEX_USB_A1_CHARGE_EN_DB_L = IOEX_USB_A1_CHARGE_EN_DB_L_OPT1;
 		usb_port_enable[USBA_PORT_A1] = IOEX_EN_USB_A1_5V_DB_OPT1;
 		c1_tcpc_config_interrupt = tcpc_alert_event;
+		c1_ppc_config_interrupt = ppc_interrupt;
 	}
 
 	/* Enable PPC interrupts. */
@@ -543,6 +587,10 @@ static void setup_fw_config(void)
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
 
+	/* Enable SBU fault interrupts */
+	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
+	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_DB_ODL);
+
 	if (ec_config_has_lid_angle_tablet_mode()) {
 		/* Enable Gyro interrupts */
 		gpio_enable_interrupt(GPIO_6AXIS_INT_L);
@@ -554,6 +602,9 @@ static void setup_fw_config(void)
 		gpio_set_flags(GPIO_6AXIS_INT_L, GPIO_INPUT | GPIO_PULL_DOWN);
 	}
 }
+/*
+ * Use HOOK_PRIO_INIT_I2C + 2 to be after ioex_init().
+ */
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 
 const struct pwm_t pwm_channels[] = {
@@ -591,31 +642,17 @@ int usb_port_enable[USBA_PORT_COUNT] = {
 	IOEX_EN_USB_A1_5V_DB_OPT1,
 };
 
-static void usba_retimer_on(void)
+static void check_v0_battery(void)
 {
-	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
-}
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, usba_retimer_on, HOOK_PRIO_DEFAULT);
+	uint32_t board_version = 0;
 
-static void usba_retimer_off(void)
-{
-	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
-}
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, usba_retimer_off, HOOK_PRIO_DEFAULT);
+	cbi_get_board_version(&board_version);
 
+	if (board_version == 1)
+		I2C_PORT_BATTERY = I2C_PORT_BATTERY_V0;
+}
 /*
- * If the battery is found on the V0 I2C port then re-map the battery port.
  * Use HOOK_PRIO_INIT_I2C so we re-map before init_battery_type() and
  * charger_chips_init() want to talk to the battery.
  */
-static void check_v0_battery(void)
-{
-	int status;
-
-	if (i2c_read16(I2C_PORT_BATTERY_V0, BATTERY_ADDR_FLAGS,
-			SB_BATTERY_STATUS, &status) == EC_SUCCESS) {
-		ccprints("V0 HW detected");
-		I2C_PORT_BATTERY = I2C_PORT_BATTERY_V0;
-	}
-}
 DECLARE_HOOK(HOOK_INIT, check_v0_battery, HOOK_PRIO_INIT_I2C);

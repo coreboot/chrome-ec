@@ -102,6 +102,7 @@
 
 #define CONFIG_GMR_TABLET_MODE
 #define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
+#define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
 
 #define PD_OPERATING_POWER_MW 30000
@@ -137,7 +138,11 @@
 #define CONFIG_SWITCH
 #define CONFIG_WATCHDOG_HELP
 
+#ifdef SECTION_IS_RO
+#undef CONFIG_SYSTEM_UNLOCKED /* Disabled in RO to save space */
+#else
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
+#endif
 
 #undef  CONFIG_UART_CONSOLE
 #define CONFIG_UART_CONSOLE 1
@@ -190,8 +195,6 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
-/* To be able to indicate the device is in tablet mode. */
-#define CONFIG_TABLET_MODE
 #define GPIO_LID_OPEN GPIO_HALL_INT_L
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
@@ -259,7 +262,9 @@
 
 #ifdef SECTION_IS_RO
 #undef CONFIG_CMD_APTHROTTLE
+#undef CONFIG_CMD_CRASH
 #undef CONFIG_CMD_HCDEBUG
+#undef CONFIG_CMD_IDLE_STATS
 #undef CONFIG_CMD_MMAPINFO
 #undef CONFIG_CMD_PWR_AVG
 #undef CONFIG_CMD_REGULATOR

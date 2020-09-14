@@ -403,8 +403,7 @@ static int fusb302_tcpm_init(int port)
 	/* Turn on retries and set number of retries */
 	tcpc_read(port, TCPC_REG_CONTROL3, &reg);
 	reg |= TCPC_REG_CONTROL3_AUTO_RETRY;
-	reg |= (PD_RETRY_COUNT & 0x3) <<
-		TCPC_REG_CONTROL3_N_RETRIES_POS;
+	reg |= (CONFIG_PD_RETRY_COUNT & 0x3) << TCPC_REG_CONTROL3_N_RETRIES_POS;
 	tcpc_write(port, TCPC_REG_CONTROL3, reg);
 
 	/* Create interrupt masks */
@@ -988,10 +987,8 @@ void fusb302_tcpc_alert(int port)
 
 		/* bring FUSB302 out of reset */
 		fusb302_pd_reset(port);
-
-		pd_execute_hard_reset(port);
-
-		task_wake(PD_PORT_TO_TASK_ID(port));
+		task_set_event(PD_PORT_TO_TASK_ID(port),
+			PD_EVENT_RX_HARD_RESET, 0);
 	}
 
 	if (interruptb & TCPC_REG_INTERRUPTB_GCRCSENT) {

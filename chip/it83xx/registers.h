@@ -164,6 +164,7 @@
 #define IT83XX_IRQ_WKO132         132
 #define IT83XX_IRQ_WKO133         133
 #define IT83XX_IRQ_WKO134         134
+#define IT83XX_IRQ_WKO135         135
 /* Group 17 */
 #define IT83XX_IRQ_WKO136         136
 #define IT83XX_IRQ_WKO137         137
@@ -407,6 +408,7 @@
 #define IT83XX_CPU_INT_IRQ_132     2
 #define IT83XX_CPU_INT_IRQ_133     2
 #define IT83XX_CPU_INT_IRQ_134     2
+#define IT83XX_CPU_INT_IRQ_135     2
 #define IT83XX_CPU_INT_IRQ_136     2
 #define IT83XX_CPU_INT_IRQ_137     2
 #define IT83XX_CPU_INT_IRQ_138     2
@@ -774,6 +776,7 @@
 #define IT83XX_GPIO_GCR30       REG8(IT83XX_GPIO_BASE+0xED)
 #define IT83XX_GPIO_GCR31       REG8(IT83XX_GPIO_BASE+0xD5)
 #define IT83XX_GPIO_GCR32       REG8(IT83XX_GPIO_BASE+0xD6)
+#define IT83XX_GPIO_GCR33       REG8(IT83XX_GPIO_BASE+0xD7)
 
 #define IT83XX_VBATPC_BGPOPSCR  REG8(IT83XX_GPIO2_BASE+0xF0)
 #define IT83XX_VBATPC_XLPIER    REG8(IT83XX_GPIO2_BASE+0xF5)
@@ -851,7 +854,7 @@ static const struct gpio_reg_t gpio_group_to_reg[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(gpio_group_to_reg) == (COUNT));
 
-#define DUMMY_GPIO_BANK GPIO_A
+#define UNIMPLEMENTED_GPIO_BANK GPIO_A
 
 #define IT83XX_GPIO_DATA(port)                 \
 	REG8(gpio_group_to_reg[port].reg_gpdr)
@@ -960,6 +963,8 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_CHIPID2      REG8(IT83XX_GCTRL_BASE+0x01)
 #endif
 #define IT83XX_GCTRL_CHIPVER      REG8(IT83XX_GCTRL_BASE+0x02)
+#define IT83XX_GCTRL_DBGROS       REG8(IT83XX_GCTRL_BASE+0x03)
+#define IT83XX_SMB_DBGR           BIT(0)
 #define IT83XX_GCTRL_WNCKR        REG8(IT83XX_GCTRL_BASE+0x0B)
 #define IT83XX_GCTRL_RSTS         REG8(IT83XX_GCTRL_BASE+0x06)
 #define IT83XX_GCTRL_BADRSEL      REG8(IT83XX_GCTRL_BASE+0x0A)
@@ -969,6 +974,7 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_SPCTRL4      REG8(IT83XX_GCTRL_BASE+0x1C)
 #define IT83XX_GCTRL_MCCR3        REG8(IT83XX_GCTRL_BASE+0x20)
 #define IT83XX_GCTRL_SPISLVPFE    BIT(6)
+#define IT83XX_GCTRL_RSTC5        REG8(IT83XX_GCTRL_BASE+0x21)
 #define IT83XX_GCTRL_MCCR         REG8(IT83XX_GCTRL_BASE+0x30)
 #define IT83XX_GCTRL_PMER1        REG8(IT83XX_GCTRL_BASE+0x32)
 #define IT83XX_GCTRL_PMER2        REG8(IT83XX_GCTRL_BASE+0x33)
@@ -1040,6 +1046,7 @@ enum clock_gate_offsets {
 #define IT83XX_ADC_ADCGCR       REG8(IT83XX_ADC_BASE+0x03)
 #define IT83XX_ADC_VCH0CTL      REG8(IT83XX_ADC_BASE+0x04)
 #define IT83XX_ADC_KDCTL        REG8(IT83XX_ADC_BASE+0x05)
+#define IT83XX_ADC_AHCE             BIT(7)
 #define IT83XX_ADC_VCH1CTL      REG8(IT83XX_ADC_BASE+0x06)
 #define IT83XX_ADC_VCH1DATL     REG8(IT83XX_ADC_BASE+0x07)
 #define IT83XX_ADC_VCH1DATM     REG8(IT83XX_ADC_BASE+0x08)
@@ -1299,10 +1306,9 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_RXF1OC          BIT(3)
 #define IT83XX_SPI_RXFAR           BIT(0)
 #define IT83XX_SPI_IMR          REG8(IT83XX_SPI_BASE+0x04)
-#define IT83XX_SPI_RFFIM           BIT(7)
+#define IT83XX_SPI_RX_REACH        BIT(5)
 #define IT83XX_SPI_EDIM            BIT(2)
 #define IT83XX_SPI_ISR          REG8(IT83XX_SPI_BASE+0x05)
-#define IT83XX_SPI_RXFIFOFULL      BIT(7)
 #define IT83XX_SPI_ENDDETECTINT    BIT(2)
 #define IT83XX_SPI_RXFSR        REG8(IT83XX_SPI_BASE+0x07)
 #define IT83XX_SPI_RXFFSM          (BIT(4) | BIT(3))
@@ -1321,7 +1327,13 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_RXFRDRB0     REG32(IT83XX_SPI_BASE+0x0C)
 #define IT83XX_SPI_FTCB0R       REG8(IT83XX_SPI_BASE+0x18)
 #define IT83XX_SPI_FTCB1R       REG8(IT83XX_SPI_BASE+0x19)
+#define IT83XX_SPI_TCCB0        REG8(IT83XX_SPI_BASE+0x1A)
+#define IT83XX_SPI_TCCB1        REG8(IT83XX_SPI_BASE+0x1B)
 #define IT83XX_SPI_HPR2         REG8(IT83XX_SPI_BASE+0x1E)
+#define IT83XX_SPI_RX_VLISMR    REG8(IT83XX_SPI_BASE+0x26)
+#define IT83XX_SPI_RVLIM           BIT(0)
+#define IT83XX_SPI_RX_VLISR     REG8(IT83XX_SPI_BASE+0x27)
+#define IT83XX_SPI_RVLI            BIT(0)
 
 /* Platform Environment Control Interface (PECI) */
 #define IT83XX_PECI_BASE  0x00F02C00
@@ -1588,8 +1600,13 @@ enum i2c_channels {
 #define USB_DP_DM_PULL_DOWN_EN BIT(4)
 
 /* Wake pin definitions, defined at board-level */
+#ifndef CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 extern const enum gpio_signal hibernate_wake_pins[];
 extern const int hibernate_wake_pins_used;
+#else
+extern enum gpio_signal hibernate_wake_pins[];
+extern int hibernate_wake_pins_used;
+#endif
 
 /* --- MISC (not implemented yet) --- */
 

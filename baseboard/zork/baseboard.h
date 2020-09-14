@@ -39,9 +39,9 @@
 #define CONFIG_CPU_PROCHOT_ACTIVE_LOW
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_HOSTCMD_ESPI
-#define CONFIG_HOSTCMD_SKUID
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
+#define CONFIG_I2C_UPDATE_IF_CHANGED
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
 #define CONFIG_PWM
@@ -71,7 +71,12 @@
 #define CONFIG_CHARGER_ISL9241
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
-#define CONFIG_CHARGE_RAMP_HW
+/*
+ * We would prefer to use CONFIG_CHARGE_RAMP_HW to enable legacy BC1.2 charging
+ * but that feature of ISL9241 is broken (b/160287056) so we have to use
+ * CONFIG_CHARGE_RAMP_SW instead.
+ */
+#define CONFIG_CHARGE_RAMP_SW
 
 #define CONFIG_CHIPSET_STONEY
 #define CONFIG_CHIPSET_CAN_THROTTLE
@@ -84,6 +89,7 @@
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
+#define CONFIG_POWER_BUTTON_TO_PCH_CUSTOM
 
 #ifdef VARIANT_ZORK_TREMBYLE
 	#define CONFIG_FANS FAN_CH_COUNT
@@ -99,11 +105,10 @@
 /*
  * On power-on, H1 releases the EC from reset but then quickly asserts and
  * releases the reset a second time. This means the EC sees 2 resets:
- * (1) power-on reset, (2) reset-pin reset. If we add a delay between reset (1)
- * and configuring GPIO output levels, then reset (2) will happen before the
- * end of the delay so we avoid extra output toggles.
+ * (1) power-on reset, (2) reset-pin reset. This config will
+ * allow the second reset to be treated as a power-on.
  */
-#define CONFIG_GPIO_INIT_POWER_ON_DELAY_MS 100
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
 
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_NCT38XX
@@ -111,7 +116,6 @@
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
-#undef  CONFIG_KEYBOARD_VIVALDI
 
 /*
  * USB ID
@@ -134,7 +138,7 @@
 
 	 /* Enable TCPMv2 Fast Role Swap */
 	 /* Turn off until FRSwap is working */
-	#undef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
+	#undef CONFIG_USB_PD_FRS_TCPC
 #endif
 
 #define CONFIG_HOSTCMD_PD_CONTROL
@@ -146,6 +150,13 @@
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_DP_HPD_GPIO
+#ifdef VARIANT_ZORK_TREMBYLE
+/*
+ * Use a custom HPD function that supports HPD on IO expander.
+ * TODO(b/165622386) remove this when HPD is on EC GPIO.
+ */
+#	define CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
+#endif
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
@@ -192,9 +203,12 @@
 #define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
-#define PD_MAX_CURRENT_MA	3000
+#define PD_MAX_POWER_MW		65000
+#define PD_MAX_CURRENT_MA	3250
 #define PD_MAX_VOLTAGE_MV	20000
+
+/* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
+#define ZORK_AC_PROCHOT_CURRENT_MA 3328
 
 /*
  * Minimum conditions to start AP and perform swsync.  Note that when the
@@ -285,12 +299,6 @@ enum fan_channel {
 	FAN_CH_COUNT,
 };
 
-enum usba_port {
-	USBA_PORT_A0 = 0,
-	USBA_PORT_A1,
-	USBA_PORT_COUNT
-};
-
 #ifdef VARIANT_ZORK_TREMBYLE
 enum usbc_port {
 	USBC_PORT_C0 = 0,
@@ -329,6 +337,7 @@ extern const struct thermistor_info thermistor_info;
 #define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
 
 void mst_hpd_interrupt(enum ioex_signal signal);
+void sbu_fault_interrupt(enum ioex_signal signal);
 
 #ifdef VARIANT_ZORK_TREMBYLE
 void board_reset_pd_mcu(void);
@@ -336,16 +345,10 @@ void board_reset_pd_mcu(void);
 /* Common definition for the USB PD interrupt handlers. */
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
-void ppc_interrupt(enum gpio_signal signal);
+__override_proto void ppc_interrupt(enum gpio_signal signal);
 #endif
 
-#ifdef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
-int board_tcpc_fast_role_swap_enable(int port, int enable);
-#endif
-
-void pi3hdx1204_retimer_power(void);
-__override_proto int check_hdmi_hpd_status(void);
-int board_get_temp(int idx, int *temp_k);
+void board_print_temps(void);
 
 #endif /* !__ASSEMBLER__ */
 

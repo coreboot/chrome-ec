@@ -200,7 +200,7 @@ void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
 	 * current limit gets incorrectly set to 0.5A.
 	 */
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		int chg_port = charge_manager_get_active_charge_port();
+		int chg_port = charge_manager_get_selected_charge_port();
 
 		charging_allowed =
 			(chg_port == port || chg_port == CHARGE_PORT_NONE);
@@ -337,7 +337,7 @@ int pd_charge_from_device(uint16_t vid, uint16_t pid)
 {
 	/* TODO: rewrite into table if we get more of these */
 	/*
-	 * White-list Apple charge-through accessory since it doesn't set
+	 * Allow the Apple charge-through accessory since it doesn't set
 	 * unconstrained bit, but we still need to charge from it when
 	 * we are a sink.
 	 */

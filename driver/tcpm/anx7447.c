@@ -707,6 +707,21 @@ static int anx7447_set_polarity(int port,
 #ifdef CONFIG_CMD_TCPC_DUMP
 static const struct tcpc_reg_dump_map anx7447_regs[] = {
 	{
+		.addr = ANX7447_REG_TCPC_SWITCH_0,
+		.name = "SWITCH_0",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_TCPC_SWITCH_1,
+		.name = "SWITCH_1",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_TCPC_AUX_SWITCH,
+		.name = "AUX_SWITCH",
+		.size = 1,
+	},
+	{
 		.addr = ANX7447_REG_ADC_CTRL_1,
 		.name = "ADC_CTRL_1",
 		.size = 1,
@@ -794,6 +809,9 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
 	.set_cc			= &anx7447_set_cc,
 	.set_polarity		= &anx7447_set_polarity,
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+#endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,

@@ -244,6 +244,9 @@
 /* Control3: PSYS gain in uA/W (ISL9238 only) */
 #define ISL9238_C3_PSYS_GAIN BIT(9)
 
+/* Control3: Enables or disables Battery Ship mode */
+#define ISL9238_C3_BGATE_OFF BIT(10)
+
 /* Control3: Don't reload ACLIM on ACIN. */
 #define ISL9238_C3_NO_RELOAD_ACLIM_ON_ACIN BIT(14)
 
@@ -287,6 +290,7 @@
 
 /* ADC registers */
 #define RAA489000_REG_ADC_INPUT_CURRENT 0x83
+#define RAA489000_REG_ADC_CHARGE_CURRENT 0x85
 #define RAA489000_REG_ADC_VSYS 0x86
 #define RAA489000_REG_ADC_VBUS 0x89
 
@@ -407,6 +411,8 @@ int isl923x_set_comparator_inversion(int chgnum, int invert);
  * @param chgnum index into chg_chips table.
  */
 void raa489000_hibernate(int chgnum);
+enum ec_error_list isl9238c_hibernate(int chgnum);
+enum ec_error_list isl9238c_resume(int chgnum);
 
 #define ISL923X_AC_PROCHOT_CURRENT_MAX	6400	/* mA */
 #define ISL923X_DC_PROCHOT_CURRENT_MAX	12800	/* mA */

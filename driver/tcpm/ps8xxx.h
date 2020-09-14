@@ -11,11 +11,13 @@
 
 /* I2C interface */
 #define PS8751_I2C_ADDR1_P1_FLAGS 0x09
-#define PS8751_I2C_ADDR1_P2_FLAGS 0x0a
-#define PS8751_I2C_ADDR1_FLAGS    0x0B
+#define PS8751_I2C_ADDR1_P2_FLAGS 0x0A
+#define PS8751_I2C_ADDR1_FLAGS    0x0B	/* P3 */
 #define PS8751_I2C_ADDR2_FLAGS    0x1B
 #define PS8751_I2C_ADDR3_FLAGS    0x2B
 #define PS8751_I2C_ADDR4_FLAGS    0x4B
+
+#define PS8751_P3_TO_P1_FLAGS(p3_flags)	((p3_flags) - 2)
 
 /* Minimum Delay for reset assertion */
 #define PS8XXX_RESET_DELAY_MS 1
@@ -65,11 +67,19 @@
 #define IN_HPD  BIT(0)
 #define HPD_IRQ BIT(1)
 
+#define PS8XXX_P1_REG_MUX_USB_DCI_CFG           0x4B
+
+/* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned in
+ * 8705, 8755 and 8805.
+ */
+#define PS8705_PRODUCT_ID 0x8705
+#define PS8751_PRODUCT_ID 0x8751
+#define PS8755_PRODUCT_ID 0x8755
+#define PS8805_PRODUCT_ID 0x8805
+#define PS8815_PRODUCT_ID 0x8815
+
 #if defined(CONFIG_USB_PD_TCPM_PS8751)
 /* Vendor defined registers */
-#define PS8XXX_PRODUCT_ID 0x8751
-
-#define FW_VER_REG                              0x90
 #define PS8XXX_REG_VENDOR_ID_L                  0x00
 #define PS8XXX_REG_VENDOR_ID_H                  0x01
 #define PS8XXX_REG_MUX_DP_EQ_CONFIGURATION      0xD3
@@ -77,33 +87,31 @@
 #define PS8XXX_REG_MUX_USB_C2SS_EQ              0xE7
 #define PS8XXX_REG_MUX_USB_C2SS_HS_THRESHOLD    0xE8
 #define PS8751_REG_MUX_USB_DCI_CFG              0xED
+#endif
 
-#elif defined(CONFIG_USB_PD_TCPM_PS8705)
+#if defined(CONFIG_USB_PD_TCPM_PS8815)
 /* Vendor defined registers */
-/* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned */
-#define PS8XXX_PRODUCT_ID 0x8705
-
-#define PS8705_P1_REG_MUX_USB_DCI_CFG           0x4B
-/* NOTE: The revision will read as 0x00 if the firmware has malfunctioned. */
-#define FW_VER_REG                              0x82
-
-#elif defined(CONFIG_USB_PD_TCPM_PS8805)
-/* Vendor defined registers */
-/* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned */
-#define PS8XXX_PRODUCT_ID 0x8805
-
-#define PS8805_P1_REG_MUX_USB_DCI_CFG           0x4B
-#define FW_VER_REG                              0x82
-
-#elif defined(CONFIG_USB_PD_TCPM_PS8815)
-/* Vendor defined registers */
-#define PS8XXX_PRODUCT_ID 0x8815
-
-#define FW_VER_REG                              0x82
+#define PS8815_P1_REG_HW_REVISION		0xF0
 
 #endif
 
 extern const struct tcpm_drv ps8xxx_tcpm_drv;
+
+/**
+ * Board specific callback to judge and provide which chip source of PS8XXX
+ * series supported by this driver per specific port.
+ *
+ * If the board supports only one single source then there is no nencessary to
+ * provide the __override version.
+ *
+ * If board supports two sources or above (with CONFIG_USB_PD_TCPM_MULTI_PS8XXX)
+ * then the __override version is mandatory.
+ *
+ * @param port	TCPC port number.
+ */
+__override_proto
+uint16_t board_get_ps8xxx_product_id(int port);
+
 void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
 				   int hpd_lvl, int hpd_irq);
 

@@ -60,7 +60,6 @@ static void tcpc_alert_event(enum gpio_signal signal)
 const struct adc_t adc_channels[] = {
 	[ADC_BOARD_ID] =  {"BOARD_ID",  3300, 4096, 0, STM32_AIN(10)},
 	[ADC_EC_SKU_ID] = {"EC_SKU_ID", 3300, 4096, 0, STM32_AIN(8)},
-	[ADC_BATT_ID] =   {"BATT_ID",   3300, 4096, 0, STM32_AIN(7)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -170,7 +169,6 @@ struct charger_config_t chg_chips[] = {
 		.drv = &isl923x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* Board version depends on ADCs, so init i2c port after ADC */
 static void charger_config_complete(void)

@@ -650,6 +650,21 @@ static void charge_manager_get_best_charge_port(int *new_port,
 
 	}
 
+#ifdef CONFIG_BATTERY
+	/*
+	 * if no battery present then retain same charge port
+	 * and charge supplier to avoid the port switching
+	 */
+	if (charge_port != CHARGE_SUPPLIER_NONE &&
+	    charge_port != port &&
+	    (battery_is_present() == BP_NO ||
+	     (battery_is_present() == BP_YES &&
+	      battery_is_cut_off() != BATTERY_CUTOFF_STATE_NORMAL))) {
+		port = charge_port;
+		supplier = charge_supplier;
+	}
+#endif
+
 	*new_port = port;
 	*new_supplier = supplier;
 }
@@ -1146,6 +1161,14 @@ int charge_manager_get_override(void)
 int charge_manager_get_active_charge_port(void)
 {
 	return charge_port;
+}
+
+int charge_manager_get_selected_charge_port(void)
+{
+	int port, supplier;
+
+	charge_manager_get_best_charge_port(&port, &supplier);
+	return port;
 }
 
 int charge_manager_get_charger_current(void)

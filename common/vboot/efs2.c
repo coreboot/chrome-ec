@@ -160,6 +160,12 @@ static enum cr50_comm_err verify_hash(void)
 	const uint8_t *hash;
 	int rv;
 
+	/* Wake up Cr50 beforehand in case it's asleep. */
+	enable_packet_mode(true);
+	CPRINTS("Ping Cr50");
+	msleep(1);
+	enable_packet_mode(false);
+
 	rv = vboot_get_rw_hash(&hash);
 	if (rv)
 		return rv;
@@ -245,18 +251,6 @@ void vboot_main(void)
 		CPRINTS("Already in RW");
 		show_power_shortage();
 		return;
-	}
-
-	if (IS_ENABLED(CONFIG_HIBERNATE)
-			&& IS_ENABLED(CONFIG_EXTPOWER_GPIO)
-			&& !gpio_get_level(GPIO_AC_PRESENT)) {
-		/*
-		 * EC doesn't hibernate from G3 when AC is present. Thus if AC
-		 * is not present here, it implies we woke up by power button or
-		 * by lid. Clear AP_IDLE to avoid interfering with the AP boot.
-		 */
-		CPRINTS("Clear AP_IDLE, assuming wake-up by PB or LID");
-		system_clear_reset_flags(EC_RESET_FLAG_AP_IDLE);
 	}
 
 	if (system_is_manual_recovery() ||

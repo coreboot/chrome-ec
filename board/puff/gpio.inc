@@ -53,11 +53,12 @@ GPIO_INT(BJ_ADP_PRESENT_L,     PIN(8, 2), GPIO_INT_BOTH | GPIO_PULL_UP, adp_conn
 /* Port power control interrupts */
 GPIO_INT(HDMI_CONN0_OC_ODL,    PIN(0, 7), GPIO_INT_BOTH, port_ocp_interrupt)
 GPIO_INT(HDMI_CONN1_OC_ODL,    PIN(0, 6), GPIO_INT_BOTH, port_ocp_interrupt)
-GPIO_INT(USB_A0_OC_ODL,        PIN(E, 4), GPIO_ODR_HIGH, port_ocp_interrupt)
-GPIO_INT(USB_A1_OC_ODL,        PIN(A, 2), GPIO_ODR_HIGH, port_ocp_interrupt)
-GPIO_INT(USB_A2_OC_ODL,        PIN(F, 5), GPIO_ODR_HIGH, port_ocp_interrupt)
-GPIO_INT(USB_A3_OC_ODL,        PIN(0, 3), GPIO_ODR_HIGH, port_ocp_interrupt)
-GPIO_INT(USB_A4_OC_ODL,        PIN(B, 0), GPIO_ODR_HIGH, port_ocp_interrupt)
+GPIO_INT(USB_A0_OC_ODL,        PIN(E, 4), GPIO_INT_BOTH, port_ocp_interrupt)
+GPIO_INT(USB_A1_OC_ODL,        PIN(A, 2), GPIO_INT_BOTH, port_ocp_interrupt)
+GPIO_INT(USB_A2_OC_ODL,        PIN(F, 5), GPIO_INT_BOTH, port_ocp_interrupt)
+GPIO_INT(USB_A3_OC_ODL,        PIN(0, 3), GPIO_INT_BOTH, port_ocp_interrupt)
+/* May be reconfigured as input */
+GPIO_INT(USB_A4_OC_ODL,        PIN(B, 0), GPIO_OUT_LOW | GPIO_INT_BOTH, port_ocp_interrupt)
 
 /* PCH/CPU signals */
 GPIO(EC_PCH_PWROK,             PIN(0, 5), GPIO_OUT_LOW)
@@ -86,6 +87,8 @@ GPIO(EN_PPVAR_BJ_ADP_L,        PIN(0, 4), GPIO_OUT_LOW)
 /* USB type A */
 GPIO(EN_PP5000_USB_VBUS,       PIN(8, 3), GPIO_OUT_LOW)
 GPIO(USB_A_LOW_PWR_OD,         PIN(9, 4), GPIO_ODR_LOW)
+GPIO(USB_A2_STATUS_L,          PIN(6, 1), GPIO_INPUT)
+GPIO(USB_A3_STATUS_L,          PIN(C, 7), GPIO_INPUT)
 
 /* USB type C */
 GPIO(USB_C0_TCPC_RST,          PIN(9, 7), GPIO_OUT_LOW)
@@ -131,7 +134,7 @@ ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)                  /* PWM5 - Fan 1 
 ALTERNATE(PIN_MASK(7, 0x08), 0, MODULE_PWM, 0)                  /* TA2 - Fan Tachometer */
 
 /* ADC */
-ALTERNATE(PIN_MASK(4, 0x3E), 0, MODULE_ADC, 0)                  /* ADC0-4 */
+ALTERNATE(PIN_MASK(4, 0x2A), 0, MODULE_ADC, 0)                  /* ADC0, ADC2, ADC4 */
 ALTERNATE(PIN_MASK(E, 0x02), 0, MODULE_ADC, 0)                  /* ADC7 */
 ALTERNATE(PIN_MASK(F, 0x01), 0, MODULE_ADC, 0)                  /* ADC9 */
 
@@ -144,13 +147,12 @@ UNUSED(PIN(F, 2))						/* EC_I2C_RFU_SDA */
 UNUSED(PIN(F, 3))						/* EC_I2C_RFU_SCL */
 UNUSED(PIN(C, 0))						/* FAN_PWM_2 */
 UNUSED(PIN(8, 0))						/* LED_BLUE_L */
-UNUSED(PIN(4, 2))						/* TEMP_SENSOR_3 */
+UNUSED(PIN(4, 4))						/* ADC1/TEMP_SENSOR_2 */
+UNUSED(PIN(4, 2))						/* ADC3/TEMP_SENSOR_3 */
 UNUSED(PIN(C, 2))						/* A12 NC */
 UNUSED(PIN(9, 2))						/* K8  NC */
 UNUSED(PIN(9, 1))						/* L8  NC */
 UNUSED(PIN(1, 2))						/* C6  NC */
-UNUSED(PIN(6, 1))						/* L3  NC */
-UNUSED(PIN(C, 7))						/* B9  NC */
 UNUSED(PIN(6, 6))						/* H4  NC */
 UNUSED(PIN(8, 1))						/* L6  NC */
 UNUSED(PIN(C, 6))						/* B11 NC */

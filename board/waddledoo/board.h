@@ -17,8 +17,10 @@
  */
 #define CONFIG_SYSTEM_UNLOCKED
 
+/* Battery */
+#define CONFIG_BATTERY_FUEL_GAUGE
+
 /* Charger */
-#define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_RAA489000
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
@@ -30,10 +32,19 @@
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
 
+/*
+ * GPIO for C1 interrupts, for baseboard use
+ *
+ * Note this line might already have its pull up disabled for HDMI DBs, but
+ * it should be fine to set again before z-state.
+ */
+#define GPIO_USB_C1_INT_ODL GPIO_SUB_C1_INT_EN_RAILS_ODL
+
 /* Keyboard */
 #define CONFIG_PWM_KBLIGHT
 
 /* LED */
+#define CONFIG_LED_PWM
 #define CONFIG_LED_PWM_COUNT 1
 #undef CONFIG_LED_PWM_NEAR_FULL_COLOR
 #undef CONFIG_LED_PWM_SOC_ON_COLOR
@@ -43,6 +54,10 @@
 #define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
 #define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
 #define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
+
+/* PWM */
+#define CONFIG_PWM
+#define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -74,6 +89,15 @@
 #define I2C_PORT_ACCEL      I2C_PORT_SENSOR
 
 #define I2C_ADDR_EEPROM_FLAGS 0x50 /* 7b address */
+
+/*
+ * I2C pin names for baseboard
+ *
+ * Note: these lines will be set as i2c on start-up, but this should be
+ * okay since they're ODL.
+ */
+#define GPIO_EC_I2C_SUB_USB_C1_SCL GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL
+#define GPIO_EC_I2C_SUB_USB_C1_SDA GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL
 
 /* Sensors */
 #define CONFIG_CMD_ACCELS
@@ -138,6 +162,12 @@ enum pwm_channel {
 	PWM_CH_LED1_AMBER,
 	PWM_CH_LED2_WHITE,
 	PWM_CH_COUNT,
+};
+
+/* List of possible batteries */
+enum battery_type {
+	BATTERY_POWER_TECH,
+	BATTERY_TYPE_COUNT,
 };
 
 int board_is_sourcing_vbus(int port);

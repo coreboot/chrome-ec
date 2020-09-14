@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright 2020 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
@@ -23,7 +23,9 @@ import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from enum import Enum
 from pathlib import Path
-import colorama
+from typing import Optional, BinaryIO, List
+
+import colorama  # type: ignore[import]
 
 EC_DIR = Path(os.path.dirname(os.path.realpath(__file__))).parent
 FLASH_SCRIPT = os.path.join(EC_DIR, 'util/flash_jlink.py')
@@ -61,7 +63,7 @@ class TestConfig:
 
     def __init__(self, name, image_to_use=ImageType.RW, finish_regexes=None,
                  toggle_power=False, test_args=None, num_flash_attempts=2,
-                 timeout_secs=10):
+                 timeout_secs=10, enable_hw_write_protect=False):
         if test_args is None:
             test_args = []
         if finish_regexes is None:
@@ -74,6 +76,7 @@ class TestConfig:
         self.toggle_power = toggle_power
         self.num_flash_attempts = num_flash_attempts
         self.timeout_secs = timeout_secs
+        self.enable_hw_write_protect = enable_hw_write_protect
         self.logs = []
         self.passed = False
         self.num_fails = 0
@@ -91,7 +94,7 @@ ALL_TESTS = {
                    toggle_power=True),
     'flash_write_protect':
         TestConfig(name='flash_write_protect', image_to_use=ImageType.RO,
-                   toggle_power=True),
+                   toggle_power=True, enable_hw_write_protect=True),
     'mpu_ro':
         TestConfig(name='mpu',
                    image_to_use=ImageType.RO,
@@ -138,7 +141,7 @@ BOARD_CONFIGS = {
 }
 
 
-def get_console(board_name, board_config):
+def get_console(board_name: str, board_config: BoardConfig) -> Optional[str]:
     """Get the name of the console for a given board."""
     cmd = [
         'dut-control',
@@ -148,7 +151,7 @@ def get_console(board_name, board_config):
     logging.debug('Running command: "%s"', ' '.join(cmd))
 
     with subprocess.Popen(cmd, stdout=subprocess.PIPE) as proc:
-        for line in io.TextIOWrapper(proc.stdout):
+        for line in io.TextIOWrapper(proc.stdout):  # type: ignore[arg-type]
             logging.debug(line)
             pty = line.split(':')
             if len(pty) == 2 and pty[0] == board_config.servo_uart_name:
@@ -157,7 +160,7 @@ def get_console(board_name, board_config):
     return None
 
 
-def power(board_name, board_config, on):
+def power(board_name: str, board_config: BoardConfig, on: bool) -> None:
     """Turn power to board on/off."""
     if on:
         state = 'pp3300'
@@ -173,7 +176,23 @@ def power(board_name, board_config, on):
     subprocess.run(cmd).check_returncode()
 
 
-def build(test_name, board_name):
+def hw_write_protect(board_name: str, enable: bool) -> None:
+    """Enable/disable hardware write protect."""
+    if enable:
+        state = 'on'
+    else:
+        state = 'off'
+
+    cmd = [
+        'dut-control',
+        '-n', board_name,
+        'fw_wp_en' + ':' + state,
+        ]
+    logging.debug('Running command: "%s"', ' '.join(cmd))
+    subprocess.run(cmd).check_returncode()
+
+
+def build(test_name: str, board_name: str) -> None:
     """Build specified test for specified board."""
     cmd = [
         'make',
@@ -186,7 +205,7 @@ def build(test_name, board_name):
     subprocess.run(cmd).check_returncode()
 
 
-def flash(test_name, board):
+def flash(test_name: str, board: str) -> bool:
     """Flash specified test to specified board."""
     logging.info("Flashing test")
 
@@ -203,7 +222,8 @@ def flash(test_name, board):
     return completed_process.returncode == 0
 
 
-def readline(executor, f, timeout_secs):
+def readline(executor: ThreadPoolExecutor, f: BinaryIO, timeout_secs: int) -> \
+             Optional[bytes]:
     """Read a line with timeout."""
     a = executor.submit(f.readline)
     try:
@@ -212,9 +232,10 @@ def readline(executor, f, timeout_secs):
         return None
 
 
-def readlines_until_timeout(executor, f, timeout_secs):
+def readlines_until_timeout(executor, f: BinaryIO, timeout_secs: int) -> \
+                            List[bytes]:
     """Continuously read lines for timeout_secs."""
-    lines = []
+    lines: List[bytes] = []
     while True:
         line = readline(executor, f, timeout_secs)
         if not line:
@@ -222,7 +243,8 @@ def readlines_until_timeout(executor, f, timeout_secs):
         lines.append(line)
 
 
-def run_test(test, console, executor):
+def run_test(test: TestConfig, console: str, executor: ThreadPoolExecutor) ->\
+             bool:
     """Run specified test."""
     start = time.time()
     with open(console, "wb+", buffering=0) as c:
@@ -276,7 +298,7 @@ def run_test(test, console, executor):
                 pass
 
 
-def get_test_list(config, test_args):
+def get_test_list(config: BoardConfig, test_args) -> List[TestConfig]:
     """Get a list of tests to run."""
     if test_args == 'all':
         return config.test_list
@@ -284,11 +306,11 @@ def get_test_list(config, test_args):
     test_list = []
     for t in test_args:
         logging.debug('test: %s', t)
-        config = ALL_TESTS.get(t)
-        if config is None:
+        test_config = ALL_TESTS.get(t)
+        if test_config is None:
             logging.error('Unable to find test config for "%s"', t)
             sys.exit(1)
-        test_list.append(config)
+        test_list.append(test_config)
 
     return test_list
 
@@ -355,6 +377,8 @@ def main():
             power(args.board, board_config, on=False)
             time.sleep(1)
             power(args.board, board_config, on=True)
+
+        hw_write_protect(args.board, test.enable_hw_write_protect)
 
         # run the test
         logging.info('Running test: "%s"', test.name)

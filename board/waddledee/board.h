@@ -15,6 +15,8 @@
 /* System unlocked in early development */
 #define CONFIG_SYSTEM_UNLOCKED
 
+#define CONFIG_CMD_CHARGER_DUMP
+
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
 
@@ -27,12 +29,25 @@
 #define CONFIG_USB_PD_5V_CHARGER_CTRL
 #define CONFIG_CHARGER_OTG
 #undef  CONFIG_CHARGER_SINGLE_CHIP
+#define CONFIG_OCPC
+#define CONFIG_OCPC_DEF_RBATT_MOHMS 5 /* R_DS(on) 5.3mOhm */
+
+/*
+ * GPIO for C1 interrupts, for baseboard use
+ *
+ * Note this will only be valid for board revision 1
+ */
+#define GPIO_USB_C1_INT_ODL GPIO_USB_C1_INT_V1_ODL
 
 /* LED */
+#define CONFIG_LED_PWM
 #define CONFIG_LED_PWM_COUNT 1
 
+/* PWM */
+#define CONFIG_PWM
+
 /* Sensors */
-#define CONFIG_ACCEL_LIS2DE		/* Lid accel */
+#define CONFIG_ACCEL_KX022		/* Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
 #define CONFIG_SYNC			/* Camera VSYNC */
 /* Sensors without hardware FIFO are in forced mode */
@@ -101,6 +116,15 @@ enum sensor_id {
 	BASE_GYRO,
 	VSYNC,
 	SENSOR_COUNT
+};
+
+/* ADC channels */
+enum adc_channel {
+	ADC_VSNS_PP3300_A,     /* ADC0 */
+	ADC_TEMP_SENSOR_1,     /* ADC2 */
+	ADC_TEMP_SENSOR_2,     /* ADC3 */
+	ADC_SUB_ANALOG,        /* ADC13 */
+	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {

@@ -5,11 +5,12 @@
 
 /* Waddledee board-specific configuration */
 
+#include "adc_chip.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
-#include "driver/accel_lis2dh.h"
+#include "driver/accel_kionix.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/sm5803.h"
@@ -125,6 +126,39 @@ static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
+/* ADC channels */
+const struct adc_t adc_channels[] = {
+	[ADC_VSNS_PP3300_A] = {
+		.name = "PP3300_A_PGOOD",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH0
+	},
+	[ADC_TEMP_SENSOR_1] = {
+		.name = "TEMP_SENSOR1",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH2
+	},
+	[ADC_TEMP_SENSOR_2] = {
+		.name = "TEMP_SENSOR2",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH3
+	},
+	[ADC_SUB_ANALOG] = {
+		.name = "SUB_ANALOG",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = CHIP_ADC_CH13
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
 /* BC 1.2 chips */
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	{
@@ -152,7 +186,6 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &sm5803_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* TCPCs */
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
@@ -210,7 +243,19 @@ void board_init(void)
 
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
 	gpio_enable_interrupt(c1_int_line);
+
+	/*
+	 * If interrupt lines are already low, schedule them to be processed
+	 * after inits are completed.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
+		hook_call_deferred(&check_c0_line_data, 0);
+	if (!gpio_get_level(c1_int_line))
+		hook_call_deferred(&check_c1_line_data, 0);
+
 	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
+	/* Enable Base Accel interrupt */
+	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 
 	/* Charger on the MB will be outputting PROCHOT_ODL and OD CHG_DET */
 	sm5803_configure_gpio0(CHARGER_PRIMARY, GPIO0_MODE_PROCHOT, 1);
@@ -224,6 +269,12 @@ void board_init(void)
 	board_power_5v_enable(on);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+__override void board_ocpc_init(struct ocpc_data *ocpc)
+{
+	/* There's no provision to measure Isys */
+	ocpc->chg_flags[CHARGER_SECONDARY] |= OCPC_NO_ISYS_MEAS_CAP;
+}
 
 void board_reset_pd_mcu(void)
 {
@@ -240,6 +291,7 @@ __override void board_power_5v_enable(int enable)
 	 * sets it through the charger GPIO.
 	 */
 	gpio_set_level(GPIO_EN_PP5000, !!enable);
+	gpio_set_level(GPIO_EN_USB_A0_VBUS, !!enable);
 	if (sm5803_set_gpio0_level(1, !!enable))
 		CPRINTUSB("Failed to %sable sub rails!", enable ? "en" : "dis");
 }
@@ -265,17 +317,6 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
-int extpower_is_present(void)
-{
-	int chg0 = 0;
-	int chg1 = 0;
-
-	sm5803_get_chg_det(0, &chg0);
-	sm5803_get_chg_det(1, &chg1);
-
-	return chg0 || chg1;
-}
-
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 			    int charge_mv)
 {
@@ -290,25 +331,18 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 
 int board_set_active_charge_port(int port)
 {
-	int is_valid_port = (port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
-	int p0_otg, p1_otg;
+	int is_valid_port = (port >= 0 && port < board_get_usb_pd_port_count());
 
 	if (!is_valid_port && port != CHARGE_PORT_NONE)
 		return EC_ERROR_INVAL;
 
-	/* TODO(b/147440290): charger functions should take chgnum */
-	p0_otg = chg_chips[0].drv->is_sourcing_otg_power(0, 0);
-	p1_otg = chg_chips[1].drv->is_sourcing_otg_power(1, 1);
-
 	if (port == CHARGE_PORT_NONE) {
 		CPRINTUSB("Disabling all charge ports");
 
-		if (!p0_otg)
-			chg_chips[0].drv->set_mode(0,
-						   CHARGE_FLAG_INHIBIT_CHARGE);
-		if (!p1_otg)
-			chg_chips[1].drv->set_mode(1,
-						   CHARGE_FLAG_INHIBIT_CHARGE);
+		sm5803_vbus_sink_enable(CHARGER_PRIMARY, 0);
+
+		if (board_get_charger_chip_count() > 1)
+			sm5803_vbus_sink_enable(CHARGER_SECONDARY, 0);
 
 		return EC_SUCCESS;
 	}
@@ -316,28 +350,16 @@ int board_set_active_charge_port(int port)
 	CPRINTUSB("New chg p%d", port);
 
 	/*
-	 * Charger task will take care of enabling charging on the new charge
-	 * port.  Here, we ensure the other port is not charging by changing
-	 * CHG_EN
+	 * Ensure other port is turned off, then enable new charge port
 	 */
 	if (port == 0) {
-		if (p0_otg) {
-			CPRINTUSB("Skip enable p%d", port);
-			return EC_ERROR_INVAL;
-		}
-		if (!p1_otg) {
-			chg_chips[1].drv->set_mode(1,
-						   CHARGE_FLAG_INHIBIT_CHARGE);
-		}
+		if (board_get_charger_chip_count() > 1)
+			sm5803_vbus_sink_enable(CHARGER_SECONDARY, 0);
+		sm5803_vbus_sink_enable(CHARGER_PRIMARY, 1);
+
 	} else {
-		if (p1_otg) {
-			CPRINTUSB("Skip enable p%d", port);
-			return EC_ERROR_INVAL;
-		}
-		if (!p0_otg) {
-			chg_chips[0].drv->set_mode(0,
-						   CHARGE_FLAG_INHIBIT_CHARGE);
-		}
+		sm5803_vbus_sink_enable(CHARGER_PRIMARY, 0);
+		sm5803_vbus_sink_enable(CHARGER_SECONDARY, 1);
 	}
 
 	return EC_SUCCESS;
@@ -356,6 +378,20 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 		gpio_set_level(GPIO_EN_USB_C0_CC2_VCONN, !!enabled);
 }
 
+__override void ocpc_get_pid_constants(int *kp, int *kp_div,
+				       int *ki, int *ki_div,
+				       int *kd, int *kd_div)
+{
+	*kp = 1;
+	*kp_div = 6;
+
+	*ki = 0;
+	*ki_div = 1;
+
+	*kd = 0;
+	*kd_div = 1;
+}
+
 __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
 {
 	int current;
@@ -365,7 +401,7 @@ __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
 
 	current = (rp == TYPEC_RP_3A0) ? 3000 : 1500;
 
-	chg_chips[port].drv->set_otg_current_voltage(port, current, 5000);
+	charger_set_otg_current_voltage(port, current, 5000);
 }
 
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
@@ -402,7 +438,7 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* Sensor Data */
-static struct stprivate_data g_lis2dh_data;
+static struct kionix_accel_data  g_kx022_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Drivers */
@@ -410,19 +446,19 @@ struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LIS2DE,
+		.chip = MOTIONSENSE_CHIP_KX022,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_LID,
-		.drv = &lis2dh_drv,
+		.drv = &kionix_accel_drv,
 		.mutex = &g_lid_mutex,
-		.drv_data = &g_lis2dh_data,
+		.drv_data = &g_kx022_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LIS2DH_ADDR1_FLAGS,
+		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 		.rot_standard_ref = NULL,
 		.default_range = 2, /* g */
 		/* We only use 2g because its resolution is only 8-bits */
-		.min_frequency = LIS2DH_ODR_MIN_VAL,
-		.max_frequency = LIS2DH_ODR_MAX_VAL,
+		.min_frequency = KX022_ACCEL_MIN_FREQ,
+		.max_frequency = KX022_ACCEL_MAX_FREQ,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 10000 | ROUND_UP_FLAG,

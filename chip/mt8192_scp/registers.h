@@ -11,7 +11,7 @@
 #include "common.h"
 #include "compile_time_macros.h"
 
-#define DUMMY_GPIO_BANK 0
+#define UNIMPLEMENTED_GPIO_BANK 0
 
 #define SCP_REG_BASE			0x70000000
 
@@ -63,6 +63,14 @@
 #define     UART_CK_SW_STATUS_26M	BIT(0)
 #define     UART_CK_SW_STATUS_32K	BIT(1)
 #define     UART_CK_SW_STATUS_ULPOS	BIT(2)
+
+/* IPC */
+#define SCP_SCP2APMCU_IPC_SET		REG32(SCP_REG_BASE + 0x24080)
+#define SCP_SCP2SPM_IPC_SET		REG32(SCP_REG_BASE + 0x24090)
+#define   IPC_SCP2HOST			BIT(0)
+#define SCP_GIPC_IN_SET			REG32(SCP_REG_BASE + 0x24098)
+#define SCP_GIPC_IN_CLR			REG32(SCP_REG_BASE + 0x2409C)
+#define   GIPC_IN(n)			BIT(n)
 
 /* UART */
 #define SCP_UART_COUNT			2

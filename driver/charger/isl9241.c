@@ -60,7 +60,7 @@ static const struct charger_info isl9241_charger_info = {
 
 static enum ec_error_list isl9241_discharge_on_ac(int chgnum, int enable);
 
-static inline enum ec_error_list isl9241_read(int chgnum, int offset,
+inline enum ec_error_list isl9241_read(int chgnum, int offset,
 					      int *value)
 {
 	return i2c_read16(chg_chips[chgnum].i2c_port,
@@ -68,7 +68,7 @@ static inline enum ec_error_list isl9241_read(int chgnum, int offset,
 			  offset, value);
 }
 
-static inline enum ec_error_list isl9241_write(int chgnum, int offset,
+inline enum ec_error_list isl9241_write(int chgnum, int offset,
 					       int value)
 {
 	return i2c_write16(chg_chips[chgnum].i2c_port,
@@ -304,19 +304,37 @@ static enum ec_error_list isl9241_post_init(int chgnum)
 	return EC_SUCCESS;
 }
 
+__overridable int isl9241_update_learn_mode(int chgnum, int enable)
+{
+	return isl9241_update(chgnum, ISL9241_REG_CONTROL1,
+			      ISL9241_CONTROL1_LEARN_MODE,
+			      (enable) ? MASK_SET : MASK_CLR);
+}
+
 static enum ec_error_list isl9241_discharge_on_ac(int chgnum, int enable)
 {
 	int rv;
 
 	mutex_lock(&control1_mutex);
 
-	rv = isl9241_update(chgnum, ISL9241_REG_CONTROL1,
-			    ISL9241_CONTROL1_LEARN_MODE,
-			    (enable) ? MASK_SET : MASK_CLR);
+	rv = isl9241_update_learn_mode(chgnum, enable);
+
 	if (!rv)
 		learn_mode = enable;
 
 	mutex_unlock(&control1_mutex);
+	return rv;
+}
+
+int isl9241_set_ac_prochot(int chgnum, int ma)
+{
+	int rv;
+	uint16_t reg = AC_CURRENT_TO_REG(ma);
+
+	rv = isl9241_write(chgnum, ISL9241_REG_AC_PROCHOT, reg);
+	if (rv)
+		CPRINTF("set_ac_prochot failed (%d)", rv);
+
 	return rv;
 }
 
@@ -383,7 +401,7 @@ static void isl9241_init(int chgnum)
 	 * No need to proceed with the rest of init if we sysjump'd to this
 	 * image as the input current limit has already been set.
 	 */
-	if (system_jumped_to_this_image())
+	if (system_jumped_late())
 		return;
 
 	/* Initialize the input current limit to the board's default. */

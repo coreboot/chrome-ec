@@ -414,7 +414,7 @@ static void set_base_lid_current(int current_base, int allow_charge_base,
 	}
 
 	if (current_lid >= 0) {
-		ret = charge_set_output_current_limit(0, 0);
+		ret = charge_set_output_current_limit(CHARGER_SOLO, 0, 0);
 		if (ret)
 			return;
 		ret = charger_set_input_current(chgnum, current_lid);
@@ -426,7 +426,7 @@ static void set_base_lid_current(int current_base, int allow_charge_base,
 		else
 			ret = charge_request(0, 0);
 	} else {
-		ret = charge_set_output_current_limit(
+		ret = charge_set_output_current_limit(CHARGER_SOLO,
 						-current_lid, otg_voltage);
 	}
 
@@ -1083,6 +1083,15 @@ static void dump_charge_state(void)
 	ccprintf("ocpc.*:\n");
 	DUMP_OCPC(active_chg_chip, "%d");
 	DUMP_OCPC(combined_rsys_rbatt_mo, "%dmOhm");
+	if ((curr.ocpc.active_chg_chip != -1) &&
+	    !(curr.ocpc.chg_flags[curr.ocpc.active_chg_chip] &
+	      OCPC_NO_ISYS_MEAS_CAP)) {
+		DUMP_OCPC(rbatt_mo, "%dmOhm");
+		DUMP_OCPC(rsys_mo, "%dmOhm");
+		DUMP_OCPC(isys_ma, "%dmA");
+	}
+	DUMP_OCPC(vsys_aux_mv, "%dmV");
+	DUMP_OCPC(vsys_mv, "%dmV");
 	DUMP_OCPC(primary_vbus_mv, "%dmV");
 	DUMP_OCPC(primary_ibus_ma, "%dmA");
 	DUMP_OCPC(secondary_vbus_mv, "%dmV");
@@ -1256,11 +1265,11 @@ static int charge_request(int voltage, int current)
 	 * For OCPC systems, if the secondary charger is active, we need to
 	 * configure that charge IC as well.  Note that if OCPC ever supports
 	 * more than 2 charger ICs, we'll need to refactor things a bit.  The
-	 * following check should be comparing against PRIMARY_CHARGER and
+	 * following check should be comparing against CHARGER_PRIMARY and
 	 * config_secondary_charger should probably be config_auxiliary_charger
 	 * and take the active chgnum as a parameter.
 	 */
-	if (curr.ocpc.active_chg_chip == SECONDARY_CHARGER) {
+	if (curr.ocpc.active_chg_chip == CHARGER_SECONDARY) {
 		if ((current >= 0) || (voltage >= 0))
 			r3 = ocpc_config_secondary_charger(&curr.desired_input_current,
 							   &curr.ocpc,
@@ -1663,12 +1672,7 @@ void charger_task(void *u)
 	charge_base = -1;
 #endif
 #ifdef CONFIG_OCPC
-	/*
-	 * We can start off assuming that the board resistance is 0 ohms
-	 * and later on, we can update this value if we charge the
-	 * system in suspend or off.
-	 */
-	curr.ocpc.combined_rsys_rbatt_mo = CONFIG_OCPC_DEF_RBATT_MOHMS;
+	ocpc_init(&curr.ocpc);
 	charge_set_active_chg_chip(CHARGE_PORT_NONE);
 #endif /* CONFIG_OCPC */
 
@@ -1755,7 +1759,8 @@ void charger_task(void *u)
 		charger_get_params(&curr.chg);
 		battery_get_params(&curr.batt);
 #ifdef CONFIG_OCPC
-		ocpc_get_adcs(&curr.ocpc);
+		if (curr.ac)
+			ocpc_get_adcs(&curr.ocpc);
 #endif /* CONFIG_OCPC */
 
 		if (prev_bp != curr.batt.is_present) {
@@ -2392,18 +2397,18 @@ int charge_is_consuming_full_input_current(void)
 }
 
 #ifdef CONFIG_CHARGER_OTG
-int charge_set_output_current_limit(int ma, int mv)
+int charge_set_output_current_limit(int chgnum, int ma, int mv)
 {
 	int ret;
 	int enable = ma > 0;
 
 	if (enable) {
-		ret = charger_set_otg_current_voltage(ma, mv);
+		ret = charger_set_otg_current_voltage(chgnum, ma, mv);
 		if (ret != EC_SUCCESS)
 			return ret;
 	}
 
-	ret = charger_enable_otg_power(enable);
+	ret = charger_enable_otg_power(chgnum, enable);
 	if (ret != EC_SUCCESS)
 		return ret;
 
@@ -2435,6 +2440,11 @@ int charge_set_input_current_limit(int ma, int mv)
 	 */
 	if (curr.batt.is_present != BP_YES && !system_is_locked() &&
 		!base_connected) {
+
+		int prev_input = 0;
+
+		charger_get_input_current(chgnum, &prev_input);
+
 #ifdef CONFIG_USB_POWER_DELIVERY
 #if ((PD_MAX_POWER_MW * 1000) / PD_MAX_VOLTAGE_MV != PD_MAX_CURRENT_MA)
 		/*
@@ -2444,14 +2454,25 @@ int charge_set_input_current_limit(int ma, int mv)
 		 * Hence, limit the input current to meet maximum allowed
 		 * input system power.
 		 */
+
 		if (mv > 0 && mv * curr.desired_input_current >
 			PD_MAX_POWER_MW * 1000)
 			ma = (PD_MAX_POWER_MW * 1000) / mv;
-		else
+		/*
+		 * If the active charger has already been initialized to at
+		 * least this current level, nothing left to do.
+		 */
+		else if (prev_input >= ma)
 			return EC_SUCCESS;
 #else
-		return EC_SUCCESS;
+		if (prev_input >= ma)
+			return EC_SUCCESS;
 #endif
+		/*
+		 * If the current needs lowered due to PD max power
+		 * considerations, or needs raised for the selected active
+		 * charger chip, fall through to set.
+		 */
 #endif /* CONFIG_USB_POWER_DELIVERY */
 	}
 
@@ -2472,7 +2493,7 @@ int charge_set_input_current_limit(int ma, int mv)
 #ifdef CONFIG_OCPC
 void charge_set_active_chg_chip(int idx)
 {
-	ASSERT(idx < (int)chg_cnt);
+	ASSERT(idx < (int)board_get_charger_chip_count());
 
 	if (idx == curr.ocpc.active_chg_chip)
 		return;
@@ -2496,7 +2517,12 @@ int charge_get_active_chg_chip(void)
 #endif
 }
 
-#ifndef TEST_BUILD
+#ifdef CONFIG_USB_PD_PREFER_MV
+bool charge_is_current_stable(void)
+{
+	return get_time().val >= stable_ts.val;
+}
+
 int charge_get_plt_plus_bat_desired_mw(void)
 {
 	/*
@@ -2534,6 +2560,7 @@ void charge_reset_stable_current(void)
 	charge_reset_stable_current_us(10 * SECOND);
 }
 #endif
+
 /*****************************************************************************/
 /* Host commands */
 

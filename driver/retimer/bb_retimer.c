@@ -6,9 +6,11 @@
  */
 
 #include "bb_retimer.h"
+#include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "i2c.h"
+#include "task.h"
 #include "timer.h"
 #include "usb_pd.h"
 #include "util.h"
@@ -33,6 +35,9 @@
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+/* Mutex for shared NVM access */
+static struct mutex bb_nvm_mutex;
 
 /**
  * Utility functions
@@ -87,31 +92,35 @@ static int bb_retimer_write(const struct usb_mux *me,
 			buf, BB_RETIMER_WRITE_SIZE, NULL, 0);
 }
 
-static void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
+__overridable void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 {
 	const struct bb_usb_control *control = &bb_controls[me->usb_port];
 
 	/* handle retimer's power domain */
 
 	if (on_off) {
+		/*
+		 * BB retimer NVM can be shared between multiple ports, hence
+		 * lock enabling the retimer until the current retimer request
+		 * is complete.
+		 */
+		mutex_lock(&bb_nvm_mutex);
+
 		gpio_set_level(control->usb_ls_en_gpio, 1);
+		/*
+		 * Tpw, minimum time from VCC to RESET_N de-assertion is 100us.
+		 * For boards that don't provide a load switch control, the
+		 * retimer_init() function ensures power is up before calling
+		 * this function.
+		 */
 		msleep(1);
 		gpio_set_level(control->retimer_rst_gpio, 1);
-		msleep(10);
-		gpio_set_level(control->force_power_gpio, 1);
 
-		/*
-		 * If BB retimer NVM is shared between multiple ports, allow
-		 * 40ms time for all the retimers to be initialized.
-		 * Else allow 20ms to initialize.
-		 */
-		if (control->shared_nvm)
-			msleep(40);
-		else
-			msleep(20);
+		/* Allow 20ms time for the retimer to be initialized. */
+		msleep(20);
+
+		mutex_unlock(&bb_nvm_mutex);
 	} else {
-		gpio_set_level(control->force_power_gpio, 0);
-		msleep(1);
 		gpio_set_level(control->retimer_rst_gpio, 0);
 		msleep(1);
 		gpio_set_level(control->usb_ls_en_gpio, 0);
@@ -165,8 +174,9 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 		*set_retimer_con |= BB_RETIMER_ACTIVE_PASSIVE;
 
 	if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED) {
-		cable_resp = get_cable_tbt_vdo(port);
-		dev_resp = get_dev_tbt_vdo(port);
+		cable_resp.raw_value =
+			pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME);
+		dev_resp.raw_value = pd_get_tbt_mode_vdo(port, TCPC_TX_SOP);
 
 		/*
 		 * Bit 2: RE_TIMER_DRIVER
@@ -332,16 +342,17 @@ static int retimer_set_state(const struct usb_mux *me, mux_state_t mux_state)
 	 * 0 - No USB3.1 Connection
 	 * 1 - USB3.1 connection
 	 */
-	if (mux_state & USB_PD_MUX_USB_ENABLED)
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
 		set_retimer_con |= BB_RETIMER_USB_3_CONNECTION;
 
-	/*
-	 * Bit 6: USB3_Speed
-	 * 0 – USB3 is limited to Gen1
-	 * 1 – USB3 Gen1/Gen2 supported
-	 */
-	if (is_cable_speed_gen2_capable(port))
-		set_retimer_con |= BB_RETIMER_USB_3_SPEED;
+		/*
+		 * Bit 6: USB3_Speed
+		 * 0 – USB3 is limited to Gen1
+		 * 1 – USB3 Gen1/Gen2 supported
+		 */
+		if (is_cable_speed_gen2_capable(port))
+			set_retimer_con |= BB_RETIMER_USB_3_SPEED;
+	}
 
 	/*
 	 * Bit 8: DP_CONNECTION
@@ -415,6 +426,13 @@ static int retimer_init(const struct usb_mux *me)
 {
 	int rv;
 	uint32_t data;
+
+	/* Burnside Bridge is powered by main AP rail */
+	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF)) {
+		/* Ensure reset is asserted while chip is not powered */
+		bb_retimer_power_handle(me, 0);
+		return EC_ERROR_NOT_POWERED;
+	}
 
 	bb_retimer_power_handle(me, 1);
 

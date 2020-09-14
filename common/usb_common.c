@@ -297,7 +297,7 @@ int pd_check_requested_voltage(uint32_t rdo, const int port)
 	return EC_SUCCESS;
 }
 
-__attribute__((weak)) uint8_t board_get_usb_pd_port_count(void)
+__overridable uint8_t board_get_usb_pd_port_count(void)
 {
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }
@@ -307,8 +307,13 @@ enum pd_drp_next_states drp_auto_toggle_next_state(
 	enum pd_power_role power_role,
 	enum pd_dual_role_states drp_state,
 	enum tcpc_cc_voltage_status cc1,
-	enum tcpc_cc_voltage_status cc2)
+	enum tcpc_cc_voltage_status cc2,
+	bool auto_toggle_supported)
 {
+	const bool hardware_debounced_unattached =
+				((drp_state == PD_DRP_TOGGLE_ON) &&
+				 auto_toggle_supported);
+
 	/* Set to appropriate port state */
 	if (cc_is_open(cc1, cc2)) {
 		/*
@@ -331,11 +336,20 @@ enum pd_drp_next_states drp_auto_toggle_next_state(
 			return DRP_TC_UNATTACHED_SRC;
 		case PD_DRP_TOGGLE_ON:
 		default:
+			if (!auto_toggle_supported) {
+				if (power_role == PD_ROLE_SINK)
+					return DRP_TC_UNATTACHED_SNK;
+				else
+					return DRP_TC_UNATTACHED_SRC;
+			}
+
 			return DRP_TC_DRP_AUTO_TOGGLE;
 		}
 	} else if ((cc_is_rp(cc1) || cc_is_rp(cc2)) &&
 		drp_state != PD_DRP_FORCE_SOURCE) {
 		/* SNK allowed unless ForceSRC */
+		if (hardware_debounced_unattached)
+			return DRP_TC_ATTACHED_WAIT_SNK;
 		return DRP_TC_UNATTACHED_SNK;
 	} else if (cc_is_at_least_one_rd(cc1, cc2) ||
 					cc_is_audio_acc(cc1, cc2)) {
@@ -362,10 +376,19 @@ enum pd_drp_next_states drp_auto_toggle_next_state(
 			else
 				return DRP_TC_DRP_AUTO_TOGGLE;
 		} else {
+			if (hardware_debounced_unattached)
+				return DRP_TC_ATTACHED_WAIT_SRC;
 			return DRP_TC_UNATTACHED_SRC;
 		}
 	} else {
 		/* Anything else, keep toggling */
+		if (!auto_toggle_supported) {
+			if (power_role == PD_ROLE_SINK)
+				return DRP_TC_UNATTACHED_SNK;
+			else
+				return DRP_TC_UNATTACHED_SRC;
+		}
+
 		return DRP_TC_DRP_AUTO_TOGGLE;
 	}
 }
@@ -421,6 +444,19 @@ void set_usb_mux_with_current_data_role(int port)
 	}
 }
 
+void usb_mux_set_safe_mode(int port)
+{
+	if (IS_ENABLED(CONFIG_USBC_SS_MUX)) {
+		usb_mux_set(port, IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) ?
+			USB_PD_MUX_SAFE_MODE : USB_PD_MUX_NONE,
+			USB_SWITCH_CONNECT, pd_get_polarity(port));
+	}
+
+	/* Isolate the SBU lines. */
+	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
+		ppc_set_sbu(port, 0);
+}
+
 static void pd_send_hard_reset(int port)
 {
 	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SEND_HARD_RESET, 0);
@@ -457,14 +493,19 @@ DECLARE_DEFERRED(re_enable_ports);
 
 void pd_handle_overcurrent(int port)
 {
-	/* Keep track of the overcurrent events. */
 	CPRINTS("C%d: overcurrent!", port);
 
 	if (IS_ENABLED(CONFIG_USB_PD_LOGGING))
 		pd_log_event(PD_EVENT_PS_FAULT, PD_LOG_PORT_SIZE(port, 0),
 			PS_FAULT_OCP, NULL);
 
+	/* No action to take if disconnected, just log. */
+	if (pd_is_disconnected(port))
+		return;
+
+	/* Keep track of the overcurrent events. */
 	ppc_add_oc_event(port);
+
 	/* Let the board specific code know about the OC event. */
 	board_overcurrent_event(port, 1);
 
@@ -510,6 +551,12 @@ __overridable int pd_check_power_swap(int port)
 __overridable void pd_execute_data_swap(int port,
 	enum pd_data_role data_role)
 {
+}
+
+__overridable enum pd_dual_role_states pd_get_drp_state_in_suspend(void)
+{
+	/* Disable dual role when going to suspend */
+	return PD_DRP_TOGGLE_OFF;
 }
 
 __overridable void pd_try_execute_vconn_swap(int port, int flags)
@@ -728,6 +775,26 @@ int pd_is_vbus_present(int port)
 	return pd_check_vbus_level(port, VBUS_PRESENT);
 }
 
+#ifdef CONFIG_USB_PD_FRS
+__overridable int board_pd_set_frs_enable(int port, int enable)
+{
+	return EC_SUCCESS;
+}
+
+int pd_set_frs_enable(int port, int enable)
+{
+	int rv = EC_SUCCESS;
+
+	if (IS_ENABLED(CONFIG_USB_PD_FRS_PPC))
+		rv = ppc_set_frs_enable(port, enable);
+	if (rv == EC_SUCCESS && IS_ENABLED(CONFIG_USB_PD_FRS_TCPC))
+		rv = tcpm_set_frs_enable(port, enable);
+	if (rv == EC_SUCCESS)
+		rv = board_pd_set_frs_enable(port, enable);
+	return rv;
+}
+#endif /* defined(CONFIG_USB_PD_FRS) */
+
 #ifdef CONFIG_CMD_TCPC_DUMP
 /*
  * Dump TCPC registers.
@@ -775,3 +842,23 @@ static int command_tcpc_dump(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(tcpci_dump, command_tcpc_dump, "<Type-C port>",
 			"dump the TCPC regs");
 #endif /* defined(CONFIG_CMD_TCPC_DUMP) */
+
+int pd_build_alert_msg(uint32_t *msg, uint32_t *len, enum pd_power_role pr)
+{
+	if (msg == NULL || len == NULL)
+		return EC_ERROR_INVAL;
+
+	/*
+	 * SOURCE: currently only supports OCP
+	 * SINK:   currently only supports OVP
+	 */
+	if (pr == PD_ROLE_SOURCE)
+		*msg = ADO_OCP_EVENT;
+	else
+		*msg = ADO_OVP_EVENT;
+
+	/* Alert data is 4 bytes */
+	*len = 4;
+
+	return EC_SUCCESS;
+}

@@ -12,8 +12,10 @@
 #include "console.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accelgyro_bmi260.h"
+#include "endian.h"
 #include "hwtimer.h"
 #include "i2c.h"
+#include "init_rom.h"
 #include "math_util.h"
 #include "motion_sense_fifo.h"
 #include "spi.h"
@@ -21,6 +23,7 @@
 #include "third_party/bmi260/accelgyro_bmi260_config_tbin.h"
 #include "timer.h"
 #include "util.h"
+#include "watchdog.h"
 
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
@@ -377,25 +380,48 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 }
 #endif  /* CONFIG_ACCEL_INTERRUPTS */
 
-static int init_config(const struct motion_sensor_t *s)
+/*
+ * If the .init_rom section is not memory mapped, we need a static
+ * buffer in RAM to access the BMI configuration data.
+ */
+#ifdef CONFIG_CHIP_INIT_ROM_REGION
+#define BMI_RAM_BUFFER_SIZE		256
+static uint8_t bmi_ram_buffer[BMI_RAM_BUFFER_SIZE];
+#else
+#define BMI_RAM_BUFFER_SIZE		0
+static uint8_t *bmi_ram_buffer;
+#endif
+
+static int bmi_config_load(const struct motion_sensor_t *s)
 {
-	int init_status, ret;
+	int ret = EC_SUCCESS;
 	uint16_t i;
+	const uint8_t *bmi_config = NULL;
 	/*
 	 * Due to i2c transaction timeout limit,
 	 * burst_write_len should not be above 2048 to prevent timeout.
 	 */
-	const int burst_write_len = 2048;
+	int burst_write_len = 2048;
+
+	/*
+	 * The BMI config data may be linked into .rodata or the .init_rom
+	 * section. Get the actual memory mapped address.
+	 */
+	bmi_config = init_rom_map(g_bmi260_config_tbin,
+				  g_bmi260_config_tbin_len);
+
+	/*
+	 * init_rom_map() only returns NULL when the CONFIG_CHIP_INIT_ROM_REGION
+	 * option is enabled and flash memory is not memory mapped.  In this
+	 * case copy the BMI config data through a RAM buffer and limit the
+	 * I2C burst to the size of the RAM buffer.
+	 */
+	if (!bmi_config)
+		burst_write_len = MIN(BMI_RAM_BUFFER_SIZE, burst_write_len);
+
 	/* We have to write the config even bytes of data every time */
-	BUILD_ASSERT((burst_write_len & 1) == 0);
+	ASSERT(((burst_write_len & 1) == 0) && (burst_write_len != 0));
 
-	/* disable advance power save but remain fifo self wakeup*/
-	bmi_write8(s->port, s->i2c_spi_addr_flags, BMI260_PWR_CONF, 2);
-	msleep(1);
-	/* prepare for config load */
-	bmi_write8(s->port, s->i2c_spi_addr_flags, BMI260_INIT_CTRL, 0);
-
-	/* load config file to INIT_DATA */
 	for (i = 0; i < g_bmi260_config_tbin_len; i += burst_write_len) {
 		uint8_t addr[2];
 		const int len = MIN(burst_write_len,
@@ -407,12 +433,54 @@ static int init_config(const struct motion_sensor_t *s)
 				  BMI260_INIT_ADDR_0, addr, 2);
 		if (ret)
 			break;
-		ret = bmi_write_n(s->port, s->i2c_spi_addr_flags,
-				  BMI260_INIT_DATA, &g_bmi260_config_tbin[i],
-				  len);
+
+		if (!bmi_config) {
+			/*
+			 * init_rom region isn't memory mapped. Copy the
+			 * data through a RAM buffer.
+			 */
+			ret = init_rom_copy((int)&g_bmi260_config_tbin[i], len,
+				bmi_ram_buffer);
+			if (ret)
+				break;
+
+			ret = bmi_write_n(s->port, s->i2c_spi_addr_flags,
+					  BMI260_INIT_DATA,
+					  bmi_ram_buffer, len);
+		} else {
+			ret = bmi_write_n(s->port, s->i2c_spi_addr_flags,
+					  BMI260_INIT_DATA,
+					  &bmi_config[i], len);
+		}
+
 		if (ret)
 			break;
 	}
+
+	/*
+	 * Unmap the BMI config data, required when init_rom_map() returns
+	 * a non NULL value.
+	 */
+	if (bmi_config)
+		init_rom_unmap(g_bmi260_config_tbin, g_bmi260_config_tbin_len);
+
+	return ret;
+}
+
+static int init_config(const struct motion_sensor_t *s)
+{
+	int init_status, ret;
+	uint16_t i;
+
+	/* disable advance power save but remain fifo self wakeup*/
+	bmi_write8(s->port, s->i2c_spi_addr_flags, BMI260_PWR_CONF, 2);
+	msleep(1);
+	/* prepare for config load */
+	bmi_write8(s->port, s->i2c_spi_addr_flags, BMI260_INIT_CTRL, 0);
+
+	/* load config file to INIT_DATA */
+	ret = bmi_config_load(s);
+
 	/* finish config load */
 	bmi_write8(s->port, s->i2c_spi_addr_flags, BMI260_INIT_CTRL, 1);
 	/* return error if load config failed */
@@ -496,6 +564,9 @@ const struct accelgyro_drv bmi260_drv = {
 	.read_temp = bmi_read_temp,
 #ifdef CONFIG_ACCEL_INTERRUPTS
 	.irq_handler = irq_handler,
+#endif
+#ifdef CONFIG_BODY_DETECTION
+	.get_rms_noise = bmi_get_rms_noise,
 #endif
 };
 

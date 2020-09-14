@@ -28,9 +28,10 @@ fingerprint-related functionality (matching, encryption, etc). The fingerprint
 sensor itself connects to the FPMCU board.
 
 This FPMCU board is the Dragonclaw Rev 0.2. |
---------------------------------------------|
+------------------------------------------- |
 ![Dragonclaw board]                         |
 
+Download the [Dragonclaw schematics, layout, and BOM][dragonclaw schematics].
 
 *** note
 **Googlers**: You can pick up the Dragonclaw development board at Chromestop.
@@ -57,12 +58,12 @@ debug a running program. It supports SPI, UART, I2C, as well as JTAG/SWD.
 There are two different servo debugger setups supported, the
 [Servo Micro](#servo-micro) and the [Servo V2 + Yoshi](#servo-v2-yoshi). The
 servo micro is recommended for its simplicity. It lacks builtin JTAG/SWD support
-for single step debugging, but Dragonclaw v0.2 has an [SWD
-connector](#servo-micro-swd) that can be used.
+for single step debugging, but Dragonclaw v0.2 has an
+[SWD connector](#servo-micro-swd) that can be used.
 
-| [Servo Micro](#servo-micro) | [ServoV2 + Yoshi](#servo-v2-yoshi)        |
-| --------------------------- | ----------------------------------------- |
-| ![Servo Micro]              | ServoV2 ![Servo v2] Yoshi Flex ![Standard Yoshi Flex] |
+[Servo Micro](#servo-micro) | [ServoV2 + Yoshi](#servo-v2-yoshi)
+--------------------------- | ----------------------------------
+![Servo Micro]              | ServoV2 ![Servo v2] Yoshi Flex ![Standard Yoshi Flex]
 
 *** note
 For more information about both servos, see [servo].
@@ -85,7 +86,6 @@ For more information about Servo Micro, see [Servo Micro Info].
 #### Using SWD (Optional) {#servo-micro-swd}
 
 Instructions for setup are described in [Fingerprint Debugging].
-
 
 ### Servo V2 + Yoshi
 
@@ -156,7 +156,7 @@ development machine.
 *   Create and [enter the `chroot`].
     *   You can stop after the `enter the chroot` step.
 
-### Build the [EC] (embedded controller) codebase
+### Build the [EC]\ (embedded controller) codebase
 
 Open **two** terminals and enter the chroot in each:
 
@@ -207,16 +207,16 @@ You should see something like this. Leave it running:
 2019-04-11 15:21:53,777 - SystemConfig - INFO - Loading XML config (/usr/lib64/python2.7/site-packages/servo/data/usb_image_management.xml, None, 0)
 2019-04-11 15:21:53,784 - SystemConfig - INFO - Loading XML config (/usr/lib64/python2.7/site-packages/servo/data/servo_zerblebarn_overlay.xml, None, 0)
 2019-04-11 15:21:53,785 - SystemConfig - INFO - Loading XML config (/usr/lib64/python2.7/site-packages/servo/data/servoflex_v2_r0_p50.xml, None, 0)
-2019-04-11 15:21:53,792 - Servod - INFO - Initializing interface 1 to ftdi_dummy
+2019-04-11 15:21:53,792 - Servod - INFO - Initializing interface 1 to ftdi_empty
 2019-04-11 15:21:53,792 - Servod - INFO - Initializing interface 2 to ftdi_i2c
 2019-04-11 15:21:53,795 - Servod - INFO - Initializing interface 3 to ftdi_uart
 2019-04-11 15:21:53,799 - Servod - INFO - /dev/pts/8
 2019-04-11 15:21:53,799 - Servod - INFO - Initializing interface 4 to ftdi_uart
 2019-04-11 15:21:53,802 - Servod - INFO - /dev/pts/9
 2019-04-11 15:21:53,802 - Servod - INFO - Use the next FTDI part @ pid = 0x5003
-2019-04-11 15:21:53,802 - Servod - INFO - Initializing interface 5 to ftdi_dummy
+2019-04-11 15:21:53,802 - Servod - INFO - Initializing interface 5 to ftdi_empty
 2019-04-11 15:21:53,802 - Servod - INFO - Use the next FTDI part @ pid = 0x5003
-2019-04-11 15:21:53,802 - Servod - INFO - Initializing interface 6 to ftdi_dummy
+2019-04-11 15:21:53,802 - Servod - INFO - Initializing interface 6 to ftdi_empty
 2019-04-11 15:21:53,802 - Servod - INFO - Use the next FTDI part @ pid = 0x5003
 2019-04-11 15:21:53,802 - Servod - INFO - Initializing interface 7 to ftdi_uart
 2019-04-11 15:21:53,805 - Servod - INFO - /dev/pts/10
@@ -284,6 +284,7 @@ Flash the firmware file:
 ```
 
 Prepare a serial terminal in your chroot:
+
 ```bash
 (chroot) $ sudo emerge screen
 ```
@@ -324,7 +325,7 @@ Start a fingerprint enrollment:
 > fpenroll
 ```
 
-### Measuring Power
+### Measuring Power {#measure-power}
 
 The Dragonclaw reference board has an onboard INA that monitors the voltage and
 power draw of the MCU and FP Sensor independently.
@@ -354,6 +355,31 @@ The `_mv` suffix denotes millivolt and `_mw` suffix denotes milliwatt.
 *** note
 See [Power Measurement Documentation] for more information.
 ***
+
+### Toggling Hardware Write Protect
+
+When using a fingerprint development board connected to servo, you can toggle
+hardware write protect for testing.
+
+**NOTE**: `servod` must be running.
+
+Check the state of hardware write protect:
+
+```bash
+(chroot) $ dut-control fw_wp_en
+```
+
+Enable hardware write protect:
+
+```bash
+(chroot) $ dut-control fw_wp_en:on
+```
+
+Disable hardware write protect:
+
+```bash
+(chroot) $ dut-control fw_wp_en:off
+```
 
 ### Contributing Changes
 
@@ -430,9 +456,9 @@ tracked by multiple people and a record is preserved for posterity.
 
 ## Working with Chromebooks
 
-Chromebooks have an FPMCU (e.g., Dragonclaw) board attached to the
-motherboard. You can use the device to run `ectool` commands and test the
-fingerprint sensor from the UI.
+Chromebooks have an FPMCU (e.g., Dragonclaw) board attached to the motherboard.
+You can use the device to run `ectool` commands and test the fingerprint sensor
+from the UI.
 
 ### Developer Mode and Write Protection
 
@@ -483,17 +509,22 @@ From the DUT, flash the firmware you copied:
 ```bash
 (device) $ flash_fp_mcu /tmp/ec.bin
 ```
+## Commit-queue Prototype Environment
+
+![Dragonclaw in CQ Prototype Environment]
 
 ## Troubleshooting
 
 ### Dragonclaw Rev 0.2 Rework {#dragonclaw-rev-0.2-rework}
 
 *** note
-**NOTE**: All Dragonclaw v0.2 boards have been reworked, so it is not necessary to perform the rework yourself.
+**NOTE**: All Dragonclaw v0.2 boards have been reworked, so it is not necessary
+to perform the rework yourself.
 ***
+
 Dragonclaw **Rev 0.2** has two load switches (`U4` and `U6`) that enable the
-1.8V power rail from the servo connector or motherboard connector. However,
-this switch is not compatible with 1.8V, so will always output 0V.
+1.8V power rail from the servo connector or motherboard connector. However, this
+switch is not compatible with 1.8V, so will always output 0V.
 
 The [rework document][Dragonclaw Rev 0.2 1.8V Rework] describes replacing these
 two switches with ones compatible with 1.8V.
@@ -576,6 +607,7 @@ Make sure that this interface is disabled:
 [Installing Chromium]: https://chromium.googlesource.com/chromiumos/docs/+/master/developer_guide.md#installing-chromium-os-on-your-device
 [FPMCU documentation]: ./fingerprint.md
 [Fingerprint Debugging]: ./fingerprint-debugging.md
+[dragonclaw schematics]: ../schematics/dragonclaw
 
 <!-- Images -->
 
@@ -599,3 +631,6 @@ Make sure that this interface is disabled:
 
 <!-- https://docs.google.com/drawings/d/1YhOUD-Qf69NUdugT6n0cX7o7CWvb5begcdmJwv7ch6I -->
 [Dragonclaw Rev 0.2 1.8V Rework]: https://github.com/coreboot/chrome-ec/blob/master/docs/images/dragonclaw_rev_0.2_1.8v_load_switch_rework.pdf
+
+<!-- https://docs.google.com/drawings/d/1w2qbb4AsSxY-KTK2vXZ6TKeWHveWvS3Dkgh61ocu0wc -->
+[Dragonclaw in CQ Prototype Environment]: ../images/Dragonclaw_in_CQ_Prototype_Environment.jpg
