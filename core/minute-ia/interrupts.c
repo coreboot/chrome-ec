@@ -183,7 +183,7 @@ static const irq_desc_t system_irqs[] = {
 	_DEFINE_EXN_HANDLER(vector, exception_panic_##vector)
 #define _DEFINE_EXN_HANDLER(vector, name)		\
 	void __keep name(void);				\
-	__attribute__((noreturn)) void name(void)	\
+	noreturn void name(void)	\
 	{						\
 		__asm__ ("push $0\n"			\
 			 "push $" #vector "\n"		\
@@ -195,7 +195,7 @@ static const irq_desc_t system_irqs[] = {
 	_DEFINE_EXN_HANDLER_W_ERRORCODE(vector, exception_panic_##vector)
 #define _DEFINE_EXN_HANDLER_W_ERRORCODE(vector, name)	\
 	void __keep name(void);				\
-	__attribute__((noreturn)) void name(void)	\
+	noreturn void name(void)	\
 	{						\
 		__asm__ ("push $" #vector "\n"		\
 			 "call exception_panic\n");	\
@@ -228,7 +228,7 @@ DEFINE_EXN_HANDLER(20);
  * watchdog timer expiration. However, this time, hardware does not
  * push errorcode, and we must account for that by pushing zero.
  */
-__attribute__((noreturn)) __keep
+noreturn __keep
 void exception_panic_wdt(uint32_t cs)
 {
 	exception_panic(
@@ -436,6 +436,13 @@ void call_irq_service_routine(uint32_t irq)
 
 	if (p == __irq_data_end)
 		CPRINTS("IRQ %d routine not found!", irq);
+}
+
+void lapic_restore(void)
+{
+	LAPIC_ESR_REG = 0;
+	APIC_SPURIOUS_INT = LAPIC_SPURIOUS_INT_VECTOR | APIC_ENABLE_BIT;
+	APIC_LVT_ERROR = LAPIC_LVT_ERROR_VECTOR;
 }
 
 void init_interrupts(void)

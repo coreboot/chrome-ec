@@ -13,14 +13,20 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-/*
- * Allow dangerous commands.
- * TODO: Remove this config before production.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_I2C_DEBUG
-
+#define CONFIG_IO_EXPANDER_PCAL6408
 #define CONFIG_MKBP_USE_GPIO
+
+#define CONFIG_USBC_PPC_NX20P3483
+#define CONFIG_USB_MUX_PS8740
+#define CONFIG_USB_MUX_PS8743
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
+
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#define CONFIG_USB_PORT_ENABLE_DYNAMIC
+
+/* USB-A config */
+#define GPIO_USB1_ILIM_SEL IOEX_USB_A0_CHARGE_EN_L
+#define GPIO_USB2_ILIM_SEL IOEX_USB_A1_CHARGE_EN_DB_L
 
 /* Power  LEDs */
 #define CONFIG_LED_POWER_LED
@@ -63,11 +69,18 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
+#define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
 
 #ifndef __ASSEMBLER__
 
 /* This I2C moved. Temporarily detect and support the V0 HW. */
 extern int I2C_PORT_BATTERY;
+
+enum adc_channel {
+	ADC_TEMP_SENSOR_CHARGER,
+	ADC_TEMP_SENSOR_SOC,
+	ADC_CH_COUNT
+};
 
 enum battery_type {
 	BATTERY_SMP,
@@ -81,6 +94,35 @@ enum pwm_channel {
 	PWM_CH_COUNT
 };
 
+enum ioex_port {
+	IOEX_C0_NCT3807 = 0,
+	IOEX_C1_NCT3807,
+	IOEX_HDMI_PCAL6408,
+	IOEX_PORT_COUNT
+};
+
+#define PORT_TO_HPD(port) ((port == 0) \
+	? GPIO_USB3_C0_DP2_HPD \
+	: GPIO_DP1_HPD)
+
+enum temp_sensor_id {
+	TEMP_SENSOR_CHARGER = 0,
+	TEMP_SENSOR_SOC,
+	TEMP_SENSOR_CPU,
+	TEMP_SENSOR_COUNT
+};
+
+enum usba_port {
+	USBA_PORT_A0 = 0,
+	USBA_PORT_A1,
+	USBA_PORT_COUNT
+};
+
+enum usbc_port {
+	USBC_PORT_C0 = 0,
+	USBC_PORT_C1,
+	USBC_PORT_COUNT
+};
 
 /*****************************************************************************
  * CBI EC FW Configuration
@@ -128,7 +170,6 @@ enum ec_cfg_usb_db_type {
 	DALBOZ_DB_D_OPT2_USBA_HDMI = 1,
 };
 
-
 #define HAS_USBC1 \
 			(BIT(DALBOZ_DB_D_OPT1_USBAC))
 
@@ -137,7 +178,6 @@ static inline bool ec_config_has_usbc1(void)
 	return !!(BIT(ec_config_get_usb_db()) &
 		  HAS_USBC1);
 }
-
 
 #define HAS_USBC1_RETIMER_PS8740 \
 			(BIT(DALBOZ_DB_D_OPT1_USBAC))
@@ -160,6 +200,13 @@ static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 /* These IO expander GPIOs vary with DB option. */
 extern enum gpio_signal IOEX_USB_A1_RETIMER_EN;
 extern enum gpio_signal IOEX_USB_A1_CHARGE_EN_DB_L;
+
+void board_reset_pd_mcu(void);
+
+/* Common definition for the USB PD interrupt handlers. */
+void tcpc_alert_event(enum gpio_signal signal);
+void bc12_interrupt(enum gpio_signal signal);
+void ppc_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

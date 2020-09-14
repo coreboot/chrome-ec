@@ -10,7 +10,7 @@
 #include "ia_structs.h"
 #include "power_mgt.h"
 
-/* magic ID for valid aontask image sanity check */
+/* magic ID for valid aontask image check */
 #define AON_MAGIC_ID			        0x544E4F41  /*"AONT"*/
 
 /* aontask error code  */
@@ -27,6 +27,10 @@ struct ish_aon_share {
 	uint32_t error_count;
 	/* last error */
 	int last_error;
+	/* successfully exit from IPAPG or not */
+	uint32_t pg_exit;
+	/* high 32bits of 64 bits dram address for dma */
+	uint32_t uma_msb;
 	/* aontask's TSS segment entry */
 	struct tss_entry *aon_tss;
 	/* aontask's LDT start address */

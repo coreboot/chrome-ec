@@ -38,17 +38,25 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	__enter_hibernate(seconds, microseconds);
 }
 
+/* Clear reset flags if it's not cleared in check_reset_cause() */
+static int delayed_clear_reset_flags;
+static void clear_reset_flags(void)
+{
+	if (IS_ENABLED(CONFIG_BOARD_RESET_AFTER_POWER_ON) &&
+			delayed_clear_reset_flags) {
+		chip_save_reset_flags(0);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, clear_reset_flags, HOOK_PRIO_LAST);
+
 static void check_reset_cause(void)
 {
-	uint32_t flags = 0;
+	uint32_t flags;
 	uint8_t raw_reset_cause = IT83XX_GCTRL_RSTS & 0x03;
 	uint8_t raw_reset_cause2 = IT83XX_GCTRL_SPCTRL4 & 0x07;
 
 	/* Restore saved reset flags. */
-	flags |= BRAM_RESET_FLAGS0 << 24;
-	flags |= BRAM_RESET_FLAGS1 << 16;
-	flags |= BRAM_RESET_FLAGS2 << 8;
-	flags |= BRAM_RESET_FLAGS3;
+	flags = chip_read_reset_flags();
 
 	/* Clear reset cause. */
 	IT83XX_GCTRL_RSTS |= 0x03;
@@ -71,13 +79,49 @@ static void check_reset_cause(void)
 	if (flags & (EC_RESET_FLAG_HARD | EC_RESET_FLAG_SOFT))
 		flags &= ~EC_RESET_FLAG_WATCHDOG;
 
-	/* Clear saved reset flags. */
-	BRAM_RESET_FLAGS0 = 0;
-	BRAM_RESET_FLAGS1 = 0;
-	BRAM_RESET_FLAGS2 = 0;
-	BRAM_RESET_FLAGS3 = 0;
+	/*
+	 * On power-on of some boards, H1 releases the EC from reset but then
+	 * quickly asserts and releases the reset a second time. This means the
+	 * EC sees 2 resets. In order to carry over some important flags (e.g.
+	 * HIBERNATE) to the second resets, the reset flag will not be wiped if
+	 * we know this is the first reset.
+	 */
+	if (IS_ENABLED(CONFIG_BOARD_RESET_AFTER_POWER_ON) &&
+			(flags & EC_RESET_FLAG_POWER_ON)) {
+		if (flags & EC_RESET_FLAG_INITIAL_PWR) {
+			/* Second boot, clear the flag immediately */
+			chip_save_reset_flags(0);
+		} else {
+			/*
+			 * First boot, Keep current flags and set INITIAL_PWR
+			 * flag. EC reset should happen soon.
+			 *
+			 * It's possible that H1 never trigger EC reset, or
+			 * reset happens before this line. Both cases should be
+			 * fine because we will have the correct flag anyway.
+			 */
+			chip_save_reset_flags(chip_read_reset_flags() |
+						EC_RESET_FLAG_INITIAL_PWR);
+
+			/*
+			 * Schedule chip_save_reset_flags(0) later.
+			 * Wait until end of HOOK_INIT should be long enough.
+			 */
+			delayed_clear_reset_flags = 1;
+		}
+	} else {
+		/* Clear saved reset flags. */
+		chip_save_reset_flags(0);
+	}
 
 	system_set_reset_flags(flags);
+
+	/* Clear PD contract recorded in bram if this is a power-on reset. */
+	if (IS_ENABLED(CONFIG_IT83XX_RESET_PD_CONTRACT_IN_BRAM) &&
+	   (flags == (EC_RESET_FLAG_POWER_ON | EC_RESET_FLAG_RESET_PIN))) {
+		for (int i = 0; i < MAX_SYSTEM_BBRAM_IDX_PD_PORTS; i++)
+			system_set_bbram((SYSTEM_BBRAM_IDX_PD0 + i), 0);
+	}
 }
 
 static void system_reset_cause_is_unknown(void)
@@ -117,8 +161,19 @@ int system_is_reboot_warm(void)
 
 void chip_pre_init(void)
 {
-	/* bit4, enable debug mode through SMBus */
-	IT83XX_SMB_SLVISELR &= ~BIT(4);
+	/* bit0, EC received the special waveform from iteflash */
+	if (IT83XX_GCTRL_DBGROS & IT83XX_SMB_DBGR) {
+		/*
+		 * Wait ~200ms, so iteflash will have enough time to let
+		 * EC enter follow mode. And once EC goes into follow mode, EC
+		 * will be stayed here (no following sequences, eg:
+		 * enable watchdog/write protect/power-on sequence...) until
+		 * we reset it.
+		 */
+		for (int i = 0; i < (200 * MSEC / 15); i++)
+			/* delay ~15.25us */
+			IT83XX_GCTRL_WNCKR = 0;
+	}
 
 	if (IS_ENABLED(IT83XX_ETWD_HW_RESET_SUPPORT))
 		/* System triggers a soft reset by default (command: reboot). */
@@ -165,9 +220,33 @@ void system_pre_init(void)
 
 }
 
+uint32_t chip_read_reset_flags(void)
+{
+	uint32_t flags = 0;
+	flags |= BRAM_RESET_FLAGS0 << 24;
+	flags |= BRAM_RESET_FLAGS1 << 16;
+	flags |= BRAM_RESET_FLAGS2 << 8;
+	flags |= BRAM_RESET_FLAGS3;
+	return flags;
+}
+
+void chip_save_reset_flags(uint32_t save_flags)
+{
+	BRAM_RESET_FLAGS0 = save_flags >> 24;
+	BRAM_RESET_FLAGS1 = (save_flags >> 16) & 0xff;
+	BRAM_RESET_FLAGS2 = (save_flags >> 8) & 0xff;
+	BRAM_RESET_FLAGS3 = save_flags & 0xff;
+}
+
 void system_reset(int flags)
 {
 	uint32_t save_flags = 0;
+
+	/* We never get this warning message in normal case. */
+	if (IT83XX_GCTRL_DBGROS & IT83XX_SMB_DBGR) {
+		ccprintf("!Reset will be failed due to EC is in debug mode!\n");
+		cflush();
+	}
 
 	/* Disable interrupts to avoid task swaps during reboot. */
 	interrupt_disable();
@@ -179,10 +258,7 @@ void system_reset(int flags)
 		save_flags |= EC_RESET_FLAG_HIBERNATE;
 
 	/* Store flags to battery backed RAM. */
-	BRAM_RESET_FLAGS0 = save_flags >> 24;
-	BRAM_RESET_FLAGS1 = (save_flags >> 16) & 0xff;
-	BRAM_RESET_FLAGS2 = (save_flags >> 8) & 0xff;
-	BRAM_RESET_FLAGS3 = save_flags & 0xff;
+	chip_save_reset_flags(save_flags);
 
 	/* If WAIT_EXT is set, then allow 10 seconds for external reset */
 	if (flags & SYSTEM_RESET_WAIT_EXT) {
@@ -194,13 +270,6 @@ void system_reset(int flags)
 			udelay(10000);
 		}
 	}
-
-	/*
-	 * bit4, disable debug mode through SMBus.
-	 * If we are in debug mode, we need disable it before triggering
-	 * a soft reset or reset will fail.
-	 */
-	IT83XX_SMB_SLVISELR |= BIT(4);
 
 	/* bit0: enable watchdog hardware reset. */
 #ifdef IT83XX_ETWD_HW_RESET_SUPPORT

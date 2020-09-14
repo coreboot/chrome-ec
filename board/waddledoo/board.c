@@ -7,6 +7,7 @@
 
 #include "adc_chip.h"
 #include "button.h"
+#include "cbi_fw_config.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
@@ -31,6 +32,8 @@
 #include "motion_sense.h"
 #include "power.h"
 #include "power_button.h"
+#include "pwm.h"
+#include "pwm_chip.h"
 #include "stdbool.h"
 #include "switch.h"
 #include "system.h"
@@ -70,14 +73,80 @@ static void sub_usb_c1_interrupt(enum gpio_signal s)
 	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
 }
 
+static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
+{
+	int hdmi_hpd_odl = gpio_get_level(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
+
+	gpio_set_level(GPIO_EC_AP_USB_C1_HDMI_HPD, !hdmi_hpd_odl);
+}
+
 #include "gpio_list.h"
+
+/* ADC channels */
+const struct adc_t adc_channels[] = {
+	[ADC_TEMP_SENSOR_1] = {
+		.name = "TEMP_SENSOR1",
+		.input_ch = NPCX_ADC_CH0,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_2] = {
+		.name = "TEMP_SENSOR2",
+		.input_ch = NPCX_ADC_CH1,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_SUB_ANALOG] = {
+		.name = "SUB_ANALOG",
+		.input_ch = NPCX_ADC_CH2,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_VSNS_PP3300_A] = {
+		.name = "PP3300_A_PGOOD",
+		.input_ch = NPCX_ADC_CH9,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 void board_init(void)
 {
 	int on;
 
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
-	gpio_enable_interrupt(GPIO_SUB_USB_C1_INT_ODL);
+
+	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+		/* Disable i2c on HDMI pins */
+		gpio_config_pin(MODULE_I2C,
+				GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
+		gpio_config_pin(MODULE_I2C,
+				GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+
+		/* Set HDMI and sub-rail enables to output */
+		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL,
+			       chipset_in_state(CHIPSET_STATE_ON) ?
+						GPIO_ODR_LOW : GPIO_ODR_HIGH);
+		gpio_set_flags(GPIO_SUB_C1_INT_EN_RAILS_ODL,   GPIO_ODR_HIGH);
+
+		/* Select HDMI option */
+		gpio_set_level(GPIO_HDMI_SEL_L, 0);
+
+		/* Enable interrupt for passing through HPD */
+		gpio_enable_interrupt(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
+	} else {
+		/* Set SDA as an input */
+		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL,
+			       GPIO_INPUT);
+
+		/* Enable C1 interrupts */
+		gpio_enable_interrupt(GPIO_SUB_C1_INT_EN_RAILS_ODL);
+	}
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 
@@ -87,13 +156,29 @@ void board_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
+/* Enable HDMI any time the SoC is on */
+static void hdmi_enable(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
+
+static void hdmi_disable(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
+
 void board_hibernate(void)
 {
 	/*
 	 * Both charger ICs need to be put into their "low power mode" before
 	 * entering the Z-state.
 	 */
-	raa489000_hibernate(1);
+	if (board_get_charger_chip_count() > 1)
+		raa489000_hibernate(1);
 	raa489000_hibernate(0);
 }
 
@@ -146,12 +231,35 @@ __override void board_power_5v_enable(int enable)
 	/*
 	 * Port 0 simply has a GPIO to turn on the 5V regulator, however, 5V is
 	 * generated locally on the sub board and we need to set the comparator
-	 * polarity on the sub board charger IC.
+	 * polarity on the sub board charger IC, or send enable signal to HDMI
+	 * DB.
 	 */
 	set_5v_gpio(!!enable);
-	if (isl923x_set_comparator_inversion(1, !!enable))
-		CPRINTS("Failed to %sable sub rails!", enable ? "en" : "dis");
 
+	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+		gpio_set_level(GPIO_SUB_C1_INT_EN_RAILS_ODL, !enable);
+	} else {
+		if (isl923x_set_comparator_inversion(1, !!enable))
+			CPRINTS("Failed to %sable sub rails!", enable ?
+								"en" : "dis");
+	}
+
+}
+
+__override uint8_t board_get_usb_pd_port_count(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
+	else
+		return CONFIG_USB_PD_PORT_MAX_COUNT;
+}
+
+__override uint8_t board_get_charger_chip_count(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		return CHARGER_NUM - 1;
+	else
+		return CHARGER_NUM;
 }
 
 int board_is_sourcing_vbus(int port)
@@ -166,7 +274,7 @@ int board_is_sourcing_vbus(int port)
 int board_set_active_charge_port(int port)
 {
 	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
+			    port < board_get_usb_pd_port_count());
 	int i;
 	int old_port;
 
@@ -179,7 +287,7 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++)
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
 
@@ -196,7 +304,7 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		if (i == port)
 			continue;
 
@@ -242,6 +350,19 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
+/* Matrices to rotate accelerometers into the standard reference. */
+static const mat33_fp_t lid_standard_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
+static const mat33_fp_t base_standard_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
 static struct accelgyro_saved_data_t g_bma253_data;
 static struct bmi_drv_data_t g_bmi160_data;
 
@@ -257,7 +378,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_bma253_data,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 2,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
@@ -281,7 +402,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,
 		.min_frequency = BMI_ACCEL_MIN_FREQ,
 		.max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -308,7 +429,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI_GYRO_MIN_FREQ,
 		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
@@ -327,21 +448,34 @@ struct motion_sensor_t motion_sensors[] = {
 
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
-int extpower_is_present(void)
+__override void ocpc_get_pid_constants(int *kp, int *kp_div,
+				       int *ki, int *ki_div,
+				       int *kd, int *kd_div)
 {
 	/*
-	 * TODO(b:146651593) We can likely use the charger IC to determine VBUS
-	 * presence.
+	 * Early boards need different constants due to a change in charger IC
+	 * silicon revision.
 	 */
-	return pd_snk_is_vbus_provided(0) || pd_snk_is_vbus_provided(1);
+	if (system_get_board_version() >= 0) {
+		*kp = 1;
+		*kp_div = 128;
+		*ki = 1;
+		*ki_div = 1024;
+		*kd = 0;
+		*kd_div = 1;
+	} else {
+		*kp = 1;
+		*kp_div = 4;
+		*ki = 1;
+		*ki_div = 15;
+		*kd = 1;
+		*kd_div = 10;
+	}
 }
 
 int pd_snk_is_vbus_provided(int port)
 {
-	int regval = 0;
-
-	tcpc_read(port, TCPC_REG_POWER_STATUS, &regval);
-	return regval & TCPC_REG_POWER_STATUS_VBUS_PRES;
+	return pd_check_vbus_level(port, VBUS_PRESENT);
 }
 
 const struct charger_config_t chg_chips[] = {
@@ -357,19 +491,42 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &isl923x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	{
 		.i2c_port = I2C_PORT_USB_C0,
 		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
+		.flags = PI3USB9201_ALWAYS_POWERED,
 	},
 
 	{
 		.i2c_port = I2C_PORT_SUB_USB_C1,
 		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
+		.flags = PI3USB9201_ALWAYS_POWERED,
 	},
 };
+
+/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
+const struct pwm_t pwm_channels[] = {
+	[PWM_CH_KBLIGHT] = {
+		.channel = 3,
+		.flags = PWM_CONFIG_DSLEEP,
+		.freq = 10000,
+	},
+
+	[PWM_CH_LED1_AMBER] = {
+		.channel = 2,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq = 2400,
+	},
+
+	[PWM_CH_LED2_WHITE] = {
+		.channel = 0,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq = 2400,
+	}
+};
+BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -436,7 +593,8 @@ uint16_t tcpc_get_alert_status(void)
 		}
 	}
 
-	if (!gpio_get_level(GPIO_SUB_USB_C1_INT_ODL)) {
+	if (board_get_usb_pd_port_count() > 1 &&
+				!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
 		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
 			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
 			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))

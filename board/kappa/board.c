@@ -60,7 +60,6 @@ static void tcpc_alert_event(enum gpio_signal signal)
 const struct adc_t adc_channels[] = {
 	[ADC_BOARD_ID] =  {"BOARD_ID",  3300, 4096, 0, STM32_AIN(10)},
 	[ADC_EC_SKU_ID] = {"EC_SKU_ID", 3300, 4096, 0, STM32_AIN(8)},
-	[ADC_BATT_ID] =   {"BATT_ID",   3300, 4096, 0, STM32_AIN(7)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -289,3 +288,24 @@ static void board_chipset_shutdown(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
+int battery_get_vendor_param(uint32_t param, uint32_t *value)
+{
+	int rv;
+	uint8_t data[16] = {};
+
+	/* only allow reading 0x70~0x7F, 16 byte data */
+	if (param < 0x70 || param >= 0x80)
+		return EC_ERROR_ACCESS_DENIED;
+
+	rv = sb_read_string(0x70, data, sizeof(data));
+	if (rv)
+		return rv;
+
+	*value = data[param - 0x70];
+	return EC_SUCCESS;
+}
+
+int battery_set_vendor_param(uint32_t param, uint32_t value)
+{
+	return EC_ERROR_UNIMPLEMENTED;
+}

@@ -73,9 +73,19 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	__enter_hibernate(seconds, microseconds);
 }
 
+uint32_t chip_read_reset_flags(void)
+{
+	return bkpdata_read_reset_flags();
+}
+
+void chip_save_reset_flags(uint32_t flags)
+{
+	bkpdata_write_reset_flags(flags);
+}
+
 static void check_reset_cause(void)
 {
-	uint32_t flags = bkpdata_read_reset_flags();
+	uint32_t flags = chip_read_reset_flags();
 	uint32_t raw_cause = STM32_RCC_RESET_CAUSE;
 	uint32_t pwr_status = STM32_PWR_RESET_CAUSE;
 
@@ -84,7 +94,7 @@ static void check_reset_cause(void)
 	/* Clear SBF in PWR_CSR */
 	STM32_PWR_RESET_CAUSE_CLR |= RESET_CAUSE_SBF_CLR;
 	/* Clear saved reset flags */
-	bkpdata_write_reset_flags(0);
+	chip_save_reset_flags(0);
 
 	if (raw_cause & RESET_CAUSE_WDG) {
 		/*
@@ -169,6 +179,17 @@ void chip_pre_init(void)
 		STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
 	apb2fz_reg = STM32_RCC_PB2_TIM9 | STM32_RCC_PB2_TIM10 |
 		STM32_RCC_PB2_TIM11;
+#elif defined(CHIP_FAMILY_STM32G4)
+	apb1fz_reg =
+		STM32_DBGMCU_APB1FZ_TIM2 | STM32_DBGMCU_APB1FZ_TIM3 |
+		STM32_DBGMCU_APB1FZ_TIM4 | STM32_DBGMCU_APB1FZ_TIM5 |
+		STM32_DBGMCU_APB1FZ_TIM6 | STM32_DBGMCU_APB1FZ_TIM7 |
+		STM32_DBGMCU_APB1FZ_RTC  | STM32_DBGMCU_APB1FZ_WWDG |
+		STM32_DBGMCU_APB1FZ_IWDG;
+	apb2fz_reg =
+		STM32_DBGMCU_APB2FZ_TIM1 | STM32_DBGMCU_APB2FZ_TIM8 |
+		STM32_DBGMCU_APB2FZ_TIM15 | STM32_DBGMCU_APB2FZ_TIM16 |
+		STM32_DBGMCU_APB2FZ_TIM17 | STM32_DBGMCU_APB2FZ_TIM20;
 #elif defined(CHIP_FAMILY_STM32H7)
 	/* TODO(b/67081508) */
 #endif
@@ -269,7 +290,7 @@ void system_pre_init(void)
 	}
 #elif defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3) || \
 	defined(CHIP_FAMILY_STM32L4) || defined(CHIP_FAMILY_STM32F4) || \
-	defined(CHIP_FAMILY_STM32H7)
+	defined(CHIP_FAMILY_STM32H7) || defined(CHIP_FAMILY_STM32G4)
 	if ((STM32_RCC_BDCR & BDCR_ENABLE_MASK) != BDCR_ENABLE_VALUE) {
 		/* The RTC settings are bad, we need to reset it */
 		STM32_RCC_BDCR |= STM32_RCC_BDCR_BDRST;
@@ -333,12 +354,16 @@ void system_reset(int flags)
 	if (flags & SYSTEM_RESET_HARD)
 		save_flags |= EC_RESET_FLAG_HARD;
 
+	/* Add in stay in RO flag into saved flags. */
+	if (flags & SYSTEM_RESET_STAY_IN_RO)
+		save_flags |= EC_RESET_FLAG_STAY_IN_RO;
+
 #ifdef CONFIG_STM32_RESET_FLAGS_EXTENDED
 	if (flags & SYSTEM_RESET_AP_WATCHDOG)
 		save_flags |= EC_RESET_FLAG_AP_WATCHDOG;
 #endif
 
-	bkpdata_write_reset_flags(save_flags);
+	chip_save_reset_flags(save_flags);
 
 	if (flags & SYSTEM_RESET_HARD) {
 #ifdef CONFIG_SOFTWARE_PANIC
@@ -526,6 +551,9 @@ int system_is_reboot_warm(void)
 			== STM32_RCC_AHB2ENR_GPIOMASK);
 #elif defined(CHIP_FAMILY_STM32F4)
 	return ((STM32_RCC_AHB1ENR & STM32_RCC_AHB1ENR_GPIOMASK)
+			== gpio_required_clocks());
+#elif defined(CHIP_FAMILY_STM32G4)
+	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK)
 			== gpio_required_clocks());
 #elif defined(CHIP_FAMILY_STM32H7)
 	return ((STM32_RCC_AHB4ENR & STM32_RCC_AHB4ENR_GPIOMASK)

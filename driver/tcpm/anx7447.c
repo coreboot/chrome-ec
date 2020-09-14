@@ -19,16 +19,6 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-#define ANX7447_VENDOR_ALERT    BIT(15)
-
-#define ANX7447_REG_STATUS      0x82
-#define ANX7447_REG_STATUS_LINK BIT(0)
-
-#define ANX7447_REG_HPD         0x83
-#define ANX7447_REG_HPD_HIGH    BIT(0)
-#define ANX7447_REG_HPD_IRQ     BIT(1)
-#define ANX7447_REG_HPD_ENABLE  BIT(2)
-
 #define vsafe5v_min (3800/25)
 #define vsafe0v_max (800/25)
 /*
@@ -411,25 +401,6 @@ static int anx7447_release(int port)
 	return EC_SUCCESS;
 }
 
-static void anx7447_update_hpd_enable(int port)
-{
-	int status, reg, rv;
-
-	rv = tcpc_read(port, ANX7447_REG_STATUS, &status);
-	rv |= tcpc_read(port, ANX7447_REG_HPD, &reg);
-	if (rv)
-		return;
-
-	if (!(reg & ANX7447_REG_HPD_ENABLE) ||
-	    !(status & ANX7447_REG_STATUS_LINK)) {
-		reg &= ~ANX7447_REG_HPD_IRQ;
-		tcpc_write(port, ANX7447_REG_HPD,
-			   (status & ANX7447_REG_STATUS_LINK)
-			   ? reg | ANX7447_REG_HPD_ENABLE
-			   : reg & ~ANX7447_REG_HPD_ENABLE);
-	}
-}
-
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
 static int anx7447_get_vbus_voltage(int port)
 {
@@ -467,14 +438,8 @@ int anx7447_board_charging_enable(int port, int enable)
 
 static void anx7447_tcpc_alert(int port)
 {
-	int alert, rv;
-
-	rv = tcpc_read16(port, TCPC_REG_ALERT, &alert);
 	/* process and clear alert status */
 	tcpci_tcpc_alert(port);
-
-	if (!rv && (alert & ANX7447_VENDOR_ALERT))
-		anx7447_update_hpd_enable(port);
 }
 
 /*
@@ -739,6 +704,94 @@ static int anx7447_set_polarity(int port,
 					? MASK_SET : MASK_CLR);
 }
 
+#ifdef CONFIG_CMD_TCPC_DUMP
+static const struct tcpc_reg_dump_map anx7447_regs[] = {
+	{
+		.addr = ANX7447_REG_TCPC_SWITCH_0,
+		.name = "SWITCH_0",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_TCPC_SWITCH_1,
+		.name = "SWITCH_1",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_TCPC_AUX_SWITCH,
+		.name = "AUX_SWITCH",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_ADC_CTRL_1,
+		.name = "ADC_CTRL_1",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_ANALOG_CTRL_8,
+		.name = "ANALOG_CTRL_8",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_ANALOG_CTRL_10,
+		.name = "ANALOG_CTRL_10",
+		.size = 1,
+	},
+	{
+		.addr = ANX7447_REG_TCPC_CTRL_2,
+		.name = "TCPC_CTRL_2",
+		.size = 1,
+	},
+};
+
+const struct {
+	const char *name;
+	uint8_t addr;
+} anx7447_alt_regs[] = {
+	{
+		.name = "HPD_CTRL_0",
+		.addr = ANX7447_REG_HPD_CTRL_0,
+	},
+	{
+		.name = "HPD_DEGLITCH_H",
+		.addr = ANX7447_REG_HPD_DEGLITCH_H,
+	},
+	{
+		.name = "INTP_SOURCE_0",
+		.addr = ANX7447_REG_INTP_SOURCE_0,
+	},
+	{
+		.name = "INTP_MASK_0",
+		.addr = ANX7447_REG_INTP_MASK_0,
+	},
+	{
+		.name = "INTP_CTRL_0",
+		.addr = ANX7447_REG_INTP_CTRL_0,
+	},
+	{
+		.name = "PAD_INTP_CTRL",
+		.addr = ANX7447_REG_PAD_INTP_CTRL,
+	},
+};
+
+/*
+ * Dump registers for debug command.
+ */
+static void anx7447_dump_registers(int port)
+{
+	int i, val;
+
+	tcpc_dump_std_registers(port);
+	tcpc_dump_registers(port, anx7447_regs, ARRAY_SIZE(anx7447_regs));
+	for (i = 0; i < ARRAY_SIZE(anx7447_alt_regs); i++) {
+		anx7447_reg_read(port, anx7447_alt_regs[i].addr, &val);
+		ccprintf("  %-26s(ALT/0x%02x) =   0x%02x\n",
+				anx7447_alt_regs[i].name,
+				anx7447_alt_regs[i].addr, (uint8_t)val);
+		cflush();
+	}
+}
+#endif /* defined(CONFIG_CMD_TCPC_DUMP) */
+
 /*
  * ANX7447 is a TCPCI compatible port controller, with some caveats.
  * It seems to require both CC lines to be set always, instead of just
@@ -751,11 +804,14 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 	.release		= &anx7447_release,
 	.get_cc			= &tcpci_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
+	.check_vbus_level	= &tcpci_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
 	.set_cc			= &anx7447_set_cc,
 	.set_polarity		= &anx7447_set_polarity,
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+#endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,
@@ -775,6 +831,9 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 #endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
+#endif
+#ifdef CONFIG_CMD_TCPC_DUMP
+	.dump_registers		= &anx7447_dump_registers,
 #endif
 };
 

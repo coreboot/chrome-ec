@@ -161,7 +161,7 @@ static uint32_t task_reset_state[TASK_ID_COUNT] = {
 #undef ENABLE_RESET
 #endif /* CONFIG_TASK_RESET_LIST */
 
-/* Sanity checks about static task invariants */
+/* Validity checks about static task invariants */
 BUILD_ASSERT(TASK_ID_COUNT <= sizeof(unsigned) * 8);
 BUILD_ASSERT(TASK_ID_COUNT < (1 << (sizeof(task_id_t) * 8)));
 BUILD_ASSERT(BIT(TASK_ID_COUNT) < TASK_RESET_LOCK);
@@ -850,24 +850,32 @@ static void __nvic_init_irqs(void)
 
 	/* Set priorities */
 	for (i = 0; i < exc_calls; i++) {
-		uint8_t irq = __irqprio[i].irq;
-		uint8_t prio = __irqprio[i].priority;
-		uint32_t prio_shift = irq % 4 * 8 + 5;
-		if (prio > 0x7)
-			prio = 0x7;
-		CPU_NVIC_PRI(irq / 4) =
-				(CPU_NVIC_PRI(irq / 4) &
-				 ~(0x7 << prio_shift)) |
-				(prio << prio_shift);
+		cpu_set_interrupt_priority(__irqprio[i].irq,
+					   __irqprio[i].priority);
 	}
 }
 
 void mutex_lock(struct mutex *mtx)
 {
 	uint32_t value;
-	uint32_t id = 1 << task_get_current();
+	uint32_t id;
 
-	ASSERT(id != TASK_ID_INVALID);
+	/*
+	 * mutex_lock() must not be used in interrupt context (because we wait
+	 * if there is contention).
+	 */
+	ASSERT(!in_interrupt_context());
+
+	/*
+	 * Task ID is not valid before task_start() (since current_task is
+	 * scratchpad), and no need for mutex locking before task switching has
+	 * begun.
+	 */
+	if (!task_start_called())
+		return;
+
+	id = 1 << task_get_current();
+
 	atomic_or(&mtx->waiters, id);
 
 	do {

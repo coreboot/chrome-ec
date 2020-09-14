@@ -5,7 +5,8 @@
  * Test utilities.
  */
 
-#ifdef TEST_COVERAGE
+#if defined(TEST_COVERAGE) || defined(TEST_HOSTTEST)
+/* We need signal() and exit() only when building to run on the host. */
 #include <signal.h>
 #include <stdlib.h>
 #endif
@@ -28,15 +29,15 @@ struct test_util_tag {
 int __test_error_count;
 
 /* Weak reference function as an entry point for unit test */
-test_mockable void run_test(void) { }
+test_mockable void run_test(int argc, char **argv) { }
 
-/* Default dummy test init */
+/* Default mock test init */
 test_mockable void test_init(void) { }
 
-/* Default dummy before test */
+/* Default mock before test */
 test_mockable void before_test(void) { }
 
-/* Default dummy after test */
+/* Default mock after test */
 test_mockable void after_test(void) { }
 
 #ifdef TEST_COVERAGE
@@ -46,7 +47,14 @@ void emulator_flush(void)
 {
 	__gcov_flush();
 }
+#else
+void emulator_flush(void)
+{
+}
+#endif
 
+#if defined(TEST_HOSTTEST) || defined(TEST_COVERAGE)
+/* Host-based unit tests need to exit(0) when they receive a SIGTERM. */
 void test_end_hook(int sig)
 {
 	emulator_flush();
@@ -58,10 +66,6 @@ void register_test_end_hook(void)
 	signal(SIGTERM, test_end_hook);
 }
 #else
-void emulator_flush(void)
-{
-}
-
 void register_test_end_hook(void)
 {
 }
@@ -195,7 +199,7 @@ DECLARE_HOOK(HOOK_SYSJUMP, preserve_state, HOOK_PRIO_DEFAULT);
 
 static int command_run_test(int argc, char **argv)
 {
-	run_test();
+	run_test(argc, argv);
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(runtest, command_run_test,

@@ -45,6 +45,11 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 	active_charge_limit = charge_ma;
 }
 
+__override uint8_t board_get_usb_pd_port_count(void)
+{
+	return CONFIG_USB_PD_PORT_MAX_COUNT;
+}
+
 /* Sets a charge port that will be rejected as the active port. */
 static void set_charge_port_to_reject(int port)
 {
@@ -782,7 +787,7 @@ static int test_unknown_dualrole_capability(void)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	test_reset();
 

@@ -12,10 +12,6 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
-#define TC_SET_FLAG(port, flag) atomic_or(&tc[port].flags, (flag))
-#define TC_CLR_FLAG(port, flag) atomic_clear(&tc[port].flags, (flag))
-#define TC_CHK_FLAG(port, flag) (tc[port].flags & (flag))
-
 enum try_src_override_t {
 	TRY_SRC_OVERRIDE_OFF,
 	TRY_SRC_OVERRIDE_ON,
@@ -180,8 +176,9 @@ void tc_request_power_swap(int port);
  * This function is called from the Policy Engine.
  *
  * @param port USB_C port number
+ * @param success swap completed normally
  */
-void tc_pr_swap_complete(int port);
+void tc_pr_swap_complete(int port, bool success);
 
 /**
  * Informs the Type-C State Machine that a Discover Identity is in progress.
@@ -232,7 +229,6 @@ int tc_src_power_on(int port);
  */
 int tc_check_vconn_swap(int port);
 
-#ifdef CONFIG_USBC_VCONN
 /**
  * Checks if VCONN is being sourced.
  *
@@ -258,8 +254,6 @@ void pd_request_vconn_swap_on(int port);
  * @param port USB_C port number
  */
 void pd_request_vconn_swap_off(int port);
-#endif
-
 
 /**
  * Returns the polarity of a Sink.
@@ -270,14 +264,6 @@ void pd_request_vconn_swap_off(int port);
  */
 enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
 	enum tcpc_cc_voltage_status cc2);
-
-/**
- * Restarts the TCPC
- *
- * @param port USB-C port number
- * @returns EC_SUCCESS on success
- */
-int tc_restart_tcpc(int port);
 
 /**
  * Called by the state machine framework to initialize the
@@ -323,16 +309,6 @@ void tc_start_error_recovery(int port);
  * @param port USB-C port number
  */
 void tc_hard_reset_request(int port);
-
-/**
- * Hard Reset was sent and we are required to remain attached until we have
- * restored our connection for the TypeC port.
- * A call to tc_hard_reset_allow_unattach will allow the connection to go
- * to an unattached state
- *
- * @param port USB-C port number
- */
-void tc_hard_reset_allow_unattach(int port);
 
 /**
  * Hard Reset is complete for the TypeC port

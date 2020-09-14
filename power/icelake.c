@@ -101,6 +101,13 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 	/* Turn off DSW load switch. */
 	GPIO_SET_LEVEL(GPIO_EN_PP3300_A, 0);
 
+	/*
+	 * For JSL, we need to wait 60ms before turning off PP5000_U to allow
+	 * VCCIN_AUX time to discharge.
+	 */
+	if (IS_ENABLED(CONFIG_CHIPSET_JASPERLAKE))
+		msleep(60);
+
 	/* Turn off PP5000 rail */
 	if (IS_ENABLED(CONFIG_POWER_PP5000_CONTROL))
 		power_5v_enable(task_get_current(), 0);
@@ -156,10 +163,9 @@ static void enable_pp5000_rail(void)
 static void dsw_pwrok_pass_thru(void)
 {
 	int dswpwrok_in = intel_x86_get_pg_ec_dsw_pwrok();
-	static int dswpwrok_out = -1;
 
 	/* Pass-through DSW_PWROK to ICL. */
-	if (dswpwrok_in != dswpwrok_out) {
+	if (dswpwrok_in != gpio_get_level(GPIO_PCH_DSW_PWROK)) {
 		if (IS_ENABLED(CONFIG_CHIPSET_SLP_S3_L_OVERRIDE)
 			&& dswpwrok_in) {
 			/*
@@ -179,7 +185,6 @@ static void dsw_pwrok_pass_thru(void)
 		 */
 		msleep(10);
 		GPIO_SET_LEVEL(GPIO_PCH_DSW_PWROK, dswpwrok_in);
-		dswpwrok_out = dswpwrok_in;
 	}
 }
 

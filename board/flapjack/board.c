@@ -254,7 +254,6 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &rt946x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
@@ -366,7 +365,7 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 
 int extpower_is_present(void)
 {
-	return tcpm_get_vbus_level(0);
+	return tcpm_check_vbus_level(0, VBUS_PRESENT);
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -624,10 +623,6 @@ BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 int board_allow_i2c_passthru(int port)
 {
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
-}
-
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
 }
 
 int board_get_fod(uint8_t **fod)

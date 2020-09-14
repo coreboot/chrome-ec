@@ -44,7 +44,7 @@ static int mock_tcpm_transmit(int port, enum tcpm_transmit_type type,
 		uint16_t header, const uint32_t *data) { return EC_SUCCESS; }
 static void mock_tcpc_alert(int port) {}
 static int mock_tcpci_get_chip_info(int port, int live,
-		struct ec_response_pd_chip_info_v1 **info)
+		struct ec_response_pd_chip_info_v1 *info)
 {
 	return EC_ERROR_UNIMPLEMENTED;
 }
@@ -126,7 +126,7 @@ static const struct tcpm_drv mock_tcpm_drv = {
 	.release                = &mock_tcpm_release,
 	.get_cc                 = &mock_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level         = &mock_tcpm_get_vbus_level,
+	.check_vbus_level       = &mock_tcpm_check_vbus_level,
 #endif
 	.select_rp_value        = &mock_tcpm_select_rp_value,
 	.set_cc                 = &mock_tcpm_set_cc,
@@ -161,7 +161,7 @@ enum tcpc_cc_voltage_status next_cc1, next_cc2;
 const int MAX_MESSAGES = 8;
 static struct message messages[MAX_MESSAGES];
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	uint8_t port = PORT0;
 	int i;

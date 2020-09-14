@@ -163,7 +163,7 @@ int rwsig_check_signature(void)
 	    vb21_sig->sig_size != RSANUMBYTES ||
 	    vb21_key->sig_alg != vb21_sig->sig_alg ||
 	    vb21_key->hash_alg != vb21_sig->hash_alg ||
-	    /* Sanity check signature offset and data size. */
+	    /* Validity check signature offset and data size. */
 	    vb21_sig->sig_offset < sizeof(vb21_sig) ||
 	    (vb21_sig->sig_offset + RSANUMBYTES) > CONFIG_RW_SIG_SIZE ||
 	    vb21_sig->data_size > (CONFIG_RW_SIZE - CONFIG_RW_SIG_SIZE)) {
@@ -268,6 +268,12 @@ void rwsig_task(void *u)
 
 	if (system_get_image_copy() != EC_IMAGE_RO)
 		goto exit;
+
+	/* Stay in RO if we were asked to when reset. */
+	if (system_get_reset_flags() & EC_RESET_FLAG_STAY_IN_RO) {
+		rwsig_status = RWSIG_ABORTED;
+		goto exit;
+	}
 
 	rwsig_status = RWSIG_IN_PROGRESS;
 	if (!rwsig_check_signature()) {

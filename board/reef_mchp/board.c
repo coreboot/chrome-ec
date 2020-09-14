@@ -249,7 +249,6 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &bd9995x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* Return the two slave addresses the specified
  * controller will respond to when controller
@@ -395,7 +394,7 @@ const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
  * Upon receiving DRP low power idle command, PS8751 holds SCL and
  * SDA low for ~480us. It simultaneously releases both pins which is
  * defined as a bus error condition by I2C spec. No ACK received.
- * TCPCI spec. states waking any TCPM requires sending any dummy
+ * TCPCI spec. states waking any TCPM requires sending any fake
  * I2C command which the TCPM will NACK. The I2C master MUST wait
  * a minimum of 5 ms after the NACK before sending another I2C
  * command. We observe the PD task and TCPCI state machines do not
@@ -506,7 +505,7 @@ void board_tcpc_init(void)
 	int reg;
 
 	/* Only reset TCPC if not sysjump */
-	if (!system_jumped_to_this_image())
+	if (!system_jumped_late())
 		board_reset_pd_mcu();
 
 	/*

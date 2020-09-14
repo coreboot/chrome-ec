@@ -21,19 +21,24 @@
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 
+/* Allow objects to be linked into a flash resident section */
+#define CONFIG_CHIP_INIT_ROM_REGION
+
 /* EC Defines */
 #define CONFIG_LTO
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
 #define CONFIG_CROS_BOARD_INFO
+#define CONFIG_DPTF
+#define CONFIG_FPU
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_PWM
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
 #define CONFIG_VOLUME_BUTTONS
-#define CONFIG_BUTTONS_RUNTIME_CONFIG
 #define CONFIG_LOW_POWER_IDLE
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
 
 /* Host communication */
 #define CONFIG_HOSTCMD_ESPI
@@ -51,7 +56,7 @@
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_S0IX
-#define CONFIG_POWER_S0IX_FAILURE_DETECTION
+#define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define CONFIG_BOARD_HAS_RTC_RESET
 
@@ -84,11 +89,6 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
-/* Camera VSYNC */
-#define CONFIG_SYNC
-#define CONFIG_SYNC_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
-
 /* Thermal features */
 #define CONFIG_FANS			FAN_CH_COUNT
 #define CONFIG_TEMP_SENSOR
@@ -105,8 +105,6 @@
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT		512
 #define CONFIG_CHARGER_ISL9241
-#define CONFIG_CHARGER_SENSE_RESISTOR		10
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
 
 #define CONFIG_USB_CHARGER
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -131,39 +129,62 @@
 /* Common LED defines */
 #define CONFIG_LED_COMMON
 
+/* EDP back-light control defines */
+#define CONFIG_BACKLIGHT_LID
+#define GPIO_ENABLE_BACKLIGHT   GPIO_EC_EDP_BL_EN
+
 /* USB Type C and USB PD defines */
 /* Enable the new USB-C PD stack */
-/* TODO: b/145756626 - re-enable once all blocking issues resolved */
-#if 0
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_DRP_ACC_TRYSRC
-#else
-/*
- * PD 3.0 is always enabled by the TCPMv2 stack, so it's only explicitly
- * enabled when using the TCPMv1 stack
- */
 #define CONFIG_USB_PD_REV30
-#endif
 
-#define CONFIG_CMD_TCPCI_DUMP
+/*
+ * TODO(b/158572770): TCPMv2: Conserve flash space
+ * Add these console commands as flash space permits.
+ */
+#undef CONFIG_CMD_HCDEBUG
+#undef CONFIG_CMD_ACCELS
+#undef CONFIG_CMD_ACCEL_INFO
+#undef CONFIG_CMD_ACCELSPOOF
+#undef CONFIG_CMD_PPC_DUMP
 
 #define CONFIG_USB_POWER_DELIVERY
-#define CONFIG_USB_PD_TCPMV1
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DISCHARGE_PPC
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT		TYPEC_RP_3A0
-#define CONFIG_USB_PD_PORT_MAX_COUNT			2
 #define CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_TCPCI
+#define CONFIG_USB_PD_TCPM_RT1715
 #define CONFIG_USB_PD_TCPM_TUSB422	/* USBC port C0 */
 #define CONFIG_USB_PD_TCPM_PS8815	/* USBC port USB3 DB */
+#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USB_PD_TCPM_MUX
-#define CONFIG_CMD_PD_CONTROL		/* Needed for TCPC FW update */
+#define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
 #define CONFIG_CMD_USB_PD_PE
+
+/*
+ * Because of the CSE Lite, an extra cold AP reset is needed, and older cr50
+ * firmware will not be able to detect it because of updated cr50 pin straps.
+ * Therefore, the AP will require the EC to reset it so that the proper reset
+ * signal will be read and verstage can execute again.
+ */
+#define CONFIG_CMD_AP_RESET_LOG
+#define CONFIG_HOSTCMD_AP_RESET
+
+/*
+ * The PS8815 TCPC was found to require a 50ms delay to consistently work
+ * with non-PD chargers.  Override the default low-power mode exit delay.
+ */
+#undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE	(50*MSEC)
+
+/* Enable USB3.2 DRD */
+#define CONFIG_USB_PD_USB32_DRD
 
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
@@ -172,15 +193,12 @@
 #define CONFIG_USB_MUX_RUNTIME_CONFIG
 
 #define CONFIG_USBC_PPC
-#define CONFIG_CMD_PPC_DUMP
 /* Note - SN5S330 support automatically adds
  * CONFIG_USBC_PPC_POLARITY
  * CONFIG_USBC_PPC_SBU
  * CONFIG_USBC_PPC_VCONN
  */
 #define CONFIG_USBC_PPC_DEDICATED_INT
-#define CONFIG_USBC_PPC_SN5S330		/* USBC port C0 */
-#define CONFIG_USBC_PPC_SYV682X		/* USBC port C1 */
 
 #define CONFIG_INTEL_VIRTUAL_MUX
 #define CONFIG_USBC_SS_MUX
@@ -203,25 +221,9 @@
  */
 #define CONFIG_USB_PID 0x503E
 
-/* TODO: b/144165680 - measure and check these values on Volteer */
-#define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
-
 /* Retimer */
 #define CONFIG_USBC_RETIMER_INTEL_BB
 #define CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
-
-/*
- * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
- * cables only support up to 60W.
- */
-#define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
-#define PD_MAX_CURRENT_MA	3000
-#define PD_MAX_VOLTAGE_MV	20000
-
 
 #ifndef __ASSEMBLER__
 
@@ -256,33 +258,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-enum usbc_port {
-	USBC_PORT_C0 = 0,
-	USBC_PORT_C1,
-	USBC_PORT_COUNT
-};
-
-/*
- * Daughterboard type is encoded in the lower 4 bits
- * of the FW_CONFIG CBI tag.
- */
-
-enum usb_db_id {
-	USB_DB_NONE = 0,
-	USB_DB_USB4 = 1,
-	USB_DB_USB3 = 2,
-	USB_DB_COUNT
-};
-
-#define CBI_FW_CONFIG_USB_DB_MASK	0x0f
-#define CBI_FW_CONFIG_USB_DB_SHIFT	0
-#define CBI_FW_CONFIG_USB_DB_TYPE(bits) \
-	(((bits) & CBI_FW_CONFIG_USB_DB_MASK) >> CBI_FW_CONFIG_USB_DB_SHIFT)
-
-extern enum gpio_signal ps8xxx_rst_odl;
-
-void board_reset_pd_mcu(void);
-
 /* Common definition for the USB PD interrupt handlers. */
 void ppc_interrupt(enum gpio_signal signal);
 void tcpc_alert_event(enum gpio_signal signal);
@@ -291,11 +266,12 @@ void bc12_interrupt(enum gpio_signal signal);
 unsigned char get_board_id(void);
 
 /**
- * Configure GPIOs based on the CBI board version.  Boards in the Volteer
- * family can optionally implement this function to change GPIO definitions for
- * different board build phases.
+ * Configure run-time data structures and operation based on CBI data. This
+ * typically includes customization for changes in the BOARD_VERSION and
+ * FW_CONFIG fields in CBI. This routine is called from the baseboard after
+ * the CBI data has been initialized.
  */
-__override_proto void config_volteer_gpios(void);
+__override_proto void board_cbi_init(void);
 
 #endif /* !__ASSEMBLER__ */
 

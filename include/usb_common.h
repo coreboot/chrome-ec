@@ -12,7 +12,9 @@
 enum pd_drp_next_states {
 	DRP_TC_DEFAULT,
 	DRP_TC_UNATTACHED_SNK,
+	DRP_TC_ATTACHED_WAIT_SNK,
 	DRP_TC_UNATTACHED_SRC,
+	DRP_TC_ATTACHED_WAIT_SRC,
 	DRP_TC_DRP_AUTO_TOGGLE
 };
 
@@ -25,11 +27,16 @@ enum pd_drp_next_states {
  * @param drp_state dual role states
  * @param cc1 value of CC1 set by tcpm_get_cc
  * @param cc2 value of CC2 set by tcpm_get_cc
+ * @param auto_toggle_supported indicates hardware auto toggle support.
+ *			Hardware auto toggle support will perform the
+ *			unattached to attached debouncing before notifying
+ *			us of a connection.
  *
  */
 enum pd_drp_next_states drp_auto_toggle_next_state(uint64_t *drp_sink_time,
 	enum pd_power_role power_role, enum pd_dual_role_states drp_state,
-	enum tcpc_cc_voltage_status cc1, enum tcpc_cc_voltage_status cc2);
+	enum tcpc_cc_voltage_status cc1, enum tcpc_cc_voltage_status cc2,
+	bool auto_toggle_supported);
 
 enum pd_pref_type {
 	/* prefer voltage larger than or equal to pd_pref_config.mv */
@@ -156,6 +163,17 @@ void notify_sysjump_ready(void);
 void set_usb_mux_with_current_data_role(int port);
 
 /**
+ * Configure the USB MUX in safe mode.
+ * Before entering into alternate mode, state of the USB-C MUX needs to be in
+ * safe mode.
+ * Ref: USB Type-C Cable and Connector Specification
+ * Section E.2.2 Alternate Mode Electrical Requirements
+ *
+ * @param port The PD port number
+ */
+void usb_mux_set_safe_mode(int port);
+
+/**
  * Get the PD flags stored in BB Ram
  *
  * @param port USB-C port number
@@ -172,4 +190,14 @@ int pd_get_saved_port_flags(int port, uint8_t *flags);
  * @param do_set value written to the BB Ram flag
  */
 void pd_update_saved_port_flags(int port, uint8_t flag, uint8_t do_set);
+
+/**
+ * Build PD alert message
+ *
+ * @param msg pointer where message is stored
+ * @param len pointer where length of message is stored in bytes
+ * @param pr  current PD power role
+ * @return EC_SUCCESS on success else EC_ERROR_INVAL
+ */
+int pd_build_alert_msg(uint32_t *msg, uint32_t *len, enum pd_power_role pr);
 #endif /* __CROS_EC_USB_COMMON_H */

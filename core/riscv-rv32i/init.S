@@ -7,13 +7,6 @@
 
 #include "config.h"
 
-/*
- * ILM/DLM size register.
- * bit[3-0] ILM size:
- *     7: 512K byte (default setting), 8: 1M byte
- */
-#define IT83XX_GCTRL_EIDSR 0xf02031
-
 .macro vector name
 .set \name\()_handler, unhandled_ec_irq
 .weak \name\()_handler
@@ -36,6 +29,7 @@ __startup:
 __irq:
         j __irq_isr     /* interrupts / exceptions */
 
+#ifdef CHIP_FAMILY_IT8XXX2
 /*
  * E-flash signature used to enable specific function after power-on reset.
  * (HW mechanism)
@@ -69,6 +63,7 @@ eflash_sig:
 .byte 0xB4 /* flag of signature */
 .byte 0x85, 0x12, 0x5A, 0x5A, 0xAA, 0xAA, 0x55, 0x55
 /* flags: internal oscillator + implicit location */
+#endif /* CHIP_FAMILY_IT8XXX2 */
 
 .align 2
 __ec_intc:
@@ -147,18 +142,35 @@ __irq_isr:
         fsw ft2,  -19*4(sp)
         fsw ft1,  -18*4(sp)
         fsw ft0,  -17*4(sp)
+        /*
+         * Note: we never execute on this stack frame, so it does not need to
+         * be 16-byte aligned.
+         */
         addi sp, sp, -37*4
 #else
+        /*
+         * Note: we never execute on this stack frame, so it does not need to
+         * be 16-byte aligned.
+         */
         addi sp, sp, -16*4
 #endif
-        /* save sp to scratch register */
+        /* Save sp to scratch register */
         csrw mscratch, sp
-        /* switch to system stack if we are called from process stack */
+        /* Load top of system stack address into t0 for comparison */
         la t0, stack_end
-        /* no chagne sp if sp < end of system stack */
-        bltu sp, t0, __no_adjust_sp
+        /*
+         * Switch to system stack (which is in lower memory than task stack)
+         * if we are not already operating with the system stack
+         */
+        bltu sp, t0, __sp_16byte_aligned
         mv sp, t0
-__no_adjust_sp:
+__sp_16byte_aligned:
+        /*
+         * This ensures sp is 16-byte aligned. This only applies to when there
+         * is an interrupt before tasks start. Otherwise stack_end is already
+         * 16-byte aligned.
+         */
+        andi sp, sp, -16
         /* read exception cause */
         csrr t0, mcause
         /* isolate exception cause */
@@ -172,6 +184,8 @@ __no_adjust_sp:
         j unhandled_interrupt
 __irq_handler:
         jal start_irq_handler
+        /* t0 = -1 if it cannot find the corresponding interrupt source */
+        bltz t0, unhandled_interrupt
         /* get EC interrupt group 0-15 or 16:ecall */
         la t0, ec_int_group
         /* get corresponding isr */
@@ -256,10 +270,10 @@ __reset:
 #else
         csrw mstatus, zero
 #endif
-	/*
-	 * move content of return address(ra) into t5 and then store the content
-	 * into variable "ec_reset_lp" later after memory initialization.
-	 */
+        /*
+         * move content of return address(ra) into t5 and then store the content
+         * into variable "ec_reset_lp" later after memory initialization.
+         */
         mv t5, ra
         /* Clear the link register */
         li ra, 0
@@ -273,7 +287,7 @@ __reset:
         /* The M-mode handles interrupt/exception */
         csrwi mideleg, 0
         csrwi medeleg, 0
-#ifdef IT83XX_CHIP_FLASH_SIZE_1MB
+#if defined(IT83XX_CHIP_FLASH_SIZE_1MB) && defined(CHIP_FAMILY_IT8XXX2)
         /* ILM size is 1M bytes */
         la t0, IT83XX_GCTRL_EIDSR
         lb t1, 0(t0)
@@ -301,8 +315,10 @@ data_loop:
         /* store the content of t5 (ra after reset) into "ec_reset_lp" */
         la t0, ec_reset_lp
         sw t5, 0(t0)
+#ifdef CHIP_FAMILY_IT8XXX2
         /* clear BRAM if it is not valid */
         jal chip_bram_valid
+#endif
         /* Jump to C routine */
         jal main
         /* That should not return.  If it does, loop forever. */
@@ -370,10 +386,10 @@ excep_handler:
         la a0, saved_regs
         csrr sp, mscratch
         sw sp, 30*4(a0)
-        /* put a sane stack pointer */
-	la sp, stack_end
-	/* jump to panic dump C routine */
-	jal report_panic
+        /* put a valid stack pointer */
+        la sp, stack_end
+        /* jump to panic dump C routine */
+        jal report_panic
         j .
 
 .align 2
@@ -388,7 +404,16 @@ _data_end:
 _data_lma_start:
 .long __data_lma_start
 
-/* Reserve space for system stack */
+/*
+ * Reserve space for system stack.
+ *
+ * Main routine and ISR will share this space before tasks start.
+ * This space is then dedicated to ISRs after tasks start.
+ *
+ * NOTE: Location of system stack (.bss.system_stack) must be less than
+ * tasks stacks (task_stacks@.bss) and scratchpad for first context switch
+ * (scratchpad[]@.bss.task_scratchpad).
+ */
 .section .bss.system_stack
 stack_start:
 .space CONFIG_STACK_SIZE, 0

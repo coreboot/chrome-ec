@@ -14,7 +14,6 @@
 #include "dma.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "host_command.h"
 #include "link_defs.h"
 #include "registers.h"
 #include "spi.h"
@@ -309,7 +308,7 @@ static void tx_status(uint8_t byte)
 static void setup_for_transaction(void)
 {
 	stm32_spi_regs_t *spi __attribute__((unused)) = STM32_SPI1_REGS;
-	volatile uint8_t dummy __attribute__((unused));
+	volatile uint8_t unused __attribute__((unused));
 
 	/* clear this as soon as possible */
 	setup_transaction_later = 0;
@@ -326,15 +325,15 @@ static void setup_for_transaction(void)
 	dma_disable(STM32_DMAC_SPI1_TX);
 
 	/*
-	 * Read dummy bytes in case there are some pending; this prevents the
+	 * Read unused bytes in case there are some pending; this prevents the
 	 * receive DMA from getting that byte right when we start it.
 	 */
-	dummy = SPI_RXDR;
+	unused = SPI_RXDR;
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32L4)
 	/* 4 Bytes makes sure the RX FIFO on the F0 is empty as well. */
-	dummy = spi->dr;
-	dummy = spi->dr;
-	dummy = spi->dr;
+	unused = spi->dr;
+	unused = spi->dr;
+	unused = spi->dr;
 #endif
 
 	/* Start DMA */
@@ -524,7 +523,7 @@ void spi_event(enum gpio_signal signal)
 		/*
 		 * Check how big the packet should be.  We can't just wait to
 		 * see how much data the host sends, because it will keep
-		 * sending dummy data until we respond.
+		 * sending extra data until we respond.
 		 */
 		pkt_size = host_request_expected_size(r);
 		if (pkt_size == 0 || pkt_size > sizeof(in_msg))
@@ -634,7 +633,11 @@ static void spi_chipset_startup(void)
 
 	enabled = 1;
 }
+#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+DECLARE_HOOK(HOOK_CHIPSET_RESUME_INIT, spi_chipset_startup, HOOK_PRIO_DEFAULT);
+#else
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, spi_chipset_startup, HOOK_PRIO_DEFAULT);
+#endif
 
 static void spi_chipset_shutdown(void)
 {
@@ -650,7 +653,12 @@ static void spi_chipset_shutdown(void)
 	/* Allow deep sleep when AP off */
 	enable_sleep(SLEEP_MASK_SPI);
 }
+#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND_COMPLETE, spi_chipset_shutdown,
+	     HOOK_PRIO_DEFAULT);
+#else
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, spi_chipset_shutdown, HOOK_PRIO_DEFAULT);
+#endif
 
 static void spi_init(void)
 {
@@ -720,7 +728,7 @@ DECLARE_HOOK(HOOK_INIT, spi_init, HOOK_PRIO_INIT_SPI);
 /**
  * Get protocol information
  */
-static enum ec_status spi_get_protocol_info(struct host_cmd_handler_args *args)
+enum ec_status spi_get_protocol_info(struct host_cmd_handler_args *args)
 {
 	struct ec_response_get_protocol_info *r = args->response;
 
@@ -737,6 +745,3 @@ static enum ec_status spi_get_protocol_info(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO,
-		     spi_get_protocol_info,
-		     EC_VER_MASK(0));

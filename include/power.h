@@ -69,7 +69,11 @@ struct power_signal_info {
  * Each board must provide its signal list and a corresponding enum
  * power_signal.
  */
+#ifdef CONFIG_POWER_SIGNAL_RUNTIME_CONFIG
+extern struct power_signal_info power_signal_list[];
+#else
 extern const struct power_signal_info power_signal_list[];
+#endif
 
 /* Convert enum power_signal to a mask for signal functions */
 #define POWER_SIGNAL_MASK(signal) (1 << (signal))
@@ -116,7 +120,7 @@ int power_has_signals(uint32_t want);
 /**
  * Wait for power input signals to be present using default timeout
  *
- * @param want		Mask of signals which must be present (one or more
+ * @param want		Wanted signals which must be present (one or more
  *			POWER_SIGNAL_MASK()s).  If want=0, stops waiting for
  *			signals.
  * @return EC_SUCCESS when all inputs are present, or ERROR_TIMEOUT if timeout
@@ -127,7 +131,7 @@ int power_wait_signals(uint32_t want);
 /**
  * Wait for power input signals to be present
  *
- * @param want		Mask of signals which must be present (one or more
+ * @param want		Wanted signals which must be present (one or more
  *			POWER_SIGNAL_MASK()s).  If want=0, stops waiting for
  *			signals.
  * @param timeout       Timeout in usec to wait for signals to be present.
@@ -135,6 +139,21 @@ int power_wait_signals(uint32_t want);
  * before reaching the desired state.
  */
 int power_wait_signals_timeout(uint32_t want, int timeout);
+
+/**
+ * Wait for power input signals to be the desired state.
+ *
+ * @param want		Desired signals states. (one or more
+ *			POWER_SIGNAL_MASK()s). Signals can be presented or be
+ *			disappeared.
+ * @param mask		Masked signals that param 'want' cares.
+ * @param timeout	Timeout in usec to wait for signals be in the deisred
+ *			state.
+ * @return EC_SUCCESS when masked signals = wanted signals, or ERROR_TIMEOUT
+ * if timeout before reaching the desired state.
+ */
+int power_wait_mask_signals_timeout(uint32_t want, uint32_t mask, int timeout);
+
 
 /**
  * Set the low-level power chipset state.
@@ -148,7 +167,13 @@ void power_set_state(enum power_state new_state);
  *
  * @return Current chipset power state
  */
+#ifdef HAS_TASK_CHIPSET
 enum power_state power_get_state(void);
+#else
+static inline enum power_state power_get_state(void) {
+	return POWER_G3;
+}
+#endif
 
 /*
  * Set the wake mask according to the current power state.
@@ -252,6 +277,67 @@ __override_proto void power_board_handle_host_sleep_event(
  * special value to know if the state was reset.
  */
 #define HOST_SLEEP_EVENT_DEFAULT_RESET		0
+
+enum sleep_notify_type {
+	SLEEP_NOTIFY_NONE,
+	SLEEP_NOTIFY_SUSPEND,
+	SLEEP_NOTIFY_RESUME,
+};
+
+/**
+ * Set the sleep notify
+ *
+ * It is called in power_chipset_handle_host_sleep_event(), to set the sleep
+ * notify. The sleep notify is assigned based on the host sleep state.
+ *
+ * @param notify The sleep notify to set.
+ */
+void sleep_set_notify(enum sleep_notify_type notify);
+
+/**
+ * Notify the given hook is the sleep notify is matched.
+ *
+ * @param check_state: The sleep notify to check.
+ * @param hook_id: The hook to notify.
+ */
+void sleep_notify_transition(int check_state, int hook_id);
+
+/**
+ * Called during the suspend transition, to increase the transition counter.
+ */
+void sleep_suspend_transition(void);
+
+/**
+ * Called during the resume transition, to increase the transition counter.
+ */
+void sleep_resume_transition(void);
+
+/**
+ * Start the suspend process.
+ *
+ * It is called in power_chipset_handle_host_sleep_event(), after it receives
+ * a host sleep event to hint that the suspend process starts.
+ *
+ * @param ctx Possible sleep parameters and return values, depending on state.
+ * @param callback Will be called if timed out, i.e. suspend hang.
+ */
+void sleep_start_suspend(struct host_sleep_event_context *ctx,
+			 void (*callback)(void));
+
+/**
+ * Complete the resume process.
+ *
+ * It is called in power_chipset_handle_host_sleep_event(), after it receives
+ * a host sleep event to hint that the resume process completes.
+ *
+ * @param ctx Possible sleep parameters and return values, depending on state.
+ */
+void sleep_complete_resume(struct host_sleep_event_context *ctx);
+
+/**
+ * Reset the transition counter and timer.
+ */
+void sleep_reset_tracking(void);
 
 #ifdef CONFIG_POWER_S0IX
 /**

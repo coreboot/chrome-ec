@@ -216,7 +216,9 @@ int extpower_is_present(void)
 	if (board_vbus_source_enabled(CHARGE_PORT_USB_C))
 		usb_c_extpower_present = 0;
 	else
-		usb_c_extpower_present = tcpm_get_vbus_level(CHARGE_PORT_USB_C);
+		usb_c_extpower_present = tcpm_check_vbus_level(
+							CHARGE_PORT_USB_C,
+							VBUS_PRESENT);
 
 	return usb_c_extpower_present;
 }
@@ -367,10 +369,6 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 #endif /* SECTION_IS_RW */
-
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-}
 
 /*
  * Return if VBUS is sagging too low

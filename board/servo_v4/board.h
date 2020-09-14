@@ -150,6 +150,15 @@
 #define PD_MAX_POWER_MW       60000
 #define PD_MAX_CURRENT_MA     3000
 #define PD_MAX_VOLTAGE_MV     20000
+/*
+ * Define PDO selection logic for SourceCap.
+ * On a 45W PD charger, it might provide PDOs with 15V/3A and 20V/2.25A.
+ * In this case, pd_find_pdo_index() would always prefer 15V/3A rather than
+ * 20V/2.25A and such that the 20V PDO will be disappeared when servo-v4
+ * advertise the SrcCap. We define PD_PREFER_HIGH_VOLTAGE so that all the
+ * PDOs could be advertised by servo-v4.
+ */
+#define PD_PREFER_HIGH_VOLTAGE
 
 /*
  * Allow dangerous commands all the time, since we don't have a write protect
@@ -242,6 +251,13 @@ int pd_set_rp_rd(int port, int cc_pull, int rp_value);
  * @return HW ID version
  */
 int board_get_version(void);
+
+/**
+ * Enable or disable external HPD detection
+ *
+ * @param enable Enable external HPD detection if true, otherwise disable
+ */
+void ext_hpd_detection_enable(int enable);
 
 /**
  * Enable or disable CCD

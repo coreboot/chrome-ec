@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_SYSTEM_H
 #define __CROS_EC_SYSTEM_H
 
+#include <stdnoreturn.h>
+
 #include "atomic.h"
 #include "common.h"
 #include "compile_time_macros.h"
@@ -37,6 +39,13 @@ void system_pre_init(void);
  * system_pre_init().
  */
 void system_common_pre_init(void);
+
+/**
+ * Checks if manual recovery is detected or not
+ *
+ * @return Non zero if manual recovery is detected or zero otherwise.
+ */
+int system_is_manual_recovery(void);
 
 /**
  * System common re-initialization; called to reset persistent state
@@ -120,8 +129,20 @@ uintptr_t get_program_memory_addr(enum ec_image copy);
 /**
  * Return non-zero if the system has switched between image copies at least
  * once since the last real boot.
+ *
+ * You probably need to call system_jumped_late instead if you're trying to
+ * avoid initializing something again in RW.
  */
 int system_jumped_to_this_image(void);
+
+/**
+ * Return non-zero if late (legacy) sysjump occurred.
+ *
+ * This happens when EFS failed but RO still jumped to RW late on AP's request.
+ * This is typically called to avoid running some code twice (once in RO and
+ * again in RW).
+ */
+int system_jumped_late(void);
 
 /**
  * Preserve data across a jump between images.
@@ -274,7 +295,7 @@ const char *system_get_build_info(void);
  * @param flags		Reset flags; see SYSTEM_RESET_* above.
  */
 #ifndef TEST_FUZZ
-__attribute__((noreturn))
+noreturn
 #endif
 void system_reset(int flags);
 

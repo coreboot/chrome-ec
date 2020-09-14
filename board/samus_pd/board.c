@@ -135,6 +135,7 @@ static void chipset_s3_to_s5(void)
 {
 	ps = POWER_S5;
 	hook_notify(HOOK_CHIPSET_SHUTDOWN);
+	hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 }
 
 static void chipset_s0_to_s3(void)
@@ -234,6 +235,7 @@ static void board_init(void)
 	} else {
 		enable_sleep(SLEEP_MASK_AP_RUN);
 		hook_notify(HOOK_CHIPSET_SHUTDOWN);
+		hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 		ps = POWER_S5;
 	}
 
@@ -492,6 +494,11 @@ void pd_send_host_event(int mask)
 	atomic_or(&(host_event_status_flags), mask);
 	atomic_or(&(pd_status_flags), PD_STATUS_HOST_EVENT);
 	pd_send_ec_int();
+}
+
+int battery_is_cut_off(void)
+{
+	return 0;  /* Always return NOT cut off */
 }
 
 /****************************************************************************/

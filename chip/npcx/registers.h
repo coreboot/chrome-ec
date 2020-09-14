@@ -509,7 +509,7 @@ enum {
 #define GPIO_D GPIO_PORT_D
 #define GPIO_E GPIO_PORT_E
 #define GPIO_F GPIO_PORT_F
-#define DUMMY_GPIO_BANK GPIO_PORT_0
+#define UNIMPLEMENTED_GPIO_BANK GPIO_PORT_0
 
 /******************************************************************************/
 /* MSWC Registers */
@@ -985,7 +985,8 @@ enum {
 #define NPCX_PWDWN_CTL7_SMB6_PD          1
 #define NPCX_PWDWN_CTL7_SMB7_PD          2
 #if defined(CHIP_VARIANT_NPCX7M6FB) || defined(CHIP_VARIANT_NPCX7M6FC) || \
-	defined(CHIP_VARIANT_NPCX7M7WB) || defined(CHIP_VARIANT_NPCX7M7WC)
+	defined(CHIP_VARIANT_NPCX7M7FC) || defined(CHIP_VARIANT_NPCX7M7WB) || \
+	defined(CHIP_VARIANT_NPCX7M7WC)
 #define NPCX_PWDWN_CTL7_ITIM64_PD        5
 #define NPCX_PWDWN_CTL7_UART2_PD         6
 #endif
@@ -1271,7 +1272,8 @@ enum PM_CHANNEL_T {
 /* BBRAM register fields */
 #define NPCX_BKUP_STS_IBBR               7
 #if defined(CHIP_VARIANT_NPCX7M6FB) || defined(CHIP_VARIANT_NPCX7M6FC) || \
-	defined(CHIP_VARIANT_NPCX7M7WB) || defined(CHIP_VARIANT_NPCX7M7WC)
+	defined(CHIP_VARIANT_NPCX7M7FC) || defined(CHIP_VARIANT_NPCX7M7WB) || \
+	defined(CHIP_VARIANT_NPCX7M7WC)
 #define NPCX_BKUP_STS_VSBY_STS           1
 #define NPCX_BKUP_STS_VCC1_STS           0
 #define NPCX_BKUP_STS_ALL_MASK \
@@ -2273,7 +2275,12 @@ static inline int npcx_is_uart(void)
 #define NPCX_PS2_PSIEN_PS2_WUE           4
 #define NPCX_PS2_PSIEN_PS2_CLK_SEL	     7
 
+#ifndef CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 extern const enum gpio_signal hibernate_wake_pins[];
 extern const int hibernate_wake_pins_used;
+#else
+extern enum gpio_signal hibernate_wake_pins[];
+extern int hibernate_wake_pins_used;
+#endif
 
 #endif /* __CROS_EC_REGISTERS_H */

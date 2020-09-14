@@ -22,6 +22,7 @@
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 1
 
 #define CONFIG_BATTERY_HW_PRESENT_CUSTOM
+#define CONFIG_BATTERY_VENDOR_PARAM
 
 #define CONFIG_CHARGER_PSYS
 
@@ -89,7 +90,6 @@ enum adc_channel {
 	/* Real ADC channels begin here */
 	ADC_BOARD_ID = 0,
 	ADC_EC_SKU_ID,
-	ADC_BATT_ID,
 	ADC_CH_COUNT
 };
 

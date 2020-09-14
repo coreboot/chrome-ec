@@ -145,7 +145,10 @@ static void set_pwrbtn_to_pch(int high, int init)
 	}
 #endif
 	CPRINTS("PB PCH pwrbtn=%s", high ? "HIGH" : "LOW");
-	gpio_set_level(GPIO_PCH_PWRBTN_L, high);
+	if (IS_ENABLED(CONFIG_POWER_BUTTON_TO_PCH_CUSTOM))
+		board_pwrbtn_to_pch(high);
+	else
+		gpio_set_level(GPIO_PCH_PWRBTN_L, high);
 }
 
 void power_button_pch_press(void)
@@ -232,6 +235,8 @@ static void set_initial_pwrbtn_state(void)
 		return;
 	} else if ((reset_flags & EC_RESET_FLAG_AP_OFF) ||
 		   (keyboard_scan_get_boot_keys() == BOOT_KEY_DOWN_ARROW)) {
+		/* Clear AP_OFF so that it won't be carried over to RW. */
+		system_clear_reset_flags(EC_RESET_FLAG_AP_OFF);
 		/*
 		 * Reset triggered by keyboard-controlled reset, and down-arrow
 		 * was held down.  Or reset flags request AP off.
@@ -245,6 +250,11 @@ static void set_initial_pwrbtn_state(void)
 		 */
 		CPRINTS("PB init-off");
 		power_button_pch_release();
+		return;
+	} else if (reset_flags & EC_RESET_FLAG_AP_IDLE) {
+		system_clear_reset_flags(EC_RESET_FLAG_AP_IDLE);
+		pwrbtn_state = PWRBTN_STATE_IDLE;
+		CPRINTS("PB idle");
 		return;
 	}
 

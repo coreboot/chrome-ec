@@ -73,8 +73,6 @@ GPIO(EN_USB_A_LOW_PWR_OD,      PIN(9, 4), GPIO_OUT_LOW)
 GPIO(EC_BATT_PRES_ODL,         PIN(E, 1), GPIO_INPUT)
 GPIO(LED_1_L,                  PIN(C, 4), GPIO_OUT_HIGH)        /* Yellow (hatch) */
 GPIO(LED_2_L,                  PIN(C, 3), GPIO_OUT_HIGH)        /* White (hatch) */
-GPIO(LED_3_L,                  PIN(C, 2), GPIO_OUT_HIGH)
-GPIO(LED_4_L,                  PIN(6, 0), GPIO_OUT_HIGH)
 GPIO(EC_KB_BL_EN,              PIN(8, 6), GPIO_OUT_LOW)         /* Keyboard backlight */
 GPIO(EDP_BKLTEN_OD,            PIN(D, 3), GPIO_ODR_HIGH)        /* Display backlight */
 GPIO(EN_PP5000_FAN,            PIN(6, 1), GPIO_OUT_LOW)
@@ -133,6 +131,5 @@ ALTERNATE(PIN_MASK(4, 0x30), 0, MODULE_ADC, 0)                             /* AD
 
 /* Power Switch Logic (PSL) inputs */
 ALTERNATE(PIN_MASK(D, 0x04), 0, MODULE_PMU, 0)                             /* GPIOD2 = LID_OPEN */
-ALTERNATE(PIN_MASK(0, 0x07), 0, MODULE_PMU, 0)                             /* GPIO00 = ACOK_OD,
-                                                                              GPIO01 = MECH_PWR_BTN_ODL
-                                                                              GPIO02 = EC_RST_ODL */
+ALTERNATE(PIN_MASK(0, 0x03), 0, MODULE_PMU, 0)                             /* GPIO00 = ACOK_OD,
+                                                                              GPIO01 = MECH_PWR_BTN_ODL */

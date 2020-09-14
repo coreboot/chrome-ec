@@ -44,19 +44,6 @@ uint32_t us_to_rtcss(int32_t us)
 	return (RTC_PREDIV_S - (us / US_PER_RTC_TICK));
 }
 
-static void wait_for_ready(volatile uint32_t *cr_reg,
-			uint32_t enable, uint32_t ready)
-{
-	/* Ensure that clock source is ON */
-	if (!(*cr_reg & ready)) {
-		/* Enable clock */
-		*cr_reg |= enable;
-		/* Wait for ready */
-		while (!(*cr_reg & ready))
-			;
-	}
-}
-
 void config_hispeed_clock(void)
 {
 #ifdef CONFIG_STM32_CLOCK_HSE_HZ
@@ -164,7 +151,6 @@ void config_hispeed_clock(void)
 		;
 
 	/* Setup RTC Clock input */
-	STM32_RCC_BDCR |= STM32_RCC_BDCR_BDRST;
 #ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	STM32_RCC_BDCR = STM32_RCC_BDCR_RTCEN | BDCR_RTCSEL(BDCR_SRC_HSE);
 #else
@@ -188,14 +174,14 @@ int clock_get_freq(void)
 
 void clock_wait_bus_cycles(enum bus_type bus, uint32_t cycles)
 {
-	volatile uint32_t dummy __attribute__((unused));
+	volatile uint32_t unused __attribute__((unused));
 
 	if (bus == BUS_AHB) {
 		while (cycles--)
-			dummy = STM32_DMA_GET_ISR(0);
+			unused = STM32_DMA_GET_ISR(0);
 	} else { /* APB */
 		while (cycles--)
-			dummy = STM32_USART_BRR(STM32_USART1_BASE);
+			unused = STM32_USART_BRR(STM32_USART1_BASE);
 	}
 }
 

@@ -567,7 +567,7 @@ static int rt946x_set_iprec(int chgnum, unsigned int iprec)
 static int rt946x_init_irq(int chgnum)
 {
 	int rv = 0;
-	int dummy;
+	int unused;
 	int i;
 
 	/* Mask all interrupts */
@@ -578,7 +578,7 @@ static int rt946x_init_irq(int chgnum)
 
 	/* Clear all interrupt flags */
 	for (i = 0; i < RT946X_IRQ_COUNT; i++) {
-		rv = rt946x_read8(chgnum, RT946X_REG_CHGSTATC + i, &dummy);
+		rv = rt946x_read8(chgnum, RT946X_REG_CHGSTATC + i, &unused);
 		if (rv)
 			return rv;
 	}
@@ -1515,7 +1515,7 @@ static void rt946x_bc12_workaround(void)
 }
 DECLARE_DEFERRED(rt946x_bc12_workaround);
 
-void usb_charger_task(void *u)
+static void rt946x_usb_charger_task(const int unused)
 {
 	struct charge_port_info chg;
 	int bc12_type = CHARGE_SUPPLIER_NONE;
@@ -1590,12 +1590,12 @@ wait_event:
 	}
 }
 
-int usb_charger_ramp_allowed(int supplier)
+static int rt946x_ramp_allowed(int supplier)
 {
 	return supplier == CHARGE_SUPPLIER_BC12_DCP;
 }
 
-int usb_charger_ramp_max(int supplier, int sup_curr)
+static int rt946x_ramp_max(int supplier, int sup_curr)
 {
 	return rt946x_get_bc12_ilim(supplier);
 }
@@ -1895,3 +1895,20 @@ const struct charger_drv rt946x_drv = {
 	.ramp_get_current_limit = &rt946x_ramp_get_current_limit,
 #endif
 };
+
+#ifdef HAS_TASK_USB_CHG
+const struct bc12_drv rt946x_bc12_drv = {
+	.usb_charger_task = rt946x_usb_charger_task,
+	.ramp_allowed = rt946x_ramp_allowed,
+	.ramp_max = rt946x_ramp_max,
+};
+
+#ifdef CONFIG_BC12_SINGLE_DRIVER
+/* provide a default bc12_ports[] for backward compatibility */
+struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
+	[0 ... (CHARGE_PORT_COUNT - 1)] = {
+		.drv = &rt946x_bc12_drv,
+	},
+};
+#endif /* CONFIG_BC12_SINGLE_DRIVER */
+#endif

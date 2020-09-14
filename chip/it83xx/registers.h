@@ -164,6 +164,7 @@
 #define IT83XX_IRQ_WKO132         132
 #define IT83XX_IRQ_WKO133         133
 #define IT83XX_IRQ_WKO134         134
+#define IT83XX_IRQ_WKO135         135
 /* Group 17 */
 #define IT83XX_IRQ_WKO136         136
 #define IT83XX_IRQ_WKO137         137
@@ -407,6 +408,7 @@
 #define IT83XX_CPU_INT_IRQ_132     2
 #define IT83XX_CPU_INT_IRQ_133     2
 #define IT83XX_CPU_INT_IRQ_134     2
+#define IT83XX_CPU_INT_IRQ_135     2
 #define IT83XX_CPU_INT_IRQ_136     2
 #define IT83XX_CPU_INT_IRQ_137     2
 #define IT83XX_CPU_INT_IRQ_138     2
@@ -774,6 +776,7 @@
 #define IT83XX_GPIO_GCR30       REG8(IT83XX_GPIO_BASE+0xED)
 #define IT83XX_GPIO_GCR31       REG8(IT83XX_GPIO_BASE+0xD5)
 #define IT83XX_GPIO_GCR32       REG8(IT83XX_GPIO_BASE+0xD6)
+#define IT83XX_GPIO_GCR33       REG8(IT83XX_GPIO_BASE+0xD7)
 
 #define IT83XX_VBATPC_BGPOPSCR  REG8(IT83XX_GPIO2_BASE+0xF0)
 #define IT83XX_VBATPC_XLPIER    REG8(IT83XX_GPIO2_BASE+0xF5)
@@ -815,6 +818,8 @@ enum {
 struct gpio_reg_t {
 	/* GPIO port data register (bit mapping to pin) */
 	uint32_t reg_gpdr;
+	/* GPIO port data mirror register (bit mapping to pin) */
+	uint32_t reg_gpdmr;
 	/* GPIO port output type register (bit mapping to pin) */
 	uint32_t reg_gpotr;
 	/* GPIO port control register (byte mapping to pin) */
@@ -823,36 +828,38 @@ struct gpio_reg_t {
 
 /* GPIO group index convert to GPIO data/output type/ctrl group address */
 static const struct gpio_reg_t gpio_group_to_reg[] = {
-	/*               GPDR,       GPOTR,      GPCR      */
-	[GPIO_A]     = { 0x00F01601, 0x00F01671, 0x00F01610 },
-	[GPIO_B]     = { 0x00F01602, 0x00F01672, 0x00F01618 },
-	[GPIO_C]     = { 0x00F01603, 0x00F01673, 0x00F01620 },
-	[GPIO_D]     = { 0x00F01604, 0x00F01674, 0x00F01628 },
-	[GPIO_E]     = { 0x00F01605, 0x00F01675, 0x00F01630 },
-	[GPIO_F]     = { 0x00F01606, 0x00F01676, 0x00F01638 },
-	[GPIO_G]     = { 0x00F01607, 0x00F01677, 0x00F01640 },
-	[GPIO_H]     = { 0x00F01608, 0x00F01678, 0x00F01648 },
-	[GPIO_I]     = { 0x00F01609, 0x00F01679, 0x00F01650 },
-	[GPIO_J]     = { 0x00F0160a, 0x00F0167a, 0x00F01658 },
-	[GPIO_K]     = { 0x00F0160b, 0x00F0167b, 0x00F01690 },
-	[GPIO_L]     = { 0x00F0160c, 0x00F0167c, 0x00F01698 },
-	[GPIO_M]     = { 0x00F0160d, 0x00F0167d, 0x00F016a0 },
+	/*               GPDR(set),  GPDMR(get), GPOTR,      GPCR      */
+	[GPIO_A]     = { 0x00F01601, 0x00F01661, 0x00F01671, 0x00F01610 },
+	[GPIO_B]     = { 0x00F01602, 0x00F01662, 0x00F01672, 0x00F01618 },
+	[GPIO_C]     = { 0x00F01603, 0x00F01663, 0x00F01673, 0x00F01620 },
+	[GPIO_D]     = { 0x00F01604, 0x00F01664, 0x00F01674, 0x00F01628 },
+	[GPIO_E]     = { 0x00F01605, 0x00F01665, 0x00F01675, 0x00F01630 },
+	[GPIO_F]     = { 0x00F01606, 0x00F01666, 0x00F01676, 0x00F01638 },
+	[GPIO_G]     = { 0x00F01607, 0x00F01667, 0x00F01677, 0x00F01640 },
+	[GPIO_H]     = { 0x00F01608, 0x00F01668, 0x00F01678, 0x00F01648 },
+	[GPIO_I]     = { 0x00F01609, 0x00F01669, 0x00F01679, 0x00F01650 },
+	[GPIO_J]     = { 0x00F0160A, 0x00F0166A, 0x00F0167A, 0x00F01658 },
+	[GPIO_K]     = { 0x00F0160B, 0x00F0166B, 0x00F0167B, 0x00F01690 },
+	[GPIO_L]     = { 0x00F0160C, 0x00F0166C, 0x00F0167C, 0x00F01698 },
+	[GPIO_M]     = { 0x00F0160D, 0x00F0166D, 0x00F0167D, 0x00F016a0 },
 #if defined(CHIP_FAMILY_IT8XXX1) || defined(CHIP_FAMILY_IT8XXX2)
-	[GPIO_O]     = { 0x00F03E01, 0x00F03E71, 0x00F03E10 },
-	[GPIO_P]     = { 0x00F03E02, 0x00F03E72, 0x00F03E18 },
-	[GPIO_Q]     = { 0x00F03E03, 0x00F03E73, 0x00F03E20 },
-	[GPIO_R]     = { 0x00F03E04, 0x00F03E74, 0x00F03E28 },
+	[GPIO_O]     = { 0x00F03E01, 0x00F03E61, 0x00F03E71, 0x00F03E10 },
+	[GPIO_P]     = { 0x00F03E02, 0x00F03E62, 0x00F03E72, 0x00F03E18 },
+	[GPIO_Q]     = { 0x00F03E03, 0x00F03E63, 0x00F03E73, 0x00F03E20 },
+	[GPIO_R]     = { 0x00F03E04, 0x00F03E64, 0x00F03E74, 0x00F03E28 },
 #endif
-	[GPIO_KSI]   = { 0x00F01D09,         -1,         -1 },
-	[GPIO_KSO_H] = { 0x00F01D0C,         -1,         -1 },
-	[GPIO_KSO_L] = { 0x00F01D0F,         -1,         -1 },
+	[GPIO_KSI]   = { 0x00F01D09, 0x00F01D09,         -1,         -1 },
+	[GPIO_KSO_H] = { 0x00F01D0C, 0x00F01D0C,         -1,         -1 },
+	[GPIO_KSO_L] = { 0x00F01D0F, 0x00F01D0F,         -1,         -1 },
 };
 BUILD_ASSERT(ARRAY_SIZE(gpio_group_to_reg) == (COUNT));
 
-#define DUMMY_GPIO_BANK GPIO_A
+#define UNIMPLEMENTED_GPIO_BANK GPIO_A
 
 #define IT83XX_GPIO_DATA(port)                 \
 	REG8(gpio_group_to_reg[port].reg_gpdr)
+#define IT83XX_GPIO_DATA_MIRROR(port)          \
+	REG8(gpio_group_to_reg[port].reg_gpdmr)
 #define IT83XX_GPIO_GPOT(port)                 \
 	REG8(gpio_group_to_reg[port].reg_gpotr)
 #define IT83XX_GPIO_CTRL(port, pin_offset)     \
@@ -956,6 +963,8 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_CHIPID2      REG8(IT83XX_GCTRL_BASE+0x01)
 #endif
 #define IT83XX_GCTRL_CHIPVER      REG8(IT83XX_GCTRL_BASE+0x02)
+#define IT83XX_GCTRL_DBGROS       REG8(IT83XX_GCTRL_BASE+0x03)
+#define IT83XX_SMB_DBGR           BIT(0)
 #define IT83XX_GCTRL_WNCKR        REG8(IT83XX_GCTRL_BASE+0x0B)
 #define IT83XX_GCTRL_RSTS         REG8(IT83XX_GCTRL_BASE+0x06)
 #define IT83XX_GCTRL_BADRSEL      REG8(IT83XX_GCTRL_BASE+0x0A)
@@ -965,6 +974,7 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_SPCTRL4      REG8(IT83XX_GCTRL_BASE+0x1C)
 #define IT83XX_GCTRL_MCCR3        REG8(IT83XX_GCTRL_BASE+0x20)
 #define IT83XX_GCTRL_SPISLVPFE    BIT(6)
+#define IT83XX_GCTRL_RSTC5        REG8(IT83XX_GCTRL_BASE+0x21)
 #define IT83XX_GCTRL_MCCR         REG8(IT83XX_GCTRL_BASE+0x30)
 #define IT83XX_GCTRL_PMER1        REG8(IT83XX_GCTRL_BASE+0x32)
 #define IT83XX_GCTRL_PMER2        REG8(IT83XX_GCTRL_BASE+0x33)
@@ -1036,6 +1046,7 @@ enum clock_gate_offsets {
 #define IT83XX_ADC_ADCGCR       REG8(IT83XX_ADC_BASE+0x03)
 #define IT83XX_ADC_VCH0CTL      REG8(IT83XX_ADC_BASE+0x04)
 #define IT83XX_ADC_KDCTL        REG8(IT83XX_ADC_BASE+0x05)
+#define IT83XX_ADC_AHCE             BIT(7)
 #define IT83XX_ADC_VCH1CTL      REG8(IT83XX_ADC_BASE+0x06)
 #define IT83XX_ADC_VCH1DATL     REG8(IT83XX_ADC_BASE+0x07)
 #define IT83XX_ADC_VCH1DATM     REG8(IT83XX_ADC_BASE+0x08)
@@ -1295,10 +1306,9 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_RXF1OC          BIT(3)
 #define IT83XX_SPI_RXFAR           BIT(0)
 #define IT83XX_SPI_IMR          REG8(IT83XX_SPI_BASE+0x04)
-#define IT83XX_SPI_RFFIM           BIT(7)
+#define IT83XX_SPI_RX_REACH        BIT(5)
 #define IT83XX_SPI_EDIM            BIT(2)
 #define IT83XX_SPI_ISR          REG8(IT83XX_SPI_BASE+0x05)
-#define IT83XX_SPI_RXFIFOFULL      BIT(7)
 #define IT83XX_SPI_ENDDETECTINT    BIT(2)
 #define IT83XX_SPI_RXFSR        REG8(IT83XX_SPI_BASE+0x07)
 #define IT83XX_SPI_RXFFSM          (BIT(4) | BIT(3))
@@ -1317,7 +1327,13 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_RXFRDRB0     REG32(IT83XX_SPI_BASE+0x0C)
 #define IT83XX_SPI_FTCB0R       REG8(IT83XX_SPI_BASE+0x18)
 #define IT83XX_SPI_FTCB1R       REG8(IT83XX_SPI_BASE+0x19)
+#define IT83XX_SPI_TCCB0        REG8(IT83XX_SPI_BASE+0x1A)
+#define IT83XX_SPI_TCCB1        REG8(IT83XX_SPI_BASE+0x1B)
 #define IT83XX_SPI_HPR2         REG8(IT83XX_SPI_BASE+0x1E)
+#define IT83XX_SPI_RX_VLISMR    REG8(IT83XX_SPI_BASE+0x26)
+#define IT83XX_SPI_RVLIM           BIT(0)
+#define IT83XX_SPI_RX_VLISR     REG8(IT83XX_SPI_BASE+0x27)
+#define IT83XX_SPI_RVLI            BIT(0)
 
 /* Platform Environment Control Interface (PECI) */
 #define IT83XX_PECI_BASE  0x00F02C00
@@ -1584,8 +1600,13 @@ enum i2c_channels {
 #define USB_DP_DM_PULL_DOWN_EN BIT(4)
 
 /* Wake pin definitions, defined at board-level */
+#ifndef CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 extern const enum gpio_signal hibernate_wake_pins[];
 extern const int hibernate_wake_pins_used;
+#else
+extern enum gpio_signal hibernate_wake_pins[];
+extern int hibernate_wake_pins_used;
+#endif
 
 /* --- MISC (not implemented yet) --- */
 

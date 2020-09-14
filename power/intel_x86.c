@@ -176,27 +176,32 @@ static void lpc_s0ix_resume_restore_masks(void)
 	backup_sci_mask = backup_smi_mask = 0;
 }
 
-enum s0ix_notify_type {
-	S0IX_NOTIFY_NONE,
-	S0IX_NOTIFY_SUSPEND,
-	S0IX_NOTIFY_RESUME,
-};
-
-/* Flag to notify listeners about S0ix suspend/resume events. */
-enum s0ix_notify_type s0ix_notify = S0IX_NOTIFY_NONE;
-
-static void s0ix_transition(int check_state, int hook_id)
+static void lpc_s0ix_hang_detected(void)
 {
-	if (s0ix_notify != check_state)
-		return;
+	/*
+	 * Wake up the AP so they don't just chill in a non-suspended state and
+	 * burn power. Overload a vaguely related event bit since event bits are
+	 * at a premium. If the system never entered S0ix, then manually set the
+	 * wake mask to pretend it did, so that the hang detect event wakes the
+	 * system.
+	 */
+	if (power_get_state() == POWER_S0) {
+		host_event_t sleep_wake_mask;
 
-	/* Clear masks before any hooks are run for suspend. */
-	if (s0ix_notify == S0IX_NOTIFY_SUSPEND)
-		lpc_s0ix_suspend_clear_masks();
+		get_lazy_wake_mask(POWER_S0ix, &sleep_wake_mask);
+		lpc_set_host_event_mask(LPC_HOST_EVENT_WAKE, sleep_wake_mask);
+	}
 
-	hook_notify(hook_id);
-	s0ix_notify = S0IX_NOTIFY_NONE;
+	CPRINTS("Warning: Detected sleep hang! Waking host up!");
+	host_set_single_event(EC_HOST_EVENT_HANG_DETECT);
 }
+
+static void handle_chipset_suspend(void)
+{
+	/* Clear masks before any hooks are run for suspend. */
+	lpc_s0ix_suspend_clear_masks();
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, handle_chipset_suspend, HOOK_PRIO_FIRST);
 
 static void handle_chipset_reset(void)
 {
@@ -208,125 +213,14 @@ static void handle_chipset_reset(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESET, handle_chipset_reset, HOOK_PRIO_FIRST);
 
-#ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
-#ifdef CONFIG_POWER_S0IX_FAILURE_DETECTION
-
-static uint16_t slp_s0ix_timeout;
-static uint32_t slp_s0ix_transitions;
-
-static void s0ix_transition_timeout(void);
-DECLARE_DEFERRED(s0ix_transition_timeout);
-
-static void s0ix_increment_transition(void)
-{
-	if ((slp_s0ix_transitions & EC_HOST_RESUME_SLEEP_TRANSITIONS_MASK) <
-	    EC_HOST_RESUME_SLEEP_TRANSITIONS_MASK)
-		slp_s0ix_transitions += 1;
-}
-
-static void s0ix_suspend_transition(void)
-{
-	s0ix_increment_transition();
-	hook_call_deferred(&s0ix_transition_timeout_data, -1);
-}
-
-static void s0ix_resume_transition(void)
-{
-	s0ix_increment_transition();
-
-	/*
-	 * Start the timer again to ensure the AP doesn't get itself stuck in
-	 * a state where it's no longer in S0ix, but from the Linux perspective
-	 * is still suspended. Perhaps a bug in the SoC-internal periodic
-	 * housekeeping code might result in a situation like this.
-	 */
-	if (slp_s0ix_timeout)
-		hook_call_deferred(&s0ix_transition_timeout_data,
-				   (uint32_t)slp_s0ix_timeout * 1000);
-}
-
-static void s0ix_transition_timeout(void)
-{
-	/* Mark the timeout. */
-	slp_s0ix_transitions |= EC_HOST_RESUME_SLEEP_TIMEOUT;
-	hook_call_deferred(&s0ix_transition_timeout_data, -1);
-
-	/*
-	 * Wake up the AP so they don't just chill in a non-suspended state and
-	 * burn power. Overload a vaguely related event bit since event bits are
-	 * at a premium. If the system never entered S0ix, then manually set the
-	 * wake mask to pretend it did, so that the hang detect event wakes the
-	 * system.
-	 */
-	if (power_get_state() == POWER_S0) {
-		host_event_t s0ix_wake_mask;
-
-		get_lazy_wake_mask(POWER_S0ix, &s0ix_wake_mask);
-		lpc_set_host_event_mask(LPC_HOST_EVENT_WAKE, s0ix_wake_mask);
-	}
-
-	CPRINTS("Warning: Detected S0ix hang! Waking host up!");
-	host_set_single_event(EC_HOST_EVENT_HANG_DETECT);
-}
-
-static void s0ix_start_suspend(struct host_sleep_event_context *ctx)
-{
-	uint16_t timeout = ctx->sleep_timeout_ms;
-
-	slp_s0ix_transitions = 0;
-
-	/* Use zero internally to indicate no timeout. */
-	if (timeout == EC_HOST_SLEEP_TIMEOUT_DEFAULT) {
-		timeout = CONFIG_SLEEP_TIMEOUT_MS;
-
-	} else if (timeout == EC_HOST_SLEEP_TIMEOUT_INFINITE) {
-		slp_s0ix_timeout = 0;
-		return;
-	}
-
-	slp_s0ix_timeout = timeout;
-	hook_call_deferred(&s0ix_transition_timeout_data,
-			   (uint32_t)timeout * 1000);
-}
-
-static void s0ix_complete_resume(struct host_sleep_event_context *ctx)
-{
-	hook_call_deferred(&s0ix_transition_timeout_data, -1);
-	ctx->sleep_transitions = slp_s0ix_transitions;
-
-	/*
-	 * If s0ix timed out and never transitioned, then the wake mask was
-	 * modified to its s0ix state, so that the event wakes the system.
-	 * Explicitly restore the wake mask to its S0 state now.
-	 */
-	power_update_wake_mask();
-}
-
-static void s0ix_reset_tracking(void)
-{
-	slp_s0ix_transitions = 0;
-	slp_s0ix_timeout = 0;
-}
-
-#else /* !CONFIG_POWER_S0IX_FAILURE_DETECTION */
-
-#define s0ix_suspend_transition()
-#define s0ix_resume_transition()
-#define s0ix_start_suspend(_ctx)
-#define s0ix_complete_resume(_ctx)
-#define s0ix_reset_tracking()
-
-#endif /* CONFIG_POWER_S0IX_FAILURE_DETECTION */
-
 void power_reset_host_sleep_state(void)
 {
 	power_set_host_sleep_state(HOST_SLEEP_EVENT_DEFAULT_RESET);
-	s0ix_reset_tracking();
+	sleep_reset_tracking();
 	power_chipset_handle_host_sleep_event(HOST_SLEEP_EVENT_DEFAULT_RESET,
 					      NULL);
 }
 
-#endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */
 #endif /* CONFIG_POWER_S0IX */
 
 void chipset_throttle_cpu(int throttle)
@@ -340,23 +234,35 @@ void chipset_throttle_cpu(int throttle)
 
 enum power_state power_chipset_init(void)
 {
+	CPRINTS("%s: power_signal=0x%x", __func__, power_get_signals());
+
+	if (!system_jumped_to_this_image())
+		return POWER_G3;
 	/*
-	 * If we're switching between images without rebooting, see if the x86
-	 * is already powered on; if so, leave it there instead of cycling
-	 * through G3.
+	 * We are here as RW. We need to handle the following cases:
+	 *
+	 * 1. Late sysjump by software sync. AP is in S0.
+	 * 2. Shutting down in recovery mode then sysjump by EFS2. AP is in S5
+	 *    and expected to sequence down.
+	 * 3. Rebooting from recovery mode then sysjump by EFS2. AP is in S5
+	 *    and expected to sequence up.
+	 * 4. RO jumps to RW from main() by EFS2. (a.k.a. power on reset, cold
+	 *    reset). AP is in G3.
 	 */
-	if (system_jumped_to_this_image()) {
-		if ((power_get_signals() & IN_ALL_S0) == IN_ALL_S0) {
-			/* Disable idle task deep sleep when in S0. */
-			disable_sleep(SLEEP_MASK_AP_RUN);
-			CPRINTS("already in S0");
-			return POWER_S0;
-		}
-
-		/* Force all signals to their G3 states */
-		chipset_force_g3();
+	if ((power_get_signals() & IN_ALL_S0) == IN_ALL_S0) {
+		/* case #1. Disable idle task deep sleep when in S0. */
+		disable_sleep(SLEEP_MASK_AP_RUN);
+		CPRINTS("already in S0");
+		return POWER_S0;
 	}
-
+	if ((power_get_signals() & CHIPSET_G3S5_POWERUP_SIGNAL)
+			== CHIPSET_G3S5_POWERUP_SIGNAL) {
+		/* case #2 & #3 */
+		CPRINTS("already in S5");
+		return POWER_S5;
+	}
+	/* case #4 */
+	chipset_force_g3();
 	return POWER_G3;
 }
 
@@ -411,8 +317,8 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 				chipset_get_sleep_signal(SYS_SLEEP_S0IX) == 0) {
 			return POWER_S0S0ix;
 		} else {
-			s0ix_transition(S0IX_NOTIFY_RESUME,
-					HOOK_CHIPSET_RESUME);
+			sleep_notify_transition(SLEEP_NOTIFY_RESUME,
+						HOOK_CHIPSET_RESUME);
 #endif
 		}
 
@@ -526,13 +432,13 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 
 #ifdef CONFIG_POWER_S0IX
 	case POWER_S0S0ix:
-
 		/*
 		 * Call hooks only if we haven't notified listeners of S0ix
 		 * suspend.
 		 */
-		s0ix_transition(S0IX_NOTIFY_SUSPEND, HOOK_CHIPSET_SUSPEND);
-		s0ix_suspend_transition();
+		sleep_notify_transition(SLEEP_NOTIFY_SUSPEND,
+					HOOK_CHIPSET_SUSPEND);
+		sleep_suspend_transition();
 
 		/*
 		 * Enable idle task deep sleep. Allow the low power idle task
@@ -548,7 +454,7 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 		 */
 		disable_sleep(SLEEP_MASK_AP_RUN);
 
-		s0ix_resume_transition();
+		sleep_resume_transition();
 		return POWER_S0;
 #endif
 
@@ -558,6 +464,9 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 
 		/* Disable wireless */
 		wireless_set_state(WIRELESS_OFF);
+
+		/* Call hooks after we remove power rails */
+		hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE);
 
 		/* Always enter into S5 state. The S5 state is required to
 		 * correctly handle global resets which have a bit of delay
@@ -656,24 +565,30 @@ __override void power_chipset_handle_host_sleep_event(
 	if (state == HOST_SLEEP_EVENT_S0IX_SUSPEND) {
 		/*
 		 * Indicate to power state machine that a new host event for
-		 * s0ix suspend has been received and so chipset suspend
+		 * s0ix/s3 suspend has been received and so chipset suspend
 		 * notification needs to be sent to listeners.
 		 */
-		s0ix_notify = S0IX_NOTIFY_SUSPEND;
+		sleep_set_notify(SLEEP_NOTIFY_SUSPEND);
 
-		s0ix_start_suspend(ctx);
+		sleep_start_suspend(ctx, lpc_s0ix_hang_detected);
 		power_signal_enable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	} else if (state == HOST_SLEEP_EVENT_S0IX_RESUME) {
 		/*
 		 * Wake up chipset task and indicate to power state machine that
 		 * listeners need to be notified of chipset resume.
 		 */
-		s0ix_notify = S0IX_NOTIFY_RESUME;
+		sleep_set_notify(SLEEP_NOTIFY_RESUME);
 		task_wake(TASK_ID_CHIPSET);
 		lpc_s0ix_resume_restore_masks();
 		power_signal_disable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
-		s0ix_complete_resume(ctx);
-
+		sleep_complete_resume(ctx);
+		/*
+		 * If the sleep signal timed out and never transitioned, then
+		 * the wake mask was modified to its suspend state (S0ix), so
+		 * that the event wakes the system. Explicitly restore the wake
+		 * mask to its S0 state now.
+		 */
+		power_update_wake_mask();
 	} else if (state == HOST_SLEEP_EVENT_DEFAULT_RESET) {
 		power_signal_disable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	}

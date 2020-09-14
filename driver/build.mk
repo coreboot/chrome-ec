@@ -25,9 +25,11 @@ driver-$(CONFIG_SENSORHUB_LSM6DSM)+=sensorhub_lsm6dsm.o
 driver-$(CONFIG_SYNC)+=sync.o
 driver-$(CONFIG_ACCEL_LIS2DW_COMMON)+=accel_lis2dw12.o stm_mems_common.o
 driver-$(CONFIG_ACCEL_LIS2DS)+=accel_lis2ds.o stm_mems_common.o
+driver-$(CONFIG_ACCELGYRO_ICM426XX)+=accelgyro_icm426xx.o accelgyro_icm_common.o
 
 # BC1.2 Charger Detection Devices
 driver-$(CONFIG_BC12_DETECT_MAX14637)+=bc12/max14637.o
+driver-$(CONFIG_BC12_DETECT_MT6360)+=bc12/mt6360.o
 driver-$(CONFIG_BC12_DETECT_PI3USB9201)+=bc12/pi3usb9201.o
 driver-$(CONFIG_BC12_DETECT_PI3USB9281)+=bc12/pi3usb9281.o
 
@@ -62,6 +64,7 @@ driver-$(CONFIG_CHARGER_BQ24773)+=charger/bq24773.o
 driver-$(CONFIG_CHARGER_BQ25710)+=charger/bq25710.o
 driver-$(CONFIG_CHARGER_ISL9237)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_ISL9238)+=charger/isl923x.o
+driver-$(CONFIG_CHARGER_ISL9238C)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_ISL9241)+=charger/isl9241.o
 driver-$(CONFIG_CHARGER_MT6370)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_RAA489000)+=charger/isl923x.o
@@ -136,9 +139,12 @@ driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7447)+=tcpm/anx7447.o
 driver-$(CONFIG_USB_PD_TCPM_PS8751)+=tcpm/ps8xxx.o
+driver-$(CONFIG_USB_PD_TCPM_PS8755)+=tcpm/ps8xxx.o
+driver-$(CONFIG_USB_PD_TCPM_PS8705)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8805)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8815)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_TUSB422)+=tcpm/tusb422.o
+driver-$(CONFIG_USB_PD_TCPM_RT1715)+=tcpm/rt1715.o
 driver-$(CONFIG_USB_PD_TCPM_NCT38XX)+=tcpm/nct38xx.o
 driver-$(CONFIG_USB_PD_TCPM_RAA489000)+=tcpm/raa489000.o
 
@@ -173,6 +179,9 @@ driver-y += ppc/nx20p348x.o
 endif
 driver-$(CONFIG_USBC_PPC_SYV682X)+=ppc/syv682x.o
 driver-$(CONFIG_USBC_PPC_NX20P3483)+=ppc/nx20p348x.o
+
+# Switchcap
+driver-$(CONFIG_LN9310)+=ln9310.o
 
 # video converters
 driver-$(CONFIG_MCDP28X0)+=mcdp28x0.o

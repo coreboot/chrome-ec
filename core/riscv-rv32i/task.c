@@ -6,14 +6,10 @@
 /* Task scheduling / events module for Chrome EC operating system */
 
 #include "atomic.h"
-#include "common.h"
 #include "console.h"
 #include "cpu.h"
-#include "hwtimer_chip.h"
-#include "intc.h"
 #include "irq_chip.h"
 #include "link_defs.h"
-#include "registers.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -50,10 +46,10 @@ static const char * const task_names[] = {
 
 #ifdef CONFIG_TASK_PROFILING
 static int task_will_switch;
-static uint64_t exc_sub_time;
+static uint32_t exc_sub_time;
 static uint64_t task_start_time; /* Time task scheduling started */
-static uint64_t exc_start_time;  /* Time of task->exception transition */
-static uint64_t exc_end_time;    /* Time of exception->task transition */
+static uint32_t exc_start_time;  /* Time of task->exception transition */
+static uint32_t exc_end_time;    /* Time of exception->task transition */
 static uint64_t exc_total_time;  /* Total time in exceptions */
 static uint32_t svc_calls;       /* Number of service calls */
 static uint32_t task_switches;   /* Number of times active task changed */
@@ -61,6 +57,10 @@ static uint32_t irq_dist[CONFIG_IRQ_COUNT];  /* Distribution of IRQ calls */
 #endif
 
 extern int __task_start(void);
+
+#if defined(CHIP_FAMILY_IT83XX)
+extern void clock_sleep_mode_wakeup_isr(void);
+#endif
 
 #ifndef CONFIG_LOW_POWER_IDLE
 /* Idle task.  Executed when no tasks are ready to be scheduled. */
@@ -74,9 +74,13 @@ void __idle(void)
 	cprints(CC_TASK, "idle task started");
 
 	while (1) {
+#if defined(CHIP_FAMILY_IT83XX)
 		/* doze mode */
 		IT83XX_ECPM_PLLCTRL = EC_PLL_DOZE;
 		clock_cpu_standby();
+#else
+		asm("wfi");
+#endif
 	}
 }
 #endif /* !CONFIG_LOW_POWER_IDLE */
@@ -110,7 +114,7 @@ static const struct {
 
 /* Contexts for all tasks */
 static task_ tasks[TASK_ID_COUNT] __attribute__ ((section(".bss.tasks")));
-/* Sanity checks about static task invariants */
+/* Validity checks about static task invariants */
 BUILD_ASSERT(TASK_ID_COUNT <= (sizeof(unsigned) * 8));
 BUILD_ASSERT(TASK_ID_COUNT < (1 << (sizeof(task_id_t) * 8)));
 
@@ -161,9 +165,9 @@ static uint32_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
 int start_called;  /* Has task swapping started */
 
 /* in interrupt context */
-static int in_interrupt;
+static volatile int in_interrupt;
 /* Interrupt number of EC modules */
-static volatile int ec_int;
+volatile int ec_int;
 /* Interrupt group of EC INTC modules */
 volatile int ec_int_group;
 /* interrupt number of sw interrupt */
@@ -200,6 +204,12 @@ inline int in_interrupt_context(void)
 	return in_interrupt;
 }
 
+int in_soft_interrupt_context(void)
+{
+	/* group 16 is reserved for soft-irq */
+	return in_interrupt_context() && ec_int_group == 16;
+}
+
 task_id_t __ram_code task_get_current(void)
 {
 #ifdef CONFIG_DEBUG_BRINGUP
@@ -219,14 +229,6 @@ uint32_t * __ram_code task_get_event_bitmap(task_id_t tskid)
 int task_start_called(void)
 {
 	return start_called;
-}
-
-int __ram_code get_sw_int(void)
-{
-	/* If this is a SW interrupt */
-	if (get_mcause() == 11)
-		return sw_int_num;
-	return 0;
 }
 
 /**
@@ -305,16 +307,9 @@ static inline void __schedule(int desched, int resched, int swirq)
 void __ram_code update_exc_start_time(void)
 {
 #ifdef CONFIG_TASK_PROFILING
-	exc_start_time = get_time().val;
+	exc_start_time = get_time().le.lo;
 #endif
 }
-
-#ifdef CHIP_FAMILY_IT83XX
-int __ram_code intc_get_ec_int(void)
-{
-	return ec_int;
-}
-#endif
 
 void __ram_code start_irq_handler(void)
 {
@@ -328,11 +323,16 @@ void __ram_code start_irq_handler(void)
 
 	/* If this is a SW interrupt */
 	if (get_mcause() == 11) {
-		ec_int = get_sw_int();
+		ec_int = sw_int_num;
 		ec_int_group = 16;
 	} else {
-		/* Determine interrupt number */
-		ec_int = IT83XX_INTC_AIVCT - 0x10;
+		/*
+		 * Determine interrupt number.
+		 * -1 if it cannot find the corresponding interrupt source.
+		 */
+		ec_int = chip_get_ec_int();
+		if (ec_int == -1)
+			goto error;
 		ec_int_group = chip_get_intc_group(ec_int);
 	}
 
@@ -350,6 +350,10 @@ void __ram_code start_irq_handler(void)
 		irq_dist[ec_int]++;
 #endif
 
+error:
+	/* cannot use return statement because a0 has been used */
+	asm volatile ("add t0, zero, %0" :: "r"(ec_int));
+
 	/* restore a0, a1, and a2 */
 	asm volatile ("lw a0, 0(sp)");
 	asm volatile ("lw a1, 1*4(sp)");
@@ -360,9 +364,9 @@ void __ram_code start_irq_handler(void)
 void __ram_code end_irq_handler(void)
 {
 #ifdef CONFIG_TASK_PROFILING
-	uint64_t t, p;
+	uint32_t t, p;
 
-	t = get_time().val;
+	t = get_time().le.lo;
 	p = t - exc_start_time;
 
 	exc_total_time += p;
@@ -624,7 +628,7 @@ void task_print_list(void)
 int command_task_info(int argc, char **argv)
 {
 #ifdef CONFIG_TASK_PROFILING
-	int total = 0;
+	unsigned int total = 0;
 	int i;
 #endif
 
@@ -640,13 +644,13 @@ int command_task_info(int argc, char **argv)
 		}
 	}
 
-	ccprintf("Service calls:          %11d\n", svc_calls);
-	ccprintf("Total exceptions:       %11d\n", total + svc_calls);
-	ccprintf("Task switches:          %11d\n", task_switches);
-	ccprintf("Task switching started: %11.6lld s\n", task_start_time);
-	ccprintf("Time in tasks:          %11.6lld s\n",
+	ccprintf("Service calls:          %11u\n", svc_calls);
+	ccprintf("Total exceptions:       %11u\n", total + svc_calls);
+	ccprintf("Task switches:          %11u\n", task_switches);
+	ccprintf("Task switching started: %11.6llu s\n", task_start_time);
+	ccprintf("Time in tasks:          %11.6llu s\n",
 		 get_time().val - task_start_time);
-	ccprintf("Time in exceptions:     %11.6lld s\n", exc_total_time);
+	ccprintf("Time in exceptions:     %11.6llu s\n", exc_total_time);
 #endif
 
 	return EC_SUCCESS;
@@ -718,7 +722,8 @@ void task_pre_init(void)
 int task_start(void)
 {
 #ifdef CONFIG_TASK_PROFILING
-	task_start_time = exc_end_time = get_time().val;
+	task_start_time = get_time().val;
+	exc_end_time = get_time().le.lo;
 #endif
 
 	return __task_start();

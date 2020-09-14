@@ -403,8 +403,7 @@ static int fusb302_tcpm_init(int port)
 	/* Turn on retries and set number of retries */
 	tcpc_read(port, TCPC_REG_CONTROL3, &reg);
 	reg |= TCPC_REG_CONTROL3_AUTO_RETRY;
-	reg |= (PD_RETRY_COUNT & 0x3) <<
-		TCPC_REG_CONTROL3_N_RETRIES_POS;
+	reg |= (CONFIG_PD_RETRY_COUNT & 0x3) << TCPC_REG_CONTROL3_N_RETRIES_POS;
 	tcpc_write(port, TCPC_REG_CONTROL3, reg);
 
 	/* Create interrupt masks */
@@ -904,14 +903,17 @@ static int fusb302_tcpm_transmit(int port, enum tcpm_transmit_type type,
 }
 
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-static int fusb302_tcpm_get_vbus_level(int port)
+static bool fusb302_tcpm_check_vbus_level(int port, enum vbus_level level)
 {
 	int reg;
 
 	/* Read status register */
 	tcpc_read(port, TCPC_REG_STATUS0, &reg);
 
-	return (reg & TCPC_REG_STATUS0_VBUSOK) ? 1 : 0;
+	if (level == VBUS_PRESENT)
+		return (reg & TCPC_REG_STATUS0_VBUSOK) ? 1 : 0;
+	else
+		return (reg & TCPC_REG_STATUS0_VBUSOK) ? 0 : 1;
 }
 #endif
 
@@ -950,9 +952,10 @@ void fusb302_tcpc_alert(int port)
 		/* VBUS crossed threshold */
 #ifdef CONFIG_USB_CHARGER
 		usb_charger_vbus_change(port,
-					fusb302_tcpm_get_vbus_level(port));
+					fusb302_tcpm_check_vbus_level(port,
+							VBUS_PRESENT));
 #else
-		if (!fusb302_tcpm_get_vbus_level(port))
+		if (!fusb302_tcpm_check_vbus_level(port, VBUS_PRESENT))
 			pd_vbus_low(port);
 #endif
 		task_wake(PD_PORT_TO_TASK_ID(port));
@@ -984,10 +987,8 @@ void fusb302_tcpc_alert(int port)
 
 		/* bring FUSB302 out of reset */
 		fusb302_pd_reset(port);
-
-		pd_execute_hard_reset(port);
-
-		task_wake(PD_PORT_TO_TASK_ID(port));
+		task_set_event(PD_PORT_TO_TASK_ID(port),
+			PD_EVENT_RX_HARD_RESET, 0);
 	}
 
 	if (interruptb & TCPC_REG_INTERRUPTB_GCRCSENT) {
@@ -1147,7 +1148,7 @@ const struct tcpm_drv fusb302_tcpm_drv = {
 	.release		= &fusb302_tcpm_release,
 	.get_cc			= &fusb302_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &fusb302_tcpm_get_vbus_level,
+	.check_vbus_level	= &fusb302_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &fusb302_tcpm_select_rp_value,
 	.set_cc			= &fusb302_tcpm_set_cc,

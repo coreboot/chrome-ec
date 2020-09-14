@@ -56,7 +56,18 @@
 #ifndef CONFIG_KEYBOARD_BOARD_CONFIG
 /* Use default keyboard scan config, because board didn't supply one */
 struct keyboard_scan_config keyscan_config = {
+#ifdef CONFIG_KEYBOARD_COL2_INVERTED
+	/*
+	 * CONFIG_KEYBOARD_COL2_INVERTED is defined for passing the column 2
+	 * to H1 which inverts the signal. The signal passing through H1
+	 * adds more delay. Need a larger delay value. Otherwise, pressing
+	 * Refresh key will also trigger T key, which is in the next scanning
+	 * column line. See http://b/156007029.
+	 */
+	.output_settle_us = 80,
+#else
 	.output_settle_us = 50,
+#endif /* CONFIG_KEYBOARD_COL2_INVERTED */
 	.debounce_down_us = 9 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 3 * MSEC,
@@ -665,7 +676,7 @@ static uint32_t check_boot_key(const uint8_t *state)
 	 * re-triggering events in RW firmware that were already processed by
 	 * RO firmware.
 	 */
-	if (system_jumped_to_this_image())
+	if (system_jumped_late())
 		return BOOT_KEY_NONE;
 
 	/* If reset was not caused by reset pin, refresh must be held down */

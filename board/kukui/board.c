@@ -247,7 +247,9 @@ int extpower_is_present(void)
 	if (board_vbus_source_enabled(CHARGE_PORT_USB_C))
 		usb_c_extpower_present = 0;
 	else
-		usb_c_extpower_present = tcpm_get_vbus_level(CHARGE_PORT_USB_C);
+		usb_c_extpower_present = tcpm_check_vbus_level(
+							CHARGE_PORT_USB_C,
+							VBUS_PRESENT);
 
 	return usb_c_extpower_present || kukui_pogo_extpower_present();
 }
@@ -261,7 +263,7 @@ int pd_snk_is_vbus_provided(int port)
 }
 
 #if defined(BOARD_KUKUI) || defined(BOARD_KODAMA)
-/* dummy interrupt function for kukui */
+/* fake interrupt function for kukui */
 void pogo_adc_interrupt(enum gpio_signal signal)
 {
 }
@@ -559,10 +561,6 @@ const struct motion_sensor_t *motion_als_sensors[] = {
 	&motion_sensors[CLEAR_ALS],
 };
 #endif /* VARIANT_KUKUI_NO_SENSORS */
-
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-}
 
 /*
  * Return if VBUS is sagging too low

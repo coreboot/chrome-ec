@@ -55,7 +55,7 @@
 
 /* Motion Sensors */
 #ifndef VARIANT_KUKUI_NO_SENSORS
-#define CONFIG_ACCEL_LIS2DE   	/* Lid accel */
+#define CONFIG_ACCEL_LIS2DWL   	/* Lid accel */
 #define CONFIG_ACCELGYRO_BMI160 /* Base accel */
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
@@ -63,6 +63,7 @@
 #define CONFIG_CMD_ACCEL_INFO
 
 #define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
@@ -97,7 +98,6 @@ enum adc_channel {
 	/* Real ADC channels begin here */
 	ADC_BOARD_ID = 0,
 	ADC_EC_SKU_ID,
-	ADC_BATT_ID,
 	ADC_CH_COUNT
 };
 

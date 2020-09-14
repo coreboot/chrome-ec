@@ -18,8 +18,9 @@
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
 #define CONFIG_USB_PD_DEBUG_LEVEL 3
 #define CONFIG_CMD_AP_RESET_LOG
+#define CONFIG_CMD_GPIO_EXTENDED
 #define CONFIG_CMD_POWERINDEBUG
-#define CONFIG_HOSTCMD_AP_RESET
+#define CONFIG_I2C_DEBUG
 
 /* Internal SPI flash on NPCX7 */
 #define CONFIG_FLASH_SIZE (1024 * 1024)  /* 1MB internal spi flash */
@@ -35,6 +36,7 @@
 /* USB */
 #define CONFIG_USB_PD_TCPM_PS8805
 #define CONFIG_USBC_PPC_SN5S330
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 
 /* USB-A */
 #define USB_PORT_COUNT 1
@@ -72,6 +74,10 @@ enum pwm_channel {
 	PWM_CH_COUNT
 };
 
+/* Swithcap functions */
+void board_set_switchcap_power(int enable);
+int board_is_switchcap_enabled(void);
+int board_is_switchcap_power_good(void);
 /* Custom function to indicate if sourcing VBUS */
 int board_is_sourcing_vbus(int port);
 /* Enable VBUS sink for a given port */

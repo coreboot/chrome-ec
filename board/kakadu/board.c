@@ -101,7 +101,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 struct mt6370_thermal_bound thermal_bound = {
-	.target = 80,
+	.target = 90,
 	.err = 4,
 };
 
@@ -118,7 +118,7 @@ static void board_hpd_update(const struct usb_mux *me,
 __override const struct rt946x_init_setting *board_rt946x_init_setting(void)
 {
 	static const struct rt946x_init_setting battery_init_setting = {
-		.eoc_current = 140,
+		.eoc_current = 500,
 		.mivr = 4000,
 		.ircmp_vclamp = 32,
 		.ircmp_res = 25,
@@ -226,7 +226,9 @@ int extpower_is_present(void)
 	if (board_vbus_source_enabled(CHARGE_PORT_USB_C))
 		usb_c_extpower_present = 0;
 	else
-		usb_c_extpower_present = tcpm_get_vbus_level(CHARGE_PORT_USB_C);
+		usb_c_extpower_present = tcpm_check_vbus_level(
+							CHARGE_PORT_USB_C,
+							VBUS_PRESENT);
 
 	return usb_c_extpower_present;
 }
@@ -239,8 +241,20 @@ int pd_snk_is_vbus_provided(int port)
 	return rt946x_is_vbus_ready();
 }
 
+
+#define CHARGER_I2C_ADDR_FLAGS RT946X_ADDR_FLAGS
+
 static void board_init(void)
 {
+
+#ifdef SECTION_IS_RW
+	int val;
+	i2c_read8(I2C_PORT_CHARGER, CHARGER_I2C_ADDR_FLAGS,
+		RT946X_REG_CHGCTRL1, &val);
+	val &= RT946X_MASK_OPA_MODE;
+	i2c_write8(I2C_PORT_CHARGER, CHARGER_I2C_ADDR_FLAGS,
+		RT946X_REG_CHGCTRL1, (val | RT946X_MASK_STAT_EN));
+#endif
 	/* If the reset cause is external, pulse PMIC force reset. */
 	if (system_get_reset_flags() == EC_RESET_FLAG_RESET_PIN) {
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 0);
@@ -384,10 +398,6 @@ struct motion_sensor_t motion_sensors[] = {
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 #endif /* VARIANT_KUKUI_NO_SENSORS */
 
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-}
-
 /*
  * Return if VBUS is sagging too low
  */
@@ -432,7 +442,3 @@ void board_fill_source_power_info(int port,
 	r->max_power = r->meas.voltage_now * r->meas.current_max;
 }
 
-__override int board_has_virtual_mux(void)
-{
-	return board_get_version() < 5;
-}

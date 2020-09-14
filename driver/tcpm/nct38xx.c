@@ -59,7 +59,7 @@ static int nct38xx_init(int port)
 		return rv;
 
 	/* Set FRS direction for SNK detect, if FRS is enabled */
-	if (IS_ENABLED(CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP)) {
+	if (IS_ENABLED(CONFIG_USB_PD_FRS_TCPC)) {
 		reg = TCPC_REG_DEV_CAP_2_SNK_FR_SWAP;
 		rv = tcpc_write(port, TCPC_REG_DEV_CAP_2, reg);
 		if (rv)
@@ -77,18 +77,28 @@ static int nct38xx_init(int port)
 	if (rv)
 		return rv;
 
+	/**
+	 * Set driver specific ALERT mask bits
+	 *
+	 * Wake up on faults
+	 */
+	reg = TCPC_REG_ALERT_FAULT;
+
 	/*
 	 * Enable the Vendor Define alert event only when the IO expander
 	 * feature is defined
 	 */
 	if (IS_ENABLED(CONFIG_IO_EXPANDER_NCT38XX))
-		rv = tcpc_update16(port,
-				    TCPC_REG_ALERT_MASK,
-				    TCPC_REG_ALERT_VENDOR_DEF,
-				    MASK_SET);
+		reg |= TCPC_REG_ALERT_VENDOR_DEF;
+
+	rv = tcpc_update16(port,
+			   TCPC_REG_ALERT_MASK,
+			   reg,
+			   MASK_SET);
 
 	return rv;
 }
+
 static int nct38xx_tcpm_init(int port)
 {
 	int rv;
@@ -98,6 +108,75 @@ static int nct38xx_tcpm_init(int port)
 		return rv;
 
 	return nct38xx_init(port);
+}
+
+static int nct38xx_tcpm_set_cc(int port, int pull)
+{
+	/*
+	 * Setting the CC lines to open/open requires that the NCT CTRL_OUT
+	 * register has sink disabled. Otherwise, when no battery is connected:
+	 *
+	 * 1. You set CC lines to Open/Open. This is physically happening on
+	 *    the CC line.
+	 * 2. Since CC is now Open/Open, the internal TCPC HW state machine
+	 *    is no longer in Attached.Snk and therefore our TCPC HW
+	 *    automatically opens the sink switch (de-assert the VBSNK_EN pin)
+	 * 3. Since sink switch is open, the TCPC VCC voltage starts to drop.
+	 * 4. When TCPC VCC gets below ~2.7V the TCPC will reset and therefore
+	 *    it will present Rd/Rd on the CC lines. Also the VBSNK_EN pin
+	 *    after reset is Hi-Z, so the sink switch will get closed again.
+	 *
+	 * Disabling SNKEN makes the VBSNK_EN pin Hi-Z, so
+	 * USB_Cx_TCPC_VBSNK_EN_L will be asserted by external
+	 * pull-down, so only do so if already sinking, otherwise
+	 * both source and sink switches can be closed, which should
+	 * never happen (b/166850036).
+	 *
+	 * SNKEN will be re-enabled in nct38xx_init above (from tcpm_init), or
+	 * when CC lines are set again, or when sinking is disabled.
+	 */
+	enum mask_update_action action = MASK_SET;
+	int rv;
+
+	if (pull == TYPEC_CC_OPEN) {
+		bool is_sinking;
+
+		rv = tcpm_get_snk_ctrl(port, &is_sinking);
+		if (rv)
+			return rv;
+
+		if (is_sinking)
+			action = MASK_CLR;
+	}
+
+	rv = tcpc_update8(port,
+			  NCT38XX_REG_CTRL_OUT_EN,
+			  NCT38XX_REG_CTRL_OUT_EN_SNKEN,
+			  action);
+	if (rv)
+		return rv;
+
+	return tcpci_tcpm_set_cc(port, pull);
+}
+
+static int nct38xx_tcpm_set_snk_ctrl(int port, int enable)
+{
+	int rv;
+
+	/*
+	 * To disable sinking, SNKEN must be enabled so that
+	 * USB_Cx_TCPC_VBSNK_EN_L will be driven high.
+	 */
+	if (!enable) {
+		rv = tcpc_update8(port,
+				  NCT38XX_REG_CTRL_OUT_EN,
+				  NCT38XX_REG_CTRL_OUT_EN_SNKEN,
+				  MASK_SET);
+		if (rv)
+			return rv;
+	}
+
+	return tcpci_tcpm_set_snk_ctrl(port, enable);
 }
 
 static void nct38xx_tcpc_alert(int port)
@@ -125,34 +204,15 @@ static void nct38xx_tcpc_alert(int port)
 
 }
 
-static __maybe_unused int nct3807_tcpc_drp_toggle(int port)
-{
-	int rv;
-
-	/* DRP will already be set with the correct pull on both CC lines */
-
-	/* Set up to catch LOOK4CONNECTION alerts */
-	rv = tcpc_update8(port,
-			  TCPC_REG_TCPC_CTRL,
-			  TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT,
-			  MASK_SET);
-	if (rv)
-		return rv;
-
-	/* Set Look4Connection command */
-	rv = tcpc_write(port, TCPC_REG_COMMAND,
-			TCPC_REG_COMMAND_LOOK4CONNECTION);
-
-	return rv;
-}
-
 static int nct3807_handle_fault(int port, int fault)
 {
 	int rv = EC_SUCCESS;
 
+	/* Registers are set to default, initialize for our use */
 	if (fault & TCPC_REG_FAULT_STATUS_ALL_REGS_RESET) {
 		rv = nct38xx_init(port);
 	} else {
+		/* We don't use TCPC OVP, so just disable it */
 		if (fault & TCPC_REG_FAULT_STATUS_VBUS_OVER_VOLTAGE) {
 			/* Disable OVP */
 			rv = tcpc_update8(port,
@@ -162,6 +222,9 @@ static int nct3807_handle_fault(int port, int fault)
 			if (rv)
 				return rv;
 		}
+		/* Failing AutoDischargeDisconnect should disable it */
+		if (fault & TCPC_REG_FAULT_STATUS_AUTO_DISCHARGE_FAIL)
+			tcpm_enable_auto_discharge_disconnect(port, 0);
 	}
 	return rv;
 }
@@ -171,11 +234,14 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 	.release		= &tcpci_tcpm_release,
 	.get_cc			= &tcpci_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
+	.check_vbus_level	= &tcpci_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
-	.set_cc			= &tcpci_tcpm_set_cc,
+	.set_cc			= &nct38xx_tcpm_set_cc,
 	.set_polarity		= &tcpci_tcpm_set_polarity,
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+#endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,
@@ -187,19 +253,22 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #endif
 	.tcpc_enable_auto_discharge_disconnect =
 				  &tcpci_tcpc_enable_auto_discharge_disconnect,
+	.debug_accessory	= &tcpci_tcpc_debug_accessory,
+
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-	.drp_toggle		= &nct3807_tcpc_drp_toggle,
-	.set_connection		= &tcpci_tcpc_set_connection,
+	.drp_toggle		= &tcpci_tcpc_drp_toggle,
 #endif
 #ifdef CONFIG_USBC_PPC
-	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
+	.get_snk_ctrl		= &tcpci_tcpm_get_snk_ctrl,
+	.set_snk_ctrl		= &nct38xx_tcpm_set_snk_ctrl,
+	.get_src_ctrl		= &tcpci_tcpm_get_src_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
 #endif
-#ifdef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
+#ifdef CONFIG_USB_PD_FRS_TCPC
 	.set_frs_enable         = &tcpci_tcpc_fast_role_swap_enable,
 #endif
 	.handle_fault		= &nct3807_handle_fault,

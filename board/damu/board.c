@@ -14,7 +14,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accel_lis2dh.h"
+#include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/battery/max17055.h"
 #include "driver/bc12/pi3usb9201.h"
@@ -62,7 +62,6 @@ static void tcpc_alert_event(enum gpio_signal signal)
 const struct adc_t adc_channels[] = {
 	[ADC_BOARD_ID] =  {"BOARD_ID",  3300, 4096, 0, STM32_AIN(10)},
 	[ADC_EC_SKU_ID] = {"EC_SKU_ID", 3300, 4096, 0, STM32_AIN(8)},
-	[ADC_BATT_ID] =   {"BATT_ID",   3300, 4096, 0, STM32_AIN(7)},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -168,7 +167,6 @@ struct charger_config_t chg_chips[] = {
 		.drv = &isl923x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* Board version depends on ADCs, so init i2c port after ADC */
 static void charger_config_complete(void)
@@ -343,14 +341,14 @@ static const mat33_fp_t base_standard_ref = {
 };
 
 static const mat33_fp_t lid_standard_ref = {
-	{FLOAT_TO_FP(-1), 0, 0},
-	{0, FLOAT_TO_FP(-1), 0},
+	{FLOAT_TO_FP(1), 0, 0},
+	{0, FLOAT_TO_FP(1), 0},
 	{0, 0, FLOAT_TO_FP(1) }
 };
 
 /* sensor private data */
 /* Lid accel private data */
-static struct stprivate_data g_lis2dh_data;
+static struct stprivate_data g_lis2dwl_data;
 /* Base accel private data */
 static struct bmi_drv_data_t g_bmi160_data;
 
@@ -358,18 +356,18 @@ struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LIS2DE,
+		.chip = MOTIONSENSE_CHIP_LIS2DWL,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_LID,
-		.drv = &lis2dh_drv,
+		.drv = &lis2dw12_drv,
 		.mutex = &g_lid_mutex,
-		.drv_data = &g_lis2dh_data,
+		.drv_data = &g_lis2dwl_data,
 		.port = I2C_PORT_SENSORS,
-		.i2c_spi_addr_flags = LIS2DH_ADDR1_FLAGS,
+		.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 2, /* g */
-		.min_frequency = LIS2DH_ODR_MIN_VAL,
-		.max_frequency = LIS2DH_ODR_MAX_VAL,
+		.min_frequency = LIS2DW12_ODR_MIN_VAL,
+		.max_frequency = LIS2DW12_ODR_MAX_VAL,
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
@@ -454,3 +452,16 @@ int board_get_charger_i2c(void)
 	/* TODO(b:138415463): confirm the bus allocation for future builds */
 	return board_get_version() == 1 ? 2 : 1;
 }
+
+/* Enable or disable input devices, based on chipset state and tablet mode */
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	/* If the lid is in 360 position, ignore the lid angle,
+	 * which might be faulty. Disable keyboard.
+	 */
+	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		enable = 0;
+	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+}
+#endif

@@ -25,6 +25,10 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	}
 };
 
+void board_reset_pd_mcu(void)
+{
+}
+
 static int deferred_resume_called;
 void pd_deferred_resume(int port)
 {
@@ -92,7 +96,7 @@ void before_test(void)
 		pd_set_suspend(PORT0, 0);
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	/* Let tasks settle down */
 	task_wait_event(MINUTE);

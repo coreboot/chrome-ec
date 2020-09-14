@@ -109,6 +109,7 @@
 
 #undef CONFIG_ACCELGYRO_BMI160
 #undef CONFIG_ACCELGYRO_BMI260
+#undef CONFIG_ACCELGYRO_ICM426XX
 #undef CONFIG_ACCELGYRO_LSM6DS0
 /* Use CONFIG_ACCELGYRO_LSM6DSM for LSM6DSL, LSM6DSM, and/or LSM6DS3 */
 #undef CONFIG_ACCELGYRO_LSM6DSM
@@ -172,6 +173,29 @@
 
 /* Support the orientation gesture */
 #undef CONFIG_GESTURE_ORIENTATION
+
+/* Support the body_detection */
+#undef CONFIG_BODY_DETECTION
+
+/* Which sensor body_detection use */
+#undef CONFIG_BODY_DETECTION_SENSOR
+
+/* Support custom setting of body_detection */
+#undef CONFIG_BODY_DETECTION_CUSTOM
+
+/* The max number of sampling data for 1 second */
+#undef CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE
+
+/* The threshold of acceleration variance */
+#undef CONFIG_BODY_DETECTION_VAR_THRESHOLD
+#undef CONFIG_BODY_DETECTION_CONFIDENCE_DELTA
+
+/* The confidence limit of on_body/off_body */
+#undef CONFIG_BODY_DETECTION_ON_BODY_CON
+#undef CONFIG_BODY_DETECTION_OFF_BODY_CON
+
+/* The threshold duration to change to off_body */
+#undef CONFIG_BODY_DETECTION_STATIONARY_DURATION
 
 /*
  * Use the old standard reference frame for accelerometers. The old
@@ -313,6 +337,7 @@
  */
 #undef CONFIG_ACCELGYRO_BMI160_INT_EVENT
 #undef CONFIG_ACCELGYRO_BMI260_INT_EVENT
+#undef CONFIG_ACCELGYRO_ICM426XX_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
 #undef CONFIG_ACCEL_LIS2DS_INT_EVENT
@@ -596,10 +621,10 @@
 #define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	4
 
 /*
- * Powerd's full_factor. It has to be 100(%) to get display battery percentage.
- * Otherwise, display percentages will be always zero.
+ * Powerd's full_factor. The value comes from:
+ *   src/platform2/power_manager/default_prefs/power_supply_full_factor
  */
-#define CONFIG_BATT_HOST_FULL_FACTOR		94
+#define CONFIG_BATT_HOST_FULL_FACTOR		97
 
 /*
  * Smart battery pass-through host commands.
@@ -641,6 +666,9 @@
 
 /*****************************************************************************/
 
+/* EC can choose power signal gpio by schematic version */
+#undef CONFIG_POWER_SIGNAL_RUNTIME_CONFIG
+
 /* EC has GPIOs to allow board to reset RTC */
 #undef CONFIG_BOARD_HAS_RTC_RESET
 
@@ -681,6 +709,18 @@
  */
 #undef CONFIG_BOARD_FORCE_RESET_PIN
 
+/*
+ * For some boards on power-on, the EC is reset by the H1 after power-on,
+ * so the EC sees 2 resets. This config enables the EC to save a flag
+ * on the first power-up restart, and then wait for the second reset before
+ * any other setup is done (such as GPIOs, timers, UART etc.)
+ * On the second reset, the saved flag is used to detect the previous
+ * power-on, and treat the second reset as a power-on instead of a reset.
+ *
+ * NOTE: Implemented only for npcx
+ */
+#undef CONFIG_BOARD_RESET_AFTER_POWER_ON
+
 /* Permanent LM4 boot configuration */
 #undef CONFIG_BOOTCFG_VALUE
 
@@ -715,8 +755,11 @@
  * volume buttons, a dedicated recovery button is not needed.  This is intended
  * because if a board has volume buttons, they can do everything a dedicated
  * recovery button can do.
+ * For various reasons, on some platforms there may be multiple recovery inputs.
+ * See b/149967026.
  */
 #undef CONFIG_DEDICATED_RECOVERY_BUTTON
+#undef CONFIG_DEDICATED_RECOVERY_BUTTON_2
 
 /*
  * The board has volume up and volume down buttons.  Note, these are *buttons*
@@ -792,7 +835,8 @@
 #undef CONFIG_CHARGER_BQ24773
 #undef CONFIG_CHARGER_BQ25710
 #undef CONFIG_CHARGER_ISL9237
-#undef CONFIG_CHARGER_ISL9238
+#undef CONFIG_CHARGER_ISL9238 /* For ISL9238 A/B */
+#undef CONFIG_CHARGER_ISL9238C
 #undef CONFIG_CHARGER_ISL9241
 #undef CONFIG_CHARGER_MT6370
 #undef CONFIG_CHARGER_RAA489000
@@ -845,11 +889,12 @@
 #undef CONFIG_CHARGER_MT6370_BACKLIGHT
 
 /*
- * MT6370 BC1.2 USB-PHY control.
+ * MT6360/MT6370 BC1.2 USB-PHY control.
  * If defined, USB-PHY connection is controlled by GPIO_BC12_DET_EN.
  * Assert GPIO_BC12_DET_EN to detect BC1.2 device, and deassert
  * GPIO_BC12_DET_EN to mux USB-PHY back.
  */
+#undef CONFIG_MT6360_BC12_GPIO
 #undef CONFIG_CHARGER_MT6370_BC12_GPIO
 
 /*
@@ -1021,6 +1066,14 @@
  */
 #undef CONFIG_OCPC
 
+/*
+ * Boards using OCPC must define this value in order to seed the starting board
+ * battery and system resistance between the secondary charger IC and the
+ * battery.  This should be at a minimum the Rds(on) resistance of the BFET plus
+ * the series sense resistor.
+ */
+#undef CONFIG_OCPC_DEF_RBATT_MOHMS
+
 /* Enable trickle charging */
 #undef CONFIG_TRICKLE_CHARGING
 
@@ -1053,6 +1106,18 @@
  */
 #undef CONFIG_CHIP_UNCACHED_REGION
 
+/*
+ * When defined, adds a new linker section to store objects that remain resident
+ * in ROM/flash. This is useful on ECs that execute all code from RAM and
+ * in which the RAM size is smaller than the flash size.
+ *
+ * Code can force objects into the .init_rom resident section using the
+ * __init_rom macro. Objects should accessed using the include/init_rom.h
+ * module.
+ */
+#undef CONFIG_CHIP_INIT_ROM_REGION
+
+
 /*****************************************************************************/
 /* Chipset config */
 
@@ -1064,12 +1129,13 @@
 #undef CONFIG_CHIPSET_COMETLAKE_DISCRETE	/* Intel Cometlake (x86),
 						 * discrete EC control
 						 */
-#undef CONFIG_CHIPSET_ECDRIVEN		/* Dummy power module */
+#undef CONFIG_CHIPSET_ECDRIVEN		/* Mock power module */
 #undef CONFIG_CHIPSET_GEMINILAKE	/* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE		/* Intel Icelake (x86) */
 #undef CONFIG_CHIPSET_JASPERLAKE	/* Intel Jasperlake (x86) */
 #undef CONFIG_CHIPSET_MT817X		/* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183		/* MediaTek MT8183 */
+#undef CONFIG_CHIPSET_MT8192		/* MediaTek MT8192 */
 #undef CONFIG_CHIPSET_RK3288		/* Rockchip rk3288 */
 #undef CONFIG_CHIPSET_RK3399		/* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE		/* Intel Skylake (x86) */
@@ -1089,6 +1155,14 @@
 
 /* Enable chipset reset hook, requires a deferrable function */
 #undef CONFIG_CHIPSET_RESET_HOOK
+
+/*
+ * Enable chipset resume init and suspend complete hooks. These hooks are
+ * usually used to initialize/disable the SPI driver, which goes to sleep
+ * on suspend. Require to initialize it first such that it can receive a
+ * host resume event, that notifies the normal resume hook.
+ */
+#undef CONFIG_CHIPSET_RESUME_INIT_HOOK
 
 /*
  * Enable turning on PP3300_A rail before PP5000_A rail on the Ice Lake
@@ -1214,6 +1288,7 @@
 #undef  CONFIG_CMD_FLASH_LOG
 #undef  CONFIG_CMD_FLASH_TRISTATE
 #undef  CONFIG_CMD_FORCETIME
+#undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
 #undef  CONFIG_CMD_GPIO_EXTENDED
 #undef  CONFIG_CMD_GSV
@@ -1243,7 +1318,6 @@
 #define CONFIG_CMD_MEM
 #define CONFIG_CMD_MMAPINFO
 #define CONFIG_CMD_PD
-#undef  CONFIG_CMD_PD_CONTROL
 #undef  CONFIG_CMD_PD_DEV_DUMP_INFO
 #undef  CONFIG_CMD_PD_FLASH
 #define CONFIG_CMD_PECI
@@ -1257,6 +1331,7 @@
 #undef  CONFIG_CMD_PS2
 #undef  CONFIG_CMD_RAND
 #define CONFIG_CMD_REGULATOR
+#undef  CONFIG_CMD_RESET_FLAGS
 #undef  CONFIG_CMD_RTC
 #undef  CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
@@ -1275,7 +1350,7 @@
 #define CONFIG_CMD_SYSLOCK
 #undef  CONFIG_CMD_TASK_RESET
 #undef  CONFIG_CMD_TASKREADY
-#undef  CONFIG_CMD_TCPCI_DUMP
+#undef  CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_TEMP_SENSOR
 #define CONFIG_CMD_TIMERINFO
 #define CONFIG_CMD_TYPEC
@@ -1769,6 +1844,24 @@
 #undef CONFIG_RW_SIZE
 
 /*
+ * Offset relative to CONFIG_EC_PROTECTED_STORAGE_OFF
+ * These define a region of flash used to store ROM resident data objects
+ * for RO images.  This is only possible when the program memory is smaller
+ * than CONFIG_EC_PROTECTED_STORAGE_SIZE.
+ */
+#undef CONFIG_RO_ROM_RESIDENT_MEM_OFF
+#undef CONFIG_RO_ROM_RESIDENT_SIZE
+
+/*
+ * Offset relative to CONFIG_EC_WRITABLE_STORAGE_OFF
+ * These define a region of flash used to store ROM resident data objects
+ * for RW images.  This is only possible when the program memory is smaller
+ * than CONFIG_EC_WRITABLE_STORAGE_SIZE.
+ */
+#undef CONFIG_RW_ROM_RESIDENT_MEM_OFF
+#undef CONFIG_RW_ROM_RESIDENT_SIZE
+
+/*
  * NPCX-specific bootheader geometry.
  * TODO(crosbug.com/p/23796): Factor these CONFIGs out.
  */
@@ -1893,19 +1986,6 @@
 #undef CONFIG_GESTURE_SIGMO_PROOF_MS
 #undef CONFIG_GESTURE_SIGMO_SKIP_MS
 #undef CONFIG_GESTURE_SIGMO_THRES_MG
-
-/*
- * Delay between power on and configuring GPIOs.
- * On power-on of some boards, H1 releases the EC from reset but then
- * quickly asserts and releases the reset a second time. This means the
- * EC sees 2 resets: (1) power-on reset, (2) reset-pin reset. If we add
- * a delay between reset (1) and configuring GPIO output levels, then
- * reset (2) will happen before the end of the delay so we avoid extra
- * output toggles.
- *
- * NOTE: Implemented only for npcx
- */
-#undef CONFIG_GPIO_INIT_POWER_ON_DELAY_MS
 
 /* Support getting gpio flags. */
 #undef CONFIG_GPIO_GET_EXTENDED
@@ -2069,8 +2149,18 @@
 /* Command to issue AP reset */
 #undef CONFIG_HOSTCMD_AP_RESET
 
+/*
+ * Support voltage regulator host command
+ * If defined, the board should also implement board functions defined in
+ * include/regulator.h
+ */
+#undef CONFIG_HOSTCMD_REGULATOR
+
 /* Flash commands over PD */
 #define CONFIG_HOSTCMD_FLASHPD
+
+/* Host command to control USB-PD chip */
+#undef CONFIG_HOSTCMD_PD_CONTROL
 
 /* Set entry in PD MCU's device rw_hash table */
 #define CONFIG_HOSTCMD_RWHASHPD
@@ -2123,6 +2213,9 @@
  * to wake up ec and the whole system.
  */
 #undef CONFIG_HIBERNATE_PSL
+
+/* Wake up pins have non-const configuration. */
+#undef CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 
 /*
  * Chip supports a 64-bit hardware timer and implements
@@ -2229,6 +2322,14 @@
 #undef CONFIG_I2C_BITBANG
 
 /*
+ * If defined, reduce I2C traffic from update functions (i2c_update8/16
+ * and i2c_field_update8/16) by skipping the write if the new value is
+ * unchanged from the old value. This assumes no side effects from writing an
+ * unchanged value back out.
+ */
+#undef CONFIG_I2C_UPDATE_IF_CHANGED
+
+/*
  * Packet error checking support for SMBus.
  *
  * If defined, adds error checking support for i2c_readN, i2c_writeN,
@@ -2319,6 +2420,17 @@
  * This is valid with PLL frequency equal to 48/96MHz only.
  */
 #undef CONFIG_IT83XX_FLASH_CLOCK_48MHZ
+
+/*
+ * Enable it if EC's VBAT won't go low when system's power isn't
+ * presented (no battery and no AC)
+ * If EC's VSTBY and VBAT(power source of BRAM) aren't connected to the same
+ * power rail and VBAT doesn't go low immediately (eg: there is a larger
+ * capacitance on the rail) after all power off: PD contract recorded in BRAM
+ * won't get cleared (But actually we have unplugged type-c adaptor, so the
+ * contract should be cleared).
+ */
+#undef CONFIG_IT83XX_RESET_PD_CONTRACT_IN_BRAM
 
 /* To define it, if I2C channel C and PECI used at the same time. */
 #undef CONFIG_IT83XX_SMCLK2_ON_GPC7
@@ -2927,6 +3039,11 @@
  */
 #define CONFIG_DSW_PWROK_TO_PWRBTN_US (95 * MSEC)
 
+/*
+ * Board provides board_pwrbtn_to_pch function instead of GPIO_PCH_PWRBTN_L
+ * as the means for asserting power button signal to PCH.
+ */
+#undef CONFIG_POWER_BUTTON_TO_PCH_CUSTOM
 
 /* Compile common code for AP power state machine */
 #undef CONFIG_POWER_COMMON
@@ -2950,8 +3067,8 @@
 /* Support S0ix */
 #undef CONFIG_POWER_S0IX
 
-/* Support detecting failure to enter S0ix */
-#undef CONFIG_POWER_S0IX_FAILURE_DETECTION
+/* Support detecting failure to enter a sleep state (S0ix/S3) */
+#undef CONFIG_POWER_SLEEP_FAILURE_DETECTION
 
 /*
  * Allow the host to self-report its sleep state, in case there is some delay
@@ -3299,6 +3416,8 @@
  *
  * When defined, CBI allows ectool to reprogram all the fields. Once undefined,
  * it refuses to change certain fields. (e.g. board version, OEM ID)
+ *
+ * Also, this will enable PD in RO for TCPMv2.
  */
 #undef CONFIG_SYSTEM_UNLOCKED
 
@@ -3559,6 +3678,22 @@
 #undef CONFIG_STREAM_USB
 
 /*****************************************************************************/
+/* UART HOST COMMAND config */
+
+/* Includes USART as host command interface */
+#undef CONFIG_USART_HOST_COMMAND
+
+/* Pointer to USART HW config of physical instance */
+#undef CONFIG_UART_HOST_COMMAND_HW
+
+/*
+ * USART baudrate for host command interface.
+ * Typically configured at 3000000 to handle use cases
+ * like firmware download and big packets in a reasonable time.
+ */
+#undef CONFIG_UART_HOST_COMMAND_BAUD_RATE
+
+/*****************************************************************************/
 /* UART config */
 
 /* Baud rate for UARTs */
@@ -3585,7 +3720,7 @@
  * console logs on SRAM so that the logs will be preserved after EC shutting
  * down or sysjumped. It will keep the contents across EC resets, so we have
  * more information about system states. The contents on SRAM will be cleared
- * when checksum or sanity check fails.
+ * when checksum or validity check fails.
  */
 #undef CONFIG_PRESERVE_LOGS
 
@@ -3627,9 +3762,14 @@
 #undef CONFIG_UART_TX_REQ_CH
 #undef CONFIG_UART_RX_REQ_CH
 
+/* Driver of LN9310 switchcap */
+#undef CONFIG_LN9310
 
 /*****************************************************************************/
 /* USB PD config */
+
+/* Config is enabled, if PD interrupt tasks are used. */
+#undef CONFIG_HAS_TASK_PD_INT
 
 /*
  * Enables USB Power Delivery
@@ -3645,6 +3785,12 @@
  * NOTE: Should not be used for new designs.
  */
 #undef CONFIG_USB_PD_TCPMV1
+
+/*
+ * Enables PD protocol state names in the TPCMv1 console output.
+ * Disable to save ~900 bytes in flash space.
+ */
+#define CONFIG_USB_PD_TCPMV1_DEBUG
 
 /*
  * Enables Version 2 of the Power Delivery state machine
@@ -3697,6 +3843,12 @@
 /* HPD is sent to the GPU from the EC via a GPIO */
 #undef CONFIG_USB_PD_DP_HPD_GPIO
 
+/*
+ * HPD is sent to the GPU from the EC via a GPIO, and the HPD GPIO level has
+ * to be handled separately.
+ */
+#undef CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
+
 /* Check if max voltage request is allowed before each request */
 #undef CONFIG_USB_PD_CHECK_MAX_REQUEST_ALLOWED
 
@@ -3722,6 +3874,9 @@
  * We don't want to allow communication to outside world until
  * we jump to RW. This can by overridden with the removal of
  * the write protect screw to allow for easier testing.
+ *
+ * Note: this is assumed for TCPMv2. See also CONFIG_BRINGUP for enabling PD in
+ * RO.
  */
 #undef CONFIG_USB_PD_COMM_LOCKED
 
@@ -3791,20 +3946,21 @@
 #undef CONFIG_USB_PD_GIVE_BACK
 
 /*
- * Enable USB PD Rev2.0 features only
- * NOTE:
- *   This flag is only used with TCPMv2. The TCPMv2 stack defaults to PD3.0
- *   and this flag disabled PD3.0 features.
- */
-#undef CONFIG_USB_PD_REV20
-
-/*
- * Enable USB PD Rev3.0 features
- * NOTE:
- *    This flag is only used with TCPMv1. The TCPMv1 stack defaults to PD2.0
- *    and this flag enabled PD3.0 features.
+ * PD Rev2.0 functionality is enabled by default. Defining this macro
+ * enables PD Rev3.0 functionality.
  */
 #undef CONFIG_USB_PD_REV30
+
+/* Defined automatically based on on maximum PD revision supported. */
+#undef CONFIG_PD_RETRY_COUNT
+
+/*
+ * Support USB PD 3.0 Extended Messages. This will only take effect if
+ * CONFIG_USB_PD_REV30 is also enabled. Note that Chromebooks disabling this
+ * config item are non-compliant with PD 3.0, because they have batteries but do
+ * not support Get_Battery_Cap or Get_Battery_Status.
+ */
+#define CONFIG_USB_PD_EXTENDED_MESSAGES
 
 /* Major and Minor ChromeOS specific PD device Hardware IDs. */
 #undef CONFIG_USB_PD_HW_DEV_ID_BOARD_MAJOR
@@ -3850,8 +4006,18 @@
 /* Use TCPC module (type-C port controller) */
 #undef CONFIG_USB_PD_TCPC
 
+/* Board provides specific TCPC init function */
+#undef CONFIG_USB_PD_TCPC_BOARD_INIT
+
 /* Enable TCPC to enter low power mode */
 #undef CONFIG_USB_PD_TCPC_LOW_POWER
+
+/*
+ * Default debounce when exiting low-power mode before checking CC status.
+ * Some TCPCs need additional time following a VBUS change to internally
+ * debounce the CC line status and updating the CC_STATUS register.
+ */
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE	(25*MSEC)
 
 /* Define EC and TCPC modules are in one integrated chip */
 #undef CONFIG_USB_PD_TCPC_ON_CHIP
@@ -3869,14 +4035,63 @@
 /* Enable to enter into USB4 mode between two port partners */
 #undef CONFIG_USB_PD_USB4
 
-/* Enable if the board supports USB3.2 devices */
-#undef CONFIG_USB_PD_USB32
+/* Enable if port is cable of operating as an USB4 device */
+#undef CONFIG_USB_PD_USB4_DRD
+
+/* Enable if port is cable of operating as an USB3.2 device */
+#undef CONFIG_USB_PD_USB32_DRD
 
 /* Enable if the board is Thunderbolt Gen 3 capable */
 #undef CONFIG_USB_PD_TBT_GEN3_CAPABLE
 
 /* Enable PCIE tunneling if Thunderbolt-Compatible mode is enabled*/
 #undef CONFIG_USB_PD_PCIE_TUNNELING
+
+/*
+ * The following two macros are ASCII text strings that matches what appears
+ * in the USB-IF Product Registration form for this device. These macros are
+ * used during VIF generation and they form the product name in the
+ * USB Integrator’s List.
+ */
+#undef CONFIG_USB_PD_MODEL_PART_NUMBER
+#undef CONFIG_USB_PD_PRODUCT_REVISION
+
+/*
+ * Should be defined if the device is a TypeC Alt Mode Adapter. This macro
+ * is used during VIF generation.
+ */
+#undef CONFIG_USB_ALT_MODE_ADAPTER
+
+/*
+ * A text string, provided by the USB-IF. This macro is used during VIF
+ * generation.
+ */
+#undef CONFIG_USB_PD_TID
+
+/*
+ * An ASCII text string that must correspond with the port label given on the
+ * device picture submitted to USB-IF by the Vendor along with the VIF. This
+ * macro is used during VIF generation.
+ */
+#undef CONFIG_USB_PD_PORT_LABEL
+
+/*
+ * Define if Get_Manufacturer_Info request PD message is supported.
+ * Used during VIF generation.
+ */
+#undef CONFIG_USB_PD_MANUFACTURER_INFO
+
+/*
+ * Define if both Security_Request and Security_Response PD messages are
+ * supported. Used during VIF generation.
+ */
+#undef CONFIG_USB_PD_SECURITY_MSGS
+
+/*
+ * The number of non-removable batteries in the device. Used duing VIF
+ * generation.
+ */
+#undef CONFIG_NUM_FIXED_BATTERIES
 
 /*
  * Track VBUS level in TCPC module. This will only be needed if we're acting
@@ -3902,12 +4117,26 @@
 #undef CONFIG_USB_PD_TCPM_ANX7447
 #undef CONFIG_USB_PD_TCPM_ANX7688
 #undef CONFIG_USB_PD_TCPM_NCT38XX
-#undef CONFIG_USB_PD_TCPM_PS8751
-#undef CONFIG_USB_PD_TCPM_PS8805
-#undef CONFIG_USB_PD_TCPM_PS8815
 #undef CONFIG_USB_PD_TCPM_MT6370
 #undef CONFIG_USB_PD_TCPM_TUSB422
 #undef CONFIG_USB_PD_TCPM_RAA489000
+#undef CONFIG_USB_PD_TCPM_RT1715
+
+/* PS8XXX series are all supported by a single driver with a build time config
+ * listed below (CONFIG_USB_PD_TCPM_PS*) defined to enable the specific product.
+ *
+ * If a board with the same EC FW is expected to support multiple products here
+ * then CONFIG_USB_PD_TCPM_MULTI_PS8XXX MUST be defined then we can enable more
+ * than one product config to support them in the runtime. In this case, board
+ * is responsible to override function of board_get_ps8xxx_product_id in order
+ * to provide the product id per port.
+ */
+#undef CONFIG_USB_PD_TCPM_MULTI_PS8XXX
+#undef CONFIG_USB_PD_TCPM_PS8751
+#undef CONFIG_USB_PD_TCPM_PS8755
+#undef CONFIG_USB_PD_TCPM_PS8705
+#undef CONFIG_USB_PD_TCPM_PS8805
+#undef CONFIG_USB_PD_TCPM_PS8815
 
 /*
  * Defined automatically by chip and depends on chip. This guards the onboard
@@ -3947,6 +4176,12 @@
  * DDI1_AUX_P signals (b/122873171)
  */
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
+
+/*
+ * Use this to override the TCPCI Device ID value to be 0x0002 for
+ * chip rev A1. Early A1 firmware misreports the DID as 0x0001.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 
 /*
  * Use this option if the TCPC port controller supports the optional register
@@ -3992,7 +4227,7 @@
 #undef CONFIG_USB_PD_TRY_SRC
 
 /* Set the default minimum battery percentage for Try.Src to be enabled */
-#define CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC 1
+#define CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC 5
 
 /*
  * Set the minimum battery percentage to allow a PD port to send resets as a
@@ -4019,8 +4254,14 @@
  */
 #undef CONFIG_USB_PD_PREFER_MV
 
-/* Type-C Fast Role Swap */
-#undef CONFIG_USB_TYPEC_PD_FAST_ROLE_SWAP
+/*
+ * The Fast Role Swap trigger can be implemented in either the TCPC or PPC
+ * driver. If either CONFIG_USB_PD_FRS_TCPC or CONFIG_USB_PD_FRS_PPC is set,
+ * CONFIG_USB_FRS will be set automatically to enable the protocol-side of FRS.
+ */
+#undef CONFIG_USB_PD_FRS_TCPC
+#undef CONFIG_USB_PD_FRS_PPC
+#undef CONFIG_USB_PD_FRS
 
 /*
  * USB Product ID. Each platform (e.g. baseboard set) should have a single
@@ -4048,6 +4289,12 @@
 #undef CONFIG_USBC_PPC_NX20P3483
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682X
+
+/*
+ * SYV682x PPC high voltage power path current limit.  Default limit is
+ * 3.3A.  See the syv682x header file for permissible values.
+ */
+#define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_3_30
 
 /* PPC is capable of gating the SBU lines. */
 #undef CONFIG_USBC_PPC_SBU
@@ -4082,19 +4329,6 @@
 /* USB Device version of product */
 #undef CONFIG_USB_BCD_DEV
 
-/*
- * Used during generation of VIF for USB Type-C Compliance Testing.
- * Indicates whether the UUT can communicate with USB 2.0 or USB 3.1 as a host
- * or as the Downstream Facing Port of a hub.
- */
-#undef CONFIG_VIF_TYPE_C_CAN_ACT_AS_HOST
-
-/*
- * Used during generation of VIF for USB Type-C Compliance Testing.
- * Indicates whether the UUT has a captive cable.
- */
-#undef CONFIG_VIF_CAPTIVE_CABLE
-
 /*****************************************************************************/
 
 /* Compile chip support for the USB device controller */
@@ -4112,8 +4346,18 @@
  */
 #undef CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER
 
+/*
+ * Board only needs one bc12 driver. This includes the case that has multiple
+ * chips that use the same driver. Enabled by default.
+ *
+ * If undefined, board should define a bc12_ports array which associates
+ * each port to its bc12 driver.
+ */
+#define CONFIG_BC12_SINGLE_DRIVER
+
 /* External BC1.2 charger detection devices. */
 #undef CONFIG_BC12_DETECT_MAX14637
+#undef CONFIG_BC12_DETECT_MT6360
 #undef CONFIG_BC12_DETECT_PI3USB9201
 #undef CONFIG_BC12_DETECT_PI3USB9281
 /* Number of Pericom PI3USB9281 chips present in system */
@@ -4330,6 +4574,9 @@
  *
  * EFS1 is being deprecated. EFS2 is faster, doesn't need two slots, and
  * supports rollback protection.
+ *
+ * EFS2 runs in the system task (a.k.a. main) and the hook task (for shutdown
+ * hook). Their stack sizes must be big enough for sha256.
  */
 #undef CONFIG_VBOOT_EFS
 #undef CONFIG_VBOOT_EFS2
@@ -4483,6 +4730,11 @@
 #undef CONFIG_ISH_PM_D3
 
 /*
+ * Define the following if the ip accessible power gating is required.
+ */
+#undef CONFIG_ISH_IPAPG
+
+/*
  * Define the following to the number of uSeconds of elapsed time that is
  * required to enter D0I2 and D0I3, if they are supported
  */
@@ -4590,6 +4842,46 @@
 #endif
 #endif
 
+/******************************************************************************/
+/*
+ * If CONFIG_USB_PD_USB4 is enabled, make sure CONFIG_USBC_SS_MUX and
+ * CONFIG_USB_PD_ALT_MODE_DFP is enabled
+ */
+#ifdef CONFIG_USB_PD_USB4
+#if !defined(CONFIG_USBC_SS_MUX)
+#error CONFIG_USBC_SS_MUX must be enabled for USB4 mode support
+#endif
+# if !defined(CONFIG_USB_PD_ALT_MODE_DFP)
+#error CONFIG_USB_PD_ALT_MODE_DFP must be enabled for USB4 mode support
+#endif
+#endif
+
+/******************************************************************************/
+/*
+ * Automatically define CONFIG_USB_PD_FRS if FRS is enabled in the TCPC or PPC
+ */
+#if defined(CONFIG_USB_PD_FRS_PPC) || defined(CONFIG_USB_PD_FRS_TCPC)
+#define CONFIG_USB_PD_FRS
+#endif
+
+/******************************************************************************/
+/* Disable extended message support if PD 3.0 support is disabled. */
+#ifndef CONFIG_USB_PD_REV30
+#undef CONFIG_USB_PD_EXTENDED_MESSAGES
+#endif
+
+/******************************************************************************/
+/*
+ * PD 3.0 only retries in TCPC hardware twice (for a total of 3 attempts), while
+ * PD 2.0 retires three times (for a total of 4 attempts).
+ *
+ * Note must be [0-3] since it must fit within 2 bits.
+ */
+#ifdef CONFIG_USB_PD_REV30
+#define CONFIG_PD_RETRY_COUNT 2
+#else
+#define CONFIG_PD_RETRY_COUNT 3
+#endif
 
 /******************************************************************************/
 /*
@@ -4839,7 +5131,7 @@
  * architecture.
  */
 #if defined(CONFIG_CHARGER_ISL9237) || defined(CONFIG_CHARGER_ISL9238) || \
-	defined(CONFIG_CHARGER_ISL9241) || \
+	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
@@ -4886,6 +5178,12 @@
 	defined(CONFIG_USB_PD_DISCHARGE_TCPC) || \
 	defined(CONFIG_USB_PD_DISCHARGE_PPC)
 #define CONFIG_USB_PD_DISCHARGE
+#endif
+
+/*****************************************************************************/
+/* Define derived config options for DP HPD GPIO */
+#ifdef CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
+#define CONFIG_USB_PD_DP_HPD_GPIO
 #endif
 
 /*****************************************************************************/
@@ -4936,6 +5234,7 @@
 #undef CONFIG_CHIPSET_JASPERLAKE
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
+#undef CONFIG_CHIPSET_MT8192
 #undef CONFIG_CHIPSET_RK3399
 #undef CONFIG_CHIPSET_RK3288
 #undef CONFIG_CHIPSET_SDM845
@@ -5017,6 +5316,15 @@
 #undef CONFIG_HOSTCMD_PD
 #endif
 
+#if defined(HAS_TASK_PD_INT_C0) || defined(HAS_TASK_PD_INT_C1) || \
+	defined(HAS_TASK_PD_INT_C2) || defined(HAS_TASK_PD_INT_C3)
+#define CONFIG_HAS_TASK_PD_INT
+#endif
+
+#if defined(HAS_TASK_PDCMD) && defined(CONFIG_HAS_TASK_PD_INT)
+#error Should not use PDCMD task with PD INT tasks
+#endif
+
 /* Certain console cmds are irrelevant without parent modules. */
 #ifndef CONFIG_BATTERY
 #undef CONFIG_CMD_PWR_AVG
@@ -5064,6 +5372,21 @@
 #error "Cannot use CONFIG_CHIPSET_SLP_S3_L_OVERRIDE if SLP_S3 is a virtual wire"
 #endif
 
+#if defined(CONFIG_POWER_S0IX) && !defined(CONFIG_POWER_TRACK_HOST_SLEEP_STATE)
+#error "Must enable CONFIG_POWER_TRACK_HOST_SLEEP_STATE for S0ix"
+#endif
+
+#if defined(CONFIG_CHIPSET_SC7180)
+#if defined(CONFIG_POWER_SLEEP_FAILURE_DETECTION) && \
+	!defined(CONFIG_CHIPSET_RESUME_INIT_HOOK)
+#error "Require resume init hook to enable sleep failure detection"
+#endif
+#if !defined(CONFIG_POWER_SLEEP_FAILURE_DETECTION) && \
+	defined(CONFIG_CHIPSET_RESUME_INIT_HOOK)
+#error "Don't enable resume init hook unless for sleep failure detection"
+#endif
+#endif
+
 /*****************************************************************************/
 
 /*
@@ -5105,14 +5428,39 @@
 #define CONFIG_USB_PD_TBT_GEN3_CAPABLE
 #endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
 
-/*****************************************************************************/
 /*
- * The board is Gen3 compatible and supports USB3.2 devices if it supports
- * USB4 mode.
+ * CONFIG_CHIP_INIT_ROM_REGION requires that the chip has defined a
+ * ROM resident region to store the .init_rom section.
+ *
+ * These sections must also not be zero bytes, which will happen if
+ * the program size is the same as the flash size.
  */
-#ifdef CONFIG_USB_PD_USB4
-#define CONFIG_USB_PD_USB32
-#endif /* CONFIG_USB_PD_USB4 */
+#ifdef CONFIG_CHIP_INIT_ROM_REGION
+
+#ifndef CONFIG_FLASH
+#error CONFIG_CHIP_INIT_ROM_REGION requires CONFIG_FLASH
+#endif
+
+#ifndef CONFIG_RO_ROM_RESIDENT_SIZE
+#error CONFIG_CHIP_INIT_ROM_REGION requires CONFIG_RO_ROM_RESIDENT_SIZE
+#endif
+
+#ifndef CONFIG_RW_ROM_RESIDENT_SIZE
+#error CONFIG_CHIP_INIT_ROM_REGION requires CONFIG_RW_ROM_RESIDENT_SIZE
+#endif
+
+
+#if (CONFIG_RO_ROM_RESIDENT_SIZE == 0)
+#error CONFIG_RO_ROM_RESIDENT_SIZE is 0 with CONFIG_CHIP_INIT_ROM_REGION defined
+#endif
+
+#if (CONFIG_RW_ROM_RESIDENT_SIZE == 0)
+#error CONFIG_RW_ROM_RESIDENT_SIZE is 0 with CONFIG_CHIP_INIT_ROM_REGION defined
+#endif
+
+#endif /* CONFIG_CHIP_INIT_ROM_REGION */
+
+/*****************************************************************************/
 
 /*
  * Apply fuzzer and test config overrides last, since fuzzers and tests need to
@@ -5123,7 +5471,7 @@
 #include "test_config.h"
 
 /*
- * Sanity checks to make sure some of the configs above make sense.
+ * Validity checks to make sure some of the configs above make sense.
  */
 
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
@@ -5320,5 +5668,44 @@
 #ifndef CONFIG_KEYBOARD_PROTOCOL_8042
 #undef CONFIG_KEYBOARD_VIVALDI
 #endif
+
+#if defined(CONFIG_USB_PD_TCPM_MULTI_PS8XXX)
+#if defined(CONFIG_USB_PD_TCPM_PS8705) + \
+	defined(CONFIG_USB_PD_TCPM_PS8751) + \
+	defined(CONFIG_USB_PD_TCPM_PS8755) + \
+	defined(CONFIG_USB_PD_TCPM_PS8805) + \
+	defined(CONFIG_USB_PD_TCPM_PS8815) < 2
+#error "Must select 2 CONFIG_USB_PD_TCPM_PS8* or above if " \
+	"CONFIG_USB_PD_TCPM_MULTI_PS8XXX is defined."
+#endif
+#endif /* CONFIG_USB_PD_TCPM_MULTI_PS8XXX  */
+
+#if defined(CONFIG_USB_PD_TCPM_PS8705) + \
+	defined(CONFIG_USB_PD_TCPM_PS8751) + \
+	defined(CONFIG_USB_PD_TCPM_PS8755) + \
+	defined(CONFIG_USB_PD_TCPM_PS8805) + \
+	defined(CONFIG_USB_PD_TCPM_PS8815) > 1
+#if !defined(CONFIG_USB_PD_TCPM_MULTI_PS8XXX)
+#error "CONFIG_USB_PD_TCPM_MULTI_PS8XXX MUST be defined if more than one " \
+	"CONFIG_USB_PD_TCPM_PS8* are intended to support in a board."
+#endif
+#endif /* defined(CONFIG_USB_PD_TCPM_PS8705) + ... */
+
+/******************************************************************************/
+/* Check body detection setup */
+#if defined(CONFIG_BODY_DETECTION)
+#ifndef CONFIG_BODY_DETECTION_SENSOR
+#error CONFIG_BODY_DETECTION_SENSOR must be defined to use body detection
+#endif /* ifndef(CONFIG_BODY_DETECTION_SENSOR) */
+/* Use default setting if CONFIG_BODY_DETECTION_CUSTOM is not set. */
+#ifndef CONFIG_BODY_DETECTION_CUSTOM
+#define CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE     250 /* max sensor odr (Hz) */
+#define CONFIG_BODY_DETECTION_VAR_THRESHOLD       550 /* (mm/s^2)^2 */
+#define CONFIG_BODY_DETECTION_CONFIDENCE_DELTA    525 /* (mm/s^2)^2 */
+#define CONFIG_BODY_DETECTION_ON_BODY_CON         50  /* % */
+#define CONFIG_BODY_DETECTION_OFF_BODY_CON        10  /* % */
+#define CONFIG_BODY_DETECTION_STATIONARY_DURATION 15  /* second */
+#endif /* ifndef(CONFIG_BODY_DETECTION_CUSTOM) */
+#endif /* CONFIG_BODY_DETECTION */
 
 #endif  /* __CROS_EC_CONFIG_H */

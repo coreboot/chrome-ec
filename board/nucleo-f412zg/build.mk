@@ -13,9 +13,18 @@ test-list-y=\
        aes \
        compile_time_macros \
        crc32 \
+       flash_physical \
+       flash_write_protect \
+       mpu \
        mutex \
        pingpong \
+       rollback \
+       rollback_entropy \
+       rsa \
+       rsa3 \
        rtc \
+       scratchpad \
        sha256 \
        sha256_unrolled \
        stm32f_rtc \
+       utils \

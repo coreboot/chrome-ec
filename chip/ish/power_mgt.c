@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include <stdnoreturn.h>
+
 #include "aontaskfw/ish_aon_share.h"
 #include "console.h"
 #include "hwtimer.h"
@@ -24,6 +26,23 @@ extern uint32_t __aon_ro_start;
 extern uint32_t __aon_ro_end;
 extern uint32_t __aon_rw_start;
 extern uint32_t __aon_rw_end;
+
+static void pg_exit_restore_hw(void)
+{
+	lapic_restore();
+	i2c_port_restore();
+
+	CCU_RST_HST = CCU_RST_HST;
+	CCU_TCG_ENABLE = 0;
+	CCU_BCG_ENABLE = 0;
+
+	CCU_BCG_MIA = 0;
+	CCU_BCG_DMA = 0;
+	CCU_BCG_I2C = 0;
+	CCU_BCG_SPI = 0;
+	CCU_BCG_UART = 0;
+	CCU_BCG_GPIO = 0;
+}
 
 /**
  * on ISH, uart interrupt can only wakeup ISH from low power state via
@@ -67,6 +86,7 @@ struct pm_statistics {
 	struct pm_stat d0i1;
 	struct pm_stat d0i2;
 	struct pm_stat d0i3;
+	struct pm_stat pg;
 };
 
 static struct pm_statistics pm_stats;
@@ -192,6 +212,8 @@ static void init_aon_task(void)
 	aon_share->main_fw_rw_size = (uint32_t)&__aon_rw_end -
 				     (uint32_t)&__aon_rw_start;
 
+	aon_share->uma_msb = IPC_UMA_RANGE_LOWER_1;
+
 	ish_dma_init();
 }
 
@@ -236,7 +258,7 @@ static void switch_to_aontask(void)
 	interrupt_enable();
 }
 
-__attribute__ ((noreturn))
+noreturn
 static void handle_reset_in_aontask(enum ish_pm_state pm_state)
 {
 	pm_ctx.aon_share->pm_state = pm_state;
@@ -394,6 +416,11 @@ static void enter_d0i2(void)
 
 	/* returned from aontask */
 
+	if (IS_ENABLED(CONFIG_ISH_IPAPG)) {
+		if (pm_ctx.aon_share->pg_exit)
+			pg_exit_restore_hw();
+	}
+
 	if (IS_ENABLED(CONFIG_ISH_NEW_PM))
 		clear_fabric_error();
 
@@ -408,6 +435,10 @@ static void enter_d0i2(void)
 	t1 = __hw_clock_source_read();
 	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
 	log_pm_stat(&pm_stats.d0i2, t0, t1);
+	if (IS_ENABLED(CONFIG_ISH_IPAPG)) {
+		if (pm_ctx.aon_share->pg_exit)
+			log_pm_stat(&pm_stats.pg, t0, t1);
+	}
 
 	/* Reload watchdog before enabling interrupts again */
 	watchdog_reload();
@@ -445,6 +476,11 @@ static void enter_d0i3(void)
 
 	/* returned from aontask */
 
+	if (IS_ENABLED(CONFIG_ISH_IPAPG)) {
+		if (pm_ctx.aon_share->pg_exit)
+			pg_exit_restore_hw();
+	}
+
 	if (IS_ENABLED(CONFIG_ISH_NEW_PM))
 		clear_fabric_error();
 
@@ -459,6 +495,10 @@ static void enter_d0i3(void)
 	t1 = __hw_clock_source_read();
 	pm_ctx.aon_share->pm_state = ISH_PM_STATE_D0;
 	log_pm_stat(&pm_stats.d0i3, t0, t1);
+	if (IS_ENABLED(CONFIG_ISH_IPAPG)) {
+		if (pm_ctx.aon_share->pg_exit)
+			log_pm_stat(&pm_stats.pg, t0, t1);
+	}
 
 	/* Reload watchdog before enabling interrupts again */
 	watchdog_reload();
@@ -587,6 +627,11 @@ void ish_pm_init(void)
 	/* unmask all wake up events */
 	PMU_MASK_EVENT = ~PMU_MASK_EVENT_BIT_ALL;
 
+	if (IS_ENABLED(CONFIG_ISH_NEW_PM)) {
+		PMU_ISH_FABRIC_CNT = (PMU_ISH_FABRIC_CNT & 0xffff0000) | FABRIC_IDLE_COUNT;
+		PMU_PGCB_CLKGATE_CTRL = TRUNK_CLKGATE_COUNT;
+	}
+
 	if (IS_ENABLED(CONFIG_ISH_PM_RESET_PREP)) {
 		/* unmask reset prep avail interrupt */
 		PMU_RST_PREP = 0;
@@ -606,7 +651,7 @@ void ish_pm_init(void)
 	}
 }
 
-__attribute__ ((noreturn))
+noreturn
 void ish_pm_reset(enum ish_pm_state pm_state)
 {
 	if (IS_ENABLED(CONFIG_ISH_PM_AONTASK) &&
@@ -677,6 +722,8 @@ static int command_idle_stats(int argc, char **argv)
 	print_stats("D0i1", &pm_stats.d0i1);
 	print_stats("D0i2", &pm_stats.d0i2);
 	print_stats("D0i3", &pm_stats.d0i3);
+	if (IS_ENABLED(CONFIG_ISH_IPAPG))
+		print_stats("IPAPG", &pm_stats.pg);
 
 	if (pm_ctx.aon_valid) {
 		ccprintf("    Aontask status:\n");
@@ -711,7 +758,7 @@ DECLARE_IRQ(ISH_PMU_WAKEUP_IRQ, pmu_wakeup_isr);
  *
  */
 
-__maybe_unused __attribute__ ((noreturn))
+__maybe_unused noreturn
 static void reset_prep_isr(void)
 {
 	/* mask reset prep avail interrupt */

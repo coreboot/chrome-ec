@@ -262,7 +262,7 @@ class RMAOpen(object):
         url = URL % (challenge, hwid)
         logging.info('GOTO:\n %s', url)
         logging.info('If the server fails to debug the challenge make sure the '
-                     'RLZ is whitelisted')
+                     'RLZ is allowlisted')
 
     def try_authcode(self, authcode):
         """Try opening cr50 with the authcode
@@ -462,19 +462,19 @@ class RMAOpen(object):
         logging.info('%s RMA support added in: %s',
                      'prePVT' if self.is_prepvt else 'prod', rma_support)
         if not self.is_prepvt and self._running_version_is_older(TESTLAB_PROD):
-            logging.warning('No testlab support in old prod images')
-            logging.warning('Update to %s to enable testlab', TESTLAB_PROD)
+            raise ValueError('Update cr50. No testlab support in old prod '
+                             'images.')
         if self._running_version_is_older(rma_support):
             raise ValueError('%s does not have RMA support. Update to at '
                              'least %s' % (version, rma_support))
 
-    def _running_version_is_older(self, comp_ver):
-        """Returns True if running version is older than comp_ver."""
-        comp_ver_fields = [int(field) for field in comp_ver.split('.')]
+    def _running_version_is_older(self, target_ver):
+        """Returns True if running version is older than target_ver."""
+        target_ver_fields = [int(field) for field in target_ver.split('.')]
         for i, field in enumerate(self.running_ver_fields):
-            if field < int(comp_ver_fields[i]):
-                return True
-        return False
+            if field > int(target_ver_fields[i]):
+                return False
+        return True
 
     def device_matches_devid(self, devid, device):
         """Return True if the device matches devid.

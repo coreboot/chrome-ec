@@ -38,7 +38,7 @@ static int cpu_shutdown;
 static int fan_pct;
 static int no_temps_read;
 
-int dummy_temp_get_val(int idx, int *temp_ptr)
+int mock_temp_get_val(int idx, int *temp_ptr)
 {
 	if (mock_temp[idx] >= 0) {
 		*temp_ptr = mock_temp[idx];
@@ -642,7 +642,7 @@ static int test_thermistor_linear_interpolate(void)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+void run_test(int argc, char **argv)
 {
 	RUN_TEST(test_init_val);
 	RUN_TEST(test_sensors_can_be_read);

@@ -57,12 +57,14 @@ int pd_set_power_supply_ready(int port)
 #endif /* defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT) */
 
 	if (IS_ENABLED(VARIANT_KUKUI_CHARGER_ISL9238))
-		charge_set_output_current_limit(3300, 5000);
+		charge_set_output_current_limit(CHARGER_SOLO, 3300, 5000);
 	else
-		charger_enable_otg_power(1);
+		charger_enable_otg_power(CHARGER_SOLO, 1);
 
 	gpio_set_level(GPIO_EN_USBC_CHARGE_L, 1);
 	gpio_set_level(GPIO_EN_PP5000_USBC, 1);
+	if (IS_ENABLED(CONFIG_CHARGER_OTG) && IS_ENABLED(CONFIG_CHARGER_ISL9238C))
+		charger_set_current(CHARGER_SOLO, 0);
 
 	/* notify host of power info change */
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
@@ -90,9 +92,9 @@ void pd_power_supply_reset(int port)
 #endif /* defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT) */
 
 	if (IS_ENABLED(VARIANT_KUKUI_CHARGER_ISL9238))
-		charge_set_output_current_limit(0, 0);
+		charge_set_output_current_limit(CHARGER_SOLO, 0, 0);
 	else
-		charger_enable_otg_power(0);
+		charger_enable_otg_power(CHARGER_SOLO, 0);
 
 	gpio_set_level(GPIO_EN_PP5000_USBC, 0);
 
@@ -158,7 +160,7 @@ __override int svdm_enter_dp_mode(int port, uint32_t mode_caps)
 
 __override int svdm_dp_config(int port, uint32_t *payload)
 {
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 	int status = dp_status[port];
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	int pin_mode;

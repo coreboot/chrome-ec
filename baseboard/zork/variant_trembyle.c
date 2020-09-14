@@ -7,7 +7,10 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
+#include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl9241.h"
+#include "driver/ppc/aoz1380.h"
+#include "driver/ppc/nx20p348x.h"
 #include "driver/retimer/ps8802.h"
 #include "driver/retimer/ps8818.h"
 #include "driver/retimer/tusb544.h"
@@ -19,8 +22,11 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "ioexpander.h"
+#include "task.h"
 #include "timer.h"
 #include "usb_mux.h"
+#include "usb_pd_tcpm.h"
+#include "usbc_ppc.h"
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -96,26 +102,6 @@ struct charger_config_t chg_chips[] = {
 		.drv = &isl9241_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
-
-/*
- * If the charger is found on the V0 I2C port then re-map the port.
- * Use HOOK_PRIO_INIT_I2C so we re-map before charger_chips_init()
- * talks to the charger. This relies on the V1 HW not using the ISL9241 address
- * on the V0 I2C port.
- * TODO(b/155214765): Remove this check once V0 HW is no longer used.
- */
-static void check_v0_charger(void)
-{
-	int id;
-
-	if (i2c_read16(I2C_PORT_CHARGER_V0, ISL9241_ADDR_FLAGS,
-			ISL9241_REG_MANUFACTURER_ID, &id) == EC_SUCCESS) {
-		ccprints("V0 charger HW detected");
-		chg_chips[0].i2c_port = I2C_PORT_CHARGER_V0;
-	}
-}
-DECLARE_HOOK(HOOK_INIT, check_v0_charger, HOOK_PRIO_INIT_I2C);
 
 /*****************************************************************************
  * TCPC
@@ -135,11 +121,243 @@ void baseboard_tcpc_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
 
-	/* Enable HPD interrupts */
-	ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
-	ioex_enable_interrupt(IOEX_MST_HPD_OUT);
+	/* Enable SBU fault interrupts */
+	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
+	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_DB_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
+
+struct ppc_config_t ppc_chips[] = {
+	[USBC_PORT_C0] = {
+		/* Device does not talk I2C */
+		.drv = &aoz1380_drv
+	},
+
+	[USBC_PORT_C1] = {
+		.i2c_port = I2C_PORT_TCPC1,
+		.i2c_addr_flags = NX20P3483_ADDR1_FLAGS,
+		.drv = &nx20p348x_drv
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
+unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
+
+__overridable void ppc_interrupt(enum gpio_signal signal)
+{
+	switch (signal) {
+	case GPIO_USB_C0_PPC_FAULT_ODL:
+		aoz1380_interrupt(USBC_PORT_C0);
+		break;
+
+	case GPIO_USB_C1_PPC_INT_ODL:
+		nx20p348x_interrupt(USBC_PORT_C1);
+		break;
+
+	default:
+		break;
+	}
+}
+
+int board_set_active_charge_port(int port)
+{
+	int is_valid_port = (port >= 0 &&
+			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
+	int i;
+
+	if (port == CHARGE_PORT_NONE) {
+		CPRINTSUSB("Disabling all charger ports");
+
+		/* Disable all ports. */
+		for (i = 0; i < ppc_cnt; i++) {
+			/*
+			 * Do not return early if one fails otherwise we can
+			 * get into a boot loop assertion failure.
+			 */
+			if (ppc_vbus_sink_enable(i, 0))
+				CPRINTSUSB("Disabling C%d as sink failed.", i);
+		}
+
+		return EC_SUCCESS;
+	} else if (!is_valid_port) {
+		return EC_ERROR_INVAL;
+	}
+
+
+	/* Check if the port is sourcing VBUS. */
+	if (ppc_is_sourcing_vbus(port)) {
+		CPRINTFUSB("Skip enable C%d", port);
+		return EC_ERROR_INVAL;
+	}
+
+	CPRINTSUSB("New charge port: C%d", port);
+
+	/*
+	 * Turn off the other ports' sink path FETs, before enabling the
+	 * requested charge port.
+	 */
+	for (i = 0; i < ppc_cnt; i++) {
+		if (i == port)
+			continue;
+
+		if (ppc_vbus_sink_enable(i, 0))
+			CPRINTSUSB("C%d: sink path disable failed.", i);
+	}
+
+	/* Enable requested charge port. */
+	if (ppc_vbus_sink_enable(port, 1)) {
+		CPRINTSUSB("C%d: sink path enable failed.", port);
+		return EC_ERROR_UNKNOWN;
+	}
+
+	return EC_SUCCESS;
+}
+
+void board_overcurrent_event(int port, int is_overcurrented)
+{
+	switch (port) {
+	case USBC_PORT_C0:
+		ioex_set_level(IOEX_USB_C0_FAULT_ODL, !is_overcurrented);
+		break;
+
+	case USBC_PORT_C1:
+		ioex_set_level(IOEX_USB_C1_FAULT_ODL, !is_overcurrented);
+		break;
+
+	default:
+		break;
+	}
+}
+
+const struct tcpc_config_t tcpc_config[] = {
+	[USBC_PORT_C0] = {
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC0,
+			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
+		},
+		.drv = &nct38xx_tcpm_drv,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0,
+	},
+	[USBC_PORT_C1] = {
+		.bus_type = EC_BUS_TYPE_I2C,
+		.i2c_info = {
+			.port = I2C_PORT_TCPC1,
+			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
+		},
+		.drv = &nct38xx_tcpm_drv,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
+BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
+
+const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
+	[USBC_PORT_C0] = {
+		.i2c_port = I2C_PORT_TCPC0,
+		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
+	},
+
+	[USBC_PORT_C1] = {
+		.i2c_port = I2C_PORT_TCPC1,
+		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
+
+static void reset_pd_port(int port, enum gpio_signal reset_gpio_l,
+			  int hold_delay, int finish_delay)
+{
+	gpio_set_level(reset_gpio_l, 0);
+	msleep(hold_delay);
+	gpio_set_level(reset_gpio_l, 1);
+	if (finish_delay)
+		msleep(finish_delay);
+}
+
+void board_reset_pd_mcu(void)
+{
+	/* Reset TCPC0 */
+	reset_pd_port(USBC_PORT_C0, GPIO_USB_C0_TCPC_RST_L,
+		      NCT38XX_RESET_HOLD_DELAY_MS,
+		      NCT38XX_RESET_POST_DELAY_MS);
+
+	/* Reset TCPC1 */
+	reset_pd_port(USBC_PORT_C1, GPIO_USB_C1_TCPC_RST_L,
+		      NCT38XX_RESET_HOLD_DELAY_MS,
+		      NCT38XX_RESET_POST_DELAY_MS);
+}
+
+uint16_t tcpc_get_alert_status(void)
+{
+	uint16_t status = 0;
+
+	/*
+	 * Check which port has the ALERT line set and ignore if that TCPC has
+	 * its reset line active.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_TCPC_INT_ODL)) {
+		if (gpio_get_level(GPIO_USB_C0_TCPC_RST_L) != 0)
+			status |= PD_STATUS_TCPC_ALERT_0;
+	}
+
+	if (!gpio_get_level(GPIO_USB_C1_TCPC_INT_ODL)) {
+		if (gpio_get_level(GPIO_USB_C1_TCPC_RST_L) != 0)
+			status |= PD_STATUS_TCPC_ALERT_1;
+	}
+
+	return status;
+}
+
+void tcpc_alert_event(enum gpio_signal signal)
+{
+	int port = -1;
+
+	switch (signal) {
+	case GPIO_USB_C0_TCPC_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_TCPC_INT_ODL:
+		port = 1;
+		break;
+	default:
+		return;
+	}
+
+	schedule_deferred_pd_interrupt(port);
+}
+
+
+int board_pd_set_frs_enable(int port, int enable)
+{
+	int rv = EC_SUCCESS;
+
+	/* Use the TCPC to enable fast switch when FRS included */
+	if (port == USBC_PORT_C0) {
+		rv = ioex_set_level(IOEX_USB_C0_TCPC_FASTSW_CTL_EN,
+				    !!enable);
+	} else {
+		rv = ioex_set_level(IOEX_USB_C1_TCPC_FASTSW_CTL_EN,
+				    !!enable);
+	}
+
+	return rv;
+}
+
+void bc12_interrupt(enum gpio_signal signal)
+{
+	switch (signal) {
+	case GPIO_USB_C0_BC12_INT_ODL:
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		break;
+
+	case GPIO_USB_C1_BC12_INT_ODL:
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+		break;
+
+	default:
+		break;
+	}
+}
 
 /*****************************************************************************
  * IO expander
@@ -159,46 +377,6 @@ struct ioexpander_config_t ioex_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_IO_EXPANDER_PORT_COUNT == USBC_PORT_COUNT);
-
-/*****************************************************************************
- * MST hub
- */
-
-static void mst_hpd_handler(void)
-{
-	int hpd = 0;
-
-	/*
-	 * Ensure level on GPIO_DP1_HPD matches IOEX_MST_HPD_OUT, in case
-	 * we got out of sync.
-	 */
-	ioex_get_level(IOEX_MST_HPD_OUT, &hpd);
-	gpio_set_level(GPIO_DP1_HPD, hpd);
-	ccprints("MST HPD %d", hpd);
-}
-DECLARE_DEFERRED(mst_hpd_handler);
-
-void mst_hpd_interrupt(enum ioex_signal signal)
-{
-	/*
-	 * Goal is to pass HPD through from DB OPT3 MST hub to AP's DP1.
-	 * Immediately invert GPIO_DP1_HPD, to pass through the edge on
-	 * IOEX_MST_HPD_OUT. Then check level after 2 msec debounce.
-	 */
-	int hpd = !gpio_get_level(GPIO_DP1_HPD);
-
-	gpio_set_level(GPIO_DP1_HPD, hpd);
-	hook_call_deferred(&mst_hpd_handler_data, (2 * MSEC));
-}
-
-/*****************************************************************************
- * USB-A Power
- */
-
-const int usb_port_enable[USBA_PORT_COUNT] = {
-	IOEX_EN_USB_A0_5V,
-	IOEX_EN_USB_A1_5V_DB,
-};
 
 /*****************************************************************************
  * Custom Zork USB-C1 Retimer/MUX driver
@@ -308,10 +486,10 @@ static int board_ps8818_mux_set(const struct usb_mux *me,
 			return rv;
 
 		/* Enable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
+		gpio_or_ioex_set_level(PORT_TO_HPD(1), 1);
 	} else {
 		/* Disable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
+		gpio_or_ioex_set_level(PORT_TO_HPD(1), 0);
 	}
 
 	return rv;
@@ -337,3 +515,26 @@ struct usb_mux usbc1_amd_fp5_usb_mux = {
 	.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
 	.driver = &amd_fp5_usb_mux_driver,
 };
+
+/*
+ * USB-C1 HPD may go through an IO expander, so we must use a custom HPD GPIO
+ * control function with CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM.
+ *
+ * TODO(b/165622386) revert to non-custom GPIO control when HPD is no longer on
+ * the IO expander in any variants.
+ */
+void svdm_set_hpd_gpio(int port, int en)
+{
+	gpio_or_ioex_set_level(PORT_TO_HPD(port), en);
+}
+
+int svdm_get_hpd_gpio(int port)
+{
+	int out;
+
+	if (gpio_or_ioex_get_level(PORT_TO_HPD(port), &out) != EC_SUCCESS) {
+		ccprints("Failed to read current HPD for port C%d", port);
+		return 0;
+	}
+	return out;
+}

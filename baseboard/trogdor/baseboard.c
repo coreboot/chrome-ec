@@ -58,8 +58,10 @@ const struct i2c_port_t i2c_ports[] = {
 					  GPIO_EC_I2C_POWER_SDA},
 	{"tcpc0",   I2C_PORT_TCPC0, 1000, GPIO_EC_I2C_USB_C0_PD_SCL,
 					  GPIO_EC_I2C_USB_C0_PD_SDA},
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	{"tcpc1",   I2C_PORT_TCPC1, 1000, GPIO_EC_I2C_USB_C1_PD_SCL,
 					  GPIO_EC_I2C_USB_C1_PD_SDA},
+#endif
 	{"eeprom",  I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
 					  GPIO_EC_I2C_EEPROM_SDA},
 	{"sensor",  I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
@@ -76,4 +78,7 @@ const struct charger_config_t chg_chips[] = {
 	},
 };
 
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
+int board_allow_i2c_passthru(int port)
+{
+	return (port == I2C_PORT_VIRTUAL_BATTERY);
+}

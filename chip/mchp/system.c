@@ -5,6 +5,8 @@
 
 /* System module for Chrome EC : MCHP hardware specific implementation */
 
+#include <stdnoreturn.h>
+
 #include "clock.h"
 #include "common.h"
 #include "console.h"
@@ -64,8 +66,8 @@ static void check_reset_cause(void)
 		flags |= EC_RESET_FLAG_RESET_PIN;
 
 
-	flags |= MCHP_VBAT_RAM(HIBDATA_INDEX_SAVED_RESET_FLAGS);
-	MCHP_VBAT_RAM(HIBDATA_INDEX_SAVED_RESET_FLAGS) = 0;
+	flags |= chip_read_reset_flags();
+	chip_save_reset_flags(0);
 
 	if ((status & MCHP_VBAT_STS_WDT) && !(flags & (EC_RESET_FLAG_SOFT |
 					    EC_RESET_FLAG_HARD |
@@ -200,13 +202,17 @@ void system_pre_init(void)
 	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
 }
 
+uint32_t chip_read_reset_flags(void)
+{
+	return MCHP_VBAT_RAM(HIBDATA_INDEX_SAVED_RESET_FLAGS);
+}
+
 void chip_save_reset_flags(uint32_t flags)
 {
 	MCHP_VBAT_RAM(HIBDATA_INDEX_SAVED_RESET_FLAGS) = flags;
 }
 
-void __attribute__((noreturn)) _system_reset(int flags,
-					int wake_from_hibernate)
+noreturn void _system_reset(int flags, int wake_from_hibernate)
 {
 	uint32_t save_flags = 0;
 

@@ -90,7 +90,6 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &rt946x_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
@@ -218,7 +217,7 @@ int extpower_is_present(void)
 	if (board_vbus_source_enabled(0))
 		return 0;
 	else
-		return tcpm_get_vbus_level(0);
+		return tcpm_check_vbus_level(0, VBUS_PRESENT);
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -282,7 +281,7 @@ static void board_init(void)
 	STM32_GPIO_OSPEEDR(GPIO_D) |= 0x000003cf;
 
 	/* Sensor Init */
-	if (system_jumped_to_this_image() && chipset_in_state(CHIPSET_STATE_ON))
+	if (system_jumped_late() && chipset_in_state(CHIPSET_STATE_ON))
 		board_spi_enable();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
@@ -460,14 +459,4 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 int board_allow_i2c_passthru(int port)
 {
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
-}
-
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-	/*
-	 * There is no USB2 switch anywhere on this board. But based
-	 * on the discussion in b:65446459, RK3399's USB PHY is powered
-	 * off when USB charging port detection is going on, so things
-	 * should mostly work without a USB2 switch.
-	 */
 }

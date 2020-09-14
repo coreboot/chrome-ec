@@ -27,9 +27,14 @@
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_5V_CHARGER_CTRL
 #define CONFIG_CHARGER_OTG
+#undef  CONFIG_CHARGER_SINGLE_CHIP
 
 /* LED */
+#define CONFIG_LED_PWM
 #define CONFIG_LED_PWM_COUNT 1
+
+/* PWM */
+#define CONFIG_PWM
 
 /* Sensors */
 #define CONFIG_ACCEL_LIS2DE		/* Lid accel */
@@ -58,6 +63,7 @@
 #define CONFIG_GMR_TABLET_MODE
 
 /* TCPC */
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPM_ITE_ON_CHIP	/* C0: ITE EC TCPC */
 #define CONFIG_USB_PD_TCPM_ANX7447	/* C1: ANX TCPC + Mux */
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 1
@@ -79,6 +85,12 @@
 #include "gpio_signal.h"
 #include "registers.h"
 
+enum chg_id {
+	CHARGER_PRIMARY,
+	CHARGER_SECONDARY,
+	CHARGER_NUM,
+};
+
 enum pwm_channel {
 	PWM_CH_KBLIGHT,
 	PWM_CH_LED_RED,
@@ -94,6 +106,15 @@ enum sensor_id {
 	BASE_GYRO,
 	VSYNC,
 	SENSOR_COUNT
+};
+
+/* ADC channels */
+enum adc_channel {
+	ADC_VSNS_PP3300_A,     /* ADC0 */
+	ADC_TEMP_SENSOR_1,     /* ADC2 */
+	ADC_TEMP_SENSOR_2,     /* ADC3 */
+	ADC_SUB_ANALOG,        /* ADC13 */
+	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {

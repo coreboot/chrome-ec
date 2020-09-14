@@ -12,11 +12,6 @@
 #include "usb_pd_tcpm.h"
 #include "usb_sm.h"
 
-/*
- * Number of times the Protocol Layer will try to transmit a message
- * before giving up and signaling an error
- */
-#define N_RETRY_COUNT 2
 
 /**
  * Returns true if Protocol Layer State Machine is in run mode
@@ -25,6 +20,15 @@
  * @return 1 if state machine is running, else 0
  */
 int prl_is_running(int port);
+
+/**
+ * Returns true if the Protocol Layer State Machine is in the
+ * process of transmitting or receiving chunked messages.
+ *
+ * @param port USB-C port number
+ * @return true if sending or receiving a chunked message, else false
+ */
+bool prl_is_busy(int port);
 
 /**
  * Sets the debug level for the PRL layer
@@ -39,6 +43,13 @@ void prl_set_debug_level(enum debug_level level);
  * @param port USB-C port number
  */
 void prl_reset(int port);
+
+/**
+ * Resets the Protocol Layer State Machine (softly)
+ *
+ * @param port USB-C port number
+ */
+void prl_reset_soft(int port);
 
 /**
  * Runs the Protocol Layer State Machine
@@ -74,7 +85,6 @@ enum pd_rev_type prl_get_rev(int port, enum tcpm_transmit_type type);
  * @param port USB-C port number
  * @param type Transmit type
  * @param msg  Control message type
- * @return 0 on EC_SUCCESS, else EC_ERROR_BUSY
  */
 void prl_send_ctrl_msg(int port, enum tcpm_transmit_type type,
 	enum pd_ctrl_msg_type msg);
@@ -85,7 +95,6 @@ void prl_send_ctrl_msg(int port, enum tcpm_transmit_type type,
  * @param port USB-C port number
  * @param type Transmit type
  * @param msg  Data message type
- * @return 0 on EC_SUCCESS, else EC_ERROR_BUSY
  */
 void prl_send_data_msg(int port, enum tcpm_transmit_type type,
 	enum pd_data_msg_type msg);
@@ -96,7 +105,6 @@ void prl_send_data_msg(int port, enum tcpm_transmit_type type,
  * @param port USB-C port number
  * @param type Transmit type
  * @param msg  Extended data message type
- * @return 0 on EC_SUCCESS, else EC_ERROR_BUSY
  */
 void prl_send_ext_data_msg(int port, enum tcpm_transmit_type type,
 	enum pd_ext_msg_type msg);
@@ -115,25 +123,27 @@ void prl_hard_reset_complete(int port);
  */
 void prl_execute_hard_reset(int port);
 
-/**
- * Informs the Protocol Layer to start an Atomic Message Sequence
- *
- * @param port USB-C port number
- */
-void prl_start_ams(int port);
-
-/**
- * Informs the Protocol Layer to end an Atomic Message Sequence
- *
- * @param port USB-C port number
- */
-void prl_end_ams(int port);
-
 #ifdef TEST_BUILD
 /**
  * Fake to track the last sent control message
  */
 enum pd_ctrl_msg_type fake_prl_get_last_sent_ctrl_msg(int port);
+
+/**
+ * Fake to set the last sent control message to an invalid value.
+ */
+void fake_prl_clear_last_sent_ctrl_msg(int port);
+
+/**
+ * Get the type of the last sent data message on the given port.
+ */
+enum pd_data_msg_type fake_prl_get_last_sent_data_msg_type(int port);
+
+/**
+ * Clear the last sent data message on the given port to an invalid value,
+ * making it possible to check that two of the same message were sent in order.
+ */
+void fake_prl_clear_last_sent_data_msg(int port);
 #endif
 
 #endif /* __CROS_EC_USB_PRL_H */

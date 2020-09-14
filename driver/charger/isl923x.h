@@ -25,6 +25,7 @@
 #define ISL923X_REG_CONTROL2         0x3d
 #define ISL9238_REG_CONTROL3         0x4c
 #define ISL9238_REG_CONTROL4         0x4e
+#define ISL9238C_REG_CONTROL6        0x37
 #define ISL923X_REG_INFO             0x3a
 #define ISL9238_REG_INFO2            0x4d
 #define ISL923X_REG_OTG_VOLTAGE      0x49
@@ -33,6 +34,7 @@
 #define ISL923X_REG_MANUFACTURER_ID  0xfe
 #define ISL923X_REG_DEVICE_ID        0xff
 #define RAA489000_REG_CONTROL8       0x37
+#define RAA489000_REG_CONTROL10      0x35
 
 /* Sense resistor default values in mOhm */
 #define ISL923X_DEFAULT_SENSE_RESISTOR_AC 20
@@ -242,6 +244,9 @@
 /* Control3: PSYS gain in uA/W (ISL9238 only) */
 #define ISL9238_C3_PSYS_GAIN BIT(9)
 
+/* Control3: Enables or disables Battery Ship mode */
+#define ISL9238_C3_BGATE_OFF BIT(10)
+
 /* Control3: Don't reload ACLIM on ACIN. */
 #define ISL9238_C3_NO_RELOAD_ACLIM_ON_ACIN BIT(14)
 
@@ -253,6 +258,9 @@
 
 /* Control4: GP comparator control bit */
 #define RAA489000_C4_DISABLE_GP_CMP BIT(12)
+
+/* Control6: charger current and maximum system voltage slew rate control. */
+#define ISL9238C_C6_SLEW_RATE_CONTROL BIT(6)
 
 /* Control8: MCU_LDO - BAT state disable */
 #define RAA489000_C8_MCU_LDO_BAT_STATE_DISABLE BIT(14)
@@ -282,6 +290,7 @@
 
 /* ADC registers */
 #define RAA489000_REG_ADC_INPUT_CURRENT 0x83
+#define RAA489000_REG_ADC_CHARGE_CURRENT 0x85
 #define RAA489000_REG_ADC_VSYS 0x86
 #define RAA489000_REG_ADC_VBUS 0x89
 
@@ -310,6 +319,23 @@ enum isl9237_fsm_state {
 #define ISL923X_INFO_DCHOT BIT(11)
 #define ISL9237_INFO_ACHOT BIT(12)
 
+#define RAA489000_DEV_ID_B0 0x11
+
+/* DVC - Dynamic Voltage Compensation */
+#define RAA489000_RP1_MAX 156
+#define RAA489000_RP1_MIN 36
+#define RAA489000_RP2_MAX 124
+#define RAA489000_RP2_MIN 0
+
+#define RAA489000_C10_RP2_MASK GENMASK(4, 0)
+#define RAA489000_C10_DISABLE_DVC_AUTO_ZERO BIT(5)
+#define RAA489000_C10_ENABLE_DVC_TRICKLE_CHARGE BIT(6)
+#define RAA489000_C10_DISABLE_DVC_CC_LOOP BIT(8)
+#define RAA489000_C10_ENABLE_DVC_CHARGE_MODE BIT(9)
+#define RAA489000_C10_RP1_MASK GENMASK(14, 10)
+#define RAA489000_C10_RP1_SHIFT 10
+#define RAA489000_C10_ENABLE_DVC_MODE BIT(15)
+
 #if defined(CONFIG_CHARGER_ISL9237)
 #define CHARGER_NAME  "isl9237"
 #define CHARGE_V_MAX  ISL9237_SYS_VOLTAGE_REG_MAX
@@ -317,6 +343,11 @@ enum isl9237_fsm_state {
 #define CHARGE_V_STEP 8
 #elif defined(CONFIG_CHARGER_ISL9238)
 #define CHARGER_NAME  "isl9238"
+#define CHARGE_V_MAX  ISL9238_SYS_VOLTAGE_REG_MAX
+#define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
+#define CHARGE_V_STEP 8
+#elif defined(CONFIG_CHARGER_ISL9238C)
+#define CHARGER_NAME  "isl9238c"
 #define CHARGE_V_MAX  ISL9238_SYS_VOLTAGE_REG_MAX
 #define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
 #define CHARGE_V_STEP 8
@@ -380,6 +411,8 @@ int isl923x_set_comparator_inversion(int chgnum, int invert);
  * @param chgnum index into chg_chips table.
  */
 void raa489000_hibernate(int chgnum);
+enum ec_error_list isl9238c_hibernate(int chgnum);
+enum ec_error_list isl9238c_resume(int chgnum);
 
 #define ISL923X_AC_PROCHOT_CURRENT_MAX	6400	/* mA */
 #define ISL923X_DC_PROCHOT_CURRENT_MAX	12800	/* mA */

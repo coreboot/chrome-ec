@@ -55,6 +55,9 @@ test_export_static int command_pd(int argc, char **argv)
 			ccprintf("Try.SRC Forced %s\n", ov ? "ON" : "OFF");
 
 		return EC_SUCCESS;
+	} else if (!strcasecmp(argv[1], "version")) {
+		ccprintf("%d\n", PD_STACK_VERSION);
+		return EC_SUCCESS;
 	}
 
 	/* command: pd <port> <subcmd> [args] */
@@ -161,15 +164,23 @@ test_export_static int command_pd(int argc, char **argv)
 		if (IS_ENABLED(CONFIG_USBC_VCONN))
 			ccprintf("%s ", tc_is_vconn_src(port) ? "-VC" : "");
 
-		ccprintf("TC State: %s, Flags: 0x%04x\n",
+		ccprintf("TC State: %s, Flags: 0x%04x",
 			tc_get_current_state(port),
 			tc_get_flags(port));
+
+		if (IS_ENABLED(CONFIG_USB_PE_SM))
+			ccprintf(" PE State: %s, Flags: 0x%04x\n",
+				pe_get_current_state(port),
+				pe_get_flags(port));
+		else
+			ccprintf("\n");
 	}
 
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(pd, command_pd,
-	 "dump [0|1|2|3]"
+	 "version"
+	 "\ndump [0|1|2|3]"
 #ifdef CONFIG_USB_PD_TRY_SRC
 	"\ntrysrc [0|1|2]"
 #endif

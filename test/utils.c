@@ -157,14 +157,23 @@ static int test_memset(void)
 	TEST_ASSERT_MEMSET(buf, (char)1, len);
 	ccprintf(" %" PRId64 " us) ", t3.val-t2.val);
 
-	/* Expected about 4x speed gain. Use 3x because it fluctuates */
-#ifndef EMU_BUILD
 	/*
-	 * The speed gain is too unpredictable on host, especially on
-	 * buildbots. Skip it if we are running in the emulator.
+	 * Expected about 4x speed gain. Use smaller value since it
+	 * fluctuates.
 	 */
-	TEST_ASSERT((t1.val-t0.val) > (unsigned)(t3.val-t2.val) * 3);
-#endif
+	if (!IS_ENABLED(EMU_BUILD)) {
+		/*
+		 * The speed gain is too unpredictable on host, especially on
+		 * buildbots. Skip it if we are running in the emulator.
+		 */
+		int expected_speedup = 3;
+
+		if (IS_ENABLED(CHIP_FAMILY_STM32F4))
+			expected_speedup = 2;
+
+		TEST_ASSERT((t1.val - t0.val) >
+			    (unsigned int)(t3.val - t2.val) * expected_speedup);
+	}
 
 	memset(buf, 128, len);
 	TEST_ASSERT_MEMSET(buf, (char)128, len);
@@ -235,19 +244,19 @@ static int test_shared_mem(void)
 {
 	int i;
 	int sz = shared_mem_size();
-	char *mem;
+	char *mem1, *mem2;
 
-	TEST_ASSERT(shared_mem_acquire(sz, &mem) == EC_SUCCESS);
-	TEST_ASSERT(shared_mem_acquire(sz, &mem) == EC_ERROR_BUSY);
+	TEST_ASSERT(shared_mem_acquire(sz, &mem1) == EC_SUCCESS);
+	TEST_ASSERT(shared_mem_acquire(sz, &mem2) == EC_ERROR_BUSY);
 
 	for (i = 0; i < 256; ++i) {
-		memset(mem, i, sz);
-		TEST_ASSERT_MEMSET(mem, (char)i, sz);
+		memset(mem1, i, sz);
+		TEST_ASSERT_MEMSET(mem1, (char)i, sz);
 		if ((i & 0xf) == 0)
 			msleep(20); /* Yield to other tasks */
 	}
 
-	shared_mem_release(mem);
+	shared_mem_release(mem1);
 
 	return EC_SUCCESS;
 }
@@ -424,7 +433,24 @@ static int test_bytes_are_trivial(void)
 	return EC_SUCCESS;
 }
 
-void run_test(void)
+test_static int test_is_aligned(void)
+{
+	TEST_EQ(is_aligned(2, 0), false, "%d");
+	TEST_EQ(is_aligned(2, 1), true, "%d");
+	TEST_EQ(is_aligned(2, 2), true, "%d");
+	TEST_EQ(is_aligned(2, 3), false, "%d");
+	TEST_EQ(is_aligned(2, 4), false, "%d");
+
+	TEST_EQ(is_aligned(3, 0), false, "%d");
+	TEST_EQ(is_aligned(3, 1), true, "%d");
+	TEST_EQ(is_aligned(3, 2), false, "%d");
+	TEST_EQ(is_aligned(3, 3), false, "%d");
+	TEST_EQ(is_aligned(3, 4), false, "%d");
+
+	return EC_SUCCESS;
+}
+
+void run_test(int argc, char **argv)
 {
 	test_reset();
 
@@ -442,6 +468,7 @@ void run_test(void)
 	RUN_TEST(test_mula32);
 	RUN_TEST(test_swap);
 	RUN_TEST(test_bytes_are_trivial);
+	RUN_TEST(test_is_aligned);
 
 	test_print_result();
 }

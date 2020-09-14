@@ -52,10 +52,10 @@ static const char * const task_names[] = {
 
 #ifdef CONFIG_TASK_PROFILING
 static int task_will_switch;
-static uint64_t exc_sub_time;
+static uint32_t exc_sub_time;
 static uint64_t task_start_time; /* Time task scheduling started */
-static uint64_t exc_start_time;  /* Time of task->exception transition */
-static uint64_t exc_end_time;    /* Time of exception->task transition */
+static uint32_t exc_start_time;  /* Time of task->exception transition */
+static uint32_t exc_end_time;    /* Time of exception->task transition */
 static uint64_t exc_total_time;  /* Total time in exceptions */
 static uint32_t svc_calls;       /* Number of service calls */
 static uint32_t task_switches;   /* Number of times active task changed */
@@ -118,7 +118,7 @@ static const struct {
 
 /* Contexts for all tasks */
 static task_ tasks[TASK_ID_COUNT];
-/* Sanity checks about static task invariants */
+/* Validity checks about static task invariants */
 BUILD_ASSERT(TASK_ID_COUNT <= sizeof(unsigned) * 8);
 BUILD_ASSERT(TASK_ID_COUNT < (1 << (sizeof(task_id_t) * 8)));
 
@@ -170,9 +170,6 @@ int start_called;  /* Has task swapping started */
 
 /* interrupt number of sw interrupt */
 static int sw_int_num;
-
-/* Number of CPU hardware interrupts (HW0 ~ HW15) */
-int cpu_int_entry_number;
 
 /*
  * This variable is used to save link pointer register,
@@ -250,14 +247,6 @@ uint32_t *task_get_event_bitmap(task_id_t tskid)
 int task_start_called(void)
 {
 	return start_called;
-}
-
-int get_sw_int(void)
-{
-	/* If this is a SW interrupt */
-	if (get_itype() & 8)
-		return sw_int_num;
-	return 0;
 }
 
 /**
@@ -341,46 +330,22 @@ static inline void __schedule(int desched, int resched, int swirq)
 void update_exc_start_time(void)
 {
 #ifdef CONFIG_TASK_PROFILING
-	exc_start_time = get_time().val;
+	exc_start_time = get_time().le.lo;
 #endif
 }
 
 /* Interrupt number of EC modules */
-static volatile int ec_int;
-
-#ifdef CHIP_FAMILY_IT83XX
-int __ram_code intc_get_ec_int(void)
-{
-	return ec_int;
-}
-#endif
+volatile int ec_int;
 
 void __ram_code start_irq_handler(void)
 {
 	/* save r0, r1, and r2 for syscall */
 	asm volatile ("smw.adm $r0, [$sp], $r2, 0");
 	/* If this is a SW interrupt */
-	if (get_itype() & 8) {
-		ec_int = get_sw_int();
-	} else {
-#ifdef CHIP_FAMILY_IT83XX
-		int i;
-
-		for (i = 0; i < IT83XX_IRQ_COUNT; i++) {
-			ec_int = IT83XX_INTC_IVCT(cpu_int_entry_number);
-			/*
-			 * WORKAROUND: when the interrupt vector register isn't
-			 * latched in a load operation,
-			 * we read it again to make sure the value we got
-			 * is the correct value.
-			 */
-			if (ec_int == IT83XX_INTC_IVCT(cpu_int_entry_number))
-				break;
-		}
-		/* Determine interrupt number */
-		ec_int -= 16;
-#endif
-	}
+	if (get_itype() & 8)
+		ec_int = sw_int_num;
+	else
+		ec_int = chip_get_ec_int();
 
 #if defined(CONFIG_LOW_POWER_IDLE) && defined(CHIP_FAMILY_IT83XX)
 	clock_sleep_mode_wakeup_isr();
@@ -402,14 +367,14 @@ void __ram_code start_irq_handler(void)
 void end_irq_handler(void)
 {
 #ifdef CONFIG_TASK_PROFILING
-	uint64_t t, p;
+	uint32_t t, p;
 	/*
 	 * save r0 and fp (fp for restore r0-r5, r15, fp, lp and sp
 	 * while interrupt exit.
 	 */
 	asm volatile ("smw.adm $r0, [$sp], $r0, 8");
 
-	t = get_time().val;
+	t = get_time().le.lo;
 	p = t - exc_start_time;
 
 	exc_total_time += p;
@@ -802,7 +767,8 @@ void task_pre_init(void)
 int task_start(void)
 {
 #ifdef CONFIG_TASK_PROFILING
-	task_start_time = exc_end_time = get_time().val;
+	task_start_time = get_time().val;
+	exc_end_time = get_time().le.lo;
 #endif
 
 	return __task_start();

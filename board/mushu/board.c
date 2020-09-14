@@ -18,6 +18,8 @@
 #include "driver/tcpm/anx7447.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
+#include "driver/temp_sensor/amd_r19me4070.h"
+#include "driver/temp_sensor/f75303.h"
 #include "ec_commands.h"
 #include "extpower.h"
 #include "fan.h"
@@ -42,7 +44,6 @@
 #include "usb_pd.h"
 #include "usbc_ppc.h"
 #include "util.h"
-#include "driver/temp_sensor/amd_r19me4070.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -376,9 +377,9 @@ const struct fan_conf fan_conf_1 = {
 };
 /* Default */
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3100,
-	.rpm_start = 3100,
-	.rpm_max = 6900,
+	.rpm_min = 2000,
+	.rpm_start = 2000,
+	.rpm_max = 4100,
 };
 
 const struct fan_rpm fan_rpm_1 = {
@@ -409,18 +410,42 @@ const struct adc_t adc_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_CHARGER] = {.name = "CHARGER",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1},
-	[TEMP_5V] = {.name = "5V",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2},
-	[TEMP_GPU] = {.name = "GPU",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_R19ME4070,
-				 .idx = R19ME4070_LOCAL},
+	[TEMP_CHARGER] = {
+		.name = "CHARGER",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_30k9_47k_4050b,
+		.idx = ADC_TEMP_SENSOR_1
+	},
+	[TEMP_5V] = {
+		.name = "5V",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_30k9_47k_4050b,
+		.idx = ADC_TEMP_SENSOR_2
+	},
+	[TEMP_GPU] = {
+		.name = "GPU",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_R19ME4070,
+		.idx = R19ME4070_LOCAL
+	},
+	[TEMP_F75303_LOCAL] = {
+		.name = "F75303_Local",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = f75303_get_val,
+		.idx = F75303_IDX_LOCAL
+	},
+	[TEMP_F75303_GPU] = {
+		.name = "F75303_GPU",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = f75303_get_val,
+		.idx = F75303_IDX_REMOTE1
+	},
+	[TEMP_F75303_GPU_POWER] = {
+		.name = "F75303_GPU_Power",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = f75303_get_val,
+		.idx = F75303_IDX_REMOTE2
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -442,8 +467,8 @@ const static struct ec_thermal_config thermal_a = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 		[EC_TEMP_THRESH_HALT] = 0,
 	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_off = C_TO_K(0),
+	.temp_fan_max = C_TO_K(70),
 };
 
 const static struct ec_thermal_config thermal_b = {
@@ -479,7 +504,7 @@ static void reset_gpio_flags(enum gpio_signal signal, int flags)
 	 * may change the value from the previous image which could cause a
 	 * brownout.
 	 */
-	if (system_is_reboot_warm() || system_jumped_to_this_image())
+	if (system_is_reboot_warm() || system_jumped_late())
 		flags &= ~(GPIO_LOW | GPIO_HIGH);
 
 	gpio_set_flags(signal, flags);
@@ -522,7 +547,7 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 void board_overcurrent_event(int port, int is_overcurrented)
 {
-	/* Sanity check the port. */
+	/* Check that port number is valid. */
 	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 

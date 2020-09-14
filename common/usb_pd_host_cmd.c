@@ -7,6 +7,7 @@
 
 #include <string.h>
 
+#include "atomic.h"
 #include "battery.h"
 #include "charge_manager.h"
 #include "console.h"
@@ -88,7 +89,7 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_RW_HASH_ENTRY,
 static enum ec_status hc_remote_pd_chip_info(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_pd_chip_info *p = args->params;
-	struct ec_response_pd_chip_info_v1 *info;
+	struct ec_response_pd_chip_info_v1 info;
 
 	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
@@ -104,7 +105,7 @@ static enum ec_status hc_remote_pd_chip_info(struct host_cmd_handler_args *args)
 		args->version ? sizeof(struct ec_response_pd_chip_info_v1)
 			      : sizeof(struct ec_response_pd_chip_info);
 
-	memcpy(args->response, info, args->response_size);
+	memcpy(args->response, &info, args->response_size);
 
 	return EC_RES_SUCCESS;
 }
@@ -124,7 +125,7 @@ static enum ec_status hc_remote_pd_set_amode(struct host_cmd_handler_args *args)
 
 	switch (p->cmd) {
 	case PD_EXIT_MODE:
-		if (pd_dfp_exit_mode(p->port, p->svid, p->opos))
+		if (pd_dfp_exit_mode(p->port, TCPC_TX_SOP, p->svid, p->opos))
 			pd_send_vdm(p->port, p->svid,
 				    CMD_EXIT_MODE | VDO_OPOS(p->opos), NULL, 0);
 		else {
@@ -133,7 +134,7 @@ static enum ec_status hc_remote_pd_set_amode(struct host_cmd_handler_args *args)
 		}
 		break;
 	case PD_ENTER_MODE:
-		if (pd_dfp_enter_mode(p->port, p->svid, p->opos))
+		if (pd_dfp_enter_mode(p->port, TCPC_TX_SOP, p->svid, p->opos))
 			pd_send_vdm(p->port, p->svid, CMD_ENTER_MODE |
 				    VDO_OPOS(p->opos), NULL, 0);
 		break;
@@ -178,20 +179,21 @@ static enum ec_status hc_remote_pd_get_amode(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 
 	/* no more to send */
-	if (p->svid_idx >= pd_get_svid_count(p->port)) {
+	/* TODO(b/148528713): Use TCPMv2's separate storage for SOP'. */
+	if (p->svid_idx >= pd_get_svid_count(p->port, TCPC_TX_SOP)) {
 		r->svid = 0;
 		args->response_size = sizeof(r->svid);
 		return EC_RES_SUCCESS;
 	}
 
-	r->svid = pd_get_svid(p->port, p->svid_idx);
+	r->svid = pd_get_svid(p->port, p->svid_idx, TCPC_TX_SOP);
 	r->opos = 0;
-	memcpy(r->vdo, pd_get_mode_vdo(p->port, p->svid_idx),
+	memcpy(r->vdo, pd_get_mode_vdo(p->port, p->svid_idx, TCPC_TX_SOP),
 		sizeof(uint32_t) * PDO_MODES);
-	modep = pd_get_amode_data(p->port, r->svid);
+	modep = pd_get_amode_data(p->port, TCPC_TX_SOP, r->svid);
 
 	if (modep)
-		r->opos = pd_alt_mode(p->port, r->svid);
+		r->opos = pd_alt_mode(p->port, TCPC_TX_SOP, r->svid);
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
@@ -251,8 +253,14 @@ static const mux_state_t typec_mux_map[USB_PD_CTRL_MUX_COUNT] = {
  */
 static uint8_t get_pd_control_flags(int port)
 {
-	union tbt_mode_resp_cable cable_resp = get_cable_tbt_vdo(port);
-	union tbt_mode_resp_device device_resp = get_dev_tbt_vdo(port);
+	union tbt_mode_resp_cable cable_resp;
+	union tbt_mode_resp_device device_resp;
+
+	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
+		return 0;
+
+	cable_resp.raw_value = pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME);
+	device_resp.raw_value = pd_get_tbt_mode_vdo(port, TCPC_TX_SOP);
 
 	/*
 	 * Ref: USB Type-C Cable and Connector Specification
@@ -294,6 +302,7 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 	struct ec_response_usb_pd_control_v1 *r_v1 = args->response;
 	struct ec_response_usb_pd_control *r = args->response;
 	const char *task_state_name;
+	mux_state_t mux_state;
 
 	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
@@ -358,8 +367,16 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 		r_v2->control_flags = get_pd_control_flags(p->port);
 		if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
 			r_v2->dp_mode = get_dp_pin_mode(p->port);
-			r_v2->cable_speed = get_tbt_cable_speed(p->port);
-			r_v2->cable_gen = get_tbt_rounded_support(p->port);
+			mux_state = usb_mux_get(p->port);
+			if (mux_state & USB_PD_MUX_USB4_ENABLED) {
+				r_v2->cable_speed =
+					get_usb4_cable_speed(p->port);
+			} else if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED) {
+				r_v2->cable_speed =
+					get_tbt_cable_speed(p->port);
+				r_v2->cable_gen =
+					get_tbt_rounded_support(p->port);
+			}
 		}
 
 		if (args->version == 1)
@@ -509,7 +526,7 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_PD_PORT_CAPS,
 		     hc_get_pd_port_caps,
 		     EC_VER_MASK(0));
 
-#ifdef CONFIG_CMD_PD_CONTROL
+#ifdef CONFIG_HOSTCMD_PD_CONTROL
 static enum ec_status pd_control(struct host_cmd_handler_args *args)
 {
 	static int pd_control_disabled[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -584,8 +601,42 @@ static enum ec_status pd_control(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-
 DECLARE_HOST_COMMAND(EC_CMD_PD_CONTROL, pd_control, EC_VER_MASK(0));
-#endif /* CONFIG_CMD_PD_CONTROL */
+#endif /* CONFIG_HOSTCMD_PD_CONTROL */
+
+#if !defined(CONFIG_USB_PD_TCPM_STUB) && !defined(TEST_BUILD)
+/*
+ * PD host event status for host command
+ * Note: this variable must be aligned on 4-byte boundary because we pass the
+ * address to atomic_ functions which use assembly to access them.
+ */
+static uint32_t pd_host_event_status __aligned(4);
+
+static enum ec_status
+hc_pd_host_event_status(struct host_cmd_handler_args *args)
+{
+	struct ec_response_host_event_status *r = args->response;
+
+	/* Read and clear the host event status to return to AP */
+	r->status = atomic_read_clear(&pd_host_event_status);
+
+	args->response_size = sizeof(*r);
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PD_HOST_EVENT_STATUS, hc_pd_host_event_status,
+		     EC_VER_MASK(0));
+
+/* Send host event up to AP */
+void pd_send_host_event(int mask)
+{
+	/* mask must be set */
+	if (!mask)
+		return;
+
+	atomic_or(&pd_host_event_status, mask);
+	/* interrupt the AP */
+	host_set_single_event(EC_HOST_EVENT_PD_MCU);
+}
+#endif /* ! CONFIG_USB_PD_TCPM_STUB && ! TEST_BUILD */
 
 #endif /* HAS_TASK_HOSTCMD */

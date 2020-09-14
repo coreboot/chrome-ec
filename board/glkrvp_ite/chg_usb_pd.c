@@ -65,11 +65,6 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-/* TODO: Implement this function and move to appropriate file */
-void usb_charger_set_switches(int port, enum usb_switch setting)
-{
-}
-
 static int board_charger_port_is_sourcing_vbus(int port)
 {
 	int reg;
@@ -122,7 +117,7 @@ void tcpc_alert_event(enum gpio_signal signal)
 void board_tcpc_init(void)
 {
 	/* Only reset TCPC if not sysjump */
-	if (!system_jumped_to_this_image())
+	if (!system_jumped_late())
 		board_reset_pd_mcu();
 
 	/* Enable TCPC0/1 interrupt */

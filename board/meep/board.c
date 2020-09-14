@@ -9,6 +9,7 @@
 #include "adc_chip.h"
 #include "battery.h"
 #include "button.h"
+#include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "common.h"
@@ -18,6 +19,7 @@
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/charger/bd9995x.h"
 #include "driver/ppc/nx20p348x.h"
+#include "driver/ppc/syv682x.h"
 #include "driver/tcpm/anx7447.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -49,17 +51,30 @@
 #define USB_PD_PORT_ANX7447	0
 #define USB_PD_PORT_PS8751	1
 
+#ifdef CONFIG_KEYBOARD_KEYPAD
+#error "KSO_14 was repurposed to PPC_ID pin so CONFIG_KEYBOARD_KEYPAD \
+should not be defined."
+#endif
+
 static uint8_t sku_id;
+static int c0_port_ppc;
+static int c1_port_ppc;
 
 static void ppc_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_PD_C0_INT_ODL:
-		nx20p348x_interrupt(0);
+		if (c0_port_ppc == PPC_SYV682X)
+			syv682x_interrupt(0);
+		else
+			nx20p348x_interrupt(0);
 		break;
 
 	case GPIO_USB_PD_C1_INT_ODL:
-		nx20p348x_interrupt(1);
+		if (c1_port_ppc == PPC_SYV682X)
+			syv682x_interrupt(1);
+		else
+			nx20p348x_interrupt(1);
 		break;
 
 	default:
@@ -238,6 +253,40 @@ static void board_update_sensor_config_from_sku(void)
 	}
 }
 
+static int get_ppc_port_config(uint32_t board_version, int port)
+{
+	switch (port) {
+	/*
+	 * Meep C0 port PPC was configrated by PPC ID pin only.
+	 */
+	case USB_PD_PORT_TCPC_0:
+		if ((board_version >= 6) && gpio_get_level(GPIO_PPC_ID))
+			return PPC_SYV682X;
+		else
+			return PPC_NX20P348X;
+	/*
+	 * Meep C1 port PPC was configrated by PPC ID pin or SSFC,
+	 * The first of all we should check SSFC with priority one,
+	 * then check PPC ID if board is unalbe to get SSFC.
+	 */
+	case USB_PD_PORT_TCPC_1:
+		switch (get_cbi_ssfc_ppc_p1()) {
+		case SSFC_PPC_P1_DEFAULT:
+			if ((board_version >= 6) && gpio_get_level(GPIO_PPC_ID))
+				return PPC_SYV682X;
+			else
+				return PPC_NX20P348X;
+		case SSFC_PPC_P1_SYV682X:
+			return PPC_SYV682X;
+		case SSFC_PPC_P1_NX20P348X:
+		default:
+			return PPC_NX20P348X;
+		}
+	default:
+		return PPC_NX20P348X;
+	}
+}
+
 static void cbi_init(void)
 {
 	uint32_t val;
@@ -247,6 +296,12 @@ static void cbi_init(void)
 	ccprints("SKU: 0x%04x", sku_id);
 
 	board_update_sensor_config_from_sku();
+
+	if (cbi_get_board_version(&val) == EC_SUCCESS)
+		ccprints("Board Version: %d", val);
+
+	c0_port_ppc = get_ppc_port_config(val, USB_PD_PORT_TCPC_0);
+	c1_port_ppc = get_ppc_port_config(val, USB_PD_PORT_TCPC_1);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -301,7 +356,7 @@ const int keyboard_factory_scan_pins_used =
 
 void board_overcurrent_event(int port, int is_overcurrented)
 {
-	/* Sanity check the port. */
+	/* Check that port number is valid. */
 	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 
@@ -322,4 +377,60 @@ __override uint32_t board_override_feature_flags0(uint32_t flags0)
 
 	/* Report that there is no keyboard backlight */
 	return (flags0 &= ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
+}
+
+__override uint16_t board_get_ps8xxx_product_id(int port)
+{
+	/* Meep variant doesn't have ps8xxx product in the port 0 */
+	if (port == 0)
+		return 0;
+
+	switch (get_cbi_ssfc_tcpc_p1()) {
+	case SSFC_TCPC_P1_PS8755:
+		return PS8755_PRODUCT_ID;
+	case SSFC_TCPC_P1_DEFAULT:
+	case SSFC_TCPC_P1_PS8751:
+	default:
+		return PS8751_PRODUCT_ID;
+	}
+}
+
+static const struct ppc_config_t ppc_syv682x_port0 = {
+		.i2c_port = I2C_PORT_TCPC0,
+		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.drv = &syv682x_drv,
+};
+
+static const struct ppc_config_t ppc_syv682x_port1 = {
+		.i2c_port = I2C_PORT_TCPC1,
+		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.drv = &syv682x_drv,
+};
+
+static void board_setup_ppc(void)
+{
+	if (c0_port_ppc == PPC_SYV682X) {
+		memcpy(&ppc_chips[USB_PD_PORT_TCPC_0],
+			   &ppc_syv682x_port0,
+			   sizeof(struct ppc_config_t));
+
+		gpio_set_flags(GPIO_USB_PD_C0_INT_ODL, GPIO_INT_BOTH);
+	}
+
+	if (c1_port_ppc == PPC_SYV682X) {
+		memcpy(&ppc_chips[USB_PD_PORT_TCPC_1],
+			   &ppc_syv682x_port1,
+			   sizeof(struct ppc_config_t));
+
+		gpio_set_flags(GPIO_USB_PD_C1_INT_ODL, GPIO_INT_BOTH);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_setup_ppc, HOOK_PRIO_INIT_I2C + 2);
+
+int ppc_get_alert_status(int port)
+{
+	if (port == 0)
+		return gpio_get_level(GPIO_USB_PD_C0_INT_ODL) == 0;
+
+	return gpio_get_level(GPIO_USB_PD_C1_INT_ODL) == 0;
 }

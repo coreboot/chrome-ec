@@ -168,7 +168,6 @@ const struct charger_config_t chg_chips[] = {
 	},
 };
 #endif /* OAK_REV1 */
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /*
  * Temperature sensors data; must be in same order as enum temp_sensor_id.
@@ -511,7 +510,7 @@ void vbus_task(void *u)
 			vbus = !gpio_get_level(port ? GPIO_USB_C1_VBUS_WAKE_L :
 						      GPIO_USB_C0_VBUS_WAKE_L);
 #else
-			vbus = tcpm_get_vbus_level(port);
+			vbus = tcpm_check_vbus_level(port, VBUS_PRESENT);
 #endif
 			/* check if VBUS changed */
 			if (((bc12[port].vbus >> port) & 1) == vbus)

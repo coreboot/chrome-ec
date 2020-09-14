@@ -12,7 +12,6 @@
 #include "baseboard.h"
 
 #define CONFIG_POWER_BUTTON
-#define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_POWER_LED
@@ -26,7 +25,6 @@
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
 #define CONFIG_KEYBOARD_CUSTOMIZATION
-#define CONFIG_KEYBOARD_DEBUG
 
 /* Enable board_config_pre_init() */
 #define CONFIG_BOARD_PRE_INIT

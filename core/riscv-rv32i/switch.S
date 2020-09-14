@@ -43,6 +43,8 @@ __switch_task:
 	beq a0, t0, __irq_exit
 	/* save our new scheduled task  */
 	sw a0, 0(t1)
+        /* save our current location in system stack so we can restore at end */
+        add t3, sp, zero
         /* restore current process stack pointer */
         csrr sp, mscratch
         /* get the task program counter saved at exception entry */
@@ -76,10 +78,18 @@ __switch_task:
         fsw fs0,  -13*4(sp)
         /* save program counter on the current process stack */
         sw t5,       -25*4(sp)
+        /*
+         * Note: we never execute on this stack frame, so it does not need to
+         * be 16-byte aligned.
+         */
         addi sp, sp, -25*4
 #else
 	/* save program counter on the current process stack */
         sw t5,       -13*4(sp)
+        /*
+         * Note: we never execute on this stack frame, so it does not need to
+         * be 16-byte aligned.
+         */
         addi sp, sp, -13*4
 #endif
         /* save the task stack pointer in its context */
@@ -128,7 +138,8 @@ __switch_task:
          * __irq_exit will restore sp from scratch register again before mret.
          */
         csrw mscratch, sp
-        la sp, stack_end
+        /* restore system stack */
+        add sp, t3, zero
         j __irq_exit
 
 /**
@@ -137,13 +148,13 @@ __switch_task:
 .global __task_start
 __task_start:
 	csrci mstatus, 0x8
-	/* area used as dummy thread stack for the first switch */
+	/* area used as thread stack for the first switch */
 	la a3, scratchpad
 	li a4, 1
 	li a2, 0    /* system call 3rd parameter : not an IRQ emulation */
 	li a1, 0    /* system call 2nd parameter : re-schedule nothing */
 	li a0, 0    /* system call 1st parameter : de-schedule nothing */
-	/* put the dummy stack pointer at the top of the stack in scratchpad */
+	/* put the stack pointer at the top of the stack in scratchpad */
 	addi sp, a3, 4 * TASK_SCRATCHPAD_SIZE
 	/* we are ready to re-schedule */
 	la t0, need_resched

@@ -13,13 +13,6 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-/*
- * Allow dangerous commands.
- * TODO: Remove this config before production.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_I2C_DEBUG
-
 #define CONFIG_USBC_RETIMER_PI3DPX1207
 #define CONFIG_MKBP_USE_GPIO
 
@@ -59,8 +52,15 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
+#define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
 
 #ifndef __ASSEMBLER__
+
+enum adc_channel {
+	ADC_TEMP_SENSOR_CHARGER,
+	ADC_TEMP_SENSOR_SOC,
+	ADC_CH_COUNT
+};
 
 enum battery_type {
 	BATTERY_AP18F4M,
@@ -79,6 +79,18 @@ enum pwm_channel {
 	PWM_CH_COUNT
 };
 
+enum temp_sensor_id {
+	TEMP_SENSOR_CHARGER = 0,
+	TEMP_SENSOR_SOC,
+	TEMP_SENSOR_CPU,
+	TEMP_SENSOR_COUNT
+};
+
+enum usba_port {
+	USBA_PORT_A0 = 0,
+	USBA_PORT_A1,
+	USBA_PORT_COUNT
+};
 
 /*****************************************************************************
  * CBI EC FW Configuration
@@ -171,6 +183,24 @@ static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 		  HAS_HDMI_RETIMER_PI3HDX1204);
 }
 
+#define HAS_MST_HUB_RTD2141B \
+			(BIT(TREMBYLE_DB_T_OPT3_USBAC_HDMI_MSTHUB))
+
+static inline bool ec_config_has_mst_hub_rtd2141b(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_MST_HUB_RTD2141B);
+}
+
+#define HAS_HDMI_CONN_HPD \
+			(BIT(TREMBYLE_DB_T_OPT1_USBAC_HMDI))
+
+static inline bool ec_config_has_hdmi_conn_hpd(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_HDMI_CONN_HPD);
+}
+
 #define PORT_TO_HPD(port) ((port == 0) \
 	? GPIO_USB_C0_HPD \
 	: (ec_config_has_usbc1_retimer_ps8802()) \
@@ -181,6 +211,8 @@ extern const struct usb_mux usbc0_pi3dpx1207_usb_retimer;
 extern const struct usb_mux usbc1_ps8802;
 extern const struct usb_mux usbc1_ps8818;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
+
+void hdmi_hpd_interrupt(enum ioex_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

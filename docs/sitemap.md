@@ -13,9 +13,13 @@
 
 ## Case Closed Debugging (CCD)
 
-*   [Case Closed Debugging Overview](./case_closed_debugging.md)
-*   [Google Security Chip Case Closed Debugging](./case_closed_debugging_cr50.md)
-*   [Tutorials](./ccd_howtos.md)
+*   [Case Closed Debugging Overview][1]
+*   [Google Security Chip Case Closed Debugging][2]
+*   [Tutorials][3]
+
+## Verified Boot Troubleshooting
+
+*   [Cr50 Verified Boot Troubleshooting][4]
 
 ## Fingerprint MCU (FPMCU)
 
@@ -25,10 +29,12 @@
 *   [Fingerprint Authentication Design Doc](./fingerprint/fingerprint-authentication-design-doc.md)
 *   [Fingerprint Factory Requirements](./fingerprint/fingerprint-factory-requirements.md)
 *   [Fingerprint Quick Factory Guide](./fingerprint/fingerprint-factory-quick-guide.md)
+*   [Dragonclaw Schematics and Layout](./schematics/dragonclaw)
 
 ## Testing
 
 *   [Unit Tests](./unit_tests.md)
+*   [Code Coverage](./code_coverage.md)
 
 ## Updaters
 
@@ -39,6 +45,10 @@
 *   [USB-C Power Delivery and Alternate Modes](./usb-c.md)
 *   [USB-A and USB-C Policies for Sourcing Power](./usb_power.md)
 *   [USB-C Power Delivery TCPMv2](./usb-tcpmv2.md)
+
+## Verified Boot
+
+*   [Detachable Base Verified Boot](./detachable_base_verified_boot.md)
 
 ## EC-3PO
 
@@ -52,3 +62,8 @@
 *   [Application Processor to EC communication](./ap-ec-comm.md)
 *   [Code Reviews](./code_reviews.md)
 *   [IDE Support](./ide-support.md)
+
+[1]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/case_closed_debugging.md
+[2]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/case_closed_debugging_cr50.md
+[3]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/ccd_howtos.md
+[4]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/cr50_vboot_troubleshooting.md

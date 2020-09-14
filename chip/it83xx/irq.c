@@ -36,7 +36,7 @@ static const struct {
 	IRQ_GROUP(13, { 2,  2,  2,  2,  2,  2,  2,  2}),
 	IRQ_GROUP(14, { 2,  2,  2,  2,  2,  2,  2,  2}),
 	IRQ_GROUP(15, { 2,  2,  2,  2,  2,  2,  2,  2}),
-	IRQ_GROUP(16, { 2,  2,  2,  2,  2,  2,  2, -1}),
+	IRQ_GROUP(16, { 2,  2,  2,  2,  2,  2,  2,  2}),
 	IRQ_GROUP(17, { 2,  2,  2,  2,  2,  2,  2,  2}),
 	IRQ_GROUP(18, { 2,  2,  2,  2, -1,  4,  4,  7}),
 	IRQ_GROUP(19, { 6,  6, 12,  3,  3,  3,  3,  3}),
@@ -59,12 +59,43 @@ static const struct {
 	IRQ_GROUP(28, { 2,  2,  2,  2,  2,  2, -1, -1}),
 };
 
+#if defined(CHIP_FAMILY_IT8320)    /* N8 core */
+/* Number of CPU hardware interrupts (HW0 ~ HW15) */
+int cpu_int_entry_number;
+#endif
+
+int chip_get_ec_int(void)
+{
+	extern volatile int ec_int;
+
+#if defined(CHIP_FAMILY_IT8320)    /* N8 core */
+	int i;
+
+	for (i = 0; i < IT83XX_IRQ_COUNT; i++) {
+		ec_int = IT83XX_INTC_IVCT(cpu_int_entry_number);
+		/*
+		 * WORKAROUND: when the interrupt vector register isn't
+		 * latched in a load operation,
+		 * we read it again to make sure the value we got
+		 * is the correct value.
+		 */
+		if (ec_int == IT83XX_INTC_IVCT(cpu_int_entry_number))
+			break;
+	}
+	/* Determine interrupt number */
+	ec_int -= 16;
+#else /* defined(CHIP_FAMILY_IT8XXX2) RISCV core */
+	ec_int = IT83XX_INTC_AIVCT - 0x10;
+#endif
+	return ec_int;
+}
+
 int chip_get_intc_group(int irq)
 {
 	return irq_groups[irq / 8].cpu_int[irq % 8];
 }
 
-int chip_enable_irq(int irq)
+void chip_enable_irq(int irq)
 {
 	int group = irq / 8;
 	int bit = irq % 8;
@@ -72,11 +103,9 @@ int chip_enable_irq(int irq)
 	IT83XX_INTC_REG(irq_groups[group].ier_off) |= BIT(bit);
 	if (IS_ENABLED(CHIP_CORE_NDS32))
 		IT83XX_INTC_REG(IT83XX_INTC_EXT_IER_OFF(group)) |= BIT(bit);
-
-	return irq_groups[group].cpu_int[bit];
 }
 
-int chip_disable_irq(int irq)
+void chip_disable_irq(int irq)
 {
 	int group = irq / 8;
 	int bit = irq % 8;
@@ -84,19 +113,15 @@ int chip_disable_irq(int irq)
 	IT83XX_INTC_REG(irq_groups[group].ier_off) &= ~BIT(bit);
 	if (IS_ENABLED(CHIP_CORE_NDS32))
 		IT83XX_INTC_REG(IT83XX_INTC_EXT_IER_OFF(group)) &= ~BIT(bit);
-
-	return -1; /* we don't want to mask other IRQs */
 }
 
-int chip_clear_pending_irq(int irq)
+void chip_clear_pending_irq(int irq)
 {
 	int group = irq / 8;
 	int bit = irq % 8;
 
 	/* always write 1 clear, no | */
 	IT83XX_INTC_REG(irq_groups[group].isr_off) = BIT(bit);
-
-	return -1; /* everything has been done */
 }
 
 int chip_trigger_irq(int irq)

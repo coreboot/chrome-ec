@@ -20,17 +20,19 @@ GPIO_INT(S0_PWROK_OD,		PIN(5, 6), GPIO_INT_BOTH,			power_signal_interrupt)
 GPIO_INT(EC_PWROK_OD,		PIN(3, 7), GPIO_INT_BOTH,			power_signal_interrupt)
 GPIO_INT(EC_PWR_BTN_ODL,	PIN(0, 1), GPIO_INT_BOTH,			power_button_interrupt)
 GPIO_INT(LID_OPEN,		PIN(D, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,	lid_interrupt)
+GPIO_INT(TABLET_MODE,		PIN(4, 4), GPIO_INT_BOTH,			board_gmr_tablet_switch_isr)
 GPIO_INT(ACOK_OD,		PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,	extpower_interrupt)
 GPIO_INT(EC_WP_L,		PIN(5, 0), GPIO_INT_BOTH,			switch_interrupt)
 GPIO_INT(VOLDN_BTN_ODL,		PIN(A, 6), GPIO_INT_BOTH | GPIO_PULL_UP,	button_interrupt)
 GPIO_INT(VOLUP_BTN_ODL,		PIN(9, 5), GPIO_INT_BOTH | GPIO_PULL_UP,	button_interrupt)
 GPIO_INT(6AXIS_INT_L,		PIN(A, 0), GPIO_INT_FALLING | GPIO_PULL_UP,	bmi160_interrupt)
 GPIO_INT(EN_PWR_TOUCHPAD_PS2,	PIN(C, 2), GPIO_INT_RISING,			ps2_pwr_en_interrupt)
+GPIO_INT(DP1_HPD_EC_IN,		PIN(7, 5), GPIO_INT_BOTH,			hdmi_hpd_interrupt_v3)
 
 /* GPIO_INT_BOTH is required for PSL wake from hibernate, but we don't need an interrupt handler. */
 GPIO(EC_RST_ODL,		PIN(0, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH)
 
-GPIO(3AXIS_INT_L,		PIN(9, 6), GPIO_INPUT | GPIO_PULL_UP)		/* 3 Axis Accel */
+GPIO(3AXIS_INT_L,		PIN(9, 6), GPIO_INPUT | GPIO_PULL_DOWN)		/* 3 Axis Accel */
 GPIO(CCD_MODE_ODL,		PIN(C, 6), GPIO_INPUT)				/* Case Closed Debug Mode */
 GPIO(PROCHOT_ODL,		PIN(D, 5), GPIO_ODR_HIGH)			/* PROCHOT to SOC */
 GPIO(EC_BATT_PRES_ODL,		PIN(4, 1), GPIO_INPUT)				/* Battery Present */
@@ -48,18 +50,23 @@ GPIO(USB_C0_TCPC_RST_L,		PIN(E, 1), GPIO_OUT_HIGH)			/* C0 TCPC Reset */
 GPIO(USB_C1_TCPC_RST_L,		PIN(F, 0), GPIO_OUT_HIGH)			/* C1 TCPC Reset */
 GPIO(USB_C0_HPD,		PIN(F, 5), GPIO_OUT_LOW)			/* C0 DP Hotplug Detect */
 GPIO(USB_C0_IN_HPD,		PIN(7, 3), GPIO_OUT_LOW)			/* C0 IN Hotplug Detect */
-GPIO(DP1_HPD,			PIN(F, 4), GPIO_OUT_LOW)			/* C1 DP Hotplug Detect */
+GPIO(EC_DP1_HPD,		PIN(F, 4), GPIO_OUT_LOW)			/* C1 DP Hotplug Detect */
 GPIO(DP2_HPD,			PIN(C, 1), GPIO_OUT_LOW)			/* C1 DP Hotplug Detect */
-GPIO(EC_PS2_RESET,		PIN(3, 2), GPIO_OUT_LOW)			/* Trackpoint reset pin */
+GPIO(EC_PS2_RESET_V0,		PIN(3, 2), GPIO_OUT_LOW)			/* Trackpoint reset pin V0*/
+GPIO(EC_PS2_RESET_V1,		PIN(4, 5), GPIO_OUT_LOW)			/* Trackpoint reset pin V1 */
 GPIO(EC_H1_PACKET_MODE,		PIN(8, 6), GPIO_OUT_LOW)			/* H1 Packet Mode */
+GPIO(FAN_ID,			PIN(8, 2), GPIO_INPUT)				/* Fan ID*/
+GPIO(USB_C1_HPD_IN_DB_V1,	PIN(B, 1), GPIO_OUT_LOW)			/* C1 HPD V1 */
+
+UNIMPLEMENTED(NO_HPD)
 
 UNIMPLEMENTED(PCH_SMI_L)
 
-GPIO(LED_FULL_L,		PIN(6, 0), GPIO_OUT_HIGH)
-GPIO(LED_CHRG_L,		PIN(C, 0), GPIO_OUT_HIGH)
+GPIO(LED_FULL_L,		PIN(6, 0), GPIO_OUT_LOW)
+GPIO(LED_CHRG_L,		PIN(C, 0), GPIO_OUT_LOW)
 
-IOEX_INT(HDMI_CONN_HPD_3V3_DB,	EXPIN(USBC_PORT_C1, 1, 0), GPIO_INT_BOTH,	hdmi_hpd_interrupt)
-IOEX_INT(MST_HPD_OUT,		EXPIN(USBC_PORT_C1, 0, 3), GPIO_INT_BOTH,	mst_hpd_interrupt)
+IOEX_INT(USB_C0_SBU_FAULT_ODL,	EXPIN(USBC_PORT_C0, 1, 2), GPIO_INT_FALLING, 	sbu_fault_interrupt)
+IOEX_INT(USB_C1_SBU_FAULT_DB_ODL, EXPIN(USBC_PORT_C1, 1, 2), GPIO_INT_FALLING,	sbu_fault_interrupt)
 
 IOEX(USB_A0_RETIMER_EN,		EXPIN(USBC_PORT_C0, 0, 0), GPIO_OUT_LOW)	/* A0 Retimer Enable */
 IOEX(USB_A0_RETIMER_RST,	EXPIN(USBC_PORT_C0, 0, 1), GPIO_OUT_LOW)	/* A0 Retimer Reset */
@@ -67,20 +74,42 @@ IOEX(USB_C0_FAULT_ODL,		EXPIN(USBC_PORT_C0, 0, 3), GPIO_ODR_HIGH)	/* C0 Fault to
 IOEX(USB_C0_TCPC_FASTSW_CTL_EN,	EXPIN(USBC_PORT_C0, 0, 4), GPIO_OUT_LOW)	/* C0 FastSwitch Control */
 IOEX(USB_C1_FAULT_ODL,		EXPIN(USBC_PORT_C0, 1, 0), GPIO_ODR_HIGH)	/* C1 Fault to SOC */
 IOEX(USB_C0_PPC_ILIM_3A_EN,	EXPIN(USBC_PORT_C0, 1, 1), GPIO_OUT_LOW)	/* C0 3A Current Limit Enable */
-IOEX(USB_C0_SBU_FAULT_ODL,	EXPIN(USBC_PORT_C0, 1, 2), GPIO_INPUT)		/* C0 SBU Fault */
 IOEX(KB_BL_EN,			EXPIN(USBC_PORT_C0, 1, 3), GPIO_OUT_LOW)	/* KB Backlight Enable */
 IOEX(USB_C0_DATA_EN,		EXPIN(USBC_PORT_C0, 1, 4), GPIO_OUT_LOW)	/* C0 Data Enable */
 IOEX(EN_USB_A0_5V,		EXPIN(USBC_PORT_C0, 1, 5), GPIO_OUT_LOW)	/* A0 5V Source Enable */
 IOEX(USB_A0_CHARGE_EN_L,	EXPIN(USBC_PORT_C0, 1, 6), GPIO_OUT_HIGH)	/* A0 5V High Current Enable */
 
 IOEX(USB_A1_RETIMER_EN,		EXPIN(USBC_PORT_C1, 0, 0), GPIO_OUT_LOW)	/* A1 Retimer Enable */
-IOEX(USB_A1_RETIMER_RST_DB,	EXPIN(USBC_PORT_C1, 0, 1), GPIO_OUT_LOW)	/* A1 Retimer Reset */
+IOEX(PPC_ID,			EXPIN(USBC_PORT_C1, 0, 1), GPIO_INPUT)		/* PPC ID */
 IOEX(USB_C1_HPD_IN_DB,		EXPIN(USBC_PORT_C1, 0, 2), GPIO_OUT_LOW)	/* C1 HPD */
+
+/*
+ * TODO(dbrockus@): remove code when older version_2 of hardware is
+ * retired and no longer needed
+ */
+#if 0
+IOEX(HDMI_POWER_EN_DB,		EXPIN(USBC_PORT_C1, 0, 3), GPIO_OUT_LOW)	/* HDMI retimer power enable */
+#else
+#define IOEX_HDMI_POWER_EN_DB		IOEX_MST_HPD_OUT
+IOEX_INT(MST_HPD_OUT,		EXPIN(USBC_PORT_C1, 0, 3), GPIO_INT_BOTH,	mst_hpd_interrupt)
+#endif
+
 IOEX(USB_C1_TCPC_FASTSW_CTL_EN,	EXPIN(USBC_PORT_C1, 0, 4), GPIO_OUT_LOW)	/* C1 FastSwitch Control */
+
+/*
+ * TODO(dbrockus@): remove code when older version_2 of hardware is
+ * retired and no longer needed
+ */
+#if 0
+IOEX(USB_C1_PPC_ILIM_3A_EN,	EXPIN(USBC_PORT_C1, 1, 0), GPIO_OUT_LOW)	/* C1 3A Current Limit Enable */
+#else
+#define IOEX_USB_C1_PPC_ILIM_3A_EN	IOEX_HDMI_CONN_HPD_3V3_DB
+IOEX_INT(HDMI_CONN_HPD_3V3_DB,	EXPIN(USBC_PORT_C1, 1, 0), GPIO_INT_BOTH,	hdmi_hpd_interrupt_v2)
+#endif
+
 IOEX(USB_C1_MUX_RST_DB,		EXPIN(USBC_PORT_C1, 1, 1), GPIO_OUT_LOW)	/* C1 Mux Reset */
-IOEX(USB_C1_SBU_FAULT_DB_ODL,	EXPIN(USBC_PORT_C1, 1, 2), GPIO_INPUT)		/* C1 SBU Fault */
 IOEX(USB_C1_PPC_EN_L,		EXPIN(USBC_PORT_C1, 1, 3), GPIO_OUT_LOW)	/* C1 PPC Enable */
-IOEX(HDMI_DATA_EN_DB,		EXPIN(USBC_PORT_C1, 1, 4), GPIO_OUT_HIGH)	/* HDMI Retimer Enable */
+IOEX(HDMI_DATA_EN_DB,		EXPIN(USBC_PORT_C1, 1, 4), GPIO_OUT_LOW)	/* HDMI Retimer Enable */
 IOEX(USB_C1_DATA_EN,		EXPIN(USBC_PORT_C1, 1, 5), GPIO_OUT_HIGH)	/* C1 Retimer Enable */
 IOEX(EN_USB_A1_5V_DB,		EXPIN(USBC_PORT_C1, 1, 6), GPIO_OUT_LOW)	/* A1 5V Source Enable */
 IOEX(USB_A1_CHARGE_EN_DB_L,	EXPIN(USBC_PORT_C1, 1, 7), GPIO_OUT_HIGH)	/* A1 5V High Current Enable */

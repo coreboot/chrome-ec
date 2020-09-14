@@ -11,10 +11,6 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
-/* Bringup/debug config items. Remove before shipping. */
-#define CONFIG_SYSTEM_UNLOCKED
-
-
 /* NPCX7 config */
 #define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
@@ -29,6 +25,9 @@
 #define CONFIG_BOARD_HAS_RTC_RESET
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_DEDICATED_RECOVERY_BUTTON
+#define CONFIG_DEDICATED_RECOVERY_BUTTON_2
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
 /* TODO: (b/143496253) re-enable CEC */
 /* #define CONFIG_CEC */
 #define CONFIG_CRC8
@@ -59,10 +58,10 @@
 #define CONFIG_CMD_CHARGEN
 #undef CONFIG_CMD_FASTCHARGE
 #undef CONFIG_CMD_KEYBOARD
-#define CONFIG_CMD_PD_CONTROL
+#define CONFIG_HOSTCMD_PD_CONTROL
 #undef CONFIG_CMD_PWR_AVG
 #define CONFIG_CMD_PPC_DUMP
-#define CONFIG_CMD_TCPCI_DUMP
+#define CONFIG_CMD_TCPC_DUMP
 #ifdef SECTION_IS_RO
 /* Reduce RO size by removing less-relevant commands. */
 #undef CONFIG_CMD_APTHROTTLE
@@ -76,6 +75,10 @@
 /* Don't generate host command debug by default */
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
+
+/* Enable AP Reset command for TPM with old firmware version to detect it. */
+#define CONFIG_CMD_AP_RESET_LOG
+#define CONFIG_HOSTCMD_AP_RESET
 
 /* Chipset config */
 #define CONFIG_CHIPSET_COMETLAKE_DISCRETE
@@ -99,13 +102,14 @@
 #define CONFIG_DELAY_DSW_PWROK_TO_PWRBTN
 #define CONFIG_POWER_PP5000_CONTROL
 #define CONFIG_POWER_S0IX
-#define CONFIG_POWER_S0IX_FAILURE_DETECTION
+#define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define CONFIG_INA3221
 
-#define PD_POWER_SUPPLY_TURN_ON_DELAY	30000	/* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000	/* us */
-#define PD_VCONN_SWAP_DELAY		5000	/* us */
+/* b/143501304 */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY	4000	/* us */
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY	2000	/* us */
+#define PD_VCONN_SWAP_DELAY		8000	/* us */
 
 #define PD_OPERATING_POWER_MW	CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
 #define PD_MAX_POWER_MW		100000
@@ -130,6 +134,7 @@
 
 /* USB type C */
 #define CONFIG_USB_PD_TCPMV2 /* Use TCPMv2 */
+#define CONFIG_USB_PD_REV30 /* Enable PD 3.0 functionality */
 #define CONFIG_USB_PD_DECODE_SOP
 #undef CONFIG_USB_CHARGER
 #define CONFIG_USB_POWER_DELIVERY
@@ -139,6 +144,7 @@
 #define CONFIG_USB_PD_DISCHARGE_PPC
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_LOGGING
+#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
 #define CONFIG_USBC_PPC_SN5S330
@@ -190,7 +196,6 @@ enum adc_channel {
 	ADC_VBUS,           /* ADC4 */
 	ADC_PPVAR_IMON,     /* ADC9 */
 	ADC_TEMP_SENSOR_1,  /* ADC0 */
-	ADC_TEMP_SENSOR_2,  /* ADC1 */
 	/* Number of ADC channels */
 	ADC_CH_COUNT
 };
@@ -216,8 +221,7 @@ enum mft_channel {
 };
 
 enum temp_sensor_id {
-	TEMP_SENSOR_PP3300,
-	TEMP_SENSOR_PP5000,
+	TEMP_SENSOR_CORE,
 	TEMP_SENSOR_COUNT
 };
 
@@ -228,13 +232,40 @@ void board_set_tcpc_power_mode(int port, int mode);
 void led_alert(int enable);
 void show_critical_error(void);
 
+/*
+ * firmware config fields
+ */
+/*
+ * Barrel-jack power (4 bits).
+ */
+#define EC_CFG_BJ_POWER_L		0
+#define EC_CFG_BJ_POWER_H		3
+#define EC_CFG_BJ_POWER_MASK GENMASK(EC_CFG_BJ_POWER_H, EC_CFG_BJ_POWER_L)
+/*
+ * USB Connector 4 not present (1 bit).
+ */
+#define EC_CFG_NO_USB4_L		4
+#define EC_CFG_NO_USB4_H		4
+#define EC_CFG_NO_USB4_MASK GENMASK(EC_CFG_NO_USB4_H, EC_CFG_NO_USB4_L)
+/*
+ * Thermal solution config (3 bits).
+ */
+#define EC_CFG_THERMAL_L		5
+#define EC_CFG_THERMAL_H		7
+#define EC_CFG_THERMAL_MASK GENMASK(EC_CFG_THERMAL_H, EC_CFG_THERMAL_L)
+
+unsigned int ec_config_get_bj_power(void);
+int ec_config_get_usb4_present(void);
+unsigned int ec_config_get_thermal_solution(void);
+
 #endif /* !__ASSEMBLER__ */
 
 /* Pin renaming */
 #define GPIO_WP_L               GPIO_EC_WP_ODL
 #define GPIO_PP5000_A_PG_OD     GPIO_PG_PP5000_A_OD
 #define GPIO_EN_PP5000		GPIO_EN_PP5000_A
-#define GPIO_RECOVERY_L         GPIO_H1_EC_RECOVERY_BTN_ODL
+#define GPIO_RECOVERY_L         GPIO_EC_RECOVERY_BTN_ODL
+#define GPIO_RECOVERY_L_2       GPIO_H1_EC_RECOVERY_BTN_ODL
 #define GPIO_POWER_BUTTON_L	GPIO_H1_EC_PWR_BTN_ODL
 #define GPIO_PCH_WAKE_L		GPIO_EC_PCH_WAKE_ODL
 #define GPIO_PCH_PWRBTN_L	GPIO_EC_PCH_PWR_BTN_ODL

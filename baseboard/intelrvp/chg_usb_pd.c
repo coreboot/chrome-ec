@@ -78,10 +78,18 @@ int pd_snk_is_vbus_provided(int port)
 
 void tcpc_alert_event(enum gpio_signal signal)
 {
-#ifdef HAS_TASK_PDCMD
-	/* Exchange status with TCPCs */
-	host_command_pd_send_status(PD_CHARGE_NO_CHANGE);
-#endif
+	int port = -1;
+	int i;
+
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		if (tcpc_gpios[i].vbus.pin == signal) {
+			port = i;
+			break;
+		}
+	}
+
+	if (port != -1)
+		schedule_deferred_pd_interrupt(port);
 }
 
 void board_tcpc_init(void)
@@ -89,7 +97,7 @@ void board_tcpc_init(void)
 	int i;
 
 	/* Only reset TCPC if not sysjump */
-	if (!system_jumped_to_this_image())
+	if (!system_jumped_late())
 		board_reset_pd_mcu();
 
 	/* Enable TCPCx interrupt */

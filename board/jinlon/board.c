@@ -448,9 +448,10 @@ __override const struct ec_response_keybd_config
 	case 22:
 		return &keybd2;
 	default:
-		cprints(CC_KEYBOARD, "Error! Unknown VIVLADI keyboard layout!");
+		cprints(CC_KEYBOARD,
+			"Error! Bad SKU ID, Using default VIVLADI keyboard!");
+		return &keybd1;
 	}
-	return NULL;
 }
 
 static void board_init(void)
@@ -466,7 +467,7 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 void board_overcurrent_event(int port, int is_overcurrented)
 {
-	/* Sanity check the port. */
+	/* Check that port number is valid. */
 	if ((port < 0) || (port >= CONFIG_USB_PD_PORT_MAX_COUNT))
 		return;
 

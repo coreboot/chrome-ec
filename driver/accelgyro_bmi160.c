@@ -213,13 +213,14 @@ static int set_offset(const struct motion_sensor_t *s,
 
 static int perform_calib(const struct motion_sensor_t *s, int enable)
 {
-	int ret, val, en_flag, status, rate;
-	timestamp_t deadline;
+	int ret, val, en_flag, status, rate, range;
+	timestamp_t deadline, timeout;
 
 	if (!enable)
 		return EC_SUCCESS;
 
 	rate = bmi_get_data_rate(s);
+	range = bmi_get_range(s);
 	/*
 	 * Temporary set frequency to 100Hz to get enough data in a short
 	 * period of time.
@@ -238,10 +239,24 @@ static int perform_calib(const struct motion_sensor_t *s, int enable)
 			(BMI160_FOC_ACC_0G << BMI160_FOC_ACC_Y_OFFSET) |
 			(val << BMI160_FOC_ACC_Z_OFFSET);
 		en_flag = BMI160_OFFSET_ACC_EN;
+		/*
+		 * Temporary set range to minimum to run calibration with
+		 * full sensitivity
+		 */
+		bmi_set_range(s, 2, 0);
+		/* Timeout for accelerometer calibration */
+		timeout.val = 400 * MSEC;
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
 		val = BMI160_FOC_GYRO_EN;
 		en_flag = BMI160_OFFSET_GYRO_EN;
+		/*
+		 * Temporary set range to minimum to run calibration with
+		 * full sensitivity
+		 */
+		bmi_set_range(s, 125, 0);
+		/* Timeout for gyroscope calibration */
+		timeout.val = 800 * MSEC;
 		break;
 	default:
 		/* Not supported on Magnetometer */
@@ -252,7 +267,7 @@ static int perform_calib(const struct motion_sensor_t *s, int enable)
 			 BMI160_FOC_CONF, val);
 	ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 			 BMI160_CMD_REG, BMI160_CMD_START_FOC);
-	deadline.val = get_time().val + 400 * MSEC;
+	deadline.val = get_time().val + timeout.val;
 	do {
 		if (timestamp_expired(deadline, NULL)) {
 			ret = EC_RES_TIMEOUT;
@@ -268,6 +283,7 @@ static int perform_calib(const struct motion_sensor_t *s, int enable)
 	/* Calibration is successful, and loaded, use the result */
 	ret = bmi_enable_reg8(s, BMI160_OFFSET_EN_GYR98, en_flag, 1);
 end_perform_calib:
+	bmi_set_range(s, range, 0);
 	set_data_rate(s, rate, 0);
 	return ret;
 }
@@ -520,7 +536,7 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 		return EC_ERROR_NOT_HANDLED;
 
 	do {
-		rv = bmi_read32(s->port, s->i2c_spi_addr_flags,
+		rv = bmi_read16(s->port, s->i2c_spi_addr_flags,
 				BMI160_INT_STATUS_0, &interrupt);
 		/*
 		 * Bail out of this loop there was an error reading the register
@@ -733,6 +749,9 @@ const struct accelgyro_drv bmi160_drv = {
 #ifdef CONFIG_GESTURE_HOST_DETECTION
 	.manage_activity = manage_activity,
 	.list_activities = list_activities,
+#endif
+#ifdef CONFIG_BODY_DETECTION
+	.get_rms_noise = bmi_get_rms_noise,
 #endif
 };
 

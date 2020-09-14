@@ -85,9 +85,10 @@
  * <25:17> : Reserved
  * <16>    : TBT Adapter
  *           Errata: TBT Adapter bits are swapped in the document
- *           "USB Type-C cable and connector specification, Release 2.0"
- *           TODO (b/147375157): Add the errata document information once
- *           published by USB-IF.
+ *           Refer USB Type-C ENGINEERING CHANGE NOTICE (ECN)
+ *           "USB Type-C ECN Thunderbolt 3 Compatibility Updates.pdf"
+ *           with Title: Thunderbolt 3 Compatibility Updates
+ *           for the document fix published by USB-IF.
  *           0b = TBT3 Adapter
  *           1b = TBT2 Legacy Adapter
  * <15:0>  : TBT Alternate Mode
@@ -96,6 +97,11 @@
 enum tbt_adapter_type {
 	TBT_ADAPTER_TBT3,
 	TBT_ADAPTER_TBT2_LEGACY,
+};
+
+enum vendor_specific_support {
+	VENDOR_SPECIFIC_NOT_SUPPORTED,
+	VENDOR_SPECIFIC_SUPPORTED,
 };
 
 /* TBT Alternate Mode */
@@ -107,10 +113,10 @@ union tbt_mode_resp_device {
 		uint16_t tbt_alt_mode : 16;
 		enum tbt_adapter_type tbt_adapter : 1;
 		uint16_t reserved0 : 9;
-		uint8_t intel_spec_b0 : 1;
+		enum vendor_specific_support intel_spec_b0 : 1;
 		uint8_t reserved1 : 3;
-		uint8_t vendor_spec_b0 : 1;
-		uint8_t vendor_spec_b1 : 1;
+		enum vendor_specific_support vendor_spec_b0 : 1;
+		enum vendor_specific_support vendor_spec_b1 : 1;
 	};
 	uint32_t raw_value;
 };
@@ -248,10 +254,10 @@ union tbt_dev_mode_enter_cmd {
 		enum link_lsrx_comm lsrx_comm : 1;
 		enum tbt_enter_cable_type cable : 1;
 		uint8_t reserved0 : 1;
-		uint8_t intel_spec_b0 : 1;
+		enum vendor_specific_support intel_spec_b0 : 1;
 		uint8_t reserved1 : 3;
-		uint8_t vendor_spec_b0 : 1;
-		uint8_t vendor_spec_b1 : 1;
+		enum vendor_specific_support vendor_spec_b0 : 1;
+		enum vendor_specific_support vendor_spec_b1 : 1;
 	};
 	uint32_t raw_value;
 };

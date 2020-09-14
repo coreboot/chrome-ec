@@ -9,7 +9,12 @@
 #include "memory.h"
 #include "mock/tcpc_mock.h"
 #include "tests/enum_strings.h"
+#include "timer.h"
 #include "usb_pd_tcpm.h"
+
+#ifndef CONFIG_COMMON_RUNTIME
+#define cprints(format, args...)
+#endif
 
 /* Public API for controlling/inspecting this mock */
 struct mock_tcpc_ctrl mock_tcpc;
@@ -42,9 +47,12 @@ static int mock_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 	return EC_SUCCESS;
 }
 
-static int mock_get_vbus_level(int port)
+static bool mock_check_vbus_level(int port, enum vbus_level level)
 {
-	return mock_tcpc.vbus_level;
+	if (level == VBUS_PRESENT)
+		return mock_tcpc.vbus_level;
+	else
+		return !mock_tcpc.vbus_level;
 }
 
 static int mock_select_rp_value(int port, int rp)
@@ -135,11 +143,20 @@ void mock_tcpc_discharge_vbus(int port, int enable)
 
 __maybe_unused static int mock_drp_toggle(int port)
 {
+	/* Only set the time the first time this is called. */
+	if (mock_tcpc.first_call_to_enable_auto_toggle == 0)
+		mock_tcpc.first_call_to_enable_auto_toggle = get_time().val;
+
+	if (!mock_tcpc.should_print_call)
+		return EC_SUCCESS;
+
+	ccprints("[TCPC] Enabling Auto Toggle");
+
 	return EC_SUCCESS;
 }
 
 static int mock_get_chip_info(int port, int live,
-			      struct ec_response_pd_chip_info_v1 **info)
+			      struct ec_response_pd_chip_info_v1 *info)
 {
 	return EC_SUCCESS;
 }
@@ -159,15 +176,16 @@ __maybe_unused static int mock_enter_low_power_mode(int port)
 	return EC_SUCCESS;
 }
 
-void mock_set_frs_enable(int port, int enable)
+int mock_set_frs_enable(int port, int enable)
 {
+	return EC_SUCCESS;
 }
 
 const struct tcpm_drv mock_tcpc_driver = {
 	.init = &mock_init,
 	.release = &mock_release,
 	.get_cc = &mock_get_cc,
-	.get_vbus_level = &mock_get_vbus_level,
+	.check_vbus_level = &mock_check_vbus_level,
 	.select_rp_value = &mock_select_rp_value,
 	.set_cc = &mock_set_cc,
 	.set_polarity = &mock_set_polarity,
@@ -189,5 +207,7 @@ const struct tcpm_drv mock_tcpc_driver = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode = &mock_enter_low_power_mode,
 #endif
+#ifdef CONFIG_USB_PD_FRS_TCPC
 	.set_frs_enable = &mock_set_frs_enable,
+#endif
 };

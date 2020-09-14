@@ -49,27 +49,6 @@ const enum gpio_signal hibernate_wake_pins[] = {
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
 /******************************************************************************/
-/* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
-	/*
-	 * F3 key scan cycle completed but scan input is not
-	 * charging to logic high when EC start scan next
-	 * column for "T" key, so we set .output_settle_us
-	 * to 80us from 50us.
-	 */
-	.output_settle_us = 80,
-	.debounce_down_us = 9 * MSEC,
-	.debounce_up_us = 30 * MSEC,
-	.scan_period_us = 3 * MSEC,
-	.min_post_scan_delay_us = 1000,
-	.poll_timeout_us = 100 * MSEC,
-	.actual_key_mask = {
-		0x1c, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
-		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
-	},
-};
-
-/******************************************************************************/
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
 #ifdef CONFIG_ACCEL_FIFO
@@ -87,7 +66,8 @@ const struct i2c_port_t i2c_ports[] = {
 	{"thermal", I2C_PORT_THERMAL, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
 #endif
 #ifdef BOARD_MUSHU
-	{"gpu_temp", I2C_PORT_THERMAL, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
+	{"f75303_temp", I2C_PORT_THERMAL, 100, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
+	{"gpu_temp", I2C_PORT_GPU, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
 #endif
 	{"power",   I2C_PORT_POWER,   100, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
 	{"eeprom",  I2C_PORT_EEPROM,  100, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
@@ -103,7 +83,6 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &bq25710_drv,
 	},
 };
-const unsigned int chg_cnt = ARRAY_SIZE(chg_chips);
 
 /******************************************************************************/
 /* Chipset callbacks/hooks */
@@ -198,7 +177,7 @@ unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 void baseboard_tcpc_init(void)
 {
 	/* Only reset TCPC if not sysjump */
-	if (!system_jumped_to_this_image())
+	if (!system_jumped_late())
 		board_reset_pd_mcu();
 
 	/* Enable PPC interrupts. */

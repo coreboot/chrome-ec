@@ -190,11 +190,14 @@ const struct tcpm_drv mt6370_tcpm_drv = {
 	.release		= &tcpci_tcpm_release,
 	.get_cc			= &mt6370_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.get_vbus_level		= &tcpci_tcpm_get_vbus_level,
+	.check_vbus_level	= &tcpci_tcpm_check_vbus_level,
 #endif
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
 	.set_cc			= &mt6370_set_cc,
 	.set_polarity		= &mt6370_set_polarity,
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+#endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,

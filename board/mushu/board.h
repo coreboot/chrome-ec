@@ -12,7 +12,6 @@
 #include "baseboard.h"
 
 #define CONFIG_POWER_BUTTON
-#define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
@@ -25,7 +24,6 @@
 /* Keyboard features */
 #define CONFIG_PWM_KBLIGHT
 
-#define CONFIG_TEMP_SENSOR_AMD_R19ME4070
 
 /* Sensors */
 /* BMI160 Base accel/gyro */
@@ -48,11 +46,29 @@
 #define CONFIG_ALS_TCS3400_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 #define I2C_PORT_ALS      I2C_PORT_SENSOR
+#define CONFIG_TEMP_SENSOR
+/* AMD SMBUS Temp sensors */
+#define CONFIG_TEMP_SENSOR_AMD_R19ME4070
+/* F75303 on I2C bus */
+#define CONFIG_TEMP_SENSOR_F75303
+/* Temp sensor is on port 4 on baseboard but on port 0 on Mushu */
+#undef I2C_PORT_THERMAL
+#define I2C_PORT_THERMAL I2C_PORT_SENSOR
 
 /* GPU features */
 #define I2C_PORT_GPU                    NPCX_I2C_PORT4_1
 
 /* USB Type C and USB PD defines */
+#undef CONFIG_USB_PD_TCPMV1
+/*
+ * Enable TCPMv2. Use default PD 2.0 operation because we have a
+ * parade PS8751 TCPC
+ */
+#define CONFIG_USB_PD_TCPMV2
+#define CONFIG_USB_PID 0x5047
+#define CONFIG_USB_PD_DECODE_SOP
+#define CONFIG_USB_PD_TRY_SRC
+#define CONFIG_USB_DRP_ACC_TRYSRC
 #define CONFIG_USB_PD_COMM_LOCKED
 #define CONFIG_USB_PD_TCPM_ANX7447
 #define CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
@@ -173,12 +189,15 @@ enum temp_sensor_id {
 	TEMP_CHARGER,
 	TEMP_5V,
 	TEMP_GPU,
+	TEMP_F75303_LOCAL,
+	TEMP_F75303_GPU,
+	TEMP_F75303_GPU_POWER,
 	TEMP_SENSOR_COUNT
 };
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_SMP_LIS,
+	BATTERY_POWER_TECH,
 	BATTERY_SMP_SDI,
 	BATTERY_TYPE_COUNT,
 };

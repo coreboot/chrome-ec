@@ -29,16 +29,15 @@ int pd_check_vconn_swap(int port)
 
 void pd_power_supply_reset(int port)
 {
-	int prev_en;
+	/* Don't need to shutoff VBus if we are not sourcing it */
+	if (ppc_is_sourcing_vbus(port)) {
+		/* Disable VBUS. */
+		ppc_vbus_source_enable(port, 0);
 
-	prev_en = ppc_is_sourcing_vbus(port);
-
-	/* Disable VBUS. */
-	ppc_vbus_source_enable(port, 0);
-
-	/* Enable discharge if we were previously sourcing 5V */
-	if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE) && prev_en)
-		pd_set_vbus_discharge(port, 1);
+		/* Enable discharge if we were previously sourcing 5V */
+		if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE))
+			pd_set_vbus_discharge(port, 1);
+	}
 
 #ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
 	/* Give back the current quota we are no longer using */
@@ -77,11 +76,6 @@ int pd_set_power_supply_ready(int port)
 	return EC_SUCCESS;
 }
 
-int pd_snk_is_vbus_provided(int port)
-{
-	return ppc_is_vbus_present(port);
-}
-
 int board_vbus_source_enabled(int port)
 {
 	return ppc_is_sourcing_vbus(port);
@@ -105,7 +99,7 @@ mux_state_t svdm_dp_mux_mode(int port)
 
 __override int svdm_dp_config(int port, uint32_t *payload)
 {
-	int opos = pd_alt_mode(port, USB_SID_DISPLAYPORT);
+	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	int pin_mode = pd_dfp_dp_get_pin_mode(port, dp_status[port]);
 	mux_state_t mux_mode = svdm_dp_mux_mode(port);
@@ -146,7 +140,7 @@ __override void svdm_dp_post_config(int port)
 	if (!(dp_flags[port] & DP_FLAGS_HPD_HI_PENDING))
 		return;
 
-	gpio_set_level(PORT_TO_HPD(port), 1);
+	gpio_or_ioex_set_level(PORT_TO_HPD(port), 1);
 
 	/* set the minimum time delay (2ms) for the next HPD IRQ */
 	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
@@ -161,7 +155,7 @@ __override void svdm_exit_dp_mode(int port)
 
 	usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_CONNECT,
 		    pd_get_polarity(port));
-	gpio_set_level(PORT_TO_HPD(port), 0);
+	gpio_or_ioex_set_level(PORT_TO_HPD(port), 0);
 
 	usb_mux_hpd_update(port, 0, 0);
 }

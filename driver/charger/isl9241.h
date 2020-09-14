@@ -39,6 +39,7 @@
 /* 2: Input Voltage Regulation (0 = Enable (default), 1 = Disable) */
 #define ISL9241_CONTROL0_INPUT_VTG_REGULATION	BIT(2)
 
+
 #define ISL9241_REG_INFORMATION1	0x3A
 #define ISL9241_REG_ADAPTER_CUR_LIMIT2	0x3B
 
@@ -96,6 +97,9 @@
 #define ISL9241_INFORMATION2_ACOK_PIN		BIT(14)
 
 #define ISL9241_REG_CONTROL4		0x4E
+/* 13: Enable VSYS slew rate control (0 - disable, 1 - enable) */
+#define ISL9241_CONTROL4_SLEW_RATE_CTRL     BIT(13)
+
 #define ISL9241_REG_CONTROL5		0x4F
 #define ISL9241_REG_NTC_ADC_RESULTS	0x80
 #define ISL9241_REG_VBAT_ADC_RESULTS	0x81
@@ -117,5 +121,19 @@
 #define ISL9241_VIN_ADC_STEP_MV		96
 
 extern const struct charger_drv isl9241_drv;
+
+enum ec_error_list isl9241_read(int chgnum, int offset,
+					int *value);
+enum ec_error_list isl9241_write(int chgnum, int offset,
+					int value);
+__override_proto int isl9241_update_learn_mode(int chgnum, int enable);
+/**
+ * Set AC prochot threshold
+ *
+ * @param chgnum: Index into charger chips
+ * @param ma: AC prochot threshold current in mA, multiple of 128mA
+ * @return EC_SUCCESS or error
+ */
+int isl9241_set_ac_prochot(int chgnum, int ma);
 
 #endif /* __CROS_EC_ISL9241_H */

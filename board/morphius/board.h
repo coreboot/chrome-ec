@@ -13,18 +13,12 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-/*
- * Allow dangerous commands.
- * TODO: Remove this config before production.
- */
-#define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_I2C_DEBUG
-
 #define CONFIG_USBC_RETIMER_PI3DPX1207
 #define CONFIG_MKBP_USE_GPIO
 #define CONFIG_8042_AUX
 #define CONFIG_PS2
 #define CONFIG_CMD_PS2
+#define CONFIG_KEYBOARD_FACTORY_TEST
 
 #undef CONFIG_LED_ONOFF_STATES
 #define CONFIG_BATTERY_LEVEL_NEAR_FULL 91
@@ -37,14 +31,19 @@
 #define CONFIG_ACCEL_KX022
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
-#define CONFIG_FAN_RPM_CUSTOM
+#define CONFIG_CUSTOM_FAN_CONTROL
 #define CONFIG_TABLET_MODE
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PWR_A
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
+#define CONFIG_GMR_TABLET_MODE
+#define CONFIG_GMR_TABLET_MODE_CUSTOM
+#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE
+#define RPM_DEVIATION 1
 
 /* GPIO mapping from board specific name to EC common name. */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
@@ -68,13 +67,21 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
+#define GPIO_PACKET_MODE_EN		GPIO_EC_H1_PACKET_MODE
 
 /* I2C mapping from board specific function*/
 #define I2C_PORT_THERMAL	I2C_PORT_AP_HDMI
 
 #ifndef __ASSEMBLER__
 
+
 void ps2_pwr_en_interrupt(enum gpio_signal signal);
+
+enum adc_channel {
+	ADC_TEMP_SENSOR_CHARGER,
+	ADC_TEMP_SENSOR_5V_REGULATOR,
+	ADC_CH_COUNT
+};
 
 enum battery_type {
 	BATTERY_SMP,
@@ -96,6 +103,19 @@ enum pwm_channel {
 	PWM_CH_COUNT
 };
 
+enum temp_sensor_id {
+	TEMP_SENSOR_CHARGER = 0,
+	TEMP_SENSOR_5V_REGULATOR,
+	TEMP_SENSOR_CPU,
+	TEMP_SENSOR_SSD,
+	TEMP_SENSOR_COUNT
+};
+
+enum usba_port {
+	USBA_PORT_A0 = 0,
+	USBA_PORT_A1,
+	USBA_PORT_COUNT
+};
 
 /*****************************************************************************
  * CBI EC FW Configuration
@@ -172,16 +192,27 @@ static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 		  HAS_HDMI_RETIMER_PI3HDX1204);
 }
 
-#define PORT_TO_HPD(port) ((port == 0) \
-	? GPIO_USB_C0_HPD \
-	: (ec_config_has_usbc1_retimer_ps8802()) \
-		? GPIO_DP1_HPD \
-		: GPIO_DP2_HPD)
+#define HAS_MST_HUB_RTD2141B \
+			(BIT(MORPHIUS_DB_T_OPT3_USBC_HDMI_MSTHUB))
+
+static inline bool ec_config_has_mst_hub_rtd2141b(void)
+{
+	return !!(BIT(ec_config_get_usb_db()) &
+		  HAS_MST_HUB_RTD2141B);
+}
+
+enum gpio_signal board_usbc_port_to_hpd_gpio(int port);
+#define PORT_TO_HPD(port) board_usbc_port_to_hpd_gpio(port)
 
 extern const struct usb_mux usbc0_pi3dpx1207_usb_retimer;
 extern const struct usb_mux usbc1_ps8802;
 extern const struct usb_mux usbc1_ps8818;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+#endif
 
 #endif /* !__ASSEMBLER__ */
 

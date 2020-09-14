@@ -387,7 +387,8 @@ static int send_validate_message(int port, uint16_t header,
 	uint8_t expected_msg_id = PD_HEADER_ID(header);
 	uint8_t cnt = PD_HEADER_CNT(header);
 	int retries = PD_HEADER_TYPE(header) == PD_DATA_SOURCE_CAP ?
-		      0 : PD_RETRY_COUNT;
+				    0 :
+				    CONFIG_PD_RETRY_COUNT;
 
 	/* retry 3 times if we are not getting a valid answer */
 	for (r = 0; r <= retries; r++) {
@@ -834,6 +835,10 @@ static void alert(int port, int mask)
 int tcpc_run(int port, int evt)
 {
 	int cc, i, res;
+
+	/* Don't do anything when port is not available */
+	if (port >= board_get_usb_pd_port_count())
+		return -1;
 
 	/* incoming packet ? */
 	if (pd_rx_started(port) && pd[port].rx_enabled) {

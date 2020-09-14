@@ -282,6 +282,7 @@ int safe_memcmp(const void *s1, const void *s2, size_t size)
 	return result != 0;
 }
 
+#if !(__has_feature(address_sanitizer) || __has_feature(memory_sanitizer))
 __stdlib_compat void *memcpy(void *dest, const void *src, size_t len)
 {
 	char *d = (char *)dest;
@@ -324,8 +325,10 @@ __stdlib_compat void *memcpy(void *dest, const void *src, size_t len)
 
 	return dest;
 }
+#endif /* address_sanitizer || memory_sanitizer */
 
 
+#if !(__has_feature(address_sanitizer) || __has_feature(memory_sanitizer))
 __stdlib_compat __visible void *memset(void *dest, int c, size_t len)
 {
 	char *d = (char *)dest;
@@ -362,8 +365,10 @@ __stdlib_compat __visible void *memset(void *dest, int c, size_t len)
 
 	return dest;
 }
+#endif /* address_sanitizer || memory_sanitizer */
 
 
+#if !(__has_feature(address_sanitizer) || __has_feature(memory_sanitizer))
 __stdlib_compat void *memmove(void *dest, const void *src, size_t len)
 {
 	if ((uintptr_t)dest <= (uintptr_t)src ||
@@ -414,6 +419,7 @@ __stdlib_compat void *memmove(void *dest, const void *src, size_t len)
 		return dest;
 	}
 }
+#endif /* address_sanitizer || memory_sanitizer */
 
 
 __stdlib_compat void *memchr(const void *buffer, int c, size_t n)
@@ -552,6 +558,14 @@ bool bytes_are_trivial(const uint8_t *buffer, size_t size)
 	return (result0 == 0) || (result1 == 0);
 }
 
+bool is_aligned(uint32_t addr, uint32_t align)
+{
+	if (!POWER_OF_TWO(align))
+		return false;
+
+	return (addr & (align - 1)) == 0;
+}
+
 /****************************************************************************/
 /* stateful conditional stuff */
 
@@ -664,4 +678,16 @@ void hexdump(const uint8_t *data, int len)
 		}
 		ccprintf("|\n");
 	}
+}
+
+void wait_for_ready(volatile uint32_t *reg, uint32_t enable, uint32_t ready)
+{
+	if (*reg & ready)
+		return;
+
+	/* Enable */
+	*reg |= enable;
+	/* Wait for ready */
+	while (!(*reg & ready))
+		;
 }

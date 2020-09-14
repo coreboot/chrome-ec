@@ -51,15 +51,17 @@ die() {
 BOARDS_IT83XX=(
 	glkrvp_ite
 	it83xx_evb
-	it8xxx2_pdevb
 	reef_it8320
 	tglrvpu_ite
+	tglrvpu_ite_tcpmv1
 	tglrvpy_ite
+	tglrvpy_ite_tcpmv1
 	jslrvp_ite
 )
 
 BOARDS_IT83XX_SPI_PROGRAMMING=(
 	it8xxx2_evb
+	it8xxx2_pdevb
 )
 
 BOARDS_STM32=(
@@ -100,7 +102,7 @@ BOARDS_STM32_DFU=(
 	twinkie
 	discovery
 	servo_v4
-	servo_v41
+	servo_v4p1
 	servo_micro
 	sweetberry
 	polyberry
@@ -159,6 +161,8 @@ DEFINE_string board "${DEFAULT_BOARD}" \
 	"The board to run debugger on."
 DEFINE_string chip "" \
 	"The chip to run debugger on."
+DEFINE_boolean dry_run "${FLAGS_FALSE}" \
+	"Print the commands to be run instead of actually running them."
 DEFINE_string image "" \
 	"Full pathname of the EC firmware image to flash."
 DEFINE_string logfile "" \
@@ -199,6 +203,29 @@ set -e
 DUT_CONTROL_CMD=( "dut-control" "--port=${FLAGS_port}" )
 DUT_CTRL_PREFIX=""
 
+# Run a command which mutates the state of an attached device.
+# This is used by the --dry_run flag, when enabled, the command will
+# only print.  When disabled, the command will run without printing
+# any message.
+function print_or_run() {
+	if [ "${FLAGS_dry_run}" = "${FLAGS_TRUE}" ]; then
+		local arg
+		local -a quoted_args
+
+		# Quote each of the arguments so it can easily be
+		# copy-pasted into a shell.
+		for arg in "$@"; do
+			quoted_args+=("$(printf "%q" "${arg}")")
+		done
+
+		tput2 bold && tput2 setaf 4
+		echo "DRY RUN:" "${quoted_args[@]}" >&2
+		tput2 sgr0
+	else
+		"$@"
+	fi
+}
+
 function dut_control() {
 	local DUT_CTRL_CML=( "${DUT_CONTROL_CMD[@]}" )
 
@@ -214,7 +241,7 @@ function dut_control() {
 		echo "${DUT_CTRL_CML[*]}" 1>&2
 	fi
 
-	"${DUT_CTRL_CML[@]}" >/dev/null
+	print_or_run "${DUT_CTRL_CML[@]}" >/dev/null
 }
 
 function dut_control_or_die {
@@ -392,16 +419,6 @@ servo_has_dut_i2c_mux() {
 	dut_control -i dut_i2c_mux >/dev/null 2>&1
 }
 
-# reset the EC
-toad_ec_hard_reset() {
-	if dut_control cold_reset 2>/dev/null ; then
-		dut_control cold_reset:on
-		dut_control cold_reset:off
-	else
-		info "you probably need to hard-reset your EC manually"
-	fi
-}
-
 servo_ec_hard_reset_or_die() {
 	dut_control_or_die cold_reset:on
 	dut_control_or_die cold_reset:off
@@ -409,7 +426,7 @@ servo_ec_hard_reset_or_die() {
 	# Cold reset on C2D2 is H1 reset, which will double reset the EC
 	# We need to wait a little bit to ensure we catch final EC reset
 	if [[ "${SERVO_TYPE}" =~ "c2d2" ]]; then
-		sleep 0.2
+		print_or_run sleep 0.2
 	fi
 }
 
@@ -446,11 +463,6 @@ ec_reset() {
 	if [[ -n "${stype}" ]]; then
 		eval ${stype}_${MCU}_hard_reset
 	fi
-}
-
-# force the EC to boot in serial monitor mode
-toad_ec_boot0() {
-	dut_control boot_mode:$1
 }
 
 ccd_ec_boot0() {
@@ -517,13 +529,6 @@ ec_switch_boot0() {
 		stype=servo
 	else
 		stype=${SERVO_TYPE}
-		if [[ "${SERVO_TYPE}" =~ "toad" ]] ; then
-			if [[ "${on_value}" == "on" ]] ; then
-				on_value="yes"
-			else
-				on_value="no"
-			fi
-		fi
 	fi
 	eval ${stype}_${MCU}_boot0 "${on_value}" $2
 }
@@ -577,7 +582,7 @@ cleanup() {
 	# Delete all files or directories in DELETE_LIST.
 	for item in "${DELETE_LIST[@]}"; do
 		if [[ -e "${item}" ]]; then
-			rm -rf "${item}" &> /dev/null
+			print_or_run rm -rf "${item}" &> /dev/null
 		fi
 	done
 
@@ -704,7 +709,6 @@ c2d2_VARS=( "cold_reset" )
 # Some servo boards use the same controls.
 servo_v3_VARS=( "${servo_v2_VARS[@]}" )
 servo_v4_with_servo_micro_VARS=( "${servo_micro_VARS[@]}" )
-toad_VARS=( "boot_mode" )
 
 declare -a save
 
@@ -859,7 +863,7 @@ function flash_openocd() {
 	dut_control jtag_buf_on_flex_en:on
 	dut_control jtag_buf_en:on
 
-	sudo timeout -k 10 -s 9 "${FLAGS_timeout}" \
+	print_or_run sudo timeout -k 10 -s 9 "${FLAGS_timeout}" \
 		openocd -s "${OCD_PATH}" -f "${OCD_CFG}" -f "${OCD_CHIP_CFG}" \
 		-c "${OCD_CMDS}" || \
 	die "Failed to program ${IMG}"
@@ -880,7 +884,7 @@ function flash_flashrom() {
 		FLASHROM_ARGS="-p raiden_debug_spi:target=EC,"
 	    fi
 	else
-		FLASHROM_ARGS="-p ft2232_spi:type=servo-v2,port=B,"
+		FLASHROM_ARGS="-p ft2232_spi:type=google-servo-v2,port=B,"
 	fi
 
 	if [ ! -x "$FLASHROM" ]; then
@@ -970,8 +974,8 @@ function flash_flashrom() {
 			info "Running flashrom:" 1>&2
 			echo " ${FLASHROM_GETSIZE}" 1>&2
 		fi
-		SPI_SIZE=$(${FLASHROM_GETSIZE} | grep -oe '[0-9]\+$') || \
-			die "Failed to determine chip size!"
+		SPI_SIZE=$(${FLASHROM_GETSIZE} | grep -oe '[0-9]\+$' |
+			   tail -n1) || die "Failed to determine chip size!"
 		[[ ${SPI_SIZE} -eq 0 ]] && die "Chip size is 0!"
 
 		PATCH_SIZE=$((${SPI_SIZE} - ${IMG_SIZE}))
@@ -980,7 +984,8 @@ function flash_flashrom() {
 		T=/tmp/flash_spi_$$
 		DELETE_LIST+=( "${T}" )
 
-		if [[ "${CHIP}" =~ ^npcx(|_int)_spi$ ]] ; then
+		if [[ "${CHIP}" =~ ^npcx(|_int)_spi$ ]] || \
+		   [[ "${CHIP}" =~ "ite_spi" ]] ; then
 		{	# Patch temp image up to SPI_SIZE
 			cat "$IMG"
 			if [[ ${IMG_SIZE} -lt ${SPI_SIZE} ]] ; then
@@ -1004,7 +1009,7 @@ function flash_flashrom() {
 			info "Running flashrom:" 1>&2
 			echo " ${FLASHROM_WRITE} -w ${T}" 1>&2
 		fi
-		sudo timeout -k 10 -s 9 "${FLAGS_timeout}" \
+		print_or_run sudo timeout -k 10 -s 9 "${FLAGS_timeout}" \
 			${FLASHROM_WRITE} -w "${T}" \
 			|| die "${MSG_PROGRAM_FAIL}"
 	else
@@ -1014,20 +1019,9 @@ function flash_flashrom() {
 			info "Running flashrom:" 1>&2
 			echo " ${FLASHROM_CMDLINE} -r ${FLAGS_read}" 1>&2
 		fi
-		sudo timeout -k 10 -s 9 "${FLAGS_timeout}" \
+		print_or_run sudo timeout -k 10 -s 9 "${FLAGS_timeout}" \
 			${FLASHROM_CMDLINE} -r "${FLAGS_read}" \
 			|| die "${MSG_READ_FAIL}"
-	fi
-	if [[ -z "${FLAGS_read}" && "${FLAGS_verify}" == ${FLAGS_TRUE} ]]; then
-		# Verify EC image.
-		info "Verifying EC firmware image."
-		if [[ "${FLAGS_verbose}" == ${FLAGS_TRUE} ]]; then
-			info "Running flashrom:" 1>&2
-			echo " ${FLASHROM_CMDLINE} -v ${T}" 1>&2
-		fi
-		sudo timeout -k 10 -s 9 "${FLAGS_timeout}" \
-			${FLASHROM_CMDLINE} -v "${T}" \
-			|| die "${MSG_VERIFY_FAIL}"
 	fi
 }
 
@@ -1109,7 +1103,7 @@ function flash_stm32() {
 		if [[ "${FLAGS_verbose}" == ${FLAGS_TRUE} ]]; then
 			echo "${STM32MON_COMMAND} ${IMG}"
 		fi
-		timeout -k 10 -s 9 "${FLAGS_timeout}" \
+		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
 			${STM32MON_COMMAND} "${IMG}" \
 			|| die "${MSG_PROGRAM_FAIL}"
 
@@ -1131,7 +1125,7 @@ function flash_stm32() {
 		if [[ "${FLAGS_verbose}" == ${FLAGS_TRUE} ]]; then
 			echo "${STM32MON_READ_CMD} ${IMG_READ}"
 		fi
-		timeout -k 10 -s 9 "${FLAGS_timeout}" \
+		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
 			${STM32MON_READ_CMD} "${IMG_READ}" \
 			|| die "${MSG_READ_FAIL}"
 	fi
@@ -1172,13 +1166,13 @@ function flash_stm32_dfu() {
 
 	SIZE=$(wc -c ${IMG} | cut -d' ' -f1)
 	# Remove read protection
-	sudo timeout -k 10 -s 9 "${FLAGS_timeout}" $DFU_UTIL -a 0 -d "${DFU_DEVICE}" \
-		-s ${ADDR}:${SIZE}:force:unprotect -D "${IMG}"
+	print_or_run sudo timeout -k 10 -s 9 "${FLAGS_timeout}" $DFU_UTIL -a 0 \
+		-d "${DFU_DEVICE}" -s ${ADDR}:${SIZE}:force:unprotect -D "${IMG}"
 	# Wait for mass-erase and reboot after unprotection
-	sleep 1
+	print_or_run sleep 1
 	# Actual image flashing
-	sudo timeout -k 10 -s 9 "${FLAGS_timeout}" $DFU_UTIL -a 0 -d "${DFU_DEVICE}" \
-		-s ${ADDR}:${SIZE} -D "${IMG}"
+	print_or_run sudo timeout -k 10 -s 9 "${FLAGS_timeout}" $DFU_UTIL -a 0 \
+		-d "${DFU_DEVICE}" -s ${ADDR}:${SIZE} -D "${IMG}"
 }
 
 # TODO(b/130165933): Implement a dut-control command to look up the correct
@@ -1227,13 +1221,13 @@ function flash_it83xx() {
 		# Don't let the EC come out of reset after H1 reset
 		dut_control ec_reset:on
 
-		# We need to swing the DUT-side muxes to I2C instead of UART.
-		# This is done by convention with EC_FLASH_SELECT pin from H1
-		servo_save_add "ec_flash_select"
-		dut_control_or_die ec_flash_select:on
 		# Enable i2c bus on C2D2 at 400kbps
 		servo_save_add "i2c_ec_bus_speed"
 		dut_control_or_die i2c_ec_bus_speed:400
+
+		# We need to swing the DUT-side muxes to I2C instead of UART.
+		# This is done by convention with EC_FLASH_SELECT pin from H1
+		dut_control_or_die ec_flash_select:on
 	fi
 
 	# Now the we have enabled the I2C mux on the servo to talk to the dut,
@@ -1306,7 +1300,15 @@ function flash_it83xx() {
 		echo "${ITEFLASH_ARGS[@]}"
 	fi
 
-	"${ITEFLASH_ARGS[@]}" || die "${ERROR_MSG}"
+	# Ensure the CR50 doesn't go into low power while flashing
+	# otherwise the DUT side muxes will get cut. Note this also needs to
+	# happen once the CR50 hooks have settled and H1 realizes that the
+	# "AP [is] Off", since that over writes the idle action with sleep.
+	if [[ "${SERVO_TYPE}" =~ "c2d2" ]]; then
+		dut_control cr50_idle_level:active
+	fi
+
+	print_or_run "${ITEFLASH_ARGS[@]}" || die "${ERROR_MSG}"
 }
 
 function flash_ite_spi() {
@@ -1409,11 +1411,11 @@ function flash_npcx_uut() {
 		ec_reset
 
 		# Have to wait a bit for EC boot-up
-		sleep 0.1
+		print_or_run sleep 0.1
 
 		# Ensure normal UART operation
 		ec_disable_boot0 "uut"
-		sleep 0.1
+		print_or_run sleep 0.1
 	fi
 
 	# Remove the prefix "/dev/" because uartupdatetool will add it.
@@ -1431,7 +1433,7 @@ function flash_npcx_uut() {
 		if [[ "${FLAGS_verbose}" = ${FLAGS_TRUE} ]]; then
 			echo "${UUT_MON[*]}"
 		fi
-		timeout -k 10 -s 9 "${FLAGS_timeout}" \
+		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
 			"${UUT_MON[@]}" || die "Failed to load monitor binary."
 
 		info "Programming EC firmware image."
@@ -1441,7 +1443,7 @@ function flash_npcx_uut() {
 		if [[ "${FLAGS_verbose}" = ${FLAGS_TRUE} ]]; then
 			echo "${UUT_WR[*]}"
 		fi
-		timeout -k 10 -s 9 "${FLAGS_timeout}" \
+		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
 			"${UUT_WR[@]}" || die "${MSG_PROGRAM_FAIL}"
 
 		# If it is a program-verify request, then make a temporary
@@ -1465,7 +1467,7 @@ function flash_npcx_uut() {
 		if [[ "${FLAGS_verbose}" == ${FLAGS_TRUE} ]]; then
 			echo "${UUT_RD[*]}"
 		fi
-		timeout -k 10 -s 9 "${FLAGS_timeout}" \
+		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
 			"${UUT_RD[@]}" || die "${MSG_READ_FAIL}"
 	fi
 
@@ -1478,7 +1480,7 @@ function flash_npcx_uut() {
 			echo "cmp -n ${IMG_SIZE} ${IMG} ${IMG_READ}"
 		fi
 
-		cmp -s -n "${IMG_SIZE}" "${IMG}" "${IMG_READ}" \
+		print_or_run cmp -s -n "${IMG_SIZE}" "${IMG}" "${IMG_READ}" \
 			|| die "${MSG_VERIFY_FAIL}"
 	fi
 }
@@ -1511,13 +1513,6 @@ function flash_mec1322() {
 	flash_flashrom
 }
 
-if dut_control boot_mode 2>/dev/null ; then
-	if [[ "${MCU}" != "ec" ]] ; then
-		die "Toad cable can't support non-ec UARTs"
-	fi
-	SERVO_TYPE=toad
-	info "Using a dedicated debug cable"
-fi
 info "Using ${SERVO_TYPE}."
 
 # Only if it is a flash program request, call ec_image.
