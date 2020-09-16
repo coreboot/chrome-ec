@@ -61,6 +61,9 @@
 
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
+#define CONFIG_IO_EXPANDER_IT8801_PWM
+#define CONFIG_KEYBOARD_BACKLIGHT
+
 #endif /* VARIANT_KUKUI_NO_SENSORS */
 
 /* I2C ports */
@@ -121,6 +124,10 @@ enum battery_type {
 	BATTERY_SUNWODA,
 	BATTERY_SMP,
 	BATTERY_TYPE_COUNT,
+};
+
+enum pwm_channel {
+	IT8801_PWM_CH_KBLIGHT = 0,
 };
 
 #include "gpio_signal.h"
