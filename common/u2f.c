@@ -10,7 +10,6 @@
 #include "cryptoc/sha256.h"
 #include "dcrypto.h"
 #include "extension.h"
-#include "fips_rand.h"
 #include "system.h"
 #include "u2f_impl.h"
 #include "u2f.h"
@@ -108,6 +107,9 @@ static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
 
 	size_t response_buf_size = *response_size;
 
+	/* Authorization salt for versioned KHs */
+	uint8_t *authorization_salt;
+
 	*response_size = 0;
 
 	if (input_size != sizeof(struct u2f_generate_req))
@@ -160,17 +162,19 @@ static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
 		copy_kh_pubkey_out(&opk_x, &opk_y, &kh_buf.kh, buf);
 		*response_size = sizeof(struct u2f_generate_resp);
 	} else {
-		if (!fips_rand_bytes(kh_buf.vkh.authorization_salt,
-				     U2F_AUTHORIZATION_SALT_SIZE))
+		authorization_salt = od_seed;
+		/* Generate in word-aligned array so that TRNG doesn't crash */
+		if (!DCRYPTO_ladder_random(authorization_salt))
 			return VENDOR_RC_INTERNAL_ERROR;
 
-		if (u2f_authorization_hmac(kh_buf.vkh.authorization_salt,
-					   &kh_buf.vkh.header,
-					   req->authTimeSecretHash,
-					   kh_buf.vkh.authorization_hmac) !=
-		    EC_SUCCESS)
+		if (u2f_authorization_hmac(
+			    authorization_salt, &kh_buf.vkh.header,
+			    req->authTimeSecretHash,
+			    kh_buf.vkh.authorization_hmac) != EC_SUCCESS)
 			return VENDOR_RC_INTERNAL_ERROR;
 
+		memcpy(&kh_buf.vkh.authorization_salt, authorization_salt,
+		       U2F_AUTHORIZATION_SALT_SIZE);
 		copy_versioned_kh_pubkey_out(&opk_x, &opk_y, &kh_buf.vkh, buf);
 		*response_size = sizeof(struct u2f_generate_versioned_resp);
 	}
