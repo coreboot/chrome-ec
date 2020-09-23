@@ -115,6 +115,32 @@ int mpu_config_region(uint8_t region, uint32_t addr, uint32_t size,
 	if (!size)
 		return EC_SUCCESS;
 
+	/*
+	 * Hack for zork: code RAM is only 64k-aligned but 256k in size, which
+	 * is not supported by the existing algorithm. Until a more complete
+	 * solution is written, special-case a configuration for NPCX797WC.
+	 * Data RAM is similar, a 64k-aligned 128k region.
+	 */
+	if (addr == 0x10070000 && size == 0x40000) {
+		/* Code RAM */
+		rv = mpu_update_region(region, 0x10000000,
+			19,	/* 1<<19 = 0x80000, 8 * 64k */
+			attr, 1,
+			0x80	/* 64k from offset 0x70000 */
+		);
+		if (rv)
+			return rv;
+		return mpu_update_region(region + 1, 0x10080000,
+			19, attr, 1,
+			0x07	/* 192k from offset 0 */);
+	} else if (addr == 0x200b0000 && size == 0x20000) {
+		/* Data RAM */
+		return mpu_update_region(region, 0x20080000,
+			19, attr, 1,
+			0x18	/* 128k from offset 0x30000 */
+		);
+	}
+
 	/* Bit position of first '1' in size */
 	size_bit = 31 - __builtin_clz(size);
 	/* Min. region size is 32 bytes */
