@@ -26,6 +26,19 @@
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 
 /* Charger parameters */
+#define CHARGER_NAME    RT946X_CHARGER_NAME
+#define CHARGE_V_MAX    4710
+#define CHARGE_V_MIN    3900
+#define CHARGE_V_STEP   10
+#define CHARGE_I_MAX    5000
+#define CHARGE_I_MIN    100
+#define CHARGE_I_OFF    0
+#define CHARGE_I_STEP   100
+#define INPUT_I_MAX     3250
+#define INPUT_I_MIN     100
+#define INPUT_I_STEP    50
+
+/* Charger parameters */
 static const struct charger_info rt946x_charger_info = {
 	.name         = CHARGER_NAME,
 	.voltage_max  = CHARGE_V_MAX,

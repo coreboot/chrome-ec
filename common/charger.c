@@ -276,7 +276,17 @@ static void charger_chips_init(void)
 			chg_chips[chip].drv->init(chip);
 	}
 }
+#if !defined(CONFIG_CHARGER_RUNTIME_CONFIG)
 DECLARE_HOOK(HOOK_INIT, charger_chips_init, HOOK_PRIO_INIT_I2C + 1);
+#else
+/*
+ * If charager is determined by SSFC,
+ * first cbi can be read after i2c init.(I2C + 1)
+ * second charge is selected on board_init(I2C + 2)
+ * then we can init charger_chips_init(I2C + 3)
+ */
+DECLARE_HOOK(HOOK_INIT, charger_chips_init, HOOK_PRIO_INIT_I2C + 3);
+#endif
 
 enum ec_error_list charger_post_init(void)
 {

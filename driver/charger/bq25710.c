@@ -5,16 +5,32 @@
  * TI bq25710 battery charger driver.
  */
 
+#include "battery.h"
 #include "battery_smart.h"
 #include "bq25710.h"
 #include "charge_ramp.h"
+#include "charge_state_v2.h"
 #include "charger.h"
 #include "common.h"
 #include "console.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "task.h"
+#include "system.h"
 #include "timer.h"
 #include "util.h"
+
+#ifndef CONFIG_CHARGER_NARROW_VDC
+#error "BQ25710 is a NVDC charger, please enable CONFIG_CHARGER_NARROW_VDC."
+#endif
+
+/*
+ * Delay required from taking the bq25710 out of low power mode and having the
+ * correct value in register 0x3E for VSYS_MIN voltage. The length of the delay
+ * was determined by experiment. Less than 12 msec was not enough of delay, so
+ * the value here is set to 20 msec to have plenty of margin.
+ */
+#define BQ25710_VDDA_STARTUP_DELAY_MSEC 20
 
 /* Sense resistor configurations and macros */
 #define DEFAULT_SENSE_RESISTOR 10
@@ -31,6 +47,16 @@
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
+
+#ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
+/*
+ * If this config option is defined, then the bq25710 needs to remain in
+ * performance mode when the AP is in S0. Performance mode is active whenever AC
+ * power is connected or when the EN_LWPWR bit in ChargeOption0 is clear.
+ */
+static uint32_t bq25710_perf_mode_req;
+static struct mutex bq25710_perf_mode_mutex;
+#endif
 
 /* Charger parameters */
 static const struct charger_info bq25710_charger_info = {
@@ -65,6 +91,7 @@ static inline enum ec_error_list raw_write16(int chgnum, int offset, int value)
 
 #if defined(CONFIG_CHARGE_RAMP_HW) || \
 	defined(CONFIG_USB_PD_VBUS_MEASURE_CHARGER)
+#ifdef CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 static int bq25710_get_low_power_mode(int chgnum, int *mode)
 {
 	int rv;
@@ -78,6 +105,7 @@ static int bq25710_get_low_power_mode(int chgnum, int *mode)
 
 	return EC_SUCCESS;
 }
+#endif //CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 
 static int bq25710_set_low_power_mode(int chgnum, int enable)
 {
@@ -87,6 +115,21 @@ static int bq25710_set_low_power_mode(int chgnum, int enable)
 	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_0, &reg);
 	if (rv)
 		return rv;
+
+#ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
+	mutex_lock(&bq25710_perf_mode_mutex);
+	/*
+	 * Performance mode means not in low power mode. The bit that controls
+	 * this is EN_LWPWR in ChargeOption0. The 'enable' param in this
+	 * function is refeerring to low power mode, so enabling low power mode
+	 * means disabling performance mode and vice versa.
+	 */
+	if (enable)
+		bq25710_perf_mode_req &= ~(1 << task_get_current());
+	else
+		bq25710_perf_mode_req |= (1 << task_get_current());
+	enable = !bq25710_perf_mode_req;
+#endif
 
 	if (enable)
 		reg |= BQ25710_CHARGE_OPTION_0_LOW_POWER_MODE;
@@ -103,6 +146,7 @@ static int bq25710_set_low_power_mode(int chgnum, int enable)
 	return EC_SUCCESS;
 }
 
+#ifdef CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 static int bq25710_adc_start(int chgnum, int adc_en_mask)
 {
 	int reg;
@@ -146,6 +190,7 @@ static int bq25710_adc_start(int chgnum, int adc_en_mask)
 
 	return EC_SUCCESS;
 }
+#endif //CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 #endif
 
 static void bq25710_init(int chgnum)
@@ -161,22 +206,26 @@ static void bq25710_init(int chgnum)
 	 * MIN_SYSTEM_VOLTAGE register prior to setting the reset so that the
 	 * correct value is preserved. In order to have the correct value read,
 	 * the bq25710 must not be in low power mode, otherwise the VDDA rail
-	 * may not be powered if AC is not connected.
+	 * may not be powered if AC is not connected. Note, this reset is only
+	 * required when running out of RO and not following sysjump to RW.
 	 */
-	rv = bq25710_set_low_power_mode(chgnum, 0);
-	/* Allow enough time for VDDA to be powered */
-	msleep(BQ25710_VDDA_STARTUP_DELAY_MSEC);
-	rv |= raw_read16(chgnum, BQ25710_REG_MIN_SYSTEM_VOLTAGE, &vsys);
-	rv |= raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_3, &reg);
-	if (!rv) {
-		reg |= BQ25710_CHARGE_OPTION_3_RESET_REG;
-		/* Set all registers to default values */
-		raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_3, reg);
-		/* Restore VSYS_MIN voltage to POR reset value */
-		raw_write16(chgnum, BQ25710_REG_MIN_SYSTEM_VOLTAGE, vsys);
+	if (!system_is_in_rw()) {
+		rv = bq25710_set_low_power_mode(chgnum, 0);
+		/* Allow enough time for VDDA to be powered */
+		msleep(BQ25710_VDDA_STARTUP_DELAY_MSEC);
+		rv |= raw_read16(chgnum, BQ25710_REG_MIN_SYSTEM_VOLTAGE, &vsys);
+		rv |= raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_3, &reg);
+		if (!rv) {
+			reg |= BQ25710_CHARGE_OPTION_3_RESET_REG;
+			/* Set all registers to default values */
+			raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_3, reg);
+			/* Restore VSYS_MIN voltage to POR reset value */
+			raw_write16(chgnum, BQ25710_REG_MIN_SYSTEM_VOLTAGE,
+				    vsys);
+		}
+		/* Reenable low power mode */
+		bq25710_set_low_power_mode(chgnum, 1);
 	}
-	/* Reenable low power mode */
-	bq25710_set_low_power_mode(chgnum, 1);
 
 	if (!raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, &reg)) {
 		/* Disable VDPM prochot profile at initialization */
@@ -401,12 +450,18 @@ static int bq25710_get_vbus_voltage(int chgnum, int port)
 	 * LSB => 64mV.
 	 * Return 0 when VBUS <= 3.2V as ADC can't measure it.
 	 */
-	return reg ?
+	*voltage = reg ?
 	       (reg * BQ25710_ADC_VBUS_STEP_MV + BQ25710_ADC_VBUS_BASE_MV) : 0;
 
 error:
-	CPRINTF("Could not read VBUS ADC! Error: %d\n", rv);
-	return 0;
+	if (rv)
+		CPRINTF("Could not read VBUS ADC! Error: %d\n", rv);
+	return rv;
+}
+#else
+static int bq25710_get_vbus_voltage(int chgnum, int port)
+{
+	return EC_ERROR_UNIMPLEMENTED;
 }
 #endif
 
@@ -430,13 +485,20 @@ static void bq25710_chg_ramp_handle(void)
 
 	/*
 	 * Once the charge ramp is stable write back the stable ramp
-	 * current to input current register.
+	 * current to the host input current limit register
 	 */
+	ramp_curr = chg_ramp_get_current_limit();
 	if (chg_ramp_is_stable()) {
-		ramp_curr = chg_ramp_get_current_limit();
 		if (ramp_curr && !charger_set_input_current(ramp_curr))
-			CPRINTF("stable ramp current=%d\n", ramp_curr);
+			CPRINTF("bq25710: stable ramp current=%d\n", ramp_curr);
+	} else {
+		CPRINTF("bq25710: ICO stall, ramp current=%d\n", ramp_curr);
 	}
+	/*
+	 * Disable ICO mode. When ICO mode is active the input current limit is
+	 * given by the value in register IIN_DPM (0x22)
+	 */
+	charger_set_hw_ramp(0);
 }
 DECLARE_DEFERRED(bq25710_chg_ramp_handle);
 
@@ -495,9 +557,7 @@ static int bq25710_ramp_is_stable(int chgnum)
 
 static int bq25710_ramp_get_current_limit(int chgnum)
 {
-	int reg;
-	int mode;
-	int tries_left = 8;
+	int reg, rv;
 
 	rv = raw_read16(chgnum, BQ25710_REG_IIN_DPM, &reg);
 	if (rv) {
@@ -506,9 +566,10 @@ static int bq25710_ramp_get_current_limit(int chgnum)
 		return 0;
 	}
 
-	/* Exit low power mode so ADC conversion takes typical time */
-	if (bq25710_set_low_power_mode(0))
-		goto error;
+	return ((reg >> BQ25710_IIN_DPM_BIT_SHIFT) * BQ25710_IIN_DPM_STEP_MA +
+		BQ25710_IIN_DPM_STEP_MA);
+}
+#endif /* CONFIG_CHARGE_RAMP_HW */
 
 #ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 /* Called on AP S5 -> S3  and S3/S0iX -> S0 transition */
@@ -519,15 +580,6 @@ static void bq25710_chipset_startup(void)
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, bq25710_chipset_startup, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, bq25710_chipset_startup, HOOK_PRIO_DEFAULT);
 
-	/*
-	 * Wait until the ADC operation completes. The spec says typical
-	 * conversion time is 10 msec. If low power mode isn't exited first,
-	 * then the conversion time jumps to ~60 msec.
-	 */
-	do {
-		msleep(2);
-		raw_read16(BQ25710_REG_ADC_OPTION, &reg);
-	} while (--tries_left && (reg & BQ25710_ADC_OPTION_ADC_START));
 
 /* Called on AP S0 -> S0iX/S3 or S3 -> S5 transition */
 static void bq25710_chipset_suspend(void)
