@@ -184,6 +184,13 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 	IOEX_EN_USB_A1_5V_DB,
 };
 
+const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
+	.eq_ch0_ch1_offset = PI3HDX1204_EQ_DB710,
+	.eq_ch2_ch3_offset = PI3HDX1204_EQ_DB710,
+	.vod_offset = PI3HDX1204_VOD_115_ALL_CHANNELS,
+	.de_offset = PI3HDX1204_DE_DB_MINUS5,
+};
+
 /*****************************************************************************
  * Board suspend / resume
  */
@@ -321,6 +328,8 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 /*****************************************************************************
  * Use FW_CONFIG to set correct configuration.
  */
+
+int board_usbc1_retimer_inhpd = IOEX_USB_C1_HPD_IN_DB;
 
 static void setup_v0_charger(void)
 {

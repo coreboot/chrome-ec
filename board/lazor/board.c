@@ -110,6 +110,42 @@ static void switchcap_interrupt(enum gpio_signal signal)
 	ln9310_interrupt(signal);
 }
 
+/* Keyboard scan setting */
+struct keyboard_scan_config keyscan_config = {
+	/* Use 80 us, because KSO_02 passes through the H1. */
+	.output_settle_us = 80,
+	/*
+	 * Unmask 0x08 in [0] (KSO_00/KSI_03, the new location of Search key);
+	 * as it still uses the legacy location (KSO_01/KSI_00).
+	 */
+	.actual_key_mask = {
+		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca
+	},
+	/* Other values should be the same as the default configuration. */
+	.debounce_down_us = 9 * MSEC,
+	.debounce_up_us = 30 * MSEC,
+	.scan_period_us = 3 * MSEC,
+	.min_post_scan_delay_us = 1000,
+	.poll_timeout_us = 100 * MSEC,
+};
+
+/* I2C port map */
+const struct i2c_port_t i2c_ports[] = {
+	{"power",   I2C_PORT_POWER,  100, GPIO_EC_I2C_POWER_SCL,
+					  GPIO_EC_I2C_POWER_SDA},
+	{"tcpc0",   I2C_PORT_TCPC0, 1000, GPIO_EC_I2C_USB_C0_PD_SCL,
+					  GPIO_EC_I2C_USB_C0_PD_SDA},
+	{"tcpc1",   I2C_PORT_TCPC1, 1000, GPIO_EC_I2C_USB_C1_PD_SCL,
+					  GPIO_EC_I2C_USB_C1_PD_SDA},
+	{"eeprom",  I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
+					  GPIO_EC_I2C_EEPROM_SDA},
+	{"sensor",  I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
+					  GPIO_EC_I2C_SENSOR_SDA},
+};
+
+const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
 /* ADC channels */
 const struct adc_t adc_channels[] = {
 	/* Measure VBUS through a 1/10 voltage divider */
@@ -475,10 +511,6 @@ static void board_switchcap_init(void)
 /* Initialize board. */
 static void board_init(void)
 {
-	/* Enable BC1.2 VBUS detection */
-	gpio_enable_interrupt(GPIO_USB_C0_VBUS_DET_L);
-	gpio_enable_interrupt(GPIO_USB_C1_VBUS_DET_L);
-
 	/* Enable BC1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
@@ -496,6 +528,41 @@ static void board_init(void)
 	board_switchcap_init();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+void board_hibernate(void)
+{
+	int i;
+
+	/*
+	 * Board rev 5+ has the hardware fix. Don't need the following
+	 * workaround.
+	 */
+	if (system_get_board_version() >= 5)
+		return;
+
+	/*
+	 * Enable the PPC power sink path before EC enters hibernate;
+	 * otherwise, ACOK won't go High and can't wake EC up. Check the
+	 * bug b/170324206 for details.
+	 */
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+		ppc_vbus_sink_enable(i, 1);
+}
+
+__override uint16_t board_get_ps8xxx_product_id(int port)
+{
+	/*
+	 * Lazor (SKU_ID: 0, 1, 2, 3) rev 3+ changes TCPC from PS8751 to
+	 * PS8805.
+	 *
+	 * Limozeen (SKU_ID: 4, 5) all-rev uses PS8805.
+	 */
+	if ((sku_id == 0 || sku_id == 1 || sku_id == 2 || sku_id == 3) &&
+	    system_get_board_version() < 3)
+		return PS8751_PRODUCT_ID;
+
+	return PS8805_PRODUCT_ID;
+}
 
 void board_tcpc_init(void)
 {

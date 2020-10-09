@@ -4,18 +4,16 @@
  */
 
 /* Volteer board-specific configuration */
-#include "bb_retimer.h"
 #include "button.h"
 #include "common.h"
 #include "accelgyro.h"
 #include "cbi_ec_fw_config.h"
+#include "charge_state_v2.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi260.h"
-#include "driver/als_tcs3400.h"
+#include "driver/accelgyro_bmi160.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/syv682x.h"
-#include "driver/retimer/bb_retimer.h"
 #include "driver/sync.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -25,6 +23,7 @@
 #include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "keyboard_raw.h"
 #include "lid_switch.h"
 #include "keyboard_scan.h"
 #include "power.h"
@@ -120,6 +119,21 @@ __override bool board_is_tbt_usb4_port(int port)
 		&& ((usb_db == DB_USB4_GEN2) || (usb_db == DB_USB4_GEN3)));
 }
 
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+			    int max_ma, int charge_mv)
+{
+	/*
+	 * Follow OEM request to limit the input current to
+	 * 90% negotiated limit when S0.
+	 */
+	if (chipset_in_state(CHIPSET_STATE_ON))
+		charge_ma = charge_ma * 90 / 100;
+
+	charge_set_input_current_limit(MAX(charge_ma,
+					CONFIG_CHARGER_INPUT_CURRENT),
+					charge_mv);
+}
+
 /******************************************************************************/
 /* Physical fans. These are logically separate from pwm_channels. */
 
@@ -184,13 +198,6 @@ const struct i2c_port_t i2c_ports[] = {
 		.kbps = 1000,
 		.scl = GPIO_EC_I2C2_USB_C1_SCL,
 		.sda = GPIO_EC_I2C2_USB_C1_SDA,
-	},
-	{
-		.name = "usb_1_mix",
-		.port = I2C_PORT_USB_1_MIX,
-		.kbps = 100,
-		.scl = GPIO_EC_I2C3_USB_1_MIX_SCL,
-		.sda = GPIO_EC_I2C3_USB_1_MIX_SDA,
 	},
 	{
 		.name = "power",
@@ -384,6 +391,10 @@ __override void board_cbi_init(void)
 	default:
 		CPRINTS("%sID %d not supported", db_type_prefix, usb_db);
 	}
+
+	if ((!IS_ENABLED(TEST_BUILD) && !ec_cfg_has_numeric_pad()) ||
+	    get_board_id() < 1)
+		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);
 }
 
 /******************************************************************************/
@@ -459,12 +470,6 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc1_usb4_db_retimer = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
-};
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
@@ -475,21 +480,9 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb4_db_retimer,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
-
-struct bb_usb_control bb_controls[] = {
-	[USBC_PORT_C0] = {
-		/* USB-C port 0 doesn't have a retimer */
-	},
-	[USBC_PORT_C1] = {
-		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
-		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
 
 static void board_tcpc_init(void)
 {

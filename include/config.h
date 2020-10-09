@@ -190,6 +190,9 @@
 #undef CONFIG_BODY_DETECTION_VAR_THRESHOLD
 #undef CONFIG_BODY_DETECTION_CONFIDENCE_DELTA
 
+/* How much noise affect threshold of variance */
+#undef CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR
+
 /* The confidence limit of on_body/off_body */
 #undef CONFIG_BODY_DETECTION_ON_BODY_CON
 #undef CONFIG_BODY_DETECTION_OFF_BODY_CON
@@ -768,6 +771,12 @@
 #undef CONFIG_VOLUME_BUTTONS
 
 /*
+ * The board has buttons that are connected to ADC pins which pressed and
+ * released values are determined by the analog voltage
+ */
+#undef CONFIG_ADC_BUTTONS
+
+/*
  * Allow runtime configuration of the buttons[] array
  */
 #undef CONFIG_BUTTONS_RUNTIME_CONFIG
@@ -1080,6 +1089,12 @@
 /* Wireless chargers */
 #undef CONFIG_WIRELESS_CHARGER_P9221_R7
 
+/*
+ * Workaround npcx9 A1 chip's bug for download_from_flash API in th booter.
+ * This can be removed when A2 chip is available.
+ */
+#undef CONFIG_WORKAROUND_FLASH_DOWNLOAD_API
+
 /*****************************************************************************/
 
 /*
@@ -1117,6 +1132,21 @@
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
 
+/*
+ * This is a convenience macro that causes the .data section to link into
+ * the ROM/flash resident section defined above.
+ *
+ * When enabled, the EC initialization code copies the .data section directly
+ * from flash into data RAM.
+ *
+ * When this is not defined, the bootloader copies the .data section from flash
+ * to code RAM. The EC initialization code copies .data from code RAM to data
+ * RAM.
+ *
+ * This is automatically enabled when both CONFIG_CHIP_INIT_ROM_REGION and
+ * CONFIG_MAPPED_STORAGE are enabled.
+ */
+#undef CONFIG_CHIP_DATA_IN_INIT_ROM
 
 /*****************************************************************************/
 /* Chipset config */
@@ -2217,6 +2247,28 @@
 /* Wake up pins have non-const configuration. */
 #undef CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 
+/* In npcx9 and later chips, enhanced PSL features are supported including:
+ *   (1) Pulse mode for PSL_OUT signal.
+ *   (2) Open-drain for PSL_OUT signal (when Pulse mode is enabled.)
+ * These features can be enabled in board configuration file by adding
+ * the following bit masks to this flag:
+ *   (1) NPCX_PSL_CFG_PSL_OUT_PULSE.
+ *   (2) NPCX_PSL_CFG_PSL_OUT_OD.
+ * Ex:  #define CONFIG_HIBERNATE_PSL_OUT_FLAGS	 \
+		 (NPCX_PSL_CFG_PSL_OUT_PULSE | NPCX_PSL_CFG_PSL_OUT_OD)
+ */
+#undef CONFIG_HIBERNATE_PSL_OUT_FLAGS
+
+/*
+ * Enable VCC1_RST pin as the input of PSL wakeup source. When Enabling this,
+ * the VCC1_RST pin must be connected to the VSBY supply via an external pull-up
+ * resistor of maximum 100K ohm .
+ * TODO: Remove this when NPCX9 A2 chip is available because A2
+ * chip will enable VCC1_RST to PSL wakeup source and lock it in
+ * the booter.
+ */
+#undef CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
+
 /*
  * Chip supports a 64-bit hardware timer and implements
  * __hw_clock_source_read64 and __hw_clock_source_set64.
@@ -2434,6 +2486,13 @@
 
 /* To define it, if I2C channel C and PECI used at the same time. */
 #undef CONFIG_IT83XX_SMCLK2_ON_GPC7
+
+/*
+ * Enable the corresponding config option, according to EC's VCC is connected
+ * to 1.8V or 3.3V
+ */
+#undef CONFIG_IT83XX_VCC_1P8V
+#undef CONFIG_IT83XX_VCC_3P3V
 
 /*
  * If this is not defined, the firmware will revert the JTAG selection
@@ -4121,6 +4180,8 @@
 #undef CONFIG_USB_PD_TCPM_TUSB422
 #undef CONFIG_USB_PD_TCPM_RAA489000
 #undef CONFIG_USB_PD_TCPM_RT1715
+#undef CONFIG_USB_PD_TCPM_FUSB307
+#undef CONFIG_USB_PD_TCPM_STM32GX
 
 /* PS8XXX series are all supported by a single driver with a build time config
  * listed below (CONFIG_USB_PD_TCPM_PS*) defined to enable the specific product.
@@ -4538,6 +4599,9 @@
 /* 'Virtual' USB mux under host (not EC) control */
 #undef CONFIG_USB_MUX_VIRTUAL
 
+/* Enable IT5205H SBU protection switch */
+#undef CONFIG_USB_MUX_IT5205H_SBU_OVP
+
 /*****************************************************************************/
 /* USB GPIO config */
 #undef CONFIG_USB_GPIO
@@ -4790,6 +4854,12 @@
 
 /* Define to enable USB State Machine framework. */
 #undef CONFIG_TEST_SM
+
+/*
+ * This build is not a complete platform/ec based EC, but instead
+ * using the platform/ec zephyr module.
+ */
+#undef CONFIG_ZEPHYR
 
 /*****************************************************************************/
 /*
@@ -5090,6 +5160,12 @@
 #if defined(CONFIG_USBC_PPC_SN5S330)
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_SBU
+#define CONFIG_USBC_PPC_VCONN
+#endif
+
+/* The SYV682X supports VCONN and needs to be informed of CC polarity */
+#if defined(CONFIG_USBC_PPC_SYV682X)
+#define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_VCONN
 #endif
 
@@ -5458,6 +5534,13 @@
 #error CONFIG_RW_ROM_RESIDENT_SIZE is 0 with CONFIG_CHIP_INIT_ROM_REGION defined
 #endif
 
+/*
+ * By default, enable storing the .data section on the ROM resident area to
+ * save flash space.
+ */
+#ifdef CONFIG_MAPPED_STORAGE
+#define CONFIG_CHIP_DATA_IN_INIT_ROM
+#endif
 #endif /* CONFIG_CHIP_INIT_ROM_REGION */
 
 /*****************************************************************************/
@@ -5702,6 +5785,7 @@
 #define CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE     250 /* max sensor odr (Hz) */
 #define CONFIG_BODY_DETECTION_VAR_THRESHOLD       550 /* (mm/s^2)^2 */
 #define CONFIG_BODY_DETECTION_CONFIDENCE_DELTA    525 /* (mm/s^2)^2 */
+#define CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR    120 /* % */
 #define CONFIG_BODY_DETECTION_ON_BODY_CON         50  /* % */
 #define CONFIG_BODY_DETECTION_OFF_BODY_CON        10  /* % */
 #define CONFIG_BODY_DETECTION_STATIONARY_DURATION 15  /* second */

@@ -14,7 +14,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accel_kionix.h"
+#include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/battery/max17055.h"
 #include "driver/bc12/pi3usb9201.h"
@@ -30,6 +30,7 @@
 #include "i2c_bitbang.h"
 #include "it8801.h"
 #include "keyboard_scan.h"
+#include "keyboard_backlight.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -333,35 +334,45 @@ static struct mutex g_base_mutex;
 
 /* Rotation matrixes */
 static const mat33_fp_t base_standard_ref = {
-	{FLOAT_TO_FP(1), 0, 0},
 	{0, FLOAT_TO_FP(1), 0},
+	{FLOAT_TO_FP(-1), 0, 0},
 	{0, 0, FLOAT_TO_FP(1)}
 };
 
+static const mat33_fp_t lid_standard_ref = {
+	{FLOAT_TO_FP(-1), 0, 0},
+	{0, FLOAT_TO_FP(1), 0},
+	{0, 0, FLOAT_TO_FP(-1) }
+};
+
 /* sensor private data */
-static struct kionix_accel_data g_kx022_data;
+/* Lid accel private data */
+static struct stprivate_data g_lis2dwl_data;
+/* Base accel private data */
 static struct bmi_drv_data_t g_bmi160_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 	 .name = "Lid Accel",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_KX022,
+	 .chip = MOTIONSENSE_CHIP_LIS2DWL,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
+	 .drv = &lis2dw12_drv,
 	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_kx022_data,
+	 .drv_data = &g_lis2dwl_data,
 	 .port = I2C_PORT_SENSORS,
-	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-	 .rot_standard_ref = NULL, /* Identity matrix. */
-	 .default_range = 2, /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	 .i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
+	 .rot_standard_ref = &lid_standard_ref,
+	 .default_range = 2, /* g */
+	 .min_frequency = LIS2DW12_ODR_MIN_VAL,
+	 .max_frequency = LIS2DW12_ODR_MAX_VAL,
 	 .config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
+			.odr = 12500 | ROUND_UP_FLAG,
 		},
-		 /* Sensor on for lid angle detection */
+		/* Sensor on for lid angle detection */
 		[SENSOR_CONFIG_EC_S3] = {
 			.odr = 10000 | ROUND_UP_FLAG,
 		},
@@ -419,6 +430,38 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+const struct it8801_pwm_t it8801_pwm_channels[] = {
+	[IT8801_PWM_CH_KBLIGHT] = {.index = 4},
+};
+
+void board_kblight_init(void)
+{
+	kblight_register(&kblight_it8801);
+}
+
+bool board_has_kb_backlight(void)
+{
+	/* Default enable keyboard backlight */
+	return true;
+}
+
+/* Called on AP S0iX -> S0 transition */
+static void board_chipset_resume(void)
+{
+	if (board_has_kb_backlight())
+		ioex_set_level(IOEX_KB_BL_EN, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S0 -> S0iX transition */
+static void board_chipset_suspend(void)
+{
+	if (board_has_kb_backlight())
+		ioex_set_level(IOEX_KB_BL_EN, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
 #endif /* !VARIANT_KUKUI_NO_SENSORS */
 
 /* Called on AP S5 -> S3 transition */
@@ -445,3 +488,59 @@ int board_get_battery_i2c(void)
 {
 	return board_get_version() >= 1 ? 2 : 1;
 }
+
+#ifdef SECTION_IS_RW
+static int it8801_get_target_channel(enum pwm_channel *channel,
+				     int type, int index)
+{
+	switch (type) {
+	case EC_PWM_TYPE_GENERIC:
+		*channel = index;
+		break;
+	default:
+		return -1;
+	}
+
+	return *channel >= 1;
+}
+
+static enum ec_status
+host_command_pwm_set_duty(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_pwm_set_duty *p = args->params;
+	enum pwm_channel channel;
+	uint16_t duty;
+
+	if (it8801_get_target_channel(&channel, p->pwm_type, p->index))
+		return EC_RES_INVALID_PARAM;
+
+	duty = (uint32_t) p->duty * 255 / 65535;
+	it8801_pwm_set_raw_duty(channel, duty);
+	it8801_pwm_enable(channel, p->duty > 0);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_DUTY,
+		     host_command_pwm_set_duty,
+		     EC_VER_MASK(0));
+
+static enum ec_status
+host_command_pwm_get_duty(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_pwm_get_duty *p = args->params;
+	struct ec_response_pwm_get_duty *r = args->response;
+
+	enum pwm_channel channel;
+
+	if (it8801_get_target_channel(&channel, p->pwm_type, p->index))
+		return EC_RES_INVALID_PARAM;
+
+	r->duty = (uint32_t) it8801_pwm_get_raw_duty(channel) * 65535 / 255;
+	args->response_size = sizeof(*r);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PWM_GET_DUTY,
+		     host_command_pwm_get_duty,
+		     EC_VER_MASK(0));
+#endif

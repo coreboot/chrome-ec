@@ -36,7 +36,6 @@
 #define CONFIG_FPU
 #define CONFIG_PWM
 #define CONFIG_PWM_DISPLIGHT
-#define CONFIG_PWM_KBLIGHT
 
 #define CONFIG_VBOOT_HASH
 
@@ -59,6 +58,14 @@
 #define CONFIG_LID_SWITCH
 #define CONFIG_EXTPOWER_GPIO
 
+/*
+ * On power-on, H1 releases the EC from reset but then quickly asserts and
+ * releases the reset a second time. This means the EC sees 2 resets:
+ * (1) power-on reset, (2) reset-pin reset. This config will
+ * allow the second reset to be treated as a power-on.
+ */
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
+
 /* Battery */
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_PRESENT_GPIO GPIO_BATT_PRES_ODL
@@ -77,7 +84,7 @@
 
 #define CONFIG_CHARGER_INPUT_CURRENT 512
 #define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 2
-#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 7500
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 10000
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 
@@ -132,7 +139,7 @@
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY  250000 /* us */
 #define PD_VCONN_SWAP_DELAY             5000 /* us */
 
-#define PD_OPERATING_POWER_MW   15000
+#define PD_OPERATING_POWER_MW   10000
 #define PD_MAX_POWER_MW         ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
 #define PD_MAX_CURRENT_MA       3000
 #define PD_MAX_VOLTAGE_MV       20000
@@ -146,20 +153,15 @@
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 
-/* NPCX Features */
-#define CONFIG_HIBERNATE_PSL
-
 /*
  * Macros for GPIO signals used in common code that don't match the
  * schematic names. Signal names in gpio.inc match the schematic and are
  * then redefined here to so it's more clear which signal is being used for
  * which purpose.
  */
-#define GPIO_AC_PRESENT		GPIO_ACOK_OD
 #define GPIO_POWER_BUTTON_L	GPIO_EC_PWR_BTN_ODL
 #define GPIO_VOLUME_DOWN_L	GPIO_EC_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L	GPIO_EC_VOLUP_BTN_ODL
-#define GPIO_WP_L		GPIO_EC_WP_ODL
 #define GPIO_LID_OPEN		GPIO_LID_OPEN_EC
 #define GPIO_SHI_CS_L		GPIO_AP_EC_SPI_CS_L
 #define GPIO_ENTERING_RW	GPIO_EC_ENTERING_RW
@@ -179,8 +181,12 @@
 #define I2C_PORT_POWER   NPCX_I2C_PORT0_0
 #define I2C_PORT_TCPC0   NPCX_I2C_PORT1_0
 #define I2C_PORT_TCPC1   NPCX_I2C_PORT2_0
+#define I2C_PORT_WLC     NPCX_I2C_PORT3_0
 #define I2C_PORT_EEPROM  NPCX_I2C_PORT5_0
 #define I2C_PORT_SENSOR  NPCX_I2C_PORT7_0
+
+/* UART */
+#define CONFIG_CMD_CHARGEN
 
 /* Define the host events which are allowed to wake AP up from S3 */
 #define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \

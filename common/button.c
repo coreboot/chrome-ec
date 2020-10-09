@@ -73,8 +73,14 @@ static int raw_button_pressed(const struct button_config *button)
 	int physical_value = 0;
 	int simulated_value = 0;
 	if (!(button->flags & BUTTON_FLAG_DISABLED)) {
-		physical_value = (!!gpio_get_level(button->gpio) ==
+		if (IS_ENABLED(CONFIG_ADC_BUTTONS) &&
+			button_is_adc_detected(button->gpio)) {
+			physical_value =
+				adc_to_physical_value(button->gpio);
+		} else {
+			physical_value = (!!gpio_get_level(button->gpio) ==
 				!!(button->flags & BUTTON_FLAG_ACTIVE_HIGH));
+		}
 #ifdef CONFIG_SIMULATED_BUTTON
 		simulated_value = simulated_button_pressed(button);
 #endif
@@ -381,8 +387,9 @@ static void simulate_button_release_deferred(void)
 		/* Check state for button pressed */
 		if (sim_button_state & BIT(buttons[button_idx].type)) {
 			/* Set state of the button as released */
-			atomic_clear(&sim_button_state,
-					BIT(buttons[button_idx].type));
+			deprecated_atomic_clear_bits(
+				&sim_button_state,
+				BIT(buttons[button_idx].type));
 
 			button_interrupt_simulate(button_idx);
 		}
@@ -398,8 +405,8 @@ static void simulate_button(uint32_t button_mask, int press_ms)
 	for (button_idx = 0; button_idx < BUTTON_COUNT; button_idx++) {
 		if (button_mask & BIT(button_idx)) {
 			/* Set state of the button as pressed */
-			atomic_or(&sim_button_state,
-					BIT(buttons[button_idx].type));
+			deprecated_atomic_or(&sim_button_state,
+					     BIT(buttons[button_idx].type));
 
 			button_interrupt_simulate(button_idx);
 		}
@@ -817,10 +824,6 @@ DECLARE_HOOK(HOOK_TICK, debug_led_tick, HOOK_PRIO_DEFAULT);
 #endif /* !CONFIG_DEDICATED_RECOVERY_BUTTON */
 #endif /* CONFIG_EMULATED_SYSRQ */
 
-#if defined(CONFIG_VOLUME_BUTTONS) && defined(CONFIG_DEDICATED_RECOVERY_BUTTON)
-#error "A dedicated recovery button is not needed if you have volume buttons."
-#endif /* defined(CONFIG_VOLUME_BUTTONS && CONFIG_DEDICATED_RECOVERY_BUTTON) */
-
 #ifndef CONFIG_BUTTONS_RUNTIME_CONFIG
 const struct button_config buttons[BUTTON_COUNT] = {
 #else
@@ -843,7 +846,8 @@ struct button_config buttons[BUTTON_COUNT] = {
 		.flags = 0,
 	},
 
-#elif defined(CONFIG_DEDICATED_RECOVERY_BUTTON)
+#endif
+#if defined(CONFIG_DEDICATED_RECOVERY_BUTTON)
 	[BUTTON_RECOVERY] = {
 		.name = "Recovery",
 		.type = KEYBOARD_BUTTON_RECOVERY,
@@ -864,6 +868,10 @@ struct button_config buttons[BUTTON_COUNT] = {
 };
 
 #ifdef CONFIG_BUTTON_TRIGGERED_RECOVERY
+/*
+ * Prefer the dedicated recovery button over the volume buttons if
+ * both are present.
+ */
 const struct button_config *recovery_buttons[] = {
 #ifdef CONFIG_DEDICATED_RECOVERY_BUTTON
 	&buttons[BUTTON_RECOVERY],

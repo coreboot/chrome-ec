@@ -84,6 +84,9 @@
 #define SM5803_REFERENCE_LDO3P3_PGOOD	BIT(4)
 #define SM5803_REFERENCE_LDO5_PGOOD	BIT(5)
 
+#define SM5803_REG_CLOCK_SEL		0x2A
+#define SM5803_CLOCK_SEL_LOW		BIT(0)
+
 #define SM5803_REG_GPIO0_CTRL		0x30
 #define SM5803_GPIO0_VAL		BIT(0)
 #define SM5803_GPIO0_MODE_MASK		GENMASK(2, 1)
@@ -120,6 +123,11 @@ enum sm5803_gpio0_modes {
 #define SM5803_GPADCC1_VCHGPWR_EN	BIT(5)  /* NOTE: DO NOT CLEAR */
 #define SM5803_GPADCC1_VSYS_EN		BIT(6)  /* NOTE: DO NOT CLEAR */
 #define SM5803_GPADCC1_TINT_EN		BIT(7)
+
+#define SM5803_REG_GPADC_CONFIG2	0x02
+
+#define SM5803_REG_PSYS1		0x04
+#define SM5803_PSYS1_DAC_EN		BIT(0)
 
 /* Note: Threshold registers all assume lower 2 bits are 0 */
 #define SM5803_REG_VBUS_LOW_TH		0x1A
@@ -167,6 +175,9 @@ enum sm5803_gpio0_modes {
 #define SM5803_VSYS_MEAS_LSB		GENMASK(1, 0)
 
 /* Charger registers (address 0x32) */
+
+#define SM5803_REG_CC_CONFIG1		0x01
+#define SM5803_CC_CONFIG1_SD_PWRUP	BIT(3)
 
 #define SM5803_REG_FLOW1		0x1C
 #define SM5803_FLOW1_MODE		GENMASK(1, 0)
@@ -283,11 +294,15 @@ enum sm5803_charger_modes {
 /* LSB is in 1.67mOhm steps. */
 #define SM5803_REG_IR_COMP2		0x40
 
+#define SM5803_REG_LOG1			0x42
+#define SM5803_BATFET_ON		BIT(2)
+
 #define SM5803_REG_PHOT1		0x72
 #define SM5803_PHOT1_IBAT_PHOT_COMP_EN	BIT(0)
 #define SM5803_PHOT1_IBUS_PHOT_COMP_EN	BIT(1)
 #define SM5803_PHOT1_VSYS_MON_EN	BIT(2)
 #define SM5803_PHOT1_VBUS_MON_EN	BIT(3)
+#define SM5803_PHOT1_COMPARATOR_EN	GENMASK(3, 0)
 #define SM5803_PHOT1_DURATION		GENMASK(6, 4)
 #define SM5803_PHOT1_DURATION_SHIFT	4
 #define SM5803_PHOT1_IRQ_MODE		BIT(7)
@@ -320,7 +335,12 @@ enum ec_error_list sm5803_get_chg_det(int chgnum, int *chg_det);
 enum ec_error_list sm5803_set_vbus_disch(int chgnum, int enable);
 enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable);
 
+void sm5803_hibernate(int chgnum);
 void sm5803_interrupt(int chgnum);
+
+/* Expose low power mode functions */
+void sm5803_disable_low_power_mode(int chgnum);
+void sm5803_enable_low_power_mode(int chgnum);
 
 extern const struct charger_drv sm5803_drv;
 

@@ -40,24 +40,32 @@
 #define CPRINTS(format, args...)
 #endif
 
-#define RCH_SET_FLAG(port, flag) atomic_or(&rch[port].flags, (flag))
-#define RCH_CLR_FLAG(port, flag) atomic_clear(&rch[port].flags, (flag))
+#define RCH_SET_FLAG(port, flag) deprecated_atomic_or(&rch[port].flags, (flag))
+#define RCH_CLR_FLAG(port, flag) \
+	deprecated_atomic_clear_bits(&rch[port].flags, (flag))
 #define RCH_CHK_FLAG(port, flag) (rch[port].flags & (flag))
 
-#define TCH_SET_FLAG(port, flag) atomic_or(&tch[port].flags, (flag))
-#define TCH_CLR_FLAG(port, flag) atomic_clear(&tch[port].flags, (flag))
+#define TCH_SET_FLAG(port, flag) deprecated_atomic_or(&tch[port].flags, (flag))
+#define TCH_CLR_FLAG(port, flag) \
+	deprecated_atomic_clear_bits(&tch[port].flags, (flag))
 #define TCH_CHK_FLAG(port, flag) (tch[port].flags & (flag))
 
-#define PRL_TX_SET_FLAG(port, flag) atomic_or(&prl_tx[port].flags, (flag))
-#define PRL_TX_CLR_FLAG(port, flag) atomic_clear(&prl_tx[port].flags, (flag))
+#define PRL_TX_SET_FLAG(port, flag) \
+	deprecated_atomic_or(&prl_tx[port].flags, (flag))
+#define PRL_TX_CLR_FLAG(port, flag) \
+	deprecated_atomic_clear_bits(&prl_tx[port].flags, (flag))
 #define PRL_TX_CHK_FLAG(port, flag) (prl_tx[port].flags & (flag))
 
-#define PRL_HR_SET_FLAG(port, flag) atomic_or(&prl_hr[port].flags, (flag))
-#define PRL_HR_CLR_FLAG(port, flag) atomic_clear(&prl_hr[port].flags, (flag))
+#define PRL_HR_SET_FLAG(port, flag) \
+	deprecated_atomic_or(&prl_hr[port].flags, (flag))
+#define PRL_HR_CLR_FLAG(port, flag) \
+	deprecated_atomic_clear_bits(&prl_hr[port].flags, (flag))
 #define PRL_HR_CHK_FLAG(port, flag) (prl_hr[port].flags & (flag))
 
-#define PDMSG_SET_FLAG(port, flag) atomic_or(&pdmsg[port].flags, (flag))
-#define PDMSG_CLR_FLAG(port, flag) atomic_clear(&pdmsg[port].flags, (flag))
+#define PDMSG_SET_FLAG(port, flag) \
+	deprecated_atomic_or(&pdmsg[port].flags, (flag))
+#define PDMSG_CLR_FLAG(port, flag) \
+	deprecated_atomic_clear_bits(&pdmsg[port].flags, (flag))
 #define PDMSG_CHK_FLAG(port, flag) (pdmsg[port].flags & (flag))
 
 /* Protocol Layer Flags */
@@ -103,8 +111,8 @@
  * Debug log level - higher number == more log
  *   Level 0: disabled
  *   Level 1: not currently used
- *   Level 2: plus non-ping messages and PRL states
- *   Level 3: plus ping packet and packet dump on error
+ *   Level 2: plus non-ping messages
+ *   Level 3: plus ping packet and PRL states
  *
  * Note that higher log level causes timing changes and thus may affect
  * performance.
@@ -365,7 +373,7 @@ test_export_static enum usb_prl_tx_state prl_tx_get_state(const int port)
 /* Print the protocol transmit statemachine's current state. */
 static void print_current_prl_tx_state(const int port)
 {
-	if (prl_debug_level >= 2)
+	if (prl_debug_level >= DEBUG_LEVEL_3)
 		CPRINTS("C%d: %s", port,
 				prl_tx_state_names[prl_tx_get_state(port)]);
 }
@@ -386,7 +394,7 @@ enum usb_prl_hr_state prl_hr_get_state(const int port)
 /* Print the hard reset statemachine's current state. */
 static void print_current_prl_hr_state(const int port)
 {
-	if (prl_debug_level >= 2)
+	if (prl_debug_level >= DEBUG_LEVEL_3)
 		CPRINTS("C%d: %s", port,
 				prl_hr_state_names[prl_hr_get_state(port)]);
 }
@@ -409,7 +417,7 @@ test_export_static enum usb_rch_state rch_get_state(const int port)
 /* Print the chunked Rx statemachine's current state. */
 static void print_current_rch_state(const int port)
 {
-	if (prl_debug_level >= 2)
+	if (prl_debug_level >= DEBUG_LEVEL_3)
 		CPRINTS("C%d: %s", port,
 				rch_state_names[rch_get_state(port)]);
 }
@@ -437,7 +445,7 @@ test_export_static enum usb_tch_state tch_get_state(const int port)
 /* Print the chunked Tx statemachine's current state. */
 static void print_current_tch_state(const int port)
 {
-	if (prl_debug_level >= 2)
+	if (prl_debug_level >= DEBUG_LEVEL_3)
 		CPRINTS("C%d: %s", port,
 				tch_state_names[tch_get_state(port)]);
 }

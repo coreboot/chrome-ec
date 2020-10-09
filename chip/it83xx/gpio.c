@@ -442,10 +442,9 @@ test_mockable int gpio_get_level(enum gpio_signal signal)
 
 void gpio_set_level(enum gpio_signal signal, int value)
 {
-	uint32_t int_mask = get_int_mask();
-
 	/* critical section with interrupts off */
-	interrupt_disable();
+	uint32_t int_mask = read_clear_int_mask();
+
 	if (value)
 		IT83XX_GPIO_DATA(gpio_list[signal].port) |=
 				 gpio_list[signal].mask;
@@ -653,7 +652,7 @@ void it83xx_disable_cc_module(int port)
 	IT83XX_USBPD_CCCSR(port) |= (USBPD_REG_MASK_CC2_DISCONNECT |
 				     USBPD_REG_MASK_CC2_DISCONNECT_5_1K_TO_GND |
 				     USBPD_REG_MASK_CC1_DISCONNECT |
-				     USBPD_REG_MASK_CC2_DISCONNECT_5_1K_TO_GND);
+				     USBPD_REG_MASK_CC1_DISCONNECT_5_1K_TO_GND);
 	/* Disconnect CC 5V tolerant */
 	IT83XX_USBPD_CCPSR(port) |= (USBPD_REG_MASK_DISCONNECT_POWER_CC2 |
 				     USBPD_REG_MASK_DISCONNECT_POWER_CC1);
@@ -667,6 +666,24 @@ void gpio_pre_init(void)
 	int i;
 
 	IT83XX_GPIO_GCR = 0x06;
+
+#if !defined(CONFIG_IT83XX_VCC_1P8V) && !defined(CONFIG_IT83XX_VCC_3P3V)
+#error Please select voltage level of VCC for EC.
+#endif
+
+#if defined(CONFIG_IT83XX_VCC_1P8V) && defined(CONFIG_IT83XX_VCC_3P3V)
+#error Must select only one voltage level of VCC for EC.
+#endif
+	/* The power level of GPM6 follows VCC */
+	IT83XX_GPIO_GCR29 |= BIT(0);
+
+	/* The power level (VCC) of GPM0~6 is 1.8V */
+	if (IS_ENABLED(CONFIG_IT83XX_VCC_1P8V))
+		IT83XX_GPIO_GCR30 |= BIT(4);
+
+	/* The power level (VCC) of GPM0~6 is 3.3V */
+	if (IS_ENABLED(CONFIG_IT83XX_VCC_3P3V))
+		IT83XX_GPIO_GCR30 &= ~BIT(4);
 
 #if IT83XX_USBPD_PHY_PORT_COUNT < CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT
 #error "ITE pd active port count should be less than physical port count !"

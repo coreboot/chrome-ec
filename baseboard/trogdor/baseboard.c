@@ -19,6 +19,12 @@ const enum gpio_signal hibernate_wake_pins[] = {
 };
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
+void board_hibernate_late(void)
+{
+	/* Set the hibernate GPIO to turn off the rails */
+	gpio_set_level(GPIO_HIBERNATE_L, 0);
+}
+
 /* Power signal list. Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
 	[SC7180_AP_RST_ASSERTED] = {
@@ -51,24 +57,6 @@ const struct power_signal_info power_signal_list[] = {
 		"DEPRECATED_AP_RST_REQ"},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
-
-/* I2C port map */
-const struct i2c_port_t i2c_ports[] = {
-	{"power",   I2C_PORT_POWER,  100, GPIO_EC_I2C_POWER_SCL,
-					  GPIO_EC_I2C_POWER_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0, 1000, GPIO_EC_I2C_USB_C0_PD_SCL,
-					  GPIO_EC_I2C_USB_C0_PD_SDA},
-#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
-	{"tcpc1",   I2C_PORT_TCPC1, 1000, GPIO_EC_I2C_USB_C1_PD_SCL,
-					  GPIO_EC_I2C_USB_C1_PD_SDA},
-#endif
-	{"eeprom",  I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
-					  GPIO_EC_I2C_EEPROM_SDA},
-	{"sensor",  I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
-					  GPIO_EC_I2C_SENSOR_SDA},
-};
-
-const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 const struct charger_config_t chg_chips[] = {
 	{

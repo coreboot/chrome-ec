@@ -100,7 +100,14 @@ STATIC_IF(DEBUG_GET_CC)
  * Last reported VBus Level
  *
  * BIT(VBUS_SAFE0V) will indicate if in SAFE0V
- * BIT(VBUS_PRESENT) will indicate if in PRESENT
+ * BIT(VBUS_PRESENT) will indicate if in PRESENT in the TCPCI POWER_STATUS
+ *
+ * Note that VBUS_REMOVED cannot be distinguished from !VBUS_PRESENT with
+ * this interface, but the trigger thresholds for Vbus Present should allow the
+ * same bit to be used safely for both.
+ *
+ * TODO(b/149530538): Some TCPCs may be able to implement
+ * VBUS_SINK_DISCONNECT_THRESHOLD to support vSinkDisconnectPD
  */
 static int tcpc_vbus[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -718,8 +725,10 @@ bool tcpci_tcpm_check_vbus_level(int port, enum vbus_level level)
 {
 	if (level == VBUS_SAFE0V)
 		return !!(tcpc_vbus[port] & BIT(VBUS_SAFE0V));
-	else
+	else if (level == VBUS_PRESENT)
 		return !!(tcpc_vbus[port] & BIT(VBUS_PRESENT));
+	else
+		return !(tcpc_vbus[port] & BIT(VBUS_PRESENT));
 }
 #endif
 
@@ -883,7 +892,7 @@ int tcpm_enqueue_message(const int port)
 	}
 
 	/* Increment atomically to ensure get_message_raw happens-before */
-	atomic_add(&q->head, 1);
+	deprecated_atomic_add(&q->head, 1);
 
 	/* Wake PD task up so it can process incoming RX messages */
 	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
@@ -915,7 +924,7 @@ int tcpm_dequeue_message(const int port, uint32_t *const payload,
 	memcpy(payload, tail->payload, sizeof(tail->payload));
 
 	/* Increment atomically to ensure memcpy happens-before */
-	atomic_add(&q->tail, 1);
+	deprecated_atomic_add(&q->tail, 1);
 
 	return EC_SUCCESS;
 }

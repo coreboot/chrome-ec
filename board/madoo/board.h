@@ -81,7 +81,6 @@
 
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
-#define CONFIG_SYNC			/* Camera VSYNC */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -90,7 +89,6 @@
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
 #define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_SYNC_INT_EVENT TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -101,11 +99,22 @@
 #define CONFIG_TABLET_MODE_SWITCH
 #define CONFIG_GMR_TABLET_MODE
 
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
 
 #define CONFIG_BATTERY_DEVICE_CHEMISTRY "LION"
 #define CONFIG_BATTERY_FUEL_GAUGE
+
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
+
+/* Thermistors */
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_THERMISTOR
+#define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 #ifndef __ASSEMBLER__
 
@@ -130,8 +139,13 @@ enum sensor_id {
 	LID_ACCEL,
 	BASE_ACCEL,
 	BASE_GYRO,
-	VSYNC,
 	SENSOR_COUNT
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_1,
+	TEMP_SENSOR_2,
+	TEMP_SENSOR_COUNT
 };
 
 enum pwm_channel {
@@ -147,6 +161,12 @@ enum battery_type {
 	BATTERY_DynaPack_COS,
 	BATTERY_DANAPACK_ATL,
 	BATTERY_TYPE_COUNT,
+};
+
+/* Keyboard type */
+enum fw_config_keyboard_type {
+	COMMON_KB = 0,
+	CUST_UK2_KB = 1,
 };
 
 int board_is_sourcing_vbus(int port);

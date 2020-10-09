@@ -21,6 +21,9 @@
 #define INPUT_I_MIN	4
 #define	INPUT_I_STEP	4
 
+/* Default minimum VIN voltage controlled by ISL9241_REG_VIN_VOLTAGE */
+#define ISL9241_BC12_MIN_VOLTAGE	4096
+
 /* Registers */
 
 /*
@@ -122,11 +125,6 @@
 
 extern const struct charger_drv isl9241_drv;
 
-enum ec_error_list isl9241_read(int chgnum, int offset,
-					int *value);
-enum ec_error_list isl9241_write(int chgnum, int offset,
-					int value);
-__override_proto int isl9241_update_learn_mode(int chgnum, int enable);
 /**
  * Set AC prochot threshold
  *

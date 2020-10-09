@@ -186,6 +186,13 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 	IOEX_EN_USB_A1_5V_DB,
 };
 
+const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
+	.eq_ch0_ch1_offset = PI3HDX1204_EQ_DB710,
+	.eq_ch2_ch3_offset = PI3HDX1204_EQ_DB710,
+	.vod_offset = PI3HDX1204_VOD_115_ALL_CHANNELS,
+	.de_offset = PI3HDX1204_DE_DB_MINUS7,
+};
+
 /*****************************************************************************
  * USB-C MUX/Retimer dynamic configuration
  */
@@ -264,6 +271,7 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
  */
 static uint32_t board_ver;
 enum gpio_signal gpio_ec_ps2_reset = GPIO_EC_PS2_RESET_V1;
+int board_usbc1_retimer_inhpd = GPIO_USB_C1_HPD_IN_DB_V1;
 
 static void setup_v0_charger(void)
 {
@@ -340,6 +348,11 @@ static void board_remap_gpio(void)
 		if (ec_config_has_hdmi_retimer_pi3hdx1204())
 			ioex_enable_interrupt(IOEX_HDMI_CONN_HPD_3V3_DB);
 	}
+
+	if (board_ver >= 4)
+		board_usbc1_retimer_inhpd = GPIO_USB_C1_HPD_IN_DB_V1;
+	else
+		board_usbc1_retimer_inhpd = IOEX_USB_C1_HPD_IN_DB;
 
 	ioex_get_level(IOEX_PPC_ID, &ppc_id);
 

@@ -246,13 +246,6 @@ __overridable int check_hdmi_hpd_status(void)
 	return 1;
 }
 
-const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
-	.eq_ch0_ch1_offset = PI3HDX1204_EQ_DB710,
-	.eq_ch2_ch3_offset = PI3HDX1204_EQ_DB710,
-	.vod_offset = PI3HDX1204_VOD_115_ALL_CHANNELS,
-	.de_offset = PI3HDX1204_DE_DB_MINUS5,
-};
-
 void sbu_fault_interrupt(enum ioex_signal signal)
 {
 	int port = (signal == IOEX_USB_C0_SBU_FAULT_ODL) ? 0 : 1;
@@ -306,36 +299,6 @@ static int command_temps_log(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(tempslog, command_temps_log,
 			"seconds",
 			"Print temp sensors periodically");
-/*
- * b/163076059: Sometimes CONTROL1 reads as 0xFF03 for unknown reason
- * when the state change from S0 to S3, but the second read will get
- * the correct 0x0103. Retry CONTROL1 read before update learn mode
- * to make sure write the correct value.
- */
-__override int isl9241_update_learn_mode(int chgnum, int enable)
-{
-	int rv;
-	int i;
-	int reg;
-
-	/* Retry CONTROL1 read if high byte is 0xFF. */
-	for (i = 0; i < 10; i++) {
-		rv = isl9241_read(chgnum, ISL9241_REG_CONTROL1, &reg);
-		if (rv == EC_SUCCESS && (reg >> 8) != 0xFF)
-			break;
-		ccprints("isl9241 error: CONTROL1=0x%x (rv=%d i=%d)",
-			 reg, rv, i);
-		if (rv)
-			return rv;
-	}
-
-	if (enable)
-		reg |= ISL9241_CONTROL1_LEARN_MODE;
-	else
-		reg &= ~ISL9241_CONTROL1_LEARN_MODE;
-
-	return isl9241_write(chgnum, ISL9241_REG_CONTROL1, reg);
-}
 
 /*
  * b/164921478: On G3->S5, wait for RSMRST_L to be deasserted before asserting
@@ -362,10 +325,39 @@ void board_pwrbtn_to_pch(int level)
  */
 int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 {
-	int voltage;
+	int voltage = 0;
+	int rv;
 
-	if (charger_get_vbus_voltage(port, &voltage))
-		voltage = 0;
+	rv = charger_get_vbus_voltage(port, &voltage);
+
+	if (rv) {
+		ccprints("%s rv=%d", __func__, rv);
+		return 0;
+	}
+
+	/*
+	 * b/168569046: The ISL9241 sometimes incorrectly reports 0 for unknown
+	 * reason, causing ramp to stop at 0.5A. Workaround this by ignoring 0.
+	 * This partly defeats the point of ramping, but will still catch
+	 * VBUS below 4.5V and above 0V.
+	 */
+	if (voltage == 0) {
+		ccprints("%s vbus=0", __func__);
+		return 0;
+	}
+
+	if (voltage < BC12_MIN_VOLTAGE)
+		ccprints("%s vbus=%d", __func__, voltage);
 
 	return voltage < BC12_MIN_VOLTAGE;
+}
+
+/**
+ * Always ramp up input current since AP needs higher power, even if battery is
+ * very low or full. We can always re-ramp if input current increases beyond
+ * what supplier can provide.
+ */
+__override int charge_is_consuming_full_input_current(void)
+{
+	return 1;
 }

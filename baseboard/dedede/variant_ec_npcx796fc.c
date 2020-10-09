@@ -26,7 +26,7 @@
 
 void pp3300_a_pgood_high(void)
 {
-	atomic_or(&pp3300_a_pgood, 1);
+	deprecated_atomic_or(&pp3300_a_pgood, 1);
 
 	/* Disable this interrupt while it's asserted. */
 	npcx_adc_thresh_int_enable(NPCX_ADC_THRESH1, 0);
@@ -42,7 +42,7 @@ void pp3300_a_pgood_high(void)
 
 void pp3300_a_pgood_low(void)
 {
-	atomic_clear(&pp3300_a_pgood, 1);
+	deprecated_atomic_clear_bits(&pp3300_a_pgood, 1);
 
 	/* Disable this interrupt while it's asserted. */
 	npcx_adc_thresh_int_enable(NPCX_ADC_THRESH2, 0);
@@ -60,7 +60,6 @@ const struct npcx_adc_thresh_t adc_pp3300_a_pgood_high = {
 	.adc_ch = ADC_VSNS_PP3300_A,
 	.adc_thresh_cb = pp3300_a_pgood_high,
 	.thresh_assert = 2700,
-	.thresh_deassert = -1,
 };
 
 const struct npcx_adc_thresh_t adc_pp3300_a_pgood_low = {
@@ -68,7 +67,6 @@ const struct npcx_adc_thresh_t adc_pp3300_a_pgood_low = {
 	.adc_thresh_cb = pp3300_a_pgood_low,
 	.lower_or_higher = 1,
 	.thresh_assert = 600,
-	.thresh_deassert = -1,
 };
 
 static void set_up_adc_irqs(void)

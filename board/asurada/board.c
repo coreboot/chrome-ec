@@ -6,6 +6,7 @@
 
 #include "adc.h"
 #include "adc_chip.h"
+#include "board/asurada/it5205_sbu.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
@@ -95,7 +96,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* Wake-up pins for hibernate */
 enum gpio_signal hibernate_wake_pins[] = {
-	GPIO_AC_PRESENT_PLACEHOLDER,
+	GPIO_AC_PRESENT,
 	GPIO_LID_OPEN,
 	GPIO_POWER_BUTTON_L,
 };
@@ -140,8 +141,7 @@ static enum board_sub_board board_get_sub_board(void);
 /* Initialize board. */
 static void board_init(void)
 {
-	/* For Rev0 only. Set GPM0~6 1.8V input. */
-	IT83XX_GPIO_GCR30 |= BIT(4);
+	gpio_enable_interrupt(GPIO_AC_PRESENT);
 
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 
@@ -167,37 +167,13 @@ DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 /* ADC channels. Must be in the exactly same order as in enum adc_channel. */
 const struct adc_t adc_channels[] = {
 	/* Convert to mV (3000mV/1024). */
-	{"TEMP_SENSOR_SUBPMIC", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0,
-	 CHIP_ADC_CH0},
+	{"VBUS", ADC_MAX_MVOLT * 10, ADC_READ_MAX + 1, 0, CHIP_ADC_CH0},
 	{"BOARD_ID_0", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH1},
 	{"BOARD_ID_1", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH2},
-	{"TEMP_SENSOR_AMB", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH3},
-	{"TEMP_SENSOR_CHARGER", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0,
-	 CHIP_ADC_CH5},
+	{"CHARGER_AMON_R", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH3},
 	{"CHARGER_PMON", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH6},
-	{"TEMP_SENSOR_AP", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH7},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
-
-const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_SUBPMIC] = {.name = "SubPMIC",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_3v3_51k1_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_SUBPMIC},
-	[TEMP_SENSOR_AMB]     = {.name = "Ambient",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_3v3_51k1_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_AMB},
-	[TEMP_SENSOR_CHARGER] = {.name = "Charger",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_3v3_51k1_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_CHARGER},
-	[TEMP_SENSOR_AP]      = {.name = "AP",
-				 .type = TEMP_SENSOR_TYPE_CPU,
-				 .read = get_temp_3v3_51k1_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_AP},
-};
-BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /* BC12 */
 const struct mt6360_config_t mt6360_config = {
@@ -264,17 +240,24 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+int board_allow_i2c_passthru(int port)
+{
+	return (port == I2C_PORT_VIRTUAL_BATTERY);
+}
+
 /* PPC */
 struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.i2c_port = I2C_PORT_PPC0,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
-		.drv = &syv682x_drv
+		.drv = &syv682x_drv,
+		.frs_en = GPIO_USB_C0_FRS_EN,
 	},
 	{
 		.i2c_port = I2C_PORT_PPC1,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
-		.drv = &syv682x_drv
+		.drv = &syv682x_drv,
+		.frs_en = GPIO_USB_C1_FRS_EN,
 	},
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
@@ -586,60 +569,40 @@ void lid_angle_peripheral_enable(int enable)
 int board_regulator_get_info(uint32_t index, char *name,
 			     uint16_t *num_voltages, uint16_t *voltages_mv)
 {
-	enum mt6360_ldo_id ldo_id = index;
+	enum mt6360_regulator_id id = index;
 
-	return mt6360_ldo_get_info(ldo_id, name, num_voltages, voltages_mv);
+	return mt6360_regulator_get_info(id, name, num_voltages,
+					 voltages_mv);
 }
 
 int board_regulator_enable(uint32_t index, uint8_t enable)
 {
-	enum mt6360_ldo_id ldo_id = index;
+	enum mt6360_regulator_id id = index;
 
-	return mt6360_ldo_enable(ldo_id, enable);
+	return mt6360_regulator_enable(id, enable);
 }
 
 int board_regulator_is_enabled(uint32_t index, uint8_t *enabled)
 {
-	enum mt6360_ldo_id ldo_id = index;
+	enum mt6360_regulator_id id = index;
 
-	return mt6360_ldo_is_enabled(ldo_id, enabled);
+	return mt6360_regulator_is_enabled(id, enabled);
 }
 
 int board_regulator_set_voltage(uint32_t index, uint32_t min_mv,
 				uint32_t max_mv)
 {
-	enum mt6360_ldo_id ldo_id = index;
+	enum mt6360_regulator_id id = index;
 
-	return mt6360_ldo_set_voltage(ldo_id, min_mv, max_mv);
+	return mt6360_regulator_set_voltage(id, min_mv, max_mv);
 }
 
 int board_regulator_get_voltage(uint32_t index, uint32_t *voltage_mv)
 {
-	enum mt6360_ldo_id ldo_id = index;
+	enum mt6360_regulator_id id = index;
 
-	return mt6360_ldo_get_voltage(ldo_id, voltage_mv);
+	return mt6360_regulator_get_voltage(id, voltage_mv);
 }
-
-/* gpio */
-
-/* TODO(b/163098341): Remove these after rev0 deprecated. */
-enum gpio_signal GPIO_AC_PRESENT = GPIO_AC_PRESENT_PLACEHOLDER;
-
-static void ac_present_init(void)
-{
-	if (board_get_version() == 0)
-		GPIO_AC_PRESENT = GPIO_EC_GPM2;
-	else
-		GPIO_AC_PRESENT = GPIO_EC_GPE5;
-
-	/* Set wake pins to the correct one */
-	hibernate_wake_pins[0] = GPIO_AC_PRESENT;
-
-	/* Manually run extpower_init() again */
-	gpio_enable_interrupt(GPIO_AC_PRESENT);
-	extpower_interrupt(GPIO_AC_PRESENT);
-}
-DECLARE_HOOK(HOOK_INIT, ac_present_init, HOOK_PRIO_INIT_ADC + 1);
 
 /* Sensor */
 static struct mutex g_base_mutex;
@@ -647,14 +610,6 @@ static struct mutex g_lid_mutex;
 
 static struct bmi_drv_data_t g_bmi160_data;
 static struct stprivate_data g_lis2dwl_data;
-
-/* Matrix to rotate accelerometer into standard reference frame */
-/* for rev 0 */
-static const mat33_fp_t base_standard_ref_rev0 = {
-	{FLOAT_TO_FP(-1), 0, 0},
-	{0, FLOAT_TO_FP(1), 0},
-	{0, 0, FLOAT_TO_FP(-1)},
-};
 
 /* Matrix to rotate accelrator into standard reference frame */
 /* TODO: update the matrix after we have assembled unit */
@@ -675,16 +630,24 @@ static struct als_drv_data_t g_tcs3400_data = {
 	},
 };
 
+#ifdef BOARD_ASURADA
+/* Matrix to rotate accelerometer into standard reference frame */
+/* for rev 0 */
+static const mat33_fp_t base_standard_ref_rev0 = {
+	{FLOAT_TO_FP(-1), 0, 0},
+	{0, FLOAT_TO_FP(1), 0},
+	{0, 0, FLOAT_TO_FP(-1)},
+};
+
 static void update_rotation_matrix(void)
 {
-	if (board_get_version() == 0) {
-		motion_sensors[BASE_ACCEL].rot_standard_ref =
-			&base_standard_ref_rev0;
-		motion_sensors[BASE_GYRO].rot_standard_ref =
-			&base_standard_ref_rev0;
-	}
+	motion_sensors[BASE_ACCEL].rot_standard_ref =
+		&base_standard_ref_rev0;
+	motion_sensors[BASE_GYRO].rot_standard_ref =
+		&base_standard_ref_rev0;
 }
 DECLARE_HOOK(HOOK_INIT, update_rotation_matrix, HOOK_PRIO_INIT_ADC + 1);
+#endif
 
 static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 	/*

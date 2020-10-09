@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#include <stdbool.h>
+
 /*
  * By default, enable all console messages excepted HC
  */
@@ -100,10 +102,14 @@
 
 /* Common charger defines */
 #define CONFIG_CHARGE_MANAGER
-#define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT		512
+
+/*
+ * Hardware based charge ramp is broken in the ISL9241 (b/169350714).
+ */
+#define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_ISL9241
 
 #define CONFIG_USB_CHARGER
@@ -272,6 +278,13 @@ unsigned char get_board_id(void);
  * the CBI data has been initialized.
  */
 __override_proto void board_cbi_init(void);
+
+/*
+ * Check battery disconnect state.
+ * This function will return if battery is initialized or not.
+ * @return true - initialized. false - not.
+ */
+__override_proto bool board_battery_is_initialized(void);
 
 #endif /* !__ASSEMBLER__ */
 

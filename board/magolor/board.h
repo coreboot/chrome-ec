@@ -11,6 +11,10 @@
 #define VARIANT_DEDEDE_EC_NPCX796FC
 #include "baseboard.h"
 
+#define CONFIG_USB_PD_DEBUG_LEVEL 2
+/* this change saves 1656 bytes of RW flash space */
+#define CONFIG_CHIP_INIT_ROM_REGION
+
 /*
  * Keep the system unlocked in early development.
  * TODO(b/151264302): Make sure to remove this before production!
@@ -27,10 +31,7 @@
 #define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
 #define CONFIG_OCPC
 #undef  CONFIG_CHARGER_SINGLE_CHIP
-
-/* EC console commands */
-#define CONFIG_CMD_TCPC_DUMP
-#define CONFIG_CMD_CHARGER_DUMP
+#undef CONFIG_CMD_CHARGER_DUMP
 
 /* GPIO for C1 interrupts, for baseboard use */
 #define GPIO_USB_C1_INT_ODL GPIO_SUB_USB_C1_INT_ODL
@@ -47,6 +48,7 @@
 
 /* Temp sensor */
 #define CONFIG_TEMP_SENSOR
+#define CONFIG_THROTTLE_AP
 #define CONFIG_THERMISTOR_NCP15WB
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
@@ -99,7 +101,6 @@
 
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCELGYRO_BMI160		/* Base accel */
-#define CONFIG_SYNC			/* Camera VSYNC */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -110,7 +111,6 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_SYNC_INT_EVENT TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -123,6 +123,12 @@
 
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
+
+/* Volume Button feature */
+#define CONFIG_ADC_BUTTONS
+#define CONFIG_VOLUME_BUTTONS
+#define GPIO_VOLUME_UP_L GPIO_VOLUP_BTN_ODL
+#define GPIO_VOLUME_DOWN_L GPIO_VOLDN_BTN_ODL
 
 #ifndef __ASSEMBLER__
 
@@ -153,7 +159,6 @@ enum sensor_id {
 	LID_ACCEL,
 	BASE_ACCEL,
 	BASE_GYRO,
-	VSYNC,
 	SENSOR_COUNT
 };
 
@@ -169,6 +174,5 @@ enum battery_type {
 };
 
 int board_is_sourcing_vbus(int port);
-
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

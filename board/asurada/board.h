@@ -19,6 +19,12 @@
 #define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_EXTPOWER_GPIO
+#ifdef BOARD_ASURADA
+/* For Rev0 only */
+#define CONFIG_IT83XX_VCC_1P8V
+#else
+#define CONFIG_IT83XX_VCC_3P3V
+#endif
 /*
  * TODO: Remove this option once the VBAT no longer keeps high when
  * system's power isn't presented.
@@ -49,6 +55,7 @@
 /* Charger */
 #define ADC_PSYS ADC_CHARGER_PMON /* ADC name remap */
 #define CONFIG_CHARGER
+#define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT 512
 #define CONFIG_CHARGER_ISL9238C
 #define CONFIG_CHARGER_MAINTAIN_VBAT
@@ -71,6 +78,8 @@
 /* I2C */
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
+#define CONFIG_I2C_PASSTHRU_RESTRICTED
+#define CONFIG_I2C_VIRTUAL_BATTERY
 #define I2C_PORT_CHARGER IT83XX_I2C_CH_A
 #define I2C_PORT_BATTERY IT83XX_I2C_CH_A
 #define I2C_PORT_ACCEL IT83XX_I2C_CH_B
@@ -78,12 +87,11 @@
 #define I2C_PORT_PPC1  IT83XX_I2C_CH_E
 #define I2C_PORT_USB_MUX0 IT83XX_I2C_CH_C
 #define I2C_PORT_USB_MUX1 IT83XX_I2C_CH_E
+#define I2C_PORT_VIRTUAL_BATTERY I2C_PORT_BATTERY
 #define CONFIG_SMBUS_PEC
 
 /* LED */
 #define CONFIG_LED_COMMON
-#define CONFIG_LED_ONOFF_STATES
-#define CONFIG_LED_POWER_LED
 
 /* PD / USB-C / PPC */
 #define CONFIG_CMD_PPC_DUMP
@@ -98,6 +106,7 @@
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_DRP_ACC_TRYSRC
 #define CONFIG_USB_MUX_IT5205 /* C0 */
+#define CONFIG_USB_MUX_IT5205H_SBU_OVP
 #define CONFIG_USB_MUX_PS8743 /* C1 */
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
@@ -108,6 +117,9 @@
 #define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
 #define CONFIG_USB_PD_DUAL_ROLE
+#define CONFIG_USB_PD_REV30
+#define CONFIG_USB_PD_FRS_PPC
+#define CONFIG_USB_PD_FRS_TCPC
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
@@ -117,7 +129,6 @@
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
-#define CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 #define CONFIG_USB_PID 0x5566  /* TODO: update PID */
 #define CONFIG_USB_POWER_DELIVERY
 
@@ -164,10 +175,6 @@
 
 #define CONFIG_MAG_BMI_BMM150
 #define CONFIG_MAG_CALIBRATE
-
-#define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR
-#define CONFIG_THERMISTOR
 
 #define ALS_COUNT 1
 #define CONFIG_ALS_TCS3400
@@ -234,13 +241,11 @@ enum pwm_channel {
 };
 
 enum adc_channel {
-	ADC_TEMP_SENSOR_SUBPMIC, /* ADC 0 */
+	ADC_VBUS,                /* ADC 0 */
 	ADC_BOARD_ID_0,          /* ADC 1 */
 	ADC_BOARD_ID_1,          /* ADC 2 */
-	ADC_TEMP_SENSOR_AMB,     /* ADC 3 */
-	ADC_TEMP_SENSOR_CHARGER, /* ADC 5 */
+	ADC_CHARGER_AMON_R,      /* ADC 3 */
 	ADC_CHARGER_PMON,        /* ADC 6 */
-	ADC_TEMP_SENSOR_AP,      /* ADC 7 */
 
 	/* Number of ADC channels */
 	ADC_CH_COUNT,
@@ -271,18 +276,8 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
-enum temp_sensor_id {
-	TEMP_SENSOR_SUBPMIC,
-	TEMP_SENSOR_AMB,
-	TEMP_SENSOR_CHARGER,
-	TEMP_SENSOR_AP,
-	TEMP_SENSOR_COUNT
-};
-
 void board_reset_pd_mcu(void);
 int board_get_version(void);
-
-extern enum gpio_signal GPIO_AC_PRESENT;
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

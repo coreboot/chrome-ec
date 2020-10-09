@@ -116,6 +116,7 @@
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
+#undef  CONFIG_KEYBOARD_VIVALDI
 
 /*
  * USB ID
@@ -211,18 +212,12 @@
 #define ZORK_AC_PROCHOT_CURRENT_MA 3328
 
 /*
- * Minimum conditions to start AP and perform swsync.  Note that when the
- * charger is connected via USB-PD analog signaling, the boot will proceed
- * regardless.
+ * EC will boot AP to depthcharge if: (BAT >= 4%) || (AC >= 50W)
+ * CONFIG_CHARGER_LIMIT_* is not set, so there is no additional restriction on
+ * Depthcharge to boot OS.
  */
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 3
-
-/*
- * Require PD negotiation to be complete when we are in a low-battery condition
- * prior to releasing depthcharge to the kernel.
- */
-#define CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW 15001
-#define CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT 3
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			4
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		50000
 
 /* Increase length of history buffer for port80 messages. */
 #undef CONFIG_PORT80_HISTORY_LEN
@@ -264,12 +259,14 @@
 /* Thermal */
 #define CONFIG_TEMP_SENSOR_SB_TSI
 
+#ifdef HAS_TASK_MOTIONSENSE
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
 /* FIFO size is a power of 2. */
 #define CONFIG_ACCEL_FIFO_SIZE 256
 /* Depends on how fast the AP boots and typical ODRs. */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+#endif
 
 /* Audio */
 #define CONFIG_AUDIO_CODEC
@@ -349,6 +346,9 @@ __override_proto void ppc_interrupt(enum gpio_signal signal);
 #endif
 
 void board_print_temps(void);
+
+/* GPIO or IOEX signal used to set IN_HPD on DB retimer. */
+extern int board_usbc1_retimer_inhpd;
 
 #endif /* !__ASSEMBLER__ */
 

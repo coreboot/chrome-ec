@@ -64,17 +64,20 @@
 #define CPRINTS_L3(format, args...) CPRINTS_LX(3, format, ## args)
 
 
-#define PE_SET_FLAG(port, flag) atomic_or(&pe[port].flags, (flag))
-#define PE_CLR_FLAG(port, flag) atomic_clear(&pe[port].flags, (flag))
+#define PE_SET_FLAG(port, flag) deprecated_atomic_or(&pe[port].flags, (flag))
+#define PE_CLR_FLAG(port, flag) \
+	deprecated_atomic_clear_bits(&pe[port].flags, (flag))
 #define PE_CHK_FLAG(port, flag) (pe[port].flags & (flag))
 
 /*
  * These macros SET, CLEAR, and CHECK, a DPM (Device Policy Manager)
  * Request. The Requests are listed in usb_pe_sm.h.
  */
-#define PE_SET_DPM_REQUEST(port, req) atomic_or(&pe[port].dpm_request,    (req))
-#define PE_CLR_DPM_REQUEST(port, req) atomic_clear(&pe[port].dpm_request, (req))
-#define PE_CHK_DPM_REQUEST(port, req) (pe[port].dpm_request &             (req))
+#define PE_SET_DPM_REQUEST(port, req) \
+	deprecated_atomic_or(&pe[port].dpm_request, (req))
+#define PE_CLR_DPM_REQUEST(port, req) \
+	deprecated_atomic_clear_bits(&pe[port].dpm_request, (req))
+#define PE_CHK_DPM_REQUEST(port, req) (pe[port].dpm_request & (req))
 
 /*
  * Policy Engine Layer Flags
@@ -128,8 +131,11 @@
 #define PE_FLAGS_FAST_ROLE_SWAP_SIGNALED     BIT(21)
 /* TODO: POLICY decision: Triggers a DR SWAP attempt from UFP to DFP */
 #define PE_FLAGS_DR_SWAP_TO_DFP              BIT(22)
-/* Flag to trigger a message resend after receiving a WAIT from port partner */
-#define PE_FLAGS_WAITING_DR_SWAP             BIT(23)
+/*
+ * TODO: POLICY decision
+ * Flag to trigger a message resend after receiving a WAIT from port partner
+ */
+#define PE_FLAGS_WAITING_PR_SWAP             BIT(23)
 /* FLAG to track if port partner is dualrole capable */
 #define PE_FLAGS_PORT_PARTNER_IS_DUALROLE    BIT(24)
 /* FLAG is set when an AMS is initiated locally. ie. AP requested a PR_SWAP */
@@ -193,6 +199,14 @@
  * Note: This is not a part of power delivery specification
  */
 #define N_VCONN_SWAP_COUNT 3
+
+/*
+ * Counter to track how many times to attempt SRC to SNK PR swaps before giving
+ * up.
+ *
+ * Note: This is not a part of power delivery specification
+ */
+#define N_SNK_SRC_PR_SWAP_COUNT 5
 
 /*
  * ChromeOS policy:
@@ -556,6 +570,12 @@ static struct policy_engine {
 	/* last requested voltage PDO index */
 	int requested_idx;
 
+	/*
+	 * Port events - PD_STATUS_EVENT_* values
+	 * Set from PD task but may be cleared by host command
+	 */
+	uint32_t events;
+
 	/* port address where soft resets are sent */
 	enum tcpm_transmit_type soft_reset_sop;
 
@@ -631,6 +651,12 @@ static struct policy_engine {
 	 * Source in response to a Sink Request Message.
 	 */
 	uint64_t sink_request_timer;
+
+	/*
+	 * This timer tracks the time after receiving a Wait message in response
+	 * to a PR_Swap message.
+	 */
+	uint64_t pr_swap_wait_timer;
 
 	/*
 	 * This timer combines the PSSourceOffTimer and PSSourceOnTimer timers.
@@ -723,6 +749,13 @@ static struct policy_engine {
 	uint32_t dr_swap_attempt_counter;
 
 	/*
+	 * This counter tracks how many PR Swap messages are sent when the
+	 * partner responds with a Wait message. Only used during SRC to SNK
+	 * PR swaps
+	 */
+	uint8_t src_snk_pr_swap_counter;
+
+	/*
 	 * This counter maintains a count of VCONN swap requests. If VCONN swap
 	 * isn't successful after N_VCONN_SWAP_COUNT, the port calls
 	 * dpm_vdm_naked().
@@ -753,6 +786,11 @@ static const uint8_t vdo_ver[] = {
 	[PD_REV20] = VDM_VER10,
 	[PD_REV30] = VDM_VER20,
 };
+
+int pd_get_rev(int port, enum tcpm_transmit_type type)
+{
+	return prl_get_rev(port, type);
+}
 
 int pd_get_vdo_ver(int port, enum tcpm_transmit_type type)
 {
@@ -810,6 +848,7 @@ static void pe_init(int port)
 	pe[port].no_response_timer = TIMER_DISABLED;
 	pe[port].data_role = pd_get_data_role(port);
 	pe[port].tx_type = TCPC_TX_INVALID;
+	pe[port].events = 0;
 
 	tc_pd_connection(port, 0);
 
@@ -985,6 +1024,27 @@ void pe_invalidate_explicit_contract(int port)
 		typec_update_cc(port);
 }
 
+void pe_notify_event(int port, uint32_t event_mask)
+{
+	/* Events may only be set from the PD task */
+	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
+
+	deprecated_atomic_or(&pe[port].events, event_mask);
+
+	/* Notify the host that new events are available to read */
+	pd_send_host_event(PD_EVENT_TYPEC);
+}
+
+void pd_clear_events(int port, uint32_t clear_mask)
+{
+	deprecated_atomic_clear_bits(&pe[port].events, clear_mask);
+}
+
+uint32_t pd_get_events(int port)
+{
+	return pe[port].events;
+}
+
 /*
  * Determine if this port may communicate with the cable plug.
  *
@@ -1142,7 +1202,7 @@ void pe_got_soft_reset(int port)
 	set_state_pe(port, PE_SOFT_RESET);
 }
 
-void pe_dpm_request(int port, enum pe_dpm_request req)
+void pd_dpm_request(int port, enum pd_dpm_request req)
 {
 	PE_SET_DPM_REQUEST(port, req);
 }
@@ -1197,6 +1257,9 @@ static void pe_handle_detach(void)
 	 * Note: The HardResetCounter is reset on a power cycle or Detach.
 	 */
 	pe[port].hard_reset_counter = 0;
+
+	/* Reset port events */
+	pd_clear_events(port, GENMASK(31, 0));
 }
 DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, pe_handle_detach, HOOK_PRIO_DEFAULT);
 
@@ -1284,6 +1347,10 @@ static bool common_src_snk_dpm_requests(int port)
 	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_ENTER_USB)) {
 		pe_set_dpm_curr_request(port, DPM_REQUEST_ENTER_USB);
 		set_state_pe(port, PE_DEU_SEND_ENTER_USB);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_EXIT_MODES)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_EXIT_MODES);
+		dpm_set_mode_exit_request(port);
 		return true;
 	}
 	return false;
@@ -1387,10 +1454,13 @@ static void pe_update_pdo_flags(int port, uint32_t pdo)
 	else
 		tc_partner_unconstrainedpower(port, 0);
 
-	if (pdo & PDO_FIXED_COMM_CAP)
-		tc_partner_usb_comm(port, 1);
-	else
-		tc_partner_usb_comm(port, 0);
+	/* Do not set USB comm if we are in an alt-mode */
+	if (pe[port].partner_amodes[TCPC_TX_SOP].amode_idx == 0) {
+		if (pdo & PDO_FIXED_COMM_CAP)
+			tc_partner_usb_comm(port, 1);
+		else
+			tc_partner_usb_comm(port, 0);
+	}
 
 	if (pdo & PDO_FIXED_DATA_SWAP)
 		tc_partner_dr_data(port, 1);
@@ -1417,7 +1487,12 @@ static void pe_update_pdo_flags(int port, uint32_t pdo)
 
 void pd_request_power_swap(int port)
 {
-	pe_dpm_request(port, DPM_REQUEST_PR_SWAP);
+	/*
+	 * Always reset the SRC to SNK PR swap counter when a PR swap is
+	 * requested by policy.
+	 */
+	pe[port].src_snk_pr_swap_counter = 0;
+	pd_dpm_request(port, DPM_REQUEST_PR_SWAP);
 }
 
 int pd_is_port_partner_dualrole(int port)
@@ -2085,7 +2160,7 @@ static void pe_src_transition_supply_run(int port)
 			 * PR_Swap
 			 */
 			if (pd_get_src_cap_cnt(port) == 0)
-				pe_dpm_request(port, DPM_REQUEST_GET_SRC_CAPS);
+				pd_dpm_request(port, DPM_REQUEST_GET_SRC_CAPS);
 
 			set_state_pe(port, PE_SRC_READY);
 		} else {
@@ -2288,6 +2363,12 @@ static void pe_src_ready_run(int port)
 		PE_CLR_FLAG(port, PE_FLAGS_VDM_REQUEST_CONTINUE);
 		set_state_pe(port, PE_VDM_REQUEST_DPM);
 		return;
+	}
+
+	if (PE_CHK_FLAG(port, PE_FLAGS_WAITING_PR_SWAP) &&
+		get_time().val > pe[port].pr_swap_wait_timer) {
+		PE_CLR_FLAG(port, PE_FLAGS_WAITING_PR_SWAP);
+		PE_SET_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP);
 	}
 
 	if (pe[port].wait_and_add_jitter_timer == TIMER_DISABLED ||
@@ -2726,7 +2807,17 @@ static void pe_snk_select_capability_run(int port)
 	 * Handle discarded message
 	 */
 	if (msg_check & PE_MSG_DISCARDED) {
-		pe_send_soft_reset(port, TCPC_TX_SOP);
+		/*
+		 * The sent REQUEST message was discarded.  This can be at
+		 * the start of an AMS or in the middle.  Handle what to
+		 * do based on where we came from.
+		 * 1) SE_SNK_EVALUATE_CAPABILITY: sends SoftReset
+		 * 2) SE_SNK_READY: goes back to SNK Ready
+		 */
+		if (get_last_state_pe(port) == PE_SNK_EVALUATE_CAPABILITY)
+			pe_send_soft_reset(port, TCPC_TX_SOP);
+		else
+			set_state_pe(port, PE_SNK_READY);
 		return;
 	}
 
@@ -2771,7 +2862,7 @@ static void pe_snk_select_capability_run(int port)
 				 * request Sink Capabilities for possible FRS
 				 */
 				if (IS_ENABLED(CONFIG_USB_PD_FRS))
-					pe_dpm_request(port,
+					pd_dpm_request(port,
 						DPM_REQUEST_GET_SNK_CAPS);
 				return;
 			}
@@ -3752,10 +3843,6 @@ static void pe_drs_send_swap_run(int port)
 			} else if ((type == PD_CTRL_REJECT) ||
 					(type == PD_CTRL_WAIT) ||
 					(type == PD_CTRL_NOT_SUPPORTED)) {
-				if (type == PD_CTRL_WAIT)
-					PE_SET_FLAG(port,
-						PE_FLAGS_WAITING_DR_SWAP);
-
 				pe_set_ready_state(port);
 				return;
 			}
@@ -3961,12 +4048,25 @@ static void pe_prs_src_snk_send_swap_run(int port)
 
 		if ((ext == 0) && (cnt == 0)) {
 			if (type == PD_CTRL_ACCEPT) {
+				pe[port].src_snk_pr_swap_counter = 0;
 				tc_request_power_swap(port);
 				set_state_pe(port,
 					PE_PRS_SRC_SNK_TRANSITION_TO_OFF);
-			} else if ((type == PD_CTRL_REJECT) ||
-						(type == PD_CTRL_WAIT))
+			} else if (type == PD_CTRL_REJECT) {
+				pe[port].src_snk_pr_swap_counter = 0;
 				set_state_pe(port, PE_SRC_READY);
+			} else if (type == PD_CTRL_WAIT) {
+				if (pe[port].src_snk_pr_swap_counter <
+				    N_SNK_SRC_PR_SWAP_COUNT) {
+					PE_SET_FLAG(port,
+						PE_FLAGS_WAITING_PR_SWAP);
+					pe[port].pr_swap_wait_timer =
+						get_time().val +
+						PD_T_PR_SWAP_WAIT;
+				}
+				pe[port].src_snk_pr_swap_counter++;
+				set_state_pe(port, PE_SRC_READY);
+			}
 			return;
 		}
 	}
@@ -3987,6 +4087,13 @@ static void pe_prs_src_snk_send_swap_run(int port)
 static void pe_prs_snk_src_evaluate_swap_entry(int port)
 {
 	print_current_state(port);
+
+	/*
+	 * Cancel any pending PR swap request due to a received Wait since the
+	 * partner just sent us a PR swap message.
+	 */
+	PE_CLR_FLAG(port, PE_FLAGS_WAITING_PR_SWAP);
+	pe[port].src_snk_pr_swap_counter = 0;
 
 	if (!pd_check_power_swap(port)) {
 		/* PE_PRS_SNK_SRC_Reject_Swap state embedded here */
@@ -4849,6 +4956,10 @@ static void pe_init_port_vdm_identity_request_run(int port)
 	case VDM_RESULT_NAK:
 		/* PE_INIT_PORT_VDM_IDENTITY_NAKed embedded here */
 		pd_set_identity_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
+		/*
+		 * Note: AP is only notified of discovery complete when
+		 * something was found (at least one ACK)
+		 */
 		break;
 	}
 
@@ -4957,6 +5068,12 @@ static void pe_init_vdm_svids_request_exit(int port)
 		 */
 		pd_set_svids_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
 	}
+
+	/* If SVID discovery failed, discovery is done at this point */
+	if (pd_get_svids_discovery(port, pe[port].tx_type) == PD_DISC_FAIL)
+		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+				PD_STATUS_EVENT_SOP_DISC_DONE :
+				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 }
 
 /**
@@ -5029,11 +5146,22 @@ static void pe_init_vdm_modes_request_run(int port)
 		uint32_t *payload = (uint32_t *) rx_emsg[port].buf;
 		int sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
 		uint8_t cnt = PD_HEADER_CNT(rx_emsg[port].header);
+		uint16_t response_svid = (uint16_t) PD_VDO_VID(payload[0]);
 
-		/* PE_INIT_VDM_Modes_ACKed embedded here */
-		dfp_consume_modes(port, sop, cnt, payload);
-		break;
+		/*
+		 * Accept ACK if the request and response SVIDs are equal;
+		 * otherwise, treat this as a NAK of the request SVID.
+		 *
+		 * TODO(b:169242812): support valid mode checking in
+		 * dfp_consume_modes.
+		 */
+		if (requested_svid == response_svid) {
+			/* PE_INIT_VDM_Modes_ACKed embedded here */
+			dfp_consume_modes(port, sop, cnt, payload);
+			break;
 		}
+		}
+		/* Fall Through */
 	case VDM_RESULT_NAK:
 		/* PE_INIT_VDM_Modes_NAKed embedded here */
 		pd_set_modes_discovery(port, pe[port].tx_type, requested_svid,
@@ -5043,6 +5171,16 @@ static void pe_init_vdm_modes_request_run(int port)
 
 	/* Return to calling state (PE_{SRC,SNK}_Ready) */
 	set_state_pe(port, get_last_state_pe(port));
+}
+
+static void pe_init_vdm_modes_request_exit(int port)
+{
+	if (pd_get_modes_discovery(port, pe[port].tx_type) != PD_DISC_NEEDED)
+		/* Mode discovery done, notify the AP */
+		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+				PD_STATUS_EVENT_SOP_DISC_DONE :
+				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
+
 }
 
 /**
@@ -5166,6 +5304,7 @@ static void pe_vdm_response_entry(int port)
 	uint32_t *tx_payload;
 	uint16_t vdo_vdm_svid;
 	uint8_t vdo_cmd;
+	uint8_t vdo_opos = 0;
 	int cmd_type;
 	svdm_rsp_func func = NULL;
 
@@ -5200,15 +5339,19 @@ static void pe_vdm_response_entry(int port)
 		func = svdm_rsp.modes;
 		break;
 	case CMD_ENTER_MODE:
+		vdo_opos = PD_VDO_OPOS(rx_payload[0]);
 		func = svdm_rsp.enter_mode;
 		break;
 	case CMD_DP_STATUS:
-		func = svdm_rsp.amode->status;
+		if (svdm_rsp.amode)
+			func = svdm_rsp.amode->status;
 		break;
 	case CMD_DP_CONFIG:
-		func = svdm_rsp.amode->config;
+		if (svdm_rsp.amode)
+			func = svdm_rsp.amode->config;
 		break;
 	case CMD_EXIT_MODE:
+		vdo_opos = PD_VDO_OPOS(rx_payload[0]);
 		func = svdm_rsp.exit_mode;
 		break;
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
@@ -5250,6 +5393,7 @@ static void pe_vdm_response_entry(int port)
 				1, /* Structured VDM */
 				VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPC_TX_SOP))
 				| VDO_CMDT(CMDT_RSP_ACK) |
+				VDO_OPOS(vdo_opos) |
 				vdo_cmd);
 		else if (response_size_bytes == 0)
 			/* NAK */
@@ -5258,6 +5402,7 @@ static void pe_vdm_response_entry(int port)
 				1, /* Structured VDM */
 				VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPC_TX_SOP))
 				| VDO_CMDT(CMDT_RSP_NAK) |
+				VDO_OPOS(vdo_opos) |
 				vdo_cmd);
 		else
 			/* BUSY */
@@ -5266,6 +5411,7 @@ static void pe_vdm_response_entry(int port)
 				1, /* Structured VDM */
 				VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPC_TX_SOP))
 				| VDO_CMDT(CMDT_RSP_BUSY) |
+				VDO_OPOS(vdo_opos) |
 				vdo_cmd);
 
 		if (response_size_bytes <= 0)
@@ -5277,6 +5423,7 @@ static void pe_vdm_response_entry(int port)
 			1, /* Structured VDM */
 			VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPC_TX_SOP)) |
 			VDO_CMDT(CMDT_RSP_NAK) |
+			VDO_OPOS(vdo_opos) |
 			vdo_cmd);
 		response_size_bytes = 4;
 	}
@@ -5338,26 +5485,32 @@ static void pe_enter_usb_entry(int port)
 
 	memcpy(tx_emsg[port].buf, &usb4_payload, tx_emsg[port].len);
 	send_data_msg(port, TCPC_TX_SOP, PD_DATA_ENTER_USB);
-
-	pe[port].sender_response_timer = TIMER_DISABLED;
+	pe_sender_response_msg_entry(port);
 }
 
 static void pe_enter_usb_run(int port)
 {
+	enum pe_msg_check msg_check;
+
 	if (!IS_ENABLED(CONFIG_USB_PD_USB4)) {
 		pe_set_ready_state(port);
 		return;
 	}
 
-	/* Wait until message is sent */
-	if (pe[port].sender_response_timer == TIMER_DISABLED) {
-		if (!PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE))
-			return;
+	/*
+	 * Check the state of the message sent
+	 */
+	msg_check = pe_sender_response_msg_run(port);
 
-		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-		/* Initialize and run SenderResponseTimer */
-		pe[port].sender_response_timer =
-				get_time().val + PD_T_SENDER_RESPONSE;
+	/*
+	 * Handle Discarded message, return to PE_SNK/SRC_READY
+	 */
+	if (msg_check & PE_MSG_DISCARDED) {
+		pe_set_ready_state(port);
+		return;
+	} else if (msg_check == PE_MSG_SEND_PENDING) {
+		/* Wait until message is sent */
+		return;
 	}
 
 	if (get_time().val > pe[port].sender_response_timer) {
@@ -5931,9 +6084,11 @@ static void pe_dr_src_get_source_cap_run(int port)
 				 */
 				pd_set_src_caps(port, cnt, payload);
 				if (pe[port].src_caps[0] &
-						PDO_FIXED_UNCONSTRAINED)
+						PDO_FIXED_UNCONSTRAINED) {
+					pe[port].src_snk_pr_swap_counter = 0;
 					PE_SET_DPM_REQUEST(port,
 							DPM_REQUEST_PR_SWAP);
+				}
 
 				set_state_pe(port, PE_SRC_READY);
 			} else if (type == PD_CTRL_REJECT ||
@@ -5989,9 +6144,10 @@ void pd_dfp_discovery_init(int port)
 	PE_CLR_FLAG(port, PE_FLAGS_VDM_SETUP_DONE |
 			  PE_FLAGS_MODAL_OPERATION);
 
-	atomic_or(&task_access[port][TCPC_TX_SOP], BIT(task_get_current()));
-	atomic_or(&task_access[port][TCPC_TX_SOP_PRIME],
-						   BIT(task_get_current()));
+	deprecated_atomic_or(&task_access[port][TCPC_TX_SOP],
+			     BIT(task_get_current()));
+	deprecated_atomic_or(&task_access[port][TCPC_TX_SOP_PRIME],
+			     BIT(task_get_current()));
 
 	memset(pe[port].discovery, 0, sizeof(pe[port].discovery));
 	memset(pe[port].partner_amodes, 0, sizeof(pe[port].partner_amodes));
@@ -6011,7 +6167,7 @@ void pd_dfp_discovery_init(int port)
 
 void pd_discovery_access_clear(int port, enum tcpm_transmit_type type)
 {
-	atomic_clear(&task_access[port][type], 0xFFFFFFFF);
+	deprecated_atomic_clear_bits(&task_access[port][type], 0xFFFFFFFF);
 }
 
 bool pd_discovery_access_validate(int port, enum tcpm_transmit_type type)
@@ -6023,7 +6179,7 @@ struct pd_discovery *pd_get_am_discovery(int port, enum tcpm_transmit_type type)
 {
 	ASSERT(type < DISCOVERY_TYPE_COUNT);
 
-	atomic_or(&task_access[port][type], BIT(task_get_current()));
+	deprecated_atomic_or(&task_access[port][type], BIT(task_get_current()));
 	return &pe[port].discovery[type];
 }
 
@@ -6295,6 +6451,7 @@ static const struct usb_state pe_states[] = {
 	[PE_INIT_VDM_MODES_REQUEST] = {
 		.entry	= pe_init_vdm_modes_request_entry,
 		.run	= pe_init_vdm_modes_request_run,
+		.exit   = pe_init_vdm_modes_request_exit,
 		.parent = &pe_states[PE_VDM_SEND_REQUEST],
 	},
 	[PE_VDM_REQUEST_DPM] = {

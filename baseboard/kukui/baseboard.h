@@ -93,6 +93,7 @@
 
 /* define this if the board is jacuzzi family */
 #ifdef VARIANT_KUKUI_JACUZZI
+#define CONFIG_HOSTCMD_AP_SET_SKUID
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_IT8801
 #define CONFIG_IO_EXPANDER_PORT_COUNT 1
@@ -142,6 +143,13 @@
 #undef CONFIG_SYSTEM_UNLOCKED /* Disabled in RO to save space */
 #else
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
+#endif
+
+/* free flash space */
+#ifdef SECTION_IS_RO
+#undef CONFIG_USB_PD_DEBUG_LEVEL
+#define CONFIG_USB_PD_DEBUG_LEVEL 0
+#define CONFIG_COMMON_GPIO_SHORTNAMES
 #endif
 
 #undef  CONFIG_UART_CONSOLE

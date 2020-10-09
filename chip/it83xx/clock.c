@@ -29,10 +29,6 @@
 #define SLEEP_SET_HTIMER_DELAY_USEC 250
 #define SLEEP_FTIMER_SKIP_USEC      (HOOK_TICK_INTERVAL * 2)
 
-#ifdef CONFIG_ADC
-BUILD_ASSERT(ADC_TIMEOUT_US < SLEEP_SET_HTIMER_DELAY_USEC);
-#endif
-
 static timestamp_t sleep_mode_t0;
 static timestamp_t sleep_mode_t1;
 static int idle_doze_cnt;
@@ -515,11 +511,11 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 
 	if (IS_ENABLED(CONFIG_USB_PD_TCPM_ITE_ON_CHIP)) {
 		/*
-		 * Disable active pd modules in hibernate for
-		 * better power consumption.
+		 * Disable active cc and pd modules and only left Rd_5.1k (Not
+		 * Rd_DB) alive in hibernate for better power consumption.
 		 */
 		for (i = 0; i < CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT; i++)
-			it83xx_disable_pd_module(i);
+			it83xx_Rd_5_1K_only_for_hibernate(i);
 	}
 
 	if (IS_ENABLED(CONFIG_ADC_VOLTAGE_COMPARATOR)) {

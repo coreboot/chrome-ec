@@ -16,7 +16,6 @@
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/sm5803.h"
-#include "driver/sync.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -351,17 +350,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 	},
-	[VSYNC] = {
-		.name = "Camera VSYNC",
-		.active_mask = SENSOR_ACTIVE_S0,
-		.chip = MOTIONSENSE_CHIP_GPIO,
-		.type = MOTIONSENSE_TYPE_SYNC,
-		.location = MOTIONSENSE_LOC_CAMERA,
-		.drv = &sync_drv,
-		.default_range = 0,
-		.min_frequency = 0,
-		.max_frequency = 1,
-	},
 };
 
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
@@ -419,10 +407,38 @@ void board_init(void)
 	}
 
 	/* Turn on 5V if the system is on, otherwise turn it off */
-	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND);
+	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
+			      CHIPSET_STATE_SOFT_OFF);
 	board_power_5v_enable(on);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+static void board_resume(void)
+{
+	sm5803_disable_low_power_mode(CHARGER_PRIMARY);
+	if (board_get_charger_chip_count() > 1)
+		sm5803_disable_low_power_mode(CHARGER_SECONDARY);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_resume, HOOK_PRIO_DEFAULT);
+
+static void board_suspend(void)
+{
+	sm5803_enable_low_power_mode(CHARGER_PRIMARY);
+	if (board_get_charger_chip_count() > 1)
+		sm5803_enable_low_power_mode(CHARGER_SECONDARY);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_suspend, HOOK_PRIO_DEFAULT);
+
+void board_hibernate(void)
+{
+	/*
+	 * Put all charger ICs present into low power mode before entering
+	 * z-state.
+	 */
+	sm5803_hibernate(CHARGER_PRIMARY);
+	if (board_get_charger_chip_count() > 1)
+		sm5803_hibernate(CHARGER_SECONDARY);
+}
 
 __override void board_ocpc_init(struct ocpc_data *ocpc)
 {
@@ -629,12 +645,12 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
 				       int *kd, int *kd_div)
 {
-	*kp = 1;
-	*kp_div = 6;
+	*kp = 3;
+	*kp_div = 14;
 
-	*ki = 0;
-	*ki_div = 1;
+	*ki = 3;
+	*ki_div = 500;
 
-	*kd = 0;
-	*kd_div = 1;
+	*kd = 4;
+	*kd_div = 40;
 }

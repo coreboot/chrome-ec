@@ -19,6 +19,7 @@ endif
 # Required chip modules
 chip-y=header.o clock.o gpio.o hwtimer.o system.o uart.o uartn.o sib.o
 chip-y+=system-$(CHIP_FAMILY).o
+chip-y+=gpio-$(CHIP_FAMILY).o
 
 # Optional chip modules
 chip-$(CONFIG_ADC)+=adc.o
@@ -42,6 +43,10 @@ chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 endif
 
 chip-$(CONFIG_PS2)+=ps2.o
+# Only npcx9 or later chip family can support LCT module
+ifneq ($(CHIP_FAMILY),$(filter $(CHIP_FAMILY),npcx5 npcx7))
+chip-y+=lct.o
+endif
 
 # spi monitor program fw for openocd and UUT(UART Update Tool)
 npcx-monitor-fw=chip/npcx/spiflashfw/npcx_monitor
