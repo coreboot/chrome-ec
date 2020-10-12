@@ -293,10 +293,12 @@ static int ap_ro_info_cmd(int argc, char **argv)
 	ccprintf("sha256 hash %ph\n",
 		 HEX_BUF(p_chk->payload.digest, sizeof(p_chk->payload.digest)));
 	ccprintf("Covered ranges:\n");
-	for (i = 0; i < p_chk->header.num_ranges; i++)
+	for (i = 0; i < p_chk->header.num_ranges; i++) {
 		ccprintf("%08x...%08x\n", p_chk->payload.ranges[i].flash_offset,
 			 p_chk->payload.ranges[i].flash_offset +
 				 p_chk->payload.ranges[i].range_size - 1);
+		cflush();
+	}
 
 	return EC_SUCCESS;
 }
