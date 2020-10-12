@@ -34,6 +34,7 @@
 #include "tpm_registers.h"
 #include "tpm_vendor_cmds.h"
 #include "upgrade_fw.h"
+#include "u2f.h"
 #include "usb_descriptor.h"
 #include "verify_ro.h"
 
@@ -247,6 +248,8 @@ static char *progname;
  */
 static const struct option_container cmd_line_options[] = {
 	/* name   has_arg    *flag  val */
+	{{"get_apro_hash", no_argument, NULL, 'A'},
+	 "get the stored ap ro hash"},
 	{{"any", no_argument, NULL, 'a'},
 	 "Try any interfaces to find Cr50"
 	 " (-d, -s, -t are all ignored)"},
@@ -2065,6 +2068,45 @@ static void process_wp(struct transfer_descriptor *td, enum wp_options wp)
 		"forced disabled");
 }
 
+static int process_get_apro_hash(struct transfer_descriptor *td)
+{
+	size_t response_size;
+	uint8_t response[SHA256_DIGEST_SIZE];
+	const char * const desc = "getting apro hash";
+	int rv = 0;
+	int i;
+
+	response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_AP_RO_HASH, NULL, 0,
+				 &response, &response_size);
+
+	if (response_size == 1) {
+		switch (response[0]) {
+		case ARCVE_NOT_PROGRAMMED:
+			printf("AP RO hash unprogrammed\n");
+			return 0;
+		default:
+			fprintf(stderr, "unexpected error %d %s\n", response[0],
+				desc);
+			return update_error;
+		}
+	} else if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d %s\n", rv, desc);
+		return update_error;
+	} else if (response_size != SHA256_DIGEST_SIZE) {
+		fprintf(stderr, "Error in the size of response, %zu.\n",
+			response_size);
+		return update_error;
+	}
+	printf("digest: ");
+	for (i = 0; i < SHA256_DIGEST_SIZE; i++)
+		printf("%x", response[i]);
+	printf("\n");
+	return 0;
+}
+
+
 static int process_get_boot_mode(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -2761,6 +2803,7 @@ int main(int argc, char *argv[])
 	int get_boot_mode = 0;
 	int try_all_transfer = 0;
 	int tpm_mode = 0;
+	int get_apro_hash = 0;
 	bool show_machine_output = false;
 	int tstamp = 0;
 	const char *tstamp_arg = NULL;
@@ -2826,6 +2869,9 @@ int main(int argc, char *argv[])
 		if (check_boolean(omap, i))
 			continue;
 		switch (i) {
+		case 'A':
+			get_apro_hash = 1;
+			break;
 		case 'a':
 			if (td.ep_type) {
 				errorcnt++;
@@ -2984,6 +3030,7 @@ int main(int argc, char *argv[])
 	    !ccd_open &&
 	    !ccd_unlock &&
 	    !corrupt_inactive_rw &&
+	    !get_apro_hash &&
 	    !get_boot_mode &&
 	    !get_flog &&
 	    !get_endorsement_seed &&
@@ -3092,6 +3139,9 @@ int main(int argc, char *argv[])
 
 	if (sn_inc_rma)
 		process_sn_inc_rma(&td, sn_inc_rma_arg);
+
+	if (get_apro_hash)
+		exit(process_get_apro_hash(&td));
 
 	if (get_boot_mode)
 		exit(process_get_boot_mode(&td));
