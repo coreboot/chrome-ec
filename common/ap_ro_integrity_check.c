@@ -27,6 +27,16 @@ struct flash_range {
 	uint32_t range_size;
 } __packed;
 
+/*
+ * A somewhat arbitrary maximum number of AP RO hash ranges to save. There are
+ * 27 regions in a FMAP layout. The AP RO ranges should only be from the RO
+ * region. It's unlikely anyone will need more than 32 ranges.
+ * If there are AP RO hash issues, the team will likely need to look at the
+ * value of each range what part of the FMAP it corresponds to. Enforce a limit
+ * to the number of ranges, so it's easier to debug and to make people consider
+ * why they would need more than 32 ranges.
+ */
+#define APRO_MAX_NUM_RANGES 32
 /* Values used for sanity check of the flash_range structure fields. */
 #define MAX_SUPPORTED_FLASH_SIZE (32 * 1024 * 1024)
 #define MAX_SUPPORTED_RANGE_SIZE (4 * 1024 * 1024)
@@ -132,6 +142,10 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 	vc_num_of_ranges =
 		(input_size - SHA256_DIGEST_SIZE) / sizeof(struct flash_range);
 
+	if (vc_num_of_ranges > APRO_MAX_NUM_RANGES) {
+		*response = ARCVE_TOO_MANY_RANGES;
+		return VENDOR_RC_BOGUS_ARGS;
+	}
 	for (i = 0; i < vc_num_of_ranges; i++) {
 		if (vc_payload->ranges[i].range_size >
 		    MAX_SUPPORTED_RANGE_SIZE) {
