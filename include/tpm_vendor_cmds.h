@@ -151,6 +151,8 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_FIPS_CMD = 55,
 
+	VENDOR_CC_GET_AP_RO_HASH = 56,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
@@ -257,6 +259,7 @@ enum ap_ro_check_vc_errors {
 	ARCVE_BID_PROGRAMMED = 7,
 	ARCVE_FLASH_ERASE_FAILED = 8,
 	ARCVE_TOO_MANY_RANGES = 9,
+	ARCVE_NOT_PROGRAMMED = 10,
 };
 
 /* Structure for VENDOR_CC_SPI_HASH request which follows tpm_header */

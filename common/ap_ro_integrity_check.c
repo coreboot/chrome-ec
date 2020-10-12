@@ -275,6 +275,35 @@ void ap_ro_add_flash_event(enum ap_ro_verification_ev event)
 	flash_log_add_event(FE_LOG_AP_RO_VERIFICATION, sizeof(ev), &ev);
 }
 
+static enum vendor_cmd_rc vc_get_ap_ro_hash(enum vendor_cmd_cc code,
+					    void *buf, size_t input_size,
+					    size_t *response_size)
+{
+	int rv;
+	uint8_t *response = buf;
+
+	*response_size = 0;
+	if (input_size)
+		return VENDOR_RC_BOGUS_ARGS;
+
+	if ((p_chk->header.num_ranges == (uint16_t)~0) &&
+	    (p_chk->header.checksum == ~0)) {
+		*response_size = 1;
+		*response = ARCVE_NOT_PROGRAMMED;
+		return VENDOR_RC_INTERNAL_ERROR;
+	}
+
+	rv = verify_ap_ro_check_space();
+	if (rv != EC_SUCCESS)
+		return VENDOR_RC_READ_FLASH_FAIL;
+
+	*response_size = SHA256_DIGEST_SIZE;
+	memcpy(buf, p_chk->payload.digest, *response_size);
+
+	return VENDOR_RC_SUCCESS;
+}
+DECLARE_VENDOR_COMMAND(VENDOR_CC_GET_AP_RO_HASH, vc_get_ap_ro_hash);
+
 static int ap_ro_info_cmd(int argc, char **argv)
 {
 	int rv;
