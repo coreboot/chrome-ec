@@ -5796,6 +5796,83 @@ struct ec_response_locate_chip {
  */
 #define EC_CMD_REBOOT_AP_ON_G3 0x0127
 
+/*
+ * Decode helpers for Source and Sink Capability PDOs
+ *
+ * Note: The Power Delivery Specification should be considered the ultimate
+ * source of truth on the decoding of these PDOs
+ */
+#define PDO_TYPE_FIXED     (0 << 30)
+#define PDO_TYPE_BATTERY   (1 << 30)
+#define PDO_TYPE_VARIABLE  (2 << 30)
+#define PDO_TYPE_AUGMENTED (3 << 30)
+#define PDO_TYPE_MASK      (3 << 30)
+
+/*
+ * From Table 6-9 and Table 6-14 PD Rev 3.0 Ver 2.0
+ *
+ * <31:30> : Fixed Supply
+ * <29>    : Dual-Role Power
+ * <28>    : SNK/SRC dependent
+ * <27>    : Unconstrained Power
+ * <26>    : USB Communications Capable
+ * <25>    : Dual-Role Data
+ * <24:20> : SNK/SRC dependent
+ * <19:10> : Voltage in 50mV Units
+ * <9:0>   : Maximum Current in 10mA units
+ */
+#define PDO_FIXED_DUAL_ROLE	BIT(29)
+#define PDO_FIXED_UNCONSTRAINED	BIT(27)
+#define PDO_FIXED_COMM_CAP	BIT(26)
+#define PDO_FIXED_DATA_SWAP	BIT(25)
+#define PDO_FIXED_FRS_CURR_MASK GENMASK(24, 23) /* Sink Cap only */
+#define PDO_FIXED_VOLTAGE(p)	((p >> 10 & 0x3FF) * 50)
+#define PDO_FIXED_CURRENT(p)	((p & 0x3FF) * 10)
+
+/*
+ * From Table 6-12 and Table 6-16 PD Rev 3.0 Ver 2.0
+ *
+ * <31:30> : Battery
+ * <29:20> : Maximum Voltage in 50mV units
+ * <19:10> : Minimum Voltage in 50mV units
+ * <9:0>   : Maximum Allowable Power in 250mW units
+ */
+#define PDO_BATT_MAX_VOLTAGE(p)	((p >> 20 & 0x3FF) * 50)
+#define PDO_BATT_MIN_VOLTAGE(p)	((p >> 10 & 0x3FF) * 50)
+#define PDO_BATT_MAX_POWER(p)	((p & 0x3FF) * 250)
+
+/*
+ * From Table 6-11 and Table 6-15 PD Rev 3.0 Ver 2.0
+ *
+ * <31:30> : Variable Supply (non-Battery)
+ * <29:20> : Maximum Voltage in 50mV units
+ * <19:10> : Minimum Voltage in 50mV units
+ * <9:0>   : Operational Current in 10mA units
+ */
+#define PDO_VAR_MAX_VOLTAGE(p)	((p >> 20 & 0x3FF) * 50)
+#define PDO_VAR_MIN_VOLTAGE(p)	((p >> 10 & 0x3FF) * 50)
+#define PDO_VAR_MAX_CURRENT(p)	((p & 0x3FF) * 10)
+
+/*
+ * From Table 6-13 and Table 6-17 PD Rev 3.0 Ver 2.0
+ *
+ * Note this type is reserved in PD 2.0, and only one type of APDO is
+ * supported as of the cited version.
+ *
+ * <31:30> : Augmented Power Data Object
+ * <29:28> : Programmable Power Supply
+ * <27>    : PPS Power Limited
+ * <26:25> : Reserved
+ * <24:17> : Maximum Voltage in 100mV increments
+ * <16>    : Reserved
+ * <15:8>  : Minimum Voltage in 100mV increments
+ * <7>     : Reserved
+ * <6:0>   : Maximum Current in 50mA increments
+ */
+#define PDO_AUG_MAX_VOLTAGE(p)	((p >> 17 & 0xFF) * 100)
+#define PDO_AUG_MIN_VOLTAGE(p)	((p >> 8 & 0xFF) * 100)
+#define PDO_AUG_MAX_CURRENT(p)	((p & 0x7F) * 50)
+
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */
 
