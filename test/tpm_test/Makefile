@@ -19,13 +19,13 @@ endif
 obj = ../../build/tpm_test
 src = .
 SWIG = /usr/bin/swig
-PYTHON_VERSION = $(shell python3 -c 'import sys; print("%d.%d" % \
-( sys.version_info.major, sys.version_info.minor))')
+PYTHON_INCLUDE = $(shell python3 -c 'import sysconfig; \
+print(sysconfig.get_paths().get("include"))')
 
 vpath %c $(src) ../../chip/g/dcrypto $(src)/testlib
 
 CFLAGS = -fPIC
-CFLAGS += -I /usr/include/python$(PYTHON_VERSION)
+CFLAGS += -I ${PYTHON_INCLUDE}
 CFLAGS += -I../../../../third_party/cryptoc/include
 CFLAGS += -I../../board/cr50
 CFLAGS += -I../../chip/g
