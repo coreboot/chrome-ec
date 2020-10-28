@@ -467,7 +467,7 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_FW_UPDATE,
 #endif /* CONFIG_HOSTCMD_FLASHPD && CONFIG_USB_PD_TCPMV2 */
 
 #ifdef CONFIG_HOSTCMD_EVENTS
-void pd_notify_dp_alt_mode_entry(void)
+__overridable void pd_notify_dp_alt_mode_entry(void)
 {
 	/*
 	 * Note: EC_HOST_EVENT_PD_MCU may be a more appropriate host event to
