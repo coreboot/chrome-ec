@@ -519,6 +519,10 @@ _PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53,
            38791, 38803, 38821, 38833, 38839, 38851, 38861, 38867, 38873]
 
 
+if hasattr(rsa.prime, 'miller_rabin_primality_testing'):
+    PRIMALITY_TEST = rsa.prime.miller_rabin_primality_testing
+else:
+    PRIMALITY_TEST = rsa.prime.randomized_primality_testing
 def _prime_from_seed(seed):
     rounds = 7
 
@@ -539,7 +543,7 @@ def _prime_from_seed(seed):
     window = _window(candidate, _PRIMES[:4096])
     for i, bit in enumerate(window):
         if not bit:
-            if rsa.prime.miller_rabin_primality_testing(candidate + i, rounds):
+            if PRIMALITY_TEST(candidate + i, rounds):
                 return candidate + i
     return None
 
