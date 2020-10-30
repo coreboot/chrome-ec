@@ -3,4 +3,7 @@
 # found in the LICENSE file.
 
 zephyr_sources(console.c)
+zephyr_sources(util.c)
+zephyr_sources(gpio.c)
+zephyr_sources_ifdef(CONFIG_CROS_EC system.c)
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TIMER hwtimer.c)

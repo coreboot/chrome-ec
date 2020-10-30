@@ -3,28 +3,13 @@
  * found in the LICENSE file.
  */
 
-/* Volteer board configuration */
+/* Elemi board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
 /* Baseboard features */
 #include "baseboard.h"
-
-#ifdef BOARD_VOLTEER_TCPMV1
-/* Disable TCPMv2 configuration options */
-#undef CONFIG_USB_PD_TCPMV2
-
-/* Enable the required TCPMv1 options */
-#define CONFIG_USB_PD_TCPMV1
-
-/*
- * Because the TPCMv1 stack has considerably smaller flash footprint, disable
- * the CONFIG_CHIP_INIT_ROM_REGION for testing of the init_rom API and the
- * BMI260 driver.
- */
-#undef CONFIG_CHIP_INIT_ROM_REGION
-#endif
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
@@ -38,11 +23,6 @@
 
 /* Chipset features */
 #define CONFIG_POWER_PP5000_CONTROL
-
-/* LED defines */
-#define CONFIG_LED_PWM
-/* Although there are 2 LEDs, they are both controlled by the same lines. */
-#define CONFIG_LED_PWM_COUNT 1
 
 /* Keyboard features */
 
@@ -177,15 +157,12 @@
 #include "registers.h"
 
 enum battery_type {
-	BATTERY_LGC011,
+	BATTERY_SIMPLO_HIGHPOWER,
+	BATTERY_COSMX,
 	BATTERY_TYPE_COUNT,
 };
 
 enum pwm_channel {
-	PWM_CH_LED1_BLUE = 0,
-	PWM_CH_LED2_GREEN,
-	PWM_CH_LED3_RED,
-	PWM_CH_LED4_SIDESEL,
 	PWM_CH_FAN,
 	PWM_CH_KBLIGHT,
 	PWM_CH_COUNT

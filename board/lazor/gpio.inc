@@ -25,9 +25,8 @@ GPIO_INT(EC_VOLUP_BTN_ODL,  PIN(F, 2), GPIO_INT_BOTH | GPIO_PULL_UP, button_inte
 GPIO_INT(EC_WP_ODL,         PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)  /* Write protection */
 GPIO_INT(LID_OPEN_EC,       PIN(D, 2), GPIO_INT_BOTH, lid_interrupt)  /* Lid open */
 GPIO_INT(AP_RST_L,          PIN(C, 1), GPIO_INT_BOTH | GPIO_SEL_1P8V, chipset_ap_rst_interrupt)  /* PMIC to signal AP reset */
-GPIO_INT(PS_HOLD,           PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt)  /* Indicate when AP triggers reset/shutdown */
-GPIO_INT(PMIC_FAULT_L,      PIN(A, 3), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)  /* Any PMIC fault? */
-GPIO_INT(AP_SUSPEND,        PIN(5, 7), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)  /* Suspend signal from PMIC */
+GPIO_INT(PS_HOLD,           PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_DOWN, power_signal_interrupt)  /* Indicate when AP triggers reset/shutdown */
+GPIO_INT(AP_SUSPEND,        PIN(5, 7), GPIO_INT_BOTH, power_signal_interrupt)  /* Suspend signal from PMIC */
 GPIO_INT(DEPRECATED_AP_RST_REQ, PIN(C, 2), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt) /* Deprecated AP initiated reset indicator */
 /*
  * When switch-cap is off, the POWER_GOOD signal is floating. Need a pull-down
@@ -41,7 +40,7 @@ GPIO_INT(AP_EC_SPI_CS_L,    PIN(5, 3), GPIO_INT_FALLING | GPIO_PULL_DOWN, shi_cs
 
 /* Sensor interrupts */
 GPIO_INT(TABLET_MODE_L,     PIN(C, 6), GPIO_INT_BOTH, gmr_tablet_switch_isr)
-GPIO_INT(ACCEL_GYRO_INT_L,  PIN(A, 0), GPIO_INT_FALLING | GPIO_SEL_1P8V, bmi160_interrupt)  /* Accelerometer/gyro interrupt */
+GPIO_INT(ACCEL_GYRO_INT_L,  PIN(A, 0), GPIO_INT_FALLING, bmi160_interrupt)  /* Accelerometer/gyro interrupt */
 
 /* Switchcap
  *
@@ -59,8 +58,8 @@ GPIO(EC_ENTERING_RW,        PIN(E, 1), GPIO_OUT_LOW)   /* Indicate when EC is en
 GPIO(EC_BATT_PRES_ODL,      PIN(E, 5), GPIO_INPUT)     /* Battery Present */
 
 /* PMIC/AP 1.8V */
-GPIO(PM845_RESIN_L,         PIN(3, 2), GPIO_ODR_HIGH | GPIO_SEL_1P8V)  /* PMIC reset trigger */
-GPIO(PMIC_KPD_PWR_ODL,      PIN(D, 6), GPIO_ODR_HIGH | GPIO_SEL_1P8V)  /* PMIC power button */
+GPIO(PM845_RESIN_L,         PIN(3, 2), GPIO_ODR_HIGH)  /* PMIC reset trigger */
+GPIO(PMIC_KPD_PWR_ODL,      PIN(D, 6), GPIO_ODR_HIGH)  /* PMIC power button */
 GPIO(EC_INT_L,              PIN(A, 2), GPIO_ODR_HIGH)  /* Interrupt line between AP and EC */
 GPIO(QSIP_ON,               PIN(5, 0), GPIO_OUT_LOW)   /* Not used, for non-switchcap testing */
 
@@ -85,10 +84,6 @@ GPIO(USB_C1_PD_RST_L,       PIN(E, 4), GPIO_ODR_HIGH)  /* Port-1 TCPC chip reset
 GPIO(DP_MUX_OE_L,           PIN(9, 6), GPIO_OUT_HIGH)  /* DP mux enable */
 GPIO(DP_MUX_SEL,            PIN(4, 5), GPIO_OUT_HIGH)  /* DP mux selection: L:C0, H:C1 */
 GPIO(DP_HOT_PLUG_DET,       PIN(9, 5), GPIO_OUT_LOW)   /* DP HPD to AP */
-/* TODO(waihong): Remove it from schematic. No use. */
-GPIO(USBC_MUX_CONF0,        PIN(5, 1), GPIO_INPUT)
-GPIO(USB_C0_VBUS_DET_L,     PIN(6, 2), GPIO_INPUT)     /* Deprecated BC1.2 VBUS detection on port-0 */
-GPIO(USB_C1_VBUS_DET_L,     PIN(8, 3), GPIO_INPUT)     /* Deprecated BC1.2 VBUS detection on port-1 */
 
 /* USB-A */
 GPIO(EN_USB_A_5V,           PIN(8, 6), GPIO_OUT_LOW)
@@ -98,6 +93,15 @@ GPIO(USB_A0_OC_ODL,         PIN(D, 1), GPIO_ODR_HIGH)
 /* LEDs */
 GPIO(EC_CHG_LED_Y_C1,       PIN(C, 3), GPIO_OUT_LOW)
 GPIO(EC_CHG_LED_B_C1,       PIN(C, 4), GPIO_OUT_LOW)
+
+/*
+ * SPI host interface - enable PDs by default. These will be made functional
+ * by the SHI driver when the AP powers up, and restored back to GPIO when
+ * the AP powers down.
+ */
+GPIO(AP_EC_SPI_MOSI,        PIN(4, 6), GPIO_INPUT | GPIO_PULL_DOWN)
+GPIO(AP_EC_SPI_MISO,        PIN(4, 7), GPIO_INPUT | GPIO_PULL_DOWN)
+GPIO(AP_EC_SPI_CLK,         PIN(5, 5), GPIO_INPUT | GPIO_PULL_DOWN)
 
 /* PWM */
 GPIO(KB_BL_PWM,             PIN(8, 0), GPIO_INPUT)     /* PWM3 */
@@ -127,6 +131,32 @@ GPIO(BRD_ID2,               PIN(6, 3), GPIO_INPUT)
 GPIO(SKU_ID0,               PIN(F, 0), GPIO_INPUT)
 GPIO(SKU_ID1,               PIN(4, 1), GPIO_INPUT)
 GPIO(SKU_ID2,               PIN(D, 4), GPIO_INPUT)
+
+/* Unused GPIOs, NC. */
+UNUSED(PIN(5, 1))
+UNUSED(PIN(D, 0))
+UNUSED(PIN(F, 3))
+UNUSED(PIN(0, 4))
+UNUSED(PIN(C, 0))
+UNUSED(PIN(A, 7))
+UNUSED(PIN(8, 3))
+UNUSED(PIN(8, 1))
+UNUSED(PIN(3, 7))
+UNUSED(PIN(7, 6))
+UNUSED(PIN(3, 4))
+UNUSED(PIN(C, 5))
+UNUSED(PIN(A, 3))
+UNUSED(PIN(7, 3))
+UNUSED(PIN(D, 7))
+UNUSED(PIN(A, 5))
+UNUSED(PIN(B, 0))
+UNUSED(PIN(9, 4))
+UNUSED(PIN(B, 1))
+UNUSED(PIN(6, 2))
+UNUSED(PIN(3, 5))
+UNUSED(PIN(9, 7))
+UNUSED(PIN(6, 0))
+UNUSED(PIN(7, 2))
 
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)            /* UART (GPIO64/65) */

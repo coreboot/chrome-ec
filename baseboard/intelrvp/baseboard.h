@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#include "stdbool.h"
+
 #ifdef VARIANT_INTELRVP_EC_IT8320
 	#include "ite_ec.h"
 #endif /* VARIANT_INTELRVP_EC_IT8320 */
@@ -143,6 +145,7 @@
 /* Temperature sensor */
 #ifdef CONFIG_TEMP_SENSOR
 	#define CONFIG_STEINHART_HART_3V0_22K6_47K_4050B
+	#define CONFIG_TEMP_SENSOR_POWER_GPIO   GPIO_EN_PP3300_A
 	#define CONFIG_THERMISTOR
 	#define CONFIG_THROTTLE_AP
 #ifdef CONFIG_PECI
@@ -245,6 +248,14 @@ struct tcpc_gpio_config_t {
 };
 extern const struct tcpc_gpio_config_t tcpc_gpios[];
 
+struct tcpc_aic_gpio_config_t {
+	/* TCPC interrupt */
+	enum gpio_signal tcpc_alert;
+	/* PPC interrupt */
+	enum gpio_signal ppc_alert;
+};
+extern const struct tcpc_aic_gpio_config_t tcpc_aic_gpios[];
+
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);
 void board_charging_enable(int port, int enable);
@@ -253,6 +264,7 @@ void board_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp);
 int ioexpander_read_intelrvp_version(int *port0, int *port1);
 void board_dc_jack_interrupt(enum gpio_signal signal);
 void tcpc_alert_event(enum gpio_signal signal);
+bool is_typec_port(int port);
 
 #endif /* !__ASSEMBLER__ */
 

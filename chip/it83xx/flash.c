@@ -496,6 +496,24 @@ int FLASH_DMA_CODE flash_physical_erase(int offset, int size)
 	for (; size > 0; size -= FLASH_SECTOR_ERASE_SIZE) {
 		dma_flash_erase(offset, FLASH_CMD_SECTOR_ERASE);
 		offset += FLASH_SECTOR_ERASE_SIZE;
+		/*
+		 * If requested erase size is too large at one time on KGD
+		 * flash, we need to reload watchdog to prevent the reset.
+		 */
+		if (IS_ENABLED(IT83XX_CHIP_FLASH_IS_KGD) && (size > 0x10000))
+			watchdog_reload();
+		/*
+		 * EC still need to handle AP's EC_CMD_GET_COMMS_STATUS command
+		 * during erasing.
+		 */
+#ifdef IT83XX_IRQ_SPI_SLAVE
+		if (IS_ENABLED(CONFIG_SPI) &&
+		    IS_ENABLED(HAS_TASK_HOSTCMD) &&
+		    IS_ENABLED(CONFIG_HOST_COMMAND_STATUS)) {
+			if (IT83XX_SPI_RX_VLISR & IT83XX_SPI_RVLI)
+				task_trigger_irq(IT83XX_IRQ_SPI_SLAVE);
+		}
+#endif
 	}
 	dma_reset_immu((v_addr + v_size) >= IMMU_TAG_INDEX_BY_DEFAULT);
 	/* get the ILM address of a flash offset. */

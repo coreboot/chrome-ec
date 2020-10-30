@@ -13,6 +13,7 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "sm5803.h"
+#include "system.h"
 #include "throttle_ap.h"
 #include "timer.h"
 #include "usb_charge.h"
@@ -50,6 +51,18 @@ static struct mutex flow1_access_lock[CHARGER_NUM];
 static struct mutex flow2_access_lock[CHARGER_NUM];
 
 static int charger_vbus[CHARGER_NUM];
+
+/* Tracker for charging failures per port */
+struct {
+	int count;
+	timestamp_t time;
+} failure_tracker[CHARGER_NUM] = {};
+
+/* Port to restart charging on */
+static int active_restart_port = CHARGE_PORT_NONE;
+
+#define CHARGING_FAILURE_MAX_COUNT	2
+#define CHARGING_FAILURE_INTERVAL	MINUTE
 
 static int sm5803_is_sourcing_otg_power(int chgnum, int port);
 static enum ec_error_list sm5803_get_dev_id(int chgnum, int *id);
@@ -337,6 +350,35 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 
 }
 
+/*
+ * Track and store whether we've initialized the charger chips already on this
+ * boot.  This should prevent us from re-running inits after sysjumps.
+ */
+static bool chip_inited[CHARGER_NUM];
+#define SM5803_SYSJUMP_TAG	0x534D /* SM */
+#define SM5803_HOOK_VERSION	1
+
+static void init_status_preserve(void)
+{
+	system_add_jump_tag(SM5803_SYSJUMP_TAG, SM5803_HOOK_VERSION,
+			    sizeof(chip_inited), &chip_inited);
+}
+DECLARE_HOOK(HOOK_SYSJUMP, init_status_preserve, HOOK_PRIO_DEFAULT);
+
+static void init_status_retrieve(void)
+{
+	const uint8_t *tag_contents;
+	int version, size;
+
+	tag_contents = system_get_jump_tag(SM5803_SYSJUMP_TAG,
+						  &version, &size);
+	if (tag_contents && (version == SM5803_HOOK_VERSION) &&
+					(size == sizeof(chip_inited)))
+		/* Valid init status found, restore before charger chip init */
+		memcpy(&chip_inited, tag_contents, size);
+}
+DECLARE_HOOK(HOOK_INIT, init_status_retrieve, HOOK_PRIO_FIRST);
+
 static void sm5803_init(int chgnum)
 {
 	enum ec_error_list rv;
@@ -364,6 +406,15 @@ static void sm5803_init(int chgnum)
 	} else {
 		CPRINTS("%s %d: Failed to read VBUS voltage during init",
 			CHARGER_NAME, chgnum);
+		return;
+	}
+
+	/*
+	 * A previous boot already ran inits, safe to return now that we've
+	 * checked i2c communication to the chip and cached Vbus presence
+	 */
+	if (chip_inited[chgnum]) {
+		CPRINTS("%s %d: Already initialized", CHARGER_NAME, chgnum);
 		return;
 	}
 
@@ -652,6 +703,8 @@ static void sm5803_init(int chgnum)
 
 	if (rv)
 		CPRINTS("%s %d: Failed initialization", CHARGER_NAME, chgnum);
+	else
+		chip_inited[chgnum] = true;
 }
 
 static enum ec_error_list sm5803_post_init(int chgnum)
@@ -840,6 +893,39 @@ void sm5803_enable_low_power_mode(int chgnum)
 }
 
 /*
+ * Restart charging on the active port, if it's still active and it hasn't
+ * exceeded our maximum number of restarts.
+ */
+void sm5803_restart_charging(void)
+{
+	int act_chg = charge_manager_get_active_charge_port();
+	timestamp_t now = get_time();
+
+	if (act_chg == active_restart_port) {
+		if (timestamp_expired(failure_tracker[act_chg].time, &now)) {
+			/*
+			 * Enough time has passed since our last failure,
+			 * restart the timing and count from now.
+			 */
+			failure_tracker[act_chg].time.val = now.val +
+						CHARGING_FAILURE_INTERVAL;
+			failure_tracker[act_chg].count = 1;
+
+			sm5803_vbus_sink_enable(act_chg, 1);
+		} else if (++failure_tracker[act_chg].count >
+			   CHARGING_FAILURE_MAX_COUNT) {
+			CPRINTS("%s %d: Exceeded charging failure retries",
+				CHARGER_NAME, act_chg);
+		} else {
+			sm5803_vbus_sink_enable(act_chg, 1);
+		}
+	}
+
+	active_restart_port = CHARGE_PORT_NONE;
+}
+DECLARE_DEFERRED(sm5803_restart_charging);
+
+/*
  * Process interrupt registers and report any Vbus changes.  Alert the AP if the
  * charger has become too hot.
  */
@@ -935,8 +1021,32 @@ void sm5803_handle_interrupt(int chgnum)
 		return;
 	}
 
-	if (int_reg & SM5803_INT4_CHG_FAIL)
-		CPRINTS("%s %d: CHG_FAIL_INT fired!!!", CHARGER_NAME, chgnum);
+	if (int_reg & SM5803_INT4_CHG_FAIL) {
+		int status_reg;
+
+		act_chg = charge_manager_get_active_charge_port();
+		chg_read8(chgnum, SM5803_REG_STATUS_CHG_REG, &status_reg);
+		CPRINTS("%s %d: CHG_FAIL_INT fired.  Status 0x%02x",
+			CHARGER_NAME, chgnum, status_reg);
+
+		/* Write 1 to clear status interrupts */
+		chg_write8(chgnum, SM5803_REG_STATUS_CHG_REG, status_reg);
+
+		/*
+		 * If a survivable fault happened, re-start sinking on the
+		 * active charger after an appropriate delay.
+		 */
+		if (status_reg & SM5803_STATUS_CHG_OV_ITEMP) {
+			active_restart_port = act_chg;
+			hook_call_deferred(&sm5803_restart_charging_data,
+					   30 * SECOND);
+		} else if ((status_reg & SM5803_STATUS_CHG_OV_VBAT) &&
+						act_chg == CHARGER_PRIMARY) {
+			active_restart_port = act_chg;
+			hook_call_deferred(&sm5803_restart_charging_data,
+					   1 * SECOND);
+		}
+	}
 
 	if (int_reg & SM5803_INT4_CHG_DONE)
 		CPRINTS("%s %d: CHG_DONE_INT fired!!!", CHARGER_NAME, chgnum);
@@ -945,7 +1055,7 @@ void sm5803_handle_interrupt(int chgnum)
 static void sm5803_irq_deferred(void)
 {
 	int i;
-	uint32_t pending = deprecated_atomic_read_clear(&irq_pending);
+	uint32_t pending = atomic_read_clear(&irq_pending);
 
 	for (i = 0; i < CHARGER_NUM; i++)
 		if (BIT(i) & pending)
@@ -955,7 +1065,7 @@ DECLARE_DEFERRED(sm5803_irq_deferred);
 
 void sm5803_interrupt(int chgnum)
 {
-	deprecated_atomic_or(&irq_pending, BIT(chgnum));
+	atomic_or(&irq_pending, BIT(chgnum));
 	hook_call_deferred(&sm5803_irq_deferred_data, 0);
 }
 
@@ -1250,7 +1360,7 @@ static enum ec_error_list sm5803_set_otg_current_voltage(int chgnum,
 static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 {
 	enum ec_error_list rv;
-	int reg;
+	int reg, status;
 
 	if (enabled) {
 		int selected_current;
@@ -1262,6 +1372,11 @@ static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 		/* Enable current limit */
 		reg &= ~SM5803_ANA_EN1_CLS_DISABLE;
 		rv = chg_write8(chgnum, SM5803_REG_ANA_EN1, reg);
+
+		/* Disable ramps on current set in discharge */
+		rv |= chg_read8(chgnum, SM5803_REG_DISCH_CONF6, &reg);
+		reg |= SM5803_DISCH_CONF6_RAMPS_DIS;
+		rv |= chg_write8(chgnum, SM5803_REG_DISCH_CONF6, reg);
 
 		/*
 		 * In order to ensure the Vbus output doesn't overshoot too
@@ -1288,18 +1403,36 @@ static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 
 		sm5803_set_otg_current_voltage(chgnum, selected_current, 5000);
 	} else {
+		/* Always clear out discharge status before clearing FLOW1 */
+		rv = chg_read8(chgnum, SM5803_REG_STATUS_DISCHG, &status);
+		if (rv)
+			return rv;
+
+		if (status)
+			CPRINTS("%s %d: Discharge failure 0x%02x", CHARGER_NAME,
+				chgnum, status);
+
+		rv |= chg_write8(chgnum, SM5803_REG_STATUS_DISCHG, status);
+
+		/* Re-enable ramps on current set in discharge */
+		rv |= chg_read8(chgnum, SM5803_REG_DISCH_CONF6, &reg);
+		reg &= ~SM5803_DISCH_CONF6_RAMPS_DIS;
+		rv |= chg_write8(chgnum, SM5803_REG_DISCH_CONF6, reg);
+
 		/*
 		 * PD tasks will always turn off previous sourcing on init.
 		 * Protect ourselves from brown out on init by checking if we're
 		 * sinking right now.  The init process should only leave sink
 		 * mode enabled if a charger is plugged in; otherwise it's
 		 * expected to be 0.
+		 *
+		 * Always clear out sourcing if the previous source-out failed.
 		 */
-		rv = chg_read8(chgnum, SM5803_REG_FLOW1, &reg);
+		rv |= chg_read8(chgnum, SM5803_REG_FLOW1, &reg);
 		if (rv)
 			return rv;
 
-		if ((reg & SM5803_FLOW1_MODE) != CHARGER_MODE_SINK)
+		if ((reg & SM5803_FLOW1_MODE) != CHARGER_MODE_SINK || status)
 			rv = sm5803_flow1_update(chgnum, CHARGER_MODE_SOURCE |
 						 SM5803_FLOW1_DIRECTCHG_SRC_EN,
 						 MASK_CLR);

@@ -55,6 +55,17 @@ int system_is_manual_recovery(void);
 __test_only void system_common_reset_state(void);
 
 /**
+ * @brief Allow tests to manually set the jump data address.
+ *
+ * This function allows an override of the location of the jump data (which is
+ * normally set by either a panic or at the end of RAM). This function is used
+ * by the zephyr integration to test the shim layer of the system module.
+ *
+ * @param test_jdata Pointer to the jump data memory allocated by the test.
+ */
+__test_only void system_override_jdata(void *test_jdata);
+
+/**
  * Set up flags that should be saved to battery backed RAM.
  *
  * @param reset_flags - flags passed into system_reset
@@ -503,7 +514,7 @@ extern uint32_t sleep_mask;
  */
 static inline void enable_sleep(uint32_t mask)
 {
-	deprecated_atomic_clear_bits(&sleep_mask, mask);
+	atomic_clear_bits(&sleep_mask, mask);
 }
 
 /**
@@ -514,7 +525,7 @@ static inline void enable_sleep(uint32_t mask)
  */
 static inline void disable_sleep(uint32_t mask)
 {
-	deprecated_atomic_or(&sleep_mask, mask);
+	atomic_or(&sleep_mask, mask);
 }
 
 #ifdef CONFIG_LOW_POWER_IDLE_LIMITED
@@ -532,12 +543,12 @@ static inline uint32_t idle_is_disabled(void)
 
 static inline void disable_idle(void)
 {
-	deprecated_atomic_or(&idle_disabled, 1);
+	atomic_or(&idle_disabled, 1);
 }
 
 static inline void enable_idle(void)
 {
-	deprecated_atomic_clear_bits(&idle_disabled, 1);
+	atomic_clear_bits(&idle_disabled, 1);
 }
 #endif
 

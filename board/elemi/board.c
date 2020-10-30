@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Volteer board-specific configuration */
+/* Elemi board-specific configuration */
 #include "bb_retimer.h"
 #include "button.h"
 #include "common.h"
@@ -73,14 +73,6 @@ struct keyboard_scan_config keyscan_config = {
 union volteer_cbi_fw_config fw_config_defaults = {
 	.usb_db = DB_USB4_GEN2,
 };
-
-static void board_init(void)
-{
-	/* Illuminate motherboard and daughter board LEDs equally to start. */
-	pwm_enable(PWM_CH_LED4_SIDESEL, 1);
-	pwm_set_duty(PWM_CH_LED4_SIDESEL, 50);
-}
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 __override enum tbt_compat_cable_speed board_get_max_tbt_speed(int port)
 {
@@ -267,31 +259,6 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 /******************************************************************************/
 /* PWM configuration */
 const struct pwm_t pwm_channels[] = {
-	[PWM_CH_LED1_BLUE] = {
-		.channel = 2,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 4800,
-	},
-	[PWM_CH_LED2_GREEN] = {
-		.channel = 0,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 4800,
-	},
-	[PWM_CH_LED3_RED] = {
-		.channel = 1,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 4800,
-	},
-	[PWM_CH_LED4_SIDESEL] = {
-		.channel = 7,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		/*
-		 * If using the side select to run both LEDs at the same time,
-		 * the frequency should be 1/2 of the color channel PWM
-		 * frequency to drive each LED equally.
-		 */
-		.freq = 2400,
-	},
 	[PWM_CH_FAN] = {
 		.channel = 5,
 		.flags = PWM_CONFIG_OPEN_DRAIN,
@@ -310,6 +277,18 @@ const struct pwm_t pwm_channels[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+static void kb_backlight_enable(void)
+{
+	gpio_set_level(GPIO_EC_KB_BL_EN, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, kb_backlight_enable, HOOK_PRIO_DEFAULT);
+
+static void kb_backlight_disable(void)
+{
+	gpio_set_level(GPIO_EC_KB_BL_EN, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, kb_backlight_disable, HOOK_PRIO_DEFAULT);
 
 /******************************************************************************/
 /* Volteer specific USB daughter-board configuration */
@@ -358,16 +337,14 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_PP5000_USBA,
 };
 
-static enum gpio_signal ps8xxx_rst_odl = GPIO_USB_C1_RT_RST_ODL;
-
 static void ps8815_reset(void)
 {
 	int val;
 
-	gpio_set_level(ps8xxx_rst_odl, 0);
+	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 0);
 	msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS,
 			   PS8815_PWR_H_RST_H_DELAY_MS));
-	gpio_set_level(ps8xxx_rst_odl, 1);
+	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 1);
 	msleep(PS8815_FW_INIT_DELAY_MS);
 
 	/*
@@ -458,16 +435,6 @@ __override void board_cbi_init(void)
 {
 	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
 
-	/* Reconfigure Volteer GPIOs based on the board ID */
-	if (get_board_id() == 0) {
-		CPRINTS("Configuring GPIOs for board ID 0");
-		CPRINTS("VOLUME_UP button disabled");
-
-		/* Reassign USB_C1_RT_RST_ODL */
-		bb_controls[USBC_PORT_C1].retimer_rst_gpio =
-			GPIO_USB_C1_RT_RST_ODL_BOARDID_0;
-		ps8xxx_rst_odl = GPIO_USB_C1_RT_RST_ODL_BOARDID_0;
-	}
 	config_port_discrete_tcpc(0);
 	switch (usb_db) {
 	case DB_USB_ABSENT:

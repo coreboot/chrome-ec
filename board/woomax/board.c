@@ -9,6 +9,7 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_ec_fw_config.h"
+#include "cros_board_info.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
@@ -336,9 +337,14 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
  */
 
 int board_usbc1_retimer_inhpd = IOEX_USB_C1_HPD_IN_DB;
-
+static uint32_t board_ver;
 static void setup_fw_config(void)
 {
+	cbi_get_board_version(&board_ver);
+
+	if (board_ver >= 2)
+		board_usbc1_retimer_inhpd = GPIO_USB_C1_HPD_IN_DB;
+
 	/* Enable Gyro interrupts */
 	gpio_enable_interrupt(GPIO_6AXIS_INT_L);
 
@@ -363,9 +369,9 @@ const struct fan_conf fan_conf_0 = {
 	.enable_gpio = -1,
 };
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 3000,
-	.rpm_start = 3000,
-	.rpm_max = 4900,
+	.rpm_min = 1100,
+	.rpm_start = 1100,
+	.rpm_max = 5120,
 };
 const struct fan_t fans[] = {
 	[FAN_CH_0] = {
@@ -448,11 +454,11 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 const static struct ec_thermal_config thermal_thermistor = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(95),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(100),
 	},
 	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
 	},
 	.temp_fan_off = C_TO_K(25),
 	.temp_fan_max = C_TO_K(58),
@@ -460,11 +466,11 @@ const static struct ec_thermal_config thermal_thermistor = {
 
 const static struct ec_thermal_config thermal_cpu = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(95),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(100),
 	},
 	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
 	},
 	.temp_fan_off = C_TO_K(25),
 	.temp_fan_max = C_TO_K(58),
@@ -530,3 +536,20 @@ void hdmi_hpd_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }
 
+enum gpio_signal board_usbc_port_to_hpd_gpio(int port)
+{
+	/* USB-C0 always uses USB_C0_HPD */
+	if (port == 0)
+		return GPIO_USB_C0_HPD;
+	/*
+	 * USB-C1 OPT3 DB use IOEX_USB_C1_HPD_IN_DB for board version 1
+	 * USB-C1 OPT3 DB use GPIO_USB_C1_HPD_IN_DB for board version 2
+	 */
+	else if (ec_config_has_mst_hub_rtd2141b())
+		return (board_ver >= 2)
+			? GPIO_USB_C1_HPD_IN_DB
+			: IOEX_USB_C1_HPD_IN_DB;
+
+	/* USB-C1 OPT1 DB use DP2_HPD. */
+	return GPIO_DP2_HPD;
+}

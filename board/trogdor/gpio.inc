@@ -25,9 +25,8 @@ GPIO_INT(EC_VOLUP_BTN_ODL,  PIN(F, 2), GPIO_INT_BOTH | GPIO_PULL_UP, button_inte
 GPIO_INT(EC_WP_ODL,         PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)  /* Write protection */
 GPIO_INT(LID_OPEN_EC,       PIN(D, 2), GPIO_INT_BOTH, lid_interrupt)  /* Lid open */
 GPIO_INT(AP_RST_L,          PIN(C, 1), GPIO_INT_BOTH | GPIO_SEL_1P8V, chipset_ap_rst_interrupt)  /* PMIC to signal AP reset */
-GPIO_INT(PS_HOLD,           PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt)  /* Indicate when AP triggers reset/shutdown */
-GPIO_INT(PMIC_FAULT_L,      PIN(A, 3), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)  /* Any PMIC fault? */
-GPIO_INT(AP_SUSPEND,        PIN(5, 7), GPIO_INT_BOTH | GPIO_SEL_1P8V, power_signal_interrupt)  /* Suspend signal from PMIC */
+GPIO_INT(PS_HOLD,           PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_DOWN, power_signal_interrupt)  /* Indicate when AP triggers reset/shutdown */
+GPIO_INT(AP_SUSPEND,        PIN(5, 7), GPIO_INT_BOTH, power_signal_interrupt)  /* Suspend signal from PMIC */
 GPIO_INT(DEPRECATED_AP_RST_REQ, PIN(C, 2), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt) /* Deprecated AP initiated reset indicator */
 /*
  * When switch-cap is off, the POWER_GOOD signal is floating. Need a pull-down
@@ -40,7 +39,7 @@ GPIO_INT(WARM_RESET_L,      PIN(F, 4), GPIO_INT_BOTH | GPIO_SEL_1P8V, chipset_wa
 GPIO_INT(AP_EC_SPI_CS_L,    PIN(5, 3), GPIO_INT_FALLING | GPIO_PULL_DOWN, shi_cs_event)  /* EC SPI Chip Select */
 
 /* Sensor interrupts */
-GPIO_INT(ACCEL_GYRO_INT_L,  PIN(A, 0), GPIO_INT_FALLING | GPIO_SEL_1P8V, bmi160_interrupt)  /* Accelerometer/gyro interrupt */
+GPIO_INT(ACCEL_GYRO_INT_L,  PIN(A, 0), GPIO_INT_FALLING, bmi160_interrupt)  /* Accelerometer/gyro interrupt */
 
 /*
  * EC_RST_ODL used to be a wake source from PSL mode. However, we disabled
@@ -51,10 +50,11 @@ GPIO(EC_ENTERING_RW,        PIN(E, 1), GPIO_OUT_LOW)   /* Indicate when EC is en
 GPIO(EC_BATT_PRES_ODL,      PIN(E, 5), GPIO_INPUT)     /* Battery Present */
 
 /* PMIC/AP 1.8V */
-GPIO(PMIC_RESIN_L,          PIN(3, 2), GPIO_ODR_HIGH | GPIO_SEL_1P8V)  /* PMIC reset trigger */
-GPIO(PMIC_KPD_PWR_ODL,      PIN(D, 6), GPIO_ODR_HIGH | GPIO_SEL_1P8V)  /* PMIC power button */
+GPIO(PMIC_RESIN_L,          PIN(3, 2), GPIO_ODR_HIGH)  /* PMIC reset trigger */
+GPIO(PMIC_KPD_PWR_ODL,      PIN(D, 6), GPIO_ODR_HIGH)  /* PMIC power button */
 GPIO(EC_INT_L,              PIN(A, 2), GPIO_ODR_HIGH)  /* Interrupt line between AP and EC */
 GPIO(QSIP_ON,               PIN(5, 0), GPIO_OUT_LOW)   /* Not used, for non-switchcap testing */
+GPIO(PMIC_FAULT_L,          PIN(A, 3), GPIO_INPUT)     /* Any PMIC fault? Deprecated since rev-1 */
 
 /* Power enables */
 GPIO(HIBERNATE_L,           PIN(5, 2), GPIO_OUT_HIGH)  /* EC hibernate */
@@ -93,6 +93,15 @@ GPIO(EC_CHG_LED_W_C0,       PIN(C, 4), GPIO_OUT_LOW)
 /* TODO(waihong): NC in the schematic. The C1 subboard doesn't have any LED. */
 GPIO(EC_CHG_LED_Y_C1,       PIN(6, 0), GPIO_OUT_LOW)
 GPIO(EC_CHG_LED_W_C1,       PIN(C, 0), GPIO_OUT_LOW)
+
+/*
+ * SPI host interface - enable PDs by default. These will be made functional
+ * by the SHI driver when the AP powers up, and restored back to GPIO when
+ * the AP powers down.
+ */
+GPIO(AP_EC_SPI_MOSI,        PIN(4, 6), GPIO_INPUT | GPIO_PULL_DOWN)
+GPIO(AP_EC_SPI_MISO,        PIN(4, 7), GPIO_INPUT | GPIO_PULL_DOWN)
+GPIO(AP_EC_SPI_CLK,         PIN(5, 5), GPIO_INPUT | GPIO_PULL_DOWN)
 
 /* PWM */
 GPIO(KB_BL_PWM,             PIN(8, 0), GPIO_INPUT)     /* PWM3 */

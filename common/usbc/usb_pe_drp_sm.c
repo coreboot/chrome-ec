@@ -63,20 +63,17 @@
 #define CPRINTS_L2(format, args...) CPRINTS_LX(2, format, ## args)
 #define CPRINTS_L3(format, args...) CPRINTS_LX(3, format, ## args)
 
-
-#define PE_SET_FLAG(port, flag) deprecated_atomic_or(&pe[port].flags, (flag))
-#define PE_CLR_FLAG(port, flag) \
-	deprecated_atomic_clear_bits(&pe[port].flags, (flag))
+#define PE_SET_FLAG(port, flag) atomic_or(&pe[port].flags, (flag))
+#define PE_CLR_FLAG(port, flag) atomic_clear_bits(&pe[port].flags, (flag))
 #define PE_CHK_FLAG(port, flag) (pe[port].flags & (flag))
 
 /*
  * These macros SET, CLEAR, and CHECK, a DPM (Device Policy Manager)
  * Request. The Requests are listed in usb_pe_sm.h.
  */
-#define PE_SET_DPM_REQUEST(port, req) \
-	deprecated_atomic_or(&pe[port].dpm_request, (req))
+#define PE_SET_DPM_REQUEST(port, req) atomic_or(&pe[port].dpm_request, (req))
 #define PE_CLR_DPM_REQUEST(port, req) \
-	deprecated_atomic_clear_bits(&pe[port].dpm_request, (req))
+	atomic_clear_bits(&pe[port].dpm_request, (req))
 #define PE_CHK_DPM_REQUEST(port, req) (pe[port].dpm_request & (req))
 
 /*
@@ -1029,7 +1026,7 @@ void pe_notify_event(int port, uint32_t event_mask)
 	/* Events may only be set from the PD task */
 	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
 
-	deprecated_atomic_or(&pe[port].events, event_mask);
+	atomic_or(&pe[port].events, event_mask);
 
 	/* Notify the host that new events are available to read */
 	pd_send_host_event(PD_EVENT_TYPEC);
@@ -1037,7 +1034,7 @@ void pe_notify_event(int port, uint32_t event_mask)
 
 void pd_clear_events(int port, uint32_t clear_mask)
 {
-	deprecated_atomic_clear_bits(&pe[port].events, clear_mask);
+	atomic_clear_bits(&pe[port].events, clear_mask);
 }
 
 uint32_t pd_get_events(int port)
@@ -1156,6 +1153,7 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 	 */
 	if ((get_state_pe(port) == PE_SRC_SEND_CAPABILITIES ||
 			get_state_pe(port) == PE_SRC_TRANSITION_SUPPLY ||
+			get_state_pe(port) == PE_PRS_SNK_SRC_EVALUATE_SWAP ||
 			get_state_pe(port) == PE_PRS_SRC_SNK_WAIT_SOURCE_ON ||
 			get_state_pe(port) == PE_SRC_DISABLED ||
 			get_state_pe(port) == PE_SRC_DISCOVERY ||
@@ -1260,6 +1258,14 @@ static void pe_handle_detach(void)
 
 	/* Reset port events */
 	pd_clear_events(port, GENMASK(31, 0));
+
+	/* Tell Policy Engine to invalidate the explicit contract */
+	pe_invalidate_explicit_contract(port);
+
+	/*
+	 * Saved SRC_Capabilities are no longer valid on disconnect
+	 */
+	pd_set_src_caps(port, 0, NULL);
 }
 DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, pe_handle_detach, HOOK_PRIO_DEFAULT);
 
@@ -1571,7 +1577,7 @@ static bool pe_attempt_port_discovery(int port)
 	 */
 	if (get_time().val > pe[port].discover_identity_timer) {
 		if (pd_get_identity_discovery(port, TCPC_TX_SOP_PRIME) ==
-				PD_DISC_NEEDED && pe_can_send_sop_prime(port)) {
+				PD_DISC_NEEDED) {
 			pe[port].tx_type = TCPC_TX_SOP_PRIME;
 			set_state_pe(port, PE_VDM_IDENTITY_REQUEST_CBL);
 			return true;
@@ -1595,14 +1601,12 @@ static bool pe_attempt_port_discovery(int port)
 			set_state_pe(port, PE_INIT_VDM_MODES_REQUEST);
 			return true;
 		} else if (pd_get_svids_discovery(port, TCPC_TX_SOP_PRIME)
-				== PD_DISC_NEEDED &&
-				pe_can_send_sop_prime(port)) {
+				== PD_DISC_NEEDED) {
 			pe[port].tx_type = TCPC_TX_SOP_PRIME;
 			set_state_pe(port, PE_INIT_VDM_SVIDS_REQUEST);
 			return true;
 		} else if (pd_get_modes_discovery(port, TCPC_TX_SOP_PRIME) ==
-				PD_DISC_NEEDED &&
-				pe_can_send_sop_prime(port)) {
+				PD_DISC_NEEDED) {
 			pe[port].tx_type = TCPC_TX_SOP_PRIME;
 			set_state_pe(port, PE_INIT_VDM_MODES_REQUEST);
 			return true;
@@ -4123,6 +4127,19 @@ static void pe_prs_snk_src_evaluate_swap_run(int port)
 			set_state_pe(port, PE_SNK_READY);
 		}
 	}
+
+	if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		/*
+		 * Protocol Error occurs while PR swap, this may
+		 * brown out if the port-parnter can't hold VBUS
+		 * for tSrcTransition. Notify TC that we end the PR
+		 * swap and start to watch VBUS.
+		 *
+		 * TODO(b:155181980): issue soft reset on protocol error.
+		 */
+		tc_pr_swap_complete(port, 0);
+	}
 }
 
 /**
@@ -4554,6 +4571,12 @@ static void pe_handle_custom_vdm_request_entry(int port)
 		tx_emsg[port].len = rlen * 4;
 		memcpy(tx_emsg[port].buf, (uint8_t *)rdata, tx_emsg[port].len);
 		send_data_msg(port, sop, PD_DATA_VENDOR_DEF);
+	} else {
+		if (prl_get_rev(port, TCPC_TX_SOP) > PD_REV20)
+			set_state_pe(port, PE_SEND_NOT_SUPPORTED);
+		else
+			pe_set_ready_state(port);
+		return;
 	}
 }
 
@@ -4739,7 +4762,11 @@ static void pe_vdm_identity_request_cbl_entry(int port)
 
 	print_current_state(port);
 
-	if (!tc_is_vconn_src(port)) {
+	if (!pe_can_send_sop_prime(port)) {
+		/*
+		 * The parent state already tried to enable SOP' traffic. If it
+		 * is still disabled, there's nothing left to try.
+		 */
 		pd_set_identity_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
 		set_state_pe(port, get_last_state_pe(port));
 		return;
@@ -4898,8 +4925,12 @@ static void pe_vdm_identity_request_cbl_exit(int port)
 	}
 
 	/* Do not attempt further discovery if identity discovery failed. */
-	if (pd_get_identity_discovery(port, pe[port].tx_type) == PD_DISC_FAIL)
+	if (pd_get_identity_discovery(port, pe[port].tx_type) == PD_DISC_FAIL) {
 		pd_set_svids_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
+		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+				PD_STATUS_EVENT_SOP_DISC_DONE :
+				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
+	}
 }
 
 /**
@@ -4951,15 +4982,18 @@ static void pe_init_port_vdm_identity_request_run(int port)
 
 		/* PE_INIT_PORT_VDM_Identity_ACKed embedded here */
 		dfp_consume_identity(port, sop, cnt, payload);
+
+#ifdef CONFIG_CHARGE_MANAGER
+		/* Evaluate whether this is an allow-listed charger */
+		if (pd_charge_from_device(pd_get_identity_vid(port),
+					  pd_get_identity_pid(port)))
+			charge_manager_update_dualrole(port, CAP_DEDICATED);
+#endif
 		break;
 		}
 	case VDM_RESULT_NAK:
 		/* PE_INIT_PORT_VDM_IDENTITY_NAKed embedded here */
 		pd_set_identity_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
-		/*
-		 * Note: AP is only notified of discovery complete when
-		 * something was found (at least one ACK)
-		 */
 		break;
 	}
 
@@ -4984,8 +5018,12 @@ static void pe_init_port_vdm_identity_request_exit(int port)
 	}
 
 	/* Do not attempt further discovery if identity discovery failed. */
-	if (pd_get_identity_discovery(port, pe[port].tx_type) == PD_DISC_FAIL)
+	if (pd_get_identity_discovery(port, pe[port].tx_type) == PD_DISC_FAIL) {
 		pd_set_svids_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
+		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+				PD_STATUS_EVENT_SOP_DISC_DONE :
+				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
+	}
 }
 
 /**
@@ -5000,7 +5038,11 @@ static void pe_init_vdm_svids_request_entry(int port)
 	print_current_state(port);
 
 	if (pe[port].tx_type == TCPC_TX_SOP_PRIME &&
-	    !tc_is_vconn_src(port)) {
+	    !pe_can_send_sop_prime(port)) {
+		/*
+		 * The parent state already tried to enable SOP' traffic. If it
+		 * is still disabled, there's nothing left to try.
+		 */
 		pd_set_svids_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
 		set_state_pe(port, get_last_state_pe(port));
 		return;
@@ -5098,7 +5140,11 @@ static void pe_init_vdm_modes_request_entry(int port)
 	print_current_state(port);
 
 	if (pe[port].tx_type == TCPC_TX_SOP_PRIME &&
-	    !tc_is_vconn_src(port)) {
+	    !pe_can_send_sop_prime(port)) {
+		/*
+		 * The parent state already tried to enable SOP' traffic. If it
+		 * is still disabled, there's nothing left to try.
+		 */
 		pd_set_modes_discovery(port, pe[port].tx_type, svid,
 				PD_DISC_FAIL);
 		set_state_pe(port, get_last_state_pe(port));
@@ -5195,7 +5241,11 @@ static void pe_vdm_request_dpm_entry(int port)
 
 	if ((pe[port].tx_type == TCPC_TX_SOP_PRIME ||
 	     pe[port].tx_type == TCPC_TX_SOP_PRIME_PRIME) &&
-	     !tc_is_vconn_src(port)) {
+	     !pe_can_send_sop_prime(port)) {
+		/*
+		 * The parent state already tried to enable SOP' traffic. If it
+		 * is still disabled, there's nothing left to try.
+		 */
 		dpm_vdm_naked(port, pe[port].tx_type,
 			      PD_VDO_VID(pe[port].vdm_data[0]),
 			      PD_VDO_CMD(pe[port].vdm_data[0]));
@@ -6144,10 +6194,9 @@ void pd_dfp_discovery_init(int port)
 	PE_CLR_FLAG(port, PE_FLAGS_VDM_SETUP_DONE |
 			  PE_FLAGS_MODAL_OPERATION);
 
-	deprecated_atomic_or(&task_access[port][TCPC_TX_SOP],
-			     BIT(task_get_current()));
-	deprecated_atomic_or(&task_access[port][TCPC_TX_SOP_PRIME],
-			     BIT(task_get_current()));
+	atomic_or(&task_access[port][TCPC_TX_SOP], BIT(task_get_current()));
+	atomic_or(&task_access[port][TCPC_TX_SOP_PRIME],
+		  BIT(task_get_current()));
 
 	memset(pe[port].discovery, 0, sizeof(pe[port].discovery));
 	memset(pe[port].partner_amodes, 0, sizeof(pe[port].partner_amodes));
@@ -6167,7 +6216,7 @@ void pd_dfp_discovery_init(int port)
 
 void pd_discovery_access_clear(int port, enum tcpm_transmit_type type)
 {
-	deprecated_atomic_clear_bits(&task_access[port][type], 0xFFFFFFFF);
+	atomic_clear_bits(&task_access[port][type], 0xFFFFFFFF);
 }
 
 bool pd_discovery_access_validate(int port, enum tcpm_transmit_type type)
@@ -6179,7 +6228,7 @@ struct pd_discovery *pd_get_am_discovery(int port, enum tcpm_transmit_type type)
 {
 	ASSERT(type < DISCOVERY_TYPE_COUNT);
 
-	deprecated_atomic_or(&task_access[port][type], BIT(task_get_current()));
+	atomic_or(&task_access[port][type], BIT(task_get_current()));
 	return &pe[port].discovery[type];
 }
 

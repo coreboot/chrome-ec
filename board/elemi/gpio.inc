@@ -84,15 +84,7 @@ GPIO(EC_PCH_INT_ODL,           PIN(B, 0), GPIO_ODR_HIGH)
 /* USB and USBC Signals */
 GPIO(EN_PP5000_USBA,		PIN(C, 6), GPIO_OUT_LOW)	/* Enable USB-A charging - all ports */
 GPIO(USB_A_LOW_PWR_OD,		PIN(6, 6), GPIO_ODR_LOW)	/* Don't limit USB-A charging by default - all ports */
-
-/*
- * USB_C1 moved from GPIO32 to GPIO83 on boards with board ID >=1.
- * GPIO83/EN_PP1800_A is DNS on board ID 0 and GPIO32 is N/C on board ID >=1
- * so it's safe to define GPIOs compatible with both designs.
- * TODO (b/149858568): remove board ID=0 support.
- */
-GPIO(USB_C1_RT_RST_ODL_BOARDID_0,	PIN(3, 2), GPIO_ODR_LOW) /* USB_C1 Reset on boards without board ID */
-GPIO(USB_C1_RT_RST_ODL,			PIN(8, 3), GPIO_ODR_LOW) /* USB_C1 Reset on boards board ID >=1 */
+GPIO(USB_C1_RT_RST_ODL,		PIN(8, 3), GPIO_ODR_LOW) /* USB_C1 Reset */
 GPIO(USB_C0_OC_ODL,			PIN(B, 1), GPIO_ODR_HIGH)
 GPIO(USB_C1_OC_ODL,			PIN(5, 0), GPIO_ODR_HIGH)
 /* There is currently no need to service this interrupt. */
@@ -103,6 +95,7 @@ UNIMPLEMENTED(USB_C1_LS_EN)
 
 /* Misc Signals */
 GPIO(EC_H1_PACKET_MODE,		PIN(7, 5), GPIO_OUT_LOW)	/* H1 Packet Mode */
+GPIO(EC_KB_BL_EN,		PIN(8, 6), GPIO_OUT_LOW)	/* Keyboard backlight enable */
 /*
  * Despite their names, M2_SSD_PLN and M2_SSD_PLA are active-low, and M2_SSD_PLN
  * is open-drain.
@@ -112,6 +105,10 @@ GPIO(M2_SSD_PLN,		PIN(A, 0), GPIO_ODR_HIGH)	/* SSD power-loss notification */
 GPIO(M2_SSD_PLA,		PIN(7, 0), GPIO_INPUT)		/* SSD power-loss acknowledgment */
 GPIO(CCD_MODE_ODL,		PIN(E, 5), GPIO_INPUT)		/* Case Closed Debug Mode */
 GPIO(EC_SLP_S0IX,		PIN(7, 2), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(C0_CHARGE_LED_AMBER_L,	PIN(C, 3), GPIO_OUT_HIGH)	/* Amber C0 port */
+GPIO(C0_CHARGE_LED_WHITE_L,	PIN(C, 4), GPIO_OUT_HIGH)	/* White C0 port */
+GPIO(C1_CHARGE_LED_AMBER_L,	PIN(6, 0), GPIO_OUT_HIGH)	/* Amber C1 port */
+GPIO(C1_CHARGE_LED_WHITE_L,	PIN(C, 2), GPIO_OUT_HIGH)	/* White C1 port */
 
 /* Unused signals */
 GPIO(UNUSED_GPIO41,		PIN(4, 1), GPIO_INPUT | GPIO_PULL_UP)
@@ -151,12 +148,6 @@ ALTERNATE(PIN_MASK(D, BIT(1) | BIT(0)), 0, MODULE_I2C, 0)                       
 ALTERNATE(PIN_MASK(3, BIT(3) | BIT(6)), 0, MODULE_I2C, 0)                            /* I2C5 */
 ALTERNATE(PIN_MASK(B, BIT(3) | BIT(2)), 0, MODULE_I2C, 0)                            /* I2C7 */
 
-/* This selects between an LED module on the motherboard and one on the daughter
- * board, to be controlled by LED_{1,2,3}_L. PWM allows driving both modules at
- * the same time. */
-ALTERNATE(PIN_MASK(6, BIT(0)), 0, MODULE_PWM, 0)                                     /* LED_SIDESEL_4_L */
-ALTERNATE(PIN_MASK(C, BIT(2) | BIT(3) | BIT(4)), 0, MODULE_PWM, 0)                   /* LED_{3,2,1}_L */
-
 /* Fan signals */
 GPIO(EN_PP5000_FAN,            PIN(6, 1), GPIO_OUT_LOW)
 ALTERNATE(PIN_MASK(B, BIT(7)), 0, MODULE_PWM, 0)	/* FAN_PWM */
@@ -182,3 +173,6 @@ ALTERNATE(PIN_MASK(0, BIT(0) | BIT(1) | BIT(2)), 0, MODULE_PMU, 0)  /* GPIO00 = 
                                                                        GPIO01 = H1_EC_PWR_BTN_ODL
                                                                        GPIO02 = EC_RST_ODL */
 
+/* Temperature sensors */
+ALTERNATE(PIN_MASK(4, BIT(2) | BIT(4) | BIT(5)), 0, MODULE_ADC, 0) /* TEMP_SENSOR1,2,4 */
+ALTERNATE(PIN(F, 1), 0, MODULE_ADC, 0) /* TEMP_SENSOR3 */

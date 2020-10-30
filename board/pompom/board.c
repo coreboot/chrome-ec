@@ -264,11 +264,13 @@ void board_hibernate(void)
 
 __override uint16_t board_get_ps8xxx_product_id(int port)
 {
-	/* Pompom rev 1+ changes TCPC from PS8751 to PS8805 */
+	/* Pompom rev 2+ changes TCPC from PS8805 to PS8755 */
 	if (system_get_board_version() == 0)
 		return PS8751_PRODUCT_ID;
+	else if (system_get_board_version() == 1)
+		return PS8805_PRODUCT_ID;
 
-	return PS8805_PRODUCT_ID;
+	return PS8755_PRODUCT_ID;
 }
 
 void board_tcpc_init(void)
@@ -507,7 +509,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 */
 	[BASE_ACCEL] = {
 	 .name = "Base Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3_S5,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_BASE,
@@ -532,7 +534,7 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 	[BASE_GYRO] = {
 	 .name = "Gyro",
-	 .active_mask = SENSOR_ACTIVE_S0_S3_S5,
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
 	 .chip = MOTIONSENSE_CHIP_BMI160,
 	 .type = MOTIONSENSE_TYPE_GYRO,
 	 .location = MOTIONSENSE_LOC_BASE,

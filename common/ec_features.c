@@ -138,6 +138,12 @@ uint32_t get_feature_flags1(void)
 #ifdef CHIP_ISH
 		| EC_FEATURE_MASK_1(EC_FEATURE_ISH)
 #endif
+#ifdef CONFIG_USB_PD_TCPMV2
+		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_CMD)
+#endif
+#ifdef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+		| EC_FEATURE_TYPEC_REQUIRE_AP_MODE_ENTRY
+#endif
 		;
 	return board_override_feature_flags1(result);
 }

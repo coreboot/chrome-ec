@@ -215,7 +215,7 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 		 * Wake up the AP.  IRQ or level high indicates a DP sink is now
 		 * present.
 		 */
-		pd_notify_dp_alt_mode_entry();
+		pd_notify_dp_alt_mode_entry(port);
 
 	/* Configure TCPC for the HPD event, for proper muxing */
 	usb_mux_hpd_update(port, lvl, irq);
@@ -252,9 +252,6 @@ __override void svdm_exit_dp_mode(int port)
 {
 	/* Disconnect the DP port selection mux. */
 	gpio_set_level(GPIO_DP_MUX_OE_L, 1);
-
-	/* Below svdm_safe_dp_mode() will disconnect SBU and DP/USB SS lines. */
-	svdm_safe_dp_mode(port);
 
 	/* Signal AP for the HPD low event */
 	usb_mux_hpd_update(port, 0, 0);

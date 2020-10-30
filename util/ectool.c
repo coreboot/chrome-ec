@@ -856,6 +856,9 @@ static const char * const ec_feature_names[] = {
 		"Refined tablet mode hysteresis",
 	[EC_FEATURE_EFS2] = "Early Firmware Selection v2",
 	[EC_FEATURE_ISH] = "Intel Integrated Sensor Hub",
+	[EC_FEATURE_TYPEC_CMD] = "TCPMv2 Type-C commands",
+	[EC_FEATURE_TYPEC_REQUIRE_AP_MODE_ENTRY] =
+		"Host-controlled Type-C mode entry",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -1909,6 +1912,8 @@ static void *fp_download_frame(struct ec_response_fp_info *info, int index)
 	int cmdver = ec_cmd_version_supported(EC_CMD_FP_INFO, 1) ? 1 : 0;
 	int rsize = cmdver == 1 ? sizeof(*info)
 				: sizeof(struct ec_response_fp_info_v0);
+	const int max_attempts = 3;
+	int num_attempts;
 
 	/* templates not supported in command v0 */
 	if (index > 0 && cmdver == 0)
@@ -1938,8 +1943,17 @@ static void *fp_download_frame(struct ec_response_fp_info *info, int index)
 	while (size) {
 		stride = MIN(ec_max_insize, size);
 		p.size = stride;
-		rv = ec_command(EC_CMD_FP_FRAME, 0, &p, sizeof(p),
-				ptr, stride);
+		num_attempts = 0;
+		while (num_attempts < max_attempts) {
+			num_attempts++;
+			rv = ec_command(EC_CMD_FP_FRAME, 0, &p, sizeof(p),
+					ptr, stride);
+			if (rv >= 0)
+				break;
+			if (rv == -EECRESULT - EC_RES_ACCESS_DENIED)
+				break;
+			usleep(100000);
+		}
 		if (rv < 0) {
 			free(buffer);
 			return NULL;
@@ -9467,6 +9481,7 @@ int cmd_pd_write_log(int argc, char *argv[])
 int cmd_typec_control(int argc, char *argv[])
 {
 	struct ec_params_typec_control p;
+	long conversion_result;
 	char *endptr;
 	int rv;
 
@@ -9474,9 +9489,13 @@ int cmd_typec_control(int argc, char *argv[])
 		fprintf(stderr,
 			"Usage: %s <port> <command> [args]\n"
 			"  <port> is the type-c port to query\n"
-			"  <type> is one of:\n"
+			"  <command> is one of:\n"
 			"    0: Exit modes\n"
-			"    1: Clear events\n", argv[0]);
+			"    1: Clear events\n"
+			"        args: <event mask>\n"
+			"    2: Enter mode\n"
+			"        args: <0: DP, 1:TBT, 2:USB4>\n",
+			argv[0]);
 		return -1;
 	}
 
@@ -9492,7 +9511,8 @@ int cmd_typec_control(int argc, char *argv[])
 		return -1;
 	}
 
-	if (p.command == TYPEC_CONTROL_COMMAND_CLEAR_EVENTS) {
+	switch (p.command) {
+	case TYPEC_CONTROL_COMMAND_CLEAR_EVENTS:
 		if (argc < 4) {
 			fprintf(stderr, "Missing event mask\n");
 			return -1;
@@ -9503,6 +9523,20 @@ int cmd_typec_control(int argc, char *argv[])
 			fprintf(stderr, "Bad event mask\n");
 			return -1;
 		}
+		break;
+	case TYPEC_CONTROL_COMMAND_ENTER_MODE:
+		if (argc < 4) {
+			fprintf(stderr, "Missing mode\n");
+			return -1;
+		}
+
+		conversion_result = strtol(argv[3], &endptr, 0);
+		if ((endptr && *endptr) || conversion_result > UINT8_MAX ||
+				conversion_result < 0) {
+			fprintf(stderr, "Bad mode\n");
+			return -1;
+		}
+		p.mode_to_enter = conversion_result;
 	}
 
 	rv = ec_command(EC_CMD_TYPEC_CONTROL, 0, &p, sizeof(p),
@@ -9571,13 +9605,49 @@ int cmd_typec_discovery(int argc, char *argv[])
 	return 0;
 }
 
+/* Print shared fields of sink and source cap PDOs */
+static inline void print_pdo_fixed(uint32_t pdo)
+{
+	printf("    Fixed: %dmV %dmA %s%s%s%s",
+	       PDO_FIXED_VOLTAGE(pdo),
+	       PDO_FIXED_CURRENT(pdo),
+	       pdo & PDO_FIXED_DUAL_ROLE ? "DRP " : "",
+	       pdo & PDO_FIXED_UNCONSTRAINED ? "UP " : "",
+	       pdo & PDO_FIXED_COMM_CAP ? "USB " : "",
+	       pdo & PDO_FIXED_DATA_SWAP ? "DRD" : "");
+}
+
+static inline void print_pdo_battery(uint32_t pdo)
+{
+	printf("    Battery: max %dmV min %dmV max %dmW\n",
+	       PDO_BATT_MAX_VOLTAGE(pdo),
+	       PDO_BATT_MIN_VOLTAGE(pdo),
+	       PDO_BATT_MAX_POWER(pdo));
+}
+
+static inline void print_pdo_variable(uint32_t pdo)
+{
+	printf("    Variable: max %dmV min %dmV max %dmA\n",
+	       PDO_VAR_MAX_VOLTAGE(pdo),
+	       PDO_VAR_MIN_VOLTAGE(pdo),
+	       PDO_VAR_MAX_CURRENT(pdo));
+}
+
+static inline void print_pdo_augmented(uint32_t pdo)
+{
+	printf("    Augmented: max %dmV min %dmV max %dmA\n",
+	       PDO_AUG_MAX_VOLTAGE(pdo),
+	       PDO_AUG_MIN_VOLTAGE(pdo),
+	       PDO_AUG_MAX_CURRENT(pdo));
+}
+
 int cmd_typec_status(int argc, char *argv[])
 {
 	struct ec_params_typec_status p;
 	struct ec_response_typec_status *r =
 				(struct ec_response_typec_status *)ec_inbuf;
 	char *endptr;
-	int rv;
+	int rv, i;
 	char *desc;
 
 	if (argc != 2) {
@@ -9680,6 +9750,66 @@ int cmd_typec_status(int argc, char *argv[])
 	}
 
 	printf("Port events: 0x%08x\n", r->events);
+
+	if (r->sop_revision)
+		printf("SOP  PD Rev: %d.%d\n",
+		       PD_STATUS_REV_GET_MAJOR(r->sop_revision),
+		       PD_STATUS_REV_GET_MINOR(r->sop_revision));
+
+	if (r->sop_prime_revision)
+		printf("SOP' PD Rev: %d.%d\n",
+		       PD_STATUS_REV_GET_MAJOR(r->sop_prime_revision),
+		       PD_STATUS_REV_GET_MINOR(r->sop_prime_revision));
+
+	for (i = 0; i < r->source_cap_count; i++) {
+		/*
+		 * Bits 31:30 always indicate the type of PDO
+		 *
+		 * Table 6-7 PD Rev 3.0 Ver 2.0
+		 */
+		uint32_t pdo = r->source_cap_pdos[i];
+		int pdo_type = pdo & PDO_TYPE_MASK;
+
+		if (i == 0)
+			printf("Source Capabilities:\n");
+
+		if (pdo_type == PDO_TYPE_FIXED) {
+			print_pdo_fixed(pdo);
+			printf("\n");
+		} else if (pdo_type == PDO_TYPE_BATTERY) {
+			print_pdo_battery(pdo);
+		} else if (pdo_type == PDO_TYPE_VARIABLE) {
+			print_pdo_variable(pdo);
+		} else {
+			print_pdo_augmented(pdo);
+		}
+	}
+
+	for (i = 0; i < r->sink_cap_count; i++) {
+		/*
+		 * Bits 31:30 always indicate the type of PDO
+		 *
+		 * Table 6-7 PD Rev 3.0 Ver 2.0
+		 */
+		uint32_t pdo = r->sink_cap_pdos[i];
+		int pdo_type = pdo & PDO_TYPE_MASK;
+
+		if (i == 0)
+			printf("Sink Capabilities:\n");
+
+		if (pdo_type == PDO_TYPE_FIXED) {
+			print_pdo_fixed(pdo);
+			/* Note: FRS bits are reserved in PD 2.0 spec */
+			printf("%s\n", pdo & PDO_FIXED_FRS_CURR_MASK ?
+			       "FRS" : "");
+		} else if (pdo_type == PDO_TYPE_BATTERY) {
+			print_pdo_battery(pdo);
+		} else if (pdo_type == PDO_TYPE_VARIABLE) {
+			print_pdo_variable(pdo);
+		} else {
+			print_pdo_augmented(pdo);
+		}
+	}
 
 	return 0;
 }

@@ -1830,7 +1830,7 @@
 
 /*****************************************************************************/
 /* Fingerprint Sensor Configuration */
-#undef CONFIG_FP_SENSOR
+#undef CONFIG_FINGERPRINT_MCU
 #undef CONFIG_FP_SENSOR_FPC1025
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
@@ -2450,6 +2450,9 @@
 
 /* Support NXP PCA9534 I/O expander. */
 #undef CONFIG_IO_EXPANDER_PCA9534
+
+/* Support NXP PCA9675 I/O expander. */
+#undef CONFIG_IO_EXPANDER_PCA9675
 
 /* Support NXP PCAL6408 I/O expander. */
 #undef CONFIG_IO_EXPANDER_PCAL6408
@@ -3334,6 +3337,9 @@
 /* Support computing of other hash sizes (without the VBOOT code) */
 #undef CONFIG_SHA256
 
+/* Compute SHA256 by using chip's hardware accelerator */
+#undef CONFIG_SHA256_HW_ACCELERATE
+
 /* Unroll some loops in SHA256_transform for better performance. */
 #undef CONFIG_SHA256_UNROLLED
 
@@ -3824,6 +3830,9 @@
 /* Driver of LN9310 switchcap */
 #undef CONFIG_LN9310
 
+/* Use this to include support for MP4245 buck boost converter */
+#undef CONFIG_MP4245
+
 /*****************************************************************************/
 /* USB PD config */
 
@@ -3898,6 +3907,12 @@
 
 /* Support for USB PD alternate mode of Downward Facing Port */
 #undef CONFIG_USB_PD_ALT_MODE_DFP
+
+/*
+ * Do not enter USB PD alternate modes or USB4 automatically. Wait for the AP to
+ * direct the EC to enter a mode. This requires AP software support.
+ */
+#undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 /* HPD is sent to the GPU from the EC via a GPIO */
 #undef CONFIG_USB_PD_DP_HPD_GPIO
@@ -4389,6 +4404,18 @@
 
 /* USB Device version of product */
 #undef CONFIG_USB_BCD_DEV
+
+/*
+ * Intel Reference Validation Platform's (RVP) Modular Embedded Control
+ * Card (MECC) version 0.9
+ */
+#undef CONFIG_INTEL_RVP_MECC_VERSION_0_9
+
+/*
+ * Intel Reference Validation Platform's (RVP) Modular Embedded Control
+ * Card (MECC) version 1.0
+ */
+#undef CONFIG_INTEL_RVP_MECC_VERSION_1_0
 
 /*****************************************************************************/
 
@@ -5283,15 +5310,6 @@
 #define CONFIG_LIBCRYPTOC
 #endif
 
-/*****************************************************************************/
-/* Fingerprint Sensor Configuration */
-#if defined(CONFIG_FP_SENSOR_FPC1025) || \
-	defined(CONFIG_FP_SENSOR_FPC1035) || \
-	defined(CONFIG_FP_SENSOR_FPC1145)
-#define CONFIG_FP_SENSOR
-#endif
-
-/*****************************************************************************/
 /*
  * Handle task-dependent configs.
  *

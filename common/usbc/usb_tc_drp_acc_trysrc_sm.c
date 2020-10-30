@@ -60,20 +60,19 @@
 
 #ifdef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
 void print_flag(int set_or_clear, int flag);
-#define TC_SET_FLAG(port, flag)                                \
-	do {                                                   \
-		print_flag(1, flag);                           \
-		deprecated_atomic_or(&tc[port].flags, (flag)); \
+#define TC_SET_FLAG(port, flag)                     \
+	do {                                        \
+		print_flag(1, flag);                \
+		atomic_or(&tc[port].flags, (flag)); \
 	} while (0)
-#define TC_CLR_FLAG(port, flag)                                        \
-	do {                                                           \
-		print_flag(0, flag);                                   \
-		deprecated_atomic_clear_bits(&tc[port].flags, (flag)); \
+#define TC_CLR_FLAG(port, flag)                             \
+	do {                                                \
+		print_flag(0, flag);                        \
+		atomic_clear_bits(&tc[port].flags, (flag)); \
 	} while (0)
 #else
-#define TC_SET_FLAG(port, flag) deprecated_atomic_or(&tc[port].flags, (flag))
-#define TC_CLR_FLAG(port, flag) \
-	deprecated_atomic_clear_bits(&tc[port].flags, (flag))
+#define TC_SET_FLAG(port, flag) atomic_or(&tc[port].flags, (flag))
+#define TC_CLR_FLAG(port, flag) atomic_clear_bits(&tc[port].flags, (flag))
 #endif
 #define TC_CHK_FLAG(port, flag) (tc[port].flags & (flag))
 
@@ -187,6 +186,8 @@ enum usb_tc_state {
 	TC_LOW_POWER_MODE,
 	TC_CT_UNATTACHED_SNK,
 	TC_CT_ATTACHED_SNK,
+
+	TC_STATE_COUNT,
 };
 /* Forward declare the full list of states. This is indexed by usb_tc_state */
 static const struct usb_state tc_states[];
@@ -266,6 +267,8 @@ static const char * const tc_state_names[] = {
 	[TC_CC_OPEN] = "SS:CC_OPEN",
 	[TC_CC_RD] = "SS:CC_RD",
 	[TC_CC_RP] = "SS:CC_RP",
+
+	[TC_STATE_COUNT] = "",
 };
 #else
 /*
@@ -470,13 +473,14 @@ static void pd_update_try_source(void);
 
 static void sink_stop_drawing_current(int port);
 
+#ifdef CONFIG_USB_PD_TRY_SRC
 static bool is_try_src_enabled(int port)
 {
 	return IS_ENABLED(CONFIG_USB_PD_TRY_SRC) &&
 		((pd_try_src_override == TRY_SRC_OVERRIDE_ON) ||
 		(pd_try_src_override == TRY_SRC_NO_OVERRIDE && pd_try_src));
 }
-
+#endif
 /*
  * Public Functions
  *
@@ -500,15 +504,9 @@ void pd_execute_hard_reset(int port)
 	/* DO NOTHING */
 }
 
-void pd_set_vbus_discharge(int port, int enable)
+__overridable void pd_set_vbus_discharge(int port, int enable)
 {
 	/* DO NOTHING */
-}
-
-uint16_t pd_get_identity_vid(int port)
-{
-	/* DO NOTHING */
-	return 0;
 }
 
 #endif /* !CONFIG_USB_PRL_SM */
@@ -584,6 +582,26 @@ void tc_request_power_swap(int port)
 	}
 }
 
+/* Flag to indicate PD comm is disabled on init */
+static int pd_disabled_on_init;
+
+static void pd_update_pd_comm(void)
+{
+	int i;
+
+	/*
+	 * Some batteries take much longer time to report its SOC.
+	 * The init function disabled PD comm on startup. Need this
+	 * hook to enable PD comm when the battery level is enough.
+	 */
+	if (pd_disabled_on_init && pd_is_battery_capable()) {
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+			pd_comm_enable(i, 1);
+		pd_disabled_on_init = 0;
+	}
+}
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, pd_update_pd_comm, HOOK_PRIO_DEFAULT);
+
 static bool pd_comm_allowed_by_policy(void)
 {
 	if (system_is_in_rw())
@@ -597,10 +615,15 @@ static bool pd_comm_allowed_by_policy(void)
 	 * when sysjump to RW that makes the device brownout on the dead-battery
 	 * case. Disable PD for this special case as a workaround.
 	 */
-	if (IS_ENABLED(CONFIG_SYSTEM_UNLOCKED) &&
-	    (IS_ENABLED(CONFIG_VBOOT_EFS2) ||
-	     usb_get_battery_soc() >= CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC))
-		return true;
+	if (IS_ENABLED(CONFIG_SYSTEM_UNLOCKED)) {
+		if (IS_ENABLED(CONFIG_VBOOT_EFS2))
+			return true;
+
+		if (pd_is_battery_capable())
+			return true;
+
+		pd_disabled_on_init = 1;
+	}
 
 	return false;
 }
@@ -608,11 +631,10 @@ static bool pd_comm_allowed_by_policy(void)
 static void tc_policy_pd_enable(int port, int en)
 {
 	if (en)
-		deprecated_atomic_clear_bits(&tc[port].pd_disabled_mask,
-					     PD_DISABLED_BY_POLICY);
+		atomic_clear_bits(&tc[port].pd_disabled_mask,
+				  PD_DISABLED_BY_POLICY);
 	else
-		deprecated_atomic_or(&tc[port].pd_disabled_mask,
-				     PD_DISABLED_BY_POLICY);
+		atomic_or(&tc[port].pd_disabled_mask, PD_DISABLED_BY_POLICY);
 
 	CPRINTS("C%d: PD comm policy %sabled", port, en ? "en" : "dis");
 }
@@ -620,20 +642,22 @@ static void tc_policy_pd_enable(int port, int en)
 static void tc_enable_pd(int port, int en)
 {
 	if (en)
-		deprecated_atomic_clear_bits(&tc[port].pd_disabled_mask,
-					     PD_DISABLED_NO_CONNECTION);
+		atomic_clear_bits(&tc[port].pd_disabled_mask,
+				  PD_DISABLED_NO_CONNECTION);
 	else
-		deprecated_atomic_or(&tc[port].pd_disabled_mask,
-				     PD_DISABLED_NO_CONNECTION);
+		atomic_or(&tc[port].pd_disabled_mask,
+			  PD_DISABLED_NO_CONNECTION);
 }
 
+#ifdef CONFIG_USB_PD_TRY_SRC
 static void tc_enable_try_src(int en)
 {
 	if (en)
-		deprecated_atomic_or(&pd_try_src, 1);
+		atomic_or(&pd_try_src, 1);
 	else
-		deprecated_atomic_clear_bits(&pd_try_src, 1);
+		atomic_clear_bits(&pd_try_src, 1);
 }
+#endif
 
 static void tc_detached(int port)
 {
@@ -648,8 +672,10 @@ static inline void pd_set_dual_role_and_event(int port,
 {
 	drp_state[port] = state;
 
+#ifdef CONFIG_USB_PD_TRY_SRC
 	if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
 		pd_update_try_source();
+#endif
 
 	if (event != 0)
 		task_set_event(PD_PORT_TO_TASK_ID(port), event, 0);
@@ -918,6 +944,7 @@ void tc_disc_ident_complete(int port)
 	TC_CLR_FLAG(port, TC_FLAGS_DISC_IDENT_IN_PROGRESS);
 }
 
+#ifdef CONFIG_USB_PD_TRY_SRC
 void tc_try_src_override(enum try_src_override_t ov)
 {
 	if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC)) {
@@ -938,6 +965,7 @@ enum try_src_override_t tc_get_try_src_override(void)
 {
 	return pd_try_src_override;
 }
+#endif
 
 void tc_snk_power_off(int port)
 {
@@ -1356,8 +1384,11 @@ void tc_state_init(int port)
 		return;
 	}
 
+
+#ifdef CONFIG_USB_PD_TRY_SRC
 	/* Allow system to set try src enable */
 	tc_try_src_override(TRY_SRC_NO_OVERRIDE);
+#endif
 
 	/*
 	 * Set initial PD communication policy.
@@ -1449,7 +1480,11 @@ static void set_state_tc(const int port, const enum usb_tc_state new_state)
 /* Get the current TypeC state. */
 test_export_static enum usb_tc_state get_state_tc(const int port)
 {
-	return tc[port].ctx.current - &tc_states[0];
+	/* Default to returning TC_STATE_COUNT if no state has been set */
+	if (tc[port].ctx.current == NULL)
+		return TC_STATE_COUNT;
+	else
+		return tc[port].ctx.current - &tc_states[0];
 }
 
 /* Get the previous TypeC state. */
@@ -1740,11 +1775,10 @@ static __maybe_unused int reset_device_and_notify(int port)
 	 * waking the TCPC, but it has also set PD_EVENT_TCPC_RESET again, which
 	 * would result in a second, unnecessary init.
 	 */
-	deprecated_atomic_clear_bits(task_get_event_bitmap(task_get_current()),
-				     PD_EVENT_TCPC_RESET);
+	atomic_clear_bits(task_get_event_bitmap(task_get_current()),
+			  PD_EVENT_TCPC_RESET);
 
-	waiting_tasks =
-		deprecated_atomic_read_clear(&tc[port].tasks_waiting_on_reset);
+	waiting_tasks = atomic_read_clear(&tc[port].tasks_waiting_on_reset);
 
 	/* Wake up all waiting tasks. */
 	while (waiting_tasks) {
@@ -1767,8 +1801,8 @@ void pd_wait_exit_low_power(int port)
 			reset_device_and_notify(port);
 	} else {
 		/* Otherwise, we need to wait for the TCPC reset to complete */
-		deprecated_atomic_or(&tc[port].tasks_waiting_on_reset,
-				     1 << task_get_current());
+		atomic_or(&tc[port].tasks_waiting_on_reset,
+			  1 << task_get_current());
 		/*
 		 * NOTE: We could be sending the PD task the reset event while
 		 * it is already processing the reset event. If that occurs,
@@ -1808,11 +1842,10 @@ void pd_prevent_low_power_mode(int port, int prevent)
 		return;
 
 	if (prevent)
-		deprecated_atomic_or(&tc[port].tasks_preventing_lpm,
-				     current_task_mask);
+		atomic_or(&tc[port].tasks_preventing_lpm, current_task_mask);
 	else
-		deprecated_atomic_clear_bits(&tc[port].tasks_preventing_lpm,
-					     current_task_mask);
+		atomic_clear_bits(&tc[port].tasks_preventing_lpm,
+				  current_task_mask);
 }
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
@@ -1933,8 +1966,12 @@ static void tc_error_recovery_run(const int port)
 	 * If try src support is active (e.g. in S0). Then try to become the
 	 * SRC, otherwise we should try to be the sink.
 	 */
+#ifdef CONFIG_USB_PD_TRY_SRC
 	restart_tc_sm(port, is_try_src_enabled(port) ? TC_UNATTACHED_SRC :
 						       TC_UNATTACHED_SNK);
+#else
+	restart_tc_sm(port, TC_UNATTACHED_SNK);
+#endif
 }
 
 /**
@@ -1959,20 +1996,7 @@ static void tc_unattached_snk_entry(const int port)
 	typec_select_pull(port, TYPEC_CC_RD);
 	typec_update_cc(port);
 
-	/*
-	 * Tell Policy Engine to invalidate the explicit contract.
-	 * This mainly used to clear the BB Ram Explicit Contract
-	 * value.
-	 */
-	pe_invalidate_explicit_contract(port);
-
 	tc[port].data_role = PD_ROLE_DISCONNECTED;
-
-	/*
-	 * Saved SRC_Capabilities are no longer valid on disconnect
-	 */
-	pd_set_src_caps(port, 0, NULL);
-
 	/*
 	 * When data role set events are used to enable BC1.2, then CC
 	 * detach events are used to notify BC1.2 that it can be powered
@@ -2150,9 +2174,11 @@ static void tc_attach_wait_snk_run(const int port)
 	 */
 	if (pd_is_vbus_present(port)) {
 		if (new_cc_state == PD_CC_DFP_ATTACHED) {
+#ifdef CONFIG_USB_PD_TRY_SRC
 			if (is_try_src_enabled(port))
 				set_state_tc(port, TC_TRY_SRC);
 			else
+#endif
 				set_state_tc(port, TC_ATTACHED_SNK);
 		} else {
 			/* new_cc_state is PD_CC_DFP_DEBUG_ACC */
@@ -2234,11 +2260,15 @@ static void tc_attached_snk_entry(const int port)
 				CAP_DUALROLE : CAP_DEDICATED);
 		}
 
-		/* Attached.SNK - enable AutoDischargeDisconnect */
-		tcpm_enable_auto_discharge_disconnect(port, 1);
-
 		/* Apply Rd */
 		typec_update_cc(port);
+
+		/*
+		 * Attached.SNK - enable AutoDischargeDisconnect
+		 * Do this after applying Rd to CC lines to avoid
+		 * TCPC_REG_FAULT_STATUS_AUTO_DISCHARGE_FAIL (b/171567398)
+		 */
+		tcpm_enable_auto_discharge_disconnect(port, 1);
 	}
 
 	tc[port].cc_debounce = 0;
@@ -2444,6 +2474,9 @@ static void tc_attached_snk_exit(const int port)
 
 	/* Stop drawing power */
 	sink_stop_drawing_current(port);
+
+	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+		tcpm_debug_detach(port);
 }
 
 /**
@@ -2470,11 +2503,6 @@ static void tc_unattached_src_entry(const int port)
 	typec_update_cc(port);
 
 	tc[port].data_role = PD_ROLE_DISCONNECTED;
-
-	/*
-	 * Saved SRC_Capabilities are no longer valid on disconnect
-	 */
-	pd_set_src_caps(port, 0, NULL);
 
 	/*
 	 * When data role set events are used to enable BC1.2, then CC
@@ -2802,8 +2830,10 @@ static void tc_attached_src_run(const int port)
 			!TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS) &&
 			!TC_CHK_FLAG(port, TC_FLAGS_DISC_IDENT_IN_PROGRESS)) {
 
+#ifdef CONFIG_USB_PD_TRY_SRC
 		const bool tryWait = is_try_src_enabled(port) &&
 				!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER);
+#endif
 
 		if (IS_ENABLED(CONFIG_USB_PE_SM))
 			if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
@@ -2812,9 +2842,12 @@ static void tc_attached_src_run(const int port)
 				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME,
 						0, 0);
 			}
-
+#ifdef CONFIG_USB_PD_TRY_SRC
 		set_state_tc(port, tryWait ?
 					TC_TRY_WAIT_SNK : TC_UNATTACHED_SNK);
+#else
+		set_state_tc(port, TC_UNATTACHED_SNK);
+#endif
 		return;
 	}
 
@@ -2940,6 +2973,9 @@ static void tc_attached_src_exit(const int port)
 
 	/* Clear PR swap flag after checking for Vconn */
 	TC_CLR_FLAG(port, TC_FLAGS_REQUEST_PR_SWAP);
+
+	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+		tcpm_debug_detach(port);
 }
 
 static __maybe_unused void check_drp_connection(const int port)
@@ -3454,8 +3490,10 @@ void tc_run(const int port)
 	 * DISABLED
 	 */
 	if (TC_CHK_FLAG(port, TC_FLAGS_SUSPEND)) {
+#ifdef CONFIG_USB_PE_SM
 		/* Invalidate a contract, if there is one */
 		pe_invalidate_explicit_contract(port);
+#endif
 
 		set_state_tc(port, TC_DISABLED);
 	}
@@ -3651,6 +3689,5 @@ const struct test_sm_data test_tc_sm_data[] = {
 		.names_size = ARRAY_SIZE(tc_state_names),
 	},
 };
-BUILD_ASSERT(ARRAY_SIZE(tc_states) == ARRAY_SIZE(tc_state_names));
 const int test_tc_sm_data_size = ARRAY_SIZE(test_tc_sm_data);
 #endif

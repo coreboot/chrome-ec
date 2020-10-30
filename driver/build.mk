@@ -78,8 +78,9 @@ include $(_driver_cur_dir)fingerprint/build.mk
 
 # I/O expander
 driver-$(CONFIG_IO_EXPANDER_IT8801)+=ioexpander/it8801.o
-driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
 driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander/ioexpander_nct38xx.o
+driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
+driver-$(CONFIG_IO_EXPANDER_PCA9675)+=ioexpander/pca9675.o
 driver-$(CONFIG_IO_EXPANDER_PCAL6408)+=ioexpander/pcal6408.o
 
 
@@ -190,3 +191,6 @@ driver-$(CONFIG_MCDP28X0)+=mcdp28x0.o
 
 # Wireless Power Chargers
 driver-$(HAS_TASK_WPC) += wpc/p9221.o
+
+# Buck-Boost converters
+driver-$(CONFIG_MP4245)+=mp4245.o

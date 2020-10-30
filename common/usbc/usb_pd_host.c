@@ -111,6 +111,9 @@ static enum ec_status hc_typec_control(struct host_cmd_handler_args *args)
 	case TYPEC_CONTROL_COMMAND_CLEAR_EVENTS:
 		pd_clear_events(p->port, p->clear_events_mask);
 		break;
+	case TYPEC_CONTROL_COMMAND_ENTER_MODE: {
+		return pd_request_enter_mode(p->port, p->mode_to_enter);
+		}
 	default:
 		return EC_RES_INVALID_PARAM;
 	}
@@ -152,7 +155,19 @@ static enum ec_status hc_typec_status(struct host_cmd_handler_args *args)
 
 	r->events = pd_get_events(p->port);
 
-	/* TODO(b/167700356): Add revisions and source cap PDOs */
+	r->sop_revision = r->sop_connected ?
+		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port, TCPC_TX_SOP)) : 0;
+	r->sop_prime_revision = pd_get_identity_discovery(p->port,
+					TCPC_TX_SOP_PRIME) == PD_DISC_COMPLETE ?
+		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port, TCPC_TX_SOP_PRIME))
+		: 0;
+
+	r->source_cap_count = pd_get_src_cap_cnt(p->port);
+	memcpy(r->source_cap_pdos, pd_get_src_caps(p->port),
+	       r->source_cap_count * sizeof(uint32_t));
+
+	/* TODO(b/160009733): Populate sink cap PDOs */
+	r->sink_cap_count = 0;
 
 	return EC_RES_SUCCESS;
 }
