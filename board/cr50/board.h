@@ -38,6 +38,10 @@
 #undef CONFIG_FLASH
 #endif
 
+#if defined(H1_RED_BOARD) || defined(CR50_DEV)
+#define CONFIG_USB_SELECT_PHY
+#endif
+
 /* Enable getting gpio flags to tell if open drain pins are asserted */
 #define CONFIG_GPIO_GET_EXTENDED
 
