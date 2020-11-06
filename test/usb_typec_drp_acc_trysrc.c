@@ -76,7 +76,7 @@ __maybe_unused static int test_mux_con_dis_as_src(void)
 	/* Update CC lines send state machine event to process */
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RD;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_OPEN;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 	pd_set_dual_role(0, PD_DRP_TOGGLE_ON);
 
 	/* This wait trainsitions through AttachWait.SRC then Attached.SRC */
@@ -88,7 +88,7 @@ __maybe_unused static int test_mux_con_dis_as_src(void)
 
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_OPEN;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* This wait will go through TryWait.SNK then to Unattached.SNK */
 	task_wait_event(10 * SECOND);
@@ -109,7 +109,7 @@ __maybe_unused static int test_mux_con_dis_as_snk(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* This wait will go through AttachWait.SNK to Attached.SNK */
 	task_wait_event(5 * SECOND);
@@ -123,7 +123,7 @@ __maybe_unused static int test_mux_con_dis_as_snk(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.vbus_level = 0;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* This wait will go through TryWait.SNK then to Unattached.SNK */
 	task_wait_event(10 * SECOND);
@@ -148,7 +148,7 @@ __maybe_unused static int test_power_role_set(void)
 	/* Update CC lines send state machine event to process */
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RD;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 	task_wait_event(10 * SECOND);
 
 	/* We are in Attached.SRC now */
@@ -180,7 +180,7 @@ __maybe_unused static int test_polarity_cc1_default(void)
 	 */
 	mock_tcpc.last.polarity = POLARITY_COUNT;
 
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -196,7 +196,7 @@ __maybe_unused static int test_polarity_cc1_1A5(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_1_5;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -212,7 +212,7 @@ __maybe_unused static int test_polarity_cc1_3A0(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -228,7 +228,7 @@ __maybe_unused static int test_polarity_cc2_default(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_DEF;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -244,7 +244,7 @@ __maybe_unused static int test_polarity_cc2_1A5(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_1_5;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -260,7 +260,7 @@ __maybe_unused static int test_polarity_cc2_3A0(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -276,7 +276,7 @@ __maybe_unused static int test_polarity_dts_cc1_default(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_1_5;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -292,7 +292,7 @@ __maybe_unused static int test_polarity_dts_cc1_1A5(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_1_5;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_DEF;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -308,7 +308,7 @@ __maybe_unused static int test_polarity_dts_cc1_3A0(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_DEF;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -324,7 +324,7 @@ __maybe_unused static int test_polarity_dts_cc2_default(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_1_5;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -340,7 +340,7 @@ __maybe_unused static int test_polarity_dts_cc2_1A5(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_DEF;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_1_5;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -356,7 +356,7 @@ __maybe_unused static int test_polarity_dts_cc2_3A0(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_RP_DEF;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Before tCCDebounce elapses, we should SRC */
 	task_wait_event(PD_T_CC_DEBOUNCE + FUDGE);
@@ -386,7 +386,7 @@ __maybe_unused static int test_try_src_disabled(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Wait a long time past many potential transitions */
 	task_wait_event(10 * SECOND);
@@ -425,7 +425,7 @@ static int switch_to_opposite_role(int port, int pull)
 		ccprints("[Test] Partner presents SRC with Vbus ON");
 	}
 
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	return EC_SUCCESS;
 };
@@ -440,7 +440,7 @@ __maybe_unused static int test_try_src_partner_switches(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* We are in AttachWait.SNK now */
 	/* Before tCCDebounce elapses, we should still be a SNK */
@@ -486,7 +486,7 @@ static int dumb_src_charger_cc_response(int port, int pull)
 
 	ccprints("[Test] Partner presents SRC with Vbus ON");
 
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	return EC_SUCCESS;
 };
@@ -501,7 +501,7 @@ __maybe_unused static int test_try_src_partner_does_not_switch_vbus(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* We are in AttachWait.SNK now */
 	/* Before tCCDebounce elapses, we should still be a SNK */
@@ -557,7 +557,7 @@ static int src_charger_drops_vbus_cc_response(int port, int pull)
 		ccprints("[Test] Partner presents SRC with Vbus ON");
 	}
 
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	return EC_SUCCESS;
 };
@@ -572,7 +572,7 @@ __maybe_unused static int test_try_src_partner_does_not_switch_no_vbus(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* We are in AttachWait.SNK now */
 	/* Before tCCDebounce elapses, we should still be a SNK */
@@ -624,7 +624,7 @@ __maybe_unused static int test_cc_open_on_normal_reset(void)
 
 	system_clear_reset_flags(EC_RESET_FLAG_POWER_ON);
 
-	task_set_event(TASK_ID_PD_C0, TASK_EVENT_RESET_DONE, 0);
+	task_set_event(TASK_ID_PD_C0, TASK_EVENT_RESET_DONE);
 	task_wait_event(SECOND * 10);
 
 	/* Ensure that the first CC set call was to open (error recovery). */
@@ -650,7 +650,7 @@ __maybe_unused static int test_cc_rd_on_por_reset(void)
 
 	system_set_reset_flags(EC_RESET_FLAG_POWER_ON);
 
-	task_set_event(TASK_ID_PD_C0, TASK_EVENT_RESET_DONE, 0);
+	task_set_event(TASK_ID_PD_C0, TASK_EVENT_RESET_DONE);
 	task_wait_event(SECOND * 10);
 
 	/* Ensure that the first CC set call was to Rd (sink) */
@@ -708,7 +708,7 @@ __maybe_unused static int test_auto_toggle_delay_early_connect(void)
 	mock_tcpc.cc1 = TYPEC_CC_VOLT_OPEN;
 	mock_tcpc.cc2 = TYPEC_CC_VOLT_RP_3_0;
 	mock_tcpc.vbus_level = 1;
-	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC, 0);
+	task_set_event(TASK_ID_PD_C0, PD_EVENT_CC);
 
 	/* Ensure the auto toggle enable was never called */
 	task_wait_event(SECOND);
@@ -732,7 +732,7 @@ void before_test(void)
 	mock_tcpc_reset();
 
 	/* Restart the PD task and let it settle */
-	task_set_event(TASK_ID_PD_C0, TASK_EVENT_RESET_DONE, 0);
+	task_set_event(TASK_ID_PD_C0, TASK_EVENT_RESET_DONE);
 	task_wait_event(SECOND);
 
 	/* Print out TCPC calls for easier debugging */

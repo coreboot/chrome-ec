@@ -274,4 +274,3 @@ int stm32gx_ucpd_set_polarity(int port, enum tcpc_cc_polarity polarity)
 
 	return EC_SUCCESS;
 }
-
