@@ -1,3 +1,5 @@
+# Check cortex-m/switch.S
+exception_frame_size: 64
 add:
 # TCPC functions, see mt6370_tcpm_drv struct.
   tcpm_init[driver/tcpm/tcpm.h:121]:
@@ -103,6 +105,7 @@ add:
   sensor_init_done[common/motion_sense.c:353]: # get_range
    - tcs3400_get_range
    - get_range[driver/accelgyro_bmi160.c]
+   - set_range[driver/accelgyro_bmi160.c]
   motion_sense_shutdown[common/motion_sense.c:431]: # list_activities
    - list_activities[driver/accelgyro_bmi160.c]
   motion_sense_shutdown[common/motion_sense.c:437]: # manage_activity
@@ -234,6 +237,8 @@ remove:
 - [ pd_request_power_swap, set_state.lto_priv.196, hook_notify,
     [ debug_mode_handle, motion_sense_shutdown, rt946x_usb_connect,
       system_common_shutdown, board_charge_termination] ]
+- [ hook_task, resume_pd_port.lto_priv.263, pd_set_suspend,
+    set_state.lto_priv.194, hook_notify, rt946x_usb_connect ]
 # HOOK_AC_CHANGE/HOOK_BATTERY_SOC_CHANGE
 - [ [ check_ac_state, charger_task ], hook_notify,
     [ debug_mode_handle, motion_sense_shutdown, rt946x_usb_connect, system_common_shutdown] ]
@@ -246,7 +251,10 @@ remove:
 - [ power_button_change_deferred, hook_notify,
     [ motion_sense_shutdown, system_common_shutdown] ]
 # HOOK_SECOND
-- [ hook_task, hook_notify, [ motion_sense_shutdown, system_common_shutdown] ]
+- [ hook_task, hook_notify, [ motion_sense_shutdown, system_common_shutdown ] ]
+- [ hook_task, resume_pd_port.lto_priv.263, pd_set_suspend,
+    set_state.lto_priv.194, hook_notify, [ motion_sense_shutdown,
+    system_common_shutdown ] ]
 # HOOK_SYSJUMP
 - [ jump_to_image, hook_notify,
     [ debug_mode_handle, motion_sense_shutdown, rt946x_usb_connect, system_common_shutdown] ]
