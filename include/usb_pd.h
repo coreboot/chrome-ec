@@ -254,6 +254,12 @@ enum pd_rx_errors {
 #define PD_V_SAFE0V_MAX		800
 #define PD_V_SAFE5V_MIN		4750
 
+/* Maximum voltage in mV offered by PD 3.0 Version 2.0 Spec */
+#define PD_REV3_MAX_VOLTAGE	20000
+
+/* Power in mW at which we will automatically charge from a DRP partner */
+#define PD_DRP_CHARGE_POWER_MIN	27000
+
 /* function table for entered mode */
 struct amode_fx {
 	int (*status)(int port, uint32_t *payload);
