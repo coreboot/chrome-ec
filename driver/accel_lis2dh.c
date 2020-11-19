@@ -30,9 +30,10 @@
  * @range: Range
  * @rnd: Round up/down flag
  */
-static int set_range(struct motion_sensor_t *s, int range, int rnd)
+static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 {
 	int err, normalized_range;
+	struct stprivate_data *data = s->drv_data;
 	int val;
 
 	val = LIS2DH_FS_TO_REG(range);
@@ -62,10 +63,17 @@ static int set_range(struct motion_sensor_t *s, int range, int rnd)
 
 	/* Save Gain in range for speed up data path */
 	if (err == EC_SUCCESS)
-		s->current_range = normalized_range;
+		data->base.range = normalized_range;
 
 	mutex_unlock(s->mutex);
 	return EC_SUCCESS;
+}
+
+static int get_range(const struct motion_sensor_t *s)
+{
+	struct stprivate_data *data = s->drv_data;
+
+	return data->base.range;
 }
 
 static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
@@ -160,7 +168,7 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 	return EC_SUCCESS;
 }
 
-static int init(struct motion_sensor_t *s)
+static int init(const struct motion_sensor_t *s)
 {
 	int ret = 0, tmp;
 	struct stprivate_data *data = s->drv_data;
@@ -244,6 +252,7 @@ const struct accelgyro_drv lis2dh_drv = {
 	.init = init,
 	.read = read,
 	.set_range = set_range,
+	.get_range = get_range,
 	.get_resolution = st_get_resolution,
 	.set_data_rate = set_data_rate,
 	.get_data_rate = st_get_data_rate,

@@ -134,13 +134,14 @@ static inline int raw_write8(const int port, const int addr, const int reg,
 	return i2c_write8(port, addr, reg, data);
 }
 
-static int set_range(struct motion_sensor_t *s,
+static int set_range(const struct motion_sensor_t *s,
 				int range,
 				int rnd)
 {
 	int ret, ctrl_val, range_tbl_size;
 	uint8_t ctrl_reg, reg_val;
 	const struct gyro_param_pair *ranges;
+	struct l3gd20_data *data = (struct l3gd20_data *)s->drv_data;
 
 	ctrl_reg = L3GD20_CTRL_REG4;
 	ranges = get_range_table(s->type, &range_tbl_size);
@@ -162,12 +163,19 @@ static int set_range(struct motion_sensor_t *s,
 
 	/* Now that we have set the range, update the driver's value. */
 	if (ret == EC_SUCCESS)
-		s->current_range = get_engineering_val(reg_val, ranges,
-						       range_tbl_size);
+		data->base.range = get_engineering_val(reg_val, ranges,
+							 range_tbl_size);
 
 gyro_cleanup:
 	mutex_unlock(s->mutex);
 	return EC_SUCCESS;
+}
+
+static int get_range(const struct motion_sensor_t *s)
+{
+	struct l3gd20_data *data = (struct l3gd20_data *)s->drv_data;
+
+	return data->base.range;
 }
 
 static int get_resolution(const struct motion_sensor_t *s)
@@ -341,14 +349,14 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 	rotate(v, *s->rot_standard_ref, v);
 
 	/* apply offset in the device coordinates */
-	range = s->current_range;
+	range = get_range(s);
 	for (i = X; i <= Z; i++)
 		v[i] += (data->offset[i] << 5) / range;
 
 	return EC_SUCCESS;
 }
 
-static int init(struct motion_sensor_t *s)
+static int init(const struct motion_sensor_t *s)
 {
 	int ret = 0, tmp;
 
@@ -384,6 +392,7 @@ const struct accelgyro_drv l3gd20h_drv = {
 	.init = init,
 	.read = read,
 	.set_range = set_range,
+	.get_range = get_range,
 	.get_resolution = get_resolution,
 	.set_data_rate = set_data_rate,
 	.get_data_rate = get_data_rate,

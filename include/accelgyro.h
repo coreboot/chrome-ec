@@ -22,10 +22,11 @@
 struct accelgyro_drv {
 	/**
 	 * Initialize accelerometers.
-	 * @s Pointer to sensor data pointer.
+	 * @s Pointer to sensor data pointer. Sensor data will be
+	 * allocated on success.
 	 * @return EC_SUCCESS if successful, non-zero if error.
 	 */
-	int (*init)(struct motion_sensor_t *s);
+	int (*init)(const struct motion_sensor_t *s);
 
 	/**
 	 * Read all three accelerations of an accelerometer. Note that all
@@ -47,22 +48,19 @@ struct accelgyro_drv {
 	int (*read_temp)(const struct motion_sensor_t *s, int *temp);
 
 	/**
-	 * Setter method for the sensor range. The sensor range
+	 * Setter and getter methods for the sensor range. The sensor range
 	 * defines the maximum value that can be returned from read(). As the
 	 * range increases, the resolution gets worse.
 	 * @s Pointer to sensor data.
 	 * @range Range (Units are +/- G's for accel, +/- deg/s for gyro)
 	 * @rnd Rounding flag. If true, it rounds up to nearest valid
 	 * value. Otherwise, it rounds down.
-	 *
-	 * sensor->current_range is updated.
-	 * It will be preserved unless EC reboots or AP is shutdown (S5).
-	 *
 	 * @return EC_SUCCESS if successful, non-zero if error.
 	 */
-	int (*set_range)(struct motion_sensor_t *s,
+	int (*set_range)(const struct motion_sensor_t *s,
 			int range,
 			int rnd);
+	int (*get_range)(const struct motion_sensor_t *s);
 
 	/**
 	 * Setter and getter methods for the sensor resolution.
@@ -123,7 +121,7 @@ struct accelgyro_drv {
 	 * Either a one shot mode (enable is not used),
 	 * or enter/exit a calibration state.
 	 */
-	int (*perform_calib)(struct motion_sensor_t *s,
+	int (*perform_calib)(const struct motion_sensor_t *s,
 				int        enable);
 	/**
 	 * handler for interrupts triggered by the sensor: it runs in task and
@@ -183,6 +181,7 @@ enum rgb_index {
 /* Used to save sensor information */
 struct accelgyro_saved_data_t {
 	int odr;
+	int range;
 	uint16_t scale[3];
 };
 

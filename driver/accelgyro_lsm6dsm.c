@@ -514,10 +514,11 @@ __maybe_unused static int irq_handler(
  * @rnd: Round up/down flag
  * Note: Range is sensitivity/gain for speed purpose
  */
-static int set_range(struct motion_sensor_t *s, int range, int rnd)
+static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 {
 	int err;
 	uint8_t ctrl_reg, reg_val;
+	struct stprivate_data *data = s->drv_data;
 	int newrange = range;
 
 	switch (s->type) {
@@ -550,9 +551,22 @@ static int set_range(struct motion_sensor_t *s, int range, int rnd)
 	err = st_write_data_with_mask(s, ctrl_reg, LSM6DSM_RANGE_MASK, reg_val);
 	if (err == EC_SUCCESS)
 		/* Save internally gain for speed optimization. */
-		s->current_range = newrange;
+		data->base.range = newrange;
 	mutex_unlock(s->mutex);
 	return err;
+}
+
+/**
+ * get_range - get full scale range
+ * @s: Motion sensor pointer
+ *
+ * For mag range is fixed to LIS2MDL_RANGE by hardware
+ */
+static int get_range(const struct motion_sensor_t *s)
+{
+	struct stprivate_data *data = s->drv_data;
+
+	return data->base.range;
 }
 
 /**
@@ -702,7 +716,7 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 	return EC_SUCCESS;
 }
 
-static int init(struct motion_sensor_t *s)
+static int init(const struct motion_sensor_t *s)
 {
 	int ret = 0, tmp;
 	struct stprivate_data *data = s->drv_data;
@@ -838,6 +852,7 @@ const struct accelgyro_drv lsm6dsm_drv = {
 	.init = init,
 	.read = read,
 	.set_range = set_range,
+	.get_range = get_range,
 	.get_resolution = st_get_resolution,
 	.set_data_rate = lsm6dsm_set_data_rate,
 	.get_data_rate = st_get_data_rate,

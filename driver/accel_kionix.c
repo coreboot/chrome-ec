@@ -321,9 +321,10 @@ static int set_value(const struct motion_sensor_t *s, int reg, int val,
 	return ret;
 }
 
-static int set_range(struct motion_sensor_t *s, int range, int rnd)
+static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 {
 	int ret, index, reg, range_field, range_val;
+	struct kionix_accel_data *data = s->drv_data;
 
 	/* Find index for interface pair matching the specified range. */
 	index = find_param_index(range, rnd, ranges[T(s)],
@@ -334,8 +335,15 @@ static int set_range(struct motion_sensor_t *s, int range, int rnd)
 
 	ret = set_value(s, reg, range_val, range_field);
 	if (ret == EC_SUCCESS)
-		s->current_range = ranges[T(s)][index].val;
+		data->base.range = ranges[T(s)][index].val;
 	return ret;
+}
+
+static int get_range(const struct motion_sensor_t *s)
+{
+	struct kionix_accel_data *data = s->drv_data;
+
+	return data->base.range;
 }
 
 static int set_resolution(const struct motion_sensor_t *s, int res, int rnd)
@@ -482,7 +490,7 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 {
 	uint8_t acc[6];
 	uint8_t reg;
-	int ret, i, resolution;
+	int ret, i, range, resolution;
 	struct kionix_accel_data *data = s->drv_data;
 
 	/* Read 6 bytes starting at XOUT_L. */
@@ -527,13 +535,14 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 	rotate(v, *s->rot_standard_ref, v);
 
 	/* apply offset in the device coordinates */
+	range = get_range(s);
 	for (i = X; i <= Z; i++)
-		v[i] += (data->offset[i] << 5) / s->current_range;
+		v[i] += (data->offset[i] << 5) / range;
 
 	return EC_SUCCESS;
 }
 
-static int init(struct motion_sensor_t *s)
+static int init(const struct motion_sensor_t *s)
 {
 	int ret, val, reg, reset_field;
 	uint8_t timeout;
@@ -668,6 +677,7 @@ const struct accelgyro_drv kionix_accel_drv = {
 	.init = init,
 	.read = read,
 	.set_range = set_range,
+	.get_range = get_range,
 	.set_resolution = set_resolution,
 	.get_resolution = get_resolution,
 	.set_data_rate = set_data_rate,
