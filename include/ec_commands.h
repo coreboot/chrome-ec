@@ -423,6 +423,14 @@ extern "C" {
 #define __packed __attribute__((packed))
 #endif
 
+#ifndef GENMASK
+#define GENMASK(h, l) (((BIT(h) << 1) - 1) ^ (BIT(l) - 1))
+#endif
+
+#ifndef GENMASK_ULL
+#define GENMASK_ULL(h, l) (((BIT_ULL(h) << 1) - 1) ^ (BIT_ULL(l) - 1))
+#endif
+
 #ifndef __aligned
 #define __aligned(x) __attribute__((aligned(x)))
 #endif
