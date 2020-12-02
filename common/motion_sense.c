@@ -137,8 +137,6 @@ static enum sensor_config motion_sense_get_ec_config(void)
  *
  * Set the sensor data rate. It is altered when the AP change the data
  * rate or when the power state changes.
- *
- * NOTE: Always run in TASK_ID_MOTIONSENSE task.
  */
 int motion_sense_set_data_rate(struct motion_sensor_t *sensor)
 {
@@ -295,6 +293,8 @@ static int motion_sense_ec_rate(struct motion_sensor_t *sensor)
  *
  * Set the wake up interval for the motion sense thread.
  * It is set to the highest frequency one of the sensors need to be polled at.
+ *
+ * Note: Not static to be tested.
  */
 static void motion_sense_set_motion_intervals(void)
 {
@@ -318,16 +318,16 @@ static void motion_sense_set_motion_intervals(void)
 
 	ap_event_interval =
 		MAX(0, ec_int_rate - MOTION_SENSOR_INT_ADJUSTMENT_US);
+	/*
+	 * Wake up the motion sense task: we want to sensor task to take
+	 * in account the new period right away.
+	 */
+	task_wake(TASK_ID_MOTIONSENSE);
 }
 
-/* Note: Always run on HOOK task, trigger by events from CHIPSET task. */
 static inline int motion_sense_init(struct motion_sensor_t *sensor)
 {
 	int ret, cnt = 3;
-
-	BUILD_ASSERT(SENSOR_COUNT < 32);
-	ASSERT((task_get_current() == TASK_ID_HOOKS) ||
-	       (task_get_current() == TASK_ID_CONSOLE));
 
 	/* Initialize accelerometers. */
 	do {
@@ -338,6 +338,7 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
 		sensor->state = SENSOR_INIT_ERROR;
 	} else {
 		sensor->state = SENSOR_INITIALIZED;
+		motion_sense_set_data_rate(sensor);
 	}
 
 	return ret;
@@ -376,19 +377,12 @@ static void motion_sense_switch_sensor_rate(void)
 {
 	int i, ret;
 	struct motion_sensor_t *sensor;
-	unsigned int sensor_setup_mask = 0;
-
-	ASSERT(task_get_current() == TASK_ID_HOOKS);
-
 	for (i = 0; i < motion_sensor_count; ++i) {
 		sensor = &motion_sensors[i];
 		if (SENSOR_ACTIVE(sensor)) {
 			/* Initialize or just back the odr previously set. */
 			if (sensor->state == SENSOR_INITIALIZED) {
-				// sensor->drv->set_range(sensor,
-				// 		       sensor->current_range,
-				// 		       1);
-				sensor_setup_mask |= BIT(i);
+				motion_sense_set_data_rate(sensor);
 			} else {
 				ret = motion_sense_init(sensor);
 				if (ret != EC_SUCCESS) {
@@ -405,32 +399,35 @@ static void motion_sense_switch_sensor_rate(void)
 					}
 #endif
 				}
-				else
-					sensor_setup_mask |= BIT(i);
 			}
 		} else {
 			/* The sensors are being powered off */
 			if (sensor->state == SENSOR_INITIALIZED) {
-				/*
-				 * Use mutex to be sure we are not changing the
-				 * ODR in MOTIONSENSE, in case it is running.
-				 */
-				mutex_lock(&g_sensor_mutex);
 				sensor->collection_rate = 0;
-				mutex_unlock(&g_sensor_mutex);
 				sensor->state = SENSOR_NOT_INITIALIZED;
 			}
 		}
 	}
+	motion_sense_set_motion_intervals();
+}
+DECLARE_DEFERRED(motion_sense_switch_sensor_rate);
 
-	if (sensor_setup_mask) {
-		atomic_or(&odr_event_required, sensor_setup_mask);
-		task_set_event(TASK_ID_MOTIONSENSE,
-			       TASK_EVENT_MOTION_ODR_CHANGE, 0);
-	} else {
-		/* No sensor activated, reset host interval interval to 0. */
-		ap_event_interval = 0;
+static void motion_sense_shutdown(void)
+{
+	int i;
+	struct motion_sensor_t *sensor;
+#ifdef CONFIG_GESTURE_DETECTION_MASK
+	uint32_t enabled = 0, disabled, mask;
+#endif
+
+	sensor_active = SENSOR_ACTIVE_S5;
+	for (i = 0; i < motion_sensor_count; i++) {
+		sensor = &motion_sensors[i];
+		/* Forget about changes made by the AP */
+		sensor->config[SENSOR_CONFIG_AP].odr = 0;
+		sensor->config[SENSOR_CONFIG_AP].ec_rate = 0;
 	}
+	motion_sense_switch_sensor_rate();
 
 	/* Forget activities set by the AP */
 #ifdef CONFIG_GESTURE_DETECTION_MASK
@@ -453,28 +450,6 @@ static void motion_sense_switch_sensor_rate(void)
 				MOTIONSENSE_ACTIVITY_DOUBLE_TAP, 1, NULL);
 	}
 #endif
-}
-DECLARE_DEFERRED(motion_sense_switch_sensor_rate);
-
-static void motion_sense_shutdown(void)
-{
-	int i;
-	struct motion_sensor_t *sensor;
-
-	sensor_active = SENSOR_ACTIVE_S5;
-	for (i = 0; i < motion_sensor_count; i++) {
-		sensor = &motion_sensors[i];
-		/* Forget about changes made by the AP */
-		sensor->config[SENSOR_CONFIG_AP].odr = 0;
-		sensor->config[SENSOR_CONFIG_AP].ec_rate = 0;
-		// sensor->current_range = sensor->default_range;
-	}
-
-	/*
-	 * Run motion_sense_switch_sensor_rate_data in the HOOK task,
-	 * To be sure no 2 rate changes happens in parralell.
-	 */
-	hook_call_deferred(&motion_sense_switch_sensor_rate_data, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, motion_sense_shutdown,
 	     MOTION_SENSE_HOOK_PRIO);
@@ -685,8 +660,6 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 {
 	int ret = EC_SUCCESS;
 	int is_odr_pending = 0;
-
-	ASSERT(task_get_current() == TASK_ID_MOTIONSENSE);
 
 	if (*event & TASK_EVENT_MOTION_ODR_CHANGE) {
 		const int sensor_bit = 1 << (sensor - motion_sensors);
@@ -1164,7 +1137,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			 * in the FIFO. Flush it explicitly.
 			 */
 			atomic_or(&odr_event_required,
-				  BIT(sensor - motion_sensors));
+				1 << (sensor - motion_sensors));
 			task_set_event(TASK_ID_MOTIONSENSE,
 					TASK_EVENT_MOTION_ODR_CHANGE, 0);
 		}
