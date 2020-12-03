@@ -600,11 +600,6 @@ static int tcs3400_rgb_set_offset(const struct motion_sensor_t *s,
 	return EC_SUCCESS;
 }
 
-static int tcs3400_rgb_get_data_rate(const struct motion_sensor_t *s)
-{
-	return 0;
-}
-
 static int tcs3400_rgb_set_data_rate(const struct motion_sensor_t *s,
 				     int rate,
 				     int rnd)
@@ -678,6 +673,11 @@ static int tcs3400_set_offset(const struct motion_sensor_t *s,
 static int tcs3400_get_data_rate(const struct motion_sensor_t *s)
 {
 	return TCS3400_DRV_DATA(s)->rate;
+}
+
+static int tcs3400_rgb_get_data_rate(const struct motion_sensor_t *s)
+{
+	return tcs3400_get_data_rate(s - 1);
 }
 
 static int tcs3400_set_data_rate(const struct motion_sensor_t *s,
