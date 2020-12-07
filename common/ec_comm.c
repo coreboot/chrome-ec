@@ -120,7 +120,7 @@ static uint16_t decode_packet_(const struct cr50_comm_packet *ph, int bytes)
 }
 
 /*
- * Transfer a 'response' to 'uart' port using DIOB3 pin.
+ * Transfer a 'response' to 'uart' port.
  *
  * @param response  Response code to return to EC. Should be one of
  *                  CR50_COMM_RESPONSE codes in include/vboot.h.
@@ -134,7 +134,7 @@ static void transfer_response_to_ec_(uint16_t response)
 	uartn_write_char(uart, ptr_resp[0]);
 	uartn_write_char(uart, ptr_resp[1]);
 
-	uartn_tx_flush(uart);  /* Flush from UART2_TX to DIOB3 */
+	uartn_tx_flush(uart);
 
 	ec_comm_ctx.last_resp = response;
 }
