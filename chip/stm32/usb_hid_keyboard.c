@@ -425,10 +425,23 @@ USB_DECLARE_EP(USB_EP_HID_KEYBOARD, hid_keyboard_tx,
 #endif
 	       hid_keyboard_event);
 
+static int hid_keyboard_get_report(uint8_t report_id, uint8_t report_type,
+				   const uint8_t **buffer_ptr, int *buffer_size)
+{
+	if (report_type == REPORT_TYPE_INPUT) {
+		*buffer_ptr = (uint8_t *)&report;
+		*buffer_size = sizeof(report);
+		return 0;
+	}
+
+	return -1;
+}
+
 static struct usb_hid_config_t hid_config_kb = {
 	.report_desc = report_desc,
 	.report_size = sizeof(report_desc),
 	.hid_desc = &hid_desc_kb,
+	.get_report = &hid_keyboard_get_report,
 };
 
 static int hid_keyboard_iface_request(usb_uint *ep0_buf_rx,
