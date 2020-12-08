@@ -6290,6 +6290,15 @@ static void pe_dr_src_get_source_cap_run(int port)
 							DPM_REQUEST_PR_SWAP);
 				}
 
+				/*
+				 * Report dual role power capability to the
+				 * charge manager if present
+				 */
+				if (IS_ENABLED(CONFIG_CHARGE_MANAGER) &&
+				    pd_get_partner_dual_role_power(port))
+					charge_manager_update_dualrole(port,
+								CAP_DUALROLE);
+
 				set_state_pe(port, PE_SRC_READY);
 			} else if (type == PD_CTRL_REJECT ||
 				   type == PD_CTRL_NOT_SUPPORTED) {
