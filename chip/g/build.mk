@@ -193,7 +193,7 @@ ifneq ($(CR50_DEV),)
 DUMMY := $(shell /usr/bin/awk 'BEGIN {skip = 0}; \
 	/^},/ {skip = 0}; \
 	{if (!skip) {print };} \
-	/\"info\": {/ {skip = 1};' $(MANIFEST) > $(SIGNER_MANIFEST))
+	/"info": {/ {skip = 1};' $(MANIFEST) > $(SIGNER_MANIFEST))
 else
 DUMMY := $(shell /bin/cp $(MANIFEST) $(SIGNER_MANIFEST))
 endif
