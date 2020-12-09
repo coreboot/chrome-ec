@@ -512,8 +512,13 @@ static void fifo_reg_read(uint8_t *dest, uint32_t data_size)
 void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 {
 	int i;
+	static uint32_t last_sts;
+	static uint32_t checked_sts;
 
-	CPRINTF("%s(0x%06x, %d)", __func__, regaddr, data_size);
+	if (regaddr != TPM_STS) {
+		CPRINTF("%s(0x%06x, %d)\n", __func__, regaddr, data_size);
+		checked_sts = 0;
+	}
 	switch (regaddr) {
 	case TPM_DID_VID:
 		copy_bytes(dest, data_size, (GOOGLE_DID << 16) | GOOGLE_VID);
@@ -528,7 +533,18 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 		copy_bytes(dest, data_size, tpm_.regs.access);
 		break;
 	case TPM_STS:
-		CPRINTF(" %x", tpm_.regs.sts);
+		/*
+		 * Print TPM_STS information from the first call and whenever
+		 * the status changes.
+		 */
+		if (!checked_sts || last_sts != tpm_.regs.sts) {
+			CPRINTF("tpm_get_status(%d)(0x%06x, %d) %x\n",
+				checked_sts, regaddr, data_size, tpm_.regs.sts);
+			checked_sts = 1;
+		} else {
+			checked_sts++;
+		}
+		last_sts = tpm_.regs.sts;
 		copy_bytes(dest, data_size, tpm_.regs.sts);
 		break;
 	case TPM_DATA_FIFO:
@@ -562,7 +578,6 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 		CPRINTS("%s(0x%06x, %d) => ??", __func__, regaddr, data_size);
 		return;
 	}
-	CPRINTF("\n");
 }
 
 static __preserved interface_control_func if_start;
