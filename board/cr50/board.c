@@ -451,6 +451,7 @@ static void ac_power_state_changed(void)
 	    (GREG32(RBOX, CHECK_INPUT) & buttons_not_pressed))
 		return;
 
+	CPRINTS("AC: wait");
 	/*
 	 * Charger cable was yanked while the power and key0 buttons were kept
 	 * pressed - user wants a battery cut off.
