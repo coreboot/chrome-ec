@@ -21,7 +21,6 @@
 
 /* Chipset */
 #define CONFIG_CHIPSET_TIGERLAKE
-#define CONFIG_POWER_PP5000_CONTROL
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -81,7 +80,7 @@
 /* USB PD config */
 #define CONFIG_USB_PD_PORT_MAX_COUNT 4
 #define CONFIG_USB_MUX_VIRTUAL
-#define PD_MAX_POWER_MW              60000
+#define PD_MAX_POWER_MW              100000
 
 /* USB-C I2C */
 #define I2C_PORT_TYPEC_0		IT83XX_I2C_CH_C
@@ -137,6 +136,13 @@
  */
 #define CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT		7500
 
+/* Config Fan */
+#define CONFIG_FANS		1
+#define GPIO_FAN_POWER_EN	GPIO_EC_THRM_SEN_PWRGATE_N
+#define GPIO_ALL_SYS_PWRGD	GPIO_ALL_SYS_PWRGD_EC
+#define BOARD_FAN_MIN_RPM	3000
+#define BOARD_FAN_MAX_RPM	10000
+
 #ifndef __ASSEMBLER__
 
 enum adlrvp_i2c_channel {
@@ -154,6 +160,11 @@ enum adlrvp_charge_ports {
 	TYPE_C_PORT_1,
 	TYPE_C_PORT_2,
 	TYPE_C_PORT_3,
+};
+
+enum battery_type {
+	BATTERY_GETAC_SMP_HHP_408,
+	BATTERY_TYPE_COUNT,
 };
 
 void espi_reset_pin_asserted_interrupt(enum gpio_signal signal);

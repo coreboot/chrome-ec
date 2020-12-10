@@ -417,7 +417,7 @@ static void set_base_lid_current(int current_base, int allow_charge_base,
 		ret = charge_set_output_current_limit(CHARGER_SOLO, 0, 0);
 		if (ret)
 			return;
-		ret = charger_set_input_current(chgnum, current_lid);
+		ret = charger_set_input_current_limit(chgnum, current_lid);
 		if (ret)
 			return;
 		if (allow_charge_lid)
@@ -1251,8 +1251,17 @@ static int charge_request(int voltage, int current)
 	 * up. This helps avoid large current spikes when connecting
 	 * battery.
 	 */
-	if (current >= 0)
-		r2 = charger_set_current(0, current);
+	if (current >= 0) {
+#ifdef CONFIG_OCPC
+		/*
+		 * For OCPC systems, don't unconditionally modify the primary
+		 * charger IC's charge current.  It may be handled by the
+		 * charger drivers directly.
+		 */
+		if (curr.ocpc.active_chg_chip == CHARGER_PRIMARY)
+#endif
+			r2 = charger_set_current(0, current);
+	}
 	if (r2 != EC_SUCCESS)
 		problem(PR_SET_CURRENT, r2);
 
@@ -1736,19 +1745,20 @@ void charger_task(void *u)
 				 * Try again if it fails.
 				 */
 				int rv = charger_post_init();
+
 				if (rv != EC_SUCCESS) {
 					problem(PR_POST_INIT, rv);
-				} else {
-					if (curr.desired_input_current !=
-					    CHARGE_CURRENT_UNINITIALIZED)
-						rv = charger_set_input_current(
-						    chgnum,
-						    curr.desired_input_current);
+				} else if (curr.desired_input_current !=
+					    CHARGE_CURRENT_UNINITIALIZED) {
+					rv = charger_set_input_current_limit(
+						chgnum,
+						curr.desired_input_current);
 					if (rv != EC_SUCCESS)
 						problem(PR_SET_INPUT_CURR, rv);
-					else
-						prev_ac = curr.ac;
 				}
+
+				if (rv == EC_SUCCESS)
+					prev_ac = curr.ac;
 			} else {
 				/* Some things are only meaningful on AC */
 				chg_ctl_mode = CHARGE_CONTROL_NORMAL;
@@ -1779,7 +1789,7 @@ void charger_task(void *u)
 				get_desired_input_current(prev_bp, info);
 			if (curr.desired_input_current !=
 			    CHARGE_CURRENT_UNINITIALIZED)
-				charger_set_input_current(chgnum,
+				charger_set_input_current_limit(chgnum,
 					curr.desired_input_current);
 			hook_notify(HOOK_BATTERY_SOC_CHANGE);
 		}
@@ -2448,7 +2458,7 @@ int charge_set_input_current_limit(int ma, int mv)
 
 		int prev_input = 0;
 
-		charger_get_input_current(chgnum, &prev_input);
+		charger_get_input_current_limit(chgnum, &prev_input);
 
 #ifdef CONFIG_USB_POWER_DELIVERY
 #if ((PD_MAX_POWER_MW * 1000) / PD_MAX_VOLTAGE_MV != PD_MAX_CURRENT_MA)
@@ -2491,7 +2501,7 @@ int charge_set_input_current_limit(int ma, int mv)
 	charge_wakeup();
 	return EC_SUCCESS;
 #else
-	return charger_set_input_current(chgnum, ma);
+	return charger_set_input_current_limit(chgnum, ma);
 #endif
 }
 
@@ -2718,7 +2728,8 @@ charge_command_charge_state(struct host_cmd_handler_args *args)
 				chgstate_set_manual_current(val);
 				break;
 			case CS_PARAM_CHG_INPUT_CURRENT:
-				if (charger_set_input_current(chgnum, val))
+				if (charger_set_input_current_limit(chgnum,
+								    val))
 					rv = EC_RES_ERROR;
 				break;
 			case CS_PARAM_CHG_STATUS:

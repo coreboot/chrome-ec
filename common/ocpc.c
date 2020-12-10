@@ -66,6 +66,7 @@ static int lb;
 
 enum phase {
 	PHASE_UNKNOWN = -1,
+	PHASE_PRECHARGE,
 	PHASE_CC,
 	PHASE_CV_TRIP,
 	PHASE_CV_COMPLETE,
@@ -74,6 +75,8 @@ enum phase {
 __overridable void board_ocpc_init(struct ocpc_data *ocpc)
 {
 }
+
+static enum ec_error_list ocpc_precharge_enable(bool enable);
 
 static void calc_resistance_stats(void)
 {
@@ -174,6 +177,7 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 	int vsys_target = 0;
 	int drive = 0;
 	int i_ma = 0;
+	static int i_ma_CC_CV;
 	int min_vsys_target;
 	int error = 0;
 	int derivative = 0;
@@ -185,6 +189,8 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 	int i_step;
 	static timestamp_t delay;
 	int i, step, loc;
+	bool icl_reached = false;
+	static timestamp_t precharge_exit;
 
 	/*
 	 * There's nothing to do if we're not using this charger.  Should
@@ -250,6 +256,7 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 
 	if (ocpc->last_vsys == OCPC_UNINIT) {
 		ph = PHASE_UNKNOWN;
+		precharge_exit.val = 0;
 		iterations = 0;
 	}
 
@@ -288,11 +295,56 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 
 	/* Set our current target accordingly. */
 	if (batt.desired_voltage) {
-		if (batt.voltage < batt.desired_voltage) {
-			if (ph < PHASE_CV_TRIP)
+		if (((batt.voltage < batt_info->voltage_min) ||
+		    ((batt.voltage < batt_info->voltage_normal) &&
+		    (batt.desired_current <= batt_info->precharge_current))) &&
+		    (ph != PHASE_PRECHARGE)) {
+			/*
+			 * If the charger IC doesn't support the linear charge
+			 * feature, proceed to the CC phase.
+			 */
+			result = ocpc_precharge_enable(true);
+			if (result == EC_ERROR_UNIMPLEMENTED) {
+				ph = PHASE_CC;
+			} else if (result == EC_SUCCESS) {
+				CPRINTS("OCPC: Enabling linear precharge");
+				ph = PHASE_PRECHARGE;
+				i_ma = batt.desired_current;
+			}
+		} else if (batt.voltage < batt.desired_voltage) {
+			if ((ph == PHASE_PRECHARGE) &&
+			    (batt.desired_current >
+			     batt_info->precharge_current)) {
+				/*
+				 * Precharge phase is complete.  Now set the
+				 * target VSYS to the battery voltage to prevent
+				 * a large current spike during the transition.
+				 */
+				/*
+				 * If we'd like to exit precharge, let's wait a
+				 * short delay.
+				 */
+				if (!precharge_exit.val) {
+					CPRINTS("OCPC: Preparing to exit "
+						"precharge");
+					precharge_exit = get_time();
+					precharge_exit.val += 3 * SECOND;
+				}
+				if (timestamp_expired(precharge_exit, NULL)) {
+					CPRINTS("OCPC: Precharge complete");
+					charger_set_voltage(CHARGER_SECONDARY,
+							    batt.voltage);
+					ocpc->last_vsys = batt.voltage;
+					ocpc_precharge_enable(false);
+					ph = PHASE_CC;
+					precharge_exit.val = 0;
+				}
+			}
+
+			if ((ph != PHASE_PRECHARGE) && (ph < PHASE_CV_TRIP))
 				ph = PHASE_CC;
 			i_ma = batt.desired_current;
-		} else{
+		} else {
 			/*
 			 * Once the battery voltage reaches the desired voltage,
 			 * we should note that we've reached the CV step and set
@@ -300,6 +352,8 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 			 */
 			i_ma = batt.current;
 			ph = ph == PHASE_CC ? PHASE_CV_TRIP : PHASE_CV_COMPLETE;
+			if (ph == PHASE_CV_TRIP)
+				i_ma_CC_CV = batt.current;
 
 		}
 	}
@@ -321,7 +375,7 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 	if (ocpc->last_vsys != OCPC_UNINIT) {
 		error = i_ma - batt.current;
 		/* Add some hysteresis. */
-		if (ABS(error) < i_step)
+		if (ABS(error) < (i_step / 2))
 			error = 0;
 
 		/* Make a note if we're significantly over target. */
@@ -330,7 +384,7 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 
 		derivative = error - ocpc->last_error;
 		ocpc->last_error = error;
-		ocpc->integral +=  error;
+		ocpc->integral += error;
 		if (ocpc->integral > 500)
 			ocpc->integral = 500;
 	}
@@ -349,33 +403,47 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 	CPRINTS_DBG("min_vsys_target = %d", min_vsys_target);
 
 	/* Obtain the drive from our PID controller. */
-	if (ocpc->last_vsys != OCPC_UNINIT) {
+	if ((ocpc->last_vsys != OCPC_UNINIT) &&
+	    (ph > PHASE_PRECHARGE)) {
 		drive = (k_p * error / k_p_div) +
 			(k_i * ocpc->integral / k_i_div) +
 			(k_d * derivative / k_d_div);
 		/*
-		 * Let's limit upward transitions to 200mV.  It's okay to reduce
+		 * Let's limit upward transitions to 10mV.  It's okay to reduce
 		 * VSYS rather quickly, but we'll be conservative on
 		 * increasing VSYS.
 		 */
-		if (drive > 200)
-			drive = 200;
+		if (drive > 10)
+			drive = 10;
 		CPRINTS_DBG("drive = %d", drive);
 	}
+
+	/*
+	 * For the pre-charge phase, simply keep the VSYS target at the desired
+	 * voltage.
+	 */
+	if (ph == PHASE_PRECHARGE)
+		vsys_target = batt.desired_voltage;
 
 	/*
 	 * Adjust our VSYS target by applying the calculated drive.  Note that
 	 * we won't apply our drive the first time through this function such
 	 * that we can determine our initial error.
 	 */
-	if (ocpc->last_vsys != OCPC_UNINIT)
+	if ((ocpc->last_vsys != OCPC_UNINIT) && (ph > PHASE_PRECHARGE))
 		vsys_target = ocpc->last_vsys + drive;
 
 	/*
 	 * Once we're in the CV region, all we need to do is keep VSYS at the
 	 * desired voltage.
 	 */
-	if (ph >= PHASE_CV_TRIP)
+	if (ph == PHASE_CV_TRIP) {
+		vsys_target = batt.desired_voltage +
+				((i_ma_CC_CV *
+				  ocpc->combined_rsys_rbatt_mo) / 1000);
+		CPRINTS_DBG("i_ma_CC_CV = %d", i_ma_CC_CV);
+	}
+	if (ph == PHASE_CV_COMPLETE)
 		vsys_target = batt.desired_voltage +
 				((batt_info->precharge_current *
 				  ocpc->combined_rsys_rbatt_mo) / 1000);
@@ -391,8 +459,19 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 	/* If we're input current limited, we cannot increase VSYS any more. */
 	CPRINTS_DBG("OCPC: Inst. Input Current: %dmA (Limit: %dmA)",
 		    ocpc->secondary_ibus_ma, *desired_input_current);
-	if ((ocpc->secondary_ibus_ma >= (*desired_input_current * 95 / 100)) &&
-	    (vsys_target > ocpc->last_vsys) &&
+
+	if (charger_is_icl_reached(chgnum, &icl_reached) != EC_SUCCESS) {
+		/*
+		 * If the charger doesn't support telling us, assume that the
+		 * input current limit is reached if we're consuming more than
+		 * 95% of the limit.
+		 */
+		if (ocpc->secondary_ibus_ma >=
+		     (*desired_input_current * 95 / 100))
+			icl_reached = true;
+	}
+
+	if (icl_reached && (vsys_target > ocpc->last_vsys) &&
 	    (ocpc->last_vsys != OCPC_UNINIT)) {
 		if (!prev_limited)
 			CPRINTS("Input limited! Not increasing VSYS");
@@ -477,6 +556,18 @@ __overridable void ocpc_get_pid_constants(int *kp, int *kp_div,
 					  int *ki, int *ki_div,
 					  int *kd, int *kd_div)
 {
+}
+
+static enum ec_error_list ocpc_precharge_enable(bool enable)
+{
+	/* Enable linear charging on the primary charger IC. */
+	int rv = charger_enable_linear_charge(CHARGER_PRIMARY, enable);
+
+	if (rv)
+		CPRINTS("OCPC: Failed to %sble linear charge!", enable ? "ena"
+			: "dis");
+
+	return rv;
 }
 
 static void ocpc_set_pid_constants(void)

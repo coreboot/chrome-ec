@@ -16,9 +16,9 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
-#include "intel_x86.h"
 #include "lpc.h"
 #include "power.h"
+#include "power/intel_x86.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
@@ -77,22 +77,37 @@ static int pause_in_s5;
 #endif
 
 static bool want_reboot_ap_at_g3;/* Want to reboot AP from G3? */
+/* Want to reboot AP from G3 with delay? */
+static uint64_t reboot_ap_at_g3_delay;
 
 static enum ec_status
 host_command_reboot_ap_on_g3(struct host_cmd_handler_args *args)
 {
+	const struct ec_params_reboot_ap_on_g3_v1 *cmd = args->params;
+
 	/* Store request for processing at g3 */
 	want_reboot_ap_at_g3 = true;
+
+	switch (args->version) {
+	case 0:
+		break;
+	case 1:
+		/* Store user specified delay to wait in G3 state */
+		reboot_ap_at_g3_delay = cmd->reboot_ap_at_g3_delay;
+		break;
+	default:
+		return EC_RES_INVALID_PARAM;
+	}
 
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_REBOOT_AP_ON_G3,
 		     host_command_reboot_ap_on_g3,
-		     EC_VER_MASK(0));
+		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 __overridable int power_signal_get_level(enum gpio_signal signal)
 {
-	if (IS_ENABLED(CONFIG_HOSTCMD_ESPI)) {
+	if (IS_ENABLED(CONFIG_HOST_ESPI_VW_POWER_SIGNAL)) {
 		/* Check signal is from GPIOs or VWs */
 		if (espi_signal_is_vw(signal))
 			return espi_vw_get_wire(signal);
@@ -102,7 +117,7 @@ __overridable int power_signal_get_level(enum gpio_signal signal)
 
 int power_signal_disable_interrupt(enum gpio_signal signal)
 {
-	if (IS_ENABLED(CONFIG_HOSTCMD_ESPI)) {
+	if (IS_ENABLED(CONFIG_HOST_ESPI_VW_POWER_SIGNAL)) {
 		/* Check signal is from GPIOs or VWs */
 		if (espi_signal_is_vw(signal))
 			return espi_vw_disable_wire_int(signal);
@@ -112,7 +127,7 @@ int power_signal_disable_interrupt(enum gpio_signal signal)
 
 int power_signal_enable_interrupt(enum gpio_signal signal)
 {
-	if (IS_ENABLED(CONFIG_HOSTCMD_ESPI)) {
+	if (IS_ENABLED(CONFIG_HOST_ESPI_VW_POWER_SIGNAL)) {
 		/* Check signal is from GPIOs or VWs */
 		if (espi_signal_is_vw(signal))
 			return espi_vw_enable_wire_int(signal);
@@ -419,8 +434,19 @@ static enum power_state power_common_state(enum power_state state)
 	switch (state) {
 	case POWER_G3:
 		if (want_g3_exit || want_reboot_ap_at_g3) {
+			uint64_t i;
+
 			want_g3_exit = 0;
 			want_reboot_ap_at_g3 = false;
+			reboot_ap_at_g3_delay = reboot_ap_at_g3_delay * MSEC;
+			/*
+			 * G3->S0 transition should happen only after the
+			 * user specified delay. Hence, wait until the
+			 * user specified delay times out.
+			 */
+			for (i = 0; i < reboot_ap_at_g3_delay; i += 100)
+				msleep(100);
+			reboot_ap_at_g3_delay = 0;
 
 			return POWER_G3S5;
 		}
@@ -1005,7 +1031,7 @@ __overridable void board_power_5v_enable(int enable)
 
 /* 5V enable request bitmask from various tasks. */
 static uint32_t pwr_5v_en_req;
-static struct mutex pwr_5v_ctl_mtx;
+static mutex_t pwr_5v_ctl_mtx;
 
 void power_5v_enable(task_id_t tid, int enable)
 {
@@ -1029,6 +1055,12 @@ static void restore_enable_5v_state(void)
 {
 	const uint32_t *state;
 	int size;
+
+	/*
+	 * Initialize the mutex for ZephyrOS.
+	 * This does nothing for non-Zephyr builds.
+	 */
+	(void)k_mutex_init(&pwr_5v_ctl_mtx);
 
 	state = (const uint32_t *) system_get_jump_tag(P5_SYSJUMP_TAG, 0,
 						       &size);

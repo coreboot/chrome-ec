@@ -26,11 +26,12 @@
 
 #define VIF_APP_VENDOR_VALUE	"Google"
 #define VIF_APP_NAME_VALUE	"EC GENVIF"
-#define VIF_APP_VERSION_VALUE	"3.0.0.7"
+#define VIF_APP_VERSION_VALUE	"3.0.0.9"
 #define VENDOR_NAME_VALUE	"Google"
 
 #define DEFAULT_MISSING_TID	0xFFFF
 #define DEFAULT_MISSING_PID	0xFFFF
+#define DEFAULT_MISSING_BCD_DEV	0x0000
 
 const uint32_t *src_pdo;
 uint32_t src_pdo_cnt;
@@ -81,6 +82,11 @@ enum power_source {
 	POWER_UFP = 1,
 	POWER_BOTH = 2,
 };
+
+/*
+ * index of component being set
+ */
+int component_index;
 
 /*
  * TAG Name Strings
@@ -400,7 +406,7 @@ static bool streq(const char *str1, const char *str2)
 /*****************************************************************************
  * VIF Structure Override Value Retrieve Functions
  */
-__maybe_unused
+/** Number **/
 static bool get_vif_field_tag_number(struct vif_field_t *vif_field, int *value)
 {
 	if (vif_field->tag_value == NULL)
@@ -409,7 +415,6 @@ static bool get_vif_field_tag_number(struct vif_field_t *vif_field, int *value)
 	*value = atoi(vif_field->tag_value);
 	return true;
 }
-__maybe_unused
 static bool get_vif_field_str_number(struct vif_field_t *vif_field, int *value)
 {
 	if (vif_field->str_value == NULL)
@@ -418,7 +423,28 @@ static bool get_vif_field_str_number(struct vif_field_t *vif_field, int *value)
 	*value = atoi(vif_field->str_value);
 	return true;
 }
+static bool get_vif_field_number(struct vif_field_t *vif_field, int *value)
+{
+	bool rv;
 
+	rv = get_vif_field_tag_number(vif_field, value);
+	if (!rv)
+		rv = get_vif_field_str_number(vif_field, value);
+
+	return rv;
+}
+__maybe_unused
+static bool get_vif_number(struct vif_field_t *vif_field, int default_value)
+{
+	int ret_value;
+
+	if (!get_vif_field_number(vif_field, &ret_value))
+		ret_value = default_value;
+
+	return ret_value;
+}
+
+/** Boolean **/
 static bool get_vif_field_tag_bool(struct vif_field_t *vif_field, bool *value)
 {
 	if (vif_field->tag_value == NULL)
@@ -435,7 +461,6 @@ static bool get_vif_field_str_bool(struct vif_field_t *vif_field, bool *value)
 	*value = streq(vif_field->str_value, "YES");
 	return true;
 }
-__maybe_unused
 static bool get_vif_field_bool(struct vif_field_t *vif_field, bool *value)
 {
 	bool rv;
@@ -446,7 +471,17 @@ static bool get_vif_field_bool(struct vif_field_t *vif_field, bool *value)
 
 	return rv;
 }
+static bool get_vif_bool(struct vif_field_t *vif_field, bool default_value)
+{
+	bool ret_value;
 
+	if (!get_vif_field_bool(vif_field, &ret_value))
+		ret_value = default_value;
+
+	return ret_value;
+}
+
+/** String **/
 __maybe_unused
 static bool get_vif_field_tag_str(struct vif_field_t *vif_field, char **value)
 {
@@ -480,7 +515,7 @@ static bool is_src(void)
 
 	/* Determine if we are DRP, SRC or SNK */
 	was_overridden = get_vif_field_tag_number(
-				&vif.Component[0]
+				&vif.Component[component_index]
 					.vif_field[Type_C_State_Machine],
 				&override_value);
 	if (was_overridden) {
@@ -497,7 +532,7 @@ static bool is_src(void)
 	}
 	if (!was_overridden) {
 		was_overridden = get_vif_field_tag_number(
-					&vif.Component[0]
+					&vif.Component[component_index]
 						.vif_field[PD_Port_Type],
 					&override_value);
 		if (was_overridden) {
@@ -521,7 +556,7 @@ static bool is_snk(void)
 
 	/* Determine if we are DRP, SRC or SNK */
 	was_overridden = get_vif_field_tag_number(
-				&vif.Component[0]
+				&vif.Component[component_index]
 					.vif_field[Type_C_State_Machine],
 				&override_value);
 	if (was_overridden) {
@@ -538,7 +573,7 @@ static bool is_snk(void)
 	}
 	if (!was_overridden) {
 		was_overridden = get_vif_field_tag_number(
-					&vif.Component[0]
+					&vif.Component[component_index]
 						.vif_field[PD_Port_Type],
 					&override_value);
 		if (was_overridden) {
@@ -562,7 +597,7 @@ static bool is_drp(void)
 
 	/* Determine if we are DRP, SRC or SNK */
 	was_overridden = get_vif_field_tag_number(
-				&vif.Component[0]
+				&vif.Component[component_index]
 					.vif_field[Type_C_State_Machine],
 				&override_value);
 	if (was_overridden) {
@@ -579,7 +614,7 @@ static bool is_drp(void)
 	}
 	if (!was_overridden) {
 		was_overridden = get_vif_field_tag_number(
-					&vif.Component[0]
+					&vif.Component[component_index]
 						.vif_field[PD_Port_Type],
 					&override_value);
 		if (was_overridden) {
@@ -601,35 +636,70 @@ static bool is_drp(void)
 
 static bool can_act_as_device(void)
 {
-	bool override_value;
-	bool was_overridden;
-
-	was_overridden = get_vif_field_bool(
-		&vif.Component[0].vif_field[Type_C_Can_Act_As_Device],
-		&override_value);
-	if (was_overridden)
-		return override_value;
-
-	#if defined(USB_DEV_CLASS) && defined(USB_CLASS_BILLBOARD)
-		return (USB_DEV_CLASS == USB_CLASS_BILLBOARD);
-	#else
-		return false;
-	#endif
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[Type_C_Can_Act_As_Device],
+#if defined(USB_DEV_CLASS) && defined(USB_CLASS_BILLBOARD)
+			    USB_DEV_CLASS == USB_CLASS_BILLBOARD
+#else
+			    false
+#endif
+			);
 }
 
 static bool can_act_as_host(void)
 {
-	bool override_value;
-	bool was_overridden;
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[Type_C_Can_Act_As_Host],
+			    (!(IS_ENABLED(CONFIG_USB_CTVPD) ||
+			       IS_ENABLED(CONFIG_USB_VPD))));
+}
 
-	was_overridden = get_vif_field_bool(
-		&vif.Component[0].vif_field[Type_C_Can_Act_As_Host],
-		&override_value);
-	if (was_overridden)
-		return override_value;
+static bool is_usb4_supported(void)
+{
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[USB4_Supported],
+			    IS_ENABLED(CONFIG_USB_PD_USB4));
+}
 
-	return (!(IS_ENABLED(CONFIG_USB_CTVPD) ||
-		IS_ENABLED(CONFIG_USB_VPD)));
+static bool is_usb_pd_supported(void)
+{
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[USB_PD_Support],
+			    (is_usb4_supported() ||
+			     IS_ENABLED(CONFIG_USB_PRL_SM) ||
+			     IS_ENABLED(CONFIG_USB_POWER_DELIVERY)));
+}
+
+static bool is_usb_comms_capable(void)
+{
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[USB_Comms_Capable],
+			    is_usb4_supported() ||
+			    (!(IS_ENABLED(CONFIG_USB_VPD) ||
+			       IS_ENABLED(CONFIG_USB_CTVPD))));
+}
+
+static bool is_alt_mode_controller(void)
+{
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[Type_C_Is_Alt_Mode_Controller],
+			    IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP));
+}
+
+static bool does_respond_to_discov_sop_ufp(void)
+{
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[Responds_To_Discov_SOP_UFP],
+			    (is_usb4_supported() ||
+			     IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE)));
+}
+
+static bool does_respond_to_discov_sop_dfp(void)
+{
+	return get_vif_bool(&vif.Component[component_index]
+				.vif_field[Responds_To_Discov_SOP_DFP],
+			    (is_usb4_supported() ||
+			     IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE)));
 }
 
 static void init_src_pdos(void)
@@ -1805,8 +1875,8 @@ static void override_vif_fields(struct vif_t *vif)
 	char name[80];
 	char tag_value[80];
 	char str_value[80];
-	int component_index = 0;
 
+	component_index = 0;
 	while (get_next_tag(name, tag_value, str_value)) {
 		if (streq(name, "/VIF"))
 			break;
@@ -2476,14 +2546,6 @@ static void init_vif_product_fields(struct vif_field_t *vif_fields)
 
 /*********************************************************************
  * Init VIF/Component[] Fields
- *
- * TODO: Generic todo to fill in additional fields as the need presents
- * itself
- *
- * Fields that are not currently being initialized
- *
- * vif_Component
- *	USB4_Router_Index			numericFieldType
  */
 static void init_vif_component_fields(struct vif_field_t *vif_fields,
 			enum bc_1_2_support *bc_support,
@@ -2495,10 +2557,10 @@ static void init_vif_component_fields(struct vif_field_t *vif_fields,
 			NULL,
 			CONFIG_USB_PD_PORT_LABEL);
 	#else
-		set_vif_field(&vif_fields[Port_Label],
+		set_vif_field_stis(&vif_fields[Port_Label],
 			vif_component_name[Port_Label],
 			NULL,
-			"0");
+			component_index);
 	#endif
 
 	set_vif_field(&vif_fields[Connector_Type],
@@ -2506,41 +2568,70 @@ static void init_vif_component_fields(struct vif_field_t *vif_fields,
 		"2",
 		"Type-C®");
 
-	set_vif_field_b(&vif_fields[USB4_Supported],
-		vif_component_name[USB4_Supported],
-		IS_ENABLED(CONFIG_USB_PD_USB4));
+	if (is_usb4_supported()) {
+		int router_index;
+
+		set_vif_field_b(&vif_fields[USB4_Supported],
+			vif_component_name[USB4_Supported],
+			true);
+
+		if (!get_vif_field_tag_number(
+				&vif.Product.USB4RouterList[0]
+					.vif_field[USB4_Router_ID],
+				&router_index)) {
+			router_index = 0;
+		}
+		set_vif_field_itss(&vif_fields[USB4_Router_Index],
+			vif_component_name[USB4_Router_Index],
+			router_index,
+			NULL);
+	} else {
+		set_vif_field_b(&vif_fields[USB4_Supported],
+			vif_component_name[USB4_Supported],
+			false);
+	}
 
 	set_vif_field_b(&vif_fields[USB_PD_Support],
 		vif_component_name[USB_PD_Support],
-		(IS_ENABLED(CONFIG_USB_PRL_SM) ||
-		 IS_ENABLED(CONFIG_USB_POWER_DELIVERY)));
+		is_usb_pd_supported());
+
+	if (is_usb_pd_supported()) {
+		switch (type) {
+		case SNK:
+			set_vif_field(&vif_fields[PD_Port_Type],
+				vif_component_name[PD_Port_Type],
+				"0",
+				"Consumer Only");
+			break;
+		case SRC:
+			set_vif_field(&vif_fields[PD_Port_Type],
+				vif_component_name[PD_Port_Type],
+				"3",
+				"Provider Only");
+			break;
+		case DRP:
+			set_vif_field(&vif_fields[PD_Port_Type],
+				vif_component_name[PD_Port_Type],
+				"4",
+				"DRP");
+			break;
+		}
+	}
 
 	switch (type) {
 	case SNK:
-		set_vif_field(&vif_fields[PD_Port_Type],
-			vif_component_name[PD_Port_Type],
-			"0",
-			"Consumer Only");
 		set_vif_field(&vif_fields[Type_C_State_Machine],
 			vif_component_name[Type_C_State_Machine],
 			"1",
 			"SNK");
 		break;
 	case SRC:
-		set_vif_field(&vif_fields[PD_Port_Type],
-			vif_component_name[PD_Port_Type],
-			"3",
-			"Provider Only");
 		set_vif_field(&vif_fields[Type_C_State_Machine],
 			vif_component_name[Type_C_State_Machine],
 			"0",
 			"SRC");
 		break;
 	case DRP:
-		set_vif_field(&vif_fields[PD_Port_Type],
-			vif_component_name[PD_Port_Type],
-			"4",
-			"DRP");
 		set_vif_field(&vif_fields[Type_C_State_Machine],
 			vif_component_name[Type_C_State_Machine],
 			"2",
@@ -2649,59 +2740,91 @@ static void init_vif_component_general_pd_fields(
 
 	set_vif_field_b(&vif_fields[USB_Comms_Capable],
 			vif_component_name[USB_Comms_Capable],
-			(!(IS_ENABLED(CONFIG_USB_VPD) ||
-			   IS_ENABLED(CONFIG_USB_CTVPD))));
+			is_usb_comms_capable());
 
+	/*
+	 * DR_Swap_To_DFP_Supported
+	 *
+	 * Set to YES if Qualifying Product can respond with an Accept to a
+	 * DR_Swap request to switch from a UFP to a DFP.
+	 *
+	 * If Type_C_State_Machine is set to DRP and Type_C_Can_Act_As_Host
+	 * is set to YES and Type_C_Can_Act_As_Device is set to NO then this
+	 * field shall be set to YES.
+	 *
+	 * If Type_C_State_Machine is set to SNK and either
+	 * Type_C_Can_Act_As_Host or Type_C_Is_Alt_Mode_Controller is set to
+	 * YES, then this field shall be set to YES.
+	 *
+	 * If Type_C_State_Machine is set to SRC and Type_C_Can_Act_As_Device
+	 * is set to YES, then this field shall be set to YES.
+	 *
+	 * If VIF_Product_Type is set to 1 (Cable) or PD_Port_Type is set to
+	 * 5 (eMarker) then this field shall be ignored by Testers.
+	 *
+	 * TODO(b/172437046): USB4 has not been added and this last statement
+	 * needs to be handled when it is:
+	 * If USB4_DFP_Supported is set to YES and Type_C_Port_On_Hub is set
+	 * to NO, then this field shall be set to YES.
+	 */
 	{
-		bool supports_to_dfp = true;
+		bool supports_to_dfp;
 
-		if (type == DRP || type == SNK)
-			/*
-			 * DR_Swap_To_DFP_Supported requires
-			 *    Type_C_Can_Act_As_Host to be YES
-			 */
-			supports_to_dfp &= can_act_as_host();
-
-		if (type == DRP)
-			/*
-			 * DR_Swap_To_DFP_Supported requires
-			 *    Type_C_Can_Act_As_Device to be NO
-			 */
-			supports_to_dfp &= !can_act_as_device();
-		else if (type == SRC)
-			/*
-			 * DR_Swap_To_DFP_Supported requires
-			 *    Type_C_Can_Act_As_Device to be YES
-			 */
-			supports_to_dfp &= can_act_as_device();
+		switch (type) {
+		case SRC:
+			supports_to_dfp = can_act_as_device();
+			break;
+		case SNK:
+			supports_to_dfp = (can_act_as_host() ||
+					   is_alt_mode_controller());
+			break;
+		case DRP:
+			supports_to_dfp = (can_act_as_host() &&
+					   !can_act_as_device());
+			break;
+		}
 
 		set_vif_field_b(&vif_fields[DR_Swap_To_DFP_Supported],
 			vif_component_name[DR_Swap_To_DFP_Supported],
 			supports_to_dfp);
 	}
 
+	/*
+	 * DR_Swap_To_UFP_Supported
+	 *
+	 * Set to YES if Qualifying Product can respond with an Accept to a
+	 * DR_Swap request to switch from a DFP to a UFP.
+	 *
+	 * If Type_C_State_Machine is set to DRP and Type_C_Can_Act_As_Device
+	 * is set to YES and Type_C_Can_Act_As_Host is set to NO then this
+	 * field shall be set to YES.
+	 *
+	 * If Type_C_State_Machine is set to SNK and either
+	 * Type_C_Can_Act_As_Host or Type_C_Is_Alt_Mode_Controller is set to
+	 * YES, then this field shall be set to YES.
+	 *
+	 * If Type_C_State_Machine is set to SRC and Type_C_Can_Act_As_Device
+	 * is set to YES, then this field shall be set to YES.
+	 *
+	 * If VIF_Product_Type is set to 1 (Cable) or PD_Port_Type is set to
+	 * 5 (eMarker) then this field shall be ignored by Testers.
+	 */
 	{
-		bool supports_to_ufp = true;
+		bool supports_to_ufp;
 
-		if (type == DRP || type == SRC)
-			/*
-			 * DR_Swap_To_UFP_Supported requires
-			 *    Type_C_Can_Act_As_Device to be YES
-			 */
-			supports_to_ufp &= can_act_as_device();
-
-		if (type == DRP)
-			/*
-			 * DR_Swap_To_UFP_Supported requires
-			 *    Type_C_Can_Act_As_Host to be NO
-			 */
-			supports_to_ufp &= !can_act_as_host();
-		else if (type == SNK)
-			/*
-			 * DR_Swap_To_DFP_Supported requires
-			 *    Type_C_Can_Act_As_Host to be YES
-			 */
-			supports_to_ufp &= can_act_as_host();
+		switch (type) {
+		case SRC:
+			supports_to_ufp = can_act_as_device();
+			break;
+		case SNK:
+			supports_to_ufp = (can_act_as_host() ||
+					   is_alt_mode_controller());
+			break;
+		case DRP:
+			supports_to_ufp = (can_act_as_device() &&
+					   !can_act_as_host());
+			break;
+		}
 
 		set_vif_field_b(&vif_fields[DR_Swap_To_UFP_Supported],
 			vif_component_name[DR_Swap_To_UFP_Supported],
@@ -2745,13 +2868,11 @@ static void init_vif_component_general_pd_fields(
 
 	set_vif_field_b(&vif_fields[Responds_To_Discov_SOP_UFP],
 		vif_component_name[Responds_To_Discov_SOP_UFP],
-		(IS_ENABLED(CONFIG_USB_PD_USB4) ||
-		 IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE)));
+		does_respond_to_discov_sop_ufp());
 
 	set_vif_field_b(&vif_fields[Responds_To_Discov_SOP_DFP],
 		vif_component_name[Responds_To_Discov_SOP_DFP],
-		(IS_ENABLED(CONFIG_USB_PD_USB4) ||
-		 IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE)));
+		does_respond_to_discov_sop_dfp());
 
 	set_vif_field_b(&vif_fields[Attempts_Discov_SOP],
 		vif_component_name[Attempts_Discov_SOP],
@@ -2922,15 +3043,23 @@ static void init_vif_component_usb_type_c_fields(
 
 	set_vif_field_b(&vif_fields[Type_C_Is_Alt_Mode_Controller],
 		vif_component_name[Type_C_Is_Alt_Mode_Controller],
-		IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP));
+		is_alt_mode_controller());
 
-	set_vif_field_b(&vif_fields[Type_C_Can_Act_As_Device],
-		vif_component_name[Type_C_Can_Act_As_Device],
-		can_act_as_device());
+	if (can_act_as_device()) {
+		set_vif_field_b(&vif_fields[Type_C_Can_Act_As_Device],
+			vif_component_name[Type_C_Can_Act_As_Device],
+			true);
 
-	set_vif_field_b(&vif_fields[Type_C_Is_Alt_Mode_Adapter],
-		vif_component_name[Type_C_Is_Alt_Mode_Adapter],
-		IS_ENABLED(CONFIG_USB_ALT_MODE_ADAPTER));
+		if (is_usb_pd_supported() &&
+		    does_respond_to_discov_sop_ufp())
+			set_vif_field_b(&vif_fields[Type_C_Is_Alt_Mode_Adapter],
+				vif_component_name[Type_C_Is_Alt_Mode_Adapter],
+				IS_ENABLED(CONFIG_USB_ALT_MODE_ADAPTER));
+	} else {
+		set_vif_field_b(&vif_fields[Type_C_Can_Act_As_Device],
+			vif_component_name[Type_C_Can_Act_As_Device],
+			false);
+	}
 
 	{
 		int ps = POWER_UFP;
@@ -2989,7 +3118,6 @@ static void init_vif_component_usb_type_c_fields(
  * Fields that are not currently being initialized
  *
  * vif_Component
- *	Device_Supports_USB_Data		booleanFieldType
  *	Device_Contains_Captive_Retimer		booleanFieldType
  *	Device_Truncates_DP_For_tDHPResponse	booleanFieldType
  *	Device_Gen1x1_tLinkTurnaround		numericFieldType
@@ -2998,38 +3126,61 @@ static void init_vif_component_usb_type_c_fields(
 static void init_vif_component_usb_data_ufp_fields(
 			struct vif_field_t *vif_fields)
 {
-	int ds = USB_2;
+	/*
+	 * TOTO(b:172441959) Adjust the speed based on CONFIG_
+	 */
+	enum usb_speed ds = USB_GEN11;
+	bool supports_usb_data;
 
-	switch (ds) {
-	case USB_2:
-		set_vif_field_itss(&vif_fields[Device_Speed],
-			vif_component_name[Device_Speed],
-			USB_2, "USB 2");
-		break;
-	case USB_GEN11:
-		set_vif_field_itss(&vif_fields[Device_Speed],
-			vif_component_name[Device_Speed],
-			USB_GEN11, "USB 3.2 GEN 1x1");
-		break;
-	case USB_GEN21:
-		set_vif_field_itss(&vif_fields[Device_Speed],
-			vif_component_name[Device_Speed],
-			USB_GEN21, "USB 3.2 GEN 2x1");
-		break;
-	case USB_GEN12:
-		set_vif_field_itss(&vif_fields[Device_Speed],
-			vif_component_name[Device_Speed],
-			USB_GEN12, "USB 3.2 GEN 1x2");
-		break;
-	case USB_GEN22:
-		set_vif_field_itss(&vif_fields[Device_Speed],
-			vif_component_name[Device_Speed],
-			USB_GEN22, "USB 3.2 GEN 2x2");
-		break;
-	default:
-		set_vif_field_itss(&vif_fields[Device_Speed],
-			vif_component_name[Device_Speed],
-			ds, NULL);
+	/*
+	 * The fields in this section shall be ignored by Testers unless
+	 * Connector_Type is set to 1 (Type-B) or 3 (Micro A/B), or
+	 * Connector_Type is set to 2 (Type-C) and Type_C_Can_Act_As_Device
+	 * is set to YES.
+	 *
+	 * NOTE: We currently are always a Connector_Type of 2 (Type-C)
+	 */
+	if (!can_act_as_device())
+		return;
+
+	set_vif_field_b(
+		&vif_fields[Device_Supports_USB_Data],
+		vif_component_name[Device_Supports_USB_Data],
+		true);
+
+	if (!get_vif_field_tag_bool(
+			&vif_fields[Device_Supports_USB_Data],
+			&supports_usb_data))
+		supports_usb_data = false;
+
+	if (supports_usb_data) {
+		switch (ds) {
+		case USB_2:
+			set_vif_field_itss(&vif_fields[Device_Speed],
+				vif_component_name[Device_Speed],
+				USB_2, "USB 2");
+			break;
+		case USB_GEN11:
+			set_vif_field_itss(&vif_fields[Device_Speed],
+				vif_component_name[Device_Speed],
+				USB_GEN11, "USB 3.2 GEN 1x1");
+			break;
+		case USB_GEN21:
+			set_vif_field_itss(&vif_fields[Device_Speed],
+				vif_component_name[Device_Speed],
+				USB_GEN21, "USB 3.2 GEN 2x1");
+			break;
+		case USB_GEN12:
+			set_vif_field_itss(&vif_fields[Device_Speed],
+				vif_component_name[Device_Speed],
+				USB_GEN12, "USB 3.2 GEN 1x2");
+			break;
+		case USB_GEN22:
+			set_vif_field_itss(&vif_fields[Device_Speed],
+				vif_component_name[Device_Speed],
+				USB_GEN22, "USB 3.2 GEN 2x2");
+			break;
+		}
 	}
 }
 
@@ -3053,47 +3204,54 @@ static void init_vif_component_usb_data_ufp_fields(
 static void init_vif_component_usb_data_dfp_fields(
 			struct vif_field_t *vif_fields)
 {
-	int ds = USB_2;
+	/*
+	 * TOTO(b:172438944) Adjust the speed based on CONFIG_
+	 */
+	enum usb_speed ds = USB_GEN11;
+	bool supports_usb_data;
 
-	switch (ds) {
-	case USB_2:
-		set_vif_field_itss(&vif_fields[Host_Speed],
-			vif_component_name[Host_Speed],
-			USB_2, "USB 2");
-		break;
-	case USB_GEN11:
-		set_vif_field_itss(&vif_fields[Host_Speed],
-			vif_component_name[Host_Speed],
-			USB_GEN11, "USB 3.2 GEN 1x1");
-		break;
-	case USB_GEN21:
-		set_vif_field_itss(&vif_fields[Host_Speed],
-			vif_component_name[Host_Speed],
-			USB_GEN21, "USB 3.2 GEN 2x1");
-		break;
-	case USB_GEN12:
-		set_vif_field_itss(&vif_fields[Host_Speed],
-			vif_component_name[Host_Speed],
-			USB_GEN12, "USB 3.2 GEN 1x2");
-		break;
-	case USB_GEN22:
-		set_vif_field_itss(&vif_fields[Host_Speed],
-			vif_component_name[Host_Speed],
-			USB_GEN22, "USB 3.2 GEN 2x2");
-		break;
-	default:
-		set_vif_field_itss(&vif_fields[Host_Speed],
-			vif_component_name[Host_Speed],
-			ds, NULL);
+	if (!get_vif_field_tag_bool(
+			&vif_fields[Host_Supports_USB_Data],
+			&supports_usb_data))
+		supports_usb_data = false;
+
+	if (supports_usb_data) {
+		switch (ds) {
+		case USB_2:
+			set_vif_field_itss(&vif_fields[Host_Speed],
+				vif_component_name[Host_Speed],
+				USB_2, "USB 2");
+			break;
+		case USB_GEN11:
+			set_vif_field_itss(&vif_fields[Host_Speed],
+				vif_component_name[Host_Speed],
+				USB_GEN11, "USB 3.2 GEN 1x1");
+			break;
+		case USB_GEN21:
+			set_vif_field_itss(&vif_fields[Host_Speed],
+				vif_component_name[Host_Speed],
+				USB_GEN21, "USB 3.2 GEN 2x1");
+			break;
+		case USB_GEN12:
+			set_vif_field_itss(&vif_fields[Host_Speed],
+				vif_component_name[Host_Speed],
+				USB_GEN12, "USB 3.2 GEN 1x2");
+			break;
+		case USB_GEN22:
+			set_vif_field_itss(&vif_fields[Host_Speed],
+				vif_component_name[Host_Speed],
+				USB_GEN22, "USB 3.2 GEN 2x2");
+			break;
+		}
+
+		set_vif_field_b(&vif_fields[Host_Contains_Captive_Retimer],
+			vif_component_name[Host_Contains_Captive_Retimer],
+			false);
+
+		set_vif_field_b(&vif_fields[Host_Is_Embedded],
+			vif_component_name[Host_Is_Embedded],
+			false);
 	}
-
-	set_vif_field_b(&vif_fields[Host_Contains_Captive_Retimer],
-		vif_component_name[Host_Contains_Captive_Retimer],
-		false);
-
-	set_vif_field_b(&vif_fields[Host_Is_Embedded],
-		vif_component_name[Host_Is_Embedded],
-		false);
 }
 
 /*********************************************************************
@@ -3304,14 +3462,9 @@ static void init_vif_component_pd_dual_role_fields(
  * Fields that are not currently being initialized
  *
  * vif_Component
- *	Data_Capable_As_USB_Host_SOP		booleanFieldType
- *	Data_Capable_As_USB_Device_SOP		booleanFieldType
  *	Product_Type_UFP_SOP			numericFieldType
  *	Product_Type_DFP_SOP			numericFieldType
- *	DFP_VDO_Port_Number			numericFieldType
  *	Modal_Operation_Supported_SOP		booleanFieldType
- *	USB_VID_SOP				numericFieldType
- *	bcdDevice_SOP				numericFieldType
  *	Num_SVIDs_Min_SOP			numericFieldType
  *	Num_SVIDs_Max_SOP			numericFieldType
  *	SVID_Fixed_SOP				booleanFieldType
@@ -3321,10 +3474,47 @@ static void init_vif_component_sop_discovery_fields(
 {
 	char hex_str[10];
 
+	/*
+	 * The fields in this section shall be ignored by Testers unless at
+	 * least one of Responds_To_Discov_SOP_UFP and
+	 * Responds_To_Discov_SOP_DFP is set to YES.
+	 */
+	if (!does_respond_to_discov_sop_ufp() &&
+	    !does_respond_to_discov_sop_dfp())
+		return;
+
 	set_vif_field(&vif_fields[XID_SOP],
 		vif_component_name[XID_SOP],
 		"0",
 		NULL);
+
+	set_vif_field_b(&vif_fields[Data_Capable_As_USB_Host_SOP],
+		vif_component_name[Data_Capable_As_USB_Host_SOP],
+		can_act_as_host());
+
+	set_vif_field_b(&vif_fields[Data_Capable_As_USB_Device_SOP],
+		vif_component_name[Data_Capable_As_USB_Device_SOP],
+		can_act_as_device());
+
+	if (does_respond_to_discov_sop_dfp() &&
+	    is_usb4_supported()) {
+#if defined(CONFIG_USB_PD_PORT_LABEL)
+		set_vif_field_stis(&vif_fields[DFP_VDO_Port_Number],
+			vif_component_name[DFP_VDO_Port_Number],
+			NULL,
+			CONFIG_USB_PD_PORT_LABEL);
+#else
+		set_vif_field_stis(&vif_fields[DFP_VDO_Port_Number],
+			vif_component_name[DFP_VDO_Port_Number],
+			NULL,
+			component_index);
+#endif
+	}
+
+	sprintf(hex_str, "%04X", USB_VID_GOOGLE);
+	set_vif_field_itss(&vif_fields[USB_VID_SOP],
+		vif_component_name[USB_VID_SOP],
+		USB_VID_GOOGLE, hex_str);
 
 	#if defined(CONFIG_USB_PID)
 		sprintf(hex_str, "%04X", CONFIG_USB_PID);
@@ -3336,6 +3526,18 @@ static void init_vif_component_sop_discovery_fields(
 		set_vif_field_itss(&vif_fields[PID_SOP],
 			vif_component_name[PID_SOP],
 			DEFAULT_MISSING_PID, hex_str);
+	#endif
+
+	#if defined(CONFIG_USB_BCD_DEV)
+		sprintf(hex_str, "%04X", CONFIG_USB_BCD_DEV);
+		set_vif_field_itss(&vif_fields[bcdDevice_SOP],
+			vif_component_name[bcdDevice_SOP],
+			CONFIG_USB_BCD_DEV, hex_str);
+	#else
+		sprintf(hex_str, "%04X", DEFAULT_MISSING_BCD_DEV);
+		set_vif_field_itss(&vif_fields[bcdDevice_SOP],
+			vif_component_name[bcdDevice_SOP],
+			DEFAULT_MISSING_BCD_DEV, hex_str);
 	#endif
 }
 
@@ -3389,63 +3591,7 @@ static void init_vif_component_product_power_fields(
 static int gen_vif(const char *board,
 		   struct vif_t *vif)
 {
-	int override_value;
-	bool was_overridden;
-	enum dtype type;
-	int32_t src_max_power = 0;
-	enum bc_1_2_support bc_support = BC_1_2_SUPPORT_NONE;
-
-	/* Determine if we are DRP, SRC or SNK */
-	was_overridden = get_vif_field_tag_number(
-				&vif->Component[0]
-					.vif_field[Type_C_State_Machine],
-				&override_value);
-	if (was_overridden) {
-		switch (override_value) {
-		case SRC:
-		case SNK:
-		case DRP:
-			type = (enum dtype)override_value;
-			break;
-		default:
-			was_overridden = false;
-		}
-	}
-	if (!was_overridden) {
-		was_overridden = get_vif_field_tag_number(
-					&vif->Component[0]
-						.vif_field[PD_Port_Type],
-					&override_value);
-		if (was_overridden) {
-			switch (override_value) {
-			case PORT_CONSUMER_ONLY:	/* SNK */
-				type = SNK;
-				break;
-			case PORT_PROVIDER_ONLY:	/* SRC */
-				type = SRC;
-				break;
-			case PORT_DRP:			/* DRP */
-				type = DRP;
-				break;
-			default:
-				was_overridden = false;
-			}
-		}
-	}
-	if (!was_overridden) {
-		if (is_drp())
-			type = DRP;
-		else if (is_src() && is_snk())
-			/* No DRP with SRC and SNK PDOs detected. So ignore. */
-			/* ie. Twinkie or Plankton */
-			return 0;
-		else if (is_src())
-			type = SRC;
-		else if (is_snk())
-			type = SNK;
-		else
-			return 1;
-	}
+	int max_component_index = board_get_usb_pd_port_count();
 
 	/*********************************************************************
 	 * Initialize the vif structure
@@ -3458,56 +3604,123 @@ static int gen_vif(const char *board,
 	init_vif_product_fields(
 			vif->Product.vif_field);
 
-	init_vif_component_fields(
-			vif->Component[0].vif_field,
-			&bc_support,
-			type);
+	for (component_index = 0;
+	     component_index < max_component_index;
+	     component_index++) {
+		int override_value;
+		bool was_overridden;
+		enum dtype type;
+		int32_t src_max_power = 0;
+		enum bc_1_2_support bc_support = BC_1_2_SUPPORT_NONE;
 
-	init_vif_component_general_pd_fields(
-			vif->Component[0].vif_field,
-			type);
+		/* Determine if we are DRP, SRC or SNK */
+		was_overridden =
+			get_vif_field_tag_number(
+				&vif->Component[component_index]
+					.vif_field[Type_C_State_Machine],
+				&override_value);
+		if (was_overridden) {
+			switch (override_value) {
+			case SRC:
+			case SNK:
+			case DRP:
+				type = (enum dtype)override_value;
+				break;
+			default:
+				was_overridden = false;
+			}
+		}
+		if (!was_overridden) {
+			was_overridden =
+				get_vif_field_tag_number(
+					&vif->Component[component_index]
+						.vif_field[PD_Port_Type],
+					&override_value);
+			if (was_overridden) {
+				switch (override_value) {
+				case PORT_CONSUMER_ONLY:	/* SNK */
+					type = SNK;
+					break;
+				case PORT_PROVIDER_ONLY:	/* SRC */
+					type = SRC;
+					break;
+				case PORT_DRP:			/* DRP */
+					type = DRP;
+					break;
+				default:
+					was_overridden = false;
+				}
+			}
+		}
+		if (!was_overridden) {
+			if (is_drp())
+				type = DRP;
+			else if (is_src() && is_snk())
+				/*
+				 * No DRP with SRC and SNK PDOs detected. So
+				 * ignore.  ie. Twinkie or Plankton
+				 */
+				return 0;
+			else if (is_src())
+				type = SRC;
+			else if (is_snk())
+				type = SNK;
+			else
+				return 1;
+		}
 
-	init_vif_component_sop_capabilities_fields(
-			vif->Component[0].vif_field);
 
-	init_vif_component_usb_type_c_fields(
-			vif->Component[0].vif_field,
-			type);
+		init_vif_component_fields(
+				vif->Component[component_index].vif_field,
+				&bc_support,
+				type);
 
-	init_vif_component_usb_data_ufp_fields(
-			vif->Component[0].vif_field);
+		init_vif_component_general_pd_fields(
+				vif->Component[component_index].vif_field,
+				type);
 
-	init_vif_component_usb_data_dfp_fields(
-			vif->Component[0].vif_field);
+		init_vif_component_sop_capabilities_fields(
+				vif->Component[component_index].vif_field);
 
-	if (init_vif_component_pd_source_fields(
-			vif->Component[0].vif_field,
-			vif->Component[0].SrcPdoList,
-			&src_max_power,
-			type))
-		return 1;
+		init_vif_component_usb_type_c_fields(
+				vif->Component[component_index].vif_field,
+				type);
 
-	if (init_vif_component_pd_sink_fields(
-			vif->Component[0].vif_field,
-			vif->Component[0].SnkPdoList,
-			type))
-		return 1;
+		init_vif_component_usb_data_ufp_fields(
+				vif->Component[component_index].vif_field);
 
-	init_vif_component_pd_dual_role_fields(
-			vif->Component[0].vif_field,
-			type);
+		init_vif_component_usb_data_dfp_fields(
+				vif->Component[component_index].vif_field);
 
-	init_vif_component_sop_discovery_fields(
-			vif->Component[0].vif_field);
+		if (init_vif_component_pd_source_fields(
+				vif->Component[component_index].vif_field,
+				vif->Component[component_index].SrcPdoList,
+				&src_max_power,
+				type))
+			return 1;
 
-	init_vif_component_bc_1_2_fields(
-			vif->Component[0].vif_field,
-			bc_support);
+		if (init_vif_component_pd_sink_fields(
+				vif->Component[component_index].vif_field,
+				vif->Component[component_index].SnkPdoList,
+				type))
+			return 1;
 
-	init_vif_component_product_power_fields(
-			vif->Component[0].vif_field,
-			src_max_power,
-			type);
+		init_vif_component_pd_dual_role_fields(
+				vif->Component[component_index].vif_field,
+				type);
+
+		init_vif_component_sop_discovery_fields(
+				vif->Component[component_index].vif_field);
+
+		init_vif_component_bc_1_2_fields(
+				vif->Component[component_index].vif_field,
+				bc_support);
+
+		init_vif_component_product_power_fields(
+				vif->Component[component_index].vif_field,
+				src_max_power,
+				type);
+	}
 
 	return 0;
 }

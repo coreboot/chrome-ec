@@ -182,11 +182,23 @@
 #define N_DISCOVER_IDENTITY_COUNT 6
 
 /*
- * tDiscoverIdentity is only defined while an explicit contract is in place.
- * To support captive cable devices that power the SOP' responder from VBUS
- * instead of VCONN stretch out the SOP' Discover Identity messages when
- * no contract is present. 200 ms provides about 1 second for the cable
- * to power up (200 * 5 retries).
+ * It is permitted to send SOP' Discover Identity messages before a PD contract
+ * is in place. However, this is only beneficial if the cable powers up quickly
+ * solely from VCONN. Limit the number of retries without a contract to
+ * ensure we attempt some cable discovery after a contract is in place.
+ */
+#define N_DISCOVER_IDENTITY_PRECONTRACT_LIMIT	2
+
+/*
+ * Once this limit of SOP' Discover Identity messages has been set, downgrade
+ * to PD 2.0 in case the cable is non-compliant about GoodCRC-ing higher
+ * revisions.  This limit should be higher than the precontract limit.
+ */
+#define N_DISCOVER_IDENTITY_PD3_0_LIMIT		4
+
+/*
+ * tDiscoverIdentity is only defined while an explicit contract is in place, so
+ * extend the interval between retries pre-contract.
  */
 #define PE_T_DISCOVER_IDENTITY_NO_CONTRACT	(200*MSEC)
 
@@ -915,6 +927,7 @@ void pe_message_received(int port)
 	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
 
 	PE_SET_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 void pe_hard_reset_sent(int port)
@@ -954,7 +967,7 @@ void pe_got_hard_reset(int port)
 void pd_got_frs_signal(int port)
 {
 	PE_SET_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_SIGNALED);
-	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 /*
@@ -1048,6 +1061,48 @@ const uint32_t * const pd_get_snk_caps(int port)
 uint8_t pd_get_snk_cap_cnt(int port)
 {
 	return pe[port].snk_cap_cnt;
+}
+
+/*
+ * Evaluate a sink PDO for reported FRS support on the given port.
+ *
+ * If the requirements in the PDO are compatible with what we can supply,
+ * FRS will be enabled on the port. If the provided PDO does not specify
+ * FRS requirements (because it is not a fixed PDO) or PD 3.0 and FRS support
+ * are not enabled, do nothing.
+ */
+__maybe_unused static void pe_evaluate_frs_snk_pdo(int port, uint32_t pdo)
+{
+	if (!(IS_ENABLED(CONFIG_USB_PD_REV30) && IS_ENABLED(CONFIG_USB_PD_FRS)))
+		return;
+
+	if ((pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED) {
+		/*
+		 * PDO must be a fixed supply: either the caller chose the
+		 * wrong PDO or the partner is not compliant.
+		 */
+		CPRINTS("C%d: Sink PDO %x is not a fixed supply,"
+			" cannot support FRS", port, pdo);
+		return;
+	}
+	/*
+	 * TODO(b/14191267): Make sure we can handle the required current
+	 * before we enable FRS.
+	 */
+	if ((pdo & PDO_FIXED_DUAL_ROLE)) {
+		switch (pdo & PDO_FIXED_FRS_CURR_MASK) {
+		case PDO_FIXED_FRS_CURR_NOT_SUPPORTED:
+			break;
+		case PDO_FIXED_FRS_CURR_DFLT_USB_POWER:
+		case PDO_FIXED_FRS_CURR_1A5_AT_5V:
+		case PDO_FIXED_FRS_CURR_3A0_AT_5V:
+			CPRINTS("C%d: Partner FRS is OK: enabling PE support",
+				port);
+			typec_set_source_current_limit(port, TYPEC_RP_3A0);
+			pe_set_frs_enable(port, 1);
+			break;
+		}
+	}
 }
 
 /*
@@ -1170,6 +1225,7 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 				get_state_pe(port) == PE_VCS_SEND_PS_RDY_SWAP)
 			) {
 		PE_SET_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		task_wake(PD_PORT_TO_TASK_ID(port));
 		return;
 	}
 
@@ -1177,14 +1233,23 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 	 * See section 8.3.3.4.1.1 PE_SRC_Send_Soft_Reset State:
 	 *
 	 * The PE_Send_Soft_Reset state shall be entered from
-	 * any state when a Protocol Error is detected by
-	 * Protocol Layer during a Non-Interruptible AMS or when
-	 * Message has not been sent after retries. When an explicit
-	 * contract is not in effect.  Otherwise go to PE_Snk/Src_Ready
+	 * any state when
+	 * * A Protocol Error is detected by Protocol Layer during a
+	 *   Non-Interruptible AMS or
+	 * * A message has not been sent after retries or
+	 * * When not in an explicit contract and
+	 *   * Protocol Errors occurred on SOP during an Interruptible AMS or
+	 *   * Protocol Errors occurred on SOP during any AMS where the first
+	 *     Message in the sequence has not yet been sent i.e. an unexpected
+	 *     Message is received instead of the expected GoodCRC Message
+	 *     response.
 	 */
-	if (!PE_CHK_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT) &&
-			(!PE_CHK_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS)
-			 || (e == ERR_TCH_XMIT))) {
+	/* All error types besides transmit errors are Protocol Errors. */
+	if ((e != ERR_TCH_XMIT &&
+				!PE_CHK_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS))
+			|| e == ERR_TCH_XMIT
+			|| (!PE_CHK_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT) &&
+				type == TCPC_TX_SOP)) {
 		pe_send_soft_reset(port, type);
 	}
 	/*
@@ -1206,6 +1271,58 @@ void pe_got_soft_reset(int port)
 	 * Soft_Reset Message is received from the Protocol Layer.
 	 */
 	set_state_pe(port, PE_SOFT_RESET);
+}
+
+static bool pd_can_source_from_device(const int pdo_cnt, const uint32_t *pdos)
+{
+	/* Don't attempt to source from a device we have no SrcCaps from */
+	if (pdo_cnt == 0)
+		return false;
+
+	/*
+	 * Treat device as a dedicated charger (meaning we should charge
+	 * from it) if:
+	 *   - it does not support power swap, or
+	 *   - it is unconstrained power, or
+	 *   - it presents at least 27 W of available power
+	 */
+
+	/* Unconstrained Power or NOT Dual Role Power we can charge from */
+	if (pdos[0] & PDO_FIXED_UNCONSTRAINED ||
+	    (pdos[0] & PDO_FIXED_DUAL_ROLE) == 0)
+		return true;
+
+	/* [virtual] allow_list */
+	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
+		uint32_t max_ma, max_mv, max_pdo, max_mw;
+
+		/*
+		 * Get max power that the partner offers (not necessarily what
+		 * this board will request)
+		 */
+		pd_find_pdo_index(pdo_cnt, pdos,
+				  PD_REV3_MAX_VOLTAGE,
+				  &max_pdo);
+		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv);
+		max_mw = max_ma * max_mv / 1000;
+
+		if (max_mw >= PD_DRP_CHARGE_POWER_MIN)
+			return true;
+	}
+	return false;
+}
+
+void pd_resume_check_pr_swap_needed(int port)
+{
+	/*
+	 * Explicit contract, current power role of SNK and the device
+	 * indicates it should not power us then trigger a PR_Swap
+	 */
+	if (pe_is_explicit_contract(port) &&
+	    pd_get_power_role(port) == PD_ROLE_SINK &&
+	    !pd_can_source_from_device(pd_get_src_cap_cnt(port),
+				       pd_get_src_caps(port)))
+		pd_dpm_request(port, DPM_REQUEST_PR_SWAP);
 }
 
 void pd_dpm_request(int port, enum pd_dpm_request req)
@@ -1235,6 +1352,7 @@ void pe_message_sent(int port)
 	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
 
 	PE_SET_FLAG(port, PE_FLAGS_TX_COMPLETE);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 void pd_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
@@ -1482,28 +1600,8 @@ static void pe_update_src_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 	else
 		tc_partner_dr_data(port, 0);
 
-	/*
-	 * Treat device as a dedicated charger (meaning we should charge
-	 * from it) if:
-	 *   - it does not support power swap, or
-	 *   - it is unconstrained power, or
-	 *   - it presents at least 27 W of available power
-	 */
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		uint32_t max_ma, max_mv, max_pdo, max_mw;
-
-		/*
-		 * Get max power that the partner offers (not necessarily what
-		 * this board will request)
-		 */
-		pd_find_pdo_index(pdo_cnt, pdos, PD_REV3_MAX_VOLTAGE,
-				  &max_pdo);
-		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv);
-		max_mw = max_ma*max_mv/1000;
-
-		if (!(pdos[0] & PDO_FIXED_DUAL_ROLE) ||
-		    (pdos[0] & PDO_FIXED_UNCONSTRAINED) ||
-		    max_mw >= PD_DRP_CHARGE_POWER_MIN) {
+		if (pd_can_source_from_device(pdo_cnt, pdos)) {
 			PE_CLR_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
 			charge_manager_update_dualrole(port, CAP_DEDICATED);
 		} else {
@@ -1911,7 +2009,9 @@ static void pe_src_discovery_run(int port)
 	 */
 	if (pd_get_identity_discovery(port, TCPC_TX_SOP_PRIME) == PD_DISC_NEEDED
 			&& get_time().val > pe[port].discover_identity_timer
-			&& pe_can_send_sop_prime(port)) {
+			&& pe_can_send_sop_prime(port)
+			&& (pe[port].discover_identity_counter <
+				N_DISCOVER_IDENTITY_PRECONTRACT_LIMIT)) {
 		pe[port].tx_type = TCPC_TX_SOP_PRIME;
 		set_state_pe(port, PE_VDM_IDENTITY_REQUEST_CBL);
 		return;
@@ -2174,7 +2274,6 @@ static void pe_src_transition_supply_run(int port)
 
 		if (PE_CHK_FLAG(port, PE_FLAGS_PS_READY)) {
 			PE_CLR_FLAG(port, PE_FLAGS_PS_READY);
-			/* NOTE: Second pass through this code block */
 
 			/*
 			 * Set first message flag to trigger a wait and add
@@ -2184,6 +2283,7 @@ static void pe_src_transition_supply_run(int port)
 			if (!pe_is_explicit_contract(port))
 				PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
 
+			/* NOTE: Second pass through this code block */
 			/* Explicit Contract is now in place */
 			pe_set_explicit_contract(port);
 
@@ -2708,10 +2808,7 @@ static void pe_snk_startup_entry(int port)
 		PE_SET_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP);
 		PE_SET_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
 
-		/*
-		 * Set up to get Device Policy Manager to
-		 * request Sink Capabilities
-		 */
+		/* Opportunistically request sink caps for FRS evaluation. */
 		pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
 	}
 }
@@ -3059,6 +3156,40 @@ static void pe_snk_ready_entry(int port)
 				get_time().val + PD_T_SINK_REQUEST;
 	} else {
 		pe[port].sink_request_timer = TIMER_DISABLED;
+	}
+
+	/*
+	 * If port partner sink capabilities are known (because we requested
+	 * and got them earlier), evaluate them for FRS support and enable
+	 * if appropriate. If not known, request that we get them through DPM
+	 * which will eventually come back here with known capabilities. Don't
+	 * do anything if FRS is already enabled.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_FRS) &&
+	    !PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_ENABLED)) {
+		if (pd_get_snk_cap_cnt(port) > 0) {
+			/*
+			 * Have partner sink caps. FRS support is only specified
+			 * in fixed PDOs, and "the vSafe5V Fixed Supply Object
+			 * Shall always be the first object" in a capabilities
+			 * message so take the first one.
+			 */
+			const uint32_t *snk_caps = pd_get_snk_caps(port);
+
+			pe_evaluate_frs_snk_pdo(port, snk_caps[0]);
+		} else {
+			/*
+			 * Don't have caps; request them. A sink port "shall
+			 * minimally offer one Power Data Object," so a
+			 * compliant partner that supports sink operation will
+			 * never fail to return sink capabilities in a way which
+			 * would cause us to endlessly request them. Non-DRPs
+			 * will never support FRS and may not support sink
+			 * operation, so avoid requesting caps from them.
+			 */
+			if (pd_is_port_partner_dualrole(port))
+				pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
+		}
 	}
 
 	/*
@@ -4085,10 +4216,6 @@ static void pe_prs_src_snk_wait_source_on_entry(int port)
 
 static void pe_prs_src_snk_wait_source_on_run(int port)
 {
-	int type;
-	int cnt;
-	int ext;
-
 	if (pe[port].ps_source_timer == TIMER_DISABLED &&
 			PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
@@ -4103,20 +4230,28 @@ static void pe_prs_src_snk_wait_source_on_run(int port)
 	 *   1) A PS_RDY Message is received.
 	 */
 	if (pe[port].ps_source_timer != TIMER_DISABLED &&
-			PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
-		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+	    PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
+		int type = PD_HEADER_TYPE(rx_emsg[port].header);
+		int cnt = PD_HEADER_CNT(rx_emsg[port].header);
+		int ext = PD_HEADER_EXT(rx_emsg[port].header);
 
-		type = PD_HEADER_TYPE(rx_emsg[port].header);
-		cnt = PD_HEADER_CNT(rx_emsg[port].header);
-		ext = PD_HEADER_EXT(rx_emsg[port].header);
+		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
 
 		if ((ext == 0) && (cnt == 0) && (type == PD_CTRL_PS_RDY)) {
 			pe[port].ps_source_timer = TIMER_DISABLED;
 
 			PE_SET_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE);
 			set_state_pe(port, PE_SNK_STARTUP);
-			return;
+		} else {
+			int sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
+			/*
+			 * USB PD 3.0 6.8.1:
+			 * Receiving an unexpected message shall be responded
+			 * to with a soft reset message.
+			 */
+			pe_send_soft_reset(port, sop);
 		}
+		return;
 	}
 
 	/*
@@ -5029,10 +5164,10 @@ static void pe_vdm_identity_request_cbl_exit(int port)
 		pd_set_identity_discovery(port, pe[port].tx_type,
 				PD_DISC_FAIL);
 	else if (pe[port].discover_identity_counter ==
-					(N_DISCOVER_IDENTITY_COUNT / 2))
+			N_DISCOVER_IDENTITY_PD3_0_LIMIT)
 		/*
-		 * Downgrade to PD 2.0 if the partner hasn't replied halfway
-		 * through discovery as well, in case the cable is
+		 * Downgrade to PD 2.0 if the partner hasn't replied before
+		 * all retries are exhausted in case the cable is
 		 * non-compliant about GoodCRC-ing higher revisions
 		 */
 		prl_set_rev(port, TCPC_TX_SOP_PRIME, PD_REV20);
@@ -6116,7 +6251,6 @@ static void pe_dr_get_sink_cap_run(int port)
 	int type;
 	int cnt;
 	int ext;
-	int rev;
 	enum pe_msg_check msg_check;
 	enum tcpm_transmit_type sop;
 
@@ -6126,8 +6260,6 @@ static void pe_dr_get_sink_cap_run(int port)
 	msg_check = pe_sender_response_msg_run(port);
 
 	/*
-	 * Determine if FRS is possible based on the returned Sink Caps
-	 *
 	 * Transition to PE_[SRC,SNK]_Ready when:
 	 *   1) A Sink_Capabilities Message is received
 	 *   2) Or SenderResponseTimer times out
@@ -6143,7 +6275,6 @@ static void pe_dr_get_sink_cap_run(int port)
 		type = PD_HEADER_TYPE(rx_emsg[port].header);
 		cnt = PD_HEADER_CNT(rx_emsg[port].header);
 		ext = PD_HEADER_EXT(rx_emsg[port].header);
-		rev = PD_HEADER_REV(rx_emsg[port].header);
 		sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
 
 		if (ext == 0 && sop == TCPC_TX_SOP) {
@@ -6154,33 +6285,6 @@ static void pe_dr_get_sink_cap_run(int port)
 							sizeof(uint32_t);
 
 				pe_set_snk_caps(port, cap_cnt, payload);
-
-				/*
-				 * Check message to see if we can handle
-				 * FRS for this connection. Multiple PDOs
-				 * may be returned, for FRS only Fixed PDOs
-				 * shall be used, and this shall be the 1st
-				 * PDO returned.
-				 *
-				 * TODO(b/14191267): Make sure we can handle
-				 * the required current before we enable FRS.
-				 */
-				if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
-					(rev > PD_REV20) &&
-					(payload[0] & PDO_FIXED_DUAL_ROLE)) {
-					switch (payload[0] &
-						PDO_FIXED_FRS_CURR_MASK) {
-					case PDO_FIXED_FRS_CURR_NOT_SUPPORTED:
-						break;
-					case PDO_FIXED_FRS_CURR_DFLT_USB_POWER:
-					case PDO_FIXED_FRS_CURR_1A5_AT_5V:
-					case PDO_FIXED_FRS_CURR_3A0_AT_5V:
-						typec_set_source_current_limit(
-							port, TYPEC_RP_3A0);
-						pe_set_frs_enable(port, 1);
-						break;
-					}
-				}
 				pe_set_ready_state(port);
 				return;
 			} else if (cnt == 0 && (type == PD_CTRL_REJECT ||
@@ -6277,18 +6381,9 @@ static void pe_dr_src_get_source_cap_run(int port)
 				uint32_t *payload =
 					(uint32_t *)rx_emsg[port].buf;
 
-				/*
-				 * Unconstrained power by the partner should
-				 * be enough to request a PR_Swap to use their
-				 * power instead of our battery
-				 */
 				pd_set_src_caps(port, cnt, payload);
-				if (pe[port].src_caps[0] &
-						PDO_FIXED_UNCONSTRAINED) {
-					pe[port].src_snk_pr_swap_counter = 0;
-					PE_SET_DPM_REQUEST(port,
-							DPM_REQUEST_PR_SWAP);
-				}
+				if (pd_can_source_from_device(cnt, payload))
+					pd_request_power_swap(port);
 
 				set_state_pe(port, PE_SRC_READY);
 			} else if (type == PD_CTRL_REJECT ||

@@ -56,6 +56,14 @@ extern "C" {
 #define BIT_ULL(nr)     (1ULL << (nr))
 #endif
 
+#ifndef GENMASK
+#define GENMASK(h, l) (((BIT(h) << 1) - 1) ^ (BIT(l) - 1))
+#endif
+
+#ifndef GENMASK_ULL
+#define GENMASK_ULL(h, l) (((BIT_ULL(h) << 1) - 1) ^ (BIT_ULL(l) - 1))
+#endif
+
 #endif  /* __KERNEL__ */
 
 /*
@@ -6033,12 +6041,20 @@ struct ec_response_locate_chip {
  *
  * This command is used for validation purpose, where the AP needs to be
  * returned back to S0 state from G3 state without using the servo to trigger
- * wake events.For this,there is no request or response struct.
- *
- * Order of command usage:
- * ectool reboot_ap_on_g3 && shutdown -h now
+ * wake events.
+ * - With command version 0:
+ * AP reboots immediately from G3
+ * command usage: ectool reboot_ap_on_g3 && shutdown -h now
+ * - With command version 1:
+ * AP reboots after the user specified delay
+ * command usage: ectool reboot_ap_on_g3 [<delay>] && shutdown -h now
  */
 #define EC_CMD_REBOOT_AP_ON_G3 0x0127
+
+struct ec_params_reboot_ap_on_g3_v1 {
+	/* configurable delay in seconds in G3 state */
+	uint32_t reboot_ap_at_g3_delay;
+} __ec_align4;
 
 /*****************************************************************************/
 /* Get PD port capabilities

@@ -9,6 +9,7 @@
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "common.h"
 #include "extpower.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/accelgyro_bmi_common.h"
@@ -17,13 +18,16 @@
 #include "driver/tcpm/tcpci.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "keyboard_mkbp.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
+#include "peripheral_charger.h"
 #include "pi3usb9201.h"
 #include "power.h"
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
+#include "queue.h"
 #include "system.h"
 #include "shi_chip.h"
 #include "switch.h"
@@ -34,6 +38,8 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
+#define KS_DEBOUNCE_US    (30 * MSEC)  /* Debounce time for kickstand switch */
+
 /* Forward declaration */
 static void tcpc_alert_event(enum gpio_signal signal);
 static void usb0_evt(enum gpio_signal signal);
@@ -43,6 +49,20 @@ static void board_connect_c0_sbu(enum gpio_signal s);
 static void ks_interrupt(enum gpio_signal s);
 
 #include "gpio_list.h"
+
+extern struct pchg_drv ctn730_drv;
+
+struct pchg pchgs[] = {
+	[0] = {
+		.cfg = &(const struct pchg_config) {
+			.drv = &ctn730_drv,
+			.i2c_port = I2C_PORT_WLC,
+			.irq_pin = GPIO_WLC_IRQ_CONN,
+		},
+		.events = QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, enum pchg_event),
+	},
+};
+const int pchg_count = ARRAY_SIZE(pchgs);
 
 /* GPIO Interrupt Handlers */
 static void tcpc_alert_event(enum gpio_signal signal)
@@ -102,9 +122,58 @@ static void board_connect_c0_sbu(enum gpio_signal s)
 	hook_call_deferred(&board_connect_c0_sbu_deferred_data, 0);
 }
 
+static int debounced_ks_attached;
+static int debounced_ks_open;
+
+/**
+ * Kickstand switch initialization
+ */
+static void ks_init(void)
+{
+	debounced_ks_attached = !gpio_get_level(GPIO_KS_ATTACHED_L);
+	debounced_ks_open = gpio_get_level(GPIO_KS_OPEN);
+
+	/* Enable interrupts, now that we've initialized */
+	gpio_enable_interrupt(GPIO_KS_ATTACHED_L);
+	gpio_enable_interrupt(GPIO_KS_OPEN);
+}
+DECLARE_HOOK(HOOK_INIT, ks_init, HOOK_PRIO_INIT_SWITCH);
+
+/**
+ * Handle debounced kickstand switch changing state.
+ */
+static void ks_change_deferred(void)
+{
+	const int ks_attached = !gpio_get_level(GPIO_KS_ATTACHED_L);
+	const int ks_open = gpio_get_level(GPIO_KS_OPEN);
+	int proximity_detected;
+
+	/* If the switches haven't changed, nothing to do */
+	if (ks_attached == debounced_ks_attached &&
+	    ks_open == debounced_ks_open)
+		return;
+
+	/*
+	 * A heuristic method to use the kickstand position to approach
+	 * the human body proximity.
+	 */
+	proximity_detected = !(ks_attached && ks_open);
+	CPRINTS("ks %s %s -> proximity %s",
+		ks_attached ? "attached" : "detached",
+		ks_open ? "open" : "close",
+		proximity_detected ? "on" : "off");
+
+	debounced_ks_attached = ks_attached;
+	debounced_ks_open = ks_open;
+
+	mkbp_update_switches(EC_MKBP_FRONT_PROXIMITY, proximity_detected);
+}
+DECLARE_DEFERRED(ks_change_deferred);
+
 static void ks_interrupt(enum gpio_signal s)
 {
-	/* TODO(b/168714440): Implement the interrupt */
+	/* Reset kickstand debounce time */
+	hook_call_deferred(&ks_change_deferred_data, KS_DEBOUNCE_US);
 }
 
 /* I2C port map */
@@ -115,7 +184,7 @@ const struct i2c_port_t i2c_ports[] = {
 					  GPIO_EC_I2C_USB_C0_PD_SDA},
 	{"tcpc1",   I2C_PORT_TCPC1, 1000, GPIO_EC_I2C_USB_C1_PD_SCL,
 					  GPIO_EC_I2C_USB_C1_PD_SDA},
-	{"wlc",     I2C_PORT_WLC,   1000, GPIO_EC_I2C_WLC_SCL,
+	{"wlc",     I2C_PORT_WLC,    400, GPIO_EC_I2C_WLC_SCL,
 					  GPIO_EC_I2C_WLC_SDA},
 	{"eeprom",  I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
 					  GPIO_EC_I2C_EEPROM_SDA},
@@ -534,5 +603,27 @@ uint16_t tcpc_get_alert_status(void)
 			status |= PD_STATUS_TCPC_ALERT_1;
 
 	return status;
+}
+
+int battery_get_vendor_param(uint32_t param, uint32_t *value)
+{
+	int rv;
+	uint8_t data[16] = {};
+
+	/* only allow reading 0x70~0x7F, 16 byte data */
+	if (param < 0x70 || param >= 0x80)
+		return EC_ERROR_ACCESS_DENIED;
+
+	rv = sb_read_string(0x70, data, sizeof(data));
+	if (rv)
+		return rv;
+
+	*value = data[param - 0x70];
+	return EC_SUCCESS;
+}
+
+int battery_set_vendor_param(uint32_t param, uint32_t value)
+{
+	return EC_ERROR_UNIMPLEMENTED;
 }
 

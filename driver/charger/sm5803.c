@@ -14,6 +14,7 @@
 #include "i2c.h"
 #include "sm5803.h"
 #include "system.h"
+#include "stdbool.h"
 #include "throttle_ap.h"
 #include "timer.h"
 #include "usb_charge.h"
@@ -62,11 +63,19 @@ struct {
 /* Port to restart charging on */
 static int active_restart_port = CHARGE_PORT_NONE;
 
+/*
+ * If powered from the sub board port, we need to attempt to enable the BFET
+ * before proceeding with charging.
+ */
+static int attempt_bfet_enable;
+
+
 #define CHARGING_FAILURE_MAX_COUNT	5
 #define CHARGING_FAILURE_INTERVAL	MINUTE
 
 static int sm5803_is_sourcing_otg_power(int chgnum, int port);
 static enum ec_error_list sm5803_get_dev_id(int chgnum, int *id);
+static enum ec_error_list sm5803_set_current(int chgnum, int current);
 
 static inline enum ec_error_list chg_read8(int chgnum, int offset, int *value)
 {
@@ -772,6 +781,58 @@ DECLARE_HOOK(HOOK_USB_PD_CONNECT,
 		sm5803_disable_runtime_low_power_mode,
 		HOOK_PRIO_FIRST);
 
+static enum ec_error_list sm5803_enable_linear_charge(int chgnum, bool enable)
+{
+	int rv;
+	int regval;
+	const struct battery_info *batt_info;
+
+	if (enable) {
+		/*
+		 * We need to wait for the BFET enable attempt to complete,
+		 * otherwise we may end up disabling linear charge.
+		 */
+		if (!attempt_bfet_enable)
+			return EC_ERROR_TRY_AGAIN;
+		rv = main_write8(chgnum, 0x1F, 0x1);
+		rv |= test_write8(chgnum, 0x44, 0x20);
+		rv |= main_write8(chgnum, 0x1F, 0);
+
+		/*
+		 * Precharge thresholds have already been set up as a part of
+		 * init, however set fast charge current equal to the precharge
+		 * current in case the battery moves beyond that threshold.
+		 */
+		batt_info = battery_get_info();
+		rv |= sm5803_set_current(CHARGER_PRIMARY,
+					 batt_info->precharge_current);
+
+		/* Enable linear charge mode. */
+		rv |= sm5803_flow1_update(chgnum,
+					  SM5803_FLOW1_LINEAR_CHARGE_EN,
+					 MASK_SET);
+		rv |= chg_read8(chgnum, SM5803_REG_FLOW3, &regval);
+		regval |= BIT(6) | BIT(5) | BIT(4);
+		rv |= chg_write8(chgnum, SM5803_REG_FLOW3, regval);
+	} else {
+		rv = sm5803_flow1_update(chgnum,
+					 SM5803_FLOW1_LINEAR_CHARGE_EN,
+					 MASK_CLR);
+		rv |= sm5803_flow2_update(chgnum,
+					  SM5803_FLOW2_AUTO_ENABLED,
+					  MASK_CLR);
+		rv |= chg_read8(chgnum, SM5803_REG_FLOW3, &regval);
+		regval &= ~(BIT(6) | BIT(5) | BIT(4) |
+			    SM5803_FLOW3_SWITCH_BCK_BST);
+		rv |= chg_write8(chgnum, SM5803_REG_FLOW3, regval);
+		rv |= chg_read8(chgnum, SM5803_REG_SWITCHER_CONF, &regval);
+		regval |= SM5803_SW_BCK_BST_CONF_AUTO;
+		rv |= chg_write8(chgnum, SM5803_REG_SWITCHER_CONF, regval);
+	}
+
+	return rv;
+}
+
 static void sm5803_enable_runtime_low_power_mode(void)
 {
 	enum ec_error_list rv;
@@ -1193,7 +1254,6 @@ static enum ec_error_list sm5803_set_voltage(int chgnum, int voltage)
 {
 	enum ec_error_list rv;
 	int regval;
-	static int attempt_bfet_enable;
 
 	regval = SM5803_VOLTAGE_TO_REG(voltage);
 
@@ -1226,6 +1286,9 @@ static enum ec_error_list sm5803_set_voltage(int chgnum, int voltage)
 			attempt_bfet_enable = 1;
 			sm5803_vbus_sink_enable(chgnum, 1);
 		}
+		/* There's no need to attempt it if the BFET's already on. */
+		if (regval & SM5803_BATFET_ON)
+			attempt_bfet_enable = 1;
 	}
 
 	return rv;
@@ -1267,14 +1330,28 @@ static enum ec_error_list sm5803_get_vbus_voltage(int chgnum, int port,
 	return rv;
 }
 
-static enum ec_error_list sm5803_set_input_current(int chgnum,
-						   int input_current)
+static enum ec_error_list sm5803_set_input_current_limit(int chgnum,
+							 int input_current)
 {
 	int reg;
 
 	reg = SM5803_CURRENT_TO_REG(input_current) & SM5803_CHG_ILIM_RAW;
 
 	return chg_write8(chgnum, SM5803_REG_CHG_ILIM, reg);
+}
+
+static enum ec_error_list sm5803_get_input_current_limit(int chgnum,
+							 int *input_current)
+{
+	int rv;
+	int val;
+
+	rv = chg_read8(chgnum, SM5803_REG_CHG_ILIM, &val);
+	if (rv)
+		return rv;
+
+	*input_current = SM5803_REG_TO_CURRENT(val & SM5803_CHG_ILIM_RAW);
+	return rv;
 }
 
 static enum ec_error_list sm5803_get_input_current(int chgnum,
@@ -1315,6 +1392,21 @@ static enum ec_error_list sm5803_get_option(int chgnum, int *option)
 	control |= reg << 16;
 
 	return rv;
+}
+
+static enum ec_error_list sm5803_is_input_current_limit_reached(int chgnum,
+								bool *reached)
+{
+	enum ec_error_list rv;
+	int reg;
+
+	rv = chg_read8(chgnum, SM5803_REG_LOG2, &reg);
+	if (rv)
+		return rv;
+
+	*reached = (reg & SM5803_ISOLOOP_ON) ? true : false;
+
+	return EC_SUCCESS;
 }
 
 static enum ec_error_list sm5803_set_option(int chgnum, int option)
@@ -1533,7 +1625,7 @@ static int sm5803_ramp_get_current_limit(int chgnum)
 	int rv;
 	int input_current = 0;
 
-	rv = sm5803_get_input_current(chgnum, &input_current);
+	rv = sm5803_get_input_current_limit(chgnum, &input_current);
 
 	return rv ? -1 : input_current;
 }
@@ -1600,7 +1692,8 @@ const struct charger_drv sm5803_drv = {
 	.set_voltage = &sm5803_set_voltage,
 	.discharge_on_ac = &sm5803_discharge_on_ac,
 	.get_vbus_voltage = &sm5803_get_vbus_voltage,
-	.set_input_current = &sm5803_set_input_current,
+	.set_input_current_limit = &sm5803_set_input_current_limit,
+	.get_input_current_limit = &sm5803_get_input_current_limit,
 	.get_input_current = &sm5803_get_input_current,
 	.device_id = &sm5803_get_dev_id,
 	.get_option = &sm5803_get_option,
@@ -1609,6 +1702,8 @@ const struct charger_drv sm5803_drv = {
 	.enable_otg_power = &sm5803_enable_otg_power,
 	.is_sourcing_otg_power = &sm5803_is_sourcing_otg_power,
 	.set_vsys_compensation = &sm5803_set_vsys_compensation,
+	.is_icl_reached = &sm5803_is_input_current_limit_reached,
+	.enable_linear_charge = &sm5803_enable_linear_charge,
 #ifdef CONFIG_CHARGE_RAMP_HW
 	.set_hw_ramp = &sm5803_set_hw_ramp,
 	.ramp_is_stable = &sm5803_ramp_is_stable,

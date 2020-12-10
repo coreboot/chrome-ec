@@ -14,7 +14,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
-#include "intel_x86.h"
+#include "power/intel_x86.h"
 #include "system.h"
 #include "usb_pd.h"
 
@@ -213,22 +213,28 @@ void baseboard_all_sys_pgood_interrupt(enum gpio_signal signal)
 
 void baseboard_chipset_startup(void)
 {
+#ifdef CONFIG_PWM_KBLIGHT
 	/* Allow keyboard backlight to be enabled */
 	gpio_set_level(GPIO_EN_KB_BL, 1);
+#endif
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, baseboard_chipset_startup,
 	     HOOK_PRIO_DEFAULT);
 
 void baseboard_chipset_shutdown(void)
 {
+#ifdef CONFIG_PWM_KBLIGHT
 	/* Turn off the keyboard backlight if it's on. */
 	gpio_set_level(GPIO_EN_KB_BL, 0);
+#endif
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, baseboard_chipset_shutdown,
 	     HOOK_PRIO_DEFAULT);
 
 void board_hibernate_late(void)
 {
+	volatile uint32_t busy = 0;
+
 	/* Disable any pull-ups on C0 and C1 interrupt lines */
 	gpio_set_flags(GPIO_USB_C0_INT_ODL, GPIO_INPUT);
 	gpio_set_flags(GPIO_USB_C1_INT_ODL, GPIO_INPUT);
@@ -238,6 +244,24 @@ void board_hibernate_late(void)
 	 * the EC.
 	 */
 	gpio_set_level(GPIO_EN_SLP_Z, 1);
+
+	/*
+	 * Interrupts are disabled at this point, so busy-loop to consume some
+	 * time (something on the order of at least 1 second, depending on EC
+	 * chip being used)
+	 */
+	while (busy < 100000)
+		busy++;
+
+	/*
+	 * Still awake despite turning on zombie state?  Reset with AP off is
+	 * the best we can do in this situation.
+	 */
+	system_reset(SYSTEM_RESET_LEAVE_AP_OFF);
+
+	/* Await our reset */
+	while (1)
+		;
 }
 
 int board_is_i2c_port_powered(int port)

@@ -429,8 +429,9 @@ static int tcs3400_post_events(struct motion_sensor_t *s, uint32_t last_ts)
 
 	/* if clear channel data changed, send illuminance upstream */
 	last_v = s->raw_xyz;
-	if ((raw_data[CLEAR_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
-	    (last_v[X] != lux)) {
+	if (is_calibration ||
+	    ((raw_data[CLEAR_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
+	     (last_v[X] != lux))) {
 		if (is_spoof(s))
 			last_v[X] = s->spoof_xyz[X];
 		else
@@ -451,11 +452,12 @@ static int tcs3400_post_events(struct motion_sensor_t *s, uint32_t last_ts)
 	 * send it upstream
 	 */
 	last_v = rgb_s->raw_xyz;
-	if (((last_v[X] != xyz_data[X]) || (last_v[Y] != xyz_data[Y]) ||
-		(last_v[Z] != xyz_data[Z])) &&
-		((raw_data[RED_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
-		(raw_data[BLUE_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
-		(raw_data[GREEN_CRGB_IDX] != TCS_SATURATION_LEVEL))) {
+	if (is_calibration ||
+	    (((last_v[X] != xyz_data[X]) || (last_v[Y] != xyz_data[Y]) ||
+	     (last_v[Z] != xyz_data[Z])) &&
+	     ((raw_data[RED_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
+	      (raw_data[BLUE_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
+	      (raw_data[GREEN_CRGB_IDX] != TCS_SATURATION_LEVEL)))) {
 
 		if (is_spoof(rgb_s)) {
 			memcpy(last_v, rgb_s->spoof_xyz, sizeof(rgb_s->spoof_xyz));
@@ -587,11 +589,6 @@ static int tcs3400_rgb_set_offset(const struct motion_sensor_t *s,
 	return EC_SUCCESS;
 }
 
-static int tcs3400_rgb_get_data_rate(const struct motion_sensor_t *s)
-{
-	return 0;
-}
-
 static int tcs3400_rgb_set_data_rate(const struct motion_sensor_t *s,
 				     int rate,
 				     int rnd)
@@ -603,6 +600,13 @@ static int tcs3400_rgb_set_data_rate(const struct motion_sensor_t *s,
 static int tcs3400_perform_calib(struct motion_sensor_t *s, int enable)
 {
 	TCS3400_RGB_DRV_DATA(s+1)->calibration_mode = enable;
+	return EC_SUCCESS;
+}
+
+static int tcs3400_rgb_set_range(struct motion_sensor_t *s,
+				 int range,
+				 int rnd)
+{
 	return EC_SUCCESS;
 }
 
@@ -659,6 +663,11 @@ static int tcs3400_set_offset(const struct motion_sensor_t *s,
 static int tcs3400_get_data_rate(const struct motion_sensor_t *s)
 {
 	return TCS3400_DRV_DATA(s)->rate;
+}
+
+static int tcs3400_rgb_get_data_rate(const struct motion_sensor_t *s)
+{
+	return tcs3400_get_data_rate(s - 1);
 }
 
 static int tcs3400_set_data_rate(const struct motion_sensor_t *s,
@@ -770,6 +779,7 @@ const struct accelgyro_drv tcs3400_drv = {
 const struct accelgyro_drv tcs3400_rgb_drv = {
 	.init = tcs3400_rgb_init,
 	.read = tcs3400_rgb_read,
+	.set_range = tcs3400_rgb_set_range,
 	.set_offset = tcs3400_rgb_set_offset,
 	.get_offset = tcs3400_rgb_get_offset,
 	.set_scale = tcs3400_rgb_set_scale,

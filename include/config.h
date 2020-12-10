@@ -19,13 +19,13 @@
 #define __CROS_EC_CONFIG_H
 
 /*
- * When building for Zephyr, a shimmed_tasks.h header may be defined
+ * When building for Zephyr tests, a shimmed_tasks.h header is defined
  * to create all the HAS_TASK_* definitions.  Since those are used in
  * config.h, we need to include that header first.
  */
-#ifdef CONFIG_SHIMMED_TASKS
+#ifdef CONFIG_ZEPHYR
 #include "shimmed_tasks.h"
-#endif
+#endif /* CONFIG_ZEPHYR */
 
 #ifdef INCLUDE_ENV_CONFIG
 /*
@@ -188,9 +188,6 @@
 
 /* Which sensor body_detection use */
 #undef CONFIG_BODY_DETECTION_SENSOR
-
-/* Support custom setting of body_detection */
-#undef CONFIG_BODY_DETECTION_CUSTOM
 
 /* The max number of sampling data for 1 second */
 #undef CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE
@@ -2503,6 +2500,13 @@
 #undef CONFIG_IT83XX_SMCLK2_ON_GPC7
 
 /*
+ * Enable board to tune cc physical parameters (ex.rising, falling time).
+ * NOTE: board must define board_get_cc_tuning_parameter(enum usbpd_port port)
+ *       function.
+ */
+#undef CONFIG_IT83XX_TUNE_CC_PHY
+
+/*
  * Enable the corresponding config option, according to EC's VCC is connected
  * to 1.8V or 3.3V
  */
@@ -2906,6 +2910,19 @@
 #undef CONFIG_ONLINE_CALIB
 
 /*
+ * Spoof the data for online calibration. When this flag is enabled, every
+ * reading with the flag MOTIONSENSE_FLAG_IN_SPOOF_MODE will be treated as a
+ * new calibration point. This should be used in conjunction with
+ * CONFIG_ACCEL_SPOOF_MODE. To trigger an accelerometer calibration for
+ * example, enable both config flags, connect to the cr50 terminal and run:
+ * $ accelspoof id on X Y Z
+ * This will spoof a reading of (X, Y, Z) from the sensor and treat those
+ * values as the calibration result (bypassing the calibration for the given
+ * sensor ID).
+ */
+#undef CONFIG_ONLINE_CALIB_SPOOF_MODE
+
+/*
  * Duration after which an entry in the temperature cache is considered stale.
  * Defaults to 5 minutes if not set.
  */
@@ -3045,6 +3062,18 @@
  * become unreliable if temperature exceeds this limit.
  */
 #undef CONFIG_PECI_TJMAX
+
+/*
+ * Enable peripheral charge manager (e.g. NFC/WLC, WPC Qi)
+ */
+#undef CONFIG_PERIPHERAL_CHARGER
+
+/*
+ * Enable CTN730 driver
+ *
+ * CTN730 is NXP's NFC/WLC power transmitter (a.k.a. poller).
+ */
+#undef CONFIG_CTN730
 
 /*****************************************************************************/
 /* PMU config */
@@ -4062,8 +4091,8 @@
 #undef CONFIG_USB_PD_IDENTITY_HW_VERS
 #undef CONFIG_USB_PD_IDENTITY_SW_VERS
 
-/* USB PD MCU slave address for host commands */
-#define CONFIG_USB_PD_I2C_SLAVE_ADDR_FLAGS 0x1E
+/* USB PD MCU I2C address for host commands */
+#define CONFIG_USB_PD_I2C_ADDR_FLAGS 0x1E
 
 /* Define if using internal comparator for PD receive */
 #undef CONFIG_USB_PD_INTERNAL_COMP
@@ -4251,6 +4280,9 @@
 #undef CONFIG_USBC_RETIMER_PS8802
 #undef CONFIG_USBC_RETIMER_PS8818
 #undef CONFIG_USBC_RETIMER_TUSB544
+
+/* Enable retimer TUSB544 tune EQ setting by register  */
+#undef CONFIG_TUSB544_EQ_BY_REGISTER
 
 /* Allow run-time configuration of the Burnside Bridge driver structure */
 #undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
@@ -4474,6 +4506,8 @@
 #undef CONFIG_BC12_DETECT_PI3USB9281
 /* Number of Pericom PI3USB9281 chips present in system */
 #undef CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT
+/* The delay in ms from power off to power on for MAX14637 */
+#define CONFIG_BC12_MAX14637_DELAY_FROM_OFF_TO_ON_MS 1
 
 
 /* Enable USB serial console module. */
@@ -4504,8 +4538,14 @@
 /* Support USB HID keyboard backlight. */
 #undef CONFIG_USB_HID_KEYBOARD_BACKLIGHT
 
-/* Support vivaldi compatible HID keyboard */
+/*
+ * Support vivaldi compatible HID keyboard.
+ * If defined, the board must implement a function board_vivaldi_keybd_config(),
+ * and define a macro CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS which is equal to
+ * board_vivaldi_keybd_config()->num_top_row_keys.
+ */
 #undef CONFIG_USB_HID_KEYBOARD_VIVALDI
+#undef CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS
 
 /* Support USB HID touchpad interface. */
 #undef CONFIG_USB_HID_TOUCHPAD
@@ -4934,7 +4974,12 @@
 #define CONFIG_HOST_ESPI_VW_POWER_SIGNAL
 #endif
 
-#if defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && !defined(CONFIG_HOSTCMD_ESPI)
+/*
+ * Note that in Zephyr OS, eSPI can be enabled for virtual wires
+ * without using eSPI for host commands.
+ */
+#if (!defined(CONFIG_ZEPHYR) && defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && \
+     !defined(CONFIG_HOSTCMD_ESPI))
 #error Must enable eSPI to enable virtual wires.
 #endif
 
@@ -5826,16 +5871,29 @@
 #ifndef CONFIG_BODY_DETECTION_SENSOR
 #error CONFIG_BODY_DETECTION_SENSOR must be defined to use body detection
 #endif /* ifndef(CONFIG_BODY_DETECTION_SENSOR) */
-/* Use default setting if CONFIG_BODY_DETECTION_CUSTOM is not set. */
-#ifndef CONFIG_BODY_DETECTION_CUSTOM
+
+#ifndef CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE
 #define CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE     250 /* max sensor odr (Hz) */
+#endif
+#ifndef CONFIG_BODY_DETECTION_VAR_THRESHOLD
 #define CONFIG_BODY_DETECTION_VAR_THRESHOLD       550 /* (mm/s^2)^2 */
+#endif
+#ifndef CONFIG_BODY_DETECTION_CONFIDENCE_DELTA
 #define CONFIG_BODY_DETECTION_CONFIDENCE_DELTA    525 /* (mm/s^2)^2 */
+#endif
+#ifndef CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR
 #define CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR    120 /* % */
+#endif
+#ifndef CONFIG_BODY_DETECTION_ON_BODY_CON
 #define CONFIG_BODY_DETECTION_ON_BODY_CON         50  /* % */
+#endif
+#ifndef CONFIG_BODY_DETECTION_OFF_BODY_CON
 #define CONFIG_BODY_DETECTION_OFF_BODY_CON        10  /* % */
+#endif
+#ifndef CONFIG_BODY_DETECTION_STATIONARY_DURATION
 #define CONFIG_BODY_DETECTION_STATIONARY_DURATION 15  /* second */
-#endif /* ifndef(CONFIG_BODY_DETECTION_CUSTOM) */
+#endif
+
 #else /* CONFIG_BODY_DETECTION */
 #ifdef CONFIG_BODY_DETECTION_SENSOR
 #error "Unexpected body detection property set"

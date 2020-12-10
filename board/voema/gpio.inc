@@ -87,8 +87,8 @@ GPIO(USB_A_LOW_PWR_OD,		PIN(6, 6), GPIO_ODR_LOW)	/* Don't limit USB-A charging b
 GPIO(USB_C1_RT_RST_ODL,		PIN(8, 3), GPIO_ODR_LOW)
 GPIO(USB_C0_OC_ODL,		PIN(B, 1), GPIO_ODR_HIGH)
 GPIO(USB_C1_OC_ODL,		PIN(5, 0), GPIO_ODR_HIGH)
-/* There is currently no need to service this interrupt. */
-GPIO(USB_C1_RT_INT_ODL,		PIN(F, 3), GPIO_INPUT)
+GPIO(USB_C0_FRS_EN,		PIN(6, 0), GPIO_OUT_LOW)
+GPIO(USB_C1_FRS_EN,		PIN(9, 4), GPIO_OUT_LOW)
 
 /* Don't have a load switch for retimer */
 UNIMPLEMENTED(USB_C1_LS_EN)
@@ -103,16 +103,22 @@ GPIO(EC_H1_PACKET_MODE,		PIN(7, 5), GPIO_OUT_LOW)	/* H1 Packet Mode */
 GPIO(M2_SSD_PLN,		PIN(A, 0), GPIO_ODR_HIGH)	/* SSD power-loss notification */
 GPIO(M2_SSD_PLA,		PIN(7, 0), GPIO_INPUT)		/* SSD power-loss acknowledgment */
 GPIO(CCD_MODE_ODL,		PIN(E, 5), GPIO_INPUT)		/* Case Closed Debug Mode */
-GPIO(EC_SLP_S0IX,		PIN(7, 2), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(EC_KB_BL_EN,		PIN(8, 6), GPIO_OUT_LOW)
 
 /* Unused signals */
+GPIO(UNUSED_GPIO72,		PIN(7, 2), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(UNUSED_GPIO41,		PIN(4, 1), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(UNUSED_GPIOF2,		PIN(F, 2), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOF3,		PIN(F, 3), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(UNUSED_GPIO96,		PIN(9, 6), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(UNUSED_GPIO34,		PIN(3, 4), GPIO_INPUT | GPIO_PULL_UP)
-/* Only connected to test points */
-GPIO(EC_KB_BL_EN,		PIN(8, 6), GPIO_INPUT | GPIO_PULL_UP)
-GPIO(EC_ESPI_ALERT_L,		PIN(5, 7), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIO57,		PIN(5, 7), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOC2,		PIN(C, 2), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIO61,		PIN(6, 1), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOB7,		PIN(B, 7), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIO40,		PIN(4, 0), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOD1,		PIN(D, 1), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOD0,		PIN(D, 0), GPIO_INPUT | GPIO_PULL_UP)
 
 /*
  * eDP backlight - both PCH and EC have enable pins that must be high
@@ -128,8 +134,6 @@ GPIO(EC_I2C1_USB_C0_SCL,       PIN(9, 0), GPIO_INPUT)
 GPIO(EC_I2C1_USB_C0_SDA,       PIN(8, 7), GPIO_INPUT)
 GPIO(EC_I2C2_USB_C1_SCL,       PIN(9, 2), GPIO_INPUT)
 GPIO(EC_I2C2_USB_C1_SDA,       PIN(9, 1), GPIO_INPUT)
-GPIO(EC_I2C3_USB_1_MIX_SCL,    PIN(D, 1), GPIO_INPUT)
-GPIO(EC_I2C3_USB_1_MIX_SDA,    PIN(D, 0), GPIO_INPUT)
 GPIO(EC_I2C5_BATTERY_SCL,      PIN(3, 3), GPIO_INPUT)
 GPIO(EC_I2C5_BATTERY_SDA,      PIN(3, 6), GPIO_INPUT)
 GPIO(EC_I2C7_EEPROM_PWR_SCL_R, PIN(B, 3), GPIO_INPUT)
@@ -138,24 +142,16 @@ GPIO(EC_I2C7_EEPROM_PWR_SDA_R, PIN(B, 2), GPIO_INPUT)
 /* Battery signals */
 GPIO(EC_BATT_PRES_ODL, 		PIN(E, 1), GPIO_INPUT)
 
+ /* LED */
+GPIO(LED_1_L,                  PIN(C, 4), GPIO_OUT_HIGH)        /* Blue */
+GPIO(LED_2_L,                  PIN(C, 3), GPIO_OUT_HIGH)        /* Amber */
+
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(B, BIT(5) | BIT(4)), 0, MODULE_I2C, (GPIO_INPUT | GPIO_SEL_1P8V)) /* I2C0 */
 ALTERNATE(PIN_MASK(9, BIT(0) | BIT(2) | BIT(1)), 0, MODULE_I2C, 0)                   /* I2C1 SCL / I2C2 */
 ALTERNATE(PIN_MASK(8, BIT(7)), 0, MODULE_I2C, 0)                                     /* I2C1 SDA */
-ALTERNATE(PIN_MASK(D, BIT(1) | BIT(0)), 0, MODULE_I2C, 0)                            /* I2C3 */
 ALTERNATE(PIN_MASK(3, BIT(3) | BIT(6)), 0, MODULE_I2C, 0)                            /* I2C5 */
 ALTERNATE(PIN_MASK(B, BIT(3) | BIT(2)), 0, MODULE_I2C, 0)                            /* I2C7 */
-
-/* This selects between an LED module on the motherboard and one on the daughter
- * board, to be controlled by LED_{1,2,3}_L. PWM allows driving both modules at
- * the same time. */
-ALTERNATE(PIN_MASK(6, BIT(0)), 0, MODULE_PWM, 0)                                     /* LED_SIDESEL_4_L */
-ALTERNATE(PIN_MASK(C, BIT(2) | BIT(3) | BIT(4)), 0, MODULE_PWM, 0)                   /* LED_{3,2,1}_L */
-
-/* Fan signals */
-GPIO(EN_PP5000_FAN,            PIN(6, 1), GPIO_OUT_LOW)
-ALTERNATE(PIN_MASK(B, BIT(7)), 0, MODULE_PWM, 0)	/* FAN_PWM */
-ALTERNATE(PIN_MASK(4, BIT(0)), 0, MODULE_PWM, 0)	/* FAN_SPEED_TACH */
 
 /* Keyboard pins */
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)

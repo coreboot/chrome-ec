@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/util.h>
 
+#include "chipset.h"
 #include "config.h"
 #include "ec_commands.h"
 #include "sysjump.h"
@@ -32,6 +33,11 @@ struct jump_tag {
 
 /** Jump data (at end of RAM, or preceding panic data). */
 static struct jump_data *jdata;
+
+static enum ec_reboot_cmd reboot_at_shutdown;
+
+STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_seconds;
+STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_microseconds;
 
 /**
  * The flags set by the reset cause. These will be a combination of
@@ -210,6 +216,19 @@ void system_clear_reset_flags(uint32_t flags)
 	reset_flags &= ~flags;
 }
 
+int system_jumped_to_this_image(void)
+{
+	return jumped_to_image;
+}
+
+void system_hibernate(uint32_t seconds, uint32_t microseconds)
+{
+	/*
+	 * TODO(b:173787365): implement this.  For now, doing nothing
+	 * won't break anything, just will eat power.
+	 */
+}
+
 __test_only void system_common_reset_state(void)
 {
 	jdata = 0;
@@ -220,4 +239,30 @@ __test_only void system_common_reset_state(void)
 __test_only void system_override_jdata(void *test_jdata)
 {
 	jdata = (struct jump_data *)test_jdata;
+}
+
+void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
+{
+	if (!IS_ENABLED(CONFIG_HIBERNATE))
+		return;
+
+	/*
+	 * If chipset is already off, then call system_hibernate directly. Else,
+	 * let chipset_task bring down the power rails and transition to proper
+	 * state before system_hibernate is called.
+	 */
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		system_hibernate(seconds, microseconds);
+	} else {
+		reboot_at_shutdown = EC_REBOOT_HIBERNATE;
+		hibernate_seconds = seconds;
+		hibernate_microseconds = microseconds;
+
+		chipset_force_shutdown(CHIPSET_SHUTDOWN_CONSOLE_CMD);
+	}
+}
+
+int system_jumped_late(void)
+{
+	return !(reset_flags & EC_RESET_FLAG_EFS) && jumped_to_image;
 }

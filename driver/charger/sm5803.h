@@ -225,8 +225,8 @@ enum sm5803_charger_modes {
 #define SM5803_REG_CHG_ILIM		0x24
 #define SM5803_CHG_ILIM_RAW		GENMASK(4, 0)
 #define SM5803_CURRENT_STEP		100
-#define SM5803_REG_TO_CURRENT(r)	(r * SM5803_CURRENT_STEP)
-#define SM5803_CURRENT_TO_REG(c)	(c / SM5803_CURRENT_STEP)
+#define SM5803_REG_TO_CURRENT(r)	((r) * SM5803_CURRENT_STEP)
+#define SM5803_CURRENT_TO_REG(c)	((c) / SM5803_CURRENT_STEP)
 
 /*
  * DPM Voltage loop regulation contains the 8 bits with MSB register
@@ -265,8 +265,8 @@ enum sm5803_charger_modes {
 #define SM5803_VOLTAGE_STEP		10
 #define SM5803_VOLTAGE_SHIFT		2720
 #define SM5803_REG_TO_VOLTAGE(r)	(SM5803_VOLTAGE_SHIFT + \
-					 r * SM5803_VOLTAGE_STEP)
-#define SM5803_VOLTAGE_TO_REG(v)	((v - SM5803_VOLTAGE_SHIFT) \
+					 (r) * SM5803_VOLTAGE_STEP)
+#define SM5803_VOLTAGE_TO_REG(v)	(((v) - SM5803_VOLTAGE_SHIFT) \
 					 / SM5803_VOLTAGE_STEP)
 
 /*
@@ -312,6 +312,9 @@ enum sm5803_charger_modes {
 
 #define SM5803_REG_LOG1			0x42
 #define SM5803_BATFET_ON		BIT(2)
+
+#define SM5803_REG_LOG2			0x43
+#define SM5803_ISOLOOP_ON		BIT(1)
 
 #define SM5803_REG_STATUS_CHG_REG	0x48
 #define SM5803_STATUS_CHG_BATT_REMOVAL	BIT(0)

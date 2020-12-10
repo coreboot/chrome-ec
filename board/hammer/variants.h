@@ -28,8 +28,7 @@
 #elif defined(BOARD_WHISKERS)
 #define CONFIG_USB_PID 0x5030
 #elif defined(BOARD_ZED)
-/* TODO: update PID */
-#define CONFIG_USB_PID 0x5022
+#define CONFIG_USB_PID 0x504c
 #else
 #error "Invalid board"
 #endif
@@ -84,6 +83,8 @@
 #define CONFIG_USB_ISOCHRONOUS
 #elif defined(BOARD_ZED)
 #define CONFIG_USB_HID_KEYBOARD_VIVALDI
+#define CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS 10
+
 /* TODO: update correct parameters */
 #define HAS_I2C_TOUCHPAD
 #define CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_X 3207

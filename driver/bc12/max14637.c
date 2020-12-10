@@ -13,7 +13,6 @@
  */
 
 #include "max14637.h"
-#include "cannonlake.h"
 #include "charge_manager.h"
 #include "chipset.h"
 #include "common.h"
@@ -21,6 +20,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "power.h"
+#include "power/cannonlake.h"
 #include "task.h"
 #include "tcpm.h"
 #include "timer.h"
@@ -83,7 +83,7 @@ static void bc12_detect(const int port)
 	 */
 	msleep(100);
 	activate_chip_enable(cfg, 0);
-	msleep(1);
+	msleep(CONFIG_BC12_MAX14637_DELAY_FROM_OFF_TO_ON_MS);
 	activate_chip_enable(cfg, 1);
 
 	new_chg.voltage = USB_CHARGER_VOLTAGE_MV;

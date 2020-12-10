@@ -11,6 +11,12 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+/*
+ * The RAM and flash size combination on the NPCX797FC dose not leave
+ * any unused flash space that can be used to store the .init_rom section.
+ */
+#undef CONFIG_CHIP_INIT_ROM_REGION
+
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
@@ -136,7 +142,7 @@
 #include "registers.h"
 
 enum battery_type {
-	BATTERY_LGC011,
+	BATTERY_C490,
 	BATTERY_TYPE_COUNT,
 };
 

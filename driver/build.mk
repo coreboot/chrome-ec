@@ -83,6 +83,7 @@ driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
 driver-$(CONFIG_IO_EXPANDER_PCA9675)+=ioexpander/pca9675.o
 driver-$(CONFIG_IO_EXPANDER_PCAL6408)+=ioexpander/pcal6408.o
 
+driver-$(CONFIG_CTN730)+=nfc/ctn730.o
 
 # Current/Power monitor
 driver-$(CONFIG_INA219)$(CONFIG_INA231)+=ina2xx.o
@@ -173,6 +174,9 @@ driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8742)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps8743.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
+
+# USB Hub with I2C interface
+driver-$(CONFIG_USB_HUB_GL3590)+=gl3590.o
 
 # Type-C Power Path Controllers (PPC)
 driver-$(CONFIG_USBC_PPC_AOZ1380)+=ppc/aoz1380.o

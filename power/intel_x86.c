@@ -12,9 +12,9 @@
 #include "ec_commands.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "intel_x86.h"
 #include "lpc.h"
 #include "power.h"
+#include "power/intel_x86.h"
 #include "power_button.h"
 #include "system.h"
 #include "task.h"
@@ -388,7 +388,12 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 		/* Enable wireless */
 		wireless_set_state(WIRELESS_ON);
 
-		lpc_s3_resume_clear_masks();
+		/*
+		 * TODO(b/172678200): this function hasn't been
+		 * shimmed to Zephyr yet
+		 */
+		if (!IS_ENABLED(CONFIG_ZEPHYR))
+			lpc_s3_resume_clear_masks();
 
 		/* Call hooks now that rails are up */
 		hook_notify(HOOK_CHIPSET_RESUME);

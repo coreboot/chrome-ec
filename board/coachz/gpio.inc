@@ -28,6 +28,10 @@ GPIO_INT(AP_RST_L,          PIN(C, 1), GPIO_INT_BOTH | GPIO_SEL_1P8V, chipset_ap
 GPIO_INT(PS_HOLD,           PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_DOWN, power_signal_interrupt)  /* Indicate when AP triggers reset/shutdown */
 GPIO_INT(AP_SUSPEND,        PIN(5, 7), GPIO_INT_BOTH, power_signal_interrupt)  /* Suspend signal from PMIC */
 GPIO_INT(DEPRECATED_AP_RST_REQ, PIN(C, 2), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt) /* Deprecated AP initiated reset indicator */
+
+/* WLC interrupt */
+GPIO_INT(WLC_IRQ_CONN, PIN(7, 4), GPIO_INT_RISING, pchg_irq)
+
 /*
  * When switch-cap is off, the POWER_GOOD signal is floating. Need a pull-down
  * to make it low. Overload the interrupt function chipset_warm_reset_interrupt
@@ -72,7 +76,6 @@ GPIO(CAM_LED,               PIN(3, 0), GPIO_INPUT)
 
 /* Stylus */
 /* TODO(b/168652326): Implement the WLC controls */
-GPIO(WLC_IRQ_CONN,          PIN(7, 4), GPIO_INPUT)
 GPIO(WLC_NRST_CONN,         PIN(C, 5), GPIO_INPUT)
 
 /* Base detection */
@@ -84,10 +87,6 @@ GPIO(USB_C1_PD_RST_L,       PIN(E, 4), GPIO_ODR_HIGH)  /* Port-1 TCPC chip reset
 GPIO(DP_MUX_OE_L,           PIN(9, 6), GPIO_ODR_HIGH)  /* DP mux enable, actually Open-Drain */
 GPIO(DP_MUX_SEL,            PIN(4, 5), GPIO_OUT_LOW)   /* DP mux selection: L:C0, H:C1 */
 GPIO(DP_HOT_PLUG_DET,       PIN(9, 5), GPIO_OUT_LOW)   /* DP HPD to AP */
-
-/* USB-A */
-GPIO(EN_USB_A_5V,           PIN(8, 6), GPIO_INPUT)     /* NC, backup only */
-GPIO(USB_A_CDP_ILIM_EN,     PIN(7, 5), GPIO_INPUT)     /* NC, backup only */
 
 /* LEDs */
 GPIO(EC_CHG_LED_Y_C0,       PIN(C, 3), GPIO_OUT_LOW)
@@ -184,6 +183,8 @@ UNUSED(PIN(B, 1))
 UNUSED(PIN(5, 6))
 UNUSED(PIN(8, 0))
 UNUSED(PIN(D, 3))
+UNUSED(PIN(7, 5))
+UNUSED(PIN(8, 6))
 
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)            /* UART (GPIO64/65) */

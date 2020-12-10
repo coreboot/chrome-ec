@@ -11,6 +11,14 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+#ifndef BOARD_DELBIN_NPCX796FC
+/*
+ * The RAM and flash size combination on the NPCX797FC dose not leave
+ * any unused flash space that can be used to store the .init_rom section.
+ */
+#undef CONFIG_CHIP_INIT_ROM_REGION
+#endif
+
 #undef NPCX_PWM1_SEL
 #define NPCX_PWM1_SEL 0	/* GPIO C2 is not used as PWM1. */
 
@@ -68,12 +76,8 @@
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
-/* Enabling Thunderbolt-compatible mode */
-#define CONFIG_USB_PD_TBT_COMPAT_MODE
-
-/* Enabling USB4 mode */
-#define CONFIG_USB_PD_USB4
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
+#undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
+#undef CONFIG_USB_MUX_RUNTIME_CONFIG
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -92,6 +96,10 @@
 /* charger defines */
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/* Retimer */
+#undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 
 /*
  * Macros for GPIO signals used in common code that don't match the

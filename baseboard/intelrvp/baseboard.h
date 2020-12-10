@@ -200,22 +200,14 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT,
 };
 
-/* List of supported batteries */
-enum battery_type {
-	BATTERY_SIMPLO_SMP_HHP_408,
-	BATTERY_SIMPLO_SMP_CA_445,
-	BATTERY_GETAC_SMP_HHP_408,
-	BATTERY_TYPE_COUNT,
-};
-
 /* TODO(b:132652892): Verify the below numbers. */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
 
 /* Define typical operating power */
 #define PD_OPERATING_POWER_MW  15000
-#define PD_MAX_CURRENT_MA      3000
 #define PD_MAX_VOLTAGE_MV      20000
+#define PD_MAX_CURRENT_MA      ((PD_MAX_POWER_MW/PD_MAX_VOLTAGE_MV) * 1000)
 #define DC_JACK_MAX_VOLTAGE_MV 19000
 
 /* TCPC gpios */

@@ -710,6 +710,9 @@ __override int pd_check_power_swap(int port)
 	if (port == CHG)
 		return 0;
 
+	if (pd_get_power_role(port) == PD_ROLE_SINK && !(cc_config & CC_ALLOW_SRC))
+		return 0;
+
 	if (pd_snk_is_vbus_provided(CHG))
 		return allow_pr_swap;
 
@@ -1034,7 +1037,7 @@ static void do_cc(int cc_config_new)
 	if (cc_config_new != cc_config) {
 		if (!(cc_config & CC_DETACH)) {
 			/* Force detach */
-			pd_power_supply_reset(DUT);
+			gpio_set_level(GPIO_DUT_CHG_EN, 0);
 			/* Always set to 0 here so both CC lines are changed */
 			cc_config &= ~(CC_DISABLE_DTS & CC_ALLOW_SRC);
 
