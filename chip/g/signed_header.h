@@ -15,6 +15,9 @@
 #define INFO_MAX 128             /* baked in rom! */
 #define INFO_IGNORE 0xaa3c55c3   /* baked in rom! */
 
+#define MAGIC_HAVEN 0xFFFFFFFF
+#define MAGIC_DAUNTLESS 0xFFFFFFFD
+
 /* Default value for _pad[] words */
 #define SIGNED_HEADER_PADDING 0x33333333
 
