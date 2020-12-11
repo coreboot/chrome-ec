@@ -589,11 +589,11 @@ struct motion_sensor_t motion_sensors[] = {
 		.addr = BH1730_I2C_ADDR,
 		.rot_standard_ref = NULL,
 		.default_range = 65535,
-		.min_frequency = 10,
-		.max_frequency = 10,
+		.min_frequency = BH1730_MIN_FREQ,
+		.max_frequency = BH1730_MAX_FREQ,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 100000,
+				.odr = BH1730_10000_MHZ,
 				.ec_rate = 0,
 			},
 		},
