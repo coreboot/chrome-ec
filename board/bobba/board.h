@@ -33,7 +33,8 @@
 
 /* Sensors */
 #define CONFIG_ACCEL_KX022	/* Lid accel */
-#define CONFIG_ACCELGYRO_BMI160	/* Base accel */
+#define CONFIG_ACCELGYRO_BMI160	/* Base accel main source*/
+#define CONFIG_ACCELGYRO_ICM426XX	/* Base accel second source*/
 #define CONFIG_SYNC		/* Camera VSYNC */
 
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
@@ -42,6 +43,8 @@
 
 /* Motion Sense Task Events */
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #define CONFIG_SYNC_INT_EVENT	\
@@ -128,6 +131,8 @@ enum battery_type {
 	BATTERY_PANASONIC_AP19A5K,
 	BATTERY_TYPE_COUNT,
 };
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 
