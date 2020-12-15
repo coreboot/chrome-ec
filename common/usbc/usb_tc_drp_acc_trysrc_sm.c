@@ -102,26 +102,18 @@ void print_flag(int set_or_clear, int flag);
 #define TC_FLAGS_REQUEST_DR_SWAP        BIT(10)
 /* Flag to note request to power off sink */
 #define TC_FLAGS_POWER_OFF_SNK          BIT(11)
-/* Flag to note port partner has unconstrained power */
-#define TC_FLAGS_PARTNER_UNCONSTRAINED  BIT(12)
-/* Flag to note port partner is Dual Role Data */
-#define TC_FLAGS_PARTNER_DR_DATA        BIT(13)
-/* Flag to note port partner is Dual Role Power */
-#define TC_FLAGS_PARTNER_DR_POWER       BIT(14)
 /* Flag to note port partner is Power Delivery capable */
-#define TC_FLAGS_PARTNER_PD_CAPABLE     BIT(15)
+#define TC_FLAGS_PARTNER_PD_CAPABLE     BIT(12)
 /* Flag to note hard reset has been requested */
-#define TC_FLAGS_HARD_RESET_REQUESTED   BIT(16)
-/* Flag to note port partner is USB comms capable */
-#define TC_FLAGS_PARTNER_USB_COMM       BIT(17)
+#define TC_FLAGS_HARD_RESET_REQUESTED   BIT(13)
 /* Flag to note we are currently performing PR Swap */
-#define TC_FLAGS_PR_SWAP_IN_PROGRESS    BIT(18)
+#define TC_FLAGS_PR_SWAP_IN_PROGRESS    BIT(14)
 /* Flag to note we are performing Discover Identity */
-#define TC_FLAGS_DISC_IDENT_IN_PROGRESS BIT(19)
+#define TC_FLAGS_DISC_IDENT_IN_PROGRESS BIT(15)
 /* Flag to note we should check for connection */
-#define TC_FLAGS_CHECK_CONNECTION       BIT(20)
+#define TC_FLAGS_CHECK_CONNECTION       BIT(16)
 /* Flag to note pd_set_suspend SUSPEND state */
-#define TC_FLAGS_SUSPEND                BIT(21)
+#define TC_FLAGS_SUSPEND                BIT(17)
 
 /*
  * Clear all flags except TC_FLAGS_LPM_ENGAGED and TC_FLAGS_SUSPEND.
@@ -299,12 +291,8 @@ static struct bit_name flag_bit_names[] = {
 	{ TC_FLAGS_REQUEST_PR_SWAP, "REQUEST_PR_SWAP" },
 	{ TC_FLAGS_REQUEST_DR_SWAP, "REQUEST_DR_SWAP" },
 	{ TC_FLAGS_POWER_OFF_SNK, "POWER_OFF_SNK" },
-	{ TC_FLAGS_PARTNER_UNCONSTRAINED, "PARTNER_UNCONSTRAINED" },
-	{ TC_FLAGS_PARTNER_DR_DATA, "PARTNER_DR_DATA" },
-	{ TC_FLAGS_PARTNER_DR_POWER, "PARTNER_DR_POWER" },
 	{ TC_FLAGS_PARTNER_PD_CAPABLE, "PARTNER_PD_CAPABLE" },
 	{ TC_FLAGS_HARD_RESET_REQUESTED, "HARD_RESET_REQUESTED" },
-	{ TC_FLAGS_PARTNER_USB_COMM, "PARTNER_USB_COMM" },
 	{ TC_FLAGS_PR_SWAP_IN_PROGRESS, "PR_SWAP_IN_PROGRESS" },
 	{ TC_FLAGS_DISC_IDENT_IN_PROGRESS, "DISC_IDENT_IN_PROGRESS" },
 	{ TC_FLAGS_CHECK_CONNECTION, "CHECK_CONNECTION" },
@@ -504,6 +492,33 @@ __overridable void pd_set_vbus_discharge(int port, int enable)
 
 #endif /* !CONFIG_USB_PRL_SM */
 
+#ifndef CONFIG_USB_PE_SM
+
+/*
+ * These pd_ functions are implemented in the PE layer
+ */
+const uint32_t * const pd_get_src_caps(int port)
+{
+	return NULL;
+}
+
+uint8_t pd_get_src_cap_cnt(int port)
+{
+	return 0;
+}
+
+const uint32_t * const pd_get_snk_caps(int port)
+{
+	return NULL;
+}
+
+uint8_t pd_get_snk_cap_cnt(int port)
+{
+	return 0;
+}
+
+#endif /* !CONFIG_USB_PR_SM */
+
 void pd_update_contract(int port)
 {
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
@@ -670,18 +685,12 @@ static inline void pd_set_dual_role_and_event(int port,
 		pd_update_try_source();
 
 	if (event != 0)
-		task_set_event(PD_PORT_TO_TASK_ID(port), event, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), event);
 }
 
 void pd_set_dual_role(int port, enum pd_dual_role_states state)
 {
 	pd_set_dual_role_and_event(port, state, PD_EVENT_UPDATE_DUAL_ROLE);
-}
-
-bool pd_get_partner_data_swap_capable(int port)
-{
-	/* return data swap capable status of port partner */
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_DR_DATA);
 }
 
 int pd_comm_is_enabled(int port)
@@ -702,28 +711,10 @@ void pd_request_data_swap(int port)
 	}
 }
 
-/*
- * Return true if partner port is a DTS or TS capable of entering debug
- * mode (eg. is presenting Rp/Rp or Rd/Rd).
- */
-int pd_ts_dts_plugged(int port)
-{
-	return TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER);
-}
-
 /* Return true if partner port is known to be PD capable. */
 bool pd_capable(int port)
 {
 	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_PD_CAPABLE);
-}
-
-/*
- * Return true if partner port is capable of communication over USB data
- * lines.
- */
-bool pd_get_partner_usb_comm_capable(int port)
-{
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_USB_COMM);
 }
 
 enum pd_dual_role_states pd_get_dual_role(int port)
@@ -765,38 +756,6 @@ int tc_is_attached_src(int port)
 int tc_is_attached_snk(int port)
 {
 	return IS_ATTACHED_SNK(port);
-}
-
-void tc_partner_dr_power(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_DR_POWER);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_DR_POWER);
-}
-
-void tc_partner_unconstrainedpower(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_UNCONSTRAINED);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_UNCONSTRAINED);
-}
-
-void tc_partner_usb_comm(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_USB_COMM);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_USB_COMM);
-}
-
-void tc_partner_dr_data(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_DR_DATA);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_DR_DATA);
 }
 
 void tc_pd_connection(int port, int en)
@@ -1101,16 +1060,6 @@ bool pd_get_vconn_state(int port)
 	return !!TC_CHK_FLAG(port, TC_FLAGS_VCONN_ON);
 }
 
-bool pd_get_partner_dual_role_power(int port)
-{
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_DR_POWER);
-}
-
-bool pd_get_partner_unconstr_power(int port)
-{
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_UNCONSTRAINED);
-}
-
 const char *pd_get_task_state_name(int port)
 {
 	return tc_get_current_state(port);
@@ -1132,6 +1081,53 @@ int pd_is_connected(int port)
 bool pd_is_disconnected(int port)
 {
 	return !pd_is_connected(port);
+}
+
+/*
+ * PD functions which query our fixed PDO flags.  Both the source and sink
+ * capabilities can present these values, and they should match between the two
+ * for compliant partners.
+ */
+static bool pd_check_fixed_flag(int port, uint32_t flag)
+{
+	uint32_t fixed_pdo;
+
+	if (pd_get_src_cap_cnt(port) != 0)
+		fixed_pdo = *pd_get_src_caps(port);
+	else if (pd_get_snk_cap_cnt(port) != 0)
+		fixed_pdo = *pd_get_snk_caps(port);
+	else
+		return false;
+
+	/*
+	 * Error check that first PDO is fixed, as 6.4.1 Capabilities requires
+	 * in the Power Delivery Specification.
+	 * "The vSafe5V Fixed Supply Object Shall always be the first object"
+	 */
+	if ((fixed_pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
+		return false;
+
+	return fixed_pdo & flag;
+}
+
+bool pd_get_partner_data_swap_capable(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_DATA_SWAP);
+}
+
+bool pd_get_partner_usb_comm_capable(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_COMM_CAP);
+}
+
+bool pd_get_partner_dual_role_power(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_DUAL_ROLE);
+}
+
+bool pd_get_partner_unconstr_power(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_UNCONSTRAINED);
 }
 
 static void bc12_role_change_handler(int port, enum pd_data_role prev_data_role,
@@ -1164,7 +1160,7 @@ static void bc12_role_change_handler(int port, enum pd_data_role prev_data_role,
 	}
 
 	if (event)
-		task_set_event(task_id, event, 0);
+		task_set_event(task_id, event);
 }
 
 /*
@@ -1685,15 +1681,13 @@ static void set_vconn(int port, int enable)
 static void pd_update_dual_role_config(int port)
 {
 	if (tc[port].power_role == PD_ROLE_SOURCE &&
-			((drp_state[port] == PD_DRP_FORCE_SINK &&
-			!pd_ts_dts_plugged(port)) ||
+			(drp_state[port] == PD_DRP_FORCE_SINK ||
 			(drp_state[port] == PD_DRP_TOGGLE_OFF &&
 			get_state_tc(port) == TC_UNATTACHED_SRC))) {
 		/*
 		 * Change to sink if port is currently a source AND (new DRP
-		 * state is force sink OR new DRP state is either toggle off
-		 * or debug accessory toggle only and we are in the source
-		 * disconnected state).
+		 * state is force sink OR new DRP state is toggle off and we are
+		 * in the source disconnected state).
 		 */
 		set_state_tc(port, TC_UNATTACHED_SNK);
 	} else if (tc[port].power_role == PD_ROLE_SINK &&
@@ -1824,7 +1818,7 @@ static __maybe_unused int reset_device_and_notify(int port)
 	while (waiting_tasks) {
 		task = __fls(waiting_tasks);
 		waiting_tasks &= ~BIT(task);
-		task_set_event(task, TASK_EVENT_PD_AWAKE, 0);
+		task_set_event(task, TASK_EVENT_PD_AWAKE);
 	}
 
 	return rv;
@@ -1851,8 +1845,7 @@ void pd_wait_exit_low_power(int port)
 		 * happen much, but it if starts occurring, we can add a guard
 		 * to prevent/reduce it.
 		 */
-		task_set_event(PD_PORT_TO_TASK_ID(port),
-			       PD_EVENT_TCPC_RESET, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_TCPC_RESET);
 		task_wait_event_mask(TASK_EVENT_PD_AWAKE, -1);
 	}
 }
@@ -1867,7 +1860,7 @@ void pd_device_accessed(int port)
 		handle_device_access(port);
 	else
 		task_set_event(PD_PORT_TO_TASK_ID(port),
-			PD_EVENT_DEVICE_ACCESSED, 0);
+			       PD_EVENT_DEVICE_ACCESSED);
 }
 
 /*
@@ -3536,7 +3529,9 @@ static void pd_chipset_resume(void)
 	int i;
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-		pd_resume_check_pr_swap_needed(i);
+		if(IS_ENABLED(CONFIG_USB_PE_SM))
+			pd_resume_check_pr_swap_needed(i);
+
 		pd_set_dual_role_and_event(i,
 					   PD_DRP_TOGGLE_ON,
 					   PD_EVENT_UPDATE_DUAL_ROLE

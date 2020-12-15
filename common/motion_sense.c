@@ -419,7 +419,7 @@ static void motion_sense_switch_sensor_rate(void)
 	if (sensor_setup_mask) {
 		atomic_or(&odr_event_required, sensor_setup_mask);
 		task_set_event(TASK_ID_MOTIONSENSE,
-			       TASK_EVENT_MOTION_ODR_CHANGE, 0);
+			       TASK_EVENT_MOTION_ODR_CHANGE);
 	} else {
 		/* No sensor activated, reset host interval interval to 0. */
 		ap_event_interval = 0;
@@ -771,8 +771,9 @@ static void check_and_queue_gestures(uint32_t *event)
 				vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP;
 			else
 				vector.flags = 0;
-			vector.activity = MOTIONSENSE_ACTIVITY_DOUBLE_TAP;
-			vector.state = 1; /* triggered */
+			vector.activity_data.activity =
+					MOTIONSENSE_ACTIVITY_DOUBLE_TAP;
+			vector.activity_data.state = 1 /* triggered */;
 			vector.sensor_num = MOTION_SENSE_ACTIVITY_SENSOR_ID;
 			motion_sense_fifo_stage_data(&vector, NULL, 0,
 					__hw_clock_source_read());
@@ -790,8 +791,9 @@ static void check_and_queue_gestures(uint32_t *event)
 
 			/* Send events to the FIFO */
 			vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP;
-			vector.activity = MOTIONSENSE_ACTIVITY_SIG_MOTION;
-			vector.state = 1; /* triggered */
+			vector.activity_data.activity =
+					MOTIONSENSE_ACTIVITY_SIG_MOTION;
+			vector.activity_data.state = 1 /* triggered */;
 			vector.sensor_num = MOTION_SENSE_ACTIVITY_SENSOR_ID;
 			motion_sense_fifo_stage_data(&vector, NULL, 0,
 					__hw_clock_source_read());
@@ -812,7 +814,8 @@ static void check_and_queue_gestures(uint32_t *event)
 				(sensor->state == SENSOR_INITIALIZED)) {
 			struct ec_response_motion_sensor_data vector = {
 				.flags = 0,
-				.activity = MOTIONSENSE_ACTIVITY_ORIENTATION,
+				.activity_data.activity =
+					MOTIONSENSE_ACTIVITY_ORIENTATION,
 				.sensor_num = MOTION_SENSE_ACTIVITY_SENSOR_ID,
 			};
 
@@ -821,7 +824,8 @@ static void check_and_queue_gestures(uint32_t *event)
 					(*motion_orientation_ptr(sensor) !=
 					 MOTIONSENSE_ORIENTATION_UNKNOWN)) {
 				motion_orientation_update(sensor);
-				vector.state = *motion_orientation_ptr(sensor);
+				vector.activity_data.state =
+					*motion_orientation_ptr(sensor);
 				motion_sense_fifo_stage_data(&vector, NULL, 0,
 						__hw_clock_source_read());
 				motion_sense_fifo_commit_data();
@@ -833,7 +837,8 @@ static void check_and_queue_gestures(uint32_t *event)
 						"Inv_Landscape",
 						"Unknown"
 					};
-					CPRINTS(mode[vector.state]);
+					CPRINTS(mode[
+						vector.activity_data.state]);
 				}
 			}
 			mutex_unlock(sensor->mutex);
@@ -1125,7 +1130,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 
 			/* Force a collection to purge old events.  */
 			task_set_event(TASK_ID_MOTIONSENSE,
-					TASK_EVENT_MOTION_ODR_CHANGE, 0);
+				       TASK_EVENT_MOTION_ODR_CHANGE);
 		}
 
 		out->ec_rate.ret = motion_sense_ec_rate(sensor) / MSEC;
@@ -1153,7 +1158,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			atomic_or(&odr_event_required,
 				  BIT(sensor - motion_sensors));
 			task_set_event(TASK_ID_MOTIONSENSE,
-					TASK_EVENT_MOTION_ODR_CHANGE, 0);
+				       TASK_EVENT_MOTION_ODR_CHANGE);
 		}
 
 		out->sensor_odr.ret = sensor->drv->get_data_rate(sensor);
@@ -1272,7 +1277,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 		atomic_add(&sensor->flush_pending, 1);
 
 		task_set_event(TASK_ID_MOTIONSENSE,
-			       TASK_EVENT_MOTION_FLUSH_PENDING, 0);
+			       TASK_EVENT_MOTION_FLUSH_PENDING);
 		/* pass-through */
 	case MOTIONSENSE_CMD_FIFO_INFO:
 		if (!IS_ENABLED(CONFIG_ACCEL_FIFO)) {
@@ -1666,7 +1671,7 @@ static int command_accel_data_rate(int argc, char **argv)
 
 		atomic_or(&odr_event_required, 1 << (sensor - motion_sensors));
 		task_set_event(TASK_ID_MOTIONSENSE,
-				TASK_EVENT_MOTION_ODR_CHANGE, 0);
+			       TASK_EVENT_MOTION_ODR_CHANGE);
 	} else {
 		ccprintf("Data rate for sensor %d: %d\n", id,
 			 sensor->drv->get_data_rate(sensor));

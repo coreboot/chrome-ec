@@ -15,7 +15,7 @@
 #include "driver/als_tcs3400.h"
 #include "driver/ppc/syv682x.h"
 #include "driver/tcpm/tcpci.h"
-#include "driver/tcpm/tusb422.h"
+#include "driver/tcpm/rt1715.h"
 #include "driver/retimer/bb_retimer.h"
 #include "driver/sync.h"
 #include "extpower.h"
@@ -311,22 +311,22 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC TCPC configuration */
-struct tcpc_config_t tcpc_config[] = {
+const struct tcpc_config_t tcpc_config[] = {
 	[USBC_PORT_C0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB_C0,
-			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
+			.addr_flags = RT1715_I2C_ADDR_FLAGS,
 		},
-		.drv = &tusb422_tcpm_drv,
+		.drv = &rt1715_tcpm_drv,
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB_C1,
-			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
+			.addr_flags = RT1715_I2C_ADDR_FLAGS,
 		},
-		.drv = &tusb422_tcpm_drv,
+		.drv = &rt1715_tcpm_drv,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -334,11 +334,10 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc1_usb4_db_retimer = {
+struct usb_mux usbc1_tcss_usb_mux = {
 	.usb_port = USBC_PORT_C1,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
 };
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
@@ -348,9 +347,10 @@ struct usb_mux usb_muxes[] = {
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb4_db_retimer,
+		.next_mux = &usbc1_tcss_usb_mux,
+		.driver = &bb_usb_retimer,
+		.i2c_port = I2C_PORT_USB_1_MIX,
+		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);

@@ -40,7 +40,7 @@ static void chip_pd_irq(enum usbpd_port port)
 		IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_HARD_RESET_DETECT;
 		USBPD_SW_RESET(port);
 		task_set_event(PD_PORT_TO_TASK_ID(port),
-			PD_EVENT_RX_HARD_RESET, 0);
+			       PD_EVENT_RX_HARD_RESET);
 	}
 
 	if (USBPD_IS_RX_DONE(port)) {
@@ -59,7 +59,7 @@ static void chip_pd_irq(enum usbpd_port port)
 		/* clear TX done interrupt */
 		IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_MSG_TX_DONE;
 		task_set_event(PD_PORT_TO_TASK_ID(port),
-			TASK_EVENT_PHY_TX_DONE, 0);
+			       TASK_EVENT_PHY_TX_DONE);
 	}
 
 	if (IS_ENABLED(IT83XX_INTC_PLUG_IN_OUT_SUPPORT)) {
@@ -84,8 +84,7 @@ static void chip_pd_irq(enum usbpd_port port)
 			/* clear type-c device plug in/out detect interrupt */
 			IT83XX_USBPD_TCDCR(port) |=
 				USBPD_REG_PLUG_IN_OUT_DETECT_STAT;
-			task_set_event(PD_PORT_TO_TASK_ID(port),
-				PD_EVENT_CC, 0);
+			task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC);
 		}
 	}
 }
@@ -228,7 +227,7 @@ void intc_cpu_int_group_6(void)
 	case IT83XX_IRQ_SMB_A:
 #ifdef CONFIG_I2C_PERIPHERAL
 		if (IT83XX_SMB_SFFCTL & IT83XX_SMB_SAFE)
-			i2c_slv_interrupt(IT83XX_I2C_CH_A);
+			i2c_periph_interrupt(IT83XX_I2C_CH_A);
 		else
 #endif
 			i2c_interrupt(IT83XX_I2C_CH_A);
@@ -245,7 +244,7 @@ void intc_cpu_int_group_6(void)
 	case IT83XX_IRQ_SMB_D:
 #ifdef CONFIG_I2C_PERIPHERAL
 		if (!(IT83XX_I2C_CTR(3) & IT83XX_I2C_MODE))
-			i2c_slv_interrupt(IT83XX_I2C_CH_D);
+			i2c_periph_interrupt(IT83XX_I2C_CH_D);
 		else
 #endif
 			i2c_interrupt(IT83XX_I2C_CH_D);
@@ -254,7 +253,7 @@ void intc_cpu_int_group_6(void)
 	case IT83XX_IRQ_SMB_E:
 #ifdef CONFIG_I2C_PERIPHERAL
 		if (!(IT83XX_I2C_CTR(0) & IT83XX_I2C_MODE))
-			i2c_slv_interrupt(IT83XX_I2C_CH_E);
+			i2c_periph_interrupt(IT83XX_I2C_CH_E);
 		else
 #endif
 			i2c_interrupt(IT83XX_I2C_CH_E);
@@ -263,7 +262,7 @@ void intc_cpu_int_group_6(void)
 	case IT83XX_IRQ_SMB_F:
 #ifdef CONFIG_I2C_PERIPHERAL
 		if (!(IT83XX_I2C_CTR(1) & IT83XX_I2C_MODE))
-			i2c_slv_interrupt(IT83XX_I2C_CH_F);
+			i2c_periph_interrupt(IT83XX_I2C_CH_F);
 		else
 #endif
 			i2c_interrupt(IT83XX_I2C_CH_F);

@@ -58,7 +58,7 @@ DECLARE_DEFERRED(check_c0_line);
 
 static void notify_c0_chips(void)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(0);
 }
 
@@ -93,7 +93,7 @@ DECLARE_DEFERRED(check_c1_line);
 static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(1);
 }
 
@@ -653,10 +653,10 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *kd, int *kd_div)
 {
 	*kp = 3;
-	*kp_div = 14;
+	*kp_div = 20;
 
 	*ki = 3;
-	*ki_div = 500;
+	*ki_div = 125;
 
 	*kd = 4;
 	*kd_div = 40;

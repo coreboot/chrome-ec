@@ -26,6 +26,26 @@
 #define CONFIG_CHIPSET_TIGERLAKE
 #endif
 
+/* Battery configuration */
+#undef CONFIG_BATTERY
+#undef CONFIG_BATTERY_FUEL_GAUGE
+#ifdef CONFIG_PLATFORM_EC_BATTERY
+#define CONFIG_BATTERY
+#define CONFIG_BATTERY_FUEL_GAUGE
+#endif
+
+#undef CONFIG_CHARGER_ISL9241
+#ifdef CONFIG_PLATFORM_EC_CHARGER_ISL9241
+#define CONFIG_CHARGER_ISL9241
+/* Hardware based charge ramp is broken in the ISL9241 (b/169350714) */
+#define CONFIG_CHARGE_RAMP_SW
+#endif
+
+#undef CONFIG_BATTERY_SMART
+#ifdef CONFIG_PLATFORM_EC_BATTERY_SMART
+#define CONFIG_BATTERY_SMART
+#endif
+
 /* eSPI configuration */
 #ifdef CONFIG_PLATFORM_EC_ESPI
 
@@ -109,16 +129,5 @@
 #endif  /* CONFIG_PLATFORM_EC_TIMER_CMD_TIMERINFO */
 
 #endif  /* CONFIG_PLATFORM_EC_TIMER */
-
-/*
- * Load the chip family specific header. Normally for npcx, this would be done
- * by chip/npcx/config_chip.h but since this file is replacing that header
- * we'll need (for now) to load it ourselves. Long term, the functions, enums,
- * and constants in this header will be replaced by more Zephyr/devicetree
- * specific code.
- */
-#ifdef CHIP_FAMILY_NPCX7
-#include "config_chip-npcx7.h"
-#endif /* CHIP_FAMILY_NPCX7 */
 
 #endif  /* __CROS_EC_CONFIG_CHIP_H */

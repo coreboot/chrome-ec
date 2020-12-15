@@ -85,12 +85,12 @@ static void tcpc_alert_event(enum gpio_signal signal)
 
 static void usb0_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 static void usb1_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 }
 
 static void ppc_interrupt(enum gpio_signal signal)
@@ -319,8 +319,8 @@ static struct bmi_drv_data_t g_bmi160_data;
 
 /* Matrix to rotate accelerometer into standard reference frame */
 const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0,  0, FLOAT_TO_FP(1)}
 };
 

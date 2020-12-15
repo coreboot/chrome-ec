@@ -5,7 +5,9 @@
 
 #include "atomic.h"
 #include "common.h"
+#include "device_event.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "peripheral_charger.h"
 #include "queue.h"
 #include "stdbool.h"
@@ -32,13 +34,7 @@ static void pchg_queue_event(struct pchg *ctx, enum pchg_event event)
 static const char *_text_state(enum pchg_state state)
 {
 	/* TODO: Use "S%d" for normal build. */
-	static const char * const state_names[] = {
-		[PCHG_STATE_RESET] = "RESET",
-		[PCHG_STATE_INITIALIZED] = "INITIALIZED",
-		[PCHG_STATE_ENABLED] = "ENABLED",
-		[PCHG_STATE_DETECTED] = "DETECTED",
-		[PCHG_STATE_CHARGING] = "CHARGING",
-	};
+	static const char * const state_names[] = EC_PCHG_STATE_TEXT;
 
 	if (state >= sizeof(state_names))
 		return "UNDEF";
@@ -325,9 +321,48 @@ void pchg_task(void *u)
 				pchg_run(ctx);
 			} while (queue_count(&ctx->events));
 		}
+		/*
+		 * Send one host event for all ports. Currently PCHG supports
+		 * only WLC but in the future other types (e.g. WPC Qi) should
+		 * send different device events.
+		 */
+		device_set_single_event(EC_DEVICE_EVENT_WLC);
 		task_wait_event(-1);
 	}
 }
+
+static enum ec_status hc_pchg_count(struct host_cmd_handler_args *args)
+{
+	struct ec_response_pchg_count *r = args->response;
+
+	r->port_count = pchg_count;
+	args->response_size = sizeof(*r);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PCHG_COUNT, hc_pchg_count, EC_VER_MASK(0));
+
+static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_pchg *p = args->params;
+	struct ec_response_pchg *r = args->response;
+	int port = p->port;
+	struct pchg *ctx;
+
+	if (port >= pchg_count)
+		return EC_RES_INVALID_PARAM;
+
+	ctx = &pchgs[port];
+
+	r->state = ctx->state;
+	r->battery_percentage = ctx->battery_percent;
+	r->error = ctx->error;
+
+	args->response_size = sizeof(*r);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PCHG, hc_pchg, EC_VER_MASK(0));
 
 static int cc_pchg(int argc, char **argv)
 {
