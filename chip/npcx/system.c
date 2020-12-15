@@ -343,6 +343,12 @@ static void check_reset_cause(void)
 	/* Clear saved hibernate wake flag in bbram , too */
 	bbram_data_write(BBRM_DATA_INDEX_WAKE, 0);
 
+	/* Reset by hibernate */
+	if (hib_wake_flags & HIBERNATE_WAKE_PIN)
+		flags |= EC_RESET_FLAG_WAKE_PIN | EC_RESET_FLAG_HIBERNATE;
+	else if (hib_wake_flags & HIBERNATE_WAKE_MTC)
+		flags |= EC_RESET_FLAG_RTC_ALARM | EC_RESET_FLAG_HIBERNATE;
+
 	/* Use scratch bit to check power on reset or VCC1_RST reset */
 	if (!IS_BIT_SET(NPCX_RSTCTL, NPCX_RSTCTL_VCC1_RST_SCRATCH)) {
 #ifdef CONFIG_BOARD_FORCE_RESET_PIN
@@ -384,15 +390,20 @@ static void check_reset_cause(void)
 					 */
 					flags |= EC_RESET_FLAG_RESET_PIN;
 			} else {
+				flags |= EC_RESET_FLAG_POWER_ON;
+
 				/*
 				 * Power-on restart, so set a flag and save it
 				 * for the next imminent reset. Later code
 				 * will check for this flag and wait for the
-				 * second reset.
+				 * second reset. Waking from PSL hibernate is
+				 * power-on for EC but not for H1, so do not
+				 * wait for the second reset.
 				 */
-				flags |= EC_RESET_FLAG_POWER_ON
-				      | EC_RESET_FLAG_INITIAL_PWR;
-				chip_flags |= EC_RESET_FLAG_INITIAL_PWR;
+				if (!(flags & EC_RESET_FLAG_HIBERNATE)) {
+					flags |= EC_RESET_FLAG_INITIAL_PWR;
+					chip_flags |= EC_RESET_FLAG_INITIAL_PWR;
+				}
 			}
 		} else
 			/*
@@ -418,12 +429,6 @@ static void check_reset_cause(void)
 		/* Clear debugger reset status initially*/
 		SET_BIT(NPCX_RSTCTL, NPCX_RSTCTL_DBGRST_STS);
 	}
-
-	/* Reset by hibernate */
-	if (hib_wake_flags & HIBERNATE_WAKE_PIN)
-		flags |= EC_RESET_FLAG_WAKE_PIN | EC_RESET_FLAG_HIBERNATE;
-	else if (hib_wake_flags & HIBERNATE_WAKE_MTC)
-		flags |= EC_RESET_FLAG_RTC_ALARM | EC_RESET_FLAG_HIBERNATE;
 
 	/* Watchdog Reset */
 	if (IS_BIT_SET(NPCX_T0CSR, NPCX_T0CSR_WDRST_STS)) {
