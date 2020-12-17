@@ -5161,9 +5161,6 @@
  * defines, and define a default number of 3.0 A ports if not selected.  Note
  * that the functionality of this default of 1 is equivalent to both previous
  * defines, which only ever allocated one 3.0 A port.
- *
- * To turn off the TCPMv2 3.0 A current allocation from the DPM, set
- * CONFIG_USB_PD_3A_PORTS to 0.
  */
 #ifdef CONFIG_USB_PD_TCPMV2
 #if defined(CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT) || \
@@ -5178,7 +5175,6 @@
 #error USB4 support requires at least one 3.0 A port
 #endif
 #endif
-
 
 /******************************************************************************/
 /*

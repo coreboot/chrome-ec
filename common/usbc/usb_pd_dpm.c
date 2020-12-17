@@ -519,6 +519,9 @@ unlock:
 /* Process port's first Sink_Capabilities PDO for port current consideration */
 void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
 {
+	if (CONFIG_USB_PD_3A_PORTS == 0)
+		return;
+
 	/* Verify partner supplied valid vSafe5V fixed object first */
 	if ((vsafe5v_pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
 		return;
