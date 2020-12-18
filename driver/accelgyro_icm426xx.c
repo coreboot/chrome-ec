@@ -810,6 +810,7 @@ static int icm426xx_init_config(const struct motion_sensor_t *s)
 
 static int icm426xx_init(const struct motion_sensor_t *s)
 {
+	struct accelgyro_saved_data_t *saved_data = ICM_GET_SAVED_DATA(s);
 	struct icm_drv_data_t *st = ICM_GET_DATA(s);
 	int mask, val;
 	int ret;
@@ -861,6 +862,8 @@ static int icm426xx_init(const struct motion_sensor_t *s)
 			goto out_unlock;
 #endif
 	}
+
+	saved_data->odr = 0;
 
 	/* set sensor filter */
 	switch (s->type) {
