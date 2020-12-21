@@ -13,9 +13,9 @@ void nvmem_wipe_cache(void)
 	 * Inclusive list of NV indices not to be wiped out when invalidating
 	 * the cache.
 	 */
-	const uint16_t whitelist_range[] = { 0x1007, 0x100b };
+	const uint16_t allowlist_range[] = { 0x1007, 0x100b };
 
-	NvSelectivelyInvalidateCache(whitelist_range);
+	NvSelectivelyInvalidateCache(allowlist_range);
 
 	/*
 	 * Wipe some confidential persistent data
