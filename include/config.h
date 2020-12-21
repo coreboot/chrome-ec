@@ -1735,6 +1735,8 @@
 
 /* Base address of program memory */
 #undef CONFIG_PROGRAM_MEMORY_BASE
+/* Base address of program memory (physical address of AP) */
+#undef CONFIG_PROGRAM_MEMORY_BASE_LOAD
 
 /*
  * EC code can reside on internal or external storage. Only one of these
@@ -4696,6 +4698,13 @@
 /* Enable IT5205H SBU protection switch */
 #undef CONFIG_USB_MUX_IT5205H_SBU_OVP
 
+/*
+ * Enable to inform the AP that an ACK is needed on configuring the TCSS mux.
+ * The config is enabled automatically when the board has CONFIG_USB_MUX_VIRTUAL
+ * and CONFIG_USBC_RETIMER_INTEL_BB enabled.
+ */
+#undef CONFIG_USB_MUX_AP_ACK_REQUEST
+
 /*****************************************************************************/
 /* USB GPIO config */
 #undef CONFIG_USB_GPIO
@@ -5035,6 +5044,7 @@
  * PD 2.0 retires three times (for a total of 4 attempts).
  *
  * Note must be [0-3] since it must fit within 2 bits.
+ * TODO(b/175236718): Set retry count dynamically based on active spec revision.
  */
 #ifdef CONFIG_USB_PD_REV30
 #define CONFIG_PD_RETRY_COUNT 2
@@ -5633,6 +5643,14 @@
 #define CONFIG_CHIP_DATA_IN_INIT_ROM
 #endif
 #endif /* CONFIG_CHIP_INIT_ROM_REGION */
+
+/*
+ * By default, enable a request for an ACK from AP, on setting the mux, if the
+ * board supports Burnside Bridge retimer.
+ */
+#if defined(CONFIG_USBC_RETIMER_INTEL_BB) && defined(CONFIG_USB_MUX_VIRTUAL)
+#define CONFIG_USB_MUX_AP_ACK_REQUEST
+#endif /* CONFIG_USBC_RETIMER_INTEL_BB  */
 
 /*****************************************************************************/
 

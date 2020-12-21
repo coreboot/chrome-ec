@@ -10,6 +10,14 @@
 
 #include "baseboard.h"
 
+/* On-body detection */
+#define CONFIG_BODY_DETECTION
+#define CONFIG_BODY_DETECTION_SENSOR           LID_ACCEL
+#define CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR 150 /* % */
+#define CONFIG_GESTURE_DETECTION
+#define CONFIG_GESTURE_DETECTION_MASK BIT(CONFIG_BODY_DETECTION_SENSOR)
+#define CONFIG_GESTURE_HOST_DETECTION
+
 /* TODO(waihong): Remove the following bringup features */
 #define CONFIG_BRINGUP
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
@@ -18,6 +26,8 @@
 #define CONFIG_CMD_POWERINDEBUG
 #define CONFIG_I2C_DEBUG
 #define CONFIG_DEVICE_EVENT
+
+#define CONFIG_BUTTON_TRIGGERED_RECOVERY
 
 /* Internal SPI flash on NPCX7 */
 #define CONFIG_FLASH_SIZE (512 * 1024)  /* 512KB internal spi flash */

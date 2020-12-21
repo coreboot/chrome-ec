@@ -64,8 +64,10 @@ enum pd_rx_errors {
 #define PD_EVENT_SYSJUMP		TASK_EVENT_CUSTOM_BIT(10)
 /* Receive a Hard Reset. */
 #define PD_EVENT_RX_HARD_RESET		TASK_EVENT_CUSTOM_BIT(11)
+/* MUX configured notification event */
+#define PD_EVENT_AP_MUX_DONE		TASK_EVENT_CUSTOM_BIT(12)
 /* First free event on PD task */
-#define PD_EVENT_FIRST_FREE_BIT		12
+#define PD_EVENT_FIRST_FREE_BIT		13
 
 /* Ensure TCPC is out of low power mode before handling these events. */
 #define PD_EXIT_LOW_POWER_EVENT_MASK \
@@ -525,14 +527,20 @@ struct partner_active_modes {
 #define VDO_INDEX_AMA            4
 #define VDO_INDEX_PTYPE_UFP1_VDO 4
 #define VDO_INDEX_PTYPE_CABLE1   4
-#define VDO_INDEX_PTYPE_UFP2_VDO 4
+#define VDO_INDEX_PTYPE_UFP2_VDO 5
 #define VDO_INDEX_PTYPE_CABLE2   5
 #define VDO_INDEX_PTYPE_DFP_VDO  6
 #define VDO_I(name) VDO_INDEX_##name
 
+/* PD Rev 2.0 ID Header VDO */
 #define VDO_IDH(usbh, usbd, ptype, is_modal, vid)		\
 	((usbh) << 31 | (usbd) << 30 | ((ptype) & 0x7) << 27	\
 	 | (is_modal) << 26 | ((vid) & 0xffff))
+
+/* PD Rev 3.0 ID Header VDO */
+#define VDO_IDH_REV30(usbh, usbd, ptype_u, is_modal, ptype_d, ctype, vid) \
+	(VDO_IDH(usbh, usbd, ptype_u, is_modal, vid)			\
+	| ((ptype_d) & 0x7) << 23 | ((ctype) & 0x3) << 21)
 
 #define PD_IDH_PTYPE(vdo)    (((vdo) >> 27) & 0x7)
 #define PD_IDH_IS_MODAL(vdo) (((vdo) >> 26) & 0x1)
@@ -1340,6 +1348,15 @@ int pd_get_rev(int port, enum tcpm_transmit_type type);
  *         VDM_VER20 for VDM Version 2.0
  */
 int pd_get_vdo_ver(int port, enum tcpm_transmit_type type);
+
+/**
+ * Get transmit retry count for active PD revision.
+ *
+ * @param port The port to query
+ * @param type The partner to query (SOP, SOP', or SOP'')
+ * @return The number of retries to perform when transmitting.
+ */
+int pd_get_retry_count(int port, enum tcpm_transmit_type type);
 
 /**
  * Check if max voltage request is allowed (only used if
@@ -2157,14 +2174,6 @@ uint32_t pd_get_tbt_mode_vdo(int port, enum tcpm_transmit_type type);
 void set_tbt_compat_mode_ready(int port);
 
 /**
- * Checks if the attached cable supports superspeed
- *
- * @param port	USB-C port number
- * @return      True if cable is superspeed, false otherwise
- */
-bool is_tbt_cable_superspeed(int port);
-
-/**
  * Returns Thunderbolt-compatible cable speed according to the port if,
  * port supports lesser speed than the cable
  *
@@ -2186,7 +2195,7 @@ int enter_tbt_compat_mode(int port, enum tcpm_transmit_type sop,
 			uint32_t *payload);
 
 /**
- * Return maximum allowed speed for Thunderbolt-compatible mode
+ * Return maximum speed supported by the port to enter into Thunderbolt mode
  *
  * NOTE: Chromebooks require that all USB-C ports support the same features,
  * so the maximum speed returned by this function should be set to the lowest

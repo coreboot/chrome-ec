@@ -472,7 +472,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PD_HOST_CMD
 #endif
 
-#ifdef TEST_USB_TCPMV2_TCPCI
+#ifdef TEST_USB_TCPMV2_COMPLIANCE
 #define CONFIG_USB_DRP_ACC_TRYSRC
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE

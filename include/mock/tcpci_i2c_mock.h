@@ -11,6 +11,8 @@
 void mock_tcpci_reset(void);
 
 void mock_tcpci_set_reg(int reg, uint16_t value);
+void mock_tcpci_set_reg_bits(int reg_offset, uint16_t mask);
+void mock_tcpci_clr_reg_bits(int reg_offset, uint16_t mask);
 
 uint16_t mock_tcpci_get_reg(int reg_offset);
 
@@ -19,6 +21,8 @@ int verify_tcpci_transmit(enum tcpm_transmit_type tx_type,
 			  enum pd_data_msg_type data_msg);
 
 int verify_tcpci_tx_retry_count(enum tcpm_transmit_type tx_type,
+				enum pd_ctrl_msg_type ctrl_msg,
+				enum pd_data_msg_type data_msg,
 				int retry_count);
 
 int verify_tcpci_tx_timeout(enum tcpm_transmit_type tx_type,
@@ -28,3 +32,5 @@ int verify_tcpci_tx_timeout(enum tcpm_transmit_type tx_type,
 
 void mock_tcpci_receive(enum pd_msg_type sop, uint16_t header,
 			uint32_t *payload);
+
+void tcpci_register_dump(void);

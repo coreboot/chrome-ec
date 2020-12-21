@@ -16,6 +16,7 @@
 #include "espi.h"
 #include "lpc.h"
 #include "port80.h"
+#include "power.h"
 #include "zephyr_espi_shim.h"
 
 LOG_MODULE_REGISTER(espi_shim, CONFIG_ESPI_LOG_LEVEL);
@@ -111,7 +112,7 @@ static void espi_vwire_handler(const struct device *dev,
 {
 	int ec_signal = zephyr_vwire_to_signal(event.evt_details);
 
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_POWERseQ) &&
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_POWERSEQ) &&
 	    (signal_interrupt_enabled & signal_to_interrupt_bit(ec_signal))) {
 		power_signal_interrupt(ec_signal);
 	}
