@@ -881,12 +881,12 @@ static void pe_update_pdo_flags(int port, uint32_t pdo)
 {
 #ifdef CONFIG_CHARGE_MANAGER
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-	int charge_whitelisted =
+	int charge_allowlisted =
 		(tc_get_power_role(port) == PD_ROLE_SINK &&
 			pd_charge_from_device(pd_get_identity_vid(port),
 			pd_get_identity_pid(port)));
 #else
-	const int charge_whitelisted = 0;
+	const int charge_allowlisted = 0;
 #endif
 #endif
 
@@ -919,10 +919,10 @@ static void pe_update_pdo_flags(int port, uint32_t pdo)
 	 * Treat device as a dedicated charger (meaning we should charge
 	 * from it) if it does not support power swap, or if it is externally
 	 * powered, or if we are a sink and the device identity matches a
-	 * charging white-list.
+	 * charging allowlist.
 	 */
 	if (!(pdo & PDO_FIXED_DUAL_ROLE) || (pdo & PDO_FIXED_EXTERNAL) ||
-		charge_whitelisted) {
+		charge_allowlisted) {
 		PE_CLR_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
 		charge_manager_update_dualrole(port, CAP_DEDICATED);
 	} else {
@@ -4431,7 +4431,7 @@ int pd_charge_from_device(uint16_t vid, uint16_t pid)
 {
 	/* TODO: rewrite into table if we get more of these */
 	/*
-	 * White-list Apple charge-through accessory since it doesn't set
+	 * Allow-list Apple charge-through accessory since it doesn't set
 	 * externally powered bit, but we still need to charge from it when
 	 * we are a sink.
 	 */

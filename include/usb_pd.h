@@ -1677,7 +1677,7 @@ void pd_check_dr_role(int port, int dr_role, int flags);
 
 /**
  * Check if we should charge from this device. This is
- * basically a white-list for chargers that are dual-role,
+ * basically a allow-list for chargers that are dual-role,
  * don't set the externally powered bit, but we should charge
  * from by default.
  *

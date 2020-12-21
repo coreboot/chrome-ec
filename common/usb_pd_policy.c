@@ -156,7 +156,7 @@ int pd_charge_from_device(uint16_t vid, uint16_t pid)
 {
 	/* TODO: rewrite into table if we get more of these */
 	/*
-	 * White-list Apple charge-through accessory since it doesn't set
+	 * Allow-list Apple charge-through accessory since it doesn't set
 	 * externally powered bit, but we still need to charge from it when
 	 * we are a sink.
 	 */
