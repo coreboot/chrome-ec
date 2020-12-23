@@ -9,7 +9,7 @@
 #include "kmsc_chip.h"
 #include "registers.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "usb_pd.h"
 
 #if defined(CONFIG_USB_PD_TCPM_ITE_ON_CHIP)
@@ -51,10 +51,10 @@ static void chip_pd_irq(enum usbpd_port port)
 
 	if (USBPD_IS_TX_DONE(port)) {
 #ifdef CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2
-		it83xx_clear_tx_error_status(port);
+		it8xxx2_clear_tx_error_status(port);
 		/* check TX status, clear by TX_DONE status too */
 		if (USBPD_IS_TX_ERR(port))
-			it83xx_get_tx_error_status(port);
+			it8xxx2_get_tx_error_status(port);
 #endif
 		/* clear TX done interrupt */
 		IT83XX_USBPD_ISR(port) = USBPD_REG_MASK_MSG_TX_DONE;

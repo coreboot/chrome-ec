@@ -52,6 +52,8 @@ const struct usbpd_ctrl_t usbpd_ctrl_regs[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usbpd_ctrl_regs) == IT83XX_USBPD_PHY_PORT_COUNT);
 
+static int it83xx_tcpm_set_rx_enable(int port, int enable);
+
 /*
  * Disable cc analog and pd digital module, but only left Rd_5.1K (Not
  * Dead Battery) analog module alive to assert Rd on CCs. EC reset or
@@ -413,6 +415,8 @@ static void it83xx_init(enum usbpd_port port, int role)
 	 */
 	IT83XX_USBPD_BMCSR(port) = (IT83XX_USBPD_BMCSR(port) & ~0x70) |
 					((CONFIG_PD_RETRY_COUNT + 1) << 4);
+	/* Disable Rx decode */
+	it83xx_tcpm_set_rx_enable(port, 0);
 	/* W/C status */
 	IT83XX_USBPD_ISR(port) = 0xff;
 	/* enable cc, select cc1 and Rd. */
@@ -831,7 +835,7 @@ static void it83xx_tcpm_hook_connect(void)
 DECLARE_HOOK(HOOK_USB_PD_CONNECT, it83xx_tcpm_hook_connect, HOOK_PRIO_DEFAULT);
 #endif
 
-static void it83xx_tcpm_sw_reset(void)
+static void it83xx_tcpm_hook_disconnect(void)
 {
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
 
@@ -857,7 +861,8 @@ static void it83xx_tcpm_sw_reset(void)
 	set_pd_sleep_mask(port);
 }
 
-DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, it83xx_tcpm_sw_reset, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, it83xx_tcpm_hook_disconnect,
+	     HOOK_PRIO_DEFAULT);
 
 const struct tcpm_drv it83xx_tcpm_drv = {
 	.init			= &it83xx_tcpm_init,
