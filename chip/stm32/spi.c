@@ -315,6 +315,9 @@ static void setup_for_transaction(void)
 	/* clear this as soon as possible */
 	setup_transaction_later = 0;
 
+	/* Stop sending DMA response before TX, if any */
+	dma_disable(STM32_DMAC_SPI1_TX);
+
 #ifndef CHIP_FAMILY_STM32H7 /* H7 is not ready to set status here */
 	/* Not ready to receive yet */
 	tx_status(EC_SPI_NOT_READY);
@@ -322,9 +325,6 @@ static void setup_for_transaction(void)
 
 	/* We are no longer actively processing a transaction */
 	state = SPI_STATE_PREPARE_RX;
-
-	/* Stop sending response, if any */
-	dma_disable(STM32_DMAC_SPI1_TX);
 
 	/*
 	 * Read dummy bytes in case there are some pending; this prevents the
@@ -476,6 +476,12 @@ void spi_event(enum gpio_signal signal)
 	/* Check chip select.  If it's high, the AP ended a transaction. */
 	if (gpio_get_level(GPIO_SPI1_NSS)) {
 		enable_sleep(SLEEP_MASK_SPI);
+
+		/*
+		 * NSS is high (CS is deasserted), which means we can't
+		 * do TX, disable DMA TX anyway.
+		 */
+		dma_get_channel(STM32_DMAC_SPI1_TX)->ccr &= ~STM32_DMA_CCR_TCIE;
 
 		/*
 		 * If the buffer is still used by the host command, postpone
@@ -670,6 +676,9 @@ static void spi_init(void)
 	state = SPI_STATE_DISABLED;
 	STM32_RCC_APB2RSTR |= STM32_RCC_PB2_SPI1;
 	STM32_RCC_APB2RSTR &= ~STM32_RCC_PB2_SPI1;
+
+	/* Reset the DMA TX. */
+	dma_disable(STM32_DMAC_SPI1_TX);
 
 	/* Config SPI GPIO to high speed. This varies from board to board. */
 	board_set_stm32_spi_pin_speed();
