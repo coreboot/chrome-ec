@@ -19,12 +19,12 @@
 #define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_EXTPOWER_GPIO
-#ifdef BOARD_ASURADA_REV0
-/* For Rev0 only */
+/*
+ * NOTE: we need to make correct VCC voltage selection here if EC's VCC isn't
+ * connect to 1.8v on other versions.
+ */
 #define CONFIG_IT83XX_VCC_1P8V
-#else
-#define CONFIG_IT83XX_VCC_3P3V
-#endif
+
 /*
  * TODO: Remove this option once the VBAT no longer keeps high when
  * system's power isn't presented.
@@ -125,7 +125,6 @@
 #define CONFIG_USB_PD_FRS_TCPC
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPMV2
