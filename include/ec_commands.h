@@ -4753,6 +4753,100 @@ struct __ec_align1 ec_params_set_cbi {
  */
 #define EC_CMD_GET_UPTIME_INFO 0x0121
 
+/* EC reset causes */
+#define EC_RESET_FLAG_OTHER       (1 << 0)   /* Other known reason */
+#define EC_RESET_FLAG_RESET_PIN   (1 << 1)   /* Reset pin asserted */
+#define EC_RESET_FLAG_BROWNOUT    (1 << 2)   /* Brownout */
+#define EC_RESET_FLAG_POWER_ON    (1 << 3)   /* Power-on reset */
+#define EC_RESET_FLAG_WATCHDOG    (1 << 4)   /* Watchdog timer reset */
+#define EC_RESET_FLAG_SOFT        (1 << 5)   /* Soft reset trigger by core */
+#define EC_RESET_FLAG_HIBERNATE   (1 << 6)   /* Wake from hibernate */
+#define EC_RESET_FLAG_RTC_ALARM   (1 << 7)   /* RTC alarm wake */
+#define EC_RESET_FLAG_WAKE_PIN    (1 << 8)   /* Wake pin triggered wake */
+#define EC_RESET_FLAG_LOW_BATTERY (1 << 9)   /* Low battery triggered wake */
+#define EC_RESET_FLAG_SYSJUMP     (1 << 10)  /* Jumped directly to this image */
+#define EC_RESET_FLAG_HARD        (1 << 11)  /* Hard reset from software */
+#define EC_RESET_FLAG_AP_OFF      (1 << 12)  /* Do not power on AP */
+/* Some reset flags preserved from previous boot */
+#define EC_RESET_FLAG_PRESERVED   (1 << 13)
+#define EC_RESET_FLAG_USB_RESUME  (1 << 14)  /* USB resume triggered wake */
+#define EC_RESET_FLAG_RDD         (1 << 15)  /* USB Type-C debug cable */
+#define EC_RESET_FLAG_RBOX        (1 << 16)  /* Fixed Reset Functionality */
+#define EC_RESET_FLAG_SECURITY    (1 << 17)  /* Security threat */
+/* AP experienced a watchdog reset */
+#define EC_RESET_FLAG_AP_WATCHDOG (1 << 18)
+/* Do not select RW in EFS. This enables PD in RO for Chromebox. */
+#define EC_RESET_FLAG_STAY_IN_RO  (1 << 19)
+#define EC_RESET_FLAG_EFS         (1 << 20)  /* Jumped to this image by EFS */
+#define EC_RESET_FLAG_AP_IDLE     (1 << 21)  /* Leave alone AP */
+#define EC_RESET_FLAG_INITIAL_PWR (1 << 22)  /* EC had power, then was reset */
+
+/*
+ * Reason codes used by the AP after a shutdown to figure out why it was reset
+ * by the EC.  These are sent in EC commands.  Therefore, to maintain protocol
+ * compatibility:
+ * - New entries must be inserted prior to the _COUNT field
+ * - If an existing entry is no longer in service, it must be replaced with a
+ *   RESERVED entry instead.
+ * - The semantic meaning of an entry should not change.
+ * - Do not exceed 2^15 - 1 for reset reasons or 2^16 - 1 for shutdown reasons.
+ */
+enum chipset_reset_reason {
+	CHIPSET_RESET_BEGIN = 0,
+	CHIPSET_RESET_UNKNOWN = CHIPSET_RESET_BEGIN,
+	/* Custom reason defined by a board.c or baseboard.c file */
+	CHIPSET_RESET_BOARD_CUSTOM,
+	/* Believe that the AP has hung */
+	CHIPSET_RESET_HANG_REBOOT,
+	/* Reset by EC console command */
+	CHIPSET_RESET_CONSOLE_CMD,
+	/* Reset by EC host command */
+	CHIPSET_RESET_HOST_CMD,
+	/* Keyboard module reset key combination */
+	CHIPSET_RESET_KB_SYSRESET,
+	/* Keyboard module warm reboot */
+	CHIPSET_RESET_KB_WARM_REBOOT,
+	/* Debug module warm reboot */
+	CHIPSET_RESET_DBG_WARM_REBOOT,
+	/* I cannot self-terminate.  You must lower me into the steel. */
+	CHIPSET_RESET_AP_REQ,
+	/* Reset as side-effect of startup sequence */
+	CHIPSET_RESET_INIT,
+	/* EC detected an AP watchdog event. */
+	CHIPSET_RESET_AP_WATCHDOG,
+
+	CHIPSET_RESET_COUNT,
+};
+
+/*
+ * AP hard shutdowns are logged on the same path as resets.
+ */
+enum chipset_shutdown_reason {
+	CHIPSET_SHUTDOWN_BEGIN = (1 << 15),
+	CHIPSET_SHUTDOWN_POWERFAIL = CHIPSET_SHUTDOWN_BEGIN,
+	/* Forcing a shutdown as part of EC initialization */
+	CHIPSET_SHUTDOWN_INIT,
+	/* Custom reason on a per-board basis. */
+	CHIPSET_SHUTDOWN_BOARD_CUSTOM,
+	/* This is a reason to inhibit startup, not cause shut down. */
+	CHIPSET_SHUTDOWN_BATTERY_INHIBIT,
+	/* A power_wait_signal is being asserted */
+	CHIPSET_SHUTDOWN_WAIT,
+	/* Critical battery level. */
+	CHIPSET_SHUTDOWN_BATTERY_CRIT,
+	/* Because you told me to. */
+	CHIPSET_SHUTDOWN_CONSOLE_CMD,
+	/* Forcing a shutdown to effect entry to G3. */
+	CHIPSET_SHUTDOWN_G3,
+	/* Force shutdown due to over-temperature. */
+	CHIPSET_SHUTDOWN_THERMAL,
+	/* Force a chipset shutdown from the power button through EC */
+	CHIPSET_SHUTDOWN_BUTTON,
+
+	CHIPSET_SHUTDOWN_COUNT,
+};
+
+
 struct __ec_align4 ec_response_uptime_info {
 	/*
 	 * Number of milliseconds since the last EC boot. Sysjump resets
@@ -4780,10 +4874,7 @@ struct __ec_align4 ec_response_uptime_info {
 
 	/* Empty log entries have both the cause and timestamp set to zero. */
 	struct ap_reset_log_entry {
-		/*
-		 * See include/chipset.h: enum chipset_{reset,shutdown}_reason
-		 * for details.
-		 */
+		/* See enum chipset_{reset,shutdown}_reason for details. */
 		uint16_t reset_cause;
 
 		/* Reserved for protocol growth. */
