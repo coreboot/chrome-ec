@@ -109,16 +109,31 @@ CFLAGS += -DEMBEDDED_MODE=1
 # Configure cryptoc headers to handle unaligned accesses.
 CFLAGS += -DSUPPORT_UNALIGNED=1
 
-TPM2_OBJS = $(shell find $(out)/tpm2 -name '*.cp.o')
+# Use absolute path as the destination to ensure that TPM2 makefile finds the
+# place for output.
+outdir := $(realpath $(out))/tpm2
+cmd_tpm2_base = $(MAKE) obj=$(outdir) EMBEDDED_MODE=1 \
+		-C $(EXTLIB) --no-print-directory
+
+TPM2_OBJS := $(shell $(cmd_tpm2_base) list_copied_objs)
+
+TPM2_TARGET := $(outdir)/.copied_objs
+
 # Add dependencies on that library
 $(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: LDFLAGS_EXTRA += $(TPM2_OBJS)
-$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: copied_objs
+$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: $(TPM2_TARGET)
 
-# Force the external build each time, so it can look for changed sources.
-.PHONY: copied_objs
-copied_objs:
-	$(MAKE) obj=$(realpath $(out))/tpm2 EMBEDDED_MODE=1 \
-		-C $(EXTLIB) copied_objs
+cmd_tpm2lib = $(cmd_tpm2_base) $(TPM2_TARGET)
+
+tpm2lib_check_clean = $(cmd_tpm2lib) -q && echo clean
+
+ifneq ($(shell $(tpm2lib_check_clean)),clean)
+# Force the external build only if it is needed.
+.PHONY: $(TPM2_TARGET)
+endif
+
+$(TPM2_TARGET):
+	$(call quiet,tpm2lib,TPM2   )
 
 endif   # BOARD_MK_INCLUDED_ONCE is nonempty
 

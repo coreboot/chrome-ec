@@ -257,11 +257,18 @@ endif
 CPPFLAGS += -I$(CRYPTOCLIB)/include
 CRYPTOC_LDFLAGS := -L$(out)/cryptoc -lcryptoc
 
-# Force the external build each time, so it can look for changed sources.
-.PHONY: $(out)/cryptoc/libcryptoc.a
-$(out)/cryptoc/libcryptoc.a:
-	$(MAKE) obj=$(realpath $(out))/cryptoc SUPPORT_UNALIGNED=1 \
+cmd_cryptolib = $(MAKE) obj=$(realpath $(out))/cryptoc SUPPORT_UNALIGNED=1 \
 		CONFIG_UPTO_SHA512=$(CONFIG_UPTO_SHA512) -C $(CRYPTOCLIB)
+
+cryptolib_check_clean = $(cmd_cryptolib) -q && echo clean
+
+ifneq ($(shell $(cryptolib_check_clean)),clean)
+# Force the external build only if it is needed.
+.PHONY: $(out)/cryptoc/libcryptoc.a
+endif
+
+$(out)/cryptoc/libcryptoc.a:
+	$(call quiet,cryptolib,CRYPTOLIB)
 
 # Link RO and RW against cryptoc.
 $(out)/RO/ec.RO.elf $(out)/RO/ec.RO_B.elf: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
