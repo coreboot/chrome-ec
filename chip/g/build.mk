@@ -214,12 +214,18 @@ CRYPTOC_OBJS = $(shell find $(out)/cryptoc -name '*.o')
 $(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: LDFLAGS_EXTRA += $(CRYPTOC_OBJS)
 $(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: cryptoc_objs
 
-
-# Force the external build each time, so it can look for changed sources.
-.PHONY: cryptoc_objs
-cryptoc_objs:
-	$(MAKE) obj=$(realpath $(out))/cryptoc SUPPORT_UNALIGNED=1 \
+cmd_cryptolib = $(MAKE) obj=$(realpath $(out))/cryptoc SUPPORT_UNALIGNED=1 \
 		CONFIG_UPTO_SHA512=$(CONFIG_UPTO_SHA512) -C $(CRYPTOCLIB) objs
+cryptolib_check_clean = $(cmd_cryptolib) -q && echo clean
+
+ifneq ($(shell $(cryptolib_check_clean)),clean)
+# Force the external build only if it is needed.
+ .PHONY: cryptoc_objs
+endif
+
+cryptoc_objs:
+	$(call quiet,cryptolib,CRYPTOLIB)
+
 endif   # end CONFIG_DCRYPTO
 
 endif   # CHIP_MK_INCLUDED_ONCE is nonempty
