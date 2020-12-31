@@ -137,6 +137,9 @@
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT TASK_EVENT_CUSTOM(4)
 #define CONFIG_ACCELGYRO_BMI160_INT2_OUTPUT
+#define CONFIG_ACCELGYRO_ICM426XX	/* Base accel second source*/
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_CUSTOM(4)
 #define CONFIG_ACCEL_BMA255
 #define CONFIG_ACCEL_KX022
 #define CONFIG_ACCEL_INTERRUPTS
@@ -348,6 +351,8 @@ extern uint8_t model;
 #define CBI_SKU_CUSTOM_FIELD(val)	((val) >> 24)
 
 void ccd_mode_isr(enum gpio_signal signal);
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

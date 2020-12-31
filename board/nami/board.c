@@ -19,6 +19,8 @@
 #include "cros_board_info.h"
 #include "driver/pmic_tps650x30.h"
 #include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm426xx.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/accel_kionix.h"
 #include "driver/baro_bmp280.h"
@@ -723,15 +725,28 @@ static struct mutex g_base_mutex;
 /* Lid accel private data */
 static struct bmi160_drv_data_t g_bmi160_data;
 static struct kionix_accel_data g_kx022_data;
+static struct icm_drv_data_t g_icm426xx_data;
 
 /* BMA255 private data */
 static struct accelgyro_saved_data_t g_bma255_data;
+
+enum base_accelgyro_type {
+	BASE_GYRO_NONE = 0,
+	BASE_GYRO_BMI160 = 1,
+	BASE_GYRO_ICM426XX = 2,
+};
 
 /* Matrix to rotate accelrator into standard reference frame */
 const matrix_3x3_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
+const matrix_3x3_t base_icm_ref = {
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(-1), 0,  0},
+	{ 0, 0,  FLOAT_TO_FP(1)}
 };
 
 const matrix_3x3_t lid_standard_ref = {
@@ -849,6 +864,51 @@ struct motion_sensor_t motion_sensors[] = {
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+struct motion_sensor_t icm426xx_base_accel = {
+	 .name = "Base Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_ICM426XX,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &icm426xx_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_icm426xx_data,
+	 .port = I2C_PORT_ACCEL,
+	 .addr = ICM426XX_ADDR0_FLAGS,
+	 .rot_standard_ref = &base_icm_ref,
+	 .default_range = 4,  /* g */
+	 .min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+	 .max_frequency = ICM426XX_ACCEL_MAX_FREQ,
+	 .config = {
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			.odr = 13000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		 },
+		 /* Sensor on for angle detection */
+		 [SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		 },
+	 },
+};
+struct motion_sensor_t icm426xx_base_gyro = {
+	 .name = "Base Gyro",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_ICM426XX,
+	 .type = MOTIONSENSE_TYPE_GYRO,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &icm426xx_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_icm426xx_data,
+	 .port = I2C_PORT_ACCEL,
+	 .addr = ICM426XX_ADDR0_FLAGS,
+	 .default_range = 1000, /* dps */
+	 .rot_standard_ref = &base_icm_ref,
+	 .min_frequency = ICM426XX_GYRO_MIN_FREQ,
+	 .max_frequency = ICM426XX_GYRO_MAX_FREQ,
+};
+
 /* Enable or disable input devices, based on chipset state and tablet mode */
 #ifndef TEST_BUILD
 void lid_angle_peripheral_enable(int enable)
@@ -878,14 +938,53 @@ static void board_chipset_suspend(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
+static int base_accelgyro_config;
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	switch (base_accelgyro_config) {
+	case BASE_GYRO_ICM426XX:
+		icm426xx_interrupt(signal);
+		break;
+	case BASE_GYRO_BMI160:
+	default:
+		bmi160_interrupt(signal);
+		break;
+	}
+}
+
+static void board_detect_motionsensor(void)
+{
+	int ret;
+	int val;
+
+	/* Check base accelgyro chip */
+	ret = icm_read8(&icm426xx_base_accel, ICM426XX_REG_WHO_AM_I, &val);
+	if (ret)
+		CPRINTS("Get ICM fail.");
+	if (val == ICM426XX_CHIP_ICM40608) {
+		motion_sensors[BASE_ACCEL] = icm426xx_base_accel;
+		motion_sensors[BASE_GYRO] = icm426xx_base_gyro;
+	}
+	base_accelgyro_config = (val == ICM426XX_CHIP_ICM40608)
+		 ? BASE_GYRO_ICM426XX : BASE_GYRO_BMI160;
+	CPRINTS("Base Accelgyro: %s", (val == ICM426XX_CHIP_ICM40608)
+		 ? "ICM40608" : "BMI160");
+}
+
 static void setup_motion_sensors(void)
 {
 	if (sku & SKU_ID_MASK_CONVERTIBLE) {
 		if (oem == PROJECT_AKALI) {
+			board_detect_motionsensor();
 			/* Rotate axis for Akali 360 */
 			motion_sensors[LID_ACCEL] = lid_accel_1;
-			motion_sensors[BASE_ACCEL].rot_standard_ref = NULL;
-			motion_sensors[BASE_GYRO].rot_standard_ref = NULL;
+			if (base_accelgyro_config != ICM426XX_CHIP_ICM40608) {
+				motion_sensors[BASE_ACCEL].rot_standard_ref
+					 = NULL;
+				motion_sensors[BASE_GYRO].rot_standard_ref
+					 = NULL;
+			}
 		}
 	} else {
 		/* Clamshells have no accel/gyro */
