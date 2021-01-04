@@ -9,7 +9,13 @@
 #define __CROS_EC_U2F_IMPL_H
 
 #include "common.h"
+
+#ifdef TEST_BUILD
+#include "board/host/dcrypto.h"
+#endif
+
 #include "cryptoc/p256.h"
+#include "tpm_vendor_cmds.h"
 #include "u2f.h"
 
 /* ---- Physical presence ---- */
@@ -131,5 +137,12 @@ int u2f_gen_kek_seed(int commit);
  * @return size of certificate written to buf, 0 on error.
  */
 int g2f_attestation_cert(uint8_t *buf);
+
+/**
+ * U2F_GENERATE command handler. Generates a key handle according to input
+ * parameters.
+ */
+enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
+				size_t input_size, size_t *response_size);
 
 #endif /* __CROS_EC_U2F_IMPL_H */

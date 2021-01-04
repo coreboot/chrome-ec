@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Provides the minimal declarations needed by pinweaver to build on
+/* Provides the minimal declarations needed by pinweaver and u2f to build on
  * CHIP_HOST. While it might be preferable to simply use the original dcrypto.h,
  * That would require incorporating additional headers / dependencies such as
  * cryptoc.
@@ -72,6 +72,29 @@ void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx);
 
 int DCRYPTO_appkey_derive(enum dcrypto_appid appid, const uint32_t input[8],
 			  uint32_t output[8]);
+
+#include "cryptoc/p256.h"
+
+int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
+				   const p256_int *pk_y, const p256_int *serial,
+				   const char *name, uint8_t *cert,
+				   const int n);
+
+int DCRYPTO_ladder_random(void *output);
+
+#define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
+
+struct drbg_ctx {
+	uint32_t k[SHA256_DIGEST_WORDS];
+	uint32_t v[SHA256_DIGEST_WORDS];
+	uint32_t reseed_counter;
+};
+
+int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
+			    const p256_int *message, p256_int *r, p256_int *s);
+
+void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx, const p256_int *key,
+			    const p256_int *message);
 
 #endif  /* CONFIG_DCRYPTO_MOCK */
 

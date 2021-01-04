@@ -180,6 +180,12 @@ enum nvmem_users { NVMEM_TPM = 0, NVMEM_CR50, NVMEM_NUM_USERS };
 #define CONFIG_HOSTCMD_RTC
 #endif
 
+#ifdef TEST_U2F
+#define CONFIG_DCRYPTO_MOCK
+#define CONFIG_U2F
+#define CC_EXTENSION CC_COMMAND
+#endif
+
 #ifdef TEST_VBOOT
 #define CONFIG_RWSIG
 #define CONFIG_SHA256

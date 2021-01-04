@@ -7,7 +7,11 @@
 
 #include "console.h"
 #include "cryptoc/p256.h"
+
+#ifndef TEST_BUILD
 #include "cryptoc/sha256.h"
+#endif
+
 #include "dcrypto.h"
 #include "extension.h"
 #include "system.h"
@@ -79,8 +83,8 @@ static void copy_versioned_kh_pubkey_out(p256_int *opk_x, p256_int *opk_y,
 }
 
 /* U2F GENERATE command  */
-static enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
-				       size_t input_size, size_t *response_size)
+enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
+				size_t input_size, size_t *response_size)
 {
 	struct u2f_generate_req *req = buf;
 	uint8_t kh_version =
@@ -440,7 +444,7 @@ static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code, void *buf,
 
 	int verify_ret;
 
-	HASH_CTX h_ctx;
+	struct HASH_CTX h_ctx;
 	struct drbg_ctx dr_ctx;
 
 	/* Data hash, and corresponding signature. */
