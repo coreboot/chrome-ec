@@ -17,7 +17,6 @@ common-$(CONFIG_ACCELGYRO_BMI160)+=math_util.o
 common-$(CONFIG_ACCELGYRO_LSM6DS0)+=math_util.o
 common-$(CONFIG_ACCELGYRO_LSM6DSM)+=math_util.o
 common-$(CONFIG_ACCELGYRO_LSM6DSO)+=math_util.o
-common-$(CONFIG_ACCEL_FIFO)+=motion_sense_fifo.o
 common-$(CONFIG_ACCEL_LIS2DW12)+=math_util.o
 common-$(CONFIG_ACCEL_LIS2DH)+=math_util.o
 common-$(CONFIG_ACCEL_KXCJ9)+=math_util.o
@@ -139,7 +138,6 @@ common-$(HAS_TASK_HOSTCMD)+=host_command.o ec_features.o
 common-$(HAS_TASK_PDCMD)+=host_command_pd.o
 common-$(HAS_TASK_KEYSCAN)+=keyboard_scan.o
 common-$(HAS_TASK_LIGHTBAR)+=lb_common.o lightbar.o
-common-$(HAS_TASK_MOTIONSENSE)+=motion_sense.o
 common-$(HAS_TASK_TPM)+=tpm_registers.o
 
 ifneq ($(HAVE_PRIVATE_AUDIO_CODEC_WOV_LIBS),y)

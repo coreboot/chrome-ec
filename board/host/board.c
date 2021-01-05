@@ -12,7 +12,6 @@
 #include "i2c.h"
 #include "inductive_charging.h"
 #include "lid_switch.h"
-#include "motion_sense.h"
 #include "motion_lid.h"
 #include "power_button.h"
 #include "spi.h"
