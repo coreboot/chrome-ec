@@ -9,7 +9,7 @@
 fuzz-test-list-host =
 # Fuzzers should only be built for architectures that support sanitizers.
 ifeq ($(ARCH),amd64)
-fuzz-test-list-host += cr50_fuzz host_command_fuzz usb_pd_fuzz usb_tcpm_v2_fuzz
+fuzz-test-list-host += cr50_fuzz host_command_fuzz
 endif
 
 # For fuzzing targets libec.a is built from the ro objects and hides functions
@@ -26,8 +26,6 @@ endif
 # Otherwise use <obj_name>-y
 cr50_fuzz-rw = cr50_fuzz.o pinweaver_model.o mem_hash_tree.o nvmem_tpm2_mock.o
 host_command_fuzz-y = host_command_fuzz.o
-usb_pd_fuzz-y = usb_pd_fuzz.o
-usb_tcpm_v2_fuzz-y = usb_pd_fuzz.o usb_tcpm_v2_fuzz.o ../test/fake_battery.o
 
 CR50_PROTO_HEADERS := $(out)/gen/fuzz/cr50_fuzz.pb.h \
   $(out)/gen/fuzz/pinweaver/pinweaver.pb.h
