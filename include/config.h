@@ -897,41 +897,6 @@
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 
 /*
- * Define to use Power Delivery State Machine Framework. Along with
- * CONFIG_USB_SM_FRAMEWORK, you must ensure the follow options are defined to
- * use the new statemachine for USB-C:
- *
- * CONFIG_USB_TYPEC_SM (defined by default)
- * CONFIG_USB_PRL_SM (defined by default)
- * One of CONFIG_USB_PE_* policy engine options.
- */
-#undef CONFIG_USB_SM_FRAMEWORK
-
-/*
- * Define to enable Type-C State Machine. Must be enabled
- * with CONFIG_USB_SM_FRAMEWORK
- */
-#define CONFIG_USB_TYPEC_SM
-
-/*
- * Define to enable Protocol Layer State Machine. Must be enabled
- * with CONFIG_USB_SM_FRAMEWORK and CONFIG_USB_TYPEC_SM
- */
-#define CONFIG_USB_PRL_SM
-
-/*
- * Define to enable Policy Engine State Machine. Must be enabled
- * with CONFIG_USB_SM_FRAMEWORK and CONFIG_USB_TYPEC_SM
- */
-#define CONFIG_USB_PE_SM
-
-/*
- * Define to enable Policy Engine State Machine. This is an override
- * that is used to just pull in PE for unit testing.
- */
-#undef CONFIG_TEST_USB_PE_SM
-
-/*
  * Board specific maximum input current limit, in mA.
  */
 #undef CONFIG_CHARGER_MAX_INPUT_CURRENT

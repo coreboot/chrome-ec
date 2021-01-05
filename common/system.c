@@ -5,7 +5,6 @@
 
 /* System module for Chrome EC : common functions */
 #include "battery.h"
-#include "charge_manager.h"
 #include "chipset.h"
 #include "clock.h"
 #include "common.h"
@@ -33,8 +32,6 @@
 #include "task.h"
 #include "timer.h"
 #include "uart.h"
-#include "usb_pd.h"
-#include "usb_pd_tcpm.h"
 #include "util.h"
 #include "version.h"
 #include "watchdog.h"
@@ -848,24 +845,6 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	case EC_REBOOT_JUMP_RW:
 		return system_run_image_copy(system_get_active_copy());
 	case EC_REBOOT_COLD:
-#ifdef HAS_TASK_PDCMD
-		/*
-		 * Reboot the PD chip(s) as well, but first suspend the ports
-		 * if this board has PD tasks running so they don't query the
-		 * TCPCs while they reset.
-		 */
-#ifdef HAS_TASK_PD_C0
-		{
-			int port;
-
-			for (port = 0; port < board_get_usb_pd_port_count();
-			     port++)
-				pd_set_suspend(port, 1);
-		}
-#endif
-		board_reset_pd_mcu();
-#endif
-
 		cflush();
 		system_reset(SYSTEM_RESET_HARD);
 		/* That shouldn't return... */
@@ -1531,9 +1510,6 @@ DECLARE_HOST_COMMAND(EC_CMD_REBOOT_EC,
 
 int system_can_boot_ap(void)
 {
-	int soc = -1;
-	int pow = -1;
-
 #if defined(CONFIG_BATTERY) && \
 	defined(CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
 	/* Require a minimum battery level to power on. If battery isn't
@@ -1543,18 +1519,8 @@ int system_can_boot_ap(void)
 		return 1;
 #endif
 
-#if defined(CONFIG_CHARGE_MANAGER) && \
-	defined(CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON)
-	pow = charge_manager_get_power_limit_uw() / 1000;
-	if (pow >= CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON)
-		return 1;
-#else
 	/* For fixed AC system */
 	return 1;
-#endif
-
-	CPRINTS("Not enough power to boot (%d %%, %d mW)", soc, pow);
-	return 0;
 }
 
 #ifdef CONFIG_SERIALNO_LEN

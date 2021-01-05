@@ -18,7 +18,6 @@
 #include "shared_mem.h"
 #include "system.h"
 #include "task.h"
-#include "usb_pd.h"
 #include "util.h"
 #include "vb21_struct.h"
 #include "version.h"
@@ -229,7 +228,6 @@ out:
 	CPRINTS("RW verify %s", good ? "OK" : "FAILED");
 
 	if (!good) {
-		pd_log_event(PD_EVENT_ACC_RW_FAIL, 0, 0, NULL);
 		/* RW firmware is invalid : do not jump there */
 		if (system_is_locked())
 			system_disable_jump();

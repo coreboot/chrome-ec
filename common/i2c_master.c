@@ -15,8 +15,6 @@
 #include "i2c.h"
 #include "system.h"
 #include "task.h"
-#include "usb_pd.h"
-#include "usb_pd_tcpm.h"
 #include "util.h"
 #include "watchdog.h"
 #include "virtual_battery.h"
@@ -1085,25 +1083,6 @@ static void i2c_passthru_protect_port(uint32_t port)
 
 static void i2c_passthru_protect_tcpc_ports(void)
 {
-#ifdef CONFIG_USB_PD_PORT_MAX_COUNT
-	int i;
-
-	/*
-	 * If WP is not enabled i.e. system is not locked leave the tunnels open
-	 * so that factory line can do updates without a new RO BIOS.
-	 */
-	if (!system_is_locked()) {
-		CPRINTS("System unlocked, TCPC I2C tunnels may be unprotected");
-		return;
-	}
-
-	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		/* TCPC tunnel not configured. No need to protect anything */
-		if (!I2C_GET_ADDR(tcpc_config[i].i2c_info.addr_flags))
-			continue;
-		i2c_passthru_protect_port(tcpc_config[i].i2c_info.port);
-	}
-#endif
 }
 
 static enum ec_status

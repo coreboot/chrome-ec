@@ -125,20 +125,6 @@ driver-$(CONFIG_TOUCHPAD_ST)+=touchpad_st.o
 driver-$(CONFIG_THERMISTOR)+=temp_sensor/thermistor.o
 driver-$(CONFIG_THERMISTOR_NCP15WB)+=temp_sensor/thermistor_ncp15wb.o
 
-# Type-C port controller (TCPC) drivers
-driver-$(CONFIG_USB_PD_TCPM_STUB)+=tcpm/stub.o
-driver-$(CONFIG_USB_PD_TCPM_TCPCI)+=tcpm/tcpci.o
-driver-$(CONFIG_USB_PD_TCPM_FUSB302)+=tcpm/fusb302.o
-driver-$(CONFIG_USB_PD_TCPM_MT6370)+=tcpm/mt6370.o
-driver-$(CONFIG_USB_PD_TCPM_ITE83XX)+=tcpm/it83xx.o
-driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
-driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
-driver-$(CONFIG_USB_PD_TCPM_ANX7447)+=tcpm/anx7447.o
-driver-$(CONFIG_USB_PD_TCPM_PS8751)+=tcpm/ps8xxx.o
-driver-$(CONFIG_USB_PD_TCPM_PS8805)+=tcpm/ps8xxx.o
-driver-$(CONFIG_USB_PD_TCPM_TUSB422)+=tcpm/tusb422.o
-driver-$(CONFIG_USB_PD_TCPM_NCT38XX)+=tcpm/nct38xx.o
-
 # Type-C Retimer drivers
 driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
 driver-$(CONFIG_USBC_RETIMER_PI3DPX1207)+=retimer/pi3dpx1207.o

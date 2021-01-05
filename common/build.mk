@@ -43,9 +43,6 @@ common-$(CONFIG_CAPSENSE)+=capsense.o
 common-$(CONFIG_CASE_CLOSED_DEBUG_V1)+=ccd_config.o
 common-$(CONFIG_CEC)+=cec.o
 common-$(CONFIG_CROS_BOARD_INFO)+=cbi.o
-common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o
-common-$(CONFIG_CHARGE_RAMP_HW)+=charge_ramp.o
-common-$(CONFIG_CHARGE_RAMP_SW)+=charge_ramp.o charge_ramp_sw.o
 common-$(CONFIG_CMD_CHARGEN) += chargen.o
 common-$(CONFIG_CHARGER)+=charger.o charge_state_v2.o
 common-$(CONFIG_CHARGER_PROFILE_OVERRIDE_COMMON)+=charger_profile_override.o
@@ -136,18 +133,9 @@ common-$(CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT)+=throttle_ap.o
 common-$(CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE)+=throttle_ap.o
 common-$(CONFIG_TPM_I2CS)+=i2cs_tpm.o
 common-$(CONFIG_U2F)+=u2f.o
-common-$(CONFIG_USB_CHARGER)+=usb_charger.o
 common-$(CONFIG_USB_CONSOLE_STREAM)+=usb_console_stream.o
 common-$(CONFIG_USB_I2C)+=usb_i2c.o
-common-$(CONFIG_USB_PORT_POWER_DUMB)+=usb_port_power_dumb.o
-common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o
-ifeq ($(CONFIG_USB_SM_FRAMEWORK),)
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o
-endif
 common-$(CONFIG_USB_PD_LOGGING)+=event_log.o pd_log.o
-common-$(CONFIG_USB_PD_TCPC)+=usb_pd_tcpc.o
-common-$(CONFIG_USBC_PPC)+=usbc_ppc.o
 common-$(CONFIG_VBOOT_EFS)+=vboot/vboot.o
 common-$(CONFIG_VBOOT_HASH)+=sha256.o vboot_hash.o
 common-$(CONFIG_VOLUME_BUTTONS)+=button.o
@@ -281,7 +269,6 @@ $(out)/$(PROJECT).exe: $(out)/cryptoc/libcryptoc.a
 endif
 
 include $(_common_dir)fpsensor/build.mk
-include $(_common_dir)usbc/build.mk
 
 include $(_common_dir)mock/build.mk
 common-y+=$(foreach m,$(mock-y),mock/$(m))

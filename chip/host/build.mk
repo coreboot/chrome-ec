@@ -13,7 +13,6 @@ chip-y=clock.o flash.o gpio.o i2c.o lpc.o persistence.o reboot.o registers.o \
 ifndef CONFIG_KEYBOARD_NOT_RAW
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 endif
-chip-$(CONFIG_USB_PD_TCPC)+=usb_pd_phy.o
 
 ifeq ($(CONFIG_DCRYPTO),y)
 CPPFLAGS += -I$(abspath ./chip/g)
