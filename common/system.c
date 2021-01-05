@@ -26,7 +26,6 @@
 #include "task.h"
 #include "timer.h"
 #include "uart.h"
-#include "usb_pd.h"
 #include "util.h"
 #include "version.h"
 #include "watchdog.h"
@@ -747,11 +746,6 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	case EC_REBOOT_JUMP_RW:
 		return system_run_image_copy(SYSTEM_IMAGE_RW);
 	case EC_REBOOT_COLD:
-#ifdef HAS_TASK_PDCMD
-		/* Reboot the PD chip as well */
-		board_reset_pd_mcu();
-#endif
-
 		cflush();
 		system_reset(SYSTEM_RESET_HARD);
 		/* That shouldn't return... */

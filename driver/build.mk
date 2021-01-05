@@ -79,18 +79,6 @@ driver-$(CONFIG_TOUCHPAD_ELAN)+=touchpad_elan.o
 # Thermistors
 driver-$(CONFIG_THERMISTOR_NCP15WB)+=temp_sensor/thermistor_ncp15wb.o
 
-# Type-C port controller (TCPC) drivers
-driver-$(CONFIG_USB_PD_TCPM_STUB)+=tcpm/stub.o
-driver-$(CONFIG_USB_PD_TCPM_TCPCI)+=tcpm/tcpci.o
-driver-$(CONFIG_USB_PD_TCPM_FUSB302)+=tcpm/fusb302.o
-driver-$(CONFIG_USB_PD_TCPM_ITE83XX)+=tcpm/it83xx.o
-driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
-driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
-driver-$(CONFIG_USB_PD_TCPM_PS8751)+=tcpm/ps8751.o
-
-# USB switches
-driver-$(CONFIG_USB_SWITCH_PI3USB9281)+=usb_switch_pi3usb9281.o
-
 # USB mux high-level driver
 driver-$(CONFIG_USBC_SS_MUX)+=usb_mux.o
 

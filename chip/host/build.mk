@@ -11,7 +11,6 @@ CORE:=host
 chip-y=clock.o flash.o gpio.o i2c.o lpc.o persistence.o reboot.o registers.o \
        system.o uart.o
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
-chip-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_phy.o
 
 ifeq ($(CONFIG_DCRYPTO),y)
 CPPFLAGS += -I$(abspath ./chip/g)
