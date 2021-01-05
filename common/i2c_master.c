@@ -7,7 +7,6 @@
 
 #include "battery.h"
 #include "clock.h"
-#include "charge_state.h"
 #include "console.h"
 #include "crc8.h"
 #include "host_command.h"
