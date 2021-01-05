@@ -68,15 +68,6 @@
  */
 #define CONFIG_ACCEL_SPOOF_MODE
 
-/* Specify type of accelerometers attached. */
-#undef CONFIG_ACCEL_BMA255
-#undef CONFIG_ACCEL_KXCJ9
-#undef CONFIG_ACCEL_KX022
-#undef CONFIG_ACCEL_LIS2DH
-#undef CONFIG_ACCELGYRO_LSM6DS0
-#undef CONFIG_ACCELGYRO_BMI160
-#undef CONFIG_ACCELGYRO_LSM6DSM
-
 /* Specify barometer attached */
 #undef CONFIG_BARO_BMP280
 
@@ -3080,7 +3071,7 @@
 #include "test_config.h"
 
 /*
- * Sanity checks to make sure some of the configs above make sense.
+ * Validate some of the configs above make sense.
  */
 
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
