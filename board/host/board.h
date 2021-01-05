@@ -89,7 +89,6 @@ enum {
 };
 
 #define CONFIG_RNG
-void fps_event(enum gpio_signal signal);
 
 /* Let the tests always check the other NVMEM slot. */
 static inline int board_nvmem_legacy_check_needed(void){ return 1; }
