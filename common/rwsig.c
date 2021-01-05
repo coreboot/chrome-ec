@@ -14,7 +14,6 @@
 #include "sha256.h"
 #include "shared_mem.h"
 #include "system.h"
-#include "usb_pd.h"
 #include "util.h"
 #include "vb21_struct.h"
 
