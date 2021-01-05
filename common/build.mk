@@ -104,7 +104,6 @@ common-$(HAS_TASK_HOSTCMD)+=host_command.o
 common-$(HAS_TASK_PDCMD)+=host_command_pd.o
 common-$(HAS_TASK_KEYSCAN)+=keyboard_scan.o
 common-$(HAS_TASK_LIGHTBAR)+=lb_common.o lightbar.o
-common-$(HAS_TASK_MOTIONSENSE)+=motion_sense.o sensor_common.o
 common-$(HAS_TASK_TPM)+=tpm_registers.o
 
 ifeq ($(CONFIG_MALLOC),y)
@@ -118,7 +117,6 @@ common-$(TEST_BUILD)+=test_util.o
 else
 common-y+=test_util.o
 endif
-common-$(TEST_BUILD)+=sensor_common.o
 
 ifneq ($(CONFIG_RSA_OPTIMIZED),)
 $(out)/RW/common/rsa.o: CFLAGS+=-O3

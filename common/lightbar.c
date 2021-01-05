@@ -17,7 +17,6 @@
 #include "lb_common.h"
 #include "lightbar.h"
 #include "lid_switch.h"
-#include "motion_sense.h"
 #include "pwm.h"
 #include "system.h"
 #include "task.h"
