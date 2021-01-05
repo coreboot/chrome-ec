@@ -2545,7 +2545,8 @@ static int process_tpm_mode(struct transfer_descriptor *td,
  * On error retry a few times just in case flash log is locked by a concurrent
  * access.
  */
-static int process_get_flog(struct transfer_descriptor *td, uint32_t prev_stamp)
+static int process_get_flog(struct transfer_descriptor *td, uint32_t prev_stamp,
+			    bool show_machine_output)
 {
 	int rv;
 	const int max_retries = 3;
@@ -2580,18 +2581,24 @@ static int process_get_flog(struct transfer_descriptor *td, uint32_t prev_stamp)
 			return 0;
 
 		memcpy(&prev_stamp, &entry.r.timestamp, sizeof(prev_stamp));
-		entry_epoch = prev_stamp;
-		localtime_r(&entry_epoch, &loc_time);
+		if  (show_machine_output) {
+			printf("%10u:%02x", prev_stamp, entry.r.type);
+		} else {
+			entry_epoch = prev_stamp;
+			localtime_r(&entry_epoch, &loc_time);
 
-		if (!time_zone_reported) {
-			strftime(date_str, sizeof(date_str), "%Z", &loc_time);
-			printf("Log time zone is %s\n", date_str);
-			time_zone_reported = true;
+			if (!time_zone_reported) {
+				strftime(date_str, sizeof(date_str), "%Z",
+					 &loc_time);
+				printf("Log time zone is %s\n", date_str);
+				time_zone_reported = true;
+			}
+
+			/* Date format is MMM DD YY HH:mm:ss */
+			strftime(date_str, sizeof(date_str), "%b %d %y %T",
+				 &loc_time);
+			printf("%s : %02x", date_str, entry.r.type);
 		}
-
-		/* Date format is MMM DD YY HH:mm:ss */
-		strftime(date_str, sizeof(date_str), "%b %d %y %T", &loc_time);
-		printf("%s : %02x", date_str, entry.r.type);
 		for (i = 0; i < FLASH_LOG_PAYLOAD_SIZE(entry.r.size); i++)
 			printf(" %02x", entry.r.payload[i]);
 		printf("\n");
@@ -3147,7 +3154,7 @@ int main(int argc, char *argv[])
 		exit(process_get_boot_mode(&td));
 
 	if (get_flog)
-		process_get_flog(&td, prev_log_entry);
+		process_get_flog(&td, prev_log_entry, show_machine_output);
 
 	if (erase_ap_ro_hash)
 		process_erase_ap_ro_hash(&td);
