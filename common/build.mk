@@ -50,7 +50,6 @@ common-$(CONFIG_FLASH_NVMEM_VARS)+=nvmem_vars.o
 common-$(CONFIG_FMAP)+=fmap.o
 common-$(CONFIG_GESTURE_SW_DETECTION)+=gesture.o
 common-$(CONFIG_HOSTCMD_EVENTS)+=host_event_commands.o
-common-$(CONFIG_HOSTCMD_PD)+=host_command_master.o
 common-$(CONFIG_I2C_MASTER)+=i2c_master.o
 common-$(CONFIG_I2C_SLAVE)+=i2c_slave.o
 common-$(CONFIG_INDUCTIVE_CHARGING)+=inductive_charging.o
