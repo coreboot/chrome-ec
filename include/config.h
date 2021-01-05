@@ -68,50 +68,6 @@
  */
 #define CONFIG_ACCEL_SPOOF_MODE
 
-/* Specify type of accelerometers attached. */
-#undef CONFIG_ACCEL_BMA255
-#undef CONFIG_ACCEL_KXCJ9
-#undef CONFIG_ACCEL_KX022
-/*
- * lis2dh/lis2de/lng2dm have the same register interface but different
- * supported resolution. In normal mode, lis2dh works in 10-bit resolution,
- * but lis2de/lng2dm only support 8bit resolution.
- *
- * Use the define for your correct chip and the CONFIG_ACCEL_LIS2D_COMMON will
- * automatically get defined.
- */
-#undef CONFIG_ACCEL_LIS2DE
-#undef CONFIG_ACCEL_LIS2DH
-#undef CONFIG_ACCEL_LNG2DM
-#undef CONFIG_ACCEL_LIS2D_COMMON
-
-/*
- * lis2dw12 and lis2dwl have almost the same register interface.
- * lis2dw12 supports 4 low power modes but lis2dwl only supports one. lis2dwl
- * only supports 12 bit resolution under low power mode. But lis2dw12 can
- * support 12 bit or 14 bit resolution at different low power modes. In order
- * to get 14 bit resolution, lis2dwl does not use low power mode and lis2dw12
- * only uses 3 of 4 low power modes.
- *
- * Use the define for your correct chip and the CONFIG_ACCEL_LIS2DW_COMMON will
- * automatically get defined.
- */
-#undef CONFIG_ACCEL_LIS2DW12
-#undef CONFIG_ACCEL_LIS2DWL
-#undef CONFIG_ACCEL_LIS2DW_COMMON
-
-/* lis2dw driver support fifo and interrupt, but letting lid accel sensor work
- * at polling mode is a common selection in current usage model. We need get a
- * option to be able to select interrupt or polling (foced mode).
- */
-#undef CONFIG_ACCEL_LIS2DW_AS_BASE
-
-#undef CONFIG_ACCELGYRO_BMI160
-#undef CONFIG_ACCELGYRO_LSM6DS0
-/* Use CONFIG_ACCELGYRO_LSM6DSM for LSM6DSL, LSM6DSM, and/or LSM6DS3 */
-#undef CONFIG_ACCELGYRO_LSM6DSM
-#undef CONFIG_ACCELGYRO_LSM6DSO
-
 /*
  * Some chips have a portion of memory which will remain powered even
  * during a reset.  This is called Always-On, or AON memory, and
@@ -125,33 +81,20 @@
 #undef CONFIG_AON_RAM_BASE
 #undef CONFIG_AON_RAM_SIZE
 
-/* Add sensorhub function for LSM6DSM, required if 2nd device attached. */
-#undef CONFIG_SENSORHUB_LSM6DSM
-
 /* Specify type of Magnetometer attached. */
-#undef CONFIG_MAG_LIS2MDL
 #undef CONFIG_MAG_BMM150
 
 /* Presence of a Bosh Sensortec BMM150 magnetometer behind a BMI160. */
 #undef CONFIG_MAG_BMI160_BMM150
 
-/* Presence of a Bosh Sensortec BMM150 magnetometer behind a LSM6DSM. */
-#undef CONFIG_MAG_LSM6DSM_BMM150
-
 /* Presence of a ST LIS2MDL magnetometer behind a BMI160. */
 #undef CONFIG_MAG_BMI160_LIS2MDL
-
-/* Presence of a ST LIS2MDL magnetometer behind a LSM6DSM. */
-#undef CONFIG_MAG_LSM6DSM_LIS2MDL
 
 /* Specify barometer attached */
 #undef CONFIG_BARO_BMP280
 
 /* When set, it indicates a secondary sensor is attached behind a BMI160. */
 #undef CONFIG_BMI160_SEC_I2C
-
-/* When set, it indicates a secondary sensor is attached behind a LSM6DSM/L. */
-#undef CONFIG_LSM6DSM_SEC_I2C
 
 /* Support for BMI160 hardware orientation sensor */
 #undef CONFIG_BMI160_ORIENTATION_SENSOR
@@ -302,10 +245,6 @@
  * Define the event to raise when a sensor interrupt triggers.
  * Must be within TASK_EVENT_MOTION_INTERRUPT_MASK.
  */
-#undef CONFIG_ACCELGYRO_BMI160_INT_EVENT
-#undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
-#undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
-#undef CONFIG_ACCEL_LIS2DW12_INT_EVENT
 #undef CONFIG_ALS_SI114X_INT_EVENT
 #undef CONFIG_ALS_TCS3400_INT_EVENT
 
@@ -4850,34 +4789,6 @@
 #endif
 
 /*****************************************************************************/
-
-/*
- * Automatically define CONFIG_ACCEL_LIS2D_COMMON if a child option is defined.
- */
-#if defined(CONFIG_ACCEL_LIS2DH) || \
-	defined(CONFIG_ACCEL_LIS2DE) || \
-	defined(CONFIG_ACCEL_LNG2DM)
-#define CONFIG_ACCEL_LIS2D_COMMON
-#endif
-
-/*
- * Automatically define CONFIG_ACCEL_LIS2DW_COMMON if a child option is defined.
- */
-#if defined(CONFIG_ACCEL_LIS2DW12) || \
-	defined(CONFIG_ACCEL_LIS2DWL)
-#define CONFIG_ACCEL_LIS2DW_COMMON
-#endif
-
-/*
- * CONFIG_ACCEL_LIS2DW12 and CONFIG_ACCEL_LIS2DWL can't be defined at the same
- * time.
- */
-#if defined(CONFIG_ACCEL_LIS2DW12) && \
-	defined(CONFIG_ACCEL_LIS2DWL)
-#error "Define only one of CONFIG_ACCEL_LIS2DW12 and CONFIG_ACCEL_LIS2DWL"
-#endif
-
-/*****************************************************************************/
 /* Define derived seven segment display common path */
 #ifdef CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
 #define CONFIG_SEVEN_SEG_DISPLAY
@@ -4914,15 +4825,8 @@
 #define CONFIG_BMI160_SEC_I2C
 #endif
 
-/* Enable LSM2MDL secondary port if needed. */
-#if defined(CONFIG_MAG_LSM6DSM_BMM150) || \
-	defined(CONFIG_MAG_LSM6DSM_LIS2MDL)
-#define CONFIG_LSM6DSM_SEC_I2C
-#endif
-
 /* Load LIS2MDL driver if needed */
-#if defined(CONFIG_MAG_BMI160_LIS2MDL) || \
-	defined(CONFIG_MAG_LSM6DSM_LIS2MDL)
+#if defined(CONFIG_MAG_BMI160_LIS2MDL)
 #define CONFIG_MAG_LIS2MDL
 #ifndef CONFIG_ACCELGYRO_SEC_ADDR_FLAGS
 #error "The i2c address of the magnetometer is not set."
@@ -4930,18 +4834,10 @@
 #endif
 
 /* Load BMM150 driver if needed */
-#if defined(CONFIG_MAG_BMI160_BMM150) || \
-	defined(CONFIG_MAG_LSM6DSM_BMM150)
+#if defined(CONFIG_MAG_BMI160_BMM150)
 #define CONFIG_MAG_BMM150
 #ifndef CONFIG_ACCELGYRO_SEC_ADDR_FLAGS
 #error "The i2c address of the magnetometer is not set."
-#endif
-#endif
-
-/* Verify sensorhub is enabled */
-#ifdef CONFIG_MAG_LSM6DSM_LIS2MDL
-#ifndef CONFIG_SENSORHUB_LSM6DSM
-#error "Enable SENSORHUB_LSM6DSM."
 #endif
 #endif
 
