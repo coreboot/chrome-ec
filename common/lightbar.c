@@ -10,7 +10,6 @@
 #include "simulation.h"
 #else
 #include "battery.h"
-#include "charge_state.h"
 #include "common.h"
 #include "console.h"
 #include "ec_commands.h"
