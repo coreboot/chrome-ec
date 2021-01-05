@@ -4,7 +4,6 @@
  */
 
 /* System module for Chrome EC : common functions */
-#include "battery.h"
 #include "chipset.h"
 #include "clock.h"
 #include "common.h"
@@ -1510,15 +1509,6 @@ DECLARE_HOST_COMMAND(EC_CMD_REBOOT_EC,
 
 int system_can_boot_ap(void)
 {
-#if defined(CONFIG_BATTERY) && \
-	defined(CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
-	/* Require a minimum battery level to power on. If battery isn't
-	 * present, battery_state_of_charge_abs returns false. */
-	if (battery_state_of_charge_abs(&soc) == EC_SUCCESS &&
-			soc >= CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
-		return 1;
-#endif
-
 	/* For fixed AC system */
 	return 1;
 }

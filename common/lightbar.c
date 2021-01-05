@@ -9,7 +9,6 @@
 #ifdef LIGHTBAR_SIMULATION
 #include "simulation.h"
 #else
-#include "battery.h"
 #include "common.h"
 #include "console.h"
 #include "ec_commands.h"

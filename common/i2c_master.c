@@ -5,7 +5,6 @@
 
 /* I2C cross-platform code for Chrome EC */
 
-#include "battery.h"
 #include "clock.h"
 #include "console.h"
 #include "crc8.h"
@@ -958,14 +957,6 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 	int in_len;
 	int ret, i;
 	int port_is_locked = 0;
-
-#ifdef CONFIG_BATTERY_CUT_OFF
-	/*
-	 * Some batteries would wake up after cut-off if we talk to it.
-	 */
-	if (battery_is_cut_off())
-		return EC_RES_ACCESS_DENIED;
-#endif
 
 	i2c_port = get_i2c_port(params->port);
 	if (!i2c_port)
