@@ -1317,20 +1317,6 @@
  */
 #undef CONFIG_EC_EFS_SUPPORT
 
-/*****************************************************************************/
-/* Support for EC-EC communication */
-
-/*
- * Board is master or slave in EC-EC communication.
- */
-#undef CONFIG_EC_EC_COMM_MASTER
-#undef CONFIG_EC_EC_COMM_SLAVE
-
-/*
- * Board support battery-related functions in EC-EC communication.
- */
-#undef CONFIG_EC_EC_COMM_BATTERY
-
 /*
  * Enable the experimental console.
  *
@@ -4586,24 +4572,6 @@
 #ifdef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
 #define CONFIG_LED_PWM_CHARGE_STATE_ONLY
 #endif
-
-/*****************************************************************************/
-/*
- * Define derived configuration options for EC-EC communication
- */
-#ifdef CONFIG_EC_EC_COMM_BATTERY
-#ifdef CONFIG_EC_EC_COMM_MASTER
-#define CONFIG_EC_EC_COMM_BATTERY_MASTER
-#define CONFIG_BATTERY_V2
-#define CONFIG_BATTERY_COUNT 2
-#endif
-
-#ifdef CONFIG_EC_EC_COMM_SLAVE
-#define CONFIG_EC_EC_COMM_BATTERY_SLAVE
-#define CONFIG_BATTERY_V2
-#define CONFIG_BATTERY_COUNT 1
-#endif
-#endif /* CONFIG_EC_EC_COMM_BATTERY */
 
 /*****************************************************************************/
 /* Define derived USB PD Discharge common path */
