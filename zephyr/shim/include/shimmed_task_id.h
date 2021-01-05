@@ -37,14 +37,31 @@ typedef uint8_t task_id_t;
 	COND_CODE_1(HAS_TASK_KEYSCAN,                                     \
 		     (CROS_EC_TASK(KEYSCAN, keyboard_scan_task, 0,        \
 				   CONFIG_TASK_KEYSCAN_STACK_SIZE)), ())
+#elif defined(CONFIG_HAS_TEST_TASKS)
+#include "shimmed_test_tasks.h"
+/*
+ * There are two different ways to define a task list (because historical
+ * reasons). Applications use CROS_EC_TASK_LIST to define their tasks, while
+ * unit tests that need additional tasks use CONFIG_TEST_TASK_LIST. For
+ * shimming a unit test, define CROS_EC_TASk_LIST as whatever
+ * CONFIG_TEST_TASK_LIST expands to.
+ */
+#if defined(CONFIG_TEST_TASK_LIST) && !defined(CROS_EC_TASK_LIST)
+#define CROS_EC_TASK_LIST CONFIG_TEST_TASK_LIST
+#endif /* CONFIG_TEST_TASK_LIST && !CROS_EC_TASK_LIST */
 #endif /* !CONFIG_ZTEST */
 
 #ifndef CROS_EC_TASK_LIST
 #define CROS_EC_TASK_LIST
 #endif /* CROS_EC_TASK_LIST */
 
-/* Define the task_ids globally for all shimmed platform/ec code to use */
+/*
+ * Define the task_ids globally for all shimmed platform/ec code to use.
+ * Note that unit test task lists use TASK_TEST, which we can just alias
+ * into a regular CROS_EC_TASK.
+ */
 #define CROS_EC_TASK(name, ...) TASK_ID_##name,
+#define TASK_TEST(name, ...) CROS_EC_TASK(name)
 enum {
 	TASK_ID_IDLE = -1, /* We don't shim the idle task */
 	CROS_EC_TASK_LIST
@@ -52,5 +69,6 @@ enum {
 	TASK_ID_INVALID = 0xff, /* Unable to find the task */
 };
 #undef CROS_EC_TASK
+#undef TASK_TEST
 
 #endif /* __CROS_EC_SHIMMED_TASK_ID_H */

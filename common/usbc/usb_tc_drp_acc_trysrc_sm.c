@@ -60,15 +60,15 @@
 #undef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
 
 #ifdef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
-void print_flag(int set_or_clear, int flag);
+void print_flag(int port, int set_or_clear, int flag);
 #define TC_SET_FLAG(port, flag)                     \
 	do {                                        \
-		print_flag(1, flag);                \
+		print_flag(port, 1, flag);          \
 		atomic_or(&tc[port].flags, (flag)); \
 	} while (0)
 #define TC_CLR_FLAG(port, flag)                             \
 	do {                                                \
-		print_flag(0, flag);                        \
+		print_flag(port, 0, flag);                  \
 		atomic_clear_bits(&tc[port].flags, (flag)); \
 	} while (0)
 #else
@@ -123,8 +123,13 @@ void print_flag(int set_or_clear, int flag);
 #define CLR_ALL_BUT_LPM_FLAGS(port) TC_CLR_FLAG(port, \
 	~(TC_FLAGS_LPM_ENGAGED | TC_FLAGS_SUSPEND))
 
-/* 100 ms is enough time for any TCPC transaction to complete. */
-#define PD_LPM_DEBOUNCE_US (100 * MSEC)
+/*
+ * 10 ms is enough time for any TCPC transaction to complete
+ *
+ * This value must be below ~39.7 ms to put ANX7447 into LPM due to bug in
+ * silicon (see b/77544959 and b/149761477 for more details).
+ */
+#define PD_LPM_DEBOUNCE_US (10 * MSEC)
 
 /*
  * This delay is not part of the USB Type-C specification or the USB port
@@ -325,12 +330,12 @@ static struct bit_name event_bit_names[] = {
 	{ PD_EVENT_SYSJUMP, "SYSJUMP" },
 };
 
-static void print_bits(const char *desc, int value,
+static void print_bits(int port, const char *desc, int value,
 		       struct bit_name *names, int names_size)
 {
 	int i;
 
-	CPRINTF("%s 0x%x : ", desc, value);
+	CPRINTF("C%d: %s 0x%x : ", port, desc, value);
 	for (i = 0; i < names_size; i++) {
 		if (value & names[i].value)
 			CPRINTF("%s | ", names[i].name);
@@ -341,9 +346,9 @@ static void print_bits(const char *desc, int value,
 	CPRINTF("\n");
 }
 
-void print_flag(int set_or_clear, int flag)
+void print_flag(int port, int set_or_clear, int flag)
 {
-	print_bits(set_or_clear ? "Set" : "Clr", flag, flag_bit_names,
+	print_bits(port, set_or_clear ? "Set" : "Clr", flag, flag_bit_names,
 		   ARRAY_SIZE(flag_bit_names));
 }
 #endif /* DEBUG_PRINT_FLAG_AND_EVENT_NAMES */
@@ -1551,7 +1556,7 @@ void tc_event_check(int port, int evt)
 {
 #ifdef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
 	if (evt != TASK_EVENT_TIMER)
-		print_bits("Event", evt, event_bit_names,
+		print_bits(port, "Event", evt, event_bit_names,
 			   ARRAY_SIZE(event_bit_names));
 #endif
 
