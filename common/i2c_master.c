@@ -17,7 +17,6 @@
 #include "task.h"
 #include "util.h"
 #include "watchdog.h"
-#include "virtual_battery.h"
 
 /* Delay for bitbanging i2c corresponds roughly to 100kHz. */
 #define I2C_BITBANG_DELAY_US	5
@@ -1010,15 +1009,6 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 		if (resp->num_msgs == params->num_msgs - 1)
 			xferflags |= I2C_XFER_STOP;
 
-#if defined(VIRTUAL_BATTERY_ADDR_FLAGS) && defined(I2C_PORT_VIRTUAL_BATTERY)
-		if (params->port == I2C_PORT_VIRTUAL_BATTERY &&
-		    addr_flags == VIRTUAL_BATTERY_ADDR_FLAGS) {
-			if (virtual_battery_handler(resp, in_len, &rv,
-						xferflags, read_len,
-						write_len, out))
-				break;
-		}
-#endif
 		/* Transfer next message */
 		PTHRUPRINTS("xfer port=%x addr=0x%x rlen=%d flags=0x%x",
 			    params->port, addr_flags,
