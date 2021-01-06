@@ -228,7 +228,7 @@ static int other_rw_is_inactive(void)
 
 /* I2C Port definition */
 const struct i2c_port_t i2c_ports[]  = {
-	{"master", I2C_PORT_MASTER, 100,
+	{"controller", I2C_PORT_CONTROLLER, 100,
 	 GPIO_I2C_SCL_INA, GPIO_I2C_SDA_INA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);

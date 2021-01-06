@@ -515,7 +515,7 @@ enum nvmem_users {
 #define CONFIG_SN_BITS_SUPPORT
 #define CONFIG_EXTENDED_VERSION_INFO
 
-#define I2C_PORT_MASTER 0
+#define I2C_PORT_CONTROLLER 0
 
 #define CONFIG_BASE32
 #define CONFIG_RMA_AUTH
