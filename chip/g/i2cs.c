@@ -6,21 +6,21 @@
 /*
  * This is a driver for the I2C peripheral (i2cp) of the g chip.
  *
- * The controller is has two register files, 64 bytes each, one for storing
- * data received from the master, and one for storing data to be transmitted
- * to the master. Both files are accessed only as 4 byte quantities, so the
- * driver must provide adaptation to concatenate messages with sizes not
- * divisible by 4 and or not properly aligned.
+ * The driver has two register files, 64 bytes each, one for storing data
+ * received from the master, and one for storing data to be transmitted to the
+ * master. Both files are accessed only as 4 byte quantities, so the driver
+ * must provide adaptation to concatenate messages with sizes not divisible by
+ * 4 and or not properly aligned.
  *
  * The file holding data written by the master has associated with it a
- * register showing where the controller accessed the file last, comparing it
+ * register showing where the driver accessed the file last, comparing it
  * with its previous value tells the driver how many bytes recently written by
  * the master are there.
  *
  * The file holding data to be read by the master has a register associated
- * with it showing where was the latest BIT the controller transmitted.
+ * with it showing where was the latest BIT the driver transmitted.
  *
- * The controller can generate interrupts on three different conditions:
+ * The driver can generate interrupts on three different conditions:
  *  - beginning of a read cycle
  *  - end of a read cycle
  *  - end of a write cycle
@@ -58,7 +58,7 @@
  *
  * TODO:
  * - figure out flow control - clock stretching can be challenging with this
- *   controller.
+ *   driver.
  * - detect and recover from overflow/underflow situations
  */
 
@@ -160,7 +160,7 @@ DECLARE_DEFERRED(poll_read_state);
  */
 #define READ_STATUS_CHECK_INTERVAL (700 * MSEC)
 
-/* Number of times SDA must be low between i2c writes before the i2cp controller
+/* Number of times SDA must be low between i2c writes before the i2cp driver
  * is restarted.
  *
  * Three was chosen because we can have two i2c transactions in between write
@@ -196,13 +196,13 @@ DECLARE_DEFERRED(poll_read_state);
 #define READ_STATUS_CHECK_THRESHOLD 3
 
 /*
- * Restart the i2cp controller if the controller gets stuck transmitting a 0 on
+ * Restart the i2cp driver if the driver gets stuck transmitting a 0 on
  * SDA.
  *
- * This can happen anytime the i2cp controller has control of SDA and the master
+ * This can happen anytime the i2cp driver has control of SDA and the master
  * happens to fail and stops clocking.
  *
- * For example when the i2cp controller is:
+ * For example when the i2cp driver is:
  * 1) Transmitting an ACK for the slave address byte.
  * 2) Transmitting an ACK for a write transaction.
  * 3) Transmitting byte data for a read transaction.
@@ -213,7 +213,7 @@ DECLARE_DEFERRED(poll_read_state);
  * condition when the bus is free (i.e., SDA is high), otherwise the master
  * thinks that it lost arbitration.
  *
- * We don't have to deal with the scenario where the controller gets stuck
+ * We don't have to deal with the scenario where the driver gets stuck
  * transmitting a 1 on SDA since the master can recover the bus by issuing a
  * normal transaction. The master will at minimum clock 9 times on any
  * transaction. This is enough for the slave to complete its current operation
@@ -241,8 +241,8 @@ static void poll_read_state(void)
 
 		/*
 		 * SDA line has been stuck low without any write transactions
-		 * occurring. We will assume the controller is stuck.
-		 * Reinitialize the i2c interface (which will also restart this
+		 * occurring. We will assume the driver is stuck.
+		 * Reinitialize the i2c driver (which will also restart this
 		 * polling function).
 		 */
 		if (i2cp_sda_low_count == READ_STATUS_CHECK_THRESHOLD) {
