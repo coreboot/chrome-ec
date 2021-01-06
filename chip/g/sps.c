@@ -272,7 +272,7 @@ static void sps_init(void)
 	if (!board_tpm_uses_spi())
 		return;
 
-	pmu_clock_en(PERIPH_SPS);
+	pmu_clock_en(PERIPH_SPP);
 
 	/* The pinmux connections are preset, but we have to set IN/OUT */
 	GWRITE_FIELD(PINMUX, DIOA2_CTL, IE, 1);	 /* SPS_MOSI */

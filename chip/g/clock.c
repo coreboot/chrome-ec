@@ -41,7 +41,7 @@ void clock_enable_module(enum module_id module, int enable)
 		clock_func(PERIPH_SPI);
 		break;
 	case MODULE_SPI:
-		clock_func(PERIPH_SPS);
+		clock_func(PERIPH_SPP);
 		break;
 	case MODULE_USB:
 		clock_func(PERIPH_USB0);
