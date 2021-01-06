@@ -6,14 +6,14 @@
 #include "common.h"
 #include "console.h"
 #include "hooks.h"
-#include "sps.h"
+#include "spp.h"
 #include "system.h"
 #include "tpm_registers.h"
 #include "util.h"
 
 /*
  * This implements the TCG's TPM SPI Hardware Protocol on the SPI bus, using
- * the Cr50 SPS (SPI slave) controller. This turns out to be very similar to
+ * the Cr50 SPP (SPI periph) controller. This turns out to be very similar to
  * the EC host command protocol, which is itself similar to HDLC. All of those
  * protocols provide ways to identify data frames over transports that don't
  * provide them natively. That's the nice thing about standards: there are so
@@ -100,26 +100,26 @@ static uint32_t regaddr;		/* Address of register to read/write. */
 #define TXBUF_MAX 512				/* chosen arbitrarily */
 static uint8_t txbuf[1 + TXBUF_MAX];
 
-static enum sps_state {
+static enum spp_state {
 	/* Receiving header */
-	SPS_TPM_STATE_RECEIVING_HEADER,
+	SPP_TPM_STATE_RECEIVING_HEADER,
 
 	/* Receiving data. */
-	SPS_TPM_STATE_RECEIVING_WRITE_DATA,
+	SPP_TPM_STATE_RECEIVING_WRITE_DATA,
 
 	/* Finished rx processing, waiting for SPI transaction to finish. */
-	SPS_TPM_STATE_PONDERING,
+	SPP_TPM_STATE_PONDERING,
 
 	/* Something went wrong. */
-	SPS_TPM_STATE_RX_BAD,
-} sps_tpm_state;
+	SPP_TPM_STATE_RX_BAD,
+} spp_tpm_state;
 
 /* Set initial conditions to get ready to receive a command. */
 static void init_new_cycle(void)
 {
 	rxbuf_count = 0;
-	sps_tpm_state = SPS_TPM_STATE_RECEIVING_HEADER;
-	sps_tx_status(TPM_STALL_ASSERT);
+	spp_tpm_state = SPP_TPM_STATE_RECEIVING_HEADER;
+	spp_tx_status(TPM_STALL_ASSERT);
 	/* We're just waiting for a new command, so we could sleep. */
 	delay_sleep_by(1 * SECOND);
 	enable_sleep(SLEEP_MASK_SPI);
@@ -144,9 +144,9 @@ static void process_rx_data(uint8_t *data, size_t data_size, int cs_deasserted)
 
 	if ((rxbuf_count + data_size) > RXBUF_MAX) {
 		CPRINTS("TPM SPI input overflow: %d + %d > %d in state %d",
-			rxbuf_count, data_size, RXBUF_MAX, sps_tpm_state);
-		sps_tx_status(TPM_STALL_DEASSERT);
-		sps_tpm_state = SPS_TPM_STATE_RX_BAD;
+			rxbuf_count, data_size, RXBUF_MAX, spp_tpm_state);
+		spp_tx_status(TPM_STALL_DEASSERT);
+		spp_tpm_state = SPP_TPM_STATE_RX_BAD;
 		/* In this state, this function won't be called again until
 		 * after the CS deasserts and we've prepared for a new
 		 * transaction. */
@@ -156,7 +156,7 @@ static void process_rx_data(uint8_t *data, size_t data_size, int cs_deasserted)
 	rxbuf_count += data_size;
 
 	/* Okay, we have enough. Now what? */
-	if (sps_tpm_state == SPS_TPM_STATE_RECEIVING_HEADER) {
+	if (spp_tpm_state == SPP_TPM_STATE_RECEIVING_HEADER) {
 		if (rxbuf_count < 4)
 			return;	/* Header is 4 bytes in size. */
 
@@ -170,8 +170,8 @@ static void process_rx_data(uint8_t *data, size_t data_size, int cs_deasserted)
 			 * room. What can we do if it doesn't? */
 			tpm_register_get(regaddr - TPM_LOCALITY_0_SPI_BASE,
 					 txbuf + 1, bytecount);
-			sps_transmit(txbuf, bytecount + 1);
-			sps_tpm_state = SPS_TPM_STATE_PONDERING;
+			spp_transmit(txbuf, bytecount + 1);
+			spp_tpm_state = SPP_TPM_STATE_PONDERING;
 			return;
 		}
 
@@ -179,13 +179,13 @@ static void process_rx_data(uint8_t *data, size_t data_size, int cs_deasserted)
 		 * Write the new idle byte value, to signal the master to
 		 * proceed with data.
 		 */
-		sps_tx_status(TPM_STALL_DEASSERT);
-		sps_tpm_state = SPS_TPM_STATE_RECEIVING_WRITE_DATA;
+		spp_tx_status(TPM_STALL_DEASSERT);
+		spp_tpm_state = SPP_TPM_STATE_RECEIVING_WRITE_DATA;
 		return;
 	}
 
 	if (cs_deasserted &&
-	    (sps_tpm_state == SPS_TPM_STATE_RECEIVING_WRITE_DATA))
+	    (spp_tpm_state == SPP_TPM_STATE_RECEIVING_WRITE_DATA))
 		/* Ok, we have all the write data, pass it to the tpm. */
 		tpm_register_put(regaddr - TPM_LOCALITY_0_SPI_BASE,
 				 rxbuf + rxbuf_count - bytecount, bytecount);
@@ -193,36 +193,36 @@ static void process_rx_data(uint8_t *data, size_t data_size, int cs_deasserted)
 
 static void tpm_rx_handler(uint8_t *data, size_t data_size, int cs_deasserted)
 {
-	if ((sps_tpm_state == SPS_TPM_STATE_RECEIVING_HEADER) ||
-	    (sps_tpm_state == SPS_TPM_STATE_RECEIVING_WRITE_DATA))
+	if ((spp_tpm_state == SPP_TPM_STATE_RECEIVING_HEADER) ||
+	    (spp_tpm_state == SPP_TPM_STATE_RECEIVING_WRITE_DATA))
 		process_rx_data(data, data_size, cs_deasserted);
 
 	if (cs_deasserted)
 		init_new_cycle();
 }
 
-static void sps_if_stop(void)
+static void spp_if_stop(void)
 {
 	/* Let's shut down the interface while TPM is being reset. */
-	sps_register_rx_handler(0, NULL, 0);
+	spp_register_rx_handler(0, NULL, 0);
 }
 
-static void sps_if_start(void)
+static void spp_if_start(void)
 {
 	/*
 	 * Threshold of 3 makes sure we get an interrupt as soon as the header
 	 * is received.
 	 */
 	init_new_cycle();
-	sps_register_rx_handler(SPS_GENERIC_MODE, tpm_rx_handler, 3);
+	spp_register_rx_handler(SPP_GENERIC_MODE, tpm_rx_handler, 3);
 }
 
 
-static void sps_if_register(void)
+static void spp_if_register(void)
 {
 	if (!board_tpm_uses_spi())
 		return;
 
-	tpm_register_interface(sps_if_start, sps_if_stop);
+	tpm_register_interface(spp_if_start, spp_if_stop);
 }
-DECLARE_HOOK(HOOK_INIT, sps_if_register, HOOK_PRIO_LAST);
+DECLARE_HOOK(HOOK_INIT, spp_if_register, HOOK_PRIO_LAST);

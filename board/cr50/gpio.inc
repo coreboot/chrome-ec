@@ -308,7 +308,7 @@ PINMUX(GPIO(DETECT_SERVO),      B5, DIO_INPUT)
  *   DIOA6  = SPS_CLK   (input)
  *   DIOA10 = SPS_MISO  (output)
  *   DIOA12 = SPS_CS_L  (input)
- * The digital inputs are enabled in sps.c
+ * The digital inputs are enabled in spp.c
  *
  * If CONFIG_SPI_MASTER is defined, these pads are used:
  *   DIOA4  = SPI_MOSI  (output)
