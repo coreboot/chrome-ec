@@ -10,7 +10,7 @@
  * pit:
  *
  * #define CONFIG_CMD_I2CWEDGE
- * #define I2C_PORT_HOST I2C_PORT_MASTER
+ * #define I2C_PORT_HOST I2C_PORT_CONTROLLER
  *
  */
 
