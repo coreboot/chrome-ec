@@ -42,7 +42,7 @@ struct spi_nor_device_t {
 	const char *name;
 
 	/* Index of the SPI master which this device is connected through. */
-	const enum spi_device spi_master;
+	const enum spi_device spi_controller;
 
 	/* Maximum timeout per command in microseconds. */
 	const uint32_t timeout_usec;
