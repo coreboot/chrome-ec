@@ -129,7 +129,7 @@ static void process_read_access(uint16_t reg_size,
 	/* Back pointer up by one to point to beginning of buffer */
 	data -= 1;
 	tpm_register_get(tpm_reg, data, reg_size);
-	/* Transfer TPM fifo data to the I2CS HW fifo */
+	/* Transfer TPM fifo data to the I2CP HW fifo */
 	i2cp_post_read_fill_fifo(data, reg_size);
 }
 
@@ -206,7 +206,7 @@ static void wr_complete_handler(void *i2cp_data, size_t i2cp_data_size)
 				     data, i2cp_data_size);
 
 	if (assert_int_ap()) {
-		gpio_enable_interrupt(GPIO_MONITOR_I2CS_SDA);
+		gpio_enable_interrupt(GPIO_MONITOR_I2CP_SDA);
 		return;
 	}
 
@@ -224,7 +224,7 @@ static void wr_complete_handler(void *i2cp_data, size_t i2cp_data_size)
 
 void i2cp_sda_isr(enum gpio_signal signal)
 {
-	gpio_disable_interrupt(GPIO_MONITOR_I2CS_SDA);
+	gpio_disable_interrupt(GPIO_MONITOR_I2CP_SDA);
 
 	deassert_int_ap();
 }
@@ -242,7 +242,7 @@ static void i2cp_if_start(void)
 	i2cp_register_write_complete_handler(wr_complete_handler);
 }
 
-/* Function that sets up for I2CS to enable INT_AP_L extension. */
+/* Function that sets up for I2CP to enable INT_AP_L extension. */
 static void i2cp_int_ap_extension_enable_(void)
 {
 	int_ap_extension_enabled_ = true;

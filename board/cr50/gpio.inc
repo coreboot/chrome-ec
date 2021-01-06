@@ -61,15 +61,15 @@
  * GPIO0.11  en_pp3300_ina
  * GPIO0.12  i2c_scl_ina
  * GPIO0.13  i2c_sda_ina
- * GPIO0.14  i2cs_sda poll
+ * GPIO0.14  i2cp_sda poll
  * GPIO0.15  ec_tx_cr50_rx_out
  * GPIO1.0   tpm_rst_l
  * GPIO1.1   detect_ap_uart
  * GPIO1.2   detect_ec_uart
  * GPIO1.3   detect_servo
  * GPIO1.4   detect_tpm_rst_asserted
- * GPIO1.5   unwedge_i2cs_scl
- * GPIO1.6   monitor_i2cs_sda
+ * GPIO1.5   unwedge_i2cp_scl
+ * GPIO1.6   monitor_i2cp_sda
  * GPIO1.7   ec_packet_mode_en
  * GPIO1.8   ec_packet_mode_dis
  * GPIO1.10  rec_lid_switch
@@ -110,13 +110,13 @@ GPIO_INT(DETECT_TPM_RST_L_ASSERTED, PIN(1, 4),  GPIO_INT_FALLING,
          tpm_rst_asserted)
 
 /*
- * A GPIO to sample the current state of the I2CS SDA line, allowing to detect
+ * A GPIO to sample the current state of the I2CP SDA line, allowing to detect
  * the 'wedged I2C bus' condition.
  *
  * Also, it works to detect an I2C transaction during extended INT_AP_L
  * assertion.
  */
-GPIO_INT(MONITOR_I2CS_SDA, PIN(1, 6), GPIO_INT_LOW, i2cp_sda_isr)
+GPIO_INT(MONITOR_I2CP_SDA, PIN(1, 6), GPIO_INT_LOW, i2cp_sda_isr)
 
 /*
  * These GPIOs are to enable or disable EC-CR50 communication.
@@ -194,7 +194,7 @@ GPIO(STRAP_A1,        PIN(1, 13), GPIO_INPUT)
 GPIO(STRAP_B0,        PIN(1, 14), GPIO_INPUT)
 GPIO(STRAP_B1,        PIN(1, 15), GPIO_INPUT)
 
-GPIO(UNWEDGE_I2CS_SCL, PIN(1, 5), GPIO_OUT_HIGH)
+GPIO(UNWEDGE_I2CP_SCL, PIN(1, 5), GPIO_OUT_HIGH)
 
 /*
  * If you change the names of EN_PP3300_INA_L, I2C_SCL_INA, or I2C_SDA_INA,
@@ -207,15 +207,15 @@ GPIO(I2C_SCL_INA,     PIN(0, 12), GPIO_INPUT)
 GPIO(I2C_SDA_INA,     PIN(0, 13), GPIO_INPUT)
 
 /*
- * Use this to poll the state of the I2CS SDA line. Note that this is not
+ * Use this to poll the state of the I2CP SDA line. Note that this is not
  * necessary if SPI interface is used to communicate with the AP, if needed,
  * this GPIO could be reclaimed in that case.
  *
  * Actual attachment of this GPIO to the SDA line happens in board.c only when
- * I2CS interface is required. Should this GPIO ever change, the code setting
+ * I2CP interface is required. Should this GPIO ever change, the code setting
  * up the pinmux in board.c will have to change as well.
  */
-GPIO(I2CS_SDA,        PIN(0, 14), GPIO_INPUT)
+GPIO(I2CP_SDA,        PIN(0, 14), GPIO_INPUT)
 /*
  * Fake open drain on EC_TX_CR50_RX_OUT. When asserted, the signal can be used
  * to enable UART programming mode on the EC. The signal needs to fake open
@@ -245,7 +245,7 @@ PINMUX(GPIO(INT_AP_L),        A5, DIO_INPUT)
 PINMUX(GPIO(DIOM4), M4, DIO_INPUT | GPIO_PULL_UP)
 
 PINMUX(GPIO(EC_FLASH_SELECT), B2, DIO_INPUT)
-PINMUX(GPIO(MONITOR_I2CS_SDA), A1, GPIO_INPUT)
+PINMUX(GPIO(MONITOR_I2CP_SDA), A1, GPIO_INPUT)
 
 /*
  * Update closed_source_set1.c if pinmux for EN_PP3300_INA_L is changed or
@@ -290,9 +290,9 @@ PINMUX(GPIO(EC_TX_CR50_RX_OUT), B6, DIO_INPUT)
 PINMUX(GPIO(DETECT_SERVO),      B5, DIO_INPUT)
 
 /*
- * I2CS pins are bi-directional and would be configured here as shown. However,
+ * I2CP pins are bi-directional and would be configured here as shown. However,
  * A1 is also used as a strapping option GPIO input which is configured
- * above. If a board is configured (via the strapping pins) to support the I2CS
+ * above. If a board is configured (via the strapping pins) to support the I2CP
  * interface, then the connection of A1 and A9 to/from the I2C0_SDA and I2C0_SCL
  * lines is done in the function i2cp_set_pinmux() which lives in board.c.
  *
