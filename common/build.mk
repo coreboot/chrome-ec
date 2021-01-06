@@ -43,7 +43,6 @@ common-$(CONFIG_CROS_BOARD_INFO)+=cbi.o
 common-$(CONFIG_CMD_CHARGEN) += chargen.o
 common-$(CONFIG_CMD_I2CWEDGE)+=i2c_wedge.o
 common-$(CONFIG_COMMON_GPIO)+=gpio.o gpio_commands.o
-common-$(CONFIG_IO_EXPANDER)+=ioexpander.o
 common-$(CONFIG_COMMON_PANIC_OUTPUT)+=panic_output.o
 common-$(CONFIG_COMMON_RUNTIME)+=hooks.o main.o system.o peripheral.o
 common-$(CONFIG_COMMON_TIMER)+=timer.o

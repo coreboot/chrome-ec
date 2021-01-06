@@ -235,25 +235,6 @@ int gpio_get_default_flags(enum gpio_signal signal);
 void gpio_set_level(enum gpio_signal signal, int value);
 
 /**
- * Set the value of a signal and log to the console.
- *
- * @param channel	Output channel
- * @param signal	Signal to set
- * @param value		New value for signal (0 = low, 1 = high)
- */
-void gpio_set_level_verbose(enum console_channel channel,
-			    enum gpio_signal signal, int value);
-
-/**
- * Set the value of a signal that could be either a local GPIO or an IO
- * expander GPIO.
- *
- * @param signal	GPIO_* or IOEX_* signal to set
- * @param value		New value for signal (0 = low, 1 = high)
- */
-void gpio_or_ioex_set_level(int signal, int value);
-
-/**
  * Reset the GPIO flags and alternate function state
  *
  * This returns the GPIO to it's default state of being a GPIO (not
@@ -338,15 +319,6 @@ void gpio_set_alternate_function(uint32_t port, uint32_t mask,
  */
 int gpio_power_down_module(enum module_id id);
 #endif
-
-/*
- * Check if signal is a valid GPIO signal, and not IO expander (enum
- * ioex_signal) or eSPI virtual wire (enum espi_vw_signal).
- *
- * @param signal	GPIO or IOEX or VW signal
- * @return		1 if signal is GPIO else return 0
- */
-int signal_is_gpio(int signal);
 
 /**
  * Configure a GPIO as wake source on a given condition and enable it, or

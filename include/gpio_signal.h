@@ -30,20 +30,4 @@ enum gpio_signal {
 };
 BUILD_ASSERT(GPIO_COUNT < GPIO_LIMIT);
 
-#define IOEX(name, expin, flags) IOEX_##name,
-#define IOEX_INT(name, expin, flags, signal) IOEX_##name,
-
-enum ioex_signal {
-	/* The first valid IOEX signal is 0x1000 */
-	IOEX_SIGNAL_START = GPIO_LIMIT + 1,
-	/* Used to ensure that the first IOEX signal is same as start */
-	__IOEX_PLACEHOLDER = GPIO_LIMIT,
-	#include "gpio.wrap"
-	IOEX_SIGNAL_END,
-	IOEX_LIMIT = 0x1FFF
-};
-BUILD_ASSERT(IOEX_SIGNAL_END < IOEX_LIMIT);
-
-#define IOEX_COUNT (IOEX_SIGNAL_END - IOEX_SIGNAL_START)
-
 #endif /* __CROS_EC_GPIO_SIGNAL_H */
