@@ -140,8 +140,8 @@
 #define CONFIG_SPI_MASTER_CONFIGURE_GPIOS
 #define CONFIG_SPI_FLASH_PORT 0
 
-/* Enable SPI Slave (SPS) module */
-#define CONFIG_SPS
+/* Enable SPI peripheral (SPP) module */
+#define CONFIG_SPP
 #define CONFIG_TPM_SPS
 
 #define CONFIG_RBOX

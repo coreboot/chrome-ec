@@ -3089,12 +3089,12 @@
 #undef CONFIG_SPI_PROTOCOL_V2
 
 /*
- * Support SPI Slave interfaces. The first board supporting this is cr50 and
- * in its parlance SPI_SLAVE is called SPS. This convention might be
+ * Support SPI periph interfaces. The first board supporting this is cr50 and
+ * in its parlance SPI_PERIPH is called SPP. This convention might be
  * reconsidered later, and the use of "SPI" in different config options needs
  * to be cleaned up. (crbug.com/512613).
  */
-#undef CONFIG_SPS
+#undef CONFIG_SPP
 
 /* Define the SPI port to use to access SPI accelerometer */
 #undef CONFIG_SPI_ACCEL_PORT
@@ -3168,8 +3168,8 @@
  * SPI master port's hardwired CS pin. */
 #undef CONFIG_SPI_MASTER_NO_CS_GPIOS
 
-/* Support testing SPI slave controller driver. */
-#undef CONFIG_SPS_TEST
+/* Support testing SPI periph interface driver. */
+#undef CONFIG_SPP_TEST
 
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE
