@@ -51,7 +51,7 @@ common-$(CONFIG_FMAP)+=fmap.o
 common-$(CONFIG_GESTURE_SW_DETECTION)+=gesture.o
 common-$(CONFIG_HOSTCMD_EVENTS)+=host_event_commands.o
 common-$(CONFIG_I2C_CONTROLLER)+=i2c_controller.o
-common-$(CONFIG_I2C_PERIPH)+=i2c_slave.o
+common-$(CONFIG_I2C_PERIPH)+=i2c_peripheral.o
 common-$(CONFIG_INDUCTIVE_CHARGING)+=inductive_charging.o
 common-$(CONFIG_KEYBOARD_PROTOCOL_8042)+=keyboard_8042.o \
 	keyboard_8042_sharedlib.o
