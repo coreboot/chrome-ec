@@ -159,7 +159,6 @@ test_mockable __keep int main(void)
 	 */
 	i2c_init();
 #endif
-
 #ifdef HAS_TASK_KEYSCAN
 	keyboard_scan_init();
 #endif

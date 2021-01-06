@@ -437,7 +437,7 @@ static void jump_to_image(uintptr_t init_addr)
 	usleep(MSEC);
 	gpio_set_level(GPIO_ENTERING_RW, 0);
 
-#ifdef CONFIG_I2C_MASTER
+#ifdef CONFIG_I2C_CONTROLLER
 	/* Prepare I2C module for sysjump */
 	i2c_prepare_sysjump();
 #endif
