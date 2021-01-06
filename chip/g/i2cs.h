@@ -13,22 +13,22 @@
  * two parameters: the address of the buffer containing received data and
  * number of bytes in the buffer.
  */
-typedef void (*wr_complete_handler_f)(void *i2cs_data, size_t i2cs_data_size);
+typedef void (*wr_complete_handler_f)(void *i2cp_data, size_t i2cp_data_size);
 
 /* Register the write complete interrupt handler. */
-int i2cs_register_write_complete_handler(wr_complete_handler_f wc_handler);
+int i2cp_register_write_complete_handler(wr_complete_handler_f wc_handler);
 
 /*
  * Post a byte for the master to read. Blend the byte into the appropriate
  * 4byte register of the master read register file.
  */
-void i2cs_post_read_data(uint8_t byte_to_read);
+void i2cp_post_read_data(uint8_t byte_to_read);
 
 /*
  * Configure the pinmux registers required to connect the I2CS interface. This
  * function is board specific and so it exists in the associated board.c file.
  */
-void i2cs_set_pinmux(void);
+void i2cp_set_pinmux(void);
 
 /*
  * Ensure no bytes are currently buffered in the I2CS READ fifo. This
@@ -38,7 +38,7 @@ void i2cs_set_pinmux(void);
  *
  * @returns: the number of bytes buffered when the function is called
  */
-size_t i2cs_zero_read_fifo_buffer_depth(void);
+size_t i2cp_zero_read_fifo_buffer_depth(void);
 
 /*
  * Write buffer of data into the I2CS HW read fifo. The function will operate a
@@ -48,7 +48,7 @@ size_t i2cs_zero_read_fifo_buffer_depth(void);
  * function diminish as the buffer size gets smaller and therefore not intended
  * to be used for <= 4 byte buffers.
  */
-void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len);
+void i2cp_post_read_fill_fifo(uint8_t *buffer, size_t len);
 
 /*
  * Provide upper layers with information with the I2CS interface
@@ -56,9 +56,9 @@ void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len);
  * counter of "hosed" i2c interface occurences, where i2c clocking stopped
  * while slave was transmitting a zero.
  */
-struct i2cs_status {
+struct i2cp_status {
 	uint16_t read_recovery_count;
 };
-void i2cs_get_status(struct i2cs_status *status);
+void i2cp_get_status(struct i2cp_status *status);
 
 #endif /* ! __CHIP_G_I2CS_H */
