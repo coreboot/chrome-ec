@@ -173,7 +173,7 @@ void i2c_lock(int port, int lock)
 
 		i2c_port_active_list |= 1 << port;
 		/* Ec cannot enter sleep if there's any i2c port active. */
-		disable_sleep(SLEEP_MASK_I2C_MASTER);
+		disable_sleep(SLEEP_MASK_I2C_CONTROLLER);
 
 		interrupt_enable();
 	} else {
@@ -182,7 +182,7 @@ void i2c_lock(int port, int lock)
 		i2c_port_active_list &= ~(1 << port);
 		/* Once there is no i2c port active, enable sleep bit of i2c. */
 		if (!i2c_port_active_list)
-			enable_sleep(SLEEP_MASK_I2C_MASTER);
+			enable_sleep(SLEEP_MASK_I2C_CONTROLLER);
 
 		interrupt_enable();
 
