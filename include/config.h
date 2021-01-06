@@ -2644,15 +2644,6 @@
 /* Include code to do online compass calibration */
 #undef CONFIG_MAG_CALIBRATE
 
-/* Microchip LPC enable debug messages */
-#undef CONFIG_MCHP_DEBUG_LPC
-
-/* Microchip I2C controller slave addresses */
-#undef CONFIG_MCHP_I2C0_SLAVE_ADDRS
-#undef CONFIG_MCHP_I2C1_SLAVE_ADDRS
-#undef CONFIG_MCHP_I2C2_SLAVE_ADDRS
-#undef CONFIG_MCHP_I2C3_SLAVE_ADDRS
-
 /* Microchip EC SRAM start address */
 #undef CONFIG_MEC_SRAM_BASE_START
 
@@ -3177,13 +3168,6 @@
  * SPI master port's hardwired CS pin. */
 #undef CONFIG_SPI_MASTER_NO_CS_GPIOS
 
-/* Support MCHP MEC family GP-SPI master(s)
- * Define to 0x01 for GPSPI0 only.
- * Define to 0x02 for GPSPI1 only.
- * Define to 0x03 for both controllers.
- */
-#undef CONFIG_MCHP_GPSPI
-
 /* Support testing SPI slave controller driver. */
 #undef CONFIG_SPS_TEST
 
@@ -3247,11 +3231,6 @@
  * base attached.
  */
 #undef CONFIG_BASE_ATTACHED_SWITCH
-
-/*
- * Microchip Trace FIFO Debug Port
- */
-#undef CONFIG_MCHP_TFDP
 
 /*****************************************************************************/
 /* Task config */
