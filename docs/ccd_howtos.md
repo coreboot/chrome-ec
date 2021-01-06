@@ -378,7 +378,7 @@ It goes into a lot more detail.
 [enter dev mode]: ./case_closed_debugging_cr50.md#enter-dev-mode
 [sparkfun]: https://www.sparkfun.com/products/14746
 [Setup CCD]: ./case_closed_debugging_cr50.md#CCD-Setup
-[SuzyQ]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/master/docs/ccd.md#suzyq-suzyqable
-[Type-C Servo V4]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/master/docs/servo_v4.md
+[SuzyQ]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/main/docs/ccd.md#suzyq-suzyqable
+[Type-C Servo V4]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/main/docs/servo_v4.md
 [wp console command]: ./case_closed_debugging_cr50.md#WP-control
 

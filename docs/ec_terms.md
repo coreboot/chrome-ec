@@ -169,10 +169,10 @@
 
 
 [BC 1.2 Specification]: <https://www.usb.org/document-library/battery-charging-v12-spec-and-adopters-agreement>
-[CrOS Board Info]: <https://chromium.googlesource.com/chromiumos/docs/+/master/design_docs/cros_board_info.md>
+[CrOS Board Info]: <https://chromium.googlesource.com/chromiumos/docs/+/main/design_docs/cros_board_info.md>
 [CEC Wikipedia page]: <https://en.wikipedia.org/wiki/Consumer_Electronics_Control>
 [DPTF Readme]: <https://github.com/intel/dptf/blob/master/README.txt>
 [eSPI Specification]: <https://www.intel.com/content/dam/support/us/en/documents/software/chipset-software/327432-004_espi_base_specification_rev1.0.pdf>
 [I2C Specification]: <https://www.nxp.com/docs/en/user-guide/UM10204.pdf>
 [RS-232]: <https://en.wikipedia.org/wiki/RS-232>
-[EC MKBP driver]: <https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/common/keyboard_mkbp.c>
+[EC MKBP driver]: <https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/main/common/keyboard_mkbp.c>

@@ -798,15 +798,15 @@ Chrome OS is installed, AP flash can be updated to include the rest of the image
 by running [`flashrom`] or `futility` from the device bash prompt.
 
 [Case Closed Debugging]: ./case_closed_debugging.md
-[chromeos-cr50 ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/master/chromeos-base/chromeos-cr50/chromeos-cr50-0.0.1.ebuild
-[Developer Mode]: https://chromium.googlesource.com/chromiumos/docs/+/master/developer_mode.md#dev-mode
-[Recovery Mode]: https://chromium.googlesource.com/chromiumos/docs/+/master/debug_buttons.md
-[Servo]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/master/docs/servo.md
-[`servod`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/master/docs/servo.md
-[Type-C Servo v4]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/master/docs/servo_v4.md
-[update servo v4]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/master/docs/servo_v4.md#updating-firmware
-[Suzy-Q]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/master/docs/ccd.md#SuzyQ-SuzyQable
-[`hdctools`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/master/README.md
+[chromeos-cr50 ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-cr50/chromeos-cr50-0.0.1.ebuild
+[Developer Mode]: https://chromium.googlesource.com/chromiumos/docs/+/main/developer_mode.md#dev-mode
+[Recovery Mode]: https://chromium.googlesource.com/chromiumos/docs/+/main/debug_buttons.md
+[Servo]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo.md
+[`servod`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo.md
+[Type-C Servo v4]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo_v4.md
+[update servo v4]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo_v4.md#updating-firmware
+[Suzy-Q]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/ccd.md#SuzyQ-SuzyQable
+[`hdctools`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/main/README.md
 [`FlashAP`]: #flashap
 [flashing the AP firmware]: #flashap
 [flashap]: #flashap
@@ -824,10 +824,10 @@ by running [`flashrom`] or `futility` from the device bash prompt.
 [cap]: #cap
 [consoles]: #consoles
 [hw-wp]: #hw-wp
-[`flash_ec`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/util/flash_ec
+[`flash_ec`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/main/util/flash_ec
 [CCD Open]: #ccd-open
-[`flashrom`]: https://chromium.googlesource.com/chromiumos/third_party/flashrom/+/master/README.chromiumos
+[`flashrom`]: https://chromium.googlesource.com/chromiumos/third_party/flashrom/+/main/README.chromiumos
 [speed up the flashing process]: #speed-up-ap-flash
 [this bug]: https://issuetracker.google.com/149420712
 [semver]: https://semver.org/
-[`usb_console`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/extra/usb_serial/console.py
+[`usb_console`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/main/extra/usb_serial/console.py
