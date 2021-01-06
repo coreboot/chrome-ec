@@ -60,7 +60,7 @@ static int spi_nor_read_status(const struct spi_nor_device_t *spi_nor_device,
 {
 	uint8_t cmd = SPI_NOR_OPCODE_READ_STATUS;
 
-	return spi_transaction(&spi_devices[spi_nor_device->spi_master],
+	return spi_transaction(&spi_devices[spi_nor_device->spi_controller],
 			       &cmd, 1, status_register_value, 1);
 }
 
@@ -74,7 +74,7 @@ static int spi_nor_write_enable(const struct spi_nor_device_t *spi_nor_device)
 	int rv = EC_SUCCESS;
 
 	/* Set the write enable latch. */
-	rv = spi_transaction(&spi_devices[spi_nor_device->spi_master],
+	rv = spi_transaction(&spi_devices[spi_nor_device->spi_controller],
 			     &cmd, 1, NULL, 0);
 	if (rv)
 		return rv;
@@ -136,7 +136,7 @@ static int spi_nor_read_jedec_mfn_id(
 	uint8_t cmd = SPI_NOR_OPCODE_JEDEC_ID;
 
 	/* Read the standardized part of the JEDEC ID. */
-	rv = spi_transaction(&spi_devices[spi_nor_device->spi_master],
+	rv = spi_transaction(&spi_devices[spi_nor_device->spi_controller],
 			     &cmd, 1, jedec_id, SPI_NOR_JEDEC_ID_BANKS);
 	if (rv)
 		return rv;
@@ -173,7 +173,7 @@ static int spi_nor_read_sfdp_dword(
 	sfdp_cmd[2] = (sfdp_offset & 0xFF00) >> 8;
 	sfdp_cmd[3] = (sfdp_offset & 0xFF);
 	sfdp_cmd[4] = 0;  /* Required dummy cycle. */
-	return spi_transaction(&spi_devices[spi_nor_device->spi_master],
+	return spi_transaction(&spi_devices[spi_nor_device->spi_controller],
 			       sfdp_cmd, 5, (uint8_t *)out_dw, 4);
 }
 
@@ -422,8 +422,9 @@ static int spi_nor_read_internal(const struct spi_nor_device_t *spi_nor_device,
 			read_command_size = 4;
 		}
 
-		rv = spi_transaction(&spi_devices[spi_nor_device->spi_master],
-				     buf, read_command_size, data, read_size);
+		rv = spi_transaction(
+				&spi_devices[spi_nor_device->spi_controller],
+				buf, read_command_size, data, read_size);
 		if (rv)
 			return rv;
 
@@ -514,9 +515,9 @@ int spi_nor_init(void)
  *
  * WARNING:
  * 1) In 3 Byte addressing mode only 16MiB of Serial NOR Flash is accessible.
- * 2) If there's a second SPI master communicating with this Serial NOR Flash
- *    part on the board, the user is responsible for ensuring addressing mode
- *    compatibility and cooperation.
+ * 2) If there's a second SPI controller communicating with this Serial NOR
+ *    Flash part on the board, the user is responsible for ensuring addressing
+ *    mode compatibility and cooperation.
  * 3) The user must ensure that multiple users do not trample on each other
  *    by having multiple parties changing the device's addressing mode.
  *
@@ -542,7 +543,7 @@ int spi_nor_set_4b_mode(struct spi_nor_device_t *spi_nor_device,
 	/* Claim the driver mutex to modify the device state. */
 	mutex_lock(&driver_mutex);
 
-	rv = spi_transaction(&spi_devices[spi_nor_device->spi_master],
+	rv = spi_transaction(&spi_devices[spi_nor_device->spi_controller],
 			     &cmd, 1, NULL, 0);
 	if (rv == EC_SUCCESS) {
 		spi_nor_device->in_4b_addressing_mode =
@@ -576,7 +577,7 @@ int spi_nor_read_jedec_id(const struct spi_nor_device_t *spi_nor_device,
 	/* Claim the driver mutex. */
 	mutex_lock(&driver_mutex);
 	/* Read the JEDEC ID. */
-	rv = spi_transaction(&spi_devices[spi_nor_device->spi_master],
+	rv = spi_transaction(&spi_devices[spi_nor_device->spi_controller],
 			     &cmd, 1, data, size);
 	/* Release the driver mutex. */
 	mutex_unlock(&driver_mutex);
@@ -723,7 +724,7 @@ int spi_nor_erase(const struct spi_nor_device_t *spi_nor_device,
 		}
 
 		rv = spi_transaction(
-			&spi_devices[spi_nor_device->spi_master],
+			&spi_devices[spi_nor_device->spi_controller],
 			buf, erase_command_size, NULL, 0);
 		if (rv)
 			goto err_free;
@@ -800,8 +801,9 @@ int spi_nor_write(const struct spi_nor_device_t *spi_nor_device,
 		/* Copy data to write into the buffer after the prefix. */
 		memmove(buf + prefix_size, data, write_size);
 
-		rv = spi_transaction(&spi_devices[spi_nor_device->spi_master],
-				     buf, prefix_size + write_size, NULL, 0);
+		rv = spi_transaction(
+				&spi_devices[spi_nor_device->spi_controller],
+				buf, prefix_size + write_size, NULL, 0);
 		if (rv)
 			goto err_free;
 
@@ -853,8 +855,8 @@ static int command_spi_nor_info(int argc, char **argv)
 
 		ccprintf("Serial NOR Flash Device %d:\n", spi_nor_device_index);
 		ccprintf("\tName: %s\n", spi_nor_device->name);
-		ccprintf("\tSPI master index: %d\n",
-			 spi_nor_device->spi_master);
+		ccprintf("\tSPI controller index: %d\n",
+			 spi_nor_device->spi_controller);
 		ccprintf("\tTimeout: %d uSec\n",
 			 spi_nor_device->timeout_usec);
 		ccprintf("\tCapacity: %d KiB\n",
