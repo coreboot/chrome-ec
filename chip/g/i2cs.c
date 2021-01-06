@@ -124,7 +124,7 @@ static void i2cs_init(void)
 	if (!board_tpm_uses_i2c())
 		return;
 
-	pmu_clock_en(PERIPH_I2CS);
+	pmu_clock_en(PERIPH_I2CP);
 
 	memset(i2cs_buffer, 0, sizeof(i2cs_buffer));
 
