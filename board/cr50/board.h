@@ -508,7 +508,7 @@ enum nvmem_users {
 
 #define CONFIG_I2C
 #define CONFIG_I2C_MASTER
-#define CONFIG_I2C_SLAVE
+#define CONFIG_I2C_PERIPH
 #define CONFIG_TPM_I2CS
 
 #define CONFIG_BOARD_ID_SUPPORT

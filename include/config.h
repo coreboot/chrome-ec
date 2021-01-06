@@ -2163,7 +2163,7 @@
 #undef CONFIG_I2C_MASTER
 
 /* EC uses an I2C slave interface */
-#undef CONFIG_I2C_SLAVE
+#undef CONFIG_I2C_PERIPH
 
 /* Defines I2C operation retry count when slave nack'd(EC_ERROR_BUSY) */
 #define CONFIG_I2C_NACK_RETRY_COUNT 0

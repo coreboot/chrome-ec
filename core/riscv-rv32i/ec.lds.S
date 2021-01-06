@@ -28,7 +28,7 @@ MEMORY
     ILM   (rx) : ORIGIN = FW_OFF(SECTION), LENGTH = FW_SIZE(SECTION)
     IRAM (rw)  : ORIGIN = CONFIG_RAM_BASE + CHIP_RAM_SPACE_RESERVED,
                  LENGTH = CONFIG_RAM_SIZE - CHIP_RAM_SPACE_RESERVED
-#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_SLAVE)
+#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_PERIPH)
     H2RAM (rw) : ORIGIN = CONFIG_H2RAM_BASE, LENGTH = CONFIG_H2RAM_SIZE
 #endif
 }
@@ -243,13 +243,13 @@ SECTIONS
     __image_size = LOADADDR(.data) + SIZEOF(.data) + \
                         CHIP_ILM_BASE - FW_OFF(SECTION);
 
-#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_SLAVE)
+#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_PERIPH)
     .h2ram (NOLOAD) : {
         . += CONFIG_H2RAM_HOST_LPC_IO_BASE;
         *(.h2ram.pool.hostcmd)
         . = ALIGN(256);
         *(.h2ram.pool.acpiec)
-#ifdef CONFIG_I2C_SLAVE
+#ifdef CONFIG_I2C_PERIPH
         . = ALIGN(256);
         *(.h2ram.pool.i2cslv)
 #endif
