@@ -157,7 +157,7 @@ static inline int nvmem_erase_tpm_data(void)
 #define NVMEM_TEST_BUILD
 enum ec_error_list browse_flash_contents(int);
 enum ec_error_list compact_nvmem(void);
-extern struct access_tracker master_at;
+extern struct access_tracker controller_at;
 extern uint16_t total_var_space;
 int is_uninitialized(const void *p, size_t size);
 size_t init_object_offsets(uint16_t *offsets, size_t count);
