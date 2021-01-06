@@ -44,7 +44,7 @@ class Hunk(object):
     self.lines = lines
 
 
-# Master file which is supposed to include all CONFIG_xxxx descriptions.
+# Main file which is supposed to include all CONFIG_xxxx descriptions.
 CONFIG_FILE = 'include/config.h'
 
 # Specific files which the checker should ignore.
@@ -53,11 +53,11 @@ ALLOWLIST = [CONFIG_FILE, 'util/config_option_check.py']
 def obtain_current_config_options():
   """Obtains current config options from include/config.h.
 
-  Scans through the master config file defined in CONFIG_FILE for all CONFIG_*
-  options.
+  Scans through the main config file defined in CONFIG_FILE for all
+  CONFIG_* options.
 
   Returns:
-    config_options: A list of all the config options in the master CONFIG_FILE.
+    config_options: A list of all the config options in the main CONFIG_FILE.
   """
 
   config_options = []
@@ -135,11 +135,11 @@ def print_missing_config_options(hunks, config_options):
   Args:
     hunks: A list of Hunk objects which represent the hunks from the git
       diff output.
-    config_options: A list of all the config options in the master CONFIG_FILE.
+    config_options: A list of all the config options in the main CONFIG_FILE.
 
   Returns:
     missing_config_option: A boolean indicating if any CONFIG_* options
-      are missing from the master CONFIG_FILE in this commit or if any CONFIG_*
+      are missing from the main CONFIG_FILE in this commit or if any CONFIG_*
       options removed are no longer being used in the repo.
   """
   missing_config_option = False
