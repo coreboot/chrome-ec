@@ -3,8 +3,8 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#ifndef __CHIP_G_I2CS_H
-#define __CHIP_G_I2CS_H
+#ifndef __CHIP_G_I2CP_H
+#define __CHIP_G_I2CP_H
 
 #include <stddef.h>
 
@@ -25,13 +25,13 @@ int i2cp_register_write_complete_handler(wr_complete_handler_f wc_handler);
 void i2cp_post_read_data(uint8_t byte_to_read);
 
 /*
- * Configure the pinmux registers required to connect the I2CS interface. This
+ * Configure the pinmux registers required to connect the I2CP interface. This
  * function is board specific and so it exists in the associated board.c file.
  */
 void i2cp_set_pinmux(void);
 
 /*
- * Ensure no bytes are currently buffered in the I2CS READ fifo. This
+ * Ensure no bytes are currently buffered in the I2CP READ fifo. This
  * value is calculated by finding the difference between read pointer that's
  * used by FW to add bytes to the HW fifo and the current value of the
  * I2CS_READ_PTR register.
@@ -51,7 +51,7 @@ size_t i2cp_zero_read_fifo_buffer_depth(void);
 void i2cp_post_read_fill_fifo(uint8_t *buffer, size_t len);
 
 /*
- * Provide upper layers with information with the I2CS interface
+ * Provide upper layers with information with the I2CP interface
  * status/statistics. The only piece of information currently provided is the
  * counter of "hosed" i2c interface occurences, where i2c clocking stopped
  * while slave was transmitting a zero.
@@ -61,4 +61,4 @@ struct i2cp_status {
 };
 void i2cp_get_status(struct i2cp_status *status);
 
-#endif /* ! __CHIP_G_I2CS_H */
+#endif /* ! __CHIP_G_I2CP_H */

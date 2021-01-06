@@ -83,7 +83,7 @@ chip-$(CONFIG_RBOX)+=rbox.o
 chip-$(CONFIG_STREAM_USB)+=usb-stream.o
 chip-$(CONFIG_STREAM_USART)+=usart.o
 chip-$(CONFIG_I2C_CONTROLLER)+= i2cm.o
-chip-$(CONFIG_I2C_PERIPH)+= i2cs.o
+chip-$(CONFIG_I2C_PERIPH)+= i2cp.o
 
 chip-$(CONFIG_LOW_POWER_IDLE)+=idle.o
 

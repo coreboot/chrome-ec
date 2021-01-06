@@ -67,7 +67,7 @@
 #include "flash_log.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "i2cs.h"
+#include "i2cp.h"
 #include "pmu.h"
 #include "registers.h"
 #include "system.h"
