@@ -450,8 +450,8 @@ void i2c_data_received(int port, uint8_t *buf, int len);
 int i2c_set_response(int port, uint8_t *buf, int len);
 
 /*
- * Initialize i2c master controller. Automatically called at board boot
- * if CONFIG_I2C_MASTER is defined.
+ * Initialize i2c controller. Automatically called at board boot if
+ * CONFIG_I2C_CONTROLLER is defined.
  */
 void i2c_init(void);
 

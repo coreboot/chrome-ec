@@ -494,7 +494,7 @@ static void jump_to_image(uintptr_t init_addr)
 	pd_prepare_sysjump();
 #endif
 
-#ifdef CONFIG_I2C_MASTER
+#ifdef CONFIG_I2C_CONTROLLER
 	/* Prepare I2C module for sysjump */
 	i2c_prepare_sysjump();
 #endif

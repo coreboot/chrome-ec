@@ -507,7 +507,7 @@ enum nvmem_users {
 #define CONFIG_USB_FW_UPDATE
 
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_PERIPH
 #define CONFIG_TPM_I2CS
 
