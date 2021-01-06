@@ -224,20 +224,20 @@ void test_reboot_to_next_step(enum test_state_t step);
 
 struct test_i2c_read_string_dev {
 	/* I2C string read handler */
-	int (*routine)(int port, int slave_addr, int offset, uint8_t *data,
+	int (*routine)(int port, int periph_addr, int offset, uint8_t *data,
 		       int len);
 };
 
 struct test_i2c_xfer {
 	/* I2C xfer handler */
-	int (*routine)(int port, int slave_addr,
+	int (*routine)(int port, int periph_addr,
 		       const uint8_t *out, int out_size,
 		       uint8_t *in, int in_size, int flags);
 };
 
 struct test_i2c_write_dev {
 	/* I2C write handler */
-	int (*routine)(int port, int slave_addr, int offset, int data);
+	int (*routine)(int port, int periph_addr, int offset, int data);
 };
 
 /**
@@ -259,20 +259,20 @@ struct test_i2c_write_dev {
  * specified port and slave address returns error.
  *
  * @param port       The port that the detached device is connected to
- * @param slave_addr The address of the detached device
+ * @param periph_addr The address of the detached device
  * @return EC_SUCCESS if detached; EC_ERROR_OVERFLOW if too many devices are
  *         detached.
  */
-int test_detach_i2c(int port, int slave_addr);
+int test_detach_i2c(int port, int periph_addr);
 
 /*
  * Re-attach an I2C device.
  *
  * @param port       The port that the detached device is connected to
- * @param slave_addr The address of the detached device
+ * @param periph_addr The address of the detached device
  * @return EC_SUCCESS if re-attached; EC_ERROR_INVAL if the specified device
  *         is not a detached device.
  */
-int test_attach_i2c(int port, int slave_addr);
+int test_attach_i2c(int port, int periph_addr);
 
 #endif /* __CROS_EC_TEST_UTIL_H */
