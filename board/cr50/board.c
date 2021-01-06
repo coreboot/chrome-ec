@@ -19,7 +19,7 @@
 #include "ite_sync.h"
 #include "hooks.h"
 #include "i2c.h"
-#include "i2cs.h"
+#include "i2cp.h"
 #include "init_chip.h"
 #include "nvmem.h"
 #include "nvmem_vars.h"
