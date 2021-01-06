@@ -602,8 +602,8 @@ static void tpm_init(void)
 	set_tpm_state(tpm_state_idle);
 	tpm_.regs.access = tpm_reg_valid_sts;
 	/*
-	 * I2CS writes must limit the burstsize to 63 for fifo writes to work
-	 * properly. For I2CS fifo writes the first byte is the I2C TPM address
+	 * I2CP writes must limit the burstsize to 63 for fifo writes to work
+	 * properly. For I2CP fifo writes the first byte is the I2C TPM address
 	 * and the next up to 62 bytes are the data to write to that register.
 	 */
 	tpm_.regs.sts = (tpm_family_tpm2 << tpm_family_shift) |

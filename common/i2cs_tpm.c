@@ -13,9 +13,9 @@
 #include "tpm_registers.h"
 
 /*
- * This implements adaptaition layer between i2cs (i2c slave) port and TPM.
+ * This implements adaptaition layer between i2cp (i2c periph) port and TPM.
  *
- * The adaptation layer is stateless, it processes the i2cs "write complete"
+ * The adaptation layer is stateless, it processes the i2cp "write complete"
  * interrupts on the interrupt context.
  *
  * Each "write complete" interrupt is associated with some data receved from
@@ -80,10 +80,10 @@ static const struct i2c_tpm_reg_map i2c_to_tpm[] = {
 	{0x1c, 4, 0xfe0}, /* TPM_BOARD_CFG */
 };
 
-/* Used to track number of times i2cs hw read fifo was adjusted */
-static uint32_t i2cs_fifo_adjust_count;
+/* Used to track number of times i2cp hw read fifo was adjusted */
+static uint32_t i2cp_fifo_adjust_count;
 /* Used to track number of write mismatch errors */
-static uint32_t i2cs_write_error_count;
+static uint32_t i2cp_write_error_count;
 
 static bool int_ap_extension_enabled_;
 
@@ -102,15 +102,15 @@ static void process_read_access(uint16_t reg_size,
 		tpm_register_get(tpm_reg, reg_value, reg_size);
 		/*
 		 * For 1 or 4 byte register reads there should not be any data
-		 * buffered in the i2cs hw read fifo. This function will check
+		 * buffered in the i2cp hw read fifo. This function will check
 		 * the current fifo queue depth and if non-zero, will adjust the
 		 * fw pointer to force it to 0.
 		 */
-		if (i2cs_zero_read_fifo_buffer_depth())
+		if (i2cp_zero_read_fifo_buffer_depth())
 			/* Count each instance that fifo was adjusted */
-			i2cs_fifo_adjust_count++;
+			i2cp_fifo_adjust_count++;
 		for (i = 0; i < reg_size; i++)
-			i2cs_post_read_data(reg_value[i]);
+			i2cp_post_read_data(reg_value[i]);
 		return;
 	}
 
@@ -130,11 +130,11 @@ static void process_read_access(uint16_t reg_size,
 	data -= 1;
 	tpm_register_get(tpm_reg, data, reg_size);
 	/* Transfer TPM fifo data to the I2CS HW fifo */
-	i2cs_post_read_fill_fifo(data, reg_size);
+	i2cp_post_read_fill_fifo(data, reg_size);
 }
 
 static void process_write_access(uint16_t reg_size, uint16_t tpm_reg,
-				 uint8_t *data, size_t i2cs_data_size)
+				 uint8_t *data, size_t i2cp_data_size)
 {
 	/* This is an actual write request. */
 
@@ -143,12 +143,12 @@ static void process_write_access(uint16_t reg_size, uint16_t tpm_reg,
 	 * down directly
 	 */
 	if (reg_size == 0) {
-		tpm_register_put(tpm_reg, data, i2cs_data_size);
+		tpm_register_put(tpm_reg, data, i2cp_data_size);
 		return;
 	}
 
-	if (i2cs_data_size != reg_size) {
-		i2cs_write_error_count++;
+	if (i2cp_data_size != reg_size) {
+		i2cp_write_error_count++;
 		return;
 	}
 
@@ -156,15 +156,15 @@ static void process_write_access(uint16_t reg_size, uint16_t tpm_reg,
 	tpm_register_put(tpm_reg, data, reg_size);
 }
 
-static void wr_complete_handler(void *i2cs_data, size_t i2cs_data_size)
+static void wr_complete_handler(void *i2cp_data, size_t i2cp_data_size)
 {
 	size_t i;
 	uint16_t tpm_reg;
-	uint8_t *data = i2cs_data;
+	uint8_t *data = i2cp_data;
 	const struct i2c_tpm_reg_map *i2c_reg_entry = NULL;
 	uint16_t reg_size;
 
-	if (i2cs_data_size < 1) {
+	if (i2cp_data_size < 1) {
 		/*
 		 * This is a misformatted request, should never happen, just
 		 * ignore it.
@@ -196,14 +196,14 @@ static void wr_complete_handler(void *i2cs_data, size_t i2cs_data_size)
 	tpm_reg = i2c_reg_entry->tpm_address;
 	reg_size = i2c_reg_entry->reg_size;
 
-	i2cs_data_size--;
+	i2cp_data_size--;
 	data++;
 
-	if (!i2cs_data_size)
+	if (!i2cp_data_size)
 		process_read_access(reg_size, tpm_reg, data);
 	else
 		process_write_access(reg_size, tpm_reg,
-				     data, i2cs_data_size);
+				     data, i2cp_data_size);
 
 	if (assert_int_ap()) {
 		gpio_enable_interrupt(GPIO_MONITOR_I2CS_SDA);
@@ -222,69 +222,69 @@ static void wr_complete_handler(void *i2cs_data, size_t i2cs_data_size)
 	gpio_set_level(GPIO_INT_AP_L, 1);
 }
 
-void i2cs_sda_isr(enum gpio_signal signal)
+void i2cp_sda_isr(enum gpio_signal signal)
 {
 	gpio_disable_interrupt(GPIO_MONITOR_I2CS_SDA);
 
 	deassert_int_ap();
 }
 
-static void i2cs_if_stop(void)
+static void i2cp_if_stop(void)
 {
 	if (int_ap_extension_enabled_)
 		int_ap_extension_stop_pulse();
 
-	i2cs_register_write_complete_handler(NULL);
+	i2cp_register_write_complete_handler(NULL);
 }
 
-static void i2cs_if_start(void)
+static void i2cp_if_start(void)
 {
-	i2cs_register_write_complete_handler(wr_complete_handler);
+	i2cp_register_write_complete_handler(wr_complete_handler);
 }
 
 /* Function that sets up for I2CS to enable INT_AP_L extension. */
-static void i2cs_int_ap_extension_enable_(void)
+static void i2cp_int_ap_extension_enable_(void)
 {
 	int_ap_extension_enabled_ = true;
 }
 
-static void i2cs_if_register(void)
+static void i2cp_if_register(void)
 {
 	if (!board_tpm_uses_i2c())
 		return;
 
-	tpm_register_interface(i2cs_if_start, i2cs_if_stop);
-	i2cs_fifo_adjust_count = 0;
-	i2cs_write_error_count = 0;
+	tpm_register_interface(i2cp_if_start, i2cp_if_stop);
+	i2cp_fifo_adjust_count = 0;
+	i2cp_write_error_count = 0;
 
-	int_ap_register(i2cs_int_ap_extension_enable_);
+	int_ap_register(i2cp_int_ap_extension_enable_);
 }
-DECLARE_HOOK(HOOK_INIT, i2cs_if_register, HOOK_PRIO_INIT_CR50_BOARD - 1);
+DECLARE_HOOK(HOOK_INIT, i2cp_if_register, HOOK_PRIO_INIT_CR50_BOARD - 1);
 
-static int command_i2cs(int argc, char **argv)
+static int command_i2cp(int argc, char **argv)
 {
 	static uint16_t base_read_recovery_count;
-	struct i2cs_status status;
+	struct i2cp_status status;
 
-	i2cs_get_status(&status);
+	i2cp_get_status(&status);
 
-	ccprintf("rd fifo adjust cnt = %d\n", i2cs_fifo_adjust_count);
-	ccprintf("wr mismatch cnt = %d\n", i2cs_write_error_count);
+	ccprintf("rd fifo adjust cnt = %d\n", i2cp_fifo_adjust_count);
+	ccprintf("wr mismatch cnt = %d\n", i2cp_write_error_count);
 	ccprintf("read recovered cnt = %d\n", status.read_recovery_count
 		 - base_read_recovery_count);
 	if (argc < 2)
 		return EC_SUCCESS;
 
 	if (!strcasecmp(argv[1], "reset")) {
-		i2cs_fifo_adjust_count = 0;
-		i2cs_write_error_count = 0;
+		i2cp_fifo_adjust_count = 0;
+		i2cp_write_error_count = 0;
 		base_read_recovery_count = status.read_recovery_count;
-		ccprintf("i2cs error counts reset\n");
+		ccprintf("i2cp error counts reset\n");
 	} else
 		return EC_ERROR_PARAM1;
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(i2cstpm, command_i2cs,
+DECLARE_SAFE_CONSOLE_COMMAND(i2cptpm, command_i2cp,
 			     "reset",
 			     "Display fifo adjust count");
