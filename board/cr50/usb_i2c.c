@@ -65,10 +65,10 @@ static void ina_connect(void)
 	GWRITE(PINMUX, DIOB0_SEL, GC_PINMUX_I2C0_SCL_SEL);
 
 	/*
-	 * Initialize the i2cm module after the INAs are powered and the signal
+	 * Initialize the i2cc module after the INAs are powered and the signal
 	 * lines are connected.
 	 */
-	i2cm_init();
+	i2cc_init();
 	usb_i2c_enabled = true;
 }
 

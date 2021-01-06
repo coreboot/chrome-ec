@@ -202,7 +202,7 @@ GPIO(UNWEDGE_I2CP_SCL, PIN(1, 5), GPIO_OUT_HIGH)
  */
 /* Control the load switch powering the INA 3.3V rail */
 GPIO(EN_PP3300_INA_L, PIN(0, 11), GPIO_ODR_HIGH)
-/* GPIOs used for I2CM pins for INAs */
+/* GPIOs used for I2CC pins for INAs */
 GPIO(I2C_SCL_INA,     PIN(0, 12), GPIO_INPUT)
 GPIO(I2C_SDA_INA,     PIN(0, 13), GPIO_INPUT)
 

@@ -4,11 +4,11 @@
  */
 
 /*
- * This is a driver for the I2C Master controller (i2cm) of the g chip.
+ * This is a driver for the I2C controller interface (i2cc) of the g chip.
  *
- * The g chip i2cm module supports 3 modes of operation, disabled, bit-banging,
+ * The g chip i2cc module supports 3 modes of operation, disabled, bit-banging,
  * and instruction based. These modes are selected via the I2C_CTRL
- * register. Selecting disabled mode can be used as a soft reset where the i2cm
+ * register. Selecting disabled mode can be used as a soft reset where the i2cc
  * hw state machine is reset, but the register values remain unchanged. In
  * bit-banging mode the signals SDA/SCL are controlled by the lower two bits of
  * the INST register. I2C_INST[1:0] = SCL|SDA. In this mode the value of SDA is
@@ -20,10 +20,10 @@
  * register which in real-time tracks the progress of the I2C sequence that was
  * configured in the INST register. If enabled, an interrupt is generated when
  * the transaction is completed. If not using interrupts then bit 24 (INTB) of
- * the status register can be polled for 0. INTB is the inverse of the i2cm
+ * the status register can be polled for 0. INTB is the inverse of the i2cc
  * interrupt status.
  *
- * The i2cm module provides a 64 byte fifo (RWBYTES) for both write and read
+ * The i2cc module provides a 64 byte fifo (RWBYTES) for both write and read
  * transactions. In addition there is a 4 byte fifo (FWBYTES) that can be used
  * for writes, for the register write of portion of a read transaction. By
  * default the pointer to RWBYTES fifo resets back 0 following each
@@ -89,12 +89,12 @@
  * conservative value for the worst case (68 byte transfer) at 100 kHz clock
  * speed.
  */
-#define I2CM_POLL_WAIT_US 25
-#define I2CM_MAX_POLL_ITERATIONS (25000 / I2CM_POLL_WAIT_US)
+#define I2CC_POLL_WAIT_US 25
+#define I2CC_MAX_POLL_ITERATIONS (25000 / I2CC_POLL_WAIT_US)
 
 /* Sizes for first write (FW) and read/write (RW) fifos */
-#define I2CM_FW_BYTES_MAX 4
-#define I2CM_RW_BYTES_MAX 64
+#define I2CC_FW_BYTES_MAX 4
+#define I2CC_RW_BYTES_MAX 64
 
 /* Macros to set bits/fields of the INST word for sequences*/
 #define INST_START GFIELD_MASK(I2C, INST, START)
@@ -110,9 +110,9 @@
 					       RWBYTESCOUNT))
 
 /* Mask for b31:INTB of STATUS register */
-#define I2CM_ERROR_MASK (~((1 << GFIELD_LSB(I2C, STATUS, INTB)) - 1))
+#define I2CC_ERROR_MASK (~((1 << GFIELD_LSB(I2C, STATUS, INTB)) - 1))
 
-enum i2cm_control_mode {
+enum i2cc_control_mode {
 	i2c_mode_disabled = 0,
 	i2c_mode_bit_bang = 1,
 	i2c_mode_instruction = 2,
@@ -150,7 +150,7 @@ const struct i2c_xfer_mode i2c_timing[I2C_FREQ_COUNT] = {
 	},
 };
 
-static void i2cm_config_xfer_mode(int port, enum i2c_freq freq)
+static void i2cc_config_xfer_mode(int port, enum i2c_freq freq)
 {
 	/* Set the control mode to disabled (soft reset) */
 	GWRITE_I(I2C, port, CTRL_MODE, i2c_mode_disabled);
@@ -173,7 +173,7 @@ static void i2cm_config_xfer_mode(int port, enum i2c_freq freq)
 	GWRITE_I(I2C, port, CTRL_MODE, i2c_mode_instruction);
 }
 
-static void i2cm_write_rwbytes(int port, const uint8_t *out, int size)
+static void i2cc_write_rwbytes(int port, const uint8_t *out, int size)
 {
 	volatile uint32_t *rw_ptr;
 	int rw_count;
@@ -201,7 +201,7 @@ static void i2cm_write_rwbytes(int port, const uint8_t *out, int size)
 	}
 }
 
-static void i2cm_read_rwbytes(int port, uint8_t *in, int size)
+static void i2cc_read_rwbytes(int port, uint8_t *in, int size)
 {
 	int rw_count;
 	int i;
@@ -231,23 +231,23 @@ static void i2cm_read_rwbytes(int port, uint8_t *in, int size)
 	}
 }
 
-static int i2cm_poll_for_complete(int port)
+static int i2cc_poll_for_complete(int port)
 {
 	int poll_count = 0;
 
-	while (poll_count < I2CM_MAX_POLL_ITERATIONS) {
+	while (poll_count < I2CC_MAX_POLL_ITERATIONS) {
 		/* Check if the sequence is complete */
 		if (!GREAD_FIELD_I(I2C, port, STATUS, INTB))
 			return EC_SUCCESS;
 		/* Not done yet, sleep */
-		usleep(I2CM_POLL_WAIT_US);
+		usleep(I2CC_POLL_WAIT_US);
 		poll_count++;
 	};
 
 	return EC_ERROR_TIMEOUT;
 }
 
-static uint32_t i2cm_create_inst(int periph_addr_flags, int is_write,
+static uint32_t i2cc_create_inst(int periph_addr_flags, int is_write,
 				 size_t size, uint32_t flags)
 {
 	uint32_t inst = 0;
@@ -276,7 +276,7 @@ static uint32_t i2cm_create_inst(int periph_addr_flags, int is_write,
 	return inst;
 }
 
-static int i2cm_execute_sequence(int port, int periph_addr_flags,
+static int i2cc_execute_sequence(int port, int periph_addr_flags,
 				 const uint8_t *out, int out_size,
 				 uint8_t *in, int in_size,
 				 int flags)
@@ -298,7 +298,7 @@ static int i2cm_execute_sequence(int port, int periph_addr_flags,
 
 		seq_flags = flags;
 
-		batch_size = MIN(size - done_so_far, I2CM_RW_BYTES_MAX);
+		batch_size = MIN(size - done_so_far, I2CC_RW_BYTES_MAX);
 
 		if (done_so_far)
 			/* No need to generate start. */
@@ -309,25 +309,25 @@ static int i2cm_execute_sequence(int port, int periph_addr_flags,
 			seq_flags &= ~I2C_XFER_STOP;
 
 		/* Build sequence instruction */
-		inst = i2cm_create_inst(periph_addr_flags, is_write,
+		inst = i2cc_create_inst(periph_addr_flags, is_write,
 					batch_size, seq_flags);
 
 		/* If this is a write - copy data into the FIFO. */
 		if (is_write)
-			i2cm_write_rwbytes(port, out + done_so_far, batch_size);
+			i2cc_write_rwbytes(port, out + done_so_far, batch_size);
 
 		/* Start transaction */
 		GWRITE_I(I2C, port, INST, inst);
 
 		/* Wait for transaction to be complete */
-		rv = i2cm_poll_for_complete(port);
+		rv = i2cc_poll_for_complete(port);
 		/* Handle timeout case */
 		if (rv)
 			return rv;
 
 		/* Check status value for errors */
 		status = GREAD_I(I2C, port, STATUS);
-		if (status & I2CM_ERROR_MASK) {
+		if (status & I2CC_ERROR_MASK) {
 			if (status & GFIELD_MASK(I2C, STATUS, FINALSTOP)) {
 				/*
 				 * A stop was requested but not generated,
@@ -335,7 +335,7 @@ static int i2cm_execute_sequence(int port, int periph_addr_flags,
 				 * the idle state.
 				 */
 				GWRITE_I(I2C, port, INST, INST_STOP);
-				i2cm_poll_for_complete(port);
+				i2cc_poll_for_complete(port);
 			}
 			/* Clear INST register after processing failure(s). */
 			GWRITE_I(I2C, port, INST, 0);
@@ -343,7 +343,7 @@ static int i2cm_execute_sequence(int port, int periph_addr_flags,
 		}
 
 		if (!is_write)
-			i2cm_read_rwbytes(port, in + done_so_far, batch_size);
+			i2cc_read_rwbytes(port, in + done_so_far, batch_size);
 
 		done_so_far += batch_size;
 	}
@@ -376,14 +376,14 @@ int chip_i2c_xfer(const int port, const uint16_t periph_addr_flags,
 
 	if (out_size) {
 		/* Process write before read. */
-		rv = i2cm_execute_sequence(port, periph_addr_flags, out,
+		rv = i2cc_execute_sequence(port, periph_addr_flags, out,
 					   out_size, NULL, 0, flags);
 		if (rv != EC_SUCCESS)
 			return rv;
 	}
 
 	if (in_size)
-		rv = i2cm_execute_sequence(port, periph_addr_flags,
+		rv = i2cc_execute_sequence(port, periph_addr_flags,
 					   NULL, 0, in, in_size, flags);
 
 	return rv;
@@ -418,11 +418,11 @@ int i2c_get_line_levels(int port)
 
 }
 
-static void i2cm_init_port(const struct i2c_port_t *p)
+static void i2cc_init_port(const struct i2c_port_t *p)
 {
 	enum i2c_freq freq;
 
-	/* Enable clock for I2C Master */
+	/* Enable clock for I2C controller */
 	pmu_clock_en(p->port ? PERIPH_I2C1 : PERIPH_I2C0);
 
 	/* Set operation speed. */
@@ -443,7 +443,7 @@ static void i2cm_init_port(const struct i2c_port_t *p)
 	}
 
 	/* Configure the transfer clocks and mode */
-	i2cm_config_xfer_mode(p->port, freq);
+	i2cc_config_xfer_mode(p->port, freq);
 
 	CPRINTS("Initialized I2C port %d, freq = %d kHz", p->port, p->kbps);
 }
@@ -451,13 +451,13 @@ static void i2cm_init_port(const struct i2c_port_t *p)
 /**
  * Initialize the i2c module for all supported ports.
  */
-void i2cm_init(void)
+void i2cc_init(void)
 {
 	const struct i2c_port_t *p = i2c_ports;
 	int i;
 
 	for (i = 0; i < i2c_ports_used; i++, p++)
-		i2cm_init_port(p);
+		i2cc_init_port(p);
 
 }
 
@@ -465,7 +465,7 @@ void i2c_init(void)
 {
 	/*
 	 * Stub init function to be called at boot.
-	 * We only want this controller active in certain cases,
+	 * We only want this interface active in certain cases,
 	 * but we still need to let main.c call something.
 	 */
 }
