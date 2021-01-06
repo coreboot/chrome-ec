@@ -1820,7 +1820,7 @@ void board_unwedge_i2cp(void)
 	GWRITE(PINMUX, GPIO1_GPIO5_SEL, GC_PINMUX_I2CS0_SCL_SEL);
 
 	/* Generate a 'stop' condition. */
-	gpio_set_level(GPIO_UNWEDGE_I2CS_SCL, 1);
+	gpio_set_level(GPIO_UNWEDGE_I2CP_SCL, 1);
 	usleep(2);
 	GWRITE_FIELD(I2CS, CTRL_SDA_VAL, READ0_S, 1);
 	usleep(2);

@@ -520,7 +520,7 @@ void i2c_trace_notify(int port, uint16_t periph_addr_flags,
 		      int direction, const uint8_t *data, size_t size);
 
 /*
- * Interrupt handler of GPIO_MONITOR_I2CS_SDA.
+ * Interrupt handler of GPIO_MONITOR_I2CP_SDA.
  * Its role is to detect any transaction start during INT_AP_L
  *  assertion and to deassert INT_AP_L.
  */
