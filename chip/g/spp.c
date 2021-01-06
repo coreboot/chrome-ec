@@ -56,8 +56,8 @@
 static uint32_t spp_tx_count, spp_rx_count, tx_empty_count, max_rx_batch;
 
 /* Console output macros */
-#define CPUTS(outstr) cputs(CC_SPS, outstr)
-#define CPRINTS(format, args...) cprints(CC_SPS, format, ## args)
+#define CPUTS(outstr) cputs(CC_SPP, outstr)
+#define CPRINTS(format, args...) cprints(CC_SPP, format, ## args)
 
 /* Flag indicating if there has been any data received while CS was asserted. */
 static uint8_t seen_data;
