@@ -4,7 +4,7 @@
  */
 
 /*
- * This is a driver for the I2C Slave controller (i2cs) of the g chip.
+ * This is a driver for the I2C peripheral (i2cp) of the g chip.
  *
  * The controller is has two register files, 64 bytes each, one for storing
  * data received from the master, and one for storing data to be transmitted
@@ -84,7 +84,7 @@
 static wr_complete_handler_f write_complete_handler_;
 
 /* A buffer to normalize the received data to pass it to the user. */
-static uint8_t i2cs_buffer[REGISTER_FILE_SIZE];
+static uint8_t i2cp_buffer[REGISTER_FILE_SIZE];
 
 /*
  * Pointer where the CPU stopped retrieving the write data sent by the master
@@ -101,10 +101,10 @@ static uint16_t last_read_pointer;
 /*
  * Keep track number of times the "hosed slave" condition was encountered.
  */
-static uint16_t i2cs_read_recovery_count;
-static uint16_t i2cs_sda_low_count;
+static uint16_t i2cp_read_recovery_count;
+static uint16_t i2cp_sda_low_count;
 
-static void check_i2cs_state(void)
+static void check_i2cp_state(void)
 {
 	if (gpio_get_level(GPIO_MONITOR_I2CS_SDA))
 		return;
@@ -113,36 +113,36 @@ static void check_i2cs_state(void)
 	 * The bus might be stuck;
 	 * Generate a stop sequence to unwedge.
 	 */
-	board_unwedge_i2cs();
+	board_unwedge_i2cp();
 }
 
-static void i2cs_init(void)
+static void i2cp_init(void)
 {
 
 	/* First decide if i2c is even needed for this platform. */
-	/* if (i2cs is not needed) return; */
+	/* if (i2cp is not needed) return; */
 	if (!board_tpm_uses_i2c())
 		return;
 
 	pmu_clock_en(PERIPH_I2CP);
 
-	memset(i2cs_buffer, 0, sizeof(i2cs_buffer));
+	memset(i2cp_buffer, 0, sizeof(i2cp_buffer));
 
-	i2cs_set_pinmux();
+	i2cp_set_pinmux();
 
-	check_i2cs_state();
+	check_i2cp_state();
 
 	/* Reset read and write pointers. */
 	last_write_pointer = 0;
 	last_read_pointer = 0;
-	i2cs_sda_low_count = 0;
+	i2cp_sda_low_count = 0;
 	GWRITE(I2CS, READ_PTR, 0);
 	GWRITE(I2CS, WRITE_PTR, 0);
 
 	/* Just in case we were wedged and the master starts with a read. */
 	*GREG32_ADDR(I2CS, READ_BUFFER0) = ~0;
 
-	/* Enable I2CS interrupt */
+	/* Enable I2CP interrupt */
 	GWRITE_FIELD(I2CS, INT_ENABLE, INTR_WRITE_COMPLETE, 1);
 
 	/* Slave address is hardcoded to 0x50. */
@@ -160,7 +160,7 @@ DECLARE_DEFERRED(poll_read_state);
  */
 #define READ_STATUS_CHECK_INTERVAL (700 * MSEC)
 
-/* Number of times SDA must be low between i2c writes before the i2cs controller
+/* Number of times SDA must be low between i2c writes before the i2cp controller
  * is restarted.
  *
  * Three was chosen because we can have two i2c transactions in between write
@@ -168,19 +168,19 @@ DECLARE_DEFERRED(poll_read_state);
  *
  * Consider the following timeline:
  * 1) START <i2c_addr|W> <reg> STOP
- * 2) Write complete handler runs (i2cs_sda_low_count = 0)
- * 3) START <i2c_addr|R> <data>+ STOP (i2cs_sda_low_count++)
- * 4) START <i2c_addr|W> <reg> <data>+ STOP (i2cs_sda_low_count++)
+ * 2) Write complete handler runs (i2cp_sda_low_count = 0)
+ * 3) START <i2c_addr|R> <data>+ STOP (i2cp_sda_low_count++)
+ * 4) START <i2c_addr|W> <reg> <data>+ STOP (i2cp_sda_low_count++)
  * 5) Write complete handler runs
  *
  * If the poller happened to run during time 3 and time 4 while SDA was low,
- * i2cs_sda_low_count would = 2. This is not considered an error case. If we
+ * i2cp_sda_low_count would = 2. This is not considered an error case. If we
  * were to see a third low value before time 5, we can assume the bus is stuck,
  * or the master performed multiple reads between writes (which is not
  * expected).
  *
  * If we were to enable the read complete interrupt and use it to clear
- * i2cs_sda_low_count we could get away with a threshold of two. This would also
+ * i2cp_sda_low_count we could get away with a threshold of two. This would also
  * support multiple reads after a write.
  *
  * We could in theory use the FIFO read/write pointers to determine if the bus
@@ -196,13 +196,13 @@ DECLARE_DEFERRED(poll_read_state);
 #define READ_STATUS_CHECK_THRESHOLD 3
 
 /*
- * Restart the i2cs controller if the controller gets stuck transmitting a 0 on
+ * Restart the i2cp controller if the controller gets stuck transmitting a 0 on
  * SDA.
  *
- * This can happen anytime the i2cs controller has control of SDA and the master
+ * This can happen anytime the i2cp controller has control of SDA and the master
  * happens to fail and stops clocking.
  *
- * For example when the i2cs controller is:
+ * For example when the i2cp controller is:
  * 1) Transmitting an ACK for the slave address byte.
  * 2) Transmitting an ACK for a write transaction.
  * 3) Transmitting byte data for a read transaction.
@@ -230,14 +230,14 @@ static void poll_read_state(void)
 		 * stopped clocking while SDA is high, or we have polled in the
 		 * middle of a transaction where SDA happens to be high.
 		 */
-		i2cs_sda_low_count = 0;
+		i2cp_sda_low_count = 0;
 	} else {
 		/*
 		 * The master has stopped clocking while the slave is holding
 		 * SDA low, or we have polled in the middle of a transaction
 		 * where SDA happens to be low.
 		 */
-		i2cs_sda_low_count++;
+		i2cp_sda_low_count++;
 
 		/*
 		 * SDA line has been stuck low without any write transactions
@@ -245,15 +245,15 @@ static void poll_read_state(void)
 		 * Reinitialize the i2c interface (which will also restart this
 		 * polling function).
 		 */
-		if (i2cs_sda_low_count == READ_STATUS_CHECK_THRESHOLD) {
-			i2cs_sda_low_count = 0;
-			i2cs_read_recovery_count++;
-			CPRINTF("I2CS bus is stuck");
+		if (i2cp_sda_low_count == READ_STATUS_CHECK_THRESHOLD) {
+			i2cp_sda_low_count = 0;
+			i2cp_read_recovery_count++;
+			CPRINTF("I2CP bus is stuck");
 			/*
-			 * i2cs_register_write_complete_handler will call
+			 * i2cp_register_write_complete_handler will call
 			 * hook_call_deferred.
 			 */
-			i2cs_register_write_complete_handler(
+			i2cp_register_write_complete_handler(
 				write_complete_handler_);
 
 #ifdef CONFIG_FLASH_LOG
@@ -267,7 +267,7 @@ static void poll_read_state(void)
 }
 
 /* Process the 'end of a write cycle' interrupt. */
-void __attribute__((used)) _i2cs_write_complete_int(void)
+void __attribute__((used)) _i2cp_write_complete_int(void)
 {
 	/* Reset the IRQ condition. */
 	GWRITE_FIELD(I2CS, INT_STATE, INTR_WRITE_COMPLETE, 1);
@@ -308,7 +308,7 @@ void __attribute__((used)) _i2cs_write_complete_int(void)
 						  (last_write_pointer >> 2));
 
 			/* Save the next byte in the adaptation buffer. */
-			i2cs_buffer[bytes_processed] =
+			i2cp_buffer[bytes_processed] =
 				word_in_value >> (8 * (last_write_pointer & 3));
 
 			/* The pointer wraps at the register file size. */
@@ -318,24 +318,24 @@ void __attribute__((used)) _i2cs_write_complete_int(void)
 		}
 
 		/* Invoke the callback to process the message. */
-		write_complete_handler_(i2cs_buffer, bytes_processed);
+		write_complete_handler_(i2cp_buffer, bytes_processed);
 	}
 
 	/* The transaction is complete so the slave has released SDA. */
-	i2cs_sda_low_count = 0;
+	i2cp_sda_low_count = 0;
 
 	/*
 	 * Could be the end of a TPM trasaction. Set sleep to be reenabled in 1
 	 * second. If this is not the end of a TPM response, then sleep will be
-	 * disabled again in the next I2CS interrupt.
+	 * disabled again in the next I2CP interrupt.
 	 */
 	delay_sleep_by(1 * SECOND);
 	enable_sleep(SLEEP_MASK_I2C_PERIPH);
 }
 DECLARE_IRQ(GC_IRQNUM_I2CS0_INTR_WRITE_COMPLETE_INT,
-	    _i2cs_write_complete_int, 1);
+	    _i2cp_write_complete_int, 1);
 
-void i2cs_post_read_data(uint8_t byte_to_read)
+void i2cp_post_read_data(uint8_t byte_to_read)
 {
 	volatile uint32_t *value_addr;
 	uint32_t word_out_value;
@@ -356,7 +356,7 @@ void i2cs_post_read_data(uint8_t byte_to_read)
 	last_read_pointer = (last_read_pointer + 1) & REGISTER_FILE_MASK;
 }
 
-void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len)
+void i2cp_post_read_fill_fifo(uint8_t *buffer, size_t len)
 {
 	volatile uint32_t *value_addr;
 	uint32_t word_out_value;
@@ -417,14 +417,14 @@ void i2cs_post_read_fill_fifo(uint8_t *buffer, size_t len)
 	}
 }
 
-int i2cs_register_write_complete_handler(wr_complete_handler_f wc_handler)
+int i2cp_register_write_complete_handler(wr_complete_handler_f wc_handler)
 {
 	task_disable_irq(GC_IRQNUM_I2CS0_INTR_WRITE_COMPLETE_INT);
 
 	if (!wc_handler)
 		return 0;
 
-	i2cs_init();
+	i2cp_init();
 	write_complete_handler_ = wc_handler;
 	task_enable_irq(GC_IRQNUM_I2CS0_INTR_WRITE_COMPLETE_INT);
 
@@ -437,7 +437,7 @@ int i2cs_register_write_complete_handler(wr_complete_handler_f wc_handler)
 	return 0;
 }
 
-size_t i2cs_zero_read_fifo_buffer_depth(void)
+size_t i2cp_zero_read_fifo_buffer_depth(void)
 {
 	uint32_t hw_read_pointer;
 	size_t depth;
@@ -463,7 +463,7 @@ size_t i2cs_zero_read_fifo_buffer_depth(void)
 	return depth;
 }
 
-void i2cs_get_status(struct i2cs_status *status)
+void i2cp_get_status(struct i2cp_status *status)
 {
-	status->read_recovery_count = i2cs_read_recovery_count;
+	status->read_recovery_count = i2cp_read_recovery_count;
 }

@@ -426,10 +426,10 @@ void board_start_ite_sync(void);
 
 /*
  * Board specific function (needs information about pinmux settings) which
- * allows to take the i2cs controller out of the 'wedged' state where the
+ * allows to take the i2cp controller out of the 'wedged' state where the
  * master stopped i2c access mid transaction and the slave is holding SDA low,
  */
-void board_unwedge_i2cs(void);
+void board_unwedge_i2cp(void);
 
 int board_in_prod_mode(void);
 

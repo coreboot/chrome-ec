@@ -116,7 +116,7 @@ GPIO_INT(DETECT_TPM_RST_L_ASSERTED, PIN(1, 4),  GPIO_INT_FALLING,
  * Also, it works to detect an I2C transaction during extended INT_AP_L
  * assertion.
  */
-GPIO_INT(MONITOR_I2CS_SDA, PIN(1, 6), GPIO_INT_LOW, i2cs_sda_isr)
+GPIO_INT(MONITOR_I2CS_SDA, PIN(1, 6), GPIO_INT_LOW, i2cp_sda_isr)
 
 /*
  * These GPIOs are to enable or disable EC-CR50 communication.
@@ -294,7 +294,7 @@ PINMUX(GPIO(DETECT_SERVO),      B5, DIO_INPUT)
  * A1 is also used as a strapping option GPIO input which is configured
  * above. If a board is configured (via the strapping pins) to support the I2CS
  * interface, then the connection of A1 and A9 to/from the I2C0_SDA and I2C0_SCL
- * lines is done in the function i2cs_set_pinmux() which lives in board.c.
+ * lines is done in the function i2cp_set_pinmux() which lives in board.c.
  *
  * PINMUX(FUNC(I2C0_SCL),        A9, DIO_INPUT)
  * PINMUX(FUNC(I2C0_SDA),        A1, DIO_INPUT)

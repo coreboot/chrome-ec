@@ -1577,7 +1577,7 @@ static void init_board_properties(void)
 }
 DECLARE_HOOK(HOOK_INIT, init_board_properties, HOOK_PRIO_FIRST);
 
-void i2cs_set_pinmux(void)
+void i2cp_set_pinmux(void)
 {
 	/* Connect I2CS SDA/SCL output to A1/A9 pads */
 	GWRITE(PINMUX, DIOA1_SEL, GC_PINMUX_I2CS0_SDA_SEL);
@@ -1806,17 +1806,17 @@ void board_start_ite_sync(void)
 	hook_call_deferred(&deferred_ite_sync_reset_data, 10 * MSEC);
 }
 
-void board_unwedge_i2cs(void)
+void board_unwedge_i2cp(void)
 {
 	/*
-	 * Create connection between i2cs_scl and the 'unwedge_scl' GPIO, and
-	 * generate the i2c stop sequence which will reset the i2cs FSM.
+	 * Create connection between i2cp_scl and the 'unwedge_scl' GPIO, and
+	 * generate the i2c stop sequence which will reset the i2cp FSM.
 	 *
-	 * First, disconnect the external pin from the i2cs_scl input.
+	 * First, disconnect the external pin from the i2cp_scl input.
 	 */
 	GWRITE(PINMUX, DIOA9_SEL, 0);
 
-	/* Connect the 'unwedge' GPIO to the i2cs_scl input. */
+	/* Connect the 'unwedge' GPIO to the i2cp_scl input. */
 	GWRITE(PINMUX, GPIO1_GPIO5_SEL, GC_PINMUX_I2CS0_SCL_SEL);
 
 	/* Generate a 'stop' condition. */
@@ -1830,7 +1830,7 @@ void board_unwedge_i2cs(void)
 	/* Disconnect the 'unwedge' mode SCL. */
 	GWRITE(PINMUX, GPIO1_GPIO5_SEL, 0);
 
-	/* Restore external pin connection to the i2cs_scl. */
+	/* Restore external pin connection to the i2cp_scl. */
 	GWRITE(PINMUX, DIOA9_SEL, GC_PINMUX_I2CS0_SCL_SEL);
 }
 
