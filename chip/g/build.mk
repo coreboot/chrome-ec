@@ -71,7 +71,7 @@ chip-$(CONFIG_ENABLE_H1_ALERTS)+= alerts.o
 chip-$(CONFIG_USB_FW_UPDATE)+= usb_upgrade.o
 chip-$(CONFIG_NON_HC_FW_UPDATE)+= upgrade_fw.o post_reset.o upgrade.o
 chip-$(CONFIG_SPP)+= spp.o
-chip-$(CONFIG_TPM_SPS)+=spp_tpm.o
+chip-$(CONFIG_TPM_SPP)+=spp_tpm.o
 chip-$(CONFIG_WATCHDOG)+=watchdog.o
 
 chip-$(CONFIG_USB)+=usb.o usb_endpoints.o

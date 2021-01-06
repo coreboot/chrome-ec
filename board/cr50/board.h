@@ -142,7 +142,7 @@
 
 /* Enable SPI peripheral (SPP) module */
 #define CONFIG_SPP
-#define CONFIG_TPM_SPS
+#define CONFIG_TPM_SPP
 
 #define CONFIG_RBOX
 #define CONFIG_RBOX_WAKEUP

@@ -3437,8 +3437,8 @@
 /*****************************************************************************/
 /* TPM-like configuration */
 
-/* Speak the TPM SPI Hardware Protocol on the SPI slave interface */
-#undef CONFIG_TPM_SPS
+/* Speak the TPM SPI Hardware Protocol on the SPI peripheral interface */
+#undef CONFIG_TPM_SPP
 /* Speak to the TPM 2.0 hardware protocol on the I2C periph interface */
 #undef CONFIG_TPM_I2CP
 
