@@ -457,7 +457,7 @@ void sps0_cs_assert_interrupt_(void)
 }
 DECLARE_IRQ(GC_IRQNUM_SPS0_CS_ASSERT_INTR, sps0_cs_assert_interrupt_, 1);
 
-#ifdef CONFIG_SPS_TEST
+#ifdef CONFIG_SPP_TEST
 
 /* Function to test SPS driver. It expects the host to send SPI frames of size
  * <size> (not exceeding 1100) of the following format:
@@ -613,4 +613,4 @@ static int command_sps(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(spstest, command_sps,
 			"<num of frames>",
 			"Loop back frames (10 by default) back to the host");
-#endif /* CONFIG_SPS_TEST */
+#endif /* CONFIG_SPP_TEST */

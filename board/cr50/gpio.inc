@@ -303,7 +303,7 @@ PINMUX(GPIO(DETECT_SERVO),      B5, DIO_INPUT)
 /*
  * Both SPI master and slave buses are wired directly to specific pads
  *
- * If CONFIG_SPS is defined, these pads are used:
+ * If CONFIG_SPP is defined, these pads are used:
  *   DIOA2  = SPS_MOSI  (input)
  *   DIOA6  = SPS_CLK   (input)
  *   DIOA10 = SPS_MISO  (output)
