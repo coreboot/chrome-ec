@@ -171,7 +171,6 @@
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
@@ -264,8 +263,13 @@
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 
-/* Sensors */
 #define CONFIG_MKBP_EVENT
+/* Host event is required to wake from sleep */
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
+/* Required to enable runtime configuration */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK (BIT(EC_MKBP_EVENT_DP_ALT_MODE_ENTERED))
+
+/* Sensors */
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 /* Thermal */

@@ -11,20 +11,22 @@
 #define CONFIG_BOARD_RESET_AFTER_POWER_ON
 #define CONFIG_BRINGUP
 #define CONFIG_CHIPSET_MT8192
+#define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_CMD_POWERINDEBUG
 #define CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 #define CONFIG_POWER_COMMON
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED
+#define CONFIG_LTO
 #define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_EXTPOWER_GPIO
-#ifdef BOARD_ASURADA_REV0
-/* For Rev0 only */
+/*
+ * NOTE: we need to make correct VCC voltage selection here if EC's VCC isn't
+ * connect to 1.8v on other versions.
+ */
 #define CONFIG_IT83XX_VCC_1P8V
-#else
-#define CONFIG_IT83XX_VCC_3P3V
-#endif
+
 /*
  * TODO: Remove this option once the VBAT no longer keeps high when
  * system's power isn't presented.
@@ -95,6 +97,11 @@
 
 /* LED */
 #define CONFIG_LED_COMMON
+#ifdef BOARD_HAYATO
+#define CONFIG_LED_POWER_LED
+#define CONFIG_LED_ONOFF_STATES
+#define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
+#endif
 
 /* PD / USB-C / PPC */
 #define CONFIG_CMD_PPC_DUMP
@@ -125,8 +132,8 @@
 #define CONFIG_USB_PD_FRS_TCPC
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPM_TCPCI

@@ -145,11 +145,6 @@ cmd_emmc_bootblock = $(out)/util/gen_emmc_transfer_data \
 cmd_ipi_table = $(out)/util/gen_ipi_table $@
 cmd_cp_script = cp "$<" "$@" && chmod +x "$@"
 
-cmd_libcryptoc_make = $(MAKE) -C $(CRYPTOCLIB) \
-	obj=$(realpath $(out))/cryptoc \
-	SUPPORT_UNALIGNED=1
-cmd_libcryptoc = $(cmd_libcryptoc_make) -q || $(cmd_libcryptoc_make)
-
 # commands for RSA signature: rwsig does not need to sign the whole image
 # (it signs the RW part separately). usbpd1 type needs to sign the final image.
 ifeq ($(CONFIG_RWSIG_TYPE_RWSIG),)
@@ -734,41 +729,55 @@ endif
 .PHONY: help
 help:
 	@echo "Google Chromium EC build"
+	@echo ""
 	@echo "Common Targets:"
 	@echo "  all   [BOARD=]       - Build a single board (Default target)"
 	@echo "  clean [BOARD=]       - Clean a single board"
-	@echo "  buildall             - Build and test all boards"
+	@echo "  buildall             - Build all boards and build/run host unit tests"
+	@echo "  buildall_only        - Build all boards and host unit tests"
+	@echo "  build_boards         - Build all boards"
 	@echo "  clobber              - Clean all boards"
 	@echo "  proj-<boardname>     - Build a single board (similar to 'all BOARD=boardname')"
 	@echo "  savesizes            - Save the filesizes of currently built boards for comparison"
 	@echo "  newsizes             - Compare previously saved filesizes against new sizes"
-	@echo "  utils                - Build all host utilities"
+	@echo "  utils [BOARD=]       - Build all host side utilities"
+	@echo "  dis   [BOARD=]       - Generate the complete disassembly of the RO and RW images"
+	@echo "  hex   [BOARD=]       - Generate an Intel hex formated output binary"
 	@echo ""
-	@echo "  tests [BOARD=]       - Build all unit tests for a specific board"
+	@echo "  tests [BOARD=]       - Build all on-device unit tests for a specific board"
 	@echo "  hosttests            - Build all host unit tests"
 	@echo "  runhosttests         - Build and run all host unit tests"
 	@echo "  coverage             - Build and run all host unit tests for code coverage"
 	@echo "  buildfuzztests       - Build all host fuzzers"
 	@echo "  runfuzztests         - Build and run all host fuzzers for one round"
+	@echo "  analyzestack [BOARD=]- Run max stack size analysis"
 	@echo ""
 	@echo "  flash     [BOARD=]   - Use OpenOCD to flash the latest image"
 	@echo "  flash_ec  [BOARD=]   - Use flash_ec to flash the latest image"
 	@echo "  flash_dfu [BOARD=]   - Use DFU to flash the latest image"
 	@echo ""
-	@echo "  print-tests          - Prints all device specific test targets"
-	@echo "  print-host-tests     - Prints all host test targets"
-	@echo "  print-host-fuzzers   - Prints all host fuzz targets"
-	@echo "  print-boards         - Prints all boards"
-	@echo "  print-configs  [BOARD=]      - Print CONFIG_* options for the target board"
-	@echo "  print-defines  [BOARD=]      - Print forced defines passed to the compiler"
-	@echo "  print-includes [BOARD=]      - Print include paths passed to the compiler"
+	@echo "  print-tests     [BOARD=]     - Print on-device test targets"
+	@echo "  print-host-tests             - Print all host unit test targets"
+	@echo "  print-host-fuzzers           - Print all host fuzz targets"
+	@echo "  print-boards                 - Print all boards"
+	@echo "  print-configs   [BOARD=]     - Print CONFIG_* options for the target board"
+	@echo "  print-defines   [BOARD=]     - Print forced defines passed to the compiler"
+	@echo "  print-includes  [BOARD=]     - Print include paths passed to the compiler"
+	@echo "  print-baseboard [BOARD=]     - Print include paths passed to the compiler"
+	@echo "  print-make-vars [BOARD=]     - Print chip/core/board make variables for a board"
+	@echo ""
 	@echo "Common Variables:"
 	@echo "  V=1                  - Show make output"
 	@echo "  BOARD=               - Set the board name to build (Default is $(BOARD))"
+	@echo "  STATIC_VERSION=1     - Force a constant version string for reproducable builds"
 	@echo "  CROSS_COMPILE=       - Set the compiler for the board"
 	@echo "  CROSS_COMPILE_arch=  - Set the compiler for arch"
 	@echo "     The board picks its CROSS_COMPILE_arch if CROSS_COMPILE is not set."
 	@echo "     arch may be one of 'arm', 'i386', 'nds32'."
+	@echo "  HOST_CROSS_COMPILE=  - Set the compiler for the target platform on top of"
+	@echo "     the EC. For example, this may be 32-bit x86 linux ('i686-pc-linux-gnu-'),"
+	@echo "     64-bit x86 linux ('x86_64-pc-linux-gnu-'), or maybe 64-bit ARM linux"
+	@echo "     ('aarch64-cros-linux-gnu-')."
 	@echo "Example:"
 	@echo "  make BOARD=reef CROSS_COMPILE_arm='arm-eabi-'"
 
@@ -875,6 +884,9 @@ build_cros_ec_commands: $(out_cros_ec_commands)
 
 $(out_cros_ec_commands): include/ec_commands.h util/make_linux_ec_commands_h.sh
 	util/make_linux_ec_commands_h.sh $< $@
+
+# Pull in special rules/targets for third_party software
+-include third_party/rules.mk
 
 .SECONDARY:
 

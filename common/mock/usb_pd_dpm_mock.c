@@ -47,3 +47,17 @@ void dpm_set_mode_exit_request(int port)
 void dpm_run(int port)
 {
 }
+
+void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
+{
+}
+
+void dpm_remove_sink(int port)
+{
+}
+
+int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
+{
+	*src_pdo = pd_src_pdo;
+	return pd_src_pdo_cnt;
+}

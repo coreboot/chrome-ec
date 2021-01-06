@@ -2,19 +2,36 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+if ZTEST
+
+config HAS_TEST_TASKS
+	bool "Whether or not this test includes custom tasks."
+	help
+	  This enables custom tasks for tests. When set to 'y', the file
+	  "shimmed_test_tasks.h" will be included and is expected to set
+	  CROS_EC_TASK_LIST.
+
+endif # ZTEST
+
 menuconfig PLATFORM_EC
-	bool "Enable building code from the platform/ec Zephyr module"
+	bool "Chromium OS EC shim"
 	imply PRINTK
 	imply SHELL
 	help
 	  The platform/ec Zephyr module allows some code from the
-	  existing Chrome OS EC project to be "shimmed" into Zephyr.
+	  existing Chromium OS EC project to be "shimmed" into Zephyr. With
+	  this it is possible to use the existing code base within Zephyr.
+
+	  Once we manage to get a platform fully running with Zephyr we will
+	  progressively upstream components and turn off the shim for each
+	  one until eventually all code is on the Zephyr side.
 
 if PLATFORM_EC
 
 rsource "Kconfig.battery"
 rsource "Kconfig.powerseq"
 rsource "Kconfig.tasks"
+rsource "Kconfig.usbc"
 
 # Below is a hack to use CONFIG_ZEPHYR in platform/ec code before
 # config.h has been included.  There is some tricky ordering in some
@@ -37,6 +54,13 @@ config ZEPHYR
 # corresponding EC CONFIG if this Kconfig is enabled.
 #
 # Please keep these in alphabetical order
+
+config PLATFORM_EC_ACPI
+	bool "Enable the ACPI module"
+	default y if AP_X86 && PLATFORM_EC_ESPI
+	help
+	  Enable shimming the ACPI handler, which will handle the Host data from
+	  the ACPI I/O port for X86 AP.
 
 config PLATFORM_EC_CBI
 	bool "Enable the CBI EEPROM module"
@@ -77,6 +101,48 @@ config PLATFORM_EC_EXTPOWER_GPIO
 	  GPIO-based external power presence detection features.  The
 	  project should define a GPIO pin named GPIO_AC_PRESENT, with
 	  extpower_interrupt configured as the handler in gpio_map.h.
+
+config PLATFORM_EC_FLASH
+	bool "Enable flash support"
+	default y
+	help
+	  Enables access to the device's flash through a simple API. With
+	  this is it possible for the EC to update its flash while running,
+	  e.g. to support auto-update. Various write-protection features are
+	  also provided.
+
+if PLATFORM_EC_FLASH
+
+config PLATFORM_EC_CONSOLE_CMD_FLASH
+	bool "Enable the flash commands"
+	default y
+	help
+	  Enables various console commands:
+
+	     flashread - read from flash to memory
+	     flasherase - erase flash region
+	     flashwrite - write memory to flash
+	     flashwp - change write-protection settings
+
+config PLATFORM_EC_EXTERNAL_STORAGE
+	bool "Flash is stored external to the EC"
+	default y if SOC_FAMILY_NPCX
+	help
+	  This indicates that the EC's flash is stored separately and is it
+	  not possible execute directly from it. Code must be loaded from
+	  the flash into internal SRAM before it can be executed. It is still
+	  possible to read and write the flash.
+
+config PLATFORM_EC_MAPPED_STORAGE
+	bool "Flash is mapped into the EC's address space"
+	default y if SOC_FAMILY_NPCX
+	help
+	  This indicates that the EC's flash is directly mapped into
+	  its address space. This makes it easier to read and write the flash.
+	  If this is not defined, the flash driver must implement
+	  flash_physical_read().
+
+endif # PLATFORM_EC_FLASH
 
 menuconfig PLATFORM_EC_KEYBOARD
 	bool "Enable keyboard support"
@@ -190,6 +256,15 @@ config PLATFORM_EC_POWER_BUTTON
 	  Enable shimming the power button implementation and related
 	  commands in platform/ec.  This requires a GPIO named
 	  GPIO_POWER_BUTTON_L in gpio_map.h.
+
+config PLATFORM_EC_CONSOLE_CMD_SHMEM
+	bool "Enable the 'shmem' command"
+	default y
+	help
+	  This command prints basic information about the EC shared memory,
+	  located at the top of RAM, above all RAM symbols: total size, bytes
+	  used and the maximum number of bytes that have been used since
+	  the EC started running.
 
 menuconfig PLATFORM_EC_TIMER
 	bool "Enable the EC timer module"

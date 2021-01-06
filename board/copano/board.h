@@ -27,10 +27,12 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
+#undef NPCX_PWM1_SEL
+#define NPCX_PWM1_SEL 0		/* GPIO C2 is not used as PWM1 */
+
 /* LED defines */
-#define CONFIG_LED_PWM
-/* Although there are 2 LEDs, they are both controlled by the same lines. */
-#define CONFIG_LED_PWM_COUNT 1
+#define CONFIG_LED_ONOFF_STATES
+#define CONFIG_LED_ONOFF_STATES_BAT_LOW	10
 
 /* Keyboard features */
 
@@ -43,16 +45,8 @@
 #define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT		1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
-
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -82,12 +76,6 @@
 #define CONFIG_USB_PD_USB4
 #define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x40
 #define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
-/*
- * For USB4, set the total budget for source current to 4.5A so that the first
- * connected port is allowed to source 3A while sourcing 1.5A on other type-C
- * ports.
- */
-#define CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT		4500
 
 /* USB Type A Features */
 
@@ -168,10 +156,7 @@ enum battery_type {
 };
 
 enum pwm_channel {
-	PWM_CH_LED1_BLUE = 0,
-	PWM_CH_LED2_RED,
-	PWM_CH_LED3_GREEN,
-	PWM_CH_KBLIGHT,
+	PWM_CH_KBLIGHT = 0,
 	PWM_CH_COUNT
 };
 
@@ -179,8 +164,6 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
-	CLEAR_ALS,
-	RGB_ALS,
 	SENSOR_COUNT,
 };
 

@@ -13,8 +13,6 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-#define CONFIG_MKBP_USE_GPIO
-
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 
 /* USB-A config */
@@ -84,6 +82,7 @@ enum battery_type {
 	BATTERY_SMP,
 	BATTERY_SMP_1,
 	BATTERY_SMP_2,
+	BATTERY_SMP_3,
 	BATTERY_LGC,
 	BATTERY_LGC_1,
 	BATTERY_LGC_2,

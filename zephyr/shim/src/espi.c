@@ -11,15 +11,30 @@
 #include <stdint.h>
 #include <zephyr.h>
 
+#include "acpi.h"
 #include "chipset.h"
 #include "common.h"
 #include "espi.h"
+#include "hooks.h"
 #include "lpc.h"
 #include "port80.h"
 #include "power.h"
+#include "soc_espi.h"
+#include "timer.h"
 #include "zephyr_espi_shim.h"
 
+#define VWIRE_PULSE_TRIGGER_TIME 65
+
 LOG_MODULE_REGISTER(espi_shim, CONFIG_ESPI_LOG_LEVEL);
+
+/* host command packet handler structure */
+static struct host_packet lpc_packet;
+/*
+ * For the eSPI host command, request & response use the same share memory.
+ * This is for input request temp buffer.
+ */
+static uint8_t params_copy[EC_LPC_HOST_PACKET_SIZE] __aligned(4);
+static bool init_done;
 
 /*
  * A mapping of platform/ec signals to Zephyr virtual wires.
@@ -118,6 +133,9 @@ static void espi_vwire_handler(const struct device *dev,
 	}
 }
 
+static void handle_host_write(uint32_t data);
+static void handle_acpi_write(uint32_t data);
+
 static void espi_peripheral_handler(const struct device *dev,
 				    struct espi_callback *cb,
 				    struct espi_event event)
@@ -127,6 +145,16 @@ static void espi_peripheral_handler(const struct device *dev,
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_PORT80) &&
 	    event_type == ESPI_PERIPHERAL_DEBUG_PORT80) {
 		port_80_write(event.evt_data);
+	}
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_ACPI) &&
+	    event_type == ESPI_PERIPHERAL_HOST_IO) {
+		handle_acpi_write(event.evt_data);
+	}
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD) &&
+	    event_type == ESPI_PERIPHERAL_EC_HOST_CMD) {
+		handle_host_write(event.evt_data);
 	}
 }
 
@@ -181,7 +209,13 @@ int zephyr_shim_setup_espi(void)
 
 int espi_vw_set_wire(enum espi_vw_signal signal, uint8_t level)
 {
-	return espi_send_vwire(espi_dev, signal_to_zephyr_vwire(signal), level);
+	int ret = espi_send_vwire(espi_dev, signal_to_zephyr_vwire(signal),
+				  level);
+
+	if (ret != 0)
+		LOG_ERR("Encountered error sending virtual wire signal");
+
+	return ret;
 }
 
 int espi_vw_get_wire(enum espi_vw_signal signal)
@@ -209,15 +243,209 @@ int espi_vw_disable_wire_int(enum espi_vw_signal signal)
 	return 0;
 }
 
-static uint8_t lpc_memmap[256] __aligned(8);
-
 uint8_t *lpc_get_memmap_range(void)
 {
-	/* TODO(b/175217186): implement eSPI functions for host commands */
-	return lpc_memmap;
+	uint32_t lpc_memmap = 0;
+
+	if (espi_read_lpc_request(espi_dev, EACPI_GET_SHARED_MEMORY,
+				  &lpc_memmap) != 0) {
+		LOG_ERR("Get lpc_memmap failed!\n");
+	}
+
+	return (uint8_t *)lpc_memmap;
+}
+
+/**
+ * Update the level-sensitive wake signal to the AP.
+ *
+ * @param wake_events	Currently asserted wake events
+ */
+static void lpc_update_wake(host_event_t wake_events)
+{
+	/*
+	 * Mask off power button event, since the AP gets that through a
+	 * separate dedicated GPIO.
+	 */
+	wake_events &= ~EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON);
+
+	/* Signal is asserted low when wake events is non-zero */
+	gpio_set_level(NAMED_GPIO(ec_pch_wake_odl), !wake_events);
+}
+
+static void lpc_generate_smi(void)
+{
+	/* Enforce signal-high for long enough to debounce high */
+	espi_vw_set_wire(VW_SMI_L, 1);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_vw_set_wire(VW_SMI_L, 0);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_vw_set_wire(VW_SMI_L, 1);
+}
+
+static void lpc_generate_sci(void)
+{
+	/* Enforce signal-high for long enough to debounce high */
+	espi_vw_set_wire(VW_SCI_L, 1);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_vw_set_wire(VW_SCI_L, 0);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_vw_set_wire(VW_SCI_L, 1);
 }
 
 void lpc_update_host_event_status(void)
 {
-	/* TODO(b/175217186): implement eSPI functions for host commands */
+	uint32_t enable;
+	uint32_t status;
+	int need_sci = 0;
+	int need_smi = 0;
+
+	if (!init_done)
+		return;
+
+	/* Disable PMC1 interrupt while updating status register */
+	enable = 0;
+	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
+			       &enable);
+
+	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	if (lpc_get_host_events_by_type(LPC_HOST_EVENT_SMI)) {
+		/* Only generate SMI for first event */
+		if (!(status & EC_LPC_STATUS_SMI_PENDING))
+			need_smi = 1;
+
+		status |= EC_LPC_STATUS_SMI_PENDING;
+		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	} else {
+		status &= ~EC_LPC_STATUS_SMI_PENDING;
+		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	}
+
+	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	if (lpc_get_host_events_by_type(LPC_HOST_EVENT_SCI)) {
+		/* Generate SCI for every event */
+		need_sci = 1;
+
+		status |= EC_LPC_STATUS_SCI_PENDING;
+		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	} else {
+		status &= ~EC_LPC_STATUS_SCI_PENDING;
+		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	}
+
+	*(host_event_t *)host_get_memmap(EC_MEMMAP_HOST_EVENTS) =
+		lpc_get_host_events();
+
+	enable = 1;
+	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
+			       &enable);
+
+	/* Process the wake events. */
+	lpc_update_wake(lpc_get_host_events_by_type(LPC_HOST_EVENT_WAKE));
+
+	/* Send pulse on SMI signal if needed */
+	if (need_smi)
+		lpc_generate_smi();
+
+	/* ACPI 5.0-12.6.1: Generate SCI for SCI_EVT=1. */
+	if (need_sci)
+		lpc_generate_sci();
+}
+
+static void host_command_init(void)
+{
+	/* We support LPC args and version 3 protocol */
+	*(lpc_get_memmap_range() + EC_MEMMAP_HOST_CMD_FLAGS) =
+		EC_HOST_CMD_FLAG_LPC_ARGS_SUPPORTED |
+		EC_HOST_CMD_FLAG_VERSION_3;
+
+	/* Sufficiently initialized */
+	init_done = 1;
+
+	lpc_update_host_event_status();
+}
+
+DECLARE_HOOK(HOOK_INIT, host_command_init, HOOK_PRIO_INIT_LPC);
+
+static void handle_acpi_write(uint32_t data)
+{
+	uint8_t value, result;
+	uint8_t is_cmd = (data >> NPCX_ACPI_TYPE_POS) & 0x01;
+	uint32_t status;
+
+	value = (data >> NPCX_ACPI_DATA_POS) & 0xff;
+
+	/* Handle whatever this was. */
+	if (acpi_ap_to_ec(is_cmd, value, &result)) {
+		data = result;
+		espi_write_lpc_request(espi_dev, EACPI_WRITE_CHAR, &data);
+	}
+
+	/* Clear processing flag */
+	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	status &= ~EC_LPC_STATUS_PROCESSING;
+	espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+
+	/*
+	 * ACPI 5.0-12.6.1: Generate SCI for Input Buffer Empty / Output Buffer
+	 * Full condition on the kernel channel.
+	 */
+	lpc_generate_sci();
+}
+
+static void lpc_send_response_packet(struct host_packet *pkt)
+{
+	uint32_t data;
+
+	/* TODO(b/176523211): check whether add EC_RES_IN_PROGRESS handle */
+
+	/* Write result to the data byte.  This sets the TOH status bit. */
+	data = pkt->driver_result;
+	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_CMD_SEND_RESULT, &data);
+}
+
+static void handle_host_write(uint32_t data)
+{
+	uint32_t shm_mem_host_cmd;
+
+	if (EC_COMMAND_PROTOCOL_3 != (data & 0xff)) {
+		LOG_ERR("Don't support this version of the host command");
+		/* TODO:(b/175217186): error response for other versions */
+		return;
+	}
+
+	espi_read_lpc_request(espi_dev, ECUSTOM_HOST_CMD_GET_PARAM_MEMORY,
+			      &shm_mem_host_cmd);
+
+	lpc_packet.send_response = lpc_send_response_packet;
+
+	lpc_packet.request = (const void *)shm_mem_host_cmd;
+	lpc_packet.request_temp = params_copy;
+	lpc_packet.request_max = sizeof(params_copy);
+	/* Don't know the request size so pass in the entire buffer */
+	lpc_packet.request_size = EC_LPC_HOST_PACKET_SIZE;
+
+	lpc_packet.response = (void *)shm_mem_host_cmd;
+	lpc_packet.response_max = EC_LPC_HOST_PACKET_SIZE;
+	lpc_packet.response_size = 0;
+
+	lpc_packet.driver_result = EC_RES_SUCCESS;
+
+	host_packet_receive(&lpc_packet);
+	return;
+}
+
+void lpc_set_acpi_status_mask(uint8_t mask)
+{
+	uint32_t status;
+	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	status |= mask;
+	espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+}
+
+void lpc_clear_acpi_status_mask(uint8_t mask)
+{
+	uint32_t status;
+	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	status &= ~mask;
+	espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
 }

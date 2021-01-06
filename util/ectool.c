@@ -862,6 +862,8 @@ static const char * const ec_feature_names[] = {
 	[EC_FEATURE_TYPEC_CMD] = "TCPMv2 Type-C commands",
 	[EC_FEATURE_TYPEC_REQUIRE_AP_MODE_ENTRY] =
 		"Host-controlled Type-C mode entry",
+	[EC_FEATURE_TYPEC_MUX_REQUIRE_AP_ACK] =
+		"AP ack for Type-C mux configuration",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -1816,10 +1818,9 @@ enum sysinfo_fields {
 
 static int sysinfo(struct ec_response_sysinfo *info)
 {
-	struct ec_response_sysinfo r;
 	int rv;
 
-	rv = ec_command(EC_CMD_SYSINFO, 0, NULL, 0, &r, sizeof(r));
+	rv = ec_command(EC_CMD_SYSINFO, 0, NULL, 0, info, sizeof(*info));
 	if (rv < 0) {
 		fprintf(stderr, "ERROR: EC_CMD_SYSINFO failed: %d\n", rv);
 		return rv;
@@ -1851,6 +1852,7 @@ int cmd_sysinfo(int argc, char **argv)
 			goto sysinfo_error_usage;
 	}
 
+	memset(&r, '\0', sizeof(r));
 	if (sysinfo(&r) != 0)
 		return -1;
 

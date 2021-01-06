@@ -60,14 +60,32 @@ void partner_send_msg(enum pd_msg_type sop,
 		      uint16_t ext,
 		      uint32_t *payload);
 
-int proc_pd_e1(enum pd_data_role data_role);
+
+int handle_attach_expected_msgs(enum pd_data_role data_role);
+
+
+enum proc_pd_e1_attach {
+	INITIAL_ATTACH			= BIT(0),
+	ALREADY_ATTACHED		= BIT(1),
+	INITIAL_AND_ALREADY_ATTACHED	= INITIAL_ATTACH | ALREADY_ATTACHED
+};
+int proc_pd_e1(enum pd_data_role data_role, enum proc_pd_e1_attach attach);
 int proc_pd_e3(void);
 
 int test_td_pd_ll_e3_dfp(void);
 int test_td_pd_ll_e3_ufp(void);
 int test_td_pd_ll_e4_dfp(void);
 int test_td_pd_ll_e4_ufp(void);
+int test_td_pd_ll_e5_dfp(void);
+int test_td_pd_ll_e5_ufp(void);
+
+int test_td_pd_src_e1(void);
+int test_td_pd_src_e2(void);
+int test_td_pd_src_e5(void);
+
+int test_td_pd_src3_e1(void);
 int test_td_pd_src3_e26(void);
+
 int test_td_pd_snk3_e12(void);
 
 int test_connect_as_nonpd_sink(void);

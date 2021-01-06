@@ -15,7 +15,7 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "system.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -1198,7 +1198,9 @@ int charge_manager_get_power_limit_uw(void)
 		return current_ma * voltage_mv;
 }
 
-#ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
+#if defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT) && \
+	!defined(CONFIG_USB_PD_TCPMV2)
+/* Note: this functionality is a part of the TCPMv2 Device Poicy Manager */
 
 /* Bitmap of ports used as power source */
 static volatile uint32_t source_port_bitmap;
@@ -1287,7 +1289,7 @@ int charge_manager_get_source_pdo(const uint32_t **src_pdo, const int port)
 	*src_pdo = pd_src_pdo;
 	return pd_src_pdo_cnt;
 }
-#endif /* CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT */
+#endif /* CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT && !CONFIG_USB_PD_TCPMV2 */
 
 #ifndef TEST_BUILD
 static enum ec_status hc_pd_power_info(struct host_cmd_handler_args *args)

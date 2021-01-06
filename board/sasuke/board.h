@@ -20,9 +20,6 @@
  */
 #define CONFIG_SYSTEM_UNLOCKED
 
-/* Save some flash space */
-#define CONFIG_CHIP_INIT_ROM_REGION
-
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
@@ -59,6 +56,12 @@
 
 /* PWM */
 #define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
+
+/* Thermistors */
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_THERMISTOR
+#define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -123,6 +126,12 @@ enum chg_id {
 	CHARGER_PRIMARY,
 	CHARGER_SECONDARY,
 	CHARGER_NUM,
+};
+
+enum temp_sensor_id {
+        TEMP_SENSOR_1,
+        TEMP_SENSOR_2,
+        TEMP_SENSOR_COUNT
 };
 
 enum adc_channel {

@@ -26,7 +26,6 @@ GPIO_INT(PG_EC_ALL_SYS_PWRGD,  PIN(F, 4),  GPIO_INT_BOTH, power_signal_interrupt
 
 /* Sensor Interrupts */
 GPIO_INT(EC_IMU_INT_L,         PIN(5, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V, bmi260_interrupt)
-GPIO_INT(EC_ALS_RGB_INT_L,     PIN(D, 4), GPIO_INT_FALLING, tcs3400_interrupt)
 GPIO_INT(TABLET_MODE_L,        PIN(9, 5), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 
 /* USB-C interrupts */
@@ -105,6 +104,11 @@ GPIO(CCD_MODE_ODL,		PIN(E, 5), GPIO_INPUT)		/* Case Closed Debug Mode */
 GPIO(M2_SSD_PLA,		PIN(7, 0), GPIO_INPUT)		/* SSD power-loss acknowledgment */
 GPIO(M2_SSD_PLN,		PIN(A, 0), GPIO_ODR_HIGH)	/* SSD power-loss notification */
 
+
+/* LED */
+GPIO(LED_2_L,			PIN(C, 3), GPIO_OUT_HIGH)	/* Battery Full LED / Power LED: White */
+GPIO(LED_1_L,			PIN(C, 4), GPIO_OUT_HIGH)	/* Battery Charging LED: Amber */
+
 /*
  * eDP backlight - both PCH and EC have enable pins that must be high
  * for the backlight to turn on. Default state is high, and can be turned
@@ -140,11 +144,6 @@ ALTERNATE(PIN_MASK(F, BIT(3) | BIT(2)), 0, MODULE_I2C, 0)                       
 ALTERNATE(PIN_MASK(3, BIT(3) | BIT(6)), 0, MODULE_I2C, 0)                            /* I2C5 */
 ALTERNATE(PIN_MASK(B, BIT(3) | BIT(2)), 0, MODULE_I2C, 0)                            /* I2C7 */
 
-/* This selects between an LED module on the motherboard and one on the daughter
- * board, to be controlled by LED_{1,2,3}_L. PWM allows driving both modules at
- * the same time. */
-ALTERNATE(PIN_MASK(C, BIT(2) | BIT(3) | BIT(4)), 0, MODULE_PWM, 0)                   /* LED_{3,2,1}_L */
-
 /* Keyboard pins */
 #define GPIO_KB_INPUT (GPIO_INPUT | GPIO_PULL_UP)
 ALTERNATE(PIN_MASK(3, 0x03), 0, MODULE_KEYBOARD_SCAN, GPIO_KB_INPUT) /* KSI_00-01 */
@@ -168,3 +167,8 @@ ALTERNATE(PIN_MASK(0, BIT(0) | BIT(1) | BIT(2)), 0, MODULE_PMU, 0)  /* GPIO00 = 
 /* Temperature sensors */
 ALTERNATE(PIN_MASK(4, BIT(2) | BIT(4) | BIT(5)), 0, MODULE_ADC, 0) /* TEMP_SENSOR1,2,4 */
 ALTERNATE(PIN(F, 1), 0, MODULE_ADC, 0) /* TEMP_SENSOR3 */
+
+/* Unused signals */
+GPIO(UNUSED_GPIOD4,		PIN(D, 4), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOC2,		PIN(C, 2), GPIO_INPUT | GPIO_PULL_UP)
+

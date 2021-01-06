@@ -13,7 +13,8 @@
 #include "console.h"
 #include "ec_commands.h"
 #include "system.h"
-#include "tcpm.h"
+#include "task.h"
+#include "tcpm/tcpm.h"
 #include "usb_dp_alt_mode.h"
 #include "usb_mode.h"
 #include "usb_pd.h"
@@ -341,4 +342,135 @@ void dpm_run(int port)
 		dpm_attempt_mode_exit(port);
 	else if (!DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE))
 		dpm_attempt_mode_entry(port);
+}
+
+/*
+ * Source-out policy variables and APIs
+ *
+ * Priority for the available 3.0 A ports is given in the following order:
+ * - sink partners which report requiring > 1.5 A in their Sink_Capabilities
+ */
+
+/*
+ * Bitmasks of port numbers in each following category
+ *
+ * Note: request bitmasks should be accessed atomically as other ports may alter
+ * them
+ */
+static uint32_t		max_current_claimed;
+static mutex_t		max_current_claimed_lock;
+
+#ifdef CONFIG_ZEPHYR
+static bool		dpm_mutex_initialized;
+#endif
+
+static uint32_t sink_max_pdo_requested;	/* Ports with PD sink needing > 1.5A */
+
+#define LOWEST_PORT(p) __builtin_ctz(p)  /* Undefined behavior if p == 0 */
+
+static int count_port_bits(uint32_t bitmask)
+{
+	int i, total = 0;
+
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
+		if (bitmask & BIT(i))
+			total++;
+	}
+
+	return total;
+}
+
+/*
+ * Centralized, mutex-controlled updates to the claimed 3.0 A ports
+ */
+static void balance_source_ports(void)
+{
+	uint32_t removed_ports, new_ports;
+
+#ifdef CONFIG_ZEPHYR
+	if (!dpm_mutex_initialized) {
+		(void)k_mutex_init(&max_current_claimed_lock);
+		dpm_mutex_initialized = true;
+	}
+#endif
+
+	mutex_lock(&max_current_claimed_lock);
+
+	/* Remove any ports which no longer require 3.0 A */
+	removed_ports = max_current_claimed & ~sink_max_pdo_requested;
+	max_current_claimed &= ~removed_ports;
+
+	/* Allocate 3.0 A to new PD sink ports that need it */
+	new_ports = sink_max_pdo_requested & ~max_current_claimed;
+	while (new_ports) {
+		int new_max_port = LOWEST_PORT(new_ports);
+
+		if (count_port_bits(max_current_claimed) <
+						CONFIG_USB_PD_3A_PORTS) {
+			max_current_claimed |= BIT(new_max_port);
+			typec_select_src_current_limit_rp(new_max_port,
+							  TYPEC_RP_3A0);
+		} else {
+			/* TODO(b/141690755): Check lower priority claims */
+			goto unlock;
+		}
+		new_ports &= ~BIT(new_max_port);
+	}
+
+unlock:
+	mutex_unlock(&max_current_claimed_lock);
+}
+
+/* Process sink's first Sink_Capabilities PDO for port current consideration */
+void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
+{
+	if (CONFIG_USB_PD_3A_PORTS == 0)
+		return;
+
+	/* Verify partner supplied valid vSafe5V fixed object first */
+	if ((vsafe5v_pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
+		return;
+
+	if (PDO_FIXED_VOLTAGE(vsafe5v_pdo) != 5000)
+		return;
+
+	/* Valid PDO to process, so evaluate whether > 1.5 A is needed */
+	if (PDO_FIXED_CURRENT(vsafe5v_pdo) <= 1500)
+		return;
+
+	atomic_or(&sink_max_pdo_requested, BIT(port));
+
+	balance_source_ports();
+}
+
+void dpm_remove_sink(int port)
+{
+	if (CONFIG_USB_PD_3A_PORTS == 0)
+		return;
+
+	if (!(BIT(port) & sink_max_pdo_requested))
+		return;
+
+	atomic_clear_bits(&sink_max_pdo_requested, BIT(port));
+
+	balance_source_ports();
+}
+
+/*
+ * Note: all ports receive the 1.5 A source offering until they are found to
+ * match a criteria on the 3.0 A priority list (ex. though sink capability
+ * probing), at which point they will be offered a new 3.0 A source capability.
+ */
+int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
+{
+	/* Max PDO may not exist on boards which don't offer 3 A */
+#if CONFIG_USB_PD_3A_PORTS > 0
+	if (max_current_claimed & BIT(port)) {
+		*src_pdo = pd_src_pdo_max;
+		return pd_src_pdo_max_cnt;
+	}
+#endif
+
+	*src_pdo = pd_src_pdo;
+	return pd_src_pdo_cnt;
 }
