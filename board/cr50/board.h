@@ -293,13 +293,13 @@ int board_use_plt_rst(void);
  */
 int board_rst_pullup_needed(void);
 /**
- * Return the state of the BOARD_SLAVE_CONFIG_I2C board strap option.
+ * Return the state of the BOARD_PERIPH_CONFIG_I2C board strap option.
  *
  * @return 0 if option is not set, !=0 if option set.
  */
 int board_tpm_uses_i2c(void);
 /**
- * Return the state of the BOARD_SLAVE_CONFIG_SPI board strap option.
+ * Return the state of the BOARD_PERIPH_CONFIG_SPI board strap option.
  *
  * @return 0 if option is not set, !=0 if option set.
  */

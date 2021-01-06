@@ -11,8 +11,8 @@
  * Bit assignments of the LONG_LIFE_SCRATCH1 register. This register survives
  * all kinds of resets, it is cleared only on the Power ON event.
  */
-#define BOARD_SLAVE_CONFIG_SPI       BIT(0)   /* TPM uses SPI interface */
-#define BOARD_SLAVE_CONFIG_I2C       BIT(1)   /* TPM uses I2C interface */
+#define BOARD_PERIPH_CONFIG_SPI       BIT(0)   /* TPM uses SPI interface */
+#define BOARD_PERIPH_CONFIG_I2C       BIT(1)   /* TPM uses I2C interface */
 
 /*
  * The gaps are left to ensure backwards compatibility with the earliest cr50
@@ -121,8 +121,8 @@
 	BOARD_EC_CR50_COMM_SUPPORT | \
 	BOARD_NEEDS_SYS_RST_PULL_UP | \
 	BOARD_NO_INA_SUPPORT | \
-	BOARD_SLAVE_CONFIG_I2C | \
-	BOARD_SLAVE_CONFIG_SPI | \
+	BOARD_PERIPH_CONFIG_I2C | \
+	BOARD_PERIPH_CONFIG_SPI | \
 	BOARD_USE_PLT_RESET | \
 	BOARD_WP_DISABLE_DELAY)
 

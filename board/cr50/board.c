@@ -154,12 +154,12 @@ int board_rst_pullup_needed(void)
 
 int board_tpm_uses_i2c(void)
 {
-	return !!(board_properties & BOARD_SLAVE_CONFIG_I2C);
+	return !!(board_properties & BOARD_PERIPH_CONFIG_I2C);
 }
 
 int board_tpm_uses_spi(void)
 {
-	return !!(board_properties & BOARD_SLAVE_CONFIG_SPI);
+	return !!(board_properties & BOARD_PERIPH_CONFIG_SPI);
 }
 
 int board_uses_closed_source_set1(void)
@@ -271,58 +271,58 @@ const struct strap_desc strap_regs[] = {
 	 "a12"},
 };
 
-#define BOARD_PROPERTIES_DEFAULT (BOARD_SLAVE_CONFIG_I2C | BOARD_USE_PLT_RESET)
+#define BOARD_PROPERTIES_DEFAULT (BOARD_PERIPH_CONFIG_I2C | BOARD_USE_PLT_RESET)
 static struct board_cfg board_cfg_table[] = {
 	/* SPI Variants: DIOA12 = 1M PD, DIOA6 = 1M PD */
 	/* Kevin/Gru: DI0A9 = 5k PD, DIOA1 = 1M PU */
 	{
 		.strap_cfg = 0x02,
-		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+		.board_properties = BOARD_PERIPH_CONFIG_SPI |
 			BOARD_NEEDS_SYS_RST_PULL_UP,
 	},
 	/* Asurada: DI0A9 = 5k PD, DIOA1 = 5k PU */
 	{
 		.strap_cfg = 0x03,
-		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+		.board_properties = BOARD_PERIPH_CONFIG_SPI |
 			BOARD_NEEDS_SYS_RST_PULL_UP |
 			BOARD_CCD_REC_LID_PIN_DIOA1,
 	},
 	/* Poppy: DI0A9 = 1M PU, DIOA1 = 1M PU */
 	{
 		.strap_cfg = 0x0A,
-		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+		.board_properties = BOARD_PERIPH_CONFIG_SPI |
 			BOARD_USE_PLT_RESET,
 	},
 	/* Mistral: DI0A9 = 1M PU, DIOA1 = 5k PU */
 	{
 		.strap_cfg = 0x0B,
-		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+		.board_properties = BOARD_PERIPH_CONFIG_SPI |
 			BOARD_USE_PLT_RESET | BOARD_NO_INA_SUPPORT |
 			BOARD_CLOSED_LOOP_RESET,
 	},
 	/* Kukui: DI0A9 = 5k PU, DIOA1 = 5k PU */
 	{
 		.strap_cfg = 0x0F,
-		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+		.board_properties = BOARD_PERIPH_CONFIG_SPI |
 			BOARD_USE_PLT_RESET,
 	},
 	/* I2C Variants: DIOA9 = 1M PD, DIOA1 = 1M PD */
 	/* Reef/Eve: DIOA12 = 5k PD, DIOA6 = 1M PU */
 	{
 		.strap_cfg = 0x20,
-		.board_properties = BOARD_SLAVE_CONFIG_I2C |
+		.board_properties = BOARD_PERIPH_CONFIG_I2C |
 			BOARD_USE_PLT_RESET,
 	},
 	/* Rowan: DIOA12 = 5k PD, DIOA6 = 5k PU */
 	{
 		.strap_cfg = 0x30,
-		.board_properties = BOARD_SLAVE_CONFIG_I2C |
+		.board_properties = BOARD_PERIPH_CONFIG_I2C |
 			BOARD_DEEP_SLEEP_DISABLED | BOARD_DETECT_AP_WITH_UART,
 	},
 	/* Sarien/Arcada: DIOA12 = 1M PD, DIOA6 = 5k PU */
 	{
 		.strap_cfg = 0x70,
-		.board_properties = BOARD_SLAVE_CONFIG_I2C |
+		.board_properties = BOARD_PERIPH_CONFIG_I2C |
 			BOARD_USE_PLT_RESET | BOARD_WP_DISABLE_DELAY |
 			BOARD_CLOSED_SOURCE_SET1 | BOARD_NO_INA_SUPPORT |
 			BOARD_ALLOW_CHANGE_TPM_MODE,
@@ -330,14 +330,14 @@ static struct board_cfg board_cfg_table[] = {
 	/* Dedede/Puff/Volteer: DIOA9 = 5K PU, DIOA1 = 1M PU */
 	{
 		.strap_cfg = 0x0E,
-		.board_properties = BOARD_SLAVE_CONFIG_SPI |
+		.board_properties = BOARD_PERIPH_CONFIG_SPI |
 			BOARD_USE_PLT_RESET | BOARD_EC_CR50_COMM_SUPPORT |
 			BOARD_CCD_REC_LID_PIN_DIOA9,
 	},
 	/* Zork: DIOA12 = 5K PU, DIOA6 = 1M PU */
 	{
 		.strap_cfg = 0xE0,
-		.board_properties = BOARD_SLAVE_CONFIG_I2C |
+		.board_properties = BOARD_PERIPH_CONFIG_I2C |
 			BOARD_USE_PLT_RESET | BOARD_EC_CR50_COMM_SUPPORT,
 	},
 };
@@ -1434,9 +1434,9 @@ static int get_strap_config(uint8_t *config)
 	 */
 	if (use_i2c && use_spi) {
 		spi_prop = (GREG32(PMU, LONG_LIFE_SCRATCH1) &
-			    BOARD_SLAVE_CONFIG_SPI);
+			    BOARD_PERIPH_CONFIG_SPI);
 		i2c_prop = (GREG32(PMU, LONG_LIFE_SCRATCH1) &
-			    BOARD_SLAVE_CONFIG_I2C);
+			    BOARD_PERIPH_CONFIG_I2C);
 		/* Make sure exactly one interface is selected */
 		if ((i2c_prop && spi_prop) || (!spi_prop && !i2c_prop))
 			return EC_ERROR_INVAL;
@@ -1459,7 +1459,7 @@ static uint32_t get_properties(void)
 
 #ifdef H1_RED_BOARD
 	CPRINTS("Unconditionally enabling SPI and platform reset");
-	return (BOARD_SLAVE_CONFIG_SPI | BOARD_USE_PLT_RESET);
+	return (BOARD_PERIPH_CONFIG_SPI | BOARD_USE_PLT_RESET);
 #endif
 	if (get_strap_config(&config) != EC_SUCCESS) {
 		/*
@@ -1489,7 +1489,7 @@ static uint32_t get_properties(void)
 	 * get_strap_config() returned EC_SUCCESS.
 	 */
 	if (config & 0xa) {
-		properties = BOARD_SLAVE_CONFIG_SPI;
+		properties = BOARD_PERIPH_CONFIG_SPI;
 		/*
 		 * Determine PLT_RST_L vs SYS_RST_L. Any board with a pullup on
 		 * DIOA9 uses PLT_RST_L.
