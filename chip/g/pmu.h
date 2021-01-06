@@ -72,9 +72,9 @@ enum {
 	PERIPH_SPI0             = 0x1a,
 	PERIPH_SPI1             = 0x1b,
 
-	PERIPH_SPS              = 0x1c,
-	PERIPH_SPS0             = 0x1c,
-	PERIPH_SPS0_TIMER       = 0x1d,
+	PERIPH_SPP              = 0x1c,
+	PERIPH_SPP0             = 0x1c,
+	PERIPH_SPP0_TIMER       = 0x1d,
 
 	PERIPH_SWDP             = 0x1e,
 	PERIPH_SWDP0            = 0x1e,
