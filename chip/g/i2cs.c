@@ -273,7 +273,7 @@ void __attribute__((used)) _i2cs_write_complete_int(void)
 	GWRITE_FIELD(I2CS, INT_STATE, INTR_WRITE_COMPLETE, 1);
 
 	/* We're receiving some bytes, so don't sleep */
-	disable_sleep(SLEEP_MASK_I2C_SLAVE);
+	disable_sleep(SLEEP_MASK_I2C_PERIPH);
 
 	if (write_complete_handler_) {
 		uint16_t bytes_written;
@@ -330,7 +330,7 @@ void __attribute__((used)) _i2cs_write_complete_int(void)
 	 * disabled again in the next I2CS interrupt.
 	 */
 	delay_sleep_by(1 * SECOND);
-	enable_sleep(SLEEP_MASK_I2C_SLAVE);
+	enable_sleep(SLEEP_MASK_I2C_PERIPH);
 }
 DECLARE_IRQ(GC_IRQNUM_I2CS0_INTR_WRITE_COMPLETE_INT,
 	    _i2cs_write_complete_int, 1);
