@@ -4,8 +4,8 @@
  * found in the LICENSE file.
  */
 
-#ifndef __CROS_EC_INCLUDE_SPI_MASTER_H
-#define __CROS_EC_INCLUDE_SPI_MASTER_H
+#ifndef __CROS_EC_INCLUDE_SPI_CONTROLLER_H
+#define __CROS_EC_INCLUDE_SPI_CONTROLLER_H
 
 #include "spi.h"
 

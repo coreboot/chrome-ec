@@ -134,10 +134,10 @@
 /* Need to be able to bitbang the EC UART for updates through CCD. */
 #define CONFIG_UART_BITBANG
 
-/* Enable SPI Master (SPI) module */
-#define CONFIG_SPI_MASTER
-#define CONFIG_SPI_MASTER_NO_CS_GPIOS
-#define CONFIG_SPI_MASTER_CONFIGURE_GPIOS
+/* Enable SPI controller (SPI) module */
+#define CONFIG_SPI_CONTROLLER
+#define CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
+#define CONFIG_SPI_CONTROLLER_CONFIGURE_GPIOS
 #define CONFIG_SPI_FLASH_PORT 0
 
 /* Enable SPI peripheral (SPP) module */

@@ -3153,7 +3153,7 @@
 #undef CONFIG_SPI_NOR_SMART_ERASE
 
 /* SPI master feature */
-#undef CONFIG_SPI_MASTER
+#undef CONFIG_SPI_CONTROLLER
 
 /* SPI master halfduplex/3-wire mode */
 #undef CONFIG_SPI_HALFDUPLEX
@@ -3162,11 +3162,11 @@
 #undef CONFIG_STM32_SPI1_MASTER
 
 /* SPI master configure gpios on init */
-#undef CONFIG_SPI_MASTER_CONFIGURE_GPIOS
+#undef CONFIG_SPI_CONTROLLER_CONFIGURE_GPIOS
 
 /* Support SPI masters without GPIO-specified Chip Selects, instead rely on the
  * SPI master port's hardwired CS pin. */
-#undef CONFIG_SPI_MASTER_NO_CS_GPIOS
+#undef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 
 /* Support testing SPI periph interface driver. */
 #undef CONFIG_SPP_TEST

@@ -59,7 +59,7 @@ endif
 endif
 chip-$(CONFIG_DCRYPTO)+= dcrypto/x509.o
 
-chip-$(CONFIG_SPI_MASTER)+=spi_master.o
+chip-$(CONFIG_SPI_CONTROLLER)+=spi_master.o
 
 chip-y+= jitter.o
 chip-y+= pmu.o
