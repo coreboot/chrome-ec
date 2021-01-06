@@ -39,8 +39,8 @@ enum {
 	PERIPH_I2C0             = 0xa,
 	PERIPH_I2C1             = 0xb,
 
-	PERIPH_I2CS             = 0xc,
-	PERIPH_I2CS0            = 0xc,
+	PERIPH_I2CP             = 0xc,
+	PERIPH_I2CP0            = 0xc,
 
 	PERIPH_KEYMGR           = 0xd,
 	PERIPH_KEYMGR0          = 0xd,
