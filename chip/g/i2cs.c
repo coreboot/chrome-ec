@@ -106,7 +106,7 @@ static uint16_t i2cp_sda_low_count;
 
 static void check_i2cp_state(void)
 {
-	if (gpio_get_level(GPIO_MONITOR_I2CS_SDA))
+	if (gpio_get_level(GPIO_MONITOR_I2CP_SDA))
 		return;
 
 	/*
@@ -221,7 +221,7 @@ DECLARE_DEFERRED(poll_read_state);
  */
 static void poll_read_state(void)
 {
-	if (!ap_is_on() || gpio_get_level(GPIO_I2CS_SDA)) {
+	if (!ap_is_on() || gpio_get_level(GPIO_I2CP_SDA)) {
 		/*
 		 * When the AP is off, the SDA line might drop low since the
 		 * pull ups might not be powered.

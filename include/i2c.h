@@ -427,7 +427,7 @@ void i2c_start_xfer_notify(int port, int periph_addr);
 void i2c_end_xfer_notify(int port, int periph_addr);
 
 /*
- * Interrupt handler of GPIO_MONITOR_I2CS_SDA.
+ * Interrupt handler of GPIO_MONITOR_I2CP_SDA.
  * Its role is to detect any transaction start during INT_AP_L
  *  assertion and to deassert INT_AP_L.
  */
