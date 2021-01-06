@@ -40,7 +40,7 @@
 
 /*
  * Minimum delay between resetting the port or sending a stop condition, and
- * when the port can be expected to be back in an idle state (and the slave
+ * when the port can be expected to be back in an idle state (and the periph
  * has had long enough to see the start/stop condition edges).
  *
  * 500 us = 50 clocks at 100 KHz bus speed.  This has been experimentally
@@ -103,7 +103,7 @@ int i2c_do_work(int port)
 		/*
 		 * Error after starting; abort transfer.  Ignore errors at
 		 * start because arbitration and timeout errors are taken care
-		 * of in chip_i2c_xfer(), and slave ack failures will
+		 * of in chip_i2c_xfer(), and periph ack failures will
 		 * automatically clear once we send a start condition.
 		 */
 		pd->err = EC_ERROR_UNKNOWN;
@@ -212,13 +212,13 @@ int chip_i2c_xfer(const int port, const uint16_t periph_addr_flags,
 		LM4_I2C_MTPR(port) = tpr;
 
 		/*
-		 * We don't know what edges the slave saw, so sleep long enough
-		 * that the slave will see the new start condition below.
+		 * We don't know what edges the periph saw, so sleep long enough
+		 * that the periph will see the new start condition below.
 		 */
 		usleep(I2C_IDLE_US);
 	}
 
-	/* Set slave address for transmit */
+	/* Set periph address for transmit */
 	LM4_I2C_MSA(port) = (I2C_GET_ADDR(periph_addr_flags) << 1) & 0xff;
 
 	/* Enable interrupts */
@@ -358,7 +358,7 @@ void i2c_init(void)
 	/* Configure GPIOs */
 	gpio_config_module(MODULE_I2C, 1);
 
-	/* Initialize ports as master, with interrupts enabled */
+	/* Initialize ports as controller, with interrupts enabled */
 	for (i = 0; i < i2c_ports_used; i++)
 		LM4_I2C_MCR(i2c_ports[i].port) = 0x10;
 
