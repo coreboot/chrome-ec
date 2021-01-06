@@ -184,7 +184,7 @@ struct usb_retimer {
 	 * no retimer driver is to be called.
 	 */
 
-	/* I2C port and slave address */
+	/* I2C port and peripheral address */
 	const int i2c_port;
 	const uint16_t i2c_addr_flags;
 

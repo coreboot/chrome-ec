@@ -92,17 +92,17 @@
 
 *   **I/O Expander**{#ioexpander}
 
-    An [I2C](#i2c) slave device that provides additional GPIO signals (anywhere
+    An [I2C](#i2c) periph device that provides additional GPIO signals (anywhere
     from 8 - 32 signals).  GPIOs behind an I/O expander are written and read
-    using I2C register accesses from the I2C master.
+    using I2C register accesses from the I2C controller.
 
 *   **I2C - Inter-Integrated Circuit**{#i2c}
 
     A 2-wire synchronous communication bus, consisting of a clock signal and a
-    bidirectional data signal. An I2C bus typically contains one master device
-    and one more slave devices. The I2C standard defines supported clock speeds
-    of 100 KHz and 400 KHz. The full [I2C Specification] is available from NXP
-    (formerly Phillips).
+    bidirectional data signal. An I2C bus typically contains one controller
+    device and one more periph devices. The I2C standard defines supported
+    clock speeds of 100 KHz and 400 KHz. The full [I2C Specification] is
+    available from NXP (formerly Phillips).
 
 *   **LED - Light Emitting Diode**{#led}
 

@@ -4,7 +4,7 @@
  */
 
 /*
- * This is a driver for the I2C controller interface (i2cc) of the g chip.
+ * This is a driver for the I2C controller driver (i2cc) of the g chip.
  *
  * The g chip i2cc module supports 3 modes of operation, disabled, bit-banging,
  * and instruction based. These modes are selected via the I2C_CTRL
@@ -34,10 +34,10 @@
  * compound instruction for the transaction:
  *
  * I2C_INST_START = 1         -> send start bit
- * I2C_INST_FWDEVADDR = 1     -> first send the slave device address
+ * I2C_INST_FWDEVADDR = 1     -> first send the periph device address
  * I2C_INST_FWBYTESCOUNT = 3  -> 3 bytes in FWBYTES (register + 16 bit value)
  * I2C_INST_FINALSTOP = 1     -> send stop bit
- * I2C_INST_DEVADDRVAL = slave address
+ * I2C_INST_DEVADDRVAL = periph address
  *
  * I2C_FWBYTES[b7:b0]   = out[0]  -> register address
  * I2C_FWBYTES[b15:b8]  = out[1]  -> first byte of value
@@ -47,14 +47,14 @@
  * compound instruction for the transaction:
  *
  * I2C_INST_START = 1         -> send start bit
- * I2C_INST_FWDEVADDR = 1     -> first send the slave device address
+ * I2C_INST_FWDEVADDR = 1     -> first send the periph device address
  * I2C_INST_FWBYTESCOUNT = 1  -> 1 byte in FWBYTES (register address)
  * I2C_INST_REPEATEDSTART = 1 -> send start bit following write
- * I2C_INST_RWDEVADDR = 1     -> send slave address in read mode
- * I2C_INST_RWDEVADDR_RWB = 1 -> read bytes following slave address
+ * I2C_INST_RWDEVADDR = 1     -> send periph address in read mode
+ * I2C_INST_RWDEVADDR_RWB = 1 -> read bytes following periph address
  * I2C_INST_FINALNA = 1       -> ACK read bytes, NACK last byte read
  * I2C_INST_FINALSTOP = 1     -> send stop bit
- * I2C_INST_DEVADDRVAL = slave address
+ * I2C_INST_DEVADDRVAL = periph address
  * I2C_FWBYTES[b7:b0] = out[0] -> register address byte
  *
  * Once transaction is complete:
@@ -254,7 +254,7 @@ static uint32_t i2cc_create_inst(int periph_addr_flags, int is_write,
 
 	if (flags & I2C_XFER_START) {
 		/*
-		 * Start sequence will have to be issued, slave address needs
+		 * Start sequence will have to be issued, periph address needs
 		 * to be included.
 		 */
 		inst |= INST_START;

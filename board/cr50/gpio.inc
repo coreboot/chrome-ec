@@ -14,15 +14,15 @@
  *     Ports' architecture and programmig is described in "ARM Cortex-M System
  *     Design Kit TRM" DDIO47B.
  *
- *   - a set of peripherals - slave and master SPI and I2C controllers, UARTs,
- *     interrupt controller, etc.
+ *   - a set of modules - SPI and I2C controller and peripheral interfaces,
+ *     UARTs,  interrupt controller, etc.
  *
  *   - 28 pins on the package named DIOA0..14, DIOB0..7 and DIOM0..4
  *
  *   - a PINMUX - a unit which allows to interconnect objects from the three
- *     groups listed above. Note that some peripherals are attached to some
- *     pins directly, so in case those peripherals are used the pins should
- *     not be connected by PINMUX to any other outputs.
+ *     groups listed above. Note that some modules are attached to some pins
+ *     directly, so in case those modules are used the pins should not be
+ *     connected by PINMUX to any other outputs.
  *
  * The below macros are somewhat misleading (apparently for historical
  * reasons), as PIN(p, b) component in fact refers not to the external pin,
@@ -293,7 +293,7 @@ PINMUX(GPIO(DETECT_SERVO),      B5, DIO_INPUT)
  * I2CP pins are bi-directional and would be configured here as shown. However,
  * A1 is also used as a strapping option GPIO input which is configured
  * above. If a board is configured (via the strapping pins) to support the I2CP
- * interface, then the connection of A1 and A9 to/from the I2C0_SDA and I2C0_SCL
+ * driver, then the connection of A1 and A9 to/from the I2C0_SDA and I2C0_SCL
  * lines is done in the function i2cp_set_pinmux() which lives in board.c.
  *
  * PINMUX(FUNC(I2C0_SCL),        A9, DIO_INPUT)
@@ -315,7 +315,7 @@ PINMUX(GPIO(DETECT_SERVO),      B5, DIO_INPUT)
  *   DIOA8  = SPI_CLK   (output)
  *   DIOA11 = SPI_MISO  (input)
  *   DIOA14 = SPI_CS_L  (output)
- * The pads are only connected to the peripheral outputs when SPI is enabled to
+ * The pads are only connected to the module outputs when SPI is enabled to
  * avoid interfering with other things on the board.
  * Note: Double-check to be sure these are configured in spi_master.c
  */

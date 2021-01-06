@@ -775,13 +775,13 @@ int i2c_raw_mode(int port, int enable)
  *   low).
  *
  * We attempt to unwedge the bus by doing:
- * - If SCL is being held low, then a slave is clock extending. The only
- *   thing we can do is try to wait until the slave stops clock extending.
- * - Otherwise, we will toggle the clock until the slave releases the SDA line.
- *   Once the SDA line is released, try to send a STOP bit. Rinse and repeat
- *   until either the bus is normal, or we run out of attempts.
+ * - If SCL is being held low, then a peripheral is clock extending. The only
+ *   thing we can do is try to wait until the peripheral stops clock extending.
+ * - Otherwise, we will toggle the clock until the peripheral releases the SDA
+ *   line. Once the SDA line is released, try to send a STOP bit. Rinse and
+ *   repeat until either the bus is normal, or we run out of attempts.
  *
- * Note this should work for most devices, but depending on the slaves i2c
+ * Note this should work for most devices, but depending on the i2c peripheral's
  * state machine, it may not be possible to unwedge the bus.
  */
 int i2c_unwedge(int port)

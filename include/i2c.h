@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* I2C interface for Chrome EC */
+/* I2C driver for Chrome EC */
 
 #ifndef __CROS_EC_I2C_H
 #define __CROS_EC_I2C_H
@@ -14,7 +14,7 @@
 #include "stddef.h"
 
 /*
- * I2C Slave Address encoding
+ * I2C Peripheral Address encoding
  *
  * EC will favor 7bit I2C/SPI address encoding.  The variable/define
  * naming should follow the pattern, if it is just the 7 bit address
@@ -29,7 +29,7 @@
  * clear.  I suggest, since this is a very small amount of usage, that
  * ending the variable as "addr_8bit" would make this clear.
  *
- * NOTE: Slave addresses are always 16 bit values.  The least significant
+ * NOTE: Peripheral addresses are always 16 bit values.  The least significant
  * 10 bits are available as an address.  More significant bits are
  * used here and in motion_sense to give specific meaning to the
  * address that is pertinent to its use.
@@ -148,7 +148,7 @@ extern const int i2c_test_dev_used;
  * by locking the I2C port and performing an I2C_XFER_SINGLE transfer.
  *
  * @param port		Port to access
- * @param periph_addr	Slave device address
+ * @param periph_addr	peripheral device address
  * @param out		Data to send
  * @param out_size	Number of bytes to send
  * @param in		Destination buffer for received data
@@ -183,7 +183,7 @@ int i2c_xfer_unlocked(const int port,
  * i2c_xfer().
  *
  * @param port		Port to access
- * @param periph_addr	Slave device address
+ * @param periph_addr	peripheral device address
  * @param out		Data to send
  * @param out_size	Number of bytes to send
  * @param in		Destination buffer for received data
@@ -287,80 +287,90 @@ void i2c_prepare_sysjump(void);
 void i2c_set_timeout(int port, uint32_t timeout);
 
 /**
- * Read a 32-bit register from the slave at 7-bit slave address <periphaddr>, at
- * the specified 8-bit <offset> in the slave's address space.
+ * Read a 32-bit register from the peripheral at 7-bit peripheral address
+ * <periphaddr>, at the specified 8-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_read32(const int port,
 	       const uint16_t periph_addr_flags,
 	       int offset, int *data);
 
 /**
- * Write a 32-bit register to the slave at 7-bit slave address <periphaddr>, at
- * the specified 8-bit <offset> in the slave's address space.
+ * Write a 32-bit register to the peripheral at 7-bit peripheral address
+ * <periphaddr>, at the specified 8-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_write32(const int port,
 		const uint16_t periph_addr_flags,
 		int offset, int data);
 
 /**
- * Read a 16-bit register from the slave at 7-bit slave address <periphaddr>, at
- * the specified 8-bit <offset> in the slave's address space.
+ * Read a 16-bit register from the peripheral at 7-bit peripheral address
+ * <periphaddr>, at the specified 8-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_read16(const int port,
 	       const uint16_t periph_addr_flags,
 	       int offset, int *data);
 
 /**
- * Write a 16-bit register to the slave at 7-bit slave address <periphaddr>, at
- * the specified 8-bit <offset> in the slave's address space.
+ * Write a 16-bit register to the peripheral at 7-bit peripheral address
+ * <periphaddr>, at the specified 8-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_write16(const int port,
 		const uint16_t periph_addr_flags,
 		int offset, int data);
 
 /**
- * Read an 8-bit register from the slave at 7-bit slave address <periphaddr>, at
- * the specified 8-bit <offset> in the slave's address space.
+ * Read an 8-bit register from the peripheral at 7-bit peripheral address
+ * <periphaddr>, at the specified 8-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_read8(const int port,
 	      const uint16_t periph_addr_flags,
 	      int offset, int *data);
 
 /**
- * Write an 8-bit register to the slave at 7-bit slave address <periphaddr>, at
- * the specified 8-bit <offset> in the slave's address space.
+ * Write an 8-bit register to the peripheral at 7-bit peripheral address
+ * <periphaddr>, at the specified 8-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_write8(const int port,
 	       const uint16_t periph_addr_flags,
 	       int offset, int data);
 
 /**
- * Read one or two bytes data from the slave at 7-bit slave address
- * * <periphaddr>, at 16-bit <offset> in the slave's address space.
+ * Read one or two bytes data from the peripheral at 7-bit peripheral address
+ * <periphaddr>, at 16-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_read_offset16(const int port,
 		      const uint16_t periph_addr_flags,
 		      uint16_t offset, int *data, int len);
 
 /**
- * Write one or two bytes data to the slave at 7-bit slave address
- * <periphaddr>, at 16-bit <offset> in the slave's address space.
+ * Write one or two bytes data to the peripheral at 7-bit peripheral address
+ * <periphaddr>, at 16-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_write_offset16(const int port,
 		       const uint16_t periph_addr_flags,
 		       uint16_t offset, int data, int len);
 
 /**
- * Read <len> bytes block data from the slave at 7-bit slave address
- * * <periphaddr>, at 16-bit <offset> in the slave's address space.
+ * Read <len> bytes block data from the peripheral at 7-bit peripheral address
+ * <periphaddr>, at 16-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_read_offset16_block(const int port,
 			    const uint16_t periph_addr_flags,
 			    uint16_t offset, uint8_t *data, int len);
 
 /**
- * Write <len> bytes block data to the slave at 7-bit slave address
- * <periphaddr>, at 16-bit <offset> in the slave's address space.
+ * Write <len> bytes block data to the peripheral at 7-bit peripheral address
+ * <periphaddr>, at 16-bit <offset> in the peripheral's address
+ * space.
  */
 int i2c_write_offset16_block(const int port,
 			     const uint16_t periph_addr_flags,
@@ -396,18 +406,18 @@ int i2c_read_string(const int port,
 		    int offset, uint8_t *data, int len);
 
 /**
- * Read a data block of <len> 8-bit transfers from the slave at 7-bit slave
- * address <periphaddr>, at the specified 8-bit <offset> in the slave's address
- * space.
+ * Read a data block of <len> 8-bit transfers from the peripheral at 7-bit
+ * peripheral address <periphaddr>, at the specified 8-bit <offset> in the
+ * peripheral's address space.
  */
 int i2c_read_block(const int port,
 		   const uint16_t periph_addr_flags,
 		   int offset, uint8_t *data, int len);
 
 /**
- * Write a data block of <len> 8-bit transfers to the slave at 7-bit slave
- * address <periphaddr>, at the specified 8-bit <offset> in the slave's address
- * space.
+ * Write a data block of <len> 8-bit transfers to the peripheral at 7-bit
+ * peripheral address <periphaddr>, at the specified 8-bit <offset> in the
+ * peripheral's address space.
  */
 int i2c_write_block(const int port,
 		    const uint16_t periph_addr_flags,
@@ -435,11 +445,12 @@ enum ec_status i2c_get_protocol_info(struct host_cmd_handler_args *args);
 /**
  * Callbacks processing received data and response
  *
- * i2c_data_recived will be called when a slave finishes receiving data and
- * i2c_set_response will be called when a slave is expected to send response.
+ * i2c_data_recived will be called when a peripheral finishes receiving data and
+ * i2c_set_response will be called when a peripheral is expected to send
+ * response.
  *
  * Using these, Chrome OS host command protocol should be separated from
- * i2c slave drivers (e.g. i2c-stm32f0.c, i2c-stm32f3.c).
+ * i2c peripheral drivers (e.g. i2c-stm32f0.c, i2c-stm32f3.c).
  *
  * @param port: I2C port number
  * @param buf:	Buffer containing received data on call and response on return
@@ -487,7 +498,7 @@ int board_is_i2c_port_powered(int port);
  * CONFIG_I2C_XFER_BOARD_CALLBACK.
  *
  * @param port: I2C port number
- * @param periph_addr: Slave device address
+ * @param periph_addr: peripheral device address
  *
  */
 void i2c_start_xfer_notify(const int port,
@@ -499,7 +510,7 @@ void i2c_start_xfer_notify(const int port,
  * CONFIG_I2C_XFER_BOARD_CALLBACK.
  *
  * @param port: I2C port number
- * @param periph_addr: Slave device address
+ * @param periph_addr: peripheral device address
  *
  */
 void i2c_end_xfer_notify(const int port,
@@ -510,7 +521,7 @@ void i2c_end_xfer_notify(const int port,
  * funcionality of transactions.
  *
  * @param port: I2C port number
- * @param periph_addr: slave device address
+ * @param periph_addr: peripheral device address
  * @param direction: 0 for write,
  *                   1 for read
  * @param data: pointer to data read or written

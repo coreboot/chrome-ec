@@ -570,7 +570,7 @@ void pmu_wakeup_interrupt(void)
 		reset_wake_logic();
 
 		/*
-		 * Delay sleep long enough for a SPI slave transaction to start
+		 * Delay sleep long enough for a SPI periph transaction to start
 		 * or for the system to be reset.
 		 */
 		delay_sleep_by(5 * SECOND);
@@ -589,7 +589,7 @@ DECLARE_IRQ(GC_IRQNUM_PMU_INTR_WAKEUP_INT, pmu_wakeup_interrupt, 1);
 void board_configure_deep_sleep_wakepins(void)
 {
 	/*
-	 * Disable the i2c and spi slave wake sources since the TPM is
+	 * Disable the i2c and spi periph wake sources since the TPM is
 	 * not being used and reenable them in their init functions on
 	 * resume.
 	 */
@@ -1591,7 +1591,7 @@ void i2cp_set_pinmux(void)
 
 	/*
 	 * Provide access to the SDA line to be able to detect 'hosed i2c
-	 * slave' condition.
+	 * periph' condition.
 	 */
 	GWRITE(PINMUX, GPIO0_GPIO14_SEL, GC_PINMUX_DIOA1_SEL);
 
