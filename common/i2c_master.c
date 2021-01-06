@@ -69,23 +69,22 @@ const struct i2c_port_t *get_i2c_port(int port)
 	return NULL;
 }
 
-static int chip_i2c_xfer_with_notify(int port, int slave_addr,
+static int chip_i2c_xfer_with_notify(int port, int periph_addr,
 				     const uint8_t *out, int out_size,
 				     uint8_t *in, int in_size, int flags)
 {
 	int ret;
 
 #ifdef CONFIG_I2C_XFER_BOARD_CALLBACK
-	i2c_start_xfer_notify(port, slave_addr);
+	i2c_start_xfer_notify(port, periph_addr);
 #endif
 
-	ret = chip_i2c_xfer(port, slave_addr, out, out_size, in, in_size,
+	ret = chip_i2c_xfer(port, periph_addr, out, out_size, in, in_size,
 			    flags);
 
 #ifdef CONFIG_I2C_XFER_BOARD_CALLBACK
-	i2c_end_xfer_notify(port, slave_addr);
+	i2c_end_xfer_notify(port, periph_addr);
 #endif
-
 	return ret;
 }
 
@@ -94,7 +93,7 @@ static int chip_i2c_xfer_with_notify(int port, int slave_addr,
  * Internal function that splits reading into multiple chip_i2c_xfer() calls
  * if in_size exceeds CONFIG_I2C_CHIP_MAX_READ_SIZE.
  */
-static int i2c_xfer_no_retry(int port, int slave_addr, const uint8_t *out,
+static int i2c_xfer_no_retry(int port, int periph_addr, const uint8_t *out,
 			     int out_size, uint8_t *in, int in_size, int flags)
 {
 	int ret;
@@ -103,13 +102,13 @@ static int i2c_xfer_no_retry(int port, int slave_addr, const uint8_t *out,
 
 	in_size -= in_chunk_size;
 	out_flags |= !in_size ? (flags & I2C_XFER_STOP) : 0;
-	ret = chip_i2c_xfer_with_notify(port, slave_addr, out, out_size, in,
+	ret = chip_i2c_xfer_with_notify(port, periph_addr, out, out_size, in,
 					in_chunk_size, out_flags);
 	in += in_chunk_size;
 	while (in_size && ret == EC_SUCCESS) {
 		in_chunk_size = MIN(in_size, CONFIG_I2C_CHIP_MAX_READ_SIZE);
 		in_size -= in_chunk_size;
-		ret = chip_i2c_xfer_with_notify(port, slave_addr, NULL, 0, in,
+		ret = chip_i2c_xfer_with_notify(port, periph_addr, NULL, 0, in,
 			in_chunk_size, !in_size ? (flags & I2C_XFER_STOP) : 0);
 		in += in_chunk_size;
 	}
@@ -117,7 +116,7 @@ static int i2c_xfer_no_retry(int port, int slave_addr, const uint8_t *out,
 }
 #endif /* CONFIG_I2C_XFER_LARGE_READ */
 
-int i2c_xfer_unlocked(int port, int slave_addr,
+int i2c_xfer_unlocked(int port, int periph_addr,
 		      const uint8_t *out, int out_size,
 		      uint8_t *in, int in_size, int flags)
 {
@@ -131,11 +130,11 @@ int i2c_xfer_unlocked(int port, int slave_addr,
 
 	for (i = 0; i <= CONFIG_I2C_NACK_RETRY_COUNT; i++) {
 #ifdef CONFIG_I2C_XFER_LARGE_READ
-		ret = i2c_xfer_no_retry(port, slave_addr, out, out_size, in,
+		ret = i2c_xfer_no_retry(port, periph_addr, out, out_size, in,
 			in_size, flags);
 #else
-		ret = chip_i2c_xfer_with_notify(port, slave_addr, out, out_size,
-						in, in_size, flags);
+		ret = chip_i2c_xfer_with_notify(port, periph_addr, out,
+						out_size, in, in_size, flags);
 #endif /* CONFIG_I2C_XFER_LARGE_READ */
 		if (ret != EC_ERROR_BUSY)
 			break;
@@ -143,13 +142,13 @@ int i2c_xfer_unlocked(int port, int slave_addr,
 	return ret;
 }
 
-int i2c_xfer(int port, int slave_addr, const uint8_t *out, int out_size,
+int i2c_xfer(int port, int periph_addr, const uint8_t *out, int out_size,
 	     uint8_t *in, int in_size)
 {
 	int rv;
 
 	i2c_lock(port, 1);
-	rv = i2c_xfer_unlocked(port, slave_addr, out, out_size, in, in_size,
+	rv = i2c_xfer_unlocked(port, periph_addr, out, out_size, in, in_size,
 			I2C_XFER_SINGLE);
 	i2c_lock(port, 0);
 
@@ -199,19 +198,19 @@ void i2c_prepare_sysjump(void)
 		mutex_lock(port_mutex + i);
 }
 
-int i2c_read32(int port, int slave_addr, int offset, int *data)
+int i2c_read32(int port, int periph_addr, int offset, int *data)
 {
 	int rv;
 	uint8_t reg, buf[sizeof(uint32_t)];
 
 	reg = offset & 0xff;
 	/* I2C read 32-bit word: transmit 8-bit offset, and read 32bits */
-	rv = i2c_xfer(port, slave_addr, &reg, 1, buf, sizeof(uint32_t));
+	rv = i2c_xfer(port, periph_addr, &reg, 1, buf, sizeof(uint32_t));
 
 	if (rv)
 		return rv;
 
-	if (slave_addr & I2C_FLAG_BIG_ENDIAN)
+	if (periph_addr & I2C_FLAG_BIG_ENDIAN)
 		*data = ((int)buf[0] << 24) | ((int)buf[1] << 16) |
 			((int)buf[0] << 8) | buf[1];
 	else
@@ -221,13 +220,13 @@ int i2c_read32(int port, int slave_addr, int offset, int *data)
 	return EC_SUCCESS;
 }
 
-int i2c_write32(int port, int slave_addr, int offset, int data)
+int i2c_write32(int port, int periph_addr, int offset, int data)
 {
 	uint8_t buf[1 + sizeof(uint32_t)];
 
 	buf[0] = offset & 0xff;
 
-	if (slave_addr & I2C_FLAG_BIG_ENDIAN) {
+	if (periph_addr & I2C_FLAG_BIG_ENDIAN) {
 		buf[1] = (data >> 24) & 0xff;
 		buf[2] = (data >> 16) & 0xff;
 		buf[3] = (data >> 8) & 0xff;
@@ -239,23 +238,23 @@ int i2c_write32(int port, int slave_addr, int offset, int data)
 		buf[4] = (data >> 24) & 0xff;
 	}
 
-	return i2c_xfer(port, slave_addr, buf, sizeof(uint32_t) + 1,
+	return i2c_xfer(port, periph_addr, buf, sizeof(uint32_t) + 1,
 			NULL, 0);
 }
 
-int i2c_read16(int port, int slave_addr, int offset, int *data)
+int i2c_read16(int port, int periph_addr, int offset, int *data)
 {
 	int rv;
 	uint8_t reg, buf[sizeof(uint16_t)];
 
 	reg = offset & 0xff;
 	/* I2C read 16-bit word: transmit 8-bit offset, and read 16bits */
-	rv = i2c_xfer(port, slave_addr, &reg, 1, buf, sizeof(uint16_t));
+	rv = i2c_xfer(port, periph_addr, &reg, 1, buf, sizeof(uint16_t));
 
 	if (rv)
 		return rv;
 
-	if (slave_addr & I2C_FLAG_BIG_ENDIAN)
+	if (periph_addr & I2C_FLAG_BIG_ENDIAN)
 		*data = ((int)buf[0] << 8) | buf[1];
 	else
 		*data = ((int)buf[1] << 8) | buf[0];
@@ -263,13 +262,13 @@ int i2c_read16(int port, int slave_addr, int offset, int *data)
 	return EC_SUCCESS;
 }
 
-int i2c_write16(int port, int slave_addr, int offset, int data)
+int i2c_write16(int port, int periph_addr, int offset, int data)
 {
 	uint8_t buf[1 + sizeof(uint16_t)];
 
 	buf[0] = offset & 0xff;
 
-	if (slave_addr & I2C_FLAG_BIG_ENDIAN) {
+	if (periph_addr & I2C_FLAG_BIG_ENDIAN) {
 		buf[1] = (data >> 8) & 0xff;
 		buf[2] = data & 0xff;
 	} else {
@@ -277,10 +276,10 @@ int i2c_write16(int port, int slave_addr, int offset, int data)
 		buf[2] = (data >> 8) & 0xff;
 	}
 
-	return i2c_xfer(port, slave_addr, buf, 1 + sizeof(uint16_t), NULL, 0);
+	return i2c_xfer(port, periph_addr, buf, 1 + sizeof(uint16_t), NULL, 0);
 }
 
-int i2c_read8(int port, int slave_addr, int offset, int *data)
+int i2c_read8(int port, int periph_addr, int offset, int *data)
 {
 	int rv;
 	uint8_t reg = offset;
@@ -288,24 +287,24 @@ int i2c_read8(int port, int slave_addr, int offset, int *data)
 
 	reg = offset;
 
-	rv = i2c_xfer(port, slave_addr, &reg, 1, &buf, 1);
+	rv = i2c_xfer(port, periph_addr, &reg, 1, &buf, 1);
 	if (!rv)
 		*data = buf;
 
 	return rv;
 }
 
-int i2c_write8(int port, int slave_addr, int offset, int data)
+int i2c_write8(int port, int periph_addr, int offset, int data)
 {
 	uint8_t buf[2];
 
 	buf[0] = offset;
 	buf[1] = data;
 
-	return i2c_xfer(port, slave_addr, buf, 2, 0, 0);
+	return i2c_xfer(port, periph_addr, buf, 2, 0, 0);
 }
 
-int i2c_read_offset16(int port, int slave_addr, uint16_t offset, int *data,
+int i2c_read_offset16(int port, int periph_addr, uint16_t offset, int *data,
 		      int len)
 {
 	int rv;
@@ -318,7 +317,7 @@ int i2c_read_offset16(int port, int slave_addr, uint16_t offset, int *data,
 	addr[1] = offset & 0xff;
 
 	/* I2C read 16-bit word: transmit 16-bit offset, and read buffer */
-	rv = i2c_xfer(port, slave_addr, addr, 2, buf, len);
+	rv = i2c_xfer(port, periph_addr, addr, 2, buf, len);
 
 	if (rv)
 		return rv;
@@ -326,7 +325,7 @@ int i2c_read_offset16(int port, int slave_addr, uint16_t offset, int *data,
 	if (len == 1) {
 		*data = buf[0];
 	} else {
-		if (slave_addr & I2C_FLAG_BIG_ENDIAN)
+		if (periph_addr & I2C_FLAG_BIG_ENDIAN)
 			*data = ((int)buf[0] << 8) | buf[1];
 		else
 			*data = ((int)buf[1] << 8) | buf[0];
@@ -335,7 +334,7 @@ int i2c_read_offset16(int port, int slave_addr, uint16_t offset, int *data,
 	return EC_SUCCESS;
 }
 
-int i2c_write_offset16(int port, int slave_addr, uint16_t offset, int data,
+int i2c_write_offset16(int port, int periph_addr, uint16_t offset, int data,
 		       int len)
 {
 	uint8_t buf[2 + sizeof(uint16_t)];
@@ -349,7 +348,7 @@ int i2c_write_offset16(int port, int slave_addr, uint16_t offset, int data,
 	if (len == 1) {
 		buf[2] = data & 0xff;
 	} else {
-		if (slave_addr & I2C_FLAG_BIG_ENDIAN) {
+		if (periph_addr & I2C_FLAG_BIG_ENDIAN) {
 			buf[2] = (data >> 8) & 0xff;
 			buf[3] = data & 0xff;
 		} else {
@@ -358,10 +357,10 @@ int i2c_write_offset16(int port, int slave_addr, uint16_t offset, int data,
 		}
 	}
 
-	return i2c_xfer(port, slave_addr, buf, 2 + len, NULL, 0);
+	return i2c_xfer(port, periph_addr, buf, 2 + len, NULL, 0);
 }
 
-int i2c_read_offset16_block(int port, int slave_addr, uint16_t offset,
+int i2c_read_offset16_block(int port, int periph_addr, uint16_t offset,
 			    uint8_t *data, int len)
 {
 	uint8_t addr[sizeof(uint16_t)];
@@ -369,10 +368,10 @@ int i2c_read_offset16_block(int port, int slave_addr, uint16_t offset,
 	addr[0] = (offset >> 8) & 0xff;
 	addr[1] = offset & 0xff;
 
-	return i2c_xfer(port, slave_addr, addr, 2, data, len);
+	return i2c_xfer(port, periph_addr, addr, 2, data, len);
 }
 
-int i2c_write_offset16_block(int port, int slave_addr, uint16_t offset,
+int i2c_write_offset16_block(int port, int periph_addr, uint16_t offset,
 			     const uint8_t *data, int len)
 {
 	int rv;
@@ -386,17 +385,17 @@ int i2c_write_offset16_block(int port, int slave_addr, uint16_t offset,
 	 * appending the destination address with the data array.
 	 */
 	i2c_lock(port, 1);
-	rv = i2c_xfer_unlocked(port, slave_addr, addr, 2, NULL, 0,
+	rv = i2c_xfer_unlocked(port, periph_addr, addr, 2, NULL, 0,
 			       I2C_XFER_START);
 	if (!rv)
-		rv = i2c_xfer_unlocked(port, slave_addr, data, len, NULL, 0,
+		rv = i2c_xfer_unlocked(port, periph_addr, data, len, NULL, 0,
 				       I2C_XFER_STOP);
 	i2c_lock(port, 0);
 
 	return rv;
 }
 
-int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
+int i2c_read_string(int port, int periph_addr, int offset, uint8_t *data,
 		    int len)
 {
 	int rv;
@@ -409,7 +408,7 @@ int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
 	 * Send device reg space offset, and read back block length.  Keep this
 	 * session open without a stop.
 	 */
-	rv = i2c_xfer_unlocked(port, slave_addr, &reg, 1, &block_length, 1,
+	rv = i2c_xfer_unlocked(port, periph_addr, &reg, 1, &block_length, 1,
 		      I2C_XFER_START);
 	if (rv)
 		goto exit;
@@ -417,7 +416,7 @@ int i2c_read_string(int port, int slave_addr, int offset, uint8_t *data,
 	if (len && block_length > (len - 1))
 		block_length = len - 1;
 
-	rv = i2c_xfer_unlocked(port, slave_addr, 0, 0, data, block_length,
+	rv = i2c_xfer_unlocked(port, periph_addr, 0, 0, data, block_length,
 		      I2C_XFER_STOP);
 	data[block_length] = 0;
 
@@ -426,17 +425,17 @@ exit:
 	return rv;
 }
 
-int i2c_read_block(int port, int slave_addr, int offset, uint8_t *data,
-		    int len)
+int i2c_read_block(int port, int periph_addr, int offset, uint8_t *data,
+		   int len)
 {
 	int rv;
 	uint8_t reg_address = offset;
 
-	rv = i2c_xfer(port, slave_addr, &reg_address, 1, data, len);
+	rv = i2c_xfer(port, periph_addr, &reg_address, 1, data, len);
 	return rv;
 }
 
-int i2c_write_block(int port, int slave_addr, int offset, const uint8_t *data,
+int i2c_write_block(int port, int periph_addr, int offset, const uint8_t *data,
 		    int len)
 {
 	int rv;
@@ -447,10 +446,10 @@ int i2c_write_block(int port, int slave_addr, int offset, const uint8_t *data,
 	 * appending the destination address with the data array.
 	 */
 	i2c_lock(port, 1);
-	rv = i2c_xfer_unlocked(port, slave_addr, &reg_address, 1, NULL, 0,
+	rv = i2c_xfer_unlocked(port, periph_addr, &reg_address, 1, NULL, 0,
 			       I2C_XFER_START);
 	if (!rv) {
-		rv = i2c_xfer_unlocked(port, slave_addr, data, len, NULL, 0,
+		rv = i2c_xfer_unlocked(port, periph_addr, data, len, NULL, 0,
 				       I2C_XFER_STOP);
 	}
 	i2c_lock(port, 0);
@@ -976,7 +975,7 @@ DECLARE_CONSOLE_COMMAND(i2cscan, command_scan,
 #ifdef CONFIG_CMD_I2C_XFER
 static int command_i2cxfer(int argc, char **argv)
 {
-	int port, slave_addr;
+	int port, periph_addr;
 	uint16_t offset = 0;
 	uint8_t offset_size = 0;
 	int v = 0;
@@ -991,7 +990,7 @@ static int command_i2cxfer(int argc, char **argv)
 	if (*e)
 		return EC_ERROR_PARAM2;
 
-	slave_addr = strtoi(argv[3], &e, 0);
+	periph_addr = strtoi(argv[3], &e, 0);
 	if (*e)
 		return EC_ERROR_PARAM3;
 
@@ -1010,18 +1009,20 @@ static int command_i2cxfer(int argc, char **argv)
 	if (strcasecmp(argv[1], "r") == 0) {
 		/* 8-bit read */
 		if (offset_size == 2)
-			rv = i2c_read_offset16(port, slave_addr, offset, &v, 1);
+			rv = i2c_read_offset16(port, periph_addr, offset, &v,
+					       1);
 		else
-			rv = i2c_read8(port, slave_addr, offset, &v);
+			rv = i2c_read8(port, periph_addr, offset, &v);
 		if (!rv)
 			ccprintf("0x%02x [%d]\n", v, v);
 
 	} else if (strcasecmp(argv[1], "r16") == 0) {
 		/* 16-bit read */
 		if (offset_size == 2)
-			rv = i2c_read_offset16(port, slave_addr, offset, &v, 2);
+			rv = i2c_read_offset16(port, periph_addr, offset, &v,
+					       2);
 		else
-			rv = i2c_read16(port, slave_addr, offset, &v);
+			rv = i2c_read16(port, periph_addr, offset, &v);
 		if (!rv)
 			ccprintf("0x%04x [%d]\n", v, v);
 
@@ -1030,7 +1031,8 @@ static int command_i2cxfer(int argc, char **argv)
 		if (argc < 6 || v < 0 || v > sizeof(data))
 			return EC_ERROR_PARAM5;
 
-		rv = i2c_xfer(port, slave_addr, (uint8_t *)&offset, 1, data, v);
+		rv = i2c_xfer(port, periph_addr, (uint8_t *)&offset, 1, data,
+			      v);
 
 		if (!rv)
 			ccprintf("Data: %ph\n", HEX_BUF(data, v));
@@ -1040,18 +1042,20 @@ static int command_i2cxfer(int argc, char **argv)
 		if (argc < 6)
 			return EC_ERROR_PARAM5;
 		if (offset_size == 2)
-			rv = i2c_write_offset16(port, slave_addr, offset, v, 1);
+			rv = i2c_write_offset16(port, periph_addr, offset, v,
+						1);
 		else
-			rv = i2c_write8(port, slave_addr, offset, v);
+			rv = i2c_write8(port, periph_addr, offset, v);
 
 	} else if (strcasecmp(argv[1], "w16") == 0) {
 		/* 16-bit write */
 		if (argc < 6)
 			return EC_ERROR_PARAM5;
 		if (offset_size == 2)
-			rv = i2c_write_offset16(port, slave_addr, offset, v, 2);
+			rv = i2c_write_offset16(port, periph_addr, offset, v,
+						2);
 		else
-			rv = i2c_write16(port, slave_addr, offset, v);
+			rv = i2c_write16(port, periph_addr, offset, v);
 
 	} else {
 		return EC_ERROR_PARAM1;
