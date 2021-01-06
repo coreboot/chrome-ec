@@ -178,19 +178,19 @@ static void i2c_bang_init(void)
 	i2c_raw_mode(I2C_PORT_HOST, 1);
 }
 
-static void i2c_bang_xfer(int slave_addr, int reg)
+static void i2c_bang_xfer(int periph_addr, int reg)
 {
 	int byte;
 
 	i2c_bang_init();
 
-	/* State a write command to 'slave_addr' */
-	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, slave_addr);
+	/* State a write command to 'periph_addr' */
+	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, periph_addr);
 	/* Write 'reg' */
 	i2c_bang_out_byte(0 /*start*/, 0 /*stop*/, reg);
 
 	/* Start a read command */
-	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, slave_addr | 1);
+	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, periph_addr | 1);
 
 	/* Read two bytes */
 	byte = i2c_bang_in_byte(0, 0); /* ack and no stop */
@@ -199,15 +199,15 @@ static void i2c_bang_xfer(int slave_addr, int reg)
 	ccprintf("  read byte: %d\n", byte);
 }
 
-static void i2c_bang_wedge_write(int slave_addr, int byte, int bit_count,
+static void i2c_bang_wedge_write(int periph_addr, int byte, int bit_count,
 	int reboot)
 {
 	int i;
 
 	i2c_bang_init();
 
-	/* State a write command to 'slave_addr' */
-	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, slave_addr);
+	/* State a write command to 'periph_addr' */
+	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, periph_addr);
 	/* Send a few bits and stop */
 	for (i = 0; i < bit_count; ++i) {
 		i2c_bang_out_bit((byte & 0x80) != 0);
@@ -219,20 +219,20 @@ static void i2c_bang_wedge_write(int slave_addr, int byte, int bit_count,
 		system_reset(0);
 }
 
-static void i2c_bang_wedge_read(int slave_addr, int reg, int bit_count,
+static void i2c_bang_wedge_read(int periph_addr, int reg, int bit_count,
 	int reboot)
 {
 	int i;
 
 	i2c_bang_init();
 
-	/* State a write command to 'slave_addr' */
-	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, slave_addr);
+	/* State a write command to 'periph_addr' */
+	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, periph_addr);
 	/* Write 'reg' */
 	i2c_bang_out_byte(0 /*start*/, 0 /*stop*/, reg);
 
 	/* Start a read command */
-	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, slave_addr | 1);
+	i2c_bang_out_byte(1 /*start*/, 0 /*stop*/, periph_addr | 1);
 
 	/* Read bit_count bits and stop */
 	for (i = 0; i < bit_count; ++i)
@@ -250,7 +250,7 @@ static void i2c_bang_wedge_read(int slave_addr, int reg, int bit_count,
 
 static int command_i2c_wedge(int argc, char **argv)
 {
-	int slave_addr, reg, wedge_flag = 0, wedge_bit_count = -1;
+	int periph_addr, reg, wedge_flag = 0, wedge_bit_count = -1;
 	char *e;
 	enum gpio_signal tmp;
 
@@ -263,7 +263,7 @@ static int command_i2c_wedge(int argc, char **argv)
 	}
 
 	if (argc < 3) {
-		ccputs("Usage: i2cwedge slave_addr out_byte "
+		ccputs("Usage: i2cwedge periph_addr out_byte "
 			"[wedge_flag [wedge_bit_count]]\n");
 		ccputs("  wedge_flag - (1: wedge out; 2: wedge in;"
 			" 5: wedge out+reboot; 6: wedge in+reboot)]\n");
@@ -271,9 +271,9 @@ static int command_i2c_wedge(int argc, char **argv)
 		return EC_ERROR_UNKNOWN;
 	}
 
-	slave_addr = strtoi(argv[1], &e, 0);
+	periph_addr = strtoi(argv[1], &e, 0);
 	if (*e) {
-		ccprintf("Invalid slave_addr %s\n", argv[1]);
+		ccprintf("Invalid periph_addr %s\n", argv[1]);
 		return EC_ERROR_INVAL;
 	}
 	reg = strtoi(argv[2], &e, 0);
@@ -301,15 +301,15 @@ static int command_i2c_wedge(int argc, char **argv)
 	if (wedge_flag & WEDGE_WRITE) {
 		if (wedge_bit_count < 0)
 			wedge_bit_count = 8;
-		i2c_bang_wedge_write(slave_addr, reg, wedge_bit_count,
+		i2c_bang_wedge_write(periph_addr, reg, wedge_bit_count,
 			(wedge_flag & WEDGE_REBOOT));
 	} else if (wedge_flag & WEDGE_READ) {
 		if (wedge_bit_count < 0)
 			wedge_bit_count = 2;
-		i2c_bang_wedge_read(slave_addr, reg, wedge_bit_count,
+		i2c_bang_wedge_read(periph_addr, reg, wedge_bit_count,
 			(wedge_flag & WEDGE_REBOOT));
 	} else {
-		i2c_bang_xfer(slave_addr, reg);
+		i2c_bang_xfer(periph_addr, reg);
 	}
 
 	/* Put it back into normal mode */
@@ -325,7 +325,7 @@ static int command_i2c_wedge(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(i2cwedge, command_i2c_wedge,
-			"i2cwedge slave_addr out_byte "
+			"i2cwedge periph_addr out_byte "
 				"[wedge_flag [wedge_bit_count]]",
 			"Wedge host I2C bus");
 

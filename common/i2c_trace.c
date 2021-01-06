@@ -15,23 +15,23 @@
 struct i2c_trace_range {
 	bool enabled;
 	int port;
-	int slave_addr_lo; /* Inclusive */
-	int slave_addr_hi; /* Inclusive */
+	int periph_addr_lo; /* Inclusive */
+	int periph_addr_hi; /* Inclusive */
 };
 
 static struct i2c_trace_range trace_entries[8];
 
-void i2c_trace_notify(int port, uint16_t slave_addr_flags,
+void i2c_trace_notify(int port, uint16_t periph_addr_flags,
 		      int direction, const uint8_t *data, size_t size)
 {
 	size_t i;
-	uint16_t addr = I2C_GET_ADDR(slave_addr_flags);
+	uint16_t addr = I2C_GET_ADDR(periph_addr_flags);
 
 	for (i = 0; i < ARRAY_SIZE(trace_entries); i++)
 		if (trace_entries[i].enabled
 		    && trace_entries[i].port == port
-		    && trace_entries[i].slave_addr_lo <= addr
-		    && trace_entries[i].slave_addr_hi >= addr)
+		    && trace_entries[i].periph_addr_lo <= addr
+		    && trace_entries[i].periph_addr_hi >= addr)
 			goto trace_enabled;
 	return;
 
@@ -57,11 +57,11 @@ static int command_i2ctrace_list(void)
 			ccprintf("%2d %4d 0x%X",
 				 i,
 				 trace_entries[i].port,
-				 trace_entries[i].slave_addr_lo);
-			if (trace_entries[i].slave_addr_hi
-			    != trace_entries[i].slave_addr_lo)
+				 trace_entries[i].periph_addr_lo);
+			if (trace_entries[i].periph_addr_hi
+			    != trace_entries[i].periph_addr_lo)
 				ccprintf(" to 0x%X",
-					 trace_entries[i].slave_addr_hi);
+					 trace_entries[i].periph_addr_hi);
 			ccprintf("\n");
 		}
 	}
@@ -78,8 +78,8 @@ static int command_i2ctrace_disable(size_t id)
 	return EC_SUCCESS;
 }
 
-static int command_i2ctrace_enable(int port, int slave_addr_lo,
-				   int slave_addr_hi)
+static int command_i2ctrace_enable(int port, int periph_addr_lo,
+				   int periph_addr_hi)
 {
 	struct i2c_trace_range *t;
 	struct i2c_trace_range *new_entry = NULL;
@@ -87,7 +87,7 @@ static int command_i2ctrace_enable(int port, int slave_addr_lo,
 	if (port >= i2c_ports_used)
 		return EC_ERROR_PARAM2;
 
-	if (slave_addr_lo > slave_addr_hi)
+	if (periph_addr_lo > periph_addr_hi)
 		return EC_ERROR_PARAM3;
 
 	/*
@@ -99,36 +99,36 @@ static int command_i2ctrace_enable(int port, int slave_addr_lo,
 	     t++) {
 		if (t->enabled && t->port == port) {
 			/* Subset of existing range, do nothing */
-			if (t->slave_addr_lo <= slave_addr_lo &&
-			    t->slave_addr_hi >= slave_addr_hi)
+			if (t->periph_addr_lo <= periph_addr_lo &&
+			    t->periph_addr_hi >= periph_addr_hi)
 				return EC_SUCCESS;
 
-			/* Extends exising range on both directions, replace */
-			if (t->slave_addr_lo >= slave_addr_lo &&
-			    t->slave_addr_hi <= slave_addr_hi) {
+			/* Extends existing range on both directions, replace */
+			if (t->periph_addr_lo >= periph_addr_lo &&
+			    t->periph_addr_hi <= periph_addr_hi) {
 				t->enabled = 0;
 				return command_i2ctrace_enable(
-					port, slave_addr_lo, slave_addr_hi);
+					port, periph_addr_lo, periph_addr_hi);
 			}
 
 			/* Extends existing range below */
-			if (t->slave_addr_lo - 1 <= slave_addr_hi &&
-			    t->slave_addr_hi >= slave_addr_hi) {
+			if (t->periph_addr_lo - 1 <= periph_addr_hi &&
+			    t->periph_addr_hi >= periph_addr_hi) {
 				t->enabled = 0;
 				return command_i2ctrace_enable(
 					port,
-					slave_addr_lo,
-					t->slave_addr_hi);
+					periph_addr_lo,
+					t->periph_addr_hi);
 			}
 
 			/* Extends existing range above */
-			if (t->slave_addr_lo <= slave_addr_lo &&
-			    t->slave_addr_hi + 1 >= slave_addr_lo) {
+			if (t->periph_addr_lo <= periph_addr_lo &&
+			    t->periph_addr_hi + 1 >= periph_addr_lo) {
 				t->enabled = 0;
 				return command_i2ctrace_enable(
 					port,
-					t->slave_addr_lo,
-					slave_addr_hi);
+					t->periph_addr_lo,
+					periph_addr_hi);
 			}
 		} else if (!t->enabled && !new_entry) {
 			new_entry = t;
@@ -139,8 +139,8 @@ static int command_i2ctrace_enable(int port, int slave_addr_lo,
 	if (new_entry) {
 		new_entry->enabled = 1;
 		new_entry->port = port;
-		new_entry->slave_addr_lo = slave_addr_lo;
-		new_entry->slave_addr_hi = slave_addr_hi;
+		new_entry->periph_addr_lo = periph_addr_lo;
+		new_entry->periph_addr_hi = periph_addr_hi;
 		return EC_SUCCESS;
 	}
 

@@ -283,20 +283,20 @@ struct test_i2c_write_dev {
  * specified port and slave address returns error.
  *
  * @param port       The port that the detached device is connected to
- * @param slave_addr The address of the detached device
+ * @param periph_addr The address of the detached device
  * @return EC_SUCCESS if detached; EC_ERROR_OVERFLOW if too many devices are
  *         detached.
  */
-int test_detach_i2c(const int port, const uint16_t slave_addr_flags);
+int test_detach_i2c(const int port, const uint16_t periph_addr_flags);
 
 /*
  * Re-attach an I2C device.
  *
  * @param port       The port that the detached device is connected to
- * @param slave_addr The address of the detached device
+ * @param periph_addr The address of the detached device
  * @return EC_SUCCESS if re-attached; EC_ERROR_INVAL if the specified device
  *         is not a detached device.
  */
-int test_attach_i2c(const int port, const uint16_t slave_addr_flags);
+int test_attach_i2c(const int port, const uint16_t periph_addr_flags);
 
 #endif /* __CROS_EC_TEST_UTIL_H */
