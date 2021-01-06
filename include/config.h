@@ -3147,9 +3147,6 @@
 /* SPI master halfduplex/3-wire mode */
 #undef CONFIG_SPI_HALFDUPLEX
 
-/* Support STM32 SPI1 as master. */
-#undef CONFIG_STM32_SPI1_MASTER
-
 /* SPI master configure gpios on init */
 #undef CONFIG_SPI_CONTROLLER_CONFIGURE_GPIOS
 
