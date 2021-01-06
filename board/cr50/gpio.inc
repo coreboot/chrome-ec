@@ -317,7 +317,7 @@ PINMUX(GPIO(DETECT_SERVO),      B5, DIO_INPUT)
  *   DIOA14 = SPI_CS_L  (output)
  * The pads are only connected to the module outputs when SPI is enabled to
  * avoid interfering with other things on the board.
- * Note: Double-check to be sure these are configured in spi_master.c
+ * Note: Double-check to be sure these are configured in spi_controller.c
  */
 PINMUX(GPIO(SPI_MOSI),           A4, DIO_OUTPUT)
 PINMUX(GPIO(SPI_CLK),            A8, DIO_OUTPUT)
