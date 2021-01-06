@@ -77,7 +77,7 @@ CONSOLE_CHANNEL(CC_SPI,          "spi")
 CONSOLE_CHANNEL(CC_RBOX,         "rbox")
 #endif
 #ifdef CONFIG_SPP
-CONSOLE_CHANNEL(CC_SPS,          "spp")
+CONSOLE_CHANNEL(CC_SPP,          "spp")
 #endif
 #if defined(CONFIG_SWITCH) || defined(CONFIG_LID_SWITCH)
 CONSOLE_CHANNEL(CC_SWITCH,       "switch")
