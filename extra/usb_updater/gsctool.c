@@ -62,7 +62,7 @@
  * devices still can be updated.
  *
  *
- * The host (either a local AP or a workstation) is the master of the firmware
+ * The host (either a local AP or a workstation) is controlling the firmware
  * update protocol, it sends data to the cr50 device, which proceeses it and
  * responds.
  *
