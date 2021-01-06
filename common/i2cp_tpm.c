@@ -19,9 +19,9 @@
  * interrupts on the interrupt context.
  *
  * Each "write complete" interrupt is associated with some data receved from
- * the master. If the package received from the master contains just one byte
- * payload, the value of this byte is considered the address of the TPM2
- * register to reach, read or write.
+ * the controller. If the package received from the controller contains just
+ * one byte payload, the value of this byte is considered the address of the
+ * TPM2 register to reach, read or write.
  *
  * Real TPM register addresses can be two bytes in size (even within locality
  * zero), to keep the i2c protocol simple and efficient, the real TPM register
@@ -34,7 +34,7 @@
  * around to itself. Outside of the TPM fifo register, all other registers are
  * either 1 byte or 4 byte writes.
  *
- * The master knows how many bytes to write into FIFO or to read from it by
+ * The controller knows how many bytes to write into FIFO or to read from it by
  * consulting the "burst size" field of the TPM status register. This happens
  * transparently for this layer.
  *
@@ -48,13 +48,13 @@
  * TODO (scollyer crosbug.com/p/56539): Should modify the register access code
  * so that the Host can access 1-4 bytes of a given register.
  *
- * Master write accesses followed by data result in the register address
+ * Controller write accesses followed by data result in the register address
  * mapped, data converted, if necessary, and passed to the tpm register task.
  *
- * Master write accesses requesting register reads result in the register
+ * Controller write accesses requesting register reads result in the register
  * address mappend and accessing the tpm task to retrieve the proper register
- * data, converting it, if necessary, and passing it to the 12cs controller to
- * make available for master read accesses.
+ * data, converting it, if necessary, and passing it to the i2cp driver to
+ * make available for controller read accesses.
  *
  * Again, both read and write accesses complete on the same interrupt context
  * they were invoked on.
@@ -94,8 +94,8 @@ static void process_read_access(uint16_t reg_size,
 	uint8_t reg_value[4];
 
 	/*
-	 * The master wants to read the register, read the value and pass it
-	 * to the controller.
+	 * The controller wants to read the register, read the value and pass it
+	 * to the interface.
 	 */
 	if (reg_size == 1 || reg_size == 4) {
 		/* Always read regsize number of bytes */

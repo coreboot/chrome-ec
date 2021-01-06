@@ -62,7 +62,7 @@ struct usb_mux_driver {
 /* Describes a USB mux present in the system */
 struct usb_mux {
 	/*
-	 * Driver-defined parameter, typically an i2c slave address
+	 * Driver-defined parameter, typically an i2c peripheral address
 	 * (for i2c muxes) or a port number (for GPIO 'muxes').
 	 */
 	const int port_addr;

@@ -7,17 +7,17 @@
  * This is a driver for the I2C peripheral (i2cp) of the g chip.
  *
  * The driver has two register files, 64 bytes each, one for storing data
- * received from the master, and one for storing data to be transmitted to the
- * master. Both files are accessed only as 4 byte quantities, so the driver
- * must provide adaptation to concatenate messages with sizes not divisible by
- * 4 and or not properly aligned.
+ * received from the controller, and one for storing data to be transmitted to
+ * the controller. Both files are accessed only as 4 byte quantities, so the
+ * driver must provide adaptation to concatenate messages with sizes not
+ * divisible by 4 and or not properly aligned.
  *
- * The file holding data written by the master has associated with it a
+ * The file holding data written by the controller has associated with it a
  * register showing where the driver accessed the file last, comparing it
  * with its previous value tells the driver how many bytes recently written by
- * the master are there.
+ * the controller are there.
  *
- * The file holding data to be read by the master has a register associated
+ * The file holding data to be read by the controller has a register associated
  * with it showing where was the latest BIT the driver transmitted.
  *
  * The driver can generate interrupts on three different conditions:
@@ -26,35 +26,35 @@
  *  - end of a write cycle
  *
  * Since this driver's major role is to serve as a TPM interface, it is safe
- * to assume that the master will always write first, even when it needs to
+ * to assume that the controller will always write first, even when it needs to
  * read data from the device.
  *
- * Each write or read access will be started by the master writing the one
+ * Each write or read access will be started by the controller writing the one
  * byte address of the TPM register to access.
  *
- * If the master needs to read this register, the originating write
+ * If the controller needs to read this register, the originating write
  * transaction will be limited to a single byte payload, a read transaction
  * would follow immediately.
  *
- * If the master needs to write into this register, the data to be written
+ * If the controller needs to write into this register, the data to be written
  * will be included in the same i2c transaction immediately following the one
  * byte register address.
  *
  * This protocol allows to keep the driver simple: the only interrupt the
  * driver enables is the 'end a write cycle'. The number of bytes received
- * from the master gives the callback function a hint as of what the master
- * intention is, to read or to write.
+ * from the controller gives the callback function a hint as of what the
+ * controller intention is, to read or to write.
  *
  * In both cases the same callback function is called. On write accesses the
  * callback function converts the data as necessary and passes it to the TPM.
  * On read accesses the callback function retrieves data from the TPM and puts
- * it into the read register file to be available to the master to retrieve in
- * the following read access. In both cases the callback function completes
+ * it into the read register file to be available to the controller to retrieve
+ * in the following read access. In both cases the callback function completes
  * processing on the invoking interrupt context.
  *
  * The driver API consists of two functions, one to register the callback to
- * process interrupts, another one - to add a byte to the master read register
- * file. See the accompanying .h file for details.
+ * process interrupts, another one - to add a byte to the congroller read
+ * register file. See the accompanying .h file for details.
  *
  * TODO:
  * - figure out flow control - clock stretching can be challenging with this
@@ -87,19 +87,19 @@ static wr_complete_handler_f write_complete_handler_;
 static uint8_t i2cp_buffer[REGISTER_FILE_SIZE];
 
 /*
- * Pointer where the CPU stopped retrieving the write data sent by the master
- * last time the write access was processed.
+ * Pointer where the CPU stopped retrieving the write data sent by the
+ * controller last time the write access was processed.
  */
 static uint16_t last_write_pointer;
 
 /*
- * Pointer where the CPU stopped writing data for the master to read last time
- * the read data was prepared.
+ * Pointer where the CPU stopped writing data for the controller to read last
+ * time the read data was prepared.
  */
 static uint16_t last_read_pointer;
 
 /*
- * Keep track number of times the "hosed slave" condition was encountered.
+ * Keep track number of times the "hosed periph" condition was encountered.
  */
 static uint16_t i2cp_read_recovery_count;
 static uint16_t i2cp_sda_low_count;
@@ -139,13 +139,13 @@ static void i2cp_init(void)
 	GWRITE(I2CS, READ_PTR, 0);
 	GWRITE(I2CS, WRITE_PTR, 0);
 
-	/* Just in case we were wedged and the master starts with a read. */
+	/* Just in case we were wedged and the controller starts with a read. */
 	*GREG32_ADDR(I2CS, READ_BUFFER0) = ~0;
 
 	/* Enable I2CP interrupt */
 	GWRITE_FIELD(I2CS, INT_ENABLE, INTR_WRITE_COMPLETE, 1);
 
-	/* Slave address is hardcoded to 0x50. */
+	/* periph address is hardcoded to 0x50. */
 	GWRITE(I2CS, SLAVE_DEVADDRVAL, 0x50);
 }
 
@@ -176,7 +176,7 @@ DECLARE_DEFERRED(poll_read_state);
  * If the poller happened to run during time 3 and time 4 while SDA was low,
  * i2cp_sda_low_count would = 2. This is not considered an error case. If we
  * were to see a third low value before time 5, we can assume the bus is stuck,
- * or the master performed multiple reads between writes (which is not
+ * or the controller performed multiple reads between writes (which is not
  * expected).
  *
  * If we were to enable the read complete interrupt and use it to clear
@@ -199,7 +199,7 @@ DECLARE_DEFERRED(poll_read_state);
  * Restart the i2cp driver if the driver gets stuck transmitting a 0 on
  * SDA.
  *
- * This can happen anytime the i2cp driver has control of SDA and the master
+ * This can happen anytime the i2cp driver has control of SDA and the controller
  * happens to fail and stops clocking.
  *
  * For example when the i2cp driver is:
@@ -207,15 +207,15 @@ DECLARE_DEFERRED(poll_read_state);
  * 2) Transmitting an ACK for a write transaction.
  * 3) Transmitting byte data for a read transaction.
  *
- * The reason this is problematic is because the master can't recover the bus
- * by issuing a new transaction. A start condition is defined as the master
- * pulling SDA low while SCL is high. The master can only initiate the start
- * condition when the bus is free (i.e., SDA is high), otherwise the master
+ * The reason this is problematic is because the i2cc can't recover the bus
+ * by issuing a new transaction. A start condition is defined as the i2cc
+ * pulling SDA low while SCL is high. The i2cc can only initiate the start
+ * condition when the bus is free (i.e., SDA is high), otherwise the i2cc
  * thinks that it lost arbitration.
  *
  * We don't have to deal with the scenario where the driver gets stuck
- * transmitting a 1 on SDA since the master can recover the bus by issuing a
- * normal transaction. The master will at minimum clock 9 times on any
+ * transmitting a 1 on SDA since the controller can recover the bus by issuing a
+ * normal transaction. The controller will at minimum clock 9 times on any
  * transaction. This is enough for the slave to complete its current operation
  * and NACK.
  */
@@ -226,16 +226,16 @@ static void poll_read_state(void)
 		 * When the AP is off, the SDA line might drop low since the
 		 * pull ups might not be powered.
 		 *
-		 * If the AP is on, the bus is either idle, the master has
+		 * If the AP is on, the bus is either idle, the controller has
 		 * stopped clocking while SDA is high, or we have polled in the
 		 * middle of a transaction where SDA happens to be high.
 		 */
 		i2cp_sda_low_count = 0;
 	} else {
 		/*
-		 * The master has stopped clocking while the slave is holding
-		 * SDA low, or we have polled in the middle of a transaction
-		 * where SDA happens to be low.
+		 * The controller has stopped clocking while the periph is
+		 * holding SDA low, or we have polled in the middle of a
+		 * transaction where SDA happens to be low.
 		 */
 		i2cp_sda_low_count++;
 
@@ -280,7 +280,7 @@ void __attribute__((used)) _i2cp_write_complete_int(void)
 		uint16_t bytes_processed;
 		uint32_t word_in_value = 0;
 
-		/* How many bytes has the master just written. */
+		/* How many bytes has the controller just written. */
 		bytes_written = ((uint16_t)GREAD(I2CS, WRITE_PTR) -
 				 last_write_pointer) & REGISTER_FILE_MASK;
 
@@ -294,7 +294,7 @@ void __attribute__((used)) _i2cp_write_complete_int(void)
 		while (bytes_written != bytes_processed) {
 			/*
 			 * This loop iterates over bytes retrieved from the
-			 * master write register file in 4 byte quantities.
+			 * controller write register file in 4 byte quantities.
 			 * Each time the ever incrementing last_write_pointer
 			 * is aligned at 4 bytes, a new value needs to be
 			 * retrieved from the next register, indexed by
@@ -321,7 +321,7 @@ void __attribute__((used)) _i2cp_write_complete_int(void)
 		write_complete_handler_(i2cp_buffer, bytes_processed);
 	}
 
-	/* The transaction is complete so the slave has released SDA. */
+	/* The transaction is complete so the periph has released SDA. */
 	i2cp_sda_low_count = 0;
 
 	/*

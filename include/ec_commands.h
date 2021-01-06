@@ -3246,7 +3246,8 @@ struct __ec_align4 ec_response_power_info {
 #define EC_I2C_STATUS_ERROR	(EC_I2C_STATUS_NAK | EC_I2C_STATUS_TIMEOUT)
 
 struct __ec_align2 ec_params_i2c_passthru_msg {
-	uint16_t addr_flags;	/* I2C slave address (7 or 10 bits) and flags */
+	uint16_t addr_flags;	/* I2C periph address (7 or 10 bits) and */
+				/* flags */
 	uint16_t len;		/* Number of bytes to read or write */
 };
 

@@ -1591,10 +1591,10 @@
  */
 #undef CONFIG_I2C_CONTROLLER
 
-/* EC uses an I2C slave interface */
+/* EC uses an I2C peripheral interface */
 #undef CONFIG_I2C_PERIPH
 
-/* Defines I2C operation retry count when slave nack'd(EC_ERROR_BUSY) */
+/* Defines I2C operation retry count when peripheral nack'd(EC_ERROR_BUSY) */
 #define CONFIG_I2C_NACK_RETRY_COUNT 0
 /*
  * I2C SCL gating.
@@ -1608,10 +1608,10 @@
 #undef CONFIG_I2C_SCL_GATE_GPIO
 
 /*
- * Some chip supports two owned slave address. The second slave address is used
- * for other purpose such as board specific i2c commands. This option can be
- * set if user of the second slave address requires larger host packet buffer
- * size.
+ * Some chip supports two owned peripheral address. The second peripheral
+ * address is used for other purpose such as board specific i2c commands. This
+ * option can be set if user of the second peripheral address requires larger
+ * host packet buffer size.
  */
 #define CONFIG_I2C_EXTRA_PACKET_SIZE 0
 

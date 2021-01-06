@@ -117,7 +117,7 @@ static int i2c_bang_in_bit(void)
 {
 	int bit;
 
-	/* Let the slave drive data */
+	/* Let the peripheral drive data */
 	i2c_raw_set_sda(I2C_PORT_HOST, 1);
 	i2c_bang_delay();
 
@@ -134,7 +134,7 @@ static int i2c_bang_in_bit(void)
 	return bit;
 }
 
-/* Write a byte to I2C bus. Return 0 if ack by the slave. */
+/* Write a byte to I2C bus. Return 0 if ack by the peripheral. */
 static int i2c_bang_out_byte(int send_start, int send_stop, unsigned char byte)
 {
 	unsigned bit;
