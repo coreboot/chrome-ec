@@ -64,10 +64,6 @@
     switching, sensor management, and other functions, offloading these tasks
     from the [AP](#ap).
 
-*   **E-Mark - Electronically Marked Cable** {#emark}
-
-    See the [USB-C documentation](./usb-c.md#emark) for more details.
-
 *   **eSPI - Enhanced Serial Peripheral Interface (Intel)**{#espi}
 
     Intel's synchronous communication interface between the [AP](#ap) and the
@@ -142,17 +138,9 @@
     video streams from a single display port. The EC code is typically
     responsible for enabling and disabling the MST hub chipset.
 
-*   **PD - USB Power Delivery**{#pd}
-
-    See the [USB-C documentation](./usb-c.md#pd) for more details.
-
 *   **PMIC - Power Management IC**{#pmic}
 
     An integrated circuit used to turn power rails on and off.
-
-*   **PPC - USB Power Path Controller**{#ppc}
-
-    See the [USB-C documentation](./usb-c.md#ppc) for more details.
 
 *   **PWM - Pulse Width Modulation**{#pwm}
 
@@ -170,14 +158,6 @@
     more bytes on the MISO signal, and de-assertion of the chip select.  The
     contents of a SPI frame varies based on the SPI slave type.
 
-*   **SVDM - Structured Vendor Defined Messages**{#svdm}
-
-    See the [USB-C documentation](./usb-c.md#svdm) for more details.
-
-*   **TCPC - USB Type-C Port Controller**{#tcpc}
-
-    See the [USB-C documentation](./usb-c.md#tcpc) for more details.
-
 *   **UART - Universal Asynchronous Receiver Transceiver**{#uart}
 
     Also known as a serial port.  An asynchronous communication channel between
@@ -186,10 +166,6 @@
     devices. Standard transmission rates are slow (up to 115200 bits per
     second). Typical use is to provide a debug console to the EC. [RS-232] is
     the protocol standard used by UARTs.
-
-*   **VCONN - Connector Voltage** {#vconn}
-
-    See the [USB-C documentation](./usb-c.md#vconn) for more details.
 
 
 [BC 1.2 Specification]: <https://www.usb.org/document-library/battery-charging-v12-spec-and-adopters-agreement>
