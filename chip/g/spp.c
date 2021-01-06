@@ -9,7 +9,7 @@
 #include "hooks.h"
 #include "pmu.h"
 #include "registers.h"
-#include "sps.h"
+#include "spp.h"
 #include "system.h"
 #include "task.h"
 #include "watchdog.h"
@@ -47,13 +47,13 @@
  * values written into the pointers have to have different sizes. Tracked under
  * http://b/20894690
  */
-#define SPS_FIFO_PTR_MASK	((SPS_FIFO_MASK << 1) | 1)
+#define SPP_FIFO_PTR_MASK	((SPP_FIFO_MASK << 1) | 1)
 
-#define SPS_TX_FIFO_BASE_ADDR (GBASE(SPS) + 0x1000)
-#define SPS_RX_FIFO_BASE_ADDR (SPS_TX_FIFO_BASE_ADDR + SPS_FIFO_SIZE)
+#define SPP_TX_FIFO_BASE_ADDR (GBASE(SPS) + 0x1000)
+#define SPP_RX_FIFO_BASE_ADDR (SPP_TX_FIFO_BASE_ADDR + SPP_FIFO_SIZE)
 
-/* SPS Statistic Counters */
-static uint32_t sps_tx_count, sps_rx_count, tx_empty_count, max_rx_batch;
+/* SPP Statistic Counters */
+static uint32_t spp_tx_count, spp_rx_count, tx_empty_count, max_rx_batch;
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_SPS, outstr)
@@ -64,7 +64,7 @@ static uint8_t seen_data;
 
 static bool int_ap_extension_enabled_;
 
-void sps_tx_status(uint8_t byte)
+void spp_tx_status(uint8_t byte)
 {
 	GREG32(SPS, DUMMY_WORD) = byte;
 }
@@ -75,9 +75,9 @@ void sps_tx_status(uint8_t byte)
  * @param data_size Number of bytes to transmit
  * @return : actual number of bytes placed into tx fifo
  */
-int sps_transmit(uint8_t *data, size_t data_size)
+int spp_transmit(uint8_t *data, size_t data_size)
 {
-	volatile uint32_t *sps_tx_fifo;
+	volatile uint32_t *spp_tx_fifo;
 	uint32_t rptr;
 	uint32_t wptr;
 	uint32_t fifo_room;
@@ -87,11 +87,11 @@ int sps_transmit(uint8_t *data, size_t data_size)
 	if (GREAD_FIELD_I(SPS, inst, ISTATE, TXFIFO_EMPTY))
 		tx_empty_count++; /* Inside packet this means underrun. */
 
-	sps_tx_fifo = (volatile uint32_t *)SPS_TX_FIFO_BASE_ADDR;
+	spp_tx_fifo = (volatile uint32_t *)SPP_TX_FIFO_BASE_ADDR;
 
 	wptr = GREG32_I(SPS, inst, TXFIFO_WPTR);
 	rptr = GREG32_I(SPS, inst, TXFIFO_RPTR);
-	fifo_room = (rptr - wptr - 1) & SPS_FIFO_MASK;
+	fifo_room = (rptr - wptr - 1) & SPP_FIFO_MASK;
 
 	if (fifo_room < data_size) {
 		bytes_sent = fifo_room;
@@ -100,7 +100,7 @@ int sps_transmit(uint8_t *data, size_t data_size)
 		bytes_sent = data_size;
 	}
 
-	sps_tx_fifo += (wptr & SPS_FIFO_MASK) / sizeof(*sps_tx_fifo);
+	spp_tx_fifo += (wptr & SPP_FIFO_MASK) / sizeof(*spp_tx_fifo);
 
 	while (data_size) {
 
@@ -113,7 +113,7 @@ int sps_transmit(uint8_t *data, size_t data_size)
 			uint32_t fifo_contents;
 			int bit_shift;
 
-			fifo_contents = *sps_tx_fifo;
+			fifo_contents = *spp_tx_fifo;
 			do {
 				/*
 				 * CR50 SPS controller does not allow byte
@@ -130,23 +130,23 @@ int sps_transmit(uint8_t *data, size_t data_size)
 
 			} while (data_size && (wptr & 3));
 
-			*sps_tx_fifo++ = fifo_contents;
+			*spp_tx_fifo++ = fifo_contents;
 		} else {
 			/*
 			 * Both fifo wptr and data are aligned and there is
 			 * plenty to send.
 			 */
-			*sps_tx_fifo++ = *((uint32_t *)data);
+			*spp_tx_fifo++ = *((uint32_t *)data);
 			data += 4;
 			data_size -= 4;
 			wptr += 4;
 		}
-		GREG32_I(SPS, inst, TXFIFO_WPTR) = wptr & SPS_FIFO_PTR_MASK;
+		GREG32_I(SPS, inst, TXFIFO_WPTR) = wptr & SPP_FIFO_PTR_MASK;
 
 		/* Make sure FIFO pointer wraps along with the index. */
-		if (!(wptr & SPS_FIFO_MASK))
-			sps_tx_fifo = (volatile uint32_t *)
-				SPS_TX_FIFO_BASE_ADDR;
+		if (!(wptr & SPP_FIFO_MASK))
+			spp_tx_fifo = (volatile uint32_t *)
+				SPP_TX_FIFO_BASE_ADDR;
 	}
 
 	/*
@@ -157,11 +157,11 @@ int sps_transmit(uint8_t *data, size_t data_size)
 	if (!GREAD_FIELD(SPS, FIFO_CTRL, TXFIFO_EN))
 		GWRITE_FIELD(SPS, FIFO_CTRL, TXFIFO_EN, 1);
 
-	sps_tx_count += bytes_sent;
+	spp_tx_count += bytes_sent;
 	return bytes_sent;
 }
 
-static int sps_cs_asserted(void)
+static int spp_cs_asserted(void)
 {
 	/*
 	 * Read the current value on the SPS CS line and return the iversion
@@ -175,7 +175,7 @@ static int sps_cs_asserted(void)
  *  @param mode Clock polarity and phase mode (0 - 3)
  *
  */
-static void sps_configure(enum sps_mode mode, enum spi_clock_mode clk_mode,
+static void spp_configure(enum spp_mode mode, enum spi_clock_mode clk_mode,
 			  unsigned rx_fifo_threshold)
 {
 	/* Disable All Interrupts */
@@ -225,9 +225,9 @@ static void enable_cs_assert_irq_(void)
  * Register and unregister rx_handler. Side effects of registering the handler
  * is reinitializing the interface.
  */
-static rx_handler_f sps_rx_handler;
+static rx_handler_f spp_rx_handler;
 
-int sps_register_rx_handler(enum sps_mode mode, rx_handler_f rx_handler,
+int spp_register_rx_handler(enum spp_mode mode, rx_handler_f rx_handler,
 			    unsigned rx_fifo_threshold)
 {
 	task_disable_irq(GC_IRQNUM_SPS0_RXFIFO_LVL_INTR);
@@ -243,9 +243,9 @@ int sps_register_rx_handler(enum sps_mode mode, rx_handler_f rx_handler,
 
 	if (!rx_fifo_threshold)
 		rx_fifo_threshold = 8;  /* This is a sensible default. */
-	sps_rx_handler = rx_handler;
+	spp_rx_handler = rx_handler;
 
-	sps_configure(mode, SPI_CLOCK_MODE0, rx_fifo_threshold);
+	spp_configure(mode, SPI_CLOCK_MODE0, rx_fifo_threshold);
 	task_enable_irq(GC_IRQNUM_SPS0_RXFIFO_LVL_INTR);
 	task_enable_irq(GC_IRQNUM_SPS0_CS_DEASSERT_INTR);
 
@@ -256,14 +256,14 @@ int sps_register_rx_handler(enum sps_mode mode, rx_handler_f rx_handler,
 }
 
 /* Function that sets up for SPS to enable INT_AP_L extension. */
-static void sps_int_ap_extension_enable_(void)
+static void spp_int_ap_extension_enable_(void)
 {
 	enable_cs_assert_irq_();
 
 	int_ap_extension_enabled_ = true;
 }
 
-static void sps_init(void)
+static void spp_init(void)
 {
 	/*
 	 * Check to see if slave SPI interface is required by the board before
@@ -283,9 +283,9 @@ static void sps_init(void)
 	/* Configure the SPS_CS_L signal, DIOA12, as wake falling */
 	gpio_set_wakepin(GPIO_STRAP_B1, GPIO_HIB_WAKE_FALLING);
 
-	int_ap_register(sps_int_ap_extension_enable_);
+	int_ap_register(spp_int_ap_extension_enable_);
 }
-DECLARE_HOOK(HOOK_INIT, sps_init, HOOK_PRIO_INIT_CR50_BOARD - 1);
+DECLARE_HOOK(HOOK_INIT, spp_init, HOOK_PRIO_INIT_CR50_BOARD - 1);
 
 /*****************************************************************************/
 /* Interrupt handler stuff */
@@ -299,28 +299,28 @@ DECLARE_HOOK(HOOK_INIT, sps_init, HOOK_PRIO_INIT_CR50_BOARD - 1);
  * @return number of available bytes and the sets the pointer if number of
  *         bytes is non zero
  */
-static int sps_check_rx(uint32_t inst, uint8_t **data)
+static int spp_check_rx(uint32_t inst, uint8_t **data)
 {
-	uint32_t write_ptr = GREG32_I(SPS, inst, RXFIFO_WPTR) & SPS_FIFO_MASK;
-	uint32_t read_ptr = GREG32_I(SPS, inst, RXFIFO_RPTR) & SPS_FIFO_MASK;
+	uint32_t write_ptr = GREG32_I(SPS, inst, RXFIFO_WPTR) & SPP_FIFO_MASK;
+	uint32_t read_ptr = GREG32_I(SPS, inst, RXFIFO_RPTR) & SPP_FIFO_MASK;
 
 	if (read_ptr == write_ptr)
 		return 0;
 
-	*data = (uint8_t *)(SPS_RX_FIFO_BASE_ADDR + read_ptr);
+	*data = (uint8_t *)(SPP_RX_FIFO_BASE_ADDR + read_ptr);
 
 	if (read_ptr > write_ptr)
-		return SPS_FIFO_SIZE - read_ptr;
+		return SPP_FIFO_SIZE - read_ptr;
 
 	return write_ptr - read_ptr;
 }
 
 /* Advance RX FIFO read pointer after data has been read from the FIFO. */
-static void sps_advance_rx(int port, int data_size)
+static void spp_advance_rx(int port, int data_size)
 {
 	uint32_t read_ptr = GREG32_I(SPS, port, RXFIFO_RPTR) + data_size;
 
-	GREG32_I(SPS, port, RXFIFO_RPTR) = read_ptr & SPS_FIFO_PTR_MASK;
+	GREG32_I(SPS, port, RXFIFO_RPTR) = read_ptr & SPP_FIFO_PTR_MASK;
 }
 
 /*
@@ -340,7 +340,7 @@ static void sps_advance_rx(int port, int data_size)
  * assertion. When 1, it indicates to the caller that the confirmation
  * pulse to the AP needs to be generated.
  */
-static uint32_t sps_rx_interrupt(uint32_t port, int cs_deasserted)
+static uint32_t spp_rx_interrupt(uint32_t port, int cs_deasserted)
 {
 	uint32_t pulse_needed = 0;
 
@@ -348,25 +348,25 @@ static uint32_t sps_rx_interrupt(uint32_t port, int cs_deasserted)
 		uint8_t *received_data = NULL;
 		size_t data_size;
 
-		data_size = sps_check_rx(port, &received_data);
+		data_size = spp_check_rx(port, &received_data);
 		if (!data_size)
 			break;
 
 		seen_data = 1;
-		sps_rx_count += data_size;
+		spp_rx_count += data_size;
 
-		if (sps_rx_handler)
-			sps_rx_handler(received_data, data_size, 0);
+		if (spp_rx_handler)
+			spp_rx_handler(received_data, data_size, 0);
 
 		if (data_size > max_rx_batch)
 			max_rx_batch = data_size;
 
-		sps_advance_rx(port, data_size);
+		spp_advance_rx(port, data_size);
 	}
 
 	if (cs_deasserted) {
 		if (seen_data) {
-			sps_rx_handler(NULL, 0, 1);
+			spp_rx_handler(NULL, 0, 1);
 			seen_data = 0;
 			pulse_needed = 1;
 		}
@@ -375,11 +375,11 @@ static uint32_t sps_rx_interrupt(uint32_t port, int cs_deasserted)
 	return pulse_needed;
 }
 
-static void sps_cs_deassert_interrupt(uint32_t port)
+static void spp_cs_deassert_interrupt(uint32_t port)
 {
 	uint32_t pulse_needed;
 
-	if (sps_cs_asserted()) {
+	if (spp_cs_asserted()) {
 		/*
 		 * we must have been slow, this is the next CS assertion after
 		 * the 'wake up' pulse, but we have not processed the wake up
@@ -396,7 +396,7 @@ static void sps_cs_deassert_interrupt(uint32_t port)
 		 */
 		GWRITE_FIELD(SPS, ISTATE_CLR, CS_DEASSERT, 1);
 		GWRITE_FIELD(SPS, FIFO_CTRL, TXFIFO_EN, 0);
-		if (sps_cs_asserted())
+		if (spp_cs_asserted())
 			return;
 
 		/*
@@ -406,7 +406,7 @@ static void sps_cs_deassert_interrupt(uint32_t port)
 	}
 
 	/* Make sure the receive FIFO is drained. */
-	pulse_needed = sps_rx_interrupt(port, 1);
+	pulse_needed = spp_rx_interrupt(port, 1);
 	GWRITE_FIELD(SPS, ISTATE_CLR, CS_DEASSERT, 1);
 	GWRITE_FIELD(SPS, FIFO_CTRL, TXFIFO_EN, 0);
 
@@ -439,12 +439,12 @@ static void sps_cs_deassert_interrupt(uint32_t port)
 
 void _sps0_interrupt(void)
 {
-	sps_rx_interrupt(0, 0);
+	spp_rx_interrupt(0, 0);
 }
 
 void _sps0_cs_deassert_interrupt(void)
 {
-	sps_cs_deassert_interrupt(0);
+	spp_cs_deassert_interrupt(0);
 }
 DECLARE_IRQ(GC_IRQNUM_SPS0_CS_DEASSERT_INTR, _sps0_cs_deassert_interrupt, 1);
 DECLARE_IRQ(GC_IRQNUM_SPS0_RXFIFO_LVL_INTR, _sps0_interrupt, 1);
@@ -473,13 +473,13 @@ DECLARE_IRQ(GC_IRQNUM_SPS0_CS_ASSERT_INTR, sps0_cs_assert_interrupt_, 1);
   * three states:  not started, receiving frame, frame finished.
   */
 
-enum sps_test_rx_state {
-	spstrx_not_started,
-	spstrx_receiving,
-	spstrx_finished
+enum spp_test_rx_state {
+	spptrx_not_started,
+	spptrx_receiving,
+	spptrx_finished
 };
 
-static enum sps_test_rx_state rx_state;
+static enum spp_test_rx_state rx_state;
 static uint8_t test_frame[1100]; /* Storage for the received frame. */
 /*
  * To verify different alignment cases, the frame is saved in the buffer
@@ -492,12 +492,12 @@ static size_t frame_base;
  */
 static size_t frame_index;
 
-static void sps_receive_callback(uint8_t *data, size_t data_size, int cs_status)
+static void spp_receive_callback(uint8_t *data, size_t data_size, int cs_status)
 {
 	static size_t frame_size; /* Total size of the frame being received. */
 	size_t to_go; /* Number of bytes still to receive. */
 
-	if (rx_state == spstrx_not_started) {
+	if (rx_state == spptrx_not_started) {
 		if (data_size < 2)
 			return; /* Something went wrong.*/
 
@@ -507,22 +507,22 @@ static void sps_receive_callback(uint8_t *data, size_t data_size, int cs_status)
 
 		if ((frame_index + frame_size) <= sizeof(test_frame))
 			/* Enter 'receiving frame' state. */
-			rx_state = spstrx_receiving;
+			rx_state = spptrx_receiving;
 		else
 			/*
 			 * If we won't be able to receive this much, enter the
 			 * 'frame finished' state.
 			 */
-			rx_state = spstrx_finished;
+			rx_state = spptrx_finished;
 	}
 
-	if (rx_state == spstrx_finished) {
+	if (rx_state == spptrx_finished) {
 		/*
 		 * If CS was deasserted (transitioned to 1) - prepare to start
 		 * receiving the next frame.
 		 */
 		if (cs_status)
-			rx_state = spstrx_not_started;
+			rx_state = spptrx_not_started;
 		return;
 	}
 
@@ -536,19 +536,19 @@ static void sps_receive_callback(uint8_t *data, size_t data_size, int cs_status)
 	frame_size -= to_go;
 
 	if (!frame_size)
-		rx_state = spstrx_finished; /* Frame finished.*/
+		rx_state = spptrx_finished; /* Frame finished.*/
 }
 
-static int command_sps(int argc, char **argv)
+static int command_spp(int argc, char **argv)
 {
 	int count = 0;
 	int target = 10; /* Expect 10 frames by default.*/
 	char *e;
 
-	sps_tx_status(GC_SPS_DUMMY_WORD_DEFAULT);
+	spp_tx_status(GC_SPS_DUMMY_WORD_DEFAULT);
 
-	rx_state = spstrx_not_started;
-	sps_register_rx_handler(SPS_GENERIC_MODE, sps_receive_callback, 0);
+	rx_state = spptrx_not_started;
+	spp_register_rx_handler(SPP_GENERIC_MODE, spp_receive_callback, 0);
 
 	if (argc > 1) {
 		target = strtoi(argv[1], &e, 10);
@@ -562,7 +562,7 @@ static int command_sps(int argc, char **argv)
 		size_t index;
 
 		/* Wait for a frame to be received.*/
-		while (rx_state != spstrx_finished) {
+		while (rx_state != spptrx_finished) {
 			watchdog_reload();
 			usleep(10);
 		}
@@ -577,10 +577,10 @@ static int command_sps(int argc, char **argv)
 				 * frame. Send a little just to prime the
 				 * transmit FIFO.
 				 */
-				transmitted = sps_transmit
+				transmitted = spp_transmit
 					(test_frame + index, 8);
 			} else {
-				transmitted = sps_transmit
+				transmitted = spp_transmit
 					(test_frame + index, to_go);
 			}
 			index += transmitted;
@@ -591,7 +591,7 @@ static int command_sps(int argc, char **argv)
 		 * Wait for receive state machine to transition out of 'frame
 		 * finished' state.
 		 */
-		while (rx_state == spstrx_finished) {
+		while (rx_state == spptrx_finished) {
 			watchdog_reload();
 			usleep(10);
 		}
@@ -599,18 +599,18 @@ static int command_sps(int argc, char **argv)
 
 	ccprintf("Processed %d frames\n", count - 1);
 	ccprintf("rx count %d, tx count %d, tx_empty %d, max rx batch %d\n",
-		 sps_rx_count, sps_tx_count,
+		 spp_rx_count, spp_tx_count,
 		 tx_empty_count, max_rx_batch);
 
-	sps_rx_count =
-		sps_tx_count =
+	spp_rx_count =
+		spp_tx_count =
 		tx_empty_count =
 		max_rx_batch = 0;
 
 	return EC_SUCCESS;
 }
 
-DECLARE_CONSOLE_COMMAND(spstest, command_sps,
+DECLARE_CONSOLE_COMMAND(spptest, command_spp,
 			"<num of frames>",
 			"Loop back frames (10 by default) back to the host");
 #endif /* CONFIG_SPP_TEST */

@@ -16,7 +16,7 @@
 #include "new_nvmem.h"
 #include "printf.h"
 #include "signed_header.h"
-#include "sps.h"
+#include "spp.h"
 #include "system.h"
 #include "system_chip.h"
 #include "task.h"
