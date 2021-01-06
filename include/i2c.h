@@ -379,10 +379,10 @@ int i2c_set_response(int port, uint8_t *buf, int len);
 void i2c_init(void);
 
 /**
- * Initialize i2c master ports. This function can be called for cases where i2c
- * ports are not initialized by default from main.c.
+ * Initialize i2c controller ports. This function can be called for cases where
+ * i2c ports are not initialized by default from main.c.
  */
-void i2cm_init(void);
+void i2cc_init(void);
 
 /**
  * Board-level function to determine whether i2c passthru should be allowed
