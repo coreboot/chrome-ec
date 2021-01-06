@@ -84,10 +84,10 @@ int spi_transaction(const struct spi_device_t *spi_device,
 	/* Copy the txdata into the 128B Transmit Buffer. */
 	memmove((uint8_t *)GREG32_ADDR_I(SPI, port, TX_DATA), txdata, txlen);
 
-#ifndef CONFIG_SPI_MASTER_NO_CS_GPIOS
+#ifndef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 	/* Drive chip select low. */
 	gpio_set_level(spi_device->gpio_cs, 0);
-#endif  /* CONFIG_SPI_MASTER_NO_CS_GPIOS */
+#endif  /* CONFIG_SPI_CONTROLLER_NO_CS_GPIOS */
 
 	/* Initiate the transaction. */
 	GWRITE_FIELD_I(SPI, port, ISTATE_CLR, TXDONE, 1);
@@ -116,10 +116,10 @@ int spi_transaction(const struct spi_device_t *spi_device,
 		rxlen);
 
 err_cs_high:
-#ifndef CONFIG_SPI_MASTER_NO_CS_GPIOS
+#ifndef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 	/* Drive chip select high. */
 	gpio_set_level(spi_device->gpio_cs, 1);
-#endif  /* CONFIG_SPI_MASTER_NO_CS_GPIOS */
+#endif  /* CONFIG_SPI_CONTROLLER_NO_CS_GPIOS */
 
 	/* Release the port's mutex. */
 	mutex_unlock(&spi_mutex[port]);
@@ -162,20 +162,20 @@ int spi_enable(int port, int enable)
 		int spi_device_found = 0;
 		uint8_t max_div = 0;
 
-#ifndef CONFIG_SPI_MASTER_NO_CS_GPIOS
+#ifndef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 		gpio_config_module(MODULE_SPI, 1);
-#endif  /* CONFIG_SPI_MASTER_NO_CS_GPIOS */
+#endif  /* CONFIG_SPI_CONTROLLER_NO_CS_GPIOS */
 		for (i = 0; i < spi_devices_used; i++) {
 			if (spi_devices[i].port != port)
 				continue;
 
 			spi_device_found = 1;
 
-#ifndef CONFIG_SPI_MASTER_NO_CS_GPIOS
+#ifndef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 			/* Deassert CS# */
 			gpio_set_flags(spi_devices[i].gpio_cs, GPIO_OUTPUT);
 			gpio_set_level(spi_devices[i].gpio_cs, 1);
-#endif  /* CONFIG_SPI_MASTER_NO_CS_GPIOS */
+#endif  /* CONFIG_SPI_CONTROLLER_NO_CS_GPIOS */
 
 			/* Find the port's largest DIV (lowest frequency). */
 			if (spi_devices[i].div > max_div)
@@ -222,11 +222,11 @@ int spi_enable(int port, int enable)
 			if (spi_devices[i].port != port)
 				continue;
 
-#ifndef CONFIG_SPI_MASTER_NO_CS_GPIOS
+#ifndef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 			/* Make sure CS# is deasserted and disabled. */
 			gpio_set_level(spi_devices[i].gpio_cs, 1);
 			gpio_set_flags(spi_devices[i].gpio_cs, GPIO_ODR_HIGH);
-#endif  /* CONFIG_SPI_MASTER_NO_CS_GPIOS */
+#endif  /* CONFIG_SPI_CONTROLLER_NO_CS_GPIOS */
 		}
 
 		/* Disable passthrough. */
@@ -246,7 +246,7 @@ static void spi_init(void)
 {
 	size_t i;
 
-#ifdef CONFIG_SPI_MASTER_CONFIGURE_GPIOS
+#ifdef CONFIG_SPI_CONTROLLER_CONFIGURE_GPIOS
 	/* Set SPI_MISO as an input */
 	GWRITE_FIELD(PINMUX, DIOA11_CTL, IE, 1); /* SPI_MISO */
 #endif
