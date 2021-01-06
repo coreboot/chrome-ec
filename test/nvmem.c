@@ -394,18 +394,18 @@ static size_t get_free_nvmem_room(void)
 	/* Compaction kicks in when 3 pages or less are left. */
 	const size_t max_pages = NEW_NVMEM_TOTAL_PAGES - 3;
 
-	ccprintf("list index %d, data offset 0x%x\n", master_at.list_index,
-		 master_at.mt.data_offset);
+	ccprintf("list index %d, data offset 0x%x\n", controller_at.list_index,
+		 controller_at.mt.data_offset);
 
-	if (master_at.list_index >= max_pages)
+	if (controller_at.list_index >= max_pages)
 		return 0;
 
-	free_pages = max_pages - master_at.list_index;
+	free_pages = max_pages - controller_at.list_index;
 	free_room = (free_pages - 1) * (CONFIG_FLASH_BANK_SIZE -
 					sizeof(struct nn_page_header)) +
-		    CONFIG_FLASH_BANK_SIZE - master_at.mt.data_offset;
+		    CONFIG_FLASH_BANK_SIZE - controller_at.mt.data_offset;
 	ccprintf("free pages %zd, data offset 0x%x\n", free_pages,
-		 master_at.mt.data_offset);
+		 controller_at.mt.data_offset);
 	return free_room;
 }
 
@@ -942,7 +942,7 @@ static int test_nvmem_incomplete_transaction(void)
 	 */
 	object_size = offsets[4] - offsets[3];
 	p = (uint8_t *)evictable_offs_to_addr(offsets[3]) + object_size - 10;
-	while ((master_at.mt.data_offset + object_size +
+	while ((controller_at.mt.data_offset + object_size +
 		sizeof(struct nn_container)) <= CONFIG_FLASH_BANK_SIZE) {
 		(*p)++;
 		new_nvmem_save();
@@ -982,7 +982,7 @@ static int test_nvmem_interrupted_compaction(void)
 	TEST_ASSERT(prepare_post_migration_nvmem() == EC_SUCCESS);
 
 	/* Let's fill up a couple of pages with erased objects. */
-	target_list_index = master_at.list_index + 2;
+	target_list_index = controller_at.list_index + 2;
 
 	do {
 		/*
@@ -1003,7 +1003,7 @@ static int test_nvmem_interrupted_compaction(void)
 			       filler++, ri.size);
 		}
 		TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
-	} while (master_at.list_index != target_list_index);
+	} while (controller_at.list_index != target_list_index);
 
 	/* Save the state of NVMEM cache. */
 	memcpy(buf, nvmem_cache_base(NVMEM_TPM), sizeof(buf));
@@ -1062,7 +1062,7 @@ static int test_migration(void)
 	TEST_ASSERT(test_result.valid_data_size == 5214);
 	TEST_ASSERT(total_var_space == 77);
 	/* Container pointer not yet set. */
-	TEST_ASSERT(!master_at.ct.data_offset && !master_at.ct.ph);
+	TEST_ASSERT(!controller_at.ct.data_offset && !controller_at.ct.ph);
 	return EC_SUCCESS;
 }
 

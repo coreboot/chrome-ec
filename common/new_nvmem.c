@@ -360,7 +360,7 @@ static void unlock_mutex(int line_num)
 test_export_static uint16_t total_var_space;
 
 /* The main context used when adding objects to NVMEM. */
-test_export_static struct access_tracker master_at;
+test_export_static struct access_tracker controller_at;
 
 test_export_static enum ec_error_list browse_flash_contents(int print);
 static enum ec_error_list save_container(struct nn_container *nc);
@@ -452,8 +452,8 @@ static void *get_scratch_buffer(size_t size)
 /* Helper function returning actual size used by NVMEM in flash. */
 static size_t total_used_size(void)
 {
-	return master_at.list_index * CONFIG_FLASH_BANK_SIZE +
-	       master_at.mt.data_offset;
+	return controller_at.list_index * CONFIG_FLASH_BANK_SIZE +
+	       controller_at.mt.data_offset;
 }
 /*
  * Helper functions to set a bit a bit at a certain index in a bitmap array
@@ -693,9 +693,9 @@ static enum ec_error_list set_first_page_header(void)
 
 	if (rv == EC_SUCCESS) {
 		/* Make sure master page tracker is ready. */
-		memset(&master_at, 0, sizeof(master_at));
-		master_at.mt.data_offset = ph.data_offset;
-		master_at.mt.ph = fph;
+		memset(&controller_at, 0, sizeof(controller_at));
+		controller_at.mt.data_offset = ph.data_offset;
+		controller_at.mt.ph = fph;
 	}
 
 	return rv;
@@ -882,7 +882,7 @@ static enum ec_error_list add_final_delimiter(void)
 {
 	const struct nn_container *del;
 
-	del = page_cursor(&master_at.mt);
+	del = page_cursor(&controller_at.mt);
 	add_delimiter();
 
 	return finalize_delimiter(del);
@@ -901,7 +901,7 @@ static void release_flash_page(struct access_tracker *at)
 		(ARRAY_SIZE(page_list) - 1) * sizeof(page_list[0]));
 	page_list[ARRAY_SIZE(page_list) - 1] = page_index;
 	at->list_index--;
-	master_at.list_index--;
+	controller_at.list_index--;
 }
 
 /* Reshuffle flash contents dropping deleted objects. */
@@ -925,7 +925,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 	 * Page where we should stop compaction, all pages before this would
 	 * be recycled.
 	 */
-	fence_ph = master_at.mt.ph;
+	fence_ph = controller_at.mt.ph;
 	saved_object_count = 0;
 
 	do {
@@ -981,7 +981,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 			const void *del;
 
 			if (saved_object_count) {
-				del = page_cursor(&master_at.mt);
+				del = page_cursor(&controller_at.mt);
 				add_delimiter();
 			}
 
@@ -1022,19 +1022,19 @@ static void start_new_flash_page(size_t data_size)
 	struct nn_page_header ph = {};
 
 	ph.data_offset = sizeof(ph) + data_size;
-	ph.page_number = master_at.mt.ph->page_number + 1;
+	ph.page_number = controller_at.mt.ph->page_number + 1;
 	ph.page_hash = calculate_page_header_hash(&ph);
-	master_at.list_index++;
-	if (master_at.list_index == ARRAY_SIZE(page_list))
+	controller_at.list_index++;
+	if (controller_at.list_index == ARRAY_SIZE(page_list))
 		report_no_payload_failure(NVMEMF_PAGE_LIST_OVERFLOW);
 
-	master_at.mt.ph =
-		(const void *)(((uintptr_t)page_list[master_at.list_index] *
+	controller_at.mt.ph =
+		(const void *)(((uintptr_t)page_list[controller_at.list_index] *
 				CONFIG_FLASH_BANK_SIZE) +
 			       CONFIG_PROGRAM_MEMORY_BASE);
 
-	write_to_flash(master_at.mt.ph, &ph, sizeof(ph));
-	master_at.mt.data_offset = sizeof(ph);
+	write_to_flash(controller_at.mt.ph, &ph, sizeof(ph));
+	controller_at.mt.data_offset = sizeof(ph);
 }
 
 /*
@@ -1052,12 +1052,12 @@ static enum ec_error_list save_object(const struct nn_container *cont)
 		save_size -= sizeof(uint32_t);
 #endif
 
-	top_room = CONFIG_FLASH_BANK_SIZE - master_at.mt.data_offset;
+	top_room = CONFIG_FLASH_BANK_SIZE - controller_at.mt.data_offset;
 	if (save_size >= top_room) {
 
 		/* Let's finish the current page. */
-		write_to_flash((uint8_t *)master_at.mt.ph +
-				       master_at.mt.data_offset,
+		write_to_flash((uint8_t *)controller_at.mt.ph +
+				       controller_at.mt.data_offset,
 			       cont, top_room);
 
 		/* Remaining data and size to be written on the next page. */
@@ -1073,10 +1073,10 @@ static enum ec_error_list save_object(const struct nn_container *cont)
 	}
 
 	if (save_size) {
-		write_to_flash((uint8_t *)master_at.mt.ph +
-				       master_at.mt.data_offset,
+		write_to_flash((uint8_t *)controller_at.mt.ph +
+				       controller_at.mt.data_offset,
 			       save_data, save_size);
-		master_at.mt.data_offset += save_size;
+		controller_at.mt.data_offset += save_size;
 	}
 
 	return EC_SUCCESS;
@@ -2139,12 +2139,13 @@ static enum ec_error_list verify_last_section(
 		}
 	}
 	shared_mem_release(newobjs);
-	if (master_at.mt.data_offset > sizeof(struct nn_page_header)) {
-		top_del.ph = master_at.mt.ph;
+	if (controller_at.mt.data_offset > sizeof(struct nn_page_header)) {
+		top_del.ph = controller_at.mt.ph;
 		top_del.data_offset =
-			master_at.mt.data_offset - sizeof(struct nn_container);
+			controller_at.mt.data_offset -
+			sizeof(struct nn_container);
 	} else {
-		top_del.ph = list_element_to_ph(master_at.list_index - 1);
+		top_del.ph = list_element_to_ph(controller_at.list_index - 1);
 		top_del.data_offset =
 			CONFIG_FLASH_BANK_SIZE - -sizeof(struct nn_container);
 	}
@@ -2162,10 +2163,10 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 	/* Used to read starting at last good delimiter. */
 	struct access_tracker dpt = {};
 
-	if ((master_at.list_index == 0) &&
-	    (master_at.mt.data_offset == sizeof(struct nn_page_header))) {
+	if ((controller_at.list_index == 0) &&
+	    (controller_at.mt.data_offset == sizeof(struct nn_page_header))) {
 		/* This must be an init from scratch, no delimiter yet. */
-		if (!master_at.dt.ph)
+		if (!controller_at.dt.ph)
 			return EC_SUCCESS;
 
 		/* This is bad, will have to wipe out everything. */
@@ -2180,7 +2181,7 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 		 * which means that there might be objects in the flash which
 		 * were not updated after the last delimiter was written.
 		 */
-		return verify_last_section(&master_at.dt, nc);
+		return verify_last_section(&controller_at.dt, nc);
 	}
 
 	/*
@@ -2190,13 +2191,13 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 	 * First, create a context for retrieving objects starting at the last
 	 * valid delimiter, make sure list index is set properly.
 	 */
-	dpt.mt = master_at.dt;
-	if (dpt.mt.ph == master_at.mt.ph) {
-		dpt.list_index = master_at.list_index;
+	dpt.mt = controller_at.dt;
+	if (dpt.mt.ph == controller_at.mt.ph) {
+		dpt.list_index = controller_at.list_index;
 	} else {
 		uint8_t i;
 
-		for (i = 0; i < master_at.list_index; i++)
+		for (i = 0; i < controller_at.list_index; i++)
 			if (list_element_to_ph(i) == dpt.mt.ph) {
 				dpt.list_index = i;
 				break;
@@ -2213,7 +2214,7 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 		 * compact the storage.
 		 */
 		size_t remainder_size;
-		const void *p = page_cursor(&master_at.ct);
+		const void *p = page_cursor(&controller_at.ct);
 
 		if (dpt.ct.ph != dpt.mt.ph) {
 			/*
@@ -2223,7 +2224,7 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 			 * If this is not the last object in the flash, this
 			 * is an unrecoverable init failure.
 			 */
-			if ((dpt.mt.ph != master_at.mt.ph) ||
+			if ((dpt.mt.ph != controller_at.mt.ph) ||
 			    (list_element_to_ph(dpt.list_index - 1) !=
 			     dpt.ct.ph))
 				report_no_payload_failure(
@@ -2239,8 +2240,8 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 			 * And move it to the available pages part of the
 			 * pages list.
 			 */
-			master_at.list_index -= 1;
-			master_at.mt = dpt.ct;
+			controller_at.list_index -= 1;
+			controller_at.mt = dpt.ct;
 		}
 
 		remainder_size = CONFIG_FLASH_BANK_SIZE - dpt.ct.data_offset;
@@ -2278,13 +2279,13 @@ static enum ec_error_list retrieve_nvmem_contents(void)
 	 * times.
 	 */
 	for (tries = 0; tries < 3; tries++) {
-		memset(&master_at, 0, sizeof(master_at));
+		memset(&controller_at, 0, sizeof(controller_at));
 		memset(nvmem_cache_base(NVMEM_TPM), 0,
 		       nvmem_user_sizes[NVMEM_TPM]);
 		memset(res_bitmap, 0, sizeof(res_bitmap));
 		next_evict_obj_base = 0;
 
-		while ((rv = get_next_object(&master_at, nc, 0)) ==
+		while ((rv = get_next_object(&controller_at, nc, 0)) ==
 		       EC_SUCCESS) {
 			switch (nc->container_type) {
 			case NN_OBJ_TUPLE:
@@ -2654,7 +2655,7 @@ static enum ec_error_list new_nvmem_save_(void)
 	uint8_t pcr_bitmap[(NUM_STATIC_PCR * ARRAY_SIZE(pcr_arrays) + 7) / 8];
 
 	/* See if compaction is needed. */
-	if (master_at.list_index >= (ARRAY_SIZE(page_list) - 3)) {
+	if (controller_at.list_index >= (ARRAY_SIZE(page_list) - 3)) {
 		enum ec_error_list rv;
 
 		rv = compact_nvmem();
@@ -2662,8 +2663,8 @@ static enum ec_error_list new_nvmem_save_(void)
 			return rv;
 	}
 
-	fence_ph = master_at.mt.ph;
-	fence_offset = master_at.mt.data_offset;
+	fence_ph = controller_at.mt.ph;
+	fence_offset = controller_at.mt.data_offset;
 
 	num_objs = init_object_offsets(tpm_object_offsets,
 				       ARRAY_SIZE(tpm_object_offsets));
@@ -2723,9 +2724,9 @@ static enum ec_error_list new_nvmem_save_(void)
 	 * flash.
 	 */
 	if (del_candidates->num_candidates ||
-	    (fence_offset != master_at.mt.data_offset) ||
-	    (fence_ph != master_at.mt.ph)) {
-		const void *del = page_cursor(&master_at.mt);
+	    (fence_offset != controller_at.mt.data_offset) ||
+	    (fence_ph != controller_at.mt.ph)) {
+		const void *del = page_cursor(&controller_at.mt);
 
 		add_delimiter();
 
@@ -2847,8 +2848,8 @@ static enum ec_error_list save_container(struct nn_container *nc)
 
 	/* Skip transactions delimiters. */
 	if (nc->size) {
-		salt[0] = master_at.mt.ph->page_number;
-		salt[1] = master_at.mt.data_offset;
+		salt[0] = controller_at.mt.ph->page_number;
+		salt[1] = controller_at.mt.data_offset;
 		salt[2] = nc->container_hash;
 		salt[3] = 0;
 
@@ -2883,7 +2884,7 @@ static int setvar_(const uint8_t *key, uint8_t key_len, const uint8_t *val,
 
 	/* See if compaction is needed. */
 	if (!erase_request &&
-	    (master_at.list_index >= (ARRAY_SIZE(page_list) - 3))) {
+	    (controller_at.list_index >= (ARRAY_SIZE(page_list) - 3))) {
 		rv = compact_nvmem();
 		if (rv != EC_SUCCESS)
 			return rv;
@@ -2943,7 +2944,7 @@ static int setvar_(const uint8_t *key, uint8_t key_len, const uint8_t *val,
 	vc->c_header.generation++;
 	rv = save_var(key, key_len, val, val_len, vc);
 	shared_mem_release(vc);
-	del = page_cursor(&master_at.mt);
+	del = page_cursor(&controller_at.mt);
 #if defined(NVMEM_TEST_BUILD)
 	if (failure_mode == TEST_FAIL_SAVING_VAR)
 		return EC_SUCCESS;
@@ -3055,7 +3056,7 @@ int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 	 * that it would be erased during next compaction. Use dummy key,
 	 * value pairs as the erase objects.
 	 */
-	saved_list_index = master_at.list_index;
+	saved_list_index = controller_at.list_index;
 	key = (const uint8_t *)nvmem_erase_tpm_data;
 	val = (const uint8_t *)nvmem_erase_tpm_data;
 	key_len = MAX_VAR_BODY_SPACE - 255;
@@ -3064,7 +3065,7 @@ int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 		uint8_t val_len;
 
 		to_go_in_page =
-			CONFIG_FLASH_BANK_SIZE - master_at.mt.data_offset;
+			CONFIG_FLASH_BANK_SIZE - controller_at.mt.data_offset;
 		if (to_go_in_page >
 		    (MAX_VAR_BODY_SPACE +
 		     offsetof(struct max_var_container, body) - 1)) {
@@ -3104,7 +3105,7 @@ int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 		if (setvar(key, key_len, NULL, 0) != EC_SUCCESS)
 			ccprintf("%s: deleting var failed!\n", __func__);
 
-	} while (master_at.list_index != (saved_list_index + 1));
+	} while (controller_at.list_index != (saved_list_index + 1));
 
 	lock_mutex(__LINE__);
 	rv = compact_nvmem();
