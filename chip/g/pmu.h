@@ -119,7 +119,7 @@ enum {
 	PERIPH_XO0_TIMER        = 0x2d,
 
 	/* RO */
-	PERIPH_MASTER_MATRIX    = 0x2e,
+	PERIPH_MAIN_MATRIX      = 0x2e,
 	PERIPH_MATRIX           = 0x2f,
 };
 
