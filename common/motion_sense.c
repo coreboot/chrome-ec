@@ -603,11 +603,8 @@ static inline void update_sense_data(uint8_t *lpc_status, int *psample_id)
 
 static int motion_sense_read(struct motion_sensor_t *sensor)
 {
-	if (sensor->state != SENSOR_INITIALIZED)
-		return EC_ERROR_UNKNOWN;
-
-	if (sensor->drv->get_data_rate(sensor) == 0)
-		return EC_ERROR_NOT_POWERED;
+	ASSERT(sensor->state == SENSOR_INITIALIZED);
+	ASSERT(sensor->drv->get_data_rate(sensor) != 0);
 
 #ifdef CONFIG_ACCEL_SPOOF_MODE
 	/*
@@ -704,8 +701,14 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 #endif
 	if (motion_sensor_in_forced_mode(sensor)) {
 		if (motion_sensor_time_to_read(ts, sensor)) {
-			ret = motion_sense_read(sensor);
+			/*
+			 * Since motion_sense_read can sleep, other task may be
+			 * scheduled. In particular if suspend is called by
+			 * HOOKS task, it may set colleciton_rate to 0 and we
+			 * would crash in increment_sensor_collection.
+			 */
 			increment_sensor_collection(sensor, ts);
+			ret = motion_sense_read(sensor);
 		} else {
 			ret = EC_ERROR_BUSY;
 		}
