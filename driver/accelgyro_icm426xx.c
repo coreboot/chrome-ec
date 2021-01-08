@@ -29,7 +29,7 @@
 volatile uint32_t last_interrupt_timestamp;
 #endif
 
-static int icm426xx_normalize(const struct motion_sensor_t *s, intv3_t v,
+static int icm426xx_normalize(const struct motion_sensor_t *s, vector_3_t v,
 			      const uint8_t *raw)
 {
 	struct accelgyro_saved_data_t *data = ICM_GET_SAVED_DATA(s);
@@ -166,7 +166,7 @@ out_unlock:
 static void __maybe_unused icm426xx_push_fifo_data(struct motion_sensor_t *s,
 						const uint8_t *raw, uint32_t ts)
 {
-	intv3_t v;
+	vector_3_t v;
 	struct ec_response_motion_sensor_data vect;
 	int ret;
 
@@ -510,7 +510,7 @@ static int icm426xx_set_range(const struct motion_sensor_t *s, int range,
 }
 
 static int icm426xx_get_hw_offset(const struct motion_sensor_t *s,
-				  intv3_t offset)
+				  vector_3_t offset)
 {
 	uint8_t raw[5];
 	int i, ret;
@@ -564,7 +564,7 @@ static int icm426xx_get_hw_offset(const struct motion_sensor_t *s,
 }
 
 static int icm426xx_set_hw_offset(const struct motion_sensor_t *s,
-				  intv3_t offset)
+				  vector_3_t offset)
 {
 	int i, val, ret;
 
@@ -661,7 +661,7 @@ static int icm426xx_set_offset(const struct motion_sensor_t *s,
 			       const int16_t *offset, int16_t temp)
 {
 	struct accelgyro_saved_data_t *data = ICM_GET_SAVED_DATA(s);
-	intv3_t v = { offset[X], offset[Y], offset[Z] };
+	vector_3_t v = { offset[X], offset[Y], offset[Z] };
 	int range, div1, div2;
 	int i;
 
@@ -696,7 +696,7 @@ static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 			       int16_t *temp)
 {
 	struct accelgyro_saved_data_t *data = ICM_GET_SAVED_DATA(s);
-	intv3_t v;
+	vector_3_t v;
 	int range, div1, div2;
 	int i, ret;
 
@@ -734,7 +734,7 @@ static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 	return EC_SUCCESS;
 }
 
-static int icm426xx_read(const struct motion_sensor_t *s, intv3_t v)
+static int icm426xx_read(const struct motion_sensor_t *s, vector_3_t v)
 {
 	uint8_t raw[6];
 	int reg, ret;

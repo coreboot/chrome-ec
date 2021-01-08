@@ -88,6 +88,20 @@ struct accelgyro_drv {
 	int (*get_offset)(const struct motion_sensor_t *s,
 				int16_t    *offset,
 				int16_t    *temp);
+	/**
+	 * Setter and getter methods for the sensor scale.
+	 * @s Pointer to sensor data.
+	 * @scale: scale to apply to raw data.
+	 * @temp: temperature when calibration was done.
+	 * @return EC_SUCCESS if successful, non-zero if error.
+	 */
+	int (*set_scale)(const struct motion_sensor_t *s,
+				const uint16_t    *scale,
+				int16_t    temp);
+	int (*get_scale)(const struct motion_sensor_t *s,
+				uint16_t   *scale,
+				int16_t    *temp);
+
 	int (*perform_calib)(const struct motion_sensor_t *s);
 #ifdef CONFIG_ACCEL_INTERRUPTS
 	/**
@@ -131,6 +145,7 @@ struct accelgyro_drv {
 struct accelgyro_saved_data_t {
 	int odr;
 	int range;
+	uint16_t scale[3];
 };
 
 #define SENSOR_APPLY_DIV_SCALE(_input, _scale) \

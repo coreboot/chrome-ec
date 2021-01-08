@@ -253,3 +253,11 @@ void rotate_inv(const vector_3_t v, const matrix_3x3_t R, vector_3_t res)
 	res[1] = FP_TO_INT(fp_div(t[1], deter));
 	res[2] = FP_TO_INT(fp_div(t[2], deter));
 }
+
+/* division that round to the nearest integer */
+int round_divide(int64_t dividend, int divisor)
+{
+	return (dividend > 0) ^ (divisor > 0) ?
+		(dividend - divisor / 2) / divisor :
+		(dividend + divisor / 2) / divisor;
+}

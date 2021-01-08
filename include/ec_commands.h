@@ -2406,6 +2406,9 @@ struct __ec_todo_unpacked ec_motion_sense_activity {
 /* Set Calibration information */
 #define MOTION_SENSE_SET_OFFSET 1
 
+/* Default Scale value, factor 1. */
+#define MOTION_SENSE_DEFAULT_SCALE (1<<15)
+
 #define LID_ANGLE_UNRELIABLE 500
 
 enum motionsense_spoof_mode {
