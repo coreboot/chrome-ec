@@ -203,7 +203,7 @@ DECLARE_DEFERRED(poll_read_state);
  * happens to fail and stops clocking.
  *
  * For example when the i2cp driver is:
- * 1) Transmitting an ACK for the slave address byte.
+ * 1) Transmitting an ACK for the peripheral address byte.
  * 2) Transmitting an ACK for a write transaction.
  * 3) Transmitting byte data for a read transaction.
  *
@@ -216,8 +216,8 @@ DECLARE_DEFERRED(poll_read_state);
  * We don't have to deal with the scenario where the driver gets stuck
  * transmitting a 1 on SDA since the controller can recover the bus by issuing a
  * normal transaction. The controller will at minimum clock 9 times on any
- * transaction. This is enough for the slave to complete its current operation
- * and NACK.
+ * transaction. This is enough for the peripheral to complete its current
+ * operation and NACK.
  */
 static void poll_read_state(void)
 {

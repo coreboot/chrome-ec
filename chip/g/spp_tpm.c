@@ -21,30 +21,31 @@
  *
  * ANYWAY, The goal of the TPM protocol is to provide read and write access to
  * device registers over the SPI bus. It is defined as follows (note that the
- * master clocks the bus, but both master and slave transmit data
+ * controller clocks the bus, but both controller and peripheral transmit data
  * simultaneously).
  *
- * Each transaction starts with the master clocking the bus to transfer 4
+ * Each transaction starts with the controller clocking the bus to transfer 4
  * bytes:
  *
- * The master sends 4 bytes:       [R/W+size-1] [Addr] [Addr] [Addr]
- * The slave also sends 4 bytes:       [xx]      [xx]   [xx]   [x?]
+ * The controller sends 4 bytes:       [R/W+size-1] [Addr] [Addr] [Addr]
+ * The peripheral also sends 4 bytes:  [xx]      [xx]   [xx]   [x?]
  *
- * Bytes sent by the master define the direction and size (1-64 bytes) of the
- * data transfer, and the address of the register to access.
+ * Bytes sent by the controller define the direction and size (1-64 bytes) of
+ * the data transfer, and the address of the register to access.
  *
- * The final bit of the 4th slave response byte determines whether or not the
- * slave needs some extra time. If that bit is 1, the master can IMMEDIATELY
- * clock in (or out) the number of bytes it specified with the header byte 0.
+ * The final bit of the 4th peripheral response byte determines whether or not
+ * the peripheral needs some extra time. If that bit is 1, the controller can
+ * IMMEDIATELY clock in (or out) the number of bytes it specified with the
+ * header byte 0.
  *
- * If the final bit of the 4th response byte is 0, the master clocks eight more
- * bits and looks again at the new received byte. It repeats this process
+ * If the final bit of the 4th response byte is 0, the controller clocks eight
+ * more bits and looks again at the new received byte. It repeats this process
  * (clock 8 bits, look at last bit) as long as every eighth bit is 0.
  *
- * When the slave is ready to proceed with the data transfer, it returns a 1
- * for the final bit of the response byte, at which point the master has to
- * resume transferring valid data for write transactions or to start reading
- * bytes sent by the slave for read transactions.
+ * When the peripheral is ready to proceed with the data transfer, it returns a
+ * 1 for the final bit of the response byte, at which point the controller has
+ * to resume transferring valid data for write transactions or to start reading
+ * bytes sent by the peripheral for read transactions.
  *
  * So here's what a 4-byte write of value of 0x11223344 to register 0xAABBCC
  * might look like:
@@ -53,9 +54,10 @@
  *   MOSI: 03 aa bb cc xx xx xx 11 22 33 44
  *   MISO: xx xx xx x0 x0 x0 x1 xx xx xx xx
  *
- * Bit 0 of MISO xfer #4 is 0, indicating that the slave needs to stall. The
- * slave stalled for three bytes before it was ready to continue accepting the
- * input data from the master. The slave released the stall in xfer #7.
+ * Bit 0 of MISO xfer #4 is 0, indicating that the peripheral needs to stall.
+ * The peripheral stalled for three bytes before it was ready to continue
+ * accepting the input data from the controller. The peripheral released the
+ * stall in xfer #7.
  *
  * Here's a 4-byte read from register 0xAABBCC:
  *
@@ -63,8 +65,8 @@
  *   MOSI: 83 aa bb cc xx xx xx xx xx xx xx
  *   MISO: xx xx xx x0 x0 x0 x1 11 22 33 44
  *
- * As before, the slave stalled the read for three bytes and indicated it was
- * done stalling at xfer #7.
+ * As before, the peripheral stalled the read for three bytes and indicated it
+ * was done stalling at xfer #7.
  *
  * Note that the ONLY place where a stall can be initiated is the last bit of
  * the fourth MISO byte of the transaction. Once the stall is released,
@@ -85,7 +87,7 @@
 /*
  * Incoming messages are collected here until they're ready to process. The
  * buffer will start with a four-byte header, followed by whatever data
- * is sent by the master (none for a read, 1 to 64 bytes for a write).
+ * is sent by the controller (none for a read, 1 to 64 bytes for a write).
  */
 #define RXBUF_MAX 512			/* chosen arbitrarily */
 static uint8_t rxbuf[RXBUF_MAX];
@@ -176,7 +178,7 @@ static void process_rx_data(uint8_t *data, size_t data_size, int cs_deasserted)
 		}
 
 		/*
-		 * Write the new idle byte value, to signal the master to
+		 * Write the new idle byte value, to signal the controller to
 		 * proceed with data.
 		 */
 		spp_tx_status(TPM_STALL_DEASSERT);

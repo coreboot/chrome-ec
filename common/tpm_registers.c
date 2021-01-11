@@ -5,8 +5,8 @@
 
 /*
  * This implements the register interface for the TPM SPI Hardware Protocol.
- * The master puts or gets between 1 and 64 bytes to a register designated by a
- * 24-bit address. There is no provision for error reporting at this level.
+ * The controller puts or gets between 1 and 64 bytes to a register designated
+ * by a24-bit address. There is no provision for error reporting at this level.
  */
 
 #include "byteorder.h"
@@ -495,7 +495,7 @@ static void fifo_reg_read(uint8_t *dest, uint32_t data_size)
 		tpm_sts |= 63 << burst_count_shift;
 	} else {
 		/*
-		 * Tell the master how much there is to read in the next
+		 * Tell the controller how much there is to read in the next
 		 * burst.
 		 */
 		tpm_sts |= MIN(tpm_.fifo_write_index -

@@ -2189,17 +2189,19 @@
  */
 #undef CONFIG_SPI_NOR_SMART_ERASE
 
-/* SPI master feature */
+/* SPI controller feature */
 #undef CONFIG_SPI_CONTROLLER
 
-/* SPI master halfduplex/3-wire mode */
+/* SPI controller halfduplex/3-wire mode */
 #undef CONFIG_SPI_HALFDUPLEX
 
-/* SPI master configure gpios on init */
+/* SPI controller configure gpios on init */
 #undef CONFIG_SPI_CONTROLLER_CONFIGURE_GPIOS
 
-/* Support SPI masters without GPIO-specified Chip Selects, instead rely on the
- * SPI master port's hardwired CS pin. */
+/*
+ * Support SPI controller's without GPIO-specified Chip Selects, instead rely on
+ * the SPI controller port's hardwired CS pin.
+ */
 #undef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 
 /* Support testing SPI periph interface driver. */
