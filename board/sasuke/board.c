@@ -19,6 +19,7 @@
 #include "driver/retimer/nb7v904m.h"
 #include "driver/tcpm/raa489000.h"
 #include "driver/tcpm/tcpci.h"
+#include "driver/temp_sensor/thermistor.h"
 #include "driver/usb_mux/pi3usb3x532.h"
 #include "extpower.h"
 #include "gpio.h"
@@ -32,6 +33,7 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
+#include "temp_sensor.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -39,33 +41,81 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-static void tcpc_alert_event(enum gpio_signal s)
-{
-	int port = (s == GPIO_USB_C0_INT_ODL) ? 0 : 1;
+#define INT_RECHECK_US 5000
 
-	schedule_deferred_pd_interrupt(port);
+/* C0 interrupt line shared by BC 1.2 and charger */
+static void check_c0_line(void);
+DECLARE_DEFERRED(check_c0_line);
+
+static void notify_c0_chips(void)
+{
+	/*
+	 * The interrupt line is shared between the TCPC and BC 1.2 detection
+	 * chip.  Therefore we'll need to check both ICs.
+	 */
+	schedule_deferred_pd_interrupt(0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+}
+
+static void check_c0_line(void)
+{
+	/*
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL)) {
+		notify_c0_chips();
+		hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+	}
 }
 
 static void usb_c0_interrupt(enum gpio_signal s)
 {
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c0_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c0_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+
+}
+
+/* C1 interrupt line shared by BC 1.2, TCPC, and charger */
+static void check_c1_line(void);
+DECLARE_DEFERRED(check_c1_line);
+
+static void notify_c1_chips(void)
+{
+	schedule_deferred_pd_interrupt(1);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+}
+
+static void check_c1_line(void)
+{
 	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips.
 	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	if (!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
+		notify_c1_chips();
+		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+	}
 }
 
 static void sub_usb_c1_interrupt(enum gpio_signal s)
 {
-	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
-	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-}
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c1_line_data, -1);
 
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c1_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+
+}
 static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
 {
 	int hdmi_hpd_odl = gpio_get_level(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
@@ -108,11 +158,26 @@ const struct adc_t adc_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
+/* Thermistors */
+const struct temp_sensor_t temp_sensors[] = {
+        [TEMP_SENSOR_1] = {.name = "Memory",
+                           .type = TEMP_SENSOR_TYPE_BOARD,
+                           .read = get_temp_3v3_51k1_47k_4050b,
+                           .idx = ADC_TEMP_SENSOR_1},
+        [TEMP_SENSOR_2] = {.name = "Charger",
+                           .type = TEMP_SENSOR_TYPE_BOARD,
+                           .read = get_temp_3v3_51k1_47k_4050b,
+                           .idx = ADC_TEMP_SENSOR_2},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
+
+
 void board_init(void)
 {
 	int on;
 
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
+	check_c0_line();
 
 	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
 		/* Disable i2c on HDMI pins */
@@ -139,6 +204,7 @@ void board_init(void)
 
 		/* Enable C1 interrupts */
 		gpio_enable_interrupt(GPIO_SUB_C1_INT_EN_RAILS_ODL);
+		check_c1_line();
 	}
 
 	/* Turn on 5V if the system is on, otherwise turn it off. */
@@ -388,11 +454,13 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
+static int tune_mux(const struct usb_mux *me);
 const struct usb_mux usbc1_retimer = {
 	.usb_port = 1,
 	.i2c_port = I2C_PORT_SUB_USB_C1,
 	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
 	.driver = &nb7v904m_usb_redriver_drv,
+	.board_init = &tune_mux,
 };
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -409,6 +477,13 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.next_mux = &usbc1_retimer,
 	}
 };
+
+static int tune_mux(const struct usb_mux *me)
+{
+	return nb7v904m_tune_usb_eq_rx(me,
+				NB7V904M_CH_A_EQ_10_DB,
+				NB7V904M_CH_D_EQ_10_DB);
+}
 
 uint16_t tcpc_get_alert_status(void)
 {

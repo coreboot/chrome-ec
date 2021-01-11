@@ -297,6 +297,7 @@ enum usb_pe_state {
 	PE_VCS_TURN_ON_VCONN_SWAP,
 	PE_VCS_TURN_OFF_VCONN_SWAP,
 	PE_VCS_SEND_PS_RDY_SWAP,
+	PE_VCS_CBL_SEND_SOFT_RESET,
 	PE_VDM_IDENTITY_REQUEST_CBL,
 	PE_INIT_PORT_VDM_IDENTITY_REQUEST,
 	PE_INIT_VDM_SVIDS_REQUEST,
@@ -306,7 +307,6 @@ enum usb_pe_state {
 	PE_HANDLE_CUSTOM_VDM_REQUEST,
 	PE_WAIT_FOR_ERROR_RECOVERY,
 	PE_BIST_TX,
-	PE_BIST_RX,
 	PE_DEU_SEND_ENTER_USB,
 	PE_DR_GET_SINK_CAP,
 	PE_DR_SNK_GIVE_SOURCE_CAP,
@@ -414,6 +414,7 @@ __maybe_unused static const char * const pe_state_names[] = {
 	[PE_VCS_TURN_ON_VCONN_SWAP] = "PE_VCS_Turn_On_Vconn_Swap",
 	[PE_VCS_TURN_OFF_VCONN_SWAP] = "PE_VCS_Turn_Off_Vconn_Swap",
 	[PE_VCS_SEND_PS_RDY_SWAP] = "PE_VCS_Send_Ps_Rdy_Swap",
+	[PE_VCS_CBL_SEND_SOFT_RESET] = "PE_VCS_CBL_Send_Soft_Reset",
 #endif
 	[PE_VDM_IDENTITY_REQUEST_CBL] = "PE_VDM_Identity_Request_Cbl",
 	[PE_INIT_PORT_VDM_IDENTITY_REQUEST] =
@@ -425,7 +426,6 @@ __maybe_unused static const char * const pe_state_names[] = {
 	[PE_HANDLE_CUSTOM_VDM_REQUEST] = "PE_Handle_Custom_Vdm_Request",
 	[PE_WAIT_FOR_ERROR_RECOVERY] = "PE_Wait_For_Error_Recovery",
 	[PE_BIST_TX] = "PE_Bist_TX",
-	[PE_BIST_RX] = "PE_Bist_RX",
 	[PE_DEU_SEND_ENTER_USB]  = "PE_DEU_Send_Enter_USB",
 	[PE_DR_GET_SINK_CAP] = "PE_DR_Get_Sink_Cap",
 	[PE_DR_SNK_GIVE_SOURCE_CAP] = "PE_DR_SNK_Give_Source_Cap",
@@ -487,16 +487,6 @@ GEN_NOT_SUPPORTED(PE_SRC_CHUNK_RECEIVED);
 GEN_NOT_SUPPORTED(PE_SNK_CHUNK_RECEIVED);
 #define PE_SNK_CHUNK_RECEIVED PE_SNK_CHUNK_RECEIVED_NOT_SUPPORTED
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
-
-/*
- * This enum is used to implement a state machine consisting of at most
- * 3 states, inside a Policy Engine State.
- */
-enum sub_state {
-	PE_SUB0,
-	PE_SUB1,
-	PE_SUB2
-};
 
 static enum sm_local_state local_state[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -578,9 +568,6 @@ static struct policy_engine {
 	/* Current limit / voltage based on the last request message */
 	uint32_t curr_limit;
 	uint32_t supply_voltage;
-
-	/* state specific state machine variable */
-	enum sub_state sub;
 
 	/* PD_VDO_INVALID is used when there is an invalid VDO */
 	int32_t ama_vdo;
@@ -1250,9 +1237,10 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 			get_state_pe(port) == PE_PRS_SRC_SNK_WAIT_SOURCE_ON ||
 			get_state_pe(port) == PE_SRC_DISABLED ||
 			get_state_pe(port) == PE_SRC_DISCOVERY ||
+			get_state_pe(port) == PE_VCS_CBL_SEND_SOFT_RESET ||
 			get_state_pe(port) == PE_VDM_IDENTITY_REQUEST_CBL) ||
-			(IS_ENABLED(CONFIG_USBC_VCONN) &&
-				get_state_pe(port) == PE_VCS_SEND_PS_RDY_SWAP)
+			(PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH) &&
+			    get_state_pe(port) == PE_PRS_SNK_SRC_SEND_SWAP)
 			) {
 		PE_SET_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
 		task_wake(PD_PORT_TO_TASK_ID(port));
@@ -1462,11 +1450,6 @@ static bool common_src_snk_dpm_requests(int port)
 			PE_CHK_DPM_REQUEST(port, DPM_REQUEST_VCONN_SWAP)) {
 		pe_set_dpm_curr_request(port, DPM_REQUEST_VCONN_SWAP);
 		set_state_pe(port, PE_VCS_SEND_SWAP);
-		return true;
-	} else if (PE_CHK_DPM_REQUEST(port,
-					DPM_REQUEST_BIST_RX)) {
-		pe_set_dpm_curr_request(port, DPM_REQUEST_BIST_RX);
-		set_state_pe(port, PE_BIST_RX);
 		return true;
 	} else if (PE_CHK_DPM_REQUEST(port,
 					DPM_REQUEST_BIST_TX)) {
@@ -1690,6 +1673,18 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 		}
 	}
 
+	/*
+	 * TODO(b/177001425): TCPMv2 - move SOP' soft reset check into
+	 * common_src_snk_dpm_requests()
+	 */
+	if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND)) {
+		pe_set_dpm_curr_request(port,
+			DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
+		pe[port].tx_type = TCPC_TX_SOP_PRIME;
+		set_state_pe(port, PE_VCS_CBL_SEND_SOFT_RESET);
+		return true;
+	}
+
 	/* If mode entry was successful, disable the timer */
 	if (PE_CHK_FLAG(port, PE_FLAGS_VDM_SETUP_DONE)) {
 		pe[port].discover_identity_timer = TIMER_DISABLED;
@@ -1898,6 +1893,13 @@ static void pe_src_startup_entry(int port)
 
 	/* Reset the protocol layer */
 	prl_reset(port);
+
+	/*
+	 * Protocol layer reset clears the message IDs for all SOP types.
+	 * Indicate that a SOP' soft reset is required before any other
+	 * messages are sent to the cable.
+	 */
+	pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
 
 	/* Set initial data role */
 	pe[port].data_role = pd_get_data_role(port);
@@ -2774,6 +2776,13 @@ static void pe_snk_startup_entry(int port)
 
 	/* Reset the protocol layer */
 	prl_reset(port);
+
+	/*
+	 * Protocol layer reset clears the message IDs for all SOP types.
+	 * Indicate that a SOP' soft reset is required before any other
+	 * messages are sent to the cable.
+	 */
+	pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
 
 	/* Set initial data role */
 	pe[port].data_role = pd_get_data_role(port);
@@ -4661,6 +4670,19 @@ static void pe_prs_snk_src_send_swap_run(int port)
 				: PE_SNK_READY);
 		else
 			set_state_pe(port, PE_SNK_READY);
+		return;
+	}
+	/*
+	 * FRS Only: Transition to ErrorRecovery state when:
+	 *   2) The FR_Swap Message is not sent after retries (a GoodCRC Message
+	 *      has not been received). A soft reset Shall Not be initiated in
+	 *      this case.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
+	    PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH) &&
+		PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		set_state_pe(port, PE_WAIT_FOR_ERROR_RECOVERY);
 	}
 }
 
@@ -4717,7 +4739,7 @@ __maybe_unused static void pe_prs_frs_shared_exit(int port)
 }
 
 /**
- * BIST TX
+ * PE_BIST_TX
  */
 static void pe_bist_tx_entry(int port)
 {
@@ -4726,27 +4748,29 @@ static void pe_bist_tx_entry(int port)
 
 	print_current_state(port);
 
-	/*
-	 * See section 6.4.3.6 BIST Carrier Mode 2:
-	 * With a BIST Carrier Mode 2 BIST Data Object, the UUT Shall send out
-	 * a continuous string of alternating "1"s and “0”s.
-	 * The UUT Shall exit the Continuous BIST Mode within tBISTContMode of
-	 * this Continuous BIST Mode being enabled.
-	 */
 	if (mode == BIST_CARRIER_MODE_2) {
+		/*
+		 * PE_BIST_Carrier_Mode embedded here.
+		 * See PD 3.0 section 6.4.3.1 BIST Carrier Mode 2: With a BIST
+		 * Carrier Mode 2 BIST Data Object, the UUT Shall send out a
+		 * continuous string of BMC-encoded alternating "1"s and “0”s.
+		 * The UUT Shall exit the Continuous BIST Mode within
+		 * tBISTContMode of this Continuous BIST Mode being enabled.
+		 */
 		send_ctrl_msg(port, TCPC_TX_BIST_MODE_2, 0);
 		pe[port].bist_cont_mode_timer =
 					get_time().val + PD_T_BIST_CONT_MODE;
-	}
-	/*
-	 * See section 6.4.3.9 BIST Test Data:
-	 * With a BIST Test Data BIST Data Object, the UUT Shall return a
-	 * GoodCRC Message and Shall enter a test mode in which it sends no
-	 * further Messages except for GoodCRC Messages in response to received
-	 * Messages.
-	 */
-	else if (mode == BIST_TEST_DATA)
+	} else if (mode == BIST_TEST_DATA) {
+		/*
+		 * See PD 3.0 section 6.4.3.2 BIST Test Data:
+		 * With a BIST Test Data BIST Data Object, the UUT Shall return
+		 * a GoodCRC Message and Shall enter a test mode in which it
+		 * sends no further Messages except for GoodCRC Messages in
+		 * response to received Messages.... The test Shall be ended by
+		 * sending Hard Reset Signaling to reset the UUT.
+		 */
 		pe[port].bist_cont_mode_timer = TIMER_DISABLED;
+	}
 }
 
 static void pe_bist_tx_run(int port)
@@ -4766,36 +4790,6 @@ static void pe_bist_tx_run(int port)
 		if (PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED))
 			PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
 	}
-}
-
-/**
- * BIST RX
- */
-static void pe_bist_rx_entry(int port)
-{
-	/* currently only support bist carrier 2 */
-	uint32_t bdo = BDO(BDO_MODE_CARRIER2, 0);
-
-	print_current_state(port);
-
-	tx_emsg[port].len = sizeof(bdo);
-	memcpy(tx_emsg[port].buf, (uint8_t *)&bdo, tx_emsg[port].len);
-	send_data_msg(port, TCPC_TX_SOP, PD_DATA_BIST);
-
-	/* Delay at least enough for partner to finish BIST */
-	pe[port].bist_cont_mode_timer =
-				get_time().val + PD_T_BIST_RECEIVE;
-}
-
-static void pe_bist_rx_run(int port)
-{
-	if (get_time().val < pe[port].bist_cont_mode_timer)
-		return;
-
-	if (pe[port].power_role == PD_ROLE_SOURCE)
-		set_state_pe(port, PE_SRC_TRANSITION_TO_DEFAULT);
-	else
-		set_state_pe(port, PE_SNK_TRANSITION_TO_DEFAULT);
 }
 
 /**
@@ -6181,78 +6175,109 @@ static void pe_vcs_send_ps_rdy_swap_entry(int port)
 
 	/* Send a PS_RDY Message */
 	send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
-	pe[port].sub = PE_SUB0;
 }
 
 static void pe_vcs_send_ps_rdy_swap_run(int port)
 {
-	/* TODO(b/152058087): TCPMv2: Break up pe_vcs_send_ps_rdy_swap */
-	switch (pe[port].sub) {
-	case PE_SUB0:
+	/*
+	 * After a VCONN Swap the VCONN Source needs to reset
+	 * the Cable Plug’s Protocol Layer in order to ensure
+	 * MessageID synchronization.
+	 */
+	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 		/*
-		 * After a VCONN Swap the VCONN Source needs to reset
-		 * the Cable Plug’s Protocol Layer in order to ensure
-		 * MessageID synchronization.
+		 * A VCONN Swap Shall reset the
+		 * DiscoverIdentityCounter to zero
 		 */
-		if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
-			PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		pe[port].discover_identity_counter = 0;
+		pe[port].dr_swap_attempt_counter = 0;
 
-			send_ctrl_msg(port, TCPC_TX_SOP_PRIME,
-					  PD_CTRL_SOFT_RESET);
-			/*
-			 * Ensures enough time for transmission completion,
-			 * in the case of more delays.
-			 */
-			pe[port].sender_response_timer = get_time().val +
-							PD_T_SENDER_RESPONSE;
-
-			pe[port].sub = PE_SUB1;
-		}
-		break;
-	case PE_SUB1:
-		if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
-			PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-			pe[port].sender_response_timer = get_time().val +
-							PD_T_SENDER_RESPONSE;
-		}
-
-		/* Got ACCEPT or REJECT from Cable Plug */
-		if (PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED) ||
-		    get_time().val > pe[port].sender_response_timer) {
-			PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
-			/*
-			 * A VCONN Swap Shall reset the
-			 * DiscoverIdentityCounter to zero
-			 */
-			pe[port].discover_identity_counter = 0;
-			pe[port].dr_swap_attempt_counter = 0;
-
-			if (pe[port].power_role == PD_ROLE_SOURCE)
-				set_state_pe(port, PE_SRC_READY);
-			else
-				set_state_pe(port, PE_SNK_READY);
-		}
-		break;
-	case PE_SUB2:
-		/* Do nothing */
-		break;
+		/* A SOP' soft reset is required after VCONN swap */
+		pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
+		pe_set_ready_state(port);
 	}
 
 	if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		/* PS_RDY didn't send, soft reset */
+		pe_send_soft_reset(port, TCPC_TX_SOP);
+	}
+}
 
-		if (pe[port].sub == PE_SUB0) {
-			/* PS_RDY didn't send, soft reset */
-			pe_send_soft_reset(port, TCPC_TX_SOP);
+/*
+ * PE_VCS_CBL_SEND_SOFT_RESET
+ * Note - Entry is only when directed by the DPM. Protocol errors are handled
+ * by the PE_SEND_SOFT_RESET state.
+ */
+static void pe_vcs_cbl_send_soft_reset_entry(int port)
+{
+	print_current_state(port);
+
+	if (!pe_can_send_sop_prime(port)) {
+		/*
+		 * If we're not VCONN source, return the appropriate state.
+		 * A VCONN swap re-triggers sending SOP' soft reset
+		 */
+		if (pe_is_explicit_contract(port)) {
+			/* Return to PE_{SRC,SNK}_Ready state */
+			pe_set_ready_state(port);
 		} else {
 			/*
-			 * Cable plug wasn't present,
-			 * return to ready state
+			 * Not in Explicit Contract, so we must be a SRC,
+			 * return to PE_Src_Send_Capabilities.
 			 */
+			set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
+		}
+		return;
+	}
+
+	send_ctrl_msg(port, TCPC_TX_SOP_PRIME, PD_CTRL_SOFT_RESET);
+	pe[port].sender_response_timer = TIMER_DISABLED;
+}
+
+static void pe_vcs_cbl_send_soft_reset_run(int port)
+{
+	bool cable_soft_reset_complete = false;
+
+	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		pe[port].sender_response_timer = get_time().val +
+						PD_T_SENDER_RESPONSE;
+	}
+
+	/* Got ACCEPT or REJECT from Cable Plug */
+	if (PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
+		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+		cable_soft_reset_complete = true;
+	}
+
+	/* No GoodCRC received, cable is not present */
+	if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		/*
+		 * TODO(b/171823328): TCPMv2: Implement cable reset
+		 * Cable reset will only be done here if we know for certain
+		 * a cable is present (we've received the SOP' DiscId response).
+		 */
+		cable_soft_reset_complete = true;
+	}
+
+	if (cable_soft_reset_complete ||
+		get_time().val > pe[port].sender_response_timer) {
+		if (pe_is_explicit_contract(port)) {
+			/* Return to PE_{SRC,SNK}_Ready state */
 			pe_set_ready_state(port);
+		} else {
+			/*
+			 * Not in Explicit Contract, so we must be a SRC,
+			 * return to PE_Src_Send_Capabilities.
+			 */
+			set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
 		}
 	}
 }
+
 #endif /* CONFIG_USBC_VCONN */
 
 /*
@@ -6769,6 +6794,10 @@ static const struct usb_state pe_states[] = {
 		.entry = pe_vcs_send_ps_rdy_swap_entry,
 		.run   = pe_vcs_send_ps_rdy_swap_run,
 	},
+	[PE_VCS_CBL_SEND_SOFT_RESET] = {
+		.entry  = pe_vcs_cbl_send_soft_reset_entry,
+		.run    = pe_vcs_cbl_send_soft_reset_run,
+	},
 #endif /* CONFIG_USBC_VCONN */
 	[PE_VDM_IDENTITY_REQUEST_CBL] = {
 		.entry  = pe_vdm_identity_request_cbl_entry,
@@ -6821,10 +6850,6 @@ static const struct usb_state pe_states[] = {
 	[PE_BIST_TX] = {
 		.entry = pe_bist_tx_entry,
 		.run   = pe_bist_tx_run,
-	},
-	[PE_BIST_RX] = {
-		.entry = pe_bist_rx_entry,
-		.run   = pe_bist_rx_run,
 	},
 	[PE_DR_GET_SINK_CAP] = {
 		.entry = pe_dr_get_sink_cap_entry,

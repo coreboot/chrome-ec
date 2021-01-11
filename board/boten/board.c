@@ -31,7 +31,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "temp_sensor.h"
 #include "uart.h"
 #include "usb_charge.h"
@@ -97,6 +97,15 @@ static void pen_detect_interrupt(enum gpio_signal s)
 	int pen_detect = !gpio_get_level(GPIO_PEN_DET_ODL);
 
 	gpio_set_level(GPIO_EN_PP5000_PEN, pen_detect);
+}
+
+void board_hibernate(void)
+{
+	/*
+	 * Charger IC need to be put into their "low power mode" before
+	 * entering the Z-state.
+	 */
+	raa489000_hibernate(0);
 }
 
 /* Must come after other header files and interrupt handler declarations */

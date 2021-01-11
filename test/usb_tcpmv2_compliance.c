@@ -8,12 +8,13 @@
 #include "task.h"
 #include "test_util.h"
 #include "timer.h"
+#include "usb_tc_sm.h"
 #include "usb_tcpmv2_compliance.h"
 
 void before_test(void)
 {
-	partner_tx_id = 0;
 	partner_set_pd_rev(PD_REV30);
+	partner_tx_msg_id_reset(TCPC_TX_SOP_ALL);
 
 	mock_usb_mux_reset();
 	mock_tcpci_reset();
@@ -21,6 +22,12 @@ void before_test(void)
 	/* Restart the PD task and let it settle */
 	task_set_event(TASK_ID_PD_C0, TASK_EVENT_RESET_DONE);
 	task_wait_event(SECOND);
+
+	/*
+	 * Default to not allowing DUT to TRY.SRC and set it to be allowed
+	 * specifically in the TRY.SRC tests
+	 */
+	tc_try_src_override(TRY_SRC_OVERRIDE_OFF);
 }
 
 void run_test(int argc, char **argv)
@@ -37,6 +44,10 @@ void run_test(int argc, char **argv)
 	RUN_TEST(test_td_pd_src_e2);
 	RUN_TEST(test_td_pd_src_e5);
 
+	RUN_TEST(test_td_pd_src3_e1);
+	RUN_TEST(test_td_pd_src3_e7);
+	RUN_TEST(test_td_pd_src3_e8);
+	RUN_TEST(test_td_pd_src3_e9);
 	RUN_TEST(test_td_pd_src3_e26);
 	RUN_TEST(test_td_pd_snk3_e12);
 

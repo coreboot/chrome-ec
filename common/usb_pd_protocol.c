@@ -12,6 +12,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
+#include "cros_version.h"
 #include "ec_commands.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -20,7 +21,7 @@
 #include "registers.h"
 #include "system.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "tcpm/tcpm.h"
 #include "timer.h"
 #include "util.h"
@@ -32,7 +33,6 @@
 #include "usb_pd_tcpc.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
-#include "version.h"
 #include "vboot.h"
 
 /* Flags to clear on a disconnect */

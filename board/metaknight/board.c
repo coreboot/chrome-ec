@@ -45,6 +45,8 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
+#define INT_RECHECK_US 5000
+
 #define ADC_VOL_UP_MASK     BIT(0)
 #define ADC_VOL_DOWN_MASK   BIT(1)
 
@@ -56,31 +58,78 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A1_VBUS,
 };
 
-static void tcpc_alert_event(enum gpio_signal s)
-{
-	int port = (s == GPIO_USB_C0_INT_ODL) ? 0 : 1;
+/* C0 interrupt line shared by BC 1.2 and charger */
+static void check_c0_line(void);
+DECLARE_DEFERRED(check_c0_line);
 
-	schedule_deferred_pd_interrupt(port);
+static void notify_c0_chips(void)
+{
+	/*
+	 * The interrupt line is shared between the TCPC and BC 1.2 detection
+	 * chip.  Therefore we'll need to check both ICs.
+	 */
+	schedule_deferred_pd_interrupt(0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+}
+
+static void check_c0_line(void)
+{
+	/*
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL)) {
+		notify_c0_chips();
+		hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+	}
 }
 
 static void usb_c0_interrupt(enum gpio_signal s)
 {
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c0_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c0_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+
+}
+
+/* C1 interrupt line shared by BC 1.2, TCPC, and charger */
+static void check_c1_line(void);
+DECLARE_DEFERRED(check_c1_line);
+
+static void notify_c1_chips(void)
+{
+	schedule_deferred_pd_interrupt(1);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+}
+
+static void check_c1_line(void)
+{
 	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips.
 	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	if (!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
+		notify_c1_chips();
+		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+	}
 }
 
 static void sub_usb_c1_interrupt(enum gpio_signal s)
 {
-	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
-	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c1_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c1_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+
 }
 
 static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
@@ -95,14 +144,15 @@ static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
  */
 static void pen_input_deferred(void)
 {
-	int pen_exist = !gpio_get_level(GPIO_PEN_DET_ODL);
+	int pen_charge_enable = !gpio_get_level(GPIO_PEN_DET_ODL) && 
+			!chipset_in_state(CHIPSET_STATE_ANY_OFF);
 
-	if (pen_exist)
+	if (pen_charge_enable)
 		gpio_set_level(GPIO_EN_PP3300_PEN, 1);
 	else
 		gpio_set_level(GPIO_EN_PP3300_PEN, 0);
 
-	CPRINTS("Pen charge %sable", pen_exist ? "en" : "dis");
+	CPRINTS("Pen charge %sable", pen_charge_enable ? "en" : "dis");
 }
 DECLARE_DEFERRED(pen_input_deferred);
 
@@ -111,6 +161,13 @@ void pen_input_interrupt(enum gpio_signal signal)
 	/* pen input debounce time */
 	hook_call_deferred(&pen_input_deferred_data, (100 * MSEC));
 }
+
+static void pen_charge_check(void)
+{
+	hook_call_deferred(&pen_input_deferred_data, (100 * MSEC));
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pen_charge_check, HOOK_PRIO_LAST);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pen_charge_check, HOOK_PRIO_LAST);
 
 #include "gpio_list.h"
 
@@ -152,8 +209,10 @@ void board_init(void)
 	int on;
 
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
+	check_c0_line();
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI) {
 		/* Disable i2c on HDMI pins */
 		gpio_config_pin(MODULE_I2C,
 				GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
@@ -178,6 +237,7 @@ void board_init(void)
 
 		/* Enable C1 interrupts */
 		gpio_enable_interrupt(GPIO_SUB_C1_INT_EN_RAILS_ODL);
+		check_c1_line();
 	}
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
@@ -194,14 +254,16 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 /* Enable HDMI any time the SoC is on */
 static void hdmi_enable(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
 
 static void hdmi_disable(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
@@ -271,7 +333,8 @@ __override void board_power_5v_enable(int enable)
 	 */
 	set_5v_gpio(!!enable);
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI) {
 		gpio_set_level(GPIO_SUB_C1_INT_EN_RAILS_ODL, !enable);
 	} else {
 		if (isl923x_set_comparator_inversion(1, !!enable))
@@ -283,7 +346,8 @@ __override void board_power_5v_enable(int enable)
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 	else
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
@@ -291,7 +355,8 @@ __override uint8_t board_get_usb_pd_port_count(void)
 
 __override uint8_t board_get_charger_chip_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		return CHARGER_NUM - 1;
 	else
 		return CHARGER_NUM;
@@ -509,23 +574,11 @@ const struct charger_config_t chg_chips[] = {
 		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
 		.drv = &isl923x_drv,
 	},
-
-	{
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
 };
 
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	{
 		.i2c_port = I2C_PORT_USB_C0,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-		.flags = PI3USB9201_ALWAYS_POWERED,
-	},
-
-	{
-		.i2c_port = I2C_PORT_SUB_USB_C1,
 		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
 		.flags = PI3USB9201_ALWAYS_POWERED,
 	},
@@ -551,24 +604,8 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 		.drv = &raa489000_tcpm_drv,
 	},
-
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_SUB_USB_C1,
-			.addr_flags = RAA489000_TCPC0_I2C_FLAGS,
-		},
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
-		.drv = &raa489000_tcpm_drv,
-	},
 };
 
-const struct usb_mux usbc1_retimer = {
-	.usb_port = 1,
-	.i2c_port = I2C_PORT_SUB_USB_C1,
-	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
-	.driver = &nb7v904m_usb_redriver_drv,
-};
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.usb_port = 0,
@@ -576,13 +613,6 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
 		.driver = &pi3usb3x532_usb_mux_driver,
 	},
-	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
-		.driver = &pi3usb3x532_usb_mux_driver,
-		.next_mux = &usbc1_retimer,
-	}
 };
 
 uint16_t tcpc_get_alert_status(void)

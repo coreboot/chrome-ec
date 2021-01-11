@@ -40,6 +40,7 @@ add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 # supported by all boards and emulators (including unit tests) using the shim
 # layer.
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC         "${PLATFORM_EC}/common/base32.c"
+                                                "${PLATFORM_EC}/common/printf.c"
                                                 "${PLATFORM_EC}/common/queue.c"
                                                 "${PLATFORM_EC}/common/shared_mem.c")
 
@@ -52,12 +53,17 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
                                                 "${PLATFORM_EC}/common/battery_fuel_gauge.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_SMART
                                                 "${PLATFORM_EC}/driver/battery/smart.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
+                                                "${PLATFORM_EC}/driver/bc12/pi3usb9201.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9241
                                                 "${PLATFORM_EC}/driver/charger/isl9241.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_MANAGER
                                                 "${PLATFORM_EC}/common/charger.c"
                                                 "${PLATFORM_EC}/common/charge_manager.c"
                                                 "${PLATFORM_EC}/common/charge_state_v2.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
+                                                "${PLATFORM_EC}/common/charge_ramp.c"
+                                                "${PLATFORM_EC}/common/charge_ramp_sw.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CBI     "${PLATFORM_EC}/common/cbi.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
@@ -90,11 +96,17 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
                                                 "${PLATFORM_EC}/power/intel_x86.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TIMER   "${PLATFORM_EC}/common/timer.c")
 
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_CHARGER
+                                                "${PLATFORM_EC}/common/usb_charger.c")
+
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usb_common.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_sm.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
                                                 "${PLATFORM_EC}/common/usbc_ocp.c")
+
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_DFP
+                                                "${PLATFORM_EC}/common/usb_pd_alt_mode_dfp.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DUAL_ROLE
                                                 "${PLATFORM_EC}/common/usb_pd_dual_role.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD

@@ -49,6 +49,7 @@ die() {
 # not aware of its 'ec_chip'. If servod becomes able to answer 'ec_chip'
 # for the board, remove it from BOARDS_XXXX array below.
 BOARDS_IT83XX=(
+	adlrvpm_ite
 	adlrvpp_ite
 	glkrvp_ite
 	it83xx_evb
@@ -1297,6 +1298,10 @@ function flash_it83xx() {
 		ITEFLASH_ARGS+=( "--erase" "--write=${IMG}" )
 		info "Programming EC firmware image using iteflash..."
 		ERROR_MSG="${MSG_PROGRAM_FAIL}"
+	fi
+
+	if [[ "${FLAGS_verify}" == "${FLAGS_FALSE}" ]]; then
+		ITEFLASH_ARGS+=( "--noverify" )
 	fi
 
 	if [[ "${FLAGS_verbose}" == ${FLAGS_TRUE} ]]; then
