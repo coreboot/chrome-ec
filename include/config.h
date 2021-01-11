@@ -333,9 +333,6 @@
 /* The decoding of the GPIOs defining board version is defined in board code */
 #undef CONFIG_BOARD_SPECIFIC_VERSION
 
-/* EC responses to a board defined I2C slave address */
-#undef CONFIG_BOARD_I2C_SLAVE_ADDR
-
 /* Permanent LM4 boot configuration */
 #undef CONFIG_BOOTCFG_VALUE
 
@@ -2509,9 +2506,6 @@
 /* HW & SW version for alternate mode discover identity response (4bits each) */
 #undef CONFIG_USB_PD_IDENTITY_HW_VERS
 #undef CONFIG_USB_PD_IDENTITY_SW_VERS
-
-/* USB PD MCU slave address for host commands */
-#define CONFIG_USB_PD_I2C_SLAVE_ADDR 0x3c
 
 /* Define if using internal comparator for PD receive */
 #undef CONFIG_USB_PD_INTERNAL_COMP
