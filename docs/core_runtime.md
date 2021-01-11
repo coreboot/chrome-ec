@@ -52,7 +52,7 @@ where you need to avoid it.
 The hardware interrupt requests are connected to the interruption handling
 *C* routines declared by the `DECLARE_IRQ` macros, through some chip/core
 specific mechanisms (e.g. depending whether we have a vectored interrupt
-controller, slave interrupt controllers...)
+controller, peripheral interrupt controllers...)
 
 The interrupts can be nested (ie interrupted by a higher priority interrupt).
 All the interrupt vectors are assigned a priority as defined in their

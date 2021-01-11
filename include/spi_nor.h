@@ -41,7 +41,7 @@ struct spi_nor_device_t {
 	/* Name of the Serial NOR Flash device. */
 	const char *name;
 
-	/* Index of the SPI master which this device is connected through. */
+	/* Index of the SPI controller this device is connected through. */
 	const enum spi_device spi_controller;
 
 	/* Maximum timeout per command in microseconds. */
@@ -109,9 +109,9 @@ int spi_nor_init(void);
  *
  * WARNING:
  * 1) In 3 Byte addressing mode only 16MiB of Serial NOR Flash is accessible.
- * 2) If there's a second SPI master communicating with this Serial NOR Flash
- *    part on the board, the user is responsible for ensuring addressing mode
- *    compatibility and cooperation.
+ * 2) If there's a second SPI controller communicating with this Serial NOR
+ *    Flash part on the board, the user is responsible for ensuring addressing
+ *    mode compatibility and cooperation.
  * 3) The user must ensure that multiple users do not trample on each other
  *    by having multiple parties changing the device's addressing mode.
  *

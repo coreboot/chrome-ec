@@ -2590,13 +2590,13 @@
 #undef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
 #undef CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 
-/* MCHP next two items are EC eSPI slave configuration */
-/* Maximum clock frequence eSPI EC slave advertises
+/* MCHP next two items are EC eSPI peripheral configuration */
+/* Maximum clock frequence eSPI EC peripheral advertises
  * Values in MHz are 20, 25, 33, 50, and 66
  */
 #undef CONFIG_HOSTCMD_ESPI_EC_MAX_FREQ
 
-/* EC eSPI slave advertises IO lanes
+/* EC eSPI peripheral advertises IO lanes
  * 0 = Single
  * 1 = Single and Dual
  * 2 = Single and Quad
@@ -3138,17 +3138,19 @@
  */
 #undef CONFIG_SPI_NOR_SMART_ERASE
 
-/* SPI master feature */
+/* SPI controller feature */
 #undef CONFIG_SPI_CONTROLLER
 
-/* SPI master halfduplex/3-wire mode */
+/* SPI controller halfduplex/3-wire mode */
 #undef CONFIG_SPI_HALFDUPLEX
 
-/* SPI master configure gpios on init */
+/* SPI controller configure gpios on init */
 #undef CONFIG_SPI_CONTROLLER_CONFIGURE_GPIOS
 
-/* Support SPI masters without GPIO-specified Chip Selects, instead rely on the
- * SPI master port's hardwired CS pin. */
+/*
+ * Support SPI controller's without GPIO-specified Chip Selects, instead rely on
+ * the SPI controller port's hardwired CS pin.
+ */
 #undef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 
 /* Support testing SPI periph interface driver. */

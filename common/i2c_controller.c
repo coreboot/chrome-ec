@@ -805,14 +805,14 @@ int i2c_unwedge(int port)
 
 	/*
 	 * If clock is low, wait for a while in case of clock stretched
-	 * by a slave.
+	 * by a peripheral.
 	 */
 	if (!i2c_raw_get_scl(port)) {
 		for (i = 0;; i++) {
 			if (i >= UNWEDGE_SCL_ATTEMPTS) {
 				/*
-				 * If we get here, a slave is holding the clock
-				 * low and there is nothing we can do.
+				 * If we get here, a peripheral is holding the
+				 * clock low and there is nothing we can do.
 				 */
 				CPRINTS("I2C%d unwedge failed, "
 					"SCL is held low", port);
@@ -837,9 +837,9 @@ int i2c_unwedge(int port)
 		udelay(I2C_BITBANG_DELAY_US);
 
 		/*
-		 * Clock through the problem by clocking out 9 bits. If slave
-		 * releases the SDA line, then we can stop clocking bits and
-		 * send a STOP.
+		 * Clock through the problem by clocking out 9 bits. If the
+		 * peripheral releases the SDA line, then we can stop clocking
+		 * bits and send a STOP.
 		 */
 		for (j = 0; j < 9; j++) {
 			if (i2c_raw_get_sda(port))

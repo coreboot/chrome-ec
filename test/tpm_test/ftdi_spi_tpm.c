@@ -99,7 +99,7 @@ static void StartTransaction(int read_write, size_t bytes, unsigned addr)
 	char *transfer_data;
 
 	/*
-	 * give it 10 ms. TODO(vbendeb): remove this once cr50 SPS TPM driver
+	 * give it 10 ms. TODO(vbendeb): remove this once cr50 SPP TPM driver
 	 * performance is fixed.
 	 */
 	usleep(10000);
@@ -124,12 +124,13 @@ static void StartTransaction(int read_write, size_t bytes, unsigned addr)
 	 * control (Section "6.4.5 Flow Control" of the TCG issued "TPM
 	 * Profile (PTP) Specification Revision 00.43).
 	 *
-	 * The slave (TPM device) expects each transaction to start with a 4
-	 * byte header trasmitted by master. If the slave needs to stall the
-	 * transaction, it sets the MOSI bit to 0 during the last clock of the
-	 * 4 byte header. In this case the master is supposed to start polling
-	 * the line, byte at time, until the last bit in the received byte
-	 * (transferred during the last clock of the byte) is set to 1.
+	 * The peripheral (TPM device) expects each transaction to start with a
+	 * 4 byte header trasmitted by controller. If the peripheral needs to
+	 * stall the transaction, it sets the MOSI bit to 0 during the last
+	 * clock of the 4 byte header. In this case the controller is supposed
+	 * to start polling the line, byte at time, until the last bit in the
+	 * received byte (transferred during the last clock of the byte) is set
+	 * to 1.
 	 */
 	flow_c = transfer_data[3];
 	free(transfer_data);

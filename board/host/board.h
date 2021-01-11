@@ -75,7 +75,7 @@ enum {
 
 /* Configuration for fake Fingerprint Sensor */
 #define CONFIG_SPI_CONTROLLER
-#define CONFIG_SPI_FP_PORT    1 /* SPI1: third master config */
+#define CONFIG_SPI_FP_PORT    1 /* SPI1: third controller config */
 
 /* UART indexes (use define rather than enum to expand them) */
 enum {

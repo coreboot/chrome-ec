@@ -208,7 +208,7 @@ static void enable_ap_spi(uint8_t custom_reset)
 }
 
 /**
- * Enable the pin mux to the SPI master port.
+ * Enable the pin mux to the SPI controller port.
  */
 static void enable_spi_pinmux(void)
 {
@@ -235,7 +235,7 @@ static void enable_spi_pinmux(void)
 }
 
 /**
- * Disable the pin mux to the SPI master port.
+ * Disable the pin mux to the SPI controller port.
  */
 static void disable_spi_pinmux(void)
 {

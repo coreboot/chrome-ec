@@ -23,14 +23,16 @@
  * by using the largest uint8_t clock divider of 256 (~235kHz). */
 #define SPI_TRANSACTION_TIMEOUT_USEC (5 * MSEC)
 
-/* There are two SPI masters or ports on this chip. */
+/* There are two SPI controllers or ports on this chip. */
 #define SPI_NUM_PORTS 2
 
 static struct mutex spi_mutex[SPI_NUM_PORTS];
 static enum spi_clock_mode clock_mode[SPI_NUM_PORTS];
 
-/* The Cr50 SPI master is not DMA auto-fill/drain capable, so async and flush
- * are not defined on purpose. */
+/*
+ * The Cr50 SPI controller is not DMA auto-fill/drain capable, so async and
+ * flush are not defined on purpose.
+ */
 int spi_transaction(const struct spi_device_t *spi_device,
 		    const uint8_t *txdata, int txlen,
 		    uint8_t *rxdata, int rxlen)
@@ -41,8 +43,10 @@ int spi_transaction(const struct spi_device_t *spi_device,
 	int transaction_size = 0;
 	int rxoffset = 0;
 
-	/* If SPI0's passthrough is enabled, SPI0 is not available unless the
-	 * SPS's BUSY bit is set. */
+	/*
+	 * If SPI0's passthrough is enabled, SPI0 is not available unless the
+	 * SPP's BUSY bit is set.
+	 */
 	if (port == 0) {
 		if (GREAD_FIELD_I(SPI, port, CTRL, ENPASSTHRU) &&
 		    !GREAD(SPS, EEPROM_BUSY_STATUS))
@@ -94,7 +98,7 @@ int spi_transaction(const struct spi_device_t *spi_device,
 	GWRITE_FIELD_I(SPI, port, XACT, SIZE, transaction_size - 1);
 	GWRITE_FIELD_I(SPI, port, XACT, START, 1);
 
-	/* Wait for the SPI master to finish the transaction. */
+	/* Wait for the SPI controller to finish the transaction. */
 	timeout.val = get_time().val + SPI_TRANSACTION_TIMEOUT_USEC;
 	while (!GREAD_FIELD_I(SPI, port, ISTATE, TXDONE)) {
 		/* Give up if the deadline has been exceeded. */
@@ -136,10 +140,11 @@ void set_spi_clock_mode(int port, enum spi_clock_mode mode)
 }
 
 /*
- * Configure the SPI0 master's passthrough mode. Note:
+ * Configure the SPI0 controller's passthrough mode. Note:
  * 1) This must be called after the SPI port is enabled.
- * 2) Passthrough cannot be safely disabled while the SPI slave port is active
- *    and the SPI slave port's status register's BUSY bit is not set.
+ * 2) Passthrough cannot be safely disabled while the SPI peripheral port is
+ *    active and the SPI peripheral port's status register's BUSY bit is not
+ *    set.
  */
 void configure_spi0_passthrough(int enable)
 {
@@ -201,7 +206,7 @@ int spi_enable(int port, int enable)
 		/* Set the clock divider, where freq / (div + 1). */
 		GWRITE_FIELD_I(SPI, port, CTRL, IDIV, max_div);
 
-		/* Master's CS is active low. */
+		/* Controller's CS is active low. */
 		GWRITE_FIELD_I(SPI, port, CTRL, CSBPOL, 0);
 
 		/* Byte 0 bit 7 is first in each double word in the buffers. */
@@ -255,9 +260,11 @@ static void spi_init(void)
 		/* Configure the SPI ports to default to mode0. */
 		set_spi_clock_mode(i, SPI_CLOCK_MODE0);
 
-		/* Ensure the SPI ports are disabled to prevent us from
+		/*
+		 * Ensure the SPI ports are disabled to prevent us from
 		 * interfering with the main chipset when we're not explicitly
-		 * using the SPI bus. */
+		 * using the SPI bus.
+		 */
 		spi_enable(i, 0);
 	}
 }

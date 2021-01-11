@@ -268,7 +268,7 @@ struct test_i2c_write_dev {
  *
  * When this function is called, it should either perform the desired
  * mock functionality, or return EC_ERROR_INVAL to indicate it does
- * not respond to the specified port and slave address.
+ * not respond to the specified port and peripheral address.
  *
  * @param routine     Function pointer, with the same prototype as i2c_xfer()
  */
@@ -280,7 +280,7 @@ struct test_i2c_write_dev {
 
 /*
  * Detach an I2C device. Once detached, any read/write command regarding the
- * specified port and slave address returns error.
+ * specified port and peripheral address returns error.
  *
  * @param port       The port that the detached device is connected to
  * @param periph_addr The address of the detached device

@@ -15,7 +15,7 @@
 #include "watchdog.h"
 
 /*
- * This file is a driver for the CR50 SPS (SPI slave) controller. The
+ * This file is a driver for the CR50 SPP (SPI peripheral) controller. The
  * controller deploys a 2KB buffer split evenly between receive and transmit
  * directions.
  *
@@ -70,7 +70,7 @@ void spp_tx_status(uint8_t byte)
 }
 
 /*
- * Push data to the SPS TX FIFO
+ * Push data to the SPP TX FIFO
  * @param data Pointer to 8-bit data
  * @param data_size Number of bytes to transmit
  * @return : actual number of bytes placed into tx fifo
@@ -116,7 +116,7 @@ int spp_transmit(uint8_t *data, size_t data_size)
 			fifo_contents = *spp_tx_fifo;
 			do {
 				/*
-				 * CR50 SPS controller does not allow byte
+				 * CR50 SPP controller does not allow byte
 				 * accesses for writes into the FIFO, so read
 				 * modify/write is required. Tracked under
 				 * http://b/20894727
@@ -164,7 +164,7 @@ int spp_transmit(uint8_t *data, size_t data_size)
 static int spp_cs_asserted(void)
 {
 	/*
-	 * Read the current value on the SPS CS line and return the iversion
+	 * Read the current value on the SPP CS line and return the iversion
 	 * of it (CS is active low).
 	 */
 	return !GREAD_FIELD(SPS, VAL, CSB);
@@ -255,7 +255,7 @@ int spp_register_rx_handler(enum spp_mode mode, rx_handler_f rx_handler,
 	return 0;
 }
 
-/* Function that sets up for SPS to enable INT_AP_L extension. */
+/* Function that sets up for SPP to enable INT_AP_L extension. */
 static void spp_int_ap_extension_enable_(void)
 {
 	enable_cs_assert_irq_();
@@ -266,8 +266,8 @@ static void spp_int_ap_extension_enable_(void)
 static void spp_init(void)
 {
 	/*
-	 * Check to see if slave SPI interface is required by the board before
-	 * initializing it. If SPI option is not set, then just return.
+	 * Check to see if peripheral SPI interface is required by the board
+	 * before initializing it. If SPI option is not set, then just return.
 	 */
 	if (!board_tpm_uses_spi())
 		return;
@@ -459,7 +459,7 @@ DECLARE_IRQ(GC_IRQNUM_SPS0_CS_ASSERT_INTR, sps0_cs_assert_interrupt_, 1);
 
 #ifdef CONFIG_SPP_TEST
 
-/* Function to test SPS driver. It expects the host to send SPI frames of size
+/* Function to test SPP driver. It expects the host to send SPI frames of size
  * <size> (not exceeding 1100) of the following format:
  *
  * <size/256> <size%256> [<size> bytes of payload]

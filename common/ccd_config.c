@@ -1459,7 +1459,7 @@ static enum vendor_cmd_rc ccd_vendor(struct vendor_cmd_params *p)
 	p->in_size++;
 
 	/*
-	 * Move response up for the master to see it in the right
+	 * Move response up for the controller to see it in the right
 	 * place in the response buffer.  We have to do this because the
 	 * first byte of the buffer on input was the subcommand, so we
 	 * passed buffer + 1 in the handler call above.

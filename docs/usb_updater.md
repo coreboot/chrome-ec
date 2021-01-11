@@ -44,7 +44,7 @@ will use `hammerd` (in `src/platform/hammerd`) to update the device.
 Update protocol
 ---------------
 
-The host (either a local AP or a workstation) is the master of the firmware
+The host (either a local AP or a workstation) is the controller of the firmware
 update protocol, it sends data to the Cr50 device, which processes it and
 responds.
 

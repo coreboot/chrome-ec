@@ -112,15 +112,15 @@ the filler byte.
 ### SPI
 
 The SPI bus is similar to I<sup>2</sup>C, but with two major exceptions. First,
-there's a minimum speed on the SPI bus. If slave devices don't respond quickly
-enough, the master will assume they're broken and give up. Second, every
-transaction is bidirectional. When bits are being clocked from master to slave
-on the MOSI line, the master will simultaneously read bits in the other
-direction on the MISO line.
+there's a minimum speed on the SPI bus. If peripheral devices don't respond
+quickly enough, the controller will assume they're broken and give up. Second,
+every transaction is bidirectional. When bits are being clocked from controller
+to peripheral on the MOSI line, the controller will simultaneously read bits in
+the other direction on the MISO line.
 
 Hardware devices can usually handle this, and often some hardware-based flow
-control used to "stretch" the transaction by a bit or byte if the slave device
-needs a little extra time to respond to the master's demands.
+control used to "stretch" the transaction by a bit or byte if the peripheral
+device needs a little extra time to respond to the controller's demands.
 
 When exchanging messages with the EC on the SPI bus, the EC's host commands are
 communicated using our own software flow-control scheme, because most of the

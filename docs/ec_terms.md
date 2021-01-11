@@ -156,7 +156,7 @@
     Communication involves a SPI frame, consisting of the assertion of chip
     select, transmitting one or more bytes on the MOSI signal, receiving zero or
     more bytes on the MISO signal, and de-assertion of the chip select.  The
-    contents of a SPI frame varies based on the SPI slave type.
+    contents of a SPI frame varies based on the SPI peripheral type.
 
 *   **UART - Universal Asynchronous Receiver Transceiver**{#uart}
 
