@@ -692,7 +692,7 @@ static enum ec_error_list set_first_page_header(void)
 	rv = write_to_flash(fph, &ph, sizeof(ph));
 
 	if (rv == EC_SUCCESS) {
-		/* Make sure master page tracker is ready. */
+		/* Make sure the controller page tracker is ready. */
 		memset(&controller_at, 0, sizeof(controller_at));
 		controller_at.mt.data_offset = ph.data_offset;
 		controller_at.mt.ph = fph;
