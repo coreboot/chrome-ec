@@ -591,9 +591,6 @@
  */
 #undef CONFIG_BOARD_VERSION_GPIO
 
-/* EC responses to a board defined I2C slave address */
-#undef CONFIG_BOARD_I2C_SLAVE_ADDR_FLAGS
-
 /*
  * The board is unable to distinguish EC reset from power-on so it should treat
  * all resets as triggered by RESET_PIN even if it is a POWER_ON reset.
@@ -3623,9 +3620,6 @@
 /* HW & SW version for alternate mode discover identity response (4bits each) */
 #undef CONFIG_USB_PD_IDENTITY_HW_VERS
 #undef CONFIG_USB_PD_IDENTITY_SW_VERS
-
-/* USB PD MCU slave address for host commands */
-#define CONFIG_USB_PD_I2C_SLAVE_ADDR_FLAGS 0x1E
 
 /* Define if using internal comparator for PD receive */
 #undef CONFIG_USB_PD_INTERNAL_COMP
