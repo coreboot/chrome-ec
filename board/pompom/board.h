@@ -12,7 +12,7 @@
 #include "board_revs.h"
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (512 * 1024)  /* 512KB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_BOARD_CONFIG
