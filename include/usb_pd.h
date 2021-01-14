@@ -956,27 +956,27 @@ enum pd_dual_role_states {
  * NOTE: These are usually set by host commands from the AP.
  */
 enum pd_dpm_request {
-	DPM_REQUEST_DR_SWAP             = BIT(0),
-	DPM_REQUEST_PR_SWAP             = BIT(1),
-	DPM_REQUEST_VCONN_SWAP          = BIT(2),
-	DPM_REQUEST_GOTO_MIN            = BIT(3),
-	DPM_REQUEST_SRC_CAP_CHANGE      = BIT(4),
-	DPM_REQUEST_GET_SNK_CAPS        = BIT(5),
-	DPM_REQUEST_SEND_PING           = BIT(6),
-	DPM_REQUEST_SOURCE_CAP          = BIT(7),
-	DPM_REQUEST_NEW_POWER_LEVEL     = BIT(8),
-	DPM_REQUEST_VDM                 = BIT(9),
-	DPM_REQUEST_BIST_RX             = BIT(10),
-	DPM_REQUEST_BIST_TX             = BIT(11),
-	DPM_REQUEST_SNK_STARTUP         = BIT(12),
-	DPM_REQUEST_SRC_STARTUP         = BIT(13),
-	DPM_REQUEST_HARD_RESET_SEND     = BIT(14),
-	DPM_REQUEST_SOFT_RESET_SEND     = BIT(15),
-	DPM_REQUEST_PORT_DISCOVERY      = BIT(16),
-	DPM_REQUEST_SEND_ALERT          = BIT(17),
-	DPM_REQUEST_ENTER_USB           = BIT(18),
-	DPM_REQUEST_GET_SRC_CAPS        = BIT(19),
-	DPM_REQUEST_EXIT_MODES          = BIT(20),
+	DPM_REQUEST_DR_SWAP                     = BIT(0),
+	DPM_REQUEST_PR_SWAP                     = BIT(1),
+	DPM_REQUEST_VCONN_SWAP                  = BIT(2),
+	DPM_REQUEST_GOTO_MIN                    = BIT(3),
+	DPM_REQUEST_SRC_CAP_CHANGE              = BIT(4),
+	DPM_REQUEST_GET_SNK_CAPS                = BIT(5),
+	DPM_REQUEST_SEND_PING                   = BIT(6),
+	DPM_REQUEST_SOURCE_CAP                  = BIT(7),
+	DPM_REQUEST_NEW_POWER_LEVEL             = BIT(8),
+	DPM_REQUEST_VDM                         = BIT(9),
+	DPM_REQUEST_BIST_TX                     = BIT(10),
+	DPM_REQUEST_SNK_STARTUP                 = BIT(11),
+	DPM_REQUEST_SRC_STARTUP                 = BIT(12),
+	DPM_REQUEST_HARD_RESET_SEND             = BIT(13),
+	DPM_REQUEST_SOFT_RESET_SEND             = BIT(14),
+	DPM_REQUEST_PORT_DISCOVERY              = BIT(15),
+	DPM_REQUEST_SEND_ALERT                  = BIT(16),
+	DPM_REQUEST_ENTER_USB                   = BIT(17),
+	DPM_REQUEST_GET_SRC_CAPS                = BIT(18),
+	DPM_REQUEST_EXIT_MODES                  = BIT(19),
+	DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND   = BIT(20),
 };
 
 /**
@@ -1625,17 +1625,6 @@ __override_proto void pd_check_dr_role(int port,
 __override_proto void pd_try_execute_vconn_swap(int port, int flags);
 
 /**
- * Check if we should charge from this device. This is
- * basically a allow-list for chargers that are dual-role,
- * don't set the unconstrained bit, but we should charge
- * from by default.
- *
- * @param vid Port partner Vendor ID
- * @param pid Port partner Product ID
- */
-int pd_charge_from_device(uint16_t vid, uint16_t pid);
-
-/**
  * Execute data swap.
  *
  * @param port USB-C port number
@@ -1706,6 +1695,23 @@ int pd_custom_flash_vdm(int port, int cnt, uint32_t *payload);
  */
 uint32_t pd_dfp_enter_mode(int port, enum tcpm_transmit_type type,
 		uint16_t svid, int opos);
+
+/**
+ * Save the Enter mode command data received from the port partner for setting
+ * the retimer
+ *
+ * @param port     USB-C port number
+ * @param payload  payload data.
+ */
+void pd_ufp_set_enter_mode(int port, uint32_t *payload);
+
+/**
+ * Return Enter mode command data received from the port partner
+ *
+ * @param port     USB-C port number
+ * @return enter mode raw value requested to the UFP
+ */
+uint32_t pd_ufp_get_enter_mode(int port);
 
 /**
  *  Get DisplayPort pin mode for DFP to request from UFP's capabilities.

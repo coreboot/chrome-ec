@@ -21,6 +21,7 @@
 #define CONFIG_ENABLE_JTAG_SELECTION
 #define CONFIG_BOARD_VERSION_GPIO
 #define CONFIG_EXTPOWER_GPIO
+#define CONFIG_HIBERNATE_PSL_COMPENSATE_RTC
 #define CONFIG_I2C_CONTROLLER
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
@@ -36,6 +37,7 @@
 #define CONFIG_CMD_STACKOVERFLOW
 #define CONFIG_CMD_JUMPTAGS
 #define CONFIG_CMD_FLASH
+#define CONFIG_CMD_RTC
 #define CONFIG_CMD_SCRATCHPAD
 #define CONFIG_CMD_I2CWEDGE
 
@@ -45,6 +47,10 @@
 
 /* Fans for testing */
 #define CONFIG_FANS 1
+
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR_TMP112
+#define I2C_PORT_THERMAL	NPCX_I2C_PORT2_0
 
 #define CONFIG_KEYBOARD_KSO_HIGH_DRIVE /* Quasi-bidirectional buf for KSOs */
 #define CONFIG_HIBERNATE_PSL /* Use PSL (Power Switch Logic) for hibernate */
@@ -82,6 +88,11 @@ enum adc_channel {
 	ADC_CH_COUNT
 };
 
+enum temp_sensor_id {
+	TEMP_SENSOR_SYSTHERM0,	/* TMP100 */
+	TEMP_SENSOR_COUNT
+};
+
 enum pwm_channel {
 	PWM_CH_FAN,
 	PWM_CH_KBLIGHT,
@@ -102,6 +113,7 @@ enum mft_channel {
 };
 
 #include "gpio_signal.h"
+#include "registers.h"
 
 #endif /* !__ASSEMBLER__ */
 

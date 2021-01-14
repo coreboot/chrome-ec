@@ -94,7 +94,7 @@
 /* Thermal features */
 #define CONFIG_FANS			FAN_CH_COUNT
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_EN_PP3300_A
+#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_PG_EC_DSW_PWROK
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
@@ -158,6 +158,7 @@
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_ALT_MODE_UFP
 #define CONFIG_USB_PD_DISCHARGE_PPC
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
@@ -167,7 +168,6 @@
 #define CONFIG_USB_PD_TCPM_RT1715
 #define CONFIG_USB_PD_TCPM_TUSB422	/* USBC port C0 */
 #define CONFIG_USB_PD_TCPM_PS8815	/* USBC port USB3 DB */
-#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
 #define CONFIG_CMD_USB_PD_PE
@@ -233,6 +233,8 @@
 
 #include "gpio_signal.h"
 #include "common.h"
+#include "baseboard_usbc_config.h"
+#include "cbi.h"
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_CHARGER,
@@ -261,21 +263,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_4_FAN,
 	TEMP_SENSOR_COUNT
 };
-
-/* Common definition for the USB PD interrupt handlers. */
-void ppc_interrupt(enum gpio_signal signal);
-void tcpc_alert_event(enum gpio_signal signal);
-void bc12_interrupt(enum gpio_signal signal);
-
-unsigned char get_board_id(void);
-
-/**
- * Configure run-time data structures and operation based on CBI data. This
- * typically includes customization for changes in the BOARD_VERSION and
- * FW_CONFIG fields in CBI. This routine is called from the baseboard after
- * the CBI data has been initialized.
- */
-__override_proto void board_cbi_init(void);
 
 /*
  * Check battery disconnect state.

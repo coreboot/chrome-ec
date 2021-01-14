@@ -144,14 +144,15 @@ static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
  */
 static void pen_input_deferred(void)
 {
-	int pen_exist = !gpio_get_level(GPIO_PEN_DET_ODL);
+	int pen_charge_enable = !gpio_get_level(GPIO_PEN_DET_ODL) && 
+			!chipset_in_state(CHIPSET_STATE_ANY_OFF);
 
-	if (pen_exist)
+	if (pen_charge_enable)
 		gpio_set_level(GPIO_EN_PP3300_PEN, 1);
 	else
 		gpio_set_level(GPIO_EN_PP3300_PEN, 0);
 
-	CPRINTS("Pen charge %sable", pen_exist ? "en" : "dis");
+	CPRINTS("Pen charge %sable", pen_charge_enable ? "en" : "dis");
 }
 DECLARE_DEFERRED(pen_input_deferred);
 
@@ -160,6 +161,13 @@ void pen_input_interrupt(enum gpio_signal signal)
 	/* pen input debounce time */
 	hook_call_deferred(&pen_input_deferred_data, (100 * MSEC));
 }
+
+static void pen_charge_check(void)
+{
+	hook_call_deferred(&pen_input_deferred_data, (100 * MSEC));
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pen_charge_check, HOOK_PRIO_LAST);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pen_charge_check, HOOK_PRIO_LAST);
 
 #include "gpio_list.h"
 
@@ -203,7 +211,8 @@ void board_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
 	check_c0_line();
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI) {
 		/* Disable i2c on HDMI pins */
 		gpio_config_pin(MODULE_I2C,
 				GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
@@ -245,14 +254,16 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 /* Enable HDMI any time the SoC is on */
 static void hdmi_enable(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
 
 static void hdmi_disable(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
@@ -276,13 +287,14 @@ void board_reset_pd_mcu(void)
 	 */
 }
 
+#ifdef BOARD_WADDLEDOO
 static void reconfigure_5v_gpio(void)
 {
 	/*
-	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
-	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
-	 * instead for those boards.  Note that this breaks the volume up button
-	 * functionality.
+	 * b/147257497: On early waddledoo boards, GPIO_EN_PP5000 was swapped
+	 * with GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that
+	 * GPIO instead for those boards.  Note that this breaks the volume up
+	 * button functionality.
 	 */
 	if (system_get_board_version() < 0) {
 		CPRINTS("old board - remapping 5V en");
@@ -290,24 +302,28 @@ static void reconfigure_5v_gpio(void)
 	}
 }
 DECLARE_HOOK(HOOK_INIT, reconfigure_5v_gpio, HOOK_PRIO_INIT_I2C+1);
+#endif /* BOARD_WADDLEDOO */
 
 static void set_5v_gpio(int level)
 {
 	int version;
-	enum gpio_signal gpio;
+	enum gpio_signal gpio = GPIO_EN_PP5000;
 
 	/*
-	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
-	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
-	 * instead for those boards.  Note that this breaks the volume up button
-	 * functionality.
+	 * b/147257497: On early waddledoo boards, GPIO_EN_PP5000 was swapped
+	 * with GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that
+	 * GPIO instead for those boards.  Note that this breaks the volume up
+	 * button functionality.
 	 */
-	version = system_get_board_version();
+	if (IS_ENABLED(BOARD_WADDLEDOO)) {
+		version = system_get_board_version();
 
-	/*
-	 * If the CBI EEPROM wasn't formatted, assume it's a very early board.
-	 */
-	gpio = version < 0 ? GPIO_VOLUP_BTN_ODL : GPIO_EN_PP5000;
+		/*
+		 * If the CBI EEPROM wasn't formatted, assume it's a very early
+		 * board.
+		 */
+		gpio = version < 0 ? GPIO_VOLUP_BTN_ODL : GPIO_EN_PP5000;
+	}
 
 	gpio_set_level(gpio, level);
 }
@@ -322,7 +338,8 @@ __override void board_power_5v_enable(int enable)
 	 */
 	set_5v_gpio(!!enable);
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI) {
 		gpio_set_level(GPIO_SUB_C1_INT_EN_RAILS_ODL, !enable);
 	} else {
 		if (isl923x_set_comparator_inversion(1, !!enable))
@@ -334,7 +351,8 @@ __override void board_power_5v_enable(int enable)
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 	else
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
@@ -342,7 +360,8 @@ __override uint8_t board_get_usb_pd_port_count(void)
 
 __override uint8_t board_get_charger_chip_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
+		get_cbi_fw_config_db() == DB_LTE_HDMI)
 		return CHARGER_NUM - 1;
 	else
 		return CHARGER_NUM;
@@ -445,8 +464,8 @@ static const mat33_fp_t lid_standard_ref = {
 };
 
 static const mat33_fp_t base_standard_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
@@ -560,23 +579,11 @@ const struct charger_config_t chg_chips[] = {
 		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
 		.drv = &isl923x_drv,
 	},
-
-	{
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
 };
 
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	{
 		.i2c_port = I2C_PORT_USB_C0,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-		.flags = PI3USB9201_ALWAYS_POWERED,
-	},
-
-	{
-		.i2c_port = I2C_PORT_SUB_USB_C1,
 		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
 		.flags = PI3USB9201_ALWAYS_POWERED,
 	},
@@ -602,24 +609,8 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 		.drv = &raa489000_tcpm_drv,
 	},
-
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_SUB_USB_C1,
-			.addr_flags = RAA489000_TCPC0_I2C_FLAGS,
-		},
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
-		.drv = &raa489000_tcpm_drv,
-	},
 };
 
-const struct usb_mux usbc1_retimer = {
-	.usb_port = 1,
-	.i2c_port = I2C_PORT_SUB_USB_C1,
-	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
-	.driver = &nb7v904m_usb_redriver_drv,
-};
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.usb_port = 0,
@@ -627,13 +618,6 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
 		.driver = &pi3usb3x532_usb_mux_driver,
 	},
-	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
-		.driver = &pi3usb3x532_usb_mux_driver,
-		.next_mux = &usbc1_retimer,
-	}
 };
 
 uint16_t tcpc_get_alert_status(void)

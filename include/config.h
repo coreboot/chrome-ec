@@ -1683,6 +1683,9 @@
 /* Default debounce time for external power signal */
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 30
 
+/* Enable fake shared memory buffer, which is used by emulators. */
+#undef CONFIG_FAKE_SHMEM
+
 /*****************************************************************************/
 /* Number of cooling fans. Undef if none. */
 #undef CONFIG_FANS
@@ -1843,6 +1846,8 @@
 #undef CONFIG_FP_SENSOR_FPC1025
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
+#undef CONFIG_FP_SENSOR_ELAN80
+#undef CONFIG_FP_SENSOR_ELAN515
 
 /*****************************************************************************/
 
@@ -2281,6 +2286,13 @@
 #undef CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
 
 /*
+ * Compensate the elapsed time for the RTC which couldn't work in hibernate PSL
+ * after hibernation wake-up. Currently, NPCX9 supports LCT to compensate the
+ * elapsed time for the RTC.
+ */
+#undef CONFIG_HIBERNATE_PSL_COMPENSATE_RTC
+
+/*
  * Chip supports a 64-bit hardware timer and implements
  * __hw_clock_source_read64 and __hw_clock_source_set64.
  *
@@ -2486,6 +2498,17 @@
  * This is valid with PLL frequency equal to 48/96MHz only.
  */
 #undef CONFIG_IT83XX_FLASH_CLOCK_48MHZ
+
+/*
+ * If this option is enabled, EC will assert GPG1 pin to reset itself instead of
+ * triggering an internal reset while receiving a reset request.
+ *
+ * IMPORTANT:
+ * - Don't enable this option if board doesn't support the mechanism.
+ * - If this option is enabled, please don't declare GPG1 signal in gpio.inc to
+ *   keep its output level is low after reset.
+ */
+#undef CONFIG_IT83XX_HARD_RESET_BY_GPG1
 
 /*
  * Enable it if EC's VBAT won't go low when system's power isn't
@@ -3963,6 +3986,9 @@
  */
 #undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
+/* Support for USB PD alternate mode of Upward Facing Port */
+#undef CONFIG_USB_PD_ALT_MODE_UFP
+
 /* HPD is sent to the GPU from the EC via a GPIO */
 #undef CONFIG_USB_PD_DP_HPD_GPIO
 
@@ -4307,12 +4333,6 @@
  * DDI1_AUX_P signals (b/122873171)
  */
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
-
-/*
- * Use this to override the TCPCI Device ID value to be 0x0002 for
- * chip rev A1. Early A1 firmware misreports the DID as 0x0001.
- */
-#undef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 
 /*
  * Use this option if the TCPC port controller supports the optional register
@@ -5029,6 +5049,15 @@
 
 /******************************************************************************/
 /*
+ * If CONFIG_USBC_SS_MUX_DFP_ONLY is enabled, make sure
+ * CONFIG_USB_PD_ALT_MODE_UFP is not enabled
+ */
+#if defined(CONFIG_USBC_SS_MUX_DFP_ONLY) && defined(CONFIG_USB_PD_ALT_MODE_UFP)
+#error port cannot be UFP when CONFIG_USBC_SS_MUX_DFP_ONLY is enabled
+#endif
+
+/******************************************************************************/
+/*
  * Automatically define CONFIG_USB_PD_FRS if FRS is enabled in the TCPC or PPC
  */
 #if defined(CONFIG_USB_PD_FRS_PPC) || defined(CONFIG_USB_PD_FRS_TCPC)
@@ -5370,13 +5399,13 @@
  */
 #ifdef CONFIG_EC_EC_COMM_BATTERY
 #ifdef CONFIG_EC_EC_COMM_CLIENT
-#define CONFIG_EC_EC_COMM_BATTERY_MASTER
+#define CONFIG_EC_EC_COMM_BATTERY_CLIENT
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 2
 #endif
 
 #ifdef CONFIG_EC_EC_COMM_SERVER
-#define CONFIG_EC_EC_COMM_BATTERY_SLAVE
+#define CONFIG_EC_EC_COMM_BATTERY_SERVER
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 1
 #endif

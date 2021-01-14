@@ -19,6 +19,18 @@ typedef uint8_t task_id_t;
  */
 #ifndef CONFIG_ZTEST
 #define CROS_EC_TASK_LIST                                                 \
+	COND_CODE_1(HAS_TASK_CHG_RAMP,                                    \
+		     (CROS_EC_TASK(CHG_RAMP, chg_ramp_task, 0,            \
+				   CONFIG_TASK_CHG_RAMP_STACK_SIZE)), ()) \
+	COND_CODE_1(HAS_TASK_USB_CHG_P0,                                  \
+		     (CROS_EC_TASK(USB_CHG_P0, usb_charger_task, 0,       \
+				   CONFIG_TASK_USB_CHG_STACK_SIZE)), ())  \
+	COND_CODE_1(HAS_TASK_USB_CHG_P1,                                  \
+		     (CROS_EC_TASK(USB_CHG_P1, usb_charger_task, 0,       \
+				   CONFIG_TASK_USB_CHG_STACK_SIZE)), ())  \
+	COND_CODE_1(HAS_TASK_USB_CHG_P2,                                  \
+		     (CROS_EC_TASK(USB_CHG_P2, usb_charger_task, 0,       \
+				   CONFIG_TASK_USB_CHG_STACK_SIZE)), ())  \
 	COND_CODE_1(HAS_TASK_CHARGER,                                     \
 		     (CROS_EC_TASK(CHARGER, charger_task, 0,              \
 				   CONFIG_TASK_CHARGER_STACK_SIZE)), ())  \
@@ -36,7 +48,31 @@ typedef uint8_t task_id_t;
 				   CONFIG_TASK_POWERBTN_STACK_SIZE)), ()) \
 	COND_CODE_1(HAS_TASK_KEYSCAN,                                     \
 		     (CROS_EC_TASK(KEYSCAN, keyboard_scan_task, 0,        \
-				   CONFIG_TASK_KEYSCAN_STACK_SIZE)), ())
+				   CONFIG_TASK_KEYSCAN_STACK_SIZE)), ())  \
+	COND_CODE_1(HAS_TASK_PD_C0,                                       \
+		     (CROS_EC_TASK(PD_C0, pd_task, 0,                     \
+				   CONFIG_TASK_PD_STACK_SIZE)), ())       \
+	COND_CODE_1(HAS_TASK_PD_C1,                                       \
+		     (CROS_EC_TASK(PD_C1, pd_task, 0,                     \
+				   CONFIG_TASK_PD_STACK_SIZE)), ())       \
+	COND_CODE_1(HAS_TASK_PD_C2,                                       \
+		     (CROS_EC_TASK(PD_C2, pd_task, 0,                     \
+				   CONFIG_TASK_PD_STACK_SIZE)), ())       \
+	COND_CODE_1(HAS_TASK_PD_C3,                                       \
+		     (CROS_EC_TASK(PD_C3, pd_task, 0,                     \
+				   CONFIG_TASK_PD_STACK_SIZE)), ())       \
+	COND_CODE_1(HAS_TASK_PD_INT_C0,                                   \
+		     (CROS_EC_TASK(PD_INT_C0, pd_interrupt_handler_task, 0, \
+				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())   \
+	COND_CODE_1(HAS_TASK_PD_INT_C1,                                   \
+		     (CROS_EC_TASK(PD_INT_C1, pd_interrupt_handler_task, 0, \
+				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())   \
+	COND_CODE_1(HAS_TASK_PD_INT_C2,                                   \
+		     (CROS_EC_TASK(PD_INT_C2, pd_interrupt_handler_task, 0, \
+				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())   \
+	COND_CODE_1(HAS_TASK_PD_INT_C3,                                   \
+		     (CROS_EC_TASK(PD_INT_C3, pd_interrupt_handler_task, 0, \
+				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())
 #elif defined(CONFIG_HAS_TEST_TASKS)
 #include "shimmed_test_tasks.h"
 /*

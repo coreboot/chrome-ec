@@ -10,7 +10,7 @@
 #include "accelgyro.h"
 #include "cbi_ec_fw_config.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi260.h"
+#include "driver/accelgyro_bmi160.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/syv682x.h"
 #include "driver/tcpm/tcpci.h"
@@ -394,3 +394,10 @@ int ppc_get_alert_status(int port)
 	else
 		return gpio_get_level(GPIO_USB_C1_PPC_INT_ODL) == 0;
 }
+
+/******************************************************************************/
+/* USB-A charging control */
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_PP5000_USBA,
+};
+

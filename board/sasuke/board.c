@@ -25,6 +25,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "keyboard_8042.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power.h"
@@ -240,6 +241,11 @@ void board_hibernate(void)
 	raa489000_hibernate(0);
 }
 
+/* USB-A charging control */
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_USB_A0_VBUS,
+};
+
 void board_reset_pd_mcu(void)
 {
 	/*
@@ -454,11 +460,13 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
+static int tune_mux(const struct usb_mux *me);
 const struct usb_mux usbc1_retimer = {
 	.usb_port = 1,
 	.i2c_port = I2C_PORT_SUB_USB_C1,
 	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
 	.driver = &nb7v904m_usb_redriver_drv,
+	.board_init = &tune_mux,
 };
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -475,6 +483,13 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.next_mux = &usbc1_retimer,
 	}
 };
+
+static int tune_mux(const struct usb_mux *me)
+{
+	return nb7v904m_tune_usb_eq_rx(me,
+				NB7V904M_CH_A_EQ_10_DB,
+				NB7V904M_CH_D_EQ_10_DB);
+}
 
 uint16_t tcpc_get_alert_status(void)
 {
@@ -510,4 +525,30 @@ uint16_t tcpc_get_alert_status(void)
 	}
 
 	return status;
+}
+
+static const struct ec_response_keybd_config keybd1 = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_FORWARD,		/* T2 */
+		TK_REFRESH,		/* T3 */
+		TK_FULLSCREEN,		/* T4 */
+		TK_OVERVIEW,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	/* No function keys, no numeric keypad and no screenlock key */
+};
+__override const struct ec_response_keybd_config
+*board_vivaldi_keybd_config(void)
+{
+	/*
+	 * Future boards should use fw_config if needed.
+	 */
+
+	return &keybd1;
 }

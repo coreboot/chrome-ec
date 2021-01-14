@@ -7,13 +7,11 @@
 #include "mock/tcpci_i2c_mock.h"
 #include "mock/usb_mux_mock.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "test_util.h"
 #include "timer.h"
 #include "usb_tcpmv2_compliance.h"
 #include "usb_tc_sm.h"
-
-int partner_tx_id;
 
 uint32_t rdo = RDO_FIXED(1, 500, 500, 0);
 uint32_t pdo = PDO_FIXED(5000, 3000,
@@ -84,7 +82,6 @@ int pd_check_vconn_swap(int port)
 
 void board_reset_pd_mcu(void) {}
 
-
 /*****************************************************************************
  * Partner utility functions
  */
@@ -118,6 +115,16 @@ enum pd_rev_type partner_get_pd_rev(void)
 	return partner_pd_rev;
 }
 
+static int partner_tx_id[NUM_SOP_STAR_TYPES];
+void partner_tx_msg_id_reset(int sop)
+{
+	if (sop == TCPC_TX_SOP_ALL)
+		for (sop = 0; sop < NUM_SOP_STAR_TYPES; ++sop)
+			partner_tx_id[sop] = 0;
+	else
+		partner_tx_id[sop] = 0;
+}
+
 void partner_send_msg(enum pd_msg_type sop,
 		      uint16_t type,
 		      uint16_t cnt,
@@ -126,18 +133,18 @@ void partner_send_msg(enum pd_msg_type sop,
 {
 	uint16_t header;
 
-	partner_tx_id &= 7;
+	partner_tx_id[sop] &= 7;
 	header = PD_HEADER(type,
 			sop == PD_MSG_SOP ? partner_get_power_role()
 			: PD_PLUG_FROM_CABLE,
 			partner_get_data_role(),
-			partner_tx_id,
+			partner_tx_id[sop],
 			cnt,
 			partner_get_pd_rev(),
 			ext);
 
 	mock_tcpci_receive(sop, header, payload);
-	partner_tx_id++;
+	++partner_tx_id[sop];
 	mock_set_alert(TCPC_REG_ALERT_RX_STATUS);
 }
 
@@ -313,7 +320,6 @@ int proc_pd_e1(enum pd_data_role data_role, enum proc_pd_e1_attach attach)
 						      PD_CTRL_PS_RDY, 0),
 				EC_SUCCESS, "%d");
 			mock_set_alert(TCPC_REG_ALERT_TX_SUCCESS);
-			task_wait_event(1 * MSEC);
 
 			TEST_EQ(tc_is_attached_src(PORT0), true, "%d");
 			break;
@@ -359,6 +365,14 @@ int proc_pd_e3(void)
 int handle_attach_expected_msgs(enum pd_data_role data_role)
 {
 	if (data_role == PD_ROLE_DFP) {
+		TEST_EQ(verify_tcpci_transmit(TCPC_TX_SOP_PRIME,
+				PD_CTRL_SOFT_RESET, 0),
+			EC_SUCCESS, "%d");
+		mock_set_alert(TCPC_REG_ALERT_TX_SUCCESS);
+		task_wait_event(10 * MSEC);
+		partner_send_msg(PD_MSG_SOP_PRIME, PD_CTRL_NOT_SUPPORTED, 0, 0,
+			NULL);
+
 		TEST_EQ(verify_tcpci_transmit(TCPC_TX_SOP_PRIME, 0,
 				PD_DATA_VENDOR_DEF),
 			EC_SUCCESS, "%d");

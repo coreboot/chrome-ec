@@ -33,7 +33,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "temp_sensor.h"
 #include "uart.h"
 #include "usb_charge.h"
@@ -396,6 +396,10 @@ void board_init(void)
 	}
 
 	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
+
+	/* Make sure pen detection is triggered or not at sysjump */
+	if (!gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_EN_PP5000_PEN, 1);
 
 	/* Charger on the MB will be outputting PROCHOT_ODL and OD CHG_DET */
 	sm5803_configure_gpio0(CHARGER_PRIMARY, GPIO0_MODE_PROCHOT, 1);

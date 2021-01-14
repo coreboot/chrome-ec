@@ -36,8 +36,7 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-/* Mutex for shared NVM access */
-static struct mutex bb_nvm_mutex;
+#define BB_RETIMER_I2C_RETRY	3
 
 /**
  * Utility functions
@@ -45,20 +44,35 @@ static struct mutex bb_nvm_mutex;
 static int bb_retimer_read(const struct usb_mux *me,
 			   const uint8_t offset, uint32_t *data)
 {
-	int rv;
+	int rv, retry = 0;
 	uint8_t buf[BB_RETIMER_READ_SIZE];
 
 	/*
-	 * Read sequence
-	 * Slave Addr(w) - Reg offset - repeated start - Slave Addr(r)
-	 * byte[0]   : Read size
-	 * byte[1:4] : Data [LSB -> MSB]
-	 * Stop
+	 * This I2C message will trigger retimer's internal read sequence
+	 * if its a NAK, sleep and resend same I2C
 	 */
-	rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags,
+	while (1) {
+		/*
+		 * Read sequence
+		 * Slave Addr(w) - Reg offset - repeated start - Slave Addr(r)
+		 * byte[0]   : Read size
+		 * byte[1:4] : Data [LSB -> MSB]
+		 * Stop
+		 */
+		rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags,
 		      &offset, 1, buf, BB_RETIMER_READ_SIZE);
-	if (rv)
-		return rv;
+
+		if (!rv)
+			break;
+
+		if (++retry >= BB_RETIMER_I2C_RETRY) {
+			CPRINTS("C%d: Retimer I2C read err=%d",
+				me->usb_port, rv);
+			return rv;
+		}
+		msleep(20);
+	}
+
 	if (buf[0] != BB_RETIMER_REG_SIZE)
 		return EC_ERROR_UNKNOWN;
 
@@ -70,6 +84,7 @@ static int bb_retimer_read(const struct usb_mux *me,
 static int bb_retimer_write(const struct usb_mux *me,
 			    const uint8_t offset, uint32_t data)
 {
+	int rv, retry = 0;
 	uint8_t buf[BB_RETIMER_WRITE_SIZE];
 
 	/*
@@ -87,9 +102,25 @@ static int bb_retimer_write(const struct usb_mux *me,
 	buf[4] = (data >> 16) & 0xFF;
 	buf[5] = (data >> 24) & 0xFF;
 
-	return i2c_xfer(me->i2c_port,
-			me->i2c_addr_flags,
-			buf, BB_RETIMER_WRITE_SIZE, NULL, 0);
+	/*
+	 * This I2C message will trigger retimer's internal write sequence
+	 * if its a NAK, sleep and resend same I2C
+	 */
+	while (1) {
+		rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags, buf,
+			     BB_RETIMER_WRITE_SIZE, NULL, 0);
+
+		if (!rv)
+			break;
+
+		if (++retry >= BB_RETIMER_I2C_RETRY) {
+			CPRINTS("C%d: Retimer I2C write err=%d",
+				me->usb_port, rv);
+			break;
+		}
+		msleep(20);
+	}
+	return rv;
 }
 
 __overridable void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
@@ -99,13 +130,6 @@ __overridable void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 	/* handle retimer's power domain */
 
 	if (on_off) {
-		/*
-		 * BB retimer NVM can be shared between multiple ports, hence
-		 * lock enabling the retimer until the current retimer request
-		 * is complete.
-		 */
-		mutex_lock(&bb_nvm_mutex);
-
 		gpio_set_level(control->usb_ls_en_gpio, 1);
 		/*
 		 * Tpw, minimum time from VCC to RESET_N de-assertion is 100us.
@@ -115,11 +139,11 @@ __overridable void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 		 */
 		msleep(1);
 		gpio_set_level(control->retimer_rst_gpio, 1);
-
-		/* Allow 20ms time for the retimer to be initialized. */
-		msleep(20);
-
-		mutex_unlock(&bb_nvm_mutex);
+		/*
+		 * Allow 1ms time for the retimer to power up lc_domain
+		 * which powers I2C controller within retimer
+		 */
+		msleep(1);
 	} else {
 		gpio_set_level(control->retimer_rst_gpio, 0);
 		msleep(1);
@@ -260,59 +284,103 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 	}
 }
 
-static void retimer_set_state_ufp(mux_state_t mux_state,
+static void retimer_set_state_ufp(int port, mux_state_t mux_state,
 				  uint32_t *set_retimer_con)
 {
-	if (mux_state & USB_PD_MUX_USB_ENABLED) {
-		/*
-		 * Bit 4: USB2_CONNECTION (ignored if BIT5=0).
-		 * 0 - No USB2 Connection
-		 * 1 - USB2 connection
-		 *
-		 * Don't care
-		 */
-
-		/*
-		 * Bit 7: USB_DATA_ROLE for the Burnside Bridge side of
-		 * connection (ignored if BIT5=0).
-		 * 0 - DFP
-		 * 1 - UFP
-		 */
-		*set_retimer_con |= BB_RETIMER_USB_DATA_ROLE;
-	}
-
-	 /*
-	  * Bit 17: TBT_TYPE
-	  * 0 - Type-C to Type-C Cable
-	  * 1 - Type-C Legacy TBT Adapter
-	  * For UFP, TBT_TYPE = 0
-	  */
-
 	/*
-	 * TODO: b/157163664: Add the following bits:
-	 *
-	 * Bit 2: RE_TIMER_DRIVER:
-	 * Set according to b20:19 of enter USB.
-	 *
-	 * Bit 16: TBT_CONNECTION:
-	 * Set according to b14 of enter USB.
-	 *
-	 * Bit 18: CABLE_TYPE:
-	 * For Thunderbolt-compat mode, set according to bit 21 of enter mode.
-	 * For USB/DP/USB4, set according to bits 20:19 of enter mode.
-	 *
-	 * Bit 20: TBT_ACTIVE_LINK_TRAINING:
-	 * For Thunderbolt-compat mode, set according to bit 23 of enter mode.
-	 * For USB, set to 0.
-	 *
-	 * Bit 22: ACTIVE/PASSIVE
-	 * For USB4, set according to bits 20:19 of enter USB SOP.
-	 * For thubderbolt-compat mode, set according to bit 24 of enter mode.
-	 *
-	 * Bits 29-28: TBT_GEN_SUPPORT
-	 * For Thunderbolt-compat mode, set according to bits 20:19 of enter
-	 * mode.
+	 * Bit 7: USB_DATA_ROLE for the Burnside Bridge side of
+	 * connection.
+	 * 0 - DFP
+	 * 1 - UFP
 	 */
+	*set_retimer_con |= BB_RETIMER_USB_DATA_ROLE;
+
+	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_UFP))
+		return;
+
+	/* TODO:b/168890624: Set USB4 retimer config for UFP */
+	if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED) {
+		union tbt_dev_mode_enter_cmd ufp_tbt_enter_mode = {
+			.raw_value = pd_ufp_get_enter_mode(port)};
+		/*
+		 * Bit 2: RE_TIMER_DRIVER
+		 * 0 - Re-driver
+		 * 1 - Re-timer
+		 *
+		 * Set according to TBT3 Enter Mode bit 22.
+		 */
+		if (ufp_tbt_enter_mode.retimer_type == USB_RETIMER)
+			*set_retimer_con |= BB_RETIMER_RE_TIMER_DRIVER;
+
+		/*
+		 * Bit 18: CABLE_TYPE
+		 * 0 - Electrical cable
+		 * 1 - Optical cable
+		 *
+		 * Set according to TBT3 Enter Mode bit 21.
+		 */
+		if (ufp_tbt_enter_mode.tbt_cable == TBT_CABLE_OPTICAL)
+			*set_retimer_con |= BB_RETIMER_TBT_CABLE_TYPE;
+
+		/*
+		 * Bit 19: VPO_DOCK_DETECTED_OR_DP_OVERDRIVE
+		 * 0 - No vPro Dock.No DP Overdrive
+		 *     detected
+		 * 1 - vPro Dock or DP Overdrive
+		 *     detected
+		 *
+		 * Set according to TBT3 Enter Mode bit 26 or bit 31
+		 */
+		if (ufp_tbt_enter_mode.intel_spec_b0 ==
+					VENDOR_SPECIFIC_SUPPORTED ||
+		    ufp_tbt_enter_mode.vendor_spec_b1 ==
+					VENDOR_SPECIFIC_SUPPORTED)
+			*set_retimer_con |= BB_RETIMER_VPRO_DOCK_DP_OVERDRIVE;
+
+		/*
+		 * Bit 20: TBT_ACTIVE_LINK_TRAINING
+		 * 0 - Active with bi-directional LSRX communication
+		 * 1 - Active with uni-directional LSRX communication
+		 *
+		 * Set according to TBT3 Enter Mode bit 23
+		 */
+		if (ufp_tbt_enter_mode.lsrx_comm == UNIDIR_LSRX_COMM)
+			*set_retimer_con |= BB_RETIMER_TBT_ACTIVE_LINK_TRAINING;
+
+		/*
+		 * Bit 22: ACTIVE/PASSIVE
+		 * 0 - Passive cable
+		 * 1 - Active cable
+		 *
+		 * Set according to TBT3 Enter Mode bit 24
+		 */
+		if (ufp_tbt_enter_mode.cable == TBT_ENTER_ACTIVE_CABLE)
+			*set_retimer_con |= BB_RETIMER_ACTIVE_PASSIVE;
+
+		/*
+		 * Bit 27-25: TBT Cable speed
+		 * 000b - No functionality
+		 * 001b - USB3.1 Gen1 Cable
+		 * 010b - 10Gb/s
+		 * 011b - 10Gb/s and 20Gb/s
+		 * 10..11b - Reserved
+		 *
+		 * Set according to TBT3 Enter Mode bit 18:16
+		 */
+		*set_retimer_con |= BB_RETIMER_USB4_TBT_CABLE_SPEED_SUPPORT(
+					ufp_tbt_enter_mode.tbt_cable_speed);
+		/*
+		 * Bits 29-28: TBT_GEN_SUPPORT
+		 * 00b - 3rd generation TBT (10.3125 and 20.625Gb/s)
+		 * 01b - 4th generation TBT (10.00005Gb/s, 10.3125Gb/s,
+		 *                           20.0625Gb/s, 20.000Gb/s)
+		 * 10..11b - Reserved
+		 *
+		 * Set according to TBT3 Enter Mode bit 20:19
+		 */
+		*set_retimer_con |= BB_RETIMER_TBT_CABLE_GENERATION(
+				       ufp_tbt_enter_mode.tbt_rounded);
+	}
 }
 
 /**
@@ -412,7 +480,7 @@ static int retimer_set_state(const struct usb_mux *me, mux_state_t mux_state)
 	if (pd_get_data_role(port) == PD_ROLE_DFP)
 		retimer_set_state_dfp(port, mux_state, &set_retimer_con);
 	else
-		retimer_set_state_ufp(mux_state, &set_retimer_con);
+		retimer_set_state_ufp(port, mux_state, &set_retimer_con);
 
 	/* Writing the register4 */
 	return bb_retimer_write(me, BB_RETIMER_REG_CONNECTION_STATE,
@@ -442,15 +510,15 @@ static int retimer_init(const struct usb_mux *me)
 	rv = bb_retimer_read(me, BB_RETIMER_REG_VENDOR_ID, &data);
 	if (rv)
 		return rv;
-	if (data != BB_RETIMER_VENDOR_ID)
-		return EC_ERROR_UNKNOWN;
+	if ((data != BB_RETIMER_VENDOR_ID_1) &&
+			data != BB_RETIMER_VENDOR_ID_2)
+		return EC_ERROR_INVAL;
 
 	rv = bb_retimer_read(me, BB_RETIMER_REG_DEVICE_ID, &data);
 	if (rv)
 		return rv;
-
 	if (data != BB_RETIMER_DEVICE_ID)
-		return EC_ERROR_UNKNOWN;
+		return EC_ERROR_INVAL;
 
 	return EC_SUCCESS;
 }
