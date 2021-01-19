@@ -19,7 +19,7 @@
 #define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 /* Internal SPI flash on NPCX796FC is 512 kB */
-#define CONFIG_FLASH_SIZE (512 * 1024)
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 
@@ -168,7 +168,6 @@
 #define CONFIG_USB_PD_TCPM_RT1715
 #define CONFIG_USB_PD_TCPM_TUSB422	/* USBC port C0 */
 #define CONFIG_USB_PD_TCPM_PS8815	/* USBC port USB3 DB */
-#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
 #define CONFIG_CMD_USB_PD_PE
@@ -234,6 +233,8 @@
 
 #include "gpio_signal.h"
 #include "common.h"
+#include "baseboard_usbc_config.h"
+#include "cbi.h"
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_CHARGER,
@@ -262,21 +263,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_4_FAN,
 	TEMP_SENSOR_COUNT
 };
-
-/* Common definition for the USB PD interrupt handlers. */
-void ppc_interrupt(enum gpio_signal signal);
-void tcpc_alert_event(enum gpio_signal signal);
-void bc12_interrupt(enum gpio_signal signal);
-
-unsigned char get_board_id(void);
-
-/**
- * Configure run-time data structures and operation based on CBI data. This
- * typically includes customization for changes in the BOARD_VERSION and
- * FW_CONFIG fields in CBI. This routine is called from the baseboard after
- * the CBI data has been initialized.
- */
-__override_proto void board_cbi_init(void);
 
 /*
  * Check battery disconnect state.

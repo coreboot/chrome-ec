@@ -19,6 +19,22 @@ import zmake.toolchains as toolchains
 import zmake.util as util
 
 
+def ninja_log_level_override(line, default_log_level):
+    """Update the log level for ninja builds if we hit an error.
+
+    Ninja builds print everything to stdout, but really we want to start
+    logging things to CRITICAL
+
+    Args:
+        line: The line that is about to be logged.
+        default_log_level: The default logging level that will be used for the
+          line.
+    """
+    if line.startswith("FAILED: "):
+        return logging.CRITICAL
+    return default_log_level
+
+
 class Zmake:
     """Wrapper class encapsulating zmake's supported operations."""
     def __init__(self, checkout=None, jobserver=None, jobs=0):
@@ -43,6 +59,11 @@ class Zmake:
                   toolchain=None, ignore_unsupported_zephyr_version=False,
                   build_after_configure=False, test_after_configure=False):
         """Set up a build directory to later be built by "zmake build"."""
+        # Make sure the build directory is clean.
+        if os.path.exists(build_dir):
+            self.logger.info("Clearing old build directory %s", build_dir)
+            shutil.rmtree(build_dir)
+
         project = zmake.project.Project(project_dir)
         if version:
             # Ignore the patchset.
@@ -64,13 +85,10 @@ class Zmake:
         if not module_paths:
             module_paths = zmake.modules.locate_modules(self.checkout, version)
 
-        if not module_paths['zephyr-chrome']:
-            raise OSError("Missing zephyr-chrome module")
-
         base_config = zmake.build_config.BuildConfig(
             environ_defs={'ZEPHYR_BASE': str(zephyr_base),
                           'PATH': '/usr/bin'},
-            cmake_defs={'DTS_ROOT': module_paths['zephyr-chrome']})
+            cmake_defs={'DTS_ROOT': str(module_paths['ec-shim'] / 'zephyr')})
         module_config = zmake.modules.setup_module_symlinks(
             build_dir / 'modules', module_paths)
 
@@ -146,7 +164,11 @@ class Zmake:
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
                 errors='replace')
-            zmake.multiproc.log_output(self.logger, logging.DEBUG, proc.stdout)
+            zmake.multiproc.log_output(
+                logger=self.logger,
+                log_level=logging.DEBUG,
+                file_descriptor=proc.stdout,
+                log_level_override_func=ninja_log_level_override)
             zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
             procs.append(proc)
 
@@ -215,6 +237,7 @@ class Zmake:
         Returns:
             The status code of pytest.
         """
+        self.logger.info('Running python test %s', directory)
         proc = self.jobserver.popen(
             ['pytest', directory],
             stdout=subprocess.PIPE,
@@ -230,9 +253,7 @@ class Zmake:
     def testall(self, fail_fast=False):
         """Test all the valid test targets"""
         modules = zmake.modules.locate_modules(self.checkout, version=None)
-        root_dirs = [modules['zephyr-chrome'] / 'projects',
-                     modules['zephyr-chrome'] / 'tests',
-                     modules['ec-shim'] / 'zephyr/test']
+        root_dirs = [modules['ec-shim'] / 'zephyr']
         project_dirs = []
         for root_dir in root_dirs:
             self.logger.info('Finding zmake target under \'%s\'.', root_dir)
@@ -255,15 +276,9 @@ class Zmake:
                     build_after_configure=True,
                     test_after_configure=is_test))
 
-        # Find all the directories under zephyr-chrome/tests containing a
-        # test_*.py file. We're using a set here to avoid running the same tests
-        # multiple times.
-        project_dirs = set()
-        for path in pathlib.Path(modules['zephyr-chrome'] / 'tests').rglob('test_*.py'):
-            project_dirs.add(path.parent)
-
-        for project_dir in project_dirs:
-            executor.append(func=lambda: self._run_pytest(directory=project_dir))
+        # Run pytest on platform/ec/zephyr/zmake.
+        executor.append(func=lambda: self._run_pytest(
+            directory=modules['ec-shim'] / 'zephyr'))
 
         rv = executor.wait()
         for tmpdir in tmp_dirs:

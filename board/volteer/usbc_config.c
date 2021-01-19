@@ -6,12 +6,17 @@
 /* Volteer family-specific USB-C configuration */
 #include "common.h"
 #include "cbi_ec_fw_config.h"
+#include "gpio.h"
+#include "hooks.h"
+#include "system.h"
+#include "timer.h"
 #include "usbc_config.h"
 #include "usbc_ppc.h"
 #include "usb_mux.h"
 #include "driver/bc12/pi3usb9201_public.h"
 #include "driver/ppc/sn5s330_public.h"
 #include "driver/ppc/syv682x_public.h"
+#include "driver/retimer/bb_retimer_public.h"
 #include "driver/tcpm/ps8xxx_public.h"
 #include "driver/tcpm/rt1715_public.h"
 #include "driver/tcpm/tusb422_public.h"
@@ -194,6 +199,151 @@ BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
+/* USB-A charging control */
+
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_PP5000_USBA,
+};
+
+/******************************************************************************/
+/* USBC mux configuration - Tiger Lake includes internal mux */
+struct usb_mux usbc1_tcss_usb_mux = {
+	.usb_port = USBC_PORT_C1,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
+};
+
+struct usb_mux usb_muxes[] = {
+	[USBC_PORT_C0] = {
+		.usb_port = USBC_PORT_C0,
+		.driver = &virtual_usb_mux_driver,
+		.hpd_update = &virtual_hpd_update,
+	},
+	[USBC_PORT_C1] = {
+		.usb_port = USBC_PORT_C1,
+		.driver = &bb_usb_retimer,
+		.next_mux = &usbc1_tcss_usb_mux,
+		.i2c_port = I2C_PORT_USB_1_MIX,
+		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
+
+struct bb_usb_control bb_controls[] = {
+	[USBC_PORT_C0] = {
+		/* USB-C port 0 doesn't have a retimer */
+	},
+	[USBC_PORT_C1] = {
+		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
+		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
+
+__override enum tbt_compat_cable_speed board_get_max_tbt_speed(int port)
+{
+	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
+
+	if (port == USBC_PORT_C1) {
+		if (usb_db == DB_USB4_GEN2) {
+			/*
+			 * Older boards violate 205mm trace length prior
+			 * to connection to the re-timer and only support up
+			 * to GEN2 speeds.
+			 */
+			return TBT_SS_U32_GEN1_GEN2;
+		} else if (usb_db == DB_USB4_GEN3) {
+			return TBT_SS_TBT_GEN3;
+		}
+	}
+
+	/*
+	 * Thunderbolt-compatible mode not supported
+	 *
+	 * TODO (b/147726366): All the USB-C ports need to support same speed.
+	 * Need to fix once USB-C feature set is known for Volteer.
+	 */
+	return TBT_SS_RES_0;
+}
+
+__override bool board_is_tbt_usb4_port(int port)
+{
+	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
+
+	/*
+	 * Volteer reference design only supports TBT & USB4 on port 1
+	 * if the USB4 DB is present.
+	 *
+	 * TODO (b/147732807): All the USB-C ports need to support same
+	 * features. Need to fix once USB-C feature set is known for Volteer.
+	 */
+	return ((port == USBC_PORT_C1)
+		&& ((usb_db == DB_USB4_GEN2) || (usb_db == DB_USB4_GEN3)));
+}
+
+static void ps8815_reset(void)
+{
+	int val;
+
+	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 0);
+	msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS,
+			   PS8815_PWR_H_RST_H_DELAY_MS));
+	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 1);
+	msleep(PS8815_FW_INIT_DELAY_MS);
+
+	/*
+	 * b/144397088
+	 * ps8815 firmware 0x01 needs special configuration
+	 */
+
+	CPRINTS("%s: patching ps8815 registers", __func__);
+
+	if (i2c_read8(I2C_PORT_USB_C1,
+		      PS8751_I2C_ADDR1_P2_FLAGS, 0x0f, &val) == EC_SUCCESS)
+		CPRINTS("ps8815: reg 0x0f was %02x", val);
+
+	if (i2c_write8(I2C_PORT_USB_C1,
+		       PS8751_I2C_ADDR1_P2_FLAGS, 0x0f, 0x31) == EC_SUCCESS)
+		CPRINTS("ps8815: reg 0x0f set to 0x31");
+
+	if (i2c_read8(I2C_PORT_USB_C1,
+		      PS8751_I2C_ADDR1_P2_FLAGS, 0x0f, &val) == EC_SUCCESS)
+		CPRINTS("ps8815: reg 0x0f now %02x", val);
+}
+
+void board_reset_pd_mcu(void)
+{
+	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
+
+	/* No reset available for TCPC on port 0 */
+	/* Daughterboard specific reset for port 1 */
+	if (usb_db == DB_USB3_ACTIVE) {
+		ps8815_reset();
+		usb_mux_hpd_update(USBC_PORT_C1, 0, 0);
+	}
+}
+
+static void board_tcpc_init(void)
+{
+	/* Don't reset TCPCs after initial reset */
+	if (!system_jumped_late())
+		board_reset_pd_mcu();
+
+	/* Enable PPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
+
+	/* Enable TCPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
+
+	/* Enable BC1.2 interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+}
+DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_CHIPSET);
+
+/******************************************************************************/
 /* BC1.2 charger detect configuration */
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	[USBC_PORT_C0] = {
@@ -206,3 +356,30 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
+
+/******************************************************************************/
+/* TCPC support routines */
+uint16_t tcpc_get_alert_status(void)
+{
+	uint16_t status = 0;
+
+	/*
+	 * Check which port has the ALERT line set
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_TCPC_INT_ODL))
+		status |= PD_STATUS_TCPC_ALERT_0;
+	if (!gpio_get_level(GPIO_USB_C1_TCPC_INT_ODL))
+		status |= PD_STATUS_TCPC_ALERT_1;
+
+	return status;
+}
+
+/******************************************************************************/
+
+int ppc_get_alert_status(int port)
+{
+	if (port == USBC_PORT_C0)
+		return gpio_get_level(GPIO_USB_C0_PPC_INT_ODL) == 0;
+	else
+		return gpio_get_level(GPIO_USB_C1_PPC_INT_ODL) == 0;
+}

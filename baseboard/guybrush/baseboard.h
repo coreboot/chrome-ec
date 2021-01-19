@@ -30,6 +30,10 @@
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
+#define CONFIG_POWER_BUTTON_TO_PCH_CUSTOM
+#define G3_TO_PWRBTN_DELAY_MS 80
+#define SAFE_RESET_VBUS_MV 5000
+#define SAFE_RESET_VBUS_DELAY_MS 900
 #define GPIO_AC_PRESENT		GPIO_ACOK_OD
 #define GPIO_POWER_BUTTON_L	GPIO_MECH_PWR_BTN_ODL
 #define GPIO_PCH_PWRBTN_L	GPIO_EC_SOC_PWR_BTN_L
@@ -38,16 +42,18 @@
 #define GPIO_PCH_SLP_S0_L	GPIO_SLP_S3_S0I3_L
 #define GPIO_PCH_SLP_S3_L	GPIO_SLP_S3_L
 #define GPIO_PCH_SLP_S5_L	GPIO_SLP_S5_L
-#define GPIO_S0_PGOOD		GPIO_S0_PWROK_OD
-#define GPIO_S5_PGOOD		GPIO_S5_PWROK
+#define GPIO_S0_PGOOD		GPIO_PG_PCORE_S0_R_OD
+#define GPIO_S5_PGOOD		GPIO_PG_PWR_S5
 #define GPIO_PCH_SYS_PWROK	GPIO_EC_SOC_PWR_GOOD
 #define GPIO_SYS_RESET_L	GPIO_EC_SYS_RST_L
 #define GPIO_EN_PWR_A		GPIO_EN_PWR_Z1
 
 /* Thermal Config */
 #define CONFIG_ADC
+#define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
 #define CONFIG_TEMP_SENSOR_SB_TSI
+#define CONFIG_THERMISTOR
 #define GPIO_CPU_PROCHOT	GPIO_PROCHOT_ODL
 
 /* Flash Config */
@@ -168,13 +174,21 @@
 #define GPIO_USB1_ILIM_SEL IOEX_USB_A0_LIMIT_SDP
 #define GPIO_USB2_ILIM_SEL IOEX_USB_A1_LIMIT_SDP_DB
 
+/* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
+#define GUYBRUSH_AC_PROCHOT_CURRENT_MA 3328
+
 /*
  * USB ID - This is allocated specifically for Guybrush
  */
 #define CONFIG_USB_PID 0x504D
 
-
 /* BC 1.2 */
+/*
+ * For legacy BC1.2 charging with CONFIG_CHARGE_RAMP_SW, ramp up input current
+ * until voltage drops to 4.5V. Don't go lower than this to be kind to the
+ * charger (see b/67964166).
+ */
+#define BC12_MIN_VOLTAGE 4500
 
 /* I2C Bus Configuration */
 #define CONFIG_I2C
@@ -260,7 +274,8 @@ void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
 void sbu_fault_interrupt(enum ioex_signal signal);
 
-int baseboard_get_temp(int idx, int *temp_ptr);
+void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
+void baseboard_en_pwr_s0(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

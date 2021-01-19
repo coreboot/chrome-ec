@@ -17,7 +17,9 @@
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/tcpm/nct38xx.h"
+#include "driver/temp_sensor/sb_tsi.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "i2c.h"
 #include "ioexpander.h"
 #include "isl9241.h"
@@ -26,9 +28,13 @@
 #include "power.h"
 #include "temp_sensor.h"
 #include "thermal.h"
+#include "thermistor.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
+
+#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
 /* Wake Sources */
 const enum gpio_signal hibernate_wake_pins[] = {
@@ -156,30 +162,31 @@ const struct adc_t adc_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Temp Sensors */
+static int board_get_soc_temp(int, int *);
 const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = baseboard_get_temp,
+		.read = board_get_soc_temp,
 		.idx = TEMP_SENSOR_SOC,
 	},
 	[TEMP_SENSOR_CHARGER] = {
 		.name = "Charger",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = baseboard_get_temp,
+		.read = get_temp_3v3_30k9_47k_4050b,
 		.idx = TEMP_SENSOR_CHARGER,
 	},
 	[TEMP_SENSOR_MEMORY] = {
 		.name = "Memory",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = baseboard_get_temp,
+		.read = get_temp_3v3_30k9_47k_4050b,
 		.idx = TEMP_SENSOR_MEMORY,
 	},
 	[TEMP_SENSOR_CPU] = {
 		.name = "CPU",
 		.type = TEMP_SENSOR_TYPE_CPU,
-		.read = baseboard_get_temp,
-		.idx = TEMP_SENSOR_CPU,
+		.read = sb_tsi_get_val,
+		.idx = 0,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
@@ -231,6 +238,7 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
 
 /*
  * Battery info for all Guybrush battery types. Note that the fields
@@ -322,6 +330,26 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 	IOEX_EN_PP5000_USB_A1_VBUS_DB,
 };
 
+static void baseboard_interrupt_init(void)
+{
+	/* Enable PPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
+
+	/* Enable TCPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
+
+	/* Enable BC 1.2 interrupts */
+	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+
+	/* Enable SBU fault interrupts */
+	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
+	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_ODL);
+}
+DECLARE_HOOK(HOOK_INIT, baseboard_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
+
 struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		/* Device does not talk I2C */
@@ -378,6 +406,54 @@ BUILD_ASSERT(CONFIG_IO_EXPANDER_PORT_COUNT == USBC_PORT_COUNT);
 
 int board_set_active_charge_port(int port)
 {
+	int is_valid_port = (port >= 0 &&
+			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
+	int i;
+
+	if (port == CHARGE_PORT_NONE) {
+		CPRINTSUSB("Disabling all charger ports");
+
+		/* Disable all ports. */
+		for (i = 0; i < ppc_cnt; i++) {
+			/*
+			 * Do not return early if one fails otherwise we can
+			 * get into a boot loop assertion failure.
+			 */
+			if (ppc_vbus_sink_enable(i, 0))
+				CPRINTSUSB("Disabling C%d as sink failed.", i);
+		}
+
+		return EC_SUCCESS;
+	} else if (!is_valid_port) {
+		return EC_ERROR_INVAL;
+	}
+
+
+	/* Check if the port is sourcing VBUS. */
+	if (ppc_is_sourcing_vbus(port)) {
+		CPRINTFUSB("Skip enable C%d", port);
+		return EC_ERROR_INVAL;
+	}
+
+	CPRINTSUSB("New charge port: C%d", port);
+
+	/*
+	 * Turn off the other ports' sink path FETs, before enabling the
+	 * requested charge port.
+	 */
+	for (i = 0; i < ppc_cnt; i++) {
+		if (i == port)
+			continue;
+
+		if (ppc_vbus_sink_enable(i, 0))
+			CPRINTSUSB("C%d: sink path disable failed.", i);
+	}
+
+	/* Enable requested charge port. */
+	if (ppc_vbus_sink_enable(port, 1)) {
+		CPRINTSUSB("C%d: sink path enable failed.", port);
+		return EC_ERROR_UNKNOWN;
+	}
 
 	return EC_SUCCESS;
 }
@@ -429,6 +505,12 @@ void sbu_fault_interrupt(enum ioex_signal signal)
 
 	pd_handle_overcurrent(port);
 }
+
+static void set_ac_prochot(void)
+{
+	isl9241_set_ac_prochot(CHARGER_SOLO, GUYBRUSH_AC_PROCHOT_CURRENT_MA);
+}
+DECLARE_HOOK(HOOK_INIT, set_ac_prochot, HOOK_PRIO_DEFAULT);
 
 void tcpc_alert_event(enum gpio_signal signal)
 {
@@ -495,22 +577,161 @@ uint16_t tcpc_get_alert_status(void)
 
 void ppc_interrupt(enum gpio_signal signal)
 {
-	/* TODO */
+	switch (signal) {
+	case GPIO_USB_C0_PPC_INT_ODL:
+		aoz1380_interrupt(USBC_PORT_C0);
+		break;
+
+	case GPIO_USB_C1_PPC_INT_ODL:
+		nx20p348x_interrupt(USBC_PORT_C1);
+		break;
+
+	default:
+		break;
+	}
 }
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	/* TODO */
+	switch (signal) {
+	case GPIO_USB_C0_BC12_INT_ODL:
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+		break;
+
+	case GPIO_USB_C1_BC12_INT_ODL:
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+		break;
+
+	default:
+		break;
+	}
 }
 
-int baseboard_get_temp(int idx, int *temp_ptr)
+static int board_get_soc_temp(int idx, int *temp_k)
 {
-	/* TODO */
-	return 0;
+	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+		return EC_ERROR_NOT_POWERED;
+	return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
 }
 
+/**
+ * Return if VBUS is sagging too low
+ */
 int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 {
-	/* TODO */
-	return false;
+	int voltage = 0;
+	int rv;
+
+	rv = charger_get_vbus_voltage(port, &voltage);
+
+	if (rv) {
+		CPRINTSUSB("%s rv=%d", __func__, rv);
+		return 0;
+	}
+
+	/*
+	 * b/168569046: The ISL9241 sometimes incorrectly reports 0 for unknown
+	 * reason, causing ramp to stop at 0.5A. Workaround this by ignoring 0.
+	 * This partly defeats the point of ramping, but will still catch
+	 * VBUS below 4.5V and above 0V.
+	 */
+	if (voltage == 0) {
+		CPRINTSUSB("%s vbus=0", __func__);
+		return 0;
+	}
+
+	if (voltage < BC12_MIN_VOLTAGE)
+		CPRINTSUSB("%s vbus=%d", __func__, voltage);
+
+	return voltage < BC12_MIN_VOLTAGE;
+}
+
+/**
+ * b/175324615: On G3->S5, wait for RSMRST_L to be deasserted before asserting
+ * PCH_PWRBTN_L.
+ */
+void board_pwrbtn_to_pch(int level)
+{
+	/* Add delay for G3 exit if asserting PWRBTN_L and S5_PGOOD is low. */
+	if (!level && !gpio_get_level(GPIO_S5_PGOOD)) {
+		/*
+		 * From measurement, wait 80 ms for RSMRST_L to rise after
+		 * S5_PGOOD.
+		 */
+		msleep(G3_TO_PWRBTN_DELAY_MS);
+
+		if (!gpio_get_level(GPIO_S5_PGOOD))
+			ccprints("Error: pwrbtn S5_PGOOD low");
+	}
+	gpio_set_level(GPIO_PCH_PWRBTN_L, level);
+}
+
+void board_hibernate(void)
+{
+	int port;
+
+	/*
+	 * If we are charging, then drop the Vbus level down to 5V to ensure
+	 * that we don't get locked out of the 6.8V OVLO for our PPCs in
+	 * dead-battery mode. This is needed when the TCPC/PPC rails go away.
+	 * (b/79218851, b/143778351, b/147007265)
+	 */
+	port = charge_manager_get_active_charge_port();
+	if (port != CHARGE_PORT_NONE) {
+		pd_request_source_voltage(port, SAFE_RESET_VBUS_MV);
+
+		/* Give PD task and PPC chip time to get to 5V */
+		msleep(SAFE_RESET_VBUS_DELAY_MS);
+	}
+}
+
+static void baseboard_chipset_suspend(void)
+{
+	/* Disable display and keyboard backlights. */
+	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 1);
+	ioex_set_level(GPIO_EN_KB_BL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
+	     HOOK_PRIO_DEFAULT);
+
+static void baseboard_chipset_resume(void)
+{
+	/* Enable display and keyboard backlights. */
+	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 0);
+	ioex_set_level(GPIO_EN_KB_BL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
+
+void board_overcurrent_event(int port, int is_overcurrented)
+{
+	switch (port) {
+	case USBC_PORT_C0:
+	case USBC_PORT_C1:
+		gpio_set_level(GPIO_USB_C0_C1_FAULT_ODL, !is_overcurrented);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void baseboard_en_pwr_pcore_s0(enum gpio_signal signal)
+{
+
+	/* EC must AND signals PG_LPDDR4X_S3_OD and PG_GROUPC_S0_OD */
+	gpio_set_level(GPIO_EN_PWR_PCORE_S0_R,
+					gpio_get_level(GPIO_PG_LPDDR4X_S3_OD) &&
+					gpio_get_level(GPIO_PG_GROUPC_S0_OD));
+}
+
+void baseboard_en_pwr_s0(enum gpio_signal signal)
+{
+
+	/* EC must AND signals SLP_S3_L and PG_PWR_S5 */
+	gpio_set_level(GPIO_EN_PWR_S0_R,
+					gpio_get_level(GPIO_SLP_S3_L) &&
+					gpio_get_level(GPIO_PG_PWR_S5));
+
+	/* Now chain off to the normal power signal interrupt handler. */
+	power_signal_interrupt(signal);
 }

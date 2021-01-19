@@ -1158,6 +1158,7 @@
 /* Chipset config */
 
 /* AP chipset support; pick at most one */
+#undef CONFIG_CHIPSET_ALDERLAKE		/* Intel Alderlake (x86) */
 #undef CONFIG_CHIPSET_APOLLOLAKE	/* Intel Apollolake (x86) */
 #undef CONFIG_CHIPSET_BRASWELL		/* Intel Braswell (x86) */
 #undef CONFIG_CHIPSET_CANNONLAKE	/* Intel Cannonlake (x86) */
@@ -1326,6 +1327,7 @@
 #undef  CONFIG_CMD_FORCETIME
 #undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
+#undef  CONFIG_CMD_GL3590
 #undef  CONFIG_CMD_GPIO_EXTENDED
 #undef  CONFIG_CMD_GSV
 #undef  CONFIG_CMD_GT7288
@@ -1825,7 +1827,7 @@
 #undef CONFIG_FLASH_REGION_TYPE_COUNT
 
 /* Total size of writable flash */
-#undef CONFIG_FLASH_SIZE
+#undef CONFIG_FLASH_SIZE_BYTES
 
 /* Minimum flash write size (in bytes) */
 #undef CONFIG_FLASH_WRITE_SIZE
@@ -1846,6 +1848,8 @@
 #undef CONFIG_FP_SENSOR_FPC1025
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
+#undef CONFIG_FP_SENSOR_ELAN80
+#undef CONFIG_FP_SENSOR_ELAN515
 
 /*****************************************************************************/
 
@@ -2282,6 +2286,13 @@
  * the booter.
  */
 #undef CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
+
+/*
+ * Compensate the elapsed time for the RTC which couldn't work in hibernate PSL
+ * after hibernation wake-up. Currently, NPCX9 supports LCT to compensate the
+ * elapsed time for the RTC.
+ */
+#undef CONFIG_HIBERNATE_PSL_COMPENSATE_RTC
 
 /*
  * Chip supports a 64-bit hardware timer and implements
@@ -4326,12 +4337,6 @@
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
 
 /*
- * Use this to override the TCPCI Device ID value to be 0x0002 for
- * chip rev A1. Early A1 firmware misreports the DID as 0x0001.
- */
-#undef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
-
-/*
  * Use this option if the TCPC port controller supports the optional register
  * 18h CONFIG_STANDARD_OUTPUT to steer the high-speed muxes.
  */
@@ -4417,7 +4422,7 @@
  * then we can differentiate USB topologies by varying the HW version field
  * in the Sink and Source Capabilities Extended messages.
  *
- * To reserve a new PID, use go/usb.
+ * To reserve a new PID, use go/usb-pid.
  */
 #undef CONFIG_USB_PID
 
@@ -5396,13 +5401,13 @@
  */
 #ifdef CONFIG_EC_EC_COMM_BATTERY
 #ifdef CONFIG_EC_EC_COMM_CLIENT
-#define CONFIG_EC_EC_COMM_BATTERY_MASTER
+#define CONFIG_EC_EC_COMM_BATTERY_CLIENT
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 2
 #endif
 
 #ifdef CONFIG_EC_EC_COMM_SERVER
-#define CONFIG_EC_EC_COMM_BATTERY_SLAVE
+#define CONFIG_EC_EC_COMM_BATTERY_SERVER
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 1
 #endif
@@ -5452,6 +5457,7 @@
 
 #ifndef HAS_TASK_CHIPSET
 #undef CONFIG_AP_HANG_DETECT
+#undef CONFIG_CHIPSET_ALDERLAKE
 #undef CONFIG_CHIPSET_APOLLOLAKE
 #undef CONFIG_CHIPSET_BRASWELL
 #undef CONFIG_CHIPSET_CANNONLAKE
@@ -5569,7 +5575,8 @@
 #endif
 
 #if defined(CONFIG_CHIPSET_JASPERLAKE) || \
-	defined(CONFIG_CHIPSET_TIGERLAKE)
+	defined(CONFIG_CHIPSET_TIGERLAKE) || \
+	defined(CONFIG_CHIPSET_ALDERLAKE)
 #define CONFIG_CHIPSET_ICELAKE
 #endif
 
