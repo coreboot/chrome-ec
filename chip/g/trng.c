@@ -32,11 +32,12 @@
 #endif
 
 /**
- * Attempts to read TRNG_EMPTY before reporting a stall.
- * Practically data should be available in less than 777
- * cycles under normal conditions.
+ * Attempts to read TRNG_EMPTY before reporting a stall. Practically data should
+ * be available in less than 0x7ff cycles under normal conditions. 0x7ff was
+ * chosen to match the hardware TRNG TIMEOUT_COUNTER. Test on boards with slow
+ * TRNG before reducing this number.
  */
-#define TRNG_EMPTY_COUNT 777
+#define TRNG_EMPTY_COUNT 0x7ff
 
 void init_trng(void)
 {
