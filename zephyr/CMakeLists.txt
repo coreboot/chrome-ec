@@ -25,6 +25,31 @@ if(NOT EXISTS "${PLATFORM_EC}/zephyr/module.yml")
   assert_exists("${PLATFORM_EC}/zephyr/module.yml")
 endif()
 
+if(DEFINED CONFIG_PLATFORM_EC)
+  # Build the EC's expected ec_version.h file.
+  set(ec_version_file "${CMAKE_BINARY_DIR}/ec/include/generated/ec_version.h")
+  # Create the command used to generate the ec_version.h file.
+  add_custom_command(
+          OUTPUT ${ec_version_file}
+          COMMAND ${PLATFORM_EC}/util/getversion.sh BOARD=${BOARD} > ${ec_version_file}
+          WORKING_DIRECTORY ${PLATFORM_EC}
+  )
+  # Create a custom target that will depend on the file.
+  add_custom_target(generate_ec_version DEPENDS ${ec_version_file})
+
+  # Create a local library (ec_version) that will be a pure interface library
+  # and will depend on the custom target that generates the ec_version.h file.
+  add_library(ec_version INTERFACE)
+  add_dependencies(ec_version generate_ec_version)
+
+  # Register the library with zephyr so that it generates the file at build
+  # time. Also, append the include directory so we can include ec_version.h.
+  zephyr_append_cmake_library(ec_version)
+  zephyr_include_directories("${CMAKE_BINARY_DIR}/ec/include/generated")
+endif()
+
+zephyr_include_directories(include)
+
 zephyr_include_directories_ifdef(
   CONFIG_PLATFORM_EC
   "${PLATFORM_EC}/zephyr/shim/include"
@@ -34,6 +59,7 @@ zephyr_include_directories_ifdef(
   "${PLATFORM_EC}/include/driver")
 
 add_subdirectory("app")
+add_subdirectory("drivers")
 
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 
@@ -44,7 +70,8 @@ add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC         "${PLATFORM_EC}/common/base32.c"
                                                 "${PLATFORM_EC}/common/printf.c"
                                                 "${PLATFORM_EC}/common/queue.c"
-                                                "${PLATFORM_EC}/common/shared_mem.c")
+                                                "${PLATFORM_EC}/common/shared_mem.c"
+                                                "${PLATFORM_EC}/common/version.c")
 
 # Now include files that depend on or relate to other CONFIG options, sorted by
 # CONFIG
@@ -91,6 +118,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWER_BUTTON
                                                 "${PLATFORM_EC}/common/power_button.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
                                                 "${PLATFORM_EC}/power/common.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_COMETLAKE
+                                                "${PLATFORM_EC}/power/cometlake.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_ICELAKE
                                                 "${PLATFORM_EC}/power/icelake.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
@@ -100,6 +129,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TIMER   "${PLATFORM_EC}/common/timer.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_CHARGER
                                                 "${PLATFORM_EC}/common/usb_charger.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
+                                                "${PLATFORM_EC}/common/usb_port_power_dumb.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usb_common.c"
@@ -117,6 +148,10 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_SS_MUX
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_VIRTUAL
                                                 "${PLATFORM_EC}/driver/usb_mux/virtual.c")
 
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
+                                                "${PLATFORM_EC}/common/usbc/tbt_alt_mode.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_USB4
+                                                "${PLATFORM_EC}/common/usbc/usb_mode.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
                                                 "${PLATFORM_EC}/common/usbc_ocp.c")
 
@@ -128,7 +163,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DUAL_ROLE
                                                 "${PLATFORM_EC}/common/usb_pd_dual_role.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD
-                                                "${PLATFORM_EC}/common/usb_pd_host_cmd.c")
+                                                "${PLATFORM_EC}/common/usb_pd_host_cmd.c"
+                                                "${PLATFORM_EC}/common/usbc/usb_pd_host.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_VPD "${PLATFORM_EC}/common/usbc/usb_tc_vpd_sm.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_CTVPD
@@ -157,5 +193,7 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SN5S330
                                                 "${PLATFORM_EC}/driver/ppc/sn5s330.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SYV682X
                                                 "${PLATFORM_EC}/driver/ppc/syv682x.c")
+
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE  "${PLATFORM_EC}/common/vstore.c")
 
 zephyr_sources_ifdef(CONFIG_SHELL               "${PLATFORM_EC}/common/gpio_commands.c")

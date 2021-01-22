@@ -10,6 +10,8 @@
 #include "charge_state.h"
 #include "common.h"
 #include "console.h"
+#include "driver/tcpm/tcpm.h"
+#include "ec_commands.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "stdbool.h"
@@ -853,6 +855,11 @@ int pe_is_running(int port)
 	return local_state[port] == SM_RUN;
 }
 
+bool pe_in_frs_mode(int port)
+{
+	return PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH);
+}
+
 bool pe_in_local_ams(int port)
 {
 	return !!PE_CHK_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
@@ -960,6 +967,9 @@ void pe_got_hard_reset(int port)
 	 *  1) Hard Reset Signaling is detected.
 	 */
 	pe[port].power_role = pd_get_power_role(port);
+
+	/* Exit BIST Test mode, in case the TCPC entered it. */
+	tcpc_set_bist_test_mode(port, false);
 
 	if (pe[port].power_role == PD_ROLE_SOURCE)
 		set_state_pe(port, PE_SRC_HARD_RESET_RECEIVED);
@@ -1263,7 +1273,7 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 			get_state_pe(port) == PE_SRC_DISCOVERY ||
 			get_state_pe(port) == PE_VCS_CBL_SEND_SOFT_RESET ||
 			get_state_pe(port) == PE_VDM_IDENTITY_REQUEST_CBL) ||
-			(PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH) &&
+			(pe_in_frs_mode(port) &&
 			    get_state_pe(port) == PE_PRS_SNK_SRC_SEND_SWAP)
 			) {
 		PE_SET_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
@@ -1437,6 +1447,9 @@ static void pe_handle_detach(void)
 	pe_set_snk_caps(port, 0, NULL);
 
 	dpm_remove_sink(port);
+
+	/* Exit BIST Test mode, in case the TCPC entered it. */
+	tcpc_set_bist_test_mode(port, false);
 }
 DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, pe_handle_detach, HOOK_PRIO_DEFAULT);
 
@@ -1556,7 +1569,15 @@ static bool common_src_snk_dpm_requests(int port)
 					DPM_REQUEST_GET_SNK_CAPS);
 		set_state_pe(port, PE_DR_GET_SINK_CAP);
 		return true;
+	} else if (PE_CHK_DPM_REQUEST(port,
+				      DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND)) {
+		pe_set_dpm_curr_request(port,
+			DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
+		pe[port].tx_type = TCPC_TX_SOP_PRIME;
+		set_state_pe(port, PE_VCS_CBL_SEND_SOFT_RESET);
+		return true;
 	}
+
 	return false;
 }
 
@@ -1571,7 +1592,7 @@ static void print_current_state(const int port)
 	const char *mode = "";
 
 	if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
-			PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH))
+			pe_in_frs_mode(port))
 		mode = " FRS-MODE";
 
 	if (IS_ENABLED(USB_PD_DEBUG_LABELS))
@@ -1722,18 +1743,6 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 			set_state_pe(port, PE_VCS_SEND_SWAP);
 			return true;
 		}
-	}
-
-	/*
-	 * TODO(b/177001425): TCPMv2 - move SOP' soft reset check into
-	 * common_src_snk_dpm_requests()
-	 */
-	if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND)) {
-		pe_set_dpm_curr_request(port,
-			DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
-		pe[port].tx_type = TCPC_TX_SOP_PRIME;
-		set_state_pe(port, PE_VCS_CBL_SEND_SOFT_RESET);
-		return true;
 	}
 
 	/* If mode entry was successful, disable the timer */
@@ -2097,6 +2106,7 @@ static void pe_src_send_capabilities_entry(int port)
 	/* Send PD Capabilities message */
 	send_source_cap(port);
 	pe_sender_response_msg_entry(port);
+	tc_high_priority_event(port, true);
 
 	/* Increment CapsCounter */
 	pe[port].caps_counter++;
@@ -2248,6 +2258,11 @@ static void pe_src_send_capabilities_run(int port)
 		set_state_pe(port, PE_SRC_HARD_RESET);
 		return;
 	}
+}
+
+static void pe_src_send_capabilities_exit(int port)
+{
+	tc_high_priority_event(port, false);
 }
 
 /**
@@ -2566,13 +2581,6 @@ static void pe_src_ready_run(int port)
 		pe[port].wait_and_add_jitter_timer = TIMER_DISABLED;
 
 		/*
-		 * Attempt discovery if possible, and return if state was
-		 * changed for that discovery.
-		 */
-		if (pe_attempt_port_discovery(port))
-			return;
-
-		/*
 		 * Handle Device Policy Manager Requests
 		 */
 
@@ -2633,6 +2641,13 @@ static void pe_src_ready_run(int port)
 
 			return;
 		}
+
+		/*
+		 * Attempt discovery if possible, and return if state was
+		 * changed for that discovery.
+		 */
+		if (pe_attempt_port_discovery(port))
+			return;
 
 		/* No DPM requests; attempt mode entry/exit if needed */
 		dpm_run(port);
@@ -3406,13 +3421,6 @@ static void pe_snk_ready_run(int port)
 		}
 
 		/*
-		 * Attempt discovery if possible, and return if state was
-		 * changed for that discovery.
-		 */
-		if (pe_attempt_port_discovery(port))
-			return;
-
-		/*
 		 * Handle Device Policy Manager Requests
 		 */
 		/*
@@ -3463,6 +3471,13 @@ static void pe_snk_ready_run(int port)
 
 			return;
 		}
+
+		/*
+		 * Attempt discovery if possible, and return if state was
+		 * changed for that discovery.
+		 */
+		if (pe_attempt_port_discovery(port))
+			return;
 
 		/* No DPM requests; attempt mode entry/exit if needed */
 		dpm_run(port);
@@ -4502,7 +4517,7 @@ static void pe_prs_snk_src_transition_to_off_entry(int port)
 	print_current_state(port);
 
 	if (!IS_ENABLED(CONFIG_USB_PD_REV30) ||
-			!PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH))
+			!pe_in_frs_mode(port))
 		tc_snk_power_off(port);
 
 	pe[port].ps_source_timer = get_time().val + PD_T_PS_SOURCE_OFF;
@@ -4565,7 +4580,7 @@ static void pe_prs_snk_src_assert_rp_run(int port)
 	/* Wait until TypeC is in the Attached.SRC state */
 	if (tc_is_attached_src(port)) {
 		if (!IS_ENABLED(CONFIG_USB_PD_REV30) ||
-			!PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH)) {
+			!pe_in_frs_mode(port)) {
 			/* Contract is invalid now */
 			pe_invalidate_explicit_contract(port);
 		}
@@ -4651,7 +4666,7 @@ static void pe_prs_snk_src_send_swap_entry(int port)
 	if (IS_ENABLED(CONFIG_USB_PD_REV30)) {
 		send_ctrl_msg(port,
 			TCPC_TX_SOP,
-			PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH)
+			pe_in_frs_mode(port)
 				? PD_CTRL_FR_SWAP
 				: PD_CTRL_PR_SWAP);
 	} else {
@@ -4676,7 +4691,7 @@ static void pe_prs_snk_src_send_swap_run(int port)
 	 * Handle discarded message
 	 */
 	if (msg_check & PE_MSG_DISCARDED) {
-		if (PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH))
+		if (pe_in_frs_mode(port))
 			set_state_pe(port, PE_SNK_HARD_RESET);
 		else
 			set_state_pe(port, PE_SNK_READY);
@@ -4709,8 +4724,7 @@ static void pe_prs_snk_src_send_swap_run(int port)
 						(type == PD_CTRL_WAIT)) {
 				if (IS_ENABLED(CONFIG_USB_PD_REV30))
 					set_state_pe(port,
-						PE_CHK_FLAG(port,
-						PE_FLAGS_FAST_ROLE_SWAP_PATH)
+						pe_in_frs_mode(port)
 					   ? PE_WAIT_FOR_ERROR_RECOVERY
 					   : PE_SNK_READY);
 				else
@@ -4728,7 +4742,7 @@ static void pe_prs_snk_src_send_swap_run(int port)
 	if (get_time().val > pe[port].sender_response_timer) {
 		if (IS_ENABLED(CONFIG_USB_PD_REV30))
 			set_state_pe(port,
-				PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH)
+				pe_in_frs_mode(port)
 				? PE_WAIT_FOR_ERROR_RECOVERY
 				: PE_SNK_READY);
 		else
@@ -4742,7 +4756,7 @@ static void pe_prs_snk_src_send_swap_run(int port)
 	 *      this case.
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
-	    PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_PATH) &&
+	    pe_in_frs_mode(port) &&
 		PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
 		set_state_pe(port, PE_WAIT_FOR_ERROR_RECOVERY);
@@ -4811,6 +4825,21 @@ static void pe_bist_tx_entry(int port)
 
 	print_current_state(port);
 
+	/*
+	 * Ignore BIST messages when not operating at vSafe5V. If charge_manager
+	 * isn't enabled, but PD has gotten this far, then VBUS should be at
+	 * vSafe5V.
+	 */
+	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
+		int vbus_voltage_mv = charge_manager_get_vbus_voltage(port);
+
+		if (vbus_voltage_mv < PD_V_SAFE5V_MIN ||
+				vbus_voltage_mv > PD_V_SAFE5V_MAX) {
+			pe_set_ready_state(port);
+			return;
+		}
+	}
+
 	if (mode == BIST_CARRIER_MODE_2) {
 		/*
 		 * PE_BIST_Carrier_Mode embedded here.
@@ -4832,7 +4861,13 @@ static void pe_bist_tx_entry(int port)
 		 * response to received Messages.... The test Shall be ended by
 		 * sending Hard Reset Signaling to reset the UUT.
 		 */
+		if (tcpc_set_bist_test_mode(port, true) != EC_SUCCESS)
+			CPRINTS("C%d: Failed to enter BIST Test Mode", port);
 		pe[port].bist_cont_mode_timer = TIMER_DISABLED;
+	} else {
+		/* Ignore unsupported BIST messages. */
+		pe_set_ready_state(port);
+		return;
 	}
 }
 
@@ -6667,6 +6702,7 @@ static const struct usb_state pe_states[] = {
 	[PE_SRC_SEND_CAPABILITIES] = {
 		.entry = pe_src_send_capabilities_entry,
 		.run   = pe_src_send_capabilities_run,
+		.exit  = pe_src_send_capabilities_exit,
 	},
 	[PE_SRC_NEGOTIATE_CAPABILITY] = {
 		.entry = pe_src_negotiate_capability_entry,

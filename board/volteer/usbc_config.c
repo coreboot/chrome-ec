@@ -6,6 +6,7 @@
 /* Volteer family-specific USB-C configuration */
 #include "common.h"
 #include "cbi_ec_fw_config.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "system.h"
 #include "timer.h"
@@ -198,6 +199,13 @@ BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
+/* USB-A charging control */
+
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_PP5000_USBA,
+};
+
+/******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
 struct usb_mux usbc1_tcss_usb_mux = {
 	.usb_port = USBC_PORT_C1,
@@ -231,6 +239,47 @@ struct bb_usb_control bb_controls[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
+
+__override enum tbt_compat_cable_speed board_get_max_tbt_speed(int port)
+{
+	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
+
+	if (port == USBC_PORT_C1) {
+		if (usb_db == DB_USB4_GEN2) {
+			/*
+			 * Older boards violate 205mm trace length prior
+			 * to connection to the re-timer and only support up
+			 * to GEN2 speeds.
+			 */
+			return TBT_SS_U32_GEN1_GEN2;
+		} else if (usb_db == DB_USB4_GEN3) {
+			return TBT_SS_TBT_GEN3;
+		}
+	}
+
+	/*
+	 * Thunderbolt-compatible mode not supported
+	 *
+	 * TODO (b/147726366): All the USB-C ports need to support same speed.
+	 * Need to fix once USB-C feature set is known for Volteer.
+	 */
+	return TBT_SS_RES_0;
+}
+
+__override bool board_is_tbt_usb4_port(int port)
+{
+	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
+
+	/*
+	 * Volteer reference design only supports TBT & USB4 on port 1
+	 * if the USB4 DB is present.
+	 *
+	 * TODO (b/147732807): All the USB-C ports need to support same
+	 * features. Need to fix once USB-C feature set is known for Volteer.
+	 */
+	return ((port == USBC_PORT_C1)
+		&& ((usb_db == DB_USB4_GEN2) || (usb_db == DB_USB4_GEN3)));
+}
 
 static void ps8815_reset(void)
 {

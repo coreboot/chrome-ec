@@ -418,7 +418,9 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USBC_SS_MUX
-#endif
+#define I2C_PORT_HOST_TCPC 0
+#define CONFIG_CHARGE_MANAGER
+#endif /* TEST_USB_PE_DRP || TEST_USB_PE_DRP_NOEXTENDED */
 
 /* Common TypeC tests defines */
 #if defined(TEST_USB_TYPEC_VPD) || \
@@ -576,7 +578,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_RW_B
 #define CONFIG_RW_B_MEM_OFF		CONFIG_RO_MEM_OFF
 #undef  CONFIG_RO_SIZE
-#define CONFIG_RO_SIZE			(CONFIG_FLASH_SIZE / 4)
+#define CONFIG_RO_SIZE			(CONFIG_FLASH_SIZE_BYTES / 4)
 #undef  CONFIG_RW_SIZE
 #define CONFIG_RW_SIZE			CONFIG_RO_SIZE
 #define CONFIG_RW_A_STORAGE_OFF		CONFIG_RW_STORAGE_OFF

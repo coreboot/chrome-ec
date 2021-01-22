@@ -14,15 +14,15 @@ ALTERNATE(			PIN_MASK(6, BIT(4) | BIT(5)), 0,		MODULE_UART, 0) 	/* UART_EC_TX_GS
 /* Power Signals */
 GPIO_INT(MECH_PWR_BTN_ODL,	PIN(D, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_LOW, 	power_button_interrupt)	/* Mechanical Power Button */
 GPIO_INT(EC_PWR_BTN_ODL,	PIN(0, 1), GPIO_INT_BOTH, 			power_button_interrupt) /* Power Button */
-GPIO_INT(SLP_S3_L,		PIN(6, 1), GPIO_INT_BOTH,			power_signal_interrupt)	/* Sleep S3 */
+GPIO_INT(SLP_S3_L,		PIN(6, 1), GPIO_INT_BOTH,			baseboard_en_pwr_s0)	/* Sleep S3 */
 GPIO_INT(SLP_S5_L,		PIN(7, 2), GPIO_INT_BOTH,			power_signal_interrupt) /* Sleep S5 */
 GPIO_INT(SLP_S3_S0I3_L,		PIN(7, 4), GPIO_INT_BOTH,			power_signal_interrupt) /* Sleep S0ix */
-GPIO_INT(PG_PWR_S5,		PIN(C, 0), GPIO_INT_BOTH,			power_signal_interrupt)	/* S5 Power OK */
+GPIO_INT(PG_PWR_S5,		PIN(C, 0), GPIO_INT_BOTH,			baseboard_en_pwr_s0)	/* S5 Power OK */
 GPIO_INT(PG_PCORE_S0_R_OD,		PIN(B, 6), GPIO_INT_BOTH, 			power_signal_interrupt) /* S0 Power OK */
 GPIO_INT(ACOK_OD,		PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,	extpower_interrupt)	/* AC Power Present */
 GPIO_INT(EC_PCORE_INT_ODL,	PIN(F, 0), GPIO_INT_BOTH | GPIO_PULL_UP,	power_signal_interrupt)	/* Power Core Interrupt */
-GPIO_INT(PG_GROUPC_S0_OD,	PIN(A, 3), GPIO_INT_BOTH, 			power_signal_interrupt)	/* Power Group C S0 */
-GPIO_INT(PG_LPDDR4X_S3_OD,	PIN(9, 5), GPIO_INT_BOTH, 			power_signal_interrupt)	/* Power Group LPDDR4 S3 */
+GPIO_INT(PG_GROUPC_S0_OD,	PIN(A, 3), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_s0)	/* Power Group C S0 */
+GPIO_INT(PG_LPDDR4X_S3_OD,	PIN(9, 5), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_s0)	/* Power Group LPDDR4 S3 */
 GPIO(EN_PWR_S5,			PIN(B, 7), GPIO_OUT_LOW)						/* Enable S5 Power */
 GPIO(EN_PWR_S0_R,		PIN(F, 1), GPIO_OUT_LOW)
 GPIO(EN_PWR_Z1,			PIN(8, 5), GPIO_OUT_LOW)						/* Enable Z1 Power */

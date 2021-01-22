@@ -16,6 +16,8 @@
 static int dut_chg_en_state;
 static int bc12_charger;
 
+static enum servo_board_id board_id_val = BOARD_ID_UNSET;
+
 /* Enable all ioexpander outputs. */
 int init_ioexpanders(void)
 {
@@ -153,7 +155,7 @@ static void ioexpanders_irq(void)
 		ccprintf("FAULT: USB3 A1 port load switch\n");
 
 	if (!(fault & USB_DUTCHG_FLT_ODL))
-		ccprintf("FAULT: Overcurrent on Charger or DUB CC/SBU lines\n");
+		ccprintf("FAULT: Overcurrent on Charger or DUT CC/SBU lines\n");
 
 	if (!(fault & PP3300_DP_FAULT_L))
 		ccprintf("FAULT: Overcurrent on DisplayPort\n");
@@ -245,13 +247,16 @@ inline int usb3_a1_mux_sel(int en)
 inline int board_id_det(void)
 {
 	int id;
-
-	id = tca6416a_read_byte(1, TCA6416A_IN_PORT_1);
-	if (id < 0)
-		return id;
+	if (board_id_val == BOARD_ID_UNSET) {
+		/* Cache board ID at init */
+		id = tca6416a_read_byte(1, TCA6416A_IN_PORT_1);
+		if (id < 0)
+			return id;
+		board_id_val = id;
+	}
 
 	/* Board ID consists of bits 5, 4, and 3 */
-	return (id >> 3) & 0x7;
+	return (board_id_val >> 3) & 0x7;
 }
 
 inline int dongle_det(void)

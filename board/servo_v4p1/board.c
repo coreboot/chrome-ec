@@ -21,6 +21,7 @@
 #include "ioexpanders.h"
 #include "pathsel.h"
 #include "pi3usb9201.h"
+#include "power_mgmt.h"
 #include "queue_policies.h"
 #include "registers.h"
 #include "spi.h"
@@ -34,6 +35,7 @@
 #include "usart_rx_dma.h"
 #include "usb_gpio.h"
 #include "usb_i2c.h"
+#include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_spi.h"
 #include "usb-stream.h"
@@ -63,6 +65,16 @@ static void tca_evt(enum gpio_signal signal)
 {
 	irq_ioexpanders();
 }
+
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	[CHG] = { /* CHG port connected directly to USB 3.0 hub, no mux */ },
+	[DUT] = { /* DUT port with UFP mux */
+		.usb_port = DUT,
+		.i2c_port = I2C_PORT_MASTER,
+		.i2c_addr_flags = TUSB1064_ADDR_FLAGS,
+		.driver = &tusb1064_usb_mux_driver,
+	}
+};
 
 static volatile uint64_t hpd_prev_ts;
 static volatile int hpd_prev_level;
@@ -387,6 +399,14 @@ int board_get_version(void)
 	return board_id_det();
 }
 
+#ifdef SECTION_IS_RO
+static void evaluate_input_power_def(void)
+{
+	evaluate_input_power();
+}
+DECLARE_DEFERRED(evaluate_input_power_def);
+#endif
+
 static void board_init(void)
 {
 	/* USB to serial queues */
@@ -403,8 +423,11 @@ static void board_init(void)
 	usleep(MSEC);
 
 	init_ioexpanders();
+	CPRINTS("Board ID is %d", board_id_det());
+
+	vbus_dischrg_en(0);
+
 	init_dacs();
-	init_tusb1064(1);
 	init_pi3usb9201();
 
 	/* Clear BBRAM, we don't want any PD state carried over on reset. */
@@ -419,6 +442,16 @@ static void board_init(void)
 	init_pathsel();
 	init_ina231s();
 	init_fusb302b(1);
+
+	/*
+	 * Get data about available input power. Add additional check after a
+	 * delay, since we need to wait for USB2/USB3 enumeration on host hub
+	 * as well as I2C interface of this hub needs to be initialized.
+	 * 3 seconds is experimentally selected value, by this time hub should
+	 * be up and running.
+	 */
+	evaluate_input_power();
+	hook_call_deferred(&evaluate_input_power_def_data, 3 * SECOND);
 
 	/* Enable DUT USB2.0 pair. */
 	gpio_set_level(GPIO_FASTBOOT_DUTHUB_MUX_EN_L, 0);

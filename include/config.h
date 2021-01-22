@@ -1158,6 +1158,7 @@
 /* Chipset config */
 
 /* AP chipset support; pick at most one */
+#undef CONFIG_CHIPSET_ALDERLAKE		/* Intel Alderlake (x86) */
 #undef CONFIG_CHIPSET_APOLLOLAKE	/* Intel Apollolake (x86) */
 #undef CONFIG_CHIPSET_BRASWELL		/* Intel Braswell (x86) */
 #undef CONFIG_CHIPSET_CANNONLAKE	/* Intel Cannonlake (x86) */
@@ -1326,6 +1327,7 @@
 #undef  CONFIG_CMD_FORCETIME
 #undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
+#undef  CONFIG_CMD_GL3590
 #undef  CONFIG_CMD_GPIO_EXTENDED
 #undef  CONFIG_CMD_GSV
 #undef  CONFIG_CMD_GT7288
@@ -1825,7 +1827,7 @@
 #undef CONFIG_FLASH_REGION_TYPE_COUNT
 
 /* Total size of writable flash */
-#undef CONFIG_FLASH_SIZE
+#undef CONFIG_FLASH_SIZE_BYTES
 
 /* Minimum flash write size (in bytes) */
 #undef CONFIG_FLASH_WRITE_SIZE
@@ -4420,7 +4422,7 @@
  * then we can differentiate USB topologies by varying the HW version field
  * in the Sink and Source Capabilities Extended messages.
  *
- * To reserve a new PID, use go/usb.
+ * To reserve a new PID, use go/usb-pid.
  */
 #undef CONFIG_USB_PID
 
@@ -4714,6 +4716,9 @@
 
 /* Support the Parade PS8743 Type-C Redriving Switch */
 #undef CONFIG_USB_MUX_PS8743
+
+/* Support the Texas Instrument TUSB1064 Type-C Redriving Switch (UFP) */
+#undef CONFIG_USB_MUX_TUSB1064
 
 /* 'Virtual' USB mux under host (not EC) control */
 #undef CONFIG_USB_MUX_VIRTUAL
@@ -5455,6 +5460,7 @@
 
 #ifndef HAS_TASK_CHIPSET
 #undef CONFIG_AP_HANG_DETECT
+#undef CONFIG_CHIPSET_ALDERLAKE
 #undef CONFIG_CHIPSET_APOLLOLAKE
 #undef CONFIG_CHIPSET_BRASWELL
 #undef CONFIG_CHIPSET_CANNONLAKE
@@ -5572,7 +5578,8 @@
 #endif
 
 #if defined(CONFIG_CHIPSET_JASPERLAKE) || \
-	defined(CONFIG_CHIPSET_TIGERLAKE)
+	defined(CONFIG_CHIPSET_TIGERLAKE) || \
+	defined(CONFIG_CHIPSET_ALDERLAKE)
 #define CONFIG_CHIPSET_ICELAKE
 #endif
 

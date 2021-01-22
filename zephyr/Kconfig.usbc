@@ -2,6 +2,27 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+# TODO(sjg): Not USB-C: perhaps we should have a 'power' thing at the top level?
+config PLATFORM_EC_USB_A_PORT_COUNT
+	int "Number of USB-A ports"
+	default 0
+	help
+	  This sets the number of USB-A ports on the device. These ports do
+	  not support USB Power Delivery features but can be used to power
+	  external devices (according to the USB 3 spec, not the Battery Charger
+	  standard) and to charge devices slowly if power is enabled to them.
+
+config PLATFORM_EC_USB_PORT_POWER_DUMB
+	bool "Simple control of power to USB-A ports"
+	depends on PLATFORM_EC_USB_A_PORT_COUNT > 0
+	default y
+	help
+	  Enable this to provide simple control of the power to USB ports
+	  using GPIOs. To use this your board code must provide a
+	  usb_port_enable[] array with the GPIOs to use for each port. This
+	  implements the EC_CMD_USB_CHARGE_SET_MODE host command and provides
+	  a 'usbchargemode' console command.
+
 menuconfig PLATFORM_EC_USBC
 	bool "USB Type-C"
 	default y if PLATFORM_EC_BATTERY
@@ -157,6 +178,23 @@ config PLATFORM_EC_CONSOLE_CMD_PD
 	  Ssee usb_pd_console.c for full details including various commands
 	  for role swap, reset, enable/disable, requesting SNK or SRC, etc.
 
+config PLATFORM_EC_USB_PD_DEBUG_FIXED_LEVEL
+	bool "USB Power Delivery debug level is fixed at build time"
+	help
+	  Enable this to set the debug level to a fixed value in the build.
+	  This saves space but means that the level cannot be changed using
+	  commands like 'pd dump'. Typically this should be set when a platform
+	  is shipped.
+
+config PLATFORM_EC_USB_PD_DEBUG_LEVEL
+	int "Debug level to use"
+	depends on PLATFORM_EC_USB_PD_DEBUG_FIXED_LEVEL
+	help
+	  Sets the value of the debug level to use. If this is 0 then no
+	  debugging output is available from the USB Power Delivery stack.
+	  The meaning of each level depends on the module in question, but
+	  the maximum available level is 3.
+
 choice "Measuring VBUS voltage"
 	prompt "Select how VBUS voltage is measured"
 
@@ -185,6 +223,17 @@ config PLATFORM_EC_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
 	  voltage.
 
 endchoice  # Measuring VBUS voltage
+
+config PLATFORM_EC_USBC_VCONN
+	bool "Support USB Type-C VCONN"
+	default y
+	help
+	  This enables support for USB Type-C connector voltage (VCONN). This
+	  option must be enabled to communicate with electronically marked
+	  (E-Mark) cables. This option is required for operation with USB4 and
+	  Thunderbolt devices.
+
+	  This is not needed for captive cables.
 
 config PLATFORM_EC_USB_PD_DUAL_ROLE
 	bool "Board can act as a dual-role Power Delivery port"
@@ -281,6 +330,15 @@ config PLATFORM_EC_USB_PD_ALT_MODE_UFP
 	  USB4 and ThunderBolt operation when the Chromium OS data role
 	  resolves to the UFP role.
 
+config PLATFORM_EC_USB_PD_USB32_DRD
+	bool "Port is cable of operating as an USB3.2 device"
+	default y
+	help
+	  Enable this if the board's USB Power Delivery Downward Facing Port is
+	  able to support the USB3.2 standard. This is advertised to the
+	  other end so that it can potentially take advantage of the additional
+	  features available.
+
 choice "VBUS detection method"
 	prompt "Select the method to detect VBUS"
 
@@ -342,6 +400,55 @@ config PLATFORM_EC_USB_PD_DECODE_SOP
 	  (SOP, SOP' and SOP'', collectively called SOP*) in bits 31-28 of the
 	  32-bit msg header type.
 
+config PLATFORM_EC_HOSTCMD_PD_CONTROL
+	bool "Host command: EC_CMD_PD_CONTROL"
+	default y
+	help
+	  Enable the EC_CMD_PD_CONTROL host command. This allows control
+	  of the USB-PD chip from the AP, including reset, suspend/resume
+	  and enabling power.
+
+	  This host command can be manually executed using the
+	  "ectool pdcontrol" command from the Chromium OS shell.
+
+config PLATFORM_EC_CMD_USB_PD_PE
+	bool "Console command: pe"
+	help
+	  This command dumps information about the USB PD alternate mode options
+	  discovered from the partner device. It can be useful for debugging.
+
+	  Example: pe 1 dump
+	     IDENT SOP:
+
+	             [ID Header] 2c000bda :: AMA, VID:0bda
+	             [Cert Stat] 00000000
+	             [2] 00000209    [3] 11000f09
+	     IDENT SOP':
+	             [ID Header] 1c000489 :: PCable, VID:0489
+	             [Cert Stat] 000001c6
+	             [2] f6810000    [3] 11082051
+	     SVID[0]: ff01 MODES: [1] 000c0045
+	     MODE[1]: svid:ff01 caps:000c0045
+
+config PLATFORM_EC_CMD_USB_PD_CABLE
+	bool "Console command: pdcable"
+	help
+	  This commands shows the USB cable charactistics as detected from the
+	  device. It can be useful for debugging problems with cables and the
+	  device's response to them.
+
+	  Example: pdcable 1
+	     Cable Type: Passive
+	     Cable Rev: 1.0
+	     Connector Type: 2
+	     Cable Current: 5A
+	     USB Superspeed Signaling support: 1
+	     Rounded support: No
+	     Optical cable: No
+	     Retimer support: No
+	     Link training: Bi-directional
+	     Thunderbolt cable type: Passive
+
 choice "USB-C device type"
 	prompt "Select the USB-C device type"
 	default PLATFORM_EC_USB_DRP_ACC_TRYSRC
@@ -372,6 +479,34 @@ config PLATFORM_EC_USB_DRP_ACC_TRYSRC
 
 endchoice  # USB-C device type
 
+config PLATFORM_EC_USB_PD_TRY_SRC
+	bool "Enable Try.SRC mode"
+	depends on PLATFORM_EC_USB_DRP_ACC_TRYSRC
+	default y
+	help
+	  This enables Try.SRC mode so that the board will try to be a source
+	  for power if the other end offers both options. This can be useful
+	  for laptops, for example, since when attaching to a cellphone we want
+	  the laptop to charge the phone, not vice versa.
+
+config PLATFORM_EC_USB_PD_USB4
+	bool "USB4 support"
+	depends on PLATFORM_EC_CONFIG_USB_PD_REV30
+	default y
+	help
+	  This enables support for entering into USB4 mode between two port
+	  partners. The provides new features such as higher speeds and more
+	  flexible multiplexing of data on the cable for different purposes,
+	  e.g. attaching multiple displays and storage devices on the same bus.
+
+config PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
+	bool "Thunderbolt-compatible mode support"
+	depends on PLATFORM_EC_CONFIG_USB_PD_REV30
+	default y
+	help
+	  Enable this to allow entering into Thunderbolt-compatible mode between
+	  two port partners. This does not require that USB4 mode be enabled.
+
 endif  # PLATFORM_EC_USB_POWER_DELIVERY
 
 menuconfig PLATFORM_EC_USBC_PPC
@@ -385,9 +520,47 @@ menuconfig PLATFORM_EC_USBC_PPC
 
 if PLATFORM_EC_USBC_PPC
 
+config PLATFORM_EC_USBC_PPC_POLARITY
+	bool
+	help
+	  Enable this if a Power Path Controller needs to be informed of
+	  the polarity of the Configuration Channel (CC) pins. This can change
+	  depending on which way up the USB-C cable is inserted into the
+	  device.
+
+	  This should be enabled by drivers which can detect this. It cannot be
+	  set otherwise, even in prj.conf
+
+config PLATFORM_EC_USBC_PPC_SBU
+	bool
+	help
+	  Enable this if a Power Path Controller is capable of gating the
+	  Sideband Use (SBU) lines. If so, the USB mux will use this feature
+	  to isolate the lines before entering into alternate mode.
+
+	  This should be enabled by drivers which can detect this. It cannot be
+	  set otherwise, even in prj.conf
+
+config PLATFORM_EC_USBC_PPC_VCONN
+	bool
+	depends on PLATFORM_EC_USBC_VCONN
+	help
+	  Enable this if a Power Path Controller is capable of providing
+	  VCONN. If so, the USB stack will enable / disable VCONN as needed.
+
+	  This should be enabled by drivers which can detect this. It cannot be
+	  set otherwise, even in prj.conf
+
+	  Note: This may not be true, as there may be scenarios where the board
+	  might need to disable this feature (for instance when both the PPC and
+	  TCPC can supply VCONN). We can cross that bridge when we come to it.
+
 config PLATFORM_EC_USBC_PPC_SN5S330
 	bool "TI SN5S330 PD 3.0 power mux"
 	select PLATFORM_EC_USBC_OCP
+	select PLATFORM_EC_USBC_PPC_POLARITY
+	select PLATFORM_EC_USBC_PPC_SBU
+	select PLATFORM_EC_USBC_PPC_VCONN if PLATFORM_EC_USBC_VCONN
 	help
 	  This is a USB Type-C Power Delivery 3.0 Bidirectional Power Mux with
 	  CC and SBU short-to-VBUS Protection and Integrated Dead Battery
@@ -399,6 +572,8 @@ config PLATFORM_EC_USBC_PPC_SN5S330
 config PLATFORM_EC_USBC_PPC_SYV682X
 	bool "SYV682X which is a Power Mux for USB PD"
 	select PLATFORM_EC_USBC_OCP
+	select PLATFORM_EC_USBC_PPC_POLARITY
+	select PLATFORM_EC_USBC_PPC_VCONN if PLATFORM_EC_USBC_VCONN
 	help
 	  The SYV682A is a 2 to 1 power mux switch for USB PD applications. The
 	  SYV682A supports dead battery wake up function and Fast Role Swap
@@ -415,6 +590,25 @@ config PLATFORM_EC_USBC_PPC_DEDICATED_INT
 	  If this is enabled the USB Power Delivery (PD) stack will call
 	  ppc_get_alert_status() to find out he interrupt status for a port.
 	  This function should be provided by the board code.
+
+config PLATFORM_EC_USB_PD_TCPC_LOW_POWER
+	bool "Allow Type-C Port Controller to enter low-power mode"
+	default y
+	help
+	  Allows entry to a low power mode when the USB port is idle.
+	  When enabled, an enter_low_power_mode member is present in tcpm_drv
+	  and should be set to a function that selects that mode, such as
+	  tcpci_enter_low_power_mode() for TCPCI-compatible TCPCs.
+
+config PLATFORM_EC_USB_PD_TCPC_LPM_EXIT_DEBOUNCE_US
+	int "Debounce delay when exiting low-power mode (uS)"
+	depends on PLATFORM_EC_USB_PD_TCPC_LOW_POWER
+	default 25000
+	help
+	  Some TCPCs need additional time following a VBUS change to internally
+	  debounce the CC line status and update the CC_STATUS register. This
+	  is the delay in microseconds to allow before checking the CC line
+	  status in the EC.
 
 choice "Type-C Port Manager (TCPM)"
 	prompt "Choose a Type-C Port Manager (TCPM) to manage TCPC"
