@@ -14,10 +14,7 @@
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-
-/* Config options automatically enabled, re-enable once support added */
-#undef CONFIG_ADC
-#undef CONFIG_SWITCH
+#define CONFIG_LTO
 
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
@@ -157,7 +154,6 @@
 /* TODO(b/176988382): Tune values for guybrush */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
 #define PD_MAX_POWER_MW		65000

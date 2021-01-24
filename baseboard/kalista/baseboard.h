@@ -228,7 +228,6 @@ enum OEM_ID {
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000 /* us */
 
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY		5000   /* us */
 
 /* Board specific handlers */
 void board_reset_pd_mcu(void);

@@ -11,6 +11,14 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+/*
+ * Create an EC build that requires AP-driven mode entry to facilitate debugging
+ * b/177105656.
+ */
+#ifdef BOARD_VOXEL_APMODEENTRY
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+#endif
+
 /* Optional features */
 #undef NPCX7_PWM1_SEL
 #define NPCX7_PWM1_SEL    0    /* GPIO C2 is not used as PWM1. */
@@ -69,7 +77,6 @@
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
@@ -163,7 +170,7 @@
 
 enum battery_type {
 	BATTERY_AP19B8M,
-	BATTERY_LGC011,
+	BATTERY_LGC_AP18C8K,
 	BATTERY_TYPE_COUNT,
 };
 

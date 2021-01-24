@@ -150,7 +150,13 @@ enum pd_rx_errors {
 				RDO_BATT_OP_POWER(op_mw) | \
 				RDO_BATT_MAX_POWER(max_mw))
 
-/* BDO : BIST Data Object */
+/* BDO : BIST Data Object
+ * 31:28 BIST Mode
+ *       In PD 3.0, all but Carrier Mode 2 (as Carrier Mode) and Test Data are
+ *       reserved.
+ * 27:16 Reserved
+ * 15:0  Returned error counters (reserved in PD 3.0)
+ */
 #define BDO_MODE_RECV       (0 << 28)
 #define BDO_MODE_TRANSMIT   BIT(28)
 #define BDO_MODE_COUNTERS   (2 << 28)
@@ -159,6 +165,7 @@ enum pd_rx_errors {
 #define BDO_MODE_CARRIER2   (5 << 28)
 #define BDO_MODE_CARRIER3   (6 << 28)
 #define BDO_MODE_EYE        (7 << 28)
+#define BDO_MODE_TEST_DATA  (8 << 28)
 
 #define BDO(mode, cnt)      ((mode) | ((cnt) & 0xFFFF))
 
@@ -187,7 +194,21 @@ enum pd_rx_errors {
 #define PD_T_SINK_WAIT_CAP         (600*MSEC) /* between 310ms and 620ms */
 #define PD_T_SINK_TRANSITION        (35*MSEC) /* between 20ms and 35ms */
 #define PD_T_SOURCE_ACTIVITY        (45*MSEC) /* between 40ms and 50ms */
+/*
+ * Adjusting for TCPMv2 PD2 Compliance. In tests like TD.PD.SRC.E5 this
+ * value is the duration before the Hard Reset can be sent. Setting the
+ * timer value to the maximum will delay sending the HardReset until
+ * after the window has closed instead of when it is desired at the
+ * beginning of the window.
+ * Leaving TCPMv1 as it was as there are no current requests to adjust
+ * for compliance on the old stack and making this change  breaks the
+ * usb_pd unit test.
+ */
+#ifndef CONFIG_USB_PD_TCPMV2
 #define PD_T_SENDER_RESPONSE        (30*MSEC) /* between 24ms and 30ms */
+#else
+#define PD_T_SENDER_RESPONSE        (24*MSEC) /* between 24ms and 30ms */
+#endif
 #define PD_T_PS_TRANSITION         (500*MSEC) /* between 450ms and 550ms */
 #define PD_T_PS_SOURCE_ON          (480*MSEC) /* between 390ms and 480ms */
 #define PD_T_PS_SOURCE_OFF         (920*MSEC) /* between 750ms and 920ms */
@@ -246,6 +267,7 @@ enum pd_rx_errors {
 /* Voltage thresholds in mV (Table 7-24, PD 3.0 Version 2.0 Spec) */
 #define PD_V_SAFE0V_MAX		800
 #define PD_V_SAFE5V_MIN		4750
+#define PD_V_SAFE5V_MAX		5500
 
 /* USB Type-C voltages in mV (Table 4-3, USB Type-C Release 2.0 Spec) */
 #define PD_V_SINK_DISCONNECT_MAX 3670
@@ -2785,6 +2807,20 @@ const uint32_t * const pd_get_snk_caps(int port);
  * @param port USB-C port number
  */
 uint8_t pd_get_snk_cap_cnt(int port);
+
+/**
+ * Returns requested voltage
+ *
+ * @param port USB-C port number
+ */
+uint32_t pd_get_requested_voltage(int port);
+
+/**
+ * Returns requested current
+ *
+ * @param port USB-C port number
+ */
+uint32_t pd_get_requested_current(int port);
 
 /**
  * Return true if partner port is capable of communication over USB data

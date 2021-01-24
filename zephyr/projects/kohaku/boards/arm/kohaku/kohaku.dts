@@ -28,11 +28,11 @@
 	};
 
 	named-i2c-ports {
-		compatible = "i2c-keys";
+		compatible = "named-i2c-ports";
 	};
 
 	named-gpios {
-		compatible = "gpio-keys";
+		compatible = "named-gpios";
 
 		lid_open {
 			gpios = <&gpiod 2 GPIO_INPUT>;

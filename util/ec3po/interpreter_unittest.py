@@ -17,8 +17,8 @@ import unittest
 
 import six
 
-import interpreter
-import threadproc_shim
+from ec3po import interpreter
+from ec3po import threadproc_shim
 
 
 def GetBuiltins(func):
@@ -63,7 +63,7 @@ class TestEnhancedECBehaviour(unittest.TestCase):
         case.
     """
     # The interpreter init should open the EC UART PTY.
-    expected_ec_calls = [mock.call(self.tempfile.name, 'ab+')]
+    expected_ec_calls = [mock.call(self.tempfile.name, 'r+b', buffering=0)]
     # Have a command come in the command pipe.  The first command will be an
     # interrogation to determine if the EC is enhanced or not.
     self.cmd_pipe_user.send(interpreter.EC_SYN)
@@ -128,7 +128,7 @@ class TestEnhancedECBehaviour(unittest.TestCase):
         case.
     """
     # The interpreter init should open the EC UART PTY.
-    expected_ec_calls = [mock.call(self.tempfile.name, 'ab+')]
+    expected_ec_calls = [mock.call(self.tempfile.name, 'r+b', buffering=0)]
     # Have a command come in the command pipe.  The first command will be an
     # interrogation to determine if the EC is enhanced or not.
     self.cmd_pipe_user.send(interpreter.EC_SYN)

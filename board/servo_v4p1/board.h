@@ -183,6 +183,7 @@
 #define CONFIG_INA231
 #define CONFIG_CHARGE_MANAGER
 #undef  CONFIG_CHARGE_MANAGER_SAFE_MODE
+#define CONFIG_USB_MUX_TUSB1064
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_TCPMV1
 #define CONFIG_CMD_PD
@@ -193,9 +194,11 @@
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
 #undef CONFIG_USB_PD_PULLUP
+/* Default pull-up should not be Rp3a0 due to Cr50 */
 #define CONFIG_USB_PD_PULLUP TYPEC_RP_USB
 #define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
 #define CONFIG_USB_PD_ALT_MODE
+#define CONFIG_USBC_SS_MUX
 
 /* Don't automatically change roles */
 #undef CONFIG_USB_PD_INITIAL_DRP_STATE
@@ -206,12 +209,13 @@
 #define CC_RA(port, cc, sel)  (pd_tcpc_cc_ra(port, cc, sel))
 
 /*
- * TODO(crosbug.com/p/60792): The delay values are currently just place holders
- * and the delay will need to be relative to the circuitry that allows VBUS to
- * be supplied to the DUT port from the CHG port.
+ * These power-supply timing values are now set towards maximum spec limit,
+ * to give the upstream charger the maximum time to respond.
+ *
+ * Currently tuned with the Apple 96W adapter.
  */
-#define PD_POWER_SUPPLY_TURN_ON_DELAY  50000  /* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY 50000 /* us */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY  (161*MSEC)
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY (461*MSEC)
 
 /* Define typical operating power and max power */
 #define PD_OPERATING_POWER_MW 15000
@@ -274,6 +278,14 @@ enum adc_channel {
 	ADC_SUB_C_REF,
 	/* Number of ADC channels */
 	ADC_CH_COUNT
+};
+
+/* Servo V4.1 Board ID mappings */
+enum servo_board_id {
+	BOARD_ID_UNSET = -1,
+	BOARD_ID_REV0 = 0, /* Proto */
+	BOARD_ID_REV1 = 1, /* EVT */
+	BOARD_ID_REV2 = 2, /* DVT */
 };
 
 /**

@@ -6,11 +6,10 @@
 /* Volteer family-specific sensor configuration */
 #include "common.h"
 #include "accelgyro.h"
-#include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi_common.h"
-#include "driver/accelgyro_bmi260.h"
-#include "driver/als_tcs3400.h"
-#include "driver/sync.h"
+#include "driver/accel_bma2x2_public.h"
+#include "driver/accelgyro_bmi_common_public.h"
+#include "driver/accelgyro_bmi260_public.h"
+#include "driver/als_tcs3400_public.h"
 #include "keyboard_scan.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -20,8 +19,8 @@
 
 /******************************************************************************/
 /* Sensors */
-static struct mutex g_lid_accel_mutex;
-static struct mutex g_base_mutex;
+static mutex_t g_lid_accel_mutex;
+static mutex_t g_base_mutex;
 
 /* BMA253 private data */
 static struct accelgyro_saved_data_t g_bma253_data;
@@ -213,6 +212,19 @@ const struct motion_sensor_t *motion_als_sensors[] = {
 	&motion_sensors[CLEAR_ALS],
 };
 BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
+
+#ifdef CONFIG_ZEPHYR
+static int init_sensor_mutex(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	k_mutex_init(&g_lid_accel_mutex);
+	k_mutex_init(&g_base_mutex);
+
+	return 0;
+}
+SYS_INIT(init_sensor_mutex, POST_KERNEL, 50);
+#endif /* CONFIG_ZEPHYR */
 
 static void baseboard_sensors_init(void)
 {

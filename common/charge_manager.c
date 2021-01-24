@@ -21,6 +21,10 @@
 #include "usb_pd_tcpm.h"
 #include "util.h"
 
+#ifdef HAS_MOCK_CHARGE_MANAGER
+#error Mock defined HAS_MOCK_CHARGE_MANAGER
+#endif
+
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 
 #define POWER(charge_port) ((charge_port.current) * (charge_port.voltage))
@@ -310,6 +314,77 @@ static enum charge_supplier find_supplier(int port, enum charge_supplier sup,
 	return sup;
 }
 
+static enum charge_supplier get_current_supplier(int port)
+{
+	enum charge_supplier supplier = CHARGE_SUPPLIER_NONE;
+
+	/* Determine supplier information to show. */
+	if (port == charge_port) {
+		supplier = charge_supplier;
+	} else {
+		/* Consider available current */
+		supplier = find_supplier(port, supplier, 0);
+		if (supplier == CHARGE_SUPPLIER_NONE)
+			/* Ignore available current */
+			supplier = find_supplier(port, supplier, -1);
+	}
+
+	return supplier;
+}
+static enum usb_power_roles get_current_power_role(int port,
+		enum charge_supplier supplier)
+{
+	enum usb_power_roles role;
+	if (charge_port == port)
+		role = USB_PD_PORT_POWER_SINK;
+	else if (is_connected(port) && !is_sink(port))
+		role = USB_PD_PORT_POWER_SOURCE;
+	else if (supplier != CHARGE_SUPPLIER_NONE)
+		role = USB_PD_PORT_POWER_SINK_NOT_CHARGING;
+	else
+		role = USB_PD_PORT_POWER_DISCONNECTED;
+	return role;
+}
+
+static int get_vbus_voltage(int port, enum usb_power_roles current_role)
+{
+	int voltage_mv;
+
+	/*
+	 * If we are sourcing power or sinking but not charging, then VBUS must
+	 * be 5V. If we are charging, then read VBUS ADC.
+	 */
+	if (current_role == USB_PD_PORT_POWER_SINK_NOT_CHARGING) {
+		voltage_mv = 5000;
+	} else {
+#if defined(CONFIG_USB_PD_VBUS_MEASURE_CHARGER)
+		/*
+		 * Try to get VBUS from the charger. If that fails, default to 0
+		 * mV.
+		 */
+		if (charger_get_vbus_voltage(port, &voltage_mv))
+			voltage_mv = 0;
+#elif defined(CONFIG_USB_PD_VBUS_MEASURE_TCPC)
+		voltage_mv = tcpc_get_vbus_voltage(port);
+#elif defined(CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT)
+		voltage_mv = adc_read_channel(board_get_vbus_adc(port));
+#elif defined(CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT)
+		/* No VBUS ADC channel - voltage is unknown */
+		voltage_mv = 0;
+#else
+		/* There is a single ADC that measures joint Vbus */
+		voltage_mv = adc_read_channel(ADC_VBUS);
+#endif
+	}
+	return voltage_mv;
+}
+
+int charge_manager_get_vbus_voltage(int port)
+{
+	return get_vbus_voltage(port, get_current_power_role(port,
+				get_current_supplier(port)));
+}
+
 /**
  * Fills passed power_info structure with current info about the passed port.
  *
@@ -319,28 +394,10 @@ static enum charge_supplier find_supplier(int port, enum charge_supplier sup,
 static void charge_manager_fill_power_info(int port,
 	struct ec_response_usb_pd_power_info *r)
 {
-	int sup = CHARGE_SUPPLIER_NONE;
-
-	/* Determine supplier information to show. */
-	if (port == charge_port) {
-		sup = charge_supplier;
-	} else {
-		/* Consider available current */
-		sup = find_supplier(port, sup, 0);
-		if (sup == CHARGE_SUPPLIER_NONE)
-			/* Ignore available current */
-			sup = find_supplier(port, sup, -1);
-	}
+	enum charge_supplier sup = get_current_supplier(port);
 
 	/* Fill in power role */
-	if (charge_port == port)
-		r->role = USB_PD_PORT_POWER_SINK;
-	else if (is_connected(port) && !is_sink(port))
-		r->role = USB_PD_PORT_POWER_SOURCE;
-	else if (sup != CHARGE_SUPPLIER_NONE)
-		r->role = USB_PD_PORT_POWER_SINK_NOT_CHARGING;
-	else
-		r->role = USB_PD_PORT_POWER_DISCONNECTED;
+	r->role = get_current_power_role(port, sup);
 
 	/* Is port partner dual-role capable */
 	r->dualrole = (dualrole_capability[port] == CAP_DUALROLE);
@@ -460,33 +517,7 @@ static void charge_manager_fill_power_info(int port,
 			r->max_power = POWER(available_charge[sup][port]);
 		}
 
-		/*
-		 * If we are sourcing power, or sinking but not charging, then
-		 * VBUS must be 5V. If we are charging, then read VBUS ADC.
-		 */
-		if (r->role == USB_PD_PORT_POWER_SINK_NOT_CHARGING)
-			r->meas.voltage_now = 5000;
-		else {
-#if defined(CONFIG_USB_PD_VBUS_MEASURE_CHARGER)
-			int voltage;
-
-			if (charger_get_vbus_voltage(port, &voltage))
-				r->meas.voltage_now = 0;
-			else
-				r->meas.voltage_now = voltage;
-#elif defined(CONFIG_USB_PD_VBUS_MEASURE_TCPC)
-			r->meas.voltage_now = tcpc_get_vbus_voltage(port);
-#elif defined(CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT)
-			r->meas.voltage_now =
-				adc_read_channel(board_get_vbus_adc(port));
-#elif defined(CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT)
-			/* No VBUS ADC channel - voltage is unknown */
-			r->meas.voltage_now = 0;
-#else
-			/* There is a single ADC that measures joint Vbus */
-			r->meas.voltage_now = adc_read_channel(ADC_VBUS);
-#endif
-		}
+		r->meas.voltage_now = get_vbus_voltage(port, r->role);
 	}
 }
 #endif /* TEST_BUILD */
@@ -699,10 +730,21 @@ static void charge_manager_refresh(void)
 		 * the port, for example, if the port has become a charge
 		 * source.
 		 */
-		if ((active_charge_port_initialized &&
+		if (active_charge_port_initialized &&
 		     new_port == charge_port &&
-		     new_supplier == charge_supplier) ||
-		     board_set_active_charge_port(new_port) == EC_SUCCESS)
+		     new_supplier == charge_supplier)
+			break;
+
+		/*
+		 * For OCPC systems, reset the OCPC state to prevent current
+		 * spikes.
+		 */
+		if (IS_ENABLED(CONFIG_OCPC)) {
+			charge_set_active_chg_chip(new_port);
+			trigger_ocpc_reset();
+		}
+
+		if (board_set_active_charge_port(new_port) == EC_SUCCESS)
 			break;
 
 		/* 'Dont charge' request must be accepted. */
@@ -719,10 +761,6 @@ static void charge_manager_refresh(void)
 	}
 
 	active_charge_port_initialized = 1;
-
-	/* Set the active charger chip based upon the selected charge port. */
-	if (IS_ENABLED(CONFIG_OCPC))
-		charge_set_active_chg_chip(new_port);
 
 	/*
 	 * Clear override if it wasn't selected as the 'best' port -- it means
@@ -834,8 +872,29 @@ static void charge_manager_refresh(void)
 #endif
 
 	/* New power requests must be set only after updating the globals. */
-	if (is_pd_port(updated_new_port))
-		pd_set_new_power_request(updated_new_port);
+	if (is_pd_port(updated_new_port)) {
+		/* Check if we can get requested voltage/current */
+		if ((IS_ENABLED(CONFIG_USB_PD_TCPMV1) &&
+		    IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE)) ||
+		    (IS_ENABLED(CONFIG_USB_PD_TCPMV2) &&
+		    IS_ENABLED(CONFIG_USB_PE_SM))) {
+			/*
+			 * Check if new voltage/current is different
+			 * than requested. If yes, send new power request
+			 */
+			if (pd_get_requested_voltage(updated_new_port) !=
+			    charge_voltage ||
+			    pd_get_requested_current(updated_new_port) !=
+			    charge_current_uncapped)
+				pd_set_new_power_request(updated_new_port);
+		} else {
+			/*
+			 * Functions for getting requested voltage/current
+			 * are not available. Send new power request.
+			 */
+			pd_set_new_power_request(updated_new_port);
+		}
+	}
 	if (is_pd_port(updated_old_port))
 		pd_set_new_power_request(updated_old_port);
 

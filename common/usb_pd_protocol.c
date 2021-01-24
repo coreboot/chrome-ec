@@ -2619,6 +2619,18 @@ uint8_t pd_get_task_state(int port)
 	return pd[port].task_state;
 }
 
+#ifdef CONFIG_USB_PD_DUAL_ROLE
+uint32_t pd_get_requested_voltage(int port)
+{
+	return pd[port].supply_voltage;
+}
+
+uint32_t pd_get_requested_current(int port)
+{
+	return pd[port].curr_limit;
+}
+#endif
+
 const char *pd_get_task_state_name(int port)
 {
 #ifdef CONFIG_USB_PD_TCPMV1_DEBUG
@@ -3459,7 +3471,7 @@ void pd_task(void *u)
 				set_state(port, PD_STATE_SRC_DISCONNECTED);
 				break;
 			}
-#ifdef CONFIG_USB_PD_TCPM_TCPCI
+#if defined(CONFIG_USB_PD_TCPM_TCPCI) || defined(CONFIG_USB_PD_TCPM_STUB)
 			/*
 			 * After transmitting hard reset, TCPM writes
 			 * to RECEIVE_DETECT register to enable
@@ -3467,7 +3479,7 @@ void pd_task(void *u)
 			 */
 			if (pd_comm_is_enabled(port))
 				tcpm_set_rx_enable(port, 1);
-#endif /* CONFIG_USB_PD_TCPM_TCPCI */
+#endif /* CONFIG_USB_PD_TCPM_TCPCI  || CONFIG_USB_PD_TCPM_STUB */
 
 			set_state(port, PD_STATE_SRC_STARTUP);
 			break;
@@ -4119,7 +4131,7 @@ void pd_task(void *u)
 			/* Wait for source cap expired only if we are enabled */
 			if ((pd[port].last_state != pd[port].task_state)
 			    && pd_comm_is_enabled(port)) {
-#ifdef CONFIG_USB_PD_TCPM_TCPCI
+#if defined(CONFIG_USB_PD_TCPM_TCPCI) || defined(CONFIG_USB_PD_TCPM_STUB)
 				/*
 				 * If we come from hard reset recover state,
 				 * then we can process the source capabilities
@@ -4129,7 +4141,7 @@ void pd_task(void *u)
 				if (pd[port].last_state ==
 				    PD_STATE_SNK_HARD_RESET_RECOVER)
 					tcpm_set_rx_enable(port, 1);
-#endif /* CONFIG_USB_PD_TCPM_TCPCI */
+#endif /* CONFIG_USB_PD_TCPM_TCPCI  || CONFIG_USB_PD_TCPM_STUB */
 #ifdef CONFIG_USB_PD_RESET_MIN_BATT_SOC
 				/*
 				 * If the battery has not met a configured safe
@@ -4446,12 +4458,14 @@ void pd_task(void *u)
 					/* Turn VCONN on and wait for it */
 					set_vconn(port, 1);
 					set_state_timeout(port,
-					  get_time().val + PD_VCONN_SWAP_DELAY,
-					  PD_STATE_VCONN_SWAP_READY);
+						get_time().val +
+						CONFIG_USBC_VCONN_SWAP_DELAY_US,
+						PD_STATE_VCONN_SWAP_READY);
 				} else {
 					set_state_timeout(port,
-					  get_time().val + PD_T_VCONN_SOURCE_ON,
-					  READY_RETURN_STATE(port));
+						get_time().val +
+							PD_T_VCONN_SOURCE_ON,
+						READY_RETURN_STATE(port));
 				}
 			}
 			break;
@@ -4460,9 +4474,9 @@ void pd_task(void *u)
 				if (!(pd[port].flags & PD_FLAGS_VCONN_ON)) {
 					/* VCONN is now on, send PS_RDY */
 					pd_set_vconn_role(port,
-							  PD_ROLE_VCONN_ON);
+							PD_ROLE_VCONN_ON);
 					res = send_control(port,
-							   PD_CTRL_PS_RDY);
+							PD_CTRL_PS_RDY);
 					if (res == -1) {
 						timeout = 10*MSEC;
 						/*
@@ -4470,19 +4484,20 @@ void pd_task(void *u)
 						 * send soft reset
 						 */
 						set_state(port,
-							  PD_STATE_SOFT_RESET);
+							PD_STATE_SOFT_RESET);
 						break;
 					}
 					set_state(port,
-						  READY_RETURN_STATE(port));
+						READY_RETURN_STATE(port));
 				} else {
 					/* Turn VCONN off and wait for it */
 					set_vconn(port, 0);
 					pd_set_vconn_role(port,
-							  PD_ROLE_VCONN_OFF);
+							PD_ROLE_VCONN_OFF);
 					set_state_timeout(port,
-					  get_time().val + PD_VCONN_SWAP_DELAY,
-					  READY_RETURN_STATE(port));
+						get_time().val +
+						CONFIG_USBC_VCONN_SWAP_DELAY_US,
+						READY_RETURN_STATE(port));
 				}
 			}
 			break;
