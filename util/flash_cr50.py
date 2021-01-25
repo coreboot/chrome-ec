@@ -48,7 +48,7 @@ REQUIRED_CONTROLS = {
         r'ec_board:\S+',
     ],
     'flex': [
-        r'servo_type:.*servo_.[^4]',
+        r'servo_type:(servo_v2|servo_micro|c2d2)',
     ],
     'type-c_servo_v4': [
         r'servo_v4_type:type-c',
