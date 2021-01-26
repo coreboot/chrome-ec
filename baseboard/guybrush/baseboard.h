@@ -44,6 +44,13 @@
 #define GPIO_PCH_SYS_PWROK	GPIO_EC_SOC_PWR_GOOD
 #define GPIO_SYS_RESET_L	GPIO_EC_SYS_RST_L
 #define GPIO_EN_PWR_A		GPIO_EN_PWR_Z1
+/*
+ * On power-on, H1 releases the EC from reset but then quickly asserts and
+ * releases the reset a second time. This means the EC sees 2 resets:
+ * (1) power-on reset, (2) reset-pin reset. This config will
+ * allow the second reset to be treated as a power-on.
+ */
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
 
 /* Thermal Config */
 #define CONFIG_ADC
@@ -59,13 +66,23 @@
 #define GPIO_WP_L			GPIO_EC_WP_L
 
 /* Host communication */
+#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
+#define GPIO_EC_INT_L		GPIO_EC_SOC_INT_L
 
 /* Chipset config */
 #define CONFIG_CHIPSET_STONEY
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_CHIPSET_RESET_HOOK
 
-/* Common Keyboard Defines */
+/* Keyboard Config */
+#define CONFIG_KEYBOARD_BACKLIGHT
+#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_KEYBOARD_COL2_INVERTED
+#define CONFIG_KEYBOARD_PROTOCOL_8042
+#define CONFIG_KEYBOARD_VIVALDI
+#define GPIO_KBD_KSO2		GPIO_EC_KSO_02_INV
 
 /* Sensors */
 #define CONFIG_TABLET_MODE
@@ -209,6 +226,10 @@
 
 /* Fan features */
 
+/* LED Config */
+#define CONFIG_PWM
+#define CONFIG_PWM_KBLIGHT
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -262,6 +283,15 @@ enum temp_sensor_id {
 enum battery_type {
 	BATTERY_AP18F4M,
 	BATTERY_TYPE_COUNT,
+};
+
+/* PWM Channels */
+enum pwm_channel {
+	PWM_CH_FAN = 0,
+	PWM_CH_KBLIGHT,
+	PWM_CH_LED_CHRG,
+	PWM_CH_LED_FULL,
+	PWM_CH_COUNT
 };
 
 /* Common definition for the USB PD interrupt handlers. */
