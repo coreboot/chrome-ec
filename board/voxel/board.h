@@ -45,12 +45,6 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
-/*
- * Disable VOL up/down when tablet mode.
- * TODO(b/170966461): Re-enable Vivaldi keyboard once
- * 8042 and MKBP drivers can coexist.
- */
-#undef CONFIG_KEYBOARD_VIVALDI
 
 /* Sensors */
 /* BMI160 Base accel/gyro */
@@ -77,7 +71,6 @@
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
@@ -171,7 +164,7 @@
 
 enum battery_type {
 	BATTERY_AP19B8M,
-	BATTERY_LGC011,
+	BATTERY_LGC_AP18C8K,
 	BATTERY_TYPE_COUNT,
 };
 

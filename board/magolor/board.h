@@ -116,6 +116,11 @@
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCELGYRO_BMI160		/* Base accel */
 
+#ifdef BOARD_MAGOLOR
+#define CONFIG_ACCEL_KX022		/* Lid accel */
+#define CONFIG_ACCELGYRO_ICM426XX	/* Base accel second source*/
+#endif
+
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 #define CONFIG_ACCEL_FIFO
@@ -126,6 +131,11 @@
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
+#ifdef BOARD_MAGOLOR
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#endif
+
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
@@ -134,9 +144,6 @@
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
 #define CONFIG_GMR_TABLET_MODE
-
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_GPIO
 
 /* Volume Button feature */
 #define CONFIG_ADC_BUTTONS
@@ -182,11 +189,14 @@ enum pwm_channel {
 };
 
 enum battery_type {
+	BATTERY_AP19B8M,
+	BATTERY_AP18C7M,
 	BATTERY_LGC_AP18C8K,
 	BATTERY_MURATA_AP18C4K,
 	BATTERY_TYPE_COUNT,
 };
 
 int board_is_sourcing_vbus(int port);
+void motion_interrupt(enum gpio_signal signal);
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

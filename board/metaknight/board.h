@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Waddledoo board configuration */
+/* metaknight board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -43,6 +43,12 @@
 /* PWM */
 #define CONFIG_PWM
 #define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
+
+/* Temp sensor */
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_THERMISTOR_NCP15WB
+#define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -97,8 +103,10 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
-#define CONFIG_ACCEL_BMA255		/* Lid accel */
-#define CONFIG_ACCELGYRO_BMI160		/* Base accel */
+#define CONFIG_ACCEL_BMA255         /* Lid accel */
+#define CONFIG_ACCEL_KX022          /* Lid accel second source */
+#define CONFIG_ACCELGYRO_BMI160     /* Base accel */
+#define CONFIG_ACCELGYRO_LSM6DSM    /* Base accel second source */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -109,6 +117,8 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -118,9 +128,6 @@
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
 #define CONFIG_GMR_TABLET_MODE
-
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_GPIO
 
 /* Volume Button feature */
 #define CONFIG_ADC_BUTTONS
@@ -159,6 +166,12 @@ enum adc_channel {
 	ADC_CH_COUNT
 };
 
+enum temp_sensor_id {
+	TEMP_SENSOR_1,
+	TEMP_SENSOR_2,
+	TEMP_SENSOR_COUNT
+};
+
 enum sensor_id {
 	LID_ACCEL,
 	BASE_ACCEL,
@@ -178,6 +191,8 @@ enum battery_type {
 };
 
 int board_is_sourcing_vbus(int port);
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

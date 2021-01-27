@@ -4482,6 +4482,13 @@
 /* Support VCONN swap */
 #undef CONFIG_USBC_VCONN_SWAP
 
+/*
+ * The amount of time in microseconds that the board takes to turn VCONN on or
+ * off after being directed to do so. Typically a property of the PPC. Default
+ * to 5 ms.
+ */
+#define CONFIG_USBC_VCONN_SWAP_DELAY_US 5000
+
 /* USB Binary device Object Store support */
 #undef CONFIG_USB_BOS
 
@@ -5349,6 +5356,10 @@
 	defined(CONFIG_CHARGER_BQ25710) || \
 	defined(CONFIG_CHARGER_ISL9241)
 #define CONFIG_USB_PD_VBUS_MEASURE_CHARGER
+
+#ifdef CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
+#error CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT defined, but charger can measure
+#endif
 #endif
 
 /*****************************************************************************/

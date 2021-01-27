@@ -706,6 +706,14 @@ static struct policy_engine {
 	 */
 	uint64_t chunking_not_supported_timer;
 
+	/*
+	 * Used to wait for tSrcTransition between sending an Accept for a
+	 * Request or receiving a GoToMin and transitioning the power supply.
+	 * See PD 3.0, table 7-11 and table 7-22 This is not a named timer in
+	 * the spec.
+	 */
+	uint64_t src_transition_timer;
+
 	/* Counters */
 
 	/*
@@ -824,6 +832,27 @@ static inline void send_ctrl_msg(int port, enum tcpm_transmit_type type,
 	/* Clear any previous TX status before sending a new message */
 	PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 	prl_send_ctrl_msg(port, type, msg);
+}
+
+static void set_cable_rev(int port)
+{
+	/*
+	 * If port partner runs PD 2.0, cable communication must
+	 * also be PD 2.0
+	 */
+	if (prl_get_rev(port, TCPC_TX_SOP) == PD_REV20) {
+	/*
+	 * If the cable supports PD 3.0, but the port partner supports PD 2.0,
+	 * redo the cable discover with PD 2.0
+	 */
+		if (prl_get_rev(port, TCPC_TX_SOP_PRIME) == PD_REV30 &&
+		    pd_get_identity_discovery(port, TCPC_TX_SOP_PRIME) ==
+					PD_DISC_COMPLETE) {
+			pd_set_identity_discovery(port, TCPC_TX_SOP_PRIME,
+					PD_DISC_NEEDED);
+		}
+		prl_set_rev(port, TCPC_TX_SOP_PRIME, PD_REV20);
+	}
 }
 
 /* Compile-time insurance to ensure this code does not call into prl directly */
@@ -1082,6 +1111,16 @@ const uint32_t * const pd_get_snk_caps(int port)
 uint8_t pd_get_snk_cap_cnt(int port)
 {
 	return pe[port].snk_cap_cnt;
+}
+
+uint32_t pd_get_requested_voltage(int port)
+{
+	return pe[port].supply_voltage;
+}
+
+uint32_t pd_get_requested_current(int port)
+{
+	return pe[port].curr_limit;
 }
 
 /*
@@ -2177,12 +2216,7 @@ static void pe_src_send_capabilities_run(int port)
 			prl_set_rev(port, TCPC_TX_SOP,
 			MIN(PD_REVISION, PD_HEADER_REV(rx_emsg[port].header)));
 
-			/*
-			 * If port partner runs PD 2.0, cable communication must
-			 * also be PD 2.0
-			 */
-			if (prl_get_rev(port, TCPC_TX_SOP) == PD_REV20)
-				prl_set_rev(port, TCPC_TX_SOP_PRIME, PD_REV20);
+			set_cable_rev(port);
 
 			/* We are PD connected */
 			PE_SET_FLAG(port, PE_FLAGS_PD_CONNECTION);
@@ -2306,8 +2340,7 @@ static void pe_src_transition_supply_entry(int port)
 {
 	print_current_state(port);
 
-	/* Transition Power Supply */
-	pd_transition_voltage(pe[port].requested_idx);
+	pe[port].src_transition_timer = TIMER_DISABLED;
 
 	/* Send a GotoMin Message or otherwise an Accept Message */
 	if (PE_CHK_FLAG(port, PE_FLAGS_ACCEPT)) {
@@ -2377,12 +2410,20 @@ static void pe_src_transition_supply_run(int port)
 			set_state_pe(port, PE_SRC_READY);
 		} else {
 			/* NOTE: First pass through this code block */
-			/* Send PS_RDY message */
-			send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
-			PE_SET_FLAG(port, PE_FLAGS_PS_READY);
+			/* Wait for tSrcTransition before changing supply. */
+			pe[port].src_transition_timer =
+				get_time().val + PD_T_SRC_TRANSITION;
 		}
 
 		return;
+	}
+
+	if (get_time().val > pe[port].src_transition_timer) {
+		pe[port].src_transition_timer = TIMER_DISABLED;
+		/* Transition power supply and send PS_RDY. */
+		pd_transition_voltage(pe[port].requested_idx);
+		send_ctrl_msg(port, TCPC_TX_SOP, PD_CTRL_PS_RDY);
+		PE_SET_FLAG(port, PE_FLAGS_PS_READY);
 	}
 
 	/*
@@ -2981,12 +3022,7 @@ static void pe_snk_evaluate_capability_entry(int port)
 	prl_set_rev(port, TCPC_TX_SOP,
 			MIN(PD_REVISION, PD_HEADER_REV(rx_emsg[port].header)));
 
-	/*
-	 * If port partner runs PD 2.0, cable communication must
-	 * also be PD 2.0
-	 */
-	if (prl_get_rev(port, TCPC_TX_SOP) == PD_REV20)
-		prl_set_rev(port, TCPC_TX_SOP_PRIME, PD_REV20);
+	set_cable_rev(port);
 
 	pd_set_src_caps(port, num, pdo);
 
@@ -6221,7 +6257,8 @@ static void pe_vcs_turn_on_vconn_swap_run(int port)
 	if (pe[port].timeout == 0 &&
 			PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE);
-		pe[port].timeout = get_time().val + PD_VCONN_SWAP_DELAY;
+		pe[port].timeout =
+			get_time().val + CONFIG_USBC_VCONN_SWAP_DELAY_US;
 	}
 
 	if (pe[port].timeout > 0 && get_time().val > pe[port].timeout)
@@ -6246,7 +6283,8 @@ static void pe_vcs_turn_off_vconn_swap_run(int port)
 	if (pe[port].timeout == 0 &&
 			PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE);
-		pe[port].timeout = get_time().val + PD_VCONN_SWAP_DELAY;
+		pe[port].timeout =
+			get_time().val + CONFIG_USBC_VCONN_SWAP_DELAY_US;
 	}
 
 	if (pe[port].timeout > 0 && get_time().val > pe[port].timeout) {

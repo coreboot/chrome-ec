@@ -159,6 +159,23 @@ static void espi_peripheral_handler(const struct device *dev,
 	}
 }
 
+#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
+static void espi_chipset_reset(void)
+{
+	hook_notify(HOOK_CHIPSET_RESET);
+}
+DECLARE_DEFERRED(espi_chipset_reset);
+
+/* Callback for reset */
+static void espi_reset_handler(const struct device *dev,
+			       struct espi_callback *cb,
+			       struct espi_event event)
+{
+	hook_call_deferred(&espi_chipset_reset_data, MSEC);
+
+}
+#endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
+
 #define ESPI_DEV DT_LABEL(DT_NODELABEL(espi0))
 static const struct device *espi_dev;
 
@@ -177,6 +194,12 @@ int zephyr_shim_setup_espi(void)
 			.handler = espi_peripheral_handler,
 			.event_type = ESPI_BUS_PERIPHERAL_NOTIFICATION,
 		},
+#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
+		{
+			.handler = espi_reset_handler,
+			.event_type = ESPI_BUS_RESET,
+		},
+#endif
 	};
 
 	struct espi_cfg cfg = {
@@ -450,3 +473,21 @@ void lpc_clear_acpi_status_mask(uint8_t mask)
 	status &= ~mask;
 	espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
 }
+
+/* Get protocol information */
+static enum ec_status lpc_get_protocol_info(struct host_cmd_handler_args *args)
+{
+	struct ec_response_get_protocol_info *r = args->response;
+
+	memset(r, 0, sizeof(*r));
+	r->protocol_versions = BIT(3);
+	r->max_request_packet_size = EC_LPC_HOST_PACKET_SIZE;
+	r->max_response_packet_size = EC_LPC_HOST_PACKET_SIZE;
+	r->flags = 0;
+
+	args->response_size = sizeof(*r);
+
+	return EC_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, lpc_get_protocol_info,
+		     EC_VER_MASK(0));

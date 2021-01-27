@@ -240,6 +240,7 @@ enum pd_rx_errors {
 #define PD_T_SWAP_SOURCE_START      (25*MSEC) /* Min of 20ms */
 #define PD_T_RP_VALUE_CHANGE        (20*MSEC) /* 20ms */
 #define PD_T_SRC_DISCONNECT         (15*MSEC) /* 15ms */
+#define PD_T_SRC_TRANSITION         (25*MSEC) /* 25ms to 35 ms */
 #define PD_T_VCONN_STABLE           (50*MSEC) /* 50ms */
 #define PD_T_DISCOVER_IDENTITY      (45*MSEC) /* between 40ms and 50ms */
 #define PD_T_SYSJUMP              (1000*MSEC) /* 1s */
@@ -2807,6 +2808,20 @@ const uint32_t * const pd_get_snk_caps(int port);
  * @param port USB-C port number
  */
 uint8_t pd_get_snk_cap_cnt(int port);
+
+/**
+ * Returns requested voltage
+ *
+ * @param port USB-C port number
+ */
+uint32_t pd_get_requested_voltage(int port);
+
+/**
+ * Returns requested current
+ *
+ * @param port USB-C port number
+ */
+uint32_t pd_get_requested_current(int port);
 
 /**
  * Return true if partner port is capable of communication over USB data

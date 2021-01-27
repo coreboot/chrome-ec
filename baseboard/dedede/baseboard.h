@@ -146,6 +146,10 @@
 /* LED */
 #define CONFIG_LED_COMMON
 
+/* Sensors */
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
+
 /* SoC */
 #define CONFIG_BOARD_HAS_RTC_RESET
 #define CONFIG_CHIPSET_JASPERLAKE
@@ -195,7 +199,6 @@
 /* TODO(b:147314141): Verify these timings */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000	/* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000	/* us */
-#define PD_VCONN_SWAP_DELAY		5000	/* us */
 
 #ifndef __ASSEMBLER__
 

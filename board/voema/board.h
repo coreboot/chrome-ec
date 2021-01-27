@@ -28,6 +28,8 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensors */
 /* BMA253 accelerometer in base */
@@ -60,7 +62,6 @@
 /* TODO: b/144165680 - measure and check these values on Volteer */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
@@ -153,6 +154,7 @@
 
 enum battery_type {
 	BATTERY_LGC011,
+	BATTERY_PANASONIC_AP15O5L,
 	BATTERY_TYPE_COUNT,
 };
 

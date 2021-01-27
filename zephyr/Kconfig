@@ -33,6 +33,7 @@ if PLATFORM_EC
 
 rsource "Kconfig.battery"
 rsource "Kconfig.powerseq"
+rsource "Kconfig.motionsense"
 rsource "Kconfig.tasks"
 rsource "Kconfig.usbc"
 
@@ -65,6 +66,31 @@ config PLATFORM_EC_ACPI
 	  Enable shimming the ACPI handler, which will handle the Host data from
 	  the ACPI I/O port for X86 AP.
 
+config PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
+	bool "Host command: EC_CMD_GET_UPTIME_INFO"
+	default PLATFORM_EC_HOSTCMD
+	help
+	  Enable the EC_CMD_GET_UPTIME_INFO host command which reports the time
+	  the EC has been powered up, the number of AP resets, an optional log
+	  of AP-reset events and some flags.
+
+config PLATFORM_EC_AP_RESET_LOG
+	bool "Enable the Application Processor reset log"
+	depends on PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
+	default y if PLATFORM_EC_POWERSEQ
+	help
+	  Enable logging of AP reset events. This information is provided in
+	  response to the EC_CMD_GET_UPTIME_INFO host command.
+
+config PLATFORM_EC_BOARD_RESET_AFTER_POWER_ON
+	bool "Work around H1 reset issue"
+	default y
+	help
+	  Enable this if H1 resets the EC after power-on. This is needed so the EC
+	  can delay its start-up until the reset happens. Without this option
+	  the EC starts up, performs some amount of processing and then gets a
+	  reset that it is not expecting.
+
 config PLATFORM_EC_CBI
 	bool "CBI EEPROM support"
 	depends on PLATFORM_EC_I2C
@@ -79,6 +105,21 @@ config PLATFORM_EC_CBI
 	  See here for information on CBI:
 
 	  https://chromium.googlesource.com/chromiumos/docs/+/master/design_docs/cros_board_info.md
+
+config PLATFORM_EC_CHIPSET_RESET_HOOK
+	bool "Provide a hook for when the AP resets"
+	default y
+	help
+	  Enables support for the HOOK_CHIPSET_RESET hook. This can be used by
+	  code that needs to run before a programmatic reset actually happens.
+	  Note that these hooks don't run with a cold reset, only when the AP
+	  decides to reset itself.
+
+	  You can declare a hook like this:
+
+	     DECLARE_HOOK(HOOK_CHIPSET_RESET, do_something, HOOK_PRIO_DEFAULT);
+
+	  Then do_something() will be called just before the reset happens.
 
 menuconfig PLATFORM_EC_ESPI
 	bool "eSPI"
@@ -167,6 +208,7 @@ endif # PLATFORM_EC_FLASH
 menuconfig PLATFORM_EC_KEYBOARD
 	bool "Keyboard support"
 	select HAS_TASK_KEYSCAN
+	default n if ARCH_POSIX
 	default y
 	help
 	  Enable compilation of support for scanning a keyboard and providing
@@ -234,6 +276,7 @@ config PLATFORM_EC_HOOKS
 
 config PLATFORM_EC_I2C
 	bool "I2C shim"
+	default n if ARCH_POSIX
 	default y
 	help
 	  Enable compilation of the EC i2c module. Once enabled, it will be
@@ -244,6 +287,7 @@ config PLATFORM_EC_I2C
 
 menuconfig PLATFORM_EC_HOSTCMD
 	bool "Host commands"
+	default n if ARCH_POSIX
 	default y if AP
 	select HAS_TASK_HOSTCMD
 	help
@@ -261,6 +305,113 @@ config PLATFORM_EC_LID_SWITCH
 	  automatically power on.
 
 	  This requires a GPIO named GPIO_LID_OPEN to be defined in gpio_map.h.
+
+config PLATFORM_EC_MKBP_EVENT
+    bool "MKBP event"
+    help
+      Enable this to support MKBP event. MKBP event is used not only
+      for matrix keyboard but also for other many events like button,
+      switch, fingerprint, and etc.
+
+      This requires a MKBP event delivery method(GPIO, HOST_EVENT, and etc)
+
+if PLATFORM_EC_MKBP_EVENT
+
+choice
+    prompt "MKBP delivery method"
+    default PLATFORM_EC_MKBP_USE_GPIO
+    help
+      Select MKBP delivery method
+
+config PLATFORM_EC_MKBP_USE_GPIO
+    bool "Use GPIO"
+    help
+      Select to send MKBP events via GPIO. You should define GPIO_EC_INT_L
+      in gpio_map.h as output from the EC. The GPIO is used to indicate an
+      event is ready for serving by the AP.
+
+config PLATFORM_EC_MKBP_USE_HOST_EVENT
+    bool "Use host event"
+    help
+      Select to send MKBP events via host event.
+
+config PLATFORM_EC_MKBP_USE_GPIO_AND_HOST_EVENT
+    bool "Use GPIO and host event"
+    help
+      MKBP events are notified by using both a GPIO and a host event.
+
+      You should use this if you are using a GPIO to notify the AP of an MKBP
+      event, and you need an MKBP event to wake the AP in suspend and the
+      AP cannot wake from the GPIO.  Since you are using both a GPIO and
+      a hostevent for the notification, make sure that the S0 hostevent mask
+      does NOT include MKBP events.  Otherwise, you will have multiple
+      consumers for a single event. However, make sure to configure the
+      host event *sleep* mask in coreboot to include MKBP events. In order to
+      prevent all MKBP events from waking the AP, use
+      CONFIG_MKBP_EVENT_WAKEUP_MASK to filter the events.
+
+config PLATFORM_EC_MKBP_USE_CUSTOM
+    bool "Use custom method"
+    help
+      Select to send MKBP events using custom method. You need to define
+      mkbp_set_host_active_via_custom() which is called when there's a MKBP event
+      to be sent. for more about the function, refer to mkbp_event.h.
+
+endchoice
+
+endif # PLATFORM_EC_MKBP_EVENT
+
+config PLATFORM_EC_PANIC
+	bool "Panic output"
+	default y
+	help
+	  Enable support for collecting and reporting panic information,
+	  caused by exceptions in the EC. This can be the result of a watchdog
+	  firing, a division by zero, unaligned access, stack overflow or
+	  assertion failure.
+
+	  The panic information is made available to the AP via the
+	  EC_CMD_GET_PANIC_INFO host command and a 'panicinfo' console command
+
+if PLATFORM_EC_PANIC
+
+config PLATFORM_EC_SOFTWARE_PANIC
+	bool "Software panic"
+	default y
+	help
+	  Sometimes the EC has bugs that are provoked by unexpected events.
+	  This enables storing a panic log and halt the system for
+	  software-related reasons, such as stack overflow or assertion
+	  failure.
+
+config PLATFORM_EC_CONSOLE_CMD_CRASH
+	bool "Console command: crash"
+	default y
+	help
+	  For testing purposes it is useful to be able to generation exceptions
+	  to check that the panic reporting is working correctly. The enables
+	  the 'crash' command which supports generating various exceptions,
+	  selected by its parameter:
+
+	     assert              - assertion failure (ASSERT() macro)
+	     divzero             - division by zero
+	     udivzero            - division of unsigned value by zero
+	     stack (if enabled)  - stack overflow
+	     unaligned           - unaligned access (e.g. word load from 0x123)
+	     watchdog            - watchdog timer fired
+	     hang                - infinite loop in the EC code
+
+config PLATFORM_EC_STACKOVERFLOW
+	bool "Console command: crash stack"
+	depends on PLATFORM_EC_CONSOLE_CMD_CRASH
+	default y
+	help
+	  This enables the 'stack' parameter for the 'crash' command. This
+	  causes a stack overflow by recursing repeatedly while task switching.
+	  This can be used to check that stack-overflow detection is working
+	  as expected.
+
+endif # PLATFORM_EC_PANIC
 
 config PLATFORM_EC_PORT80
 	bool "Port 80 support"
@@ -294,6 +445,44 @@ config PLATFORM_EC_CONSOLE_CMD_SHMEM
 	  located at the top of RAM, above all RAM symbols: total size, bytes
 	  used and the maximum number of bytes that have been used since
 	  the EC started running.
+
+config PLATFORM_EC_THROTTLE_AP
+	bool "CPU throttling"
+	default y if PLATFORM_EC_POWERSEQ
+	help
+	  Enable throttling the CPU based on the temperature sensors. When they
+	  detect that the CPU is getting too hot, the CPU is throttled to
+	  a lower speed. This reduce the CPU's power output and eventually
+	  results in a lower temperature.
+
+if PLATFORM_EC_THROTTLE_AP
+
+# TODO(b/177676794): Add the CONFIG_THROTTLE_AP_ON_... options
+
+config PLATFORM_EC_CHIPSET_CAN_THROTTLE
+	bool "CPU can support throttling"
+	default y
+	help
+	  Indicates that the SoC supports throttling. This means that a
+	  chipset_throttle_cpu() function is provided by the chipset, to be
+	  called to set the throttle state. The typical implementation asserts
+	  GPIO_CPU_PROCHOT, to make the CPU slow down.
+
+config PLATFORM_EC_CONSOLE_CMD_APTHROTTLE
+	bool "Console command: apthrottle"
+	default y
+	help
+	  This command shows the current status of AP throttling. Both soft
+	  (type 0) and hard (type 1) throttling are supported. Soft throttling
+	  is typically controlled by the AP via a host event. Hard throttling
+	  typically uses the PROCHOT (Processor Hot) signal on x86 CPUs.
+
+	  Example output:
+
+	     AP throttling type 0 is off (0x00000000)
+	     AP throttling type 1 is off (0x00000000)
+
+endif # PLATFORM_EC_THROTTLE_AP
 
 menuconfig PLATFORM_EC_TIMER
 	bool "Timer module"
