@@ -661,23 +661,23 @@ static int icm426xx_set_offset(const struct motion_sensor_t *s,
 			       const int16_t *offset, int16_t temp)
 {
 	intv3_t v = { offset[X], offset[Y], offset[Z] };
-	int range, div1, div2;
+	int div1, div2;
 	int i;
 
+	/* rotate back to chip frame */
 	rotate_inv(v, *s->rot_standard_ref, v);
 
 	/* convert raw data to hardware offset units */
-	range = icm_get_range(s);
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		/* hardware offset is 1/2048g by LSB */
-		div1 = range * 2048;
-		div2 = 32768;
+		/* hardware offset is 1/2048g /LSB, EC offset 1/1024g /LSB. */
+		div1 = 2;
+		div2 = 1;
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
-		/* hardware offset is 1/32dps by LSB */
-		div1 = range * 32;
-		div2 = 32768;
+		/* hardware offset is 1/32dps /LSB, EC offset 1/1024dps /LSB. */
+		div1 = 1;
+		div2 = 32;
 		break;
 	default:
 		return EC_ERROR_INVAL;
@@ -692,7 +692,7 @@ static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 			       int16_t *temp)
 {
 	intv3_t v;
-	int range, div1, div2;
+	int div1, div2;
 	int i, ret;
 
 	ret = icm426xx_get_hw_offset(s, v);
@@ -700,17 +700,16 @@ static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 		return ret;
 
 	/* transform offset to raw data */
-	range = icm_get_range(s);
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		/* hardware offset is 1/2048g by LSB */
-		div1 = 32768;
-		div2 = 2048 * range;
+		/* hardware offset is 1/2048g /LSB, EC offset 1/1024g /LSB. */
+		div1 = 1;
+		div2 = 2;
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
-		/* hardware offset is 1/32dps by LSB */
-		div1 = 32768;
-		div2 = 32 * range;
+		/* hardware offset is 1/32dps /LSB, EC offset 1/1024dps /LSB. */
+		div1 = 32;
+		div2 = 1;
 		break;
 	default:
 		return EC_ERROR_INVAL;
@@ -719,7 +718,6 @@ static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 		v[i] = round_divide(v[i] * div1, div2);
 
 	rotate(v, *s->rot_standard_ref, v);
-
 	offset[X] = v[X];
 	offset[Y] = v[Y];
 	offset[Z] = v[Z];
