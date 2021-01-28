@@ -14,8 +14,8 @@
 
 /* Shutdown mode parameter to write to manufacturer access register */
 #define SB_SHUTDOWN_DATA	0x0010
-#define CHARGING_VOLTAGE_LIMIT	8500
-#define CHARGING_CURRENT_LIMIT	1930
+#define CHARGING_VOLTAGE_LIMIT	8304
+#define CHARGING_CURRENT_LIMIT	1536
 
 static const struct battery_info info = {
 	.voltage_max = 8700,/* mV */
