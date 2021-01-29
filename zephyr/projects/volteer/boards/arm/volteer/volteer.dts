@@ -57,6 +57,31 @@
 		};
 	};
 
+	named-pwms {
+		compatible = "named-pwms";
+
+		led1_blue {
+			pwms = <&pwm2 0 PWM_POLARITY_INVERTED>;
+			label = "LED1_BLUE";
+			frequency = <4800>;
+		};
+		led2_green  {
+			pwms = <&pwm0 0 PWM_POLARITY_INVERTED>;
+			label = "LED2_GREEN";
+			frequency = <4800>;
+		};
+		led3_red {
+			pwms = <&pwm1 0 PWM_POLARITY_INVERTED>;
+			label = "LED3_RED";
+			frequency = <4800>;
+		};
+		led3_sidesel {
+			pwms = <&pwm7 0 PWM_POLARITY_INVERTED>;
+			label = "LED4_SIDESEL";
+			frequency = <2400>;
+		};
+	};
+
 	named-gpios {
 		compatible = "named-gpios";
 
@@ -140,6 +165,10 @@
 			#gpio-cells = <0>;
 			gpios = <&gpio0 3 GPIO_INPUT>;
 			label = "USB_C1_MIX_INT_ODL";
+		};
+		usb_c1_frs_en {
+			gpios = <&gpio9 4 GPIO_OUT_LOW>;
+			label = "USB_C1_FRS_EN";
 		};
 		ec_voldn_btn_odl {
 			gpios = <&gpio9 3 (GPIO_INPUT | GPIO_PULL_UP)>;
@@ -393,6 +422,15 @@
 			label = "FLASH_INTERFACE_UNIT0";
 			pinctrl-0 = <>;
 		};
+
+		bbram: bb-ram@400af000 {
+			compatible = "nuvoton,npcx-cros-bbram";
+			status = "okay";
+			reg = <0x400af000 0x80
+			       0x400af100 0x1>;
+			reg-names = "memory", "status";
+			label = "BBRAM";
+		};
 	};
 
 	/*
@@ -452,5 +490,25 @@
 };
 
 &cros_kb_raw {
+	status = "okay";
+};
+
+/* Green LED */
+&pwm0 {
+	status = "okay";
+};
+
+/* Red LED */
+&pwm1 {
+	status = "okay";
+};
+
+/* Blue LED */
+&pwm2 {
+	status = "okay";
+};
+
+/* Side selection LED */
+&pwm7 {
 	status = "okay";
 };

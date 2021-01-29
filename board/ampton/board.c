@@ -76,7 +76,7 @@ const struct usb_mux ampton_usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_port = I2C_PORT_USBC0,
 		.i2c_addr_flags = PS8751_I2C_ADDR1_FLAGS,
 		.flags = USB_MUX_FLAG_NOT_TCPC,
-		.driver = &tcpci_tcpm_usb_mux_driver,
+		.driver = &ps8xxx_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 		.board_init = &tune_mux,
 	},
@@ -86,7 +86,7 @@ const struct usb_mux ampton_usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_port = I2C_PORT_USBC1,
 		.i2c_addr_flags = PS8751_I2C_ADDR1_FLAGS,
 		.flags = USB_MUX_FLAG_NOT_TCPC,
-		.driver = &tcpci_tcpm_usb_mux_driver,
+		.driver = &ps8xxx_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 		.board_init = &tune_mux,
 	}
@@ -98,9 +98,10 @@ const struct usb_mux ampton_usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 static int tune_mux(const struct usb_mux *me)
 {
 	/* Auto EQ disabled, compensate for channel lost up to 3.6dB */
-	mux_write(me, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98);
+	RETURN_ERROR(mux_write(me, PS8XXX_REG_MUX_DP_EQ_CONFIGURATION, 0x98));
 	/* DP output swing adjustment +15% */
-	mux_write(me, PS8XXX_REG_MUX_DP_OUTPUT_CONFIGURATION, 0xc0);
+	RETURN_ERROR(mux_write(me, PS8XXX_REG_MUX_DP_OUTPUT_CONFIGURATION,
+			       0xc0));
 
 	return EC_SUCCESS;
 }

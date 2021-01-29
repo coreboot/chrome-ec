@@ -364,7 +364,7 @@ static const struct usb_state pe_states[];
 #endif
 
 /* List of human readable state names for console debugging */
-__maybe_unused static const char * const pe_state_names[] = {
+__maybe_unused static __const_data const char * const pe_state_names[] = {
 	/* Super States */
 #ifdef CONFIG_USB_PD_REV30
 	[PE_PRS_FRS_SHARED] = "SS:PE_PRS_FRS_SHARED",
@@ -6334,6 +6334,9 @@ static void pe_vcs_send_ps_rdy_swap_run(int port)
 		pe_set_ready_state(port);
 	}
 
+	if (pe_check_outgoing_discard(port))
+		return;
+
 	if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
 		/* PS_RDY didn't send, soft reset */
@@ -6713,8 +6716,7 @@ uint32_t pe_get_flags(int port)
 	return pe[port].flags;
 }
 
-
-static const struct usb_state pe_states[] = {
+static __const_data const struct usb_state pe_states[] = {
 	/* Super States */
 #ifdef CONFIG_USB_PD_REV30
 	[PE_PRS_FRS_SHARED] = {

@@ -76,12 +76,16 @@ static void spi_configure(void)
 	/* Enable clocks to SPI4 module (master) */
 	STM32_RCC_APB2ENR |= STM32_RCC_PB2_SPI4;
 
-	spi_enable(CONFIG_SPI_FP_PORT, 1);
+	spi_enable(&spi_devices[0], 1);
 }
 
 /* Initialize board. */
 static void board_init(void)
 {
+	enum fp_sensor_spi_select spi_select = get_fp_sensor_spi_select();
+
+	ccprints("FP_SPI_SEL: %s", fp_sensor_spi_select_to_str(spi_select));
+
 	spi_configure();
 
 	ccprints("TRANSPORT_SEL: %s",

@@ -7,7 +7,9 @@
 
 #include "adc_chip.h"
 #include "button.h"
+#include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
+#include "cbi_fw_config.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
@@ -31,6 +33,8 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "keyboard_config.h"
+#include "keyboard_raw.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "motion_sense.h"
@@ -67,6 +71,27 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A1_VBUS,
 };
 
+#ifdef BOARD_MAGOLOR
+/* Keyboard scan setting */
+struct keyboard_scan_config keyscan_config = {
+	/*
+	 * F3 key scan cycle completed but scan input is not
+	 * charging to logic high when EC start scan next
+	 * column for "T" key, so we set .output_settle_us
+	 * to 80us from 50us.
+	 */
+	.output_settle_us = 80,
+	.debounce_down_us = 9 * MSEC,
+	.debounce_up_us = 30 * MSEC,
+	.scan_period_us = 3 * MSEC,
+	.min_post_scan_delay_us = 1000,
+	.poll_timeout_us = 100 * MSEC,
+	.actual_key_mask = {
+		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff,  /* full set */
+	},
+};
+#endif
 
 /* C0 interrupt line shared by BC 1.2 and charger */
 static void check_c0_line(void);
@@ -189,7 +214,6 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-
 const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
@@ -223,6 +247,24 @@ static void setup_thermal(void)
 	thermal_params[TEMP_SENSOR_1] = thermal_a;
 	thermal_params[TEMP_SENSOR_2] = thermal_b;
 }
+
+#ifdef BOARD_MAGOLOR
+static void board_update_no_keypad_by_fwconfig(void)
+{
+	if (!get_cbi_fw_config_numeric_pad()) {
+#ifndef TEST_BUILD
+		/* Disable scanning KSO13 & 14 if keypad isn't present. */
+		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);
+		keyscan_config.actual_key_mask[11] = 0xfa;
+		keyscan_config.actual_key_mask[12] = 0xca;
+
+		/* Search key is moved back to col=1,row=0 */
+		keyscan_config.actual_key_mask[0] = 0x14;
+		keyscan_config.actual_key_mask[1] = 0xff;
+#endif
+	}
+}
+#endif
 
 void board_hibernate(void)
 {
@@ -397,6 +439,14 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 	charge_set_input_current_limit(icl, charge_mv);
 }
 
+__override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
+{
+	if (port < 0 || port > board_get_usb_pd_port_count())
+		return;
+
+	raa489000_set_output_current(port, rp);
+}
+
 /* Sensors */
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
@@ -501,7 +551,7 @@ struct motion_sensor_t icm426xx_base_gyro = {
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
 	.default_range = 1000, /* dps */
-	.rot_standard_ref = &base_standard_ref,
+	.rot_standard_ref = &base_icm_ref,
 	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
 	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
 };
@@ -576,7 +626,7 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 };
 
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 void board_init(void)
 {
@@ -589,16 +639,8 @@ void board_init(void)
 
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
-
-	/* Turn on 5V if the system is on, otherwise turn it off. */
-	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
-			      CHIPSET_STATE_SOFT_OFF);
-	board_power_5v_enable(on);
-
-	/* Initialize THERMAL */
-	setup_thermal();
-
-	#ifdef BOARD_MAGOLOR
+	if (get_cbi_fw_config_tablet_mode()) {
+#ifdef BOARD_MAGOLOR
 		if (get_cbi_ssfc_base_sensor() == SSFC_SENSOR_ICM426XX) {
 			motion_sensors[BASE_ACCEL] = icm426xx_base_accel;
 			motion_sensors[BASE_GYRO] = icm426xx_base_gyro;
@@ -611,13 +653,37 @@ void board_init(void)
 			ccprints("LID_ACCEL is KX022");
 		} else
 			ccprints("LID_ACCEL is BMA253");
-	#endif
+#endif
+		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+		/* Enable gpio interrupt for base accelgyro sensor */
+		gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+	} else {
+		motion_sensor_count = 0;
+		gmr_tablet_switch_disable();
+		/* Base accel is not stuffed, don't allow line to float */
+		gpio_set_flags(GPIO_BASE_SIXAXIS_INT_L,
+		GPIO_INPUT | GPIO_PULL_DOWN);
+	}
+
+	/* Turn on 5V if the system is on, otherwise turn it off. */
+	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
+			      CHIPSET_STATE_SOFT_OFF);
+	board_power_5v_enable(on);
+
+	/* Initialize THERMAL */
+	setup_thermal();
+
+#ifdef BOARD_MAGOLOR
+	/* Support Keyboard Pad */
+		board_update_no_keypad_by_fwconfig();
+#endif
+
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 void motion_interrupt(enum gpio_signal signal)
 {
-	#ifdef BOARD_MAGOLOR
+#ifdef BOARD_MAGOLOR
 		switch (get_cbi_ssfc_base_sensor()) {
 		case SSFC_SENSOR_ICM426XX:
 			icm426xx_interrupt(signal);
@@ -629,7 +695,7 @@ void motion_interrupt(enum gpio_signal signal)
 		}
 	#else
 		bmi160_interrupt(signal);
-	#endif
+#endif
 }
 
 __override void ocpc_get_pid_constants(int *kp, int *kp_div,
