@@ -51,6 +51,10 @@
 #define GPIO_USB_C1_INT_ODL GPIO_SUB_USB_C1_INT_ODL
 
 /* Keyboard */
+#ifdef BOARD_MAGOLOR
+#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_KEYBOARD_KEYPAD
+#endif
 #define CONFIG_PWM_KBLIGHT
 
 /* LED defines */
@@ -112,6 +116,7 @@
 /* Sensors */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCELGYRO_BMI160		/* Base accel */
