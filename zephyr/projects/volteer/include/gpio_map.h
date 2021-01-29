@@ -24,6 +24,7 @@
 #define GPIO_AC_PRESENT            NAMED_GPIO(acok_od)
 #define GPIO_CPU_PROCHOT           NAMED_GPIO(ec_prochot_odl)
 #define GPIO_EC_BATT_PRES_ODL      NAMED_GPIO(ec_batt_pres_odl)
+#define GPIO_EC_INT_L              NAMED_GPIO(ec_pch_int_odl)
 #define GPIO_EC_PCH_SYS_PWROK      NAMED_GPIO(ec_pch_sys_pwrok)
 #define GPIO_EC_PCH_WAKE_ODL       NAMED_GPIO(ec_pch_wake_odl)
 #define GPIO_EN_PP3300_A           NAMED_GPIO(en_pp3300_a)
@@ -63,6 +64,7 @@
 
 /* USB and USBC Signals */
 #define GPIO_EN_PP5000_USBA        NAMED_GPIO(en_pp5000_usba)
+#define GPIO_USB_C1_FRS_EN         NAMED_GPIO(usb_c1_frs_en)
 #define GPIO_USB_C1_RT_RST_ODL \
 	NAMED_GPIO_NODELABEL(usb_c1_bb_retimer, reset_gpios)
 
@@ -120,6 +122,7 @@
 	POWER_SIGNAL_INT(GPIO_PCH_SLP_S0_L, GPIO_INT_EDGE_BOTH)           \
 	POWER_SIGNAL_INT(GPIO_PCH_SLP_S3_L, GPIO_INT_EDGE_BOTH)           \
 	POWER_SIGNAL_INT(GPIO_PCH_SLP_SUS_L, GPIO_INT_EDGE_BOTH)          \
+	POWER_SIGNAL_INT(GPIO_PG_EC_DSW_PWROK, GPIO_INT_EDGE_BOTH)        \
 	POWER_SIGNAL_INT(GPIO_PG_EC_RSMRST_ODL, GPIO_INT_EDGE_BOTH)       \
 	POWER_SIGNAL_INT(GPIO_PCH_DSW_PWROK, GPIO_INT_EDGE_BOTH)          \
 	POWER_SIGNAL_INT(GPIO_PG_EC_ALL_SYS_PWRGD, GPIO_INT_EDGE_BOTH)    \

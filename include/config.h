@@ -1772,6 +1772,13 @@
 #undef CONFIG_FLASH_PROTECT_RW
 
 /*
+ * Enable Flash Write Protect by default. Some platforms like Servo_v4
+ * development tools do not use write protection. This enables the feature
+ * to be removed to save flash space
+ */
+#define CONFIG_CMD_FLASH_WP
+
+/*
  * Store persistent write protect for the flash inside the flash data itself.
  * This allows ECs with internal flash to emulate something closer to a SPI
  * flash write protect register.  If this is not defined, write protect state
@@ -4290,6 +4297,17 @@
 #undef CONFIG_USB_PD_TCPM_PS8705
 #undef CONFIG_USB_PD_TCPM_PS8805
 #undef CONFIG_USB_PD_TCPM_PS8815
+
+/*
+ * Enable PS8751 custom mux driver. It was designed to make use of Low Power
+ * Mode on PS8751 TCPC/MUX chip when running as MUX only (CC lines are not
+ * connected, eg. Ampton).
+ *
+ * If your PS8751 is working in the ordinary way (as TCPC and MUX) or you don't
+ * need to take advantage of Low Power Mode when working as MUX only, standard
+ * TCPC MUX driver (CONFIG_USB_PD_TCPM_MUX) will work fine.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8751_CUSTOM_MUX_DRIVER
 
 /*
  * Defined automatically by chip and depends on chip. This guards the onboard
