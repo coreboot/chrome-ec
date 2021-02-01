@@ -40,8 +40,20 @@ void device_set_events(uint32_t mask)
 	/* Ignore events that are not enabled */
 	mask &= device_enabled_events;
 
-	if ((device_current_events & mask) != mask)
+	if ((device_current_events & mask) != mask) {
 		CPRINTS("device event set 0x%08x", mask);
+	} else {
+		/*
+		 * We are here because there is no flag change (1->1, 0->0).
+		 * For 0->0, we shouldn't notify the host because the flag is
+		 * disabled. For 1->1, it's most likely redundant but we still
+		 * need to notify the host in case the host didn't have a
+		 * chance to read the flags. Otherwise, the flag would never be
+		 * consumed because the host would never be notified.
+		 */
+		if (!mask)
+			return;
+	}
 
 	atomic_or(&device_current_events, mask);
 
