@@ -68,7 +68,7 @@ enum base_accelgyro_type {
 
 const mat33_fp_t base_standard_ref_icm426xx = {
 	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
+	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0,  0, FLOAT_TO_FP(1)}
 };
 
@@ -137,6 +137,8 @@ static void board_detect_motionsensor(void)
 	int ret;
 	int val;
 
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		return;
 	if (base_accelgyro_config != BASE_GYRO_NONE)
 		return;
 
@@ -158,6 +160,7 @@ static void board_detect_motionsensor(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_detect_motionsensor,
 	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, board_detect_motionsensor, HOOK_PRIO_INIT_ADC + 2);
 
 void board_update_sensor_config_from_sku(void)
 {

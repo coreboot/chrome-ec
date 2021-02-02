@@ -40,6 +40,9 @@ typedef uint8_t task_id_t;
 	COND_CODE_1(HAS_TASK_MOTIONSENSE,                                     \
 		     (CROS_EC_TASK(MOTIONSENSE, motion_sense_task, 0,         \
 				   CONFIG_TASK_MOTIONSENSE_STACK_SIZE)), ())  \
+	COND_CODE_1(HAS_TASK_HOOKS,                                       \
+			(CROS_EC_TASK(HOOKS, hook_task, 0,                \
+				CONFIG_TASK_HOOKS_STACK_SIZE)), ())       \
 	COND_CODE_1(HAS_TASK_HOSTCMD,                                     \
 		     (CROS_EC_TASK(HOSTCMD, host_command_task, 0,         \
 				   CONFIG_TASK_HOSTCMD_STACK_SIZE)), ())  \
@@ -68,13 +71,13 @@ typedef uint8_t task_id_t;
 		     (CROS_EC_TASK(PD_INT_C0, pd_interrupt_handler_task, 0, \
 				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())   \
 	COND_CODE_1(HAS_TASK_PD_INT_C1,                                   \
-		     (CROS_EC_TASK(PD_INT_C1, pd_interrupt_handler_task, 0, \
+		     (CROS_EC_TASK(PD_INT_C1, pd_interrupt_handler_task, 1, \
 				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())   \
 	COND_CODE_1(HAS_TASK_PD_INT_C2,                                   \
-		     (CROS_EC_TASK(PD_INT_C2, pd_interrupt_handler_task, 0, \
+		     (CROS_EC_TASK(PD_INT_C2, pd_interrupt_handler_task, 2, \
 				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())   \
 	COND_CODE_1(HAS_TASK_PD_INT_C3,                                   \
-		     (CROS_EC_TASK(PD_INT_C3, pd_interrupt_handler_task, 0, \
+		     (CROS_EC_TASK(PD_INT_C3, pd_interrupt_handler_task, 3, \
 				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())
 #elif defined(CONFIG_HAS_TEST_TASKS)
 #include "shimmed_test_tasks.h"

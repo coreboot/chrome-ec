@@ -32,6 +32,8 @@ menuconfig PLATFORM_EC
 if PLATFORM_EC
 
 rsource "Kconfig.battery"
+rsource "Kconfig.keyboard"
+rsource "Kconfig.led"
 rsource "Kconfig.powerseq"
 rsource "Kconfig.motionsense"
 rsource "Kconfig.tasks"
@@ -58,6 +60,15 @@ config ZEPHYR
 # corresponding EC CONFIG if this Kconfig is enabled.
 #
 # Please keep these in alphabetical order
+
+config PLATFORM_EC_BOOT_RAM_SIZE
+	hex "The total size required for the boot loader"
+	default 0x0
+	help
+	  This is the size (in bytes) required by the boot loader. It will count
+	  against the data section of the RAM. Not all chips require this value.
+	  See the datasheet for the npcx chip family for example. If not needed,
+	  this can simple be left at 0x0.
 
 config PLATFORM_EC_ACPI
 	bool "Enable the ACPI module"
@@ -220,64 +231,6 @@ config PLATFORM_EC_MAPPED_STORAGE
 	  flash_physical_read().
 
 endif # PLATFORM_EC_FLASH
-
-menuconfig PLATFORM_EC_KEYBOARD
-	bool "Keyboard support"
-	select HAS_TASK_KEYSCAN
-	default n if ARCH_POSIX
-	default y
-	help
-	  Enable compilation of support for scanning a keyboard and providing
-	  the resulting input to the AP over the host interface. This consists
-	  of a keyboard-scanning task which provides key scans via it calling
-	  keyboard_state_changed() (for i8042) or its client calling
-	  keyboard_scan_get_state() (for MKBP).
-
-	  Enabling this automatically enables HAS_TASK_KEYSCAN since keyboard
-	  scanning must run in its own task.
-
-if PLATFORM_EC_KEYBOARD
-
-choice "Protocol select"
-	prompt "Select the keyboard protocol to use"
-
-config PLATFORM_EC_KEYBOARD_PROTOCOL_8042
-	bool "i8042"
-	select HAS_TASK_KEYPROTO
-	help
-	  Use the i8042 protocol to communicate with the AP. This dates from the
-	  Intel 8042 keyboard controller chip released in 1976. It uses two-way
-	  communication via a few 8-bit registers, allowing key codes to be
-	  sent to the AP when keys are pressed and released.
-
-	  See here for docs: https://wiki.osdev.org/%228042%22_PS/2_Controller
-
-endchoice # PLATFORM_EC_KEYBOARD
-
-config PLATFORM_EC_KEYBOARD_COL2_INVERTED
-	bool "A mechanism for passing KSO2 to H1 which inverts the signal"
-	help
-	  This option enables a mechanism for passing the column 2
-	  to H1 which inverts the signal. The signal passing through H1
-	  adds more delay. Need a larger delay value. Otherwise, pressing
-	  Refresh key will also trigger T key, which is in the next scanning
-	  column line. See http://b/156007029.
-
-config PLATFORM_EC_CONSOLE_CMD_KEYBOARD_8042
-	bool "Console command: i8042"
-	default y if PLATFORM_EC_KEYBOARD_PROTOCOL_8042
-	help
-	  This command prints the state of the i8042 keyboard protocol and
-	  includes the following subcommands:
-
-	    codeset	- Get/set keyboard codeset
-	    ctrlram	- Get/set keyboard controller RAM
-	    internal    - Show internal information
-	    kbd		- Print or toggle keyboard info
-	    kblog	- Print or toggle keyboard event log (current disabled)
-	    typematic	- Get/set typematic delays
-
-endif # PLATFORM_EC_KEYBOARD
 
 config PLATFORM_EC_HOOKS
 	bool "Hooks and deferred compatibility shim"
@@ -452,6 +405,67 @@ config PLATFORM_EC_POWER_BUTTON
 	  shutdown sequence.
 
 	  This requires a GPIO named GPIO_POWER_BUTTON_L in gpio_map.h.
+
+config PLATFORM_EC_PWM
+	bool "PWM (Pulse Width Modulation) module"
+	help
+	  Enable the PWM (Pulse Width Modulation) module. This module is used to
+	  support variable brightness LEDs, backlight controls, and
+	  variable-speed fans.
+
+config PLATFORM_EC_RTC
+	bool "Real-time clock (RTC)"
+	default y
+	help
+	  Enable support for a real-time clock. Typically this is available
+	  on-chip in the EC. It provides a way to track the passage of time
+	  in terms of second and minutes. Once set, and provided that it has a
+	  suitable power source, it should be able to keep reasonably accurate
+	  time over a period of days and weeks.
+
+	  The starting EC clock is typically set by the AP, since it has access
+	  to the outside world and can often obtain the current time when
+	  desired.
+
+if PLATFORM_EC_RTC
+
+config PLATFORM_EC_CONSOLE_CMD_RTC
+	bool "Console command: rtc"
+	default y
+	help
+	  This command allows getting and setting the current RTC value. The
+	  value is in seconds since the Epoch (midnight on 1/1/70). You can
+	  convert this to a human date on the command line with 'date -u -d @n'
+	  where n is the numeric value. To convert a time to seconds, use:
+
+	     date -d '1970-01-01 UTC + n seconds'
+
+config PLATFORM_EC_CONSOLE_CMD_RTC_ALARM
+	bool "Console command: rtc_alarm"
+	depends on PLATFORM_EC_CONSOLE_CMD_RTC
+	default y
+	help
+	  This command supports setting a real-time-clock (RTC) alarm that
+	  causes an interrupt when the timer reaches that point. To set the
+	  alarm:
+
+	     rtc <sec> [<usec>]
+
+	  where:
+	    <sec> is the number of seconds since the epoch
+	    <usec> is the optional number of microseconds (fractional seconds)
+
+config PLATFORM_EC_HOSTCMD_RTC
+	bool "Host command: EC_CMD_RTC_GET_VALUE etc."
+	depends on PLATFORM_EC_HOSTCMD
+	default y
+	help
+	  Enables support for EC_CMD_RTC_GET_VALUE, EC_CMD_RTC_SET_VALUE,
+	  EC_CMD_RTC_GET_ALARM and EC_CMD_RTC_SET_ALARM which colectively allow
+	  the AP to control the EC's real-time-clock. The AP typically makes
+	  use of the EC's RTC to avoid needing a discrete RTC chip on the board.
+
+endif # PLATFORM_EC_RTC
 
 config PLATFORM_EC_CONSOLE_CMD_SHMEM
 	bool "Console command: shmem"

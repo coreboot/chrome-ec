@@ -31,6 +31,7 @@
 #define GPIO_EN_PP5000             NAMED_GPIO(en_pp5000_a)
 #define GPIO_EN_PP5000_A           NAMED_GPIO(en_pp5000_a)
 #define GPIO_EN_PPVAR_VCCIN        NAMED_GPIO(en_ppvar_vccin)
+#define GPIO_ENTERING_RW           NAMED_GPIO(ec_entering_rw)
 #define GPIO_KBD_KSO2              NAMED_GPIO(ec_kso_02_inv)
 #define GPIO_LID_OPEN              NAMED_GPIO(ec_lid_open)
 #define GPIO_PCH_DSW_PWROK         NAMED_GPIO(ec_pch_dsw_pwrok)
@@ -67,6 +68,9 @@
 #define GPIO_USB_C1_FRS_EN         NAMED_GPIO(usb_c1_frs_en)
 #define GPIO_USB_C1_RT_RST_ODL \
 	NAMED_GPIO_NODELABEL(usb_c1_bb_retimer, reset_gpios)
+
+/* Fan control */
+#define GPIO_EN_PP5000_FAN         NAMED_GPIO(en_pp5000_fan)
 
 /* Don't have a load switch for retimer */
 /* TODO(b/176559881): How to do unimplemented GPIOs? */

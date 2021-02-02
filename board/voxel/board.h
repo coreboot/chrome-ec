@@ -29,8 +29,6 @@
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
 
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-
 #define CONFIG_VBOOT_EFS2
 
 #define CONFIG_POWER_BUTTON
@@ -47,6 +45,7 @@
 /* Keyboard features */
 
 /* Sensors */
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 /* BMI160 Base accel/gyro */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_ICM426XX	/* Base accel second source*/

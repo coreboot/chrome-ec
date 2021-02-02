@@ -126,10 +126,17 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
                                                 "${PLATFORM_EC}/common/keyboard_8042.c"
                                                 "${PLATFORM_EC}/common/keyboard_8042_sharedlib.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
+                                                "${PLATFORM_EC}/common/keyboard_backlight.c"
+                                                "${PLATFORM_EC}/common/pwm_kblight.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
+                                                "${PLATFORM_EC}/common/led_common.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM "${PLATFORM_EC}/common/led_pwm.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_LID_ANGLE
-                                                "${PLATFORM_EC}/common/lid_angle.c"
                                                 "${PLATFORM_EC}/common/motion_lid.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE
+                                                "${PLATFORM_EC}/common/lid_angle.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_LID_SWITCH
                                                 "${PLATFORM_EC}/common/lid_switch.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
@@ -155,6 +162,7 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_THROTTLE_AP
                                                 "${PLATFORM_EC}/common/throttle_ap.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TABLET_MODE
                                                 "${PLATFORM_EC}/common/tablet_mode.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PWM     "${PLATFORM_EC}/common/pwm.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TIMER   "${PLATFORM_EC}/common/timer.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_CHARGER

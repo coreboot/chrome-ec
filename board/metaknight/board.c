@@ -423,6 +423,14 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 	charge_set_input_current_limit(icl, charge_mv);
 }
 
+__override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
+{
+	if (port < 0 || port > board_get_usb_pd_port_count())
+		return;
+
+	raa489000_set_output_current(port, rp);
+}
+
 /* Sensors */
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
@@ -552,7 +560,7 @@ struct motion_sensor_t kx022_lid_accel = {
 struct motion_sensor_t lsm6dsm_base_accel = {
 	.name = "Base Accel",
 	.active_mask = SENSOR_ACTIVE_S0_S3,
-	.chip = MOTIONSENSE_CHIP_LSM6DSM,
+	.chip = MOTIONSENSE_CHIP_LSM6DS3,
 	.type = MOTIONSENSE_TYPE_ACCEL,
 	.location = MOTIONSENSE_LOC_BASE,
 	.drv = &lsm6dsm_drv,
@@ -582,7 +590,7 @@ struct motion_sensor_t lsm6dsm_base_accel = {
 struct motion_sensor_t lsm6dsm_base_gyro = {
 	.name = "Base Gyro",
 	.active_mask = SENSOR_ACTIVE_S0_S3,
-	.chip = MOTIONSENSE_CHIP_LSM6DSM,
+	.chip = MOTIONSENSE_CHIP_LSM6DS3,
 	.type = MOTIONSENSE_TYPE_GYRO,
 	.location = MOTIONSENSE_LOC_BASE,
 	.drv = &lsm6dsm_drv,

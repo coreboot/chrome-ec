@@ -2960,7 +2960,7 @@ static void pe_snk_discovery_run(int port)
 	 * Transition to the PE_SNK_Wait_for_Capabilities state when:
 	 *   1) VBUS has been detected
 	 */
-	if (pd_is_vbus_present(port))
+	if (!pd_check_vbus_level(port, VBUS_REMOVED))
 		set_state_pe(port, PE_SNK_WAIT_FOR_CAPABILITIES);
 }
 
@@ -3636,6 +3636,12 @@ static void pe_snk_transition_to_default_entry(int port)
 {
 	print_current_state(port);
 
+	/* Reset flags */
+	pe[port].flags = 0;
+
+	/* Reset DPM Request */
+	pe[port].dpm_request = 0;
+
 	/* Inform the TC Layer of Hard Reset */
 	tc_hard_reset_request(port);
 }
@@ -3643,7 +3649,6 @@ static void pe_snk_transition_to_default_entry(int port)
 static void pe_snk_transition_to_default_run(int port)
 {
 	if (PE_CHK_FLAG(port, PE_FLAGS_PS_RESET_COMPLETE)) {
-		/* PE_SNK_Startup clears all flags */
 		PE_CLR_FLAG(port, PE_FLAGS_PS_RESET_COMPLETE);
 		/* Inform the Protocol Layer that the Hard Reset is complete */
 		prl_hard_reset_complete(port);
@@ -6333,6 +6338,9 @@ static void pe_vcs_send_ps_rdy_swap_run(int port)
 		pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
 		pe_set_ready_state(port);
 	}
+
+	if (pe_check_outgoing_discard(port))
+		return;
 
 	if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
