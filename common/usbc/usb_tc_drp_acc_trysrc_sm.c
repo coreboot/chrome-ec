@@ -112,21 +112,21 @@ void print_flag(int port, int set_or_clear, int flag);
 #define TC_FLAGS_DISC_IDENT_IN_PROGRESS BIT(15)
 /* Flag to note we should check for connection */
 #define TC_FLAGS_CHECK_CONNECTION       BIT(16)
-/* Flag to note pd_set_suspend SUSPEND state */
-#define TC_FLAGS_SUSPEND                BIT(17)
+/* Flag to note request from pd_set_suspend to enter TC_DISABLED state */
+#define TC_FLAGS_REQUEST_SUSPEND        BIT(17)
+/* Flag to note we are in TC_DISABLED state */
+#define TC_FLAGS_SUSPENDED              BIT(18)
 /* Flag to indicate the port current limit has changed */
-#define TC_FLAGS_UPDATE_CURRENT		BIT(18)
+#define TC_FLAGS_UPDATE_CURRENT		BIT(19)
 /* Flag to indicate USB mux should be updated */
-#define TC_FLAGS_UPDATE_USB_MUX		BIT(19)
+#define TC_FLAGS_UPDATE_USB_MUX		BIT(20)
 
 /* For checking flag_bit_names[] array */
-#define TC_FLAGS_COUNT			20
+#define TC_FLAGS_COUNT			21
 
-/*
- * Clear all flags except TC_FLAGS_LPM_ENGAGED and TC_FLAGS_SUSPEND.
- */
-#define CLR_ALL_BUT_LPM_FLAGS(port) TC_CLR_FLAG(port, \
-	~(TC_FLAGS_LPM_ENGAGED | TC_FLAGS_SUSPEND))
+/* On disconnect, clear most of the flags. */
+#define CLR_FLAGS_ON_DISCONNECT(port) TC_CLR_FLAG(port, \
+	~(TC_FLAGS_LPM_ENGAGED | TC_FLAGS_REQUEST_SUSPEND | TC_FLAGS_SUSPENDED))
 
 /* 100 ms is enough time for any TCPC transaction to complete. */
 #define PD_LPM_DEBOUNCE_US (100 * MSEC)
@@ -303,7 +303,8 @@ static struct bit_name flag_bit_names[] = {
 	{ TC_FLAGS_PR_SWAP_IN_PROGRESS, "PR_SWAP_IN_PROGRESS" },
 	{ TC_FLAGS_DISC_IDENT_IN_PROGRESS, "DISC_IDENT_IN_PROGRESS" },
 	{ TC_FLAGS_CHECK_CONNECTION, "CHECK_CONNECTION" },
-	{ TC_FLAGS_SUSPEND, "SUSPEND" },
+	{ TC_FLAGS_REQUEST_SUSPEND, "REQUEST_SUSPEND" },
+	{ TC_FLAGS_SUSPENDED, "SUSPENDED" },
 	{ TC_FLAGS_UPDATE_CURRENT, "UPDATE_CURRENT" },
 	{ TC_FLAGS_UPDATE_USB_MUX, "UPDATE_USB_MUX" },
 };
@@ -687,12 +688,28 @@ __maybe_unused static void tc_enable_try_src(int en)
 		atomic_clear_bits(&pd_try_src, 1);
 }
 
+/*
+ * Exit all modes due to a detach event
+ * Note: this skips the ExitMode VDM steps in the PE because it is assumed the
+ * partner is not present to receive them, and the PE will no longer be running.
+ */
+static void tc_set_modes_exit(int port)
+{
+	if (IS_ENABLED(CONFIG_USB_PE_SM) &&
+			IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
+		pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
+		pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
+		pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME, 0, 0);
+	}
+}
+
 static void tc_detached(int port)
 {
 	TC_CLR_FLAG(port, TC_FLAGS_TS_DTS_PARTNER);
 	hook_notify(HOOK_USB_PD_DISCONNECT);
 	tc_pd_connection(port, 0);
 	tcpm_debug_accessory(port, 0);
+	tc_set_modes_exit(port);
 }
 
 static inline void pd_set_dual_role_and_event(int port,
@@ -1010,7 +1027,7 @@ void pd_set_suspend(int port, int suspend)
 	if (suspend) {
 		int wait = 0;
 
-		TC_SET_FLAG(port, TC_FLAGS_SUSPEND);
+		TC_SET_FLAG(port, TC_FLAGS_REQUEST_SUSPEND);
 
 		/*
 		 * Avoid deadlock when running from task
@@ -1031,14 +1048,19 @@ void pd_set_suspend(int port, int suspend)
 			msleep(SUSPEND_SLEEP_DELAY);
 		}
 	} else {
-		TC_CLR_FLAG(port, TC_FLAGS_SUSPEND);
+		TC_CLR_FLAG(port, TC_FLAGS_REQUEST_SUSPEND);
 		task_wake(PD_PORT_TO_TASK_ID(port));
 	}
 }
 
 int pd_is_port_enabled(int port)
 {
-	return get_state_tc(port) != TC_DISABLED;
+	/*
+	 * Checking get_state_tc(port) from another task isn't safe since it
+	 * can return TC_DISABLED before tc_cc_open_entry and tc_disabled_entry
+	 * are complete. So check TC_FLAGS_SUSPENDED instead.
+	 */
+	return !TC_CHK_FLAG(port, TC_FLAGS_SUSPENDED);
 }
 
 int pd_fetch_acc_log_entry(int port)
@@ -1449,8 +1471,7 @@ void tc_state_init(int port)
 	/* If port is not available, there is nothing to initialize */
 	if (port >= board_get_usb_pd_port_count()) {
 		tc_enable_pd(port, 0);
-		tc_pause_event_loop(port);
-		TC_SET_FLAG(port, TC_FLAGS_SUSPEND);
+		TC_SET_FLAG(port, TC_FLAGS_REQUEST_SUSPEND);
 		return;
 	}
 
@@ -1845,10 +1866,7 @@ static __maybe_unused int reset_device_and_notify(int port)
 	TC_CLR_FLAG(port, TC_FLAGS_LPM_ENGAGED);
 	tc_start_event_loop(port);
 
-	if (rv == EC_SUCCESS)
-		CPRINTS("C%d: TCPC init ready", port);
-	else
-		CPRINTS("C%d: TCPC init failed!", port);
+	CPRINTS("C%d: TCPC init %s", port, rv ? "failed!" : "ready");
 
 	/*
 	 * Before getting the other tasks that are waiting, clear the reset
@@ -1983,36 +2001,36 @@ static void sink_power_sub_states(int port)
  *
  * Super State Entry Actions:
  *   Remove the terminations from CC
- *   Set's VBUS and VCONN off
+ *   Set VBUS and VCONN off
  */
 static void tc_disabled_entry(const int port)
 {
 	print_current_state(port);
+	/*
+	 * We have completed tc_cc_open_entry (our super state), so set flag
+	 * to indicate to pd_is_port_enabled that we are now suspended.
+	 */
+	TC_SET_FLAG(port, TC_FLAGS_SUSPENDED);
 }
 
 static void tc_disabled_run(const int port)
 {
-	/*
-	 * If pd_set_suspend SUSPEND state changes to
-	 * no longer be suspended then we need to exit
-	 * our current state and go UNATTACHED_SNK
-	 */
-	if (!TC_CHK_FLAG(port, TC_FLAGS_SUSPEND))
+	/* If pd_set_suspend clears the request, go to TC_UNATTACHED_SNK. */
+	if (!TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND))
 		set_state_tc(port, TC_UNATTACHED_SNK);
-
-	task_wait_event(-1);
+	else
+		tc_pause_event_loop(port);
 }
 
 static void tc_disabled_exit(const int port)
 {
-	if (!IS_ENABLED(CONFIG_USB_PD_TCPC)) {
-		if (tcpm_init(port) != 0) {
-			CPRINTS("C%d: TCPC restart failed!", port);
-			return;
-		}
-	}
+	int rv;
 
-	CPRINTS("C%d: TCPC resumed!", port);
+	tc_start_event_loop(port);
+	TC_CLR_FLAG(port, TC_FLAGS_SUSPENDED);
+
+	rv = tcpm_init(port);
+	CPRINTS("C%d: TCPC init %s", port, rv ? "failed!" : "ready");
 }
 
 /**
@@ -2106,7 +2124,7 @@ static void tc_unattached_snk_entry(const int port)
 			USB_SWITCH_DISCONNECT, tc[port].polarity);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
-		CLR_ALL_BUT_LPM_FLAGS(port);
+		CLR_FLAGS_ON_DISCONNECT(port);
 		tc_enable_pd(port, 0);
 	}
 }
@@ -2226,13 +2244,6 @@ static void tc_attach_wait_snk_run(const int port)
 	 */
 	if (new_cc_state == PD_CC_NONE &&
 				get_time().val > tc[port].pd_debounce) {
-		if (IS_ENABLED(CONFIG_USB_PE_SM) &&
-				IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-			pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-			pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-			pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME, 0, 0);
-		}
-
 		/* We are detached */
 		if (drp_state[port] == PD_DRP_TOGGLE_OFF
 		    || drp_state[port] == PD_DRP_FREEZE
@@ -2425,13 +2436,6 @@ static void tc_attached_snk_run(const int port)
 		 * Detach detection
 		 */
 		if (pd_check_vbus_level(port, VBUS_REMOVED)) {
-			if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-				pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME,
-						0, 0);
-			}
-
 			set_state_tc(port, TC_UNATTACHED_SNK);
 			return;
 		}
@@ -2550,7 +2554,7 @@ static void tc_attached_snk_exit(const int port)
 		 * happen in tc_cc_open_entry if that is the path we are
 		 * taking.
 		 */
-		if (!TC_CHK_FLAG(port, TC_FLAGS_SUSPEND))
+		if (!TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND))
 			tcpm_enable_auto_discharge_disconnect(port, 0);
 	}
 
@@ -2605,7 +2609,7 @@ static void tc_unattached_src_entry(const int port)
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
-		CLR_ALL_BUT_LPM_FLAGS(port);
+		CLR_FLAGS_ON_DISCONNECT(port);
 		tc_enable_pd(port, 0);
 	}
 
@@ -2914,13 +2918,6 @@ static void tc_attached_src_run(const int port)
 		if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
 			tryWait = is_try_src_enabled(port) &&
 				!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER);
-
-		if (IS_ENABLED(CONFIG_USB_PE_SM) &&
-		    IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-			pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-			pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-			pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME, 0, 0);
-		}
 
 		if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
 			set_state_tc(port, tryWait ?
@@ -3431,13 +3428,6 @@ __maybe_unused static void tc_ct_unattached_snk_run(int port)
 	if (get_time().val > tc[port].cc_debounce) {
 		if (new_cc_state == PD_CC_NONE &&
 		    pd_check_vbus_level(port, VBUS_SAFE0V)) {
-			if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-				pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME,
-						0, 0);
-			}
-
 			set_state_tc(port, TC_UNATTACHED_SNK);
 			return;
 		}
@@ -3583,11 +3573,11 @@ void tc_set_debug_level(enum debug_level debug_level)
 void tc_run(const int port)
 {
 	/*
-	 * If pd_set_suspend SUSPEND state changes to
-	 * be suspended then we need to go directly to
-	 * DISABLED
+	 * If pd_set_suspend set TC_FLAGS_REQUEST_SUSPEND, go directly to
+	 * TC_DISABLED.
 	 */
-	if (TC_CHK_FLAG(port, TC_FLAGS_SUSPEND)) {
+	if (get_state_tc(port) != TC_DISABLED
+	    && TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND)) {
 		/* Invalidate a contract, if there is one */
 		if (IS_ENABLED(CONFIG_USB_PE_SM))
 			pe_invalidate_explicit_contract(port);

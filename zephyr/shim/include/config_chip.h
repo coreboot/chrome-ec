@@ -21,6 +21,33 @@
 #define CONFIG_ZEPHYR
 #define CHROMIUM_EC
 
+/*
+ * Obsolete configs - these are options that are not needed, either because
+ * Zephyr features directly replace the option, or because the config option
+ * will not be used with Zephyr OS.
+ */
+
+/*
+ * ROM resident support. The ROM resident capabilities in the Chromium OS
+ * code are used with EC chipsets that provide more flash space than
+ * executable RAM. These options allow storing the initialized data into
+ * an unused area of flash where it is copied directly from flash into data
+ * RAM by the early boot code.
+ *
+ * When ROM resident is disabled, the initialized data is stored in the main
+ * image, copied from flash to executable RAM by the chip boot loader, and
+ * then copied from executable RAM to data RAM by the early boot code.
+ *
+ * Supporting this under Zephyr would require linker changes to the common
+ * Zephyr linking.
+ */
+#undef CONFIG_CHIP_DATA_IN_INIT_ROM
+#undef CONFIG_CHIP_INIT_ROM_REGION
+#undef CONFIG_RO_ROM_RESIDENT_MEM_OFF
+#undef CONFIG_RO_ROM_RESIDENT_SIZE
+#undef CONFIG_RW_ROM_RESIDENT_MEM_OFF
+#undef CONFIG_RW_ROM_RESIDENT_SIZE
+
 /* EC chipset configuration */
 #define HOOK_TICK_INTERVAL	CONFIG_CROS_EC_HOOK_TICK_INTERVAL
 
@@ -143,6 +170,30 @@ enum battery_type {
 
 #endif /* CONFIG_PLATFORM_EC_ESPI */
 
+#if DT_NODE_EXISTS(DT_NODELABEL(flash0))
+#define CONFIG_PROGRAM_MEMORY_BASE DT_REG_ADDR(DT_NODELABEL(flash0))
+#else
+#define CONFIG_PROGRAM_MEMORY_BASE 0X0
+#endif
+
+#if DT_NODE_EXISTS(DT_NODELABEL(sram0))
+#define CONFIG_RAM_BASE DT_REG_ADDR(DT_NODELABEL(sram0))
+#define CONFIG_DATA_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(sram0))
+#else
+#define CONFIG_RAM_BASE 0x0
+#define CONFIG_DATA_RAM_SIZE 0x0
+#endif
+
+#define CONFIG_RO_MEM_OFF CONFIG_CROS_EC_RO_MEM_OFF
+#define CONFIG_RO_MEM_SIZE CONFIG_CROS_EC_RO_MEM_SIZE
+#define CONFIG_RW_MEM_OFF CONFIG_CROS_EC_RW_MEM_OFF
+#define CONFIG_RW_MEM_SIZE CONFIG_CROS_EC_RW_MEM_SIZE
+
+#define CONFIG_WP_STORAGE_OFF	CONFIG_EC_PROTECTED_STORAGE_OFF
+#define CONFIG_WP_STORAGE_SIZE	CONFIG_EC_PROTECTED_STORAGE_SIZE
+#define CONFIG_RO_SIZE		CONFIG_CROS_EC_RO_SIZE
+#define CONFIG_RW_SIZE		CONFIG_CROS_EC_RW_SIZE
+
 /* Flash settings */
 #undef CONFIG_EXTERNAL_STORAGE
 #undef CONFIG_MAPPED_STORAGE
@@ -153,34 +204,27 @@ enum battery_type {
 #undef CONFIG_CMD_FLASH
 #define CONFIG_FLASH
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
-#define CONFIG_FLASH_SIZE_BYTES	0x80000
+#ifdef CONFIG_FLASH_SIZE
+#define CONFIG_FLASH_SIZE_BYTES	(CONFIG_FLASH_SIZE * 1024)
+#else
+#define CONFIG_FLASH_SIZE_BYTES 0x0
+#endif
 /* TODO(b:176490413): use DT_PROP(DT_INST(inst, DT_DRV_COMPAT), size) ? */
 #define CONFIG_MAPPED_STORAGE_BASE 0x64000000
 #define CONFIG_FLASH_WRITE_SIZE		0x1  /* minimum write size */
 #define CONFIG_FLASH_WRITE_IDEAL_SIZE	256   /* one page size for write */
 #define CONFIG_FLASH_ERASE_SIZE	0x1000
 #define CONFIG_FLASH_BANK_SIZE		CONFIG_FLASH_ERASE_SIZE
-#define CONFIG_EC_PROTECTED_STORAGE_OFF  0
-#define CONFIG_EC_PROTECTED_STORAGE_SIZE 0x40000
-#define CONFIG_EC_WRITABLE_STORAGE_OFF   0x40000
-#define CONFIG_EC_WRITABLE_STORAGE_SIZE  0x40000
-#define CONFIG_WP_STORAGE_OFF	CONFIG_EC_PROTECTED_STORAGE_OFF
-#define CONFIG_WP_STORAGE_SIZE	CONFIG_EC_PROTECTED_STORAGE_SIZE
-#define CONFIG_RO_SIZE		CONFIG_CROS_EC_RO_SIZE
-#define CONFIG_RW_SIZE		CONFIG_CROS_EC_RW_SIZE
+#define CONFIG_EC_PROTECTED_STORAGE_OFF CONFIG_PLATFORM_EC_PROTECTED_STORAGE_OFF
+#define CONFIG_EC_PROTECTED_STORAGE_SIZE \
+	CONFIG_PLATFORM_EC_PROTECTED_STORAGE_SIZE
+#define CONFIG_EC_WRITABLE_STORAGE_OFF CONFIG_PLATFORM_EC_WRITABLE_STORAGE_OFF
+#define CONFIG_EC_WRITABLE_STORAGE_SIZE CONFIG_PLATFORM_EC_WRITABLE_STORAGE_SIZE
 
 #define CONFIG_RO_HDR_SIZE	0x40
 /* RO image resides at start of protected region, right after header */
 #define CONFIG_RO_STORAGE_OFF	CONFIG_RO_HDR_SIZE
 
-#define CONFIG_PROGRAM_MEMORY_BASE DT_REG_ADDR(DT_NODELABEL(flash0))
-#define CONFIG_RAM_BASE DT_REG_ADDR(DT_NODELABEL(sram0))
-#define CONFIG_DATA_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(sram0))
-
-#define CONFIG_RO_MEM_OFF CONFIG_CROS_EC_RO_MEM_OFF
-#define CONFIG_RO_MEM_SIZE CONFIG_CROS_EC_RO_MEM_SIZE
-#define CONFIG_RW_MEM_OFF CONFIG_CROS_EC_RW_MEM_OFF
-#define CONFIG_RW_MEM_SIZE CONFIG_CROS_EC_RW_MEM_SIZE
 #define CONFIG_RW_STORAGE_OFF 0
 #define CONFIG_RAM_SIZE \
 	(CONFIG_DATA_RAM_SIZE - CONFIG_PLATFORM_EC_BOOT_RAM_SIZE)
@@ -219,6 +263,33 @@ enum battery_type {
 #ifdef CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #endif  /* CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED */
+
+#undef CONFIG_PWM_KBLIGHT
+#undef CONFIG_KEYBOARD_BACKLIGHT
+#ifdef CONFIG_PLATFORM_EC_PWM_KBLIGHT
+#define CONFIG_PWM_KBLIGHT
+#define CONFIG_KEYBOARD_BACKLIGHT
+#endif
+
+#undef CONFIG_LED_COMMON
+#ifdef CONFIG_PLATFORM_EC_LED_COMMON
+#define CONFIG_LED_COMMON
+#endif
+
+#undef CONFIG_LED_PWM
+#ifdef CONFIG_PLATFORM_EC_LED_PWM
+#define CONFIG_LED_PWM
+#endif
+
+#undef CONFIG_LED_PWM_COUNT
+#ifdef CONFIG_PLATFORM_EC_LED_PWM_COUNT
+#define CONFIG_LED_PWM_COUNT CONFIG_PLATFORM_EC_LED_PWM_COUNT
+#endif
+
+#undef CONFIG_CMD_LEDTEST
+#ifdef CONFIG_PLATFORM_EC_CMD_LEDTEST
+#define CONFIG_CMD_LEDTEST
+#endif
 
 #ifdef CONFIG_PLATFORM_EC_POWERSEQ_CPU_PROCHOT_ACTIVE_LOW
 #define CONFIG_CHIPSET_CPU_PROCHOT_ACTIVE_LOW
@@ -821,6 +892,26 @@ enum battery_type {
 #undef CONFIG_CMD_STACKOVERFLOW
 #ifdef CONFIG_PLATFORM_EC_STACKOVERFLOW
 #define CONFIG_CMD_STACKOVERFLOW
+#endif
+
+#undef CONFIG_RTC
+#ifdef CONFIG_PLATFORM_EC_RTC
+#define CONFIG_RTC
+#endif
+
+#undef CONFIG_CMD_RTC
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_RTC
+#define CONFIG_CMD_RTC
+#endif
+
+#undef CONFIG_CMD_RTC_ALARM
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_RTC_ALARM
+#define CONFIG_CMD_RTC_ALARM
+#endif
+
+#undef CONFIG_HOSTCMD_RTC
+#ifdef CONFIG_PLATFORM_EC_HOSTCMD_RTC
+#define CONFIG_HOSTCMD_RTC
 #endif
 
 #endif  /* __CROS_EC_CONFIG_CHIP_H */
