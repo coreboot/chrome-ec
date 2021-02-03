@@ -14,7 +14,8 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm426xx.h"
 #include "driver/charger/rt946x.h"
 #include "driver/sync.h"
 #include "driver/tcpm/mt6370.h"
@@ -251,7 +252,7 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_CHARGER_INT_ODL);
 
 #ifdef SECTION_IS_RW
-	/* Enable interrupts from BMI160 sensor. */
+	/* Enable interrupts from ICM40608 sensor. */
 	gpio_enable_interrupt(GPIO_ACCEL_INT_ODL);
 
 	/* Enable interrupt for the camera vsync. */
@@ -292,7 +293,7 @@ DECLARE_HOOK(HOOK_INIT, board_rev_init, HOOK_PRIO_INIT_ADC + 1);
 #ifndef VARIANT_KUKUI_NO_SENSORS
 static struct mutex g_lid_mutex;
 
-static struct bmi160_drv_data_t g_bmi160_data;
+static struct icm_drv_data_t g_icm426xx_data;
 
 /* Matrix to rotate accelerometer into standard reference frame */
 static const mat33_fp_t lid_standard_ref = {
@@ -303,25 +304,25 @@ static const mat33_fp_t lid_standard_ref = {
 
 struct motion_sensor_t motion_sensors[] = {
 	/*
-	 * Note: bmi160: supports accelerometer and gyro sensor
+	 * Note: ICM40608: supports accelerometer and gyro sensor
 	 * Requirement: accelerometer sensor must init before gyro sensor
 	 * DO NOT change the order of the following table.
 	 */
 	[LID_ACCEL] = {
 	 .name = "Accel",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
+	 .chip = MOTIONSENSE_CHIP_ICM426XX,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &bmi160_drv,
+	 .drv = &icm426xx_drv,
 	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_bmi160_data,
+	 .drv_data = &g_icm426xx_data,
 	 .port = I2C_PORT_ACCEL,
-	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	 .i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
 	 .rot_standard_ref = &lid_standard_ref,
 	 .default_range = 4,  /* g */
-	 .min_frequency = BMI160_ACCEL_MIN_FREQ,
-	 .max_frequency = BMI160_ACCEL_MAX_FREQ,
+	 .min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+	 .max_frequency = ICM426XX_ACCEL_MAX_FREQ,
 	 .config = {
 		 /* Enable accel in S0 */
 		 [SENSOR_CONFIG_EC_S0] = {
@@ -333,18 +334,18 @@ struct motion_sensor_t motion_sensors[] = {
 	[LID_GYRO] = {
 	 .name = "Gyro",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
+	 .chip = MOTIONSENSE_CHIP_ICM426XX,
 	 .type = MOTIONSENSE_TYPE_GYRO,
 	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &bmi160_drv,
+	 .drv = &icm426xx_drv,
 	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_bmi160_data,
+	 .drv_data = &g_icm426xx_data,
 	 .port = I2C_PORT_ACCEL,
-	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	 .i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &lid_standard_ref,
-	 .min_frequency = BMI160_GYRO_MIN_FREQ,
-	 .max_frequency = BMI160_GYRO_MAX_FREQ,
+	 .min_frequency = ICM426XX_GYRO_MIN_FREQ,
+	 .max_frequency = ICM426XX_GYRO_MAX_FREQ,
 	},
 	[VSYNC] = {
 	 .name = "Camera vsync",
