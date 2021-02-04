@@ -7,15 +7,6 @@ cmake_minimum_required(VERSION 3.13.1)
 set(BOARD_ROOT ${CMAKE_CURRENT_LIST_DIR})
 set(BOARD volteer)
 
-# Append ${PLATFORM_EC}/zephyr/include/drivers to SYSCALL_INCLUDE_DIRS
-# variable for generating __syscall api functions by the
-# `gen_syscalls.py` script.
-# TODO: remove this when zmake support
-list(APPEND
-     SYSCALL_INCLUDE_DIRS
-     "${CMAKE_CURRENT_LIST_DIR}/../../include/drivers"
-)
-
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(volteer)
 
@@ -50,8 +41,12 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
   "${PLATFORM_EC_BOARD}/battery.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CBI
   "${PLATFORM_EC_BOARD}/cbi.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_BOARD_CONFIG
+  "${PLATFORM_EC_BOARD}/keyboard.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
   "${PLATFORM_EC_BOARD}/led.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
+  "${PLATFORM_EC_BOARD}/sensors.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC
   "${PLATFORM_EC_BOARD}/usbc_config.c")
 

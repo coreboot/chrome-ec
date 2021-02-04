@@ -118,6 +118,59 @@ config PLATFORM_EC_BRINGUP
 	  - And more!  You can search the codebase for CONFIG_BRINGUP
             to see all of the features this flag will toggle.
 
+config PLATFORM_EC_BOARD_VERSION
+	bool "Support the notion of board version"
+	default y
+	help
+	  Enable support for a board version, used to distinguish different
+	  revisions of the same base design. Each board goes through a number
+	  of development phases on the way to launch. Sometimes different boards
+	  have different quirks and this version number can provide a way for
+	  the EC to handle several board versions, avoiding the problem of
+	  having to flash different images to different board versions.
+
+if PLATFORM_EC_BOARD_VERSION
+
+choice "Version source"
+	prompt "Select the source of the version number"
+	help
+	  This allow selection of the source of the board version number
+	  information. Several options are available, but BOARD_VERSION_CBI is
+	  preferred for new boards, so long as the hardware supports it (i.e.
+	  has an EEPROM).
+
+config PLATFORM_EC_BOARD_VERSION_CBI
+	bool "Chromium OS Board Info (CBI)"
+	depends on PLATFORM_EC_CBI
+	help
+	  Choose this if the board version comes from Chromium Board Info
+	  within the EEPROM. This is the recommended approach and is used on
+	  newer boards. The version information is written into the EEPROM as
+	  part of the factory process.
+
+config PLATFORM_EC_BOARD_VERSION_GPIO
+	bool "Strapping GPIOs"
+	help
+	  Choose this if the board version is encoded with three GPIO signals
+	  (GPIO_BOARD_VERSION1, GPIO_BOARD_VERSION2 and GPIO_BOARD_VERSION3)
+	  forming the 3-digit binary number. GPIO_BOARD_VERSION1 is the LSB.
+	  This provides 8 possible combinations.
+
+	  The GPIOs should have external pull-up/pull-down resistors installed
+	  at the factory to select the correct value.
+
+config PLATFORM_EC_BOARD_VERSION_CUSTOM
+	bool "Custom board-specific algortihm"
+	help
+	  Choose this if none of the standard methods is available and you must
+	  perform special logic to find the board version. If this is chosen,
+	  then the system code will call board_get_version() to find out the
+	  version, so you should implement this function in your board code.
+
+endchoice
+
+endif # PLATFORM_EC_BOARD_VERSION
+
 config PLATFORM_EC_CBI
 	bool "CBI EEPROM support"
 	depends on PLATFORM_EC_I2C
@@ -190,9 +243,9 @@ config PLATFORM_EC_EXTPOWER_GPIO
 	  project should define a GPIO pin named GPIO_AC_PRESENT, with
 	  extpower_interrupt configured as the handler in gpio_map.h.
 
-# TODO(b/176828988): enable by default once the code can compile
 config PLATFORM_EC_FLASH
 	bool "Enable flash support"
+	default y if FLASH_SIZE > 0
 	help
 	  Enables access to the device's flash through a simple API. With
 	  this is it possible for the EC to update its flash while running,
@@ -200,6 +253,36 @@ config PLATFORM_EC_FLASH
 	  also provided.
 
 if PLATFORM_EC_FLASH
+
+config PLATFORM_EC_PROTECTED_STORAGE_OFF
+	hex "Position of the RO image in Flash memory"
+	default 0x0
+	help
+	  Sets the position in flash memory where the RO image begins. This is
+	  the address that will be used to start copying the image into RAM.
+
+config PLATFORM_EC_PROTECTED_STORAGE_SIZE
+	hex "Size of the RO image in Flash memory"
+	default 0x40000
+	help
+	  The total size of the RO image in flash memory. This will dictate the
+	  ending position of the RO image being copied into RAM when combined
+	  with PLATFORM_EC_PROTECTED_STORAGE_OFF.
+
+config PLATFORM_EC_WRITABLE_STORAGE_OFF
+	hex "Position of the RW image in Flash memory"
+	default 0x40000
+	help
+	  Sets the position in flash memory where the RW image begins. This is
+	  the address that will be used to start copying the image into RAM.
+
+config PLATFORM_EC_WRITABLE_STORAGE_SIZE
+	hex "Size of the RW image in Flash memory"
+	default 0x40000
+	help
+	  The total size of the RW image in flash memory. This will dictate the
+	  ending position of the RW image being copied into RAM when combined
+	  with PLATFORM_EC_WRITABLE_STORAGE_OFF.
 
 config PLATFORM_EC_CONSOLE_CMD_FLASH
 	bool "Console commands: flasherase, flashread, flashwp, flashwrite"
@@ -467,6 +550,32 @@ config PLATFORM_EC_HOSTCMD_RTC
 
 endif # PLATFORM_EC_RTC
 
+choice "SHA256 method"
+	prompt "Select method to use for computing SHA256 hashes"
+	help
+	  The verified boot mechanism requests the hash of the entire read-write
+	  portion of the EC image. This is typically done using a hashing block
+	  in the EC, so that it is as fast as possible. A fallback software
+	  algorithm is available if needed.
+
+config PLATFORM_EC_SHA256_SW
+	bool "Compute SHA256 in software"
+	help
+	  Enable this if your EC chip does not support hardware-accelerated
+	  SHA256 computation. This enables the software algorithm which is
+	  quite slow but will work in a pinch.
+
+config PLATFORM_EC_SHA256_HW_ACCELERATE
+	bool "Compute SHA256 in hardware"
+	help
+	  Enable this if your EC chip supports hardware-accelerated SHA256
+	  computation. This is faster than running the algorithm in software,
+	  so is desirable.
+
+	  The chip support must implement the functions in sha256.h
+
+endchoice # SHA256 method
+
 config PLATFORM_EC_CONSOLE_CMD_SHMEM
 	bool "Console command: shmem"
 	default y
@@ -475,6 +584,23 @@ config PLATFORM_EC_CONSOLE_CMD_SHMEM
 	  located at the top of RAM, above all RAM symbols: total size, bytes
 	  used and the maximum number of bytes that have been used since
 	  the EC started running.
+
+config PLATFORM_EC_SWITCH
+	bool "Memory mapped switches"
+	depends on PLATFORM_EC_HOSTCMD
+	default y
+	help
+	  Enable the reporting of the platform switches state to the AP using
+	  memory mapped storage provided by the host command interface.
+
+	  The platform switches include:
+	    LID open
+	    power button pressed
+	    write protect disabled
+	    recovery switch
+
+          This also enables the "mmapinfo" console command to report the current
+          state of all switches.
 
 config PLATFORM_EC_THROTTLE_AP
 	bool "CPU throttling"
@@ -570,6 +696,18 @@ config PLATFORM_EC_CONSOLE_CMD_WAITMS
 	  two-second wait can cause the EC to reset.
 
 endif # PLATFORM_EC_TIMER
+
+config PLATFORM_EC_VBOOT_HASH
+	bool "Host command: EC_CMD_VBOOT_HASH"
+	depends on PLATFORM_EC_HOSTCMD
+	default y
+	help
+	  Allows the AP to request hashing functions from the EC.
+
+	  Verified boot can update the EC's read/write code when it detects
+	  that it is an incorrect version. It detects this by asking the EC to
+	  hash itself. If the hash is incorrect, new code is write to the EC's
+	  read/write area.
 
 config PLATFORM_EC_VSTORE
 	bool "Secure temporary storage for verified boot"

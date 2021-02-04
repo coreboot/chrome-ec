@@ -25,8 +25,6 @@ enum bbram_data_index {
 	BBRM_DATA_INDEX_TRY_SLOT = 14,
 	/** USB-PD saved port2 state */
 	BBRM_DATA_INDEX_PD2 = 15,
-	/** VbNvContext for ARM arch */
-	BBRM_DATA_INDEX_VBNVCNTXT = 16,
 	/** RAM log for Booter */
 	BBRM_DATA_INDEX_RAMLOG = 32,
 	/** Flag to indicate validity of panic data starting at index 36. */
@@ -36,5 +34,10 @@ enum bbram_data_index {
 	/** The start time of LCT(4 bytes) */
 	BBRM_DATA_INDEX_LCT_TIME = 64,
 };
+
+#define BBRAM_SIZE DT_REG_SIZE(DT_NODELABEL(bbram))
+#define BBRAM_ADDR DT_REG_ADDR(DT_NODELABEL(bbram))
+#define BBRAM(offset) REG8(BBRAM_ADDR + offset)
+#define BBRAM_BKUP_STS BBRAM(CONFIG_BBRAM_BKUP_STS)
 
 #endif /* ZEPHYR_SHIM_INCLUDE_BBRAM_H_ */
