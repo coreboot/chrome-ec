@@ -53,6 +53,12 @@ static void pe_init(int port)
 	set_state_pe(port, PE_REQUEST);
 }
 
+bool pe_in_frs_mode(int port)
+{
+	/* Will never be in FRS mode */
+	return false;
+}
+
 bool pe_in_local_ams(int port)
 {
 	/* We never start a local AMS */
@@ -190,12 +196,8 @@ static void pe_request_run(const int port)
 			VPD_MAX_VBUS_20V,
 			VPD_VBUS_IMP(VPD_VBUS_IMPEDANCE),
 			VPD_GND_IMP(VPD_GND_IMPEDANCE),
-#ifdef CONFIG_USB_CTVPD
-			VPD_CTS_SUPPORTED
-#else
-			VPD_CTS_NOT_SUPPORTED
-#endif
-		);
+			IS_ENABLED(CONFIG_USB_CTVPD) ? VPD_CTS_SUPPORTED
+						     : VPD_CTS_NOT_SUPPORTED);
 
 		/* 20 bytes, 5 data objects */
 		tx_emsg[port].len = 20;

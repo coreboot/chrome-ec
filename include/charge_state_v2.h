@@ -9,7 +9,7 @@
 #include "battery_smart.h"
 #include "charger.h"
 #include "chipset.h"
-#include "ec_ec_comm_master.h"
+#include "ec_ec_comm_client.h"
 #include "ocpc.h"
 #include "timer.h"
 
@@ -43,7 +43,7 @@ struct charge_state_data {
 #ifdef CONFIG_CHARGER_OTG
 	int output_current;
 #endif
-#ifdef CONFIG_EC_EC_COMM_BATTERY_MASTER
+#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
 	int input_voltage;
 #endif
 #ifdef CONFIG_OCPC
@@ -190,5 +190,11 @@ void charge_reset_stable_current_us(uint64_t us);
  * @return true if stable timestamp expired, false otherwise.
  */
 bool charge_is_current_stable(void);
+
+/**
+ * Reset the OCPC internal state data and set the target VSYS to the current
+ * battery voltage for the auxiliary chargers.
+ */
+void trigger_ocpc_reset(void);
 
 #endif /* __CROS_EC_CHARGE_STATE_V2_H */

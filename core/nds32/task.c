@@ -134,7 +134,8 @@ uint8_t task_stacks[0
 #undef TASK
 
 /* Reserve space to discard context on first context switch. */
-uint32_t scratchpad[19];
+uint32_t scratchpad[TASK_SCRATCHPAD_SIZE] __attribute__
+					((section(".bss.task_scratchpad")));
 
 task_ *current_task = (task_ *)scratchpad;
 
@@ -235,7 +236,8 @@ task_id_t task_get_current(void)
 	/* If we haven't done a context switch then our task ID isn't valid */
 	ASSERT(current_task != (task_ *)scratchpad);
 #endif
-	return current_task - tasks;
+	/* return invalid task id if task scheduling is not yet start */
+	return start_called ? (current_task - tasks) : TASK_ID_INVALID;
 }
 
 uint32_t *task_get_event_bitmap(task_id_t tskid)
@@ -294,10 +296,8 @@ task_ *next_sched_task(void)
 
 #ifdef CONFIG_TASK_PROFILING
 	if (current_task != new_task) {
-		if ((current_task - tasks) < TASK_ID_COUNT) {
-			current_task->runtime +=
+		current_task->runtime +=
 				(exc_start_time - exc_end_time - exc_sub_time);
-		}
 		task_will_switch = 1;
 	}
 #endif
@@ -305,13 +305,11 @@ task_ *next_sched_task(void)
 #ifdef CONFIG_DEBUG_STACK_OVERFLOW
 	if (*current_task->stack != STACK_UNUSED_VALUE) {
 		int i = task_get_current();
-		if (i < TASK_ID_COUNT) {
-			panic_printf("\n\nStack overflow in %s task!\n",
-				task_names[i]);
+
+		panic_printf("\n\nStack overflow in %s task!\n", task_names[i]);
 #ifdef CONFIG_SOFTWARE_PANIC
 		software_panic(PANIC_SW_STACK_OVERFLOW, i);
 #endif
-		}
 	}
 #endif
 
@@ -406,7 +404,7 @@ static uint32_t __ram_code __wait_evt(int timeout_us, task_id_t resched)
 		ret = timer_arm(deadline, me);
 		ASSERT(ret == EC_SUCCESS);
 	}
-	while (!(evt = atomic_read_clear(&tsk->events))) {
+	while (!(evt = atomic_clear(&tsk->events))) {
 		/* Remove ourself and get the next task in the scheduler */
 		__schedule(1, resched, 0);
 		resched = TASK_ID_IDLE;
@@ -414,12 +412,12 @@ static uint32_t __ram_code __wait_evt(int timeout_us, task_id_t resched)
 	if (timeout_us > 0) {
 		timer_cancel(me);
 		/* Ensure timer event is clear, we no longer care about it */
-		atomic_clear(&tsk->events, TASK_EVENT_TIMER);
+		atomic_clear_bits(&tsk->events, TASK_EVENT_TIMER);
 	}
 	return evt;
 }
 
-uint32_t __ram_code task_set_event(task_id_t tskid, uint32_t event, int wait)
+uint32_t __ram_code task_set_event(task_id_t tskid, uint32_t event)
 {
 	task_ *receiver = __task_id_to_ptr(tskid);
 	ASSERT(receiver);
@@ -434,10 +432,7 @@ uint32_t __ram_code task_set_event(task_id_t tskid, uint32_t event, int wait)
 		if (start_called)
 			need_resched = 1;
 	} else {
-		if (wait)
-			return __wait_evt(-1, tskid);
-		else
-			__schedule(0, tskid, 0);
+		__schedule(0, tskid, 0);
 	}
 
 	return 0;
@@ -476,11 +471,18 @@ uint32_t __ram_code task_wait_event_mask(uint32_t event_mask, int timeout_us)
 	return events & event_mask;
 }
 
-uint32_t __ram_code get_int_mask(void)
+uint32_t __ram_code read_clear_int_mask(void)
 {
-	uint32_t ret;
-	asm volatile ("mfsr %0, $INT_MASK" : "=r"(ret));
-	return ret;
+	uint32_t int_mask, int_dis = BIT(30);
+
+	asm volatile(
+		"mfsr %0, $INT_MASK\n\t"
+		"mtsr %1, $INT_MASK\n\t"
+		"dsb\n\t"
+		: "=&r"(int_mask)
+		: "r"(int_dis));
+
+	return int_mask;
 }
 
 void __ram_code set_int_mask(uint32_t val)
@@ -521,7 +523,7 @@ void task_enable_task(task_id_t tskid)
 
 void task_disable_task(task_id_t tskid)
 {
-	atomic_clear(&tasks_enabled, BIT(tskid));
+	atomic_clear_bits(&tasks_enabled, BIT(tskid));
 
 	if (!in_interrupt_context() && tskid == task_get_current())
 		__schedule(0, 0, 0);
@@ -529,18 +531,16 @@ void task_disable_task(task_id_t tskid)
 
 void __ram_code task_enable_irq(int irq)
 {
-	uint32_t int_mask = get_int_mask();
+	uint32_t int_mask = read_clear_int_mask();
 
-	interrupt_disable();
 	chip_enable_irq(irq);
 	set_int_mask(int_mask);
 }
 
 void __ram_code task_disable_irq(int irq)
 {
-	uint32_t int_mask = get_int_mask();
+	uint32_t int_mask = read_clear_int_mask();
 
-	interrupt_disable();
 	chip_disable_irq(irq);
 	set_int_mask(int_mask);
 }
@@ -628,20 +628,29 @@ void __ram_code mutex_unlock(struct mutex *mtx)
 	uint32_t waiters;
 	task_ *tsk = current_task;
 
-	waiters = mtx->waiters;
-	/* give back the lock */
-	mtx->lock = 0;
+	/*
+	 * we need to read to waiters after giving the lock back
+	 * otherwise we might miss a waiter between the two calls.
+	 *
+	 * prevent compiler reordering
+	 */
+	asm volatile(
+		/* give back the lock */
+		"movi %0, #0\n\t"
+		"lwi %1, [%2]\n\t"
+		: "=&r"(mtx->lock), "=&r"(waiters)
+		: "r"(&mtx->waiters));
 
 	while (waiters) {
 		task_id_t id = __fls(waiters);
 		waiters &= ~BIT(id);
 
 		/* Somebody is waiting on the mutex */
-		task_set_event(id, TASK_EVENT_MUTEX, 0);
+		task_set_event(id, TASK_EVENT_MUTEX);
 	}
 
 	/* Ensure no event is remaining from mutex wake-up */
-	atomic_clear(&tsk->events, TASK_EVENT_MUTEX);
+	atomic_clear_bits(&tsk->events, TASK_EVENT_MUTEX);
 }
 
 void task_print_list(void)

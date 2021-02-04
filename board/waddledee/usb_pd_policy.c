@@ -38,11 +38,6 @@ void pd_power_supply_reset(int port)
 	if (prev_en)
 		sm5803_set_vbus_disch(port, 1);
 
-#ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
-	/* Give back the current quota we are no longer using */
-	charge_manager_source_port(port, 0);
-#endif /* defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT) */
-
 	/* Notify host of power info change. */
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
 }
@@ -62,15 +57,26 @@ int pd_set_power_supply_ready(int port)
 	/* Provide Vbus */
 	charger_enable_otg_power(port, 1);
 
-#ifdef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
-	/* Ensure we advertise the proper available current quota */
-	charge_manager_source_port(port, 1);
-#endif /* defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT) */
-
 	/* Notify host of power info change. */
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
 
 	return EC_SUCCESS;
+}
+
+__override bool pd_check_vbus_level(int port, enum vbus_level level)
+{
+	int vbus_voltage;
+
+	/* If we're unable to speak to the charger, best to guess false */
+	if (charger_get_vbus_voltage(port, &vbus_voltage))
+		return false;
+
+	if (level == VBUS_SAFE0V)
+		return vbus_voltage < PD_V_SAFE0V_MAX;
+	else if (level == VBUS_PRESENT)
+		return vbus_voltage > PD_V_SAFE5V_MIN;
+	else
+		return vbus_voltage < PD_V_SINK_DISCONNECT_MAX;
 }
 
 int pd_snk_is_vbus_provided(int port)

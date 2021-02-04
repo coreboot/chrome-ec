@@ -7,7 +7,7 @@
 #define HIDE_EC_STDLIB
 #include "common.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "test_util.h"
 #include "timer.h"
 #include "usb_pd.h"
@@ -114,7 +114,7 @@ int tcpm_enqueue_message(const int port)
 	pending = 1;
 
 	/* Wake PD task up so it can process incoming RX messages */
-	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
+	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE);
 
 	return EC_SUCCESS;
 }
@@ -158,7 +158,7 @@ static pthread_cond_t done_cond;
 static pthread_mutex_t lock;
 
 enum tcpc_cc_voltage_status next_cc1, next_cc2;
-const int MAX_MESSAGES = 8;
+#define MAX_MESSAGES 8
 static struct message messages[MAX_MESSAGES];
 
 void run_test(int argc, char **argv)
@@ -175,14 +175,13 @@ void run_test(int argc, char **argv)
 		memset(&mock_tcpc_state[port],
 			0, sizeof(mock_tcpc_state[port]));
 
-		task_set_event(PD_PORT_TO_TASK_ID(port),
-			PD_EVENT_TCPC_RESET, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_TCPC_RESET);
 		task_wait_event(250 * MSEC);
 
 		mock_tcpc_state[port].cc1 = next_cc1;
 		mock_tcpc_state[port].cc2 = next_cc2;
 
-		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC);
 		task_wait_event(50 * MSEC);
 
 		/* Fake RX messages, one by one. */
@@ -234,7 +233,7 @@ int test_fuzz_one_input(const uint8_t *data, unsigned int size)
 		return 0;
 	}
 
-	task_set_event(TASK_ID_TEST_RUNNER, TASK_EVENT_FUZZ, 0);
+	task_set_event(TASK_ID_TEST_RUNNER, TASK_EVENT_FUZZ);
 	pthread_cond_wait(&done_cond, &lock);
 
 	return 0;

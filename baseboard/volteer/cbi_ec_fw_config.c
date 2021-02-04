@@ -39,4 +39,17 @@ bool ec_cfg_has_tabletmode(void)
 	return (fw_config.tabletmode == TABLETMODE_ENABLED);
 }
 
+bool ec_cfg_has_keyboard_backlight(void)
+{
+	return (fw_config.kb_bl == KEYBOARD_BACKLIGHT_ENABLED);
+}
 
+bool ec_cfg_has_numeric_pad(void)
+{
+	return (fw_config.num_pad == NUMERIC_PAD_ENABLED);
+}
+
+enum ec_cfg_keyboard_layout ec_cfg_keyboard_layout(void)
+{
+	return fw_config.kb_layout;
+}

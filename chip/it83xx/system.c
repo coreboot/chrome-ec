@@ -7,6 +7,7 @@
 
 #include "console.h"
 #include "cpu.h"
+#include "cros_version.h"
 #include "ec2i_chip.h"
 #include "flash.h"
 #include "hooks.h"
@@ -16,7 +17,6 @@
 #include "system.h"
 #include "task.h"
 #include "util.h"
-#include "version.h"
 #include "watchdog.h"
 
 void system_hibernate(uint32_t seconds, uint32_t microseconds)
@@ -49,6 +49,15 @@ static void clear_reset_flags(void)
 }
 DECLARE_HOOK(HOOK_INIT, clear_reset_flags, HOOK_PRIO_LAST);
 
+static void system_reset_ec_by_gpg1(void)
+{
+	/* Set GPG1 as output high and wait until EC reset. */
+	IT83XX_GPIO_CTRL(GPIO_G, 1) = GPCR_PORT_PIN_MODE_OUTPUT;
+	IT83XX_GPIO_DATA(GPIO_G) |= BIT(1);
+	while (1)
+		;
+}
+
 static void check_reset_cause(void)
 {
 	uint32_t flags;
@@ -65,6 +74,18 @@ static void check_reset_cause(void)
 	/* Determine if watchdog reset or power on reset. */
 	if (raw_reset_cause & 0x02) {
 		flags |= EC_RESET_FLAG_WATCHDOG;
+		if (IS_ENABLED(CONFIG_IT83XX_HARD_RESET_BY_GPG1)) {
+			/*
+			 * Save watchdog reset flag to BRAM so we can restore
+			 * the flag on next reboot.
+			 */
+			chip_save_reset_flags(EC_RESET_FLAG_WATCHDOG);
+			/*
+			 * Assert GPG1 to reset EC and then EC_RST_ODL will be
+			 * toggled.
+			 */
+			system_reset_ec_by_gpg1();
+		}
 	} else if (raw_reset_cause & 0x01) {
 		flags |= EC_RESET_FLAG_POWER_ON;
 	} else {
@@ -276,6 +297,10 @@ void system_reset(int flags)
 	if (flags & SYSTEM_RESET_HARD)
 		IT83XX_GCTRL_ETWDUARTCR |= ETWD_HW_RST_EN;
 #endif
+	/* Set GPG1 as output high and wait until EC reset. */
+	if (IS_ENABLED(CONFIG_IT83XX_HARD_RESET_BY_GPG1))
+		system_reset_ec_by_gpg1();
+
 	/*
 	 * Writing invalid key to watchdog module triggers a soft or hardware
 	 * reset. It depends on the setting of bit0 at ETWDUARTCR register.
@@ -363,10 +388,6 @@ const char *system_get_chip_revision(void)
 
 static int bram_idx_lookup(enum system_bbram_idx idx)
 {
-	if (idx >= SYSTEM_BBRAM_IDX_VBNVBLOCK0 &&
-	    idx <= SYSTEM_BBRAM_IDX_VBNVBLOCK15)
-		return BRAM_IDX_NVCONTEXT +
-		       idx - SYSTEM_BBRAM_IDX_VBNVBLOCK0;
 	if (idx == SYSTEM_BBRAM_IDX_PD0)
 		return BRAM_IDX_PD0;
 	if (idx == SYSTEM_BBRAM_IDX_PD1)
@@ -397,9 +418,6 @@ int system_set_bbram(enum system_bbram_idx idx, uint8_t value)
 	IT83XX_BRAM_BANK0(bram_idx) = value;
 	return EC_SUCCESS;
 }
-
-#define BRAM_NVCONTEXT_SIZE (BRAM_IDX_NVCONTEXT_END - BRAM_IDX_NVCONTEXT + 1)
-BUILD_ASSERT(EC_VBNV_BLOCK_SIZE <= BRAM_NVCONTEXT_SIZE);
 
 uintptr_t system_get_fw_reset_vector(uintptr_t base)
 {

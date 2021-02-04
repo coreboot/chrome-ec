@@ -79,6 +79,37 @@ void interrupt_disable(void);
  */
 void interrupt_enable(void);
 
+/*
+ * Define irq_lock and irq_unlock that match the function signatures to Zephyr's
+ * functions. In reality, these simply call the current implementation of
+ * interrupt_disable() and interrupt_enable().
+ */
+#ifndef CONFIG_ZEPHYR
+/**
+ * Perform the same operation as interrupt_disable but allow nesting. The
+ * return value from this function should be used as the argument to
+ * irq_unlock. Do not attempt to parse the value, it is a representation
+ * of the state and not an indication of any form of count.
+ *
+ * For more information see:
+ * https://docs.zephyrproject.org/latest/reference/kernel/other/interrupts.html#c.irq_lock
+ *
+ * @return Lock key to use for restoring the state via irq_unlock.
+ */
+uint32_t irq_lock(void);
+
+/**
+ * Perform the same operation as interrupt_enable but allow nesting. The key
+ * should be the unchanged value returned by irq_lock.
+ *
+ * For more information see:
+ * https://docs.zephyrproject.org/latest/reference/kernel/other/interrupts.html#c.irq_unlock
+ *
+ * @param key The lock-out key used to restore the interrupt state.
+ */
+void irq_unlock(uint32_t key);
+#endif /* CONFIG_ZEPHYR */
+
 /**
  * Return true if we are in interrupt context.
  */
@@ -90,11 +121,11 @@ int in_interrupt_context(void);
 int in_soft_interrupt_context(void);
 
 /**
- * Return current interrupt mask. Meaning is chip-specific and
- * should not be examined; just pass it to set_int_mask() to
- * restore a previous interrupt state after interrupt_disable().
+ * Return current interrupt mask with disabling interrupt. Meaning is
+ * chip-specific and should not be examined; just pass it to set_int_mask() to
+ * restore a previous interrupt state after interrupt disable.
  */
-uint32_t get_int_mask(void);
+uint32_t read_clear_int_mask(void);
 
 /**
  * Set interrupt mask. As with interrupt_disable(), use with care.
@@ -111,12 +142,9 @@ void set_int_mask(uint32_t val);
  *
  * @param tskid		Task to set event for
  * @param event		Event bitmap to set (TASK_EVENT_*)
- * @param wait		If non-zero, after setting the event, de-schedule the
- *			calling task to wait for a response event.  Ignored in
- *			interrupt context.
  * @return		The bitmap of events which occurred if wait!=0, else 0.
  */
-uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait);
+uint32_t task_set_event(task_id_t tskid, uint32_t event);
 
 /**
  * Wake a task.  This sends it the TASK_EVENT_WAKE event.
@@ -125,7 +153,7 @@ uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait);
  */
 static inline void task_wake(task_id_t tskid)
 {
-	task_set_event(tskid, TASK_EVENT_WAKE, 0);
+	task_set_event(tskid, TASK_EVENT_WAKE);
 }
 
 /**
@@ -325,10 +353,18 @@ int task_reset(task_id_t id, int wait);
  */
 void task_clear_pending_irq(int irq);
 
+#ifdef CONFIG_ZEPHYR
+typedef struct k_mutex mutex_t;
+
+#define mutex_lock(mtx) (k_mutex_lock(mtx, K_FOREVER))
+#define mutex_unlock(mtx) (k_mutex_unlock(mtx))
+#else
 struct mutex {
 	uint32_t lock;
 	uint32_t waiters;
 };
+
+typedef struct mutex mutex_t;
 
 /**
  * Lock a mutex.
@@ -338,12 +374,16 @@ struct mutex {
  *
  * Must not be used in interrupt context!
  */
-void mutex_lock(struct mutex *mtx);
+void mutex_lock(mutex_t *mtx);
 
 /**
  * Release a mutex previously locked by the same task.
  */
-void mutex_unlock(struct mutex *mtx);
+void mutex_unlock(mutex_t *mtx);
+
+/** Zephyr will try to init the mutex using `k_mutex_init()`. */
+#define k_mutex_init(mutex) 0
+#endif /* CONFIG_ZEPHYR */
 
 struct irq_priority {
 	uint8_t irq;
@@ -371,6 +411,7 @@ struct irq_def {
  * Implement the DECLARE_IRQ(irq, routine, priority) macro which is
  * a core specific helper macro to declare an interrupt handler "routine".
  */
+#ifndef CONFIG_ZEPHYR
 #ifdef CONFIG_COMMON_RUNTIME
 #include "irq_handler.h"
 #else
@@ -383,6 +424,7 @@ struct irq_def {
 /* Include ec.irqlist here for compilation dependency */
 #define ENABLE_IRQ(x)
 #include "ec.irqlist"
-#endif
+#endif /* CONFIG_COMMON_RUNTIME */
+#endif /* !CONFIG_ZEPHYR */
 
 #endif  /* __CROS_EC_TASK_H */

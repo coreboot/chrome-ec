@@ -8,6 +8,7 @@
  */
 
 #include "console.h"
+#include "cros_version.h"
 #include "ec_commands.h"
 #include "flash.h"
 #include "host_command.h"
@@ -22,7 +23,6 @@
 #include "util.h"
 #include "vb21_struct.h"
 #include "vboot.h"
-#include "version.h"
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
@@ -254,12 +254,12 @@ enum rwsig_status rwsig_get_status(void)
 
 void rwsig_abort(void)
 {
-	task_set_event(TASK_ID_RWSIG, TASK_EVENT_ABORT, 0);
+	task_set_event(TASK_ID_RWSIG, TASK_EVENT_ABORT);
 }
 
 void rwsig_continue(void)
 {
-	task_set_event(TASK_ID_RWSIG, TASK_EVENT_CONTINUE, 0);
+	task_set_event(TASK_ID_RWSIG, TASK_EVENT_CONTINUE);
 }
 
 void rwsig_task(void *u)

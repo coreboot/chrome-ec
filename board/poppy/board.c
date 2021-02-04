@@ -108,12 +108,12 @@ void vbus1_evt(enum gpio_signal signal)
 
 void usb0_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 void usb1_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 }
 
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
@@ -132,7 +132,7 @@ static void anx74xx_cable_det_handler(void)
 	 * and if in normal mode, then there is no need to trigger a tcpc reset.
 	 */
 	if (cable_det && !reset_n)
-		task_set_event(TASK_ID_PD_C0, PD_EVENT_TCPC_RESET, 0);
+		task_set_event(TASK_ID_PD_C0, PD_EVENT_TCPC_RESET);
 }
 DECLARE_DEFERRED(anx74xx_cable_det_handler);
 
@@ -577,6 +577,16 @@ static void board_init(void)
 		gpio_set_flags(GPIO_LTE_OFF_ODL,
 			GPIO_INPUT | GPIO_PULL_UP);
 	}
+#endif
+
+#ifndef BOARD_LUX
+	/*
+	 * see (b/111215677): setting the internal PU/PD of the unused pin
+	 * GPIO10 affects the ball K10 when it is selected to CR_SIN.
+	 * Disabing the WKINEN bit of GPIO10 insteading setting its PU/PD to
+	 * bypass this issue.
+	 */
+	NPCX_WKINEN(MIWU_TABLE_1, MIWU_GROUP_2) &= 0xFE;
 #endif
 
 	/* Enable Gyro interrupts */

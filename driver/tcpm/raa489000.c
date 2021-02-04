@@ -11,8 +11,12 @@
 #include "driver/charger/isl923x.h"
 #include "i2c.h"
 #include "raa489000.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
+
+#define DEFAULT_R_AC 20
+#define R_AC CONFIG_CHARGER_SENSE_RESISTOR_AC
+#define AC_CURRENT_TO_REG(CUR) ((CUR) * R_AC / DEFAULT_R_AC)
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
@@ -32,6 +36,21 @@ static int raa489000_enter_low_power_mode(int port)
 		CPRINTS("RAA489000(%d): Failed to set TCPC setting1!", port);
 
 	return tcpci_enter_low_power_mode(port);
+}
+
+/* Configure output current in the TCPC because it is controlling Vbus */
+int raa489000_set_output_current(int port, enum tcpc_rp_value rp)
+{
+	int regval;
+	int selected_cur = rp == TYPEC_RP_3A0 ?
+				RAA489000_VBUS_CURRENT_TARGET_3A :
+				RAA489000_VBUS_CURRENT_TARGET_1_5A;
+
+	regval = AC_CURRENT_TO_REG(selected_cur) +
+				selected_cur % (DEFAULT_R_AC/R_AC);
+
+	return tcpc_write16(port, RAA489000_VBUS_CURRENT_TARGET,
+				regval);
 }
 
 int raa489000_init(int port)
@@ -177,6 +196,20 @@ int raa489000_init(int port)
 		board_set_active_charge_port(port);
 	}
 
+	/*
+	 * Set Vbus OCP UV here, PD tasks will set target current
+	 */
+	rv = tcpc_write16(port, RAA489000_VBUS_OCP_UV_THRESHOLD,
+				RAA489000_OCP_THRESHOLD_VALUE);
+	if (rv)
+		CPRINTS("c%d: failed to set OCP threshold", port);
+
+	/* Set Vbus Target Voltage */
+	rv = tcpc_write16(port, RAA489000_VBUS_VOLTAGE_TARGET,
+				RAA489000_VBUS_VOLTAGE_TARGET_5220MV);
+	if (rv)
+		CPRINTS("c%d: failed to set Vbus Target Voltage", port);
+
 	return rv;
 }
 
@@ -196,6 +229,26 @@ int raa489000_tcpm_set_cc(int port, int pull)
 	return rv;
 }
 
+int raa489000_debug_detach(int port)
+{
+	int rv;
+	/*
+	 * Force RAA489000 to see debug detach by running:
+	 *
+	 * 1. Set POWER_CONTROL. AutoDischargeDisconnect=1
+	 * 2. Set ROLE_CONTROL=0x0F(OPEN,OPEN)
+	 * 3. Set POWER_CONTROL. AutoDischargeDisconnect=0
+	 */
+
+	tcpci_tcpc_enable_auto_discharge_disconnect(port, 1);
+
+	rv = tcpci_tcpm_set_cc(port, TYPEC_CC_OPEN);
+
+	tcpci_tcpc_enable_auto_discharge_disconnect(port, 0);
+
+	return rv;
+}
+
 /* RAA489000 is a TCPCI compatible port controller */
 const struct tcpm_drv raa489000_tcpm_drv = {
 	.init                   = &raa489000_init,
@@ -208,7 +261,7 @@ const struct tcpm_drv raa489000_tcpm_drv = {
 	.set_cc                 = &raa489000_tcpm_set_cc,
 	.set_polarity           = &tcpci_tcpm_set_polarity,
 #ifdef CONFIG_USB_PD_DECODE_SOP
-	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
 #endif
 	.set_vconn              = &tcpci_tcpm_set_vconn,
 	.set_msg_header         = &tcpci_tcpm_set_msg_header,
@@ -226,6 +279,8 @@ const struct tcpm_drv raa489000_tcpm_drv = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode   = &raa489000_enter_low_power_mode,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 	.tcpc_enable_auto_discharge_disconnect =
-	&tcpci_tcpc_enable_auto_discharge_disconnect,
+		&tcpci_tcpc_enable_auto_discharge_disconnect,
+	.debug_detach		= &raa489000_debug_detach,
 };

@@ -9,21 +9,30 @@ CHIP:=stm32
 CHIP_FAMILY:=stm32h7
 CHIP_VARIANT:=stm32h7x3
 
-board-rw=ro_workarounds.o
-board-y=board.o fpsensor_detect.o
+board-rw=ro_workarounds.o board_rw.o
+board-y=board.o
+# If we're mocking the sensor detection for testing (so we can test
+# sensor/transport permutations in the unit tests), don't build the real sensor
+# detection.
+ifeq ($(HAS_MOCK_FPSENSOR_DETECT),)
+	board-rw+=fpsensor_detect_rw.o
+	board-y+=fpsensor_detect.o
+endif
 
+# Do not build rsa test because this board uses RSA exponent 3 and the rsa test
+# will fail on device.
 test-list-y=\
        aes \
        compile_time_macros \
-       crc32 \
+       crc \
        flash_physical \
        flash_write_protect \
+       fpsensor \
        mpu \
        mutex \
        pingpong \
        rollback \
        rollback_entropy \
-       rsa \
        rsa3 \
        rtc \
        scratchpad \

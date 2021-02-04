@@ -28,14 +28,14 @@
 #define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (1024 * 1024)  /* 1MB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (1024 * 1024)  /* 1MB internal spi flash */
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 #define CONFIG_HOSTCMD_FLASH_SPI_INFO
 
 /* EC Modules */
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_ADC
@@ -147,7 +147,6 @@
 /* PD */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY   30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY  250000 /* us */
-#define PD_VCONN_SWAP_DELAY             5000 /* us */
 
 #define PD_OPERATING_POWER_MW   15000
 #define PD_MAX_POWER_MW         ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)

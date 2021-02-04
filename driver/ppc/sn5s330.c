@@ -12,7 +12,7 @@
 
 #include "common.h"
 #include "console.h"
-#include "driver/ppc/sn5s330.h"
+#include "sn5s330.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "system.h"
@@ -712,7 +712,7 @@ static void sn5s330_handle_interrupt(int port)
 static void sn5s330_irq_deferred(void)
 {
 	int i;
-	uint32_t pending = atomic_read_clear(&irq_pending);
+	uint32_t pending = atomic_clear(&irq_pending);
 
 	for (i = 0; i < board_get_usb_pd_port_count(); i++)
 		if (BIT(i) & pending)

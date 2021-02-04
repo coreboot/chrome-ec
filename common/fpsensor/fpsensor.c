@@ -18,6 +18,7 @@
 #include "host_command.h"
 #include "link_defs.h"
 #include "mkbp_event.h"
+#include "overflow.h"
 #include "spi.h"
 #include "system.h"
 #include "task.h"
@@ -27,6 +28,10 @@
 
 #if !defined(CONFIG_RNG)
 #error "fpsensor requires RNG"
+#endif
+
+#if defined(SECTION_IS_RO)
+#error "fpsensor code should not be in RO image."
 #endif
 
 /* Ready to encrypt a template. */
@@ -58,7 +63,7 @@ BUILD_ASSERT(sizeof(struct ec_fp_template_encryption_metadata) % 4 == 0);
 /* Interrupt line from the fingerprint sensor */
 void fps_event(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_SENSOR_IRQ, 0);
+	task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_SENSOR_IRQ);
 }
 
 static void send_mkbp_event(uint32_t event)
@@ -356,12 +361,17 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_INFO, fp_command_info,
 
 BUILD_ASSERT(FP_CONTEXT_NONCE_BYTES == 12);
 
-static int validate_fp_buffer_offset(const uint32_t buffer_size,
-				     const uint32_t offset, const uint32_t size)
+int validate_fp_buffer_offset(const uint32_t buffer_size, const uint32_t offset,
+			      const uint32_t size)
 {
-	if (size > buffer_size || offset > buffer_size ||
-	    size + offset > buffer_size)
+	uint32_t bytes_requested;
+
+	if (check_add_overflow(size, offset, &bytes_requested))
+		return EC_ERROR_OVERFLOW;
+
+	if (bytes_requested > buffer_size)
 		return EC_ERROR_INVAL;
+
 	return EC_SUCCESS;
 }
 
@@ -777,18 +787,18 @@ int command_fpenroll(int argc, char **argv)
 				       FP_MODE_ENROLL_IMAGE);
 		if (rc != EC_SUCCESS)
 			break;
-		event = atomic_read_clear(&fp_events);
+		event = atomic_clear(&fp_events);
 		percent = EC_MKBP_FP_ENROLL_PROGRESS(event);
 		CPRINTS("Enroll capture: %s (%d%%)",
 			enroll_str[EC_MKBP_FP_ERRCODE(event) & 3], percent);
 		/* wait for finger release between captures */
 		sensor_mode = FP_MODE_ENROLL_SESSION | FP_MODE_FINGER_UP;
-		task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_UPDATE_CONFIG, 0);
+		task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_UPDATE_CONFIG);
 		while (tries-- && sensor_mode & FP_MODE_FINGER_UP)
 			usleep(20 * MSEC);
 	} while (percent < 100);
 	sensor_mode = 0; /* reset FP_MODE_ENROLL_SESSION */
-	task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_UPDATE_CONFIG, 0);
+	task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_UPDATE_CONFIG);
 
 	return rc;
 }
@@ -800,7 +810,7 @@ DECLARE_CONSOLE_COMMAND_FLAGS(fpenroll, command_fpenroll, NULL,
 int command_fpmatch(int argc, char **argv)
 {
 	enum ec_error_list rc = fp_console_action(FP_MODE_MATCH);
-	uint32_t event = atomic_read_clear(&fp_events);
+	uint32_t event = atomic_clear(&fp_events);
 
 	if (rc == EC_SUCCESS && event & EC_MKBP_FP_MATCH) {
 		uint32_t errcode = EC_MKBP_FP_ERRCODE(event);
@@ -826,7 +836,7 @@ int command_fpclear(int argc, char **argv)
 	if (rc < 0)
 		CPRINTS("Failed to clear fingerprint context: %d", rc);
 
-	atomic_read_clear(&fp_events);
+	atomic_clear(&fp_events);
 
 	return rc;
 }

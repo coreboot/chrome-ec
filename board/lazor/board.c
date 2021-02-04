@@ -6,12 +6,17 @@
 /* Lazor board-specific configuration */
 
 #include "adc_chip.h"
+#include "battery_fuel_gauge.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "extpower.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm426xx.h"
+#include "driver/accel_kionix.h"
+#include "driver/accel_kx022.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -30,6 +35,7 @@
 #include "switch.h"
 #include "tablet_mode.h"
 #include "task.h"
+#include "usbc_ocp.h"
 #include "usbc_ppc.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
@@ -39,6 +45,7 @@
 static void tcpc_alert_event(enum gpio_signal signal);
 static void usb0_evt(enum gpio_signal signal);
 static void usb1_evt(enum gpio_signal signal);
+static void usba_oc_interrupt(enum gpio_signal signal);
 static void ppc_interrupt(enum gpio_signal signal);
 static void board_connect_c0_sbu(enum gpio_signal s);
 static void switchcap_interrupt(enum gpio_signal signal);
@@ -68,12 +75,25 @@ static void tcpc_alert_event(enum gpio_signal signal)
 
 static void usb0_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 static void usb1_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+}
+
+static void usba_oc_deferred(void)
+{
+	/* Use next number after all USB-C ports to indicate the USB-A port */
+	board_overcurrent_event(CONFIG_USB_PD_PORT_MAX_COUNT,
+				!gpio_get_level(GPIO_USB_A0_OC_ODL));
+}
+DECLARE_DEFERRED(usba_oc_deferred);
+
+static void usba_oc_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&usba_oc_deferred_data, 0);
 }
 
 static void ppc_interrupt(enum gpio_signal signal)
@@ -109,6 +129,42 @@ static void switchcap_interrupt(enum gpio_signal signal)
 {
 	ln9310_interrupt(signal);
 }
+
+/* Keyboard scan setting */
+struct keyboard_scan_config keyscan_config = {
+	/* Use 80 us, because KSO_02 passes through the H1. */
+	.output_settle_us = 80,
+	/*
+	 * Unmask 0x08 in [0] (KSO_00/KSI_03, the new location of Search key);
+	 * as it still uses the legacy location (KSO_01/KSI_00).
+	 */
+	.actual_key_mask = {
+		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca
+	},
+	/* Other values should be the same as the default configuration. */
+	.debounce_down_us = 9 * MSEC,
+	.debounce_up_us = 30 * MSEC,
+	.scan_period_us = 3 * MSEC,
+	.min_post_scan_delay_us = 1000,
+	.poll_timeout_us = 100 * MSEC,
+};
+
+/* I2C port map */
+const struct i2c_port_t i2c_ports[] = {
+	{"power",   I2C_PORT_POWER,  100, GPIO_EC_I2C_POWER_SCL,
+					  GPIO_EC_I2C_POWER_SDA},
+	{"tcpc0",   I2C_PORT_TCPC0, 1000, GPIO_EC_I2C_USB_C0_PD_SCL,
+					  GPIO_EC_I2C_USB_C0_PD_SDA},
+	{"tcpc1",   I2C_PORT_TCPC1, 1000, GPIO_EC_I2C_USB_C1_PD_SCL,
+					  GPIO_EC_I2C_USB_C1_PD_SDA},
+	{"eeprom",  I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
+					  GPIO_EC_I2C_EEPROM_SDA},
+	{"sensor",  I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
+					  GPIO_EC_I2C_SENSOR_SDA},
+};
+
+const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 /* ADC channels */
 const struct adc_t adc_channels[] = {
@@ -235,17 +291,37 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 static struct mutex g_base_mutex;
 static struct mutex g_lid_mutex;
 
+static struct kionix_accel_data g_kx022_data;
 static struct bmi_drv_data_t g_bmi160_data;
+static struct icm_drv_data_t g_icm426xx_data;
 static struct accelgyro_saved_data_t g_bma255_data;
 
+enum base_accelgyro_type {
+	BASE_GYRO_NONE = 0,
+	BASE_GYRO_BMI160 = 1,
+	BASE_GYRO_ICM426XX = 2,
+};
+
 /* Matrix to rotate accelerometer into standard reference frame */
-const mat33_fp_t base_standard_ref = {
+const mat33_fp_t base_standard_ref_bmi160 = {
 	{ FLOAT_TO_FP(1), 0,  0},
 	{ 0,  FLOAT_TO_FP(-1),  0},
 	{ 0,  0, FLOAT_TO_FP(-1)}
 };
 
-static const mat33_fp_t lid_standard_ref = {
+const mat33_fp_t base_standard_ref_icm426xx = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0,  0, FLOAT_TO_FP(-1)}
+};
+
+static const mat33_fp_t lid_standard_ref_bma255 = {
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
+static const mat33_fp_t lid_standard_ref_kx022 = {
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
@@ -254,7 +330,7 @@ static const mat33_fp_t lid_standard_ref = {
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 	 .name = "Lid Accel",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .active_mask = SENSOR_ACTIVE_S0_S3_S5,
 	 .chip = MOTIONSENSE_CHIP_BMA255,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
@@ -263,7 +339,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bma255_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
-	 .rot_standard_ref = &lid_standard_ref,
+	 .rot_standard_ref = &lid_standard_ref_bma255,
 	 .default_range = 2, /* g, to support lid angle calculation. */
 	 .min_frequency = BMA255_ACCEL_MIN_FREQ,
 	 .max_frequency = BMA255_ACCEL_MAX_FREQ,
@@ -294,14 +370,19 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .rot_standard_ref = &base_standard_ref,
+	 .rot_standard_ref = &base_standard_ref_bmi160,
 	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
-		 [SENSOR_CONFIG_EC_S0] = {
-			 .odr = 10000 | ROUND_UP_FLAG,
-		 },
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		/* Sensor on for lid angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
 	 },
 	},
 	[BASE_GYRO] = {
@@ -316,12 +397,83 @@ struct motion_sensor_t motion_sensors[] = {
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
 	 .default_range = 1000, /* dps */
-	 .rot_standard_ref = &base_standard_ref,
+	 .rot_standard_ref = &base_standard_ref_bmi160,
 	 .min_frequency = BMI_GYRO_MIN_FREQ,
 	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+struct motion_sensor_t kx022_lid_accel = {
+	.name = "Lid Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3_S5,
+	.chip = MOTIONSENSE_CHIP_KX022,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_LID,
+	.drv = &kionix_accel_drv,
+	.mutex = &g_lid_mutex,
+	.drv_data = &g_kx022_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = KX022_ADDR0_FLAGS,
+	.rot_standard_ref = &lid_standard_ref_kx022,
+	.default_range = 2, /* g, enough for laptop. */
+	.min_frequency = KX022_ACCEL_MIN_FREQ,
+	.max_frequency = KX022_ACCEL_MAX_FREQ,
+	.config = {
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		 },
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	},
+};
+
+struct motion_sensor_t icm426xx_base_accel = {
+	.name = "Base Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3_S5,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 2, /* g, enough for laptop */
+	.rot_standard_ref = &base_standard_ref_icm426xx,
+	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	},
+};
+
+struct motion_sensor_t icm426xx_base_gyro = {
+	.name = "Base Gyro",
+	.active_mask = SENSOR_ACTIVE_S0_S3_S5,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_GYRO,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 1000, /* dps */
+	.rot_standard_ref = &base_standard_ref_icm426xx,
+	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
+	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
+};
 
 #ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
@@ -345,17 +497,72 @@ void lid_angle_peripheral_enable(int enable)
 
 static int board_is_clamshell(void)
 {
-	/* SKU ID of Limozeen: 4, 5 */
-	return sku_id == 4 || sku_id == 5;
+	/* SKU ID of Limozeen: 4, 5, 6 */
+	return sku_id == 4 || sku_id == 5 || sku_id == 6;
 }
 
 enum battery_cell_type board_get_battery_cell_type(void)
 {
-	/* SKU ID of Limozeen: 4, 5 -> 3S battery */
-	if (sku_id == 4 || sku_id == 5)
+	/* SKU ID of Limozeen: 4, 5, 6 -> 3S battery */
+	if (sku_id == 4 || sku_id == 5 || sku_id == 6)
 		return BATTERY_CELL_TYPE_3S;
 
 	return BATTERY_CELL_TYPE_UNKNOWN;
+}
+
+__override int board_get_default_battery_type(void)
+{
+	/*
+	 * A 2S battery is set as default. If the board is configured to use
+	 * a 3S battery, according to its SKU_ID, return a 3S battery as
+	 * default. It helps to configure the charger to output a correct
+	 * voltage in case the battery is not attached.
+	 */
+	if (board_get_battery_cell_type() == BATTERY_CELL_TYPE_3S)
+		return BATTERY_LGC_AP18C8K;
+
+	return DEFAULT_BATTERY_TYPE;
+}
+
+static int base_accelgyro_config;
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	switch (base_accelgyro_config) {
+	case BASE_GYRO_ICM426XX:
+		icm426xx_interrupt(signal);
+		break;
+	case BASE_GYRO_BMI160:
+	default:
+		bmi160_interrupt(signal);
+		break;
+	}
+}
+
+static void board_detect_motionsensor(void)
+{
+	int ret;
+	int val;
+
+	/* Check lid accel chip */
+	ret = i2c_read8(I2C_PORT_SENSOR, BMA2x2_I2C_ADDR1_FLAGS,
+		BMA2x2_CHIP_ID_ADDR, &val);
+	if (ret)
+		motion_sensors[LID_ACCEL] = kx022_lid_accel;
+
+	CPRINTS("Lid Accel: %s", ret ? "KX022" : "BMA255");
+
+	/* Check base accelgyro chip */
+	ret = icm_read8(&icm426xx_base_accel, ICM426XX_REG_WHO_AM_I, &val);
+	if (val == ICM426XX_CHIP_ICM40608) {
+		motion_sensors[BASE_ACCEL] = icm426xx_base_accel;
+		motion_sensors[BASE_GYRO] = icm426xx_base_gyro;
+	}
+
+	base_accelgyro_config = (val == ICM426XX_CHIP_ICM40608)
+		 ? BASE_GYRO_ICM426XX : BASE_GYRO_BMI160;
+	CPRINTS("Base Accelgyro: %s", (val == ICM426XX_CHIP_ICM40608)
+		 ? "ICM40608" : "BMI160");
 }
 
 static void board_update_sensor_config_from_sku(void)
@@ -363,10 +570,13 @@ static void board_update_sensor_config_from_sku(void)
 	if (board_is_clamshell()) {
 		motion_sensor_count = 0;
 		gmr_tablet_switch_disable();
-		/* The base accel is not stuffed; don't allow line to float */
+		/* The sensors are not stuffed; don't allow lines to float */
 		gpio_set_flags(GPIO_ACCEL_GYRO_INT_L,
 			       GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_LID_ACCEL_INT_L,
+			       GPIO_INPUT | GPIO_PULL_DOWN);
 	} else {
+		board_detect_motionsensor();
 		motion_sensor_count = ARRAY_SIZE(motion_sensors);
 		/* Enable interrupt for the base accel sensor */
 		gpio_enable_interrupt(GPIO_ACCEL_GYRO_INT_L);
@@ -475,13 +685,12 @@ static void board_switchcap_init(void)
 /* Initialize board. */
 static void board_init(void)
 {
-	/* Enable BC1.2 VBUS detection */
-	gpio_enable_interrupt(GPIO_USB_C0_VBUS_DET_L);
-	gpio_enable_interrupt(GPIO_USB_C1_VBUS_DET_L);
-
 	/* Enable BC1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
+
+	/* Enable USB-A overcurrent interrupt */
+	gpio_enable_interrupt(GPIO_USB_A0_OC_ODL);
 
 	/*
 	 * The H1 SBU line for CCD are behind PPC chip. The PPC internal FETs
@@ -496,6 +705,52 @@ static void board_init(void)
 	board_switchcap_init();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+void board_hibernate(void)
+{
+	int i;
+
+	if (!board_is_clamshell()) {
+		/*
+		 * Sensors are unpowered in hibernate. Apply PD to the
+		 * interrupt lines such that they don't float.
+		 */
+		gpio_set_flags(GPIO_ACCEL_GYRO_INT_L,
+			       GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_LID_ACCEL_INT_L,
+			       GPIO_INPUT | GPIO_PULL_DOWN);
+	}
+
+	/*
+	 * Board rev 5+ has the hardware fix. Don't need the following
+	 * workaround.
+	 */
+	if (system_get_board_version() >= 5)
+		return;
+
+	/*
+	 * Enable the PPC power sink path before EC enters hibernate;
+	 * otherwise, ACOK won't go High and can't wake EC up. Check the
+	 * bug b/170324206 for details.
+	 */
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+		ppc_vbus_sink_enable(i, 1);
+}
+
+__override uint16_t board_get_ps8xxx_product_id(int port)
+{
+	/*
+	 * Lazor (SKU_ID: 0, 1, 2, 3) rev 3+ changes TCPC from PS8751 to
+	 * PS8805.
+	 *
+	 * Limozeen (SKU_ID: 4, 5, 6) all-rev uses PS8805.
+	 */
+	if ((sku_id == 0 || sku_id == 1 || sku_id == 2 || sku_id == 3) &&
+	    system_get_board_version() < 3)
+		return PS8751_PRODUCT_ID;
+
+	return PS8805_PRODUCT_ID;
+}
 
 void board_tcpc_init(void)
 {

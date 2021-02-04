@@ -7,12 +7,17 @@
 
 #include "common.h"
 #include "console.h"
+#include "ec_commands.h"
 #include "usb_tc_sm.h"
 #include "mock/usb_tc_sm_mock.h"
 #include "memory.h"
 
 #ifndef CONFIG_COMMON_RUNTIME
 #define cprints(format, args...)
+#endif
+
+#ifndef TEST_BUILD
+#error "Mocks should only be in the test build."
 #endif
 
 struct mock_tc_port_t mock_tc_port[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -24,14 +29,15 @@ void mock_tc_port_reset(void)
 	for (port = 0 ; port < CONFIG_USB_PD_PORT_MAX_COUNT ; ++port) {
 		mock_tc_port[port].rev = PD_REV30;
 		mock_tc_port[port].pd_enable = 0;
-		mock_tc_port[port].power_role = PD_ROLE_SINK;
-		mock_tc_port[port].data_role = PD_ROLE_DISCONNECTED;
 		mock_tc_port[port].msg_tx_id = 0;
 		mock_tc_port[port].msg_rx_id = 0;
 		mock_tc_port[port].sop = TCPC_TX_INVALID;
 		mock_tc_port[port].lcl_rp = TYPEC_RP_RESERVED;
 		mock_tc_port[port].attached_snk = 0;
 		mock_tc_port[port].attached_src = 0;
+		mock_tc_port[port].vconn_src = false;
+		mock_tc_port[port].data_role = PD_ROLE_UFP;
+		mock_tc_port[port].power_role = PD_ROLE_SINK;
 	}
 }
 
@@ -77,16 +83,6 @@ int typec_update_cc(int port)
 	return EC_SUCCESS;
 }
 
-void tc_set_data_role(int port, enum pd_data_role role)
-{
-	mock_tc_port[port].data_role = role;
-}
-
-void tc_set_power_role(int port, enum pd_power_role role)
-{
-	mock_tc_port[port].power_role = role;
-}
-
 int tc_check_vconn_swap(int port)
 {
 	return 0;
@@ -97,7 +93,7 @@ void tc_ctvpd_detected(int port)
 
 int tc_is_vconn_src(int port)
 {
-	return 0;
+	return mock_tc_port[port].vconn_src;
 }
 
 void tc_hard_reset_request(int port)
@@ -134,4 +130,72 @@ void tc_snk_power_off(int port)
 
 void tc_request_power_swap(int port)
 {
+}
+
+enum pd_dual_role_states pd_get_dual_role(int port)
+{
+	return PD_DRP_TOGGLE_ON;
+}
+
+enum pd_data_role pd_get_data_role(int port)
+{
+	return mock_tc_port[port].data_role;
+}
+
+enum pd_power_role pd_get_power_role(int port)
+{
+	return mock_tc_port[port].power_role;
+}
+
+enum pd_cc_states pd_get_task_cc_state(int port)
+{
+	return PD_CC_NONE;
+}
+
+int pd_is_connected(int port)
+{
+	return 1;
+}
+
+bool pd_is_disconnected(int port)
+{
+	return false;
+}
+
+bool pd_get_partner_usb_comm_capable(int port)
+{
+	return true;
+}
+
+bool pd_get_partner_dual_role_power(int port)
+{
+	return true;
+}
+
+bool pd_capable(int port)
+{
+	return true;
+}
+
+void pd_set_suspend(int port, int suspend)
+{
+}
+
+enum tcpc_cc_polarity pd_get_polarity(int port)
+{
+	return POLARITY_CC1;
+}
+
+void pd_request_data_swap(int port)
+{}
+
+void pd_request_vconn_swap_off(int port)
+{}
+
+void pd_request_vconn_swap_on(int port)
+{}
+
+bool pd_alt_mode_capable(int port)
+{
+	return false;
 }

@@ -37,7 +37,7 @@
 
 #if defined(CHIP_VARIANT_IT83202BX)
 /* TODO(b/133460224): enable properly chip config option. */
-#define CONFIG_FLASH_SIZE           0x00080000
+#define CONFIG_FLASH_SIZE_BYTES           0x00080000
 #define CONFIG_RAM_BASE             0x80080000
 #define CONFIG_RAM_SIZE             0x00010000
 
@@ -77,8 +77,10 @@
 /* Chip IT83202BX actually has TCPC physical port count. */
 #define IT83XX_USBPD_PHY_PORT_COUNT    3
 #elif defined(CHIP_VARIANT_IT81302AX_1024) \
-|| defined(CHIP_VARIANT_IT81202AX_1024)
-#define CONFIG_FLASH_SIZE           0x00100000
+|| defined(CHIP_VARIANT_IT81202AX_1024) \
+|| defined(CHIP_VARIANT_IT81302BX_1024) \
+|| defined(CHIP_VARIANT_IT81202BX_1024)
+#define CONFIG_FLASH_SIZE_BYTES           0x00100000
 #define CONFIG_RAM_BASE             0x80100000
 #define CONFIG_RAM_SIZE             0x0000f000
 
@@ -107,7 +109,7 @@
  * Please refer to gpio_1p8v_sel[] for 1.8v GPIOs.
  */
 #define IT83XX_GPIO_1P8V_PIN_EXTENDED
-#ifdef CHIP_VARIANT_IT81202AX_1024
+#if defined(CHIP_VARIANT_IT81202AX_1024) || defined(CHIP_VARIANT_IT81202BX_1024)
 /* Pins of group K and L are set as internal pull-down at initialization. */
 #define IT83XX_GPIO_GROUP_K_L_DEFAULT_PULL_DOWN
 #endif
@@ -123,10 +125,6 @@
 #define IT83XX_INTC_PLUG_IN_OUT_SUPPORT
 /* Wake up CPU from low power mode even if interrupts are disabled */
 #define IT83XX_RISCV_WAKEUP_CPU_WITHOUT_INT_ENABLED
-/* Auto reset rx fifo while CS# deasserted. */
-#define IT83XX_SPI_AUTO_RESET_RX_FIFO
-/* CPU accesses FIFO to reach rx valid data length. */
-#define IT83XX_SPI_RX_VALID_INT
 /* Individual setting CC1 and CC2 resistance. */
 #define IT83XX_USBPD_CC1_CC2_RESISTANCE_SEPARATE
 /* Chip actually has TCPC physical port count. */
@@ -135,6 +133,7 @@
 #error "Unsupported chip variant!"
 #endif
 
+#define CHIP_RAMCODE_ILM0 (CONFIG_RAM_BASE + 0)      /* base+0000h~base+0FFF */
 #define CHIP_H2RAM_BASE   (CONFIG_RAM_BASE + 0x1000) /* base+1000h~base+1FFF */
 #define CHIP_RAMCODE_BASE (CONFIG_RAM_BASE + 0x2000) /* base+2000h~base+2FFF */
 

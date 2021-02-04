@@ -40,7 +40,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -133,7 +133,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr_flags = FUSB302_I2C_SLAVE_ADDR_FLAGS,
+			.addr_flags = FUSB302_I2C_ADDR_FLAGS,
 		},
 		.drv = &fusb302_tcpm_drv,
 	},
@@ -254,7 +254,7 @@ int pd_snk_is_vbus_provided(int port)
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
@@ -274,7 +274,7 @@ static void board_spi_enable(void)
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
 	/* Reinitialize spi peripheral. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+	spi_enable(&spi_devices[0], 1);
 
 	/* Pin mux spi peripheral toward the sensor. */
 	gpio_config_module(MODULE_SPI_MASTER, 1);
@@ -291,7 +291,7 @@ static void board_spi_disable(void)
 	gpio_config_module(MODULE_SPI_MASTER, 0);
 
 	/* Disable spi peripheral and clocks. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
+	spi_enable(&spi_devices[0], 0);
 	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
@@ -324,6 +324,9 @@ static void board_init(void)
 
 	/* Enable BC12 interrupt */
 	gpio_enable_interrupt(GPIO_BC12_EC_INT_ODL);
+
+	/* Enable USM mode */
+	ioex_set_level(IOEX_5V_DC_DC_MODE_CTRL, 1);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -335,15 +338,15 @@ static struct mutex g_base_mutex;
 
 /* Rotation matrixes */
 static const mat33_fp_t base_standard_ref = {
-	{FLOAT_TO_FP(1), 0, 0},
 	{0, FLOAT_TO_FP(-1), 0},
+	{FLOAT_TO_FP(-1), 0, 0},
 	{0, 0, FLOAT_TO_FP(-1)}
 };
 
 static const mat33_fp_t lid_standard_ref = {
-	{FLOAT_TO_FP(1), 0, 0},
 	{0, FLOAT_TO_FP(1), 0},
-	{0, 0, FLOAT_TO_FP(1) }
+	{FLOAT_TO_FP(1), 0, 0},
+	{0, 0, FLOAT_TO_FP(-1)}
 };
 
 /* sensor private data */
@@ -446,6 +449,22 @@ static void board_chipset_shutdown(void)
 	gpio_set_level(GPIO_EN_USBA_5V, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S3 -> S0 transition, 5V DC-DC ctrl  */
+static void board_chipset_resume(void)
+{
+	/* Enable USM mode */
+	ioex_set_level(IOEX_5V_DC_DC_MODE_CTRL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S0 -> S3 transition */
+static void board_chipset_suspend(void)
+{
+	/* Enable Normal mode */
+	ioex_set_level(IOEX_5V_DC_DC_MODE_CTRL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
 int board_get_charger_i2c(void)
 {

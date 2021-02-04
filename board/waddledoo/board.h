@@ -17,6 +17,14 @@
  */
 #define CONFIG_SYSTEM_UNLOCKED
 
+/* Save some flash space */
+#define CONFIG_CHIP_INIT_ROM_REGION
+#define CONFIG_DEBUG_ASSERT_BRIEF
+
+/* EC console commands */
+#define CONFIG_CMD_TCPC_DUMP
+#define CONFIG_CMD_CHARGER_DUMP
+
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
 
@@ -27,10 +35,6 @@
 #define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
 #define CONFIG_OCPC
 #undef  CONFIG_CHARGER_SINGLE_CHIP
-
-/* EC console commands */
-#define CONFIG_CMD_TCPC_DUMP
-#define CONFIG_CMD_CHARGER_DUMP
 
 /*
  * GPIO for C1 interrupts, for baseboard use
@@ -76,6 +80,16 @@
 /* Variant references the TCPCs to determine Vbus sourcing */
 #define CONFIG_USB_PD_5V_EN_CUSTOM
 
+#undef PD_POWER_SUPPLY_TURN_ON_DELAY
+#undef PD_POWER_SUPPLY_TURN_OFF_DELAY
+#undef CONFIG_USBC_VCONN_SWAP_DELAY_US
+/* 20% margin added for these timings */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY	13080	/* us */
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY	16080	/* us */
+#undef CONFIG_USBC_VCONN_SWAP_DELAY_US
+#define CONFIG_USBC_VCONN_SWAP_DELAY_US		787	/* us */
+
+
 /* I2C configuration */
 #define I2C_PORT_EEPROM     NPCX_I2C_PORT7_0
 #define I2C_PORT_BATTERY    NPCX_I2C_PORT5_0
@@ -105,7 +119,6 @@
 
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCELGYRO_BMI160		/* Base accel */
-#define CONFIG_SYNC			/* Camera VSYNC */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -116,7 +129,6 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_SYNC_INT_EVENT TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -126,9 +138,6 @@
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
 #define CONFIG_GMR_TABLET_MODE
-
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_GPIO
 
 #ifndef __ASSEMBLER__
 
@@ -153,7 +162,6 @@ enum sensor_id {
 	LID_ACCEL,
 	BASE_ACCEL,
 	BASE_GYRO,
-	VSYNC,
 	SENSOR_COUNT
 };
 

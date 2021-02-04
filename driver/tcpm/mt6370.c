@@ -9,8 +9,8 @@
 #include "hooks.h"
 #include "mt6370.h"
 #include "task.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
@@ -196,7 +196,7 @@ const struct tcpm_drv mt6370_tcpm_drv = {
 	.set_cc			= &mt6370_set_cc,
 	.set_polarity		= &mt6370_set_polarity,
 #ifdef CONFIG_USB_PD_DECODE_SOP
-	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
 #endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
@@ -218,4 +218,5 @@ const struct tcpm_drv mt6370_tcpm_drv = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &mt6370_enter_low_power_mode,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 };

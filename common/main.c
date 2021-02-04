@@ -124,6 +124,10 @@ test_mockable __keep int main(void)
 	 */
 	timer_init();
 
+	/* Compensate the elapsed time for the RTC. */
+	if (IS_ENABLED(CONFIG_HIBERNATE_PSL_COMPENSATE_RTC))
+		system_compensate_rtc();
+
 	/* Main initialization stage.  Modules may enable interrupts here. */
 	cpu_init();
 
@@ -187,7 +191,7 @@ test_mockable __keep int main(void)
 #ifdef CONFIG_HOSTCMD_X86
 	lpc_init_mask();
 #endif
-	if (IS_ENABLED(CONFIG_I2C_MASTER)) {
+	if (IS_ENABLED(CONFIG_I2C_CONTROLLER)) {
 		/*
 		 * Some devices (like the I2C keyboards, CBI) need I2C access
 		 * pretty early, so let's initialize the controller now.

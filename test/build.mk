@@ -26,7 +26,7 @@ test-list-host += charge_manager_drp_charging
 test-list-host += charge_ramp
 test-list-host += compile_time_macros
 test-list-host += console_edit
-test-list-host += crc32
+test-list-host += crc
 test-list-host += entropy
 test-list-host += extpwr_gpio
 test-list-host += fan
@@ -42,6 +42,7 @@ test-list-host += host_command
 test-list-host += i2c_bitbang
 test-list-host += inductive_charging
 test-list-host += interrupt
+test-list-host += irq_locking
 test-list-host += is_enabled
 test-list-host += is_enabled_error
 test-list-host += kasa
@@ -59,6 +60,7 @@ test-list-host += motion_sense_fifo
 test-list-host += mutex
 test-list-host += newton_fit
 test-list-host += online_calibration
+test-list-host += online_calibration_spoof
 test-list-host += pingpong
 test-list-host += power_button
 test-list-host += printf
@@ -90,7 +92,7 @@ test-list-host += usb_typec_vpd
 test-list-host += usb_typec_ctvpd
 test-list-host += usb_typec_drp_acc_trysrc
 test-list-host += usb_prl_old
-test-list-host += usb_tcpmv2_tcpci
+test-list-host += usb_tcpmv2_compliance
 test-list-host += usb_prl
 test-list-host += usb_prl_noextended
 test-list-host += usb_pe_drp_old
@@ -134,7 +136,7 @@ charge_manager_drp_charging-y=charge_manager.o
 charge_ramp-y+=charge_ramp.o
 compile_time_macros-y=compile_time_macros.o
 console_edit-y=console_edit.o
-crc32-y=crc32.o
+crc-y=crc.o
 entropy-y=entropy.o
 extpwr_gpio-y=extpwr_gpio.o
 fan-y=fan.o
@@ -144,12 +146,13 @@ flash_write_protect-y=flash_write_protect.o
 fpsensor-y=fpsensor.o
 fpsensor_crypto-y=fpsensor_crypto.o
 fpsensor_state-y=fpsensor_state.o
-gyro_cal-y=gyro_cal.o
+gyro_cal-y=gyro_cal.o gyro_cal_init_for_test.o
 hooks-y=hooks.o
 host_command-y=host_command.o
 i2c_bitbang-y=i2c_bitbang.o
 inductive_charging-y=inductive_charging.o
 interrupt-y=interrupt.o
+irq_locking-y=irq_locking.o
 is_enabled-y=is_enabled.o
 kb_8042-y=kb_8042.o
 kb_mkbp-y=kb_mkbp.o
@@ -163,6 +166,7 @@ motion_angle_tablet-y=motion_angle_tablet.o motion_angle_data_literals_tablet.o 
 motion_lid-y=motion_lid.o
 motion_sense_fifo-y=motion_sense_fifo.o
 online_calibration-y=online_calibration.o
+online_calibration_spoof-y=online_calibration_spoof.o gyro_cal_init_for_test.o
 kasa-y=kasa.o
 mpu-y=mpu.o
 mutex-y=mutex.o
@@ -212,7 +216,20 @@ usb_pe_drp_old-y=usb_pe_drp_old.o usb_sm_checks.o fake_usbc.o
 usb_pe_drp_old_noextended-y=usb_pe_drp_old.o usb_sm_checks.o fake_usbc.o
 usb_pe_drp-y=usb_pe_drp.o usb_sm_checks.o
 usb_pe_drp_noextended-y=usb_pe_drp_noextended.o usb_sm_checks.o
-usb_tcpmv2_tcpci-y=usb_tcpmv2_tcpci.o vpd_api.o usb_sm_checks.o
+usb_tcpmv2_compliance-y=usb_tcpmv2_compliance.o usb_tcpmv2_compliance_common.o \
+	usb_tcpmv2_td_pd_ll_e3.o \
+	usb_tcpmv2_td_pd_ll_e4.o \
+	usb_tcpmv2_td_pd_ll_e5.o \
+	usb_tcpmv2_td_pd_src_e1.o \
+	usb_tcpmv2_td_pd_src_e2.o \
+	usb_tcpmv2_td_pd_src_e5.o \
+	usb_tcpmv2_td_pd_src3_e1.o \
+	usb_tcpmv2_td_pd_src3_e7.o \
+	usb_tcpmv2_td_pd_src3_e8.o \
+	usb_tcpmv2_td_pd_src3_e9.o \
+	usb_tcpmv2_td_pd_src3_e26.o \
+	usb_tcpmv2_td_pd_snk3_e12.o \
+	usb_tcpmv2_td_pd_other.o
 utils-y=utils.o
 utils_str-y=utils_str.o
 vboot-y=vboot.o
@@ -226,3 +243,7 @@ is_enabled_error-y=is_enabled_error.o.cmd
 
 host-static_if_error: TEST_SCRIPT=static_if_error.sh
 static_if_error-y=static_if_error.o.cmd
+
+run-genvif_test:
+	@echo "  TEST    genvif_test"
+	@test/genvif/genvif.sh

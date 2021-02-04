@@ -241,7 +241,7 @@ void icm426xx_interrupt(enum gpio_signal signal)
 		last_interrupt_timestamp = __hw_clock_source_read();
 
 	task_set_event(TASK_ID_MOTIONSENSE,
-		       CONFIG_ACCELGYRO_ICM426XX_INT_EVENT, 0);
+		       CONFIG_ACCELGYRO_ICM426XX_INT_EVENT);
 }
 
 /**
@@ -450,10 +450,9 @@ out_unlock:
 	return ret;
 }
 
-static int icm426xx_set_range(const struct motion_sensor_t *s, int range,
+static int icm426xx_set_range(struct motion_sensor_t *s, int range,
 			      int rnd)
 {
-	struct accelgyro_saved_data_t *data = ICM_GET_SAVED_DATA(s);
 	int reg, ret, reg_val;
 	int newrange;
 
@@ -501,7 +500,7 @@ static int icm426xx_set_range(const struct motion_sensor_t *s, int range,
 	ret = icm_field_update8(s, reg, ICM426XX_FS_MASK,
 				ICM426XX_FS_SEL(reg_val));
 	if (ret == EC_SUCCESS)
-		data->range = newrange;
+		s->current_range = newrange;
 
 	mutex_unlock(s->mutex);
 
@@ -659,28 +658,24 @@ out_unlock:
 static int icm426xx_set_offset(const struct motion_sensor_t *s,
 			       const int16_t *offset, int16_t temp)
 {
-	struct accelgyro_saved_data_t *data = ICM_GET_SAVED_DATA(s);
 	intv3_t v = { offset[X], offset[Y], offset[Z] };
-	int range, div1, div2;
+	int div1, div2;
 	int i;
 
-	/* unscale values and rotate back to chip frame */
-	for (i = X; i <= Z; ++i)
-		v[i] = SENSOR_APPLY_DIV_SCALE(v[i], data->scale[i]);
+	/* rotate back to chip frame */
 	rotate_inv(v, *s->rot_standard_ref, v);
 
 	/* convert raw data to hardware offset units */
-	range = icm_get_range(s);
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		/* hardware offset is 1/2048g by LSB */
-		div1 = range * 2048;
-		div2 = 32768;
+		/* hardware offset is 1/2048g /LSB, EC offset 1/1024g /LSB. */
+		div1 = 2;
+		div2 = 1;
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
-		/* hardware offset is 1/32dps by LSB */
-		div1 = range * 32;
-		div2 = 32768;
+		/* hardware offset is 1/32dps /LSB, EC offset 1/1024dps /LSB. */
+		div1 = 1;
+		div2 = 32;
 		break;
 	default:
 		return EC_ERROR_INVAL;
@@ -694,9 +689,8 @@ static int icm426xx_set_offset(const struct motion_sensor_t *s,
 static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 			       int16_t *temp)
 {
-	struct accelgyro_saved_data_t *data = ICM_GET_SAVED_DATA(s);
 	intv3_t v;
-	int range, div1, div2;
+	int div1, div2;
 	int i, ret;
 
 	ret = icm426xx_get_hw_offset(s, v);
@@ -704,17 +698,16 @@ static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 		return ret;
 
 	/* transform offset to raw data */
-	range = icm_get_range(s);
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		/* hardware offset is 1/2048g by LSB */
-		div1 = 32768;
-		div2 = 2048 * range;
+		/* hardware offset is 1/2048g /LSB, EC offset 1/1024g /LSB. */
+		div1 = 1;
+		div2 = 2;
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
-		/* hardware offset is 1/32dps by LSB */
-		div1 = 32768;
-		div2 = 32 * range;
+		/* hardware offset is 1/32dps /LSB, EC offset 1/1024dps /LSB. */
+		div1 = 32;
+		div2 = 1;
 		break;
 	default:
 		return EC_ERROR_INVAL;
@@ -723,9 +716,6 @@ static int icm426xx_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 		v[i] = round_divide(v[i] * div1, div2);
 
 	rotate(v, *s->rot_standard_ref, v);
-	for (i = X; i <= Z; i++)
-		v[i] = SENSOR_APPLY_SCALE(v[i], data->scale[i]);
-
 	offset[X] = v[X];
 	offset[Y] = v[Y];
 	offset[Z] = v[Z];
@@ -861,7 +851,7 @@ static int icm426xx_init_config(const struct motion_sensor_t *s)
 	return icm_field_update8(s, ICM426XX_REG_INTF_CONFIG0, mask, val);
 }
 
-static int icm426xx_init(const struct motion_sensor_t *s)
+static int icm426xx_init(struct motion_sensor_t *s)
 {
 	struct icm_drv_data_t *st = ICM_GET_DATA(s);
 	struct accelgyro_saved_data_t *saved_data = ICM_GET_SAVED_DATA(s);
@@ -909,15 +899,16 @@ static int icm426xx_init(const struct motion_sensor_t *s)
 		if (ret)
 			goto out_unlock;
 
-#ifdef CONFIG_ACCEL_INTERRUPTS
-		ret = icm426xx_config_interrupt(s);
+		if (IS_ENABLED(CONFIG_ACCEL_INTERRUPTS))
+			ret = icm426xx_config_interrupt(s);
 		if (ret)
 			goto out_unlock;
-#endif
 	}
 
 	for (i = X; i <= Z; i++)
 		saved_data->scale[i] = MOTION_SENSE_DEFAULT_SCALE;
+
+	saved_data->odr = 0;
 
 	/* set sensor filter */
 	switch (s->type) {
@@ -955,7 +946,6 @@ const struct accelgyro_drv icm426xx_drv = {
 	.read = icm426xx_read,
 	.read_temp = icm426xx_read_temp,
 	.set_range = icm426xx_set_range,
-	.get_range = icm_get_range,
 	.get_resolution = icm_get_resolution,
 	.set_data_rate = icm426xx_set_data_rate,
 	.get_data_rate = icm_get_data_rate,

@@ -11,11 +11,23 @@
 #define VARIANT_DEDEDE_EC_NPCX796FC
 #include "baseboard.h"
 
+#define CONFIG_USB_PD_DEBUG_LEVEL 2
+
+#ifdef BOARD_MAGOLOR_LEGACY
+/* this change saves 1656 bytes of RW flash space */
+#define CONFIG_CHIP_INIT_ROM_REGION
+#define CONFIG_DEBUG_ASSERT_BRIEF
+#else
 /*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
+ * The RAM and flash size combination on the the NPCX797FC does not leave
+ * any unused flash space that can be used to store the .init_rom section.
  */
-#define CONFIG_SYSTEM_UNLOCKED
+#undef CONFIG_CHIP_INIT_ROM_REGION
+#endif
+
+/* Remove default commands to free flash space */
+#undef CONFIG_CMD_ACCELSPOOF
+#undef CONFIG_CMD_BATTFAKE
 
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
@@ -27,15 +39,16 @@
 #define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
 #define CONFIG_OCPC
 #undef  CONFIG_CHARGER_SINGLE_CHIP
-
-/* EC console commands */
-#define CONFIG_CMD_TCPC_DUMP
-#define CONFIG_CMD_CHARGER_DUMP
+#undef CONFIG_CMD_CHARGER_DUMP
 
 /* GPIO for C1 interrupts, for baseboard use */
 #define GPIO_USB_C1_INT_ODL GPIO_SUB_USB_C1_INT_ODL
 
 /* Keyboard */
+#ifdef BOARD_MAGOLOR
+#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_KEYBOARD_KEYPAD
+#endif
 #define CONFIG_PWM_KBLIGHT
 
 /* LED defines */
@@ -47,12 +60,13 @@
 
 /* Temp sensor */
 #define CONFIG_TEMP_SENSOR
+#define CONFIG_THROTTLE_AP
 #define CONFIG_THERMISTOR_NCP15WB
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
-#define CONFIG_USBC_RETIMER_NB7V904M
 #define CONFIG_USBC_RETIMER_PS8802
 
 /* Common USB-A defines */
@@ -96,10 +110,15 @@
 /* Sensors */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCELGYRO_BMI160		/* Base accel */
-#define CONFIG_SYNC			/* Camera VSYNC */
+
+#ifdef BOARD_MAGOLOR
+#define CONFIG_ACCEL_KX022		/* Lid accel */
+#define CONFIG_ACCELGYRO_ICM426XX	/* Base accel second source*/
+#endif
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -110,7 +129,11 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_SYNC_INT_EVENT TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
+
+#ifdef BOARD_MAGOLOR
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#endif
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -121,8 +144,11 @@
 #define CONFIG_TABLET_MODE_SWITCH
 #define CONFIG_GMR_TABLET_MODE
 
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_GPIO
+/* Volume Button feature */
+#define CONFIG_ADC_BUTTONS
+#define CONFIG_VOLUME_BUTTONS
+#define GPIO_VOLUME_UP_L GPIO_VOLUP_BTN_ODL
+#define GPIO_VOLUME_DOWN_L GPIO_VOLDN_BTN_ODL
 
 #ifndef __ASSEMBLER__
 
@@ -153,7 +179,6 @@ enum sensor_id {
 	LID_ACCEL,
 	BASE_ACCEL,
 	BASE_GYRO,
-	VSYNC,
 	SENSOR_COUNT
 };
 
@@ -163,12 +188,14 @@ enum pwm_channel {
 };
 
 enum battery_type {
+	BATTERY_AP19B8M,
+	BATTERY_AP18C7M,
 	BATTERY_LGC_AP18C8K,
 	BATTERY_MURATA_AP18C4K,
 	BATTERY_TYPE_COUNT,
 };
 
 int board_is_sourcing_vbus(int port);
-
+void motion_interrupt(enum gpio_signal signal);
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

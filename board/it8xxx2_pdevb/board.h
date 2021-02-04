@@ -41,6 +41,7 @@
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_CHECK_MAX_REQUEST_ALLOWED
 #define CONFIG_USB_PD_CUSTOM_PDO
+#define CONFIG_USB_PD_3A_PORTS 0
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_PORT_MAX_COUNT    2
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT   2
@@ -95,7 +96,6 @@ enum adc_channel {
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
 
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 void board_pd_vbus_ctrl(int port, int enabled);
 

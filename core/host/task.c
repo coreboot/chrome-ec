@@ -124,14 +124,14 @@ int in_interrupt_context(void)
 	return !!in_interrupt;
 }
 
-void interrupt_disable(void)
+test_mockable void interrupt_disable(void)
 {
 	pthread_mutex_lock(&interrupt_lock);
 	interrupt_disabled = 1;
 	pthread_mutex_unlock(&interrupt_lock);
 }
 
-void interrupt_enable(void)
+test_mockable void interrupt_enable(void)
 {
 	pthread_mutex_lock(&interrupt_lock);
 	interrupt_disabled = 0;
@@ -198,11 +198,9 @@ pthread_t task_get_thread(task_id_t tskid)
 	return tasks[tskid].thread;
 }
 
-uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait)
+uint32_t task_set_event(task_id_t tskid, uint32_t event)
 {
 	atomic_or(&tasks[tskid].event, event);
-	if (wait)
-		return task_wait_event(-1);
 	return 0;
 }
 
@@ -224,7 +222,7 @@ uint32_t task_wait_event(int timeout_us)
 	pthread_cond_wait(&tasks[tid].resume, &run_lock);
 
 	/* Resume */
-	ret = atomic_read_clear(&tasks[tid].event);
+	ret = atomic_clear(&tasks[tid].event);
 	pthread_mutex_unlock(&interrupt_lock);
 	return ret;
 }
@@ -253,7 +251,7 @@ uint32_t task_wait_event_mask(uint32_t event_mask, int timeout_us)
 	/* Re-post any other events collected */
 	if (events & ~event_mask)
 		atomic_or(&tasks[task_get_current()].event,
-				events & ~event_mask);
+			  events & ~event_mask);
 
 	return events & event_mask;
 }
@@ -286,7 +284,7 @@ void mutex_unlock(struct mutex *mtx)
 	for (v = 31; v >= 0; --v)
 		if ((1ul << v) & mtx->waiters) {
 			mtx->waiters &= ~(1ul << v);
-			task_set_event(v, TASK_EVENT_MUTEX, 0);
+			task_set_event(v, TASK_EVENT_MUTEX);
 			break;
 		}
 }

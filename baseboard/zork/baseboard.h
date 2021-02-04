@@ -19,7 +19,7 @@
 #define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (512 * 1024)
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40 /* Internal SPI flash type. */
 
@@ -40,7 +40,7 @@
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_HOSTCMD_ESPI
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_UPDATE_IF_CHANGED
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
@@ -61,6 +61,16 @@
 #define CONFIG_BATTERY_FUEL_GAUGE
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_SMART
+/*
+ * Enable support for battery hostcmd, supporting longer strings.
+ *
+ * Vilboz battery options' model names vary in the 8th character, which is
+ * truncated in the memory mapped battery info; differentiating them requires
+ * support for EC_CMD_BATTERY_GET_STATIC version 1.
+ */
+#define CONFIG_BATTERY_V2
+#define CONFIG_BATTERY_COUNT 1
+#define CONFIG_HOSTCMD_BATTERY_V2
 
 #define CONFIG_BC12_DETECT_PI3USB9201
 
@@ -90,12 +100,12 @@
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_POWER_BUTTON_TO_PCH_CUSTOM
+#define CONFIG_THROTTLE_AP
 
 #ifdef VARIANT_ZORK_TREMBYLE
 	#define CONFIG_FANS FAN_CH_COUNT
 	#undef CONFIG_FAN_INIT_SPEED
 	#define CONFIG_FAN_INIT_SPEED 50
-	#define CONFIG_THROTTLE_AP
 #endif
 
 #define CONFIG_LED_COMMON
@@ -116,6 +126,7 @@
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
+#undef  CONFIG_KEYBOARD_VIVALDI
 
 /*
  * USB ID
@@ -160,7 +171,6 @@
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
@@ -187,6 +197,8 @@
 	/* USB-A config */
 	#define GPIO_USB1_ILIM_SEL IOEX_USB_A0_CHARGE_EN_L
 	#define GPIO_USB2_ILIM_SEL IOEX_USB_A1_CHARGE_EN_DB_L
+	/* PS8818 RX Input Termination - default value */
+	#define ZORK_PS8818_RX_INPUT_TERM PS8818_RX_INPUT_TERM_112_OHM
 #elif defined(VARIANT_ZORK_DALBOZ)
 	#define CONFIG_IO_EXPANDER_PORT_COUNT IOEX_PORT_COUNT
 #endif
@@ -200,7 +212,6 @@
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
 #define PD_MAX_POWER_MW		65000
@@ -211,18 +222,12 @@
 #define ZORK_AC_PROCHOT_CURRENT_MA 3328
 
 /*
- * Minimum conditions to start AP and perform swsync.  Note that when the
- * charger is connected via USB-PD analog signaling, the boot will proceed
- * regardless.
+ * EC will boot AP to depthcharge if: (BAT >= 4%) || (AC >= 50W)
+ * CONFIG_CHARGER_LIMIT_* is not set, so there is no additional restriction on
+ * Depthcharge to boot OS.
  */
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 3
-
-/*
- * Require PD negotiation to be complete when we are in a low-battery condition
- * prior to releasing depthcharge to the kernel.
- */
-#define CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW 15001
-#define CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT 3
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			4
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		50000
 
 /* Increase length of history buffer for port80 messages. */
 #undef CONFIG_PORT80_HISTORY_LEN
@@ -257,19 +262,26 @@
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 
-/* Sensors */
 #define CONFIG_MKBP_EVENT
+/* Host event is required to wake from sleep */
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
+/* Required to enable runtime configuration */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK (BIT(EC_MKBP_EVENT_DP_ALT_MODE_ENTERED))
+
+/* Sensors */
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 /* Thermal */
 #define CONFIG_TEMP_SENSOR_SB_TSI
 
+#ifdef HAS_TASK_MOTIONSENSE
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
 /* FIFO size is a power of 2. */
 #define CONFIG_ACCEL_FIFO_SIZE 256
 /* Depends on how fast the AP boots and typical ODRs. */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+#endif
 
 /* Audio */
 #define CONFIG_AUDIO_CODEC
@@ -349,6 +361,9 @@ __override_proto void ppc_interrupt(enum gpio_signal signal);
 #endif
 
 void board_print_temps(void);
+
+/* GPIO or IOEX signal used to set IN_HPD on DB retimer. */
+extern int board_usbc1_retimer_inhpd;
 
 #endif /* !__ASSEMBLER__ */
 

@@ -11,10 +11,12 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-#define CONFIG_MKBP_USE_GPIO
 #define CONFIG_FAN_RPM_CUSTOM
 
 /* Motion sensing drivers */
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
@@ -203,6 +205,7 @@ extern const struct usb_mux usbc1_tusb544;
 extern const struct usb_mux usbc1_ps8743;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
 
+void motion_interrupt(enum gpio_signal signal);
 void hdmi_hpd_interrupt(enum gpio_signal signal);
 void hdmi_hpd_interrupt_v2(enum ioex_signal signal);
 

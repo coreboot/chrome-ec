@@ -22,7 +22,7 @@
 #define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 /* Internal SPI flash on NPCX796FC is 512 kB */
-#define CONFIG_FLASH_SIZE (512 * 1024)
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 #define CONFIG_I2C
@@ -169,7 +169,6 @@
 /* TODO(b/122273953): Use correct PD delay values */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000	/* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000	/* us */
-#define PD_VCONN_SWAP_DELAY		5000	/* us */
 
 /* TODO(b/122273953): Use correct PD power values */
 #define PD_OPERATING_POWER_MW	15000
@@ -179,7 +178,7 @@
 
 /* I2C Bus Configuration */
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 #define I2C_PORT_PPC0		NPCX_I2C_PORT1_0
 #define I2C_PORT_TCPC1		NPCX_I2C_PORT2_0

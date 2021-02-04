@@ -69,6 +69,9 @@ struct usb_hid_keyboard_report {
 	/* Assistant/tablet mode switch bitmask */
 	uint8_t extra;
 #endif
+#ifdef CONFIG_USB_HID_KEYBOARD_VIVALDI
+	uint32_t top_row; /* bitmap of top row action keys */
+#endif
 } __packed;
 
 struct usb_hid_keyboard_output_report {
@@ -104,6 +107,12 @@ struct usb_hid_keyboard_output_report {
 /* Modifiers keycode range */
 #define HID_KEYBOARD_MODIFIER_LOW 0xe0
 #define HID_KEYBOARD_MODIFIER_HIGH 0xe7
+
+/* Supported function key range */
+#define HID_F1 0x3a
+#define HID_F12 0x45
+#define HID_F13 0x68
+#define HID_F15 0x6a
 
 /* Special keys/switches */
 #define HID_KEYBOARD_EXTRA_LOW 0xf0
@@ -197,6 +206,50 @@ const struct usb_endpoint_descriptor USB_EP_DESC(USB_IFACE_HID_KEYBOARD, 02) = {
 	0x29, 0xa4, /* Usage Maximum (164) */				\
 	0x81, 0x00, /* Input (Data, Array), ;Key arrays (6 bytes) */
 
+#define KEYBOARD_TOP_ROW_DESC						\
+	/* Modifiers */							\
+	0x05, 0x0C, /* Consumer Page */					\
+	0x0A, 0x24, 0x02, /* AC Back (0x224) */				\
+	0x0A, 0x25, 0x02, /* AC Forward (0x225) */			\
+	0x0A, 0x27, 0x02, /* AC Refresh (0x227) */			\
+	0x0A, 0x32, 0x02, /* AC View Toggle (0x232) */			\
+	0x0A, 0x9F, 0x02, /* AC Desktop Show All windows (0x29F) */	\
+	0x09, 0x70,       /* Display Brightness Decrement (0x70) */	\
+	0x09, 0x6F,       /* Display Brightness Increment (0x6F) */	\
+	0x09, 0xE2,       /* Mute (0xE2) */				\
+	0x09, 0xEA,       /* Volume Decrement (0xEA) */			\
+	0x09, 0xE9,       /* Volume Increment (0xE9) */			\
+	0x0B, 0x46, 0x00, 0x07, 0x00, /* PrintScreen (Page 0x7, Usage 0x46) */ \
+	0x0A, 0xD0, 0x02, /* Privacy Screen Toggle (0x2D0) */		\
+	0x09, 0x7A,       /* Keyboard Brightness Decrement (0x7A) */	\
+	0x09, 0x79,       /* Keyboard Brightness Increment (0x79)*/	\
+	0x09, 0xCD,       /* Play / Pause (0xCD) */			\
+	0x09, 0xB5,       /* Scan Next Track (0xB5) */			\
+	0x09, 0xB6,       /* Scan Previous Track (0xB6) */		\
+	0x09, 0x32,       /* Sleep (0x32) */				\
+	0x15, 0x00, /* Logical Minimum (0) */				\
+	0x25, 0x01, /* Logical Maximum (1) */				\
+	0x75, 0x01, /* Report Size (1) */				\
+	0x95, 0x12, /* Report Count (18) */				\
+	0x81, 0x02, /* Input (Data, Variable, Absolute), ;Modifier byte */ \
+									\
+	/* 14-bit padding */						\
+	0x95, 0x0E, /* Report Count (14) */				\
+	0x75, 0x01, /* Report Size (1) */				\
+	0x81, 0x01, /* Input (Constant), ;1-bit padding */
+
+#define KEYBOARD_TOP_ROW_FEATURE_DESC					\
+	0x06, 0xd1, 0xff, /* Usage Page (Google) */			\
+	0x09, 0x01,       /* Usage (Top Row List) */			\
+	0xa1, 0x02,       /* Collection (Logical) */			\
+	0x05, 0x0a,       /*   Usage Page (Ordinal) */			\
+	0x19, 0x01,       /*   Usage Minimum (1) */			\
+	0x29, CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS, /* Usage Maximum */	\
+	0x95, CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS, /* Report Count */	\
+	0x75, 0x20,       /*   Report Size (32) */			\
+	0xb1, 0x03,       /*   Feature (Cnst,Var,Abs) */		\
+	0xc0,             /* End Collection */
+
 /*
  * Vendor-defined Usage Page 0xffd1:
  *  - 0x18: Assistant key
@@ -273,6 +326,10 @@ static const uint8_t report_desc[] = {
 	KEYBOARD_VENDOR_DESC
 #endif
 
+#ifdef CONFIG_USB_HID_KEYBOARD_VIVALDI
+	KEYBOARD_TOP_ROW_DESC
+	KEYBOARD_TOP_ROW_FEATURE_DESC
+#endif
 	0xC0        /* End Collection */
 };
 
@@ -288,6 +345,10 @@ static const uint8_t report_desc_with_backlight[] = {
 	KEYBOARD_VENDOR_DESC
 #endif
 
+#ifdef CONFIG_USB_HID_KEYBOARD_VIVALDI
+	KEYBOARD_TOP_ROW_DESC
+	KEYBOARD_TOP_ROW_FEATURE_DESC
+#endif
 	KEYBOARD_BACKLIGHT_DESC
 
 	0xC0        /* End Collection */
@@ -335,7 +396,7 @@ static void write_keyboard_report(void)
 		return;
 	}
 
-	if (atomic_read_clear(&hid_ep_data_ready)) {
+	if (atomic_clear((int *)&hid_ep_data_ready)) {
 		/*
 		 * Endpoint is not busy, and interrupt handler did not just
 		 * send the buffer: enable TX.
@@ -425,10 +486,74 @@ USB_DECLARE_EP(USB_EP_HID_KEYBOARD, hid_keyboard_tx,
 #endif
 	       hid_keyboard_event);
 
+struct action_key_config {
+	uint32_t mask; /* bit position of usb_hid_keyboard_report.top_row */
+	uint32_t usage; /*usage ID */
+};
+
+static const struct action_key_config action_key[] = {
+	[TK_BACK] = { .mask = BIT(0), .usage = 0x000C0224 },
+	[TK_FORWARD] = { .mask = BIT(1), .usage = 0x000C0225 },
+	[TK_REFRESH] = { .mask = BIT(2), .usage = 0x000C0227 },
+	[TK_FULLSCREEN] = { .mask = BIT(3), .usage = 0x000C0232 },
+	[TK_OVERVIEW] = { .mask = BIT(4), .usage = 0x000C029F },
+	[TK_BRIGHTNESS_DOWN] = { .mask = BIT(5), .usage = 0x000C0070 },
+	[TK_BRIGHTNESS_UP] = { .mask = BIT(6), .usage = 0x000C006F },
+	[TK_VOL_MUTE] = { .mask = BIT(7), .usage = 0x000C00E2 },
+	[TK_VOL_DOWN] = { .mask = BIT(8), .usage = 0x000C00EA },
+	[TK_VOL_UP] = { .mask = BIT(9), .usage = 0x000C00E9 },
+	[TK_SNAPSHOT] = { .mask = BIT(10), .usage = 0x00070046 },
+	[TK_PRIVACY_SCRN_TOGGLE] = { .mask = BIT(11), .usage = 0x000C02D0 },
+	[TK_KBD_BKLIGHT_DOWN] = { .mask = BIT(12), .usage = 0x000C007A },
+	[TK_KBD_BKLIGHT_UP] = { .mask = BIT(13), .usage = 0x000C0079 },
+	[TK_PLAY_PAUSE] = { .mask = BIT(14), .usage = 0x000C00CD },
+	[TK_NEXT_TRACK] = { .mask = BIT(15), .usage = 0x000C00B5 },
+	[TK_PREV_TRACK] = { .mask = BIT(16), .usage = 0x000C00B6 },
+};
+
+#ifdef CONFIG_USB_HID_KEYBOARD_VIVALDI
+static uint32_t feature_report[CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS];
+
+static void hid_keyboard_feature_init(void)
+{
+	const struct ec_response_keybd_config *config =
+		board_vivaldi_keybd_config();
+
+	for (int i = 0; i < CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS; i++) {
+		int key = config->action_keys[i];
+
+		if (IN_RANGE(key, 0, ARRAY_SIZE(action_key)))
+			feature_report[i] = action_key[key].usage;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, hid_keyboard_feature_init, HOOK_PRIO_DEFAULT - 1);
+#endif
+
+static int hid_keyboard_get_report(uint8_t report_id, uint8_t report_type,
+				   const uint8_t **buffer_ptr, int *buffer_size)
+{
+	if (report_type == REPORT_TYPE_INPUT) {
+		*buffer_ptr = (uint8_t *)&report;
+		*buffer_size = sizeof(report);
+		return 0;
+	}
+
+#ifdef CONFIG_USB_HID_KEYBOARD_VIVALDI
+	if (report_type == REPORT_TYPE_FEATURE) {
+		*buffer_ptr = (uint8_t *)feature_report;
+		*buffer_size = sizeof(feature_report);
+		return 0;
+	}
+#endif
+
+	return -1;
+}
+
 static struct usb_hid_config_t hid_config_kb = {
 	.report_desc = report_desc,
 	.report_size = sizeof(report_desc),
 	.hid_desc = &hid_desc_kb,
+	.get_report = &hid_keyboard_get_report,
 };
 
 static int hid_keyboard_iface_request(usb_uint *ep0_buf_rx,
@@ -489,6 +614,38 @@ void keyboard_clear_buffer(void)
 	write_keyboard_report();
 }
 
+/*
+ * Convert a function key to the bit mask of corresponding action key.
+ *
+ * Return 0 if no need to map (not a function key or vivaldi not enabled)
+ */
+static uint32_t maybe_convert_function_key(int keycode)
+{
+	const struct ec_response_keybd_config *config =
+		board_vivaldi_keybd_config();
+	/* zero-based function key index (e.g. F1 -> 0) */
+	int index;
+
+	if (!IS_ENABLED(CONFIG_USB_HID_KEYBOARD_VIVALDI) || !config)
+		return 0;
+
+	if (IN_RANGE(keycode, HID_F1, HID_F12 + 1))
+		index = keycode - HID_F1;
+	else if (IN_RANGE(keycode, HID_F13, HID_F15 + 1))
+		index = keycode - HID_F13 + 12;
+	else
+		return 0; /* not a function key */
+
+	/* convert F13 to Sleep */
+	if (index == 12 && (config->capabilities & KEYBD_CAP_SCRNLOCK_KEY))
+		return BIT(17);
+
+	if (index >= config->num_top_row_keys ||
+			config->action_keys[index] == TK_ABSENT)
+		return 0; /* not mapped */
+	return action_key[config->action_keys[index]].mask;
+}
+
 static void keyboard_process_queue(void)
 {
 	int i;
@@ -541,6 +698,8 @@ static void keyboard_process_queue(void)
 	 * dropping keys that are too old.
 	 */
 	while (queue_count(&key_queue) > 0) {
+		uint32_t action_key_mask;
+
 		queue_peek_units(&key_queue, &ev, 0, 1);
 		if (keyboard_debug)
 			CPRINTF(" =%02x/%d %d %d\n", ev.keycode, ev.keycode,
@@ -552,7 +711,16 @@ static void keyboard_process_queue(void)
 
 		queue_advance_head(&key_queue, 1);
 
-		if (ev.keycode >= HID_KEYBOARD_EXTRA_LOW &&
+		action_key_mask = maybe_convert_function_key(ev.keycode);
+		if (action_key_mask) {
+#ifdef CONFIG_USB_HID_KEYBOARD_VIVALDI
+			if (ev.pressed)
+				report.top_row |= action_key_mask;
+			else
+				report.top_row &= ~action_key_mask;
+			valid = 1;
+#endif
+		} else if (ev.keycode >= HID_KEYBOARD_EXTRA_LOW &&
 		    ev.keycode <= HID_KEYBOARD_EXTRA_HIGH) {
 #ifdef HID_KEYBOARD_EXTRA_FIELD
 			mask = 0x01 << (ev.keycode - HID_KEYBOARD_EXTRA_LOW);

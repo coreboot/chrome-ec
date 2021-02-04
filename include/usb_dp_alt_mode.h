@@ -14,7 +14,7 @@
 
 #include <stdint.h>
 
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 
 /*
  * Initialize DP state for the specified port.
@@ -31,6 +31,16 @@ void dp_init(int port);
  *                  False otherwise
  */
 bool dp_is_active(int port);
+
+/*
+ * Checks whether the mode entry sequence for DisplayPort alternate mode is done
+ * for a port.
+ *
+ * @param port      USB-C port number
+ * @return          True if entry sequence for DisplayPort mode is completed
+ *                  False otherwise
+ */
+bool dp_entry_is_done(int port);
 
 /*
  * Handles received DisplayPort VDM ACKs.
@@ -52,14 +62,6 @@ void dp_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
  * @param vdm_cmd The VDM command of the request
  */
 void dp_vdm_naked(int port, enum tcpm_transmit_type type, uint8_t vdm_cmd);
-
-/*
- * Reset the DisplayPort VDM state for the specified port, as when exiting
- * DisplayPort mode.
- *
- * @param port USB-C port number
- */
-void dp_teardown(int port);
 
 /*
  * Construct the next DisplayPort VDM that should be sent.

@@ -742,7 +742,7 @@ static void st_tp_handle_status_report(struct st_tp_event_t *e)
  *
  * When there are error events, suggested action will be saved in `tp_control`.
  *
- * @param show_error: weather EC should read and dump error or not.
+ * @param show_error: whether EC should read and dump error or not.
  *   ***If this is true, rx_buf.events[] will be cleared.***
  *
  * @return number of events available
@@ -1223,7 +1223,7 @@ int touchpad_update_write(int offset, int size, const uint8_t *data)
 		CPRINTS("%s: End update, wait for reset.", __func__);
 
 		ret = st_tp_panel_init(full_init_required);
-		task_set_event(TASK_ID_TOUCHPAD, TASK_EVENT_TP_UPDATED, 0);
+		task_set_event(TASK_ID_TOUCHPAD, TASK_EVENT_TP_UPDATED);
 		return ret;
 	}
 
@@ -1509,7 +1509,7 @@ void touchpad_task(void *u)
 #if defined(CONFIG_USB_SUSPEND) || defined(CONFIG_TABLET_MODE)
 static void touchpad_power_change(void)
 {
-	task_set_event(TASK_ID_TOUCHPAD, TASK_EVENT_POWER, 0);
+	task_set_event(TASK_ID_TOUCHPAD, TASK_EVENT_POWER);
 }
 #endif
 #ifdef CONFIG_USB_SUSPEND

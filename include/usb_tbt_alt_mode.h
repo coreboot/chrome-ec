@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 
 /*
  * Initialize Thunderbolt state for the specified port.
@@ -23,10 +23,36 @@
 void tbt_init(int port);
 
 /*
- * Returns True if Thunderbolt mode is in active state
+ * Requests to exit the Thunderbolt alternate mode
+ *
+ * @param port USB-C port number
+ */
+void tbt_exit_mode_request(int port);
+
+/*
+ * Checks whether the mode entry sequence for Thunderbolt alternate mode is
+ * done for a port.
  *
  * @param port      USB-C port number
- * @return          True if Thunderbolt mode is in active state
+ * @return          True if entry sequence for Thunderbolt mode is completed
+ *                  False otherwise
+ */
+bool tbt_entry_is_done(int port);
+
+/*
+ * Checks if the cable entry into Thunderbolt alternate mode is done
+ *
+ * @param port      USB-C port number
+ * @return          True if TBT_FLAG_CABLE_ENTRY_DONE is set
+ *                  False otherwise
+ */
+bool tbt_cable_entry_is_done(int port);
+
+/*
+ * Returns True if Thunderbolt mode is not in inactive state
+ *
+ * @param port      USB-C port number
+ * @return          True if Thunderbolt mode is not in inactive state
  *                  False otherwise
  */
 bool tbt_is_active(int port);
@@ -51,14 +77,6 @@ void intel_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
  * @param vdm_cmd The VDM command of the request
  */
 void intel_vdm_naked(int port, enum tcpm_transmit_type type, uint8_t vdm_cmd);
-
-/*
- * Reset the Thunderbolt mode VDM state for the specified port, as when exiting
- * Thunderbolt mode.
- *
- * @param port USB-C port number
- */
-void tbt_teardown(int port);
 
 /*
  * Construct the next Thunderbolt VDM that should be sent.

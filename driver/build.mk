@@ -78,10 +78,12 @@ include $(_driver_cur_dir)fingerprint/build.mk
 
 # I/O expander
 driver-$(CONFIG_IO_EXPANDER_IT8801)+=ioexpander/it8801.o
-driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
 driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander/ioexpander_nct38xx.o
+driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
+driver-$(CONFIG_IO_EXPANDER_PCA9675)+=ioexpander/pca9675.o
 driver-$(CONFIG_IO_EXPANDER_PCAL6408)+=ioexpander/pcal6408.o
 
+driver-$(CONFIG_CTN730)+=nfc/ctn730.o
 
 # Current/Power monitor
 driver-$(CONFIG_INA219)$(CONFIG_INA231)+=ina2xx.o
@@ -147,6 +149,8 @@ driver-$(CONFIG_USB_PD_TCPM_TUSB422)+=tcpm/tusb422.o
 driver-$(CONFIG_USB_PD_TCPM_RT1715)+=tcpm/rt1715.o
 driver-$(CONFIG_USB_PD_TCPM_NCT38XX)+=tcpm/nct38xx.o
 driver-$(CONFIG_USB_PD_TCPM_RAA489000)+=tcpm/raa489000.o
+driver-$(CONFIG_USB_PD_TCPM_FUSB307)+=tcpm/fusb307.o
+driver-$(CONFIG_USB_PD_TCPM_STM32GX)+=tcpm/stm32gx.o
 
 # Type-C Retimer drivers
 driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
@@ -162,6 +166,7 @@ driver-$(CONFIG_USBC_SS_MUX)+=usb_mux/usb_mux.o
 
 # USB muxes
 driver-$(CONFIG_USB_MUX_AMD_FP5)+=usb_mux/amd_fp5.o
+driver-$(CONFIG_USB_MUX_AMD_FP6)+=usb_mux/amd_fp6.o
 driver-$(CONFIG_USB_MUX_ANX7440)+=usb_mux/anx7440.o
 driver-$(CONFIG_USB_MUX_IT5205)+=usb_mux/it5205.o
 driver-$(CONFIG_USB_MUX_PI3USB30532)+=usb_mux/pi3usb3x532.o
@@ -169,7 +174,11 @@ driver-$(CONFIG_USB_MUX_PI3USB31532)+=usb_mux/pi3usb3x532.o
 driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8742)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps8743.o
+driver-$(CONFIG_USB_MUX_TUSB1064)+=usb_mux/tusb1064.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
+
+# USB Hub with I2C interface
+driver-$(CONFIG_USB_HUB_GL3590)+=gl3590.o
 
 # Type-C Power Path Controllers (PPC)
 driver-$(CONFIG_USBC_PPC_AOZ1380)+=ppc/aoz1380.o
@@ -188,3 +197,6 @@ driver-$(CONFIG_MCDP28X0)+=mcdp28x0.o
 
 # Wireless Power Chargers
 driver-$(HAS_TASK_WPC) += wpc/p9221.o
+
+# Buck-Boost converters
+driver-$(CONFIG_MP4245)+=mp4245.o

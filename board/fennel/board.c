@@ -14,7 +14,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accel_kionix.h"
+#include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/battery/max17055.h"
 #include "driver/bc12/pi3usb9201.h"
@@ -30,6 +30,7 @@
 #include "i2c_bitbang.h"
 #include "it8801.h"
 #include "keyboard_scan.h"
+#include "keyboard_backlight.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -38,7 +39,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -131,7 +132,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr_flags = FUSB302_I2C_SLAVE_ADDR_FLAGS,
+			.addr_flags = FUSB302_I2C_ADDR_FLAGS,
 		},
 		.drv = &fusb302_tcpm_drv,
 	},
@@ -252,7 +253,7 @@ int pd_snk_is_vbus_provided(int port)
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
@@ -272,7 +273,7 @@ static void board_spi_enable(void)
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
 	/* Reinitialize spi peripheral. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+	spi_enable(&spi_devices[0], 1);
 
 	/* Pin mux spi peripheral toward the sensor. */
 	gpio_config_module(MODULE_SPI_MASTER, 1);
@@ -289,7 +290,7 @@ static void board_spi_disable(void)
 	gpio_config_module(MODULE_SPI_MASTER, 0);
 
 	/* Disable spi peripheral and clocks. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
+	spi_enable(&spi_devices[0], 0);
 	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
@@ -333,35 +334,45 @@ static struct mutex g_base_mutex;
 
 /* Rotation matrixes */
 static const mat33_fp_t base_standard_ref = {
-	{FLOAT_TO_FP(1), 0, 0},
 	{0, FLOAT_TO_FP(1), 0},
+	{FLOAT_TO_FP(-1), 0, 0},
 	{0, 0, FLOAT_TO_FP(1)}
 };
 
+static const mat33_fp_t lid_standard_ref = {
+	{FLOAT_TO_FP(-1), 0, 0},
+	{0, FLOAT_TO_FP(1), 0},
+	{0, 0, FLOAT_TO_FP(-1) }
+};
+
 /* sensor private data */
-static struct kionix_accel_data g_kx022_data;
+/* Lid accel private data */
+static struct stprivate_data g_lis2dwl_data;
+/* Base accel private data */
 static struct bmi_drv_data_t g_bmi160_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 	 .name = "Lid Accel",
 	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_KX022,
+	 .chip = MOTIONSENSE_CHIP_LIS2DWL,
 	 .type = MOTIONSENSE_TYPE_ACCEL,
 	 .location = MOTIONSENSE_LOC_LID,
-	 .drv = &kionix_accel_drv,
+	 .drv = &lis2dw12_drv,
 	 .mutex = &g_lid_mutex,
-	 .drv_data = &g_kx022_data,
+	 .drv_data = &g_lis2dwl_data,
 	 .port = I2C_PORT_SENSORS,
-	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-	 .rot_standard_ref = NULL, /* Identity matrix. */
-	 .default_range = 2, /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	 .i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
+	 .rot_standard_ref = &lid_standard_ref,
+	 .default_range = 2, /* g */
+	 .min_frequency = LIS2DW12_ODR_MIN_VAL,
+	 .max_frequency = LIS2DW12_ODR_MAX_VAL,
 	 .config = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
+			.odr = 12500 | ROUND_UP_FLAG,
 		},
-		 /* Sensor on for lid angle detection */
+		/* Sensor on for lid angle detection */
 		[SENSOR_CONFIG_EC_S3] = {
 			.odr = 10000 | ROUND_UP_FLAG,
 		},
@@ -419,7 +430,71 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+const struct it8801_pwm_t it8801_pwm_channels[] = {
+	[IT8801_PWM_CH_KBLIGHT] = {.index = 4},
+};
+
+void board_kblight_init(void)
+{
+	kblight_register(&kblight_it8801);
+}
+
+bool board_has_kb_backlight(void)
+{
+	/* Default enable keyboard backlight */
+	return true;
+}
 #endif /* !VARIANT_KUKUI_NO_SENSORS */
+
+/* Battery functions */
+#define SB_SMARTCHARGE				0x26
+/* Quick charge enable bit */
+#define SMART_QUICK_CHARGE			0x02
+/* Quick charge support bit */
+#define MODE_QUICK_CHARGE_SUPPORT		0x01
+
+static void sb_quick_charge_mode(int enable)
+{
+	int val, rv;
+
+	rv = sb_read(SB_SMARTCHARGE, &val);
+	if (rv || !(val & MODE_QUICK_CHARGE_SUPPORT))
+		return;
+
+	if (enable)
+		val |= SMART_QUICK_CHARGE;
+	else
+		val &= ~SMART_QUICK_CHARGE;
+
+	sb_write(SB_SMARTCHARGE, val);
+}
+
+/* Called on AP S0iX -> S0 transition */
+static void board_chipset_resume(void)
+{
+#ifndef VARIANT_KUKUI_NO_SENSORS
+	if (board_has_kb_backlight())
+		ioex_set_level(IOEX_KB_BL_EN, 1);
+#endif
+
+	/* Normal charge mode */
+	sb_quick_charge_mode(0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S0 -> S0iX transition */
+static void board_chipset_suspend(void)
+{
+#ifndef VARIANT_KUKUI_NO_SENSORS
+	if (board_has_kb_backlight())
+		ioex_set_level(IOEX_KB_BL_EN, 0);
+#endif
+
+	/* Quick charge mode */
+	sb_quick_charge_mode(1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)
@@ -445,3 +520,72 @@ int board_get_battery_i2c(void)
 {
 	return board_get_version() >= 1 ? 2 : 1;
 }
+
+#ifdef SECTION_IS_RW
+static int it8801_get_target_channel(enum pwm_channel *channel,
+				     int type, int index)
+{
+	switch (type) {
+	case EC_PWM_TYPE_GENERIC:
+		*channel = index;
+		break;
+	default:
+		return -1;
+	}
+
+	return *channel >= 1;
+}
+
+static enum ec_status
+host_command_pwm_set_duty(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_pwm_set_duty *p = args->params;
+	enum pwm_channel channel;
+	uint16_t duty;
+
+	if (it8801_get_target_channel(&channel, p->pwm_type, p->index))
+		return EC_RES_INVALID_PARAM;
+
+	duty = (uint32_t) p->duty * 255 / 65535;
+	it8801_pwm_set_raw_duty(channel, duty);
+	it8801_pwm_enable(channel, p->duty > 0);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_DUTY,
+		     host_command_pwm_set_duty,
+		     EC_VER_MASK(0));
+
+static enum ec_status
+host_command_pwm_get_duty(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_pwm_get_duty *p = args->params;
+	struct ec_response_pwm_get_duty *r = args->response;
+
+	enum pwm_channel channel;
+
+	if (it8801_get_target_channel(&channel, p->pwm_type, p->index))
+		return EC_RES_INVALID_PARAM;
+
+	r->duty = (uint32_t) it8801_pwm_get_raw_duty(channel) * 65535 / 255;
+	args->response_size = sizeof(*r);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PWM_GET_DUTY,
+		     host_command_pwm_get_duty,
+		     EC_VER_MASK(0));
+#endif
+
+/* Enable or disable input devices, based on chipset state and tablet mode */
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	/* If the lid is in 360 position, ignore the lid angle,
+	 * which might be faulty. Disable keyboard.
+	 */
+	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		enable = 0;
+	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+}
+#endif

@@ -33,7 +33,7 @@
 #include "switch.h"
 #include "system.h"
 #include "tablet_mode.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "temp_sensor.h"
 #include "thermistor.h"
 #include "usb_mux.h"
@@ -210,10 +210,10 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 static int board_is_convertible(void)
 {
 	/*
-	 * Garg360: 37, 38
+	 * Garg360: 37, 38, 39
 	 * Unprovisioned: 255
 	 */
-	return sku_id == 37 || sku_id == 38 || sku_id == 255;
+	return sku_id == 37 || sku_id == 38 || sku_id == 39 || sku_id == 255;
 }
 
 static void board_update_sensor_config_from_sku(void)

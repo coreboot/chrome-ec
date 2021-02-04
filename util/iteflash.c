@@ -118,6 +118,7 @@ struct iteflash_config {
 	int usb_interface;
 	int usb_vid;
 	int usb_pid;
+	int verify;  /* boolean */
 	char *usb_serial;
 	char *i2c_dev_path;
 	const struct i2c_interface *i2c_if;
@@ -1305,32 +1306,10 @@ failed_write:
  * Test for spi page program command
  */
 static int command_write_pages3(struct common_hnd *chnd, uint32_t address,
-				uint32_t size, uint8_t *buffer,
-				int block_write_size)
+				uint32_t size, uint8_t *buffer)
 {
 	int ret = 0;
 	uint8_t addr_H, addr_M, addr_L;
-	uint8_t cmd_tmp, i;
-
-	struct cmds commands[] = {
-		{0x07, 0x7f},
-		{0x06, 0xff},
-		{0x04, 0xff},
-		{0x05, 0xfe},
-		{0x08, 0x00},
-		{0x05, 0xfd},
-		{0x08, 0x01},
-		{0x08, 0x00}
-	};
-
-	for (i = 0; i < ARRAY_SIZE(commands); i++) {
-		ret = i2c_write_byte(chnd, commands[i].addr, commands[i].cmd);
-		if (ret) {
-			fprintf(stderr, "Page Program Failed: cmd %x ,data %x\n"
-			, commands[i].addr, commands[i].cmd);
-			return ret;
-		}
-	}
 
 	/* SMB_SPI_Flash_Write_Enable */
 	if (spi_flash_command_short(chnd, SPI_CMD_WRITE_ENABLE,
@@ -1352,23 +1331,16 @@ static int command_write_pages3(struct common_hnd *chnd, uint32_t address,
 	ret = i2c_byte_transfer(chnd, I2C_DATA_ADDR, &addr_H, 1, 1);
 	ret |= i2c_byte_transfer(chnd, I2C_DATA_ADDR, &addr_M, 1, 1);
 	ret |= i2c_byte_transfer(chnd, I2C_DATA_ADDR, &addr_L, 1, 1);
+	ret |= i2c_byte_transfer(chnd, I2C_BLOCK_ADDR, buffer, 1, size);
+	if (ret < 0)
+		goto failed_write;
 
-	cmd_tmp = 0x0A;
-	ret = i2c_byte_transfer(chnd, I2C_CMD_ADDR, &cmd_tmp, 1, 1);
-
-	ret = i2c_byte_transfer(chnd, I2C_BLOCK_ADDR, buffer, 1,
-		256);
-
-	if (spi_flash_command_short(chnd, SPI_CMD_WRITE_DISABLE,
-		"write disable exit page program") < 0)
-		ret = -EIO;
 	/* Wait until not busy */
 	if (spi_poll_busy(chnd, "Page Program") < 0)
-		goto failed_write;
+		ret = -EIO;
 
 	/* No error so far */
 failed_write:
-
 	return ret;
 }
 
@@ -1775,14 +1747,14 @@ failed_enter_mode:
 static int write_flash3(struct common_hnd *chnd, const char *filename,
 			uint32_t offset)
 {
-	int res, written;
+	int res, ret = 0;
 	int block_write_size = chnd->conf.block_write_size;
 	FILE *hnd;
 	int size = chnd->flash_size;
 	int cnt;
-	uint8_t *buffer = malloc(size);
+	uint8_t *buf = malloc(size);
 
-	if (!buffer) {
+	if (!buf) {
 		fprintf(stderr, "%s: Cannot allocate %d bytes\n", __func__,
 			size);
 		return -ENOMEM;
@@ -1792,43 +1764,53 @@ static int write_flash3(struct common_hnd *chnd, const char *filename,
 	if (!hnd) {
 		fprintf(stderr, "%s: Cannot open file %s for reading\n",
 			__func__, filename);
-		free(buffer);
+		free(buf);
 		return -EIO;
 	}
-	res = fread(buffer, 1, size, hnd);
+	res = fread(buf, 1, size, hnd);
 	if (res <= 0) {
 		fprintf(stderr, "%s: Failed to read %d bytes from %s with "
 			"ferror() %d\n", __func__, size, filename, ferror(hnd));
 		fclose(hnd);
-		free(buffer);
+		free(buf);
 		return -EIO;
 	}
 	fclose(hnd);
 
-	offset = 0;
 	printf("Writing %d bytes at 0x%08x.......\n", res, offset);
+
+	/* Enter follow mode */
+	ret = spi_flash_follow_mode(chnd, "Page program");
+	if (ret < 0)
+		goto failed_write;
+
+	/* Page program instruction allows up to 256 bytes */
+	if (block_write_size > 256)
+		block_write_size = 256;
+
 	while (res) {
-		cnt = (res > 256) ? 256 : res;
-		written = command_write_pages3(chnd, offset, cnt,
-			&buffer[offset], block_write_size);
-		if (written == -EIO)
+		cnt = (res > block_write_size) ? block_write_size : res;
+		if (command_write_pages3(chnd, offset, cnt, &buf[offset]) < 0) {
+			ret = -EIO;
 			goto failed_write;
+		}
 
 		res -= cnt;
 		offset += cnt;
 		draw_spinner(res, res + offset);
 	}
 
-	if (written != res) {
 failed_write:
+	free(buf);
+	spi_flash_command_short(chnd, SPI_CMD_WRITE_DISABLE,
+		"SPI write disable");
+	spi_flash_follow_mode_exit(chnd, "Page program");
+	if (ret < 0)
 		fprintf(stderr, "%s: Error writing to flash\n", __func__);
-		free(buffer);
-		return -EIO;
-	}
-	printf("\n\rWriting Done.\n");
-	free(buffer);
+	else
+		printf("\n\rWriting Done.\n");
 
-	return 0;
+	return ret;
 }
 
 
@@ -2076,6 +2058,7 @@ static const struct option longopts[] = {
 	{"interface", 1, 0, 'i'},
 	{"nodisable-protect-path", 0, 0, 'Z'},
 	{"nodisable-watchdog", 0, 0, 'z'},
+	{"noverify", 0, 0, 'n'},
 	{"product", 1, 0, 'p'},
 	{"range", 1, 0, 'R'},
 	{"read", 1, 0, 'r'},
@@ -2105,6 +2088,7 @@ static void display_usage(const char *program)
 	fprintf(stderr, "-m, --i2c-mux : Enable i2c-mux (to EC).\n"
 		"\tSpecify this flag only if the board has an I2C MUX and\n"
 		"\tyou are not using servod.\n");
+	fprintf(stderr, "-n, --noverify : Don't auto verify.\n");
 	fprintf(stderr, "-b, --block-write-size <size> : Perform writes in\n"
 		"\tblocks of this many bytes.\n");
 	fprintf(stderr, "-p, --product <0x1234> : USB product ID\n");
@@ -2141,7 +2125,7 @@ static int parse_range_options(char *str, struct iteflash_config *conf)
 		return -1;
 	}
 
-	conf->range_base = strtoul(str, &size, 16);
+	conf->range_base = strtoull(str, &size, 16);
 	if (!size || !*size)
 		return 0;
 
@@ -2155,7 +2139,7 @@ static int parse_range_options(char *str, struct iteflash_config *conf)
 		return -1;
 	}
 
-	conf->range_size = strtoul(size, &size, 16);
+	conf->range_size = strtoull(size, &size, 16);
 	if ((size && *size) || !conf->range_size) {
 		fprintf(stderr, "wrong range size specification\n");
 		return -1;
@@ -2208,6 +2192,9 @@ static int parse_parameters(int argc, char **argv, struct iteflash_config *conf)
 			break;
 		case 'm':
 			conf->i2c_mux = 1;
+			break;
+		case 'n':
+			conf->verify = 0;
 			break;
 		case 'p':
 			conf->usb_pid = strtol(optarg, NULL, 16);
@@ -2290,6 +2277,7 @@ int main(int argc, char **argv)
 			.usb_interface = SERVO_INTERFACE,
 			.usb_vid = SERVO_USB_VID,
 			.usb_pid = SERVO_USB_PID,
+			.verify = 1,
 			.i2c_if = &ftdi_i2c_interface,
 		},
 	};
@@ -2399,9 +2387,11 @@ int main(int argc, char **argv)
 			ret = write_flash(&chnd, chnd.conf.output_filename, 0);
 		if (ret)
 			goto return_after_init;
-		ret = verify_flash(&chnd, chnd.conf.output_filename, 0);
-		if (ret)
-			goto return_after_init;
+		if (chnd.conf.verify) {
+			ret = verify_flash(&chnd, chnd.conf.output_filename, 0);
+			if (ret)
+				goto return_after_init;
+		}
 	}
 
 	/* Normal exit */

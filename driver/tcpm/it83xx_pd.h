@@ -51,7 +51,7 @@
 #define USBPD_REG_MASK_HARD_RESET_DETECT          BIT(5)
 #define USBPD_REG_MASK_MSG_RX_DONE                BIT(4)
 #define USBPD_REG_MASK_AUTO_SOFT_RESET_TX_DONE    BIT(3)
-#define USBPD_REG_MASK_HARD_RESET_TX_DONE         BIT(2)
+#define USBPD_REG_MASK_HARD_CABLE_RESET_TX_DONE   BIT(2)
 #define USBPD_REG_MASK_MSG_TX_DONE                BIT(1)
 #define USBPD_REG_MASK_TIMER_TIMEOUT              BIT(0)
 #define IT83XX_USBPD_IMR(p)       REG8(IT83XX_USBPD_BASE(p)+0x15)
@@ -71,6 +71,7 @@
 #define USBPD_REG_MASK_SEND_BIST_MODE_2           BIT(5)
 #define IT83XX_USBPD_MTSR1(p)     REG8(IT83XX_USBPD_BASE(p)+0x1A)
 #define IT83XX_USBPD_VDMMCSR(p)   REG8(IT83XX_USBPD_BASE(p)+0x1B)
+#define USBPD_REG_MASK_HARD_RESET_DECODE          BIT(0)
 #define IT83XX_USBPD_MRSR(p)      REG8(IT83XX_USBPD_BASE(p)+0x1C)
 #define USBPD_REG_GET_SOP_TYPE_RX(mrsr)           (((mrsr) >> 4) & 0x7)
 #define USBPD_REG_MASK_RX_MSG_VALID               BIT(0)
@@ -126,6 +127,7 @@
 #define IT83XX_USBPD_CCGCR(p)       REG8(IT83XX_USBPD_BASE(p)+0x04)
 #define USBPD_REG_MASK_DISABLE_CC                 BIT(7)
 #define USBPD_REG_MASK_DISABLE_CC_VOL_DETECTOR    BIT(6)
+#define USBPD_REG_MASK_CC_SELECT_RP_RESERVED      (BIT(3) | BIT(2) | BIT(1))
 #define USBPD_REG_MASK_CC_SELECT_RP_DEF           (BIT(3) | BIT(2))
 #define USBPD_REG_MASK_CC_SELECT_RP_1A5           BIT(3)
 #define USBPD_REG_MASK_CC_SELECT_RP_3A0           BIT(2)
@@ -201,6 +203,8 @@
 #define USBPD_REG_PLUG_IN_OUT_DETECT_DISABLE      BIT(1)
 #define USBPD_REG_PLUG_IN_OUT_DETECT_STAT         BIT(0)
 #define IT83XX_USBPD_CCPSR0(p)      REG8(IT83XX_USBPD_BASE(p)+0x70)
+#define IT83XX_USBPD_CCPSR3_RISE(p) REG8(IT83XX_USBPD_BASE(p)+0x73)
+#define IT83XX_USBPD_CCPSR4_FALL(p) REG8(IT83XX_USBPD_BASE(p)+0x74)
 #endif /* !defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX) */
 
 /*
@@ -347,6 +351,9 @@
 /* macros for PD ISR */
 #define USBPD_IS_HARD_RESET_DETECT(port) \
 	IS_MASK_SET(IT83XX_USBPD_ISR(port), USBPD_REG_MASK_HARD_RESET_DETECT)
+#define USBPD_IS_HARD_CABLE_RESET_TX_DONE(port) \
+	IS_MASK_SET(IT83XX_USBPD_ISR(port),     \
+		USBPD_REG_MASK_HARD_CABLE_RESET_TX_DONE)
 #define USBPD_IS_TX_DONE(port)           \
 	IS_MASK_SET(IT83XX_USBPD_ISR(port), USBPD_REG_MASK_MSG_TX_DONE)
 #define USBPD_IS_RX_DONE(port)           \
@@ -389,22 +396,37 @@ enum usbpd_power_role {
 	USBPD_POWER_ROLE_PROVIDER_CONSUMER,
 };
 
+enum tuning_unit {
+	IT83XX_TX_PRE_DRIVING_TIME_DEFAULT,
+	IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
+	IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
+	IT83XX_TX_PRE_DRIVING_TIME_3_UNIT,
+};
+
 struct usbpd_ctrl_t {
 	volatile uint8_t *cc1;
 	volatile uint8_t *cc2;
 	uint8_t irq;
 };
 
+/* Data structure for board to adjust pd port rising and falling time */
+struct cc_para_t {
+	enum tuning_unit rising_time;
+	enum tuning_unit falling_time;
+};
+
 extern const struct usbpd_ctrl_t usbpd_ctrl_regs[];
 extern const struct tcpm_drv it83xx_tcpm_drv;
-/* Disable cc module */
-void it83xx_disable_cc_module(int port);
-/* Disable integrated pd module */
-void it83xx_disable_pd_module(int port);
+void it83xx_Rd_5_1K_only_for_hibernate(int port);
 #ifdef CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2
-void it83xx_clear_tx_error_status(enum usbpd_port port);
-void it83xx_get_tx_error_status(enum usbpd_port port);
+void it8xxx2_clear_tx_error_status(enum usbpd_port port);
+void it8xxx2_get_tx_error_status(enum usbpd_port port);
 #endif
 void switch_plug_out_type(enum usbpd_port port);
+/*
+ * Board-level callback function to get cc tuning parameters
+ * NOTE: board must define CONFIG_IT83XX_TUNE_CC_PHY
+ */
+const struct cc_para_t *board_get_cc_tuning_parameter(enum usbpd_port port);
 
 #endif /* __CROS_EC_DRIVER_TCPM_IT83XX_H */

@@ -5,6 +5,7 @@
 
 #include "battery_smart.h"
 #include "button.h"
+#include "charge_state_v2.h"
 #include "cros_board_info.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_lsm6dsm.h"
@@ -375,7 +376,7 @@ void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 		break;
 
 	default:
@@ -413,11 +414,75 @@ static void setup_fw_config(void)
 }
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 
+static void lte_usb3_mux_init(void)
+{
+	/*
+	 * the USB_C1 port might be used for the LTE modem if it is not used
+	 * for type-C, we need to keep the superspeed mux in USB 3 position.
+	 */
+	if (ec_config_lte_present() == LTE_PRESENT) {
+		const struct usb_mux usb_c1 = {
+			.usb_port = 1 /* USBC_PORT_C1 */,
+			.i2c_port = I2C_PORT_USB_AP_MUX,
+			.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
+			.driver = &amd_fp5_usb_mux_driver,
+		};
+		/* steer the mux to connect the USB 3 superspeed pairs */
+		usb_c1.driver->set(&usb_c1, USB_PD_MUX_USB_ENABLED);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, lte_usb3_mux_init, HOOK_PRIO_DEFAULT);
+
+static void lte_function_resume(void)
+{
+	gpio_set_level(GPIO_LTE_FCPO, 1);
+}
+DECLARE_DEFERRED(lte_function_resume);
+
+static void lte_power_resume(void)
+{
+	gpio_set_level(GPIO_LTE_EN, 1);
+	gpio_set_level(GPIO_LTE_W_DISABLE_L, 1);
+}
+DECLARE_DEFERRED(lte_power_resume);
+
+static void lte_power_suspend(void)
+{
+	gpio_set_level(GPIO_LTE_EN, 0);
+	gpio_set_level(GPIO_LTE_W_DISABLE_L, 0);
+}
+DECLARE_DEFERRED(lte_power_suspend);
+
+static void lte_function_suspend(void)
+{
+	gpio_set_level(GPIO_LTE_FCPO, 0);
+	hook_call_deferred(&lte_power_suspend_data, 100 * MSEC);
+}
+DECLARE_DEFERRED(lte_function_suspend);
+
+static void wwan_lte_resume_hook(void)
+{
+	/* Turn on WWAN LTE function as we go into S0 from S3/S5. */
+	hook_call_deferred(&lte_function_suspend_data, -1);
+	hook_call_deferred(&lte_power_suspend_data, -1);
+	lte_power_resume();
+	hook_call_deferred(&lte_function_resume_data, 10 * MSEC);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, wwan_lte_resume_hook, HOOK_PRIO_DEFAULT);
+
+static void wwan_lte_suspend_hook(void)
+{
+	/* Turn off WWAN LTE function as we go into S3/S5 from S0. */
+	hook_call_deferred(&lte_power_resume_data, -1);
+	hook_call_deferred(&lte_function_resume_data, -1);
+	hook_call_deferred(&lte_function_suspend_data, 20 * MSEC);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, wwan_lte_suspend_hook, HOOK_PRIO_DEFAULT);
 const struct pwm_t pwm_channels[] = {
 	[PWM_CH_KBLIGHT] = {
 		.channel = 3,
-		.flags = PWM_CONFIG_DSLEEP,
-		.freq = 100,
+		.flags = 0,
+		.freq = 15000,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
@@ -435,3 +500,17 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 	IOEX_EN_USB_A0_5V,
 	GPIO_EN_USB_A1_5V,
 };
+
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+			int max_ma, int charge_mv)
+{
+	/*
+	 * Limit the input current to 95% negotiated limit,
+	 * to account for the charger chip margin.
+	 */
+	charge_ma = charge_ma * 95 / 100;
+
+	charge_set_input_current_limit(MAX(charge_ma,
+				CONFIG_CHARGER_INPUT_CURRENT),
+				charge_mv);
+}

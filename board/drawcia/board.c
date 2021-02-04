@@ -16,7 +16,6 @@
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/sm5803.h"
-#include "driver/sync.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -34,7 +33,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "temp_sensor.h"
 #include "uart.h"
 #include "usb_charge.h"
@@ -59,7 +58,7 @@ DECLARE_DEFERRED(check_c0_line);
 
 static void notify_c0_chips(void)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(0);
 }
 
@@ -94,7 +93,7 @@ DECLARE_DEFERRED(check_c1_line);
 static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(1);
 }
 
@@ -347,20 +346,9 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
-	},
-	[VSYNC] = {
-		.name = "Camera VSYNC",
-		.active_mask = SENSOR_ACTIVE_S0,
-		.chip = MOTIONSENSE_CHIP_GPIO,
-		.type = MOTIONSENSE_TYPE_SYNC,
-		.location = MOTIONSENSE_LOC_CAMERA,
-		.drv = &sync_drv,
-		.default_range = 0,
-		.min_frequency = 0,
-		.max_frequency = 1,
 	},
 };
 
@@ -409,6 +397,10 @@ void board_init(void)
 
 	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
 
+	/* Make sure pen detection is triggered or not at sysjump */
+	if (!gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_EN_PP5000_PEN, 1);
+
 	/* Charger on the MB will be outputting PROCHOT_ODL and OD CHG_DET */
 	sm5803_configure_gpio0(CHARGER_PRIMARY, GPIO0_MODE_PROCHOT, 1);
 	sm5803_configure_chg_det_od(CHARGER_PRIMARY, 1);
@@ -419,10 +411,38 @@ void board_init(void)
 	}
 
 	/* Turn on 5V if the system is on, otherwise turn it off */
-	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND);
+	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
+			      CHIPSET_STATE_SOFT_OFF);
 	board_power_5v_enable(on);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+static void board_resume(void)
+{
+	sm5803_disable_low_power_mode(CHARGER_PRIMARY);
+	if (board_get_charger_chip_count() > 1)
+		sm5803_disable_low_power_mode(CHARGER_SECONDARY);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_resume, HOOK_PRIO_DEFAULT);
+
+static void board_suspend(void)
+{
+	sm5803_enable_low_power_mode(CHARGER_PRIMARY);
+	if (board_get_charger_chip_count() > 1)
+		sm5803_enable_low_power_mode(CHARGER_SECONDARY);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_suspend, HOOK_PRIO_DEFAULT);
+
+void board_hibernate(void)
+{
+	/*
+	 * Put all charger ICs present into low power mode before entering
+	 * z-state.
+	 */
+	sm5803_hibernate(CHARGER_PRIMARY);
+	if (board_get_charger_chip_count() > 1)
+		sm5803_hibernate(CHARGER_SECONDARY);
+}
 
 __override void board_ocpc_init(struct ocpc_data *ocpc)
 {
@@ -455,18 +475,28 @@ __override void board_power_5v_enable(int enable)
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	enum fw_config_db db = get_cbi_fw_config_db();
+
+	if (db == DB_1A_HDMI || db == DB_NONE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
-	else
+	else if (db == DB_1C || db == DB_1C_LTE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
+
+	ccprints("Unhandled DB configuration: %d", db);
+	return 0;
 }
 
 __override uint8_t board_get_charger_chip_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	enum fw_config_db db = get_cbi_fw_config_db();
+
+	if (db == DB_1A_HDMI || db == DB_NONE)
 		return CHARGER_NUM - 1;
-	else
+	else if (db == DB_1C || db == DB_1C_LTE)
 		return CHARGER_NUM;
+
+	ccprints("Unhandled DB configuration: %d", db);
+	return 0;
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -629,12 +659,31 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
 				       int *kd, int *kd_div)
 {
-	*kp = 1;
-	*kp_div = 6;
+	*kp = 3;
+	*kp_div = 20;
 
-	*ki = 0;
-	*ki_div = 1;
+	*ki = 3;
+	*ki_div = 125;
 
-	*kd = 0;
-	*kd_div = 1;
+	*kd = 4;
+	*kd_div = 40;
 }
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ * The connector has 24 pins total, and there is no pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {GPIO_KSO_H, 4}, {GPIO_KSO_H, 0}, {GPIO_KSO_H, 1},
+	{GPIO_KSO_H, 3}, {GPIO_KSO_H, 2}, {GPIO_KSO_L, 5}, {GPIO_KSO_L, 6},
+	{GPIO_KSO_L, 3}, {GPIO_KSO_L, 2}, {GPIO_KSI, 0}, {GPIO_KSO_L, 1},
+	{GPIO_KSO_L, 4}, {GPIO_KSI, 3}, {GPIO_KSI, 2}, {GPIO_KSO_L, 0},
+	{GPIO_KSI, 5}, {GPIO_KSI, 4}, {GPIO_KSO_L, 7}, {GPIO_KSI, 6},
+	{GPIO_KSI, 7}, {GPIO_KSI, 1}, {-1, -1}, {-1, -1}, {-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+			ARRAY_SIZE(keyboard_factory_scan_pins);
+#endif

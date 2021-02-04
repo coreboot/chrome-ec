@@ -10,10 +10,12 @@
 #include "compile_time_macros.h"
 #include "console.h"
 #include "ec_commands.h"
+#include "hooks.h"
+#include "i2c.h"
 #include "ps8xxx.h"
 #include "task.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_common.h"
@@ -26,7 +28,7 @@
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
 STATIC_IF(CONFIG_USB_PD_DECODE_SOP)
-	int sop_prime_en[CONFIG_USB_PD_PORT_MAX_COUNT];
+	bool sop_prime_en[CONFIG_USB_PD_PORT_MAX_COUNT];
 STATIC_IF(CONFIG_USB_PD_DECODE_SOP)
 	int rx_en[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -100,7 +102,14 @@ STATIC_IF(DEBUG_GET_CC)
  * Last reported VBus Level
  *
  * BIT(VBUS_SAFE0V) will indicate if in SAFE0V
- * BIT(VBUS_PRESENT) will indicate if in PRESENT
+ * BIT(VBUS_PRESENT) will indicate if in PRESENT in the TCPCI POWER_STATUS
+ *
+ * Note that VBUS_REMOVED cannot be distinguished from !VBUS_PRESENT with
+ * this interface, but the trigger thresholds for Vbus Present should allow the
+ * same bit to be used safely for both.
+ *
+ * TODO(b/149530538): Some TCPCs may be able to implement
+ * VBUS_SINK_DISCONNECT_THRESHOLD to support vSinkDisconnectPD
  */
 static int tcpc_vbus[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -485,7 +494,7 @@ int tcpci_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 
 int tcpci_tcpm_set_cc(int port, int pull)
 {
-	int role = TCPC_REG_ROLE_CTRL_SET(0,
+	int role = TCPC_REG_ROLE_CTRL_SET(TYPEC_NO_DRP,
 					  tcpci_get_cached_rp(port),
 					  pull, pull);
 
@@ -496,13 +505,14 @@ int tcpci_tcpm_set_cc(int port, int pull)
 }
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-int tcpci_set_role_ctrl(int port, int toggle, int rp, int pull)
+int tcpci_set_role_ctrl(int port, enum tcpc_drp drp, enum tcpc_rp_value rp,
+	enum tcpc_cc_pull pull)
 {
-	int role = TCPC_REG_ROLE_CTRL_SET(toggle, rp, pull, pull);
+	int role = TCPC_REG_ROLE_CTRL_SET(drp, rp, pull, pull);
 
 	if (IS_ENABLED(DEBUG_ROLE_CTRL_UPDATES))
-		CPRINTS("C%d: SET_ROLE_CTRL toggle=%d rp=%d pull=%d role=0x%X",
-			port, toggle, rp, pull, role);
+		CPRINTS("C%d: SET_ROLE_CTRL drp=%d rp=%d pull=%d role=0x%X",
+			port, drp, rp, pull, role);
 
 	return tcpc_write(port, TCPC_REG_ROLE_CTRL, role);
 }
@@ -528,7 +538,7 @@ int tcpci_tcpc_drp_toggle(int port)
 	pull = (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0)
 			? TYPEC_CC_RP : TYPEC_CC_RD;
 
-	rv = tcpci_set_role_ctrl(port, 1, TYPEC_RP_USB, pull);
+	rv = tcpci_set_role_ctrl(port, TYPEC_DRP, TYPEC_RP_USB, pull);
 	if (rv)
 		return rv;
 
@@ -608,7 +618,7 @@ int tcpci_tcpm_set_src_ctrl(int port, int enable)
 }
 #endif
 
-__maybe_unused static int tpcm_set_sop_prime_enable(int port, int enable)
+__maybe_unused int tcpci_tcpm_sop_prime_enable(int port, bool enable)
 {
 	/* save SOP'/SOP'' enable state */
 	sop_prime_en[port] = enable;
@@ -627,11 +637,6 @@ __maybe_unused static int tpcm_set_sop_prime_enable(int port, int enable)
 	return EC_SUCCESS;
 }
 
-__maybe_unused int tcpci_tcpm_sop_prime_disable(int port)
-{
-	return tpcm_set_sop_prime_enable(port, 0);
-}
-
 int tcpci_tcpm_set_vconn(int port, int enable)
 {
 	int reg, rv;
@@ -641,7 +646,7 @@ int tcpci_tcpm_set_vconn(int port, int enable)
 		return rv;
 
 	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP)) {
-		rv = tpcm_set_sop_prime_enable(port, enable);
+		rv = tcpci_tcpm_sop_prime_enable(port, enable);
 		if (rv)
 			return rv;
 	}
@@ -718,8 +723,10 @@ bool tcpci_tcpm_check_vbus_level(int port, enum vbus_level level)
 {
 	if (level == VBUS_SAFE0V)
 		return !!(tcpc_vbus[port] & BIT(VBUS_SAFE0V));
-	else
+	else if (level == VBUS_PRESENT)
 		return !!(tcpc_vbus[port] & BIT(VBUS_PRESENT));
+	else
+		return !(tcpc_vbus[port] & BIT(VBUS_PRESENT));
 }
 #endif
 
@@ -886,7 +893,7 @@ int tcpm_enqueue_message(const int port)
 	atomic_add(&q->head, 1);
 
 	/* Wake PD task up so it can process incoming RX messages */
-	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
+	task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE);
 
 	return EC_SUCCESS;
 }
@@ -999,7 +1006,8 @@ int tcpci_tcpm_transmit(int port, enum tcpm_transmit_type type,
 	 * supported at build time.
 	 */
 	return tcpc_write(port, TCPC_REG_TRANSMIT,
-			  TCPC_REG_TRANSMIT_SET_WITH_RETRY(type));
+			  TCPC_REG_TRANSMIT_SET_WITH_RETRY(
+				  pd_get_retry_count(port, type), type));
 }
 
 /*
@@ -1053,6 +1061,19 @@ static int tcpci_handle_fault(int port, int fault)
 	if (tcpc_config[port].drv->handle_fault)
 		rv = tcpc_config[port].drv->handle_fault(port, fault);
 
+	return rv;
+}
+
+enum ec_error_list tcpci_set_bist_test_mode(const int port,
+		const bool enable)
+{
+	int rv;
+
+	rv = tcpc_update8(port, TCPC_REG_TCPC_CTRL,
+			TCPC_REG_TCPC_CTRL_BIST_TEST_MODE,
+			enable ? MASK_SET : MASK_CLR);
+	rv |= tcpc_update16(port, TCPC_REG_ALERT_MASK,
+			TCPC_REG_ALERT_RX_STATUS, enable ? MASK_CLR : MASK_SET);
 	return rv;
 }
 
@@ -1257,7 +1278,7 @@ void tcpci_tcpc_alert(int port)
 	 * the next I2C transaction to the TCPC will cause it to wake again.
 	 */
 	if (pd_event)
-		task_set_event(PD_PORT_TO_TASK_ID(port), pd_event, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), pd_event);
 }
 
 /*
@@ -1477,7 +1498,7 @@ int tcpci_tcpm_mux_init(const struct usb_mux *me)
 	return error ? EC_ERROR_UNKNOWN : EC_SUCCESS;
 }
 
-static int tcpci_tcpm_mux_enter_low_power(const struct usb_mux *me)
+int tcpci_tcpm_mux_enter_low_power(const struct usb_mux *me)
 {
 	/* If this MUX is also the TCPC, then skip low power */
 	if (!(me->flags & USB_MUX_FLAG_NOT_TCPC))
@@ -1750,7 +1771,7 @@ const struct tcpm_drv tcpci_tcpm_drv = {
 	.set_cc			= &tcpci_tcpm_set_cc,
 	.set_polarity		= &tcpci_tcpm_set_polarity,
 #ifdef CONFIG_USB_PD_DECODE_SOP
-	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
 #endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
@@ -1772,6 +1793,7 @@ const struct tcpm_drv tcpci_tcpm_drv = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 #ifdef CONFIG_CMD_TCPC_DUMP
 	.dump_registers		= &tcpc_dump_std_registers,
 #endif

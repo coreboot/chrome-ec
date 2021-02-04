@@ -11,6 +11,10 @@
 /* Test config flags only apply for test builds */
 #ifdef TEST_BUILD
 
+#ifndef __ASSEMBLER__
+#include <stdint.h>
+#endif
+
 /* Host commands are sorted. */
 #define CONFIG_HOSTCMD_SECTION_SORTED
 
@@ -138,6 +142,14 @@
 #define CONFIG_MKBP_USE_GPIO
 #endif
 
+#ifdef TEST_ONLINE_CALIBRATION_SPOOF
+#define CONFIG_FPU
+#define CONFIG_ONLINE_CALIB
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO
+#define CONFIG_ONLINE_CALIB_SPOOF_MODE
+#endif /* TEST_ONLINE_CALIBRATION_SPOOF */
+
 #ifdef TEST_GYRO_CAL
 #define CONFIG_FPU
 #define CONFIG_ONLINE_CALIB
@@ -177,7 +189,8 @@ enum sensor_id {
 #define CONFIG_ACCEL_STD_REF_FRAME_OLD
 #endif
 
-#if defined(TEST_MOTION_ANGLE_TABLET)
+#if defined(TEST_MOTION_ANGLE_TABLET) || \
+	defined(TEST_MOTION_LID)
 #define CONFIG_ACCEL_FORCE_MODE_MASK \
 	((1 << CONFIG_LID_ANGLE_SENSOR_BASE) | \
 	 (1 << CONFIG_LID_ANGLE_SENSOR_LID))
@@ -215,22 +228,21 @@ enum sensor_id {
 
 #endif
 
-#ifdef TEST_CRC32
+#ifdef TEST_CRC
+#define CONFIG_CRC8
 #define CONFIG_SW_CRC
 #endif
 
 #ifdef TEST_RSA
 #define CONFIG_RSA
-#undef CONFIG_RSA_KEY_SIZE
-#define CONFIG_RSA_KEY_SIZE 2048
-#undef CONFIG_RSA_EXPONENT_3
+#ifdef CONFIG_RSA_EXPONENT_3
+#error Your board uses RSA exponent 3, please build rsa3 test instead!
+#endif
 #define CONFIG_RWSIG_TYPE_RWSIG
 #endif
 
 #ifdef TEST_RSA3
 #define CONFIG_RSA
-#undef CONFIG_RSA_KEY_SIZE
-#define CONFIG_RSA_KEY_SIZE 2048
 #define CONFIG_RSA_EXPONENT_3
 #define CONFIG_RWSIG_TYPE_RWSIG
 #endif
@@ -258,7 +270,7 @@ enum sensor_id {
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_DISCHARGE_ON_AC_CUSTOM
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 int board_discharge_on_ac(int enabled);
 #define I2C_PORT_MASTER 0
 #define I2C_PORT_BATTERY 0
@@ -269,7 +281,7 @@ int board_discharge_on_ac(int enabled);
 #define CONFIG_CHIPSET_CAN_THROTTLE
 #define CONFIG_FANS 1
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THROTTLE_AP
 #define CONFIG_THERMISTOR
@@ -294,7 +306,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER_INPUT_CURRENT 4032
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_MASTER 0
 #define I2C_PORT_BATTERY 0
 #define I2C_PORT_CHARGER 0
@@ -306,7 +318,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #ifdef TEST_LIGHTBAR
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_LIGHTBAR 0
 #define CONFIG_ALS_LIGHTBAR_DIMMING 0
 #endif
@@ -377,7 +389,6 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_DECODE_SOP
 #undef CONFIG_USB_TYPEC_SM
 #define CONFIG_USBC_VCONN
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 #define CONFIG_USB_PD_DISCHARGE_GPIO
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
@@ -401,12 +412,13 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_DECODE_SOP
 #undef CONFIG_USB_TYPEC_SM
 #define CONFIG_USBC_VCONN
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 #define CONFIG_USB_PD_DISCHARGE_GPIO
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USBC_SS_MUX
-#endif
+#define I2C_PORT_HOST_TCPC 0
+#define CONFIG_CHARGE_MANAGER
+#endif /* TEST_USB_PE_DRP || TEST_USB_PE_DRP_NOEXTENDED */
 
 /* Common TypeC tests defines */
 #if defined(TEST_USB_TYPEC_VPD) || \
@@ -460,7 +472,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PD_HOST_CMD
 #endif
 
-#ifdef TEST_USB_TCPMV2_TCPCI
+#ifdef TEST_USB_TCPMV2_COMPLIANCE
 #define CONFIG_USB_DRP_ACC_TRYSRC
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
@@ -477,14 +489,16 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_PID 0x5036
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
+#define CONFIG_BATTERY
+#define CONFIG_NUM_FIXED_BATTERIES 1
 #define I2C_PORT_HOST_TCPC 0
 #define CONFIG_USB_PD_DEBUG_LEVEL 3
 #define CONFIG_USB_PD_EXTENDED_MESSAGES
 #define CONFIG_USB_PD_DECODE_SOP
+#define CONFIG_USB_PD_3A_PORTS 0 /* Host does not define a 3.0 A PDO */
 #endif
 
 #ifdef TEST_USB_PD_INT
@@ -534,7 +548,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_BATTERY
 #define CONFIG_BATTERY_SMART
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_BATTERY 0
 #endif /* TEST_CHARGE_MANAGER_* */
 
@@ -561,7 +575,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_RW_B
 #define CONFIG_RW_B_MEM_OFF		CONFIG_RO_MEM_OFF
 #undef  CONFIG_RO_SIZE
-#define CONFIG_RO_SIZE			(CONFIG_FLASH_SIZE / 4)
+#define CONFIG_RO_SIZE			(CONFIG_FLASH_SIZE_BYTES / 4)
 #undef  CONFIG_RW_SIZE
 #define CONFIG_RW_SIZE			CONFIG_RO_SIZE
 #define CONFIG_RW_A_STORAGE_OFF		CONFIG_RW_STORAGE_OFF
@@ -579,7 +593,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #ifdef TEST_I2C_BITBANG
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_BITBANG
 #define I2C_BITBANG_PORT_COUNT 1
 #endif

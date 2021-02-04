@@ -4,20 +4,19 @@
  */
 
 /* Volteer board-specific configuration */
-#include "bb_retimer.h"
 #include "button.h"
 #include "common.h"
 #include "accelgyro.h"
 #include "cbi_ec_fw_config.h"
+#include "charge_state_v2.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi260.h"
-#include "driver/als_tcs3400.h"
+#include "driver/accelgyro_bmi160.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/syv682x.h"
-#include "driver/retimer/bb_retimer.h"
 #include "driver/sync.h"
 #include "driver/tcpm/ps8xxx.h"
+#include "driver/tcpm/rt1715.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tusb422.h"
 #include "extpower.h"
@@ -25,6 +24,9 @@
 #include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "isl9241.h"
+#include "keyboard_8042_sharedlib.h"
+#include "keyboard_raw.h"
 #include "lid_switch.h"
 #include "keyboard_scan.h"
 #include "power.h"
@@ -72,10 +74,58 @@ union volteer_cbi_fw_config fw_config_defaults = {
 	.usb_db = DB_USB3_ACTIVE,
 };
 
+static void board_charger_config(void)
+{
+	/*
+	 * b/166728543, we configured charger setting to throttle CPU
+	 * when the system loading is at battery current limit.
+	 */
+	int reg;
+
+	/*
+	 * Set DCProchot# to 5120mA
+	 */
+	isl9241_set_dc_prochot(CHARGER_SOLO, 5120);
+
+	/*
+	 * Set Control1 bit<3> = 1, PSYS = 1
+	 */
+	if (i2c_read16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+		       ISL9241_REG_CONTROL1, &reg) == EC_SUCCESS) {
+		reg |= ISL9241_CONTROL1_PSYS;
+		if (i2c_write16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+			    ISL9241_REG_CONTROL1, reg))
+			CPRINTS("Failed to set isl9241");
+	}
+
+	/*
+	 * Set Control2 bit<10:9> = 00, PROCHOT# Debounce = 7us
+	 */
+	if (i2c_read16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+		       ISL9241_REG_CONTROL2, &reg) == EC_SUCCESS) {
+		reg &= ~ISL9241_CONTROL2_PROCHOT_DEBOUNCE_MASK;
+		if (i2c_write16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+			    ISL9241_REG_CONTROL2, reg))
+			CPRINTS("Failed to set isl9241");
+	}
+
+	/*
+	 * Set Control4 bit<11> = 1, PSYS Rsense Ratio = 1:1
+	 */
+	if (i2c_read16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+		       ISL9241_REG_CONTROL4, &reg) == EC_SUCCESS) {
+		reg |= ISL9241_CONTROL4_PSYS_RSENSE_RATIO;
+		if (i2c_write16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+			    ISL9241_REG_CONTROL4, reg))
+			CPRINTS("Failed to set isl9241");
+	}
+}
+
 static void board_init(void)
 {
 	pwm_enable(PWM_CH_LED4_SIDESEL, 1);
 	pwm_set_duty(PWM_CH_LED4_SIDESEL, 100);
+	board_charger_config();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -118,6 +168,30 @@ __override bool board_is_tbt_usb4_port(int port)
 	 */
 	return ((port == USBC_PORT_C1)
 		&& ((usb_db == DB_USB4_GEN2) || (usb_db == DB_USB4_GEN3)));
+}
+
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+			    int max_ma, int charge_mv)
+{
+	/*
+	 * b/166728543
+	 * Set different AC_PROCHOT value when using different wattage ADT.
+	 */
+	if (max_ma * charge_mv == PD_MAX_POWER_MW * 1000)
+		isl9241_set_ac_prochot(0, 3072);
+	else
+		isl9241_set_ac_prochot(0, 2816);
+
+	/*
+	 * Follow OEM request to limit the input current to
+	 * 90% negotiated limit when S0.
+	 */
+	if (chipset_in_state(CHIPSET_STATE_ON))
+		charge_ma = charge_ma * 90 / 100;
+
+	charge_set_input_current_limit(MAX(charge_ma,
+					CONFIG_CHARGER_INPUT_CURRENT),
+					charge_mv);
 }
 
 /******************************************************************************/
@@ -186,13 +260,6 @@ const struct i2c_port_t i2c_ports[] = {
 		.sda = GPIO_EC_I2C2_USB_C1_SDA,
 	},
 	{
-		.name = "usb_1_mix",
-		.port = I2C_PORT_USB_1_MIX,
-		.kbps = 100,
-		.scl = GPIO_EC_I2C3_USB_1_MIX_SCL,
-		.sda = GPIO_EC_I2C3_USB_1_MIX_SDA,
-	},
-	{
 		.name = "power",
 		.port = I2C_PORT_POWER,
 		.kbps = 100,
@@ -253,7 +320,6 @@ static const struct tcpc_config_t tcpc_config_p1_usb3 = {
 	},
 	.flags = TCPC_FLAGS_TCPCI_REV2_0 | TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
 	.drv = &ps8xxx_tcpm_drv,
-	.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 };
 
 /*
@@ -358,10 +424,29 @@ static void config_db_usb3_passive(void)
 	usb_muxes[USBC_PORT_C1] = mux_config_p1_usb3_passive;
 }
 
+static void config_port_discrete_tcpc(int port)
+{
+	/*
+	 * Support 2 Pin-to-Pin compatible parts: TUSB422 and RT1715, for
+	 * simplicity allow either and decide which we are using.
+	 * Default to TUSB422, and switch to RT1715 after BOARD_ID >=1.
+	 */
+	if (get_board_id() >= 1) {
+		CPRINTS("C%d: RT1715", port);
+		tcpc_config[port].i2c_info.addr_flags =
+			RT1715_I2C_ADDR_FLAGS;
+		tcpc_config[port].drv = &rt1715_tcpm_drv;
+		return;
+	}
+	CPRINTS("C%d: Default to TUSB422", port);
+}
+
 static const char *db_type_prefix = "USB DB type: ";
 __override void board_cbi_init(void)
 {
 	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
+
+	config_port_discrete_tcpc(0);
 
 	switch (usb_db) {
 	case DB_USB_ABSENT:
@@ -384,6 +469,17 @@ __override void board_cbi_init(void)
 	default:
 		CPRINTS("%sID %d not supported", db_type_prefix, usb_db);
 	}
+
+	if ((!IS_ENABLED(TEST_BUILD) && !ec_cfg_has_numeric_pad()) ||
+	    get_board_id() < 1)
+		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);
+
+	/*
+	 * If keyboard is US2(KB_LAYOUT_1), we need translate right ctrl
+	 * to backslash(\|) key.
+	 */
+	if (ec_cfg_keyboard_layout() == KB_LAYOUT_1)
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
 }
 
 /******************************************************************************/
@@ -442,7 +538,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_0_USB2_NUM | (USBC_PORT_0_USB3_NUM << 4),
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -451,7 +546,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -459,12 +553,6 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc1_usb4_db_retimer = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
-};
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
@@ -475,21 +563,9 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb4_db_retimer,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
-
-struct bb_usb_control bb_controls[] = {
-	[USBC_PORT_C0] = {
-		/* USB-C port 0 doesn't have a retimer */
-	},
-	[USBC_PORT_C1] = {
-		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
-		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
 
 static void board_tcpc_init(void)
 {

@@ -17,6 +17,7 @@
 #include "driver/accel_kxcj9.h"
 #include "i2c.h"
 #include "math_util.h"
+#include "motion_orientation.h"
 #include "spi.h"
 #include "task.h"
 #include "util.h"
@@ -40,6 +41,9 @@
 #else
 #define T(s_) V(s_)
 #endif /* !defined(CONFIG_ACCEL_KXCJ9) || !defined(CONFIG_ACCEL_KX022) */
+
+STATIC_IF(CONFIG_KX022_ORIENTATION_SENSOR) int check_orientation_locked(
+					const struct motion_sensor_t *s);
 
 /* List of range values in +/-G's and their associated register values. */
 static const struct accel_param_pair ranges[][3] = {
@@ -263,11 +267,11 @@ static int enable_sensor(const struct motion_sensor_t *s, int reg_val)
 		if (ret != EC_SUCCESS)
 			continue;
 
-#ifdef CONFIG_KX022_ORIENTATION_SENSOR
 		/* Enable tilt orientation mode  if lid sensor */
-		if ((s->location == MOTIONSENSE_LOC_LID) && (V(s) == 0))
+		if (IS_ENABLED(CONFIG_KX022_ORIENTATION_SENSOR) &&
+		    (s->location == MOTIONSENSE_LOC_LID) &&
+		    (V(s) == 0))
 			reg_val |= KX022_CNTL1_TPE;
-#endif
 
 		/* Enable accelerometer based on reg_val value. */
 		ret = raw_write8(s->port, s->i2c_spi_addr_flags,
@@ -317,10 +321,9 @@ static int set_value(const struct motion_sensor_t *s, int reg, int val,
 	return ret;
 }
 
-static int set_range(const struct motion_sensor_t *s, int range, int rnd)
+static int set_range(struct motion_sensor_t *s, int range, int rnd)
 {
 	int ret, index, reg, range_field, range_val;
-	struct kionix_accel_data *data = s->drv_data;
 
 	/* Find index for interface pair matching the specified range. */
 	index = find_param_index(range, rnd, ranges[T(s)],
@@ -331,15 +334,8 @@ static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 
 	ret = set_value(s, reg, range_val, range_field);
 	if (ret == EC_SUCCESS)
-		data->base.range = ranges[T(s)][index].val;
+		s->current_range = ranges[T(s)][index].val;
 	return ret;
-}
-
-static int get_range(const struct motion_sensor_t *s)
-{
-	struct kionix_accel_data *data = s->drv_data;
-
-	return data->base.range;
 }
 
 static int set_resolution(const struct motion_sensor_t *s, int res, int rnd)
@@ -414,8 +410,7 @@ static int get_offset(const struct motion_sensor_t *s, int16_t *offset,
 	return EC_SUCCESS;
 }
 
-#ifdef CONFIG_KX022_ORIENTATION_SENSOR
-static enum motionsensor_orientation kx022_convert_orientation(
+static __maybe_unused enum motionsensor_orientation kx022_convert_orientation(
 		const struct motion_sensor_t *s,
 		int orientation)
 {
@@ -437,10 +432,11 @@ static enum motionsensor_orientation kx022_convert_orientation(
 	default:
 		break;
 	}
-	res = motion_sense_remap_orientation(s, res);
+	res = motion_orientation_remap(s, res);
 	return res;
 }
 
+#ifdef CONFIG_KX022_ORIENTATION_SENSOR
 static int check_orientation_locked(const struct motion_sensor_t *s)
 {
 	struct kionix_accel_data *data = s->drv_data;
@@ -457,28 +453,47 @@ static int check_orientation_locked(const struct motion_sensor_t *s)
 	if (raw_orientation && (raw_orientation != data->raw_orientation)) {
 		data->raw_orientation = raw_orientation;
 		orientation = kx022_convert_orientation(s, raw_orientation);
-		SET_ORIENTATION(s, orientation);
+		*motion_orientation_ptr(s) = orientation;
 	}
 	return ret;
 }
+
+bool motion_orientation_changed(const struct motion_sensor_t *s)
+{
+	return ((struct kionix_accel_data *)s->drv_data)->orientation !=
+		((struct kionix_accel_data *)s->drv_data)->last_orientation;
+}
+
+enum motionsensor_orientation *motion_orientation_ptr(
+		const struct motion_sensor_t *s)
+{
+	return &((struct kionix_accel_data *)s->drv_data)->orientation;
+}
+
+void motion_orientation_update(const struct motion_sensor_t *s)
+{
+	((struct kionix_accel_data *)s->drv_data)->last_orientation =
+		((struct kionix_accel_data *)s->drv_data)->orientation;
+}
+
 #endif
 
 static int read(const struct motion_sensor_t *s, intv3_t v)
 {
 	uint8_t acc[6];
 	uint8_t reg;
-	int ret, i, range, resolution;
+	int ret, i, resolution;
 	struct kionix_accel_data *data = s->drv_data;
 
 	/* Read 6 bytes starting at XOUT_L. */
 	reg = KIONIX_XOUT_L(V(s));
 	mutex_lock(s->mutex);
 	ret = raw_read_multi(s->port, s->i2c_spi_addr_flags, reg, acc, 6);
-#ifdef CONFIG_KX022_ORIENTATION_SENSOR
-	if ((s->location == MOTIONSENSE_LOC_LID) && (V(s) == 0) &&
-			(ret == EC_SUCCESS))
+	if (IS_ENABLED(CONFIG_KX022_ORIENTATION_SENSOR) &&
+	    (s->location == MOTIONSENSE_LOC_LID) &&
+	    (V(s) == 0) &&
+	    (ret == EC_SUCCESS))
 		ret = check_orientation_locked(s);
-#endif
 	mutex_unlock(s->mutex);
 
 	if (ret != EC_SUCCESS)
@@ -512,14 +527,13 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 	rotate(v, *s->rot_standard_ref, v);
 
 	/* apply offset in the device coordinates */
-	range = get_range(s);
 	for (i = X; i <= Z; i++)
-		v[i] += (data->offset[i] << 5) / range;
+		v[i] += (data->offset[i] << 5) / s->current_range;
 
 	return EC_SUCCESS;
 }
 
-static int init(const struct motion_sensor_t *s)
+static int init(struct motion_sensor_t *s)
 {
 	int ret, val, reg, reset_field;
 	uint8_t timeout;
@@ -556,7 +570,7 @@ static int init(const struct motion_sensor_t *s)
 			 */
 			if (!SLAVE_IS_SPI(s->i2c_spi_addr_flags)) {
 				const uint16_t i2c_alt_addr_flags =
-					I2C_GET_ADDR(
+					I2C_STRIP_FLAGS(
 						s->i2c_spi_addr_flags)
 					& ~2;
 				ret = raw_write8(s->port,
@@ -654,7 +668,6 @@ const struct accelgyro_drv kionix_accel_drv = {
 	.init = init,
 	.read = read,
 	.set_range = set_range,
-	.get_range = get_range,
 	.set_resolution = set_resolution,
 	.get_resolution = get_resolution,
 	.set_data_rate = set_data_rate,

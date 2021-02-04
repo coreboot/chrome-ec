@@ -10,7 +10,9 @@
 #include "console.h"
 #include "ec_commands.h"
 #include "host_command.h"
+#include "usb_mux.h"
 #include "usb_pd.h"
+#include "util.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
@@ -94,3 +96,79 @@ static enum ec_status hc_typec_discovery(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_TYPEC_DISCOVERY,
 		     hc_typec_discovery,
 		     EC_VER_MASK(0));
+
+static enum ec_status hc_typec_control(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_typec_control *p = args->params;
+
+	if (p->port >= board_get_usb_pd_port_count())
+		return EC_RES_INVALID_PARAM;
+
+	switch (p->command) {
+	case TYPEC_CONTROL_COMMAND_EXIT_MODES:
+		pd_dpm_request(p->port, DPM_REQUEST_EXIT_MODES);
+		break;
+	case TYPEC_CONTROL_COMMAND_CLEAR_EVENTS:
+		pd_clear_events(p->port, p->clear_events_mask);
+		break;
+	case TYPEC_CONTROL_COMMAND_ENTER_MODE:
+		return pd_request_enter_mode(p->port, p->mode_to_enter);
+	default:
+		return EC_RES_INVALID_PARAM;
+	}
+
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_TYPEC_CONTROL, hc_typec_control, EC_VER_MASK(0));
+
+static enum ec_status hc_typec_status(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_typec_status *p = args->params;
+	struct ec_response_typec_status *r = args->response;
+	const char *tc_state_name;
+
+	if (p->port >= board_get_usb_pd_port_count())
+		return EC_RES_INVALID_PARAM;
+
+	if (args->response_max < sizeof(*r))
+		return EC_RES_RESPONSE_TOO_BIG;
+
+	args->response_size = sizeof(*r);
+
+	r->pd_enabled = pd_comm_is_enabled(p->port);
+	r->dev_connected = pd_is_connected(p->port);
+	r->sop_connected = pd_capable(p->port);
+
+	r->power_role = pd_get_power_role(p->port);
+	r->data_role = pd_get_data_role(p->port);
+	r->vconn_role = pd_get_vconn_state(p->port) ? PD_ROLE_VCONN_SRC :
+						      PD_ROLE_VCONN_OFF;
+	r->polarity = pd_get_polarity(p->port);
+	r->cc_state = pd_get_task_cc_state(p->port);
+	r->dp_pin = get_dp_pin_mode(p->port);
+	r->mux_state = usb_mux_get(p->port);
+
+	tc_state_name = pd_get_task_state_name(p->port);
+	strzcpy(r->tc_state, tc_state_name, sizeof(r->tc_state));
+
+	r->events = pd_get_events(p->port);
+
+	r->sop_revision = r->sop_connected ?
+		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port, TCPC_TX_SOP)) : 0;
+	r->sop_prime_revision = pd_get_identity_discovery(p->port,
+					TCPC_TX_SOP_PRIME) == PD_DISC_COMPLETE ?
+		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port, TCPC_TX_SOP_PRIME))
+		: 0;
+
+	r->source_cap_count = pd_get_src_cap_cnt(p->port);
+	memcpy(r->source_cap_pdos, pd_get_src_caps(p->port),
+	       r->source_cap_count * sizeof(uint32_t));
+
+	r->sink_cap_count = pd_get_snk_cap_cnt(p->port);
+	memcpy(r->sink_cap_pdos, pd_get_snk_caps(p->port),
+	       r->sink_cap_count * sizeof(uint32_t));
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_TYPEC_STATUS, hc_typec_status, EC_VER_MASK(0));

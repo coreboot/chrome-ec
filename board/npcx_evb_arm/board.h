@@ -15,11 +15,11 @@
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
-#define CONFIG_FLASH_SIZE          0x00800000 /* 8MB spi flash */
+#define CONFIG_FLASH_SIZE_BYTES          0x00800000 /* 8MB spi flash */
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q64
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP /* Instead of 8042 protocol of keyboard */
 #define CONFIG_MKBP_USE_GPIO

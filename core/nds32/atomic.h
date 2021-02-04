@@ -12,46 +12,64 @@
 #include "cpu.h"
 #include "task.h"
 
-static inline void atomic_clear(uint32_t volatile *addr, uint32_t bits)
+typedef int atomic_t;
+typedef atomic_t atomic_val_t;
+
+static inline void atomic_clear_bits(atomic_t *addr, atomic_val_t bits)
 {
-	uint32_t int_mask = get_int_mask();
-	interrupt_disable();
-	*addr &= ~bits;
+	atomic_t volatile *ptr = addr;
+	uint32_t int_mask = read_clear_int_mask();
+
+	*ptr &= ~bits;
 	set_int_mask(int_mask);
 }
 
-static inline void atomic_or(uint32_t volatile *addr, uint32_t bits)
+static inline atomic_val_t atomic_or(atomic_t *addr, atomic_val_t bits)
 {
-	uint32_t int_mask = get_int_mask();
-	interrupt_disable();
-	*addr |= bits;
+	atomic_val_t ret;
+	atomic_t volatile *ptr = addr;
+	uint32_t int_mask = read_clear_int_mask();
+
+	ret = *ptr;
+	*ptr |= bits;
 	set_int_mask(int_mask);
+	return ret;
 }
 
-static inline void atomic_add(uint32_t volatile *addr, uint32_t value)
+static inline atomic_val_t atomic_add(atomic_t *addr, atomic_val_t value)
 {
-	uint32_t int_mask = get_int_mask();
-	interrupt_disable();
-	*addr += value;
+	atomic_val_t ret;
+	atomic_t volatile *ptr = addr;
+	uint32_t int_mask = read_clear_int_mask();
+
+	ret = *ptr;
+	*ptr += value;
 	set_int_mask(int_mask);
+	return ret;
 }
 
-static inline void atomic_sub(uint32_t volatile *addr, uint32_t value)
+static inline atomic_val_t atomic_sub(atomic_t *addr, atomic_val_t value)
 {
-	uint32_t int_mask = get_int_mask();
-	interrupt_disable();
-	*addr -= value;
+	atomic_val_t ret;
+	atomic_t volatile *ptr = addr;
+	uint32_t int_mask = read_clear_int_mask();
+
+	ret = *ptr;
+	*ptr -= value;
 	set_int_mask(int_mask);
+	return ret;
 }
 
-static inline uint32_t atomic_read_clear(uint32_t volatile *addr)
+static inline atomic_val_t atomic_clear(atomic_t *addr)
 {
-	uint32_t val;
-	uint32_t int_mask = get_int_mask();
-	interrupt_disable();
-	val = *addr;
-	*addr = 0;
+	atomic_val_t ret;
+	atomic_t volatile *ptr = addr;
+	uint32_t int_mask = read_clear_int_mask();
+
+	ret = *ptr;
+	*ptr = 0;
 	set_int_mask(int_mask);
-	return val;
+	return ret;
 }
+
 #endif  /* __CROS_EC_ATOMIC_H */

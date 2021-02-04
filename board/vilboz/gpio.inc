@@ -53,6 +53,11 @@ GPIO(LED_FULL_L,		PIN(6, 0), GPIO_OUT_HIGH)
 GPIO(LED_CHRG_L,		PIN(C, 0), GPIO_OUT_HIGH)
 GPIO(LED3_PWM,			PIN(C, 3), GPIO_OUT_HIGH)
 
+/* LTE control */
+GPIO(LTE_EN,            PIN(6, 2), GPIO_OUT_LOW)           /* WWAN LTE Function enable */
+GPIO(LTE_W_DISABLE_L,   PIN(4, 0), GPIO_OUT_LOW)           /* WWAN LTE flight mode */
+GPIO(LTE_FCPO,          PIN(7, 3), GPIO_OUT_LOW)           /* WWAN LTE Full Card Power ON OFF */
+
 /*
  * Vilboz has only 1 HDMI DB option
  */

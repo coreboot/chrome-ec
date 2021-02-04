@@ -22,6 +22,20 @@ static int tusb544_read(const struct usb_mux *me, int offset, int *data)
 			 offset, data);
 }
 
+int tusb544_i2c_field_update8(const struct usb_mux *me, int offset,
+			     uint8_t field_mask, uint8_t set_value)
+{
+	int rv;
+
+	rv = i2c_field_update8(me->i2c_port,
+			       me->i2c_addr_flags,
+			       offset,
+			       field_mask,
+			       set_value);
+
+	return rv;
+}
+
 static int tusb544_enter_low_power_mode(const struct usb_mux *me)
 {
 	int reg;
@@ -63,6 +77,9 @@ static int tusb544_set_mux(const struct usb_mux *me, mux_state_t mux_state)
 
 	reg &= ~TUSB544_GEN4_CTL_SEL;
 
+	if (IS_ENABLED(CONFIG_TUSB544_EQ_BY_REGISTER))
+		reg |= TUSB544_GEN4_EQ_OVRD;
+
 	if ((mux_state & USB_PD_MUX_USB_ENABLED) &&
 	    (mux_state & USB_PD_MUX_DP_ENABLED)) {
 		reg |= TUSB544_CTL_SEL_DP_USB;
@@ -82,10 +99,8 @@ static int tusb544_set_mux(const struct usb_mux *me, mux_state_t mux_state)
 		return rv;
 
 	reg &= ~TUSB544_GEN6_DIR_SEL;
-	if (pd_get_power_role(me->usb_port) == PD_ROLE_SOURCE)
-		reg |= TUSB544_DIR_SEL_USB_DP_SRC;
-	else
-		reg |= TUSB544_DIR_SEL_USB_DP_SNK;
+	/* All chromebooks are DP SRC */
+	reg |= TUSB544_DIR_SEL_USB_DP_SRC;
 
 	return tusb544_write(me, TUSB544_REG_GENERAL6, reg);
 }

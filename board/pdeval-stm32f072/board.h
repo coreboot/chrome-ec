@@ -18,7 +18,7 @@
 /* Optional features */
 #define CONFIG_HW_CRC
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_STM_HWTIMER32
 /* USB Power Delivery configuration */
 #define CONFIG_USB_POWER_DELIVERY
@@ -58,7 +58,6 @@
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /* USB Configuration */
 #define CONFIG_USB

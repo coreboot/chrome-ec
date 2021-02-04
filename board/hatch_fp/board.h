@@ -71,7 +71,7 @@
 
 #define CONFIG_RW_MEM_OFF	(CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
 #define CONFIG_RW_STORAGE_OFF	0
-#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE -			\
+#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE_BYTES -		\
 				(CONFIG_RW_MEM_OFF - CONFIG_RO_MEM_OFF))
 
 #define CONFIG_EC_PROTECTED_STORAGE_OFF         CONFIG_RO_MEM_OFF
@@ -124,10 +124,10 @@
  *-------------------------------------------------------------------------*/
 
 #define CONFIG_CMD_FLASH
-#define CONFIG_CMD_SPI_XFER
 #define CONFIG_CMD_IDLE_STATS
 
 #ifdef SECTION_IS_RW
+#define CONFIG_CMD_SPI_XFER
 /* TODO(b/130249462): remove for release */
 #define CONFIG_CMD_FPSENSOR_DEBUG
 #endif
@@ -190,6 +190,7 @@
 /* SPI configuration for the fingerprint sensor */
 #define CONFIG_SPI_MASTER
 #define CONFIG_SPI_FP_PORT  0 /* SPI2: first master config */
+#define CONFIG_FINGERPRINT_MCU
 #ifdef SECTION_IS_RW
 #define CONFIG_FP_SENSOR_FPC1025
 /*
@@ -224,12 +225,9 @@
 #define CONFIG_AES
 #define CONFIG_AES_GCM
 #define CONFIG_DMA
-/*FIXME*/
-/*#define CONFIG_FORCE_CONSOLE_RESUME*/
 #define CONFIG_FPU
 #define CONFIG_HOST_COMMAND_STATUS
-/*FIXME*/
-/*#define CONFIG_LOW_POWER_IDLE*/
+#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
 #define CONFIG_PRINTF_LEGACY_LI_FORMAT

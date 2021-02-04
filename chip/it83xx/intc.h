@@ -31,8 +31,8 @@ void adc_interrupt(void);
 void voltage_comparator_interrupt(void);
 #endif
 void i2c_interrupt(int port);
-#ifdef CONFIG_I2C_SLAVE
-void i2c_slv_interrupt(int port);
+#ifdef CONFIG_I2C_PERIPHERAL
+void i2c_periph_interrupt(int port);
 #endif
 void clock_sleep_mode_wakeup_isr(void);
 int clock_ec_wake_from_sleep(void);
@@ -44,6 +44,7 @@ void espi_vw_interrupt(void);
 void espi_enable_pad(int enable);
 void espi_init(void);
 void clock_cpu_standby(void);
+void spi_emmc_cmd0_isr(uint32_t *cmd0_payload);
 void spi_slv_int_handler(void);
 #if defined(CONFIG_HOSTCMD_X86) && defined(HAS_TASK_KEYPROTO)
 void lpc_kbc_ibf_interrupt(void);

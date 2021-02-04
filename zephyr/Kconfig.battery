@@ -1,0 +1,152 @@
+# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+menuconfig PLATFORM_EC_BATTERY
+	bool "Battery support"
+	select HAS_TASK_CHARGER
+	help
+	  Enables battery support on the board. Requires selection of a battery
+	  and a charger IC.
+
+	  If using I2C batteries, you must define I2C_PORT_BATTERY in your
+	  board's i2c_map.h file so that the EC code will know which I2C
+	  port the battery is on.
+
+if PLATFORM_EC_BATTERY
+
+choice "Battery select"
+	prompt "Select the battery to use"
+	help
+	  Select the battery used on the board. If you are ensure, select the
+	  smart battery option.
+
+config PLATFORM_EC_BATTERY_SMART
+	bool "Support a smart battery"
+	depends on PLATFORM_EC_I2C
+	help
+	  Many batteries support the Smart Battery Specification and therefore
+	  have common registers which can be accessed to control and monitor
+	  the battery.
+
+	  See here for the spec: http://sbs-forum.org/specs/sbdat110.pdf
+
+endchoice
+
+choice "Battery presence detection"
+	prompt "Method to use to detect the battery"
+	help
+	  This selects the method to use to detect the presence of a battery.
+
+	  Battery detection is important since it can be used to indicate that
+	  the case is open, so security features can be disabled. It is also
+	  useful to report to the user when the battery is missing, e.g. with
+	  a desktop icon.
+
+config PLATFORM_EC_BATTERY_PRESENT_CUSTOM
+	bool "Call a board-provided function"
+	help
+	  Use this method to provide a board-provided battery_is_present()
+	  function to determine whether the battery is currently present.
+	  This should be implemented in the board code and can use any
+	  reasonable method to detect the battery.
+
+config PLATFORM_EC_BATTERY_PRESENT_GPIO
+	bool "Check a GPIO"
+	help
+	  Use this method if a GPIO signals whether the battery is present. The
+	  GPIO should read low if the battery is present, high if absent,
+
+	  TODO:
+	  The actual GPIO to use is not defined by this option. Perhaps this
+	  needs to be placed in the devicetree.
+
+endchoice  # battery presence
+
+choice "Charger select"
+	prompt "Select the charger to use"
+	help
+	  Select the battery charger IC used on the board. Only one charger may
+	  be selected.
+
+config PLATFORM_EC_CHARGER_ISL9241
+	bool "Use the ISL9241 charger"
+	depends on PLATFORM_EC_I2C
+	help
+	  Enables a driver for the ISL9241 VCD Battery Charger. This is a
+	  digitally-configurable, buck-boost battery charger that can support
+	  both Narrow Voltage Direct Charging (NVDC) and Hybrid Power Buck Boost
+	  (HPBB/Bypass) charging and switch between the modes under firmware
+	  control. It supports an input voltage range of 3.9-23.4V and output
+	  of 3.9-18.3V. It provides an I2C interace for configuration.
+
+endchoice
+
+config PLATFORM_EC_BATTERY_FUEL_GAUGE
+	bool "Board supplies battery info"
+	help
+	  The fuel gauge information is used to cut off the battery for shipping
+	  mode and to check the charge/discharge FET status.  The battery
+	  information is used to set voltage, current and temperature operating
+	  limits for the battery.
+
+config PLATFORM_EC_CHARGE_RAMP_SW
+	bool "Software-controlled charging"
+	default y
+	select HAS_TASK_CHG_RAMP
+	help
+	  Enables ramping up charging from an external source to the maximum
+	  available within the source's limits and taking into account the
+	  current needs of the device. It handles the user plugging chargers in
+	  and removing them.
+
+config PLATFORM_EC_CMD_CHGRAMP
+	bool "Console command: chgramp"
+	depends on PLATFORM_EC_CHARGE_RAMP_SW
+	default y
+	help
+	  Enable the "chgramp" command. This shows the current state of the
+	  chg_ramp task. It shows the state of each port and the current limit
+	  for each port. The 'State' shown is from enum chg_ramp_state.
+
+	  Chg Ramp:
+	    State: 5
+	    Min ICL: 2000
+	    Active ICL: 2000
+	    Port 0:
+	      OC idx:0
+	      OC 0: s-1 oc_det0 icl0
+	      OC 1: s0 oc_det0 icl0
+	      OC 2: s0 oc_det0 icl0
+	    Port 1:
+	      OC idx:0
+	      OC 0: s-1 oc_det0 icl0
+	      OC 1: s0 oc_det0 icl0
+	      OC 2: s0 oc_det0 icl0
+
+config PLATFORM_EC_BATTERY_CUT_OFF
+	bool "Host/Console command: battery cut-off"
+	help
+	  Enables support for disconnecting the battery using the "cutoff"
+	  console command and the EC_CMD_BATTERY_CUT_OFF host command.
+	  Once defined, a board specific board_cut_off_battery() function
+	  has to be provided.
+
+config PLATFORM_EC_BATTERY_HW_PRESENT_CUSTOM
+	bool "Hardware check of battery presence"
+	help
+	  Once defined, the charger will check a board specific function
+	  battery_hw_present() for battery hw presence as an additional
+	  condition to determine if power on is allowed for factory override,
+	  where allowing booting of a bare board with no battery and no power
+	  button press is required.
+
+config PLATFORM_EC_BATTERY_REVIVE_DISCONNECT
+	bool "Check battery disconnect state"
+	help
+	  Check for battery in disconnect state (similar to cut-off state).
+	  If this battery is found to be in disconnect state, take it out of
+	  this state by force-applying a charge current. Once defined,
+	  a battery_get_disconnect_state() function has to be provided.
+
+endif # PLATFORM_EC_BATTERY

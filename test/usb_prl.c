@@ -5,23 +5,23 @@
  * Test USB Protocol Layer module.
  */
 #include "common.h"
+#include "mock/tcpc_mock.h"
+#include "mock/tcpm_mock.h"
+#include "mock/usb_pe_sm_mock.h"
+#include "mock/usb_tc_sm_mock.h"
 #include "task.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "test_util.h"
 #include "timer.h"
 #include "usb_emsg.h"
-#include "usb_pd_test_util.h"
 #include "usb_pd.h"
+#include "usb_pd_test_util.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
 #include "usb_sm_checks.h"
 #include "usb_tc_sm.h"
 #include "util.h"
-#include "mock/tcpc_mock.h"
-#include "mock/tcpm_mock.h"
-#include "mock/usb_tc_sm_mock.h"
-#include "mock/usb_pe_sm_mock.h"
 
 #define PORT0 0
 
@@ -47,8 +47,8 @@ static int test_receive_control_msg(void)
 {
 	int port = PORT0;
 	uint16_t header = PD_HEADER(PD_CTRL_DR_SWAP,
-		mock_tc_port[port].power_role,
-		mock_tc_port[port].data_role,
+		pd_get_power_role(port),
+		pd_get_data_role(port),
 		mock_tc_port[port].msg_rx_id,
 		0, mock_tc_port[port].rev, 0);
 
@@ -99,8 +99,8 @@ static int test_discard_queued_tx_when_rx_happens(void)
 {
 	int port = PORT0;
 	uint16_t header = PD_HEADER(PD_CTRL_DR_SWAP,
-		mock_tc_port[port].power_role,
-		mock_tc_port[port].data_role,
+		pd_get_power_role(port),
+		pd_get_data_role(port),
 		mock_tc_port[port].msg_rx_id,
 		0, mock_tc_port[port].rev, 0);
 	uint8_t *buf = tx_emsg[port].buf;

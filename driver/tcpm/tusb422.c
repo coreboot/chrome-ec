@@ -7,8 +7,8 @@
 
 #include "common.h"
 #include "tusb422.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_pd.h"
 
@@ -20,14 +20,14 @@
 
 #if defined(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE) && \
 	!defined(CONFIG_USB_PD_TCPC_LOW_POWER)
-#error "TUSB422 driver requires CONFIG_USB_PD_TCPC_LOW_POWER if"
-#error "CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE is enabled"
+#error "TUSB422 driver requires CONFIG_USB_PD_TCPC_LOW_POWER if " \
+		"CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE is enabled"
 #endif
 
 #if defined(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE) && \
 	defined(CONFIG_USB_PD_DISCHARGE_TCPC)
-#error "TUSB422 must disable TCPC discharge to support enabling Auto Discharge"
-#error "Disconnect all the time."
+#error "TUSB422 must disable TCPC discharge to support enabling Auto " \
+		"Discharge Disconnect all the time."
 #endif
 
 enum tusb422_reg_addr {
@@ -159,7 +159,7 @@ const struct tcpm_drv tusb422_tcpm_drv = {
 	.set_cc			= &tusb422_tcpm_set_cc,
 	.set_polarity		= &tcpci_tcpm_set_polarity,
 #ifdef CONFIG_USB_PD_DECODE_SOP
-	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
 #endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
@@ -183,6 +183,7 @@ const struct tcpm_drv tusb422_tcpm_drv = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 #ifdef CONFIG_USB_PD_FRS_TCPC
 	.set_frs_enable         = &tusb422_set_frs_enable,
 #endif

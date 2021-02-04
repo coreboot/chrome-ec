@@ -10,20 +10,15 @@
 
 #include "baseboard.h"
 
-/* TODO(waihong): Remove the following bringup features */
-#define CONFIG_BRINGUP
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
-#define CONFIG_USB_PD_DEBUG_LEVEL 3
-#define CONFIG_CMD_AP_RESET_LOG
-#define CONFIG_CMD_GPIO_EXTENDED
-#define CONFIG_CMD_POWERINDEBUG
-#define CONFIG_I2C_DEBUG
-
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (512 * 1024)  /* 512KB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
 
 /* Switchcap */
 #define CONFIG_LN9310
+
+/* Keyboard */
+#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_PWM_KBLIGHT
 
 /* Battery */
 #define CONFIG_BATTERY_DEVICE_CHEMISTRY  "LION"
@@ -34,7 +29,9 @@
 #define CONFIG_BC12_DETECT_PI3USB9201
 
 /* USB */
+#define CONFIG_USB_PD_TCPM_MULTI_PS8XXX
 #define CONFIG_USB_PD_TCPM_PS8751
+#define CONFIG_USB_PD_TCPM_PS8805
 #define CONFIG_USBC_PPC_SN5S330
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 
@@ -52,6 +49,14 @@
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
 
+/* ICM426XX Base accel/gyro */
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* KX022 lid accel */
+#define CONFIG_ACCEL_KX022
+
 /* BMA253 lid accel */
 #define CONFIG_ACCEL_BMA255
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -67,6 +72,8 @@
 #define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 
 /* GPIO alias */
+#define GPIO_AC_PRESENT GPIO_ACOK_OD
+#define GPIO_WP_L GPIO_EC_WP_ODL
 #define GPIO_PMIC_RESIN_L GPIO_PM845_RESIN_L
 #define GPIO_SWITCHCAP_PG_INT_L GPIO_DA9313_GPIO0
 #define GPIO_SWITCHCAP_ON_L GPIO_SWITCHCAP_ON
@@ -102,6 +109,8 @@ enum battery_type {
 	BATTERY_AP16L5J,
 	BATTERY_AP16L5J_009,
 	BATTERY_AP16L8J,
+	BATTERY_LGC_AP18C8K,
+	BATTERY_MURATA_AP18C4K,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -117,6 +126,8 @@ int board_vbus_sink_enable(int port, int enable);
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
+/* Motion sensor interrupt */
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !defined(__ASSEMBLER__) */
 

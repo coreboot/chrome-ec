@@ -39,7 +39,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -132,7 +132,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr_flags = FUSB302_I2C_SLAVE_ADDR_FLAGS,
+			.addr_flags = FUSB302_I2C_ADDR_FLAGS,
 		},
 		.drv = &fusb302_tcpm_drv,
 	},
@@ -237,23 +237,43 @@ int pd_snk_is_vbus_provided(int port)
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+}
+
+/*
+ * Returns 1 for boards that are convertible into tablet mode, and
+ * zero for clamshells.
+ */
+int board_is_convertible(void)
+{
+	/*
+	 * Burnet: 17
+	 * Esche: 16
+	 */
+	return system_get_sku_id() == 17;
 }
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
 static void board_spi_enable(void)
 {
-	cputs(CC_ACCEL, "board_spi_enable");
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	/*
+	 * Pin mux spi peripheral away from emmc, since RO might have
+	 * left them there.
+	 */
+	gpio_config_module(MODULE_SPI_FLASH, 0);
 
-	/* Enable clocks to SPI2 module */
+	/* Enable clocks to SPI2 module. */
 	STM32_RCC_APB1ENR |= STM32_RCC_PB1_SPI2;
 
-	/* Reset SPI2 */
+	/* Reset SPI2 to clear state left over from the emmc slave. */
 	STM32_RCC_APB1RSTR |= STM32_RCC_PB1_SPI2;
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+	/* Reinitialize spi peripheral. */
+	spi_enable(&spi_devices[0], 1);
+
+	/* Pin mux spi peripheral toward the sensor. */
+	gpio_config_module(MODULE_SPI_MASTER, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP,
 	     board_spi_enable,
@@ -261,47 +281,19 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP,
 
 static void board_spi_disable(void)
 {
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
-
-	/* Disable clocks to SPI2 module */
-	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
-
-	gpio_config_module(MODULE_SPI_MASTER, 0);
+	/* Set pins to a state calming the sensor down. */
 	gpio_set_flags(GPIO_EC_SENSOR_SPI_CK, GPIO_OUT_LOW);
 	gpio_set_level(GPIO_EC_SENSOR_SPI_CK, 0);
+	gpio_config_module(MODULE_SPI_MASTER, 0);
+
+	/* Disable spi peripheral and clocks. */
+	spi_enable(&spi_devices[0], 0);
+	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
 	     board_spi_disable,
 	     MOTION_SENSE_HOOK_PRIO + 1);
 #endif /* !VARIANT_KUKUI_NO_SENSORS */
-
-static void board_init(void)
-{
-	/* If the reset cause is external, pulse PMIC force reset. */
-	if (system_get_reset_flags() == EC_RESET_FLAG_RESET_PIN) {
-		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 0);
-		msleep(100);
-		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 1);
-	}
-
-	/* Enable TCPC alert interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
-
-#ifndef VARIANT_KUKUI_NO_SENSORS
-	/* Enable interrupts from BMI160 sensor. */
-	gpio_enable_interrupt(GPIO_ACCEL_INT_ODL);
-
-	/* For some reason we have to do this again in case of sysjump */
-	board_spi_enable();
-#endif /* !VARIANT_KUKUI_NO_SENSORS */
-
-	/* Enable interrupt from PMIC. */
-	gpio_enable_interrupt(GPIO_PMIC_EC_RESETB);
-
-	/* Enable BC12 interrupt */
-	gpio_enable_interrupt(GPIO_BC12_EC_INT_ODL);
-}
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
 /* Motion sensors */
@@ -401,9 +393,49 @@ struct motion_sensor_t motion_sensors[] = {
 		.max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 };
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 #endif /* !VARIANT_KUKUI_NO_SENSORS */
+
+static void board_init(void)
+{
+	/* If the reset cause is external, pulse PMIC force reset. */
+	if (system_get_reset_flags() == EC_RESET_FLAG_RESET_PIN) {
+		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 0);
+		msleep(100);
+		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 1);
+	}
+
+	/* Enable TCPC alert interrupts */
+	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
+
+#ifndef VARIANT_KUKUI_NO_SENSORS
+	if (board_is_convertible()) {
+		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+		/* Enable interrupts from BMI160 sensor. */
+		gpio_enable_interrupt(GPIO_ACCEL_INT_ODL);
+		/* For some reason we have to do this again in case of sysjump */
+		board_spi_enable();
+	} else {
+		motion_sensor_count = 0;
+		/* Device is clamshell only */
+		tablet_set_mode(0);
+		/* Turn off GMR interrupt */
+		gmr_tablet_switch_disable();
+		/* Base accel is not stuffed, don't allow line to float */
+		gpio_set_flags(GPIO_ACCEL_INT_ODL,
+			       GPIO_INPUT | GPIO_PULL_DOWN);
+		board_spi_disable();
+	}
+#endif /* !VARIANT_KUKUI_NO_SENSORS */
+
+	/* Enable interrupt from PMIC. */
+	gpio_enable_interrupt(GPIO_PMIC_EC_RESETB);
+
+	/* Enable BC12 interrupt */
+	gpio_enable_interrupt(GPIO_BC12_EC_INT_ODL);
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)
@@ -440,3 +472,16 @@ int battery_set_vendor_param(uint32_t param, uint32_t value)
 {
 	return EC_ERROR_UNIMPLEMENTED;
 }
+
+/* Enable or disable input devices, based on chipset state and tablet mode */
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	/* If the lid is in 360 position, ignore the lid angle,
+	 * which might be faulty. Disable keyboard.
+	 */
+	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		enable = 0;
+	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+}
+#endif

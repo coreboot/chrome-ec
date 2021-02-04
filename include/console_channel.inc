@@ -33,7 +33,7 @@ CONSOLE_CHANNEL(CC_DMA,          "dma")
 #if defined(CONFIG_DEVICE_EVENT) || defined(CONFIG_HOSTCMD_EVENTS)
 CONSOLE_CHANNEL(CC_EVENTS,       "events")
 #endif
-#if defined(HAS_TASK_FPSENSOR) || defined(CONFIG_FP_SENSOR)
+#if defined(HAS_TASK_FPSENSOR) || defined(CONFIG_FINGERPRINT_MCU)
 CONSOLE_CHANNEL(CC_FP,           "fingerprint")
 #endif
 #ifdef CONFIG_GESTURE_SW_DETECTION
@@ -74,6 +74,9 @@ CONSOLE_CHANNEL(CC_PD_HOST_CMD,  "pdhostcm")
 CONSOLE_CHANNEL(CC_PORT80,       "port80")
 #ifdef CONFIG_PS2
 CONSOLE_CHANNEL(CC_PS2,          "ps2")
+#endif
+#ifdef CONFIG_PERIPHERAL_CHARGER
+CONSOLE_CHANNEL(CC_PCHG,         "pchg")
 #endif
 #if defined(CONFIG_PWM) || defined(CONFIG_FANS)
 CONSOLE_CHANNEL(CC_PWM,          "pwm")

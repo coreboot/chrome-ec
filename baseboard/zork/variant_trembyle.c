@@ -347,11 +347,11 @@ void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 		break;
 
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 		break;
 
 	default:
@@ -418,12 +418,6 @@ static int board_ps8802_mux_set(const struct usb_mux *me,
 					PS8802_DPEQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
-
-		/* Enable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
-	} else {
-		/* Disable IN_HPD on the DB */
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
 	}
 
 	return rv;
@@ -472,6 +466,15 @@ static int board_ps8818_mux_set(const struct usb_mux *me,
 					PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
+
+		/* Set the RX input termination */
+		rv = ps8818_i2c_field_update8(me,
+					PS8818_REG_PAGE1,
+					PS8818_REG1_RX_PHY,
+					PS8818_RX_INPUT_TERM_MASK,
+					ZORK_PS8818_RX_INPUT_TERM);
+		if (rv)
+			return rv;
 	}
 
 	/* DP specific config */
@@ -486,10 +489,10 @@ static int board_ps8818_mux_set(const struct usb_mux *me,
 			return rv;
 
 		/* Enable IN_HPD on the DB */
-		gpio_or_ioex_set_level(PORT_TO_HPD(1), 1);
+		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 1);
 	} else {
 		/* Disable IN_HPD on the DB */
-		gpio_or_ioex_set_level(PORT_TO_HPD(1), 0);
+		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 0);
 	}
 
 	return rv;

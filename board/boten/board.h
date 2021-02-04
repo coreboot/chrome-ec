@@ -28,6 +28,9 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
 
+/* DAC for PSYS */
+#define CONFIG_DAC
+
 /* LED */
 #define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
@@ -38,6 +41,8 @@
 /* Sensors */
 #define CONFIG_ACCEL_LIS2DWL		/* Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
@@ -66,6 +71,9 @@
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_TCPC_LOW_POWER
+
+/* EC console commands */
+#define CONFIG_CMD_TCPC_DUMP
 
 /* Variant references the TCPCs to determine Vbus sourcing */
 #define CONFIG_USB_PD_5V_EN_CUSTOM

@@ -9,6 +9,7 @@
 #define __CROS_EC_USB_PD_TCPM_H
 
 #include <stdbool.h>
+#include "common.h"
 #include "ec_commands.h"
 #include "i2c.h"
 
@@ -47,29 +48,10 @@ enum tcpc_rp_value {
 	TYPEC_RP_RESERVED = 3,
 };
 
-enum tcpc_cc_polarity {
-	/*
-	 * _CCx: is used to indicate the polarity while not connected to
-	 * a Debug Accessory.  Only one CC line will assert a resistor and
-	 * the other will be open.
-	 */
-	POLARITY_CC1 = 0,
-	POLARITY_CC2 = 1,
-
-	/*
-	 * CCx_DTS is used to indicate the polarity while connected to a
-	 * SRC Debug Accessory.  Assert resistors on both lines.
-	 */
-	POLARITY_CC1_DTS = 2,
-	POLARITY_CC2_DTS = 3,
-
-	/*
-	 * The current TCPC code relies on these specific POLARITY values.
-	 * Adding in a check to verify if the list grows for any reason
-	 * that this will give a hint that other places need to be
-	 * adjusted.
-	 */
-	POLARITY_COUNT
+/* DRP (dual-role-power) setting */
+enum tcpc_drp {
+	TYPEC_NO_DRP = 0,
+	TYPEC_DRP = 1,
 };
 
 /**
@@ -104,10 +86,15 @@ enum tcpc_transmit_complete {
 	TCPC_TX_COMPLETE_FAILED =    2,
 };
 
-/* USB-C PD Vbus levels */
+/*
+ * USB-C PD Vbus levels
+ *
+ * Return true on Vbus check if Vbus is...
+ */
 enum vbus_level {
-	VBUS_SAFE0V,
-	VBUS_PRESENT,
+	VBUS_SAFE0V,	/* less than vSafe0V max */
+	VBUS_PRESENT,	/* at least vSafe5V min */
+	VBUS_REMOVED,	/* less than vSinkDisconnect max */
 };
 
 /**
@@ -247,15 +234,17 @@ struct tcpm_drv {
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	/**
-	 * Disable receive of SOP' and SOP'' messages. This is provided
+	 * Control receive of SOP' and SOP'' messages. This is provided
 	 * separately from set_vconn so that we can preemptively disable
-	 * receipt of SOP' messages during a VCONN swap.
+	 * receipt of SOP' messages during a VCONN swap, or disable during spans
+	 * when port partners may erroneously be sending cable messages.
 	 *
 	 * @param port Type-C port number
+	 * @param enable Enable SOP' and SOP'' messages
 	 *
 	 * @return EC_SUCCESS or error
 	 */
-	int (*sop_prime_disable)(int port);
+	int (*sop_prime_enable)(int port, bool enable);
 #endif
 
 	/**
@@ -345,6 +334,14 @@ struct tcpm_drv {
 	 * @param enable Debug Accessory enable or disable
 	 */
 	int (*debug_accessory)(int port, bool enable);
+
+	/**
+	 * Break debug connection, if TCPC requires specific commands to be run
+	 * in order to correctly exit a debug connection.
+	 *
+	 * @param port Type-C port number
+	 */
+	int (*debug_detach)(int port);
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	/**
@@ -449,6 +446,17 @@ struct tcpm_drv {
 	 */
 	 int (*handle_fault)(int port, int fault);
 
+	/**
+	 * Controls BIST Test Mode (or analogous functionality) in the TCPC and
+	 * associated behavior changes. Disables message Rx alerts while the
+	 * port is in Test Mode.
+	 *
+	 * @param port   USB-C port number
+	 * @param enable true to enter BIST Test Mode; false to exit
+	 * @return EC_SUCCESS or error code
+	 */
+	 enum ec_error_list (*set_bist_test_mode)(int port, bool enable);
+
 #ifdef CONFIG_CMD_TCPC_DUMP
 	/**
 	 * Dump TCPC registers
@@ -483,13 +491,6 @@ struct tcpc_config_t {
 	const struct tcpm_drv *drv;
 	/* See TCPC_FLAGS_* above */
 	uint32_t flags;
-#ifdef CONFIG_INTEL_VIRTUAL_MUX
-	/*
-	 * 0-3: Corresponding USB2 port number (1 ~ 15)
-	 * 4-7: Corresponding USB3 port number (1 ~ 15)
-	 */
-	uint8_t usb23;
-#endif
 };
 
 #ifndef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG

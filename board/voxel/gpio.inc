@@ -25,7 +25,7 @@ GPIO_INT(PG_EC_DSW_PWROK,      PIN(C, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PG_EC_ALL_SYS_PWRGD,  PIN(F, 4),  GPIO_INT_BOTH, power_signal_interrupt)
 
 /* Sensor Interrupts */
-GPIO_INT(EC_IMU_INT_L,         PIN(5, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V, bmi160_interrupt)
+GPIO_INT(EC_IMU_INT_L,         PIN(5, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V, motion_interrupt)
 GPIO(EC_ALS_RGB_INT_L,         PIN(D, 4), GPIO_INPUT | GPIO_PULL_UP)	/* unused */
 GPIO_INT(TABLET_MODE_L,        PIN(9, 5), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 /*
@@ -181,3 +181,6 @@ ALTERNATE(PIN_MASK(0, BIT(0) | BIT(1) | BIT(2)), 0, MODULE_PMU, 0)  /* GPIO00 = 
                                                                        GPIO01 = H1_EC_PWR_BTN_ODL
                                                                        GPIO02 = EC_RST_ODL */
 
+/* Temperature sensors */
+ALTERNATE(PIN_MASK(4, BIT(2) | BIT(4) | BIT(5)), 0, MODULE_ADC, 0) /* TEMP_SENSOR1,2,4 */
+ALTERNATE(PIN(F, 1), 0, MODULE_ADC, 0) /* TEMP_SENSOR3 */

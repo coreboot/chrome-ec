@@ -16,6 +16,9 @@
 #define PS8802_DEBUG 0
 #define PS8802_I2C_WAKE_DELAY 500
 
+#define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USB, format, ## args)
+
 int ps8802_i2c_read(const struct usb_mux *me, int page, int offset, int *data)
 {
 	int rv;
@@ -189,8 +192,26 @@ int ps8802_i2c_wake(const struct usb_mux *me)
 	return rv;
 }
 
+/*
+ * Setting operation mode to standby mode
+ */
+static int ps8802_enter_low_power_mode(const struct usb_mux *me)
+{
+	int rv;
+
+	rv = ps8802_i2c_write(me, PS8802_REG_PAGE2, PS8802_REG2_MODE,
+		  PS8802_MODE_STANDBY_MODE);
+
+	if (rv)
+		CPRINTS("C%d: PS8802: Failed to enter low power mode!",
+			me->usb_port);
+
+	return rv;
+}
+
 static int ps8802_init(const struct usb_mux *me)
 {
+	ps8802_enter_low_power_mode(me);
 	return EC_SUCCESS;
 }
 
@@ -272,4 +293,21 @@ const struct usb_mux_driver ps8802_usb_mux_driver = {
 	.init = ps8802_init,
 	.set = ps8802_set_mux,
 	.get = ps8802_get_mux,
+	.enter_low_power_mode = &ps8802_enter_low_power_mode,
 };
+
+/*
+ * If PS8802 I2c address was conflicted, change
+ * the I2c address in page 0x0A, offset 0xB0
+ * switch to 0x50 8-bit address
+ */
+int ps8802_chg_i2c_addr(int i2c_port)
+{
+	int rv;
+
+	rv = i2c_write8(i2c_port,
+			PS8802_P1_ADDR, PS8802_ADDR_CFG,
+			PS8802_I2C_ADDR_FLAGS_ALT);
+
+	return rv;
+}

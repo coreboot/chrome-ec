@@ -17,13 +17,16 @@
 #define CONFIG_BRINGUP
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
 #define CONFIG_USB_PD_DEBUG_LEVEL 3
-#define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_CMD_GPIO_EXTENDED
 #define CONFIG_CMD_POWERINDEBUG
 #define CONFIG_I2C_DEBUG
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (1024 * 1024)  /* 1MB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (1024 * 1024)  /* 1MB internal spi flash */
+
+/* Keyboard */
+#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_PWM_KBLIGHT
 
 /* BC 1.2 Charger */
 #if BOARD_REV >= TROGDOR_REV1
@@ -48,6 +51,10 @@
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
+
+/* GPIO alias */
+#define GPIO_AC_PRESENT GPIO_ACOK_OD
+#define GPIO_WP_L GPIO_EC_WP_ODL
 
 #ifndef __ASSEMBLER__
 

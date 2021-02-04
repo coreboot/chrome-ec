@@ -12,6 +12,10 @@
 #include "mock/usb_pd_dpm_mock.h"
 #include "memory.h"
 
+#ifndef TEST_BUILD
+#error "Mocks should only be in the test build."
+#endif
+
 struct mock_dpm_port_t dpm[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 void mock_dpm_reset(void)
@@ -36,6 +40,24 @@ void dpm_vdm_naked(int port, enum tcpm_transmit_type type, uint16_t svid,
 {
 }
 
+void dpm_set_mode_exit_request(int port)
+{
+}
+
 void dpm_run(int port)
 {
+}
+
+void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
+{
+}
+
+void dpm_remove_sink(int port)
+{
+}
+
+int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
+{
+	*src_pdo = pd_src_pdo;
+	return pd_src_pdo_cnt;
 }

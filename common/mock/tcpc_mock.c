@@ -8,12 +8,17 @@
 #include "console.h"
 #include "memory.h"
 #include "mock/tcpc_mock.h"
+#include "test_util.h"
 #include "tests/enum_strings.h"
 #include "timer.h"
 #include "usb_pd_tcpm.h"
 
 #ifndef CONFIG_COMMON_RUNTIME
 #define cprints(format, args...)
+#endif
+
+#ifndef TEST_BUILD
+#error "Mocks should only be in the test build."
 #endif
 
 /* Public API for controlling/inspecting this mock */
@@ -51,8 +56,17 @@ static bool mock_check_vbus_level(int port, enum vbus_level level)
 {
 	if (level == VBUS_PRESENT)
 		return mock_tcpc.vbus_level;
-	else
+	else if (level == VBUS_SAFE0V || level == VBUS_REMOVED)
 		return !mock_tcpc.vbus_level;
+
+	/*
+	 * Unknown vbus_level was added, force a failure.
+	 * Note that TCPC drivers and pd_check_vbus_level() implementations
+	 * should be carefully checked on new level additions in case they
+	 * need updated.
+	 */
+	ccprints("[TCPC] Unhandled Vbus check %d", level);
+	TEST_ASSERT(0);
 }
 
 static int mock_select_rp_value(int port, int rp)

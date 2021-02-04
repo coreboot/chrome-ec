@@ -67,6 +67,19 @@ static int select_input_port_update;
 #endif
 
 /* Charger parameters */
+#define CHARGER_NAME    BD9995X_CHARGER_NAME
+#define CHARGE_V_MAX    19200
+#define CHARGE_V_MIN    3072
+#define CHARGE_V_STEP   16
+#define CHARGE_I_MAX    16320
+#define CHARGE_I_MIN    128
+#define CHARGE_I_OFF    0
+#define CHARGE_I_STEP   64
+#define INPUT_I_MAX     16352
+#define INPUT_I_MIN     512
+#define INPUT_I_STEP    32
+
+/* Charger parameters */
 static const struct charger_info bd9995x_charger_info = {
 	.name         = CHARGER_NAME,
 	.voltage_max  = CHARGE_V_MAX,
@@ -601,8 +614,8 @@ static int bd9995x_ramp_max(int supplier, int sup_curr)
 
 /* chip specific interfaces */
 
-static enum ec_error_list bd9995x_set_input_current(int chgnum,
-						    int input_current)
+static enum ec_error_list bd9995x_set_input_current_limit(int chgnum,
+							  int input_current)
 {
 	int rv;
 
@@ -621,8 +634,8 @@ static enum ec_error_list bd9995x_set_input_current(int chgnum,
 				BD9995X_BAT_CHG_COMMAND);
 }
 
-static enum ec_error_list bd9995x_get_input_current(int chgnum,
-						    int *input_current)
+static enum ec_error_list bd9995x_get_input_current_limit(int chgnum,
+							  int *input_current)
 {
 	return ch_raw_read16(chgnum, BD9995X_CMD_CUR_ILIM_VAL, input_current,
 			     BD9995X_EXTENDED_COMMAND);
@@ -889,7 +902,7 @@ static void bd9995x_battery_charging_profile_settings(int chgnum)
 	const struct battery_info *bi = battery_get_info();
 
 	/* Input Current Limit Setting */
-	bd9995x_set_input_current(chgnum, CONFIG_CHARGER_INPUT_CURRENT);
+	bd9995x_set_input_current_limit(chgnum, CONFIG_CHARGER_INPUT_CURRENT);
 
 	/* Charge Termination Current Setting */
 	ch_raw_write16(chgnum, BD9995X_CMD_ITERM_SET, 0,
@@ -1718,8 +1731,8 @@ const struct charger_drv bd9995x_drv = {
 	.set_voltage = &bd9995x_set_voltage,
 	.discharge_on_ac = &bd9995x_discharge_on_ac,
 	.get_vbus_voltage = &bd9995x_get_vbus_voltage,
-	.set_input_current = &bd9995x_set_input_current,
-	.get_input_current = &bd9995x_get_input_current,
+	.set_input_current_limit = &bd9995x_set_input_current_limit,
+	.get_input_current_limit = &bd9995x_get_input_current_limit,
 	.manufacturer_id = &bd9995x_manufacturer_id,
 	.device_id = &bd9995x_device_id,
 	.get_option = &bd9995x_get_option,

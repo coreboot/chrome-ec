@@ -13,26 +13,11 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-#define CONFIG_MKBP_USE_GPIO
-
 #define RPM_DEVIATION 1
-
-/* Motion sensing drivers */
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_ACCEL_KX022
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
 #define CONFIG_FAN_RPM_CUSTOM
-#define CONFIG_TABLET_MODE
+
 #undef CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_COMMON
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
 #define CONFIG_KEYBOARD_FACTORY_TEST
 
@@ -40,6 +25,7 @@
 #define CONFIG_USB_MUX_PS8743
 #define CONFIG_USBC_RETIMER_TUSB544
 #define TUSB544_I2C_ADDR_FLAGS1 0x0F
+#define CONFIG_TUSB544_EQ_BY_REGISTER
 
 #define CONFIG_POWER_SIGNAL_RUNTIME_CONFIG
 
@@ -212,8 +198,6 @@ enum gpio_signal board_usbc_port_to_hpd_gpio(int port);
 extern const struct usb_mux usbc1_tusb544;
 extern const struct usb_mux usbc1_ps8743;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
-
-void hdmi_hpd_interrupt(enum ioex_signal signal);
 
 #ifdef CONFIG_KEYBOARD_FACTORY_TEST
 extern const int keyboard_factory_scan_pins[][2];

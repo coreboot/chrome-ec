@@ -193,7 +193,7 @@ int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
 
 		CPRINTS("I2C%d Addr:%02X bad status 0x%02x, SCL=%d, SDA=%d",
 			port,
-			I2C_GET_ADDR(slave_addr_flags),
+			I2C_STRIP_FLAGS(slave_addr_flags),
 			reg_mcs,
 			i2c_get_line_levels(port) & I2C_LINE_SCL_HIGH,
 			i2c_get_line_levels(port) & I2C_LINE_SDA_HIGH);
@@ -204,7 +204,7 @@ int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
 		/* Clock timeout or arbitration lost.  Reset port to clear. */
 		atomic_or(LM4_SYSTEM_SRI2C_ADDR, BIT(port));
 		clock_wait_cycles(3);
-		atomic_clear(LM4_SYSTEM_SRI2C_ADDR, BIT(port));
+		atomic_clear_bits(LM4_SYSTEM_SRI2C_ADDR, BIT(port));
 		clock_wait_cycles(3);
 
 		/* Restore settings */
@@ -219,7 +219,7 @@ int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
 	}
 
 	/* Set slave address for transmit */
-	LM4_I2C_MSA(port) = (I2C_GET_ADDR(slave_addr_flags) << 1) & 0xff;
+	LM4_I2C_MSA(port) = (I2C_STRIP_FLAGS(slave_addr_flags) << 1) & 0xff;
 
 	/* Enable interrupts */
 	pd->task_waiting = task_get_current();
@@ -393,7 +393,7 @@ static void handle_interrupt(int port)
 
 	/* If done doing work, wake up the task waiting for the transfer */
 	if (!i2c_do_work(port))
-		task_set_event(id, TASK_EVENT_I2C_IDLE, 0);
+		task_set_event(id, TASK_EVENT_I2C_IDLE);
 }
 
 void i2c0_interrupt(void) { handle_interrupt(0); }

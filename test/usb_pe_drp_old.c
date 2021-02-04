@@ -17,6 +17,7 @@
 #include "usb_prl_sm.h"
 #include "usb_sm_checks.h"
 #include "usb_tc_sm.h"
+#include "mock/usb_prl_mock.h"
 
 /**
  * STUB Section
@@ -79,6 +80,8 @@ test_static void setup_source(void)
 	task_wait_event(10 * MSEC);
 	pe_set_flag(PORT0, PE_FLAGS_VDM_SETUP_DONE);
 	pe_set_flag(PORT0, PE_FLAGS_EXPLICIT_CONTRACT);
+	/* As long as we're hacking our way to ready, clear any DPM requests */
+	pe_clr_dpm_requests(PORT0);
 	set_state_pe(PORT0, PE_SRC_READY);
 	task_wait_event(10 * MSEC);
 	/* At this point, the PE should be running in PE_SRC_Ready. */
@@ -93,6 +96,8 @@ test_static void setup_sink(void)
 	task_wait_event(10 * MSEC);
 	pe_set_flag(PORT0, PE_FLAGS_VDM_SETUP_DONE);
 	pe_set_flag(PORT0, PE_FLAGS_EXPLICIT_CONTRACT);
+	/* As long as we're hacking our way to ready, clear any DPM requests */
+	pe_clr_dpm_requests(PORT0);
 	set_state_pe(PORT0, PE_SNK_READY);
 	task_wait_event(10 * MSEC);
 	/* At this point, the PE should be running in PE_SNK_Ready. */
@@ -104,8 +109,8 @@ test_static void setup_sink(void)
 static int test_pe_frs(void)
 {
 	/*
-	 * TODO: This test should validate PE boundary API differences -- not
-	 * internal state changes.
+	 * TODO(b/173791979): This test should validate PE boundary API
+	 * differences -- not internal state changes.
 	 */
 
 	task_wait_event(10 * MSEC);
@@ -119,6 +124,7 @@ static int test_pe_frs(void)
 	tc_prs_src_snk_assert_rd(PORT0);
 	pe_set_flag(PORT0, PE_FLAGS_VDM_SETUP_DONE);
 	pe_set_flag(PORT0, PE_FLAGS_EXPLICIT_CONTRACT);
+	pe_clr_dpm_requests(PORT0);
 	set_state_pe(PORT0, PE_SNK_READY);
 	task_wait_event(10 * MSEC);
 	TEST_ASSERT(get_state_pe(PORT0) == PE_SNK_READY);
@@ -141,7 +147,7 @@ static int test_pe_frs(void)
 	 * Make sure that we sent FR_Swap
 	 */
 	task_wait_event(10 * MSEC);
-	TEST_ASSERT(fake_prl_get_last_sent_ctrl_msg(PORT0) == PD_CTRL_FR_SWAP);
+	TEST_ASSERT(mock_prl_get_last_sent_ctrl_msg(PORT0) == PD_CTRL_FR_SWAP);
 	TEST_ASSERT(get_state_pe(PORT0) == PE_PRS_SNK_SRC_SEND_SWAP);
 	TEST_ASSERT(pe_chk_flag(PORT0, PE_FLAGS_FAST_ROLE_SWAP_PATH));
 	pe_set_flag(PORT0, PE_FLAGS_TX_COMPLETE);
@@ -174,7 +180,7 @@ static int test_pe_frs(void)
 	task_wait_event(PD_POWER_SUPPLY_TURN_ON_DELAY);
 	TEST_ASSERT(get_state_pe(PORT0) == PE_PRS_SNK_SRC_SOURCE_ON);
 	TEST_ASSERT(pe_chk_flag(PORT0, PE_FLAGS_FAST_ROLE_SWAP_PATH));
-	TEST_ASSERT(fake_prl_get_last_sent_ctrl_msg(PORT0) == PD_CTRL_PS_RDY);
+	TEST_ASSERT(mock_prl_get_last_sent_ctrl_msg(PORT0) == PD_CTRL_PS_RDY);
 
 	/*
 	 * Fake the Transmit complete and this will bring us to Source Startup
@@ -202,7 +208,7 @@ static int test_snk_give_source_cap(void)
 
 	TEST_ASSERT(!pe_chk_flag(PORT0, PE_FLAGS_MSG_RECEIVED));
 	TEST_ASSERT(!pe_chk_flag(PORT0, PE_FLAGS_TX_COMPLETE));
-	TEST_EQ(fake_prl_get_last_sent_data_msg_type(PORT0),
+	TEST_EQ(mock_prl_get_last_sent_data_msg(PORT0),
 		PD_DATA_SOURCE_CAP, "%d");
 	TEST_EQ(get_state_pe(PORT0), PE_DR_SNK_GIVE_SOURCE_CAP, "%d");
 
@@ -238,12 +244,12 @@ test_static int test_extended_message_not_supported(void)
 	*(uint16_t *)rx_emsg[PORT0].buf =
 		PD_EXT_HEADER(0, 0, ARRAY_SIZE(rx_emsg[PORT0].buf)) & ~BIT(15);
 	pe_set_flag(PORT0, PE_FLAGS_MSG_RECEIVED);
-	fake_prl_clear_last_sent_ctrl_msg(PORT0);
+	mock_prl_clear_last_sent_msg(PORT0);
 	task_wait_event(10 * MSEC);
 
 	pe_set_flag(PORT0, PE_FLAGS_TX_COMPLETE);
 	task_wait_event(10 * MSEC);
-	TEST_EQ(fake_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
+	TEST_EQ(mock_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
 			"%d");
 	/* At this point, the PE should again be running in PE_SRC_Ready. */
 
@@ -257,12 +263,12 @@ test_static int test_extended_message_not_supported(void)
 	*(uint16_t *)rx_emsg[PORT0].buf =
 		PD_EXT_HEADER(0, 0, PD_MAX_EXTENDED_MSG_CHUNK_LEN);
 	pe_set_flag(PORT0, PE_FLAGS_MSG_RECEIVED);
-	fake_prl_clear_last_sent_ctrl_msg(PORT0);
+	mock_prl_clear_last_sent_msg(PORT0);
 	task_wait_event(10 * MSEC);
 
 	pe_set_flag(PORT0, PE_FLAGS_TX_COMPLETE);
 	task_wait_event(10 * MSEC);
-	TEST_EQ(fake_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
+	TEST_EQ(mock_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
 			"%d");
 	/* At this point, the PE should again be running in PE_SRC_Ready. */
 
@@ -276,20 +282,20 @@ test_static int test_extended_message_not_supported(void)
 	*(uint16_t *)rx_emsg[PORT0].buf =
 		PD_EXT_HEADER(0, 0, ARRAY_SIZE(rx_emsg[PORT0].buf));
 	pe_set_flag(PORT0, PE_FLAGS_MSG_RECEIVED);
-	fake_prl_clear_last_sent_ctrl_msg(PORT0);
+	mock_prl_clear_last_sent_msg(PORT0);
 	task_wait_event(10 * MSEC);
 	/*
 	 * The PE should stay in PE_SRC_Chunk_Received for
 	 * tChunkingNotSupported.
 	 */
 	task_wait_event(10 * MSEC);
-	TEST_NE(fake_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
+	TEST_NE(mock_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
 			"%d");
 
 	task_wait_event(PD_T_CHUNKING_NOT_SUPPORTED);
 	pe_set_flag(PORT0, PE_FLAGS_TX_COMPLETE);
 	task_wait_event(10 * MSEC);
-	TEST_EQ(fake_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
+	TEST_EQ(mock_prl_get_last_sent_ctrl_msg(PORT0), PD_CTRL_NOT_SUPPORTED,
 			"%d");
 	/* At this point, the PE should again be running in PE_SRC_Ready. */
 
@@ -327,7 +333,7 @@ test_static int test_prl_is_busy(enum pd_power_role pr)
 	prl_is_busy_flag = true;
 
 	/* Make a request to perform a Port Discovery */
-	pe_dpm_request(PORT0, DPM_REQUEST_PORT_DISCOVERY);
+	pd_dpm_request(PORT0, DPM_REQUEST_PORT_DISCOVERY);
 	task_wait_event(10 * MSEC);
 	task_wait_event(10 * MSEC);
 
@@ -373,12 +379,12 @@ static int test_send_caps_error(void)
 	 *  1) The Protocol Layer indicates that the Message has not been sent
 	 *     and we are presently not Connected
 	 */
-	fake_prl_clear_last_sent_ctrl_msg(PORT0);
+	mock_prl_clear_last_sent_msg(PORT0);
 	pe_set_flag(PORT0, PE_FLAGS_PROTOCOL_ERROR);
 	pe_clr_flag(PORT0, PE_FLAGS_PD_CONNECTION);
 	set_state_pe(PORT0, PE_SRC_SEND_CAPABILITIES);
 	task_wait_event(10 * MSEC);
-	TEST_EQ(fake_prl_get_last_sent_ctrl_msg(PORT0), 0, "%d");
+	TEST_EQ(mock_prl_get_last_sent_ctrl_msg(PORT0), 0, "%d");
 	TEST_EQ(get_state_pe(PORT0), PE_SRC_DISCOVERY, "%d");
 
 	/*
@@ -386,12 +392,12 @@ static int test_send_caps_error(void)
 	 *  1) The Protocol Layer indicates that the Message has not been sent
 	 *     and we are already Connected
 	 */
-	fake_prl_clear_last_sent_ctrl_msg(PORT0);
+	mock_prl_clear_last_sent_msg(PORT0);
 	pe_set_flag(PORT0, PE_FLAGS_PROTOCOL_ERROR);
 	pe_set_flag(PORT0, PE_FLAGS_PD_CONNECTION);
 	set_state_pe(PORT0, PE_SRC_SEND_CAPABILITIES);
 	task_wait_event(10 * MSEC);
-	TEST_EQ(fake_prl_get_last_sent_ctrl_msg(PORT0),
+	TEST_EQ(mock_prl_get_last_sent_ctrl_msg(PORT0),
 		PD_CTRL_SOFT_RESET, "%d");
 	TEST_EQ(get_state_pe(PORT0), PE_SEND_SOFT_RESET, "%d");
 

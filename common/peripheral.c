@@ -30,7 +30,7 @@ static enum ec_status hc_locate_chip(struct host_cmd_handler_args *args)
 #endif /* CONFIG_CROS_BOARD_INFO */
 		break;
 	case EC_CHIP_TYPE_TCPC:
-#if defined(CONFIG_USB_PD_PORT_MAX_COUNT) && !defined(CONFIG_USB_PD_TCPC)
+#if defined(CONFIG_USB_POWER_DELIVERY) && defined(CONFIG_USB_PD_PORT_MAX_COUNT) && !defined(CONFIG_USB_PD_TCPC)
 		if (params->index >= board_get_usb_pd_port_count())
 			return EC_RES_OVERFLOW;
 		resp->bus_type = tcpc_config[params->index].bus_type;
@@ -40,9 +40,6 @@ static enum ec_status hc_locate_chip(struct host_cmd_handler_args *args)
 			resp->i2c_info.addr_flags =
 				tcpc_config[params->index].i2c_info.addr_flags;
 		}
-#ifdef CONFIG_INTEL_VIRTUAL_MUX
-		resp->reserved = tcpc_config[params->index].usb23;
-#endif
 #else
 		return EC_RES_UNAVAILABLE;
 #endif /* CONFIG_USB_PD_PORT_MAX_COUNT */

@@ -11,8 +11,8 @@
 #include "fusb302.h"
 #include "task.h"
 #include "hooks.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
@@ -607,6 +607,24 @@ static int fusb302_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 	return 0;
 }
 
+__maybe_unused static int fusb302_tcpm_decode_sop_prime_enable(int port,
+								bool enable)
+{
+	int reg;
+
+	if (tcpc_read(port, TCPC_REG_CONTROL1, &reg))
+		return EC_ERROR_UNKNOWN;
+
+	if (enable)
+		reg |= (TCPC_REG_CONTROL1_ENSOP1 |
+				TCPC_REG_CONTROL1_ENSOP2);
+	else
+		reg &= ~(TCPC_REG_CONTROL1_ENSOP1 |
+			TCPC_REG_CONTROL1_ENSOP2);
+
+	return tcpc_write(port, TCPC_REG_CONTROL1, reg);
+}
+
 static int fusb302_tcpm_set_vconn(int port, int enable)
 {
 	/*
@@ -626,16 +644,13 @@ static int fusb302_tcpm_set_vconn(int port, int enable)
 		/* set to saved polarity */
 		tcpm_set_polarity(port, state[port].cc_polarity);
 
-#ifdef CONFIG_USB_PD_DECODE_SOP
-		if (state[port].rx_enable) {
-			if (tcpc_read(port, TCPC_REG_CONTROL1, &reg))
-				return EC_ERROR_UNKNOWN;
-
-			reg |= (TCPC_REG_CONTROL1_ENSOP1 |
-				TCPC_REG_CONTROL1_ENSOP2);
-			tcpc_write(port, TCPC_REG_CONTROL1, reg);
+		if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP)) {
+			if (state[port].rx_enable) {
+				if (fusb302_tcpm_decode_sop_prime_enable(port,
+									true))
+					return EC_ERROR_UNKNOWN;
+			}
 		}
-#endif
 	} else {
 
 		tcpc_read(port, TCPC_REG_SWITCHES0, &reg);
@@ -646,16 +661,13 @@ static int fusb302_tcpm_set_vconn(int port, int enable)
 
 		tcpc_write(port, TCPC_REG_SWITCHES0, reg);
 
-#ifdef CONFIG_USB_PD_DECODE_SOP
-		if (state[port].rx_enable) {
-			if (tcpc_read(port, TCPC_REG_CONTROL1, &reg))
-				return EC_ERROR_UNKNOWN;
-
-			reg &= ~(TCPC_REG_CONTROL1_ENSOP1 |
-				TCPC_REG_CONTROL1_ENSOP2);
-			tcpc_write(port, TCPC_REG_CONTROL1, reg);
+		if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP)) {
+			if (state[port].rx_enable) {
+				if (fusb302_tcpm_decode_sop_prime_enable(port,
+									false))
+					return EC_ERROR_UNKNOWN;
+			}
 		}
-#endif
 	}
 
 	return 0;
@@ -870,6 +882,30 @@ static int fusb302_tcpm_transmit(int port, enum tcpm_transmit_type type,
 		buf[buf_pos++] = FUSB302_TKN_SYNC2;
 
 		return fusb302_send_message(port, header, data, buf, buf_pos);
+	case TCPC_TX_SOP_PRIME:
+
+		/* put register address first for of burst tcpc write */
+		buf[buf_pos++] = TCPC_REG_FIFOS;
+
+		/* Write the SOP' Ordered Set into TX FIFO */
+		buf[buf_pos++] = FUSB302_TKN_SYNC1;
+		buf[buf_pos++] = FUSB302_TKN_SYNC1;
+		buf[buf_pos++] = FUSB302_TKN_SYNC3;
+		buf[buf_pos++] = FUSB302_TKN_SYNC3;
+
+		return fusb302_send_message(port, header, data, buf, buf_pos);
+	case TCPC_TX_SOP_PRIME_PRIME:
+
+		/* put register address first for of burst tcpc write */
+		buf[buf_pos++] = TCPC_REG_FIFOS;
+
+		/* Write the SOP'' Ordered Set into TX FIFO */
+		buf[buf_pos++] = FUSB302_TKN_SYNC1;
+		buf[buf_pos++] = FUSB302_TKN_SYNC3;
+		buf[buf_pos++] = FUSB302_TKN_SYNC1;
+		buf[buf_pos++] = FUSB302_TKN_SYNC3;
+
+		return fusb302_send_message(port, header, data, buf, buf_pos);
 	case TCPC_TX_HARD_RESET:
 		/* Simply hit the SEND_HARD_RESET bit */
 		tcpc_read(port, TCPC_REG_CONTROL3, &reg);
@@ -939,7 +975,7 @@ void fusb302_tcpc_alert(int port)
 
 	if (interrupt & TCPC_REG_INTERRUPT_BC_LVL) {
 		/* CC Status change */
-		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC);
 	}
 
 	if (interrupt & TCPC_REG_INTERRUPT_COLLISION) {
@@ -988,7 +1024,7 @@ void fusb302_tcpc_alert(int port)
 		/* bring FUSB302 out of reset */
 		fusb302_pd_reset(port);
 		task_set_event(PD_PORT_TO_TASK_ID(port),
-			PD_EVENT_RX_HARD_RESET, 0);
+			       PD_EVENT_RX_HARD_RESET);
 	}
 
 	if (interruptb & TCPC_REG_INTERRUPTB_GCRCSENT) {
@@ -1153,6 +1189,9 @@ const struct tcpm_drv fusb302_tcpm_drv = {
 	.select_rp_value	= &fusb302_tcpm_select_rp_value,
 	.set_cc			= &fusb302_tcpm_set_cc,
 	.set_polarity		= &fusb302_tcpm_set_polarity,
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	.sop_prime_enable	= &fusb302_tcpm_decode_sop_prime_enable,
+#endif
 	.set_vconn		= &fusb302_tcpm_set_vconn,
 	.set_msg_header		= &fusb302_tcpm_set_msg_header,
 	.set_rx_enable		= &fusb302_tcpm_set_rx_enable,

@@ -413,7 +413,7 @@ static uint32_t __wait_evt(int timeout_us, task_id_t resched)
 		ret = timer_arm(deadline, me);
 		ASSERT(ret == EC_SUCCESS);
 	}
-	while (!(evt = atomic_read_clear(&tsk->events))) {
+	while (!(evt = atomic_clear(&tsk->events))) {
 		/* Remove ourself and get the next task in the scheduler */
 		__schedule(1, resched);
 		resched = TASK_ID_IDLE;
@@ -421,12 +421,12 @@ static uint32_t __wait_evt(int timeout_us, task_id_t resched)
 	if (timeout_us > 0) {
 		timer_cancel(me);
 		/* Ensure timer event is clear, we no longer care about it */
-		atomic_clear(&tsk->events, TASK_EVENT_TIMER);
+		atomic_clear_bits(&tsk->events, TASK_EVENT_TIMER);
 	}
 	return evt;
 }
 
-uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait)
+uint32_t task_set_event(task_id_t tskid, uint32_t event)
 {
 	task_ *receiver = __task_id_to_ptr(tskid);
 	ASSERT(receiver);
@@ -443,10 +443,7 @@ uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait)
 			need_resched_or_profiling = 1;
 #endif
 	} else {
-		if (wait)
-			return __wait_evt(-1, tskid);
-		else
-			__schedule(0, tskid);
+		__schedule(0, tskid);
 	}
 
 	return 0;
@@ -500,7 +497,7 @@ void task_enable_task(task_id_t tskid)
 
 void task_disable_task(task_id_t tskid)
 {
-	atomic_clear(&tasks_enabled, BIT(tskid));
+	atomic_clear_bits(&tasks_enabled, BIT(tskid));
 
 	if (!in_interrupt_context() && tskid == task_get_current())
 		__schedule(0, 0);
@@ -578,7 +575,7 @@ static void deferred_task_reset(void)
 	while (deferred_reset_task_ids) {
 		task_id_t reset_id = __fls(deferred_reset_task_ids);
 
-		atomic_clear(&deferred_reset_task_ids, 1 << reset_id);
+		atomic_clear_bits(&deferred_reset_task_ids, 1 << reset_id);
 		do_task_reset(reset_id);
 	}
 }
@@ -758,15 +755,14 @@ int task_reset_cleanup(void)
 			 * itself back to the list of tasks to notify,
 			 * and we will notify it again.
 			 */
-			atomic_clear(state, 1 << notify_id);
+			atomic_clear_bits(state, 1 << notify_id);
 			/*
 			 * Skip any invalid ids set by tasks that
 			 * requested a non-blocking reset.
 			 */
 			if (notify_id < TASK_ID_COUNT)
 				task_set_event(notify_id,
-					       TASK_EVENT_RESET_DONE,
-					       0);
+					       TASK_EVENT_RESET_DONE);
 		}
 	}
 
@@ -895,7 +891,7 @@ void mutex_lock(struct mutex *mtx)
 			task_wait_event_mask(TASK_EVENT_MUTEX, 0);
 	} while (value);
 
-	atomic_clear(&mtx->waiters, id);
+	atomic_clear_bits(&mtx->waiters, id);
 }
 
 void mutex_unlock(struct mutex *mtx)
@@ -917,11 +913,11 @@ void mutex_unlock(struct mutex *mtx)
 		waiters &= ~BIT(id);
 
 		/* Somebody is waiting on the mutex */
-		task_set_event(id, TASK_EVENT_MUTEX, 0);
+		task_set_event(id, TASK_EVENT_MUTEX);
 	}
 
 	/* Ensure no event is remaining from mutex wake-up */
-	atomic_clear(&tsk->events, TASK_EVENT_MUTEX);
+	atomic_clear_bits(&tsk->events, TASK_EVENT_MUTEX);
 }
 
 void task_print_list(void)

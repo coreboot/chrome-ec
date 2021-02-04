@@ -56,6 +56,11 @@ __overridable enum pd_cable_plug tc_get_cable_plug(int port)
 	return PD_PLUG_FROM_DFP_UFP;
 }
 
+__overridable int pd_get_rev(int port, enum tcpm_transmit_type type)
+{
+	return IS_ENABLED(CONFIG_USB_PD_REV30) ? PD_REV30 : PD_REV20;
+}
+
 int tc_check_vconn_swap(int port)
 {
 	return 0;
@@ -253,10 +258,6 @@ void dpm_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
 {
 }
 
-void dp_teardown(int port)
-{
-}
-
 void dpm_vdm_naked(int port, enum tcpm_transmit_type type, uint16_t svid,
 		uint8_t vdm_cmd)
 {
@@ -272,6 +273,20 @@ void dpm_set_mode_exit_request(int port)
 
 void dpm_run(int port)
 {
+}
+
+void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
+{
+}
+
+void dpm_remove_sink(int port)
+{
+}
+
+int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
+{
+	*src_pdo = pd_src_pdo;
+	return pd_src_pdo_cnt;
 }
 
 static enum tcpc_rp_value lcl_rp;

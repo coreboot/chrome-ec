@@ -223,6 +223,58 @@ const struct pwm_t pwm_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /******************************************************************************/
+/* EC thermal management configuration */
+
+/*
+ * Tiger Lake specifies 100 C as maximum TDP temperature.  THRMTRIP# occurs at
+ * 130 C.  However, sensor is located next to DDR, so we need to use the lower
+ * DDR temperature limit (85 C)
+ */
+const static struct ec_thermal_config thermal_cpu = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+	},
+	.temp_fan_off = C_TO_K(35),
+	.temp_fan_max = C_TO_K(50),
+};
+
+/*
+ * Inductor limits - used for both charger and PP3300 regulator
+ *
+ * Need to use the lower of the charger IC, PP3300 regulator, and the inductors
+ *
+ * Charger max recommended temperature 100C, max absolute temperature 125C
+ * PP3300 regulator: operating range -40 C to 145 C
+ *
+ * Inductors: limit of 125c
+ * PCB: limit is 80c
+ */
+const static struct ec_thermal_config thermal_inductor = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+	},
+	.temp_fan_off = C_TO_K(40),
+	.temp_fan_max = C_TO_K(55),
+};
+
+
+struct ec_thermal_config thermal_params[] = {
+	[TEMP_SENSOR_1_CHARGER]			= thermal_inductor,
+	[TEMP_SENSOR_2_PP3300_REGULATOR]	= thermal_inductor,
+	[TEMP_SENSOR_3_DDR_SOC]			= thermal_cpu,
+	[TEMP_SENSOR_4_FAN]			= thermal_cpu,
+};
+BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+/******************************************************************************/
 void halvor_tcpc_alert_event(enum gpio_signal signal)
 {
 	int port = -1;
@@ -266,13 +318,13 @@ void halvor_bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 		break;
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 		break;
 	case GPIO_USB_C2_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P2, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P2, USB_CHG_EVENT_BC12);
 		break;
 
 	default:
@@ -340,7 +392,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_0_USB2_NUM | (USBC_PORT_0_USB3_NUM << 4),
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -349,7 +400,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 	},
 	[USBC_PORT_C2] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -358,7 +408,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_2_USB2_NUM | (USBC_PORT_2_USB3_NUM << 4),
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -366,42 +415,43 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc0_usb4_db_retimer = {
+struct usb_mux usbc0_tcss_usb_mux = {
 	.usb_port = USBC_PORT_C0,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
 };
-struct usb_mux usbc1_usb4_db_retimer = {
+struct usb_mux usbc1_tcss_usb_mux = {
 	.usb_port = USBC_PORT_C1,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
 };
-struct usb_mux usbc2_usb4_db_retimer = {
+struct usb_mux usbc2_tcss_usb_mux = {
 	.usb_port = USBC_PORT_C2,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
 };
+
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc0_usb4_db_retimer,
+		.next_mux = &usbc0_tcss_usb_mux,
+		.driver = &bb_usb_retimer,
+		.i2c_port = I2C_PORT_USB_1_MIX,
+		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb4_db_retimer,
+		.next_mux = &usbc1_tcss_usb_mux,
+		.driver = &bb_usb_retimer,
+		.i2c_port = I2C_PORT_USB_1_MIX,
+		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 	},
 	[USBC_PORT_C2] = {
 		.usb_port = USBC_PORT_C2,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc2_usb4_db_retimer,
+		.next_mux = &usbc2_tcss_usb_mux,
+		.driver = &bb_usb_retimer,
+		.i2c_port = I2C_PORT_USB_1_MIX,
+		.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);

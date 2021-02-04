@@ -13,7 +13,7 @@
  * The sensor stack is generating a lot of activity.
  * They can be enabled through the console command 'chan'.
  */
-#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_HOSTCMD)))
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_HOSTCMD)))
 
 /* NPCX7 config */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
@@ -26,7 +26,7 @@
 
 /* EC Modules */
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_VIRTUAL_BATTERY
 #define CONFIG_I2C_PASSTHRU_RESTRICTED
 #define CONFIG_LED_COMMON
@@ -36,7 +36,6 @@
 #define CONFIG_FPU
 #define CONFIG_PWM
 #define CONFIG_PWM_DISPLIGHT
-#define CONFIG_PWM_KBLIGHT
 
 #define CONFIG_VBOOT_HASH
 
@@ -59,6 +58,18 @@
 #define CONFIG_LID_SWITCH
 #define CONFIG_EXTPOWER_GPIO
 
+/*
+ * On power-on, H1 releases the EC from reset but then quickly asserts and
+ * releases the reset a second time. This means the EC sees 2 resets:
+ * (1) power-on reset, (2) reset-pin reset. This config will
+ * allow the second reset to be treated as a power-on.
+ */
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
+
+/* Increase console output buffer since we have the RAM available. */
+#undef CONFIG_UART_TX_BUF_SIZE
+#define CONFIG_UART_TX_BUF_SIZE 4096
+
 /* Battery */
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_PRESENT_GPIO GPIO_BATT_PRES_ODL
@@ -68,6 +79,7 @@
 #define CONFIG_CHARGER
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGER_ISL9238
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
 #define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_USB_CHARGER
 #define CONFIG_CMD_CHARGER_ADC_AMON_BMON
@@ -77,7 +89,7 @@
 
 #define CONFIG_CHARGER_INPUT_CURRENT 512
 #define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 2
-#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 7500
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 10000
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 
@@ -102,7 +114,6 @@
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_CMD_TCPC_DUMP
@@ -110,6 +121,7 @@
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #define CONFIG_USB_PD_5V_EN_CUSTOM
 #define CONFIG_USBC_SS_MUX
+#define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 
@@ -130,9 +142,8 @@
 /* PD */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY   30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY  250000 /* us */
-#define PD_VCONN_SWAP_DELAY             5000 /* us */
 
-#define PD_OPERATING_POWER_MW   15000
+#define PD_OPERATING_POWER_MW   10000
 #define PD_MAX_POWER_MW         ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
 #define PD_MAX_CURRENT_MA       3000
 #define PD_MAX_VOLTAGE_MV       20000
@@ -145,9 +156,7 @@
 #define CONFIG_POWER_PP5000_CONTROL
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define CONFIG_POWER_SLEEP_FAILURE_DETECTION
-
-/* NPCX Features */
-#define CONFIG_HIBERNATE_PSL
+#define CONFIG_CMD_AP_RESET_LOG
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -155,11 +164,9 @@
  * then redefined here to so it's more clear which signal is being used for
  * which purpose.
  */
-#define GPIO_AC_PRESENT		GPIO_ACOK_OD
 #define GPIO_POWER_BUTTON_L	GPIO_EC_PWR_BTN_ODL
 #define GPIO_VOLUME_DOWN_L	GPIO_EC_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L	GPIO_EC_VOLUP_BTN_ODL
-#define GPIO_WP_L		GPIO_EC_WP_ODL
 #define GPIO_LID_OPEN		GPIO_LID_OPEN_EC
 #define GPIO_SHI_CS_L		GPIO_AP_EC_SPI_CS_L
 #define GPIO_ENTERING_RW	GPIO_EC_ENTERING_RW
@@ -179,8 +186,12 @@
 #define I2C_PORT_POWER   NPCX_I2C_PORT0_0
 #define I2C_PORT_TCPC0   NPCX_I2C_PORT1_0
 #define I2C_PORT_TCPC1   NPCX_I2C_PORT2_0
+#define I2C_PORT_WLC     NPCX_I2C_PORT3_0
 #define I2C_PORT_EEPROM  NPCX_I2C_PORT5_0
 #define I2C_PORT_SENSOR  NPCX_I2C_PORT7_0
+
+/* UART */
+#define CONFIG_CMD_CHARGEN
 
 /* Define the host events which are allowed to wake AP up from S3 */
 #define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
@@ -189,20 +200,26 @@
 		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_CONNECTED) | \
 		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_DISCONNECTED) | \
 		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_RTC) | \
-		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE))
+		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE)) | \
+		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_DEVICE)
 
 /* And the MKBP events */
+#ifdef HAS_TASK_KEYSCAN
 #define CONFIG_MKBP_EVENT_WAKEUP_MASK \
 		(BIT(EC_MKBP_EVENT_KEY_MATRIX) | \
 		 BIT(EC_MKBP_EVENT_HOST_EVENT) | \
 		 BIT(EC_MKBP_EVENT_SENSOR_FIFO))
+#else
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK \
+		(BIT(EC_MKBP_EVENT_HOST_EVENT) | \
+		 BIT(EC_MKBP_EVENT_SENSOR_FIFO))
+#endif
 
 #ifndef __ASSEMBLER__
 
 enum power_signal {
 	SC7180_AP_RST_ASSERTED = 0,
 	SC7180_PS_HOLD,
-	SC7180_PMIC_FAULT_L,
 	SC7180_POWER_GOOD,
 	SC7180_WARM_RESET,
 	SC7180_AP_SUSPEND,

@@ -6,6 +6,7 @@
 #include "battery_smart.h"
 #include "button.h"
 #include "cros_board_info.h"
+#include "charge_state.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
@@ -29,6 +30,8 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
+#include "temp_sensor.h"
+#include "thermal.h"
 #include "usb_charge.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
@@ -434,11 +437,11 @@ void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 		break;
 
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 		break;
 
 	default:
@@ -519,4 +522,113 @@ BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
 int usb_port_enable[USBA_PORT_COUNT] = {
 	IOEX_EN_USB_A0_5V,
 	IOEX_EN_USB_A1_5V_DB,
+};
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ * The connector has 24 pins total, and there is no pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+		{0, 5}, {1, 1}, {1, 0}, {0, 6}, {0, 7},
+		{1, 4}, {1, 3}, {1, 6}, {1, 7}, {3, 1},
+		{2, 0}, {1, 5}, {2, 6}, {2, 7}, {2, 1},
+		{2, 4}, {2, 5}, {1, 2}, {2, 3}, {2, 2},
+		{3, 0}, {-1, -1}, {-1, -1}, {-1, -1},
+};
+const int keyboard_factory_scan_pins_used =
+			ARRAY_SIZE(keyboard_factory_scan_pins);
+#endif
+
+#define CHARGING_CURRENT_500mA 500
+
+int charger_profile_override(struct charge_state_data *curr)
+{
+	static int thermal_sensor_temp;
+	static int prev_thermal_sensor_temp;
+	static int limit_charge;
+	static int limit_usbc_power;
+	static int limit_usbc_power_backup;
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		return 0;
+
+	temp_sensor_read(TEMP_SENSOR_CHARGER, &thermal_sensor_temp);
+
+	if (thermal_sensor_temp > prev_thermal_sensor_temp) {
+		if (thermal_sensor_temp > C_TO_K(56)) {
+			if (curr->state == ST_CHARGE)
+				limit_charge = 1;
+
+			limit_usbc_power = 1;
+		}
+	} else if (thermal_sensor_temp < prev_thermal_sensor_temp) {
+		if (thermal_sensor_temp < C_TO_K(53)) {
+			if (curr->state == ST_CHARGE)
+				limit_charge = 0;
+
+			limit_usbc_power = 0;
+		}
+	}
+
+	if (limit_charge)
+		curr->requested_current = CHARGING_CURRENT_500mA;
+	else
+		curr->requested_current = curr->batt.desired_current;
+
+	if (limit_usbc_power != limit_usbc_power_backup) {
+		if (limit_usbc_power == 1)
+			typec_select_src_current_limit_rp(0, TYPEC_RP_1A5);
+		else
+			typec_select_src_current_limit_rp(0, TYPEC_RP_3A0);
+
+		limit_usbc_power_backup = limit_usbc_power;
+	}
+
+	prev_thermal_sensor_temp = thermal_sensor_temp;
+
+	return 0;
+}
+
+enum ec_status charger_profile_override_get_param(uint32_t param,
+							uint32_t *value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+enum ec_status charger_profile_override_set_param(uint32_t param,
+							uint32_t value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+__override struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
+	[TEMP_SENSOR_CHARGER] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(56),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(53),
+		}
+	},
+	[TEMP_SENSOR_SOC] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(77),
+		}
+	},
+	[TEMP_SENSOR_CPU] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(83),
+		}
+	},
 };

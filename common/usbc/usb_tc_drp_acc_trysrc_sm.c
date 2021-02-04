@@ -10,7 +10,7 @@
 #include "hooks.h"
 #include "system.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
@@ -19,6 +19,7 @@
 #include "usb_prl_sm.h"
 #include "usb_sm.h"
 #include "usb_tc_sm.h"
+#include "usbc_ocp.h"
 #include "usbc_ppc.h"
 #include "vboot.h"
 
@@ -59,16 +60,20 @@
 #undef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
 
 #ifdef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
-	void print_flag(int set_or_clear, int flag);
-	#define TC_SET_FLAG(port, flag) do { \
-		print_flag(1, flag); atomic_or(&tc[port].flags, (flag)); \
+void print_flag(int port, int set_or_clear, int flag);
+#define TC_SET_FLAG(port, flag)                     \
+	do {                                        \
+		print_flag(port, 1, flag);          \
+		atomic_or(&tc[port].flags, (flag)); \
 	} while (0)
-	#define TC_CLR_FLAG(port, flag) do { \
-		print_flag(0, flag); atomic_clear(&tc[port].flags, (flag)); \
+#define TC_CLR_FLAG(port, flag)                             \
+	do {                                                \
+		print_flag(port, 0, flag);                  \
+		atomic_clear_bits(&tc[port].flags, (flag)); \
 	} while (0)
 #else
-	#define TC_SET_FLAG(port, flag) atomic_or(&tc[port].flags, (flag))
-	#define TC_CLR_FLAG(port, flag) atomic_clear(&tc[port].flags, (flag))
+#define TC_SET_FLAG(port, flag) atomic_or(&tc[port].flags, (flag))
+#define TC_CLR_FLAG(port, flag) atomic_clear_bits(&tc[port].flags, (flag))
 #endif
 #define TC_CHK_FLAG(port, flag) (tc[port].flags & (flag))
 
@@ -97,32 +102,31 @@
 #define TC_FLAGS_REQUEST_DR_SWAP        BIT(10)
 /* Flag to note request to power off sink */
 #define TC_FLAGS_POWER_OFF_SNK          BIT(11)
-/* Flag to note port partner has unconstrained power */
-#define TC_FLAGS_PARTNER_UNCONSTRAINED  BIT(12)
-/* Flag to note port partner is Dual Role Data */
-#define TC_FLAGS_PARTNER_DR_DATA        BIT(13)
-/* Flag to note port partner is Dual Role Power */
-#define TC_FLAGS_PARTNER_DR_POWER       BIT(14)
 /* Flag to note port partner is Power Delivery capable */
-#define TC_FLAGS_PARTNER_PD_CAPABLE     BIT(15)
+#define TC_FLAGS_PARTNER_PD_CAPABLE     BIT(12)
 /* Flag to note hard reset has been requested */
-#define TC_FLAGS_HARD_RESET_REQUESTED   BIT(16)
-/* Flag to note port partner is USB comms capable */
-#define TC_FLAGS_PARTNER_USB_COMM       BIT(17)
+#define TC_FLAGS_HARD_RESET_REQUESTED   BIT(13)
 /* Flag to note we are currently performing PR Swap */
-#define TC_FLAGS_PR_SWAP_IN_PROGRESS    BIT(18)
+#define TC_FLAGS_PR_SWAP_IN_PROGRESS    BIT(14)
 /* Flag to note we are performing Discover Identity */
-#define TC_FLAGS_DISC_IDENT_IN_PROGRESS BIT(19)
+#define TC_FLAGS_DISC_IDENT_IN_PROGRESS BIT(15)
 /* Flag to note we should check for connection */
-#define TC_FLAGS_CHECK_CONNECTION       BIT(20)
-/* Flag to note pd_set_suspend SUSPEND state */
-#define TC_FLAGS_SUSPEND                BIT(21)
+#define TC_FLAGS_CHECK_CONNECTION       BIT(16)
+/* Flag to note request from pd_set_suspend to enter TC_DISABLED state */
+#define TC_FLAGS_REQUEST_SUSPEND        BIT(17)
+/* Flag to note we are in TC_DISABLED state */
+#define TC_FLAGS_SUSPENDED              BIT(18)
+/* Flag to indicate the port current limit has changed */
+#define TC_FLAGS_UPDATE_CURRENT		BIT(19)
+/* Flag to indicate USB mux should be updated */
+#define TC_FLAGS_UPDATE_USB_MUX		BIT(20)
 
-/*
- * Clear all flags except TC_FLAGS_LPM_ENGAGED and TC_FLAGS_SUSPEND.
- */
-#define CLR_ALL_BUT_LPM_FLAGS(port) TC_CLR_FLAG(port, \
-	~(TC_FLAGS_LPM_ENGAGED | TC_FLAGS_SUSPEND))
+/* For checking flag_bit_names[] array */
+#define TC_FLAGS_COUNT			21
+
+/* On disconnect, clear most of the flags. */
+#define CLR_FLAGS_ON_DISCONNECT(port) TC_CLR_FLAG(port, \
+	~(TC_FLAGS_LPM_ENGAGED | TC_FLAGS_REQUEST_SUSPEND | TC_FLAGS_SUSPENDED))
 
 /* 100 ms is enough time for any TCPC transaction to complete. */
 #define PD_LPM_DEBOUNCE_US (100 * MSEC)
@@ -182,6 +186,8 @@ enum usb_tc_state {
 	TC_LOW_POWER_MODE,
 	TC_CT_UNATTACHED_SNK,
 	TC_CT_ATTACHED_SNK,
+
+	TC_STATE_COUNT,
 };
 /* Forward declare the full list of states. This is indexed by usb_tc_state */
 static const struct usb_state tc_states[];
@@ -234,9 +240,9 @@ GEN_NOT_SUPPORTED(TC_CT_ATTACHED_SNK);
 #define IS_ATTACHED_SNK(port) (get_state_tc(port) == TC_ATTACHED_SNK)
 
 
-#ifdef USB_PD_DEBUG_LABELS
 /* List of human readable state names for console debugging */
-static const char * const tc_state_names[] = {
+__maybe_unused static __const_data const char * const tc_state_names[] = {
+#ifdef USB_PD_DEBUG_LABELS
 	[TC_DISABLED] = "Disabled",
 	[TC_ERROR_RECOVERY] = "ErrorRecovery",
 	[TC_UNATTACHED_SNK] = "Unattached.SNK",
@@ -261,14 +267,10 @@ static const char * const tc_state_names[] = {
 	[TC_CC_OPEN] = "SS:CC_OPEN",
 	[TC_CC_RD] = "SS:CC_RD",
 	[TC_CC_RP] = "SS:CC_RP",
-};
-#else
-/*
- * Reference so IS_ENABLED section below that references the names
- * will compile and the optimizer will remove it.
- */
-extern const char **tc_state_names;
+
+	[TC_STATE_COUNT] = "",
 #endif
+};
 
 /* Debug log level - higher number == more log */
 #ifdef CONFIG_USB_PD_DEBUG_LEVEL
@@ -296,17 +298,17 @@ static struct bit_name flag_bit_names[] = {
 	{ TC_FLAGS_REQUEST_PR_SWAP, "REQUEST_PR_SWAP" },
 	{ TC_FLAGS_REQUEST_DR_SWAP, "REQUEST_DR_SWAP" },
 	{ TC_FLAGS_POWER_OFF_SNK, "POWER_OFF_SNK" },
-	{ TC_FLAGS_PARTNER_UNCONSTRAINED, "PARTNER_UNCONSTRAINED" },
-	{ TC_FLAGS_PARTNER_DR_DATA, "PARTNER_DR_DATA" },
-	{ TC_FLAGS_PARTNER_DR_POWER, "PARTNER_DR_POWER" },
 	{ TC_FLAGS_PARTNER_PD_CAPABLE, "PARTNER_PD_CAPABLE" },
 	{ TC_FLAGS_HARD_RESET_REQUESTED, "HARD_RESET_REQUESTED" },
-	{ TC_FLAGS_PARTNER_USB_COMM, "PARTNER_USB_COMM" },
 	{ TC_FLAGS_PR_SWAP_IN_PROGRESS, "PR_SWAP_IN_PROGRESS" },
 	{ TC_FLAGS_DISC_IDENT_IN_PROGRESS, "DISC_IDENT_IN_PROGRESS" },
 	{ TC_FLAGS_CHECK_CONNECTION, "CHECK_CONNECTION" },
-	{ TC_FLAGS_SUSPEND, "SUSPEND" },
+	{ TC_FLAGS_REQUEST_SUSPEND, "REQUEST_SUSPEND" },
+	{ TC_FLAGS_SUSPENDED, "SUSPENDED" },
+	{ TC_FLAGS_UPDATE_CURRENT, "UPDATE_CURRENT" },
+	{ TC_FLAGS_UPDATE_USB_MUX, "UPDATE_USB_MUX" },
 };
+BUILD_ASSERT(ARRAY_SIZE(flag_bit_names) == TC_FLAGS_COUNT);
 
 static struct bit_name event_bit_names[] = {
 	{ TASK_EVENT_SYSJUMP_READY, "SYSJUMP_READY" },
@@ -331,12 +333,12 @@ static struct bit_name event_bit_names[] = {
 	{ PD_EVENT_SYSJUMP, "SYSJUMP" },
 };
 
-static void print_bits(const char *desc, int value,
+static void print_bits(int port, const char *desc, int value,
 		       struct bit_name *names, int names_size)
 {
 	int i;
 
-	CPRINTF("%s 0x%x : ", desc, value);
+	CPRINTF("C%d: %s 0x%x : ", port, desc, value);
 	for (i = 0; i < names_size; i++) {
 		if (value & names[i].value)
 			CPRINTF("%s | ", names[i].name);
@@ -347,15 +349,16 @@ static void print_bits(const char *desc, int value,
 	CPRINTF("\n");
 }
 
-void print_flag(int set_or_clear, int flag)
+void print_flag(int port, int set_or_clear, int flag)
 {
-	print_bits(set_or_clear ? "Set" : "Clr", flag, flag_bit_names,
+	print_bits(port, set_or_clear ? "Set" : "Clr", flag, flag_bit_names,
 		   ARRAY_SIZE(flag_bit_names));
 }
 #endif /* DEBUG_PRINT_FLAG_AND_EVENT_NAMES */
 
-/* Generate a compiler error if invalid states are referenced */
 #ifndef CONFIG_USB_PD_TRY_SRC
+extern int TC_TRY_SRC_UNDEFINED;
+extern int TC_TRY_WAIT_SNK_UNDEFINED;
 #define TC_TRY_SRC	TC_TRY_SRC_UNDEFINED
 #define TC_TRY_WAIT_SNK	TC_TRY_WAIT_SNK_UNDEFINED
 #endif
@@ -446,9 +449,7 @@ static __maybe_unused int reset_device_and_notify(int port);
 static __maybe_unused void check_drp_connection(const int port);
 static void sink_power_sub_states(int port);
 
-#ifdef CONFIG_POWER_COMMON
-static void handle_new_power_state(int port);
-#endif /* CONFIG_POWER_COMMON */
+__maybe_unused static void handle_new_power_state(int port);
 
 static void pd_update_dual_role_config(int port);
 
@@ -456,19 +457,19 @@ static void pd_update_dual_role_config(int port);
 static void set_state_tc(const int port, const enum usb_tc_state new_state);
 test_export_static enum usb_tc_state get_state_tc(const int port);
 
-#ifdef CONFIG_USB_PD_TRY_SRC
 /* Enable variable for Try.SRC states */
 static uint32_t pd_try_src;
 static volatile enum try_src_override_t pd_try_src_override;
 static void pd_update_try_source(void);
-#endif
 
 static void sink_stop_drawing_current(int port);
 
-static bool is_try_src_enabled(int port)
+__maybe_unused static bool is_try_src_enabled(int port)
 {
-	return IS_ENABLED(CONFIG_USB_PD_TRY_SRC) &&
-		((pd_try_src_override == TRY_SRC_OVERRIDE_ON) ||
+	if (!IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+		assert(0);
+
+	return ((pd_try_src_override == TRY_SRC_OVERRIDE_ON) ||
 		(pd_try_src_override == TRY_SRC_NO_OVERRIDE && pd_try_src));
 }
 
@@ -495,24 +496,54 @@ void pd_execute_hard_reset(int port)
 	/* DO NOTHING */
 }
 
-void pd_set_vbus_discharge(int port, int enable)
+__overridable void pd_set_vbus_discharge(int port, int enable)
 {
 	/* DO NOTHING */
-}
-
-uint16_t pd_get_identity_vid(int port)
-{
-	/* DO NOTHING */
-	return 0;
 }
 
 #endif /* !CONFIG_USB_PRL_SM */
+
+#ifndef CONFIG_USB_PE_SM
+
+/*
+ * These pd_ functions are implemented in the PE layer
+ */
+const uint32_t * const pd_get_src_caps(int port)
+{
+	return NULL;
+}
+
+uint8_t pd_get_src_cap_cnt(int port)
+{
+	return 0;
+}
+
+const uint32_t * const pd_get_snk_caps(int port)
+{
+	return NULL;
+}
+
+uint8_t pd_get_snk_cap_cnt(int port)
+{
+	return 0;
+}
+
+void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
+{
+}
+
+int pd_get_rev(int port, enum tcpm_transmit_type type)
+{
+	return PD_REV30;
+}
+
+#endif /* !CONFIG_USB_PR_SM */
 
 void pd_update_contract(int port)
 {
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
 		if (IS_ATTACHED_SRC(port))
-			pe_dpm_request(port, DPM_REQUEST_SRC_CAP_CHANGE);
+			pd_dpm_request(port, DPM_REQUEST_SRC_CAP_CHANGE);
 	}
 }
 
@@ -522,9 +553,9 @@ void pd_request_source_voltage(int port, int mv)
 		pd_set_max_voltage(mv);
 
 		if (IS_ATTACHED_SNK(port))
-			pe_dpm_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
+			pd_dpm_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
 		else
-			pe_dpm_request(port, DPM_REQUEST_PR_SWAP);
+			pd_dpm_request(port, DPM_REQUEST_PR_SWAP);
 
 		task_wake(PD_PORT_TO_TASK_ID(port));
 	}
@@ -537,7 +568,7 @@ void pd_set_external_voltage_limit(int port, int mv)
 
 		/* Must be in Attached.SNK when this function is called */
 		if (get_state_tc(port) == TC_ATTACHED_SNK)
-			pe_dpm_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
+			pd_dpm_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
 
 		task_wake(PD_PORT_TO_TASK_ID(port));
 	}
@@ -548,7 +579,7 @@ void pd_set_new_power_request(int port)
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
 		/* Must be in Attached.SNK when this function is called */
 		if (get_state_tc(port) == TC_ATTACHED_SNK)
-			pe_dpm_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
+			pd_dpm_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
 	}
 }
 
@@ -579,6 +610,26 @@ void tc_request_power_swap(int port)
 	}
 }
 
+/* Flag to indicate PD comm is disabled on init */
+static int pd_disabled_on_init;
+
+static void pd_update_pd_comm(void)
+{
+	int i;
+
+	/*
+	 * Some batteries take much longer time to report its SOC.
+	 * The init function disabled PD comm on startup. Need this
+	 * hook to enable PD comm when the battery level is enough.
+	 */
+	if (pd_disabled_on_init && pd_is_battery_capable()) {
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+			pd_comm_enable(i, 1);
+		pd_disabled_on_init = 0;
+	}
+}
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, pd_update_pd_comm, HOOK_PRIO_DEFAULT);
+
 static bool pd_comm_allowed_by_policy(void)
 {
 	if (system_is_in_rw())
@@ -592,10 +643,15 @@ static bool pd_comm_allowed_by_policy(void)
 	 * when sysjump to RW that makes the device brownout on the dead-battery
 	 * case. Disable PD for this special case as a workaround.
 	 */
-	if (IS_ENABLED(CONFIG_SYSTEM_UNLOCKED) &&
-	    (IS_ENABLED(CONFIG_VBOOT_EFS2) ||
-	     usb_get_battery_soc() >= CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC))
-		return true;
+	if (!system_is_locked()) {
+		if (IS_ENABLED(CONFIG_VBOOT_EFS2))
+			return true;
+
+		if (pd_is_battery_capable())
+			return true;
+
+		pd_disabled_on_init = 1;
+	}
 
 	return false;
 }
@@ -603,7 +659,8 @@ static bool pd_comm_allowed_by_policy(void)
 static void tc_policy_pd_enable(int port, int en)
 {
 	if (en)
-		atomic_clear(&tc[port].pd_disabled_mask, PD_DISABLED_BY_POLICY);
+		atomic_clear_bits(&tc[port].pd_disabled_mask,
+				  PD_DISABLED_BY_POLICY);
 	else
 		atomic_or(&tc[port].pd_disabled_mask, PD_DISABLED_BY_POLICY);
 
@@ -613,20 +670,37 @@ static void tc_policy_pd_enable(int port, int en)
 static void tc_enable_pd(int port, int en)
 {
 	if (en)
-		atomic_clear(&tc[port].pd_disabled_mask,
-						PD_DISABLED_NO_CONNECTION);
+		atomic_clear_bits(&tc[port].pd_disabled_mask,
+				  PD_DISABLED_NO_CONNECTION);
 	else
 		atomic_or(&tc[port].pd_disabled_mask,
-						PD_DISABLED_NO_CONNECTION);
-
+			  PD_DISABLED_NO_CONNECTION);
 }
 
-static void tc_enable_try_src(int en)
+__maybe_unused static void tc_enable_try_src(int en)
 {
+	if (!IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+		assert(0);
+
 	if (en)
 		atomic_or(&pd_try_src, 1);
 	else
-		atomic_clear(&pd_try_src, 1);
+		atomic_clear_bits(&pd_try_src, 1);
+}
+
+/*
+ * Exit all modes due to a detach event
+ * Note: this skips the ExitMode VDM steps in the PE because it is assumed the
+ * partner is not present to receive them, and the PE will no longer be running.
+ */
+static void tc_set_modes_exit(int port)
+{
+	if (IS_ENABLED(CONFIG_USB_PE_SM) &&
+			IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
+		pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
+		pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
+		pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME, 0, 0);
+	}
 }
 
 static void tc_detached(int port)
@@ -635,6 +709,7 @@ static void tc_detached(int port)
 	hook_notify(HOOK_USB_PD_DISCONNECT);
 	tc_pd_connection(port, 0);
 	tcpm_debug_accessory(port, 0);
+	tc_set_modes_exit(port);
 }
 
 static inline void pd_set_dual_role_and_event(int port,
@@ -646,18 +721,12 @@ static inline void pd_set_dual_role_and_event(int port,
 		pd_update_try_source();
 
 	if (event != 0)
-		task_set_event(PD_PORT_TO_TASK_ID(port), event, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), event);
 }
 
 void pd_set_dual_role(int port, enum pd_dual_role_states state)
 {
 	pd_set_dual_role_and_event(port, state, PD_EVENT_UPDATE_DUAL_ROLE);
-}
-
-bool pd_get_partner_data_swap_capable(int port)
-{
-	/* return data swap capable status of port partner */
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_DR_DATA);
 }
 
 int pd_comm_is_enabled(int port)
@@ -678,28 +747,10 @@ void pd_request_data_swap(int port)
 	}
 }
 
-/*
- * Return true if partner port is a DTS or TS capable of entering debug
- * mode (eg. is presenting Rp/Rp or Rd/Rd).
- */
-int pd_ts_dts_plugged(int port)
-{
-	return TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER);
-}
-
 /* Return true if partner port is known to be PD capable. */
 bool pd_capable(int port)
 {
 	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_PD_CAPABLE);
-}
-
-/*
- * Return true if partner port is capable of communication over USB data
- * lines.
- */
-bool pd_get_partner_usb_comm_capable(int port)
-{
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_USB_COMM);
 }
 
 enum pd_dual_role_states pd_get_dual_role(int port)
@@ -715,7 +766,7 @@ static inline void pd_dev_dump_info(uint16_t dev_id, uint32_t *hash)
 	ccprintf("DevId:%d.%d Hash:", HW_DEV_ID_MAJ(dev_id),
 		 HW_DEV_ID_MIN(dev_id));
 	for (j = 0; j < PD_RW_HASH_SIZE / 4; j++)
-		ccprintf(" %08x ", hash[i]);
+		ccprintf(" %08x ", hash[j]);
 	ccprintf("\n");
 }
 #endif /* CONFIG_CMD_PD_DEV_DUMP_INFO */
@@ -741,44 +792,6 @@ int tc_is_attached_src(int port)
 int tc_is_attached_snk(int port)
 {
 	return IS_ATTACHED_SNK(port);
-}
-
-void tc_partner_dr_power(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_DR_POWER);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_DR_POWER);
-}
-
-void tc_partner_unconstrainedpower(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_UNCONSTRAINED);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_UNCONSTRAINED);
-}
-
-void tc_partner_usb_comm(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_USB_COMM);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_USB_COMM);
-
-	/*
-	 * Update the mux setting according to the port partner's
-	 * USB communication capability.
-	 */
-	set_usb_mux_with_current_data_role(port);
-}
-
-void tc_partner_dr_data(int port, int en)
-{
-	if (en)
-		TC_SET_FLAG(port, TC_FLAGS_PARTNER_DR_DATA);
-	else
-		TC_CLR_FLAG(port, TC_FLAGS_PARTNER_DR_DATA);
 }
 
 void tc_pd_connection(int port, int en)
@@ -820,14 +833,13 @@ void pd_try_vconn_src(int port)
 
 int tc_check_vconn_swap(int port)
 {
-#ifdef CONFIG_USBC_VCONN
-	if (TC_CHK_FLAG(port, TC_FLAGS_REJECT_VCONN_SWAP))
-		return 0;
+	if (IS_ENABLED(CONFIG_USBC_VCONN)) {
+		if (TC_CHK_FLAG(port, TC_FLAGS_REJECT_VCONN_SWAP))
+			return 0;
 
-	return pd_check_vconn_swap(port);
-#else
-	return 0;
-#endif
+		return pd_check_vconn_swap(port);
+	} else
+		return 0;
 }
 
 void tc_pr_swap_complete(int port, bool success)
@@ -920,6 +932,9 @@ void tc_disc_ident_complete(int port)
 
 void tc_try_src_override(enum try_src_override_t ov)
 {
+	if (!IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+		assert(0);
+
 	if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC)) {
 		switch (ov) {
 		case TRY_SRC_OVERRIDE_OFF: /* 0 */
@@ -936,6 +951,9 @@ void tc_try_src_override(enum try_src_override_t ov)
 
 enum try_src_override_t tc_get_try_src_override(void)
 {
+	if (!IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+		assert(0);
+
 	return pd_try_src_override;
 }
 
@@ -949,6 +967,15 @@ void tc_snk_power_off(int port)
 
 int tc_src_power_on(int port)
 {
+	/*
+	 * Check our OC event counter.  If we've exceeded our threshold, then
+	 * let's latch our source path off to prevent continuous cycling.  When
+	 * the PD state machine detects a disconnection on the CC lines, we will
+	 * reset our OC event counter.
+	 */
+	if (IS_ENABLED(CONFIG_USBC_OCP) && usbc_ocp_is_port_latched_off(port))
+		return EC_ERROR_ACCESS_DENIED;
+
 	if (IS_ATTACHED_SRC(port))
 		return pd_set_power_supply_ready(port);
 
@@ -963,6 +990,23 @@ void tc_src_power_off(int port)
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
 		charge_manager_set_ceil(port, CEIL_REQUESTOR_PD,
 					CHARGE_CEIL_NONE);
+}
+
+/* Set what role the partner is right now, for the PPC and OCP module */
+static void tc_set_partner_role(int port, enum ppc_device_role role)
+{
+	if (IS_ENABLED(CONFIG_USBC_PPC))
+		ppc_dev_is_connected(port, role);
+
+	if (IS_ENABLED(CONFIG_USBC_OCP)) {
+		usbc_ocp_snk_is_connected(port, role == PPC_DEV_SNK);
+		/*
+		 * Clear the overcurrent event counter
+		 * since we've detected a disconnect.
+		 */
+		if (role == PPC_DEV_DISCONNECTED)
+			usbc_ocp_clear_event_counter(port);
+	}
 }
 
 /*
@@ -983,7 +1027,7 @@ void pd_set_suspend(int port, int suspend)
 	if (suspend) {
 		int wait = 0;
 
-		TC_SET_FLAG(port, TC_FLAGS_SUSPEND);
+		TC_SET_FLAG(port, TC_FLAGS_REQUEST_SUSPEND);
 
 		/*
 		 * Avoid deadlock when running from task
@@ -1004,14 +1048,19 @@ void pd_set_suspend(int port, int suspend)
 			msleep(SUSPEND_SLEEP_DELAY);
 		}
 	} else {
-		TC_CLR_FLAG(port, TC_FLAGS_SUSPEND);
+		TC_CLR_FLAG(port, TC_FLAGS_REQUEST_SUSPEND);
 		task_wake(PD_PORT_TO_TASK_ID(port));
 	}
 }
 
 int pd_is_port_enabled(int port)
 {
-	return get_state_tc(port) != TC_DISABLED;
+	/*
+	 * Checking get_state_tc(port) from another task isn't safe since it
+	 * can return TC_DISABLED before tc_cc_open_entry and tc_disabled_entry
+	 * are complete. So check TC_FLAGS_SUSPENDED instead.
+	 */
+	return !TC_CHK_FLAG(port, TC_FLAGS_SUSPENDED);
 }
 
 int pd_fetch_acc_log_entry(int port)
@@ -1052,16 +1101,6 @@ bool pd_get_vconn_state(int port)
 	return !!TC_CHK_FLAG(port, TC_FLAGS_VCONN_ON);
 }
 
-bool pd_get_partner_dual_role_power(int port)
-{
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_DR_POWER);
-}
-
-bool pd_get_partner_unconstr_power(int port)
-{
-	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_UNCONSTRAINED);
-}
-
 const char *pd_get_task_state_name(int port)
 {
 	return tc_get_current_state(port);
@@ -1075,9 +1114,8 @@ void pd_vbus_low(int port)
 int pd_is_connected(int port)
 {
 	return (IS_ATTACHED_SRC(port) ||
-#ifdef CONFIG_USB_PE_SM
-		(get_state_tc(port) == TC_CT_ATTACHED_SNK) ||
-#endif
+		(IS_ENABLED(CONFIG_USB_PE_SM) &&
+		 (get_state_tc(port) == TC_CT_ATTACHED_SNK)) ||
 		IS_ATTACHED_SNK(port));
 }
 
@@ -1086,18 +1124,74 @@ bool pd_is_disconnected(int port)
 	return !pd_is_connected(port);
 }
 
-static __maybe_unused void bc12_role_change_handler(int port)
+/*
+ * PD functions which query our fixed PDO flags.  Both the source and sink
+ * capabilities can present these values, and they should match between the two
+ * for compliant partners.
+ */
+static bool pd_check_fixed_flag(int port, uint32_t flag)
 {
-	int event;
+	uint32_t fixed_pdo;
+
+	if (pd_get_src_cap_cnt(port) != 0)
+		fixed_pdo = *pd_get_src_caps(port);
+	else if (pd_get_snk_cap_cnt(port) != 0)
+		fixed_pdo = *pd_get_snk_caps(port);
+	else
+		return false;
+
+	/*
+	 * Error check that first PDO is fixed, as 6.4.1 Capabilities requires
+	 * in the Power Delivery Specification.
+	 * "The vSafe5V Fixed Supply Object Shall always be the first object"
+	 */
+	if ((fixed_pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
+		return false;
+
+	return fixed_pdo & flag;
+}
+
+bool pd_get_partner_data_swap_capable(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_DATA_SWAP);
+}
+
+bool pd_get_partner_usb_comm_capable(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_COMM_CAP);
+}
+
+bool pd_get_partner_dual_role_power(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_DUAL_ROLE);
+}
+
+bool pd_get_partner_unconstr_power(int port)
+{
+	return pd_check_fixed_flag(port, PDO_FIXED_UNCONSTRAINED);
+}
+
+static void bc12_role_change_handler(int port, enum pd_data_role prev_data_role,
+	enum pd_data_role data_role)
+{
+	int event = 0;
 	int task_id = USB_CHG_PORT_TO_TASK_ID(port);
+	bool role_changed = (data_role != prev_data_role);
+
+	if (!IS_ENABLED(CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER))
+		return;
 
 	/* Get the data role of our device */
-	switch (pd_get_data_role(port)) {
+	switch (data_role) {
 	case PD_ROLE_UFP:
-		event = USB_CHG_EVENT_DR_UFP;
+		/* Only trigger BC12 detection on a role change */
+		if (role_changed)
+			event = USB_CHG_EVENT_DR_UFP;
 		break;
 	case PD_ROLE_DFP:
-		event = USB_CHG_EVENT_DR_DFP;
+		/* Only trigger BC12 host mode on a role change */
+		if (role_changed)
+			event = USB_CHG_EVENT_DR_DFP;
 		break;
 	case PD_ROLE_DISCONNECTED:
 		event = USB_CHG_EVENT_CC_OPEN;
@@ -1105,7 +1199,9 @@ static __maybe_unused void bc12_role_change_handler(int port)
 	default:
 		return;
 	}
-	task_set_event(task_id, event, 0);
+
+	if (event)
+		task_set_event(task_id, event);
 }
 
 /*
@@ -1118,6 +1214,8 @@ static void typec_select_pull(int port, enum tcpc_cc_pull pull)
 void typec_select_src_current_limit_rp(int port, enum tcpc_rp_value rp)
 {
 	tc[port].select_current_limit_rp = rp;
+	if (IS_ATTACHED_SRC(port))
+		TC_SET_FLAG(port, TC_FLAGS_UPDATE_CURRENT);
 }
 void typec_select_src_collision_rp(int port, enum tcpc_rp_value rp)
 {
@@ -1204,39 +1302,58 @@ static bool tc_perform_snk_hard_reset(int port)
 {
 	switch (tc[port].ps_reset_state) {
 	case PS_STATE0:
-		/* Shutting off power, Disable AutoDischargeDisconnect */
-		tcpm_enable_auto_discharge_disconnect(port, 0);
-
 		/* Hard reset sets us back to default data role */
 		tc_set_data_role(port, PD_ROLE_UFP);
-
-		/* Clear the input current limit */
-		sink_stop_drawing_current(port);
 
 		/*
 		 * When VCONN is supported, the Hard Reset Shall cause
 		 * the Port with the Rd resistor asserted to turn off
 		 * VCONN.
 		 */
-#ifdef CONFIG_USBC_VCONN
-		if (TC_CHK_FLAG(port, TC_FLAGS_VCONN_ON))
+		if (IS_ENABLED(CONFIG_USBC_VCONN) &&
+		    TC_CHK_FLAG(port, TC_FLAGS_VCONN_ON))
 			set_vconn(port, 0);
-#endif
-		/* Wait tSafe0V + tSrcRecover, then check for Vbus presence */
+
+		/* Wait up to tVSafe0V for Vbus to disappear */
 		tc[port].ps_reset_state = PS_STATE1;
-		tc[port].timeout = get_time().val + PD_T_SAFE_0V +
-							PD_T_SRC_RECOVER_MAX;
+		tc[port].timeout = get_time().val + PD_T_SAFE_0V;
 		return false;
 	case PS_STATE1:
-		if (get_time().val < tc[port].timeout)
-			return false;
+		if (pd_check_vbus_level(port, VBUS_SAFE0V)) {
+			/*
+			 * Partner dropped Vbus, reduce our current consumption
+			 * and await its return.
+			 */
+			sink_stop_drawing_current(port);
 
-		/* Watch for Vbus to return */
-		tc[port].ps_reset_state = PS_STATE2;
-		tc[port].timeout = get_time().val + PD_T_SRC_TURN_ON;
+			tcpm_enable_auto_discharge_disconnect(port, 0);
+
+			/* Move on to waiting for the return of Vbus */
+			tc[port].ps_reset_state = PS_STATE2;
+			tc[port].timeout = get_time().val +
+						PD_T_SRC_RECOVER_MAX +
+						PD_T_SRC_TURN_ON;
+		}
+
+		if (get_time().val > tc[port].timeout) {
+			/*
+			 * No Vbus drop likely indicates a non-PD port partner,
+			 * move to the next stage anyway.
+			 */
+			tc[port].ps_reset_state = PS_STATE2;
+			tc[port].timeout = get_time().val +
+						PD_T_SRC_RECOVER_MAX +
+						PD_T_SRC_TURN_ON;
+
+		}
 		return false;
 	case PS_STATE2:
-		if (pd_is_vbus_present(port)) {
+		/*
+		 * Look for the voltage to be above disconnect.  Since we didn't
+		 * drop our draw on non-PD partners, they may have dipped below
+		 * vSafe5V but still be in a valid connected voltage.
+		 */
+		if (!pd_check_vbus_level(port, VBUS_REMOVED)) {
 			/*
 			 * Inform policy engine that power supply
 			 * reset is complete
@@ -1322,9 +1439,12 @@ static void restart_tc_sm(int port, enum usb_tc_state start_state)
 	}
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		/* Initialize PD and type-C supplier current limits to 0 */
+		/*
+		 * Only initialize PD supplier current limit to 0.
+		 * Defer initializing type-C supplier current limit
+		 * to Unattached.SNK or Attached.SNK.
+		 */
 		pd_set_input_current_limit(port, 0, 0);
-		typec_set_input_current_limit(port, 0, 0);
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
 	}
 
@@ -1351,13 +1471,14 @@ void tc_state_init(int port)
 	/* If port is not available, there is nothing to initialize */
 	if (port >= board_get_usb_pd_port_count()) {
 		tc_enable_pd(port, 0);
-		tc_pause_event_loop(port);
-		TC_SET_FLAG(port, TC_FLAGS_SUSPEND);
+		TC_SET_FLAG(port, TC_FLAGS_REQUEST_SUSPEND);
 		return;
 	}
 
+
 	/* Allow system to set try src enable */
-	tc_try_src_override(TRY_SRC_NO_OVERRIDE);
+	if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+		tc_try_src_override(TRY_SRC_NO_OVERRIDE);
 
 	/*
 	 * Set initial PD communication policy.
@@ -1378,10 +1499,15 @@ void tc_state_init(int port)
 	 * stale PD state as well.
 	 */
 	if (system_get_reset_flags() &
-	    (EC_RESET_FLAG_BROWNOUT | EC_RESET_FLAG_POWER_ON))
+	    (EC_RESET_FLAG_BROWNOUT | EC_RESET_FLAG_POWER_ON)) {
 		first_state = TC_UNATTACHED_SNK;
-	else
+
+		/* Turn off any previous sourcing */
+		tc_src_power_off(port);
+		set_vconn(port, 0);
+	} else {
 		first_state = TC_ERROR_RECOVERY;
+	}
 
 #ifdef CONFIG_USB_PD_TCPC_BOARD_INIT
 	/* Board specific TCPC init */
@@ -1444,7 +1570,11 @@ static void set_state_tc(const int port, const enum usb_tc_state new_state)
 /* Get the current TypeC state. */
 test_export_static enum usb_tc_state get_state_tc(const int port)
 {
-	return tc[port].ctx.current - &tc_states[0];
+	/* Default to returning TC_STATE_COUNT if no state has been set */
+	if (tc[port].ctx.current == NULL)
+		return TC_STATE_COUNT;
+	else
+		return tc[port].ctx.current - &tc_states[0];
 }
 
 /* Get the previous TypeC state. */
@@ -1470,7 +1600,7 @@ void tc_event_check(int port, int evt)
 {
 #ifdef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
 	if (evt != TASK_EVENT_TIMER)
-		print_bits("Event", evt, event_bit_names,
+		print_bits(port, "Event", evt, event_bit_names,
 			   ARRAY_SIZE(event_bit_names));
 #endif
 
@@ -1486,8 +1616,11 @@ void tc_event_check(int port, int evt)
 	if (evt & PD_EVENT_RX_HARD_RESET)
 		pd_execute_hard_reset(port);
 
-	if (evt & PD_EVENT_SEND_HARD_RESET)
-		tc_hard_reset_request(port);
+	if (evt & PD_EVENT_SEND_HARD_RESET) {
+		/* Pass Hard Reset request to PE layer if available */
+		if (IS_ENABLED(CONFIG_USB_PE_SM) && tc_get_pd_enabled(port))
+			pd_dpm_request(port, DPM_REQUEST_HARD_RESET_SEND);
+	}
 
 #ifdef CONFIG_POWER_COMMON
 	if (IS_ENABLED(CONFIG_POWER_COMMON)) {
@@ -1496,23 +1629,19 @@ void tc_event_check(int port, int evt)
 	}
 #endif /* CONFIG_POWER_COMMON */
 
-#ifdef CONFIG_USB_PD_ALT_MODE_DFP
-	{
+	if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
 		int i;
 
-		if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-			/*
-			 * Notify all ports of sysjump
-			 */
-			if (evt & PD_EVENT_SYSJUMP) {
-				for (i = 0; i <
-					CONFIG_USB_PD_PORT_MAX_COUNT; i++)
-					dpm_set_mode_exit_request(i);
-				notify_sysjump_ready();
-			}
+		/*
+		 * Notify all ports of sysjump
+		 */
+		if (evt & PD_EVENT_SYSJUMP) {
+			for (i = 0; i <
+				CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+				dpm_set_mode_exit_request(i);
+			notify_sysjump_ready();
 		}
 	}
-#endif
 
 	if (evt & PD_EVENT_UPDATE_DUAL_ROLE)
 		pd_update_dual_role_config(port);
@@ -1533,6 +1662,9 @@ void tc_event_check(int port, int evt)
 
 void tc_set_data_role(int port, enum pd_data_role role)
 {
+	enum pd_data_role prev_data_role;
+
+	prev_data_role = tc[port].data_role;
 	tc[port].data_role = role;
 
 	if (IS_ENABLED(CONFIG_USBC_SS_MUX))
@@ -1549,8 +1681,7 @@ void tc_set_data_role(int port, enum pd_data_role role)
 	 * instead of VBUS changes, need to set an event to wake up the USB_CHG
 	 * task and indicate the current data role.
 	 */
-	if (IS_ENABLED(CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER))
-		bc12_role_change_handler(port);
+	bc12_role_change_handler(port, prev_data_role, tc[port].data_role);
 
 	/* Notify TCPC of role update */
 	tcpm_set_msg_header(port, tc[port].power_role, tc[port].data_role);
@@ -1567,13 +1698,13 @@ static void sink_stop_drawing_current(int port)
 	}
 }
 
-#ifdef CONFIG_USB_PD_TRY_SRC
 static void pd_update_try_source(void)
 {
+#ifdef CONFIG_USB_PD_TRY_SRC
 	tc_enable_try_src(pd_is_try_source_capable());
+#endif
 }
 DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, pd_update_try_source, HOOK_PRIO_DEFAULT);
-#endif /* CONFIG_USB_PD_TRY_SRC */
 
 static void set_vconn(int port, int enable)
 {
@@ -1581,6 +1712,16 @@ static void set_vconn(int port, int enable)
 		TC_SET_FLAG(port, TC_FLAGS_VCONN_ON);
 	else
 		TC_CLR_FLAG(port, TC_FLAGS_VCONN_ON);
+
+	/*
+	 * Check our OC event counter.  If we've exceeded our threshold, then
+	 * let's latch our source path off to prevent continuous cycling.  When
+	 * the PD state machine detects a disconnection on the CC lines, we will
+	 * reset our OC event counter.
+	 */
+	if (IS_ENABLED(CONFIG_USBC_OCP) &&
+	    enable && usbc_ocp_is_port_latched_off(port))
+		return;
 
 	/*
 	 * Disable PPC Vconn first then TCPC in case the voltage feeds back
@@ -1606,15 +1747,13 @@ static void set_vconn(int port, int enable)
 static void pd_update_dual_role_config(int port)
 {
 	if (tc[port].power_role == PD_ROLE_SOURCE &&
-			((drp_state[port] == PD_DRP_FORCE_SINK &&
-			!pd_ts_dts_plugged(port)) ||
+			(drp_state[port] == PD_DRP_FORCE_SINK ||
 			(drp_state[port] == PD_DRP_TOGGLE_OFF &&
 			get_state_tc(port) == TC_UNATTACHED_SRC))) {
 		/*
 		 * Change to sink if port is currently a source AND (new DRP
-		 * state is force sink OR new DRP state is either toggle off
-		 * or debug accessory toggle only and we are in the source
-		 * disconnected state).
+		 * state is force sink OR new DRP state is toggle off and we are
+		 * in the source disconnected state).
 		 */
 		set_state_tc(port, TC_UNATTACHED_SNK);
 	} else if (tc[port].power_role == PD_ROLE_SINK &&
@@ -1627,9 +1766,11 @@ static void pd_update_dual_role_config(int port)
 	}
 }
 
-#ifdef CONFIG_POWER_COMMON
-static void handle_new_power_state(int port)
+__maybe_unused static void handle_new_power_state(int port)
 {
+	if (!IS_ENABLED(CONFIG_POWER_COMMON))
+		assert(0);
+
 	if (IS_ENABLED(CONFIG_POWER_COMMON) &&
 	    IS_ENABLED(CONFIG_USB_PE_SM)) {
 		if (chipset_in_or_transitioning_to_state(
@@ -1639,16 +1780,22 @@ static void handle_new_power_state(int port)
 			 * boots up
 			 */
 			dpm_set_mode_exit_request(port);
-
-			/*
-			 * The following function will disconnect both USB and
-			 * DP mux, as the chipset is transitioning to OFF.
-			 */
-			set_usb_mux_with_current_data_role(port);
 		}
 	}
+
+	/*
+	 * TC_FLAGS_UPDATE_USB_MUX is set on chipset startup and shutdown.
+	 * Set the USB mux according to the new power state.  If the chipset
+	 * is transitioning to OFF, this disconnects USB and DP mux.
+	 *
+	 * Transitions to and from suspend states do not change the USB mux
+	 * or the alternate mode configuration.
+	 */
+	if (TC_CHK_FLAG(port, TC_FLAGS_UPDATE_USB_MUX)) {
+		TC_CLR_FLAG(port, TC_FLAGS_UPDATE_USB_MUX);
+		set_usb_mux_with_current_data_role(port);
+	}
 }
-#endif /* CONFIG_POWER_COMMON */
 
 #if defined(CONFIG_USB_PD_ALT_MODE) && !defined(CONFIG_USB_PD_ALT_MODE_DFP)
 void pd_send_hpd(int port, enum hpd_event hpd)
@@ -1693,7 +1840,7 @@ void pd_request_vconn_swap_on(int port)
 
 void pd_request_vconn_swap(int port)
 {
-	pe_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
+	pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
 }
 #endif
 
@@ -1719,10 +1866,7 @@ static __maybe_unused int reset_device_and_notify(int port)
 	TC_CLR_FLAG(port, TC_FLAGS_LPM_ENGAGED);
 	tc_start_event_loop(port);
 
-	if (rv == EC_SUCCESS)
-		CPRINTS("C%d: TCPC init ready", port);
-	else
-		CPRINTS("C%d: TCPC init failed!", port);
+	CPRINTS("C%d: TCPC init %s", port, rv ? "failed!" : "ready");
 
 	/*
 	 * Before getting the other tasks that are waiting, clear the reset
@@ -1735,16 +1879,16 @@ static __maybe_unused int reset_device_and_notify(int port)
 	 * waking the TCPC, but it has also set PD_EVENT_TCPC_RESET again, which
 	 * would result in a second, unnecessary init.
 	 */
-	atomic_clear(task_get_event_bitmap(task_get_current()),
-		PD_EVENT_TCPC_RESET);
+	atomic_clear_bits(task_get_event_bitmap(task_get_current()),
+			  PD_EVENT_TCPC_RESET);
 
-	waiting_tasks = atomic_read_clear(&tc[port].tasks_waiting_on_reset);
+	waiting_tasks = atomic_clear(&tc[port].tasks_waiting_on_reset);
 
 	/* Wake up all waiting tasks. */
 	while (waiting_tasks) {
 		task = __fls(waiting_tasks);
 		waiting_tasks &= ~BIT(task);
-		task_set_event(task, TASK_EVENT_PD_AWAKE, 0);
+		task_set_event(task, TASK_EVENT_PD_AWAKE);
 	}
 
 	return rv;
@@ -1771,8 +1915,7 @@ void pd_wait_exit_low_power(int port)
 		 * happen much, but it if starts occurring, we can add a guard
 		 * to prevent/reduce it.
 		 */
-		task_set_event(PD_PORT_TO_TASK_ID(port),
-			       PD_EVENT_TCPC_RESET, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_TCPC_RESET);
 		task_wait_event_mask(TASK_EVENT_PD_AWAKE, -1);
 	}
 }
@@ -1787,7 +1930,7 @@ void pd_device_accessed(int port)
 		handle_device_access(port);
 	else
 		task_set_event(PD_PORT_TO_TASK_ID(port),
-			PD_EVENT_DEVICE_ACCESSED, 0);
+			       PD_EVENT_DEVICE_ACCESSED);
 }
 
 /*
@@ -1798,13 +1941,11 @@ void pd_prevent_low_power_mode(int port, int prevent)
 {
 	const int current_task_mask = (1 << task_get_current());
 
-	if (!IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER))
-		return;
-
 	if (prevent)
 		atomic_or(&tc[port].tasks_preventing_lpm, current_task_mask);
 	else
-		atomic_clear(&tc[port].tasks_preventing_lpm, current_task_mask);
+		atomic_clear_bits(&tc[port].tasks_preventing_lpm,
+				  current_task_mask);
 }
 #endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
@@ -1860,36 +2001,36 @@ static void sink_power_sub_states(int port)
  *
  * Super State Entry Actions:
  *   Remove the terminations from CC
- *   Set's VBUS and VCONN off
+ *   Set VBUS and VCONN off
  */
 static void tc_disabled_entry(const int port)
 {
 	print_current_state(port);
+	/*
+	 * We have completed tc_cc_open_entry (our super state), so set flag
+	 * to indicate to pd_is_port_enabled that we are now suspended.
+	 */
+	TC_SET_FLAG(port, TC_FLAGS_SUSPENDED);
 }
 
 static void tc_disabled_run(const int port)
 {
-	/*
-	 * If pd_set_suspend SUSPEND state changes to
-	 * no longer be suspended then we need to exit
-	 * our current state and go UNATTACHED_SNK
-	 */
-	if (!TC_CHK_FLAG(port, TC_FLAGS_SUSPEND))
+	/* If pd_set_suspend clears the request, go to TC_UNATTACHED_SNK. */
+	if (!TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND))
 		set_state_tc(port, TC_UNATTACHED_SNK);
-
-	task_wait_event(-1);
+	else
+		tc_pause_event_loop(port);
 }
 
 static void tc_disabled_exit(const int port)
 {
-	if (!IS_ENABLED(CONFIG_USB_PD_TCPC)) {
-		if (tcpm_init(port) != 0) {
-			CPRINTS("C%d: TCPC restart failed!", port);
-			return;
-		}
-	}
+	int rv;
 
-	CPRINTS("C%d: TCPC resumed!", port);
+	tc_start_event_loop(port);
+	TC_CLR_FLAG(port, TC_FLAGS_SUSPENDED);
+
+	rv = tcpm_init(port);
+	CPRINTS("C%d: TCPC init %s", port, rv ? "failed!" : "ready");
 }
 
 /**
@@ -1925,8 +2066,12 @@ static void tc_error_recovery_run(const int port)
 	 * If try src support is active (e.g. in S0). Then try to become the
 	 * SRC, otherwise we should try to be the sink.
 	 */
-	restart_tc_sm(port, is_try_src_enabled(port) ? TC_UNATTACHED_SRC :
-						       TC_UNATTACHED_SNK);
+	if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+		restart_tc_sm(port, is_try_src_enabled(port)
+						? TC_UNATTACHED_SRC
+						: TC_UNATTACHED_SNK);
+	else
+		restart_tc_sm(port, TC_UNATTACHED_SNK);
 }
 
 /**
@@ -1934,6 +2079,8 @@ static void tc_error_recovery_run(const int port)
  */
 static void tc_unattached_snk_entry(const int port)
 {
+	enum pd_data_role prev_data_role;
+
 	if (get_last_state_tc(port) != TC_UNATTACHED_SRC) {
 		tc_detached(port);
 		print_current_state(port);
@@ -1951,38 +2098,19 @@ static void tc_unattached_snk_entry(const int port)
 	typec_select_pull(port, TYPEC_CC_RD);
 	typec_update_cc(port);
 
-	/*
-	 * Tell Policy Engine to invalidate the explicit contract.
-	 * This mainly used to clear the BB Ram Explicit Contract
-	 * value.
-	 */
-	pe_invalidate_explicit_contract(port);
-
+	prev_data_role = tc[port].data_role;
 	tc[port].data_role = PD_ROLE_DISCONNECTED;
-
-	/*
-	 * Saved SRC_Capabilities are no longer valid on disconnect
-	 */
-	pd_set_src_caps(port, 0, NULL);
-
 	/*
 	 * When data role set events are used to enable BC1.2, then CC
 	 * detach events are used to notify BC1.2 that it can be powered
 	 * down.
 	 */
-	if (IS_ENABLED(CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER))
-		bc12_role_change_handler(port);
+	bc12_role_change_handler(port, prev_data_role, tc[port].data_role);
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
 
-	if (IS_ENABLED(CONFIG_USBC_PPC)) {
-		/*
-		 * Clear the overcurrent event counter
-		 * since we've detected a disconnect.
-		 */
-		ppc_clear_oc_event_counter(port);
-	}
+	tc_set_partner_role(port, PPC_DEV_DISCONNECTED);
 
 	/*
 	 * Indicate that the port is disconnected so the board
@@ -1996,7 +2124,7 @@ static void tc_unattached_snk_entry(const int port)
 			USB_SWITCH_DISCONNECT, tc[port].polarity);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
-		CLR_ALL_BUT_LPM_FLAGS(port);
+		CLR_FLAGS_ON_DISCONNECT(port);
 		tc_enable_pd(port, 0);
 	}
 }
@@ -2023,17 +2151,6 @@ static void tc_unattached_snk_run(const int port)
 	tcpm_get_cc(port, &cc1, &cc2);
 
 	/*
-	 * Attempt TCPC auto DRP toggle if it is
-	 * not already auto toggling.
-	 */
-	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE) &&
-	    drp_state[port] == PD_DRP_TOGGLE_ON &&
-	    tcpm_auto_toggle_supported(port) && cc_is_open(cc1, cc2)) {
-		set_state_tc(port, TC_DRP_AUTO_TOGGLE);
-		return;
-	}
-
-	/*
 	 * The port shall transition to AttachWait.SNK when a Source
 	 * connection is detected, as indicated by the SNK.Rp state
 	 * on at least one of its CC pins.
@@ -2045,9 +2162,34 @@ static void tc_unattached_snk_run(const int port)
 	if (cc_is_rp(cc1) || cc_is_rp(cc2)) {
 		/* Connection Detected */
 		set_state_tc(port, TC_ATTACH_WAIT_SNK);
-	} else if (get_time().val > tc[port].next_role_swap &&
-		   drp_state[port] == PD_DRP_TOGGLE_ON) {
-		/* DRP Toggle */
+		return;
+	}
+
+	/*
+	 * Debounce the CC open status. Some TCPC needs time to get the CC
+	 * status valid. Before that, CC open is reported by default. Wait
+	 * to make sure the CC is really open. Reuse the role toggle timer.
+	 */
+	if (get_time().val < tc[port].next_role_swap)
+		return;
+
+	/*
+	 * Initialize type-C supplier current limits to 0. The charge
+	 * manage is now seeded if it was not.
+	 */
+	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
+		typec_set_input_current_limit(port, 0, 0);
+
+	/*
+	 * Attempt TCPC auto DRP toggle if it is
+	 * not already auto toggling.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE) &&
+	    drp_state[port] == PD_DRP_TOGGLE_ON &&
+	    tcpm_auto_toggle_supported(port)) {
+		set_state_tc(port, TC_DRP_AUTO_TOGGLE);
+	} else if (drp_state[port] == PD_DRP_TOGGLE_ON) {
+		/* DRP Toggle. The timer was checked above. */
 		set_state_tc(port, TC_UNATTACHED_SRC);
 	} else if (IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER) &&
 		   (drp_state[port] == PD_DRP_FORCE_SINK ||
@@ -2102,13 +2244,6 @@ static void tc_attach_wait_snk_run(const int port)
 	 */
 	if (new_cc_state == PD_CC_NONE &&
 				get_time().val > tc[port].pd_debounce) {
-		if (IS_ENABLED(CONFIG_USB_PE_SM) &&
-				IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-			pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-			pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-			pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME, 0, 0);
-		}
-
 		/* We are detached */
 		if (drp_state[port] == PD_DRP_TOGGLE_OFF
 		    || drp_state[port] == PD_DRP_FREEZE
@@ -2139,7 +2274,8 @@ static void tc_attach_wait_snk_run(const int port)
 	 */
 	if (pd_is_vbus_present(port)) {
 		if (new_cc_state == PD_CC_DFP_ATTACHED) {
-			if (is_try_src_enabled(port))
+			if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC) &&
+			    is_try_src_enabled(port))
 				set_state_tc(port, TC_TRY_SRC);
 			else
 				set_state_tc(port, TC_ATTACHED_SNK);
@@ -2177,8 +2313,11 @@ static void tc_attached_snk_entry(const int port)
 	 */
 	typec_select_pull(port, TYPEC_CC_RD);
 
-#ifdef CONFIG_USB_PE_SM
-	if (TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
+	/* Inform the PPC and OCP module that a source is connected */
+	tc_set_partner_role(port, PPC_DEV_SRC);
+
+	if (IS_ENABLED(CONFIG_USB_PE_SM) &&
+	    TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
 		/* Flipping power role - Disable AutoDischargeDisconnect */
 		tcpm_enable_auto_discharge_disconnect(port, 0);
 
@@ -2196,9 +2335,7 @@ static void tc_attached_snk_entry(const int port)
 		 * AutoDischargeDisconnect until the swap is completed
 		 * and tc_pr_swap_complete is called.
 		 */
-	} else
-#endif
-	{
+	} else {
 		/* Get connector orientation */
 		tcpm_get_cc(port, &cc1, &cc2);
 		tc[port].polarity = get_snk_polarity(cc1, cc2);
@@ -2219,11 +2356,15 @@ static void tc_attached_snk_entry(const int port)
 				CAP_DUALROLE : CAP_DEDICATED);
 		}
 
-		/* Attached.SNK - enable AutoDischargeDisconnect */
-		tcpm_enable_auto_discharge_disconnect(port, 1);
-
 		/* Apply Rd */
 		typec_update_cc(port);
+
+		/*
+		 * Attached.SNK - enable AutoDischargeDisconnect
+		 * Do this after applying Rd to CC lines to avoid
+		 * TCPC_REG_FAULT_STATUS_AUTO_DISCHARGE_FAIL (b/171567398)
+		 */
+		tcpm_enable_auto_discharge_disconnect(port, 1);
 	}
 
 	tc[port].cc_debounce = 0;
@@ -2255,6 +2396,19 @@ static void tc_attached_snk_run(const int port)
 	}
 
 	/*
+	 * From 4.5.2.2.5.2 Exiting from Attached.SNK State:
+	 *
+	 * "A port that is not a Vconn-Powered USB Device and is not in the
+	 * process of a USB PD PR_Swap or a USB PD Hard Reset or a USB PD
+	 * FR_Swap shall transition to Unattached.SNK within tSinkDisconnect
+	 * when Vbus falls below vSinkDisconnect for Vbus operating at or
+	 * below 5 V or below vSinkDisconnectPD when negotiated by USB PD
+	 * to operate above 5 V."
+	 *
+	 * TODO(b/149530538): Use vSinkDisconnectPD when above 5V
+	 */
+
+	/*
 	 * Debounce Vbus before we drop that we are doing a PR_Swap
 	 */
 	if (TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS) &&
@@ -2268,7 +2422,7 @@ static void tc_attached_snk_run(const int port)
 		 * with the swap and should have Vbus, so re-enable
 		 * AutoDischargeDisconnect.
 		 */
-		if (pd_is_vbus_present(port))
+		if (!pd_check_vbus_level(port, VBUS_REMOVED))
 			tcpm_enable_auto_discharge_disconnect(port, 1);
 	}
 
@@ -2281,14 +2435,7 @@ static void tc_attached_snk_run(const int port)
 		/*
 		 * Detach detection
 		 */
-		if (!pd_is_vbus_present(port)) {
-			if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-				pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME,
-						0, 0);
-			}
-
+		if (pd_check_vbus_level(port, VBUS_REMOVED)) {
 			set_state_tc(port, TC_UNATTACHED_SNK);
 			return;
 		}
@@ -2327,12 +2474,12 @@ static void tc_attached_snk_run(const int port)
 					PD_ROLE_DFP : PD_ROLE_UFP);
 		}
 
-#ifdef CONFIG_USBC_VCONN
 		/*
 		 * VCONN Swap
 		 * UnorientedDebugAccessory.SRC shall not drive Vconn
 		 */
-		if (!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER)) {
+		if (IS_ENABLED(CONFIG_USBC_VCONN) &&
+		    !TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER)) {
 			if (TC_CHK_FLAG(port, TC_FLAGS_REQUEST_VC_SWAP_ON)) {
 				TC_CLR_FLAG(port, TC_FLAGS_REQUEST_VC_SWAP_ON);
 
@@ -2354,7 +2501,7 @@ static void tc_attached_snk_run(const int port)
 				pe_vconn_swap_complete(port);
 			}
 		}
-#endif
+
 		if (!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER)) {
 			/*
 			 * If the port supports Charge-Through VCONN-Powered USB
@@ -2380,7 +2527,7 @@ static void tc_attached_snk_run(const int port)
 #else /* CONFIG_USB_PE_SM */
 
 	/* Detach detection */
-	if (!pd_is_vbus_present(port)) {
+	if (pd_check_vbus_level(port, VBUS_REMOVED)) {
 		set_state_tc(port, TC_UNATTACHED_SNK);
 		return;
 	}
@@ -2407,7 +2554,7 @@ static void tc_attached_snk_exit(const int port)
 		 * happen in tc_cc_open_entry if that is the path we are
 		 * taking.
 		 */
-		if (!TC_CHK_FLAG(port, TC_FLAGS_SUSPEND))
+		if (!TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND))
 			tcpm_enable_auto_discharge_disconnect(port, 0);
 	}
 
@@ -2416,6 +2563,9 @@ static void tc_attached_snk_exit(const int port)
 
 	/* Stop drawing power */
 	sink_stop_drawing_current(port);
+
+	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+		tcpm_debug_detach(port);
 }
 
 /**
@@ -2423,6 +2573,8 @@ static void tc_attached_snk_exit(const int port)
  */
 static void tc_unattached_src_entry(const int port)
 {
+	enum pd_data_role prev_data_role;
+
 	if (get_last_state_tc(port) != TC_UNATTACHED_SNK) {
 		tc_detached(port);
 		print_current_state(port);
@@ -2441,37 +2593,23 @@ static void tc_unattached_src_entry(const int port)
 	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 	typec_update_cc(port);
 
+	prev_data_role = tc[port].data_role;
 	tc[port].data_role = PD_ROLE_DISCONNECTED;
-
-	/*
-	 * Saved SRC_Capabilities are no longer valid on disconnect
-	 */
-	pd_set_src_caps(port, 0, NULL);
 
 	/*
 	 * When data role set events are used to enable BC1.2, then CC
 	 * detach events are used to notify BC1.2 that it can be powered
 	 * down.
 	 */
-	if (IS_ENABLED(CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER))
-		bc12_role_change_handler(port);
+	bc12_role_change_handler(port, prev_data_role, tc[port].data_role);
 
-	if (IS_ENABLED(CONFIG_USBC_PPC)) {
-		/* There is no sink connected. */
-		ppc_sink_is_connected(port, 0);
-
-		/*
-		 * Clear the overcurrent event counter
-		 * since we've detected a disconnect.
-		 */
-		ppc_clear_oc_event_counter(port);
-	}
+	tc_set_partner_role(port, PPC_DEV_DISCONNECTED);
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
-		CLR_ALL_BUT_LPM_FLAGS(port);
+		CLR_FLAGS_ON_DISCONNECT(port);
 		tc_enable_pd(port, 0);
 	}
 
@@ -2491,12 +2629,12 @@ static void tc_unattached_src_run(const int port)
 		}
 	}
 
-	if (IS_ENABLED(CONFIG_USBC_PPC)) {
+	if (IS_ENABLED(CONFIG_USBC_OCP)) {
 		/*
 		 * If the port is latched off, just continue to
 		 * monitor for a detach.
 		 */
-		if (ppc_is_port_latched_off(port))
+		if (usbc_ocp_is_port_latched_off(port))
 			return;
 	}
 
@@ -2626,25 +2764,72 @@ static void tc_attached_src_entry(const int port)
 	typec_select_pull(port, TYPEC_CC_RP);
 	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 
-#if defined(CONFIG_USB_PE_SM)
-	if (TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
-		/* Change role to source */
-		tc_set_power_role(port, PD_ROLE_SOURCE);
-		tcpm_set_msg_header(port,
-				tc[port].power_role, tc[port].data_role);
+	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
+		if (TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
+			/* Change role to source */
+			tc_set_power_role(port, PD_ROLE_SOURCE);
+			tcpm_set_msg_header(port,
+					tc[port].power_role,
+					tc[port].data_role);
 
-		/* Enable VBUS */
-		tc_src_power_on(port);
+			/* Enable VBUS */
+			tc_src_power_on(port);
 
-		/* Apply Rp */
-		typec_update_cc(port);
+			/* Apply Rp */
+			typec_update_cc(port);
 
-		/*
-		 * Maintain VCONN supply state, whether ON or OFF, and its
-		 * data role / usb mux connections. Do not re-enable
-		 * AutoDischargeDisconnect until the swap is completed
-		 * and tc_pr_swap_complete is called.
-		 */
+			/*
+			 * Maintain VCONN supply state, whether ON or OFF, and
+			 * its data role / usb mux connections. Do not
+			 * re-enable AutoDischargeDisconnect until the swap is
+			 * completed and tc_pr_swap_complete is called.
+			 */
+		} else {
+			/* Get connector orientation */
+			tcpm_get_cc(port, &cc1, &cc2);
+			tc[port].polarity = get_src_polarity(cc1, cc2);
+			pd_set_polarity(port, tc[port].polarity);
+
+			/*
+			 * Initial data role for sink is DFP
+			 * This also sets the usb mux
+			 */
+			tc_set_data_role(port, PD_ROLE_DFP);
+
+			/*
+			 * Start sourcing Vconn before Vbus to ensure
+			 * we are within USB Type-C Spec 1.4 tVconnON
+			 *
+			 * UnorientedDebugAccessory.SRC shall not drive Vconn
+			 */
+			if (IS_ENABLED(CONFIG_USBC_VCONN) &&
+			    !TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+				set_vconn(port, 1);
+
+			/* Enable VBUS */
+			if (tc_src_power_on(port)) {
+				/* Stop sourcing Vconn if Vbus failed */
+				if (IS_ENABLED(CONFIG_USBC_VCONN))
+					set_vconn(port, 0);
+
+				if (IS_ENABLED(CONFIG_USBC_SS_MUX))
+					usb_mux_set(port,
+						USB_PD_MUX_NONE,
+						USB_SWITCH_DISCONNECT,
+						tc[port].polarity);
+			}
+
+			/* Attached.SRC - enable AutoDischargeDisconnect */
+			tcpm_enable_auto_discharge_disconnect(port, 1);
+
+			/* Apply Rp */
+			typec_update_cc(port);
+
+			tc_enable_pd(port, 0);
+			tc[port].timeout = get_time().val +
+				MAX(PD_POWER_SUPPLY_TURN_ON_DELAY,
+				    PD_T_VCONN_STABLE);
+		}
 	} else {
 		/* Get connector orientation */
 		tcpm_get_cc(port, &cc1, &cc2);
@@ -2664,7 +2849,7 @@ static void tc_attached_src_entry(const int port)
 		 * UnorientedDebugAccessory.SRC shall not drive Vconn
 		 */
 		if (IS_ENABLED(CONFIG_USBC_VCONN) &&
-				!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+		    !TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
 			set_vconn(port, 1);
 
 		/* Enable VBUS */
@@ -2683,55 +2868,10 @@ static void tc_attached_src_entry(const int port)
 
 		/* Apply Rp */
 		typec_update_cc(port);
-
-		tc_enable_pd(port, 0);
-		tc[port].timeout = get_time().val +
-			MAX(PD_POWER_SUPPLY_TURN_ON_DELAY, PD_T_VCONN_STABLE);
-	}
-#else
-	/* Get connector orientation */
-	tcpm_get_cc(port, &cc1, &cc2);
-	tc[port].polarity = get_src_polarity(cc1, cc2);
-	pd_set_polarity(port, tc[port].polarity);
-
-	/*
-	 * Initial data role for sink is DFP
-	 * This also sets the usb mux
-	 */
-	tc_set_data_role(port, PD_ROLE_DFP);
-
-	/*
-	 * Start sourcing Vconn before Vbus to ensure
-	 * we are within USB Type-C Spec 1.4 tVconnON
-	 *
-	 * UnorientedDebugAccessory.SRC shall not drive Vconn
-	 */
-	if (IS_ENABLED(CONFIG_USBC_VCONN) &&
-				!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
-		set_vconn(port, 1);
-
-	/* Enable VBUS */
-	if (tc_src_power_on(port)) {
-		/* Stop sourcing Vconn if Vbus failed */
-		if (IS_ENABLED(CONFIG_USBC_VCONN))
-			set_vconn(port, 0);
-
-		if (IS_ENABLED(CONFIG_USBC_SS_MUX))
-			usb_mux_set(port, USB_PD_MUX_NONE,
-			USB_SWITCH_DISCONNECT, tc[port].polarity);
 	}
 
-	/* Attached.SRC - enable AutoDischargeDisconnect */
-	tcpm_enable_auto_discharge_disconnect(port, 1);
-
-	/* Apply Rp */
-	typec_update_cc(port);
-
-#endif /* CONFIG_USB_PE_SM */
-
-	/* Inform PPC that a sink is connected. */
-	if (IS_ENABLED(CONFIG_USBC_PPC))
-		ppc_sink_is_connected(port, 1);
+	/* Inform PPC and OCP module that a sink is connected. */
+	tc_set_partner_role(port, PPC_DEV_SNK);
 
 	/*
 	 * Only notify if we're not performing a power role swap.  During a
@@ -2773,20 +2913,17 @@ static void tc_attached_src_run(const int port)
 	if (tc[port].cc_state == PD_CC_NONE &&
 			!TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS) &&
 			!TC_CHK_FLAG(port, TC_FLAGS_DISC_IDENT_IN_PROGRESS)) {
+		bool tryWait;
 
-		const bool tryWait = is_try_src_enabled(port) &&
+		if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+			tryWait = is_try_src_enabled(port) &&
 				!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER);
 
-		if (IS_ENABLED(CONFIG_USB_PE_SM))
-			if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-				pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME,
-						0, 0);
-			}
-
-		set_state_tc(port, tryWait ?
+		if (IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
+			set_state_tc(port, tryWait ?
 					TC_TRY_WAIT_SNK : TC_UNATTACHED_SNK);
+		else
+			set_state_tc(port, TC_UNATTACHED_SNK);
 		return;
 	}
 
@@ -2891,6 +3028,14 @@ static void tc_attached_src_run(const int port)
 		}
 	}
 #endif
+
+	if (TC_CHK_FLAG(port, TC_FLAGS_UPDATE_CURRENT)) {
+		/* TODO(b/141690755): Also set new CC if needed for non-PD */
+		TC_CLR_FLAG(port, TC_FLAGS_UPDATE_CURRENT);
+		typec_set_source_current_limit(port,
+					tc[port].select_current_limit_rp);
+		pd_update_contract(port);
+	}
 }
 
 static void tc_attached_src_exit(const int port)
@@ -2912,6 +3057,9 @@ static void tc_attached_src_exit(const int port)
 
 	/* Clear PR swap flag after checking for Vconn */
 	TC_CLR_FLAG(port, TC_FLAGS_REQUEST_PR_SWAP);
+
+	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+		tcpm_debug_detach(port);
 }
 
 static __maybe_unused void check_drp_connection(const int port)
@@ -2962,12 +3110,14 @@ static __maybe_unused void check_drp_connection(const int port)
 	}
 }
 
-#ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 /**
  * DrpAutoToggle
  */
-static void tc_drp_auto_toggle_entry(const int port)
+__maybe_unused static void tc_drp_auto_toggle_entry(const int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE))
+		assert(0);
+
 	print_current_state(port);
 
 	/*
@@ -2978,8 +3128,11 @@ static void tc_drp_auto_toggle_entry(const int port)
 	tc[port].timeout = get_time().val + MAX(PD_T_DRP_SNK, PD_T_DRP_SRC);
 }
 
-static void tc_drp_auto_toggle_run(const int port)
+__maybe_unused static void tc_drp_auto_toggle_run(const int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE))
+		assert(0);
+
 	/*
 	 * A timer is running, but if a connection comes in while waiting
 	 * then allow that to take higher priority.
@@ -2999,18 +3152,22 @@ static void tc_drp_auto_toggle_run(const int port)
 		}
 	}
 }
-#endif /* CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE */
 
-#ifdef CONFIG_USB_PD_TCPC_LOW_POWER
-static void tc_low_power_mode_entry(const int port)
+__maybe_unused static void tc_low_power_mode_entry(const int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER))
+		assert(0);
+
 	print_current_state(port);
 	tc[port].low_power_time = get_time().val + PD_LPM_DEBOUNCE_US;
 	tc[port].low_power_exit_time = 0;
 }
 
-static void tc_low_power_mode_run(const int port)
+__maybe_unused static void tc_low_power_mode_run(const int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER))
+		assert(0);
+
 	if (TC_CHK_FLAG(port, TC_FLAGS_CHECK_CONNECTION)) {
 		uint64_t now = get_time().val;
 
@@ -3039,7 +3196,6 @@ static void tc_low_power_mode_run(const int port)
 		tc[port].low_power_exit_time = 0;
 	}
 }
-#endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
 
 /**
@@ -3184,15 +3340,16 @@ static void tc_try_wait_snk_run(const int port)
 	    pd_is_vbus_present(port))
 		set_state_tc(port, TC_ATTACHED_SNK);
 }
-
 #endif
 
-#if defined(CONFIG_USB_PE_SM)
 /*
  * CTUnattached.SNK
  */
-static void tc_ct_unattached_snk_entry(int port)
+__maybe_unused static void tc_ct_unattached_snk_entry(int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PE_SM))
+		assert(0);
+
 	print_current_state(port);
 
 	/*
@@ -3218,11 +3375,14 @@ static void tc_ct_unattached_snk_entry(int port)
 	tc[port].timeout = get_time().val + PD_POWER_SUPPLY_TURN_ON_DELAY;
 }
 
-static void tc_ct_unattached_snk_run(int port)
+__maybe_unused static void tc_ct_unattached_snk_run(int port)
 {
 	enum tcpc_cc_voltage_status cc1;
 	enum tcpc_cc_voltage_status cc2;
 	enum pd_cc_states new_cc_state;
+
+	if (!IS_ENABLED(CONFIG_USB_PE_SM))
+		assert(0);
 
 	if (tc[port].timeout > 0 && get_time().val > tc[port].timeout) {
 		tc_enable_pd(port, 1);
@@ -3268,13 +3428,6 @@ static void tc_ct_unattached_snk_run(int port)
 	if (get_time().val > tc[port].cc_debounce) {
 		if (new_cc_state == PD_CC_NONE &&
 		    pd_check_vbus_level(port, VBUS_SAFE0V)) {
-			if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-				pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-				pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME,
-						0, 0);
-			}
-
 			set_state_tc(port, TC_UNATTACHED_SNK);
 			return;
 		}
@@ -3290,16 +3443,22 @@ static void tc_ct_unattached_snk_run(int port)
 /**
  * CTAttached.SNK
  */
-static void tc_ct_attached_snk_entry(int port)
+__maybe_unused static void tc_ct_attached_snk_entry(int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PE_SM))
+		assert(0);
+
 	print_current_state(port);
 
 	/* The port shall reject a VCONN swap request. */
 	TC_SET_FLAG(port, TC_FLAGS_REJECT_VCONN_SWAP);
 }
 
-static void tc_ct_attached_snk_run(int port)
+__maybe_unused static void tc_ct_attached_snk_run(int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PE_SM))
+		assert(0);
+
 	/*
 	 * Hard Reset is sent when the PE layer is disabled due to a
 	 * CTVPD connection.
@@ -3315,7 +3474,7 @@ static void tc_ct_attached_snk_run(int port)
 	 * transition to CTUnattached.SNK within tSinkDisconnect when VBUS
 	 * falls below vSinkDisconnect
 	 */
-	if (!pd_is_vbus_present(port)) {
+	if (pd_check_vbus_level(port, VBUS_REMOVED)) {
 		set_state_tc(port, TC_CT_UNATTACHED_SNK);
 		return;
 	}
@@ -3329,14 +3488,16 @@ static void tc_ct_attached_snk_run(int port)
 		sink_power_sub_states(port);
 }
 
-static void tc_ct_attached_snk_exit(int port)
+__maybe_unused static void tc_ct_attached_snk_exit(int port)
 {
+	if (!IS_ENABLED(CONFIG_USB_PE_SM))
+		assert(0);
+
 	/* Stop drawing power */
 	sink_stop_drawing_current(port);
 
 	TC_CLR_FLAG(port, TC_FLAGS_REJECT_VCONN_SWAP);
 }
-#endif /* CONFIG_USB_PE_SM */
 
 /**
  * Super State CC_RD
@@ -3376,8 +3537,7 @@ static void tc_cc_open_entry(const int port)
 	tc_src_power_off(port);
 
 	/* Disable VCONN */
-	if (TC_CHK_FLAG(port, TC_FLAGS_VCONN_ON))
-		set_vconn(port, 0);
+	set_vconn(port, 0);
 
 	/*
 	 * Ensure we disable discharging before setting CC lines to open.
@@ -3400,16 +3560,7 @@ static void tc_cc_open_entry(const int port)
 	typec_select_pull(port, TYPEC_CC_OPEN);
 	typec_update_cc(port);
 
-	if (IS_ENABLED(CONFIG_USBC_PPC)) {
-		/* There is no sink connected. */
-		ppc_sink_is_connected(port, 0);
-
-		/*
-		 * Clear the overcurrent event counter
-		 * since we've detected a disconnect.
-		 */
-		ppc_clear_oc_event_counter(port);
-	}
+	tc_set_partner_role(port, PPC_DEV_DISCONNECTED);
 }
 
 void tc_set_debug_level(enum debug_level debug_level)
@@ -3422,13 +3573,14 @@ void tc_set_debug_level(enum debug_level debug_level)
 void tc_run(const int port)
 {
 	/*
-	 * If pd_set_suspend SUSPEND state changes to
-	 * be suspended then we need to go directly to
-	 * DISABLED
+	 * If pd_set_suspend set TC_FLAGS_REQUEST_SUSPEND, go directly to
+	 * TC_DISABLED.
 	 */
-	if (TC_CHK_FLAG(port, TC_FLAGS_SUSPEND)) {
+	if (get_state_tc(port) != TC_DISABLED
+	    && TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND)) {
 		/* Invalidate a contract, if there is one */
-		pe_invalidate_explicit_contract(port);
+		if (IS_ENABLED(CONFIG_USB_PE_SM))
+			pe_invalidate_explicit_contract(port);
 
 		set_state_tc(port, TC_DISABLED);
 	}
@@ -3441,6 +3593,9 @@ static void pd_chipset_resume(void)
 	int i;
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		if(IS_ENABLED(CONFIG_USB_PE_SM))
+			pd_resume_check_pr_swap_needed(i);
+
 		pd_set_dual_role_and_event(i,
 					   PD_DRP_TOGGLE_ON,
 					   PD_EVENT_UPDATE_DUAL_ROLE
@@ -3471,7 +3626,7 @@ static void pd_chipset_startup(void)
 	int i;
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-		set_usb_mux_with_current_data_role(i);
+		TC_SET_FLAG(i, TC_FLAGS_UPDATE_USB_MUX);
 		pd_set_dual_role_and_event(i,
 					   pd_get_drp_state_in_suspend(),
 					   PD_EVENT_UPDATE_DUAL_ROLE
@@ -3483,7 +3638,7 @@ static void pd_chipset_startup(void)
 		 * is an existing connection.
 		 */
 		if (IS_ENABLED(CONFIG_USB_PE_SM))
-			pe_dpm_request(i, DPM_REQUEST_PORT_DISCOVERY);
+			pd_dpm_request(i, DPM_REQUEST_PORT_DISCOVERY);
 	}
 
 	CPRINTS("PD:S5->S3");
@@ -3495,6 +3650,7 @@ static void pd_chipset_shutdown(void)
 	int i;
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		TC_SET_FLAG(i, TC_FLAGS_UPDATE_USB_MUX);
 		pd_set_dual_role_and_event(i,
 					   PD_DRP_FORCE_SINK,
 					   PD_EVENT_UPDATE_DUAL_ROLE
@@ -3525,7 +3681,7 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pd_chipset_shutdown, HOOK_PRIO_DEFAULT);
  * TC_ATTACHED_SNK    TC_ATTACHED_SRC    TC_DRP_AUTO_TOGGLE    TC_LOW_POWER_MODE
  *
  */
-static const struct usb_state tc_states[] = {
+static __const_data const struct usb_state tc_states[] = {
 	/* Super States */
 	[TC_CC_OPEN] = {
 		.entry	= tc_cc_open_entry,
@@ -3624,6 +3780,5 @@ const struct test_sm_data test_tc_sm_data[] = {
 		.names_size = ARRAY_SIZE(tc_state_names),
 	},
 };
-BUILD_ASSERT(ARRAY_SIZE(tc_states) == ARRAY_SIZE(tc_state_names));
 const int test_tc_sm_data_size = ARRAY_SIZE(test_tc_sm_data);
 #endif

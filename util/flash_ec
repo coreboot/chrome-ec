@@ -49,14 +49,16 @@ die() {
 # not aware of its 'ec_chip'. If servod becomes able to answer 'ec_chip'
 # for the board, remove it from BOARDS_XXXX array below.
 BOARDS_IT83XX=(
+	adlrvpm_ite
+	adlrvpp_ite
 	glkrvp_ite
 	it83xx_evb
+	jslrvp_ite
 	reef_it8320
 	tglrvpu_ite
 	tglrvpu_ite_tcpmv1
 	tglrvpy_ite
 	tglrvpy_ite_tcpmv1
-	jslrvp_ite
 )
 
 BOARDS_IT83XX_SPI_PROGRAMMING=(
@@ -89,6 +91,7 @@ BOARDS_STM32=(
 	strago_pd
 	wand
 	whiskers
+	zed
 	zinger
 )
 BOARDS_STM32_PROG_EN=(
@@ -245,7 +248,7 @@ function dut_control() {
 }
 
 function dut_control_or_die {
-	dut_control "$@" || die "dut-control $* exited $? (non-zero)"
+	dut_control "$@" || die "command exited $? (non-zero): dut-control $*"
 }
 
 function dut_control_get() {
@@ -255,7 +258,7 @@ function dut_control_get() {
 	fi
 
 	local ARGS DUT_GETVAL RETVAL
-	ARGS=( "${DUT_CONTROL_CMD[@]}" "-o" "${DUT_CTRL_PREFIX}$1" )
+	ARGS=( "${DUT_CONTROL_CMD[@]}" "--value_only" "${DUT_CTRL_PREFIX}$1" )
 	RETVAL=0
 	# || statement is attached to avoid an exit if error exit is enabled.
 	DUT_GETVAL=$( "${ARGS[@]}" ) || RETVAL="$?"
@@ -265,6 +268,11 @@ function dut_control_get() {
 	fi
 
 	echo "${DUT_GETVAL}"
+}
+
+function dut_control_get_or_die {
+	dut_control_get "$@" || \
+	    die "command exited $? (non-zero): dut-control --value_only $*"
 }
 
 BOARD=${FLAGS_board}
@@ -369,13 +377,15 @@ case "${BOARD}" in
 	chocodile_bec ) MCU="usbpd" ;;
 	oak_pd|samus_pd|strago_pd ) MCU="usbpd" ;;
 	chell_pd|glados_pd ) MCU="usbpd" ;;
-	bloonchipper|dartmonkey|hatch_fp|nami_fp|nocturne_fp ) MCU="usbpd" ;;
+	bloonchipper|dartmonkey|hatch_fp|nami_fp|nocturne_fp ) MCU="fpmcu" ;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD=( "true" ); MCU="ec" ;;
 	*) MCU="ec" ;;
 esac
 
 case "${CHIP}" in
-	"stm32"|"npcx_spi"|"npcx_int_spi"|"it83xx"|"npcx_uut"|"ite_spi") ;;
+	"stm32"|"npcx_spi"|"npcx_int_spi"|"it83xx"|"npcx_uut"|"ite_spi"| \
+			"ite_spi_ccd_i2c")
+		;;
 	*)
 		if [[ -n "${FLAGS_read}" ]]; then
 			die "The flag is not yet supported on ${CHIP}."
@@ -391,18 +401,24 @@ case "${CHIP}" in
 esac
 
 SERVO_TYPE="$(dut_control_get servo_type || :)"
-if [[ ${SERVO_TYPE} =~ servo_v4_with_.*_and_.* ]] ; then
+
+if [[ "${SERVO_TYPE}" =~ ^servo_v4_with_.*$ ]]; then
+	ACTIVE_DEVICE="$(dut_control_get active_v4_device)"
+else
+	ACTIVE_DEVICE="${SERVO_TYPE}"
+fi
+
+if [[ "${SERVO_TYPE}" =~ ^servo_v4_with_.*_and_.*$ ]]; then
 	# If there are two devices, servo v4 type will show both devices. The
 	# default device is first. The other device is second.
 	# servo_type:servo_v4_with_servo_micro_and_ccd_cr50
 	SECOND_DEVICE="${SERVO_TYPE#*_and_}"
-	ACTIVE_DEVICE="$(dut_control_get active_v4_device || :)"
 	SERVO_TYPE="servo_v4_with_${ACTIVE_DEVICE}"
 	# Controls sent through the default device don't have a prefix. The
 	# second device controls do. If the default device isn't active, we
 	# need to use the second device controls to send commands. Use the
 	# prefix for all dut control commands.
-	if [[ "${SECOND_DEVICE}" = "${ACTIVE_DEVICE}" ]] ; then
+	if [[ "${SECOND_DEVICE}" = "${ACTIVE_DEVICE}" ]]; then
 		DUT_CTRL_PREFIX="${ACTIVE_DEVICE}."
 	fi
 fi
@@ -443,6 +459,10 @@ c2d2_ec_hard_reset() {
 
 servo_usbpd_hard_reset() {
 	dut_control usbpd_reset:on sleep:0.5 usbpd_reset:off
+}
+
+servo_fpmcu_hard_reset() {
+	dut_control fpmcu_reset:on sleep:0.5 fpmcu_reset:off
 }
 
 servo_sh_hard_reset() {
@@ -503,6 +523,14 @@ c2d2_ec_boot0() {
 
 servo_usbpd_boot0() {
 	dut_control usbpd_boot_mode:$1
+}
+
+servo_fpmcu_boot0() {
+	dut_control fpmcu_boot_mode:"$1"
+}
+
+servo_micro_fpmcu_boot0() {
+	servo_fpmcu_boot0 "$@"
 }
 
 servo_micro_usbpd_boot0() {
@@ -688,11 +716,27 @@ function ec_image() {
 	die "no EC image found : build one or specify one."
 }
 
+# Get the correct UART for flashing. The resulting string is concatenated with
+# the various UART control suffixes, such as "_pty", "_en", "_parity", etc.
+function servo_ec_uart_prefix() {
+	if [[ "${MCU}" == "fpmcu" ]]; then
+		# The FPMCU has multiple UARTs. Use the platform UART since it's a
+		# bootloader capable UART on all devices. See
+		# http://go/cros-fingerprint-reference-designs#uart-console.
+		echo "fpmcu_platform_uart"
+		return
+	fi
+
+	echo "${MCU}_uart"
+}
+
 # Find the EC UART provided by servo.
 function servo_ec_uart() {
 	SERVOD_FAIL="Cannot communicate with servod. Is servod running?"
-	PTY=$(dut_control_get raw_${MCU}_uart_pty ||
-	      dut_control_get ${MCU}_uart_pty)
+	local EC_UART_PREFIX
+	EC_UART_PREFIX="$(servo_ec_uart_prefix)"
+	PTY=$(dut_control_get "raw_${EC_UART_PREFIX}_pty" ||
+	      dut_control_get "${EC_UART_PREFIX}_pty")
 	if [[ -z "${PTY}" ]]; then
 	    die "${SERVOD_FAIL}"
 	fi
@@ -796,9 +840,14 @@ function claim_pty() {
 	done
 }
 
+# Returns the serialnumber of the specified servo.
 function get_serial() {
 	if [[ "${SERVO_TYPE}" =~ "servo_v4_with_servo_micro" ]]; then
 		if [[ -z "${BOARD}" ]]; then
+			sn_ctl="servo_micro_"
+		elif [[ "$(dut_control_get "servo_micro_for_${BOARD}_serialname")" =~ \
+				"unknown" ]] ; then
+			# Fall back to servo_micro_ if S/N is uknown.
 			sn_ctl="servo_micro_"
 		else
 			sn_ctl="servo_micro_for_${BOARD}_"
@@ -901,7 +950,7 @@ function flash_flashrom() {
 	if ! on_raiden || [[ "${SERVO_TYPE}" =~ "servo_micro" ]] ; then
 		if $(in_array "${BOARDS_SPI_1800MV[@]}" "${BOARD}"); then
 			SPI_VOLTAGE="pp1800"
-		elif [[ "${CHIP}" == "ite_spi" ]]; then
+		elif [[ "${CHIP}" == "ite_spi" || "${CHIP}" == "ite_spi_ccd_i2c" ]]; then
 			SPI_VOLTAGE="pp1800"
 		else
 			SPI_VOLTAGE="pp3300"
@@ -920,7 +969,7 @@ function flash_flashrom() {
 		fi
 
 		# Enable SPI programming mode.
-		if [[ "${CHIP}" == "ite_spi" ]]; then
+		if [[ "${CHIP}" == "ite_spi" || "${CHIP}" == "ite_spi_ccd_i2c" ]]; then
 			# Set hardware strap pin (GPG6) of SPI programming as low then start ec
 			dut_control fw_up:on
 			sleep 0.1
@@ -985,6 +1034,7 @@ function flash_flashrom() {
 		DELETE_LIST+=( "${T}" )
 
 		if [[ "${CHIP}" =~ ^npcx(|_int)_spi$ ]] || \
+		   [[ "${CHIP}" =~ "ite_spi_ccd_i2c" ]] ||
 		   [[ "${CHIP}" =~ "ite_spi" ]] ; then
 		{	# Patch temp image up to SPI_SIZE
 			cat "$IMG"
@@ -1036,6 +1086,7 @@ function flash_stm32() {
 	TOOL_PATH="${EC_DIR}/build/${BOARD}/util:$PATH"
 	STM32MON=$(PATH="${TOOL_PATH}" which stm32mon)
 	EC_UART="$(servo_ec_uart)"
+	EC_UART_PREFIX="$(servo_ec_uart_prefix)"
 	if [ ! -x "$STM32MON" ]; then
 		die "no stm32mon util found."
 	fi
@@ -1052,14 +1103,14 @@ function flash_stm32() {
 	ec_reset
 
 	if ! on_raiden && [[ "${SERVO_TYPE}" =~ "servo" ]] ; then
-		servo_save_add "${MCU}_uart_en"
+		servo_save_add "${EC_UART_PREFIX}_en"
 
-		dut_control ${MCU}_uart_en:on
+		dut_control "${EC_UART_PREFIX}_en:on"
 	fi
 
-	servo_save_add "${MCU}_uart_parity"
+	servo_save_add "${EC_UART_PREFIX}_parity"
 
-	dut_control ${MCU}_uart_parity:even
+	dut_control "${EC_UART_PREFIX}_parity:even"
 
 	if [[ "${SERVO_TYPE}" =~ "ccd_cr50" ]] ; then
 		case "${FLAGS_bitbang_rate}" in
@@ -1071,15 +1122,15 @@ function flash_stm32() {
 		esac
 		info "Programming at ${FLAGS_bitbang_rate} baud"
 
-		servo_save_add "${MCU}_uart_baudrate"
-		servo_save_add "${MCU}_uart_bitbang_en"
+		servo_save_add "${EC_UART_PREFIX}_baudrate"
+		servo_save_add "${EC_UART_PREFIX}_bitbang_en"
 
-		dut_control ${MCU}_uart_baudrate:"${FLAGS_bitbang_rate}"
-		dut_control ${MCU}_uart_bitbang_en:on
+		dut_control "${EC_UART_PREFIX}_baudrate:${FLAGS_bitbang_rate}"
+		dut_control "${EC_UART_PREFIX}_bitbang_en:on"
 	else
-		servo_save_add "${MCU}_uart_baudrate"
+		servo_save_add "${EC_UART_PREFIX}_baudrate"
 
-		dut_control ${MCU}_uart_baudrate:115200
+		dut_control "${EC_UART_PREFIX}_baudrate:115200"
 	fi
 
 	# Add a delay long enough for cr50 to update the ccdstate. Cr50 updates
@@ -1099,7 +1150,7 @@ function flash_stm32() {
 	if [[ -z "${IMG_READ}" ]]; then
 		info "Programming EC firmware image."
 		# Unprotect flash, erase, and write
-		local STM32MON_COMMAND="${STM32MON} ${STM32MON_OPT} -u -e -w"
+		local STM32MON_COMMAND="${STM32MON} ${STM32MON_OPT} -U -u -e -w"
 		if [[ "${FLAGS_verbose}" == ${FLAGS_TRUE} ]]; then
 			echo "${STM32MON_COMMAND} ${IMG}"
 		fi
@@ -1175,9 +1226,6 @@ function flash_stm32_dfu() {
 		-d "${DFU_DEVICE}" -s ${ADDR}:${SIZE} -D "${IMG}"
 }
 
-# TODO(b/130165933): Implement a dut-control command to look up the correct
-# I2C adapter number, and use that here in place of the hack of looking at
-# I2C adapter names.
 function dut_i2c_dev() {
 	if [ -n "$DUT_I2C_DEV" ]; then
 		[ -e "$DUT_I2C_DEV" ] ||
@@ -1186,24 +1234,10 @@ function dut_i2c_dev() {
 		return
 	fi
 
-	if ! (
-		set -e
-		cd /sys/class/i2c-dev
-		# Sorting in reverse numerical order generally picks the correct
-		# servod I2C bus when there are multiple servos in line to the
-		# DUT, e.g. servo_v4->servo_micro, or servo_v4->CR50 (CCD).
-		for dev in $(ls | grep ^i2c- | sort -s -t- -n -k2,2 -r); do
-			if grep -q servod "$dev"/name; then
-				echo /dev/"$dev"
-				exit
-			fi
-		done
-		false
-	); then
-		die "Could not find servo I2C adapter. This could be because"\
-" the i2c-pseudo module was not loaded when servod was started."\
-" See also iteflash.md for more info."
-	fi
+	local adap_num=
+	adap_num="$(dut_control_get_or_die \
+	    "${ACTIVE_DEVICE}_i2c_pseudo_adapter_num")"
+	echo /dev/i2c-"$adap_num"
 }
 
 function flash_it83xx() {
@@ -1295,6 +1329,10 @@ function flash_it83xx() {
 		ERROR_MSG="${MSG_PROGRAM_FAIL}"
 	fi
 
+	if [[ "${FLAGS_verify}" == "${FLAGS_FALSE}" ]]; then
+		ITEFLASH_ARGS+=( "--noverify" )
+	fi
+
 	if [[ "${FLAGS_verbose}" == ${FLAGS_TRUE} ]]; then
 		ITEFLASH_ARGS+=( "--debug" )
 		echo "${ITEFLASH_ARGS[@]}"
@@ -1313,6 +1351,15 @@ function flash_it83xx() {
 
 function flash_ite_spi() {
 	flash_flashrom
+}
+
+function flash_ite_spi_ccd_i2c() {
+	if [[ "${SERVO_TYPE}" =~ "servo_micro" || \
+	      "${SERVO_TYPE}" =~ "servo_v2" ]] ; then
+		flash_flashrom
+	else
+		flash_it83xx
+	fi
 }
 
 function flash_lm4() {

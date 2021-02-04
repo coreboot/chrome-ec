@@ -1,0 +1,737 @@
+# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+rsource "app/Kconfig"
+rsource "drivers/Kconfig"
+
+if ZTEST
+
+config HAS_TEST_TASKS
+	bool "Whether or not this test includes custom tasks"
+	help
+	  This enables custom tasks for tests. When set to 'y', the file
+	  "shimmed_test_tasks.h" will be included and is expected to set
+	  CROS_EC_TASK_LIST.
+
+endif # ZTEST
+
+menuconfig PLATFORM_EC
+	bool "Chromium OS EC shim"
+	imply PRINTK
+	imply SHELL
+	help
+	  The platform/ec Zephyr module allows some code from the
+	  existing Chromium OS EC project to be "shimmed" into Zephyr. With
+	  this it is possible to use the existing code base within Zephyr.
+
+	  Once we manage to get a platform fully running with Zephyr we will
+	  progressively upstream components and turn off the shim for each
+	  one until eventually all code is on the Zephyr side.
+
+if PLATFORM_EC
+
+rsource "Kconfig.battery"
+rsource "Kconfig.keyboard"
+rsource "Kconfig.led"
+rsource "Kconfig.powerseq"
+rsource "Kconfig.motionsense"
+rsource "Kconfig.tasks"
+rsource "Kconfig.usbc"
+
+# Below is a hack to use CONFIG_ZEPHYR in platform/ec code before
+# config.h has been included.  There is some tricky ordering in some
+# header files that we cannot use config.h (e.g., common.h and
+# compile_time_macros.h), as many board.h and config_chip.h files
+# use these macros, and thus would be included by an include of
+# config.h.  We work around this by initially defining CONFIG_ZEPHYR
+# in Kconfig as an invisible symbol (it should always be enabled).
+# Then, once config.h gets included, it subsequently gets undef'ed by
+# config.h, and then redefined by config_chip.h in the Zephyr shim.
+config ZEPHYR
+	bool
+	default y
+	help
+	  This should always be enabled.  It's a workaround for
+	  config.h not being available in some headers.
+
+# Define PLATFORM_EC_... options to enable EC features. Each Kconfig should be
+# matched by a line in zephyr/shim/include/config_chip.h which #defines the
+# corresponding EC CONFIG if this Kconfig is enabled.
+#
+# Please keep these in alphabetical order
+
+config PLATFORM_EC_BOOT_RAM_SIZE
+	hex "The total size required for the boot loader"
+	default 0x0
+	help
+	  This is the size (in bytes) required by the boot loader. It will count
+	  against the data section of the RAM. Not all chips require this value.
+	  See the datasheet for the npcx chip family for example. If not needed,
+	  this can simple be left at 0x0.
+
+config PLATFORM_EC_ACPI
+	bool "Enable the ACPI module"
+	default y if AP_X86 && PLATFORM_EC_ESPI
+	help
+	  Enable shimming the ACPI handler, which will handle the Host data from
+	  the ACPI I/O port for X86 AP.
+
+config PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
+	bool "Host command: EC_CMD_GET_UPTIME_INFO"
+	default PLATFORM_EC_HOSTCMD
+	help
+	  Enable the EC_CMD_GET_UPTIME_INFO host command which reports the time
+	  the EC has been powered up, the number of AP resets, an optional log
+	  of AP-reset events and some flags.
+
+config PLATFORM_EC_AP_RESET_LOG
+	bool "Enable the Application Processor reset log"
+	depends on PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
+	default y if PLATFORM_EC_POWERSEQ
+	help
+	  Enable logging of AP reset events. This information is provided in
+	  response to the EC_CMD_GET_UPTIME_INFO host command.
+
+config PLATFORM_EC_BOARD_RESET_AFTER_POWER_ON
+	bool "Work around H1 reset issue"
+	default y
+	help
+	  Enable this if H1 resets the EC after power-on. This is needed so the EC
+	  can delay its start-up until the reset happens. Without this option
+	  the EC starts up, performs some amount of processing and then gets a
+	  reset that it is not expecting.
+
+config PLATFORM_EC_BRINGUP
+	bool "Enable early bringup debugging features"
+	help
+	  Enable the CONFIG_BRINGUP platform/ec configuration option,
+	  turning on a variety of miscellaneous early bringup
+	  debugging features.
+
+	  These features include:
+	  - The device will not power on when the EC starts.  The
+	    power button will need to be pressed, or the "powerbtn"
+	    command issued.
+	  - Enable power signal logging, showing relative timestamps
+	    for each power signal change.
+	  - And more!  You can search the codebase for CONFIG_BRINGUP
+            to see all of the features this flag will toggle.
+
+config PLATFORM_EC_BOARD_VERSION
+	bool "Support the notion of board version"
+	default y
+	help
+	  Enable support for a board version, used to distinguish different
+	  revisions of the same base design. Each board goes through a number
+	  of development phases on the way to launch. Sometimes different boards
+	  have different quirks and this version number can provide a way for
+	  the EC to handle several board versions, avoiding the problem of
+	  having to flash different images to different board versions.
+
+if PLATFORM_EC_BOARD_VERSION
+
+choice "Version source"
+	prompt "Select the source of the version number"
+	help
+	  This allow selection of the source of the board version number
+	  information. Several options are available, but BOARD_VERSION_CBI is
+	  preferred for new boards, so long as the hardware supports it (i.e.
+	  has an EEPROM).
+
+config PLATFORM_EC_BOARD_VERSION_CBI
+	bool "Chromium OS Board Info (CBI)"
+	depends on PLATFORM_EC_CBI
+	help
+	  Choose this if the board version comes from Chromium Board Info
+	  within the EEPROM. This is the recommended approach and is used on
+	  newer boards. The version information is written into the EEPROM as
+	  part of the factory process.
+
+config PLATFORM_EC_BOARD_VERSION_GPIO
+	bool "Strapping GPIOs"
+	help
+	  Choose this if the board version is encoded with three GPIO signals
+	  (GPIO_BOARD_VERSION1, GPIO_BOARD_VERSION2 and GPIO_BOARD_VERSION3)
+	  forming the 3-digit binary number. GPIO_BOARD_VERSION1 is the LSB.
+	  This provides 8 possible combinations.
+
+	  The GPIOs should have external pull-up/pull-down resistors installed
+	  at the factory to select the correct value.
+
+config PLATFORM_EC_BOARD_VERSION_CUSTOM
+	bool "Custom board-specific algortihm"
+	help
+	  Choose this if none of the standard methods is available and you must
+	  perform special logic to find the board version. If this is chosen,
+	  then the system code will call board_get_version() to find out the
+	  version, so you should implement this function in your board code.
+
+endchoice
+
+endif # PLATFORM_EC_BOARD_VERSION
+
+config PLATFORM_EC_CBI
+	bool "CBI EEPROM support"
+	depends on PLATFORM_EC_I2C
+	help
+	  Enables various Chromium OS Board Info (CBI) accessors as well as
+	  host and console commands. CBI is a means for accessing information
+	  about a board, typically written during the factory process.
+
+	  One must specify both I2C_PORT_EEPROM and I2C_ADDR_EEPROM_FLAGS to the
+	  CBI EEPROM's i2c port and 7-bit i2c address.
+
+	  See here for information on CBI:
+
+	  https://chromium.googlesource.com/chromiumos/docs/+/master/design_docs/cros_board_info.md
+
+config PLATFORM_EC_CHIPSET_RESET_HOOK
+	bool "Provide a hook for when the AP resets"
+	default y
+	help
+	  Enables support for the HOOK_CHIPSET_RESET hook. This can be used by
+	  code that needs to run before a programmatic reset actually happens.
+	  Note that these hooks don't run with a cold reset, only when the AP
+	  decides to reset itself.
+
+	  You can declare a hook like this:
+
+	     DECLARE_HOOK(HOOK_CHIPSET_RESET, do_something, HOOK_PRIO_DEFAULT);
+
+	  Then do_something() will be called just before the reset happens.
+
+menuconfig PLATFORM_EC_ESPI
+	bool "eSPI"
+	depends on ESPI && AP
+	default y
+	help
+	  Enable the Enhanced Serial Peripheral Interface (eSPI) shim layer.
+	  eSPI supports a shared physical connection between several on-board
+	  devices, similar to SPI. It adds a few optional signals and a protocol
+	  layer to provide independent 'channels' for each device to communicate
+	  over.
+
+	  eSPI is the replacement for LPC (Low-Pin-Count bus).
+
+	  See here for information about eSPI:
+
+	  https://www.intel.com/content/dam/support/us/en/documents/software/chipset-software/327432-004_espi_base_specification_rev1.0_cb.pdf
+
+if PLATFORM_EC_ESPI
+
+config PLATFORM_EC_ESPI_VW_SLP_S3
+	bool "SLP_S3 is an eSPI virtual wire instead of a GPIO"
+	help
+	  For power sequencing, use an eSPI virtual wire instead of
+	  defining GPIO_PCH_SLP_S3 in gpio_map.h.
+
+config PLATFORM_EC_ESPI_VW_SLP_S4
+	bool "SLP_S4 is an eSPI virtual wire instead of a GPIO"
+	help
+	  For power sequencing, use an eSPI virtual wire instead of
+	  defining GPIO_PCH_SLP_S4 in gpio_map.h.
+
+endif # PLATFORM_EC_ESPI
+
+config PLATFORM_EC_EXTPOWER_GPIO
+	bool "GPIO-based external power detection"
+	depends on PLATFORM_EC_HOOKS && PLATFORM_EC_HOSTCMD
+	help
+	  Enable shimming the extpower_gpio module, which provides
+	  GPIO-based external power presence detection features.  The
+	  project should define a GPIO pin named GPIO_AC_PRESENT, with
+	  extpower_interrupt configured as the handler in gpio_map.h.
+
+config PLATFORM_EC_FLASH
+	bool "Enable flash support"
+	default y if FLASH_SIZE > 0
+	help
+	  Enables access to the device's flash through a simple API. With
+	  this is it possible for the EC to update its flash while running,
+	  e.g. to support auto-update. Various write-protection features are
+	  also provided.
+
+if PLATFORM_EC_FLASH
+
+config PLATFORM_EC_PROTECTED_STORAGE_OFF
+	hex "Position of the RO image in Flash memory"
+	default 0x0
+	help
+	  Sets the position in flash memory where the RO image begins. This is
+	  the address that will be used to start copying the image into RAM.
+
+config PLATFORM_EC_PROTECTED_STORAGE_SIZE
+	hex "Size of the RO image in Flash memory"
+	default 0x40000
+	help
+	  The total size of the RO image in flash memory. This will dictate the
+	  ending position of the RO image being copied into RAM when combined
+	  with PLATFORM_EC_PROTECTED_STORAGE_OFF.
+
+config PLATFORM_EC_WRITABLE_STORAGE_OFF
+	hex "Position of the RW image in Flash memory"
+	default 0x40000
+	help
+	  Sets the position in flash memory where the RW image begins. This is
+	  the address that will be used to start copying the image into RAM.
+
+config PLATFORM_EC_WRITABLE_STORAGE_SIZE
+	hex "Size of the RW image in Flash memory"
+	default 0x40000
+	help
+	  The total size of the RW image in flash memory. This will dictate the
+	  ending position of the RW image being copied into RAM when combined
+	  with PLATFORM_EC_WRITABLE_STORAGE_OFF.
+
+config PLATFORM_EC_CONSOLE_CMD_FLASH
+	bool "Console commands: flasherase, flashread, flashwp, flashwrite"
+	default y
+	help
+	  Enables various console commands:
+
+	     flasherase - erase flash region
+	     flashread - read from flash to memory
+	     flashwp - change write-protection settings
+	     flashwrite - write memory to flash
+
+config PLATFORM_EC_EXTERNAL_STORAGE
+	bool "Flash is stored external to the EC"
+	default y if SOC_FAMILY_NPCX
+	help
+	  This indicates that the EC's flash is stored separately and is it
+	  not possible execute directly from it. Code must be loaded from
+	  the flash into internal SRAM before it can be executed. It is still
+	  possible to read and write the flash.
+
+config PLATFORM_EC_MAPPED_STORAGE
+	bool "Flash is mapped into the EC's address space"
+	default y if SOC_FAMILY_NPCX
+	help
+	  This indicates that the EC's flash is directly mapped into
+	  its address space. This makes it easier to read and write the flash.
+	  If this is not defined, the flash driver must implement
+	  flash_physical_read().
+
+endif # PLATFORM_EC_FLASH
+
+config PLATFORM_EC_HOOKS
+	bool "Hooks and deferred compatibility shim"
+	default y
+	help
+	  Enable translation of DECLARE_DEFERRED() and hook_call_deferred()
+	  to Zephyr's work queues, along with a compatible DECLARE_HOOK
+	  implementation.
+
+	  This option is needed by many features in the EC. Disabling it will
+	  likely cause build errors.
+
+config PLATFORM_EC_I2C
+	bool "I2C shim"
+	default n if ARCH_POSIX
+	default y
+	help
+	  Enable compilation of the EC i2c module. Once enabled, it will be
+	  possible to make calls using the old platform/ec i2c APIs defined
+	  in include/i2c.h and implemented in common/i2c_master.c. Doing so
+	  should make shimming other platform/ec modules which rely on i2c
+	  communication "just work" without requiring any further code changes.
+
+menuconfig PLATFORM_EC_HOSTCMD
+	bool "Host commands"
+	default n if ARCH_POSIX
+	default y if AP
+	select HAS_TASK_HOSTCMD
+	help
+	  Enable the host commands shim in platform/ec. This handles
+	  communication with the AP. The AP sends a command to the EC and it
+	  responds when able. An interrupt can be used to indicate to the AP
+	  that the EC has something for it.
+
+config PLATFORM_EC_LID_SWITCH
+	bool "Lid switch"
+	help
+	  Enable shimming the lid switch implementation and related
+	  commands in platform/ec. The lid switch can affect power-on
+	  behaviour. For example, when the lid is opened, the device may
+	  automatically power on.
+
+	  This requires a GPIO named GPIO_LID_OPEN to be defined in gpio_map.h.
+
+config PLATFORM_EC_MKBP_EVENT
+    bool "MKBP event"
+    help
+      Enable this to support MKBP event. MKBP event is used not only
+      for matrix keyboard but also for other many events like button,
+      switch, fingerprint, and etc.
+
+      This requires a MKBP event delivery method(GPIO, HOST_EVENT, and etc)
+
+if PLATFORM_EC_MKBP_EVENT
+
+choice
+    prompt "MKBP delivery method"
+    default PLATFORM_EC_MKBP_USE_GPIO
+    help
+      Select MKBP delivery method
+
+config PLATFORM_EC_MKBP_USE_GPIO
+    bool "Use GPIO"
+    help
+      Select to send MKBP events via GPIO. You should define GPIO_EC_INT_L
+      in gpio_map.h as output from the EC. The GPIO is used to indicate an
+      event is ready for serving by the AP.
+
+config PLATFORM_EC_MKBP_USE_HOST_EVENT
+    bool "Use host event"
+    help
+      Select to send MKBP events via host event.
+
+config PLATFORM_EC_MKBP_USE_GPIO_AND_HOST_EVENT
+    bool "Use GPIO and host event"
+    help
+      MKBP events are notified by using both a GPIO and a host event.
+
+      You should use this if you are using a GPIO to notify the AP of an MKBP
+      event, and you need an MKBP event to wake the AP in suspend and the
+      AP cannot wake from the GPIO.  Since you are using both a GPIO and
+      a hostevent for the notification, make sure that the S0 hostevent mask
+      does NOT include MKBP events.  Otherwise, you will have multiple
+      consumers for a single event. However, make sure to configure the
+      host event *sleep* mask in coreboot to include MKBP events. In order to
+      prevent all MKBP events from waking the AP, use
+      CONFIG_MKBP_EVENT_WAKEUP_MASK to filter the events.
+
+config PLATFORM_EC_MKBP_USE_CUSTOM
+    bool "Use custom method"
+    help
+      Select to send MKBP events using custom method. You need to define
+      mkbp_set_host_active_via_custom() which is called when there's a MKBP event
+      to be sent. for more about the function, refer to mkbp_event.h.
+
+endchoice
+
+endif # PLATFORM_EC_MKBP_EVENT
+
+config PLATFORM_EC_PANIC
+	bool "Panic output"
+	default y
+	help
+	  Enable support for collecting and reporting panic information,
+	  caused by exceptions in the EC. This can be the result of a watchdog
+	  firing, a division by zero, unaligned access, stack overflow or
+	  assertion failure.
+
+	  The panic information is made available to the AP via the
+	  EC_CMD_GET_PANIC_INFO host command and a 'panicinfo' console command
+
+if PLATFORM_EC_PANIC
+
+config PLATFORM_EC_SOFTWARE_PANIC
+	bool "Software panic"
+	default y
+	help
+	  Sometimes the EC has bugs that are provoked by unexpected events.
+	  This enables storing a panic log and halt the system for
+	  software-related reasons, such as stack overflow or assertion
+	  failure.
+
+config PLATFORM_EC_CONSOLE_CMD_CRASH
+	bool "Console command: crash"
+	default y
+	help
+	  For testing purposes it is useful to be able to generation exceptions
+	  to check that the panic reporting is working correctly. The enables
+	  the 'crash' command which supports generating various exceptions,
+	  selected by its parameter:
+
+	     assert              - assertion failure (ASSERT() macro)
+	     divzero             - division by zero
+	     udivzero            - division of unsigned value by zero
+	     stack (if enabled)  - stack overflow
+	     unaligned           - unaligned access (e.g. word load from 0x123)
+	     watchdog            - watchdog timer fired
+	     hang                - infinite loop in the EC code
+
+config PLATFORM_EC_STACKOVERFLOW
+	bool "Console command: crash stack"
+	depends on PLATFORM_EC_CONSOLE_CMD_CRASH
+	default y
+	help
+	  This enables the 'stack' parameter for the 'crash' command. This
+	  causes a stack overflow by recursing repeatedly while task switching.
+	  This can be used to check that stack-overflow detection is working
+	  as expected.
+
+endif # PLATFORM_EC_PANIC
+
+config PLATFORM_EC_PORT80
+	bool "Port 80 support"
+	default y if AP_X86 && PLATFORM_EC_POWERSEQ
+	help
+	  Enable the port80 module, a way to report progress of the AP's boot
+	  sequence, assuming that the EC can detect these writes on the I/O
+	  bus. The EC buffers calls to port_80_write() and occasionally prints
+	  a message when there are new writes.
+
+	  See here for more information:
+
+	  https://en.wikipedia.org/wiki/Power-on_self-test#Progress_and_error_reporting
+
+config PLATFORM_EC_POWER_BUTTON
+	bool "Power-button support"
+	select HAS_TASK_POWERBTN
+	depends on PLATFORM_EC_HOSTCMD
+	help
+	  Enable shimming the power button implementation and related
+	  commands in platform/ec.  This is used to implement the Chromium OS
+	  shutdown sequence.
+
+	  This requires a GPIO named GPIO_POWER_BUTTON_L in gpio_map.h.
+
+config PLATFORM_EC_PWM
+	bool "PWM (Pulse Width Modulation) module"
+	help
+	  Enable the PWM (Pulse Width Modulation) module. This module is used to
+	  support variable brightness LEDs, backlight controls, and
+	  variable-speed fans.
+
+config PLATFORM_EC_RTC
+	bool "Real-time clock (RTC)"
+	default y
+	help
+	  Enable support for a real-time clock. Typically this is available
+	  on-chip in the EC. It provides a way to track the passage of time
+	  in terms of second and minutes. Once set, and provided that it has a
+	  suitable power source, it should be able to keep reasonably accurate
+	  time over a period of days and weeks.
+
+	  The starting EC clock is typically set by the AP, since it has access
+	  to the outside world and can often obtain the current time when
+	  desired.
+
+if PLATFORM_EC_RTC
+
+config PLATFORM_EC_CONSOLE_CMD_RTC
+	bool "Console command: rtc"
+	default y
+	help
+	  This command allows getting and setting the current RTC value. The
+	  value is in seconds since the Epoch (midnight on 1/1/70). You can
+	  convert this to a human date on the command line with 'date -u -d @n'
+	  where n is the numeric value. To convert a time to seconds, use:
+
+	     date -d '1970-01-01 UTC + n seconds'
+
+config PLATFORM_EC_CONSOLE_CMD_RTC_ALARM
+	bool "Console command: rtc_alarm"
+	depends on PLATFORM_EC_CONSOLE_CMD_RTC
+	default y
+	help
+	  This command supports setting a real-time-clock (RTC) alarm that
+	  causes an interrupt when the timer reaches that point. To set the
+	  alarm:
+
+	     rtc <sec> [<usec>]
+
+	  where:
+	    <sec> is the number of seconds since the epoch
+	    <usec> is the optional number of microseconds (fractional seconds)
+
+config PLATFORM_EC_HOSTCMD_RTC
+	bool "Host command: EC_CMD_RTC_GET_VALUE etc."
+	depends on PLATFORM_EC_HOSTCMD
+	default y
+	help
+	  Enables support for EC_CMD_RTC_GET_VALUE, EC_CMD_RTC_SET_VALUE,
+	  EC_CMD_RTC_GET_ALARM and EC_CMD_RTC_SET_ALARM which colectively allow
+	  the AP to control the EC's real-time-clock. The AP typically makes
+	  use of the EC's RTC to avoid needing a discrete RTC chip on the board.
+
+endif # PLATFORM_EC_RTC
+
+choice "SHA256 method"
+	prompt "Select method to use for computing SHA256 hashes"
+	help
+	  The verified boot mechanism requests the hash of the entire read-write
+	  portion of the EC image. This is typically done using a hashing block
+	  in the EC, so that it is as fast as possible. A fallback software
+	  algorithm is available if needed.
+
+config PLATFORM_EC_SHA256_SW
+	bool "Compute SHA256 in software"
+	help
+	  Enable this if your EC chip does not support hardware-accelerated
+	  SHA256 computation. This enables the software algorithm which is
+	  quite slow but will work in a pinch.
+
+config PLATFORM_EC_SHA256_HW_ACCELERATE
+	bool "Compute SHA256 in hardware"
+	help
+	  Enable this if your EC chip supports hardware-accelerated SHA256
+	  computation. This is faster than running the algorithm in software,
+	  so is desirable.
+
+	  The chip support must implement the functions in sha256.h
+
+endchoice # SHA256 method
+
+config PLATFORM_EC_CONSOLE_CMD_SHMEM
+	bool "Console command: shmem"
+	default y
+	help
+	  This command prints basic information about the EC shared memory,
+	  located at the top of RAM, above all RAM symbols: total size, bytes
+	  used and the maximum number of bytes that have been used since
+	  the EC started running.
+
+config PLATFORM_EC_SWITCH
+	bool "Memory mapped switches"
+	depends on PLATFORM_EC_HOSTCMD
+	default y
+	help
+	  Enable the reporting of the platform switches state to the AP using
+	  memory mapped storage provided by the host command interface.
+
+	  The platform switches include:
+	    LID open
+	    power button pressed
+	    write protect disabled
+	    recovery switch
+
+          This also enables the "mmapinfo" console command to report the current
+          state of all switches.
+
+config PLATFORM_EC_THROTTLE_AP
+	bool "CPU throttling"
+	default y if PLATFORM_EC_POWERSEQ
+	help
+	  Enable throttling the CPU based on the temperature sensors. When they
+	  detect that the CPU is getting too hot, the CPU is throttled to
+	  a lower speed. This reduce the CPU's power output and eventually
+	  results in a lower temperature.
+
+if PLATFORM_EC_THROTTLE_AP
+
+# TODO(b/177676794): Add the CONFIG_THROTTLE_AP_ON_... options
+
+config PLATFORM_EC_CHIPSET_CAN_THROTTLE
+	bool "CPU can support throttling"
+	default y
+	help
+	  Indicates that the SoC supports throttling. This means that a
+	  chipset_throttle_cpu() function is provided by the chipset, to be
+	  called to set the throttle state. The typical implementation asserts
+	  GPIO_CPU_PROCHOT, to make the CPU slow down.
+
+config PLATFORM_EC_CONSOLE_CMD_APTHROTTLE
+	bool "Console command: apthrottle"
+	default y
+	help
+	  This command shows the current status of AP throttling. Both soft
+	  (type 0) and hard (type 1) throttling are supported. Soft throttling
+	  is typically controlled by the AP via a host event. Hard throttling
+	  typically uses the PROCHOT (Processor Hot) signal on x86 CPUs.
+
+	  Example output:
+
+	     AP throttling type 0 is off (0x00000000)
+	     AP throttling type 1 is off (0x00000000)
+
+endif # PLATFORM_EC_THROTTLE_AP
+
+menuconfig PLATFORM_EC_TIMER
+	bool "Timer module"
+	default y
+	help
+	  Enable compilation of the EC timer module. This provides support for
+	  delays, getting the current time and setting alarms.
+
+	  This option is needed by many features in the EC. Disabling it will
+	  likely cause build errors.
+
+if PLATFORM_EC_TIMER
+
+config PLATFORM_EC_CONSOLE_CMD_GETTIME
+	bool "Console command: gettime"
+	default y
+	help
+	  Enable the "gettime" command. This shows the current time (in
+	  microseconds since boot) in both hex and in decimal converted to
+	  seconds. For example:
+
+	     Time: 0x0000000002706a62 = 40.921698 s
+
+
+config PLATFORM_EC_CONSOLE_CMD_TIMERINFO
+	bool "Console command: timerinfo"
+	default y
+	help
+	  Enable the "timerinfo" command which shows the current time (in
+	  microseconds and seconds since boot), the deadline (next time the EC
+	  needs to wake up) and a list of active timers along with when they
+	  will next fire.
+
+	  Example:
+
+	    Time:     0x0000000002706a62 us,   40.921698 s
+	    Deadline: 0x000000000270774d ->    0.003307 s from now
+	    Active timers:
+	      Tsk  1  0x000000000271db8f ->    0.094509
+	      Tsk  4  0x00000000027396b3 ->    0.207953
+	      Tsk 13  0x00000000027133a1 ->    0.051519
+
+
+config PLATFORM_EC_CONSOLE_CMD_WAITMS
+	bool "Console command: waitms"
+	default y
+	help
+	  Enable the "waitms" command. This waits for a given number of
+	  milliseconds. For example:
+
+	    waitms 100
+
+	  waits for 100ms. Note that long waits can introduce problems since
+	  it stops the EC from executing its normal tasks. For example, a
+	  two-second wait can cause the EC to reset.
+
+endif # PLATFORM_EC_TIMER
+
+config PLATFORM_EC_VBOOT_HASH
+	bool "Host command: EC_CMD_VBOOT_HASH"
+	depends on PLATFORM_EC_HOSTCMD
+	default y
+	help
+	  Allows the AP to request hashing functions from the EC.
+
+	  Verified boot can update the EC's read/write code when it detects
+	  that it is an incorrect version. It detects this by asking the EC to
+	  hash itself. If the hash is incorrect, new code is write to the EC's
+	  read/write area.
+
+config PLATFORM_EC_VSTORE
+	bool "Secure temporary storage for verified boot"
+	default y
+	help
+	  Enable support for storing a block of data received from the AP so it
+	  can be read back later by the AP. This is helpful since the AP may
+	  reboot or resume and want the data early in its start-up before it
+	  has access to SDRAM.
+
+	  There are a fixed number of slots and each can hold a fixed amount of
+	  data (EC_VSTORE_SLOT_SIZE bytes). Once a slot is written it is locked
+	  and cannot be written again unless explicitly unlocked.
+
+	  Stored data is preserved when the EC moved from RO to RW.
+
+config PLATFORM_EC_VSTORE_SLOT_COUNT
+	int "Number of slots"
+	depends on PLATFORM_EC_VSTORE
+	default 1
+	help
+	  Set the number of slots available in the verified-boot store. The
+	  number required depends on the AP firmware. Typically the vstore is
+	  used only for recording a hash of the read-write AP firmware for
+	  checking on resume. For this, one slot is enough.
+
+endif # PLATFORM_EC

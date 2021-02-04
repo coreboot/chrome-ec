@@ -8,6 +8,7 @@
 #include "charger.h"
 #include "console.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "system.h"
 #include "timer.h"
 #include "usb_mux.h"
@@ -22,12 +23,37 @@ static int board_get_polarity(int port)
 {
 	/* Krane's aux mux polarity is reversed. Workaround to flip it back. */
 	if (IS_ENABLED(BOARD_KRANE) && board_get_version() == 3)
-		return !pd_get_polarity(port);
+		return !polarity_rm_dts(pd_get_polarity(port));
 
-	return pd_get_polarity(port);
+	return polarity_rm_dts(pd_get_polarity(port));
 }
 
 static uint8_t vbus_en;
+
+#define VBUS_EN_SYSJUMP_TAG		0x5645 /* VE */
+#define VBUS_EN_HOOK_VERSION	1
+
+static void vbus_en_preserve_state(void)
+{
+	system_add_jump_tag(VBUS_EN_SYSJUMP_TAG, VBUS_EN_HOOK_VERSION,
+			    sizeof(vbus_en), &vbus_en);
+}
+DECLARE_HOOK(HOOK_SYSJUMP, vbus_en_preserve_state, HOOK_PRIO_DEFAULT);
+
+static void vbus_en_restore_state(void)
+{
+	const uint8_t *prev_vbus_en;
+	int size, version;
+
+	prev_vbus_en = (const uint8_t *)system_get_jump_tag(
+		VBUS_EN_SYSJUMP_TAG, &version, &size);
+
+	if (prev_vbus_en && version == VBUS_EN_HOOK_VERSION &&
+		size == sizeof(*prev_vbus_en)) {
+		memcpy(&vbus_en, prev_vbus_en, sizeof(vbus_en));
+	}
+}
+DECLARE_HOOK(HOOK_INIT, vbus_en_restore_state, HOOK_PRIO_DEFAULT);
 
 int board_vbus_source_enabled(int port)
 {
@@ -104,11 +130,8 @@ void pd_power_supply_reset(int port)
 
 int pd_check_vconn_swap(int port)
 {
-	/*
-	 * VCONN is provided directly by the battery (PPVAR_SYS)
-	 * but use the same rules as power swap.
-	 */
-	return pd_get_dual_role(port) == PD_DRP_TOGGLE_ON ? 1 : 0;
+	/* always allow vconn swap, since PSYS sources VCONN */
+	return 1;
 }
 
 /* ----------------- Vendor Defined Messages ------------------ */
@@ -261,7 +284,6 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 
 __override void svdm_exit_dp_mode(int port)
 {
-	svdm_safe_dp_mode(port);
 	gpio_set_level(GPIO_USB_C0_HPD_OD, 0);
 #ifdef VARIANT_KUKUI_DP_MUX_GPIO
 	board_set_dp_mux_control(0, 0);

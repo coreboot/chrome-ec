@@ -24,7 +24,8 @@
 
 /*****************************************************************************/
 /* This enforces the virtual OR of all throttling sources. */
-static struct mutex throttle_mutex;
+static mutex_t throttle_mutex;
+STATIC_IF(CONFIG_ZEPHYR) bool throttle_mutex_inited;
 static uint32_t throttle_request[NUM_THROTTLE_TYPES];
 static int debounced_prochot_in;
 static enum gpio_signal gpio_prochot_in = GPIO_COUNT;
@@ -35,6 +36,10 @@ void throttle_ap(enum throttle_level level,
 {
 	uint32_t tmpval, bitmask;
 
+	if (IS_ENABLED(CONFIG_ZEPHYR) && !throttle_mutex_inited) {
+		(void)k_mutex_init(&throttle_mutex);
+		throttle_mutex_inited = true;
+	}
 	mutex_lock(&throttle_mutex);
 
 	bitmask = BIT(source);
@@ -93,6 +98,16 @@ static void prochot_input_deferred(void)
 		prochot_in = !prochot_in;
 
 	if (prochot_in == debounced_prochot_in)
+		return;
+
+	/*
+	 * b/173180788 Confirmed from Intel internal that SLP_S3# asserts low
+	 * about 10us before PROCHOT# asserts low, which means that
+	 * the CPU is already in reset and therefore the PROCHOT#
+	 * asserting low is normal behavior and not a concern
+	 * for PROCHOT# event.  Ignore all PROCHOT changes while the AP is off
+	 */
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		return;
 
 	debounced_prochot_in = prochot_in;

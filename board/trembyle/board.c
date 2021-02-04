@@ -184,6 +184,13 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 	IOEX_EN_USB_A1_5V_DB,
 };
 
+const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
+	.eq_ch0_ch1_offset = PI3HDX1204_EQ_DB710,
+	.eq_ch2_ch3_offset = PI3HDX1204_EQ_DB710,
+	.vod_offset = PI3HDX1204_VOD_130_ALL_CHANNELS,
+	.de_offset = PI3HDX1204_DE_DB_MINUS5,
+};
+
 /*****************************************************************************
  * Board suspend / resume
  */
@@ -203,7 +210,7 @@ static void board_chipset_resume(void)
 		int val;
 
 		rv = i2c_read8(I2C_PORT_USBA0,
-				PS8811_I2C_ADDR_FLAGS + PS8811_REG_PAGE1,
+				PS8811_I2C_ADDR_FLAGS3 + PS8811_REG_PAGE1,
 				PS8811_REG1_USB_BEQ_LEVEL, &val);
 		if (!rv)
 			break;
@@ -216,7 +223,7 @@ static void board_chipset_resume(void)
 	/* USB-A1 needs to increase gain to get over MB/DB connector */
 	for (retry = 0; retry < PS8811_ACCESS_RETRIES; ++retry) {
 		rv = i2c_write8(I2C_PORT_USBA1,
-				PS8811_I2C_ADDR_FLAGS + PS8811_REG_PAGE1,
+				PS8811_I2C_ADDR_FLAGS3 + PS8811_REG_PAGE1,
 				PS8811_REG1_USB_BEQ_LEVEL,
 				PS8811_BEQ_I2C_LEVEL_UP_13DB |
 				PS8811_BEQ_PIN_LEVEL_UP_18DB);
@@ -321,6 +328,8 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 /*****************************************************************************
  * Use FW_CONFIG to set correct configuration.
  */
+
+int board_usbc1_retimer_inhpd = IOEX_USB_C1_HPD_IN_DB;
 
 static void setup_v0_charger(void)
 {

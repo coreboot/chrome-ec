@@ -12,6 +12,10 @@
 #include "usb_dp_alt_mode.h"
 #include "mock/dp_alt_mode_mock.h"
 
+#ifndef TEST_BUILD
+#error "Mocks should only be in the test build."
+#endif
+
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
@@ -29,9 +33,3 @@ void dp_init(int port)
 {
 	CPRINTS("C%d: DP init", port);
 }
-
-void dp_teardown(int port)
-{
-	CPRINTS("C%d: DP teardown", port);
-}
-

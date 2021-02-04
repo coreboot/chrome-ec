@@ -20,15 +20,16 @@
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/retimer/nb7v904m.h"
-#include "driver/sync.h"
 #include "driver/tcpm/raa489000.h"
 #include "driver/tcpm/tcpci.h"
+#include "driver/temp_sensor/thermistor.h"
 #include "driver/usb_mux/pi3usb3x532.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "keyboard_scan.h"
+#include "keyboard_8042_sharedlib.h"
 #include "lid_switch.h"
 #include "motion_sense.h"
 #include "power.h"
@@ -40,6 +41,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
+#include "temp_sensor.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -47,31 +49,80 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-static void tcpc_alert_event(enum gpio_signal s)
-{
-	int port = (s == GPIO_USB_C0_INT_ODL) ? 0 : 1;
+#define INT_RECHECK_US 5000
 
-	schedule_deferred_pd_interrupt(port);
+/* C0 interrupt line shared by BC 1.2 and charger */
+static void check_c0_line(void);
+DECLARE_DEFERRED(check_c0_line);
+
+static void notify_c0_chips(void)
+{
+	/*
+	 * The interrupt line is shared between the TCPC and BC 1.2 detection
+	 * chip.  Therefore we'll need to check both ICs.
+	 */
+	schedule_deferred_pd_interrupt(0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+}
+
+static void check_c0_line(void)
+{
+	/*
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL)) {
+		notify_c0_chips();
+		hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+	}
 }
 
 static void usb_c0_interrupt(enum gpio_signal s)
 {
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c0_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c0_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+
+}
+
+/* C1 interrupt line shared by BC 1.2, TCPC, and charger */
+static void check_c1_line(void);
+DECLARE_DEFERRED(check_c1_line);
+
+static void notify_c1_chips(void)
+{
+	schedule_deferred_pd_interrupt(1);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+}
+
+static void check_c1_line(void)
+{
 	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips.
 	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	if (!gpio_get_level(GPIO_USB_C1_INT_ODL)) {
+		notify_c1_chips();
+		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+	}
 }
 
 static void sub_usb_c1_interrupt(enum gpio_signal s)
 {
-	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
-	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c1_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c1_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+
 }
 
 static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
@@ -126,9 +177,30 @@ void board_init(void)
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 
+	/*
+	 * If interrupt lines are already low, schedule them to be processed
+	 * after inits are completed.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
+		hook_call_deferred(&check_c0_line_data, 0);
+	if (!gpio_get_level(GPIO_USB_C1_INT_ODL))
+		hook_call_deferred(&check_c1_line_data, 0);
+
 	/* Turn on 5V if the system is on, otherwise turn it off. */
-	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND);
+	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
+			      CHIPSET_STATE_SOFT_OFF);
 	board_power_5v_enable(on);
+	if (get_cbi_fw_config_keyboard() == CUST_UK2_KB) {
+		/*
+		 * Observed on Shyvana with UK keyboard,
+		 *   \|:     0x0061->0x61->0x56
+		 *   r-ctrl: 0xe014->0x14->0x1d
+		 */
+		uint16_t tmp = get_scancode_set2(4, 0);
+
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
+		set_scancode_set2(2, 7, tmp);
+	}
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -138,8 +210,8 @@ void board_hibernate(void)
 	 * Both charger ICs need to be put into their "low power mode" before
 	 * entering the Z-state.
 	 */
-	raa489000_hibernate(1);
-	raa489000_hibernate(0);
+	raa489000_hibernate(1, true);
+	raa489000_hibernate(0, false);
 }
 
 void board_reset_pd_mcu(void)
@@ -150,40 +222,9 @@ void board_reset_pd_mcu(void)
 	 */
 }
 
-static void reconfigure_5v_gpio(void)
-{
-	/*
-	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
-	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
-	 * instead for those boards.  Note that this breaks the volume up button
-	 * functionality.
-	 */
-	if (system_get_board_version() < 0) {
-		CPRINTS("old board - remapping 5V en");
-		gpio_set_flags(GPIO_VOLUP_BTN_ODL, GPIO_OUT_LOW);
-	}
-}
-DECLARE_HOOK(HOOK_INIT, reconfigure_5v_gpio, HOOK_PRIO_INIT_I2C+1);
-
 static void set_5v_gpio(int level)
 {
-	int version;
-	enum gpio_signal gpio;
-
-	/*
-	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
-	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
-	 * instead for those boards.  Note that this breaks the volume up button
-	 * functionality.
-	 */
-	version = system_get_board_version();
-
-	/*
-	 * If the CBI EEPROM wasn't formatted, assume it's a very early board.
-	 */
-	gpio = version < 0 ? GPIO_VOLUP_BTN_ODL : GPIO_EN_PP5000;
-
-	gpio_set_level(gpio, level);
+	gpio_set_level(GPIO_EN_PP5000, level);
 }
 
 __override void board_power_5v_enable(int enable)
@@ -278,10 +319,20 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
 
 	/*
-	 * TODO(b:147463641): Characterize the input current limit in case that
-	 * a scaling needs to be applied here.
+	 * b/147463641: The charger IC seems to overdraw ~4%, therefore we
+	 reduce
+	 * our target accordingly.
 	 */
+	icl = icl * 96 / 100;
 	charge_set_input_current_limit(icl, charge_mv);
+}
+
+__override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
+{
+	if (port < 0 || port > board_get_usb_pd_port_count())
+		return;
+
+	raa489000_set_output_current(port, rp);
 }
 
 /* Sensors */
@@ -290,6 +341,12 @@ static struct mutex g_base_mutex;
 
 /* Matrices to rotate accelerometers into the standard reference. */
 static const mat33_fp_t lid_standard_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
@@ -337,7 +394,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,  /* g */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
@@ -367,24 +424,26 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
-	},
-	[VSYNC] = {
-		.name = "Camera VSYNC",
-		.active_mask = SENSOR_ACTIVE_S0,
-		.chip = MOTIONSENSE_CHIP_GPIO,
-		.type = MOTIONSENSE_TYPE_SYNC,
-		.location = MOTIONSENSE_LOC_CAMERA,
-		.drv = &sync_drv,
-		.default_range = 0,
-		.min_frequency = 0,
-		.max_frequency = 1,
 	},
 };
 
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+/* Thermistors */
+const struct temp_sensor_t temp_sensors[] = {
+	[TEMP_SENSOR_1] = {.name = "Memory",
+			   .type = TEMP_SENSOR_TYPE_BOARD,
+			   .read = get_temp_3v3_51k1_47k_4050b,
+			   .idx = ADC_TEMP_SENSOR_1},
+	[TEMP_SENSOR_2] = {.name = "Charger",
+			   .type = TEMP_SENSOR_TYPE_BOARD,
+			   .read = get_temp_3v3_51k1_47k_4050b,
+			   .idx = ADC_TEMP_SENSOR_2},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
@@ -488,13 +547,12 @@ const struct usb_mux usbc1_retimer = {
 	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
 	.driver = &nb7v904m_usb_redriver_drv,
 };
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.usb_port = 0,
 		.i2c_port = I2C_PORT_USB_C0,
 		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
 		.driver = &pi3usb3x532_usb_mux_driver,
-		.next_mux = &usbc0_retimer,
 	},
 	{
 		.usb_port = 1,
@@ -504,6 +562,15 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.next_mux = &usbc1_retimer,
 	}
 };
+
+static void reconfigure_usbmux(void)
+{
+	if (system_get_board_version() < 2) {
+		CPRINTS("add redriver at usbc0");
+		usb_muxes[0].next_mux = &usbc0_retimer;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, reconfigure_usbmux, HOOK_PRIO_INIT_I2C+1);
 
 uint16_t tcpc_get_alert_status(void)
 {

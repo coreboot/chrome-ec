@@ -11,19 +11,23 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+/*
+ * Create an EC build that requires AP-driven mode entry to facilitate debugging
+ * b/177105656.
+ */
+#ifdef BOARD_VOXEL_APMODEENTRY
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+#endif
+
 /* Optional features */
 #undef NPCX7_PWM1_SEL
 #define NPCX7_PWM1_SEL    0    /* GPIO C2 is not used as PWM1. */
 
-#ifdef BOARD_VOXEL_NPCX797FC
 /*
  * The RAM and flash size combination on the the NPCX797FC does not leave
  * any unused flash space that can be used to store the .init_rom section.
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
-#endif
-
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
 #define CONFIG_VBOOT_EFS2
 
@@ -40,13 +44,25 @@
 
 /* Keyboard features */
 
+/* Keyboard backliht */
+#define CONFIG_PWM
+#define CONFIG_PWM_KBLIGHT
+
 /* Sensors */
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 /* BMI160 Base accel/gyro */
 #define CONFIG_ACCELGYRO_BMI160
+#define CONFIG_ACCELGYRO_ICM426XX	/* Base accel second source*/
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* Lid operates in forced mode, base in FIFO */
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
 /* BMA253 Lid accel */
+#define CONFIG_ACCEL_KX022	/* Lid accel */
 #define CONFIG_ACCEL_BMA255
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -56,20 +72,8 @@
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_PORT_MAX_COUNT			2
 
-/*
- * USB-C port's USB2 & USB3 mapping from schematics
- * USB2 numbering on PCH - 1 to n
- * USB3 numbering on AP - 0 to n (PMC's USB3 numbering for MUX
- * configuration is - 1 to n hence add +1)
- */
-#define USBC_PORT_0_USB2_NUM	9
-#define USBC_PORT_0_USB3_NUM	1
-#define USBC_PORT_1_USB2_NUM	4
-#define USBC_PORT_1_USB3_NUM	2
-
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
@@ -153,7 +157,7 @@
 #define I2C_PORT_CHARGER	I2C_PORT_EEPROM
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 
 
 #ifndef __ASSEMBLER__
@@ -163,7 +167,7 @@
 
 enum battery_type {
 	BATTERY_AP19B8M,
-	BATTERY_LGC011,
+	BATTERY_LGC_AP18C8K,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -187,6 +191,8 @@ enum usbc_port {
 };
 
 void board_reset_pd_mcu(void);
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

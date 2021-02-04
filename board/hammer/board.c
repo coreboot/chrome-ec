@@ -10,7 +10,7 @@
 #include "driver/charger/isl923x.h"
 #include "driver/led/lm3630a.h"
 #include "ec_version.h"
-#include "ec_ec_comm_slave.h"
+#include "ec_ec_comm_server.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "hwtimer.h"
@@ -145,15 +145,15 @@ struct keyboard_scan_config keyscan_config = {
 struct consumer const ec_ec_usart_consumer;
 static struct usart_config const ec_ec_usart;
 
-struct queue const ec_ec_comm_slave_input = QUEUE_DIRECT(64, uint8_t,
+struct queue const ec_ec_comm_server_input = QUEUE_DIRECT(64, uint8_t,
 				ec_ec_usart.producer, ec_ec_usart_consumer);
-struct queue const ec_ec_comm_slave_output = QUEUE_DIRECT(64, uint8_t,
+struct queue const ec_ec_comm_server_output = QUEUE_DIRECT(64, uint8_t,
 				null_producer, ec_ec_usart.consumer);
 
 struct consumer const ec_ec_usart_consumer = {
-	.queue = &ec_ec_comm_slave_input,
+	.queue = &ec_ec_comm_server_input,
 	.ops   = &((struct consumer_ops const) {
-		.written = ec_ec_comm_slave_written,
+		.written = ec_ec_comm_server_written,
 	}),
 };
 
@@ -163,8 +163,8 @@ static struct usart_config const ec_ec_usart =
 		usart_tx_interrupt,
 		115200,
 		USART_CONFIG_FLAG_HDSEL,
-		ec_ec_comm_slave_input,
-		ec_ec_comm_slave_output);
+		ec_ec_comm_server_input,
+		ec_ec_comm_server_output);
 #endif /* BOARD_WAND && SECTION_IS_RW */
 
 /******************************************************************************
@@ -184,8 +184,8 @@ static void board_init(void)
 
 #ifdef BOARD_WAND
 	/* USB to serial queues */
-	queue_init(&ec_ec_comm_slave_input);
-	queue_init(&ec_ec_comm_slave_output);
+	queue_init(&ec_ec_comm_server_input);
+	queue_init(&ec_ec_comm_server_output);
 
 	/* UART init */
 	usart_init(&ec_ec_usart);
@@ -196,7 +196,7 @@ static void board_init(void)
 #endif
 
 #ifdef HAS_SPI_TOUCHPAD
-	spi_enable(CONFIG_SPI_TOUCHPAD_PORT, 0);
+	spi_enable(&spi_devices[SPI_ST_TP_DEVICE_ID], 0);
 
 	/* Disable SPI passthrough when the system is locked */
 	usb_spi_enable(&usb_spi, system_is_locked());
@@ -215,7 +215,7 @@ static void board_init(void)
 	clock_wait_bus_cycles(BUS_APB, 1);
 	/* Enable SPI for touchpad */
 	gpio_config_module(MODULE_SPI_MASTER, 1);
-	spi_enable(CONFIG_SPI_TOUCHPAD_PORT, 1);
+	spi_enable(&spi_devices[SPI_ST_TP_DEVICE_ID], 1);
 #endif /* HAS_SPI_TOUCHPAD */
 }
 /* This needs to happen before PWM is initialized. */
@@ -328,4 +328,30 @@ __override const char *board_read_serial(void)
 __override int board_write_serial(const char *serialno)
 {
 	return 0;
+}
+
+static const struct ec_response_keybd_config zed_kb = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,
+		TK_REFRESH,
+		TK_FULLSCREEN,
+		TK_OVERVIEW,
+		TK_SNAPSHOT,
+		TK_BRIGHTNESS_DOWN,
+		TK_BRIGHTNESS_UP,
+		TK_VOL_MUTE,
+		TK_VOL_DOWN,
+		TK_VOL_UP,
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override
+const struct ec_response_keybd_config *board_vivaldi_keybd_config(void)
+{
+	if (IS_ENABLED(BOARD_ZED))
+		return &zed_kb;
+
+	return NULL;
 }

@@ -86,9 +86,12 @@ static enum cr50_comm_err send_to_cr50(const uint8_t *data, size_t size)
 
 	until.val = get_time().val + CR50_COMM_TIMEOUT;
 
-	/* Make sure console task won't steal the response (in case in the
-	 * future we should exchange packets after tasks start). */
-	task_disable_task(TASK_ID_CONSOLE);
+	/*
+	 * Make sure console task won't steal the response in case we exchange
+	 * packets after tasks start.
+	 */
+	if (task_start_called())
+		task_disable_task(TASK_ID_CONSOLE);
 
 	/* Wait for response from Cr50 */
 	for (i = 0; i < sizeof(res); i++) {
@@ -103,7 +106,8 @@ static enum cr50_comm_err send_to_cr50(const uint8_t *data, size_t size)
 		}
 	}
 
-	task_enable_task(TASK_ID_CONSOLE);
+	if (task_start_called())
+		task_enable_task(TASK_ID_CONSOLE);
 
 	/* Exit packet mode */
 	enable_packet_mode(false);
@@ -141,7 +145,7 @@ static enum cr50_comm_err cmd_to_cr50(enum cr50_comm_cmd cmd,
 	p->type = cmd;
 	p->size = size;
 	memcpy(p->data, data, size);
-	p->crc = crc8((uint8_t *)&p->type,
+	p->crc = cros_crc8((uint8_t *)&p->type,
 		      sizeof(p->type) + sizeof(p->size) + size);
 
 	do {

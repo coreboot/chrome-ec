@@ -264,7 +264,7 @@ int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
 		  const uint8_t *out, int out_bytes,
 		  uint8_t *in, int in_bytes, int flags)
 {
-	int addr_8bit = I2C_GET_ADDR(slave_addr_flags) << 1;
+	int addr_8bit = I2C_STRIP_FLAGS(slave_addr_flags) << 1;
 	int rv = EC_SUCCESS;
 	int i;
 	int xfer_start = flags & I2C_XFER_START;
@@ -408,7 +408,7 @@ int i2c_get_line_levels(int port)
 /*****************************************************************************/
 /* Hooks */
 
-#ifdef CONFIG_I2C_MASTER
+#ifdef CONFIG_I2C_CONTROLLER
 /* Handle an upcoming frequency change. */
 static void i2c_pre_freq_change_hook(void)
 {

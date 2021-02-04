@@ -377,11 +377,11 @@ static int parse_vidpid(const char *input, uint16_t *vid_ptr, uint16_t *pid_ptr)
 		return 0;
 	*s++ = '\0';
 
-	*vid_ptr = (uint16_t) strtoul(copy, &e, 16);
+	*vid_ptr = (uint16_t) strtoull(copy, &e, 16);
 	if (!*optarg || (e && *e))
 		return 0;
 
-	*pid_ptr = (uint16_t) strtoul(s, &e, 16);
+	*pid_ptr = (uint16_t) strtoull(s, &e, 16);
 	if (!*optarg || (e && *e))
 		return 0;
 
@@ -1113,7 +1113,7 @@ int main(int argc, char *argv[])
 
 			data = get_file_or_die(optarg, &data_len);
 			printf("read %zd(%#zx) bytes from %s\n",
-				data_len, data_len, argv[optind]);
+				data_len, data_len, argv[optind - 1]);
 
 			break;
 		case 'r':

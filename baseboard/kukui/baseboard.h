@@ -12,6 +12,7 @@
  * Variant battery defines, pick one:
  * VARIANT_KUKUI_BATTERY_MAX17055
  * VARIANT_KUKUI_BATTERY_MM8013
+ * VARIANT_KUKUI_BATTERY_BQ27541
  * VARIANT_KUKUI_BATTERY_SMART
  */
 #if defined(VARIANT_KUKUI_BATTERY_MAX17055)
@@ -20,6 +21,8 @@
 #define BATTERY_MAX17055_RSENSE             5     /* m-ohm */
 #elif defined(VARIANT_KUKUI_BATTERY_MM8013)
 #define CONFIG_BATTERY_MM8013
+#elif defined(VARIANT_KUKUI_BATTERY_BQ27541)
+#define CONFIG_BATTERY_BQ27541
 #elif defined(VARIANT_KUKUI_BATTERY_SMART)
 #define CONFIG_BATTERY_SMART
 #define CONFIG_BATTERY_FUEL_GAUGE
@@ -46,7 +49,6 @@
 /* TCPC MT6370 */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /*
  * The Maximum input voltage is 13.5V, need another 5% tolerance.
@@ -64,7 +66,6 @@
 /* TCPC FUSB302 */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  160000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /* b/2230219: 15V has better charging performance than 20V */
 #define PD_MAX_VOLTAGE_MV 15000
@@ -93,6 +94,7 @@
 
 /* define this if the board is jacuzzi family */
 #ifdef VARIANT_KUKUI_JACUZZI
+#define CONFIG_HOSTCMD_AP_SET_SKUID
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_IT8801
 #define CONFIG_IO_EXPANDER_PORT_COUNT 1
@@ -126,7 +128,7 @@
 #define CONFIG_EMULATED_SYSRQ
 #undef  CONFIG_HIBERNATE
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_VIRTUAL_BATTERY
 #define CONFIG_I2C_PASSTHRU_RESTRICTED
 #define CONFIG_LED_COMMON
@@ -142,6 +144,13 @@
 #undef CONFIG_SYSTEM_UNLOCKED /* Disabled in RO to save space */
 #else
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
+#endif
+
+/* free flash space */
+#ifdef SECTION_IS_RO
+#undef CONFIG_USB_PD_DEBUG_LEVEL
+#define CONFIG_USB_PD_DEBUG_LEVEL 0
+#define CONFIG_COMMON_GPIO_SHORTNAMES
 #endif
 
 #undef  CONFIG_UART_CONSOLE
@@ -276,6 +285,11 @@
 #undef CONFIG_HOSTCMD_FLASHPD
 #undef CONFIG_HOSTCMD_RWHASHPD
 #undef CONFIG_CONSOLE_CMDHELP
+
+#undef CONFIG_HOSTCMD_GET_UPTIME_INFO
+#undef CONFIG_CMD_AP_RESET_LOG
+#undef CONFIG_CMD_I2C_SCAN
+#undef CONFIG_CMD_I2C_XFER
 #endif
 
 #define CONFIG_TASK_PROFILING

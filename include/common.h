@@ -10,7 +10,16 @@
 
 #include <stdint.h>
 #include <inttypes.h>
+
 #include "compile_time_macros.h"
+
+#ifdef CONFIG_ZEPHYR
+#include <sys/util.h>
+#include <toolchain.h>
+#ifdef CONFIG_ZTEST
+#define TEST_BUILD
+#endif /* CONFIG_ZTEST */
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * Macros to concatenate 2 - 4 tokens together to form a single token.
@@ -35,8 +44,10 @@
  * Compared to directly using the preprocessor # operator, this 2-stage macro
  * is safe with regards to using nested macros and defined arguments.
  */
+#ifndef CONFIG_ZEPHYR
 #define STRINGIFY0(name)  #name
 #define STRINGIFY(name)  STRINGIFY0(name)
+#endif   /* CONFIG_ZEPHYR */
 
 /* Macros to access registers */
 #define REG64_ADDR(addr) ((volatile uint64_t *)(addr))
@@ -121,7 +132,11 @@
  * linked into the .rodata section.
  */
 #ifndef __init_rom
+#ifndef CONFIG_ZEPHYR
 #define __init_rom __attribute__((section(".init.rom")))
+#else
+#define __init_rom
+#endif
 #endif
 
 /* gcc does not support __has_feature */
@@ -209,6 +224,21 @@
 /* Include top-level configuration file */
 #include "config.h"
 
+/*
+ * When CONFIG_CHIP_DATA_IN_INIT_ROM is enabled the .data section is linked
+ * into an unused are of flash and excluded from the executable portion of
+ * the RO and RW images to save space.
+ *
+ * The __const_data attribute can be used to force constant data objects
+ * into the .data section instead of the .rodata section for additional
+ * savings.
+ */
+#ifdef CONFIG_CHIP_DATA_IN_INIT_ROM
+#define __const_data __attribute__((section(".data#")))
+#else
+#define __const_data
+#endif
+
 /* Canonical list of module IDs */
 #include "module_id.h"
 
@@ -261,6 +291,9 @@ enum ec_error_list {
 
 	/* Sometimes operation is expected to have to be repeated. */
 	EC_ERROR_TRY_AGAIN = 26,
+
+	/* Operation was successful but completion is pending. */
+	EC_SUCCESS_IN_PROGRESS = 27,
 
 	/* Verified boot errors */
 	EC_ERROR_VBOOT_SIGNATURE = 0x1000, /* 4096 */
@@ -411,7 +444,24 @@ enum ec_error_list {
  * Note: This macro will only function inside a code block due to the way
  * it checks for unknown values.
  */
+#ifndef CONFIG_ZEPHYR
 #define IS_ENABLED(option) __config_enabled(#option, option)
+#else
+/* IS_ENABLED previously defined in sys/util.h */
+#undef IS_ENABLED
+/*
+ * For Zephyr, we must create a new version of IS_ENABLED which is
+ * compatible with both Kconfig enables (for Zephyr code), which have
+ * the value defined to 1 upon enablement, and CrOS EC defines (which
+ * are defined to the empty string).
+ *
+ * To do this, we use __cfg_select from this codebase to determine if
+ * the option was defined to nothing ("enabled" in CrOS EC terms).  If
+ * not, we then check using Zephyr's Z_IS_ENABLED1 macro to determine
+ * if the config option is enabled by Zephyr's definition.
+ */
+#define IS_ENABLED(option) __cfg_select(option, 1, Z_IS_ENABLED1(option))
+#endif  /* CONFIG_ZEPHYR */
 
 /**
  * Makes a global variable static when a config option is enabled,
@@ -422,8 +472,19 @@ enum ec_error_list {
  * This follows the same constraints as IS_ENABLED, the config option
  * should be defined to nothing or undefined.
  */
+#ifndef CONFIG_ZEPHYR
 #define STATIC_IF(option)						\
 	__cfg_select_build_assert(#option, option, static, extern)
+#else
+/*
+ * Version of STATIC_IF for Zephyr, with similar considerations to IS_ENABLED.
+ *
+ * Note, if __cfg_select fails, then we check using Zephyr's COND_CODE_1 macro
+ * to determine if the config option is enabled by Zephyr's definition.
+ */
+#define STATIC_IF(option) \
+	__cfg_select(option, static, COND_CODE_1(option, (static), (extern)))
+#endif /* CONFIG_ZEPHYR */
 
 /**
  * STATIC_IF_NOT is just like STATIC_IF, but makes the variable static
@@ -432,7 +493,16 @@ enum ec_error_list {
  * This is to assert that a variable will go unused with a certain
  * config option.
  */
+#ifndef CONFIG_ZEPHYR
 #define STATIC_IF_NOT(option)						\
 	__cfg_select_build_assert(#option, option, extern, static)
+#else
+/*
+ * Version of STATIC_IF_NOT for Zephyr, with similar considerations to STATIC_IF
+ * and IS_ENABLED.
+ */
+#define STATIC_IF_NOT(option) \
+	__cfg_select(option, extern, COND_CODE_1(option, (extern), (static)))
+#endif /* CONFIG_ZEPHYR */
 
 #endif  /* __CROS_EC_COMMON_H */

@@ -11,7 +11,7 @@
 #include "hooks.h"
 #include "nct38xx.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "usb_common.h"
 
 #if !defined(CONFIG_USB_PD_TCPM_TCPCI)
@@ -95,6 +95,19 @@ static int nct38xx_init(int port)
 			   TCPC_REG_ALERT_MASK,
 			   reg,
 			   MASK_SET);
+
+	if (rv)
+		return rv;
+
+	/* Enable full VCONN protection (Over-Current and Short-Circuit) */
+	reg = NCT38XX_REG_VBC_FAULT_CTL_VC_OCP_EN |
+	      NCT38XX_REG_VBC_FAULT_CTL_VC_SCP_EN |
+	      NCT38XX_REG_VBC_FAULT_CTL_FAULT_VC_OFF;
+
+	rv = tcpc_update8(port,
+			  NCT38XX_REG_VBC_FAULT_CTL,
+			  reg,
+			  MASK_SET);
 
 	return rv;
 }
@@ -240,7 +253,7 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 	.set_cc			= &nct38xx_tcpm_set_cc,
 	.set_polarity		= &tcpci_tcpm_set_polarity,
 #ifdef CONFIG_USB_PD_DECODE_SOP
-	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
 #endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
@@ -268,6 +281,7 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 #ifdef CONFIG_USB_PD_FRS_TCPC
 	.set_frs_enable         = &tcpci_tcpc_fast_role_swap_enable,
 #endif

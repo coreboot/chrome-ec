@@ -11,7 +11,7 @@
 #include "common.h"
 #include "compile_time_macros.h"
 
-#define __ram_code __attribute__((section(".ram_code")))
+#define __ram_code __attribute__((section(__RAM_CODE_SECTION_NAME)))
 
 /* IRQ numbers */
 /* Group 0 */
@@ -773,6 +773,7 @@
 #define IT83XX_GPIO_GCR26       REG8(IT83XX_GPIO_BASE+0xD2)
 #define IT83XX_GPIO_GCR27       REG8(IT83XX_GPIO_BASE+0xD3)
 #define IT83XX_GPIO_GCR28       REG8(IT83XX_GPIO_BASE+0xD4)
+#define IT83XX_GPIO_GCR29       REG8(IT83XX_GPIO_BASE+0xEE)
 #define IT83XX_GPIO_GCR30       REG8(IT83XX_GPIO_BASE+0xED)
 #define IT83XX_GPIO_GCR31       REG8(IT83XX_GPIO_BASE+0xD5)
 #define IT83XX_GPIO_GCR32       REG8(IT83XX_GPIO_BASE+0xD6)
@@ -804,7 +805,16 @@ enum {
 #endif
 	GPIO_PORT_COUNT,
 
-	/* NOTE: Support GPIO input only if KSO/KSI pins are used as GPIO. */
+	/*
+	 * NOTE: support flags when KSI/KSO are configured as GPIO
+	 * 1) it8320bx:
+	 * output: GPIO_OUTPUT, GPIO_OPEN_DRAIN, GPIO_HIGH, GPIO_LOW
+	 * input: GPIO_INPUT
+	 * 2) it8320dx, it8xxx1, and it8xxx2:
+	 * output: GPIO_OUTPUT, GPIO_OPEN_DRAIN(always internal pullup),
+	 *         GPIO_HIGH, GPIO_LOW
+	 * input: GPIO_INPUT, GPIO_PULL_UP
+	 */
 	/* KSI[7-0]  GPIO data mirror register. */
 	GPIO_KSI,
 	/* KSO[15-8] GPIO data mirror register. */
@@ -816,11 +826,11 @@ enum {
 };
 
 struct gpio_reg_t {
-	/* GPIO port data register (bit mapping to pin) */
+	/* GPIO and KSI/KSO port data register (bit mapping to pin) */
 	uint32_t reg_gpdr;
-	/* GPIO port data mirror register (bit mapping to pin) */
+	/* GPIO and KSI/KSO port data mirror register (bit mapping to pin) */
 	uint32_t reg_gpdmr;
-	/* GPIO port output type register (bit mapping to pin) */
+	/* GPIO and KSI/KSO port output type register (bit mapping to pin) */
 	uint32_t reg_gpotr;
 	/* GPIO port control register (byte mapping to pin) */
 	uint32_t reg_gpcr;
@@ -848,9 +858,9 @@ static const struct gpio_reg_t gpio_group_to_reg[] = {
 	[GPIO_Q]     = { 0x00F03E03, 0x00F03E63, 0x00F03E73, 0x00F03E20 },
 	[GPIO_R]     = { 0x00F03E04, 0x00F03E64, 0x00F03E74, 0x00F03E28 },
 #endif
-	[GPIO_KSI]   = { 0x00F01D09, 0x00F01D09,         -1,         -1 },
-	[GPIO_KSO_H] = { 0x00F01D0C, 0x00F01D0C,         -1,         -1 },
-	[GPIO_KSO_L] = { 0x00F01D0F, 0x00F01D0F,         -1,         -1 },
+	[GPIO_KSI]   = { 0x00F01D08, 0x00F01D09, 0x00F01D26,         -1 },
+	[GPIO_KSO_H] = { 0x00F01D01, 0x00F01D0C, 0x00F01D27,         -1 },
+	[GPIO_KSO_L] = { 0x00F01D00, 0x00F01D0F, 0x00F01D28,         -1 },
 };
 BUILD_ASSERT(ARRAY_SIZE(gpio_group_to_reg) == (COUNT));
 
@@ -981,6 +991,8 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_EPLR         REG8(IT83XX_GCTRL_BASE+0x37)
 #define IT83XX_GCTRL_IVTBAR       REG8(IT83XX_GCTRL_BASE+0x41)
 #define IT83XX_GCTRL_MCCR2        REG8(IT83XX_GCTRL_BASE+0x44)
+#define IT83XX_GCTRL_PIN_MUX0     REG8(IT83XX_GCTRL_BASE+0x46)
+#define IT83XX_DLM14_ENABLE       BIT(5)
 #define IT83XX_GCTRL_SSCR         REG8(IT83XX_GCTRL_BASE+0x4A)
 #define IT83XX_GCTRL_ETWDUARTCR   REG8(IT83XX_GCTRL_BASE+0x4B)
 #define IT83XX_GCTRL_WMCR         REG8(IT83XX_GCTRL_BASE+0x4C)
@@ -988,6 +1000,7 @@ enum clock_gate_offsets {
 /* bit[0] = 0 or 1 : disable or enable ETWD hardware reset */
 #define ETWD_HW_RST_EN            BIT(0)
 #define IT83XX_GCTRL_RVILMCR0     REG8(IT83XX_GCTRL_BASE+0x5D)
+#define ILMCR_ILM0_ENABLE         BIT(0)
 #define ILMCR_ILM2_ENABLE         BIT(2)
 #define IT83XX_GCTRL_EWPR0PFH(i)  REG8(IT83XX_GCTRL_BASE+0x60+i)
 #define IT83XX_GCTRL_EWPR0PFD(i)  REG8(IT83XX_GCTRL_BASE+0xA0+i)
@@ -1246,6 +1259,9 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_KBS_SDC2R        REG8(IT83XX_KBS_BASE+0x23)
 #define IT83XX_KBS_SDC3R        REG8(IT83XX_KBS_BASE+0x24)
 #define IT83XX_KBS_SDSR         REG8(IT83XX_KBS_BASE+0x25)
+#define IT83XX_KBS_KSIGPODR     REG8(IT83XX_KBS_BASE+0x26)
+#define IT83XX_KBS_KSOHGPODR    REG8(IT83XX_KBS_BASE+0x27)
+#define IT83XX_KBS_KSOLGPODR    REG8(IT83XX_KBS_BASE+0x28)
 
 /* Shared Memory Flash Interface Bridge (SMFI) */
 #define IT83XX_SMFI_BASE  0x00F01000
@@ -1270,6 +1286,9 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SMFI_ECINDAR3    REG8(IT83XX_SMFI_BASE+0x3E)
 #define EC_INDIRECT_READ_INTERNAL_FLASH BIT(6)
 #define IT83XX_SMFI_ECINDDR     REG8(IT83XX_SMFI_BASE+0x3F)
+#define IT83XX_SMFI_SCAR0L      REG8(IT83XX_SMFI_BASE+0x40)
+#define IT83XX_SMFI_SCAR0M      REG8(IT83XX_SMFI_BASE+0x41)
+#define IT83XX_SMFI_SCAR0H      REG8(IT83XX_SMFI_BASE+0x42)
 #define IT83XX_SMFI_SCAR2L      REG8(IT83XX_SMFI_BASE+0x46)
 #define IT83XX_SMFI_SCAR2M      REG8(IT83XX_SMFI_BASE+0x47)
 #define IT83XX_SMFI_SCAR2H      REG8(IT83XX_SMFI_BASE+0x48)
@@ -1306,9 +1325,11 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_RXF1OC          BIT(3)
 #define IT83XX_SPI_RXFAR           BIT(0)
 #define IT83XX_SPI_IMR          REG8(IT83XX_SPI_BASE+0x04)
+#define IT83XX_SPI_RX_FIFO_FULL    BIT(7)
 #define IT83XX_SPI_RX_REACH        BIT(5)
 #define IT83XX_SPI_EDIM            BIT(2)
 #define IT83XX_SPI_ISR          REG8(IT83XX_SPI_BASE+0x05)
+#define IT83XX_SPI_TXFSR        REG8(IT83XX_SPI_BASE+0x06)
 #define IT83XX_SPI_ENDDETECTINT    BIT(2)
 #define IT83XX_SPI_RXFSR        REG8(IT83XX_SPI_BASE+0x07)
 #define IT83XX_SPI_RXFFSM          (BIT(4) | BIT(3))
@@ -1330,6 +1351,8 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_TCCB0        REG8(IT83XX_SPI_BASE+0x1A)
 #define IT83XX_SPI_TCCB1        REG8(IT83XX_SPI_BASE+0x1B)
 #define IT83XX_SPI_HPR2         REG8(IT83XX_SPI_BASE+0x1E)
+#define IT83XX_SPI_EMMCBMR      REG8(IT83XX_SPI_BASE+0x21)
+#define IT83XX_SPI_EMMCABM         BIT(1) /* eMMC Alternative Boot Mode */
 #define IT83XX_SPI_RX_VLISMR    REG8(IT83XX_SPI_BASE+0x26)
 #define IT83XX_SPI_RVLIM           BIT(0)
 #define IT83XX_SPI_RX_VLISR     REG8(IT83XX_SPI_BASE+0x27)
@@ -1426,13 +1449,8 @@ enum bram_indices {
 	BRAM_IDX_SCRATCHPAD1  = 9,
 	BRAM_IDX_SCRATCHPAD2  = 0xa,
 	BRAM_IDX_SCRATCHPAD3  = 0xb,
-	/* index 0xc ~ 0xf are reserved */
 
-	/* NVCONTEXT uses 16 bytes */
-	BRAM_IDX_NVCONTEXT     = 0x10,
-	BRAM_IDX_NVCONTEXT_END = 0x1F,
-
-	/* offset 0x20 ~ 0x7b are reserved for future use. */
+	/* offset 0x0c ~ 0x7b are reserved for future use. */
 
 	/* This field is used to indicate BRAM is valid or not. */
 	BRAM_IDX_VALID_FLAGS0  = 0x7c,

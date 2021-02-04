@@ -5,10 +5,15 @@
 
 /* Trogdor baseboard-specific configuration */
 
+#include "charge_state.h"
 #include "charger.h"
 #include "driver/charger/isl923x.h"
 #include "i2c.h"
 #include "power.h"
+#include "usb_pd.h"
+
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
 /* Wake-up pins for hibernate */
 const enum gpio_signal hibernate_wake_pins[] = {
@@ -18,6 +23,12 @@ const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_EC_RST_ODL,
 };
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
+
+void board_hibernate_late(void)
+{
+	/* Set the hibernate GPIO to turn off the rails */
+	gpio_set_level(GPIO_HIBERNATE_L, 0);
+}
 
 /* Power signal list. Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
@@ -29,10 +40,6 @@ const struct power_signal_info power_signal_list[] = {
 		GPIO_PS_HOLD,
 		POWER_SIGNAL_ACTIVE_HIGH,
 		"PS_HOLD"},
-	[SC7180_PMIC_FAULT_L] = {
-		GPIO_PMIC_FAULT_L,
-		POWER_SIGNAL_ACTIVE_HIGH | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"PMIC_FAULT_L"},
 	[SC7180_POWER_GOOD] = {
 		GPIO_POWER_GOOD,
 		POWER_SIGNAL_ACTIVE_HIGH,
@@ -52,24 +59,6 @@ const struct power_signal_info power_signal_list[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
-/* I2C port map */
-const struct i2c_port_t i2c_ports[] = {
-	{"power",   I2C_PORT_POWER,  100, GPIO_EC_I2C_POWER_SCL,
-					  GPIO_EC_I2C_POWER_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0, 1000, GPIO_EC_I2C_USB_C0_PD_SCL,
-					  GPIO_EC_I2C_USB_C0_PD_SDA},
-#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
-	{"tcpc1",   I2C_PORT_TCPC1, 1000, GPIO_EC_I2C_USB_C1_PD_SCL,
-					  GPIO_EC_I2C_USB_C1_PD_SDA},
-#endif
-	{"eeprom",  I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
-					  GPIO_EC_I2C_EEPROM_SDA},
-	{"sensor",  I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
-					  GPIO_EC_I2C_SENSOR_SDA},
-};
-
-const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
-
 const struct charger_config_t chg_chips[] = {
 	{
 		.i2c_port = I2C_PORT_CHARGER,
@@ -81,4 +70,42 @@ const struct charger_config_t chg_chips[] = {
 int board_allow_i2c_passthru(int port)
 {
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
+}
+
+int charger_profile_override(struct charge_state_data *curr)
+{
+	int usb_mv;
+	int port;
+
+	if (curr->state != ST_CHARGE)
+		return 0;
+
+	/* Lower the max requested voltage to 5V when battery is full. */
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF) &&
+	    !(curr->batt.flags & BATT_FLAG_BAD_STATUS) &&
+	    !(curr->batt.flags & BATT_FLAG_WANT_CHARGE) &&
+	    (curr->batt.status & STATUS_FULLY_CHARGED))
+		usb_mv = 5000;
+	else
+		usb_mv = PD_MAX_VOLTAGE_MV;
+
+	if (pd_get_max_voltage() != usb_mv) {
+		CPRINTS("VBUS limited to %dmV", usb_mv);
+		for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++)
+			pd_set_external_voltage_limit(port, usb_mv);
+	}
+
+	return 0;
+}
+
+enum ec_status charger_profile_override_get_param(uint32_t param,
+						  uint32_t *value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+enum ec_status charger_profile_override_set_param(uint32_t param,
+						  uint32_t value)
+{
+	return EC_RES_INVALID_PARAM;
 }

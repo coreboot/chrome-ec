@@ -76,7 +76,7 @@ void sync_interrupt(enum gpio_signal signal)
 	next_event.counter++;
 	queue_add_unit(&sync_event_queue, &next_event);
 
-	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_SYNC_INT_EVENT, 0);
+	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_SYNC_INT_EVENT);
 }
 
 /* Bottom half of the irq handler */
@@ -97,7 +97,7 @@ static int motion_irq_handler(struct motion_sensor_t *s, uint32_t *event)
 	return EC_SUCCESS;
 }
 
-static int sync_init(const struct motion_sensor_t *s)
+static int sync_init(struct motion_sensor_t *s)
 {
 	vector.sensor_num = s - motion_sensors;
 	sync_enabled = 0;

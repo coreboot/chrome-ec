@@ -115,6 +115,53 @@ static int is_battery_gt_10v(void)
 	return gt_10v;
 }
 
+static int ln9310_update_startup_seq(void)
+{
+	CPRINTS("LN9310 update startup sequence");
+
+	/* Startup sequence instruction swap */
+	field_update8(LN9310_REG_LION_CTRL,
+		      LN9310_LION_CTRL_MASK,
+		      LN9310_LION_CTRL_UNLOCK);
+
+	field_update8(LN9310_REG_SWAP_CTRL_0,
+		      0xff,
+		      0x3f);
+
+	field_update8(LN9310_REG_SWAP_CTRL_1,
+		      0xff,
+		      0x51);
+
+	field_update8(LN9310_REG_SWAP_CTRL_2,
+		      0xff,
+		      0x19);
+
+	field_update8(LN9310_REG_SWAP_CTRL_3,
+		      0xff,
+		      0x02);
+
+	/* Startup sequence settings */
+	field_update8(LN9310_REG_CFG_4,
+		      LN9310_CFG_4_SC_OUT_PRECHARGE_EN_TIME_CFG_MASK |
+				LN9310_CFG_4_SW1_VGS_SHORT_EN_MSK_MASK |
+				LN9310_CFG_4_BSTH_BSTL_HIGH_ROUT_CFG_MASK,
+		      LN9310_CFG_4_SC_OUT_PRECHARGE_EN_TIME_CFG_ON |
+				LN9310_CFG_4_SW1_VGS_SHORT_EN_MSK_OFF |
+				LN9310_CFG_4_BSTH_BSTL_HIGH_ROUT_CFG_LOWEST);
+
+	/* SW4 before BSTH_BSTL */
+	field_update8(LN9310_REG_SPARE_0,
+		      LN9310_SPARE_0_SW4_BEFORE_BSTH_BSTL_EN_CFG_MASK,
+		      LN9310_SPARE_0_SW4_BEFORE_BSTH_BSTL_EN_CFG_ON);
+
+
+	field_update8(LN9310_REG_LION_CTRL,
+		      LN9310_LION_CTRL_MASK,
+		      LN9310_LION_CTRL_LOCK);
+
+	return EC_SUCCESS;
+}
+
 static int ln9310_init_3to1(void)
 {
 	CPRINTS("LN9310 init (3:1 operation)");
@@ -134,9 +181,17 @@ static int ln9310_init_3to1(void)
 		      LN9310_PWR_OP_MODE_SWITCH31);
 
 	/* 3S lower bounde delta configurations */
+	field_update8(LN9310_REG_LB_CTRL,
+		      LN9310_LB_DELTA_MASK,
+		      LN9310_LB_DELTA_3S);
+
+	/*
+	 * TODO(waihong): The LN9310_REG_SYS_CTR was set to a wrong value
+	 * accidentally. Override it to 0. This may not need.
+	 */
 	field_update8(LN9310_REG_SYS_CTRL,
-		      LN9310_SYS_CTRL_LB_DELTA_MASK,
-		      LN9310_SYS_CTRL_LB_DELTA_3S);
+		      0xff,
+		      0);
 
 	return EC_SUCCESS;
 }
@@ -163,9 +218,52 @@ static int ln9310_init_2to1(void)
 		      LN9310_PWR_OP_MODE_SWITCH21);
 
 	/* 2S lower bounde delta configurations */
+	field_update8(LN9310_REG_LB_CTRL,
+		      LN9310_LB_DELTA_MASK,
+		      LN9310_LB_DELTA_2S);
+
+	/*
+	 * TODO(waihong): The LN9310_REG_SYS_CTR was set to a wrong value
+	 * accidentally. Override it to 0. This may not need.
+	 */
 	field_update8(LN9310_REG_SYS_CTRL,
-		      LN9310_SYS_CTRL_LB_DELTA_MASK,
-		      LN9310_SYS_CTRL_LB_DELTA_2S);
+		      0xff,
+		      0);
+
+	return EC_SUCCESS;
+}
+
+static int ln9310_update_infet(void)
+{
+	CPRINTS("LN9310 update infet configuration");
+
+
+	field_update8(LN9310_REG_LION_CTRL,
+		      LN9310_LION_CTRL_MASK,
+		      LN9310_LION_CTRL_UNLOCK);
+
+	/* Update Infet register settings */
+	field_update8(LN9310_REG_CFG_5,
+		      LN9310_CFG_5_INGATE_PD_EN_MASK,
+			  LN9310_CFG_5_INGATE_PD_EN_OFF);
+
+	field_update8(LN9310_REG_CFG_5,
+		      LN9310_CFG_5_INFET_CP_PD_BIAS_CFG_MASK,
+			  LN9310_CFG_5_INFET_CP_PD_BIAS_CFG_LOWEST);
+
+	/* enable automatic infet control */
+	field_update8(LN9310_REG_PWR_CTRL,
+				LN9310_PWR_INFET_AUTO_MODE_MASK,
+				LN9310_PWR_INFET_AUTO_MODE_ON);
+
+ 	/* disable LS_HELPER during IDLE by setting MSK bit high  */
+	field_update8(LN9310_REG_CFG_0,
+				LN9310_CFG_0_LS_HELPER_IDLE_MSK_MASK,
+				LN9310_CFG_0_LS_HELPER_IDLE_MSK_ON);
+
+	field_update8(LN9310_REG_LION_CTRL,
+		      LN9310_LION_CTRL_MASK,
+		      LN9310_LION_CTRL_LOCK);
 
 	return EC_SUCCESS;
 }
@@ -174,6 +272,12 @@ void ln9310_init(void)
 {
 	int status, val;
 	enum battery_cell_type batt;
+
+	/* Update INFET configuration  */
+	status = ln9310_update_infet();
+
+	if (status != EC_SUCCESS)
+		return;
 
 	/*
 	 * Set OPERATION_MODE update method
@@ -188,8 +292,26 @@ void ln9310_init(void)
 		      LN9310_TIMER_OP_SELF_SYNC_EN_MASK,
 		      LN9310_TIMER_OP_SELF_SYNC_EN_ON);
 
+	/*
+	 * Use VIN for VDR, not EXT_5V. The following usleep will give
+	 * circuit time to settle.
+	 */
+	field_update8(LN9310_REG_STARTUP_CTRL,
+		      LN9310_STARTUP_SELECT_EXT_5V_FOR_VDR,
+		      0);
+
+	field_update8(LN9310_REG_LB_CTRL,
+		      LN9310_LB_MIN_FREQ_EN,
+		      LN9310_LB_MIN_FREQ_EN);
+
 	usleep(LN9310_CDC_DELAY);
 	CPRINTS("LN9310 OP_MODE Update method: Self-sync");
+
+	/* Update Startup sequence */
+	status = ln9310_update_startup_seq();
+
+	if (status != EC_SUCCESS)
+		return;
 
 	batt = board_get_battery_cell_type();
 	if (batt == BATTERY_CELL_TYPE_3S) {
@@ -215,5 +337,11 @@ void ln9310_init(void)
 		CPRINTS("LN9310 reading INT1 failed");
 		return;
 	}
+
+	/* Clear the STANDBY_EN bit */
+	field_update8(LN9310_REG_STARTUP_CTRL,
+		      LN9310_STARTUP_STANDBY_EN,
+		      0);
+
 	CPRINTS("LN9310 cleared interrupts: 0x%x", val);
 }

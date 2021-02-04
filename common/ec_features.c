@@ -59,7 +59,7 @@ uint32_t get_feature_flags0(void)
 #ifdef CONFIG_COMMON_GPIO
 		| EC_FEATURE_MASK_0(EC_FEATURE_GPIO)
 #endif
-#ifdef CONFIG_I2C_MASTER
+#ifdef CONFIG_I2C_CONTROLLER
 		| EC_FEATURE_MASK_0(EC_FEATURE_I2C)
 #endif
 #ifdef CONFIG_CHARGER
@@ -137,6 +137,15 @@ uint32_t get_feature_flags1(void)
 #endif
 #ifdef CHIP_ISH
 		| EC_FEATURE_MASK_1(EC_FEATURE_ISH)
+#endif
+#ifdef CONFIG_USB_PD_TCPMV2
+		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_CMD)
+#endif
+#ifdef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_REQUIRE_AP_MODE_ENTRY)
+#endif
+#ifdef CONFIG_USB_MUX_AP_ACK_REQUEST
+		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_MUX_REQUIRE_AP_ACK)
 #endif
 		;
 	return board_override_feature_flags1(result);

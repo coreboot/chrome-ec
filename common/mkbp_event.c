@@ -48,7 +48,7 @@ enum interrupt_state {
 };
 
 struct mkbp_state {
-	struct mutex lock;
+	mutex_t lock;
 	uint32_t events;
 	enum interrupt_state interrupt;
 	/*
@@ -76,10 +76,23 @@ static uint32_t mkbp_event_wake_mask = CONFIG_MKBP_EVENT_WAKEUP_MASK;
 static uint32_t mkbp_host_event_wake_mask = CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK;
 #endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
 
+#ifdef CONFIG_ZEPHYR
+static int init_mkbp_mutex(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	k_mutex_init(&state.lock);
+
+	return 0;
+}
+SYS_INIT(init_mkbp_mutex, POST_KERNEL, 50);
+#endif /* CONFIG_ZEPHYR */
+
 #if defined(CONFIG_MKBP_USE_GPIO) || \
 	defined(CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT)
 static int mkbp_set_host_active_via_gpio(int active, uint32_t *timestamp)
 {
+	uint32_t lock_key;
 	/*
 	 * If we want to take a timestamp, then disable interrupts temporarily
 	 * to ensure that the timestamp is as close as possible to the setting
@@ -87,14 +100,14 @@ static int mkbp_set_host_active_via_gpio(int active, uint32_t *timestamp)
 	 * taking the timestamp and setting the gpio)
 	 */
 	if (timestamp) {
-		interrupt_disable();
+		lock_key = irq_lock();
 		*timestamp = __hw_clock_source_read();
 	}
 
 	gpio_set_level(GPIO_EC_INT_L, !active);
 
 	if (timestamp)
-		interrupt_enable();
+		irq_unlock(lock_key);
 
 #ifdef CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 	/*
@@ -264,12 +277,55 @@ static void activate_mkbp_with_events(uint32_t events_to_add)
 static void force_mkbp_if_events(void)
 {
 	int toggled = 0;
+	int send_mkbp_interrupt = 0;
 
 	mutex_lock(&state.lock);
-	if (state.interrupt == INTERRUPT_ACTIVE) {
+	if (state.interrupt == INTERRUPT_INACTIVE) {
+		/*
+		 * When this function is called with state of interrupt set
+		 * to INACTIVE, it means that EC failed to send MKBP interrupt
+		 * to AP. In this case we are going to send interrupt once
+		 * again (without limits).
+		 */
+		send_mkbp_interrupt = 1;
+	} else if (state.interrupt == INTERRUPT_ACTIVE) {
+		/*
+		 * When this function is called with state of interrupt set
+		 * to ACTIVE, it means that AP failed to respond.
+		 *
+		 * It is safe to mark interrupt state as INACTIVE, because
+		 * force_mkbp_with_events() function can be only scheduled by
+		 * activate_mkbp_with_event() which will set interrupt state
+		 * to ACTIVE (and allow to increment failed_attempts counter).
+		 * After 3 attempts, we are setting interrupt state to INACTIVE
+		 * but we are not going to call activate_mkbp_with_events().
+		 * This was meant to unblock MKBP interrupt mechanism for new
+		 * events.
+		 */
+		state.interrupt = INTERRUPT_INACTIVE;
+		/*
+		 * Failed attempts counter is cleared only when AP pulls all
+		 * of events or we exceed number of attempts, so marking
+		 * interrupt as INACTIVE doesn't affect failed_attempts counter.
+		 * If we need to send interrupt once again
+		 * activate_mkbp_with_events() will set interrupt state to ACTIVE
+		 * before this function will be called.
+		 */
 		if (++state.failed_attempts < 3) {
-			state.interrupt = INTERRUPT_INACTIVE;
+			send_mkbp_interrupt = 1;
 			toggled = 1;
+		} else {
+			/*
+			 * If we exceed maximum number of failed attempts we
+			 * will stop trying to send MKBP interrupt for current
+			 * event (send_mkbp_interrupt == 0), but leaving
+			 * possibility to send MKBP interrupts for future
+			 * events (state of interrupt makred as inactive).
+			 * Future events should have a chance to be sent
+			 * 3 times, so we should clear failed attempts
+			 * counter now
+			 */
+			state.failed_attempts = 0;
 		}
 	}
 	mutex_unlock(&state.lock);
@@ -277,7 +333,8 @@ static void force_mkbp_if_events(void)
 	if (toggled)
 		CPRINTS("MKBP not cleared within threshold, toggling.");
 
-	activate_mkbp_with_events(0);
+	if (send_mkbp_interrupt)
+		activate_mkbp_with_events(0);
 }
 
 test_mockable int mkbp_send_event(uint8_t event_type)
@@ -319,6 +376,24 @@ static int take_event_if_set(uint8_t event_type)
 	return taken;
 }
 
+static const struct mkbp_event_source *find_mkbp_event_source(uint8_t type)
+{
+#ifdef CONFIG_ZEPHYR
+	return zephyr_find_mkbp_event_source(type);
+#else
+	const struct mkbp_event_source *src;
+
+	for (src = __mkbp_evt_srcs; src < __mkbp_evt_srcs_end; ++src)
+		if (src->event_type == type)
+			break;
+
+	if (src == __mkbp_evt_srcs_end)
+		return NULL;
+
+	return src;
+#endif
+}
+
 static enum ec_status mkbp_get_next_event(struct host_cmd_handler_args *args)
 {
 	static int last;
@@ -349,11 +424,8 @@ static enum ec_status mkbp_get_next_event(struct host_cmd_handler_args *args)
 		evt = (i + last) % EC_MKBP_EVENT_COUNT;
 		last = evt + 1;
 
-		for (src = __mkbp_evt_srcs; src < __mkbp_evt_srcs_end; ++src)
-			if (src->event_type == evt)
-				break;
-
-		if (src == __mkbp_evt_srcs_end)
+		src = find_mkbp_event_source(evt);
+		if (src == NULL)
 			return EC_RES_ERROR;
 
 		resp[0] = evt; /* Event type */
@@ -479,7 +551,7 @@ static int command_mkbp_wake_mask(int argc, char **argv)
 {
 	if (argc == 3) {
 		char *e;
-		uint32_t new_mask = strtoul(argv[2], &e, 0);
+		uint32_t new_mask = strtoull(argv[2], &e, 0);
 
 		if (*e)
 			return EC_ERROR_PARAM2;

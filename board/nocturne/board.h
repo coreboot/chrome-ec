@@ -26,7 +26,7 @@
 #define CONFIG_HIBERNATE_PSL
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (512 * 1024) /* It's really 1MB. */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024) /* It's really 1MB. */
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 
@@ -37,7 +37,7 @@
 #define CONFIG_HOSTCMD_ESPI
 #define CONFIG_I2C
 #define CONFIG_I2C_BUS_MAY_BE_UNPOWERED
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_PWM
 #define CONFIG_THROTTLE_AP
@@ -131,6 +131,7 @@
 
 /* USB PD */
 #define CONFIG_USB_DRP_ACC_TRYSRC
+#define CONFIG_USB_PD_3A_PORTS 0
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_COMM_LOCKED
@@ -165,7 +166,6 @@
 #define PD_MAX_CURRENT_MA     3000
 #define PD_MAX_POWER_MW       45000
 #define PD_OPERATING_POWER_MW 15000
-#define PD_VCONN_SWAP_DELAY   5000 /* us */
 
 /* TODO(aaboagye): Verify these timings. */
 /*

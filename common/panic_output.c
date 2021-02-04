@@ -19,6 +19,18 @@
 #include "usb_console.h"
 #include "util.h"
 
+/*
+ * TODO(b/178011288): use persistent storage for panic data in
+ * Zephyr OS
+ */
+#ifdef CONFIG_ZEPHYR
+static struct panic_data zephyr_panic_data;
+#undef PANIC_DATA_PTR
+#undef CONFIG_PANIC_DATA_BASE
+#define PANIC_DATA_PTR (&zephyr_panic_data)
+#define CONFIG_PANIC_DATA_BASE (&zephyr_panic_data)
+#endif
+
 /* Panic data goes at the end of RAM. */
 static struct panic_data * const pdata_ptr = PANIC_DATA_PTR;
 
@@ -167,9 +179,20 @@ uintptr_t get_panic_data_start(void)
 	if (pdata_ptr->magic != PANIC_DATA_MAGIC)
 		return 0;
 
+	if (IS_ENABLED(CONFIG_ZEPHYR))
+		return (uintptr_t)pdata_ptr;
+
 	return ((uintptr_t)CONFIG_PANIC_DATA_BASE
 			   + CONFIG_PANIC_DATA_SIZE
 			   - pdata_ptr->struct_size);
+}
+
+static uint32_t get_panic_data_size(void)
+{
+	if (pdata_ptr->magic != PANIC_DATA_MAGIC)
+		return 0;
+
+	return pdata_ptr->struct_size;
 }
 
 /*
@@ -177,7 +200,16 @@ uintptr_t get_panic_data_start(void)
  * Please note that this function can move jump data and jump tags.
  * It can also delete panic data from previous boot, so this function
  * should be used when we are sure that we don't need it.
+ *
+ * TODO(b/178011288): figure out an appropriate implementation for
+ * Zephyr.
  */
+#ifdef CONFIG_ZEPHYR
+struct panic_data *get_panic_data_write(void)
+{
+	return pdata_ptr;
+}
+#else
 struct panic_data *get_panic_data_write(void)
 {
 	/*
@@ -260,6 +292,7 @@ struct panic_data *get_panic_data_write(void)
 
 	return pdata_ptr;
 }
+#endif /* CONFIG_ZEPHYR */
 
 static void panic_init(void)
 {
@@ -316,7 +349,7 @@ static int command_crash(int argc, char **argv)
 		volatile int zero = 0;
 
 		cflush();
-		ccprintf("%08x", 1 / zero);
+		ccprintf("%08x", 1U / zero);
 #ifdef CONFIG_CMD_STACKOVERFLOW
 	} else if (!strcasecmp(argv[1], "stack")) {
 		stack_overflow_recurse(1);
@@ -329,9 +362,13 @@ static int command_crash(int argc, char **argv)
 		while (1)
 			;
 	} else if (!strcasecmp(argv[1], "hang")) {
-		interrupt_disable();
+		uint32_t lock_key = irq_lock();
+
 		while (1)
 			;
+
+		/* Unreachable, but included for consistency */
+		irq_unlock(lock_key);
 	} else {
 		return EC_ERROR_PARAM1;
 	}
@@ -346,11 +383,13 @@ DECLARE_CONSOLE_COMMAND(crash, command_crash,
 #endif
 			" | unaligned | watchdog | hang]",
 		"Crash the system (for testing)");
-#endif
+#endif /* CONFIG_CMD_CRASH */
 
 static int command_panicinfo(int argc, char **argv)
 {
-	if (pdata_ptr->magic == PANIC_DATA_MAGIC) {
+	struct panic_data * const pdata_ptr = panic_get_data();
+
+	if (pdata_ptr) {
 		ccprintf("Saved panic data:%s\n",
 			 (pdata_ptr->flags & PANIC_DATA_FLAG_OLD_CONSOLE ?
 			  "" : " (NEW)"));
@@ -360,7 +399,8 @@ static int command_panicinfo(int argc, char **argv)
 		/* Data has now been printed */
 		pdata_ptr->flags |= PANIC_DATA_FLAG_OLD_CONSOLE;
 	} else {
-		ccprintf("No saved panic data available.\n");
+		ccprintf("No saved panic data available "
+		    "or panic data can't be safely interpreted.\n");
 	}
 	return EC_SUCCESS;
 }
@@ -373,13 +413,20 @@ DECLARE_CONSOLE_COMMAND(panicinfo, command_panicinfo,
 
 enum ec_status host_command_panic_info(struct host_cmd_handler_args *args)
 {
-	if (pdata_ptr->magic == PANIC_DATA_MAGIC) {
-		ASSERT(pdata_ptr->struct_size <= args->response_max);
-		memcpy(args->response, pdata_ptr, pdata_ptr->struct_size);
-		args->response_size = pdata_ptr->struct_size;
+	uint32_t pdata_size = get_panic_data_size();
+	uintptr_t pdata_start = get_panic_data_start();
+	struct panic_data * pdata;
 
-		/* Data has now been returned */
-		pdata_ptr->flags |= PANIC_DATA_FLAG_OLD_HOSTCMD;
+	if (pdata_start && pdata_size > 0) {
+		ASSERT(pdata_size <= args->response_max);
+		memcpy(args->response, (void *)pdata_start, pdata_size);
+		args->response_size = pdata_size;
+
+		pdata = panic_get_data();
+		if (pdata) {
+			/* Data has now been returned */
+			pdata->flags |= PANIC_DATA_FLAG_OLD_HOSTCMD;
+		}
 	}
 
 	return EC_RES_SUCCESS;

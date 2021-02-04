@@ -19,6 +19,7 @@
 
 #define FLASH_DMA_START ((uint32_t) &__flash_dma_start)
 #define FLASH_DMA_CODE __attribute__((section(".flash_direct_map")))
+#define FLASH_ILM0_ADDR ((uint32_t) &__ilm0_ram_code)
 
 /* erase size of sector is 1KB or 4KB */
 #define FLASH_SECTOR_ERASE_SIZE CONFIG_FLASH_ERASE_SIZE
@@ -47,15 +48,14 @@
 /* Read status register */
 #define FLASH_CMD_RS           0x05
 
+#if (CONFIG_FLASH_SIZE_BYTES == 0x80000) && defined(CHIP_CORE_NDS32)
 #define FLASH_TEXT_START ((uint32_t) &__flash_text_start)
+/* Apply workaround of the issue (b:111808417) */
+#define IMMU_CACHE_TAG_INVALID
 /* The default tag index of immu. */
 #define IMMU_TAG_INDEX_BY_DEFAULT 0x7E000
 /* immu cache size is 8K bytes. */
 #define IMMU_SIZE                 0x2000
-
-#if (CONFIG_FLASH_SIZE == 0x80000) && defined(CHIP_CORE_NDS32)
-/* Apply workaround of the issue (b:111808417) */
-#define IMMU_CACHE_TAG_INVALID
 #endif
 
 static int stuck_locked;
@@ -370,7 +370,7 @@ static enum flash_wp_status flash_check_wp(void)
 	enum flash_wp_status wp_status;
 	int all_bank_count, bank;
 
-	all_bank_count = CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE;
+	all_bank_count = CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE;
 
 	for (bank = 0; bank < all_bank_count; bank++) {
 		if (!(IT83XX_GCTRL_EWPR0PFEC(FWP_REG(bank)) & FWP_MASK(bank)))
@@ -452,7 +452,11 @@ int FLASH_DMA_CODE flash_physical_write(int offset, int size, const char *data)
 	interrupt_disable();
 
 	dma_flash_write(offset, size, data);
+#ifdef IMMU_CACHE_TAG_INVALID
 	dma_reset_immu((offset + size) >= IMMU_TAG_INDEX_BY_DEFAULT);
+#else
+	dma_reset_immu(0);
+#endif
 	/*
 	 * Internal flash of N8 or RISC-V core is ILM(Instruction Local Memory)
 	 * mapped, but RISC-V's ILM base address is 0x80000000.
@@ -496,8 +500,30 @@ int FLASH_DMA_CODE flash_physical_erase(int offset, int size)
 	for (; size > 0; size -= FLASH_SECTOR_ERASE_SIZE) {
 		dma_flash_erase(offset, FLASH_CMD_SECTOR_ERASE);
 		offset += FLASH_SECTOR_ERASE_SIZE;
+		/*
+		 * If requested erase size is too large at one time on KGD
+		 * flash, we need to reload watchdog to prevent the reset.
+		 */
+		if (IS_ENABLED(IT83XX_CHIP_FLASH_IS_KGD) && (size > 0x10000))
+			watchdog_reload();
+		/*
+		 * EC still need to handle AP's EC_CMD_GET_COMMS_STATUS command
+		 * during erasing.
+		 */
+#ifdef IT83XX_IRQ_SPI_SLAVE
+		if (IS_ENABLED(CONFIG_SPI) &&
+		    IS_ENABLED(HAS_TASK_HOSTCMD) &&
+		    IS_ENABLED(CONFIG_HOST_COMMAND_STATUS)) {
+			if (IT83XX_SPI_RX_VLISR & IT83XX_SPI_RVLI)
+				task_trigger_irq(IT83XX_IRQ_SPI_SLAVE);
+		}
+#endif
 	}
+#ifdef IMMU_CACHE_TAG_INVALID
 	dma_reset_immu((v_addr + v_size) >= IMMU_TAG_INDEX_BY_DEFAULT);
+#else
+	dma_reset_immu(0);
+#endif
 	/* get the ILM address of a flash offset. */
 	v_addr |= CONFIG_MAPPED_STORAGE_BASE;
 	ret = dma_flash_verify(v_addr, v_size, NULL);
@@ -529,7 +555,7 @@ int flash_physical_protect_now(int all)
 	if (all) {
 		/* Protect the entire flash */
 		flash_protect_banks(0,
-			CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE,
+			CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
 			FLASH_WP_EC);
 		all_protected = 1;
 	} else {
@@ -615,6 +641,37 @@ uint32_t flash_physical_get_writable_flags(uint32_t cur_flags)
 	return ret;
 }
 
+static void flash_enable_second_ilm(void)
+{
+#ifdef CHIP_CORE_RISCV
+	/* Make sure no interrupt while enable static cache */
+	interrupt_disable();
+
+	/* Invalid ILM0 */
+	IT83XX_GCTRL_RVILMCR0 &= ~ILMCR_ILM0_ENABLE;
+	IT83XX_SMFI_SCAR0H = BIT(3);
+	/* copy code to ram */
+	memcpy((void *)CHIP_RAMCODE_ILM0,
+		(const void *)FLASH_ILM0_ADDR,
+		IT83XX_ILM_BLOCK_SIZE);
+	/*
+	 * Set the logic memory address(flash code of RO/RW) in flash
+	 * by programming the register SCAR0x bit19-bit0.
+	 */
+	IT83XX_SMFI_SCAR0L = FLASH_ILM0_ADDR & GENMASK(7, 0);
+	IT83XX_SMFI_SCAR0M = (FLASH_ILM0_ADDR >> 8) & GENMASK(7, 0);
+	IT83XX_SMFI_SCAR0H = (FLASH_ILM0_ADDR >> 16) & GENMASK(2, 0);
+	if (FLASH_ILM0_ADDR & BIT(19))
+		IT83XX_SMFI_SCAR0H |= BIT(7);
+	else
+		IT83XX_SMFI_SCAR0H &= ~BIT(7);
+	/* Enable ILM 0 */
+	IT83XX_GCTRL_RVILMCR0 |= ILMCR_ILM0_ENABLE;
+
+	interrupt_enable();
+#endif
+}
+
 static void flash_code_static_dma(void)
 {
 
@@ -626,13 +683,16 @@ static void flash_code_static_dma(void)
 		IT83XX_GCTRL_RVILMCR0 &= ~ILMCR_ILM2_ENABLE;
 	IT83XX_SMFI_SCAR2H = 0x08;
 
-	/* Copy to DLM */
-	IT83XX_GCTRL_MCCR2 |= 0x20;
+	/* Enable DLM 56k~60k region and than copy data into it */
+	if (IS_ENABLED(CHIP_CORE_NDS32))
+		IT83XX_GCTRL_MCCR2 |= IT83XX_DLM14_ENABLE;
 	memcpy((void *)CHIP_RAMCODE_BASE, (const void *)FLASH_DMA_START,
 		IT83XX_ILM_BLOCK_SIZE);
 	if (IS_ENABLED(CHIP_CORE_RISCV))
 		IT83XX_GCTRL_RVILMCR0 |= ILMCR_ILM2_ENABLE;
-	IT83XX_GCTRL_MCCR2 &= ~0x20;
+	/* Disable DLM 56k~60k region and be the ram code section */
+	if (IS_ENABLED(CHIP_CORE_NDS32))
+		IT83XX_GCTRL_MCCR2 &= ~IT83XX_DLM14_ENABLE;
 
 	/*
 	 * Enable ILM
@@ -675,6 +735,11 @@ int flash_pre_init(void)
 	if (IS_ENABLED(IT83XX_CHIP_FLASH_IS_KGD))
 		IT83XX_SMFI_FLHCTRL6R |= IT83XX_SMFI_MASK_ECINDPP;
 	flash_code_static_dma();
+	/*
+	 * Enable second ilm (ILM0 of it8xxx2 series), so we can pull more code
+	 * (4kB) into static cache to save latency of fetching code from flash.
+	 */
+	flash_enable_second_ilm();
 
 	reset_flags = system_get_reset_flags();
 	prot_flags = flash_get_protect();
@@ -691,11 +756,11 @@ int flash_pre_init(void)
 	if (prot_flags & EC_FLASH_PROTECT_GPIO_ASSERTED) {
 		/* Protect the entire flash of host interface */
 		flash_protect_banks(0,
-			CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE,
+			CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
 			FLASH_WP_HOST);
 		/* Protect the entire flash of DBGR interface */
 		flash_protect_banks(0,
-			CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE,
+			CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
 			FLASH_WP_DBGR);
 		/*
 		 * Write protect is asserted.  If we want RO flash protected,

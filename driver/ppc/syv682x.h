@@ -8,11 +8,7 @@
 #ifndef __CROS_EC_SYV682X_H
 #define __CROS_EC_SYV682X_H
 
-/* I2C addresses */
-#define SYV682X_ADDR0_FLAGS		0x40
-#define SYV682X_ADDR1_FLAGS		0x41
-#define SYV682X_ADDR2_FLAGS		0x42
-#define SYV682x_ADDR3_FLAGS		0x43
+#include "driver/ppc/syv682x_public.h"
 
 /* SYV682x register addresses */
 #define SYV682X_STATUS_REG		0x00
@@ -75,6 +71,7 @@
 
 /* Control Register 3 */
 #define SYV682X_BUSY			BIT(7)
+#define SYV682X_RVS_MASK		BIT(3)
 #define SYV682X_RST_REG			BIT(0)
 #define SYV682X_OVP_MASK		0x70
 #define SYV682X_OVP_BIT_SHIFT		4
@@ -96,10 +93,5 @@
 #define SYV682X_CONTROL_4_VCONN_OCP	BIT(2)
 #define SYV682X_CONTROL_4_CC_FRS	BIT(1)
 #define SYV682X_CONTROL_4_INT_MASK	0x0c
-
-struct ppc_drv;
-extern const struct ppc_drv syv682x_drv;
-
-void syv682x_interrupt(int port);
 
 #endif /* defined(__CROS_EC_SYV682X_H) */

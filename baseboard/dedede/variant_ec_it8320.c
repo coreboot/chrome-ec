@@ -20,7 +20,7 @@
 
 static void pp3300_a_pgood_low(void)
 {
-	atomic_clear(&pp3300_a_pgood, 1);
+	atomic_clear_bits(&pp3300_a_pgood, 1);
 
 	/* Disable low interrupt while asserted */
 	vcmp_enable(VCMP_SNS_PP3300_LOW, 0);
@@ -84,11 +84,12 @@ const struct i2c_port_t i2c_ports[] = {
 		"battery", I2C_PORT_BATTERY, 100, GPIO_EC_I2C_BATTERY_SCL,
 		GPIO_EC_I2C_BATTERY_SDA
 	},
-
+#ifdef HAS_TASK_MOTIONSENSE
 	{
 		"sensor", I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
 		GPIO_EC_I2C_SENSOR_SDA
 	},
+#endif
 
 #if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	{

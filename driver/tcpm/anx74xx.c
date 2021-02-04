@@ -10,8 +10,8 @@
 #include "console.h"
 #include "anx74xx.h"
 #include "task.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -1011,7 +1011,7 @@ void anx74xx_tcpc_alert(int port)
 
 	if (reg & ANX74XX_REG_IRQ_CC_STATUS_INT)
 		/* CC status changed, wake task */
-		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC);
 
 	/* Read and clear extended alert register 1 */
 	reg = 0;
@@ -1043,7 +1043,7 @@ void anx74xx_tcpc_alert(int port)
 	if (reg & ANX74XX_REG_EXT_HARD_RST) {
 		/* hard reset received */
 		task_set_event(PD_PORT_TO_TASK_ID(port),
-			PD_EVENT_RX_HARD_RESET, 0);
+			       PD_EVENT_RX_HARD_RESET);
 	}
 }
 
@@ -1168,6 +1168,9 @@ const struct tcpm_drv anx74xx_tcpm_drv = {
 	.select_rp_value	= &anx74xx_tcpm_select_rp_value,
 	.set_cc			= &anx74xx_tcpm_set_cc,
 	.set_polarity		= &anx74xx_tcpm_set_polarity,
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
+#endif
 	.set_vconn		= &anx74xx_tcpm_set_vconn,
 	.set_msg_header		= &anx74xx_tcpm_set_msg_header,
 	.set_rx_enable		= &anx74xx_tcpm_set_rx_enable,
@@ -1183,6 +1186,7 @@ const struct tcpm_drv anx74xx_tcpm_drv = {
 	.drp_toggle		= &anx74xx_tcpc_drp_toggle,
 	.enter_low_power_mode	= &anx74xx_enter_low_power_mode,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 };
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC

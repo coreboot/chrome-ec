@@ -8,9 +8,11 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
-#ifdef CHIP_FAMILY_IT83XX
+#include "stdbool.h"
+
+#ifdef VARIANT_INTELRVP_EC_IT8320
 	#include "ite_ec.h"
-#endif /* CHIP_FAMILY_IT83XX */
+#endif /* VARIANT_INTELRVP_EC_IT8320 */
 
 /*
  * Allow dangerous commands.
@@ -44,7 +46,6 @@
 /* Battery */
 #define CONFIG_BATTERY_CUT_OFF
 #define CONFIG_BATTERY_FUEL_GAUGE
-#define CONFIG_BATTERY_PRESENT_GPIO GPIO_EC_BATT_PRES_L
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_SMART
 
@@ -59,6 +60,15 @@
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 200
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_TRICKLE_CHARGING
+
+/*
+ * Don't allow the system to boot to S0 when the battery is low and unable to
+ * communicate on locked systems (which haven't PD negotiated)
+ */
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			3
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC		1
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		15001
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_BOARD_CONFIG
@@ -83,6 +93,7 @@
 /* USB PD config */
 #if defined(BOARD_TGLRVPU_ITE_TCPMV1) || defined(BOARD_TGLRVPY_ITE_TCPMV1)
 	#define CONFIG_USB_PD_TCPMV1
+	#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #else
 	#define CONFIG_USB_DRP_ACC_TRYSRC
 	#define CONFIG_USB_PD_DECODE_SOP
@@ -92,16 +103,13 @@
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DUAL_ROLE
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_TRY_SRC
-#define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
 #define CONFIG_USB_POWER_DELIVERY
 
 /* USB MUX */
 #ifdef CONFIG_USB_MUX_VIRTUAL
 	#define CONFIG_HOSTCMD_LOCATE_CHIP
-	#define CONFIG_INTEL_VIRTUAL_MUX
 #endif
 #define CONFIG_USBC_SS_MUX
 
@@ -128,7 +136,6 @@
 /* Tablet mode */
 #define CONFIG_TABLET_MODE
 #define CONFIG_GMR_TABLET_MODE
-#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 
 /* Verified boot */
 #define CONFIG_CRC8
@@ -145,6 +152,7 @@
 /* Temperature sensor */
 #ifdef CONFIG_TEMP_SENSOR
 	#define CONFIG_STEINHART_HART_3V0_22K6_47K_4050B
+	#define CONFIG_TEMP_SENSOR_POWER_GPIO   GPIO_EN_PP3300_A
 	#define CONFIG_THERMISTOR
 	#define CONFIG_THROTTLE_AP
 #ifdef CONFIG_PECI
@@ -154,7 +162,7 @@
 
 /* I2C ports */
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 
 /* EC exclude modules */
 
@@ -200,21 +208,14 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT,
 };
 
-/* List of supported batteries */
-enum battery_type {
-	BATTERY_SIMPLO_SMP_HHP_408,
-	BATTERY_SIMPLO_SMP_CA_445,
-	BATTERY_TYPE_COUNT,
-};
-
 /* TODO(b:132652892): Verify the below numbers. */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
 
 /* Define typical operating power */
 #define PD_OPERATING_POWER_MW  15000
-#define PD_MAX_CURRENT_MA      3000
 #define PD_MAX_VOLTAGE_MV      20000
+#define PD_MAX_CURRENT_MA      ((PD_MAX_POWER_MW/PD_MAX_VOLTAGE_MV) * 1000)
 #define DC_JACK_MAX_VOLTAGE_MV 19000
 
 /* TCPC gpios */
@@ -246,6 +247,16 @@ struct tcpc_gpio_config_t {
 };
 extern const struct tcpc_gpio_config_t tcpc_gpios[];
 
+struct tcpc_aic_gpio_config_t {
+	/* TCPC interrupt */
+	enum gpio_signal tcpc_alert;
+	/* PPC interrupt */
+	enum gpio_signal ppc_alert;
+	/* PPC interrupt handler */
+	void (*ppc_intr_handler)(int port);
+};
+extern const struct tcpc_aic_gpio_config_t tcpc_aic_gpios[];
+
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);
 void board_charging_enable(int port, int enable);
@@ -254,6 +265,7 @@ void board_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp);
 int ioexpander_read_intelrvp_version(int *port0, int *port1);
 void board_dc_jack_interrupt(enum gpio_signal signal);
 void tcpc_alert_event(enum gpio_signal signal);
+bool is_typec_port(int port);
 
 #endif /* !__ASSEMBLER__ */
 

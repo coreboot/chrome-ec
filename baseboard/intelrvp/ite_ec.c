@@ -13,45 +13,10 @@
 #include "timer.h"
 #include "usb_pd_tcpm.h"
 
-/* USB-C TPCP Configuration */
-const struct tcpc_config_t tcpc_config[] = {
-	[TYPE_C_PORT_0] = {
-		.bus_type = EC_BUS_TYPE_EMBEDDED,
-		/* TCPC is embedded within EC so no i2c config needed */
-		.drv = &it83xx_tcpm_drv,
-#ifdef CONFIG_INTEL_VIRTUAL_MUX
-		.usb23 = TYPE_C_PORT_0_USB2_NUM | (TYPE_C_PORT_0_USB3_NUM << 4),
-#endif
-	},
-#ifdef HAS_TASK_PD_C1
-	[TYPE_C_PORT_1] = {
-		.bus_type = EC_BUS_TYPE_EMBEDDED,
-		/* TCPC is embedded within EC so no i2c config needed */
-		.drv = &it83xx_tcpm_drv,
-#ifdef CONFIG_INTEL_VIRTUAL_MUX
-		.usb23 = TYPE_C_PORT_1_USB2_NUM | (TYPE_C_PORT_1_USB3_NUM << 4),
-#endif
-	},
-#endif /* HAS_TASK_PD_C1 */
-};
-BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
-
 /* Reset PD MCU */
 void board_reset_pd_mcu(void)
 {
 	/* Not applicable for ITE TCPC */
-}
-
-uint16_t tcpc_get_alert_status(void)
-{
-	/*
-	 * Since C0/C1 TCPC are embedded within EC, we don't need the
-	 * PDCMD tasks. The (embedded) TCPC status since chip driver
-	 * code handles its own interrupts and forward the correct
-	 * events to the PD_C0 task. See it83xx/intc.c
-	 */
-
-	return 0;
 }
 
 /* Keyboard scan setting */
@@ -140,6 +105,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 #ifdef CONFIG_USBC_VCONN
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 {
+#ifndef CONFIG_USBC_PPC_VCONN
 	/*
 	 * Setting VCONN low by disabling the power switch before
 	 * enabling the VCONN on respective CC line
@@ -154,5 +120,6 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 				tcpc_gpios[port].vconn.cc2_pin :
 				tcpc_gpios[port].vconn.cc1_pin,
 				tcpc_gpios[port].vconn.pin_pol);
+#endif
 }
 #endif
