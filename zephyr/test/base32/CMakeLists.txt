@@ -1,7 +1,9 @@
-# SPDX-License-Identifier: Apache-2.0
+# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
 
 cmake_minimum_required(VERSION 3.13.1)
-project(base32)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+project(base32)
 
-target_sources(app PRIVATE ${PLATFORM_EC}/test/base32.c)
+target_sources(app PRIVATE "${PLATFORM_EC}/test/base32.c")

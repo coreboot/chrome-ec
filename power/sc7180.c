@@ -77,28 +77,28 @@
 #define CAN_BOOT_AP_CHECK_TIMEOUT	(1500 * MSEC)
 
 /* Wait for polling if the system can boot AP */
-#define CAN_BOOT_AP_CHECK_WAIT		(100 * MSEC)
+#define CAN_BOOT_AP_CHECK_WAIT		(200 * MSEC)
 
 /* The timeout of the check if the switchcap outputs good voltage */
-#define SWITCHCAP_PG_CHECK_TIMEOUT	(50 * MSEC)
+#define SWITCHCAP_PG_CHECK_TIMEOUT	(100 * MSEC)
 
 /* Wait for polling if the switchcap outputs good voltage */
-#define SWITCHCAP_PG_CHECK_WAIT		(5 * MSEC)
+#define SWITCHCAP_PG_CHECK_WAIT		(6 * MSEC)
 
 /*
  * Delay between power-on the system and power-on the PMIC.
  * Some latest PMIC firmware needs this delay longer, for doing a cold
- * reboot. Did an experiment; it should be 100ms+. Set it with margin.
+ * reboot. Did an experiment; it should be 120ms+. Set it with margin.
  */
-#define SYSTEM_POWER_ON_DELAY		(110 * MSEC)
+#define SYSTEM_POWER_ON_DELAY		(150 * MSEC)
 
 /*
  * Delay between the PMIC power drop and power-off the system.
  * Qualcomm measured the entire POFF duration is around 70ms. Setting
- * this delay to 70ms is more than enough, as the PMIC power drop is in
- * the middle of POFF duration.
+ * this delay to the same value as the above power-on sequence, which
+ * has much safer margin.
  */
-#define PMIC_POWER_OFF_DELAY		(70 * MSEC)
+#define PMIC_POWER_OFF_DELAY		(150 * MSEC)
 
 /* The AP_RST_L transition count of a normal AP warm reset */
 #define EXPECTED_AP_RST_TRANSITIONS	3
@@ -945,14 +945,17 @@ enum power_state power_handle_state(enum power_state state)
 		power_button_wait_for_release(-1);
 
 		/* If no enough power, return back to S5. */
-		if (!power_is_enough())
+		if (!power_is_enough()) {
+			boot_from_off = 0;
 			return POWER_S5;
+		}
 
 		/* Initialize components to ready state before AP is up. */
 		hook_notify(HOOK_CHIPSET_PRE_INIT);
 
 		if (power_on() != EC_SUCCESS) {
 			power_off();
+			boot_from_off = 0;
 			return POWER_S5;
 		}
 		CPRINTS("AP running ...");

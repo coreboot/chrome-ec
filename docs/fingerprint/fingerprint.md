@@ -2,16 +2,20 @@
 
 [TOC]
 
+<!-- mdformat off(b/139308852) -->
 *** note
 NOTE: The build commands assume you are in the `~/trunk/src/platform/ec`
 directory inside the chroot.
 ***
+<!-- mdformat on -->
 
+<!-- mdformat off(b/139308852) -->
 *** note
 WARNING: When switching branches in the EC codebase, you probably want to nuke
 the `build` directory or at least the board you're working on: `rm -rf
 build/<board>` or `make clobber` to prevent compilation errors.
 ***
+<!-- mdformat on -->
 
 ## Software
 
@@ -24,10 +28,17 @@ The main source code for fingerprint sensor functionality lives in the
 The following "boards" (specified by the `BOARD` environment variable when
 building the EC code) are for fingerprint:
 
-MCU                   | Firmware (EC "board")                          | Dev Board
---------------------- | ---------------------------------------------- | ---------
-[STM32H743] (Cortex-M7) | `dartmonkey`<br>(aka `nocturne_fp`, `nami_fp`) | Icetower v0.2 <br>(Previously Dragontalon)
-[STM32F412] (Cortex-M4) | `bloonchipper`<br>(aka `hatch_fp`)             | Dragonclaw v0.2
+MCU                    | Sensor     | Firmware (EC "board")                          | Dev Board                                    | Nucleo Board
+---------------------- | ---------- | ---------------------------------------------- | -------------------------------------------- | ------------
+[STM32H743](Cortex-M7) | [FPC 1145] | `dartmonkey`<br>(aka `nocturne_fp`, `nami_fp`) | [Icetower v0.2] <br>(Previously Dragontalon) | [Nucleo H743ZI2]
+[STM32F412](Cortex-M4) | [FPC 1025] | `bloonchipper`<br>(aka `hatch_fp`)             | [Dragonclaw v0.2]                            | [Nucleo F412ZG]
+
+### Sensor Template Sizes
+
+Sensor     | Fingerprint Template Size
+---------- | --------------------------------
+[FPC 1145] | [~48 KB][FPC 1145 Template Size]
+[FPC 1025] | [~5 KB][FPC 1025 Template Size]
 
 ### Determining Hardware {#chromeos-config-fingerprint}
 
@@ -45,11 +56,13 @@ in the chroot to determine the FPMCU:
 (chroot) $  cros_config_host -c /build/<BOARD>/usr/share/chromeos-config/yaml/config.yaml -m <MODEL> get /fingerprint board
 ```
 
+<!-- mdformat off(b/139308852) -->
 *** note
 **NOTE**: If you get an empty response when running these commands, the
 [Chrome OS Config] properties for fingerprint may not have been set up yet. See
 the [section on updating Chrome OS Config](#update-chromeos-config).
 ***
+<!-- mdformat on -->
 
 ## Building FPMCU Firmware Locally
 
@@ -82,10 +95,12 @@ Before uploading a change to Gerrit via `repo upload`, you'll need to build
 *all* the boards in the EC codebase to make sure your changes do not break any
 others.
 
+<!-- mdformat off(b/139308852) -->
 *** note
 NOTE: If you forget to do this, do not worry. `repo upload` will warn you and
 prevent you from uploading.
 ***
+<!-- mdformat on -->
 
 ```bash
 (chroot) ~/trunk/src/platform/ec $ make buildall -j
@@ -146,11 +161,13 @@ kernel:
 
 ### `fp_updater.sh` and `bio_fw_updater`
 
+<!-- mdformat off(b/139308852) -->
 *** note
 **NOTE**: The auto-update process requires a working version of the firmware
 running on the FPMCU. See [Fingerprint Factory Requirements] for details on
 flashing in the factory.
 ***
+<!-- mdformat on -->
 
 [`fp_updater.sh`] and [`bio_fw_updater`] are wrappers around [`flashrom`] and
 require already-functioning RO firmware running on the FPMCU. It’s meant to be
@@ -168,12 +185,14 @@ user disables [hardware write protection]).
 
 ### `flash_fp_mcu`
 
+<!-- mdformat off(b/139308852) -->
 *** note
 **NOTE**: This tool is really just for us to use during development or during
 the RMA flow (must go through finalization again in that case). We never update
 RO in the field (can’t by design). See [Fingerprint Factory Requirements] for
 details on flashing in the factory.
 ***
+<!-- mdformat on -->
 
 [`flash_fp_mcu`] enables spidev and toggles some GPIOs to put the FPMCU (STM32)
 into bootloader mode. At that point it uses [`stm32mon`] to rewrite the entire
@@ -303,25 +322,43 @@ fingerprint development boards.
 (chroot) $  dut-control -t 60 pp3300_dx_mcu_mv pp3300_dx_fp_mv pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
 ```
 
-**Firmware Version**: `bloonchipper_v2.0.4277-9f652bb3`
+**Firmware Version**: `bloonchipper_v2.0.6509-80a3a4a2`
+
+When the MCU is idling waiting for an AP message:
 
 ```
 @@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@       sample_msecs    128   469.05   33.79   641.75   399.90
-@@    pp1800_dx_fp_mv    128  1802.06    3.50  1808.00  1800.00
-@@    pp1800_dx_fp_mw    128     0.00    0.00     0.00     0.00
-@@    pp3300_dx_fp_mv    128  3296.00    0.00  3296.00  3296.00
-@@    pp3300_dx_fp_mw    128     0.00    0.03     0.26     0.00
-@@   pp3300_dx_mcu_mv    128  3288.00    0.00  3288.00  3288.00
-@@   pp3300_dx_mcu_mw    128    24.20    0.00    24.20    24.20
+@@       sample_msecs   1285    46.71   24.16   394.68    17.88
+@@    pp1800_dx_fp_mv   1285  1807.90    0.89  1808.00  1800.00
+@@    pp1800_dx_fp_mw   1285     0.00    0.00     0.00     0.00
+@@    pp3300_dx_fp_mv   1285  3288.00    0.00  3288.00  3288.00
+@@    pp3300_dx_fp_mw   1285     0.01    0.04     0.26     0.00
+@@   pp3300_dx_mcu_mv   1285  3280.93    2.56  3288.00  3280.00
+@@   pp3300_dx_mcu_mw   1285    21.26    0.08    22.36    20.99
+```
+
+When the MCU is in **low power** mode during the AP suspend (as emulated by
+`dut-control slp_s3:on`):
+
+```
+@@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
+@@       sample_msecs   1243    48.27   24.90   385.11    17.12
+@@    pp1800_dx_fp_mv   1243  1807.92    0.81  1808.00  1800.00
+@@    pp1800_dx_fp_mw   1243     0.00    0.00     0.00     0.00
+@@    pp3300_dx_fp_mv   1243  3288.04    0.55  3296.00  3288.00
+@@    pp3300_dx_fp_mw   1243     0.01    0.04     0.26     0.00
+@@   pp3300_dx_mcu_mv   1243  3288.00    0.00  3288.00  3288.00
+@@   pp3300_dx_mcu_mw   1243     2.25    0.39    10.26     2.10
 ```
 
 ### Dragontalon
 
+<!-- mdformat off(b/139308852) -->
 *** note
 **NOTE**: The sensor doesn't work on Dragontalon, so the measurements below show
 zero for the sensor.
 ***
+<!-- mdformat on -->
 
 ```bash
 (chroot) $  dut-control -t 60 pp3300_h7_mv pp3300_h7_mw pp1800_fpc_mv pp1800_fpc_mw
@@ -392,9 +429,11 @@ See the [Hatch baseboard `make.defaults`] for an example.
 Once you have added the `FPMCU_FIRMWARE` flag and rebuilt the
 [`chromeos-firmware-fpmcu` ebuild], the firmware will show up in the the chroot:
 
+<!-- mdformat off(b/139308852) -->
 *** note
 **NOTE**: This requires access to the [internal manifest].
 ***
+<!-- mdformat on -->
 
 ```bash
 (chroot) $ emerge-<BOARD> chromeos-firmware-fpmcu
@@ -480,3 +519,11 @@ detail.
 [run the unit tests]: ../unit_tests.md#running
 [Measuring Power]: ./fingerprint-dev-for-partners.md#measure-power
 [dragonclaw]: ./fingerprint-dev-for-partners.md#fpmcu-dev-board
+[FPC 1145]: ../../driver/fingerprint/fpc/libfp/fpc1145_private.h
+[FPC 1025]: ../../driver/fingerprint/fpc/bep/fpc1025_private.h
+[FPC 1145 Template Size]: https://chromium.googlesource.com/chromiumos/platform/ec/+/127521b109be8aac352e80e319e46ed123360408/driver/fingerprint/fpc/libfp/fpc1145_private.h#46
+[FPC 1025 Template Size]: https://chromium.googlesource.com/chromiumos/platform/ec/+/127521b109be8aac352e80e319e46ed123360408/driver/fingerprint/fpc/bep/fpc1025_private.h#44
+[Dragonclaw v0.2]: ./fingerprint-dev-for-partners.md#fpmcu-dev-board
+[Icetower v0.2]: ./fingerprint-dev-for-partners.md#fpmcu-dev-board
+[Nucleo F412ZG]: https://www.digikey.com/en/products/detail/stmicroelectronics/NUCLEO-F412ZG/6137573
+[Nucleo H743ZI2]: https://www.digikey.com/en/products/detail/stmicroelectronics/NUCLEO-H743ZI2/10130892

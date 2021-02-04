@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "ocpc.h"
+#include "stdbool.h"
 
 /* Charger information
  * voltage unit: mV
@@ -92,7 +93,12 @@ struct charger_drv {
 					       int *voltage);
 
 	/* Set desired input current value */
-	enum ec_error_list (*set_input_current)(int chgnum, int input_current);
+	enum ec_error_list (*set_input_current_limit)(int chgnum,
+						      int input_current);
+
+	/* Get input current limit */
+	enum ec_error_list (*get_input_current_limit)(int chgnum,
+						      int *input_current);
 
 	/* Get actual input current value */
 	enum ec_error_list (*get_input_current)(int chgnum, int *input_current);
@@ -117,6 +123,12 @@ struct charger_drv {
 						    struct ocpc_data *o,
 						    int current_ma,
 						    int voltage_mv);
+
+	/* Is the input current limit reached? */
+	enum ec_error_list (*is_icl_reached)(int chgnum, bool *reached);
+
+	/* Enable/disable linear charging */
+	enum ec_error_list (*enable_linear_charge)(int chgnum, bool enable);
 };
 
 struct charger_config_t {
@@ -255,13 +267,42 @@ int charger_get_system_power(void);
 
 /* Other parameters that may be charger-specific, but are common so far. */
 
-/* Set desired input current value */
-enum ec_error_list charger_set_input_current(int chgnum, int input_current);
+/**
+ * Set desired input current limit
+ *
+ * Sets the hard limit of the input current (from AC).
+ *
+ * @param chgnum		charger IC index
+ * @param input_current		The current limit in mA.
+ *
+ * @return EC_SUCCESS on success, an error otherwise.
+ */
+enum ec_error_list charger_set_input_current_limit(int chgnum,
+						   int input_current);
 
-/*
+/**
+ * Get desired input current limit
+ *
+ * Gets the hard limit of the input current (from AC).
+ *
+ * @param chgnum		charger IC index
+ * @param input_current		The current limit in mA.
+ *
+ * @return EC_SUCCESS on success, an error otherwise.
+ */
+enum ec_error_list charger_get_input_current_limit(int chgnum,
+						   int *input_current);
+
+/**
  * Get actual input current value.
+ *
  * Actual input current may be less than the desired input current set
  * due to current ratings of the wall adapter.
+ *
+ * @param chgnum		charger IC index
+ * @param input_current		The input current in mA.
+ *
+ * @return EC_SUCCESS on success, an error otherwise.
  */
 enum ec_error_list charger_get_input_current(int chgnum, int *input_current);
 
@@ -289,6 +330,27 @@ enum ec_error_list charger_set_vsys_compensation(int chgnum,
 						 int current_ma,
 						 int voltage_mv);
 
+/**
+ * Is the input current limit been reached?
+ *
+ * @param chgnum: Active charge port
+ * @param reached: Pointer to reached
+ * @return EC_SUCCESS on success, error otherwise.
+ */
+enum ec_error_list charger_is_icl_reached(int chgnum, bool *reached);
+
+/**
+ * Enable/disable linear charging
+ *
+ * For charger ICs that support it, this allows the charger IC to operate the
+ * BFET in the linear region.
+ *
+ * @param chgnum: Active charge port
+ * @param enable: Whether to enable or disable linear charging.
+ * @return EC_SUCCESS on success, error otherwise.
+ */
+enum ec_error_list charger_enable_linear_charge(int chgnum, bool enable);
+
 /*
  * Print all charger info for debugging purposes
  * @param chgnum: charger IC index.
@@ -296,4 +358,3 @@ enum ec_error_list charger_set_vsys_compensation(int chgnum,
 void print_charger_debug(int chgnum);
 
 #endif /* __CROS_EC_CHARGER_H */
-

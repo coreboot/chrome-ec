@@ -40,7 +40,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -133,7 +133,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr_flags = FUSB302_I2C_SLAVE_ADDR_FLAGS,
+			.addr_flags = FUSB302_I2C_ADDR_FLAGS,
 		},
 		.drv = &fusb302_tcpm_drv,
 	},
@@ -254,7 +254,7 @@ int pd_snk_is_vbus_provided(int port)
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
@@ -274,7 +274,7 @@ static void board_spi_enable(void)
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
 	/* Reinitialize spi peripheral. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+	spi_enable(&spi_devices[0], 1);
 
 	/* Pin mux spi peripheral toward the sensor. */
 	gpio_config_module(MODULE_SPI_MASTER, 1);
@@ -291,7 +291,7 @@ static void board_spi_disable(void)
 	gpio_config_module(MODULE_SPI_MASTER, 0);
 
 	/* Disable spi peripheral and clocks. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
+	spi_enable(&spi_devices[0], 0);
 	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
@@ -324,6 +324,9 @@ static void board_init(void)
 
 	/* Enable BC12 interrupt */
 	gpio_enable_interrupt(GPIO_BC12_EC_INT_ODL);
+
+	/* Enable USM mode */
+	ioex_set_level(IOEX_5V_DC_DC_MODE_CTRL, 1);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -447,6 +450,22 @@ static void board_chipset_shutdown(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
+/* Called on AP S3 -> S0 transition, 5V DC-DC ctrl  */
+static void board_chipset_resume(void)
+{
+	/* Enable USM mode */
+	ioex_set_level(IOEX_5V_DC_DC_MODE_CTRL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S0 -> S3 transition */
+static void board_chipset_suspend(void)
+{
+	/* Enable Normal mode */
+	ioex_set_level(IOEX_5V_DC_DC_MODE_CTRL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
 int board_get_charger_i2c(void)
 {
 	/* TODO(b:138415463): confirm the bus allocation for future builds */
@@ -465,43 +484,3 @@ void lid_angle_peripheral_enable(int enable)
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
 #endif
-
-/* map from sku id voltage in mv */
-const int16_t sku_id_map[] = {
-	109,   /* 51.1K , 2.2K ohm */
-	211,   /* 51.1k , 6.8K ohm */
-};
-BUILD_ASSERT(ARRAY_SIZE(sku_id_map) == BOARD_SKU_ID_COUNT);
-
-#define THRESHOLD_MV 56 /* Simply assume 1800/16/2 */
-
-int board_get_sku_id(void)
-{
-	static int version = BOARD_SKU_ID_UNKNOWN;
-	int mv;
-	int i;
-
-	if (version != BOARD_SKU_ID_UNKNOWN)
-		return version;
-
-	mv = adc_read_channel(ADC_EC_SKU_ID);
-
-	if (mv == ADC_READ_ERROR)
-		mv = adc_read_channel(ADC_EC_SKU_ID);
-
-	for (i = 0; i < BOARD_SKU_ID_COUNT; ++i) {
-		if (mv < sku_id_map[i] + THRESHOLD_MV) {
-			version = i;
-			break;
-		}
-	}
-	/*
-	 * For devices without pogo, Disable ADC module after we detect the
-	 * board version, since this is the only thing ADC module needs to do
-	 * for this board.
-	 */
-	if (version != BOARD_SKU_ID_UNKNOWN)
-		adc_disable();
-
-	return version;
-}

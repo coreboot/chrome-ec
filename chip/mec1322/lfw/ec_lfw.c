@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "config.h"
+#include "cros_version.h"
 #include "gpio.h"
 #include "spi.h"
 #include "spi_flash.h"
@@ -19,7 +20,6 @@
 #include "cpu.h"
 #include "clock.h"
 #include "system.h"
-#include "version.h"
 #include "hwtimer.h"
 #include "gpio_list.h"
 
@@ -83,7 +83,7 @@ static int spi_flash_readloc(uint8_t *buf_usr,
 				(offset >> 8) & 0xFF,
 				offset & 0xFF};
 
-	if (offset + bytes > CONFIG_FLASH_SIZE)
+	if (offset + bytes > CONFIG_FLASH_SIZE_BYTES)
 		return EC_ERROR_INVAL;
 
 	return spi_transaction(SPI_FLASH_DEVICE, cmd, 4, buf_usr, bytes);
@@ -252,7 +252,7 @@ void lfw_main()
 	dma_init();
 	uart_init();
 	system_init();
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	uart_puts("littlefw ");
 	uart_puts(current_image_data.version);

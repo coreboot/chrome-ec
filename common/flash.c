@@ -218,9 +218,9 @@ int flash_bank_start_offset(int bank)
 static int flash_range_ok(int offset, int size_req, int align)
 {
 	if (offset < 0 || size_req < 0 ||
-	    offset > CONFIG_FLASH_SIZE ||
-	    size_req > CONFIG_FLASH_SIZE ||
-	    offset + size_req > CONFIG_FLASH_SIZE ||
+	    offset > CONFIG_FLASH_SIZE_BYTES ||
+	    size_req > CONFIG_FLASH_SIZE_BYTES ||
+	    offset + size_req > CONFIG_FLASH_SIZE_BYTES ||
 	    (offset | size_req) & (align - 1))
 		return 0;  /* Invalid range */
 
@@ -251,7 +251,7 @@ int flash_dataptr(int offset, int size_req, int align, const char **ptrp)
 	if (ptrp)
 		*ptrp = flash_physical_dataptr(offset);
 
-	return CONFIG_FLASH_SIZE - offset;
+	return CONFIG_FLASH_SIZE_BYTES - offset;
 }
 #endif
 
@@ -979,7 +979,7 @@ static int command_flash_info(int argc, char **argv)
 {
 	int i, flags;
 
-	ccprintf("Usable:  %4d KB\n", CONFIG_FLASH_SIZE / 1024);
+	ccprintf("Usable:  %4d KB\n", CONFIG_FLASH_SIZE_BYTES / 1024);
 	ccprintf("Write:   %4d B (ideal %d B)\n", CONFIG_FLASH_WRITE_SIZE,
 		 CONFIG_FLASH_WRITE_IDEAL_SIZE);
 #ifdef CONFIG_FLASH_MULTIPLE_REGION
@@ -1156,6 +1156,7 @@ DECLARE_CONSOLE_COMMAND(flashread, command_flash_read,
 			"Read flash");
 #endif
 
+#ifdef CONFIG_CMD_FLASH_WP
 static int command_flash_wp(int argc, char **argv)
 {
 	int val;
@@ -1204,6 +1205,7 @@ DECLARE_CONSOLE_COMMAND(flashwp, command_flash_wp,
 			" | rb | norb"
 #endif
 			, "Modify flash write protect");
+#endif /* CONFIG_CMD_FLASH_WP */
 
 /*****************************************************************************/
 /* Host commands */
@@ -1234,7 +1236,7 @@ static enum ec_status flash_command_get_info(struct host_cmd_handler_args *args)
 #error "Flash: Bank size expected bigger or equal to erase size."
 #endif
 	struct ec_flash_bank single_bank = {
-		.count = CONFIG_FLASH_SIZE / CONFIG_FLASH_BANK_SIZE,
+		.count = CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
 		.size_exp = __fls(CONFIG_FLASH_BANK_SIZE),
 		.write_size_exp = __fls(CONFIG_FLASH_WRITE_SIZE),
 		.erase_size_exp = __fls(CONFIG_FLASH_ERASE_SIZE),
@@ -1265,7 +1267,8 @@ static enum ec_status flash_command_get_info(struct host_cmd_handler_args *args)
 
 	if (args->version >= 2) {
 		args->response_size = sizeof(struct ec_response_flash_info_2);
-		r_2->flash_size = CONFIG_FLASH_SIZE - EC_FLASH_REGION_START;
+		r_2->flash_size =
+			CONFIG_FLASH_SIZE_BYTES - EC_FLASH_REGION_START;
 #if (CONFIG_FLASH_ERASED_VALUE32 == 0)
 		r_2->flags = EC_FLASH_INFO_ERASE_TO_0;
 #else
@@ -1285,7 +1288,7 @@ static enum ec_status flash_command_get_info(struct host_cmd_handler_args *args)
 #ifdef CONFIG_FLASH_MULTIPLE_REGION
 	return EC_RES_INVALID_PARAM;
 #else
-	r_1->flash_size = CONFIG_FLASH_SIZE - EC_FLASH_REGION_START;
+	r_1->flash_size = CONFIG_FLASH_SIZE_BYTES - EC_FLASH_REGION_START;
 	r_1->flags = 0;
 	r_1->write_block_size = CONFIG_FLASH_WRITE_SIZE;
 	r_1->erase_block_size = CONFIG_FLASH_ERASE_SIZE;
@@ -1370,10 +1373,10 @@ DECLARE_HOST_COMMAND(EC_CMD_FLASH_WRITE,
 /*
  * Make sure our image sizes are a multiple of flash block erase size so that
  * the host can erase the entire image.
+ * Note that host (flashrom/depthcharge) does not erase/program the
+ * EC_FLASH_REGION_RO region, it only queries this region.
  */
-BUILD_ASSERT(CONFIG_RO_SIZE % CONFIG_FLASH_ERASE_SIZE == 0);
-BUILD_ASSERT(CONFIG_RW_SIZE % CONFIG_FLASH_ERASE_SIZE == 0);
-BUILD_ASSERT(EC_FLASH_REGION_RO_SIZE % CONFIG_FLASH_ERASE_SIZE == 0);
+BUILD_ASSERT(CONFIG_WP_STORAGE_SIZE % CONFIG_FLASH_ERASE_SIZE == 0);
 BUILD_ASSERT(CONFIG_EC_WRITABLE_STORAGE_SIZE % CONFIG_FLASH_ERASE_SIZE == 0);
 
 #endif

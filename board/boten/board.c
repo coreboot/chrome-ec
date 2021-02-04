@@ -31,7 +31,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "temp_sensor.h"
 #include "uart.h"
 #include "usb_charge.h"
@@ -40,20 +40,50 @@
 #include "usb_pd_tcpm.h"
 
 #define CPRINTUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define INT_RECHECK_US 5000
+
+/* C0 interrupt line shared by BC 1.2 and charger */
+static void check_c0_line(void);
+DECLARE_DEFERRED(check_c0_line);
 
 static void hdmi_hpd_interrupt(enum gpio_signal s)
 {
 	gpio_set_level(GPIO_USB_C1_DP_HPD, !gpio_get_level(s));
 }
 
-static void usb_c0_interrupt(enum gpio_signal s)
+static void notify_c0_chips(void)
 {
 	/*
 	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.
+	 * chip.  Therefore we'll need to check both ICs.
 	 */
 	schedule_deferred_pd_interrupt(0);
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+}
+
+static void check_c0_line(void)
+{
+	/*
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL)) {
+		notify_c0_chips();
+		hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+	}
+}
+
+static void usb_c0_interrupt(enum gpio_signal s)
+{
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c0_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c0_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+
 }
 
 static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
@@ -67,6 +97,15 @@ static void pen_detect_interrupt(enum gpio_signal s)
 	int pen_detect = !gpio_get_level(GPIO_PEN_DET_ODL);
 
 	gpio_set_level(GPIO_EN_PP5000_PEN, pen_detect);
+}
+
+void board_hibernate(void)
+{
+	/*
+	 * Charger IC need to be put into their "low power mode" before
+	 * entering the Z-state.
+	 */
+	raa489000_hibernate(0, true);
 }
 
 /* Must come after other header files and interrupt handler declarations */
@@ -162,6 +201,13 @@ void board_init(void)
 	pwm_set_duty(PWM_CH_LED_RED, 70);
 	pwm_set_duty(PWM_CH_LED_GREEN, 70);
 	pwm_set_duty(PWM_CH_LED_WHITE, 70);
+
+	/*
+	 * If interrupt lines are already low, schedule them to be processed
+	 * after inits are completed.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
+		hook_call_deferred(&check_c0_line_data, 0);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -203,10 +249,19 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
 
 	/*
-	 * TODO(b/151955431): Characterize the input current limit in case a
-	 * scaling needs to be applied here
+	 * b/147463641: The charger IC seems to overdraw ~4%, therefore we
+	 * reduce our target accordingly.
 	 */
+	icl = icl * 96 / 100;
 	charge_set_input_current_limit(icl, charge_mv);
+}
+
+__override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
+{
+	if (port < 0 || port > board_get_usb_pd_port_count())
+		return;
+
+	raa489000_set_output_current(port, rp);
 }
 
 int board_is_sourcing_vbus(int port)
@@ -282,6 +337,19 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
+/* Matrices to rotate accelerometers into the standard reference. */
+static const mat33_fp_t lid_standard_ref = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+static const mat33_fp_t base_standard_ref = {
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
 /* Sensor Data */
 static struct stprivate_data g_lis2dwl_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
@@ -299,7 +367,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_lis2dwl_data,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 2, /* g */
 		.min_frequency = LIS2DW12_ODR_MIN_VAL,
 		.max_frequency = LIS2DW12_ODR_MAX_VAL,
@@ -326,7 +394,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,  /* g */
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
@@ -356,7 +424,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 	},

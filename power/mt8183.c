@@ -109,9 +109,6 @@ static const struct power_seq_op s3s5_power_seq[] = {
 	{ GPIO_AP_SYS_RST_L, 0, 0 },
 	/* Assert watchdog to PMIC (there may be a 1.6ms debounce) */
 	{ GPIO_PMIC_WATCHDOG_L, 0, 3 },
-#ifdef BOARD_KAKADU
-        { GPIO_USB_C0_VCONN_EN_OD, 0, 0 },
-#endif
 };
 
 static int forcing_shutdown;
@@ -276,6 +273,7 @@ enum power_state power_handle_state(enum power_state state)
 	 * transition to S5, G3.
 	 */
 	static int ap_shutdown;
+	uint16_t tries = 0;
 
 	switch (state) {
 	case POWER_G3:
@@ -361,6 +359,24 @@ enum power_state power_handle_state(enum power_state state)
 			}
 		}
 #endif
+
+		/*
+		 * Allow time for charger to be initialized, in case we're
+		 * trying to boot the AP with no battery.
+		 */
+		while (charge_prevent_power_on(0) &&
+		       tries++ < CHARGER_INITIALIZED_TRIES) {
+			msleep(CHARGER_INITIALIZED_DELAY_MS);
+		}
+
+		/* Return to G3 if battery level is too low. */
+		if (charge_want_shutdown() ||
+		    tries > CHARGER_INITIALIZED_TRIES) {
+			CPRINTS("power-up inhibited");
+			chipset_force_shutdown(
+				CHIPSET_SHUTDOWN_BATTERY_INHIBIT);
+			return POWER_G3;
+		}
 
 #if CONFIG_CHIPSET_POWER_SEQ_VERSION == 1
 		hook_call_deferred(&deassert_en_pp1800_s5_l_data, -1);

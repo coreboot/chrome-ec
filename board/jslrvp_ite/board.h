@@ -47,6 +47,7 @@
 /* USB PD config */
 #define CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
+#define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
 
 /* USB MUX */
 #define CONFIG_USB_MUX_ANX7440
@@ -80,6 +81,12 @@ enum jslrvp_i2c_channel {
 	I2C_CHAN_BATT_CHG,
 	I2C_CHAN_RETIMER,
 	I2C_CHAN_COUNT,
+};
+
+enum battery_type {
+	BATTERY_SIMPLO_SMP_HHP_408,
+	BATTERY_SIMPLO_SMP_CA_445,
+	BATTERY_TYPE_COUNT,
 };
 
 /* Define max power */

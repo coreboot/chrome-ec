@@ -9,6 +9,7 @@
 #define __CROS_EC_USB_PD_TCPM_H
 
 #include <stdbool.h>
+#include "common.h"
 #include "ec_commands.h"
 #include "i2c.h"
 
@@ -45,6 +46,12 @@ enum tcpc_rp_value {
 	TYPEC_RP_1A5 = 1,
 	TYPEC_RP_3A0 = 2,
 	TYPEC_RP_RESERVED = 3,
+};
+
+/* DRP (dual-role-power) setting */
+enum tcpc_drp {
+	TYPEC_NO_DRP = 0,
+	TYPEC_DRP = 1,
 };
 
 /**
@@ -227,15 +234,17 @@ struct tcpm_drv {
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	/**
-	 * Disable receive of SOP' and SOP'' messages. This is provided
+	 * Control receive of SOP' and SOP'' messages. This is provided
 	 * separately from set_vconn so that we can preemptively disable
-	 * receipt of SOP' messages during a VCONN swap.
+	 * receipt of SOP' messages during a VCONN swap, or disable during spans
+	 * when port partners may erroneously be sending cable messages.
 	 *
 	 * @param port Type-C port number
+	 * @param enable Enable SOP' and SOP'' messages
 	 *
 	 * @return EC_SUCCESS or error
 	 */
-	int (*sop_prime_disable)(int port);
+	int (*sop_prime_enable)(int port, bool enable);
 #endif
 
 	/**
@@ -437,6 +446,17 @@ struct tcpm_drv {
 	 */
 	 int (*handle_fault)(int port, int fault);
 
+	/**
+	 * Controls BIST Test Mode (or analogous functionality) in the TCPC and
+	 * associated behavior changes. Disables message Rx alerts while the
+	 * port is in Test Mode.
+	 *
+	 * @param port   USB-C port number
+	 * @param enable true to enter BIST Test Mode; false to exit
+	 * @return EC_SUCCESS or error code
+	 */
+	 enum ec_error_list (*set_bist_test_mode)(int port, bool enable);
+
 #ifdef CONFIG_CMD_TCPC_DUMP
 	/**
 	 * Dump TCPC registers
@@ -471,13 +491,6 @@ struct tcpc_config_t {
 	const struct tcpm_drv *drv;
 	/* See TCPC_FLAGS_* above */
 	uint32_t flags;
-#ifdef CONFIG_INTEL_VIRTUAL_MUX
-	/*
-	 * 0-3: Corresponding USB2 port number (1 ~ 15)
-	 * 4-7: Corresponding USB3 port number (1 ~ 15)
-	 */
-	uint8_t usb23;
-#endif
 };
 
 #ifndef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG

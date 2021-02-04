@@ -109,6 +109,12 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 	.saturation.atime = TCS_DEFAULT_ATIME,
 };
 
+const mat33_fp_t screen_standard_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0,  0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
 struct motion_sensor_t motion_sensors[] = {
 	[SCREEN_ACCEL] = {
 		.name = "Screen Accel",
@@ -121,7 +127,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv_data = &g_bma253_data,
 		.port = I2C_PORT_SENSORS,
 		.i2c_spi_addr_flags = BMA2x2_I2C_ADDR2_FLAGS,
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &screen_standard_ref,
 		.default_range = 2,
 		.min_frequency = BMA255_ACCEL_MIN_FREQ,
 		.max_frequency = BMA255_ACCEL_MAX_FREQ,
@@ -406,6 +412,10 @@ const struct pwm_t pwm_channels[] = {
 	[PWM_CH_FAN]        = { .channel = 5,
 				.flags = PWM_CONFIG_OPEN_DRAIN,
 				.freq = 25000},
+	[PWM_CH_LED_RED]    = { .channel = 0,
+				.flags = PWM_CONFIG_ACTIVE_LOW |
+					 PWM_CONFIG_DSLEEP,
+				.freq = 2000 },
 	[PWM_CH_LED_WHITE]  = { .channel = 2,
 				.flags = PWM_CONFIG_ACTIVE_LOW |
 					 PWM_CONFIG_DSLEEP,
@@ -641,9 +651,6 @@ static void board_init(void)
 	/* Always claim AC is online, because we don't have a battery. */
 	memmap_batt_flags = host_get_memmap(EC_MEMMAP_BATT_FLAG);
 	*memmap_batt_flags |= EC_BATT_FLAG_AC_PRESENT;
-
-	if (board_version >= 1)
-		buttons[BUTTON_VOLUME_DOWN].gpio = GPIO_EC_VOLDN_BTN_ODL_V1;
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -818,7 +825,7 @@ int extpower_is_present(void)
 
 int board_is_c10_gate_enabled(void)
 {
-	return 1;
+	return 0;
 }
 
 void board_enable_s0_rails(int enable)

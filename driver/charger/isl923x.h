@@ -9,32 +9,33 @@
 #ifndef __CROS_EC_ISL923X_H
 #define __CROS_EC_ISL923X_H
 
+#include "stdbool.h"
 #define ISL923X_ADDR_FLAGS	(0x09)
 
 /* Registers */
-#define ISL923X_REG_CHG_CURRENT      0x14
-#define ISL923X_REG_ADAPTER_CURRENT1 0x3f
-#define ISL923X_REG_ADAPTER_CURRENT2 0x3b
-#define ISL923X_REG_SYS_VOLTAGE_MAX  0x15
-#define ISL923X_REG_SYS_VOLTAGE_MIN  0x3e
-#define ISL923X_REG_PROCHOT_AC       0x47
-#define ISL923X_REG_PROCHOT_DC       0x48
-#define ISL923X_REG_T1_T2            0x38
-#define ISL923X_REG_CONTROL0         0x39
-#define ISL923X_REG_CONTROL1         0x3c
-#define ISL923X_REG_CONTROL2         0x3d
-#define ISL9238_REG_CONTROL3         0x4c
-#define ISL9238_REG_CONTROL4         0x4e
-#define ISL9238C_REG_CONTROL6        0x37
-#define ISL923X_REG_INFO             0x3a
-#define ISL9238_REG_INFO2            0x4d
-#define ISL923X_REG_OTG_VOLTAGE      0x49
-#define ISL923X_REG_OTG_CURRENT      0x4a
-#define ISL9238_REG_INPUT_VOLTAGE    0x4b
-#define ISL923X_REG_MANUFACTURER_ID  0xfe
-#define ISL923X_REG_DEVICE_ID        0xff
-#define RAA489000_REG_CONTROL8       0x37
-#define RAA489000_REG_CONTROL10      0x35
+#define ISL923X_REG_CHG_CURRENT            0x14
+#define ISL923X_REG_ADAPTER_CURRENT_LIMIT1 0x3f
+#define ISL923X_REG_ADAPTER_CURRENT_LIMIT2 0x3b
+#define ISL923X_REG_SYS_VOLTAGE_MAX        0x15
+#define ISL923X_REG_SYS_VOLTAGE_MIN        0x3e
+#define ISL923X_REG_PROCHOT_AC             0x47
+#define ISL923X_REG_PROCHOT_DC             0x48
+#define ISL923X_REG_T1_T2                  0x38
+#define ISL923X_REG_CONTROL0               0x39
+#define ISL923X_REG_CONTROL1               0x3c
+#define ISL923X_REG_CONTROL2               0x3d
+#define ISL9238_REG_CONTROL3               0x4c
+#define ISL9238_REG_CONTROL4               0x4e
+#define ISL9238C_REG_CONTROL6              0x37
+#define ISL923X_REG_INFO                   0x3a
+#define ISL9238_REG_INFO2                  0x4d
+#define ISL923X_REG_OTG_VOLTAGE            0x49
+#define ISL923X_REG_OTG_CURRENT            0x4a
+#define ISL9238_REG_INPUT_VOLTAGE          0x4b
+#define ISL923X_REG_MANUFACTURER_ID        0xfe
+#define ISL923X_REG_DEVICE_ID              0xff
+#define RAA489000_REG_CONTROL8             0x37
+#define RAA489000_REG_CONTROL10            0x35
 
 /* Sense resistor default values in mOhm */
 #define ISL923X_DEFAULT_SENSE_RESISTOR_AC 20
@@ -247,6 +248,9 @@
 /* Control3: Enables or disables Battery Ship mode */
 #define ISL9238_C3_BGATE_OFF BIT(10)
 
+/* Control3: Enable or disable DCM/CCM Hysteresis */
+#define RAA489000_C3_DCM_CCM_HYSTERESIS_ENABLE BIT(10)
+
 /* Control3: Don't reload ACLIM on ACIN. */
 #define ISL9238_C3_NO_RELOAD_ACLIM_ON_ACIN BIT(14)
 
@@ -258,6 +262,9 @@
 
 /* Control4: GP comparator control bit */
 #define RAA489000_C4_DISABLE_GP_CMP BIT(12)
+
+/* Control4: Ignores BATGONE input */
+#define RAA489000_C4_BATGONE_DISABLE BIT(15)
 
 /* Control6: charger current and maximum system voltage slew rate control. */
 #define ISL9238C_C6_SLEW_RATE_CONTROL BIT(6)
@@ -336,44 +343,6 @@ enum isl9237_fsm_state {
 #define RAA489000_C10_RP1_SHIFT 10
 #define RAA489000_C10_ENABLE_DVC_MODE BIT(15)
 
-#if defined(CONFIG_CHARGER_ISL9237)
-#define CHARGER_NAME  "isl9237"
-#define CHARGE_V_MAX  ISL9237_SYS_VOLTAGE_REG_MAX
-#define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
-#define CHARGE_V_STEP 8
-#elif defined(CONFIG_CHARGER_ISL9238)
-#define CHARGER_NAME  "isl9238"
-#define CHARGE_V_MAX  ISL9238_SYS_VOLTAGE_REG_MAX
-#define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
-#define CHARGE_V_STEP 8
-#elif defined(CONFIG_CHARGER_ISL9238C)
-#define CHARGER_NAME  "isl9238c"
-#define CHARGE_V_MAX  ISL9238_SYS_VOLTAGE_REG_MAX
-#define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
-#define CHARGE_V_STEP 8
-#elif defined(CONFIG_CHARGER_RAA489000)
-#define CHARGER_NAME  "raa489000"
-#define CHARGE_V_MAX  RAA489000_SYS_VOLTAGE_REG_MAX
-#define CHARGE_V_MIN  RAA489000_SYS_VOLTAGE_REG_MIN
-#define CHARGE_V_STEP 64
-#endif
-
-#ifdef CONFIG_CHARGER_RAA489000
-#define CHARGE_I_MAX  RAA489000_CURRENT_REG_MAX
-#else
-#define CHARGE_I_MAX  ISL923X_CURRENT_REG_MAX
-#endif /* CONFIG_CHARGER_RAA489000 */
-#define CHARGE_I_MIN  4
-#define CHARGE_I_OFF  0
-#define CHARGE_I_STEP 4
-#ifdef CONFIG_CHARGER_RAA489000
-#define INPUT_I_MAX   RAA489000_CURRENT_REG_MAX
-#else
-#define INPUT_I_MAX   ISL923X_CURRENT_REG_MAX
-#endif /* CONFIG_CHARGER_RAA489000 */
-#define INPUT_I_MIN   4
-#define INPUT_I_STEP  4
-
 #define I2C_ADDR_CHARGER_FLAGS ISL923X_ADDR_FLAGS
 
 extern const struct charger_drv isl923x_drv;
@@ -410,7 +379,7 @@ int isl923x_set_comparator_inversion(int chgnum, int invert);
  *
  * @param chgnum index into chg_chips table.
  */
-void raa489000_hibernate(int chgnum);
+void raa489000_hibernate(int chgnum, bool disable_adc);
 enum ec_error_list isl9238c_hibernate(int chgnum);
 enum ec_error_list isl9238c_resume(int chgnum);
 

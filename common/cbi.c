@@ -26,8 +26,8 @@
  */
 uint8_t cbi_crc8(const struct cbi_header *h)
 {
-	return crc8((uint8_t *)&h->crc + 1,
-		    h->total_size - sizeof(h->magic) - sizeof(h->crc));
+	return cros_crc8((uint8_t *)&h->crc + 1,
+			 h->total_size - sizeof(h->magic) - sizeof(h->crc));
 }
 
 uint8_t *cbi_set_data(uint8_t *p, enum cbi_data_tag tag,
@@ -434,7 +434,7 @@ static void dump_flash(void)
 
 static void print_tag(const char * const tag, int rv, const uint32_t *val)
 {
-	ccprintf(tag);
+	ccprintf("%s", tag);
 	if (rv == EC_SUCCESS && val)
 		ccprintf(": %u (0x%x)\n", *val, *val);
 	else

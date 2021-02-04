@@ -24,7 +24,9 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd_dpm.h"
 #include "usb_pd_tcpm.h"
+#include "usbc_ocp.h"
 #include "usbc_ppc.h"
 #include "util.h"
 
@@ -262,7 +264,10 @@ int pd_check_requested_voltage(uint32_t rdo, const int port)
 	int idx = RDO_POS(rdo);
 	uint32_t pdo;
 	uint32_t pdo_ma;
-#if defined(CONFIG_USB_PD_DYNAMIC_SRC_CAP) || \
+#if defined(CONFIG_USB_PD_TCPMV2) && defined(CONFIG_USB_PE_SM)
+	const uint32_t *src_pdo;
+	const int pdo_cnt = dpm_get_source_pdo(&src_pdo, port);
+#elif defined(CONFIG_USB_PD_DYNAMIC_SRC_CAP) || \
 		defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
 	const uint32_t *src_pdo;
 	const int pdo_cnt = charge_manager_get_source_pdo(&src_pdo, port);
@@ -300,6 +305,12 @@ int pd_check_requested_voltage(uint32_t rdo, const int port)
 __overridable uint8_t board_get_usb_pd_port_count(void)
 {
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
+}
+
+int pd_get_retry_count(int port, enum tcpm_transmit_type type)
+{
+	/* PD 3.0 6.7.7: nRetryCount = 2; PD 2.0 6.6.9: nRetryCount = 3 */
+	return pd_get_rev(port, type) == PD_REV30 ? 2 : 3;
 }
 
 enum pd_drp_next_states drp_auto_toggle_next_state(
@@ -419,11 +430,12 @@ mux_state_t get_mux_mode_to_set(int port)
 		return USB_PD_MUX_NONE;
 
 	/*
-	 * If the power role is sink and the partner device is not capable
+	 * If the power role is sink and the PD partner device is not capable
 	 * of USB communication then disconnect.
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
 	    pd_get_power_role(port) == PD_ROLE_SINK &&
+	    pd_capable(port) &&
 	    !pd_get_partner_usb_comm_capable(port))
 		return USB_PD_MUX_NONE;
 
@@ -440,7 +452,7 @@ void set_usb_mux_with_current_data_role(int port)
 				USB_SWITCH_DISCONNECT : USB_SWITCH_CONNECT;
 
 		usb_mux_set(port, mux_mode, usb_switch_mode,
-				pd_get_polarity(port));
+				polarity_rm_dts(pd_get_polarity(port)));
 	}
 }
 
@@ -449,7 +461,8 @@ void usb_mux_set_safe_mode(int port)
 	if (IS_ENABLED(CONFIG_USBC_SS_MUX)) {
 		usb_mux_set(port, IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) ?
 			USB_PD_MUX_SAFE_MODE : USB_PD_MUX_NONE,
-			USB_SWITCH_CONNECT, pd_get_polarity(port));
+			USB_SWITCH_CONNECT,
+			polarity_rm_dts(pd_get_polarity(port)));
 	}
 
 	/* Isolate the SBU lines. */
@@ -459,16 +472,16 @@ void usb_mux_set_safe_mode(int port)
 
 static void pd_send_hard_reset(int port)
 {
-	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SEND_HARD_RESET, 0);
+	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SEND_HARD_RESET);
 }
 
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USBC_OCP
 
 static uint32_t port_oc_reset_req;
 
 static void re_enable_ports(void)
 {
-	uint32_t ports = atomic_read_clear(&port_oc_reset_req);
+	uint32_t ports = atomic_clear(&port_oc_reset_req);
 
 	while (ports) {
 		int port = __fls(ports);
@@ -493,18 +506,23 @@ DECLARE_DEFERRED(re_enable_ports);
 
 void pd_handle_overcurrent(int port)
 {
+	if ((port < 0) || (port >= board_get_usb_pd_port_count())) {
+		CPRINTS("%s(%d) Invalid port!", __func__, port);
+		return;
+	}
+
 	CPRINTS("C%d: overcurrent!", port);
 
 	if (IS_ENABLED(CONFIG_USB_PD_LOGGING))
 		pd_log_event(PD_EVENT_PS_FAULT, PD_LOG_PORT_SIZE(port, 0),
-			PS_FAULT_OCP, NULL);
+			     PS_FAULT_OCP, NULL);
 
 	/* No action to take if disconnected, just log. */
 	if (pd_is_disconnected(port))
 		return;
 
 	/* Keep track of the overcurrent events. */
-	ppc_add_oc_event(port);
+	usbc_ocp_add_event(port);
 
 	/* Let the board specific code know about the OC event. */
 	board_overcurrent_event(port, 1);
@@ -514,7 +532,7 @@ void pd_handle_overcurrent(int port)
 	hook_call_deferred(&re_enable_ports_data, SECOND);
 }
 
-#endif /* CONFIG_USBC_PPC */
+#endif /* CONFIG_USBC_OCP */
 
 __maybe_unused void pd_handle_cc_overvoltage(int port)
 {
@@ -723,8 +741,15 @@ static void gpio_discharge_vbus(int port, int enable)
 
 void pd_set_vbus_discharge(int port, int enable)
 {
-	static struct mutex discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
+	static mutex_t discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
+#ifdef CONFIG_ZEPHYR
+	static bool inited[CONFIG_USB_PD_PORT_MAX_COUNT];
 
+	if (!inited[port]) {
+		(void)k_mutex_init(&discharge_lock[port]);
+		inited[port] = true;
+	}
+#endif
 	if (port >= board_get_usb_pd_port_count())
 		return;
 
@@ -747,7 +772,7 @@ static uint32_t pd_ports_to_resume;
 static void resume_pd_port(void)
 {
 	uint32_t port;
-	uint32_t suspended_ports = atomic_read_clear(&pd_ports_to_resume);
+	uint32_t suspended_ports = atomic_clear(&pd_ports_to_resume);
 
 	while (suspended_ports) {
 		port = __builtin_ctz(suspended_ports);

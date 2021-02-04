@@ -11,6 +11,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
+#include "cros_version.h"
 #include "ec_commands.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -24,15 +25,15 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_prl_sm.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
 #include "usb_sm.h"
 #include "usb_tc_sm.h"
 #include "usbc_ppc.h"
-#include "version.h"
 
 #define USBC_EVENT_TIMEOUT (5 * MSEC)
+#define USBC_PRIORITY_EVENT_TIMEOUT (1 * MSEC)
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
@@ -44,6 +45,18 @@ void tc_pause_event_loop(int port)
 	paused[port] = 1;
 }
 
+/*
+ * TODO(b/178029034): Change this to allow for multiple timers that can be
+ * used as events to wake us up instead of having either a set 5ms loop or
+ * a high priority 1ms loop. The bug has more detail on ideas on how to
+ * adjust to make this more reactive
+ */
+static uint8_t priority[CONFIG_USB_PD_PORT_MAX_COUNT];
+void tc_high_priority_event(int port, bool high_pri)
+{
+	priority[port] = high_pri;
+}
+
 void tc_start_event_loop(int port)
 {
 	/*
@@ -52,7 +65,7 @@ void tc_start_event_loop(int port)
 	 */
 	if (paused[port]) {
 		paused[port] = 0;
-		task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), TASK_EVENT_WAKE);
 	}
 }
 
@@ -61,6 +74,7 @@ static void pd_task_init(int port)
 	if (IS_ENABLED(CONFIG_USB_TYPEC_SM))
 		tc_state_init(port);
 	paused[port] = 0;
+	priority[port] = 0;
 
 	/*
 	 * Since most boards configure the TCPC interrupt as edge
@@ -79,7 +93,9 @@ static bool pd_task_loop(int port)
 	const uint32_t evt =
 		task_wait_event(paused[port]
 					? -1
-					: USBC_EVENT_TIMEOUT);
+					: priority[port]
+						? USBC_PRIORITY_EVENT_TIMEOUT
+						: USBC_EVENT_TIMEOUT);
 
 	/*
 	 * Re-use TASK_EVENT_RESET_DONE in tests to restart the USB task

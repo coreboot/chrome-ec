@@ -30,8 +30,8 @@ import traceback
 
 import six
 
-import interpreter
-import threadproc_shim
+from ec3po import interpreter
+from ec3po import threadproc_shim
 
 
 PROMPT = b'> '
@@ -200,12 +200,12 @@ class Console(object):
     string.append('input_buffer_pos: %d' % self.input_buffer_pos)
     string.append('esc_state: %d' % self.esc_state)
     string.append('line_limit: %d' % self.line_limit)
-    string.append('history: [\'' + '%s' % repr(self.history) + '\']')
+    string.append('history: %r' % self.history)
     string.append('history_pos: %d' % self.history_pos)
-    string.append('prompt: \'%s\'' % self.prompt)
-    string.append('partial_cmd: \'%s\''% self.partial_cmd)
-    string.append('interrogation_mode: \'%s\'' % self.interrogation_mode)
-    string.append('look_buffer: \'%s\'' % self.look_buffer)
+    string.append('prompt: %r' % self.prompt)
+    string.append('partial_cmd: %r'% self.partial_cmd)
+    string.append('interrogation_mode: %r' % self.interrogation_mode)
+    string.append('look_buffer: %r' % self.look_buffer)
     return '\n'.join(string)
 
   def LogConsoleOutput(self, data):
@@ -215,39 +215,49 @@ class Console(object):
     when it sees backspaces.
 
     Args:
-      data: binary string received from MCU
+      data: bytes - string received from MCU
     """
     data = list(data)
+    # For compatibility with python2 and python3, standardize on the data
+    # being a list of integers. This requires one more transformation in py2
+    if not isinstance(data[0], int):
+      data = [ord(c) for c in data]
 
     # This is a list of already filtered characters (or placeholders).
     line = self.output_line_log_buffer
 
+    # TODO(b/177480273): use raw strings here
     symbols = {
-            b'\n': u'\\n',
-            b'\r': u'\\r',
-            b'\t': u'\\t'
+            ord(b'\n'): u'\\n',
+            ord(b'\r'): u'\\r',
+            ord(b'\t'): u'\\t'
     }
     # self.logger.debug(u'%s + %r', u''.join(line), ''.join(data))
     while data:
+      # Recall, data is a list of integers, namely the byte values sent by
+      # the MCU.
       byte = data.pop(0)
-      if byte == '\n':
+      # This means that |byte| is an int.
+      if byte == ord('\n'):
         line.append(symbols[byte])
         if line:
           self.logger.debug(u'%s', ''.join(line))
         line = []
-      elif byte == b'\b':
+      elif byte == ord('\b'):
         # Backspace: trim the last character off the buffer
         if line:
           line.pop(-1)
       elif byte in symbols:
         line.append(symbols[byte])
-      elif byte < b' ' or byte > b'~':
+      elif byte < ord(' ') or byte > ord('~'):
         # Turn any character that isn't printable ASCII into escaped hex.
         # ' ' is chr(20), and 0-19 are unprintable control characters.
         # '~' is chr(126), and 127 is DELETE.  128-255 are control and Latin-1.
-        line.append(u'\\x%02x' % ord(byte))
+        line.append(u'\\x%02x' % byte)
       else:
-        line.append(u'%s' % byte)
+        # byte is printable. Thus it is safe to use chr() to get the printable
+        # character out of it again.
+        line.append(u'%s' % chr(byte))
     self.output_line_log_buffer = line
 
   def PrintHistory(self):
@@ -279,7 +289,7 @@ class Console(object):
 
     # Save the text entered on the console if any.
     if self.history_pos == len(self.history)-1:
-      self.logger.debug('saving partial_cmd: \'%s\'', self.input_buffer)
+      self.logger.debug('saving partial_cmd: %r', self.input_buffer)
       self.partial_cmd = self.input_buffer
 
     # Backspace the line.
@@ -311,7 +321,7 @@ class Console(object):
 
     # Restore the partial cmd.
     if self.history_pos == len(self.history):
-      self.logger.debug('Restoring partial command of \'%s\'', self.partial_cmd)
+      self.logger.debug('Restoring partial command of %r', self.partial_cmd)
       # Backspace the line.
       for _ in range(self.input_buffer_pos):
         self.SendBackspace()
@@ -512,7 +522,7 @@ class Console(object):
     response = ''
     if self.dbg_pipe.poll(self.interrogation_timeout):
       response = self.dbg_pipe.recv()
-      self.logger.debug('response: \'%s\'', binascii.hexlify(response))
+      self.logger.debug('response: %r', binascii.hexlify(response))
     else:
       self.logger.debug('Timed out waiting for EC_ACK')
 
@@ -566,7 +576,7 @@ class Console(object):
         self.logger.debug('End OOBM command.')
         if self.pending_oobm_cmd:
           self.oobm_queue.put(self.pending_oobm_cmd)
-          self.logger.debug('Placed \'%s\' into OOBM command queue.',
+          self.logger.debug('Placed %r into OOBM command queue.',
                             self.pending_oobm_cmd)
 
         # Reset the state.
@@ -786,7 +796,7 @@ class Console(object):
   def ProcessOOBMQueue(self):
     """Retrieve an item from the OOBM queue and process it."""
     item = self.oobm_queue.get()
-    self.logger.debug('OOBM cmd: %s', item)
+    self.logger.debug('OOBM cmd: %r', item)
     cmd = item.split(b' ')
 
     if cmd[0] == b'loglevel':
@@ -1009,7 +1019,7 @@ def StartLoop(console, command_active, shutdown_pipe=None):
           else:
             # Write it to the user console.
             if console.raw_debug:
-              console.logger.debug('|CMD|-%s->\'%s\'',
+              console.logger.debug('|CMD|-%s->%r',
                                    ('u' if master_connected else '') +
                                    ('i' if command_active.value else ''),
                                    data.strip())
@@ -1030,7 +1040,7 @@ def StartLoop(console, command_active, shutdown_pipe=None):
               console.CheckBufferForEnhancedImage(data)
             # Write it to the user console.
             if len(data) > 1 and console.raw_debug:
-              console.logger.debug('|DBG|-%s->\'%s\'',
+              console.logger.debug('|DBG|-%s->%r',
                                    ('u' if master_connected else '') +
                                    ('i' if command_active.value else ''),
                                    data.strip())

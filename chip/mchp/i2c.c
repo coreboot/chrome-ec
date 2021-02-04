@@ -741,7 +741,7 @@ int chip_i2c_xfer(int port, uint16_t slave_addr_flags,
 	cdata[ctrl].hwsts3 = 0;
 	cdata[ctrl].hwsts4 = 0;
 	cdata[ctrl].port = port & 0xff;
-	cdata[ctrl].slv_addr_8bit = I2C_GET_ADDR(slave_addr_flags) << 1;
+	cdata[ctrl].slv_addr_8bit = I2C_STRIP_FLAGS(slave_addr_flags) << 1;
 	cdata[ctrl].out_size = out_size;
 	cdata[ctrl].outp = out;
 	cdata[ctrl].in_size = in_size;
@@ -950,7 +950,7 @@ static void handle_interrupt(int controller)
 
 	/* Wake up the task which was waiting on the I2C interrupt, if any. */
 	if (id != TASK_ID_INVALID)
-		task_set_event(id, TASK_EVENT_I2C_IDLE, 0);
+		task_set_event(id, TASK_EVENT_I2C_IDLE);
 }
 
 void i2c0_interrupt(void) { handle_interrupt(0); }

@@ -345,7 +345,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_0_USB2_NUM | (USBC_PORT_0_USB3_NUM << 4),
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -354,7 +353,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -362,12 +360,12 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc1_usb4_db_retimer = {
+struct usb_mux usbc1_tcss_usb_mux = {
 	.usb_port = USBC_PORT_C1,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
 };
+
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
@@ -376,9 +374,10 @@ struct usb_mux usb_muxes[] = {
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb4_db_retimer,
+		.driver = &bb_usb_retimer,
+		.next_mux = &usbc1_tcss_usb_mux,
+		.i2c_port = I2C_PORT_USB_1_MIX,
+		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);

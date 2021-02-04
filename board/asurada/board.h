@@ -11,20 +11,22 @@
 #define CONFIG_BOARD_RESET_AFTER_POWER_ON
 #define CONFIG_BRINGUP
 #define CONFIG_CHIPSET_MT8192
+#define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_CMD_POWERINDEBUG
 #define CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 #define CONFIG_POWER_COMMON
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED
+#define CONFIG_LTO
 #define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_EXTPOWER_GPIO
-#ifdef BOARD_ASURADA
-/* For Rev0 only */
+/*
+ * NOTE: we need to make correct VCC voltage selection here if EC's VCC isn't
+ * connect to 1.8v on other versions.
+ */
 #define CONFIG_IT83XX_VCC_1P8V
-#else
-#define CONFIG_IT83XX_VCC_3P3V
-#endif
+
 /*
  * TODO: Remove this option once the VBAT no longer keeps high when
  * system's power isn't presented.
@@ -53,6 +55,7 @@
 #define CONFIG_USB_CHARGER
 
 /* Charger */
+#define ADC_AMON_BMON ADC_CHARGER_AMON_R /* ADC name remap */
 #define ADC_PSYS ADC_CHARGER_PMON /* ADC name remap */
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
@@ -66,6 +69,7 @@
 #define CONFIG_CHARGER_PSYS_READ
 #define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_CHARGE_MANAGER
+#define CONFIG_CMD_CHARGER_ADC_AMON_BMON
 
 /* Chipset */
 #define CONFIG_HOST_COMMAND_STATUS
@@ -78,7 +82,7 @@
 
 /* I2C */
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_PASSTHRU_RESTRICTED
 #define CONFIG_I2C_VIRTUAL_BATTERY
 #define I2C_PORT_CHARGER IT83XX_I2C_CH_A
@@ -93,6 +97,11 @@
 
 /* LED */
 #define CONFIG_LED_COMMON
+#ifdef BOARD_HAYATO
+#define CONFIG_LED_POWER_LED
+#define CONFIG_LED_ONOFF_STATES
+#define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
+#endif
 
 /* PD / USB-C / PPC */
 #define CONFIG_CMD_PPC_DUMP
@@ -107,7 +116,6 @@
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_DRP_ACC_TRYSRC
 #define CONFIG_USB_MUX_IT5205 /* C0 */
-#define CONFIG_USB_MUX_IT5205H_SBU_OVP
 #define CONFIG_USB_MUX_PS8743 /* C1 */
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
@@ -119,12 +127,10 @@
 #define CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_REV30
-#define CONFIG_USB_PD_FRS_PPC
-#define CONFIG_USB_PD_FRS_TCPC
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPM_TCPCI
@@ -132,6 +138,7 @@
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
 #define CONFIG_USB_PID 0x5566  /* TODO: update PID */
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_IT83XX_TUNE_CC_PHY
 
 #define PD_MAX_CURRENT_MA 3000
 #define PD_MAX_VOLTAGE_MV 20000
@@ -139,7 +146,6 @@
 #define PD_MAX_POWER_MW 60000
 #define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /* Optional console commands */
 #define CONFIG_CMD_FLASH
@@ -173,14 +179,18 @@
 #define CONFIG_CMD_ACCEL_INFO
 #define CONFIG_CMD_ACCELS
 
-#ifdef BOARD_ASURADA
+#ifdef BOARD_ASURADA_REV0
+#define CONFIG_ALS
 #define ALS_COUNT 1
 #define CONFIG_ALS_TCS3400
 #define CONFIG_ALS_TCS3400_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 #define CONFIG_ALS_TCS3400_EMULATED_IRQ_EVENT
 
-#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(CLEAR_ALS)
+#define CONFIG_ACCEL_FORCE_MODE_MASK (BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+#else
+/* TODO(b/171931139): remove this after rev1 board deprecated */
+#define CONFIG_ACCEL_FORCE_MODE_MASK (board_accel_force_mode_mask())
 #endif
 
 /* SPI / Host Command */
@@ -198,10 +208,12 @@
 #define CONFIG_MKBP_USE_GPIO
 
 /* Define the host events which are allowed to wakeup AP in S3. */
-#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK                \
-	(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |     \
-	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON) | \
-	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) /* for DP */)
+#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK                   \
+	(EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_CONNECTED) |    \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_DISCONNECTED) | \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |        \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) | /* for DP */ \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
 /* UART */
 #undef CONFIG_UART_TX_BUF_SIZE
@@ -269,7 +281,7 @@ enum sensor_id {
 	BASE_ACCEL = 0,
 	BASE_GYRO,
 	LID_ACCEL,
-#ifdef BOARD_ASURADA
+#ifdef BOARD_ASURADA_REV0
 	CLEAR_ALS,
 	RGB_ALS,
 #endif
@@ -278,6 +290,7 @@ enum sensor_id {
 
 void board_reset_pd_mcu(void);
 int board_get_version(void);
+int board_accel_force_mode_mask(void);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

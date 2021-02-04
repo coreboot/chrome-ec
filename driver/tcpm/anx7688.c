@@ -6,8 +6,8 @@
 /* ANX7688 port manager */
 
 #include "hooks.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_mux.h"
 
@@ -201,7 +201,7 @@ const struct tcpm_drv anx7688_tcpm_drv = {
 	.set_cc			= &tcpci_tcpm_set_cc,
 	.set_polarity		= &tcpci_tcpm_set_polarity,
 #ifdef CONFIG_USB_PD_DECODE_SOP
-	.sop_prime_disable	= &tcpci_tcpm_sop_prime_disable,
+	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
 #endif
 	.set_vconn		= &tcpci_tcpm_set_vconn,
 	.set_msg_header		= &tcpci_tcpm_set_msg_header,
@@ -209,6 +209,7 @@ const struct tcpm_drv anx7688_tcpm_drv = {
 	.get_message_raw	= &tcpci_tcpm_get_message_raw,
 	.transmit		= &tcpci_tcpm_transmit,
 	.tcpc_alert		= &anx7688_tcpc_alert,
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 };
 
 #ifdef CONFIG_USB_PD_TCPM_MUX

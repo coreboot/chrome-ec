@@ -20,7 +20,7 @@
 #include "driver/wpc/p9221.h"
 #include "rt946x.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
@@ -30,6 +30,19 @@
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 #define CPRINTS(format, args...) \
 	cprints(CC_CHARGER, "%s " format, "RT946X", ## args)
+
+/* Charger parameters */
+#define CHARGER_NAME    RT946X_CHARGER_NAME
+#define CHARGE_V_MAX    4710
+#define CHARGE_V_MIN    3900
+#define CHARGE_V_STEP   10
+#define CHARGE_I_MAX    5000
+#define CHARGE_I_MIN    100
+#define CHARGE_I_OFF    0
+#define CHARGE_I_STEP   100
+#define INPUT_I_MAX     3250
+#define INPUT_I_MIN     100
+#define INPUT_I_STEP    50
 
 /* Charger parameters */
 static const struct charger_info rt946x_charger_info = {
@@ -683,8 +696,8 @@ static int rt946x_is_sourcing_otg_power(int chgnum, int port)
 }
 #endif
 
-static enum ec_error_list rt946x_set_input_current(int chgnum,
-						   int input_current)
+static enum ec_error_list rt946x_set_input_current_limit(int chgnum,
+							 int input_current)
 {
 	uint8_t reg_iin = 0;
 	const struct charger_info * const info = rt946x_get_info(chgnum);
@@ -699,8 +712,8 @@ static enum ec_error_list rt946x_set_input_current(int chgnum,
 		reg_iin << RT946X_SHIFT_AICR);
 }
 
-static enum ec_error_list rt946x_get_input_current(int chgnum,
-						   int *input_current)
+static enum ec_error_list rt946x_get_input_current_limit(int chgnum,
+							 int *input_current)
 {
 	int rv;
 	int val = 0;
@@ -1048,7 +1061,7 @@ static int rt946x_ramp_get_current_limit(int chgnum)
 	int rv;
 	int input_current = 0;
 
-	rv = rt946x_get_input_current(chgnum, &input_current);
+	rv = rt946x_get_input_current_limit(chgnum, &input_current);
 
 	return rv ? -1 : input_current;
 }
@@ -1328,7 +1341,7 @@ int rt946x_get_adc(enum rt946x_adc_in_sel adc_sel, int *adc_val)
 		goto out;
 
 	if (adc_sel == MT6370_ADC_IBUS) {
-		rv = charger_get_input_current(CHARGER_SOLO, &aicr);
+		rv = charger_get_input_current_limit(CHARGER_SOLO, &aicr);
 		if (rv)
 			goto out;
 	}
@@ -1882,8 +1895,8 @@ const struct charger_drv rt946x_drv = {
 	.set_voltage = &rt946x_set_voltage,
 	.discharge_on_ac = &rt946x_discharge_on_ac,
 	.get_vbus_voltage = &rt946x_get_vbus_voltage,
-	.set_input_current = &rt946x_set_input_current,
-	.get_input_current = &rt946x_get_input_current,
+	.set_input_current_limit = &rt946x_set_input_current_limit,
+	.get_input_current_limit = &rt946x_get_input_current_limit,
 	.manufacturer_id = &rt946x_manufacturer_id,
 	.device_id = &rt946x_device_id,
 	.get_option = &rt946x_get_option,

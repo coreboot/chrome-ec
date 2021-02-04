@@ -9,8 +9,8 @@
 #include "fusb307.h"
 #include "hooks.h"
 #include "task.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "util.h"
 
@@ -28,7 +28,7 @@ static int fusb307_tcpm_init(int port)
 
 	rv = tcpci_tcpm_init(port);
 
-	rv = tcpci_set_role_ctrl(port, 1, TYPEC_RP_USB, TYPEC_CC_RD);
+	rv = tcpci_set_role_ctrl(port, TYPEC_DRP, TYPEC_RP_USB, TYPEC_CC_RD);
 	pd_set_dual_role(port, PD_DRP_TOGGLE_ON);
 
 	return rv;
@@ -98,5 +98,6 @@ const struct tcpm_drv fusb307_tcpm_drv = {
 #if defined(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE)
 	.drp_toggle		= &tcpci_tcpc_drp_toggle,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 };
 

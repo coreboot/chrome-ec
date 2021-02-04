@@ -7,12 +7,11 @@
 #include "common.h"
 #include "mock/tcpc_mock.h"
 #include "mock/tcpm_mock.h"
-#include "mock/usb_pd_mock.h"
 #include "mock/usb_pe_sm_mock.h"
 #include "mock/usb_tc_sm_mock.h"
 #include "task.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "test_util.h"
 #include "timer.h"
 #include "usb_emsg.h"
@@ -140,8 +139,8 @@ void before_test(void)
 {
 	mock_tc_port_reset();
 	mock_tc_port[PORT0].rev = PD_REV30;
-	mock_pd_port[PORT0].power_role = PD_ROLE_SOURCE;
-	mock_pd_port[PORT0].data_role = PD_ROLE_DFP;
+	mock_tc_port[PORT0].power_role = PD_ROLE_SOURCE;
+	mock_tc_port[PORT0].data_role = PD_ROLE_DFP;
 
 	mock_tcpm_reset();
 	mock_pe_port_reset();

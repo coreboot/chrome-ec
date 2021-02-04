@@ -14,7 +14,7 @@
 #include "ec_commands.h"
 #include "host_command.h"
 #include "mkbp_event.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd.h"
@@ -256,6 +256,7 @@ static uint8_t get_pd_control_flags(int port)
 {
 	union tbt_mode_resp_cable cable_resp;
 	union tbt_mode_resp_device device_resp;
+	uint8_t control_flags = 0;
 
 	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
 		return 0;
@@ -268,14 +269,17 @@ static uint8_t get_pd_control_flags(int port)
 	 * Table F-11 TBT3 Cable Discover Mode VDO Responses
 	 * For Passive cables, Active Cable Plug link training is set to 0
 	 */
-	return (cable_resp.lsrx_comm == UNIDIR_LSRX_COMM ?
-			USB_PD_CTRL_ACTIVE_LINK_UNIDIR : 0) |
-		(device_resp.tbt_adapter == TBT_ADAPTER_TBT2_LEGACY ?
-			USB_PD_CTRL_TBT_LEGACY_ADAPTER : 0) |
-		(cable_resp.tbt_cable == TBT_CABLE_OPTICAL ?
-			USB_PD_CTRL_OPTICAL_CABLE : 0) |
-		(cable_resp.retimer_type == USB_RETIMER ?
-			USB_PD_CTRL_ACTIVE_CABLE : 0);
+	control_flags |= (get_usb_pd_cable_type(port) == IDH_PTYPE_ACABLE ||
+			 cable_resp.tbt_active_passive == TBT_CABLE_ACTIVE) ?
+			 USB_PD_CTRL_ACTIVE_CABLE : 0;
+	control_flags |= cable_resp.tbt_cable == TBT_CABLE_OPTICAL ?
+			 USB_PD_CTRL_OPTICAL_CABLE : 0;
+	control_flags |= device_resp.tbt_adapter == TBT_ADAPTER_TBT2_LEGACY ?
+			 USB_PD_CTRL_TBT_LEGACY_ADAPTER : 0;
+	control_flags |= cable_resp.lsrx_comm == UNIDIR_LSRX_COMM ?
+			 USB_PD_CTRL_ACTIVE_LINK_UNIDIR : 0;
+
+	return control_flags;
 }
 
 static uint8_t pd_get_role_flags(int port)
@@ -325,7 +329,7 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 			    typec_mux_map[p->mux] == USB_PD_MUX_NONE ?
 			    USB_SWITCH_DISCONNECT :
 			    USB_SWITCH_CONNECT,
-			    pd_get_polarity(p->port));
+			    polarity_rm_dts(pd_get_polarity(p->port)));
 
 	if (p->swap == USB_PD_CTRL_SWAP_DATA) {
 		pd_request_data_swap(p->port);
@@ -347,13 +351,22 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 		break;
 	case 1:
 	case 2:
-		r_v2->enabled =
-			(pd_comm_is_enabled(p->port) ?
-				PD_CTRL_RESP_ENABLED_COMMS : 0) |
-			(pd_is_connected(p->port) ?
-				PD_CTRL_RESP_ENABLED_CONNECTED : 0) |
-			(pd_capable(p->port) ?
-				PD_CTRL_RESP_ENABLED_PD_CAPABLE : 0);
+		/*
+		 * Set enabled to 0 if disconnect latch flag=true, needed this
+		 * to configure Virtual mux in disconnect mode.
+		 */
+		if (IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) &&
+		    usb_mux_get_disconnect_latch_flag(p->port)) {
+			r_v2->enabled = 0;
+		} else {
+			r_v2->enabled =
+				(pd_comm_is_enabled(p->port) ?
+					PD_CTRL_RESP_ENABLED_COMMS : 0) |
+				(pd_is_connected(p->port) ?
+					PD_CTRL_RESP_ENABLED_CONNECTED : 0) |
+				(pd_capable(p->port) ?
+					PD_CTRL_RESP_ENABLED_PD_CAPABLE : 0);
+		}
 		r_v2->role = pd_get_role_flags(p->port);
 		r_v2->polarity = pd_get_polarity(p->port);
 
@@ -372,7 +385,9 @@ static enum ec_status hc_usb_pd_control(struct host_cmd_handler_args *args)
 			if (mux_state & USB_PD_MUX_USB4_ENABLED) {
 				r_v2->cable_speed =
 					get_usb4_cable_speed(p->port);
-			} else if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED) {
+			}
+			if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED ||
+			    mux_state & USB_PD_MUX_USB4_ENABLED) {
 				r_v2->cable_speed =
 					get_tbt_cable_speed(p->port);
 				r_v2->cable_gen =
@@ -611,7 +626,7 @@ hc_pd_host_event_status(struct host_cmd_handler_args *args)
 	struct ec_response_host_event_status *r = args->response;
 
 	/* Read and clear the host event status to return to AP */
-	r->status = atomic_read_clear(&pd_host_event_status);
+	r->status = atomic_clear(&pd_host_event_status);
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;

@@ -28,6 +28,22 @@
 #define REG8_TO_CURRENT(REG, RS) ((REG) * DEFAULT_SENSE_RESISTOR / (RS) * R8)
 #define CURRENT_TO_REG8(CUR, RS) ((CUR) * (RS) / DEFAULT_SENSE_RESISTOR / R8)
 
+/* ChargeCurrent Register - 0x14 (mA) */
+#define CHARGE_I_OFF                    0
+#define CHARGE_I_MIN                    128
+#define CHARGE_I_MAX                    8128
+#define CHARGE_I_STEP                   64
+
+/* MaxChargeVoltage Register - 0x15 (mV) */
+#define CHARGE_V_MIN                    1024
+#define CHARGE_V_MAX                    19200
+#define CHARGE_V_STEP                   16
+
+/* InputCurrent Register - 0x3f (mA) */
+#define INPUT_I_MIN                    128
+#define INPUT_I_MAX                    8128
+#define INPUT_I_STEP                   64
+
 /* Charger parameters */
 static const struct charger_info bq2477x_charger_info = {
 	.name         = CHARGER_NAME,
@@ -75,8 +91,8 @@ static inline enum ec_error_list raw_write16(int chgnum, int offset, int value)
 
 /* chip specific interfaces */
 
-static enum ec_error_list bq2477x_set_input_current(int chgnum,
-						    int input_current)
+static enum ec_error_list bq2477x_set_input_current_limit(int chgnum,
+							  int input_current)
 {
 #ifdef CONFIG_CHARGER_BQ24770
 	return raw_write16(chgnum, REG_INPUT_CURRENT,
@@ -87,8 +103,8 @@ static enum ec_error_list bq2477x_set_input_current(int chgnum,
 #endif
 }
 
-static enum ec_error_list bq2477x_get_input_current(int chgnum,
-						    int *input_current)
+static enum ec_error_list bq2477x_get_input_current_limit(int chgnum,
+							  int *input_current)
 {
 	int rv;
 	int reg;
@@ -292,8 +308,8 @@ const struct charger_drv bq2477x_drv = {
 	.get_voltage = &bq2477x_get_voltage,
 	.set_voltage = &bq2477x_set_voltage,
 	.discharge_on_ac = &bq2477x_discharge_on_ac,
-	.set_input_current = &bq2477x_set_input_current,
-	.get_input_current = &bq2477x_get_input_current,
+	.set_input_current_limit = &bq2477x_set_input_current_limit,
+	.get_input_current_limit = &bq2477x_get_input_current_limit,
 	.manufacturer_id = &bq2477x_manufacturer_id,
 	.device_id = &bq2477x_device_id,
 	.get_option = &bq2477x_get_option,

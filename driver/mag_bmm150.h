@@ -128,11 +128,13 @@ struct bmm150_private_data {
 #define BMM150_MAG_MAX_FREQ(_preset) \
 	BMI_REG_TO_ODR(BMI_ODR_TO_REG(__BMM150_MAG_MAX_FREQ(_preset)))
 #else
+#define BMM150_COMP_REG(_s) NULL
+#define BMM150_CAL(_s) NULL
 #define BMM150_MAG_MAX_FREQ(_preset) __BMM150_MAG_MAX_FREQ(_preset)
 #endif
 
 /* Specific initialization of BMM150 when behing BMI160 */
-int bmm150_init(const struct motion_sensor_t *s);
+int bmm150_init(struct motion_sensor_t *s);
 
 /* Command to normalize and apply temperature compensation */
 void bmm150_normalize(const struct motion_sensor_t *s,

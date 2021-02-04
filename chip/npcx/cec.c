@@ -505,7 +505,7 @@ void enter_state(enum cec_state new_state)
 			addr = cec_rx.transfer.buf[0] & 0x0f;
 			if (addr == cec_addr || addr == CEC_BROADCAST_ADDR) {
 				task_set_event(TASK_ID_CEC,
-					       TASK_EVENT_RECEIVED_DATA, 0);
+					       TASK_EVENT_RECEIVED_DATA);
 			}
 			timeout = DATA_ZERO_HIGH_TICKS;
 		} else {
@@ -963,7 +963,7 @@ DECLARE_HOST_COMMAND(EC_CMD_CEC_GET, hc_cec_get, EC_VER_MASK(0));
 
 static int cec_get_next_event(uint8_t *out)
 {
-	uint32_t event_out = atomic_read_clear(&cec_events);
+	uint32_t event_out = atomic_clear(&cec_events);
 
 	memcpy(out, &event_out, sizeof(event_out));
 

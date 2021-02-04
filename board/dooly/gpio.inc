@@ -62,8 +62,7 @@ GPIO_INT(USB_A0_OC_ODL,        PIN(F, 5), GPIO_INT_BOTH, port_ocp_interrupt)
 GPIO_INT(USB_A1_OC_ODL,        PIN(0, 3), GPIO_INT_BOTH, port_ocp_interrupt)
 
 /* Volume button interrupts */
-GPIO_INT(EC_VOLDN_BTN_ODL,     PIN(C, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-GPIO_INT(EC_VOLDN_BTN_ODL_V1,     PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
+GPIO_INT(EC_VOLDN_BTN_ODL,     PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 GPIO_INT(EC_VOLUP_BTN_ODL,     PIN(8, 0), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 
 /* PCH/CPU signals */
@@ -135,6 +134,7 @@ ALTERNATE(PIN_MASK(3, 0x48), 0, MODULE_I2C, 0)                  /* I2C5 */
 ALTERNATE(PIN_MASK(B, 0x0C), 0, MODULE_I2C, 0)                  /* I2C7 */
 
 /* PWM */
+ALTERNATE(PIN_MASK(C, 0x08), 0, MODULE_PWM, 0)                  /* PWM0 - Red Led */
 ALTERNATE(PIN_MASK(C, 0x10), 0, MODULE_PWM, 0)                  /* PWM2 - White Led */
 ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)                  /* PWM5 - Fan 1 */
 ALTERNATE(PIN_MASK(7, 0x08), 0, MODULE_PWM, 0)                  /* TA2 - Fan Tachometer */
@@ -151,8 +151,10 @@ ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)                 /* UART from EC 
 GPIO(PANEL_ID0,			PIN(0, 2), GPIO_INPUT)
 GPIO(PANEL_ID1,			PIN(C, 6), GPIO_INPUT)
 
+/* EDID write protect control */
+GPIO(EC_EDID_WP_DISABLE_L,	PIN(D, 3), GPIO_OUT_HIGH)			/* LOW to disable EDID WP */
+
 /* Unused pins */
-UNUSED(PIN(D, 3))						/* E9  TP55 */
 UNUSED(PIN(9, 5))						/* H10 TP54 */
 UNUSED(PIN(4, 0))						/* E4  TP56 */
 UNUSED(PIN(5, 0))						/* G4 NC */

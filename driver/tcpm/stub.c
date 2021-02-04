@@ -6,8 +6,8 @@
 /* TCPM for MCU also running TCPC */
 
 #include "task.h"
-#include "tcpci.h"
-#include "tcpm.h"
+#include "tcpm/tcpci.h"
+#include "tcpm/tcpm.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
 #include "usb_pd_tcpm.h"
@@ -65,7 +65,7 @@ int tcpm_set_cc(int port, int pull)
 
 int tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
-	return tcpc_set_polarity(port, polarity);
+	return tcpc_set_polarity(port, polarity_rm_dts(polarity));
 }
 
 int tcpm_set_vconn(int port, int enable)
@@ -136,7 +136,7 @@ void tcpc_alert(int port)
 
 	if (status & TCPC_REG_ALERT_CC_STATUS) {
 		/* CC status changed, wake task */
-		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_CC);
 	}
 	if (status & TCPC_REG_ALERT_RX_STATUS) {
 		/*
@@ -148,7 +148,7 @@ void tcpc_alert(int port)
 	if (status & TCPC_REG_ALERT_RX_HARD_RST) {
 		/* hard reset received */
 		task_set_event(PD_PORT_TO_TASK_ID(port),
-			PD_EVENT_RX_HARD_RESET, 0);
+			       PD_EVENT_RX_HARD_RESET);
 	}
 	if (status & TCPC_REG_ALERT_TX_COMPLETE) {
 		/* transmit complete */

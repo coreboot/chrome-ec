@@ -10,7 +10,7 @@
 
 #include "ec_commands.h"
 #include "i2c.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
 
@@ -139,12 +139,14 @@ struct usb_mux {
 
 /* Supported USB mux drivers */
 extern const struct usb_mux_driver amd_fp5_usb_mux_driver;
+extern const struct usb_mux_driver amd_fp6_usb_mux_driver;
 extern const struct usb_mux_driver anx7440_usb_mux_driver;
 extern const struct usb_mux_driver it5205_usb_mux_driver;
 extern const struct usb_mux_driver pi3usb3x532_usb_mux_driver;
 extern const struct usb_mux_driver ps8740_usb_mux_driver;
 extern const struct usb_mux_driver ps8743_usb_mux_driver;
 extern const struct usb_mux_driver tcpm_usb_mux_driver;
+extern const struct usb_mux_driver tusb1064_usb_mux_driver;
 extern const struct usb_mux_driver virtual_usb_mux_driver;
 
 /* USB muxes present in system, ordered by PD port #, defined at board-level */
@@ -238,5 +240,23 @@ void usb_mux_flip(int port);
  * @param hpd_irq HPD IRQ.
  */
 void usb_mux_hpd_update(int port, int hpd_lvl, int hpd_irq);
+
+/**
+ * Get the disconnect latch flag so that the Kernel Mux driver doesn't
+ * miss the unnoticed disconnection status.
+ *
+ * @param port port number.
+ * @return status of disconnect latch flag
+ */
+bool usb_mux_get_disconnect_latch_flag(int port);
+
+/**
+ * Set the disconnect latch flag if the Type-C devices are disconnected and
+ * the information is not yet updated to Kernel Mux driver.
+ *
+ * @param port port number
+ * @param enable whether to enable or disable the disconnect latch flag
+ */
+void usb_mux_set_disconnect_latch_flag(int port, bool enable);
 
 #endif

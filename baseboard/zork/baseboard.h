@@ -19,7 +19,7 @@
 #define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (512 * 1024)
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40 /* Internal SPI flash type. */
 
@@ -40,7 +40,7 @@
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_HOSTCMD_ESPI
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_UPDATE_IF_CHANGED
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
@@ -61,6 +61,16 @@
 #define CONFIG_BATTERY_FUEL_GAUGE
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_SMART
+/*
+ * Enable support for battery hostcmd, supporting longer strings.
+ *
+ * Vilboz battery options' model names vary in the 8th character, which is
+ * truncated in the memory mapped battery info; differentiating them requires
+ * support for EC_CMD_BATTERY_GET_STATIC version 1.
+ */
+#define CONFIG_BATTERY_V2
+#define CONFIG_BATTERY_COUNT 1
+#define CONFIG_HOSTCMD_BATTERY_V2
 
 #define CONFIG_BC12_DETECT_PI3USB9201
 
@@ -90,12 +100,12 @@
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_POWER_BUTTON_TO_PCH_CUSTOM
+#define CONFIG_THROTTLE_AP
 
 #ifdef VARIANT_ZORK_TREMBYLE
 	#define CONFIG_FANS FAN_CH_COUNT
 	#undef CONFIG_FAN_INIT_SPEED
 	#define CONFIG_FAN_INIT_SPEED 50
-	#define CONFIG_THROTTLE_AP
 #endif
 
 #define CONFIG_LED_COMMON
@@ -161,7 +171,6 @@
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
-#define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT TYPEC_RP_3A0
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
@@ -203,7 +212,6 @@
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
 #define PD_MAX_POWER_MW		65000
@@ -254,8 +262,13 @@
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 
-/* Sensors */
 #define CONFIG_MKBP_EVENT
+/* Host event is required to wake from sleep */
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
+/* Required to enable runtime configuration */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK (BIT(EC_MKBP_EVENT_DP_ALT_MODE_ENTERED))
+
+/* Sensors */
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 /* Thermal */

@@ -10,10 +10,18 @@
 #include <zephyr.h>
 
 #include "console.h"
+#include "printf.h"
+#include "uart.h"
 
 int cputs(enum console_channel channel, const char *str)
 {
-	return cprintf(channel, "%s\n", str);
+	return cprintf(channel, "%s", str);
+}
+
+static int printk_putchar(void *context, int c)
+{
+	printk("%c", c);
+	return 0;
 }
 
 static void console_vprintf(enum console_channel channel, const char *format,
@@ -27,7 +35,7 @@ static void console_vprintf(enum console_channel channel, const char *format,
 	 * use shell_ print functions instead of printk function as they could
 	 * be on different uarts (they are not for Chrome OS Apps though).
 	 */
-	vprintk(format, args);
+	vfnprintf(printk_putchar, NULL, format, args);
 }
 
 __attribute__((__format__(__printf__, 2, 3))) int
@@ -46,7 +54,7 @@ cprints(enum console_channel channel, const char *format, ...)
 {
 	va_list args;
 
-	cprintf(channel, "[%lld ", k_uptime_get());
+	cprintf(channel, "[%pT ", PRINTF_TIMESTAMP_NOW);
 	va_start(args, format);
 	console_vprintf(channel, format, args);
 	va_end(args);
@@ -82,4 +90,27 @@ int zshim_run_ec_console_command(int (*handler)(int argc, char **argv),
 	}
 
 	return handler(argc, argv);
+}
+
+/*
+ * Minimal implementation of a few uart_* functions we need.
+ * TODO(b/178033156): probably need to swap this for something more
+ * robust in order to handle UART buffering.
+ */
+int uart_tx_ready(void)
+{
+	return 1;
+}
+
+void uart_write_char(char c)
+{
+	printk_putchar(NULL, c);
+}
+
+void uart_flush_output(void)
+{
+}
+
+void uart_tx_flush(void)
+{
 }

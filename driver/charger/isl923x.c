@@ -8,6 +8,7 @@
 #include "adc.h"
 #include "battery.h"
 #include "battery_smart.h"
+#include "charge_state_v2.h"
 #include "charger.h"
 #include "compile_time_macros.h"
 #include "console.h"
@@ -30,6 +31,13 @@
 #define CHARGER_ISL9238X
 #endif
 
+#ifdef CONFIG_CHARGER_SENSE_RESISTOR_AC_ISL9238
+	#undef CONFIG_CHARGER_SENSE_RESISTOR_AC
+	#define CONFIG_CHARGER_SENSE_RESISTOR_AC \
+		CONFIG_CHARGER_SENSE_RESISTOR_AC_ISL9238
+#endif
+
+
 #define DEFAULT_R_AC 20
 #define DEFAULT_R_SNS 10
 #define R_AC CONFIG_CHARGER_SENSE_RESISTOR_AC
@@ -39,9 +47,50 @@
 #define AC_REG_TO_CURRENT(REG) ((REG) * DEFAULT_R_AC / R_AC)
 #define AC_CURRENT_TO_REG(CUR) ((CUR) * R_AC / DEFAULT_R_AC)
 
+#if defined(CONFIG_CHARGER_ISL9237)
+#define CHARGER_NAME  "isl9237"
+#define CHARGE_V_MAX  ISL9237_SYS_VOLTAGE_REG_MAX
+#define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
+#define CHARGE_V_STEP 8
+#elif defined(CONFIG_CHARGER_ISL9238)
+#define CHARGER_NAME  "isl9238"
+#define CHARGE_V_MAX  ISL9238_SYS_VOLTAGE_REG_MAX
+#define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
+#define CHARGE_V_STEP 8
+#elif defined(CONFIG_CHARGER_ISL9238C)
+#define CHARGER_NAME  "isl9238c"
+#define CHARGE_V_MAX  ISL9238_SYS_VOLTAGE_REG_MAX
+#define CHARGE_V_MIN  ISL923X_SYS_VOLTAGE_REG_MIN
+#define CHARGE_V_STEP 8
+#elif defined(CONFIG_CHARGER_RAA489000)
+#define CHARGER_NAME  "raa489000"
+#define CHARGE_V_MAX  RAA489000_SYS_VOLTAGE_REG_MAX
+#define CHARGE_V_MIN  RAA489000_SYS_VOLTAGE_REG_MIN
+#define CHARGE_V_STEP 8
+#endif
+
+#ifdef CONFIG_CHARGER_RAA489000
+#define CHARGE_I_MAX  RAA489000_CURRENT_REG_MAX
+#else
+#define CHARGE_I_MAX  ISL923X_CURRENT_REG_MAX
+#endif /* CONFIG_CHARGER_RAA489000 */
+#define CHARGE_I_MIN  4
+#define CHARGE_I_OFF  0
+#define CHARGE_I_STEP 4
+#ifdef CONFIG_CHARGER_RAA489000
+#define INPUT_I_MAX   RAA489000_CURRENT_REG_MAX
+#else
+#define INPUT_I_MAX   ISL923X_CURRENT_REG_MAX
+#endif /* CONFIG_CHARGER_RAA489000 */
+#define INPUT_I_MIN   4
+#define INPUT_I_STEP  4
+
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+
+enum isl923x_amon_bmon { AMON, BMON };
+enum isl923x_mon_dir { MON_CHARGE = 0, MON_DISCHARGE = 1 };
 
 static int learn_mode;
 
@@ -106,43 +155,115 @@ static enum ec_error_list isl9237_set_voltage(int chgnum, uint16_t voltage)
 
 /* chip specific interfaces */
 
-static enum ec_error_list isl923x_set_input_current(int chgnum,
-						    int input_current)
+static enum ec_error_list isl923x_set_input_current_limit(int chgnum,
+							  int input_current)
 {
 	int rv;
 	uint16_t reg = AC_CURRENT_TO_REG(input_current);
 
-	rv = raw_write16(chgnum, ISL923X_REG_ADAPTER_CURRENT1, reg);
+	rv = raw_write16(chgnum, ISL923X_REG_ADAPTER_CURRENT_LIMIT1, reg);
 	if (rv)
 		return rv;
 
-	return raw_write16(chgnum, ISL923X_REG_ADAPTER_CURRENT2, reg);
+	return raw_write16(chgnum, ISL923X_REG_ADAPTER_CURRENT_LIMIT2, reg);
 }
 
-static enum ec_error_list isl923x_get_input_current(int chgnum,
+#ifdef CONFIG_CMD_CHARGER_ADC_AMON_BMON
+static int get_amon_bmon(int chgnum, enum isl923x_amon_bmon amon,
+			 enum isl923x_mon_dir direction, int *adc)
+{
+	int reg, ret;
+
+	if (IS_ENABLED(CHARGER_ISL9238X)) {
+		ret = raw_read16(chgnum, ISL9238_REG_CONTROL3, &reg);
+		if (ret)
+			return ret;
+
+		/* Switch direction */
+		if (direction)
+			reg |= ISL9238_C3_AMON_BMON_DIRECTION;
+		else
+			reg &= ~ISL9238_C3_AMON_BMON_DIRECTION;
+		ret = raw_write16(chgnum, ISL9238_REG_CONTROL3, reg);
+		if (ret)
+			return ret;
+	}
+
+	mutex_lock(&control1_mutex);
+
+	ret = raw_read16(chgnum, ISL923X_REG_CONTROL1, &reg);
+	if (!ret) {
+		/* Switch between AMON/BMON */
+		if (amon == AMON)
+			reg &= ~ISL923X_C1_SELECT_BMON;
+		else
+			reg |= ISL923X_C1_SELECT_BMON;
+
+		/* Enable monitor */
+		reg &= ~ISL923X_C1_DISABLE_MON;
+		ret = raw_write16(chgnum, ISL923X_REG_CONTROL1, reg);
+	}
+
+	mutex_unlock(&control1_mutex);
+
+	if (ret)
+		return ret;
+
+	*adc = adc_read_channel(ADC_AMON_BMON);
+
+	return ret;
+}
+#endif
+
+static enum ec_error_list isl923x_get_input_current_limit(int chgnum,
+							  int *input_current)
+{
+	int rv;
+	int regval;
+
+	rv = raw_read16(chgnum, ISL923X_REG_ADAPTER_CURRENT_LIMIT1, &regval);
+	if (rv)
+		return rv;
+
+	*input_current = AC_REG_TO_CURRENT(regval);
+	return EC_SUCCESS;
+}
+
+#ifdef CONFIG_CHARGER_RAA489000
+static enum ec_error_list raa489000_get_input_current(int chgnum,
 						    int *input_current)
 {
 	int rv;
 	int regval;
 	int reg;
 
-	if (IS_ENABLED(CONFIG_CHARGER_RAA489000))
-		reg = RAA489000_REG_ADC_INPUT_CURRENT;
-	else
-		reg = ISL923X_REG_ADAPTER_CURRENT1;
+	reg = RAA489000_REG_ADC_INPUT_CURRENT;
 
 	rv = raw_read16(chgnum, reg, &regval);
 	if (rv)
 		return rv;
 
-	if (IS_ENABLED(CONFIG_CHARGER_RAA489000)) {
-		/* LSB is 22.2mA */
-		regval *= 22;
-	}
+	/* LSB is 22.2mA */
+	regval *= 22;
 
 	*input_current = AC_REG_TO_CURRENT(regval);
 	return EC_SUCCESS;
 }
+#elif defined(CONFIG_CMD_CHARGER_ADC_AMON_BMON)
+static enum ec_error_list isl923x_get_input_current(int chgnum,
+						    int *input_current)
+{
+	int rv, adc;
+
+	rv = get_amon_bmon(chgnum, AMON, MON_CHARGE, &adc);
+	if (rv)
+		return rv;
+
+	*input_current = adc / CONFIG_CHARGER_SENSE_RESISTOR_AC;
+
+	return EC_SUCCESS;
+}
+#endif /* CONFIG_CHARGER_RAA489000 */
 
 #if defined(CONFIG_CHARGER_OTG) && defined(CHARGER_ISL9238X)
 static enum ec_error_list isl923x_enable_otg_power(int chgnum, int enabled)
@@ -439,6 +560,28 @@ static void isl923x_init(int chgnum)
 					RAA489000_C4_PSYS_RSNS_RATIO_1_TO_1))
 				goto init_fail;
 		}
+
+		/*
+		 * Enable hysteresis for CCM/DCM boundary to help with ripple.
+		 */
+		if (raw_read16(chgnum, ISL9238_REG_CONTROL3, &reg))
+			goto init_fail;
+
+		if (raw_write16(chgnum, ISL9238_REG_CONTROL3,
+				reg |
+				RAA489000_C3_DCM_CCM_HYSTERESIS_ENABLE))
+			goto init_fail;
+
+		/* Set switching frequency to 600KHz to help with ripple. */
+		if (raw_read16(chgnum, ISL923X_REG_CONTROL1, &reg))
+			goto init_fail;
+
+		reg &= ~ISL923X_C1_SWITCH_FREQ_MASK;
+
+		if (raw_write16(chgnum, ISL923X_REG_CONTROL1,
+				reg |
+				ISL9237_C1_SWITCH_FREQ_599K))
+			goto init_fail;
 	}
 
 	if (IS_ENABLED(CONFIG_TRICKLE_CHARGING))
@@ -455,9 +598,14 @@ static void isl923x_init(int chgnum)
 
 	if (!IS_ENABLED(CONFIG_CHARGER_RAA489000))
 		reg |= ISL923X_C2_OTG_DEBOUNCE_150;
+
+	if (IS_ENABLED(CONFIG_CHARGER_RAA489000))
+		reg |= ISL923X_C2_PROCHOT_DEBOUNCE_500;
+	else
+		reg |= ISL923X_C2_PROCHOT_DEBOUNCE_1000;
+
 	if (raw_write16(chgnum, ISL923X_REG_CONTROL2,
 			reg |
-			ISL923X_C2_PROCHOT_DEBOUNCE_1000 |
 			ISL923X_C2_ADAPTER_DEBOUNCE_150))
 		goto init_fail;
 
@@ -569,10 +717,28 @@ static void isl923x_init(int chgnum)
 		/*
 		 * Initialize the input current limit to the board's default.
 		 */
-		if (isl923x_set_input_current(chgnum,
-					      CONFIG_CHARGER_INPUT_CURRENT))
+		if (isl923x_set_input_current_limit(
+				chgnum, CONFIG_CHARGER_INPUT_CURRENT))
 			goto init_fail;
 	}
+
+#ifdef CONFIG_OCPC
+	if (IS_ENABLED(CONFIG_CHARGER_RAA489000)) {
+		/*
+		 * Ignore BATGONE on auxiliary charger ICs as it's not connected
+		 * there.
+		 */
+		if (chgnum != CHARGER_PRIMARY) {
+			if (raw_read16(chgnum, ISL9238_REG_CONTROL4, &reg))
+				goto init_fail;
+
+			reg |= RAA489000_C4_BATGONE_DISABLE;
+
+			if (raw_write16(chgnum, ISL9238_REG_CONTROL4, reg))
+				goto init_fail;
+		}
+	}
+#endif /* CONFIG_OCPC */
 
 	return;
 init_fail:
@@ -606,7 +772,7 @@ out:
 }
 
 #ifdef CONFIG_CHARGER_RAA489000
-void raa489000_hibernate(int chgnum)
+void raa489000_hibernate(int chgnum, bool disable_adc)
 {
 	int rv, regval;
 
@@ -652,8 +818,9 @@ void raa489000_hibernate(int chgnum)
 
 	rv = raw_read16(chgnum, ISL9238_REG_CONTROL3, &regval);
 	if (!rv) {
-		/* ADC is active only when adapter plugged in */
-		regval &= ~RAA489000_ENABLE_ADC;
+		if (disable_adc)
+			/* ADC is active only when adapter plugged in */
+			regval &= ~RAA489000_ENABLE_ADC;
 
 		rv = raw_write16(chgnum, ISL9238_REG_CONTROL3, regval);
 	}
@@ -778,7 +945,7 @@ static int isl923x_ramp_get_current_limit(int chgnum)
 	 */
 	int input_current;
 
-	if (isl923x_get_input_current(chgnum, &input_current) != EC_SUCCESS)
+	if (isl923x_get_input_current_limit(chgnum, &input_current))
 		return 0;
 	return input_current;
 }
@@ -813,7 +980,7 @@ static void charger_enable_psys(void)
 out:
 	mutex_unlock(&control1_mutex);
 }
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, charger_enable_psys, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, charger_enable_psys, HOOK_PRIO_DEFAULT);
 
 static void charger_disable_psys(void)
 {
@@ -837,7 +1004,7 @@ static void charger_disable_psys(void)
 out:
 	mutex_unlock(&control1_mutex);
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, charger_disable_psys, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, charger_disable_psys, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_CHARGER_PSYS_READ
 int charger_get_system_power(void)
@@ -873,52 +1040,18 @@ DECLARE_CONSOLE_COMMAND(psys, console_command_psys,
 #endif /* CONFIG_CHARGER_PSYS */
 
 #ifdef CONFIG_CMD_CHARGER_ADC_AMON_BMON
-enum amon_bmon { AMON, BMON };
-
-static int print_amon_bmon(int chgnum, enum amon_bmon amon,
-					  int direction, int resistor)
+static int print_amon_bmon(int chgnum, enum isl923x_amon_bmon amon,
+			   enum isl923x_mon_dir direction, int resistor)
 {
-	int adc, curr, reg, ret;
+	int ret, adc, curr;
 
-	if (IS_ENABLED(CHARGER_ISL9238X)) {
-		ret = raw_read16(chgnum, ISL9238_REG_CONTROL3, &reg);
-		if (ret)
-			return ret;
-
-		/* Switch direction */
-		if (direction)
-			reg |= ISL9238_C3_AMON_BMON_DIRECTION;
-		else
-			reg &= ~ISL9238_C3_AMON_BMON_DIRECTION;
-		ret = raw_write16(chgnum, ISL9238_REG_CONTROL3, reg);
-		if (ret)
-			return ret;
-	}
-
-	mutex_lock(&control1_mutex);
-
-	ret = raw_read16(chgnum, ISL923X_REG_CONTROL1, &reg);
-	if (!ret) {
-		/* Switch between AMON/BMON */
-		if (amon == AMON)
-			reg &= ~ISL923X_C1_SELECT_BMON;
-		else
-			reg |= ISL923X_C1_SELECT_BMON;
-
-		/* Enable monitor */
-		reg &= ~ISL923X_C1_DISABLE_MON;
-		ret = raw_write16(chgnum, ISL923X_REG_CONTROL1, reg);
-	}
-
-	mutex_unlock(&control1_mutex);
-
+	ret = get_amon_bmon(chgnum, amon, direction, &adc);
 	if (ret)
 		return ret;
 
-	adc = adc_read_channel(ADC_AMON_BMON);
 	curr = adc / resistor;
 	ccprintf("%cMON(%sharging): %d uV, %d mA\n", amon == AMON ? 'A' : 'B',
-		direction ? "Disc" : "C", adc, curr);
+		direction == MON_DISCHARGE ? "Disc" : "C", adc, curr);
 
 	return ret;
 }
@@ -952,23 +1085,23 @@ static int console_command_amon_bmon(int argc, char **argv)
 
 	if (print_ac) {
 		if (print_charge)
-			ret |= print_amon_bmon(chgnum, AMON, 0,
+			ret |= print_amon_bmon(chgnum, AMON, MON_CHARGE,
 					CONFIG_CHARGER_SENSE_RESISTOR_AC);
 		if (IS_ENABLED(CHARGER_ISL9238X) && print_discharge)
-			ret |= print_amon_bmon(chgnum, AMON, 1,
+			ret |= print_amon_bmon(chgnum, AMON, MON_DISCHARGE,
 					CONFIG_CHARGER_SENSE_RESISTOR_AC);
 	}
 
 	if (print_battery) {
 		if (IS_ENABLED(CHARGER_ISL9238X) && print_charge)
-			ret |= print_amon_bmon(chgnum, BMON, 0,
+			ret |= print_amon_bmon(chgnum, BMON, MON_CHARGE,
 					/*
 					 * charging current monitor has
 					 * 2x amplification factor
 					 */
 					2 * CONFIG_CHARGER_SENSE_RESISTOR);
 		if (print_discharge)
-			ret |= print_amon_bmon(chgnum, BMON, 1,
+			ret |= print_amon_bmon(chgnum, BMON, MON_DISCHARGE,
 					CONFIG_CHARGER_SENSE_RESISTOR);
 	}
 
@@ -1050,6 +1183,74 @@ static enum ec_error_list isl923x_get_vbus_voltage(int chgnum, int port,
 }
 
 #if defined(CONFIG_CHARGER_RAA489000) && defined(CONFIG_OCPC)
+static enum ec_error_list raa489000_enable_linear_charge(int chgnum,
+							 bool enable)
+{
+	const struct battery_info *batt_info;
+	int trickle_regval;
+	int precharge_current;
+	int regval;
+	enum ec_error_list rv;
+	int act_chg = charge_get_active_chg_chip();
+
+	batt_info = battery_get_info();
+
+	if (enable) {
+		/* Set the auxiliary max VSYS to 300mV + min VSYS. */
+		rv = isl9237_set_voltage(act_chg, batt_info->voltage_min + 300);
+
+		/* Disable charge current loop for the aux charger. */
+		rv |= raw_update16(act_chg, RAA489000_REG_CONTROL10,
+				   RAA489000_C10_DISABLE_DVC_CC_LOOP,
+				   MASK_SET);
+
+		/*
+		 * Set primary charger charge current to the desired precharge
+		 * current.
+		 */
+		rv |= isl9237_set_current(CHARGER_PRIMARY,
+				    batt_info->precharge_current);
+
+		/*
+		 * Set primary charger max VSYS to the max of the battery.
+		 */
+		rv |= isl9237_set_voltage(CHARGER_PRIMARY,
+					  batt_info->voltage_max);
+
+		/*
+		 * Set trickle charging level.
+		 *
+		 * 64mA is the minimum current level we must set.
+		 */
+		precharge_current = MAX(64, batt_info->precharge_current);
+		trickle_regval = precharge_current / 32;
+		trickle_regval--; /* convert to 0-based field */
+		rv |= raw_read16(CHARGER_PRIMARY, ISL923X_REG_CONTROL2,
+				 &regval);
+		regval &= ~(GENMASK(15, 13));
+		regval |= trickle_regval << 13;
+		rv |= raw_write16(CHARGER_PRIMARY, ISL923X_REG_CONTROL2,
+				  regval);
+
+		/* Enable DVC trickle charge and DVC charge mode. */
+		rv |= raw_update16(CHARGER_PRIMARY, RAA489000_REG_CONTROL10,
+				   RAA489000_C10_ENABLE_DVC_MODE |
+				   RAA489000_C10_ENABLE_DVC_TRICKLE_CHARGE,
+				   MASK_SET);
+
+		if (rv)
+			return EC_ERROR_UNKNOWN;
+
+	} else {
+		/* Disable DVC trickle charge. */
+		rv = raw_update16(CHARGER_PRIMARY, RAA489000_REG_CONTROL10,
+				  RAA489000_C10_ENABLE_DVC_TRICKLE_CHARGE,
+				  MASK_CLR);
+	}
+
+	return rv;
+}
+
 static enum ec_error_list raa489000_set_vsys_compensation(int chgnum,
 							  struct ocpc_data *o,
 							  int current_ma,
@@ -1180,8 +1381,13 @@ const struct charger_drv isl923x_drv = {
 	.set_voltage = &isl923x_set_voltage,
 	.discharge_on_ac = &isl923x_discharge_on_ac,
 	.get_vbus_voltage = &isl923x_get_vbus_voltage,
-	.set_input_current = &isl923x_set_input_current,
+	.set_input_current_limit = &isl923x_set_input_current_limit,
+	.get_input_current_limit = &isl923x_get_input_current_limit,
+#ifdef CONFIG_CHARGER_RAA489000
+	.get_input_current = &raa489000_get_input_current,
+#elif defined(CONFIG_CMD_CHARGER_ADC_AMON_BMON)
 	.get_input_current = &isl923x_get_input_current,
+#endif
 	.manufacturer_id = &isl923x_manufacturer_id,
 	.device_id = &isl923x_device_id,
 	.get_option = &isl923x_get_option,
@@ -1193,6 +1399,7 @@ const struct charger_drv isl923x_drv = {
 	.ramp_get_current_limit = &isl923x_ramp_get_current_limit,
 #endif
 #if defined(CONFIG_CHARGER_RAA489000) && defined(CONFIG_OCPC)
+	.enable_linear_charge = &raa489000_enable_linear_charge,
 	.set_vsys_compensation = &raa489000_set_vsys_compensation,
 #endif
 };

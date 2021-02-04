@@ -10,9 +10,9 @@
 
 #include "accelgyro.h"
 #include "console.h"
-#include "driver/accelgyro_bmi_common.h"
-#include "driver/accelgyro_bmi260.h"
-#include "endian.h"
+#include "accelgyro_bmi_common.h"
+#include "accelgyro_bmi260.h"
+#include "bmi260/accelgyro_bmi260_config_tbin.h"
 #include "hwtimer.h"
 #include "i2c.h"
 #include "init_rom.h"
@@ -20,7 +20,6 @@
 #include "motion_sense_fifo.h"
 #include "spi.h"
 #include "task.h"
-#include "third_party/bmi260/accelgyro_bmi260_config_tbin.h"
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
@@ -209,14 +208,14 @@ static int calibrate_offset(const struct motion_sensor_t *s,
 	return ret;
 }
 
-static int perform_calib(const struct motion_sensor_t *s, int enable)
+static int perform_calib(struct motion_sensor_t *s, int enable)
 {
 	int ret, rate;
 	int16_t temp;
 	int16_t offset[3];
 	intv3_t target = {0, 0, 0};
 	/* Get sensor range for calibration*/
-	int range = bmi_get_range(s);
+	int range = s->current_range;
 
 	if (!enable)
 		return EC_SUCCESS;
@@ -270,8 +269,7 @@ void bmi260_interrupt(enum gpio_signal signal)
 	if (IS_ENABLED(CONFIG_ACCEL_FIFO))
 		last_interrupt_timestamp = __hw_clock_source_read();
 
-	task_set_event(TASK_ID_MOTIONSENSE,
-		       CONFIG_ACCELGYRO_BMI260_INT_EVENT, 0);
+	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_ACCELGYRO_BMI260_INT_EVENT);
 }
 
 static int config_interrupt(const struct motion_sensor_t *s)
@@ -289,18 +287,17 @@ static int config_interrupt(const struct motion_sensor_t *s)
 	ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 			 BMI260_INT1_IO_CTRL,
 			 BMI260_INT1_OUTPUT_EN);
-#ifdef CONFIG_ACCELGYRO_BMI260_INT2_OUTPUT
-	/* TODO(chingkang): Test it if we want int2 as an interrupt */
-	/* configure int2 as an interrupt */
-	ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
-			 BMI260_INT2_IO_CTRL,
-			 BMI260_INT2_OUTPUT_EN);
-#else
-	/* configure int2 as an external input. */
-	ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
-			 BMI260_INT2_IO_CTRL,
-			 BMI260_INT2_INPUT_EN);
-#endif
+	if (IS_ENABLED(CONFIG_ACCELGYRO_BMI260_INT2_OUTPUT))
+		/* TODO(chingkang): Test it if we want int2 as an interrupt */
+		/* configure int2 as an interrupt */
+		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
+				BMI260_INT2_IO_CTRL,
+				BMI260_INT2_OUTPUT_EN);
+	else
+		/* configure int2 as an external input. */
+		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
+				BMI260_INT2_IO_CTRL,
+				BMI260_INT2_INPUT_EN);
 
 	if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
 		/* map fifo water mark to int 1 */
@@ -317,17 +314,16 @@ static int config_interrupt(const struct motion_sensor_t *s)
 				 BMI260_FIFO_WTM_0, 1);
 		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 				 BMI260_FIFO_WTM_1, 0);
-#ifdef CONFIG_ACCELGYRO_BMI260_INT2_OUTPUT
-		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
-				 BMI260_FIFO_CONFIG_1,
-				 BMI260_FIFO_HEADER_EN);
-#else
-		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
-				 BMI260_FIFO_CONFIG_1,
-				 (BMI260_FIFO_TAG_INT_LEVEL <<
-				 BMI260_FIFO_TAG_INT2_EN_OFFSET) |
-				 BMI260_FIFO_HEADER_EN);
-#endif
+		if (IS_ENABLED(CONFIG_ACCELGYRO_BMI260_INT2_OUTPUT))
+			ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
+					BMI260_FIFO_CONFIG_1,
+					BMI260_FIFO_HEADER_EN);
+		else
+			ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
+					BMI260_FIFO_CONFIG_1,
+					(BMI260_FIFO_TAG_INT_LEVEL <<
+					 BMI260_FIFO_TAG_INT2_EN_OFFSET) |
+					BMI260_FIFO_HEADER_EN);
 		/* disable FIFO sensortime frame */
 		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 				 BMI260_FIFO_CONFIG_0, 0);
@@ -499,7 +495,7 @@ static int init_config(const struct motion_sensor_t *s)
 	return EC_SUCCESS;
 }
 
-static int init(const struct motion_sensor_t *s)
+static int init(struct motion_sensor_t *s)
 {
 	int ret = 0, tmp, i;
 	struct accelgyro_saved_data_t *saved_data = BMI_GET_SAVED_DATA(s);
@@ -534,13 +530,10 @@ static int init(const struct motion_sensor_t *s)
 	 * so set data rate to 0.
 	 */
 	saved_data->odr = 0;
-	bmi_set_range(s, s->default_range, 0);
 
-	if (s->type == MOTIONSENSE_TYPE_ACCEL) {
-#ifdef CONFIG_ACCEL_INTERRUPTS
+	if (IS_ENABLED(CONFIG_ACCEL_INTERRUPTS) &&
+	    (s->type == MOTIONSENSE_TYPE_ACCEL))
 		ret = config_interrupt(s);
-#endif
-	}
 
 	return sensor_init_done(s);
 }
@@ -549,7 +542,6 @@ const struct accelgyro_drv bmi260_drv = {
 	.init = init,
 	.read = bmi_read,
 	.set_range = bmi_set_range,
-	.get_range = bmi_get_range,
 	.get_resolution = bmi_get_resolution,
 	.set_data_rate = set_data_rate,
 	.get_data_rate = bmi_get_data_rate,

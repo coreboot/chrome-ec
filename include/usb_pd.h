@@ -64,8 +64,10 @@ enum pd_rx_errors {
 #define PD_EVENT_SYSJUMP		TASK_EVENT_CUSTOM_BIT(10)
 /* Receive a Hard Reset. */
 #define PD_EVENT_RX_HARD_RESET		TASK_EVENT_CUSTOM_BIT(11)
+/* MUX configured notification event */
+#define PD_EVENT_AP_MUX_DONE		TASK_EVENT_CUSTOM_BIT(12)
 /* First free event on PD task */
-#define PD_EVENT_FIRST_FREE_BIT		12
+#define PD_EVENT_FIRST_FREE_BIT		13
 
 /* Ensure TCPC is out of low power mode before handling these events. */
 #define PD_EXIT_LOW_POWER_EVENT_MASK \
@@ -148,7 +150,13 @@ enum pd_rx_errors {
 				RDO_BATT_OP_POWER(op_mw) | \
 				RDO_BATT_MAX_POWER(max_mw))
 
-/* BDO : BIST Data Object */
+/* BDO : BIST Data Object
+ * 31:28 BIST Mode
+ *       In PD 3.0, all but Carrier Mode 2 (as Carrier Mode) and Test Data are
+ *       reserved.
+ * 27:16 Reserved
+ * 15:0  Returned error counters (reserved in PD 3.0)
+ */
 #define BDO_MODE_RECV       (0 << 28)
 #define BDO_MODE_TRANSMIT   BIT(28)
 #define BDO_MODE_COUNTERS   (2 << 28)
@@ -157,6 +165,7 @@ enum pd_rx_errors {
 #define BDO_MODE_CARRIER2   (5 << 28)
 #define BDO_MODE_CARRIER3   (6 << 28)
 #define BDO_MODE_EYE        (7 << 28)
+#define BDO_MODE_TEST_DATA  (8 << 28)
 
 #define BDO(mode, cnt)      ((mode) | ((cnt) & 0xFFFF))
 
@@ -185,7 +194,21 @@ enum pd_rx_errors {
 #define PD_T_SINK_WAIT_CAP         (600*MSEC) /* between 310ms and 620ms */
 #define PD_T_SINK_TRANSITION        (35*MSEC) /* between 20ms and 35ms */
 #define PD_T_SOURCE_ACTIVITY        (45*MSEC) /* between 40ms and 50ms */
+/*
+ * Adjusting for TCPMv2 PD2 Compliance. In tests like TD.PD.SRC.E5 this
+ * value is the duration before the Hard Reset can be sent. Setting the
+ * timer value to the maximum will delay sending the HardReset until
+ * after the window has closed instead of when it is desired at the
+ * beginning of the window.
+ * Leaving TCPMv1 as it was as there are no current requests to adjust
+ * for compliance on the old stack and making this change  breaks the
+ * usb_pd unit test.
+ */
+#ifndef CONFIG_USB_PD_TCPMV2
 #define PD_T_SENDER_RESPONSE        (30*MSEC) /* between 24ms and 30ms */
+#else
+#define PD_T_SENDER_RESPONSE        (24*MSEC) /* between 24ms and 30ms */
+#endif
 #define PD_T_PS_TRANSITION         (500*MSEC) /* between 450ms and 550ms */
 #define PD_T_PS_SOURCE_ON          (480*MSEC) /* between 390ms and 480ms */
 #define PD_T_PS_SOURCE_OFF         (920*MSEC) /* between 750ms and 920ms */
@@ -217,6 +240,7 @@ enum pd_rx_errors {
 #define PD_T_SWAP_SOURCE_START      (25*MSEC) /* Min of 20ms */
 #define PD_T_RP_VALUE_CHANGE        (20*MSEC) /* 20ms */
 #define PD_T_SRC_DISCONNECT         (15*MSEC) /* 15ms */
+#define PD_T_SRC_TRANSITION         (25*MSEC) /* 25ms to 35 ms */
 #define PD_T_VCONN_STABLE           (50*MSEC) /* 50ms */
 #define PD_T_DISCOVER_IDENTITY      (45*MSEC) /* between 40ms and 50ms */
 #define PD_T_SYSJUMP              (1000*MSEC) /* 1s */
@@ -244,10 +268,17 @@ enum pd_rx_errors {
 /* Voltage thresholds in mV (Table 7-24, PD 3.0 Version 2.0 Spec) */
 #define PD_V_SAFE0V_MAX		800
 #define PD_V_SAFE5V_MIN		4750
+#define PD_V_SAFE5V_MAX		5500
 
 /* USB Type-C voltages in mV (Table 4-3, USB Type-C Release 2.0 Spec) */
 #define PD_V_SINK_DISCONNECT_MAX 3670
 /* TODO(b/149530538): Add equation for vSinkDisconnectPD */
+
+/* Maximum voltage in mV offered by PD 3.0 Version 2.0 Spec */
+#define PD_REV3_MAX_VOLTAGE	20000
+
+/* Power in mW at which we will automatically charge from a DRP partner */
+#define PD_DRP_CHARGE_POWER_MIN	27000
 
 /* function table for entered mode */
 struct amode_fx {
@@ -519,14 +550,20 @@ struct partner_active_modes {
 #define VDO_INDEX_AMA            4
 #define VDO_INDEX_PTYPE_UFP1_VDO 4
 #define VDO_INDEX_PTYPE_CABLE1   4
-#define VDO_INDEX_PTYPE_UFP2_VDO 4
+#define VDO_INDEX_PTYPE_UFP2_VDO 5
 #define VDO_INDEX_PTYPE_CABLE2   5
 #define VDO_INDEX_PTYPE_DFP_VDO  6
 #define VDO_I(name) VDO_INDEX_##name
 
+/* PD Rev 2.0 ID Header VDO */
 #define VDO_IDH(usbh, usbd, ptype, is_modal, vid)		\
 	((usbh) << 31 | (usbd) << 30 | ((ptype) & 0x7) << 27	\
 	 | (is_modal) << 26 | ((vid) & 0xffff))
+
+/* PD Rev 3.0 ID Header VDO */
+#define VDO_IDH_REV30(usbh, usbd, ptype_u, is_modal, ptype_d, ctype, vid) \
+	(VDO_IDH(usbh, usbd, ptype_u, is_modal, vid)			\
+	| ((ptype_d) & 0x7) << 23 | ((ctype) & 0x3) << 21)
 
 #define PD_IDH_PTYPE(vdo)    (((vdo) >> 27) & 0x7)
 #define PD_IDH_IS_MODAL(vdo) (((vdo) >> 26) & 0x1)
@@ -777,9 +814,12 @@ struct pd_cable {
 #define USB_PID2_APPLE 0x1013
 
 #define USB_VID_HP     0x03F0
-#define USB_PID1_HP    0x0467		/* E24d monitor */
-#define USB_PID2_HP    0x096B		/* USB-C/A Univ Dock G2 */
-#define USB_PID3_HP    0x036B		/* USB-C Dock G5 */
+#define USB_PID_HP_USB_C_DOCK_G5	0x036B
+#define USB_PID_HP_USB_C_A_UNIV_DOCK_G2	0x096B
+#define USB_PID_HP_E24D_DOCK_MONITOR	0x0467
+#define USB_PID_HP_ELITE_E233_MONITOR	0x1747
+#define USB_PID_HP_E244D_DOCK_MONITOR	0x056D
+#define USB_PID_HP_E274D_DOCK_MONITOR	0x016E
 
 #define USB_VID_INTEL  0x8087
 
@@ -939,27 +979,27 @@ enum pd_dual_role_states {
  * NOTE: These are usually set by host commands from the AP.
  */
 enum pd_dpm_request {
-	DPM_REQUEST_DR_SWAP             = BIT(0),
-	DPM_REQUEST_PR_SWAP             = BIT(1),
-	DPM_REQUEST_VCONN_SWAP          = BIT(2),
-	DPM_REQUEST_GOTO_MIN            = BIT(3),
-	DPM_REQUEST_SRC_CAP_CHANGE      = BIT(4),
-	DPM_REQUEST_GET_SNK_CAPS        = BIT(5),
-	DPM_REQUEST_SEND_PING           = BIT(6),
-	DPM_REQUEST_SOURCE_CAP          = BIT(7),
-	DPM_REQUEST_NEW_POWER_LEVEL     = BIT(8),
-	DPM_REQUEST_VDM                 = BIT(9),
-	DPM_REQUEST_BIST_RX             = BIT(10),
-	DPM_REQUEST_BIST_TX             = BIT(11),
-	DPM_REQUEST_SNK_STARTUP         = BIT(12),
-	DPM_REQUEST_SRC_STARTUP         = BIT(13),
-	DPM_REQUEST_HARD_RESET_SEND     = BIT(14),
-	DPM_REQUEST_SOFT_RESET_SEND     = BIT(15),
-	DPM_REQUEST_PORT_DISCOVERY      = BIT(16),
-	DPM_REQUEST_SEND_ALERT          = BIT(17),
-	DPM_REQUEST_ENTER_USB           = BIT(18),
-	DPM_REQUEST_GET_SRC_CAPS        = BIT(19),
-	DPM_REQUEST_EXIT_MODES          = BIT(20),
+	DPM_REQUEST_DR_SWAP                     = BIT(0),
+	DPM_REQUEST_PR_SWAP                     = BIT(1),
+	DPM_REQUEST_VCONN_SWAP                  = BIT(2),
+	DPM_REQUEST_GOTO_MIN                    = BIT(3),
+	DPM_REQUEST_SRC_CAP_CHANGE              = BIT(4),
+	DPM_REQUEST_GET_SNK_CAPS                = BIT(5),
+	DPM_REQUEST_SEND_PING                   = BIT(6),
+	DPM_REQUEST_SOURCE_CAP                  = BIT(7),
+	DPM_REQUEST_NEW_POWER_LEVEL             = BIT(8),
+	DPM_REQUEST_VDM                         = BIT(9),
+	DPM_REQUEST_BIST_TX                     = BIT(10),
+	DPM_REQUEST_SNK_STARTUP                 = BIT(11),
+	DPM_REQUEST_SRC_STARTUP                 = BIT(12),
+	DPM_REQUEST_HARD_RESET_SEND             = BIT(13),
+	DPM_REQUEST_SOFT_RESET_SEND             = BIT(14),
+	DPM_REQUEST_PORT_DISCOVERY              = BIT(15),
+	DPM_REQUEST_SEND_ALERT                  = BIT(16),
+	DPM_REQUEST_ENTER_USB                   = BIT(17),
+	DPM_REQUEST_GET_SRC_CAPS                = BIT(18),
+	DPM_REQUEST_EXIT_MODES                  = BIT(19),
+	DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND   = BIT(20),
 };
 
 /**
@@ -1063,6 +1103,13 @@ bool pd_get_partner_dual_role_power(int port);
  */
 bool pd_get_partner_unconstr_power(int port);
 
+/**
+ * Check if poower role swap may be needed on AP resume.
+ *
+ * @param port USB-C Port number
+ */
+void pd_resume_check_pr_swap_needed(int port);
+
 /* Control Message type */
 enum pd_ctrl_msg_type {
 	/* 0 Reserved */
@@ -1113,7 +1160,17 @@ enum pd_ctrl_msg_type {
 #define BSDO_DISCHARGING BIT(10)
 #define BSDO_IDLE        BIT(11)
 
-/* Get Battery Cap Message fields for REV 3.0 */
+/* Battery Capability offsets for 16-bit array indexes */
+#define BCDB_VID	0
+#define BCDB_PID	1
+#define BCDB_DESIGN_CAP	2
+#define BCDB_FULL_CAP	3
+#define BCDB_BATT_TYPE	4
+
+/*
+ * Get Battery Cap Message fields for REV 3.0 (assumes extended header is
+ * present in first two bytes)
+ */
 #define BATT_CAP_REF(n)  (((n) >> 16) & 0xff)
 
 /* Extended message type for REV 3.0 */
@@ -1314,6 +1371,15 @@ int pd_get_rev(int port, enum tcpm_transmit_type type);
  *         VDM_VER20 for VDM Version 2.0
  */
 int pd_get_vdo_ver(int port, enum tcpm_transmit_type type);
+
+/**
+ * Get transmit retry count for active PD revision.
+ *
+ * @param port The port to query
+ * @param type The partner to query (SOP, SOP', or SOP'')
+ * @return The number of retries to perform when transmitting.
+ */
+int pd_get_retry_count(int port, enum tcpm_transmit_type type);
 
 /**
  * Check if max voltage request is allowed (only used if
@@ -1582,17 +1648,6 @@ __override_proto void pd_check_dr_role(int port,
 __override_proto void pd_try_execute_vconn_swap(int port, int flags);
 
 /**
- * Check if we should charge from this device. This is
- * basically a allow-list for chargers that are dual-role,
- * don't set the unconstrained bit, but we should charge
- * from by default.
- *
- * @param vid Port partner Vendor ID
- * @param pid Port partner Product ID
- */
-int pd_charge_from_device(uint16_t vid, uint16_t pid);
-
-/**
  * Execute data swap.
  *
  * @param port USB-C port number
@@ -1663,6 +1718,23 @@ int pd_custom_flash_vdm(int port, int cnt, uint32_t *payload);
  */
 uint32_t pd_dfp_enter_mode(int port, enum tcpm_transmit_type type,
 		uint16_t svid, int opos);
+
+/**
+ * Save the Enter mode command data received from the port partner for setting
+ * the retimer
+ *
+ * @param port     USB-C port number
+ * @param payload  payload data.
+ */
+void pd_ufp_set_enter_mode(int port, uint32_t *payload);
+
+/**
+ * Return Enter mode command data received from the port partner
+ *
+ * @param port     USB-C port number
+ * @return enter mode raw value requested to the UFP
+ */
+uint32_t pd_ufp_get_enter_mode(int port);
 
 /**
  *  Get DisplayPort pin mode for DFP to request from UFP's capabilities.
@@ -2131,19 +2203,11 @@ uint32_t pd_get_tbt_mode_vdo(int port, enum tcpm_transmit_type type);
 void set_tbt_compat_mode_ready(int port);
 
 /**
- * Checks if the attached cable supports superspeed
- *
- * @param port	USB-C port number
- * @return      True if cable is superspeed, false otherwise
- */
-bool is_tbt_cable_superspeed(int port);
-
-/**
  * Returns Thunderbolt-compatible cable speed according to the port if,
  * port supports lesser speed than the cable
  *
  * @param port USB-C port number
- * @return thunderbolt-cable cable speed
+ * @return Thunderbolt cable speed
  */
 enum tbt_compat_cable_speed get_tbt_cable_speed(int port);
 
@@ -2160,7 +2224,7 @@ int enter_tbt_compat_mode(int port, enum tcpm_transmit_type sop,
 			uint32_t *payload);
 
 /**
- * Return maximum allowed speed for Thunderbolt-compatible mode
+ * Return maximum speed supported by the port to enter into Thunderbolt mode
  *
  * NOTE: Chromebooks require that all USB-C ports support the same features,
  * so the maximum speed returned by this function should be set to the lowest
@@ -2700,14 +2764,6 @@ void pd_prepare_reset(void);
 void pd_set_new_power_request(int port);
 
 /**
- * Return true if partner port is a DTS or TS capable of entering debug
- * mode (eg. is presenting Rp/Rp or Rd/Rd).
- *
- * @param port USB-C port number
- */
-int pd_ts_dts_plugged(int port);
-
-/**
  * Return true if partner port is known to be PD capable.
  *
  * @param port USB-C port number
@@ -2738,6 +2794,34 @@ uint8_t pd_get_src_cap_cnt(int port);
  *
  */
 void pd_set_src_caps(int port, int cnt, uint32_t *src_caps);
+
+/**
+ * Returns the sink caps list
+ *
+ * @param port USB-C port number
+ */
+const uint32_t * const pd_get_snk_caps(int port);
+
+/**
+ * Returns the number of sink caps
+ *
+ * @param port USB-C port number
+ */
+uint8_t pd_get_snk_cap_cnt(int port);
+
+/**
+ * Returns requested voltage
+ *
+ * @param port USB-C port number
+ */
+uint32_t pd_get_requested_voltage(int port);
+
+/**
+ * Returns requested current
+ *
+ * @param port USB-C port number
+ */
+uint32_t pd_get_requested_current(int port);
 
 /**
  * Return true if partner port is capable of communication over USB data

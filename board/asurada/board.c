@@ -129,9 +129,7 @@ __override void board_hibernate_late(void)
 const struct power_signal_info power_signal_list[] = {
 	{GPIO_PMIC_EC_PWRGD, POWER_SIGNAL_ACTIVE_HIGH, "PMIC_PWR_GOOD"},
 	{GPIO_AP_IN_SLEEP_L, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_S3_L"},
-	{GPIO_AP_EC_WATCHDOG_L,
-	  POWER_SIGNAL_ACTIVE_LOW | POWER_SIGNAL_DISABLE_AT_BOOT,
-	  "AP_WDT_ASSERTED"},
+	{GPIO_AP_EC_WATCHDOG_L, POWER_SIGNAL_ACTIVE_LOW, "AP_WDT_ASSERTED"},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
@@ -170,7 +168,9 @@ const struct adc_t adc_channels[] = {
 	{"VBUS", ADC_MAX_MVOLT * 10, ADC_READ_MAX + 1, 0, CHIP_ADC_CH0},
 	{"BOARD_ID_0", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH1},
 	{"BOARD_ID_1", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH2},
-	{"CHARGER_AMON_R", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH3},
+	/* AMON/BMON gain = 17.97 */
+	{"CHARGER_AMON_R", ADC_MAX_MVOLT * 1000 / 17.97, ADC_READ_MAX + 1, 0,
+	 CHIP_ADC_CH3},
 	{"CHARGER_PMON", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH6},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
@@ -178,7 +178,7 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /* BC12 */
 const struct mt6360_config_t mt6360_config = {
 	.i2c_port = 0,
-	.i2c_addr_flags = MT6360_PMU_SLAVE_ADDR_FLAGS,
+	.i2c_addr_flags = MT6360_PMU_I2C_ADDR_FLAGS,
 };
 
 const struct pi3usb9201_config_t
@@ -198,9 +198,9 @@ struct bc12_config bc12_ports[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 static void bc12_interrupt(enum gpio_signal signal)
 {
 	if (signal == GPIO_USB_C0_BC12_INT_ODL)
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 	else
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 }
 
 static void board_sub_bc12_init(void)
@@ -234,9 +234,9 @@ DECLARE_HOOK(HOOK_INIT, board_sub_bc12_init, HOOK_PRIO_INIT_I2C + 1);
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 	{"bat_chg",  IT83XX_I2C_CH_A, 100, GPIO_I2C_A_SCL, GPIO_I2C_A_SDA},
-	{"sensor",   IT83XX_I2C_CH_B, 100, GPIO_I2C_B_SCL, GPIO_I2C_B_SDA},
-	{"usb0",     IT83XX_I2C_CH_C, 100, GPIO_I2C_C_SCL, GPIO_I2C_C_SDA},
-	{"usb1",     IT83XX_I2C_CH_E, 100, GPIO_I2C_E_SCL, GPIO_I2C_E_SDA},
+	{"sensor",   IT83XX_I2C_CH_B, 400, GPIO_I2C_B_SCL, GPIO_I2C_B_SDA},
+	{"usb0",     IT83XX_I2C_CH_C, 400, GPIO_I2C_C_SCL, GPIO_I2C_C_SDA},
+	{"usb1",     IT83XX_I2C_CH_E, 400, GPIO_I2C_E_SCL, GPIO_I2C_E_SDA},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -342,6 +342,23 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.flags = 0,
 	},
 };
+
+const struct cc_para_t *board_get_cc_tuning_parameter(enum usbpd_port port)
+{
+	const static struct cc_para_t
+		cc_parameter[CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT] = {
+		{
+			.rising_time = IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
+			.falling_time = IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
+		},
+		{
+			.rising_time = IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
+			.falling_time = IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
+		},
+	};
+
+	return &cc_parameter[port];
+}
 
 uint16_t tcpc_get_alert_status(void)
 {
@@ -620,7 +637,7 @@ static struct mutex g_lid_mutex;
 static struct bmi_drv_data_t g_bmi160_data;
 static struct stprivate_data g_lis2dwl_data;
 
-#ifdef BOARD_ASURADA
+#ifdef BOARD_ASURADA_REV0
 /* Matrix to rotate accelerometer into standard reference frame */
 /* for rev 0 */
 static const mat33_fp_t base_standard_ref_rev0 = {
@@ -636,7 +653,7 @@ static void update_rotation_matrix(void)
 	motion_sensors[BASE_GYRO].rot_standard_ref =
 		&base_standard_ref_rev0;
 }
-DECLARE_HOOK(HOOK_INIT, update_rotation_matrix, HOOK_PRIO_INIT_ADC + 1);
+DECLARE_HOOK(HOOK_INIT, update_rotation_matrix, HOOK_PRIO_INIT_ADC + 2);
 
 /* TCS3400 private data */
 static struct als_drv_data_t g_tcs3400_data = {
@@ -690,7 +707,28 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 	.saturation.again = TCS_DEFAULT_AGAIN,
 	.saturation.atime = TCS_DEFAULT_ATIME,
 };
-#endif /* BOARD_ASURADA */
+#endif /* BOARD_ASURADA_REV0 */
+
+#ifdef BOARD_HAYATO
+/* Matrix to rotate accelerometer into standard reference frame */
+/* for Hayato */
+static const mat33_fp_t base_standard_ref = {
+	{0, FLOAT_TO_FP(1), 0},
+	{FLOAT_TO_FP(-1), 0 , 0},
+	{0, 0, FLOAT_TO_FP(1)},
+};
+
+static void update_rotation_matrix(void)
+{
+	if (board_get_version() >= 2) {
+		motion_sensors[BASE_ACCEL].rot_standard_ref =
+			&base_standard_ref;
+		motion_sensors[BASE_GYRO].rot_standard_ref =
+			&base_standard_ref;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, update_rotation_matrix, HOOK_PRIO_INIT_ADC + 2);
+#endif
 
 struct motion_sensor_t motion_sensors[] = {
 	/*
@@ -770,7 +808,7 @@ struct motion_sensor_t motion_sensors[] = {
 			},
 		},
 	},
-#ifdef BOARD_ASURADA
+#ifdef BOARD_ASURADA_REV0
 	[CLEAR_ALS] = {
 		.name = "Clear Light",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
@@ -806,6 +844,15 @@ struct motion_sensor_t motion_sensors[] = {
 		.min_frequency = 0,
 		.max_frequency = 0,
 	},
-#endif /* BOARD_ASURADA */
+#endif /* BOARD_ASURADA_REV0 */
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+int board_accel_force_mode_mask(void)
+{
+	int version = board_get_version();
+
+	if (version == -1 || version >= 2)
+		return 0;
+	return BIT(LID_ACCEL);
+}

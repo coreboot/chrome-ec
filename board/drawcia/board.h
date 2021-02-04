@@ -15,9 +15,6 @@
 #undef GPIO_VOLUME_UP_L
 #define GPIO_VOLUME_UP_L GPIO_VOLUP_BTN_ODL_HDMI_HPD
 
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
 
@@ -25,6 +22,7 @@
 #define CONFIG_BC12_DETECT_PI3USB9201
 
 /* Charger */
+#define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_CHARGER_SM5803		/* C0 and C1: Charger */
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_5V_CHARGER_CTRL
@@ -41,6 +39,9 @@
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
+
+#define CONFIG_CMD_ACCELS
+#define CONFIG_CMD_ACCEL_INFO
 
 #define CONFIG_ACCEL_INTERRUPTS
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
@@ -142,6 +143,7 @@ enum battery_type {
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_COS,
+	BATTERY_COS_2,
 	BATTERY_TYPE_COUNT,
 };
 

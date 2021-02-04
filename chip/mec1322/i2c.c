@@ -287,7 +287,7 @@ int chip_i2c_xfer(const int port,
 	if (out_size) {
 		if (send_start) {
 			MEC1322_I2C_DATA(controller) =
-				(uint8_t)(I2C_GET_ADDR(slave_addr_flags)
+				(uint8_t)(I2C_STRIP_FLAGS(slave_addr_flags)
 					  << 1);
 
 			/* Clock out the slave address, sending START bit */
@@ -332,7 +332,7 @@ int chip_i2c_xfer(const int port,
 							       CTRL_ENI;
 
 			MEC1322_I2C_DATA(controller) =
-				(uint8_t)(I2C_GET_ADDR(slave_addr_flags)
+				(uint8_t)(I2C_STRIP_FLAGS(slave_addr_flags)
 					  << 1)
 				| 0x01;
 
@@ -517,7 +517,7 @@ static void handle_interrupt(int controller)
 
 	/* Wake up the task which was waiting on the I2C interrupt, if any. */
 	if (id != TASK_ID_INVALID)
-		task_set_event(id, TASK_EVENT_I2C_IDLE, 0);
+		task_set_event(id, TASK_EVENT_I2C_IDLE);
 }
 
 void i2c0_interrupt(void) { handle_interrupt(0); }

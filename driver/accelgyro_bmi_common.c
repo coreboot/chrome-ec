@@ -11,7 +11,9 @@
 
 #include "accelgyro.h"
 #include "console.h"
-#include "driver/accelgyro_bmi_common.h"
+#include "accelgyro_bmi_common.h"
+#include "mag_bmm150.h"
+#include "mag_lis2mdl.h"
 #include "i2c.h"
 #include "math_util.h"
 #include "motion_sense_fifo.h"
@@ -141,7 +143,7 @@ int bmi_get_engineering_val(const int reg_val,
 }
 
 #ifdef CONFIG_SPI_ACCEL_PORT
-int bmi_spi_raw_read(const int addr, const uint8_t reg,
+static int bmi_spi_raw_read(const int addr, const uint8_t reg,
 		     uint8_t *data, const int len)
 {
 	uint8_t cmd = 0x80 | reg;
@@ -198,6 +200,14 @@ int bmi_write8(const int port, const uint16_t i2c_spi_addr_flags,
 				reg, data);
 #endif
 	}
+	/*
+	 * From Bosch:  BMI needs a delay of 450us after each write if it
+	 * is in suspend mode, otherwise the operation may be ignored by
+	 * the sensor. Given we are only doing write during init, add
+	 * the delay unconditionally.
+	 */
+	msleep(1);
+
 	return rv;
 }
 
@@ -220,6 +230,34 @@ int bmi_read16(const int port, const uint16_t i2c_spi_addr_flags,
 				reg, data_ptr);
 #endif
 	}
+	return rv;
+}
+
+/**
+ * Write 16bit register from accelerometer.
+ */
+int bmi_write16(const int port, const uint16_t i2c_spi_addr_flags,
+		const int reg, int data)
+{
+	int rv = -EC_ERROR_PARAM1;
+
+	if (SLAVE_IS_SPI(i2c_spi_addr_flags)) {
+#ifdef CONFIG_SPI_ACCEL_PORT
+		CPRINTS("%s() spi part is not implemented", __func__);
+#endif
+	} else {
+#ifdef I2C_PORT_ACCEL
+		rv = i2c_write16(port, i2c_spi_addr_flags,
+				 reg, data);
+#endif
+	}
+	/*
+	 * From Bosch:  BMI needs a delay of 450us after each write if it
+	 * is in suspend mode, otherwise the operation may be ignored by
+	 * the sensor. Given we are only doing write during init, add
+	 * the delay unconditionally.
+	 */
+	msleep(1);
 	return rv;
 }
 
@@ -285,6 +323,14 @@ int bmi_write_n(const int port, const uint16_t i2c_spi_addr_flags,
 				     reg, data_ptr, len);
 #endif
 	}
+	/*
+	 * From Bosch:  BMI needs a delay of 450us after each write if it
+	 * is in suspend mode, otherwise the operation may be ignored by
+	 * the sensor. Given we are only doing write during init, add
+	 * the delay unconditionally.
+	 */
+	msleep(1);
+
 	return rv;
 }
 /*
@@ -319,17 +365,13 @@ void bmi_normalize(const struct motion_sensor_t *s, intv3_t v, uint8_t *input)
 	int i;
 	struct accelgyro_saved_data_t *data = BMI_GET_SAVED_DATA(s);
 
-#ifdef CONFIG_MAG_BMI_BMM150
-	if (s->type == MOTIONSENSE_TYPE_MAG)
+	if (IS_ENABLED(CONFIG_MAG_BMI_BMM150) &&
+	    (s->type == MOTIONSENSE_TYPE_MAG)) {
 		bmm150_normalize(s, v, input);
-	else
-#endif
-#ifdef CONFIG_MAG_BMI_LIS2MDL
-	if (s->type == MOTIONSENSE_TYPE_MAG)
-		lis2mdl_normalize(s, v, data);
-	else
-#endif
-	{
+	} else if (IS_ENABLED(CONFIG_MAG_BMI_LIS2MDL) &&
+		   (s->type == MOTIONSENSE_TYPE_MAG)) {
+		lis2mdl_normalize(s, v, input);
+	} else {
 		v[0] = ((int16_t)((input[1] << 8) | input[0]));
 		v[1] = ((int16_t)((input[3] << 8) | input[2]));
 		v[2] = ((int16_t)((input[5] << 8) | input[4]));
@@ -538,15 +580,14 @@ int bmi_load_fifo(struct motion_sensor_t *s, uint32_t last_ts)
 	return EC_SUCCESS;
 }
 
-int bmi_set_range(const struct motion_sensor_t *s, int range, int rnd)
+int bmi_set_range(struct motion_sensor_t *s, int range, int rnd)
 {
 	int ret, range_tbl_size;
 	uint8_t reg_val, ctrl_reg;
 	const struct bmi_accel_param_pair *ranges;
-	struct accelgyro_saved_data_t *data = BMI_GET_SAVED_DATA(s);
 
 	if (s->type == MOTIONSENSE_TYPE_MAG) {
-		data->range = range;
+		s->current_range = range;
 		return EC_SUCCESS;
 	}
 
@@ -558,16 +599,9 @@ int bmi_set_range(const struct motion_sensor_t *s, int range, int rnd)
 			 ctrl_reg, reg_val);
 	/* Now that we have set the range, update the driver's value. */
 	if (ret == EC_SUCCESS)
-		data->range = bmi_get_engineering_val(reg_val, ranges,
-				range_tbl_size);
+		s->current_range = bmi_get_engineering_val(reg_val, ranges,
+							   range_tbl_size);
 	return ret;
-}
-
-int bmi_get_range(const struct motion_sensor_t *s)
-{
-	struct accelgyro_saved_data_t *data = BMI_GET_SAVED_DATA(s);
-
-	return data->range;
 }
 
 int bmi_get_data_rate(const struct motion_sensor_t *s)
@@ -860,4 +894,23 @@ void bmi_set_gyro_offset(const struct motion_sensor_t *gyro, intv3_t v,
 		*val98_ptr |= (val >> 8) << (2 * i);
 	}
 }
+
+#ifdef CONFIG_BMI_ORIENTATION_SENSOR
+bool motion_orientation_changed(const struct motion_sensor_t *s)
+{
+	return BMI_GET_DATA(s)->orientation !=
+		BMI_GET_DATA(s)->last_orientation;
+}
+
+enum motionsensor_orientation *motion_orientation_ptr(
+		const struct motion_sensor_t *s)
+{
+	return &BMI_GET_DATA(s)->orientation;
+}
+
+void motion_orientation_update(const struct motion_sensor_t *s)
+{
+	BMI_GET_DATA(s)->last_orientation = BMI_GET_DATA(s)->orientation;
+}
+#endif
 

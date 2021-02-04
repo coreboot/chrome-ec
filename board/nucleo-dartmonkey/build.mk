@@ -13,13 +13,18 @@ board-y+=fpsensor_detect.o
 test-list-y=\
        aes \
        compile_time_macros \
-       crc32 \
+       crc \
+       flash_physical \
+       flash_write_protect \
        fpsensor \
+       mpu \
        mutex \
        pingpong \
-       rsa \
+       rollback \
+       rollback_entropy \
        rsa3 \
        rtc \
+       scratchpad \
        sha256 \
        sha256_unrolled \
        stm32f_rtc \

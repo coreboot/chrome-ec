@@ -35,7 +35,7 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
-#include "version.h"
+#include "cros_version.h"
 #include "watchdog.h"
 
 /* Console output macros */
@@ -530,7 +530,7 @@ static void jump_to_image(uintptr_t init_addr)
 		/* Note: must be before i2c module is locked down */
 		pd_prepare_sysjump();
 
-#ifdef CONFIG_I2C_MASTER
+#ifdef CONFIG_I2C_CONTROLLER
 	/* Prepare I2C module for sysjump */
 	i2c_prepare_sysjump();
 #endif
@@ -891,6 +891,7 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	case EC_REBOOT_JUMP_RW:
 		return system_run_image_copy(system_get_active_copy());
 	case EC_REBOOT_COLD:
+	case EC_REBOOT_COLD_AP_OFF:
 		/*
 		 * Reboot the PD chip(s) as well, but first suspend the ports
 		 * if this board has PD tasks running so they don't query the
@@ -916,7 +917,11 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 			board_reset_pd_mcu();
 
 		cflush();
-		system_reset(SYSTEM_RESET_HARD);
+		if (cmd == EC_REBOOT_COLD_AP_OFF)
+			system_reset(SYSTEM_RESET_HARD |
+				     SYSTEM_RESET_LEAVE_AP_OFF);
+		else
+			system_reset(SYSTEM_RESET_HARD);
 		/* That shouldn't return... */
 		return EC_ERROR_UNKNOWN;
 	case EC_REBOOT_DISABLE_JUMP:
@@ -942,6 +947,27 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 		return EC_ERROR_UNKNOWN;
 	default:
 		return EC_ERROR_INVAL;
+	}
+}
+
+void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
+{
+	if (!IS_ENABLED(CONFIG_HIBERNATE))
+		return;
+
+	/*
+	 * If chipset is already off, then call system_hibernate directly. Else,
+	 * let chipset_task bring down the power rails and transition to proper
+	 * state before system_hibernate is called.
+	 */
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		system_hibernate(seconds, microseconds);
+	else {
+		reboot_at_shutdown = EC_REBOOT_HIBERNATE;
+		hibernate_seconds = seconds;
+		hibernate_microseconds = microseconds;
+
+		chipset_force_shutdown(CHIPSET_SHUTDOWN_CONSOLE_CMD);
 	}
 }
 
@@ -1081,20 +1107,7 @@ __maybe_unused static int command_hibernate(int argc, char **argv)
 	} else
 		ccprintf("Hibernating until wake pin asserted.\n");
 
-	/*
-	 * If chipset is already off, then call system_hibernate directly. Else,
-	 * let chipset_task bring down the power rails and transition to proper
-	 * state before system_hibernate is called.
-	 */
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		system_hibernate(seconds, microseconds);
-	else {
-		reboot_at_shutdown = EC_REBOOT_HIBERNATE;
-		hibernate_seconds = seconds;
-		hibernate_microseconds = microseconds;
-
-		chipset_force_shutdown(CHIPSET_SHUTDOWN_CONSOLE_CMD);
-	}
+	system_enter_hibernate(seconds, microseconds);
 
 	return EC_SUCCESS;
 }
@@ -1543,39 +1556,6 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION,
 		     EC_VER_MASK(0));
 #endif
 
-#ifdef CONFIG_HOSTCMD_VBNV_CONTEXT
-enum ec_status host_command_vbnvcontext(struct host_cmd_handler_args *args)
-{
-	const struct ec_params_vbnvcontext *p = args->params;
-	struct ec_response_vbnvcontext *r;
-	int i;
-
-	switch (p->op) {
-	case EC_VBNV_CONTEXT_OP_READ:
-		r = args->response;
-		for (i = 0; i < EC_VBNV_BLOCK_SIZE; ++i)
-			if (system_get_bbram(SYSTEM_BBRAM_IDX_VBNVBLOCK0 + i,
-					     r->block + i))
-				return EC_RES_ERROR;
-		args->response_size = sizeof(*r);
-		break;
-	case EC_VBNV_CONTEXT_OP_WRITE:
-		for (i = 0; i < EC_VBNV_BLOCK_SIZE; ++i)
-			if (system_set_bbram(SYSTEM_BBRAM_IDX_VBNVBLOCK0 + i,
-					     p->block[i]))
-				return EC_RES_ERROR;
-		break;
-	default:
-		return EC_RES_ERROR;
-	}
-
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_VBNV_CONTEXT,
-		     host_command_vbnvcontext,
-		     EC_VER_MASK(EC_VER_VBNV_CONTEXT));
-#endif /* CONFIG_HOSTCMD_VBNV_CONTEXT */
-
 enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 {
 	struct ec_params_reboot_ec p;
@@ -1610,7 +1590,8 @@ enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 	if (p.cmd == EC_REBOOT_JUMP_RO ||
 	    p.cmd == EC_REBOOT_JUMP_RW ||
 	    p.cmd == EC_REBOOT_COLD ||
-	    p.cmd == EC_REBOOT_HIBERNATE) {
+	    p.cmd == EC_REBOOT_HIBERNATE ||
+	    p.cmd == EC_REBOOT_COLD_AP_OFF) {
 		/* Clean busy bits on host for commands that won't return */
 		args->result = EC_RES_SUCCESS;
 		host_send_response(args);

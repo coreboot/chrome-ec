@@ -63,7 +63,7 @@
 
 #define CONFIG_RW_MEM_OFF	(CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
 #define CONFIG_RW_STORAGE_OFF	0
-#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE -			\
+#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE_BYTES -		\
 				(CONFIG_RW_MEM_OFF - CONFIG_RO_MEM_OFF))
 
 #define CONFIG_EC_PROTECTED_STORAGE_OFF         CONFIG_RO_MEM_OFF
@@ -167,7 +167,10 @@
 #define CONFIG_RNG
 
 #define CONFIG_CMD_FLASH
+
+#ifdef SECTION_IS_RW
 #define CONFIG_CMD_SPI_XFER
+#endif
 
 #ifdef SECTION_IS_RW
 /*
@@ -183,11 +186,7 @@
 #define TIM_WATCHDOG 16
 
 #include "gpio_signal.h"
-
-void fps_event(enum gpio_signal signal);
-
-/* Defined in ro_workarounds.c */
-void wp_event(enum gpio_signal signal);
+#include "board_rw.h"
 
 #endif /* !__ASSEMBLER__ */
 

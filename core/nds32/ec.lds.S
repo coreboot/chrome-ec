@@ -22,7 +22,7 @@ MEMORY
 {
 	FLASH (rx) : ORIGIN = FW_OFF(SECTION), LENGTH = FW_SIZE(SECTION)
 	IRAM (rw)  : ORIGIN = CONFIG_RAM_BASE, LENGTH = CONFIG_RAM_SIZE
-#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_SLAVE)
+#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_PERIPHERAL)
 	H2RAM (rw) : ORIGIN = CONFIG_H2RAM_BASE, LENGTH = CONFIG_H2RAM_SIZE
 #endif
 }
@@ -285,20 +285,20 @@ SECTIONS
         /*
          * These linker labels are just for analysis and not used in the code.
          */
-	__config_flash_size = CONFIG_FLASH_SIZE;
+	__config_flash_size = CONFIG_FLASH_SIZE_BYTES;
 	__config_ro_size = CONFIG_RO_SIZE;
 	__config_ec_protected_storage_size = CONFIG_EC_PROTECTED_STORAGE_SIZE;
 	__config_rw_size = CONFIG_RW_SIZE;
 	__config_ec_writable_storage_size = CONFIG_EC_WRITABLE_STORAGE_SIZE;
 #endif
 
-#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_SLAVE)
+#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_PERIPHERAL)
 	.h2ram (NOLOAD) : {
 		. += CONFIG_H2RAM_HOST_LPC_IO_BASE;
 		*(.h2ram.pool.hostcmd)
 		. = ALIGN(256);
 		*(.h2ram.pool.acpiec)
-#ifdef CONFIG_I2C_SLAVE
+#ifdef CONFIG_I2C_PERIPHERAL
 		. = ALIGN(256);
 		*(.h2ram.pool.i2cslv)
 #endif

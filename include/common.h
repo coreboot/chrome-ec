@@ -132,7 +132,11 @@
  * linked into the .rodata section.
  */
 #ifndef __init_rom
+#ifndef CONFIG_ZEPHYR
 #define __init_rom __attribute__((section(".init.rom")))
+#else
+#define __init_rom
+#endif
 #endif
 
 /* gcc does not support __has_feature */
@@ -220,6 +224,21 @@
 /* Include top-level configuration file */
 #include "config.h"
 
+/*
+ * When CONFIG_CHIP_DATA_IN_INIT_ROM is enabled the .data section is linked
+ * into an unused are of flash and excluded from the executable portion of
+ * the RO and RW images to save space.
+ *
+ * The __const_data attribute can be used to force constant data objects
+ * into the .data section instead of the .rodata section for additional
+ * savings.
+ */
+#ifdef CONFIG_CHIP_DATA_IN_INIT_ROM
+#define __const_data __attribute__((section(".data#")))
+#else
+#define __const_data
+#endif
+
 /* Canonical list of module IDs */
 #include "module_id.h"
 
@@ -272,6 +291,9 @@ enum ec_error_list {
 
 	/* Sometimes operation is expected to have to be repeated. */
 	EC_ERROR_TRY_AGAIN = 26,
+
+	/* Operation was successful but completion is pending. */
+	EC_SUCCESS_IN_PROGRESS = 27,
 
 	/* Verified boot errors */
 	EC_ERROR_VBOOT_SIGNATURE = 0x1000, /* 4096 */
@@ -450,8 +472,19 @@ enum ec_error_list {
  * This follows the same constraints as IS_ENABLED, the config option
  * should be defined to nothing or undefined.
  */
+#ifndef CONFIG_ZEPHYR
 #define STATIC_IF(option)						\
 	__cfg_select_build_assert(#option, option, static, extern)
+#else
+/*
+ * Version of STATIC_IF for Zephyr, with similar considerations to IS_ENABLED.
+ *
+ * Note, if __cfg_select fails, then we check using Zephyr's COND_CODE_1 macro
+ * to determine if the config option is enabled by Zephyr's definition.
+ */
+#define STATIC_IF(option) \
+	__cfg_select(option, static, COND_CODE_1(option, (static), (extern)))
+#endif /* CONFIG_ZEPHYR */
 
 /**
  * STATIC_IF_NOT is just like STATIC_IF, but makes the variable static
@@ -460,7 +493,16 @@ enum ec_error_list {
  * This is to assert that a variable will go unused with a certain
  * config option.
  */
+#ifndef CONFIG_ZEPHYR
 #define STATIC_IF_NOT(option)						\
 	__cfg_select_build_assert(#option, option, extern, static)
+#else
+/*
+ * Version of STATIC_IF_NOT for Zephyr, with similar considerations to STATIC_IF
+ * and IS_ENABLED.
+ */
+#define STATIC_IF_NOT(option) \
+	__cfg_select(option, extern, COND_CODE_1(option, (extern), (static)))
+#endif /* CONFIG_ZEPHYR */
 
 #endif  /* __CROS_EC_COMMON_H */

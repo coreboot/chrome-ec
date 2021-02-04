@@ -13,8 +13,8 @@ GPIO_INT(USB_C0_PD_INT_ODL,    PIN(E, 0), GPIO_INT_FALLING, tcpc_alert_event)  /
 GPIO_INT(USB_C1_PD_INT_ODL,    PIN(F, 5), GPIO_INT_FALLING, tcpc_alert_event)  /* Interrupt from port-1 TCPC */
 GPIO_INT(USB_C0_SWCTL_INT_ODL, PIN(0, 3), GPIO_INT_FALLING, ppc_interrupt)  /* Interrupt from port-0 PPC */
 GPIO_INT(USB_C1_SWCTL_INT_ODL, PIN(4, 0), GPIO_INT_FALLING, ppc_interrupt)  /* Interrupt from port-1 PPC */
-GPIO_INT(USB_C0_BC12_INT_L,    PIN(6, 1), GPIO_INT_FALLING, usb0_evt)  /* Interrupt from port-0 BC1.2 */
-GPIO_INT(USB_C1_BC12_INT_L,    PIN(8, 2), GPIO_INT_FALLING, usb1_evt)  /* Interrupt from port-1 BC1.2 */
+GPIO_INT(USB_C0_BC12_INT_L,    PIN(6, 1), GPIO_INT_FALLING | GPIO_PULL_UP, usb0_evt)  /* Interrupt from port-0 BC1.2 */
+GPIO_INT(USB_C1_BC12_INT_L,    PIN(8, 2), GPIO_INT_FALLING | GPIO_PULL_UP, usb1_evt)  /* Interrupt from port-1 BC1.2 */
 
 /* System interrupts */
 GPIO_INT(CHG_ACOK_OD,       PIN(0, 0), GPIO_INT_BOTH, extpower_interrupt)  /* ACOK */
@@ -28,6 +28,10 @@ GPIO_INT(AP_RST_L,          PIN(C, 1), GPIO_INT_BOTH | GPIO_SEL_1P8V, chipset_ap
 GPIO_INT(PS_HOLD,           PIN(A, 4), GPIO_INT_BOTH | GPIO_PULL_DOWN, power_signal_interrupt)  /* Indicate when AP triggers reset/shutdown */
 GPIO_INT(AP_SUSPEND,        PIN(5, 7), GPIO_INT_BOTH, power_signal_interrupt)  /* Suspend signal from PMIC */
 GPIO_INT(DEPRECATED_AP_RST_REQ, PIN(C, 2), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt) /* Deprecated AP initiated reset indicator */
+
+/* WLC interrupt. GPIO_PULL_DOWN ensures no IRQ when WLC chip is off. */
+GPIO_INT(WLC_IRQ_CONN, PIN(7, 4), GPIO_INT_RISING | GPIO_PULL_DOWN, pchg_irq)
+
 /*
  * When switch-cap is off, the POWER_GOOD signal is floating. Need a pull-down
  * to make it low. Overload the interrupt function chipset_warm_reset_interrupt
@@ -41,6 +45,9 @@ GPIO_INT(AP_EC_SPI_CS_L,    PIN(5, 3), GPIO_INT_FALLING | GPIO_PULL_DOWN, shi_cs
 GPIO_INT(BASE_DET_L,        PIN(3, 7), GPIO_INT_BOTH, base_detect_interrupt)  /* Detachable base attached? */
 
 /* Sensor interrupts */
+GPIO_INT(LID_360_L,         PIN(7, 3), GPIO_INT_BOTH, gmr_tablet_switch_isr)
+GPIO_INT(LID_INT_N_HALL1,   PIN(D, 7), GPIO_INT_BOTH, ks_interrupt)  /* Kickstand attached (0) or detached (1) */
+GPIO_INT(LID_INT_N_HALL2,   PIN(6, 0), GPIO_INT_BOTH, ks_interrupt)  /* Kickstand close (0) or open (1) */
 GPIO_INT(ACCEL_GYRO_INT_L,  PIN(A, 0), GPIO_INT_FALLING, bmi160_interrupt)  /* Accelerometer/gyro interrupt */
 
 /*
@@ -64,19 +71,11 @@ GPIO(EN_PP3300_A,           PIN(A, 6), GPIO_OUT_LOW)   /* Enable PP3300 */
 GPIO(EN_PP5000_A,           PIN(6, 7), GPIO_OUT_LOW)   /* Enable PP5000 */
 GPIO(EC_BL_DISABLE_L,       PIN(B, 6), GPIO_OUT_LOW)   /* Backlight disable signal from EC */
 
-/* Sensors */
-GPIO(REVERSE_DOCK_EC,       PIN(C, 6), GPIO_INPUT)
-/* TODO(b/168714440): Implement the hall sensor interrupts */
-GPIO(LID_INT_N_HALL1,       PIN(7, 3), GPIO_INPUT)
-GPIO(LID_INT_N_HALL2,       PIN(6, 0), GPIO_INPUT)
-GPIO(LID_INT_N_HALL3,       PIN(D, 7), GPIO_INPUT)
 /* TODO(waihong): Should remove it from hardware */
 GPIO(CAM_LED,               PIN(3, 0), GPIO_INPUT)
 
-/* Stylus */
-/* TODO(b/168652326): Implement the WLC controls */
-GPIO(WLC_IRQ_CONN,          PIN(7, 4), GPIO_INPUT)
-GPIO(WLC_NRST_CONN,         PIN(C, 5), GPIO_INPUT)
+/* Reset line for WLC. External pull-up is expected. */
+GPIO(WLC_NRST_CONN,         PIN(C, 5), GPIO_ODR_HIGH)
 
 /* Base detection */
 GPIO(EN_BASE,               PIN(0, 4), GPIO_OUT_LOW)   /* Enable power to detachable base */
@@ -84,13 +83,9 @@ GPIO(EN_BASE,               PIN(0, 4), GPIO_OUT_LOW)   /* Enable power to detach
 /* USB-C */
 GPIO(USB_C0_PD_RST_L,       PIN(F, 1), GPIO_ODR_HIGH)  /* Port-0 TCPC chip reset, actaully Open-Drain */
 GPIO(USB_C1_PD_RST_L,       PIN(E, 4), GPIO_ODR_HIGH)  /* Port-1 TCPC chip reset, actually Open-Drain */
-GPIO(DP_MUX_OE_L,           PIN(9, 6), GPIO_OUT_HIGH)  /* DP mux enable */
-GPIO(DP_MUX_SEL,            PIN(4, 5), GPIO_OUT_HIGH)  /* DP mux selection: L:C0, H:C1 */
+GPIO(DP_MUX_OE_L,           PIN(9, 6), GPIO_ODR_HIGH)  /* DP mux enable, actually Open-Drain */
+GPIO(DP_MUX_SEL,            PIN(4, 5), GPIO_OUT_LOW)   /* DP mux selection: L:C0, H:C1 */
 GPIO(DP_HOT_PLUG_DET,       PIN(9, 5), GPIO_OUT_LOW)   /* DP HPD to AP */
-
-/* USB-A */
-GPIO(EN_USB_A_5V,           PIN(8, 6), GPIO_INPUT)     /* NC, backup only */
-GPIO(USB_A_CDP_ILIM_EN,     PIN(7, 5), GPIO_INPUT)     /* NC, backup only */
 
 /* LEDs */
 GPIO(EC_CHG_LED_Y_C0,       PIN(C, 3), GPIO_OUT_LOW)
@@ -142,6 +137,9 @@ GPIO(SKU_ID2,               PIN(D, 4), GPIO_INPUT)
  */
 GPIO(DA9313_GPIO0,          PIN(E, 2), GPIO_INPUT | GPIO_PULL_DOWN) /* Switchcap GPIO0 */
 
+/* Special straps */
+GPIO(ARM_X86,               PIN(6, 6), GPIO_OUT_LOW)  /* NC, low for power saving */
+
 /* Unused GPIOs, NC. Apply PU for power saving */
 UNUSED(PIN(5, 1))
 UNUSED(PIN(F, 3))
@@ -175,6 +173,7 @@ UNUSED(PIN(7, 2))
 UNUSED(PIN(8, 1))
 UNUSED(PIN(7, 6))
 UNUSED(PIN(3, 4))
+UNUSED(PIN(C, 6))
 UNUSED(PIN(C, 0))
 UNUSED(PIN(A, 3))
 UNUSED(PIN(6, 2))
@@ -183,6 +182,8 @@ UNUSED(PIN(B, 1))
 UNUSED(PIN(5, 6))
 UNUSED(PIN(8, 0))
 UNUSED(PIN(D, 3))
+UNUSED(PIN(7, 5))
+UNUSED(PIN(8, 6))
 
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)            /* UART (GPIO64/65) */
@@ -192,7 +193,6 @@ ALTERNATE(PIN_MASK(8, 0x80), 1, MODULE_I2C, 0)             /* I2C1 SCL (GPIO87) 
 ALTERNATE(PIN_MASK(3, 0x48), 1, MODULE_I2C, 0)             /* I2C5 (GPIO33/36) */
 ALTERNATE(PIN_MASK(B, 0x0C), 1, MODULE_I2C, GPIO_SEL_1P8V) /* I2C7 (GPIOB2/B3) - 1.8V */
 ALTERNATE(PIN_MASK(D, 0x03), 1, MODULE_I2C, 0)             /* I2C3 (GPIOD0/D1) */
-ALTERNATE(PIN_MASK(3, 0x80), 0, MODULE_ADC, 0)             /* ADC5 (GPIO37) */
 ALTERNATE(PIN_MASK(4, 0x1C), 0, MODULE_ADC, 0)             /* ADC1 (GPIO44), ADC2 (GPIO43), ADC3 (GPIO42) */
 ALTERNATE(PIN_MASK(4, 0xC0), 1, MODULE_SPI, GPIO_SEL_1P8V) /* SHI_SDO (GPIO47), SHI_SDI (GPIO46) */
 ALTERNATE(PIN_MASK(5, 0x28), 1, MODULE_SPI, GPIO_SEL_1P8V) /* SHI_SCLK (GPIO55), SHI_CS# (GPIO53) */

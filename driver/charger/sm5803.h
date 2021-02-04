@@ -150,8 +150,10 @@ enum sm5803_gpio0_modes {
 #define SM5803_TINT_HIGH_LEVEL		0xD1
 
 /* IBAT levels - The IBAT levels increment in 7.32mA */
-#define SM5803_REG_IBAT_CHG_MEAS_MSB	0x44
-#define SM5803_REG_IBAT_CHG_MEAS_LSB	0x45
+#define SM5803_REG_IBAT_CHG_MEAS_MSB		0x44
+#define SM5803_REG_IBAT_CHG_MEAS_LSB		0x45
+#define SM5803_REG_IBAT_CHG_AVG_MEAS_MSB	0xC4
+#define SM5803_REG_IBAT_CHG_AVG_MEAS_LSB	0xC5
 #define SM5803_IBAT_CHG_MEAS_LSB	GENMASK(1, 0)
 
 /* IBUS levels - The IBUS levels increment in 7.32mA */
@@ -172,6 +174,8 @@ enum sm5803_gpio0_modes {
 /* VSYS levels - The VSYS levels increment in  23.4mV steps. */
 #define SM5803_REG_VSYS_MEAS_MSB	0x4C
 #define SM5803_REG_VSYS_MEAS_LSB	0x4D
+#define SM5803_REG_VSYS_AVG_MEAS_MSB	0xCC
+#define SM5803_REG_VSYS_AVG_MEAS_LSB	0xCD
 #define SM5803_VSYS_MEAS_LSB		GENMASK(1, 0)
 
 /* Charger registers (address 0x32) */
@@ -221,8 +225,16 @@ enum sm5803_charger_modes {
 #define SM5803_REG_CHG_ILIM		0x24
 #define SM5803_CHG_ILIM_RAW		GENMASK(4, 0)
 #define SM5803_CURRENT_STEP		100
-#define SM5803_REG_TO_CURRENT(r)	(r * SM5803_CURRENT_STEP)
-#define SM5803_CURRENT_TO_REG(c)	(c / SM5803_CURRENT_STEP)
+#define SM5803_REG_TO_CURRENT(r)	((r) * SM5803_CURRENT_STEP)
+#define SM5803_CURRENT_TO_REG(c)	((c) / SM5803_CURRENT_STEP)
+
+/*
+ * DPM Voltage loop regulation contains the 8 bits with MSB register
+ * and the lower 3 bits with LSB register.
+ * The regulation value is 2.72 V + DPM_VL_SET * 10mV
+ */
+#define SM5803_REG_DPM_VL_SET_MSB		0x26
+#define SM5803_REG_DPM_VL_SET_LSB		0x27
 
 /*
  * Output voltage uses the same equation as Vsys
@@ -253,8 +265,8 @@ enum sm5803_charger_modes {
 #define SM5803_VOLTAGE_STEP		10
 #define SM5803_VOLTAGE_SHIFT		2720
 #define SM5803_REG_TO_VOLTAGE(r)	(SM5803_VOLTAGE_SHIFT + \
-					 r * SM5803_VOLTAGE_STEP)
-#define SM5803_VOLTAGE_TO_REG(v)	((v - SM5803_VOLTAGE_SHIFT) \
+					 (r) * SM5803_VOLTAGE_STEP)
+#define SM5803_VOLTAGE_TO_REG(v)	(((v) - SM5803_VOLTAGE_SHIFT) \
 					 / SM5803_VOLTAGE_STEP)
 
 /*
@@ -301,6 +313,9 @@ enum sm5803_charger_modes {
 #define SM5803_REG_LOG1			0x42
 #define SM5803_BATFET_ON		BIT(2)
 
+#define SM5803_REG_LOG2			0x43
+#define SM5803_ISOLOOP_ON		BIT(1)
+
 #define SM5803_REG_STATUS_CHG_REG	0x48
 #define SM5803_STATUS_CHG_BATT_REMOVAL	BIT(0)
 #define SM5803_STATUS_CHG_CHG_REMOVAL	BIT(1)
@@ -319,6 +334,9 @@ enum sm5803_charger_modes {
 #define SM5803_STATUS_DISCHG_ISO_CURR	BIT(5)
 #define SM5803_STATUS_DISCHG_VBUS_SHORT	BIT(6)
 #define SM5803_STATUS_DISCHG_OV_ITEMP	BIT(7)
+
+#define SM5803_REG_CHG_MON_REG		0x5C
+#define SM5803_DPM_LOOP_EN		BIT(0)
 
 #define SM5803_REG_PHOT1		0x72
 #define SM5803_PHOT1_IBAT_PHOT_COMP_EN	BIT(0)

@@ -120,6 +120,7 @@ enum usb_pe_state {
 	PE_VCS_TURN_ON_VCONN_SWAP,
 	PE_VCS_TURN_OFF_VCONN_SWAP,
 	PE_VCS_SEND_PS_RDY_SWAP,
+	PE_VCS_CBL_SEND_SOFT_RESET,
 	PE_VDM_IDENTITY_REQUEST_CBL,
 	PE_INIT_PORT_VDM_IDENTITY_REQUEST,
 	PE_INIT_VDM_SVIDS_REQUEST,
@@ -129,7 +130,6 @@ enum usb_pe_state {
 	PE_HANDLE_CUSTOM_VDM_REQUEST,
 	PE_WAIT_FOR_ERROR_RECOVERY,
 	PE_BIST_TX,
-	PE_BIST_RX,
 	PE_DEU_SEND_ENTER_USB,
 	PE_DR_SNK_GET_SINK_CAP,
 	PE_DR_SNK_GIVE_SOURCE_CAP,
@@ -152,5 +152,6 @@ void pe_clr_flag(int port, int flag);
 int pe_chk_flag(int port, int flag);
 int pe_get_all_flags(int port);
 void pe_set_all_flags(int port, int flags);
+void pe_clr_dpm_requests(int port);
 
 #endif /* __CROS_TEST_USB_PE_H */

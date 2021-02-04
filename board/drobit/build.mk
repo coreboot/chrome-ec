@@ -8,10 +8,9 @@
 
 CHIP:=npcx
 CHIP_FAMILY:=npcx7
-CHIP_VARIANT:=npcx7m6fc
+CHIP_VARIANT:=npcx7m7fc
 BASEBOARD:=volteer
 
 board-y=board.o
 board-y+=battery.o
 board-y+=led.o
-board-y+=sensors.o

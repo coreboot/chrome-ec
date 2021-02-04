@@ -18,14 +18,16 @@ from google.protobuf import json_format
 
 from chromite.api.gen.chromite.api import firmware_pb2
 
+
 def build(opts):
     """Builds all EC firmware targets"""
     # TODO(b/169178847): Add appropriate metric information
     metrics = firmware_pb2.FwBuildMetricList()
     with open(opts.metrics, 'w') as f:
         f.write(json_format.MessageToJson(metrics))
-    return subprocess.run(['make', 'buildall_only', '-j{}'.format(opts.cpus)],
-                          cwd=os.path.dirname(__file__)).returncode
+    subprocess.run(['make', 'buildall_only', '-j{}'.format(opts.cpus)],
+                   cwd=os.path.dirname(__file__),
+                   check=True)
 
 
 def test(opts):
@@ -34,12 +36,23 @@ def test(opts):
     metrics = firmware_pb2.FwTestMetricList()
     with open(opts.metrics, 'w') as f:
         f.write(json_format.MessageToJson(metrics))
-    return subprocess.run(['make', 'runtests', '-j{}'.format(opts.cpus)],
-                          cwd=os.path.dirname(__file__)).returncode
+
+    # Verify all posix-based unit tests build and pass
+    subprocess.run(['make', 'runtests', '-j{}'.format(opts.cpus)],
+                   cwd=os.path.dirname(__file__),
+                   check=True)
+
+    # Verify compilation of the on-device unit test binaries.
+    # TODO(b/172501728) These should build  for all boards, but they've bit
+    # rotted, so we only build the ones that compile.
+    subprocess.run(
+        ['make', 'BOARD=bloonchipper', 'tests', '-j{}'.format(opts.cpus)],
+        cwd=os.path.dirname(__file__),
+        check=True)
 
 
 def main(args):
-    """Builds and tests all of the EC targets and reports build metrics"""
+    """Builds and tests all of the EC targets and reports build metrics."""
     opts = parse_args(args)
 
     if not hasattr(opts, 'func'):
@@ -47,7 +60,12 @@ def main(args):
         return -1
 
     # Run selected sub command function
-    return opts.func(opts)
+    try:
+        opts.func(opts)
+    except subprocess.CalledProcessError:
+        return 1
+    else:
+        return 0
 
 
 def parse_args(args):

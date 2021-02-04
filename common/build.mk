@@ -10,7 +10,7 @@
 _common_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
 
 common-y=util.o
-common-y+=version.o printf.o queue.o queue_policies.o
+common-y+=version.o printf.o queue.o queue_policies.o irq_locking.o
 
 common-$(CONFIG_ACCELGYRO_BMI160)+=math_util.o
 common-$(CONFIG_ACCELGYRO_BMI260)+=math_util.o
@@ -48,9 +48,12 @@ common-$(CONFIG_BODY_DETECTION)+=body_detection.o
 common-$(CONFIG_CAPSENSE)+=capsense.o
 common-$(CONFIG_CEC)+=cec.o
 common-$(CONFIG_CROS_BOARD_INFO)+=cbi.o
+ifeq ($(HAS_MOCK_CHARGE_MANAGER),)
 common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o
+endif
 common-$(CONFIG_CHARGE_RAMP_HW)+=charge_ramp.o
 common-$(CONFIG_CHARGE_RAMP_SW)+=charge_ramp.o charge_ramp_sw.o
+common-$(CONFIG_CHIP_INIT_ROM_REGION)+=init_rom.o
 common-$(CONFIG_CMD_CHARGEN) += chargen.o
 common-$(CONFIG_CHARGER)+=charger.o charge_state_v2.o
 common-$(CONFIG_CHARGER_PROFILE_OVERRIDE_COMMON)+=charger_profile_override.o
@@ -58,7 +61,7 @@ common-$(CONFIG_CMD_I2CWEDGE)+=i2c_wedge.o
 common-$(CONFIG_COMMON_GPIO)+=gpio.o gpio_commands.o
 common-$(CONFIG_IO_EXPANDER)+=ioexpander.o
 common-$(CONFIG_COMMON_PANIC_OUTPUT)+=panic_output.o
-common-$(CONFIG_COMMON_RUNTIME)+=hooks.o main.o system.o peripheral.o init_rom.o
+common-$(CONFIG_COMMON_RUNTIME)+=hooks.o main.o system.o peripheral.o
 common-$(CONFIG_COMMON_TIMER)+=timer.o
 common-$(CONFIG_CRC8)+= crc8.o
 common-$(CONFIG_CURVE25519)+=curve25519.o
@@ -69,8 +72,8 @@ common-$(CONFIG_DEDICATED_RECOVERY_BUTTON)+=button.o
 common-$(CONFIG_DEVICE_EVENT)+=device_event.o
 common-$(CONFIG_DEVICE_STATE)+=device_state.o
 common-$(CONFIG_DPTF)+=dptf.o
-common-$(CONFIG_EC_EC_COMM_MASTER)+=ec_ec_comm_master.o
-common-$(CONFIG_EC_EC_COMM_SLAVE)+=ec_ec_comm_slave.o
+common-$(CONFIG_EC_EC_COMM_CLIENT)+=ec_ec_comm_client.o
+common-$(CONFIG_EC_EC_COMM_SERVER)+=ec_ec_comm_server.o
 common-$(CONFIG_HOSTCMD_ESPI)+=espi.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
 common-$(CONFIG_EXTPOWER)+=extpower_common.o
@@ -80,13 +83,13 @@ common-$(CONFIG_FMAP)+=fmap.o
 common-$(CONFIG_GESTURE_SW_DETECTION)+=gesture.o
 common-$(CONFIG_HOSTCMD_EVENTS)+=host_event_commands.o
 common-$(CONFIG_HOSTCMD_GET_UPTIME_INFO)+=uptime.o
-common-$(CONFIG_HOSTCMD_PD)+=host_command_master.o
+common-$(CONFIG_HOSTCMD_PD)+=host_command_controller.o
 common-$(CONFIG_HOSTCMD_REGULATOR)+=regulator.o
 common-$(CONFIG_HOSTCMD_RTC)+=rtc.o
 common-$(CONFIG_I2C_DEBUG)+=i2c_trace.o
 common-$(CONFIG_I2C_HID_TOUCHPAD)+=i2c_hid_touchpad.o
-common-$(CONFIG_I2C_MASTER)+=i2c_master.o
-common-$(CONFIG_I2C_SLAVE)+=i2c_slave.o
+common-$(CONFIG_I2C_CONTROLLER)+=i2c_controller.o
+common-$(CONFIG_I2C_PERIPHERAL)+=i2c_peripheral.o
 common-$(CONFIG_I2C_BITBANG)+=i2c_bitbang.o
 common-$(CONFIG_I2C_VIRTUAL_BATTERY)+=virtual_battery.o
 common-$(CONFIG_INDUCTIVE_CHARGING)+=inductive_charging.o
@@ -108,7 +111,9 @@ common-$(CONFIG_MAG_CALIBRATE)+= mag_cal.o math_util.o vec3.o mat33.o mat44.o \
 common-$(CONFIG_MKBP_EVENT)+=mkbp_event.o
 common-$(CONFIG_OCPC)+=ocpc.o
 common-$(CONFIG_ONEWIRE)+=onewire.o
+common-$(CONFIG_ORIENTATION_SENSOR)+=motion_orientation.o
 common-$(CONFIG_PECI_COMMON)+=peci.o
+common-$(CONFIG_PERIPHERAL_CHARGER)+=peripheral_charger.o
 common-$(CONFIG_POWER_BUTTON)+=power_button.o
 common-$(CONFIG_POWER_BUTTON_X86)+=power_button_x86.o
 common-$(CONFIG_PSTORE)+=pstore_commands.o
@@ -160,9 +165,11 @@ common-$(CONFIG_USB_PD_HOST_CMD)+=usb_pd_host_cmd.o
 common-$(CONFIG_USB_PD_CONSOLE_CMD)+=usb_pd_console_cmd.o
 endif
 common-$(CONFIG_USB_PD_ALT_MODE_DFP)+=usb_pd_alt_mode_dfp.o
+common-$(CONFIG_USB_PD_ALT_MODE_UFP)+=usb_pd_alt_mode_ufp.o
 common-$(CONFIG_USB_PD_LOGGING)+=event_log.o pd_log.o
 common-$(CONFIG_USB_PD_TCPC)+=usb_pd_tcpc.o
 common-$(CONFIG_USB_UPDATE)+=usb_update.o update_fw.o
+common-$(CONFIG_USBC_OCP)+=usbc_ocp.o
 common-$(CONFIG_USBC_PPC)+=usbc_ppc.o
 common-$(CONFIG_VBOOT_EFS)+=vboot/vboot.o
 common-$(CONFIG_VBOOT_EFS2)+=vboot/efs2.o
@@ -233,7 +240,7 @@ $(out)/.fake-bootblock:
 
 endif # BOOTBLOCK
 
-build-util-bin += gen_emmc_transfer_data
+build-util-bin-y += gen_emmc_transfer_data
 
 # Bootblock is only packed in RO image.
 $(out)/util/gen_emmc_transfer_data: BUILD_LDFLAGS += -DSECTION_IS_RO=$(EMPTY)
@@ -291,35 +298,6 @@ $(out)/RW/common/rma_auth.o: $(out)/rma_key_from_blob.h
 $(out)/rma_key_from_blob.h: board/$(BOARD)/$(BLOB_FILE) util/bin2h.sh
 	$(Q)util/bin2h.sh RMA_KEY_BLOB $< $@
 
-endif
-
-# Build and link against libcryptoc.
-ifeq ($(CONFIG_LIBCRYPTOC),y)
-CRYPTOCLIB := $(realpath ../../third_party/cryptoc)
-ifneq ($(BOARD),host)
-CPPFLAGS += -I$(abspath ./builtin)
-endif
-CPPFLAGS += -I$(CRYPTOCLIB)/include
-CRYPTOC_LDFLAGS := -L$(out)/cryptoc -lcryptoc
-
-# Force the external build each time, so it can look for changed sources.
-.PHONY: $(out)/cryptoc/libcryptoc.a
-$(out)/cryptoc/libcryptoc.a:
-	+$(call quiet,libcryptoc,MAKE   )
-
-# Link RO and RW against cryptoc.
-$(out)/RO/ec.RO.elf $(out)/RO/ec.RO_B.elf: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
-$(out)/RO/ec.RO.elf $(out)/RO/ec.RO_B.elf: $(out)/cryptoc/libcryptoc.a
-$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
-$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: $(out)/cryptoc/libcryptoc.a
-# Host test executables (including fuzz tests).
-$(out)/$(PROJECT).exe: LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
-$(out)/$(PROJECT).exe: $(out)/cryptoc/libcryptoc.a
-# On-device tests.
-test-targets=$(foreach test,$(test-list-y),\
-	$(out)/RW/$(test).RW.elf $(out)/RO/$(test).RO.elf)
-$(test-targets): LDFLAGS_EXTRA += $(CRYPTOC_LDFLAGS)
-$(test-targets): $(out)/cryptoc/libcryptoc.a
 endif
 
 include $(_common_dir)fpsensor/build.mk

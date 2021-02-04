@@ -109,12 +109,12 @@ void vbus1_evt(enum gpio_signal signal)
 
 void usb0_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 void usb1_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 }
 
 static void chipset_s5_to_s3(void)
@@ -611,7 +611,7 @@ host_event_status_host_cmd(struct host_cmd_handler_args *args)
 	atomic_clear_bits(&(pd_status_flags), PD_STATUS_HOST_EVENT);
 
 	/* Read and clear the host event status to return to AP */
-	r->status = atomic_read_clear(&(host_event_status_flags));
+	r->status = atomic_clear(&(host_event_status_flags));
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;

@@ -7,7 +7,7 @@
 
 #include "console.h"
 #include "hooks.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "system.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -34,7 +34,7 @@ void board_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp)
 	/* Only Type-C ports can source VBUS */
 	if (is_typec_port(port)) {
 		/* Enable SRC ILIM if rp is MAX single source current */
-		ilim_en = (rp == CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT &&
+		ilim_en = (rp ==  TYPEC_RP_3A0 &&
 			board_vbus_source_enabled(port));
 
 		gpio_set_level(tcpc_gpios[port].src_ilim.pin,
@@ -60,8 +60,10 @@ int pd_snk_is_vbus_provided(int port)
 {
 	int vbus_intr;
 
+#if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
 	if (port == DEDICATED_CHARGE_PORT)
 		return 1;
+#endif
 
 	vbus_intr = gpio_get_level(tcpc_gpios[port].vbus.pin);
 

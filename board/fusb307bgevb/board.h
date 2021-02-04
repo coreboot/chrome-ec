@@ -31,7 +31,7 @@
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 
 /* USB Configuration */
 #define CONFIG_USB
@@ -52,7 +52,6 @@
 #define CONFIG_USB_PD_TCPM_FUSB307
 
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 /* Define operating power and max power */
 #define PD_OPERATING_POWER_MW 15000
 #define PD_MAX_VOLTAGE_MV 20000

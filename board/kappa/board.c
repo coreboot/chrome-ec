@@ -38,7 +38,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -131,7 +131,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr_flags = FUSB302_I2C_SLAVE_ADDR_FLAGS,
+			.addr_flags = FUSB302_I2C_ADDR_FLAGS,
 		},
 		.drv = &fusb302_tcpm_drv,
 	},
@@ -236,7 +236,7 @@ int pd_snk_is_vbus_provided(int port)
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 static void board_init(void)

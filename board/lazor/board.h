@@ -10,15 +10,8 @@
 
 #include "baseboard.h"
 
-/* TODO(waihong): Remove the following bringup features */
-#define CONFIG_USB_PD_DEBUG_LEVEL 3
-#define CONFIG_CMD_AP_RESET_LOG
-#define CONFIG_CMD_GPIO_EXTENDED
-#define CONFIG_CMD_POWERINDEBUG
-#define CONFIG_I2C_DEBUG
-
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE (512 * 1024)  /* 512KB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
 
 /* Switchcap */
 #define CONFIG_LN9310
@@ -55,6 +48,14 @@
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
+
+/* ICM426XX Base accel/gyro */
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* KX022 lid accel */
+#define CONFIG_ACCEL_KX022
 
 /* BMA253 lid accel */
 #define CONFIG_ACCEL_BMA255
@@ -125,6 +126,8 @@ int board_vbus_sink_enable(int port, int enable);
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
+/* Motion sensor interrupt */
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !defined(__ASSEMBLER__) */
 

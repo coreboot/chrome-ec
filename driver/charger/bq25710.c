@@ -35,6 +35,13 @@
 /* Sense resistor configurations and macros */
 #define DEFAULT_SENSE_RESISTOR 10
 
+#ifdef CONFIG_CHARGER_SENSE_RESISTOR_AC_BQ25710
+	#undef CONFIG_CHARGER_SENSE_RESISTOR_AC
+	#define CONFIG_CHARGER_SENSE_RESISTOR_AC \
+		CONFIG_CHARGER_SENSE_RESISTOR_AC_BQ25710
+#endif
+
+
 #define INPUT_RESISTOR_RATIO \
 	((CONFIG_CHARGER_SENSE_RESISTOR_AC) / DEFAULT_SENSE_RESISTOR)
 #define REG_TO_INPUT_CURRENT(REG) ((REG + 1) * 50 / INPUT_RESISTOR_RATIO)
@@ -381,8 +388,8 @@ static enum ec_error_list bq25710_discharge_on_ac(int chgnum, int enable)
 	return bq25710_set_option(chgnum, option);
 }
 
-static enum ec_error_list bq25710_set_input_current(int chgnum,
-						    int input_current)
+static enum ec_error_list bq25710_set_input_current_limit(int chgnum,
+							  int input_current)
 {
 	int num_steps = INPUT_CURRENT_TO_REG(input_current);
 
@@ -390,8 +397,8 @@ static enum ec_error_list bq25710_set_input_current(int chgnum,
 			  BQ25710_CHARGE_IIN_BIT_0FFSET);
 }
 
-static enum ec_error_list bq25710_get_input_current(int chgnum,
-						    int *input_current)
+static enum ec_error_list bq25710_get_input_current_limit(int chgnum,
+							  int *input_current)
 {
 	int rv, reg;
 
@@ -478,7 +485,8 @@ static void bq25710_chg_ramp_handle(void)
 	 */
 	ramp_curr = chg_ramp_get_current_limit();
 	if (chg_ramp_is_stable()) {
-		if (ramp_curr && !charger_set_input_current(chgnum, ramp_curr))
+		if (ramp_curr &&
+		    !charger_set_input_current_limit(chgnum, ramp_curr))
 			CPRINTF("bq25710: stable ramp current=%d\n", ramp_curr);
 	} else {
 		CPRINTF("bq25710: ICO stall, ramp current=%d\n", ramp_curr);
@@ -661,8 +669,8 @@ const struct charger_drv bq25710_drv = {
 	.set_voltage = &bq25710_set_voltage,
 	.discharge_on_ac = &bq25710_discharge_on_ac,
 	.get_vbus_voltage = &bq25710_get_vbus_voltage,
-	.set_input_current = &bq25710_set_input_current,
-	.get_input_current = &bq25710_get_input_current,
+	.set_input_current_limit = &bq25710_set_input_current_limit,
+	.get_input_current_limit = &bq25710_get_input_current_limit,
 	.manufacturer_id = &bq25710_manufacturer_id,
 	.device_id = &bq25710_device_id,
 	.get_option = &bq25710_get_option,

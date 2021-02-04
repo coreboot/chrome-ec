@@ -13,8 +13,6 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-#define CONFIG_MKBP_USE_GPIO
-
 #define RPM_DEVIATION 1
 #define CONFIG_FAN_RPM_CUSTOM
 
@@ -27,6 +25,7 @@
 #define CONFIG_USB_MUX_PS8743
 #define CONFIG_USBC_RETIMER_TUSB544
 #define TUSB544_I2C_ADDR_FLAGS1 0x0F
+#define CONFIG_TUSB544_EQ_BY_REGISTER
 
 #define CONFIG_POWER_SIGNAL_RUNTIME_CONFIG
 

@@ -6,7 +6,7 @@
 #include "clock-f.h"
 #include "test_util.h"
 
-static volatile uint32_t rtc_fired;
+static uint32_t rtc_fired;
 static struct rtc_time_reg rtc_irq;
 static const int rtc_delay_ms = 500;
 
@@ -29,7 +29,7 @@ test_static int test_rtc_alarm(void)
 	msleep(2 * rtc_delay_ms);
 
 	/* Make sure the interrupt fired exactly once. */
-	TEST_EQ(1, atomic_read_clear(&rtc_fired), "%d");
+	TEST_EQ(1, atomic_clear(&rtc_fired), "%d");
 
 	rtc_diff_us = get_rtc_diff(&rtc, &rtc_irq);
 

@@ -179,7 +179,7 @@ void host_command_received(struct host_cmd_handler_args *args)
 		pending_args = args;
 
 		/* Wake up the task to handle the command */
-		task_set_event(TASK_ID_HOSTCMD, TASK_EVENT_CMD_PENDING, 0);
+		task_set_event(TASK_ID_HOSTCMD, TASK_EVENT_CMD_PENDING);
 		return;
 	}
 
@@ -370,38 +370,40 @@ host_packet_bad:
  */
 static const struct host_command *find_host_command(int command)
 {
-#ifdef CONFIG_HOSTCMD_SECTION_SORTED
-	const struct host_command *l, *r, *m;
-	uint32_t num;
+	if (IS_ENABLED(CONFIG_ZEPHYR)) {
+		return zephyr_find_host_command(command);
+	} else if (IS_ENABLED(CONFIG_HOSTCMD_SECTION_SORTED)) {
+		const struct host_command *l, *r, *m;
+		uint32_t num;
 
-/* Use binary search to locate host command handler */
-	l = __hcmds;
-	r = __hcmds_end - 1;
+		/* Use binary search to locate host command handler */
+		l = __hcmds;
+		r = __hcmds_end - 1;
 
-	while (1) {
-		if (l > r)
-			return NULL;
+		while (1) {
+			if (l > r)
+				return NULL;
 
-		num = r - l;
-		m = l + (num / 2);
+			num = r - l;
+			m = l + (num / 2);
 
-		if (m->command < command)
-			l = m + 1;
-		else if (m->command > command)
-			r = m - 1;
-		else
-			return m;
+			if (m->command < command)
+				l = m + 1;
+			else if (m->command > command)
+				r = m - 1;
+			else
+				return m;
+		}
+	} else {
+		const struct host_command *cmd;
+
+		for (cmd = __hcmds; cmd < __hcmds_end; cmd++) {
+			if (command == cmd->command)
+				return cmd;
+		}
+
+		return NULL;
 	}
-#else
-	const struct host_command *cmd;
-
-	for (cmd = __hcmds; cmd < __hcmds_end; cmd++) {
-		if (command == cmd->command)
-			return cmd;
-	}
-
-	return NULL;
-#endif
 }
 
 static void host_command_init(void)

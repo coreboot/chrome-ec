@@ -5,10 +5,12 @@
 
 /* USB mux high-level driver. */
 
+#include "atomic.h"
 #include "common.h"
 #include "console.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "task.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -27,9 +29,16 @@ static int enable_debug_prints;
  * Flags will reset to 0 after sysjump; This works for current flags as LPM will
  * get reset in the init method which is called during PD task startup.
  */
-static uint8_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
+static uint32_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-#define USB_MUX_FLAG_IN_LPM BIT(0) /* Device is in low power mode. */
+/* Device is in low power mode. */
+#define USB_MUX_FLAG_IN_LPM		BIT(0)
+
+/* The following bit is used to configure virtual mux in disconnect mode */
+#define USB_MUX_FLAG_DISCONNECT_LATCH	BIT(1)
+
+/* Device initialized at least once */
+#define USB_MUX_FLAG_INIT		BIT(2)
 
 enum mux_config_type {
 	USB_MUX_INIT,
@@ -54,6 +63,11 @@ static int configure_mux(int port,
 
 		if (config == USB_MUX_GET_MODE)
 			*mux_state = USB_PD_MUX_NONE;
+	}
+
+	if ((config == USB_MUX_SET_MODE && *mux_state == USB_PD_MUX_NONE) ||
+	      config == USB_MUX_INIT) {
+		usb_mux_set_disconnect_latch_flag(port, true);
 	}
 
 	/*
@@ -142,7 +156,7 @@ static void enter_low_power_mode(int port)
 	 * want know know that we tried to put the device in low power mode
 	 * so we can re-initialize the device on the next access.
 	 */
-	flags[port] |= USB_MUX_FLAG_IN_LPM;
+	atomic_or(&flags[port], USB_MUX_FLAG_IN_LPM);
 
 	/* Apply any low power customization if present */
 	configure_mux(port, USB_MUX_LOW_POWER, NULL);
@@ -167,14 +181,17 @@ void usb_mux_init(int port)
 
 	rv = configure_mux(port, USB_MUX_INIT, NULL);
 
+	if (rv == EC_SUCCESS)
+		atomic_or(&flags[port], USB_MUX_FLAG_INIT);
+
 	/*
 	 * Mux may fail initialization if it's not powered. Mark this port
 	 * as in LPM mode to try initialization again.
 	 */
 	if (rv == EC_ERROR_NOT_POWERED)
-		flags[port] |= USB_MUX_FLAG_IN_LPM;
+		atomic_or(&flags[port], USB_MUX_FLAG_IN_LPM);
 	else
-		flags[port] &= ~USB_MUX_FLAG_IN_LPM;
+		atomic_clear_bits(&flags[port], USB_MUX_FLAG_IN_LPM);
 }
 
 /*
@@ -192,6 +209,10 @@ void usb_mux_set(int port, mux_state_t mux_mode,
 	if (port >= board_get_usb_pd_port_count()) {
 		return;
 	}
+
+	/* Perform initialization if not initialized yet */
+	if (!(flags[port] & USB_MUX_FLAG_INIT))
+		usb_mux_init(port);
 
 	/* Configure USB2.0 */
 	if (IS_ENABLED(CONFIG_USB_CHARGER))
@@ -231,28 +252,51 @@ void usb_mux_set(int port, mux_state_t mux_mode,
 mux_state_t usb_mux_get(int port)
 {
 	mux_state_t mux_state;
-	bool is_low_power_mode;
 	int rv;
 
 	if (port >= board_get_usb_pd_port_count()) {
 		return USB_PD_MUX_NONE;
 	}
 
-	/* Store the status of LPM flag (low power mode) */
-	is_low_power_mode = flags[port] & USB_MUX_FLAG_IN_LPM;
+	/* Perform initialization if not initialized yet */
+	if (!(flags[port] & USB_MUX_FLAG_INIT))
+		usb_mux_init(port);
 
-	exit_low_power_mode(port);
+	if (flags[port] & USB_MUX_FLAG_IN_LPM)
+		return USB_PD_MUX_NONE;
 
 	rv = configure_mux(port, USB_MUX_GET_MODE, &mux_state);
 
-	/*
-	 * If the LPM flag was set prior to reading the mux state, re-enter the
-	 * low power mode.
-	 */
-	if (is_low_power_mode)
-		enter_low_power_mode(port);
-
 	return rv ? USB_PD_MUX_NONE : mux_state;
+}
+
+/* Get USB MUX (virtual MUX) disconnect flag */
+bool usb_mux_get_disconnect_latch_flag(int port)
+{
+	bool rv = false;
+
+	if (port >= board_get_usb_pd_port_count())
+		return rv;
+
+	if (!IS_ENABLED(CONFIG_USB_MUX_VIRTUAL))
+		return rv;
+
+	return !!(flags[port] & USB_MUX_FLAG_DISCONNECT_LATCH);
+}
+
+/* Set USB MUX (virtual MUX) disconnect flag */
+void usb_mux_set_disconnect_latch_flag(int port, bool enable)
+{
+	if (port >= board_get_usb_pd_port_count())
+		return;
+
+	if (!IS_ENABLED(CONFIG_USB_MUX_VIRTUAL))
+		return;
+
+	if (enable)
+		atomic_or(&flags[port], USB_MUX_FLAG_DISCONNECT_LATCH);
+	else
+		atomic_clear_bits(&flags[port], USB_MUX_FLAG_DISCONNECT_LATCH);
 }
 
 void usb_mux_flip(int port)
@@ -262,6 +306,10 @@ void usb_mux_flip(int port)
 	if (port >= board_get_usb_pd_port_count()) {
 		return;
 	}
+
+	/* Perform initialization if not initialized yet */
+	if (!(flags[port] & USB_MUX_FLAG_INIT))
+		usb_mux_init(port);
 
 	exit_low_power_mode(port);
 
@@ -284,6 +332,10 @@ void usb_mux_hpd_update(int port, int hpd_lvl, int hpd_irq)
 	if (port >= board_get_usb_pd_port_count()) {
 		return;
 	}
+
+	/* Perform initialization if not initialized yet */
+	if (!(flags[port] & USB_MUX_FLAG_INIT))
+		usb_mux_init(port);
 
 	for (; mux_ptr; mux_ptr = mux_ptr->next_mux)
 		if (mux_ptr->hpd_update)
@@ -351,7 +403,7 @@ static int command_typec(int argc, char **argv)
 	usb_mux_set(port, mux, mux == USB_PD_MUX_NONE ?
 				      USB_SWITCH_DISCONNECT :
 				      USB_SWITCH_CONNECT,
-			  pd_get_polarity(port));
+			  polarity_rm_dts(pd_get_polarity(port)));
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(typec, command_typec,
@@ -364,7 +416,6 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 	const struct ec_params_usb_pd_mux_info *p = args->params;
 	struct ec_response_usb_pd_mux_info *r = args->response;
 	int port = p->port;
-	const struct usb_mux *me = &usb_muxes[port];
 	mux_state_t mux_state;
 
 	if (port >= board_get_usb_pd_port_count())
@@ -375,10 +426,22 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 
 	r->flags = mux_state;
 
+	/*
+	 * Force disconnect mode if disconnect latch flag is set.
+	 * Send host event for configuring the latest mux state
+	 */
+	if (IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) &&
+	    usb_mux_get_disconnect_latch_flag(port)) {
+		r->flags = USB_PD_MUX_NONE;
+		usb_mux_set_disconnect_latch_flag(port, false);
+		args->response_size = sizeof(*r);
+		host_set_single_event(EC_HOST_EVENT_USB_MUX);
+		return EC_RES_SUCCESS;
+	}
+
 	/* Clear HPD IRQ event since we're about to inform host of it. */
 	if (IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) &&
-	    (r->flags & USB_PD_MUX_HPD_IRQ) &&
-	    (me->hpd_update == &virtual_hpd_update)) {
+	    (r->flags & USB_PD_MUX_HPD_IRQ)) {
 		usb_mux_hpd_update(port, r->flags & USB_PD_MUX_HPD_LVL, 0);
 	}
 
@@ -387,4 +450,19 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_MUX_INFO,
 		     hc_usb_pd_mux_info,
+		     EC_VER_MASK(0));
+
+static enum ec_status hc_usb_pd_mux_ack(struct host_cmd_handler_args *args)
+{
+	__maybe_unused const struct ec_params_usb_pd_mux_ack *p = args->params;
+
+	if (!IS_ENABLED(CONFIG_USB_MUX_AP_ACK_REQUEST))
+		return EC_RES_INVALID_COMMAND;
+
+	task_set_event(PD_PORT_TO_TASK_ID(p->port), PD_EVENT_AP_MUX_DONE);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_USB_PD_MUX_ACK,
+		     hc_usb_pd_mux_ack,
 		     EC_VER_MASK(0));

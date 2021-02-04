@@ -39,7 +39,7 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "temp_sensor.h"
 #include "thermistor.h"
 #include "usb_mux.h"
@@ -197,7 +197,7 @@ static void anx74xx_cable_det_handler(void)
 	 * and if in normal mode, then there is no need to trigger a tcpc reset.
 	 */
 	if (cable_det && !reset_n)
-		task_set_event(TASK_ID_PD_C0, PD_EVENT_TCPC_RESET, 0);
+		task_set_event(TASK_ID_PD_C0, PD_EVENT_TCPC_RESET);
 }
 DECLARE_DEFERRED(anx74xx_cable_det_handler);
 
@@ -803,4 +803,11 @@ void board_hibernate(void)
 	 */
 	ppc_vbus_source_enable(0, 0);
 	ppc_vbus_sink_enable(0, 1);
+
+	/*
+	 * If CCD not active, set port 0 SBU_EN=0 to avoid power leakage during
+	 * hibernation (b/175674973).
+	 */
+	if (gpio_get_level(GPIO_CCD_MODE_ODL))
+		ppc_set_sbu(0, 0);
 }

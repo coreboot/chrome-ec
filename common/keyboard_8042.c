@@ -38,6 +38,17 @@
 #define CPRINTS5(format, args...)
 #endif
 
+/*
+ * This command needs malloc to work. Could we use this instead?
+ *
+ * #define CMD_KEYBOARD_LOG IS_ENABLED(CONFIG_MALLOC)
+ */
+#ifdef CONFIG_MALLOC
+#define CMD_KEYBOARD_LOG	1
+#else
+#define CMD_KEYBOARD_LOG	0
+#endif
+
 static enum {
 	STATE_NORMAL = 0,
 	STATE_SCANCODE,
@@ -68,7 +79,7 @@ enum scancode_set_list {
  * Mutex to control write access to the to-host buffer head.  Don't need to
  * mutex the tail because reads are only done in one place.
  */
-static struct mutex to_host_mutex;
+static mutex_t to_host_mutex;
 
 /* Queue command/data to the host */
 enum {
@@ -1050,10 +1061,6 @@ static int command_typematic(int argc, char **argv)
 	ccputs("}\n");
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(typematic, command_typematic,
-			"[first] [inter]",
-			"Get/set typematic delays");
-
 
 static int command_codeset(int argc, char **argv)
 {
@@ -1073,10 +1080,6 @@ static int command_codeset(int argc, char **argv)
 	ccprintf("I8042_XLATE: %d\n", controller_ram[0] & I8042_XLATE ? 1 : 0);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(codeset, command_codeset,
-			"[set]",
-			"Get/set keyboard codeset");
-
 
 static int command_controller_ram(int argc, char **argv)
 {
@@ -1095,9 +1098,6 @@ static int command_controller_ram(int argc, char **argv)
 	ccprintf("%d = 0x%02x\n", index, controller_ram[index]);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(ctrlram, command_controller_ram,
-			"index [value]",
-			"Get/set keyboard controller RAM");
 
 static int command_keyboard_log(int argc, char **argv)
 {
@@ -1141,10 +1141,6 @@ static int command_keyboard_log(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(kblog, command_keyboard_log,
-			"[on | off]",
-			"Print or toggle keyboard event log");
-
 
 static int command_keyboard(int argc, char **argv)
 {
@@ -1160,10 +1156,6 @@ static int command_keyboard(int argc, char **argv)
 	ccprintf("Enabled: %d\n", keyboard_enabled);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(kbd, command_keyboard,
-			"[on | off]",
-			"Print or toggle keyboard info");
-
 
 static int command_8042_internal(int argc, char **argv)
 {
@@ -1208,6 +1200,24 @@ static int command_8042_internal(int argc, char **argv)
 	return EC_SUCCESS;
 }
 
+/* Zephyr only provides these as subcommands*/
+#ifndef CONFIG_ZEPHYR
+DECLARE_CONSOLE_COMMAND(typematic, command_typematic,
+			"[first] [inter]",
+			"Get/set typematic delays");
+DECLARE_CONSOLE_COMMAND(codeset, command_codeset,
+			"[set]",
+			"Get/set keyboard codeset");
+DECLARE_CONSOLE_COMMAND(ctrlram, command_controller_ram,
+			"index [value]",
+			"Get/set keyboard controller RAM");
+DECLARE_CONSOLE_COMMAND(kblog, command_keyboard_log,
+			"[on | off]",
+			"Print or toggle keyboard event log");
+DECLARE_CONSOLE_COMMAND(kbd, command_keyboard,
+			"[on | off]",
+			"Print or toggle keyboard info");
+#endif
 
 static int command_8042(int argc, char **argv)
 {
@@ -1220,7 +1230,7 @@ static int command_8042(int argc, char **argv)
 			return command_codeset(argc - 1, argv + 1);
 		else if (!strcasecmp(argv[1], "ctrlram"))
 			return command_controller_ram(argc - 1, argv + 1);
-		else if (!strcasecmp(argv[1], "kblog"))
+		else if (CMD_KEYBOARD_LOG && !strcasecmp(argv[1], "kblog"))
 			return command_keyboard_log(argc - 1, argv + 1);
 		else if (!strcasecmp(argv[1], "kbd"))
 			return command_keyboard(argc - 1, argv + 1);
@@ -1237,8 +1247,10 @@ static int command_8042(int argc, char **argv)
 		command_controller_ram(
 			sizeof(ctlram_argv) / sizeof(ctlram_argv[0]),
 			ctlram_argv);
-		ccprintf("\n- Keyboard log:\n");
-		command_keyboard_log(argc, argv);
+		if (CMD_KEYBOARD_LOG) {
+			ccprintf("\n- Keyboard log:\n");
+			command_keyboard_log(argc, argv);
+		}
 		ccprintf("\n- Keyboard:\n");
 		command_keyboard(argc, argv);
 		ccprintf("\n- Internal:\n");
@@ -1300,6 +1312,7 @@ static void keyboard_restore_state(void)
 }
 DECLARE_HOOK(HOOK_INIT, keyboard_restore_state, HOOK_PRIO_DEFAULT);
 
+#ifdef CONFIG_POWER_BUTTON
 /**
  * Handle power button changing state.
  */
@@ -1310,3 +1323,4 @@ static void keyboard_power_button(void)
 }
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, keyboard_power_button,
 	     HOOK_PRIO_DEFAULT);
+#endif

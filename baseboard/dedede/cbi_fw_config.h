@@ -19,6 +19,7 @@ enum fw_config_db {
 	DB_1C_LTE,
 	DB_1A_HDMI,
 	DB_1C,
+	DB_LTE_HDMI,
 };
 #define FW_CONFIG_DB_OFFSET			0
 #define FW_CONFIG_DB_MASK			GENMASK(3, 0)
@@ -32,6 +33,16 @@ enum fw_config_kblight_type {
 };
 #define FW_CONFIG_KB_BL_OFFSET			8
 #define FW_CONFIG_KB_BL_MASK			GENMASK(8, 8)
+
+/*
+ * Keyboard numeric pad (1 bit)
+ */
+enum fw_config_numeric_pad_type {
+	NUMERIC_PAD_ABSENT = 0,
+	NUMERIC_PAD_PRESENT = 1,
+};
+#define FW_CONFIG_KB_NUMPAD_OFFSET		9
+#define FW_CONFIG_KB_NUMPAD_MASK		GENMASK(9, 9)
 
 /*
  * Tablet Mode (1 bit)
@@ -49,6 +60,7 @@ enum fw_config_tablet_mode_type {
 enum fw_config_db get_cbi_fw_config_db(void);
 enum fw_config_kblight_type get_cbi_fw_config_kblight(void);
 enum fw_config_tablet_mode_type get_cbi_fw_config_tablet_mode(void);
+enum fw_config_numeric_pad_type get_cbi_fw_config_numeric_pad(void);
 
 int get_cbi_fw_config_keyboard(void);
 

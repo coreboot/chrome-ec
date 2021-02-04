@@ -200,26 +200,74 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 static int board_tusb544_mux_set(const struct usb_mux *me,
 				mux_state_t mux_state)
 {
+	int rv = EC_SUCCESS;
+
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_USB3_1_1,
+					TUSB544_EQ_RX_MASK,
+					TUSB544_EQ_RX_DFP_04_UFP_MINUS15);
+		if (rv)
+			return rv;
+
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_USB3_1_1,
+					TUSB544_EQ_TX_MASK,
+					TUSB544_EQ_TX_DFP_MINUS14_UFP_MINUS33);
+		if (rv)
+			return rv;
+
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_USB3_1_2,
+					TUSB544_EQ_RX_MASK,
+					TUSB544_EQ_RX_DFP_04_UFP_MINUS15);
+		if (rv)
+			return rv;
+
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_USB3_1_2,
+					TUSB544_EQ_TX_MASK,
+					TUSB544_EQ_TX_DFP_MINUS14_UFP_MINUS33);
+		if (rv)
+			return rv;
+	}
+
 	if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_DISPLAYPORT_1,
+					TUSB544_EQ_RX_MASK,
+					TUSB544_EQ_RX_DFP_61_UFP_43);
+		if (rv)
+			return rv;
+
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_DISPLAYPORT_1,
+					TUSB544_EQ_TX_MASK,
+					TUSB544_EQ_TX_DFP_61_UFP_43);
+		if (rv)
+			return rv;
+
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_DISPLAYPORT_2,
+					TUSB544_EQ_RX_MASK,
+					TUSB544_EQ_RX_DFP_61_UFP_43);
+		if (rv)
+			return rv;
+
+		rv = tusb544_i2c_field_update8(me,
+					TUSB544_REG_DISPLAYPORT_2,
+					TUSB544_EQ_TX_MASK,
+					TUSB544_EQ_TX_DFP_61_UFP_43);
+		if (rv)
+			return rv;
+
 		/* Enable IN_HPD on the DB */
 		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 1);
 	} else {
 		/* Disable IN_HPD on the DB */
 		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 0);
 	}
-	return EC_SUCCESS;
-}
-
-static int board_ps8743_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
-{
-	if (mux_state & USB_PD_MUX_DP_ENABLED)
-		/* Enable IN_HPD on the DB */
-		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 1);
-	else
-		/* Disable IN_HPD on the DB */
-		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 0);
-
 	return EC_SUCCESS;
 }
 
@@ -235,7 +283,6 @@ const struct usb_mux usbc1_ps8743 = {
 	.i2c_port = I2C_PORT_TCPC1,
 	.i2c_addr_flags = PS8743_I2C_ADDR1_FLAG,
 	.driver = &ps8743_usb_mux_driver,
-	.board_set = &board_ps8743_mux_set,
 };
 
 /*****************************************************************************
@@ -468,8 +515,6 @@ const static struct ec_thermal_config thermal_cpu = {
 	.temp_host_release = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(99),
 	},
-	.temp_fan_off = C_TO_K(105),
-	.temp_fan_max = C_TO_K(105),
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];

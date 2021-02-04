@@ -28,10 +28,10 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_USE_HOST_EVENT
 #define CONFIG_DPTF
-#define CONFIG_FLASH_SIZE 0x80000
+#define CONFIG_FLASH_SIZE_BYTES 0x80000
 #define CONFIG_FPU
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #undef  CONFIG_LID_SWITCH
 #define CONFIG_POWER_BUTTON_IGNORE_LID
 #define CONFIG_PWM
@@ -143,7 +143,7 @@
 #define CONFIG_RW_B
 #define CONFIG_RW_B_MEM_OFF		CONFIG_RO_MEM_OFF
 #undef  CONFIG_RO_SIZE
-#define CONFIG_RO_SIZE			(CONFIG_FLASH_SIZE / 4)
+#define CONFIG_RO_SIZE			(CONFIG_FLASH_SIZE_BYTES / 4)
 #undef  CONFIG_RW_SIZE
 #define CONFIG_RW_SIZE			CONFIG_RO_SIZE
 #define CONFIG_RW_A_STORAGE_OFF		CONFIG_RW_STORAGE_OFF
@@ -228,7 +228,6 @@ enum OEM_ID {
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000 /* us */
 
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY		5000   /* us */
 
 /* Board specific handlers */
 void board_reset_pd_mcu(void);

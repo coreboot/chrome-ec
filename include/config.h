@@ -18,6 +18,15 @@
 #ifndef __CROS_EC_CONFIG_H
 #define __CROS_EC_CONFIG_H
 
+/*
+ * When building for Zephyr tests, a shimmed_tasks.h header is defined
+ * to create all the HAS_TASK_* definitions.  Since those are used in
+ * config.h, we need to include that header first.
+ */
+#ifdef CONFIG_ZEPHYR
+#include "shimmed_tasks.h"
+#endif /* CONFIG_ZEPHYR */
+
 #ifdef INCLUDE_ENV_CONFIG
 /*
  * When building for an EC target, pick up the .h file which allows to
@@ -166,8 +175,8 @@
 #undef CONFIG_ACCELGYRO_SEC_ADDR_FLAGS
 
 /*
- * Define if either CONFIG_BMI_ORIENTATION_SUPPORT or
- * CONFIG_KX022_ORIENTATION_SUPPORT is set.
+ * Define if either CONFIG_BMI_ORIENTATION_SENSOR or
+ * CONFIG_KX022_ORIENTATION_SENSOR is set.
  */
 #undef CONFIG_ORIENTATION_SENSOR
 
@@ -179,9 +188,6 @@
 
 /* Which sensor body_detection use */
 #undef CONFIG_BODY_DETECTION_SENSOR
-
-/* Support custom setting of body_detection */
-#undef CONFIG_BODY_DETECTION_CUSTOM
 
 /* The max number of sampling data for 1 second */
 #undef CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE
@@ -703,8 +709,8 @@
  */
 #undef CONFIG_BOARD_VERSION_GPIO
 
-/* EC responses to a board defined I2C slave address */
-#undef CONFIG_BOARD_I2C_SLAVE_ADDR_FLAGS
+/* EC responses to a board defined I2C address */
+#undef CONFIG_BOARD_I2C_ADDR_FLAGS
 
 /*
  * The board is unable to distinguish EC reset from power-on so it should treat
@@ -1152,6 +1158,7 @@
 /* Chipset config */
 
 /* AP chipset support; pick at most one */
+#undef CONFIG_CHIPSET_ALDERLAKE		/* Intel Alderlake (x86) */
 #undef CONFIG_CHIPSET_APOLLOLAKE	/* Intel Apollolake (x86) */
 #undef CONFIG_CHIPSET_BRASWELL		/* Intel Braswell (x86) */
 #undef CONFIG_CHIPSET_CANNONLAKE	/* Intel Cannonlake (x86) */
@@ -1320,6 +1327,7 @@
 #undef  CONFIG_CMD_FORCETIME
 #undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
+#undef  CONFIG_CMD_GL3590
 #undef  CONFIG_CMD_GPIO_EXTENDED
 #undef  CONFIG_CMD_GSV
 #undef  CONFIG_CMD_GT7288
@@ -1336,6 +1344,7 @@
 #undef  CONFIG_CMD_I2C_STRESS_TEST_CHARGER
 #undef  CONFIG_CMD_I2C_STRESS_TEST_TCPC
 #define CONFIG_CMD_I2C_XFER
+#undef  CONFIG_CMD_I2C_XFER_RAW
 #define CONFIG_CMD_IDLE_STATS
 #undef  CONFIG_CMD_ILIM
 #define CONFIG_CMD_INA
@@ -1515,10 +1524,10 @@
 /* Support for EC-EC communication */
 
 /*
- * Board is master or slave in EC-EC communication.
+ * Board is client or server in EC-EC communication.
  */
-#undef CONFIG_EC_EC_COMM_MASTER
-#undef CONFIG_EC_EC_COMM_SLAVE
+#undef CONFIG_EC_EC_COMM_CLIENT
+#undef CONFIG_EC_EC_COMM_SERVER
 
 /*
  * Board support battery-related functions in EC-EC communication.
@@ -1676,6 +1685,9 @@
 /* Default debounce time for external power signal */
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 30
 
+/* Enable fake shared memory buffer, which is used by emulators. */
+#undef CONFIG_FAKE_SHMEM
+
 /*****************************************************************************/
 /* Number of cooling fans. Undef if none. */
 #undef CONFIG_FANS
@@ -1728,6 +1740,8 @@
 
 /* Base address of program memory */
 #undef CONFIG_PROGRAM_MEMORY_BASE
+/* Base address of program memory (physical address of AP) */
+#undef CONFIG_PROGRAM_MEMORY_BASE_LOAD
 
 /*
  * EC code can reside on internal or external storage. Only one of these
@@ -1756,6 +1770,13 @@
  * Some platforms need to write protect RW independently of all flash.
  */
 #undef CONFIG_FLASH_PROTECT_RW
+
+/*
+ * Enable Flash Write Protect by default. Some platforms like Servo_v4
+ * development tools do not use write protection. This enables the feature
+ * to be removed to save flash space
+ */
+#define CONFIG_CMD_FLASH_WP
 
 /*
  * Store persistent write protect for the flash inside the flash data itself.
@@ -1813,7 +1834,7 @@
 #undef CONFIG_FLASH_REGION_TYPE_COUNT
 
 /* Total size of writable flash */
-#undef CONFIG_FLASH_SIZE
+#undef CONFIG_FLASH_SIZE_BYTES
 
 /* Minimum flash write size (in bytes) */
 #undef CONFIG_FLASH_WRITE_SIZE
@@ -1834,6 +1855,8 @@
 #undef CONFIG_FP_SENSOR_FPC1025
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
+#undef CONFIG_FP_SENSOR_ELAN80
+#undef CONFIG_FP_SENSOR_ELAN515
 
 /*****************************************************************************/
 
@@ -1980,11 +2003,8 @@
 /* Sensor sampling interval for gesture recognition */
 #undef CONFIG_GESTURE_SAMPLING_INTERVAL_MS
 
-/* Which sensor to look for double tap recognition */
+/* Enable double tap support. */
 #undef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
-
-/* Use for waking up host */
-#undef CONFIG_GESTURE_SENSOR_DOUBLE_TAP_FOR_HOST
 
 /*
  * Double tap detection parameters
@@ -1997,15 +2017,19 @@
  * which to check for relatively calm periods. In between the two impulses
  * there is a minimum and maximum interstice time allowed.
  *
- * Define an acceleration threshold to dectect a tap, in mg.
+ * Define an acceleration threshold to detect a tap, in mg.
+ * Which sensor to look for double tap recognition.
+ * Use for waking up host.
  */
 #undef CONFIG_GESTURE_TAP_OUTER_WINDOW_T
 #undef CONFIG_GESTURE_TAP_INNER_WINDOW_T
 #undef CONFIG_GESTURE_TAP_MIN_INTERSTICE_T
 #undef CONFIG_GESTURE_TAP_MAX_INTERSTICE_T
 #undef CONFIG_GESTURE_TAP_THRES_MG
+#undef CONFIG_GESTURE_TAP_SENSOR
+#undef CONFIG_GESTURE_TAP_FOR_HOST
 
-/* Which sensor to look for significant motion activity */
+/* Significant motion activity */
 #undef CONFIG_GESTURE_SIGMO
 
 /*
@@ -2014,6 +2038,7 @@
  * and check for movement again with proof milli-seconds.
  */
 #undef CONFIG_GESTURE_SIGMO_PROOF_MS
+#undef CONFIG_GESTURE_SIGMO_SENSOR
 #undef CONFIG_GESTURE_SIGMO_SKIP_MS
 #undef CONFIG_GESTURE_SIGMO_THRES_MG
 
@@ -2127,10 +2152,10 @@
 #undef CONFIG_HOSTCMD_FLASH_SPI_INFO
 
 /*
- * For ECs where the host command interface is I2C, slave
+ * For ECs where the host command interface is I2C, peripheral
  * address which the EC will respond to.
  */
-#undef CONFIG_HOSTCMD_I2C_SLAVE_ADDR_FLAGS
+#undef CONFIG_HOSTCMD_I2C_ADDR_FLAGS
 
 /*
  * Accept EC host commands over the SPI slave (SPS) interface.
@@ -2166,9 +2191,6 @@
 
 /* Board supports RTC host commands */
 #undef CONFIG_HOSTCMD_RTC
-
-/* For access to VBNV on-EC battery-backed storage */
-#undef CONFIG_HOSTCMD_VBNV_CONTEXT
 
 /* EC controls the board's SKU ID and can report that to the AP */
 #undef CONFIG_HOSTCMD_SKUID
@@ -2270,6 +2292,13 @@
 #undef CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
 
 /*
+ * Compensate the elapsed time for the RTC which couldn't work in hibernate PSL
+ * after hibernation wake-up. Currently, NPCX9 supports LCT to compensate the
+ * elapsed time for the RTC.
+ */
+#undef CONFIG_HIBERNATE_PSL_COMPENSATE_RTC
+
+/*
  * Chip supports a 64-bit hardware timer and implements
  * __hw_clock_source_read64 and __hw_clock_source_set64.
  *
@@ -2301,16 +2330,16 @@
 #undef CONFIG_I2C_BUS_MAY_BE_UNPOWERED
 
 /*
- * Conservative I2C reading size per single transaction. For example, register
- * of stm32f0 and stm32l4 are limited to be 8 bits for this field.
+ * Conservative I2C transmission size per single transaction. For example,
+ * register of stm32f0 and stm32l4 are limited to be 8 bits for this field.
  */
-#define CONFIG_I2C_CHIP_MAX_READ_SIZE 255
+#define CONFIG_I2C_CHIP_MAX_TRANSFER_SIZE 255
 
 /*
  * Enable i2c_xfer() for receiving request larger than
- * CONFIG_I2C_CHIP_MAX_READ_SIZE.
+ * CONFIG_I2C_CHIP_MAX_TRANSFER_SIZE.
  */
-#undef CONFIG_I2C_XFER_LARGE_READ
+#undef CONFIG_I2C_XFER_LARGE_TRANSFER
 
 /*
  * If defined, makes i2c_xfer callback into board-provided functions before the
@@ -2321,14 +2350,14 @@
 #undef CONFIG_I2C_XFER_BOARD_CALLBACK
 
 /*
- * EC uses an I2C master interface.
+ * EC uses an I2C controller interface.
  * Note: if this is defined, i2c_init() will be called
  * automatically at board boot.
  */
-#undef CONFIG_I2C_MASTER
+#undef CONFIG_I2C_CONTROLLER
 
-/* EC uses an I2C slave interface */
-#undef CONFIG_I2C_SLAVE
+/* EC uses an I2C peripheral interface */
+#undef CONFIG_I2C_PERIPHERAL
 
 /* Defines I2C operation retry count when slave nack'd(EC_ERROR_BUSY) */
 #define CONFIG_I2C_NACK_RETRY_COUNT 0
@@ -2477,6 +2506,17 @@
 #undef CONFIG_IT83XX_FLASH_CLOCK_48MHZ
 
 /*
+ * If this option is enabled, EC will assert GPG1 pin to reset itself instead of
+ * triggering an internal reset while receiving a reset request.
+ *
+ * IMPORTANT:
+ * - Don't enable this option if board doesn't support the mechanism.
+ * - If this option is enabled, please don't declare GPG1 signal in gpio.inc to
+ *   keep its output level is low after reset.
+ */
+#undef CONFIG_IT83XX_HARD_RESET_BY_GPG1
+
+/*
  * Enable it if EC's VBAT won't go low when system's power isn't
  * presented (no battery and no AC)
  * If EC's VSTBY and VBAT(power source of BRAM) aren't connected to the same
@@ -2489,6 +2529,13 @@
 
 /* To define it, if I2C channel C and PECI used at the same time. */
 #undef CONFIG_IT83XX_SMCLK2_ON_GPC7
+
+/*
+ * Enable board to tune cc physical parameters (ex.rising, falling time).
+ * NOTE: board must define board_get_cc_tuning_parameter(enum usbpd_port port)
+ *       function.
+ */
+#undef CONFIG_IT83XX_TUNE_CC_PHY
 
 /*
  * Enable the corresponding config option, according to EC's VCC is connected
@@ -2894,6 +2941,19 @@
 #undef CONFIG_ONLINE_CALIB
 
 /*
+ * Spoof the data for online calibration. When this flag is enabled, every
+ * reading with the flag MOTIONSENSE_FLAG_IN_SPOOF_MODE will be treated as a
+ * new calibration point. This should be used in conjunction with
+ * CONFIG_ACCEL_SPOOF_MODE. To trigger an accelerometer calibration for
+ * example, enable both config flags, connect to the cr50 terminal and run:
+ * $ accelspoof id on X Y Z
+ * This will spoof a reading of (X, Y, Z) from the sensor and treat those
+ * values as the calibration result (bypassing the calibration for the given
+ * sensor ID).
+ */
+#undef CONFIG_ONLINE_CALIB_SPOOF_MODE
+
+/*
  * Duration after which an entry in the temperature cache is considered stale.
  * Defaults to 5 minutes if not set.
  */
@@ -3033,6 +3093,18 @@
  * become unreliable if temperature exceeds this limit.
  */
 #undef CONFIG_PECI_TJMAX
+
+/*
+ * Enable peripheral charge manager (e.g. NFC/WLC, WPC Qi)
+ */
+#undef CONFIG_PERIPHERAL_CHARGER
+
+/*
+ * Enable CTN730 driver
+ *
+ * CTN730 is NXP's NFC/WLC power transmitter (a.k.a. poller).
+ */
+#undef CONFIG_CTN730
 
 /*****************************************************************************/
 /* PMU config */
@@ -3516,6 +3588,12 @@
 #undef CONFIG_BASE_ATTACHED_SWITCH
 
 /*
+ * Add a virtual switch to indicate whether a nearby object is present in front
+ * of the device.
+ */
+#undef CONFIG_FRONT_PROXIMITY_SWITCH
+
+/*
  * Microchip Trace FIFO Debug Port
  */
 #undef CONFIG_MCHP_TFDP
@@ -3914,6 +3992,9 @@
  */
 #undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
+/* Support for USB PD alternate mode of Upward Facing Port */
+#undef CONFIG_USB_PD_ALT_MODE_UFP
+
 /* HPD is sent to the GPU from the EC via a GPIO */
 #undef CONFIG_USB_PD_DP_HPD_GPIO
 
@@ -4044,8 +4125,8 @@
 #undef CONFIG_USB_PD_IDENTITY_HW_VERS
 #undef CONFIG_USB_PD_IDENTITY_SW_VERS
 
-/* USB PD MCU slave address for host commands */
-#define CONFIG_USB_PD_I2C_SLAVE_ADDR_FLAGS 0x1E
+/* USB PD MCU I2C address for host commands */
+#define CONFIG_USB_PD_I2C_ADDR_FLAGS 0x1E
 
 /* Define if using internal comparator for PD receive */
 #undef CONFIG_USB_PD_INTERNAL_COMP
@@ -4215,6 +4296,17 @@
 #undef CONFIG_USB_PD_TCPM_PS8815
 
 /*
+ * Enable PS8751 custom mux driver. It was designed to make use of Low Power
+ * Mode on PS8751 TCPC/MUX chip when running as MUX only (CC lines are not
+ * connected, eg. Ampton).
+ *
+ * If your PS8751 is working in the ordinary way (as TCPC and MUX) or you don't
+ * need to take advantage of Low Power Mode when working as MUX only, standard
+ * TCPC MUX driver (CONFIG_USB_PD_TCPM_MUX) will work fine.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8751_CUSTOM_MUX_DRIVER
+
+/*
  * Defined automatically by chip and depends on chip. This guards the onboard
  * TCPM driver, but CONFIG_USB_PD_TCPM_ITE_ON_CHIP needs to be defined in
  * board.h for either of these driver to actually be included in the final
@@ -4234,8 +4326,14 @@
 #undef CONFIG_USBC_RETIMER_PS8818
 #undef CONFIG_USBC_RETIMER_TUSB544
 
+/* Enable retimer TUSB544 tune EQ setting by register  */
+#undef CONFIG_TUSB544_EQ_BY_REGISTER
+
 /* Allow run-time configuration of the Burnside Bridge driver structure */
 #undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
+
+/* Enables debug console commands for the STM32 UCPD driver */
+#undef CONFIG_STM32G4_UCPD_DEBUG
 
 /*
  * Adds an EC console command to erase the ANX7447 OCM flash.
@@ -4252,12 +4350,6 @@
  * DDI1_AUX_P signals (b/122873171)
  */
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
-
-/*
- * Use this to override the TCPCI Device ID value to be 0x0002 for
- * chip rev A1. Early A1 firmware misreports the DID as 0x0001.
- */
-#undef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 
 /*
  * Use this option if the TCPC port controller supports the optional register
@@ -4345,9 +4437,15 @@
  * then we can differentiate USB topologies by varying the HW version field
  * in the Sink and Source Capabilities Extended messages.
  *
- * To reserve a new PID, use go/usb.
+ * To reserve a new PID, use go/usb-pid.
  */
 #undef CONFIG_USB_PID
+
+/*
+ * Track overcurrent events for sinking partners coming from some component on
+ * the board.  Auto-enabled for drivers which contain support for this feature.
+ */
+#undef CONFIG_USBC_OCP
 
 /* PPC needs to be informed of CC polarity */
 #undef CONFIG_USBC_PPC_POLARITY
@@ -4398,6 +4496,13 @@
 
 /* Support VCONN swap */
 #undef CONFIG_USBC_VCONN_SWAP
+
+/*
+ * The amount of time in microseconds that the board takes to turn VCONN on or
+ * off after being directed to do so. Typically a property of the PPC. Default
+ * to 5 ms.
+ */
+#define CONFIG_USBC_VCONN_SWAP_DELAY_US 5000
 
 /* USB Binary device Object Store support */
 #undef CONFIG_USB_BOS
@@ -4450,6 +4555,8 @@
 #undef CONFIG_BC12_DETECT_PI3USB9281
 /* Number of Pericom PI3USB9281 chips present in system */
 #undef CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT
+/* The delay in ms from power off to power on for MAX14637 */
+#define CONFIG_BC12_MAX14637_DELAY_FROM_OFF_TO_ON_MS 1
 
 
 /* Enable USB serial console module. */
@@ -4479,6 +4586,15 @@
 
 /* Support USB HID keyboard backlight. */
 #undef CONFIG_USB_HID_KEYBOARD_BACKLIGHT
+
+/*
+ * Support vivaldi compatible HID keyboard.
+ * If defined, the board must implement a function board_vivaldi_keybd_config(),
+ * and define a macro CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS which is equal to
+ * board_vivaldi_keybd_config()->num_top_row_keys.
+ */
+#undef CONFIG_USB_HID_KEYBOARD_VIVALDI
+#undef CONFIG_USB_HID_KB_NUM_TOP_ROW_KEYS
 
 /* Support USB HID touchpad interface. */
 #undef CONFIG_USB_HID_TOUCHPAD
@@ -4599,6 +4715,9 @@
 /* Support the AMD FP5 USB/DP Mux */
 #undef CONFIG_USB_MUX_AMD_FP5
 
+/* Support the AMD FP6 USB/DP Mux */
+#undef CONFIG_USB_MUX_AMD_FP6
+
 /*
  * Support the Analogix ANX7440 USB Type-C Active mux with
  * Integrated Re-timers for USB3.1/DisplayPort.
@@ -4623,11 +4742,21 @@
 /* Support the Parade PS8743 Type-C Redriving Switch */
 #undef CONFIG_USB_MUX_PS8743
 
+/* Support the Texas Instrument TUSB1064 Type-C Redriving Switch (UFP) */
+#undef CONFIG_USB_MUX_TUSB1064
+
 /* 'Virtual' USB mux under host (not EC) control */
 #undef CONFIG_USB_MUX_VIRTUAL
 
 /* Enable IT5205H SBU protection switch */
 #undef CONFIG_USB_MUX_IT5205H_SBU_OVP
+
+/*
+ * Enable to inform the AP that an ACK is needed on configuring the TCSS mux.
+ * The config is enabled automatically when the board has CONFIG_USB_MUX_VIRTUAL
+ * and CONFIG_USBC_RETIMER_INTEL_BB enabled.
+ */
+#undef CONFIG_USB_MUX_AP_ACK_REQUEST
 
 /*****************************************************************************/
 /* USB GPIO config */
@@ -4861,16 +4990,6 @@
 #undef CONFIG_ISH_DW_UART
 
 /*
- * On Intel devices EC's USB-C port numbers may not be physically equal to
- * AP's USB3 & USB2 port number. Because there can be MAX 15 USB2 ports on
- * PCH and MAX 15 USB3 ports on SOC, based on the complexity of the physical
- * layout of the board, USB3 & USB2 port signals of AP are routed to respective
- * USB-C port of EC. Hence, to configure the Intel Virtual MUX, information of
- * USB3 and USB2 port numbers of the respective USB-C port is needed.
- */
-#undef CONFIG_INTEL_VIRTUAL_MUX
-
-/*
  * TEST ONLY defines (CONFIG_TEST_*)
  *
  * Used to include files for unit and other builds tests.
@@ -4917,7 +5036,12 @@
 #define CONFIG_HOST_ESPI_VW_POWER_SIGNAL
 #endif
 
-#if defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && !defined(CONFIG_HOSTCMD_ESPI)
+/*
+ * Note that in Zephyr OS, eSPI can be enabled for virtual wires
+ * without using eSPI for host commands.
+ */
+#if (!defined(CONFIG_ZEPHYR) && defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && \
+     !defined(CONFIG_HOSTCMD_ESPI))
 #error Must enable eSPI to enable virtual wires.
 #endif
 
@@ -4955,6 +5079,15 @@
 
 /******************************************************************************/
 /*
+ * If CONFIG_USBC_SS_MUX_DFP_ONLY is enabled, make sure
+ * CONFIG_USB_PD_ALT_MODE_UFP is not enabled
+ */
+#if defined(CONFIG_USBC_SS_MUX_DFP_ONLY) && defined(CONFIG_USB_PD_ALT_MODE_UFP)
+#error port cannot be UFP when CONFIG_USBC_SS_MUX_DFP_ONLY is enabled
+#endif
+
+/******************************************************************************/
+/*
  * Automatically define CONFIG_USB_PD_FRS if FRS is enabled in the TCPC or PPC
  */
 #if defined(CONFIG_USB_PD_FRS_PPC) || defined(CONFIG_USB_PD_FRS_TCPC)
@@ -4973,6 +5106,7 @@
  * PD 2.0 retires three times (for a total of 4 attempts).
  *
  * Note must be [0-3] since it must fit within 2 bits.
+ * TODO(b/175236718): Set retry count dynamically based on active spec revision.
  */
 #ifdef CONFIG_USB_PD_REV30
 #define CONFIG_PD_RETRY_COUNT 2
@@ -4989,6 +5123,27 @@
 	defined(CONFIG_USB_CTVPD) + \
 	defined(CONFIG_USB_DRP_ACC_TRYSRC) != 1
 #error Must define exactly one CONFIG_USB_ device type.
+#endif
+#endif
+
+/******************************************************************************/
+/*
+ * Ensure that CONFIG_USB_PD_TCPMV2 is not being used with charge_manager source
+ * defines, and define a default number of 3.0 A ports if not selected.  Note
+ * that the functionality of this default of 1 is equivalent to both previous
+ * defines, which only ever allocated one 3.0 A port.
+ */
+#ifdef CONFIG_USB_PD_TCPMV2
+#if defined(CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT) || \
+	defined(CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
+#error Define CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT is limited to TCPMv1
+#endif
+#ifndef CONFIG_USB_PD_3A_PORTS
+#define CONFIG_USB_PD_3A_PORTS	1
+#endif
+/* USB4 support requires at least one port providing 3.0 A */
+#if defined(CONFIG_USB_PD_USB4) && CONFIG_USB_PD_3A_PORTS == 0
+#error USB4 support requires at least one 3.0 A port
 #endif
 #endif
 
@@ -5197,6 +5352,17 @@
 #endif
 
 /*****************************************************************************/
+/* Define CONFIG_USBC_OCP if a component can detect overcurrent */
+#if defined(CONFIG_USBC_PPC_AOZ1380) || \
+	defined(CONFIG_USBC_PPC_NX20P3481) || \
+	defined(CONFIG_USBC_PPC_NX20P3483) || \
+	defined(CONFIG_USBC_PPC_SN5S330) || \
+	defined(CONFIG_USBC_PPC_SYV682X)  || \
+	defined(CONFIG_CHARGER_SM5803)
+#define CONFIG_USBC_OCP
+#endif
+
+/*****************************************************************************/
 /*
  * Define CONFIG_USB_PD_VBUS_MEASURE_CHARGER if the charger on the board
  * supports VBUS measurement.
@@ -5208,6 +5374,10 @@
 	defined(CONFIG_CHARGER_BQ25710) || \
 	defined(CONFIG_CHARGER_ISL9241)
 #define CONFIG_USB_PD_VBUS_MEASURE_CHARGER
+
+#ifdef CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
+#error CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT defined, but charger can measure
+#endif
 #endif
 
 /*****************************************************************************/
@@ -5262,14 +5432,14 @@
  * Define derived configuration options for EC-EC communication
  */
 #ifdef CONFIG_EC_EC_COMM_BATTERY
-#ifdef CONFIG_EC_EC_COMM_MASTER
-#define CONFIG_EC_EC_COMM_BATTERY_MASTER
+#ifdef CONFIG_EC_EC_COMM_CLIENT
+#define CONFIG_EC_EC_COMM_BATTERY_CLIENT
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 2
 #endif
 
-#ifdef CONFIG_EC_EC_COMM_SLAVE
-#define CONFIG_EC_EC_COMM_BATTERY_SLAVE
+#ifdef CONFIG_EC_EC_COMM_SERVER
+#define CONFIG_EC_EC_COMM_BATTERY_SERVER
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 1
 #endif
@@ -5319,6 +5489,7 @@
 
 #ifndef HAS_TASK_CHIPSET
 #undef CONFIG_AP_HANG_DETECT
+#undef CONFIG_CHIPSET_ALDERLAKE
 #undef CONFIG_CHIPSET_APOLLOLAKE
 #undef CONFIG_CHIPSET_BRASWELL
 #undef CONFIG_CHIPSET_CANNONLAKE
@@ -5436,7 +5607,8 @@
 #endif
 
 #if defined(CONFIG_CHIPSET_JASPERLAKE) || \
-	defined(CONFIG_CHIPSET_TIGERLAKE)
+	defined(CONFIG_CHIPSET_TIGERLAKE) || \
+	defined(CONFIG_CHIPSET_ALDERLAKE)
 #define CONFIG_CHIPSET_ICELAKE
 #endif
 
@@ -5560,6 +5732,14 @@
 #define CONFIG_CHIP_DATA_IN_INIT_ROM
 #endif
 #endif /* CONFIG_CHIP_INIT_ROM_REGION */
+
+/*
+ * By default, enable a request for an ACK from AP, on setting the mux, if the
+ * board supports Burnside Bridge retimer.
+ */
+#if defined(CONFIG_USBC_RETIMER_INTEL_BB) && defined(CONFIG_USB_MUX_VIRTUAL)
+#define CONFIG_USB_MUX_AP_ACK_REQUEST
+#endif /* CONFIG_USBC_RETIMER_INTEL_BB  */
 
 /*****************************************************************************/
 
@@ -5798,16 +5978,68 @@
 #ifndef CONFIG_BODY_DETECTION_SENSOR
 #error CONFIG_BODY_DETECTION_SENSOR must be defined to use body detection
 #endif /* ifndef(CONFIG_BODY_DETECTION_SENSOR) */
-/* Use default setting if CONFIG_BODY_DETECTION_CUSTOM is not set. */
-#ifndef CONFIG_BODY_DETECTION_CUSTOM
+
+#ifndef CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE
 #define CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE     250 /* max sensor odr (Hz) */
+#endif
+#ifndef CONFIG_BODY_DETECTION_VAR_THRESHOLD
 #define CONFIG_BODY_DETECTION_VAR_THRESHOLD       550 /* (mm/s^2)^2 */
+#endif
+#ifndef CONFIG_BODY_DETECTION_CONFIDENCE_DELTA
 #define CONFIG_BODY_DETECTION_CONFIDENCE_DELTA    525 /* (mm/s^2)^2 */
+#endif
+#ifndef CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR
 #define CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR    120 /* % */
+#endif
+#ifndef CONFIG_BODY_DETECTION_ON_BODY_CON
 #define CONFIG_BODY_DETECTION_ON_BODY_CON         50  /* % */
+#endif
+#ifndef CONFIG_BODY_DETECTION_OFF_BODY_CON
 #define CONFIG_BODY_DETECTION_OFF_BODY_CON        10  /* % */
+#endif
+#ifndef CONFIG_BODY_DETECTION_STATIONARY_DURATION
 #define CONFIG_BODY_DETECTION_STATIONARY_DURATION 15  /* second */
-#endif /* ifndef(CONFIG_BODY_DETECTION_CUSTOM) */
+#endif
+
+#else /* CONFIG_BODY_DETECTION */
+#ifdef CONFIG_BODY_DETECTION_SENSOR
+#error "Unexpected body detection property set"
+#else
+#define CONFIG_BODY_DETECTION_SENSOR 0
+#endif
 #endif /* CONFIG_BODY_DETECTION */
+
+/*
+ * Set parameters to dummy values to use IS_ENABLED().
+ * If a parameter is already set, it will trigger a compilatin error.
+ */
+
+/* To be able to use IS_ENABLED(CONFIG_GESTURE_SENSOR_DOUBLE_TAP) */
+#ifndef CONFIG_GESTURE_SENSOR_DOUBLE_TAP
+#define CONFIG_GESTURE_TAP_THRES_MG 0
+#define CONFIG_GESTURE_TAP_MAX_INTERSTICE_T 0
+#define CONFIG_GESTURE_TAP_SENSOR 0
+#endif /* CONFIG_GESTURE_SENSOR_DOUBLE_TAP */
+
+#ifndef CONFIG_ACCEL_FIFO
+#define CONFIG_ACCEL_FIFO_SIZE 0
+#endif
+
+#ifndef CONFIG_GESTURE_DETECTION
+#define CONFIG_GESTURE_DETECTION_MASK 0
+#endif /* CONFIG_GESTURE_DETECTION */
+
+#ifndef CONFIG_GESTURE_SIGMO
+#define CONFIG_GESTURE_SIGMO_SENSOR 0
+#endif /* CONFIG_GESTURE_SIGMO */
+
+#ifndef CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_SENSOR_BASE 0
+#define CONFIG_LID_ANGLE_SENSOR_LID 0
+#endif /* CONFIG_LID_ANGLE */
+
+#ifndef CONFIG_ALS
+#define ALS_COUNT 0
+#endif /* CONFIG_ALS */
 
 #endif  /* __CROS_EC_CONFIG_H */

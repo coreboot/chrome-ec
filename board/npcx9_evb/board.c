@@ -10,6 +10,7 @@
 #include "backlight.h"
 #include "chipset.h"
 #include "common.h"
+#include "driver/temp_sensor/tmp112.h"
 #include "extpower.h"
 #include "fan.h"
 #include "fan_chip.h"
@@ -80,6 +81,13 @@ const struct fan_t fans[] = {
 BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
 
 /******************************************************************************/
+/* Temperature sensor. */
+const struct temp_sensor_t temp_sensors[] = {
+	{ "System", TEMP_SENSOR_TYPE_BOARD, tmp112_get_val, 0 },
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
+
+/******************************************************************************/
 /* MFT channels. These are logically separate from pwm_channels. */
 const struct mft_t mft_channels[] = {
 	[MFT_CH_0] = { NPCX_MFT_MODULE_1, TCKC_LFCLK, PWM_CH_FAN},
@@ -96,13 +104,6 @@ const struct i2c_port_t i2c_ports[] = {
 	{"master7-0", NPCX_I2C_PORT7_0, 100, GPIO_I2C7_SCL0, GPIO_I2C7_SDA0},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
-
-/******************************************************************************/
-/* SPI devices */
-const struct spi_device_t spi_devices[] = {
-	{ CONFIG_SPI_FLASH_PORT, 0, GPIO_SPI_CS_L},
-};
-const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 
 /******************************************************************************/
 /* Wake-up pins for hibernate */

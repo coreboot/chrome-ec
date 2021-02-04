@@ -11,7 +11,7 @@
 #include "common.h"
 #include "compile_time_macros.h"
 
-#define __ram_code __attribute__((section(".ram_code")))
+#define __ram_code __attribute__((section(__RAM_CODE_SECTION_NAME)))
 
 /* IRQ numbers */
 /* Group 0 */
@@ -991,6 +991,7 @@ enum clock_gate_offsets {
 #define IT83XX_GCTRL_EPLR         REG8(IT83XX_GCTRL_BASE+0x37)
 #define IT83XX_GCTRL_IVTBAR       REG8(IT83XX_GCTRL_BASE+0x41)
 #define IT83XX_GCTRL_MCCR2        REG8(IT83XX_GCTRL_BASE+0x44)
+#define IT83XX_GCTRL_PIN_MUX0     REG8(IT83XX_GCTRL_BASE+0x46)
 #define IT83XX_DLM14_ENABLE       BIT(5)
 #define IT83XX_GCTRL_SSCR         REG8(IT83XX_GCTRL_BASE+0x4A)
 #define IT83XX_GCTRL_ETWDUARTCR   REG8(IT83XX_GCTRL_BASE+0x4B)
@@ -999,6 +1000,7 @@ enum clock_gate_offsets {
 /* bit[0] = 0 or 1 : disable or enable ETWD hardware reset */
 #define ETWD_HW_RST_EN            BIT(0)
 #define IT83XX_GCTRL_RVILMCR0     REG8(IT83XX_GCTRL_BASE+0x5D)
+#define ILMCR_ILM0_ENABLE         BIT(0)
 #define ILMCR_ILM2_ENABLE         BIT(2)
 #define IT83XX_GCTRL_EWPR0PFH(i)  REG8(IT83XX_GCTRL_BASE+0x60+i)
 #define IT83XX_GCTRL_EWPR0PFD(i)  REG8(IT83XX_GCTRL_BASE+0xA0+i)
@@ -1284,6 +1286,9 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SMFI_ECINDAR3    REG8(IT83XX_SMFI_BASE+0x3E)
 #define EC_INDIRECT_READ_INTERNAL_FLASH BIT(6)
 #define IT83XX_SMFI_ECINDDR     REG8(IT83XX_SMFI_BASE+0x3F)
+#define IT83XX_SMFI_SCAR0L      REG8(IT83XX_SMFI_BASE+0x40)
+#define IT83XX_SMFI_SCAR0M      REG8(IT83XX_SMFI_BASE+0x41)
+#define IT83XX_SMFI_SCAR0H      REG8(IT83XX_SMFI_BASE+0x42)
 #define IT83XX_SMFI_SCAR2L      REG8(IT83XX_SMFI_BASE+0x46)
 #define IT83XX_SMFI_SCAR2M      REG8(IT83XX_SMFI_BASE+0x47)
 #define IT83XX_SMFI_SCAR2H      REG8(IT83XX_SMFI_BASE+0x48)
@@ -1320,9 +1325,11 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_RXF1OC          BIT(3)
 #define IT83XX_SPI_RXFAR           BIT(0)
 #define IT83XX_SPI_IMR          REG8(IT83XX_SPI_BASE+0x04)
+#define IT83XX_SPI_RX_FIFO_FULL    BIT(7)
 #define IT83XX_SPI_RX_REACH        BIT(5)
 #define IT83XX_SPI_EDIM            BIT(2)
 #define IT83XX_SPI_ISR          REG8(IT83XX_SPI_BASE+0x05)
+#define IT83XX_SPI_TXFSR        REG8(IT83XX_SPI_BASE+0x06)
 #define IT83XX_SPI_ENDDETECTINT    BIT(2)
 #define IT83XX_SPI_RXFSR        REG8(IT83XX_SPI_BASE+0x07)
 #define IT83XX_SPI_RXFFSM          (BIT(4) | BIT(3))
@@ -1344,6 +1351,8 @@ REG8(IT83XX_PMC_BASE + (ch > LPC_PM2 ? 5 : 8) + (ch << 4))
 #define IT83XX_SPI_TCCB0        REG8(IT83XX_SPI_BASE+0x1A)
 #define IT83XX_SPI_TCCB1        REG8(IT83XX_SPI_BASE+0x1B)
 #define IT83XX_SPI_HPR2         REG8(IT83XX_SPI_BASE+0x1E)
+#define IT83XX_SPI_EMMCBMR      REG8(IT83XX_SPI_BASE+0x21)
+#define IT83XX_SPI_EMMCABM         BIT(1) /* eMMC Alternative Boot Mode */
 #define IT83XX_SPI_RX_VLISMR    REG8(IT83XX_SPI_BASE+0x26)
 #define IT83XX_SPI_RVLIM           BIT(0)
 #define IT83XX_SPI_RX_VLISR     REG8(IT83XX_SPI_BASE+0x27)
@@ -1440,13 +1449,8 @@ enum bram_indices {
 	BRAM_IDX_SCRATCHPAD1  = 9,
 	BRAM_IDX_SCRATCHPAD2  = 0xa,
 	BRAM_IDX_SCRATCHPAD3  = 0xb,
-	/* index 0xc ~ 0xf are reserved */
 
-	/* NVCONTEXT uses 16 bytes */
-	BRAM_IDX_NVCONTEXT     = 0x10,
-	BRAM_IDX_NVCONTEXT_END = 0x1F,
-
-	/* offset 0x20 ~ 0x7b are reserved for future use. */
+	/* offset 0x0c ~ 0x7b are reserved for future use. */
 
 	/* This field is used to indicate BRAM is valid or not. */
 	BRAM_IDX_VALID_FLAGS0  = 0x7c,

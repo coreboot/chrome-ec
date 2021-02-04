@@ -11,7 +11,7 @@
 #include "i2c.h"
 #include "ioexpander.h"
 #include "nct38xx.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 
 #define CPRINTF(format, args...) cprintf(CC_GPIO, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_GPIO, format, ## args)
@@ -420,7 +420,7 @@ int nct38xx_ioex_event_handler(int ioex)
 
 			if (ioex == g->ioex && i == g->port &&
 						(pending & g->mask)) {
-				ioex_irq_handlers[j](j);
+				ioex_irq_handlers[j](j + IOEX_SIGNAL_START);
 				pending &= ~g->mask;
 				if (!pending)
 					break;

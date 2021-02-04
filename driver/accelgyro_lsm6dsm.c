@@ -67,9 +67,7 @@ static inline enum dev_fifo get_fifo_type(const struct motion_sensor_t *s)
 	static enum dev_fifo map[] = {
 		FIFO_DEV_ACCEL,
 		FIFO_DEV_GYRO,
-#ifdef CONFIG_LSM6DSM_SEC_I2C
 		FIFO_DEV_MAG
-#endif /* CONFIG_LSM6DSM_SEC_I2C */
 	};
 	return map[s->type];
 }
@@ -225,40 +223,44 @@ static int fifo_enable(const struct motion_sensor_t *accel)
 		      LSM6DSM_FIFO_CTRL3_ADDR,
 		      (decimators[FIFO_DEV_GYRO] << LSM6DSM_FIFO_DEC_G_OFF) |
 		      (decimators[FIFO_DEV_ACCEL] << LSM6DSM_FIFO_DEC_XL_OFF));
-#ifdef CONFIG_LSM6DSM_SEC_I2C
-	st_raw_write8(accel->port, accel->i2c_spi_addr_flags,
-		      LSM6DSM_FIFO_CTRL4_ADDR,
-		      decimators[FIFO_DEV_MAG]);
+	if (IS_ENABLED(CONFIG_LSM6DSM_SEC_I2C)) {
+		st_raw_write8(accel->port, accel->i2c_spi_addr_flags,
+				LSM6DSM_FIFO_CTRL4_ADDR,
+				decimators[FIFO_DEV_MAG]);
 
-	/*
-	 * FIFO ODR is limited by odr of gyro or accel.
-	 * If we are sampling magnetometer faster than gyro or accel,
-	 * bump up ODR of accel. Thanks to decimation we will still measure at
-	 * the specified ODR.
-	 * Contrary to gyroscope, sampling faster will not affect measurements.
-	 * Set the ODR behind the back of set/get_data_rate.
-	 *
-	 * First samples after ODR changes must be thrown out [See
-	 * AN4987, section 3.9].
-	 * When increasing accel ODR, the FIFO is going to drop samples,
-	 * - except the first one after ODR change.
-	 * When decreasing accel ODR, we don't need to drop sample if
-	 * frequency is less than 52Hz.
-	 * At most, we need to drop one sample, but Android requirement specify
-	 * that chaning one sensor ODR should not affect other sensors.
-	 * Leave the bad sample alone, it will be a single glitch in the
-	 * accelerometer data stream.
-	 */
-	if (max_odr > MAX(odrs[FIFO_DEV_ACCEL], odrs[FIFO_DEV_GYRO])) {
-		st_write_data_with_mask(accel, LSM6DSM_ODR_REG(accel->type),
+		/*
+		 * FIFO ODR is limited by odr of gyro or accel.
+		 * If we are sampling magnetometer faster than gyro or accel,
+		 * bump up ODR of accel. Thanks to decimation we will still
+		 * measure at the specified ODR.
+		 * Contrary to gyroscope, sampling faster will not affect
+		 * measurements.
+		 * Set the ODR behind the back of set/get_data_rate.
+		 *
+		 * First samples after ODR changes must be thrown out [See
+		 * AN4987, section 3.9].
+		 * When increasing accel ODR, the FIFO is going to drop samples,
+		 * - except the first one after ODR change.
+		 * When decreasing accel ODR, we don't need to drop sample if
+		 * frequency is less than 52Hz.
+		 * At most, we need to drop one sample, but Android requirement
+		 * specify that changing one sensor ODR should not affect other
+		 * sensors.
+		 * Leave the bad sample alone, it will be a single glitch in the
+		 * accelerometer data stream.
+		 */
+		if (max_odr > MAX(odrs[FIFO_DEV_ACCEL], odrs[FIFO_DEV_GYRO])) {
+			st_write_data_with_mask(accel,
+				LSM6DSM_ODR_REG(accel->type),
 				LSM6DSM_ODR_MASK,
 				LSM6DSM_ODR_TO_REG(max_odr));
-	} else {
-		st_write_data_with_mask(accel, LSM6DSM_ODR_REG(accel->type),
+		} else {
+			st_write_data_with_mask(accel,
+				LSM6DSM_ODR_REG(accel->type),
 				LSM6DSM_ODR_MASK,
 				LSM6DSM_ODR_TO_REG(odrs[FIFO_DEV_ACCEL]));
+		}
 	}
-#endif /* CONFIG_MAG_LSM6DSM_LIS2MDL */
 	/*
 	 * After ODR and decimation values are set, continuous mode can be
 	 * enabled
@@ -347,13 +349,11 @@ static void push_fifo_data(struct motion_sensor_t *accel, uint8_t *fifo,
 			axis = s->raw_xyz;
 
 			/* Apply precision, sensitivity and rotation. */
-#ifdef CONFIG_MAG_LSM6DSM_LIS2MDL
-			if (s->type == MOTIONSENSE_TYPE_MAG) {
+			if (IS_ENABLED(CONFIG_MAG_LSM6DSM_LIS2MDL) &&
+			    (s->type == MOTIONSENSE_TYPE_MAG)) {
 				lis2mdl_normalize(s, axis, fifo);
 				rotate(axis, *s->rot_standard_ref, axis);
-			} else
-#endif
-			{
+			} else {
 				st_normalize(s, axis, fifo);
 			}
 
@@ -450,8 +450,7 @@ static void handle_interrupt_for_fifo(uint32_t ts)
 	if (IS_ENABLED(CONFIG_ACCEL_FIFO) &&
 	    time_after(ts, last_interrupt_timestamp))
 		last_interrupt_timestamp = ts;
-	task_set_event(TASK_ID_MOTIONSENSE,
-		       CONFIG_ACCEL_LSM6DSM_INT_EVENT, 0);
+	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_ACCEL_LSM6DSM_INT_EVENT);
 }
 
 /**
@@ -514,11 +513,10 @@ __maybe_unused static int irq_handler(
  * @rnd: Round up/down flag
  * Note: Range is sensitivity/gain for speed purpose
  */
-static int set_range(const struct motion_sensor_t *s, int range, int rnd)
+static int set_range(struct motion_sensor_t *s, int range, int rnd)
 {
 	int err;
 	uint8_t ctrl_reg, reg_val;
-	struct stprivate_data *data = s->drv_data;
 	int newrange = range;
 
 	switch (s->type) {
@@ -551,22 +549,9 @@ static int set_range(const struct motion_sensor_t *s, int range, int rnd)
 	err = st_write_data_with_mask(s, ctrl_reg, LSM6DSM_RANGE_MASK, reg_val);
 	if (err == EC_SUCCESS)
 		/* Save internally gain for speed optimization. */
-		data->base.range = newrange;
+		s->current_range = newrange;
 	mutex_unlock(s->mutex);
 	return err;
-}
-
-/**
- * get_range - get full scale range
- * @s: Motion sensor pointer
- *
- * For mag range is fixed to LIS2MDL_RANGE by hardware
- */
-static int get_range(const struct motion_sensor_t *s)
-{
-	struct stprivate_data *data = s->drv_data;
-
-	return data->base.range;
 }
 
 /**
@@ -609,12 +594,12 @@ int lsm6dsm_set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 			return EC_RES_INVALID_PARAM;
 	}
 
-#ifdef CONFIG_MAG_LSM6DSM_LIS2MDL
 	/*
 	 * TODO(b:110143516) Improve data rate selection:
 	 * Sensor is always running at 100Hz, even when not used.
 	 */
-	if (s->type == MOTIONSENSE_TYPE_MAG) {
+	if (IS_ENABLED(CONFIG_MAG_LSM6DSM_LIS2MDL) &&
+	    (s->type == MOTIONSENSE_TYPE_MAG)) {
 		struct mag_cal_t *cal = LIS2MDL_CAL(s);
 
 		init_mag_cal(cal);
@@ -631,9 +616,7 @@ int lsm6dsm_set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 			cal->batch_size = 0;
 		CPRINTS("Batch size: %d", cal->batch_size);
 		mutex_lock(s->mutex);
-	} else
-#endif
-	{
+	} else {
 		mutex_lock(s->mutex);
 		ctrl_reg = LSM6DSM_ODR_REG(s->type);
 		ret = st_write_data_with_mask(s, ctrl_reg, LSM6DSM_ODR_MASK,
@@ -718,7 +701,7 @@ static int read(const struct motion_sensor_t *s, intv3_t v)
 	return EC_SUCCESS;
 }
 
-static int init(const struct motion_sensor_t *s)
+static int init(struct motion_sensor_t *s)
 {
 	int ret = 0, tmp;
 	struct stprivate_data *data = s->drv_data;
@@ -767,37 +750,37 @@ static int init(const struct motion_sensor_t *s)
 		if (ret != EC_SUCCESS)
 			goto err_unlock;
 
-#ifdef CONFIG_LSM6DSM_SEC_I2C
-		/*
-		 * Reboot to reload memory content as pass-through mode can get
-		 * stuck.
-		 * Direct to the AN: See "AN4987 - LSM6DSM: always-on 3D
-		 * accelerometer and 3D gyroscope".
-		 */
+		if (IS_ENABLED(CONFIG_LSM6DSM_SEC_I2C)) {
+			/*
+			 * Reboot to reload memory content as pass-through mode
+			 * can get stuck.
+			 * Direct to the AN: See "AN4987 - LSM6DSM: always-on 3D
+			 * accelerometer and 3D gyroscope".
+			 */
 
-		/* Power ON Accel. */
-		ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
-				    ctrl_reg, reg_val);
-		if (ret != EC_SUCCESS)
-			goto err_unlock;
+			/* Power ON Accel. */
+			ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+					ctrl_reg, reg_val);
+			if (ret != EC_SUCCESS)
+				goto err_unlock;
 
-		ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
-				    LSM6DSM_CTRL3_ADDR, LSM6DSM_BOOT);
-		if (ret != EC_SUCCESS)
-			goto err_unlock;
+			ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+					LSM6DSM_CTRL3_ADDR, LSM6DSM_BOOT);
+			if (ret != EC_SUCCESS)
+				goto err_unlock;
 
-		/*
-		 * Refer to AN4987, wait 15ms for accelerometer to doing full
-		 * reboot.
-		 */
-		msleep(15);
+			/*
+			 * Refer to AN4987, wait 15ms for accelerometer to doing
+			 * full reboot.
+			 */
+			msleep(15);
 
-		/* Power OFF Accel. */
-		ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
-				    ctrl_reg, 0);
-		if (ret != EC_SUCCESS)
-			goto err_unlock;
-#endif
+			/* Power OFF Accel. */
+			ret = st_raw_write8(s->port, s->i2c_spi_addr_flags,
+					ctrl_reg, 0);
+			if (ret != EC_SUCCESS)
+				goto err_unlock;
+		}
 
 		/*
 		 * Output data not updated until have been read.
@@ -817,11 +800,10 @@ static int init(const struct motion_sensor_t *s)
 				goto err_unlock;
 		}
 
-#ifdef CONFIG_ACCEL_INTERRUPTS
-		ret = config_interrupt(s);
+		if (IS_ENABLED(CONFIG_ACCEL_INTERRUPTS))
+			ret = config_interrupt(s);
 		if (ret != EC_SUCCESS)
 			goto err_unlock;
-#endif /* CONFIG_ACCEL_INTERRUPTS */
 
 		mutex_unlock(s->mutex);
 	}
@@ -855,7 +837,6 @@ const struct accelgyro_drv lsm6dsm_drv = {
 	.init = init,
 	.read = read,
 	.set_range = set_range,
-	.get_range = get_range,
 	.get_resolution = st_get_resolution,
 	.set_data_rate = lsm6dsm_set_data_rate,
 	.get_data_rate = st_get_data_rate,

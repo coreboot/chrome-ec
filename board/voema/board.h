@@ -25,20 +25,15 @@
 #define CONFIG_POWER_PP5000_CONTROL
 
 /* LED defines */
-#define CONFIG_LED_PWM
-/* Although there are 2 LEDs, they are both controlled by the same lines. */
-#define CONFIG_LED_PWM_COUNT 1
+#define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensors */
 /* BMA253 accelerometer in base */
 #define CONFIG_ACCEL_BMA255
-
-/* BMI260 accel/gyro in base */
-#define CONFIG_ACCELGYRO_BMI260
-#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* TCS3400 ALS */
 #define CONFIG_ALS
@@ -49,7 +44,7 @@
 
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+	(BIT(LID_ACCEL) | BIT(CLEAR_ALS) | BIT(BASE_ACCEL))
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -59,21 +54,9 @@
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_PORT_MAX_COUNT			2
 
-/*
- * USB-C port's USB2 & USB3 mapping from schematics
- * USB2 numbering on PCH - 1 to n
- * USB3 numbering on AP - 0 to n (PMC's USB3 numbering for MUX
- * configuration is - 1 to n hence add +1)
- */
-#define USBC_PORT_0_USB2_NUM	9
-#define USBC_PORT_0_USB3_NUM	1
-#define USBC_PORT_1_USB2_NUM	4
-#define USBC_PORT_1_USB3_NUM	2
-
 /* TODO: b/144165680 - measure and check these values on Volteer */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
@@ -87,27 +70,30 @@
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
 
-/* Enabling USB4 mode */
-#define CONFIG_USB_PD_USB4
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
-
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USBC PPC*/
-#define CONFIG_USBC_PPC_SN5S330		/* USBC port C0 */
-#define CONFIG_USBC_PPC_SYV682X		/* USBC port C1 */
+#define CONFIG_USBC_PPC_SYV682X		/* USBC port C0/C1 */
+#undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
+#undef CONFIG_USB_PD_TCPM_TUSB422
+#undef CONFIG_USB_MUX_RUNTIME_CONFIG
 
 /* BC 1.2 */
 
 /* Volume Button feature */
 
 /* Fan features */
+#undef CONFIG_FANS
 
 /* charger defines */
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/* Retimer */
+#undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -153,7 +139,7 @@
 #define I2C_PORT_CHARGER	I2C_PORT_EEPROM
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 
 
 #ifndef __ASSEMBLER__
@@ -163,15 +149,11 @@
 
 enum battery_type {
 	BATTERY_LGC011,
+	BATTERY_PANASONIC_AP15O5L,
 	BATTERY_TYPE_COUNT,
 };
 
 enum pwm_channel {
-	PWM_CH_LED1_BLUE = 0,
-	PWM_CH_LED2_GREEN,
-	PWM_CH_LED3_RED,
-	PWM_CH_LED4_SIDESEL,
-	PWM_CH_FAN,
 	PWM_CH_KBLIGHT,
 	PWM_CH_COUNT
 };
@@ -179,7 +161,6 @@ enum pwm_channel {
 enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
-	BASE_GYRO,
 	CLEAR_ALS,
 	RGB_ALS,
 	SENSOR_COUNT,

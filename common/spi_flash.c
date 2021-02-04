@@ -153,7 +153,7 @@ int spi_flash_read(uint8_t *buf_usr, unsigned int offset, unsigned int bytes)
 {
 	int i, read_size, ret, spi_addr;
 	uint8_t cmd[4];
-	if (offset + bytes > CONFIG_FLASH_SIZE)
+	if (offset + bytes > CONFIG_FLASH_SIZE_BYTES)
 		return EC_ERROR_INVAL;
 	cmd[0] = SPI_FLASH_READ;
 	for (i = 0; i < bytes; i += read_size) {
@@ -227,7 +227,7 @@ int spi_flash_erase(unsigned int offset, unsigned int bytes)
 	int rv = EC_SUCCESS;
 
 	/* Invalid input */
-	if (offset + bytes > CONFIG_FLASH_SIZE)
+	if (offset + bytes > CONFIG_FLASH_SIZE_BYTES)
 		return EC_ERROR_INVAL;
 
 	/* Not aligned to sector (4kb) */
@@ -280,7 +280,7 @@ int spi_flash_write(unsigned int offset, unsigned int bytes,
 	int rv, write_size;
 
 	/* Invalid input */
-	if (!data || offset + bytes > CONFIG_FLASH_SIZE ||
+	if (!data || offset + bytes > CONFIG_FLASH_SIZE_BYTES ||
 	    bytes > SPI_FLASH_MAX_WRITE_SIZE)
 		return EC_ERROR_INVAL;
 
@@ -435,7 +435,8 @@ int spi_flash_check_protect(unsigned int offset, unsigned int bytes)
 	int rv = EC_SUCCESS;
 
 	/* Invalid value */
-	if (sr1 == 0xff || sr2 == 0xff || offset + bytes > CONFIG_FLASH_SIZE)
+	if (sr1 == 0xff || sr2 == 0xff ||
+	    offset + bytes > CONFIG_FLASH_SIZE_BYTES)
 		return EC_ERROR_INVAL;
 
 	/* Compute current protect range */
@@ -466,7 +467,8 @@ int spi_flash_set_protect(unsigned int offset, unsigned int bytes)
 	uint8_t sr2 = spi_flash_get_status2();
 
 	/* Invalid values */
-	if (sr1 == 0xff || sr2 == 0xff || offset + bytes > CONFIG_FLASH_SIZE)
+	if (sr1 == 0xff || sr2 == 0xff ||
+	    offset + bytes > CONFIG_FLASH_SIZE_BYTES)
 		return EC_ERROR_INVAL;
 
 	/* Compute desired protect range */
@@ -483,7 +485,8 @@ static int command_spi_flashinfo(int argc, char **argv)
 	uint8_t unique[8];
 	int rv;
 
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	/* TODO(tomhughes): use board function to get devices. */
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	/* Wait for previous operation to complete */
 	rv = spi_flash_wait();
@@ -535,7 +538,7 @@ static int command_spi_flasherase(int argc, char **argv)
 	if (rv)
 		return rv;
 
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	/* Chip has protection */
 	if (spi_flash_check_protect(offset, bytes))
@@ -560,7 +563,7 @@ static int command_spi_flashwrite(int argc, char **argv)
 	if (rv)
 		return rv;
 
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	/* Chip has protection */
 	if (spi_flash_check_protect(offset, bytes))
@@ -605,10 +608,10 @@ static int command_spi_flashread(int argc, char **argv)
 	if (rv)
 		return rv;
 
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	/* Can't read past size of memory */
-	if (offset + bytes > CONFIG_FLASH_SIZE)
+	if (offset + bytes > CONFIG_FLASH_SIZE_BYTES)
 		return EC_ERROR_INVAL;
 
 	/* Wait for previous operation to complete */
@@ -653,7 +656,7 @@ DECLARE_CONSOLE_COMMAND(spi_flashread, command_spi_flashread,
 
 static int command_spi_flashread_sr(int argc, char **argv)
 {
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	ccprintf("Status Register 1: 0x%02x\n", spi_flash_get_status1());
 	ccprintf("Status Register 2: 0x%02x\n", spi_flash_get_status2());
@@ -673,7 +676,7 @@ static int command_spi_flashwrite_sr(int argc, char **argv)
 	if (rv)
 		return rv;
 
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	ccprintf("Writing 0x%02x to status register 1, ", val1);
 	ccprintf("0x%02x to status register 2...\n", val2);
@@ -692,7 +695,7 @@ static int command_spi_flashprotect(int argc, char **argv)
 	if (rv)
 		return rv;
 
-	spi_enable(CONFIG_SPI_FLASH_PORT, 1);
+	spi_enable(SPI_FLASH_DEVICE, 1);
 
 	ccprintf("Setting protection for 0x%06x to 0x%06x\n", val1, val1+val2);
 	return spi_flash_set_protect(val1, val2);

@@ -67,7 +67,7 @@ DECLARE_DEFERRED(deferred_reset_pd_mcu);
 void usb_evt(enum gpio_signal signal)
 {
 	if (!gpio_get_level(GPIO_BC12_WAKE_L))
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 #include "gpio_list.h"
@@ -96,7 +96,7 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 int anx7688_passthru_allowed(const struct i2c_port_t *port,
 			     const uint16_t addr_flags)
 {
-	uint16_t addr = I2C_GET_ADDR(addr_flags);
+	uint16_t addr = I2C_STRIP_FLAGS(addr_flags);
 
 	/* Allow access to 0x2c (TCPC) */
 	if (addr == 0x2c)
@@ -206,7 +206,7 @@ void deferred_reset_pd_mcu(void)
 		gpio_set_level(GPIO_USB_C0_RST, 1);
 		hook_call_deferred(&deferred_reset_pd_mcu_data, 1*MSEC);
 		/* on PD reset, trigger PD task to reset state */
-		task_set_event(TASK_ID_PD_C0, PD_EVENT_TCPC_RESET, 0);
+		task_set_event(TASK_ID_PD_C0, PD_EVENT_TCPC_RESET);
 		break;
 	case 3:
 		/*
@@ -403,7 +403,7 @@ static void board_chipset_pre_init(void)
 	STM32_RCC_APB1RSTR |= STM32_RCC_PB1_SPI2;
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+	spi_enable(&spi_devices[0], 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_PRE_INIT, board_chipset_pre_init, HOOK_PRIO_DEFAULT);
 
@@ -413,7 +413,7 @@ static void board_chipset_shutdown(void)
 	/* Disable level shift to SoC when shutting down */
 	gpio_set_level(GPIO_LEVEL_SHIFT_EN_L, 1);
 
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
+	spi_enable(&spi_devices[0], 0);
 
 	/* Disable clocks to SPI2 module */
 	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;

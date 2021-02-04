@@ -119,7 +119,7 @@
 #define CONFIG_FPU
 #define CONFIG_HOSTCMD_FLASH_SPI_INFO
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_COL2_INVERTED
@@ -162,7 +162,7 @@
 #undef CONFIG_MOTION_SENSE_SUSPEND_DELAY_US
 #define CONFIG_MOTION_SENSE_SUSPEND_DELAY_US (MSEC * 60)
 
-#define CONFIG_FLASH_SIZE 524288
+#define CONFIG_FLASH_SIZE_BYTES 524288
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40	/* FIXME: Should be GD25LQ40? */
 
@@ -290,7 +290,6 @@ enum reef_board_version {
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
 
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /* Define typical operating power and max power */
 #define PD_OPERATING_POWER_MW 15000

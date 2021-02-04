@@ -3,14 +3,16 @@
  * found in the LICENSE file.
  */
 
-/* Configuration for kakadu */
+/* Configuration for Kakadu */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
-#define VARIANT_KUKUI_BATTERY_MAX17055
-#define VARIANT_KUKUI_CHARGER_MT6370
+#define BQ27541_ADDR	0x55
+#define VARIANT_KUKUI_BATTERY_BQ27541
 #define VARIANT_KUKUI_POGO_KEYBOARD
+
+#define VARIANT_KUKUI_CHARGER_MT6370
 #define VARIANT_KUKUI_TABLET_PWRBTN
 
 #ifndef SECTION_IS_RW
@@ -21,21 +23,19 @@
 
 #define CONFIG_USB_MUX_IT5205
 #define CONFIG_VOLUME_BUTTONS
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
 
 /* Battery */
 #define BATTERY_DESIRED_CHARGING_CURRENT    3500  /* mA */
 
 #define CONFIG_CHARGER_MT6370_BACKLIGHT
-#ifdef BOARD_KAKADU
-#define CHARGER_LIMIT_TIMEOUT_HOURS 48
-#define CHARGER_LIMIT_TIMEOUT_HOURS_TEMP 2
-#endif
+
 
 /* Motion Sensors */
 #ifdef SECTION_IS_RW
-#define CONFIG_ACCELGYRO_LSM6DSM
+#define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 
 /* Camera VSYNC */
@@ -53,7 +53,6 @@
 #define I2C_PORT_VIRTUAL_BATTERY I2C_PORT_BATTERY
 #define I2C_PORT_ACCEL    1
 #define I2C_PORT_BC12     1
-#define I2C_PORT_ALS      1
 
 /* Route sbs host requests to virtual battery driver */
 #define VIRTUAL_BATTERY_ADDR_FLAGS 0x0B
@@ -117,6 +116,16 @@ int board_is_sourcing_vbus(int port);
 void pogo_adc_interrupt(enum gpio_signal signal);
 int board_discharge_on_ac(int enable);
 
+/* Enable double tap detection */
+#define CONFIG_GESTURE_DETECTION
+#define CONFIG_GESTURE_HOST_DETECTION
+#define CONFIG_GESTURE_SENSOR_DOUBLE_TAP
+#define CONFIG_GESTURE_TAP_SENSOR 0
+#define CONFIG_GESTURE_SENSOR_DOUBLE_TAP_FOR_HOST
+#define CONFIG_GESTURE_SAMPLING_INTERVAL_MS 5
+#define CONFIG_GESTURE_TAP_THRES_MG 100
+#define CONFIG_GESTURE_TAP_MAX_INTERSTICE_T 500
+#define CONFIG_GESTURE_DETECTION_MASK BIT(CONFIG_GESTURE_TAP_SENSOR)
 
 #endif /* !__ASSEMBLER__ */
 

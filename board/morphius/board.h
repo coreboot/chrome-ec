@@ -14,7 +14,6 @@
 #include "baseboard.h"
 
 #define CONFIG_USBC_RETIMER_PI3DPX1207
-#define CONFIG_MKBP_USE_GPIO
 #define CONFIG_8042_AUX
 #define CONFIG_PS2
 #define CONFIG_CMD_PS2
@@ -28,6 +27,9 @@
 #define ZORK_PS8818_RX_INPUT_TERM PS8818_RX_INPUT_TERM_85_OHM
 
 /* Motion sensing drivers */
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
@@ -205,6 +207,7 @@ static inline bool ec_config_has_mst_hub_rtd2141b(void)
 		  HAS_MST_HUB_RTD2141B);
 }
 
+void motion_interrupt(enum gpio_signal signal);
 enum gpio_signal board_usbc_port_to_hpd_gpio(int port);
 #define PORT_TO_HPD(port) board_usbc_port_to_hpd_gpio(port)
 

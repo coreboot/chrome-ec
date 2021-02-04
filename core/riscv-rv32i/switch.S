@@ -8,7 +8,9 @@
 #include "config.h"
 #include "cpu.h"
 
-.text
+#ifdef __RAM_CODE_SECTION_NAME
+.section __RAM_CODE_SECTION_NAME
+#endif
 
 /**
  * Task context switching
@@ -142,6 +144,7 @@ __switch_task:
         add sp, t3, zero
         j __irq_exit
 
+.text
 /**
  * Start the task scheduling.
  */

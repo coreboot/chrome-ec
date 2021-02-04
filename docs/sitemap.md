@@ -25,6 +25,7 @@
 
 *   [Fingerprint MCU (FPMCU)](./fingerprint/fingerprint.md)
 *   [FPMCU Development for Partners](./fingerprint/fingerprint-dev-for-partners.md)
+*   [FPMCU Firmware Testing for Partners](./fingerprint/fingerprint-firmware-testing-for-partners.md)
 *   [FPMCU Debugging](./fingerprint/fingerprint-debugging.md)
 *   [Fingerprint Authentication Design Doc](./fingerprint/fingerprint-authentication-design-doc.md)
 *   [Fingerprint Factory Requirements](./fingerprint/fingerprint-factory-requirements.md)
@@ -34,7 +35,7 @@
 ## Testing
 
 *   [Unit Tests](./unit_tests.md)
-  *   [Porting EC unit tests to Ztest](./ztest.md)
+    *   [Porting EC unit tests to Ztest](./ztest.md)
 *   [Code Coverage](./code_coverage.md)
 
 ## Updaters

@@ -70,8 +70,8 @@ void pd_mcu_interrupt(enum gpio_signal signal)
 #if BOARD_REV >= OAK_REV4
 void usb_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_INTR, 0);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_INTR, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_INTR);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_INTR);
 }
 #endif /* BOARD_REV >= OAK_REV4 */
 
@@ -294,7 +294,7 @@ static void board_init(void)
 	STM32_RCC_APB1RSTR |= STM32_RCC_PB1_SPI2;
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+	spi_enable(&spi_devices[0], 1);
 	CPRINTS("Board using SPI sensors");
 #endif
 }
@@ -545,7 +545,7 @@ void vbus_task(void *u)
 			if (wake)
 				task_set_event(port ? TASK_ID_USB_CHG_P1 :
 						      TASK_ID_USB_CHG_P0,
-					       USB_CHG_EVENT_BC12, 0);
+					       USB_CHG_EVENT_BC12);
 		}
 		task_wait_event(-1);
 	}

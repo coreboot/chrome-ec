@@ -39,7 +39,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -132,7 +132,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_TCPC0,
-			.addr_flags = FUSB302_I2C_SLAVE_ADDR_FLAGS,
+			.addr_flags = FUSB302_I2C_ADDR_FLAGS,
 		},
 		.drv = &fusb302_tcpm_drv,
 	},
@@ -253,7 +253,7 @@ int pd_snk_is_vbus_provided(int port)
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 }
 
 #ifndef VARIANT_KUKUI_NO_SENSORS
@@ -273,7 +273,7 @@ static void board_spi_enable(void)
 	STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_SPI2;
 
 	/* Reinitialize spi peripheral. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 1);
+	spi_enable(&spi_devices[0], 1);
 
 	/* Pin mux spi peripheral toward the sensor. */
 	gpio_config_module(MODULE_SPI_MASTER, 1);
@@ -290,7 +290,7 @@ static void board_spi_disable(void)
 	gpio_config_module(MODULE_SPI_MASTER, 0);
 
 	/* Disable spi peripheral and clocks. */
-	spi_enable(CONFIG_SPI_ACCEL_PORT, 0);
+	spi_enable(&spi_devices[0], 0);
 	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
@@ -444,12 +444,41 @@ bool board_has_kb_backlight(void)
 	/* Default enable keyboard backlight */
 	return true;
 }
+#endif /* !VARIANT_KUKUI_NO_SENSORS */
+
+/* Battery functions */
+#define SB_SMARTCHARGE				0x26
+/* Quick charge enable bit */
+#define SMART_QUICK_CHARGE			0x02
+/* Quick charge support bit */
+#define MODE_QUICK_CHARGE_SUPPORT		0x01
+
+static void sb_quick_charge_mode(int enable)
+{
+	int val, rv;
+
+	rv = sb_read(SB_SMARTCHARGE, &val);
+	if (rv || !(val & MODE_QUICK_CHARGE_SUPPORT))
+		return;
+
+	if (enable)
+		val |= SMART_QUICK_CHARGE;
+	else
+		val &= ~SMART_QUICK_CHARGE;
+
+	sb_write(SB_SMARTCHARGE, val);
+}
 
 /* Called on AP S0iX -> S0 transition */
 static void board_chipset_resume(void)
 {
+#ifndef VARIANT_KUKUI_NO_SENSORS
 	if (board_has_kb_backlight())
 		ioex_set_level(IOEX_KB_BL_EN, 1);
+#endif
+
+	/* Normal charge mode */
+	sb_quick_charge_mode(0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_INIT, board_chipset_resume, HOOK_PRIO_DEFAULT);
@@ -457,12 +486,15 @@ DECLARE_HOOK(HOOK_INIT, board_chipset_resume, HOOK_PRIO_DEFAULT);
 /* Called on AP S0 -> S0iX transition */
 static void board_chipset_suspend(void)
 {
+#ifndef VARIANT_KUKUI_NO_SENSORS
 	if (board_has_kb_backlight())
 		ioex_set_level(IOEX_KB_BL_EN, 0);
+#endif
+
+	/* Quick charge mode */
+	sb_quick_charge_mode(1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
-
-#endif /* !VARIANT_KUKUI_NO_SENSORS */
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)
@@ -543,4 +575,17 @@ host_command_pwm_get_duty(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_PWM_GET_DUTY,
 		     host_command_pwm_get_duty,
 		     EC_VER_MASK(0));
+#endif
+
+/* Enable or disable input devices, based on chipset state and tablet mode */
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	/* If the lid is in 360 position, ignore the lid angle,
+	 * which might be faulty. Disable keyboard.
+	 */
+	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		enable = 0;
+	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
+}
 #endif

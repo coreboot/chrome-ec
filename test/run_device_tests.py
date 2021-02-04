@@ -105,8 +105,8 @@ class AllTests:
         tests = {
             'aes':
                 TestConfig(name='aes'),
-            'crc32':
-                TestConfig(name='crc32'),
+            'crc':
+                TestConfig(name='crc'),
             'flash_physical':
                 TestConfig(name='flash_physical', image_to_use=ImageType.RO,
                            toggle_power=True),
@@ -165,16 +165,16 @@ class AllTests:
 
 BLOONCHIPPER_CONFIG = BoardConfig(
     name=BLOONCHIPPER,
-    servo_uart_name='raw_fpmcu_uart_pty',
-    servo_power_enable='spi1_vref',
+    servo_uart_name='raw_fpmcu_console_uart_pty',
+    servo_power_enable='fpmcu_pp3300',
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
 )
 
 DARTMONKEY_CONFIG = BoardConfig(
     name=DARTMONKEY,
-    servo_uart_name='raw_fpmcu_uart_pty',
-    servo_power_enable='spi1_vref',
+    servo_uart_name='raw_fpmcu_console_uart_pty',
+    servo_power_enable='fpmcu_pp3300',
     rollback_region0_regex=DATA_ACCESS_VIOLATION_80C0000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_80E0000_REGEX,
 )

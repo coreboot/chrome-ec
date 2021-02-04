@@ -334,6 +334,11 @@
 #define STM32_UCPD_CR_CC1TCDIS              BIT(20)
 #define STM32_UCPD_CR_CC2TCDIS              BIT(21)
 
+/* TX mode message types */
+#define STM32_UCPD_CR_TXMODE_DEF            0
+#define STM32_UCPD_CR_TXMODE_CBL_RST        1
+#define STM32_UCPD_CR_TXMODE_BIST           2
+
 /* --- UCPD IMR Bit Definitions --- */
 #define STM32_UCPD_IMR_TXISIE               BIT(0)
 #define STM32_UCPD_IMR_TXMSGDISCIE          BIT(1)
@@ -891,6 +896,7 @@ typedef volatile struct stm32_spi_regs stm32_spi_regs_t;
 #define STM32_SPI_SR_FTLVL		(3 << 11)
 
 /* --- Debug --- */
+#define STM32_DBGMCU_IDCODE         REG32(STM32_DBGMCU_BASE + 0x00)
 #define STM32_DBGMCU_CR             REG32(STM32_DBGMCU_BASE + 0x04)
 #define STM32_DBGMCU_APB1FZ         REG32(STM32_DBGMCU_BASE + 0x08)
 #define STM32_DBGMCU_APB2FZ         REG32(STM32_DBGMCU_BASE + 0x0C)

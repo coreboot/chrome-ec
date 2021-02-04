@@ -493,8 +493,7 @@ void i2c_done(int controller)
 		task_disable_irq(i2c_irqs[controller]);
 
 	/* Notify upper layer */
-	task_set_event(p_status->task_waiting,
-		       TASK_EVENT_I2C_IDLE, 0);
+	task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE);
 	CPUTS("-END");
 }
 
@@ -551,8 +550,7 @@ static void i2c_handle_receive(int controller)
 		/* Set error code */
 		p_status->err_code = SMB_OK;
 		/* Notify upper layer of missing data */
-		task_set_event(p_status->task_waiting,
-				TASK_EVENT_I2C_IDLE, 0);
+		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE);
 		CPUTS("-END");
 	}
 }
@@ -647,8 +645,7 @@ static void i2c_fifo_handle_receive(int controller)
 		/* Set error code */
 		p_status->err_code = SMB_OK;
 		/* Notify upper layer of missing data */
-		task_set_event(p_status->task_waiting,
-				TASK_EVENT_I2C_IDLE, 0);
+		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE);
 		CPUTS("-END");
 	}
 
@@ -657,7 +654,7 @@ static void i2c_fifo_handle_receive(int controller)
 static void i2c_handle_sda_irq(int controller)
 {
 	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
-	uint8_t addr_8bit = I2C_GET_ADDR(p_status->slave_addr_flags) << 1;
+	uint8_t addr_8bit = I2C_STRIP_FLAGS(p_status->slave_addr_flags) << 1;
 
 	/* 1 Issue Start is successful ie. write address byte */
 	if (p_status->oper_state == SMB_MASTER_START
@@ -767,7 +764,7 @@ void i2c_master_int_handler (int controller)
 		p_status->err_code = SMB_BUS_ERROR;
 		/* Notify upper layer */
 		p_status->oper_state = SMB_IDLE;
-		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE, 0);
+		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE);
 		CPUTS("-BER");
 
 		/*
@@ -791,7 +788,7 @@ void i2c_master_int_handler (int controller)
 		p_status->err_code = SMB_MASTER_NO_ADDRESS_MATCH;
 		/* Notify upper layer */
 		p_status->oper_state = SMB_IDLE;
-		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE, 0);
+		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE);
 		CPUTS("-NA");
 	}
 

@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Waddledoo board configuration */
+/* metaknight board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -24,13 +24,7 @@
 #define CONFIG_CHARGER_RAA489000
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
-#define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
-#define CONFIG_OCPC
 #undef  CONFIG_CHARGER_SINGLE_CHIP
-
-/* EC console commands */
-#define CONFIG_CMD_TCPC_DUMP
-#define CONFIG_CMD_CHARGER_DUMP
 
 /*
  * GPIO for C1 interrupts, for baseboard use
@@ -43,25 +37,32 @@
 /* Keyboard */
 #define CONFIG_PWM_KBLIGHT
 
-/* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 1
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
+/* LED defines */
+#define CONFIG_LED_ONOFF_STATES
 
 /* PWM */
 #define CONFIG_PWM
 #define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 
+/* Temp sensor */
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_THROTTLE_AP
+#define CONFIG_THERMISTOR_NCP15WB
+#define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
+#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
+
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
 #define CONFIG_USBC_RETIMER_NB7V904M
+
+/* Common USB-A defines */
+#define USB_PORT_COUNT 2
+#define CONFIG_USB_PORT_POWER_SMART
+#define CONFIG_USB_PORT_POWER_SMART_CDP_SDP_ONLY
+#define CONFIG_USB_PORT_POWER_SMART_DEFAULT_MODE USB_CHARGE_MODE_CDP
+#define CONFIG_USB_PORT_POWER_SMART_INVERTED
+#define GPIO_USB1_ILIM_SEL GPIO_USB_A0_CHARGE_EN_L
+#define GPIO_USB2_ILIM_SEL GPIO_USB_A1_CHARGE_EN_L
 
 /* USB PD */
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
@@ -103,8 +104,10 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
-#define CONFIG_ACCEL_BMA255		/* Lid accel */
-#define CONFIG_ACCELGYRO_BMI160		/* Base accel */
+#define CONFIG_ACCEL_BMA255         /* Lid accel */
+#define CONFIG_ACCEL_KX022          /* Lid accel second source */
+#define CONFIG_ACCELGYRO_BMI160     /* Base accel */
+#define CONFIG_ACCELGYRO_LSM6DSM    /* Base accel second source */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -114,6 +117,8 @@
 
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #define CONFIG_LID_ANGLE
@@ -125,8 +130,23 @@
 #define CONFIG_TABLET_MODE_SWITCH
 #define CONFIG_GMR_TABLET_MODE
 
-#define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_GPIO
+/* Volume Button feature */
+#define CONFIG_ADC_BUTTONS
+#define CONFIG_VOLUME_BUTTONS
+#define GPIO_VOLUME_UP_L GPIO_VOLUP_BTN_ODL
+#define GPIO_VOLUME_DOWN_L GPIO_VOLDN_BTN_ODL
+
+#ifdef BOARD_METAKNIGHT_LEGACY
+/* this change saves 1656 bytes of RW flash space */
+#define CONFIG_CHIP_INIT_ROM_REGION
+#define CONFIG_DEBUG_ASSERT_BRIEF
+#else
+/*
+ * The RAM and flash size combination on the the NPCX797FC does not leave
+ * any unused flash space that can be used to store the .init_rom section.
+ */
+#undef CONFIG_CHIP_INIT_ROM_REGION
+#endif
 
 #ifndef __ASSEMBLER__
 
@@ -147,6 +167,12 @@ enum adc_channel {
 	ADC_CH_COUNT
 };
 
+enum temp_sensor_id {
+	TEMP_SENSOR_1,
+	TEMP_SENSOR_2,
+	TEMP_SENSOR_COUNT
+};
+
 enum sensor_id {
 	LID_ACCEL,
 	BASE_ACCEL,
@@ -156,18 +182,18 @@ enum sensor_id {
 
 enum pwm_channel {
 	PWM_CH_KBLIGHT,
-	PWM_CH_LED1_AMBER,
-	PWM_CH_LED2_WHITE,
 	PWM_CH_COUNT,
 };
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_POWER_TECH,
+	BATTERY_SMP_PCVPBP144,
 	BATTERY_TYPE_COUNT,
 };
 
 int board_is_sourcing_vbus(int port);
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

@@ -58,7 +58,7 @@
 
 #define CONFIG_RW_MEM_OFF	(CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
 #define CONFIG_RW_STORAGE_OFF	0
-#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE - \
+#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE_BYTES - \
 				(CONFIG_RW_MEM_OFF - CONFIG_RO_MEM_OFF))
 
 #define CONFIG_EC_PROTECTED_STORAGE_OFF		CONFIG_RO_MEM_OFF
@@ -91,8 +91,8 @@
 #define CONFIG_USB_UPDATE
 
 #undef CONFIG_UPDATE_PDU_SIZE
-#ifdef BOARD_WAND
-/* Wand does not have enough space to fit 4k PDU. */
+#if defined(BOARD_WAND) || defined(BOARD_ZED)
+/* Wand/Zed does not have enough space to fit 4k PDU. */
 #define CONFIG_UPDATE_PDU_SIZE 2048
 #else
 #define CONFIG_UPDATE_PDU_SIZE 4096
@@ -175,12 +175,17 @@
  * buffer size have to be power of two.
  */
 #undef CONFIG_USB_I2C_MAX_WRITE_COUNT
+#ifdef BOARD_ZED
+/* Zed requires 516 byte per packet for touchpad update */
+#define CONFIG_USB_I2C_MAX_WRITE_COUNT (1024 - 4) /* 4 is maximum header size */
+#else
 #define CONFIG_USB_I2C_MAX_WRITE_COUNT (128 - 4) /* 4 is maximum header size */
+#endif
 
 #undef CONFIG_USB_I2C_MAX_READ_COUNT
 #define CONFIG_USB_I2C_MAX_READ_COUNT (1024 - 6) /* 6 is maximum header size */
 
-#define CONFIG_I2C_XFER_LARGE_READ
+#define CONFIG_I2C_XFER_LARGE_TRANSFER
 
 /* No lid switch */
 #undef CONFIG_LID_SWITCH
@@ -210,7 +215,7 @@
 
 #if defined(HAS_I2C_TOUCHPAD) || defined(CONFIG_LED_DRIVER_LM3630A)
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_MASTER 0
 #define I2C_PORT_KBLIGHT 0
 #define I2C_PORT_CHARGER 1
@@ -278,7 +283,7 @@
 #define CONFIG_STREAM_USART2
 #define CONFIG_STREAM_USART
 
-#define CONFIG_EC_EC_COMM_SLAVE
+#define CONFIG_EC_EC_COMM_SERVER
 #define CONFIG_EC_EC_COMM_BATTERY
 #define CONFIG_CRC8
 #endif /* BOARD_WAND */

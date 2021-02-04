@@ -15,6 +15,7 @@
 #include "i2c.h"
 #include "math_util.h"
 #include "queue.h"
+#include "task.h"
 #include "timer.h"
 #include "util.h"
 
@@ -72,15 +73,9 @@ enum sensor_config {
 		TASK_EVENT_MOTION_FIRST_SW_EVENT + (_activity_id)))
 
 
-#define ROUND_UP_FLAG BIT(31)
+#define ROUND_UP_FLAG ((uint32_t)BIT(31))
 #define BASE_ODR(_odr) ((_odr) & ~ROUND_UP_FLAG)
 #define BASE_RANGE(_range) ((_range) & ~ROUND_UP_FLAG)
-
-#ifdef CONFIG_ACCEL_FIFO
-#define MAX_FIFO_EVENT_COUNT CONFIG_ACCEL_FIFO_SIZE
-#else
-#define MAX_FIFO_EVENT_COUNT 0
-#endif
 
 /*
  * I2C/SPI Slave Address encoding for motion sensors
@@ -95,7 +90,7 @@ enum sensor_config {
 #define SLAVE_MK_I2C_ADDR_FLAGS(addr)	(addr)
 #define SLAVE_MK_SPI_ADDR_FLAGS(addr)	((addr) | I2C_FLAG_ADDR_IS_SPI)
 
-#define SLAVE_GET_I2C_ADDR(addr_flags)	(I2C_GET_ADDR(addr_flags))
+#define SLAVE_GET_I2C_ADDR(addr_flags)	(I2C_STRIP_FLAGS(addr_flags))
 #define SLAVE_GET_SPI_ADDR(addr_flags)	((addr_flags) & I2C_ADDR_MASK)
 
 #define SLAVE_IS_SPI(addr_flags)	((addr_flags) & I2C_FLAG_ADDR_IS_SPI)
@@ -166,7 +161,7 @@ struct motion_sensor_t {
 	enum motionsensor_location location;
 	const struct accelgyro_drv *drv;
 	/* One mutex per physical chip. */
-	struct mutex *mutex;
+	mutex_t *mutex;
 	void *drv_data;
 	/* Only valid if flags & MOTIONSENSE_FLAG_INT_SIGNAL is true. */
 	enum gpio_signal int_signal;
@@ -191,6 +186,9 @@ struct motion_sensor_t {
 	 * The host can change it, but rarely does.
 	 */
 	int default_range;
+
+	/* Range currently used by the sensor. */
+	int current_range;
 
 	/*
 	 * There are 4 configuration parameters to deal with different
@@ -259,7 +257,7 @@ struct motion_sensor_t {
  * When we process CMD_DUMP, we want to be sure the motion sense
  * task is not updating the sensor values at the same time.
  */
-extern struct mutex g_sensor_mutex;
+extern mutex_t g_sensor_mutex;
 
 /* Defined at board level. */
 extern struct motion_sensor_t motion_sensors[];
@@ -269,10 +267,8 @@ extern unsigned motion_sensor_count;
 #else
 extern const unsigned motion_sensor_count;
 #endif
-#if (!defined HAS_TASK_ALS) && (defined CONFIG_ALS)
 /* Needed if reading ALS via LPC is needed */
 extern const struct motion_sensor_t *motion_als_sensors[];
-#endif
 
 /* optionally defined at board level */
 extern unsigned int motion_min_interval;
@@ -290,19 +286,13 @@ extern unsigned int motion_min_interval;
  *
  * @param sensor sensor which was just initialized
  */
-int sensor_init_done(const struct motion_sensor_t *sensor);
+int sensor_init_done(struct motion_sensor_t *sensor);
 
 /**
  * Board specific function that is called when a double_tap event is detected.
  *
  */
 void sensor_board_proc_double_tap(void);
-
-#ifdef CONFIG_ORIENTATION_SENSOR
-enum motionsensor_orientation motion_sense_remap_orientation(
-		const struct motion_sensor_t *s,
-		enum motionsensor_orientation orientation);
-#endif
 
 /*
  * There are 4 variables that represent the number of sensors:
@@ -319,6 +309,7 @@ enum motionsensor_orientation motion_sense_remap_orientation(
 #define ALL_MOTION_SENSORS (MOTION_SENSE_ACTIVITY_SENSOR_ID + 1)
 #define MAX_MOTION_SENSORS (SENSOR_COUNT + 1)
 #else
+#define MOTION_SENSE_ACTIVITY_SENSOR_ID (-1)
 #define ALL_MOTION_SENSORS (motion_sensor_count)
 #define MAX_MOTION_SENSORS (SENSOR_COUNT)
 #endif

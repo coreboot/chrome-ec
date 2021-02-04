@@ -10,9 +10,9 @@
 
 /* Select Baseboard features */
 #define VARIANT_OCTOPUS_EC_NPCX796FB
-#define VARIANT_OCTOPUS_CHARGER_ISL9238
 #define VARIANT_OCTOPUS_TCPC_0_PS8751
 #define VARIANT_OCTOPUS_NO_SENSORS
+#define CONFIG_CHARGER_RUNTIME_CONFIG
 #include "baseboard.h"
 
 #define CONFIG_LED_COMMON
@@ -20,7 +20,11 @@
 
 /* USB PD */
 #undef CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
-#define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
+/*
+ * This board configures two chargers, one of which can measure VBUS and one of
+ * which cannot. Leave the default config, which defines
+ * CONFIG_USB_PD_VBUS_MEASURE_CHARGER.
+ */
 
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
@@ -57,8 +61,13 @@
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
 /* Battery W/A */
+#define CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA 6144
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 #define CONFIG_I2C_XFER_BOARD_CALLBACK
+
+/* The board needs 100ms for VBUS_C[0|1]_BC12 to drop to lower VvbusUVLO */
+#undef CONFIG_BC12_MAX14637_DELAY_FROM_OFF_TO_ON_MS
+#define CONFIG_BC12_MAX14637_DELAY_FROM_OFF_TO_ON_MS 100
 
 #ifndef __ASSEMBLER__
 

@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "console.h"
+#include "usb_pd.h"
 #include "usb_pe_sm.h"
 #include "mock/usb_pe_sm_mock.h"
 #include "memory.h"
@@ -15,6 +16,9 @@
 #define cprints(format, args...)
 #endif
 
+#ifndef TEST_BUILD
+#error "Mocks should only be in the test build."
+#endif
 
 struct mock_pe_port_t mock_pe_port[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -77,9 +81,39 @@ void pe_got_soft_reset(int port)
 	mock_pe_port[port].mock_got_soft_reset = 1;
 }
 
+bool pe_in_frs_mode(int port)
+{
+	return false;
+}
+
 bool pe_in_local_ams(int port)
 {
 	/* We will probably want to change this in the future */
 	return false;
 }
 
+const uint32_t * const pd_get_src_caps(int port)
+{
+	return NULL;
+}
+
+uint8_t pd_get_src_cap_cnt(int port)
+{
+	return 0;
+}
+
+void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
+{
+}
+
+void pd_request_power_swap(int port)
+{}
+
+int pd_get_rev(int port, enum tcpm_transmit_type type)
+{
+	return IS_ENABLED(CONFIG_USB_PD_REV30) ? PD_REV30 : PD_REV20;
+}
+
+void pe_invalidate_explicit_contract(int port)
+{
+}

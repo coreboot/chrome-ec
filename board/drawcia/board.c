@@ -33,7 +33,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "tcpci.h"
+#include "tcpm/tcpci.h"
 #include "temp_sensor.h"
 #include "uart.h"
 #include "usb_charge.h"
@@ -58,7 +58,7 @@ DECLARE_DEFERRED(check_c0_line);
 
 static void notify_c0_chips(void)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(0);
 }
 
@@ -93,7 +93,7 @@ DECLARE_DEFERRED(check_c1_line);
 static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(1);
 }
 
@@ -346,7 +346,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 	},
@@ -396,6 +396,10 @@ void board_init(void)
 	}
 
 	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
+
+	/* Make sure pen detection is triggered or not at sysjump */
+	if (!gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_EN_PP5000_PEN, 1);
 
 	/* Charger on the MB will be outputting PROCHOT_ODL and OD CHG_DET */
 	sm5803_configure_gpio0(CHARGER_PRIMARY, GPIO0_MODE_PROCHOT, 1);
@@ -471,18 +475,28 @@ __override void board_power_5v_enable(int enable)
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	enum fw_config_db db = get_cbi_fw_config_db();
+
+	if (db == DB_1A_HDMI || db == DB_NONE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
-	else
+	else if (db == DB_1C || db == DB_1C_LTE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
+
+	ccprints("Unhandled DB configuration: %d", db);
+	return 0;
 }
 
 __override uint8_t board_get_charger_chip_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	enum fw_config_db db = get_cbi_fw_config_db();
+
+	if (db == DB_1A_HDMI || db == DB_NONE)
 		return CHARGER_NUM - 1;
-	else
+	else if (db == DB_1C || db == DB_1C_LTE)
 		return CHARGER_NUM;
+
+	ccprints("Unhandled DB configuration: %d", db);
+	return 0;
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -646,10 +660,10 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *kd, int *kd_div)
 {
 	*kp = 3;
-	*kp_div = 14;
+	*kp_div = 20;
 
 	*ki = 3;
-	*ki_div = 500;
+	*ki_div = 125;
 
 	*kd = 4;
 	*kd_div = 40;

@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 
 /*
  * Initialize Thunderbolt state for the specified port.
@@ -38,6 +38,15 @@ void tbt_exit_mode_request(int port);
  *                  False otherwise
  */
 bool tbt_entry_is_done(int port);
+
+/*
+ * Checks if the cable entry into Thunderbolt alternate mode is done
+ *
+ * @param port      USB-C port number
+ * @return          True if TBT_FLAG_CABLE_ENTRY_DONE is set
+ *                  False otherwise
+ */
+bool tbt_cable_entry_is_done(int port);
 
 /*
  * Returns True if Thunderbolt mode is not in inactive state

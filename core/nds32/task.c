@@ -236,7 +236,8 @@ task_id_t task_get_current(void)
 	/* If we haven't done a context switch then our task ID isn't valid */
 	ASSERT(current_task != (task_ *)scratchpad);
 #endif
-	return current_task - tasks;
+	/* return invalid task id if task scheduling is not yet start */
+	return start_called ? (current_task - tasks) : TASK_ID_INVALID;
 }
 
 uint32_t *task_get_event_bitmap(task_id_t tskid)
@@ -403,7 +404,7 @@ static uint32_t __ram_code __wait_evt(int timeout_us, task_id_t resched)
 		ret = timer_arm(deadline, me);
 		ASSERT(ret == EC_SUCCESS);
 	}
-	while (!(evt = atomic_read_clear(&tsk->events))) {
+	while (!(evt = atomic_clear(&tsk->events))) {
 		/* Remove ourself and get the next task in the scheduler */
 		__schedule(1, resched, 0);
 		resched = TASK_ID_IDLE;
@@ -416,7 +417,7 @@ static uint32_t __ram_code __wait_evt(int timeout_us, task_id_t resched)
 	return evt;
 }
 
-uint32_t __ram_code task_set_event(task_id_t tskid, uint32_t event, int wait)
+uint32_t __ram_code task_set_event(task_id_t tskid, uint32_t event)
 {
 	task_ *receiver = __task_id_to_ptr(tskid);
 	ASSERT(receiver);
@@ -431,10 +432,7 @@ uint32_t __ram_code task_set_event(task_id_t tskid, uint32_t event, int wait)
 		if (start_called)
 			need_resched = 1;
 	} else {
-		if (wait)
-			return __wait_evt(-1, tskid);
-		else
-			__schedule(0, tskid, 0);
+		__schedule(0, tskid, 0);
 	}
 
 	return 0;
@@ -648,7 +646,7 @@ void __ram_code mutex_unlock(struct mutex *mtx)
 		waiters &= ~BIT(id);
 
 		/* Somebody is waiting on the mutex */
-		task_set_event(id, TASK_EVENT_MUTEX, 0);
+		task_set_event(id, TASK_EVENT_MUTEX);
 	}
 
 	/* Ensure no event is remaining from mutex wake-up */

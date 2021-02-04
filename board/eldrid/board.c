@@ -24,6 +24,8 @@
 #include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "isl9241.h"
+#include "keyboard_8042_sharedlib.h"
 #include "keyboard_raw.h"
 #include "lid_switch.h"
 #include "keyboard_scan.h"
@@ -72,10 +74,58 @@ union volteer_cbi_fw_config fw_config_defaults = {
 	.usb_db = DB_USB3_ACTIVE,
 };
 
+static void board_charger_config(void)
+{
+	/*
+	 * b/166728543, we configured charger setting to throttle CPU
+	 * when the system loading is at battery current limit.
+	 */
+	int reg;
+
+	/*
+	 * Set DCProchot# to 5120mA
+	 */
+	isl9241_set_dc_prochot(CHARGER_SOLO, 5120);
+
+	/*
+	 * Set Control1 bit<3> = 1, PSYS = 1
+	 */
+	if (i2c_read16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+		       ISL9241_REG_CONTROL1, &reg) == EC_SUCCESS) {
+		reg |= ISL9241_CONTROL1_PSYS;
+		if (i2c_write16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+			    ISL9241_REG_CONTROL1, reg))
+			CPRINTS("Failed to set isl9241");
+	}
+
+	/*
+	 * Set Control2 bit<10:9> = 00, PROCHOT# Debounce = 7us
+	 */
+	if (i2c_read16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+		       ISL9241_REG_CONTROL2, &reg) == EC_SUCCESS) {
+		reg &= ~ISL9241_CONTROL2_PROCHOT_DEBOUNCE_MASK;
+		if (i2c_write16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+			    ISL9241_REG_CONTROL2, reg))
+			CPRINTS("Failed to set isl9241");
+	}
+
+	/*
+	 * Set Control4 bit<11> = 1, PSYS Rsense Ratio = 1:1
+	 */
+	if (i2c_read16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+		       ISL9241_REG_CONTROL4, &reg) == EC_SUCCESS) {
+		reg |= ISL9241_CONTROL4_PSYS_RSENSE_RATIO;
+		if (i2c_write16(I2C_PORT_CHARGER, ISL9241_ADDR_FLAGS,
+			    ISL9241_REG_CONTROL4, reg))
+			CPRINTS("Failed to set isl9241");
+	}
+}
+
 static void board_init(void)
 {
 	pwm_enable(PWM_CH_LED4_SIDESEL, 1);
 	pwm_set_duty(PWM_CH_LED4_SIDESEL, 100);
+	board_charger_config();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -123,6 +173,15 @@ __override bool board_is_tbt_usb4_port(int port)
 __override void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
 {
+	/*
+	 * b/166728543
+	 * Set different AC_PROCHOT value when using different wattage ADT.
+	 */
+	if (max_ma * charge_mv == PD_MAX_POWER_MW * 1000)
+		isl9241_set_ac_prochot(0, 3072);
+	else
+		isl9241_set_ac_prochot(0, 2816);
+
 	/*
 	 * Follow OEM request to limit the input current to
 	 * 90% negotiated limit when S0.
@@ -261,7 +320,6 @@ static const struct tcpc_config_t tcpc_config_p1_usb3 = {
 	},
 	.flags = TCPC_FLAGS_TCPCI_REV2_0 | TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
 	.drv = &ps8xxx_tcpm_drv,
-	.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 };
 
 /*
@@ -415,6 +473,13 @@ __override void board_cbi_init(void)
 	if ((!IS_ENABLED(TEST_BUILD) && !ec_cfg_has_numeric_pad()) ||
 	    get_board_id() < 1)
 		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);
+
+	/*
+	 * If keyboard is US2(KB_LAYOUT_1), we need translate right ctrl
+	 * to backslash(\|) key.
+	 */
+	if (ec_cfg_keyboard_layout() == KB_LAYOUT_1)
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
 }
 
 /******************************************************************************/
@@ -473,7 +538,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_0_USB2_NUM | (USBC_PORT_0_USB3_NUM << 4),
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -482,7 +546,6 @@ struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
 		},
 		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);

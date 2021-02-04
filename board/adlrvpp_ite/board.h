@@ -11,17 +11,7 @@
 /* ITE EC variant */
 #define VARIANT_INTELRVP_EC_IT8320
 
-#include "baseboard.h"
-
-/* MECC config */
-#define CONFIG_INTEL_RVP_MECC_VERSION_1_0
-
-/* Support early firmware selection */
-#define CONFIG_VBOOT_EFS2
-
-/* Chipset */
-#define CONFIG_CHIPSET_TIGERLAKE
-#define CONFIG_POWER_PP5000_CONTROL
+#include "adlrvp.h"
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -63,8 +53,6 @@
 /* I2C ports & Configs */
 #define CONFIG_IT83XX_SMCLK2_ON_GPC7
 
-/* charger */
-#define CONFIG_CHARGER_ISL9241
 #define I2C_PORT_CHARGER	IT83XX_I2C_CH_B
 
 /* Battery */
@@ -72,67 +60,27 @@
 
 /* Board ID */
 #define I2C_PORT_PCA9555_BOARD_ID_GPIO	IT83XX_I2C_CH_B
-#define I2C_ADDR_PCA9555_BOARD_ID_GPIO	0x22
 
 /* Port 80 */
 #define I2C_PORT_PORT80		IT83XX_I2C_CH_B
-#define PORT80_I2C_ADDR		MAX695X_I2C_ADDR1_FLAGS
-
-/* USB PD config */
-#define CONFIG_USB_PD_PORT_MAX_COUNT 4
-#define CONFIG_INTEL_VIRTUAL_MUX
-#define CONFIG_USB_MUX_VIRTUAL
-#define PD_MAX_POWER_MW              60000
 
 /* USB-C I2C */
 #define I2C_PORT_TYPEC_0		IT83XX_I2C_CH_C
 #define I2C_PORT_TYPEC_1		IT83XX_I2C_CH_F
+#if defined(HAS_TASK_PD_C2)
 #define I2C_PORT_TYPEC_2		IT83XX_I2C_CH_E
+#endif
+#if defined(HAS_TASK_PD_C3)
 #define I2C_PORT_TYPEC_3		IT83XX_I2C_CH_D
-
-/* TCPC AIC config */
-/* Support NXP PCA9675 I/O expander. */
-#define CONFIG_IO_EXPANDER_PCA9675
-#define I2C_ADDR_PCA9675_TCPC_AIC_IOEX	0x21
-#define CONFIG_IO_EXPANDER_PORT_COUNT CONFIG_USB_PD_PORT_MAX_COUNT
-
-/* DC Jack charge ports */
-#undef  CONFIG_DEDICATED_CHARGE_PORT_COUNT
-#define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
-#define DEDICATED_CHARGE_PORT CONFIG_USB_PD_PORT_MAX_COUNT
-
-/* PPC */
-#define CONFIG_USBC_PPC_SN5S330
-#define CONFIG_USB_PD_VBUS_DETECT_PPC
-#define CONFIG_USB_PD_DISCHARGE_PPC
-#define I2C_ADDR_SN5S330_TCPC_AIC_PPC	0x40
+#endif
 
 /* TCPC */
-#define CONFIG_USB_PD_DISCHARGE
 #define CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 1
-#define CONFIG_USB_PD_TCPM_FUSB302
-#define I2C_ADDR_FUSB302_TCPC_AIC	0x22
 
-/* Config BB retimer */
-#define CONFIG_USBC_RETIMER_INTEL_BB
-#define I2C_PORT0_BB_RETIMER_ADDR	0x50
-#define I2C_PORT1_BB_RETIMER_ADDR	0x51
-#define I2C_PORT2_BB_RETIMER_ADDR	0x52
-#define I2C_PORT3_BB_RETIMER_ADDR	0x53
-
-/* USB-C port's USB2 & USB3 port numbers */
-#ifdef CONFIG_INTEL_VIRTUAL_MUX
-	#define TYPE_C_PORT_0_USB2_NUM	1
-	#define TYPE_C_PORT_1_USB2_NUM	2
-	#define TYPE_C_PORT_2_USB2_NUM	3
-	#define TYPE_C_PORT_3_USB2_NUM	5
-
-	#define TYPE_C_PORT_0_USB3_NUM	(0+1)
-	#define TYPE_C_PORT_1_USB3_NUM	(1+1)
-	#define TYPE_C_PORT_2_USB3_NUM	(2+1)
-	#define TYPE_C_PORT_3_USB3_NUM	(3+1)
-#endif
+/* Config Fan */
+#define GPIO_FAN_POWER_EN	GPIO_EC_THRM_SEN_PWRGATE_N
+#define GPIO_ALL_SYS_PWRGD	GPIO_ALL_SYS_PWRGD_EC
 
 #ifndef __ASSEMBLER__
 
@@ -141,24 +89,12 @@ enum adlrvp_i2c_channel {
 	I2C_CHAN_BATT_CHG,
 	I2C_CHAN_TYPEC_0,
 	I2C_CHAN_TYPEC_1,
+#if defined(HAS_TASK_PD_C2)
 	I2C_CHAN_TYPEC_2,
 	I2C_CHAN_TYPEC_3,
+#endif
 	I2C_CHAN_COUNT,
 };
-
-enum adlrvp_charge_ports {
-	TYPE_C_PORT_0,
-	TYPE_C_PORT_1,
-	TYPE_C_PORT_2,
-	TYPE_C_PORT_3,
-};
-
-void espi_reset_pin_asserted_interrupt(enum gpio_signal signal);
-void extpower_interrupt(enum gpio_signal signal);
-void ppc_interrupt(enum gpio_signal signal);
-void tcpc_alert_event(enum gpio_signal signal);
-void board_connect_c0_sbu(enum gpio_signal s);
-int board_get_version(void);
 
 #endif /* !__ASSEMBLER__ */
 

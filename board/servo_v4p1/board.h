@@ -67,7 +67,7 @@
 
 #define CONFIG_RW_MEM_OFF       (CONFIG_FW_PSTATE_OFF + CONFIG_FW_PSTATE_SIZE)
 #define CONFIG_RW_STORAGE_OFF   0
-#define CONFIG_RW_SIZE          (CONFIG_FLASH_SIZE - \
+#define CONFIG_RW_SIZE          (CONFIG_FLASH_SIZE_BYTES - \
 				(CONFIG_RW_MEM_OFF - CONFIG_RO_MEM_OFF))
 
 #define CONFIG_EC_PROTECTED_STORAGE_OFF         CONFIG_RO_MEM_OFF
@@ -163,7 +163,7 @@
 /* Enable control of I2C over USB */
 #define CONFIG_USB_I2C
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_MASTER 1
 
 /* PD features */
@@ -179,9 +179,11 @@
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 
 #ifdef SECTION_IS_RO
+#define CONFIG_USB_HUB_GL3590
 #define CONFIG_INA231
 #define CONFIG_CHARGE_MANAGER
 #undef  CONFIG_CHARGE_MANAGER_SAFE_MODE
+#define CONFIG_USB_MUX_TUSB1064
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_USB_PD_TCPMV1
 #define CONFIG_CMD_PD
@@ -192,9 +194,11 @@
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
 #undef CONFIG_USB_PD_PULLUP
+/* Default pull-up should not be Rp3a0 due to Cr50 */
 #define CONFIG_USB_PD_PULLUP TYPEC_RP_USB
 #define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
 #define CONFIG_USB_PD_ALT_MODE
+#define CONFIG_USBC_SS_MUX
 
 /* Don't automatically change roles */
 #undef CONFIG_USB_PD_INITIAL_DRP_STATE
@@ -205,19 +209,24 @@
 #define CC_RA(port, cc, sel)  (pd_tcpc_cc_ra(port, cc, sel))
 
 /*
- * TODO(crosbug.com/p/60792): The delay values are currently just place holders
- * and the delay will need to be relative to the circuitry that allows VBUS to
- * be supplied to the DUT port from the CHG port.
+ * These power-supply timing values are now set towards maximum spec limit,
+ * to give the upstream charger the maximum time to respond.
+ *
+ * Currently tuned with the Apple 96W adapter.
  */
-#define PD_POWER_SUPPLY_TURN_ON_DELAY  50000  /* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY 50000 /* us */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY  (161*MSEC)
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY (461*MSEC)
 
 /* Define typical operating power and max power */
 #define PD_OPERATING_POWER_MW 15000
 #define PD_MAX_POWER_MW       60000
 #define PD_MAX_CURRENT_MA     3000
 #define PD_MAX_VOLTAGE_MV     20000
+
+/* Add the raw option to the i2c_xfer command */
+#define CONFIG_CMD_I2C_XFER_RAW
 #else
+#undef CONFIG_CMD_I2C_XFER
 #undef CONFIG_USB_POWER_DELIVERY
 #endif /* SECTION_IS_RO */
 
@@ -269,6 +278,14 @@ enum adc_channel {
 	ADC_SUB_C_REF,
 	/* Number of ADC channels */
 	ADC_CH_COUNT
+};
+
+/* Servo V4.1 Board ID mappings */
+enum servo_board_id {
+	BOARD_ID_UNSET = -1,
+	BOARD_ID_REV0 = 0, /* Proto */
+	BOARD_ID_REV1 = 1, /* EVT */
+	BOARD_ID_REV2 = 2, /* DVT */
 };
 
 /**

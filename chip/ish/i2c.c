@@ -302,7 +302,7 @@ int chip_i2c_xfer(const int port, const uint16_t slave_addr_flags,
 	uint64_t expire_ts;
 	struct i2c_context *ctx;
 	ssize_t curr_index = 0;
-	uint16_t addr = I2C_GET_ADDR(slave_addr_flags);
+	uint16_t addr = I2C_STRIP_FLAGS(slave_addr_flags);
 	int begin_indx;
 	uint8_t repeat_start = 0;
 
@@ -446,7 +446,7 @@ static void i2c_interrupt_handler(struct i2c_context *ctx)
 
 	/* disable interrupts */
 	i2c_intr_switch(ctx->base, DISABLE_INT);
-	task_set_event(ctx->wait_task_id, TASK_EVENT_I2C_IDLE, 0);
+	task_set_event(ctx->wait_task_id, TASK_EVENT_I2C_IDLE);
 }
 
 static void i2c_isr_bus0(void)

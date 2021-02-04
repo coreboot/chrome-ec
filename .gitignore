@@ -4,10 +4,21 @@ private*/
 local/
 *~
 *.swp
-*.pyc
 tags
 TAGS
 cscope.*
 .tests-passed
 .failedboards/
 .sizes.txt
+
+# VSCode IDE
+.vscode/*
+!.vscode/README.md
+!.vscode/settings.json.default
+*.code-workspace
+
+# Python ignores
+*.pyc
+__pycache__
+*.egg-info
+.hypothesis/

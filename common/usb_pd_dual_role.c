@@ -12,34 +12,14 @@
 #include "usb_pd.h"
 #include "util.h"
 
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+
 #if defined(PD_MAX_VOLTAGE_MV) && defined(PD_OPERATING_POWER_MW)
 /*
  * As a sink, this is the max voltage (in millivolts) we can request
  * before getting source caps
  */
 static unsigned int max_request_mv = PD_MAX_VOLTAGE_MV;
-
-/*
- * Partner allow_list pair data to override ability for us to sink from them
- * even if they do not present Unconstrained Power in their SRC_Caps. The
- * partner pairs in this list should be able to perform as a dual role partner
- * and should not present Unconstrained Power. It is best for the partner to
- * fix the device so it is not required to be in this list but some devices
- * are already out in the wild and will require this for the user's sake.
- */
-struct allow_list_pair {
-	uint16_t vid;
-	uint16_t pid;
-};
-
-static struct allow_list_pair allow_list[] = {
-	{USB_VID_APPLE, USB_PID1_APPLE},
-	{USB_VID_APPLE, USB_PID2_APPLE},
-	{USB_VID_HP, USB_PID1_HP},
-	{USB_VID_HP, USB_PID2_HP},
-	{USB_VID_HP, USB_PID3_HP},
-};
-static int allow_list_count = ARRAY_SIZE(allow_list);
 
 STATIC_IF_NOT(CONFIG_USB_PD_PREFER_MV)
 struct pd_pref_config_t __maybe_unused pd_pref_config;
@@ -345,7 +325,7 @@ void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
 		/* Get max power info that we could request */
 		pd_find_pdo_index(pd_get_src_cap_cnt(port),
 					pd_get_src_caps(port),
-					PD_MAX_VOLTAGE_MV, &pdo);
+					pd_get_max_voltage(), &pdo);
 		pd_extract_pdo_power(pdo, &ma, &mv);
 
 		/* Set max. limit, but apply 500mA ceiling */
@@ -354,23 +334,6 @@ void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
 	}
 }
 #endif /* defined(PD_MAX_VOLTAGE_MV) && defined(PD_OPERATING_POWER_MW) */
-
-int pd_charge_from_device(uint16_t vid, uint16_t pid)
-{
-	int i;
-
-	/*
-	 * Allow list check for partners that do not set unconstrained bit
-	 * but we still need to charge from it when we are a sink.
-	 */
-	for (i = 0; i < allow_list_count; ++i) {
-		if (vid == allow_list[i].vid &&
-		    pid == allow_list[i].pid)
-			return 1;
-	}
-	ccprints("Allow_List pair not found: vid=0x%X pid=0x%X", vid, pid);
-	return 0;
-}
 
 bool pd_is_battery_capable(void)
 {

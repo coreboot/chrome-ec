@@ -118,6 +118,7 @@ struct iteflash_config {
 	int usb_interface;
 	int usb_vid;
 	int usb_pid;
+	int verify;  /* boolean */
 	char *usb_serial;
 	char *i2c_dev_path;
 	const struct i2c_interface *i2c_if;
@@ -2057,6 +2058,7 @@ static const struct option longopts[] = {
 	{"interface", 1, 0, 'i'},
 	{"nodisable-protect-path", 0, 0, 'Z'},
 	{"nodisable-watchdog", 0, 0, 'z'},
+	{"noverify", 0, 0, 'n'},
 	{"product", 1, 0, 'p'},
 	{"range", 1, 0, 'R'},
 	{"read", 1, 0, 'r'},
@@ -2086,6 +2088,7 @@ static void display_usage(const char *program)
 	fprintf(stderr, "-m, --i2c-mux : Enable i2c-mux (to EC).\n"
 		"\tSpecify this flag only if the board has an I2C MUX and\n"
 		"\tyou are not using servod.\n");
+	fprintf(stderr, "-n, --noverify : Don't auto verify.\n");
 	fprintf(stderr, "-b, --block-write-size <size> : Perform writes in\n"
 		"\tblocks of this many bytes.\n");
 	fprintf(stderr, "-p, --product <0x1234> : USB product ID\n");
@@ -2122,7 +2125,7 @@ static int parse_range_options(char *str, struct iteflash_config *conf)
 		return -1;
 	}
 
-	conf->range_base = strtoul(str, &size, 16);
+	conf->range_base = strtoull(str, &size, 16);
 	if (!size || !*size)
 		return 0;
 
@@ -2136,7 +2139,7 @@ static int parse_range_options(char *str, struct iteflash_config *conf)
 		return -1;
 	}
 
-	conf->range_size = strtoul(size, &size, 16);
+	conf->range_size = strtoull(size, &size, 16);
 	if ((size && *size) || !conf->range_size) {
 		fprintf(stderr, "wrong range size specification\n");
 		return -1;
@@ -2189,6 +2192,9 @@ static int parse_parameters(int argc, char **argv, struct iteflash_config *conf)
 			break;
 		case 'm':
 			conf->i2c_mux = 1;
+			break;
+		case 'n':
+			conf->verify = 0;
 			break;
 		case 'p':
 			conf->usb_pid = strtol(optarg, NULL, 16);
@@ -2271,6 +2277,7 @@ int main(int argc, char **argv)
 			.usb_interface = SERVO_INTERFACE,
 			.usb_vid = SERVO_USB_VID,
 			.usb_pid = SERVO_USB_PID,
+			.verify = 1,
 			.i2c_if = &ftdi_i2c_interface,
 		},
 	};
@@ -2380,9 +2387,11 @@ int main(int argc, char **argv)
 			ret = write_flash(&chnd, chnd.conf.output_filename, 0);
 		if (ret)
 			goto return_after_init;
-		ret = verify_flash(&chnd, chnd.conf.output_filename, 0);
-		if (ret)
-			goto return_after_init;
+		if (chnd.conf.verify) {
+			ret = verify_flash(&chnd, chnd.conf.output_filename, 0);
+			if (ret)
+				goto return_after_init;
+		}
 	}
 
 	/* Normal exit */

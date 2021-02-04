@@ -41,12 +41,16 @@ MEMORY
 	 */
 	ILM (rx) : ORIGIN = FW_OFF(SECTION), LENGTH = FW_SIZE(SECTION)
 
-#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_SLAVE)
+#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_PERIPHERAL)
 	H2RAM (rw) : ORIGIN = CONFIG_H2RAM_BASE, LENGTH = CONFIG_H2RAM_SIZE
 #endif
 #else
 	IRAM (rw) : ORIGIN = CONFIG_RAM_BASE, LENGTH = CONFIG_RAM_SIZE
 #endif /* CHIP_FAMILY_IT8XXX2 */
+
+#ifdef CONFIG_DRAM_BASE
+	DRAM (rwx) : ORIGIN = CONFIG_DRAM_BASE, LENGTH = CONFIG_DRAM_SIZE
+#endif
 }
 
 SECTIONS
@@ -78,8 +82,12 @@ SECTIONS
 		ASSERT((__flash_dma_size < IT83XX_ILM_BLOCK_SIZE),
 		       "__flash_dma_size < IT83XX_ILM_BLOCK_SIZE");
 		. = ALIGN(IT83XX_ILM_BLOCK_SIZE);
-
-		__flash_text_start = .;
+		__ilm0_ram_code = .;
+		OUTDIR/chip/it83xx/i2c.o (.text*)
+		OUTDIR/chip/it83xx/i2c.o (.rodata)
+		OUTDIR/chip/it83xx/hwtimer.o (.text*)
+		OUTDIR/chip/it83xx/hwtimer.o (.rodata)
+		. = ALIGN(16);
 #endif
 		*(.text*)
 		. = ALIGN(4);
@@ -333,7 +341,7 @@ SECTIONS
         /*
          * These linker labels are just for analysis and not used in the code.
          */
-	__config_flash_size = CONFIG_FLASH_SIZE;
+	__config_flash_size = CONFIG_FLASH_SIZE_BYTES;
 	__config_ro_size = CONFIG_RO_SIZE;
 	__config_ec_protected_storage_size = CONFIG_EC_PROTECTED_STORAGE_SIZE;
 	__config_rw_size = CONFIG_RW_SIZE;
@@ -341,13 +349,13 @@ SECTIONS
 #endif
 
 #if defined(CHIP_FAMILY_IT8XXX2)
-#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_SLAVE)
+#if defined(CONFIG_HOSTCMD_X86) || defined(CONFIG_I2C_PERIPHERAL)
 	.h2ram (NOLOAD) : {
 		. += CONFIG_H2RAM_HOST_LPC_IO_BASE;
 		*(.h2ram.pool.hostcmd)
 		. = ALIGN(256);
 		*(.h2ram.pool.acpiec)
-#ifdef CONFIG_I2C_SLAVE
+#ifdef CONFIG_I2C_PERIPHERAL
 		. = ALIGN(256);
 		*(.h2ram.pool.i2cslv)
 #endif
@@ -358,6 +366,66 @@ SECTIONS
 	       "Not enough space for h2ram section.")
 #endif
 #endif /* CHIP_FAMILY_IT8XXX2 */
+
+#ifdef CONFIG_DRAM_BASE
+	/*
+	 * Sections in DRAM region are constructed as like in non-DRAM regions:
+	 * .dram.data LMA is for preserving initialized data across resets.
+	 * The only difference is that they are all in the DRAM region:
+	 * .dram.text     | LOAD
+	 * .dram.rodata   | LOAD
+	 * .dram.data LMA | LOAD
+	 * .dram.data VMA |
+	 * .dram.bss      | NOLOAD
+	 */
+
+	.dram.text : {
+		. = ALIGN(4);
+		KEEP(*(SORT(.dram.text.keep.*)))
+		*(SORT(.dram.text.*))
+		. = ALIGN(4);
+	} > DRAM
+
+	.dram.rodata : {
+		. = ALIGN(4);
+		KEEP(*(SORT(.dram.rodata.keep.*)))
+		*(SORT(.dram.rodata.*))
+		. = ALIGN(4);
+	} > DRAM
+
+	__dram_data_lma_start = ADDR(.dram.rodata) + SIZEOF(.dram.rodata);
+
+	/* Place .dram.data LMA in between .dram.rodata and .dram.data VMA. */
+	.dram.data __dram_data_lma_start +
+		(__dram_data_end - __dram_data_start) : {
+		. = ALIGN(4);
+		__dram_data_start = .;
+		*(.dram.data*)
+		. = ALIGN(4);
+		__dram_data_end = .;
+
+	/*
+	 * Normally, '> DRAM AT > DRAM' should be the same as '> DRAM',
+	 * and they  will be at the same address. However, if the address
+	 * of VMA specified, LMA and VMA might have different addresses:
+	 * '> DRAM' places VMA at the address where section declaration
+	 * specified.
+	 * 'AT > DRAM' places LMA at the location counter's address.
+	 */
+	} > DRAM AT > DRAM
+
+	/*
+	 * ld assigns correct attribute for .bss, but not for other .*.bss,
+	 * we need an explicltly NOLOAD.
+	 */
+	.dram.bss(NOLOAD) : {
+		. = ALIGN(4);
+		__dram_bss_start = .;
+		*(SORT(.dram.bss*))
+		. = ALIGN(4);
+		__dram_bss_end = .;
+	} > DRAM
+#endif /* CONFIG_DRAM_BASE */
 
 #if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH))
 	/DISCARD/ : { *(.google) }

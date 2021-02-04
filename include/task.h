@@ -79,6 +79,37 @@ void interrupt_disable(void);
  */
 void interrupt_enable(void);
 
+/*
+ * Define irq_lock and irq_unlock that match the function signatures to Zephyr's
+ * functions. In reality, these simply call the current implementation of
+ * interrupt_disable() and interrupt_enable().
+ */
+#ifndef CONFIG_ZEPHYR
+/**
+ * Perform the same operation as interrupt_disable but allow nesting. The
+ * return value from this function should be used as the argument to
+ * irq_unlock. Do not attempt to parse the value, it is a representation
+ * of the state and not an indication of any form of count.
+ *
+ * For more information see:
+ * https://docs.zephyrproject.org/latest/reference/kernel/other/interrupts.html#c.irq_lock
+ *
+ * @return Lock key to use for restoring the state via irq_unlock.
+ */
+uint32_t irq_lock(void);
+
+/**
+ * Perform the same operation as interrupt_enable but allow nesting. The key
+ * should be the unchanged value returned by irq_lock.
+ *
+ * For more information see:
+ * https://docs.zephyrproject.org/latest/reference/kernel/other/interrupts.html#c.irq_unlock
+ *
+ * @param key The lock-out key used to restore the interrupt state.
+ */
+void irq_unlock(uint32_t key);
+#endif /* CONFIG_ZEPHYR */
+
 /**
  * Return true if we are in interrupt context.
  */
@@ -111,12 +142,9 @@ void set_int_mask(uint32_t val);
  *
  * @param tskid		Task to set event for
  * @param event		Event bitmap to set (TASK_EVENT_*)
- * @param wait		If non-zero, after setting the event, de-schedule the
- *			calling task to wait for a response event.  Ignored in
- *			interrupt context.
  * @return		The bitmap of events which occurred if wait!=0, else 0.
  */
-uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait);
+uint32_t task_set_event(task_id_t tskid, uint32_t event);
 
 /**
  * Wake a task.  This sends it the TASK_EVENT_WAKE event.
@@ -125,7 +153,7 @@ uint32_t task_set_event(task_id_t tskid, uint32_t event, int wait);
  */
 static inline void task_wake(task_id_t tskid)
 {
-	task_set_event(tskid, TASK_EVENT_WAKE, 0);
+	task_set_event(tskid, TASK_EVENT_WAKE);
 }
 
 /**

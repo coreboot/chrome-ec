@@ -3,10 +3,13 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
-# Toolchain configuration build system
-#
-
 # Toolchain configuration
+#
+# BUILD - Refers to the system doing the "build".
+#         For example, you would compile servo_ectool to run on your local
+#         build machine.
+# HOST  - Refers to target platform on top of the EC.
+#         For example, you would compile ectool to run on the Chrome OS device.
 
 min_make_version:=3.82
 make_version_ok:=$(filter $(min_make_version), \
@@ -42,6 +45,7 @@ PKG_CONFIG?=pkg-config
 BUILDCC?=$(CCACHE) gcc
 HOSTCC?=$(CCACHE) $(HOST_CROSS_COMPILE)gcc
 HOSTCXX?=$(CCACHE) $(HOST_CROSS_COMPILE)g++
+HOST_PKG_CONFIG?=$(HOST_CROSS_COMPILE)pkg-config
 PROTOC?=protoc
 
 C_WARN = -Wstrict-prototypes -Wdeclaration-after-statement -Wno-pointer-sign
@@ -70,7 +74,7 @@ CFLAGS_TEST=$(if $(TEST_BUILD),-DTEST_BUILD=$(EMPTY) \
                        -fno-experimental-new-pass-manager -DTEST_FUZZ=$(EMPTY))
 CFLAGS_COVERAGE=$(if $(TEST_COVERAGE),--coverage \
 				      -DTEST_COVERAGE=$(EMPTY),)
-CFLAGS_HOSTTEST=$(if $(TEST_HOSTTEST),-DTEST_HOSTTEST=$(EMPTY),)
+CFLAGS_HOSTTEST=$(if $(TEST_HOSTTEST),-DTEST_HOSTTEST=$(EMPTY),) -Iinclude/driver
 CFLAGS_DEFINE=-DOUTDIR=$(out)/$(BLD) -DCHIP=$(CHIP) -DBOARD_TASKFILE=$(_tsk_lst_file) \
               -DBOARD=$(BOARD) -DCORE=$(CORE) -DPROJECT=$(PROJECT) \
               -DCHIP_VARIANT=$(CHIP_VARIANT) -DCHIP_FAMILY=$(UC_CHIP_FAMILY) \

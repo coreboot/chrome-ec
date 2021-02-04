@@ -4,18 +4,13 @@
  */
 
 /* Elemi board-specific configuration */
-#include "bb_retimer.h"
 #include "button.h"
 #include "common.h"
 #include "accelgyro.h"
 #include "cbi_ec_fw_config.h"
-#include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi260.h"
-#include "driver/als_tcs3400.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/syv682x.h"
-#include "driver/retimer/bb_retimer.h"
 #include "driver/sync.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/rt1715.h"
@@ -36,7 +31,6 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
-#include "tablet_mode.h"
 #include "throttle_ap.h"
 #include "uart.h"
 #include "usb_mux.h"
@@ -68,54 +62,12 @@ struct keyboard_scan_config keyscan_config = {
 
 /******************************************************************************/
 /*
- * FW_CONFIG defaults for Volteer if the CBI data is not initialized.
+ * FW_CONFIG defaults for Elemi if the CBI data is not initialized.
  */
 union volteer_cbi_fw_config fw_config_defaults = {
-	.usb_db = DB_USB4_GEN2,
+	.usb_db = DB_USB3_ACTIVE,
 };
 
-__override enum tbt_compat_cable_speed board_get_max_tbt_speed(int port)
-{
-	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
-
-	if (port == USBC_PORT_C1) {
-		if (usb_db == DB_USB4_GEN2) {
-			/*
-			 * Older boards violate 205mm trace length prior
-			 * to connection to the re-timer and only support up
-			 * to GEN2 speeds.
-			 */
-			return TBT_SS_U32_GEN1_GEN2;
-		} else if (usb_db == DB_USB4_GEN3) {
-			return TBT_SS_TBT_GEN3;
-		}
-	}
-
-	/*
-	 * Thunderbolt-compatible mode not supported
-	 *
-	 * TODO (b/147726366): All the USB-C ports need to support same speed.
-	 * Need to fix once USB-C feature set is known for Volteer.
-	 */
-	return TBT_SS_RES_0;
-}
-
-__override bool board_is_tbt_usb4_port(int port)
-{
-	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
-
-	/*
-	 * Volteer reference design only supports TBT & USB4 on port 1
-	 * if the USB4 DB is present.
-	 *
-	 * TODO (b/147732807): All the USB-C ports need to support same
-	 * features. Need to fix once USB-C feature set is known for Volteer.
-	 */
-	return ((port == USBC_PORT_C1)
-		&& ((usb_db == DB_USB4_GEN2) || (usb_db == DB_USB4_GEN3)));
-}
-
-/******************************************************************************/
 /* Physical fans. These are logically separate from pwm_channels. */
 
 const struct fan_conf fan_conf_0 = {
@@ -125,17 +77,10 @@ const struct fan_conf fan_conf_0 = {
 	.enable_gpio = GPIO_EN_PP5000_FAN,
 };
 
-/*
- * Fan specs from datasheet:
- * Max speed 5900 rpm (+/- 7%), minimum duty cycle 30%.
- * Minimum speed not specified by RPM. Set minimum RPM to max speed (with
- * margin) x 30%.
- *    5900 x 1.07 x 0.30 = 1894, round up to 1900
- */
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 1900,
-	.rpm_start = 1900,
-	.rpm_max = 5900,
+	.rpm_min = 2500,
+	.rpm_start = 2500,
+	.rpm_max = 6500,
 };
 
 const struct fan_t fans[FAN_CH_COUNT] = {
@@ -155,43 +100,43 @@ const struct fan_t fans[FAN_CH_COUNT] = {
  */
 const static struct ec_thermal_config thermal_cpu = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(68),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(70),
 	},
 	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(58),
 	},
-	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_off = C_TO_K(40),
+	.temp_fan_max = C_TO_K(60),
 };
 
-/*
- * Inductor limits - used for both charger and PP3300 regulator
- *
- * Need to use the lower of the charger IC, PP3300 regulator, and the inductors
- *
- * Charger max recommended temperature 100C, max absolute temperature 125C
- * PP3300 regulator: operating range -40 C to 145 C
- *
- * Inductors: limit of 125c
- * PCB: limit is 80c
- */
-const static struct ec_thermal_config thermal_inductor = {
+const static struct ec_thermal_config thermal_charger = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(78),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
 	},
 	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(68),
+	},
+	.temp_fan_off = C_TO_K(40),
+	.temp_fan_max = C_TO_K(70),
+};
+
+const static struct ec_thermal_config thermal_regulator = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(68),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(70),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(58),
 	},
 	.temp_fan_off = C_TO_K(40),
 	.temp_fan_max = C_TO_K(55),
 };
 
-
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_1_CHARGER]			= thermal_inductor,
-	[TEMP_SENSOR_2_PP3300_REGULATOR]	= thermal_inductor,
+	[TEMP_SENSOR_1_CHARGER]			= thermal_charger,
+	[TEMP_SENSOR_2_PP3300_REGULATOR]	= thermal_regulator,
 	[TEMP_SENSOR_3_DDR_SOC]			= thermal_cpu,
 	[TEMP_SENSOR_4_FAN]			= thermal_cpu,
 };
@@ -211,13 +156,6 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 /******************************************************************************/
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
-	{
-		.name = "sensor",
-		.port = I2C_PORT_SENSOR,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C0_SENSOR_SCL,
-		.sda = GPIO_EC_I2C0_SENSOR_SDA,
-	},
 	{
 		.name = "usb_c0",
 		.port = I2C_PORT_USB_C0,
@@ -290,21 +228,6 @@ static void kb_backlight_disable(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, kb_backlight_disable, HOOK_PRIO_DEFAULT);
 
-/******************************************************************************/
-/* Volteer specific USB daughter-board configuration */
-
-/* USBC TCPC configuration for USB3 daughter board */
-static const struct tcpc_config_t tcpc_config_p1_usb3 = {
-	.bus_type = EC_BUS_TYPE_I2C,
-	.i2c_info = {
-		.port = I2C_PORT_USB_C1,
-		.addr_flags = PS8751_I2C_ADDR1_FLAGS,
-	},
-	.flags = TCPC_FLAGS_TCPCI_REV2_0 | TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
-	.drv = &ps8xxx_tcpm_drv,
-	.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
-};
-
 /*
  * USB3 DB mux configuration - the top level mux still needs to be set to the
  * virtual_usb_mux_driver so the AP gets notified of mux changes and updates
@@ -315,19 +238,6 @@ static const struct usb_mux usbc1_usb3_db_retimer = {
 	.driver = &tcpci_tcpm_usb_mux_driver,
 	.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	.next_mux = NULL,
-};
-
-static const struct usb_mux mux_config_p1_usb3_active = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
-	.next_mux = &usbc1_usb3_db_retimer,
-};
-
-static const struct usb_mux mux_config_p1_usb3_passive = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
 };
 
 /******************************************************************************/
@@ -369,98 +279,14 @@ static void ps8815_reset(void)
 
 void board_reset_pd_mcu(void)
 {
-	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
-
 	/* No reset available for TCPC on port 0 */
 	/* Daughterboard specific reset for port 1 */
-	if (usb_db == DB_USB3_ACTIVE) {
-		ps8815_reset();
-		usb_mux_hpd_update(USBC_PORT_C1, 0, 0);
-	}
+	ps8815_reset();
+	usb_mux_hpd_update(USBC_PORT_C1, 0, 0);
 }
 
-/*
- * Set up support for the USB3 daughterboard:
- *   Parade PS8815 TCPC (integrated retimer)
- *   Diodes PI3USB9201 BC 1.2 chip (same as USB4 board)
- *   Silergy SYV682A PPC (same as USB4 board)
- *   Virtual mux with stacked retimer
- */
-static void config_db_usb3_active(void)
-{
-	tcpc_config[USBC_PORT_C1] = tcpc_config_p1_usb3;
-	usb_muxes[USBC_PORT_C1] = mux_config_p1_usb3_active;
-}
-
-/*
- * Set up support for the passive USB3 daughterboard:
- *   TUSB422 TCPC (already the default)
- *   PI3USB9201 BC 1.2 chip (already the default)
- *   Silergy SYV682A PPC (already the default)
- *   Virtual mux without stacked retimer
- */
-
-static void config_db_usb3_passive(void)
-{
-	usb_muxes[USBC_PORT_C1] = mux_config_p1_usb3_passive;
-}
-
-static void config_port_discrete_tcpc(int port)
-{
-	/*
-	 * Support 2 Pin-to-Pin compatible parts: TUSB422 and RT1715, for
-	 * simplicity allow either and decide at runtime which we are using.
-	 * Default to TUSB422, and switch to RT1715 if it is on the I2C bus and
-	 * the VID matches.
-	 */
-
-	int regval;
-
-	if (i2c_read16(port ? I2C_PORT_USB_C1 : I2C_PORT_USB_C0,
-		       RT1715_I2C_ADDR_FLAGS, TCPC_REG_VENDOR_ID,
-		       &regval) == EC_SUCCESS) {
-		if (regval == RT1715_VENDOR_ID) {
-			CPRINTS("C%d: RT1715 detected", port);
-			tcpc_config[port].i2c_info.addr_flags =
-				RT1715_I2C_ADDR_FLAGS;
-			tcpc_config[port].drv = &rt1715_tcpm_drv;
-			return;
-		}
-	}
-	CPRINTS("C%d: Default to TUSB422", port);
-}
-
-static const char *db_type_prefix = "USB DB type: ";
 __override void board_cbi_init(void)
 {
-	enum ec_cfg_usb_db_type usb_db = ec_cfg_usb_db_type();
-
-	config_port_discrete_tcpc(0);
-	switch (usb_db) {
-	case DB_USB_ABSENT:
-		CPRINTS("%sNone", db_type_prefix);
-		break;
-	case DB_USB4_GEN2:
-		config_port_discrete_tcpc(1);
-		CPRINTS("%sUSB4 Gen1/2", db_type_prefix);
-		break;
-	case DB_USB4_GEN3:
-		config_port_discrete_tcpc(1);
-		CPRINTS("%sUSB4 Gen3", db_type_prefix);
-		break;
-	case DB_USB3_ACTIVE:
-		config_db_usb3_active();
-		CPRINTS("%sUSB3 Active", db_type_prefix);
-		break;
-	case DB_USB3_PASSIVE:
-		config_db_usb3_passive();
-		config_port_discrete_tcpc(1);
-		CPRINTS("%sUSB3 Passive", db_type_prefix);
-		break;
-	default:
-		CPRINTS("%sID %d not supported", db_type_prefix, usb_db);
-	}
-
 	if ((!IS_ENABLED(TEST_BUILD) && !ec_cfg_has_numeric_pad()) ||
 	    get_board_id() <= 2)
 		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);
@@ -514,24 +340,24 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC TCPC configuration */
-struct tcpc_config_t tcpc_config[] = {
+const struct tcpc_config_t tcpc_config[] = {
 	[USBC_PORT_C0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB_C0,
-			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
+			.addr_flags = RT1715_I2C_ADDR_FLAGS,
 		},
-		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_0_USB2_NUM | (USBC_PORT_0_USB3_NUM << 4),
+		.drv = &rt1715_tcpm_drv,
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB_C1,
-			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
+			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
 		},
-		.drv = &tusb422_tcpm_drv,
-		.usb23 = USBC_PORT_1_USB2_NUM | (USBC_PORT_1_USB3_NUM << 4),
+		.flags = TCPC_FLAGS_TCPCI_REV2_0 |
+			TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
+		.drv = &ps8xxx_tcpm_drv,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -539,13 +365,7 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc1_usb4_db_retimer = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &bb_usb_retimer,
-	.i2c_port = I2C_PORT_USB_1_MIX,
-	.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
-};
-struct usb_mux usb_muxes[] = {
+const struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
 		.driver = &virtual_usb_mux_driver,
@@ -555,21 +375,10 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.driver = &virtual_usb_mux_driver,
 		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb4_db_retimer,
+		.next_mux = &usbc1_usb3_db_retimer,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
-
-struct bb_usb_control bb_controls[] = {
-	[USBC_PORT_C0] = {
-		/* USB-C port 0 doesn't have a retimer */
-	},
-	[USBC_PORT_C1] = {
-		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
-		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
 
 static void board_tcpc_init(void)
 {

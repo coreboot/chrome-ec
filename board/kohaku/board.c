@@ -83,11 +83,11 @@ static void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 		break;
 
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 		break;
 
 	default:
@@ -313,12 +313,11 @@ struct motion_sensor_t motion_sensors[] = {
 		.i2c_spi_addr_flags = BH1730_I2C_ADDR_FLAGS,
 		.rot_standard_ref = NULL,
 		.default_range = 65535,
-		.min_frequency = 10,
-		.max_frequency = 10,
+		.min_frequency = BH1730_MIN_FREQ,
+		.max_frequency = BH1730_MAX_FREQ,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 100000,
-				.ec_rate = 0,
+				.odr = BH1730_10000_MHZ,
 			},
 		},
 	},

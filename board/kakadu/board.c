@@ -14,7 +14,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accelgyro_lsm6dsm.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/charger/rt946x.h"
 #include "driver/sync.h"
 #include "driver/tcpm/mt6370.h"
@@ -34,7 +34,7 @@
 #include "spi.h"
 #include "system.h"
 #include "task.h"
-#include "tcpm.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -75,6 +75,7 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
 	{GPIO_AP_IN_SLEEP_L,   POWER_SIGNAL_ACTIVE_LOW,  "AP_IN_S3_L"},
@@ -101,7 +102,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 struct mt6370_thermal_bound thermal_bound = {
-	.target = 90,
+	.target = 80,
 	.err = 4,
 };
 
@@ -118,7 +119,7 @@ static void board_hpd_update(const struct usb_mux *me,
 __override const struct rt946x_init_setting *board_rt946x_init_setting(void)
 {
 	static const struct rt946x_init_setting battery_init_setting = {
-		.eoc_current = 500,
+		.eoc_current = 140,
 		.mivr = 4000,
 		.ircmp_vclamp = 32,
 		.ircmp_res = 25,
@@ -129,7 +130,7 @@ __override const struct rt946x_init_setting *board_rt946x_init_setting(void)
 	return &battery_init_setting;
 }
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.usb_port = 0,
 		.i2c_port = I2C_PORT_USB_MUX,
@@ -241,20 +242,8 @@ int pd_snk_is_vbus_provided(int port)
 	return rt946x_is_vbus_ready();
 }
 
-
-#define CHARGER_I2C_ADDR_FLAGS RT946X_ADDR_FLAGS
-
 static void board_init(void)
 {
-
-#ifdef SECTION_IS_RW
-	int val;
-	i2c_read8(I2C_PORT_CHARGER, CHARGER_I2C_ADDR_FLAGS,
-		RT946X_REG_CHGCTRL1, &val);
-	val &= RT946X_MASK_OPA_MODE;
-	i2c_write8(I2C_PORT_CHARGER, CHARGER_I2C_ADDR_FLAGS,
-		RT946X_REG_CHGCTRL1, (val | RT946X_MASK_STAT_EN));
-#endif
 	/* If the reset cause is external, pulse PMIC force reset. */
 	if (system_get_reset_flags() == EC_RESET_FLAG_RESET_PIN) {
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 0);
@@ -269,7 +258,7 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_CHARGER_INT_ODL);
 
 #ifdef SECTION_IS_RW
-	/* Enable interrupts from LSM6DS3TR sensor. */
+	/* Enable interrupts from BMI160 sensor. */
 	gpio_enable_interrupt(GPIO_ACCEL_INT_ODL);
 
 	/* Enable interrupt for the camera vsync. */
@@ -300,18 +289,9 @@ static void board_rev_init(void)
 	 * Keep this pin defaults to P1 setting since that eMMC enabled with
 	 * High-Z stat.
 	 */
-
 	/* TODO */
 	/* Put initial code here for different EC board reversion */
-
-	/* Display bias settings. */
-	mt6370_db_set_voltages(6000, 5800, 5800);
-
-	/*
-	 * Enable MT6370 DB_POSVOUT/DB_NEGVOUT (controlled by _EN pins).
-	 */
-	mt6370_db_external_control(1);
-
+	return;
 }
 DECLARE_HOOK(HOOK_INIT, board_rev_init, HOOK_PRIO_INIT_ADC + 1);
 
@@ -325,12 +305,12 @@ void sensor_board_proc_double_tap(void)
 #ifndef VARIANT_KUKUI_NO_SENSORS
 static struct mutex g_lid_mutex;
 
-static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
+static struct bmi_drv_data_t g_bmi160_data;
 
 /* Matrix to rotate accelerometer into standard reference frame */
 static const mat33_fp_t lid_standard_ref = {
-	{0, FLOAT_TO_FP(1), 0},
 	{FLOAT_TO_FP(-1), 0, 0},
+	{0, FLOAT_TO_FP(-1), 0},
 	{0, 0, FLOAT_TO_FP(1)}
 };
 
@@ -341,58 +321,59 @@ struct motion_sensor_t motion_sensors[] = {
 	 * DO NOT change the order of the following table.
 	 */
 	[LID_ACCEL] = {
-		.name = "Accel",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
-		.type = MOTIONSENSE_TYPE_ACCEL,
-		.location = MOTIONSENSE_LOC_LID,
-		.drv = &lsm6dsm_drv,
-		.mutex = &g_lid_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-					    MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_ACCEL_INT_ODL,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
-		.port = I2C_PORT_ACCEL,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.rot_standard_ref = &lid_standard_ref,
-		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
-		.config = {
-		/* Enable accel in S0 */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 13000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
-			},
-		},
+	 .name = "Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_BMI160,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &bmi160_drv,
+	 .mutex = &g_lid_mutex,
+	 .drv_data = &g_bmi160_data,
+	 .port = I2C_PORT_ACCEL,
+	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	 .rot_standard_ref = &lid_standard_ref,
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
+	 .config = {
+		 /* Enable accel in S0 */
+		 [SENSOR_CONFIG_EC_S0] = {
+			 .odr = TAP_ODR,
+			 .ec_rate = 100 * MSEC,
+		 },
+		 /* For double tap detection */
+		 [SENSOR_CONFIG_EC_S3] = {
+			 .odr = TAP_ODR,
+			 .ec_rate = 100 * MSEC,
+		 },
+	 },
 	},
 	[LID_GYRO] = {
-		.name = "Gyro",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
-		.type = MOTIONSENSE_TYPE_GYRO,
-		.location = MOTIONSENSE_LOC_LID,
-		.drv = &lsm6dsm_drv,
-		.mutex = &g_lid_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-					    MOTIONSENSE_TYPE_GYRO),
-		.port = I2C_PORT_ACCEL,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = &lid_standard_ref,
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
+	 .name = "Gyro",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_BMI160,
+	 .type = MOTIONSENSE_TYPE_GYRO,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &bmi160_drv,
+	 .mutex = &g_lid_mutex,
+	 .drv_data = &g_bmi160_data,
+	 .port = I2C_PORT_ACCEL,
+	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	 .default_range = 1000, /* dps */
+	 .rot_standard_ref = &lid_standard_ref,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
 	},
 	[VSYNC] = {
-		.name = "Camera vsync",
-		.active_mask = SENSOR_ACTIVE_S0,
-		.chip = MOTIONSENSE_CHIP_GPIO,
-		.type = MOTIONSENSE_TYPE_SYNC,
-		.location = MOTIONSENSE_LOC_CAMERA,
-		.drv = &sync_drv,
-		.default_range = 0,
-		.min_frequency = 0,
-		.max_frequency = 1,
+	 .name = "Camera vsync",
+	 .active_mask = SENSOR_ACTIVE_S0,
+	 .chip = MOTIONSENSE_CHIP_GPIO,
+	 .type = MOTIONSENSE_TYPE_SYNC,
+	 .location = MOTIONSENSE_LOC_CAMERA,
+	 .drv = &sync_drv,
+	 .default_range = 0,
+	 .min_frequency = 0,
+	 .max_frequency = 1,
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);

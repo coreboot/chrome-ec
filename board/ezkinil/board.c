@@ -9,6 +9,8 @@
 #include "charge_state_v2.h"
 #include "cros_board_info.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm426xx.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "driver/ppc/aoz1380.h"
@@ -39,9 +41,9 @@
 
 #include "gpio_list.h"
 
-#ifdef HAS_TASK_MOTIONSENSE
-
 static int board_ver;
+
+#ifdef HAS_TASK_MOTIONSENSE
 
 /* Motion sensors */
 static struct mutex g_lid_mutex;
@@ -50,11 +52,17 @@ static struct mutex g_base_mutex;
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
 static struct bmi_drv_data_t g_bmi160_data;
+static struct icm_drv_data_t g_icm426xx_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
 const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(-1), 0,  0},
+	{ 0, 0,  FLOAT_TO_FP(-1)}
+};
+const mat33_fp_t base_standard_ref_1 = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0,  FLOAT_TO_FP(-1)}
 };
 const mat33_fp_t lid_standard_ref = {
@@ -141,6 +149,51 @@ struct motion_sensor_t motion_sensors[] = {
 
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+struct motion_sensor_t icm426xx_base_accel = {
+	.name = "Base Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 2, /* g, enough for laptop */
+	.rot_standard_ref = &base_standard_ref_1,
+	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	},
+};
+
+struct motion_sensor_t icm426xx_base_gyro = {
+	.name = "Base Gyro",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_GYRO,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 1000, /* dps */
+	.rot_standard_ref = &base_standard_ref_1,
+	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
+	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
+};
+
 #endif /* HAS_TASK_MOTIONSENSE */
 
 const struct power_signal_info power_signal_list[] = {
@@ -199,7 +252,7 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
 	.eq_ch0_ch1_offset = PI3HDX1204_EQ_DB710,
 	.eq_ch2_ch3_offset = PI3HDX1204_EQ_DB710,
-	.vod_offset = PI3HDX1204_VOD_115_ALL_CHANNELS,
+	.vod_offset = PI3HDX1204_VOD_130_ALL_CHANNELS,
 	.de_offset = PI3HDX1204_DE_DB_MINUS5,
 };
 
@@ -233,6 +286,37 @@ const struct usb_mux usbc0_sbu_mux = {
 	.usb_port = USBC_PORT_C0,
 	.driver = &usbc0_sbu_mux_driver,
 };
+
+/*****************************************************************************
+ * Base Gyro Sensor dynamic configuration
+ */
+
+static int base_gyro_config;
+
+static void setup_base_gyro_config(void)
+{
+	base_gyro_config = ec_config_has_base_gyro_sensor();
+
+	if (base_gyro_config == BASE_GYRO_ICM426XX) {
+		motion_sensors[BASE_ACCEL] = icm426xx_base_accel;
+		motion_sensors[BASE_GYRO] = icm426xx_base_gyro;
+		ccprints("BASE GYRO is ICM426XX");
+	} else if (base_gyro_config == BASE_GYRO_BMI160)
+		ccprints("BASE GYRO is BMI160");
+}
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	switch (base_gyro_config) {
+	case BASE_GYRO_ICM426XX:
+		icm426xx_interrupt(signal);
+		break;
+	case BASE_GYRO_BMI160:
+	default:
+		bmi160_interrupt(signal);
+		break;
+	}
+}
 
 /*****************************************************************************
  * USB-C MUX/Retimer dynamic configuration
@@ -420,6 +504,8 @@ static void setup_fw_config(void)
 		else
 			gpio_enable_interrupt(GPIO_DP1_HPD_EC_IN);
 	}
+
+	setup_base_gyro_config();
 }
 /* Use HOOK_PRIO_INIT_I2C + 2 to be after ioex_init(). */
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
@@ -508,8 +594,8 @@ const struct fan_conf fan_conf_0 = {
 	.enable_gpio = -1,
 };
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 2800,
-	.rpm_start = 2800,
+	.rpm_min = 3200,
+	.rpm_start = 3200,
 	.rpm_max = 6000,
 };
 const struct fan_t fans[] = {
@@ -611,20 +697,8 @@ const static struct ec_thermal_config thermal_soc = {
 	.temp_host_release = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 	},
-	.temp_fan_off = 0,
-	.temp_fan_max = 0,
-};
-
-const static struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(95),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-	},
-	.temp_fan_off = C_TO_K(37),
-	.temp_fan_max = C_TO_K(90),
+	.temp_fan_off = C_TO_K(32),
+	.temp_fan_max = C_TO_K(75),
 };
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
@@ -637,14 +711,14 @@ struct fan_step {
 
 /* Note: Do not make the fan on/off point equal to 0 or 100 */
 static const struct fan_step fan_table0[] = {
-	{.on =  0, .off =  2, .rpm = 0},
-	{.on = 15, .off =  2, .rpm = 2800},
-	{.on = 23, .off = 13, .rpm = 3200},
-	{.on = 30, .off = 21, .rpm = 3400},
-	{.on = 38, .off = 28, .rpm = 3700},
-	{.on = 45, .off = 36, .rpm = 4200},
-	{.on = 55, .off = 43, .rpm = 4500},
-	{.on = 66, .off = 53, .rpm = 5300},
+	{.on =  0, .off =  1, .rpm = 0},
+	{.on =  9, .off =  1, .rpm = 3200},
+	{.on = 21, .off =  7, .rpm = 3500},
+	{.on = 28, .off = 16, .rpm = 3900},
+	{.on = 37, .off = 26, .rpm = 4200},
+	{.on = 47, .off = 35, .rpm = 4600},
+	{.on = 56, .off = 44, .rpm = 5100},
+	{.on = 72, .off = 60, .rpm = 5500},
 };
 /* All fan tables must have the same number of levels */
 #define NUM_FAN_LEVELS ARRAY_SIZE(fan_table0)
@@ -655,7 +729,6 @@ static void setup_fans(void)
 {
 	thermal_params[TEMP_SENSOR_CHARGER] = thermal_thermistor;
 	thermal_params[TEMP_SENSOR_SOC] = thermal_soc;
-	thermal_params[TEMP_SENSOR_CPU] = thermal_cpu;
 }
 DECLARE_HOOK(HOOK_INIT, setup_fans, HOOK_PRIO_DEFAULT);
 

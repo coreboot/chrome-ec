@@ -26,10 +26,10 @@
 #define CONFIG_DPTF_MULTI_PROFILE
 #endif
 #define CONFIG_EMULATED_SYSRQ
-#define CONFIG_FLASH_SIZE 0x80000
+#define CONFIG_FLASH_SIZE_BYTES 0x80000
 #define CONFIG_FPU
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_LED_COMMON
 #define CONFIG_LID_SWITCH
 #define CONFIG_LOW_POWER_IDLE
@@ -78,7 +78,7 @@
 #ifdef BOARD_LUX
 #define CONFIG_UART_PAD_SWITCH
 
-#define CONFIG_EC_EC_COMM_MASTER
+#define CONFIG_EC_EC_COMM_CLIENT
 #define CONFIG_EC_EC_COMM_BATTERY
 #define CONFIG_CRC8
 #endif
@@ -244,7 +244,6 @@ enum adc_channel {
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	250000 /* us */
 
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY		5000   /* us */
 
 /* Define typical operating power and max power */
 #define PD_OPERATING_POWER_MW		15000

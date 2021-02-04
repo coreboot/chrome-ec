@@ -347,11 +347,11 @@ void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
 		break;
 
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 		break;
 
 	default:
@@ -418,12 +418,6 @@ static int board_ps8802_mux_set(const struct usb_mux *me,
 					PS8802_DPEQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
-
-		/* Enable IN_HPD on the DB */
-		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 1);
-	} else {
-		/* Disable IN_HPD on the DB */
-		gpio_or_ioex_set_level(board_usbc1_retimer_inhpd, 0);
 	}
 
 	return rv;

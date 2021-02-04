@@ -8,13 +8,19 @@
 /* Declare symbolic names for all the GPIOs that we care about.
  * Note: Those with interrupt handlers must be declared first. */
 
-/* USB-C interrupts */
+/* USB interrupts */
 GPIO_INT(USB_C0_PD_INT_ODL,    PIN(E, 0), GPIO_INT_FALLING, tcpc_alert_event)  /* Interrupt from port-0 TCPC */
 GPIO_INT(USB_C1_PD_INT_ODL,    PIN(F, 5), GPIO_INT_FALLING, tcpc_alert_event)  /* Interrupt from port-1 TCPC */
 GPIO_INT(USB_C0_SWCTL_INT_ODL, PIN(0, 3), GPIO_INT_FALLING, ppc_interrupt)  /* Interrupt from port-0 PPC */
 GPIO_INT(USB_C1_SWCTL_INT_ODL, PIN(4, 0), GPIO_INT_FALLING, ppc_interrupt)  /* Interrupt from port-1 PPC */
+#if BOARD_REV >= TROGDOR_REV1
+GPIO_INT(USB_C0_BC12_INT_L,    PIN(6, 1), GPIO_INT_FALLING | GPIO_PULL_UP, usb0_evt)  /* Interrupt from port-0 BC1.2 */
+GPIO_INT(USB_C1_BC12_INT_L,    PIN(8, 2), GPIO_INT_FALLING | GPIO_PULL_UP, usb1_evt)  /* Interrupt from port-1 BC1.2 */
+#else
 GPIO_INT(USB_C0_BC12_INT_L,    PIN(6, 1), GPIO_INT_FALLING, usb0_evt)  /* Interrupt from port-0 BC1.2 */
 GPIO_INT(USB_C1_BC12_INT_L,    PIN(8, 2), GPIO_INT_FALLING, usb1_evt)  /* Interrupt from port-1 BC1.2 */
+#endif /* BOARD_REV */
+GPIO_INT(USB_A0_OC_ODL,        PIN(D, 1), GPIO_INT_BOTH | GPIO_PULL_UP, usba_oc_interrupt)
 
 /* System interrupts */
 GPIO_INT(ACOK_OD,           PIN(0, 0), GPIO_INT_BOTH, extpower_interrupt)  /* ACOK */
@@ -74,8 +80,8 @@ GPIO(TRACKPAD_INT_GATE,     PIN(7, 4), GPIO_OUT_LOW)
 /* USB-C */
 GPIO(USB_C0_PD_RST_L,       PIN(F, 1), GPIO_OUT_HIGH)  /* Port-0 TCPC chip reset */
 GPIO(USB_C1_PD_RST_ODL,     PIN(E, 4), GPIO_ODR_HIGH)  /* Port-1 TCPC chip reset */
-GPIO(DP_MUX_OE_L,           PIN(9, 6), GPIO_OUT_HIGH)  /* DP mux enable */
-GPIO(DP_MUX_SEL,            PIN(4, 5), GPIO_OUT_HIGH)  /* DP mux selection: L:C0, H:C1 */
+GPIO(DP_MUX_OE_L,           PIN(9, 6), GPIO_ODR_HIGH)  /* DP mux enable, actually Open-Drain */
+GPIO(DP_MUX_SEL,            PIN(4, 5), GPIO_OUT_LOW)   /* DP mux selection: L:C0, H:C1 */
 GPIO(DP_HOT_PLUG_DET,       PIN(9, 5), GPIO_OUT_LOW)   /* DP HPD to AP */
 /* TODO(waihong): Remove it from schematic. No use. */
 GPIO(USBC_MUX_CONF0,        PIN(5, 1), GPIO_INPUT)
@@ -85,7 +91,6 @@ GPIO(USB_C1_VBUS_DET_L,     PIN(8, 3), GPIO_INPUT)     /* Deprecated BC1.2 VBUS 
 /* USB-A */
 GPIO(EN_USB_A_5V,           PIN(8, 6), GPIO_OUT_LOW)
 GPIO(USB_A_CDP_ILIM_EN_L,   PIN(7, 5), GPIO_OUT_HIGH)  /* H:CDP, L:SDP. Only one USB-A port, always CDP */
-GPIO(USB_A0_OC_ODL,         PIN(D, 1), GPIO_ODR_HIGH)
 
 /* LEDs */
 GPIO(EC_CHG_LED_Y_C0,       PIN(C, 3), GPIO_OUT_LOW)
@@ -138,6 +143,9 @@ GPIO(SKU_ID2,               PIN(D, 4), GPIO_INPUT)
  * high-Z. Set pull-down to avoid floating.
  */
 GPIO(DA9313_GPIO0,          PIN(E, 2), GPIO_INPUT | GPIO_PULL_DOWN) /* Switchcap GPIO0 */
+
+/* Special straps */
+GPIO(ARM_X86,               PIN(6, 6), GPIO_OUT_LOW)  /* NC, low for power saving */
 
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)            /* UART (GPIO64/65) */

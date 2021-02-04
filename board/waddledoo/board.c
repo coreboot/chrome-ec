@@ -45,31 +45,80 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-static void tcpc_alert_event(enum gpio_signal s)
-{
-	int port = (s == GPIO_USB_C0_INT_ODL) ? 0 : 1;
+#define INT_RECHECK_US 5000
 
-	schedule_deferred_pd_interrupt(port);
+/* C0 interrupt line shared by BC 1.2 and charger */
+static void check_c0_line(void);
+DECLARE_DEFERRED(check_c0_line);
+
+static void notify_c0_chips(void)
+{
+	/*
+	 * The interrupt line is shared between the TCPC and BC 1.2 detection
+	 * chip.  Therefore we'll need to check both ICs.
+	 */
+	schedule_deferred_pd_interrupt(0);
+	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+}
+
+static void check_c0_line(void)
+{
+	/*
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL)) {
+		notify_c0_chips();
+		hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+	}
 }
 
 static void usb_c0_interrupt(enum gpio_signal s)
 {
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c0_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c0_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
+
+}
+
+/* C1 interrupt line shared by BC 1.2, TCPC, and charger */
+static void check_c1_line(void);
+DECLARE_DEFERRED(check_c1_line);
+
+static void notify_c1_chips(void)
+{
+	schedule_deferred_pd_interrupt(1);
+	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+}
+
+static void check_c1_line(void)
+{
 	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
+	 * If line is still being held low, see if there's more to process from
+	 * one of the chips.
 	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12, 0);
+	if (!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
+		notify_c1_chips();
+		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+	}
 }
 
 static void sub_usb_c1_interrupt(enum gpio_signal s)
 {
-	/*
-	 * The interrupt line is shared between the TCPC and BC 1.2 detection
-	 * chip.  Therefore we'll need to check both ICs.
-	 */
-	tcpc_alert_event(s);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12, 0);
+	/* Cancel any previous calls to check the interrupt line */
+	hook_call_deferred(&check_c1_line_data, -1);
+
+	/* Notify all chips using this line that an interrupt came in */
+	notify_c1_chips();
+
+	/* Check the line again in 5ms */
+	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+
 }
 
 static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
@@ -118,7 +167,9 @@ void board_init(void)
 {
 	int on;
 
+	/* Enable C0 interrupt and check if it needs processing */
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
+	check_c0_line();
 
 	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
 		/* Disable i2c on HDMI pins */
@@ -143,8 +194,9 @@ void board_init(void)
 		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL,
 			       GPIO_INPUT);
 
-		/* Enable C1 interrupts */
+		/* Enable C1 interrupt and check if it needs processing */
 		gpio_enable_interrupt(GPIO_SUB_C1_INT_EN_RAILS_ODL);
+		check_c1_line();
 	}
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
@@ -178,8 +230,8 @@ void board_hibernate(void)
 	 * entering the Z-state.
 	 */
 	if (board_get_charger_chip_count() > 1)
-		raa489000_hibernate(1);
-	raa489000_hibernate(0);
+		raa489000_hibernate(1, true);
+	raa489000_hibernate(0, true);
 }
 
 void board_reset_pd_mcu(void)
@@ -190,13 +242,14 @@ void board_reset_pd_mcu(void)
 	 */
 }
 
+#ifdef BOARD_WADDLEDOO
 static void reconfigure_5v_gpio(void)
 {
 	/*
-	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
-	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
-	 * instead for those boards.  Note that this breaks the volume up button
-	 * functionality.
+	 * b/147257497: On early waddledoo boards, GPIO_EN_PP5000 was swapped
+	 * with GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that
+	 * GPIO instead for those boards.  Note that this breaks the volume up
+	 * button functionality.
 	 */
 	if (system_get_board_version() < 0) {
 		CPRINTS("old board - remapping 5V en");
@@ -204,24 +257,28 @@ static void reconfigure_5v_gpio(void)
 	}
 }
 DECLARE_HOOK(HOOK_INIT, reconfigure_5v_gpio, HOOK_PRIO_INIT_I2C+1);
+#endif /* BOARD_WADDLEDOO */
 
 static void set_5v_gpio(int level)
 {
 	int version;
-	enum gpio_signal gpio;
+	enum gpio_signal gpio = GPIO_EN_PP5000;
 
 	/*
-	 * b/147257497: On early boards, GPIO_EN_PP5000 was swapped with
-	 * GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that GPIO
-	 * instead for those boards.  Note that this breaks the volume up button
-	 * functionality.
+	 * b/147257497: On early waddledoo boards, GPIO_EN_PP5000 was swapped
+	 * with GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that
+	 * GPIO instead for those boards.  Note that this breaks the volume up
+	 * button functionality.
 	 */
-	version = system_get_board_version();
+	if (IS_ENABLED(BOARD_WADDLEDOO)) {
+		version = system_get_board_version();
 
-	/*
-	 * If the CBI EEPROM wasn't formatted, assume it's a very early board.
-	 */
-	gpio = version < 0 ? GPIO_VOLUP_BTN_ODL : GPIO_EN_PP5000;
+		/*
+		 * If the CBI EEPROM wasn't formatted, assume it's a very early
+		 * board.
+		 */
+		gpio = version < 0 ? GPIO_VOLUP_BTN_ODL : GPIO_EN_PP5000;
+	}
 
 	gpio_set_level(gpio, level);
 }
@@ -340,10 +397,19 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
 
 	/*
-	 * TODO(b:147463641): Characterize the input current limit in case that
-	 * a scaling needs to be applied here.
+	 * b/147463641: The charger IC seems to overdraw ~4%, therefore we
+	 * reduce our target accordingly.
 	 */
+	icl = icl * 96 / 100;
 	charge_set_input_current_limit(icl, charge_mv);
+}
+
+__override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
+{
+	if (port < 0 || port > board_get_usb_pd_port_count())
+		return;
+
+	raa489000_set_output_current(port, rp);
 }
 
 /* Sensors */

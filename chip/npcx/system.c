@@ -82,13 +82,10 @@ void system_watchdog_reset(void)
 /* Return true if index is stored as a single byte in bbram */
 static int bbram_is_byte_access(enum bbram_data_index index)
 {
-	return (index >= BBRM_DATA_INDEX_VBNVCNTXT &&
-		index <  BBRM_DATA_INDEX_RAMLOG)
-		|| index == BBRM_DATA_INDEX_PD0
-		|| index == BBRM_DATA_INDEX_PD1
-		|| index == BBRM_DATA_INDEX_PD2
-		|| index == BBRM_DATA_INDEX_PANIC_FLAGS
-	;
+	return index == BBRM_DATA_INDEX_PD0 ||
+	       index == BBRM_DATA_INDEX_PD1 ||
+	       index == BBRM_DATA_INDEX_PD2 ||
+	       index == BBRM_DATA_INDEX_PANIC_FLAGS;
 }
 
 /* Check and clear BBRAM status on any reset */
@@ -183,10 +180,6 @@ static int bbram_data_write(enum bbram_data_index index, uint32_t value)
 /* Map idx to a returned BBRM_DATA_INDEX_*, or return -1 on invalid idx */
 static int bbram_idx_lookup(enum system_bbram_idx idx)
 {
-	if (idx >= SYSTEM_BBRAM_IDX_VBNVBLOCK0 &&
-	    idx <= SYSTEM_BBRAM_IDX_VBNVBLOCK15)
-		return BBRM_DATA_INDEX_VBNVCNTXT +
-		       idx - SYSTEM_BBRAM_IDX_VBNVBLOCK0;
 	if (idx == SYSTEM_BBRAM_IDX_PD0)
 		return BBRM_DATA_INDEX_PD0;
 	if (idx == SYSTEM_BBRAM_IDX_PD1)
@@ -378,6 +371,8 @@ static void check_reset_cause(void)
 	/* Clear saved hibernate wake flag in bbram , too */
 	bbram_data_write(BBRM_DATA_INDEX_WAKE, 0);
 
+	chip_set_hib_flag(&flags, hib_wake_flags);
+
 	/* Use scratch bit to check power on reset or VCC1_RST reset */
 	if (!IS_BIT_SET(NPCX_RSTCTL, NPCX_RSTCTL_VCC1_RST_SCRATCH)) {
 #ifdef CONFIG_BOARD_FORCE_RESET_PIN
@@ -419,15 +414,20 @@ static void check_reset_cause(void)
 					 */
 					flags |= EC_RESET_FLAG_RESET_PIN;
 			} else {
+				flags |= EC_RESET_FLAG_POWER_ON;
+
 				/*
 				 * Power-on restart, so set a flag and save it
 				 * for the next imminent reset. Later code
 				 * will check for this flag and wait for the
-				 * second reset.
+				 * second reset. Waking from PSL hibernate is
+				 * power-on for EC but not for H1, so do not
+				 * wait for the second reset.
 				 */
-				flags |= EC_RESET_FLAG_POWER_ON
-				      | EC_RESET_FLAG_INITIAL_PWR;
-				chip_flags |= EC_RESET_FLAG_INITIAL_PWR;
+				if (!(flags & EC_RESET_FLAG_HIBERNATE)) {
+					flags |= EC_RESET_FLAG_INITIAL_PWR;
+					chip_flags |= EC_RESET_FLAG_INITIAL_PWR;
+				}
 			}
 		} else
 			/*
@@ -453,8 +453,6 @@ static void check_reset_cause(void)
 		/* Clear debugger reset status initially*/
 		SET_BIT(NPCX_RSTCTL, NPCX_RSTCTL_DBGRST_STS);
 	}
-
-	chip_set_hib_flag(&flags, hib_wake_flags);
 
 	/* Watchdog Reset */
 	if (IS_BIT_SET(NPCX_T0CSR, NPCX_T0CSR_WDRST_STS)) {
@@ -529,6 +527,9 @@ static void system_set_lct_alarm(uint32_t seconds, uint32_t microseconds)
 #ifdef CONFIG_HIBERNATE_PSL
 	/* Enable LCT event to PSL */
 	npcx_lct_config(seconds, 1, 0);
+	/* save the start time of LCT */
+	if (IS_ENABLED(CONFIG_HOSTCMD_RTC) || IS_ENABLED(CONFIG_CMD_RTC))
+		bbram_data_write(BBRM_DATA_INDEX_LCT_TIME, seconds);
 #else
 	/* Enable LCT event interrupt and MIWU */
 	npcx_lct_config(seconds, 0, 1);
@@ -612,21 +613,48 @@ void __enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	for (i = NPCX_IRQ_0 ; i < NPCX_IRQ_COUNT ; i++)
 		task_clear_pending_irq(i);
 
-	/*
-	 * Set RTC interrupt in time to wake up before
-	 * next event.
-	 */
-	if (seconds || microseconds)
+	/* Set the timer interrupt for wake up.  */
 #ifdef NPCX_LCT_SUPPORT
+	if (seconds || microseconds) {
 		system_set_lct_alarm(seconds, microseconds);
+	} else if (IS_ENABLED(CONFIG_HIBERNATE_PSL_COMPENSATE_RTC)) {
+		system_set_lct_alarm(NPCX_LCT_MAX, 0);
+	}
 #else
+	if (seconds || microseconds)
 		system_set_rtc_alarm(seconds, microseconds);
 #endif
 
 	/* execute hibernate func depend on chip series */
 	__hibernate_npcx_series();
-
 }
+
+#ifdef CONFIG_HIBERNATE_PSL_COMPENSATE_RTC
+#ifndef NPCX_LCT_SUPPORT
+#error "Do not enable CONFIG_HIBERNATE_PSL_COMPENSATE_RTC if npcx ec doesn't \
+support LCT!"
+#endif
+/*
+ * The function uses the LCT counter value to compensate for RTC after hibernate
+ * wake-up. Because system_set_rtc() will invoke udelay(), the function should
+ * execute after timer_init(). The function also should execute before
+ * npcx_lct_init() which will clear all LCT register.
+ */
+void system_compensate_rtc(void)
+{
+	uint32_t rtc_time, ltc_start_time;
+
+	ltc_start_time = bbram_data_read(BBRM_DATA_INDEX_LCT_TIME);
+	if (ltc_start_time == 0)
+		return;
+
+	rtc_time = system_get_rtc_sec();
+	rtc_time += ltc_start_time - npcx_lct_get_time();
+	system_set_rtc(rtc_time);
+	/* Clear BBRAM data to avoid compensating again. */
+	bbram_data_write(BBRM_DATA_INDEX_LCT_TIME, 0);
+}
+#endif
 #endif /* CONFIG_SUPPORT_CHIP_HIBERNATION */
 
 static char system_to_hex(uint8_t val)
@@ -1064,8 +1092,6 @@ const char *system_get_chip_revision(void)
 
 	return rev;
 }
-
-BUILD_ASSERT(BBRM_DATA_INDEX_VBNVCNTXT + EC_VBNV_BLOCK_SIZE <= NPCX_BBRAM_SIZE);
 
 /**
  * Set a scratchpad register to the specified value.

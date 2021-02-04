@@ -149,7 +149,7 @@ void pd_prepare_sysjump(void)
 			continue;
 
 		sysjump_task_waiting = task_get_current();
-		task_set_event(PD_PORT_TO_TASK_ID(i), PD_EVENT_SYSJUMP, 0);
+		task_set_event(PD_PORT_TO_TASK_ID(i), PD_EVENT_SYSJUMP);
 		task_wait_event_mask(TASK_EVENT_SYSJUMP_READY, -1);
 		sysjump_task_waiting = TASK_ID_INVALID;
 	}
@@ -302,6 +302,23 @@ int pd_dfp_exit_mode(int port, enum tcpm_transmit_type type, uint16_t svid,
 	return 1;
 }
 
+/*
+ * Check if the SVID has been recorded previously. Some peripherals provide
+ * duplicated SVID.
+ */
+static bool is_svid_duplicated(const struct pd_discovery *disc, uint16_t svid)
+{
+	int i;
+
+	for (i = 0; i < disc->svid_cnt; ++i)
+		if (disc->svids[i].svid == svid) {
+			CPRINTF("ERR:SVIDDUP\n");
+			return true;
+		}
+
+	return false;
+}
+
 void dfp_consume_attention(int port, uint32_t *payload)
 {
 	uint16_t svid = PD_VDO_VID(payload[0]);
@@ -383,14 +400,17 @@ void dfp_consume_svids(int port, enum tcpm_transmit_type type, int cnt,
 		svid0 = PD_VDO_SVID_SVID0(*ptr);
 		if (!svid0)
 			break;
-		disc->svids[i].svid = svid0;
-		disc->svid_cnt++;
+
+		if (!is_svid_duplicated(disc, svid0))
+			disc->svids[disc->svid_cnt++].svid = svid0;
 
 		svid1 = PD_VDO_SVID_SVID1(*ptr);
 		if (!svid1)
 			break;
-		disc->svids[i + 1].svid = svid1;
-		disc->svid_cnt++;
+
+		if (!is_svid_duplicated(disc, svid1))
+			disc->svids[disc->svid_cnt++].svid = svid1;
+
 		ptr++;
 		vdo++;
 	}
@@ -653,13 +673,12 @@ void notify_sysjump_ready(void)
 	 * task waiting on us to complete.
 	 */
 	if (sysjump_task_waiting != TASK_ID_INVALID)
-		task_set_event(sysjump_task_waiting,
-				TASK_EVENT_SYSJUMP_READY, 0);
+		task_set_event(sysjump_task_waiting, TASK_EVENT_SYSJUMP_READY);
 }
 
-static inline bool is_rev3_vdo(int port, enum tcpm_transmit_type type)
+static inline bool is_pd_rev3(int port, enum tcpm_transmit_type type)
 {
-	return pd_get_vdo_ver(port, type) == PD_REV30;
+	return pd_get_rev(port, type) == PD_REV30;
 }
 
 /*
@@ -683,6 +702,7 @@ bool is_usb2_cable_support(int port)
 		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
 
 	return disc->identity.idh.product_type == IDH_PTYPE_PCABLE ||
+	       pd_get_vdo_ver(port, TCPC_TX_SOP_PRIME) < VDM_VER20 ||
 	       disc->identity.product_t2.a2_rev30.usb_20_support ==
 							USB2_SUPPORTED;
 }
@@ -715,7 +735,7 @@ bool is_active_cable_element_retimer(int port)
 	/* Ref: USB PD Spec 2.0 Table 6-29 Active Cable VDO
 	 * Revision 2 Active cables do not have Active element support.
 	 */
-	return is_rev3_vdo(port, TCPC_TX_SOP_PRIME) &&
+	return is_pd_rev3(port, TCPC_TX_SOP_PRIME) &&
 		disc->identity.idh.product_type == IDH_PTYPE_ACABLE &&
 		disc->identity.product_t2.a2_rev30.active_elem ==
 							ACTIVE_RETIMER;
@@ -748,7 +768,8 @@ void set_tbt_compat_mode_ready(int port)
 
 		/* Set usb mux to Thunderbolt-compatible mode */
 		usb_mux_set(port, USB_PD_MUX_TBT_COMPAT_ENABLED,
-			USB_SWITCH_CONNECT, pd_get_polarity(port));
+			USB_SWITCH_CONNECT,
+			polarity_rm_dts(pd_get_polarity(port)));
 	}
 }
 
@@ -756,7 +777,7 @@ void set_tbt_compat_mode_ready(int port)
  * Ref: USB Type-C Cable and Connector Specification
  * Figure F-1 TBT3 Discovery Flow
  */
-bool is_tbt_cable_superspeed(int port)
+static bool is_tbt_cable_superspeed(int port)
 {
 	struct pd_discovery *disc;
 
@@ -774,7 +795,7 @@ bool is_tbt_cable_superspeed(int port)
 		return false;
 
 	if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
-	   is_rev3_vdo(port, TCPC_TX_SOP_PRIME))
+	   is_pd_rev3(port, TCPC_TX_SOP_PRIME))
 		return  disc->identity.product_t1.p_rev30.ss ==
 						USB_R30_SS_U32_U40_GEN1 ||
 			disc->identity.product_t1.p_rev30.ss ==
@@ -790,10 +811,15 @@ bool is_tbt_cable_superspeed(int port)
 
 enum tbt_compat_cable_speed get_tbt_cable_speed(int port)
 {
-	union tbt_mode_resp_cable cable_mode_resp = {
-		.raw_value = pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME) };
-	enum tbt_compat_cable_speed max_tbt_speed =
-				board_get_max_tbt_speed(port);
+	union tbt_mode_resp_cable cable_mode_resp;
+	enum tbt_compat_cable_speed max_tbt_speed;
+
+	if (!is_tbt_cable_superspeed(port))
+		return TBT_SS_RES_0;
+
+	cable_mode_resp.raw_value =
+		pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME);
+	max_tbt_speed = board_get_max_tbt_speed(port);
 
 	/*
 	 * Ref: USB Type-C Cable and Connector Specification,
@@ -844,9 +870,11 @@ int enter_tbt_compat_mode(int port, enum tcpm_transmit_type sop,
 	enter_dev_mode.vendor_spec_b1 = dev_mode_resp.vendor_spec_b1;
 	enter_dev_mode.vendor_spec_b0 = dev_mode_resp.vendor_spec_b0;
 	enter_dev_mode.intel_spec_b0 = dev_mode_resp.intel_spec_b0;
-	enter_dev_mode.cable =
-		get_usb_pd_cable_type(port) == IDH_PTYPE_PCABLE ?
-			TBT_ENTER_PASSIVE_CABLE : TBT_ENTER_ACTIVE_CABLE;
+
+	if (get_usb_pd_cable_type(port) == IDH_PTYPE_ACABLE ||
+	    cable_mode_resp.tbt_active_passive == TBT_CABLE_ACTIVE)
+		enter_dev_mode.cable = TBT_ENTER_ACTIVE_CABLE;
+
 	enter_dev_mode.lsrx_comm = cable_mode_resp.lsrx_comm;
 	enter_dev_mode.retimer_type = cable_mode_resp.retimer_type;
 	enter_dev_mode.tbt_cable = cable_mode_resp.tbt_cable;
@@ -869,13 +897,9 @@ enum tbt_compat_rounded_support get_tbt_rounded_support(int port)
 	return cable_mode_resp.tbt_rounded;
 }
 
-/* Return the current cable speed received from Cable Discover Mode command */
 __overridable enum tbt_compat_cable_speed board_get_max_tbt_speed(int port)
 {
-	union tbt_mode_resp_cable cable_mode_resp = {
-		.raw_value = pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME) };
-
-	return cable_mode_resp.tbt_cable_speed;
+	return TBT_SS_TBT_GEN3;
 }
 /*
  * ############################################################################
@@ -890,7 +914,7 @@ __overridable enum tbt_compat_cable_speed board_get_max_tbt_speed(int port)
  * the port and the response received from the cable, whichever is least.
  *
  * For Cable rev 2.0: If get_tbt_cable_speed() is less than
- * TBT_SS_U32_GEN1_GEN2, return USB_R30_SS_U2_ONLY speed since the board
+ * TBT_SS_U31_GEN1, return USB_R30_SS_U2_ONLY speed since the board
  * doesn't support superspeed else the USB4 cable speed is set according to
  * the cable response.
  */
@@ -901,7 +925,7 @@ enum usb_rev30_ss get_usb4_cable_speed(int port)
 	enum usb_rev30_ss max_usb4_speed;
 
 
-	if (tbt_speed < TBT_SS_U32_GEN1_GEN2)
+	if (tbt_speed < TBT_SS_U31_GEN1)
 		return USB_R30_SS_U2_ONLY;
 
 	/*
@@ -911,7 +935,7 @@ enum usb_rev30_ss get_usb4_cable_speed(int port)
 	max_usb4_speed = tbt_speed == TBT_SS_TBT_GEN3 ?
 		USB_R30_SS_U40_GEN3 : USB_R30_SS_U32_U40_GEN2;
 
-	if (is_rev3_vdo(port, TCPC_TX_SOP_PRIME)) {
+	if (is_pd_rev3(port, TCPC_TX_SOP_PRIME)) {
 		disc = pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
 
 		return max_usb4_speed <  disc->identity.product_t1.p_rev30.ss ?
@@ -929,6 +953,7 @@ uint32_t get_enter_usb_msg_payload(int port)
 	 */
 	union enter_usb_data_obj eudo;
 	struct pd_discovery *disc;
+	union tbt_mode_resp_cable cable_mode_resp;
 
 	if (!IS_ENABLED(CONFIG_USB_PD_USB4))
 		return 0;
@@ -939,15 +964,29 @@ uint32_t get_enter_usb_msg_payload(int port)
 	eudo.usb3_drd_cap = IS_ENABLED(CONFIG_USB_PD_USB32_DRD);
 	eudo.cable_speed = get_usb4_cable_speed(port);
 
-	if (is_rev3_vdo(port, TCPC_TX_SOP_PRIME) &&
-	    (disc->identity.idh.product_type == IDH_PTYPE_ACABLE)) {
-		eudo.cable_type =
-			(disc->identity.product_t2.a2_rev30.active_elem ==
-			ACTIVE_RETIMER) ? CABLE_TYPE_ACTIVE_RETIMER :
-			CABLE_TYPE_ACTIVE_REDRIVER;
-	/* TODO: Add eudo.cable_type for Revisiosn 2 active cables */
+	if (disc->identity.idh.product_type == IDH_PTYPE_ACABLE) {
+		if (is_pd_rev3(port, TCPC_TX_SOP_PRIME)) {
+			enum retimer_active_element active_element =
+				disc->identity.product_t2.a2_rev30.active_elem;
+			eudo.cable_type = active_element == ACTIVE_RETIMER ?
+				CABLE_TYPE_ACTIVE_RETIMER :
+				CABLE_TYPE_ACTIVE_REDRIVER;
+		} else {
+			cable_mode_resp.raw_value =
+				pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME);
+
+			eudo.cable_type =
+				cable_mode_resp.retimer_type  == USB_RETIMER ?
+				CABLE_TYPE_ACTIVE_RETIMER :
+				CABLE_TYPE_ACTIVE_REDRIVER;
+		}
 	} else {
-		eudo.cable_type = CABLE_TYPE_PASSIVE;
+		cable_mode_resp.raw_value =
+			pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME);
+
+		eudo.cable_type =
+			cable_mode_resp.tbt_active_passive == TBT_CABLE_ACTIVE ?
+			CABLE_TYPE_ACTIVE_REDRIVER : CABLE_TYPE_PASSIVE;
 	}
 
 	switch (disc->identity.product_t1.p_rev20.vbus_cur) {
@@ -1039,28 +1078,42 @@ __overridable uint8_t get_dp_pin_mode(int port)
 	return pd_dfp_dp_get_pin_mode(port, dp_status[port]);
 }
 
+static mux_state_t svdm_dp_get_mux_mode(int port)
+{
+	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
+	int pin_mode = get_dp_pin_mode(port);
+	/*
+	 * Multi-function operation is only allowed if that pin config is
+	 * supported.
+	 */
+	if ((pin_mode & MODE_DP_PIN_MF_MASK) && mf_pref)
+		return USB_PD_MUX_DOCK;
+	else
+		return USB_PD_MUX_DP_ENABLED;
+}
+
 __overridable int svdm_dp_config(int port, uint32_t *payload)
 {
 	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	uint8_t pin_mode = get_dp_pin_mode(port);
-	mux_state_t mux_mode;
+	mux_state_t mux_mode = svdm_dp_get_mux_mode(port);
 
 	if (!pin_mode)
 		return 0;
 
-	/*
-	 * Multi-function operation is only allowed if that pin config is
-	 * supported.
-	 */
-	mux_mode = ((pin_mode & MODE_DP_PIN_MF_MASK) && mf_pref) ?
-		USB_PD_MUX_DOCK : USB_PD_MUX_DP_ENABLED;
 	CPRINTS("pin_mode: %x, mf: %d, mux: %d", pin_mode, mf_pref, mux_mode);
 
-	/* Connect the SBU and USB lines to the connector. */
-	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-		ppc_set_sbu(port, 1);
-	usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT, pd_get_polarity(port));
+	/*
+	 * Place the USB Type-C pins that are to be re-configured to DisplayPort
+	 * Configuration into the Safe state. For USB_PD_MUX_DOCK, the
+	 * superspeed signals can remain connected. For USB_PD_MUX_DP_ENABLED,
+	 * disconnect the superspeed signals here, before the pins are
+	 * re-configured to DisplayPort (in svdm_dp_post_config, when we receive
+	 * the config ack).
+	 */
+	if (mux_mode == USB_PD_MUX_DP_ENABLED)
+		usb_mux_set_safe_mode(port);
 
 	payload[0] = VDO(USB_SID_DISPLAYPORT, 1,
 			 CMD_DP_CONFIG | VDO_OPOS(opos));
@@ -1085,6 +1138,13 @@ int svdm_get_hpd_gpio(int port)
 
 __overridable void svdm_dp_post_config(int port)
 {
+	mux_state_t mux_mode = svdm_dp_get_mux_mode(port);
+	/* Connect the SBU and USB lines to the connector. */
+	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
+		ppc_set_sbu(port, 1);
+	usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT,
+		polarity_rm_dts(pd_get_polarity(port)));
+
 	dp_flags[port] |= DP_FLAGS_DP_ON;
 	if (!(dp_flags[port] & DP_FLAGS_HPD_HI_PENDING))
 		return;

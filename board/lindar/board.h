@@ -14,6 +14,8 @@
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
+#define CONFIG_VBOOT_EFS2
+
 #define CONFIG_POWER_BUTTON
 
 #undef CONFIG_UART_TX_BUF_SIZE
@@ -45,20 +47,8 @@
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_PORT_MAX_COUNT			2
 
-/*
- * USB-C port's USB2 & USB3 mapping from schematics
- * USB2 numbering on PCH - 1 to n
- * USB3 numbering on AP - 0 to n (PMC's USB3 numbering for MUX
- * configuration is - 1 to n hence add +1)
- */
-#define USBC_PORT_0_USB2_NUM	9
-#define USBC_PORT_0_USB3_NUM	1
-#define USBC_PORT_1_USB2_NUM	4
-#define USBC_PORT_1_USB3_NUM	2
-
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
@@ -68,10 +58,13 @@
 #define PD_MAX_POWER_MW		60000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
-/* Enabling USB4 mode */
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
+
+#undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
+#undef CONFIG_USB_MUX_RUNTIME_CONFIG
 
 /* USB Type A Features */
+#define USB_PORT_COUNT			1
+#define CONFIG_USB_PORT_POWER_DUMB
 
 /* USBC PPC*/
 #define CONFIG_USBC_PPC_SN5S330		/* USBC port C0 */
@@ -86,6 +79,10 @@
 /* charger defines */
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/* Retimer */
+#undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -125,13 +122,12 @@
 #define I2C_PORT_LIGHTBAR	NPCX_I2C_PORT3_0
 #define I2C_PORT_POWER		NPCX_I2C_PORT5_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
-#define I2C_PORT_USB_1_MIX	NPCX_I2C_COUNT
 
 #define I2C_PORT_BATTERY	I2C_PORT_POWER
 #define I2C_PORT_CHARGER	I2C_PORT_EEPROM
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 
 #ifndef __ASSEMBLER__
 

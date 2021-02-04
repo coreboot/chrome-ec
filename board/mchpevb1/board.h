@@ -173,7 +173,7 @@
 /* #define CONFIG_HOSTCMD_PD */
 /* #define CONFIG_HOSTCMD_PD_PANIC */
 #define CONFIG_I2C
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_LED_COMMON
 
@@ -270,10 +270,10 @@
  * Configure for smaller flash is OK for testing except
  * for SPI flash lock bit.
  */
- #define CONFIG_FLASH_SIZE 524288
+ #define CONFIG_FLASH_SIZE_BYTES 524288
  #define CONFIG_SPI_FLASH_W25X40
 /*
- * #define CONFIG_FLASH_SIZE 0x1000000
+ * #define CONFIG_FLASH_SIZE_BYTES 0x1000000
  * #define CONFIG_SPI_FLASH_W25Q128
  */
 
@@ -457,7 +457,6 @@ enum als_id {
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
 
 /* delay to turn on/off vconn */
-#define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /* Define typical operating power and max power */
 #define PD_OPERATING_POWER_MW 15000

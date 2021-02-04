@@ -95,11 +95,18 @@ extern "C" {
 
 /* Standard library functions */
 int atoi(const char *nptr);
+
+#ifdef CONFIG_ZEPHYR
+#include <ctype.h>
+#else
 int isdigit(int c);
 int isspace(int c);
 int isalpha(int c);
 int isupper(int c);
 int isprint(int c);
+int tolower(int c);
+#endif
+
 int memcmp(const void *s1, const void *s2, size_t len);
 void *memcpy(void *dest, const void *src, size_t len);
 void *memset(void *dest, int c, size_t len);
@@ -124,7 +131,8 @@ int strncmp(const char *s1, const char *s2, size_t n);
 
 /* Like strtol(), but for integers. */
 int strtoi(const char *nptr, char **endptr, int base);
-uint64_t strtoul(const char *nptr, char **endptr, int base);
+
+unsigned long long int strtoull(const char *nptr, char **endptr, int base);
 
 /* Like strncpy(), but guarantees null termination. */
 char *strzcpy(char *dest, const char *src, int len);
@@ -147,8 +155,6 @@ char *strzcpy(char *dest, const char *src, int len);
  * Other strings return 0 and leave *dest unchanged.
  */
 int parse_bool(const char *s, int *dest);
-
-int tolower(int c);
 #endif  /* !HIDE_EC_STDLIB */
 
 /**
@@ -194,6 +200,16 @@ bool bytes_are_trivial(const uint8_t *buffer, size_t size);
  * @return true if addr is aligned to align, false otherwise
  */
 bool is_aligned(uint32_t addr, uint32_t align);
+
+/**
+ * Get the alignment of x; the number of trailing zero bits.
+ *
+ * x must not be zero, otherwise the result is undefined (and will panic
+ * in debug builds).
+ *
+ * @return the number of consecutive zero bits in x starting from the lsb
+ */
+int alignment_log2(unsigned int x);
 
 /**
  * Reverse's the byte-order of the provided buffer.

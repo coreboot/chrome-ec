@@ -20,7 +20,7 @@
 
 /* Internal SPI flash on NPCX7 */
 /* Flash is 1MB but reserve half for future use. */
-#define CONFIG_FLASH_SIZE (512 * 1024)
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 
@@ -41,7 +41,7 @@
 #define CONFIG_HOSTCMD_SKUID
 #define CONFIG_I2C
 #define CONFIG_I2C_BUS_MAY_BE_UNPOWERED
-#define CONFIG_I2C_MASTER
+#define CONFIG_I2C_CONTROLLER
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LOW_POWER_S0
 #define CONFIG_LTO
@@ -142,7 +142,6 @@
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
-#define PD_VCONN_SWAP_DELAY		5000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
 #define PD_MAX_POWER_MW		45000
