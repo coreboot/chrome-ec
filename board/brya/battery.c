@@ -6,11 +6,11 @@
  */
 
 #include "battery_fuel_gauge.h"
-#include "charge_state.h"
 #include "common.h"
+#include "util.h"
 
 /*
- * Battery info for all sasukette battery types. Note that the fields
+ * Battery info for all Brya battery types. Note that the fields
  * start_charging_min/max and charging_min/max are not used for the charger.
  * The effective temperature limits are given by discharging_min/max_c.
  *
@@ -32,38 +32,67 @@
  * address, mask, and disconnect value need to be provided.
  */
 const struct board_batt_params board_battery_info[] = {
-	/* SDI Battery Information */
-	[BATTERY_SDI] = {
+	/* POW-TECH GQA05 Battery Information */
+	[BATTERY_POWER_TECH] = {
+		/* BQ40Z50 Fuel Gauge */
 		.fuel_gauge = {
-			.manuf_name = "SDI",
-			.device_name = "4402D51",
+			.manuf_name = "POW-TECH",
+			.device_name = "GQA05",
 			.ship_mode = {
 				.reg_addr = 0x00,
 				.reg_data = { 0x0010, 0x0010 },
 			},
 			.fet = {
-				.mfgacc_support = 0,
+				.mfgacc_support = 1,
 				.reg_addr = 0x00,
-				.reg_mask = 0xc000,
-				.disconnect_val = 0x8000,
-				.cfet_mask = 0xc000,
-				.cfet_off_val = 0x2000,
+				.reg_mask = 0x2000,		/* XDSG */
+				.disconnect_val = 0x2000,
 			}
 		},
 		.batt_info = {
-			.voltage_max		= 8860,
-			.voltage_normal		= 7700, /* mV */
-			.voltage_min		= 6000, /* mV */
-			.precharge_current	= 200,	/* mA */
+			.voltage_max		= TARGET_WITH_MARGIN(13050, 5),
+			.voltage_normal		= 11400, /* mV */
+			.voltage_min		= 9000, /* mV */
+			.precharge_current	= 256,	/* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 45,
+			.charging_min_c		= 0,
+			.charging_max_c		= 45,
+			.discharging_min_c	= -20,
+			.discharging_max_c	= 60,
+		},
+	},
+	/* LGC L17L3PB0 Battery Information */
+	/*
+	 * Battery info provided by ODM on b/143477210, comment #11
+	 */
+	[BATTERY_LGC011] = {
+		.fuel_gauge = {
+			.manuf_name = "LGC",
+			.ship_mode = {
+				.reg_addr = 0x00,
+				.reg_data = { 0x0010, 0x0010 },
+			},
+			.fet = {
+				.reg_addr = 0x0,
+				.reg_mask = 0x6000,
+				.disconnect_val = 0x6000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= TARGET_WITH_MARGIN(13200, 5),
+			.voltage_normal		= 11550, /* mV */
+			.voltage_min		= 9000, /* mV */
+			.precharge_current	= 256,	/* mA */
 			.start_charging_min_c	= 0,
 			.start_charging_max_c	= 45,
 			.charging_min_c		= 0,
 			.charging_max_c		= 60,
-			.discharging_min_c	= -20,
-			.discharging_max_c	= 70,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 75,
 		},
-	}
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(board_battery_info) == BATTERY_TYPE_COUNT);
 
-const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_SDI;
+const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_POWER_TECH;

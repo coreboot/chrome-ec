@@ -5,6 +5,10 @@
 """Release branch updater tool.
 
 This is a tool to merge from the main branch into a release branch.
+
+Inspired by the fingerprint release process:
+http://go/cros-fingerprint-firmware-branching-and-signing and now used by other
+boards.
 """
 from __future__ import print_function
 import argparse
@@ -13,6 +17,8 @@ import re
 import subprocess
 import sys
 import textwrap
+
+BUG_NONE_PATTERN = re.compile('none', flags=re.IGNORECASE)
 
 
 def git_commit_msg(branch, head, merge_head, rel_paths):
@@ -40,6 +46,15 @@ def git_commit_msg(branch, head, merge_head, rel_paths):
 
     _, relevant_bugs = get_relevant_commits(head, merge_head, '', rel_paths)
     relevant_bugs = set(re.findall('BUG=(.*)', relevant_bugs))
+    # Filter out "none" from set of bugs
+    filtered = []
+    for bug_line in relevant_bugs:
+        bug_line = bug_line.replace(',', ' ')
+        bugs = bug_line.split(' ')
+        for bug in bugs:
+            if bug and not BUG_NONE_PATTERN.match(bug):
+                filtered.append(bug)
+    relevant_bugs = filtered
 
     COMMIT_MSG_TEMPLATE = """
 Merge remote-tracking branch cros/main into {BRANCH}
@@ -59,7 +74,7 @@ TEST=`make -j buildall`
     # 72 cols.
     relevant_commits_cmd = textwrap.fill(relevant_commits_cmd, width=72)
     # Wrap at 68 cols to save room for 'BUG='
-    bugs = textwrap.wrap(' '.join(list(relevant_bugs)), width=68)
+    bugs = textwrap.wrap(' '.join(relevant_bugs), width=68)
     bug_field = ''
     for line in bugs:
         bug_field += 'BUG=' + line + '\n'
@@ -169,12 +184,12 @@ def main(argv):
     if opts.baseboard:
         # Dereference symlinks so "git log" works as expected.
         baseboard_dir = os.path.relpath('baseboard/' + opts.baseboard)
-        baseboard_dir = os.path.realpath(baseboard_dir)
+        baseboard_dir = os.path.relpath(os.path.realpath(baseboard_dir))
 
         boards = get_relevant_boards(opts.baseboard)
     elif opts.board:
         board_dir = os.path.relpath('board/' + opts.board)
-        board_dir = os.path.realpath(board_dir)
+        board_dir = os.path.relpath(os.path.realpath(board_dir))
         boards = [opts.board]
     else:
         parser.error('You must specify a board OR a baseboard')

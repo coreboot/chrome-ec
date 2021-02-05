@@ -69,6 +69,7 @@ add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 # supported by all boards and emulators (including unit tests) using the shim
 # layer.
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC         "${PLATFORM_EC}/common/base32.c"
+                                                "${PLATFORM_EC}/common/peripheral.c"
                                                 "${PLATFORM_EC}/common/printf.c"
                                                 "${PLATFORM_EC}/common/queue.c"
                                                 "${PLATFORM_EC}/common/shared_mem.c"
@@ -158,6 +159,12 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PANIC   "${PLATFORM_EC}/common/panic_output.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
+                                                "${PLATFORM_EC}/common/sha256.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SWITCH
+                                                "${PLATFORM_EC}/common/switch.c")
+
+
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_THROTTLE_AP
                                                 "${PLATFORM_EC}/common/throttle_ap.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TABLET_MODE
@@ -232,6 +239,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SN5S330
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SYV682X
                                                 "${PLATFORM_EC}/driver/ppc/syv682x.c")
 
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_HASH
+                                                "${PLATFORM_EC}/common/vboot_hash.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE  "${PLATFORM_EC}/common/vstore.c")
 
 zephyr_sources_ifdef(CONFIG_SHELL               "${PLATFORM_EC}/common/gpio_commands.c")

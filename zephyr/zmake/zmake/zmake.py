@@ -54,17 +54,12 @@ class Zmake:
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def configure(self, project_dir, build_dir,
+    def configure(self, project_dir, build_dir=None,
                   version=None, zephyr_base=None, module_paths=None,
                   toolchain=None, ignore_unsupported_zephyr_version=False,
                   build_after_configure=False, test_after_configure=False,
                   bringup=False):
         """Set up a build directory to later be built by "zmake build"."""
-        # Make sure the build directory is clean.
-        if os.path.exists(build_dir):
-            self.logger.info("Clearing old build directory %s", build_dir)
-            shutil.rmtree(build_dir)
-
         project = zmake.project.Project(project_dir)
         if version:
             # Ignore the patchset.
@@ -86,10 +81,24 @@ class Zmake:
         if not module_paths:
             module_paths = zmake.modules.locate_modules(self.checkout, version)
 
+        # Resolve build_dir if needed.
+        build_dir = util.resolve_build_dir(
+            platform_ec_dir=module_paths['ec-shim'],
+            project_dir=project_dir,
+            build_dir=build_dir)
+        # Make sure the build directory is clean.
+        if os.path.exists(build_dir):
+            self.logger.info("Clearing old build directory %s", build_dir)
+            shutil.rmtree(build_dir)
+
         base_config = zmake.build_config.BuildConfig(
             environ_defs={'ZEPHYR_BASE': str(zephyr_base),
                           'PATH': '/usr/bin'},
-            cmake_defs={'DTS_ROOT': str(module_paths['ec-shim'] / 'zephyr')})
+            cmake_defs={
+                'DTS_ROOT': str(module_paths['ec-shim'] / 'zephyr'),
+                'SYSCALL_INCLUDE_DIRS': str(
+                    module_paths['ec-shim'] / 'zephyr' / 'include' / 'drivers'),
+            })
         module_config = zmake.modules.setup_module_symlinks(
             build_dir / 'modules', module_paths)
 
@@ -139,6 +148,9 @@ class Zmake:
 
     def build(self, build_dir, output_files_out=None):
         """Build a pre-configured build directory."""
+        build_dir = util.resolve_build_dir(platform_ec_dir=self.platform_ec_dir,
+                                           project_dir=build_dir,
+                                           build_dir=build_dir)
         project = zmake.project.Project(build_dir / 'project')
 
         procs = []
@@ -190,6 +202,9 @@ class Zmake:
         """Test a build directory."""
         procs = []
         output_files = []
+        build_dir = util.resolve_build_dir(platform_ec_dir=self.platform_ec_dir,
+                                           project_dir=build_dir,
+                                           build_dir=build_dir)
         self.build(build_dir, output_files_out=output_files)
 
         # If the project built but isn't a test, just bail.
@@ -275,3 +290,9 @@ class Zmake:
         for tmpdir in tmp_dirs:
             shutil.rmtree(tmpdir)
         return rv
+
+    @property
+    def platform_ec_dir(self):
+        return zmake.modules.locate_modules(
+            checkout_dir=self.checkout,
+            version=None)['ec-shim']
