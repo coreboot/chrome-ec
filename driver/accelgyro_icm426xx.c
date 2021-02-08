@@ -421,11 +421,6 @@ static int icm426xx_set_data_rate(const struct motion_sensor_t *s, int rate,
 		ret = icm426xx_enable_sensor(s, 0);
 		data->odr = 0;
 		return ret;
-	} else if (data->odr == 0) {
-		/* enable sensor */
-		ret = icm426xx_enable_sensor(s, 1);
-		if (ret)
-			return ret;
 	}
 
 	mutex_lock(s->mutex);
@@ -435,15 +430,20 @@ static int icm426xx_set_data_rate(const struct motion_sensor_t *s, int rate,
 	if (ret != EC_SUCCESS)
 		goto out_unlock;
 
-	data->odr = normalized_rate;
-
 	mutex_unlock(s->mutex);
 
+	if (data->odr == 0) {
+		/* enable sensor */
+		ret = icm426xx_enable_sensor(s, 1);
+		if (ret)
+			return ret;
 #ifdef CONFIG_ACCEL_FIFO
-	/* enable data in FIFO */
-	icm426xx_config_fifo(s, 1);
+		/* enable data in FIFO */
+		icm426xx_config_fifo(s, 1);
 #endif /* CONFIG_ACCEL_FIFO */
+	}
 
+	data->odr = normalized_rate;
 	return EC_SUCCESS;
 
 out_unlock:
