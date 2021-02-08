@@ -803,7 +803,14 @@ static int icm426xx_init_config(const struct motion_sensor_t *s)
 	val |= ICM426XX_UI_SIFS_CFG_SPI_DIS;
 #endif
 
-	return icm_field_update8(s, ICM426XX_REG_INTF_CONFIG0, mask, val);
+	ret = icm_field_update8(s, ICM426XX_REG_INTF_CONFIG0, mask, val);
+	if (ret)
+		return ret;
+
+	/* set accel oscillator to RC clock to avoid bad transition with PLL */
+	return icm_field_update8(s, ICM426XX_REG_INTF_CONFIG1,
+				 ICM426XX_ACCEL_LP_CLK_SEL,
+				 ICM426XX_ACCEL_LP_CLK_SEL);
 }
 
 static int icm426xx_init(const struct motion_sensor_t *s)
