@@ -3,12 +3,33 @@
 # found in the LICENSE file.
 """Module for project config wrapper object."""
 
-import jsonschema
+import warnings
 import yaml
+
+# The version of jsonschema in the chroot has a bunch of
+# DeprecationWarnings that fire when we import it.  Suppress these
+# during the import to keep the noise down.
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore')
+    import jsonschema
 
 import zmake.build_config as build_config
 import zmake.output_packers as packers
 import zmake.util as util
+
+
+def module_dts_overlay_name(modpath, board_name):
+    """Given a board name, return the expected DTS overlay path.
+
+    Args:
+        modpath: the module path as a pathlib.Path object
+        board_name: the name of the board
+
+    Returns:
+        A pathlib.Path object to the expected overlay path.
+    """
+    return modpath / 'zephyr' / 'dts' / 'board-overlays' / '{}.dts'.format(
+        board_name)
 
 
 class ProjectConfig:
@@ -41,6 +62,12 @@ class ProjectConfig:
             'is-test': {
                 'type': 'boolean',
             },
+            'dts-overlays': {
+                'type': 'array',
+                'items': {
+                    'type': 'string',
+                },
+            },
         },
     }
 
@@ -70,13 +97,19 @@ class ProjectConfig:
     def is_test(self):
         return self.config_dict.get('is-test', False)
 
+    @property
+    def dts_overlays(self):
+        return self.config_dict.get('dts-overlays', [])
+
 
 class Project:
     """An object encapsulating a project directory."""
-    def __init__(self, project_dir):
+    def __init__(self, project_dir, config_dict=None):
         self.project_dir = project_dir.resolve()
-        with open(self.project_dir / 'zmake.yaml') as f:
-            self.config = ProjectConfig(yaml.safe_load(f))
+        if not config_dict:
+            with open(self.project_dir / 'zmake.yaml') as f:
+                config_dict = yaml.safe_load(f)
+        self.config = ProjectConfig(config_dict)
         self.packer = self.config.output_packer(self)
 
     def iter_builds(self):
@@ -94,3 +127,27 @@ class Project:
             conf |= build_config.BuildConfig(kconfig_files=[prj_conf])
         for build_name, packer_config in self.packer.configs():
             yield build_name, conf | packer_config
+
+    def find_dts_overlays(self, modules):
+        """Find appropriate dts overlays from registered modules.
+
+        Args:
+            modules: A dictionary of module names mapping to paths.
+
+        Returns:
+            A BuildConfig with relevant configurations to enable the
+            found DTS overlay files.
+        """
+        overlays = []
+        for module_path in modules.values():
+            dts_path = module_dts_overlay_name(module_path, self.config.board)
+            if dts_path.is_file():
+                overlays.append(dts_path.resolve())
+
+        overlays.extend(self.project_dir / f for f in self.config.dts_overlays)
+
+        if overlays:
+            return build_config.BuildConfig(
+                cmake_defs={'DTC_OVERLAY_FILE': ';'.join(map(str, overlays))})
+        else:
+            return build_config.BuildConfig()

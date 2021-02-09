@@ -297,6 +297,48 @@ config PLATFORM_EC_USB_PD_DUAL_ROLE
 	  up its battery), or send out power to an attached device on the same
 	  port.
 
+config PLATFORM_EC_USB_PD_FRS
+	bool "Support Fast Role Swap protocol"
+	help
+	  Enables the protocol side of Fast Role Swap (FRS). This allows the
+	  device to switch from a SNK to a SRC (or vice versa) based on
+	  communication with the partner device.
+
+	  For this to work the trigger must be implemented in either the
+	  Type-C Port Controller (TCPC) or Power Path Controller (PPC).
+
+	  FRS differs from the traditional power-role swap in that FRS
+	  guarantees there is no interruption of power nor disruption of data
+	  communication to any downstream devices (such as devices connected
+	  to a USB-C hub or dock).
+
+if PLATFORM_EC_USB_PD_FRS
+
+choice "Trigger implementation"
+	prompt "Select where the trigger is implemented"
+	help
+	  The Fast Role Swap (protocol requires that a trigger be implemented to
+	  initiate the swap. Use this option to select which of the available
+	  options should be used.
+
+config PLATFORM_EC_USB_PD_FRS_PPC
+	bool "PPC"
+	depends on PLATFORM_EC_USBC_PPC
+	help
+	  Enable this if the Fast Role Swap trigger is implemented in the
+	  Power Path Controller (PPC).
+
+config PLATFORM_EC_USB_PD_FRS_TCPC
+	bool "TCPC"
+	depends on PLATFORM_EC_USBC_TCPC
+	help
+	  Enable this if the Fast Role Swap trigger is implemented in the
+	  Type-C Port Controller (TCPC).
+
+endchoice # Trigger implementation
+
+endif # PLATFORM_EC_USB_PD_FRS
+
 config PLATFORM_EC_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	bool "Board can use TCPC-controlled DRP toggle"
 	depends on PLATFORM_EC_USB_PD_DUAL_ROLE
@@ -340,7 +382,7 @@ config PLATFORM_EC_USB_PD_DISCHARGE_PPC
 
 endchoice  # Discharge method
 
-config PLATFORM_EC_CONFIG_USB_PD_REV30
+config PLATFORM_EC_USB_PD_REV30
 	bool "USB PD Rev3.0 functionality"
 	default y
 	help
@@ -464,6 +506,15 @@ config PLATFORM_EC_HOSTCMD_PD_CONTROL
 	  This host command can be manually executed using the
 	  "ectool pdcontrol" command from the Chromium OS shell.
 
+config PLATFORM_EC_USB_PD_LOGGING
+	bool "Host command: EC_CMD_PD_GET_LOG_ENTRY"
+	help
+	  Enable logging of USB Power Delivery events. The AP can request the
+	  log to see what has happened recently.
+
+	  The log events are stored in a circular buffer, each one being a
+	  struct event_log_entry.
+
 config PLATFORM_EC_CMD_USB_PD_PE
 	bool "Console command: pe"
 	help
@@ -544,7 +595,7 @@ config PLATFORM_EC_USB_PD_TRY_SRC
 
 config PLATFORM_EC_USB_PD_USB4
 	bool "USB4 support"
-	depends on PLATFORM_EC_CONFIG_USB_PD_REV30
+	depends on PLATFORM_EC_USB_PD_REV30
 	default y
 	help
 	  This enables support for entering into USB4 mode between two port
@@ -554,7 +605,7 @@ config PLATFORM_EC_USB_PD_USB4
 
 config PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
 	bool "Thunderbolt-compatible mode support"
-	depends on PLATFORM_EC_CONFIG_USB_PD_REV30
+	depends on PLATFORM_EC_USB_PD_REV30
 	default y
 	help
 	  Enable this to allow entering into Thunderbolt-compatible mode between
@@ -731,6 +782,20 @@ config PLATFORM_EC_USB_MUX_VIRTUAL
 	  actually handled by the AP. In this case the AP gets an interrupt
 	  and is is informed when status changes, via the
 	  EC_CMD_USB_PD_MUX_INFO host command.
+
+config PLATFORM_EC_USBC_RETIMER_FW_UPDATE
+	bool "Support firmware update of USB Type-C retimers"
+	default y
+	depends on PLATFORM_EC_USBC_SS_MUX
+	help
+	   Enable this to support USB Type-C retimer firmware update. Each
+	   Type-C retimer indicates its capability of supporting firmware update
+	   independently in its usb_mux_driver.
+
+	   During AP boot-up, the AP scans each PD port for retimers but only
+	   if there are no Type-C devices attached to the port. The firmware
+	   update can only be performed on retimers which show up in the AP
+	   thunderbolt device entries.
 
 endif  # PLATFORM_EC_USB_MUX
 

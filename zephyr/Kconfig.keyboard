@@ -50,6 +50,42 @@ config PLATFORM_EC_KEYBOARD_BOARD_CONFIG
 	  If this is not enabled, default values in common/keyboard_scan.c are
 	  used.
 
+config PLATFORM_EC_KEYBOARD_KEYPAD
+	bool "Support a numeric keypad"
+	help
+	  Enable support for a keypad, a palm-sized keyboard section usually
+	  placed on the far right. This contains nuumber keys and also some
+	  commonly used symbols, to help speed up numeric data entry.
+
+choice "Power button interference"
+	prompt "Select the impact of pressing the power button"
+	help
+	  On some boards one of the keyboard-scan inputs is affected by pressing
+	  the power button. When the power button is pressed, that input needs
+	  to be ignored in that case.
+
+config PLATFORM_EC_KEYBOARD_PWRBTN_INDEPENDENT
+	bool "No impact on keyboard-scan inputs"
+	help
+	  Select this if pressing the power button does not affect any
+	  keyboard-scan inputs.
+
+config PLATFORM_EC_KEYBOARD_PWRBTN_ASSERTS_KSI2
+	bool "Forces KSI2 to be asserted"
+	help
+	  Enable this if KSI2 is stuck 'asserted' for all scan columns if the
+	  power button is held. We must be aware of this case in order to
+	  correctly handle recovery-mode key combinations.
+
+config PLATFORM_EC_KEYBOARD_PWRBTN_ASSERTS_KSI3
+	bool "Forces KSI3 to be asserted"
+	help
+	  Enable this if KSI3 is stuck 'asserted' for all scan columns if the
+	  power button is held. We must be aware of this case in order to
+	  correctly handle recovery-mode key combinations.
+
+endchoice # "Power button interference"
+
 config PLATFORM_EC_KEYBOARD_COL2_INVERTED
 	bool "A mechanism for passing KSO2 to H1 which inverts the signal"
 	help
@@ -58,6 +94,16 @@ config PLATFORM_EC_KEYBOARD_COL2_INVERTED
 	  adds more delay. Need a larger delay value. Otherwise, pressing
 	  Refresh key will also trigger T key, which is in the next scanning
 	  column line. See http://b/156007029.
+
+config PLATFORM_EC_VOLUME_BUTTONS
+	bool "Board has volume-up and volume-down buttons"
+	help
+	  Enable this if the board has physical buttons for the volume controls.
+	  These are buttons controlled by GPIOs and are not part of the keyboard
+	  matrix.
+
+	  Your board must define GPIO_VOLUME_UP_L and GPIO_VOLUME_DOWN_L in
+	  gpio_map.h
 
 config PLATFORM_EC_CONSOLE_CMD_KEYBOARD_8042
 	bool "Console command: i8042"

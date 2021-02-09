@@ -90,6 +90,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_ALS_TCS3400
                                                 "${PLATFORM_EC}/driver/als_tcs3400.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_ACPI    "${PLATFORM_EC}/common/acpi.c"
                                                 "${PLATFORM_EC}/common/ec_features.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BACKLIGHT_LID
+                                                "${PLATFORM_EC}/common/backlight_lid.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY "${PLATFORM_EC}/common/battery.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
                                                 "${PLATFORM_EC}/common/battery_fuel_gauge.c")
@@ -159,17 +161,18 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PANIC   "${PLATFORM_EC}/common/panic_output.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PWM     "${PLATFORM_EC}/common/pwm.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
                                                 "${PLATFORM_EC}/common/sha256.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SWITCH
                                                 "${PLATFORM_EC}/common/switch.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SPI_FLASH_REGS
+                                                "${PLATFORM_EC}/common/spi_flash_reg.c")
 
-
-zephyr_sources_ifdef(CONFIG_PLATFORM_EC_THROTTLE_AP
-                                                "${PLATFORM_EC}/common/throttle_ap.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TABLET_MODE
                                                 "${PLATFORM_EC}/common/tablet_mode.c")
-zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PWM     "${PLATFORM_EC}/common/pwm.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_THROTTLE_AP
+                                                "${PLATFORM_EC}/common/throttle_ap.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TIMER   "${PLATFORM_EC}/common/timer.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_CHARGER
@@ -186,6 +189,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_PD
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_console.c")
 
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_FW_UPDATE
+                                                "${PLATFORM_EC}/common/usbc/usb_retimer_fw_update.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_SS_MUX
@@ -193,6 +198,9 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_SS_MUX
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_VIRTUAL
                                                 "${PLATFORM_EC}/driver/usb_mux/virtual.c")
 
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_LOGGING
+                                                "${PLATFORM_EC}/common/event_log.c"
+                                                "${PLATFORM_EC}/common/pd_log.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
                                                 "${PLATFORM_EC}/common/usbc/tbt_alt_mode.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_USB4
@@ -241,6 +249,9 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SYV682X
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_HASH
                                                 "${PLATFORM_EC}/common/vboot_hash.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VOLUME_BUTTONS
+                                                "${PLATFORM_EC}/common/button.c")
+
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE  "${PLATFORM_EC}/common/vstore.c")
 
 zephyr_sources_ifdef(CONFIG_SHELL               "${PLATFORM_EC}/common/gpio_commands.c")

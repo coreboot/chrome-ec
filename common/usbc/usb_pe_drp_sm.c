@@ -1364,10 +1364,14 @@ void pe_got_soft_reset(int port)
 	set_state_pe(port, PE_SOFT_RESET);
 }
 
-static bool pd_can_source_from_device(const int pdo_cnt, const uint32_t *pdos)
+static bool pd_can_source_from_device(int port, const int pdo_cnt,
+				      const uint32_t *pdos)
 {
-	/* Don't attempt to source from a device we have no SrcCaps from */
-	if (pdo_cnt == 0)
+	/*
+	 * Don't attempt to source from a device we have no SrcCaps from. Or, if
+	 * drp_state is FORCE_SOURCE then don't attempt a PRS.
+	 */
+	if (pdo_cnt == 0 || pd_get_dual_role(port) == PD_DRP_FORCE_SOURCE)
 		return false;
 
 	/*
@@ -1406,13 +1410,16 @@ static bool pd_can_source_from_device(const int pdo_cnt, const uint32_t *pdos)
 void pd_resume_check_pr_swap_needed(int port)
 {
 	/*
-	 * Explicit contract, current power role of SNK and the device
-	 * indicates it should not power us then trigger a PR_Swap
+	 * Explicit contract, current power role of SNK, the device
+	 * indicates it should not power us, and device isn't selected
+	 * as the charging port (ex. through the GUI) then trigger a PR_Swap
 	 */
 	if (pe_is_explicit_contract(port) &&
 	    pd_get_power_role(port) == PD_ROLE_SINK &&
-	    !pd_can_source_from_device(pd_get_src_cap_cnt(port),
-				       pd_get_src_caps(port)))
+	    !pd_can_source_from_device(port, pd_get_src_cap_cnt(port),
+				       pd_get_src_caps(port)) &&
+	    (!IS_ENABLED(CONFIG_CHARGE_MANAGER) ||
+	     charge_manager_get_active_charge_port() != port))
 		pd_dpm_request(port, DPM_REQUEST_PR_SWAP);
 }
 
@@ -1516,7 +1523,8 @@ static void pe_update_waiting_batt_flag(void)
 		}
 	}
 }
-DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, pe_update_waiting_batt_flag, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, pe_update_waiting_batt_flag,
+							HOOK_PRIO_DEFAULT);
 #endif
 
 /*
@@ -1542,6 +1550,13 @@ test_export_static enum usb_pe_state get_state_pe(const int port)
 	return pe[port].ctx.current - &pe_states[0];
 }
 
+/*
+ * Handle common DPM requests to both source and sink.
+ *
+ * Note: it is assumed the calling state set PE_FLAGS_LOCALLY_INITIATED_AMS
+ *
+ * Returns true if state was set and calling run state should now return.
+ */
 static bool common_src_snk_dpm_requests(int port)
 {
 	if (IS_ENABLED(CONFIG_USB_PD_EXTENDED_MESSAGES) &&
@@ -1617,6 +1632,167 @@ static bool common_src_snk_dpm_requests(int port)
 		return true;
 	}
 
+	return false;
+}
+
+/*
+ * Handle source-specific DPM requests
+ *
+ * Returns true if state was set and calling run state should now return.
+ */
+static bool source_dpm_requests(int port)
+{
+	/*
+	 * Ignore sink-specific request:
+	 *   DPM_REQUEST_NEW_POWER_LEVEL
+	 *   DPM_REQUEST_SOURCE_CAP
+	 *   DPM_REQUEST_FRS_DET_ENABLE
+	 *   DPM_REQURST_FRS_DET_DISABLE
+	 */
+	PE_CLR_DPM_REQUEST(port, DPM_REQUEST_NEW_POWER_LEVEL |
+				 DPM_REQUEST_SOURCE_CAP |
+				 DPM_REQUEST_FRS_DET_ENABLE |
+				 DPM_REQUEST_FRS_DET_DISABLE);
+
+	if (pe[port].dpm_request) {
+		uint32_t dpm_request = pe[port].dpm_request;
+
+		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+
+		if (PE_CHK_DPM_REQUEST(port,
+				       DPM_REQUEST_DR_SWAP)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_DR_SWAP);
+			if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
+				set_state_pe(port, PE_SRC_HARD_RESET);
+			else
+				set_state_pe(port, PE_DRS_SEND_SWAP);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_PR_SWAP)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_PR_SWAP);
+			set_state_pe(port, PE_PRS_SRC_SNK_SEND_SWAP);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_GOTO_MIN)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_GOTO_MIN);
+			set_state_pe(port, PE_SRC_TRANSITION_SUPPLY);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_SRC_CAP_CHANGE)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_SRC_CAP_CHANGE);
+			set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_GET_SRC_CAPS)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_GET_SRC_CAPS);
+			set_state_pe(port, PE_DR_SRC_GET_SOURCE_CAP);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_SEND_PING)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_SEND_PING);
+			set_state_pe(port, PE_SRC_PING);
+			return true;
+		} else if (common_src_snk_dpm_requests(port)) {
+			return true;
+		}
+
+		CPRINTF("Unhandled DPM Request %x received\n",
+			dpm_request);
+		PE_CLR_DPM_REQUEST(port, dpm_request);
+		PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+	}
+	return false;
+}
+
+/*
+ * Handle sink-specific DPM requests
+ *
+ * Returns true if state was set and calling run state should now return.
+ */
+static bool sink_dpm_requests(int port)
+{
+	/*
+	 * Ignore source specific requests:
+	 *   DPM_REQUEST_GOTO_MIN
+	 *   DPM_REQUEST_SRC_CAP_CHANGE,
+	 *   DPM_REQUEST_SEND_PING
+	 */
+	PE_CLR_DPM_REQUEST(port, DPM_REQUEST_GOTO_MIN |
+			   DPM_REQUEST_SRC_CAP_CHANGE |
+			   DPM_REQUEST_SEND_PING);
+
+	if (pe[port].dpm_request) {
+		uint32_t dpm_request = pe[port].dpm_request;
+
+		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+
+		if (PE_CHK_DPM_REQUEST(port,
+				       DPM_REQUEST_DR_SWAP)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_DR_SWAP);
+			if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
+				set_state_pe(port, PE_SNK_HARD_RESET);
+			else
+				set_state_pe(port, PE_DRS_SEND_SWAP);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_PR_SWAP)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_PR_SWAP);
+			set_state_pe(port, PE_PRS_SNK_SRC_SEND_SWAP);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_SOURCE_CAP)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_SOURCE_CAP);
+			set_state_pe(port, PE_SNK_GET_SOURCE_CAP);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_NEW_POWER_LEVEL)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_NEW_POWER_LEVEL);
+			set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
+			return true;
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_FRS_DET_ENABLE)) {
+			if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
+			    IS_ENABLED(CONFIG_USB_PD_FRS)) {
+				int curr_limit = *pd_get_snk_caps(port)
+					& PDO_FIXED_FRS_CURR_MASK;
+
+				typec_set_source_current_limit(port,
+						curr_limit ==
+						PDO_FIXED_FRS_CURR_3A0_AT_5V ?
+						TYPEC_RP_3A0 : TYPEC_RP_1A5);
+				pe_set_frs_enable(port, 1);
+			}
+
+			/* Requires no state change, fall through to false */
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_ENABLE);
+		} else if (PE_CHK_DPM_REQUEST(port,
+					      DPM_REQUEST_FRS_DET_DISABLE)) {
+			if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
+			    IS_ENABLED(CONFIG_USB_PD_FRS))
+				pe_set_frs_enable(port, 0);
+
+			/* Requires no state change, fall through to false */
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_DISABLE);
+		} else if (common_src_snk_dpm_requests(port)) {
+			return true;
+		} else {
+			CPRINTF("Unhandled DPM Request %x received\n",
+				dpm_request);
+			PE_CLR_DPM_REQUEST(port, dpm_request);
+		}
+
+		PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+	}
 	return false;
 }
 
@@ -1698,7 +1874,7 @@ static void pe_update_src_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 		return;
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		if (pd_can_source_from_device(pdo_cnt, pdos)) {
+		if (pd_can_source_from_device(port, pdo_cnt, pdos)) {
 			PE_CLR_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
 			charge_manager_update_dualrole(port, CAP_DEDICATED);
 		} else {
@@ -1710,6 +1886,10 @@ static void pe_update_src_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 
 void pd_request_power_swap(int port)
 {
+	/* Ignore requests when the board does not wish to swap */
+	if (!pd_check_power_swap(port))
+		return;
+
 	/*
 	 * Always reset the SRC to SNK PR swap counter when a PR swap is
 	 * requested by policy.
@@ -1721,11 +1901,6 @@ void pd_request_power_swap(int port)
 int pd_is_port_partner_dualrole(int port)
 {
 	return PE_CHK_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
-}
-
-static void pe_prl_execute_hard_reset(int port)
-{
-	prl_execute_hard_reset(port);
 }
 
 /* The function returns true if there is a PE state change, false otherwise */
@@ -1991,7 +2166,7 @@ static void pe_src_startup_entry(int port)
 	pe[port].caps_counter = 0;
 
 	/* Reset the protocol layer */
-	prl_reset(port);
+	prl_reset_soft(port);
 
 	/*
 	 * Protocol layer reset clears the message IDs for all SOP types.
@@ -2502,7 +2677,7 @@ static void pe_src_ready_run(int port)
 			case PD_EXT_GET_BATTERY_STATUS:
 				set_state_pe(port, PE_GIVE_BATTERY_STATUS);
 				break;
-#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY*/
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY */
 			default:
 				extended_message_not_supported(port, payload);
 			}
@@ -2624,64 +2799,8 @@ static void pe_src_ready_run(int port)
 		/*
 		 * Handle Device Policy Manager Requests
 		 */
-
-		/*
-		 * Ignore sink specific request:
-		 *   DPM_REQUEST_NEW_POWER_LEVEL
-		 *   DPM_REQUEST_SOURCE_CAP
-		 */
-
-		PE_CLR_DPM_REQUEST(port, DPM_REQUEST_NEW_POWER_LEVEL |
-					DPM_REQUEST_SOURCE_CAP);
-
-		if (pe[port].dpm_request) {
-			uint32_t dpm_request = pe[port].dpm_request;
-
-			PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-
-			if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_DR_SWAP)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_DR_SWAP);
-				if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
-					set_state_pe(port, PE_SRC_HARD_RESET);
-				else
-					set_state_pe(port, PE_DRS_SEND_SWAP);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_PR_SWAP)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_PR_SWAP);
-				set_state_pe(port, PE_PRS_SRC_SNK_SEND_SWAP);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_GOTO_MIN)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_GOTO_MIN);
-				set_state_pe(port, PE_SRC_TRANSITION_SUPPLY);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_SRC_CAP_CHANGE)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_SRC_CAP_CHANGE);
-				set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_GET_SRC_CAPS)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_GET_SRC_CAPS);
-				set_state_pe(port, PE_DR_SRC_GET_SOURCE_CAP);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_SEND_PING)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_SEND_PING);
-				set_state_pe(port, PE_SRC_PING);
-			} else if (!common_src_snk_dpm_requests(port)) {
-				CPRINTF("Unhandled DPM Request %x received\n",
-					dpm_request);
-				PE_CLR_DPM_REQUEST(port, dpm_request);
-				PE_CLR_FLAG(port,
-					PE_FLAGS_LOCALLY_INITIATED_AMS);
-			}
-
+		if (source_dpm_requests(port))
 			return;
-		}
 
 		/*
 		 * Attempt discovery if possible, and return if state was
@@ -2873,7 +2992,7 @@ static void pe_snk_startup_entry(int port)
 	print_current_state(port);
 
 	/* Reset the protocol layer */
-	prl_reset(port);
+	prl_reset_soft(port);
 
 	/*
 	 * Protocol layer reset clears the message IDs for all SOP types.
@@ -3459,54 +3578,8 @@ static void pe_snk_ready_run(int port)
 		/*
 		 * Handle Device Policy Manager Requests
 		 */
-		/*
-		 * Ignore source specific requests:
-		 *   DPM_REQUEST_GOTO_MIN
-		 *   DPM_REQUEST_SRC_CAP_CHANGE,
-		 *   DPM_REQUEST_SEND_PING
-		 */
-		PE_CLR_DPM_REQUEST(port, DPM_REQUEST_GOTO_MIN |
-					DPM_REQUEST_SRC_CAP_CHANGE |
-					DPM_REQUEST_SEND_PING);
-
-		if (pe[port].dpm_request) {
-			uint32_t dpm_request = pe[port].dpm_request;
-
-			PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-
-			if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_DR_SWAP)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_DR_SWAP);
-				if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
-					set_state_pe(port, PE_SNK_HARD_RESET);
-				else
-					set_state_pe(port, PE_DRS_SEND_SWAP);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_PR_SWAP)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_PR_SWAP);
-				set_state_pe(port, PE_PRS_SNK_SRC_SEND_SWAP);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_SOURCE_CAP)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_SOURCE_CAP);
-				set_state_pe(port, PE_SNK_GET_SOURCE_CAP);
-			} else if (PE_CHK_DPM_REQUEST(port,
-						DPM_REQUEST_NEW_POWER_LEVEL)) {
-				pe_set_dpm_curr_request(port,
-						DPM_REQUEST_NEW_POWER_LEVEL);
-				set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
-			} else if (!common_src_snk_dpm_requests(port)) {
-				CPRINTF("Unhandled DPM Request %x received\n",
-					dpm_request);
-				PE_CLR_DPM_REQUEST(port, dpm_request);
-				PE_CLR_FLAG(port,
-					PE_FLAGS_LOCALLY_INITIATED_AMS);
-			}
-
+		if (sink_dpm_requests(port))
 			return;
-		}
 
 		/*
 		 * Attempt discovery if possible, and return if state was
@@ -3595,7 +3668,7 @@ static void pe_snk_hard_reset_entry(int port)
 			  PE_FLAGS_VDM_REQUEST_BUSY);
 
 	/* Request the generation of Hard Reset Signaling by the PHY Layer */
-	pe_prl_execute_hard_reset(port);
+	prl_execute_hard_reset(port);
 
 	/* Increment the HardResetCounter */
 	pe[port].hard_reset_counter++;
@@ -6377,21 +6450,19 @@ static void pe_vcs_cbl_send_soft_reset_entry(int port)
 	}
 
 	send_ctrl_msg(port, TCPC_TX_SOP_PRIME, PD_CTRL_SOFT_RESET);
-	pe[port].sender_response_timer = TIMER_DISABLED;
+	pe_sender_response_msg_entry(port);
 }
 
 static void pe_vcs_cbl_send_soft_reset_run(int port)
 {
 	bool cable_soft_reset_complete = false;
+	enum pe_msg_check msg_check;
 
-	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
-		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-		pe[port].sender_response_timer = get_time().val +
-						PD_T_SENDER_RESPONSE;
-	}
+	msg_check = pe_sender_response_msg_run(port);
 
 	/* Got ACCEPT or REJECT from Cable Plug */
-	if (PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
+	if ((msg_check & PE_MSG_SENT) &&
+				PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
 		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
 		cable_soft_reset_complete = true;
 
@@ -6419,7 +6490,8 @@ static void pe_vcs_cbl_send_soft_reset_run(int port)
 	}
 
 	if (cable_soft_reset_complete ||
-		get_time().val > pe[port].sender_response_timer) {
+			get_time().val > pe[port].sender_response_timer ||
+			(msg_check & PE_MSG_DISCARDED)) {
 		if (pe_is_explicit_contract(port)) {
 			/* Return to PE_{SRC,SNK}_Ready state */
 			pe_set_ready_state(port);
@@ -6587,7 +6659,8 @@ static void pe_dr_src_get_source_cap_run(int port)
 					(uint32_t *)rx_emsg[port].buf;
 
 				pd_set_src_caps(port, cnt, payload);
-				if (pd_can_source_from_device(cnt, payload))
+				if (pd_can_source_from_device(port, cnt,
+							      payload))
 					pd_request_power_swap(port);
 
 				/*

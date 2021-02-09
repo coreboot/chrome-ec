@@ -32,6 +32,7 @@ menuconfig PLATFORM_EC
 if PLATFORM_EC
 
 rsource "Kconfig.battery"
+rsource "Kconfig.header"
 rsource "Kconfig.keyboard"
 rsource "Kconfig.led"
 rsource "Kconfig.powerseq"
@@ -76,6 +77,18 @@ config PLATFORM_EC_ACPI
 	help
 	  Enable shimming the ACPI handler, which will handle the Host data from
 	  the ACPI I/O port for X86 AP.
+
+config PLATFORM_EC_BACKLIGHT_LID
+	bool "Control the display backlight based on the lid switch"
+	depends on PLATFORM_EC_HOSTCMD
+	default y
+	help
+	  Support controlling the display backlight based on the state of the
+	  lid switch. The EC will disable the backlight when the lid is closed.
+
+	  This option enables the EC_CMD_SWITCH_ENABLE_BKLIGHT host command,
+	  which allows the AP to override the backlight setting until the next
+	  change in the lid state.
 
 config PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
 	bool "Host command: EC_CMD_GET_UPTIME_INFO"
@@ -245,6 +258,7 @@ config PLATFORM_EC_EXTPOWER_GPIO
 
 config PLATFORM_EC_FLASH
 	bool "Enable flash support"
+	depends on PLATFORM_EC_RO_HEADER
 	default y if FLASH_SIZE > 0
 	help
 	  Enables access to the device's flash through a simple API. With
@@ -253,6 +267,16 @@ config PLATFORM_EC_FLASH
 	  also provided.
 
 if PLATFORM_EC_FLASH
+
+config PLATFORM_EC_SPI_FLASH_REGS
+	bool "Enable SPI flash registers"
+	default y
+	help
+	  Enables flash registers for SPI flash (both internal and external).
+	  When enabled, two new functions will become available: (1) a function
+	  to compute the block write protection range from a set of status
+	  registers, and (2) the inverse function to set the status registers
+	  based on the desired protection offset/length.
 
 config PLATFORM_EC_PROTECTED_STORAGE_OFF
 	hex "Position of the RO image in Flash memory"
@@ -733,5 +757,20 @@ config PLATFORM_EC_VSTORE_SLOT_COUNT
 	  number required depends on the AP firmware. Typically the vstore is
 	  used only for recording a hash of the read-write AP firmware for
 	  checking on resume. For this, one slot is enough.
+
+config PLATFORM_EC_SYSTEM_UNLOCKED
+	bool "System unlocked: allow dangerous commands while in development"
+	default y if PLATFORM_EC_BRINGUP
+	help
+	  System should remain unlocked even if write protect is enabled.
+
+	  NOTE: This should ONLY be defined during bringup, and should never be
+	  defined on a shipping / released platform.
+
+	  When defined, CBI allows ectool to reprogram all the fields.
+	  Normally, it refuses to change certain fields. (e.g. board version,
+	  OEM ID)
+
+	  Also, this enables PD in RO for TCPMv2.
 
 endif # PLATFORM_EC

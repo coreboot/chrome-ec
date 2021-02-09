@@ -5,6 +5,7 @@
 
 /dts-v1/;
 
+#include <cros/nuvoton/npcx.dtsi>
 #include <dt-bindings/gpio_defines.h>
 #include <nuvoton/npcx7m6fb.dtsi>
 
@@ -137,6 +138,10 @@
 		en_pp5000_a {
 			gpios = <&gpioa 4 GPIO_OUT_LOW>;
 			label = "EN_PP5000_A";
+		};
+		gpio_edp_bklten_od {
+			gpios = <&gpiod 3 GPIO_ODR_HIGH>;
+			label = "EDP_BKLTEN_OD";
 		};
 		en_a_rails {
 			gpios = <&gpioa 3 GPIO_OUT_LOW>;
@@ -318,6 +323,12 @@
 			gpios = <&gpio1 7 GPIO_OUT_LOW>;
 			label = "KBD_KSO2";
 		};
+	};
+
+	def_lvol_io_list {
+		compatible = "nuvoton,npcx-lvolctrl-def";
+		lvol_io_pads = <&lvol_iob4 &lvol_iob5 /* I2C_SDA0 & SCL0 */
+		                &lvol_io50>;          /* GPIO50 */
 	};
 
 	soc {

@@ -128,7 +128,7 @@ struct bit_name {
 	const char	*name;
 };
 
-static struct bit_name flag_bit_names[] = {
+static __const_data struct bit_name flag_bit_names[] = {
 	{ PRL_FLAGS_TX_COMPLETE, "PRL_FLAGS_TX_COMPLETE" },
 	{ PRL_FLAGS_SINK_NG, "PRL_FLAGS_SINK_NG" },
 	{ PRL_FLAGS_WAIT_SINK_OK, "PRL_FLAGS_WAIT_SINK_OK" },
@@ -369,7 +369,7 @@ static struct pd_message {
 	uint8_t ext;
 	uint32_t chunk_number_to_send;
 	uint32_t send_offset;
-#endif /* CONFIG_USB_PD_REV30 */
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 } pdmsg[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 struct extended_msg rx_emsg[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -631,7 +631,7 @@ void prl_send_ctrl_msg(int port,
 	TCH_SET_FLAG(port, PRL_FLAGS_MSG_XMIT);
 #else
 	PRL_TX_SET_FLAG(port, PRL_FLAGS_MSG_XMIT);
-#endif /* CONFIG_USB_PD_REV30 */
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
@@ -650,7 +650,7 @@ void prl_send_data_msg(int port,
 #else
 	prl_copy_msg_to_buffer(port);
 	PRL_TX_SET_FLAG(port, PRL_FLAGS_MSG_XMIT);
-#endif /* CONFIG_USB_PD_REV30 */
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
@@ -669,7 +669,8 @@ void prl_send_ext_data_msg(int port,
 }
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
-static void prl_set_default_pd_revision(int port) {
+void prl_set_default_pd_revision(int port)
+{
 	/*
 	 * Initialize to highest revision supported. If the port or cable
 	 * partner doesn't support this revision, the Protocol Engine will
@@ -691,22 +692,12 @@ void prl_reset_soft(int port)
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
-void prl_reset(int port)
-{
-	prl_set_default_pd_revision(port);
-	local_state[port] = SM_INIT;
-
-	/* Ensure we process the reset quickly */
-	task_wake(PD_PORT_TO_TASK_ID(port));
-}
-
 void prl_run(int port, int evt, int en)
 {
 	switch (local_state[port]) {
 	case SM_PAUSED:
 		if (!en)
 			break;
-		prl_set_default_pd_revision(port);
 		/* fall through */
 	case SM_INIT:
 		prl_init(port);
@@ -1283,6 +1274,18 @@ static void prl_hr_reset_layer_entry(const int port)
 		vpd_rx_enable(0);
 	else
 		tcpm_set_rx_enable(port, 0);
+
+	/*
+	 * PD r3.0 v2.0, ss6.2.1.1.5:
+	 * After a physical or logical (USB Type-C Error Recovery) Attach, a
+	 * Port discovers the common Specification Revision level between itself
+	 * and its Port Partner and/or the Cable Plug(s), and uses this
+	 * Specification Revision level until a Detach, Hard Reset or Error
+	 * Recovery happens.
+	 *
+	 * This covers the Hard Reset case.
+	 */
+	prl_set_default_pd_revision(port);
 
 	/*
 	 * Protocol Layer message transmission transitions to
@@ -2192,7 +2195,7 @@ static void prl_rx_wait_for_phy_message(const int port, int evt)
 }
 
 /* All necessary Protocol Transmit States (Section 6.11.2.2) */
-static const struct usb_state prl_tx_states[] = {
+static __const_data const struct usb_state prl_tx_states[] = {
 	[PRL_TX_PHY_LAYER_RESET] = {
 		.entry  = prl_tx_phy_layer_reset_entry,
 	},
@@ -2233,7 +2236,7 @@ static const struct usb_state prl_tx_states[] = {
 };
 
 /* All necessary Protocol Hard Reset States (Section 6.11.2.4) */
-static const struct usb_state prl_hr_states[] = {
+static __const_data const struct usb_state prl_hr_states[] = {
 	[PRL_HR_WAIT_FOR_REQUEST] = {
 		.entry  = prl_hr_wait_for_request_entry,
 		.run    = prl_hr_wait_for_request_run,
@@ -2279,7 +2282,7 @@ __maybe_unused static const struct usb_state rch_states[] = {
 		.entry  = rch_report_error_entry,
 		.run    = rch_report_error_run,
 	},
-#endif
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 };
 
 /* All necessary Chunked Tx states (Section 6.11.2.1.3) */
@@ -2315,7 +2318,7 @@ __maybe_unused static const struct usb_state tch_states[] = {
 	[TCH_REPORT_ERROR] = {
 		.entry  = tch_report_error_entry,
 	},
-#endif
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 };
 
 #ifdef TEST_BUILD
@@ -2356,4 +2359,3 @@ BUILD_ASSERT(ARRAY_SIZE(tch_states) == ARRAY_SIZE(tch_state_names));
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 const int test_prl_sm_data_size = ARRAY_SIZE(test_prl_sm_data);
 #endif
-
