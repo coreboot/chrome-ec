@@ -8,6 +8,7 @@
 
 /* Registers definitions */
 #define GL3590_HUB_MODE_REG		0x0
+#define GL3590_HUB_MODE_I2C_READY	0x1
 #define GL3590_HUB_MODE_USB2_EN		0x2
 #define GL3590_HUB_MODE_USB3_EN		0x4
 #define GL3590_INT_REG			0x1
@@ -16,6 +17,7 @@
 #define GL3590_RESPONSE_REG		0x2
 #define GL3590_RESPONSE_REG_SYNC_MASK	0x80
 #define GL3590_PORT_DISABLED_REG	0x4
+#define GL3590_PORT_EN_STS_REG		0x8
 #define GL3590_HUB_STS_REG 		0xA
 #define GL3590_HUB_STS_HOST_PWR_MASK	0x30
 #define GL3590_HUB_STS_HOST_PWR_SHIFT	4
@@ -30,6 +32,9 @@ int gl3590_read(int hub, uint8_t reg, uint8_t *data, int count);
 
 /* Write to GL3590 I2C register */
 int gl3590_write(int hub, uint8_t reg, uint8_t *data, int count);
+
+/* Initialize GL3590 I2C interface */
+void gl3590_init(int hub);
 
 /* Generic handler for GL3590 IRQ, can be registered/invoked by platform */
 void gl3590_irq_handler(int hub);
@@ -53,5 +58,6 @@ int gl3590_enable_ports(int hub, uint8_t port_mask, bool enable);
 struct uhub_i2c_iface_t {
 	int i2c_host_port;
 	int i2c_addr;
+	int initialized;
 };
 extern struct uhub_i2c_iface_t uhub_config[];

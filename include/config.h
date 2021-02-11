@@ -1177,6 +1177,7 @@
 #undef CONFIG_CHIPSET_MT817X		/* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183		/* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192		/* MediaTek MT8192 */
+#undef CONFIG_CHIPSET_CEZANNE		/* AMD Cezanne (x86) */
 #undef CONFIG_CHIPSET_RK3288		/* Rockchip rk3288 */
 #undef CONFIG_CHIPSET_RK3399		/* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE		/* Intel Skylake (x86) */
@@ -4762,6 +4763,9 @@
 /* Support the Texas Instrument TUSB1064 Type-C Redriving Switch (UFP) */
 #undef CONFIG_USB_MUX_TUSB1064
 
+/* Support the Parade PS8822 Type-C Redriving Demux Switch */
+#undef CONFIG_USB_MUX_PS8822
+
 /* 'Virtual' USB mux under host (not EC) control */
 #undef CONFIG_USB_MUX_VIRTUAL
 
@@ -5529,6 +5533,7 @@
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
+#undef CONFIG_CHIPSET_CEZANNE
 #undef CONFIG_CHIPSET_RK3399
 #undef CONFIG_CHIPSET_RK3288
 #undef CONFIG_CHIPSET_SDM845

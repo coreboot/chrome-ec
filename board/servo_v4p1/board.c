@@ -187,7 +187,11 @@ static void dut_pwr_evt(enum gpio_signal signal)
 static void init_uservo_port(void)
 {
 	/* Enable USERVO_POWER_EN */
-	uservo_power_en(1);
+	if (board_id_det() <= BOARD_ID_REV1)
+		ec_uservo_power_en(1);
+
+	gl3590_enable_ports(0, GL3590_DFP4, 1);
+
 	/* Connect uservo to host hub */
 	uservo_fastboot_mux_sel(0);
 }
@@ -345,14 +349,15 @@ static struct usart_config const usart4 =
 		usart4_to_usb,
 		usb_to_usart4);
 
-USB_STREAM_CONFIG(usart4_usb,
+USB_STREAM_CONFIG_USART_IFACE(usart4_usb,
 	USB_IFACE_USART4_STREAM,
 	USB_STR_USART4_STREAM_NAME,
 	USB_EP_USART4_STREAM,
 	USB_STREAM_RX_SIZE,
 	USB_STREAM_TX_SIZE,
 	usb_to_usart4,
-	usart4_to_usb)
+	usart4_to_usb,
+	usart4)
 
 
 /******************************************************************************
@@ -400,11 +405,35 @@ int board_get_version(void)
 }
 
 #ifdef SECTION_IS_RO
+/* Forward declaration */
+static void evaluate_input_power_def(void);
+DECLARE_DEFERRED(evaluate_input_power_def);
+
 static void evaluate_input_power_def(void)
 {
+	int state;
+	static int retry = 3;
+
+	/* Wait until host hub INTR# signal is asserted */
+	state = gpio_get_level(GPIO_USBH_I2C_BUSY_INT);
+	if ((state == 0) && retry--) {
+		hook_call_deferred(&evaluate_input_power_def_data, 100 * MSEC);
+		return;
+	}
+
+	if (retry == 0)
+		CPRINTF("Host hub I2C isn't online, expect issues with its "
+			"behaviour\n");
+
+	gpio_enable_interrupt(GPIO_USBH_I2C_BUSY_INT);
+
+	gl3590_init(HOST_HUB);
+
 	evaluate_input_power();
+
+	init_uservo_port();
+	init_pathsel();
 }
-DECLARE_DEFERRED(evaluate_input_power_def);
 #endif
 
 static void board_init(void)
@@ -438,20 +467,16 @@ static void board_init(void)
 	atmel_reset_l(1);
 
 #ifdef SECTION_IS_RO
-	init_uservo_port();
-	init_pathsel();
 	init_ina231s();
 	init_fusb302b(1);
 
 	/*
-	 * Get data about available input power. Add additional check after a
-	 * delay, since we need to wait for USB2/USB3 enumeration on host hub
-	 * as well as I2C interface of this hub needs to be initialized.
-	 * 3 seconds is experimentally selected value, by this time hub should
-	 * be up and running.
+	 * Get data about available input power. Defer this check, since we need
+	 * to wait for USB2/USB3 enumeration on host hub as well as I2C
+	 * interface of this hub needs to be initialized. Genesys recommends at
+	 * least 100ms.
 	 */
-	evaluate_input_power();
-	hook_call_deferred(&evaluate_input_power_def_data, 3 * SECOND);
+	hook_call_deferred(&evaluate_input_power_def_data, 100 * MSEC);
 
 	/* Enable DUT USB2.0 pair. */
 	gpio_set_level(GPIO_FASTBOOT_DUTHUB_MUX_EN_L, 0);
@@ -462,7 +487,6 @@ static void board_init(void)
 
 	gpio_enable_interrupt(GPIO_STM_FAULT_IRQ_L);
 	gpio_enable_interrupt(GPIO_DP_HPD);
-	gpio_enable_interrupt(GPIO_USBH_I2C_BUSY_INT);
 	gpio_enable_interrupt(GPIO_DUT_PWR_IRQ_ODL);
 
 	/* Disable power to DUT by default */
