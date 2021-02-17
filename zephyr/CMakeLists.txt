@@ -46,6 +46,15 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # time. Also, append the include directory so we can include ec_version.h.
   zephyr_append_cmake_library(ec_version)
   zephyr_include_directories("${CMAKE_BINARY_DIR}/ec/include/generated")
+
+  # Add CHROMIUM_EC definition, which is used by ec_commands.h to
+  # determine that the header is being compiled for the EC instead of
+  # by another third-party C codebase.
+  zephyr_compile_definitions("CHROMIUM_EC")
+
+  # Add CONFIG_ZEPHYR, which is commonly used to guard code for use
+  # with Zephyr builds only.
+  zephyr_compile_definitions("CONFIG_ZEPHYR")
 endif()
 
 # If a header is needed (should only be set for npcx) run the ecst.py script to
@@ -138,10 +147,12 @@ add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 # supported by all boards and emulators (including unit tests) using the shim
 # layer.
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC         "${PLATFORM_EC}/common/base32.c"
+                                                "${PLATFORM_EC}/common/console_output.c"
                                                 "${PLATFORM_EC}/common/peripheral.c"
                                                 "${PLATFORM_EC}/common/printf.c"
                                                 "${PLATFORM_EC}/common/queue.c"
                                                 "${PLATFORM_EC}/common/shared_mem.c"
+                                                "${PLATFORM_EC}/common/uart_printf.c"
                                                 "${PLATFORM_EC}/common/version.c")
 
 # Now include files that depend on or relate to other CONFIG options, sorted by
@@ -190,6 +201,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_FLASH   "${PLATFORM_EC}/common/flash.c"
                                                 "${PLATFORM_EC}/common/spi_flash_reg.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD "${PLATFORM_EC}/common/host_command.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD "${PLATFORM_EC}/common/host_event_commands.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE
+                                                "${PLATFORM_EC}/common/uart_hostcmd.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
                                                 "${PLATFORM_EC}/common/uptime.c")
 
@@ -241,6 +254,10 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SPI_FLASH_REGS
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TABLET_MODE
                                                 "${PLATFORM_EC}/common/tablet_mode.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR
+                                                "${PLATFORM_EC}/common/temp_sensor.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_THERMISTOR
+                                                "${PLATFORM_EC}/driver/temp_sensor/thermistor.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_THROTTLE_AP
                                                 "${PLATFORM_EC}/common/throttle_ap.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TIMER   "${PLATFORM_EC}/common/timer.c")

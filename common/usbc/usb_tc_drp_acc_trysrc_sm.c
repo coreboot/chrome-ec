@@ -131,8 +131,13 @@ void print_flag(int port, int set_or_clear, int flag);
 #define CLR_FLAGS_ON_DISCONNECT(port) TC_CLR_FLAG(port, \
 	~(TC_FLAGS_LPM_ENGAGED | TC_FLAGS_REQUEST_SUSPEND | TC_FLAGS_SUSPENDED))
 
-/* 100 ms is enough time for any TCPC transaction to complete. */
-#define PD_LPM_DEBOUNCE_US (100 * MSEC)
+/*
+ * 10 ms is enough time for any TCPC transaction to complete
+ *
+ * This value must be below ~39.7 ms to put ANX7447 into LPM due to bug in
+ * silicon (see b/77544959 and b/149761477 for more details).
+ */
+#define PD_LPM_DEBOUNCE_US (10 * MSEC)
 
 /*
  * This delay is not part of the USB Type-C specification or the USB port
@@ -3095,11 +3100,15 @@ static void tc_attached_src_run(const int port)
 #endif
 
 	if (TC_CHK_FLAG(port, TC_FLAGS_UPDATE_CURRENT)) {
-		/* TODO(b/141690755): Also set new CC if needed for non-PD */
 		TC_CLR_FLAG(port, TC_FLAGS_UPDATE_CURRENT);
 		typec_set_source_current_limit(port,
 					tc[port].select_current_limit_rp);
 		pd_update_contract(port);
+
+		/* Update Rp if no contract is present */
+		if (!IS_ENABLED(CONFIG_USB_PE_SM) ||
+						!pe_is_explicit_contract(port))
+			typec_update_cc(port);
 	}
 }
 
@@ -3712,6 +3721,19 @@ static void pd_chipset_suspend(void)
 	CPRINTS("PD:S0->S3");
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, pd_chipset_suspend, HOOK_PRIO_DEFAULT);
+
+static void pd_chipset_reset(void)
+{
+	int i;
+
+	if (IS_ENABLED(CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+			/* Exit mode. PD can enter mode again after reset */
+			dpm_set_mode_exit_request(i);
+		}
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESET, pd_chipset_reset, HOOK_PRIO_DEFAULT);
 
 static void pd_chipset_startup(void)
 {

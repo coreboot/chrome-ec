@@ -3,8 +3,11 @@
  * found in the LICENSE file.
  */
 
+#include <device.h>
+#include <init.h>
 #include <kernel.h>
 #include <shell/shell.h>
+#include <stdbool.h>
 #include <string.h>
 #include <sys/printk.h>
 #include <zephyr.h>
@@ -12,63 +15,6 @@
 #include "console.h"
 #include "printf.h"
 #include "uart.h"
-
-int cputs(enum console_channel channel, const char *str)
-{
-	return cprintf(channel, "%s", str);
-}
-
-static int printk_putchar(void *context, int c)
-{
-	printk("%c", c);
-	return 0;
-}
-
-static void console_vprintf(enum console_channel channel, const char *format,
-			    va_list args)
-{
-	/*
-	 * TODO(jrosenth): investigate using the logging subsystem
-	 * and generating modules for the channels instead of printk
-	 *
-	 * TODO(b/170658516): If logging doesn't work, then we should at least
-	 * use shell_ print functions instead of printk function as they could
-	 * be on different uarts (they are not for Chrome OS Apps though).
-	 */
-	vfnprintf(printk_putchar, NULL, format, args);
-}
-
-__attribute__((__format__(__printf__, 2, 3))) int
-cprintf(enum console_channel channel, const char *format, ...)
-{
-	va_list args;
-
-	va_start(args, format);
-	console_vprintf(channel, format, args);
-	va_end(args);
-	return 0;
-}
-
-__attribute__((__format__(__printf__, 2, 3))) int
-cprints(enum console_channel channel, const char *format, ...)
-{
-	va_list args;
-
-	cprintf(channel, "[%pT ", PRINTF_TIMESTAMP_NOW);
-	va_start(args, format);
-	console_vprintf(channel, format, args);
-	va_end(args);
-	cprintf(channel, "]\n");
-	return 0;
-}
-
-void cflush(void)
-{
-	/*
-	 * Do nothing.  Output is sent immediately without buffering
-	 * from a printk() in Zephyr.
-	 */
-}
 
 int zshim_run_ec_console_command(int (*handler)(int argc, char **argv),
 				 const struct shell *shell, size_t argc,
@@ -92,19 +38,52 @@ int zshim_run_ec_console_command(int (*handler)(int argc, char **argv),
 	return handler(argc, argv);
 }
 
+#if DT_NODE_EXISTS(DT_PATH(ec_console))
+#define EC_CONSOLE DT_PATH(ec_console)
+
+static const char * const disabled_channels[] = DT_PROP(EC_CONSOLE, disabled);
+static const size_t disabled_channel_count = DT_PROP_LEN(EC_CONSOLE, disabled);
+static int init_ec_console(const struct device *unused)
+{
+	for (size_t i = 0; i < disabled_channel_count; i++)
+		console_channel_disable(disabled_channels[i]);
+
+	return 0;
+} SYS_INIT(init_ec_console, PRE_KERNEL_1, 50);
+#endif
+
 /*
  * Minimal implementation of a few uart_* functions we need.
  * TODO(b/178033156): probably need to swap this for something more
  * robust in order to handle UART buffering.
  */
+
+int uart_init_done(void)
+{
+	return true;
+}
+
+void uart_tx_start(void)
+{
+}
+
 int uart_tx_ready(void)
 {
 	return 1;
 }
 
+int uart_tx_char_raw(void *context, int c)
+{
+	uart_write_char(c);
+	return 0;
+}
+
 void uart_write_char(char c)
 {
-	printk_putchar(NULL, c);
+	printk("%c", c);
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
+		console_buf_notify_char(c);
 }
 
 void uart_flush_output(void)

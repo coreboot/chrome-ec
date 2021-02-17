@@ -22,6 +22,23 @@
  */
 #define NPCX_UART_MODULE2	1 /* 1:GPIO64/65 for UART1 */
 
+#define CONFIG_EXTPOWER_GPIO
+
+/* Host communication */
+#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+
+/* Common battery defines */
+#define CONFIG_BATTERY_SMART
+#define CONFIG_BATTERY_FUEL_GAUGE
+#define CONFIG_BATTERY_CUT_OFF
+#define CONFIG_BATTERY_PRESENT_CUSTOM
+#define CONFIG_BATTERY_HW_PRESENT_CUSTOM
+#define CONFIG_BATTERY_REVIVE_DISCONNECT
+
+/* Chipset config */
+#define CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
+
 #define CONFIG_PWM
 
 /* Enable I2C Support */
@@ -30,7 +47,18 @@
 
 #ifndef __ASSEMBLER__
 
+#include <stdbool.h>
+
+#include "common.h"
 #include "baseboard_usbc_config.h"
+#include "extpower.h"
+
+/*
+ * Check battery disconnect state.
+ * This function will return if battery is initialized or not.
+ * @return true - initialized. false - not.
+ */
+__override_proto bool board_battery_is_initialized(void);
 
 #endif /* !__ASSEMBLER__ */
 

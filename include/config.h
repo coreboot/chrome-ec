@@ -771,6 +771,20 @@
 #undef CONFIG_DEDICATED_RECOVERY_BUTTON_2
 
 /*
+ * RISC-V core specific panic data is bigger than Cortex-M core specific panic
+ * data. Including this into union in panic_data structure causes whole
+ * to grow by 28 bytes. In many boards EC RO is still obtaining pointer to
+ * beginning of panic data by subtracting its panic data structure size from
+ * the end of RAM. When EC RW saves panic data it will be corrupted by EC RO.
+ * Moreover, during next boot EC RW won't be able to find jump data (see
+ * b/165773837 for more details).
+ *
+ * This config allows boards to not include RV32I panic data if their EC RO
+ * doesn't include it to keep panic data structure in sync.
+ */
+#undef CONFIG_DO_NOT_INCLUDE_RV32I_PANIC_DATA
+
+/*
  * The board has volume up and volume down buttons.  Note, these are *buttons*
  * and not keys in the keyboard matrix.
  */
@@ -3991,14 +4005,17 @@
 /* Support for USB PD alternate mode of Downward Facing Port */
 #undef CONFIG_USB_PD_ALT_MODE_DFP
 
+/* Support for USB PD alternate mode of Upward Facing Port */
+#undef CONFIG_USB_PD_ALT_MODE_UFP
+
 /*
  * Do not enter USB PD alternate modes or USB4 automatically. Wait for the AP to
  * direct the EC to enter a mode. This requires AP software support.
  */
 #undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
-/* Support for USB PD alternate mode of Upward Facing Port */
-#undef CONFIG_USB_PD_ALT_MODE_UFP
+/* Supports DP as UFP-D and requires HPD to DP_ATTEN converter */
+#undef CONFIG_USB_PD_ALT_MODE_UFP_DP
 
 /* HPD is sent to the GPU from the EC via a GPIO */
 #undef CONFIG_USB_PD_DP_HPD_GPIO
@@ -4343,6 +4360,9 @@
  * scan on that port.
  */
 #undef CONFIG_USBC_RETIMER_FW_UPDATE
+
+/* Prevent enabling LPM of NB7V904M */
+#undef CONFIG_NB7V904M_LPM_OVERRIDE
 
 /* Enable retimer TUSB544 tune EQ setting by register  */
 #undef CONFIG_TUSB544_EQ_BY_REGISTER
@@ -5025,8 +5045,12 @@
 /*
  * This build is not a complete platform/ec based EC, but instead
  * using the platform/ec zephyr module.
+ *
+ * Note: this is here purely for stylistic purposes and documentation.
  */
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_ZEPHYR
+#endif
 
 /*****************************************************************************/
 /*

@@ -18,9 +18,6 @@
  * common/config.h.
  */
 
-#define CONFIG_ZEPHYR
-#define CHROMIUM_EC
-
 /*
  * Obsolete configs - these are options that are not needed, either because
  * Zephyr features directly replace the option, or because the config option
@@ -47,6 +44,17 @@
 #undef CONFIG_RO_ROM_RESIDENT_SIZE
 #undef CONFIG_RW_ROM_RESIDENT_MEM_OFF
 #undef CONFIG_RW_ROM_RESIDENT_SIZE
+
+/*
+ * ECOS specific options, not used in Zephyr.
+ */
+#undef CONFIG_CONSOLE_UART /* Only used by the Chromium EC chip drivers */
+#undef CONFIG_I2C_MULTI_PORT_CONTROLLER /* Not required by I2C shim */
+#undef CONFIG_IRQ_COUNT /* Only used by Chromium EC core drivers */
+#undef CONFIG_LTO /* Link time optimization enabled by Zephyr build system */
+#ifndef CONFIG_FPU
+#undef CONFIG_FPU /* Used in Zephyr as well, enabled in Kconfig directly */
+#endif
 
 /*
  * This not used by the Zephyr code since we always make cros_crc8() available.
@@ -249,7 +257,7 @@ enum battery_type {
 #define CONFIG_RAM_SIZE \
 	(CONFIG_DATA_RAM_SIZE - CONFIG_PLATFORM_EC_BOOT_RAM_SIZE)
 
-#ifdef PLATFORM_EC_EXTERNAL_STORAGE
+#ifdef CONFIG_PLATFORM_EC_EXTERNAL_STORAGE
 #define CONFIG_EXTERNAL_STORAGE
 #endif
 
@@ -272,6 +280,36 @@ enum battery_type {
 #undef CONFIG_CMD_ADC
 #ifdef CONFIG_PLATFORM_EC_ADC_CMD
 #define CONFIG_CMD_ADC
+#endif
+
+#undef CONFIG_TEMP_SENSOR
+#ifdef CONFIG_PLATFORM_EC_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR
+#endif
+
+#undef CONFIG_THERMISTOR
+#ifdef CONFIG_PLATFORM_EC_THERMISTOR
+#define CONFIG_THERMISTOR
+#endif
+
+#undef CONFIG_STEINHART_HART_3V0_22K6_47K_4050B
+#ifdef CONFIG_PLATFORM_EC_STEINHART_HART_3V0_22K6_47K_4050B
+#define CONFIG_STEINHART_HART_3V0_22K6_47K_4050B
+#endif
+
+#undef CONFIG_STEINHART_HART_3V3_13K7_47K_4050B
+#ifdef CONFIG_PLATFORM_EC_STEINHART_HART_3V3_13K7_47K_4050B
+#define CONFIG_STEINHART_HART_3V3_13K7_47K_4050B
+#endif
+
+#undef CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
+#ifdef CONFIG_PLATFORM_EC_STEINHART_HART_3V3_30K9_47K_4050B
+#define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
+#endif
+
+#undef CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
+#ifdef CONFIG_PLATFORM_EC_STEINHART_HART_3V3_51K1_47K_4050B
+#define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 #endif
 
 #ifdef CONFIG_PLATFORM_EC_I2C
@@ -347,8 +385,9 @@ enum battery_type {
 #define CONFIG_CMD_LEDTEST
 #endif
 
+#undef CONFIG_CPU_PROCHOT_ACTIVE_LOW
 #ifdef CONFIG_PLATFORM_EC_POWERSEQ_CPU_PROCHOT_ACTIVE_LOW
-#define CONFIG_CHIPSET_CPU_PROCHOT_ACTIVE_LOW
+#define CONFIG_CPU_PROCHOT_ACTIVE_LOW
 #endif
 
 #undef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
@@ -526,6 +565,11 @@ enum battery_type {
 #undef CONFIG_USB_PID
 #ifdef CONFIG_PLATFORM_EC_USB_PID
 #define CONFIG_USB_PID		CONFIG_PLATFORM_EC_USB_PID
+#endif
+
+#undef CONFIG_USB_BCD_DEV
+#ifdef CONFIG_PLATFORM_EC_USB_BCD_DEV
+#define CONFIG_USB_BCD_DEV	CONFIG_PLATFORM_EC_USB_BCD_DEV
 #endif
 
 /* VBUS-voltage measurement */
@@ -1083,6 +1127,11 @@ enum battery_type {
 #undef CONFIG_DEBUG_ASSERT_REBOOTS
 #ifdef CONFIG_PLATFORM_EC_DEBUG_ASSERT_REBOOTS
 #define CONFIG_DEBUG_ASSERT_REBOOTS
+#endif
+
+#undef CONFIG_MPU
+#ifdef CONFIG_PLATFORM_EC_MPU
+#define CONFIG_MPU
 #endif
 
 #endif  /* __CROS_EC_CONFIG_CHIP_H */

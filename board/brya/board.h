@@ -22,8 +22,23 @@
 /* USB Type C and USB PD defines */
 #define CONFIG_IO_EXPANDER_PORT_COUNT		2
 
+#define GPIO_AC_PRESENT			GPIO_ACOK_EC_OD
+#define GPIO_CPU_PROCHOT		GPIO_EC_PROCHOT_ODL
 #define GPIO_ENTERING_RW		GPIO_EC_ENTERING_RW
 #define GPIO_LID_OPEN			GPIO_LID_OPEN_OD
+#define GPIO_PCH_RSMRST_L		GPIO_EC_PCH_RSMRST_L
+#define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
+#define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
+/*
+ * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
+ * signal.
+ */
+#define GPIO_PCH_WAKE_L			GPIO_EC_PCH_INT_ODL
+#define GPIO_PG_EC_ALL_SYS_PWRGD	GPIO_SEQ_EC_ALL_SYS_PG
+#define GPIO_PG_EC_DSW_PWROK		GPIO_SEQ_EC_DSW_PWROK
+#define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
+#define GPIO_RSMRST_L_PGOOD		GPIO_SEQ_EC_RSMRST_ODL
+#define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
 
 #define CONFIG_FANS			FAN_CH_COUNT
@@ -104,12 +119,6 @@ void power_button_interrupt(enum gpio_signal signal);
  */
 
 void throttle_ap_prochot_input_interrupt(enum gpio_signal signal);
-
-/*
- * remove when we enable CONFIG_EXTPOWER_GPIO
- */
-
-void extpower_interrupt(enum gpio_signal signal);
 
 /*
  * remove when we enable CONFIG_VOLUME_BUTTONS

@@ -470,6 +470,17 @@ void usb_mux_set_safe_mode(int port)
 		ppc_set_sbu(port, 0);
 }
 
+void usb_mux_set_safe_mode_exit(int port)
+{
+	if (IS_ENABLED(CONFIG_USBC_SS_MUX))
+		usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_CONNECT,
+			    polarity_rm_dts(pd_get_polarity(port)));
+
+	/* Isolate the SBU lines. */
+	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
+		ppc_set_sbu(port, 0);
+}
+
 static void pd_send_hard_reset(int port)
 {
 	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SEND_HARD_RESET);
@@ -619,7 +630,9 @@ const uint32_t pd_src_pdo_max[] = {
 const int pd_src_pdo_max_cnt = ARRAY_SIZE(pd_src_pdo_max);
 
 const uint32_t pd_snk_pdo[] = {
-	PDO_FIXED(5000, 500, PDO_FIXED_FLAGS),
+	PDO_FIXED(5000,
+		  GENERIC_MIN((PD_OPERATING_POWER_MW / 5), PD_MAX_CURRENT_MA),
+		  PDO_FIXED_FLAGS),
 	PDO_BATT(4750, PD_MAX_VOLTAGE_MV, PD_OPERATING_POWER_MW),
 	PDO_VAR(4750, PD_MAX_VOLTAGE_MV, PD_MAX_CURRENT_MA),
 };

@@ -5892,6 +5892,7 @@ enum cbi_data_tag {
 	CBI_TAG_PCB_SUPPLIER = 7,  /* uint32_t or smaller */
 	/* Second Source Factory Cache */
 	CBI_TAG_SSFC = 8,          /* uint32_t bit field */
+	CBI_TAG_REWORK_ID = 9,     /* uint64_t or smaller */
 	CBI_TAG_COUNT,
 };
 
@@ -6811,6 +6812,8 @@ enum pchg_state {
 	PCHG_STATE_DETECTED,
 	/* Device is being charged. */
 	PCHG_STATE_CHARGING,
+	/* Device is fully charged. It implies DETECTED (& not charging). */
+	PCHG_STATE_FULL,
 };
 
 #define EC_PCHG_STATE_TEXT { \
@@ -6819,6 +6822,7 @@ enum pchg_state {
 	[PCHG_STATE_ENABLED] = "ENABLED", \
 	[PCHG_STATE_DETECTED] = "DETECTED", \
 	[PCHG_STATE_CHARGING] = "CHARGING", \
+	[PCHG_STATE_FULL] = "FULL", \
 	}
 
 /*****************************************************************************/

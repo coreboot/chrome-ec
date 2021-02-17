@@ -473,7 +473,6 @@ GEN_NOT_SUPPORTED(PE_SRC_CHUNK_RECEIVED);
 #define PE_SRC_CHUNK_RECEIVED PE_SRC_CHUNK_RECEIVED_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_SNK_CHUNK_RECEIVED);
 #define PE_SNK_CHUNK_RECEIVED PE_SNK_CHUNK_RECEIVED_NOT_SUPPORTED
-void pe_set_frs_enable(int port, int enable);
 #endif /* CONFIG_USB_PD_REV30 */
 
 #ifndef CONFIG_USB_PD_EXTENDED_MESSAGES
@@ -1019,6 +1018,7 @@ void pd_got_frs_signal(int port)
 	PE_SET_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_SIGNALED);
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
+#endif /* CONFIG_USB_PD_REV30 */
 
 /*
  * PE_Set_FRS_Enable
@@ -1033,26 +1033,32 @@ void pd_got_frs_signal(int port)
  */
 static void pe_set_frs_enable(int port, int enable)
 {
+	int current = PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
+
 	/* This should only be called from the PD task */
 	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
 
-	if (IS_ENABLED(CONFIG_USB_PD_FRS)) {
-		int current = PE_CHK_FLAG(port,
-					  PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
+	if (!IS_ENABLED(CONFIG_USB_PD_FRS) || !IS_ENABLED(CONFIG_USB_PD_REV30))
+		return;
 
-		/* Request an FRS change, only if the state has changed */
-		if (!!current != !!enable) {
-			pd_set_frs_enable(port, enable);
-			if (enable)
-				PE_SET_FLAG(port,
-					    PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
-			else
-				PE_CLR_FLAG(port,
-					    PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
-		}
+	/* Request an FRS change, only if the state has changed */
+	if (!!current == !!enable)
+		return;
+
+	pd_set_frs_enable(port, enable);
+	if (enable) {
+		int curr_limit = *pd_get_snk_caps(port)
+						& PDO_FIXED_FRS_CURR_MASK;
+
+		typec_set_source_current_limit(port,
+					       curr_limit ==
+					       PDO_FIXED_FRS_CURR_3A0_AT_5V ?
+					       TYPEC_RP_3A0 : TYPEC_RP_1A5);
+		PE_SET_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
+	} else {
+		PE_CLR_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
 	}
 }
-#endif /* CONFIG_USB_PD_REV30 */
 
 void pe_set_explicit_contract(int port)
 {
@@ -1065,8 +1071,7 @@ void pe_set_explicit_contract(int port)
 
 void pe_invalidate_explicit_contract(int port)
 {
-	if (IS_ENABLED(CONFIG_USB_PD_REV30))
-		pe_set_frs_enable(port, 0);
+	pe_set_frs_enable(port, 0);
 
 	PE_CLR_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT);
 
@@ -1121,48 +1126,6 @@ uint32_t pd_get_requested_voltage(int port)
 uint32_t pd_get_requested_current(int port)
 {
 	return pe[port].curr_limit;
-}
-
-/*
- * Evaluate a sink PDO for reported FRS support on the given port.
- *
- * If the requirements in the PDO are compatible with what we can supply,
- * FRS will be enabled on the port. If the provided PDO does not specify
- * FRS requirements (because it is not a fixed PDO) or PD 3.0 and FRS support
- * are not enabled, do nothing.
- */
-__maybe_unused static void pe_evaluate_frs_snk_pdo(int port, uint32_t pdo)
-{
-	if (!(IS_ENABLED(CONFIG_USB_PD_REV30) && IS_ENABLED(CONFIG_USB_PD_FRS)))
-		return;
-
-	if ((pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED) {
-		/*
-		 * PDO must be a fixed supply: either the caller chose the
-		 * wrong PDO or the partner is not compliant.
-		 */
-		CPRINTS("C%d: Sink PDO %x is not a fixed supply,"
-			" cannot support FRS", port, pdo);
-		return;
-	}
-	/*
-	 * TODO(b/14191267): Make sure we can handle the required current
-	 * before we enable FRS.
-	 */
-	if ((pdo & PDO_FIXED_DUAL_ROLE)) {
-		switch (pdo & PDO_FIXED_FRS_CURR_MASK) {
-		case PDO_FIXED_FRS_CURR_NOT_SUPPORTED:
-			break;
-		case PDO_FIXED_FRS_CURR_DFLT_USB_POWER:
-		case PDO_FIXED_FRS_CURR_1A5_AT_5V:
-		case PDO_FIXED_FRS_CURR_3A0_AT_5V:
-			CPRINTS("C%d: Partner FRS is OK: enabling PE support",
-				port);
-			typec_set_source_current_limit(port, TYPEC_RP_3A0);
-			pe_set_frs_enable(port, 1);
-			break;
-		}
-	}
 }
 
 /*
@@ -1493,6 +1456,7 @@ static void pe_handle_detach(void)
 	pe_set_snk_caps(port, 0, NULL);
 
 	dpm_remove_sink(port);
+	dpm_remove_source(port);
 
 	/* Exit BIST Test mode, in case the TCPC entered it. */
 	tcpc_set_bist_test_mode(port, false);
@@ -1761,25 +1725,13 @@ static bool sink_dpm_requests(int port)
 			return true;
 		} else if (PE_CHK_DPM_REQUEST(port,
 					      DPM_REQUEST_FRS_DET_ENABLE)) {
-			if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
-			    IS_ENABLED(CONFIG_USB_PD_FRS)) {
-				int curr_limit = *pd_get_snk_caps(port)
-					& PDO_FIXED_FRS_CURR_MASK;
-
-				typec_set_source_current_limit(port,
-						curr_limit ==
-						PDO_FIXED_FRS_CURR_3A0_AT_5V ?
-						TYPEC_RP_3A0 : TYPEC_RP_1A5);
-				pe_set_frs_enable(port, 1);
-			}
+			pe_set_frs_enable(port, 1);
 
 			/* Requires no state change, fall through to false */
 			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_ENABLE);
 		} else if (PE_CHK_DPM_REQUEST(port,
 					      DPM_REQUEST_FRS_DET_DISABLE)) {
-			if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
-			    IS_ENABLED(CONFIG_USB_PD_FRS))
-				pe_set_frs_enable(port, 0);
+			pe_set_frs_enable(port, 0);
 
 			/* Requires no state change, fall through to false */
 			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_DISABLE);
@@ -2168,13 +2120,6 @@ static void pe_src_startup_entry(int port)
 	/* Reset the protocol layer */
 	prl_reset_soft(port);
 
-	/*
-	 * Protocol layer reset clears the message IDs for all SOP types.
-	 * Indicate that a SOP' soft reset is required before any other
-	 * messages are sent to the cable.
-	 */
-	pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
-
 	/* Set initial data role */
 	pe[port].data_role = pd_get_data_role(port);
 
@@ -2186,10 +2131,38 @@ static void pe_src_startup_entry(int port)
 
 	if (PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE);
+		/*
+		 * Protocol layer reset clears the message IDs for all SOP
+		 * types. Indicate that a SOP' soft reset is required before any
+		 * other messages are sent to the cable.
+		 *
+		 * Note that other paths into this state are for the initial
+		 * connection and for a hard reset. In both cases the cable
+		 * should also automatically clear the message IDs so don't
+		 * generate an SOP' soft reset for those cases. Sending
+		 * unnecessary SOP' soft resets causes bad behavior with
+		 * some devices. See b/179325862.
+		 */
+		pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
 
 		/* Start SwapSourceStartTimer */
 		pe[port].swap_source_start_timer = get_time().val +
 			PD_T_SWAP_SOURCE_START;
+
+		/*
+		 * Evaluate port's sink caps for preferred current, if
+		 * already available
+		 */
+		if (pd_get_snk_cap_cnt(port) > 0)
+			dpm_evaluate_sink_fixed_pdo(port,
+						    *pd_get_snk_caps(port));
+
+		/*
+		 * Remove prior FRS claims to 3.0 A now that sink current has
+		 * been claimed, to avoid issues with lower priority ports
+		 * potentially receiving a 3.0 A claim between calls.
+		 */
+		dpm_remove_source(port);
 	} else {
 		/*
 		 * SwapSourceStartTimer delay is not needed, so trigger now.
@@ -2573,14 +2546,6 @@ static void pe_src_transition_supply_run(int port)
 			 */
 			if (pd_get_src_cap_cnt(port) == 0)
 				pd_dpm_request(port, DPM_REQUEST_GET_SRC_CAPS);
-
-			/*
-			 * Evaluate port's sink caps for preferred current, if
-			 * already available
-			 */
-			if (pd_get_snk_cap_cnt(port) > 0)
-				dpm_evaluate_sink_fixed_pdo(port,
-							*pd_get_snk_caps(port));
 
 			set_state_pe(port, PE_SRC_READY);
 		} else {
@@ -2994,13 +2959,6 @@ static void pe_snk_startup_entry(int port)
 	/* Reset the protocol layer */
 	prl_reset_soft(port);
 
-	/*
-	 * Protocol layer reset clears the message IDs for all SOP types.
-	 * Indicate that a SOP' soft reset is required before any other
-	 * messages are sent to the cable.
-	 */
-	pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
-
 	/* Set initial data role */
 	pe[port].data_role = pd_get_data_role(port);
 
@@ -3012,6 +2970,19 @@ static void pe_snk_startup_entry(int port)
 
 	if (PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE);
+		/*
+		 * Protocol layer reset clears the message IDs for all SOP
+		 * types. Indicate that a SOP' soft reset is required before any
+		 * other messages are sent to the cable.
+		 *
+		 * Note that other paths into this state are for the initial
+		 * connection and for a hard reset. In both cases the cable
+		 * should also automatically clear the message IDs so don't
+		 * generate an SOP' soft reset for those cases. Sending
+		 * unnecessary SOP' soft resets causes bad behavior with
+		 * some devices. See b/179325862.
+		 */
+		pd_dpm_request(port, DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND);
 
 		/*
 		 * Some port partners may violate spec and attempt to
@@ -3332,6 +3303,14 @@ static void pe_snk_transition_sink_run(int port)
 			if (tc_is_vconn_src(port))
 				tcpm_sop_prime_enable(port, true);
 
+			/*
+			 * Evaluate port's sink caps for FRS current, if
+			 * already available
+			 */
+			if (pd_get_snk_cap_cnt(port) > 0)
+				dpm_evaluate_sink_fixed_pdo(port,
+							*pd_get_snk_caps(port));
+
 			set_state_pe(port, PE_SNK_READY);
 			return;
 		}
@@ -3390,40 +3369,6 @@ static void pe_snk_ready_entry(int port)
 				get_time().val + PD_T_SINK_REQUEST;
 	} else {
 		pe[port].sink_request_timer = TIMER_DISABLED;
-	}
-
-	/*
-	 * If port partner sink capabilities are known (because we requested
-	 * and got them earlier), evaluate them for FRS support and enable
-	 * if appropriate. If not known, request that we get them through DPM
-	 * which will eventually come back here with known capabilities. Don't
-	 * do anything if FRS is already enabled.
-	 */
-	if (IS_ENABLED(CONFIG_USB_PD_FRS) &&
-	    !PE_CHK_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_ENABLED)) {
-		if (pd_get_snk_cap_cnt(port) > 0) {
-			/*
-			 * Have partner sink caps. FRS support is only specified
-			 * in fixed PDOs, and "the vSafe5V Fixed Supply Object
-			 * Shall always be the first object" in a capabilities
-			 * message so take the first one.
-			 */
-			const uint32_t *snk_caps = pd_get_snk_caps(port);
-
-			pe_evaluate_frs_snk_pdo(port, snk_caps[0]);
-		} else {
-			/*
-			 * Don't have caps; request them. A sink port "shall
-			 * minimally offer one Power Data Object," so a
-			 * compliant partner that supports sink operation will
-			 * never fail to return sink capabilities in a way which
-			 * would cause us to endlessly request them. Non-DRPs
-			 * will never support FRS and may not support sink
-			 * operation, so avoid requesting caps from them.
-			 */
-			if (pd_is_port_partner_dualrole(port))
-				pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
-		}
 	}
 
 	/*
@@ -6558,9 +6503,7 @@ static void pe_dr_get_sink_cap_run(int port)
 
 				pe_set_snk_caps(port, cap_cnt, payload);
 
-				if (pe[port].power_role == PD_ROLE_SOURCE)
-					dpm_evaluate_sink_fixed_pdo(port,
-								payload[0]);
+				dpm_evaluate_sink_fixed_pdo(port, payload[0]);
 				pe_set_ready_state(port);
 				return;
 			} else if (cnt == 0 && (type == PD_CTRL_REJECT ||
