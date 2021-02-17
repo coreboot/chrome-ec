@@ -253,11 +253,6 @@ static const struct option_container cmd_line_options[] = {
 	{{"any", no_argument, NULL, 'a'},
 	 "Try any interfaces to find Cr50"
 	 " (-d, -s, -t are all ignored)"},
-	{{"background_update_supported", no_argument, NULL, 'B'},
-	 "Force background update mode (relevant"
-	 " only when interacting"
-	 " with Cr50 versions before 0.0.19)"
-	},
 	{{"binvers", no_argument, NULL, 'b'},
 	 "Report versions of Cr50 image's "
 	 "RW and RO headers, do not update"},
@@ -1546,12 +1541,6 @@ static void process_erase_ap_ro_hash(struct transfer_descriptor *td)
 	exit(update_error);
 }
 
-static struct signed_header_version ver19 = {
-	.epoch = 0,
-	.major = 0,
-	.minor = 19,
-};
-
 static void generate_reset_request(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -1559,7 +1548,6 @@ static void generate_reset_request(struct transfer_descriptor *td)
 	uint16_t subcommand;
 	uint8_t command_body[2]; /* Max command body size. */
 	size_t command_body_size;
-	uint32_t background_update_supported;
 	const char *reset_type;
 	int rv;
 
@@ -1575,46 +1563,32 @@ static void generate_reset_request(struct transfer_descriptor *td)
 		return;
 	}
 
-	/* RW version 0.0.19 and above has support for background updates. */
-	background_update_supported = td->background_update_supported ||
-				!a_newer_than_b(&ver19, &targ.shv[1]);
-
 	/*
-	 * If this is an upstart request and there is support for background
-	 * updates, don't post a request now. The target should handle it on
-	 * the next reboot.
+	 * If this is an upstart request, don't post a request now. The target
+	 * should handle it on the next reboot.
 	 */
-	if (td->upstart_mode && background_update_supported)
+	if (td->upstart_mode)
 		return;
 
 	/*
-	 * If the user explicitly wants it or a reset is needed because h1
-	 * does not support background updates, request post reset instead of
-	 * immediate reset. In this case next time the target reboots, the h1
+	 * If the user explicitly wants it, request post reset instead of
+	 * immediate reset. In this case next time the target reboots, the GSC
 	 * will reboot as well, and will consider running the uploaded code.
 	 *
-	 * In case target RW version is 19 or above, to reset the target the
-	 * host is supposed to send the command to enable the uploaded image
-	 * disabled by default.
-	 *
-	 * Otherwise the immediate reset command would suffice.
+	 * Otherwise, to reset the target the host is supposed to send the
+	 * command to enable the uploaded image disabled by default.
 	 */
-	/* Most common case. */
-	command_body_size = 0;
 	response_size = 1;
-	if (td->post_reset || td->upstart_mode) {
+	if (td->post_reset) {
 		subcommand = EXTENSION_POST_RESET;
+		command_body_size = 0;
 		reset_type = "posted";
-	} else if (background_update_supported) {
+	} else {
 		subcommand = VENDOR_CC_TURN_UPDATE_ON;
 		command_body_size = sizeof(command_body);
 		command_body[0] = 0;
 		command_body[1] = 100;  /* Reset in 100 ms. */
 		reset_type = "requested";
-	} else {
-		response_size = 0;
-		subcommand = VENDOR_CC_IMMEDIATE_RESET;
-		reset_type = "triggered";
 	}
 
 	rv = send_vendor_command(td, subcommand, command_body,
@@ -2986,7 +2960,6 @@ int main(int argc, char *argv[])
 	 * with addresses of the flags. Terminated by a zeroed entry.
 	 */
 	const struct options_map omap[] = {
-		{ 'B', &td.background_update_supported},
 		{ 'b', &binary_vers },
 		{ 'c', &corrupt_inactive_rw },
 		{ 'f', &show_fw_ver },
