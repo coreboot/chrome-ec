@@ -33,6 +33,19 @@ enum touch_state {
  */
 enum touch_state pop_check_presence(int consume);
 
+/* ---- non-volatile U2F state ---- */
+
+struct u2f_state {
+	uint32_t salt[8];
+	uint32_t salt_kek[8];
+	uint32_t salt_kh[8];
+};
+
+/**
+ * Get the current u2f state from the board.
+ */
+struct u2f_state *get_state(void);
+
 /* ---- platform cryptography hooks ---- */
 
 /**
@@ -144,5 +157,12 @@ int g2f_attestation_cert(uint8_t *buf);
  */
 enum vendor_cmd_rc u2f_generate(enum vendor_cmd_cc code, void *buf,
 				size_t input_size, size_t *response_size);
+
+/**
+ * U2F_SIGN command handler. Verifies a key handle is owned and signs data with
+ * it.
+ */
+enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
+			    size_t input_size, size_t *response_size);
 
 #endif /* __CROS_EC_U2F_IMPL_H */

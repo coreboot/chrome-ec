@@ -65,10 +65,28 @@ void DCRYPTO_SHA256_init(LITE_SHA256_CTX *ctx, uint32_t sw_required)
 	SHA256_init(ctx);
 }
 
+void DCRYPTO_HMAC_SHA256_init(LITE_HMAC_CTX *ctx, const void *key,
+			      unsigned int len)
+{
+	SHA256_init(&ctx->hash);
+}
+
+const uint8_t *DCRYPTO_HMAC_final(LITE_HMAC_CTX *ctx)
+{
+	return SHA256_final(&ctx->hash);
+}
+
 /******************************************************************************/
 /* Mock implementations of U2F functionality.
  */
 static int presence;
+
+static struct u2f_state state;
+
+struct u2f_state *get_state(void)
+{
+	return &state;
+}
 
 enum touch_state pop_check_presence(int consume)
 {
@@ -80,21 +98,6 @@ enum touch_state pop_check_presence(int consume)
 	return ret;
 }
 
-int u2f_origin_user_keyhandle(const uint8_t *origin, const uint8_t *user,
-			      const uint8_t *seed,
-			      struct u2f_key_handle *key_handle)
-{
-	return EC_SUCCESS;
-}
-
-int u2f_origin_user_versioned_keyhandle(
-	const uint8_t *origin, const uint8_t *user, const uint8_t *seed,
-	uint8_t version,
-	struct u2f_versioned_key_handle_header *key_handle_header)
-{
-	return EC_SUCCESS;
-}
-
 int u2f_origin_user_keypair(const uint8_t *key_handle, size_t key_handle_size,
 			    p256_int *d, p256_int *pk_x, p256_int *pk_y)
 {
@@ -102,13 +105,6 @@ int u2f_origin_user_keypair(const uint8_t *key_handle, size_t key_handle_size,
 }
 
 int g2f_individual_keypair(p256_int *d, p256_int *pk_x, p256_int *pk_y)
-{
-	return EC_SUCCESS;
-}
-
-int u2f_authorization_hmac(const uint8_t *authorization_salt,
-			   const struct u2f_versioned_key_handle_header *header,
-			   const uint8_t *auth_time_secret_hash, uint8_t *hmac)
 {
 	return EC_SUCCESS;
 }

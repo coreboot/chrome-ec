@@ -264,8 +264,8 @@ static int verify_versioned_kh_owned(
 BUILD_ASSERT(sizeof(struct u2f_sign_resp) <= sizeof(struct u2f_sign_req));
 
 /* U2F SIGN command */
-static enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
-				   size_t input_size, size_t *response_size)
+enum vendor_cmd_rc u2f_sign(enum vendor_cmd_cc code, void *buf,
+			    size_t input_size, size_t *response_size)
 {
 	const struct u2f_sign_req *req = buf;
 	const struct u2f_sign_versioned_req *req_versioned = buf;
@@ -504,3 +504,72 @@ static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code, void *buf,
 	return VENDOR_RC_SUCCESS;
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_U2F_ATTEST, u2f_attest);
+
+int u2f_origin_user_keyhandle(const uint8_t *origin, const uint8_t *user,
+			      const uint8_t *origin_seed,
+			      struct u2f_key_handle *key_handle)
+{
+	LITE_HMAC_CTX ctx;
+	struct u2f_state *state = get_state();
+
+	if (!state)
+		return EC_ERROR_UNKNOWN;
+
+	memcpy(key_handle->origin_seed, origin_seed, P256_NBYTES);
+
+	DCRYPTO_HMAC_SHA256_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
+	HASH_update(&ctx.hash, origin, P256_NBYTES);
+	HASH_update(&ctx.hash, user, P256_NBYTES);
+	HASH_update(&ctx.hash, origin_seed, P256_NBYTES);
+
+	memcpy(key_handle->hmac, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
+
+	return EC_SUCCESS;
+}
+
+int u2f_origin_user_versioned_keyhandle(
+	const uint8_t *origin, const uint8_t *user, const uint8_t *origin_seed,
+	uint8_t version,
+	struct u2f_versioned_key_handle_header *key_handle_header)
+{
+	LITE_HMAC_CTX ctx;
+	struct u2f_state *state = get_state();
+
+	if (!state)
+		return EC_ERROR_UNKNOWN;
+
+	key_handle_header->version = version;
+	memcpy(key_handle_header->origin_seed, origin_seed, P256_NBYTES);
+
+	DCRYPTO_HMAC_SHA256_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
+	HASH_update(&ctx.hash, origin, P256_NBYTES);
+	HASH_update(&ctx.hash, user, P256_NBYTES);
+	HASH_update(&ctx.hash, origin_seed, P256_NBYTES);
+	HASH_update(&ctx.hash, &version, sizeof(key_handle_header->version));
+
+	memcpy(key_handle_header->kh_hmac, DCRYPTO_HMAC_final(&ctx),
+	       SHA256_DIGEST_SIZE);
+
+	return EC_SUCCESS;
+}
+
+int u2f_authorization_hmac(const uint8_t *authorization_salt,
+			   const struct u2f_versioned_key_handle_header *header,
+			   const uint8_t *auth_time_secret_hash, uint8_t *hmac)
+{
+	LITE_HMAC_CTX ctx;
+	struct u2f_state *state = get_state();
+
+	if (!state)
+		return EC_ERROR_UNKNOWN;
+
+	DCRYPTO_HMAC_SHA256_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
+	HASH_update(&ctx.hash, authorization_salt, U2F_AUTHORIZATION_SALT_SIZE);
+	HASH_update(&ctx.hash, (uint8_t *)header,
+		    sizeof(struct u2f_versioned_key_handle_header));
+	HASH_update(&ctx.hash, auth_time_secret_hash, SHA256_DIGEST_SIZE);
+
+	memcpy(hmac, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
+
+	return EC_SUCCESS;
+}
