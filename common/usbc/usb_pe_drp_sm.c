@@ -603,6 +603,7 @@ static struct policy_engine {
 	 * Source_Capabilities Message.
 	 */
 	uint64_t source_cap_timer;
+
 	/*
 	 * This timer is used during an Explicit Contract when discovering
 	 * whether a Port Partner is PD Capable using SOP'.
@@ -2226,7 +2227,6 @@ static void pe_src_send_capabilities_entry(int port)
 	/* Send PD Capabilities message */
 	send_source_cap(port);
 	pe_sender_response_msg_entry(port);
-	tc_high_priority_event(port, true);
 
 	/* Increment CapsCounter */
 	pe[port].caps_counter++;
@@ -2378,7 +2378,6 @@ static void pe_src_send_capabilities_run(int port)
 static void pe_src_send_capabilities_exit(int port)
 {
 	pe_sender_response_msg_exit(port);
-	tc_high_priority_event(port, false);
 }
 
 /**
