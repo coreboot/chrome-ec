@@ -23,3 +23,9 @@ baseboard-$(VARIANT_INTELRVP_EC_IT8320)+=ite_ec.o
 
 #BC1.2 specific files
 baseboard-$(CONFIG_BC12_DETECT_MAX14637)+=bc12.o
+
+#Common board specific files
+ifneq ($(filter y,$(BOARD_ADLRVPP_ITE) $(BOARD_ADLRVPM_ITE)),)
+baseboard-y+=adlrvp.o
+baseboard-$(CONFIG_BATTERY_SMART)+=adlrvp_battery.o
+endif
