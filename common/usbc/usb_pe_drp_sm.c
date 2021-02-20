@@ -954,11 +954,8 @@ void pe_invalidate_explicit_contract(int port)
 		typec_update_cc(port);
 }
 
-void pe_notify_event(int port, uint32_t event_mask)
+void pd_notify_event(int port, uint32_t event_mask)
 {
-	/* Events may only be set from the PD task */
-	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
-
 	atomic_or(&pe[port].events, event_mask);
 
 	/* Notify the host that new events are available to read */
@@ -5377,7 +5374,7 @@ static void pe_vdm_identity_request_cbl_exit(int port)
 	/* Do not attempt further discovery if identity discovery failed. */
 	if (pd_get_identity_discovery(port, pe[port].tx_type) == PD_DISC_FAIL) {
 		pd_set_svids_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
-		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+		pd_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
 				PD_STATUS_EVENT_SOP_DISC_DONE :
 				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 	}
@@ -5464,7 +5461,7 @@ static void pe_init_port_vdm_identity_request_exit(int port)
 	/* Do not attempt further discovery if identity discovery failed. */
 	if (pd_get_identity_discovery(port, pe[port].tx_type) == PD_DISC_FAIL) {
 		pd_set_svids_discovery(port, pe[port].tx_type, PD_DISC_FAIL);
-		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+		pd_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
 				PD_STATUS_EVENT_SOP_DISC_DONE :
 				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 	}
@@ -5557,7 +5554,7 @@ static void pe_init_vdm_svids_request_exit(int port)
 
 	/* If SVID discovery failed, discovery is done at this point */
 	if (pd_get_svids_discovery(port, pe[port].tx_type) == PD_DISC_FAIL)
-		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+		pd_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
 				PD_STATUS_EVENT_SOP_DISC_DONE :
 				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 }
@@ -5667,7 +5664,7 @@ static void pe_init_vdm_modes_request_exit(int port)
 {
 	if (pd_get_modes_discovery(port, pe[port].tx_type) != PD_DISC_NEEDED)
 		/* Mode discovery done, notify the AP */
-		pe_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
+		pd_notify_event(port, pe[port].tx_type == TCPC_TX_SOP ?
 				PD_STATUS_EVENT_SOP_DISC_DONE :
 				PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 
