@@ -126,6 +126,7 @@ int board_get_version(void)
 		}
 	}
 
+#ifdef VARIANT_KUKUI_EC_STM32F098
 	/*
 	 * For devices without pogo, Disable ADC module after we detect the
 	 * board version, since this is the only thing ADC module needs to do
@@ -134,15 +135,18 @@ int board_get_version(void)
 	if (CONFIG_DEDICATED_CHARGE_PORT_COUNT == 0 &&
 			version != BOARD_VERSION_UNKNOWN)
 		adc_disable();
+#endif
 
 	return version;
 }
 
 __override void board_set_stm32_spi_pin_speed(void)
 {
+#if defined(VARIANT_KUKUI_EC_STM32F098) || defined(VARIANT_KUKUI_EC_STM32L431)
 	/* Set SPI PA15,PB3/4/5/13/14/15 pins to high speed */
 	STM32_GPIO_OSPEEDR(GPIO_A) |= 0xc0000000;
 	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xfc000fc0;
+#endif
 }
 
 int board_allow_i2c_passthru(int port)

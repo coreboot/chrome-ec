@@ -257,13 +257,6 @@
 #define TIM_CLOCK32  2
 #define TIM_WATCHDOG 7
 
-/* 48 MHz SYSCLK clock frequency */
-#ifdef VARIANT_KUKUI_EC_STM32L431
-#define CPU_CLOCK 80000000
-#else
-#define CPU_CLOCK 48000000
-#endif
-
 /* Optional for testing */
 #undef CONFIG_PECI
 #undef CONFIG_PSTORE
@@ -297,6 +290,22 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
+
+/*
+ * Variant EC defines. Pick one:
+ * VARIANT_KUKUI_EC_STM32F098
+ * VARIANT_KUKUI_EC_STM32L431
+ * VARIANT_KUKUI_EC_IT81202
+ */
+#if defined(VARIANT_KUKUI_EC_STM32F098)
+#define CPU_CLOCK 48000000
+#elif defined(VARIANT_KUKUI_EC_STM32L431)
+#define CPU_CLOCK 80000000
+#elif defined(VARIANT_KUKUI_EC_IT81202)
+/* TODO: Put it83xx chip-specific config options here. */
+#else
+#error "Must define a VARIANT_KUKUI_EC_XXX!"
+#endif
 
 #ifndef __ASSEMBLER__
 #ifdef VARIANT_KUKUI_DP_MUX_GPIO
