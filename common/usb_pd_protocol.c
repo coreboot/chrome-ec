@@ -3463,6 +3463,8 @@ void pd_task(void *u)
 				tcpm_set_rx_enable(port, 1);
 #endif /* CONFIG_USB_PD_TCPM_TCPCI */
 
+			pd[port].flags |= PD_FLAGS_CHECK_PR_ROLE |
+					  PD_FLAGS_CHECK_DR_ROLE;
 			set_state(port, PD_STATE_SRC_STARTUP);
 			break;
 		case PD_STATE_SRC_STARTUP:
