@@ -216,9 +216,10 @@ CCD needs to be [`Open`].
 
     *** note
     **WARNING**: Opening CCD causes Cr50 to forget that it is in
-    [Developer Mode], so when the device reboots, it will say that the OS
-    image is invalid. Use the key combinations to enter [Recovery Mode] and
-    re-enable [Developer Mode]. See [this bug] for details.
+    [Developer Mode], so when the device reboots, it will either say that
+    the OS image is invalid or it will enter a bootloop. Use the key
+    combinations to enter [Recovery Mode] and re-enable [Developer Mode].
+    See [this bug] for details.
     ***
 
 1.  Use the `ccd` command on the Cr50 console to verify the state is [`Open`]:
