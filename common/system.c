@@ -46,6 +46,18 @@
 /* Round up to a multiple of 4 */
 #define ROUNDUP4(x) (((x) + 3) & ~3)
 
+#ifdef CONFIG_ZEPHYR
+#ifdef CONFIG_CPU_CORTEX_M
+/*
+ * For cortex-m we cannot use irq_lock() for disabling all the interrupts
+ * because it leaves some (NMI and faults) still enabled.
+ */
+#define interrupt_disable_all() __asm__("cpsid i")
+#endif
+#else /* !CONFIG_ZEPHYR */
+#define interrupt_disable_all() interrupt_disable()
+#endif /* CONFIG_ZEPHYR */
+
 /* Data for an individual jump tag */
 struct jump_tag {
 	uint16_t tag;		/* Tag ID */
@@ -491,6 +503,13 @@ const char *ec_image_to_string(enum ec_image copy)
 	return image_names[copy < ARRAY_SIZE(image_names) ? copy : 0];
 }
 
+__overridable void board_pulse_entering_rw(void)
+{
+	gpio_set_level(GPIO_ENTERING_RW, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_ENTERING_RW, 0);
+}
+
 /**
  * Jump to what we hope is the init address of an image.
  *
@@ -511,9 +530,7 @@ static void jump_to_image(uintptr_t init_addr)
 	 * drop it again so we don't leak power through the pulldown in the
 	 * Silego.
 	 */
-	gpio_set_level(GPIO_ENTERING_RW, 1);
-	usleep(MSEC);
-	gpio_set_level(GPIO_ENTERING_RW, 0);
+	board_pulse_entering_rw();
 
 	/*
 	 * Since in EFS2, USB/PD won't be enabled in RO or if it's enabled in
@@ -550,7 +567,7 @@ static void jump_to_image(uintptr_t init_addr)
 	hook_notify(HOOK_SYSJUMP);
 
 	/* Disable interrupts before jump */
-	interrupt_disable();
+	interrupt_disable_all();
 
 #ifdef CONFIG_DMA
 	/* Disable all DMA channels to avoid memory corruption */

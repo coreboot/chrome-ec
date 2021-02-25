@@ -8,13 +8,17 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+/*
+ * Early brya boards are not set up for vivaldi
+ */
+#undef CONFIG_KEYBOARD_VIVALDI
+
 /* Baseboard features */
 #include "baseboard.h"
 
 /*
  * Disable features enabled by default.
  */
-#undef CONFIG_ADC
 #undef CONFIG_HIBERNATE
 #undef CONFIG_SPI_FLASH
 #undef CONFIG_SWITCH
@@ -56,25 +60,43 @@
 #define I2C_PORT_USB_C2_TCPC	NPCX_I2C_PORT1_0	/* dual TCPC with C0 */
 
 #define I2C_PORT_USB_C0_PPC	NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_PPC	NPCX_I2C_PORT6_0
+#define I2C_PORT_USB_C1_PPC	NPCX_I2C_PORT6_1
 #define I2C_PORT_USB_C2_PPC	NPCX_I2C_PORT2_0
 
 #define I2C_PORT_USB_C0_BC12	NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_BC12	NPCX_I2C_PORT6_0
+#define I2C_PORT_USB_C1_BC12	NPCX_I2C_PORT6_1
 #define I2C_PORT_USB_C2_BC12	NPCX_I2C_PORT2_0
 
 #define I2C_PORT_USB_C0_MUX	NPCX_I2C_PORT3_0
-#define I2C_PORT_USB_C1_MUX	NPCX_I2C_PORT6_0
+#define I2C_PORT_USB_C1_MUX	NPCX_I2C_PORT6_1
 #define I2C_PORT_USB_C2_MUX	NPCX_I2C_PORT3_0
 
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
 #define I2C_PORT_CHARGER	NPCX_I2C_PORT7_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
 
+/* Thermal features */
+#define CONFIG_THERMISTOR
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
+#define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"	/* needed by registers.h */
 #include "registers.h"
+
+enum adc_channel {
+	ADC_TEMP_SENSOR_1_DDR_SOC,
+	ADC_TEMP_SENSOR_2_CHARGER,
+	ADC_CH_COUNT
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_1_DDR_SOC,
+	TEMP_SENSOR_2_CHARGER,
+	TEMP_SENSOR_COUNT
+};
 
 enum ioex_port {
 	IOEX_C0_NCT38XX = 0,
@@ -113,12 +135,6 @@ enum mft_channel {
  */
 
 void power_button_interrupt(enum gpio_signal signal);
-
-/*
- * remove when we enable CONFIG_THROTTLE_AP
- */
-
-void throttle_ap_prochot_input_interrupt(enum gpio_signal signal);
 
 /*
  * remove when we enable CONFIG_VOLUME_BUTTONS

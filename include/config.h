@@ -1468,6 +1468,13 @@
 #undef CONFIG_IO_EXPANDER
 
 /*
+ * Enable reading levels for whole IO expander port with one call.
+ * This adds 'get_port' function pointer to 'ioexpander_drv' structure.
+ * Most drivers don't implement this functionality.
+ */
+#undef CONFIG_IO_EXPANDER_SUPPORT_GET_PORT
+
+/*
  * EC's supporting powering down GPIO pins.
  * Add flag GPIO_POWER_DOWN and additional API's.
  */
@@ -2505,6 +2512,9 @@
 /* Support NXP PCAL6408 I/O expander. */
 #undef CONFIG_IO_EXPANDER_PCAL6408
 
+/* Support TI TCA64xxA I/O expander. */
+#undef CONFIG_IO_EXPANDER_TCA64XXA
+
 /* Number of IO Expander ports */
 #undef CONFIG_IO_EXPANDER_PORT_COUNT
 
@@ -3415,12 +3425,6 @@
 
 /* Storage  offset of sharedobjects library. */
 #undef CONFIG_SHAREDLIB_STORAGE_OFF
-
-/*
- * If defined, the hash module will save its last computed hash when jumping
- * between EC images.
- */
-#undef CONFIG_SAVE_VBOOT_HASH
 
 /* Allow the board to use a GPIO for the SCI# signal. */
 #undef CONFIG_SCI_GPIO
@@ -4762,6 +4766,12 @@
  */
 #undef CONFIG_USB_MUX_ANX7440
 
+/*
+ * Support the Analogix ANX7451 10G Active Mux (4x4) with
+ * Integrated Re-timers for USB3.2/DisplayPort
+ */
+#undef CONFIG_USB_MUX_ANX7451
+
 /* Support the ITE IT5205 Type-C USB alternate mode mux. */
 #undef CONFIG_USB_MUX_IT5205
 
@@ -4868,7 +4878,9 @@
  * if the hook task (which is the lowest-priority task on the system) gets
  * starved for CPU time and isn't able to fire its HOOK_TICK event.
  */
+#ifndef CONFIG_ZEPHYR
 #define CONFIG_WATCHDOG
+#endif
 
 /*
  * Try to detect a watchdog that is about to fire, and print a trace.  This is
@@ -5177,6 +5189,9 @@
  * defines, and define a default number of 3.0 A ports if not selected.  Note
  * that the functionality of this default of 1 is equivalent to both previous
  * defines, which only ever allocated one 3.0 A port.
+ *
+ * To turn off the TCPMv2 3.0 A current allocation from the DPM, set
+ * CONFIG_USB_PD_3A_PORTS to 0.
  */
 #ifdef CONFIG_USB_PD_TCPMV2
 #if defined(CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT) || \
@@ -5815,8 +5830,15 @@
  * Validity checks to make sure some of the configs above make sense.
  */
 
+/*
+ * Chromium ec uses hook tick to reload the watchdog. The interval between
+ * reloads of the watchdog timer should be less than half of the watchdog
+ * period.
+ */
+#if !defined(CONFIG_ZEPHYR) && defined(CONFIG_WATCHDOG)
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
+#endif
 #endif
 
 #ifdef CONFIG_USB_SERIALNO

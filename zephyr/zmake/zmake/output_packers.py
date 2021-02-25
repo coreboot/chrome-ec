@@ -97,7 +97,18 @@ class ElfPacker(BasePacker):
 
 
 class RawBinPacker(BasePacker):
-    """Packer for RO/RW image to generate a .bin build using FMAP."""
+    """Raw proxy for zephyr.bin output of a single build."""
+    def pack_firmware(self, work_dir, jobclient, singleimage):
+        yield singleimage / 'zephyr' / 'zephyr.bin', 'zephyr.bin'
+
+
+class NpcxPacker(BasePacker):
+    """Packer for RO/RW image to generate a .bin build using FMAP.
+
+    This expects that the build is setup to generate a
+    zephyr.packed.bin for the RO image, which should be packed using
+    Nuvoton's loader format.
+    """
     def __init__(self, project):
         self.logger = logging.getLogger(self.__class__.__name__)
         super().__init__(project)
@@ -161,5 +172,6 @@ class RawBinPacker(BasePacker):
 # A dictionary mapping packer config names to classes.
 packer_registry = {
     'elf': ElfPacker,
+    'npcx': NpcxPacker,
     'raw': RawBinPacker,
 }

@@ -88,10 +88,8 @@ static int smart_batt_temp;
 static int ds1624_temp;
 static int sb_temp(int idx, int *temp_ptr);
 static int ds1624_get_val(int idx, int *temp_ptr);
-#ifdef HAS_TASK_MOTIONSENSE
 static void board_spi_enable(void);
 static void board_spi_disable(void);
-#endif
 
 #ifdef CONFIG_BOARD_PRE_INIT
 /*
@@ -273,40 +271,6 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	 &tcpci_tcpm_drv},
 };
 #endif
-
-const uint32_t i2c_ctrl_slave_addrs[I2C_CONTROLLER_COUNT] = {
-#ifdef CONFIG_BOARD_MCHP_I2C0_SLAVE_ADDRS
-	(MCHP_I2C_CTRL0 + (CONFIG_BOARD_MCHP_I2C0_SLAVE_ADDRS << 16)),
-#else
-	(MCHP_I2C_CTRL0 + (CONFIG_MCHP_I2C0_SLAVE_ADDRS << 16)),
-#endif
-#ifdef CONFIG_BOARD_MCHP_I2C1_SLAVE_ADDRS
-	(MCHP_I2C_CTRL1 + (CONFIG_BOARD_MCHP_I2C1_SLAVE_ADDRS << 16)),
-#else
-	(MCHP_I2C_CTRL1 + (CONFIG_MCHP_I2C1_SLAVE_ADDRS << 16)),
-#endif
-};
-
-/* Return the two slave addresses the specified
- * controller will respond to when controller
- * is acting as a slave.
- * b[6:0]  = b[7:1] of I2C address 1
- * b[14:8] = b[7:1] of I2C address 2
- * When not using I2C controllers as slaves we can use
- * the same value for all controllers. The address should
- * not be 0x00 as this is the general call address.
- */
-uint16_t board_i2c_slave_addrs(int controller)
-{
-	int i;
-
-	for (i = 0; i < I2C_CONTROLLER_COUNT; i++)
-		if ((i2c_ctrl_slave_addrs[i] & 0xffff) == controller)
-			return (i2c_ctrl_slave_addrs[i] >> 16);
-
-	return CONFIG_MCHP_I2C0_SLAVE_ADDRS;
-}
-
 
 /* SPI devices */
 const struct spi_device_t spi_devices[] = {
@@ -561,13 +525,11 @@ static void board_init(void)
 	/* Provide AC status to the PCH */
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
 
-#ifdef HAS_TASK_MOTIONSENSE
 	if (system_jumped_late() &&
 	    chipset_in_state(CHIPSET_STATE_ON)) {
 		trace0(0, BRD, 0, "board_init: S0 call board_spi_enable");
 		board_spi_enable();
 	}
-#endif
 
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
@@ -906,7 +868,6 @@ static void board_one_sec(void)
 }
 DECLARE_HOOK(HOOK_SECOND, board_one_sec, HOOK_PRIO_DEFAULT);
 
-#ifdef HAS_TASK_MOTIONSENSE
 /* Motion sensors */
 
 static struct mutex g_base_mutex;
@@ -1018,7 +979,6 @@ static void board_spi_disable(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_spi_disable,
 	     MOTION_SENSE_HOOK_PRIO + 1);
-#endif /* defined(HAS_TASK_MOTIONSENSE) */
 
 #ifdef MEC1701_EVB_TACH_TEST /* PWM/TACH test */
 void tach0_isr(void)

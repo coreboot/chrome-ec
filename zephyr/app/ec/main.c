@@ -10,6 +10,8 @@
 #include "ec_tasks.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
+#include "system.h"
+#include "watchdog.h"
 #include "zephyr_espi_shim.h"
 
 void main(void)
@@ -18,6 +20,8 @@ void main(void)
 	printk("  BOARD=%s\n", CONFIG_BOARD);
 	printk("  ACTIVE_COPY=%s\n", CONFIG_CROS_EC_ACTIVE_COPY);
 
+	system_common_pre_init();
+
 	/*
 	 * Initialize reset logs. This needs to be done before any updates of
 	 * reset logs because we need to verify if the values remain the same
@@ -25,6 +29,10 @@ void main(void)
 	 */
 	if (IS_ENABLED(CONFIG_CMD_AP_RESET_LOG)) {
 		init_reset_log();
+	}
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG)) {
+		watchdog_init();
 	}
 
 	if (IS_ENABLED(HAS_TASK_KEYSCAN)) {

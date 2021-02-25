@@ -14,7 +14,10 @@
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-#define CONFIG_LTO
+#define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
+#define CONFIG_BRINGUP /* EC will not automatically power on the AP */
+#define CONFIG_I2C_DEBUG /* Print i2c traces */
+#define CONFIG_KEYBOARD_DEBUG /* Print keyboard debug messages */
 
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
@@ -162,7 +165,7 @@
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
-#define CONFIG_USB_MUX_ANX7440
+#define CONFIG_USB_MUX_ANX7451
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USBC_PPC_NX20P3483
 #define CONFIG_USBC_RETIMER_PS8818

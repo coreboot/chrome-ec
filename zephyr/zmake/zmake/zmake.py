@@ -36,9 +36,29 @@ def ninja_log_level_override(line, default_log_level):
 
 
 class Zmake:
-    """Wrapper class encapsulating zmake's supported operations."""
-    def __init__(self, checkout=None, jobserver=None, jobs=0):
+    """Wrapper class encapsulating zmake's supported operations.
+
+    The invocations of the constructor and the methods actually comes
+    from the main function.  The command line arguments are translated
+    such that dashes are replaced with underscores and applied as
+    keyword arguments to the constructor and the method, and the
+    subcommand invoked becomes the method run.
+
+    As such, you won't find documentation for each method's parameters
+    here, as it would be duplicate of the help strings from the
+    command line.  Run "zmake --help" for full documentation of each
+    parameter.
+    """
+    def __init__(self, checkout=None, jobserver=None, jobs=0, modules_dir=None,
+                 zephyr_base=None):
         self._checkout = checkout
+        self._zephyr_base = zephyr_base
+
+        if modules_dir:
+            self.module_paths = zmake.modules.locate_from_directory(modules_dir)
+        else:
+            self.module_paths = zmake.modules.locate_from_checkout(
+                self.checkout)
 
         if jobserver:
             self.jobserver = jobserver
@@ -56,36 +76,46 @@ class Zmake:
             self._checkout = util.locate_cros_checkout()
         return self._checkout.resolve()
 
+    def locate_zephyr_base(self, version):
+        """Locate the Zephyr OS repository.
+
+        Args:
+            version: If a Zephyr OS base was not supplied to Zmake,
+                which version to search for as a tuple of integers.
+                This argument is ignored if a Zephyr base was supplied
+                to Zmake.
+        Returns:
+            A pathlib.Path to the found Zephyr OS repository.
+        """
+        if self._zephyr_base:
+            return self._zephyr_base
+
+        return util.locate_zephyr_base(self.checkout, version)
+
     def configure(self, project_dir, build_dir=None,
-                  version=None, zephyr_base=None, module_paths=None,
                   toolchain=None, ignore_unsupported_zephyr_version=False,
                   build_after_configure=False, test_after_configure=False,
                   bringup=False):
         """Set up a build directory to later be built by "zmake build"."""
         project = zmake.project.Project(project_dir)
-        if version:
-            # Ignore the patchset.
-            version = version[:2]
-            if (not ignore_unsupported_zephyr_version
-                    and version not in project.config.supported_zephyr_versions):
-                raise ValueError(
-                    'Requested version (v{}.{}) is not supported by the '
-                    'project.  You may wish to either configure zmake.yaml to '
-                    'support this version, or pass '
-                    '--ignore-unsupported-zephyr-version.'.format(*version))
-        else:
-            # Assume the highest supported version by default.
-            version = max(project.config.supported_zephyr_versions)
-        if not zephyr_base:
-            zephyr_base = util.locate_zephyr_base(self.checkout, version)
-        zephyr_base = zephyr_base.resolve()
+        supported_versions = project.config.supported_zephyr_versions
 
-        if not module_paths:
-            module_paths = zmake.modules.locate_modules(self.checkout, version)
+        zephyr_base = self.locate_zephyr_base(max(supported_versions)).resolve()
+
+        # Ignore the patchset from the Zephyr version.
+        zephyr_version = util.read_zephyr_version(zephyr_base)[:2]
+
+        if (not ignore_unsupported_zephyr_version
+                and zephyr_version not in supported_versions):
+            raise ValueError(
+                'The Zephyr OS version (v{}.{}) is not supported by the '
+                'project.  You may wish to either configure zmake.yaml to '
+                'support this version, or pass '
+                '--ignore-unsupported-zephyr-version.'.format(*zephyr_version))
 
         # Resolve build_dir if needed.
         build_dir = util.resolve_build_dir(
-            platform_ec_dir=module_paths['ec-shim'],
+            platform_ec_dir=self.module_paths['ec'],
             project_dir=project_dir,
             build_dir=build_dir)
         # Make sure the build directory is clean.
@@ -97,10 +127,14 @@ class Zmake:
             environ_defs={'ZEPHYR_BASE': str(zephyr_base),
                           'PATH': '/usr/bin'},
             cmake_defs={
-                'DTS_ROOT': str(module_paths['ec-shim'] / 'zephyr'),
+                'DTS_ROOT': str(self.module_paths['ec'] / 'zephyr'),
                 'SYSCALL_INCLUDE_DIRS': str(
-                    module_paths['ec-shim'] / 'zephyr' / 'include' / 'drivers'),
+                    self.module_paths['ec'] / 'zephyr' / 'include' / 'drivers'),
             })
+
+        # Prune the module paths to just those required by the project.
+        module_paths = project.prune_modules(self.module_paths)
+
         module_config = zmake.modules.setup_module_symlinks(
             build_dir / 'modules', module_paths)
 
@@ -153,9 +187,6 @@ class Zmake:
 
     def build(self, build_dir, output_files_out=None):
         """Build a pre-configured build directory."""
-        build_dir = util.resolve_build_dir(platform_ec_dir=self.platform_ec_dir,
-                                           project_dir=build_dir,
-                                           build_dir=build_dir)
         project = zmake.project.Project(build_dir / 'project')
 
         procs = []
@@ -207,9 +238,6 @@ class Zmake:
         """Test a build directory."""
         procs = []
         output_files = []
-        build_dir = util.resolve_build_dir(platform_ec_dir=self.platform_ec_dir,
-                                           project_dir=build_dir,
-                                           build_dir=build_dir)
         self.build(build_dir, output_files_out=output_files)
 
         # If the project built but isn't a test, just bail.
@@ -284,8 +312,7 @@ class Zmake:
 
     def testall(self, fail_fast=False):
         """Test all the valid test targets"""
-        modules = zmake.modules.locate_modules(self.checkout, version=None)
-        root_dirs = [modules['ec-shim'] / 'zephyr']
+        root_dirs = [self.module_paths['ec'] / 'zephyr']
         project_dirs = []
         for root_dir in root_dirs:
             self.logger.info('Finding zmake target under \'%s\'.', root_dir)
@@ -310,15 +337,9 @@ class Zmake:
 
         # Run pytest on platform/ec/zephyr/zmake/tests.
         self._run_pytest(
-            executor, modules['ec-shim'] / 'zephyr' / 'zmake' / 'tests')
+            executor, self.module_paths['ec'] / 'zephyr' / 'zmake' / 'tests')
 
         rv = executor.wait()
         for tmpdir in tmp_dirs:
             shutil.rmtree(tmpdir)
         return rv
-
-    @property
-    def platform_ec_dir(self):
-        return zmake.modules.locate_modules(
-            checkout_dir=self.checkout,
-            version=None)['ec-shim']

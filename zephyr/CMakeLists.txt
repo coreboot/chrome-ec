@@ -148,6 +148,7 @@ add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 # layer.
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC         "${PLATFORM_EC}/common/base32.c"
                                                 "${PLATFORM_EC}/common/console_output.c"
+                                                "${PLATFORM_EC}/common/gpio_commands.c"
                                                 "${PLATFORM_EC}/common/peripheral.c"
                                                 "${PLATFORM_EC}/common/printf.c"
                                                 "${PLATFORM_EC}/common/queue.c"
@@ -255,6 +256,7 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SPI_FLASH_REGS
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TABLET_MODE
                                                 "${PLATFORM_EC}/common/tablet_mode.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR
+                                                "${PLATFORM_EC}/common/thermal.c"
                                                 "${PLATFORM_EC}/common/temp_sensor.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_THERMISTOR
                                                 "${PLATFORM_EC}/driver/temp_sensor/thermistor.c")
@@ -302,6 +304,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DUAL_ROLE
                                                 "${PLATFORM_EC}/common/usb_pd_dual_role.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_CONSOLE_CMD
+                                                "${PLATFORM_EC}/common/usb_pd_console_cmd.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD
                                                 "${PLATFORM_EC}/common/usb_pd_host_cmd.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_host.c")
@@ -341,4 +345,3 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VOLUME_BUTTONS
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE  "${PLATFORM_EC}/common/vstore.c")
 
-zephyr_sources_ifdef(CONFIG_SHELL               "${PLATFORM_EC}/common/gpio_commands.c")
