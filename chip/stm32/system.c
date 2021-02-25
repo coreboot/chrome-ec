@@ -73,6 +73,13 @@ enum bkpdata_index {
 	BKPDATA_INDEX_PD1,		     /* USB-PD saved port1 state */
 	BKPDATA_INDEX_PD2,		     /* USB-PD saved port2 state */
 #endif
+#ifdef CONFIG_SOFTWARE_PANIC
+	/**
+	 * Saving the panic flags in case that AP thinks the panic is new
+	 * after a hard reset.
+	 */
+	BKPDATA_INDEX_SAVED_PANIC_FLAGS,     /* Saved panic flags */
+#endif
 	BKPDATA_COUNT
 };
 BUILD_ASSERT(STM32_BKP_ENTRIES >= BKPDATA_COUNT);
@@ -274,7 +281,7 @@ void system_pre_init(void)
 {
 #ifdef CONFIG_SOFTWARE_PANIC
 	uint16_t reason, info;
-	uint8_t exception;
+	uint8_t exception, panic_flags;
 #endif
 
 	/* enable clock on Power module */
@@ -341,11 +348,14 @@ void system_pre_init(void)
 	reason = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_REASON);
 	info = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_INFO);
 	exception = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION);
-	if (reason || info || exception) {
+	panic_flags = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_FLAGS);
+	if (reason || info || exception || panic_flags) {
 		panic_set_reason(reason, info, exception);
+		panic_get_data()->flags = panic_flags;
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_REASON, 0);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_INFO, 0);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, 0);
+		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS, 0);
 	}
 #endif
 }
@@ -384,6 +394,7 @@ void system_reset(int flags)
 #ifdef CONFIG_SOFTWARE_PANIC
 		uint32_t reason, info;
 		uint8_t exception;
+		uint8_t panic_flags = panic_get_data()->flags;
 
 		/* Panic data will be wiped by hard reset, so save it */
 		panic_get_reason(&reason, &info, &exception);
@@ -391,6 +402,7 @@ void system_reset(int flags)
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_REASON, reason);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_INFO, info);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, exception);
+		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS, panic_flags);
 #endif
 
 #ifdef CHIP_FAMILY_STM32L
