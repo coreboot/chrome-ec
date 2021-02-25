@@ -14,9 +14,10 @@ import os
 import subprocess
 import sys
 
-from google.protobuf import json_format
-
+# TODO(crbug/1181505): Code outside of chromite should not be importing from
+# chromite.api.gen.  Import json_format after that so we get the matching one.
 from chromite.api.gen.chromite.api import firmware_pb2
+from google.protobuf import json_format
 
 
 def build(opts):
