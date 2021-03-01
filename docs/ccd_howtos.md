@@ -1,2 +1,5 @@
-The has been moved into a [different
-branch](https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/ccd_howtos.md)
+*** note
+**Warning: This document is old & has moved.  Please update any links:**<br>
+https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/docs/ccd_howtos.md
+***
+
