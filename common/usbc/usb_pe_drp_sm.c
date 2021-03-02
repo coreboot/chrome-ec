@@ -740,6 +740,7 @@ static void pe_init(int port)
 	pe[port].dpm_request = 0;
 	pe[port].dpm_curr_request = 0;
 	pd_timer_disable(port, PE_TIMER_NO_RESPONSE);
+	pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
 	pd_timer_disable(port, PE_TIMER_SOURCE_CAP);
 	pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 	pe[port].data_role = pd_get_data_role(port);
@@ -3153,6 +3154,8 @@ static void pe_snk_select_capability_run(int port)
 				if (type == PD_CTRL_WAIT)
 					PE_SET_FLAG(port, PE_FLAGS_WAIT);
 
+				pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
+
 				/*
 				 * We had a previous explicit contract, so
 				 * transition to PE_SNK_Ready
@@ -3303,12 +3306,6 @@ static void pe_snk_ready_entry(int port)
 	pe[port].dpm_curr_request = 0;
 
 	/*
-	 * TODO(b:181343741) The PE_TIMER_SINK_REQUEST should not be disabled
-	 * and re-enabled on transition to/from SNK_READY unless this is the
-	 * initial time in.  Leaving for a message or other normal handling
-	 * should not reset the timer
-	 */
-	/*
 	 * On entry to the PE_SNK_Ready state as the result of a wait,
 	 * then do the following:
 	 *   1) Initialize and run the SinkRequestTimer
@@ -3318,6 +3315,7 @@ static void pe_snk_ready_entry(int port)
 		pd_timer_enable(port, PE_TIMER_SINK_REQUEST,
 				PD_T_SINK_REQUEST);
 	}
+
 	/*
 	 * Wait and add jitter if we are operating in PD2.0 mode and no messages
 	 * have been sent since enter this state.
@@ -3463,6 +3461,7 @@ static void pe_snk_ready_run(int port)
 		pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 
 		if (pd_timer_is_expired(port, PE_TIMER_SINK_REQUEST)) {
+			pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
 			set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
 			return;
 		}
@@ -3484,11 +3483,6 @@ static void pe_snk_ready_run(int port)
 		dpm_run(port);
 
 	}
-}
-
-static void pe_snk_ready_exit(int port)
-{
-	pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
 }
 
 /**
@@ -6897,7 +6891,6 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SNK_READY] = {
 		.entry = pe_snk_ready_entry,
 		.run   = pe_snk_ready_run,
-		.exit  = pe_snk_ready_exit,
 	},
 	[PE_SNK_HARD_RESET] = {
 		.entry = pe_snk_hard_reset_entry,
