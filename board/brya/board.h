@@ -23,6 +23,10 @@
 #undef CONFIG_SPI_FLASH
 #undef CONFIG_SWITCH
 
+/* USB Type A Features */
+#define USB_PORT_COUNT			1
+#define CONFIG_USB_PORT_POWER_DUMB
+
 /* USB Type C and USB PD defines */
 #define CONFIG_IO_EXPANDER_PORT_COUNT		2
 
@@ -74,6 +78,8 @@
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
 #define I2C_PORT_CHARGER	NPCX_I2C_PORT7_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
+
+#define I2C_ADDR_EEPROM_FLAGS	0x50
 
 /* Thermal features */
 #define CONFIG_THERMISTOR

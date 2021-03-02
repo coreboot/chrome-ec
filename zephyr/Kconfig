@@ -118,6 +118,17 @@ config PLATFORM_EC_BRINGUP
 	  - And more!  You can search the codebase for CONFIG_BRINGUP
             to see all of the features this flag will toggle.
 
+config PLATFORM_EC_VBOOT
+	bool "Enable Chromium OS verified boot"
+	default y if !SOC_POSIX
+	help
+	  Enables Early Firmware Selection v2 (EFS2) verified boot. When booting
+	  a Chromium OS image we're actually packing both an RO image and an RW
+	  image into flash. The RO image is loaded first. EFS2 runs at boot and
+	  verifies the integrity of the RW image by sending a hash of the image
+	  to the Google Security Chip (GSC). Once the GSC verifies the hash,
+	  EFS2 calls sysjump and reboot the EC using the RW image.
+
 config PLATFORM_EC_BOARD_VERSION
 	bool "Support the notion of board version"
 	default y
@@ -200,6 +211,45 @@ config PLATFORM_EC_CHIPSET_RESET_HOOK
 	     DECLARE_HOOK(HOOK_CHIPSET_RESET, do_something, HOOK_PRIO_DEFAULT);
 
 	  Then do_something() will be called just before the reset happens.
+
+config PLATFORM_EC_CONSOLE_CMD_MEM
+	bool "Console command: md, rw"
+	default y
+	help
+	  Enable memory related console commands.
+
+	     md - dump memory values
+	     rw - read or write in memory
+
+if PLATFORM_EC_CONSOLE_CMD_MEM
+
+config PLATFORM_EC_CONSOLE_CMD_MD
+	bool "Console command: md"
+	default y
+	help
+	  Enable the "md" command. This dumps memory value from a specified
+	  address, optionally specifying the format.
+
+	  Example:
+	     md 0x64000000 10
+
+	     64000000: 2a3b4d5e 030054e1 07000000 09297110
+	     64000010: 00000010 03db4f00 03db5000 00000100
+	     64000020: 00000000 00000000
+
+config PLATFORM_EC_CONSOLE_CMD_RW
+	bool "Console command: rw"
+	default y
+	help
+	  Enable the "rw" command. This Read or write in memory optionally
+	  specifying the size.
+
+	  Example:
+	     rw 0x64000000
+
+	     read 0x64000000 = 0x2a3b4d5e
+
+endif # PLATFORM_EC_CONSOLE_CMD_MEM
 
 config PLATFORM_EC_DEBUG_ASSERT
 	bool "Enable assertion failures"

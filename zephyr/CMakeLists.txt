@@ -192,6 +192,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CBI     "${PLATFORM_EC}/common/cbi.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
+                                                "${PLATFORM_EC}/common/memory_commands.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
                                                 "${PLATFORM_EC}/common/chipset.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_ESPI    "${PLATFORM_EC}/common/espi.c")
@@ -213,6 +215,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
                                                 "${PLATFORM_EC}/common/keyboard_8042.c"
                                                 "${PLATFORM_EC}/common/keyboard_8042_sharedlib.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_VIVALDI
+                                                "${PLATFORM_EC}/common/keyboard_vivaldi.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
                                                 "${PLATFORM_EC}/common/keyboard_backlight.c"
                                                 "${PLATFORM_EC}/common/pwm_kblight.c")
@@ -272,6 +276,7 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usb_common.c"
                                                 "${PLATFORM_EC}/common/usbc/usbc_task.c"
+                                                "${PLATFORM_EC}/common/usbc/usb_pd_timer.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_sm.c"
                                                 "${PLATFORM_EC}/common/usbc_intr_task.c")
 
@@ -342,6 +347,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_HASH
                                                 "${PLATFORM_EC}/common/vboot_hash.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VOLUME_BUTTONS
                                                 "${PLATFORM_EC}/common/button.c")
+
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT   "${PLATFORM_EC}/common/vboot/efs2.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE  "${PLATFORM_EC}/common/vstore.c")
 
