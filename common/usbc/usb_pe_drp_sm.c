@@ -741,6 +741,7 @@ static void pe_init(int port)
 	pe[port].dpm_curr_request = 0;
 	pd_timer_disable(port, PE_TIMER_NO_RESPONSE);
 	pd_timer_disable(port, PE_TIMER_SOURCE_CAP);
+	pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 	pe[port].data_role = pd_get_data_role(port);
 	pe[port].tx_type = TCPC_TX_INVALID;
 	pe[port].events = 0;
@@ -1923,7 +1924,8 @@ static void pe_update_wait_and_add_jitter_timer(int port)
 	 * ~345ms to prevent multiple collisions.
 	 */
 	if (prl_get_rev(port, TCPC_TX_SOP) == PD_REV20 &&
-	    PE_CHK_FLAG(port, PE_FLAGS_FIRST_MSG)) {
+	    PE_CHK_FLAG(port, PE_FLAGS_FIRST_MSG) &&
+	    pd_timer_is_disabled(port, PE_TIMER_WAIT_AND_ADD_JITTER)) {
 		pd_timer_enable(port, PE_TIMER_WAIT_AND_ADD_JITTER,
 				SRC_SNK_READY_HOLD_OFF_US +
 				(get_time().le.lo & 0xf) * 23 * MSEC);
@@ -2434,8 +2436,11 @@ static void pe_src_transition_supply_run(int port)
 			 * jitter delay when operating in PD2.0 mode. Skip
 			 * if we already have a contract.
 			 */
-			if (!pe_is_explicit_contract(port))
+			if (!pe_is_explicit_contract(port)) {
 				PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
+				pd_timer_disable(port,
+						PE_TIMER_WAIT_AND_ADD_JITTER);
+			}
 
 			/* NOTE: Second pass through this code block */
 			/* Explicit Contract is now in place */
@@ -2684,11 +2689,6 @@ static void pe_src_ready_run(int port)
 		/* No DPM requests; attempt mode entry/exit if needed */
 		dpm_run(port);
 	}
-}
-
-static void pe_src_ready_exit(int port)
-{
-	pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 }
 
 /**
@@ -3233,6 +3233,7 @@ static void pe_snk_transition_sink_run(int port)
 			 * jitter delay when operating in PD2.0 mode.
 			 */
 			PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
+			pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 
 			/*
 			 * If we've successfully completed our new power
@@ -3488,7 +3489,6 @@ static void pe_snk_ready_run(int port)
 static void pe_snk_ready_exit(int port)
 {
 	pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
-	pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 }
 
 /**
@@ -6851,7 +6851,6 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SRC_READY] = {
 		.entry = pe_src_ready_entry,
 		.run   = pe_src_ready_run,
-		.exit  = pe_src_ready_exit,
 	},
 	[PE_SRC_DISABLED] = {
 		.entry = pe_src_disabled_entry,
