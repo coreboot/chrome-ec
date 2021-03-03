@@ -739,8 +739,7 @@ static void pe_init(int port)
 	pe[port].flags = 0;
 	pe[port].dpm_request = 0;
 	pe[port].dpm_curr_request = 0;
-	pd_timer_disable(port, PE_TIMER_NO_RESPONSE);
-	pd_timer_disable(port, PE_TIMER_SOURCE_CAP);
+	pd_timer_disable_range(port, PE_TIMER_RANGE);
 	pe[port].data_role = pd_get_data_role(port);
 	pe[port].tx_type = TCPC_TX_INVALID;
 	pe[port].events = 0;
@@ -1142,6 +1141,7 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 	if ((get_state_pe(port) == PE_SRC_SEND_CAPABILITIES ||
 			get_state_pe(port) == PE_SRC_TRANSITION_SUPPLY ||
 			get_state_pe(port) == PE_PRS_SNK_SRC_EVALUATE_SWAP ||
+			get_state_pe(port) == PE_PRS_SNK_SRC_SOURCE_ON ||
 			get_state_pe(port) == PE_PRS_SRC_SNK_WAIT_SOURCE_ON ||
 			get_state_pe(port) == PE_SRC_DISABLED ||
 			get_state_pe(port) == PE_SRC_DISCOVERY ||
@@ -1920,7 +1920,8 @@ static void pe_update_wait_and_add_jitter_timer(int port)
 	 * ~345ms to prevent multiple collisions.
 	 */
 	if (prl_get_rev(port, TCPC_TX_SOP) == PD_REV20 &&
-	    PE_CHK_FLAG(port, PE_FLAGS_FIRST_MSG)) {
+	    PE_CHK_FLAG(port, PE_FLAGS_FIRST_MSG) &&
+	    pd_timer_is_disabled(port, PE_TIMER_WAIT_AND_ADD_JITTER)) {
 		pd_timer_enable(port, PE_TIMER_WAIT_AND_ADD_JITTER,
 				SRC_SNK_READY_HOLD_OFF_US +
 				(get_time().le.lo & 0xf) * 23 * MSEC);
@@ -2431,8 +2432,11 @@ static void pe_src_transition_supply_run(int port)
 			 * jitter delay when operating in PD2.0 mode. Skip
 			 * if we already have a contract.
 			 */
-			if (!pe_is_explicit_contract(port))
+			if (!pe_is_explicit_contract(port)) {
 				PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
+				pd_timer_disable(port,
+						PE_TIMER_WAIT_AND_ADD_JITTER);
+			}
 
 			/* NOTE: Second pass through this code block */
 			/* Explicit Contract is now in place */
@@ -2681,11 +2685,6 @@ static void pe_src_ready_run(int port)
 		/* No DPM requests; attempt mode entry/exit if needed */
 		dpm_run(port);
 	}
-}
-
-static void pe_src_ready_exit(int port)
-{
-	pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 }
 
 /**
@@ -3150,6 +3149,8 @@ static void pe_snk_select_capability_run(int port)
 				if (type == PD_CTRL_WAIT)
 					PE_SET_FLAG(port, PE_FLAGS_WAIT);
 
+				pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
+
 				/*
 				 * We had a previous explicit contract, so
 				 * transition to PE_SNK_Ready
@@ -3230,6 +3231,7 @@ static void pe_snk_transition_sink_run(int port)
 			 * jitter delay when operating in PD2.0 mode.
 			 */
 			PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
+			pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 
 			/*
 			 * If we've successfully completed our new power
@@ -3299,12 +3301,6 @@ static void pe_snk_ready_entry(int port)
 	pe[port].dpm_curr_request = 0;
 
 	/*
-	 * TODO(b:181343741) The PE_TIMER_SINK_REQUEST should not be disabled
-	 * and re-enabled on transition to/from SNK_READY unless this is the
-	 * initial time in.  Leaving for a message or other normal handling
-	 * should not reset the timer
-	 */
-	/*
 	 * On entry to the PE_SNK_Ready state as the result of a wait,
 	 * then do the following:
 	 *   1) Initialize and run the SinkRequestTimer
@@ -3314,6 +3310,7 @@ static void pe_snk_ready_entry(int port)
 		pd_timer_enable(port, PE_TIMER_SINK_REQUEST,
 				PD_T_SINK_REQUEST);
 	}
+
 	/*
 	 * Wait and add jitter if we are operating in PD2.0 mode and no messages
 	 * have been sent since enter this state.
@@ -3459,6 +3456,7 @@ static void pe_snk_ready_run(int port)
 		pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 
 		if (pd_timer_is_expired(port, PE_TIMER_SINK_REQUEST)) {
+			pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
 			set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
 			return;
 		}
@@ -3480,12 +3478,6 @@ static void pe_snk_ready_run(int port)
 		dpm_run(port);
 
 	}
-}
-
-static void pe_snk_ready_exit(int port)
-{
-	pd_timer_disable(port, PE_TIMER_SINK_REQUEST);
-	pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
 }
 
 /**
@@ -3655,6 +3647,12 @@ static void pe_send_soft_reset_entry(int port)
 	prl_reset_soft(port);
 
 	pe_sender_response_msg_entry(port);
+
+	/*
+	 * Mark the temporary timer PE_TIMER_TIMEOUT as expired to limit
+	 * to sending a single SoftReset message.
+	 */
+	pd_timer_enable(port, PE_TIMER_TIMEOUT, 0);
 }
 
 static void pe_send_soft_reset_run(int port)
@@ -3662,18 +3660,20 @@ static void pe_send_soft_reset_run(int port)
 	int type;
 	int cnt;
 	int ext;
+	enum pe_msg_check msg_check;
 
 	/* Wait until protocol layer is running */
 	if (!prl_is_running(port))
 		return;
 
 	/*
-	 * TODO(b:181337870) This should be using pe_sender_response_msg_run
-	 * to make sure PE_TIMER_SENDER_RESPONSE does not start until the
-	 * message is actually sent and probably a good idea to not get lost
-	 * if we hit a discard
+	 * Protocol layer is running, so need to send a single SoftReset.
+	 * Use temporary timer to act as a flag to keep this as a single
+	 * message send.
 	 */
-	if (pd_timer_is_disabled(port, PE_TIMER_SENDER_RESPONSE)) {
+	if (!pd_timer_is_disabled(port, PE_TIMER_TIMEOUT)) {
+		pd_timer_disable(port, PE_TIMER_TIMEOUT);
+
 		/*
 		 * TODO(b/150614211): Soft reset type should match
 		 * unexpected incoming message type
@@ -3682,9 +3682,20 @@ static void pe_send_soft_reset_run(int port)
 		send_ctrl_msg(port,
 			pe[port].soft_reset_sop, PD_CTRL_SOFT_RESET);
 
-		/* Initialize and run SenderResponseTimer */
-		pd_timer_enable(port, PE_TIMER_SENDER_RESPONSE,
-				PD_T_SENDER_RESPONSE);
+		return;
+	}
+
+	/*
+	 * Check the state of the message sent
+	 */
+	msg_check = pe_sender_response_msg_run(port);
+
+	/*
+	 * Handle discarded message
+	 */
+	if (msg_check == PE_MSG_DISCARDED) {
+		pe_set_ready_state(port);
+		return;
 	}
 
 	/*
@@ -3692,7 +3703,8 @@ static void pe_send_soft_reset_run(int port)
 	 * PE_SRC_Send_Capabilities state when:
 	 *   1) An Accept Message has been received.
 	 */
-	if (PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
+	if (msg_check == PE_MSG_SENT &&
+	    PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
 		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
 
 		type = PD_HEADER_TYPE(rx_emsg[port].header);
@@ -3724,12 +3736,12 @@ static void pe_send_soft_reset_run(int port)
 			set_state_pe(port, PE_SRC_HARD_RESET);
 		return;
 	}
-
 }
 
 static void pe_send_soft_reset_exit(int port)
 {
 	pe_sender_response_msg_exit(port);
+	pd_timer_disable(port, PE_TIMER_TIMEOUT);
 }
 
 /**
@@ -6828,7 +6840,6 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SRC_READY] = {
 		.entry = pe_src_ready_entry,
 		.run   = pe_src_ready_run,
-		.exit  = pe_src_ready_exit,
 	},
 	[PE_SRC_DISABLED] = {
 		.entry = pe_src_disabled_entry,
@@ -6875,7 +6886,6 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SNK_READY] = {
 		.entry = pe_snk_ready_entry,
 		.run   = pe_snk_ready_run,
-		.exit  = pe_snk_ready_exit,
 	},
 	[PE_SNK_HARD_RESET] = {
 		.entry = pe_snk_hard_reset_entry,
