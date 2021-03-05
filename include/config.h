@@ -4532,6 +4532,7 @@
 #undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
 #undef CONFIG_USBC_PPC_SN5S330
+#undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
 
 /*
@@ -4539,6 +4540,9 @@
  * 3.3A.  See the syv682x header file for permissible values.
  */
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_3_30
+
+/* Define to enable SYV682X VBUS smart discharge. */
+#undef CONFIG_USBC_PPC_SYV682X_SMART_DISCHARGE
 
 /* PPC is capable of gating the SBU lines. */
 #undef CONFIG_USBC_PPC_SBU
@@ -5423,6 +5427,13 @@
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_SBU
 #define CONFIG_USBC_PPC_VCONN
+#endif
+
+
+/*****************************************************************************/
+/* PPC SYV682C is a subset of SYV682X. */
+#if defined(CONFIG_USBC_PPC_SYV682C)
+#define CONFIG_USBC_PPC_SYV682X
 #endif
 
 /*
