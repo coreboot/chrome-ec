@@ -19,6 +19,7 @@
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
+#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK /* bypass cbi wp check in dev. */
 
 #define CONFIG_VBOOT_EFS2
 
@@ -59,6 +60,8 @@
 #define PD_MAX_POWER_MW		60000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
+
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE

@@ -863,6 +863,7 @@
 #undef CONFIG_CHARGER_BQ24770
 #undef CONFIG_CHARGER_BQ24773
 #undef CONFIG_CHARGER_BQ25710
+#undef CONFIG_CHARGER_BQ25720
 #undef CONFIG_CHARGER_ISL9237
 #undef CONFIG_CHARGER_ISL9238 /* For ISL9238 A/B */
 #undef CONFIG_CHARGER_ISL9238C
@@ -3038,6 +3039,13 @@
 /* Minute-IA watchdog timer vector number. */
 #define CONFIG_MIA_WDT_VEC 0xFF
 
+/*
+ * ISL9241 Configures the switching frequency and overrides the default
+ * switching frequency set by PROG pin. The valid frequency settings are
+ * find in driver/charger/isl9241.h.
+ */
+#undef CONFIG_ISL9241_SWITCHING_FREQ
+
 /* Support MKBP event */
 #undef CONFIG_MKBP_EVENT
 
@@ -3581,6 +3589,12 @@
  * Also, this will enable PD in RO for TCPMv2.
  */
 #undef CONFIG_SYSTEM_UNLOCKED
+/*
+ * Some systems decouple the CBI eeprom write protection from the
+ * H1_FLASH_WP_ODL via the hardware change. Adds this config to
+ * bypass the cbi eeprom write protection check.
+ */
+#undef CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
 
 /*
  * Device can be a tablet as well as a clamshell.
@@ -5453,6 +5467,11 @@
 #endif
 
 /*****************************************************************************/
+/* The BQ25720 is supported by the BQ25710 driver */
+#if defined(CONFIG_CHARGER_BQ25720)
+#define CONFIG_CHARGER_BQ25710
+#endif
+
 /*
  * Define CONFIG_USB_PD_VBUS_MEASURE_CHARGER if the charger on the board
  * supports VBUS measurement.
@@ -6142,5 +6161,11 @@
 #ifndef CONFIG_ALS
 #define ALS_COUNT 0
 #endif /* CONFIG_ALS */
+
+#if defined(CONFIG_BYPASS_CBI_EEPROM_WP_CHECK) && \
+	!defined(CONFIG_SYSTEM_UNLOCKED)
+#error "CONFIG_BYPASS_CBI_EEPROM_WP_CHECK is only permitted " \
+	"when CONFIG_SYSTEM_UNLOCK is also enabled."
+#endif /* CONFIG_BYPASS_CBI_EEPROM_WP_CHECK && !CONFIG_SYSTEM_UNLOCK */
 
 #endif  /* __CROS_EC_CONFIG_H */
