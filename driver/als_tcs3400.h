@@ -107,6 +107,7 @@ enum tcs3400_mode {
 #define TCS_CALIBRATION_AGAIN   0x02            /* 16x gain */
 #define TCS_DEFAULT_AGAIN       TCS_CALIBRATION_AGAIN
 
+#define TCS_MAX_INTEGRATION_TIME 2780 /* 2780us */
 #define TCS_ATIME_DEC_STEP      5
 #define TCS_ATIME_INC_STEP      TCS_GAIN_UPSHIFT_ATIME
 
@@ -176,4 +177,5 @@ extern const struct accelgyro_drv tcs3400_drv;
 extern const struct accelgyro_drv tcs3400_rgb_drv;
 
 void tcs3400_interrupt(enum gpio_signal signal);
+int tcs3400_get_integration_time(int atime);
 #endif /* __CROS_EC_ALS_TCS3400_H */
