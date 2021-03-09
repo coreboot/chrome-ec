@@ -56,7 +56,11 @@ struct keyboard_scan_config keyscan_config = {
 	 * to 80us from 50us.
 	 */
 	.output_settle_us = 80,
+#ifdef CONFIG_KEYBOARD_DEBOUNCE_DOWN
+	.debounce_down_us = CONFIG_KEYBOARD_DEBOUNCE_DOWN * MSEC,
+#else
 	.debounce_down_us = 9 * MSEC,
+#endif
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 3 * MSEC,
 	.min_post_scan_delay_us = 1000,

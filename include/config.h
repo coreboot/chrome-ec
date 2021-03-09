@@ -2527,6 +2527,11 @@
  */
 #undef CONFIG_KEYBOARD_KEYPAD
 
+/*
+ * Change key debounce time to block noise when key is pressed
+ */
+#undef CONFIG_KEYBOARD_DEBOUNCE_DOWN
+
 /*****************************************************************************/
 
 /* Support common LED interface */
