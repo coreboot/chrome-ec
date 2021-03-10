@@ -400,6 +400,22 @@ static void motion_sense_switch_sensor_rate(void)
 				sensor->state = SENSOR_NOT_INITIALIZED;
 		}
 	}
+	/* disable the body detection since AP is suspended */
+	if (IS_ENABLED(CONFIG_BODY_DETECTION)) {
+		static bool was_enabled;
+
+		switch (sensor_active) {
+		case SENSOR_ACTIVE_S3:
+			was_enabled = body_detect_get_enable();
+			body_detect_set_enable(false);
+			break;
+		case SENSOR_ACTIVE_S0:
+			body_detect_set_enable(was_enabled);
+			break;
+		default:
+			break;
+		}
+	}
 	motion_sense_set_motion_intervals();
 }
 DECLARE_DEFERRED(motion_sense_switch_sensor_rate);
@@ -443,9 +459,6 @@ static void motion_sense_shutdown(void)
 				MOTIONSENSE_ACTIVITY_DOUBLE_TAP, 1, NULL);
 		}
 	}
-	/* disable the body detection since motion sensor is down */
-	if (IS_ENABLED(CONFIG_BODY_DETECTION))
-		body_detect_set_enable(false);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, motion_sense_shutdown,
 	     MOTION_SENSE_HOOK_PRIO);
@@ -461,9 +474,6 @@ static void motion_sense_suspend(void)
 
 	sensor_active = SENSOR_ACTIVE_S3;
 
-	/* disable the body detection since motion sensor is suspended */
-	if (IS_ENABLED(CONFIG_BODY_DETECTION))
-		body_detect_set_enable(false);
 	/*
 	 * During shutdown sequence sensor rails can be powered down
 	 * asynchronously to the EC hence EC cannot interlock the sensor
