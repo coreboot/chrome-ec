@@ -23,13 +23,45 @@
 #define NPCX_UART_MODULE2	1 /* 1:GPIO64/65 for UART1 */
 
 /* EC Defines */
+#define CONFIG_LTO
 #define CONFIG_CROS_BOARD_INFO
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
 
+/* Verified boot configs */
+#define CONFIG_VBOOT_HASH
+#define CONFIG_VSTORE
+#define CONFIG_VSTORE_SLOT_COUNT 1
+
+/* Work around double CR50 reset by waiting in initial power on. */
+#define CONFIG_BOARD_RESET_AFTER_POWER_ON
+
 /* Host communication */
 #define CONFIG_HOSTCMD_ESPI
 #define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO
+
+/* Common charger defines */
+#define CONFIG_CHARGE_MANAGER
+#define CONFIG_CHARGER
+#define CONFIG_CHARGER_DISCHARGE_ON_AC
+#define CONFIG_CHARGER_INPUT_CURRENT		512
+
+#define CONFIG_CMD_CHARGER_DUMP
+
+#define CONFIG_USB_CHARGER
+#define CONFIG_BC12_DETECT_PI3USB9201
+
+/*
+ * Don't allow the system to boot to S0 when the battery is low and unable to
+ * communicate on locked systems (which haven't PD negotiated)
+ */
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			3
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC		1
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		15001
 
 /* Common battery defines */
 #define CONFIG_BATTERY_SMART
@@ -52,9 +84,12 @@
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 
 #define CONFIG_BOARD_HAS_RTC_RESET
+#define CONFIG_CMD_AP_RESET_LOG
+#define CONFIG_HOSTCMD_AP_RESET
 
-/* Physical Volume Buttons */
+/* Buttons / Switches */
 #define CONFIG_VOLUME_BUTTONS
+#define CONFIG_SWITCH
 
 /* Common Keyboard Defines */
 #define CONFIG_CMD_KEYBOARD
@@ -77,6 +112,77 @@
 /* Enable I2C Support */
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
+
+/* EDP back-light control defines */
+#define CONFIG_BACKLIGHT_LID
+
+/* UART COMMAND */
+#define CONFIG_CMD_CHARGEN
+
+/* USB Type C and USB PD defines */
+/* Enable the new USB-C PD stack */
+#define CONFIG_USB_PD_TCPMV2
+#define CONFIG_USB_DRP_ACC_TRYSRC
+#define CONFIG_USB_PD_REV30
+
+#define CONFIG_CMD_HCDEBUG
+#define CONFIG_CMD_PPC_DUMP
+#define CONFIG_CMD_TCPC_DUMP
+
+#define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_ALT_MODE
+#define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_ALT_MODE_UFP
+#define CONFIG_USB_PD_DISCHARGE_PPC
+#define CONFIG_USB_PD_DUAL_ROLE
+#define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#define CONFIG_USB_PD_TCPC_LOW_POWER
+#define CONFIG_USB_PD_TCPM_TCPCI
+#define CONFIG_USB_PD_TCPM_NCT38XX
+
+#define CONFIG_USB_PD_TCPM_MUX
+#define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
+#define CONFIG_CMD_USB_PD_PE
+
+/*
+ * The PS8815 TCPC was found to require a 50ms delay to consistently work
+ * with non-PD chargers.  Override the default low-power mode exit delay.
+ */
+#undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE	(50*MSEC)
+
+/* Enable USB3.2 DRD */
+#define CONFIG_USB_PD_USB32_DRD
+
+#define CONFIG_USB_PD_TRY_SRC
+#define CONFIG_USB_PD_VBUS_DETECT_TCPC
+
+#define CONFIG_USBC_PPC
+/* Note - SN5S330 support automatically adds
+ * CONFIG_USBC_PPC_POLARITY
+ * CONFIG_USBC_PPC_SBU
+ * CONFIG_USBC_PPC_VCONN
+ */
+#define CONFIG_USBC_PPC_DEDICATED_INT
+
+#define CONFIG_USBC_SS_MUX
+#define CONFIG_USB_MUX_VIRTUAL
+
+#define CONFIG_USBC_VCONN
+#define CONFIG_USBC_VCONN_SWAP
+
+/* Enabling SOP* communication */
+#define CONFIG_CMD_USB_PD_CABLE
+#define CONFIG_USB_PD_DECODE_SOP
+
+/*
+ * USB ID
+ * This is allocated specifically for Brya
+ * http://google3/hardware/standards/usb/
+ */
+#define CONFIG_USB_PID 0x504F
+/* Device version of product. */
+#define CONFIG_USB_BCD_DEV 0x0000
 
 #ifndef __ASSEMBLER__
 

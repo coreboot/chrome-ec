@@ -425,13 +425,22 @@ int pd_tcpc_cc_ra(int port, int cc_volt, int cc_sel)
 	return ra;
 }
 
+/* DUT CC readings aren't valid if we aren't applying CC pulls */
+bool cc_is_valid(void)
+{
+	if ((cc_config & CC_DETACH) || (cc_pull_stored == TYPEC_CC_OPEN) ||
+	    ((cc_pull_stored == TYPEC_CC_RP) &&
+	     (rp_value_stored == TYPEC_RP_RESERVED)))
+		return false;
+	return true;
+}
+
 int pd_adc_read(int port, int cc)
 {
 	int mv;
-
 	if (port == 0)
 		mv = adc_read_channel(cc ? ADC_CHG_CC2_PD : ADC_CHG_CC1_PD);
-	else if (!(cc_config & CC_DETACH)) {
+	else if (cc_is_valid()) {
 		/*
 		 * In servo v4 hardware logic, both CC lines are wired directly
 		 * to DUT. When servo v4 as a snk, DUT may source Vconn to CC2
@@ -462,7 +471,6 @@ int pd_adc_read(int port, int cc)
 		 */
 		mv = 0;
 	}
-
 	return mv;
 }
 
@@ -1204,6 +1212,10 @@ static int cmd_ada_srccaps(int argc, char *argv[])
 
 	for (i = 0; i < pd_get_src_cap_cnt(CHG); ++i) {
 		uint32_t max_ma, max_mv;
+
+		/* It's an supported Augmented PDO (PD3.0) */
+		if ((ada_srccaps[i] & PDO_TYPE_MASK) == PDO_TYPE_AUGMENTED)
+			continue;
 
 		pd_extract_pdo_power(ada_srccaps[i], &max_ma, &max_mv);
 		ccprintf("%d: %dmV/%dmA\n", i, max_mv, max_ma);

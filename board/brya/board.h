@@ -16,22 +16,53 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+#define CONFIG_BRINGUP
+#define CONFIG_SYSTEM_UNLOCKED
+
 /*
  * Disable features enabled by default.
  */
 #undef CONFIG_HIBERNATE
-#undef CONFIG_SPI_FLASH
-#undef CONFIG_SWITCH
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
+
+#define CONFIG_IO_EXPANDER
+#define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT		2
 
+#define CONFIG_USB_PD_TCPM_PS8815
+#define CONFIG_USBC_RETIMER_INTEL_BB
+
+#define CONFIG_USBC_PPC_SYV682X
+#define CONFIG_USBC_PPC_NX20P3483
+
+/* TODO: b/177608416 - measure and check these values on brya */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
+#define PD_VCONN_SWAP_DELAY		5000 /* us */
+
+/*
+ * Passive USB-C cables only support up to 60W.
+ */
+#define PD_OPERATING_POWER_MW	15000
+#define PD_MAX_POWER_MW		60000
+#define PD_MAX_CURRENT_MA	3000
+#define PD_MAX_VOLTAGE_MV	20000
+
+/*
+ * Macros for GPIO signals used in common code that don't match the
+ * schematic names. Signal names in gpio.inc match the schematic and are
+ * then redefined here to so it's more clear which signal is being used for
+ * which purpose.
+ */
 #define GPIO_AC_PRESENT			GPIO_ACOK_EC_OD
 #define GPIO_CPU_PROCHOT		GPIO_EC_PROCHOT_ODL
+#define GPIO_EC_INT_L			GPIO_EC_PCH_INT_ODL
+#define GPIO_ENABLE_BACKLIGHT		GPIO_EC_EN_EDP_BL
 #define GPIO_ENTERING_RW		GPIO_EC_ENTERING_RW
 #define GPIO_KBD_KSO2			GPIO_EC_KSO_02_INV
 #define GPIO_LID_OPEN			GPIO_LID_OPEN_OD
@@ -62,28 +93,29 @@
 
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 
-#define I2C_PORT_TCPC0_2	NPCX_I2C_PORT1_0
-#define I2C_PORT_USB_C0_TCPC	NPCX_I2C_PORT1_0
+#define I2C_PORT_USB_C0_C2_TCPC	NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1_TCPC	NPCX_I2C_PORT4_1
-#define I2C_PORT_USB_C2_TCPC	NPCX_I2C_PORT1_0	/* dual TCPC with C0 */
 
-#define I2C_PORT_USB_C0_PPC	NPCX_I2C_PORT2_0
+#define I2C_PORT_USB_C0_C2_PPC	NPCX_I2C_PORT2_0
 #define I2C_PORT_USB_C1_PPC	NPCX_I2C_PORT6_1
-#define I2C_PORT_USB_C2_PPC	NPCX_I2C_PORT2_0
 
-#define I2C_PORT_USB_C0_BC12	NPCX_I2C_PORT2_0
+#define I2C_PORT_USB_C0_C2_BC12	NPCX_I2C_PORT2_0
 #define I2C_PORT_USB_C1_BC12	NPCX_I2C_PORT6_1
-#define I2C_PORT_USB_C2_BC12	NPCX_I2C_PORT2_0
 
-#define I2C_PORT_USB_C0_MUX	NPCX_I2C_PORT3_0
+#define I2C_PORT_USB_C0_C2_MUX	NPCX_I2C_PORT3_0
 #define I2C_PORT_USB_C1_MUX	NPCX_I2C_PORT6_1
-#define I2C_PORT_USB_C2_MUX	NPCX_I2C_PORT3_0
 
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
 #define I2C_PORT_CHARGER	NPCX_I2C_PORT7_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
+
+/*
+ * see b/174768555#comment22
+ */
+#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x56
+#define USBC_PORT_C2_BB_RETIMER_I2C_ADDR	0x57
 
 /* Thermal features */
 #define CONFIG_THERMISTOR
@@ -96,10 +128,18 @@
  */
 /* #define CONFIG_FANS			FAN_CH_COUNT */
 
+/* Charger defines */
+#define CONFIG_CHARGER_BQ25720
+#define CONFIG_CHARGE_RAMP_SW
+#define CONFIG_CHARGER_NARROW_VDC
+#define CONFIG_CHARGER_SENSE_RESISTOR		10
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"	/* needed by registers.h */
 #include "registers.h"
+#include "usbc_config.h"
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
@@ -144,12 +184,6 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
-
-/*
- * remove when we enable CONFIG_VOLUME_BUTTONS
- */
-
-void button_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

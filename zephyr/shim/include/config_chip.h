@@ -68,6 +68,13 @@
 #endif
 
 /*
+ * The Zephyr I2C shell command provides the same functionality as the Chromium
+ * EC i2cscan and i2cxfer commands, so they are always disabled.
+ */
+#undef CONFIG_CMD_I2C_SCAN
+#undef CONFIG_CMD_I2C_XFER
+
+/*
  * This not used by the Zephyr code since we always make cros_crc8() available.
  * Define it here to reduce the delta from the ECOS CONFIG.
  */
@@ -241,8 +248,6 @@ enum battery_type {
 #undef CONFIG_FLASH_PSTATE
 #undef CONFIG_FLASH_SIZE_BYTES
 #ifdef CONFIG_PLATFORM_EC_FLASH
-#undef CONFIG_CMD_FLASHINFO
-#undef CONFIG_CMD_FLASH
 #define CONFIG_FLASH
 #define CONFIG_SPI_FLASH_W25Q80 /* Internal SPI flash type. */
 #ifdef CONFIG_FLASH_SIZE
@@ -276,9 +281,19 @@ enum battery_type {
 #define CONFIG_MAPPED_STORAGE
 #endif
 
+#undef CONFIG_CMD_FLASH
 #ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_FLASH
-#define CONFIG_CMD_FLASHINFO
 #define CONFIG_CMD_FLASH
+#endif
+
+#undef CONFIG_CMD_FLASHINFO
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_FLASHINFO
+#define CONFIG_CMD_FLASHINFO
+#endif
+
+#undef CONFIG_CMD_FLASH_WP
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_FLASH_WP
+#define CONFIG_CMD_FLASH_WP
 #endif
 
 #endif /* CONFIG_PLATFORM_EC_FLASH */
@@ -896,6 +911,11 @@ enum battery_type {
 #define CONFIG_HOSTCMD_PD_CONTROL
 #endif
 
+#undef CONFIG_CMD_HCDEBUG
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_HCDEBUG
+#define CONFIG_CMD_HCDEBUG
+#endif
+
 #undef CONFIG_CMD_USB_PD_PE
 #ifdef CONFIG_PLATFORM_EC_CMD_USB_PD_PE
 #define CONFIG_CMD_USB_PD_PE
@@ -960,6 +980,16 @@ enum battery_type {
 #undef CONFIG_CMD_ACCEL_INFO
 #ifdef CONFIG_PLATFORM_EC_CMD_ACCEL_INFO
 #define CONFIG_CMD_ACCEL_INFO
+#endif
+
+#undef CONFIG_ACCEL_SPOOF_MODE
+#ifdef CONFIG_PLATFORM_EC_ACCEL_SPOOF_MODE
+#define CONFIG_ACCEL_SPOOF_MODE
+#endif
+
+#undef CONFIG_CMD_ACCEL_SPOOF
+#ifdef CONFIG_PLATFORM_EC_CMD_ACCEL_SPOOF
+#define CONFIG_CMD_ACCEL_SPOOF
 #endif
 
 #undef CONFIG_SENSOR_TIGHT_TIMESTAMPS

@@ -6,6 +6,7 @@
 #define DT_DRV_COMPAT nuvoton_npcx_cros_bbram
 
 #include <drivers/cros_bbram.h>
+#include <drivers/cros_system.h>
 #include <errno.h>
 #include <logging/log.h>
 #include <sys/util.h>
@@ -64,7 +65,7 @@ static int cros_bbram_npcx_reset_vcc1(const struct device *dev)
 }
 
 static int cros_bbram_npcx_read(const struct device *dev, int offset, int size,
-				char *data)
+				uint8_t *data)
 {
 	const struct cros_bbram_npcx_config *config = DRV_CONFIG(dev);
 
@@ -75,13 +76,13 @@ static int cros_bbram_npcx_read(const struct device *dev, int offset, int size,
 
 	for (size_t i = 0; i < size; ++i) {
 		*(data + i) =
-			*((volatile char *)config->base_addr + offset + i);
+			*((volatile uint8_t *)config->base_addr + offset + i);
 	}
 	return 0;
 }
 
 static int cros_bbram_npcx_write(const struct device *dev, int offset, int size,
-				 char *data)
+				 uint8_t *data)
 {
 	const struct cros_bbram_npcx_config *config = DRV_CONFIG(dev);
 
@@ -91,7 +92,7 @@ static int cros_bbram_npcx_write(const struct device *dev, int offset, int size,
 	}
 
 	for (size_t i = 0; i < size; ++i) {
-		*((volatile char *)config->base_addr + offset + i) =
+		*((volatile uint8_t *)config->base_addr + offset + i) =
 			*(data + i);
 	}
 	return 0;
@@ -110,9 +111,21 @@ static const struct cros_bbram_driver_api cros_bbram_npcx_driver_api = {
 
 static int bbram_npcx_init(const struct device *dev)
 {
+	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
+	int reset = cros_system_get_reset_cause(sys_dev);
+
+	if (reset == POWERUP) {
+		/* clear the status register when EC power-up*/
+		DRV_STATUS(dev) = NPCX_STATUS_IBBR | NPCX_STATUS_VSBY |
+				  NPCX_STATUS_VCC1;
+	}
+
 	return 0;
 }
 
+/*
+ * The priority of bbram_npcx_init() should lower than cros_system_npcx_init().
+ */
 #define CROS_BBRAM_INIT(inst)                                                \
 	static struct {                                                      \
 	} cros_bbram_data_##inst;                                            \
