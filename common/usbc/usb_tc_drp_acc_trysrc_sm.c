@@ -2150,9 +2150,13 @@ static void tc_unattached_snk_entry(const int port)
 	 *
 	 * Both CC1 and CC2 pins shall be independently terminated to
 	 * ground through Rd.
+	 *
+	 * Restore default current limit Rp in case we swap to source
 	 */
 	typec_select_pull(port, TYPEC_CC_RD);
+	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 	typec_update_cc(port);
+
 
 	prev_data_role = tc[port].data_role;
 	tc[port].data_role = PD_ROLE_DISCONNECTED;
@@ -2696,6 +2700,8 @@ static void tc_unattached_src_entry(const int port)
 	 *
 	 * Both CC1 and CC2 pins shall be independently terminated to
 	 * ground through Rp.
+	 *
+	 * Restore default current limit Rp.
 	 */
 	typec_select_pull(port, TYPEC_CC_RP);
 	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
@@ -2880,9 +2886,11 @@ static void tc_attached_src_entry(const int port)
 	 *
 	 * Both CC1 and CC2 pins shall be independently terminated to
 	 * pulled up through Rp.
+	 *
+	 * Set selected current limit in the hardware.
 	 */
 	typec_select_pull(port, TYPEC_CC_RP);
-	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
+	typec_set_source_current_limit(port, tc[port].select_current_limit_rp);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
 		if (TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
