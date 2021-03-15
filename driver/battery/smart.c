@@ -366,7 +366,7 @@ void battery_get_params(struct batt_params *batt)
 	else
 		batt_new.current = (int16_t)v;
 
-	if (sb_read(SB_AVERAGE_CURRENT, &v);
+	if (sb_read(SB_AVERAGE_CURRENT, &v))
 		batt_new.flags |= BATT_FLAG_BAD_AVERAGE_CURRENT;
 	if (sb_read(SB_CHARGING_VOLTAGE, &batt_new.desired_voltage))
 		batt_new.flags |= BATT_FLAG_BAD_DESIRED_VOLTAGE;
