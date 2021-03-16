@@ -6678,6 +6678,8 @@ enum pchg_state {
 	PCHG_STATE_CHARGING,
 	/* Device is fully charged. It implies DETECTED (& not charging). */
 	PCHG_STATE_FULL,
+	/* Put no more entry below */
+	PCHG_STATE_COUNT,
 };
 
 #define EC_PCHG_STATE_TEXT { \
