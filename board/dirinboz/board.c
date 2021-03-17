@@ -20,6 +20,7 @@
 #include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "keyboard_8042_sharedlib.h"
 #include "ioexpander.h"
 #include "lid_switch.h"
 #include "power.h"
@@ -489,6 +490,13 @@ static void setup_fw_config(void)
 		/* Gyro is not present, don't allow line to float */
 		gpio_set_flags(GPIO_6AXIS_INT_L, GPIO_INPUT | GPIO_PULL_DOWN);
 	}
+
+	/*
+	 * If keyboard is US2(KB_LAYOUT_1), we need translate right ctrl
+	 * to backslash(\|) key.
+	 */
+	if (ec_config_keyboard_layout() == KB_LAYOUT_1)
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
 }
 DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 
@@ -546,6 +554,7 @@ int charger_profile_override(struct charge_state_data *curr)
 	static int limit_charge;
 	static int limit_usbc_power;
 	static int limit_usbc_power_backup;
+	enum tcpc_rp_value rp;
 
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		return 0;
@@ -553,18 +562,20 @@ int charger_profile_override(struct charge_state_data *curr)
 	temp_sensor_read(TEMP_SENSOR_CHARGER, &thermal_sensor_temp);
 
 	if (thermal_sensor_temp > prev_thermal_sensor_temp) {
-		if (thermal_sensor_temp > C_TO_K(56)) {
+		if (thermal_sensor_temp > C_TO_K(63))
+			limit_usbc_power = 1;
+
+		if (thermal_sensor_temp > C_TO_K(58)) {
 			if (curr->state == ST_CHARGE)
 				limit_charge = 1;
-
-			limit_usbc_power = 1;
 		}
 	} else if (thermal_sensor_temp < prev_thermal_sensor_temp) {
-		if (thermal_sensor_temp < C_TO_K(53)) {
+		if (thermal_sensor_temp < C_TO_K(62))
+			limit_usbc_power = 0;
+
+		if (thermal_sensor_temp < C_TO_K(57)) {
 			if (curr->state == ST_CHARGE)
 				limit_charge = 0;
-
-			limit_usbc_power = 0;
 		}
 	}
 
@@ -575,10 +586,13 @@ int charger_profile_override(struct charge_state_data *curr)
 
 	if (limit_usbc_power != limit_usbc_power_backup) {
 		if (limit_usbc_power == 1)
-			typec_select_src_current_limit_rp(0, TYPEC_RP_1A5);
+			rp = TYPEC_RP_1A5;
 		else
-			typec_select_src_current_limit_rp(0, TYPEC_RP_3A0);
+			rp = TYPEC_RP_3A0;
 
+		ppc_set_vbus_source_current_limit(0, rp);
+		tcpm_select_rp_value(0, rp);
+		pd_update_contract(0);
 		limit_usbc_power_backup = limit_usbc_power;
 	}
 
@@ -602,11 +616,11 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 __override struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 	[TEMP_SENSOR_CHARGER] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(56),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(63),
 			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
 		},
 		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(53),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(62),
 		}
 	},
 	[TEMP_SENSOR_SOC] = {

@@ -183,6 +183,18 @@ enum battery_type {
 #define CONFIG_CHARGER_INPUT_CURRENT		512
 #endif
 
+/*
+ * Note - ISL9241 chargers for all channels are configured with the same
+ * switching frequency. Use the first ISL9241 instance found in the device tree.
+ */
+#undef CONFIG_ISL9241_SWITCHING_FREQ
+#define ISL9241_NODE	DT_INST(0, intersil_isl9241)
+#if DT_NODE_EXISTS(ISL9241_NODE) && \
+	DT_NODE_HAS_PROP(ISL9241_NODE, switching_frequency)
+#define CONFIG_ISL9241_SWITCHING_FREQ \
+	DT_PROP(ISL9241_NODE, switching_frequency)
+#endif
+
 #undef CONFIG_CHIPSET_RESET_HOOK
 #ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
 #define CONFIG_CHIPSET_RESET_HOOK
@@ -412,7 +424,7 @@ enum battery_type {
 #endif
 
 #undef CONFIG_CMD_LEDTEST
-#ifdef CONFIG_PLATFORM_EC_CMD_LEDTEST
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_LEDTEST
 #define CONFIG_CMD_LEDTEST
 #endif
 
@@ -532,7 +544,7 @@ enum battery_type {
 #endif
 
 #undef CONFIG_CMD_TCPC_DUMP
-#ifdef CONFIG_PLATFORM_EC_CMD_TCPC_DUMP
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_TCPC_DUMP
 #define CONFIG_CMD_TCPC_DUMP
 #endif
 
@@ -588,7 +600,7 @@ enum battery_type {
 #endif
 
 #undef CONFIG_CMD_CHGRAMP
-#ifdef CONFIG_PLATFORM_EC_CMD_CHGRAMP
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_CHGRAMP
 #define CONFIG_CMD_CHGRAMP
 #endif
 
@@ -917,12 +929,12 @@ enum battery_type {
 #endif
 
 #undef CONFIG_CMD_USB_PD_PE
-#ifdef CONFIG_PLATFORM_EC_CMD_USB_PD_PE
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_USB_PD_PE
 #define CONFIG_CMD_USB_PD_PE
 #endif
 
 #undef CONFIG_CMD_USB_PD_CABLE
-#ifdef CONFIG_PLATFORM_EC_CMD_USB_PD_CABLE
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_USB_PD_CABLE
 #define CONFIG_CMD_USB_PD_CABLE
 #endif
 
@@ -973,12 +985,12 @@ enum battery_type {
 #endif /* CONFIG_PLATFORM_EC_ACCEL_FIFO */
 
 #undef CONFIG_CMD_ACCELS
-#ifdef CONFIG_PLATFORM_EC_CMD_ACCELS
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_ACCELS
 #define CONFIG_CMD_ACCELS
 #endif
 
 #undef CONFIG_CMD_ACCEL_INFO
-#ifdef CONFIG_PLATFORM_EC_CMD_ACCEL_INFO
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_ACCEL_INFO
 #define CONFIG_CMD_ACCEL_INFO
 #endif
 
@@ -988,7 +1000,7 @@ enum battery_type {
 #endif
 
 #undef CONFIG_CMD_ACCEL_SPOOF
-#ifdef CONFIG_PLATFORM_EC_CMD_ACCEL_SPOOF
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_ACCEL_SPOOF
 #define CONFIG_CMD_ACCEL_SPOOF
 #endif
 
@@ -1178,6 +1190,11 @@ enum battery_type {
 #define CONFIG_SYSTEM_UNLOCKED
 #endif
 
+#undef CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
+#ifdef CONFIG_PLATFORM_EC_BYPASS_CBI_EEPROM_WP_CHECK
+#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
+#endif
+
 #undef CONFIG_SPI_FLASH_REGS
 #ifdef CONFIG_PLATFORM_EC_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_REGS
@@ -1229,6 +1246,16 @@ enum battery_type {
 #undef CONFIG_VBOOT_EFS2
 #ifdef CONFIG_PLATFORM_EC_VBOOT
 #define CONFIG_VBOOT_EFS2
+#endif
+
+#undef CONFIG_USB_PD_TCPC_VCONN
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TCPC_VCONN
+#define CONFIG_USB_PD_TCPC_VCONN
+#endif
+
+#undef CONFIG_DPTF
+#ifdef CONFIG_PLATFORM_EC_DPTF
+#define CONFIG_DPTF
 #endif
 
 #endif  /* __CROS_EC_CONFIG_CHIP_H */

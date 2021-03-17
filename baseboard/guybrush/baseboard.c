@@ -22,6 +22,8 @@
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
 #include "driver/usb_mux/amd_fp6.h"
+#include "fan.h"
+#include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -352,6 +354,10 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 
 static void baseboard_interrupt_init(void)
 {
+	/* Enable Power Group interrupts. */
+	gpio_enable_interrupt(GPIO_PG_GROUPC_S0_OD);
+	gpio_enable_interrupt(GPIO_PG_LPDDR4X_S3_OD);
+
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
@@ -503,6 +509,34 @@ const struct pwm_t pwm_channels[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+const struct mft_t mft_channels[] = {
+	[MFT_CH_0] = {
+		.module = NPCX_MFT_MODULE_1,
+		.clk_src = TCKC_LFCLK,
+		.pwm_id = PWM_CH_FAN,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
+
+const struct fan_conf fan_conf_0 = {
+	.flags = FAN_USE_RPM_MODE,
+	.ch = MFT_CH_0,	/* Use MFT id to control fan */
+	.pgood_gpio = -1,
+	.enable_gpio = -1,
+};
+const struct fan_rpm fan_rpm_0 = {
+	.rpm_min = 1800,
+	.rpm_start = 3000,
+	.rpm_max = 5200,
+};
+const struct fan_t fans[] = {
+	[FAN_CH_0] = {
+		.conf = &fan_conf_0,
+		.rpm = &fan_rpm_0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
 
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
@@ -850,16 +884,13 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
  */
 void board_pwrbtn_to_pch(int level)
 {
-	/* Add delay for G3 exit if asserting PWRBTN_L and S5_PGOOD is low. */
-	if (!level && !gpio_get_level(GPIO_S5_PGOOD)) {
-		/*
-		 * From measurement, wait 80 ms for RSMRST_L to rise after
-		 * S5_PGOOD.
-		 */
+	/* Add delay for G3 exit if asserting PWRBTN_L and RSMRST_L is low. */
+	if (!level && !gpio_get_level(GPIO_PCH_RSMRST_L)) {
+		/* Wait G3_TO_PWRBTN_DELAY_MS ms for RSMRST_L to rise */
 		msleep(G3_TO_PWRBTN_DELAY_MS);
 
-		if (!gpio_get_level(GPIO_S5_PGOOD))
-			ccprints("Error: pwrbtn S5_PGOOD low");
+		if (!gpio_get_level(GPIO_PCH_RSMRST_L))
+			ccprints("Error pwrbtn: RSMRST_L still low");
 	}
 	gpio_set_level(GPIO_PCH_PWRBTN_L, level);
 }
@@ -887,7 +918,7 @@ static void baseboard_chipset_suspend(void)
 {
 	/* Disable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 1);
-	ioex_set_level(GPIO_EN_KB_BL, 0);
+	gpio_set_level(GPIO_EN_KB_BL, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
 	     HOOK_PRIO_DEFAULT);
@@ -896,7 +927,7 @@ static void baseboard_chipset_resume(void)
 {
 	/* Enable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 0);
-	ioex_set_level(GPIO_EN_KB_BL, 1);
+	gpio_set_level(GPIO_EN_KB_BL, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
 

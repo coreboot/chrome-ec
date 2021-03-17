@@ -931,10 +931,10 @@ static void pe_set_frs_enable(int port, int enable)
 		int curr_limit = *pd_get_snk_caps(port)
 						& PDO_FIXED_FRS_CURR_MASK;
 
-		typec_set_source_current_limit(port,
-					       curr_limit ==
-					       PDO_FIXED_FRS_CURR_3A0_AT_5V ?
-					       TYPEC_RP_3A0 : TYPEC_RP_1A5);
+		typec_select_src_current_limit_rp(port,
+						  curr_limit ==
+						  PDO_FIXED_FRS_CURR_3A0_AT_5V ?
+						  TYPEC_RP_3A0 : TYPEC_RP_1A5);
 		PE_SET_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
 	} else {
 		PE_CLR_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_ENABLED);
@@ -1622,6 +1622,9 @@ static bool sink_dpm_requests(int port)
 		} else if (PE_CHK_DPM_REQUEST(port,
 					      DPM_REQUEST_FRS_DET_DISABLE)) {
 			pe_set_frs_enable(port, 0);
+			/* Restore a default port current limit */
+			typec_select_src_current_limit_rp(port,
+							  CONFIG_USB_PD_PULLUP);
 
 			/* Requires no state change, fall through to false */
 			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_DISABLE);
@@ -1680,12 +1683,26 @@ static void send_source_cap(int port)
  */
 static void pe_send_request_msg(int port)
 {
+	uint32_t vpd_vdo = 0;
 	uint32_t rdo;
 	uint32_t curr_limit;
 	uint32_t supply_voltage;
 
+	/*
+	 * If we are charging through a VPD, the requested voltage and current
+	 * might need adjusting.
+	 */
+	if ((get_usb_pd_cable_type(port) == IDH_PTYPE_VPD) &&
+						is_vpd_ct_supported(port)) {
+		union vpd_vdo vpd = pd_get_am_discovery(port,
+				TCPC_TX_SOP_PRIME)->identity.product_t1.vpd;
+
+		/* The raw vpd_vdo is passed to pd_build_request */
+		vpd_vdo = vpd.raw_value;
+	}
+
 	/* Build and send request RDO */
-	pd_build_request(pe[port].vpd_vdo, &rdo, &curr_limit,
+	pd_build_request(vpd_vdo, &rdo, &curr_limit,
 			&supply_voltage, port);
 
 	CPRINTF("C%d: Req [%d] %dmV %dmA", port, RDO_POS(rdo),
@@ -2701,7 +2718,8 @@ static void pe_src_disabled_entry(int port)
 {
 	print_current_state(port);
 
-	if ((pe[port].vpd_vdo >= 0) && VPD_VDO_CTS(pe[port].vpd_vdo)) {
+	if ((get_usb_pd_cable_type(port) == IDH_PTYPE_VPD) &&
+						is_vpd_ct_supported(port)) {
 		/*
 		 * Inform the Device Policy Manager that a Charge-Through VCONN
 		 * Powered Device was detected.
@@ -4890,8 +4908,27 @@ static void pe_bist_tx_entry(int port)
 {
 	uint32_t *payload = (uint32_t *)rx_emsg[port].buf;
 	uint8_t mode = BIST_MODE(payload[0]);
+	int vbus_mv;
+	int ibus_ma;
 
 	print_current_state(port);
+
+	/* Get the current nominal VBUS value */
+	if (pe[port].power_role == PD_ROLE_SOURCE) {
+		const uint32_t *src_pdo;
+
+		dpm_get_source_pdo(&src_pdo, port);
+		pd_extract_pdo_power(src_pdo[pe[port].requested_idx - 1],
+				     &ibus_ma, &vbus_mv);
+	} else {
+		vbus_mv = pe[port].supply_voltage;
+	}
+
+	/* If VBUS is not at vSafe5V, then don't enter BIST test mode */
+	if (vbus_mv != PD_V_SAFE5V_NOM) {
+		pe_set_ready_state(port);
+		return;
+	}
 
 	if (mode == BIST_CARRIER_MODE_2) {
 		/*
@@ -4926,6 +4963,12 @@ static void pe_bist_tx_entry(int port)
 static void pe_bist_tx_run(int port)
 {
 	if (pd_timer_is_expired(port, PE_TIMER_BIST_CONT_MODE)) {
+		/*
+		 * Entry point to disable BIST in TCPC if that's not already
+		 * handled automatically by the TCPC. Unless this method is
+		 * implemented in a TCPM driver, this function does nothing.
+		 */
+		tcpm_reset_bist_type_2(port);
 
 		if (pe[port].power_role == PD_ROLE_SOURCE)
 			set_state_pe(port, PE_SRC_TRANSITION_TO_DEFAULT);
@@ -5044,27 +5087,6 @@ static enum vdm_response_result parse_vdm_response_common(int port)
 	uint8_t type;
 	uint8_t cnt;
 	uint8_t ext;
-	uint32_t vdm_hdr;
-
-	/*
-	 * USB-PD 3.0 Rev 1.1 - 6.4.4.2.5
-	 * Structured VDM command consists of a command request and a command
-	 * response (ACK, NAK, or BUSY). An exception is made for the Attention
-	 * command which shall have no response.
-	 *
-	 * This function is a helper function for PE states which are sending
-	 * VDM commands and are waiting for VDM responses from the port partner.
-	 * Since Attention commands do not have an expected reply, the SVDM
-	 * command is complete once the Attention command transmit is complete.
-	 */
-	vdm_hdr = pe[port].vdm_data[0];
-	if(PD_VDO_SVDM(vdm_hdr) &&
-	   (PD_VDO_CMD(vdm_hdr) == CMD_ATTENTION)) {
-		if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
-			PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
-			return VDM_RESULT_NO_ACTION;
-		}
-	}
 
 	if (!PE_CHK_REPLY(port))
 		return VDM_RESULT_WAITING;
@@ -5729,9 +5751,33 @@ static void pe_vdm_request_dpm_entry(int port)
 
 static void pe_vdm_request_dpm_run(int port)
 {
+	uint32_t vdm_hdr;
+
 	switch (parse_vdm_response_common(port)) {
 	case VDM_RESULT_WAITING:
-		/* If common code didn't parse a message, continue waiting. */
+		/*
+		 * USB-PD 3.0 Rev 1.1 - 6.4.4.2.5
+		 * Structured VDM command consists of a command request and a
+		 * command response (ACK, NAK, or BUSY). An exception is made
+		 * for the Attention command which shall have no response.
+		 *
+		 * Since Attention commands do not have an expected reply,
+		 * the SVDM command is complete once the Attention command
+		 * transmit is complete.
+		 */
+		vdm_hdr = pe[port].vdm_data[0];
+		if(PD_VDO_SVDM(vdm_hdr) &&
+		   (PD_VDO_CMD(vdm_hdr) == CMD_ATTENTION)) {
+			if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+				PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+				break;
+			}
+		}
+		/*
+		 * If common code didn't parse a message, and the VDM
+		 * just sent was not an Attention message, then continue
+		 * waiting.
+		 */
 		return;
 	case VDM_RESULT_NO_ACTION:
 		/*
@@ -5892,7 +5938,13 @@ static void pe_vdm_response_entry(int port)
 		CPRINTF("VDO ERR:CMD:%d\n", vdo_cmd);
 	}
 
-	if (func) {
+	/*
+	 * If the port partner is PD_REV20 and our data role is DFP, we must
+	 * reply to any SVDM command with a NAK. If the SVDM was an Attention
+	 * command, it does not have a response, and exits the function above.
+	 */
+	if (func && (prl_get_rev(port, TCPC_TX_SOP) != PD_REV20 ||
+		     pe[port].data_role == PD_ROLE_UFP)) {
 		/*
 		 * Execute SVDM response function selected above and set the
 		 * correct response type in the VDM header.

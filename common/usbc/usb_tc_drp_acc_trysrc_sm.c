@@ -109,26 +109,24 @@ void print_flag(int port, int set_or_clear, int flag);
 #define TC_FLAGS_HARD_RESET_REQUESTED   BIT(13)
 /* Flag to note we are currently performing PR Swap */
 #define TC_FLAGS_PR_SWAP_IN_PROGRESS    BIT(14)
-/* Flag to note we are performing Discover Identity */
-#define TC_FLAGS_DISC_IDENT_IN_PROGRESS BIT(15)
 /* Flag to note we should check for connection */
-#define TC_FLAGS_CHECK_CONNECTION       BIT(16)
+#define TC_FLAGS_CHECK_CONNECTION       BIT(15)
 /* Flag to note request from pd_set_suspend to enter TC_DISABLED state */
-#define TC_FLAGS_REQUEST_SUSPEND        BIT(17)
+#define TC_FLAGS_REQUEST_SUSPEND        BIT(16)
 /* Flag to note we are in TC_DISABLED state */
-#define TC_FLAGS_SUSPENDED              BIT(18)
+#define TC_FLAGS_SUSPENDED              BIT(17)
 /* Flag to indicate the port current limit has changed */
-#define TC_FLAGS_UPDATE_CURRENT		BIT(19)
+#define TC_FLAGS_UPDATE_CURRENT		BIT(18)
 /* Flag to indicate USB mux should be updated */
-#define TC_FLAGS_UPDATE_USB_MUX		BIT(20)
+#define TC_FLAGS_UPDATE_USB_MUX		BIT(19)
 /* Flag for retimer firmware update */
-#define TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN     BIT(21)
-#define TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN BIT(22)
+#define TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN     BIT(20)
+#define TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN BIT(21)
 /* Flag for asynchronous call to request Error Recovery */
-#define TC_FLAGS_REQUEST_ERROR_RECOVERY	BIT(23)
+#define TC_FLAGS_REQUEST_ERROR_RECOVERY	BIT(22)
 
 /* For checking flag_bit_names[] array */
-#define TC_FLAGS_COUNT			23
+#define TC_FLAGS_COUNT			22
 
 /* On disconnect, clear most of the flags. */
 #define CLR_FLAGS_ON_DISCONNECT(port) TC_CLR_FLAG(port, \
@@ -936,16 +934,6 @@ void tc_hard_reset_request(int port)
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
-void tc_disc_ident_in_progress(int port)
-{
-	TC_SET_FLAG(port, TC_FLAGS_DISC_IDENT_IN_PROGRESS);
-}
-
-void tc_disc_ident_complete(int port)
-{
-	TC_CLR_FLAG(port, TC_FLAGS_DISC_IDENT_IN_PROGRESS);
-}
-
 void tc_try_src_override(enum try_src_override_t ov)
 {
 	if (!IS_ENABLED(CONFIG_USB_PD_TRY_SRC))
@@ -1136,7 +1124,8 @@ int pd_is_connected(int port)
 {
 	return (IS_ATTACHED_SRC(port) ||
 		(IS_ENABLED(CONFIG_USB_PE_SM) &&
-		 (get_state_tc(port) == TC_CT_ATTACHED_SNK)) ||
+		((get_state_tc(port) == TC_CT_UNATTACHED_SNK) ||
+		(get_state_tc(port) == TC_CT_ATTACHED_SNK))) ||
 		IS_ATTACHED_SNK(port));
 }
 
@@ -2043,11 +2032,13 @@ static void tc_disabled_entry(const int port)
 
 static void tc_disabled_run(const int port)
 {
-	/* If pd_set_suspend clears the request, go to TC_UNATTACHED_SNK. */
-	if (!TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND))
-		set_state_tc(port, TC_UNATTACHED_SNK);
-	else
+	/* If pd_set_suspend clears the request, go to TC_UNATTACHED_SNK/SRC. */
+	if (!TC_CHK_FLAG(port, TC_FLAGS_REQUEST_SUSPEND)) {
+		set_state_tc(port, drp_state[port] == PD_DRP_FORCE_SOURCE ?
+			     TC_UNATTACHED_SRC : TC_UNATTACHED_SNK);
+	} else {
 		tc_pause_event_loop(port);
+	}
 }
 
 static void tc_disabled_exit(const int port)
@@ -2133,9 +2124,13 @@ static void tc_unattached_snk_entry(const int port)
 	 *
 	 * Both CC1 and CC2 pins shall be independently terminated to
 	 * ground through Rd.
+	 *
+	 * Restore default current limit Rp in case we swap to source
 	 */
 	typec_select_pull(port, TYPEC_CC_RD);
+	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 	typec_update_cc(port);
+
 
 	prev_data_role = tc[port].data_role;
 	tc[port].data_role = PD_ROLE_DISCONNECTED;
@@ -2427,6 +2422,46 @@ static void tc_attached_snk_entry(const int port)
 		tcpm_debug_accessory(port, 1);
 }
 
+/*
+ * Check whether Vbus has been removed on this port, accounting for some Vbus
+ * debounce if FRS is enabled.
+ *
+ * Returns true if a new state was set and the calling run should exit.
+ */
+static bool tc_snk_check_vbus_removed(const int port)
+{
+	if (IS_ENABLED(CONFIG_USB_PD_FRS)) {
+		/*
+		 * Debounce Vbus presence when FRS is enabled. Note that we may
+		 * lose Vbus before the FRS signal comes in to let us know
+		 * we're PR swapping, but we must still transition to unattached
+		 * within tSinkDisconnect.
+		 *
+		 * We may safely re-use the Vbus debounce timer here
+		 * since a PR swap would no longer be in progress when Vbus
+		 * removal is checked.
+		 */
+		if (pd_check_vbus_level(port, VBUS_REMOVED)) {
+			if (pd_timer_is_disabled(port,
+						 TC_TIMER_VBUS_DEBOUNCE)) {
+				pd_timer_enable(port, TC_TIMER_VBUS_DEBOUNCE,
+						PD_T_FRS_VBUS_DEBOUNCE);
+			} else if (pd_timer_is_expired(port,
+						TC_TIMER_VBUS_DEBOUNCE)) {
+				set_state_tc(port, TC_UNATTACHED_SNK);
+				return true;
+			}
+		} else {
+			pd_timer_disable(port, TC_TIMER_VBUS_DEBOUNCE);
+		}
+	} else if (pd_check_vbus_level(port, VBUS_REMOVED)) {
+		set_state_tc(port, TC_UNATTACHED_SNK);
+		return true;
+	}
+
+	return false;
+}
+
 static void tc_attached_snk_run(const int port)
 {
 #ifdef CONFIG_USB_PE_SM
@@ -2465,6 +2500,7 @@ static void tc_attached_snk_run(const int port)
 	    pd_timer_is_expired(port, TC_TIMER_VBUS_DEBOUNCE)) {
 		/* PR Swap is no longer in progress */
 		TC_CLR_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS);
+		pd_timer_disable(port, TC_TIMER_VBUS_DEBOUNCE);
 
 		/*
 		 * AutoDischargeDisconnect was turned off when we
@@ -2485,10 +2521,8 @@ static void tc_attached_snk_run(const int port)
 		/*
 		 * Detach detection
 		 */
-		if (pd_check_vbus_level(port, VBUS_REMOVED)) {
-			set_state_tc(port, TC_UNATTACHED_SNK);
+		if (tc_snk_check_vbus_removed(port))
 			return;
-		}
 
 		if (!pe_is_explicit_contract(port))
 			sink_power_sub_states(port);
@@ -2577,10 +2611,8 @@ static void tc_attached_snk_run(const int port)
 #else /* CONFIG_USB_PE_SM */
 
 	/* Detach detection */
-	if (pd_check_vbus_level(port, VBUS_REMOVED)) {
-		set_state_tc(port, TC_UNATTACHED_SNK);
+	if (tc_snk_check_vbus_removed(port))
 		return;
-	}
 
 	/* Run Sink Power Sub-State */
 	sink_power_sub_states(port);
@@ -2642,6 +2674,8 @@ static void tc_unattached_src_entry(const int port)
 	 *
 	 * Both CC1 and CC2 pins shall be independently terminated to
 	 * ground through Rp.
+	 *
+	 * Restore default current limit Rp.
 	 */
 	typec_select_pull(port, TYPEC_CC_RP);
 	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
@@ -2826,9 +2860,11 @@ static void tc_attached_src_entry(const int port)
 	 *
 	 * Both CC1 and CC2 pins shall be independently terminated to
 	 * pulled up through Rp.
+	 *
+	 * Set selected current limit in the hardware.
 	 */
 	typec_select_pull(port, TYPEC_CC_RP);
-	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
+	typec_set_source_current_limit(port, tc[port].select_current_limit_rp);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
 		if (TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
@@ -2977,8 +3013,7 @@ static void tc_attached_src_run(const int port)
 	 * Attached.SRC.
 	 */
 	if (tc[port].cc_state == PD_CC_NONE &&
-			!TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS) &&
-			!TC_CHK_FLAG(port, TC_FLAGS_DISC_IDENT_IN_PROGRESS)) {
+			!TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
 		bool tryWait;
 		enum usb_tc_state new_tc_state = TC_UNATTACHED_SNK;
 
@@ -3089,10 +3124,6 @@ static void tc_attached_src_run(const int port)
 		 */
 		if (!TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER) &&
 			TC_CHK_FLAG(port, TC_FLAGS_CTVPD_DETECTED)) {
-			TC_CLR_FLAG(port, TC_FLAGS_CTVPD_DETECTED);
-
-			/* Clear TC_FLAGS_DISC_IDENT_IN_PROGRESS */
-			TC_CLR_FLAG(port, TC_FLAGS_DISC_IDENT_IN_PROGRESS);
 
 			set_state_tc(port, TC_CT_UNATTACHED_SNK);
 		}
@@ -3124,10 +3155,17 @@ static void tc_attached_src_exit(const int port)
 		/* Attached.SRC exit - disable AutoDischargeDisconnect */
 		tcpm_enable_auto_discharge_disconnect(port, 0);
 
-		/* Disable VCONN if not power role swapping */
-		if (TC_CHK_FLAG(port, TC_FLAGS_VCONN_ON))
+		/*
+		 * Disable VCONN if not power role swapping and
+		 * a CTVPD was not detected
+		 */
+		if (TC_CHK_FLAG(port, TC_FLAGS_VCONN_ON) &&
+				!TC_CHK_FLAG(port, TC_FLAGS_CTVPD_DETECTED))
 			set_vconn(port, 0);
 	}
+
+	/* Clear CTVPD detected after checking for Vconn */
+	TC_CLR_FLAG(port, TC_FLAGS_CTVPD_DETECTED);
 
 	/* Clear PR swap flag after checking for Vconn */
 	TC_CLR_FLAG(port, TC_FLAGS_REQUEST_PR_SWAP);
@@ -3456,7 +3494,6 @@ __maybe_unused static void tc_ct_unattached_snk_entry(int port)
 	 * ground through Rd.
 	 */
 	typec_select_pull(port, TYPEC_CC_RD);
-	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 	typec_update_cc(port);
 
 	tc[port].cc_state = PD_CC_UNSET;
@@ -3673,6 +3710,7 @@ static void tc_cc_open_entry(const int port)
 	typec_update_cc(port);
 
 	tc_set_partner_role(port, PPC_DEV_DISCONNECTED);
+	tc_detached(port);
 }
 
 void tc_set_debug_level(enum debug_level debug_level)

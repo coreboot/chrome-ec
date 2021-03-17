@@ -17,6 +17,9 @@
 
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
+#define CONFIG_BATTERY_V2
+#define CONFIG_BATTERY_COUNT 1
+#define CONFIG_HOSTCMD_BATTERY_V2
 
 /* BC 1.2 */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -136,6 +139,7 @@ enum battery_type {
 };
 
 int board_is_sourcing_vbus(int port);
+void pen_detect_interrupt(enum gpio_signal s);
 
 #endif /* !__ASSEMBLER__ */
 

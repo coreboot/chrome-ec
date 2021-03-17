@@ -250,10 +250,12 @@ uint32_t pd_dfp_enter_mode(int port, enum tcpm_transmit_type type,
 	/*
 	 * Strictly speaking, this should only happen when the request
 	 * has been ACKed.
-	 * TODO(b/159854667): Redo setting the enter mode flag to incorporate
-	 * it into the DP state machine.
+	 * For TCPMV1, still set modal flag pre-emptively. For TCPMv2, the modal
+	 * flag is set when the ENTER command is ACK'd for each alt mode that is
+	 * supported.
 	 */
-	pd_set_dfp_enter_mode_flag(port, true);
+	if (IS_ENABLED(CONFIG_USB_PD_TCPMV1))
+		pd_set_dfp_enter_mode_flag(port, true);
 
 	/* SVDM to send to UFP for mode entry */
 	return VDO(modep->fx->svid, 1, CMD_ENTER_MODE | VDO_OPOS(modep->opos));
@@ -679,6 +681,85 @@ void notify_sysjump_ready(void)
 static inline bool is_pd_rev3(int port, enum tcpm_transmit_type type)
 {
 	return pd_get_rev(port, type) == PD_REV30;
+}
+
+/*
+ * ############################################################################
+ *
+ * (Charge Through) Vconn Powered Device functions
+ *
+ * ############################################################################
+ */
+bool is_vpd_ct_supported(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.ct_support;
+}
+
+uint8_t get_vpd_ct_gnd_impedance(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.gnd_impedance;
+}
+
+uint8_t get_vpd_ct_vbus_impedance(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.vbus_impedance;
+}
+
+uint8_t get_vpd_ct_current_support(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.ct_current_support;
+}
+
+uint8_t get_vpd_ct_max_vbus_voltage(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.max_vbus_voltage;
+}
+
+uint8_t get_vpd_ct_vdo_version(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.vdo_version;
+}
+
+uint8_t get_vpd_ct_firmware_verion(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.firmware_version;
+}
+
+uint8_t get_vpd_ct_hw_version(int port)
+{
+	struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
+	union vpd_vdo vpd = disc->identity.product_t1.vpd;
+
+	return vpd.hw_version;
 }
 
 /*

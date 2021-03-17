@@ -16,13 +16,24 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#define CONFIG_BRINGUP
 #define CONFIG_SYSTEM_UNLOCKED
 
 /*
  * Disable features enabled by default.
  */
 #undef CONFIG_HIBERNATE
+
+/* LED */
+#define CONFIG_LED_PWM
+#define CONFIG_LED_PWM_COUNT 2
+#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
+#undef CONFIG_LED_PWM_SOC_ON_COLOR
+#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
+#undef CONFIG_LED_PWM_LOW_BATT_COLOR
+#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
+#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
+#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
+#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -71,6 +82,8 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
+#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_ODL
+
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
  * signal.
@@ -167,11 +180,11 @@ enum battery_type {
 
 enum pwm_channel {
 	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
-	PWM_CH_LED3,			/* PWM1 */
+	PWM_CH_LED3,			/* PWM1 (orange on DB) */
 	PWM_CH_LED1,			/* PWM2 (orange charger) */
 	PWM_CH_KBLIGHT,			/* PWM3 */
 	PWM_CH_FAN,			/* PWM5 */
-	PWM_CH_LED4,			/* PWM7 */
+	PWM_CH_LED4,			/* PWM7 (white on DB) */
 	PWM_CH_COUNT
 };
 

@@ -28,9 +28,9 @@ GPIO(BJ_ADP_PRESENT_L,		PIN(3, 0), GPIO_INPUT)							/* Barrel Jack Adapter Pres
 GPIO(EC_RECOVERY_BTN_ODL,	PIN(3, 1), GPIO_INT_BOTH)
 GPIO(EN_PWR_S5,			PIN(B, 7), GPIO_OUT_LOW)						/* Enable S5 Power */
 GPIO(EN_PWR_S0_R,		PIN(F, 1), GPIO_OUT_LOW)
-GPIO(EN_PWR_Z1,			PIN(8, 5), GPIO_OUT_LOW)						/* Enable Z1 Power */
 GPIO(EN_PWR_PCORE_S0_R,		PIN(E, 1), GPIO_OUT_LOW)
 GPIO(EN_PPVAR_BJ_ADP_L,		PIN(2, 1), GPIO_OUT_HIGH)						/* Enable Barrel Jack Adapter Power */
+GPIO(EN_USM_ODL,		PIN(1, 2), GPIO_ODR_HIGH)						/* Enable ultrasonic mode */
 ALTERNATE(/*MECH_PWR_BTN_ODL*/	PIN_MASK(D, BIT(2)), 0,				MODULE_PMU, 0)		/* PSL - Mechanical Power Button */
 
 /* SOC Signals */
@@ -61,10 +61,11 @@ GPIO(USB_C0_HPD,		PIN(F, 5), GPIO_OUT_LOW)						/* C0 DP Hotplug Detect */
 GPIO(USB_C1_HPD,		PIN(F, 4), GPIO_OUT_LOW)						/* C1 DP Hotplug Detect */
 
 /* Sensor Signals */
-ALTERNATE(/*TEMP_SOC|MEM*/	PIN_MASK(4, BIT(3) | BIT(5)), 0, 		MODULE_PWM, 0)		/* SOC and Memory Temperature */
-ALTERNATE(			PIN_MASK(4, BIT(4)), 0,		 		MODULE_PWM, 0)		/* ANALOG_PPVAR_PWR_IN_IMON */
-ALTERNATE(			PIN_MASK(4, BIT(1) | BIT(2)), 0,		MODULE_PWM, 0)		/* EC_ADC_CORE_IMON1, EC_ADC_SOC_IMON2 */
-ALTERNATE(			PIN_MASK(3, BIT(7)), 0,				MODULE_PWM, 0)		/* SNS_PPVAR_PWR_IN */
+ALTERNATE(/*TEMP_SOC|MEM*/	PIN_MASK(4, BIT(3) | BIT(5)), 0, 		MODULE_ADC, 0)		/* SOC and Memory Temperature */
+ALTERNATE(			PIN_MASK(4, BIT(4)), 0,		 		MODULE_ADC, 0)		/* ANALOG_PPVAR_PWR_IN_IMON */
+ALTERNATE(			PIN_MASK(4, BIT(1) | BIT(2)), 0,		MODULE_ADC, 0)		/* EC_ADC_CORE_IMON1, EC_ADC_SOC_IMON2 */
+ALTERNATE(			PIN_MASK(3, BIT(7)), 0,				MODULE_ADC, 0)		/* SNS_PPVAR_PWR_IN */
+ALTERNATE(			PIN_MASK(3, BIT(4)), 0,				MODULE_ADC, 0)		/* TEMP_AMBIENT_VR */
 
 /* LED Signals */
 GPIO(EC_DISABLE_DISP_BL,	PIN(A, 6), GPIO_OUT_HIGH)						/* Disable Display Backlight */

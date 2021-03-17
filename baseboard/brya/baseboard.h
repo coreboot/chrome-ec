@@ -27,6 +27,7 @@
 #define CONFIG_CROS_BOARD_INFO
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
+#define CONFIG_FPU
 
 /* Verified boot configs */
 #define CONFIG_VBOOT_HASH
@@ -40,8 +41,18 @@
 #define CONFIG_HOSTCMD_ESPI
 #define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 
+/*
+ * TODO(b/179648721): implement sensors
+ */
+#define CONFIG_TABLET_MODE
+#define CONFIG_TABLET_MODE_SWITCH
+#define CONFIG_GMR_TABLET_MODE
+
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
+
+/* LED */
+#define CONFIG_LED_COMMON
 
 /* Common charger defines */
 #define CONFIG_CHARGE_MANAGER

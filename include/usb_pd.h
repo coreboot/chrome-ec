@@ -191,7 +191,7 @@ enum pd_rx_errors {
 #define PD_T_HARD_RESET_COMPLETE     (5*MSEC) /* between 4ms and 5ms*/
 #define PD_T_HARD_RESET_RETRY        (1*MSEC) /* 1ms */
 #define PD_T_SEND_SOURCE_CAP       (100*MSEC) /* between 100ms and 200ms */
-#define PD_T_SINK_WAIT_CAP         (600*MSEC) /* between 310ms and 620ms */
+#define PD_T_SINK_WAIT_CAP         (575*MSEC) /* between 310ms and 620ms */
 #define PD_T_SINK_TRANSITION        (35*MSEC) /* between 20ms and 35ms */
 #define PD_T_SOURCE_ACTIVITY        (45*MSEC) /* between 40ms and 50ms */
 /*
@@ -228,7 +228,7 @@ enum pd_rx_errors {
 #define PD_T_NO_RESPONSE          (5500*MSEC) /* between 4.5s and 5.5s */
 #define PD_T_BIST_TRANSMIT          (50*MSEC) /* 50ms (for task_wait arg) */
 #define PD_T_BIST_RECEIVE           (60*MSEC) /* 60ms (time to process bist) */
-#define PD_T_BIST_CONT_MODE         (60*MSEC) /* 30ms to 60ms */
+#define PD_T_BIST_CONT_MODE         (55*MSEC) /* 30ms to 60ms */
 #define PD_T_VCONN_SOURCE_ON       (100*MSEC) /* 100ms */
 #define PD_T_DRP_TRY               (125*MSEC) /* between 75ms and 150ms */
 #define PD_T_TRY_TIMEOUT           (550*MSEC) /* between 550ms and 1100ms */
@@ -245,6 +245,13 @@ enum pd_rx_errors {
 #define PD_T_DISCOVER_IDENTITY      (45*MSEC) /* between 40ms and 50ms */
 #define PD_T_SYSJUMP              (1000*MSEC) /* 1s */
 #define PD_T_PR_SWAP_WAIT          (100*MSEC) /* tPRSwapWait 100ms */
+
+/*
+ * Non-spec timer to prevent going Unattached if Vbus drops before a partner FRS
+ * signal comes through.  This timer should be shorter than tSinkDisconnect
+ * (40ms) to ensure we still transition out of Attached.SNK in time.
+ */
+#define PD_T_FRS_VBUS_DEBOUNCE	     (5*MSEC)
 
 /* number of edges and time window to detect CC line is not idle */
 #define PD_RX_TRANSITION_COUNT  3
@@ -268,6 +275,7 @@ enum pd_rx_errors {
 /* Voltage thresholds in mV (Table 7-24, PD 3.0 Version 2.0 Spec) */
 #define PD_V_SAFE0V_MAX		800
 #define PD_V_SAFE5V_MIN		4750
+#define PD_V_SAFE5V_NOM		5000
 #define PD_V_SAFE5V_MAX		5500
 
 /* USB Type-C voltages in mV (Table 4-3, USB Type-C Release 2.0 Spec) */
@@ -1799,6 +1807,76 @@ void dfp_consume_svids(int port, enum tcpm_transmit_type type, int cnt,
  */
 void dfp_consume_modes(int port, enum tcpm_transmit_type type, int cnt,
 		uint32_t *payload);
+
+/**
+ * Returns true if connected VPD supports Charge Through
+ *
+ * @param port  USB-C port number
+ * @return      TRUE if Charge Through is supported, else FALSE
+ */
+bool is_vpd_ct_supported(int port);
+
+/**
+ * Returns CTVPD ground impedance
+ *
+ * @param port     USB-C port number
+ * @return         Ground impedance through the VPD in 1 mOhm increments, else
+ *                 0 if Charge Through isn't supported
+ */
+uint8_t get_vpd_ct_gnd_impedance(int port);
+
+/**
+ * Returns CTVPD VBUS impedance
+ *
+ * @param port     USB-C port number
+ * @return         VBUS impedance through the VPD in 2 mOhm increments, else
+ *                 0 if Charge Through isn't supported
+ */
+uint8_t get_vpd_ct_vbus_impedance(int port);
+
+/**
+ * Returns CTVPD Current support
+ *
+ * @param port     USB-C port number
+ * @return         0 - 3A capable or
+ *                 1 - 5A capable
+ */
+uint8_t get_vpd_ct_current_support(int port);
+
+/**
+ * Returns CTVPD Maximum VBUS Voltage
+ *
+ * @param port     USB-C port number
+ * @return         0 - 20V
+ *                 1 - 30V
+ *                 2 - 40V
+ *                 3 - 50V
+ */
+uint8_t get_vpd_ct_max_vbus_voltage(int port);
+
+/**
+ * Returns VPD VDO Version
+ *
+ * @param port     USB-C port number
+ * @return         0 for Version 1.0
+ */
+uint8_t get_vpd_ct_vdo_version(int port);
+
+/**
+ * Returns VPD Firmware Version
+ *
+ * @param port     USB-C port number
+ * @return         Firmware version assigned by the VID owner
+ */
+uint8_t get_vpd_ct_firmware_verion(int port);
+
+/**
+ * Returns HW Firmware Version
+ *
+ * @param port     USB-C port number
+ * @return         HW version assigned by the VID owner
+ */
+uint8_t get_vpd_ct_hw_version(int port);
 
 /**
  * Initialize alternate mode discovery info for DFP

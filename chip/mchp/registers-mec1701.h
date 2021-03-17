@@ -245,6 +245,11 @@
 /* 8-bit Device Revision */
 #define MCHP_CHIP_DEV_REV	REG8(MCHP_CHIP_BASE + 0x21)
 
+/* PCR clock control dividers */
+#define MCHP_PCR_CLK_CTL_FASTEST	1U
+#define MCHP_PCR_CLK_CTL_48MHZ		1U
+#define MCHP_PCR_CLK_CTL_12MHZ		4U
+
 /* Number of PCR Sleep Enable, Clock Required, and Reset registers */
 #define MCHP_PCR_SLP_RST_REG_MAX 5
 
@@ -1029,11 +1034,7 @@
 #define MCHP_8042_OBE_GIRQ_BIT		BIT(18)
 #define MCHP_8042_IBF_GIRQ_BIT		BIT(19)
 
-/*
- * I2C controllers 0 - 4 include SMBus network layer functionality.
- * I2C controllers 5 - 7 are I2C only and include slave mode
- * promiscuous functionality.
- */
+/* I2C controllers 0 - 4 include SMBus network layer functionality. */
 #define MCHP_I2C_CTRL0		0
 #define MCHP_I2C_CTRL1		1
 #define MCHP_I2C_CTRL2		2
@@ -1335,34 +1336,6 @@ enum dma_channel {
 #define MCHP_DMA_SPI1_RX_REQ_ID		11
 #define MCHP_DMA_QMSPI0_TX_REQ_ID	12
 #define MCHP_DMA_QMSPI0_RX_REQ_ID	13
-/*
- * Required structure typedef for common/dma.h interface
- * !!! checkpatch.pl will not like this !!!
- */
-/*
- * Required structure typedef for common/dma.h interface
- * !!! checkpatch.pl will not like this !!!
- * structure moved to chip level dma.c
- * We can't remove dma_chan_t as its used in DMA API header.
- */
-struct MCHP_dma_chan {
-	uint32_t act;		/* Activate */
-	uint32_t mem_start;	/* Memory start address */
-	uint32_t mem_end;	/* Memory end address */
-	uint32_t dev;		/* Device address */
-	uint32_t ctrl;		/* Control */
-	uint32_t int_status;	/* Interrupt status */
-	uint32_t int_enabled;	/* Interrupt enabled */
-	uint32_t chfsm;		/* channel fsm read-only */
-	uint32_t alu_en;	/* channels 0 & 1 only */
-	uint32_t alu_data;	/* channels 0 & 1 only */
-	uint32_t alu_sts;	/* channel 0 only */
-	uint32_t alu_ro;	/* channel 0 only */
-	uint32_t rsvd[4];	/* 0x30 - 0x3F */
-};
-
-/* Common code and header file must use this */
-typedef struct MCHP_dma_chan dma_chan_t;
 
 /*
  * Hardware delay register.
@@ -1373,9 +1346,5 @@ typedef struct MCHP_dma_chan dma_chan_t;
  */
 #define MCHP_USEC_DELAY_REG_ADDR 0x10000000
 #define MCHP_USEC_DELAY(x) (REG8(MCHP_USEC_DELAY_REG_ADDR) = (x))
-
-/* Wake pin definitions, defined at board-level */
-extern const enum gpio_signal hibernate_wake_pins[];
-extern const int hibernate_wake_pins_used;
 
 #endif /* #ifndef __ASSEMBLER__ */

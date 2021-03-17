@@ -18,14 +18,13 @@ GPIO_INT(SLP_S3_L,		PIN(6, 1), GPIO_INT_BOTH,			baseboard_en_pwr_s0)	/* Sleep S3
 GPIO_INT(SLP_S5_L,		PIN(7, 2), GPIO_INT_BOTH,			power_signal_interrupt) /* Sleep S5 */
 GPIO_INT(SLP_S3_S0I3_L,		PIN(7, 4), GPIO_INT_BOTH,			power_signal_interrupt) /* Sleep S0ix */
 GPIO_INT(PG_PWR_S5,		PIN(C, 0), GPIO_INT_BOTH,			baseboard_en_pwr_s0)	/* S5 Power OK */
-GPIO_INT(PG_PCORE_S0_R_OD,		PIN(B, 6), GPIO_INT_BOTH, 			power_signal_interrupt) /* S0 Power OK */
+GPIO_INT(PG_PCORE_S0_R_OD,	PIN(B, 6), GPIO_INT_BOTH, 			power_signal_interrupt) /* S0 Power OK */
 GPIO_INT(ACOK_OD,		PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,	extpower_interrupt)	/* AC Power Present */
 GPIO_INT(EC_PCORE_INT_ODL,	PIN(F, 0), GPIO_INT_BOTH | GPIO_PULL_UP,	power_signal_interrupt)	/* Power Core Interrupt */
 GPIO_INT(PG_GROUPC_S0_OD,	PIN(A, 3), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_s0)	/* Power Group C S0 */
 GPIO_INT(PG_LPDDR4X_S3_OD,	PIN(9, 5), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_s0)	/* Power Group LPDDR4 S3 */
 GPIO(EN_PWR_S5,			PIN(B, 7), GPIO_OUT_LOW)						/* Enable S5 Power */
 GPIO(EN_PWR_S0_R,		PIN(F, 1), GPIO_OUT_LOW)
-GPIO(EN_PWR_Z1,			PIN(8, 5), GPIO_OUT_LOW)						/* Enable Z1 Power */
 GPIO(EN_PWR_PCORE_S0_R,		PIN(E, 1), GPIO_OUT_LOW)
 ALTERNATE(/*MECH_PWR_BTN_ODL*/	PIN_MASK(D, BIT(2)), 0,				MODULE_PMU, 0)		/* PSL - Mechanical Power Button */
 ALTERNATE(/*LID_OPEN*/		PIN_MASK(0, BIT(2)), 0, 			MODULE_PMU, 0)		/* PSL - Lid Open */
@@ -66,9 +65,9 @@ GPIO_INT(LID_OPEN,		PIN(0, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,	lid_interrupt
 GPIO_INT(TABLET_MODE,		PIN(C, 1), GPIO_INT_BOTH,			gmr_tablet_switch_isr)	/* 360 Tablet Mode */
 GPIO_INT(VOLDN_BTN_ODL,		PIN(A, 7), GPIO_INT_BOTH | GPIO_PULL_UP,	button_interrupt)	/* Volume Down */
 GPIO_INT(VOLUP_BTN_ODL,		PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, 	button_interrupt)	/* Volume Up */
-GPIO(EC_BATT_PRES_ODL,		PIN(9, 4), GPIO_INPUT | GPIO_PULL_UP)					/* Battery Present */
-ALTERNATE(/*TEMP_SOC|CHRG|MEM*/	PIN_MASK(4, BIT(3) | BIT(4) | BIT(5)), 0, 	MODULE_PWM, 0)		/* SOC, Charger and Memory Temperature */
-ALTERNATE(			PIN_MASK(4, BIT(1) | BIT(2)), 0,		MODULE_PWM, 0)		/* EC_ADC_CORE_IMON1, EC_ADC_SOC_IMON2 */
+GPIO(EC_BATT_PRES_ODL,		PIN(9, 4), GPIO_INPUT)							/* Battery Present */
+ALTERNATE(/*TEMP_SOC|CHRG|MEM*/	PIN_MASK(4, BIT(3) | BIT(4) | BIT(5)), 0, 	MODULE_ADC, 0)		/* SOC, Charger and Memory Temperature */
+ALTERNATE(			PIN_MASK(4, BIT(1) | BIT(2)), 0,		MODULE_ADC, 0)		/* EC_ADC_CORE_IMON1, EC_ADC_SOC_IMON2 */
 
 /* LED Signals */
 GPIO(EC_DISABLE_DISP_BL,	PIN(A, 6), GPIO_OUT_HIGH)						/* Disable Display Backlight */
@@ -117,7 +116,12 @@ ALTERNATE(/*KSO_03-09*/		PIN_MASK(1, GENMASK(6, 0)), 0,			MODULE_KEYBOARD_SCAN, 
 ALTERNATE(/*KSO_10-13*/		PIN_MASK(0, GENMASK(7, 4)), 0, 			MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH)
 ALTERNATE(/*KSO_14*/		PIN_MASK(8, BIT(2)), 0, 			MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH)
 
-/* SOC eSPI Bus */
+#if 0
+/*
+ * SOC eSPI Bus
+ * These signals do not need to be explicitly configured.
+ * Leaving here so all signals are documented.
+ */
 GPIO(ESPI_SOC_CLK,		PIN(5, 5), GPIO_DEFAULT)
 GPIO(ESPI_SOC_CS_EC_L,		PIN(5, 3), GPIO_DEFAULT)
 GPIO(ESPI_SOC_D0_EC,		PIN(4, 6), GPIO_DEFAULT)
@@ -126,6 +130,7 @@ GPIO(ESPI_SOC_D2_EC,		PIN(5, 1), GPIO_DEFAULT)
 GPIO(ESPI_SOC_D3_EC,		PIN(5, 2), GPIO_DEFAULT)
 GPIO(EC_ESPI_RST_L,		PIN(5, 4), GPIO_DEFAULT)
 GPIO(ESPI_EC_ALERT_SOC_L,	PIN(5, 7), GPIO_DEFAULT)
+#endif
 
 /* TCPC C0 */
 IOEX(USB_C0_PPC_EN_L,		EXPIN(USBC_PORT_C0, 1, 0), GPIO_OUT_HIGH)

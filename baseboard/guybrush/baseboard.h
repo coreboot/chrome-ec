@@ -15,14 +15,24 @@
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
-#define CONFIG_BRINGUP /* EC will not automatically power on the AP */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
 #define CONFIG_KEYBOARD_DEBUG /* Print keyboard debug messages */
 
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
+/* Vboot Config */
+#define CONFIG_CRC8
+#define CONFIG_VBOOT_EFS2
+#define CONFIG_VBOOT_HASH
+#define GPIO_PACKET_MODE_EN	GPIO_EC_GSC_PACKET_MODE
+
+/* CBI Config */
+#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_BOARD_VERSION_CBI
+
 /* Power Config */
+#define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #undef  CONFIG_EXTPOWER_DEBOUNCE_MS
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 200
 #define CONFIG_EXTPOWER_GPIO
@@ -36,9 +46,9 @@
 #define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 #define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
-#define G3_TO_PWRBTN_DELAY_MS 80
+#define G3_TO_PWRBTN_DELAY_MS 200
 #define GPIO_AC_PRESENT		GPIO_ACOK_OD
-#define GPIO_EN_PWR_A		GPIO_EN_PWR_Z1
+#define GPIO_EN_PWR_A		GPIO_EN_PWR_S5
 #define GPIO_PCH_PWRBTN_L	GPIO_EC_SOC_PWR_BTN_L
 #define GPIO_PCH_RSMRST_L	GPIO_EC_SOC_RSMRST_L
 #define GPIO_PCH_SLP_S0_L	GPIO_SLP_S3_S0I3_L
@@ -235,7 +245,9 @@
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
 
-/* Fan features */
+/* Fan Config */
+#define CONFIG_FANS FAN_CH_COUNT
+/* TODO: Set CONFIG_FAN_INIT_SPEED, defaults to 100 */
 
 /* LED Config */
 #define CONFIG_PWM
@@ -306,6 +318,19 @@ enum pwm_channel {
 	PWM_CH_LED_FULL,
 	PWM_CH_COUNT
 };
+
+/* Fan Channels */
+enum fan_channel {
+	FAN_CH_0 = 0,
+	/* Number of FAN channels */
+	FAN_CH_COUNT,
+};
+enum mft_channel {
+	MFT_CH_0 = 0,
+	/* Number of MFT channels */
+	MFT_CH_COUNT,
+};
+
 
 /* Common definition for the USB PD interrupt handlers. */
 void tcpc_alert_event(enum gpio_signal signal);
