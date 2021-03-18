@@ -219,6 +219,7 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_DRP_ACC_TRYSRC
                                                 "${PLATFORM_EC}/common/usbc/usb_tc_drp_acc_trysrc_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pe_drp_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_dpm.c"
+						"${PLATFORM_EC}/common/usbc/usbc_pd_policy.c"
                                                 "${PLATFORM_EC}/common/usbc/dp_alt_mode.c")
 
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_USB_PRL_SM
