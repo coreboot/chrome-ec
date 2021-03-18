@@ -19,6 +19,8 @@
 #include "intel_x86.h"
 #include "lpc.h"
 #include "power.h"
+#include "power/intel_x86.h"
+#include "power/sc7180.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
