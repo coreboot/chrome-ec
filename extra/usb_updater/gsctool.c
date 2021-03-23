@@ -155,8 +155,8 @@
  */
 
 /* Look for Cr50 FW update interface */
-#define VID USB_VID_GOOGLE
-#define PID CONFIG_USB_PID
+#define H1_PID 0x5014
+#define D2_PID 0x504A
 #define SUBCLASS USB_SUBCLASS_GOOGLE_CR50
 #define PROTOCOL USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE
 
@@ -270,7 +270,7 @@ static const struct option_container cmd_line_options[] = {
 	{{"corrupt", no_argument, NULL, 'c'},
 	 "Corrupt the inactive rw"},
 	{{"device", required_argument, NULL, 'd'},
-	 " VID:PID%USB device (default 18d1:5014)"},
+	 " VID:PID%USB device (default 18d1:5014 or 18d1:504a based on image)"},
 	{{"endorsement_seed", optional_argument, NULL, 'e'},
 	 "[state]%get/set the endorsement key seed"},
 	{{"fwver", no_argument, NULL, 'f'},
@@ -3187,15 +3187,6 @@ int main(int argc, char *argv[])
 	if (errorcnt)
 		usage(errorcnt);
 
-	/*
-	 * If no usb device information was given, default to the using cr50
-	 * vendor and product id to find the usb device.
-	 */
-	if (!serial && !vid && !pid) {
-		vid = VID;
-		pid = PID;
-	}
-
 	if ((bid_action == bid_none) &&
 	    !ccd_info &&
 	    !ccd_lock &&
@@ -3240,6 +3231,15 @@ int main(int argc, char *argv[])
 			printf("Ignoring binary image %s\n", argv[optind]);
 	}
 
+	/*
+	 * If no usb device information was given, default to the using haven
+	 * or dauntless vendor and product id to find the usb device.
+	 */
+	if (!serial && !vid && !pid) {
+		vid = USB_VID_GOOGLE;
+		/* Set default product id based on image type */
+		pid = (image_magic == MAGIC_DAUNTLESS) ? D2_PID : H1_PID;
+	}
 
 	if (((bid_action != bid_none) + !!rma + !!password + !!ccd_open +
 	     !!ccd_unlock + !!ccd_lock + !!ccd_info + !!get_flog +
