@@ -26,7 +26,7 @@
 static const int _wake_up_delay_ms = 10;
 
 /* Device detection interval */
-static const int _detection_interval_ms = 100;
+static const int _detection_interval_ms = 500;
 
 /* Buffer size for i2c read & write */
 #define CTN730_MESSAGE_BUFFER_SIZE	0x20
@@ -274,7 +274,12 @@ static int _send_command(struct pchg *ctx, const struct ctn730_msg *cmd)
 static int ctn730_reset(struct pchg *ctx)
 {
 	gpio_set_level(GPIO_WLC_NRST_CONN, 0);
-	msleep(1);
+	/*
+	 * Datasheet says minimum is 10 us. This is better not to be a sleep
+	 * especially if it's long (e.g. ~1 ms) since the PCHG state machine
+	 * may try to access the I2C bus, which is held low by ctn730.
+	 */
+	udelay(15);
 	gpio_set_level(GPIO_WLC_NRST_CONN, 1);
 	return EC_SUCCESS_IN_PROGRESS;
 }

@@ -6,8 +6,6 @@
 /* Trogdor baseboard-specific configuration */
 
 #include "charge_state.h"
-#include "charger.h"
-#include "driver/charger/isl923x.h"
 #include "i2c.h"
 #include "power.h"
 #include "usb_pd.h"
@@ -29,43 +27,6 @@ void board_hibernate_late(void)
 	/* Set the hibernate GPIO to turn off the rails */
 	gpio_set_level(GPIO_HIBERNATE_L, 0);
 }
-
-/* Power signal list. Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-	[SC7180_AP_RST_ASSERTED] = {
-		GPIO_AP_RST_L,
-		POWER_SIGNAL_ACTIVE_LOW | POWER_SIGNAL_DISABLE_AT_BOOT,
-		"AP_RST_ASSERTED"},
-	[SC7180_PS_HOLD] = {
-		GPIO_PS_HOLD,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"PS_HOLD"},
-	[SC7180_POWER_GOOD] = {
-		GPIO_POWER_GOOD,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"POWER_GOOD"},
-	[SC7180_WARM_RESET] = {
-		GPIO_WARM_RESET_L,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"WARM_RESET_L"},
-	[SC7180_AP_SUSPEND] = {
-		GPIO_AP_SUSPEND,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"AP_SUSPEND"},
-	[SC7180_DEPRECATED_AP_RST_REQ] = {
-		GPIO_DEPRECATED_AP_RST_REQ,
-		POWER_SIGNAL_ACTIVE_HIGH,
-		"DEPRECATED_AP_RST_REQ"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
-
-const struct charger_config_t chg_chips[] = {
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
-};
 
 int board_allow_i2c_passthru(int port)
 {

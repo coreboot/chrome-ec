@@ -190,12 +190,22 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_SMART
                                                 "${PLATFORM_EC}/driver/battery/smart.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
                                                 "${PLATFORM_EC}/driver/bc12/pi3usb9201.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9237
+                                                "${PLATFORM_EC}/driver/charger/isl923x.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9238
+                                                "${PLATFORM_EC}/driver/charger/isl923x.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9241
                                                 "${PLATFORM_EC}/driver/charger/isl9241.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_BQ25710
+                                                "${PLATFORM_EC}/driver/charger/bq25710.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_BQ25720
+                                                "${PLATFORM_EC}/driver/charger/bq25710.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_MANAGER
                                                 "${PLATFORM_EC}/common/charger.c"
                                                 "${PLATFORM_EC}/common/charge_manager.c"
                                                 "${PLATFORM_EC}/common/charge_state_v2.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_HW
+                                                "${PLATFORM_EC}/common/charge_ramp.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp.c"
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
@@ -226,6 +236,8 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
                                                 "${PLATFORM_EC}/common/keyboard_8042.c"
                                                 "${PLATFORM_EC}/common/keyboard_8042_sharedlib.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP
+                                                "${PLATFORM_EC}/common/keyboard_mkbp.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_VIVALDI
                                                 "${PLATFORM_EC}/common/keyboard_vivaldi.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
@@ -259,12 +271,16 @@ zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
                                                 "${PLATFORM_EC}/power/intel_x86.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
+                                                "${PLATFORM_EC}/power/sc7180.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PANIC   "${PLATFORM_EC}/common/panic_output.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_PWM     "${PLATFORM_EC}/common/pwm.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
                                                 "${PLATFORM_EC}/common/sha256.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SWITCH
                                                 "${PLATFORM_EC}/common/switch.c")
+zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_LN9310
+                                                "${PLATFORM_EC}/driver/ln9310.c")
 zephyr_sources_ifdef(CONFIG_PLATFORM_EC_SPI_FLASH_REGS
                                                 "${PLATFORM_EC}/common/spi_flash_reg.c")
 

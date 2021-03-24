@@ -697,6 +697,15 @@ config PLATFORM_EC_PWM
 	  support variable brightness LEDs, backlight controls, and
 	  variable-speed fans.
 
+config PLATFORM_EC_PWM_DISPLIGHT
+	bool "PWM display backlight"
+	depends on PLATFORM_EC_PWM
+	help
+	  Enables display backlight controlled by a PWM signal connected
+	  directly to the EC chipset. The board files must define the C
+	  reference PWM_CH_DISPLIGHT to the PWM channel used for the
+	  display backlight control.
+
 config PLATFORM_EC_RTC
 	bool "Real-time clock (RTC)"
 	default y
@@ -802,6 +811,15 @@ config PLATFORM_EC_SWITCH
 
           This also enables the "mmapinfo" console command to report the current
           state of all switches.
+
+config PLATFORM_EC_SWITCHCAP_LN9310
+	bool "LN9310 switchcap driver"
+	depends on PLATFORM_EC_I2C
+	help
+	  Enable support for the LION Semiconductor LN9310 switched
+	  capacitor converter.  This will export definitions for
+	  ln9310_init, ln9310_interrupt, and ln9310_power_good, which
+	  project-specific code should call appropriately.
 
 config PLATFORM_EC_THROTTLE_AP
 	bool "CPU throttling"

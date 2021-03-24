@@ -16,8 +16,6 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#define CONFIG_SYSTEM_UNLOCKED
-
 /*
  * Disable features enabled by default.
  */
@@ -77,6 +75,7 @@
 #define GPIO_ENTERING_RW		GPIO_EC_ENTERING_RW
 #define GPIO_KBD_KSO2			GPIO_EC_KSO_02_INV
 #define GPIO_LID_OPEN			GPIO_LID_OPEN_OD
+#define GPIO_PACKET_MODE_EN		GPIO_EC_GSC_PACKET_MODE
 #define GPIO_PCH_PWRBTN_L		GPIO_EC_PCH_PWR_BTN_ODL
 #define GPIO_PCH_RSMRST_L		GPIO_EC_PCH_RSMRST_L
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
@@ -144,7 +143,6 @@
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
 #define CONFIG_CHARGE_RAMP_SW
-#define CONFIG_CHARGER_NARROW_VDC
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
 

@@ -1126,6 +1126,13 @@ void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type)
 	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
 
 	/*
+	 * If there is a timeout error while waiting for a chunk of a chunked
+	 * message, there is no requirement to trigger a soft reset.
+	 */
+	if (e == ERR_RCH_CHUNK_WAIT_TIMEOUT)
+		return;
+
+	/*
 	 * Generate Hard Reset if Protocol Error occurred
 	 * while in PE_Send_Soft_Reset state.
 	 */
@@ -1206,7 +1213,7 @@ void pe_got_soft_reset(int port)
 	set_state_pe(port, PE_SOFT_RESET);
 }
 
-static bool pd_can_source_from_device(int port, const int pdo_cnt,
+__overridable bool pd_can_source_from_device(int port, const int pdo_cnt,
 				      const uint32_t *pdos)
 {
 	/*
@@ -1741,6 +1748,13 @@ static void pe_update_src_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 			charge_manager_update_dualrole(port, CAP_DUALROLE);
 		}
 	}
+
+	/*
+	 * If port policy preference is to be a power role source, then request
+	 * a power role swap.
+	 */
+	if (!pd_can_source_from_device(port, pdo_cnt, pdos))
+		pd_request_power_swap(port);
 }
 
 void pd_request_power_swap(int port)
@@ -1766,7 +1780,6 @@ int pd_is_port_partner_dualrole(int port)
 static bool port_try_vconn_swap(int port)
 {
 	if (pe[port].vconn_swap_counter < N_VCONN_SWAP_COUNT) {
-		pe[port].vconn_swap_counter++;
 		PE_SET_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
 		set_state_pe(port, get_last_state_pe(port));
 		return true;
@@ -3071,9 +3084,12 @@ static void pe_snk_evaluate_capability_entry(int port)
 
 	set_cable_rev(port);
 
-	pd_set_src_caps(port, num, pdo);
+	/* Parse source caps if they have changed */
+	if (pe[port].src_cap_cnt != num ||
+	    memcmp(pdo, pe[port].src_caps, num << 2))
+		pe_update_src_pdo_flags(port, num, pdo);
 
-	pe_update_src_pdo_flags(port, num, pdo);
+	pd_set_src_caps(port, num, pdo);
 
 	/* Evaluate the options based on supplied capabilities */
 	pd_process_source_cap(port, pe[port].src_cap_cnt, pe[port].src_caps);
@@ -6230,6 +6246,9 @@ static void pe_vcs_send_swap_run(int port)
 	if ((msg_check & PE_MSG_SENT) &&
 	    PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
 		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+
+		/* Increment once message has successfully sent */
+		pe[port].vconn_swap_counter++;
 
 		type = PD_HEADER_TYPE(rx_emsg[port].header);
 		cnt = PD_HEADER_CNT(rx_emsg[port].header);

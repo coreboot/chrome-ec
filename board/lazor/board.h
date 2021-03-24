@@ -114,18 +114,8 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
-/* Battery cell type */
-enum battery_cell_type {
-	BATTERY_CELL_TYPE_UNKNOWN = 0,
-	BATTERY_CELL_TYPE_2S = 2,
-	BATTERY_CELL_TYPE_3S = 3
-};
+int board_is_clamshell(void);
 
-/* Swithcap functions */
-void board_set_switchcap_power(int enable);
-int board_is_switchcap_enabled(void);
-int board_is_switchcap_power_good(void);
-enum battery_cell_type board_get_battery_cell_type(void);
 /* Custom function to indicate if sourcing VBUS */
 int board_is_sourcing_vbus(int port);
 /* Enable VBUS sink for a given port */

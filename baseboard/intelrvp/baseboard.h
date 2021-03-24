@@ -12,10 +12,12 @@
 
 #ifdef VARIANT_INTELRVP_EC_IT8320
 	#include "ite_ec.h"
-/* VARIANT_INTELRVP_EC_IT8320 */
 #elif defined(VARIANT_INTELRVP_EC_MCHP)
 	#include "mchp_ec.h"
-/* VARIANT_INTELRVP_EC_MCHP */
+#elif defined(VARIANT_INTELRVP_EC_NPCX)
+	#include "npcx_ec.h"
+#else
+	#error "Define EC chip variant"
 #endif
 
 /*
@@ -261,8 +263,6 @@ struct tcpc_aic_gpio_config_t {
 };
 extern const struct tcpc_aic_gpio_config_t tcpc_aic_gpios[];
 
-/* Reset PD MCU */
-void board_reset_pd_mcu(void);
 void board_charging_enable(int port, int enable);
 void board_vbus_enable(int port, int enable);
 void board_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp);

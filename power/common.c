@@ -19,6 +19,7 @@
 #include "lpc.h"
 #include "power.h"
 #include "power/intel_x86.h"
+#include "power/sc7180.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
@@ -693,6 +694,10 @@ void chipset_task(void *u)
 		if (new_state != state) {
 			power_set_state(new_state);
 			power_set_active_wake_mask();
+
+			/* Call hooks before we enter G3 */
+			if (new_state == POWER_G3)
+				hook_notify(HOOK_CHIPSET_HARD_OFF);
 		}
 	}
 }
@@ -1031,7 +1036,7 @@ __overridable void board_power_5v_enable(int enable)
 
 /* 5V enable request bitmask from various tasks. */
 static uint32_t pwr_5v_en_req;
-static mutex_t pwr_5v_ctl_mtx;
+K_MUTEX_DEFINE(pwr_5v_ctl_mtx);
 
 void power_5v_enable(task_id_t tid, int enable)
 {
@@ -1055,12 +1060,6 @@ static void restore_enable_5v_state(void)
 {
 	const uint32_t *state;
 	int size;
-
-	/*
-	 * Initialize the mutex for ZephyrOS.
-	 * This does nothing for non-Zephyr builds.
-	 */
-	(void)k_mutex_init(&pwr_5v_ctl_mtx);
 
 	state = (const uint32_t *) system_get_jump_tag(P5_SYSJUMP_TAG, 0,
 						       &size);
