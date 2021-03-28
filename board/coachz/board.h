@@ -104,10 +104,10 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
+
 /* Custom function to indicate if sourcing VBUS */
 int board_is_sourcing_vbus(int port);
-/* Enable VBUS sink for a given port */
-int board_vbus_sink_enable(int port, int enable);
+
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
