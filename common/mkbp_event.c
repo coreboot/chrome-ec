@@ -184,7 +184,7 @@ static inline int host_is_sleeping(void)
 /*
  * This is the deferred function that ensures that we attempt to set the MKBP
  * interrupt again if there was a failure in the system (EC or AP) and the AP
- * never called get_next_event.
+ * never called mkbp_fifo_get_next_event.
  */
 static void force_mkbp_if_events(void);
 DECLARE_DEFERRED(force_mkbp_if_events);
@@ -259,7 +259,7 @@ static void activate_mkbp_with_events(uint32_t events_to_add)
 /*
  * This is the deferred function that ensures that we attempt to set the MKBP
  * interrupt again if there was a failure in the system (EC or AP) and the AP
- * never called get_next_event.
+ * never called mkbp_fifo_get_next_event.
  */
 static void force_mkbp_if_events(void)
 {
