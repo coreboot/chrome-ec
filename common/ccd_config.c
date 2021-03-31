@@ -95,6 +95,7 @@ static const uint8_t k_ccd_config = NVMEM_VAR_CCD_CONFIG;
 
 /* Flags which can be set via ccd_set_flag() */
 static const uint32_t k_public_flags =
+		CCD_FLAG_RDDKEEPALIVE_AT_BOOT |
 		CCD_FLAG_OVERRIDE_WP_AT_BOOT |
 		CCD_FLAG_OVERRIDE_WP_STATE_ENABLED |
 		CCD_FLAG_OVERRIDE_BATT_AT_BOOT |

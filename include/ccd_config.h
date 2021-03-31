@@ -54,6 +54,9 @@ enum ccd_flag {
 	 * in ccd_config.c.
 	 */
 
+	/* Enable Rddkeepalive at boot */
+	CCD_FLAG_RDDKEEPALIVE_AT_BOOT = BIT(19),
+
 	/* Override BATT_PRES_L at boot */
 	CCD_FLAG_OVERRIDE_BATT_AT_BOOT = BIT(20),
 
