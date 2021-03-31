@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "ccd_config.h"
 #include "clock.h"
 #include "console.h"
 #include "gpio.h"
@@ -54,8 +55,10 @@ uint8_t rdd_is_detected(void)
 
 void print_rdd_state(void)
 {
-	ccprintf("Rdd:     %s\n",
-		 force_detected ? "keepalive" : device_state_name(state));
+	ccprintf("Rdd:     %s%s\n",
+		 force_detected ? "keepalive" : device_state_name(state),
+		 ccd_get_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT) ? " (atboot)" :
+		 "");
 }
 
 /**
@@ -205,6 +208,12 @@ void init_rdd_state(void)
 	task_enable_irq(GC_IRQNUM_RDD0_INTR_DEBUG_STATE_DETECTED_INT);
 	GWRITE_FIELD(RDD, INT_STATE, INTR_DEBUG_STATE_DETECTED, 1);
 	GWRITE_FIELD(RDD, INT_ENABLE, INTR_DEBUG_STATE_DETECTED, 1);
+
+	/* Restore the rddkeepalive atboot state from the ccd flags. */
+	force_detected = ccd_get_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT);
+
+	if (force_detected)
+		hook_call_deferred(&rdd_connect_data, 0);
 }
 
 static int command_rdd_keepalive(int argc, char **argv)
@@ -219,15 +228,23 @@ static int command_rdd_keepalive(int argc, char **argv)
 
 	if (force_detected) {
 		/* Force Rdd detect */
-		ccprintf("Forcing Rdd detect keepalive\n");
+		ccprintf("Forcing Rdd detect keepalive");
+
+		if (argc > 2 && !strcasecmp(argv[2], "atboot")) {
+			/* Change rddkeeplalive at boot to match */
+			ccprintf(" atboot");
+			ccd_set_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT, 1);
+		}
+		ccprintf("\n");
 		hook_call_deferred(&rdd_connect_data, 0);
 	} else {
 		/* Go back to actual hardware state */
 		ccprintf("Using actual Rdd state\n");
+		ccd_set_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT, 0);
 	}
 
 	return EC_SUCCESS;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(rddkeepalive, command_rdd_keepalive,
-			     "[BOOLEAN]",
+			     "[BOOLEAN] [atboot]",
 			     "Get Rdd state or force keepalive");

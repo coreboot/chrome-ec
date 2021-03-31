@@ -857,6 +857,7 @@ static void board_init(void)
 	 * used for battery cutoff software support on detachable devices.
 	 */
 	init_ac_detect();
+	/* Reads ccd_flag. Must be done after ccd_config_init. */
 	init_rdd_state();
 
 	/* Initialize write protect.  Must be after CCD config init. */
