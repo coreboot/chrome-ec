@@ -214,7 +214,7 @@ static int command_rdd_keepalive(int argc, char **argv)
 		return EC_SUCCESS;
 	}
 
-	if (!parse_bool(argv[1], &force_detected))
+	if (console_is_restricted() || !parse_bool(argv[1], &force_detected))
 		return EC_ERROR_PARAM1;
 
 	if (force_detected) {
@@ -228,6 +228,6 @@ static int command_rdd_keepalive(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(rddkeepalive, command_rdd_keepalive,
-			"[BOOLEAN]",
-			"Get Rdd state or force keepalive");
+DECLARE_SAFE_CONSOLE_COMMAND(rddkeepalive, command_rdd_keepalive,
+			     "[BOOLEAN]",
+			     "Get Rdd state or force keepalive");
