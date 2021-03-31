@@ -9,6 +9,16 @@
 #include <devicetree.h>
 
 /*
+ * The battery enum is used in various drivers and these assume that it is
+ * always available (defined in board.h). With Zephyr we don't include board.h
+ * so we have a battery_enum.h header in the shim which defines
+ * enum battery_type based on settings in the device tree. Include that here.
+ */
+#ifdef CONFIG_PLATFORM_EC_BATTERY
+#include "battery_enum.h"
+#endif
+
+/*
  * This file translates Kconfig options to platform/ec options.
  *
  * Options which are from Zephyr platform/ec module (Kconfig) start
@@ -133,11 +143,6 @@
 #define CONFIG_BATTERY
 #define CONFIG_BATTERY_FUEL_GAUGE
 
-/* TODO(b/176121284): hard-coded for volteer */
-enum battery_type {
-	BATTERY_LGC011,
-	BATTERY_TYPE_COUNT,
-};
 #endif /* CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE */
 
 #undef CONFIG_BATTERY_SMART
@@ -169,6 +174,13 @@ enum battery_type {
 #undef CONFIG_BATTERY_REVIVE_DISCONNECT
 #ifdef CONFIG_PLATFORM_EC_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
+#endif
+
+#undef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
+#if defined(CONFIG_PLATFORM_EC_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV) && \
+    (CONFIG_PLATFORM_EC_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV > 0)
+#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV \
+    CONFIG_PLATFORM_EC_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
 #endif
 
 #undef CONFIG_BOARD_RESET_AFTER_POWER_ON
@@ -246,6 +258,10 @@ enum battery_type {
 
 #ifdef CONFIG_PLATFORM_EC_ESPI_VW_SLP_S4
 #define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+#endif
+
+#ifdef CONFIG_PLATFORM_EC_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+#define CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 #endif
 
 #endif /* CONFIG_PLATFORM_EC_ESPI */
@@ -424,6 +440,11 @@ enum battery_type {
 #undef CONFIG_VOLUME_BUTTONS
 #ifdef CONFIG_PLATFORM_EC_VOLUME_BUTTONS
 #define CONFIG_VOLUME_BUTTONS
+#endif
+
+#undef CONFIG_CMD_BUTTON
+#ifdef CONFIG_PLATFORM_EC_CMD_BUTTON
+#define CONFIG_CMD_BUTTON
 #endif
 
 #undef CONFIG_PWM_KBLIGHT
@@ -786,9 +807,25 @@ enum battery_type {
 #define CONFIG_USB_DRP_ACC_TRYSRC
 #endif
 
+#undef CONFIG_USB_PD_TCPM_PS8751
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8751
+#define CONFIG_USB_PD_TCPM_PS8751
+#endif
+
+#undef CONFIG_USB_PD_TCPM_PS8805
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8805
+#define CONFIG_USB_PD_TCPM_PS8805
+#endif
+
 #undef CONFIG_USB_PD_TCPM_PS8815
 #ifdef CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8815
 #define CONFIG_USB_PD_TCPM_PS8815
+#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
+#endif
+
+#undef CONFIG_USB_PD_TCPM_MULTI_PS8XXX
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TCPM_MULTI_PS8XXX
+#define CONFIG_USB_PD_TCPM_MULTI_PS8XXX
 #endif
 
 #undef CONFIG_USB_PD_TCPM_RT1715
@@ -1311,6 +1348,11 @@ enum battery_type {
 #undef CONFIG_CHARGER_BQ25720
 #ifdef CONFIG_PLATFORM_EC_CHARGER_BQ25720
 #define CONFIG_CHARGER_BQ25720
+#endif
+
+#undef CONFIG_HIBERNATE_PSL
+#ifdef CONFIG_PLATFORM_EC_HIBERNATE_PSL
+#define CONFIG_HIBERNATE_PSL
 #endif
 
 #endif  /* __CROS_EC_CONFIG_CHIP_H */

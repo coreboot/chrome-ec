@@ -5,4 +5,5 @@
 add_subdirectory(cros_bbram)
 add_subdirectory(cros_flash)
 add_subdirectory(cros_kb_raw)
+add_subdirectory(cros_rtc)
 add_subdirectory(cros_system)

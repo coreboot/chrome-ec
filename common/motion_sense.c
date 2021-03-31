@@ -437,6 +437,22 @@ static void motion_sense_switch_sensor_rate(void)
 		ap_event_interval = 0;
 	}
 
+	/* disable the body detection since AP is suspended */
+	if (IS_ENABLED(CONFIG_BODY_DETECTION)) {
+		static bool was_enabled;
+
+		switch (sensor_active) {
+		case SENSOR_ACTIVE_S3:
+			was_enabled = body_detect_get_enable();
+			body_detect_set_enable(false);
+			break;
+		case SENSOR_ACTIVE_S0:
+			body_detect_set_enable(was_enabled);
+			break;
+		default:
+			break;
+		}
+	}
 	/* Forget activities set by the AP */
 	if (IS_ENABLED(CONFIG_GESTURE_DETECTION) &&
 	    (sensor_active == SENSOR_ACTIVE_S5)) {
@@ -500,9 +516,6 @@ static void motion_sense_suspend(void)
 
 	sensor_active = SENSOR_ACTIVE_S3;
 
-	/* disable the body detection since AP is suspended */
-	if (IS_ENABLED(CONFIG_BODY_DETECTION))
-		body_detect_set_enable(false);
 	/*
 	 * During shutdown sequence sensor rails can be powered down
 	 * asynchronously to the EC hence EC cannot interlock the sensor
@@ -777,15 +790,14 @@ static void check_and_queue_gestures(uint32_t *event)
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION)) {
 			struct ec_response_motion_sensor_data vector;
 
+			vector.flags = MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO;
 			/*
 			 * Send events to the FIFO
 			 * AP is ignoring double tap event, do no wake up and no
 			 * automatic disable.
 			 */
 			if (IS_ENABLED(CONFIG_GESTURE_SENSOR_DOUBLE_TAP_FOR_HOST))
-				vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP;
-			else
-				vector.flags = 0;
+				vector.flags |= MOTIONSENSE_SENSOR_FLAG_WAKEUP;
 			vector.activity_data.activity =
 					MOTIONSENSE_ACTIVITY_DOUBLE_TAP;
 			vector.activity_data.state = 1 /* triggered */;
@@ -805,7 +817,8 @@ static void check_and_queue_gestures(uint32_t *event)
 			struct ec_response_motion_sensor_data vector;
 
 			/* Send events to the FIFO */
-			vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP;
+			vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP |
+				       MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO;
 			vector.activity_data.activity =
 					MOTIONSENSE_ACTIVITY_SIG_MOTION;
 			vector.activity_data.state = 1 /* triggered */;
@@ -951,7 +964,7 @@ void motion_sense_task(void *u)
 		 * - we haven't done it for a while.
 		 */
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO) &&
-		    (motion_sense_fifo_wake_up_needed() ||
+		    (motion_sense_fifo_bypass_needed() ||
 		     event & (TASK_EVENT_MOTION_ODR_CHANGE |
 			      TASK_EVENT_MOTION_FLUSH_PENDING) ||
 		     motion_sense_fifo_over_thres() ||
@@ -974,8 +987,10 @@ void motion_sense_task(void *u)
 			      sensor_active == SENSOR_ACTIVE_S0) ||
 			     motion_sense_fifo_wake_up_needed()))) {
 				mkbp_send_event(EC_MKBP_EVENT_SENSOR_FIFO);
-				motion_sense_fifo_reset_wake_up_needed();
 			}
+			if (motion_sense_fifo_bypass_needed())
+				/* wakeup flag is a subset of bypass flag. */
+				motion_sense_fifo_reset_needed_flags();
 		}
 
 		ts_end_task = get_time();

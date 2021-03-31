@@ -619,6 +619,12 @@
 #undef CONFIG_BATTERY_MEASURE_IMBALANCE
 
 /*
+ * Some boards needs to lower input voltage when battery is full and chipset
+ * is in S5/G3. This should be defined to integer value in mV.
+ */
+#undef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
+
+/*
  * If remaining capacity is x% of full capacity, remaining capacity is set
  * equal to full capacity.
  *
@@ -4450,6 +4456,12 @@
  * DDI1_AUX_P signals (b/122873171)
  */
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
+
+/*
+ * Use this to override the TCPCI Device ID value to be 0x0002 for
+ * chip rev A1. Early A1 firmware misreports the DID as 0x0001.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 
 /*
  * Use this option if the TCPC port controller supports the optional register

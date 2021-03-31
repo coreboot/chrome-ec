@@ -9,6 +9,7 @@
 #include "common.h"
 #include "accelgyro.h"
 #include "cbi_ec_fw_config.h"
+#include "charge_state_v2.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/syv682x.h"
 #include "driver/retimer/bb_retimer.h"
@@ -270,11 +271,13 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_C0,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = GPIO_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_C1,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = GPIO_USB_C1_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };
@@ -294,6 +297,22 @@ void ppc_interrupt(enum gpio_signal signal)
 	default:
 		break;
 	}
+}
+
+/* Disable FRS on boards with the SYV682A. FRS only works on the SYV682B. */
+void setup_board_ppc(void)
+{
+	uint8_t board_id = get_board_id();
+
+	if (board_id < 2) {
+		ppc_chips[USBC_PORT_C0].frs_en = 0;
+		ppc_chips[USBC_PORT_C1].frs_en = 0;
+	}
+}
+
+__override void board_cbi_init(void)
+{
+	setup_board_ppc();
 }
 
 /******************************************************************************/
@@ -435,3 +454,17 @@ static void board_chipset_suspend(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
+/******************************************************************************/
+/* Set the charge limit based upon desired maximum. */
+void board_set_charge_limit(int port, int supplier, int charge_ma,
+			    int max_ma, int charge_mv)
+{
+	/*
+	 * Limit the input current to 98% negotiated limit,
+	 * to account for the charger chip margin.
+	 */
+	charge_ma = charge_ma * 98 / 100;
+	charge_set_input_current_limit(
+			MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT),
+			charge_mv);
+}

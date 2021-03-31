@@ -222,7 +222,8 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		.temp_fan_off = C_TO_K(32),
+		/* TODO: Setting fan off to 0 so it's allways on */
+		.temp_fan_off = C_TO_K(0),
 		.temp_fan_max = C_TO_K(75),
 	},
 	[TEMP_SENSOR_CHARGER] = {
@@ -247,17 +248,7 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_fan_off = 0,
 		.temp_fan_max = 0,
 	},
-	[TEMP_SENSOR_CPU] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
-	},
+	/* TODO: TEMP_SENSOR_CPU */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 

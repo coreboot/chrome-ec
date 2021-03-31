@@ -14,18 +14,35 @@
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
-#undef CONFIG_UART_TX_BUF_SIZE
-#define CONFIG_UART_TX_BUF_SIZE 4096
+#define CONFIG_WP_ACTIVE_HIGH
+
+/* Console */
+#define CONFIG_UART_CONSOLE 3
+#define CONFIG_UART_TX_DMA_CH STM32_DMAC_USART3_TX
+#define CONFIG_UART_TX_DMA_PH DMAMUX_REQ_USART3_TX
 
 /* USB Type C and USB PD defines */
 #define USB_PD_PORT_HOST   0
 #define USB_PD_PORT_DP   1
-#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 
+#define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#define CONFIG_USB_MUX_TUSB1064
+#define CONFIG_USBC_PPC_STUB
+#define CONFIG_USB_PD_VBUS_ALERT_TCPC
 
-/* USB Type A Features */
+#define CONFIG_USB_PID 0x5049
+#define CONFIG_USB_BCD_DEV 0x0001 /* v 0.01 */
+#define CONFIG_USB_PD_IDENTITY_HW_VERS 1
+#define CONFIG_USB_PD_IDENTITY_SW_VERS 1
 
-/* BC 1.2 */
+/* I2C port names */
+#define I2C_PORT_I2C1	0
+#define I2C_PORT_I2C2	1
+#define I2C_PORT_I2C3	2
+/* Required symbolic I2C port names */
+#define I2C_PORT_MP4245 I2C_PORT_I2C3
+#define I2C_PORT_EEPROM I2C_PORT_I2C1
+#define MP4245_I2C_ADDR_FLAGS  MP4245_I2C_ADDR_0_FLAGS
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -35,14 +52,23 @@
  */
 #define GPIO_ENTERING_RW	GPIO_EC_ENTERING_RW
 #define GPIO_WP_L		GPIO_EC_WP_L
-
-
+#define GPIO_WP		GPIO_EC_WP_L
 
 #ifndef __ASSEMBLER__
 
-#include "gpio_signal.h"
 #include "registers.h"
 
+#define GPIO_DP_HPD GPIO_DDI_MST_IN_HPD
+
+#define GPIO_TRIGGER_1 GPIO_EC_HUB1_RESET_L
+#define GPIO_TRIGGER_2 GPIO_EC_HUB2_RESET_L
+
+enum  debug_gpio {
+	TRIGGER_1 = 0,
+	TRIGGER_2,
+};
+
+void board_debug_gpio(int trigger, int enable, int pulse_usec);
 
 #endif /* !__ASSEMBLER__ */
 

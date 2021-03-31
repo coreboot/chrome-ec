@@ -31,6 +31,7 @@ menuconfig PLATFORM_EC
 
 if PLATFORM_EC
 
+rsource "shim/chip/npcx/Kconfig.npcx"
 rsource "Kconfig.adc"
 rsource "Kconfig.battery"
 rsource "Kconfig.console"
@@ -39,6 +40,7 @@ rsource "Kconfig.keyboard"
 rsource "Kconfig.led"
 rsource "Kconfig.powerseq"
 rsource "Kconfig.motionsense"
+rsource "Kconfig.system"
 rsource "Kconfig.tasks"
 rsource "Kconfig.temperature"
 rsource "Kconfig.usbc"
@@ -98,7 +100,6 @@ config PLATFORM_EC_AP_RESET_LOG
 
 config PLATFORM_EC_BOARD_RESET_AFTER_POWER_ON
 	bool "Work around H1 reset issue"
-	default y
 	help
 	  Enable this if H1 resets the EC after power-on. This is needed so the EC
 	  can delay its start-up until the reset happens. Without this option
@@ -339,6 +340,15 @@ config PLATFORM_EC_ESPI_VW_SLP_S4
 	help
 	  For power sequencing, use an eSPI virtual wire instead of
 	  defining GPIO_PCH_SLP_S4 in gpio_map.h.
+
+config PLATFORM_EC_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+	bool "Reset SLP VW signals on eSPI reset"
+	help
+	  Enable this config to reset SLP* VW when eSPI_RST is asserted
+	  for the Global Reset event case.  Don't enable this config if
+	  the platform implements the Deep-Sx entry as EC needs to
+	  maintain these pins' states per request. Note that this is
+	  currently unimplemented for Zephyr. Please see b/183148073.
 
 endif # PLATFORM_EC_ESPI
 
@@ -708,7 +718,6 @@ config PLATFORM_EC_PWM_DISPLIGHT
 
 config PLATFORM_EC_RTC
 	bool "Real-time clock (RTC)"
-	default y
 	help
 	  Enable support for a real-time clock. Typically this is available
 	  on-chip in the EC. It provides a way to track the passage of time
@@ -724,7 +733,6 @@ if PLATFORM_EC_RTC
 
 config PLATFORM_EC_CONSOLE_CMD_RTC
 	bool "Console command: rtc"
-	default y
 	help
 	  This command allows getting and setting the current RTC value. The
 	  value is in seconds since the Epoch (midnight on 1/1/70). You can
@@ -736,7 +744,6 @@ config PLATFORM_EC_CONSOLE_CMD_RTC
 config PLATFORM_EC_CONSOLE_CMD_RTC_ALARM
 	bool "Console command: rtc_alarm"
 	depends on PLATFORM_EC_CONSOLE_CMD_RTC
-	default y
 	help
 	  This command supports setting a real-time-clock (RTC) alarm that
 	  causes an interrupt when the timer reaches that point. To set the
@@ -751,7 +758,6 @@ config PLATFORM_EC_CONSOLE_CMD_RTC_ALARM
 config PLATFORM_EC_HOSTCMD_RTC
 	bool "Host command: EC_CMD_RTC_GET_VALUE etc."
 	depends on PLATFORM_EC_HOSTCMD
-	default y
 	help
 	  Enables support for EC_CMD_RTC_GET_VALUE, EC_CMD_RTC_SET_VALUE,
 	  EC_CMD_RTC_GET_ALARM and EC_CMD_RTC_SET_ALARM which colectively allow

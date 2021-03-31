@@ -115,6 +115,38 @@ static int cros_system_npcx_soc_reset(const struct device *dev)
 	return 0;
 }
 
+static int cros_system_npcx_hibernate(const struct device *dev,
+				      uint32_t seconds, uint32_t microseconds)
+{
+	ARG_UNUSED(seconds);
+	ARG_UNUSED(microseconds);
+
+	/* Disable interrupt first */
+	interrupt_disable_all();
+
+	/*
+	 * TODO(b:178230662): RTC wake-up in PSL mode only support in npcx9
+	 * series. Nuvoton will introduce CLs for it later.
+	 */
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_HIBERNATE_PSL)) {
+		/*
+		 * Configure PSL input pads from "psl-in-pads" property in
+		 * device tree file.
+		 */
+		npcx_pinctrl_psl_input_configure();
+
+		/* Turn off VCC1 and enter ultra-low-power mode */
+		npcx_pinctrl_psl_output_set_inactive();
+	}
+
+	/*
+	 * TODO(b:183745774): implement Non-PSL hibernate mechanism if
+	 * CONFIG_PLATFORM_EC_HIBERNATE_PSL is not enabled.
+	 */
+	return 0;
+}
+
 static struct cros_system_npcx_data cros_system_npcx_dev_data;
 
 static const struct cros_system_npcx_config cros_system_dev_cfg = {
@@ -125,15 +157,17 @@ static const struct cros_system_npcx_config cros_system_dev_cfg = {
 static const struct cros_system_driver_api cros_system_driver_npcx_api = {
 	.get_reset_cause = cros_system_npcx_get_reset_cause,
 	.soc_reset = cros_system_npcx_soc_reset,
+	.hibernate = cros_system_npcx_hibernate,
 };
 
 /*
- * The priority of cros_system_npcx_init() should be lower than watchdog init
+ * The priority of cros_system_npcx_init() should be higher than watchdog init
  * for reset cause check.
  */
 DEVICE_DEFINE(cros_system_npcx_0, "CROS_SYSTEM", cros_system_npcx_init, NULL,
 	      &cros_system_npcx_dev_data, &cros_system_dev_cfg, PRE_KERNEL_1,
-	      30, &cros_system_driver_npcx_api);
+	      CONFIG_CROS_SYSTEM_NPCX_INIT_PRIORITY,
+	      &cros_system_driver_npcx_api);
 
 #define HAL_DBG_REG_BASE_ADDR \
 	((struct dbg_reg *)DT_REG_ADDR(DT_INST(0, nuvoton_npcx_cros_dbg)))

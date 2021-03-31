@@ -174,7 +174,7 @@
 	(EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_CONNECTED) |    \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_DISCONNECTED) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |        \
-	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) | /* for DP */ \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
 /* GPIO name remapping */
@@ -217,6 +217,5 @@ enum board_sub_board {
 
 int board_get_version(void);
 void board_reset_pd_mcu(void);
-
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BASEBOARD_H */

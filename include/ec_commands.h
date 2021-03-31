@@ -2770,6 +2770,8 @@ struct ec_motion_sense_activity {
 #define MOTIONSENSE_SENSOR_FLAG_TABLET_MODE BIT(3)
 #define MOTIONSENSE_SENSOR_FLAG_ODR BIT(4)
 
+#define MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO BIT(7)
+
 /*
  * Send this value for the data element to only perform a read. If you
  * send any other value, the EC will interpret it as data to set and will
@@ -6799,6 +6801,11 @@ struct ec_response_pchg {
 	uint32_t error;			/* enum pchg_error */
 	uint8_t state;			/* enum pchg_state state */
 	uint8_t battery_percentage;
+	uint8_t unused0;
+	uint8_t unused1;
+	/* Fields added in version 1 */
+	uint32_t fw_version;
+	uint32_t dropped_event_count;
 } __ec_align2;
 
 enum pchg_state {

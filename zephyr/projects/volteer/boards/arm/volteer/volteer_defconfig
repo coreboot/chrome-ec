@@ -4,9 +4,9 @@
 
 # Zephyr Kernel Configuration
 CONFIG_SOC_SERIES_NPCX7=y
+CONFIG_SOC_NPCX7M6FC=y
 
 # Platform Configuration
-CONFIG_SOC_NPCX7M6FB=y # Actually NPCX7M6FC; C just has 512K Flash
 CONFIG_BOARD_VOLTEER=y
 
 # NPCX BootLoader Table Configuration
@@ -66,6 +66,8 @@ CONFIG_CROS_EC_HOOK_TICK_INTERVAL=200000
 
 # ADC
 # The resolution and oversamplig values are fixed by the NPCX ADC driver
+CONFIG_ADC=y
+CONFIG_ADC_SHELL=n
 CONFIG_PLATFORM_EC_ADC_RESOLUTION=10
 CONFIG_PLATFORM_EC_ADC_OVERSAMPLING=0
 
