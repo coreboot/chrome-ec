@@ -47,7 +47,12 @@ enum ccd_flag {
 
 	/* (flags in the middle are unused) */
 
-	/* Flags that can be set via ccd_set_flags(); fill from top down */
+	/*
+	 * Flags that can be set via ccd_set_flags(); fill from top down.
+	 *
+	 * Note: To use ccd_set_flags a flag has to be a part of k_public_flags
+	 * in ccd_config.c.
+	 */
 
 	/* Override BATT_PRES_L at boot */
 	CCD_FLAG_OVERRIDE_BATT_AT_BOOT = BIT(20),
