@@ -69,6 +69,9 @@ static void ec_comm_init_(void)
 
 	CPRINTS("Initialization");
 
+	/* Wake from sleep or deep sleep when EC_PACKET_MODE_EN is asserted. */
+	gpio_set_wakepin(GPIO_EC_PACKET_MODE_EN, GPIO_HIB_WAKE_HIGH);
+
 	gpio_enable_interrupt(GPIO_EC_PACKET_MODE_EN);
 	gpio_enable_interrupt(GPIO_EC_PACKET_MODE_DIS);
 
