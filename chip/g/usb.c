@@ -1553,26 +1553,4 @@ static void usb_load_serialno(void)
 	usb_set_serial(devid_str);
 }
 DECLARE_HOOK(HOOK_INIT, usb_load_serialno, HOOK_PRIO_DEFAULT - 1);
-
-static int command_serialno(int argc, char **argv)
-{
-	struct usb_string_desc *sd = usb_serialno_desc;
-	char buf[CONFIG_SERIALNO_LEN];
-	int rv = EC_SUCCESS;
-	int i;
-
-	if (argc != 1) {
-		ccprintf("Setting serial number\n");
-		rv = usb_set_serial(argv[1]);
-	}
-
-	for (i = 0; i < CONFIG_SERIALNO_LEN; i++)
-		buf[i] = sd->_data[i];
-	ccprintf("Serial number: %s\n", buf);
-	return rv;
-}
-
-DECLARE_CONSOLE_COMMAND(serialno, command_serialno,
-	"[value]",
-	"Read and write USB serial number");
 #endif
