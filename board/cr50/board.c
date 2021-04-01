@@ -624,9 +624,6 @@ void board_configure_deep_sleep_wakepins(void)
 	 *       configure_board_specific_gpios().
 	 */
 	gpio_set_wakepin(GPIO_TPM_RST_L, GPIO_HIB_WAKE_HIGH);
-
-	if (board_has_ec_cr50_comm_support())
-		gpio_set_wakepin(GPIO_EC_PACKET_MODE_EN, GPIO_HIB_WAKE_HIGH);
 }
 
 static void deferred_tpm_rst_isr(void);
