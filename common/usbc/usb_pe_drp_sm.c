@@ -4505,7 +4505,7 @@ int pd_check_requested_voltage(uint32_t rdo, const int port)
 void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
 {
 #ifdef CONFIG_CHARGE_MANAGER
-	uint32_t ma, mv, pdo;
+	uint32_t ma, mv, pdo, unused;
 #endif
 	int i;
 
@@ -4517,7 +4517,7 @@ void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
 	/* Get max power info that we could request */
 	pd_find_pdo_index(pe[port].src_cap_cnt, pe[port].src_caps,
 						PD_MAX_VOLTAGE_MV, &pdo);
-	pd_extract_pdo_power(pdo, &ma, &mv);
+	pd_extract_pdo_power(pdo, &ma, &mv, &unused);
 	/* Set max. limit, but apply 500mA ceiling */
 	charge_manager_set_ceil(port, CEIL_REQUESTOR_PD, PD_MIN_MA);
 	pd_set_input_current_limit(port, ma, mv);

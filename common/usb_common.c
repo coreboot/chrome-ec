@@ -253,26 +253,35 @@ int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 	return ret;
 }
 
-void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv)
+void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *max_mv,
+			  uint32_t *min_mv)
 {
-	int max_ma, uw;
+	uint32_t max_ma, uw;
 
-	*mv = ((pdo >> 10) & 0x3FF) * 50;
-
-	if (*mv == 0) {
-		*ma = 0;
+	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_AUGMENTED) {
+		max_ma = 50 * (pdo & GENMASK(6, 0));
+		*min_mv = 100 * ((pdo & GENMASK(15, 8)) >> 8);
+		*max_mv = 100 * ((pdo & GENMASK(24, 17)) >> 17);
+		max_ma = MIN(max_ma, PD_MAX_POWER_MW * 1000 / *min_mv);
+		*ma = MIN(max_ma, PD_MAX_CURRENT_MA);
 		return;
 	}
 
+	*max_mv = ((pdo >> 10) & 0x3FF) * 50;
+	if (*max_mv == 0) {
+		*ma = 0;
+		*min_mv = 0;
+		return;
+	}
 	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) {
 		uw = 250000 * (pdo & 0x3FF);
-		max_ma = 1000 * MIN(1000 * uw, PD_MAX_POWER_MW) / *mv;
+		max_ma = 1000 * MIN(1000 * uw, PD_MAX_POWER_MW) / *max_mv;
 	} else {
 		max_ma = 10 * (pdo & 0x3FF);
-		max_ma = MIN(max_ma, PD_MAX_POWER_MW * 1000 / *mv);
+		max_ma = MIN(max_ma, PD_MAX_POWER_MW * 1000 / *max_mv);
 	}
-
 	*ma = MIN(max_ma, PD_MAX_CURRENT_MA);
+	*min_mv = *max_mv;
 }
 
 void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
@@ -280,7 +289,7 @@ void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 			uint32_t *mv, enum pd_request_type req_type,
 			uint32_t max_request_mv)
 {
-	uint32_t pdo;
+	uint32_t pdo, unused;
 	int pdo_index, flags = 0;
 	int uw;
 	int max_or_min_ma;
@@ -299,7 +308,7 @@ void pd_build_request(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 						max_request_mv, &pdo);
 	}
 
-	pd_extract_pdo_power(pdo, ma, mv);
+	pd_extract_pdo_power(pdo, ma, mv, &unused);
 
 	/*
 	 * Adjust VBUS current if CTVPD device was detected.
