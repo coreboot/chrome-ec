@@ -316,3 +316,23 @@ int board_accel_force_mode_mask(void)
 		return 0;
 	return BIT(LID_ACCEL);
 }
+
+static void board_suspend(void)
+{
+	if (board_get_version() >= 3)
+		gpio_set_level(GPIO_EN_5V_USM, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_suspend, HOOK_PRIO_DEFAULT);
+
+static void board_resume(void)
+{
+	if (board_get_version() >= 3)
+		gpio_set_level(GPIO_EN_5V_USM, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_resume, HOOK_PRIO_DEFAULT);
+
+__override int syv682x_board_is_syv682c(int port)
+{
+	return board_get_version() > 2;
+}
+

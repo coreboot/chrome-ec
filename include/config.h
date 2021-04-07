@@ -983,6 +983,16 @@
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 
 /*
+ * This config option is used to set the charger's VSYS voltage
+ * threshold. When the voltage drops to this level, PROCHOT is asserted
+ * by the charger to request reduced system power demand and hopefully
+ * avoid a voltage droop leading to system instability. The voltage is
+ * specified in deci-volts, so a value of 80 would set the threshold to
+ * 8.0v.
+ */
+#undef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
+
+/*
  * Board specific maximum input current limit, in mA.
  */
 #undef CONFIG_CHARGER_MAX_INPUT_CURRENT
@@ -3943,8 +3953,8 @@
 #undef CONFIG_UART_PAD_SWITCH
 
 /**
- * This will only be used for Kukui and cortex-m0. Preserve EC reset logs and
- * console logs on SRAM so that the logs will be preserved after EC shutting
+ * This will only be used for Kukui. Preserve EC reset logs and console
+ * logs on SRAM/FLASH so that the logs will be preserved after EC shutting
  * down or sysjumped. It will keep the contents across EC resets, so we have
  * more information about system states. The contents on SRAM will be cleared
  * when checksum or validity check fails.
@@ -4574,6 +4584,7 @@
 #undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
 #undef CONFIG_USBC_PPC_SN5S330
+#undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
 
 /*
@@ -4584,6 +4595,9 @@
 
 /* SYV682 does not pass through CC, instead it bypasses to the TCPC */
 #undef CONFIG_SYV682X_NO_CC
+
+/* Define to enable SYV682X VBUS smart discharge. */
+#undef CONFIG_USBC_PPC_SYV682X_SMART_DISCHARGE
 
 /* PPC is capable of gating the SBU lines. */
 #undef CONFIG_USBC_PPC_SBU
@@ -5496,6 +5510,13 @@
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_SBU
 #define CONFIG_USBC_PPC_VCONN
+#endif
+
+
+/*****************************************************************************/
+/* PPC SYV682C is a subset of SYV682X. */
+#if defined(CONFIG_USBC_PPC_SYV682C)
+#define CONFIG_USBC_PPC_SYV682X
 #endif
 
 /*

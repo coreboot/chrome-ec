@@ -79,18 +79,22 @@
 
 		adc_charger: charger {
 			label = "ADC_TEMP_SENSOR_CHARGER";
+			enum-name = "ADC_TEMP_SENSOR_CHARGER";
 			channel = <0>;
 		};
 		adc_pp3300_regulator: pp3300_regulator {
 			label = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
+			enum-name = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
 			channel = <1>;
 		};
 		adc_ddr_soc: ddr_soc {
 			label = "ADC_TEMP_SENSOR_DDR_SOC";
+			enum-name = "ADC_TEMP_SENSOR_DDR_SOC";
 			channel = <8>;
 		};
 		adc_fan: fan {
 			label = "ADC_TEMP_SENSOR_FAN";
+			enum-name = "ADC_TEMP_SENSOR_FAN";
 			channel = <3>;
 		};
 	};
@@ -99,6 +103,7 @@
 		charger {
 			compatible = "temp-3v3-30k9-47k-4050b";
 			label = "TEMP_SENSOR_CHARGER";
+			enum-name = "TEMP_SENSOR_CHARGER";
 			temp_fan_off = <40>;
 			temp_fan_max = <55>;
 			temp_host_high = <75>;
@@ -109,6 +114,7 @@
 		pp3300_regulator {
 			compatible = "temp-3v3-30k9-47k-4050b";
 			label = "TEMP_SENSOR_PP3300_REGULATOR";
+			enum-name = "TEMP_SENSOR_PP3300_REGULATOR";
 			temp_fan_off = <40>;
 			temp_fan_max = <55>;
 			temp_host_high = <75>;
@@ -119,6 +125,7 @@
 		ddr_soc {
 			compatible = "temp-3v3-30k9-47k-4050b";
 			label = "TEMP_SENSOR_DDR_SOC";
+			enum-name = "TEMP_SENSOR_DDR_SOC";
 			temp_fan_off = <35>;
 			temp_fan_max = <50>;
 			temp_host_high = <70>;
@@ -129,6 +136,7 @@
 		fan {
 			compatible = "temp-3v3-30k9-47k-4050b";
 			label = "TEMP_SENSOR_FAN";
+			enum-name = "TEMP_SENSOR_FAN";
 			temp_fan_off = <35>;
 			temp_fan_max = <50>;
 			temp_host_high = <70>;
@@ -136,6 +144,11 @@
 			temp_host_release_high = <65>;
 			adc = <&adc_fan>;
 		};
+	};
+
+	vsby-psl-in-list {
+		/* Use PSL_IN1/2/3/4 as detection pins from hibernate mode */
+		psl-in-pads = <&psl_in1 &psl_in2 &psl_in3 &psl_in4>;
 	};
 
 	soc {
@@ -244,4 +257,21 @@
 
 &adc0 {
 	status = "okay";
+};
+
+/* Power switch logic input pads */
+&psl_in1 {
+	flag = <NPCX_PSL_RISING_EDGE>;
+};
+
+&psl_in2 {
+	flag = <NPCX_PSL_RISING_EDGE>;
+};
+
+&psl_in3 {
+	flag = <NPCX_PSL_FALLING_EDGE>;
+};
+
+&psl_in4 {
+	flag = <NPCX_PSL_RISING_EDGE>;
 };

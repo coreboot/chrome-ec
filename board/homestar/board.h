@@ -32,6 +32,9 @@
 /* Internal SPI flash on NPCX7 */
 #define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
 
+/* Switchcap */
+#define CONFIG_LN9310
+
 /* Battery */
 #define CONFIG_BATTERY_DEVICE_CHEMISTRY  "LION"
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
@@ -66,6 +69,7 @@
 #define GPIO_PMIC_RESIN_L GPIO_PM845_RESIN_L
 /* TODO(Dolan): check which pin was used for tablet mode detect */
 #define GMR_TABLET_MODE_GPIO_L GPIO_LID_OPEN_EC
+#define GPIO_SWITCHCAP_PG_INT_L GPIO_LN9310_INT
 
 #ifndef __ASSEMBLER__
 
@@ -101,10 +105,6 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
-/* Custom function to indicate if sourcing VBUS */
-int board_is_sourcing_vbus(int port);
-/* Enable VBUS sink for a given port */
-int board_vbus_sink_enable(int port, int enable);
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);

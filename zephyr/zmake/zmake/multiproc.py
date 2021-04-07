@@ -1,6 +1,7 @@
 # Copyright 2020 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+import collections
 import logging
 import os
 import select
@@ -19,8 +20,69 @@ on the screen.
 _logging_interrupt_pipe = os.pipe()
 # A condition variable used to synchronize logging operations.
 _logging_cv = threading.Condition()
-# A map of file descriptors to their logger/logging level tuple.
+# A map of file descriptors to their LogWriter
 _logging_map = {}
+
+
+def reset():
+    """Reset this module to its starting state (useful for tests)"""
+    global _logging_map
+
+    _logging_map = {}
+
+
+class LogWriter:
+    """Contains information about a file descriptor that is producing output
+
+    There is typically one of these for each file descriptor that a process is
+    writing to while running (stdout and stderr).
+
+    Properties:
+        _logger: The logger object to use.
+        _log_level: The logging level to use.
+        _override_func: A function used to override the log level. The
+            function will be called once per line prior to logging and will be
+            passed the arguments of the line and the default log level.
+        _written_at_level: dict:
+            key: log_level
+            value: True if output was written at that level
+    """
+    def __init__(self, logger, log_level, log_level_override_func):
+        self._logger = logger
+        self._log_level = log_level
+        self._override_func = log_level_override_func
+        # A map whether output was printed at each logging level
+        self._written_at_level = collections.defaultdict(lambda: False)
+
+    def log_line(self, line):
+        """Log a line of output
+
+        If the log-level override function requests a change in log level, that
+        causes self._log_level to be updated accordingly.
+
+        Args:
+            line: Text line to log
+        """
+        if self._override_func:
+            # Get the new log level and update the default. The reason we
+            # want to update the default is that if we hit an error, all
+            # future logging should be moved to the new logging level. This
+            # greatly simplifies the logic that is needed to update the log
+            # level.
+            self._log_level = self._override_func(line, self._log_level)
+        self._logger.log(self._log_level, line)
+        self._written_at_level[self._log_level] = True
+
+    def has_written(self, log_level):
+        """Check if output was written at a certain log level
+
+        Args:
+            log_level: log level to check
+
+        Returns:
+            True if any output was written at that log level, False if not
+        """
+        return self._written_at_level[log_level]
 
 
 def _log_fd(fd):
@@ -34,7 +96,7 @@ def _log_fd(fd):
     removed from the map as it is no longer valid.
     """
     with _logging_cv:
-        logger, log_level, log_level_override_func = _logging_map[fd]
+        writer = _logging_map[fd]
         if fd.closed:
             del _logging_map[fd]
             _logging_cv.notify_all()
@@ -47,15 +109,7 @@ def _log_fd(fd):
             return
         line = line.strip()
         if line:
-            if log_level_override_func:
-                # Get the new log level and update the default. The reason we
-                # want to update the default is that if we hit an error, all
-                # future logging should be moved to the new logging level. This
-                # greatly simplifies the logic that is needed to update the log
-                # level.
-                log_level = log_level_override_func(line, log_level)
-                _logging_map[fd] = (logger, log_level, log_level_override_func)
-            logger.log(log_level, line)
+            writer.log_line(line)
 
 
 def _prune_logging_fds():
@@ -76,8 +130,8 @@ def _logging_loop():
     """The primary logging thread loop.
 
     This is the entry point of the logging thread. It will listen for (1) any
-    new data on the output file descriptors that were added via log_output and
-    (2) any new file descriptors being added by log_output. Once a file
+    new data on the output file descriptors that were added via log_output() and
+    (2) any new file descriptors being added by log_output(). Once a file
     descriptor is ready to be read, this function will call _log_fd to perform
     the actual read and logging.
     """
@@ -93,7 +147,7 @@ def _logging_loop():
             _prune_logging_fds()
             continue
         if _logging_interrupt_pipe[0] in fds:
-            # We got a dummy byte sent by log_output, this is a signal used to
+            # We got a dummy byte sent by log_output(), this is a signal used to
             # break out of the blocking select.select call to tell us that the
             # file descriptor set has changed. We just need to read the byte and
             # remove this descriptor from the list. If we actually have data
@@ -118,17 +172,21 @@ def log_output(logger, log_level, file_descriptor,
         log_level_override_func: A function used to override the log level. The
           function will be called once per line prior to logging and will be
           passed the arguments of the line and the default log level.
+
+    Returns:
+        LogWriter object for the resulting output
     """
     with _logging_cv:
         if not _logging_thread.is_alive():
             _logging_thread.start()
-        _logging_map[file_descriptor] = (logger, log_level,
-                                         log_level_override_func)
+        writer = LogWriter(logger, log_level, log_level_override_func)
+        _logging_map[file_descriptor] = writer
         # Write a dummy byte to the pipe to break the select so we can add the
         # new fd.
         os.write(_logging_interrupt_pipe[1], b'x')
         # Notify the condition so we can run the select on the current fds.
         _logging_cv.notify_all()
+    return writer
 
 
 def wait_for_log_end():

@@ -45,26 +45,9 @@
 
 #define CONFIG_USB_MUX_IT5205
 
-/* Motion Sensors */
-#define CONFIG_ACCEL_KX022	/* Lid accel */
-#define CONFIG_ACCELGYRO_BMI160 /* Base accel */
-#define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-/* ICM426XX Base accel/gyro */
-#define CONFIG_ACCELGYRO_ICM426XX
-#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-#define CONFIG_ALS
-#define CONFIG_CMD_ACCEL_INFO
-
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
-
-#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
+#undef CONFIG_ACCEL_FIFO
+#undef CONFIG_ACCEL_FIFO_SIZE
+#undef CONFIG_ACCEL_FIFO_THRES
 
 /* I2C ports */
 #define I2C_PORT_BC12               IT83XX_I2C_CH_C
@@ -139,7 +122,6 @@ void emmc_ap_jump_to_bl(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void board_reset_pd_mcu(void);
 int board_get_version(void);
-int board_is_sourcing_vbus(int port);
 
 /* returns the i2c port number of charger/battery */
 int board_get_charger_i2c(void);

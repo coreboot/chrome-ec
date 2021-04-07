@@ -14,12 +14,6 @@
 #undef GPIO_VOLUME_DOWN_L
 #undef CONFIG_VOLUME_BUTTONS
 
-/*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
@@ -76,6 +70,7 @@
 #define CONFIG_USB_PD_TCPM_RAA489000
 #undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
 #define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
+#define CONFIG_USB_PD_COMM_LOCKED
 
 /* USB defines specific to external TCPCs */
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
@@ -166,8 +161,6 @@ enum battery_type {
 	BATTERY_SDI,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

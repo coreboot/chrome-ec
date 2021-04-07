@@ -173,11 +173,14 @@ enum pwm_channel {
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_POWER_TECH,
+	BATTERY_BYD,
+	BATTERY_LGC,
+	BATTERY_SWD_ATL,
+	BATTERY_SWD_COS,
+	BATTERY_SMP_ATL,
+	BATTERY_SMP_COS,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

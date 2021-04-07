@@ -629,12 +629,12 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(68),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(78),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(58),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 		[EC_TEMP_THRESH_HALT] = 0,
 	},
 	.temp_fan_off = C_TO_K(41),
@@ -1156,14 +1156,14 @@ __override void oz554_board_init(void)
 	case 0x00:
 		CPRINTS("PANEL_HAN01.10A");
 		oz554_set_config(0, 0xF3);
-		oz554_set_config(2, 0x55);
-		oz554_set_config(5, 0x87);
+		oz554_set_config(2, 0x4C);
+		oz554_set_config(5, 0xB7);
 		break;
 	case 0x02:
 		CPRINTS("PANEL_WF9_SSA2");
 		oz554_set_config(0, 0xF3);
-		oz554_set_config(2, 0x4C);
-		oz554_set_config(5, 0xB7);
+		oz554_set_config(2, 0x55);
+		oz554_set_config(5, 0x87);
 		break;
 	default:
 		CPRINTS("PANEL UNKNOWN");

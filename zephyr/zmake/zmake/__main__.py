@@ -106,6 +106,8 @@ def main(argv=None):
     build = sub.add_parser('build')
     build.add_argument('build_dir', type=pathlib.Path,
                        help='The build directory used during configuration')
+    build.add_argument('-w', '--fail-on-warnings', action='store_true',
+                       help='Exit with code 2 if warnings are detected')
 
     test = sub.add_parser('test')
     test.add_argument('build_dir', type=pathlib.Path,
@@ -114,6 +116,12 @@ def main(argv=None):
     testall = sub.add_parser('testall')
     testall.add_argument('--fail-fast', action='store_true',
                          help='stop testing after the first error')
+
+    coverage = sub.add_parser('coverage')
+    coverage.add_argument('--fail-fast', action='store_true',
+                         help='stop testing after the first error')
+    coverage.add_argument('build_dir', type=pathlib.Path,
+                      help='The build directory used during configuration')
 
     opts = parser.parse_args(argv)
 
