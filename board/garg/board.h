@@ -101,6 +101,7 @@ enum sensor_id {
 enum battery_type {
 	BATTERY_SIMPLO_SDI,
 	BATTERY_SIMPLO_BYD,
+	BATTERY_SIMPLO_CA475778G,
 	BATTERY_TYPE_COUNT,
 };
 
