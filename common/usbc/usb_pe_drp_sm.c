@@ -23,6 +23,7 @@
 #include "usb_dp_alt_mode.h"
 #include "usb_mode.h"
 #include "usb_pd_dpm.h"
+#include "usb_pd_policy.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_timer.h"
@@ -137,22 +138,20 @@
  * Flag to trigger a message resend after receiving a WAIT from port partner
  */
 #define PE_FLAGS_WAITING_PR_SWAP             BIT(23)
-/* FLAG to track if port partner is dualrole capable */
-#define PE_FLAGS_PORT_PARTNER_IS_DUALROLE    BIT(24)
 /* FLAG is set when an AMS is initiated locally. ie. AP requested a PR_SWAP */
-#define PE_FLAGS_LOCALLY_INITIATED_AMS       BIT(25)
+#define PE_FLAGS_LOCALLY_INITIATED_AMS       BIT(24)
 /* Flag to note the first message sent in PE_SRC_READY and PE_SNK_READY */
-#define PE_FLAGS_FIRST_MSG                   BIT(26)
+#define PE_FLAGS_FIRST_MSG                   BIT(25)
 /* Flag to continue a VDM request if it was interrupted */
-#define PE_FLAGS_VDM_REQUEST_CONTINUE        BIT(27)
+#define PE_FLAGS_VDM_REQUEST_CONTINUE        BIT(26)
 /* TODO: POLICY decision: Triggers a Vconn SWAP attempt to on */
-#define PE_FLAGS_VCONN_SWAP_TO_ON	     BIT(28)
+#define PE_FLAGS_VCONN_SWAP_TO_ON	     BIT(27)
 /* FLAG to track that VDM request to port partner timed out */
-#define PE_FLAGS_VDM_REQUEST_TIMEOUT	     BIT(29)
+#define PE_FLAGS_VDM_REQUEST_TIMEOUT	     BIT(28)
 /* FLAG to note message was discarded due to incoming message */
-#define PE_FLAGS_MSG_DISCARDED		     BIT(30)
+#define PE_FLAGS_MSG_DISCARDED		     BIT(29)
 /* FLAG to note that hard reset can't be performed due to battery low */
-#define PE_FLAGS_SNK_WAITING_BATT	     BIT(31)
+#define PE_FLAGS_SNK_WAITING_BATT	     BIT(30)
 
 /* Message flags which should not persist on returning to ready state */
 #define PE_FLAGS_READY_CLR		     (PE_FLAGS_LOCALLY_INITIATED_AMS \
@@ -1238,7 +1237,7 @@ __overridable bool pd_can_source_from_device(int port, const int pdo_cnt,
 
 	/* [virtual] allow_list */
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		uint32_t max_ma, max_mv, max_pdo, max_mw;
+		uint32_t max_ma, max_mv, max_pdo, max_mw, unused;
 
 		/*
 		 * Get max power that the partner offers (not necessarily what
@@ -1247,7 +1246,7 @@ __overridable bool pd_can_source_from_device(int port, const int pdo_cnt,
 		pd_find_pdo_index(pdo_cnt, pdos,
 				  PD_REV3_MAX_VOLTAGE,
 				  &max_pdo);
-		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv);
+		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv, &unused);
 		max_mw = max_ma * max_mv / 1000;
 
 		if (max_mw >= PD_DRP_CHARGE_POWER_MIN)
@@ -1741,20 +1740,11 @@ static void pe_update_src_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
 		if (pd_can_source_from_device(port, pdo_cnt, pdos)) {
-			PE_CLR_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
 			charge_manager_update_dualrole(port, CAP_DEDICATED);
 		} else {
-			PE_SET_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
 			charge_manager_update_dualrole(port, CAP_DUALROLE);
 		}
 	}
-
-	/*
-	 * If port policy preference is to be a power role source, then request
-	 * a power role swap.
-	 */
-	if (!pd_can_source_from_device(port, pdo_cnt, pdos))
-		pd_request_power_swap(port);
 }
 
 void pd_request_power_swap(int port)
@@ -1769,11 +1759,6 @@ void pd_request_power_swap(int port)
 	 */
 	pe[port].src_snk_pr_swap_counter = 0;
 	pd_dpm_request(port, DPM_REQUEST_PR_SWAP);
-}
-
-int pd_is_port_partner_dualrole(int port)
-{
-	return PE_CHK_FLAG(port, PE_FLAGS_PORT_PARTNER_IS_DUALROLE);
 }
 
 /* The function returns true if there is a PE state change, false otherwise */
@@ -1806,29 +1791,23 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 	if (PE_CHK_FLAG(port, PE_FLAGS_VDM_SETUP_DONE))
 		return false;
 
-	/*
-	 * TODO: POLICY decision: move policy functionality out to a separate
-	 * file.  For now, try once to become DFP/Vconn source
-	 */
-	if (PE_CHK_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP)) {
+	/* Apply Port Discovery DR Swap Policy */
+	if (port_discovery_dr_swap_policy(port, pe[port].data_role,
+			PE_CHK_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP))) {
+		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 		PE_CLR_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP);
-
-		if (pe[port].data_role == PD_ROLE_UFP) {
-			PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-			set_state_pe(port, PE_DRS_SEND_SWAP);
-			return true;
-		}
+		set_state_pe(port, PE_DRS_SEND_SWAP);
+		return true;
 	}
 
+	/* Apply Port Discovery VCONN Swap Policy */
 	if (IS_ENABLED(CONFIG_USBC_VCONN) &&
-			PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON)) {
+			port_discovery_vconn_swap_policy(port,
+			PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON))) {
+		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 		PE_CLR_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
-
-		if (!tc_is_vconn_src(port)) {
-			PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-			set_state_pe(port, PE_VCS_SEND_SWAP);
-			return true;
-		}
+		set_state_pe(port, PE_VCS_SEND_SWAP);
+		return true;
 	}
 
 	/* If mode entry was successful, disable the timer */
@@ -3087,8 +3066,14 @@ static void pe_snk_evaluate_capability_entry(int port)
 	/* Parse source caps if they have changed */
 	if (pe[port].src_cap_cnt != num ||
 	    memcmp(pdo, pe[port].src_caps, num << 2))
-		pe_update_src_pdo_flags(port, num, pdo);
+		/*
+		 * If port policy preference is to be a power role source,
+		 * then request a power role swap.
+		 */
+		if (!pd_can_source_from_device(port, num, pdo))
+			pd_request_power_swap(port);
 
+	pe_update_src_pdo_flags(port, num, pdo);
 	pd_set_src_caps(port, num, pdo);
 
 	/* Evaluate the options based on supplied capabilities */
@@ -4932,10 +4917,11 @@ static void pe_bist_tx_entry(int port)
 	/* Get the current nominal VBUS value */
 	if (pe[port].power_role == PD_ROLE_SOURCE) {
 		const uint32_t *src_pdo;
+		uint32_t unused;
 
 		dpm_get_source_pdo(&src_pdo, port);
 		pd_extract_pdo_power(src_pdo[pe[port].requested_idx - 1],
-				     &ibus_ma, &vbus_mv);
+				     &ibus_ma, &vbus_mv, &unused);
 	} else {
 		vbus_mv = pe[port].supply_voltage;
 	}
@@ -6727,6 +6713,11 @@ static void pe_dr_src_get_source_cap_run(int port)
 					(uint32_t *)rx_emsg[port].buf;
 
 				pd_set_src_caps(port, cnt, payload);
+
+				/*
+				 * If we'd prefer to charge from this partner,
+				 * then propose a PR swap.
+				 */
 				if (pd_can_source_from_device(port, cnt,
 							      payload))
 					pd_request_power_swap(port);

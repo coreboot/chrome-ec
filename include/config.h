@@ -1411,6 +1411,7 @@
 #undef  CONFIG_CMD_RTC
 #undef  CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
+#undef	CONFIG_CMD_S5_TIMEOUT
 #undef  CONFIG_CMD_SCRATCHPAD
 #undef	CONFIG_CMD_SEVEN_SEG_DISPLAY
 #define CONFIG_CMD_SHMEM
@@ -4818,6 +4819,12 @@
  * Should be defined with one of the tcpc_rp_value.
  */
 #undef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
+
+/*
+ * Ignore all non-fixed PDOs received from a src_caps message. Enable this for
+ * boards (like servo_v4) which only support FIXED PDO types.
+ */
+#undef CONFIG_USB_PD_ONLY_FIXED_PDOS
 
 /*
  * Total current in mA the board can supply to external devices through

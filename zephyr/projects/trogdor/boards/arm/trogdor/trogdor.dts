@@ -34,27 +34,53 @@
 
 		power {
 			i2c-port = <&i2c0_0>;
+			enum-name = "I2C_PORT_POWER";
 			label = "POWER";
+		};
+		battery {
+			i2c-port = <&i2c0_0>;
+			enum-name = "I2C_PORT_BATTERY";
+			label = "BATTERY";
+		};
+		virtual {
+			i2c-port = <&i2c0_0>;
+			enum-name = "I2C_PORT_VIRTUAL";
+			label = "VIRTUAL";
+		};
+		charger {
+			i2c-port = <&i2c0_0>;
+			enum-name = "I2C_PORT_CHARGER";
+			label = "CHARGER";
 		};
 		tcpc0 {
 			i2c-port = <&i2c1_0>;
+			enum-name = "I2C_PORT_TCPC0";
 			label = "TCPC0";
 		};
 		tcpc1 {
 			i2c-port = <&i2c2_0>;
+			enum-name = "I2C_PORT_TCPC1";
 			label = "TCPC1";
 		};
 		wlc {
 			i2c-port = <&i2c3_0>;
+			enum-name = "I2C_PORT_WLC";
 			label = "WLC";
 		};
 		eeprom {
 			i2c-port = <&i2c5_0>;
+			enum-name = "I2C_PORT_EEPROM";
 			label = "EEPROM";
 		};
 		sensor {
 			i2c-port = <&i2c7_0>;
+			enum-name = "I2C_PORT_SENSOR";
 			label = "SENSOR";
+		};
+		accel {
+			i2c-port = <&i2c7_0>;
+			enum-name = "I2C_PORT_ACCEL";
+			label = "ACCEL";
 		};
 	};
 
@@ -107,11 +133,11 @@
 		};
 	};
 
-	def_lvol_io_list {
+	def-lvol-io-list {
 		compatible = "nuvoton,npcx-lvolctrl-def";
 
 		/* I2C_SDA0 & SCL0 */
-		lvol_io_pads = <&lvol_iob4 &lvol_iob5>;
+		lvol-io-pads = <&lvol_iob4 &lvol_iob5>;
 	};
 
 	soc {
@@ -176,6 +202,12 @@
 &i2c0_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	isl9238: isl9238@9 {
+		compatible = "intersil,isl9238";
+		reg = <0x09>;
+		label = "ISL9238_CHARGER";
+	};
 };
 
 &i2c1_0 {

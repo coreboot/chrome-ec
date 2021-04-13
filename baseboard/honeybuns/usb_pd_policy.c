@@ -66,6 +66,41 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 	return pdo_cnt;
 }
 
+/*
+ * Default Port Discovery DR Swap Policy.
+ *
+ * 1) If port == 0 and port data role is DFP, transition to pe_drs_send_swap
+ * 2) If port == 1 and port data role is UFP, transition to pe_drs_send_swap
+ */
+__override bool port_discovery_dr_swap_policy(int port,
+			enum pd_data_role dr, bool dr_swap_flag)
+{
+	/*
+	 * Port0: test if role is DFP
+	 * Port1: test if role is UFP
+	 */
+	enum pd_data_role role_test =
+		(port == USB_PD_PORT_HOST) ? PD_ROLE_DFP : PD_ROLE_UFP;
+
+	if (dr == role_test)
+		return true;
+
+	/* Do not perform a DR swap */
+	return false;
+}
+
+/*
+ * Default Port Discovery VCONN Swap Policy.
+ *
+ * 1) Never perform VCONN swap
+ */
+__override bool port_discovery_vconn_swap_policy(int port,
+			bool vconn_swap_flag)
+{
+	/* Do not perform a VCONN swap */
+	return false;
+}
+
 int pd_check_vconn_swap(int port)
 {
 	/*TODO: Dock is the Vconn source */
@@ -122,7 +157,7 @@ void pd_transition_voltage(int idx)
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
 
 	if (port == USB_PD_PORT_HOST) {
-		int mv;
+		int mv, unused_mv;
 		int ma;
 		int vbus_hi;
 		int vbus_lo;
@@ -133,7 +168,8 @@ void pd_transition_voltage(int idx)
 	 * by the PDO requested by sink. Note that USB PD uses idx = 1 for 1st
 	 * PDO of SRC_CAP which must always be 5V fixed supply.
 	 */
-		pd_extract_pdo_power(pd_src_host_pdo[idx - 1], &ma, &mv);
+		pd_extract_pdo_power(pd_src_host_pdo[idx - 1], &ma, &mv,
+				     &unused_mv);
 
 		/* Set VBUS level to value specified in the requested PDO */
 		mp4245_set_voltage_out(mv);

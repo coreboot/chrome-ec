@@ -23,7 +23,7 @@
 #define CONFIG_SPI_FLASH_REGS
 #define CONFIG_SPI_FLASH_W25Q40 /* Internal SPI flash type. */
 
-#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_HOSTCMD)))
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_HOSTCMD) | CC_MASK(CC_LPC)))
 
 /*
  * Enable 1 slot of secure temporary storage to support
@@ -96,7 +96,6 @@
 #define CONFIG_EXTPOWER_DEBOUNCE_MS 200
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_POWER_COMMON
-#define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_POWER_BUTTON_TO_PCH_CUSTOM

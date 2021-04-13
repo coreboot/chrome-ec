@@ -11,11 +11,13 @@
 
 #ifdef CONFIG_PLATFORM_EC_I2C
 #if DT_NODE_EXISTS(DT_PATH(named_i2c_ports))
-#define I2C_PORT(id) DT_CAT(I2C_, id)
+
+#define I2C_PORT(id) DT_ENUM_UPPER_TOKEN(id, enum_name)
 #define I2C_PORT_WITH_COMMA(id) I2C_PORT(id),
+
 enum i2c_ports {
-DT_FOREACH_CHILD(DT_PATH(named_i2c_ports), I2C_PORT_WITH_COMMA)
-I2C_PORT_COUNT
+	DT_FOREACH_CHILD(DT_PATH(named_i2c_ports), I2C_PORT_WITH_COMMA)
+		I2C_PORT_COUNT
 };
 #define NAMED_I2C(name) I2C_PORT(DT_PATH(named_i2c_ports, name))
 #endif /* named_i2c_ports */

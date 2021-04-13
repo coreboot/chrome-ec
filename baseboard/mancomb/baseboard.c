@@ -21,6 +21,8 @@
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
 #include "driver/usb_mux/amd_fp6.h"
+#include "fan.h"
+#include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -202,7 +204,8 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		.temp_fan_off = C_TO_K(32),
+		/* TODO: Setting fan off to 0 so it's always on */
+		.temp_fan_off = C_TO_K(0),
 		.temp_fan_max = C_TO_K(75),
 	},
 	[TEMP_SENSOR_MEMORY] = {
@@ -227,17 +230,7 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_fan_off = 0,
 		.temp_fan_max = 0,
 	},
-	[TEMP_SENSOR_CPU] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
-	},
+	/* TODO: TEMP_SENSOR_CPU */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -290,6 +283,13 @@ static void baseboard_interrupt_init(void)
 	/* Enable SBU fault interrupts */
 	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
 	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_ODL);
+
+	/* Enable USB-A fault interrupts */
+	gpio_enable_interrupt(GPIO_USB_A4_FAULT_R_ODL);
+	gpio_enable_interrupt(GPIO_USB_A3_FAULT_R_ODL);
+	gpio_enable_interrupt(GPIO_USB_A2_FAULT_R_ODL);
+	gpio_enable_interrupt(GPIO_USB_A1_FAULT_R_ODL);
+	gpio_enable_interrupt(GPIO_USB_A0_FAULT_R_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -397,6 +397,36 @@ const struct pwm_t pwm_channels[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+const struct mft_t mft_channels[] = {
+	[MFT_CH_0] = {
+		.module = NPCX_MFT_MODULE_1,
+		.clk_src = TCKC_LFCLK,
+		.pwm_id = PWM_CH_FAN,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
+
+const struct fan_conf fan_conf_0 = {
+	.flags = FAN_USE_RPM_MODE,
+	.ch = MFT_CH_0,	/* Use MFT id to control fan */
+	.pgood_gpio = -1,
+	.enable_gpio = -1,
+};
+
+const struct fan_rpm fan_rpm_0 = {
+	.rpm_min = 1800,
+	.rpm_start = 3000,
+	.rpm_max = 5200,
+};
+
+const struct fan_t fans[] = {
+	[FAN_CH_0] = {
+		.conf = &fan_conf_0,
+		.rpm = &fan_rpm_0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
 
 /*
  * USB C0/C1 port SBU mux use standalone FSUSB42UMX
@@ -695,17 +725,48 @@ static void baseboard_chipset_resume(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
 
+static bool ocp_tracker[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+static void set_usb_fault_output(void)
+{
+	bool fault_present = false;
+	int i;
+
+	/*
+	 * EC must OR all fault alerts and pass them to USB_FAULT_ODL, including
+	 * overcurrents.
+	 */
+	for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		if (ocp_tracker[i])
+			fault_present = true;
+
+	fault_present = fault_present ||
+			!gpio_get_level(GPIO_USB_A4_FAULT_R_ODL) ||
+			!gpio_get_level(GPIO_USB_A3_FAULT_R_ODL) ||
+			!gpio_get_level(GPIO_USB_A2_FAULT_R_ODL) ||
+			!gpio_get_level(GPIO_USB_A1_FAULT_R_ODL) ||
+			!gpio_get_level(GPIO_USB_A0_FAULT_R_ODL);
+
+	gpio_set_level(GPIO_USB_FAULT_ODL, !fault_present);
+}
+
 void board_overcurrent_event(int port, int is_overcurrented)
 {
 	switch (port) {
 	case USBC_PORT_C0:
 	case USBC_PORT_C1:
-		gpio_set_level(GPIO_USB_C0_C1_FAULT_ODL, !is_overcurrented);
+		ocp_tracker[port] = is_overcurrented;
+		set_usb_fault_output();
 		break;
 
 	default:
 		break;
 	}
+}
+
+void baseboard_usb_fault_alert(enum gpio_signal signal)
+{
+	set_usb_fault_output();
 }
 
 void baseboard_en_pwr_pcore_s0(enum gpio_signal signal)

@@ -158,7 +158,7 @@ static int bq25710_adc_start(int chgnum, int adc_en_mask)
 {
 	int reg;
 	int mode;
-	int tries_left = 8;
+	int tries_left = BQ25710_ADC_OPTION_ADC_CONV_MS;
 
 	/* Save current mode to restore same state after ADC read */
 	if (bq25710_get_low_power_mode(chgnum, &mode))
@@ -179,10 +179,12 @@ static int bq25710_adc_start(int chgnum, int adc_en_mask)
 
 	/*
 	 * Wait until the ADC operation completes. The spec says typical
-	 * conversion time is 10 msec. If low power mode isn't exited first,
-	 * then the conversion time jumps to ~60 msec.
+	 * conversion time is 10 msec (25 msec on bq25720). If low power
+	 * mode isn't exited first, then the conversion time jumps to
+	 * ~60 msec.
 	 */
 	do {
+		/* sleep 2 ms so we time out after 2x the expected time */
 		msleep(2);
 		raw_read16(chgnum, BQ25710_REG_ADC_OPTION, &reg);
 	} while (--tries_left && (reg & BQ25710_ADC_OPTION_ADC_START));
@@ -660,6 +662,7 @@ static int console_bq25710_dump_regs(int argc, char **argv)
 		BQ25710_REG_PROCHOT_OPTION_1,
 		BQ25710_REG_ADC_OPTION,
 #ifdef CONFIG_CHARGER_BQ25720
+		BQ25720_REG_CHARGE_OPTION_4,
 		BQ25720_REG_VMIN_ACTIVE_PROTECTION,
 #endif
 		BQ25710_REG_CHARGER_STATUS,
@@ -669,7 +672,6 @@ static int console_bq25710_dump_regs(int argc, char **argv)
 		BQ25710_REG_ADC_IBAT,
 		BQ25710_REG_ADC_CMPIN_IIN,
 		BQ25710_REG_ADC_VSYS_VBAT,
-		BQ25710_REG_PROCHOT_OPTION_1,
 		BQ25710_REG_OTG_VOLTAGE,
 		BQ25710_REG_OTG_CURRENT,
 		BQ25710_REG_INPUT_VOLTAGE,

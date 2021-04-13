@@ -121,6 +121,8 @@ class Zmake:
     parameter.
 
     Properties:
+        executor: a zmake.multiproc.Executor object for submitting
+            tasks to.
         _sequential: True to check the results of each build job sequentially,
             before launching more, False to just do this after all jobs complete
     """
@@ -145,6 +147,7 @@ class Zmake:
                 self.jobserver = zmake.jobserver.GNUMakeJobServer(jobs=jobs)
 
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.executor = zmake.multiproc.Executor()
         self._sequential = jobs == 1
 
     @property
@@ -375,14 +378,13 @@ class Zmake:
                 raise OSError(get_process_failure_msg(proc))
         return 0
 
-    def _run_pytest(self, executor, directory):
+    def _run_pytest(self, directory):
         """Run pytest on a given directory.
 
         This is a utility function to help parallelize running pytest on
         multiple directories.
 
         Args:
-            executor: a multiproc.Executor object.
             directory: The directory that we should search for tests in.
         """
         def get_log_level(line, current_log_level):
@@ -415,11 +417,10 @@ class Zmake:
                 return rv
 
         for test_file in directory.glob('test_*.py'):
-            executor.append(func=lambda: run_test(test_file))
+            self.executor.append(func=lambda f=test_file: run_test(f))
 
-    def testall(self, fail_fast=False):
+    def testall(self):
         """Test all the valid test targets"""
-        executor = zmake.multiproc.Executor(fail_fast=fail_fast)
         tmp_dirs = []
         for project in zmake.project.find_projects(
                 self.module_paths['ec'] / 'zephyr'):
@@ -430,7 +431,7 @@ class Zmake:
                 prefix='zbuild-')
             tmp_dirs.append(temp_build_dir)
             # Configure and run the test.
-            executor.append(
+            self.executor.append(
                 func=lambda: self.configure(
                     project_dir=project.project_dir,
                     build_dir=pathlib.Path(temp_build_dir),
@@ -439,9 +440,9 @@ class Zmake:
 
         # Run pytest on platform/ec/zephyr/zmake/tests.
         self._run_pytest(
-            executor, self.module_paths['ec'] / 'zephyr' / 'zmake' / 'tests')
+            self.module_paths['ec'] / 'zephyr' / 'zmake' / 'tests')
 
-        rv = executor.wait()
+        rv = self.executor.wait()
         for tmpdir in tmp_dirs:
             shutil.rmtree(tmpdir)
         return rv
@@ -461,7 +462,6 @@ class Zmake:
             if initial:
                 cmd += ['-i']
             proc = self.jobserver.popen(cmd,
-                                        claim_job=False,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
                                         encoding='utf-8',
@@ -506,7 +506,6 @@ class Zmake:
                 ['/usr/bin/ninja', '-C', dirs[build_name], 'all.libraries'],
                 # Ninja will connect as a job client instead and claim
                 # many jobs.
-                claim_job=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
@@ -538,9 +537,8 @@ class Zmake:
             return rv
         return self._run_lcov(build_dir, lcov_file, initial=False)
 
-    def coverage(self, build_dir, fail_fast=False):
+    def coverage(self, build_dir):
         """Builds all targets with coverage enabled, and then runs the tests."""
-        executor = zmake.multiproc.Executor(fail_fast=fail_fast)
         all_lcov_files = []
         root_dir = self.module_paths['ec'] / 'zephyr'
         for project in zmake.project.find_projects(root_dir):
@@ -552,20 +550,20 @@ class Zmake:
             all_lcov_files.append(lcov_file)
             if is_test:
                 # Configure and run the test.
-                executor.append(
+                self.executor.append(
                     func=lambda: self._coverage_run_test(
                         project,
                         project_build_dir,
                         lcov_file))
             else:
                 # Configure and compile the non-test project.
-                executor.append(
+                self.executor.append(
                     func=lambda: self._coverage_compile_only(
                         project,
                         project_build_dir,
                         lcov_file))
 
-        rv = executor.wait()
+        rv = self.executor.wait()
         if rv:
             return rv
 
@@ -574,7 +572,6 @@ class Zmake:
             proc = self.jobserver.popen(
                 [self.module_paths['ec'] /
                  'util/getversion.sh'],
-                claim_job=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
@@ -588,6 +585,23 @@ class Zmake:
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
 
+            # Merge info files into a single lcov.info
+            self.logger.info("Merging coverage data into %s.",
+                             build_dir / 'lcov.info')
+            cmd = ['/usr/bin/lcov', '-o', build_dir / 'lcov.info']
+            for info in all_lcov_files:
+                cmd += ['-a', info]
+            proc = self.jobserver.popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                encoding='utf-8',
+                errors='replace')
+            zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
+            zmake.multiproc.log_output(self.logger, logging.DEBUG, proc.stdout)
+            if proc.wait():
+                raise OSError(get_process_failure_msg(proc))
+
             # Merge into a nice html report
             self.logger.info("Creating coverage report %s.",
                              build_dir / 'coverage_rpt')
@@ -596,7 +610,6 @@ class Zmake:
                  build_dir / 'coverage_rpt', '-t',
                  "Zephyr EC Unittest {}".format(version), '-p',
                  self.checkout / 'src', '-s'] + all_lcov_files,
-                claim_job=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 encoding='utf-8',

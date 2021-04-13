@@ -114,12 +114,8 @@ def main(argv=None):
                       help='The build directory used during configuration')
 
     testall = sub.add_parser('testall')
-    testall.add_argument('--fail-fast', action='store_true',
-                         help='stop testing after the first error')
 
     coverage = sub.add_parser('coverage')
-    coverage.add_argument('--fail-fast', action='store_true',
-                         help='stop testing after the first error')
     coverage.add_argument('build_dir', type=pathlib.Path,
                       help='The build directory used during configuration')
 
@@ -134,11 +130,13 @@ def main(argv=None):
     if not opts.debug:
         sys.tracebacklimit = 0
 
-    zmake = call_with_namespace(zm.Zmake, opts)
-    subcommand_method = getattr(zmake, opts.subcommand.replace('-', '_'))
-    result = call_with_namespace(subcommand_method, opts)
-    multiproc.wait_for_log_end()
-    return result
+    try:
+        zmake = call_with_namespace(zm.Zmake, opts)
+        subcommand_method = getattr(zmake, opts.subcommand.replace('-', '_'))
+        result = call_with_namespace(subcommand_method, opts)
+        return result
+    finally:
+        multiproc.wait_for_log_end()
 
 
 if __name__ == '__main__':
