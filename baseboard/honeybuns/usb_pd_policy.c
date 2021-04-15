@@ -228,6 +228,18 @@ int pd_check_power_swap(int port)
 	return 0;
 }
 
+__override bool pd_can_source_from_device(int port, const int pdo_cnt,
+				      const uint32_t *pdos)
+{
+	/*
+	 * This function is called to determine if this port can be charged by
+	 * the port partner. We always want to be a power role source, so always
+	 * return false.
+	 */
+
+	return false;
+}
+
 static int vdm_is_dp_enabled(int port)
 {
 	mux_state_t mux_state = usb_mux_get(port);
@@ -326,17 +338,7 @@ static int amode_dp_status(int port, uint32_t *payload)
 {
 	int opos = PD_VDO_OPOS(payload[0]);
 	int hpd = gpio_get_level(GPIO_DP_HPD);
-	uint32_t fw_config;
-	int mf = 0;
-	int rv;
-
-	/* MF (multi function) preferece is indicated by bit 0 of the fw_config
-	 * data field. If this data field does not exist, then default to 4 lane
-	 * mode.
-	 */
-	rv = cbi_get_fw_config(&fw_config);
-	if (!rv)
-		mf = fw_config & 1;
+	int mf = dock_get_mf_preference();
 
 	if (opos != OPOS_DP)
 		return 0; /* nak */

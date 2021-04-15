@@ -5002,11 +5002,15 @@
 /* Watchdog period in ms; see also AUX_TIMER_PERIOD_MS */
 #define CONFIG_WATCHDOG_PERIOD_MS 1600
 
+/* The leading time of watchdog warning timer. */
+#define CONFIG_WATCHDOG_WARNING_LEADING_TIME_MS 500
+
 /*
- * Fire auxiliary timer 500ms before watchdog timer expires. This leaves
- * some time for debug trace to be printed.
+ * Fire auxiliary timer before watchdog timer expires. This leaves some time for
+ * debug trace to be printed.
  */
-#define CONFIG_AUX_TIMER_PERIOD_MS (CONFIG_WATCHDOG_PERIOD_MS - 500)
+#define CONFIG_AUX_TIMER_PERIOD_MS \
+	(CONFIG_WATCHDOG_PERIOD_MS - CONFIG_WATCHDOG_WARNING_LEADING_TIME_MS)
 
 /*****************************************************************************/
 /* WebUSB config */
@@ -5082,8 +5086,8 @@
 #undef CONFIG_EXTENDED_VERSION_INFO
 
 /*
- * Define this to enable Cros Board Info support. I2C_EEPROM_PORT and
- * I2C_EEPROM_ADDR must be defined as well.
+ * Define this to enable Cros Board Info support. I2C_PORT_EEPROM and
+ * I2C_ADDR_EEPROM_FLAGS must be defined as well.
  */
 #undef CONFIG_CROS_BOARD_INFO
 
@@ -5959,7 +5963,7 @@
  * reloads of the watchdog timer should be less than half of the watchdog
  * period.
  */
-#if !defined(CONFIG_ZEPHYR) && defined(CONFIG_WATCHDOG)
+#ifdef CONFIG_WATCHDOG
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
 #endif
