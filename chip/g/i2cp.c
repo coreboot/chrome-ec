@@ -378,7 +378,9 @@ void i2cp_post_read_fill_fifo(uint8_t *buffer, size_t len)
 		REGISTER_FILE_MASK;
 
 	/* Insert bytes until fifo is word aligned */
-	if (remainder_bytes) {
+	if (remainder_bytes && len) {
+		if (len < remainder_bytes)
+			remainder_bytes = len;
 		/* mask the bytes to be kept */
 		word_out_value = value_addr[addr_offset];
 		word_out_value &= (1 << (8 * start_offset)) - 1;
