@@ -462,8 +462,8 @@ static int command_ccd_state(int argc, char **argv)
 	print_ap_state();
 	print_ap_uart_state();
 	print_ec_state();
-	print_rdd_state();
 	print_servo_state();
+	print_rdd_state();
 
 	ccprintf("CCD EXT: %s\n",
 		 ccd_ext_is_enabled() ? "enabled" : "disabled");
