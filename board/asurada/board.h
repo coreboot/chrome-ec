@@ -10,10 +10,8 @@
 #include "baseboard.h"
 
 /* Chipset config */
-#define CONFIG_BRINGUP
 
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_LTO
 
 /*
@@ -106,7 +104,7 @@ enum sensor_id {
 };
 
 enum adc_channel {
-	ADC_VBUS,                /* ADC 0 */
+	ADC_VBUS_C0,             /* ADC 0 */
 	ADC_BOARD_ID_0,          /* ADC 1 */
 	ADC_BOARD_ID_1,          /* ADC 2 */
 	ADC_CHARGER_AMON_R,      /* ADC 3 */

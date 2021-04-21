@@ -27,11 +27,13 @@
 #define EC_CROS_GPIO_INTERRUPTS                                               \
 	GPIO_INT(GPIO_AC_PRESENT, GPIO_INT_EDGE_BOTH, extpower_interrupt)     \
 	GPIO_INT(GPIO_LID_OPEN, GPIO_INT_EDGE_BOTH, lid_interrupt)            \
+	GPIO_INT(GPIO_WP_L, GPIO_INT_EDGE_BOTH, switch_interrupt)             \
 	GPIO_INT(GPIO_POWER_BUTTON_L, GPIO_INT_EDGE_BOTH,                     \
 		 power_button_interrupt)                                      \
 	GPIO_INT(GPIO_VOLUME_DOWN_L, GPIO_INT_EDGE_BOTH, button_interrupt)    \
 	GPIO_INT(GPIO_VOLUME_UP_L, GPIO_INT_EDGE_BOTH, button_interrupt)      \
-	GPIO_INT(GPIO_SWITCHCAP_PG_INT_L, GPIO_INT_FALLING, ln9310_interrupt) \
+	GPIO_INT(GPIO_SWITCHCAP_PG_INT_L, GPIO_INT_EDGE_FALLING,              \
+		 ln9310_interrupt)                                            \
 	GPIO_INT(GPIO_AP_RST_L, GPIO_INT_EDGE_BOTH, power_signal_interrupt)   \
 	GPIO_INT(GPIO_AP_SUSPEND, GPIO_INT_EDGE_BOTH, power_signal_interrupt) \
 	GPIO_INT(GPIO_DEPRECATED_AP_RST_REQ, GPIO_INT_EDGE_BOTH,              \
@@ -40,14 +42,18 @@
 	GPIO_INT(GPIO_PS_HOLD, GPIO_INT_EDGE_BOTH, power_signal_interrupt)    \
 	GPIO_INT(GPIO_WARM_RESET_L, GPIO_INT_EDGE_BOTH,                       \
 		 power_signal_interrupt)                                      \
-	GPIO_INT(GPIO_USB_C0_PD_INT_ODL, GPIO_INT_FALLING, tcpc_alert_event)  \
-	GPIO_INT(GPIO_USB_C1_PD_INT_ODL, GPIO_INT_FALLING, tcpc_alert_event)  \
-	GPIO_INT(GPIO_USB_C0_SWCTL_INT_ODL, GPIO_INT_FALLING, ppc_interrupt)  \
-	GPIO_INT(GPIO_USB_C1_SWCTL_INT_ODL, GPIO_INT_FALLING, ppc_interrupt)  \
-	GPIO_INT(GPIO_USB_C0_BC12_INT_L, GPIO_INT_FALLING, usb0_evt)          \
-	GPIO_INT(GPIO_USB_C1_BC12_INT_L, GPIO_INT_FALLING, usb1_evt)          \
-	GPIO_INT(GPIO_USB_A0_OC_ODL, GPIO_INT_BOTH, usba_oc_interrupt)        \
-	GPIO_INT(GPIO_CCD_MODE_ODL, GPIO_INT_FALLING, board_connect_c0_sbu)
-
+	GPIO_INT(GPIO_USB_C0_PD_INT_ODL, GPIO_INT_EDGE_FALLING,               \
+		 tcpc_alert_event)                                            \
+	GPIO_INT(GPIO_USB_C1_PD_INT_ODL, GPIO_INT_EDGE_FALLING,               \
+		 tcpc_alert_event)                                            \
+	GPIO_INT(GPIO_USB_C0_SWCTL_INT_ODL, GPIO_INT_EDGE_FALLING,            \
+		 ppc_interrupt)                                               \
+	GPIO_INT(GPIO_USB_C1_SWCTL_INT_ODL, GPIO_INT_EDGE_FALLING,            \
+		 ppc_interrupt)                                               \
+	GPIO_INT(GPIO_USB_C0_BC12_INT_L, GPIO_INT_EDGE_FALLING, usb0_evt)     \
+	GPIO_INT(GPIO_USB_C1_BC12_INT_L, GPIO_INT_EDGE_FALLING, usb1_evt)     \
+	GPIO_INT(GPIO_USB_A0_OC_ODL, GPIO_INT_EDGE_BOTH, usba_oc_interrupt)   \
+	GPIO_INT(GPIO_CCD_MODE_ODL, GPIO_INT_EDGE_FALLING,                    \
+		 board_connect_c0_sbu)
 
 #endif /* __ZEPHYR_GPIO_MAP_H */

@@ -124,6 +124,22 @@
 #undef CONFIG_ACCELGYRO_LSM6DSM
 #undef CONFIG_ACCELGYRO_LSM6DSO
 
+/* Select the communication mode for the accelgyro ICM. Only one of these should
+ * be set. To set the value manually, simply define one or the other. If neither
+ * is defined, but I2C_PORT_ACCEL is defined, then CONFIG_ACCELGYRO_ICM_I2C will
+ * automatically be set.
+ */
+#undef CONFIG_ACCELGYRO_ICM_COMM_SPI
+#undef CONFIG_ACCELGYRO_ICM_COMM_I2C
+
+/* Select the communication mode for the accelgyro BMI. Only one of these should
+ * be set. To set the value manually, simply define one or the other. If neither
+ * is defined, but I2C_PORT_ACCEL is defined, then CONFIG_ACCELGYRO_BMI_I2C will
+ * automatically be set.
+ */
+#undef CONFIG_ACCELGYRO_BMI_COMM_SPI
+#undef CONFIG_ACCELGYRO_BMI_COMM_I2C
+
 /*
  * Some chips have a portion of memory which will remain powered even
  * during a reset.  This is called Always-On, or AON memory, and
@@ -4006,6 +4022,9 @@
 /* Use this to include support for MP4245 buck boost converter */
 #undef CONFIG_MP4245
 
+/* Use this to include support for MP2964 IMVP9.1 PMIC */
+#undef CONFIG_MP2964
+
 /*****************************************************************************/
 /* USB PD config */
 
@@ -4303,6 +4322,9 @@
 /* Enable PCIE tunneling if Thunderbolt-Compatible mode is enabled*/
 #undef CONFIG_USB_PD_PCIE_TUNNELING
 
+/* Enable Power Path Control from PD */
+#undef CONFIG_USB_PD_PPC
+
 /*
  * The following two macros are ASCII text strings that matches what appears
  * in the USB-IF Product Registration form for this device. These macros are
@@ -4379,6 +4401,7 @@
 #undef CONFIG_USB_PD_TCPM_RT1715
 #undef CONFIG_USB_PD_TCPM_FUSB307
 #undef CONFIG_USB_PD_TCPM_STM32GX
+#undef CONFIG_USB_PD_TCPM_CCGXXF
 
 /* PS8XXX series are all supported by a single driver with a build time config
  * listed below (CONFIG_USB_PD_TCPM_PS*) defined to enable the specific product.
@@ -5516,6 +5539,13 @@
 #define CONFIG_USBC_PPC
 #endif /* "has a PPC" */
 
+/* Following chips use Power Path Control information from TCPC chip */
+#if defined(CONFIG_USBC_PPC_AOZ1380) || \
+	defined(CONFIG_USBC_PPC_NX20P3481) || \
+	defined(CONFIG_USBC_PPC_NX20P3483)
+#define CONFIG_USB_PD_PPC
+#endif
+
 /* The TI SN5S330 supports VCONN and needs to be informed of CC polarity */
 #if defined(CONFIG_USBC_PPC_SN5S330)
 #define CONFIG_USBC_PPC_POLARITY
@@ -5546,6 +5576,16 @@
 	!defined(CONFIG_SYV682X_NO_CC)
 #undef CONFIG_USB_PD_TCPC_VCONN
 #endif
+#endif
+
+/* CCGXXF standard default defines */
+#if defined(CONFIG_USB_PD_TCPM_CCGXXF)
+#define CONFIG_USB_PD_DISCHARGE_TCPC
+#define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#define CONFIG_USB_PD_PPC
+#define CONFIG_USB_PD_TCPC_LOW_POWER
+#define CONFIG_USB_PD_TCPM_TCPCI
+#define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #endif
 
 /*****************************************************************************/
@@ -6273,5 +6313,27 @@
 	!defined(CONFIG_VBOOT_HASH_RELOAD_WATCHDOG)
 #define CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
 #endif
+
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_ICM_COMM_SPI) && \
+	!defined(CONFIG_ACCELGYRO_ICM_COMM_I2C)
+#ifdef I2C_PORT_ACCEL
+#define CONFIG_ACCELGYRO_ICM_COMM_I2C
+#else
+#define CONFIG_ACCELGYRO_ICM_COMM_SPI
+#endif
+#endif	/* !CONFIG_ZEPHYR && !CONFIG_ACCELGYRO_ICM_COMM_SPI &&
+	 * !CONFIG_ACCELGYRO_ICM_COMM_I2C
+	 */
+
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_BMI_COMM_SPI) && \
+	!defined(CONFIG_ACCELGYRO_BMI_COMM_I2C)
+#ifdef I2C_PORT_ACCEL
+#define CONFIG_ACCELGYRO_BMI_COMM_I2C
+#else
+#define CONFIG_ACCELGYRO_BMI_COMM_SPI
+#endif
+#endif	/* !CONFIG_ZEPHYR && !CONFIG_ACCELGYRO_BMI_SPI && \
+	 * !CONFIG_ACCELGYRO_BMI_I2C
+	 */
 
 #endif  /* __CROS_EC_CONFIG_H */

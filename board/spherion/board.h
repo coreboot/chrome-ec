@@ -10,11 +10,10 @@
 #include "baseboard.h"
 
 /* Chipset config */
-#define CONFIG_BRINGUP
 
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_LTO
+#undef CONFIG_LOW_POWER_S0
 
 /*
  * TODO: Remove this option once the VBAT no longer keeps high when

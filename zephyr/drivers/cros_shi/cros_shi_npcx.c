@@ -54,7 +54,7 @@ LOG_MODULE_REGISTER(cros_shi, LOG_LEVEL_DBG);
  * practically want to run the SHI interface, since running it slower
  * significantly impacts firmware update times.
  */
-#define SHI_CMD_RX_TIMEOUT_US 8192
+#define SHI_CMD_RX_TIMEOUT_MS 9
 
 /*
  * The AP blindly clocks back bytes over the SPI interface looking for a
@@ -442,7 +442,7 @@ static void shi_parse_header(struct shi_reg *const inst)
 	DEBUG_CPRINTF("RV-");
 
 	/* Setup deadline time for receiving */
-	shi_params.rx_deadline = k_uptime_get() + SHI_CMD_RX_TIMEOUT_US;
+	shi_params.rx_deadline = k_uptime_get() + SHI_CMD_RX_TIMEOUT_MS;
 
 	/* Wait for version, command, length bytes */
 	if (!shi_read_inbuf_wait(inst, 3))
@@ -787,13 +787,13 @@ static int cros_shi_npcx_disable(const struct device *dev)
 	/* Configure pin-mux from SHI to GPIO. */
 	npcx_pinctrl_mux_configure(config->alts_list, config->alts_size, 0);
 
-	return 0;
-
 	/*
 	 * Allow deep sleep again in case CS dropped before ec was
 	 * informed in hook function and turn off SHI's interrupt in time.
 	 */
 	enable_sleep(SLEEP_MASK_SPI);
+
+	return 0;
 }
 
 static int shi_npcx_init(const struct device *dev)
