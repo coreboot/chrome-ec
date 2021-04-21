@@ -465,9 +465,7 @@ static int command_ccd_state(int argc, char **argv)
 	print_servo_state();
 	print_rdd_state();
 
-	ccprintf("CCD EXT: %s\n",
-		 ccd_ext_is_enabled() ? "enabled" : "disabled");
-
+	ccprintf("CCD_MODE:  %sasserted\n", ccd_ext_is_enabled() ? "" : "de");
 	ccprintf("State flags:");
 	print_state_flags(CC_COMMAND, get_state_flags());
 	ccprintf("\n");
