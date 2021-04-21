@@ -55,10 +55,10 @@ uint8_t rdd_is_detected(void)
 
 void print_rdd_state(void)
 {
-	ccprintf("Rdd:     %s%s\n",
-		 force_detected ? "keepalive" : device_state_name(state),
-		 ccd_get_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT) ? " (atboot)" :
-		 "");
+	ccprintf("Rdd:       %s\n", device_state_name(state));
+	ccprintf("KeepAlive: %sabled%s\n", force_detected ? "en" : "dis",
+		ccd_get_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT) ? " (atboot)" :
+		"");
 }
 
 /**
