@@ -5266,6 +5266,16 @@ struct ec_response_rollback_info {
 /* Issue AP reset */
 #define EC_CMD_AP_RESET 0x0125
 
+
+#define EC_CMD_DISPLAY_SOC 0x0137
+
+struct ec_response_display_soc {
+	int16_t display_soc;  /* Display charge in 10ths of a % (1000=100.0%) */
+	int16_t full_factor;  /* Full factor in 10ths of a % (1000=100.0%) */
+	int16_t shutdown_soc; /* Shutdown SoC in 10ths of a % (1000=100.0%) */
+} __ec_align2;
+
+
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */
 
