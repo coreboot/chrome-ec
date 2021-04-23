@@ -29,11 +29,12 @@
 #define LED_OFF_LVL	1
 #define LED_ON_LVL	0
 
-const int led_charge_lvl_1 = 5;
+__override const int led_charge_lvl_1 = 5;
 
-const int led_charge_lvl_2 = 97;
+__override const int led_charge_lvl_2 = 97;
 
-struct led_descriptor led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
+__override struct led_descriptor
+			led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
 	[STATE_CHARGING_LVL_1]	     = {{EC_LED_COLOR_RED, LED_INDEFINITE} },
 	[STATE_CHARGING_LVL_2]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
 	[STATE_CHARGING_FULL_CHARGE] = {{EC_LED_COLOR_GREEN, LED_INDEFINITE} },
@@ -46,7 +47,7 @@ struct led_descriptor led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
 					{EC_LED_COLOR_GREEN, 2 * LED_ONE_SEC} },
 };
 
-const struct led_descriptor
+__override const struct led_descriptor
 		led_pwr_state_table[PWR_LED_NUM_STATES][LED_NUM_PHASES] = {
 	[PWR_LED_STATE_ON]            = {{EC_LED_COLOR_WHITE, LED_INDEFINITE} },
 	[PWR_LED_STATE_SUSPEND_AC]    = {{EC_LED_COLOR_WHITE, 1 * LED_ONE_SEC},
@@ -63,7 +64,7 @@ const enum ec_led_id supported_led_ids[] = {
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-void led_set_color_power(enum ec_led_colors color)
+__override void led_set_color_power(enum ec_led_colors color)
 {
 	if (color == EC_LED_COLOR_WHITE)
 		gpio_set_level(GPIO_LED_3_L, LED_ON_LVL);
@@ -72,7 +73,7 @@ void led_set_color_power(enum ec_led_colors color)
 		gpio_set_level(GPIO_LED_3_L, LED_OFF_LVL);
 }
 
-void led_set_color_battery(enum ec_led_colors color)
+__override void led_set_color_battery(enum ec_led_colors color)
 {
 	switch (color) {
 	case EC_LED_COLOR_AMBER:
@@ -388,12 +389,12 @@ const uint8_t lightbar_10_led_cfg[LIGHTBAR_COLOR_TOTAL][KTD20XX_TOTOAL_REG] = {
 	[BAR_COLOR_GRN_FULL] = {
 		0x00, 0x00, ENABLE_LIGHTBAR,
 		GRN_I_ON, I_OFF, I_OFF, I_OFF, I_OFF, I_OFF,
-		SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_OFF, SEL_BOTH
+		SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_OFF
 	},
 	[BAR_COLOR_ORG_FULL] = {
 		0x00, 0x00, ENABLE_LIGHTBAR,
 		I_OFF, ORG_I_ON, I_OFF, I_OFF, I_OFF, I_OFF,
-		SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_OFF, SEL_BOTH
+		SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_BOTH, SEL_OFF
 	}
 };
 

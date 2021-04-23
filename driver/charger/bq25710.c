@@ -44,8 +44,6 @@
 
 #define INPUT_RESISTOR_RATIO \
 	((CONFIG_CHARGER_SENSE_RESISTOR_AC) / DEFAULT_SENSE_RESISTOR)
-#define REG_TO_INPUT_CURRENT(REG) ((REG + 1) * 50 / INPUT_RESISTOR_RATIO)
-#define INPUT_CURRENT_TO_REG(CUR) (((CUR) * INPUT_RESISTOR_RATIO / 50) - 1)
 
 #define CHARGING_RESISTOR_RATIO \
 	((CONFIG_CHARGER_SENSE_RESISTOR) / DEFAULT_SENSE_RESISTOR)
@@ -84,6 +82,18 @@ static const struct charger_info bq25710_charger_info = {
 
 static enum ec_error_list bq25710_get_option(int chgnum, int *option);
 static enum ec_error_list bq25710_set_option(int chgnum, int option);
+
+static inline int iin_dpm_reg_to_current(int reg)
+{
+	return (reg + 1) * BQ25710_IIN_DPM_CURRENT_STEP_MA /
+		INPUT_RESISTOR_RATIO;
+}
+
+static inline int iin_host_current_to_reg(int current)
+{
+	return (current * INPUT_RESISTOR_RATIO /
+		BQ25710_IIN_HOST_CURRENT_STEP_MA) - 1;
+}
 
 static inline enum ec_error_list raw_read16(int chgnum, int offset, int *value)
 {
@@ -412,10 +422,10 @@ static enum ec_error_list bq25710_discharge_on_ac(int chgnum, int enable)
 static enum ec_error_list bq25710_set_input_current_limit(int chgnum,
 							  int input_current)
 {
-	int num_steps = INPUT_CURRENT_TO_REG(input_current);
+	int num_steps = iin_host_current_to_reg(input_current);
 
-	return raw_write16(chgnum, BQ25710_REG_IIN_HOST, num_steps <<
-			  BQ25710_CHARGE_IIN_BIT_0FFSET);
+	return raw_write16(chgnum, BQ25710_REG_IIN_HOST,
+			   num_steps << BQ25710_IIN_HOST_CURRENT_SHIFT);
 }
 
 static enum ec_error_list bq25710_get_input_current_limit(int chgnum,
@@ -432,8 +442,8 @@ static enum ec_error_list bq25710_get_input_current_limit(int chgnum,
 	rv = raw_read16(chgnum, BQ25710_REG_IIN_DPM, &reg);
 	if (!rv)
 		*input_current =
-			REG_TO_INPUT_CURRENT((reg >>
-					      BQ25710_CHARGE_IIN_BIT_0FFSET));
+			iin_dpm_reg_to_current(reg >>
+					       BQ25710_IIN_DPM_CURRENT_SHIFT);
 
 	return rv;
 }
@@ -618,8 +628,7 @@ static int bq25710_ramp_get_current_limit(int chgnum)
 		return 0;
 	}
 
-	return ((reg >> BQ25710_IIN_DPM_BIT_SHIFT) * BQ25710_IIN_DPM_STEP_MA +
-		BQ25710_IIN_DPM_STEP_MA);
+	return iin_dpm_reg_to_current(reg >> BQ25710_IIN_DPM_CURRENT_SHIFT);
 }
 #endif /* CONFIG_CHARGE_RAMP_HW */
 

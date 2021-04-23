@@ -34,7 +34,7 @@
 #include "pwm.h"
 #include "temp_sensor.h"
 #include "thermal.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
@@ -385,12 +385,12 @@ const struct pwm_t pwm_channels[] = {
 		.flags = PWM_CONFIG_OPEN_DRAIN,
 		.freq = 25000,
 	},
-	[PWM_CH_LED_CHRG] = {
+	[PWM_CH_LED1] = {
 		.channel = 2,
 		.flags = PWM_CONFIG_DSLEEP,
 		.freq = 100,
 	},
-	[PWM_CH_LED_FULL] = {
+	[PWM_CH_LED2] = {
 		.channel = 3,
 		.flags = PWM_CONFIG_DSLEEP,
 		.freq = 100,

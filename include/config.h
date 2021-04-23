@@ -1784,7 +1784,7 @@
 /* Flash configuration */
 
 /* This enables console commands and higher-level features */
-#define CONFIG_FLASH
+#define CONFIG_FLASH_CROS
 /* This enables chip-specific access functions */
 #define CONFIG_FLASH_PHYSICAL
 #undef CONFIG_FLASH_BANK_SIZE
@@ -2843,12 +2843,6 @@
  * provided by CONFIG_LED_ONOFF_STATES.
  */
 #undef CONFIG_LED_ONOFF_STATES_BAT_LOW
-
-/*
- * Adds a power LED under the control of the board-defined lookup table.
- * Must be used with the CONFIG_LED_ONOFF_STATES option.
- */
-#undef CONFIG_LED_POWER_LED
 
 /*
  * LEDs for LED_POLICY STD may be inverted.  In this case they are active low
@@ -5946,8 +5940,8 @@
  */
 #ifdef CONFIG_CHIP_INIT_ROM_REGION
 
-#ifndef CONFIG_FLASH
-#error CONFIG_CHIP_INIT_ROM_REGION requires CONFIG_FLASH
+#ifndef CONFIG_FLASH_CROS
+#error CONFIG_CHIP_INIT_ROM_REGION requires CONFIG_FLASH_CROS
 #endif
 
 #ifndef CONFIG_RO_ROM_RESIDENT_SIZE

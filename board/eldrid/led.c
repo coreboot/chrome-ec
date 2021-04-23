@@ -22,11 +22,12 @@
 #define LED_SIDESEL_MB_PORT 0
 #define LED_SIDESEL_DB_PORT 1
 
-const int led_charge_lvl_1 = 5;
+__override const int led_charge_lvl_1 = 5;
 
-const int led_charge_lvl_2 = 95;
+__override const int led_charge_lvl_2 = 95;
 
-struct led_descriptor led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
+__override struct led_descriptor
+			led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
 	[STATE_CHARGING_LVL_1]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
 	[STATE_CHARGING_LVL_2]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
 	[STATE_CHARGING_FULL_CHARGE] = {{EC_LED_COLOR_WHITE, LED_INDEFINITE} },
@@ -45,7 +46,7 @@ struct led_descriptor led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
 	},
 };
 
-const struct led_descriptor
+__override const struct led_descriptor
 		led_pwr_state_table[PWR_LED_NUM_STATES][LED_NUM_PHASES] = {
 	[PWR_LED_STATE_ON]           =  {{EC_LED_COLOR_WHITE, LED_INDEFINITE} },
 	[PWR_LED_STATE_SUSPEND_AC]   =  {{EC_LED_COLOR_WHITE,  1 * LED_ONE_SEC},
@@ -64,7 +65,7 @@ const enum ec_led_id supported_led_ids[] = {
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-void led_set_color_battery(enum ec_led_colors color)
+__override void led_set_color_battery(enum ec_led_colors color)
 {
 	int port;
 	int side_select_duty;
@@ -106,7 +107,7 @@ void led_set_color_battery(enum ec_led_colors color)
 	}
 }
 
-void led_set_color_power(enum ec_led_colors color)
+__override void led_set_color_power(enum ec_led_colors color)
 {
 	if (color == EC_LED_COLOR_WHITE)
 		gpio_set_level(GPIO_POWER_LED_GATE, PWR_LED_ON_LVL);

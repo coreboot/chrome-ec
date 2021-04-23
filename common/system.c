@@ -176,7 +176,7 @@ int system_is_locked(void)
 	is_locked = 0;
 	return 0;
 
-#elif defined(CONFIG_FLASH)
+#elif defined(CONFIG_FLASH_CROS)
 	/*
 	 * Unlocked if write protect pin deasserted or read-only firmware
 	 * is not protected.
@@ -285,6 +285,24 @@ static void print_reset_flags(uint32_t flags)
 void system_print_reset_flags(void)
 {
 	print_reset_flags(reset_flags);
+}
+
+void system_print_banner(void)
+{
+	/* be less verbose if we boot for USB resume to meet spec timings */
+	if (!(system_get_reset_flags() & EC_RESET_FLAG_USB_RESUME)) {
+		CPUTS("\n");
+		if (system_jumped_to_this_image())
+			CPRINTS("UART initialized after sysjump");
+		else
+			CPUTS("\n--- UART initialized after reboot ---\n");
+		CPRINTF("[Image: %s, %s]\n",
+			 system_get_image_copy_string(),
+			 system_get_build_info());
+		CPUTS("[Reset cause: ");
+		system_print_reset_flags();
+		CPUTS("]\n");
+	}
 }
 
 int system_jumped_to_this_image(void)

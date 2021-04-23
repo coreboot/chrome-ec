@@ -31,7 +31,8 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # Create the command used to generate the ec_version.h file.
   add_custom_command(
           OUTPUT ${ec_version_file}
-          COMMAND ${PLATFORM_EC}/util/getversion.sh BOARD=${BOARD} > ${ec_version_file}
+          # TODO(b/185249526): zephyr: add project name to the version output
+          COMMAND BOARD=${BOARD}_zephyr ${PLATFORM_EC}/util/getversion.sh > ${ec_version_file}
           WORKING_DIRECTORY ${PLATFORM_EC}
   )
   # Create a custom target that will depend on the file.
@@ -201,9 +202,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/base32.c"
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA255
                                                 "${PLATFORM_EC}/driver/accel_bma2x2.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_KX022
+                                                "${PLATFORM_EC}/driver/accel_kionix.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI
                                                 "${PLATFORM_EC}/driver/accelgyro_bmi_common.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI160
+                                                "${PLATFORM_EC}/driver/accelgyro_bmi160.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI260
                                                 "${PLATFORM_EC}/driver/accelgyro_bmi260.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_ICM
@@ -263,7 +268,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_EXTPOWER_GPIO
                                                 "${PLATFORM_EC}/common/extpower_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN
                                                 "${PLATFORM_EC}/common/fan.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS
                                                 "${PLATFORM_EC}/common/flash.c"
                                                 "${PLATFORM_EC}/common/spi_flash_reg.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
