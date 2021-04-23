@@ -23,6 +23,10 @@
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
 
+#if !defined(CONFIG_ACCELGYRO_BMI160) && !defined(CONFIG_ACCELGYRO_BMI260)
+#error "Must use either BMI160 or BMI260"
+#endif
+
 #if defined(CONFIG_ACCELGYRO_BMI260) && !defined(CONFIG_ACCELGYRO_BMI160)
 #define V(s_) 1
 #elif defined(CONFIG_ACCELGYRO_BMI160) && !defined(CONFIG_ACCELGYRO_BMI260)
@@ -913,4 +917,3 @@ void motion_orientation_update(const struct motion_sensor_t *s)
 	BMI_GET_DATA(s)->last_orientation = BMI_GET_DATA(s)->orientation;
 }
 #endif
-
