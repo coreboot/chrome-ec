@@ -67,6 +67,7 @@
 #define CONFIG_USB_MUX_IT5205
 
 /* KeyBoard */
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 #define CONFIG_KEYBOARD_KEYPAD
 
 #ifndef __ASSEMBLER__
@@ -104,8 +105,6 @@ enum battery_type {
 	BATTERY_CELXPERT,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 

@@ -9,6 +9,7 @@
 #include <logging/log.h>
 
 #include "gpio.h"
+#include "gpio/gpio.h"
 
 LOG_MODULE_REGISTER(gpio_shim, LOG_LEVEL_ERR);
 
@@ -27,13 +28,17 @@ struct gpio_config {
 	gpio_flags_t init_flags;
 };
 
-#define GPIO_CONFIG(id)                                      \
-	{                                                    \
-		.name = DT_LABEL(id),                        \
-		.dev_name = DT_LABEL(DT_PHANDLE(id, gpios)), \
-		.pin = DT_GPIO_PIN(id, gpios),               \
-		.init_flags = DT_GPIO_FLAGS(id, gpios),      \
-	},
+#define GPIO_CONFIG(id)                                                      \
+	COND_CODE_1(                                                         \
+		DT_NODE_HAS_PROP(id, enum_name),                             \
+		(                                                            \
+			{                                                    \
+				.name = DT_LABEL(id),                        \
+				.dev_name = DT_LABEL(DT_PHANDLE(id, gpios)), \
+				.pin = DT_GPIO_PIN(id, gpios),               \
+				.init_flags = DT_GPIO_FLAGS(id, gpios),      \
+			}, ),                                                \
+		())
 static const struct gpio_config configs[] = {
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
 	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_CONFIG)
@@ -46,7 +51,7 @@ struct gpio_data {
 	const struct device *dev;
 };
 
-#define GPIO_DATA(id) {},
+#define GPIO_DATA(id) COND_CODE_1(DT_NODE_HAS_PROP(id, enum_name), ({}, ), ())
 static struct gpio_data data[] = {
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
 	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_DATA)
@@ -75,6 +80,29 @@ static void gpio_handler_shim(const struct device *port,
 	/* Call the platform/ec gpio interrupt handler */
 	gpio->irq_handler(gpio->signal);
 }
+
+/*
+ * Validate interrupt flags are valid for the Zephyr GPIO driver.
+ */
+#define IS_GPIO_INTERRUPT_FLAG(flag, mask) ((flag & mask) == mask)
+#define VALID_GPIO_INTERRUPT_FLAG(flag)                             \
+	(IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_EDGE_RISING) ||      \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_EDGE_FALLING) ||     \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_EDGE_BOTH) ||        \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_LEVEL_LOW) ||        \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_LEVEL_HIGH) ||       \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_EDGE_TO_INACTIVE) || \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_EDGE_TO_ACTIVE) ||   \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_LEVEL_INACTIVE) ||   \
+	 IS_GPIO_INTERRUPT_FLAG(flag, GPIO_INT_LEVEL_ACTIVE))
+
+#define GPIO_INT(sig, f, cb)                       \
+	BUILD_ASSERT(VALID_GPIO_INTERRUPT_FLAG(f), \
+		     STRINGIFY(sig) " is not using Zephyr interrupt flags");
+#ifdef EC_CROS_GPIO_INTERRUPTS
+EC_CROS_GPIO_INTERRUPTS
+#endif
+#undef GPIO_INT
 
 /*
  * Each zephyr project should define EC_CROS_GPIO_INTERRUPTS in their gpio_map.h
@@ -256,9 +284,22 @@ static int init_gpios(const struct device *unused)
 		}
 	}
 
+	/* Configure unused pins in chip driver for better power consumption */
+	if (gpio_config_unused_pins) {
+		int rv;
+
+		rv = gpio_config_unused_pins();
+		if (rv < 0) {
+			return rv;
+		}
+	}
+
 	return 0;
 }
-SYS_INIT(init_gpios, PRE_KERNEL_1, 50);
+#if CONFIG_PLATFORM_EC_GPIO_INIT_PRIORITY <= CONFIG_KERNEL_INIT_PRIORITY_DEFAULT
+#error "GPIOs must initialize after the kernel default initialization"
+#endif
+SYS_INIT(init_gpios, POST_KERNEL, CONFIG_PLATFORM_EC_GPIO_INIT_PRIORITY);
 
 int gpio_enable_interrupt(enum gpio_signal signal)
 {

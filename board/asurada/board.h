@@ -10,10 +10,8 @@
 #include "baseboard.h"
 
 /* Chipset config */
-#define CONFIG_BRINGUP
 
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_LTO
 
 /*
@@ -28,7 +26,6 @@
 
 /* LED */
 #ifdef BOARD_HAYATO
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 #endif
@@ -103,6 +100,18 @@ enum sensor_id {
 	RGB_ALS,
 #endif
 	SENSOR_COUNT,
+};
+
+enum adc_channel {
+	ADC_VBUS_C0,             /* ADC 0 */
+	ADC_BOARD_ID_0,          /* ADC 1 */
+	ADC_BOARD_ID_1,          /* ADC 2 */
+	ADC_CHARGER_AMON_R,      /* ADC 3 */
+	ADC_VBUS_C1,             /* ADC 5 */
+	ADC_CHARGER_PMON,        /* ADC 6 */
+
+	/* Number of ADC channels */
+	ADC_CH_COUNT,
 };
 
 enum pwm_channel {

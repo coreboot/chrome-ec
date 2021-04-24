@@ -124,6 +124,22 @@
 #undef CONFIG_ACCELGYRO_LSM6DSM
 #undef CONFIG_ACCELGYRO_LSM6DSO
 
+/* Select the communication mode for the accelgyro ICM. Only one of these should
+ * be set. To set the value manually, simply define one or the other. If neither
+ * is defined, but I2C_PORT_ACCEL is defined, then CONFIG_ACCELGYRO_ICM_I2C will
+ * automatically be set.
+ */
+#undef CONFIG_ACCELGYRO_ICM_COMM_SPI
+#undef CONFIG_ACCELGYRO_ICM_COMM_I2C
+
+/* Select the communication mode for the accelgyro BMI. Only one of these should
+ * be set. To set the value manually, simply define one or the other. If neither
+ * is defined, but I2C_PORT_ACCEL is defined, then CONFIG_ACCELGYRO_BMI_I2C will
+ * automatically be set.
+ */
+#undef CONFIG_ACCELGYRO_BMI_COMM_SPI
+#undef CONFIG_ACCELGYRO_BMI_COMM_I2C
+
 /*
  * Some chips have a portion of memory which will remain powered even
  * during a reset.  This is called Always-On, or AON memory, and
@@ -983,6 +999,16 @@
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 
 /*
+ * This config option is used to set the charger's VSYS voltage
+ * threshold. When the voltage drops to this level, PROCHOT is asserted
+ * by the charger to request reduced system power demand and hopefully
+ * avoid a voltage droop leading to system instability. The voltage is
+ * specified in deci-volts, so a value of 80 would set the threshold to
+ * 8.0v.
+ */
+#undef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
+
+/*
  * Board specific maximum input current limit, in mA.
  */
 #undef CONFIG_CHARGER_MAX_INPUT_CURRENT
@@ -1401,6 +1427,7 @@
 #undef  CONFIG_CMD_RTC
 #undef  CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
+#undef	CONFIG_CMD_S5_TIMEOUT
 #undef  CONFIG_CMD_SCRATCHPAD
 #undef	CONFIG_CMD_SEVEN_SEG_DISPLAY
 #define CONFIG_CMD_SHMEM
@@ -2818,12 +2845,6 @@
 #undef CONFIG_LED_ONOFF_STATES_BAT_LOW
 
 /*
- * Adds a power LED under the control of the board-defined lookup table.
- * Must be used with the CONFIG_LED_ONOFF_STATES option.
- */
-#undef CONFIG_LED_POWER_LED
-
-/*
  * LEDs for LED_POLICY STD may be inverted.  In this case they are active low
  * and the GPIO names will be GPIO_LED..._L.
  */
@@ -3943,8 +3964,8 @@
 #undef CONFIG_UART_PAD_SWITCH
 
 /**
- * This will only be used for Kukui and cortex-m0. Preserve EC reset logs and
- * console logs on SRAM so that the logs will be preserved after EC shutting
+ * This will only be used for Kukui. Preserve EC reset logs and console
+ * logs on SRAM/FLASH so that the logs will be preserved after EC shutting
  * down or sysjumped. It will keep the contents across EC resets, so we have
  * more information about system states. The contents on SRAM will be cleared
  * when checksum or validity check fails.
@@ -3994,6 +4015,9 @@
 
 /* Use this to include support for MP4245 buck boost converter */
 #undef CONFIG_MP4245
+
+/* Use this to include support for MP2964 IMVP9.1 PMIC */
+#undef CONFIG_MP2964
 
 /*****************************************************************************/
 /* USB PD config */
@@ -4292,6 +4316,9 @@
 /* Enable PCIE tunneling if Thunderbolt-Compatible mode is enabled*/
 #undef CONFIG_USB_PD_PCIE_TUNNELING
 
+/* Enable Power Path Control from PD */
+#undef CONFIG_USB_PD_PPC
+
 /*
  * The following two macros are ASCII text strings that matches what appears
  * in the USB-IF Product Registration form for this device. These macros are
@@ -4368,6 +4395,7 @@
 #undef CONFIG_USB_PD_TCPM_RT1715
 #undef CONFIG_USB_PD_TCPM_FUSB307
 #undef CONFIG_USB_PD_TCPM_STM32GX
+#undef CONFIG_USB_PD_TCPM_CCGXXF
 
 /* PS8XXX series are all supported by a single driver with a build time config
  * listed below (CONFIG_USB_PD_TCPM_PS*) defined to enable the specific product.
@@ -4574,6 +4602,7 @@
 #undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
 #undef CONFIG_USBC_PPC_SN5S330
+#undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
 
 /*
@@ -4584,6 +4613,9 @@
 
 /* SYV682 does not pass through CC, instead it bypasses to the TCPC */
 #undef CONFIG_SYV682X_NO_CC
+
+/* Define to enable SYV682X VBUS smart discharge. */
+#undef CONFIG_USBC_PPC_SYV682X_SMART_DISCHARGE
 
 /* PPC is capable of gating the SBU lines. */
 #undef CONFIG_USBC_PPC_SBU
@@ -4806,6 +4838,12 @@
 #undef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
 
 /*
+ * Ignore all non-fixed PDOs received from a src_caps message. Enable this for
+ * boards (like servo_v4) which only support FIXED PDO types.
+ */
+#undef CONFIG_USB_PD_ONLY_FIXED_PDOS
+
+/*
  * Total current in mA the board can supply to external devices through
  * USB-C ports
  *
@@ -4981,11 +5019,15 @@
 /* Watchdog period in ms; see also AUX_TIMER_PERIOD_MS */
 #define CONFIG_WATCHDOG_PERIOD_MS 1600
 
+/* The leading time of watchdog warning timer. */
+#define CONFIG_WATCHDOG_WARNING_LEADING_TIME_MS 500
+
 /*
- * Fire auxiliary timer 500ms before watchdog timer expires. This leaves
- * some time for debug trace to be printed.
+ * Fire auxiliary timer before watchdog timer expires. This leaves some time for
+ * debug trace to be printed.
  */
-#define CONFIG_AUX_TIMER_PERIOD_MS (CONFIG_WATCHDOG_PERIOD_MS - 500)
+#define CONFIG_AUX_TIMER_PERIOD_MS \
+	(CONFIG_WATCHDOG_PERIOD_MS - CONFIG_WATCHDOG_WARNING_LEADING_TIME_MS)
 
 /*****************************************************************************/
 /* WebUSB config */
@@ -5061,8 +5103,8 @@
 #undef CONFIG_EXTENDED_VERSION_INFO
 
 /*
- * Define this to enable Cros Board Info support. I2C_EEPROM_PORT and
- * I2C_EEPROM_ADDR must be defined as well.
+ * Define this to enable Cros Board Info support. I2C_PORT_EEPROM and
+ * I2C_ADDR_EEPROM_FLAGS must be defined as well.
  */
 #undef CONFIG_CROS_BOARD_INFO
 
@@ -5491,11 +5533,25 @@
 #define CONFIG_USBC_PPC
 #endif /* "has a PPC" */
 
+/* Following chips use Power Path Control information from TCPC chip */
+#if defined(CONFIG_USBC_PPC_AOZ1380) || \
+	defined(CONFIG_USBC_PPC_NX20P3481) || \
+	defined(CONFIG_USBC_PPC_NX20P3483)
+#define CONFIG_USB_PD_PPC
+#endif
+
 /* The TI SN5S330 supports VCONN and needs to be informed of CC polarity */
 #if defined(CONFIG_USBC_PPC_SN5S330)
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_SBU
 #define CONFIG_USBC_PPC_VCONN
+#endif
+
+
+/*****************************************************************************/
+/* PPC SYV682C is a subset of SYV682X. */
+#if defined(CONFIG_USBC_PPC_SYV682C)
+#define CONFIG_USBC_PPC_SYV682X
 #endif
 
 /*
@@ -5514,6 +5570,16 @@
 	!defined(CONFIG_SYV682X_NO_CC)
 #undef CONFIG_USB_PD_TCPC_VCONN
 #endif
+#endif
+
+/* CCGXXF standard default defines */
+#if defined(CONFIG_USB_PD_TCPM_CCGXXF)
+#define CONFIG_USB_PD_DISCHARGE_TCPC
+#define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#define CONFIG_USB_PD_PPC
+#define CONFIG_USB_PD_TCPC_LOW_POWER
+#define CONFIG_USB_PD_TCPM_TCPCI
+#define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #endif
 
 /*****************************************************************************/
@@ -5931,7 +5997,7 @@
  * reloads of the watchdog timer should be less than half of the watchdog
  * period.
  */
-#if !defined(CONFIG_ZEPHYR) && defined(CONFIG_WATCHDOG)
+#ifdef CONFIG_WATCHDOG
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
 #endif
@@ -6241,5 +6307,27 @@
 	!defined(CONFIG_VBOOT_HASH_RELOAD_WATCHDOG)
 #define CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
 #endif
+
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_ICM_COMM_SPI) && \
+	!defined(CONFIG_ACCELGYRO_ICM_COMM_I2C)
+#ifdef I2C_PORT_ACCEL
+#define CONFIG_ACCELGYRO_ICM_COMM_I2C
+#else
+#define CONFIG_ACCELGYRO_ICM_COMM_SPI
+#endif
+#endif	/* !CONFIG_ZEPHYR && !CONFIG_ACCELGYRO_ICM_COMM_SPI &&
+	 * !CONFIG_ACCELGYRO_ICM_COMM_I2C
+	 */
+
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_BMI_COMM_SPI) && \
+	!defined(CONFIG_ACCELGYRO_BMI_COMM_I2C)
+#ifdef I2C_PORT_ACCEL
+#define CONFIG_ACCELGYRO_BMI_COMM_I2C
+#else
+#define CONFIG_ACCELGYRO_BMI_COMM_SPI
+#endif
+#endif	/* !CONFIG_ZEPHYR && !CONFIG_ACCELGYRO_BMI_SPI && \
+	 * !CONFIG_ACCELGYRO_BMI_I2C
+	 */
 
 #endif  /* __CROS_EC_CONFIG_H */

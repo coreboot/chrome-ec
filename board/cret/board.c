@@ -14,8 +14,8 @@
 #include "chipset.h"
 #include "common.h"
 #include "compile_time_macros.h"
-#include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi_common.h"
+#include "driver/accel_lis2dh.h"
+#include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/retimer/nb7v904m.h"
@@ -26,6 +26,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "keyboard_8042.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "motion_sense.h"
@@ -128,6 +129,12 @@ static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
 	gpio_set_level(GPIO_EC_AP_USB_C1_HDMI_HPD, !hdmi_hpd_odl);
 }
 
+static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
+{
+	cprints(CC_USBPD, "C0: CC OVP, SBU OVP, or thermal event");
+	pd_handle_cc_overvoltage(0);
+}
+
 #include "gpio_list.h"
 
 /* ADC channels */
@@ -142,13 +149,6 @@ const struct adc_t adc_channels[] = {
 	[ADC_TEMP_SENSOR_2] = {
 		.name = "TEMP_SENSOR2",
 		.input_ch = NPCX_ADC_CH1,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-	},
-	[ADC_SUB_ANALOG] = {
-		.name = "SUB_ANALOG",
-		.input_ch = NPCX_ADC_CH2,
 		.factor_mul = ADC_MAX_VOLT,
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
@@ -171,33 +171,21 @@ void board_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
 	check_c0_line();
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
-		/* Disable i2c on HDMI pins */
-		gpio_config_pin(MODULE_I2C,
-				GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
-		gpio_config_pin(MODULE_I2C,
-				GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+	/* Disable i2c on HDMI pins */
+	gpio_config_pin(MODULE_I2C,
+			GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
+	gpio_config_pin(MODULE_I2C,
+			GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
 
-		/* Set HDMI and sub-rail enables to output */
-		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL,
-			       chipset_in_state(CHIPSET_STATE_ON) ?
-						GPIO_ODR_LOW : GPIO_ODR_HIGH);
-		gpio_set_flags(GPIO_SUB_C1_INT_EN_RAILS_ODL,   GPIO_ODR_HIGH);
+	/* Set HDMI and sub-rail enables to output */
+	gpio_set_flags(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL,
+			    chipset_in_state(CHIPSET_STATE_ON) ?
+					GPIO_ODR_LOW : GPIO_ODR_HIGH);
+	gpio_set_flags(GPIO_SUB_C1_INT_EN_RAILS_ODL,   GPIO_ODR_HIGH);
 
-		/* Select HDMI option */
-		gpio_set_level(GPIO_HDMI_SEL_L, 0);
+	/* Enable interrupt for passing through HPD */
+	gpio_enable_interrupt(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
 
-		/* Enable interrupt for passing through HPD */
-		gpio_enable_interrupt(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
-	} else {
-		/* Set SDA as an input */
-		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL,
-			       GPIO_INPUT);
-
-		/* Enable C1 interrupt and check if it needs processing */
-		gpio_enable_interrupt(GPIO_SUB_C1_INT_EN_RAILS_ODL);
-		check_c1_line();
-	}
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 
@@ -211,15 +199,13 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 /* Enable HDMI any time the SoC is on */
 static void hdmi_enable(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
-		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+	gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
 
 static void hdmi_disable(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
-		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
+	gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
 
@@ -261,26 +247,8 @@ DECLARE_HOOK(HOOK_INIT, reconfigure_5v_gpio, HOOK_PRIO_INIT_I2C+1);
 
 static void set_5v_gpio(int level)
 {
-	int version;
-	enum gpio_signal gpio = GPIO_EN_PP5000;
-
-	/*
-	 * b/147257497: On early waddledoo boards, GPIO_EN_PP5000 was swapped
-	 * with GPIO_VOLUP_BTN_ODL. Therefore, we'll actually need to set that
-	 * GPIO instead for those boards.  Note that this breaks the volume up
-	 * button functionality.
-	 */
-	if (IS_ENABLED(BOARD_WADDLEDOO)) {
-		version = system_get_board_version();
-
-		/*
-		 * If the CBI EEPROM wasn't formatted, assume it's a very early
-		 * board.
-		 */
-		gpio = version < 0 ? GPIO_VOLUP_BTN_ODL : GPIO_EN_PP5000;
-	}
-
-	gpio_set_level(gpio, level);
+	gpio_set_level(GPIO_EN_PP5000, level);
+	gpio_set_level(GPIO_EN_USB_A0_VBUS, level);
 }
 
 __override void board_power_5v_enable(int enable)
@@ -429,25 +397,25 @@ static const mat33_fp_t base_standard_ref = {
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
-static struct accelgyro_saved_data_t g_bma253_data;
-static struct bmi_drv_data_t g_bmi160_data;
+static struct stprivate_data g_lis2dh_data;
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_BMA255,
+		.chip = MOTIONSENSE_CHIP_LIS2DE,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_LID,
-		.drv = &bma2x2_accel_drv,
+		.drv = &lis2dh_drv,
 		.mutex = &g_lid_mutex,
-		.drv_data = &g_bma253_data,
+		.drv_data = &g_lis2dh_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
+		.i2c_spi_addr_flags = LIS2DH_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 2,
-		.min_frequency = BMA255_ACCEL_MIN_FREQ,
-		.max_frequency = BMA255_ACCEL_MAX_FREQ,
+		.min_frequency = LIS2DH_ODR_MIN_VAL,
+		.max_frequency = LIS2DH_ODR_MAX_VAL,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 10000 | ROUND_UP_FLAG,
@@ -460,18 +428,21 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_ACCEL] = {
 		.name = "Base Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_BMI160,
+		.chip = MOTIONSENSE_CHIP_LSM6DSM,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &bmi160_drv,
+		.drv = &lsm6dsm_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = &g_bmi160_data,
+		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
+				MOTIONSENSE_TYPE_ACCEL),
+		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
+		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,
-		.min_frequency = BMI_ACCEL_MIN_FREQ,
-		.max_frequency = BMI_ACCEL_MAX_FREQ,
+		.min_frequency = LSM6DSM_ODR_MIN_VAL,
+		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 13000 | ROUND_UP_FLAG,
@@ -486,18 +457,21 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_GYRO] = {
 		.name = "Base Gyro",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_BMI160,
+		.chip = MOTIONSENSE_CHIP_LSM6DSM,
 		.type = MOTIONSENSE_TYPE_GYRO,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &bmi160_drv,
+		.drv = &lsm6dsm_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = &g_bmi160_data,
+		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
+				MOTIONSENSE_TYPE_GYRO),
+		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
+		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-		.default_range = 1000, /* dps */
+		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
+		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = BMI_GYRO_MIN_FREQ,
-		.max_frequency = BMI_GYRO_MAX_FREQ,
+		.min_frequency = LSM6DSM_ODR_MIN_VAL,
+		.max_frequency = LSM6DSM_ODR_MAX_VAL,
 	},
 };
 
@@ -677,3 +651,29 @@ void lid_angle_peripheral_enable(int enable)
 	}
 }
 #endif
+
+/* Keyboard scan setting */
+static const struct ec_response_keybd_config cret_keybd = {
+	/* Default Chromeos keyboard config */
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_FORWARD,		/* T2 */
+		TK_REFRESH,		/* T3 */
+		TK_FULLSCREEN,		/* T4 */
+		TK_OVERVIEW,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	/* No function keys, no numeric keypad, has screenlock key */
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override const struct ec_response_keybd_config
+*board_vivaldi_keybd_config(void)
+{
+	return &cret_keybd;
+}

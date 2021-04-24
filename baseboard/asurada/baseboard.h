@@ -101,7 +101,8 @@
 #define CONFIG_USBC_PPC
 #define CONFIG_USBC_PPC_DEDICATED_INT
 #define CONFIG_USBC_PPC_POLARITY
-#define CONFIG_USBC_PPC_SYV682X
+#define CONFIG_USBC_PPC_SYV682C
+#define CONFIG_USBC_PPC_SYV682X_SMART_DISCHARGE
 #define CONFIG_USBC_PPC_VCONN
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_VCONN
@@ -117,6 +118,7 @@
 #define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
 #define CONFIG_USB_PD_DUAL_ROLE
+#define CONFIG_USB_PD_FRS_PPC
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 2
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
@@ -127,6 +129,7 @@
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
+#define CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
 #define CONFIG_USB_PID 0x5566  /* TODO: update PID */
 #define CONFIG_USB_POWER_DELIVERY
 
@@ -146,6 +149,7 @@
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
 /* Sensor */
+#ifdef HAS_TASK_MOTIONSENSE
 #define CONFIG_CMD_ACCEL_INFO
 #define CONFIG_CMD_ACCELS
 
@@ -153,6 +157,7 @@
 #define CONFIG_ACCEL_FIFO_SIZE 256
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 #define CONFIG_ACCEL_INTERRUPTS
+#endif
 
 /* SPI / Host Command */
 #define CONFIG_SPI
@@ -189,17 +194,6 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
-
-enum adc_channel {
-	ADC_VBUS,                /* ADC 0 */
-	ADC_BOARD_ID_0,          /* ADC 1 */
-	ADC_BOARD_ID_1,          /* ADC 2 */
-	ADC_CHARGER_AMON_R,      /* ADC 3 */
-	ADC_CHARGER_PMON,        /* ADC 6 */
-
-	/* Number of ADC channels */
-	ADC_CH_COUNT,
-};
 
 enum power_signal {
 	PMIC_PWR_GOOD,

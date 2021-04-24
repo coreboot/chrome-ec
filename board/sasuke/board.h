@@ -14,12 +14,6 @@
 #undef GPIO_VOLUME_DOWN_L
 #undef CONFIG_VOLUME_BUTTONS
 
-/*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
@@ -52,7 +46,6 @@
 /* LED */
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES
-#define CONFIG_LED_POWER_LED
 #define GPIO_BAT_LED_RED_L GPIO_LED_R_ODL
 #define GPIO_BAT_LED_GREEN_L GPIO_LED_G_ODL
 #define GPIO_PWR_LED_BLUE_L GPIO_LED_B_ODL
@@ -70,12 +63,15 @@
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
 #define CONFIG_USBC_RETIMER_NB7V904M
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
+#define CONFIG_USB_MUX_PS8743
 
 /* USB PD */
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPM_RAA489000
 #undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
 #define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
+#define CONFIG_USB_PD_COMM_LOCKED
 
 /* USB defines specific to external TCPCs */
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
@@ -164,10 +160,9 @@ enum adc_channel {
 /* List of possible batteries */
 enum battery_type {
 	BATTERY_SDI,
+	BATTERY_SWD,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

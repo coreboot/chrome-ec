@@ -6,6 +6,7 @@
 /* Quiche board-specific configuration */
 
 #include "common.h"
+#include "cros_board_info.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/stm32gx.h"
@@ -79,23 +80,14 @@ void hpd_interrupt(enum gpio_signal signal)
 	usb_pd_hpd_edge_event(signal);
 }
 
-void board_uf_manage_vbus(void)
-{
-	int level = gpio_get_level(GPIO_USBC_UF_MUX_VBUS_EN);
-
-	/*
-	 * GPIO_USBC_UF_MUX_VBUS_EN is an output from the PS8803 which tracks if
-	 * C2 is attached. When it's attached, this signal will be high. Use
-	 * this level to control PPC VBUS on/off.
-	 */
-	ppc_vbus_source_enable(USB_PD_PORT_USB3, level);
-	CPRINTS("C2: State = %s", level ? "Attached.SRC " : "Unattached.SRC");
-}
-DECLARE_DEFERRED(board_uf_manage_vbus);
-
 static void board_uf_manage_vbus_interrupt(enum gpio_signal signal)
 {
-	hook_call_deferred(&board_uf_manage_vbus_data, 0);
+	baseboard_usb3_check_state();
+}
+
+static void board_pwr_btn_interrupt(enum gpio_signal signal)
+{
+	baseboard_power_button_evt(gpio_get_level(signal));
 }
 #endif /* SECTION_IS_RW */
 
@@ -157,6 +149,22 @@ struct ppc_config_t ppc_chips[] = {
 #endif
 
 #ifdef SECTION_IS_RW
+/*
+ * PS8802 set mux board tuning.
+ * Adds in board specific gain and DP lane count configuration
+ */
+static int board_ps8822_mux_set(const struct usb_mux *me,
+				mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+
+	/* DP specific config */
+	if (mux_state & USB_PD_MUX_DP_ENABLED)
+		rv = ps8822_set_dp_rx_eq(me, PS8822_DPEQ_LEVEL_UP_20DB);
+
+	return rv;
+}
+
 /* TCPCs */
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_HOST] = {
@@ -179,6 +187,7 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_port = I2C_PORT_I2C1,
 		.i2c_addr_flags = PS8822_I2C_ADDR3_FLAG,
 		.driver = &ps8822_usb_mux_driver,
+		.board_set = &board_ps8822_mux_set,
 	},
 	[USB_PD_PORT_DP] = {
 		.usb_port = USB_PD_PORT_DP,
@@ -226,47 +235,44 @@ void board_reset_pd_mcu(void)
 	msleep(PS8805_FW_INIT_DELAY_MS);
 }
 
+void board_enable_usbc_interrupts(void)
+{
+	/* Enable C0 PPC interrupt */
+	gpio_enable_interrupt(GPIO_HOST_USBC_PPC_INT_ODL);
+	/* Enable C1 PPC interrupt */
+	gpio_enable_interrupt(GPIO_USBC_DP_PPC_INT_ODL);
+	/* Enable C0 HPD interrupt */
+	gpio_enable_interrupt(GPIO_DDI_MST_IN_HPD);
+	/* Enable C1 TCPC interrupt */
+	gpio_enable_interrupt(GPIO_USBC_DP_MUX_ALERT_ODL);
+}
+
+void board_disable_usbc_interrupts(void)
+{
+	/* Disable C0 PPC interrupt */
+	gpio_disable_interrupt(GPIO_HOST_USBC_PPC_INT_ODL);
+	/* Disable C1 PPC interrupt */
+	gpio_disable_interrupt(GPIO_USBC_DP_PPC_INT_ODL);
+	/* Disable C0 HPD interrupt */
+	gpio_disable_interrupt(GPIO_DDI_MST_IN_HPD);
+	/* Disable C1 TCPC interrupt */
+	gpio_disable_interrupt(GPIO_USBC_DP_MUX_ALERT_ODL);
+	/* Disable VBUS control interrupt for C2 */
+	gpio_disable_interrupt(GPIO_USBC_UF_MUX_VBUS_EN);
+}
+
 void board_tcpc_init(void)
 {
 	board_reset_pd_mcu();
 
-	/* Enable PPC interrupts. */
-	gpio_enable_interrupt(GPIO_HOST_USBC_PPC_INT_ODL);
-	gpio_enable_interrupt(GPIO_USBC_DP_PPC_INT_ODL);
-	/* Enable HPD interrupt */
-	gpio_enable_interrupt(GPIO_DDI_MST_IN_HPD);
-	/* Enable TCPC interrupts. */
-	gpio_enable_interrupt(GPIO_USBC_DP_MUX_ALERT_ODL);
+	/* Enable board usbc interrupts */
+	board_enable_usbc_interrupts();
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 2);
 
 enum pd_dual_role_states board_tc_get_initial_drp_mode(int port)
 {
 	return pd_dual_role_init[port];
-}
-
-static void board_config_usbc_uf_ppc(void)
-{
-	int vbus_level;
-
-	/*
-	 * This port is not usb-pd capable, but there is a ppc which must be
-	 * initialized, and keep the VBUS switch enabled.
-	 */
-	ppc_init(USB_PD_PORT_USB3);
-	vbus_level = gpio_get_level(GPIO_USBC_UF_MUX_VBUS_EN);
-
-	CPRINTS("usbc: UF PPC configured. VBUS = %s",
-		vbus_level ? "on" : "off");
-
-	/*
-	 * Check initial state as there there may not be an edge event after
-	 * interrupts are enabled if the port is attached at EC reboot time.
-	 */
-	ppc_vbus_source_enable(USB_PD_PORT_USB3, vbus_level);
-
-	/* Enable VBUS control interrupt for C2 */
-	gpio_enable_interrupt(GPIO_USBC_UF_MUX_VBUS_EN);
 }
 
 __override uint8_t board_get_usb_pd_port_count(void)
@@ -304,13 +310,30 @@ void board_overcurrent_event(int port, int is_overcurrented)
 {
 	/* TODO(b/174825406): check correct operation for honeybuns */
 }
+
+int dock_get_mf_preference(void)
+{
+	int rv;
+	uint32_t fw_config;
+	int mf = MF_OFF;
+
+	/*
+	 * MF (multi function) preferece is indicated by bit 0 of the fw_config
+	 * data field. If this data field does not exist, then default to 4 lane
+	 * mode.
+	 */
+	rv = cbi_get_fw_config(&fw_config);
+	if (!rv)
+		mf = CBI_FW_MF_PREFERENCE(fw_config);
+
+	return mf;
+}
+
 #endif /* SECTION_IS_RW */
 
 static void board_init(void)
 {
-#ifdef SECTION_IS_RW
-	board_config_usbc_uf_ppc();
-#endif
+
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -326,17 +349,17 @@ static void board_debug_gpio_2_pulse(void)
 }
 DECLARE_DEFERRED(board_debug_gpio_2_pulse);
 
-void board_debug_gpio(int trigger, int enable, int pulse_usec)
+void board_debug_gpio(enum debug_gpio trigger, int level, int pulse_usec)
 {
 	switch (trigger) {
 	case TRIGGER_1:
-		gpio_set_level(GPIO_TRIGGER_1, enable);
+		gpio_set_level(GPIO_TRIGGER_1, level);
 		if (pulse_usec)
 			hook_call_deferred(&board_debug_gpio_1_pulse_data,
 					   pulse_usec);
 		break;
 	case TRIGGER_2:
-		gpio_set_level(GPIO_TRIGGER_2, enable);
+		gpio_set_level(GPIO_TRIGGER_2, level);
 		if (pulse_usec)
 			hook_call_deferred(&board_debug_gpio_2_pulse_data,
 					   pulse_usec);

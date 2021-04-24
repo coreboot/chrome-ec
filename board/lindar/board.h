@@ -20,7 +20,6 @@
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
 /* LED defines */
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
@@ -118,6 +117,7 @@
 
 /* I2C Bus Configuration */
 #define CONFIG_I2C
+#define CONFIG_I2C_BUS_MAY_BE_UNPOWERED
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 #define I2C_PORT_USB_C0		NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1		NPCX_I2C_PORT2_0

@@ -58,10 +58,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkout', type=pathlib.Path,
                         help='Path to ChromiumOS checkout')
+    parser.add_argument('-D', '--debug', action='store_true', default=False,
+                        help=('Turn on debug features (e.g., stack trace, '
+                              'verbose logging)'))
     parser.add_argument('-j', '--jobs', type=int,
                         help='Degree of multiprogramming to use')
     parser.add_argument('-l', '--log-level', choices=list(log_level_map.keys()),
-                        default='WARNING',
                         dest='log_level',
                         help='Set the logging level (default=WARNING)')
     parser.add_argument('-L', '--no-log-label', action='store_true',
@@ -104,14 +106,18 @@ def main(argv=None):
     build = sub.add_parser('build')
     build.add_argument('build_dir', type=pathlib.Path,
                        help='The build directory used during configuration')
+    build.add_argument('-w', '--fail-on-warnings', action='store_true',
+                       help='Exit with code 2 if warnings are detected')
 
     test = sub.add_parser('test')
     test.add_argument('build_dir', type=pathlib.Path,
                       help='The build directory used during configuration')
 
     testall = sub.add_parser('testall')
-    testall.add_argument('--fail-fast', action='store_true',
-                         help='stop testing after the first error')
+
+    coverage = sub.add_parser('coverage')
+    coverage.add_argument('build_dir', type=pathlib.Path,
+                      help='The build directory used during configuration')
 
     opts = parser.parse_args(argv)
 
@@ -119,13 +125,24 @@ def main(argv=None):
         log_format = '%(message)s'
     else:
         log_format = '%(asctime)s - %(name)s/%(levelname)s: %(message)s'
-    logging.basicConfig(format=log_format, level=log_level_map.get(opts.log_level))
 
-    zmake = call_with_namespace(zm.Zmake, opts)
-    subcommand_method = getattr(zmake, opts.subcommand.replace('-', '_'))
-    result = call_with_namespace(subcommand_method, opts)
-    multiproc.wait_for_log_end()
-    return result
+    log_level = logging.WARNING
+    if opts.log_level:
+        log_level = log_level_map[opts.log_level]
+    elif opts.debug:
+        log_level = logging.DEBUG
+    logging.basicConfig(format=log_format, level=log_level)
+
+    if not opts.debug:
+        sys.tracebacklimit = 0
+
+    try:
+        zmake = call_with_namespace(zm.Zmake, opts)
+        subcommand_method = getattr(zmake, opts.subcommand.replace('-', '_'))
+        result = call_with_namespace(subcommand_method, opts)
+        return result
+    finally:
+        multiproc.wait_for_log_end()
 
 
 if __name__ == '__main__':

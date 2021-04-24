@@ -66,6 +66,41 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 	return pdo_cnt;
 }
 
+/*
+ * Default Port Discovery DR Swap Policy.
+ *
+ * 1) If port == 0 and port data role is DFP, transition to pe_drs_send_swap
+ * 2) If port == 1 and port data role is UFP, transition to pe_drs_send_swap
+ */
+__override bool port_discovery_dr_swap_policy(int port,
+			enum pd_data_role dr, bool dr_swap_flag)
+{
+	/*
+	 * Port0: test if role is DFP
+	 * Port1: test if role is UFP
+	 */
+	enum pd_data_role role_test =
+		(port == USB_PD_PORT_HOST) ? PD_ROLE_DFP : PD_ROLE_UFP;
+
+	if (dr == role_test)
+		return true;
+
+	/* Do not perform a DR swap */
+	return false;
+}
+
+/*
+ * Default Port Discovery VCONN Swap Policy.
+ *
+ * 1) Never perform VCONN swap
+ */
+__override bool port_discovery_vconn_swap_policy(int port,
+			bool vconn_swap_flag)
+{
+	/* Do not perform a VCONN swap */
+	return false;
+}
+
 int pd_check_vconn_swap(int port)
 {
 	/*TODO: Dock is the Vconn source */
@@ -122,7 +157,7 @@ void pd_transition_voltage(int idx)
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
 
 	if (port == USB_PD_PORT_HOST) {
-		int mv;
+		int mv, unused_mv;
 		int ma;
 		int vbus_hi;
 		int vbus_lo;
@@ -133,7 +168,8 @@ void pd_transition_voltage(int idx)
 	 * by the PDO requested by sink. Note that USB PD uses idx = 1 for 1st
 	 * PDO of SRC_CAP which must always be 5V fixed supply.
 	 */
-		pd_extract_pdo_power(pd_src_host_pdo[idx - 1], &ma, &mv);
+		pd_extract_pdo_power(pd_src_host_pdo[idx - 1], &ma, &mv,
+				     &unused_mv);
 
 		/* Set VBUS level to value specified in the requested PDO */
 		mp4245_set_voltage_out(mv);
@@ -190,6 +226,18 @@ int pd_check_power_swap(int port)
 		return 1;
 
 	return 0;
+}
+
+__override bool pd_can_source_from_device(int port, const int pdo_cnt,
+				      const uint32_t *pdos)
+{
+	/*
+	 * This function is called to determine if this port can be charged by
+	 * the port partner. We always want to be a power role source, so always
+	 * return false.
+	 */
+
+	return false;
 }
 
 static int vdm_is_dp_enabled(int port)
@@ -290,17 +338,7 @@ static int amode_dp_status(int port, uint32_t *payload)
 {
 	int opos = PD_VDO_OPOS(payload[0]);
 	int hpd = gpio_get_level(GPIO_DP_HPD);
-	uint32_t fw_config;
-	int mf = 0;
-	int rv;
-
-	/* MF (multi function) preferece is indicated by bit 0 of the fw_config
-	 * data field. If this data field does not exist, then default to 4 lane
-	 * mode.
-	 */
-	rv = cbi_get_fw_config(&fw_config);
-	if (!rv)
-		mf = fw_config & 1;
+	int mf = dock_get_mf_preference();
 
 	if (opos != OPOS_DP)
 		return 0; /* nak */
@@ -325,6 +363,14 @@ static void svdm_configure_demux(int port, int enable, int mf)
 		/* 4 lane mode if MF is not preferred */
 		if (!mf)
 			demux &= ~USB_PD_MUX_USB_ENABLED;
+		/*
+		 * Make sure the MST_LANE_CONTROL gpio is set to match the DP
+		 * pin configuration selected by the host. Note that the mf
+		 * passed into this function reflects the pin configuration
+		 * selected by the host and not the user mf preference which is
+		 * stored in bit 0 of CBI fw_config.
+		 */
+		baseboard_set_mst_lane_control(mf);
 	} else {
 		demux &= ~USB_PD_MUX_DP_ENABLED;
 		demux |= USB_PD_MUX_USB_ENABLED;

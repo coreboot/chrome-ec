@@ -34,7 +34,6 @@
 #define CONFIG_DAC
 
 /* LED */
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 
 /* PWM */
@@ -134,7 +133,6 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
-int board_is_sourcing_vbus(int port);
 void pen_detect_interrupt(enum gpio_signal s);
 
 #endif /* !__ASSEMBLER__ */

@@ -40,7 +40,6 @@
 /* LED */
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES
-#define CONFIG_LED_POWER_LED
 #define GPIO_BAT_LED_RED_L GPIO_LED_R_ODL
 #define GPIO_BAT_LED_GREEN_L GPIO_LED_G_ODL
 #define GPIO_PWR_LED_BLUE_L GPIO_LED_B_ODL
@@ -92,8 +91,6 @@ enum battery_type {
 	BATTERY_SDI,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 

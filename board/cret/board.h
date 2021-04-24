@@ -46,9 +46,6 @@
  */
 #define GPIO_USB_C1_INT_ODL GPIO_SUB_C1_INT_EN_RAILS_ODL
 
-/* Keyboard */
-#define CONFIG_PWM_KBLIGHT
-
 /* LED */
 #define CONFIG_LED_PWM
 #define CONFIG_LED_PWM_COUNT 1
@@ -119,8 +116,8 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
-#define CONFIG_ACCEL_BMA255		/* Lid accel */
-#define CONFIG_ACCELGYRO_BMI160		/* Base accel */
+#define CONFIG_ACCEL_LIS2DE		/* Lid accel */
+#define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -155,7 +152,6 @@ enum chg_id {
 enum adc_channel {
 	ADC_TEMP_SENSOR_1,     /* ADC0 */
 	ADC_TEMP_SENSOR_2,     /* ADC1 */
-	ADC_SUB_ANALOG,	       /* ADC2 */
 	ADC_VSNS_PP3300_A,     /* ADC9 */
 	ADC_CH_COUNT
 };
@@ -176,11 +172,18 @@ enum pwm_channel {
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_POWER_TECH,
+	BATTERY_BYD,
+	BATTERY_LGC,
+	BATTERY_SWD_ATL,
+	BATTERY_SWD_COS,
+	BATTERY_SMP_ATL,
+	BATTERY_SMP_COS,
+	BATTERY_BYD16,
+	BATTERY_LGC3,
+	BATTERY_SIMPLO,
+	BATTERY_SIMPLO_LS,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

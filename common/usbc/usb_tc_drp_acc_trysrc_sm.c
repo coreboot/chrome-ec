@@ -1815,12 +1815,7 @@ static void pd_update_dual_role_config(int port)
 		 * Change to sink if port is currently a source AND (new DRP
 		 * state is force sink OR new DRP state is toggle off and we are
 		 * in the source disconnected state).
-		 *
-		 * Force a debug detach in case there was an incomplete debug
-		 * connection in progress.
 		 */
-		if (get_state_tc(port) != TC_ATTACHED_SRC)
-			tcpm_debug_detach(port);
 		set_state_tc(port, TC_UNATTACHED_SNK);
 	} else if (tc[port].power_role == PD_ROLE_SINK &&
 			drp_state[port] == PD_DRP_FORCE_SOURCE) {
@@ -1828,8 +1823,6 @@ static void pd_update_dual_role_config(int port)
 		 * Change to source if port is currently a sink and the
 		 * new DRP state is force source.
 		 */
-		if (get_state_tc(port) != TC_ATTACHED_SNK)
-			tcpm_debug_detach(port);
 		set_state_tc(port, TC_UNATTACHED_SRC);
 	}
 }
@@ -2156,7 +2149,12 @@ static void tc_unattached_snk_entry(const int port)
 	 * ground through Rd.
 	 *
 	 * Restore default current limit Rp in case we swap to source
+	 *
+	 * Run any debug detaches needed before setting CC, as some TCPCs may
+	 * require we set CC Open before changing power roles with a debug
+	 * accessory.
 	 */
+	tcpm_debug_detach(port);
 	typec_select_pull(port, TYPEC_CC_RD);
 	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 	typec_update_cc(port);
@@ -2426,9 +2424,12 @@ static void tc_attached_snk_entry(const int port)
 								cc1, cc2);
 			typec_set_input_current_limit(port,
 					tc[port].typec_curr, TYPE_C_VOLTAGE);
-			charge_manager_update_dualrole(port,
-				pd_is_port_partner_dualrole(port) ?
-				CAP_DUALROLE : CAP_DEDICATED);
+			/*
+			 * Start new connections as dedicated until source caps
+			 * are received, at which point the PE will update the
+			 * flag.
+			 */
+			charge_manager_update_dualrole(port, CAP_DEDICATED);
 		}
 
 		/* Apply Rd */
@@ -2706,7 +2707,12 @@ static void tc_unattached_src_entry(const int port)
 	 * ground through Rp.
 	 *
 	 * Restore default current limit Rp.
+	 *
+	 * Run any debug detaches needed before setting CC, as some TCPCs may
+	 * require we set CC Open before changing power roles with a debug
+	 * accessory.
 	 */
+	tcpm_debug_detach(port);
 	typec_select_pull(port, TYPEC_CC_RP);
 	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 	typec_update_cc(port);
@@ -3844,6 +3850,9 @@ static void pd_chipset_reset(void)
 
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		enum tcpm_transmit_type tx;
+
+		/* Do not notify the AP of irrelevant past Hard Resets. */
+		pd_clear_events(i, PD_STATUS_EVENT_HARD_RESET);
 
 		/*
 		 * Re-set events for SOP and SOP' discovery complete so the

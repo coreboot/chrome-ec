@@ -12,9 +12,9 @@
 #include "accelgyro.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accel_kionix.h"
-#include "driver/accel_kx022.h"
-#include "driver/accel_kxcj9.h"
+#include "accel_kionix.h"
+#include "accel_kx022.h"
+#include "accel_kxcj9.h"
 #include "i2c.h"
 #include "math_util.h"
 #include "motion_orientation.h"
@@ -27,6 +27,10 @@
 
 /* Number of times to attempt to enable sensor before giving up. */
 #define SENSOR_ENABLE_ATTEMPTS 3
+
+#if !defined(CONFIG_ACCEL_KXCJ9) && !defined(CONFIG_ACCEL_KX022)
+#error "Must use either KXCJ9 or KX022"
+#endif
 
 #if defined(CONFIG_ACCEL_KXCJ9) && !defined(CONFIG_ACCEL_KX022)
 #define V(s_) 1

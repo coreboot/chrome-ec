@@ -17,6 +17,7 @@
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
 #define CONFIG_KEYBOARD_DEBUG /* Print keyboard debug messages */
+#define CONFIG_CMD_S5_TIMEOUT /* Allow a user-specified timeout to exit S5 */
 
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
@@ -46,7 +47,6 @@
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_S0IX
 #define CONFIG_POWER_SLEEP_FAILURE_DETECTION
-#define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define G3_TO_PWRBTN_DELAY_MS 200
 #define GPIO_AC_PRESENT		GPIO_ACOK_OD
@@ -110,6 +110,8 @@
 #define CONFIG_TABLET_MODE
 #define CONFIG_GMR_TABLET_MODE
 #define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE
+#define CONFIG_SUPPRESSED_HOST_COMMANDS \
+	EC_CMD_MOTION_SENSE_CMD
 
 /* Battery Config */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
@@ -181,6 +183,7 @@
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USBC_PPC_NX20P3483
 #define CONFIG_USBC_RETIMER_PS8818
+#define CONFIG_USBC_RETIMER_ANX7451
 #define CONFIG_USB_MUX_RUNTIME_CONFIG
 #define CONFIG_USB_MUX_AMD_FP6
 
@@ -306,6 +309,12 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
+enum sensor_id {
+	BASE_ACCEL = 0,
+	BASE_GYRO,
+	SENSOR_COUNT,
+};
+
 /* Battery Types */
 enum battery_type {
 	BATTERY_AP18F4M,
@@ -332,7 +341,6 @@ enum mft_channel {
 	/* Number of MFT channels */
 	MFT_CH_COUNT,
 };
-
 
 /* Common definition for the USB PD interrupt handlers. */
 void tcpc_alert_event(enum gpio_signal signal);

@@ -506,7 +506,7 @@ int isl923x_set_ac_prochot(int chgnum, uint16_t ma)
 		return EC_ERROR_INVAL;
 	}
 
-	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_AC, ma);
+	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_AC, AC_CURRENT_TO_REG(ma));
 	if (rv)
 		CPRINTS("%s set_ac_prochot failed (%d)", CHARGER_NAME, rv);
 	return rv;
@@ -521,7 +521,7 @@ int isl923x_set_dc_prochot(int chgnum, uint16_t ma)
 		return EC_ERROR_INVAL;
 	}
 
-	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_DC, ma);
+	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_DC, CURRENT_TO_REG(ma));
 	if (rv)
 		CPRINTS("%s set_dc_prochot failed (%d)", CHARGER_NAME, rv);
 	return rv;
@@ -741,14 +741,25 @@ static void isl923x_init(int chgnum)
 		/*
 		 * Ignore BATGONE on auxiliary charger ICs as it's not connected
 		 * there.
+		 * Clear DISABLE_GP_CMP & MCU_LDO_BAT_STATE_DISABLE to
+		 * enable ALERT_B with control the power of sub-board
 		 */
 		if (chgnum != CHARGER_PRIMARY) {
 			if (raw_read16(chgnum, ISL9238_REG_CONTROL4, &reg))
 				goto init_fail;
 
 			reg |= RAA489000_C4_BATGONE_DISABLE;
+			reg &= ~RAA489000_C4_DISABLE_GP_CMP;
 
 			if (raw_write16(chgnum, ISL9238_REG_CONTROL4, reg))
+				goto init_fail;
+
+			if (raw_read16(chgnum, RAA489000_REG_CONTROL8, &reg))
+				goto init_fail;
+
+			reg &= ~RAA489000_C8_MCU_LDO_BAT_STATE_DISABLE;
+
+			if (raw_write16(chgnum, RAA489000_REG_CONTROL8, reg))
 				goto init_fail;
 		}
 	}
@@ -786,6 +797,14 @@ out:
 }
 
 #ifdef CONFIG_CHARGER_RAA489000
+int raa489000_enable_asgate(int chgnum, bool enable)
+{
+	enum mask_update_action action = enable ? MASK_SET : MASK_CLR;
+
+	return raw_update16(chgnum, RAA489000_REG_CONTROL8,
+			    RAA489000_C8_ASGATE_ON_READY, action);
+}
+
 void raa489000_hibernate(int chgnum, bool disable_adc)
 {
 	int rv, regval;

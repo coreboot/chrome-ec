@@ -9,13 +9,15 @@
 #ifndef __CROS_EC_USB_MUX_ANX7451_H
 #define __CROS_EC_USB_MUX_ANX7451_H
 
-#define ANX7451_I2C_READY_DELAY_MS	30
-
 /* I2C interface addresses */
 #define ANX7451_I2C_ADDR0_FLAGS		0x10
 #define ANX7451_I2C_ADDR1_FLAGS		0x14
 #define ANX7451_I2C_ADDR2_FLAGS		0x16
 #define ANX7451_I2C_ADDR3_FLAGS		0x11
+
+/* This register is not documented in datasheet. */
+#define ANX7451_REG_POWER_CNTRL		0x2B
+#define ANX7451_POWER_CNTRL_OFF		0xFF
 
 /*
  * Ultra low power control register.
@@ -33,5 +35,7 @@
 #define ANX7451_ULP_CFG_MODE_FLIP	BIT(2)
 #define ANX7451_ULP_CFG_MODE_DP_EN	BIT(1)
 #define ANX7451_ULP_CFG_MODE_USB_EN	BIT(0)
+
+extern const struct usb_mux_driver anx7451_usb_mux_driver;
 
 #endif /* __CROS_EC_USB_MUX_ANX7451_H */

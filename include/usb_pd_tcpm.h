@@ -81,9 +81,10 @@ enum tcpm_transmit_type {
 
 enum tcpc_transmit_complete {
 	TCPC_TX_UNSET = -1,
-	TCPC_TX_COMPLETE_SUCCESS =   0,
-	TCPC_TX_COMPLETE_DISCARDED = 1,
-	TCPC_TX_COMPLETE_FAILED =    2,
+	TCPC_TX_WAIT = 0,
+	TCPC_TX_COMPLETE_SUCCESS =   1,
+	TCPC_TX_COMPLETE_DISCARDED = 2,
+	TCPC_TX_COMPLETE_FAILED =    3,
 };
 
 /*
@@ -366,17 +367,16 @@ struct tcpm_drv {
 	int (*get_chip_info)(int port, int live,
 			struct ec_response_pd_chip_info_v1 *info);
 
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USB_PD_PPC
 	/**
 	 * Request current sinking state of the TCPC
 	 * NOTE: this is most useful for PPCs that can not tell on their own
 	 *
 	 * @param port Type-C port number
-	 * @param is_sinking true for sinking, false for not
 	 *
-	 * @return EC_SUCCESS, EC_ERROR_UNIMPLEMENTED or error
+	 * @return true if sinking else false
 	 */
-	int (*get_snk_ctrl)(int port, bool *sinking);
+	bool (*get_snk_ctrl)(int port);
 
 	/**
 	 * Send SinkVBUS or DisableSinkVBUS command
@@ -393,11 +393,10 @@ struct tcpm_drv {
 	 * NOTE: this is most useful for PPCs that can not tell on their own
 	 *
 	 * @param port Type-C port number
-	 * @param is_sourcing true for sourcing, false for not
 	 *
-	 * @return EC_SUCCESS, EC_ERROR_UNIMPLEMENTED or error
+	 * @return true if sourcing else false
 	 */
-	int (*get_src_ctrl)(int port, bool *sourcing);
+	bool (*get_src_ctrl)(int port);
 
 	/**
 	 * Send SourceVBUS or DisableSourceVBUS command

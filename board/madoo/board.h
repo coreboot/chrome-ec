@@ -39,7 +39,6 @@
 
 /* LED */
 #define CONFIG_LED_COMMON
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 
@@ -162,8 +161,6 @@ enum fw_config_keyboard_type {
 	COMMON_KB = 0,
 	CUST_UK2_KB = 1,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

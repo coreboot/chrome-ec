@@ -238,8 +238,13 @@ int i2c_xfer_unlocked(const int port,
 			num_msgs++;
 		}
 
+
+		if (no_pec_af & ~I2C_ADDR_MASK)
+			ccprintf("Ignoring flags from i2c addr_flags: %04x",
+					no_pec_af);
+
 		return i2c_transfer(i2c_get_device_for_port(port), msg,
-				    num_msgs, no_pec_af);
+				    num_msgs, I2C_STRIP_FLAGS(no_pec_af));
 #elif defined(CONFIG_I2C_XFER_LARGE_TRANSFER)
 		ret = i2c_xfer_no_retry(port, no_pec_af,
 					    out, out_size, in,
@@ -1213,7 +1218,8 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 		if (resp->num_msgs == params->num_msgs - 1)
 			xferflags |= I2C_XFER_STOP;
 
-#if defined(VIRTUAL_BATTERY_ADDR_FLAGS) && defined(I2C_PORT_VIRTUAL_BATTERY)
+#if defined(VIRTUAL_BATTERY_ADDR_FLAGS) && \
+	(defined(CONFIG_ZEPHYR) || defined(I2C_PORT_VIRTUAL_BATTERY))
 		if (params->port == I2C_PORT_VIRTUAL_BATTERY &&
 		    addr_flags == VIRTUAL_BATTERY_ADDR_FLAGS) {
 			if (virtual_battery_handler(resp, in_len, &rv,

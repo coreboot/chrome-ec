@@ -63,6 +63,9 @@ PACK_EC=pack_ec.py
 ifeq ($(CHIP_FAMILY),mec152x)
 	PACK_EC=pack_ec_mec152x.py
 endif
+ifeq ($(CHIP_FAMILY),mec172x)
+	PACK_EC=pack_ec_mec172x.py
+endif
 
 # pack_ec.py creates SPI flash image for MEC
 # _rw_size is CONFIG_RW_SIZE
@@ -88,7 +91,7 @@ objs_lfw += $(out)/RW/common/version.o
 dirs-y+=chip/$(CHIP)/lfw
 
 # objs with -lfw suffix are to include lfw's gpio
-$(out)/RW/%-lfw.o: private CC+=-I$(BDIR)/lfw -DLFW=$(EMPTY)
+$(out)/RW/%-lfw.o: private CC+=-Ichip/mchp/lfw -DLFW=$(EMPTY)
 # Remove the lto flag for the loader.  It actually causes it to bloat in size.
 ifeq ($(CONFIG_LTO),y)
 $(out)/RW/%-lfw.o: private CFLAGS_CPU := $(filter-out -flto, $(CFLAGS_CPU))
@@ -97,6 +100,15 @@ $(out)/RW/%-lfw.o: %.c
 	$(call quiet,c_to_o,CC     )
 
 # let lfw's elf link only with selected objects
+ifeq ($(CHIP_FAMILY),mec172x)
+$(out)/RW/%-lfw.elf: private objs = $(objs_lfw)
+$(out)/RW/%-lfw.elf: override shlib :=
+$(out)/RW/%-lfw.elf: %_416kb.ld $(objs_lfw)
+	$(call quiet,elf,LD     )
+
+# final image needs lfw loader
+$(out)/$(PROJECT).bin: $(chip-lfw-flat)
+else
 $(out)/RW/%-lfw.elf: private objs = $(objs_lfw)
 $(out)/RW/%-lfw.elf: override shlib :=
 $(out)/RW/%-lfw.elf: %.ld $(objs_lfw)
@@ -104,3 +116,4 @@ $(out)/RW/%-lfw.elf: %.ld $(objs_lfw)
 
 # final image needs lfw loader
 $(out)/$(PROJECT).bin: $(chip-lfw-flat)
+endif

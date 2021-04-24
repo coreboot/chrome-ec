@@ -135,10 +135,9 @@ enum temp_sensor_id {
 /* List of possible batteries */
 enum battery_type {
 	BATTERY_C140254,
+	BATTERY_C340184,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 

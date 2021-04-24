@@ -51,7 +51,6 @@
 #define CONFIG_USB_MUX_IT5205
 
 #define CONFIG_LED_ONOFF_STATES
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_COMMON
 
 /* Motion Sensors */
@@ -139,7 +138,6 @@ void emmc_cmd_interrupt(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void board_reset_pd_mcu(void);
 int board_get_version(void);
-int board_is_sourcing_vbus(int port);
 
 /* returns the i2c port number of charger */
 int board_get_charger_i2c(void);

@@ -21,6 +21,18 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
+/* Vboot Config */
+#define CONFIG_CRC8
+#define CONFIG_VBOOT_EFS2
+#define CONFIG_VBOOT_HASH
+#define CONFIG_VSTORE
+#define CONFIG_VSTORE_SLOT_COUNT 1
+#define GPIO_PACKET_MODE_EN	GPIO_EC_GSC_PACKET_MODE
+
+/* CBI Config */
+#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_BOARD_VERSION_CBI
+
 /* Undefs because Box */
 #undef CONFIG_LID_SWITCH
 #undef CONFIG_HIBERNATE
@@ -41,7 +53,6 @@
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_S0IX
-#define CONFIG_POWER_SHUTDOWN_PAUSE_IN_S5
 #define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 #define G3_TO_PWRBTN_DELAY_MS 80
@@ -201,7 +212,9 @@
 #define I2C_PORT_THERMAL_AP	NPCX_I2C_PORT7_0
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 
-/* Fan features */
+/* Fan Config */
+#define CONFIG_FANS FAN_CH_COUNT
+/* TODO: Set CONFIG_FAN_INIT_SPEED, defaults to 100 */
 
 /* LED Config */
 #define CONFIG_PWM
@@ -273,14 +286,28 @@ enum temp_sensor_id {
 /* PWM Channels */
 enum pwm_channel {
 	PWM_CH_FAN = 0,
-	PWM_CH_LED_CHRG,
-	PWM_CH_LED_FULL,
+	PWM_CH_LED1,
+	PWM_CH_LED2,
 	PWM_CH_COUNT
+};
+
+/* Fan Channels */
+enum fan_channel {
+	FAN_CH_0 = 0,
+	/* Number of FAN channels */
+	FAN_CH_COUNT,
+};
+
+enum mft_channel {
+	MFT_CH_0 = 0,
+	/* Number of MFT channels */
+	MFT_CH_COUNT,
 };
 
 /* Baseboard Interrupt handlers. */
 void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
 void baseboard_en_pwr_s0(enum gpio_signal signal);
+void baseboard_usb_fault_alert(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ext_charger_interrupt(enum gpio_signal signal);
 void dp_fault_interrupt(enum gpio_signal signal);

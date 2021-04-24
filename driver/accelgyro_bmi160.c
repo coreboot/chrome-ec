@@ -11,9 +11,9 @@
 #include "accelgyro.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accelgyro_bmi_common.h"
-#include "driver/accelgyro_bmi160.h"
-#include "driver/mag_bmm150.h"
+#include "accelgyro_bmi_common.h"
+#include "accelgyro_bmi160.h"
+#include "mag_bmm150.h"
 #include "hwtimer.h"
 #include "i2c.h"
 #include "math_util.h"
@@ -27,6 +27,23 @@
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
+
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_ACCEL_INTERRUPTS)
+/* Get the motion sensor ID of the BMI160 sensor that generates the interrupt.
+ * The interrupt is converted to the event and transferred to motion sense task
+ * that actually handles the interrupt.
+ *
+ * Here we use an alias (bmi160_int) to get the motion sensor ID. This alias
+ * MUST be defined for this driver to work.
+ * aliases {
+ *   bmi160-int = &base_accel;
+ * };
+ */
+#if DT_NODE_EXISTS(DT_ALIAS(bmi160_int))
+#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(bmi160_int)))
+#endif
+#endif
 
 STATIC_IF(CONFIG_BMI_ORIENTATION_SENSOR) void irq_set_orientation(
 				struct motion_sensor_t *s,

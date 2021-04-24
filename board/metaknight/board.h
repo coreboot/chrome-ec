@@ -104,6 +104,7 @@
 #define CONFIG_ACCEL_KX022          /* Lid accel second source */
 #define CONFIG_ACCELGYRO_BMI160     /* Base accel */
 #define CONFIG_ACCELGYRO_LSM6DSM    /* Base accel second source */
+#define CONFIG_ACCELGYRO_ICM426XX   /* Base accel second source */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -115,6 +116,8 @@
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #define CONFIG_LID_ANGLE
@@ -184,8 +187,6 @@ enum battery_type {
 	BATTERY_SMP_PCVPBP144,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 void motion_interrupt(enum gpio_signal signal);
 

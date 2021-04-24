@@ -35,6 +35,7 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Keyboard backliht */
 #define CONFIG_PWM
@@ -166,6 +167,7 @@
 enum battery_type {
 	BATTERY_AP19B8M,
 	BATTERY_LGC_AP18C8K,
+	BATTERY_COSMX_AP20CBL,
 	BATTERY_TYPE_COUNT,
 };
 

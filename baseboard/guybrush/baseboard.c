@@ -7,6 +7,8 @@
 
 #include "adc.h"
 #include "adc_chip.h"
+#include "cros_board_info.h"
+#include "base_fw_config.h"
 #include "battery_fuel_gauge.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
@@ -18,9 +20,12 @@
 #include "chipset.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
+#include "driver/retimer/anx7491.h"
+#include "driver/retimer/ps8811.h"
 #include "driver/retimer/ps8818.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
+#include "driver/usb_mux/anx7451.h"
 #include "driver/usb_mux/amd_fp6.h"
 #include "fan.h"
 #include "fan_chip.h"
@@ -36,7 +41,7 @@
 #include "pwm.h"
 #include "temp_sensor.h"
 #include "thermal.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
@@ -364,6 +369,9 @@ static void baseboard_interrupt_init(void)
 	/* Enable SBU fault interrupts */
 	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
 	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_ODL);
+
+	/* Enable Accel/Gyro interrupt for convertibles. */
+	gpio_enable_interrupt(GPIO_6AXIS_INT_L);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -402,7 +410,7 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
  * properly.
  */
 static int fsusb42umx_set_mux(const struct usb_mux*, mux_state_t);
-const struct usb_mux_driver usbc0_sbu_mux_driver = {
+struct usb_mux_driver usbc0_sbu_mux_driver = {
 	.set = fsusb42umx_set_mux,
 };
 
@@ -410,18 +418,39 @@ const struct usb_mux_driver usbc0_sbu_mux_driver = {
  * Since FSUSB42UMX is not a i2c device, .i2c_port and
  * .i2c_addr_flags are not required here.
  */
-const struct usb_mux usbc0_sbu_mux = {
+struct usb_mux usbc0_sbu_mux = {
 	.usb_port = USBC_PORT_C0,
 	.driver = &usbc0_sbu_mux_driver,
 };
 
-static int board_ps8818_mux_set(const struct usb_mux*, mux_state_t);
-const struct usb_mux usbc1_ps8818 = {
+__overridable int board_c1_ps8818_mux_set(const struct usb_mux *me,
+					  mux_state_t mux_state)
+{
+	CPRINTSUSB("C1: PS8818 mux using default tuning");
+	return 0;
+}
+
+struct usb_mux usbc1_ps8818 = {
 	.usb_port = USBC_PORT_C1,
 	.i2c_port = I2C_PORT_TCPC1,
 	.i2c_addr_flags = PS8818_I2C_ADDR_FLAGS,
 	.driver = &ps8818_usb_retimer_driver,
-	.board_set = &board_ps8818_mux_set,
+	.board_set = &board_c1_ps8818_mux_set,
+};
+
+__overridable int board_c1_anx7451_mux_set(const struct usb_mux *me,
+					   mux_state_t mux_state)
+{
+	CPRINTSUSB("C1: ANX7451 mux using default tuning");
+	return 0;
+}
+
+struct usb_mux usbc1_anx7451 = {
+	.usb_port = USBC_PORT_C1,
+	.i2c_port = I2C_PORT_TCPC1,
+	.i2c_addr_flags = ANX7491_I2C_ADDR3_FLAGS,
+	.driver = &anx7451_usb_mux_driver,
+	.board_set = &board_c1_anx7451_mux_set,
 };
 
 struct usb_mux usb_muxes[] = {
@@ -437,7 +466,7 @@ struct usb_mux usb_muxes[] = {
 		.i2c_port = I2C_PORT_USB_MUX,
 		.i2c_addr_flags = AMD_FP6_C4_MUX_I2C_ADDR,
 		.driver = &amd_fp6_usb_mux_driver,
-		.next_mux = &usbc1_ps8818,
+		/* .next_mux = filled in by setup_mux based on fw_config */
 	}
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -544,81 +573,22 @@ static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state)
 	return EC_SUCCESS;
 }
 
-/*
- * PS8818 set mux board tuning.
- * Adds in board specific gain and DP lane count configuration
- * TODO(b/179036200): Adjust PS8818 tuning for guybrush and variants
- */
-static int board_ps8818_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
+static void setup_mux(void)
 {
-	int rv = EC_SUCCESS;
-
-	/* USB specific config */
-	if (mux_state & USB_PD_MUX_USB_ENABLED) {
-		/* Boost the USB gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		/* Set the RX input termination */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_RX_PHY,
-					PS8818_RX_INPUT_TERM_MASK,
-					PS8818_RX_INPUT_TERM_112_OHM);
-		if (rv)
-			return rv;
+	switch (board_get_usb_c1_mux()) {
+	case USB_C1_MUX_PS8818:
+		CPRINTSUSB("C1: Setting PS8818 mux");
+		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_ps8818;
+		break;
+	case USB_C1_MUX_ANX7451:
+		CPRINTSUSB("C1: Setting ANX7451 mux");
+		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_anx7451;
+		break;
+	default:
+		CPRINTSUSB("C1: Mux is unknown");
 	}
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
-		/* Boost the DP gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_DPEQ_LEVEL,
-					PS8818_DPEQ_LEVEL_UP_MASK,
-					PS8818_DPEQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		/* Enable HPD on the DB */
-		gpio_set_level(GPIO_USB_C1_HPD, 1);
-	} else {
-		/* Disable HPD on the DB */
-		gpio_set_level(GPIO_USB_C1_HPD, 0);
-	}
-
-	return rv;
 }
+DECLARE_HOOK(HOOK_INIT, setup_mux, HOOK_PRIO_INIT_I2C);
 
 int board_set_active_charge_port(int port)
 {
@@ -905,11 +875,77 @@ void board_hibernate(void)
 	}
 }
 
+__overridable void board_a1_ps8811_retimer_setup(void)
+{
+	CPRINTSUSB("A1: PS8811 retimer using default tuning");
+}
+
+static void baseboard_a1_ps8811_retimer_setup(void)
+{
+	int rv;
+	int tries = 2;
+
+	do {
+		int val;
+
+		rv = i2c_read8(I2C_PORT_TCPC1,
+				PS8811_I2C_ADDR_FLAGS3 + PS8811_REG_PAGE1,
+				PS8811_REG1_USB_BEQ_LEVEL, &val);
+	} while (rv && --tries);
+
+	if (rv) {
+		CPRINTSUSB("A1: PS8811 retimer not detected!");
+		return;
+	}
+	CPRINTSUSB("A1: PS8811 retimer detected");
+	board_a1_ps8811_retimer_setup();
+}
+
+__overridable void board_a1_anx7491_retimer_setup(void)
+{
+	CPRINTSUSB("A1: ANX7491 retimer using default tuning");
+}
+
+static void baseboard_a1_anx7491_retimer_setup(void)
+{
+	int rv;
+	int tries = 2;
+
+	do {
+		int val;
+
+		rv = i2c_read8(I2C_PORT_TCPC1, ANX7491_I2C_ADDR0_FLAGS, 0,
+			       &val);
+	} while (rv && --tries);
+	if (rv) {
+		CPRINTSUSB("A1: ANX7491 retimer not detected!");
+		return;
+	}
+	CPRINTSUSB("A1: ANX7491 retimer detected");
+	board_a1_anx7491_retimer_setup();
+}
+
+void baseboard_a1_retimer_setup(void)
+{
+	switch (board_get_usb_a1_retimer()) {
+	case USB_A1_RETIMER_ANX7491:
+		baseboard_a1_anx7491_retimer_setup();
+		break;
+	case USB_A1_RETIMER_PS8811:
+		baseboard_a1_ps8811_retimer_setup();
+		break;
+	default:
+		CPRINTSUSB("A1: Unknown retimer!");
+	}
+}
+DECLARE_DEFERRED(baseboard_a1_retimer_setup);
+
 static void baseboard_chipset_suspend(void)
 {
 	/* Disable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 1);
 	gpio_set_level(GPIO_EN_KB_BL, 0);
+	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
 	     HOOK_PRIO_DEFAULT);
@@ -919,6 +955,9 @@ static void baseboard_chipset_resume(void)
 	/* Enable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 0);
 	gpio_set_level(GPIO_EN_KB_BL, 1);
+	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
+	/* Some retimers take several ms to be ready, so defer setup call */
+	hook_call_deferred(&baseboard_a1_retimer_setup_data, 20 * MSEC);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
 
@@ -954,4 +993,18 @@ void baseboard_en_pwr_s0(enum gpio_signal signal)
 
 	/* Now chain off to the normal power signal interrupt handler. */
 	power_signal_interrupt(signal);
+}
+
+int get_fw_config_field(uint8_t offset, uint8_t width)
+{
+	static uint32_t cached_fw_config = UNINITIALIZED_FW_CONFIG;
+
+	if (cached_fw_config == UNINITIALIZED_FW_CONFIG) {
+		uint32_t val;
+
+		if (cbi_get_fw_config(&val) != EC_SUCCESS)
+			return -1;
+		cached_fw_config = val;
+	}
+	return (cached_fw_config >> offset) & ((1 << width) - 1);
 }

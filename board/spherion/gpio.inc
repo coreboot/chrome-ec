@@ -13,8 +13,6 @@ GPIO_INT(POWER_BUTTON_L,     PIN(E, 4), GPIO_INT_BOTH | GPIO_PULL_UP |
 	 GPIO_HIB_WAKE_HIGH, power_button_interrupt) /* H1_EC_PWR_BTN_ODL */
 GPIO_INT(LID_OPEN,           PIN(E, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,
          lid_interrupt)
-GPIO_INT(TABLET_MODE_L,      PIN(J, 7), GPIO_INT_BOTH,
-         gmr_tablet_switch_isr)
 
 /* Chipset interrupts */
 GPIO_INT(AP_EC_WARM_RST_REQ, PIN(D, 3), GPIO_INT_RISING | GPIO_SEL_1P8V,
@@ -29,11 +27,6 @@ GPIO_INT(PMIC_EC_PWRGD, PIN(F, 3),
          GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V, power_signal_interrupt)
 
 /* Sensor Interrupts */
-GPIO_INT(BASE_IMU_INT_L,     PIN(J, 2), GPIO_INT_FALLING | GPIO_SEL_1P8V,
-         bmi160_interrupt)
-GPIO_INT(LID_ACCEL_INT_L,    PIN(J, 3), GPIO_INT_FALLING | GPIO_SEL_1P8V,
-         lis2dw12_interrupt)
-GPIO(ALS_RGB_INT_ODL,        PIN(F, 0), GPIO_INPUT)
 
 /* USB-C interrupts */
 GPIO_INT(USB_C0_PPC_INT_ODL, PIN(D, 1), GPIO_INT_BOTH, ppc_interrupt)
@@ -83,7 +76,7 @@ GPIO(BC12_DET_EN,            PIN(J, 5), GPIO_OUT_LOW) /* EN_USB_C0_BC12_DET */
 GPIO(EN_EC_ID_ODL,           PIN(H, 5), GPIO_ODR_LOW)
 GPIO(ENTERING_RW,            PIN(C, 5), GPIO_OUT_LOW) /* EC_ENTERING_RW */
 GPIO(EC_USB_C0_MUX_RESET_L,  PIN(D, 7), GPIO_OUT_HIGH)
-GPIO(EC_KB_BL_EN,            PIN(I, 7), GPIO_OUT_LOW) /* Keyboard backlight enable */
+GPIO(EC_KB_BL_EN,            PIN(G, 3), GPIO_OUT_LOW) /* Keyboard backlight enable */
 
 /* I2C pins - Alternate function below configures I2C module on these pins */
 GPIO(I2C_A_SCL,              PIN(B, 3), GPIO_INPUT) /* I2C_CHG_BATT_SCL */
@@ -115,7 +108,7 @@ ALTERNATE(PIN_MASK(E, 0x81), 1, MODULE_I2C, 0) /* I2C E */
 ALTERNATE(PIN_MASK(B, 0x03), 1, MODULE_UART, 0) /* EC to Servo */
 
 /* ADC */
-ALTERNATE(PIN_MASK(I, 0x4F), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,6 */
+ALTERNATE(PIN_MASK(I, 0xEF), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,5,6,7 */
 
 /* SPI */
 ALTERNATE(PIN_MASK(M, 0x33), 0, MODULE_SPI, 0) /* SPI */
@@ -127,6 +120,10 @@ GPIO(PACKET_MODE_EN,         PIN(A, 3), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(UNUSED_GPIOA0,          PIN(A, 0), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(UNUSED_GPIOA1,          PIN(A, 1), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(UNUSED_GPIOA2,          PIN(A, 2), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOF0,          PIN(F, 0), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOJ2,          PIN(J, 2), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOJ3,          PIN(J, 3), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(UNUSED_GPIOJ7,          PIN(J, 7), GPIO_INPUT | GPIO_PULL_UP)
 
 /* b/160218054: behavior not defined */
 /* *_ODL pin has external pullup so don't pull it down. */
@@ -136,21 +133,16 @@ GPIO(PG_MT6315_GPU_ODL,      PIN(H, 6), GPIO_INPUT)
 GPIO(EN_PP3000_SD_U,         PIN(G, 1), GPIO_INPUT | GPIO_PULL_DOWN | GPIO_SEL_1P8V)
 /* reserved for future use */
 GPIO(CCD_MODE_ODL,           PIN(C, 4), GPIO_INPUT)
-/*
- * ADC pins don't have internal pull-down capability,
- * so we set them as output low.
- */
-GPIO(NC_GPI5,                PIN(I, 5), GPIO_OUT_LOW)
+
 /* NC pins, enable internal pull-up/down to avoid floating state. */
 GPIO(NC_GPM2,                PIN(M, 2), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(NC_GPM3,                PIN(M, 3), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(NC_GPM6,                PIN(M, 6), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(SPI_CLK_GPG6,           PIN(G, 6), GPIO_INPUT | GPIO_PULL_UP)
 /*
- * These 4 pins don't have internal pull-down capability,
+ * These 3 pins don't have internal pull-down capability,
  * so we set them as output low.
  */
-GPIO(NC_GPG3,                PIN(G, 3), GPIO_OUT_LOW)
 GPIO(SPI_MOSI_GPG4,          PIN(G, 4), GPIO_OUT_LOW)
 GPIO(SPI_MISO_GPG5,          PIN(G, 5), GPIO_OUT_LOW)
 GPIO(SPI_CS_GPG7,            PIN(G, 7), GPIO_OUT_LOW)

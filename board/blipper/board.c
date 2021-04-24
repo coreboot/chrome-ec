@@ -180,10 +180,10 @@ static const struct ec_response_keybd_config blipper_keybd = {
 	.num_top_row_keys = 10,
 	.action_keys = {
 		TK_BACK,		/* T1 */
-		TK_FORWARD,		/* T2 */
-		TK_REFRESH,		/* T3 */
-		TK_FULLSCREEN,		/* T4 */
-		TK_OVERVIEW,		/* T5 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
 		TK_BRIGHTNESS_DOWN,	/* T6 */
 		TK_BRIGHTNESS_UP,	/* T7 */
 		TK_VOL_MUTE,		/* T8 */
@@ -316,7 +316,7 @@ int board_set_active_charge_port(int port)
 	if (port == CHARGE_PORT_NONE) {
 		tcpc_write(0, TCPC_REG_COMMAND,
 				TCPC_REG_COMMAND_SNK_CTRL_LOW);
-
+		raa489000_enable_asgate(0, false);
 		return EC_SUCCESS;
 	}
 
@@ -327,7 +327,8 @@ int board_set_active_charge_port(int port)
 	}
 
 	/* Enable requested charge port. */
-	if (tcpc_write(0, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(0, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTUSB("p%d: sink path enable failed.", port);
 		return EC_ERROR_UNKNOWN;

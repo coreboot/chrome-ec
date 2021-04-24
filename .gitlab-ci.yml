@@ -41,16 +41,40 @@ before_script:
   - export ZEPHYR_DIR=/zephyr
   - export PATH="$PATH:$HOME/.local/bin"
 
-test:
-  script:
-    echo "It works"
-
-run:
+# Users of this template must set:
+# $PROJECT to the project to build in zephyr/projects. E.g. "lazor")
+# $PROJECT_SUBDIR if it is in a subdirectory. E.g. "trogdor/"
+.build_template: &build_template
+  stage: build
   script:
     - zmake --zephyr-base "${ZEPHYR_BASE}" --modules-dir "${MODULES_DIR}"
-      -l DEBUG configure -b -B "${BUILD_DIR}/vol" -t zephyr zephyr/projects/volteer
-    - ls "${BUILD_DIR}/vol" "${BUILD_DIR}/vol/output"
+      -l DEBUG configure -b -B "${BUILD_DIR}/${PROJECT}" -t zephyr
+      zephyr/projects/${PROJECT_SUBDIR}${PROJECT}
+    - ls "${BUILD_DIR}/${PROJECT}" "${BUILD_DIR}/${PROJECT}/output"
   artifacts:
     paths:
-      - build/vol/output/*
+      - build/${PROJECT}/output/*
     expire_in: 1 week
+
+delbin:
+  variables:
+    PROJECT: "delbin"
+    PROJECT_SUBDIR: "volteer/"
+  <<: *build_template
+
+kohaku:
+  variables:
+    PROJECT: "kohaku"
+  <<: *build_template
+
+lazor:
+  variables:
+    PROJECT: "lazor"
+    PROJECT_SUBDIR: "trogdor/"
+  <<: *build_template
+
+volteer:
+  variables:
+    PROJECT: "volteer"
+    PROJECT_SUBDIR: "volteer/"
+  <<: *build_template

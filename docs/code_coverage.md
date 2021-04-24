@@ -36,13 +36,15 @@ appear to be caused in part by using relative paths instead of absolute paths.)
 
 ## Zephyr ztest code coverage
 
-This needs some work, but you can generate coverage reports with these commands:
+To build the Zephyr unit tests for code coverage run:
 
-```
-for i in zephyr/test/* ; do
-        builddir="build/ztest-coverage/$(basename $i)"
-        zmake configure --coverage --test -B ${builddir} $i
-        lcov --gcov-tool $HOME/trunk/src/platform/ec/util/llvm-gcov.sh -q -o - -c -d ${builddir} -t "$(basename $i)" --exclude '*/build-singleimage/zephyr/*/generated/*' | util/normalize_symlinks.py >${builddir}.info
-done
-genhtml -q -o build/ztest-coverage/coverage_rpt -t "Zephyr EC Unittest" -p /mnt/host/source/src -s build/ztest-coverage/*.info
-```
+`zmake coverage build/ztest-coverage`
+
+This target will compile, without linking, all zephyr projects with
+`CONFIG_COVERAGE` Kconfig option enabled, run the tests, and then process the
+profiling data into a code coverage report using the `lcov` and `genhtml`
+tools. This requires the `HAS_COVERAGE_SUPPORT` option, which can only be
+selected in `Kconfig.board`.
+
+The coverage report top-level page is
+`build/ztest-coverage/coverage_rpt/index.html`.

@@ -44,13 +44,14 @@
 
 #define INPUT_RESISTOR_RATIO \
 	((CONFIG_CHARGER_SENSE_RESISTOR_AC) / DEFAULT_SENSE_RESISTOR)
-#define REG_TO_INPUT_CURRENT(REG) ((REG + 1) * 50 / INPUT_RESISTOR_RATIO)
-#define INPUT_CURRENT_TO_REG(CUR) (((CUR) * INPUT_RESISTOR_RATIO / 50) - 1)
 
 #define CHARGING_RESISTOR_RATIO \
 	((CONFIG_CHARGER_SENSE_RESISTOR) / DEFAULT_SENSE_RESISTOR)
 #define REG_TO_CHARGING_CURRENT(REG) ((REG) / CHARGING_RESISTOR_RATIO)
 #define CHARGING_CURRENT_TO_REG(CUR) ((CUR) * CHARGING_RESISTOR_RATIO)
+#ifdef CONFIG_CHARGER_BQ25720
+#define VMIN_AP_VSYS_TH2_TO_REG(DV) ((DV) - 32)
+#endif
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
@@ -81,6 +82,18 @@ static const struct charger_info bq25710_charger_info = {
 
 static enum ec_error_list bq25710_get_option(int chgnum, int *option);
 static enum ec_error_list bq25710_set_option(int chgnum, int option);
+
+static inline int iin_dpm_reg_to_current(int reg)
+{
+	return (reg + 1) * BQ25710_IIN_DPM_CURRENT_STEP_MA /
+		INPUT_RESISTOR_RATIO;
+}
+
+static inline int iin_host_current_to_reg(int current)
+{
+	return (current * INPUT_RESISTOR_RATIO /
+		BQ25710_IIN_HOST_CURRENT_STEP_MA) - 1;
+}
 
 static inline enum ec_error_list raw_read16(int chgnum, int offset, int *value)
 {
@@ -155,7 +168,7 @@ static int bq25710_adc_start(int chgnum, int adc_en_mask)
 {
 	int reg;
 	int mode;
-	int tries_left = 8;
+	int tries_left = BQ25710_ADC_OPTION_ADC_CONV_MS;
 
 	/* Save current mode to restore same state after ADC read */
 	if (bq25710_get_low_power_mode(chgnum, &mode))
@@ -176,10 +189,12 @@ static int bq25710_adc_start(int chgnum, int adc_en_mask)
 
 	/*
 	 * Wait until the ADC operation completes. The spec says typical
-	 * conversion time is 10 msec. If low power mode isn't exited first,
-	 * then the conversion time jumps to ~60 msec.
+	 * conversion time is 10 msec (25 msec on bq25720). If low power
+	 * mode isn't exited first, then the conversion time jumps to
+	 * ~60 msec.
 	 */
 	do {
+		/* sleep 2 ms so we time out after 2x the expected time */
 		msleep(2);
 		raw_read16(chgnum, BQ25710_REG_ADC_OPTION, &reg);
 	} while (--tries_left && (reg & BQ25710_ADC_OPTION_ADC_START));
@@ -256,6 +271,22 @@ static void bq25710_init(int chgnum)
 		reg |= BQ25710_PROCHOT_PROFILE_IDCHG;
 #endif
 		raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, reg);
+#ifdef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
+		/*
+		 * The default VSYS_TH2 is 5.9v for a 2S config. Boards
+		 * may need to increase this for stability. PROCHOT is
+		 * asserted when the threshold is reached.
+		 */
+		if (!raw_read16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION,
+				&reg)) {
+			reg &= ~BQ25720_VMIN_AP_VSYS_TH2_MASK;
+			reg |= VMIN_AP_VSYS_TH2_TO_REG(
+				CONFIG_CHARGER_BQ25720_VSYS_TH2_DV) <<
+				BQ25720_VMIN_AP_VSYS_TH2_SHIFT;
+			raw_write16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION,
+				    reg);
+		}
+#endif
 	}
 
 	/* Reduce ILIM from default of 150% to 105% */
@@ -391,10 +422,10 @@ static enum ec_error_list bq25710_discharge_on_ac(int chgnum, int enable)
 static enum ec_error_list bq25710_set_input_current_limit(int chgnum,
 							  int input_current)
 {
-	int num_steps = INPUT_CURRENT_TO_REG(input_current);
+	int num_steps = iin_host_current_to_reg(input_current);
 
-	return raw_write16(chgnum, BQ25710_REG_IIN_HOST, num_steps <<
-			  BQ25710_CHARGE_IIN_BIT_0FFSET);
+	return raw_write16(chgnum, BQ25710_REG_IIN_HOST,
+			   num_steps << BQ25710_IIN_HOST_CURRENT_SHIFT);
 }
 
 static enum ec_error_list bq25710_get_input_current_limit(int chgnum,
@@ -411,8 +442,8 @@ static enum ec_error_list bq25710_get_input_current_limit(int chgnum,
 	rv = raw_read16(chgnum, BQ25710_REG_IIN_DPM, &reg);
 	if (!rv)
 		*input_current =
-			REG_TO_INPUT_CURRENT((reg >>
-					      BQ25710_CHARGE_IIN_BIT_0FFSET));
+			iin_dpm_reg_to_current(reg >>
+					       BQ25710_IIN_DPM_CURRENT_SHIFT);
 
 	return rv;
 }
@@ -597,8 +628,7 @@ static int bq25710_ramp_get_current_limit(int chgnum)
 		return 0;
 	}
 
-	return ((reg >> BQ25710_IIN_DPM_BIT_SHIFT) * BQ25710_IIN_DPM_STEP_MA +
-		BQ25710_IIN_DPM_STEP_MA);
+	return iin_dpm_reg_to_current(reg >> BQ25710_IIN_DPM_CURRENT_SHIFT);
 }
 #endif /* CONFIG_CHARGE_RAMP_HW */
 
@@ -634,12 +664,6 @@ static int console_bq25710_dump_regs(int argc, char **argv)
 		BQ25710_REG_CHARGE_OPTION_0,
 		BQ25710_REG_CHARGE_CURRENT,
 		BQ25710_REG_MAX_CHARGE_VOLTAGE,
-		BQ25710_REG_CHARGE_OPTION_1,
-		BQ25710_REG_CHARGE_OPTION_2,
-		BQ25710_REG_CHARGE_OPTION_3,
-		BQ25710_REG_PROCHOT_OPTION_0,
-		BQ25710_REG_PROCHOT_OPTION_1,
-		BQ25710_REG_ADC_OPTION,
 		BQ25710_REG_CHARGER_STATUS,
 		BQ25710_REG_PROCHOT_STATUS,
 		BQ25710_REG_IIN_DPM,
@@ -647,7 +671,16 @@ static int console_bq25710_dump_regs(int argc, char **argv)
 		BQ25710_REG_ADC_IBAT,
 		BQ25710_REG_ADC_CMPIN_IIN,
 		BQ25710_REG_ADC_VSYS_VBAT,
+		BQ25710_REG_CHARGE_OPTION_1,
+		BQ25710_REG_CHARGE_OPTION_2,
+		BQ25710_REG_CHARGE_OPTION_3,
+		BQ25710_REG_PROCHOT_OPTION_0,
 		BQ25710_REG_PROCHOT_OPTION_1,
+		BQ25710_REG_ADC_OPTION,
+#ifdef CONFIG_CHARGER_BQ25720
+		BQ25720_REG_CHARGE_OPTION_4,
+		BQ25720_REG_VMIN_ACTIVE_PROTECTION,
+#endif
 		BQ25710_REG_OTG_VOLTAGE,
 		BQ25710_REG_OTG_CURRENT,
 		BQ25710_REG_INPUT_VOLTAGE,

@@ -24,6 +24,10 @@
  * because it leaves some (NMI and faults) still enabled.
  */
 #define interrupt_disable_all() __asm__("cpsid i")
+#elif CONFIG_ZTEST
+#define interrupt_disable_all()
+#else /* !CONFIG_CPU_CORTEX_M */
+#define interrupt_disable_all() irq_lock()
 #endif
 #else /* !CONFIG_ZEPHYR */
 #define interrupt_disable_all() interrupt_disable()
@@ -115,6 +119,11 @@ void system_clear_reset_flags(uint32_t flags);
  * Print a description of the reset flags to the console.
  */
 void system_print_reset_flags(void);
+
+/**
+ * Print a banner at boot, including image type, version, and reset type
+ */
+void system_print_banner(void);
 
 /**
  * Check if system is locked down for normal consumer use.

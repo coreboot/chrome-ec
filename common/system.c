@@ -226,6 +226,10 @@ void system_encode_save_flags(int reset_flags, uint32_t *save_flags)
 	if (reset_flags & SYSTEM_RESET_STAY_IN_RO)
 		*save_flags |= EC_RESET_FLAG_STAY_IN_RO;
 
+	/* Add in watchdog flag into saved flags. */
+	if (reset_flags & SYSTEM_RESET_AP_WATCHDOG)
+		*save_flags |= EC_RESET_FLAG_AP_WATCHDOG;
+
 	/* Save reset flag */
 	if (reset_flags & (SYSTEM_RESET_HARD | SYSTEM_RESET_WAIT_EXT))
 		*save_flags |= EC_RESET_FLAG_HARD;
@@ -281,6 +285,24 @@ static void print_reset_flags(uint32_t flags)
 void system_print_reset_flags(void)
 {
 	print_reset_flags(reset_flags);
+}
+
+void system_print_banner(void)
+{
+	/* be less verbose if we boot for USB resume to meet spec timings */
+	if (!(system_get_reset_flags() & EC_RESET_FLAG_USB_RESUME)) {
+		CPUTS("\n");
+		if (system_jumped_to_this_image())
+			CPRINTS("UART initialized after sysjump");
+		else
+			CPUTS("\n--- UART initialized after reboot ---\n");
+		CPRINTF("[Image: %s, %s]\n",
+			 system_get_image_copy_string(),
+			 system_get_build_info());
+		CPUTS("[Reset cause: ");
+		system_print_reset_flags();
+		CPUTS("]\n");
+	}
 }
 
 int system_jumped_to_this_image(void)
@@ -946,6 +968,13 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 		if (!IS_ENABLED(CONFIG_HIBERNATE))
 			return EC_ERROR_INVAL;
 
+		/*
+		 * Allow some time for the system to quiesce before entering EC
+		 * hibernate.  Otherwise, some stray signals may cause an
+		 * immediate wake up.
+		 */
+		CPRINTS("Waiting 1s before hibernating...");
+		msleep(1000);
 		CPRINTS("system hibernating");
 		system_hibernate(hibernate_seconds, hibernate_microseconds);
 		/* That shouldn't return... */

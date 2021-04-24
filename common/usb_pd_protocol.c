@@ -1529,7 +1529,7 @@ static void pd_update_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 	 *   - it presents at least 27 W of available power
 	 */
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		uint32_t max_ma, max_mv, max_pdo, max_mw;
+		uint32_t max_ma, max_mv, max_pdo, max_mw, unused;
 
 		/*
 		 * Get max power that the partner offers (not necessarily what
@@ -1537,7 +1537,7 @@ static void pd_update_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 		 */
 		pd_find_pdo_index(pdo_cnt, pdos, PD_REV3_MAX_VOLTAGE,
 				  &max_pdo);
-		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv);
+		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv, &unused);
 		max_mw = max_ma * max_mv / 1000;
 
 		if (!(pdos[0] & PDO_FIXED_DUAL_ROLE) ||
@@ -3212,7 +3212,7 @@ void pd_task(void *u)
 			break;
 		case PD_STATE_SRC_DISCONNECTED:
 			timeout = 10*MSEC;
-
+			pd_set_src_caps(port, 0, NULL);
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 			/*
 			 * If SW decided we should be in a low power state and
@@ -3900,7 +3900,7 @@ void pd_task(void *u)
 #else
 			timeout = 10*MSEC;
 #endif
-
+			pd_set_src_caps(port, 0, NULL);
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 			/*
 			 * If SW decided we should be in a low power state and
@@ -5200,6 +5200,8 @@ static int command_pd(int argc, char **argv)
 #endif
 		else
 			return EC_ERROR_PARAM3;
+	} else if (!strncasecmp(argv[2], "srccaps", 7)) {
+		pd_srccaps_dump(port);
 	} else if (!strncasecmp(argv[2], "ping", 4)) {
 		int enable;
 
@@ -5317,7 +5319,7 @@ DECLARE_CONSOLE_COMMAND(pd, command_pd,
 			"\n\t<port> flash [erase|reboot|signature|info|version]"
 #endif /* CONFIG_CMD_PD_FLASH */
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
-			,
+			"\n\t<port> srccaps",
 			"USB PD");
 
 #ifdef HAS_TASK_HOSTCMD

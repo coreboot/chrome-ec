@@ -17,9 +17,12 @@
 #include "baseboard.h"
 
 /*
- * Disable features enabled by default.
+ * This will happen automatically on NPCX9 ES2 and later. Do not remove
+ * until we can confirm all earlier chips are out of service.
  */
-#undef CONFIG_HIBERNATE
+#define CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
+
+#define CONFIG_MP2964
 
 /* LED */
 #define CONFIG_LED_PWM
@@ -32,6 +35,41 @@
 #define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
 #define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
 #define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
+
+/* Sensors */
+#define CONFIG_ACCELGYRO_LSM6DSO	/* Base accel */
+#define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* TCS3400 ALS */
+#define CONFIG_ALS
+#define ALS_COUNT 1
+#define CONFIG_ALS_TCS3400
+#define CONFIG_ALS_TCS3400_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
+
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
+/* FIFO size is in power of 2. */
+#define CONFIG_ACCEL_FIFO_SIZE 256
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+
+/* Sensors without hardware FIFO are in forced mode */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+
+/* Lid accel */
+#define CONFIG_ACCEL_LIS2DWL
+#define CONFIG_ACCEL_LIS2DW_AS_BASE
+#define CONFIG_ACCEL_LIS2DW12_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
+
+#define CONFIG_ACCEL_INTERRUPTS
+
+/* Sensor console commands */
+#define CONFIG_CMD_ACCELS
+#define CONFIG_CMD_ACCEL_INFO
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -68,20 +106,19 @@
  * then redefined here to so it's more clear which signal is being used for
  * which purpose.
  */
-#define GPIO_AC_PRESENT			GPIO_ACOK_EC_OD
+#define GPIO_AC_PRESENT			GPIO_ACOK_OD
 #define GPIO_CPU_PROCHOT		GPIO_EC_PROCHOT_ODL
 #define GPIO_EC_INT_L			GPIO_EC_PCH_INT_ODL
 #define GPIO_ENABLE_BACKLIGHT		GPIO_EC_EN_EDP_BL
 #define GPIO_ENTERING_RW		GPIO_EC_ENTERING_RW
 #define GPIO_KBD_KSO2			GPIO_EC_KSO_02_INV
-#define GPIO_LID_OPEN			GPIO_LID_OPEN_OD
 #define GPIO_PACKET_MODE_EN		GPIO_EC_GSC_PACKET_MODE
 #define GPIO_PCH_PWRBTN_L		GPIO_EC_PCH_PWR_BTN_ODL
 #define GPIO_PCH_RSMRST_L		GPIO_EC_PCH_RSMRST_L
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_ODL
+#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -120,8 +157,11 @@
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
 #define I2C_PORT_CHARGER	NPCX_I2C_PORT7_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
+#define I2C_PORT_MP2964		NPCX_I2C_PORT7_0
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
+
+#define I2C_ADDR_MP2964_FLAGS	0x20
 
 /*
  * see b/174768555#comment22
@@ -151,6 +191,7 @@
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
+#define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	70
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
@@ -171,6 +212,15 @@ enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_CHARGER,
 	TEMP_SENSOR_COUNT
+};
+
+enum sensor_id {
+	LID_ACCEL = 0,
+	BASE_ACCEL,
+	BASE_GYRO,
+	CLEAR_ALS,
+	RGB_ALS,
+	SENSOR_COUNT
 };
 
 enum ioex_port {

@@ -574,18 +574,16 @@ int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 					? MASK_SET : MASK_CLR);
 }
 
-#ifdef CONFIG_USBC_PPC
-int tcpci_tcpm_get_snk_ctrl(int port, bool *sinking)
+#ifdef CONFIG_USB_PD_PPC
+bool tcpci_tcpm_get_snk_ctrl(int port)
 {
 	int rv;
 	int pwr_sts;
 
 	rv = tcpci_tcpm_get_power_status(port, &pwr_sts);
-	*sinking = (rv != EC_SUCCESS)
-			? 0
-			: pwr_sts & TCPC_REG_POWER_STATUS_SINKING_VBUS;
 
-	return rv;
+	return rv == EC_SUCCESS &&
+		pwr_sts & TCPC_REG_POWER_STATUS_SINKING_VBUS;
 }
 
 int tcpci_tcpm_set_snk_ctrl(int port, int enable)
@@ -596,17 +594,15 @@ int tcpci_tcpm_set_snk_ctrl(int port, int enable)
 	return tcpc_write(port, TCPC_REG_COMMAND, cmd);
 }
 
-int tcpci_tcpm_get_src_ctrl(int port, bool *sourcing)
+bool tcpci_tcpm_get_src_ctrl(int port)
 {
 	int rv;
 	int pwr_sts;
 
 	rv = tcpci_tcpm_get_power_status(port, &pwr_sts);
-	*sourcing = (rv != EC_SUCCESS)
-			? 0
-			: pwr_sts & TCPC_REG_POWER_STATUS_SOURCING_VBUS;
 
-	return rv;
+	return rv == EC_SUCCESS &&
+		pwr_sts & TCPC_REG_POWER_STATUS_SOURCING_VBUS;
 }
 
 int tcpci_tcpm_set_src_ctrl(int port, int enable)
@@ -1780,8 +1776,10 @@ const struct tcpm_drv tcpci_tcpm_drv = {
 	.drp_toggle		= &tcpci_tcpc_drp_toggle,
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USB_PD_PPC
+	.get_snk_ctrl		= &tcpci_tcpm_get_snk_ctrl,
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
+	.get_src_ctrl		= &tcpci_tcpm_get_src_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
 #endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER

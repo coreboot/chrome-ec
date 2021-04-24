@@ -31,7 +31,8 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # Create the command used to generate the ec_version.h file.
   add_custom_command(
           OUTPUT ${ec_version_file}
-          COMMAND ${PLATFORM_EC}/util/getversion.sh BOARD=${BOARD} > ${ec_version_file}
+          # TODO(b/185249526): zephyr: add project name to the version output
+          COMMAND BOARD=${BOARD}_zephyr ${PLATFORM_EC}/util/getversion.sh > ${ec_version_file}
           WORKING_DIRECTORY ${PLATFORM_EC}
   )
   # Create a custom target that will depend on the file.
@@ -61,7 +62,14 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # TODO: Enable LTO for all sources when Zephyr supports it.
   # See https://github.com/zephyrproject-rtos/zephyr/issues/2112
   if (DEFINED CONFIG_LTO)
-    set_property(TARGET app PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+    # The Zephyr toolchain generates linker errors if both CONFIG_LTO and
+    # CONFIG_FPU are used. See b/184302085.
+    if(("${ZEPHYR_TOOLCHAIN_VARIANT}" STREQUAL "zephyr") AND
+     (DEFINED CONFIG_FPU))
+      message(STATUS "Zephyr toolchain and CONFIG_FPU detected: disabling LTO")
+    else()
+      set_property(TARGET app PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+    endif()
   endif()
 endif()
 
@@ -163,6 +171,16 @@ add_subdirectory("app")
 add_subdirectory("drivers")
 
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
+# Creates a phony target all.libraries in case you only want to build the
+# libraries and not the binaries. For example for creating the initial zero
+# coverage files.
+get_property(ZEPHYR_LIBS_PROPERTY GLOBAL PROPERTY ZEPHYR_LIBS)
+add_custom_target(
+  all.libraries
+  DEPENDS
+  ${ZEPHYR_LIBS_PROPERTY}
+  kernel
+  )
 
 # CONFIG_PLATFORM_EC files that don't relate to something below should be
 # included here, sorted by filename. This is common functionality which is
@@ -184,10 +202,19 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/base32.c"
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA255
                                                 "${PLATFORM_EC}/driver/accel_bma2x2.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI260
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_KX022
+                                                "${PLATFORM_EC}/driver/accel_kionix.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI
                                                 "${PLATFORM_EC}/driver/accelgyro_bmi_common.c"
-                                                "${PLATFORM_EC}/driver/accelgyro_bmi260.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI160
+                                                "${PLATFORM_EC}/driver/accelgyro_bmi160.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI260
+                                                "${PLATFORM_EC}/driver/accelgyro_bmi260.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_ICM
+                                                "${PLATFORM_EC}/driver/accelgyro_icm_common.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_ICM426XX
+                                                "${PLATFORM_EC}/driver/accelgyro_icm426xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_FIFO
                                                 "${PLATFORM_EC}/common/motion_sense_fifo.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ADC_CMD
@@ -278,10 +305,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE
                                                 "${PLATFORM_EC}/common/lid_angle.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LID_SWITCH
                                                 "${PLATFORM_EC}/common/lid_switch.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
-                                                "${PLATFORM_EC}/common/motion_sense.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_EVENT
                                                 "${PLATFORM_EC}/common/mkbp_event.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
+                                                "${PLATFORM_EC}/common/motion_sense.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MP2964
+                                                "${PLATFORM_EC}/driver/mp2964.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PORT80
                                                 "${PLATFORM_EC}/common/port80.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWER_BUTTON
@@ -382,6 +411,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_DRP_ACC_TRYSRC
                                                 "${PLATFORM_EC}/common/usbc/usb_tc_drp_acc_trysrc_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pe_drp_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_dpm.c"
+						"${PLATFORM_EC}/common/usbc/usbc_pd_policy.c"
                                                 "${PLATFORM_EC}/common/usbc/dp_alt_mode.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PRL_SM

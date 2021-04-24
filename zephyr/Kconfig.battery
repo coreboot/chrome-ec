@@ -73,6 +73,30 @@ config PLATFORM_EC_BATTERY_PRESENT_GPIO
 
 endchoice  # battery presence
 
+config PLATFORM_EC_USE_BATTERY_DEVICE_CHEMISTRY
+	bool "Provide information about battery chemistry"
+	help
+	  Enable this to specify the chemistry of the battery device. It is
+	  only used for stress testing of reading the battery information over
+	  I2C.
+
+config PLATFORM_EC_BATTERY_DEVICE_CHEMISTRY
+	string "Battery-device chemistry"
+	depends on PLATFORM_EC_USE_BATTERY_DEVICE_CHEMISTRY
+	help
+	  Specify the battery chemistry for use with the I2C stress test.
+	  The value provided here must match what is read from the real
+	  battery. This is used in sb_i2c_test_read() to check that the battery
+	  is returning the right information. If it is not, there might be
+	  something wrong with the I2C implementation.
+
+config PLATFORM_EC_BATTERY_REVIVE_DISCONNECT
+	bool "Check for a battery in disconnect state"
+	help
+	  Check for battery in disconnect state (similar to cut-off state). If
+	  so, take it out of that state by force-applying a charge current.
+	  This option requires battery_get_disconnect_state() to be defined.
+
 choice "Charger select"
 	prompt "Select the charger to use"
 	help
@@ -139,6 +163,69 @@ config PLATFORM_EC_CHARGER_BQ25720
 
 endchoice  # "Charger select"
 
+config PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
+	bool "Board supports discharge mode"
+	help
+	  Enable this if the board supports discharging the battery even when
+	  AC power is present. This is used for testing. The function is
+	  provided either by the charger or by custom code in the board.
+
+if PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
+
+choice "Discharge control method"
+	prompt "Select the method of controlling discharge"
+	help
+	  Select which method is provided to enable and disable the discharge
+	  mode.
+
+config PLATFORM_EC_CHARGER_DISCHARGE_ON_AC_CHARGER
+	bool "Charger controls discharge mode"
+	help
+	  Enable this if the charger controls selection of discharge mode.
+	  In this case the charger must provide a function:
+
+	     int charger_discharge_on_ac(int enabled)
+
+	  It should enable this feature if enabled is true, else disable it.
+	  The function should return EC_SUCCESS
+
+config PLATFORM_EC_CHARGER_DISCHARGE_ON_AC_CUSTOM
+	bool "Custom control of discharge mode"
+	help
+	  Enable this if the discharge mode is controlled by a custom function.
+	  This function is typically provided by the board implementation:
+
+	     int board_discharge_on_ac(int enabled)
+
+	  It should enable this feature if enabled is true, else disable it.
+	  The function should return EC_SUCCESS
+
+endchoice  # "Discharge control method"
+
+endif  # PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
+
+config PLATFORM_EC_CHARGER_BQ25720_VSYS_TH2_CUSTOM
+	bool "VSYS_TH2 override"
+	depends on PLATFORM_EC_CHARGER_BQ25720
+	help
+	  Enable customizing the charger's VSYS_TH2 threshold.
+
+config PLATFORM_EC_CHARGER_BQ25720_VSYS_TH2_DV
+	int "VSYS threshold 2 in deci-volts"
+	range 32 95
+	default 32
+	depends on PLATFORM_EC_CHARGER_BQ25720_VSYS_TH2_CUSTOM
+	help
+	  Sets the VSYS threshold 2 in deci volts. This is the first
+	  threshold that will be encountered when VSYS droops, typically
+	  due to high power demand from the main processor. The charger
+	  chip reacts by asserting PROCHOT which the main processor uses
+	  as an indication to throttle back and reduce power demand. The
+	  charger chip uses default thresholds which may be low enough
+	  to cause system instability. The default for 1S batteries is
+	  3.2v and 5.9v for 2S or higher batteries.  The valid range is
+	  3.2v - 3.9v for 1S and 3.2 - 9.5v for 2S or higher batteries.
+
 config PLATFORM_EC_CHARGER_NARROW_VDC
 	bool
 	help
@@ -152,6 +239,54 @@ config PLATFORM_EC_CHARGER_NARROW_VDC
 
 	  This should be enabled by charger drivers which need it. It cannot
 	  be set otherwise, even in prj.conf
+
+config PLATFORM_EC_CHARGER_PROFILE_OVERRIDE
+	bool "Override the charger profile"
+	help
+	  Select this if the charger should call battery_override_params() to
+	  limit/correct the voltage and current requested by the battery pack
+	  before acting on the request.
+
+	  The board must provide this function:
+
+	    void battery_override_params(struct batt_params *batt);
+
+	  It may modify the parameters as needed.
+
+config PLATFORM_EC_CHARGER_PSYS
+	bool "Support system power-monitor (PSYS) function"
+	help
+	  Enable this to support monitoring of system power using the charger's
+	  PSYS function. The charger provides an output which can be read
+	  using an ADC channel on the EC.
+
+config PLATFORM_EC_CHARGER_PSYS_READ
+	bool "Allow reading PSYS (system power) value"
+	depends on PLATFORM_EC_CHARGER_PSYS
+	help
+	  Enable support for reading the system-power value (PSYS). This
+	  calls the function charger_get_system_power() which is provided
+	  by the charger.
+
+	  It also enables the "psys" console command.
+
+	  Sample output:
+
+	    PSYS from chg_adc: 456 mW
+
+config PLATFORM_EC_CHARGER_SENSE_RESISTOR
+	int "Value of the charge sense-resistor, in mOhms"
+	help
+	  The charge sense-resistor is used to detect the charge current to the
+	  battery. Its value must be known for the calculation to be correct.
+	  The value is typically around 10 mOhms.
+
+config PLATFORM_EC_CHARGER_SENSE_RESISTOR_AC
+	int "Value of the input sense-resistor, in mOhms"
+	help
+	  The input sense-resistor is used to detect the input current from the
+	  external AC power supply. Its value must be known for the calculation
+	  to be correct. The value is typically around 10 mOhms.
 
 config PLATFORM_EC_BATTERY_FUEL_GAUGE
 	bool "Board supplies battery info"
@@ -198,6 +333,14 @@ config PLATFORM_EC_CHARGE_RAMP_SW
 	  and removing them.
 
 endchoice  # "Charge-ramp method"
+
+config PLATFORM_EC_CONSOLE_CMD_CHARGER_ADC_AMON_BMON
+	bool "Console command: amonbmon"
+	help
+	  Enable the 'amonbmon' command. This shows the charger adapter-current
+	  monitor (AMON) and battery-charging current monitor (BMON).
+
+	     amonbmon a | b
 
 config PLATFORM_EC_CONSOLE_CMD_CHGRAMP
 	bool "Console command: chgramp"

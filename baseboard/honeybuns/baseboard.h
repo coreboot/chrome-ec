@@ -87,7 +87,8 @@
 #define CONFIG_CROS_BOARD_INFO
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CMD_CBI
-#define CONFIG_CMD_CBI_SET
+#define CBI_FW_MF_MASK BIT(0)
+#define CBI_FW_MF_PREFERENCE(val) (val & (CBI_FW_MF_MASK))
 
 /* USB Configuration */
 #define CONFIG_USB
@@ -134,6 +135,8 @@ enum usb_strings {
 #define CONFIG_USB_PD_ALT_MODE_UFP_DP
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_REV30
+#undef CONFIG_USB_PD_PULLUP
+#define CONFIG_USB_PD_PULLUP TYPEC_RP_3A0
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_PS8805
 #define CONFIG_USB_PD_TCPM_STM32GX
@@ -216,6 +219,11 @@ struct power_seq {
 	unsigned int delay_ms;   /* delay (in msec) after setting gpio_signal */
 };
 
+enum mf_preference {
+	MF_OFF = 0,
+	MF_ON,
+};
+
 /*
  * This is required as adc_channel is included in adc.h which ends up being
  * included when TCPMv2 functions are included
@@ -227,7 +235,47 @@ enum adc_channel {
 extern const struct power_seq board_power_seq[];
 extern const size_t board_power_seq_count;
 
+void baseboard_power_button_evt(int level);
+
+/*
+ * Configure the host port to present Rd on both CC lines. This function is
+ * called in RO which does not otherwise have usbc/usb-pd support.
+ *
+ * @return true - initialized. false - not.
+ */
 int baseboard_usbc_init(int port);
+
+/*
+ * Get a board's desired multi-function (MF) prefernce. This allows for board
+ * specific policy.
+ *
+ * @return 1 if multi function (DP + USB3) is preferred, 0 otherwise
+ */
+int dock_get_mf_preference(void);
+
+/*
+ * Initialize and configure PPC used for USB3 only port
+ *
+ * @return EC success if PPC initialization is successful
+ */
+int baseboard_config_usbc_usb3_ppc(void);
+
+/*
+ * Called from interrupt handler for PS8803 attached.src gpio. This gpio signal
+ * will be set high by the PS8803 when it's in the attached.src state and low
+ * otherwise. For boards wich have a PPC on this port, this signal is used to
+ * enable/disable VBUS in the PPC.
+ */
+void baseboard_usb3_check_state(void);
+
+
+/*
+ * Set MST_LANE_CONTROL gpio to match the DP pin configuration selected
+ * by the host in the DP Configure SVDM message.
+ *
+ * @param dock_mf 1 -> 2 lanes DP, 0 -> 4 lanes DP
+ */
+void baseboard_set_mst_lane_control(int dock_mf);
 
 #endif /* !__ASSEMBLER__ */
 

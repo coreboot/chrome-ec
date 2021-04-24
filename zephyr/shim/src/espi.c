@@ -137,38 +137,6 @@ static void espi_vwire_handler(const struct device *dev,
 	}
 }
 
-static void handle_host_write(uint32_t data);
-static void handle_acpi_write(uint32_t data);
-static void kbc_ibf_obe_handler(uint32_t data);
-
-static void espi_peripheral_handler(const struct device *dev,
-				    struct espi_callback *cb,
-				    struct espi_event event)
-{
-	uint16_t event_type = event.evt_details;
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_PORT80) &&
-	    event_type == ESPI_PERIPHERAL_DEBUG_PORT80) {
-		port_80_write(event.evt_data);
-	}
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_ACPI) &&
-	    event_type == ESPI_PERIPHERAL_HOST_IO) {
-		handle_acpi_write(event.evt_data);
-	}
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD) &&
-	    event_type == ESPI_PERIPHERAL_EC_HOST_CMD) {
-		handle_host_write(event.evt_data);
-	}
-
-	if (IS_ENABLED(CONFIG_ESPI_PERIPHERAL_8042_KBC) &&
-	    IS_ENABLED(HAS_TASK_KEYPROTO) &&
-	    event_type == ESPI_PERIPHERAL_8042_KBC) {
-		kbc_ibf_obe_handler(event.evt_data);
-	}
-}
-
 #ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
 static void espi_chipset_reset(void)
 {
@@ -189,57 +157,6 @@ static void espi_reset_handler(const struct device *dev,
 #define ESPI_DEV DT_LABEL(DT_NODELABEL(espi0))
 static const struct device *espi_dev;
 
-int zephyr_shim_setup_espi(void)
-{
-	static struct {
-		struct espi_callback cb;
-		espi_callback_handler_t handler;
-		enum espi_bus_event event_type;
-	} callbacks[] = {
-		{
-			.handler = espi_vwire_handler,
-			.event_type = ESPI_BUS_EVENT_VWIRE_RECEIVED,
-		},
-		{
-			.handler = espi_peripheral_handler,
-			.event_type = ESPI_BUS_PERIPHERAL_NOTIFICATION,
-		},
-#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
-		{
-			.handler = espi_reset_handler,
-			.event_type = ESPI_BUS_RESET,
-		},
-#endif
-	};
-
-	struct espi_cfg cfg = {
-		.io_caps = ESPI_IO_MODE_SINGLE_LINE,
-		.channel_caps = ESPI_CHANNEL_VWIRE | ESPI_CHANNEL_PERIPHERAL |
-				ESPI_CHANNEL_OOB,
-		.max_freq = 20,
-	};
-
-	espi_dev = device_get_binding(ESPI_DEV);
-	if (!espi_dev) {
-		LOG_ERR("Failed to find device %s", ESPI_DEV);
-		return -1;
-	}
-
-	/* Configure eSPI */
-	if (espi_config(espi_dev, &cfg)) {
-		LOG_ERR("Failed to configure eSPI device");
-		return -1;
-	}
-
-	/* Setup callbacks */
-	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
-		espi_init_callback(&callbacks[i].cb, callbacks[i].handler,
-				   callbacks[i].event_type);
-		espi_add_callback(espi_dev, &callbacks[i].cb);
-	}
-
-	return 0;
-}
 
 int espi_vw_set_wire(enum espi_vw_signal signal, uint8_t level)
 {
@@ -502,7 +419,6 @@ static enum ec_status lpc_get_protocol_info(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, lpc_get_protocol_info,
 		     EC_VER_MASK(0));
 
-#if defined(CONFIG_ESPI_PERIPHERAL_8042_KBC)
 /*
  * This function is needed only for the obsolete platform which uses the GPIO
  * for KBC's IRQ.
@@ -542,9 +458,9 @@ void lpc_aux_put_char(uint8_t chr, int send_irq)
 	LOG_INF("AUX put %02x", kb_char);
 }
 
-#ifdef HAS_TASK_KEYPROTO
 static void kbc_ibf_obe_handler(uint32_t data)
 {
+#ifdef HAS_TASK_KEYPROTO
 	uint8_t is_ibf = (data >> NPCX_8042_EVT_POS) & NPCX_8042_EVT_IBF;
 	uint32_t status = I8042_AUX_DATA;
 
@@ -555,8 +471,8 @@ static void kbc_ibf_obe_handler(uint32_t data)
 		espi_write_lpc_request(espi_dev, E8042_CLEAR_FLAG, &status);
 	}
 	task_wake(TASK_ID_KEYPROTO);
-}
 #endif
+}
 
 int lpc_keyboard_input_pending(void)
 {
@@ -567,4 +483,82 @@ int lpc_keyboard_input_pending(void)
 	return status;
 }
 
+static void espi_peripheral_handler(const struct device *dev,
+				    struct espi_callback *cb,
+				    struct espi_event event)
+{
+	uint16_t event_type = event.evt_details;
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_PORT80) &&
+	    event_type == ESPI_PERIPHERAL_DEBUG_PORT80) {
+		port_80_write(event.evt_data);
+	}
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_ACPI) &&
+	    event_type == ESPI_PERIPHERAL_HOST_IO) {
+		handle_acpi_write(event.evt_data);
+	}
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD) &&
+	    event_type == ESPI_PERIPHERAL_EC_HOST_CMD) {
+		handle_host_write(event.evt_data);
+	}
+
+	if (IS_ENABLED(CONFIG_ESPI_PERIPHERAL_8042_KBC) &&
+	    IS_ENABLED(HAS_TASK_KEYPROTO) &&
+	    event_type == ESPI_PERIPHERAL_8042_KBC) {
+		kbc_ibf_obe_handler(event.evt_data);
+	}
+}
+
+int zephyr_shim_setup_espi(void)
+{
+	static struct {
+		struct espi_callback cb;
+		espi_callback_handler_t handler;
+		enum espi_bus_event event_type;
+	} callbacks[] = {
+		{
+			.handler = espi_vwire_handler,
+			.event_type = ESPI_BUS_EVENT_VWIRE_RECEIVED,
+		},
+		{
+			.handler = espi_peripheral_handler,
+			.event_type = ESPI_BUS_PERIPHERAL_NOTIFICATION,
+		},
+#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
+		{
+			.handler = espi_reset_handler,
+			.event_type = ESPI_BUS_RESET,
+		},
 #endif
+	};
+
+	struct espi_cfg cfg = {
+		.io_caps = ESPI_IO_MODE_SINGLE_LINE,
+		.channel_caps = ESPI_CHANNEL_VWIRE | ESPI_CHANNEL_PERIPHERAL |
+				ESPI_CHANNEL_OOB,
+		.max_freq = 20,
+	};
+
+	espi_dev = device_get_binding(ESPI_DEV);
+	if (!espi_dev) {
+		LOG_ERR("Failed to find device %s", ESPI_DEV);
+		return -1;
+	}
+
+	/* Configure eSPI */
+	if (espi_config(espi_dev, &cfg)) {
+		LOG_ERR("Failed to configure eSPI device");
+		return -1;
+	}
+
+	/* Setup callbacks */
+	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
+		espi_init_callback(&callbacks[i].cb, callbacks[i].handler,
+				   callbacks[i].event_type);
+		espi_add_callback(espi_dev, &callbacks[i].cb);
+	}
+
+	return 0;
+}
