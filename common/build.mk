@@ -78,7 +78,7 @@ common-$(CONFIG_HOSTCMD_ESPI)+=espi.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
 common-$(CONFIG_EXTPOWER)+=extpower_common.o
 common-$(CONFIG_FANS)+=fan.o pwm.o
-common-$(CONFIG_FLASH_CROS)+=flash.o
+common-$(CONFIG_FLASH)+=flash.o
 common-$(CONFIG_FMAP)+=fmap.o
 common-$(CONFIG_GESTURE_SW_DETECTION)+=gesture.o
 common-$(CONFIG_HOSTCMD_EVENTS)+=host_event_commands.o
@@ -95,7 +95,7 @@ common-$(CONFIG_I2C_VIRTUAL_BATTERY)+=virtual_battery.o
 common-$(CONFIG_INDUCTIVE_CHARGING)+=inductive_charging.o
 common-$(CONFIG_KEYBOARD_PROTOCOL_8042)+=keyboard_8042.o \
 	keyboard_8042_sharedlib.o
-common-$(CONFIG_KEYBOARD_PROTOCOL_MKBP)+=keyboard_mkbp.o
+common-$(CONFIG_KEYBOARD_PROTOCOL_MKBP)+=keyboard_mkbp.o mkbp_fifo.o
 common-$(CONFIG_KEYBOARD_TEST)+=keyboard_test.o
 common-$(CONFIG_KEYBOARD_VIVALDI)+=keyboard_vivaldi.o
 common-$(CONFIG_LED_COMMON)+=led_common.o
