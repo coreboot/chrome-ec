@@ -27,6 +27,15 @@
 
 /* Delay from power on to reset de-asserted */
 #define PS8815_PWR_H_RST_H_DELAY_MS 20
+
+/*
+ * Add delay of writing TCPC_REG_POWER_CTRL makes
+ * CC status being judged correctly when disable VCONN.
+ * This may be a PS8XXX firmware issue, Parade is still trying.
+ * https://partnerissuetracker.corp.google.com/issues/185202064
+ */
+#define PS8XXX_VCONN_TURN_OFF_DELAY_US 10
+
 /*
  * Delay between releasing reset and the first I2C read
  *
