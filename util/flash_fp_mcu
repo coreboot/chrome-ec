@@ -33,14 +33,18 @@ fi
 
 # print out canonical path to differentiate between /usr/local/bin and
 # /usr/bin installs
-echo "$(readlink -f "$0")"
+readlink -f "$0"
 
 readonly CROS_EC_SPI_MODALIAS_STR="of:NcrfpTCgoogle,cros-ec-spi"
 
 readonly CROS_EC_UART_MODALIAS_STR="of:NcrfpTCgoogle,cros-ec-uart"
 
 check_hardware_write_protect_disabled() {
-  local hardware_write_protect_state="$(crossystem wpsw_cur)"
+  local hardware_write_protect_state
+  if ! hardware_write_protect_state="$(crossystem wpsw_cur)"; then
+    echo "Failed to get hardware write protect status" >&2
+    exit 1
+  fi
   if [[ "${hardware_write_protect_state}" != "0" ]]; then
     echo "Please make sure hardware write protect is disabled."
     echo "See https://www.chromium.org/chromium-os/firmware-porting-guide/firmware-ec-write-protection"
@@ -54,17 +58,17 @@ get_spiid() {
   # TODO(b/179533783): Fix modalias on strongbad and remove this bypass.
   if [[ -n "${DEVICEID}" ]]; then
     echo "${DEVICEID}"
-    exit 0
+    return 0
   fi
 
   for dev in /sys/bus/spi/devices/*; do
     if [[ "$(cat "${dev}/modalias")" == "${CROS_EC_SPI_MODALIAS_STR}" ]]; then
-      echo "$(basename "${dev}")"
-      exit 0
+      basename "${dev}"
+      return 0
     fi
   done
 
-  exit 1
+  return 1
 }
 
 # Get the uartid for the fingerprint sensor based on the modalias
@@ -72,13 +76,13 @@ get_uartid() {
   for dev in /sys/bus/serial/devices/*; do
     if [ -f "${dev}/modalias" ]; then
       if [[ "$(cat "${dev}/modalias")" == "${CROS_EC_UART_MODALIAS_STR}" ]]; then
-        echo "$(basename "${dev}")"
-        exit 0
+        basename "${dev}"
+        return 0
       fi
     fi
   done
 
-  exit 1
+  return 1
 }
 
 # Usage: gpio <unexport|export|in|out|0|1|get> <signal> [signal...]
@@ -109,6 +113,24 @@ gpio() {
         ;;
     esac
   done
+}
+
+# Usage: warn_gpio <signal> <expected_value> <msg>
+warn_gpio() {
+  local signal=$1
+  local expected_value=$2
+  local msg=$3
+
+  local value
+  if ! value="$(gpio get "${signal}")"; then
+    echo "Error fetching gpio value ${signal}" >&2
+    exit 1
+  fi
+
+  if [[ "${value}" != "${expected_value}" ]]; then
+    echo "${msg}" >&2
+    return 1
+  fi
 }
 
 # Taken verbatim from
@@ -153,7 +175,7 @@ get_platform_name() {
   echo "Getting platform name from /etc/lsb-release." 1>&2
   platform_name="$(lsbval "CHROMEOS_RELEASE_BOARD")"
   if [[ -z "${platform_name}" ]]; then
-    exit 1
+    return 1
   fi
 
   echo "${platform_name}"
@@ -214,14 +236,13 @@ flash_fp_mcu_stm32() {
   check_hardware_write_protect_disabled
 
   if [[ "${transport}" == "UART" ]]; then
-    deviceid="$(get_uartid)"
-    if [[ $? -ne 0 ]]; then
+    if ! deviceid="$(get_uartid)"; then
       echo "Unable to find FP sensor UART device: ${CROS_EC_UART_MODALIAS_STR}"
       exit 1
     fi
   else
-    deviceid="$(get_spiid)"
-    if [[ $? -ne 0 ]]; then
+
+    if ! deviceid="$(get_spiid)"; then
       echo "Unable to find FP sensor SPI device: ${CROS_EC_SPI_MODALIAS_STR}"
       exit 1
     fi
@@ -257,8 +278,7 @@ flash_fp_mcu_stm32() {
     echo AMDI0020:01 > /sys/bus/platform/drivers/dw-apb-uart/unbind;
     echo AMDI0020:01 > /sys/bus/platform/drivers/dw-apb-uart/bind;
   else
-    # load spidev (fail on cros-ec-spi first to change modalias)
-    echo "${deviceid}" > /sys/bus/spi/drivers/cros-ec-spi/bind 2>/dev/null
+    echo spidev > "/sys/bus/spi/devices/${deviceid}/driver_override"
     echo "${deviceid}" > /sys/bus/spi/drivers/spidev/bind
     # The following sleep is a workaround to mitigate the effects of a
     # poorly behaved chip select line. See b/145023809.
@@ -268,12 +288,10 @@ flash_fp_mcu_stm32() {
   # We do not expect the drivers to change the pin state when binding.
   # If you receive this warning, the driver needs to be fixed on this board
   # and this flash attempt will probably fail.
-  if [[ $(gpio get "${gpio_boot0}") -ne 1 ]]; then
-    echo "WARNING: One of the drivers changed BOOT0 pin state on bind attempt."
-  fi
-  if [[ $(gpio get "${gpio_nrst}") -ne 0 ]]; then
-    echo "WARNING: One of the drivers changed NRST pin state on bind attempt."
-  fi
+  warn_gpio "${gpio_boot0}" 1 \
+    "WARNING: One of the drivers changed BOOT0 pin state on bind attempt."
+  warn_gpio "${gpio_nrst}" 0 \
+    "WARNING: One of the drivers changed NRST pin state on bind attempt."
 
   # TODO(b/179530529): Remove this hack when the drivers on strongbad stop
   # setting the gpio states.
@@ -287,7 +305,7 @@ flash_fp_mcu_stm32() {
   local cmd_exit_status=1
   local cmd="stm32mon ${stm32mon_flags}"
 
-  for attempt in $(seq ${FLAGS_retries}); do
+  for attempt in $(seq "${FLAGS_retries}"); do
     # Reset sequence to enter bootloader mode
     gpio 0 "${gpio_nrst}"
     sleep 0.01
@@ -339,6 +357,7 @@ flash_fp_mcu_stm32() {
 
   # Put back cros_fp driver if transport is SPI
   if [[ "${transport}" != "UART" ]]; then
+    echo "" > "/sys/bus/spi/devices/${deviceid}/driver_override"
     echo "${deviceid}" > /sys/bus/spi/drivers/cros-ec-spi/bind
 
     # Kernel driver is back, we are no longer controlling power
@@ -485,7 +504,11 @@ config_guybrush() {
 # function. Doing it in this manner allows us to reduce the number of
 # configurations that we have to maintain (and reduces the amount of testing
 # if we're only updating a specific config_<platform_name>).
-readonly PLATFORM_NAME="$(get_platform_name)"
+if ! PLATFORM_NAME="$(get_platform_name)"; then
+  echo "Failed to get platform name"
+  exit 1
+fi
+readonly PLATFORM_NAME
 
 echo "Using config for ${PLATFORM_NAME}"
 
@@ -495,9 +518,7 @@ if [[ "$(type -t "config_${PLATFORM_NAME}")" != "function" ]]; then
   exit 1
 fi
 
-config_${PLATFORM_NAME}
-
-if [[ $? -ne 0 ]]; then
+if ! "config_${PLATFORM_NAME}"; then
   echo "Configuration failed for platform ${PLATFORM_NAME}"
   exit 1
 fi

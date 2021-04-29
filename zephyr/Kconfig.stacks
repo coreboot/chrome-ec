@@ -1,3 +1,7 @@
+# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
 if SOC_SERIES_NPCX7
 
 # Zephyr internal stack sizes
@@ -12,12 +16,9 @@ config SHELL_STACK_SIZE
 	default 1536
 
 config SYSTEM_WORKQUEUE_STACK_SIZE
-	default 288
+	default 704
 
 # Chromium EC stack sizes
-
-config DEFERRED_STACK_SIZE
-	default 704
 
 config TASK_CHARGER_STACK_SIZE
 	default 704
