@@ -776,7 +776,7 @@ reading and writing sections we care about:
 # only if you need to preserve the DUT's identity, no need to run it in case
 # the DUT flash is not programmed at all, or you do not care about preserving
 # the device identity.
-sudo flashrom -p raiden_debug_spi:target=AP -i FMAP -i RO_VPD -i RW_VPD -r /tmp/bios.essentials.bin --fast-verify
+sudo flashrom -p raiden_debug_spi:target=AP -i FMAP -i RO_VPD -i RW_VPD -r /tmp/bios.essentials.bin
 
 # This command will erase the entire flash chip in one shot, the fastest
 # possible way to erase.
