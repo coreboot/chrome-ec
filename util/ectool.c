@@ -1054,7 +1054,7 @@ int cmd_flash_read(int argc, char *argv[])
 	int offset, size;
 	int rv;
 	char *e;
-	char *buf;
+	uint8_t *buf;
 
 	if (argc < 4) {
 		fprintf(stderr,
@@ -1073,7 +1073,7 @@ int cmd_flash_read(int argc, char *argv[])
 	}
 	printf("Reading %d bytes at offset %d...\n", size, offset);
 
-	buf = (char *)malloc(size);
+	buf = (uint8_t *)malloc(size);
 	if (!buf) {
 		fprintf(stderr, "Unable to allocate buffer.\n");
 		return -1;
@@ -1086,7 +1086,7 @@ int cmd_flash_read(int argc, char *argv[])
 		return rv;
 	}
 
-	rv = write_file(argv[3], buf, size);
+	rv = write_file(argv[3], (const char *)(buf), size);
 	free(buf);
 	if (rv)
 		return rv;
@@ -1121,7 +1121,8 @@ int cmd_flash_write(int argc, char *argv[])
 	printf("Writing to offset %d...\n", offset);
 
 	/* Write data in chunks */
-	rv = ec_flash_write(buf, offset, size);
+	rv = ec_flash_write((const uint8_t *)(buf), offset,
+			    size);
 
 	free(buf);
 
@@ -1394,7 +1395,7 @@ static void *fp_download_frame(struct ec_response_fp_info *info, int index)
 		return NULL;
 	}
 
-	ptr = buffer;
+	ptr = (uint8_t *)(buffer);
 	p.offset = index << FP_FRAME_INDEX_SHIFT;
 	while (size) {
 		stride = MIN(ec_max_insize, size);
@@ -1579,7 +1580,7 @@ int cmd_fp_frame(int argc, char *argv[])
 	struct ec_response_fp_info r;
 	int idx = (argc == 2 && !strcasecmp(argv[1], "raw")) ?
 		FP_FRAME_INDEX_RAW_IMAGE : FP_FRAME_INDEX_SIMPLE_IMAGE;
-	void *buffer = fp_download_frame(&r, idx);
+	uint8_t *buffer = (uint8_t *)(fp_download_frame(&r, idx));
 	uint8_t *ptr = buffer;
 	int x, y;
 
@@ -1610,14 +1611,15 @@ frame_done:
 int cmd_fp_template(int argc, char *argv[])
 {
 	struct ec_response_fp_info r;
-	struct ec_params_fp_template *p = ec_outbuf;
+	struct ec_params_fp_template *p =
+		(struct ec_params_fp_template *)(ec_outbuf);
 	/* TODO(b/78544921): removing 32 bits is a workaround for the MCU bug */
 	int max_chunk = ec_max_outsize
 			- offsetof(struct ec_params_fp_template, data) - 4;
 	int idx = -1;
 	char *e;
 	int size;
-	void *buffer = NULL;
+	char *buffer = NULL;
 	uint32_t offset = 0;
 	int rv = 0;
 
@@ -1628,7 +1630,7 @@ int cmd_fp_template(int argc, char *argv[])
 
 	idx = strtol(argv[1], &e, 0);
 	if (!(e && *e)) {
-		buffer = fp_download_frame(&r, idx + 1);
+		buffer = (char *)(fp_download_frame(&r, idx + 1));
 		if (!buffer) {
 			fprintf(stderr, "Failed to get FP template %d\n", idx);
 			return -1;
@@ -6059,7 +6061,7 @@ int cmd_i2c_xfer(int argc, char *argv[])
 	write_len = argc;
 
 	if (write_len) {
-		write_buf = malloc(write_len);
+		write_buf = (uint8_t *)(malloc(write_len));
 		for (i = 0; i < write_len; i++) {
 			write_buf[i] = strtol(argv[i], &e, 0);
 			if (e && *e) {
@@ -6849,7 +6851,7 @@ static int cmd_cbi(int argc, char *argv[])
 	}
 
 	/* Tag */
-	tag = strtol(argv[2], &e, 0);
+	tag = (enum cbi_data_tag)(strtol(argv[2], &e, 0));
 	if (e && *e) {
 		fprintf(stderr, "Bad tag\n");
 		return -1;
@@ -7532,8 +7534,10 @@ static int cmd_tmp006cal_v0(int idx, int argc, char *argv[])
 static int cmd_tmp006cal_v1(int idx, int argc, char *argv[])
 {
 	struct ec_params_tmp006_get_calibration pg;
-	struct ec_response_tmp006_get_calibration_v1 *rg = ec_inbuf;
-	struct ec_params_tmp006_set_calibration_v1 *ps = ec_outbuf;
+	struct ec_response_tmp006_get_calibration_v1 *rg =
+		(struct ec_response_tmp006_get_calibration_v1 *)(ec_inbuf);
+	struct ec_params_tmp006_set_calibration_v1 *ps =
+		(struct ec_params_tmp006_set_calibration_v1 *)(ec_outbuf);
 	float val;
 	char *e;
 	int i, rv, cmdsize;
@@ -7743,7 +7747,8 @@ int cmd_port80_read(int argc, char *argv[])
 	writes = rsp.get_info.writes;
 	history_size = rsp.get_info.history_size;
 
-	history = malloc(history_size*sizeof(uint16_t));
+	history = (uint16_t *)(
+		malloc(history_size * sizeof(uint16_t)));
 	if (!history) {
 		fprintf(stderr, "Unable to allocate buffer.\n");
 		return -1;
@@ -8102,8 +8107,8 @@ int cmd_tp_frame_get(int argc, char* argv[])
 	struct ec_response_tp_frame_info* r;
 	struct ec_params_tp_frame_get p;
 
-	data = malloc(ec_max_insize);
-	r = malloc(ec_max_insize);
+	data = (uint8_t *)(malloc(ec_max_insize));
+	r = (struct ec_response_tp_frame_info *)(malloc(ec_max_insize));
 
 	rv = ec_command(EC_CMD_TP_FRAME_INFO, 0, NULL, 0, r, ec_max_insize);
 	if (rv < 0) {
