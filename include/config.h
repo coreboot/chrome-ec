@@ -1183,6 +1183,7 @@
 #undef  CONFIG_CMD_USB_PD_CABLE
 #undef  CONFIG_CMD_USB_PD_PE
 #define CONFIG_CMD_WAITMS
+#define CONFIG_CMD_WP
 #undef  CONFIG_CMD_AP_RESET_LOG
 
 /*****************************************************************************/
