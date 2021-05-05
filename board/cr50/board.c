@@ -1191,11 +1191,13 @@ void assert_ec_rst(void)
 
 void deassert_ec_rst(void)
 {
+#ifdef CONFIG_AP_RO_VERIFICATION
 	if (ec_rst_override()) {
 		ccprintf("EC un-reset blocked, try powercycle or Cr50 reboot."
 			 "\n");
 		return;
 	}
+#endif /* CONFIG_AP_RO_VERIFICATION */
 
 	wait_ec_rst(0);
 
