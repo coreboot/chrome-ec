@@ -564,4 +564,19 @@ enum nvmem_users {
 /* Total time deep sleep should not be allowed while wiping the TPM. */
 #define DISABLE_SLEEP_TIME_TPM_WIPE (TPM_PROCESSING_TIME + TPM_RESET_TIME)
 
+#ifdef CRYPTO_TEST_SETUP
+/* Remove console commands to save space */
+#undef CONFIG_CMD_ECRST
+#undef CONFIG_CMD_SYSRST
+#undef CONFIG_CMD_WP
+#undef CONFIG_CMD_DUMP_NVMEM
+#undef CONFIG_CMD_PINMUX
+#undef CONFIG_CMD_GPIOCFG
+#undef CONFIG_CMD_SLEEPMASK
+#undef CONFIG_CMD_TIMERINFO
+#undef CONFIG_CONSOLE_HISTORY
+#undef CONFIG_I2C_XFER
+#undef CONFIG_I2C_SCAN
+#undef CONFIG_CONSOLE_CMDHELP
+#endif /* CRYPTO_TEST_SETUP */
 #endif /* __CROS_EC_BOARD_H */
