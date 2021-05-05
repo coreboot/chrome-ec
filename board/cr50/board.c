@@ -1211,6 +1211,7 @@ int is_ec_rst_asserted(void)
 	return GREAD(RBOX, ASSERT_EC_RST);
 }
 
+#ifdef CONFIG_CMD_ECRST
 /**
  * Console command to toggle EC reset
  */
@@ -1245,6 +1246,7 @@ static int command_ec_rst(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(ecrst, command_ec_rst,
 	"[cl | pulse | <BOOLEAN>]",
 	"Assert/deassert EC_RST_L to reset the EC (and AP)");
+#endif /* CONFIG_CMD_ECRST */
 
 /*
  * This function duplicates some of the functionality in chip/g/gpio.c in order
