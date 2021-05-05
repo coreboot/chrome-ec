@@ -120,6 +120,7 @@ static void force_write_protect(int force, int wp_en)
 	set_wp_state(wp_en);
 }
 
+#ifdef CONFIG_CMD_WP
 static enum vendor_cmd_rc vc_set_wp(enum vendor_cmd_cc code,
 				    void *buf,
 				    size_t input_size,
@@ -246,6 +247,7 @@ static int command_wp(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(wp, command_wp,
 			     "[<BOOLEAN>/follow_batt_pres [atboot]]",
 			     "Get/set the flash HW write-protect signal");
+#endif /* CONFIG_CMD_WP */
 
 void set_bp_follow_ccd_config(void)
 {
