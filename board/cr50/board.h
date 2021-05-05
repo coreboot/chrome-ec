@@ -563,6 +563,9 @@ enum nvmem_users {
 #define DISABLE_SLEEP_TIME_TPM_WIPE (TPM_PROCESSING_TIME + TPM_RESET_TIME)
 
 #ifdef CRYPTO_TEST_SETUP
+/* Enable unsafe dev features for CCD in crypto test builds */
+#define CONFIG_CMD_ROLLBACK
+
 /* Remove console commands to save space */
 #undef CONFIG_CMD_ECRST
 #undef CONFIG_CMD_SYSRST
