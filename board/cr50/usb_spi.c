@@ -24,6 +24,7 @@
 
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
 
+#ifdef CONFIG_SPI_HASH
 /* Don't hash more than this at once */
 #define MAX_SPI_HASH_SIZE (4 * 1024 * 1024)
 
@@ -36,12 +37,6 @@
 
 /* Timeout for auto-disabling SPI hash device, in microseconds */
 #define SPI_HASH_TIMEOUT_US (60 * SECOND)
-
-/*
- * If True, don't touch the reset signals while setting up AP usb spi. This
- * doesn't affect spi hash.
- */
-static uint8_t usb_spi_custom_reset;
 
 /* Current device for SPI hashing */
 static uint8_t spi_hash_device = USB_SPI_DISABLE;
@@ -85,6 +80,8 @@ bool usb_spi_shortcut_active(void)
 	return shortcut_active_;
 }
 #endif /* CONFIG_AP_RO_VERIFICATION */
+#endif /* CONFIG_SPI_HASH */
+
 
 /*****************************************************************************/
 /*
@@ -100,6 +97,12 @@ static enum spi_bus_user_t {
 	SPI_BUS_USER_USB,
 	SPI_BUS_USER_HASH
 } spi_bus_user = SPI_BUS_USER_NONE;
+
+/*
+ * If True, don't touch the reset signals while setting up AP usb spi. This
+ * doesn't affect spi hash.
+ */
+static uint8_t usb_spi_custom_reset;
 
 /**
  * Set who's using the SPI bus.
@@ -379,6 +382,7 @@ int usb_spi_interface(struct usb_spi_config const *config,
 	return 0;
 }
 
+#ifdef CONFIG_SPI_HASH
 /*****************************************************************************/
 /* Hashing support */
 
@@ -879,3 +883,4 @@ static int hash_command_wrapper(int argc, char *argv[])
 DECLARE_CONSOLE_COMMAND(spihash, hash_command_wrapper,
 			"ap | ec [gang] | disable | [dump] <offset> <size>",
 			"Hash SPI flash via TPM vendor command");
+#endif /* CONFIG_SPI_HASH */

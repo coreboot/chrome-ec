@@ -2210,6 +2210,9 @@
  */
 #undef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
 
+/* Add support for hashing AP RO */
+#undef CONFIG_SPI_HASH
+
 /* Support testing SPI periph interface driver. */
 #undef CONFIG_SPP_TEST
 
