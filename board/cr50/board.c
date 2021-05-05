@@ -1778,7 +1778,7 @@ static int command_board_properties(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(brdprop, command_board_properties,
 			     NULL, "Display board properties");
 
-#ifdef CR50_DEV
+#ifdef CONFIG_CMD_ROLLBACK
 static int command_rollback(int argc, char **argv)
 {
 	system_ensure_rollback();
