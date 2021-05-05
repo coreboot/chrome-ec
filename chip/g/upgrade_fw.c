@@ -164,7 +164,7 @@ int usb_pdu_valid(struct upgrade_command *cmd_body,  size_t cmd_size)
 	return 1;
 }
 
-#ifdef CR50_DEV
+#if defined(CR50_DEV) || defined(CRYPTO_TEST_SETUP)
 #ifndef CONFIG_IGNORE_G_UPDATE_CHECKS
 #define CONFIG_IGNORE_G_UPDATE_CHECKS
 #endif
