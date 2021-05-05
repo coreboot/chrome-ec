@@ -3218,6 +3218,7 @@ test_export_static enum ec_error_list browse_flash_contents(int print)
 	return rv;
 }
 
+#ifdef CONFIG_CMD_DUMP_NVMEM
 static int command_dump_nvmem(int argc, char **argv)
 {
 	int print = 1;
@@ -3235,3 +3236,4 @@ static int command_dump_nvmem(int argc, char **argv)
 	return 0;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(dump_nvmem, command_dump_nvmem, "", "");
+#endif /* CONFIG_CMD_DUMP_NVMEM */
