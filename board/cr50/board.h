@@ -578,5 +578,9 @@ enum nvmem_users {
 #undef CONFIG_I2C_XFER
 #undef CONFIG_I2C_SCAN
 #undef CONFIG_CONSOLE_CMDHELP
+
+/* Remove features crypto test doesn't use to save space */
+#undef CONFIG_AP_RO_VERIFICATION
+#undef CONFIG_SPI_HASH
 #endif /* CRYPTO_TEST_SETUP */
 #endif /* __CROS_EC_BOARD_H */
