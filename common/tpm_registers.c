@@ -27,12 +27,12 @@
 #include "wp.h"
 
 /*
- * Do not enable TPM if crypto test is enabled - there is no room in the flash
- * for both.
+ * ENABLE_TPM can be used to free up a bunch of space for developing features
+ * running up on the space limits.
  */
-#ifndef CRYPTO_TEST_SETUP
 #define ENABLE_TPM
 
+#ifdef ENABLE_TPM
 /* TPM2 library includes. */
 #include "ExecCommand_fp.h"
 #include "Platform.h"
