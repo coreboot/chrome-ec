@@ -1039,15 +1039,6 @@ void deassert_sys_rst(void)
 	gpio_set_level(GPIO_SYS_RST_L_OUT, 1);
 }
 
-static int is_sys_rst_asserted(void)
-{
-	/*
-	 * SYS_RST_L is pseudo open drain. It is only an output when it's
-	 * asserted.
-	 */
-	return gpio_get_flags(GPIO_SYS_RST_L_OUT) & GPIO_OUTPUT;
-}
-
 /**
  * Reboot the AP
  */
@@ -1094,6 +1085,16 @@ static void key_combo0_irq(void)
 }
 DECLARE_IRQ(GC_IRQNUM_RBOX0_INTR_BUTTON_COMBO0_RDY_INT, key_combo0_irq, 0);
 
+#ifdef CONFIG_CMD_SYSRST
+static int is_sys_rst_asserted(void)
+{
+	/*
+	 * SYS_RST_L is pseudo open drain. It is only an output when it's
+	 * asserted.
+	 */
+	return gpio_get_flags(GPIO_SYS_RST_L_OUT) & GPIO_OUTPUT;
+}
+
 /**
  * Console command to toggle system (AP) reset
  */
@@ -1135,6 +1136,7 @@ static int command_sys_rst(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(sysrst, command_sys_rst,
 	"[pulse [time] | <BOOLEAN>]",
 	"Assert/deassert SYS_RST_L to reset the AP");
+#endif /* CONFIG_CMD_SYSRST */
 
 /*
  * Set RBOX register controlling EC reset and wait until RBOX updates the
