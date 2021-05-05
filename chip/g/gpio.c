@@ -440,6 +440,7 @@ void _gpio1_interrupt(void)
 DECLARE_IRQ(GC_IRQNUM_GPIO0_GPIOCOMBINT, _gpio0_interrupt, 1);
 DECLARE_IRQ(GC_IRQNUM_GPIO1_GPIOCOMBINT, _gpio1_interrupt, 1);
 
+#ifdef CONFIG_CMD_PINMUX
 /*
  * The uart, i2c, and spi suffix arrays must match the order of the pinmux
  * select registers in chip/g/hw_regdefs.h. If the order is incorrect, the
@@ -563,6 +564,7 @@ static int command_pinmux(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(pinmux, command_pinmux,
 			     "",
 			     "Display pinmux info");
+#endif /* CONFIG_CMD_PINMUX */
 
 static const char * const int_str[] = {
 	"LOW", "FALLING", "HIGH", "RISING",
