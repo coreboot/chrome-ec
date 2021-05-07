@@ -584,3 +584,61 @@ static enum vendor_cmd_rc vc_endorsement_seed(enum vendor_cmd_cc code,
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_ENDORSEMENT_SEED, vc_endorsement_seed);
 #endif
+
+static int command_erase_flash_info(int argc, char **argv)
+{
+	uint32_t *preserved_manufacture_state;
+	const size_t manuf_word_count = FLASH_INFO_MANUFACTURE_STATE_SIZE /
+		sizeof(uint32_t);
+	int i;
+	int rv = EC_ERROR_BUSY;
+
+	if (shared_mem_acquire(FLASH_INFO_MANUFACTURE_STATE_SIZE,
+			       (char **)&preserved_manufacture_state) !=
+	    EC_SUCCESS) {
+		ccprintf("Failed to allocate memory for manufacture state!\n");
+		return rv;
+	}
+
+	/* Read the entire info1. */
+	p = (uint32_t *)info1;
+	for (i = 0; i < (sizeof(*info1) / sizeof(*p)); i++) {
+		if (flash_physical_info_read_word(i * sizeof(*p), p + i) !=
+		    EC_SUCCESS) {
+			ccprintf("Failed to read word %d!\n", i);
+			goto exit;
+		}
+	}
+
+	mutex_lock(&flash_mtx);
+
+	flash_info_write_enable();
+
+	rv = do_flash_op(OP_ERASE_BLOCK, 1, 0, 512);
+
+	mutex_unlock(&flash_mtx);
+
+	if (rv != EC_SUCCESS) {
+		ccprintf("Failed to erase info space!\n");
+		goto exit;
+	}
+
+	if (flash_info_physical_write
+	    (FLASH_INFO_MANUFACTURE_STATE_OFFSET,
+	     FLASH_INFO_MANUFACTURE_STATE_SIZE,
+	     (char *)preserved_manufacture_state) != EC_SUCCESS) {
+		ccprintf("Failed to restore manufacture state!\n");
+		goto exit;
+	}
+
+	rv = EC_SUCCESS;
+ exit:
+	always_memset(preserved_manufacture_state, 0,
+		      FLASH_INFO_MANUFACTURE_STATE_SIZE);
+	shared_mem_release(preserved_manufacture_state);
+	flash_info_write_disable();
+	return rv;
+}
+DECLARE_CONSOLE_COMMAND(eraseflashinfo, command_erase_flash_info,
+			"",
+			"Erase INFO1 flash space");
