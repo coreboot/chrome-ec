@@ -8,41 +8,25 @@
 
 #include "common.h"
 #include "console.h"
+#include "ec_tasks.h"
 #include "hooks.h"
 #include "task.h"
 #include "timer.h"
 
-static void deferred_work_queue_handler(struct k_work *work)
-{
-	struct deferred_data *data =
-		CONTAINER_OF(work, struct deferred_data, delayed_work.work);
-
-	data->routine();
-}
-
-void zephyr_shim_setup_deferred(const struct deferred_data *data)
-{
-	struct deferred_data *non_const = (struct deferred_data *)data;
-
-	k_delayed_work_init(&non_const->delayed_work,
-			    deferred_work_queue_handler);
-}
-
 int hook_call_deferred(const struct deferred_data *data, int us)
 {
-	struct deferred_data *non_const = (struct deferred_data *)data;
+	struct k_delayed_work *work = data->delayed_work;
 	int rv = 0;
 
 	if (us == -1) {
-		k_delayed_work_cancel(&non_const->delayed_work);
+		k_delayed_work_cancel(work);
 	} else if (us >= 0) {
-		rv = k_delayed_work_submit(&non_const->delayed_work,
-					   K_USEC(us));
+		rv = k_delayed_work_submit(work, K_USEC(us));
 		if (rv < 0)
-			cprintf(CC_HOOK,
+			cprints(CC_HOOK,
 				"Warning: deferred call not submitted, "
-				"routine=0x%08x, err=%d",
-				non_const->routine, rv);
+				"deferred_data=0x%pP, err=%d",
+				data, rv);
 	} else {
 		return EC_ERROR_PARAM2;
 	}
@@ -78,11 +62,26 @@ void hook_notify(enum hook_type type)
 		p->routine();
 }
 
+static void check_hook_task_priority(k_tid_t thread)
+{
+	if (k_thread_priority_get(thread) != LOWEST_THREAD_PRIORITY)
+		cprintf(CC_HOOK,
+			"ERROR: %s has priority %d but must be priority %d\n",
+			k_thread_name_get(thread),
+			k_thread_priority_get(thread), LOWEST_THREAD_PRIORITY);
+}
+
 void hook_task(void *u)
 {
 	/* Periodic hooks will be called first time through the loop */
 	static uint64_t last_second = -SECOND;
 	static uint64_t last_tick = -HOOK_TICK_INTERVAL;
+
+	/*
+	 * Verify deferred routines are run at the lowest priority.
+	 */
+	check_hook_task_priority(&k_sys_work_q.thread);
+	check_hook_task_priority(k_current_get());
 
 	while (1) {
 		uint64_t t = get_time().val;

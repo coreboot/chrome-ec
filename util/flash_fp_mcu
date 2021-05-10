@@ -21,19 +21,17 @@ DEFINE_integer 'baudrate' "${STM32MON_SERIAL_BAUDRATE}" 'Specify UART baudrate' 
 DEFINE_boolean 'hello' "${FLAGS_FALSE}" 'Only ping the bootloader' 'H'
 FLAGS_HELP="Usage: ${0} [flags] ec.bin"
 
+#        EXIT_SUCCESS=0
+#        EXIT_FAILURE=1
+#        EXIT_BASHBUILTIN=2
+readonly EXIT_ARGUMENT=3
+readonly EXIT_CONFIG=4
+readonly EXIT_PRECONDITION=5
+readonly EXIT_RUNTIME=6
+
 # Process commandline flags
-FLAGS "${@}" || exit 1
+FLAGS "${@}" || exit "${EXIT_ARGUMENT}"
 eval set -- "${FLAGS_ARGV}"
-
-if [[ "$#" -eq 0 ]] && [[ "${FLAGS_hello}" -eq "${FLAGS_FALSE}" ]]; then
-  echo "Missing filename"
-  flags_help
-  exit 1
-fi
-
-# print out canonical path to differentiate between /usr/local/bin and
-# /usr/bin installs
-readlink -f "$0"
 
 readonly CROS_EC_SPI_MODALIAS_STR="of:NcrfpTCgoogle,cros-ec-spi"
 
@@ -43,12 +41,12 @@ check_hardware_write_protect_disabled() {
   local hardware_write_protect_state
   if ! hardware_write_protect_state="$(crossystem wpsw_cur)"; then
     echo "Failed to get hardware write protect status" >&2
-    exit 1
+    exit "${EXIT_PRECONDITION}"
   fi
   if [[ "${hardware_write_protect_state}" != "0" ]]; then
     echo "Please make sure hardware write protect is disabled."
     echo "See https://www.chromium.org/chromium-os/firmware-porting-guide/firmware-ec-write-protection"
-    exit 1
+    exit "${EXIT_PRECONDITION}"
   fi
 }
 
@@ -109,7 +107,7 @@ gpio() {
         ;;
       *)
         echo "Invalid gpio command: ${cmd}" >&2
-        exit 1
+        exit "${EXIT_RUNTIME}"
         ;;
     esac
   done
@@ -124,7 +122,7 @@ warn_gpio() {
   local value
   if ! value="$(gpio get "${signal}")"; then
     echo "Error fetching gpio value ${signal}" >&2
-    exit 1
+    exit "${EXIT_RUNTIME}"
   fi
 
   if [[ "${value}" != "${expected_value}" ]]; then
@@ -178,15 +176,13 @@ get_platform_name() {
     return 1
   fi
 
-  echo "${platform_name}"
-}
+  # Tests are also run on modified images, like hatch-arc-r or hatch-borealis.
+  # These devices still have fingerprint and are expected to pass tests.
+  # See b/186697064.
+  # We remove any suffix starting at the first '-'.
+  platform_name="${platform_name%%-*}"
 
-check_gpio_chip_exists() {
-  local gpiochip="$1"
-  if [[ ! -e "/sys/class/gpio/${gpiochip}" ]]; then
-    echo "Cannot find GPIO chip: ${gpiochip}"
-    exit 1
-  fi
+  echo "${platform_name}"
 }
 
 flash_fp_mcu_stm32() {
@@ -219,14 +215,14 @@ flash_fp_mcu_stm32() {
       # Read from FPMCU to file
       if [[ -e "${file}" ]]; then
         echo "Output file already exists: ${file}"
-        exit 1
+        return "${EXIT_PRECONDITION}"
       fi
       stm32mon_flags+=" -r ${file}"
     else
       # Write to FPMCU from file
       if [[ ! -f "${file}" ]]; then
         echo "Invalid image file: ${file}"
-        exit 1
+        return "${EXIT_PRECONDITION}"
       fi
       stm32mon_flags+=" -e -w ${file}"
     fi
@@ -238,13 +234,13 @@ flash_fp_mcu_stm32() {
   if [[ "${transport}" == "UART" ]]; then
     if ! deviceid="$(get_uartid)"; then
       echo "Unable to find FP sensor UART device: ${CROS_EC_UART_MODALIAS_STR}"
-      exit 1
+      return "${EXIT_PRECONDITION}"
     fi
   else
 
     if ! deviceid="$(get_spiid)"; then
       echo "Unable to find FP sensor SPI device: ${CROS_EC_SPI_MODALIAS_STR}"
-      exit 1
+      return "${EXIT_PRECONDITION}"
     fi
   fi
 
@@ -292,14 +288,6 @@ flash_fp_mcu_stm32() {
     "WARNING: One of the drivers changed BOOT0 pin state on bind attempt."
   warn_gpio "${gpio_nrst}" 0 \
     "WARNING: One of the drivers changed NRST pin state on bind attempt."
-
-  # TODO(b/179530529): Remove this hack when the drivers on strongbad stop
-  # setting the gpio states.
-  if [[ "${PLATFORM_NAME}" == "strongbad" ]]; then
-    echo "# Fixing GPIOs"
-    gpio 1 "${gpio_boot0}"
-    gpio 0 "${gpio_nrst}"
-  fi
 
   local attempt=0
   local cmd_exit_status=1
@@ -367,7 +355,7 @@ flash_fp_mcu_stm32() {
   fi
 
   if [[ "${cmd_exit_status}" -ne 0 ]]; then
-    exit 1
+    return "${EXIT_RUNTIME}"
   fi
 
   # Inform user to reboot if transport is UART.
@@ -381,8 +369,6 @@ flash_fp_mcu_stm32() {
 }
 
 config_hatch() {
-  check_gpio_chip_exists "gpiochip200"
-
   readonly TRANSPORT="SPI"
   readonly DEVICE="/dev/spidev1.1"
   # See
@@ -390,6 +376,7 @@ config_hatch() {
   # for pin name to number mapping.
   # Examine `cat /sys/kernel/debug/pinctrl/INT34BB:00/gpio-ranges` on a hatch
   # device to determine gpio number from pin number.
+  readonly GPIO_CHIP="gpiochip200"
   # FPMCU RST_ODL is on GPP_A12 = 200 + 12 = 212
   readonly GPIO_NRST=212
   # FPMCU BOOT0 is on GPP_A22 = 200 + 22 = 222
@@ -400,11 +387,10 @@ config_hatch() {
 
 
 config_nami() {
-  check_gpio_chip_exists "gpiochip360"
-
   readonly TRANSPORT="SPI"
   readonly DEVICE="/dev/spidev32765.0"
 
+  readonly GPIO_CHIP="gpiochip360"
   # FPMCU RST_ODL is on GPP_C9 = 360 + 57 = 417
   readonly GPIO_NRST=417
   # FPMCU BOOT0 is on GPP_D5 = 360 + 77 = 437
@@ -414,11 +400,10 @@ config_nami() {
 }
 
 config_nocturne() {
-  check_gpio_chip_exists "gpiochip360"
-
   readonly TRANSPORT="SPI"
   readonly DEVICE="/dev/spidev32765.0"
 
+  readonly GPIO_CHIP="gpiochip360"
   # FPMCU RST_ODL is on GPP_C10 = 360 + 58 = 418
   readonly GPIO_NRST=418
   # FPMCU BOOT0 is on GPP_C8 = 360 + 56 = 416
@@ -428,13 +413,12 @@ config_nocturne() {
 }
 
 config_strongbad() {
-  check_gpio_chip_exists "gpiochip392"
-
   readonly TRANSPORT="SPI"
   readonly DEVICE="/dev/spidev10.0"
   # TODO(b/179533783): Fix modalias on strongbad and remove this bypass.
   readonly DEVICEID="spi10.0"
 
+  readonly GPIO_CHIP="gpiochip392"
   # FPMCU RST_ODL is $(gpiofind FP_RST_L) is gpiochip0 22
   readonly GPIO_NRST=$((392 + $(gpiofind FP_RST_L|cut -f2 -d" ")))
   # FPMCU BOOT0 is $(gpiofind FPMCU_BOOT0) is gpiochip0 10
@@ -445,8 +429,6 @@ config_strongbad() {
 }
 
 config_volteer() {
-  check_gpio_chip_exists "gpiochip152"
-
   readonly TRANSPORT="SPI"
   readonly DEVICE="/dev/spidev1.0"
 
@@ -458,6 +440,7 @@ config_volteer() {
   # the pin number is 194. From the gpio-ranges, the gpio value is
   # 408 + (194-171) = 431
 
+  readonly GPIO_CHIP="gpiochip152"
   # FPMCU RST_ODL is on GPP_C23 = 408 + (194 - 171) = 431
   readonly GPIO_NRST=431
   # FPMCU BOOT0 is on GPP_C22 = 408 + (193 - 171) = 430
@@ -467,11 +450,10 @@ config_volteer() {
 }
 
 config_zork() {
-  check_gpio_chip_exists "gpiochip256"
-
   readonly TRANSPORT="UART"
   readonly DEVICE="/dev/ttyS1"
 
+  readonly GPIO_CHIP="gpiochip256"
   # FPMCU RST_ODL is on AGPIO 11 = 256 + 11 = 267
   readonly GPIO_NRST=267
   # FPMCU BOOT0 is on AGPIO 69 = 256 + 69 = 325
@@ -482,12 +464,11 @@ config_zork() {
 }
 
 config_guybrush() {
-  check_gpio_chip_exists "gpiochip256"
-
   readonly TRANSPORT="UART"
 
   readonly DEVICE="/dev/ttyS1"
 
+  readonly GPIO_CHIP="gpiochip256"
   # FPMCU RST_ODL is on AGPIO 11 = 256 + 11 = 267
   readonly GPIO_NRST=267
   # FPMCU BOOT0 is on AGPIO 144 = 256 + 144 = 400
@@ -497,36 +478,57 @@ config_guybrush() {
   readonly GPIO_PWREN=-1
 }
 
-# The "platform name" corresponds to the underlying board (reference design)
-# that we're running on (not the FPMCU or sensor). At the moment all of the
-# reference designs use the same GPIOs. If for some reason a design differs in
-# the future, we will want to add a nested check in the config_<platform_name>
-# function. Doing it in this manner allows us to reduce the number of
-# configurations that we have to maintain (and reduces the amount of testing
-# if we're only updating a specific config_<platform_name>).
-if ! PLATFORM_NAME="$(get_platform_name)"; then
-  echo "Failed to get platform name"
-  exit 1
-fi
-readonly PLATFORM_NAME
+main() {
+  if [[ "$#" -eq 0 ]] && [[ "${FLAGS_hello}" -eq "${FLAGS_FALSE}" ]]; then
+    echo "Missing filename"
+    flags_help
+    exit "${EXIT_ARGUMENT}"
+  fi
 
-echo "Using config for ${PLATFORM_NAME}"
+  # print out canonical path to differentiate between /usr/local/bin and
+  # /usr/bin installs
+  readlink -f "$0"
 
-# Check that the config function exists
-if [[ "$(type -t "config_${PLATFORM_NAME}")" != "function" ]]; then
-  echo "No config for platform ${PLATFORM_NAME}"
-  exit 1
-fi
+  # The "platform name" corresponds to the underlying board (reference design)
+  # that we're running on (not the FPMCU or sensor). At the moment all of the
+  # reference designs use the same GPIOs. If for some reason a design differs in
+  # the future, we will want to add a nested check in the config_<platform_name>
+  # function. Doing it in this manner allows us to reduce the number of
+  # configurations that we have to maintain (and reduces the amount of testing
+  # if we're only updating a specific config_<platform_name>).
+  if ! PLATFORM_NAME="$(get_platform_name)"; then
+    echo "Failed to get platform name"
+    exit "${EXIT_CONFIG}"
+  fi
+  readonly PLATFORM_NAME
 
-if ! "config_${PLATFORM_NAME}"; then
-  echo "Configuration failed for platform ${PLATFORM_NAME}"
-  exit 1
-fi
+  echo "Using config for ${PLATFORM_NAME}"
 
-flash_fp_mcu_stm32 \
-  "${TRANSPORT}"   \
-  "${DEVICE}"      \
-  "${GPIO_NRST}"   \
-  "${GPIO_BOOT0}"  \
-  "${GPIO_PWREN}"  \
-  "${1}"
+  # Check that the config function exists
+  if [[ "$(type -t "config_${PLATFORM_NAME}")" != "function" ]]; then
+    echo "No config for platform ${PLATFORM_NAME}"
+    exit "${EXIT_CONFIG}"
+  fi
+
+  if ! "config_${PLATFORM_NAME}"; then
+    echo "Configuration failed for platform ${PLATFORM_NAME}"
+    exit "${EXIT_CONFIG}"
+  fi
+
+  # Check that the gpiochip exists
+  if [[ ! -e "/sys/class/gpio/${GPIO_CHIP}" ]]; then
+    echo "Cannot find GPIO chip: ${GPIO_CHIP}"
+    exit "${EXIT_CONFIG}"
+  fi
+
+  flash_fp_mcu_stm32 \
+    "${TRANSPORT}"   \
+    "${DEVICE}"      \
+    "${GPIO_NRST}"   \
+    "${GPIO_BOOT0}"  \
+    "${GPIO_PWREN}"  \
+    "${1}"
+  exit $?
+}
+
+main "$@"

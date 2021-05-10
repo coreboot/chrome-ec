@@ -15,10 +15,9 @@
 #include "common.h"
 #include "compile_time_macros.h"
 #include "driver/accel_lis2dh.h"
-#include "driver/accelgyro_lsm6dsm.h"
+#include "driver/accelgyro_lsm6dso.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
-#include "driver/retimer/nb7v904m.h"
 #include "driver/tcpm/raa489000.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/usb_mux/pi3usb3x532.h"
@@ -48,6 +47,7 @@
 
 #define INT_RECHECK_US 5000
 
+static void fw_config_tablet_mode(void);
 /* C0 interrupt line shared by BC 1.2 and charger */
 static void check_c0_line(void);
 DECLARE_DEFERRED(check_c0_line);
@@ -84,41 +84,6 @@ static void usb_c0_interrupt(enum gpio_signal s)
 
 	/* Check the line again in 5ms */
 	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
-
-}
-
-/* C1 interrupt line shared by BC 1.2, TCPC, and charger */
-static void check_c1_line(void);
-DECLARE_DEFERRED(check_c1_line);
-
-static void notify_c1_chips(void)
-{
-	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-}
-
-static void check_c1_line(void)
-{
-	/*
-	 * If line is still being held low, see if there's more to process from
-	 * one of the chips.
-	 */
-	if (!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
-		notify_c1_chips();
-		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
-	}
-}
-
-static void sub_usb_c1_interrupt(enum gpio_signal s)
-{
-	/* Cancel any previous calls to check the interrupt line */
-	hook_call_deferred(&check_c1_line_data, -1);
-
-	/* Notify all chips using this line that an interrupt came in */
-	notify_c1_chips();
-
-	/* Check the line again in 5ms */
-	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
 
 }
 
@@ -171,23 +136,10 @@ void board_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
 	check_c0_line();
 
-	/* Disable i2c on HDMI pins */
-	gpio_config_pin(MODULE_I2C,
-			GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
-	gpio_config_pin(MODULE_I2C,
-			GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
-
-	/* Set HDMI and sub-rail enables to output */
-	gpio_set_flags(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL,
-			    chipset_in_state(CHIPSET_STATE_ON) ?
-					GPIO_ODR_LOW : GPIO_ODR_HIGH);
-	gpio_set_flags(GPIO_SUB_C1_INT_EN_RAILS_ODL,   GPIO_ODR_HIGH);
-
 	/* Enable interrupt for passing through HPD */
 	gpio_enable_interrupt(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
 
-	/* Enable gpio interrupt for base accelgyro sensor */
-	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+	fw_config_tablet_mode();
 
 	/* Turn on 5V if the system is on, otherwise turn it off. */
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
@@ -199,13 +151,15 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 /* Enable HDMI any time the SoC is on */
 static void hdmi_enable(void)
 {
-	gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+	gpio_set_level(GPIO_EC_HDMI_EN_ODL, 0);
+	gpio_set_level(GPIO_HDMI_PP3300_EN, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
 
 static void hdmi_disable(void)
 {
-	gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
+	gpio_set_level(GPIO_EC_HDMI_EN_ODL, 1);
+	gpio_set_level(GPIO_HDMI_PP3300_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
 
@@ -261,30 +215,16 @@ __override void board_power_5v_enable(int enable)
 	 */
 	set_5v_gpio(!!enable);
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
-		gpio_set_level(GPIO_SUB_C1_INT_EN_RAILS_ODL, !enable);
-	} else {
-		if (isl923x_set_comparator_inversion(1, !!enable))
-			CPRINTS("Failed to %sable sub rails!", enable ?
-								"en" : "dis");
-	}
-
 }
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
-		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
-	else
-		return CONFIG_USB_PD_PORT_MAX_COUNT;
+	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }
 
 __override uint8_t board_get_charger_chip_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
-		return CHARGER_NUM - 1;
-	else
-		return CHARGER_NUM;
+	return CHARGER_NUM;
 }
 
 int board_is_sourcing_vbus(int port)
@@ -398,7 +338,7 @@ static const mat33_fp_t base_standard_ref = {
 };
 
 static struct stprivate_data g_lis2dh_data;
-static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
+static struct lsm6dso_data lsm6dso_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -428,21 +368,20 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_ACCEL] = {
 		.name = "Base Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
+		.chip = MOTIONSENSE_CHIP_LSM6DSO,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dsm_drv,
+		.drv = &lsm6dso_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-				MOTIONSENSE_TYPE_ACCEL),
+		.drv_data = &lsm6dso_data,
 		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
+		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
+		.min_frequency = LSM6DSO_ODR_MIN_VAL,
+		.max_frequency = LSM6DSO_ODR_MAX_VAL,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
 				.odr = 13000 | ROUND_UP_FLAG,
@@ -457,25 +396,24 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_GYRO] = {
 		.name = "Base Gyro",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
+		.chip = MOTIONSENSE_CHIP_LSM6DSO,
 		.type = MOTIONSENSE_TYPE_GYRO,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dsm_drv,
+		.drv = &lsm6dso_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-				MOTIONSENSE_TYPE_GYRO),
+		.drv_data = &lsm6dso_data,
 		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
+		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
 		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
+		.min_frequency = LSM6DSO_ODR_MIN_VAL,
+		.max_frequency = LSM6DSO_ODR_MAX_VAL,
 	},
 };
 
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
@@ -500,23 +438,11 @@ const struct charger_config_t chg_chips[] = {
 		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
 		.drv = &isl923x_drv,
 	},
-
-	{
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
 };
 
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	{
 		.i2c_port = I2C_PORT_USB_C0,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-		.flags = PI3USB9201_ALWAYS_POWERED,
-	},
-
-	{
-		.i2c_port = I2C_PORT_SUB_USB_C1,
 		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
 		.flags = PI3USB9201_ALWAYS_POWERED,
 	},
@@ -554,23 +480,6 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 		.drv = &raa489000_tcpm_drv,
 	},
-
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_SUB_USB_C1,
-			.addr_flags = RAA489000_TCPC0_I2C_FLAGS,
-		},
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
-		.drv = &raa489000_tcpm_drv,
-	},
-};
-
-const struct usb_mux usbc1_retimer = {
-	.usb_port = 1,
-	.i2c_port = I2C_PORT_SUB_USB_C1,
-	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
-	.driver = &nb7v904m_usb_redriver_drv,
 };
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -579,13 +488,6 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
 		.driver = &pi3usb3x532_usb_mux_driver,
 	},
-	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
-		.driver = &pi3usb3x532_usb_mux_driver,
-		.next_mux = &usbc1_retimer,
-	}
 };
 
 uint16_t tcpc_get_alert_status(void)
@@ -606,18 +508,6 @@ uint16_t tcpc_get_alert_status(void)
 
 			if (regval)
 				status |= PD_STATUS_TCPC_ALERT_0;
-		}
-	}
-
-	if (board_get_usb_pd_port_count() > 1 &&
-				!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
-		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
-			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
-			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))
-				regval &= ~((1 << 14) | (1 << 13) | (1 << 12));
-
-			if (regval)
-				status |= PD_STATUS_TCPC_ALERT_1;
 		}
 	}
 
@@ -676,4 +566,19 @@ __override const struct ec_response_keybd_config
 *board_vivaldi_keybd_config(void)
 {
 	return &cret_keybd;
+}
+
+static void fw_config_tablet_mode(void)
+{
+	if (get_cbi_fw_config_tablet_mode() == TABLET_MODE_PRESENT) {
+		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+		/* Enable Base Accel interrupt */
+		gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+	} else {
+		motion_sensor_count = 0;
+		gmr_tablet_switch_disable();
+		/* Base accel is not stuffed, don't allow line to float */
+		gpio_set_flags(GPIO_BASE_SIXAXIS_INT_L,
+			       GPIO_INPUT | GPIO_PULL_DOWN);
+	}
 }

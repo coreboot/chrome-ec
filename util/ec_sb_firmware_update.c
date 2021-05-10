@@ -364,9 +364,12 @@ static int write_block(struct fw_update_ctrl *fw_update,
 	return EC_RES_SUCCESS;
 }
 
-static void dump_data(uint8_t *data, int offset, int size)
+static void dump_data(char *data, int offset, int size)
 {
 	int i = 0;
+
+	if (data == NULL)
+		return;
 
 	printf("Offset:0x%X\n", offset);
 	for (i = 0; i < size; i++) {

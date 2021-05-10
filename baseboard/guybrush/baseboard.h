@@ -9,6 +9,7 @@
 #define __CROS_EC_BASEBOARD_H
 
 /* NPCX9 config */
+#define CONFIG_PORT80_4_BYTE
 #define NPCX9_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 
@@ -166,6 +167,8 @@
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_TCPC_LOW_POWER
+#undef  CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
 #define CONFIG_USB_PD_TCPM_TCPCI
@@ -313,12 +316,6 @@ enum sensor_id {
 	BASE_ACCEL = 0,
 	BASE_GYRO,
 	SENSOR_COUNT,
-};
-
-/* Battery Types */
-enum battery_type {
-	BATTERY_AP18F4M,
-	BATTERY_TYPE_COUNT,
 };
 
 /* PWM Channels */

@@ -172,19 +172,19 @@ const struct temp_sensor_t temp_sensors[] = {
 		.name = "SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = TEMP_SENSOR_SOC,
+		.idx = ADC_TEMP_SENSOR_SOC,
 	},
 	[TEMP_SENSOR_MEMORY] = {
 		.name = "Memory",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = TEMP_SENSOR_MEMORY,
+		.idx = ADC_TEMP_SENSOR_MEMORY,
 	},
 	[TEMP_SENSOR_AMBIENT] = {
 		.name = "Ambient",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = TEMP_SENSOR_AMBIENT,
+		.idx = ADC_TEMP_SENSOR_AMBIENT,
 	},
 	[TEMP_SENSOR_CPU] = {
 		.name = "CPU",
@@ -698,16 +698,22 @@ void bc12_interrupt(enum gpio_signal signal)
  */
 void board_pwrbtn_to_pch(int level)
 {
-	/* Add delay for G3 exit if asserting PWRBTN_L and S5_PGOOD is low. */
-	if (!level && !gpio_get_level(GPIO_S5_PGOOD)) {
-		/*
-		 * From measurement, wait 80 ms for RSMRST_L to rise after
-		 * S5_PGOOD.
-		 */
-		msleep(G3_TO_PWRBTN_DELAY_MS);
+	timestamp_t start;
+	const uint32_t timeout_rsmrst_rise_us = 30 * MSEC;
 
-		if (!gpio_get_level(GPIO_S5_PGOOD))
-			ccprints("Error: pwrbtn S5_PGOOD low");
+	/* Add delay for G3 exit if asserting PWRBTN_L and RSMRST_L is low. */
+	if (!level && !gpio_get_level(GPIO_PCH_RSMRST_L)) {
+		start = get_time();
+		do {
+			usleep(200);
+			if (gpio_get_level(GPIO_PCH_RSMRST_L))
+				break;
+		} while (time_since32(start) < timeout_rsmrst_rise_us);
+
+		if (!gpio_get_level(GPIO_PCH_RSMRST_L))
+			ccprints("Error pwrbtn: RSMRST_L still low");
+
+		msleep(G3_TO_PWRBTN_DELAY_MS);
 	}
 	gpio_set_level(GPIO_PCH_PWRBTN_L, level);
 }

@@ -18,17 +18,20 @@ import zmake.multiproc
 import zmake.project
 import zmake.toolchains as toolchains
 import zmake.util as util
+import zmake.version
+
+ninja_warnings = re.compile(r'\S*: warning:.*')
 
 
-def ninja_log_level_override(line, default_log_level):
+def ninja_stdout_log_level_override(line, current_log_level):
     """Update the log level for ninja builds if we hit an error.
 
-    Ninja builds print everything to stdout, but really we want to start
+    Ninja builds prints everything to stdout, but really we want to start
     logging things to CRITICAL
 
     Args:
         line: The line that is about to be logged.
-        default_log_level: The default logging level that will be used for the
+        current_log_level: The active logging level that would be used for the
           line.
     """
     # Output lines from Zephyr that are not normally useful
@@ -49,38 +52,45 @@ def ninja_log_level_override(line, default_log_level):
     if line.startswith("["):
         return logging.DEBUG
     # we don't care about entering directories since it happens every time
-    elif line.startswith("ninja: Entering directory"):
+    if line.startswith("ninja: Entering directory"):
         return logging.DEBUG
     # we know the build stops from the compiler messages and ninja return code
-    elif line.startswith("ninja: build stopped"):
+    if line.startswith("ninja: build stopped"):
         return logging.DEBUG
     # someone prints a *** SUCCESS *** message which we don't need
-    elif line.startswith("***"):
+    if line.startswith("***"):
         return logging.DEBUG
     # dopey ninja puts errors on stdout, so fix that. It does not look
     # likely that it will be fixed upstream:
     # https://github.com/ninja-build/ninja/issues/1537
     # Try to drop output about the device tree
-    elif any(line.startswith(x) for x in cmake_suppress):
+    if any(line.startswith(x) for x in cmake_suppress):
         return logging.INFO
     # this message is a bit like make failing. We already got the error output.
-    elif line.startswith("FAILED: CMakeFiles"):
+    if line.startswith("FAILED: CMakeFiles"):
         return logging.INFO
     # if a particular file fails it shows the build line used, but that is not
     # useful except for debugging.
-    elif line.startswith("ccache"):
+    if line.startswith("ccache"):
         return logging.DEBUG
-    elif line.split()[0] in ["Memory", "FLASH:", "SRAM:", "IDT_LIST:"]:
-        pass
-    else:
-        return logging.ERROR
-    return default_log_level
+    if ninja_warnings.match(line):
+        return logging.WARNING
+    # When we see "Memory region" go into INFO, and stay there as long as the
+    # line starts with \S+:
+    if line.startswith("Memory region"):
+        return logging.INFO
+    if current_log_level == logging.INFO and line.split()[0].endswith(":"):
+        return current_log_level
+    if current_log_level == logging.WARNING:
+        return current_log_level
+    return logging.ERROR
 
 
-def cmake_log_level_override(line, default_log_level):
-    """Update the log level for cmake builds if we hit an error.
+def cmake_stderr_log_level_override(line, default_log_level):
+    """Update the log level for cmake stderr output if we hit an error.
 
-    Cmake prints some messages that are less than useful during development.
+    Cmake prints some messages that are less than useful during
+    development.
 
     Args:
         line: The line that is about to be logged.
@@ -218,6 +228,10 @@ class Zmake:
         module_config = zmake.modules.setup_module_symlinks(
             build_dir / 'modules', module_paths)
 
+        # Symlink the Zephyr base into the build directory so it can
+        # be used in the build phase.
+        util.update_symlink(zephyr_base, build_dir / 'zephyr_base')
+
         dts_overlay_config = project.find_dts_overlays(module_paths)
 
         if not toolchain:
@@ -251,8 +265,14 @@ class Zmake:
                                       stderr=subprocess.PIPE,
                                       encoding='utf-8',
                                       errors='replace')
-            zmake.multiproc.log_output(self.logger, logging.DEBUG, proc.stdout)
-            zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
+            job_id = "{}:{}".format(project_dir, build_name)
+            zmake.multiproc.log_output(
+                self.logger, logging.DEBUG, proc.stdout,
+                job_id=job_id,)
+            zmake.multiproc.log_output(
+                self.logger, logging.ERROR, proc.stderr,
+                log_level_override_func=cmake_stderr_log_level_override,
+                job_id=job_id,)
             processes.append(proc)
         for proc in processes:
             if proc.wait():
@@ -279,9 +299,18 @@ class Zmake:
                 True if all if OK
                 False if an error was found (so that zmake should exit)
             """
+            # Let all output be produced before exiting
+            bad = None
             for proc in procs:
-                if proc.wait():
-                    raise OSError(get_process_failure_msg(proc))
+                if proc.wait() and not bad:
+                    bad = proc
+            if bad:
+                # Just show the first bad process for now. Both builds likely
+                # produce the same error anyway. If they don't, the user can
+                # still take action on the errors/warnings provided. Showing
+                # multiple 'Execution failed' messages is not very friendly
+                # since it exposes the fragmented nature of the build.
+                raise OSError(get_process_failure_msg(bad))
 
             if (fail_on_warnings and
                 any(w.has_written(logging.WARNING) or
@@ -295,7 +324,13 @@ class Zmake:
         log_writers = []
         dirs = {}
 
+        build_dir = build_dir.resolve()
         project = zmake.project.Project(build_dir / 'project')
+
+        # Compute the version string.
+        version_string = zmake.version.get_version_string(
+            project, build_dir / 'zephyr_base',
+            zmake.modules.locate_from_directory(build_dir / 'modules'))
 
         for build_name, build_config in project.iter_builds():
             with self.jobserver.get_job():
@@ -309,16 +344,18 @@ class Zmake:
                     stderr=subprocess.PIPE,
                     encoding='utf-8',
                     errors='replace')
+                job_id = "{}:{}".format(build_dir, build_name)
                 out = zmake.multiproc.log_output(
                     logger=self.logger,
                     log_level=logging.INFO,
                     file_descriptor=proc.stdout,
-                    log_level_override_func=ninja_log_level_override)
+                    log_level_override_func=ninja_stdout_log_level_override,
+                    job_id=job_id,)
                 err = zmake.multiproc.log_output(
                     self.logger,
                     logging.ERROR,
                     proc.stderr,
-                    log_level_override_func=cmake_log_level_override)
+                    job_id=job_id,)
 
                 if self._sequential:
                     if not wait_and_check_success([proc], [out, err]):
@@ -340,7 +377,8 @@ class Zmake:
         if output_files_out is None:
             output_files_out = []
         for output_file, output_name in project.packer.pack_firmware(
-                packer_work_dir, self.jobserver, **dirs):
+                packer_work_dir, self.jobserver, version_string=version_string,
+                **dirs):
             shutil.copy2(output_file, output_dir / output_name)
             self.logger.info('Output file \'%r\' created.', output_file)
             output_files_out.append(output_file)
@@ -367,10 +405,13 @@ class Zmake:
                     stderr=subprocess.PIPE,
                     encoding='utf-8',
                     errors='replace')
-                zmake.multiproc.log_output(self.logger, logging.DEBUG,
-                                           proc.stdout)
-                zmake.multiproc.log_output(self.logger, logging.ERROR,
-                                           proc.stderr)
+                job_id = "test {}".format(output_file)
+                zmake.multiproc.log_output(
+                    self.logger, logging.DEBUG,
+                    proc.stdout, job_id=job_id,)
+                zmake.multiproc.log_output(
+                    self.logger, logging.ERROR,
+                    proc.stderr, job_id=job_id,)
                 procs.append(proc)
 
         for idx, proc in enumerate(procs):
@@ -410,7 +451,8 @@ class Zmake:
                     errors='replace')
                 zmake.multiproc.log_output(
                     self.logger, logging.DEBUG,
-                    proc.stdout, log_level_override_func=get_log_level)
+                    proc.stdout, log_level_override_func=get_log_level,
+                    job_id=os.path.basename(test_file),)
                 rv = proc.wait()
                 if rv:
                     self.logger.error(get_process_failure_msg(proc))
@@ -467,7 +509,8 @@ class Zmake:
                                         encoding='utf-8',
                                         errors='replace')
             zmake.multiproc.log_output(
-                self.logger, logging.WARNING, proc.stderr)
+                self.logger, logging.WARNING, proc.stderr,
+                job_id="{}-lcov".format(build_dir),)
 
             with open(lcov_file, 'w') as outfile:
                 for line in proc.stdout:
@@ -510,12 +553,16 @@ class Zmake:
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
                 errors='replace')
+            job_id = "{}:{}".format(build_dir, build_name)
             zmake.multiproc.log_output(
                 logger=self.logger,
                 log_level=logging.DEBUG,
                 file_descriptor=proc.stdout,
-                log_level_override_func=ninja_log_level_override)
-            zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
+                log_level_override_func=ninja_stdout_log_level_override,
+                job_id=job_id,)
+            zmake.multiproc.log_output(
+                self.logger, logging.ERROR, proc.stderr,
+                job_id=job_id,)
             procs.append(proc)
 
         for proc in procs:
@@ -576,7 +623,11 @@ class Zmake:
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
                 errors='replace')
-            zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
+            zmake.multiproc.log_output(
+                self.logger,
+                logging.ERROR,
+                proc.stderr,
+                job_id="getversion.sh")
             version = ''
             for line in proc.stdout:
                 match = re.search(r'#define VERSION "(.*)"', line)
@@ -597,8 +648,10 @@ class Zmake:
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
                 errors='replace')
-            zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
-            zmake.multiproc.log_output(self.logger, logging.DEBUG, proc.stdout)
+            zmake.multiproc.log_output(
+                self.logger, logging.ERROR, proc.stderr, job_id="lcov")
+            zmake.multiproc.log_output(
+                self.logger, logging.DEBUG, proc.stdout, job_id="lcov")
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
 
@@ -614,8 +667,16 @@ class Zmake:
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
                 errors='replace')
-            zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
-            zmake.multiproc.log_output(self.logger, logging.DEBUG, proc.stdout)
+            zmake.multiproc.log_output(
+                self.logger,
+                logging.ERROR,
+                proc.stderr,
+                job_id="genhtml")
+            zmake.multiproc.log_output(
+                self.logger,
+                logging.DEBUG,
+                proc.stdout,
+                job_id="genhtml")
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
             return 0
