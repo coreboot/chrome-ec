@@ -42,6 +42,9 @@
 #define CONFIG_USB_PD_DEBUG_LEVEL 0
 #endif
 
+/* b/185834008: Allow kodama drain 5V/2A on DCP. */
+#define USB_CHARGER_MAX_CURR_MA 2000
+
 /* Battery */
 #define BATTERY_DESIRED_CHARGING_CURRENT    2000  /* mA */
 
