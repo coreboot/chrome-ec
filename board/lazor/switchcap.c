@@ -10,7 +10,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
-#include "power/sc7180.h"
+#include "power/qcom.h"
 #include "system.h"
 #include "sku.h"
 
