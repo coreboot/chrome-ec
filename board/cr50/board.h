@@ -522,6 +522,7 @@ enum nvmem_users {
 #define CONFIG_RNG
 
 #define CONFIG_EC_EFS_SUPPORT
+#define CONFIG_EC_EFS2_VERSION 0
 
 #define CONFIG_ENABLE_H1_ALERTS
 

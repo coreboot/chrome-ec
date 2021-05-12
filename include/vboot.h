@@ -59,14 +59,13 @@ struct cr50_comm_packet {
 #define CR50_COMM_ERROR_BAD_PAYLOAD     CR50_COMM_RESPONSE(0x07)
 #define CR50_COMM_ERROR_STRUCT_VERSION  CR50_COMM_RESPONSE(0x08)
 #define CR50_COMM_ERROR_NVMEM           CR50_COMM_RESPONSE(0x09)
+#define CR50_COMM_ERROR_BAD_PARAM       CR50_COMM_RESPONSE(0x0a)
 
-/*
- * BIT(0) : NO_BOOT flag
- * BIT(1) : RECOVERY flag
- */
 enum ec_efs_boot_mode {
-	EC_EFS_BOOT_MODE_NORMAL           = 0x00,
+	EC_EFS_BOOT_MODE_NORMAL           = 0x00, /* in 2.0 */
+	EC_EFS_BOOT_MODE_VERIFIED         = 0x00, /* in 2.1 */
 	EC_EFS_BOOT_MODE_NO_BOOT          = 0x01,
+	EC_EFS_BOOT_MODE_TRUSTED_RO       = 0x02, /* in 2.1 */
 
 	/* boot_mode is uint8_t */
 	EC_EFS_BOOT_MODE_LIMIT            = 255,

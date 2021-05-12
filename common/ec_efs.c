@@ -29,6 +29,14 @@
 #define CPRINTS(format, args...) do { } while (0)
 #endif
 
+#if CONFIG_EC_EFS2_VERSION == 0
+#define EC_EFS_BOOT_MODE_INITIAL EC_EFS_BOOT_MODE_NORMAL
+#elif CONFIG_EC_EFS2_VERSION == 1
+#define EC_EFS_BOOT_MODE_INITIAL EC_EFS_BOOT_MODE_TRUSTED_RO
+#else
+#error "NOT SUPPORTED EFS2 VERSION"
+#endif
+
 /*
  * Context of EC-EFS
  */
@@ -40,11 +48,22 @@ static struct ec_efs_context_ {
 	uint32_t secdata_error_code;
 
 	uint8_t hash[SHA256_DIGEST_SIZE];	/* EC-RW digest */
-} ec_efs_ctx;
+} ec_efs_ctx = {
+	.boot_mode = EC_EFS_BOOT_MODE_INITIAL,
+	.hash_is_loaded = 0,
+	.secdata_error_code = 0,
+	.hash = { 0, },
+};
 
 static const char * const boot_mode_name_[] = {
+#if CONFIG_EC_EFS2_VERSION == 0
 	"NORMAL",
 	"NO_BOOT",
+#elif CONFIG_EC_EFS2_VERSION == 1
+	"VERIFIED",
+	"NO_BOOT",
+	"TRUSTED_RO",
+#endif
 };
 
 /*
@@ -166,7 +185,13 @@ DECLARE_VENDOR_COMMAND_P(VENDOR_CC_RESET_EC, vc_reset_ec_);
 
 void ec_efs_reset(void)
 {
-	set_boot_mode_(EC_EFS_BOOT_MODE_NORMAL);
+	set_boot_mode_(
+#if CONFIG_EC_EFS2_VERSION == 0
+		EC_EFS_BOOT_MODE_NORMAL
+#elif CONFIG_EC_EFS2_VERSION == 1
+		EC_EFS_BOOT_MODE_TRUSTED_RO
+#endif
+	);
 }
 
 /*
@@ -188,6 +213,7 @@ uint16_t ec_efs_set_boot_mode(const char * const data, const uint8_t size)
 	boot_mode = data[0];
 
 	switch (boot_mode) {
+#if CONFIG_EC_EFS2_VERSION == 0
 	case EC_EFS_BOOT_MODE_NORMAL:
 		/*
 		 * Per EC-EFS2 design, CR50 accepts the repeating commands
@@ -203,12 +229,47 @@ uint16_t ec_efs_set_boot_mode(const char * const data, const uint8_t size)
 		 */
 		board_reboot_ec_deferred(0);
 		return 0;
-
+#elif CONFIG_EC_EFS2_VERSION == 1
+	case EC_EFS_BOOT_MODE_TRUSTED_RO:
+		switch (ec_efs_ctx.boot_mode) {
+		case EC_EFS_BOOT_MODE_TRUSTED_RO:
+			/*
+			 * Per EC-EFS2 design, CR50 accepts the repeating
+			 * commands as long as the result is the same.
+			 * It is to be tolerant against CR50 response loss,
+			 * so that EC can resend the same command.
+			 */
+			return CR50_COMM_SUCCESS;
+		case EC_EFS_BOOT_MODE_NO_BOOT:
+			/* fall through */
+		case EC_EFS_BOOT_MODE_VERIFIED:
+			/*
+			 * Once the boot mode is NO_BOOT, then it must not be
+			 * set to RO mode without resetting EC.
+			 */
+			board_reboot_ec_deferred(0);
+			return 0;
+		default:
+			/*
+			 * This case should not happen.
+			 * However, should it happen, reset EC and EFS-context.
+			 */
+			cprints(CC_SYSTEM,
+				"ERROR: EFS boot_mode is corrupted: %x",
+				ec_efs_ctx.boot_mode);
+			board_reboot_ec_deferred(0);
+			return 0;
+		}
+		break;
+#else
+#error "Not-supported EC-EFS2 version"
+#endif /* CONFIG_EC_EFS2_VERSION == 1 */
 	case EC_EFS_BOOT_MODE_NO_BOOT:
 		break;
 
 	default:
-		return CR50_COMM_ERROR_BAD_PAYLOAD;
+		/* Reject changing to all other BOOT_MODEs. */
+		return CR50_COMM_ERROR_BAD_PARAM;
 	}
 
 	set_boot_mode_(boot_mode);
@@ -246,14 +307,20 @@ uint16_t ec_efs_verify_hash(const char *hash_data, const uint8_t size)
 	}
 
 	/*
-	 * Once the boot mode is not NORMAL, (i.e. it is NO_BOOT), then CR50
+	 * Once the boot mode is NO_BOOT, then CR50
 	 * should not approve the hash verification, but reset EC.
 	 */
-	if (ec_efs_ctx.boot_mode != EC_EFS_BOOT_MODE_NORMAL) {
+	if (ec_efs_ctx.boot_mode == EC_EFS_BOOT_MODE_NO_BOOT) {
 		board_reboot_ec_deferred(0);
 		return 0;
 	}
-
+#if CONFIG_EC_EFS2_VERSION == 1
+	/*
+	 * Changing BOOT_MODE_VERIFIED does not break a backward compatibility
+	 * to EFS2.0 in AP-FW, because AP-FW accepts all boot_modes but NO_BOOT.
+	 */
+	set_boot_mode_(EC_EFS_BOOT_MODE_VERIFIED);
+#endif
 	return CR50_COMM_SUCCESS;
 }
 
