@@ -15,9 +15,6 @@
 #undef GPIO_VOLUME_DOWN_L
 #undef CONFIG_VOLUME_BUTTONS
 
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
 
@@ -69,6 +66,10 @@
 /* KeyBoard */
 #define CONFIG_KEYBOARD_REFRESH_ROW3
 #define CONFIG_KEYBOARD_KEYPAD
+
+/* USB Type A Features */
+#define USB_PORT_COUNT 1
+#define CONFIG_USB_PORT_POWER_DUMB
 
 #ifndef __ASSEMBLER__
 

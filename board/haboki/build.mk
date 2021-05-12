@@ -6,15 +6,10 @@
 # Board specific files build
 #
 
-CHIP:=npcx
-CHIP_FAMILY:=npcx7
-CHIP_VARIANT:=npcx7m7fc
-BASEBOARD:=volteer
+CHIP:=it83xx
+CHIP_FAMILY:=it8320
+CHIP_VARIANT:=it8320dx
+BASEBOARD:=keeby
 
-board-y=board.o
-board-y+=battery.o
-board-y+=cbi.o
-board-y+=led.o
-board-y+=keyboard.o
-board-y+=sensors.o
-board-y+=usbc_config.o
+board-y=board.o led.o usb_pd_policy.o
+board-$(CONFIG_BATTERY_SMART)+=battery.o
