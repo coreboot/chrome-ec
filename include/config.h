@@ -854,6 +854,12 @@
 #undef CONFIG_EC_EFS_SUPPORT
 
 /*
+ * Version of EC-EFS: 0 (for 2.0) or 1 (for 2.1).
+ * This is for CR50 config only
+ */
+#undef CONFIG_EC_EFS2_VERSION
+
+/*
  * Enable the experimental console.
  *
  * NOTE: If you enable this experimental console, you will need to run the

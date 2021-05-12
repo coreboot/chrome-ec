@@ -105,8 +105,17 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 
 #ifdef TEST_EC_COMM
+/* Test EC-EFS2.0 */
 #define CONFIG_CRC8
 #define CONFIG_EC_EFS_SUPPORT
+#define CONFIG_EC_EFS2_VERSION 0
+#endif
+
+#ifdef TEST_EC_COMM21
+/* Test EC-EFS2.1 */
+#define CONFIG_CRC8
+#define CONFIG_EC_EFS_SUPPORT
+#define CONFIG_EC_EFS2_VERSION 1
 #endif
 
 #if defined(TEST_NVMEM) || defined(TEST_NVMEM_VARS)
