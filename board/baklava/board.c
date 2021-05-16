@@ -69,6 +69,11 @@ static void board_pwr_btn_interrupt(enum gpio_signal signal)
 {
 	baseboard_power_button_evt(gpio_get_level(signal));
 }
+
+static void board_usbc_usb3_interrupt(enum gpio_signal signal)
+{
+	baseboard_usbc_usb3_irq();
+}
 #endif /* SECTION_IS_RW */
 
 #include "gpio_list.h" /* Must come after other header files. */
@@ -80,6 +85,7 @@ static void board_pwr_btn_interrupt(enum gpio_signal signal)
  */
 const struct power_seq board_power_seq[] = {
 	{GPIO_EN_AC_JACK,               1, 20},
+	{GPIO_EC_DFU_MUX_CTRL,          0, 0},
 	{GPIO_EN_PP5000_A,              1, 31},
 	{GPIO_MST_LP_CTL_L,             1, 0},
 	{GPIO_EN_PP3300_B,              1, 1},
@@ -105,8 +111,8 @@ const size_t board_power_seq_count = ARRAY_SIZE(board_power_seq);
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC]         = usb_string_desc,
-	[USB_STR_VENDOR]       = USB_STRING_DESC("Google Inc."),
-	[USB_STR_PRODUCT]      = USB_STRING_DESC("Quiche"),
+	[USB_STR_VENDOR]       = USB_STRING_DESC("Acer"),
+	[USB_STR_PRODUCT]      = USB_STRING_DESC("D501"),
 	[USB_STR_SERIALNO]     = 0,
 	[USB_STR_VERSION]      =
 			USB_STRING_DESC(CROS_EC_SECTION ":" CROS_EC_VERSION32),

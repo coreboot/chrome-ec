@@ -505,7 +505,7 @@ static int cros_system_npcx_hibernate(const struct device *dev,
 	system_npcx_watchdog_stop();
 
 	/* Enter hibernate mode */
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_SYSTEM_HIBERNATE_PSL)) {
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_HIBERNATE_PSL)) {
 		system_npcx_hibernate_by_psl(dev, seconds, microseconds);
 	} else {
 		system_npcx_hibernate_by_disable_ram(dev, seconds,
@@ -513,6 +513,12 @@ static int cros_system_npcx_hibernate(const struct device *dev,
 	}
 
 	return 0;
+}
+
+__maybe_unused static uint64_t
+cros_system_npcx_deep_sleep_ticks(const struct device *dev)
+{
+	return npcx_clock_get_sleep_ticks();
 }
 
 static struct cros_system_npcx_data cros_system_npcx_dev_data;
@@ -531,6 +537,9 @@ static const struct cros_system_driver_api cros_system_driver_npcx_api = {
 	.chip_vendor = cros_system_npcx_get_chip_vendor,
 	.chip_name = cros_system_npcx_get_chip_name,
 	.chip_revision = cros_system_npcx_get_chip_revision,
+#ifdef CONFIG_SOC_POWER_MANAGEMENT_TRACE
+	.deep_sleep_ticks = cros_system_npcx_deep_sleep_ticks,
+#endif
 };
 
 DEVICE_DEFINE(cros_system_npcx_0, "CROS_SYSTEM", cros_system_npcx_init, NULL,

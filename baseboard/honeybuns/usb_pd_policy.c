@@ -10,16 +10,21 @@
 #include "driver/mp4245.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/mp4245.h"
+#include "hooks.h"
 #include "task.h"
 #include "timer.h"
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_dp_ufp.h"
+#include "usb_tc_sm.h"
 #include "usbc_ppc.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+
+#define MP4245_VOLTAGE_WINDOW BIT(2)
+#define MP4245_VOLTAGE_WINDOW_MASK (MP4245_VOLTAGE_WINDOW - 1)
 
 #define PDO_FIXED_FLAGS (PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP |\
 			 PDO_FIXED_COMM_CAP | PDO_FIXED_UNCONSTRAINED)
@@ -51,6 +56,29 @@ const uint32_t pd_snk_pdo[] = {
 };
 const int pd_snk_pdo_cnt = ARRAY_SIZE(pd_snk_pdo);
 
+static int src_host_pdo_cnt_override;
+
+static int command_hostpdo(int argc, char **argv)
+{
+	char *e;
+	int limit;
+
+	if (argc >= 2) {
+
+		limit = strtoi(argv[1], &e, 10);
+		if ((limit < 0) || (limit > PDO_IDX_COUNT))
+			return EC_ERROR_PARAM1;
+
+		src_host_pdo_cnt_override = limit;
+	}
+	ccprintf("src host pdo override = %d\n", src_host_pdo_cnt_override);
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(hostpdo, command_hostpdo,
+			"<0|1|2|3|4>",
+			"Limit number of PDOs for C0");
+
 int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 {
 	int pdo_cnt = 0;
@@ -58,6 +86,14 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 	if (port == USB_PD_PORT_HOST) {
 		*src_pdo =  pd_src_host_pdo;
 		pdo_cnt = ARRAY_SIZE(pd_src_host_pdo);
+		/*
+		 * This override is only active via a console command. Only used
+		 * for debug to limit the level of VBUS offered to port partner
+		 * if desired. The console command only allows 0 ->
+		 * PDO_IDX_COUNT for this value.
+		 */
+		if (src_host_pdo_cnt_override)
+			pdo_cnt = src_host_pdo_cnt_override;
 	} else {
 		*src_pdo =  pd_src_display_pdo;
 		pdo_cnt = ARRAY_SIZE(pd_src_display_pdo);
@@ -82,7 +118,11 @@ __override bool port_discovery_dr_swap_policy(int port,
 	enum pd_data_role role_test =
 		(port == USB_PD_PORT_HOST) ? PD_ROLE_DFP : PD_ROLE_UFP;
 
-	if (dr == role_test)
+	/*
+	 * Request data role swap if not in the port's desired data role and if
+	 * flag to check for data role in PE is set.
+	 */
+	if (dr == role_test && dr_swap_flag)
 		return true;
 
 	/* Do not perform a DR swap */
@@ -92,13 +132,15 @@ __override bool port_discovery_dr_swap_policy(int port,
 /*
  * Default Port Discovery VCONN Swap Policy.
  *
- * 1) Never perform VCONN swap
+ * 1) VCONN swap if requested by PE and currently not vconn source.
  */
 __override bool port_discovery_vconn_swap_policy(int port,
 			bool vconn_swap_flag)
 {
-	/* Do not perform a VCONN swap */
-	return false;
+	if (vconn_swap_flag && !tc_is_vconn_src(port))
+		return true;
+	else
+		return false;
 }
 
 int pd_check_vconn_swap(int port)
@@ -116,7 +158,7 @@ void pd_power_supply_reset(int port)
 
 	prev_en = ppc_is_sourcing_vbus(port);
 
-	/* Disable VBUS. */
+	/* Disable VBUS via PPC. */
 	ppc_vbus_source_enable(port, 0);
 
 	/* Enable discharge if we were previously sourcing 5V */
@@ -124,9 +166,21 @@ void pd_power_supply_reset(int port)
 		pd_set_vbus_discharge(port, 1);
 
 	if (port == USB_PD_PORT_HOST) {
-		/* Turn off voltage output from buck-boost */
-		mp4245_votlage_out_enable(0);
-		/* Reset VBUS voltage to default value (fixed 5V SRC_CAP) */
+		int mv;
+		int ma;
+		int unused_mv;
+
+		/*
+		 * Because VBUS on C0 is turned on/off via the PPC, the
+		 * voltage from the mp4245 does not need to be turned off, or
+		 * set to 0V. Instead, reset VBUS voltage to default value
+		 * (fixed 5V SRC_CAP) so VBUS is ready to be applied at the next
+		 * attached.src condition.
+		 */
+		pd_extract_pdo_power(pd_src_host_pdo[0], &ma, &mv,
+				     &unused_mv);
+		mp4245_set_voltage_out(mv);
+		/* Ensure voltage is back to 5V */
 		pd_transition_voltage(1);
 	}
 }
@@ -135,15 +189,11 @@ int pd_set_power_supply_ready(int port)
 {
 	int rv;
 
-	if (port == USB_PD_PORT_HOST) {
-		/* Ensure buck-boost is enabled and Vout is on */
-		mp4245_votlage_out_enable(1);
-		msleep(MP4245_VOUT_5V_DELAY_MS);
-	}
-
 	/*
-	 * Default operation of buck-boost is 5v/3.6A.
-	 * Turn on the PPC Provide Vbus.
+	 * Note: For host port, the mp4245 output voltage is set for 5V by
+	 * default and each time VBUS is turned off. VOUT from the mp4245 is
+	 * left enabled as there is a switch (either PPC or discrete) to turn
+	 * VBUS on/off on the wire.
 	 */
 	rv = ppc_vbus_source_enable(port, 1);
 	if (rv)
@@ -155,39 +205,79 @@ int pd_set_power_supply_ready(int port)
 void pd_transition_voltage(int idx)
 {
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
+	int mv;
+	int target_mv;
+	int mv_average = 0;
+	int ma;
+	int vbus_hi;
+	int vbus_lo;
+	int i;
+	int mv_buffer[MP4245_VOLTAGE_WINDOW];
 
-	if (port == USB_PD_PORT_HOST) {
-		int mv, unused_mv;
-		int ma;
-		int vbus_hi;
-		int vbus_lo;
-		int i;
+	/* Only C0 can provide more than 5V */
+	if (port != USB_PD_PORT_HOST)
+		return;
 
 	/*
 	 * Set the VBUS output voltage and current limit to the values specified
 	 * by the PDO requested by sink. Note that USB PD uses idx = 1 for 1st
 	 * PDO of SRC_CAP which must always be 5V fixed supply.
 	 */
-		pd_extract_pdo_power(pd_src_host_pdo[idx - 1], &ma, &mv,
-				     &unused_mv);
+	pd_extract_pdo_power(pd_src_host_pdo[idx - 1], &ma, &target_mv,
+			     &mv);
 
-		/* Set VBUS level to value specified in the requested PDO */
-		mp4245_set_voltage_out(mv);
-		/* Wait for vbus to be within ~5% of its target value */
-		vbus_hi = mv + (mv >> 4);
-		vbus_lo = mv - (mv >> 4);
+	/* Initialize sample delay buffer */
+	for (i = 0; i < MP4245_VOLTAGE_WINDOW; i++)
+		mv_buffer[i] = 0;
 
-		for (i = 0; i < 20; i++) {
-			int rv;
+	/* Set VBUS level to value specified in the requested PDO */
+	mp4245_set_voltage_out(target_mv);
+	/* Wait for vbus to be within ~5% of its target value */
+	vbus_hi = target_mv + (target_mv >> 4);
+	vbus_lo = target_mv - (target_mv >> 4);
 
-			rv =  mp3245_get_vbus(&mv, &ma);
-			if ((rv == EC_SUCCESS) && (mv >= vbus_lo) &&
-			    (mv <= vbus_hi))
+	for (i = 0; i < 20; i++) {
+		/* Read current sample */
+		mv = 0;
+		mp3245_get_vbus(&mv, &ma);
+		/* Add new sample to cicrcular delay buffer */
+		mv_buffer[i & MP4245_VOLTAGE_WINDOW_MASK] = mv;
+		/*
+		 * Don't compute average until sample delay buffer is
+		 * full.
+		 */
+		if (i >= (MP4245_VOLTAGE_WINDOW_MASK)) {
+			int sum = 0;
+			int j;
+
+			/* Sum the voltage samples */
+			for (j = 0; j < MP4245_VOLTAGE_WINDOW; j++)
+				sum += mv_buffer[j];
+			/* Add rounding */
+			sum += MP4245_VOLTAGE_WINDOW / 2;
+			mv_average = sum / MP4245_VOLTAGE_WINDOW;
+			/*
+			 * Check if average is within the target
+			 * voltage range.
+			 */
+			if ((mv_average >= vbus_lo) &&
+			    (mv_average <= vbus_hi)) {
+				CPRINTS("usbc[%d]: VBUS to %d mV in %d steps",
+					port, target_mv, i);
 				return;
-
-			msleep(2);
+			}
 		}
+
+		/*
+		 * The voltage ramp from 5V to 20V requires ~30
+		 * msec. The max loop count and this sleep time gives plenty
+		 * of time for this change.
+		 */
+		msleep(2);
 	}
+
+	CPRINTS("usbc[%d]: Vbus transition timeout: target = %d, measure = %d",
+		port, target_mv, mv_average);
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -227,6 +317,34 @@ int pd_check_power_swap(int port)
 
 	return 0;
 }
+
+static void usb_tc_connect(void)
+{
+	/*
+	 * The EC needs to indicate to the USB hub when the host port is
+	 * attached so that the USB-EP can be properly enumerated. GPIO_BPWR_DET
+	 * is used for this purpose.
+	 */
+	if (pd_is_connected(USB_PD_PORT_HOST)) {
+		gpio_set_level(GPIO_BPWR_DET, 1);
+#ifdef GPIO_UFP_PLUG_DET
+		gpio_set_level(GPIO_UFP_PLUG_DET, 1);
+#endif
+	}
+}
+DECLARE_HOOK(HOOK_USB_PD_CONNECT, usb_tc_connect, HOOK_PRIO_DEFAULT);
+
+static void usb_tc_disconnect(void)
+{
+	/* Only the host port disconnect is relevant */
+	if (!pd_is_connected(USB_PD_PORT_HOST)) {
+		gpio_set_level(GPIO_BPWR_DET, 0);
+#ifdef GPIO_UFP_PLUG_DET
+		gpio_set_level(GPIO_UFP_PLUG_DET, 0);
+#endif
+	}
+}
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, usb_tc_disconnect, HOOK_PRIO_DEFAULT);
 
 __override bool pd_can_source_from_device(int port, const int pdo_cnt,
 				      const uint32_t *pdos)
@@ -316,9 +434,9 @@ static int svdm_response_svids(int port, uint32_t *payload)
 
 const uint32_t vdo_dp_modes[1] =  {
 	VDO_MODE_DP(/* Must support C and E. D is required for 2 lanes */
-		    MODE_DP_PIN_C | MODE_DP_PIN_D | MODE_DP_PIN_D,
+		    MODE_DP_PIN_C | MODE_DP_PIN_D | MODE_DP_PIN_E,
 		    0, /* DFP pin cfg supported */
-		    1,		   /* no usb2.0	signalling in AMode */
+		    0,		   /* usb2.0 signalling in AMode may be req */
 		    CABLE_RECEPTACLE,	   /* its a receptacle */
 		    MODE_DP_V13,   /* DPv1.3 Support, no Gen2 */
 		    MODE_DP_SNK)   /* Its a sink only */
@@ -371,6 +489,8 @@ static void svdm_configure_demux(int port, int enable, int mf)
 		 * stored in bit 0 of CBI fw_config.
 		 */
 		baseboard_set_mst_lane_control(mf);
+		CPRINTS("DP[%d]: DFP-D selected pin config %s",
+			port, mf ? "D" : "C");
 	} else {
 		demux &= ~USB_PD_MUX_DP_ENABLED;
 		demux |= USB_PD_MUX_USB_ENABLED;

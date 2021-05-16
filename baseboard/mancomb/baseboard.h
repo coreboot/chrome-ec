@@ -9,13 +9,13 @@
 #define __CROS_EC_BASEBOARD_H
 
 /* NPCX9 config */
+#define CONFIG_PORT80_4_BYTE
 #define NPCX9_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
-#define CONFIG_BRINGUP /* EC will not automatically power on the AP */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
 
 #undef CONFIG_UART_TX_BUF_SIZE
@@ -44,7 +44,7 @@
 #define CONFIG_DEDICATED_RECOVERY_BUTTON
 #define CONFIG_DEDICATED_RECOVERY_BUTTON_2
 #undef  CONFIG_EXTPOWER_DEBOUNCE_MS
-#define CONFIG_EXTPOWER_DEBOUNCE_MS 200
+#define CONFIG_EXTPOWER_DEBOUNCE_MS 16
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_IGNORE_LID
@@ -137,6 +137,8 @@
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_TCPC_LOW_POWER
+#undef  CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
 #define CONFIG_USB_PD_TCPM_TCPCI
@@ -305,6 +307,7 @@ enum mft_channel {
 };
 
 /* Baseboard Interrupt handlers. */
+void baseboard_bj_connect_interrupt(enum gpio_signal signal);
 void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
 void baseboard_en_pwr_s0(enum gpio_signal signal);
 void baseboard_usb_fault_alert(enum gpio_signal signal);
@@ -315,6 +318,9 @@ void hdmi_fault_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
 void sbu_fault_interrupt(enum ioex_signal signal);
 void tcpc_alert_event(enum gpio_signal signal);
+
+/* Required board functions */
+void board_get_bj_power(int *voltage, int *current);
 
 #endif /* !__ASSEMBLER__ */
 

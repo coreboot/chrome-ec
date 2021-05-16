@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include <cros/nuvoton/npcx.dtsi>
+#include <dt-bindings/adc/adc.h>
 #include <dt-bindings/gpio_defines.h>
 #include <nuvoton/npcx7m6fc.dtsi>
 
@@ -76,15 +77,6 @@
 			i2c-port = <&i2c7_0>;
 			enum-name = "I2C_PORT_SENSOR";
 			label = "SENSOR";
-			config {
-				frequency = <400>;
-				scl {
-					enum-name = "GPIO_EC_I2C_SENSOR_SCL";
-				};
-				sda {
-					enum-name = "GPIO_EC_I2C_SENSOR_SDA";
-				};
-			};
 		};
 		accel {
 			i2c-port = <&i2c7_0>;
@@ -193,12 +185,6 @@
 			label = "FLASH_INTERFACE_UNIT0";
 			pinctrl-0 = <>;
 		};
-	};
-
-	/* Update flash size to 512KB from 196KB since we are using C variant */
-	/delete-node/ flash@10090000;
-	flash0: flash@10070000 {
-		reg = <0x10070000 0x40000>;
 	};
 };
 

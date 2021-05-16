@@ -955,8 +955,8 @@ void pe_invalidate_explicit_contract(int port)
 
 	PE_CLR_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT);
 
-	/* Set Rp for current limit */
-	if (IS_ENABLED(CONFIG_USB_PD_REV30))
+	/* Set Rp for current limit if still attached */
+	if (IS_ENABLED(CONFIG_USB_PD_REV30) && pd_is_connected(port))
 		typec_update_cc(port);
 }
 
@@ -1765,7 +1765,7 @@ void pd_request_power_swap(int port)
 static bool port_try_vconn_swap(int port)
 {
 	if (pe[port].vconn_swap_counter < N_VCONN_SWAP_COUNT) {
-		PE_SET_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
+		pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
 		set_state_pe(port, get_last_state_pe(port));
 		return true;
 	}
@@ -3529,17 +3529,21 @@ static void pe_snk_hard_reset_entry(int port)
 	}
 
 	/*
-	 * If we're about to kill our active charge port and have no battery
-	 * to supply power, disable the PE layer instead.
+	 * If we're about to kill our active charge port and have no battery to
+	 * supply power, disable the PE layer instead.  If we have no battery,
+	 * but we haven't determined our active charge port yet, also avoid
+	 * performing the HardReset.  It might be that this port was our active
+	 * charge port.
 	 *
 	 * Note: On systems without batteries (ex. chromeboxes), it's preferable
 	 * to brown out rather than leave the port only semi-functional for a
-	 * customer.  For systems which should have a battery, this condition
-	 * is not expected to be encountered by a customer.
+	 * customer.  For systems which should have a battery, this condition is
+	 * not expected to be encountered by a customer.
 	 */
 	if (IS_ENABLED(CONFIG_BATTERY) && (battery_is_present() == BP_NO) &&
 	    IS_ENABLED(CONFIG_CHARGE_MANAGER) &&
-	    (port == charge_manager_get_active_charge_port()) &&
+	    ((port == charge_manager_get_active_charge_port() ||
+	     (charge_manager_get_active_charge_port() == CHARGE_PORT_NONE))) &&
 	    system_get_reset_flags() & EC_RESET_FLAG_SYSJUMP) {
 		CPRINTS("C%d: Disabling port to avoid brown out, "
 			"please reboot EC to enable port again", port);
@@ -5180,7 +5184,8 @@ static void pe_vdm_send_request_entry(int port)
 
 	if ((pe[port].tx_type == TCPC_TX_SOP_PRIME ||
 	     pe[port].tx_type == TCPC_TX_SOP_PRIME_PRIME) &&
-	     !tc_is_vconn_src(port)) {
+	    !tc_is_vconn_src(port) && port_discovery_vconn_swap_policy(port,
+		PE_FLAGS_VCONN_SWAP_TO_ON)) {
 		if (port_try_vconn_swap(port))
 			return;
 	}
@@ -5983,7 +5988,17 @@ static void pe_vdm_response_entry(int port)
 			vdo_len = 1;
 		}
 	} else {
-		/* Received at VDM command which is not supported */
+		/*
+		 * Received at VDM command which is not supported.  PD 2.0 may
+		 * NAK or ignore the message (see TD.PD.VNDI.E1. VDM Identity
+		 * steps), but PD 3.0 must send Not_Supported (PD 3.0 Ver 2.0 +
+		 * ECNs 2020-12-10 Table 6-64 Response to an incoming
+		 * VDM or TD.PD.VNDI3.E3 VDM Identity steps)
+		 */
+		if (prl_get_rev(port, TCPC_TX_SOP) == PD_REV30) {
+			set_state_pe(port, PE_SEND_NOT_SUPPORTED);
+			return;
+		}
 		tx_payload[0] |= VDO_CMDT(CMDT_RSP_NAK);
 		vdo_len = 1;
 	}

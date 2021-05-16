@@ -17,6 +17,7 @@
 #define CONFIG_LN9310
 
 /* Keyboard */
+#define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_PWM_KBLIGHT
 
@@ -113,8 +114,6 @@ enum battery_type {
 	BATTERY_MURATA_AP18C4K,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_clamshell(void);
 
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);

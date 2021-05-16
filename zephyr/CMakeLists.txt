@@ -268,7 +268,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_EXTPOWER_GPIO
                                                 "${PLATFORM_EC}/common/extpower_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN
                                                 "${PLATFORM_EC}/common/fan.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS
                                                 "${PLATFORM_EC}/common/flash.c"
                                                 "${PLATFORM_EC}/common/spi_flash_reg.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
@@ -288,7 +288,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
                                                 "${PLATFORM_EC}/common/keyboard_8042.c"
                                                 "${PLATFORM_EC}/common/keyboard_8042_sharedlib.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP
-                                                "${PLATFORM_EC}/common/keyboard_mkbp.c")
+                                                "${PLATFORM_EC}/common/keyboard_mkbp.c"
+                                                "${PLATFORM_EC}/common/mkbp_fifo.c"
+                                                "${PLATFORM_EC}/common/mkbp_info.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_INPUT_DEVICES
+                                                "${PLATFORM_EC}/common/mkbp_input_devices.c"
+                                                "${PLATFORM_EC}/common/mkbp_fifo.c"
+                                                "${PLATFORM_EC}/common/mkbp_info.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_VIVALDI
                                                 "${PLATFORM_EC}/common/keyboard_vivaldi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT

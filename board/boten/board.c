@@ -123,7 +123,7 @@ void board_hibernate(void)
 	 * Charger IC need to be put into their "low power mode" before
 	 * entering the Z-state.
 	 */
-	raa489000_hibernate(0, true);
+	raa489000_hibernate(0, false);
 }
 
 __override void board_pulse_entering_rw(void)
@@ -209,6 +209,11 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
 	},
+};
+
+/* USB-A charging control */
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_USB_A0_VBUS,
 };
 
 void board_init(void)

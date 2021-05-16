@@ -10,6 +10,7 @@
 
 #include "bbram.h"
 #include "common.h"
+#include "console.h"
 #include "cros_version.h"
 #include "system.h"
 #include "watchdog.h"
@@ -22,7 +23,7 @@
 LOG_MODULE_REGISTER(shim_system, LOG_LEVEL_ERR);
 
 STATIC_IF_NOT(CONFIG_ZTEST) const struct device *bbram_dev;
-STATIC_IF_NOT(CONFIG_ZTEST) const struct device *sys_dev;
+static const struct device *sys_dev;
 
 #if DT_NODE_EXISTS(DT_NODELABEL(bbram))
 static int system_init(const struct device *unused)
@@ -104,6 +105,27 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	while (1)
 		continue;
 }
+
+#ifdef CONFIG_PM
+/**
+ * Print low power idle statistics
+ */
+static int command_idle_stats(int argc, char **argv)
+{
+	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
+
+	timestamp_t ts = get_time();
+	uint64_t deep_sleep_ticks = cros_system_deep_sleep_ticks(sys_dev);
+
+	ccprintf("Time spent in deep-sleep:            %.6llds\n",
+		 k_ticks_to_us_near64(deep_sleep_ticks));
+	ccprintf("Total time on:                       %.6llds\n", ts.val);
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats,
+		"",
+		"Print last idle stats");
+#endif
 
 const char *system_get_chip_vendor(void)
 {
@@ -290,7 +312,6 @@ static int system_preinitialize(const struct device *unused)
 
 	return 0;
 }
-#if (!defined(CONFIG_ZTEST))
+
 SYS_INIT(system_preinitialize, PRE_KERNEL_1,
 	 CONFIG_PLATFORM_EC_SYSTEM_PRE_INIT_PRIORITY);
-#endif

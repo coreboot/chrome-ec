@@ -854,6 +854,8 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		if (disable_adc)
 			/* ADC is active only when adapter plugged in */
 			regval &= ~RAA489000_ENABLE_ADC;
+		else
+			regval |= RAA489000_ENABLE_ADC;
 
 		rv = raw_write16(chgnum, ISL9238_REG_CONTROL3, regval);
 	}
@@ -883,6 +885,14 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		}
 		if (rv)
 			CPRINTS("%s(%d):Failed to set Control8!", __func__,
+				chgnum);
+	}
+
+	/* Disable DVC on the main charger to reduce power consumption. */
+	if (chgnum == CHARGER_PRIMARY) {
+		rv = raw_write16(chgnum, RAA489000_REG_CONTROL10, 0);
+		if (rv)
+			CPRINTS("%s(%d):Failed to set Control10!", __func__,
 				chgnum);
 	}
 #endif

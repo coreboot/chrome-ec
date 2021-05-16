@@ -102,7 +102,6 @@
 #define CONFIG_USBC_PPC_DEDICATED_INT
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_SYV682C
-#define CONFIG_USBC_PPC_SYV682X_SMART_DISCHARGE
 #define CONFIG_USBC_PPC_VCONN
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USBC_VCONN
@@ -130,7 +129,7 @@
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
 #define CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
-#define CONFIG_USB_PID 0x5566  /* TODO: update PID */
+#define CONFIG_USB_PID 0x5053
 #define CONFIG_USB_POWER_DELIVERY
 
 #define PD_MAX_CURRENT_MA 3000
@@ -211,5 +210,6 @@ enum board_sub_board {
 
 int board_get_version(void);
 void board_reset_pd_mcu(void);
+enum board_sub_board board_get_sub_board(void);
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BASEBOARD_H */

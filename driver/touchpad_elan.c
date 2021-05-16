@@ -277,7 +277,7 @@ static int elan_tp_read_report(void)
 	return 0;
 }
 
-static int elan_get_fwinfo(void)
+static void elan_get_fwinfo(void)
 {
 	uint16_t ic_type = elan_tp_params.ic_type;
 	uint16_t iap_version = elan_tp_params.iap_version;
@@ -292,14 +292,15 @@ static int elan_get_fwinfo(void)
 	case 0x00:
 	case 0x10:
 	case 0x14:
+	case 0x15:
 		elan_tp_params.page_count = 1024;
 		break;
 	default:
+		elan_tp_params.page_count = -1;
 		CPRINTS("unknown ic_type: %d", ic_type);
-		return EC_ERROR_UNKNOWN;
 	}
 
-	if (ic_type == 0x14 && iap_version >= 2) {
+	if ((ic_type == 0x14 || ic_type == 0x15) && iap_version >= 2) {
 		elan_tp_params.page_count /= 8;
 		elan_tp_params.page_size = 512;
 	} else if (ic_type >= 0x0D && iap_version >= 1) {
@@ -308,8 +309,6 @@ static int elan_get_fwinfo(void)
 	} else {
 		elan_tp_params.page_size = 64;
 	}
-
-	return EC_SUCCESS;
 }
 
 /*
@@ -354,9 +353,7 @@ static void elan_tp_init(void)
 	if (rv)
 		goto out;
 
-	rv = elan_get_fwinfo();
-	if (rv)
-		goto out;
+	elan_get_fwinfo();
 
 	/* Read min/max */
 	rv = elan_tp_read_cmd(ETP_I2C_MAX_X_AXIS_CMD, &elan_tp_params.max_x);

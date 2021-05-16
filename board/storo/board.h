@@ -12,15 +12,15 @@
 #define VARIANT_DEDEDE_EC_IT8320
 #include "baseboard.h"
 
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
 
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
+#define CONFIG_BATTERY_EXPORT_DISPLAY_SOC
+#undef  CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE
+#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE 3
 
 /* BC 1.2 */
 #define CONFIG_BC12_DETECT_PI3USB9201

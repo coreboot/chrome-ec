@@ -29,11 +29,13 @@ const struct tcpc_aic_gpio_config_t tcpc_aic_gpios[] = {
 		.ppc_alert = GPIO_USBC_TCPC_PPC_ALRT_P0,
 		.ppc_intr_handler = sn5s330_interrupt,
 	},
+#if defined(HAS_TASK_PD_C1)
 	[TYPE_C_PORT_1] = {
 		.tcpc_alert = GPIO_USBC_TCPC_ALRT_P1,
 		.ppc_alert = GPIO_USBC_TCPC_PPC_ALRT_P1,
 		.ppc_intr_handler = sn5s330_interrupt,
 	},
+#endif
 #if defined(HAS_TASK_PD_C2)
 	[TYPE_C_PORT_2] = {
 		.tcpc_alert = GPIO_USBC_TCPC_ALRT_P2,
@@ -58,11 +60,13 @@ struct ppc_config_t ppc_chips[] = {
 		.i2c_addr_flags = I2C_ADDR_SN5S330_TCPC_AIC_PPC,
 		.drv = &sn5s330_drv,
 	},
+#if defined(HAS_TASK_PD_C1)
 	[TYPE_C_PORT_1] = {
 		.i2c_port = I2C_PORT_TYPEC_1,
 		.i2c_addr_flags = I2C_ADDR_SN5S330_TCPC_AIC_PPC,
 		.drv = &sn5s330_drv
 	},
+#endif
 #if defined(HAS_TASK_PD_C2)
 	[TYPE_C_PORT_2] = {
 		.i2c_port = I2C_PORT_TYPEC_2,
@@ -87,11 +91,13 @@ struct usb_mux usbc0_tcss_usb_mux = {
 	.driver = &virtual_usb_mux_driver,
 	.hpd_update = &virtual_hpd_update,
 };
+#if defined(HAS_TASK_PD_C1)
 struct usb_mux usbc1_tcss_usb_mux = {
 	.usb_port = TYPE_C_PORT_1,
 	.driver = &virtual_usb_mux_driver,
 	.hpd_update = &virtual_hpd_update,
 };
+#endif
 #if defined(HAS_TASK_PD_C2)
 struct usb_mux usbc2_tcss_usb_mux = {
 	.usb_port = TYPE_C_PORT_2,
@@ -116,6 +122,7 @@ struct usb_mux usb_muxes[] = {
 		.i2c_port = I2C_PORT_TYPEC_0,
 		.i2c_addr_flags = I2C_PORT0_BB_RETIMER_ADDR,
 	},
+#if defined(HAS_TASK_PD_C1)
 	[TYPE_C_PORT_1] = {
 		.usb_port = TYPE_C_PORT_1,
 		.next_mux = &usbc1_tcss_usb_mux,
@@ -123,6 +130,7 @@ struct usb_mux usb_muxes[] = {
 		.i2c_port = I2C_PORT_TYPEC_1,
 		.i2c_addr_flags = I2C_PORT1_BB_RETIMER_ADDR,
 	},
+#endif
 #if defined(HAS_TASK_PD_C2)
 	[TYPE_C_PORT_2] = {
 		.usb_port = TYPE_C_PORT_2,
@@ -279,7 +287,7 @@ DECLARE_HOOK(HOOK_INIT, enable_h1_irq, HOOK_PRIO_LAST);
 
 static void configure_retimer_usbmux(void)
 {
-	switch (board_get_version() & 0x3F) {
+	switch (ADL_RVP_BOARD_ID(board_get_version())) {
 	case ADLP_LP5_T4_RVP_SKU_BOARD_ID:
 		/* No retimer on Port-2 */
 #if defined(HAS_TASK_PD_C2)
@@ -322,8 +330,15 @@ const int pwrok_signal_deassert_count = ARRAY_SIZE(pwrok_signal_assert_list);
  */
 int board_get_version(void)
 {
+	/* Cache the ADLRVP board ID */
+	static int adlrvp_board_id;
+
 	int port0, port1;
 	int fab_id, board_id, bom_id;
+
+	/* Board ID is already read */
+	if (adlrvp_board_id)
+		return adlrvp_board_id;
 
 	if (ioexpander_read_intelrvp_version(&port0, &port1))
 		return -1;
@@ -339,5 +354,27 @@ int board_get_version(void)
 
 	CPRINTS("BID:0x%x, FID:0x%x, BOM:0x%x", board_id, fab_id, bom_id);
 
-	return board_id | (fab_id << 8);
+	adlrvp_board_id = board_id | (fab_id << 8);
+	return adlrvp_board_id;
+}
+
+__override bool board_is_tbt_usb4_port(int port)
+{
+	bool tbt_usb4 = true;
+
+	switch (ADL_RVP_BOARD_ID(board_get_version())) {
+	case ADLP_LP5_T4_RVP_SKU_BOARD_ID:
+		/* No retimer on Port-2 hence no platform level AUX & LSx mux */
+#if defined(HAS_TASK_PD_C2)
+		if (port == TYPE_C_PORT_2)
+			tbt_usb4 = false;
+#endif
+		break;
+
+	/* Add additional board SKUs */
+	default:
+		break;
+	}
+
+	return tbt_usb4;
 }
