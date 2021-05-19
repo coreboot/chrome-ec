@@ -16,7 +16,7 @@ endif()
 zephyr_library_sources_ifdef(no_libgcc                  libgcc_${ARCH}.S)
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ADC         adc.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI         cbi_ssfc.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI         cbi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ESPI        espi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN         fan.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS  flash.c)
@@ -24,6 +24,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOOKS       hooks.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD     host_command.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE
                                                             console_buffer.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyboard_raw.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_EVENT  mkbp_event.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
                                                             motionsense_sensors.c)

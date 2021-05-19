@@ -221,20 +221,20 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 	[TEMP_SENSOR_SOC] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
 		},
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
 		/* TODO: Setting fan off to 0 so it's allways on */
 		.temp_fan_off = C_TO_K(0),
-		.temp_fan_max = C_TO_K(75),
+		.temp_fan_max = C_TO_K(70),
 	},
 	[TEMP_SENSOR_CHARGER] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
 		},
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
@@ -244,8 +244,8 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 	},
 	[TEMP_SENSOR_MEMORY] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
 		},
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
@@ -253,7 +253,17 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_fan_off = 0,
 		.temp_fan_max = 0,
 	},
-	/* TODO: TEMP_SENSOR_CPU */
+	[TEMP_SENSOR_CPU] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		},
+		.temp_fan_off = 0,
+		.temp_fan_max = 0,
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -491,9 +501,9 @@ const struct fan_conf fan_conf_0 = {
 	.enable_gpio = -1,
 };
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 1800,
-	.rpm_start = 3000,
-	.rpm_max = 5200,
+	.rpm_min = 1000,
+	.rpm_start = 1000,
+	.rpm_max = 6500,
 };
 const struct fan_t fans[] = {
 	[FAN_CH_0] = {
@@ -898,7 +908,6 @@ static void baseboard_chipset_suspend(void)
 {
 	/* Disable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 1);
-	gpio_set_level(GPIO_EN_KB_BL, 0);
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
@@ -908,7 +917,6 @@ static void baseboard_chipset_resume(void)
 {
 	/* Enable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 0);
-	gpio_set_level(GPIO_EN_KB_BL, 1);
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
 	/* Some retimers take several ms to be ready, so defer setup call */
 	hook_call_deferred(&baseboard_a1_retimer_setup_data, 20 * MSEC);

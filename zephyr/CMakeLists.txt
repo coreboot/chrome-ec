@@ -43,6 +43,10 @@ if(DEFINED CONFIG_PLATFORM_EC)
   add_library(ec_version INTERFACE)
   add_dependencies(ec_version generate_ec_version)
 
+  # Ensure the EC version file is generated before trying to build the app
+  # library, which includes compiling version.c
+  add_dependencies(app ec_version)
+
   # Register the library with zephyr so that it generates the file at build
   # time. Also, append the include directory so we can include ec_version.h.
   zephyr_append_cmake_library(ec_version)
@@ -73,82 +77,6 @@ if(DEFINED CONFIG_PLATFORM_EC)
   endif()
 endif()
 
-# If a header is needed (should only be set for npcx) run the ecst.py script to
-# generate it.
-if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER)
-    # Translate the CONFIG_FLASH_SIZE to the correct argument value.
-    if ("${CONFIG_FLASH_SIZE}" STREQUAL "512" OR "${CONFIG_FLASH_SIZE}" STREQUAL "1024")
-        set(flash_size 1)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "2048")
-        set(flash_size 2)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "4096")
-        set(flash_size 4)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "8192")
-        set(flash_size 8)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "16384")
-        set(flash_size 16)
-    endif()
-
-    if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_CORE_CLOCK_SPI_CLOCK_RATIO_1)
-        set(spiclkratio 1)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_CORE_CLOCK_SPI_CLOCK_RATIO_2)
-        set(spiclkratio 2)
-    else()
-        # Defaults to 1 if none are set.
-        set(spiclkratio 1)
-    endif()
-
-    if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_20)
-        set(spimaxclk 20)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_25)
-        set(spimaxclk 25)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_33)
-        set(spimaxclk 33)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_40)
-        set(spimaxclk 40)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_50)
-        set(spimaxclk 50)
-    else()
-        # Defaults to 20 if none are set.
-        set(spimaxclk 20)
-    endif()
-
-    if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_NORMAL)
-        set(spireadmode "normal")
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_FAST)
-        set(spireadmode "fast")
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_DUAL)
-        set(spireadmode "dual")
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_QUAD)
-        set(spireadmode "quad")
-    else()
-        # Defaults to "dual" if none are set.
-        set(spireadmode "dual")
-    endif()
-
-    # Check for disabling header CRC.
-    if (NOT DEFINED CONFIG_PLATFORM_EC_RO_HEADER_ENABLE_HEADER_CRC)
-        set(hcrc "-nohcrc")
-    endif()
-
-    # Check for disabling firmware CRC.
-    if (NOT DEFINED CONFIG_PLATFORM_EC_RO_HEADER_ENABLE_FIRMWARE_CRC)
-        set(fcrc "-nofcrc")
-    endif()
-
-    # Note, we cannot get the chip from Kconfig because currently Zephyr doesn't
-    # support all the variations we need for NPCX. These values should be set
-    # in each project's board.cmake.
-    set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
-            COMMAND ${PYTHON_EXECUTABLE}
-            ${ZEPHYR_BASE}/boards/arm/npcx7m6fb_evb/support/ecst.py
-            -i ${PROJECT_BINARY_DIR}/${CONFIG_KERNEL_BIN_NAME}.bin
-            -o ${PROJECT_BINARY_DIR}/zephyr.packed.bin ${hcrc} ${fcrc}
-            -chip ${ECST_CHIP_ARG} -flashsize ${flash_size}
-            -spiclkratio ${spiclkratio} -spimaxclk ${spimaxclk}
-            -spireadmode ${spireadmode})
-endif()
-
 # Switch from the "zephyr" library to the "app" library for all Chromium OS
 # sources.
 set(ZEPHYR_CURRENT_LIBRARY app)
@@ -169,6 +97,7 @@ endif()
 
 add_subdirectory("app")
 add_subdirectory("drivers")
+add_subdirectory("emul")
 
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 # Creates a phony target all.libraries in case you only want to build the
@@ -332,8 +261,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
                                                 "${PLATFORM_EC}/power/intel_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8192
+                                                "${PLATFORM_EC}/power/it8xxx2.c"
+						"${PLATFORM_EC}/power/mt8192.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
-                                                "${PLATFORM_EC}/power/sc7180.c")
+                                                "${PLATFORM_EC}/power/qcom.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
+                                                "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC
                                                 "${PLATFORM_EC}/common/panic_output.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM

@@ -1267,6 +1267,7 @@
 #undef CONFIG_CHIPSET_RK3399		/* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE		/* Intel Skylake (x86) */
 #undef CONFIG_CHIPSET_SC7180            /* Qualcomm SC7180 */
+#undef CONFIG_CHIPSET_SC7280            /* Qualcomm SC7280 */
 #undef CONFIG_CHIPSET_SDM845            /* Qualcomm SDM845 */
 #undef CONFIG_CHIPSET_STONEY		/* AMD Stoney (x86)*/
 #undef CONFIG_CHIPSET_TIGERLAKE		/* Intel Tigerlake (x86) */
@@ -2324,8 +2325,15 @@
 /* Command to get the EC uptime (and optionally AP reset stats) */
 #define CONFIG_HOSTCMD_GET_UPTIME_INFO
 
-/* List of host commands whose debug output will be suppressed */
-#undef CONFIG_SUPPRESSED_HOST_COMMANDS
+/*
+ * List of host commands whose debug output will be suppressed
+ * By default remove periodic commands and commands called often (SENSE).
+ */
+#define CONFIG_SUPPRESSED_HOST_COMMANDS \
+	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_USB_PD_DISCOVERY, \
+	EC_CMD_USB_PD_POWER_INFO, EC_CMD_PD_GET_LOG_ENTRY, \
+	EC_CMD_MOTION_SENSE_CMD, EC_CMD_GET_NEXT_EVENT, EC_CMD_GET_UPTIME_INFO
+
 
 /*****************************************************************************/
 
@@ -5038,15 +5046,6 @@
 /* Support computing hash of code for verified boot */
 #undef CONFIG_VBOOT_HASH
 
-/*
- * Reload the watchdog at 1/2 the watchdog period during hash
- * calculation.  When CONFIG_SHA256_HW_ACCELERATE and
- * CONFIG_SHA256_UNROLLED are disabled, the hash calculation may trip
- * the watchdog.  This option becomes enabled by default when both
- * those options are disabled.
- */
-#undef CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
-
 /* Support for secure temporary storage for verified boot */
 #undef CONFIG_VSTORE
 
@@ -5946,7 +5945,7 @@
 #error "Must enable CONFIG_POWER_TRACK_HOST_SLEEP_STATE for S0ix"
 #endif
 
-#if defined(CONFIG_CHIPSET_SC7180)
+#if defined(CONFIG_CHIPSET_SC7180) || defined(CONFIG_CHIPSET_SC7280)
 #if defined(CONFIG_POWER_SLEEP_FAILURE_DETECTION) && \
 	!defined(CONFIG_CHIPSET_RESUME_INIT_HOOK)
 #error "Require resume init hook to enable sleep failure detection"
@@ -6358,22 +6357,6 @@
 #error "CONFIG_BYPASS_CBI_EEPROM_WP_CHECK is only permitted " \
 	"when CONFIG_SYSTEM_UNLOCK is also enabled."
 #endif /* CONFIG_BYPASS_CBI_EEPROM_WP_CHECK && !CONFIG_SYSTEM_UNLOCK */
-
-/*
- * Enable CONFIG_VBOOT_HASH_RELOAD_WATCHDOG by default when these
- * conditions are met:
- * - Watchdog enabled
- * - No hardware acceleration for SHA256 calculation
- * - Loops for SHA256 calculation are not unrolled
- *
- * See the CONFIG_VBOOT_HASH_RELOAD_WATCHDOG entry in this file for an
- * explanation as to why this is necessary.
- */
-#if defined(CONFIG_WATCHDOG) && !defined(CONFIG_SHA256_HW_ACCELERATE) && \
-	!defined(CONFIG_SHA256_UNROLLED) &&                              \
-	!defined(CONFIG_VBOOT_HASH_RELOAD_WATCHDOG)
-#define CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
-#endif
 
 #if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_ICM_COMM_SPI) && \
 	!defined(CONFIG_ACCELGYRO_ICM_COMM_I2C)

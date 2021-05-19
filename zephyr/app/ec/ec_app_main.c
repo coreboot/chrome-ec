@@ -37,6 +37,10 @@ void ec_app_main(void)
 
 	system_print_banner();
 
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG)) {
+		watchdog_init();
+	}
+
 	/*
 	 * Keyboard scan init/Button init can set recovery events to
 	 * indicate to host entry into recovery mode. Before this is
@@ -60,10 +64,6 @@ void ec_app_main(void)
 		if (zephyr_shim_setup_espi() < 0) {
 			printk("Failed to init eSPI!\n");
 		}
-	}
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG)) {
-		watchdog_init();
 	}
 
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_VBOOT)) {

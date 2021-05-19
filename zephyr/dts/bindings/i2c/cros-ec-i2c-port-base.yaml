@@ -17,6 +17,9 @@ properties:
     - I2C_PORT_BATTERY
     - I2C_PORT_CHARGER
     - I2C_PORT_EEPROM
+    - I2C_PORT_EVB_1
+    - I2C_PORT_EVB_2
+    - I2C_PORT_OPT_4
     - I2C_PORT_POWER
     - I2C_PORT_SENSOR
     - I2C_PORT_TCPC0
@@ -32,14 +35,3 @@ properties:
     description:
       Human readable string describing the device (used as device_get_binding()
       argument).
-
-child-binding:
-  description: Optional configuration bindings
-  properties:
-    frequency:
-      type: int
-      required: true
-      description: Transfer data rate in kHz
-  child-binding:
-    description: SCL and SDA configurations
-    include: gpio-enum-name.yaml

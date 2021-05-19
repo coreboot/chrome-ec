@@ -5291,6 +5291,9 @@ static int cmd_motionsense(int argc, char **argv)
 		case MOTIONSENSE_CHIP_ICM426XX:
 			printf("icm426xx\n");
 			break;
+		case MOTIONSENSE_CHIP_ICM42607:
+			printf("icm42607\n");
+			break;
 		default:
 			printf("unknown\n");
 		}
@@ -7146,7 +7149,7 @@ static void cmd_i2c_help(void)
 
 int cmd_i2c_read(int argc, char *argv[])
 {
-	unsigned int port, addr;
+	unsigned int port, addr8, addr7;
 	int read_len, write_len;
 	uint8_t write_buf[1];
 	uint8_t *read_buf = NULL;
@@ -7171,13 +7174,12 @@ int cmd_i2c_read(int argc, char *argv[])
 		return -1;
 	}
 
-	addr = strtol(argv[3], &e, 0);
+	addr8 = strtol(argv[3], &e, 0);
 	if (e && *e) {
 		fprintf(stderr, "Bad address.\n");
 		return -1;
 	}
-	/* Convert from 8-bit to 7-bit address */
-	addr = addr >> 1;
+	addr7 = addr8 >> 1;
 
 	write_buf[0] = strtol(argv[4], &e, 0);
 	if (e && *e) {
@@ -7186,20 +7188,21 @@ int cmd_i2c_read(int argc, char *argv[])
 	}
 	write_len = 1;
 
-	rv = do_i2c_xfer(port, addr, write_buf, write_len, &read_buf, read_len);
+	rv = do_i2c_xfer(port, addr7, write_buf, write_len, &read_buf,
+			 read_len);
 
 	if (rv < 0)
 		return rv;
 
 	printf("Read from I2C port %d at 0x%x offset 0x%x = 0x%x\n",
-		port, addr, write_buf[0], *(uint16_t *)read_buf);
+		port, addr8, write_buf[0], *(uint16_t *)read_buf);
 	return 0;
 }
 
 
 int cmd_i2c_write(int argc, char *argv[])
 {
-	unsigned int port, addr;
+	unsigned int port, addr8, addr7;
 	int write_len;
 	uint8_t write_buf[3];
 	char *e;
@@ -7224,13 +7227,12 @@ int cmd_i2c_write(int argc, char *argv[])
 		return -1;
 	}
 
-	addr = strtol(argv[3], &e, 0);
+	addr8 = strtol(argv[3], &e, 0);
 	if (e && *e) {
 		fprintf(stderr, "Bad address.\n");
 		return -1;
 	}
-	/* Convert from 8-bit to 7-bit address */
-	addr = addr >> 1;
+	addr7 = addr8 >> 1;
 
 	write_buf[0] = strtol(argv[4], &e, 0);
 	if (e && *e) {
@@ -7244,13 +7246,13 @@ int cmd_i2c_write(int argc, char *argv[])
 		return -1;
 	}
 
-	rv = do_i2c_xfer(port, addr, write_buf, write_len, NULL, 0);
+	rv = do_i2c_xfer(port, addr7, write_buf, write_len, NULL, 0);
 
 	if (rv < 0)
 		return rv;
 
 	printf("Wrote 0x%x to I2C port %d at 0x%x offset 0x%x.\n",
-	       *((uint16_t *)&write_buf[1]), port, addr, write_buf[0]);
+	       *((uint16_t *)&write_buf[1]), port, addr8, write_buf[0]);
 	return 0;
 }
 

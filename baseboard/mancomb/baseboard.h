@@ -16,7 +16,6 @@
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
-#define CONFIG_BRINGUP /* EC will not automatically power on the AP */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
 
 #undef CONFIG_UART_TX_BUF_SIZE
@@ -165,14 +164,14 @@
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT USBC_PORT_COUNT
 
-/* TODO(b/176988382): Tune values for mancomb */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 
-#define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		65000
-#define PD_MAX_CURRENT_MA	3250
+#define PD_OPERATING_POWER_MW	CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
+#define PD_MAX_CURRENT_MA	5000
 #define PD_MAX_VOLTAGE_MV	20000
+/* Max Power = 100 W */
+#define PD_MAX_POWER_MW		((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
 
 /* USB-A config */
 #define USB_PORT_COUNT USBA_PORT_COUNT
@@ -308,6 +307,7 @@ enum mft_channel {
 };
 
 /* Baseboard Interrupt handlers. */
+void baseboard_bj_connect_interrupt(enum gpio_signal signal);
 void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
 void baseboard_en_pwr_s0(enum gpio_signal signal);
 void baseboard_usb_fault_alert(enum gpio_signal signal);
@@ -318,6 +318,9 @@ void hdmi_fault_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
 void sbu_fault_interrupt(enum ioex_signal signal);
 void tcpc_alert_event(enum gpio_signal signal);
+
+/* Required board functions */
+void board_get_bj_power(int *voltage, int *current);
 
 #endif /* !__ASSEMBLER__ */
 

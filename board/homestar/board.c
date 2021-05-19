@@ -25,7 +25,7 @@
 #include "peripheral_charger.h"
 #include "pi3usb9201.h"
 #include "power.h"
-#include "power/sc7180.h"
+#include "power/qcom.h"
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
@@ -264,7 +264,7 @@ static struct bmi_drv_data_t g_bmi160_data;
 const mat33_fp_t lid_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, FLOAT_TO_FP(1), 0}
+	{ 0,  0, FLOAT_TO_FP(1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {

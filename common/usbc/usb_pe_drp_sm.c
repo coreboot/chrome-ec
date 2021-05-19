@@ -1765,7 +1765,7 @@ void pd_request_power_swap(int port)
 static bool port_try_vconn_swap(int port)
 {
 	if (pe[port].vconn_swap_counter < N_VCONN_SWAP_COUNT) {
-		PE_SET_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
+		pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
 		set_state_pe(port, get_last_state_pe(port));
 		return true;
 	}
@@ -4355,6 +4355,17 @@ static void pe_prs_src_snk_transition_to_off_entry(int port)
 
 static void pe_prs_src_snk_transition_to_off_run(int port)
 {
+	/*
+	 * This is a non-interruptible AMS and power is transitioning - hard
+	 * reset on interruption.
+	 */
+	if (PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
+		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+
+		tc_pr_swap_complete(port, 0);
+		set_state_pe(port, PE_SRC_HARD_RESET);
+	}
+
 	/* Give time for supply to power off */
 	if (pd_timer_is_expired(port, PE_TIMER_PS_SOURCE) &&
 	    pd_check_vbus_level(port, VBUS_SAFE0V))
@@ -5988,7 +5999,17 @@ static void pe_vdm_response_entry(int port)
 			vdo_len = 1;
 		}
 	} else {
-		/* Received at VDM command which is not supported */
+		/*
+		 * Received at VDM command which is not supported.  PD 2.0 may
+		 * NAK or ignore the message (see TD.PD.VNDI.E1. VDM Identity
+		 * steps), but PD 3.0 must send Not_Supported (PD 3.0 Ver 2.0 +
+		 * ECNs 2020-12-10 Table 6-64 Response to an incoming
+		 * VDM or TD.PD.VNDI3.E3 VDM Identity steps)
+		 */
+		if (prl_get_rev(port, TCPC_TX_SOP) == PD_REV30) {
+			set_state_pe(port, PE_SEND_NOT_SUPPORTED);
+			return;
+		}
 		tx_payload[0] |= VDO_CMDT(CMDT_RSP_NAK);
 		vdo_len = 1;
 	}
