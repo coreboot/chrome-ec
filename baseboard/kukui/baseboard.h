@@ -258,7 +258,11 @@
 #define TIM_WATCHDOG 7
 
 /* 48 MHz SYSCLK clock frequency */
+#ifdef VARIANT_KUKUI_EC_STM32L431
+#define CPU_CLOCK 80000000
+#else
 #define CPU_CLOCK 48000000
+#endif
 
 /* Optional for testing */
 #undef CONFIG_PECI
