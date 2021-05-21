@@ -410,6 +410,8 @@ class BatteryCutoffReset(Cr50Reset):
         # EC console needs to be read-write to issue cutoff command.
         'ec_uart',
     )
+    CHECK_EC_RETRIES = 5
+    WAIT_EC = 3
 
     def run_reset(self):
         """Use EC commands to cutoff the battery."""
@@ -423,9 +425,14 @@ class BatteryCutoffReset(Cr50Reset):
         self._servo.dut_control('ec_uart_cmd:reboot', check_error=False,
                                 wait=True)
 
-        if not self._servo.dut_control('ec_board', check_error=False)[0]:
+        for i in range(self.CHECK_EC_RETRIES):
+            time.sleep(self.WAIT_EC)
+            if self._servo.dut_control('ec_board', check_error=False)[0]:
+                logging.info('Device is cutoff')
+                return
+            logging.info('EC still responsive')
+        else:
             raise Error('EC still responsive after cutoff')
-        logging.info('Device is cutoff')
 
     def recover_from_reset(self):
         """Connect power using servo v4 to recover from cutoff."""
