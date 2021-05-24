@@ -212,6 +212,10 @@ void init_rdd_state(void)
 	/* Restore the rddkeepalive atboot state from the ccd flags. */
 	force_detected = ccd_get_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT);
 
+#ifdef H1_RED_BOARD
+	CPRINTS("Red board rddkeepalive enabled.");
+	force_detected = 1;
+#endif
 	if (force_detected)
 		hook_call_deferred(&rdd_connect_data, 0);
 }
