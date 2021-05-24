@@ -793,7 +793,7 @@ DECLARE_DEFERRED(process_board_cfg);
 /* Initialize board. */
 static void board_init(void)
 {
-#ifdef CR50_DEV
+#if defined(CR50_DEV) || defined(CRYPTO_TEST_SETUP)
 	static enum ccd_state ccd_init_state = CCD_STATE_OPENED;
 #else
 	static enum ccd_state ccd_init_state = CCD_STATE_LOCKED;
