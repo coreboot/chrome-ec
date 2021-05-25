@@ -391,7 +391,7 @@ static enum vendor_cmd_rc drbg_test(enum vendor_cmd_cc code, void *buf,
 				    size_t input_size, size_t *response_size)
 {
 	static struct drbg_ctx drbg_ctx;
-	static uint8_t output[128];
+	static uint8_t output[512];
 	uint8_t *p0 = NULL, *p1 = NULL, *p2 = NULL;
 	uint16_t p0_len = 0, p1_len = 0, p2_len = 0;
 	uint8_t *cmd = (uint8_t *)buf;
