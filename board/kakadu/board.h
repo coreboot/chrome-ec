@@ -38,6 +38,9 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
+#define CONFIG_ACCELGYRO_ICM42607	/* Base accel second source*/
+#define CONFIG_ACCELGYRO_ICM42607_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 
 /* Camera VSYNC */
 #define CONFIG_SYNC
@@ -116,10 +119,10 @@ int board_get_version(void);
 int board_is_sourcing_vbus(int port);
 void pogo_adc_interrupt(enum gpio_signal signal);
 int board_discharge_on_ac(int enable);
+void motion_interrupt(enum gpio_signal signal);
 
 /* Enable double tap detection */
 #define CONFIG_GESTURE_DETECTION
-#define CONFIG_GESTURE_HOST_DETECTION
 #define CONFIG_GESTURE_SENSOR_DOUBLE_TAP 0
 #define CONFIG_GESTURE_SENSOR_DOUBLE_TAP_FOR_HOST
 #define CONFIG_GESTURE_SAMPLING_INTERVAL_MS 5
