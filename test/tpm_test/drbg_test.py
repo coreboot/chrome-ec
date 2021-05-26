@@ -87,19 +87,26 @@ def _drbg_gen_cmd(inp, outlen):
           outlen.to_bytes(2, 'big')
 
 
-def drbg_test(tpm):
+def drbg_test_inputs(tpm, test_inputs):
     """Runs DRBG test case.
 
     Args:
         tpm: a tpm object used to communicate with the device
 
+    Returns:
+        a list of tuples with the generate responses (tgid, tcid, result_str)
+
     Raises:
         subcmd.TpmTestError: on unexpected target responses
     """
 
-    for test in TEST_INPUTS:
+    tcid = 0
+    tgid = 0
+    test_results = []
+    for test in test_inputs:
         drbg_op, drbg_params = test
         if drbg_op == DRBG_GROUP_INIT:
+            tgid += 1
             outlen = drbg_params
         elif drbg_op == DRBG_INIT:
             entropy, nonce, perso = drbg_params
@@ -122,10 +129,26 @@ def drbg_test(tpm):
             cmd = _drbg_gen_cmd(a2b(inp), outlen)
             response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
             if check_result:
+                tcid += 1
                 result = response[12:]
+                result_hexdump = utils.hex_dump(result)
                 if expected and a2b(expected) != result:
                     raise subcmd.TpmTestError('error:\nexpected %s'
                                               '\nreceived %s' %
                                               (utils.hex_dump(a2b(expected)),
-                                               utils.hex_dump(result)))
+                                               result_hexdump))
+                result_str = ''.join(result_hexdump.split()).upper()
+                test_results.append((tgid, tcid, result_str))
     print('%sSUCCESS: %s' % (utils.cursor_back(), 'DRBG test'))
+    return test_results
+
+def drbg_test(tpm):
+    """Runs DRBG test cases.
+
+    Args:
+        tpm: a tpm object used to communicate with the device
+
+    Raises:
+        subcmd.TpmTestError: on unexpected target responses
+    """
+    drbg_test_inputs(tpm, TEST_INPUTS)
