@@ -154,12 +154,15 @@ def usage():
           '        0 - raw TRNG'
           '        [-o file] - set output file, default /tmp/trng_output\n'
           '        [-s bits] - TRNG sample size in bit, default = 1\n'
+          '     -l path to output lab result vectors.\n'
+          '     -r path for the drbg input vector.\n'
+          '        [-e file] - expected results file\n'
           '     -h - this help\n')
 
 def main():
     """Run TPM tests"""
     try:
-        opts, _ = getopt.getopt(sys.argv[1:], 'dt:hs:o:', 'help')
+        opts, _ = getopt.getopt(sys.argv[1:], 'dt:hs:o:r:e:l:', 'help')
     except getopt.GetoptError as err:
         print(str(err))
         usage()
@@ -169,6 +172,9 @@ def main():
     trng_output = '/tmp/trng_output'
     trng_sample_bits = 1
     trng_mode = 0
+    lab_output = '/tmp/lab_output'
+    drbg_request = ''
+    drbg_expected = ''
 
     for option, arg in opts:
         if option == '-d':
@@ -178,6 +184,12 @@ def main():
             trng_mode = int(arg)
         elif option == '-o':
             trng_output = arg
+        elif option == '-l':
+            lab_output = arg
+        elif option == '-r':
+            drbg_request = arg
+        elif option == '-e':
+            drbg_expected = arg
         elif option == '-s':
             trng_sample_bits = int(arg)
         elif option in ('-h', '--help'):
@@ -189,9 +201,14 @@ def main():
             trng_test.trng_test(tpm_object, trng_output,
                                 trng_mode, trng_sample_bits)
             sys.exit(0)
+        if drbg_request:
+            drbg_test.drbg_test(tpm_object, drbg_request, drbg_expected,
+                                lab_output)
+            sys.exit(0)
         crypto_test.crypto_tests(tpm_object, os.path.join(ROOT_DIR,
                                                           'crypto_test.xml'))
-        drbg_test.drbg_test(tpm_object)
+        drbg_test.drbg_test(tpm_object, drbg_request, drbg_expected,
+                            lab_output)
         ecc_test.ecc_test(tpm_object)
         ecies_test.ecies_test(tpm_object)
         hash_test.hash_test(tpm_object)

@@ -5,6 +5,7 @@
 
 """Support functions for extended command based testing."""
 
+import json
 import sys
 
 if hasattr(sys.stdout, 'isatty') and sys.stdout.isatty():
@@ -35,3 +36,14 @@ def hex_dump(binstr):
         i += strsize
     dump_lines.append('')
     return '\n'.join(dump_lines)
+
+def write_test_result_json(filename, results):
+    """Write the test results to the given file."""
+    with open(filename, 'w') as json_file:
+        json.dump(results, json_file, indent=4)
+
+def read_vectors(filename):
+    """Read the test vectors from the given json file."""
+    with open(filename, 'r') as json_file:
+        contents = json.load(json_file)
+    return contents
