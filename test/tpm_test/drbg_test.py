@@ -22,8 +22,10 @@ EMPTY_DRBG_RESPONSE = bytes([0x80, 0x01,
 DRBG_INIT = 0
 DRBG_RESEED = 1
 DRBG_GENERATE = 2
+DRBG_GROUP_INIT = 3
 
 TEST_INPUTS = (
+  (DRBG_GROUP_INIT, 32),
   (DRBG_INIT,
    ('C40894D0C37712140924115BF8A3110C7258532365BB598F81B127A5E4CB8EB0',
     'FBB1EDAF92D0C2699F5C0A7418D308B09AC679FFBB0D8918C8E62D35091DD2B9',
@@ -75,10 +77,7 @@ def _drbg_init_cmd(drbg_op, entropy, nonce, perso):
 
 # DRBG_GENERATE (p0_len, p0 - additional input 1, p1_len - size of output)
 # DRBG_GENERATE returns p1_len bytes of generated data
-def _drbg_gen_cmd(inp, out):
-    outlen = len(out)
-    if outlen == 0:
-        outlen = 32 # if we don't care about output value, still need to have it
+def _drbg_gen_cmd(inp, outlen):
     return DRBG_GENERATE.to_bytes(1, 'big') +\
           len(inp).to_bytes(2, 'big') + inp +\
           outlen.to_bytes(2, 'big')
@@ -96,7 +95,9 @@ def drbg_test(tpm):
 
     for test in TEST_INPUTS:
         drbg_op, drbg_params = test
-        if drbg_op == DRBG_INIT:
+        if drbg_op == DRBG_GROUP_INIT:
+            outlen = drbg_params
+        elif drbg_op == DRBG_INIT:
             entropy, nonce, perso = drbg_params
             cmd = _drbg_init_cmd(drbg_op, a2b(entropy), a2b(nonce), a2b(perso))
             response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
@@ -114,7 +115,7 @@ def drbg_test(tpm):
                                           (utils.hex_dump(response)))
         elif drbg_op == DRBG_GENERATE:
             inp, expected = drbg_params
-            cmd = _drbg_gen_cmd(a2b(inp), a2b(expected))
+            cmd = _drbg_gen_cmd(a2b(inp), outlen)
             response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
             if expected != '':
                 result = response[12:]
