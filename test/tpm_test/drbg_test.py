@@ -35,20 +35,24 @@ TEST_INPUTS = (
     '0153A0A1D7487E2EE9915E2CAA8488F97239C67595F418D9503D0B11CC07044E', '')),
   (DRBG_GENERATE,
    ('39AE66C2939D1D73EF21AE22988B04CC7E8EA2D790C75E1FC6ACC7FEEEF90F98',
-    '')),
+    '',
+    False)),
   (DRBG_GENERATE,
    ('B8031829E07B09EEEADEBA149D0AC9F08B110197CD8BBDDC32744BCD66FCF3C4',
-    'A1307377F6B472661BC3C6D44C035FB20A13CCB04D6601B2425FC4DDA3B6D7DF')),
+    'A1307377F6B472661BC3C6D44C035FB20A13CCB04D6601B2425FC4DDA3B6D7DF',
+    True)),
   (DRBG_INIT,
    ('3A2D261884010CCB4C2C4D7B323CCB7BD4515089BEB749C565A7492710922164',
     '9E4D22471A4546F516099DD4D737967562D1BB77D774B67B7FE4ED893AE336CF',
     '5837CAA74345CC2D316555EF820E9F3B0FD454D8C5B7BDE68E4A176D52EE7D1C')),
   (DRBG_GENERATE,
    ('4D87985505D779F1AD98455E04199FE8F2FE8E550E6FEB1D26177A2C5B744B9F',
-    '')),
+    '',
+    False)),
   (DRBG_GENERATE,
    ('85D011A3B36AC6B25A792F213A1C22C80BFD1C5B47BCA04CD0D9834BB466447B',
-    'B03863C42C9396B4936D83A551871A424C5A8EDBDC9D1E0E8E89710D58B5CA1E')),
+    'B03863C42C9396B4936D83A551871A424C5A8EDBDC9D1E0E8E89710D58B5CA1E',
+    True)),
 )
 
 # DRBG_TEST command structure:
@@ -114,12 +118,12 @@ def drbg_test(tpm):
                                           'DRBG_RESEED: %s' %
                                           (utils.hex_dump(response)))
         elif drbg_op == DRBG_GENERATE:
-            inp, expected = drbg_params
+            inp, expected, check_result = drbg_params
             cmd = _drbg_gen_cmd(a2b(inp), outlen)
             response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
-            if expected != '':
+            if check_result:
                 result = response[12:]
-                if a2b(expected) != result:
+                if expected and a2b(expected) != result:
                     raise subcmd.TpmTestError('error:\nexpected %s'
                                               '\nreceived %s' %
                                               (utils.hex_dump(a2b(expected)),
