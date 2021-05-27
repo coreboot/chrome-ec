@@ -87,6 +87,72 @@ def _drbg_gen_cmd(inp, outlen):
           outlen.to_bytes(2, 'big')
 
 
+def drbg_init(tpm, drbg_params):
+    """Run the drbg reseed command with the given drbg params.
+
+    Args:
+        tpm: a tpm object used to communicate with the device
+        drbg_params: a tuple (entropy string, nonce string, perso string)
+
+    Raises:
+        subcmd.TpmTestError: on unexpected target responses
+    """
+    entropy, nonce, perso = drbg_params
+    cmd = _drbg_init_cmd(DRBG_INIT, a2b(entropy), a2b(nonce), a2b(perso))
+    response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
+    if response != EMPTY_DRBG_RESPONSE:
+        raise subcmd.TpmTestError('Unexpected response to '
+                                  'DRBG_INIT: %s' %
+                                  (utils.hex_dump(response)))
+
+def drbg_reseed(tpm, drbg_params):
+    """Run the drbg reseed command with the given drbg params.
+
+    Args:
+        tpm: a tpm object used to communicate with the device
+        drbg_params: a tuple (entropy string, input1 string, input2 string)
+
+    Raises:
+        subcmd.TpmTestError: on unexpected target responses
+    """
+    entropy, inp1, inp2 = drbg_params
+    cmd = _drbg_init_cmd(DRBG_RESEED, a2b(entropy), a2b(inp1), a2b(inp2))
+    response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
+    if response != EMPTY_DRBG_RESPONSE:
+        raise subcmd.TpmTestError('Unexpected response to '
+                                  'DRBG_RESEED: %s' %
+                                  (utils.hex_dump(response)))
+
+def drbg_generate(tpm, drbg_params, outlen):
+    """Run the drbg reseed command with the given drbg params.
+
+    Args:
+        tpm: a tpm object used to communicate with the device
+        drbg_params: a tuple (entropy string, nonce string, perso string)
+        outlen: the response size for the generate command
+
+    Returns:
+        The response from the generate command if the params say to check the
+        result otherwise return ''
+
+    Raises:
+        subcmd.TpmTestError: on unexpected target responses
+    """
+    result_str = ''
+    inp, expected, check_result = drbg_params
+    cmd = _drbg_gen_cmd(a2b(inp), outlen)
+    response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
+    if check_result:
+        result = response[12:]
+        result_hexdump = utils.hex_dump(result)
+        if expected and a2b(expected) != result:
+            raise subcmd.TpmTestError('error:\nexpected %s'
+                                      '\nreceived %s' %
+                                      (utils.hex_dump(a2b(expected)),
+                                       result_hexdump))
+        result_str = ''.join(result_hexdump.split()).upper()
+    return result_str
+
 def drbg_test_inputs(tpm, test_inputs):
     """Runs DRBG test case.
 
@@ -109,36 +175,19 @@ def drbg_test_inputs(tpm, test_inputs):
             tgid += 1
             outlen = drbg_params
         elif drbg_op == DRBG_INIT:
-            entropy, nonce, perso = drbg_params
-            cmd = _drbg_init_cmd(drbg_op, a2b(entropy), a2b(nonce), a2b(perso))
-            response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
-            if response != EMPTY_DRBG_RESPONSE:
-                raise subcmd.TpmTestError('Unexpected response to '
-                                          'DRBG_INIT: %s' %
-                                          (utils.hex_dump(response)))
+            drbg_init(tpm, drbg_params)
+
         elif drbg_op == DRBG_RESEED:
-            entropy, inp1, inp2 = drbg_params
-            cmd = _drbg_init_cmd(drbg_op, a2b(entropy), a2b(inp1), a2b(inp2))
-            response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
-            if response != EMPTY_DRBG_RESPONSE:
-                raise subcmd.TpmTestError('Unexpected response to '
-                                          'DRBG_RESEED: %s' %
-                                          (utils.hex_dump(response)))
+            drbg_reseed(tpm, drbg_params)
+
         elif drbg_op == DRBG_GENERATE:
-            inp, expected, check_result = drbg_params
-            cmd = _drbg_gen_cmd(a2b(inp), outlen)
-            response = tpm.command(tpm.wrap_ext_command(subcmd.DRBG_TEST, cmd))
-            if check_result:
+            generate_response = drbg_generate(tpm, drbg_params, outlen)
+            # drbg_generate will return an empty string if the test case says
+            # to ignore the input. Only save responses the test cares about.
+            if generate_response:
                 tcid += 1
-                result = response[12:]
-                result_hexdump = utils.hex_dump(result)
-                if expected and a2b(expected) != result:
-                    raise subcmd.TpmTestError('error:\nexpected %s'
-                                              '\nreceived %s' %
-                                              (utils.hex_dump(a2b(expected)),
-                                               result_hexdump))
-                result_str = ''.join(result_hexdump.split()).upper()
-                test_results.append((tgid, tcid, result_str))
+                test_results.append((tgid, tcid, generate_response))
+
     print('%sSUCCESS: %s' % (utils.cursor_back(), 'DRBG test'))
     return test_results
 
