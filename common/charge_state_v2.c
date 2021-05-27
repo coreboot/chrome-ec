@@ -1757,6 +1757,13 @@ void charger_task(void *u)
 				set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
 				battery_seems_to_be_dead = 0;
 				prev_ac = curr.ac;
+
+				/*
+				 * b/187967523, we should clear charge current,
+				 * otherwise it will effect typeC output.this
+				 * should be ok for all chargers.
+				 */
+				charger_set_current(0);
 			}
 		}
 
