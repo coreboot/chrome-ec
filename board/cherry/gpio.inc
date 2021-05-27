@@ -30,7 +30,7 @@ GPIO_INT(PMIC_EC_PWRGD, PIN(F, 3),
 
 /* Sensor Interrupts */
 GPIO_INT(BASE_IMU_INT_L,     PIN(M, 3), GPIO_INT_FALLING | GPIO_SEL_1P8V,
-         icm426xx_interrupt)
+         icm42607_interrupt)
 /* USB-C interrupts */
 GPIO_INT(USB_C0_PPC_INT_ODL, PIN(D, 1), GPIO_INT_BOTH, ppc_interrupt)
 GPIO_INT(USB_C0_BC12_INT_ODL,PIN(J, 4), GPIO_INT_FALLING, bc12_interrupt)
@@ -118,7 +118,7 @@ ALTERNATE(PIN_MASK(B, 0x03), 1, MODULE_UART, 0) /* EC to Servo */
 ALTERNATE(PIN_MASK(A, 0b11011111), 1, MODULE_PWM, 0) /* PWM 0~4,6,7 */
 
 /* ADC */
-ALTERNATE(PIN_MASK(I, 0x4F), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,6 */
+ALTERNATE(PIN_MASK(I, 0xCF), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,6,7 */
 
 /* SPI */
 ALTERNATE(PIN_MASK(M, 0x33), 0, MODULE_SPI, 0) /* SPI */

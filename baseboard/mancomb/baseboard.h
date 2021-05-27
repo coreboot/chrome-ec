@@ -14,6 +14,7 @@
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 
 /* Optional features */
+#define CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
@@ -118,6 +119,11 @@
 #undef  CONFIG_DEDICATED_CHARGE_PORT_COUNT
 #define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
 #define DEDICATED_CHARGE_PORT CONFIG_USB_PD_PORT_MAX_COUNT
+
+/* DisplayPort redriver */
+#define CONFIG_DP_REDRIVER_TDP142
+#define TDP142_I2C_PORT		I2C_PORT_USB_HUB
+#define TDP142_I2C_ADDR		TDP142_I2C_ADDR3
 
 /* USB Type C and USB PD config */
 #define CONFIG_USB_PD_REV30
@@ -321,6 +327,11 @@ void tcpc_alert_event(enum gpio_signal signal);
 
 /* Required board functions */
 void board_get_bj_power(int *voltage, int *current);
+
+/* CBI utility functions */
+uint32_t get_sku_id(void);
+uint32_t get_board_version(void);
+uint32_t get_fw_config(void);
 
 #endif /* !__ASSEMBLER__ */
 

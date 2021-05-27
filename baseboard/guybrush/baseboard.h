@@ -14,6 +14,7 @@
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 
 /* Optional features */
+#define CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
@@ -347,6 +348,15 @@ void sbu_fault_interrupt(enum ioex_signal signal);
 
 void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
 void baseboard_en_pwr_s0(enum gpio_signal signal);
+
+int board_get_soc_temp(int idx, int *temp_k);
+
+/* CBI utility functions */
+uint32_t get_sku_id(void);
+uint32_t get_board_version(void);
+uint32_t get_fw_config(void);
+/* Board callback after CBI has been initialized */
+__overridable void board_cbi_init(void);
 
 #endif /* !__ASSEMBLER__ */
 

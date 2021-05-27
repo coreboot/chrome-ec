@@ -4505,6 +4505,11 @@
 #undef CONFIG_USBC_RETIMER_TUSB544
 
 /*
+ * DP redriver drivers to be used.
+ */
+#undef CONFIG_DP_REDRIVER_TDP142
+
+/*
  * Define this to enable Type-C retimer firmware update. Each Type-C retimer
  * indicates its capability of supporting firmware update in usb_mux_driver.
  * This feature is available to TCPMv2 PD stack, also requires
@@ -4833,6 +4838,12 @@
 
 /* Support simple control of power to the device's USB ports */
 #undef CONFIG_USB_PORT_POWER_DUMB
+
+/*
+ * Let board customize the timing to enable/disable usb port, instead
+ * of using the default S3 hook.
+ */
+#undef CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 
 /*
  * Support smart power control to the device's USB ports, using
@@ -5250,6 +5261,19 @@
 #undef CONFIG_ZEPHYR
 #endif
 
+/*
+ * Define the following to drive CCD_MODE_ODL when a DTS accessory is
+ * connected to the CCD USBC port.
+ *
+ * GPIO_CCD_MODE_ODL should be configured with GPIO_ODR_HIGH flag
+ */
+#undef CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
+
+/*
+ * The USB port used for CCD. Defaults to 0/C0.
+ */
+#define CONFIG_CCD_USBC_PORT_NUMBER	0
+
 /*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
@@ -5631,9 +5655,7 @@
 #if defined(CONFIG_USBC_PPC_SYV682X)
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_VCONN
-#if !defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX) && \
-	!defined(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2) && \
-	!defined(CONFIG_SYV682X_NO_CC)
+#if !defined(CONFIG_USB_PD_TCPM_ITE_ON_CHIP) && !defined(CONFIG_SYV682X_NO_CC)
 #undef CONFIG_USB_PD_TCPC_VCONN
 #endif
 #endif
@@ -5694,6 +5716,10 @@
  */
 #ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPC_ON_CHIP
+#if !defined(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2) && \
+	!defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)
+#error "No drivers for ITE ON CHIP"
+#endif
 #endif
 
 /*****************************************************************************/

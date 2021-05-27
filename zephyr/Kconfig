@@ -266,6 +266,13 @@ config PLATFORM_EC_DEBUG_ASSERT
 	  Note: There is also ASSERT() which is an alias of assert(), used in
 	  host code where cstdlib is used.
 
+config PLATFORM_EC_DP_REDRIVER_TDP142
+	bool "Include TDP142 DisplayPort redriver driver"
+	default n
+	help
+	  Include a driver for the Texas Instruments TDP142 DisplayPort linear
+	  redriver chip.
+
 menuconfig PLATFORM_EC_ESPI
 	bool "eSPI"
 	depends on ESPI && AP
@@ -619,5 +626,18 @@ menuconfig PLATFORM_EC_WATCHDOG
 	  watchdog timer should be less than half of the auxiliary timer
 	  (PLATFORM_EC_WATCHDOG_PERIOD_MS -
 	  PLATFORM_EC_WATCHDOG_WARNING_LEADING_TIME_MS).
+
+config PLATFORM_EC_ASSERT_CCD_MODE_ON_DTS_CONNECT
+	bool "Assert CCD Mode"
+	help
+	  Assert CCD_MODE_ODL when a DTS debug accessory is connected to the
+	  CCD USBC port. GPIO_CCD_MODE_ODL should be configured with
+	  GPIO_ODR_HIGH flag.
+
+config PLATFORM_EC_CCD_USBC_PORT_NUMBER
+	int "CCD USB Port Number"
+	default 0
+	help
+	  USB port number of the CCD enabled USBC port.
 
 endif # PLATFORM_EC

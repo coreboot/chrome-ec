@@ -26,14 +26,31 @@
  * keyboard scan pins, so we do not list them in *gpio.inc. However, when
  * KEYBOARD_COL2_INVERTED is defined, this name is required.
  */
-GPIO(EC_KSO_02_INV,                  PIN(1, 7), GPIO_OUT_LOW)
+GPIO(EC_KSO_02_INV,               PIN(1, 7), GPIO_OUT_LOW)
 
-IOEX(USB_C0_RT_RST_ODL,  EXPIN(IOEX_C0_NCT38XX, 0, 2), GPIO_ODR_LOW)
-IOEX(USB_C0_FRS_EN,      EXPIN(IOEX_C0_NCT38XX, 0, 4), GPIO_LOW)
-IOEX(USB_C0_OC_ODL,      EXPIN(IOEX_C0_NCT38XX, 0, 6), GPIO_ODR_HIGH)
-IOEX(NCT_3808_GPIO07_P1, EXPIN(IOEX_C0_NCT38XX, 0, 7), GPIO_LOW)
+/*
+ * GPIOE1 is an ALT function ADC INPUT on board ID 2 and a GPIO INPUT on
+ * board ID 1. This declaration gives us a signal name to use on board
+ * ID 1.
+ */
+GPIO(ID_1_EC_BATT_PRES_ODL,       PIN(E, 1), GPIO_INPUT)
 
-IOEX(USB_C2_RT_RST_ODL,  EXPIN(IOEX_C2_NCT38XX, 0, 2), GPIO_ODR_LOW)
-IOEX(USB_C2_FRS_EN,      EXPIN(IOEX_C2_NCT38XX, 0, 4), GPIO_LOW)
-IOEX(USB_C1_OC_ODL,      EXPIN(IOEX_C2_NCT38XX, 0, 6), GPIO_ODR_HIGH)
-IOEX(USB_C2_OC_ODL,      EXPIN(IOEX_C2_NCT38XX, 0, 7), GPIO_ODR_HIGH)
+/*
+ * GPIO34 is an INPUT on board ID 2 and ODR_LOW on board ID 1.
+ *
+ * Since this pin is pulled up to 3.3V through a 30.9K ohm resistor on
+ * board ID 2, we will leak about 0.3mW until the pin is put in ALT mode
+ * when MODULE_ADC configuration runs. Initializing the pin to ODR_LOW
+ * gives us full control on both boards.
+ */
+GPIO(ID_1_USB_C0_C2_TCPC_RST_ODL, PIN(3, 4), GPIO_ODR_LOW)
+
+IOEX(ID_1_USB_C0_RT_RST_ODL, EXPIN(IOEX_C0_NCT38XX, 0, 2), GPIO_ODR_LOW)
+IOEX(USB_C0_FRS_EN,          EXPIN(IOEX_C0_NCT38XX, 0, 4), GPIO_LOW)
+IOEX(USB_C0_OC_ODL,          EXPIN(IOEX_C0_NCT38XX, 0, 6), GPIO_ODR_HIGH)
+IOEX(USB_C0_RT_RST_ODL,      EXPIN(IOEX_C0_NCT38XX, 0, 7), GPIO_ODR_LOW)
+
+IOEX(USB_C2_RT_RST_ODL,      EXPIN(IOEX_C2_NCT38XX, 0, 2), GPIO_ODR_LOW)
+IOEX(USB_C2_FRS_EN,          EXPIN(IOEX_C2_NCT38XX, 0, 4), GPIO_LOW)
+IOEX(USB_C1_OC_ODL,          EXPIN(IOEX_C2_NCT38XX, 0, 6), GPIO_ODR_HIGH)
+IOEX(USB_C2_OC_ODL,          EXPIN(IOEX_C2_NCT38XX, 0, 7), GPIO_ODR_HIGH)

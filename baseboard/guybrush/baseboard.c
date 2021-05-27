@@ -189,7 +189,7 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Temp Sensors */
 static int board_get_memory_temp(int, int *);
-static int board_get_soc_temp(int, int *);
+
 const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
@@ -497,7 +497,7 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 const struct fan_conf fan_conf_0 = {
 	.flags = FAN_USE_RPM_MODE,
 	.ch = MFT_CH_0,	/* Use MFT id to control fan */
-	.pgood_gpio = -1,
+	.pgood_gpio = GPIO_S0_PGOOD,
 	.enable_gpio = -1,
 };
 const struct fan_rpm fan_rpm_0 = {
@@ -755,13 +755,6 @@ static int board_get_memory_temp(int idx, int *temp_k)
 	return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
 }
 
-static int board_get_soc_temp(int idx, int *temp_k)
-{
-	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
-		return EC_ERROR_NOT_POWERED;
-	return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
-}
-
 /**
  * Return if VBUS is sagging too low
  */
@@ -955,18 +948,4 @@ void baseboard_en_pwr_s0(enum gpio_signal signal)
 
 	/* Now chain off to the normal power signal interrupt handler. */
 	power_signal_interrupt(signal);
-}
-
-int get_fw_config_field(uint8_t offset, uint8_t width)
-{
-	static uint32_t cached_fw_config = UNINITIALIZED_FW_CONFIG;
-
-	if (cached_fw_config == UNINITIALIZED_FW_CONFIG) {
-		uint32_t val;
-
-		if (cbi_get_fw_config(&val) != EC_SUCCESS)
-			return -1;
-		cached_fw_config = val;
-	}
-	return (cached_fw_config >> offset) & ((1 << width) - 1);
 }

@@ -90,9 +90,6 @@
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USBC_PPC_NX20P3483
 
-/* Remove prints and free flash space by excluding PD state names */
-#define CONFIG_USB_PD_DEBUG_LEVEL 0
-
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
@@ -140,6 +137,8 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
+
+#define GPIO_ID_1_EC_KB_BL_EN		GPIO_EC_BATT_PRES_ODL
 
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
