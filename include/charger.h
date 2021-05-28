@@ -40,6 +40,32 @@ struct charger_params {
 	int flags;
 };
 
+struct charger_drv {
+	/* Discharge battery when on AC power. */
+	enum ec_error_list (*discharge_on_ac)(int chgnum, int enable);
+};
+
+struct charger_config_t {
+	int i2c_port;
+	uint16_t i2c_addr_flags;
+	const struct charger_drv *drv;
+};
+
+extern const struct charger_config_t chg_chips[];
+
+__override_proto uint8_t board_get_charger_chip_count(void);
+
+/*
+ * Note: CHARGER_SOLO should be used anywhere the charger index being called is
+ * only valid for a single-chip system.  This will then generate build errors if
+ * the callsite is compliled for a multi-chip system, which needs to re-evaluate
+ * the charger index to act upon.
+ */
+enum chg_id {
+	CHARGER_SOLO,
+	CHARGER_NUM,
+};
+
 /* Get the current charger_params. Failures are reported in .flags */
 void charger_get_params(struct charger_params *chg);
 
@@ -123,7 +149,7 @@ int charger_get_voltage(int *voltage);
 int charger_set_voltage(int voltage);
 
 /* Discharge battery when on AC power. */
-int charger_discharge_on_ac(int enable);
+enum ec_error_list charger_discharge_on_ac(int enable);
 
 /* Get the VBUS voltage (mV) from the charger */
 int charger_get_vbus_voltage(int port);

@@ -394,7 +394,7 @@ init_fail:
 }
 DECLARE_HOOK(HOOK_INIT, isl923x_init, HOOK_PRIO_INIT_I2C + 1);
 
-int charger_discharge_on_ac(int enable)
+static enum ec_error_list isl923x_discharge_on_ac(int chgnum, int enable)
 {
 	int rv;
 	int control1;
@@ -703,3 +703,7 @@ static int command_isl923x_dump(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(charger_dump, command_isl923x_dump, "",
 			"Dumps ISL923x registers");
 #endif /* CONFIG_CMD_CHARGER_DUMP */
+
+const struct charger_drv isl923x_drv = {
+	.discharge_on_ac = isl923x_discharge_on_ac,
+};

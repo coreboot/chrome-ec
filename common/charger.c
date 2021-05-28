@@ -41,6 +41,15 @@ static void dptf_disable_hook(void)
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, dptf_disable_hook, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, dptf_disable_hook, HOOK_PRIO_DEFAULT);
 
+/*
+ * Boards should override this function if their count may vary during run-time
+ * due to different DB options.
+ */
+__overridable uint8_t board_get_charger_chip_count(void)
+{
+	return CHARGER_NUM;
+}
+
 int charger_closest_voltage(int voltage)
 {
 	const struct charger_info *info = charger_get_info();
@@ -213,3 +222,24 @@ static int command_charger(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(charger, command_charger,
 			"[input | current | voltage | dptf] [newval]",
 			"Get or set charger param(s)");
+
+enum ec_error_list charger_discharge_on_ac(int enable)
+{
+	int chgnum;
+	int rv = EC_ERROR_UNIMPLEMENTED;
+
+	if (IS_ENABLED(CONFIG_CHARGER_DISCHARGE_ON_AC_CUSTOM))
+		return board_discharge_on_ac(enable);
+
+	/*
+	 * When discharge on AC is selected, cycle through all chargers to
+	 * enable or disable this feature.
+	 */
+	for (chgnum = 0; chgnum < board_get_charger_chip_count(); chgnum++) {
+		if (chg_chips[chgnum].drv->discharge_on_ac)
+			rv = chg_chips[chgnum].drv->discharge_on_ac(chgnum,
+								    enable);
+	}
+
+	return rv;
+}

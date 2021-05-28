@@ -298,3 +298,5 @@ enum isl9237_fsm_state {
 
 #define I2C_ADDR_CHARGER ISL923X_ADDR
 #endif /* __CROS_EC_ISL923X_H */
+
+extern const struct charger_drv isl923x_drv;
