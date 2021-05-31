@@ -189,6 +189,11 @@ void charge_problem(enum problem_type p, int v)
 	problems_exist = 1;
 }
 
+test_export_static enum ec_charge_control_mode get_chg_ctrl_mode(void)
+{
+	return chg_ctl_mode;
+}
+
 static int battery_sustainer_set(int8_t lower, int8_t upper)
 {
 	if (lower == -1 || upper == -1) {
@@ -765,6 +770,9 @@ static void dump_charge_state(void)
 #define DUMP_CHG(FLD, FMT) ccprintf("\t" #FLD " = " FMT "\n", curr.chg. FLD)
 #define DUMP_BATT(FLD, FMT) ccprintf("\t" #FLD " = " FMT "\n", curr.batt. FLD)
 #define DUMP_OCPC(FLD, FMT) ccprintf("\t" #FLD " = " FMT "\n", curr.ocpc. FLD)
+
+	enum ec_charge_control_mode cmode = get_chg_ctrl_mode();
+
 	ccprintf("state = %s\n", state_list[curr.state]);
 	DUMP(ac, "%d");
 	DUMP(batt_is_charging, "%d");
@@ -820,8 +828,8 @@ static void dump_charge_state(void)
 	DUMP(input_voltage, "%dmV");
 #endif
 	ccprintf("chg_ctl_mode = %s (%d)\n",
-		 chg_ctl_mode < CHARGE_CONTROL_COUNT
-		 	? mode_text[chg_ctl_mode] : "UNDEF", chg_ctl_mode);
+		 cmode < CHARGE_CONTROL_COUNT ? mode_text[cmode] : "UNDEF",
+		 cmode);
 	ccprintf("manual_voltage = %d\n", manual_voltage);
 	ccprintf("manual_current = %d\n", manual_current);
 	ccprintf("user_current_limit = %dmA\n", user_current_limit);
@@ -839,6 +847,7 @@ static void dump_charge_state(void)
 static void show_charging_progress(void)
 {
 	int rv = 0, minutes, to_full, chgnum = 0;
+	int dsoc;
 
 #ifdef CONFIG_BATTERY_SMART
 	/*
@@ -872,19 +881,17 @@ static void show_charging_progress(void)
 	}
 #endif
 
+	dsoc = charge_get_display_charge();
 	if (rv)
 		CPRINTS("Battery %d%% (Display %d.%d %%) / ??h:?? %s%s",
 			curr.batt.state_of_charge,
-			curr.batt.display_charge / 10,
-			curr.batt.display_charge % 10,
+			dsoc / 10, dsoc % 10,
 			to_full ? "to full" : "to empty",
 			is_full ? ", not accepting current" : "");
 	else
 		CPRINTS("Battery %d%% (Display %d.%d %%) / %dh:%d %s%s",
 			curr.batt.state_of_charge,
-			curr.batt.display_charge / 10,
-			curr.batt.display_charge % 10,
-			minutes / 60, minutes % 60,
+			dsoc / 10, dsoc % 10, minutes / 60, minutes % 60,
 			to_full ? "to full" : "to empty",
 			is_full ? ", not accepting current" : "");
 
@@ -1335,7 +1342,7 @@ static int battery_outside_charging_temperature(void)
 
 static void sustain_battery_soc(void)
 {
-	enum ec_charge_control_mode mode = chg_ctl_mode;
+	enum ec_charge_control_mode mode = get_chg_ctrl_mode();
 	int soc;
 	int rv;
 
@@ -1346,7 +1353,7 @@ static void sustain_battery_soc(void)
 
 	soc = charge_get_display_charge() / 10;
 
-	switch (chg_ctl_mode) {
+	switch (mode) {
 	case CHARGE_CONTROL_NORMAL:
 		/* Going up */
 		if (sustain_soc.upper < soc)
@@ -1367,7 +1374,7 @@ static void sustain_battery_soc(void)
 		return;
 	}
 
-	if (mode == chg_ctl_mode)
+	if (mode == get_chg_ctrl_mode())
 		return;
 
 	rv = set_chg_ctrl_mode(mode);
@@ -1686,7 +1693,7 @@ void charger_task(void *u)
 		/* Okay, we're on AC and we should have a battery. */
 
 		/* Used for factory tests. */
-		if (chg_ctl_mode != CHARGE_CONTROL_NORMAL) {
+		if (get_chg_ctrl_mode() != CHARGE_CONTROL_NORMAL) {
 			set_charge_state(ST_IDLE);
 			goto wait_for_it;
 		}
@@ -1803,7 +1810,7 @@ void charger_task(void *u)
 
 wait_for_it:
 #ifdef CONFIG_CHARGER_PROFILE_OVERRIDE
-		if (chg_ctl_mode == CHARGE_CONTROL_NORMAL) {
+		if (get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) {
 			sleep_usec = charger_profile_override(&curr);
 			if (sleep_usec < 0)
 				charge_problem(PR_CUSTOM, sleep_usec);
@@ -1861,11 +1868,11 @@ wait_for_it:
 #endif
 		    (is_full != prev_full) ||
 		    (curr.state != prev_state) ||
-		    (curr.batt.display_charge != prev_disp_charge)) {
+		    (charge_get_display_charge() != prev_disp_charge)) {
 			sustain_battery_soc();
 			show_charging_progress();
 			prev_charge = curr.batt.state_of_charge;
-			prev_disp_charge = curr.batt.display_charge;
+			prev_disp_charge = charge_get_display_charge();
 #ifdef CONFIG_EC_EC_COMM_BATTERY_MASTER
 			prev_charge_base = charge_base;
 #endif
@@ -2202,7 +2209,7 @@ uint32_t charge_get_flags(void)
 {
 	uint32_t flags = 0;
 
-	if (chg_ctl_mode != CHARGE_CONTROL_NORMAL)
+	if (get_chg_ctrl_mode() != CHARGE_CONTROL_NORMAL)
 		flags |= CHARGE_FLAG_FORCE_IDLE;
 	if (curr.ac)
 		flags |= CHARGE_FLAG_EXTERNAL_POWER;
@@ -2223,7 +2230,7 @@ int charge_get_percent(void)
 	return is_full ? 100 : curr.batt.state_of_charge;
 }
 
-int charge_get_display_charge(void)
+test_mockable int charge_get_display_charge(void)
 {
 	return curr.batt.display_charge;
 }
@@ -2422,7 +2429,7 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 
 	if (args->version >= 2) {
 		if (p->cmd == EC_CHARGE_CONTROL_CMD_SET) {
-			if (chg_ctl_mode == CHARGE_CONTROL_NORMAL) {
+			if (get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) {
 				rv = battery_sustainer_set(
 						p->sustain_soc.lower,
 						p->sustain_soc.upper);
@@ -2434,7 +2441,7 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 				battery_sustainer_disable();
 			}
 		} else if (p->cmd == EC_CHARGE_CONTROL_CMD_GET) {
-			r->mode = chg_ctl_mode;
+			r->mode = get_chg_ctrl_mode();
 			r->sustain_soc.lower = sustain_soc.lower;
 			r->sustain_soc.upper = sustain_soc.upper;
 			args->response_size = sizeof(*r);
@@ -2750,7 +2757,7 @@ int charge_get_charge_state_debug(int param, uint32_t *value)
 {
 	switch (param) {
 	case CS_PARAM_DEBUG_CTL_MODE:
-		*value = chg_ctl_mode;
+		*value = get_chg_ctrl_mode();
 		break;
 	case CS_PARAM_DEBUG_MANUAL_CURRENT:
 		*value = manual_current;
