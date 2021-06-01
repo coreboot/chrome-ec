@@ -124,6 +124,12 @@ int board_is_clamshell(void);
 int board_is_sourcing_vbus(int port);
 /* Enable VBUS sink for a given port */
 int board_vbus_sink_enable(int port, int enable);
+
+/* support factory keyboard test */
+#define CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
