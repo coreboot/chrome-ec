@@ -5,6 +5,7 @@
 
 /* Persistence module for emulator */
 
+#include <assert.h>
 #include <linux/limits.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -26,7 +27,7 @@ static void get_storage_path(char *out)
 		current = strchr(current, '/');
 	}
 
-	snprintf(out, PATH_MAX - 1, "/dev/shm/EC_persist_%s", buf);
+	assert(snprintf(out, PATH_MAX - 1, "/dev/shm/EC_persist_%s", buf) > 0);
 	out[PATH_MAX - 1] = '\0';
 }
 
@@ -40,7 +41,7 @@ FILE *get_persistent_storage(const char *tag, const char *mode)
 	 * be named 'bar_persist_foo'
 	 */
 	get_storage_path(buf);
-	snprintf(path, PATH_MAX - 1, "%s_%s", buf, tag);
+	assert(snprintf(path, PATH_MAX - 1, "%s_%s", buf, tag) > 0);
 	path[PATH_MAX - 1] = '\0';
 
 	return fopen(path, mode);
@@ -57,7 +58,7 @@ void remove_persistent_storage(const char *tag)
 	char path[PATH_MAX];
 
 	get_storage_path(buf);
-	snprintf(path, PATH_MAX - 1, "%s_%s", buf, tag);
+	assert(snprintf(path, PATH_MAX - 1, "%s_%s", buf, tag) > 0);
 	path[PATH_MAX - 1] = '\0';
 
 	unlink(path);
