@@ -61,12 +61,12 @@ chip-$(CONFIG_DCRYPTO)+= dcrypto/sha512.o
 endif
 endif
 chip-$(CONFIG_DCRYPTO)+= dcrypto/x509.o
+chip-$(CONFIG_DCRYPTO)+= trng.o
 
 chip-$(CONFIG_SPI_CONTROLLER)+=spi_controller.o
 
 chip-y+= jitter.o
 chip-y+= pmu.o
-chip-y+= trng.o
 chip-y+= runlevel.o
 chip-$(CONFIG_CCD_ITE_PROGRAMMING)+= ite_flash.o
 chip-$(CONFIG_CCD_ITE_PROGRAMMING)+= ite_sync.o
