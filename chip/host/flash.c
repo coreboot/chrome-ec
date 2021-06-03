@@ -39,12 +39,10 @@ static int flash_check_protect(int offset, int size)
 static void flash_set_persistent(void)
 {
 	FILE *f = get_persistent_storage("flash", "wb");
-	int sz;
 
 	ASSERT(f != NULL);
 
-	sz = fwrite(__host_flash, sizeof(__host_flash), 1, f);
-	ASSERT(sz == 1);
+	ASSERT(fwrite(__host_flash, sizeof(__host_flash), 1, f) == 1);
 
 	release_persistent_storage(f);
 }
@@ -60,7 +58,7 @@ static void flash_get_persistent(void)
 		return;
 	}
 
-	fread(__host_flash, sizeof(__host_flash), 1, f);
+	ASSERT(fread(__host_flash, sizeof(__host_flash), 1, f) == 1);
 
 	release_persistent_storage(f);
 }
