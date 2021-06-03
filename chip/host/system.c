@@ -50,7 +50,7 @@ static void ramdata_get_persistent(void)
 		return;
 	}
 
-	fread(__ram_data, RAM_DATA_SIZE, 1, f);
+	ASSERT(fread(__ram_data, RAM_DATA_SIZE, 1, f) == 1);
 
 	release_persistent_storage(f);
 
@@ -78,7 +78,7 @@ static uint32_t get_image_copy(void)
 
 	if (f == NULL)
 		return SYSTEM_IMAGE_UNKNOWN;
-	fread(&ret, sizeof(ret), 1, f);
+	ASSERT(fread(&ret, sizeof(ret), 1, f) == 1);
 	release_persistent_storage(f);
 	remove_persistent_storage("image_copy");
 
@@ -102,7 +102,7 @@ static uint32_t load_reset_flags(void)
 
 	if (f == NULL)
 		return EC_RESET_FLAG_POWER_ON;
-	fread(&ret, sizeof(ret), 1, f);
+	ASSERT(fread(&ret, sizeof(ret), 1, f) == 1);
 	release_persistent_storage(f);
 	remove_persistent_storage("reset_flags");
 
@@ -125,7 +125,7 @@ static int load_time(timestamp_t *t)
 
 	if (f == NULL)
 		return 0;
-	fread(t, sizeof(*t), 1, f);
+	ASSERT(fread(t, sizeof(*t), 1, f) == 1);
 	release_persistent_storage(f);
 	remove_persistent_storage("time");
 
@@ -218,7 +218,7 @@ int system_set_scratchpad(uint32_t value)
 {
 	FILE *f = get_persistent_storage("scratchpad", "w");
 
-	fprintf(f, "%lu", value);
+	fprintf(f, "%u", value);
 	release_persistent_storage(f);
 
 	return EC_SUCCESS;

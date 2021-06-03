@@ -29,7 +29,7 @@ void rand_bytes(void *buffer, size_t len)
 	FILE *f = fopen("/dev/urandom", "rb");
 
 	assert(f);
-	fread(buffer, 1, len, f);
+	assert(fread(buffer, len, 1, f) == 1);
 	fclose(f);
 }
 
