@@ -617,13 +617,6 @@
 #undef CONFIG_BATTERY_V2
 
 /*
- * Some fuel gauges in battery take some time to return valid battery params
- * when wake form dead battery.
- * It need to do precharge to take valid battery params.
- */
-#undef CONFIG_BATTERY_DEAD_UNTIL_VALUE
-
-/*
  * Number of batteries, only matters when CONFIG_BATTERY_V2 is used.
  */
 #undef CONFIG_BATTERY_COUNT
@@ -3651,21 +3644,14 @@
  */
 #undef CONFIG_SPI_NOR_SMART_ERASE
 
-/* SPI master feature */
-#undef CONFIG_SPI_MASTER
+/* SPI controller feature */
+#undef CONFIG_SPI_CONTROLLER
 
 /* SPI master halfduplex/3-wire mode */
 #undef CONFIG_SPI_HALFDUPLEX
 
 /* Support STM32 SPI1 as master. */
 #undef CONFIG_STM32_SPI1_MASTER
-
-/* SPI master configure gpios on init */
-#undef CONFIG_SPI_MASTER_CONFIGURE_GPIOS
-
-/* Support SPI masters without GPIO-specified Chip Selects, instead rely on the
- * SPI master port's hardwired CS pin. */
-#undef CONFIG_SPI_MASTER_NO_CS_GPIOS
 
 /* Support MCHP MEC family GP-SPI master(s)
  * Define to 0x01 for GPSPI0 only.
@@ -4453,6 +4439,7 @@
 #undef CONFIG_USB_PD_TCPM_TUSB422
 #undef CONFIG_USB_PD_TCPM_RAA489000
 #undef CONFIG_USB_PD_TCPM_RT1715
+#undef CONFIG_USB_PD_TCPM_RT1718S
 #undef CONFIG_USB_PD_TCPM_FUSB307
 #undef CONFIG_USB_PD_TCPM_STM32GX
 #undef CONFIG_USB_PD_TCPM_CCGXXF
@@ -4671,6 +4658,7 @@
 #undef CONFIG_USBC_PPC_AOZ1380
 #undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
+#undef CONFIG_USBC_PPC_RT1718S
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X

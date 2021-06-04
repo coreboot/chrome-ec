@@ -19,7 +19,8 @@ enum ec_ssfc_base_sensor {
 	SSFC_SENSOR_BASE_DEFAULT = 0,
 	SSFC_SENSOR_BMI160 = 1,
 	SSFC_SENSOR_ICM426XX = 2,
-	SSFC_SENSOR_LSM6DSM = 3
+	SSFC_SENSOR_LSM6DSM = 3,
+	SSFC_SENSOR_ICM42607 = 4
 };
 
 /*
@@ -28,7 +29,8 @@ enum ec_ssfc_base_sensor {
 enum ec_ssfc_lid_sensor {
 	SSFC_SENSOR_LID_DEFAULT = 0,
 	SSFC_SENSOR_BMA255 = 1,
-	SSFC_SENSOR_KX022 = 2
+	SSFC_SENSOR_KX022 = 2,
+	SSFC_SENSOR_LIS2DWL = 3
 };
 
 /*
@@ -39,6 +41,11 @@ enum ec_ssfc_usb_ss_mux {
 	SSFC_USB_SS_MUX_PS8743 = 1,
 	SSFC_USB_SS_MUX_PI3USBX532 = 2,
 };
+
+/*
+ * Bits 9-11
+ * Only cret board use SSFC bits 9-11 in coreboot for audio codec.
+ */
 
 union dedede_cbi_ssfc {
 	struct {

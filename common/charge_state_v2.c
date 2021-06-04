@@ -1778,6 +1778,11 @@ void charger_task(void *u)
 			board_base_reset();
 #endif
 		if (curr.ac != prev_ac) {
+			/*
+			 * We've noticed a change in AC presence, let the board
+			 * know.
+			 */
+			board_check_extpower();
 			if (curr.ac) {
 				/*
 				 * Some chargers are unpowered when the AC is
@@ -1805,6 +1810,13 @@ void charger_task(void *u)
 				chg_ctl_mode = CHARGE_CONTROL_NORMAL;
 				battery_seems_to_be_dead = 0;
 				prev_ac = curr.ac;
+
+				/*
+				 * b/187967523, we should clear charge current,
+				 * otherwise it will effect typeC output.this
+				 * should be ok for all chargers.
+				 */
+				charger_set_current(chgnum, 0);
 			}
 		}
 
@@ -1959,11 +1971,7 @@ void charger_task(void *u)
 			 */
 			if (curr.requested_voltage == 0 &&
 			    curr.requested_current == 0 &&
-#ifdef CONFIG_BATTERY_DEAD_UNTIL_VALUE
-			    curr.batt.state_of_charge < CONFIG_BATTERY_DEAD_UNTIL_VALUE) {
-#else
 			    curr.batt.state_of_charge == 0) {
-#endif
 				/* Battery is dead, give precharge current */
 				curr.requested_voltage =
 					batt_info->voltage_max;
