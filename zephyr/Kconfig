@@ -171,7 +171,7 @@ endchoice
 
 endif # PLATFORM_EC_BOARD_VERSION
 
-config PLATFORM_EC_CBI
+config PLATFORM_EC_CBI_EEPROM
 	bool "CBI EEPROM support"
 	depends on PLATFORM_EC_I2C
 	help
