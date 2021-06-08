@@ -26,6 +26,8 @@ import tempfile
 import threading
 import time
 
+import serial
+
 from chromite.lib import cros_build_lib
 from chromite.lib import cros_logging as logging
 
@@ -58,6 +60,7 @@ REQUIRED_CONTROLS = {
 # Supported methods to resetting cr50.
 SUPPORTED_RESETS = (
     'battery_cutoff',
+    'console_reboot',
     'cr50_reset_odl',
     'manual_reset',
 )
@@ -468,6 +471,30 @@ class ManualReset(Cr50Reset):
         logging.warning('User input timeout: assuming cr50 reset')
 
 
+class ConsoleReboot(Cr50Reset):
+    """Class for using a manual reset to reset Cr50."""
+
+    REQUIRED_SETUP = (
+        # Rescue is done through Cr50 uart. It requires a flex cable not ccd.
+        'flex',
+        # Cr50 rescue is done through cr50 uart.
+        'cr50_uart',
+    )
+    REBOOT_CMD = '\n\nreboot\n\n'
+
+    def run_reset(self):
+        """Nothing to do."""
+        pass
+
+    def recover_from_reset(self):
+        """Run reboot on the cr50 console."""
+        # EC3PO is disconnected. Send reboot to the raw pty.
+        raw_pty = self._servo.dut_control('raw_cr50_uart_pty')[1]
+        logging.info('Sending cr50 reboot command %r', self.REBOOT_CMD)
+        with serial.Serial(raw_pty, timeout=1) as ser:
+            ser.write(self.REBOOT_CMD.encode('utf-8'))
+
+
 class FlashCr50(object):
     """Class for updating cr50."""
 
@@ -553,17 +580,17 @@ class GsctoolUpdater(FlashCr50):
         '0xc': 'Board id mismatch',
     }
 
-    def __init__(self, cmd, serial=None):
+    def __init__(self, cmd, usb_ser=None):
         """Generate the gsctool command.
 
         Args:
             cmd: gsctool updater command.
-            serial: The serial number of the CCD device being updated.
+            usb_ser: The usb_ser number of the CCD device being updated.
         """
         super(GsctoolUpdater, self).__init__(cmd)
         self._gsctool_cmd = [self._updater]
-        if serial:
-            self._gsctool_cmd.extend(['-n', serial])
+        if usb_ser:
+            self._gsctool_cmd.extend(['-n', usb_ser])
 
     def update(self, image):
         """Use gsctool to update cr50.
@@ -629,6 +656,8 @@ class Cr50RescueUpdater(FlashCr50):
         assert reset_type in SUPPORTED_RESETS, '%s is unsupported.' % reset_type
         if reset_type == 'battery_cutoff':
             return BatteryCutoffReset(self._servo, reset_type)
+        elif reset_type == 'console_reboot':
+            return ConsoleReboot(self._servo, reset_type)
         elif reset_type == 'cr50_reset_odl':
             return Cr50ResetODLReset(self._servo, reset_type)
         return ManualReset(self._servo, reset_type)
