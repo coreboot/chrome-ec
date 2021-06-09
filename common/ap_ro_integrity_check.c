@@ -110,10 +110,12 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 	*response_size = 1; /* Just in case there is an error. */
 
 	/* Neither write nor erase are allowed once Board ID is programmed. */
+#ifndef CR50_DEV
 	if (!board_id_is_erased()) {
 		*response = ARCVE_BID_PROGRAMMED;
 		return VENDOR_RC_NOT_ALLOWED;
 	}
+#endif
 
 	if (input_size == 0) {
 		/* Empty payload is a request to erase the hash. */
