@@ -250,6 +250,7 @@ enum vendor_cc_spi_hash_request_flags {
  * command handler.
  */
 enum ap_ro_check_vc_errors {
+	ARCVE_OK = 0,
 	ARCVE_TOO_SHORT = 1,
 	ARCVE_BAD_PAYLOAD_SIZE = 2,
 	ARCVE_BAD_OFFSET = 3,
@@ -260,6 +261,7 @@ enum ap_ro_check_vc_errors {
 	ARCVE_FLASH_ERASE_FAILED = 8,
 	ARCVE_TOO_MANY_RANGES = 9,
 	ARCVE_NOT_PROGRAMMED = 10,
+	ARCVE_FLASH_READ_FAILED = 11,
 };
 
 /* Structure for VENDOR_CC_SPI_HASH request which follows tpm_header */
