@@ -217,6 +217,36 @@ static int verify_ap_ro_check_space(void)
 	return EC_SUCCESS;
 }
 
+/*
+ * ap_ro_check_unsupported: Returns non-zero value if AP RO verification is
+ *                          unsupported.
+ *
+ * Returns:
+ *
+ *  ARCVE_OK if AP RO verification is supported.
+ *  ARCVE_NOT_PROGRAMMED if the hash is not programmed.
+ *  ARCVE_FLASH_READ_FAILED if there was an error reading the hash.
+ */
+static enum ap_ro_check_vc_errors ap_ro_check_unsupported(int add_flash_event)
+{
+
+	if (p_chk->header.num_ranges == (uint16_t)~0) {
+		CPRINTS("%s: RO verification not programmed", __func__);
+		if (add_flash_event)
+			ap_ro_add_flash_event(APROF_SPACE_NOT_PROGRAMMED);
+		return ARCVE_NOT_PROGRAMMED;
+	}
+
+	/* Is the contents intact? */
+	if (verify_ap_ro_check_space() != EC_SUCCESS) {
+		CPRINTS("%s: unable to read ap ro space", __func__);
+		if (add_flash_event)
+			ap_ro_add_flash_event(APROF_SPACE_INVALID);
+		return ARCVE_FLASH_READ_FAILED; /* No verification possible. */
+	}
+	return ARCVE_OK;
+}
+
 int validate_ap_ro(void)
 {
 	uint32_t i;
@@ -224,17 +254,8 @@ int validate_ap_ro(void)
 	uint8_t digest[SHA256_DIGEST_SIZE];
 	int rv;
 
-	if (p_chk->header.num_ranges == (uint16_t)~0) {
-		CPRINTS("%s: RO verification not programmed", __func__);
-		ap_ro_add_flash_event(APROF_SPACE_NOT_PROGRAMMED);
+	if (ap_ro_check_unsupported(true))
 		return EC_ERROR_INVAL;
-	}
-
-	/* Is the contents intact? */
-	if (verify_ap_ro_check_space() != EC_SUCCESS) {
-		ap_ro_add_flash_event(APROF_SPACE_INVALID);
-		return EC_ERROR_INVAL; /* No verification possible. */
-	}
 
 	enable_ap_spi_hash_shortcut();
 	usb_spi_sha256_start(&ctx);
@@ -288,17 +309,14 @@ static enum vendor_cmd_rc vc_get_ap_ro_hash(enum vendor_cmd_cc code,
 	if (input_size)
 		return VENDOR_RC_BOGUS_ARGS;
 
-	if ((p_chk->header.num_ranges == (uint16_t)~0) &&
-	    (p_chk->header.checksum == ~0)) {
+	rv = ap_ro_check_unsupported(false);
+	if (rv == ARCVE_FLASH_READ_FAILED)
+		return VENDOR_RC_READ_FLASH_FAIL;
+	if (rv) {
 		*response_size = 1;
-		*response = ARCVE_NOT_PROGRAMMED;
+		*response = rv;
 		return VENDOR_RC_INTERNAL_ERROR;
 	}
-
-	rv = verify_ap_ro_check_space();
-	if (rv != EC_SUCCESS)
-		return VENDOR_RC_READ_FLASH_FAIL;
-
 	*response_size = SHA256_DIGEST_SIZE;
 	memcpy(buf, p_chk->payload.digest, *response_size);
 
@@ -325,15 +343,13 @@ static int ap_ro_info_cmd(int argc, char **argv)
 		ap_ro_erase_hash();
 	}
 #endif
-	if ((p_chk->header.num_ranges == (uint16_t)~0) &&
-	    (p_chk->header.checksum == ~0)) {
-		ccprintf("AP RO check space is not programmed\n");
+	rv = ap_ro_check_unsupported(false);
+	if (rv == ARCVE_NOT_PROGRAMMED)
 		return EC_SUCCESS;
-	}
-
-	rv = verify_ap_ro_check_space();
-	if (rv != EC_SUCCESS)
-		return rv; /* No verification possible. */
+	if (rv == ARCVE_FLASH_READ_FAILED)
+		return EC_ERROR_CRC; /* No verification possible. */
+	if (rv)
+		return EC_ERROR_UNKNOWN;
 
 	ccprintf("sha256 hash %ph\n",
 		 HEX_BUF(p_chk->payload.digest, sizeof(p_chk->payload.digest)));
