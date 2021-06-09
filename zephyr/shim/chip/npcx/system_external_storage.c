@@ -7,6 +7,7 @@
 #include "common.h"
 #include "rom_chip.h"
 #include "system.h"
+#include "system_chip.h"
 
 /* TODO (b:179900857) Make this implementation not npcx specific. */
 
@@ -14,12 +15,6 @@
 #define NPCX_FWCTRL                       REG8(NPCX_MDC_BASE_ADDR + 0x007)
 #define NPCX_FWCTRL_RO_REGION             0
 #define NPCX_FWCTRL_FW_SLOT               1
-#define SET_BIT(reg, bit)           ((reg) |= (0x1 << (bit)))
-#define CLEAR_BIT(reg, bit)         ((reg) &= (~(0x1 << (bit))))
-
-/* TODO(b:179900857) Clean this up too */
-#undef IS_BIT_SET
-#define IS_BIT_SET(reg, bit)        (((reg) >> (bit)) & (0x1))
 
 void system_jump_to_booter(void)
 {
@@ -70,7 +65,8 @@ void system_jump_to_booter(void)
  * TODO: Removing npcx9 when Rev.2 is available.
  */
 	/* Bypass for GMDA issue of ROM api utilities */
-#if defined(CHIP_FAMILY_NPCX5) || defined(CONFIG_WORKAROUND_FLASH_DOWNLOAD_API)
+#if defined(CONFIG_SOC_SERIES_NPCX5) || \
+	defined(CONFIG_PLATFORM_EC_WORKAROUND_FLASH_DOWNLOAD_API)
 	system_download_from_flash(
 		flash_offset,      /* The offset of the data in spi flash */
 		CONFIG_PROGRAM_MEMORY_BASE, /* RAM Addr of downloaded data */

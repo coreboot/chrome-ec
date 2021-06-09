@@ -4,7 +4,9 @@
 
 board: asurada
 dts-overlays:
+  - battery.dts
   - gpio.dts
+  - motionsense.dts
 supported-zephyr-versions:
   - v2.5
 toolchain: coreboot-sdk

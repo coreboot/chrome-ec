@@ -1213,11 +1213,11 @@ void pe_got_soft_reset(int port)
 	set_state_pe(port, PE_SOFT_RESET);
 }
 
-__overridable bool pd_can_source_from_device(int port, const int pdo_cnt,
+__overridable bool pd_can_charge_from_device(int port, const int pdo_cnt,
 				      const uint32_t *pdos)
 {
 	/*
-	 * Don't attempt to source from a device we have no SrcCaps from. Or, if
+	 * Don't attempt to charge from a device we have no SrcCaps from. Or, if
 	 * drp_state is FORCE_SOURCE then don't attempt a PRS.
 	 */
 	if (pdo_cnt == 0 || pd_get_dual_role(port) == PD_DRP_FORCE_SOURCE)
@@ -1265,7 +1265,7 @@ void pd_resume_check_pr_swap_needed(int port)
 	 */
 	if (pe_is_explicit_contract(port) &&
 	    pd_get_power_role(port) == PD_ROLE_SINK &&
-	    !pd_can_source_from_device(port, pd_get_src_cap_cnt(port),
+	    !pd_can_charge_from_device(port, pd_get_src_cap_cnt(port),
 				       pd_get_src_caps(port)) &&
 	    (!IS_ENABLED(CONFIG_CHARGE_MANAGER) ||
 	     charge_manager_get_active_charge_port() != port))
@@ -1742,7 +1742,7 @@ static void pe_update_src_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
 		return;
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		if (pd_can_source_from_device(port, pdo_cnt, pdos)) {
+		if (pd_can_charge_from_device(port, pdo_cnt, pdos)) {
 			charge_manager_update_dualrole(port, CAP_DEDICATED);
 		} else {
 			charge_manager_update_dualrole(port, CAP_DUALROLE);
@@ -3073,7 +3073,7 @@ static void pe_snk_evaluate_capability_entry(int port)
 		 * If port policy preference is to be a power role source,
 		 * then request a power role swap.
 		 */
-		if (!pd_can_source_from_device(port, num, pdo))
+		if (!pd_can_charge_from_device(port, num, pdo))
 			pd_request_power_swap(port);
 
 	pe_update_src_pdo_flags(port, num, pdo);
@@ -6455,14 +6455,9 @@ static void pe_vcs_turn_off_vconn_swap_entry(int port)
 static void pe_vcs_turn_off_vconn_swap_run(int port)
 {
 	/* Wait for VCONN to turn off */
-	if (pd_timer_is_disabled(port, PE_TIMER_TIMEOUT) &&
-	    PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE)) {
+	if (PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE);
-		pd_timer_enable(port, PE_TIMER_TIMEOUT,
-				CONFIG_USBC_VCONN_SWAP_DELAY_US);
-	}
 
-	if (pd_timer_is_expired(port, PE_TIMER_TIMEOUT)) {
 		/*
 		 * A VCONN Swap Shall reset the DiscoverIdentityCounter
 		 * to zero
@@ -6470,16 +6465,9 @@ static void pe_vcs_turn_off_vconn_swap_run(int port)
 		pe[port].discover_identity_counter = 0;
 		pe[port].dr_swap_attempt_counter = 0;
 
-		if (pe[port].power_role == PD_ROLE_SOURCE)
-			set_state_pe(port, PE_SRC_READY);
-		else
-			set_state_pe(port, PE_SNK_READY);
+		pe_set_ready_state(port);
+		return;
 	}
-}
-
-static void pe_vcs_turn_off_vconn_swap_exit(int port)
-{
-	pd_timer_disable(port, PE_TIMER_TIMEOUT);
 }
 
 /*
@@ -6786,7 +6774,7 @@ static void pe_dr_src_get_source_cap_run(int port)
 				 * If we'd prefer to charge from this partner,
 				 * then propose a PR swap.
 				 */
-				if (pd_can_source_from_device(port, cnt,
+				if (pd_can_charge_from_device(port, cnt,
 							      payload))
 					pd_request_power_swap(port);
 
@@ -7167,7 +7155,6 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_VCS_TURN_OFF_VCONN_SWAP] = {
 		.entry = pe_vcs_turn_off_vconn_swap_entry,
 		.run   = pe_vcs_turn_off_vconn_swap_run,
-		.exit  = pe_vcs_turn_off_vconn_swap_exit,
 	},
 	[PE_VCS_SEND_PS_RDY_SWAP] = {
 		.entry = pe_vcs_send_ps_rdy_swap_entry,

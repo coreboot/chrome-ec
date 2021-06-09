@@ -25,6 +25,7 @@
 #include "driver/retimer/ps8818.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
+#include "driver/temp_sensor/tmp112.h"
 #include "driver/usb_mux/anx7451.h"
 #include "driver/usb_mux/amd_fp6.h"
 #include "fan.h"
@@ -190,6 +191,12 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /* Temp Sensors */
 static int board_get_memory_temp(int, int *);
 
+const struct tmp112_sensor_t tmp112_sensors[] = {
+	{ I2C_PORT_SENSOR, TMP112_I2C_ADDR_FLAGS0 },
+	{ I2C_PORT_SENSOR, TMP112_I2C_ADDR_FLAGS1 },
+};
+BUILD_ASSERT(ARRAY_SIZE(tmp112_sensors) == TMP112_COUNT);
+
 const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
@@ -214,6 +221,12 @@ const struct temp_sensor_t temp_sensors[] = {
 		.type = TEMP_SENSOR_TYPE_CPU,
 		.read = sb_tsi_get_val,
 		.idx = 0,
+	},
+	[TEMP_SENSOR_AMBIENT] = {
+		.name = "Ambient",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = tmp112_get_val,
+		.idx = TMP112_AMB,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
@@ -264,6 +277,10 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_fan_off = 0,
 		.temp_fan_max = 0,
 	},
+	/*
+	 * Note: Leave ambient entries at 0, both as it does not represent a
+	 * hotspot and as not all boards have this sensor
+	 */
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
