@@ -779,6 +779,11 @@ static __preserved int wipe_result;
  */
 static int wipe_requested __attribute__((section(".bss.Tpm2_common")));
 
+int tpm_reset_in_progress(void)
+{
+	return reset_in_progress;
+}
+
 int tpm_reset_request(int wait_until_done, int wipe_nvmem_first)
 {
 	uint32_t evt;
