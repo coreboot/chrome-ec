@@ -4,6 +4,7 @@
  *
  * AP state machine
  */
+#include "ap_ro_integrity_check.h"
 #include "ec_commands.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -110,6 +111,9 @@ void tpm_rst_asserted(enum gpio_signal unused)
 {
 	CPRINTS("%s", __func__);
 
+	/* Clear AP RO verification state since this is a new boot. */
+	if (!tpm_reset_in_progress())
+		ap_ro_device_reset();
 	/*
 	 * It's possible the signal is being pulsed. Wait 1 second to disable
 	 * functionality, so it's more likely the AP is fully off and not being

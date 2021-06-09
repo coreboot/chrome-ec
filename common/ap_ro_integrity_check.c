@@ -80,6 +80,19 @@ struct ap_ro_check {
 static const struct ap_ro_check *p_chk =
 	(const struct ap_ro_check *)AP_RO_DATA_SPACE_ADDR;
 
+/*
+ * Track if the AP RO hash was validated this boot. Must be cleared every AP
+ * reset.
+ */
+static uint8_t validated_ap_ro_boot;
+
+void ap_ro_device_reset(void)
+{
+	if (validated_ap_ro_boot)
+		CPRINTS("%s: clear validated state", __func__);
+	validated_ap_ro_boot = 0;
+}
+
 static int ap_ro_erase_hash(void)
 {
 	int rv;
@@ -289,6 +302,7 @@ int validate_ap_ro(void)
 	} else {
 		ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
 		rv = EC_SUCCESS;
+		validated_ap_ro_boot = 1;
 		CPRINTS("AP RO verification SUCCEEDED!");
 	}
 	disable_ap_spi_hash_shortcut();
@@ -356,6 +370,7 @@ static int ap_ro_info_cmd(int argc, char **argv)
 	if (rv)
 		return EC_SUCCESS;
 
+	ccprintf("boot validated: %s\n", validated_ap_ro_boot ? "yes" : "no");
 	ccprintf("sha256 hash %ph\n",
 		 HEX_BUF(p_chk->payload.digest, sizeof(p_chk->payload.digest)));
 	ccprintf("Covered ranges:\n");
@@ -375,3 +390,29 @@ DECLARE_SAFE_CONSOLE_COMMAND(ap_ro_info, ap_ro_info_cmd,
 			     "", "Display AP RO check space"
 #endif
 );
+
+static enum vendor_cmd_rc vc_get_ap_ro_status(enum vendor_cmd_cc code,
+					      void *buf, size_t input_size,
+					      size_t *response_size)
+{
+	uint8_t rv = AP_RO_NOT_RUN;
+	uint8_t *response = buf;
+
+	CPRINTS("Check AP RO status");
+
+	*response_size = 0;
+	if (input_size)
+		return VENDOR_RC_BOGUS_ARGS;
+
+	if (ap_ro_check_unsupported(false))
+		rv = AP_RO_UNSUPPORTED;
+	else if (ec_rst_override())
+		rv = AP_RO_FAIL;
+	else if (validated_ap_ro_boot)
+		rv = AP_RO_PASS;
+
+	*response_size = 1;
+	response[0] = rv;
+	return VENDOR_RC_SUCCESS;
+}
+DECLARE_VENDOR_COMMAND(VENDOR_CC_GET_AP_RO_STATUS, vc_get_ap_ro_status);

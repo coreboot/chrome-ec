@@ -36,6 +36,7 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 		case EXTENSION_POST_RESET: /* Always need to reset. */
 		case VENDOR_CC_CCD:
 		case VENDOR_CC_GET_AP_RO_HASH:
+		case VENDOR_CC_GET_AP_RO_STATUS:
 		case VENDOR_CC_GET_BOARD_ID:
 		case VENDOR_CC_GET_BOOT_MODE:
 		case VENDOR_CC_RMA_CHALLENGE_RESPONSE:
