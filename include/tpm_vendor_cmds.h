@@ -152,6 +152,8 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_GET_AP_RO_HASH = 56,
 
+	VENDOR_CC_GET_AP_RO_STATUS = 57,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
