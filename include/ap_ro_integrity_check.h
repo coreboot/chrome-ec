@@ -27,4 +27,10 @@ int validate_ap_ro(void);
  */
 void ap_ro_add_flash_event(enum ap_ro_verification_ev event);
 
+/*
+ * ap_ro_board_id_blocked: Returns True if AP RO verification is disabled for
+ *       the board's RLZ.
+ */
+int ap_ro_board_id_blocked(void);
+
 #endif /* ! __CR50_INCLUDE_AP_RO_INTEGRITY_CHECK_H */

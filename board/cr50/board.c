@@ -755,6 +755,75 @@ static void  check_board_id_mismatch(void)
 	system_reset(0);
 }
 
+/*****************************************************************************/
+/*
+ * Certain boards need to skip AP RO verification even when the hash is saved.
+ * Block AP RO verification based on the board id type.
+ */
+#define BLOCKED_BID_COUNT 7
+/*
+ * This contains the ap ro verification board id blocklist. Skip AP RO
+ * verification if the board id is found in the blocklist.
+ */
+const uint32_t ap_ro_board_id_blocklist[] = {
+	/* b/185783841 block verification on unsupported devices. */
+	0x54514155, /* TQAU */
+	0x524c4745, /* RLGE */
+	0x56595243, /* VYRC */
+	0x44554b49, /* DUKI */
+	0x4346554c, /* CFUL */
+	0x5248444e, /* RHDN */
+	0x454b574c  /* EKWL */
+};
+BUILD_ASSERT(ARRAY_SIZE(ap_ro_board_id_blocklist) == BLOCKED_BID_COUNT);
+
+
+#define AP_RO_ALLOW_BID 1
+#define AP_RO_BLOCK_BID 2
+
+int ap_ro_board_id_blocked(void)
+{
+	static int checked_ap_ro_bid;
+	struct board_id id;
+	int i;
+
+	/*
+	 * Don't allow ap ro verification if the image board id is mismatched.
+	 * This ensures the device can boot to get an update.
+	 */
+	if (board_id_is_mismatched())
+		return 1;
+
+	if (checked_ap_ro_bid)
+		return checked_ap_ro_bid == AP_RO_BLOCK_BID;
+
+	/*
+	 * If cr50 can't read the board id for some reason, return 1 just to
+	 * be safe.
+	 */
+	if (read_board_id(&id) != EC_SUCCESS) {
+		CPRINTS("%s: BID read error", __func__);
+		return 1;
+	}
+
+	if (board_id_is_blank(&id))
+		return 0;
+
+	/*
+	 * Cache the board id block state, so cr50 doesn't need to keep reading
+	 * and checking the RLZ. The board id can't change if it's already set.
+	 */
+	checked_ap_ro_bid = AP_RO_ALLOW_BID;
+	for (i = 0; i < ARRAY_SIZE(ap_ro_board_id_blocklist); i++) {
+		if (id.type == ap_ro_board_id_blocklist[i]) {
+			checked_ap_ro_bid = AP_RO_BLOCK_BID;
+			break;
+		}
+	}
+	return checked_ap_ro_bid == AP_RO_BLOCK_BID;
+}
+/*****************************************************************************/
+
 /*
  * Check if ITE SYNC sequence generation was requested before the reset, if so
  * - clear the request and call the function to generate the sequence.
