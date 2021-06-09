@@ -63,7 +63,7 @@ GPIO(QSIP_ON,               PIN(5, 0), GPIO_OUT_LOW)   /* Not used, for non-swit
 GPIO(PMIC_FAULT_L,          PIN(A, 3), GPIO_INPUT)     /* Any PMIC fault? Deprecated since rev-1 */
 
 /* Power enables */
-GPIO(HIBERNATE_L,           PIN(5, 2), GPIO_OUT_HIGH)  /* EC hibernate */
+GPIO(HIBERNATE_L,           PIN(5, 2), GPIO_ODR_HIGH)  /* EC hibernate */
 GPIO(SWITCHCAP_ON,          PIN(D, 5), GPIO_OUT_LOW)   /* Enable switch cap */
 /* TODO(waihong): Remove it. The VBOB switch is for backup. */
 GPIO(VBOB_EN,               PIN(D, 3), GPIO_OUT_LOW)   /* Enable VBOB */
