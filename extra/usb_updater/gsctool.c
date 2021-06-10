@@ -269,8 +269,11 @@ static const struct option_container cmd_line_options[] = {
 	 "RW and RO headers, do not update"},
 	{{"corrupt", no_argument, NULL, 'c'},
 	 "Corrupt the inactive rw"},
+	{{"dauntless", no_argument, NULL, 'D'},
+	 "Communicate with Dauntless chip. This may be implied or overridden by"
+	 " --image flag values"},
 	{{"device", required_argument, NULL, 'd'},
-	 " VID:PID%USB device (default 18d1:5014 or 18d1:504a based on image)"},
+	 "VID:PID%USB device (default 18d1:5014 or 18d1:504a based on image)"},
 	{{"endorsement_seed", optional_argument, NULL, 'e'},
 	 "[state]%get/set the endorsement key seed"},
 	{{"fwver", no_argument, NULL, 'f'},
@@ -2993,6 +2996,7 @@ int main(int argc, char *argv[])
 	int sn_inc_rma = 0;
 	uint8_t sn_inc_rma_arg;
 	int erase_ap_ro_hash = 0;
+	int is_dauntless = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -3001,6 +3005,7 @@ int main(int argc, char *argv[])
 	const struct options_map omap[] = {
 		{ 'b', &binary_vers },
 		{ 'c', &corrupt_inactive_rw },
+		{ 'D', &is_dauntless },
 		{ 'f', &show_fw_ver },
 		{ 'g', &get_boot_mode},
 		{ 'H', &erase_ap_ro_hash},
@@ -3186,6 +3191,13 @@ int main(int argc, char *argv[])
 
 	if (errorcnt)
 		usage(errorcnt);
+
+	/*
+	 * If dauntless was explicitly asked for, then use it; otherwise default
+	 * to haven. Note this may get overridden if the --image flag specifies
+	 * a dauntless or haven image.
+	 */
+	image_magic = is_dauntless ? MAGIC_DAUNTLESS : MAGIC_HAVEN;
 
 	if ((bid_action == bid_none) &&
 	    !ccd_info &&
