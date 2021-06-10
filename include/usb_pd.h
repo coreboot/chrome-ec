@@ -3045,6 +3045,15 @@ __override_proto uint8_t get_dp_pin_mode(int port);
  */
 __override_proto uint8_t board_get_usb_pd_port_count(void);
 
+/**
+ * Return true if specified PD port is DTS (Debug and Test System
+ * capable).
+ *
+ * @param port USB-C port number
+ *
+ * @return true if port is DTS capable.
+ */
+__override_proto bool board_is_dts_port(int port);
 
 /**
  * Resets external PD chips including TCPCs and MCUs.

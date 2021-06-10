@@ -348,6 +348,11 @@ __overridable uint8_t board_get_usb_pd_port_count(void)
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }
 
+__overridable bool board_is_dts_port(int port)
+{
+	return true;
+}
+
 int pd_get_retry_count(int port, enum tcpm_transmit_type type)
 {
 	/* PD 3.0 6.7.7: nRetryCount = 2; PD 2.0 6.6.9: nRetryCount = 3 */
