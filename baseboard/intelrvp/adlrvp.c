@@ -198,7 +198,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 		pca9675_update_pins(ioex, 0, TCPC_AIC_IOE_OC);
 }
 
-__override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
+__override int bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 {
 	/* Handle retimer's power domain.*/
 	if (on_off) {
@@ -227,6 +227,7 @@ __override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 		pca9675_update_pins(me->usb_port,
 				0, TCPC_AIC_IOE_BB_RETIMER_LS_EN);
 	}
+	return EC_SUCCESS;
 }
 
 static void board_connect_c0_sbu_deferred(void)
