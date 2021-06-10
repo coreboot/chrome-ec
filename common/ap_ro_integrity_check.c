@@ -330,8 +330,6 @@ static enum vendor_cmd_rc vc_get_ap_ro_hash(enum vendor_cmd_cc code,
 		return VENDOR_RC_BOGUS_ARGS;
 
 	rv = ap_ro_check_unsupported(false);
-	if (rv == ARCVE_FLASH_READ_FAILED)
-		return VENDOR_RC_READ_FLASH_FAIL;
 	if (rv) {
 		*response_size = 1;
 		*response = rv;
