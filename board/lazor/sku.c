@@ -10,10 +10,12 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "system.h"
+#include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
+static int brd_id = -1;
 static uint8_t sku_id;
 
 enum board_model {
@@ -27,6 +29,19 @@ static const char *const model_name[] = {
 	"LIMOZEEN",
 	"UNKNOWN",
 };
+
+int board_get_version(void)
+{
+	if (brd_id == -1) {
+		int bits[3];
+
+		bits[0] = gpio_get_ternary(GPIO_BOARD_VERSION1);
+		bits[1] = gpio_get_ternary(GPIO_BOARD_VERSION2);
+		bits[2] = gpio_get_ternary(GPIO_BOARD_VERSION3);
+		brd_id = binary_first_base3_from_bits(bits, ARRAY_SIZE(bits));
+	}
+	return brd_id;
+}
 
 static enum board_model get_model(void)
 {
