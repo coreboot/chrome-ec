@@ -187,7 +187,7 @@ void config_usb_db_type(void)
 	CPRINTS("Configured USB DB type number is %d", db_type);
 }
 
-__override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
+__override int bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 {
 	enum ioex_signal rst_signal;
 
@@ -199,7 +199,7 @@ __override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 	} else if (me->usb_port == USBC_PORT_C2) {
 		rst_signal = IOEX_USB_C2_RT_RST_ODL;
 	} else {
-		return;
+		return EC_ERROR_INVAL;
 	}
 
 	/*
@@ -220,10 +220,25 @@ __override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 		 * which powers I2C controller within retimer
 		 */
 		msleep(1);
+		if (get_board_id() == 1) {
+			int val;
+
+			/*
+			 * Check if we were able to deassert
+			 * reset. Board ID 1 uses a GPIO that is
+			 * uncontrollable when a debug accessory is
+			 * connected.
+			 */
+			if (ioex_get_level(rst_signal, &val) != EC_SUCCESS)
+				return EC_ERROR_UNKNOWN;
+			if (val != 1)
+				return EC_ERROR_NOT_POWERED;
+		}
 	} else {
 		ioex_set_level(rst_signal, 0);
 		msleep(1);
 	}
+	return EC_SUCCESS;
 }
 
 void board_reset_pd_mcu(void)
@@ -385,4 +400,9 @@ void retimer_interrupt(enum gpio_signal signal)
 	/*
 	 * TODO(b/179513527): add USB-C support
 	 */
+}
+
+__override bool board_is_dts_port(int port)
+{
+	return port == USBC_PORT_C0;
 }

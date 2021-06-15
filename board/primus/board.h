@@ -3,13 +3,13 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Primus board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
 /*
- * Early brya boards are not set up for vivaldi
+ * Early primus boards are not set up for vivaldi
  */
 #undef CONFIG_KEYBOARD_VIVALDI
 
@@ -37,42 +37,9 @@
 #define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
 
 /* Sensors */
-#define CONFIG_ACCELGYRO_LSM6DSO	/* Base accel */
-#define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT 1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
-
-/* Enable sensor fifo, must also define the _SIZE and _THRES */
-#define CONFIG_ACCEL_FIFO
-/* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO_SIZE 256
-/* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
-
-/* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
-
-/* Lid accel */
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
-#define CONFIG_ACCEL_LIS2DWL
-#define CONFIG_ACCEL_LIS2DW_AS_BASE
-#define CONFIG_ACCEL_LIS2DW12_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
-
-#define CONFIG_ACCEL_INTERRUPTS
-
-/* Sensor console commands */
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
+#undef CONFIG_TABLET_MODE
+#undef CONFIG_TABLET_MODE_SWITCH
+#undef CONFIG_GMR_TABLET_MODE
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -90,7 +57,6 @@
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USBC_PPC_NX20P3483
 
-/* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 #define PD_VCONN_SWAP_DELAY		5000 /* us */
@@ -121,7 +87,6 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -144,8 +109,6 @@
 #define CONFIG_PWM_KBLIGHT
 
 /* I2C Bus Configuration */
-
-#define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 
 #define I2C_PORT_USB_C0_C2_TCPC	NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1_TCPC	NPCX_I2C_PORT4_1
@@ -190,7 +153,7 @@
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
 /*
- * TODO(b/181271666): no fan control loop until sensors are tuned
+ * TODO: no fan control loop until sensors are tuned
  */
 /* #define CONFIG_FANS			FAN_CH_COUNT */
 
@@ -209,13 +172,19 @@
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
-	ADC_TEMP_SENSOR_2_CHARGER,
+	ADC_TEMP_SENSOR_2_SSD,
+	ADC_TEMP_SENSOR_3_CHARGER,
+	ADC_TEMP_SENSOR_4_MEMORY,
+	ADC_TEMP_SENSOR_5_USBC,
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
-	TEMP_SENSOR_2_CHARGER,
+	TEMP_SENSOR_2_SSD,
+	TEMP_SENSOR_3_CHARGER,
+	TEMP_SENSOR_4_MEMORY,
+	TEMP_SENSOR_5_USBC,
 	TEMP_SENSOR_COUNT
 };
 
@@ -242,11 +211,11 @@ enum battery_type {
 
 enum pwm_channel {
 	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
-	PWM_CH_LED3,			/* PWM1 (orange on DB) */
+	PWM_CH_TKP_A_LED_N,		/* PWM1 (LOGO led on A cover) */
 	PWM_CH_LED1,			/* PWM2 (orange charger) */
 	PWM_CH_KBLIGHT,			/* PWM3 */
 	PWM_CH_FAN,			/* PWM5 */
-	PWM_CH_LED4,			/* PWM7 (white on DB) */
+	PWM_CH_LED4,			/* PWM7 (power) */
 	PWM_CH_COUNT
 };
 

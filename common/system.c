@@ -313,9 +313,17 @@ struct jump_data *get_jump_data(void)
 	 * Put the jump data before the panic data, or at the end of RAM if
 	 * panic data is not present.
 	 */
-	addr = get_panic_data_start();
-	if (!addr)
+	if (IS_ENABLED(CONFIG_ZEPHYR)) {
+		/*
+		 * For Zephyr, the panic data is not at the end of RAM so
+		 * the jump data is always at the end of RAM.
+		 */
 		addr = CONFIG_RAM_BASE + CONFIG_RAM_SIZE;
+	} else {
+		addr = get_panic_data_start();
+		if (!addr)
+			addr = CONFIG_RAM_BASE + CONFIG_RAM_SIZE;
+	}
 
 	return (struct jump_data *)(addr - sizeof(struct jump_data));
 }
@@ -388,6 +396,7 @@ void system_disable_jump(void)
 
 #ifdef CONFIG_MPU
 	if (system_is_locked()) {
+#ifndef CONFIG_ZEPHYR
 		int ret;
 		enum ec_image __attribute__((unused)) copy;
 
@@ -443,6 +452,7 @@ void system_disable_jump(void)
 			return;
 		}
 #endif /* !CONFIG_EXTERNAL_STORAGE */
+#endif /* !CONFIG_ZEPHYR */
 
 		/* All regions were configured successfully, enable MPU */
 		mpu_enable();

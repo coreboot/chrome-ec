@@ -50,6 +50,7 @@ static void ks_interrupt(enum gpio_signal s);
 
 #include "gpio_list.h"
 
+#ifdef SECTION_IS_RW
 extern struct pchg_drv ctn730_drv;
 
 struct pchg pchgs[] = {
@@ -65,6 +66,7 @@ struct pchg pchgs[] = {
 	},
 };
 const int pchg_count = ARRAY_SIZE(pchgs);
+#endif
 
 /* GPIO Interrupt Handlers */
 static void tcpc_alert_event(enum gpio_signal signal)
@@ -375,6 +377,15 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 /* Initialize board. */
 static void board_init(void)
 {
+	/*
+	 * The rev-1 hardware doesn't have the external pull-up fix for the bug
+	 * b/177611071. It requires rework to stuff the resistor. For people who
+	 * has difficulty to do the rework, this is a workaround, which makes
+	 * the GPIO push-pull, instead of open-drain.
+	 */
+	if (system_get_board_version() == 1)
+		gpio_set_flags(GPIO_HIBERNATE_L, GPIO_OUTPUT);
+
 	/* Enable BC1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);

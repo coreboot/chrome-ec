@@ -10,16 +10,13 @@
 #include "charge_ramp.h"
 #include "charger.h"
 #include "console.h"
-#include "driver/accel_lis2dw12.h"
-#include "driver/accelgyro_lsm6dso.h"
-#include "driver/als_tcs3400.h"
 #include "fw_config.h"
 #include "hooks.h"
 #include "lid_switch.h"
 #include "power_button.h"
 #include "power.h"
+#include "pwm.h"
 #include "switch.h"
-#include "tablet_mode.h"
 #include "throttle_ap.h"
 
 #include "gpio_list.h" /* Must come after other header files. */
@@ -27,6 +24,9 @@
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+
+#define KBLIGHT_LED_ON_LVL 100
+#define KBLIGHT_LED_OFF_LVL 0
 
 /******************************************************************************/
 /* USB-A charging control */
@@ -47,11 +47,7 @@ __override void board_cbi_init(void)
 static void board_chipset_resume(void)
 {
 	/* Allow keyboard backlight to be enabled */
-
-	if (get_board_id() == 1)
-		gpio_set_level(GPIO_ID_1_EC_KB_BL_EN, 1);
-	else
-		gpio_set_level(GPIO_EC_KB_BL_EN_L, 0);
+	pwm_set_duty(PWM_CH_KBLIGHT, KBLIGHT_LED_ON_LVL);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
@@ -59,11 +55,7 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 static void board_chipset_suspend(void)
 {
 	/* Turn off the keyboard backlight if it's on. */
-
-	if (get_board_id() == 1)
-		gpio_set_level(GPIO_ID_1_EC_KB_BL_EN, 0);
-	else
-		gpio_set_level(GPIO_EC_KB_BL_EN_L, 1);
+	pwm_set_duty(PWM_CH_KBLIGHT, KBLIGHT_LED_OFF_LVL);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 

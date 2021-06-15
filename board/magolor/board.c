@@ -111,6 +111,25 @@ static const struct ec_response_keybd_config magolor_keybd = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
+static const struct ec_response_keybd_config magister_keybd = {
+	/* Default Chromeos keyboard config */
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	/* No function keys, no numeric keypad, has screenlock key */
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
 static const struct ec_response_keybd_config magpie_keybd = {
 	.num_top_row_keys = 10,
 	.action_keys = {
@@ -128,13 +147,26 @@ static const struct ec_response_keybd_config magpie_keybd = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY | KEYBD_CAP_NUMERIC_KEYPAD,
 };
 
+__override
+uint8_t board_keyboard_row_refresh(void)
+{
+	if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+		return 3;
+	else
+		return 2;
+}
+
 __override const struct ec_response_keybd_config
 *board_vivaldi_keybd_config(void)
 {
 	if (get_cbi_fw_config_numeric_pad())
 		return &magpie_keybd;
-	else
-		return &magolor_keybd;
+	else {
+		if (system_get_board_version() >= 5)
+			return &magister_keybd;
+		else
+			return &magolor_keybd;
+	}
 }
 #endif
 
@@ -978,16 +1010,16 @@ static void adc_vol_key_press_check(void)
 	static uint8_t old_adc_key_state;
 	uint8_t adc_key_state_change;
 
-	if (volt > 2400 && volt < 2490) {
+	if (volt > 2400 && volt < 2540) {
 		/* volume-up is pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK;
-	} else if (volt > 2600 && volt < 2690) {
+	} else if (volt > 2600 && volt < 2740) {
 		/* volume-down is pressed */
 		new_adc_key_state = ADC_VOL_DOWN_MASK;
-	} else if (volt < 2290) {
+	} else if (volt < 2300) {
 		/* both volumn-up and volume-down are pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK | ADC_VOL_DOWN_MASK;
-	} else if (volt > 2700) {
+	} else if (volt > 2780) {
 		/* both volumn-up and volume-down are released */
 		new_adc_key_state = 0;
 	}

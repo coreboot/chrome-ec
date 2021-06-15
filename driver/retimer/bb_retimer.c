@@ -62,7 +62,7 @@ static int bb_retimer_read(const struct usb_mux *me,
 		rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags,
 		      &offset, 1, buf, BB_RETIMER_READ_SIZE);
 
-		if (!rv)
+		if (rv == EC_SUCCESS)
 			break;
 
 		if (++retry >= BB_RETIMER_I2C_RETRY) {
@@ -70,7 +70,7 @@ static int bb_retimer_read(const struct usb_mux *me,
 				me->usb_port, rv);
 			return rv;
 		}
-		msleep(20);
+		msleep(10);
 	}
 
 	if (buf[0] != BB_RETIMER_REG_SIZE)
@@ -110,7 +110,7 @@ static int bb_retimer_write(const struct usb_mux *me,
 		rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags, buf,
 			     BB_RETIMER_WRITE_SIZE, NULL, 0);
 
-		if (!rv)
+		if (rv == EC_SUCCESS)
 			break;
 
 		if (++retry >= BB_RETIMER_I2C_RETRY) {
@@ -118,12 +118,12 @@ static int bb_retimer_write(const struct usb_mux *me,
 				me->usb_port, rv);
 			break;
 		}
-		msleep(20);
+		msleep(10);
 	}
 	return rv;
 }
 
-__overridable void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
+__overridable int bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 {
 	const struct bb_usb_control *control = &bb_controls[me->usb_port];
 
@@ -149,6 +149,7 @@ __overridable void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 		msleep(1);
 		gpio_set_level(control->usb_ls_en_gpio, 0);
 	}
+	return EC_SUCCESS;
 }
 
 static void retimer_set_state_dfp(int port, mux_state_t mux_state,
@@ -490,17 +491,19 @@ static int retimer_init(const struct usb_mux *me)
 		return EC_ERROR_NOT_POWERED;
 	}
 
-	bb_retimer_power_handle(me, 1);
+	rv = bb_retimer_power_handle(me, 1);
+	if (rv != EC_SUCCESS)
+		return rv;
 
 	rv = bb_retimer_read(me, BB_RETIMER_REG_VENDOR_ID, &data);
-	if (rv)
+	if (rv != EC_SUCCESS)
 		return rv;
 	if ((data != BB_RETIMER_VENDOR_ID_1) &&
 			data != BB_RETIMER_VENDOR_ID_2)
 		return EC_ERROR_INVAL;
 
 	rv = bb_retimer_read(me, BB_RETIMER_REG_DEVICE_ID, &data);
-	if (rv)
+	if (rv != EC_SUCCESS)
 		return rv;
 	if (data != BB_RETIMER_DEVICE_ID)
 		return EC_ERROR_INVAL;

@@ -274,8 +274,12 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
+		/*
+		 * CPU temp sensor fan thresholds are high because they are a
+		 * backup for the SOC temp sensor fan thresholds.
+		 */
+		.temp_fan_off = C_TO_K(60),
+		.temp_fan_max = C_TO_K(90),
 	},
 	/*
 	 * Note: Leave ambient entries at 0, both as it does not represent a
@@ -849,12 +853,13 @@ void board_hibernate(void)
 	}
 }
 
-__overridable void board_a1_ps8811_retimer_setup(void)
+__overridable enum ec_error_list
+board_a1_ps8811_retimer_init(const struct usb_mux *me)
 {
-	CPRINTSUSB("A1: PS8811 retimer using default tuning");
+	return EC_SUCCESS;
 }
 
-static void baseboard_a1_ps8811_retimer_setup(void)
+static int baseboard_a1_ps8811_retimer_init(const struct usb_mux *me)
 {
 	int rv;
 	int tries = 2;
@@ -862,25 +867,36 @@ static void baseboard_a1_ps8811_retimer_setup(void)
 	do {
 		int val;
 
-		rv = i2c_read8(I2C_PORT_TCPC1,
-				PS8811_I2C_ADDR_FLAGS3 + PS8811_REG_PAGE1,
-				PS8811_REG1_USB_BEQ_LEVEL, &val);
+		rv = ps8811_i2c_read(me, PS8811_REG_PAGE1,
+				     PS8811_REG1_USB_BEQ_LEVEL, &val);
 	} while (rv && --tries);
 
 	if (rv) {
 		CPRINTSUSB("A1: PS8811 retimer not detected!");
-		return;
+		return rv;
 	}
 	CPRINTSUSB("A1: PS8811 retimer detected");
-	board_a1_ps8811_retimer_setup();
+	rv = board_a1_ps8811_retimer_init(me);
+	if (rv)
+		CPRINTSUSB("A1: Error during PS8811 setup rv:%d", rv);
+	return rv;
 }
 
-__overridable void board_a1_anx7491_retimer_setup(void)
+/* PS8811 is just a type-A USB retimer, reusing mux structure for convience. */
+const struct usb_mux usba1_ps8811 = {
+	.usb_port = USBA_PORT_A1,
+	.i2c_port = I2C_PORT_TCPC1,
+	.i2c_addr_flags = PS8811_I2C_ADDR_FLAGS3,
+	.board_init = &baseboard_a1_ps8811_retimer_init,
+};
+
+__overridable enum ec_error_list
+board_a1_anx7491_retimer_init(const struct usb_mux *me)
 {
-	CPRINTSUSB("A1: ANX7491 retimer using default tuning");
+	return EC_SUCCESS;
 }
 
-static void baseboard_a1_anx7491_retimer_setup(void)
+static int baseboard_a1_anx7491_retimer_init(const struct usb_mux *me)
 {
 	int rv;
 	int tries = 2;
@@ -888,29 +904,42 @@ static void baseboard_a1_anx7491_retimer_setup(void)
 	do {
 		int val;
 
-		rv = i2c_read8(I2C_PORT_TCPC1, ANX7491_I2C_ADDR0_FLAGS, 0,
-			       &val);
+		rv = i2c_read8(me->i2c_port, me->i2c_addr_flags, 0, &val);
 	} while (rv && --tries);
 	if (rv) {
 		CPRINTSUSB("A1: ANX7491 retimer not detected!");
-		return;
+		return rv;
 	}
 	CPRINTSUSB("A1: ANX7491 retimer detected");
-	board_a1_anx7491_retimer_setup();
+	rv = board_a1_anx7491_retimer_init(me);
+	if (rv)
+		CPRINTSUSB("A1: Error during ANX7491 setup rv:%d", rv);
+	return rv;
 }
+
+/* ANX7491 is just a type-A USB retimer, reusing mux structure for convience. */
+const struct usb_mux usba1_anx7491 = {
+	.usb_port = USBA_PORT_A1,
+	.i2c_port = I2C_PORT_TCPC1,
+	.i2c_addr_flags = ANX7491_I2C_ADDR0_FLAGS,
+	.board_init = &baseboard_a1_anx7491_retimer_init,
+};
 
 void baseboard_a1_retimer_setup(void)
 {
+	struct usb_mux a1_retimer;
 	switch (board_get_usb_a1_retimer()) {
 	case USB_A1_RETIMER_ANX7491:
-		baseboard_a1_anx7491_retimer_setup();
+		a1_retimer = usba1_anx7491;
 		break;
 	case USB_A1_RETIMER_PS8811:
-		baseboard_a1_ps8811_retimer_setup();
+		a1_retimer = usba1_ps8811;
 		break;
 	default:
 		CPRINTSUSB("A1: Unknown retimer!");
+		return;
 	}
+	a1_retimer.board_init(&a1_retimer);
 }
 DECLARE_DEFERRED(baseboard_a1_retimer_setup);
 

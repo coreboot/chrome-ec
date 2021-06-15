@@ -25,11 +25,10 @@ config PLATFORM_EC_USB_PORT_POWER_DUMB
 
 config PLATFORM_EC_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 	bool "Simple control of power to USB-A ports"
-  depends on PLATFORM_EC_USB_PORT_POWER_DUMB
-	default n
+	depends on PLATFORM_EC_USB_PORT_POWER_DUMB
 	help
-    Enable this if your board does not want to use the default S3 hooks
-    from USB_PORT_POWER_DUMB.
+	  Enable this if your board does not want to use the default S3 hooks
+	  from USB_PORT_POWER_DUMB.
 
 menuconfig PLATFORM_EC_USBC
 	bool "USB Type-C"
@@ -472,6 +471,26 @@ config PLATFORM_EC_USB_PD_USB32_DRD
 	  other end so that it can potentially take advantage of the additional
 	  features available.
 
+config PLATFORM_EC_USB_PD_DP_HPD_GPIO
+	bool "Hotplug Detect (HPD) is controlled by an EC GPIO"
+	help
+	  Enable this if the EC must send the Hotplug Detect (HPD) signal to
+	  the DisplayPort Graphics Processing Unit (GPU) via a GPIO. Otherwise
+	  this is sent by the display device.
+
+config PLATFORM_EC_USB_PD_DP_HPD_GPIO_CUSTOM
+	bool "Custom handling of HPD GPIO"
+	depends on PLATFORM_EC_USB_PD_DP_HPD_GPIO
+	help
+	  Enable this if the Hotplug Detect (HPD) GPIO level has to be handled
+	  by custom functions. In this case your board must implement a
+	  function to enable the feature for a port and another function to
+	  check the current state:
+
+	    void svdm_set_hpd_gpio(int port, int enable);
+
+	    int svdm_get_hpd_gpio(int port);
+
 choice "VBUS detection method"
 	prompt "Select the method to detect VBUS"
 
@@ -734,6 +753,14 @@ config PLATFORM_EC_USBC_PPC_SYV682X
 	  features. It provides protection against overcurrent, overvoltage,
 	  thermal shutdown, and undervoltage conditions.
 
+config PLATFORM_EC_USBC_PPC_SYV682C
+	bool "SYV682C Power Mux for USB PD (subset of SYV682X)"
+	depends on PLATFORM_EC_USBC_PPC_SYV682X
+	help
+	  The C version of this chip won't block I2C accessing to the CONTROL4
+	  rer (to on/off Vconn) when smart discahrge is enabled. This allows us
+	  to re-enable the smart discharge on boards using SYV682C.
+
 config PLATFORM_EC_USBC_PPC_SYV682X_NO_CC
 	bool "SYV682X does not pass through CC"
 	help
@@ -796,11 +823,6 @@ config PLATFORM_EC_USB_PD_TCPM_TCPCI
 
 	  Note: most of the TCPC will depend on PLATFORM_EC_USB_PD_TCPM_TCPCI.
 
-config PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
-	bool "Use on-chip ITE"
-	help
-	  Use ITE series TCPM driver on the board
-
 # TODO: Add other choices:
 #  CONFIG_USB_PD_TCPM_STUB
 #  CONFIG_USB_PD_TCPM_FUSB302
@@ -823,6 +845,25 @@ menuconfig PLATFORM_EC_USB_MUX
 	default y
 	help
 	  Enables support for USB muxes. These allow multiplexing
+
+if PLATFORM_EC_USB_MUX
+
+config PLATFORM_EC_USB_MUX_IT5205
+	bool "ITE IT5205 USB Type-C 3:2 Alternative mode passive mux"
+	help
+	  This is a USB Type-C 3:2 Alternative mode mux, supporting USB 3.1
+	  Gen 2 10Gbps as well as DisplayPort (DP1.4) at 8Gbps. It provides a
+	  cross-point mux for low-speed Side-Band-Use (SBU) pins. The mux can
+	  be controlled via I2C.
+
+config PLATFORM_EC_USB_MUX_PS8743
+	bool "Parade PS8743 USB-C Host Switch with redriver"
+	help
+	  This is a Parade USB 3.1 Gen 1 / DisplayPort (DP) Alt Mode
+	  High-Bit-Rate 2 (HBR2) redriver. It provides control of switching
+	  modes through either GPIO or I2C.
+
+endif
 
 config PLATFORM_EC_USBC_SS_MUX
 	bool "SuperSpeed mux"
@@ -892,6 +933,23 @@ config PLATFORM_EC_CONSOLE_CMD_PPC_DUMP
 	  what is going on.
 
 if PLATFORM_EC_USB_PD_TCPM_TCPCI
+
+config PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
+	bool "Use on-chip ITE"
+	help
+	  Use the ITE-series TCPM driver built into the EC chip.
+
+	  This is selected by the ITE USB Type-C drivers. It cannot be set
+	  otherwise, even in prj.conf
+
+config PLATFORM_EC_USB_PD_ITE_ACTIVE_PORT_COUNT
+	int "Number of ITE USB PD active ports"
+	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
+	default 1
+	help
+	  This sets the number of active USB Power Delivery (USB PD) ports
+	  in use on the ITE microcontroller. The active port usage should
+	  follow the order of ITE TCPC port index.
 
 config PLATFORM_EC_USB_PD_PPC
 	bool "Enable Power Path Control from PD"
@@ -1009,18 +1067,23 @@ endif  # PLATFORM_EC_USB_PD_TCPM_TCPCI
 config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT83XX
 	bool "Enable IT83XX driver"
 	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
-	default n
+	help
+	  Enable a driver for the ITE IT83XX on-chip UBB Type-C Port Manager.
+	  This supports up to two USB Type-C ports with Dual Role function
+	  (provider and consumer) and Fast Role Swap detection.
 
 config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
 	bool "Enable IT8XXX2 driver"
 	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
-	default n
+	help
+	  Enable a driver for the ITE IT8XXX2 on-chip UBB Type-C Port Manager.
+	  This supports up to two USB Type-C ports with Dual Role function
+	  (provider and consumer) and Fast Role Swap detection.
 
 endif  # PLATFORM_EC_USBC_PPC
 
 config PLATFORM_EC_USB_PD_ONLY_FIXED_PDOS
 	bool "Only support FIXED type PDOs"
-	default n
 	help
 	  Ignore all non-fixed PDOs received from a src_caps message. Enable
 	  this for boards (like servo_v4) which only support FIXED PDO types.
@@ -1046,6 +1109,38 @@ config PLATFORM_EC_BC12_DETECT_PI3USB9201
 	  (SDP/CDP/DCP) advertisement when in host mode. In client mode it
 	  starts BC1.2 detection to detect the attached host type. It provides
 	  an I2C interface to report detection results.
+
+config PLATFORM_EC_BC12_DETECT_MT6360
+	bool "MediaTek MT6360P PMIC"
+	help
+	  This PMIC includes a battery charger with an On-The-Go (OTG) output
+	  range of 4.85 to 5.825V. It provides integrated ADCs for system
+	  monitoring. The MT6360 also supports USB Power Delivery 3.0 with
+	  Dual-Role, with host or client mode. It supports alternate mode as
+	  well as VCONN with programmable over-current protection (OCP).
+
+config PLATFORM_EC_MT6360_BC12_GPIO
+	bool "USB-PHY connection is controlled by a GPIO"
+	depends on PLATFORM_EC_BC12_DETECT_MT6360
+	help
+	  If enabled, the MT6360 USB-PHY connection is controlled by
+	  a GPIO: GPIO_BC12_DET_EN. Assert GPIO_BC12_DET_EN to detect a BC1.2
+	  device, and deassert GPIO_BC12_DET_EN to mux the USB-PHY back.
+
+config PLATFORM_EC_BC12_SINGLE_DRIVER
+	bool "Only support a single BC12 driver"
+	default y
+	help
+	  Enable this if the board only needs one BC12 driver. This includes
+	  the case that has multiple chips that use the same driver.
+
+	  If undefined, the board should define a bc12_ports[] array which
+	  associates each port to its bc12 driver:
+
+	     struct bc12_config bc12_ports[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	        { .drv = &xxx_drv },
+	        { .drv = &yyy_drv },
+	     };
 
 endif  # PLATFORM_EC_USB_CHARGER
 
