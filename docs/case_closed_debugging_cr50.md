@@ -63,7 +63,7 @@ Capability        | Default    | Function
 `OpenNoTPMWipe`   | `IfOpened` | Allow opening Cr50 without wiping the TPM
 `OpenNoLongPP`    | `IfOpened` | Allow opening Cr50 without physical presence
 `BatteryBypassPP` | `Always`   | Allow opening Cr50 without physical presence and developer mode if the battery is removed
-`UpdateNoTPMWipe` | `Always`   | Allow updating Cr50 without wiping the TPM
+`Unused`          | `Always`   | Doesn't do anything
 `I2C`             | `IfOpened` | Allow access to the I2C controller (used for measuring power)
 `FlashRead`       | `Always`   | Allow dumping a hash of the AP or EC flash
 `OpenNoDevMode`   | `IfOpened` | Allow opening Cr50 without developer mode

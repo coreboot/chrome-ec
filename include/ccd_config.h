@@ -114,8 +114,8 @@ enum ccd_capability {
 	/* Allow removing the battery to bypass physical presence requirement */
 	CCD_CAP_REMOVE_BATTERY_BYPASSES_PP = 13,
 
-	/* Allow GSC firmware update without wiping TPM data */
-	CCD_CAP_GSC_FW_UPDATE_WITHOUT_TPM_WIPE = 14,
+	/* This was UpdateNoTPMWipe which didn't do anything. */
+	CCD_CAP_UNUSED = 14,
 
 	/* Access to I2C via USB */
 	CCD_CAP_I2C = 15,
@@ -188,7 +188,7 @@ struct ccd_capability_info {
 							  \
 	{"OpenNoLongPP",	CCD_CAP_STATE_IF_OPENED}, \
 	{"BatteryBypassPP",	CCD_CAP_STATE_ALWAYS},	  \
-	{"UpdateNoTPMWipe",	CCD_CAP_STATE_ALWAYS},	  \
+	{"Unused",		CCD_CAP_STATE_ALWAYS},	  \
 	{"I2C",			CCD_CAP_STATE_IF_OPENED}, \
 	{"FlashRead",		CCD_CAP_STATE_ALWAYS},	  \
 	{"OpenNoDevMode",	CCD_CAP_STATE_OPEN_REQ}, \
