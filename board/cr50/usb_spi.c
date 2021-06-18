@@ -223,7 +223,6 @@ static void enable_spi_pinmux(void)
 	/* Connect DIO A4, A8, and A14 to the SPI peripheral */
 	GWRITE(PINMUX, DIOA4_SEL, 0); /* SPI_MOSI */
 	GWRITE(PINMUX, DIOA8_SEL, 0); /* SPI_CS_L */
-	GWRITE(PINMUX, DIOA14_SEL, 0); /* SPI_CLK */
 	/* Set SPI_CS to be an internal pull up */
 	GWRITE_FIELD(PINMUX, DIOA14_CTL, PU, 1);
 
@@ -252,7 +251,6 @@ static void disable_spi_pinmux(void)
 	/* TODO: Implement way to get the gpio */
 	ASSERT(GREAD(PINMUX, GPIO0_GPIO7_SEL) == GC_PINMUX_DIOA4_SEL);
 	ASSERT(GREAD(PINMUX, GPIO0_GPIO8_SEL) == GC_PINMUX_DIOA8_SEL);
-	ASSERT(GREAD(PINMUX, GPIO0_GPIO9_SEL) == GC_PINMUX_DIOA14_SEL);
 
 	GWRITE_FIELD(PINMUX, DIOA4_CTL, PD, 1);    /* SPI_MOSI */
 	GWRITE_FIELD(PINMUX, DIOA8_CTL, PD, 1);    /* SPI_CLK */
@@ -260,7 +258,6 @@ static void disable_spi_pinmux(void)
 	/* Set SPI MOSI, CLK, and CS_L as inputs */
 	GWRITE(PINMUX, DIOA4_SEL, GC_PINMUX_GPIO0_GPIO7_SEL);
 	GWRITE(PINMUX, DIOA8_SEL, GC_PINMUX_GPIO0_GPIO8_SEL);
-	GWRITE(PINMUX, DIOA14_SEL, GC_PINMUX_GPIO0_GPIO9_SEL);
 }
 
 /*****************************************************************************/
