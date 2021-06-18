@@ -59,6 +59,11 @@ enum usb_spi_error {
 	USB_SPI_WRITE_COUNT_INVALID = 0x0003,
 	USB_SPI_READ_COUNT_INVALID  = 0x0004,
 	USB_SPI_DISABLED            = 0x0005,
+	USB_SPI_RX_BAD_DATA_INDEX   = 0x0006,
+	USB_SPI_RX_DATA_OVERFLOW    = 0x0007,
+	USB_SPI_RX_UNEXPECTED_PACKET = 0x0008,
+	USB_SPI_UNSUPPORTED_FULL_DUPLEX = 0x0009,
+	USB_SPI_RUNT_PACKET         = 0x000a,
 	USB_SPI_UNKNOWN_ERROR       = 0x8000,
 };
 
@@ -86,11 +91,22 @@ enum usb_spi {
 };
 
 
-#define USB_SPI_MAX_WRITE_COUNT 62
-#define USB_SPI_MAX_READ_COUNT  62
-
-BUILD_ASSERT(USB_MAX_PACKET_SIZE == (1 + 1 + USB_SPI_MAX_WRITE_COUNT));
-BUILD_ASSERT(USB_MAX_PACKET_SIZE == (2 + USB_SPI_MAX_READ_COUNT));
+#ifdef CONFIG_USB_SPI_V2
+/*
+ * Raiden client can be in one of two states, IDLE, or WRITING.
+ *
+ * When in IDLE state the client accepts commands from the host and can either
+ * perform the required action (report the configuration, or write a full
+ * write transaction (fitting into one USB packet), or write the received
+ * chunk and then repeatedly read the SPI flash and send the contents back in
+ * USB packets until the full required read transaction is completed.
+ *
+ * In case the received chunk is less than the total write transaction size
+ * the client moves into RAIDEN_WRITING state and expects all following
+ * received USB packets to be continuation of the write transaction.
+ */
+enum raiden_state { RAIDEN_IDLE, RAIDEN_WRITING };
+#endif
 
 struct usb_spi_state {
 	/*
@@ -114,6 +130,13 @@ struct usb_spi_state {
 	 * callback.
 	 */
 	int enabled;
+
+#ifdef CONFIG_USB_SPI_V2
+	/* Variable helping to keep track of multi packet write PDUs. */
+	uint16_t total_write_count;
+	uint16_t wrote_so_far;
+	enum raiden_state raiden_state;
+#endif
 };
 
 /*
@@ -167,7 +190,8 @@ extern struct consumer_ops const usb_spi_consumer_ops;
 		       INTERFACE,					\
 		       ENDPOINT)					\
 									\
-	static uint8_t CONCAT2(NAME, _buffer_)[USB_MAX_PACKET_SIZE];	\
+	static uint8_t CONCAT2(NAME, _buffer_)[USB_MAX_PACKET_SIZE]	\
+		__aligned(2);						\
 	static void CONCAT2(NAME, _deferred_)(void);			\
 	DECLARE_DEFERRED(CONCAT2(NAME, _deferred_));			\
 	static struct queue const CONCAT2(NAME, _to_usb_);		\
