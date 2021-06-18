@@ -85,6 +85,29 @@ int spi_transaction(const struct spi_device_t *spi_device,
 		    const uint8_t *txdata, int txlen,
 		    uint8_t *rxdata, int rxlen);
 
+/* Issue a part of SPI transaction.  Assumes SPI port has already been enabled.
+ *
+ * If CS is not asserted, asserts it first.
+ * Transmits <txlen> bytes from <txdata>, throwing away the corresponding
+ * received data, then transmits <rxlen> unused bytes, saving the received data
+ * in <rxdata>.
+ * If SPI_READBACK_ALL is set in <rxlen>, the received data during transmission
+ * is recorded in rxdata buffer and it assumes that the real <rxlen> is equal
+ * to <txlen>.
+ * If 'final' is true, deasserts CS once transfer is completed.
+ *
+ * @param spi_device  the SPI device to use
+ * @param txdata  buffer to transmit
+ * @param txlen  number of bytes in txdata.
+ * @param rxdata  receive buffer.
+ * @param rxlen  number of bytes in rxdata or SPI_READBACK_ALL.
+ * @param deassert_cs flag indicating that CS needs to be deasserted in the
+ *                     end of this sub transaction.
+ */
+int spi_sub_transaction(const struct spi_device_t *spi_device,
+			const uint8_t *txdata, int txlen, uint8_t *rxdata,
+			int rxlen, bool deassert_cs);
+
 /* Similar to spi_transaction(), but hands over to DMA for reading response.
  * Must call spi_transaction_flush() after this to make sure the response is
  * received.
