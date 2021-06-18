@@ -19,6 +19,12 @@
 #include "signing.h"
 #endif
 
+#define USB_SPI_MAX_WRITE_COUNT 62
+#define USB_SPI_MAX_READ_COUNT  62
+
+BUILD_ASSERT(USB_MAX_PACKET_SIZE == (1 + 1 + USB_SPI_MAX_WRITE_COUNT));
+BUILD_ASSERT(USB_MAX_PACKET_SIZE == (2 + USB_SPI_MAX_READ_COUNT));
+
 #define CPUTS(outstr) cputs(CC_USB, outstr)
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
 
