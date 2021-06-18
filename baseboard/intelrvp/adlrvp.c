@@ -9,6 +9,7 @@
 #include "charger.h"
 #include "common.h"
 #include "hooks.h"
+#include "ioexpander.h"
 #include "isl9241.h"
 #include "pca9675.h"
 #include "power/icelake.h"
@@ -198,10 +199,10 @@ void board_overcurrent_event(int port, int is_overcurrented)
 		pca9675_update_pins(ioex, 0, TCPC_AIC_IOE_OC);
 }
 
-__override int bb_retimer_power_handle(const struct usb_mux *me, int on_off)
+__override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 {
 	/* Handle retimer's power domain.*/
-	if (on_off) {
+	if (enable) {
 		pca9675_update_pins(me->usb_port,
 				TCPC_AIC_IOE_BB_RETIMER_LS_EN, 0);
 
