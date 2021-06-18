@@ -10,6 +10,7 @@
 #include "registers.h"
 #include "spi.h"
 #include "spi_flash.h"
+#include "timer.h"
 #include "usb_descriptor.h"
 #include "usb_spi.h"
 #include "util.h"
@@ -44,6 +45,14 @@ static uint16_t usb_spi_read_packet(struct usb_spi_config const *config)
 static void usb_spi_write_packet(struct usb_spi_config const *config,
 				 uint8_t count)
 {
+	/*
+	 * Experiments show that while reading a 16M flash time spent waiting
+	 * is less than 30 ms, which is negligible in this case, as the AP is
+	 * held in reset.
+	 */
+	while (queue_space(config->tx_queue) < count)
+		msleep(1);
+
 #ifdef CONFIG_STREAM_SIGNATURE
 	/*
 	 * This hook allows mn50 to sign SPI data read from newly
