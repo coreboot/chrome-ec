@@ -35,8 +35,9 @@
 #define always_memset memset
 #endif
 
-#ifdef CONFIG_DCRYPTO
+#if defined(CONFIG_DCRYPTO) || defined(CONFIG_DCRYPTO_BOARD)
 #include "dcrypto.h"
+#define USE_DCRYPTO
 #else
 #include "sha256.h"
 #endif
@@ -79,7 +80,7 @@ static void get_hmac_sha256(void *hmac_out, const uint8_t *secret,
 			    size_t secret_size, const void *ch_ptr,
 			    size_t ch_size)
 {
-#ifdef CONFIG_DCRYPTO
+#ifdef USE_DCRYPTO
 	LITE_HMAC_CTX hmac;
 
 	DCRYPTO_HMAC_SHA256_init(&hmac, secret, secret_size);

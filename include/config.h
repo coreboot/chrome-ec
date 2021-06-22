@@ -1355,6 +1355,10 @@
  */
 #undef CONFIG_DCRYPTO
 /*
+ * Use dcrypto in the board directory instead of chip/g.
+ */
+#undef CONFIG_DCRYPTO_BOARD
+/*
  * This provides struct definitions and function declarations that can be
  * implemented by unit tests for testing code that depends on dcrypto.
  * This should not be set at the same time as CONFIG_DCRYPTO.

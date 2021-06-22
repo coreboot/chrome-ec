@@ -33,9 +33,9 @@ else
 all: hex
 
 # The simulator components have their own subdirectory
-CFLAGS += -I$(realpath chip/$(CHIP)/dcrypto)
+CFLAGS += -I$(realpath $(BDIR)/dcrypto)
 CFLAGS += -I$(realpath $(BDIR)/tpm2)
-dirs-y += chip/$(CHIP)/dcrypto
+dirs-y += $(BDIR)/dcrypto
 dirs-y += $(BDIR)/tpm2
 
 # Objects that we need to build
@@ -54,6 +54,38 @@ board-${CONFIG_RDD} += rdd.o
 board-${CONFIG_USB_SPI} += usb_spi.o
 board-${CONFIG_USB_I2C} += usb_i2c.o
 board-y += recovery_button.o
+
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/aes.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/aes_cmac.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/app_cipher.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/app_key.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/bn.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_bn.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_p256.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/compare.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_runtime.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/gcm.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/hkdf.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/hmac.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/hmac_drbg.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/key_ladder.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/p256.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/p256_ec.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/p256_ecies.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/rsa.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha1.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha256.o
+ifeq ($(CONFIG_UPTO_SHA512),y)
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha384.o
+ifeq ($(CONFIG_DCRYPTO_SHA512),y)
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_sha512.o
+else
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha512.o
+endif
+endif
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/x509.o
+board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/trng.o
+
 board-y += tpm2/NVMem.o
 board-y += tpm2/aes.o
 board-y += tpm2/ecc.o

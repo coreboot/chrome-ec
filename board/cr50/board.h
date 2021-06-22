@@ -156,7 +156,8 @@
 #define CONFIG_CONSOLE_COMMAND_FLAGS_DEFAULT CMD_FLAG_RESTRICTED
 
 /* Include crypto stuff, both software and hardware. Enable optimizations. */
-#define CONFIG_DCRYPTO
+/* Use board specific version of dcrypto */
+#define CONFIG_DCRYPTO_BOARD
 #define CONFIG_UPTO_SHA512
 #define CONFIG_DCRYPTO_RSA_SPEEDUP
 
