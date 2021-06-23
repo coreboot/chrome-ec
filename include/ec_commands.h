@@ -6514,6 +6514,7 @@ enum tcpc_cc_polarity {
 
 #define PD_STATUS_EVENT_SOP_DISC_DONE		BIT(0)
 #define PD_STATUS_EVENT_SOP_PRIME_DISC_DONE	BIT(1)
+#define PD_STATUS_EVENT_DISCONNECTED		BIT(3)
 
 /*
  * Encode and decode for BCD revision response
