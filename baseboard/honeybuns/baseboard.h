@@ -81,7 +81,7 @@
 
 /* CBI Configs */
 #define I2C_ADDR_EEPROM_FLAGS   0x50
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CMD_CBI
 #define CBI_FW_MF_MASK BIT(0)
@@ -287,6 +287,31 @@ void baseboard_usbc_usb3_enable_interrupts(int enable);
  *
  */
 void baseboard_usbc_usb3_irq(void);
+
+/**
+ * Determine if VBUS is present or not.
+ *
+ * @param port: The Type-C port number.
+ * @return 1 if VBUS is present, 0 if not.
+ */
+int c1_ps8805_is_vbus_present(int port);
+
+/**
+ * Is the port sourcing Vbus?
+ *
+ * @param port: The Type-C port number.
+ * @return 1 if sourcing Vbus, 0 if not.
+ */
+int c1_ps8805_is_sourcing_vbus(int port);
+
+/**
+ * Turn on/off VBUS for port C1
+ *
+ * @param port: The Type-C port number.
+ * @param enable: 1: Turn on VBUS, 0: turn off VBUS.
+ * @return EC_SUCCESS on success, error otherwise.
+	 */
+int c1_ps8805_vbus_source_enable(int port, int enable);
 
 #endif /* !__ASSEMBLER__ */
 

@@ -9433,7 +9433,9 @@ static int cmd_pchg_info(const struct ec_response_pchg *res)
 {
 	static const char * const pchg_state_text[] = EC_PCHG_STATE_TEXT;
 
-	printf("State: %s (%d)\n", res->state < sizeof(pchg_state_text)
+	BUILD_ASSERT(ARRAY_SIZE(pchg_state_text) == PCHG_STATE_COUNT);
+
+	printf("State: %s (%d)\n", res->state < PCHG_STATE_COUNT
 	       ? pchg_state_text[res->state] : "UNDEF", res->state);
 	printf("Battery: %u%%\n", res->battery_percentage);
 	printf("Errors: 0x%x\n", res->error);
@@ -9657,7 +9659,7 @@ static int cmd_pchg(int argc, char *argv[])
 		 * ...
 		 */
 		uint32_t address, version;
-		uint32_t block_size;
+		uint32_t block_size = 0;
 		uint32_t crc;
 		int i;
 
@@ -9674,7 +9676,7 @@ static int cmd_pchg(int argc, char *argv[])
 		}
 
 		rv = cmd_pchg_update_open(port, version, &block_size, &crc);
-		if (rv < 0) {
+		if (rv < 0 || block_size == 0) {
 			fprintf(stderr, "\nFailed to open update session: %d\n",
 				rv);
 			return -1;

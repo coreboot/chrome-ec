@@ -21,8 +21,6 @@
 #undef CONFIG_CHIPSET_POWER_SEQ_VERSION
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 1
 
-#define CONFIG_SYSTEM_UNLOCKED
-
 #define CONFIG_BATTERY_HW_PRESENT_CUSTOM
 
 #define CONFIG_CHARGER_PSYS
@@ -116,6 +114,12 @@ enum battery_type {
 
 #include "gpio_signal.h"
 #include "registers.h"
+
+/* support factory keyboard test */
+#define CONFIG_KEYBOARD_FACTORY_TEST
+#define GPIO_KBD_KSO2		GPIO_EC_KSO_02_INV
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
 
 #ifdef SECTION_IS_RO
 /* Interrupt handler for AP jump to BL */

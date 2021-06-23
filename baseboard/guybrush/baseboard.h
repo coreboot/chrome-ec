@@ -32,7 +32,7 @@
 #define GPIO_PACKET_MODE_EN	GPIO_EC_GSC_PACKET_MODE
 
 /* CBI Config */
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_BOARD_VERSION_CBI
 
 /* Power Config */
@@ -135,11 +135,10 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 
 /*
- * EC will boot AP to depthcharge if: (BAT >= 4%) || (AC >= 50W)
+ * EC will boot AP to depthcharge if: (BAT >= 2%) || (AC >= 50W)
  * CONFIG_CHARGER_LIMIT_* is not set, so there is no additional restriction on
  * Depthcharge to boot OS.
  */
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			4
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		50000
 
 /*

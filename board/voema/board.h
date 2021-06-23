@@ -37,6 +37,7 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_KEYBOARD_VIVALDI
 #define CONFIG_KEYBOARD_REFRESH_ROW3
 
@@ -85,6 +86,8 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USBC PPC*/
+#undef CONFIG_SYV682X_HV_ILIM
+#define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 #define CONFIG_USBC_PPC_SYV682X		/* USBC port C0/C1 */
 #define CONFIG_USB_PD_FRS_PPC
 #undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
@@ -184,6 +187,9 @@ enum usbc_port {
 };
 
 void board_reset_pd_mcu(void);
+
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
 
 #endif /* !__ASSEMBLER__ */
 

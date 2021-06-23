@@ -50,6 +50,8 @@
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
+static void reset_nct38xx_port(int port);
+
 /* Wake Sources */
 const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_LID_OPEN,
@@ -571,12 +573,23 @@ int board_set_active_charge_port(int port)
 	int is_valid_port = (port >= 0 &&
 			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
+	int cur_port = charge_manager_get_active_charge_port();
 
 	if (port == CHARGE_PORT_NONE) {
 		CPRINTSUSB("Disabling all charger ports");
 
 		/* Disable all ports. */
 		for (i = 0; i < ppc_cnt; i++) {
+			/*
+			 * If this port had booted in dead battery mode, go
+			 * ahead and reset it so EN_SNK responds properly.
+			 */
+			if (nct38xx_get_boot_type(i) ==
+						NCT38XX_BOOT_DEAD_BATTERY) {
+				reset_nct38xx_port(cur_port);
+				pd_set_error_recovery(i);
+			}
+
 			/*
 			 * Do not return early if one fails otherwise we can
 			 * get into a boot loop assertion failure.
@@ -593,8 +606,31 @@ int board_set_active_charge_port(int port)
 
 	/* Check if the port is sourcing VBUS. */
 	if (ppc_is_sourcing_vbus(port)) {
-		CPRINTFUSB("Skip enable C%d", port);
+		CPRINTSUSB("Skip enable C%d", port);
 		return EC_ERROR_INVAL;
+	}
+
+	/*
+	 * Disallow changing ports if we booted in dead battery mode and don't
+	 * have sufficient power to withstand Vbus loss.  The NCT3807 may
+	 * continue to keep EN_SNK low on the original port and allow a
+	 * dangerous level of voltage to pass through to the initial charge
+	 * port (see b/183660105)
+	 *
+	 * If we do have sufficient power, then reset the dead battery port and
+	 * set up Type-C error recovery on its connection.
+	 */
+	if (cur_port != CHARGE_PORT_NONE &&
+			port != cur_port &&
+			nct38xx_get_boot_type(cur_port) ==
+						NCT38XX_BOOT_DEAD_BATTERY) {
+		if (pd_is_battery_capable()) {
+			reset_nct38xx_port(cur_port);
+			pd_set_error_recovery(cur_port);
+		} else {
+			CPRINTSUSB("Battery too low for charge port change");
+			return EC_ERROR_INVAL;
+		}
 	}
 
 	CPRINTSUSB("New charge port: C%d", port);
@@ -692,28 +728,34 @@ void tcpc_alert_event(enum gpio_signal signal)
 	schedule_deferred_pd_interrupt(port);
 }
 
-static void reset_pd_port(int port, enum gpio_signal reset_gpio_l,
-			  int hold_delay, int post_delay)
+static void reset_nct38xx_port(int port)
 {
+	enum gpio_signal reset_gpio_l;
+
+	if (port == USBC_PORT_C0)
+		reset_gpio_l = GPIO_USB_C0_TCPC_RST_L;
+	else if (port == USBC_PORT_C1)
+		reset_gpio_l = GPIO_USB_C1_TCPC_RST_L;
+	else
+		/* Invalid port: do nothing */
+		return;
+
 	gpio_set_level(reset_gpio_l, 0);
-	msleep(hold_delay);
+	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
 	gpio_set_level(reset_gpio_l, 1);
-	if (post_delay)
-		msleep(post_delay);
+	nct38xx_reset_notify(port);
+	if (NCT38XX_RESET_POST_DELAY_MS != 0)
+		msleep(NCT38XX_RESET_POST_DELAY_MS);
 }
 
 
 void board_reset_pd_mcu(void)
 {
 	/* Reset TCPC0 */
-	reset_pd_port(USBC_PORT_C0, GPIO_USB_C0_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C0);
 
 	/* Reset TCPC1 */
-	reset_pd_port(USBC_PORT_C1, GPIO_USB_C1_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C1);
 }
 
 uint16_t tcpc_get_alert_status(void)

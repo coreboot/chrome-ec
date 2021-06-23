@@ -163,10 +163,15 @@ void pd_power_supply_reset(int port)
 	if (port < 0 || port >= CONFIG_USB_PD_PORT_MAX_COUNT)
 		return;
 
-	prev_en = ppc_is_sourcing_vbus(port);
-
-	/* Disable VBUS via PPC. */
-	ppc_vbus_source_enable(port, 0);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port) {
+		prev_en = c1_ps8805_is_sourcing_vbus(port);
+		/* Disable VBUS via PPC. */
+		c1_ps8805_vbus_source_enable(port, 0);
+	} else {
+		prev_en = ppc_is_sourcing_vbus(port);
+		/* Disable VBUS via PPC. */
+		ppc_vbus_source_enable(port, 0);
+	}
 
 	/* Enable discharge if we were previously sourcing 5V */
 	if (prev_en)
@@ -202,7 +207,11 @@ int pd_set_power_supply_ready(int port)
 	 * left enabled as there is a switch (either PPC or discrete) to turn
 	 * VBUS on/off on the wire.
 	 */
-	rv = ppc_vbus_source_enable(port, 1);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port)
+		rv = c1_ps8805_vbus_source_enable(port, 1);
+	else
+		rv = ppc_vbus_source_enable(port, 1);
+
 	if (rv)
 		return rv;
 
@@ -289,12 +298,26 @@ void pd_transition_voltage(int idx)
 
 int pd_snk_is_vbus_provided(int port)
 {
-	return ppc_is_vbus_present(port);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port)
+		return c1_ps8805_is_vbus_present(port);
+	else
+		return ppc_is_vbus_present(port);
+}
+
+__override bool pd_check_vbus_level(int port, enum vbus_level level)
+{
+	if (level == VBUS_PRESENT)
+		return pd_snk_is_vbus_provided(port);
+	else
+		return !pd_snk_is_vbus_provided(port);
 }
 
 int board_vbus_source_enabled(int port)
 {
-	return ppc_is_sourcing_vbus(port);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port)
+		return c1_ps8805_is_sourcing_vbus(port);
+	else
+		return ppc_is_sourcing_vbus(port);
 }
 
 void pd_set_input_current_limit(int port, uint32_t max_ma,
@@ -337,7 +360,7 @@ static void usb_tc_connect(void)
 	if (port == USB_PD_PORT_HOST) {
 		gpio_set_level(GPIO_BPWR_DET, 1);
 #ifdef GPIO_UFP_PLUG_DET
-		gpio_set_level(GPIO_UFP_PLUG_DET, 1);
+		gpio_set_level(GPIO_UFP_PLUG_DET, 0);
 #endif
 	}
 
@@ -354,7 +377,7 @@ static void usb_tc_disconnect(void)
 	if (port == USB_PD_PORT_HOST) {
 		gpio_set_level(GPIO_BPWR_DET, 0);
 #ifdef GPIO_UFP_PLUG_DET
-		gpio_set_level(GPIO_UFP_PLUG_DET, 0);
+		gpio_set_level(GPIO_UFP_PLUG_DET, 1);
 #endif
 	}
 }

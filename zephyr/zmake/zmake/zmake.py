@@ -20,7 +20,8 @@ import zmake.toolchains as toolchains
 import zmake.util as util
 import zmake.version
 
-ninja_warnings = re.compile(r'\S*: warning:.*')
+ninja_warnings = re.compile(r'^(\S*: )?warning:.*')
+ninja_errors = re.compile(r'error:.*')
 
 
 def ninja_stdout_log_level_override(line, current_log_level):
@@ -75,6 +76,8 @@ def ninja_stdout_log_level_override(line, current_log_level):
         return logging.DEBUG
     if ninja_warnings.match(line):
         return logging.WARNING
+    if ninja_errors.match(line):
+        return logging.ERROR
     # When we see "Memory region" go into INFO, and stay there as long as the
     # line starts with \S+:
     if line.startswith("Memory region"):
@@ -101,6 +104,10 @@ def cmake_log_level_override(line, default_log_level):
     if line.startswith("Including boilerplate"):
         return logging.DEBUG
     elif line.startswith("devicetree error:"):
+        return logging.ERROR
+    if ninja_warnings.match(line):
+        return logging.WARNING
+    if ninja_errors.match(line):
         return logging.ERROR
     return default_log_level
 
@@ -139,10 +146,11 @@ class Zmake:
             before launching more, False to just do this after all jobs complete
     """
     def __init__(self, checkout=None, jobserver=None, jobs=0, modules_dir=None,
-                 zephyr_base=None):
+                 zephyr_base=None, cq=False):
         zmake.multiproc.reset()
         self._checkout = checkout
         self._zephyr_base = zephyr_base
+        self._is_cq = cq
 
         if modules_dir:
             self.module_paths = zmake.modules.locate_from_directory(modules_dir)
@@ -446,8 +454,11 @@ class Zmake:
 
         def run_test(test_file):
             with self.jobserver.get_job():
+                proc_args = ['pytest', '--verbose']
+                if self._is_cq:
+                    proc_args.append('--hypothesis-profile=cq')
                 proc = self.jobserver.popen(
-                    ['pytest', '--verbose', test_file],
+                    proc_args + [test_file],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     encoding='utf-8',

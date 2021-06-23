@@ -172,6 +172,58 @@ static int ps8815_dci_disable(int port)
 }
 #endif /* CONFIG_USB_PD_TCPM_PS8815 */
 
+#ifdef CONFIG_USB_PD_TCPM_PS8805
+static int ps8805_gpio_mask[] = {
+	PS8805_REG_GPIO_0,
+	PS8805_REG_GPIO_1,
+	PS8805_REG_GPIO_2,
+};
+
+int ps8805_gpio_set_level(int port, enum ps8805_gpio signal, int level)
+{
+	int rv;
+	int regval;
+	int mask;
+
+	if (signal >= PS8805_GPIO_NUM)
+		return EC_ERROR_INVAL;
+
+	rv = i2c_read8(tcpc_config[port].i2c_info.port,
+		       PS8805_VENDOR_DEFINED_I2C_ADDR,
+		       PS8805_REG_GPIO_CONTROL, &regval);
+	if (rv)
+		return rv;
+
+	mask = ps8805_gpio_mask[signal];
+	if (level)
+		regval |= mask;
+	else
+		regval &= ~mask;
+
+	return i2c_write8(tcpc_config[port].i2c_info.port,
+		       PS8805_VENDOR_DEFINED_I2C_ADDR,
+		       PS8805_REG_GPIO_CONTROL, regval);
+}
+
+int ps8805_gpio_get_level(int port, enum ps8805_gpio signal, int *level)
+{
+	int regval;
+	int rv;
+
+	if (signal >= PS8805_GPIO_NUM)
+		return EC_ERROR_INVAL;
+
+	rv = i2c_read8(tcpc_config[port].i2c_info.port,
+		       PS8805_VENDOR_DEFINED_I2C_ADDR,
+		       PS8805_REG_GPIO_CONTROL, &regval);
+	if (rv)
+		return rv;
+	*level = !!(regval & ps8805_gpio_mask[signal]);
+
+	return EC_SUCCESS;
+}
+#endif /* CONFIG_USB_PD_TCPM_PS8805 */
+
 enum ps8xxx_variant_regs {
 	REG_FIRST_INDEX = 0,
 	/* NOTE: The rev will read as 0x00 if the FW has malfunctioned. */
@@ -240,10 +292,12 @@ static struct ps8xxx_variant_map variant_map[] = {
 static int get_reg_by_product(const int port,
 				const enum ps8xxx_variant_regs reg)
 {
+	int i;
+
 	if (reg < REG_FIRST_INDEX || reg >= REG_MAX_COUNT)
 		return INT32_MAX;
 
-	for (int i = 0; i < ARRAY_SIZE(variant_map); i++) {
+	for (i = 0; i < ARRAY_SIZE(variant_map); i++) {
 		if (product_id[port] ==
 		      variant_map[i].product_id) {
 			return variant_map[i].reg_map[reg];
@@ -559,7 +613,9 @@ static int ps8xxx_enter_low_power_mode(int port)
 
 static int ps8xxx_dci_disable(int port)
 {
-	for (int i = 0; i < ARRAY_SIZE(variant_map); i++) {
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(variant_map); i++) {
 		if (product_id[port] == variant_map[i].product_id)
 			return variant_map[i].dci_disable_ptr(port);
 	}

@@ -9,6 +9,11 @@
 #include <devicetree.h>
 #include <gpio_signal.h>
 
+/*
+ * TODO(b:188674805) create a driver to pull this information from DeviceTree
+ */
+#include "power/mt8192.h"
+
 #define GPIO_ENTERING_RW		GPIO_UNIMPLEMENTED
 #define GPIO_WP_L			GPIO_UNIMPLEMENTED
 
@@ -41,20 +46,20 @@
 	GPIO_INT(GPIO_LID_ACCEL_INT_L,					\
 		 GPIO_INT_EDGE_FALLING, lis2dw12_interrupt)		\
 	GPIO_INT(GPIO_TABLET_MODE_L,					\
-		 GPIO_INT_EDGE_BOTH, gmr_tablet_switch_isr)
-
-
+		 GPIO_INT_EDGE_BOTH, gmr_tablet_switch_isr)		\
+	GPIO_INT(GPIO_USB_C0_PPC_INT_ODL,				\
+		 GPIO_INT_EDGE_BOTH, ppc_interrupt)			\
+	GPIO_INT(GPIO_USB_C0_BC12_INT_ODL,				\
+		 GPIO_INT_EDGE_FALLING, bc12_interrupt)			\
+	GPIO_INT(GPIO_USB_C1_BC12_INT_L,				\
+		 GPIO_INT_EDGE_FALLING, bc12_interrupt)			\
+	GPIO_INT(GPIO_AC_PRESENT,					\
+		 GPIO_INT_EDGE_BOTH, extpower_interrupt)		\
+	GPIO_INT(GPIO_X_EC_GPIO2,					\
+		 GPIO_INT_EDGE_FALLING, x_ec_interrupt)			\
+	GPIO_INT(GPIO_AP_XHCI_INIT_DONE,				\
+		 GPIO_INT_EDGE_BOTH, usb_a0_interrupt)
 
 #define GPIO_EN_PP5000 GPIO_EN_PP5000_A
-
-/*
- * TODO(b:188674805) create a driver to pull this information from DeviceTree
- */
-enum power_signal {
-	PMIC_PWR_GOOD,
-	AP_IN_S3_L,
-	AP_WDT_ASSERTED,
-	POWER_SIGNAL_COUNT,
-};
 
 #endif /* __ZEPHYR_GPIO_MAP_H */

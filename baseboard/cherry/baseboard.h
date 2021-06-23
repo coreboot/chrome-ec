@@ -25,6 +25,8 @@
 #define CONFIG_CHIPSET_MT8192
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
+#define CONFIG_POWER_SLEEP_FAILURE_DETECTION
+#define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 
 /* Chipset */
 #define CONFIG_CMD_AP_RESET_LOG
@@ -54,7 +56,7 @@
 
 /* CBI */
 #define CONFIG_BOARD_VERSION_CBI
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_CMD_CBI
 #define I2C_PORT_EEPROM IT83XX_I2C_CH_A
 #define I2C_ADDR_EEPROM_FLAGS 0x50
@@ -179,6 +181,7 @@
 	(EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_CONNECTED) |    \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_DISCONNECTED) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |        \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_HANG_DETECT) |     \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
@@ -186,6 +189,7 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
+#include "power/mt8192.h"
 
 enum adc_channel {
 	ADC_VBUS,                /* ADC 0 */
@@ -210,13 +214,6 @@ enum pwm_channel {
 	PWM_CH_LED3,
 	PWM_CH_KBLIGHT,
 	PWM_CH_COUNT,
-};
-
-enum power_signal {
-	PMIC_PWR_GOOD,
-	AP_IN_S3_L,
-	AP_WDT_ASSERTED,
-	POWER_SIGNAL_COUNT,
 };
 
 void board_reset_pd_mcu(void);

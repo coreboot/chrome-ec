@@ -39,7 +39,7 @@
  * version. But for P0/P1 boards rely on GPIO signals.
  */
 /* #define CONFIG_BOARD_VERSION_CBI */
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_CRC8
 
 /* Common Keyboard Defines */
@@ -56,7 +56,6 @@
 #define CONFIG_CHARGER_BQ25710
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT 512 /* Allow low-current USB charging */
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 1
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 
