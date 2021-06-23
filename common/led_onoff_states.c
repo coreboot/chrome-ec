@@ -17,6 +17,11 @@
 
 #define CPRINTS(format, args...) cprints(CC_GPIO, format, ## args)
 
+static int led_get_charge_percent(void)
+{
+	return DIV_ROUND_NEAREST(charge_get_display_charge(), 10);
+}
+
 static enum led_states led_get_state(void)
 {
 	int  charge_lvl;
