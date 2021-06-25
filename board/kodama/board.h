@@ -73,11 +73,6 @@
 #define I2C_PORT_BATTERY  board_get_battery_i2c()
 #define I2C_PORT_VIRTUAL_BATTERY I2C_PORT_BATTERY
 
-/* Define the host events which are allowed to wakeup AP in S3. */
-#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
-		(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |\
-		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
-
 #define PD_OPERATING_POWER_MW 15000
 
 #ifndef __ASSEMBLER__
