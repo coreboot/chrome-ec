@@ -177,11 +177,6 @@ int board_has_ina_support(void)
 	return !(board_properties & BOARD_NO_INA_SUPPORT);
 }
 
-int board_tpm_mode_change_allowed(void)
-{
-	return !!(board_properties & BOARD_ALLOW_CHANGE_TPM_MODE);
-}
-
 int board_has_ec_cr50_comm_support(void)
 {
 	return !!(board_properties & BOARD_EC_CR50_COMM_SUPPORT);
@@ -329,8 +324,7 @@ static struct board_cfg board_cfg_table[] = {
 		.strap_cfg = 0x70,
 		.board_properties = BOARD_PERIPH_CONFIG_I2C |
 			BOARD_USE_PLT_RESET | BOARD_WP_DISABLE_DELAY |
-			BOARD_CLOSED_SOURCE_SET1 | BOARD_NO_INA_SUPPORT |
-			BOARD_ALLOW_CHANGE_TPM_MODE,
+			BOARD_CLOSED_SOURCE_SET1 | BOARD_NO_INA_SUPPORT,
 	},
 	/* Dedede/Puff/Volteer: DIOA9 = 5K PU, DIOA1 = 1M PU */
 	{
@@ -1054,32 +1048,37 @@ static void deferred_tpm_rst_isr(void)
 {
 	CPRINTS("%s", __func__);
 
-	/*
-	 * TPM reset is used to detect the AP, connect AP. Let the AP state
-	 * machine know the AP is on.
-	 */
-	set_ap_on();
+	if (get_tpm_mode() != TPM_MODE_DISABLED) {
 
-	/*
-	 * If no reboot request is posted, OR if the other RW's header is not
-	 * ready to run - do not try rebooting the device, just reset the
-	 * TPM.
-	 *
-	 * The inactive header will have to be restored by the appropriate
-	 * vendor command, the device will be rebooted then.
-	 */
-	if (!reboot_request_posted || other_rw_is_inactive()) {
-		/* Reset TPM, no need to wait for completion. */
-		tpm_reset_request(0, 0);
-		return;
+		/*
+		 * TPM reset is used to detect the AP, connect AP. Let the AP
+		 * state machine know the AP is on.
+		 */
+		set_ap_on();
+
+		/*
+		 * If no reboot request is posted, OR if the other RW's header
+		 * is not ready to run - do not try rebooting the device, just
+		 * reset the TPM.
+		 *
+		 * The inactive header will have to be restored by the
+		 * appropriate vendor command, the device will be rebooted
+		 * then.
+		 */
+		if (!reboot_request_posted || other_rw_is_inactive()) {
+			/* Reset TPM, no need to wait for completion. */
+			tpm_reset_request(0, 0);
+			return;
+		}
+
+		/*
+		 * Reset TPM and wait to completion to make sure nvmem is
+		 * committed before reboot.
+		 */
+		tpm_reset_request(1, 0);
 	}
 
-	/*
-	 * Reset TPM and wait to completion to make sure nvmem is
-	 * committed before reboot.
-	 */
-	tpm_reset_request(1, 0);
-
+	cflush();
 	/* This will never return. */
 	system_reset(SYSTEM_RESET_MANUALLY_TRIGGERED | SYSTEM_RESET_HARD);
 }
