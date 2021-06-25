@@ -32,11 +32,17 @@ static void disable_tpm(void)
 DECLARE_DEFERRED(disable_tpm);
 
 /*
- * On TPM reset event, tpm_reset_now() in tpm_registers.c clears TPM2 BSS memory
- * area. By placing s_tpm_mode in TPM2 BSS area, TPM mode value shall be
- * "TPM_MODE_ENABLED_TENTATIVE" on every TPM reset events.
+ * tpm_mode can be set only once after a hardware reset, to either
+ * TPM_MODE_ENABLED or TPM_MODE_DISABLED.
+ *
+ * This allows the AP to make sure that TPM can't be disabled by setting mode
+ * to TPM_MODE_ENABLED during start up.
+ *
+ * If mode is set to TPM_MODE_DISABLED, the AP loses the ability to
+ * communicate with the TPM until next TPM reset (which will trigger the H1
+ * hardware reset in that case).
  */
-static enum tpm_modes s_tpm_mode __attribute__((section(".bss.Tpm2_common")));
+static enum tpm_modes s_tpm_mode;
 
 static enum vendor_cmd_rc process_tpm_mode(struct vendor_cmd_params *p)
 {
@@ -51,8 +57,7 @@ static enum vendor_cmd_rc process_tpm_mode(struct vendor_cmd_params *p)
 	buffer = (uint8_t *)p->buffer;
 	if (p->in_size == sizeof(uint8_t)) {
 
-		if (!board_tpm_mode_change_allowed() ||
-		    (s_tpm_mode != TPM_MODE_ENABLED_TENTATIVE))
+		if (s_tpm_mode != TPM_MODE_ENABLED_TENTATIVE)
 			return VENDOR_RC_NOT_ALLOWED;
 
 		mode_val = buffer[0];
