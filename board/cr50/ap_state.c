@@ -111,9 +111,11 @@ void tpm_rst_asserted(enum gpio_signal unused)
 {
 	CPRINTS("%s", __func__);
 
+#ifdef CONFIG_AP_RO_VERIFICATION
 	/* Clear AP RO verification state since this is a new boot. */
 	if (!tpm_reset_in_progress())
 		ap_ro_device_reset();
+#endif
 	/*
 	 * It's possible the signal is being pulsed. Wait 1 second to disable
 	 * functionality, so it's more likely the AP is fully off and not being
