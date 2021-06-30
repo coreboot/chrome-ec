@@ -193,6 +193,7 @@ enum vendor_cmd_rc {
 	VENDOR_RC_NO_SUCH_SUBCOMMAND = 8,
 	VENDOR_RC_IN_PROGRESS = 9,
 	VENDOR_RC_PASSWORD_REQUIRED = 10,
+	VENDOR_RC_NVMEM_LOCKED = 11,
 
 	/* Maximum possible failure reason. */
 	VENDOR_RC_NO_SUCH_COMMAND = 127,
