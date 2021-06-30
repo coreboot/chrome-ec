@@ -3,8 +3,12 @@
  * found in the LICENSE file.
  */
 
-#include "common.h"
+#include <stdint.h>
+#include <stdbool.h>
 
+#include "common.h"
+#include "compile_time_macros.h"
+#include "console.h"
 #include "driver/bc12/pi3usb9201_public.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/ppc/syv682x_public.h"
@@ -12,14 +16,21 @@
 #include "driver/tcpm/nct38xx.h"
 #include "driver/tcpm/ps8xxx_public.h"
 #include "driver/tcpm/tcpci.h"
+#include "ec_commands.h"
 #include "fw_config.h"
+#include "gpio.h"
+#include "gpio_signal.h"
 #include "hooks.h"
 #include "ioexpander.h"
 #include "system.h"
+#include "task.h"
+#include "task_id.h"
 #include "timer.h"
 #include "usbc_config.h"
 #include "usbc_ppc.h"
+#include "usb_charge.h"
 #include "usb_mux.h"
+#include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -173,6 +184,18 @@ struct ioexpander_config_t ioex_config[] = {
 		.drv = &nct38xx_ioexpander_drv,
 		.flags = IOEX_FLAGS_DISABLED,
 	},
+	[IOEX_ID_1_C0_NCT38XX] = {
+		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.drv = &nct38xx_ioexpander_drv,
+		.flags = IOEX_FLAGS_DISABLED,
+	},
+	[IOEX_ID_1_C2_NCT38XX] = {
+		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
+		.drv = &nct38xx_ioexpander_drv,
+		.flags = IOEX_FLAGS_DISABLED,
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
 
@@ -197,7 +220,10 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 		else
 			rst_signal = IOEX_USB_C0_RT_RST_ODL;
 	} else if (me->usb_port == USBC_PORT_C2) {
-		rst_signal = IOEX_USB_C2_RT_RST_ODL;
+		if (get_board_id() == 1)
+			rst_signal = IOEX_ID_1_USB_C2_RT_RST_ODL;
+		else
+			rst_signal = IOEX_USB_C2_RT_RST_ODL;
 	} else {
 		return EC_ERROR_INVAL;
 	}
@@ -277,17 +303,29 @@ void board_reset_pd_mcu(void)
 	msleep(50);
 }
 
+static void enable_ioex(int ioex)
+{
+	ioex_config[ioex].flags &= ~IOEX_FLAGS_DISABLED;
+	ioex_init(ioex);
+}
+
 static void board_tcpc_init(void)
 {
-	int i;
-
 	/* Don't reset TCPCs after initial reset */
 	if (!system_jumped_late()) {
 		board_reset_pd_mcu();
 
-		for (i = 0; i < CONFIG_IO_EXPANDER_PORT_COUNT; ++i) {
-			ioex_config[i].flags &= ~IOEX_FLAGS_DISABLED;
-			ioex_init(i);
+		/*
+		 * These IO expander pins are implemented using the
+		 * C0/C2 TCPC, so they must be set up after the TCPC has
+		 * been taken out of reset.
+		 */
+		if (get_board_id() == 1) {
+			enable_ioex(IOEX_ID_1_C0_NCT38XX);
+			enable_ioex(IOEX_ID_1_C2_NCT38XX);
+		} else {
+			enable_ioex(IOEX_C0_NCT38XX);
+			enable_ioex(IOEX_C2_NCT38XX);
 		}
 	}
 

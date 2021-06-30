@@ -1,7 +1,6 @@
-/*
- * Copyright 2020 Google LLC
- *
- * SPDX-License-Identifier: Apache-2.0
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
  */
 
 #define DT_DRV_COMPAT nuvoton_npcx_cros_flash
@@ -492,8 +491,7 @@ static const struct cros_flash_driver_api cros_flash_npcx_driver_api = {
 static int flash_npcx_init(const struct device *dev)
 {
 	const struct cros_flash_npcx_config *const config = DRV_CONFIG(dev);
-	const struct device *const clk_dev =
-		device_get_binding(NPCX_CLK_CTRL_NAME);
+	const struct device *clk_dev = DEVICE_DT_GET(DT_NODELABEL(pcc));
 
 	int ret;
 
@@ -519,6 +517,7 @@ static const struct cros_flash_npcx_config cros_flash_cfg = {
 
 static struct cros_flash_npcx_data cros_flash_data;
 
-DEVICE_DEFINE(cros_flash_npcx_0, DT_INST_LABEL(0), flash_npcx_init, NULL,
-	      &cros_flash_data, &cros_flash_cfg, PRE_KERNEL_1,
-	      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &cros_flash_npcx_driver_api);
+DEVICE_DT_INST_DEFINE(0, flash_npcx_init, NULL, &cros_flash_data,
+		      &cros_flash_cfg, PRE_KERNEL_1,
+		      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      &cros_flash_npcx_driver_api);

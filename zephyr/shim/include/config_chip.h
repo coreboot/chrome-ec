@@ -441,6 +441,20 @@
 #define CONFIG_MKBP_INPUT_DEVICES
 #endif
 
+#undef CONFIG_MKBP_EVENT_WAKEUP_MASK
+#if defined(CONFIG_PLATFORM_EC_MKBP_EVENT_WAKEUP_MASK) && \
+			DT_NODE_EXISTS(DT_PATH(ec_mkbp_event_wakeup_mask))
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK \
+		DT_PROP(DT_PATH(ec_mkbp_event_wakeup_mask), wakeup_mask)
+#endif
+
+#undef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
+#if defined(CONFIG_PLATFORM_EC_MKBP_HOST_EVENT_WAKEUP_MASK) && \
+			DT_NODE_EXISTS(DT_PATH(ec_mkbp_host_event_wakeup_mask))
+#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
+		DT_PROP(DT_PATH(ec_mkbp_host_event_wakeup_mask), wakeup_mask)
+#endif
+
 #undef CONFIG_CMD_KEYBOARD
 #ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_KEYBOARD
 #define CONFIG_CMD_KEYBOARD
@@ -1277,6 +1291,11 @@
 #undef CONFIG_ACCEL_BMA255
 #ifdef CONFIG_PLATFORM_EC_ACCEL_BMA255
 #define CONFIG_ACCEL_BMA255
+#endif
+
+#undef CONFIG_ACCEL_BMA4XX
+#ifdef CONFIG_PLATFORM_EC_ACCEL_BMA4XX
+#define CONFIG_ACCEL_BMA4XX
 #endif
 
 #undef CONFIG_ACCEL_KX022

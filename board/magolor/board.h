@@ -47,6 +47,7 @@
 #define GPIO_USB_C1_INT_ODL GPIO_SUB_C1_INT_EN_RAILS_ODL
 
 /* Keyboard */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 #ifdef BOARD_MAGOLOR
 #define CONFIG_KEYBOARD_BOARD_CONFIG
 #define CONFIG_KEYBOARD_KEYPAD
@@ -65,8 +66,6 @@
 #define CONFIG_THROTTLE_AP
 #define CONFIG_THERMISTOR_NCP15WB
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
-#define CONFIG_TEMP_SENSOR_FIRST_READ_DELAY_MS 500
 
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -207,6 +206,9 @@ enum battery_type {
 	BATTERY_COSMX_AP20CBL,
 	BATTERY_TYPE_COUNT,
 };
+
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
 
 void motion_interrupt(enum gpio_signal signal);
 #endif /* !__ASSEMBLER__ */

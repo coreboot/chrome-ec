@@ -21,6 +21,7 @@ common-$(CONFIG_ACCELGYRO_LSM6DSM)+=math_util.o
 common-$(CONFIG_ACCELGYRO_LSM6DSO)+=math_util.o
 common-$(CONFIG_ACCEL_FIFO)+=motion_sense_fifo.o
 common-$(CONFIG_ACCEL_BMA255)+=math_util.o
+common-$(CONFIG_ACCEL_BMA4XX)+=math_util.o
 common-$(CONFIG_ACCEL_LIS2DW12)+=math_util.o
 common-$(CONFIG_ACCEL_LIS2DH)+=math_util.o
 common-$(CONFIG_ACCEL_LIS2DS)+=math_util.o
@@ -48,7 +49,7 @@ common-$(CONFIG_BLUETOOTH_LE_STACK)+=btle_hci_controller.o btle_ll.o
 common-$(CONFIG_BODY_DETECTION)+=body_detection.o
 common-$(CONFIG_CAPSENSE)+=capsense.o
 common-$(CONFIG_CEC)+=cec.o
-common-$(CONFIG_CBI_EEPROM)+=cbi.o
+common-$(CONFIG_CBI_EEPROM)+=cbi.o cbi_eeprom.o
 ifeq ($(HAS_MOCK_CHARGE_MANAGER),)
 common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o
 endif

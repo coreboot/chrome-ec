@@ -59,6 +59,27 @@
 #define PS8815_P1_REG_HW_REVISION		0xF0
 
 /*
+ * Below register is defined from Parade PS8815 Register Table,
+ * See b:189587527 for more detail.
+ */
+
+/* Displayport related settings */
+#define PS8815_REG_DP_EQ_SETTING		0xF8
+#define PS8815_AUTO_EQ_DISABLE			BIT(7)
+#define PS8815_DPEQ_LOSS_UP_21DB		0x09
+#define PS8815_DPEQ_LOSS_UP_20DB		0x08
+#define PS8815_DPEQ_LOSS_UP_19DB		0x07
+#define PS8815_DPEQ_LOSS_UP_18DB		0x06
+#define PS8815_DPEQ_LOSS_UP_17DB		0x05
+#define PS8815_DPEQ_LOSS_UP_16DB		0x04
+#define PS8815_DPEQ_LOSS_UP_13DB		0x03
+#define PS8815_DPEQ_LOSS_UP_12DB		0x02
+#define PS8815_DPEQ_LOSS_UP_10DB		0x01
+#define PS8815_DPEQ_LOSS_UP_9DB			0x00
+#define PS8815_REG_DP_EQ_COMP_SHIFT		3
+#define PS8815_AUX_INTERCEPTION_DISABLE		BIT(1)
+
+/*
  * PS8805 GPIO control register. Note the device I2C address of 0x1A is
  * independent of the ADDR pin on the chip, and not the same address being used
  * for TCPCI functions.
@@ -95,5 +116,13 @@ int ps8805_gpio_set_level(int port, enum ps8805_gpio signal, int level);
  * @return EC_SUCCESS if I2C accesses are successful
  */
 int ps8805_gpio_get_level(int port, enum ps8805_gpio signal, int *level);
+
+/*
+ * Allow boards to customize for PS8XXX initial if board has
+ * specific settings.
+ *
+ * @param port: The Type-C port number.
+ */
+__override_proto void board_ps8xxx_tcpc_init(int port);
 
 #endif /* defined(__CROS_EC_USB_PD_TCPM_PS8XXX_H) */
