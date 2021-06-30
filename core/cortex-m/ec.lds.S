@@ -99,6 +99,24 @@ SECTIONS
 		. = ALIGN(4);
 		KEEP(*(.rodata.pstate))
 
+		/**
+		 * Reserve a space for FIPS crypto module.
+		 * We compute sha256 for this block to check integrity, but
+		 * don't use position independent code, so placing block
+		 * closer to start of code with as much constant address as
+		 * possible to prevent sudden relocations from breaking
+		 * integrity check.
+		 */
+		. = ALIGN(4);
+		__fips_module_start = .;
+		KEEP(*(.text.fips))
+		KEEP(*(.rodata.fips))
+		__fips_module_end = .;
+		. = ALIGN(4);
+		__fips_module_checksum_start = .;
+		KEEP(*(.rodata.fips.checksum))
+		__fips_module_checksum_end = .;
+
 		. = ALIGN(4);
 		STRINGIFY(OUTDIR/core/CORE/init.o) (.text)
 #if defined(CHIP_FAMILY_NPCX7) && !defined(CONFIG_HIBERNATE_PSL)
@@ -306,6 +324,11 @@ SECTIONS
 		 */
 		. = ALIGN(512);
 		__bss_start = .;
+		/**
+		 * Reserve a space for data used by FIPS crypto module.
+		 */
+		KEEP(*(.bss.fips))
+
 		*(.bss.big_align)
 		/* Stacks must be 64-bit aligned */
 		. = ALIGN(8);
