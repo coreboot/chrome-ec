@@ -22,7 +22,6 @@
 
 static void disable_tpm(void)
 {
-	nvmem_enable_commits();
 	tpm_stop();
 	DCRYPTO_ladder_revoke();
 	nvmem_clear_cache();
@@ -83,6 +82,9 @@ static enum vendor_cmd_rc process_tpm_mode(struct vendor_cmd_params *p)
 			 * so that this vendor command can be responded to
 			 * before TPM stops.
 			 */
+			if (nvmem_enable_commits() != EC_SUCCESS)
+				return VENDOR_RC_NVMEM_LOCKED;
+
 			hook_call_deferred(&disable_tpm_data, 10 * MSEC);
 			break;
 		default:
