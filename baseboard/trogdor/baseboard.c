@@ -40,7 +40,9 @@ const struct charger_config_t chg_chips[] = {
 
 int board_allow_i2c_passthru(int port)
 {
-	return (port == I2C_PORT_VIRTUAL_BATTERY);
+	return (port == I2C_PORT_VIRTUAL_BATTERY ||
+		port == I2C_PORT_TCPC0 ||
+		port == I2C_PORT_TCPC1);
 }
 
 int charger_profile_override(struct charge_state_data *curr)
