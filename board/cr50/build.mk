@@ -55,34 +55,37 @@ board-${CONFIG_USB_SPI} += usb_spi.o
 board-${CONFIG_USB_I2C} += usb_i2c.o
 board-y += recovery_button.o
 
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/aes.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/app_cipher.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/app_key.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/bn.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_bn.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_p256.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/compare.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_runtime.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/gcm.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/hkdf.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/hmac.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/hmac_drbg.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/key_ladder.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/p256.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/p256_ec.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/rsa.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha1.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha256.o
+# TODO(mruthven): add cryptoc the fips boundary
+fips-y=
+fips-$(CONFIG_U2F) += u2f.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/aes.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/app_cipher.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/app_key.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/bn.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_bn.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_p256.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/compare.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_runtime.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/gcm.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hkdf.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_drbg.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/key_ladder.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/p256.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/p256_ec.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/rsa.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha1.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha256.o
 ifeq ($(CONFIG_UPTO_SHA512),y)
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha384.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha384.o
 ifeq ($(CONFIG_DCRYPTO_SHA512),y)
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/dcrypto_sha512.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_sha512.o
 else
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/sha512.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha512.o
 endif
 endif
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/x509.o
-board-$(CONFIG_DCRYPTO_BOARD)+= dcrypto/trng.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/x509.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/trng.o
 
 board-y += tpm2/NVMem.o
 board-y += tpm2/aes.o
@@ -103,10 +106,22 @@ board-y += tpm2/trng.o
 board-y += tpm2/virtual_nvmem.o
 board-y += tpm_nvmem_ops.o
 board-y += wp.o
-board-$(CONFIG_U2F) += u2f.o
 
 ifneq ($(H1_RED_BOARD),)
 CPPFLAGS += -DH1_RED_BOARD=$(EMPTY)
+endif
+
+# Build fips code separately
+ifneq ($(fips-y),)
+RW_BD_OUT=$(out)/RW/$(BDIR)
+FIPS_MODULE=dcrypto/fips_module.o
+RW_FIPS_OBJS=$(patsubst %.o, $(RW_BD_OUT)/%.o, $(fips-y))
+
+$(RW_BD_OUT)/$(FIPS_MODULE): $(RW_FIPS_OBJS)
+	@echo "  LD      $(notdir $@)"
+	$(Q)$(CC) $(CFLAGS) --static -Wl,--relocatable -Wl,-Map=$@.map -o $@ $^
+
+board-y+= $(FIPS_MODULE)
 endif
 
 # Build and link with an external library
