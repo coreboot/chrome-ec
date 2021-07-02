@@ -16,6 +16,13 @@
 #else
 /* CPU core BFD configuration */
 #include "core/cortex-m/config_core.h"
+#define STM32_IRQ_EXTI0_PRIORITY	1
+#define STM32_IRQ_EXTI1_PRIORITY	1
+#define STM32_IRQ_EXTI2_PRIORITY	1
+#define STM32_IRQ_EXTI3_PRIORITY	1
+#define STM32_IRQ_EXTI4_PRIORITY	1
+#define STM32_IRQ_EXTI9_5_PRIORITY	1
+#define STM32_IRQ_EXTI15_10_PRIORITY	1
 #endif
 
 /* Default to UART 1 for EC console */
@@ -59,6 +66,8 @@
 #include "config-stm32f03x.h"
 #elif defined(CHIP_VARIANT_STM32H7X3)
 #include "config-stm32h7x3.h"
+#elif defined(CHIP_VARIANT_STM32L431X)
+#include "config-stm32l431.h"
 #else
 #error "Unsupported chip variant"
 #endif
@@ -105,6 +114,9 @@
 /* Even bigger */
 #define VENTI_TASK_STACK_SIZE 768
 
+/* Much bigger */
+#define TRENTA_TASK_STACK_SIZE 1024
+
 /* Interval between HOOK_TICK notifications */
 #define HOOK_TICK_INTERVAL_MS 500
 #define HOOK_TICK_INTERVAL    (HOOK_TICK_INTERVAL_MS * MSEC)
@@ -144,9 +156,9 @@
 #define GPIO_PIN(port, index) GPIO_##port, BIT(index)
 #define GPIO_PIN_MASK(p, m) .port = GPIO_##p, .mask = (m)
 
-/* Prescaler values for PLL. Currently used only by STM32L476. */
-#define STM32_PLLM	0
-#define STM32_PLLN	0
-#define STM32_PLLR	0
+/* Prescaler values for PLL. Currently used only by STM32L476 and STM32L431. */
+#define STM32_PLLM	1
+#define STM32_PLLN	1
+#define STM32_PLLR	1
 
 #endif /* __CROS_EC_CONFIG_CHIP_H */
