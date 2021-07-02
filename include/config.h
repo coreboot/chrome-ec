@@ -1626,16 +1626,6 @@
 #undef CONFIG_I2C_MULTI_PORT_CONTROLLER
 
 /*****************************************************************************/
-/* Current/Power monitor */
-
-/*
- * Compile driver for INA219 or INA231. These two flags may not be both
- * defined.
- */
-#undef CONFIG_INA219
-#undef CONFIG_INA231
-
-/*****************************************************************************/
 /* Inductive charging */
 
 /* Enable inductive charging support */
