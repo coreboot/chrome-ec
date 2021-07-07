@@ -65,10 +65,10 @@ struct cbi_storage_driver {
 	int (*is_protected)(void);
 };
 
-struct cbi_storage_config_t {
+extern const struct cbi_storage_config_t {
 	enum cbi_storage_type storage_type;
 	const struct cbi_storage_driver *drv;
-};
+} cbi_config;
 
 /**
  * Board info accessors
@@ -199,6 +199,11 @@ int cbi_create(void);
  * Override CBI cache status to EC_CBI_CACHE_INVALID
  */
 void cbi_invalidate_cache(void);
+
+/**
+ * Return CBI cache status
+ */
+int cbi_get_cache_status(void);
 
 #ifdef TEST_BUILD
 /**

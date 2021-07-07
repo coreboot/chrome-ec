@@ -23,6 +23,7 @@
 #include "host_command.h"
 #include "i2c.h"
 #include "math_util.h"
+#include "power.h"
 #include "printf.h"
 #include "system.h"
 #include "task.h"
@@ -1562,17 +1563,21 @@ static int shutdown_on_critical_battery(void)
 		return 1;
 
 	/* Timer has expired */
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF)) {
 		switch (board_critical_shutdown_check(&curr)) {
 		case CRITICAL_SHUTDOWN_HIBERNATE:
 			if (IS_ENABLED(CONFIG_HIBERNATE)) {
+				if (power_get_state() == POWER_S3S5)
+					sleep(1);
 				CPRINTS("Hibernate due to critical battery");
+				cflush();
 				system_hibernate(0, 0);
 			}
 			break;
 		case CRITICAL_SHUTDOWN_CUTOFF:
+			if (power_get_state() == POWER_S3S5)
+				sleep(1);
 			CPRINTS("Cutoff due to critical battery");
-			/* Ensure logs are flushed. */
 			cflush();
 			board_cut_off_battery();
 			break;
@@ -1683,7 +1688,6 @@ const struct batt_params *charger_current_battery_params(void)
 	return &curr.batt;
 }
 
-#ifdef CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS
 /* Determine if the battery is outside of allowable temperature range */
 static int battery_outside_charging_temperature(void)
 {
@@ -1711,7 +1715,6 @@ static int battery_outside_charging_temperature(void)
 	}
 	return 0;
 }
-#endif
 
 static void sustain_battery_soc(void)
 {
@@ -2134,23 +2137,21 @@ void charger_task(void *u)
 		}
 
 wait_for_it:
-#ifdef CONFIG_CHARGER_PROFILE_OVERRIDE
-		if (get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) {
+		if (IS_ENABLED(CONFIG_CHARGER_PROFILE_OVERRIDE)
+			&& get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) {
 			sleep_usec = charger_profile_override(&curr);
 			if (sleep_usec < 0)
 				problem(PR_CUSTOM, sleep_usec);
 		}
-#endif
 
-#ifdef CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS
-		if (battery_outside_charging_temperature()) {
+		if (IS_ENABLED(CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS)
+				&& battery_outside_charging_temperature()) {
 			curr.requested_current = 0;
 			curr.requested_voltage = 0;
 			curr.batt.flags &= ~BATT_FLAG_WANT_CHARGE;
 			if (curr.state != ST_DISCHARGE)
 				curr.state = ST_IDLE;
 		}
-#endif
 
 #ifdef CONFIG_CHARGE_MANAGER
 		if (curr.batt.state_of_charge >=
@@ -2809,6 +2810,42 @@ charge_command_current_limit(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_CHARGE_CURRENT_LIMIT, charge_command_current_limit,
 		     EC_VER_MASK(0));
 
+/*
+ * Expose charge/battery related state
+ *
+ * @param param command to get corresponding data
+ * @param value the corresponding data
+ * @return EC_SUCCESS or error
+ */
+static int charge_get_charge_state_debug(int param, uint32_t *value)
+{
+	switch (param) {
+	case CS_PARAM_DEBUG_CTL_MODE:
+		*value = get_chg_ctrl_mode();
+		break;
+	case CS_PARAM_DEBUG_MANUAL_CURRENT:
+		*value = manual_current;
+		break;
+	case CS_PARAM_DEBUG_MANUAL_VOLTAGE:
+		*value = manual_voltage;
+		break;
+	case CS_PARAM_DEBUG_SEEMS_DEAD:
+		*value = battery_seems_to_be_dead;
+		break;
+	case CS_PARAM_DEBUG_SEEMS_DISCONNECTED:
+		*value = battery_seems_to_be_disconnected;
+		break;
+	case CS_PARAM_DEBUG_BATT_REMOVED:
+		*value = battery_was_removed;
+		break;
+	default:
+		*value = 0;
+		return EC_ERROR_INVAL;
+	}
+
+	return EC_SUCCESS;
+}
+
 static enum ec_status
 charge_command_charge_state(struct host_cmd_handler_args *args)
 {
@@ -2834,22 +2871,19 @@ charge_command_charge_state(struct host_cmd_handler_args *args)
 
 	case CHARGE_STATE_CMD_GET_PARAM:
 		val = 0;
-#ifdef CONFIG_CHARGER_PROFILE_OVERRIDE
-		/* custom profile params */
-		if (in->get_param.param >= CS_PARAM_CUSTOM_PROFILE_MIN &&
-		    in->get_param.param <= CS_PARAM_CUSTOM_PROFILE_MAX) {
+		if (IS_ENABLED(CONFIG_CHARGER_PROFILE_OVERRIDE)
+			&& in->get_param.param >= CS_PARAM_CUSTOM_PROFILE_MIN
+			&& in->get_param.param <= CS_PARAM_CUSTOM_PROFILE_MAX) {
+			/* custom profile params */
 			rv  = charger_profile_override_get_param(
 				in->get_param.param, &val);
-		} else
-#endif
-#ifdef CONFIG_CHARGE_STATE_DEBUG
-		/* debug params */
-		if (in->get_param.param >= CS_PARAM_DEBUG_MIN &&
-		    in->get_param.param <= CS_PARAM_DEBUG_MAX) {
+		} else if (IS_ENABLED(CONFIG_CHARGE_STATE_DEBUG)
+			&& in->get_param.param >= CS_PARAM_DEBUG_MIN
+			&& in->get_param.param <= CS_PARAM_DEBUG_MAX) {
+			/* debug params */
 			rv = charge_get_charge_state_debug(
 				in->get_param.param, &val);
-		} else
-#endif
+		} else {
 			/* standard params */
 			switch (in->get_param.param) {
 			case CS_PARAM_CHG_VOLTAGE:
@@ -2887,6 +2921,7 @@ charge_command_charge_state(struct host_cmd_handler_args *args)
 			default:
 				rv = EC_RES_INVALID_PARAM;
 			}
+		}
 
 		/* got something */
 		out->get_param.value = val;
@@ -2898,14 +2933,13 @@ charge_command_charge_state(struct host_cmd_handler_args *args)
 			return EC_RES_ACCESS_DENIED;
 
 		val = in->set_param.value;
-#ifdef CONFIG_CHARGER_PROFILE_OVERRIDE
-		/* custom profile params */
-		if (in->set_param.param >= CS_PARAM_CUSTOM_PROFILE_MIN &&
-		    in->set_param.param <= CS_PARAM_CUSTOM_PROFILE_MAX) {
+		if (IS_ENABLED(CONFIG_CHARGER_PROFILE_OVERRIDE)
+			&& in->set_param.param >= CS_PARAM_CUSTOM_PROFILE_MIN
+			&& in->set_param.param <= CS_PARAM_CUSTOM_PROFILE_MAX) {
+			/* custom profile params */
 			rv  = charger_profile_override_set_param(
 				in->set_param.param, val);
-		} else
-#endif
+		} else {
 			switch (in->set_param.param) {
 			case CS_PARAM_CHG_VOLTAGE:
 				chgstate_set_manual_voltage(val);
@@ -2931,6 +2965,7 @@ charge_command_charge_state(struct host_cmd_handler_args *args)
 				rv = EC_RES_INVALID_PARAM;
 
 			}
+		}
 		break;
 
 	default:
@@ -3081,35 +3116,4 @@ static int command_chgdualdebug(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(chgdualdebug, command_chgdualdebug,
 			"[charge (auto|<current>)|discharge (auto|<current>)]",
 			"Manually control dual-battery charging algorithm.");
-#endif
-
-#ifdef CONFIG_CHARGE_STATE_DEBUG
-int charge_get_charge_state_debug(int param, uint32_t *value)
-{
-	switch (param) {
-	case CS_PARAM_DEBUG_CTL_MODE:
-		*value = get_chg_ctrl_mode();
-		break;
-	case CS_PARAM_DEBUG_MANUAL_CURRENT:
-		*value = manual_current;
-		break;
-	case CS_PARAM_DEBUG_MANUAL_VOLTAGE:
-		*value = manual_voltage;
-		break;
-	case CS_PARAM_DEBUG_SEEMS_DEAD:
-		*value = battery_seems_to_be_dead;
-		break;
-	case CS_PARAM_DEBUG_SEEMS_DISCONNECTED:
-		*value = battery_seems_to_be_disconnected;
-		break;
-	case CS_PARAM_DEBUG_BATT_REMOVED:
-		*value = battery_was_removed;
-		break;
-	default:
-		*value = 0;
-		return EC_ERROR_INVAL;
-	}
-
-	return EC_SUCCESS;
-}
 #endif

@@ -58,11 +58,13 @@ struct jump_tag {
 /* Jump data (at end of RAM, or preceding panic data) */
 static struct jump_data *jdata;
 
-static uint32_t reset_flags;
+static uint32_t reset_flags;  /* EC_RESET_FLAG_* */
 static int jumped_to_image;
 static int disable_jump;  /* Disable ALL jumps if system is locked */
 static int force_locked;  /* Force system locked even if WP isn't enabled */
 static enum ec_reboot_cmd reboot_at_shutdown;
+
+static enum sysinfo_flags system_info_flags;
 
 STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_seconds;
 STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_microseconds;
@@ -209,29 +211,29 @@ test_mockable uintptr_t system_usable_ram_end(void)
 	return (uintptr_t)jdata - jdata->jump_tag_total;
 }
 
-void system_encode_save_flags(int reset_flags, uint32_t *save_flags)
+void system_encode_save_flags(int flags, uint32_t *save_flags)
 {
 	*save_flags = 0;
 
 	/* Save current reset reasons if necessary */
-	if (reset_flags & SYSTEM_RESET_PRESERVE_FLAGS)
+	if (flags & SYSTEM_RESET_PRESERVE_FLAGS)
 		*save_flags = system_get_reset_flags() |
 			      EC_RESET_FLAG_PRESERVED;
 
 	/* Add in AP off flag into saved flags. */
-	if (reset_flags & SYSTEM_RESET_LEAVE_AP_OFF)
+	if (flags & SYSTEM_RESET_LEAVE_AP_OFF)
 		*save_flags |= EC_RESET_FLAG_AP_OFF;
 
 	/* Add in stay in RO flag into saved flags. */
-	if (reset_flags & SYSTEM_RESET_STAY_IN_RO)
+	if (flags & SYSTEM_RESET_STAY_IN_RO)
 		*save_flags |= EC_RESET_FLAG_STAY_IN_RO;
 
 	/* Add in watchdog flag into saved flags. */
-	if (reset_flags & SYSTEM_RESET_AP_WATCHDOG)
+	if (flags & SYSTEM_RESET_AP_WATCHDOG)
 		*save_flags |= EC_RESET_FLAG_AP_WATCHDOG;
 
 	/* Save reset flag */
-	if (reset_flags & (SYSTEM_RESET_HARD | SYSTEM_RESET_WAIT_EXT))
+	if (flags & (SYSTEM_RESET_HARD | SYSTEM_RESET_WAIT_EXT))
 		*save_flags |= EC_RESET_FLAG_HARD;
 	else
 		*save_flags |= EC_RESET_FLAG_SOFT;
@@ -919,9 +921,19 @@ void system_common_pre_init(void)
 	}
 }
 
+void system_enter_manual_recovery(void)
+{
+	system_info_flags |= SYSTEM_IN_MANUAL_RECOVERY;
+}
+
+void system_exit_manual_recovery(void)
+{
+	system_info_flags &= ~SYSTEM_IN_MANUAL_RECOVERY;
+}
+
 int system_is_manual_recovery(void)
 {
-	return host_is_event_set(EC_HOST_EVENT_KEYBOARD_RECOVERY);
+	return system_info_flags & SYSTEM_IN_MANUAL_RECOVERY;
 }
 
 /**
@@ -1030,6 +1042,7 @@ void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
 
 static void system_common_shutdown(void)
 {
+	system_exit_manual_recovery();
 	if (reboot_at_shutdown)
 		CPRINTF("Reboot at shutdown: %d\n", reboot_at_shutdown);
 	handle_pending_reboot(reboot_at_shutdown);
@@ -1050,18 +1063,20 @@ static int sysinfo(struct ec_response_sysinfo *info)
 	info->current_image = system_get_image_copy();
 
 	if (system_jumped_to_this_image())
-		info->flags |= SYSTEM_JUMPED_TO_CURRENT_IMAGE;
+		system_info_flags |= SYSTEM_JUMPED_TO_CURRENT_IMAGE;
 
 	if (system_is_locked()) {
-		info->flags |= SYSTEM_IS_LOCKED;
+		system_info_flags |= SYSTEM_IS_LOCKED;
 		if (force_locked)
-			info->flags |= SYSTEM_IS_FORCE_LOCKED;
+			system_info_flags |= SYSTEM_IS_FORCE_LOCKED;
 		if (!disable_jump)
-			info->flags |= SYSTEM_JUMP_ENABLED;
+			system_info_flags |= SYSTEM_JUMP_ENABLED;
 	}
 
 	if (reboot_at_shutdown)
-		info->flags |= SYSTEM_REBOOT_AT_SHUTDOWN;
+		system_info_flags |= SYSTEM_REBOOT_AT_SHUTDOWN;
+
+	info->flags = system_info_flags;
 
 	return EC_SUCCESS;
 }
@@ -1081,6 +1096,8 @@ static int command_sysinfo(int argc, char **argv)
 	ccprintf("Copy:   %s\n", ec_image_to_string(info.current_image));
 	ccprintf("Jumped: %s\n",
 		 (info.flags & SYSTEM_JUMPED_TO_CURRENT_IMAGE) ? "yes" : "no");
+	ccprintf("Recovery: %s\n",
+		 (info.flags & SYSTEM_IN_MANUAL_RECOVERY) ? "yes" : "no");
 
 	ccputs("Flags: ");
 	if (info.flags & SYSTEM_IS_LOCKED) {

@@ -64,6 +64,19 @@ void system_common_pre_init(void);
 int system_is_manual_recovery(void);
 
 /**
+ * Set a flag indicating system is in recovery mode.
+ */
+void system_enter_manual_recovery(void);
+
+/**
+ * Set a flag indicating system left recovery mode.
+ *
+ * WARNING: This flag should be cleared right after a shutdown from recovery
+ *          boot. You most likely shouldn't call this elsewhere.
+ */
+void system_exit_manual_recovery(void);
+
+/**
  * Make sure AP shutdown completely, before call system_hibernate
  */
 void system_enter_hibernate(uint32_t seconds, uint32_t microseconds);
@@ -89,10 +102,10 @@ __test_only void system_override_jdata(void *test_jdata);
 /**
  * Set up flags that should be saved to battery backed RAM.
  *
- * @param reset_flags - flags passed into system_reset
+ * @param flags - flags passed into system_reset (i.e. SYSTEM_RESET_*)
  * @param *save_flags - flags to be saved in battery backed RAM
  */
-void system_encode_save_flags(int reset_flags, uint32_t *save_flags);
+void system_encode_save_flags(int flags, uint32_t *save_flags);
 
 /**
  * Get the reset flags.

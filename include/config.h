@@ -652,20 +652,20 @@
  * Thus, we set them as follows by default:
  *
  *   CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON = 2 (don't boot if soc < 2%)
- *   CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE = 3    (shutdown if soc <= 3%)
+ *   CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE = 4    (shutdown if soc <= 4%)
  *   BATTERY_LEVEL_SHUTDOWN = 3                  (shutdown if soc < 3%)
  *
  * This produces the following behavior:
  *
  * - If soc = 1%, system doesn't boot. User wouldn't know why.
- * - If soc = 2~3%, system boots. Alert is shown. System immediately shuts down.
- * - If battery discharges to 3% while the system is running, system shuts down.
+ * - If soc = 2~4%, system boots. Alert is shown. System immediately shuts down.
+ * - If battery discharges to 4% while the system is running, system shuts down.
  *   If that happens while a user is away, they can press the power button to
  *   learn what happened.
  * - If system fails to shutdown for some reason and battery further discharges
  *   to 2%, EC will trigger shutdown.
  */
-#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	3  /* shutdown if soc <= 3% */
+#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	4  /* shutdown if soc <= 4% */
 
 /*
  * Powerd's full_factor. The value comes from:
@@ -1373,9 +1373,9 @@
 #undef  CONFIG_CMD_BATDEBUG
 #define CONFIG_CMD_BATTFAKE
 #undef  CONFIG_CMD_BATT_MFG_ACCESS
-#define CONFIG_CMD_RETIMER
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
+
 /*
  * HAS_TASK_CHIPSET implies the GSC presence.
  * HAS_TASK_CONSOLE means UART console enabled.
@@ -1435,6 +1435,7 @@
 #undef  CONFIG_CMD_MCDP
 #define CONFIG_CMD_MD
 #define CONFIG_CMD_MEM
+#define CONFIG_CMD_MFALLOW
 #define CONFIG_CMD_MMAPINFO
 #define CONFIG_CMD_PD
 #undef  CONFIG_CMD_PD_DEV_DUMP_INFO
@@ -1452,6 +1453,7 @@
 #undef  CONFIG_CMD_RAND
 #define CONFIG_CMD_REGULATOR
 #undef  CONFIG_CMD_RESET_FLAGS
+#define CONFIG_CMD_RETIMER
 #undef  CONFIG_CMD_RTC
 #undef  CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
