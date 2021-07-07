@@ -566,6 +566,12 @@ enum nvmem_users {
 /* Total time deep sleep should not be allowed while wiping the TPM. */
 #define DISABLE_SLEEP_TIME_TPM_WIPE (TPM_PROCESSING_TIME + TPM_RESET_TIME)
 
+/*****************************************************************************/
+/*
+ * Options for CRYPTO_TEST=1 images. Crypto test support takes up more space
+ * than the standard image has available. Use this section to add crypto test
+ * features and remove things to free up enough space to build them.
+ */
 #ifdef CRYPTO_TEST_SETUP
 /* Enable unsafe dev features for CCD in crypto test builds */
 #define CONFIG_CMD_ROLLBACK
