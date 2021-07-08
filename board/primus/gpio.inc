@@ -19,15 +19,15 @@ GPIO_INT(SEQ_EC_RSMRST_ODL,              PIN(E, 2), GPIO_INT_BOTH, power_signal_
 GPIO_INT(SLP_S3_L,                       PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SLP_SUS_L,                      PIN(F, 1), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SYS_SLP_S0IX_L,                 PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(USB_C0_BC12_INT_ODL,            PIN(C, 6), GPIO_INT_BOTH, bc12_interrupt)
-GPIO_INT(USB_C0_TCPC_INT_ODL,            PIN(E, 0), GPIO_INT_BOTH, tcpc_alert_event)
-GPIO_INT(USB_C0_RT_INT_ODL,              PIN(B, 1), GPIO_INT_BOTH, retimer_interrupt)
-GPIO_INT(USB_C0_PPC_INT_ODL,             PIN(F, 5), GPIO_INT_BOTH, ppc_interrupt)
+GPIO_INT(USB_C0_BC12_INT_ODL,            PIN(C, 6), GPIO_INT_FALLING, bc12_interrupt)
+GPIO_INT(USB_C0_TCPC_INT_ODL,            PIN(E, 0), GPIO_INT_FALLING, tcpc_alert_event)
+GPIO_INT(USB_C0_RT_INT_ODL,              PIN(B, 1), GPIO_INT_FALLING, retimer_interrupt)
+GPIO_INT(USB_C0_PPC_INT_ODL,             PIN(F, 5), GPIO_INT_FALLING, ppc_interrupt)
 /* USB C1 gpio pins are mapped to schematic USB C2 */
-GPIO_INT(USB_C1_TCPC_INT_ODL,            PIN(A, 2), GPIO_INT_BOTH, tcpc_alert_event)
-GPIO_INT(USB_C1_BC12_INT_ODL,            PIN(0, 2), GPIO_INT_BOTH, bc12_interrupt)
-GPIO_INT(USB_C1_PPC_INT_ODL,             PIN(7, 0), GPIO_INT_BOTH, ppc_interrupt)
-GPIO_INT(USB_C1_RT_INT_ODL,              PIN(4, 1), GPIO_INT_BOTH, retimer_interrupt)
+GPIO_INT(USB_C1_TCPC_INT_ODL,            PIN(A, 2), GPIO_INT_FALLING, tcpc_alert_event)
+GPIO_INT(USB_C1_BC12_INT_ODL,            PIN(0, 2), GPIO_INT_FALLING, bc12_interrupt)
+GPIO_INT(USB_C1_PPC_INT_ODL,             PIN(7, 0), GPIO_INT_FALLING, ppc_interrupt)
+GPIO_INT(USB_C1_RT_INT_ODL,              PIN(4, 1), GPIO_INT_FALLING, retimer_interrupt)
 
 /* USED GPIOs: */
 GPIO(CCD_MODE_ODL,                   PIN(E, 5), GPIO_INPUT)
@@ -58,7 +58,7 @@ GPIO(EC_PCH_PWR_BTN_ODL,             PIN(C, 1), GPIO_ODR_HIGH)
 GPIO(EC_PCH_RSMRST_L,                PIN(A, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_RTCRST,                  PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_SYS_PWROK,               PIN(3, 7), GPIO_OUT_LOW)
-GPIO(EC_PCH_WAKE_R_ODL,              PIN(C, 0), GPIO_INPUT)
+GPIO(EC_PCH_WAKE_R_ODL,              PIN(C, 0), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_ODL,                 PIN(5, 7), GPIO_ODR_HIGH)
 GPIO(EN_PP5000_FAN,                  PIN(6, 1), GPIO_OUT_HIGH)
 GPIO(EN_PP5000_USBA_R,               PIN(D, 7), GPIO_OUT_LOW)
@@ -70,15 +70,14 @@ GPIO(USB_C0_RT_RST_ODL,              PIN(A, 7), GPIO_ODR_LOW)
 GPIO(PDEV_STP_N,                     PIN(9, 6), GPIO_ODR_HIGH)
 GPIO(VCCST_PWRGD_OD,                 PIN(A, 4), GPIO_ODR_LOW)
 GPIO(USB_C1_RT_RST_ODL,              PIN(3, 2), GPIO_ODR_LOW)
-GPIO(PAD_FW_RW_EN_N,                 PIN(B, 5), GPIO_ODR_HIGH)
-GPIO(TP4_FW_RW_EN_N,                 PIN(B, 4), GPIO_ODR_HIGH)
+GPIO(PAD_FW_RW_EN_N,                 PIN(B, 5), GPIO_ODR_LOW)
+GPIO(TP4_FW_RW_EN_N,                 PIN(B, 4), GPIO_ODR_LOW)
 GPIO(USB_C0_FRS_EN,                  PIN(3, 5), GPIO_OUT_LOW)
 GPIO(USB_A_LOW_PWR_OD,               PIN(6, 6), GPIO_ODR_LOW)
 GPIO(TBT_PWR_EN,                     PIN(D, 4), GPIO_OUT_LOW)
 GPIO(TP4_RESET,                      PIN(9, 3), GPIO_ODR_LOW)
 GPIO(USB_C1_FRS_EN,                  PIN(9, 4), GPIO_OUT_LOW)
 GPIO(FAN_ID,                         PIN(9, 7), GPIO_INPUT)
-GPIO(DMIC_DET_N,                     PIN(5, 0), GPIO_INPUT)
 GPIO(USB_C0_OC_ODL,                  PIN(5, 6), GPIO_ODR_HIGH)
 GPIO(USB_C1_OC_ODL,                  PIN(8, 6), GPIO_ODR_HIGH)
 
@@ -126,7 +125,7 @@ ALTERNATE(PIN_MASK(6, 0x0C), 0, MODULE_PS2, 0)               /* PS2_CLK1/GPIO62,
 /* Unused Pins */
 UNUSED(PIN(D, 6))       /* GPOD6/CR_SOUT3/SHDF_ESPI_L */
 UNUSED(PIN(8, 1))       /* GPIO81/PECI_DATA */
-
+UNUSED(PIN(5, 0))       /* GPIO50 */
 /* Pre-configured PSL balls:  J8  K6 */
 
 
