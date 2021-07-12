@@ -47,9 +47,15 @@ const uint32_t pd_src_host_pdo[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pd_src_host_pdo) == PDO_IDX_COUNT);
 
+#ifdef BOARD_C1_1A5_LIMIT
+const uint32_t pd_src_display_pdo[] = {
+	[PDO_IDX_5V]  = PDO_FIXED(5000,   1500, PDO_FIXED_FLAGS),
+};
+#else
 const uint32_t pd_src_display_pdo[] = {
 	[PDO_IDX_5V]  = PDO_FIXED(5000,   3000, PDO_FIXED_FLAGS),
 };
+#endif
 
 const uint32_t pd_snk_pdo[] = {
 	[PDO_IDX_5V]  = PDO_FIXED(5000,   0, PDO_FIXED_FLAGS),
@@ -139,15 +145,12 @@ __override bool port_discovery_dr_swap_policy(int port,
 /*
  * Default Port Discovery VCONN Swap Policy.
  *
- * 1) VCONN swap if requested by PE and currently not vconn source.
+ * 1) No need to Vconn swap.  This board does not require any cable information.
  */
 __override bool port_discovery_vconn_swap_policy(int port,
 			bool vconn_swap_flag)
 {
-	if (vconn_swap_flag && !tc_is_vconn_src(port))
-		return true;
-	else
-		return false;
+	return false;
 }
 
 int pd_check_vconn_swap(int port)
@@ -347,6 +350,20 @@ int pd_check_power_swap(int port)
 
 	return 0;
 }
+
+#ifdef BOARD_C1_1A5_LIMIT
+__override int typec_get_default_current_limit_rp(int port)
+{
+	int rp = TYPEC_RP_USB;
+
+	if (port == USB_PD_PORT_HOST)
+		rp = TYPEC_RP_3A0;
+	else if (port == USB_PD_PORT_DP)
+		rp = TYPEC_RP_1A5;
+
+	return rp;
+}
+#endif
 
 static void usb_tc_connect(void)
 {

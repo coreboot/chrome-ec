@@ -18,6 +18,7 @@
 /* To save space */
 #undef CONFIG_SUPPRESSED_HOST_COMMANDS
 #undef CONFIG_CMD_MFALLOW
+#define CONFIG_USB_PD_DEBUG_LEVEL 1
 
 /* Optional features */
 #define CONFIG_ADC
@@ -29,6 +30,7 @@
 #undef  CONFIG_CMD_ADC
 #undef  CONFIG_CMD_CHARGE_SUPPLIER_INFO
 #undef  CONFIG_CMD_CRASH
+#undef  CONFIG_CMD_FLASHINFO
 #undef  CONFIG_CMD_HASH
 #undef  CONFIG_CMD_HCDEBUG
 #undef  CONFIG_CMD_I2C_SCAN

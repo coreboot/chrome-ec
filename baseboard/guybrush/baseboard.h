@@ -15,7 +15,6 @@
 
 /* Optional features */
 #define CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
 #define CONFIG_CMD_S5_TIMEOUT /* Allow a user-specified timeout to exit S5 */
@@ -113,6 +112,7 @@
 #define CONFIG_TABLET_MODE
 #define CONFIG_GMR_TABLET_MODE
 #define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 /* Battery Config */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
