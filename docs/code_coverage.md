@@ -33,3 +33,18 @@ function data mismatch at
 
 These warnings can be ignored. (FYI, the "function data mismatch" warnings
 appear to be caused in part by using relative paths instead of absolute paths.)
+
+## Zephyr ztest code coverage
+
+To build the Zephyr unit tests for code coverage run:
+
+`zmake coverage build/ztest-coverage`
+
+This target will compile, without linking, all zephyr projects with
+`CONFIG_COVERAGE` Kconfig option enabled, run the tests, and then process the
+profiling data into a code coverage report using the `lcov` and `genhtml`
+tools. This requires the `HAS_COVERAGE_SUPPORT` option, which can only be
+selected in `Kconfig.board`.
+
+The coverage report top-level page is
+`build/ztest-coverage/coverage_rpt/index.html`.

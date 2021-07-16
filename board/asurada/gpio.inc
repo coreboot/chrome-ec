@@ -30,7 +30,7 @@ GPIO_INT(PMIC_EC_PWRGD, PIN(F, 3),
 
 /* Sensor Interrupts */
 GPIO_INT(BASE_IMU_INT_L,     PIN(J, 2), GPIO_INT_FALLING | GPIO_SEL_1P8V,
-         bmi160_interrupt)
+         motion_interrupt)
 GPIO_INT(LID_ACCEL_INT_L,    PIN(J, 3), GPIO_INT_FALLING | GPIO_SEL_1P8V,
          lis2dw12_interrupt)
 #ifdef BOARD_ASURADA_REV0
@@ -53,6 +53,8 @@ GPIO_INT(VOLUME_UP_L,        PIN(D, 6), GPIO_INT_BOTH | GPIO_PULL_UP,
          button_interrupt) /* EC_VOLUP_BTN_ODL */
 
 /* Other interrupts */
+GPIO_INT(AP_XHCI_INIT_DONE,  PIN(D, 2), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V,
+         usb_a0_interrupt)
 #ifdef BOARD_ASURADA_REV0
 GPIO_INT(AC_PRESENT,         PIN(M, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,
          extpower_interrupt) /* AC_OK / AC_PRESENT in rev0 */
@@ -93,7 +95,7 @@ GPIO(EC_BATT_PRES_ODL,       PIN(C, 0), GPIO_INPUT)
 GPIO(BC12_DET_EN,            PIN(J, 5), GPIO_OUT_LOW) /* EN_USB_C0_BC12_DET */
 GPIO(EN_EC_ID_ODL,           PIN(H, 5), GPIO_ODR_LOW)
 GPIO(ENTERING_RW,            PIN(C, 5), GPIO_OUT_LOW) /* EC_ENTERING_RW */
-GPIO(EC_USB_C0_MUX_RESET_L,  PIN(D, 7), GPIO_OUT_HIGH)
+GPIO(EN_5V_USM,              PIN(D, 7), GPIO_OUT_LOW)
 
 /* I2C pins - Alternate function below configures I2C module on these pins */
 GPIO(I2C_A_SCL,              PIN(B, 3), GPIO_INPUT) /* I2C_CHG_BATT_SCL */
@@ -128,14 +130,13 @@ ALTERNATE(PIN_MASK(B, 0x03), 1, MODULE_UART, 0) /* EC to Servo */
 ALTERNATE(PIN_MASK(A, 0x07), 1, MODULE_PWM, 0) /* PWM 0~2 */
 
 /* ADC */
-ALTERNATE(PIN_MASK(I, 0x4F), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,6 */
+ALTERNATE(PIN_MASK(I, 0x6F), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,5,6 */
 
 /* SPI */
 ALTERNATE(PIN_MASK(M, 0x33), 0, MODULE_SPI, 0) /* SPI */
 
 /* Unimplemented Pins  */
 GPIO(SET_VMC_VOLT_AT_1V8,    PIN(D, 4), GPIO_INPUT | GPIO_PULL_DOWN | GPIO_SEL_1P8V)
-GPIO(EN_PP3000_VMC_PMU,      PIN(D, 2), GPIO_INPUT | GPIO_PULL_DOWN | GPIO_SEL_1P8V)
 GPIO(PACKET_MODE_EN,         PIN(A, 3), GPIO_INPUT | GPIO_PULL_DOWN)
 /* b/160218054: behavior not defined */
 /* *_ODL pin has external pullup so don't pull it down. */
@@ -149,7 +150,6 @@ GPIO(CCD_MODE_ODL,           PIN(C, 4), GPIO_INPUT)
  * ADC pins don't have internal pull-down capability,
  * so we set them as output low.
  */
-GPIO(NC_GPI5,                PIN(I, 5), GPIO_OUT_LOW)
 GPIO(NC_GPI7,                PIN(I, 7), GPIO_OUT_LOW)
 /* NC pins, enable internal pull-up/down to avoid floating state. */
 #ifdef BOARD_ASURADA_REV0

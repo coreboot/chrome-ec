@@ -8,6 +8,7 @@
 #include "clock.h"
 #include "cpu.h"
 #include "flash.h"
+#include "flash-regs.h"
 #include "hooks.h"
 #include "registers.h"
 #include "panic.h"
@@ -90,7 +91,6 @@ static int unlock(int bank)
 
 		STM32_FLASH_KEYR(bank) = FLASH_KEYR_KEY1;
 		STM32_FLASH_KEYR(bank) = FLASH_KEYR_KEY2;
-		asm volatile("dsb; isb");
 		ignore_bus_fault(0);
 	}
 
@@ -111,11 +111,7 @@ static int unlock_optb(void)
 	if (unlock(0))
 		return EC_ERROR_UNKNOWN;
 
-	/*
-	 * Always use bank 0 flash controller as there is only one option bytes
-	 * set for both banks.
-	 */
-	if (STM32_FLASH_OPTCR(0) & FLASH_OPTCR_OPTLOCK) {
+	if (flash_option_bytes_locked()) {
 		/*
 		 * We may have already locked the flash module and get a bus
 		 * fault in the attempt to unlock. Need to disable bus fault
@@ -123,14 +119,12 @@ static int unlock_optb(void)
 		 */
 		ignore_bus_fault(1);
 
-		STM32_FLASH_OPTKEYR(0) = FLASH_OPTKEYR_KEY1;
-		STM32_FLASH_OPTKEYR(0) = FLASH_OPTKEYR_KEY2;
-		asm volatile("dsb; isb");
+		unlock_flash_option_bytes();
 		ignore_bus_fault(0);
 	}
 
-	return STM32_FLASH_OPTCR(0) & FLASH_OPTCR_OPTLOCK ? EC_ERROR_UNKNOWN
-							  : EC_SUCCESS;
+	return flash_option_bytes_locked() ? EC_ERROR_UNKNOWN
+					   : EC_SUCCESS;
 }
 
 static int commit_optb(void)
@@ -144,7 +138,7 @@ static int commit_optb(void)
 	while (STM32_FLASH_OPTSR_CUR(0) & FLASH_OPTSR_BUSY && timeout-- > 0)
 		;
 
-	STM32_FLASH_OPTCR(0) |= FLASH_OPTCR_OPTLOCK;
+	lock_flash_option_bytes();
 	lock(0);
 
 	return (timeout > 0) ? EC_SUCCESS : EC_ERROR_TIMEOUT;
@@ -158,6 +152,87 @@ static void protect_blocks(uint32_t blocks)
 	STM32_FLASH_WPSN_PRG(1) &= ~((blocks >> BLOCKS_PER_HWBANK)
 				& BLOCKS_HWBANK_MASK);
 	commit_optb();
+}
+
+
+/*
+ * Helper function definitions for consistency with F4 to enable flash
+ * physical unitesting
+ */
+void unlock_flash_control_register(void)
+{
+	unlock(0);
+	unlock(1);
+}
+
+void unlock_flash_option_bytes(void)
+{
+	/*
+	 * Always use bank 0 flash controller as there is only one option bytes
+	 * set for both banks. See http://b/181130245
+	 *
+	 * Consecutively program values. Ref: RM0433:4.9.2
+	 */
+	STM32_FLASH_OPTKEYR(0) = FLASH_OPTKEYR_KEY1;
+	STM32_FLASH_OPTKEYR(0) = FLASH_OPTKEYR_KEY2;
+}
+
+void disable_flash_option_bytes(void)
+{
+	ignore_bus_fault(1);
+	/*
+	 * Always use bank 0 flash controller as there is only one option bytes
+	 * set for both banks. See http://b/181130245
+	 *
+	 * Writing anything other than the pre-defined keys to the option key
+	 * register results in a bus fault and the register being locked until
+	 * reboot (even with a further correct key write).
+	 */
+	STM32_FLASH_OPTKEYR(0) = 0xffffffff;
+	ignore_bus_fault(0);
+}
+
+void disable_flash_control_register(void)
+{
+	ignore_bus_fault(1);
+	/*
+	 * Writing anything other than the pre-defined keys to a key
+	 * register results in a bus fault and the register being locked until
+	 * reboot (even with a further correct key write).
+	 */
+	STM32_FLASH_KEYR(0) = 0xffffffff;
+	STM32_FLASH_KEYR(1) = 0xffffffff;
+	ignore_bus_fault(0);
+}
+
+void lock_flash_control_register(void)
+{
+	lock(0);
+	lock(1);
+}
+
+void lock_flash_option_bytes(void)
+{
+	/*
+	 * Always use bank 0 flash controller as there is only one option bytes
+	 * set for both banks. See http://b/181130245
+	 */
+	STM32_FLASH_OPTCR(0) |= FLASH_OPTCR_OPTLOCK;
+}
+
+bool flash_option_bytes_locked(void)
+{
+	/*
+	 * Always use bank 0 flash controller as there is only one option bytes
+	 * set for both banks. See http://b/181130245
+	 */
+	return  !!(STM32_FLASH_OPTCR(0) & FLASH_OPTCR_OPTLOCK);
+}
+
+bool flash_control_register_locked(void)
+{
+	return !!(STM32_FLASH_CR(0) & FLASH_CR_LOCK) &&
+	       !!(STM32_FLASH_CR(1) & FLASH_CR_LOCK);
 }
 
 /*
@@ -212,7 +287,7 @@ static int set_wp(int enabled)
 /*****************************************************************************/
 /* Physical layer APIs */
 
-int flash_physical_write(int offset, int size, const char *data)
+int crec_flash_physical_write(int offset, int size, const char *data)
 {
 	int res = EC_SUCCESS;
 	int bank = offset / HWBANK_SIZE;
@@ -290,7 +365,7 @@ exit_wr:
 	return res;
 }
 
-int flash_physical_erase(int offset, int size)
+int crec_flash_physical_erase(int offset, int size)
 {
 	int res = EC_SUCCESS;
 	int bank = offset / HWBANK_SIZE;
@@ -335,7 +410,12 @@ int flash_physical_erase(int offset, int size)
 		/* Wait for erase to complete */
 		while ((STM32_FLASH_SR(bank) & FLASH_SR_BUSY) &&
 		       (get_time().val < deadline.val)) {
-			usleep(5000);
+			/*
+			 * Interrupts may not be enabled, so we are using
+			 * udelay() instead of usleep() which can trigger
+			 * Forced Hard Fault (see b/180761547).
+			 */
+			udelay(5000);
 		}
 		if (STM32_FLASH_SR(bank) & FLASH_SR_BUSY) {
 			res = EC_ERROR_TIMEOUT;
@@ -366,7 +446,7 @@ exit_er:
 	return res;
 }
 
-int flash_physical_get_protect(int block)
+int crec_flash_physical_get_protect(int block)
 {
 	int bank = block / BLOCKS_PER_HWBANK;
 	int index = block % BLOCKS_PER_HWBANK;
@@ -378,7 +458,7 @@ int flash_physical_get_protect(int block)
  * Note: This does not need to update _NOW flags, as flash_get_protect
  * in common code already does so.
  */
-uint32_t flash_physical_get_protect_flags(void)
+uint32_t crec_flash_physical_get_protect_flags(void)
 {
 	uint32_t flags = 0;
 
@@ -398,7 +478,7 @@ uint32_t flash_physical_get_protect_flags(void)
 #define WP_RANGE(start, count) (((1 << (count)) - 1) << (start))
 #define RO_WP_RANGE WP_RANGE(WP_BANK_OFFSET, WP_BANK_COUNT)
 
-int flash_physical_protect_now(int all)
+int crec_flash_physical_protect_now(int all)
 {
 	protect_blocks(RO_WP_RANGE);
 
@@ -411,24 +491,20 @@ int flash_physical_protect_now(int all)
 	 * permanently locked until reset, a correct keyring write
 	 * will not unlock it.
 	 */
-	ignore_bus_fault(1);
 
 	if (all) {
 		/* cannot do any write/erase access until next reboot */
-		STM32_FLASH_KEYR(0) = 0xffffffff;
-		STM32_FLASH_KEYR(1) = 0xffffffff;
+		disable_flash_control_register();
 		access_disabled = 1;
 	}
 	/* cannot modify the WP bits in the option bytes until reboot */
-	STM32_FLASH_OPTKEYR(0) = 0xffffffff;
+	disable_flash_option_bytes();
 	option_disabled = 1;
-	asm volatile("dsb; isb");
-	ignore_bus_fault(0);
 
 	return EC_SUCCESS;
 }
 
-int flash_physical_protect_at_boot(uint32_t new_flags)
+int crec_flash_physical_protect_at_boot(uint32_t new_flags)
 {
 	int new_wp_enable = !!(new_flags & EC_FLASH_PROTECT_RO_AT_BOOT);
 
@@ -438,14 +514,14 @@ int flash_physical_protect_at_boot(uint32_t new_flags)
 	return EC_SUCCESS;
 }
 
-uint32_t flash_physical_get_valid_flags(void)
+uint32_t crec_flash_physical_get_valid_flags(void)
 {
 	return EC_FLASH_PROTECT_RO_AT_BOOT |
 	       EC_FLASH_PROTECT_RO_NOW |
 	       EC_FLASH_PROTECT_ALL_NOW;
 }
 
-uint32_t flash_physical_get_writable_flags(uint32_t cur_flags)
+uint32_t crec_flash_physical_get_writable_flags(uint32_t cur_flags)
 {
 	uint32_t ret = 0;
 
@@ -464,7 +540,7 @@ uint32_t flash_physical_get_writable_flags(uint32_t cur_flags)
 	return ret;
 }
 
-int flash_physical_restore_state(void)
+int crec_flash_physical_restore_state(void)
 {
 	uint32_t reset_flags = system_get_reset_flags();
 	int version, size;
@@ -490,14 +566,14 @@ int flash_physical_restore_state(void)
 	return 0;
 }
 
-int flash_pre_init(void)
+int crec_flash_pre_init(void)
 {
 	uint32_t reset_flags = system_get_reset_flags();
-	uint32_t prot_flags = flash_get_protect();
+	uint32_t prot_flags = crec_flash_get_protect();
 	uint32_t unwanted_prot_flags = EC_FLASH_PROTECT_ALL_NOW |
 		EC_FLASH_PROTECT_ERROR_INCONSISTENT;
 
-	if (flash_physical_restore_state())
+	if (crec_flash_physical_restore_state())
 		return EC_SUCCESS;
 
 	/*
@@ -516,13 +592,13 @@ int flash_pre_init(void)
 		    !(prot_flags & EC_FLASH_PROTECT_RO_NOW)) {
 			int rv;
 
-			rv = flash_set_protect(EC_FLASH_PROTECT_RO_NOW,
-					       EC_FLASH_PROTECT_RO_NOW);
+			rv = crec_flash_set_protect(EC_FLASH_PROTECT_RO_NOW,
+						    EC_FLASH_PROTECT_RO_NOW);
 			if (rv)
 				return rv;
 
 			/* Re-read flags */
-			prot_flags = flash_get_protect();
+			prot_flags = crec_flash_get_protect();
 		}
 	} else {
 		/* Don't want RO flash protected */

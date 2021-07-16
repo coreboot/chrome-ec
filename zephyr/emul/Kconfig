@@ -1,0 +1,35 @@
+# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+config EMUL_SMART_BATTERY
+	bool "Smart Battery emulator"
+	help
+	  Enable the Smart Battery emulator. This driver use emulated I2C bus.
+
+config EMUL_BMA255
+	bool "BMA255 emulator"
+	help
+	  Enable the BMA255 emulator. This driver use emulated I2C bus.
+	  It is used to test bma2x2 driver. Emulators API is available in
+	  zephyr/include/emul/emul_bma255.h
+
+config EMUL_BC12_DETECT_PI3USB9201
+	bool "PI3USB9201 emulator"
+	help
+	  Enable the PI3USB9201 emulator. PI3USB9201 is a BC1.2 charger
+	  detector/advertiser. The emulator supports reading and writing the
+	  4 I2C registers of the PI3USB9201 using the emulated I2C bus.
+
+config EMUL_PPC_SYV682X
+	bool "Silergy SYV682x PPC emulator"
+	select PLATFORM_EC_USBC_PPC_SYV682X
+	help
+	  Enable the SYV682x emulator. SYV682 is a USB Type-C PPC. This driver
+	  uses the emulated I2C bus.
+config EMUL_BMI
+	bool "BMI emulator"
+	help
+	  Enable the BMI emulator. This driver use emulated I2C bus.
+	  It is used to test bmi 160 and 260 drivers. Emulators API is
+	  available in zephyr/include/emul/emul_bmi.h

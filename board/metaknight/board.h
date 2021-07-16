@@ -11,11 +11,6 @@
 #define VARIANT_DEDEDE_EC_NPCX796FC
 #include "baseboard.h"
 
-/*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
- */
-#define CONFIG_SYSTEM_UNLOCKED
 
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
@@ -25,6 +20,8 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #undef  CONFIG_CHARGER_SINGLE_CHIP
+#undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 
 /*
  * GPIO for C1 interrupts, for baseboard use
@@ -34,14 +31,11 @@
  */
 #define GPIO_USB_C1_INT_ODL GPIO_SUB_C1_INT_EN_RAILS_ODL
 
-/* Keyboard */
-#define CONFIG_PWM_KBLIGHT
 
 /* LED defines */
 #define CONFIG_LED_ONOFF_STATES
 
 /* PWM */
-#define CONFIG_PWM
 #define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 
 /* Temp sensor */
@@ -49,7 +43,6 @@
 #define CONFIG_THROTTLE_AP
 #define CONFIG_THERMISTOR_NCP15WB
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -65,7 +58,7 @@
 #define GPIO_USB2_ILIM_SEL GPIO_USB_A1_CHARGE_EN_L
 
 /* USB PD */
-#define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_TCPM_RAA489000
 
 /* USB defines specific to external TCPCs */
@@ -97,8 +90,8 @@
  * Note: these lines will be set as i2c on start-up, but this should be
  * okay since they're ODL.
  */
-#define GPIO_EC_I2C_SUB_USB_C1_SCL GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL
-#define GPIO_EC_I2C_SUB_USB_C1_SDA GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL
+#define GPIO_EC_I2C_SUB_USB_C1_SCL GPIO_GPIO92_NC
+#define GPIO_EC_I2C_SUB_USB_C1_SDA GPIO_HDMI_HPD_SUB_ODL
 
 /* Sensors */
 #define CONFIG_CMD_ACCELS
@@ -108,6 +101,7 @@
 #define CONFIG_ACCEL_KX022          /* Lid accel second source */
 #define CONFIG_ACCELGYRO_BMI160     /* Base accel */
 #define CONFIG_ACCELGYRO_LSM6DSM    /* Base accel second source */
+#define CONFIG_ACCELGYRO_ICM426XX   /* Base accel second source */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -119,6 +113,8 @@
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #define CONFIG_LID_ANGLE
@@ -155,7 +151,6 @@
 
 enum chg_id {
 	CHARGER_PRIMARY,
-	CHARGER_SECONDARY,
 	CHARGER_NUM,
 };
 
@@ -168,8 +163,8 @@ enum adc_channel {
 };
 
 enum temp_sensor_id {
-	TEMP_SENSOR_1,
-	TEMP_SENSOR_2,
+	TEMP_SENSOR_MEMORY,
+	TEMP_SENSOR_CPU,
 	TEMP_SENSOR_COUNT
 };
 
@@ -181,7 +176,6 @@ enum sensor_id {
 };
 
 enum pwm_channel {
-	PWM_CH_KBLIGHT,
 	PWM_CH_COUNT,
 };
 
@@ -190,8 +184,6 @@ enum battery_type {
 	BATTERY_SMP_PCVPBP144,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 void motion_interrupt(enum gpio_signal signal);
 

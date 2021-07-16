@@ -9,6 +9,7 @@
 #include "battery_smart.h"
 #include "charge_state_v2.h"
 #include "charger.h"
+#include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -624,6 +625,12 @@ static void sm5803_init(int chgnum)
 	rv = chg_write8(chgnum, SM5803_REG_DPM_VL_SET_MSB, (reg >> 3));
 	rv |= chg_write8(chgnum, SM5803_REG_DPM_VL_SET_LSB, (reg & 0x7));
 
+	/* Set the VCHGPWR thresholds to mirror those for VBUS. */
+	rv |= meas_write8(chgnum, SM5803_REG_VCHG_PWR_HIGH_TH,
+			  SM5803_VBUS_HIGH_LEVEL);
+	rv |= meas_write8(chgnum, SM5803_REG_VCHG_PWR_LOW_TH,
+			  SM5803_VBUS_LOW_LEVEL);
+
 	/* Set default input current */
 	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_INPUT_CURRENT)
 		& SM5803_CHG_ILIM_RAW;
@@ -636,14 +643,22 @@ static void sm5803_init(int chgnum)
 						      SM5803_INT4_CHG_DONE |
 						      SM5803_INT4_OTG_FAIL);
 
-	/* Set TINT interrupts for 360 K and 330 K */
+	/* Set TINT interrupts for higher threshold 360 K */
 	rv |= meas_write8(chgnum, SM5803_REG_TINT_HIGH_TH,
 						SM5803_TINT_HIGH_LEVEL);
+	/*
+	 * Set TINT interrupts for lower threshold to 0 when not
+	 * throttled to prevent trigger interrupts continually
+	 */
 	rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
-						SM5803_TINT_LOW_LEVEL);
+						SM5803_TINT_MIN_LEVEL);
 
-	/* Configure TINT interrupts to fire after thresholds are set */
-	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, SM5803_INT2_TINT);
+
+	/*
+	 * Configure TINT & VCHGPWR interrupts to fire after thresholds are set
+	 */
+	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, SM5803_INT2_TINT |
+						      SM5803_INT2_VCHGPWR);
 
 	/*
 	 * Configure CHG_ENABLE to only be set through I2C by setting
@@ -1015,12 +1030,10 @@ void sm5803_handle_interrupt(int chgnum)
 			charger_vbus[chgnum] = 0;
 			if (IS_ENABLED(CONFIG_USB_CHARGER))
 				usb_charger_vbus_change(chgnum, 0);
-			board_vbus_present_change();
 		} else {
 			charger_vbus[chgnum] = 1;
 			if (IS_ENABLED(CONFIG_USB_CHARGER))
 				usb_charger_vbus_change(chgnum, 1);
-			board_vbus_present_change();
 		}
 	}
 
@@ -1032,20 +1045,31 @@ void sm5803_handle_interrupt(int chgnum)
 	}
 
 	if (int_reg & SM5803_INT2_TINT) {
-		/*
-		 * Ignore any interrupts from the low threshold when not
-		 * throttled in order to prevent console spam when the
-		 * temperature is holding near the threshold.
-		 */
 		rv = meas_read8(chgnum, SM5803_REG_TINT_MEAS_MSB, &meas_reg);
 		if ((meas_reg <= SM5803_TINT_LOW_LEVEL) && throttled) {
 			throttled = false;
 			throttle_ap(THROTTLE_OFF, THROTTLE_HARD,
 							THROTTLE_SRC_THERMAL);
+			/*
+			 * Set back higher threshold to 360 K and set lower
+			 * threshold to 0.
+			 */
+			rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
+							SM5803_TINT_MIN_LEVEL);
+			rv |= meas_write8(chgnum, SM5803_REG_TINT_HIGH_TH,
+							SM5803_TINT_HIGH_LEVEL);
 		} else if (meas_reg >= SM5803_TINT_HIGH_LEVEL) {
 			throttled = true;
 			throttle_ap(THROTTLE_ON, THROTTLE_HARD,
 							THROTTLE_SRC_THERMAL);
+			/*
+			 * Set back lower threshold to 330 K and set higher
+			 * threshold to maximum.
+			 */
+			rv |= meas_write8(chgnum, SM5803_REG_TINT_HIGH_TH,
+							SM5803_TINT_MAX_LEVEL);
+			rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
+							SM5803_TINT_LOW_LEVEL);
 		}
 		/*
 		 * If the interrupt came in and we're not currently throttling
@@ -1053,6 +1077,10 @@ void sm5803_handle_interrupt(int chgnum)
 		 * ignored.
 		 */
 	}
+
+	/* Update extpower if VCHGPWR changes. */
+	if (int_reg & SM5803_INT2_VCHGPWR)
+		board_check_extpower();
 
 	/* TODO(b/159376384): Take action on fatal BFET power alert. */
 	rv = main_read8(chgnum, SM5803_REG_INT3_REQ, &int_reg);
@@ -1212,7 +1240,7 @@ static enum ec_error_list sm5803_set_mode(int chgnum, int mode)
 	return rv;
 }
 
-static enum ec_error_list sm5803_get_current(int chgnum, int *current)
+static enum ec_error_list sm5803_get_actual_current(int chgnum, int *current)
 {
 	enum ec_error_list rv;
 	int reg;
@@ -1233,6 +1261,21 @@ static enum ec_error_list sm5803_get_current(int chgnum, int *current)
 	return EC_SUCCESS;
 }
 
+static enum ec_error_list sm5803_get_current(int chgnum, int *current)
+{
+	enum ec_error_list rv;
+	int reg;
+
+	rv = chg_read8(chgnum, SM5803_REG_FAST_CONF4, &reg);
+	if (rv)
+		return rv;
+
+	reg &= SM5803_CONF4_ICHG_FAST;
+	*current = SM5803_REG_TO_CURRENT(reg);
+
+	return EC_SUCCESS;
+}
+
 static enum ec_error_list sm5803_set_current(int chgnum, int current)
 {
 	enum ec_error_list rv;
@@ -1249,7 +1292,7 @@ static enum ec_error_list sm5803_set_current(int chgnum, int current)
 	return rv;
 }
 
-static enum ec_error_list sm5803_get_voltage(int chgnum, int *voltage)
+static enum ec_error_list sm5803_get_actual_voltage(int chgnum, int *voltage)
 {
 	enum ec_error_list rv;
 	int reg;
@@ -1267,6 +1310,25 @@ static enum ec_error_list sm5803_get_voltage(int chgnum, int *voltage)
 
 	/* The LSB is 23.4mV */
 	*voltage = volt_bits * 234 / 10;
+
+	return EC_SUCCESS;
+}
+
+static enum ec_error_list sm5803_get_voltage(int chgnum, int *voltage)
+{
+	enum ec_error_list rv;
+	int regval;
+	int v;
+
+	rv = chg_read8(chgnum, SM5803_REG_VBAT_FAST_MSB, &regval);
+	v = regval << 3;
+	rv |= chg_read8(chgnum, SM5803_REG_VBAT_FAST_LSB, &regval);
+	v |= (regval & 0x3);
+
+	*voltage = SM5803_REG_TO_VOLTAGE(v);
+
+	if (rv)
+		return EC_ERROR_UNKNOWN;
 
 	return EC_SUCCESS;
 }
@@ -1422,6 +1484,40 @@ static enum ec_error_list sm5803_get_option(int chgnum, int *option)
 	control |= reg << 16;
 
 	return rv;
+}
+
+enum ec_error_list sm5803_is_acok(int chgnum, bool *acok)
+{
+	int rv;
+	enum sm5803_charger_modes mode;
+	int reg;
+
+	rv = chg_read8(chgnum, SM5803_REG_FLOW1, &reg);
+	if (rv)
+		return rv;
+
+	/* The charger mode is contained in the last 2 bits. */
+	reg &= SM5803_FLOW1_MODE;
+	mode = (enum sm5803_charger_modes)reg;
+
+	/* If we're not sinking, then AC can't be OK. */
+	if (mode != CHARGER_MODE_SINK) {
+		*acok = false;
+		return EC_SUCCESS;
+	}
+
+	/*
+	 * Okay, we're sinking.  Check that VCHGPWR has some voltage.  This
+	 * should indicate that the path is good.
+	 */
+	rv = meas_read8(chgnum, SM5803_REG_VCHG_PWR_MSB, &reg);
+	if (rv)
+		return rv;
+
+	/* Assume that ACOK would be asserted if VCHGPWR is higher than ~4V. */
+	*acok = reg >= SM5803_VBUS_HIGH_LEVEL;
+
+	return EC_SUCCESS;
 }
 
 static enum ec_error_list sm5803_is_input_current_limit_reached(int chgnum,
@@ -1716,8 +1812,10 @@ const struct charger_drv sm5803_drv = {
 	.get_info = &sm5803_get_info,
 	.get_status = &sm5803_get_status,
 	.set_mode = &sm5803_set_mode,
+	.get_actual_current = &sm5803_get_actual_current,
 	.get_current = &sm5803_get_current,
 	.set_current = &sm5803_set_current,
+	.get_actual_voltage = &sm5803_get_actual_voltage,
 	.get_voltage = &sm5803_get_voltage,
 	.set_voltage = &sm5803_set_voltage,
 	.discharge_on_ac = &sm5803_discharge_on_ac,

@@ -12,10 +12,6 @@
 #include <stdint.h>
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef CHROMIUM_EC
 /*
  * CHROMIUM_EC is defined by the Makefile system of Chromium EC repository.
@@ -72,6 +68,10 @@ extern "C" {
 #endif
 
 #endif  /* __KERNEL__ */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * Current version of this protocol
@@ -943,7 +943,7 @@ struct ec_host_response {
  *
  * Packets always start with a request or response header.  They are followed
  * by data_len bytes of data.  If the data_crc_present flag is set, the data
- * bytes are followed by a CRC-8 of that data, using using x^8 + x^2 + x + 1
+ * bytes are followed by a CRC-8 of that data, using x^8 + x^2 + x + 1
  * polynomial.
  *
  * Host algorithm when sending a request q:
@@ -1949,7 +1949,13 @@ enum sysinfo_flags {
 	SYSTEM_IS_FORCE_LOCKED = BIT(1),
 	SYSTEM_JUMP_ENABLED = BIT(2),
 	SYSTEM_JUMPED_TO_CURRENT_IMAGE = BIT(3),
-	SYSTEM_REBOOT_AT_SHUTDOWN = BIT(4)
+	SYSTEM_REBOOT_AT_SHUTDOWN = BIT(4),
+	/*
+	 * Used internally. It's set when EC_HOST_EVENT_KEYBOARD_RECOVERY is
+	 * set and cleared when the system shuts down (not when the host event
+	 * flag is cleared).
+	 */
+	SYSTEM_IN_MANUAL_RECOVERY = BIT(5),
 };
 
 struct ec_response_sysinfo {
@@ -2672,6 +2678,9 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_LIS2DS = 23,
 	MOTIONSENSE_CHIP_BMI260 = 24,
 	MOTIONSENSE_CHIP_ICM426XX = 25,
+	MOTIONSENSE_CHIP_ICM42607 = 26,
+	MOTIONSENSE_CHIP_BMA422 = 27,
+	MOTIONSENSE_CHIP_BMI323 = 28,
 	MOTIONSENSE_CHIP_MAX,
 };
 
@@ -2769,6 +2778,8 @@ struct ec_motion_sense_activity {
 #define MOTIONSENSE_SENSOR_FLAG_WAKEUP BIT(2)
 #define MOTIONSENSE_SENSOR_FLAG_TABLET_MODE BIT(3)
 #define MOTIONSENSE_SENSOR_FLAG_ODR BIT(4)
+
+#define MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO BIT(7)
 
 /*
  * Send this value for the data element to only perform a read. If you
@@ -3787,6 +3798,9 @@ enum ec_mkbp_event {
 	/* New online calibration values are available. */
 	EC_MKBP_EVENT_ONLINE_CALIBRATION = 11,
 
+	/* Peripheral device charger event */
+	EC_MKBP_EVENT_PCHG = 12,
+
 	/* Number of MKBP events */
 	EC_MKBP_EVENT_COUNT,
 };
@@ -4243,16 +4257,55 @@ struct ec_params_i2c_write {
  * discharge the battery.
  */
 #define EC_CMD_CHARGE_CONTROL 0x0096
-#define EC_VER_CHARGE_CONTROL 1
+#define EC_VER_CHARGE_CONTROL 2
 
 enum ec_charge_control_mode {
 	CHARGE_CONTROL_NORMAL = 0,
 	CHARGE_CONTROL_IDLE,
 	CHARGE_CONTROL_DISCHARGE,
+	/* Add no more entry below. */
+	CHARGE_CONTROL_COUNT,
+};
+
+#define EC_CHARGE_MODE_TEXT { \
+	[CHARGE_CONTROL_NORMAL] = "NORMAL", \
+	[CHARGE_CONTROL_IDLE] = "IDLE", \
+	[CHARGE_CONTROL_DISCHARGE] = "DISCHARGE", \
+	}
+
+enum ec_charge_control_cmd {
+	EC_CHARGE_CONTROL_CMD_SET = 0,
+	EC_CHARGE_CONTROL_CMD_GET,
 };
 
 struct ec_params_charge_control {
 	uint32_t mode;  /* enum charge_control_mode */
+
+	/* Below are the fields added in V2. */
+	uint8_t cmd;    /* enum ec_charge_control_cmd. */
+	uint8_t reserved;
+	/*
+	 * Lower and upper thresholds for battery sustainer. This struct isn't
+	 * named to avoid tainting foreign projects' name spaces.
+	 *
+	 * If charge mode is explicitly set (e.g. DISCHARGE), battery sustainer
+	 * will be disabled. To disable battery sustainer, set mode=NORMAL,
+	 * lower=-1, upper=-1.
+	 */
+	struct {
+		int8_t lower;	/* Display SoC in percentage. */
+		int8_t upper;	/* Display SoC in percentage. */
+	} sustain_soc;
+} __ec_align4;
+
+/* Added in v2 */
+struct ec_response_charge_control {
+	uint32_t mode;  /* enum charge_control_mode */
+	struct {        /* Battery sustainer thresholds */
+		int8_t lower;
+		int8_t upper;
+	} sustain_soc;
+	uint16_t reserved;
 } __ec_align4;
 
 /*****************************************************************************/
@@ -5892,6 +5945,7 @@ enum cbi_data_tag {
 	CBI_TAG_PCB_SUPPLIER = 7,  /* uint32_t or smaller */
 	/* Second Source Factory Cache */
 	CBI_TAG_SSFC = 8,          /* uint32_t bit field */
+	CBI_TAG_REWORK_ID = 9,     /* uint64_t or smaller */
 	CBI_TAG_COUNT,
 };
 
@@ -6644,6 +6698,7 @@ enum tcpc_cc_polarity {
 #define PD_STATUS_EVENT_SOP_DISC_DONE		BIT(0)
 #define PD_STATUS_EVENT_SOP_PRIME_DISC_DONE	BIT(1)
 #define PD_STATUS_EVENT_HARD_RESET		BIT(2)
+#define PD_STATUS_EVENT_DISCONNECTED		BIT(3)
 
 /*
  * Encode and decode for BCD revision response
@@ -6799,6 +6854,11 @@ struct ec_response_pchg {
 	uint32_t error;			/* enum pchg_error */
 	uint8_t state;			/* enum pchg_state state */
 	uint8_t battery_percentage;
+	uint8_t unused0;
+	uint8_t unused1;
+	/* Fields added in version 1 */
+	uint32_t fw_version;
+	uint32_t dropped_event_count;
 } __ec_align2;
 
 enum pchg_state {
@@ -6808,10 +6868,20 @@ enum pchg_state {
 	PCHG_STATE_INITIALIZED,
 	/* Charger is enabled and ready to detect a device. */
 	PCHG_STATE_ENABLED,
-	/* Device is detected in proximity. */
+	/* Device is in proximity. */
 	PCHG_STATE_DETECTED,
 	/* Device is being charged. */
 	PCHG_STATE_CHARGING,
+	/* Device is fully charged. It implies DETECTED (& not charging). */
+	PCHG_STATE_FULL,
+	/* In download (a.k.a. firmware update) mode */
+	PCHG_STATE_DOWNLOAD,
+	/* In download mode. Ready for receiving data. */
+	PCHG_STATE_DOWNLOADING,
+	/* Device is ready for data communication. */
+	PCHG_STATE_CONNECTED,
+	/* Put no more entry below */
+	PCHG_STATE_COUNT,
 };
 
 #define EC_PCHG_STATE_TEXT { \
@@ -6820,7 +6890,92 @@ enum pchg_state {
 	[PCHG_STATE_ENABLED] = "ENABLED", \
 	[PCHG_STATE_DETECTED] = "DETECTED", \
 	[PCHG_STATE_CHARGING] = "CHARGING", \
+	[PCHG_STATE_FULL] = "FULL", \
+	[PCHG_STATE_DOWNLOAD] = "DOWNLOAD", \
+	[PCHG_STATE_DOWNLOADING] = "DOWNLOADING", \
+	[PCHG_STATE_CONNECTED] = "CONNECTED", \
 	}
+
+/**
+ * Update firmware of peripheral chip
+ */
+#define EC_CMD_PCHG_UPDATE 0x0136
+
+/* Port number is encoded in bit[28:31]. */
+#define EC_MKBP_PCHG_PORT_SHIFT		28
+/* Utility macro for converting MKBP event to port number. */
+#define EC_MKBP_PCHG_EVENT_TO_PORT(e)	(((e) >> EC_MKBP_PCHG_PORT_SHIFT) & 0xf)
+/* Utility macro for extracting event bits. */
+#define EC_MKBP_PCHG_EVENT_MASK(e)	((e) \
+					& GENMASK(EC_MKBP_PCHG_PORT_SHIFT-1, 0))
+
+#define EC_MKBP_PCHG_UPDATE_OPENED	BIT(0)
+#define EC_MKBP_PCHG_WRITE_COMPLETE	BIT(1)
+#define EC_MKBP_PCHG_UPDATE_CLOSED	BIT(2)
+#define EC_MKBP_PCHG_UPDATE_ERROR	BIT(3)
+
+enum ec_pchg_update_cmd {
+	/* Reset chip to normal mode. */
+	EC_PCHG_UPDATE_CMD_RESET_TO_NORMAL = 0,
+	/* Reset and put a chip in update (a.k.a. download) mode. */
+	EC_PCHG_UPDATE_CMD_OPEN,
+	/* Write a block of data containing FW image. */
+	EC_PCHG_UPDATE_CMD_WRITE,
+	/* Close update session. */
+	EC_PCHG_UPDATE_CMD_CLOSE,
+	/* End of commands */
+	EC_PCHG_UPDATE_CMD_COUNT,
+};
+
+struct ec_params_pchg_update {
+	/* PCHG port number */
+	uint8_t port;
+	/* enum ec_pchg_update_cmd */
+	uint8_t cmd;
+	/* Padding */
+	uint8_t reserved0;
+	uint8_t reserved1;
+	/* Version of new firmware */
+	uint32_t version;
+	/* CRC32 of new firmware */
+	uint32_t crc32;
+	/* Address in chip memory where <data> is written to */
+	uint32_t addr;
+	/* Size of <data> */
+	uint32_t size;
+	/* Partial data of new firmware */
+	uint8_t data[];
+} __ec_align4;
+
+BUILD_ASSERT(EC_PCHG_UPDATE_CMD_COUNT
+	     < BIT(sizeof(((struct ec_params_pchg_update *)0)->cmd)*8));
+
+struct ec_response_pchg_update {
+	/* Block size */
+	uint32_t block_size;
+} __ec_align4;
+
+
+#define EC_CMD_DISPLAY_SOC 0x0137
+
+struct ec_response_display_soc {
+	int16_t display_soc;  /* Display charge in 10ths of a % (1000=100.0%) */
+	int16_t full_factor;  /* Full factor in 10ths of a % (1000=100.0%) */
+	int16_t shutdown_soc; /* Shutdown SoC in 10ths of a % (1000=100.0%) */
+} __ec_align2;
+
+
+#define EC_CMD_SET_BASE_STATE 0x0138
+
+struct ec_params_set_base_state {
+	uint8_t cmd;  /* enum ec_set_base_state_cmd */
+} __ec_align1;
+
+enum ec_set_base_state_cmd {
+	EC_SET_BASE_STATE_DETACH = 0,
+	EC_SET_BASE_STATE_ATTACH,
+	EC_SET_BASE_STATE_RESET,
+};
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

@@ -145,9 +145,11 @@ int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t * const src_caps,
  *
  * @param pdo raw pdo to extract
  * @param ma current of the PDO (output)
- * @param mv voltage of the PDO (output)
+ * @param max_mv maximum voltage of the PDO (output)
+ * @param min_mv minimum voltage of the PDO (output)
  */
-void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv);
+void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *max_mv,
+			  uint32_t *min_mv);
 
 /**
  * Decide which PDO to choose from the source capabilities.
@@ -263,4 +265,11 @@ int usb_retimer_fw_update_get_result(void);
  * @param port USB-C port number
  */
 void usb_retimer_fw_update_process_op_cb(int port);
+
+/**
+ * Dump SourceCap information.
+ *
+ * @param port USB-C port number
+ */
+void pd_srccaps_dump(int port);
 #endif /* __CROS_EC_USB_COMMON_H */

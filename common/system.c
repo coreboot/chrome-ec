@@ -58,11 +58,13 @@ struct jump_tag {
 /* Jump data (at end of RAM, or preceding panic data) */
 static struct jump_data *jdata;
 
-static uint32_t reset_flags;
+static uint32_t reset_flags;  /* EC_RESET_FLAG_* */
 static int jumped_to_image;
 static int disable_jump;  /* Disable ALL jumps if system is locked */
 static int force_locked;  /* Force system locked even if WP isn't enabled */
 static enum ec_reboot_cmd reboot_at_shutdown;
+
+static enum sysinfo_flags system_info_flags;
 
 STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_seconds;
 STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_microseconds;
@@ -75,13 +77,10 @@ uint32_t sleep_mask;
 uint32_t idle_disabled;
 #endif
 
-#ifdef CONFIG_HOSTCMD_AP_SET_SKUID
+/* SKU ID sourced from AP */
 static uint32_t ap_sku_id;
 
-uint32_t system_get_sku_id(void)
-{
-	return ap_sku_id;
-}
+#ifdef CONFIG_HOSTCMD_AP_SET_SKUID
 
 #define AP_SKUID_SYSJUMP_TAG		0x4153 /* AS */
 #define AP_SKUID_HOOK_VERSION		1
@@ -115,6 +114,19 @@ static void ap_sku_id_restore_state(void)
 }
 DECLARE_HOOK(HOOK_INIT, ap_sku_id_restore_state, HOOK_PRIO_DEFAULT);
 #endif
+
+__overridable uint32_t board_get_sku_id(void)
+{
+	return 0;
+}
+
+uint32_t system_get_sku_id(void)
+{
+	if (IS_ENABLED(CONFIG_HOSTCMD_AP_SET_SKUID))
+		return ap_sku_id;
+
+	return board_get_sku_id();
+}
 
 /**
  * Return the program memory address where the image `copy` begins or should
@@ -176,13 +188,13 @@ int system_is_locked(void)
 	is_locked = 0;
 	return 0;
 
-#elif defined(CONFIG_FLASH)
+#elif defined(CONFIG_FLASH_CROS)
 	/*
 	 * Unlocked if write protect pin deasserted or read-only firmware
 	 * is not protected.
 	 */
 	if ((EC_FLASH_PROTECT_GPIO_ASSERTED | EC_FLASH_PROTECT_RO_NOW) &
-	    ~flash_get_protect()) {
+	    ~crec_flash_get_protect()) {
 		is_locked = 0;
 		return 0;
 	}
@@ -209,25 +221,29 @@ test_mockable uintptr_t system_usable_ram_end(void)
 	return (uintptr_t)jdata - jdata->jump_tag_total;
 }
 
-void system_encode_save_flags(int reset_flags, uint32_t *save_flags)
+void system_encode_save_flags(int flags, uint32_t *save_flags)
 {
 	*save_flags = 0;
 
 	/* Save current reset reasons if necessary */
-	if (reset_flags & SYSTEM_RESET_PRESERVE_FLAGS)
+	if (flags & SYSTEM_RESET_PRESERVE_FLAGS)
 		*save_flags = system_get_reset_flags() |
 			      EC_RESET_FLAG_PRESERVED;
 
 	/* Add in AP off flag into saved flags. */
-	if (reset_flags & SYSTEM_RESET_LEAVE_AP_OFF)
+	if (flags & SYSTEM_RESET_LEAVE_AP_OFF)
 		*save_flags |= EC_RESET_FLAG_AP_OFF;
 
 	/* Add in stay in RO flag into saved flags. */
-	if (reset_flags & SYSTEM_RESET_STAY_IN_RO)
+	if (flags & SYSTEM_RESET_STAY_IN_RO)
 		*save_flags |= EC_RESET_FLAG_STAY_IN_RO;
 
+	/* Add in watchdog flag into saved flags. */
+	if (flags & SYSTEM_RESET_AP_WATCHDOG)
+		*save_flags |= EC_RESET_FLAG_AP_WATCHDOG;
+
 	/* Save reset flag */
-	if (reset_flags & (SYSTEM_RESET_HARD | SYSTEM_RESET_WAIT_EXT))
+	if (flags & (SYSTEM_RESET_HARD | SYSTEM_RESET_WAIT_EXT))
 		*save_flags |= EC_RESET_FLAG_HARD;
 	else
 		*save_flags |= EC_RESET_FLAG_SOFT;
@@ -281,6 +297,47 @@ static void print_reset_flags(uint32_t flags)
 void system_print_reset_flags(void)
 {
 	print_reset_flags(reset_flags);
+}
+
+void system_print_banner(void)
+{
+	/* be less verbose if we boot for USB resume to meet spec timings */
+	if (!(system_get_reset_flags() & EC_RESET_FLAG_USB_RESUME)) {
+		CPUTS("\n");
+		if (system_jumped_to_this_image())
+			CPRINTS("UART initialized after sysjump");
+		else
+			CPUTS("\n--- UART initialized after reboot ---\n");
+		CPRINTF("[Image: %s, %s]\n",
+			 system_get_image_copy_string(),
+			 system_get_build_info());
+		CPUTS("[Reset cause: ");
+		system_print_reset_flags();
+		CPUTS("]\n");
+	}
+}
+
+struct jump_data *get_jump_data(void)
+{
+	uintptr_t addr;
+
+	/*
+	 * Put the jump data before the panic data, or at the end of RAM if
+	 * panic data is not present.
+	 */
+	if (IS_ENABLED(CONFIG_ZEPHYR)) {
+		/*
+		 * For Zephyr, the panic data is not at the end of RAM so
+		 * the jump data is always at the end of RAM.
+		 */
+		addr = CONFIG_RAM_BASE + CONFIG_RAM_SIZE;
+	} else {
+		addr = get_panic_data_start();
+		if (!addr)
+			addr = CONFIG_RAM_BASE + CONFIG_RAM_SIZE;
+	}
+
+	return (struct jump_data *)(addr - sizeof(struct jump_data));
 }
 
 int system_jumped_to_this_image(void)
@@ -351,6 +408,7 @@ void system_disable_jump(void)
 
 #ifdef CONFIG_MPU
 	if (system_is_locked()) {
+#ifndef CONFIG_ZEPHYR
 		int ret;
 		enum ec_image __attribute__((unused)) copy;
 
@@ -406,6 +464,7 @@ void system_disable_jump(void)
 			return;
 		}
 #endif /* !CONFIG_EXTERNAL_STORAGE */
+#endif /* !CONFIG_ZEPHYR */
 
 		/* All regions were configured successfully, enable MPU */
 		mpu_enable();
@@ -491,6 +550,13 @@ const char *ec_image_to_string(enum ec_image copy)
 	return image_names[copy < ARRAY_SIZE(image_names) ? copy : 0];
 }
 
+__overridable void board_pulse_entering_rw(void)
+{
+	gpio_set_level(GPIO_ENTERING_RW, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_ENTERING_RW, 0);
+}
+
 /**
  * Jump to what we hope is the init address of an image.
  *
@@ -511,9 +577,7 @@ static void jump_to_image(uintptr_t init_addr)
 	 * drop it again so we don't leak power through the pulldown in the
 	 * Silego.
 	 */
-	gpio_set_level(GPIO_ENTERING_RW, 1);
-	usleep(MSEC);
-	gpio_set_level(GPIO_ENTERING_RW, 0);
+	board_pulse_entering_rw();
 
 	/*
 	 * Since in EFS2, USB/PD won't be enabled in RO or if it's enabled in
@@ -550,7 +614,7 @@ static void jump_to_image(uintptr_t init_addr)
 	hook_notify(HOOK_SYSJUMP);
 
 	/* Disable interrupts before jump */
-	interrupt_disable();
+	interrupt_disable_all();
 
 #ifdef CONFIG_DMA
 	/* Disable all DMA channels to avoid memory corruption */
@@ -628,7 +692,12 @@ static int system_run_image_copy_with_flags(enum ec_image copy,
 
 	system_set_reset_flags(add_reset_flags);
 
-	CPRINTS("Jumping to image %s", ec_image_to_string(copy));
+	/* If jumping back to RO, we're no longer in the EFS context. */
+	if (copy == EC_IMAGE_RO)
+		system_clear_reset_flags(EC_RESET_FLAG_EFS);
+
+	CPRINTS("Jumping to image %s (0x%08x)",
+		ec_image_to_string(copy), system_get_reset_flags());
 
 	jump_to_image(init_addr);
 
@@ -711,12 +780,12 @@ const struct image_data *system_get_image_data(enum ec_image copy)
 
 #ifdef CONFIG_MAPPED_STORAGE
 	addr += CONFIG_MAPPED_STORAGE_BASE;
-	flash_lock_mapped_storage(1);
+	crec_flash_lock_mapped_storage(1);
 	memcpy(&data, (const void *)addr, sizeof(data));
-	flash_lock_mapped_storage(0);
+	crec_flash_lock_mapped_storage(0);
 #else
 	/* Read the version struct from flash into a buffer. */
-	if (flash_read(addr, sizeof(data), (char *)&data))
+	if (crec_flash_read(addr, sizeof(data), (char *)&data))
 		return NULL;
 #endif
 
@@ -754,31 +823,40 @@ int system_get_image_used(enum ec_image copy)
 }
 
 /*
+ * Overwrite it in board directory in case that we want to read board version
+ * in our own way.
+ */
+__overridable int board_get_version(void)
+{
+#ifdef CONFIG_BOARD_VERSION_GPIO
+	return (!!gpio_get_level(GPIO_BOARD_VERSION1) << 0) |
+	       (!!gpio_get_level(GPIO_BOARD_VERSION2) << 1) |
+	       (!!gpio_get_level(GPIO_BOARD_VERSION3) << 2);
+#else
+	return 0;
+#endif
+}
+
+/*
  * Returns positive board version if successfully retrieved. Otherwise the
  * value is a negative version of an EC return code. Without this optimization
  * multiple boards run out of flash size.
  */
 int system_get_board_version(void)
 {
-#if defined(CONFIG_BOARD_VERSION_CUSTOM)
-	return board_get_version();
-#elif defined(CONFIG_BOARD_VERSION_GPIO)
-	return
-		(!!gpio_get_level(GPIO_BOARD_VERSION1) << 0) |
-		(!!gpio_get_level(GPIO_BOARD_VERSION2) << 1) |
-		(!!gpio_get_level(GPIO_BOARD_VERSION3) << 2);
-#elif defined(CONFIG_BOARD_VERSION_CBI)
-	int error;
-	int32_t version;
+	int board_id;
 
-	error = cbi_get_board_version(&version);
-	if (error)
-		return -error;
-	else
-		return version;
-#else
-	return 0;
-#endif
+	if (IS_ENABLED(CONFIG_BOARD_VERSION_CBI)) {
+		int error;
+
+		error = cbi_get_board_version(&board_id);
+		if (error)
+			return -error;
+
+		return board_id;
+	};
+
+	return board_get_version();
 }
 
 __attribute__((weak))	   /* Weird chips may need their own implementations */
@@ -789,8 +867,6 @@ const char *system_get_build_info(void)
 
 void system_common_pre_init(void)
 {
-	uintptr_t addr;
-
 #ifdef CONFIG_SOFTWARE_PANIC
 	/*
 	 * Log panic cause if watchdog caused reset and panic cause
@@ -808,15 +884,7 @@ void system_common_pre_init(void)
 	}
 #endif
 
-	/*
-	 * Put the jump data before the panic data, or at the end of RAM if
-	 * panic data is not present.
-	 */
-	addr = get_panic_data_start();
-	if (!addr)
-		addr = CONFIG_RAM_BASE + CONFIG_RAM_SIZE;
-
-	jdata = (struct jump_data *)(addr - sizeof(struct jump_data));
+	jdata = get_jump_data();
 
 	/*
 	 * Check jump data if this is a jump between images.
@@ -872,9 +940,19 @@ void system_common_pre_init(void)
 	}
 }
 
+void system_enter_manual_recovery(void)
+{
+	system_info_flags |= SYSTEM_IN_MANUAL_RECOVERY;
+}
+
+void system_exit_manual_recovery(void)
+{
+	system_info_flags &= ~SYSTEM_IN_MANUAL_RECOVERY;
+}
+
 int system_is_manual_recovery(void)
 {
-	return host_is_event_set(EC_HOST_EVENT_KEYBOARD_RECOVERY);
+	return system_info_flags & SYSTEM_IN_MANUAL_RECOVERY;
 }
 
 /**
@@ -941,6 +1019,13 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 		if (!IS_ENABLED(CONFIG_HIBERNATE))
 			return EC_ERROR_INVAL;
 
+		/*
+		 * Allow some time for the system to quiesce before entering EC
+		 * hibernate.  Otherwise, some stray signals may cause an
+		 * immediate wake up.
+		 */
+		CPRINTS("Waiting 1s before hibernating...");
+		msleep(1000);
 		CPRINTS("system hibernating");
 		system_hibernate(hibernate_seconds, hibernate_microseconds);
 		/* That shouldn't return... */
@@ -976,6 +1061,7 @@ void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
 
 static void system_common_shutdown(void)
 {
+	system_exit_manual_recovery();
 	if (reboot_at_shutdown)
 		CPRINTF("Reboot at shutdown: %d\n", reboot_at_shutdown);
 	handle_pending_reboot(reboot_at_shutdown);
@@ -996,18 +1082,20 @@ static int sysinfo(struct ec_response_sysinfo *info)
 	info->current_image = system_get_image_copy();
 
 	if (system_jumped_to_this_image())
-		info->flags |= SYSTEM_JUMPED_TO_CURRENT_IMAGE;
+		system_info_flags |= SYSTEM_JUMPED_TO_CURRENT_IMAGE;
 
 	if (system_is_locked()) {
-		info->flags |= SYSTEM_IS_LOCKED;
+		system_info_flags |= SYSTEM_IS_LOCKED;
 		if (force_locked)
-			info->flags |= SYSTEM_IS_FORCE_LOCKED;
+			system_info_flags |= SYSTEM_IS_FORCE_LOCKED;
 		if (!disable_jump)
-			info->flags |= SYSTEM_JUMP_ENABLED;
+			system_info_flags |= SYSTEM_JUMP_ENABLED;
 	}
 
 	if (reboot_at_shutdown)
-		info->flags |= SYSTEM_REBOOT_AT_SHUTDOWN;
+		system_info_flags |= SYSTEM_REBOOT_AT_SHUTDOWN;
+
+	info->flags = system_info_flags;
 
 	return EC_SUCCESS;
 }
@@ -1027,6 +1115,8 @@ static int command_sysinfo(int argc, char **argv)
 	ccprintf("Copy:   %s\n", ec_image_to_string(info.current_image));
 	ccprintf("Jumped: %s\n",
 		 (info.flags & SYSTEM_JUMPED_TO_CURRENT_IMAGE) ? "yes" : "no");
+	ccprintf("Recovery: %s\n",
+		 (info.flags & SYSTEM_IN_MANUAL_RECOVERY) ? "yes" : "no");
 
 	ccputs("Flags: ");
 	if (info.flags & SYSTEM_IS_LOCKED) {
@@ -1533,7 +1623,7 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_CHIP_INFO,
 		     host_command_get_chip_info,
 		     EC_VER_MASK(0));
 
-#ifdef CONFIG_BOARD_VERSION
+#if defined(CONFIG_BOARD_VERSION_CBI) || defined(CONFIG_BOARD_VERSION_GPIO)
 enum ec_status
 host_command_get_board_version(struct host_cmd_handler_args *args)
 {
@@ -1648,7 +1738,7 @@ __overridable const char *board_read_serial(void)
 {
 	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
 	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
-		return flash_read_pstate_serial();
+		return crec_flash_read_pstate_serial();
 	else if (IS_ENABLED(CONFIG_OTP))
 		return otp_read_serial();
 	else
@@ -1659,7 +1749,7 @@ __overridable int board_write_serial(const char *serialno)
 {
 	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
 	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
-		return flash_write_pstate_serial(serialno);
+		return crec_flash_write_pstate_serial(serialno);
 	else if (IS_ENABLED(CONFIG_OTP))
 		return otp_write_serial(serialno);
 	else
@@ -1673,7 +1763,7 @@ __overridable const char *board_read_mac_addr(void)
 {
 	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
 	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
-		return flash_read_pstate_mac_addr();
+		return crec_flash_read_pstate_mac_addr();
 	else
 		return "";
 }
@@ -1683,7 +1773,7 @@ __overridable int board_write_mac_addr(const char *mac_addr)
 {
 	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
 	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
-		return flash_write_pstate_mac_addr(mac_addr);
+		return crec_flash_write_pstate_mac_addr(mac_addr);
 	else
 		return EC_ERROR_UNIMPLEMENTED;
 }

@@ -188,7 +188,7 @@
  *-------------------------------------------------------------------------*/
 
 /* SPI configuration for the fingerprint sensor */
-#define CONFIG_SPI_MASTER
+#define CONFIG_SPI_CONTROLLER
 #define CONFIG_SPI_FP_PORT  0 /* SPI2: first master config */
 #define CONFIG_FINGERPRINT_MCU
 #ifdef SECTION_IS_RW
@@ -236,8 +236,6 @@
 #define CONFIG_SHA256_UNROLLED
 #define CONFIG_SPI
 #define CONFIG_STM_HWTIMER32
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_PD_GET_LOG_ENTRY
 #define CONFIG_WP_ACTIVE_HIGH
 
 #ifndef __ASSEMBLER__
@@ -247,8 +245,7 @@
 #define TIM_WATCHDOG 16
 
 #include "gpio_signal.h"
-
-void fps_event(enum gpio_signal signal);
+#include "board_rw.h"
 
 #endif /* !__ASSEMBLER__ */
 

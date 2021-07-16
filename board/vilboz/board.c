@@ -46,8 +46,6 @@ void hdmi_hpd_interrupt(enum gpio_signal signal)
 
 #include "gpio_list.h"
 
-#ifdef HAS_TASK_MOTIONSENSE
-
 /* Motion sensors */
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
@@ -112,7 +110,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-	 .default_range = 4, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = LSM6DSM_ODR_MIN_VAL,
 	 .max_frequency = LSM6DSM_ODR_MAX_VAL,
@@ -152,8 +150,6 @@ struct motion_sensor_t motion_sensors[] = {
 };
 
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-#endif /* HAS_TASK_MOTIONSENSE */
 
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
@@ -309,23 +305,29 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
-static void reset_pd_port(int port, enum gpio_signal reset_gpio_l,
-			  int hold_delay, int finish_delay)
+static void reset_nct38xx_port(int port)
 {
+	enum gpio_signal reset_gpio_l;
+
+	if (port == USBC_PORT_C0)
+		reset_gpio_l = GPIO_USB_C0_TCPC_RST_L;
+	else
+		/* Invalid port: do nothing */
+		return;
+
 	gpio_set_level(reset_gpio_l, 0);
-	msleep(hold_delay);
+	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
 	gpio_set_level(reset_gpio_l, 1);
-	if (finish_delay)
-		msleep(finish_delay);
+	nct38xx_reset_notify(port);
+	if (NCT38XX_RESET_POST_DELAY_MS != 0)
+		msleep(NCT38XX_RESET_POST_DELAY_MS);
 }
+
 
 void board_reset_pd_mcu(void)
 {
 	/* Reset TCPC0 */
-	reset_pd_port(USBC_PORT_C0, GPIO_USB_C0_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
-
+	reset_nct38xx_port(USBC_PORT_C0);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -490,7 +492,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 struct ioexpander_config_t ioex_config[] = {
 	[IOEX_C0_NCT3807] = {
 		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 	},
 };

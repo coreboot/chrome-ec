@@ -13,13 +13,17 @@
 #include <zephyr.h>
 
 #include "common.h"
+#include "cros_version.h"
 
 /**
  * The internal data structure stored for a deferred function.
  */
 struct deferred_data {
-	void (*routine)(void);
-	struct k_delayed_work delayed_work;
+#if IS_ZEPHYR_VERSION(2, 6)
+	struct k_work_delayable *work;
+#else
+	struct k_delayed_work *work;
+#endif
 };
 
 /**
@@ -27,32 +31,21 @@ struct deferred_data {
  */
 int hook_call_deferred(const struct deferred_data *data, int us);
 
-/**
- * Runtime helper to setup deferred data.
- *
- * @param data		The struct deferred_data.
- */
-void zephyr_shim_setup_deferred(const struct deferred_data *data);
-
-/**
- * See include/hooks.h for documentation.
- *
- * Typically Zephyr would put const data in the rodata section but that is
- * write-protected with native_posix. So force it into .data instead.
- */
-#define DECLARE_DEFERRED(routine) _DECLARE_DEFERRED(routine)
-#define _DECLARE_DEFERRED(_routine)                                        \
-	__maybe_unused const struct deferred_data _routine##_data          \
-		__attribute__((section(".data.hooks"))) = {                \
-		.routine = _routine,                                       \
-	};                                                                 \
-	static int _setup_deferred_##_routine(const struct device *unused) \
-	{                                                                  \
-		ARG_UNUSED(unused);                                        \
-		zephyr_shim_setup_deferred(&_routine##_data);              \
-		return 0;                                                  \
-	}                                                                  \
-	SYS_INIT(_setup_deferred_##_routine, APPLICATION, 1)
+#if IS_ZEPHYR_VERSION(2, 6)
+#define DECLARE_DEFERRED(routine)                                    \
+	K_WORK_DELAYABLE_DEFINE(routine##_work_data,                 \
+				(void (*)(struct k_work *))routine); \
+	__maybe_unused const struct deferred_data routine##_data = { \
+		.work = &routine##_work_data,                \
+	}
+#else
+#define DECLARE_DEFERRED(routine)                                    \
+	K_DELAYED_WORK_DEFINE(routine##_work_data,                   \
+			      (void (*)(struct k_work *))routine);   \
+	__maybe_unused const struct deferred_data routine##_data = { \
+		.work = &routine##_work_data,                \
+	}
+#endif
 
 /**
  * Internal linked-list structure used to store hook lists.

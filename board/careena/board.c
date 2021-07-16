@@ -8,6 +8,7 @@
 #include "button.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "extpower.h"
+#include "hooks.h"
 #include "i2c.h"
 #include "lid_switch.h"
 #include "power.h"
@@ -15,6 +16,7 @@
 #include "pwm.h"
 #include "pwm_chip.h"
 #include "switch.h"
+#include "thermal.h"
 
 #include "gpio_list.h"
 
@@ -45,6 +47,35 @@ const struct pwm_t pwm_channels[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
+	[TEMP_SENSOR_SOC] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_WARN] = 0,
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(74),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(79),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_WARN] = 0,
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(71),
+			[EC_TEMP_THRESH_HALT] = 0,
+		},
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+static void board_init(void)
+{
+	/*
+	 * Ensure PROCHOT is deasserted after sysjump.
+	 * The GPIO was an input in old RO images. On sysjump to new RW, the
+	 * direction is changed to output but the level is not set, which
+	 * results in the output driving low, which asserts PROCHOT incorrectly.
+	 * (crbug.com/1226694)
+	 */
+	gpio_set_level(GPIO_CPU_PROCHOT, 1);
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_KEYBOARD_FACTORY_TEST
 /*

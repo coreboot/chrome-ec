@@ -1,0 +1,244 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/dts-v1/;
+
+#include <cros/ite/it8xxx2.dtsi>
+#include <dt-bindings/gpio_defines.h>
+#include <it8xxx2.dtsi>
+
+/ {
+	model = "IT8XXX2 EV-Board";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,console = &uart1;
+		zephyr,shell-uart = &uart1;
+		zephyr,flash = &flash0;
+		zephyr,flash-controller = &flashctrl;
+	};
+
+	named-gpios {
+		compatible = "named-gpios";
+
+		power_button_l {
+			gpios = <&gpioe 4 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_POWER_BUTTON_L";
+			label = "POWER_BUTTON_L";
+		};
+		lid_open {
+			gpios = <&gpioe 2 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_LID_OPEN";
+			label = "LID_OPEN";
+		};
+		wp_l {
+			gpios = <&gpioi 4 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_WP_L";
+			label = "WP_L";
+		};
+		pch_pltrst_l {
+			gpios = <&gpioe 3 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_PCH_RSMRST_L";
+			label = "PCH_PLTRST_L";
+		};
+		uart1_rx {
+			gpios = <&gpiob 0 GPIO_INPUT_PULL_UP>;
+			#enum-name = "GPIO_UART1_RX";
+			label = "UART1_RX";
+		};
+		pch_smi_l {
+			gpios = <&gpiod 3 GPIO_OUT_HIGH>;
+			#enum-name = "GPIO_PCH_SMI_L";
+			label = "PCH_SMI_L";
+		};
+		pch_sci_l {
+			gpios = <&gpiod 4 GPIO_OUT_HIGH>;
+			#enum-name = "GPIO_PCH_SCI_L";
+			label = "PCH_SCI_L";
+		};
+		gate_a20_h {
+			gpios = <&gpiob 5 GPIO_OUT_HIGH>;
+			#enum-name = "GPIO_GATE_A20_H";
+			label = "GATE_A20_H";
+		};
+		sys_reset_l {
+			gpios = <&gpiob 6 GPIO_OUT_HIGH>;
+			enum-name = "GPIO_SYS_RESET_L";
+			label = "SYS_RESET_L";
+		};
+		lpc_clkrun_l {
+			gpios = <&gpioh 0 GPIO_OUT_LOW>;
+			#enum-name = "GPIO_LPC_CLKRUN_L";
+			label = "LPC_CLKRUN_L";
+		};
+		pch_wake_l {
+			gpios = <&gpiob 7 GPIO_OUT_HIGH>;
+			enum-name = "GPIO_EC_PCH_WAKE_ODL";
+			label = "PCH_WAKE_L";
+		};
+		i2c_a_scl {
+			gpios = <&gpiob 3 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C0_SENSOR_SCL";
+			label = "I2C_A_SCL";
+		};
+		i2c_a_sda {
+			gpios = <&gpiob 4 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C0_SENSOR_SDA";
+			label = "I2C_A_SDA";
+		};
+		i2c_b_scl {
+			gpios = <&gpioc 1 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C1_USB_C0_SCL";
+			label = "I2C_B_SCL";
+		};
+		i2c_b_sda {
+			gpios = <&gpioc 2 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C1_USB_C0_SDA";
+			label = "I2C_B_SDA";
+		};
+		i2c_c_scl {
+			gpios = <&gpiof 6 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C2_USB_C1_SCL";
+			label = "I2C_C_SCL";
+		};
+		i2c_c_sda {
+			gpios = <&gpiof 7 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C2_USB_C1_SDA";
+			label = "I2C_C_SDA";
+		};
+		i2c_e_scl {
+			gpios = <&gpioe 0 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C5_BATTERY_SCL";
+			label = "I2C_E_SCL";
+		};
+		i2c_e_sda {
+			gpios = <&gpioe 7 GPIO_INPUT>;
+			enum-name = "GPIO_EC_I2C5_BATTERY_SDA";
+			label = "I2C_E_SDA";
+		};
+
+	};
+
+	named-adc-channels {
+		compatible = "named-adc-channels";
+
+		adc_vbussa: vbussa {
+			label = "ADC_VBUSSA";
+			enum-name = "ADC_VBUS";
+			channel = <0>;
+		};
+		adc_vbussb: vbussb {
+			label = "ADC_VBUSSB";
+			enum-name = "ADC_PSYS";
+			channel = <1>;
+		};
+		adc_evb_ch_13: evb_ch_13 {
+			label = "ADC_EVB_CH_13";
+			enum-name = "ADC_AMON_BMON";
+			channel = <2>;
+		};
+		adc_evb_ch_14: evb_ch_14 {
+			label = "ADC_EVB_CH_14";
+			enum-name = "ADC_TEMP_SENSOR_FAN";
+			channel = <3>;
+		};
+		adc_evb_ch_15: evb_ch_15 {
+			label = "ADC_EVB_CH_15";
+			enum-name = "ADC_TEMP_SENSOR_DDR_SOC";
+			channel = <4>;
+		};
+		adc_evb_ch_16: evb_ch_16 {
+			label = "ADC_EVB_CH_16";
+			enum-name = "ADC_TEMP_SENSOR_CHARGER";
+			channel = <5>;
+		};
+	};
+
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+
+		battery {
+			i2c-port = <&i2c2>;
+			enum-name = "I2C_PORT_BATTERY";
+			label = "BATTERY";
+		};
+		evb-1 {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_EVB_1";
+			label = "EVB_1";
+		};
+		evb-2 {
+			i2c-port = <&i2c1>;
+			enum-name = "I2C_PORT_EVB_2";
+			label = "EVB_2";
+		};
+		opt-4 {
+			i2c-port = <&i2c4>;
+			enum-name = "I2C_PORT_OPT_4";
+			label = "OPT_4";
+		};
+	};
+
+	named-pwms {
+		compatible = "named-pwms";
+		/* NOTE: &pwm number needs same with channel number */
+		test0 {
+			pwms = <&pwm7 PWM_CHANNEL_7 PWM_POLARITY_INVERTED>;
+			label = "TEST0";
+			/*
+			 * If we need pwm output in ITE chip power saving
+			 * mode, then we should set frequency <=324Hz.
+			 */
+			frequency = <324>;
+		};
+		test1 {
+			pwms = <&pwm0 PWM_CHANNEL_0 PWM_POLARITY_NORMAL>;
+			label = "TEST1";
+			frequency = <30000>;
+		};
+	};
+};
+
+&adc0 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+
+&i2c1 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+
+&i2c2 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+
+&i2c4 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+
+&uart1 {
+	status = "okay";
+	current-speed = <115200>;
+	clock-frequency = <1804800>;
+};
+
+/* TEST1 */
+&pwm0 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C6>;
+};
+
+/* TEST0 */
+&pwm7 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C4>;
+};

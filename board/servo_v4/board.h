@@ -17,7 +17,6 @@
  * id from previous versions.
  */
 #define BOARD_VERSION_BLACK 3
-#define CONFIG_BOARD_VERSION_CUSTOM
 
 /* 48 MHz SYSCLK clock frequency */
 #define CPU_CLOCK 48000000
@@ -131,6 +130,7 @@
 #undef CONFIG_USB_PD_PULLUP
 #define CONFIG_USB_PD_PULLUP TYPEC_RP_USB
 #define CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
+#define CONFIG_USB_PD_ONLY_FIXED_PDOS
 
 /* Don't automatically change roles */
 #undef CONFIG_USB_PD_INITIAL_DRP_STATE

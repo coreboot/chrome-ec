@@ -21,7 +21,7 @@
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_POWER_COMMON
 #define CONFIG_SPI
-#define CONFIG_SPI_MASTER
+#define CONFIG_SPI_CONTROLLER
 #define CONFIG_STM_HWTIMER32
 /* Source RTCCLK from external 32.768kHz source on PC15/OSC32_IN. */
 #define CONFIG_STM32_CLOCK_LSE
@@ -42,7 +42,6 @@
 
 /* Optional features */
 #define CONFIG_BOARD_PRE_INIT
-#define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_BUTTON_TRIGGERED_RECOVERY
 #define CONFIG_CHARGER_ILIM_PIN_DISABLED
 #define CONFIG_FORCE_CONSOLE_RESUME
@@ -131,7 +130,7 @@
 /* Enable Accel over SPI */
 #define CONFIG_SPI_ACCEL_PORT    0  /* The first SPI master port (SPI2) */
 
-#define CONFIG_KEYBOARD_PROTOCOL_MKBP
+#define CONFIG_MKBP_INPUT_DEVICES
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
 /* Define the host events which are allowed to wakeup AP in S3. */

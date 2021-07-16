@@ -12,9 +12,9 @@
 #include "accelgyro.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accel_kionix.h"
-#include "driver/accel_kx022.h"
-#include "driver/accel_kxcj9.h"
+#include "accel_kionix.h"
+#include "accel_kx022.h"
+#include "accel_kxcj9.h"
 #include "i2c.h"
 #include "math_util.h"
 #include "motion_orientation.h"
@@ -27,6 +27,10 @@
 
 /* Number of times to attempt to enable sensor before giving up. */
 #define SENSOR_ENABLE_ATTEMPTS 3
+
+#if !defined(CONFIG_ACCEL_KXCJ9) && !defined(CONFIG_ACCEL_KX022)
+#error "Must use either KXCJ9 or KX022"
+#endif
 
 #if defined(CONFIG_ACCEL_KXCJ9) && !defined(CONFIG_ACCEL_KX022)
 #define V(s_) 1
@@ -143,13 +147,13 @@ static int raw_read8(const int port,
 {
 	int rv = EC_ERROR_INVAL;
 
-	if (SLAVE_IS_SPI(i2c_spi_addr_flags)) {
+	if (ACCEL_ADDR_IS_SPI(i2c_spi_addr_flags)) {
 #ifdef CONFIG_SPI_ACCEL_PORT
 		uint8_t val;
 		uint8_t cmd = 0x80 | reg;
 
 		rv = spi_transaction(
-			&spi_devices[SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags)],
+			&spi_devices[ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags)],
 			&cmd, 1, &val, 1);
 		if (rv == EC_SUCCESS)
 			*data_ptr = val;
@@ -171,12 +175,12 @@ static int raw_write8(const int port,
 {
 	int rv = EC_ERROR_INVAL;
 
-	if (SLAVE_IS_SPI(i2c_spi_addr_flags)) {
+	if (ACCEL_ADDR_IS_SPI(i2c_spi_addr_flags)) {
 #ifdef CONFIG_SPI_ACCEL_PORT
 		uint8_t cmd[2] = { reg, data };
 
 		rv = spi_transaction(
-			&spi_devices[SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags)],
+			&spi_devices[ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags)],
 			cmd, 2, NULL, 0);
 #endif
 	} else {
@@ -192,11 +196,11 @@ static int raw_read_multi(const int port,
 {
 	int rv = EC_ERROR_INVAL;
 
-	if (SLAVE_IS_SPI(i2c_spi_addr_flags)) {
+	if (ACCEL_ADDR_IS_SPI(i2c_spi_addr_flags)) {
 #ifdef CONFIG_SPI_ACCEL_PORT
 		reg |= 0x80;
 		rv = spi_transaction(
-			&spi_devices[SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags)],
+			&spi_devices[ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags)],
 			&reg, 1, rxdata, rxlen);
 #endif
 	} else {
@@ -568,7 +572,7 @@ static int init(struct motion_sensor_t *s)
 			 * from the first address, resend the command using
 			 * the second address.
 			 */
-			if (!SLAVE_IS_SPI(s->i2c_spi_addr_flags)) {
+			if (!ACCEL_ADDR_IS_SPI(s->i2c_spi_addr_flags)) {
 				const uint16_t i2c_alt_addr_flags =
 					I2C_STRIP_FLAGS(
 						s->i2c_spi_addr_flags)

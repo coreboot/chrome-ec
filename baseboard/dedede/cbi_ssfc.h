@@ -19,7 +19,8 @@ enum ec_ssfc_base_sensor {
 	SSFC_SENSOR_BASE_DEFAULT = 0,
 	SSFC_SENSOR_BMI160 = 1,
 	SSFC_SENSOR_ICM426XX = 2,
-	SSFC_SENSOR_LSM6DSM = 3
+	SSFC_SENSOR_LSM6DSM = 3,
+	SSFC_SENSOR_ICM42607 = 4
 };
 
 /*
@@ -28,14 +29,30 @@ enum ec_ssfc_base_sensor {
 enum ec_ssfc_lid_sensor {
 	SSFC_SENSOR_LID_DEFAULT = 0,
 	SSFC_SENSOR_BMA255 = 1,
-	SSFC_SENSOR_KX022 = 2
+	SSFC_SENSOR_KX022 = 2,
+	SSFC_SENSOR_LIS2DWL = 3
 };
+
+/*
+ * USB SuperSpeed Mux (Bits 6-8)
+ */
+enum ec_ssfc_usb_ss_mux {
+	SSFC_USB_SS_MUX_DEFAULT = 0,
+	SSFC_USB_SS_MUX_PS8743 = 1,
+	SSFC_USB_SS_MUX_PI3USBX532 = 2,
+};
+
+/*
+ * Bits 9-11
+ * Only cret board use SSFC bits 9-11 in coreboot for audio codec.
+ */
 
 union dedede_cbi_ssfc {
 	struct {
-		enum ec_ssfc_base_sensor	base_sensor : 3;
-		enum ec_ssfc_lid_sensor		lid_sensor : 3;
-		uint32_t					reserved_2 : 26;
+		uint32_t base_sensor : 3;
+		uint32_t lid_sensor : 3;
+		uint32_t usb_ss_mux : 3;
+		uint32_t reserved_2 : 23;
 	};
 	uint32_t raw_value;
 };
@@ -53,5 +70,13 @@ enum ec_ssfc_base_sensor get_cbi_ssfc_base_sensor(void);
  * @return the Lid sensor board type.
  */
 enum ec_ssfc_lid_sensor get_cbi_ssfc_lid_sensor(void);
+
+/**
+ * Get the USB SuperSpeed Mux type from SSFC_CONFIG
+ *
+ * @return the USB SuperSpeed Mux type
+ */
+enum ec_ssfc_usb_ss_mux get_cbi_ssfc_usb_ss_mux(void);
+
 
 #endif /* _DEDEDE_CBI_SSFC__H_ */

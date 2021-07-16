@@ -45,25 +45,28 @@ typedef int (*cros_flash_api_physical_write)(const struct device *dev,
 
 typedef int (*cros_flash_api_physical_erase)(const struct device *dev,
 					     int offset, int size);
-typedef int (*cros_flash_api_write_protection)(const struct device *dev,
-					       bool enable);
-typedef int (*cros_flash_api_write_protection_is_set)(const struct device *dev);
-typedef int (*cros_flash_api_get_status_reg)(const struct device *dev,
-					     char cmd_code, char *data);
-typedef int (*cros_flash_api_set_status_reg)(const struct device *dev,
-					     char *data);
-typedef int (*cros_flash_api_uma_lock)(const struct device *dev, bool enable);
+
+typedef int (*cros_flash_api_physical_get_protect)(const struct device *dev,
+						   int bank);
+
+typedef uint32_t
+(*cros_flash_api_physical_get_protect_flags)(const struct device *dev);
+
+typedef int (*cros_flash_api_physical_protect_at_boot)(const struct device *dev,
+						       uint32_t new_flags);
+
+typedef int (*cros_flash_api_physical_protect_now)(const struct device *dev,
+						   int all);
 
 __subsystem struct cros_flash_driver_api {
 	cros_flash_api_init init;
 	cros_flash_api_physical_read physical_read;
 	cros_flash_api_physical_write physical_write;
 	cros_flash_api_physical_erase physical_erase;
-	cros_flash_api_write_protection write_protection;
-	cros_flash_api_write_protection_is_set write_protection_is_set;
-	cros_flash_api_get_status_reg get_status_reg;
-	cros_flash_api_set_status_reg set_status_reg;
-	cros_flash_api_uma_lock uma_lock;
+	cros_flash_api_physical_get_protect physical_get_protect;
+	cros_flash_api_physical_get_protect_flags physical_get_protect_flags;
+	cros_flash_api_physical_protect_at_boot physical_protect_at_boot;
+	cros_flash_api_physical_protect_now physical_protect_now;
 };
 
 /**
@@ -179,126 +182,103 @@ static inline int z_impl_cros_flash_physical_erase(const struct device *dev,
 }
 
 /**
- * @brief Enable or disable write protection for a flash memory
- *
- * Offset and size must be a multiple of CONFIG_FLASH_ERASE_SIZE.
+ * @brief Read physical write protect setting for a flash bank.
  *
  * @param dev Pointer to the device structure for the flash driver instance.
- * @param enable True to enable it, False to disable it.
+ * @param bank	Bank index to check.
  *
- * @return 0 If successful.
+ * @return non-zero if bank is protected until reboot.
  * @retval -ENOTSUP Not supported api function.
  */
-__syscall int cros_flash_write_protection_set(const struct device *dev,
-					      bool enable);
+__syscall int cros_flash_physical_get_protect(const struct device *dev,
+					      int bank);
 
 static inline int
-z_impl_cros_flash_write_protection_set(const struct device *dev, bool enable)
+z_impl_cros_flash_physical_get_protect(const struct device *dev, int bank)
 {
 	const struct cros_flash_driver_api *api =
 		(const struct cros_flash_driver_api *)dev->api;
 
-	if (!api->write_protection) {
+	if (!api->physical_get_protect) {
 		return -ENOTSUP;
 	}
 
-	return api->write_protection(dev, enable);
+	return api->physical_get_protect(dev, bank);
 }
 
 /**
- * @brief Get write protection status of the flash device
- *
- * @return 1 If write protection is set, 0 otherwise.
- */
-__syscall bool cros_flash_write_protection_is_set(const struct device *dev);
-
-static inline bool
-z_impl_cros_flash_write_protection_is_set(const struct device *dev)
-{
-	const struct cros_flash_driver_api *api =
-		(const struct cros_flash_driver_api *)dev->api;
-
-	if (!api->write_protection_is_set) {
-		return -ENOTSUP;
-	}
-
-	return api->write_protection_is_set(dev);
-}
-
-/**
- * @brief Read status registers of flash.
- *
- * cmd_code must be a valid code to read the status register.
+ * @brief Return flash protect state flags from the physical layer.
  *
  * @param dev Pointer to the device structure for the flash driver instance.
- * @param cmd_code	instruction code to read status registers.
- * @param data	        Buffer to store the value read back
+ *
+ * @retval -ENOTSUP Not supported api function.
+ */
+__syscall
+uint32_t cros_flash_physical_get_protect_flags(const struct device *dev);
+
+static inline uint32_t
+z_impl_cros_flash_physical_get_protect_flags(const struct device *dev)
+{
+	const struct cros_flash_driver_api *api =
+		(const struct cros_flash_driver_api *)dev->api;
+
+	if (!api->physical_get_protect_flags) {
+		return -ENOTSUP;
+	}
+
+	return api->physical_get_protect_flags(dev);
+}
+
+/**
+ * @brief Enable/disable protecting firmware/pstate at boot.
+ *
+ * @param dev Pointer to the device structure for the flash driver instance.
+ * @param new_flags	to protect (only EC_FLASH_PROTECT_*_AT_BOOT are
+ * taken care of)
  *
  * @return 0 If successful.
  * @retval -ENOTSUP Not supported api function.
  */
-__syscall int cros_flash_get_status_reg(const struct device *dev, char cmd_code,
-					char *data);
-
-static inline int z_impl_cros_flash_get_status_reg(const struct device *dev,
-						   char cmd_code, char *data)
-{
-	const struct cros_flash_driver_api *api =
-		(const struct cros_flash_driver_api *)dev->api;
-
-	if (!api->get_status_reg) {
-		return -ENOTSUP;
-	}
-
-	return api->get_status_reg(dev, cmd_code, data);
-}
-
-/**
- * @brief Write status registers of flash.
- *
- * @param dev Pointer to the device structure for the flash driver instance.
- * @param data	        Buffer to store the value to write
- *
- * @return 0 If successful.
- * @retval -ENOTSUP Not supported api function.
- */
-__syscall int cros_flash_set_status_reg(const struct device *dev, char *data);
-
-static inline int z_impl_cros_flash_set_status_reg(const struct device *dev,
-						   char *data)
-{
-	const struct cros_flash_driver_api *api =
-		(const struct cros_flash_driver_api *)dev->api;
-
-	if (!api->set_status_reg) {
-		return -ENOTSUP;
-	}
-
-	return api->set_status_reg(dev, data);
-}
-
-/**
- * @brief Enable or disable UMA module to access the internal flash.
- *
- * @param dev Pointer to the device structure for the flash driver instance.
- * @param enable True to lock it, False to unlock it.
- *
- * @return 0 If successful.
- * @retval -ENOTSUP Not supported api function.
- */
-__syscall int cros_flash_uma_lock(const struct device *dev, bool enable);
+__syscall int cros_flash_physical_protect_at_boot(const struct device *dev,
+						  uint32_t new_flags);
 
 static inline int
-z_impl_cros_flash_uma_lock(const struct device *dev, bool enable)
+z_impl_cros_flash_physical_protect_at_boot(const struct device *dev,
+					   uint32_t new_flags)
 {
 	const struct cros_flash_driver_api *api =
 		(const struct cros_flash_driver_api *)dev->api;
 
-	if (!api->uma_lock) {
+	if (!api->physical_protect_at_boot) {
 		return -ENOTSUP;
 	}
 
-	return api->uma_lock(dev, enable);
+	return api->physical_protect_at_boot(dev, new_flags);
+}
+
+/**
+ * @brief Protect now physical flash.
+ *
+ * @param dev Pointer to the device structure for the flash driver instance.
+ * @param all	Protect all (=1) or just read-only and pstate (=0).
+ *
+ * @return 0 If successful.
+ * @retval -ENOTSUP Not supported api function.
+ */
+__syscall int cros_flash_physical_protect_now(const struct device *dev,
+					      int all);
+
+static inline int
+z_impl_cros_flash_physical_protect_now(const struct device *dev, int all)
+{
+	const struct cros_flash_driver_api *api =
+		(const struct cros_flash_driver_api *)dev->api;
+
+	if (!api->physical_protect_now) {
+		return -ENOTSUP;
+	}
+
+	return api->physical_protect_now(dev, all);
 }
 
 /**

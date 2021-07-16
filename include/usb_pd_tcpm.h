@@ -10,6 +10,7 @@
 
 #include <stdbool.h>
 #include "common.h"
+#include "compiler.h"
 #include "ec_commands.h"
 #include "i2c.h"
 
@@ -41,7 +42,7 @@ enum tcpc_cc_pull {
 };
 
 /* Pull-up values we apply as a SRC to advertise different current limits */
-enum tcpc_rp_value {
+FORWARD_DECLARE_ENUM(tcpc_rp_value) {
 	TYPEC_RP_USB = 0,
 	TYPEC_RP_1A5 = 1,
 	TYPEC_RP_3A0 = 2,
@@ -61,7 +62,7 @@ static inline enum tcpc_cc_polarity polarity_rm_dts(
 	enum tcpc_cc_polarity polarity)
 {
 	BUILD_ASSERT(POLARITY_COUNT == 4);
-	return polarity & BIT(0);
+	return (enum tcpc_cc_polarity)(polarity & BIT(0));
 }
 
 enum tcpm_transmit_type {
@@ -477,12 +478,14 @@ struct tcpm_drv {
  * Bit 3 --> Set to 1 if TCPC is using TCPCI Revision 2.0
  * Bit 4 --> Set to 1 if TCPC is using TCPCI Revision 2.0 but does not support
  *           the vSafe0V bit in the EXTENDED_STATUS_REGISTER
+ * Bit 5 --> Set to 1 to prevent TCPC setting debug accessory control
  */
 #define TCPC_FLAGS_ALERT_ACTIVE_HIGH	BIT(0)
 #define TCPC_FLAGS_ALERT_OD		BIT(1)
 #define TCPC_FLAGS_RESET_ACTIVE_HIGH	BIT(2)
 #define TCPC_FLAGS_TCPCI_REV2_0		BIT(3)
 #define TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V	BIT(4)
+#define TCPC_FLAGS_NO_DEBUG_ACC_CONTROL	BIT(5)
 
 struct tcpc_config_t {
 	enum ec_bus_type bus_type;	/* enum ec_bus_type */

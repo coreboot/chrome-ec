@@ -23,6 +23,8 @@
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PORT_ENABLE_DYNAMIC
 
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
+
 #define CONFIG_KEYBOARD_FACTORY_TEST
 
 /* USB-A config */
@@ -132,7 +134,6 @@ enum usbc_port {
 /*****************************************************************************
  * CBI EC FW Configuration
  */
-#include "cbi_ec_fw_config.h"
 
 /**
  * DALBOZ_MB_USBAC
@@ -164,6 +165,8 @@ enum ec_cfg_usb_mb_type {
 enum ec_cfg_usb_db_type {
 	GUMBOZ_DB_OPT1_USBC = 0,
 };
+
+#include "cbi_ec_fw_config.h"
 
 static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 {

@@ -34,7 +34,6 @@
 #define CONFIG_ADC
 #define CONFIG_BACKLIGHT_LID
 #define CONFIG_BACKLIGHT_LID_ACTIVE_LOW
-#define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_HOSTCMD_LPC
@@ -147,13 +146,6 @@
 #define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
-
-/*
- * Minimum conditions to start AP and perform swsync.  Note that when the
- * charger is connected via USB-PD analog signaling, the boot will proceed
- * regardless.
- */
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 3
 
 /*
  * Require PD negotiation to be complete when we are in a low-battery condition

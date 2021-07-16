@@ -214,7 +214,7 @@ static void board_init(void)
 
 	clock_wait_bus_cycles(BUS_APB, 1);
 	/* Enable SPI for touchpad */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 	spi_enable(&spi_devices[SPI_ST_TP_DEVICE_ID], 1);
 #endif /* HAS_SPI_TOUCHPAD */
 }
@@ -350,7 +350,7 @@ static const struct ec_response_keybd_config zed_kb = {
 __override
 const struct ec_response_keybd_config *board_vivaldi_keybd_config(void)
 {
-	if (IS_ENABLED(BOARD_ZED))
+	if (IS_ENABLED(BOARD_ZED) || IS_ENABLED(BOARD_STAR))
 		return &zed_kb;
 
 	return NULL;

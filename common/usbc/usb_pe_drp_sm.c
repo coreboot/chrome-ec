@@ -1247,7 +1247,7 @@ __overridable bool pd_can_charge_from_device(int port, const int pdo_cnt,
 
 	/* [virtual] allow_list */
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		uint32_t max_ma, max_mv, max_pdo, max_mw;
+		uint32_t max_ma, max_mv, max_pdo, max_mw, unused;
 
 		/*
 		 * Get max power that the partner offers (not necessarily what
@@ -1256,7 +1256,7 @@ __overridable bool pd_can_charge_from_device(int port, const int pdo_cnt,
 		pd_find_pdo_index(pdo_cnt, pdos,
 				  PD_REV3_MAX_VOLTAGE,
 				  &max_pdo);
-		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv);
+		pd_extract_pdo_power(max_pdo, &max_ma, &max_mv, &unused);
 		max_mw = max_ma * max_mv / 1000;
 
 		if (max_mw >= PD_DRP_CHARGE_POWER_MIN)
@@ -1351,6 +1351,9 @@ static void pe_handle_detach(void)
 
 	/* Reset port events */
 	pd_clear_events(port, GENMASK(31, 0));
+
+	/* But then set disconnected event */
+	pd_notify_event(port, PD_STATUS_EVENT_DISCONNECTED);
 
 	/* Tell Policy Engine to invalidate the explicit contract */
 	pe_invalidate_explicit_contract(port);
@@ -2016,6 +2019,8 @@ static void pe_sender_response_msg_entry(const int port)
  */
 static enum pe_msg_check pe_sender_response_msg_run(const int port)
 {
+	timestamp_t tx_success_ts;
+	uint32_t offset;
 	if (pd_timer_is_disabled(port, PE_TIMER_SENDER_RESPONSE)) {
 		/* Check for Discard */
 		if (PE_CHK_FLAG(port, PE_FLAGS_MSG_DISCARDED)) {
@@ -2034,9 +2039,19 @@ static enum pe_msg_check pe_sender_response_msg_run(const int port)
 		if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
 			PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 
-			/* Initialize and run the SenderResponseTimer */
+			/* TCPC TX success time stamp */
+			tx_success_ts = prl_get_tcpc_tx_success_ts(port);
+			/* Calculate the delay from TX success to PE */
+			offset = time_since32(tx_success_ts);
+
+			/*
+			 * Initialize and run the SenderResponseTimer by
+			 * offsetting it with TX transmit success time.
+			 * This would remove the effect of the latency from
+			 * propagating the TX status.
+			 */
 			pd_timer_enable(port, PE_TIMER_SENDER_RESPONSE,
-					PD_T_SENDER_RESPONSE);
+					PD_T_SENDER_RESPONSE - offset);
 			return PE_MSG_SEND_COMPLETED;
 		}
 		return PE_MSG_SEND_PENDING;
@@ -2138,8 +2153,11 @@ static void pe_src_startup_entry(int port)
 		/* Reset VCONN swap counter */
 		pe[port].vconn_swap_counter = 0;
 
-		/* Request partner sink caps */
-		pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
+		/* Request partner sink caps if a feature requires them */
+		if (IS_ENABLED(CONFIG_USB_PD_HOST_CMD) ||
+						CONFIG_USB_PD_3A_PORTS > 0 ||
+						IS_ENABLED(CONFIG_USB_PD_FRS))
+			pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
 	}
 }
 
@@ -2599,7 +2617,7 @@ static void pe_src_ready_run(int port)
 			case PD_EXT_GET_BATTERY_STATUS:
 				set_state_pe(port, PE_GIVE_BATTERY_STATUS);
 				break;
-#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY*/
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY */
 			default:
 				extended_message_not_supported(port, payload);
 			}
@@ -2990,13 +3008,18 @@ static void pe_snk_startup_entry(int port)
 		PE_SET_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
 	}
 
-	/* Request sink caps for FRS and PRS evaluation.
+	/*
+	 * Request sink caps for FRS, output power consideration, or reporting
+	 * to the AP through host commands.
 	 *
 	 * On entry to the PE_SNK_Ready state if the Sink supports Fast Role
 	 * Swap, then the Policy Engine Shall do the following:
 	 * - Send a Get_Sink_Cap Message
 	 */
-	pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
+	if (IS_ENABLED(CONFIG_USB_PD_HOST_CMD) ||
+					CONFIG_USB_PD_3A_PORTS > 0 ||
+					IS_ENABLED(CONFIG_USB_PD_FRS))
+		pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
 
 }
 
@@ -4356,6 +4379,12 @@ static void pe_prs_src_snk_evaluate_swap_run(int port)
 			PE_CLR_FLAG(port, PE_FLAGS_ACCEPT);
 
 			/*
+			 * Clear any pending DPM power role swap request so we
+			 * don't trigger a power role swap request back to src
+			 * power role.
+			 */
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP);
+			/*
 			 * Power Role Swap OK, transition to
 			 * PE_PRS_SRC_SNK_Transition_to_off
 			 */
@@ -4609,6 +4638,12 @@ static void pe_prs_snk_src_evaluate_swap_run(int port)
 		if (PE_CHK_FLAG(port, PE_FLAGS_ACCEPT)) {
 			PE_CLR_FLAG(port, PE_FLAGS_ACCEPT);
 
+			/*
+			 * Clear any pending DPM power role swap request so we
+			 * don't trigger a power role swap request back to sink
+			 * power role.
+			 */
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP);
 			/*
 			 * Accept message sent, transition to
 			 * PE_PRS_SNK_SRC_Transition_to_off
@@ -4969,10 +5004,11 @@ static void pe_bist_tx_entry(int port)
 	/* Get the current nominal VBUS value */
 	if (pe[port].power_role == PD_ROLE_SOURCE) {
 		const uint32_t *src_pdo;
+		uint32_t unused;
 
 		dpm_get_source_pdo(&src_pdo, port);
 		pd_extract_pdo_power(src_pdo[pe[port].requested_idx - 1],
-				     &ibus_ma, &vbus_mv);
+				     &ibus_ma, &vbus_mv, &unused);
 	} else {
 		vbus_mv = pe[port].supply_voltage;
 	}

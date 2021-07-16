@@ -1,0 +1,346 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+#include <dt-bindings/gpio_defines.h>
+
+/ {
+	aliases {
+		bmi260-int = &ms_bmi260_accel;
+		bmi160-int = &ms_bmi160_accel;
+	};
+	named-gpios {
+		compatible = "named-gpios";
+
+		ec_batt_pres_odl {
+			gpios = <&gpio0 1 GPIO_INPUT>;
+			enum-name = "GPIO_BATT_PRES_ODL";
+			label = "EC_BATT_PRES_ODL";
+		};
+		acok_od {
+			gpios = <&gpio0 2 GPIO_INPUT>;
+			enum-name = "GPIO_AC_PRESENT";
+			label = "ACOK_OD";
+		};
+		/* In test WP is output because CBI use it, but it is also
+		 * input, because test_all_tags set it to enable write
+		 * protection.
+		 */
+		gpio_wp_l: wp_l {
+			#gpio-cells = <0>;
+			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_OUTPUT)>;
+			enum-name = "GPIO_WP_L";
+			label = "WP_L";
+		};
+		pg_ec_dsw_pwrok {
+			gpios = <&gpio0 4 GPIO_INPUT>;
+			enum-name = "GPIO_PG_EC_DSW_PWROK";
+			label = "PG_EC_DSW_PWROK";
+		};
+	};
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+
+		usb-c0 {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_USB_C0";
+			label = "USB_C0";
+		};
+		usb-c1 {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_USB_C1";
+			label = "USB_C1";
+		};
+		battery {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_BATTERY";
+			label = "BATTERY";
+		};
+		charger {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_CHARGER";
+			label = "CHARGER";
+		};
+		eeprom {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_EEPROM";
+			label = "EEPROM";
+		};
+		i2c_accel: accel {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_ACCEL";
+			label = "ACCEL";
+		};
+		i2c_sensor: sensor {
+			i2c-port = <&i2c1>;
+			enum-name = "I2C_PORT_SENSOR";
+			label = "SENSOR";
+		};
+	};
+
+	named-batteries {
+		compatible = "named-batteries";
+
+		lgc011 {
+			enum-name = "lgc011";
+		};
+	};
+
+	adc0: adc {
+		compatible = "zephyr,adc-emul";
+		nchannels = <4>;
+		ref-internal-mv = <3300>;
+		#io-channel-cells = <1>;
+		label = "ADC_0";
+		status = "okay";
+	};
+
+	named-adc-channels {
+		compatible = "named-adc-channels";
+
+		adc_charger: charger {
+			label = "ADC_TEMP_SENSOR_CHARGER";
+			enum-name = "ADC_TEMP_SENSOR_CHARGER";
+			channel = <0>;
+		};
+		adc_pp3300_regulator: pp3300-regulator {
+			label = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
+			enum-name = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
+			channel = <1>;
+		};
+		adc_ddr_soc: ddr-soc {
+			label = "ADC_TEMP_SENSOR_DDR_SOC";
+			enum-name = "ADC_TEMP_SENSOR_DDR_SOC";
+			channel = <2>;
+		};
+		adc_fan: fan {
+			label = "ADC_TEMP_SENSOR_FAN";
+			enum-name = "ADC_TEMP_SENSOR_FAN";
+			channel = <3>;
+		};
+	};
+
+	named-temp-sensors {
+		charger {
+			compatible = "temp-3v3-13k7-47k-4050b";
+			label = "TEMP_SENSOR_CHARGER";
+			enum-name = "TEMP_SENSOR_CHARGER";
+			temp_fan_off = <40>;
+			temp_fan_max = <55>;
+			temp_host_high = <75>;
+			temp_host_halt = <80>;
+			temp_host_release_high = <65>;
+			adc = <&adc_charger>;
+		};
+		pp3300-regulator {
+			compatible = "temp-3v3-30k9-47k-4050b";
+			label = "TEMP_SENSOR_PP3300_REGULATOR";
+			enum-name = "TEMP_SENSOR_PP3300_REGULATOR";
+			temp_fan_off = <40>;
+			temp_fan_max = <55>;
+			temp_host_high = <75>;
+			temp_host_halt = <80>;
+			temp_host_release_high = <65>;
+			adc = <&adc_pp3300_regulator>;
+		};
+		ddr-soc {
+			compatible = "temp-3v3-51k1-47k-4050b";
+			label = "TEMP_SENSOR_DDR_SOC";
+			enum-name = "TEMP_SENSOR_DDR_SOC";
+			temp_fan_off = <35>;
+			temp_fan_max = <50>;
+			temp_host_high = <70>;
+			temp_host_halt = <80>;
+			temp_host_release_high = <65>;
+			adc = <&adc_ddr_soc>;
+		};
+		fan {
+			compatible = "temp-3v0-22k6-47k-4050b";
+			label = "TEMP_SENSOR_FAN";
+			enum-name = "TEMP_SENSOR_FAN";
+			temp_fan_off = <35>;
+			temp_fan_max = <50>;
+			temp_host_high = <70>;
+			temp_host_halt = <80>;
+			temp_host_release_high = <65>;
+			adc = <&adc_fan>;
+		};
+	};
+
+	/*
+	 * Declare mutexes used by sensor drivers.
+	 * A mutex node is used to create an instance of mutex_t.
+	 * A mutex node is referenced by a sensor node if the
+	 * corresponding sensor driver needs to use the
+	 * instance of the mutex.
+	 */
+	motionsense-mutex {
+		compatible = "cros-ec,motionsense-mutex";
+		mutex_bmi260: bmi260-mutex {
+			label = "BMI260_MUTEX";
+		};
+
+		mutex_bmi160: bmi160-mutex {
+			label = "BMI160_MUTEX";
+		};
+	};
+
+	/*
+	 * Driver specific data. A driver-specific data can be shared with
+	 * different motion sensors while they are using the same driver.
+	 */
+	motionsense-sensor-data {
+		bmi260_data: bmi260-drv-data {
+			compatible = "cros-ec,drvdata-bmi260";
+			status = "okay";
+		};
+
+		bmi160_data: bmi160-drv-data {
+			compatible = "cros-ec,drvdata-bmi160";
+			status = "okay";
+		};
+	};
+
+	/*
+	 * List of motion sensors that creates motion_sensors array.
+	 * The label "lid_accel" and "base_accel" are used to indicate
+	 * motion sensor IDs for lid angle calculation.
+	 */
+	motionsense-sensor {
+		ms_bmi260_accel: ms-bmi260-accel {
+			compatible = "cros-ec,bmi260-accel";
+			status = "okay";
+
+			label = "BMI260 emul accel";
+			location = "MOTIONSENSE_LOC_BASE";
+			mutex = <&mutex_bmi260>;
+			port = <&i2c_accel>;
+			drv-data = <&bmi260_data>;
+			default-range = <4>;
+			i2c-spi-addr-flags = "BMI260_ADDR0_FLAGS";
+		};
+
+		ms_bmi260_gyro: ms-bmi260-gyro {
+			compatible = "cros-ec,bmi260-gyro";
+			status = "okay";
+
+			label = "BMI260 emul gyro";
+			location = "MOTIONSENSE_LOC_BASE";
+			mutex = <&mutex_bmi260>;
+			port = <&i2c_accel>;
+			drv-data = <&bmi260_data>;
+			default-range = <1000>; /* dps */
+			i2c-spi-addr-flags = "BMI260_ADDR0_FLAGS";
+		};
+
+		ms_bmi160_accel: ms-bmi160-accel {
+			compatible = "cros-ec,bmi160-accel";
+			status = "okay";
+
+			label = "BMI160 emul accel";
+			location = "MOTIONSENSE_LOC_BASE";
+			mutex = <&mutex_bmi160>;
+			port = <&i2c_sensor>;
+			drv-data = <&bmi160_data>;
+			default-range = <4>;
+			i2c-spi-addr-flags = "BMI160_ADDR0_FLAGS";
+		};
+
+		ms_bmi160_gyro: ms-bmi160-gyro {
+			compatible = "cros-ec,bmi160-gyro";
+			status = "okay";
+
+			label = "BMI160 emul gyro";
+			location = "MOTIONSENSE_LOC_BASE";
+			mutex = <&mutex_bmi160>;
+			port = <&i2c_sensor>;
+			drv-data = <&bmi160_data>;
+			default-range = <1000>; /* dps */
+			i2c-spi-addr-flags = "BMI160_ADDR0_FLAGS";
+		};
+	};
+
+	/*
+	 * Second i2c bus is required, because there is already device with
+	 * address 0x68 on the first bus
+	 */
+	i2c1: i2c@400 {
+		status = "okay";
+		compatible = "zephyr,i2c-emul-controller";
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x400 4>;
+		label = "I2C_1";
+
+		accel_bmi160: bmi160@68 {
+			compatible = "zephyr,bmi";
+			reg = <0x68>;
+			label = "BMI160";
+			device-model = "BMI_EMUL_160";
+			error-on-ro-write;
+			error-on-wo-read;
+			error-on-reserved-bit-write;
+			simulate-command-exec-time;
+		};
+	};
+};
+
+&gpio0 {
+	ngpios = <5>;
+};
+
+&i2c0 {
+	cbi_eeprom: eeprom@56 {
+		compatible = "atmel,at24";
+		reg = <0x56>;
+		label = "EEPROM_CBI";
+		size = <512>;
+		pagesize = <8>;
+		address-width = <8>;
+		timeout = <5>;
+		wp-gpios = <&gpio_wp_l>;
+	};
+
+	battery: sb@b {
+		compatible = "zephyr,smart-battery";
+		reg = <0xb>;
+		label = "BATTERY";
+		cycle-count = <99>;
+		version = "BATTERY_SPEC_VER_1_1_WITH_PEC";
+	};
+
+	bma_emul: bma@18 {
+		compatible = "zephyr,bma255";
+		reg = <0x18>;
+		label = "BMA_EMUL";
+		error-on-compensation-not-ready;
+		error-on-ro-write;
+		error-on-reserved-bit-write;
+		error-on-msb-first-access;
+	};
+
+	pi3usb9201_emul: pi3usb9201@5f {
+		compatible = "zephyr,pi3usb9201-emul";
+		reg = <0x5f>;
+		label = "PI3USB9201_EMUL";
+	};
+
+	syv682x_emul: syv682x@41 {
+		compatible = "zephyr,syv682x-emul";
+		reg = <0x41>;
+		label = "SYV682X_EMUL";
+	};
+
+	accel_bmi260: bmi260@68 {
+		compatible = "zephyr,bmi";
+		reg = <0x68>;
+		label = "BMI260";
+		device-model = "BMI_EMUL_260";
+		error-on-ro-write;
+		error-on-wo-read;
+		error-on-reserved-bit-write;
+		simulate-command-exec-time;
+	};
+};

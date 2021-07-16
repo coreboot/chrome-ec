@@ -56,6 +56,7 @@ static enum {
 	ESC_BRACKET,   /* Got ESC [ */
 	ESC_BRACKET_1, /* Got ESC [ 1 */
 	ESC_BRACKET_3, /* Got ESC [ 3 */
+	ESC_BRACKET_4, /* Got ESC [ 4 */
 	ESC_O,         /* Got ESC O */
 } esc_state;
 #endif /* !defined(CONFIG_EXPERIMENTAL_CONSOLE) */
@@ -93,7 +94,7 @@ static int split_words(char *input, int *argc, char **argv)
 	for (c = input; in_line; c++) {
 		if (!*c)
 			in_line = 0;
-		if (isspace(*c) || !*c) {
+		if (isspace((unsigned char)*c) || !*c) {
 			if (in_word) {
 				/* Ending a word */
 				*c = '\0';
@@ -418,6 +419,9 @@ static int handle_esc(int c)
 		} else if (c == '3') {
 			esc_state = ESC_BRACKET_3;
 			return -1;
+		} else if (c == '4') {
+			esc_state = ESC_BRACKET_4;
+			return -1;
 		}
 
 		if (c == 'A')
@@ -445,12 +449,17 @@ static int handle_esc(int c)
 			return KEY_DEL;
 		break;
 
+	case ESC_BRACKET_4:
+		if (c == '~')
+			return KEY_END;
+		break;
+
 	default:
 		break;
 	}
 
 	/* Check if the escape code is done */
-	if (isalpha(c) || c == '~')
+	if (isalpha((unsigned char)c) || c == '~')
 		esc_state = ESC_OUTSIDE;
 	else
 		esc_state = ESC_BAD;
@@ -610,7 +619,7 @@ static void console_handle_char(int c)
 
 	default:
 		/* Ignore non-printing characters */
-		if (!isprint(c))
+		if (!isprint((unsigned char)c))
 			break;
 
 #ifndef CONFIG_EXPERIMENTAL_CONSOLE

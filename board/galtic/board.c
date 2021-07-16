@@ -212,11 +212,114 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 /* USB Retimer */
+enum tusb544_conf {
+	USB_DP = 0,
+	USB_DP_INV,
+	USB,
+	USB_INV,
+	DP,
+	DP_INV
+};
+
+static int board_tusb544_set(const struct usb_mux *me,
+		mux_state_t mux_state)
+{
+	int  rv = EC_SUCCESS;
+	enum tusb544_conf usb_mode = 0;
+	/* USB */
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		/* USB with DP */
+		if (mux_state & USB_PD_MUX_DP_ENABLED) {
+			usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+					? USB_DP_INV
+					: USB_DP;
+		}
+		/* USB without DP */
+		else {
+			usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+					? USB_INV
+					: USB;
+		}
+	}
+	/* DP without USB */
+	else if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+				? DP_INV
+				: DP;
+	}
+	/* Nothing enabled */
+	else
+		return EC_SUCCESS;
+	/* Write the retimer config byte */
+	if (usb_mode == USB_INV) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x15);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == USB) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x11);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == USB_DP_INV) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1F);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == USB_DP) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1B);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == DP_INV) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1E);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x99);
+	} else if (usb_mode == DP) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1A);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x99);
+	}
+
+	return rv;
+}
+
 const struct usb_mux usbc1_retimer = {
 	.usb_port = 1,
 	.i2c_port = I2C_PORT_SUB_USB_C1,
 	.i2c_addr_flags = TUSB544_I2C_ADDR_FLAGS0,
 	.driver = &tusb544_drv,
+	.board_set = &board_tusb544_set,
 };
 
 /* USB Muxes */
@@ -413,13 +516,16 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+			raa489000_enable_asgate(i, false);
+		}
+
 		return EC_SUCCESS;
 	}
 
-	/* Check is port is sourcing VBUS. */
+	/* Check if port is sourcing VBUS. */
 	if (board_is_sourcing_vbus(port)) {
 		CPRINTS("Skip enable p%d", port);
 		return EC_ERROR_INVAL;
@@ -430,24 +536,26 @@ int board_set_active_charge_port(int port)
 	 * requested charge port.
 	 */
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		if (port == 0)
+		if (port == i)
 			continue;
 
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
-	 * Stop the charger IC from switching while charging ports. Otherwise,
-	 * we can overcurrent the adapter we's switching to. (crbug.com/926056)
+	 * Stop the charger IC from switching while changing ports.  Otherwise,
+	 * we can overcurrent the adapter we're switching to. (crbug.com/926056)
 	 */
 	if (old_port != CHARGE_PORT_NONE)
 		charger_discharge_on_ac(1);
 
-	 /* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
-			TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
+	/* Enable requested charge port. */
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
+		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);
 		return EC_ERROR_UNKNOWN;
@@ -464,14 +572,12 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
 				       int *kd, int *kd_div)
 {
-	*kp = 3;
-	*kp_div = 14;
-
-	*ki = 3;
-	*ki_div = 500;
-
-	*kd = 4;
-	*kd_div = 40;
+	*kp = 1;
+	*kp_div = 20;
+	*ki = 1;
+	*ki_div = 250;
+	*kd = 0;
+	*kd_div = 1;
 }
 
 __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
@@ -596,6 +702,40 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
+const static struct ec_thermal_config thermal_charger = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(98),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+	},
+};
+const static struct ec_thermal_config thermal_vcore = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(50),
+	},
+};
+const static struct ec_thermal_config thermal_ambient = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(50),
+	},
+};
+struct ec_thermal_config thermal_params[] = {
+	[TEMP_SENSOR_1] = thermal_charger,
+	[TEMP_SENSOR_2] = thermal_vcore,
+	[TEMP_SENSOR_3] = thermal_ambient,
+};
+BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
 #ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
 void lid_angle_peripheral_enable(int enable)
@@ -623,3 +763,18 @@ void lid_angle_peripheral_enable(int enable)
 	}
 }
 #endif
+
+__override void board_pulse_entering_rw(void)
+{
+	/*
+	 * On the ITE variants, the EC_ENTERING_RW signal was connected to a pin
+	 * which is active high by default. This cause Cr50 to think that the
+	 * EC has jumped to its RW image even though this may not be the case.
+	 * The pin is changed to GPIO_EC_ENTERING_RW2.
+	 */
+	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
+}

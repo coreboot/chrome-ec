@@ -19,6 +19,8 @@
 /* EC console commands  */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+#undef CONFIG_CMD_ACCELSPOOF
+#undef CONFIG_CMD_MFALLOW
 
 /* Reduce flash space usage */
 #define CONFIG_DEBUG_ASSERT_BRIEF
@@ -78,6 +80,8 @@
 #define CONFIG_USBC_PPC_DEDICATED_INT
 #undef CONFIG_SYV682X_HV_ILIM
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
+/* SYV682 isn't connected to CC, so TCPC must provide VCONN */
+#define CONFIG_USBC_PPC_SYV682X_NO_CC
 
 #ifndef __ASSEMBLER__
 

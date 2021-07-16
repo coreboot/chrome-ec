@@ -22,7 +22,6 @@
 #define CONFIG_CMD_ACCEL_INFO
 
 #define CONFIG_LED_COMMON
-#define CONFIG_LED_POWER_LED
 
 /* Sensors */
 #define CONFIG_ACCEL_KX022		/* Lid accel */
@@ -56,6 +55,8 @@
 #define CONFIG_USBC_PPC_DEDICATED_INT
 #undef CONFIG_SYV682X_HV_ILIM
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
+/* SYV682 isn't connected to CC, so TCPC must provide VCONN */
+#define CONFIG_USBC_PPC_SYV682X_NO_CC
 
 /* Additional TCPC second source in Port 1 */
 #define CONFIG_USB_PD_TCPM_MULTI_PS8XXX
