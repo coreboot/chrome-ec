@@ -5,6 +5,14 @@
 #ifndef __U2F_H_INCLUDED__
 #define __U2F_H_INCLUDED__
 
+/**
+ * Note: This header file should be self-sufficient as it is shared
+ * with other boards and with userland daemons (u2fd).
+ *
+ * chromeos-ec-headers package installs it in ChromeOS development environment.
+ *
+ */
+
 #ifdef _MSC_VER /* Windows */
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
@@ -20,7 +28,7 @@ extern "C" {
 
 /* General constants */
 
-#define U2F_EC_KEY_SIZE	      32 /* EC key size in bytes */
+#define U2F_EC_KEY_SIZE	      32 /* EC key size in bytes, NIST P-256 Curve */
 #define U2F_EC_POINT_SIZE     ((U2F_EC_KEY_SIZE * 2) + 1) /* Size of EC point */
 #define U2F_MAX_KH_SIZE	      128 /* Max size of key handle */
 #define U2F_MAX_ATT_CERT_SIZE 2048 /* Max size of attestation certificate */
@@ -30,8 +38,15 @@ extern "C" {
 #define U2F_CHAL_SIZE	      32 /* Size of challenge */
 #define U2F_MAX_ATTEST_SIZE   256 /* Size of largest blob to sign */
 #define U2F_P256_SIZE	      32
+/* Origin seed is a random nonce generated during key handle creation. */
+#define U2F_ORIGIN_SEED_SIZE  32
+#define U2F_USER_SECRET_SIZE  32 /* Size of user secret */
+
+#define U2F_AUTH_TIME_SECRET_SIZE 32
 
 #define SHA256_DIGEST_SIZE    32
+#define U2F_MESSAGE_DIGEST_SIZE SHA256_DIGEST_SIZE
+
 
 #define ENC_SIZE(x) ((x + 7) & 0xfff8)
 
@@ -56,15 +71,29 @@ struct u2f_ec_point {
 #define U2F_KH_VERSION_1 0x01
 
 #define U2F_AUTHORIZATION_SALT_SIZE 16
+#define U2F_V0_KH_SIZE 64
+
+/**
+ * Key handle version = 1 for WebAuthn, bound to device and user.
+ */
+#define U2F_V1_KH_SIZE 113
+
+/* Header is composed of version || origin_seed || kh_hmac */
+#define U2F_V1_KH_HEADER_SIZE (U2F_ORIGIN_SEED_SIZE + SHA256_DIGEST_SIZE + 1)
+
+struct u2f_signature {
+	uint8_t sig_r[U2F_EC_KEY_SIZE]; /* Signature */
+	uint8_t sig_s[U2F_EC_KEY_SIZE]; /* Signature */
+};
 
 struct u2f_key_handle {
-	uint8_t origin_seed[U2F_P256_SIZE];
+	uint8_t origin_seed[U2F_ORIGIN_SEED_SIZE];
 	uint8_t hmac[SHA256_DIGEST_SIZE];
 };
 
 struct u2f_versioned_key_handle_header {
 	uint8_t version;
-	uint8_t origin_seed[U2F_P256_SIZE];
+	uint8_t origin_seed[U2F_ORIGIN_SEED_SIZE];
 	uint8_t kh_hmac[SHA256_DIGEST_SIZE];
 };
 
@@ -75,17 +104,46 @@ struct u2f_versioned_key_handle {
 	uint8_t authorization_hmac[SHA256_DIGEST_SIZE];
 };
 
+/**
+ * Alternative definitions of key handles.
+ *
+ *  struct u2f_key_handle_v0 == struct u2f_key_handle
+ *  struct u2f_key_handle_v1 == struct u2f_versioned_key_handle
+ *
+ */
+
+/* Key handle version = 0, only bound to device. */
+struct u2f_key_handle_v0 {
+	uint8_t origin_seed[U2F_ORIGIN_SEED_SIZE];
+	uint8_t hmac[SHA256_DIGEST_SIZE];
+};
+
+/* Key handle version = 1, bound to device and user. */
+struct u2f_key_handle_v1 {
+	uint8_t version;
+	uint8_t origin_seed[U2F_ORIGIN_SEED_SIZE];
+	uint8_t kh_hmac[SHA256_DIGEST_SIZE];
+	/* Optionally checked in u2f_sign. */
+	uint8_t authorization_salt[U2F_AUTHORIZATION_SALT_SIZE];
+	uint8_t authorization_hmac[SHA256_DIGEST_SIZE];
+};
+
+union u2f_key_handle_variant {
+	struct u2f_key_handle_v0 v0;
+	struct u2f_key_handle_v1 v1;
+};
+
 /* TODO(louiscollard): Add Descriptions. */
 
 struct u2f_generate_req {
 	uint8_t appId[U2F_APPID_SIZE]; /* Application id */
-	uint8_t userSecret[U2F_P256_SIZE];
+	uint8_t userSecret[U2F_USER_SECRET_SIZE];
 	uint8_t flags;
 	/*
 	 * If generating versioned KH, derive an hmac from it and append to
 	 * the key handle. Otherwise unused.
 	 */
-	uint8_t authTimeSecretHash[SHA256_DIGEST_SIZE];
+	uint8_t authTimeSecretHash[U2F_AUTH_TIME_SECRET_SIZE];
 };
 
 struct u2f_generate_resp {
@@ -100,7 +158,7 @@ struct u2f_generate_versioned_resp {
 
 struct u2f_sign_req {
 	uint8_t appId[U2F_APPID_SIZE]; /* Application id */
-	uint8_t userSecret[U2F_P256_SIZE];
+	uint8_t userSecret[U2F_USER_SECRET_SIZE];
 	struct u2f_key_handle keyHandle;
 	uint8_t hash[U2F_P256_SIZE];
 	uint8_t flags;
@@ -108,8 +166,8 @@ struct u2f_sign_req {
 
 struct u2f_sign_versioned_req {
 	uint8_t appId[U2F_APPID_SIZE]; /* Application id */
-	uint8_t userSecret[U2F_P256_SIZE];
-	uint8_t authTimeSecret[U2F_P256_SIZE];
+	uint8_t userSecret[U2F_USER_SECRET_SIZE];
+	uint8_t authTimeSecret[U2F_AUTH_TIME_SECRET_SIZE];
 	uint8_t hash[U2F_P256_SIZE];
 	uint8_t flags;
 	struct u2f_versioned_key_handle keyHandle;
@@ -121,7 +179,7 @@ struct u2f_sign_resp {
 };
 
 struct u2f_attest_req {
-	uint8_t userSecret[U2F_P256_SIZE];
+	uint8_t userSecret[U2F_USER_SECRET_SIZE];
 	uint8_t format;
 	uint8_t dataLen;
 	uint8_t data[U2F_MAX_ATTEST_SIZE];

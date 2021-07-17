@@ -13,7 +13,7 @@
 #include "link_defs.h"
 #include "rma_auth.h"
 #include "sn_bits.h"
-#include "u2f_impl.h"
+#include "u2f_cmds.h"
 #include "virtual_nvmem.h"
 
 /*

@@ -37,6 +37,9 @@ chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hmac_sw.o
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/sha1.o
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/sha256.o
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hmac_drbg.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/p256.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/compare.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hkdf.o
 
 # We still want raw SHA & HMAC implementations for mocked dcrypto
 chip-$(CONFIG_DCRYPTO_MOCK)+= ../../board/cr50/dcrypto/sha256.o
