@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include "u2f_cmds.h"
+#include "physical_presence.h"
 #include "test_util.h"
 #include "u2f_impl.h"
 
@@ -24,13 +26,41 @@ int DCRYPTO_ladder_random(void *output)
 	return 1;
 }
 
+bool fips_rand_bytes(void *buffer, size_t len)
+{
+	memset(buffer, 1, len);
+	return true;
+}
+
+bool fips_trng_bytes(void *buffer, size_t len)
+{
+	memset(buffer, 2, len);
+	return true;
+}
+
 int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
 				   const p256_int *pk_y, const p256_int *serial,
-				   const char *name, uint8_t *cert,
-				   const int n)
+				   const char *name, uint8_t *cert, const int n)
 {
 	/* Return the size of certificate, 0 means error. */
 	return 0;
+}
+
+int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
+				const uint8_t key_bytes[P256_NBYTES])
+{
+	p256_int key;
+
+	p256_from_bin(key_bytes, &key);
+
+	if (p256_lt_blinded(&key, &SECP256r1_nMin2) >= 0)
+		return 0;
+	p256_add_d(&key, 1, d);
+	if (x == NULL || y == NULL)
+		return 1;
+	memset(x, 0, P256_NBYTES);
+	memset(y, 0, P256_NBYTES);
+	return 1;
 }
 
 int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
@@ -42,6 +72,7 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 	return 1;
 }
 
+
 /******************************************************************************/
 /* Mock implementations of U2F functionality.
  */
@@ -49,30 +80,18 @@ static int presence;
 
 static struct u2f_state state;
 
-struct u2f_state *get_state(void)
+struct u2f_state *u2f_get_state(void)
 {
 	return &state;
 }
 
 enum touch_state pop_check_presence(int consume)
 {
-	enum touch_state ret = presence ?
-		POP_TOUCH_YES : POP_TOUCH_NO;
+	enum touch_state ret = presence ? POP_TOUCH_YES : POP_TOUCH_NO;
 
 	if (consume)
 		presence = 0;
 	return ret;
-}
-
-int u2f_origin_user_keypair(const uint8_t *key_handle, size_t key_handle_size,
-			    p256_int *d, p256_int *pk_x, p256_int *pk_y)
-{
-	return EC_SUCCESS;
-}
-
-int g2f_individual_keypair(p256_int *d, p256_int *pk_x, p256_int *pk_y)
-{
-	return EC_SUCCESS;
 }
 
 /******************************************************************************/
@@ -89,10 +108,8 @@ test_static int test_u2f_generate_no_require_presence(void)
 	memset(buffer, 0, sizeof(buffer));
 	req->flags = 0;
 	presence = 0;
-	ret = u2f_generate(
-		VENDOR_CC_U2F_GENERATE, &buffer,
-		sizeof(struct u2f_generate_req),
-		&response_size);
+	ret = u2f_generate_cmd(VENDOR_CC_U2F_GENERATE, &buffer,
+			       sizeof(struct u2f_generate_req), &response_size);
 
 	TEST_ASSERT(ret == VENDOR_RC_SUCCESS);
 	return EC_SUCCESS;
@@ -107,20 +124,16 @@ test_static int test_u2f_generate_require_presence(void)
 	memset(buffer, 0, sizeof(buffer));
 	req->flags = U2F_AUTH_FLAG_TUP;
 	presence = 0;
-	ret = u2f_generate(
-		VENDOR_CC_U2F_GENERATE, &buffer,
-		sizeof(struct u2f_generate_req),
-		&response_size);
+	ret = u2f_generate_cmd(VENDOR_CC_U2F_GENERATE, &buffer,
+			       sizeof(struct u2f_generate_req), &response_size);
 	TEST_ASSERT(ret == VENDOR_RC_NOT_ALLOWED);
 
 	memset(buffer, 0, sizeof(buffer));
 	req->flags = U2F_AUTH_FLAG_TUP;
 	response_size = sizeof(struct u2f_generate_resp);
 	presence = 1;
-	ret = u2f_generate(
-		VENDOR_CC_U2F_GENERATE, &buffer,
-		sizeof(struct u2f_generate_req),
-		&response_size);
+	ret = u2f_generate_cmd(VENDOR_CC_U2F_GENERATE, &buffer,
+			       sizeof(struct u2f_generate_req), &response_size);
 	TEST_ASSERT(ret == VENDOR_RC_SUCCESS);
 
 	return EC_SUCCESS;

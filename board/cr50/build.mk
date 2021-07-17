@@ -103,6 +103,7 @@ custom-board-ro_objs-${CONFIG_FIPS_UTIL} = $(BDIR)/dcrypto/util.o
 
 # FIPS console and TPM2 commands are outside FIPS module
 board-y += fips_cmd.o
+board-y += u2f_state_load.o
 
 board-y += tpm2/NVMem.o
 board-y += tpm2/aes.o

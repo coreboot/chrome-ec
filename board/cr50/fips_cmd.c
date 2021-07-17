@@ -21,7 +21,7 @@
 #include "system.h"
 #include "task.h"
 #include "tpm_nvmem_ops.h"
-#include "u2f_impl.h"
+#include "u2f_cmds.h"
 
 /**
  * Create IRQ handler calling FIPS module's dcrypto_done_interrupt() on
@@ -68,47 +68,46 @@ static void fips_print_status(void)
 }
 DECLARE_HOOK(HOOK_INIT, fips_print_status, HOOK_PRIO_INIT_PRINT_FIPS_STATUS);
 
-#ifdef CRYPTO_TEST_SETUP
+#if defined(CRYPTO_TEST_SETUP) || defined(CR50_DEV)
 static const uint8_t k_salt = NVMEM_VAR_G2F_SALT;
 
-/* Can't include TPM2 headers, so just define constant locally. */
-#define HR_NV_INDEX (1U << 24)
-
-/* Wipe old U2F keys. */
-static void u2f_zeroize_non_fips(void)
+static void print_u2f_keys_status(void)
 {
-	const uint32_t u2fobjs[] = { TPM_HIDDEN_U2F_KEK | HR_NV_INDEX,
-				     TPM_HIDDEN_U2F_KH_SALT | HR_NV_INDEX, 0 };
-	/* Delete NVMEM_VAR_G2F_SALT. */
-	setvar(&k_salt, sizeof(k_salt), NULL, 0);
-	/* Remove U2F keys and wipe all deleted objects. */
-	nvmem_erase_tpm_data_selective(u2fobjs);
+	struct u2f_state state;
+	bool load_result;
+	size_t hmac_len, drbg_len;
+
+	hmac_len = read_tpm_nvmem_size(TPM_HIDDEN_U2F_KEK);
+	drbg_len = read_tpm_nvmem_size(TPM_HIDDEN_U2F_KH_SALT);
+	load_result = u2f_load_or_create_state(&state, false);
+
+	CPRINTS("U2F HMAC len: %u, U2F Entropy len: %u, U2F load:%u, "
+		"State DRBG len:%u", hmac_len,
+		drbg_len, load_result, state.drbg_entropy_size);
 }
 
-/* Set U2F keys to old or new version. */
-static void fips_set_u2f_keys(bool active)
+static void u2f_keys(void)
 {
-	if (!active) {
-		/* Old version. */
-		uint8_t random[32];
-		/* Create fake u2f keys old style */
-		fips_trng_bytes(random, sizeof(random));
-		setvar(&k_salt, sizeof(k_salt), random, sizeof(random));
+	CPRINTS("U2F state %x", (uintptr_t)u2f_get_state());
+	print_u2f_keys_status();
+}
 
-		fips_trng_bytes(random, sizeof(random));
-		write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK, sizeof(random),
-				       random, 1);
-		fips_trng_bytes(random, sizeof(random));
-		write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KH_SALT, sizeof(random),
-				       random, 1);
-	} else {
-		/**
-		 * TODO(sukhomlinov): Implement new key generation after merging
-		 * https://crrev.com/c/3034852 and adding FIPS key gen.
-		 */
-		u2f_zeroize_non_fips();
-	}
-	system_reset(EC_RESET_FLAG_SECURITY);
+/* Set U2F keys as old. */
+static void fips_set_old_u2f_keys(void)
+{
+	uint8_t random[32];
+
+	u2f_zeroize_keys();
+
+	/* Create fake u2f keys old style */
+	fips_trng_bytes(random, sizeof(random));
+	setvar(&k_salt, sizeof(k_salt), random, sizeof(random));
+
+	fips_trng_bytes(random, sizeof(random));
+	write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK, sizeof(random), random, 1);
+	fips_trng_bytes(random, sizeof(random));
+	write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KH_SALT, sizeof(random), random,
+			       1);
 }
 #endif
 
@@ -127,11 +126,20 @@ static int cmd_fips_status(int argc, char **argv)
 			fips_print_test_time();
 			fips_print_mode();
 		}
-#ifdef CRYPTO_TEST_SETUP
+#if defined(CRYPTO_TEST_SETUP) || defined(CR50_DEV)
 		else if (!strncmp(argv[1], "new", 3))
-			fips_set_u2f_keys(true); /* we can reboot here... */
+			CPRINTS("u2f update status: %d", u2f_update_keys());
+		else if (!strncmp(argv[1], "del", 3))
+			CPRINTS("u2f zeroization status: %d",
+				u2f_zeroize_keys());
 		else if (!strncmp(argv[1], "old", 3))
-			fips_set_u2f_keys(false); /* we can reboot here... */
+			fips_set_old_u2f_keys();
+		else if (!strncmp(argv[1], "u2f", 3))
+			print_u2f_keys_status();
+		else if (!strncmp(argv[1], "gen", 3))
+			u2f_keys();
+#endif
+#ifdef CRYPTO_TEST_SETUP
 		else if (!strncmp(argv[1], "trng", 4))
 			fips_break_cmd = FIPS_BREAK_TRNG;
 		else if (!strncmp(argv[1], "sha", 3))
@@ -144,7 +152,7 @@ static int cmd_fips_status(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(
 	fips, cmd_fips_status,
 #ifdef CRYPTO_TEST_SETUP
-	"[test | new | old | trng | sha]",
+	"[test | new | old | u2f | gen | trng | sha]",
 	"Report FIPS status, switch U2F key, run tests, simulate errors");
 #else
 	"[test]", "Report FIPS status, run tests");
@@ -181,10 +189,10 @@ static enum vendor_cmd_rc fips_cmd(enum vendor_cmd_cc code, void *buf,
 		memcpy(buf, &fips_reverse, sizeof(fips_reverse));
 		*response_size = sizeof(fips_reverse);
 		break;
-#ifdef CRYPTO_TEST_SETUP
 	case FIPS_CMD_ON:
-		fips_set_u2f_keys(true); /* we can reboot here... */
+		u2f_update_keys();
 		break;
+#ifdef CRYPTO_TEST_SETUP
 	case FIPS_CMD_BREAK_TRNG:
 		fips_break_cmd = FIPS_BREAK_TRNG;
 		break;
