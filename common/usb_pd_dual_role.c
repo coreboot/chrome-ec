@@ -61,6 +61,9 @@ int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 
 	/* Get max power that is under our max voltage input */
 	for (i = 0; i < src_cap_cnt; i++) {
+		if (IS_ENABLED(CONFIG_USB_PD_ONLY_FIXED_PDOS) &&
+		    (src_caps[i] & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
+			continue;
 		/* its an unsupported Augmented PDO (PD3.0) */
 		if ((src_caps[i] & PDO_TYPE_MASK) == PDO_TYPE_AUGMENTED)
 			continue;
@@ -154,25 +157,42 @@ int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t * const src_caps,
 	return ret;
 }
 
-void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv)
+void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *max_mv,
+			  uint32_t *min_mv)
 {
-	int max_ma, uw;
+	int max_ma, mw;
 
-	*mv = ((pdo >> 10) & 0x3FF) * 50;
+	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_FIXED) {
+		*max_mv = PDO_FIXED_VOLTAGE(pdo);
+		*min_mv = *max_mv;
+	} else if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_AUGMENTED) {
+		*max_mv = PDO_AUG_MAX_VOLTAGE(pdo);
+		*min_mv = PDO_AUG_MIN_VOLTAGE(pdo);
+	} else if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_VARIABLE) {
+		*max_mv = PDO_VAR_MAX_VOLTAGE(pdo);
+		*min_mv = PDO_VAR_MIN_VOLTAGE(pdo);
+	} else {
+		*max_mv = PDO_BATT_MAX_VOLTAGE(pdo);
+		*min_mv = PDO_BATT_MIN_VOLTAGE(pdo);
+	}
 
-	if (*mv == 0) {
+	if (*max_mv == 0) {
 		*ma = 0;
+		*min_mv = 0;
 		return;
 	}
 
-	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) {
-		uw = 250000 * (pdo & 0x3FF);
-		max_ma = 1000 * MIN(1000 * uw, PD_MAX_POWER_MW) / *mv;
+	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_FIXED) {
+		max_ma = PDO_FIXED_CURRENT(pdo);
+	} else if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_AUGMENTED) {
+		max_ma = PDO_AUG_MAX_CURRENT(pdo);
+	} else if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_VARIABLE) {
+		max_ma = PDO_VAR_MAX_CURRENT(pdo);
 	} else {
-		max_ma = 10 * (pdo & 0x3FF);
-		max_ma = MIN(max_ma, PD_MAX_POWER_MW * 1000 / *mv);
+		mw = PDO_BATT_MAX_POWER(pdo);
+		max_ma = 1000 * mw / *min_mv;
 	}
-
+	max_ma = MIN(max_ma, PD_MAX_POWER_MW * 1000 / *min_mv);
 	*ma = MIN(max_ma, PD_MAX_CURRENT_MA);
 }
 
@@ -192,6 +212,7 @@ void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
 	int charging_allowed;
 	int max_request_allowed;
 	uint32_t max_request_mv = pd_get_max_voltage();
+	uint32_t unused;
 
 	/*
 	 * If this port is the current charge port, or if there isn't an active
@@ -229,7 +250,7 @@ void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
 		pdo = src_caps[0];
 	}
 
-	pd_extract_pdo_power(pdo, ma, mv);
+	pd_extract_pdo_power(pdo, ma, mv, &unused);
 
 	/*
 	 * Adjust VBUS current if CTVPD device was detected.
@@ -320,13 +341,13 @@ void pd_process_source_cap(int port, int cnt, uint32_t *src_caps)
 	pd_set_src_caps(port, cnt, src_caps);
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
-		uint32_t ma, mv, pdo;
+		uint32_t ma, mv, pdo, unused;
 
 		/* Get max power info that we could request */
 		pd_find_pdo_index(pd_get_src_cap_cnt(port),
 					pd_get_src_caps(port),
 					pd_get_max_voltage(), &pdo);
-		pd_extract_pdo_power(pdo, &ma, &mv);
+		pd_extract_pdo_power(pdo, &ma, &mv, &unused);
 
 		/* Set max. limit, but apply 500mA ceiling */
 		charge_manager_set_ceil(port, CEIL_REQUESTOR_PD, PD_MIN_MA);

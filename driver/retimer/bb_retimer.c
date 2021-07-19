@@ -70,7 +70,7 @@ static int bb_retimer_read(const struct usb_mux *me,
 				me->usb_port, rv);
 			return rv;
 		}
-		msleep(20);
+		msleep(10);
 	}
 
 	if (buf[0] != BB_RETIMER_REG_SIZE)
@@ -118,7 +118,7 @@ static int bb_retimer_write(const struct usb_mux *me,
 				me->usb_port, rv);
 			break;
 		}
-		msleep(20);
+		msleep(10);
 	}
 	return rv;
 }
@@ -159,7 +159,6 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 		.raw_value = pd_get_tbt_mode_vdo(port, TCPC_TX_SOP_PRIME) };
 	union tbt_mode_resp_device dev_resp;
 	enum idh_ptype cable_type = get_usb_pd_cable_type(port);
-	struct pd_discovery *disc;
 
 	/*
 	 * Bit 2: RE_TIMER_DRIVER
@@ -242,7 +241,7 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 			*set_retimer_con |= BB_RETIMER_TBT_ACTIVE_LINK_TRAINING;
 
 		/*
-		 * Bit 27-25: TBT Cable speed
+		 * Bit 27-25: USB4/TBT Cable speed
 		 * 000b - No functionality
 		 * 001b - USB3.1 Gen1 Cable
 		 * 010b - 10Gb/s
@@ -250,7 +249,10 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 		 * 10..11b - Reserved
 		 */
 		*set_retimer_con |= BB_RETIMER_USB4_TBT_CABLE_SPEED_SUPPORT(
-						get_tbt_cable_speed(port));
+				    mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED ?
+				    get_tbt_cable_speed(port) :
+				    get_usb4_cable_speed(port));
+
 		/*
 		 * Bits 29-28: TBT_GEN_SUPPORT
 		 * 00b - 3rd generation TBT (10.3125 and 20.625Gb/s)
@@ -260,28 +262,6 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 		 */
 		*set_retimer_con |= BB_RETIMER_TBT_CABLE_GENERATION(
 				       cable_resp.tbt_rounded);
-	}
-	if (mux_state & USB_PD_MUX_USB4_ENABLED) {
-		disc = pd_get_am_discovery(port, TCPC_TX_SOP);
-
-		/*
-		 * Bit 16: TBT_CONNECTION
-		 * 0 - Port partner doesn't support TBT3
-		 * 1 - Port partner supports TBT3
-		 */
-		if (PD_PRODUCT_IS_TBT3(disc->identity.product_t1.raw_value))
-			*set_retimer_con |= BB_RETIMER_TBT_CONNECTION;
-
-		/*
-		 * Bit 27-25: USB4 Cable speed
-		 * 000b - No functionality
-		 * 001b - USB3.1 Gen1 Cable
-		 * 010b - 10Gb/s
-		 * 011b - 10Gb/s and 20Gb/s
-		 * 10..11b - Reserved
-		 */
-		*set_retimer_con |= BB_RETIMER_USB4_TBT_CABLE_SPEED_SUPPORT(
-					get_usb4_cable_speed(port));
 	}
 }
 
@@ -550,7 +530,7 @@ static int console_command_bb_retimer(int argc, char **argv)
 
 	/* Get port number */
 	port = strtoi(argv[1], &e, 0);
-	if (*e || port < 0 || port > board_get_usb_pd_port_count())
+	if (*e || !board_is_usb_pd_port_present(port))
 		return EC_ERROR_PARAM1;
 
 	mux = &usb_muxes[port];

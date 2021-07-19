@@ -54,7 +54,7 @@
 #define CONFIG_HOST_COMMAND_STATUS
 #define CONFIG_HOSTCMD_SECTION_SORTED /* Host commands are sorted. */
 #define CONFIG_MKBP_EVENT
-#define CONFIG_KEYBOARD_PROTOCOL_MKBP
+#define CONFIG_MKBP_INPUT_DEVICES
 #define CONFIG_MKBP_USE_GPIO
 
 #define CONFIG_BOARD_VERSION_GPIO
@@ -211,10 +211,6 @@ enum pwm_channel {
 	PWM_CH_COUNT
 };
 
-/* Custom function to indicate if sourcing VBUS */
-int board_is_sourcing_vbus(int port);
-/* Enable VBUS sink for a given port */
-int board_vbus_sink_enable(int port, int enable);
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 /* Base detection interrupt handler */

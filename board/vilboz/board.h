@@ -21,9 +21,6 @@
 
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 
-/* Power  LEDs */
-#define CONFIG_LED_POWER_LED
-
 /* Motion sensing drivers */
 #define CONFIG_ACCELGYRO_LSM6DSM
 #define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
@@ -130,7 +127,6 @@ enum usbc_port {
 /*****************************************************************************
  * CBI EC FW Configuration
  */
-#include "cbi_ec_fw_config.h"
 
 /**
  * VILBOZ_MB_USBAC
@@ -157,6 +153,8 @@ enum ec_cfg_usb_mb_type {
 enum ec_cfg_usb_db_type {
 	VILBOZ_DB_D_OPT1_USBA_HDMI = 0,
 };
+
+#include "cbi_ec_fw_config.h"
 
 void board_reset_pd_mcu(void);
 

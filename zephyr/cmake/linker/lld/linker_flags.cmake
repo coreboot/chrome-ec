@@ -4,3 +4,6 @@
 
 # Include definitions for bfd as a base.
 include("${ZEPHYR_BASE}/cmake/linker/ld/linker_flags.cmake")
+# ld/linker_flags.cmake includes ${LINKER}/${COMPILER}/linker_flags.cmake but
+# that doesn't exist for ldd, so import the path that actually exists.
+include("${ZEPHYR_BASE}/cmake/linker/ld/${COMPILER}/linker_flags.cmake" OPTIONAL)

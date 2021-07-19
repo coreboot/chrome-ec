@@ -19,7 +19,6 @@
 #include "registers.h"
 #include "system.h"
 #include "task.h"
-#include "timer.h"
 #include "tcpm/tcpm.h"
 #include "util.h"
 #include "usb_charge.h"
@@ -362,7 +361,7 @@ static struct pd_message {
 	uint8_t ext;
 	uint32_t chunk_number_to_send;
 	uint32_t send_offset;
-#endif /* CONFIG_USB_PD_REV30 */
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 } pdmsg[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 struct extended_msg rx_emsg[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -415,6 +414,8 @@ GEN_NOT_SUPPORTED(TCH_REPORT_ERROR);
 #define TCH_REPORT_ERROR TCH_REPORT_ERROR_NOT_SUPPORTED
 #endif /* !CONFIG_USB_PD_REV30 */
 
+/* To store the time stamp when TCPC sets TX Complete Success */
+static timestamp_t tcpc_tx_success_ts[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Set the protocol transmit statemachine to a new state. */
 static void set_state_prl_tx(const int port,
@@ -507,8 +508,22 @@ static void print_current_tch_state(const int port)
 }
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
+
+timestamp_t prl_get_tcpc_tx_success_ts(int port)
+{
+	return tcpc_tx_success_ts[port];
+}
+
+/* Sets the time stamp when TCPC reports TX success. */
+static void set_tcpc_tx_success_ts(int port)
+{
+	tcpc_tx_success_ts[port] = get_time();
+}
+
 void pd_transmit_complete(int port, int status)
 {
+	if (status == TCPC_TX_COMPLETE_SUCCESS)
+		set_tcpc_tx_success_ts(port);
 	prl_tx[port].xmit_status = status;
 }
 
@@ -626,7 +641,7 @@ void prl_send_ctrl_msg(int port,
 	TCH_SET_FLAG(port, PRL_FLAGS_MSG_XMIT);
 #else
 	PRL_TX_SET_FLAG(port, PRL_FLAGS_MSG_XMIT);
-#endif /* CONFIG_USB_PD_REV30 */
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
@@ -645,7 +660,7 @@ void prl_send_data_msg(int port,
 #else
 	prl_copy_msg_to_buffer(port);
 	PRL_TX_SET_FLAG(port, PRL_FLAGS_MSG_XMIT);
-#endif /* CONFIG_USB_PD_REV30 */
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
 	task_wake(PD_PORT_TO_TASK_ID(port));
 }
@@ -2368,7 +2383,7 @@ __maybe_unused static const struct usb_state rch_states[] = {
 		.entry  = rch_report_error_entry,
 		.run    = rch_report_error_run,
 	},
-#endif
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 };
 
 /* All necessary Chunked Tx states (Section 6.11.2.1.3) */
@@ -2405,7 +2420,7 @@ __maybe_unused static const struct usb_state tch_states[] = {
 	[TCH_REPORT_ERROR] = {
 		.entry  = tch_report_error_entry,
 	},
-#endif
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 };
 
 #ifdef TEST_BUILD
@@ -2446,4 +2461,3 @@ BUILD_ASSERT(ARRAY_SIZE(tch_states) == ARRAY_SIZE(tch_state_names));
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 const int test_prl_sm_data_size = ARRAY_SIZE(test_prl_sm_data);
 #endif
-

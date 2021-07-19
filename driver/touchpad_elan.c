@@ -10,6 +10,7 @@
 #include "hwtimer.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "math_util.h"
 #include "sha256.h"
 #include "shared_mem.h"
 #include "task.h"
@@ -276,7 +277,7 @@ static int elan_tp_read_report(void)
 	return 0;
 }
 
-static int elan_get_fwinfo(void)
+static void elan_get_fwinfo(void)
 {
 	uint16_t ic_type = elan_tp_params.ic_type;
 	uint16_t iap_version = elan_tp_params.iap_version;
@@ -291,14 +292,15 @@ static int elan_get_fwinfo(void)
 	case 0x00:
 	case 0x10:
 	case 0x14:
+	case 0x15:
 		elan_tp_params.page_count = 1024;
 		break;
 	default:
+		elan_tp_params.page_count = -1;
 		CPRINTS("unknown ic_type: %d", ic_type);
-		return EC_ERROR_UNKNOWN;
 	}
 
-	if (ic_type == 0x14 && iap_version >= 2) {
+	if ((ic_type == 0x14 || ic_type == 0x15) && iap_version >= 2) {
 		elan_tp_params.page_count /= 8;
 		elan_tp_params.page_size = 512;
 	} else if (ic_type >= 0x0D && iap_version >= 1) {
@@ -307,8 +309,15 @@ static int elan_get_fwinfo(void)
 	} else {
 		elan_tp_params.page_size = 64;
 	}
+}
 
-	return EC_SUCCESS;
+/*
+ * - dpi == logical dimension / physical dimension (inches)
+ *   (254 tenths of mm per inch)
+ */
+__maybe_unused static int calc_physical_dimension(int dpi, int logical_dim)
+{
+	return round_divide(254 * logical_dim, dpi);
 }
 
 /* Initialize the controller ICs after reset */
@@ -344,9 +353,7 @@ static void elan_tp_init(void)
 	if (rv)
 		goto out;
 
-	rv = elan_get_fwinfo();
-	if (rv)
-		goto out;
+	elan_get_fwinfo();
 
 	/* Read min/max */
 	rv = elan_tp_read_cmd(ETP_I2C_MAX_X_AXIS_CMD, &elan_tp_params.max_x);
@@ -391,17 +398,13 @@ static void elan_tp_init(void)
 		elan_tp_params.pressure_adj, dpi_x, dpi_y);
 
 #ifdef CONFIG_USB_HID_TOUCHPAD
-	/*
-	 * Validity check dimensions provided at build time.
-	 * - dpi == logical dimension / physical dimension (inches)
-	 *   (254 tenths of mm per inch)
-	 */
+	/* Validity check dimensions provided at build time. */
 	if (elan_tp_params.max_x != CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_X ||
 	    elan_tp_params.max_y != CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_Y ||
-	    dpi_x != 254*CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_X /
-				CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_X ||
-	    dpi_y != 254*CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_Y /
-				CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_Y) {
+	    calc_physical_dimension(dpi_x, elan_tp_params.max_x) !=
+			CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_X ||
+	    calc_physical_dimension(dpi_y, elan_tp_params.max_y) !=
+			CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_Y) {
 		CPRINTS("*** TP mismatch!");
 	}
 #endif

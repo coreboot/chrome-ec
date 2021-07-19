@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_SM5803_H
 #define __CROS_EC_SM5803_H
 
+#include "common.h"
+
 /* Note: configure charger struct with CHARGER_FLAGS */
 #define SM5803_ADDR_MAIN_FLAGS		0x30
 #define SM5803_ADDR_MEAS_FLAGS		0x31
@@ -132,6 +134,8 @@ enum sm5803_gpio0_modes {
 /* Note: Threshold registers all assume lower 2 bits are 0 */
 #define SM5803_REG_VBUS_LOW_TH		0x1A
 #define SM5803_REG_VBUS_HIGH_TH		0x2A
+#define SM5803_REG_VCHG_PWR_LOW_TH	0x1B
+#define SM5803_REG_VCHG_PWR_HIGH_TH	0x2B
 #define SM5803_REG_TINT_LOW_TH		0x1D
 #define SM5803_REG_TINT_HIGH_TH		0x2D
 
@@ -148,6 +152,9 @@ enum sm5803_gpio0_modes {
  */
 #define SM5803_TINT_LOW_LEVEL		0xBF
 #define SM5803_TINT_HIGH_LEVEL		0xD1
+
+#define SM5803_TINT_MAX_LEVEL		0xFF
+#define SM5803_TINT_MIN_LEVEL		0x00
 
 /* IBAT levels - The IBAT levels increment in 7.32mA */
 #define SM5803_REG_IBAT_CHG_MEAS_MSB		0x44
@@ -168,6 +175,9 @@ enum sm5803_gpio0_modes {
 #define SM5803_VBUS_MEAS_VBUS_SHORT	BIT(4)
 #define SM5803_VBUS_MEAS_OV_TEMP	BIT(5)
 #define SM5803_VBUS_MEAS_CHG_DET	BIT(6)
+
+/* VCHGPWR levels - The VCHGPWR levels increment in 23.4mV steps. */
+#define SM5803_REG_VCHG_PWR_MSB		0x4A
 
 #define SM5803_REG_TINT_MEAS_MSB	0x4E
 
@@ -379,10 +389,22 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable);
 void sm5803_hibernate(int chgnum);
 void sm5803_interrupt(int chgnum);
 
+/**
+ * Return whether ACOK is high or low.
+ *
+ * @param chgnum index into chg_chips table.
+ * @param acok will be set to true if ACOK is asserted, otherwise false.
+ * @return EC_SUCCESS, error otherwise.
+ */
+enum ec_error_list sm5803_is_acok(int chgnum, bool *acok);
+
 /* Expose low power mode functions */
 void sm5803_disable_low_power_mode(int chgnum);
 void sm5803_enable_low_power_mode(int chgnum);
 
 extern const struct charger_drv sm5803_drv;
+
+/* Expose interrupt handler for processing in PD_INT task when needed */
+void sm5803_handle_interrupt(int chgnum);
 
 #endif

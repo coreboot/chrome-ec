@@ -132,8 +132,13 @@ void print_flag(int port, int set_or_clear, int flag);
 #define CLR_FLAGS_ON_DISCONNECT(port) TC_CLR_FLAG(port, \
 	~(TC_FLAGS_LPM_ENGAGED | TC_FLAGS_REQUEST_SUSPEND | TC_FLAGS_SUSPENDED))
 
-/* 100 ms is enough time for any TCPC transaction to complete. */
-#define PD_LPM_DEBOUNCE_US (100 * MSEC)
+/*
+ * 10 ms is enough time for any TCPC transaction to complete
+ *
+ * This value must be below ~39.7 ms to put ANX7447 into LPM due to bug in
+ * silicon (see b/77544959 and b/149761477 for more details).
+ */
+#define PD_LPM_DEBOUNCE_US (10 * MSEC)
 
 /*
  * This delay is not part of the USB Type-C specification or the USB port
@@ -1245,6 +1250,10 @@ void typec_select_src_current_limit_rp(int port, enum tcpc_rp_value rp)
 	if (IS_ATTACHED_SRC(port))
 		TC_SET_FLAG(port, TC_FLAGS_UPDATE_CURRENT);
 }
+__overridable int typec_get_default_current_limit_rp(int port)
+{
+	return CONFIG_USB_PD_PULLUP;
+}
 void typec_select_src_collision_rp(int port, enum tcpc_rp_value rp)
 {
 	tc[port].select_collision_rp = rp;
@@ -1445,7 +1454,8 @@ static void restart_tc_sm(int port, enum usb_tc_state start_state)
 	 * Update the Rp Value. We don't need to update CC lines though as that
 	 * happens in below set_state transition.
 	 */
-	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
+	typec_select_src_current_limit_rp(port,
+		typec_get_default_current_limit_rp(port));
 
 	/* Disable if restart failed, otherwise start in default state. */
 	set_state_tc(port, res ? TC_DISABLED : start_state);
@@ -2187,7 +2197,8 @@ static void tc_unattached_snk_entry(const int port)
 	 */
 	tcpm_debug_detach(port);
 	typec_select_pull(port, TYPEC_CC_RD);
-	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
+	typec_select_src_current_limit_rp(port,
+		typec_get_default_current_limit_rp(port));
 	typec_update_cc(port);
 
 
@@ -2747,7 +2758,8 @@ static void tc_unattached_src_entry(const int port)
 	 */
 	tcpm_debug_detach(port);
 	typec_select_pull(port, TYPEC_CC_RP);
-	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
+	typec_select_src_current_limit_rp(port,
+		typec_get_default_current_limit_rp(port));
 	typec_update_cc(port);
 
 	prev_data_role = tc[port].data_role;
@@ -3046,6 +3058,10 @@ static void tc_attached_src_entry(const int port)
 
 	/* Inform PPC and OCP module that a sink is connected. */
 	tc_set_partner_role(port, PPC_DEV_SNK);
+
+	/* Initialize type-C supplier to seed the charge manger */
+	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
+		typec_set_input_current_limit(port, 0, 0);
 
 	/*
 	 * Only notify if we're not performing a power role swap.  During a
@@ -3420,7 +3436,9 @@ static void tc_try_src_entry(const int port)
 	 * ground through Rp.
 	 */
 	typec_select_pull(port, TYPEC_CC_RP);
-	typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
+
+	typec_select_src_current_limit_rp(port,
+		typec_get_default_current_limit_rp(port));
 
 	/* Apply Rp */
 	typec_update_cc(port);

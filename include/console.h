@@ -10,9 +10,30 @@
 
 #include "common.h"
 #include "config.h"
+#include <stdbool.h>
 
 #ifdef CONFIG_ZEPHYR
 #include "zephyr_console_shim.h"
+#endif
+
+/*
+ * Define uart_shell_stop() and uart_shell_start() functions to start/stop the
+ * running shell. To avoid having a guard on the build type, non-Zephyr builds
+ * will have a stubbed function for these which is safe to call. These functions
+ * will stop/start the Zephyr shell from processing, they should be used for
+ * briefly taking control of the uart.
+ */
+#ifdef CONFIG_ZEPHYR
+int uart_shell_stop(void);
+void uart_shell_start(void);
+#else
+static inline int uart_shell_stop(void)
+{
+	return 0;
+}
+static inline void uart_shell_start(void)
+{
+}
 #endif
 
 /*
@@ -101,6 +122,36 @@ enum console_channel {
 
 /* Mask to use to enable all channels */
 #define CC_ALL			0xffffffffU
+
+/**
+ * Enable a console channel by name
+ *
+ * @param name		Console channel name
+ */
+void console_channel_enable(const char *name);
+
+/**
+ * Disable a console channel by name
+ *
+ * @param name		Console channel name
+ */
+void console_channel_disable(const char *name);
+
+/**
+ * Check if channel is disabled.
+ *
+ * @param channel	Output channel
+ *
+ * @return true if channel is disabled, false if not.
+ */
+#ifdef CONFIG_CONSOLE_CHANNEL
+bool console_channel_is_disabled(enum console_channel channel);
+#else
+static inline bool console_channel_is_disabled(enum console_channel channel)
+{
+	return false;
+}
+#endif
 
 /**
  * Put a string to the console channel.

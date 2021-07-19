@@ -42,7 +42,7 @@
 #include "task.h"
 #include "temp_sensor.h"
 #include "thermal.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "uart.h"
 #include "usb_charge.h"
 #include "usb_common.h"
@@ -183,6 +183,73 @@ BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
 static void power_monitor(void);
 DECLARE_DEFERRED(power_monitor);
+
+__override void tcs3400_translate_to_xyz(struct motion_sensor_t *s,
+				     int32_t *crgb_data, int32_t *xyz_data)
+{
+	int n, cur_gain;
+	fp_t n_interval, rgbc_sum;
+	int integration_time_us;
+	struct tcs_saturation_t *sat_p =
+				&(TCS3400_RGB_DRV_DATA(s+1)->saturation);
+
+	cur_gain = (1 << (2 * sat_p->again));
+
+	integration_time_us =
+		tcs3400_get_integration_time(sat_p->atime);
+
+	/* n_interval = (G+B)/C, to use different coefficient*/
+	if (crgb_data[0] != 0)
+		n_interval = INT_TO_FP(crgb_data[2]+crgb_data[3])/crgb_data[0];
+	else
+		n_interval = FLOAT_TO_FP(0.692); /* set default n = 2 */
+
+	if (n_interval < FLOAT_TO_FP(0.692))
+		n = 1;
+	else if (n_interval >= FLOAT_TO_FP(0.692) &&
+			n_interval < FLOAT_TO_FP(1.012))
+		n = 2;
+	else
+		n = 3;
+
+	switch (n) {
+	case 1:
+		rgbc_sum =
+			fp_mul(INT_TO_FP(crgb_data[0]), FLOAT_TO_FP(0.009)) +
+			fp_mul(INT_TO_FP(crgb_data[1]), FLOAT_TO_FP(0.056)) +
+			fp_mul(INT_TO_FP(crgb_data[2]), FLOAT_TO_FP(2.735)) +
+			fp_mul(INT_TO_FP(crgb_data[3]), FLOAT_TO_FP(-1.903));
+
+		xyz_data[1] = FP_TO_INT(fp_mul(FLOAT_TO_FP(799.797), rgbc_sum
+			/ (int)(integration_time_us * cur_gain / 1000ULL)));
+	break;
+	case 2:
+		rgbc_sum =
+			fp_mul(INT_TO_FP(crgb_data[0]), FLOAT_TO_FP(0.202)) +
+			fp_mul(INT_TO_FP(crgb_data[1]), FLOAT_TO_FP(-1.1)) +
+			fp_mul(INT_TO_FP(crgb_data[2]), FLOAT_TO_FP(8.692)) +
+			fp_mul(INT_TO_FP(crgb_data[3]), FLOAT_TO_FP(-7.068));
+
+		xyz_data[1] = FP_TO_INT(fp_mul(FLOAT_TO_FP(801.347), rgbc_sum
+			/ (int)(integration_time_us * cur_gain / 1000ULL)));
+	break;
+	case 3:
+		rgbc_sum =
+			fp_mul(INT_TO_FP(crgb_data[0]), FLOAT_TO_FP(-0.661)) +
+			fp_mul(INT_TO_FP(crgb_data[1]), FLOAT_TO_FP(1.334)) +
+			fp_mul(INT_TO_FP(crgb_data[2]), FLOAT_TO_FP(1.095)) +
+			fp_mul(INT_TO_FP(crgb_data[3]), FLOAT_TO_FP(-1.821));
+
+		xyz_data[1] = FP_TO_INT(fp_mul(FLOAT_TO_FP(795.574), rgbc_sum
+			/ (int)(integration_time_us * cur_gain / 1000ULL)));
+	break;
+	default:
+	break;
+	}
+
+	if (xyz_data[1] < 0)
+		xyz_data[1] = 0;
+}
 
 static void ppc_interrupt(enum gpio_signal signal)
 {
@@ -343,12 +410,12 @@ static const struct {
 	int current;
 } bj_power[] = {
 	{ /* 0 - 65W (also default) */
-	.voltage = 19000,
-	.current = 3420
+	.voltage = 19500,
+	.current = 3200
 	},
 	{ /* 1 - 90W */
-	.voltage = 19000,
-	.current = 4740
+	.voltage = 19500,
+	.current = 4600
 	},
 };
 
@@ -507,12 +574,6 @@ const struct adc_t adc_channels[] = {
 		.factor_mul = ADC_MAX_VOLT,
 		.factor_div = ADC_READ_MAX + 1,
 	},
-	[ADC_TEMP_SENSOR_2] = {
-		.name = "TEMP_SENSOR_2",
-		.input_ch = NPCX_ADC_CH1,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
-	},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -522,12 +583,6 @@ const struct temp_sensor_t temp_sensors[] = {
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
 		.idx = ADC_TEMP_SENSOR_1,
-	},
-	[TEMP_SENSOR_2] = {
-		.name = "PP5000",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
@@ -570,12 +625,12 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 const static struct ec_thermal_config thermal_a = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(68),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(78),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(58),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 		[EC_TEMP_THRESH_HALT] = 0,
 	},
 	.temp_fan_off = C_TO_K(41),
@@ -584,7 +639,6 @@ const static struct ec_thermal_config thermal_a = {
 
 struct ec_thermal_config thermal_params[] = {
 	[TEMP_SENSOR_1] = thermal_a,
-	[TEMP_SENSOR_2] = thermal_a,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -903,11 +957,17 @@ unsigned int ec_config_get_thermal_solution(void)
 #define POWER_DELAY_MS		2
 #define POWER_READINGS		(10/POWER_DELAY_MS)
 
+/* PROCHOT_DEFER_OFF is to extend CPU prochot long enough
+ * to pass safety requirement 30 * 2ms = 60 ms
+ */
+#define PROCHOT_DEFER_OFF		30
+
 static void power_monitor(void)
 {
 	static uint32_t current_state;
 	static uint32_t history[POWER_READINGS];
 	static uint8_t index;
+	static uint8_t prochot_linger;
 	int32_t delay;
 	uint32_t new_state = 0, diff;
 	int32_t headroom_5v = PWR_MAX - base_5v_power;
@@ -1008,8 +1068,16 @@ static void power_monitor(void)
 			 * As a last resort, turn on PROCHOT to
 			 * throttle the CPU.
 			 */
-			if (gap <= 0)
+			if (gap <= 0) {
+				prochot_linger = 0;
 				new_state |= THROT_PROCHOT;
+			} else if (prochot_linger < PROCHOT_DEFER_OFF) {
+				/*
+				 * Do not turn off PROCHOT immediately.
+				 */
+				prochot_linger++;
+				new_state |= THROT_PROCHOT;
+			}
 		}
 	}
 	/*
@@ -1074,6 +1142,10 @@ static void power_monitor(void)
 		ppc_set_vbus_source_current_limit(0, rp);
 		tcpm_select_rp_value(0, rp);
 		pd_update_contract(0);
+
+		ppc_set_vbus_source_current_limit(1, rp);
+		tcpm_select_rp_value(1, rp);
+		pd_update_contract(1);
 	}
 	if (diff & THROT_TYPE_A) {
 		int typea_bc = (new_state & THROT_TYPE_A) ? 1 : 0;
@@ -1094,14 +1166,14 @@ __override void oz554_board_init(void)
 	case 0x00:
 		CPRINTS("PANEL_HAN01.10A");
 		oz554_set_config(0, 0xF3);
-		oz554_set_config(2, 0x55);
-		oz554_set_config(5, 0x87);
+		oz554_set_config(2, 0x4C);
+		oz554_set_config(5, 0xB7);
 		break;
 	case 0x02:
 		CPRINTS("PANEL_WF9_SSA2");
 		oz554_set_config(0, 0xF3);
-		oz554_set_config(2, 0x4C);
-		oz554_set_config(5, 0xB7);
+		oz554_set_config(2, 0x55);
+		oz554_set_config(5, 0x87);
 		break;
 	default:
 		CPRINTS("PANEL UNKNOWN");

@@ -54,7 +54,9 @@ extern "C" {
  * @return `v` if it is already between `min`/`max`, `min` if `v` was smaller
  * than `min`, `max` if `v` was bigger than `max`.
  */
+#ifndef CONFIG_ZEPHYR
 #define CLAMP(v, min, max) MIN(max, MAX(v, min))
+#endif
 
 /*
  * Convert a pointer to a base struct into a pointer to the struct that
@@ -98,6 +100,7 @@ int atoi(const char *nptr);
 
 #ifdef CONFIG_ZEPHYR
 #include <ctype.h>
+#include <string.h>
 #else
 int isdigit(int c);
 int isspace(int c);
@@ -105,15 +108,12 @@ int isalpha(int c);
 int isupper(int c);
 int isprint(int c);
 int tolower(int c);
-#endif
 
 int memcmp(const void *s1, const void *s2, size_t len);
 void *memcpy(void *dest, const void *src, size_t len);
 void *memset(void *dest, int c, size_t len);
 void *memmove(void *dest, const void *src, size_t len);
 void *memchr(const void *buffer, int c, size_t n);
-int strcasecmp(const char *s1, const char *s2);
-int strncasecmp(const char *s1, const char *s2, size_t size);
 
 /**
  * Find the first occurrence of the substring <s2> in the string <s1>
@@ -125,9 +125,13 @@ int strncasecmp(const char *s1, const char *s2, size_t size);
 char *strstr(const char *s1, const char *s2);
 
 size_t strlen(const char *s);
-size_t strnlen(const char *s, size_t maxlen);
 char *strncpy(char *dest, const char *src, size_t n);
 int strncmp(const char *s1, const char *s2, size_t n);
+#endif
+
+int strcasecmp(const char *s1, const char *s2);
+int strncasecmp(const char *s1, const char *s2, size_t size);
+size_t strnlen(const char *s, size_t maxlen);
 
 /* Like strtol(), but for integers. */
 int strtoi(const char *nptr, char **endptr, int base);
@@ -323,6 +327,37 @@ static inline uint64_t mulaa32(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
  * @param ready  Bit(s) to be read for readiness
  */
 void wait_for_ready(volatile uint32_t *reg, uint32_t enable, uint32_t ready);
+
+/**
+ * Convert the ternary bit array (each element is either 0, 1, or 2) to a
+ * non-standard ternary number system where the first 2^n natural numbers are
+ * represented as they would be in a binary system (without any Z digits) and
+ * the following 3^n-2^n numbers use the remaining ternary representations in
+ * the normal ternary system order (skipping the values that were already used
+ * up).
+ *
+ * This function is useful for converting BOARd ID, which is initially used a
+ * binary and later decided to switch to tri-state after some revisions have
+ * already been built.
+ *
+ * Example: For nbits = 2 we get the following representation:
+ *
+ *   Number      X1     X0
+ *     0          0      0
+ *     1          0      1
+ *     2          1      0
+ *     3          1      1	// Start counting ternaries back at 0 after this
+ *     4          0      2	// Skipping 00 and 01 which are already used up
+ *     5          1      2	// Skipping 10 and 11 which are already used up
+ *     6          2      0
+ *     7          2      1
+ *     8          2      2
+ *
+ * @param bits		Array of ternary bits (LSB first).
+ * @param nbits		Total number of bits.
+ * @return Number in the binary-first ternary number system.
+ */
+int binary_first_base3_from_bits(int *bits, int nbits);
 
 #ifdef __cplusplus
 }

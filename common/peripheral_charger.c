@@ -9,6 +9,7 @@
 #include "device_event.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "mkbp_event.h"
 #include "peripheral_charger.h"
 #include "queue.h"
 #include "stdbool.h"
@@ -20,22 +21,32 @@
 
 #define CPRINTS(fmt, args...) cprints(CC_PCHG, "PCHG: " fmt, ##args)
 
-static int dropped_event;
+/* Currently only used for FW update. */
+static uint32_t pchg_host_events;
 
 static void pchg_queue_event(struct pchg *ctx, enum pchg_event event)
 {
 	mutex_lock(&ctx->mtx);
 	if (queue_add_unit(&ctx->events, &event) == 0) {
-		dropped_event++;
+		ctx->dropped_event_count++;
 		CPRINTS("ERR: Queue is full");
 	}
 	mutex_unlock(&ctx->mtx);
+}
+
+static void _send_host_event(const struct pchg *ctx, uint32_t event)
+{
+	int port = PCHG_CTX_TO_PORT(ctx);
+
+	atomic_or(&pchg_host_events, event | port << EC_MKBP_PCHG_PORT_SHIFT);
+	mkbp_send_event(EC_MKBP_EVENT_PCHG);
 }
 
 static const char *_text_state(enum pchg_state state)
 {
 	/* TODO: Use "S%d" for normal build. */
 	static const char * const state_names[] = EC_PCHG_STATE_TEXT;
+	BUILD_ASSERT(ARRAY_SIZE(state_names) == PCHG_STATE_COUNT);
 
 	if (state >= sizeof(state_names))
 		return "UNDEF";
@@ -49,20 +60,31 @@ static const char *_text_event(enum pchg_event event)
 	static const char * const event_names[] = {
 		[PCHG_EVENT_NONE] = "NONE",
 		[PCHG_EVENT_IRQ] = "IRQ",
+		[PCHG_EVENT_RESET] = "RESET",
 		[PCHG_EVENT_INITIALIZED] = "INITIALIZED",
 		[PCHG_EVENT_ENABLED] = "ENABLED",
 		[PCHG_EVENT_DISABLED] = "DISABLED",
 		[PCHG_EVENT_DEVICE_DETECTED] = "DEVICE_DETECTED",
+		[PCHG_EVENT_DEVICE_CONNECTED] = "DEVICE_CONNECTED",
 		[PCHG_EVENT_DEVICE_LOST] = "DEVICE_LOST",
 		[PCHG_EVENT_CHARGE_STARTED] = "CHARGE_STARTED",
 		[PCHG_EVENT_CHARGE_UPDATE] = "CHARGE_UPDATE",
 		[PCHG_EVENT_CHARGE_ENDED] = "CHARGE_ENDED",
 		[PCHG_EVENT_CHARGE_STOPPED] = "CHARGE_STOPPED",
+		[PCHG_EVENT_UPDATE_OPENED] = "UPDATE_OPENED",
+		[PCHG_EVENT_UPDATE_CLOSED] = "UPDATE_CLOSED",
+		[PCHG_EVENT_UPDATE_WRITTEN] = "UPDATE_WRITTEN",
+		[PCHG_EVENT_IN_NORMAL] = "IN_NORMAL",
 		[PCHG_EVENT_CHARGE_ERROR] = "CHARGE_ERROR",
-		[PCHG_EVENT_INITIALIZE] = "INITIALIZE",
+		[PCHG_EVENT_UPDATE_ERROR] = "UPDATE_ERROR",
+		[PCHG_EVENT_OTHER_ERROR] = "OTHER_ERROR",
 		[PCHG_EVENT_ENABLE] = "ENABLE",
 		[PCHG_EVENT_DISABLE] = "DISABLE",
+		[PCHG_EVENT_UPDATE_OPEN] = "UPDATE_OPEN",
+		[PCHG_EVENT_UPDATE_WRITE] = "UPDATE_WRITE",
+		[PCHG_EVENT_UPDATE_CLOSE] = "UPDATE_CLOSE",
 	};
+	BUILD_ASSERT(ARRAY_SIZE(event_names) == PCHG_EVENT_COUNT);
 
 	if (event >= sizeof(event_names))
 		return "UNDEF";
@@ -70,44 +92,61 @@ static const char *_text_event(enum pchg_event event)
 	return event_names[event];
 }
 
-static enum pchg_state pchg_initialize(struct pchg *ctx, enum pchg_state state)
+static void _clear_port(struct pchg *ctx)
 {
-	int rv = ctx->cfg->drv->init(ctx);
+	mutex_lock(&ctx->mtx);
+	queue_init(&ctx->events);
+	mutex_unlock(&ctx->mtx);
+	atomic_clear(&ctx->irq);
+	ctx->battery_percent = 0;
+	ctx->error = 0;
+	ctx->update.data_ready = 0;
+}
 
-	if (rv == EC_SUCCESS) {
-		pchg_queue_event(ctx, PCHG_EVENT_ENABLE);
-		state = PCHG_STATE_INITIALIZED;
-	} else if (rv == EC_SUCCESS_IN_PROGRESS) {
-		state = PCHG_STATE_RESET;
+static enum pchg_state pchg_reset(struct pchg *ctx)
+{
+	enum pchg_state state = PCHG_STATE_RESET;
+	int rv;
+
+	/*
+	 * In case we get asynchronous reset, clear port though it's redundant
+	 * for a synchronous reset.
+	 */
+	_clear_port(ctx);
+
+	if (ctx->mode == PCHG_MODE_NORMAL) {
+		rv = ctx->cfg->drv->init(ctx);
+		if (rv == EC_SUCCESS) {
+			state = PCHG_STATE_INITIALIZED;
+			pchg_queue_event(ctx, PCHG_EVENT_ENABLE);
+		} else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			CPRINTS("ERR: Failed to reset to normal mode");
+		}
 	} else {
-		CPRINTS("ERR: Failed to initialize");
+		state = PCHG_STATE_DOWNLOAD;
+		pchg_queue_event(ctx, PCHG_EVENT_UPDATE_OPEN);
 	}
 
 	return state;
 }
 
-static enum pchg_state pchg_state_reset(struct pchg *ctx)
+static void pchg_state_reset(struct pchg *ctx)
 {
-	enum pchg_state state = PCHG_STATE_RESET;
-
 	switch (ctx->event) {
-	case PCHG_EVENT_INITIALIZE:
-		state = pchg_initialize(ctx, state);
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
 		break;
-	case PCHG_EVENT_INITIALIZED:
+	case PCHG_EVENT_IN_NORMAL:
+		ctx->state = PCHG_STATE_INITIALIZED;
 		pchg_queue_event(ctx, PCHG_EVENT_ENABLE);
-		state = PCHG_STATE_INITIALIZED;
 		break;
 	default:
 		break;
 	}
-
-	return state;
 }
 
-static enum pchg_state pchg_state_initialized(struct pchg *ctx)
+static void pchg_state_initialized(struct pchg *ctx)
 {
-	enum pchg_state state = PCHG_STATE_INITIALIZED;
 	int rv;
 
 	if (ctx->event == PCHG_EVENT_ENABLE)
@@ -115,141 +154,245 @@ static enum pchg_state pchg_state_initialized(struct pchg *ctx)
 
 	/* Spin in INITIALIZED until error condition is cleared. */
 	if (ctx->error)
-		return state;
+		return;
 
 	switch (ctx->event) {
-	case PCHG_EVENT_INITIALIZE:
-		state = pchg_initialize(ctx, state);
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_ENABLE:
 		rv = ctx->cfg->drv->enable(ctx, true);
 		if (rv == EC_SUCCESS)
-			state = PCHG_STATE_ENABLED;
+			ctx->state = PCHG_STATE_ENABLED;
 		else if (rv != EC_SUCCESS_IN_PROGRESS)
 			CPRINTS("ERR: Failed to enable");
 		break;
 	case PCHG_EVENT_ENABLED:
-		state = PCHG_STATE_ENABLED;
+		ctx->state = PCHG_STATE_ENABLED;
 		break;
 	default:
 		break;
 	}
-
-	return state;
 }
 
-static enum pchg_state pchg_state_enabled(struct pchg *ctx)
+static void pchg_state_enabled(struct pchg *ctx)
 {
-	enum pchg_state state = PCHG_STATE_ENABLED;
 	int rv;
 
 	switch (ctx->event) {
-	case PCHG_EVENT_INITIALIZE:
-		state = pchg_initialize(ctx, state);
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_DISABLE:
 		ctx->error |= PCHG_ERROR_HOST;
 		rv = ctx->cfg->drv->enable(ctx, false);
 		if (rv == EC_SUCCESS)
-			state = PCHG_STATE_INITIALIZED;
+			ctx->state = PCHG_STATE_INITIALIZED;
 		else if (rv != EC_SUCCESS_IN_PROGRESS)
 			CPRINTS("ERR: Failed to disable");
 		break;
 	case PCHG_EVENT_DISABLED:
-		state = PCHG_STATE_INITIALIZED;
+		ctx->state = PCHG_STATE_INITIALIZED;
 		break;
 	case PCHG_EVENT_DEVICE_DETECTED:
-		state = PCHG_STATE_DETECTED;
+		ctx->state = PCHG_STATE_DETECTED;
 		break;
-	case PCHG_EVENT_CHARGE_STARTED:
-		state = PCHG_STATE_CHARGING;
+	case PCHG_EVENT_DEVICE_CONNECTED:
+		/*
+		 * Proactively query SOC in case charging info won't be sent
+		 * because device is already charged.
+		 */
+		ctx->cfg->drv->get_soc(ctx);
+		ctx->state = PCHG_STATE_CONNECTED;
 		break;
 	default:
 		break;
 	}
-
-	return state;
 }
 
-static enum pchg_state pchg_state_detected(struct pchg *ctx)
+static void pchg_state_detected(struct pchg *ctx)
 {
-	enum pchg_state state = PCHG_STATE_DETECTED;
 	int rv;
 
 	switch (ctx->event) {
-	case PCHG_EVENT_INITIALIZE:
-		state = pchg_initialize(ctx, state);
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_DISABLE:
 		ctx->error |= PCHG_ERROR_HOST;
 		rv = ctx->cfg->drv->enable(ctx, false);
 		if (rv == EC_SUCCESS)
-			state = PCHG_STATE_INITIALIZED;
+			ctx->state = PCHG_STATE_INITIALIZED;
 		else if (rv != EC_SUCCESS_IN_PROGRESS)
 			CPRINTS("ERR: Failed to disable");
 		break;
 	case PCHG_EVENT_DISABLED:
-		state = PCHG_STATE_INITIALIZED;
+		ctx->state = PCHG_STATE_INITIALIZED;
 		break;
-	case PCHG_EVENT_CHARGE_STARTED:
-		state = PCHG_STATE_CHARGING;
+	case PCHG_EVENT_DEVICE_CONNECTED:
+		/*
+		 * Proactively query SOC in case charging info won't be sent
+		 * because device is already charged.
+		 */
+		ctx->cfg->drv->get_soc(ctx);
+		ctx->state = PCHG_STATE_CONNECTED;
 		break;
 	case PCHG_EVENT_DEVICE_LOST:
-		state = PCHG_STATE_ENABLED;
-		break;
-	case PCHG_EVENT_CHARGE_ERROR:
-		state = PCHG_STATE_INITIALIZED;
+		ctx->battery_percent = 0;
+		ctx->state = PCHG_STATE_ENABLED;
 		break;
 	default:
 		break;
 	}
-
-	return state;
 }
 
-static enum pchg_state pchg_state_charging(struct pchg *ctx)
+static void pchg_state_connected(struct pchg *ctx)
 {
-	enum pchg_state state = PCHG_STATE_CHARGING;
 	int rv;
 
 	switch (ctx->event) {
-	case PCHG_EVENT_INITIALIZE:
-		state = pchg_initialize(ctx, state);
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_DISABLE:
 		ctx->error |= PCHG_ERROR_HOST;
 		rv = ctx->cfg->drv->enable(ctx, false);
 		if (rv == EC_SUCCESS)
-			state = PCHG_STATE_INITIALIZED;
+			ctx->state = PCHG_STATE_INITIALIZED;
 		else if (rv != EC_SUCCESS_IN_PROGRESS)
 			CPRINTS("ERR: Failed to disable");
 		break;
 	case PCHG_EVENT_DISABLED:
-		state = PCHG_STATE_INITIALIZED;
+		ctx->state = PCHG_STATE_INITIALIZED;
+		break;
+	case PCHG_EVENT_CHARGE_STARTED:
+		ctx->state = PCHG_STATE_CHARGING;
+		break;
+	case PCHG_EVENT_DEVICE_LOST:
+		ctx->battery_percent = 0;
+		ctx->state = PCHG_STATE_ENABLED;
+		break;
+	case PCHG_EVENT_CHARGE_ERROR:
+		ctx->state = PCHG_STATE_INITIALIZED;
+		break;
+	default:
+		break;
+	}
+}
+
+static void pchg_state_charging(struct pchg *ctx)
+{
+	int rv;
+
+	switch (ctx->event) {
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
+		break;
+	case PCHG_EVENT_DISABLE:
+		ctx->error |= PCHG_ERROR_HOST;
+		rv = ctx->cfg->drv->enable(ctx, false);
+		if (rv == EC_SUCCESS)
+			ctx->state = PCHG_STATE_INITIALIZED;
+		else if (rv != EC_SUCCESS_IN_PROGRESS)
+			CPRINTS("ERR: Failed to disable");
+		break;
+	case PCHG_EVENT_DISABLED:
+		ctx->state = PCHG_STATE_INITIALIZED;
 		break;
 	case PCHG_EVENT_CHARGE_UPDATE:
-		CPRINTS("Battery %d%%", ctx->battery_percent);
 		break;
 	case PCHG_EVENT_DEVICE_LOST:
-		state = PCHG_STATE_ENABLED;
+		ctx->battery_percent = 0;
+		ctx->state = PCHG_STATE_ENABLED;
 		break;
 	case PCHG_EVENT_CHARGE_ERROR:
-		state = PCHG_STATE_INITIALIZED;
+		ctx->state = PCHG_STATE_INITIALIZED;
 		break;
 	case PCHG_EVENT_CHARGE_ENDED:
 	case PCHG_EVENT_CHARGE_STOPPED:
-		state = PCHG_STATE_DETECTED;
+		ctx->state = PCHG_STATE_CONNECTED;
 		break;
 	default:
 		break;
 	}
+}
 
-	return state;
+static void pchg_state_download(struct pchg *ctx)
+{
+	int rv;
+
+	switch (ctx->event) {
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
+		break;
+	case PCHG_EVENT_UPDATE_OPEN:
+		rv = ctx->cfg->drv->update_open(ctx);
+		if (rv == EC_SUCCESS) {
+			ctx->state = PCHG_STATE_DOWNLOADING;
+		} else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			_send_host_event(ctx, EC_MKBP_PCHG_UPDATE_ERROR);
+			CPRINTS("ERR: Failed to open");
+		}
+		break;
+	case PCHG_EVENT_UPDATE_OPENED:
+		ctx->state = PCHG_STATE_DOWNLOADING;
+		_send_host_event(ctx, EC_MKBP_PCHG_UPDATE_OPENED);
+		break;
+	case PCHG_EVENT_UPDATE_ERROR:
+		_send_host_event(ctx, EC_MKBP_PCHG_UPDATE_ERROR);
+		break;
+	default:
+		break;
+	}
+}
+
+static void pchg_state_downloading(struct pchg *ctx)
+{
+	int rv;
+
+	switch (ctx->event) {
+	case PCHG_EVENT_RESET:
+		ctx->state = pchg_reset(ctx);
+		break;
+	case PCHG_EVENT_UPDATE_WRITE:
+		if (ctx->update.data_ready == 0)
+			break;
+		rv = ctx->cfg->drv->update_write(ctx);
+		if (rv != EC_SUCCESS && rv != EC_SUCCESS_IN_PROGRESS) {
+			_send_host_event(ctx, EC_MKBP_PCHG_UPDATE_ERROR);
+			CPRINTS("ERR: Failed to write");
+		}
+		break;
+	case PCHG_EVENT_UPDATE_WRITTEN:
+		ctx->update.data_ready = 0;
+		_send_host_event(ctx, EC_MKBP_PCHG_WRITE_COMPLETE);
+		break;
+	case PCHG_EVENT_UPDATE_CLOSE:
+		rv = ctx->cfg->drv->update_close(ctx);
+		if (rv == EC_SUCCESS) {
+			ctx->state = PCHG_STATE_DOWNLOAD;
+		} else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			_send_host_event(ctx, EC_MKBP_PCHG_UPDATE_ERROR);
+			CPRINTS("ERR: Failed to close");
+		}
+		break;
+	case PCHG_EVENT_UPDATE_CLOSED:
+		ctx->state = PCHG_STATE_DOWNLOAD;
+		_send_host_event(ctx, EC_MKBP_PCHG_UPDATE_CLOSED);
+		break;
+	case PCHG_EVENT_UPDATE_ERROR:
+		CPRINTS("ERR: Failed to update");
+		_send_host_event(ctx, EC_MKBP_PCHG_UPDATE_ERROR);
+		break;
+	default:
+		break;
+	}
 }
 
 static int pchg_run(struct pchg *ctx)
 {
 	enum pchg_state previous_state = ctx->state;
+	uint8_t previous_battery = ctx->battery_percent;
 	int port = PCHG_CTX_TO_PORT(ctx);
 	int rv;
 
@@ -267,27 +410,39 @@ static int pchg_run(struct pchg *ctx)
 	if (ctx->event == PCHG_EVENT_IRQ) {
 		rv = ctx->cfg->drv->get_event(ctx);
 		if (rv) {
-			CPRINTS("ERR: get_event (%d)", rv);
+			CPRINTS("ERR: Failed to get event (%d)", rv);
 			return 0;
 		}
-		CPRINTS("IRQ:EVENT_%s", _text_event(ctx->event));
+		CPRINTS("  EVENT_%s", _text_event(ctx->event));
 	}
+
+	if (ctx->event == PCHG_EVENT_NONE)
+		return 0;
 
 	switch (ctx->state) {
 	case PCHG_STATE_RESET:
-		ctx->state = pchg_state_reset(ctx);
+		pchg_state_reset(ctx);
 		break;
 	case PCHG_STATE_INITIALIZED:
-		ctx->state = pchg_state_initialized(ctx);
+		pchg_state_initialized(ctx);
 		break;
 	case PCHG_STATE_ENABLED:
-		ctx->state = pchg_state_enabled(ctx);
+		pchg_state_enabled(ctx);
 		break;
 	case PCHG_STATE_DETECTED:
-		ctx->state = pchg_state_detected(ctx);
+		pchg_state_detected(ctx);
+		break;
+	case PCHG_STATE_CONNECTED:
+		pchg_state_connected(ctx);
 		break;
 	case PCHG_STATE_CHARGING:
-		ctx->state = pchg_state_charging(ctx);
+		pchg_state_charging(ctx);
+		break;
+	case PCHG_STATE_DOWNLOAD:
+		pchg_state_download(ctx);
+		break;
+	case PCHG_STATE_DOWNLOADING:
+		pchg_state_downloading(ctx);
 		break;
 	default:
 		CPRINTS("ERR: Unknown state (%d)", ctx->state);
@@ -297,19 +452,26 @@ static int pchg_run(struct pchg *ctx)
 	if (previous_state != ctx->state)
 		CPRINTS("->STATE_%s", _text_state(ctx->state));
 
+	if (ctx->battery_percent != previous_battery)
+		CPRINTS("Battery %u%%", ctx->battery_percent);
+
 	/*
 	 * Notify the host of
-	 * - [S0] any event
-	 * - [S3/S0IX] device attach or detach (for wake-up)
-	 * - [S5/G3] no events.
+	 * - [S0] Charge update with SoC change and all other events.
+	 * - [S3/S0IX] Device attach or detach (for wake-up)
+	 * - [S5/G3] No events.
 	 */
-	if (chipset_in_state(CHIPSET_STATE_ON))
-		return ctx->event != PCHG_EVENT_NONE;
-	else if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		return 0;
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
 		return (ctx->event == PCHG_EVENT_DEVICE_DETECTED)
 			|| (ctx->event == PCHG_EVENT_DEVICE_LOST);
 
-	return 0;
+	if (ctx->event == PCHG_EVENT_CHARGE_UPDATE)
+		return ctx->battery_percent != previous_battery;
+
+	return ctx->event != PCHG_EVENT_NONE;
 }
 
 void pchg_irq(enum gpio_signal signal)
@@ -327,6 +489,15 @@ void pchg_irq(enum gpio_signal signal)
 	}
 }
 
+
+static void pchg_suspend_complete(void)
+{
+	CPRINTS("%s", __func__);
+	device_enable_event(EC_DEVICE_EVENT_WLC);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND_COMPLETE, pchg_suspend_complete,
+	     HOOK_PRIO_DEFAULT);
+
 static void pchg_startup(void)
 {
 	struct pchg *ctx;
@@ -336,7 +507,9 @@ static void pchg_startup(void)
 
 	for (p = 0; p < pchg_count; p++) {
 		ctx = &pchgs[p];
-		pchg_queue_event(ctx, PCHG_EVENT_INITIALIZE);
+		_clear_port(ctx);
+		ctx->mode = PCHG_MODE_NORMAL;
+		ctx->cfg->drv->reset(ctx);
 		gpio_enable_interrupt(ctx->cfg->irq_pin);
 	}
 
@@ -354,9 +527,6 @@ static void pchg_shutdown(void)
 	for (p = 0; p < pchg_count; p++) {
 		ctx = &pchgs[0];
 		gpio_disable_interrupt(ctx->cfg->irq_pin);
-		mutex_lock(&ctx->mtx);
-		queue_init(&ctx->events);
-		mutex_unlock(&ctx->mtx);
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pchg_shutdown, HOOK_PRIO_DEFAULT);
@@ -366,8 +536,8 @@ void pchg_task(void *u)
 	struct pchg *ctx;
 	int p;
 
-	/* In case we arrive here after power-on (for late sysjump) */
 	if (chipset_in_state(CHIPSET_STATE_ON))
+		/* We are here after power-on (because of late sysjump). */
 		pchg_startup();
 
 	while (true) {
@@ -402,6 +572,8 @@ static enum ec_status hc_pchg_count(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_PCHG_COUNT, hc_pchg_count, EC_VER_MASK(0));
 
+#define HCPRINTS(fmt, args...) cprints(CC_PCHG, "HC:PCHG: " fmt, ##args)
+
 static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_pchg *p = args->params;
@@ -414,15 +586,105 @@ static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
 
 	ctx = &pchgs[port];
 
-	r->state = ctx->state;
+	if (ctx->state == PCHG_STATE_CONNECTED
+			&& ctx->battery_percent >= ctx->cfg->full_percent)
+		r->state = PCHG_STATE_FULL;
+	else
+		r->state = ctx->state;
+
 	r->battery_percentage = ctx->battery_percent;
 	r->error = ctx->error;
+	r->fw_version = ctx->fw_version;
+	r->dropped_event_count = ctx->dropped_event_count;
 
 	args->response_size = sizeof(*r);
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_PCHG, hc_pchg, EC_VER_MASK(0));
+DECLARE_HOST_COMMAND(EC_CMD_PCHG, hc_pchg, EC_VER_MASK(1));
+
+int pchg_get_next_event(uint8_t *out)
+{
+	uint32_t events = atomic_clear(&pchg_host_events);
+
+	memcpy(out, &events, sizeof(events));
+
+	return sizeof(events);
+}
+DECLARE_EVENT_SOURCE(EC_MKBP_EVENT_PCHG, pchg_get_next_event);
+
+static enum ec_status hc_pchg_update(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_pchg_update *p = args->params;
+	struct ec_response_pchg_update *r = args->response;
+	int port = p->port;
+	struct pchg *ctx;
+
+	if (port >= pchg_count)
+		return EC_RES_INVALID_PARAM;
+
+	ctx = &pchgs[port];
+
+	switch (p->cmd) {
+	case EC_PCHG_UPDATE_CMD_RESET_TO_NORMAL:
+		HCPRINTS("Resetting to normal mode");
+
+		gpio_disable_interrupt(ctx->cfg->irq_pin);
+		_clear_port(ctx);
+		ctx->mode = PCHG_MODE_NORMAL;
+		ctx->cfg->drv->reset(ctx);
+		gpio_enable_interrupt(ctx->cfg->irq_pin);
+		break;
+
+	case EC_PCHG_UPDATE_CMD_OPEN:
+		HCPRINTS("Resetting to download mode");
+
+		gpio_disable_interrupt(ctx->cfg->irq_pin);
+		_clear_port(ctx);
+		ctx->mode = PCHG_MODE_DOWNLOAD;
+		ctx->cfg->drv->reset(ctx);
+		gpio_enable_interrupt(ctx->cfg->irq_pin);
+
+		ctx->update.version = p->version;
+		r->block_size = ctx->cfg->block_size;
+		args->response_size = sizeof(*r);
+		break;
+
+	case EC_PCHG_UPDATE_CMD_WRITE:
+		if (ctx->state != PCHG_STATE_DOWNLOADING)
+			return EC_RES_ERROR;
+		if (p->size > sizeof(ctx->update.data))
+			return EC_RES_OVERFLOW;
+		if (ctx->update.data_ready)
+			return EC_RES_BUSY;
+
+		HCPRINTS("Writing %u bytes to 0x%x", p->size, p->addr);
+		ctx->update.addr = p->addr;
+		ctx->update.size = p->size;
+		memcpy(ctx->update.data, p->data, p->size);
+		pchg_queue_event(ctx, PCHG_EVENT_UPDATE_WRITE);
+		ctx->update.data_ready = 1;
+		break;
+
+	case EC_PCHG_UPDATE_CMD_CLOSE:
+		if (ctx->state != PCHG_STATE_DOWNLOADING)
+			return EC_RES_ERROR;
+		if (ctx->update.data_ready)
+			return EC_RES_BUSY;
+
+		HCPRINTS("Closing update session (crc=0x%x)", p->crc32);
+		ctx->update.crc32 = p->crc32;
+		pchg_queue_event(ctx, PCHG_EVENT_UPDATE_CLOSE);
+		break;
+	default:
+		return EC_RES_INVALID_PARAM;
+	}
+
+	task_wake(TASK_ID_PCHG);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_PCHG_UPDATE, hc_pchg_update, EC_VER_MASK(0));
 
 static int cc_pchg(int argc, char **argv)
 {
@@ -430,28 +692,40 @@ static int cc_pchg(int argc, char **argv)
 	char *end;
 	struct pchg *ctx;
 
-	if (argc < 2 || 3 < argc)
+	if (argc < 2 || 4 < argc)
 		return EC_ERROR_PARAM_COUNT;
 
 	port = strtoi(argv[1], &end, 0);
 	if (*end || port < 0 || port >= pchg_count)
-		return EC_ERROR_PARAM2;
+		return EC_ERROR_PARAM1;
 	ctx = &pchgs[port];
 
 	if (argc == 2) {
-		ccprintf("P%d STATE_%s EVENT_%s\n", port,
-			 _text_state(ctx->state), _text_event(ctx->event));
+		ccprintf("P%d STATE_%s EVENT_%s SOC=%d%%\n",
+			 port, _text_state(ctx->state), _text_event(ctx->event),
+			 ctx->battery_percent);
+		ccprintf("error=0x%x dropped=%u fw_version=0x%x\n",
+			 ctx->error, ctx->dropped_event_count, ctx->fw_version);
 		return EC_SUCCESS;
 	}
 
-	if (!strcasecmp(argv[2], "init")) {
-		pchg_queue_event(ctx, PCHG_EVENT_INITIALIZE);
+	if (!strcasecmp(argv[2], "reset")) {
+		if (argc == 3)
+			ctx->mode = PCHG_MODE_NORMAL;
+		else if (!strcasecmp(argv[3], "download"))
+			ctx->mode = PCHG_MODE_DOWNLOAD;
+		else
+			return EC_ERROR_PARAM3;
+		gpio_disable_interrupt(ctx->cfg->irq_pin);
+		_clear_port(ctx);
+		ctx->cfg->drv->reset(ctx);
+		gpio_enable_interrupt(ctx->cfg->irq_pin);
 	} else if (!strcasecmp(argv[2], "enable")) {
 		pchg_queue_event(ctx, PCHG_EVENT_ENABLE);
 	} else if (!strcasecmp(argv[2], "disable")) {
 		pchg_queue_event(ctx, PCHG_EVENT_DISABLE);
 	} else {
-		return EC_ERROR_PARAM1;
+		return EC_ERROR_PARAM2;
 	}
 
 	task_wake(TASK_ID_PCHG);
@@ -459,9 +733,8 @@ static int cc_pchg(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(pchg, cc_pchg,
-			"<port> [init/enable/disable]"
 			"\n\t<port>"
-			"\n\t<port> init"
+			"\n\t<port> reset [download]"
 			"\n\t<port> enable"
 			"\n\t<port> disable",
 			"Control peripheral chargers");

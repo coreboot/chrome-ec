@@ -41,7 +41,7 @@
 #include "task.h"
 #include "tcpm/tcpci.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -606,7 +606,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = NULL,
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -748,7 +748,7 @@ static void cbi_init(void)
  */
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_ADC + 1);
 
-uint32_t system_get_sku_id(void)
+__override uint32_t board_get_sku_id(void)
 {
 	return sku_id;
 }
@@ -786,6 +786,7 @@ __override uint32_t board_override_feature_flags0(uint32_t flags0)
 	    sku_id == 20 || sku_id == 21 ||
 	    sku_id == 32 || sku_id == 33 ||
 	    sku_id == 40 || sku_id == 41 ||
+	    sku_id == 44 || sku_id == 45 ||
 	    ((sku_id >= 0xa0) && (sku_id <= 0xaf)))
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
 	else

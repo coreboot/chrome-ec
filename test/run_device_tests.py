@@ -28,7 +28,8 @@ from typing import Optional, BinaryIO, List
 import colorama  # type: ignore[import]
 
 EC_DIR = Path(os.path.dirname(os.path.realpath(__file__))).parent
-FLASH_SCRIPT = os.path.join(EC_DIR, 'util/flash_jlink.py')
+JTRACE_FLASH_SCRIPT = os.path.join(EC_DIR, 'util/flash_jlink.py')
+SERVO_MICRO_FLASH_SCRIPT = os.path.join(EC_DIR, 'util/flash_ec')
 
 ALL_TESTS_PASSED_REGEX = re.compile(r'Pass!\r\n')
 ALL_TESTS_FAILED_REGEX = re.compile(r'Fail! \(\d+ tests\)\r\n')
@@ -48,9 +49,14 @@ DATA_ACCESS_VIOLATION_80E0000_REGEX = re.compile(
     r'Data access violation, mfar = 80e0000\r\n')
 DATA_ACCESS_VIOLATION_20000000_REGEX = re.compile(
     r'Data access violation, mfar = 20000000\r\n')
+DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
+    r'Data access violation, mfar = 24000000\r\n')
 
 BLOONCHIPPER = 'bloonchipper'
 DARTMONKEY = 'dartmonkey'
+
+JTRACE = 'jtrace'
+SERVO_MICRO = 'servo_micro'
 
 
 class ImageType(Enum):
@@ -63,12 +69,13 @@ class BoardConfig:
     """Board-specific configuration."""
 
     def __init__(self, name, servo_uart_name, servo_power_enable,
-                 rollback_region0_regex, rollback_region1_regex):
+                 rollback_region0_regex, rollback_region1_regex, mpu_regex):
         self.name = name
         self.servo_uart_name = servo_uart_name
         self.servo_power_enable = servo_power_enable
         self.rollback_region0_regex = rollback_region0_regex
         self.rollback_region1_regex = rollback_region1_regex
+        self.mpu_regex = mpu_regex
 
 
 class TestConfig:
@@ -105,6 +112,8 @@ class AllTests:
         tests = {
             'aes':
                 TestConfig(name='aes'),
+            'cec':
+                TestConfig(name='cec'),
             'crc':
                 TestConfig(name='crc'),
             'flash_physical':
@@ -114,6 +123,8 @@ class AllTests:
                 TestConfig(name='flash_write_protect',
                            image_to_use=ImageType.RO,
                            toggle_power=True, enable_hw_write_protect=True),
+            'fpsensor_hw':
+                TestConfig(name='fpsensor_hw'),
             'fpsensor_spi_ro':
                 TestConfig(name='fpsensor', image_to_use=ImageType.RO,
                            test_args=['spi']),
@@ -127,16 +138,18 @@ class AllTests:
             'mpu_ro':
                 TestConfig(name='mpu',
                            image_to_use=ImageType.RO,
-                           finish_regexes=[
-                               DATA_ACCESS_VIOLATION_20000000_REGEX]),
+                           finish_regexes=[board_config.mpu_regex]),
             'mpu_rw':
                 TestConfig(name='mpu',
-                           finish_regexes=[
-                               DATA_ACCESS_VIOLATION_20000000_REGEX]),
+                           finish_regexes=[board_config.mpu_regex]),
             'mutex':
                 TestConfig(name='mutex'),
             'pingpong':
                 TestConfig(name='pingpong'),
+            'printf':
+                TestConfig(name='printf'),
+            'queue':
+                TestConfig(name='queue'),
             'rollback_region0':
                 TestConfig(name='rollback', finish_regexes=[
                     board_config.rollback_region0_regex],
@@ -153,8 +166,14 @@ class AllTests:
                 TestConfig(name='sha256'),
             'sha256_unrolled':
                 TestConfig(name='sha256_unrolled'),
+            'static_if':
+                TestConfig(name='static_if'),
+            'timer_dos':
+                TestConfig(name='timer_dos'),
             'utils':
                 TestConfig(name='utils', timeout_secs=20),
+            'utils_str':
+                TestConfig(name='utils_str'),
         }
 
         if board_config.name == BLOONCHIPPER:
@@ -169,6 +188,7 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     servo_power_enable='fpmcu_pp3300',
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
+    mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
 )
 
 DARTMONKEY_CONFIG = BoardConfig(
@@ -177,6 +197,7 @@ DARTMONKEY_CONFIG = BoardConfig(
     servo_power_enable='fpmcu_pp3300',
     rollback_region0_regex=DATA_ACCESS_VIOLATION_80C0000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_80E0000_REGEX,
+    mpu_regex=DATA_ACCESS_VIOLATION_24000000_REGEX,
 )
 
 BOARD_CONFIGS = {
@@ -185,11 +206,10 @@ BOARD_CONFIGS = {
 }
 
 
-def get_console(board_name: str, board_config: BoardConfig) -> Optional[str]:
+def get_console(board_config: BoardConfig) -> Optional[str]:
     """Get the name of the console for a given board."""
     cmd = [
         'dut-control',
-        '-n', board_name,
         board_config.servo_uart_name,
     ]
     logging.debug('Running command: "%s"', ' '.join(cmd))
@@ -204,7 +224,7 @@ def get_console(board_name: str, board_config: BoardConfig) -> Optional[str]:
     return None
 
 
-def power(board_name: str, board_config: BoardConfig, on: bool) -> None:
+def power(board_config: BoardConfig, on: bool) -> None:
     """Turn power to board on/off."""
     if on:
         state = 'pp3300'
@@ -213,24 +233,22 @@ def power(board_name: str, board_config: BoardConfig, on: bool) -> None:
 
     cmd = [
         'dut-control',
-        '-n', board_name,
         board_config.servo_power_enable + ':' + state,
     ]
     logging.debug('Running command: "%s"', ' '.join(cmd))
     subprocess.run(cmd).check_returncode()
 
 
-def hw_write_protect(board_name: str, enable: bool) -> None:
+def hw_write_protect(enable: bool) -> None:
     """Enable/disable hardware write protect."""
     if enable:
-        state = 'on'
+        state = 'force_on'
     else:
-        state = 'off'
+        state = 'force_off'
 
     cmd = [
         'dut-control',
-        '-n', board_name,
-        'fw_wp_en' + ':' + state,
+        'fw_wp_state:' + state,
         ]
     logging.debug('Running command: "%s"', ' '.join(cmd))
     subprocess.run(cmd).check_returncode()
@@ -249,14 +267,19 @@ def build(test_name: str, board_name: str) -> None:
     subprocess.run(cmd).check_returncode()
 
 
-def flash(test_name: str, board: str) -> bool:
+def flash(test_name: str, board: str, flasher: str) -> bool:
     """Flash specified test to specified board."""
     logging.info("Flashing test")
 
-    # TODO(b/151105339): Support ./util/flash_ec as well. It's slower, but only
-    # requires servo micro.
+    if flasher == JTRACE:
+        flash_script = JTRACE_FLASH_SCRIPT
+    elif flasher == SERVO_MICRO:
+        flash_script = SERVO_MICRO_FLASH_SCRIPT
+    else:
+        logging.error('Unknown flasher: "%s"', flasher)
+        return False
     cmd = [
-        FLASH_SCRIPT,
+        flash_script,
         '--board', board,
         '--image', os.path.join(EC_DIR, 'build', board, test_name,
                                 test_name + '.bin'),
@@ -399,6 +422,13 @@ def main():
         default='DEBUG'
     )
 
+    flasher_choices = [SERVO_MICRO, JTRACE]
+    parser.add_argument(
+         '--flasher', '-f',
+         choices=flasher_choices,
+         default=JTRACE
+     )
+
     args = parser.parse_args()
     logging.basicConfig(level=args.log_level)
 
@@ -423,7 +453,7 @@ def main():
         flash_succeeded = False
         for i in range(0, test.num_flash_attempts):
             logging.debug('Flash attempt %d', i + 1)
-            if flash(test.name, args.board):
+            if flash(test.name, args.board, args.flasher):
                 flash_succeeded = True
                 break
             time.sleep(1)
@@ -435,15 +465,15 @@ def main():
             continue
 
         if test.toggle_power:
-            power(args.board, board_config, on=False)
+            power(board_config, on=False)
             time.sleep(1)
-            power(args.board, board_config, on=True)
+            power(board_config, on=True)
 
-        hw_write_protect(args.board, test.enable_hw_write_protect)
+        hw_write_protect(test.enable_hw_write_protect)
 
         # run the test
         logging.info('Running test: "%s"', test.name)
-        console = get_console(args.board, board_config)
+        console = get_console(board_config)
         test.passed = run_test(test, console, executor=e)
 
     colorama.init()

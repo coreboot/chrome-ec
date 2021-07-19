@@ -3046,6 +3046,16 @@ __override_proto uint8_t get_dp_pin_mode(int port);
 __override_proto uint8_t board_get_usb_pd_port_count(void);
 
 /**
+ * Return true if specified PD port is present. This is similar to
+ * checking CONFIG_USB_PD_PORT_MAX_COUNT but handles sparse numbering.
+ *
+ * @param port USB-C port number
+ *
+ * @return true if port is present.
+ */
+__override_proto bool board_is_usb_pd_port_present(int port);
+
+/**
  * Return true if specified PD port is DTS (Debug and Test System
  * capable).
  *
@@ -3054,6 +3064,13 @@ __override_proto uint8_t board_get_usb_pd_port_count(void);
  * @return true if port is DTS capable.
  */
 __override_proto bool board_is_dts_port(int port);
+
+/**
+ * Process PD-related alerts for a chip which is sharing the TCPC interrupt line
+ *
+ * @param port USB-C port number
+ */
+__override_proto void board_process_pd_alert(int port);
 
 /**
  * Resets external PD chips including TCPCs and MCUs.
@@ -3330,12 +3347,6 @@ __override_proto int svdm_tbt_compat_attention(int port, uint32_t *payload);
 
 __override_proto enum ec_pd_port_location board_get_pd_port_location(int port);
 
-/**
- * Can be called whenever VBUS presence changes.  The default implementation
- * does nothing, but a board may override it.
- */
-__override_proto void board_vbus_present_change(void);
-
 /****************************************************************************
  * TCPC CC/Rp Management
  */
@@ -3348,6 +3359,14 @@ __override_proto void board_vbus_present_change(void);
  * @param rp   Rp is the Current Limit to advertise
  */
 void typec_select_src_current_limit_rp(int port, enum tcpc_rp_value rp);
+
+/**
+ * Called to get a port's default current limit Rp.
+ *
+ * @param port The PD port number
+ * @return rp   Rp is the Current Limit to advertise
+ */
+__override_proto int typec_get_default_current_limit_rp(int port);
 
 /**
  * Called to cache Source Collision Rp

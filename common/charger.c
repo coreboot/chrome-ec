@@ -196,7 +196,7 @@ static int command_charger(int argc, char **argv)
 		return EC_SUCCESS;
 	}
 
-	idx_provided = isdigit(argv[1][0]);
+	idx_provided = isdigit((unsigned char)argv[1][0]);
 	if (idx_provided)
 		chgnum = atoi(argv[1]);
 	else
@@ -359,6 +359,23 @@ int charger_is_sourcing_otg_power(int port)
 	return chg_chips[chgnum].drv->is_sourcing_otg_power(chgnum, port);
 }
 
+enum ec_error_list charger_get_actual_current(int chgnum, int *current)
+{
+	/* Note: chgnum may be -1 if no active port is selected */
+	if (chgnum < 0)
+		return EC_ERROR_INVAL;
+
+	if (chgnum >= board_get_charger_chip_count()) {
+		CPRINTS("%s(%d) Invalid charger!", __func__, chgnum);
+		return EC_ERROR_INVAL;
+	}
+
+	if (!chg_chips[chgnum].drv->get_actual_current)
+		return EC_ERROR_UNIMPLEMENTED;
+
+	return chg_chips[chgnum].drv->get_actual_current(chgnum, current);
+}
+
 enum ec_error_list charger_get_current(int chgnum, int *current)
 {
 	/* Note: chgnum may be -1 if no active port is selected */
@@ -387,6 +404,22 @@ enum ec_error_list charger_set_current(int chgnum, int current)
 		return EC_ERROR_UNIMPLEMENTED;
 
 	return chg_chips[chgnum].drv->set_current(chgnum, current);
+}
+
+enum ec_error_list charger_get_actual_voltage(int chgnum, int *voltage)
+{
+	if (chgnum < 0)
+		return EC_ERROR_INVAL;
+
+	if (chgnum >= board_get_charger_chip_count()) {
+		CPRINTS("%s(%d) Invalid charger!", __func__, chgnum);
+		return EC_ERROR_INVAL;
+	}
+
+	if (!chg_chips[chgnum].drv->get_actual_voltage)
+		return EC_ERROR_UNIMPLEMENTED;
+
+	return chg_chips[chgnum].drv->get_actual_voltage(chgnum, voltage);
 }
 
 enum ec_error_list charger_get_voltage(int chgnum, int *voltage)
@@ -422,6 +455,9 @@ enum ec_error_list charger_discharge_on_ac(int enable)
 {
 	int chgnum;
 	int rv = EC_ERROR_UNIMPLEMENTED;
+
+	if (IS_ENABLED(CONFIG_CHARGER_DISCHARGE_ON_AC_CUSTOM))
+		return board_discharge_on_ac(enable);
 
 	/*
 	 * When discharge on AC is selected, cycle through all chargers to

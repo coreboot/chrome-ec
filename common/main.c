@@ -109,7 +109,7 @@ test_mockable __keep int main(void)
 	 * Initialize flash and apply write protect if necessary.  Requires
 	 * the reset flags calculated by system initialization.
 	 */
-	flash_pre_init();
+	crec_flash_pre_init();
 #endif
 
 	/* Set the CPU clocks / PLLs.  System is now running at full speed. */
@@ -143,20 +143,7 @@ test_mockable __keep int main(void)
 	if (mpu_pre_init_rv != EC_SUCCESS)
 		panic("MPU init failed");
 
-	/* be less verbose if we boot for USB resume to meet spec timings */
-	if (!(system_get_reset_flags() & EC_RESET_FLAG_USB_RESUME)) {
-		CPUTS("\n");
-		if (system_jumped_to_this_image())
-			CPRINTS("UART initialized after sysjump");
-		else
-			CPUTS("\n--- UART initialized after reboot ---\n");
-		CPRINTF("[Image: %s, %s]\n",
-			 system_get_image_copy_string(),
-			 system_get_build_info());
-		CPUTS("[Reset cause: ");
-		system_print_reset_flags();
-		CPUTS("]\n");
-	}
+	system_print_banner();
 
 #ifdef CONFIG_BRINGUP
 	ccprintf("\n\nWARNING: BRINGUP BUILD\n\n\n");
@@ -185,7 +172,7 @@ test_mockable __keep int main(void)
 	/*
 	 * Keyboard scan init/Button init can set recovery events to
 	 * indicate to host entry into recovery mode. Before this is
-	 * done, lpc always report mask needs to be initialized
+	 * done, LPC_HOST_EVENT_ALWAYS_REPORT mask needs to be initialized
 	 * correctly.
 	 */
 #ifdef CONFIG_HOSTCMD_X86

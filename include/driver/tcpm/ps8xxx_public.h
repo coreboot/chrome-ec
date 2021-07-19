@@ -28,6 +28,15 @@ struct usb_mux;
 
 /* Delay from power on to reset de-asserted */
 #define PS8815_PWR_H_RST_H_DELAY_MS 20
+
+/*
+ * Add delay of writing TCPC_REG_POWER_CTRL makes
+ * CC status being judged correctly when disable VCONN.
+ * This may be a PS8XXX firmware issue, Parade is still trying.
+ * https://partnerissuetracker.corp.google.com/issues/185202064
+ */
+#define PS8XXX_VCONN_TURN_OFF_DELAY_US 10
+
 /*
  * Delay between releasing reset and the first I2C read
  *
@@ -40,6 +49,15 @@ struct usb_mux;
  *   25ms is OK
  */
 #define PS8815_FW_INIT_DELAY_MS 40
+
+/* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned in
+ * 8705, 8755 and 8805.
+ */
+#define PS8705_PRODUCT_ID 0x8705
+#define PS8751_PRODUCT_ID 0x8751
+#define PS8755_PRODUCT_ID 0x8755
+#define PS8805_PRODUCT_ID 0x8805
+#define PS8815_PRODUCT_ID 0x8815
 
 extern const struct tcpm_drv ps8xxx_tcpm_drv;
 

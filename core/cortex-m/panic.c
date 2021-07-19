@@ -336,6 +336,11 @@ void __keep report_panic(void)
 	 * exception happened in a handler's context.
 	 */
 #endif
+
+	/* Make sure that all changes are saved into RAM */
+	if (IS_ENABLED(CONFIG_ARMV7M_CACHE))
+		cpu_clean_invalidate_dcache();
+
 	panic_reboot();
 }
 
@@ -418,6 +423,11 @@ void bus_fault_handler(void)
 
 void ignore_bus_fault(int ignored)
 {
+	if (IS_ENABLED(CHIP_FAMILY_STM32H7)) {
+		if (ignored == 0)
+			asm volatile("dsb; isb");
+	}
+
 	/*
 	 * Flash code might call this before cpu_init(),
 	 * ensure that the bus faults really go through our handler.

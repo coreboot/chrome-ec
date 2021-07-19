@@ -15,6 +15,10 @@
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USB, format, ## args)
 
+#ifdef CONFIG_NB7V904M_LPM_OVERRIDE
+int nb7v904m_lpm_disable = 0;
+#endif
+
 static int nb7v904m_write(const struct usb_mux *me, int offset, int data)
 {
 	return i2c_write8(me->i2c_port,
@@ -39,6 +43,10 @@ static int set_low_power_mode(const struct usb_mux *me, bool enable)
 	rv = nb7v904m_read(me, NB7V904M_REG_GEN_DEV_SETTINGS, &regval);
 	if (rv)
 		return rv;
+#ifdef CONFIG_NB7V904M_LPM_OVERRIDE
+	if (nb7v904m_lpm_disable)
+		enable = 0;
+#endif
 
 	if (enable)
 		regval &= ~NB7V904M_CHIP_EN;
@@ -97,6 +105,36 @@ int nb7v904m_tune_usb_flat_gain(const struct usb_mux *me, uint8_t gain_a,
 	if (gain_d != NB7V904M_CH_ALL_SKIP_GAIN)
 		rv |= nb7v904m_write(me, NB7V904M_REG_CH_D_FLAT_GAIN, gain_d);
 
+	return rv;
+}
+
+/* Set Loss Profile Matching : This must be called on board_init context */
+int nb7v904m_set_loss_profile_match(const struct usb_mux *me, uint8_t loss_a,
+			uint8_t loss_b, uint8_t loss_c, uint8_t loss_d)
+{
+	int rv = EC_SUCCESS;
+
+	if (loss_a != NB7V904M_CH_ALL_SKIP_LOSS)
+		rv |= nb7v904m_write(me, NB7V904M_REG_CH_A_LOSS_CTRL, loss_a);
+
+	if (loss_b != NB7V904M_CH_ALL_SKIP_LOSS)
+		rv |= nb7v904m_write(me, NB7V904M_REG_CH_B_LOSS_CTRL, loss_b);
+
+	if (loss_c != NB7V904M_CH_ALL_SKIP_LOSS)
+		rv |= nb7v904m_write(me, NB7V904M_REG_CH_C_LOSS_CTRL, loss_c);
+
+	if (loss_d != NB7V904M_CH_ALL_SKIP_LOSS)
+		rv |= nb7v904m_write(me, NB7V904M_REG_CH_D_LOSS_CTRL, loss_d);
+
+	return rv;
+}
+
+/* Set AUX control switch */
+int nb7v904m_set_aux_ch_switch(const struct usb_mux *me, uint8_t aux_ch)
+{
+	int rv = EC_SUCCESS;
+
+	rv = nb7v904m_write(me, NB7V904M_REG_AUX_CH_CTRL, aux_ch);
 	return rv;
 }
 

@@ -18,15 +18,6 @@
 #define CONFIG_GESTURE_DETECTION_MASK BIT(CONFIG_BODY_DETECTION_SENSOR)
 #define CONFIG_GESTURE_HOST_DETECTION
 
-/* TODO(waihong): Remove the following bringup features */
-#define CONFIG_BRINGUP
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
-#define CONFIG_USB_PD_DEBUG_LEVEL 3
-#define CONFIG_CMD_GPIO_EXTENDED
-#define CONFIG_CMD_POWERINDEBUG
-#define CONFIG_I2C_DEBUG
-#define CONFIG_DEVICE_EVENT
-
 #define CONFIG_BUTTON_TRIGGERED_RECOVERY
 
 /* Internal SPI flash on NPCX7 */
@@ -60,6 +51,11 @@
 #define CONFIG_GMR_TABLET_MODE
 #define CONFIG_FRONT_PROXIMITY_SWITCH
 
+#define CONFIG_MKBP_INPUT_DEVICES
+
+#define CONFIG_DETACHABLE_BASE
+#define CONFIG_BASE_ATTACHED_SWITCH
+
 /* GPIO alias */
 #define GPIO_AC_PRESENT GPIO_CHG_ACOK_OD
 #define GPIO_WP_L GPIO_EC_FLASH_WP_ODL
@@ -69,9 +65,12 @@
 #define GPIO_KS_OPEN GPIO_LID_INT_N_HALL2
 
 /* WLC pins */
+#ifdef SECTION_IS_RW
 #define GPIO_PCHG_P0 GPIO_WLC_IRQ_CONN
 #define CONFIG_PERIPHERAL_CHARGER
+#define CONFIG_DEVICE_EVENT
 #define CONFIG_CTN730
+#endif
 
 #ifndef __ASSEMBLER__
 
@@ -107,14 +106,6 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
-/* Swithcap functions */
-void board_set_switchcap_power(int enable);
-int board_is_switchcap_enabled(void);
-int board_is_switchcap_power_good(void);
-/* Custom function to indicate if sourcing VBUS */
-int board_is_sourcing_vbus(int port);
-/* Enable VBUS sink for a given port */
-int board_vbus_sink_enable(int port, int enable);
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);

@@ -14,12 +14,6 @@
 #undef GPIO_VOLUME_DOWN_L
 #undef CONFIG_VOLUME_BUTTONS
 
-/*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
@@ -34,7 +28,10 @@
 #define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
 #define CONFIG_OCPC
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
+#define CONFIG_CHARGE_RAMP_HW
 #undef  CONFIG_CHARGER_SINGLE_CHIP
+
+#define CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS
 
 /*
  * GPIO for C1 interrupts, for baseboard use
@@ -49,7 +46,6 @@
 /* LED */
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES
-#define CONFIG_LED_POWER_LED
 #define GPIO_BAT_LED_RED_L GPIO_LED_R_ODL
 #define GPIO_BAT_LED_GREEN_L GPIO_LED_G_ODL
 #define GPIO_PWR_LED_BLUE_L GPIO_LED_B_ODL
@@ -62,15 +58,19 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB */
 #define CONFIG_BC12_DETECT_PI3USB9201
 #define CONFIG_USBC_RETIMER_NB7V904M
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
+#define CONFIG_USB_MUX_PS8743
 
 /* USB PD */
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPM_RAA489000
+#undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
+#define CONFIG_USB_PD_COMM_LOCKED
 
 /* USB defines specific to external TCPCs */
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
@@ -125,6 +125,12 @@
 
 #define CONFIG_MATH_UTIL
 
+/*
+ * There is ccd connection issue on board id = 2.
+ * NB7V904M is needed to be active to resolve this.
+ */
+#define CONFIG_NB7V904M_LPM_OVERRIDE
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -153,10 +159,9 @@ enum adc_channel {
 /* List of possible batteries */
 enum battery_type {
 	BATTERY_SDI,
+	BATTERY_SWD,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

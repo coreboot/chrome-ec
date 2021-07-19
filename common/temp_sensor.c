@@ -15,6 +15,10 @@
 #include "timer.h"
 #include "util.h"
 
+#ifdef CONFIG_ZEPHYR
+#include "temp_sensor/temp_sensor.h"
+#endif
+
 int temp_sensor_read(enum temp_sensor_id id, int *temp_ptr)
 {
 	const struct temp_sensor_t *sensor;
@@ -97,7 +101,8 @@ DECLARE_HOOK(HOOK_INIT, temp_sensor_init, HOOK_PRIO_DEFAULT);
 /*****************************************************************************/
 /* Console commands */
 
-static int command_temps(int argc, char **argv)
+#ifdef CONFIG_CMD_TEMP_SENSOR
+int console_command_temps(int argc, char **argv)
 {
 	int t, i;
 	int rv, rv1 = EC_SUCCESS;
@@ -135,9 +140,10 @@ static int command_temps(int argc, char **argv)
 
 	return rv1;
 }
-DECLARE_CONSOLE_COMMAND(temps, command_temps,
+DECLARE_CONSOLE_COMMAND(temps, console_command_temps,
 			NULL,
 			"Print temp sensors");
+#endif
 
 /*****************************************************************************/
 /* Host commands */

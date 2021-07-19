@@ -308,7 +308,7 @@ static uint8_t *read_input_file(uint32_t size, const char *file_name)
 	uint8_t *buffer;
 	FILE *input_fp;
 
-	buffer = malloc(size);
+	buffer = (uint8_t *)(malloc(size));
 	if (!buffer) {
 		fprintf(stderr, "Cannot allocate %d bytes\n", size);
 		return NULL;
@@ -454,7 +454,7 @@ int main(int argc, char *argv[])
 			/* Ensure non-zero size */
 			if (size == 0)
 				exit_uart_app(EC_FILE_ERR);
-			opr_write_mem(aux_buf, addr, size);
+			opr_write_mem((uint8_t *)(aux_buf), addr, size);
 		} else {
 			size = param_get_file_size(file_name);
 			if (size == 0)
@@ -522,7 +522,7 @@ static const struct option long_opts[] = {
 	{NULL,       0, 0, 0}
 };
 
-static char *short_opts = "vhqcArb:o:p:f:a:s:O:?";
+static const char *short_opts = "vhqcArb:o:p:f:a:s:O:?";
 
 static void param_parse_cmd_line(int argc, char *argv[])
 {
@@ -760,7 +760,7 @@ static void exit_uart_app(int32_t exit_status)
  *		black background.
  *---------------------------------------------------------------------------
  */
-void display_color_msg(bool success, char *fmt, ...)
+void display_color_msg(bool success, const char *fmt, ...)
 {
 	va_list argptr;
 

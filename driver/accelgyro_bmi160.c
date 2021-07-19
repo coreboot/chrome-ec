@@ -11,9 +11,9 @@
 #include "accelgyro.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accelgyro_bmi_common.h"
-#include "driver/accelgyro_bmi160.h"
-#include "driver/mag_bmm150.h"
+#include "accelgyro_bmi_common.h"
+#include "accelgyro_bmi160.h"
+#include "mag_bmm150.h"
 #include "hwtimer.h"
 #include "i2c.h"
 #include "math_util.h"
@@ -27,6 +27,23 @@
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
+
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_ACCEL_INTERRUPTS)
+/* Get the motion sensor ID of the BMI160 sensor that generates the interrupt.
+ * The interrupt is converted to the event and transferred to motion sense task
+ * that actually handles the interrupt.
+ *
+ * Here we use an alias (bmi160_int) to get the motion sensor ID. This alias
+ * MUST be defined for this driver to work.
+ * aliases {
+ *   bmi160-int = &base_accel;
+ * };
+ */
+#if DT_NODE_EXISTS(DT_ALIAS(bmi160_int))
+#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(bmi160_int)))
+#endif
+#endif
 
 STATIC_IF(CONFIG_BMI_ORIENTATION_SENSOR) void irq_set_orientation(
 				struct motion_sensor_t *s,
@@ -194,13 +211,19 @@ static int set_offset(const struct motion_sensor_t *s,
 
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		bmi_set_accel_offset(s, v);
+		ret = bmi_set_accel_offset(s, v);
+		if (ret != EC_SUCCESS)
+			return ret;
+
 		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 				 BMI160_OFFSET_EN_GYR98,
 				 val98 | BMI160_OFFSET_ACC_EN);
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
-		bmi_set_gyro_offset(s, v, &val98);
+		ret = bmi_set_gyro_offset(s, v, &val98);
+		if (ret != EC_SUCCESS)
+			return ret;
+
 		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 				 BMI160_OFFSET_EN_GYR98,
 				 val98 | BMI160_OFFSET_GYRO_EN);
@@ -229,7 +252,9 @@ static int perform_calib(struct motion_sensor_t *s, int enable)
 	 * Temporary set frequency to 100Hz to get enough data in a short
 	 * period of time.
 	 */
-	set_data_rate(s, 100000, 0);
+	ret = set_data_rate(s, 100000, 0);
+	if (ret != EC_SUCCESS)
+		goto end_perform_calib;
 
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:

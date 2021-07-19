@@ -152,7 +152,9 @@ static int i2c_xfer_no_retry(const int port,
 			     const uint8_t *out, int out_size,
 			     uint8_t *in, int in_size, int flags)
 {
-	for (int offset = 0; offset < out_size; ) {
+	int offset;
+
+	for (offset = 0; offset < out_size; ) {
 		int chunk_size = MIN(out_size - offset,
 				CONFIG_I2C_CHIP_MAX_TRANSFER_SIZE);
 		int out_flags = 0;
@@ -167,7 +169,7 @@ static int i2c_xfer_no_retry(const int port,
 				out_flags));
 		offset += chunk_size;
 	}
-	for (int offset = 0; offset < in_size; ) {
+	for (offset = 0; offset < in_size; ) {
 		int chunk_size = MIN(in_size - offset,
 				CONFIG_I2C_CHIP_MAX_TRANSFER_SIZE);
 		int in_flags = 0;
@@ -238,8 +240,13 @@ int i2c_xfer_unlocked(const int port,
 			num_msgs++;
 		}
 
+
+		if (no_pec_af & ~I2C_ADDR_MASK)
+			ccprintf("Ignoring flags from i2c addr_flags: %04x",
+					no_pec_af);
+
 		return i2c_transfer(i2c_get_device_for_port(port), msg,
-				    num_msgs, no_pec_af);
+				    num_msgs, I2C_STRIP_FLAGS(no_pec_af));
 #elif defined(CONFIG_I2C_XFER_LARGE_TRANSFER)
 		ret = i2c_xfer_no_retry(port, no_pec_af,
 					    out, out_size, in,
@@ -855,6 +862,7 @@ int i2c_write_block(const int port,
 	return rv;
 }
 
+#ifndef CONFIG_ZEPHYR
 int get_sda_from_i2c_port(int port, enum gpio_signal *sda)
 {
 	const struct i2c_port_t *i2c_port = get_i2c_port(port);
@@ -1063,6 +1071,7 @@ unwedge_done:
 
 	return ret;
 }
+#endif /* !CONFIG_ZEPHYR */
 
 int i2c_set_freq(int port, enum i2c_freq freq)
 {
@@ -1152,8 +1161,32 @@ static int check_i2c_params(const struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
+#ifdef I2C_PORT_VIRTUAL_BATTERY
+static inline int is_i2c_port_virtual_battery(int port)
+{
+#ifdef CONFIG_ZEPHYR
+	/* For Zephyr compare the actual device, which will be used in
+	 * i2c_transfer function.
+	 */
+	return (i2c_get_device_for_port(port) ==
+		i2c_get_device_for_port(I2C_PORT_VIRTUAL_BATTERY));
+#else
+	return (port == I2C_PORT_VIRTUAL_BATTERY);
+#endif
+}
+#endif /* I2C_PORT_VIRTUAL_BATTERY */
+
 static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 {
+#ifdef CONFIG_ZEPHYR
+	/* For Zephyr, convert the received remote port number to a port number
+	 * used in EC.
+	 */
+	((struct ec_params_i2c_passthru *)(args->params))->port =
+		i2c_get_port_from_remote_port(
+			((struct ec_params_i2c_passthru *)(args->params))
+			->port);
+#endif
 	const struct ec_params_i2c_passthru *params = args->params;
 	const struct ec_params_i2c_passthru_msg *msg;
 	struct ec_response_i2c_passthru *resp = args->response;
@@ -1179,7 +1212,10 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 	if (ret)
 		return ret;
 
-	if (port_protected[params->port] && i2c_port->passthru_allowed) {
+	if (port_protected[params->port]) {
+		if (!i2c_port->passthru_allowed)
+			return EC_RES_ACCESS_DENIED;
+
 		for (i = 0; i < params->num_msgs; i++) {
 			if (!i2c_port->passthru_allowed(i2c_port,
 					params->msg[i].addr_flags))
@@ -1214,7 +1250,7 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 			xferflags |= I2C_XFER_STOP;
 
 #if defined(VIRTUAL_BATTERY_ADDR_FLAGS) && defined(I2C_PORT_VIRTUAL_BATTERY)
-		if (params->port == I2C_PORT_VIRTUAL_BATTERY &&
+		if (is_i2c_port_virtual_battery(params->port) &&
 		    addr_flags == VIRTUAL_BATTERY_ADDR_FLAGS) {
 			if (virtual_battery_handler(resp, in_len, &rv,
 						xferflags, read_len,
@@ -1310,6 +1346,15 @@ static void i2c_passthru_protect_tcpc_ports(void)
 static enum ec_status
 i2c_command_passthru_protect(struct host_cmd_handler_args *args)
 {
+#ifdef CONFIG_ZEPHYR
+	/* For Zephyr, convert the received remote port number to a port number
+	 * used in EC.
+	 */
+	((struct ec_params_i2c_passthru_protect *)(args->params))
+		->port = i2c_get_port_from_remote_port(
+		((struct ec_params_i2c_passthru_protect *)(args->params))
+		->port);
+#endif
 	const struct ec_params_i2c_passthru_protect *params = args->params;
 	struct ec_response_i2c_passthru_protect *resp = args->response;
 

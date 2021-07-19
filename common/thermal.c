@@ -19,6 +19,10 @@
 #include "timer.h"
 #include "util.h"
 
+#ifdef CONFIG_ZEPHYR
+#include "temp_sensor/temp_sensor.h"
+#endif
+
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_THERMAL, outstr)
 #define CPRINTS(format, args...) cprints(CC_THERMAL, format, ## args)
@@ -49,6 +53,12 @@ BUILD_ASSERT(EC_TEMP_THRESH_COUNT == 3);
 /* Keep track of which thresholds have triggered */
 static cond_t cond_hot[EC_TEMP_THRESH_COUNT];
 
+/* thermal sensor read delay */
+#if defined(CONFIG_TEMP_SENSOR_POWER_GPIO) && \
+	defined(CONFIG_TEMP_SENSOR_FIRST_READ_DELAY_MS)
+static int first_read_delay = CONFIG_TEMP_SENSOR_FIRST_READ_DELAY_MS;
+#endif
+
 static void thermal_control(void)
 {
 	int i, j, t, rv, f;
@@ -61,6 +71,15 @@ static void thermal_control(void)
 
 #ifdef CONFIG_CUSTOM_FAN_CONTROL
 	int temp[TEMP_SENSOR_COUNT];
+#endif
+
+	/* add delay to ensure thermal sensor is ready when EC boot */
+#if defined(CONFIG_TEMP_SENSOR_POWER_GPIO) && \
+	defined(CONFIG_TEMP_SENSOR_FIRST_READ_DELAY_MS)
+	if (first_read_delay != 0) {
+		msleep(first_read_delay);
+		first_read_delay = 0;
+	}
 #endif
 
 	/* Get ready to count things */
@@ -156,6 +175,13 @@ static void thermal_control(void)
 
 	if (cond_went_true(&cond_hot[EC_TEMP_THRESH_HALT])) {
 		CPRINTS("thermal SHUTDOWN");
+
+		/* Print temperature sensor values before shutting down AP */
+		if (IS_ENABLED(CONFIG_CMD_TEMP_SENSOR)) {
+			console_command_temps(1, NULL);
+			cflush();
+		}
+
 		chipset_force_shutdown(CHIPSET_SHUTDOWN_THERMAL);
 	} else if (cond_went_false(&cond_hot[EC_TEMP_THRESH_HALT])) {
 		/* We don't reboot automatically - the user has to push

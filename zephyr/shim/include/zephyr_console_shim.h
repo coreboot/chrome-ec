@@ -55,4 +55,13 @@ int zshim_run_ec_console_command(int (*handler)(int argc, char **argv),
 #define DECLARE_SAFE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP) \
 	_ZEPHYR_SHELL_COMMAND_SHIM(NAME, ROUTINE, ARGDESC, HELP)
 
+/**
+ * console_buf_notify_chars() - Notify the console host command buffer
+ * of bytes on the console.
+ *
+ * @s:			The pointer to the string.
+ * @len:		The size of the string.
+ */
+void console_buf_notify_chars(const char *s, size_t len);
+
 #endif  /* __CROS_EC_ZEPHYR_CONSOLE_SHIM_H */

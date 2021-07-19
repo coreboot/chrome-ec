@@ -124,6 +124,13 @@ config PLATFORM_EC_TABLET_MODE
 
 if PLATFORM_EC_TABLET_MODE
 
+config PLATFORM_EC_TABLET_MODE_SWITCH
+    bool "Tablet Mode Switch"
+    depends on PLATFORM_EC_MKBP_INPUT_DEVICES
+    help
+      Enable a virtual switch to indicate when we are in tablet mode. The tablet
+      mode state is sent to AP via MKBP protocol(switch event).
+
 config PLATFORM_EC_GMR_TABLET_MODE
     bool "Giant Magnetoresistance(GMR) Tablet Mode"
     help
@@ -134,5 +141,50 @@ config PLATFORM_EC_GMR_TABLET_MODE
 
 endif # PLATFORM_EC_TABLET_MODE
 endif # PLATFORM_EC_LID_ANGLE
+
+config PLATFORM_EC_CONSOLE_CMD_ACCELS
+    bool "Console commands: accels, accelrate, accelinit, accelinfo, etc."
+    help
+      Enables console commands:
+
+        accelrange <sensor id> <data> <roundup> - Read or write accelerometer
+        range
+        accelres <sensor id> <data> <roundup> - Read or write accelerometer
+        resolution
+        accelrate <sensor id> <data> <roundup> - Read or write accelerometer
+        ODR
+        accelread <sensor id> [n(iteration)] - Read sensor x/y/z
+        accelinit <sensor id> - Init sensor
+
+if PLATFORM_EC_CONSOLE_CMD_ACCELS
+
+config PLATFORM_EC_CONSOLE_CMD_ACCEL_INFO
+    bool "Console Command: accelinfo"
+    help
+      Enable console command:
+
+        accelinfo on/off [interval] - Print motion sensor info, lid angle
+        calculations and set calculation frequency.
+
+endif # PLATFORM_EC_CONSOLE_CMD_ACCELS
+
+config PLATFORM_EC_ACCEL_SPOOF_MODE
+	bool "Sensor spoof mode"
+	help
+	  Enable this to allow sensors values spoofed to any arbitrary value.
+	  This is useful for testing the motion sense framework if the hardware
+	  sensor or the sensor driver code is not ready.
+
+if PLATFORM_EC_ACCEL_SPOOF_MODE
+
+config PLATFORM_EC_CONSOLE_CMD_ACCEL_SPOOF
+	bool "Console Command: accelspoof"
+	help
+	  Enable console command:
+
+	    accelspoof id [on/off] [X] [Y] [Z] - Enable/Disable spoofing of
+	    sensor readings.
+
+endif # PLATFORM_EC_ACCEL_SPOOF_MODE
 
 rsource "Kconfig.sensor_devices"

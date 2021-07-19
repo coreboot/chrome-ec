@@ -333,6 +333,17 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_SW_CRC
 #endif
 
+#ifdef TEST_USB_PD_PDO_FIXED
+#define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_TCPMV1
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
+#define CONFIG_USB_PD_TCPC
+#define CONFIG_USB_PD_TCPM_STUB
+#define CONFIG_SHA256
+#define CONFIG_SW_CRC
+#define CONFIG_USB_PD_ONLY_FIXED_PDOS
+#endif
+
 #if defined(TEST_USB_SM_FRAMEWORK_H3) || \
 	defined(TEST_USB_SM_FRAMEWORK_H2) || \
 	defined(TEST_USB_SM_FRAMEWORK_H1) || \
@@ -393,6 +404,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USBC_SS_MUX
+#define CONFIG_USB_PD_3A_PORTS 0 /* Host does not define a 3.0 A PDO */
 #endif
 
 #if defined(TEST_USB_PE_DRP) || defined(TEST_USB_PE_DRP_NOEXTENDED)
@@ -418,6 +430,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USBC_SS_MUX
 #define I2C_PORT_HOST_TCPC 0
 #define CONFIG_CHARGE_MANAGER
+#define CONFIG_USB_PD_3A_PORTS 0 /* Host does not define a 3.0 A PDO */
 #endif /* TEST_USB_PE_DRP || TEST_USB_PE_DRP_NOEXTENDED */
 
 /* Common TypeC tests defines */

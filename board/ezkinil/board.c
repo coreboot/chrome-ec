@@ -33,7 +33,7 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "temp_sensor.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -43,7 +43,23 @@
 
 static int board_ver;
 
-#ifdef HAS_TASK_MOTIONSENSE
+/*
+ * We have total 30 pins for keyboard connecter {-1, -1} mean
+ * the N/A pin that don't consider it and reserve index 0 area
+ * that we don't have pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
+	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
+	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
+	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
+	{-1, -1}, {0, 4}, {-1, -1}, {8, 2}, {-1, -1},
+	{-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 /* Motion sensors */
 static struct mutex g_lid_mutex;
@@ -112,7 +128,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -160,7 +176,7 @@ struct motion_sensor_t icm426xx_base_accel = {
 	.drv_data = &g_icm426xx_data,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
-	.default_range = 2, /* g, enough for laptop */
+	.default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	.rot_standard_ref = &base_standard_ref_1,
 	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
 	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
@@ -193,8 +209,6 @@ struct motion_sensor_t icm426xx_base_gyro = {
 	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
 	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
 };
-
-#endif /* HAS_TASK_MOTIONSENSE */
 
 const struct power_signal_info power_signal_list[] = {
 	[X86_SLP_S3_N] = {

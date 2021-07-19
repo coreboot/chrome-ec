@@ -11,6 +11,9 @@
 /* board revision */
 #include "board_revs.h"
 
+/* Free up some flash space */
+#define CONFIG_USB_PD_DEBUG_LEVEL 0
+
 #define CONFIG_LTO
 
 #if BOARD_REV >= OAK_REV5
@@ -57,7 +60,6 @@
 #define CONFIG_CMD_TYPEC
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_FORCE_CONSOLE_RESUME
-#define CONFIG_CMD_CHARGER_ADC_AMON_BMON
 
 /*
  * EC_WAKE: PA0 - WKUP1
@@ -103,7 +105,7 @@
 #define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #define CONFIG_SPI
-#define CONFIG_SPI_MASTER
+#define CONFIG_SPI_CONTROLLER
 #define CONFIG_STM_HWTIMER32
 #define CONFIG_VBOOT_HASH
 #undef  CONFIG_WATCHDOG_HELP
@@ -127,6 +129,7 @@
 
 /* Optional features */
 #define CONFIG_CMD_HOSTCMD
+#undef CONFIG_CMD_MFALLOW
 
 /* Drivers */
 /* USB Mux */

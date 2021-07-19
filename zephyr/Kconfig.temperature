@@ -1,0 +1,113 @@
+# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+menuconfig PLATFORM_EC_TEMP_SENSOR
+	bool "Temperature sensors"
+	help
+	  Support for temperature sensors. Once enabled, "temps" console
+	  command and EC_CMD_TEMP_SENSOR_GET_INFO host command are available.
+
+if PLATFORM_EC_TEMP_SENSOR
+
+config PLATFORM_EC_DPTF
+	bool "Dynamic Platform and Thermal Framework"
+	default y if PLATFORM_EC_ACPI
+	help
+	  Enables the Dynamic Platform and Thermal Framework (DPTF). DPTF
+	  exposes the temperature sensors and the fan controls to the
+	  Applicaiton Processor (AP) using Advanced Configuration and Power
+	  Interface (ACPI). This permits the AP to control thermal management
+	  independent of the EC.
+
+	  Even when DPTF is enabled, the EC still monitors temperature sensors
+	  and will take corrective actions for high temperatures such as turning
+	  on the fans or powering down the AP.
+
+config PLATFORM_EC_THERMISTOR
+	bool "Thermistor support"
+	depends on PLATFORM_EC_ADC
+	help
+	  Enables support for thermistors (resistor whose resistance is
+	  strongly dependent on temperature) as temperature-sensor type.
+
+config PLATFORM_EC_STEINHART_HART_3V0_22K6_47K_4050B
+	bool "Steinhart-hart 3V0_22K6_47K_4050B"
+	depends on PLATFORM_EC_THERMISTOR
+	help
+	  Enables support for measuring temperature using the Steinhart-Hart
+	  equation model and the thermistor configured with the following
+	  circuit configuration:
+	  -3.0V reference voltage
+	  -22.6 kilohm fixed resistor, connected to the reference voltage
+	  -47 kilohm thermistor reference resistance at 25 C
+	  -4050 B-constant (thermistor sensitivity)
+
+config PLATFORM_EC_STEINHART_HART_3V3_13K7_47K_4050B
+	bool "Steinhart-hart 3V3_13K7_47K_4050B"
+	depends on PLATFORM_EC_THERMISTOR
+	help
+	  Enables support for measuring temperature using the Steinhart-Hart
+	  equation model and the thermistor configured with the following
+	  circuit configuration:
+	  -3.3V reference voltage
+	  -13.7 kilohm fixed resistor, connected to the reference voltage
+	  -47 kilohm thermistor reference resistance at 25 C
+	  -4050 B-constant (thermistor sensitivity)
+
+config PLATFORM_EC_STEINHART_HART_3V3_30K9_47K_4050B
+	bool "Steinhart-hart 3V3_30K9_47K_4050B"
+	depends on PLATFORM_EC_THERMISTOR
+	help
+	  Enables support for measuring temperature using the Steinhart-Hart
+	  equation model and the thermistor configured with the following
+	  circuit configuration:
+	  -3.3V reference voltage
+	  -30.9 kilohm fixed resistor, connected to the reference voltage
+	  -47 kilohm thermistor reference resistance at 25 C
+	  -4050 B-constant (thermistor sensitivity)
+
+config PLATFORM_EC_STEINHART_HART_3V3_51K1_47K_4050B
+	bool "Steinhart-hart 3V3_51K1_47K_4050B"
+	depends on PLATFORM_EC_THERMISTOR
+	default y
+	help
+	  Enables support for measuring temperature using the Steinhart-Hart
+	  equation model and the thermistor configured with the following
+	  circuit configuration:
+	  -3.3V reference voltage
+	  -51.1 kilohm fixed resistor, connected to the reference voltage
+	  -47 kilohm thermistor reference resistance at 25 C
+	  -4050 B-constant (thermistor sensitivity)
+endif # PLATFORM_EC_TEMP_SENSOR
+
+
+config PLATFORM_EC_TEMP_SENSOR_FIRST_READ_DELAY
+	bool "Enable a delay before reading temperature seensors"
+	help
+	  Enables a delay on the first read of temperature sensors after
+	  the EC powers on. This allows for setting of any power rails that
+	  control the temperature sensors on the platform.
+
+if PLATFORM_EC_TEMP_SENSOR_FIRST_READ_DELAY
+
+config PLATFORM_EC_TEMP_SENSOR_FIRST_READ_DELAY_MS
+	int "Temperature sensor read delay time"
+	default 500
+	help
+	  Sets the delay time, in milliseconds, before the first the EC will
+	  read any temperature sensors and perform any thermal management.
+
+endif # PLATFORM_EC_TEMP_SENSOR_FIRST_READ_DELAY
+
+config PLATFORM_EC_FAN
+	bool "Fan support"
+	depends on PLATFORM_EC_PWM
+	help
+	  Enables support for fans. Allows periodic thermal task to
+	  automatically set the fan speed (control temperature).
+	  Once enabled fanduty, fanset, faninfo, fanauto consol command and
+	  EC_CMD_PWM_GET_FAN_TARGET_RPM, EC_CMD_PWM_SET_FAN_TARGET_RPM,
+	  EC_CMD_PWM_SET_FAN_DUTY, EC_CMD_THERMAL_AUTO_FAN_CTRL are
+	  available. Also enables a periodic task (1s) to verify fan is
+	  running (is not stalled).
