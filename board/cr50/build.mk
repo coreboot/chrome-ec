@@ -48,8 +48,6 @@ board-y += power_button.o
 board-y += servo_state.o
 board-y += ap_uart_state.o
 board-y += factory_mode.o
-board-y += fips.o
-board-y += fips_rand.o
 board-${CONFIG_RDD} += rdd.o
 board-${CONFIG_USB_SPI} += usb_spi.o
 board-${CONFIG_USB_I2C} += usb_i2c.o
@@ -57,6 +55,8 @@ board-y += recovery_button.o
 
 # TODO(mruthven): add cryptoc the fips boundary
 fips-y=
+fips-y += fips.o
+fips-y += fips_rand.o
 fips-$(CONFIG_U2F) += u2f.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/aes.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/app_cipher.o
@@ -66,7 +66,6 @@ fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_bn.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_p256.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/compare.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_runtime.o
-fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/gcm.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hkdf.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_drbg.o
@@ -117,11 +116,14 @@ endif
 ifneq ($(fips-y),)
 RW_BD_OUT=$(out)/RW/$(BDIR)
 FIPS_MODULE=dcrypto/fips_module.o
+FIPS_LD_SCRIPT=$(BDIR)/dcrypto/fips_module.ld
 RW_FIPS_OBJS=$(patsubst %.o, $(RW_BD_OUT)/%.o, $(fips-y))
 
 $(RW_BD_OUT)/$(FIPS_MODULE): $(RW_FIPS_OBJS)
 	@echo "  LD      $(notdir $@)"
-	$(Q)$(CC) $(CFLAGS) --static -Wl,--relocatable -Wl,-Map=$@.map -o $@ $^
+	$(Q)$(CC) $(CFLAGS) --static -Wl,--relocatable\
+		-Wl,-T $(FIPS_LD_SCRIPT) -Wl,-Map=$@.map -o $@ $^
+	$(Q)$(OBJDUMP) -th $@ > $@.sym
 
 board-y+= $(FIPS_MODULE)
 endif
