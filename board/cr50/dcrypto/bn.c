@@ -491,6 +491,121 @@ static void bn_mul_ex(struct LITE_BIGNUM *c,
 	BN_DIGIT(c, i + b->dmax - 1) = carry;
 }
 
+/* Functions to convert between uint32_t and uint64_t */
+static inline uint32_t lo32(uint64_t v)
+{
+	return (uint32_t)v;
+}
+static inline uint32_t hi32(uint64_t v)
+{
+	return (uint32_t)(v >> 32);
+}
+static inline uint64_t make64(uint32_t hi, uint32_t lo)
+{
+	return (((uint64_t)hi) << 32) | lo;
+}
+
+static inline uint32_t lo16(uint32_t v)
+{
+	return (uint32_t)(v)&0xffff;
+}
+
+static inline uint32_t hi16(uint32_t v)
+{
+	return (uint32_t)(v >> 16);
+}
+
+/* make Clang's host behavior of clz match Soteria and avoid UBSAN error */
+static inline int clz(unsigned int x)
+{
+	return (x) ? __builtin_clz(x) : 32;
+}
+
+/**
+ * Unsigned division of 64-bit integer with 32-bit divisor, used to implement
+ * Knuth's long division algorithm. For platforms which don't support hardware
+ * 64 by 32 division we have to either rely on compiler builtins (__udivdi3,
+ * __aeabi_uldivmod) or implement this code explicitly.
+ * Due to potential build issues with dependency on compiler run-time libs,
+ * use our own implementation.
+ *
+ * Algorithm is adapted from GNU's libgcc and optimized for the use case.
+ *
+ */
+#define udiv_qrnnd(q, r, n1, n0, d)                               \
+	{							  \
+		uint32_t __d1, __d0, __q1, __q0, __r1, __r0, __m; \
+		__d1 = hi16(d);                                   \
+		__d0 = lo16(d);                                   \
+								  \
+		__q1 = (n1) / __d1;				  \
+		__r1 = (n1) - (__q1 * __d1);			  \
+		__m = __q1 * __d0;                                \
+		__r1 = (__r1 << 16) | hi16(n0);                   \
+		if (__r1 < __m) {                                 \
+			__q1--;                                   \
+			__r1 += (d);                              \
+			if (__r1 >= (d))                          \
+				if (__r1 < __m)                   \
+					__q1--, __r1 += (d);      \
+		}                                                 \
+		__r1 -= __m;                                      \
+		__q0 = __r1 / __d1;                               \
+		__r0 = __r1 - (__q0 * __d1);                      \
+		__m = __q0 * __d0;                                \
+		__r0 = (__r0 << 16) | lo16(n0);                   \
+		if (__r0 < __m) {                                 \
+			__q0--;                                   \
+			__r0 += (d);                              \
+			if (__r0 >= (d))                          \
+				if (__r0 < __m)                   \
+					__q0--, __r0 += (d);      \
+		}                                                 \
+		__r0 -= __m;                                      \
+								  \
+		(q) = (__q1 << 16) | __q0;                        \
+		(r) = __r0;                                       \
+	}
+
+uint64_t udiv32(uint64_t n, uint32_t d0)
+{
+	uint32_t n0, n1, n2, q0, q1, bm;
+
+	n0 = lo32(n);
+	n1 = hi32(n);
+
+	/* if it's 32-bit division or division by zero, use hardware directly */
+	if (d0 == 0 || n1 == 0)
+		return n0 / d0;
+
+	bm = clz(d0);
+	if (d0 > n1) { /* 0q = nn / 0D */
+		/* make the most significant bit of the denominator set. */
+		if (bm != 0) {
+			d0 = d0 << bm;
+			n1 = (n1 << bm) | (n0 >> (32 - bm));
+			n0 = n0 << bm;
+		}
+		q1 = 0;
+	} else {
+		/* qq = NN / 0d */
+		if (bm == 0) {
+			n1 -= d0;
+			q1 = 1;
+		} else {
+			/* Normalize.  */
+			d0 = d0 << bm;
+			n2 = n1 >> (32 - bm);
+			n1 = (n1 << bm) | (n0 >> (32 - bm));
+			n0 = n0 << bm;
+			udiv_qrnnd(q1, n1, n2, n1, d0);
+		}
+	}
+	udiv_qrnnd(q0, n0, n1, n0, d0);
+	/* Remainder in n0 >> bm, but we don't use it  */
+	return make64(q1, q0);
+}
+
 static int bn_div_word_ex(struct LITE_BIGNUM *q,
 		struct LITE_BIGNUM *r,
 		const struct LITE_BIGNUM *u, int m,
@@ -501,7 +616,7 @@ static int bn_div_word_ex(struct LITE_BIGNUM *q,
 
 	for (i = m - 1; i >= 0; --i) {
 		uint64_t tmp = ((uint64_t)rem << 32) + BN_DIGIT(u, i);
-		uint32_t qd = tmp / div;
+		uint32_t qd = udiv32(tmp, div);
 
 		BN_DIGIT(q, i) = qd;
 		rem = tmp - (uint64_t)qd * div;
@@ -544,11 +659,8 @@ static int bn_div_ex(struct LITE_BIGNUM *q,
 		return bn_div_word_ex(q, r, u, m, vtop);
 
 	/* Compute shift factor to make v have high bit set */
-	s = 0;
-	while ((vtop & 0x80000000) == 0) {
-		s = s + 1;
-		vtop = vtop << 1;
-	}
+	s = clz(vtop);
+	vtop <<= s;
 
 	/* Normalize u and v into un and vn.
 	 * Note un always gains a leading digit
@@ -586,7 +698,7 @@ static int bn_div_ex(struct LITE_BIGNUM *q,
 			uint64_t rhat = ((uint64_t)un[j + n] << 32) +
 				un[j + n - 1];
 
-			qd = rhat / vn[n - 1];
+			qd = udiv32(rhat, vn[n - 1]);
 			rhat = rhat - (uint64_t)qd * vn[n - 1];
 			while ((rhat >> 32) == 0 &&
 				(uint64_t)qd * vn[n - 2] >
