@@ -1358,6 +1358,8 @@
  * Use dcrypto in the board directory instead of chip/g.
  */
 #undef CONFIG_DCRYPTO_BOARD
+/* Build FIPS utils in the module */
+#undef CONFIG_FIPS_UTIL
 /*
  * This provides struct definitions and function declarations that can be
  * implemented by unit tests for testing code that depends on dcrypto.
