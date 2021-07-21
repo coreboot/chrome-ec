@@ -10,14 +10,6 @@
 
 #include "baseboard.h"
 
-/* On-body detection */
-#define CONFIG_BODY_DETECTION
-#define CONFIG_BODY_DETECTION_SENSOR           LID_ACCEL
-#define CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR 150 /* % */
-#define CONFIG_GESTURE_DETECTION
-#define CONFIG_GESTURE_DETECTION_MASK BIT(CONFIG_BODY_DETECTION_SENSOR)
-#define CONFIG_GESTURE_HOST_DETECTION
-
 #define CONFIG_BUTTON_TRIGGERED_RECOVERY
 
 /* Internal SPI flash on NPCX7 */
@@ -45,12 +37,15 @@
 #define CONFIG_USBC_PPC_SN5S330
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 
-/* BMI160 Lid accel/gyro */
+/* Lid accel/gyro */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
+#define CONFIG_ACCELGYRO_ICM42607
+#define CONFIG_ACCELGYRO_ICM42607_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
@@ -108,6 +103,8 @@ void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
 /* Base detection */
 void base_detect_interrupt(enum gpio_signal signal);
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !defined(__ASSEMBLER__) */
 

@@ -140,9 +140,9 @@ static const int base_connected;
 #endif
 
 /* Is battery connected but unresponsive after precharge? */
-static int battery_seems_to_be_dead;
+static int battery_seems_dead;
 
-static int battery_seems_to_be_disconnected;
+static int battery_seems_disconnected;
 
 /*
  * Was battery removed?  Set when we see BP_NO, cleared after the battery is
@@ -1201,9 +1201,9 @@ static void dump_charge_state(void)
 	ccprintf("manual_voltage = %d\n", manual_voltage);
 	ccprintf("manual_current = %d\n", manual_current);
 	ccprintf("user_current_limit = %dmA\n", user_current_limit);
-	ccprintf("battery_seems_to_be_dead = %d\n", battery_seems_to_be_dead);
-	ccprintf("battery_seems_to_be_disconnected = %d\n",
-		 battery_seems_to_be_disconnected);
+	ccprintf("battery_seems_dead = %d\n", battery_seems_dead);
+	ccprintf("battery_seems_disconnected = %d\n",
+		 battery_seems_disconnected);
 	ccprintf("battery_was_removed = %d\n", battery_was_removed);
 	ccprintf("debug output = %s\n", debugging ? "on" : "off");
 	ccprintf("Battery sustainer = %s (%d%% ~ %d%%)\n",
@@ -1823,6 +1823,70 @@ static int get_desired_input_current(enum battery_present batt_present,
 	}
 }
 
+static void wakeup_battery(int *need_static)
+{
+	if (battery_seems_dead || battery_is_cut_off()) {
+		/* It's dead, do nothing */
+		set_charge_state(ST_IDLE);
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	} else if (curr.state == ST_PRECHARGE
+			&& (get_time().val > precharge_start_time.val +
+			PRECHARGE_TIMEOUT_US)) {
+		/* We've tried long enough, give up */
+		CPRINTS("battery seems to be dead");
+		battery_seems_dead = 1;
+		set_charge_state(ST_IDLE);
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	} else {
+		/* See if we can wake it up */
+		if (curr.state != ST_PRECHARGE) {
+			CPRINTS("try to wake battery");
+			precharge_start_time = get_time();
+			*need_static = 1;
+		}
+		set_charge_state(ST_PRECHARGE);
+		curr.requested_voltage = batt_info->voltage_max;
+		curr.requested_current = batt_info->precharge_current;
+	}
+}
+
+static void revive_battery(int *need_static)
+{
+	if (IS_ENABLED(CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD)
+			&& curr.requested_voltage == 0
+			&& curr.requested_current == 0
+			&& curr.batt.state_of_charge == 0) {
+		/*
+		 * Battery is dead, give precharge current
+		 * TODO (crosbug.com/p/29467): remove this workaround
+		 * for dead battery that requests no voltage/current
+		 */
+		curr.requested_voltage = batt_info->voltage_max;
+		curr.requested_current = batt_info->precharge_current;
+	} else if (IS_ENABLED(CONFIG_BATTERY_REVIVE_DISCONNECT)
+			&& curr.requested_voltage == 0
+			&& curr.requested_current == 0
+			&& battery_seems_disconnected) {
+		/*
+		 * Battery is in disconnect state. Apply a
+		 * current to kick it out of this state.
+		 */
+		CPRINTS("found battery in disconnect state");
+		curr.requested_voltage = batt_info->voltage_max;
+		curr.requested_current = batt_info->precharge_current;
+	} else if (curr.state == ST_PRECHARGE
+			|| battery_seems_dead || battery_was_removed) {
+		CPRINTS("battery woke up");
+		/* Update the battery-specific values */
+		batt_info = battery_get_info();
+		*need_static = 1;
+	}
+
+	battery_seems_dead = battery_was_removed = 0;
+}
+
 /* Main loop */
 void charger_task(void *u)
 {
@@ -1839,7 +1903,7 @@ void charger_task(void *u)
 	prev_ac = prev_charge = prev_disp_charge = -1;
 	chg_ctl_mode = CHARGE_CONTROL_NORMAL;
 	shutdown_target_time.val = 0UL;
-	battery_seems_to_be_dead = 0;
+	battery_seems_dead = 0;
 #ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
 	base_responsive = 0;
 	curr.input_voltage = CHARGE_VOLTAGE_UNINITIALIZED;
@@ -1927,7 +1991,7 @@ void charger_task(void *u)
 			} else {
 				/* Some things are only meaningful on AC */
 				set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
-				battery_seems_to_be_dead = 0;
+				battery_seems_dead = 0;
 				prev_ac = curr.ac;
 
 				/*
@@ -1966,25 +2030,7 @@ void charger_task(void *u)
 			hook_notify(HOOK_BATTERY_SOC_CHANGE);
 		}
 
-		/*
-		 * TODO(crosbug.com/p/27527). Sometimes the battery thinks its
-		 * temperature is 6280C, which seems a bit high. Let's ignore
-		 * anything above the boiling point of tungsten until this bug
-		 * is fixed. If the battery is really that warm, we probably
-		 * have more urgent problems.
-		 */
-		if (curr.batt.temperature > CELSIUS_TO_DECI_KELVIN(5660)) {
-			CPRINTS("ignoring ridiculous batt.temp of %dC",
-				 DECI_KELVIN_TO_CELSIUS(curr.batt.temperature));
-			curr.batt.flags |= BATT_FLAG_BAD_TEMPERATURE;
-		}
-
-		/* If the battery thinks it's above 100%, don't believe it */
-		if (curr.batt.state_of_charge > 100) {
-			CPRINTS("ignoring ridiculous batt.soc of %d%%",
-				curr.batt.state_of_charge);
-			curr.batt.flags |= BATT_FLAG_BAD_STATE_OF_CHARGE;
-		}
+		battery_validate_params(&curr.batt);
 
 		notify_host_of_over_current(&curr.batt);
 
@@ -2053,88 +2099,23 @@ void charger_task(void *u)
 
 		/* If the battery is not responsive, try to wake it up. */
 		if (!(curr.batt.flags & BATT_FLAG_RESPONSIVE)) {
-			if (battery_seems_to_be_dead || battery_is_cut_off()) {
-				/* It's dead, do nothing */
-				set_charge_state(ST_IDLE);
-				curr.requested_voltage = 0;
-				curr.requested_current = 0;
-			} else if (curr.state == ST_PRECHARGE &&
-				   (get_time().val > precharge_start_time.val +
-				    PRECHARGE_TIMEOUT_US)) {
-				/* We've tried long enough, give up */
-				CPRINTS("battery seems to be dead");
-				battery_seems_to_be_dead = 1;
-				set_charge_state(ST_IDLE);
-				curr.requested_voltage = 0;
-				curr.requested_current = 0;
-			} else {
-				/* See if we can wake it up */
-				if (curr.state != ST_PRECHARGE) {
-					CPRINTS("try to wake battery");
-					precharge_start_time = get_time();
-					need_static = 1;
-				}
-				set_charge_state(ST_PRECHARGE);
-				curr.requested_voltage =
-					batt_info->voltage_max;
-				curr.requested_current =
-					batt_info->precharge_current;
-			}
+			wakeup_battery(&need_static);
 			goto wait_for_it;
-		} else {
-			/* The battery is responding. Yay. Try to use it. */
-#ifdef CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD
-			/*
-			 * TODO (crosbug.com/p/29467): remove this workaround
-			 * for dead battery that requests no voltage/current
-			 */
-			if (curr.requested_voltage == 0 &&
-			    curr.requested_current == 0 &&
-			    curr.batt.state_of_charge == 0) {
-				/* Battery is dead, give precharge current */
-				curr.requested_voltage =
-					batt_info->voltage_max;
-				curr.requested_current =
-					batt_info->precharge_current;
-			} else
-#endif
-#ifdef CONFIG_BATTERY_REVIVE_DISCONNECT
-			/*
-			 * Always check the disconnect state.  This is because
-			 * the battery disconnect state is one of the items used
-			 * to decide whether or not to leave safe mode.
-			 */
-			battery_seems_to_be_disconnected =
-				battery_get_disconnect_state() ==
-				BATTERY_DISCONNECTED;
-
-			if (curr.requested_voltage == 0 &&
-			    curr.requested_current == 0 &&
-			    battery_seems_to_be_disconnected) {
-				/*
-				 * Battery is in disconnect state. Apply a
-				 * current to kick it out of this state.
-				 */
-				CPRINTS("found battery in disconnect state");
-				curr.requested_voltage =
-					batt_info->voltage_max;
-				curr.requested_current =
-					batt_info->precharge_current;
-			} else
-#endif
-			if (curr.state == ST_PRECHARGE ||
-			    battery_seems_to_be_dead ||
-			    battery_was_removed) {
-				CPRINTS("battery woke up");
-
-				/* Update the battery-specific values */
-				batt_info = battery_get_info();
-				need_static = 1;
-			    }
-
-			battery_seems_to_be_dead = battery_was_removed = 0;
-			set_charge_state(ST_CHARGE);
 		}
+
+		/* The battery is responding. Yay. Try to use it. */
+
+		/*
+		 * Always check the disconnect state.  This is because
+		 * the battery disconnect state is one of the items used
+		 * to decide whether or not to leave safe mode.
+		 */
+		battery_seems_disconnected =
+			battery_get_disconnect_state() == BATTERY_DISCONNECTED;
+
+		revive_battery(&need_static);
+
+		set_charge_state(ST_CHARGE);
 
 wait_for_it:
 		if (IS_ENABLED(CONFIG_CHARGER_PROFILE_OVERRIDE)
@@ -2156,7 +2137,7 @@ wait_for_it:
 #ifdef CONFIG_CHARGE_MANAGER
 		if (curr.batt.state_of_charge >=
 		    CONFIG_CHARGE_MANAGER_BAT_PCT_SAFE_MODE_EXIT &&
-		    !battery_seems_to_be_disconnected) {
+		    !battery_seems_disconnected) {
 			/*
 			 * Sometimes the fuel gauge will report that it has
 			 * sufficient state of charge and remaining capacity,
@@ -2506,7 +2487,7 @@ enum charge_state charge_get_state(void)
 {
 	switch (curr.state) {
 	case ST_IDLE:
-		if (battery_seems_to_be_dead || curr.batt.is_present == BP_NO)
+		if (battery_seems_dead || curr.batt.is_present == BP_NO)
 			return PWR_STATE_ERROR;
 		return PWR_STATE_IDLE;
 	case ST_DISCHARGE:
@@ -2830,10 +2811,10 @@ static int charge_get_charge_state_debug(int param, uint32_t *value)
 		*value = manual_voltage;
 		break;
 	case CS_PARAM_DEBUG_SEEMS_DEAD:
-		*value = battery_seems_to_be_dead;
+		*value = battery_seems_dead;
 		break;
 	case CS_PARAM_DEBUG_SEEMS_DISCONNECTED:
-		*value = battery_seems_to_be_disconnected;
+		*value = battery_seems_disconnected;
 		break;
 	case CS_PARAM_DEBUG_BATT_REMOVED:
 		*value = battery_was_removed;

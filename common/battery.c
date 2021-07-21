@@ -702,6 +702,11 @@ int battery_manufacturer_name(char *dest, int size)
 	return get_battery_manufacturer_name(dest, size);
 }
 
+__overridable enum battery_disconnect_state battery_get_disconnect_state(void)
+{
+	return BATTERY_NOT_DISCONNECTED;
+}
+
 #ifdef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
 
 #if CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV < 5000 || \
@@ -781,3 +786,26 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP, reduce_input_voltage_when_full,
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, reduce_input_voltage_when_full,
 	     HOOK_PRIO_DEFAULT);
 #endif
+
+void battery_validate_params(struct batt_params *batt)
+{
+	/*
+	 * TODO(crosbug.com/p/27527). Sometimes the battery thinks its
+	 * temperature is 6280C, which seems a bit high. Let's ignore
+	 * anything above the boiling point of tungsten until this bug
+	 * is fixed. If the battery is really that warm, we probably
+	 * have more urgent problems.
+	 */
+	if (batt->temperature > CELSIUS_TO_DECI_KELVIN(5660)) {
+		CPRINTS("ignoring ridiculous batt.temp of %dC",
+			 DECI_KELVIN_TO_CELSIUS(batt->temperature));
+		batt->flags |= BATT_FLAG_BAD_TEMPERATURE;
+	}
+
+	/* If the battery thinks it's above 100%, don't believe it */
+	if (batt->state_of_charge > 100) {
+		CPRINTS("ignoring ridiculous batt.soc of %d%%",
+			batt->state_of_charge);
+		batt->flags |= BATT_FLAG_BAD_STATE_OF_CHARGE;
+	}
+}

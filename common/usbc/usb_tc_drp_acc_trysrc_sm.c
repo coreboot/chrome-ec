@@ -2036,7 +2036,7 @@ static void sink_power_sub_states(int port)
 
 	tcpm_get_cc(port, &cc1, &cc2);
 
-	cc = tc[port].polarity ? cc2 : cc1;
+	cc = polarity_rm_dts(tc[port].polarity) ? cc2 : cc1;
 
 	if (cc == TYPEC_CC_VOLT_RP_DEF)
 		new_cc_voltage = TYPEC_CC_VOLT_RP_DEF;
@@ -3075,6 +3075,17 @@ static void tc_attached_src_entry(const int port)
 		tcpm_debug_accessory(port, 1);
 		set_ccd_mode(port, 1);
 	}
+
+	/*
+	 * Some TCPCs require time to correctly return CC status after
+	 * changing the ROLE_CONTROL register. Due to that, we have to ignore
+	 * CC_NONE state until PD_T_SRC_DISCONNECT delay has elapsed.
+	 * From the "Universal Serial Bus Type-C Cable and Connector
+	 * Specification" Release 2.0 paragraph 4.5.2.2.9.2:
+	 * The Source shall detect the SRC.Open state within tSRCDisconnect,
+	 * but should detect it as quickly as possible
+	 */
+	pd_timer_enable(port, TC_TIMER_CC_DEBOUNCE, PD_T_SRC_DISCONNECT);
 }
 
 static void tc_attached_src_run(const int port)
@@ -3084,7 +3095,7 @@ static void tc_attached_src_run(const int port)
 	/* Check for connection */
 	tcpm_get_cc(port, &cc1, &cc2);
 
-	if (tc[port].polarity)
+	if (polarity_rm_dts(tc[port].polarity))
 		cc1 = cc2;
 
 	if (cc1 == TYPEC_CC_VOLT_OPEN)
@@ -3102,7 +3113,8 @@ static void tc_attached_src_run(const int port)
 	 * AttachWait.SNK shall enter TryWait.SNK for a Sink detach from
 	 * Attached.SRC.
 	 */
-	if (tc[port].cc_state == PD_CC_NONE) {
+	if (tc[port].cc_state == PD_CC_NONE &&
+	    pd_timer_is_expired(port, TC_TIMER_CC_DEBOUNCE)) {
 		bool tryWait;
 		enum usb_tc_state new_tc_state = TC_UNATTACHED_SNK;
 
@@ -3262,6 +3274,7 @@ static void tc_attached_src_exit(const int port)
 	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
 		tcpm_debug_detach(port);
 
+	pd_timer_disable(port, TC_TIMER_CC_DEBOUNCE);
 	pd_timer_disable(port, TC_TIMER_TIMEOUT);
 }
 

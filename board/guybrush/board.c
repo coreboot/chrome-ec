@@ -19,6 +19,7 @@
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -47,9 +48,9 @@ const mat33_fp_t base_standard_ref = {
 };
 
 const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0,  FLOAT_TO_FP(1)}
+	{ 0, 0,  FLOAT_TO_FP(-1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -71,12 +72,12 @@ struct motion_sensor_t motion_sensors[] = {
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 10000 | ROUND_UP_FLAG,
+				.odr = 12500 | ROUND_UP_FLAG,
 				.ec_rate = 100 * MSEC,
 			},
 			/* Sensor on in S3 */
 			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
+				.odr = 12500 | ROUND_UP_FLAG,
 				.ec_rate = 0,
 			},
 		},
@@ -99,12 +100,12 @@ struct motion_sensor_t motion_sensors[] = {
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 10000 | ROUND_UP_FLAG,
+				.odr = 12500 | ROUND_UP_FLAG,
 				.ec_rate = 100 * MSEC,
 			},
 			/* Sensor on in S3 */
 			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
+				.odr = 12500 | ROUND_UP_FLAG,
 				.ec_rate = 0,
 			},
 		},
@@ -350,7 +351,26 @@ int board_get_soc_temp(int idx, int *temp_k)
 		return EC_ERROR_NOT_POWERED;
 
 	if (board_version == 1)
-		return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
+		return get_temp_3v3_30k9_47k_4050b(ADC_TEMP_SENSOR_SOC, temp_k);
 
 	return tmp112_get_val(idx, temp_k);
 }
+
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
+
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_s0)
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	}
+}
+#endif
