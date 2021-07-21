@@ -20,7 +20,8 @@
 #define CONFIG_LN9310
 
 /* Keyboard */
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_KEYBOARD_PROTOCOL_MKBP
+
 #define CONFIG_PWM_KBLIGHT
 
 /* Battery */

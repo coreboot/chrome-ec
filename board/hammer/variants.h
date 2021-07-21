@@ -137,7 +137,7 @@
 
 /* Assistant key */
 #if defined(BOARD_HAMMER) || defined(BOARD_WAND) || defined(BOARD_WHISKERS)
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_ASSISTANT_KEY
 #endif
 
