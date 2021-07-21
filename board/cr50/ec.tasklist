@@ -9,7 +9,7 @@
 
 #ifdef CRYPTO_TEST_SETUP
 /* some crypto testing console commands require larger stack */
-#define CONSOLE_STACK_SIZE (CONFIG_STACK_SIZE + 512)
+#define CONSOLE_STACK_SIZE (CONFIG_STACK_SIZE + 1024)
 #else
 #define CONSOLE_STACK_SIZE CONFIG_STACK_SIZE
 #endif
