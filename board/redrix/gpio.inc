@@ -9,9 +9,8 @@
 
 /* INTERRUPT GPIOs: */
 GPIO_INT(ACOK_OD,                        PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, extpower_interrupt)
-GPIO_INT(EC_ACCEL_INT_R_L,               PIN(8, 1), GPIO_SEL_1P8V | GPIO_INT_FALLING, lis2dw12_interrupt)
 GPIO_INT(EC_ALS_RGB_INT_R_L,             PIN(D, 4), GPIO_INT_FALLING, tcs3400_interrupt)
-GPIO_INT(EC_IMU_INT_R_L,                 PIN(5, 6), GPIO_SEL_1P8V | GPIO_INT_FALLING, lsm6dso_interrupt)
+GPIO_INT(EC_IMU_INT_R_L,                 PIN(5, 6), GPIO_SEL_1P8V | GPIO_INT_FALLING, lsm6dsm_interrupt)
 GPIO_INT(EC_PROCHOT_IN_L,                PIN(F, 0), GPIO_INT_BOTH, throttle_ap_prochot_input_interrupt)
 GPIO_INT(EC_VOLDN_BTN_ODL,               PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 GPIO_INT(EC_VOLUP_BTN_ODL,               PIN(9, 7), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
@@ -36,7 +35,7 @@ GPIO_INT(USB_C1_RT_INT_ODL,              PIN(4, 1), GPIO_INT_FALLING, retimer_in
 
 /* USED GPIOs: */
 GPIO(CCD_MODE_ODL,                   PIN(E, 5), GPIO_INPUT)
-GPIO(CHARGER_VAP_OTG_EN,             PIN(7, 3), GPIO_OUT_LOW)
+GPIO(CHARGER_VAP_OTG_EN,             PIN(9, 6), GPIO_OUT_LOW)
 GPIO(CPU_C10_GATE_L,                 PIN(6, 7), GPIO_INPUT)
 GPIO(EC_BATT_PRES_ODL,               PIN(A, 3), GPIO_INPUT)
 GPIO(EC_ENTERING_RW,                 PIN(0, 3), GPIO_OUT_LOW)
@@ -68,6 +67,7 @@ GPIO(EC_PCH_SYS_PWROK,               PIN(3, 7), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_R_ODL,              PIN(C, 0), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_ODL,                 PIN(6, 3), GPIO_ODR_HIGH)
 GPIO(EN_PP5000_FAN,                  PIN(6, 1), GPIO_OUT_HIGH)
+GPIO(EN_PP5000_FAN2,                 PIN(5, 0), GPIO_OUT_HIGH)
 GPIO(EN_PP5000_USBA_R,               PIN(D, 7), GPIO_OUT_LOW)
 GPIO(EN_S5_RAILS,                    PIN(B, 6), GPIO_OUT_LOW)
 GPIO(IMVP9_VRRDY_OD,                 PIN(4, 3), GPIO_INPUT)
@@ -76,6 +76,13 @@ GPIO(SYS_RST_ODL,                    PIN(C, 5), GPIO_ODR_HIGH)
 GPIO(USB_C0_TCPC_RST_ODL,            PIN(A, 7), GPIO_ODR_LOW)
 GPIO(USB_C1_TCPC_RST_ODL,            PIN(A, 0), GPIO_ODR_LOW)
 GPIO(VCCST_PWRGD_OD,                 PIN(A, 4), GPIO_ODR_LOW)
+
+/* LED */
+GPIO(C0_CHARGE_LED_AMBER_L,          PIN(C, 4), GPIO_OUT_HIGH)	/* Amber C0 port */
+GPIO(C0_CHARGE_LED_WHITE_L,          PIN(C, 3), GPIO_OUT_HIGH)	/* White C0 port */
+GPIO(C1_CHARGE_LED_AMBER_L,          PIN(5, 7), GPIO_OUT_HIGH)	/* Amber C1 port */
+GPIO(C1_CHARGE_LED_WHITE_L,          PIN(9, 4), GPIO_OUT_HIGH)	/* White C1 port */
+GPIO(PWR_LED_WHITE_L,                PIN(C, 2), GPIO_OUT_HIGH)	/* Power LED */
 
 /* UART alternate functions */
 ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)              /* GPIO64/CR_SIN1, GPO65/CR_SOUT1/FLPRG1_L */
@@ -92,10 +99,10 @@ ALTERNATE(PIN_MASK(F, 0x0c), 0, MODULE_I2C, 0)               /* GPIOF3/I2C4_SCL1
 
 /* PWM alternate functions */
 ALTERNATE(PIN_MASK(4, 0x01), 0, MODULE_PWM, 0)               /* GPIO40/TA1 */
+ALTERNATE(PIN_MASK(7, 0x08), 0, MODULE_PWM, 0)               /* GPIO73/TA2 */
 ALTERNATE(PIN_MASK(6, 0x01), 0, MODULE_PWM, 0)               /* GPIO60/PWM7 */
 ALTERNATE(PIN_MASK(8, 0x01), 0, MODULE_PWM, 0)               /* GPIO80/PWM3 */
 ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)               /* GPIOB7/PWM5 */
-ALTERNATE(PIN_MASK(C, 0x1c), 0, MODULE_PWM, 0)               /* GPIOC4/PWM2, GPIOC3/PWM0, GPIOC2/PWM1/I2C6_SCL0 */
 
 /* ADC alternate functions */
 ALTERNATE(PIN_MASK(3, 0x10), 0, MODULE_ADC, 0)               /* GPIO34/PS2_DAT2/ADC6 */

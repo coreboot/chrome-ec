@@ -8,12 +8,14 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_fw_config.h"
+#include "cros_board_info.h"
 #include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accel_bma2x2.h"
+#include "driver/accel_kionix.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accelgyro_icm_common.h"
 #include "driver/accelgyro_icm42607.h"
@@ -46,6 +48,7 @@
 #include "usb_pd_tcpm.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTF(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 #define INT_RECHECK_US 5000
 
@@ -624,7 +627,7 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 };
 
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 static const mat33_fp_t lid_lis2dwl_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
@@ -660,6 +663,40 @@ struct motion_sensor_t lis2dwl_lid_accel = {
 				.odr = 10000 | ROUND_UP_FLAG,
 			},
 		},
+};
+
+static const mat33_fp_t lid_KX022_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+static struct kionix_accel_data g_kx022_data;
+struct motion_sensor_t kx022_lid_accel = {
+	.name = "Lid Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_KX022,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_LID,
+	.drv = &kionix_accel_drv,
+	.mutex = &g_lid_mutex,
+	.drv_data = &g_kx022_data,
+	.port = I2C_PORT_ACCEL,
+	.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
+	.rot_standard_ref = &lid_KX022_ref,
+	.min_frequency = KX022_ACCEL_MIN_FREQ,
+	.max_frequency = KX022_ACCEL_MAX_FREQ,
+	.default_range = 2, /* g, to support tablet mode */
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	},
 };
 
 static struct icm_drv_data_t g_icm42607_data;
@@ -715,6 +752,7 @@ struct motion_sensor_t icm42607_base_gyro = {
 void board_init(void)
 {
 	int on;
+	uint32_t board_id;
 
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_INT_ODL);
@@ -742,19 +780,58 @@ void board_init(void)
 	if (!gpio_get_level(GPIO_PEN_DET_ODL))
 		gpio_set_level(GPIO_EN_PP3300_PEN, 1);
 
-	if (get_cbi_ssfc_base_sensor() == SSFC_SENSOR_ICM42607) {
-		motion_sensors[BASE_ACCEL] = icm42607_base_accel;
-		motion_sensors[BASE_GYRO] = icm42607_base_gyro;
-		ccprints("BASE GYRO is ICM42607");
-	} else {
-		ccprints("BASE GYRO is BMI160");
-	}
+	cbi_get_board_version(&board_id);
 
-	if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_LIS2DWL) {
-		motion_sensors[LID_ACCEL] = lis2dwl_lid_accel;
-		ccprints("LID_ACCEL is LIS2DWL");
+	if (board_id > 2) {
+		if (get_cbi_fw_config_tablet_mode()) {
+			if (get_cbi_ssfc_base_sensor() ==
+						SSFC_SENSOR_ICM42607) {
+				motion_sensors[BASE_ACCEL] =
+						icm42607_base_accel;
+				motion_sensors[BASE_GYRO] = icm42607_base_gyro;
+				CPRINTF("BASE GYRO is ICM42607");
+			} else {
+				CPRINTF("BASE GYRO is BMI160");
+			}
+
+			if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_LIS2DWL) {
+				motion_sensors[LID_ACCEL] = lis2dwl_lid_accel;
+				CPRINTF("LID_ACCEL is LIS2DWL");
+			} else if (get_cbi_ssfc_lid_sensor() ==
+						SSFC_SENSOR_KX022) {
+				motion_sensors[LID_ACCEL] = kx022_lid_accel;
+				CPRINTF("LID_ACCEL is KX022");
+			} else {
+				CPRINTF("LID_ACCEL is BMA253");
+			}
+		} else {
+			motion_sensor_count = 0;
+			gmr_tablet_switch_disable();
+			/*
+			 * Base accel is not stuffed, don't allow
+			 * line to float.
+			 */
+			gpio_set_flags(GPIO_BASE_SIXAXIS_INT_L,
+					GPIO_INPUT | GPIO_PULL_DOWN);
+		}
 	} else {
-		ccprints("LID_ACCEL is BMA253");
+		if (get_cbi_ssfc_base_sensor() == SSFC_SENSOR_ICM42607) {
+			motion_sensors[BASE_ACCEL] = icm42607_base_accel;
+			motion_sensors[BASE_GYRO] = icm42607_base_gyro;
+			CPRINTF("BASE GYRO is ICM42607");
+		} else {
+			CPRINTF("BASE GYRO is BMI160");
+		}
+
+		if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_LIS2DWL) {
+			motion_sensors[LID_ACCEL] = lis2dwl_lid_accel;
+			CPRINTF("LID_ACCEL is LIS2DWL");
+		} else if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_KX022) {
+			motion_sensors[LID_ACCEL] = kx022_lid_accel;
+			CPRINTF("LID_ACCEL is KX022");
+		} else {
+			CPRINTF("LID_ACCEL is BMA253");
+		}
 	}
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
