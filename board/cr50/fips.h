@@ -29,6 +29,7 @@ enum fips_status {
 	FIPS_FATAL_ECDSA = 1 << 7,
 	FIPS_FATAL_RSA2048 = 1 << 8,
 	FIPS_FATAL_AES256 = 1 << 9,
+	FIPS_FATAL_SELF_INTEGRITY = 1 << 10,
 	FIPS_FATAL_OTHER = 1 << 15,
 	FIPS_ERROR_MASK = 0xffff,
 	FIPS_RFU_MASK = 0x7fff0000
@@ -59,6 +60,10 @@ enum fips_cmd {
 	FIPS_CMD_BREAK_AES256 = 8,
 	FIPS_CMD_NO_BREAK = 9
 };
+
+/* These symbols defined in core/cortex-m/ec.lds.S. */
+extern uint8_t __fips_module_start;
+extern uint8_t __fips_module_end;
 
 /* Return current FIPS status of operations. */
 enum fips_status fips_status(void);

@@ -576,6 +576,30 @@ static bool call_on_stack(void *new_stack, bool (*func)(void))
 	return result;
 }
 
+/* Placeholder for SHA256 digest of module computed during build time. */
+const uint8_t fips_integrity[SHA256_DIGEST_SIZE]
+	__attribute__((section(".rodata.fips.checksum")));
+
+static bool fips_self_integrity(void)
+{
+	uint8_t digest[SHA256_DIGEST_SIZE];
+	size_t module_length = &__fips_module_end - &__fips_module_start;
+
+#ifdef CR50_DEV
+	CPRINTS("FIPS self-integrity start %x, length %u",
+		(uintptr_t)&__fips_module_start, module_length);
+#endif
+	DCRYPTO_SHA256_hash(&__fips_module_start, module_length, digest);
+
+#ifdef CR50_DEV
+	CPRINTS("Stored, %ph, computed %ph",
+		HEX_BUF(fips_integrity, sizeof(fips_integrity)),
+		HEX_BUF(digest, sizeof(digest)));
+#endif
+
+	return DCRYPTO_equals(fips_integrity, digest, sizeof(digest));
+}
+
 /**
  * FIPS Power-up known-answer tests.
  * Single point of initialization for all FIPS-compliant
@@ -592,6 +616,10 @@ static uint64_t fips_power_up_tests(void)
 	uint64_t starttime;
 
 	starttime = get_time().val;
+
+	if (!fips_self_integrity())
+		_fips_status |= FIPS_FATAL_SELF_INTEGRITY;
+
 	/**
 	 * Since we are very limited on stack and static RAM, acquire
 	 * shared memory for KAT tests temporary larger stack.
