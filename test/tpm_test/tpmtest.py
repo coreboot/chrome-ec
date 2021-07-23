@@ -30,6 +30,7 @@ import rsa_test
 import subcmd
 import trng_test
 import upgrade_test
+import u2f_test
 
 # Extension command for dcypto testing
 EXT_CMD = 0xbaccd00a
@@ -59,15 +60,18 @@ class TPM:
         if not self._handle.FtdiSpiInit(freq, debug_mode):
             raise subcmd.TpmTestError('Failed to connect')
 
-    def validate(self, data_blob, response_mode=False):
+    def parse_response(self, data_blob):
+        (tag, size, cmd_code, _) = struct.unpack_from(
+          self.HEADER_FMT, data_blob + b'  ')
+        return tag, size, cmd_code
+
+    def validate(self, data_blob, response_mode=False, check_cmd=True):
         """Validate TPM header format
 
         Check if a data blob complies with TPM command/response
         header format.
         """
-
-        (tag, size, cmd_code, _) = struct.unpack_from(
-          self.HEADER_FMT, data_blob + b'  ')
+        tag, size, cmd_code = self.parse_response(data_blob)
         prefix = 'Misformatted blob: '
         if tag not in (0x8001, 0x8002):
             raise subcmd.TpmTestError(prefix + 'bad tag value 0x%4.4x' % tag)
@@ -83,12 +87,14 @@ class TPM:
                 raise subcmd.TpmTestError(
                   prefix + 'invalid response code 0x%x' % cmd_code)
             return
+        if check_cmd == False:
+            return size, cmd_code
         if 0x11f <= cmd_code <= 0x18f:
-            return  # This is a valid command
+            return size, cmd_code # This is a valid command
         if cmd_code == EXT_CMD:
-            return  # This is an extension command
+            return size, cmd_code # This is an extension command
         if 0x20000000 <= cmd_code <= 0x200001ff:
-            return  # this is vendor command
+            return size, cmd_code # this is vendor command
         raise subcmd.TpmTestError(prefix + 'invalid command code 0x%x'
                                   % cmd_code)
 
@@ -98,6 +104,13 @@ class TPM:
         response = self._handle.FtdiSendCommandAndWait(cmd_data)
         self.validate(response, response_mode=True)
         return response
+
+    def command_unchecked(self, cmd_data):
+        """Verify command header"""
+        self.validate(cmd_data)
+        response = self._handle.FtdiSendCommandAndWait(cmd_data)
+        size, cmd_code = self.validate(response, response_mode=False, check_cmd=False)
+        return response, size, cmd_code
 
     def wrap_ext_command(self, subcmd_code, cmd_body):
         """Wrap TPM command into extension command header"""
@@ -205,12 +218,14 @@ def main():
             drbg_test.drbg_test(tpm_object, drbg_request, drbg_expected,
                                 lab_output)
             sys.exit(0)
+        u2f_test.u2f_test(tpm_object)
         crypto_test.crypto_tests(tpm_object, os.path.join(ROOT_DIR,
-                                                          'crypto_test.xml'))
+                                                         'crypto_test.xml'))
         drbg_test.drbg_test(tpm_object, drbg_request, drbg_expected,
-                            lab_output)
+                           lab_output)
         ecc_test.ecc_test(tpm_object)
-        ecies_test.ecies_test(tpm_object)
+#       cr50 don't implement ecies
+#       ecies_test.ecies_test(tpm_object)
         hash_test.hash_test(tpm_object)
         hkdf_test.hkdf_test(tpm_object)
         rsa_test.rsa_test(tpm_object)

@@ -13,6 +13,9 @@ ECC = 3
 FW_UPGRADE = 4
 HKDF = 5
 ECIES = 6
+U2F_GENERATE = 44
+U2F_SIGN = 45
+U2F_ATTEST = 46
 DRBG_TEST = 50
 # The same exception class used by all tpmtest modules.
 class TpmTestError(Exception):

@@ -40,6 +40,9 @@ void power_button_record(void)
 
 enum touch_state pop_check_presence(int consume)
 {
+#ifdef CRYPTO_TEST_SETUP
+	return POP_TOUCH_YES;
+#else
 	int recent = ((last_press.val  > 0) &&
 		((get_time().val - last_press.val) < PRESENCE_TIMEOUT));
 
@@ -52,6 +55,7 @@ enum touch_state pop_check_presence(int consume)
 
 	/* user physical presence on the power button */
 	return recent ? POP_TOUCH_YES : POP_TOUCH_NO;
+#endif
 }
 
 static const uint8_t k_salt = NVMEM_VAR_G2F_SALT;
