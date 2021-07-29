@@ -90,7 +90,7 @@ const struct power_signal_info power_signal_list[] = {
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * TODO(b/133200075): Tune this once we have the final performance
 	 * out of the driver and the i2c bus.
@@ -537,7 +537,7 @@ static void board_init(void)
 	} else {
 		motion_sensor_count = 0;
 		/* Device is clamshell only */
-		tablet_set_mode(0);
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
 		/* Turn off GMR interrupt */
 		gmr_tablet_switch_disable();
 		/* Base accel is not stuffed, don't allow line to float */

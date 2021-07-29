@@ -208,7 +208,7 @@ static void board_set_tablet_mode(void)
 	 * Always report device isn't in tablet mode because
 	 * our id is clamshell and no TABLET_MODE_L pin
 	 */
-	tablet_set_mode(0);
+	tablet_set_mode(0, TABLET_TRIGGER_LID);
 }
 
 /* Initialize board. */
@@ -472,7 +472,7 @@ int board_get_version(void)
 }
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next

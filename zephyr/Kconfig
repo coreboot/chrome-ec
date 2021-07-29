@@ -376,6 +376,13 @@ config PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
 	  the EC has been powered up, the number of AP resets, an optional log
 	  of AP-reset events and some flags.
 
+config PLATFORM_EC_HOSTCMD_REGULATOR
+	bool "Host command of voltage regulator control"
+	help
+	  Enable host commands (EC_CMD_REGULATOR_) for controlling voltage
+	  regulator. The board should also implement board functions defined in
+	  include/regulator.h.
+
 config PLATFORM_EC_I2C
 	bool "I2C shim"
 	default n if ARCH_POSIX
@@ -387,6 +394,18 @@ config PLATFORM_EC_I2C
 	  in include/i2c.h and implemented in common/i2c_master.c. Doing so
 	  should make shimming other platform/ec modules which rely on i2c
 	  communication "just work" without requiring any further code changes.
+
+config PLATFORM_EC_SMBUS_PEC
+	bool "Packet error checking support for SMBus"
+	help
+	  If enabled, adds error checking support for i2c_readN, i2c_writeN,
+	  i2c_read_string and i2c_write_block. Where
+	  - write operation appends an error checking byte at end of transfer, and
+	  - read operatoin verifies the correctness of error checking byte from the
+	  slave.
+	  Set I2C_FLAG on addr_flags parameter to use this feature.
+
+	  This option also enables error checking function on smart batteries.
 
 config PLATFORM_EC_LID_SWITCH
 	bool "Lid switch"
