@@ -6198,6 +6198,8 @@ enum action_key {
 	TK_PLAY_PAUSE = 15,
 	TK_NEXT_TRACK = 16,
 	TK_PREV_TRACK = 17,
+	TK_KBD_BKLIGHT_TOGGLE = 18,
+	TK_MICMUTE = 19,
 };
 
 /*
