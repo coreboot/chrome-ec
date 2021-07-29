@@ -17,6 +17,7 @@
 #define PS8751_I2C_ADDR3_FLAGS    0x2B
 #define PS8751_I2C_ADDR4_FLAGS    0x4B
 
+#define PS8751_P3_TO_P0_FLAGS(p3_flags)	((p3_flags) - 3)
 #define PS8751_P3_TO_P1_FLAGS(p3_flags)	((p3_flags) - 2)
 
 /* Minimum Delay for reset assertion */
@@ -100,6 +101,12 @@
 
 /* Vendor defined registers */
 #define PS8815_P1_REG_HW_REVISION		0xF0
+
+/*
+ * PS8805 register to distinguish chip revision
+ * bit 7-4: 1010b is A3 chip, 0000b is A2 chip
+ */
+#define PS8805_P0_REG_CHIP_REVISION		0x62
 
 extern const struct tcpm_drv ps8xxx_tcpm_drv;
 
