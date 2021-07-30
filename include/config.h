@@ -1397,14 +1397,12 @@
 #define CONFIG_CMD_FASTCHARGE
 #undef  CONFIG_CMD_FLASH
 #define CONFIG_CMD_FLASHINFO
-#undef  CONFIG_CMD_FLASH_LOG
 #undef  CONFIG_CMD_FLASH_TRISTATE
 #undef  CONFIG_CMD_FORCETIME
 #undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
 #undef  CONFIG_CMD_GL3590
 #undef  CONFIG_CMD_GPIO_EXTENDED
-#undef  CONFIG_CMD_GSV
 #undef  CONFIG_CMD_GT7288
 #define CONFIG_CMD_HASH
 #define CONFIG_CMD_HCDEBUG
@@ -1421,12 +1419,10 @@
 #define CONFIG_CMD_I2C_XFER
 #undef  CONFIG_CMD_I2C_XFER_RAW
 #define CONFIG_CMD_IDLE_STATS
-#undef  CONFIG_CMD_ILIM
 #define CONFIG_CMD_INA
 #undef  CONFIG_CMD_JUMPTAGS
 #define CONFIG_CMD_KEYBOARD
 #undef  CONFIG_CMD_LEDTEST
-#undef  CONFIG_CMD_LID_ANGLE
 #undef  CONFIG_CMD_MCDP
 #define CONFIG_CMD_MD
 #define CONFIG_CMD_MEM
@@ -1438,7 +1434,6 @@
 #undef  CONFIG_CMD_PD_TIMER
 #define CONFIG_CMD_PECI
 #undef  CONFIG_CMD_PLL
-#undef  CONFIG_CMD_PMU
 #define CONFIG_CMD_POWERINDEBUG
 #undef  CONFIG_CMD_POWERLED
 #define CONFIG_CMD_PWR_AVG
@@ -1473,7 +1468,6 @@
 #define CONFIG_CMD_TIMERINFO
 #define CONFIG_CMD_TYPEC
 #undef  CONFIG_CMD_USART_INFO
-#define CONFIG_CMD_USBMUX
 #undef  CONFIG_CMD_USB_PD_CABLE
 #undef  CONFIG_CMD_USB_PD_PE
 #define CONFIG_CMD_WAITMS
@@ -5176,6 +5170,14 @@
  */
 #undef CONFIG_CBI_EEPROM
 
+/*
+ * Define this if the EC has exclusive control over the CBI EEPROM WP signal.
+ * The accompanying hardware must ensure that the CBI WP gets latched and is
+ * only reset when EC_RST_ODL is asserted.  GPIO_EC_CBI_WP must be set up for
+ * the board.
+ */
+#undef CONFIG_EEPROM_CBI_WP
+
 /* Define this to support Cros Board Info from GPIO. */
 #undef CONFIG_CBI_GPIO
 
@@ -6366,10 +6368,23 @@
 #define ALS_COUNT 0
 #endif /* CONFIG_ALS */
 
+
+/*
+ * If the EC has exclusive control over CBI EEPROM WP, don't consult the main
+ * flash WP.
+ */
+#ifdef CONFIG_EEPROM_CBI_WP
+#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
+#endif
+
+#if defined(CONFIG_EEPROM_CBI_WP) && !defined(CONFIG_CBI_EEPROM)
+#error "CONFIG_EEPROM_CBI_WP requires CONFIG_CBI_EEPROM to be defined!"
+#endif
+
 #if defined(CONFIG_BYPASS_CBI_EEPROM_WP_CHECK) && \
-	!defined(CONFIG_SYSTEM_UNLOCKED)
+	!defined(CONFIG_SYSTEM_UNLOCKED) && !defined(CONFIG_EEPROM_CBI_WP)
 #error "CONFIG_BYPASS_CBI_EEPROM_WP_CHECK is only permitted " \
-	"when CONFIG_SYSTEM_UNLOCK is also enabled."
+	"when CONFIG_SYSTEM_UNLOCK or CONFIG_EEPROM_CBI_WP is also enabled."
 #endif /* CONFIG_BYPASS_CBI_EEPROM_WP_CHECK && !CONFIG_SYSTEM_UNLOCK */
 
 #if defined(CONFIG_BOARD_VERSION_CBI) && defined(CONFIG_BOARD_VERSION_GPIO)

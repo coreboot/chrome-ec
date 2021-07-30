@@ -273,19 +273,20 @@ static void rt1718s_bc12_usb_charger_task(const int port)
 	while (1) {
 		uint32_t evt = task_wait_event(-1);
 
-		if (evt & USB_CHG_EVENT_DR_UFP)
-			rt1718s_enable_bc12_sink(port, true);
-
-		if ((evt & USB_CHG_EVENT_DR_DFP) ||
-		    (evt & USB_CHG_EVENT_CC_OPEN)) {
-			rt1718s_update_charge_manager(
-					port, CHARGE_SUPPLIER_NONE);
+		if (evt & USB_CHG_EVENT_VBUS) {
+			if (pd_snk_is_vbus_provided(port))
+				rt1718s_enable_bc12_sink(port, true);
+			else
+				rt1718s_update_charge_manager(
+						port, CHARGE_SUPPLIER_NONE);
 		}
 
 		/* detection done, update charge_manager and stop detection */
 		if (evt & USB_CHG_EVENT_BC12) {
+			int type = rt1718s_get_bc12_type(port);
+
 			rt1718s_update_charge_manager(
-					port, rt1718s_get_bc12_type(port));
+					port, type);
 			rt1718s_enable_bc12_sink(port, false);
 		}
 	}
@@ -354,7 +355,7 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,
 	.get_message_raw	= &tcpci_tcpm_get_message_raw,
 	.transmit		= &tcpci_tcpm_transmit,
-	.tcpc_alert		= &tcpci_tcpc_alert,
+	.tcpc_alert		= &rt1718s_alert,
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif

@@ -175,7 +175,7 @@ static uint32_t __attribute__((unused)) get_size(enum ec_image copy)
 	}
 }
 
-int system_is_locked(void)
+test_mockable int system_is_locked(void)
 {
 	static int is_locked = -1;
 
@@ -1638,7 +1638,6 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_CHIP_INFO,
 		     host_command_get_chip_info,
 		     EC_VER_MASK(0));
 
-#if defined(CONFIG_BOARD_VERSION_CBI) || defined(CONFIG_BOARD_VERSION_GPIO)
 enum ec_status
 host_command_get_board_version(struct host_cmd_handler_args *args)
 {
@@ -1659,7 +1658,6 @@ host_command_get_board_version(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION,
 		     host_command_get_board_version,
 		     EC_VER_MASK(0));
-#endif
 
 enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 {
