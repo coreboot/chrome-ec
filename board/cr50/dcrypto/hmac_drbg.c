@@ -14,30 +14,28 @@
 /* V = HMAC(K, V) */
 static void update_v(const uint32_t *k, uint32_t *v)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 
-	DCRYPTO_HMAC_SHA256_init(&ctx, k, SHA256_DIGEST_SIZE);
-	HASH_update(&ctx.hash, v, SHA256_DIGEST_SIZE);
-	memcpy(v, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
+	HMAC_SHA256_hw_init(&ctx, k, SHA256_DIGEST_SIZE);
+	HMAC_SHA256_update(&ctx, v, SHA256_DIGEST_SIZE);
+	memcpy(v, HMAC_SHA256_final(&ctx), SHA256_DIGEST_SIZE);
 }
 
 /* K = HMAC(K, V || tag || p0 || p1 || p2) */
 /* V = HMAC(K, V) */
-static void update_kv(uint32_t *k, uint32_t *v, uint8_t tag,
-		      const void *p0, size_t p0_len,
-		      const void *p1, size_t p1_len,
+static void update_kv(uint32_t *k, uint32_t *v, uint8_t tag, const void *p0,
+		      size_t p0_len, const void *p1, size_t p1_len,
 		      const void *p2, size_t p2_len)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 
-	DCRYPTO_HMAC_SHA256_init(&ctx, k, SHA256_DIGEST_SIZE);
-	HASH_update(&ctx.hash, v, SHA256_DIGEST_SIZE);
-	HASH_update(&ctx.hash, &tag, 1);
-	HASH_update(&ctx.hash, p0, p0_len);
-	HASH_update(&ctx.hash, p1, p1_len);
-	HASH_update(&ctx.hash, p2, p2_len);
-	memcpy(k, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
-
+	HMAC_SHA256_hw_init(&ctx, k, SHA256_DIGEST_SIZE);
+	HMAC_SHA256_update(&ctx, v, SHA256_DIGEST_SIZE);
+	HMAC_SHA256_update(&ctx, &tag, 1);
+	HMAC_SHA256_update(&ctx, p0, p0_len);
+	HMAC_SHA256_update(&ctx, p1, p1_len);
+	HMAC_SHA256_update(&ctx, p2, p2_len);
+	memcpy(k, HMAC_SHA256_final(&ctx), SHA256_DIGEST_SIZE);
 	update_v(k, v);
 }
 
@@ -179,7 +177,7 @@ static int cmd_rfc6979(int argc, char **argv)
 	static const char message[] = "sample";
 	static struct drbg_ctx drbg;
 
-	static HASH_CTX ctx;
+	static struct sha256_ctx ctx;
 	int result;
 	static const uint8_t priv_from_rfc[] = {
 		0xC9, 0xAF, 0xA9, 0xD8, 0x45, 0xBA, 0x75, 0x16,
@@ -197,9 +195,9 @@ static int cmd_rfc6979(int argc, char **argv)
 	p256_int *reference_k = (p256_int *)k_from_rfc;
 
 	/* h1 = H(m) */
-	DCRYPTO_SHA256_init(&ctx, 1);
-	HASH_update(&ctx, message, sizeof(message) - 1);
-	memcpy(&h1, HASH_final(&ctx), SHA256_DIGEST_SIZE);
+	SHA256_hw_init(&ctx);
+	SHA256_update(&ctx, message, sizeof(message) - 1);
+	memcpy(&h1, SHA256_final(&ctx)->b8, SHA256_DIGEST_SIZE);
 
 	hmac_drbg_init_rfc6979(&drbg, x, &h1);
 	do {

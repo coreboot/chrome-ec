@@ -72,23 +72,23 @@ void MemHashTree::UpdatePath(uint64_t label,
   for (int level = 0; level < height_; ++level) {
     shifted_parent_label &= ~child_index_mask;
 
-    LITE_SHA256_CTX ctx;
-    DCRYPTO_SHA256_init(&ctx, 1);
+    struct sha256_ctx ctx;
+    SHA256_hw_init(&ctx);
     int empty_nodes = 0;
     for (int index = 0; index < fan_out; ++index) {
       auto itr =
           hash_tree_.find(MaskedLabel(shifted_parent_label | index, level));
       if (itr == hash_tree_.end()) {
-        HASH_update(&ctx, empty_node_hashes_[level].data(),
+        SHA256_update(&ctx, empty_node_hashes_[level].data(),
                     empty_node_hashes_[level].size());
         ++empty_nodes;
       } else {
-        HASH_update(&ctx, itr->second.data(), itr->second.size());
+        SHA256_update(&ctx, itr->second.data(), itr->second.size());
       }
     }
     shifted_parent_label = shifted_parent_label >> bits_per_level_;
 
-    const uint8_t* temp = HASH_final(&ctx);
+    const uint8_t* temp = SHA256_final(&ctx)->b8;
     std::copy(temp, temp + SHA256_DIGEST_SIZE, hash.begin());
     MaskedLabel node_key(shifted_parent_label, level + 1);
     if (empty_nodes == fan_out) {
@@ -118,12 +118,12 @@ void MemHashTree::Reset(uint8_t bits_per_level, uint8_t height) {
 
   uint8_t fan_out = 1 << bits_per_level;
   for (int level = 1; level < height; ++level) {
-    LITE_SHA256_CTX ctx;
-    DCRYPTO_SHA256_init(&ctx, 1);
+    struct sha256_ctx ctx;
+    SHA256_hw_init(&ctx);
     for (int index = 0; index < fan_out; ++index) {
-      HASH_update(&ctx, hash.data(), hash.size());
+      SHA256_update(&ctx, hash.data(), hash.size());
     }
-    const uint8_t* temp = HASH_final(&ctx);
+    const uint8_t* temp = SHA256_final(&ctx)->b8;
     std::copy(temp, temp + SHA256_DIGEST_SIZE, hash.begin());
     empty_node_hashes_[level] = hash;
   }

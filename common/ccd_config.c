@@ -9,7 +9,6 @@
 #include "byteorder.h"
 #include "ccd_config.h"
 #include "console.h"
-#include "cryptoc/sha256.h"
 #include "dcrypto.h"
 #include "extension.h"
 #include "hooks.h"
@@ -239,17 +238,17 @@ static int raw_has_password(void)
  */
 static void ccd_password_digest(uint8_t *digest, const char *password)
 {
-	HASH_CTX sha;
+	struct sha256_ctx sha;
 	uint8_t *unique_id;
 	int unique_id_len;
 
 	unique_id_len = system_get_chip_unique_id(&unique_id);
 
-	DCRYPTO_SHA256_init(&sha, 0);
-	HASH_update(&sha, config.password_salt, sizeof(config.password_salt));
-	HASH_update(&sha, unique_id, unique_id_len);
-	HASH_update(&sha, password, strlen(password));
-	memcpy(digest, HASH_final(&sha), CCD_PASSWORD_DIGEST_SIZE);
+	SHA256_hw_init(&sha);
+	SHA256_update(&sha, config.password_salt, sizeof(config.password_salt));
+	SHA256_update(&sha, unique_id, unique_id_len);
+	SHA256_update(&sha, password, strlen(password));
+	memcpy(digest, SHA256_final(&sha)->b8, CCD_PASSWORD_DIGEST_SIZE);
 }
 
 /**

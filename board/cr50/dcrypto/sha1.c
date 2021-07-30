@@ -1,65 +1,137 @@
-/* Copyright 2015 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "dcrypto.h"
+#include "endian.h"
 #include "internal.h"
-#include "registers.h"
 
-#include "cryptoc/sha.h"
+static void SHA1_transform(struct sha1_ctx *const ctx)
+{
+	uint32_t W[80];
+	uint32_t A, B, C, D, E;
+	size_t t;
+	static const uint32_t K[4] = { 0x5A827999, 0x6ED9EBA1, 0x8F1BBCDC,
+				       0xCA62C1D6 };
 
-static void dcrypto_sha1_init(SHA_CTX *ctx);
-static const uint8_t *dcrypto_sha1_final(SHA_CTX *unused);
+	for (t = 0; t < 16; ++t)
+		W[t] = be32toh(ctx->b32[t]);
+	for (; t < 80; t++)
+		W[t] = rol(W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16], 1);
 
-/*
- * Hardware SHA implementation.
+	A = ctx->state[0];
+	B = ctx->state[1];
+	C = ctx->state[2];
+	D = ctx->state[3];
+	E = ctx->state[4];
+	for (t = 0; t < 80; t++) {
+		uint32_t tmp = rol(A, 5) + E + W[t];
+
+		if (t < 20)
+			tmp += (D ^ (B & (C ^ D))) + K[0];
+		else if (t < 40)
+			tmp += (B ^ C ^ D) + K[1];
+		else if (t < 60)
+			tmp += ((B & C) | (D & (B | C))) + K[2];
+		else
+			tmp += (B ^ C ^ D) + K[3];
+		E = D;
+		D = C;
+		C = rol(B, 30);
+		B = A;
+		A = tmp;
+	}
+	ctx->state[0] += A;
+	ctx->state[1] += B;
+	ctx->state[2] += C;
+	ctx->state[3] += D;
+	ctx->state[4] += E;
+}
+/**
+ * Define aliases taking union type as parameter. This is safe
+ * as union type has header in same place and is not less than original type.
+ * Equal to:
+ * void SHA1_init_as_hash(hash_ctx_t *const ctx) {SHA1_init(&ctx.sha1);}
+ * but save some space for embedded uses.
  */
-static const HASH_VTAB HW_SHA1_VTAB = {
-	dcrypto_sha1_init,
-	dcrypto_sha_update,
-	dcrypto_sha1_final,
-	DCRYPTO_SHA1_hash,
-	SHA_DIGEST_SIZE
-};
+BUILD_ASSERT(sizeof(union hash_ctx) >= sizeof(struct sha1_ctx));
+static void SHA1_init_as_hash(union hash_ctx *const ctx) __alias(SHA1_sw_init);
+static void SHA1_update_as_hash(union hash_ctx *const ctx, const void *data,
+				size_t len) __alias(SHA1_sw_update);
+static const union sha_digests *SHA1_final_as_hash(union hash_ctx *const ctx)
+	__alias(SHA1_sw_final);
 
-/* Requires dcrypto_grab_sha_hw() to be called first. */
-static void dcrypto_sha1_init(SHA_CTX *ctx)
+void SHA1_sw_init(struct sha1_ctx *const ctx)
 {
-	ctx->f = &HW_SHA1_VTAB;
-	dcrypto_sha_init(SHA1_MODE);
+	static const struct hash_vtable sha1_vtab = {
+		SHA1_init_as_hash,	SHA1_update_as_hash, SHA1_final_as_hash,
+		HMAC_sw_final,		SHA1_DIGEST_SIZE,    SHA1_BLOCK_SIZE,
+		sizeof(struct sha1_ctx)
+	};
+	static const uint32_t sha1_init[SHA1_DIGEST_WORDS] = {
+		0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0
+	};
+
+	ctx->f = &sha1_vtab;
+	memcpy(ctx->state, sha1_init, sizeof(ctx->state));
+	ctx->count = 0;
 }
 
-/* Select and initialize either the software or hardware
- * implementation.  If "multi-threaded" behaviour is required, then
- * callers must set sw_required to 1.  This is because SHA1 state
- * internal to the hardware cannot be extracted, so it is not possible
- * to suspend and resume a hardware based SHA operation.
- *
- * If the caller has no preference as to implementation, then hardware
- * is preferred based on availability.  Hardware is considered to be
- * in use between init() and finished() calls. */
-void DCRYPTO_SHA1_init(SHA_CTX *ctx, uint32_t sw_required)
+void SHA1_sw_update(struct sha1_ctx *const ctx, const void *data, size_t len)
 {
-	if (!sw_required && dcrypto_grab_sha_hw())
-		dcrypto_sha1_init(ctx);
-	else
-		SHA_init(ctx);
+	size_t i = ctx->count & (SHA1_BLOCK_SIZE - 1);
+	const uint8_t *p = (const uint8_t *)data;
+
+	ctx->count += len;
+	while (len--) {
+		ctx->b8[i++] = *p++;
+		if (i == SHA1_BLOCK_SIZE) {
+			SHA1_transform(ctx);
+			i = 0;
+		}
+	}
 }
 
-static const uint8_t *dcrypto_sha1_final(SHA_CTX *ctx)
+const struct sha1_digest *SHA1_sw_final(struct sha1_ctx *const ctx)
 {
-	dcrypto_sha_wait(SHA1_MODE, (uint32_t *) ctx->buf);
-	return ctx->buf;
+	uint64_t cnt = (uint64_t)ctx->count * CHAR_BIT;
+	size_t i = ctx->count & (SHA1_BLOCK_SIZE - 1);
+
+	/**
+	 * append the bit '1' to the message which would be 0x80 if message
+	 * length is a multiple of 8 bits.
+	 */
+	ctx->b8[i++] = 0x80;
+	/**
+	 * append 0 ≤ k < 512 bits '0', such that the resulting message length
+	 * in bits is congruent to −64 ≡ 448 (mod 512)
+	 */
+	if (i > (SHA1_BLOCK_SIZE - sizeof(cnt))) {
+		/* current block won't fit length, so move to next */
+		while (i < SHA1_BLOCK_SIZE)
+			ctx->b8[i++] = 0;
+		SHA1_transform(ctx);
+		i = 0;
+	}
+	/* pad rest of zeros */
+	while (i < (SHA1_BLOCK_SIZE - sizeof(cnt)))
+		ctx->b8[i++] = 0;
+	/* place big-endian 64-bit bit counter at the end of block */
+	ctx->b64[SHA1_BLOCK_DWORDS - 1] = htobe64(cnt);
+	SHA1_transform(ctx);
+	for (i = 0; i < 5; i++)
+		ctx->b32[i] = htobe32(ctx->state[i]);
+	return &ctx->digest;
 }
 
-const uint8_t *DCRYPTO_SHA1_hash(const void *data, uint32_t n,
-				uint8_t *digest)
+/* One shot SHA1 calculation */
+const struct sha1_digest *SHA1_sw_hash(const void *data, size_t len,
+				       struct sha1_digest *digest)
 {
-	if (dcrypto_grab_sha_hw())
-		/* dcrypto_sha_wait() will release the hw. */
-		dcrypto_sha_hash(SHA1_MODE, data, n, digest);
-	else
-		SHA_hash(data, n, digest);
+	struct sha1_ctx ctx;
+
+	SHA1_sw_init(&ctx);
+	SHA1_sw_update(&ctx, data, len);
+	memcpy(digest->b8, SHA1_sw_final(&ctx)->b8, SHA1_DIGEST_SIZE);
 	return digest;
 }

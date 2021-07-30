@@ -98,10 +98,10 @@ size_t DCRYPTO_ecies_encrypt(
 	outp += P256_NBYTES;
 
 	/* Calculate HMAC(auth_data || ciphertext). */
-	DCRYPTO_HMAC_SHA256_init(&ctx, hmac_key, HMAC_KEY_BYTES);
+	HMAC_SHA256_hw_init(&ctx, hmac_key, HMAC_KEY_BYTES);
 	HASH_update(&ctx.hash, outp, in_len);
 	outp += in_len;
-	memcpy(outp, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
+	memcpy(outp, HMAC_SHA256_hw_final(&ctx), SHA256_DIGEST_SIZE);
 	outp += SHA256_DIGEST_SIZE;
 
 	return outp - (uint8_t *) out;
@@ -159,9 +159,9 @@ size_t DCRYPTO_ecies_decrypt(
 
 	aes_key = &key[0];
 	hmac_key = &key[AES_KEY_BYTES];
-	DCRYPTO_HMAC_SHA256_init(&ctx, hmac_key, HMAC_KEY_BYTES);
+	HMAC_SHA256_hw_init(&ctx, hmac_key, HMAC_KEY_BYTES);
 	HASH_update(&ctx.hash, inp, in_len);
-	if (!DCRYPTO_equals(inp + in_len, DCRYPTO_HMAC_final(&ctx),
+	if (!DCRYPTO_equals(inp + in_len, HMAC_SHA256_hw_final(&ctx),
 				SHA256_DIGEST_SIZE))
 		return 0;
 

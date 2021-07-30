@@ -192,7 +192,7 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 	TPM2B *local_extra;
 	uint32_t count = 0;
 	uint8_t key_bytes[P256_NBYTES];
-	LITE_HMAC_CTX hmac;
+	struct hmac_sha256_ctx hmac;
 
 	if (curve_id != TPM_ECC_NIST_P256)
 		return CRYPT_PARAMETER;
@@ -208,9 +208,10 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 
 	/* Hash down the primary seed for ECC key generation, so that
 	 * the derivation tree is distinct from RSA key derivation. */
-	DCRYPTO_HMAC_SHA256_init(&hmac, seed->buffer, seed->size);
-	HASH_update(&hmac.hash, "ECC", 4);
-	memcpy(local_seed.t.buffer, DCRYPTO_HMAC_final(&hmac),
+	HMAC_SHA256_hw_init(&hmac, seed->buffer,
+				 seed->size);
+	HMAC_SHA256_update(&hmac, "ECC", 4);
+	memcpy(local_seed.t.buffer, HMAC_SHA256_final(&hmac),
 	       local_seed.t.size);
 	always_memset(&hmac, 0, sizeof(hmac));
 	/* b/35576109: the personalize code uses only the first 4 bytes

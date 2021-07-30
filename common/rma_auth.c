@@ -80,11 +80,11 @@ static void get_hmac_sha256(void *hmac_out, const uint8_t *secret,
 			    size_t ch_size)
 {
 #ifdef USE_DCRYPTO
-	LITE_HMAC_CTX hmac;
+	struct hmac_sha256_ctx hmac;
 
-	DCRYPTO_HMAC_SHA256_init(&hmac, secret, secret_size);
-	HASH_update(&hmac.hash, ch_ptr, ch_size);
-	memcpy(hmac_out, DCRYPTO_HMAC_final(&hmac), 32);
+	HMAC_SHA256_hw_init(&hmac, secret, secret_size);
+	HMAC_SHA256_update(&hmac, ch_ptr, ch_size);
+	memcpy(hmac_out, HMAC_SHA256_hw_final(&hmac), 32);
 #else
 	hmac_SHA256(hmac_out, secret, secret_size, ch_ptr, ch_size);
 #endif
@@ -131,7 +131,7 @@ static void p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 	 * until the genreated bublic key has the compliant Y coordinate.
 	 */
 	while (1) {
-		HASH_CTX sha;
+		struct sha256_ctx sha;
 
 		if (DCRYPTO_p256_key_from_bytes(&pk_x, &pk_y, &d, buf)) {
 
@@ -141,9 +141,9 @@ static void p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 		}
 
 		/* Did not succeed, rehash the private key and try again. */
-		DCRYPTO_SHA256_init(&sha, 0);
-		HASH_update(&sha, buf, sizeof(buf));
-		memcpy(buf, HASH_final(&sha), sizeof(buf));
+		SHA256_hw_init(&sha);
+		SHA256_update(&sha, buf, sizeof(buf));
+		memcpy(buf, SHA256_final(&sha), sizeof(buf));
 	}
 
 	/* X coordinate is passed to the server as the public key. */

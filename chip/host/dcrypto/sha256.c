@@ -5,14 +5,26 @@
 
 #include "dcrypto.h"
 
-void DCRYPTO_SHA256_init(LITE_SHA256_CTX *ctx, uint32_t sw_required)
+void SHA256_hw_init(struct sha256_ctx *ctx)
 {
-	SHA256_init(ctx);
+	SHA256_sw_init(ctx);
 }
 
-const uint8_t *DCRYPTO_SHA256_hash(const void *data, uint32_t n,
-				uint8_t *digest)
+const struct sha256_digest *SHA256_hw_hash(const void *data, size_t n,
+					   struct sha256_digest *digest)
 {
-	SHA256_hash(data, n, digest);
+	SHA256_sw_hash(data, n, digest);
 	return digest;
+}
+
+void HMAC_SHA256_hw_init(struct hmac_sha256_ctx *ctx, const void *key,
+			      size_t len)
+{
+	SHA256_hw_init(&ctx->hash);
+	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
+}
+
+const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx)
+{
+	return HMAC_SHA256_final(ctx);
 }

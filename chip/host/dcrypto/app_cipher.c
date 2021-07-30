@@ -9,15 +9,15 @@
 void app_compute_hash(const void *p_buf, size_t num_bytes, void *p_hash,
 		      size_t hash_len)
 {
-	uint8_t digest[SHA256_DIGEST_SIZE];
+	struct sha256_digest digest;
 
 	/*
 	 * Use the built in dcrypto engine to generate the sha1 hash of the
 	 * buffer.
 	 */
-	DCRYPTO_SHA256_hash(p_buf, num_bytes, digest);
+	SHA256_hw_hash(p_buf, num_bytes, &digest);
 
-	memcpy(p_hash, digest, MIN(hash_len, sizeof(digest)));
+	memcpy(p_hash, digest.b8, MIN(hash_len, sizeof(digest)));
 
 	if (hash_len > sizeof(digest))
 		memset((uint8_t *)p_hash + sizeof(digest), 0,

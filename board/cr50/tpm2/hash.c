@@ -42,7 +42,7 @@ uint16_t _cpri__GetHashBlockSize(TPM_ALG_ID alg)
 	return lookup_hash_info(alg)->blockSize;
 }
 
-BUILD_ASSERT(sizeof(LITE_SHA256_CTX) == USER_MIN_HASH_STATE_SIZE);
+BUILD_ASSERT(sizeof(struct sha256_ctx) <= USER_MIN_HASH_STATE_SIZE);
 BUILD_ASSERT(sizeof(CPRI_HASH_STATE) == sizeof(EXPORT_HASH_STATE));
 void _cpri__ImportExportHashState(CPRI_HASH_STATE *osslFmt,
 				EXPORT_HASH_STATE *externalFmt,
@@ -57,7 +57,7 @@ void _cpri__ImportExportHashState(CPRI_HASH_STATE *osslFmt,
 uint16_t _cpri__HashBlock(TPM_ALG_ID alg, uint32_t in_len, uint8_t *in,
 			uint32_t out_len, uint8_t *out)
 {
-	uint8_t digest[SHA_DIGEST_MAX_BYTES];
+	union sha_digests digest;
 	const uint16_t digest_len = _cpri__GetDigestSize(alg);
 
 	if (digest_len == 0)
@@ -65,17 +65,17 @@ uint16_t _cpri__HashBlock(TPM_ALG_ID alg, uint32_t in_len, uint8_t *in,
 
 	switch (alg) {
 	case TPM_ALG_SHA1:
-		DCRYPTO_SHA1_hash(in, in_len, digest);
+		SHA1_hw_hash(in, in_len, &digest.sha1);
 		break;
 
 	case TPM_ALG_SHA256:
-		DCRYPTO_SHA256_hash(in, in_len, digest);
+		SHA256_hw_hash(in, in_len, &digest.sha256);
 		break;
 	case TPM_ALG_SHA384:
-		DCRYPTO_SHA384_hash(in, in_len, digest);
+		SHA384_hw_hash(in, in_len, &digest.sha384);
 		break;
 	case TPM_ALG_SHA512:
-		DCRYPTO_SHA512_hash(in, in_len, digest);
+		SHA512_hw_hash(in, in_len, &digest.sha512);
 		break;
 	default:
 		FAIL(FATAL_ERROR_INTERNAL);
@@ -83,16 +83,16 @@ uint16_t _cpri__HashBlock(TPM_ALG_ID alg, uint32_t in_len, uint8_t *in,
 	}
 
 	out_len = MIN(out_len, digest_len);
-	memcpy(out, digest, out_len);
+	memcpy(out, digest.b8, out_len);
 	return out_len;
 }
 
-BUILD_ASSERT(sizeof(struct HASH_CTX) <=
+BUILD_ASSERT(sizeof(union hash_ctx) <=
 	     sizeof(((CPRI_HASH_STATE *)0)->state));
 uint16_t _cpri__StartHash(TPM_ALG_ID alg, BOOL sequence,
 			  CPRI_HASH_STATE *state)
 {
-	struct HASH_CTX *ctx = (struct HASH_CTX *) state->state;
+	union hash_ctx *ctx = (union hash_ctx *) state->state;
 	uint16_t result;
 
 	/* NOTE: as per bug http://crosbug.com/p/55331#26 (NVMEM
@@ -103,20 +103,20 @@ uint16_t _cpri__StartHash(TPM_ALG_ID alg, BOOL sequence,
 	 */
 	switch (alg) {
 	case TPM_ALG_SHA1:
-		DCRYPTO_SHA1_init(ctx, 1);
+		SHA1_sw_init(&ctx->sha1);
 		result = HASH_size(ctx);
 		break;
 	case TPM_ALG_SHA256:
-		DCRYPTO_SHA256_init(ctx, 1);
+		SHA256_sw_init(&ctx->sha256);
 		result = HASH_size(ctx);
 		break;
 
 	case TPM_ALG_SHA384:
-		DCRYPTO_SHA384_init(ctx);
+		SHA384_sw_init(&ctx->sha384);
 		result = HASH_size(ctx);
 		break;
 	case TPM_ALG_SHA512:
-		DCRYPTO_SHA512_init(ctx);
+		SHA512_sw_init(&ctx->sha512);
 		result = HASH_size(ctx);
 		break;
 	default:
@@ -133,7 +133,7 @@ uint16_t _cpri__StartHash(TPM_ALG_ID alg, BOOL sequence,
 void _cpri__UpdateHash(CPRI_HASH_STATE *state, uint32_t in_len,
 		BYTE *in)
 {
-	struct HASH_CTX *ctx = (struct HASH_CTX *) state->state;
+	union hash_ctx *ctx = (union hash_ctx *) state->state;
 
 	HASH_update(ctx, in, in_len);
 }
@@ -141,10 +141,10 @@ void _cpri__UpdateHash(CPRI_HASH_STATE *state, uint32_t in_len,
 uint16_t _cpri__CompleteHash(CPRI_HASH_STATE *state,
 			uint32_t out_len, uint8_t *out)
 {
-	struct HASH_CTX *ctx = (struct HASH_CTX *) state->state;
+	union hash_ctx *ctx = (union hash_ctx *) state->state;
 
 	out_len = MIN(HASH_size(ctx), out_len);
-	memcpy(out, HASH_final(ctx), out_len);
+	memcpy(out, HASH_final(ctx)->b8, out_len);
 	return out_len;
 }
 
@@ -294,7 +294,7 @@ static uint16_t do_software_hmac(TPM_ALG_ID alg, uint32_t in_len, uint8_t *in,
 static uint16_t do_dcrypto_hmac(TPM_ALG_ID alg, uint32_t in_len,
 				uint8_t *in, int32_t out_len, uint8_t *out)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 	uint8_t *key;
 	uint32_t key_len;
 
@@ -304,10 +304,10 @@ static uint16_t do_dcrypto_hmac(TPM_ALG_ID alg, uint32_t in_len,
 	key = in + in_len;
 	key_len = *key++;
 	key_len = key_len * 256 + *key++;
-	DCRYPTO_HMAC_SHA256_init(&ctx, key, key_len);
-	HASH_update(&ctx.hash, in, in_len);
+	HMAC_SHA256_hw_init(&ctx, key, key_len);
+	HMAC_SHA256_update(&ctx, in, in_len);
 	out_len = MIN(out_len, SHA256_DIGEST_SIZE);
-	memcpy(out, DCRYPTO_HMAC_final(&ctx), out_len);
+	memcpy(out, HMAC_SHA256_hw_final(&ctx), out_len);
 	return out_len;
 }
 
@@ -382,7 +382,7 @@ static void hash_command_handler(void *cmd_body,
 	case HASH_ALG_SHA256:
 		alg = TPM_ALG_SHA256;
 		break;
-#ifdef SHA512_SUPPORT
+#ifdef CONFIG_UPTO_SHA512
 	case HASH_ALG_SHA384:
 		alg = TPM_ALG_SHA384;
 		break;

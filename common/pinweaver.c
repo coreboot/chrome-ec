@@ -159,17 +159,19 @@ static int create_merkle_tree(struct bits_per_level_t bits_per_level,
 	uint8_t temp_hash[PW_HASH_SIZE] = {};
 	uint8_t hx;
 	uint16_t kx;
-	LITE_SHA256_CTX ctx;
+	struct sha256_ctx ctx;
 
 	merkle_tree->bits_per_level = bits_per_level;
 	merkle_tree->height = height;
 
 	/* Initialize the root hash. */
 	for (hx = 0; hx < height.v; ++hx) {
-		DCRYPTO_SHA256_init(&ctx, 0);
+		SHA256_hw_init(&ctx);
 		for (kx = 0; kx < fan_out; ++kx)
-			HASH_update(&ctx, temp_hash, PW_HASH_SIZE);
-		memcpy(temp_hash, HASH_final(&ctx), PW_HASH_SIZE);
+			HASH_update((union hash_ctx *)&ctx, temp_hash,
+				    PW_HASH_SIZE);
+		memcpy(temp_hash, HASH_final((union hash_ctx *)&ctx),
+		       PW_HASH_SIZE);
 	}
 	memcpy(merkle_tree->root, temp_hash, PW_HASH_SIZE);
 
@@ -179,24 +181,25 @@ static int create_merkle_tree(struct bits_per_level_t bits_per_level,
 }
 
 /* Computes the HMAC for an encrypted leaf using the key in the merkle_tree. */
-static void compute_hmac(
-		const struct merkle_tree_t *merkle_tree,
-		const struct imported_leaf_data_t *imported_leaf_data,
-		uint8_t result[PW_HASH_SIZE])
+static void compute_hmac(const struct merkle_tree_t *merkle_tree,
+			 const struct imported_leaf_data_t *imported_leaf_data,
+			 uint8_t result[PW_HASH_SIZE])
 {
-	LITE_HMAC_CTX hmac;
+	struct hmac_sha256_ctx hmac;
 
-	DCRYPTO_HMAC_SHA256_init(&hmac, merkle_tree->hmac_key,
+	HMAC_SHA256_hw_init(&hmac, merkle_tree->hmac_key,
 				 sizeof(merkle_tree->hmac_key));
-	HASH_update(&hmac.hash, imported_leaf_data->head,
+	/* use HASH_update() vs. HMAC_update() due limits of dcrypto mock. */
+	HASH_update((union hash_ctx *)&hmac.hash, imported_leaf_data->head,
 		    sizeof(*imported_leaf_data->head));
-	HASH_update(&hmac.hash, imported_leaf_data->iv,
+	HASH_update((union hash_ctx *)&hmac.hash, imported_leaf_data->iv,
 		    sizeof(PW_WRAP_BLOCK_SIZE));
-	HASH_update(&hmac.hash, imported_leaf_data->pub,
+	HASH_update((union hash_ctx *)&hmac.hash, imported_leaf_data->pub,
 		    imported_leaf_data->head->pub_len);
-	HASH_update(&hmac.hash, imported_leaf_data->cipher_text,
+	HASH_update((union hash_ctx *)&hmac.hash,
+		    imported_leaf_data->cipher_text,
 		    imported_leaf_data->head->sec_len);
-	memcpy(result, DCRYPTO_HMAC_final(&hmac), PW_HASH_SIZE);
+	memcpy(result, HMAC_SHA256_hw_final(&hmac), PW_HASH_SIZE);
 }
 
 /* Computes the root hash for the specified path and child hash. */
@@ -1386,16 +1389,17 @@ void compute_hash(const uint8_t hashes[][PW_HASH_SIZE], uint16_t num_hashes,
 		  const uint8_t child_hash[PW_HASH_SIZE],
 		  uint8_t result[PW_HASH_SIZE])
 {
-	LITE_SHA256_CTX ctx;
+	struct sha256_ctx ctx;
 
-	DCRYPTO_SHA256_init(&ctx, 0);
+	SHA256_hw_init(&ctx);
 	if (location.v > 0)
-		HASH_update(&ctx, hashes[0], PW_HASH_SIZE * location.v);
-	HASH_update(&ctx, child_hash, PW_HASH_SIZE);
+		HASH_update((union hash_ctx *)&ctx, hashes[0],
+			    PW_HASH_SIZE * location.v);
+	HASH_update((union hash_ctx *)&ctx, child_hash, PW_HASH_SIZE);
 	if (location.v < num_hashes)
-		HASH_update(&ctx, hashes[location.v],
+		HASH_update((union hash_ctx *)&ctx, hashes[location.v],
 			    PW_HASH_SIZE * (num_hashes - location.v));
-	memcpy(result, HASH_final(&ctx), PW_HASH_SIZE);
+	memcpy(result, HASH_final((union hash_ctx *)&ctx), PW_HASH_SIZE);
 }
 
 /* If a request from older protocol comes, this method should make it

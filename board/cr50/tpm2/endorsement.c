@@ -30,8 +30,6 @@
 
 #include "dcrypto.h"
 
-#include <cryptoc/sha256.h>
-
 #include <endian.h>
 #include <string.h>
 
@@ -548,7 +546,7 @@ enum manufacturing_status tpm_endorse(void)
 	enum manufacturing_status result;
 	uint8_t eps[PRIMARY_SEED_SIZE];
 
-	LITE_HMAC_CTX hmac;
+	struct hmac_sha256_ctx hmac;
 
 	flash_cert_region_enable();
 
@@ -592,12 +590,12 @@ enum manufacturing_status tpm_endorse(void)
 		 *
 		 * This will fail if we are not running w/ expected keyladder.
 		 */
-		DCRYPTO_HMAC_SHA256_init(&hmac, eps, sizeof(eps));
-		HASH_update(&hmac.hash, "RSA", 4);
-		DCRYPTO_HMAC_SHA256_init(&hmac, DCRYPTO_HMAC_final(&hmac), 32);
-		HASH_update(&hmac.hash, p, RO_CERTS_REGION_SIZE - 32);
+		HMAC_SHA256_hw_init(&hmac, eps, sizeof(eps));
+		HMAC_SHA256_update(&hmac, "RSA", 4);
+		HMAC_SHA256_hw_init(&hmac, HMAC_SHA256_hw_final(&hmac), 32);
+		HMAC_SHA256_update(&hmac, p, RO_CERTS_REGION_SIZE - 32);
 		if (!DCRYPTO_equals(p + RO_CERTS_REGION_SIZE - 32,
-				   DCRYPTO_HMAC_final(&hmac), 32)) {
+				   HMAC_SHA256_hw_final(&hmac), 32)) {
 
 			CPRINTF("%s: bad cert region hmac;", __func__);
 #ifdef CR50_INCLUDE_FALLBACK_CERT

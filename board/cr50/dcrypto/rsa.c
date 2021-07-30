@@ -11,11 +11,6 @@
 
 #include <assert.h>
 
-#include "cryptoc/sha.h"
-#include "cryptoc/sha256.h"
-#include "cryptoc/sha384.h"
-#include "cryptoc/sha512.h"
-
 /* Extend the MSB throughout the word. */
 static uint32_t msb_extend(uint32_t a)
 {
@@ -34,11 +29,15 @@ static uint32_t select(uint32_t mask, uint32_t a, uint32_t b)
 	return (mask & a) | (~mask & b);
 }
 
+/* We use SHA256 context to store SHA1 context, so make sure it's ok. */
+BUILD_ASSERT(sizeof(struct sha256_ctx) >= sizeof(struct sha1_ctx));
+
 static void MGF1_xor(uint8_t *dst, uint32_t dst_len,
 		const uint8_t *seed, uint32_t seed_len,
 		enum hashing_mode hashing)
 {
-	HASH_CTX ctx;
+	union hash_ctx ctx;
+
 	struct {
 		uint8_t b3;
 		uint8_t b2;
@@ -46,21 +45,21 @@ static void MGF1_xor(uint8_t *dst, uint32_t dst_len,
 		uint8_t b0;
 	} cnt;
 	const uint8_t *digest;
-	const size_t hash_size = (hashing == HASH_SHA1) ? SHA_DIGEST_SIZE
-		: SHA256_DIGEST_SIZE;
+	const size_t hash_size = (hashing == HASH_SHA1) ? SHA1_DIGEST_SIZE :
+							SHA256_DIGEST_SIZE;
 
 	cnt.b0 = cnt.b1 = cnt.b2 = cnt.b3 = 0;
 	while (dst_len) {
 		int i;
 
 		if (hashing == HASH_SHA1)
-			DCRYPTO_SHA1_init(&ctx, 0);
+			SHA1_hw_init(&ctx.sha1);
 		else
-			DCRYPTO_SHA256_init(&ctx, 0);
+			SHA256_hw_init(&ctx.sha256);
 
 		HASH_update(&ctx, seed, seed_len);
-		HASH_update(&ctx, (uint8_t *) &cnt, sizeof(cnt));
-		digest = HASH_final(&ctx);
+		HASH_update(&ctx, (uint8_t *)&cnt, sizeof(cnt));
+		digest = HASH_final(&ctx)->b8;
 		for (i = 0; i < dst_len && i < hash_size; ++i)
 			*dst++ ^= *digest++;
 		dst_len -= i;
@@ -93,7 +92,7 @@ static int oaep_pad(uint8_t *output, uint32_t output_len,
 	const uint32_t max_msg_len = output_len - 2 - 2 * hash_size;
 	const uint32_t ps_len = max_msg_len - msg_len;
 	uint8_t *const one = PS + ps_len;
-	struct HASH_CTX ctx;
+	union hash_ctx ctx;
 
 	if (output_len < 2 + 2 * hash_size)
 		return 0;       /* Key size too small for chosen hash. */
@@ -111,12 +110,12 @@ static int oaep_pad(uint8_t *output, uint32_t output_len,
 	}
 
 	if (hashing == HASH_SHA1)
-		DCRYPTO_SHA1_init(&ctx, 0);
+		SHA1_hw_init(&ctx.sha1);
 	else
-		DCRYPTO_SHA256_init(&ctx, 0);
+		SHA256_hw_init(&ctx.sha256);
 
 	HASH_update(&ctx, label, label ? strlen(label) + 1 : 0);
-	memcpy(phash, HASH_final(&ctx), hash_size);
+	memcpy(phash, HASH_final(&ctx)->b8, hash_size);
 	*one = 1;
 	memcpy(one + 1, msg, msg_len);
 	MGF1_xor(phash, hash_size + 1 + max_msg_len,
@@ -137,7 +136,7 @@ static int check_oaep_pad(uint8_t *out, uint32_t *out_len,
 	uint8_t *phash = seed + hash_size;
 	uint8_t *PS = phash + hash_size;
 	const uint32_t max_msg_len = padded_len - 2 - 2 * hash_size;
-	struct HASH_CTX ctx;
+	union hash_ctx ctx;
 	size_t one_index = 0;
 	uint32_t looking_for_one_byte = ~0;
 	int bad;
@@ -152,12 +151,12 @@ static int check_oaep_pad(uint8_t *out, uint32_t *out_len,
 	MGF1_xor(phash, hash_size + 1 + max_msg_len, seed, hash_size, hashing);
 
 	if (hashing == HASH_SHA1)
-		DCRYPTO_SHA1_init(&ctx, 0);
+		SHA1_hw_init(&ctx.sha1);
 	else
-		DCRYPTO_SHA256_init(&ctx, 0);
+		SHA256_hw_init(&ctx.sha256);
 	HASH_update(&ctx, label, label ? strlen(label) + 1 : 0);
 
-	bad = !DCRYPTO_equals(phash, HASH_final(&ctx), hash_size);
+	bad = !DCRYPTO_equals(phash, HASH_final(&ctx)->b8, hash_size);
 	bad |= padded[0];
 
 	for (i = PS - padded; i <  padded_len; i++) {
@@ -283,7 +282,7 @@ static int pkcs1_get_der(enum hashing_mode hashing, const uint8_t **der,
 	case HASH_SHA1:
 		*der = &SHA1_DER[0];
 		*der_size = sizeof(SHA1_DER);
-		*hash_size = SHA_DIGEST_SIZE;
+		*hash_size = SHA1_DIGEST_SIZE;
 		break;
 	case HASH_SHA256:
 		*der = &SHA256_DER[0];
@@ -382,12 +381,12 @@ static int pkcs1_pss_pad(uint8_t *padded, uint32_t padded_len,
 			const uint8_t *in, uint32_t in_len,
 			enum hashing_mode hashing)
 {
-	const uint32_t hash_size = (hashing == HASH_SHA1) ? SHA_DIGEST_SIZE
+	const uint32_t hash_size = (hashing == HASH_SHA1) ? SHA1_DIGEST_SIZE
 		: SHA256_DIGEST_SIZE;
 	const uint32_t salt_len = MIN(padded_len - hash_size - 2, hash_size);
 	uint32_t db_len;
 	uint32_t ps_len;
-	struct HASH_CTX ctx;
+	union hash_ctx ctx;
 
 	if (in_len != hash_size)
 		return 0;
@@ -396,9 +395,9 @@ static int pkcs1_pss_pad(uint8_t *padded, uint32_t padded_len,
 	db_len = padded_len - hash_size - 1;
 
 	if (hashing == HASH_SHA1)
-		DCRYPTO_SHA1_init(&ctx, 0);
+		SHA1_hw_init(&ctx.sha1);
 	else
-		DCRYPTO_SHA256_init(&ctx, 0);
+		SHA256_hw_init(&ctx.sha256);
 
 	/* Pilfer bits of output for temporary use. */
 	memset(padded, 0, 8);
@@ -409,7 +408,7 @@ static int pkcs1_pss_pad(uint8_t *padded, uint32_t padded_len,
 	HASH_update(&ctx, padded, salt_len);
 
 	/* Output hash. */
-	memcpy(padded + db_len, HASH_final(&ctx), hash_size);
+	memcpy(padded + db_len, HASH_final(&ctx)->b8, hash_size);
 
 	/* Prepare DB. */
 	ps_len = db_len - salt_len - 1;
@@ -430,13 +429,13 @@ static int check_pkcs1_pss_pad(const uint8_t *in, uint32_t in_len,
 			uint8_t *padded, uint32_t padded_len,
 			enum hashing_mode hashing)
 {
-	const uint32_t hash_size = (hashing == HASH_SHA1) ? SHA_DIGEST_SIZE
+	const uint32_t hash_size = (hashing == HASH_SHA1) ? SHA1_DIGEST_SIZE
 		: SHA256_DIGEST_SIZE;
 	const uint8_t zeros[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 	uint32_t db_len;
 	uint32_t max_ps_len;
 	uint32_t salt_len;
-	HASH_CTX ctx;
+	union hash_ctx ctx;
 	int bad = 0;
 	int i;
 
@@ -468,9 +467,9 @@ static int check_pkcs1_pss_pad(const uint8_t *in, uint32_t in_len,
 	salt_len = max_ps_len - i;
 
 	if (hashing == HASH_SHA1)
-		DCRYPTO_SHA1_init(&ctx, 0);
+		SHA1_hw_init(&ctx.sha1);
 	else
-		DCRYPTO_SHA256_init(&ctx, 0);
+		SHA256_hw_init(&ctx.sha256);
 	HASH_update(&ctx, zeros, sizeof(zeros));
 	HASH_update(&ctx, in, in_len);
 	HASH_update(&ctx, padded + db_len - salt_len, salt_len);

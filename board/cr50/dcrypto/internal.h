@@ -2,7 +2,6 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #ifndef __EC_CHIP_G_DCRYPTO_INTERNAL_H
 #define __EC_CHIP_G_DCRYPTO_INTERNAL_H
 
@@ -13,10 +12,7 @@
 #include "util.h"
 
 #include "cryptoc/p256.h"
-#include "cryptoc/sha.h"
-#include "cryptoc/sha256.h"
-#include "cryptoc/sha384.h"
-#include "cryptoc/sha512.h"
+#include "hmacsha2.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,10 +29,14 @@ extern "C" {
 #define SHA_DIGEST_WORDS   (SHA_DIGEST_SIZE / sizeof(uint32_t))
 #define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
 
-#ifdef SHA512_SUPPORT
+#ifdef CONFIG_UPTO_SHA512
 #define SHA_DIGEST_MAX_BYTES SHA512_DIGEST_SIZE
 #else
 #define SHA_DIGEST_MAX_BYTES SHA256_DIGEST_SIZE
+#endif
+
+#ifndef CHAR_BIT
+#define CHAR_BIT 8
 #endif
 
 enum sha_mode {
@@ -56,12 +56,6 @@ struct access_helper {
 int dcrypto_grab_sha_hw(void);
 void dcrypto_release_sha_hw(void);
 #endif
-void dcrypto_sha_hash(enum sha_mode mode, const uint8_t *data,
-		uint32_t n, uint8_t *digest);
-void dcrypto_sha_init(enum sha_mode mode);
-void dcrypto_sha_update(struct HASH_CTX *unused,
-			const void *data, uint32_t n);
-void dcrypto_sha_wait(enum sha_mode mode, uint32_t *digest);
 
 /*
  * BIGNUM.
@@ -205,6 +199,44 @@ uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words);
  * useful for scrubbing security sensitive buffers.
  */
 void *always_memset(void *s, int c, size_t n);
+
+#ifndef __alias
+#define __alias(func) __attribute__((alias(#func)))
+#endif
+
+/* rotate 32-bit value right */
+static inline uint32_t ror(uint32_t value, int bits)
+{
+	/* return __builtin_rotateright32(value, bits); */
+	return (value >> bits) | (value << (32 - bits));
+}
+
+/* rotate 64-bit value right */
+static inline uint64_t ror64(uint64_t value, int bits)
+{
+	/* return __builtin_rotateright64(value, bits); */
+	return (value >> bits) | (value << (64 - bits));
+}
+
+/* rotate 32-bit value left */
+static inline uint32_t rol(uint32_t value, int bits)
+{
+	/* return __builtin_rotateleft32(value, bits); */
+	return (value << bits) | (value >> (32 - bits));
+}
+
+/* rotate 64-bit value left */
+static inline uint64_t rol64(uint64_t value, int bits)
+{
+	/* return __builtin_rotateleft64(value, bits); */
+	return (value << bits) | (value >> (64 - bits));
+}
+
+/* stack based allocation */
+#ifndef alloca
+#define alloca __builtin_alloca
+#endif
+
 
 /*
  * Key ladder.

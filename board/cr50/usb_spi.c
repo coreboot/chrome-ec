@@ -20,6 +20,7 @@
 #include "tpm_registers.h"
 #include "tpm_vendor_cmds.h"
 #include "usb_spi.h"
+#include "usb_spi_board.h"
 #include "watchdog.h"
 
 #define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
@@ -670,19 +671,20 @@ static enum vendor_cmd_rc spi_hash_dump(uint8_t *dest, uint32_t offset,
 	return VENDOR_RC_SUCCESS;
 }
 
-int usb_spi_sha256_start(HASH_CTX *ctx)
+int usb_spi_sha256_start(struct sha256_ctx *ctx)
 {
 	if (get_spi_bus_user() != SPI_BUS_USER_HASH) {
 		CPRINTS("%s: not enabled", __func__);
 		return EC_ERROR_BUSY;
 	}
 
-	DCRYPTO_SHA256_init(ctx, 0);
+	SHA256_hw_init(ctx);
 
 	return EC_SUCCESS;
 }
 
-int usb_spi_sha256_update(HASH_CTX *ctx, uint32_t offset, uint32_t size)
+int usb_spi_sha256_update(struct sha256_ctx *ctx, uint32_t offset,
+			  uint32_t size)
 {
 	uint8_t data[SPI_HASH_CHUNK_SIZE];
 
@@ -695,7 +697,7 @@ int usb_spi_sha256_update(HASH_CTX *ctx, uint32_t offset, uint32_t size)
 			return VENDOR_RC_READ_FLASH_FAIL;
 		}
 		/* Update hash */
-		HASH_update(ctx, data, this_chunk);
+		SHA256_update(ctx, data, this_chunk);
 
 		/* Kick the watchdog every 128 chunks. */
 		if (((size / SPI_HASH_CHUNK_SIZE) % 128) == 127) {
@@ -709,12 +711,13 @@ int usb_spi_sha256_update(HASH_CTX *ctx, uint32_t offset, uint32_t size)
 	return EC_SUCCESS;
 }
 
-void usb_spi_sha256_final(HASH_CTX *ctx, void *digest, size_t digest_size)
+void usb_spi_sha256_final(struct sha256_ctx *ctx, void *digest,
+			  size_t digest_size)
 {
 	size_t copy_size;
 
 	copy_size = MIN(digest_size, SHA256_DIGEST_SIZE);
-	memcpy(digest, HASH_final(ctx), copy_size);
+	memcpy(digest, SHA256_final(ctx), copy_size);
 
 	if (copy_size < digest_size)
 		memset((uint8_t *)digest + copy_size, 0,
@@ -724,7 +727,7 @@ void usb_spi_sha256_final(HASH_CTX *ctx, void *digest, size_t digest_size)
 static enum vendor_cmd_rc spi_hash_sha256(uint8_t *dest, uint32_t offset,
 					  uint32_t size)
 {
-	HASH_CTX sha;
+	struct sha256_ctx sha;
 
 	CPRINTS("%s: 0x%x 0x%x", __func__, offset, size);
 	if (size > MAX_SPI_HASH_SIZE)

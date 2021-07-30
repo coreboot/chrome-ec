@@ -15,9 +15,16 @@ chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 endif
 
 ifeq ($(CONFIG_DCRYPTO),y)
-CPPFLAGS += -I$(abspath ./chip/g)
-dirs-y += chip/g/dcrypto
+CPPFLAGS += -I$(abspath ./board/cr50)
+dirs-y += board/cr50/dcrypto
+LDFLAGS_EXTRA += -lcrypto
 endif
+
+ifeq ($(CONFIG_DCRYPTO_MOCK),y)
+CPPFLAGS += -I$(abspath ./board/cr50)
+dirs-y += board/cr50/dcrypto
+endif
+
 dirs-y += chip/host/dcrypto
 
 chip-$(CONFIG_DCRYPTO)+= dcrypto/aes.o
@@ -26,4 +33,11 @@ chip-$(CONFIG_DCRYPTO)+= dcrypto/app_key.o
 chip-$(CONFIG_DCRYPTO)+= dcrypto/sha256.o
 
 # Object files that can be shared with the Cr50 dcrypto implementation
-chip-$(CONFIG_DCRYPTO)+= ../g/dcrypto/hmac.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hmac_sw.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/sha1.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/sha256.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hmac_drbg.o
+
+# We still want raw SHA & HMAC implementations for mocked dcrypto
+chip-$(CONFIG_DCRYPTO_MOCK)+= ../../board/cr50/dcrypto/sha256.o
+chip-$(CONFIG_DCRYPTO_MOCK)+= ../../board/cr50/dcrypto/hmac_sw.o

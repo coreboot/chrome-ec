@@ -8,10 +8,6 @@
 #include "console.h"
 #include "cryptoc/p256.h"
 
-#ifndef TEST_BUILD
-#include "cryptoc/sha256.h"
-#endif
-
 #include "dcrypto.h"
 #include "extension.h"
 #include "system.h"
@@ -444,7 +440,7 @@ static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code, void *buf,
 
 	int verify_ret;
 
-	struct HASH_CTX h_ctx;
+	struct sha256_ctx h_ctx;
 	struct drbg_ctx dr_ctx;
 
 	/* Data hash, and corresponding signature. */
@@ -471,9 +467,9 @@ static enum vendor_cmd_rc u2f_attest(enum vendor_cmd_cc code, void *buf,
 		return verify_ret;
 
 	/* Message signature */
-	DCRYPTO_SHA256_init(&h_ctx, 0);
-	HASH_update(&h_ctx, req->data, u2f_attest_format_size(req->format));
-	p256_from_bin(HASH_final(&h_ctx), &h);
+	SHA256_hw_init(&h_ctx);
+	SHA256_update(&h_ctx, req->data, u2f_attest_format_size(req->format));
+	p256_from_bin(SHA256_final(&h_ctx)->b8, &h);
 
 	/* Derive G2F Attestation Key */
 	if (g2f_individual_keypair(&d, &pk_x, &pk_y)) {
@@ -509,7 +505,7 @@ int u2f_origin_user_keyhandle(const uint8_t *origin, const uint8_t *user,
 			      const uint8_t *origin_seed,
 			      struct u2f_key_handle *key_handle)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 	struct u2f_state *state = get_state();
 
 	if (!state)
@@ -517,12 +513,13 @@ int u2f_origin_user_keyhandle(const uint8_t *origin, const uint8_t *user,
 
 	memcpy(key_handle->origin_seed, origin_seed, P256_NBYTES);
 
-	DCRYPTO_HMAC_SHA256_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
-	HASH_update(&ctx.hash, origin, P256_NBYTES);
-	HASH_update(&ctx.hash, user, P256_NBYTES);
-	HASH_update(&ctx.hash, origin_seed, P256_NBYTES);
+	HMAC_SHA256_hw_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
+	HMAC_SHA256_update(&ctx, origin, P256_NBYTES);
+	HMAC_SHA256_update(&ctx, user, P256_NBYTES);
+	HMAC_SHA256_update(&ctx, origin_seed, P256_NBYTES);
 
-	memcpy(key_handle->hmac, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
+	memcpy(key_handle->hmac, HMAC_SHA256_hw_final(&ctx),
+	       SHA256_DIGEST_SIZE);
 
 	return EC_SUCCESS;
 }
@@ -532,7 +529,7 @@ int u2f_origin_user_versioned_keyhandle(
 	uint8_t version,
 	struct u2f_versioned_key_handle_header *key_handle_header)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 	struct u2f_state *state = get_state();
 
 	if (!state)
@@ -541,13 +538,13 @@ int u2f_origin_user_versioned_keyhandle(
 	key_handle_header->version = version;
 	memcpy(key_handle_header->origin_seed, origin_seed, P256_NBYTES);
 
-	DCRYPTO_HMAC_SHA256_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
-	HASH_update(&ctx.hash, origin, P256_NBYTES);
-	HASH_update(&ctx.hash, user, P256_NBYTES);
-	HASH_update(&ctx.hash, origin_seed, P256_NBYTES);
-	HASH_update(&ctx.hash, &version, sizeof(key_handle_header->version));
+	HMAC_SHA256_hw_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
+	HMAC_SHA256_update(&ctx, origin, P256_NBYTES);
+	HMAC_SHA256_update(&ctx, user, P256_NBYTES);
+	HMAC_SHA256_update(&ctx, origin_seed, P256_NBYTES);
+	HMAC_SHA256_update(&ctx, &version, sizeof(key_handle_header->version));
 
-	memcpy(key_handle_header->kh_hmac, DCRYPTO_HMAC_final(&ctx),
+	memcpy(key_handle_header->kh_hmac, HMAC_SHA256_hw_final(&ctx),
 	       SHA256_DIGEST_SIZE);
 
 	return EC_SUCCESS;
@@ -557,19 +554,20 @@ int u2f_authorization_hmac(const uint8_t *authorization_salt,
 			   const struct u2f_versioned_key_handle_header *header,
 			   const uint8_t *auth_time_secret_hash, uint8_t *hmac)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 	struct u2f_state *state = get_state();
 
 	if (!state)
 		return EC_ERROR_UNKNOWN;
 
-	DCRYPTO_HMAC_SHA256_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
-	HASH_update(&ctx.hash, authorization_salt, U2F_AUTHORIZATION_SALT_SIZE);
-	HASH_update(&ctx.hash, (uint8_t *)header,
-		    sizeof(struct u2f_versioned_key_handle_header));
-	HASH_update(&ctx.hash, auth_time_secret_hash, SHA256_DIGEST_SIZE);
+	HMAC_SHA256_hw_init(&ctx, state->salt_kek, SHA256_DIGEST_SIZE);
+	HMAC_SHA256_update(&ctx, authorization_salt,
+			   U2F_AUTHORIZATION_SALT_SIZE);
+	HMAC_SHA256_update(&ctx, (uint8_t *)header,
+			   sizeof(struct u2f_versioned_key_handle_header));
+	HMAC_SHA256_update(&ctx, auth_time_secret_hash, SHA256_DIGEST_SIZE);
 
-	memcpy(hmac, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
+	memcpy(hmac, HMAC_SHA256_hw_final(&ctx), SHA256_DIGEST_SIZE);
 
 	return EC_SUCCESS;
 }

@@ -70,16 +70,16 @@ ifneq ($(CRYPTO_TEST),)
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/gcm.o
 endif
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hkdf.o
-fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_sw.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_drbg.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/key_ladder.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/p256.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/p256_ec.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/rsa.o
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha_hw.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha1.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha256.o
 ifeq ($(CONFIG_UPTO_SHA512),y)
-fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha384.o
 ifeq ($(CONFIG_DCRYPTO_SHA512),y)
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_sha512.o
 else
@@ -145,16 +145,13 @@ CPPFLAGS += -I$(abspath .)
 CPPFLAGS += -I$(abspath $(BDIR))
 CPPFLAGS += -I$(abspath ./fuzz)
 CPPFLAGS += -I$(abspath ./test)
-ifeq ($(CONFIG_UPTO_SHA512),y)
-CPPFLAGS += -DSHA512_SUPPORT
-endif
 
 # Make sure the context of the software sha512 implementation fits. If it ever
 # increases, a compile time assert will fire in tpm2/hash.c.
 ifeq ($(CONFIG_UPTO_SHA512),y)
-CFLAGS += -DUSER_MIN_HASH_STATE_SIZE=208
+CFLAGS += -DUSER_MIN_HASH_STATE_SIZE=200
 else
-CFLAGS += -DUSER_MIN_HASH_STATE_SIZE=112
+CFLAGS += -DUSER_MIN_HASH_STATE_SIZE=104
 endif
 # Configure TPM2 headers accordingly.
 CFLAGS += -DEMBEDDED_MODE=1

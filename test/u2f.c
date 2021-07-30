@@ -42,40 +42,6 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 	return 1;
 }
 
-void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx,
-			    const p256_int *key,
-			    const p256_int *message)
-{
-	memset(ctx, 0, sizeof(struct drbg_ctx));
-}
-
-void HASH_update(struct HASH_CTX *ctx, const void *data, size_t len)
-{
-	if (ctx)
-		SHA256_update(ctx, data, len);
-}
-
-uint8_t *HASH_final(struct HASH_CTX *ctx)
-{
-	return SHA256_final(ctx);
-}
-
-void DCRYPTO_SHA256_init(LITE_SHA256_CTX *ctx, uint32_t sw_required)
-{
-	SHA256_init(ctx);
-}
-
-void DCRYPTO_HMAC_SHA256_init(LITE_HMAC_CTX *ctx, const void *key,
-			      unsigned int len)
-{
-	SHA256_init(&ctx->hash);
-}
-
-const uint8_t *DCRYPTO_HMAC_final(LITE_HMAC_CTX *ctx)
-{
-	return SHA256_final(&ctx->hash);
-}
-
 /******************************************************************************/
 /* Mock implementations of U2F functionality.
  */

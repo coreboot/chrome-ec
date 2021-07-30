@@ -8,7 +8,7 @@
 /* USB SPI driver for Chrome EC */
 
 #include "compile_time_macros.h"
-#include "cryptoc/sha256.h"
+#include "dcrypto.h"
 #include "hooks.h"
 #include "queue.h"
 #include "queue_policies.h"
@@ -279,9 +279,5 @@ static inline bool usb_spi_shortcut_active(void) { return false; }
 /* Functions to use to fast track AP RO flash verification. */
 void enable_ap_spi_hash_shortcut(void);
 void disable_ap_spi_hash_shortcut(void);
-
-int usb_spi_sha256_start(HASH_CTX *ctx);
-int usb_spi_sha256_update(HASH_CTX *ctx, uint32_t offset, uint32_t size);
-void usb_spi_sha256_final(HASH_CTX *ctx, void *digest, size_t digest_size);
 
 #endif /* __CROS_EC_USB_SPI_H */

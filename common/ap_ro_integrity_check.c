@@ -12,11 +12,11 @@
 #include "extension.h"
 #include "flash.h"
 #include "flash_info.h"
-#include "cryptoc/sha256.h"
 #include "stddef.h"
 #include "stdint.h"
 #include "timer.h"
 #include "usb_spi.h"
+#include "usb_spi_board.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
@@ -269,7 +269,7 @@ static enum ap_ro_check_vc_errors ap_ro_check_unsupported(int add_flash_event)
 int validate_ap_ro(void)
 {
 	uint32_t i;
-	HASH_CTX ctx;
+	struct sha256_ctx ctx;
 	uint8_t digest[SHA256_DIGEST_SIZE];
 	int rv;
 

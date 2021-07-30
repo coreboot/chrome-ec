@@ -4,192 +4,205 @@
  */
 
 #include "dcrypto.h"
+#include "endian.h"
 #include "internal.h"
 #include "registers.h"
 #include "util.h"
 
-#include "cryptoc/sha256.h"
-
-static void dcrypto_sha256_init(LITE_SHA256_CTX *ctx);
-static const uint8_t *dcrypto_sha256_final(LITE_SHA256_CTX *ctx);
-
-#ifdef SECTION_IS_RO
-/* RO is single threaded. */
-#define mutex_lock(x)
-#define mutex_unlock(x)
-static inline int dcrypto_grab_sha_hw(void)
+static void SHA256_transform(struct sha256_ctx *const ctx)
 {
-	return 1;
-}
-static inline void dcrypto_release_sha_hw(void)
-{
-}
-#else
-#include "task.h"
-static struct mutex hw_busy_mutex;
+	static const uint32_t K[64] = {
+		0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b,
+		0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
+		0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7,
+		0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+		0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152,
+		0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+		0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+		0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+		0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819,
+		0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08,
+		0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f,
+		0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+		0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+	};
+	uint32_t W[64];
+	uint32_t A, B, C, D, E, F, G, H;
+	size_t t;
 
-static int hw_busy;
+	for (t = 0; t < 16; ++t)
+		W[t] = be32toh(ctx->b32[t]);
+	for (; t < 64; t++) {
+		uint32_t s0 = ror(W[t - 15], 7) ^ ror(W[t - 15], 18) ^
+			      (W[t - 15] >> 3);
+		uint32_t s1 = ror(W[t - 2], 17) ^ ror(W[t - 2], 19) ^
+			      (W[t - 2] >> 10);
 
-int dcrypto_grab_sha_hw(void)
-{
-	int rv = 0;
-
-	mutex_lock(&hw_busy_mutex);
-	if (!hw_busy) {
-		rv = 1;
-		hw_busy = 1;
+		W[t] = W[t - 16] + s0 + W[t - 7] + s1;
 	}
-	mutex_unlock(&hw_busy_mutex);
+	A = ctx->state[0];
+	B = ctx->state[1];
+	C = ctx->state[2];
+	D = ctx->state[3];
+	E = ctx->state[4];
+	F = ctx->state[5];
+	G = ctx->state[6];
+	H = ctx->state[7];
+	for (t = 0; t < 64; t++) {
+		uint32_t s0 = ror(A, 2) ^ ror(A, 13) ^ ror(A, 22);
+		uint32_t maj = (A & B) ^ (A & C) ^ (B & C);
+		uint32_t t2 = s0 + maj;
+		uint32_t s1 = ror(E, 6) ^ ror(E, 11) ^ ror(E, 25);
+		uint32_t ch = (E & F) ^ ((~E) & G);
+		uint32_t t1 = H + s1 + ch + K[t] + W[t];
 
-	return rv;
-}
-
-void dcrypto_release_sha_hw(void)
-{
-	mutex_lock(&hw_busy_mutex);
-	hw_busy = 0;
-	mutex_unlock(&hw_busy_mutex);
-}
-
-#endif  /* ! SECTION_IS_RO */
-
-void dcrypto_sha_wait(enum sha_mode mode, uint32_t *digest)
-{
-	int i;
-	const int digest_len = (mode == SHA1_MODE) ?
-		SHA_DIGEST_SIZE :
-		SHA256_DIGEST_SIZE;
-
-	/* Stop LIVESTREAM mode. */
-	GREG32(KEYMGR, SHA_TRIG) = GC_KEYMGR_SHA_TRIG_TRIG_STOP_MASK;
-
-	/* Wait for SHA DONE interrupt. */
-	while (!GREG32(KEYMGR, SHA_ITOP))
-		;
-
-	/* Read out final digest. */
-	for (i = 0; i < digest_len / 4; ++i)
-		*digest++ = GR_KEYMGR_SHA_HASH(i);
-	dcrypto_release_sha_hw();
-}
-
-/* Hardware SHA implementation. */
-static const HASH_VTAB HW_SHA256_VTAB = {
-	dcrypto_sha256_init,
-	dcrypto_sha_update,
-	dcrypto_sha256_final,
-	DCRYPTO_SHA256_hash,
-	SHA256_DIGEST_SIZE
-};
-
-void dcrypto_sha_hash(enum sha_mode mode, const uint8_t *data, uint32_t n,
-		uint8_t *digest)
-{
-	dcrypto_sha_init(mode);
-	dcrypto_sha_update(NULL, data, n);
-	dcrypto_sha_wait(mode, (uint32_t *) digest);
-}
-
-void dcrypto_sha_update(struct HASH_CTX *unused,
-			const void *data, uint32_t n)
-{
-	const uint8_t *bp = (const uint8_t *) data;
-	const uint32_t *wp;
-
-	/* Feed unaligned start bytes. */
-	while (n != 0 && ((uint32_t)bp & 3)) {
-		GREG8(KEYMGR, SHA_INPUT_FIFO) = *bp++;
-		n -= 1;
+		H = G;
+		G = F;
+		F = E;
+		E = D + t1;
+		D = C;
+		C = B;
+		B = A;
+		A = t1 + t2;
 	}
+	ctx->state[0] += A;
+	ctx->state[1] += B;
+	ctx->state[2] += C;
+	ctx->state[3] += D;
+	ctx->state[4] += E;
+	ctx->state[5] += F;
+	ctx->state[6] += G;
+	ctx->state[7] += H;
+}
+/**
+ * Define aliases taking union type as parameter. This is safe
+ * as union type has header in same place and is not less than original type.
+ * Equal to:
+ * void SHA256_init_as_hash(HASH_CTX *const ctx) {SHA256_init(&ctx.sha256);}
+ * but save some space for embedded uses.
+ */
+BUILD_ASSERT(sizeof(union hash_ctx) >= sizeof(struct sha256_ctx));
+BUILD_ASSERT(sizeof(union hash_ctx) >= sizeof(struct sha224_ctx));
 
-	/* Feed groups of aligned words. */
-	wp = (uint32_t *)bp;
-	while (n >= 8*4) {
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		n -= 8*4;
+static void SHA256_init_as_hash(union hash_ctx *const ctx)
+	__alias(SHA256_sw_init);
+static void SHA256_update_as_hash(union hash_ctx *const ctx, const void *data,
+				  size_t len) __alias(SHA256_sw_update);
+static const union sha_digests *SHA256_final_as_hash(union hash_ctx *const ctx)
+	__alias(SHA256_sw_final);
+static void SHA224_init_as_hash(union hash_ctx *const ctx)
+	__alias(SHA224_sw_init);
+
+void SHA256_sw_init(struct sha256_ctx *const ctx)
+{
+	static const struct hash_vtable sha256_vtable = {
+		SHA256_init_as_hash,	  SHA256_update_as_hash,
+		SHA256_final_as_hash,	  HMAC_sw_final,
+		SHA256_DIGEST_SIZE,	  SHA256_BLOCK_SIZE,
+		sizeof(struct sha256_ctx)
+	};
+	static const uint32_t sha256_init[SHA256_DIGEST_WORDS] = {
+		0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+		0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+	};
+
+	ctx->f = &sha256_vtable;
+	memcpy(ctx->state, sha256_init, sizeof(ctx->state));
+	ctx->count = 0;
+}
+
+/* SHA2-224 and SHA2-256 use same internal context. */
+BUILD_ASSERT(sizeof(struct sha224_ctx) == sizeof(struct sha256_ctx));
+void SHA224_sw_update(struct sha224_ctx *ctx, const void *data, size_t len)
+	__alias(SHA256_sw_update);
+
+void SHA256_sw_update(struct sha256_ctx *ctx, const void *data, size_t len)
+{
+	size_t i = ctx->count & (SHA256_BLOCK_SIZE - 1);
+	const uint8_t *p = (const uint8_t *)data;
+
+	ctx->count += len;
+	while (len--) {
+		ctx->b8[i++] = *p++;
+		if (i == SHA256_BLOCK_SIZE) {
+			SHA256_transform(ctx);
+			i = 0;
+		}
 	}
-	/* Feed individual aligned words. */
-	while (n >= 4) {
-		GREG32(KEYMGR, SHA_INPUT_FIFO) = *wp++;
-		n -= 4;
+}
+const struct sha224_digest *SHA224_sw_final(struct sha224_ctx *const ctx)
+	__alias(SHA256_sw_final);
+const struct sha256_digest *SHA256_sw_final(struct sha256_ctx *const ctx)
+{
+	uint64_t cnt = (uint64_t)ctx->count * CHAR_BIT;
+	size_t i = ctx->count & (SHA256_BLOCK_SIZE - 1);
+
+	/**
+	 * append the bit '1' to the message which would be 0x80 if message
+	 * length is a multiple of 8 bits.
+	 */
+	ctx->b8[i++] = 0x80;
+	/**
+	 * Append 0 ≤ k < 512 bits '0', such that the resulting message length
+	 * in bits is congruent to −64 ≡ 448 (mod 512).
+	 */
+	if (i > (SHA256_BLOCK_SIZE - sizeof(cnt))) {
+		/* Current block won't fit length, so move to next. */
+		while (i < SHA256_BLOCK_SIZE)
+			ctx->b8[i++] = 0;
+		SHA256_transform(ctx);
+		i = 0;
 	}
+	/* Pad rest of zeros. */
+	while (i < (SHA256_BLOCK_SIZE - sizeof(cnt)))
+		ctx->b8[i++] = 0;
 
-	/* Feed remaing bytes. */
-	bp = (uint8_t *) wp;
-	while (n != 0) {
-		GREG8(KEYMGR, SHA_INPUT_FIFO) = *bp++;
-		n -= 1;
-	}
+	/* Place big-endian 64-bit bit counter at the end of block. */
+	ctx->b64[SHA256_BLOCK_DWORDS - 1] = htobe64(cnt);
+	SHA256_transform(ctx);
+	for (i = 0; i < 8; i++)
+		ctx->b32[i] = htobe32(ctx->state[i]);
+	return &ctx->digest;
 }
 
-void dcrypto_sha_init(enum sha_mode mode)
+void SHA224_sw_init(struct sha224_ctx *const ctx)
 {
-	int val;
+	/* SHA2-224 differs from SHA2-256 only in initialization. */
+	static const struct hash_vtable sha224_vtable = {
+		SHA224_init_as_hash,	  SHA256_update_as_hash,
+		SHA256_final_as_hash,	  HMAC_sw_final,
+		SHA224_DIGEST_SIZE,	  SHA224_BLOCK_SIZE,
+		sizeof(struct sha224_ctx)
+	};
+	static const uint32_t sha224_init[SHA256_DIGEST_WORDS] = {
+		0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939,
+		0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4
+	};
 
-	/* Stop LIVESTREAM mode, in case final() was not called. */
-	GREG32(KEYMGR, SHA_TRIG) = GC_KEYMGR_SHA_TRIG_TRIG_STOP_MASK;
-	/* Clear interrupt status. */
-	GREG32(KEYMGR, SHA_ITOP) = 0;
-
-	/* Enable streaming mode. */
-	val = GC_KEYMGR_SHA_CFG_EN_LIVESTREAM_MASK;
-	/* Enable SHA DONE interrupt. */
-	val |= GC_KEYMGR_SHA_CFG_EN_INT_EN_DONE_MASK;
-	/* Select SHA mode. */
-	if (mode == SHA1_MODE)
-		val |= GC_KEYMGR_SHA_CFG_EN_SHA1_MASK;
-	GREG32(KEYMGR, SHA_CFG_EN) = val;
-
-	/* Turn off random nops (which are enabled by default). */
-	GWRITE_FIELD(KEYMGR, SHA_RAND_STALL_CTL, STALL_EN, 0);
-	/* Configure random nop percentage at 12%. */
-	GWRITE_FIELD(KEYMGR, SHA_RAND_STALL_CTL, FREQ, 2);
-	/* Now turn on random nops. */
-	GWRITE_FIELD(KEYMGR, SHA_RAND_STALL_CTL, STALL_EN, 1);
-
-	/* Start SHA engine. */
-	GREG32(KEYMGR, SHA_TRIG) = GC_KEYMGR_SHA_TRIG_TRIG_GO_MASK;
+	ctx->f = &sha224_vtable;
+	memcpy(ctx->state, sha224_init, sizeof(ctx->state));
+	ctx->count = 0;
 }
 
-static void dcrypto_sha256_init(LITE_SHA256_CTX *ctx)
+/* One shot hash computation. */
+const struct sha224_digest *SHA224_sw_hash(const void *data, size_t len,
+					   struct sha224_digest *digest)
 {
-	ctx->f = &HW_SHA256_VTAB;
-	dcrypto_sha_init(SHA256_MODE);
-}
+	struct sha224_ctx ctx;
 
-/* Requires dcrypto_grab_sha_hw() to be called first. */
-void DCRYPTO_SHA256_init(LITE_SHA256_CTX *ctx, uint32_t sw_required)
-{
-	if (!sw_required && dcrypto_grab_sha_hw())
-		dcrypto_sha256_init(ctx);
-#ifndef SECTION_IS_RO
-	else
-		SHA256_init(ctx);
-#endif
+	SHA224_sw_init(&ctx);
+	SHA224_sw_update(&ctx, data, len);
+	memcpy(digest->b8, SHA224_sw_final(&ctx), SHA224_DIGEST_SIZE);
+	return digest;
 }
-
-static const uint8_t *dcrypto_sha256_final(LITE_SHA256_CTX *ctx)
+/* One shot hash computation */
+const struct sha256_digest *SHA256_sw_hash(const void *data, size_t len,
+					   struct sha256_digest *digest)
 {
-	dcrypto_sha_wait(SHA256_MODE, (uint32_t *) ctx->buf);
-	return ctx->buf;
-}
+	struct sha256_ctx ctx;
 
-const uint8_t *DCRYPTO_SHA256_hash(const void *data, uint32_t n,
-				uint8_t *digest)
-{
-	if (dcrypto_grab_sha_hw())
-		/* dcrypto_sha_wait() will release the hw. */
-		dcrypto_sha_hash(SHA256_MODE, data, n, digest);
-#ifndef SECTION_IS_RO
-	else
-		SHA256_hash(data, n, digest);
-#endif
+	SHA256_sw_init(&ctx);
+	SHA256_sw_update(&ctx, data, len);
+	memcpy(digest->b8, SHA256_sw_final(&ctx)->b8, SHA256_DIGEST_SIZE);
 	return digest;
 }

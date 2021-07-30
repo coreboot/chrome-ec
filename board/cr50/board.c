@@ -48,8 +48,6 @@
 /* Define interrupt and gpio structs */
 #include "gpio_list.h"
 
-#include "cryptoc/sha.h"
-
 /*
  * Need to include Implementation.h here to make sure that NVRAM size
  * definitions match across different git repos.

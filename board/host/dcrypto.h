@@ -21,28 +21,13 @@
 #ifndef CONFIG_DCRYPTO_MOCK
 
 /* If not using the mock struct definitions, use the ones from Cr50. */
-#include "chip/g/dcrypto/dcrypto.h"
+#include "board/cr50/dcrypto/dcrypto.h"
 
 #else  /* defined(CONFIG_DCRYPTO_MOCK) */
 
-#include <sha256.h>
-
-#define HASH_CTX sha256_ctx
-
-/* Used as a replacement for declarations in cryptoc that are used by Cr50, but
- * add unnecessary complexity to the test code.
- */
-struct dcrypto_mock_ctx_t {
-	struct HASH_CTX hash;
-};
-#define LITE_HMAC_CTX struct dcrypto_mock_ctx_t
-#define LITE_SHA256_CTX struct HASH_CTX
-
-void HASH_update(struct HASH_CTX *ctx, const void *data, size_t len);
-uint8_t *HASH_final(struct HASH_CTX *ctx);
+#include "board/cr50/dcrypto/hmacsha2.h"
 
 #define AES256_BLOCK_CIPHER_KEY_SIZE 32
-#define SHA256_DIGEST_SIZE 32
 
 enum dcrypto_appid {
 	RESERVED = 0,
@@ -55,11 +40,11 @@ enum dcrypto_appid {
 	/* This enum value should not exceed 7. */
 };
 
-void DCRYPTO_SHA256_init(LITE_SHA256_CTX *ctx, uint32_t sw_required);
+void SHA256_hw_init(struct sha256_ctx *ctx);
 
-void DCRYPTO_HMAC_SHA256_init(LITE_HMAC_CTX *ctx, const void *key,
-			      unsigned int len);
-const uint8_t *DCRYPTO_HMAC_final(LITE_HMAC_CTX *ctx);
+void HMAC_SHA256_hw_init(struct hmac_sha256_ctx *ctx, const void *key,
+			 size_t len);
+const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx);
 
 int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 		    const uint8_t *iv, const uint8_t *in, size_t in_len);

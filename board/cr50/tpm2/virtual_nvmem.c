@@ -9,7 +9,7 @@
 
 #include "board_id.h"
 #include "console.h"
-#include "cryptoc/sha256.h"
+#include "dcrypto.h"
 #include "link_defs.h"
 #include "rma_auth.h"
 #include "sn_bits.h"
@@ -300,16 +300,16 @@ BUILD_ASSERT(VIRTUAL_NV_INDEX_G2F_CERT_SIZE == G2F_ATTESTATION_CERT_MAX_LEN);
 
 static void GetRSUDevID(BYTE *to, size_t offset, size_t size)
 {
-	LITE_SHA256_CTX ctx;
+	struct sha256_ctx ctx;
 	uint8_t rma_device_id[RMA_DEVICE_ID_SIZE];
 	const uint8_t *rsu_device_id;
 
 	get_rma_device_id(rma_device_id);
 
-	SHA256_init(&ctx);
-	HASH_update(&ctx, rma_device_id, sizeof(rma_device_id));
-	HASH_update(&ctx, kRsuSalt, RSU_SALT_SIZE);
-	rsu_device_id = HASH_final(&ctx);
+	SHA256_hw_init(&ctx);
+	SHA256_update(&ctx, rma_device_id, sizeof(rma_device_id));
+	SHA256_update(&ctx, kRsuSalt, RSU_SALT_SIZE);
+	rsu_device_id = SHA256_final(&ctx)->b8;
 
 	memcpy(to, rsu_device_id + offset, size);
 }

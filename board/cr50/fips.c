@@ -153,7 +153,7 @@ void fips_throw_err(enum fips_status err)
 /* KAT for SHA256, test values from OpenSSL. */
 static bool fips_sha256_kat(void)
 {
-	struct HASH_CTX ctx;
+	struct sha256_ctx ctx;
 
 	static const uint8_t in[] = /* "etaonrishd" */ { 0x65, 0x74, 0x61, 0x6f,
 							 0x6e, 0x72, 0x69, 0x73,
@@ -164,16 +164,16 @@ static bool fips_sha256_kat(void)
 				       0xc8, 0x5d, 0x1c, 0xaf, 0x64, 0x22, 0xe6,
 				       0x50, 0x4f, 0x47, 0x57 };
 
-	DCRYPTO_SHA256_init(&ctx, 0);
-	HASH_update(&ctx, in, sizeof(in));
+	SHA256_hw_init(&ctx);
+	SHA256_update(&ctx, in, sizeof(in));
 	return !(fips_break_cmd == FIPS_BREAK_SHA256) &&
-	       (memcmp(HASH_final(&ctx), ans, SHA256_DIGEST_SIZE) == 0);
+	       (memcmp(SHA256_final(&ctx), ans, SHA256_DIGEST_SIZE) == 0);
 }
 
 /* KAT for HMAC-SHA256, test values from OpenSSL. */
 static bool fips_hmac_sha256_kat(void)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 
 	static const uint8_t k[SHA256_DIGEST_SIZE] =
 		/* "etaonrishd" */ { 0x65, 0x74, 0x61, 0x6f, 0x6e, 0x72, 0x69,
@@ -190,10 +190,11 @@ static bool fips_hmac_sha256_kat(void)
 				       0xa8, 0xea, 0xaa, 0x9f, 0xba, 0xee, 0x51,
 				       0xff, 0xda, 0x24, 0xf4 };
 
-	DCRYPTO_HMAC_SHA256_init(&ctx, k, sizeof(k));
-	HASH_update(&ctx.hash, in, sizeof(in));
+	HMAC_SHA256_hw_init(&ctx, k, sizeof(k));
+	HMAC_SHA256_update(&ctx, in, sizeof(in));
 	return !(fips_break_cmd == FIPS_BREAK_HMAC_SHA256) &&
-	       (memcmp(DCRYPTO_HMAC_final(&ctx), ans, SHA256_DIGEST_SIZE) == 0);
+	       (memcmp(HMAC_SHA256_hw_final(&ctx), ans, SHA256_DIGEST_SIZE) ==
+		0);
 }
 
 /**
@@ -397,12 +398,12 @@ static bool fips_ecdsa_verify_kat(void)
 	};
 
 	p256_int p256_digest;
-	uint8_t digest[SHA256_DIGEST_SIZE];
+	struct sha256_digest digest;
 	uint8_t bad_msg[128];
 	int passed;
 
-	DCRYPTO_SHA256_hash(msg, sizeof(msg), digest);
-	p256_from_bin(digest, &p256_digest);
+	SHA256_hw_hash(msg, sizeof(msg), &digest);
+	p256_from_bin(digest.b8, &p256_digest);
 	passed = dcrypto_p256_ecdsa_verify(&qx, &qy, &p256_digest, &r, &s);
 	if (!passed)
 		return false;
@@ -413,8 +414,8 @@ static bool fips_ecdsa_verify_kat(void)
 	 */
 	memcpy(bad_msg, msg, sizeof(msg));
 	bad_msg[92] ^= 0x10;
-	DCRYPTO_SHA256_hash(bad_msg, sizeof(bad_msg), digest);
-	p256_from_bin(digest, &p256_digest);
+	SHA256_hw_hash(bad_msg, sizeof(bad_msg), &digest);
+	p256_from_bin(digest.b8, &p256_digest);
 	passed = dcrypto_p256_ecdsa_verify(&qx, &qy, &p256_digest, &r, &s);
 	return !(fips_break_cmd == FIPS_BREAK_ECDSA) && (passed == 0);
 }
@@ -580,19 +581,19 @@ static bool call_on_stack(void *new_stack, bool (*func)(void))
 }
 
 /* Placeholder for SHA256 digest of module computed during build time. */
-const uint8_t fips_integrity[SHA256_DIGEST_SIZE]
+const struct sha256_digest fips_integrity
 	__attribute__((section(".rodata.fips.checksum")));
 
 static bool fips_self_integrity(void)
 {
-	uint8_t digest[SHA256_DIGEST_SIZE];
+	struct sha256_digest digest;
 	size_t module_length = &__fips_module_end - &__fips_module_start;
 
 #ifdef CR50_DEV
 	CPRINTS("FIPS self-integrity start %x, length %u",
 		(uintptr_t)&__fips_module_start, module_length);
 #endif
-	DCRYPTO_SHA256_hash(&__fips_module_start, module_length, digest);
+	SHA256_hw_hash(&__fips_module_start, module_length, &digest);
 
 #ifdef CR50_DEV
 	CPRINTS("Stored, %ph, computed %ph",
@@ -600,7 +601,7 @@ static bool fips_self_integrity(void)
 		HEX_BUF(digest, sizeof(digest)));
 #endif
 
-	return DCRYPTO_equals(fips_integrity, digest, sizeof(digest));
+	return DCRYPTO_equals(fips_integrity.b8, digest.b8, sizeof(digest));
 }
 
 /**

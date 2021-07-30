@@ -413,7 +413,7 @@ exit:
 static int command_dcrypto_ecdsa_test(int argc, char *argv[])
 {
 	p256_int entropy, message, r, s;
-	LITE_SHA256_CTX hsh;
+	struct sha256_ctx hsh;
 	int result = 0;
 	char *new_stack;
 	const uint32_t new_stack_size = 2 * 1024;
@@ -424,9 +424,9 @@ static int command_dcrypto_ecdsa_test(int argc, char *argv[])
 	for (uint8_t i = 0; i < 8; i++)
 		entropy.a[i] = i;
 
-	DCRYPTO_SHA256_init(&hsh, 0);
-	HASH_update(&hsh, &ten, sizeof(ten));
-	p256_from_bin(HASH_final(&hsh), &message);
+	SHA256_hw_init(&hsh);
+	SHA256_update(&hsh, &ten, sizeof(ten));
+	p256_from_bin(SHA256_final(&hsh)->b8, &message);
 
 	r = entropy;
 	s = message;

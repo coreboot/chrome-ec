@@ -6,14 +6,12 @@
 /*
  * Crypto wrapper library for the g chip.
  */
-#ifndef __EC_CHIP_G_DCRYPTO_DCRYPTO_H
-#define __EC_CHIP_G_DCRYPTO_DCRYPTO_H
+#ifndef __EC_BOARD_CR50_DCRYPTO_DCRYPTO_H
+#define __EC_BOARD_CR50_DCRYPTO_DCRYPTO_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#if defined(TEST_FUZZ) || !defined(TEST_BUILD)
 
 #include "internal.h"
 
@@ -21,36 +19,31 @@ extern "C" {
 
 #include <stddef.h>
 
-#include "cryptoc/hmac.h"
-
 enum cipher_mode {
 	CIPHER_MODE_ECB = 0, /* NIST SP 800-38A */
 	CIPHER_MODE_CTR = 1, /* NIST SP 800-38A */
 	CIPHER_MODE_CBC = 2, /* NIST SP 800-38A */
-	CIPHER_MODE_GCM = 3  /* NIST SP 800-38D */
+	CIPHER_MODE_GCM = 3 /* NIST SP 800-38D */
 };
 
-enum encrypt_mode {
-	DECRYPT_MODE = 0,
-	ENCRYPT_MODE = 1
-};
+enum encrypt_mode { DECRYPT_MODE = 0, ENCRYPT_MODE = 1 };
 
 enum hashing_mode {
 	HASH_SHA1 = 0,
 	HASH_SHA256 = 1,
-	HASH_SHA384 = 2,  /* Only supported for PKCS#1 signing */
-	HASH_SHA512 = 3,  /* Only supported for PKCS#1 signing */
-	HASH_NULL = 4  /* Only supported for PKCS#1 signing */
+	HASH_SHA384 = 2, /* Only supported for PKCS#1 signing */
+	HASH_SHA512 = 3, /* Only supported for PKCS#1 signing */
+	HASH_NULL = 4 /* Only supported for PKCS#1 signing */
 };
 
 /*
  * AES implementation, based on a hardware AES block.
  * FIPS Publication 197, The Advanced Encryption Standard (AES)
  */
-#define AES256_BLOCK_CIPHER_KEY_SIZE       32
+#define AES256_BLOCK_CIPHER_KEY_SIZE 32
 
 int DCRYPTO_aes_init(const uint8_t *key, uint32_t key_len, const uint8_t *iv,
-		enum cipher_mode c_mode, enum encrypt_mode e_mode);
+		     enum cipher_mode c_mode, enum encrypt_mode e_mode);
 int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out);
 
 void DCRYPTO_aes_write_iv(const uint8_t *iv);
@@ -60,7 +53,7 @@ void DCRYPTO_aes_read_iv(uint8_t *iv);
  * NIST Special Publication 800-38A
  */
 int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
-		const uint8_t *iv, const uint8_t *in, size_t in_len);
+		    const uint8_t *iv, const uint8_t *in, size_t in_len);
 
 /* AES-GCM-128/192/256
  * NIST Special Publication 800-38D, IV is provided externally
@@ -81,7 +74,7 @@ struct GCM_CTX {
 
 /* Initialize the GCM context structure. */
 void DCRYPTO_gcm_init(struct GCM_CTX *ctx, uint32_t key_bits,
-		const uint8_t *key, const uint8_t *iv, size_t iv_len);
+		      const uint8_t *key, const uint8_t *iv, size_t iv_len);
 /* Additional authentication data to include in the tag calculation. */
 void DCRYPTO_gcm_aad(struct GCM_CTX *ctx, const uint8_t *aad_data, size_t len);
 /* Encrypt & decrypt return the number of bytes written to out
@@ -98,10 +91,10 @@ int DCRYPTO_gcm_decrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
 /* Encrypt & decrypt a partial final block, if any.  These functions
  * return the number of bytes written to out (<= 15), or -1 on error.
  */
-int DCRYPTO_gcm_encrypt_final(struct GCM_CTX *ctx,
-			uint8_t *out, size_t out_len);
-int DCRYPTO_gcm_decrypt_final(struct GCM_CTX *ctx,
-			uint8_t *out, size_t out_len);
+int DCRYPTO_gcm_encrypt_final(struct GCM_CTX *ctx, uint8_t *out,
+			      size_t out_len);
+int DCRYPTO_gcm_decrypt_final(struct GCM_CTX *ctx, uint8_t *out,
+			      size_t out_len);
 /* Compute the tag over AAD + encrypt or decrypt data, and return the
  * number of bytes written to tag.  Returns -1 on error.
  */
@@ -116,13 +109,13 @@ void DCRYPTO_gcm_finish(struct GCM_CTX *ctx);
  * otherwise.
  */
 int DCRYPTO_aes_cmac(const uint8_t *K, const uint8_t *M, const uint32_t len,
-		uint32_t T[4]);
+		     uint32_t T[4]);
 /* key: 128-bit key, M: message, len: number of bytes in M,
  *    T: tag to be verified
  * Returns 1 if the tag is correct and 0 otherwise.
  */
 int DCRYPTO_aes_cmac_verify(const uint8_t *key, const uint8_t *M, const int len,
-		const uint32_t T[4]);
+			    const uint32_t T[4]);
 
 /*
  * SHA implementation.  This abstraction is backed by either a
@@ -133,27 +126,35 @@ int DCRYPTO_aes_cmac_verify(const uint8_t *key, const uint8_t *M, const int len,
  * is TRUE, in which case there will be no attempt to use the hardware for
  * this particular hashing session.
  */
-void DCRYPTO_SHA1_init(SHA_CTX *ctx, uint32_t sw_required);
-/*  SHA256/384/512 FIPS 180-4
- */
-void DCRYPTO_SHA256_init(LITE_SHA256_CTX *ctx, uint32_t sw_required);
-void DCRYPTO_SHA384_init(LITE_SHA384_CTX *ctx);
-void DCRYPTO_SHA512_init(LITE_SHA512_CTX *ctx);
-const uint8_t *DCRYPTO_SHA1_hash(const void *data, uint32_t n,
-				uint8_t *digest);
-const uint8_t *DCRYPTO_SHA256_hash(const void *data, uint32_t n,
-				   uint8_t *digest);
-const uint8_t *DCRYPTO_SHA384_hash(const void *data, uint32_t n,
-				   uint8_t *digest);
-const uint8_t *DCRYPTO_SHA512_hash(const void *data, uint32_t n,
-				   uint8_t *digest);
+
+void SHA1_hw_init(struct sha1_ctx *ctx);
+void SHA256_hw_init(struct sha256_ctx *ctx);
+const struct sha1_digest *SHA1_hw_hash(const void *data, size_t len,
+				       struct sha1_digest *digest);
+const struct sha256_digest *SHA256_hw_hash(const void *data, size_t len,
+					   struct sha256_digest *digest);
+#ifdef CONFIG_UPTO_SHA512
+void SHA384_hw_init(struct sha384_ctx *ctx);
+void SHA512_hw_init(struct sha512_ctx *ctx);
+const struct sha384_digest *SHA384_hw_hash(const void *data, size_t len,
+					   struct sha384_digest *digest);
+
+const struct sha512_digest *SHA512_hw_hash(const void *data, size_t len,
+					   struct sha512_digest *digest);
+#endif
+
+const uint8_t *DCRYPTO_SHA1_hash(const void *data, size_t n, uint8_t *digest);
+
+/* TODO: remove dependency on board/cr50/dcrypto/dcrypto.h for RO. */
+const uint8_t *DCRYPTO_SHA256_hash(const void *data, size_t n, uint8_t *digest);
+
 /*
  *  HMAC. FIPS 198-1
  */
-void DCRYPTO_HMAC_SHA256_init(LITE_HMAC_CTX *ctx, const void *key,
-			unsigned int len);
+void HMAC_SHA256_hw_init(struct hmac_sha256_ctx *ctx, const void *key,
+			      size_t len);
 /* DCRYPTO HMAC-SHA256 final */
-const uint8_t *DCRYPTO_HMAC_final(LITE_HMAC_CTX *ctx);
+const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx);
 
 /*
  * BIGNUM utility methods.
@@ -170,15 +171,15 @@ void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
  * is not required, and enabling support would result in increased
  * stack usage for all key sizes.)
  */
-#define RSA_BYTES_2K    256
-#define RSA_BYTES_4K    512
-#define RSA_WORDS_2K    (RSA_BYTES_2K / sizeof(uint32_t))
-#define RSA_WORDS_4K    (RSA_BYTES_4K / sizeof(uint32_t))
+#define RSA_BYTES_2K 256
+#define RSA_BYTES_4K 512
+#define RSA_WORDS_2K (RSA_BYTES_2K / sizeof(uint32_t))
+#define RSA_WORDS_4K (RSA_BYTES_4K / sizeof(uint32_t))
 #ifndef RSA_MAX_BYTES
-#define RSA_MAX_BYTES   RSA_BYTES_2K
+#define RSA_MAX_BYTES RSA_BYTES_2K
 #endif
-#define RSA_MAX_WORDS   (RSA_MAX_BYTES / sizeof(uint32_t))
-#define RSA_F4          65537
+#define RSA_MAX_WORDS (RSA_MAX_BYTES / sizeof(uint32_t))
+#define RSA_F4	      65537
 
 struct RSA {
 	uint32_t e;
@@ -188,11 +189,11 @@ struct RSA {
 
 enum padding_mode {
 	PADDING_MODE_PKCS1 = 0,
-	PADDING_MODE_OAEP  = 1,
+	PADDING_MODE_OAEP = 1,
 	PADDING_MODE_PSS = 2,
 	/* USE OF NULL PADDING IS NOT RECOMMENDED.
 	 * SUPPORT EXISTS AS A REQUIREMENT FOR TPM2 OPERATION. */
-	PADDING_MODE_NULL  = 3
+	PADDING_MODE_NULL = 3
 };
 
 /* RSA support, FIPS PUB 186-4 *
@@ -215,21 +216,21 @@ int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
  * return 0 if error
  */
 int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
-		const uint8_t *in, const uint32_t in_len,
-		enum padding_mode padding, enum hashing_mode hashing);
+		     const uint8_t *in, const uint32_t in_len,
+		     enum padding_mode padding, enum hashing_mode hashing);
 
 /* Calculate r = m ^ e mod N
  * return 0 if error
  */
 int DCRYPTO_rsa_verify(const struct RSA *rsa, const uint8_t *digest,
-		uint32_t digest_len, const uint8_t *sig,
-		const uint32_t sig_len,	enum padding_mode padding,
-		enum hashing_mode hashing);
+		       uint32_t digest_len, const uint8_t *sig,
+		       const uint32_t sig_len, enum padding_mode padding,
+		       enum hashing_mode hashing);
 
 /* Calculate n = p * q, d = e ^ -1 mod phi. */
 int DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N, struct LITE_BIGNUM *d,
-			struct LITE_BIGNUM *p, struct LITE_BIGNUM *q,
-			uint32_t e);
+			    struct LITE_BIGNUM *p, struct LITE_BIGNUM *q,
+			    uint32_t e);
 
 /*
  *  EC.
@@ -244,9 +245,8 @@ int DCRYPTO_p256_base_point_mul(p256_int *out_x, p256_int *out_y,
 /* DCRYPTO_p256_point_mul sets {out_x,out_y} = n*{in_x,in_y}, where n is <
  * the order of the group.
  */
-int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
-			const p256_int *n, const p256_int *in_x,
-			const p256_int *in_y);
+int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y, const p256_int *n,
+			   const p256_int *in_x, const p256_int *in_y);
 /*
  * Key selection based on FIPS-186-4, section B.4.2 (Key Pair
  * Generation by Testing Candidates).
@@ -257,7 +257,6 @@ int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
 int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 				const uint8_t bytes[P256_NBYTES]);
 
-
 /* P256 based integration encryption (DH+AES128+SHA256).
  * Not FIPS 140-2 compliant, not used other than for tests
  * Authenticated data may be provided, where the first auth_data_len
@@ -267,18 +266,17 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
  * 0x04 || PUBKEY || AUTH_DATA || AES128_CTR(PLAINTEXT) ||
  *         HMAC_SHA256(AUTH_DATA || CIPHERTEXT)
  */
-size_t DCRYPTO_ecies_encrypt(
-	void *out, size_t out_len, const void *in, size_t in_len,
-	size_t auth_data_len, const uint8_t *iv,
-	const p256_int *pub_x, const p256_int *pub_y,
-	const uint8_t *salt, size_t salt_len,
-	const uint8_t *info, size_t info_len);
-size_t DCRYPTO_ecies_decrypt(
-	void *out, size_t out_len, const void *in, size_t in_len,
-	size_t auth_data_len, const uint8_t *iv,
-	const p256_int *d,
-	const uint8_t *salt, size_t salt_len,
-	const uint8_t *info, size_t info_len);
+size_t DCRYPTO_ecies_encrypt(void *out, size_t out_len, const void *in,
+			     size_t in_len, size_t auth_data_len,
+			     const uint8_t *iv, const p256_int *pub_x,
+			     const p256_int *pub_y, const uint8_t *salt,
+			     size_t salt_len, const uint8_t *info,
+			     size_t info_len);
+size_t DCRYPTO_ecies_decrypt(void *out, size_t out_len, const void *in,
+			     size_t in_len, size_t auth_data_len,
+			     const uint8_t *iv, const p256_int *d,
+			     const uint8_t *salt, size_t salt_len,
+			     const uint8_t *info, size_t info_len);
 
 /*
  * HKDF as per RFC 5869. Mentioned as conforming NIST SP 800-56C Rev.1
@@ -286,10 +284,9 @@ size_t DCRYPTO_ecies_decrypt(
  * key-derivation procedure using HMAC for both the extraction and expansion
  * steps.
  */
-int DCRYPTO_hkdf(uint8_t *OKM, size_t OKM_len,
-		const uint8_t *salt, size_t salt_len,
-		const uint8_t *IKM, size_t IKM_len,
-		const uint8_t *info, size_t info_len);
+int DCRYPTO_hkdf(uint8_t *OKM, size_t OKM_len, const uint8_t *salt,
+		 size_t salt_len, const uint8_t *IKM, size_t IKM_len,
+		 const uint8_t *info, size_t info_len);
 
 /*
  *  BN.
@@ -301,10 +298,10 @@ int DCRYPTO_hkdf(uint8_t *OKM, size_t OKM_len,
 int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p);
 void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
 void DCRYPTO_bn_mul(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a,
-		const struct LITE_BIGNUM *b);
+		    const struct LITE_BIGNUM *b);
 int DCRYPTO_bn_div(struct LITE_BIGNUM *quotient, struct LITE_BIGNUM *remainder,
-		const struct LITE_BIGNUM *input,
-		const struct LITE_BIGNUM *divisor);
+		   const struct LITE_BIGNUM *input,
+		   const struct LITE_BIGNUM *divisor);
 
 /*
  * ASN.1 DER
@@ -362,8 +359,8 @@ int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
  * @param n: max size of cert
  */
 int DCRYPTO_x509_gen_u2f_cert(const p256_int *d, const p256_int *pk_x,
-			const p256_int *pk_y, const p256_int *serial,
-			uint8_t *cert, const int n);
+			      const p256_int *pk_y, const p256_int *serial,
+			      uint8_t *cert, const int n);
 
 /*
  * Memory related functions.
@@ -427,10 +424,9 @@ BUILD_ASSERT(DCRYPTO_CIPHER_SALT_SIZE == CIPHER_SALT_SIZE);
  * @param len Number of bytes to read from in / write to out.
  * @return non-zero on success, and zero otherwise.
  */
-int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
-		void *out, const void *in, size_t len);
+int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt, void *out,
+		       const void *in, size_t len);
 
-#endif  /*  ^^^^^^^^^^^^^^^^^^^^^  !TEST_BUILD   */
 /*
  * Query whether Key Ladder is enabled.
  *
@@ -442,4 +438,4 @@ int DCRYPTO_ladder_is_enabled(void);
 }
 #endif
 
-#endif  /* ! __EC_CHIP_G_DCRYPTO_DCRYPTO_H */
+#endif /* ! __EC_BOARD_CR50_DCRYPTO_DCRYPTO_H */

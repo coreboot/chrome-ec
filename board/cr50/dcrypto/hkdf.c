@@ -7,12 +7,10 @@
 #include "dcrypto.h"
 #include "internal.h"
 
-#include "cryptoc/sha256.h"
-
 static int hkdf_extract(uint8_t *PRK, const uint8_t *salt, size_t salt_len,
 			const uint8_t *IKM, size_t IKM_len)
 {
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 
 	if (PRK == NULL)
 		return 0;
@@ -21,9 +19,9 @@ static int hkdf_extract(uint8_t *PRK, const uint8_t *salt, size_t salt_len,
 	if (IKM == NULL && IKM_len > 0)
 		return 0;
 
-	DCRYPTO_HMAC_SHA256_init(&ctx, salt, salt_len);
-	HASH_update(&ctx.hash, IKM, IKM_len);
-	memcpy(PRK, DCRYPTO_HMAC_final(&ctx), SHA256_DIGEST_SIZE);
+	HMAC_SHA256_hw_init(&ctx, salt, salt_len);
+	HMAC_SHA256_update(&ctx, IKM, IKM_len);
+	memcpy(PRK, HMAC_SHA256_hw_final(&ctx), SHA256_DIGEST_SIZE);
 	return 1;
 }
 
@@ -46,15 +44,15 @@ static int hkdf_expand(uint8_t *OKM, size_t OKM_len, const uint8_t *PRK,
 		return 0;
 
 	while (OKM_len > 0) {
-		LITE_HMAC_CTX ctx;
+		struct hmac_sha256_ctx ctx;
 		const size_t block_size = OKM_len < SHA256_DIGEST_SIZE ?
 			OKM_len : SHA256_DIGEST_SIZE;
 
-		DCRYPTO_HMAC_SHA256_init(&ctx, PRK, SHA256_DIGEST_SIZE);
-		HASH_update(&ctx.hash, T, T_len);
-		HASH_update(&ctx.hash, info, info_len);
-		HASH_update(&ctx.hash, &count, sizeof(count));
-		memcpy(OKM, DCRYPTO_HMAC_final(&ctx), block_size);
+		HMAC_SHA256_hw_init(&ctx, PRK, SHA256_DIGEST_SIZE);
+		HMAC_SHA256_update(&ctx, T, T_len);
+		HMAC_SHA256_update(&ctx, info, info_len);
+		HMAC_SHA256_update(&ctx, &count, sizeof(count));
+		memcpy(OKM, HMAC_SHA256_hw_final(&ctx), block_size);
 
 		T += T_len;
 		T_len = SHA256_DIGEST_SIZE;

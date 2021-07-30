@@ -366,7 +366,7 @@ int DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
 	const uint8_t *sig;
 	size_t sig_len;
 
-	uint8_t digest[SHA256_DIGEST_SIZE];
+	struct sha256_digest digest;
 
 	/* Read Certificate SEQUENCE. */
 	if (!asn1_parse_certificate(&p, &len))
@@ -398,8 +398,8 @@ int DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
 		sig_len--;
 	}
 
-	DCRYPTO_SHA256_hash(tbs, tbs_len, digest);
-	return DCRYPTO_rsa_verify(ca_pub_key, digest, sizeof(digest),
+	SHA256_hw_hash(tbs, tbs_len, &digest);
+	return DCRYPTO_rsa_verify(ca_pub_key, digest.b8, sizeof(digest),
 				sig, sig_len, PADDING_MODE_PKCS1, HASH_SHA256);
 }
 
@@ -425,7 +425,7 @@ int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
 				   const char *name, uint8_t *cert, const int n)
 {
 	struct asn1 ctx = {cert, 0};
-	HASH_CTX sha;
+	struct sha256_ctx sha;
 	p256_int h, r, s;
 	struct drbg_ctx drbg;
 
@@ -513,9 +513,9 @@ int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
 	SEQ_END(ctx);  /* Cert body */
 
 	/* Sign all of cert body */
-	DCRYPTO_SHA256_init(&sha, 0);
-	HASH_update(&sha, body, (ctx.p + ctx.n) - body);
-	p256_from_bin(HASH_final(&sha), &h);
+	SHA256_hw_init(&sha);
+	SHA256_update(&sha, body, (ctx.p + ctx.n) - body);
+	p256_from_bin(SHA256_final(&sha)->b8, &h);
 	hmac_drbg_init_rfc6979(&drbg, d, &h);
 	if (!dcrypto_p256_ecdsa_sign(&drbg, d, &h, &r, &s))
 		return 0;
