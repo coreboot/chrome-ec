@@ -590,18 +590,23 @@ uint32_t flash_physical_get_protect_flags(void)
 	    wrp_ro.end == FLASH_RO_LAST_PAGE_IDX)
 		flags |= EC_FLASH_PROTECT_RO_AT_BOOT;
 
+	/*
+	 * If RW write protection is enabled, verify that relevant flash pages
+	 * are write-protected. Note that start/end refer to the flash page idx
+	 * and therefore the total number of pages protected will be:
+	 *     num protect pages = start + end + 1
+	 */
 	if (wrp_rw.enable) {
-
 #ifdef CONFIG_ROLLBACK
 		if (wrp_rw.start <= FLASH_PAGE_ROLLBACK_FIRST_IDX &&
 		    wrp_rw.end >= FLASH_PAGE_ROLLBACK_LAST_IDX)
 			flags |= EC_FLASH_PROTECT_ROLLBACK_AT_BOOT;
 #endif /* CONFIG_ROLLBACK */
 #ifdef CONFIG_FLASH_PROTECT_RW
-		if (wrp_rw.end == PHYSICAL_BANKS)
+		if (wrp_rw.end == (PHYSICAL_BANKS - 1))
 			flags |= EC_FLASH_PROTECT_RW_AT_BOOT;
 #endif /* CONFIG_FLASH_PROTECT_RW */
-		if (wrp_rw.end == PHYSICAL_BANKS &&
+		if (wrp_rw.end == (PHYSICAL_BANKS - 1) &&
 		    wrp_rw.start == WP_BANK_OFFSET + WP_BANK_COUNT &&
 		    flags & EC_FLASH_PROTECT_RO_AT_BOOT)
 			flags |= EC_FLASH_PROTECT_ALL_AT_BOOT;
