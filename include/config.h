@@ -2718,12 +2718,6 @@
 #undef CONFIG_KEYBOARD_FACTORY_TEST
 
 /*
- * Keyboard config (struct keyboard_scan_config) is in board.c.  If this is
- * not defined, default values from common/keyboard_scan.c will be used.
- */
-#undef CONFIG_KEYBOARD_BOARD_CONFIG
-
-/*
  * Support for boot key combinations (e.g. refresh key being held on boot to
  * trigger recovery).
  */
@@ -2805,6 +2799,21 @@
  * Enable keypad (a palm-sized keyboard section usually placed on the far right)
  */
 #undef CONFIG_KEYBOARD_KEYPAD
+
+/*
+ * Enable strict debouncer. A strict debouncer waits until debounce is done
+ * before registering key up/down while a non-strict debouncer registers a key
+ * up/down as soon as a key is pressed or released.
+ *
+ * A strict debouncer is robust against unintentional key presses, caused by a
+ * device drop, for example. However, its latency isn't as fast as a non-strict
+ * debouncer.
+ *
+ * If a strict debouncer is used, it's recommended to set debounce_down_us and
+ * debounce_up_us to an equal value. This guarantees key events are registered
+ * in the order the keys are pressed.
+ */
+#undef CONFIG_KEYBOARD_STRICT_DEBOUNCE
 
 /*
  * Enable the 8042 AUX port. This is typically used for PS/2 mouse devices.

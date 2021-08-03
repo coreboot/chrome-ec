@@ -87,7 +87,7 @@ const struct {
 	CMD_LOOKUP_ENTRY(RU),
 };
 
-const char *cmd_lookup_name(char cmd)
+const char *cmd_lookup_name(uint8_t cmd)
 {
 	int i;
 	for (i = 0; i < ARRAY_SIZE(cmd_lookup_table); i++) {
@@ -904,7 +904,7 @@ int command_get_commands(int fd, struct stm32_def *chip)
 			if (name)
 				printf("%s ", name);
 			else
-				printf("%02x ", cmds[i]);
+				printf("0x%02x ", cmds[i]);
 		}
 
 		if (mode == MODE_I2C)
@@ -1117,7 +1117,7 @@ int command_erase(int fd, uint16_t count, uint16_t start)
 int command_read_unprotect(int fd)
 {
 	int res;
-	int retries = MAX_RETRY_COUNT;
+	int retries = MAX_ACK_RETRY_COUNT;
 
 	printf("Unprotecting flash read...\n");
 
@@ -1672,6 +1672,12 @@ int main(int argc, char **argv)
 	if (!chip)
 		goto terminate;
 
+	if (command_get_commands(ser, chip) < 0)
+		goto terminate;
+
+	if (flags & FLAG_READ_UNPROTECT)
+		command_read_unprotect(ser);
+
 	/*
 	 * Use the actual size if we were able to read it since some chips
 	 * have the same chip ID, but different flash sizes based on the
@@ -1693,11 +1699,6 @@ int main(int argc, char **argv)
 	 */
 	(void)read_package_data_register(ser, chip, &package_data_reg);
 
-	if (command_get_commands(ser, chip) < 0)
-		goto terminate;
-
-	if (flags & FLAG_READ_UNPROTECT)
-		command_read_unprotect(ser);
 	if (flags & FLAG_UNPROTECT)
 		command_write_unprotect(ser);
 

@@ -28,7 +28,7 @@
 #define CONFIG_FPU
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_KEYPAD
@@ -214,8 +214,6 @@
 
 /* support factory keyboard test */
 #define CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
 
 #include "gpio_signal.h"
 #include "registers.h"

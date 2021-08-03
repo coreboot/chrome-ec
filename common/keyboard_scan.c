@@ -53,9 +53,7 @@
 #define CONFIG_KEYBOARD_POST_SCAN_CLOCKS 16000
 #endif
 
-#ifndef CONFIG_KEYBOARD_BOARD_CONFIG
-/* Use default keyboard scan config, because board didn't supply one */
-struct keyboard_scan_config keyscan_config = {
+__overridable struct keyboard_scan_config keyscan_config = {
 #ifdef CONFIG_KEYBOARD_COL2_INVERTED
 	/*
 	 * CONFIG_KEYBOARD_COL2_INVERTED is defined for passing the column 2
@@ -78,7 +76,6 @@ struct keyboard_scan_config keyscan_config = {
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
 	},
 };
-#endif
 
 /* Boot key list.  Must be in same order as enum boot_key. */
 struct boot_key_entry {
@@ -499,6 +496,16 @@ static int has_ghosting(const uint8_t *state)
 	return 0;
 }
 
+/* Inform keyboard module if scanning is enabled */
+static void key_state_changed(int row, int col, uint8_t state)
+{
+	if (!keyboard_scan_is_enabled())
+		return;
+
+	/* No-op for protocols that require full keyboard matrix (e.g. MKBP). */
+	keyboard_state_changed(row, col, !!(state & BIT(row)));
+}
+
 /**
  * Update keyboard state using low-level interface to read keyboard.
  *
@@ -528,7 +535,7 @@ static int check_keys_changed(uint8_t *state)
 
 	/* Check for changes between previous scan and this one */
 	for (c = 0; c < keyboard_cols; c++) {
-		int diff;
+		int diff = new_state[c] ^ state[c];
 
 		/* Clear debouncing flag, if sufficient time has elapsed. */
 		for (i = 0; i < KEYBOARD_ROWS && debouncing[c]; i++) {
@@ -539,6 +546,20 @@ static int check_keys_changed(uint8_t *state)
 					keyscan_config.debounce_up_us))
 				continue;  /* Not done debouncing */
 			debouncing[c] &= ~BIT(i);
+
+			if (!IS_ENABLED(CONFIG_KEYBOARD_STRICT_DEBOUNCE))
+				continue;
+			if (!(diff & BIT(i)))
+				/* Debounced but no difference. */
+				continue;
+			any_change = 1;
+			key_state_changed(i, c, new_state[c]);
+			/*
+			 * This makes state[c] == new_state[c] for row i.
+			 * Thus, when diff is calculated below, it won't
+			 * be asserted (for row i).
+			 */
+			state[c] ^= diff & BIT(i);
 		}
 
 		/* Recognize change in state, unless debounce in effect. */
@@ -549,15 +570,10 @@ static int check_keys_changed(uint8_t *state)
 			if (!(diff & BIT(i)))
 				continue;
 			scan_edge_index[c][i] = scan_time_index;
-			any_change = 1;
 
-			/* Inform keyboard module if scanning is enabled */
-			if (keyboard_scan_is_enabled()) {
-				/* This is no-op for protocols that require a
-				 * full keyboard matrix (e.g., MKBP).
-				 */
-				keyboard_state_changed(
-					i, c, !!(new_state[c] & BIT(i)));
+			if (!IS_ENABLED(CONFIG_KEYBOARD_STRICT_DEBOUNCE)) {
+				any_change = 1;
+				key_state_changed(i, c, new_state[c]);
 			}
 		}
 
@@ -568,7 +584,8 @@ static int check_keys_changed(uint8_t *state)
 		 * (up or down), the state bits are only updated if the
 		 * edge was not suppressed due to debouncing.
 		 */
-		state[c] ^= diff;
+		if (!IS_ENABLED(CONFIG_KEYBOARD_STRICT_DEBOUNCE))
+			state[c] ^= diff;
 	}
 
 	if (any_change) {
@@ -726,6 +743,15 @@ const uint8_t *keyboard_scan_get_state(void)
 
 void keyboard_scan_init(void)
 {
+	if (IS_ENABLED(CONFIG_KEYBOARD_STRICT_DEBOUNCE) &&
+	    keyscan_config.debounce_down_us != keyscan_config.debounce_up_us) {
+		/*
+		 * Strict debouncer is prone to keypress reordering if debounce
+		 * durations for down and up are not equal. crbug.com/547131
+		 */
+		CPRINTS("KB WARN: Debounce durations not equal");
+	}
+
 	/* Configure refresh key matrix */
 	keyboard_mask_refresh = KEYBOARD_ROW_TO_MASK(
 		board_keyboard_row_refresh());

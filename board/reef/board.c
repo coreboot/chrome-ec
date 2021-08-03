@@ -445,7 +445,8 @@ void chipset_pre_init_callback(void)
 
 static void board_set_tablet_mode(void)
 {
-	tablet_set_mode(!gpio_get_level(GPIO_TABLET_MODE_L));
+	tablet_set_mode(!gpio_get_level(GPIO_TABLET_MODE_L),
+			TABLET_TRIGGER_LID);
 }
 
 /* Initialize board. */
@@ -913,7 +914,7 @@ int board_get_version(void)
 }
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next

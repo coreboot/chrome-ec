@@ -18,7 +18,7 @@
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_PWM_KBLIGHT
 
 /* Battery */
@@ -118,8 +118,6 @@ enum battery_type {
 
 /* support factory keyboard test */
 #define CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
 
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);

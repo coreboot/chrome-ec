@@ -10,6 +10,7 @@
 #include "driver/accel_bma2x2_public.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "hooks.h"
+#include "keyboard_scan.h"
 #include "motion_sense.h"
 #include "temp_sensor.h"
 #include "thermal.h"
@@ -24,9 +25,16 @@ const struct adc_t adc_channels[] = {
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
 	},
-	[ADC_TEMP_SENSOR_2_CHARGER] = {
-		.name = "TEMP_CHARGER",
+	[ADC_TEMP_SENSOR_2_FAN] = {
+		.name = "TEMP_FAN",
 		.input_ch = NPCX_ADC_CH1,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_3_CHARGER] = {
+		.name = "TEMP_CHARGER",
+		.input_ch = NPCX_ADC_CH6,
 		.factor_mul = ADC_MAX_VOLT,
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
@@ -147,17 +155,23 @@ const struct temp_sensor_t temp_sensors[] = {
 		.read = get_temp_3v3_30k9_47k_4050b,
 		.idx = ADC_TEMP_SENSOR_1_DDR_SOC
 	},
-	[TEMP_SENSOR_2_CHARGER] = {
+	[TEMP_SENSOR_2_FAN] = {
+		.name = "Fan",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_30k9_47k_4050b,
+		.idx = ADC_TEMP_SENSOR_2_FAN
+	},
+	[TEMP_SENSOR_3_CHARGER] = {
 		.name = "Charger",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_CHARGER
+		.idx = ADC_TEMP_SENSOR_3_CHARGER
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /*
- * TODO(b/180681346): update for Alder Lake/brya
+ * TODO(b/194318801): confirm thermal limits setting for gimble
  *
  * Tiger Lake specifies 100 C as maximum TDP temperature.  THRMTRIP# occurs at
  * 130 C.  However, sensor is located next to DDR, so we need to use the lower
@@ -176,7 +190,7 @@ static const struct ec_thermal_config thermal_cpu = {
 };
 
 /*
- * TODO(b/180681346): update for Alder Lake/brya
+ * TODO(b/194318801): confirm thermal limits setting for gimble
  *
  * Inductor limits - used for both charger and PP3300 regulator
  *
@@ -203,6 +217,27 @@ static const struct ec_thermal_config thermal_inductor = {
 /* this should really be "const" */
 struct ec_thermal_config thermal_params[] = {
 	[TEMP_SENSOR_1_DDR_SOC] = thermal_cpu,
-	[TEMP_SENSOR_2_CHARGER]	= thermal_inductor,
+	/* TODO(b/194318801): confirm thermal limits setting for gimble */
+	[TEMP_SENSOR_2_FAN]	= thermal_inductor,
+	[TEMP_SENSOR_3_CHARGER]	= thermal_inductor,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+#ifndef TEST_BUILD
+void lid_angle_peripheral_enable(int enable)
+{
+	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
+
+	if (enable) {
+		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
+	} else {
+		/*
+		 * Ensure that the chipset is off before disabling the keyboard.
+		 * When the chipset is on, the EC keeps the keyboard enabled and
+		 * the AP decides whether to ignore input devices or not.
+		 */
+		if (!chipset_in_s0)
+			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	}
+}
+#endif
