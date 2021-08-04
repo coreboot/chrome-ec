@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early brya boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -40,8 +35,16 @@
 
 /* Lid accel */
 #define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
+
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
+/* FIFO size is in power of 2. */
+#define CONFIG_ACCEL_FIFO_SIZE 256
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
 /* Sensor console commands */
 #define CONFIG_CMD_ACCELS
@@ -52,8 +55,6 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
-#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
-
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT		1
@@ -115,6 +116,10 @@
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
 
+/* Keyboard features */
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
+
 /* I2C Bus Configuration */
 
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
@@ -123,10 +128,10 @@
 #define I2C_PORT_USB_C1_TCPC	NPCX_I2C_PORT4_1
 
 #define I2C_PORT_USB_C0_PPC	NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_PPC	NPCX_I2C_PORT6_1
+#define I2C_PORT_USB_C1_PPC	NPCX_I2C_PORT4_1
 
 #define I2C_PORT_USB_C0_BC12	NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_BC12	NPCX_I2C_PORT6_1
+#define I2C_PORT_USB_C1_BC12	NPCX_I2C_PORT4_1
 
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
 #define I2C_PORT_CHARGER	NPCX_I2C_PORT7_0
@@ -155,6 +160,10 @@
 #define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
+/* LED defines */
+#define CONFIG_LED_ONOFF_STATES
+#define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
+
 /*
  * TODO(b/181271666): no fan control loop until sensors are tuned
  */
@@ -175,13 +184,15 @@
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
-	ADC_TEMP_SENSOR_2_CHARGER,
+	ADC_TEMP_SENSOR_2_FAN,
+	ADC_TEMP_SENSOR_3_CHARGER,
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
-	TEMP_SENSOR_2_CHARGER,
+	TEMP_SENSOR_2_FAN,
+	TEMP_SENSOR_3_CHARGER,
 	TEMP_SENSOR_COUNT
 };
 
@@ -198,8 +209,8 @@ enum ioex_port {
 };
 
 enum battery_type {
-	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_SIMPLO_HIGHPOWER,
+	BATTERY_COSMX,
 	BATTERY_TYPE_COUNT
 };
 

@@ -18,6 +18,8 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+#define CONFIG_SYSTEM_UNLOCKED
+
 /*
  * This will happen automatically on NPCX9 ES2 and later. Do not remove
  * until we can confirm all earlier chips are out of service.
@@ -25,18 +27,6 @@
 #define CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
 
 #define CONFIG_MP2964
-
-/* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 2
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
 
 /* Sensors */
 #undef CONFIG_TABLET_MODE
@@ -198,9 +188,9 @@ enum battery_type {
 };
 
 enum pwm_channel {
-	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
+	PWM_CH_LED2_WHITE = 0,	/* PWM0 (white charger) */
 	PWM_CH_TKP_A_LED_N,		/* PWM1 (LOGO led on A cover) */
-	PWM_CH_LED1,			/* PWM2 (orange charger) */
+	PWM_CH_LED1_AMBER,		/* PWM2 (orange charger) */
 	PWM_CH_KBLIGHT,			/* PWM3 */
 	PWM_CH_FAN,			/* PWM5 */
 	PWM_CH_LED4,			/* PWM7 (power) */

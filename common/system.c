@@ -13,6 +13,7 @@
 #include "cpu.h"
 #include "cros_board_info.h"
 #include "dma.h"
+#include "extpower.h"
 #include "flash.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -174,7 +175,7 @@ static uint32_t __attribute__((unused)) get_size(enum ec_image copy)
 	}
 }
 
-int system_is_locked(void)
+test_mockable int system_is_locked(void)
 {
 	static int is_locked = -1;
 
@@ -1041,6 +1042,20 @@ void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
 		return;
 
 	/*
+	 * On ChromeOS devices, if AC is present, don't hibernate.
+	 * It might trigger an immediate wake up (since AC is present),
+	 * resulting in an AP reboot.
+	 * Hibernate when AC is present never occurs in normal circumstantces,
+	 * this is to prevent an action triggered by developers.
+	 * See: b/192259035
+	 */
+	if (IS_ENABLED(CONFIG_EXTPOWER) && IS_ENABLED(HAS_TASK_CHIPSET)
+			&& extpower_is_present()) {
+		CPRINTS("AC on, skip hibernate");
+		return;
+	}
+
+	/*
 	 * If chipset is already off, then call system_hibernate directly. Else,
 	 * let chipset_task bring down the power rails and transition to proper
 	 * state before system_hibernate is called.
@@ -1623,7 +1638,6 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_CHIP_INFO,
 		     host_command_get_chip_info,
 		     EC_VER_MASK(0));
 
-#if defined(CONFIG_BOARD_VERSION_CBI) || defined(CONFIG_BOARD_VERSION_GPIO)
 enum ec_status
 host_command_get_board_version(struct host_cmd_handler_args *args)
 {
@@ -1644,7 +1658,6 @@ host_command_get_board_version(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION,
 		     host_command_get_board_version,
 		     EC_VER_MASK(0));
-#endif
 
 enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 {

@@ -456,7 +456,7 @@ static void board_set_tablet_mode(void)
 	if (SKU_IS_CONVERTIBLE(sku_id))
 		tablet_mode = !gpio_get_level(GPIO_TABLET_MODE_L);
 
-	tablet_set_mode(tablet_mode);
+	tablet_set_mode(tablet_mode, TABLET_TRIGGER_LID);
 }
 
 /* Initialize board. */
@@ -911,7 +911,7 @@ static void sku_id_init(void)
 			CPRINTS("Disable tablet mode interrupt");
 			gpio_disable_interrupt(GPIO_TABLET_MODE_L);
 			/* Enfore device in laptop mode */
-			tablet_set_mode(0);
+			tablet_set_mode(0, TABLET_TRIGGER_LID);
 		}
 	}
 }
@@ -990,7 +990,7 @@ __override uint32_t board_get_sku_id(void)
 }
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next

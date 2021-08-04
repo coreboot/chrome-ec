@@ -40,6 +40,9 @@
 /* Sensors */
 /* BMA253 accelerometer in base */
 #define CONFIG_ACCEL_BMA255
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_KX022
 
 /* TCS3400 ALS */
@@ -50,8 +53,12 @@
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 
 /* Sensors without hardware FIFO are in forced mode */
+#ifdef BOARD_VOEMA_NPCX796FC
 #define CONFIG_ACCEL_FORCE_MODE_MASK \
 	(BIT(LID_ACCEL) | BIT(CLEAR_ALS) | BIT(BASE_ACCEL))
+#else
+#define CONFIG_ACCEL_FORCE_MODE_MASK (board_accel_force_mode_mask())
+#endif
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -171,6 +178,7 @@ enum pwm_channel {
 enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
+	BASE_GYRO,
 	CLEAR_ALS,
 	RGB_ALS,
 	SENSOR_COUNT,
@@ -183,9 +191,10 @@ enum usbc_port {
 };
 
 void board_reset_pd_mcu(void);
-
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
+#ifndef BOARD_VOEMA_NPCX796FC
+void motion_interrupt(enum gpio_signal signal);
+int board_accel_force_mode_mask(void);
+#endif
 
 #endif /* !__ASSEMBLER__ */
 

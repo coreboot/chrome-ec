@@ -155,6 +155,39 @@ static int rt1718s_bc12_init(int port)
 	return EC_SUCCESS;
 }
 
+static int rt1718s_workaround(int port)
+{
+	int device_id;
+
+	RETURN_ERROR(tcpc_read16(port, RT1718S_DEVICE_ID, &device_id));
+
+	switch (device_id) {
+	case RT1718S_DEVICE_ID_ES1:
+		RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_VCONN_CONTROL_3,
+					RT1718S_VCONN_CONTROL_3_VCONN_OVP_DEG,
+					0xFF));
+		/* fallthrough */
+	case RT1718S_DEVICE_ID_ES2:
+		RETURN_ERROR(rt1718s_update_bits8(port, TCPC_REG_FAULT_CTRL,
+					TCPC_REG_FAULT_CTRL_VBUS_OCP_FAULT_DIS,
+					0xFF));
+		RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_VCON_CTRL4,
+					RT1718S_VCON_CTRL4_UVP_CP_EN |
+					RT1718S_VCON_CTRL4_OVP_CP_EN,
+					0));
+		RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_VCONN_CONTROL_2,
+					RT1718S_VCONN_CONTROL_2_OVP_EN_CC1 |
+					RT1718S_VCONN_CONTROL_2_OVP_EN_CC2,
+					0xFF));
+		break;
+	default:
+		/* do nothing */
+		break;
+	}
+
+	return EC_SUCCESS;
+}
+
 static int rt1718s_init(int port)
 {
 	static bool need_sw_reset = true;
@@ -194,6 +227,7 @@ static int rt1718s_init(int port)
 
 	RETURN_ERROR(tcpci_tcpm_init(port));
 
+	RETURN_ERROR(rt1718s_workaround(port));
 	/*
 	 * Set vendor defined alert unmasked, this must be done after
 	 * tcpci_tcpm_init.
@@ -273,19 +307,20 @@ static void rt1718s_bc12_usb_charger_task(const int port)
 	while (1) {
 		uint32_t evt = task_wait_event(-1);
 
-		if (evt & USB_CHG_EVENT_DR_UFP)
-			rt1718s_enable_bc12_sink(port, true);
-
-		if ((evt & USB_CHG_EVENT_DR_DFP) ||
-		    (evt & USB_CHG_EVENT_CC_OPEN)) {
-			rt1718s_update_charge_manager(
-					port, CHARGE_SUPPLIER_NONE);
+		if (evt & USB_CHG_EVENT_VBUS) {
+			if (pd_snk_is_vbus_provided(port))
+				rt1718s_enable_bc12_sink(port, true);
+			else
+				rt1718s_update_charge_manager(
+						port, CHARGE_SUPPLIER_NONE);
 		}
 
 		/* detection done, update charge_manager and stop detection */
 		if (evt & USB_CHG_EVENT_BC12) {
+			int type = rt1718s_get_bc12_type(port);
+
 			rt1718s_update_charge_manager(
-					port, rt1718s_get_bc12_type(port));
+					port, type);
 			rt1718s_enable_bc12_sink(port, false);
 		}
 	}
@@ -309,6 +344,19 @@ void rt1718s_vendor_defined_alert(int port)
 	if (value & RT1718S_RT_INT6_INT_BC12_SNK_DONE)
 		task_set_event(USB_CHG_PORT_TO_TASK_ID(port),
 			       USB_CHG_EVENT_BC12);
+
+	/* clear the alerts from rt1718s_workaround() */
+	rv = rt1718s_write8(port, RT1718S_RT_INT2, 0xFF);
+	if (rv)
+		return;
+	/* ES1 workaround: disable Vconn discharge */
+	rv = rt1718s_update_bits8(port, RT1718S_SYS_CTRL2,
+			RT1718S_SYS_CTRL2_VCONN_DISCHARGE_EN,
+			0);
+	if (rv)
+		return;
+
+	tcpc_write16(port, TCPC_REG_ALERT, TCPC_REG_ALERT_VENDOR_DEF);
 }
 
 static void rt1718s_alert(int port)
@@ -354,7 +402,7 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,
 	.get_message_raw	= &tcpci_tcpm_get_message_raw,
 	.transmit		= &tcpci_tcpm_transmit,
-	.tcpc_alert		= &tcpci_tcpc_alert,
+	.tcpc_alert		= &rt1718s_alert,
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif
