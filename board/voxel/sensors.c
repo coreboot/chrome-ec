@@ -129,21 +129,15 @@ static void board_sensors_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_sensors_init, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+void motion_interrupt(enum gpio_signal signal)
 {
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
+	switch (get_cbi_ssfc_base_sensor()) {
+	case SSFC_SENSOR_BASE_ICM426XX:
+		icm426xx_interrupt(signal);
+		break;
+	case SSFC_SENSOR_BASE_BMI160:
+	default:
+		bmi160_interrupt(signal);
+		break;
 	}
 }
-#endif

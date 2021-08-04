@@ -644,9 +644,8 @@ static void adc_vol_key_press_check(void)
 }
 DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -670,4 +669,47 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	switch (base_gyro_config) {
+	case SSFC_SENSOR_LSM6DSM:
+		lsm6dsm_interrupt(signal);
+		break;
+	case SSFC_SENSOR_ICM426XX:
+		icm426xx_interrupt(signal);
+		break;
+	case SSFC_SENSOR_BMI160:
+	default:
+		bmi160_interrupt(signal);
+		break;
+	}
+}
+
+const struct i2c_port_t i2c_ports[] = {
+	{
+		"eeprom", I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
+		GPIO_EC_I2C_EEPROM_SDA
+	},
+
+	{
+		"battery", I2C_PORT_BATTERY, 100, GPIO_EC_I2C_BATTERY_SCL,
+		GPIO_EC_I2C_BATTERY_SDA
+	},
+
+	{
+		"sensor", I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
+		GPIO_EC_I2C_SENSOR_SDA
+	},
+
+	{
+		"usbc0", I2C_PORT_USB_C0, 1000, GPIO_EC_I2C_USB_C0_SCL,
+		GPIO_EC_I2C_USB_C0_SDA
+	},
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
+	{
+		"sub_usbc1", I2C_PORT_SUB_USB_C1, 1000,
+		GPIO_EC_I2C_SUB_USB_C1_SCL, GPIO_EC_I2C_SUB_USB_C1_SDA
+	},
 #endif
+};
