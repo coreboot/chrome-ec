@@ -1212,7 +1212,7 @@ static void show_charging_progress(void)
 }
 
 /* Calculate if battery is full based on whether it is accepting charge */
-static int calc_is_full(void)
+test_mockable int calc_is_full(void)
 {
 	static int __bss_slow ret;
 
@@ -1329,6 +1329,7 @@ static int set_chg_ctrl_mode(enum ec_charge_control_mode mode)
 	int current, voltage;
 	int rv;
 
+	ccprintf("\033[32m%s: %d\n\033[m", __func__, mode);
 	current = manual_current;
 	voltage = manual_voltage;
 
@@ -1634,6 +1635,7 @@ static void sustain_battery_soc(void)
 	if (mode == get_chg_ctrl_mode())
 		return;
 
+	ccprintf("\033[35m%s: \n\033[m", __func__);
 	rv = set_chg_ctrl_mode(mode);
 	CPRINTS("%s: %s control mode to %s",
 		__func__, rv == EC_SUCCESS ? "Switched" : "Failed to switch",
@@ -1791,6 +1793,7 @@ void charger_task(void *u)
 				}
 			} else {
 				/* Some things are only meaningful on AC */
+				ccprintf("\033[35m%s: \n\033[m", __func__);
 				set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
 				battery_seems_to_be_dead = 0;
 				prev_ac = curr.ac;
@@ -2588,6 +2591,7 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 		}
 	}
 
+	ccprintf("\033[35m%s: \n\033[m", __func__);
 	rv = set_chg_ctrl_mode(p->mode);
 	if (rv != EC_SUCCESS)
 		return EC_RES_ERROR;
@@ -2789,6 +2793,7 @@ static int command_chgstate(int argc, char **argv)
 				return EC_ERROR_PARAM_COUNT;
 			if (!parse_bool(argv[2], &val))
 				return EC_ERROR_PARAM2;
+			ccprintf("\033[35m%s: idle\n\033[m", __func__);
 			rv = set_chg_ctrl_mode(val ? CHARGE_CONTROL_IDLE :
 						CHARGE_CONTROL_NORMAL);
 			if (rv)
@@ -2798,6 +2803,7 @@ static int command_chgstate(int argc, char **argv)
 				return EC_ERROR_PARAM_COUNT;
 			if (!parse_bool(argv[2], &val))
 				return EC_ERROR_PARAM2;
+			ccprintf("\033[35m%s: discharge or normal\n\033[m", __func__);
 			rv = set_chg_ctrl_mode(val ? CHARGE_CONTROL_DISCHARGE :
 						CHARGE_CONTROL_NORMAL);
 			if (rv)
