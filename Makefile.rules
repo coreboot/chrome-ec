@@ -69,6 +69,7 @@ cmd_ec_elf_to_flat_dram ?= $(OBJCOPY) -j .dram* -O binary $< $@
 cmd_elf_to_signed ?= $(SIGNER) --key=util/signer/$(3) \
 	--b --input=$< --format=bin --output=$@.signed $(SIGNER_EXTRAS) \
 	&& sudo chown $(shell whoami) $@.signed && mv $@.signed $@
+cmd_elf_to_elf_fips = ./util/inject_fips_fingerprint.sh $(OBJCOPY) $(OBJDUMP) $^
 cmd_elf_to_dis = $(OBJDUMP) -D $< > $@
 cmd_elf_to_bin = $(OBJCOPY) -O binary $< $@
 cmd_elf_to_hex = $(OBJCOPY) -O ihex $< $@
@@ -419,7 +420,16 @@ $(out)/$(PROJECT).obj: common/firmware_image.S $(out)/firmware_image.lds \
 $(out)/%.dis: $(out)/%.elf
 	$(call quiet,elf_to_dis,OBJDUMP)
 
-$(out)/RW/%.hex: $(out)/RW/%.elf $(out)/RW/%.smap
+ifeq ($(CONFIG_FIPS_CHECKSUM),)
+rw_elf_ext=
+else
+rw_elf_ext=.fips
+
+$(out)/RW/%.elf.fips: $(out)/RW/%.elf
+	$(call quiet,elf_to_elf_fips,ELF_FIPS)
+endif
+
+$(out)/RW/%.hex: $(out)/RW/%.elf$(rw_elf_ext) $(out)/RW/%.smap
 	$(call quiet,elf_to_hex,OBJCOPY)
 
 ifeq ($(SIGNED_IMAGES),)
@@ -435,7 +445,7 @@ else
 $(out)/RO/%.flat: $(out)/RO/%.elf  $(out)/RO/%.smap
 	$(call quiet,elf_to_signed,RO_SIGN,$(CR50_RO_KEY))
 
-$(out)/RW/%.flat: $(out)/RW/%.elf  $(out)/RW/%.smap
+$(out)/RW/%.flat: $(out)/RW/%.elf$(rw_elf_ext) $(out)/RW/%.smap
 	$(call quiet,elf_to_signed,RW_SIGN,$(CR50_RW_KEY))
 
 $(out)/RO/%.hex: $(out)/RO/%.flat

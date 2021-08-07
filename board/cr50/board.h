@@ -157,6 +157,8 @@
 #define CONFIG_RESTRICTED_CONSOLE_COMMANDS
 #define CONFIG_CONSOLE_COMMAND_FLAGS_DEFAULT CMD_FLAG_RESTRICTED
 
+/* Inject the fips checksum into the image. */
+#define CONFIG_FIPS_CHECKSUM
 /* Include crypto stuff, both software and hardware. Enable optimizations. */
 /* Use board specific version of dcrypto */
 #define CONFIG_FIPS_UTIL
