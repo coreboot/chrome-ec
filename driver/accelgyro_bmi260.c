@@ -20,10 +20,19 @@
 #include "motion_sense_fifo.h"
 #include "spi.h"
 #include "task.h"
-#include "third_party/bmi260/accelgyro_bmi260_config_tbin.h"
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
+
+/* BMI220/BMI260 firmware binary */
+#if defined(CONFIG_ACCELGYRO_BMI220)
+#include "third_party/bmi220/accelgyro_bmi220_config_tbin.h"
+#endif /* CONFIG_ACCELGYRO_BMI220 */
+
+#if defined(CONFIG_ACCELGYRO_BMI260)
+#include "third/party/bmi260/accelgyro_bmi260_config_tbin.h"
+#endif /* CONFIG_ACCELGYRO_BMI260 */
+
 
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
@@ -391,6 +400,8 @@ static int bmi_config_load(const struct motion_sensor_t *s)
 	int ret = EC_SUCCESS;
 	uint16_t i;
 	const uint8_t *bmi_config = NULL;
+	const unsigned char *bmi_config_tbin;
+	int bmi_config_tbin_len;
 	/*
 	 * Due to i2c transaction timeout limit,
 	 * burst_write_len should not be above 2048 to prevent timeout.
@@ -401,8 +412,26 @@ static int bmi_config_load(const struct motion_sensor_t *s)
 	 * The BMI config data may be linked into .rodata or the .init_rom
 	 * section. Get the actual memory mapped address.
 	 */
-	bmi_config = init_rom_map(g_bmi260_config_tbin,
-				  g_bmi260_config_tbin_len);
+	switch (s->chip) {
+#ifdef CONFIG_ACCELGYRO_BMI220
+	case MOTIONSENSE_CHIP_BMI220:
+		bmi_config_tbin = g_bmi220_config_tbin;
+		bmi_config_tbin_len = g_bmi220_config_tbin_len;
+		break;
+#endif /* CONFIG_ACCELGYRO_BMI220 */
+
+#ifdef CONFIG_ACCELGYRO_BMI260
+	case MOTIONSENSE_CHIP_BMI260:
+		bmi_config_tbin = g_bmi260_config_tbin;
+		bmi_config_tbin_len = g_bmi260_config_tbin_len;
+		break;
+#endif /* CONFIG_ACCELGYRO_BMI260 */
+
+	default:
+		return EC_ERROR_INVALID_CONFIG;
+	}
+
+	bmi_config = init_rom_map(bmi_config_tbin, bmi_config_tbin_len);
 
 	/*
 	 * init_rom_map() only returns NULL when the CONFIG_CHIP_INIT_ROM_REGION
@@ -416,10 +445,10 @@ static int bmi_config_load(const struct motion_sensor_t *s)
 	/* We have to write the config even bytes of data every time */
 	ASSERT(((burst_write_len & 1) == 0) && (burst_write_len != 0));
 
-	for (i = 0; i < g_bmi260_config_tbin_len; i += burst_write_len) {
+	for (i = 0; i < bmi_config_tbin_len; i += burst_write_len) {
 		uint8_t addr[2];
 		const int len = MIN(burst_write_len,
-				    g_bmi260_config_tbin_len - i);
+				    bmi_config_tbin_len - i);
 
 		addr[0] = (i / 2) & 0xF;
 		addr[1] = (i / 2) >> 4;
@@ -433,7 +462,7 @@ static int bmi_config_load(const struct motion_sensor_t *s)
 			 * init_rom region isn't memory mapped. Copy the
 			 * data through a RAM buffer.
 			 */
-			ret = init_rom_copy((int)&g_bmi260_config_tbin[i], len,
+			ret = init_rom_copy((int)&bmi_config_tbin[i], len,
 				bmi_ram_buffer);
 			if (ret)
 				break;
@@ -456,7 +485,7 @@ static int bmi_config_load(const struct motion_sensor_t *s)
 	 * a non NULL value.
 	 */
 	if (bmi_config)
-		init_rom_unmap(g_bmi260_config_tbin, g_bmi260_config_tbin_len);
+		init_rom_unmap(bmi_config_tbin, bmi_config_tbin_len);
 
 	return ret;
 }
@@ -506,8 +535,21 @@ static int init(struct motion_sensor_t *s)
 	if (ret)
 		return EC_ERROR_UNKNOWN;
 
-	if (tmp != BMI260_CHIP_ID_MAJOR)
+	switch (s->chip) {
+	case MOTIONSENSE_CHIP_BMI220:
+		if (tmp != BMI220_CHIP_ID_MAJOR)
+			return EC_ERROR_ACCESS_DENIED;
+		break;
+
+	case MOTIONSENSE_CHIP_BMI260:
+		if (tmp != BMI260_CHIP_ID_MAJOR)
+			return EC_ERROR_ACCESS_DENIED;
+		break;
+
+	default:
 		return EC_ERROR_ACCESS_DENIED;
+	}
+
 
 	if (s->type == MOTIONSENSE_TYPE_ACCEL) {
 		struct bmi_drv_data_t *data = BMI_GET_DATA(s);
