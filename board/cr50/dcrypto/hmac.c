@@ -9,7 +9,6 @@
 #include <stdint.h>
 
 #include "cryptoc/sha256.h"
-#include "cryptoc/util.h"
 
 /* TODO(sukhomlinov): add support for hardware hmac. */
 static void hmac_sha256_init(LITE_HMAC_CTX *ctx, const void *key,

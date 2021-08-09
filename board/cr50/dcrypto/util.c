@@ -203,3 +203,15 @@ __stdlib_compat int strncmp(const char *s1, const char *s2, size_t n)
 	}
 	return 0;
 }
+
+static void always_memset_impl(volatile char *s, int c, size_t n)
+{
+	while (n--)
+		*s++ = c;
+}
+
+void *always_memset(void *s, int c, size_t n)
+{
+	always_memset_impl(s, c, n);
+	return s;
+}

@@ -10,7 +10,6 @@
 #include "ccd_config.h"
 #include "console.h"
 #include "cryptoc/sha256.h"
-#include "cryptoc/util.h"
 #include "dcrypto.h"
 #include "extension.h"
 #include "hooks.h"

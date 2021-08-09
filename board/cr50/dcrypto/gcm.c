@@ -9,8 +9,6 @@
 
 #include "endian.h"
 
-#include "cryptoc/util.h"
-
 static void gcm_mul(uint32_t *counter)
 {
 	int i;

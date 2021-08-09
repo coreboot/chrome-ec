@@ -8,7 +8,6 @@
 #include "internal.h"
 
 #include "cryptoc/sha256.h"
-#include "cryptoc/util.h"
 
 static int hkdf_extract(uint8_t *PRK, const uint8_t *salt, size_t salt_len,
 			const uint8_t *IKM, size_t IKM_len)

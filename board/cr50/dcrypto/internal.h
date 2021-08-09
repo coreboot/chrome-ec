@@ -200,6 +200,12 @@ void dcrypto_imem_load(size_t offset, const uint32_t *opcodes,
  */
 uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words);
 
+/**
+ * An implementation of memset that ought not to be optimized away;
+ * useful for scrubbing security sensitive buffers.
+ */
+void *always_memset(void *s, int c, size_t n);
+
 /*
  * Key ladder.
  */

@@ -4,7 +4,6 @@
  */
 
 #include "console.h"
-#include "cryptoc/util.h"
 #include "dcrypto.h"
 #include "extension.h"
 #include "internal.h"

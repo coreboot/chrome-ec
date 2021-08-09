@@ -6,7 +6,6 @@
 #include "dcrypto.h"
 
 #include "cryptoc/p256.h"
-#include "cryptoc/util.h"
 
 static const p256_int p256_one = P256_ONE;
 

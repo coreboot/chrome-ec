@@ -15,7 +15,6 @@
 
 #include "cryptoc/p256.h"
 #include "cryptoc/p256_ecdsa.h"
-#include "cryptoc/util.h"
 
 static void reverse_tpm2b(TPM2B *b)
 {

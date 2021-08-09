@@ -15,7 +15,6 @@
 #include "cryptoc/sha256.h"
 #include "cryptoc/sha384.h"
 #include "cryptoc/sha512.h"
-#include "cryptoc/util.h"
 
 /* Extend the MSB throughout the word. */
 static uint32_t msb_extend(uint32_t a)

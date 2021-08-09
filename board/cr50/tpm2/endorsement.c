@@ -31,7 +31,6 @@
 #include "dcrypto.h"
 
 #include <cryptoc/sha256.h>
-#include <cryptoc/util.h>
 
 #include <endian.h>
 #include <string.h>

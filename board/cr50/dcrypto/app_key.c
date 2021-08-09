@@ -7,8 +7,6 @@
 #include "endian.h"
 #include "registers.h"
 
-#include "cryptoc/util.h"
-
 #include "console.h"
 
 const char *const dcrypto_app_names[] = {

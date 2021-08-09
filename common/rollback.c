@@ -7,7 +7,6 @@
 
 #include "common.h"
 #include "console.h"
-#include "cryptoc/util.h"
 #include "flash.h"
 #include "hooks.h"
 #include "host_command.h"

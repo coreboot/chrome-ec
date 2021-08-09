@@ -28,7 +28,6 @@
 #include "util.h"
 
 #ifndef TEST_BUILD
-#include "cryptoc/util.h"
 #include "rma_key_from_blob.h"
 #else
 /* Cryptoc library is not available to the test layer. */
