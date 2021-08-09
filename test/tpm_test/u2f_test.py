@@ -49,7 +49,8 @@ def u2f_sign(tpm, origin, user, auth, kh, msg, flag, fail=False):
         if size != 12:
              raise subcmd.TpmTestError('Unexpected response: '
                                        + utils.hex_dump(response))
-        print('response: ', hex(response_code))
+        if tpm.debug_enabled():
+            print('U2F sign response: ', hex(response_code))
         return b''
     return sig
 
@@ -81,20 +82,27 @@ def u2f_test(tpm):
     auth = b'3'
     msg = b'12345'
     public_key1, khv1 = u2f_generate(tpm, origin, user, 0, auth)
-    print('key_handle v1 = ',utils.hex_dump(khv1), len(khv1))
-    print('public_key v1 = ',utils.hex_dump(public_key1), len(public_key1))
+    if tpm.debug_enabled():
+        print('key_handle v1 = ',utils.hex_dump(khv1), len(khv1))
+        print('public_key v1 = ',utils.hex_dump(public_key1), len(public_key1))
 
     public_key2, khv2 = u2f_generate(tpm, origin, user, 8, auth)
-    print('key_handle v2 = ',utils.hex_dump(khv2), len(khv2))
+    if tpm.debug_enabled():
+        print('key_handle v2 = ',utils.hex_dump(khv2), len(khv2))
 
     sig1 = u2f_sign(tpm, origin, user, auth, khv1, msg, 2)
-    print('sig v1 = ',utils.hex_dump(sig1), len(sig1))
+    if tpm.debug_enabled():
+        print('sig v1 = ',utils.hex_dump(sig1), len(sig1))
 
     sig1 = u2f_sign(tpm, origin, user, auth, khv2, msg, 2)
-    print('sig v2 = ',utils.hex_dump(sig1), len(sig1))
+    if tpm.debug_enabled():
+        print('sig v2 = ',utils.hex_dump(sig1), len(sig1))
 
     sig1 = u2f_sign(tpm, user, origin, auth, khv2, msg, 2, fail=True)
-    print('sig v2 = ',utils.hex_dump(sig1), len(sig1))
+    if tpm.debug_enabled():
+        print('sig v2 = ',utils.hex_dump(sig1), len(sig1))
 
     sig_attest = u2f_attest(tpm, origin, user, auth, khv1, public_key1)
-    print('sig attest = ',utils.hex_dump(sig_attest), len(sig_attest))
+    if tpm.debug_enabled():
+        print('sig attest = ',utils.hex_dump(sig_attest), len(sig_attest))
+    print('%sSUCCESS: %s' % (utils.cursor_back(), 'U2F test'))

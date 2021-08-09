@@ -66,6 +66,9 @@ fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_bn.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_p256.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/compare.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_runtime.o
+ifneq ($(CRYPTO_TEST),)
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/gcm.o
+endif
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hkdf.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_drbg.o

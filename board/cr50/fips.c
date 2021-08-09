@@ -120,15 +120,18 @@ static bool fips_u2f_compliant(void)
 	return false;
 }
 
-/* Return true if crypto can be used (no failures detectd). */
+/* Return true if crypto can be used (no failures detected). */
 bool fips_crypto_allowed(void)
 {
 	/**
 	 * We never allow crypto if there were errors, no matter
 	 * if we are in FIPS approved or not-approved mode.
+	 * Until self-integrity works properly (b/138578318), ignore it.
+	 * TODO(b/138578318): remove ignoring of FIPS_FATAL_SELF_INTEGRITY.
 	 */
 	return ((_fips_status & FIPS_POWER_UP_TEST_DONE) &&
-		!(_fips_status & FIPS_ERROR_MASK));
+		!(_fips_status &
+		  (FIPS_ERROR_MASK & (~FIPS_FATAL_SELF_INTEGRITY))));
 }
 
 void fips_throw_err(enum fips_status err)

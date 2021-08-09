@@ -15,7 +15,7 @@ SECTIONS
 	.rodata.cmds.fips : {
 		*(.rodata.cmds.*)
 	}
-	.rodata.extensioncmds.fips : {
+	.rodata.extensioncmds : {
 		*(.rodata.extensioncmds)
 	}
 	.rodata.irqprio : {
