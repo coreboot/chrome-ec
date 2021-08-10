@@ -13,9 +13,6 @@
 #include "util.h"
 #include "dcrypto.h"
 
-#include "cryptoc/p256.h"
-#include "cryptoc/p256_ecdsa.h"
-
 static void reverse_tpm2b(TPM2B *b)
 {
 	reverse(b->buffer, b->size);

@@ -381,7 +381,7 @@ static int call_on_bigger_stack(uint32_t stack,
 static int ecdsa_sign_go(p256_int *r, p256_int *s)
 {
 	struct drbg_ctx drbg;
-	p256_int d, tmp;
+	p256_int d;
 	int ret = 0;
 	p256_int message = *s;
 
@@ -389,15 +389,11 @@ static int ecdsa_sign_go(p256_int *r, p256_int *s)
 	hmac_drbg_init(&drbg, r->a, sizeof(r->a), NULL, 0, NULL, 0);
 
 	/* pick a key */
-	ret = dcrypto_p256_pick(&drbg, &tmp);
-	if (ret) {
+	if (p256_hmac_drbg_generate(&drbg, &d) != HMAC_DRBG_SUCCESS) {
 		/* to be consistent with ecdsa_sign error return */
-		ret = 0;
-		goto exit;
+		drbg_exit(&drbg);
+		return 0;
 	}
-
-	/* add 1 */
-	p256_add_d(&tmp, 1, &d);
 
 	/* drbg_reseed with entropy and message */
 	hmac_drbg_reseed(&drbg, r->a, sizeof(r->a), s->a, sizeof(s->a), NULL,
@@ -405,7 +401,6 @@ static int ecdsa_sign_go(p256_int *r, p256_int *s)
 
 	ret = dcrypto_p256_ecdsa_sign(&drbg, &d, &message, r, s);
 
-exit:
 	drbg_exit(&drbg);
 	return ret;
 }

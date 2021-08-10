@@ -6,7 +6,6 @@
 /* APDU dispatcher and U2F command handlers. */
 
 #include "console.h"
-#include "cryptoc/p256.h"
 
 #include "dcrypto.h"
 #include "extension.h"

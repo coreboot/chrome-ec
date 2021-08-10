@@ -11,7 +11,6 @@
 #include "common.h"
 #include "util.h"
 
-#include "cryptoc/p256.h"
 #include "hmacsha2.h"
 
 #ifdef __cplusplus
@@ -135,10 +134,6 @@ void hmac_drbg_init(struct drbg_ctx *ctx,
 		    const void *p0, size_t p0_len,
 		    const void *p1, size_t p1_len,
 		    const void *p2, size_t p2_len);
-/* Initialize for use as RFC6979 DRBG. */
-void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx,
-			    const p256_int *key,
-			    const p256_int *message);
 /* Initialize with at least nbits of random entropy. */
 void hmac_drbg_init_rand(struct drbg_ctx *ctx, size_t nbits);
 void hmac_drbg_reseed(struct drbg_ctx *ctx,
@@ -148,13 +143,73 @@ void hmac_drbg_reseed(struct drbg_ctx *ctx,
 enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx, void *out,
 				    size_t out_len, const void *input,
 				    size_t input_len);
-/* Generate p256, with no additional input. */
-enum hmac_result hmac_drbg_generate_p256(struct drbg_ctx *ctx, p256_int *k_out);
 void drbg_exit(struct drbg_ctx *ctx);
+
+/* Set seed for fast random number generator using LFSR. */
+void set_fast_random_seed(uint32_t seed);
+
+/* Generate week pseudorandom using LFSR for blinding purposes. */
+uint32_t fast_random(void);
 
 /*
  * Accelerated p256. FIPS PUB 186-4
  */
+#define P256_BITSPERDIGIT 32
+#define P256_NDIGITS	  8
+#define P256_NBYTES	  32
+
+typedef uint32_t p256_digit;
+typedef int32_t p256_sdigit;
+typedef uint64_t p256_ddigit;
+typedef int64_t p256_sddigit;
+
+#define P256_DIGITS(x)	 ((x)->a)
+#define P256_DIGIT(x, y) ((x)->a[y])
+
+/**
+ * P-256 integers internally represented as little-endian 32-bit integer
+ * digits in platform-specific format. On little-endian platform this would
+ * be regular 256-bit little-endian unsigned integer. On big-endian platform
+ * it would big-endian 32-bit digits in little-endian order.
+ *
+ * Defining p256_int as struct to leverage struct assignment.
+ */
+typedef struct p256_int {
+	union {
+		p256_digit a[P256_NDIGITS];
+		uint8_t b8[P256_NBYTES];
+	};
+} __packed p256_int;
+
+extern const p256_int SECP256r1_nMin2;
+
+/* Clear a p256_int to zero. */
+void p256_clear(p256_int *a);
+
+/* Check p256 is a zero. */
+int p256_is_zero(const p256_int *a);
+
+/* Check p256 is odd. */
+int p256_is_odd(const p256_int *a);
+
+/* c := a + (single digit)b, returns carry 1 on carry. */
+int p256_add_d(const p256_int *a, p256_digit b, p256_int *c);
+
+/* Returns -1, 0 or 1. */
+int p256_cmp(const p256_int *a, const p256_int *b);
+
+/* Return -1 if a < b. */
+int p256_lt_blinded(const p256_int *a, const p256_int *b);
+
+/* Outputs big-endian binary form. No leading zero skips. */
+void p256_to_bin(const p256_int *src, uint8_t dst[P256_NBYTES]);
+
+/**
+ * Reads from big-endian binary form, thus pre-pad with leading
+ * zeros if short. Input length is assumed P256_NBYTES bytes.
+ */
+void p256_from_bin(const uint8_t src[P256_NBYTES], p256_int *dst);
+
 int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 			    const p256_int *message, p256_int *r, p256_int *s)
 	__attribute__((warn_unused_result));
@@ -171,11 +226,16 @@ int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
 int dcrypto_p256_is_valid_point(const p256_int *x, const p256_int *y)
 	__attribute__((warn_unused_result));
 
-/* Pick a p256 number between 1 < k < |p256| */
-int dcrypto_p256_pick(struct drbg_ctx *drbg, p256_int *output);
+/* Wipe content of rnd with pseudo-random values. */
+void p256_fast_random(p256_int *rnd);
 
-/* Overwrite with random p256 value */
-void dcrypto_p256_rnd(p256_int *output);
+/* Generate a p256 number between 1 < k < |p256| using provided DRBG. */
+enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *k_out);
+
+/* Initialize for use as RFC6979 DRBG. */
+void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx,
+			    const p256_int *key,
+			    const p256_int *message);
 
 /*
  * Accelerator runtime.

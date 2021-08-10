@@ -10,11 +10,8 @@
 
 #include "common.h"
 
-#ifdef TEST_BUILD
-#include "board/host/dcrypto.h"
-#endif
+#include "dcrypto.h"
 
-#include "cryptoc/p256.h"
 #include "tpm_vendor_cmds.h"
 #include "u2f.h"
 

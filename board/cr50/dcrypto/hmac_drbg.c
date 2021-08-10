@@ -136,11 +136,6 @@ enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx,
 	return HMAC_DRBG_SUCCESS;
 }
 
-enum hmac_result hmac_drbg_generate_p256(struct drbg_ctx *ctx, p256_int *k_out)
-{
-	return hmac_drbg_generate(ctx, k_out->a, sizeof(k_out->a), NULL, 0);
-}
-
 void drbg_exit(struct drbg_ctx *ctx)
 {
 	always_memset(ctx->k,  0x00, sizeof(ctx->k));
@@ -200,12 +195,10 @@ static int cmd_rfc6979(int argc, char **argv)
 	memcpy(&h1, SHA256_final(&ctx)->b8, SHA256_DIGEST_SIZE);
 
 	hmac_drbg_init_rfc6979(&drbg, x, &h1);
-	do {
-		hmac_drbg_generate_p256(&drbg, &k);
-		ccprintf("K = %ph\n", HEX_BUF(&k, 32));
-	} while (p256_cmp(&SECP256r1_nMin2, &k) < 0);
+	hmac_drbg_generate(&drbg, k.a, sizeof(k), NULL, 0);
+	ccprintf("K = %ph\n", HEX_BUF(&k, 32));
 	drbg_exit(&drbg);
-	result = p256_cmp(&k, reference_k);
+	result = memcmp(&k, reference_k, sizeof(reference_k));
 	ccprintf("K generation: %s\n", result ? "FAIL" : "PASS");
 
 	return result ? EC_ERROR_INVAL : EC_SUCCESS;

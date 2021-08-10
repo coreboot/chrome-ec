@@ -155,8 +155,6 @@ CFLAGS += -DUSER_MIN_HASH_STATE_SIZE=104
 endif
 # Configure TPM2 headers accordingly.
 CFLAGS += -DEMBEDDED_MODE=1
-# Configure cryptoc headers to handle unaligned accesses.
-CFLAGS += -DSUPPORT_UNALIGNED=1
 
 # Use absolute path as the destination to ensure that TPM2 makefile finds the
 # place for output.

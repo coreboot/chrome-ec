@@ -314,6 +314,7 @@ bool fips_drbg_init(void)
 		       &nonce.random_value, sizeof(nonce.random_value), NULL,
 		       0);
 
+	set_fast_random_seed(fips_trng32(0).random_value);
 	rand_state.drbg_initialized = 1;
 	return true;
 }

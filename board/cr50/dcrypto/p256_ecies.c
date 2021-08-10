@@ -9,7 +9,6 @@
 #include "trng.h"
 #include "util.h"
 
-#include "cryptoc/p256.h"
 #include "cryptoc/sha256.h"
 
 #define AES_KEY_BYTES  16
