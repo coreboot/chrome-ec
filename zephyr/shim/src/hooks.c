@@ -15,25 +15,13 @@
 
 int hook_call_deferred(const struct deferred_data *data, int us)
 {
-#if IS_ZEPHYR_VERSION(2, 6)
 	struct k_work_delayable *work = data->work;
-#else
-	struct k_delayed_work *work = data->work;
-#endif
 	int rv = 0;
 
 	if (us == -1) {
-#if IS_ZEPHYR_VERSION(2, 6)
 		k_work_cancel_delayable(work);
-#else
-		k_delayed_work_cancel(work);
-#endif
 	} else if (us >= 0) {
-#if IS_ZEPHYR_VERSION(2, 6)
 		rv = k_work_schedule(work, K_USEC(us));
-#else
-		rv = k_delayed_work_submit(work, K_USEC(us));
-#endif
 		if (rv == -EINVAL) {
 			/* Already processing or completed. */
 			return 0;
@@ -52,23 +40,25 @@ int hook_call_deferred(const struct deferred_data *data, int us)
 
 static struct zephyr_shim_hook_list *hook_registry[HOOK_TYPE_COUNT];
 
-void zephyr_shim_setup_hook(enum hook_type type, void (*routine)(void),
-			    int priority, struct zephyr_shim_hook_list *entry)
+static int zephyr_shim_setup_hooks(const struct device *unused)
 {
-	struct zephyr_shim_hook_list **loc = &hook_registry[type];
+	STRUCT_SECTION_FOREACH(zephyr_shim_hook_list, entry) {
+		struct zephyr_shim_hook_list **loc = &hook_registry[entry->type];
 
-	/* Find the correct place to put the entry in the registry. */
-	while (*loc && (*loc)->priority < priority)
-		loc = &((*loc)->next);
+		/* Find the correct place to put the entry in the registry. */
+		while (*loc && (*loc)->priority < entry->priority)
+			loc = &((*loc)->next);
 
-	/* Setup the entry. */
-	entry->routine = routine;
-	entry->priority = priority;
-	entry->next = *loc;
+		entry->next = *loc;
 
-	/* Insert the entry. */
-	*loc = entry;
+		/* Insert the entry. */
+		*loc = entry;
+	}
+
+	return 0;
 }
+
+SYS_INIT(zephyr_shim_setup_hooks, APPLICATION, 1);
 
 void hook_notify(enum hook_type type)
 {

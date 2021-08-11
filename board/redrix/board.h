@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early redrix boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -56,6 +51,13 @@
 /* Sensor console commands */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+
+/* WLC pins */
+#ifdef SECTION_IS_RW
+#define CONFIG_PERIPHERAL_CHARGER
+#define CONFIG_DEVICE_EVENT
+#define CONFIG_CTN730
+#endif
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -121,7 +123,7 @@
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
 
-#define GPIO_ID_1_EC_KB_BL_EN		GPIO_EC_BATT_PRES_ODL
+#define GPIO_WLC_NRST_CONN		GPIO_PEN_RST_L
 
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
@@ -145,6 +147,7 @@
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
 #define I2C_PORT_CHARGER	NPCX_I2C_PORT7_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
+#define I2C_PORT_WLC		NPCX_I2C_PORT7_0
 
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 
@@ -175,9 +178,13 @@
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
 #define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	70
-#define CONFIG_CHARGE_RAMP_SW
+#define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/* Keyboard features */
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 #ifndef __ASSEMBLER__
 
@@ -186,16 +193,18 @@
 #include "usbc_config.h"
 
 enum adc_channel {
-	ADC_TEMP_SENSOR_1_DDR_SOC,
-	ADC_TEMP_SENSOR_2_FAN,
+	ADC_TEMP_SENSOR_1_DDR,
+	ADC_TEMP_SENSOR_2_SOC,
 	ADC_TEMP_SENSOR_3_CHARGER,
-	ADC_TEMP_SENSOR_4_WWAN,
+	ADC_TEMP_SENSOR_4_REGULATOR,
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
-	TEMP_SENSOR_1_DDR_SOC,
-	TEMP_SENSOR_2_FAN,
+	TEMP_SENSOR_1_DDR,
+	TEMP_SENSOR_2_SOC,
+	TEMP_SENSOR_3_CHARGER,
+	TEMP_SENSOR_4_REGULATOR,
 	TEMP_SENSOR_COUNT
 };
 

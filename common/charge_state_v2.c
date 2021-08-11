@@ -1280,7 +1280,7 @@ static void show_charging_progress(void)
 }
 
 /* Calculate if battery is full based on whether it is accepting charge */
-static int calc_is_full(void)
+test_mockable int calc_is_full(void)
 {
 	static int __bss_slow ret;
 
@@ -1729,22 +1729,28 @@ static void sustain_battery_soc(void)
 
 	soc = charge_get_display_charge() / 10;
 
+	/*
+	 * When lower < upper, the sustainer discharges using DISCHARGE. When
+	 * lower == upper, the sustainer discharges using IDLE. The following
+	 * switch statement handle both cases but in reality either DISCHARGE
+	 * or IDLE is used but not both.
+	 */
 	switch (mode) {
 	case CHARGE_CONTROL_NORMAL:
 		/* Going up */
 		if (sustain_soc.upper < soc)
-			mode = CHARGE_CONTROL_DISCHARGE;
+			mode = sustain_soc.upper == sustain_soc.lower ?
+				CHARGE_CONTROL_IDLE : CHARGE_CONTROL_DISCHARGE;
 		break;
 	case CHARGE_CONTROL_IDLE:
-		/* discharging naturally */
+		/* Discharging naturally */
 		if (soc < sustain_soc.lower)
-			/* TODO: Charge slowly */
 			mode = CHARGE_CONTROL_NORMAL;
 		break;
 	case CHARGE_CONTROL_DISCHARGE:
-		/* discharging rapidly (discharge_on_ac) */
-		if (soc < sustain_soc.upper)
-			mode = CHARGE_CONTROL_IDLE;
+		/* Discharging actively. */
+		if (soc < sustain_soc.lower)
+			mode = CHARGE_CONTROL_NORMAL;
 		break;
 	default:
 		return;
@@ -2168,6 +2174,10 @@ wait_for_it:
 
 		/* And the EC console */
 		is_full = calc_is_full();
+
+		/* Run battery sustainer (no-op if not applicable). */
+		sustain_battery_soc();
+
 		if ((!(curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
 		    curr.batt.state_of_charge != prev_charge) ||
 #ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
@@ -2176,7 +2186,6 @@ wait_for_it:
 		    (is_full != prev_full) ||
 		    (curr.state != prev_state) ||
 		    (charge_get_display_charge() != prev_disp_charge)) {
-			sustain_battery_soc();
 			show_charging_progress();
 			prev_charge = curr.batt.state_of_charge;
 			prev_disp_charge = charge_get_display_charge();
@@ -2741,7 +2750,7 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 
 	if (args->version >= 2) {
 		if (p->cmd == EC_CHARGE_CONTROL_CMD_SET) {
-			if (get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) {
+			if (p->mode == CHARGE_CONTROL_NORMAL) {
 				rv = battery_sustainer_set(
 						p->sustain_soc.lower,
 						p->sustain_soc.upper);
