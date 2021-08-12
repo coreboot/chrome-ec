@@ -24,9 +24,6 @@
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
-/* FIPS mode is temporarily disabled. */
-#define FIPS_MODE_ENABLED 0
-
 /**
  * Combined FIPS status & global FIPS error.
  * default value is  = FIPS_UNINITIALIZED
@@ -39,85 +36,18 @@ enum fips_status fips_status(void)
 	return _fips_status;
 }
 
+#ifdef CRYPTO_TEST_SETUP
 /* Flag to simulate specific error condition in power-up tests. */
 uint8_t fips_break_cmd;
-
-void fips_set_status(enum fips_status status)
-{
-	/**
-	 * if FIPS error took place, drop indication of FIPS approved mode.
-	 * Next cycle of sleep will power-cycle HW crypto components, so any
-	 * soft-errors will be recovered. In case of hard errors it
-	 * will be detected again.
-	 */
-	/* accumulate status */
-	_fips_status |= status;
-
-	status = _fips_status;
-	/* if we have error, require power up tests on resume */
-	if (status & FIPS_ERROR_MASK)
-		board_set_fips_policy_test(false);
-}
-
-bool fips_mode(void)
-{
-	return (_fips_status & FIPS_MODE_ACTIVE);
-}
-
-#if FIPS_MODE_ENABLED
-static const uint8_t k_salt = NVMEM_VAR_G2F_SALT;
-
-/* Can't include TPM2 headers, so just define constant locally. */
-#define HR_NV_INDEX (1U << 24)
-
-/* Wipe old U2F keys. */
-static void u2f_zeroize(void)
-{
-	const uint32_t u2fobjs[] = { TPM_HIDDEN_U2F_KEK | HR_NV_INDEX,
-				     TPM_HIDDEN_U2F_KH_SALT | HR_NV_INDEX, 0 };
-	/* Delete NVMEM_VAR_G2F_SALT. */
-	setvar(&k_salt, sizeof(k_salt), NULL, 0);
-	/* Remove U2F keys and wipe all deleted objects. */
-	nvmem_erase_tpm_data_selective(u2fobjs);
-}
+#else
+/* For production set it to zero, so check is eliminated. */
+#define fips_break_cmd 0
 #endif
 
-/**
- * Return current status for U2F keys:
- * false - U2F keys require zeroization.
- * true - U2F keys are missing or created in FIPS mode.
- */
-static bool fips_u2f_compliant(void)
+static inline bool fips_is_no_crypto_error(void)
 {
-/* Until U2F key gen switch to new code, don't enable FIPS mode. */
-#if FIPS_MODE_ENABLED
-	uint8_t val_len = 0;
-	const struct tuple *t_salt;
-
-	/**
-	 * We are in FIPS mode if and only if:
-	 * 1) U2F keys were created in FIPS compliant way (board_fips_enforced)
-	 * 2) OR U2F keys weren't previously created
-	 */
-	if (board_fips_enforced())
-		return true;
-
-	/* FIPS mode wasn't enforced, so check presence of U2F keys */
-	t_salt = getvar(&k_salt, sizeof(k_salt));
-	if (t_salt) {
-		val_len = t_salt->val_len;
-		freevar(t_salt);
-	}
-	/* If none of keys is present - we are in FIPS mode. */
-	if (!val_len && !read_tpm_nvmem_size(TPM_HIDDEN_U2F_KEK) &&
-	    !read_tpm_nvmem_size(TPM_HIDDEN_U2F_KH_SALT)) {
-		/* Apparently, board FIPS mode wasn't set yet, so set it. */
-		board_set_local_fips_policy(true);
-		return true;
-	}
-#endif
-	/* we still have old U2F keys, so not in FIPS until zeroized */
-	return false;
+	return (_fips_status &
+	       (FIPS_ERROR_MASK & (~FIPS_FATAL_SELF_INTEGRITY))) == 0;
 }
 
 /* Return true if crypto can be used (no failures detected). */
@@ -130,8 +60,7 @@ bool fips_crypto_allowed(void)
 	 * TODO(b/138578318): remove ignoring of FIPS_FATAL_SELF_INTEGRITY.
 	 */
 	return ((_fips_status & FIPS_POWER_UP_TEST_DONE) &&
-		!(_fips_status &
-		  (FIPS_ERROR_MASK & (~FIPS_FATAL_SELF_INTEGRITY))));
+		fips_is_no_crypto_error());
 }
 
 void fips_throw_err(enum fips_status err)
@@ -144,6 +73,49 @@ void fips_throw_err(enum fips_status err)
 		flash_log_add_event(FE_LOG_FIPS_FAILURE, sizeof(_fips_status),
 				    &_fips_status);
 	}
+}
+
+/**
+ * Set status of FIPS power-up tests on wake from sleep. We don't want to
+ * run lengthy KAT & power-up tests on every wake-up, so need to 'cache'
+ * result in long life register which content persists during sleep mode.
+ *
+ * @param asserted: false power-up tests should run on resume, otherwise
+ * can be skipped.
+ */
+static void fips_set_power_up(bool asserted)
+{
+	/* Enable writing to the long life register */
+	if (asserted)
+		GREG32(PMU, PWRDN_SCRATCH22) = BOARD_FIPS_POWERUP_DONE;
+	else
+		GREG32(PMU, PWRDN_SCRATCH22) = 0;
+}
+
+/**
+ * Return true if FIPS KAT tests completed successfully after waking up
+ * from sleep mode which clears RAM.
+ */
+static bool fips_is_power_up_done(void)
+{
+	return !!(GREG32(PMU, PWRDN_SCRATCH22) == BOARD_FIPS_POWERUP_DONE);
+}
+
+void fips_set_status(enum fips_status status)
+{
+	/**
+	 * if FIPS error took place, drop indication of FIPS approved mode.
+	 * Next cycle of sleep will power-cycle HW crypto components, so any
+	 * soft-errors will be recovered. In case of hard errors it
+	 * will be detected again.
+	 */
+	/* Accumulate status (errors). */
+	_fips_status |= status;
+
+	status = _fips_status;
+	/* if we have error, require power up tests on resume. */
+	if (status & FIPS_ERROR_MASK)
+		fips_set_power_up(false);
 }
 
 /**
@@ -420,6 +392,7 @@ static bool fips_ecdsa_verify_kat(void)
 	return !(fips_break_cmd == FIPS_BREAK_ECDSA) && (passed == 0);
 }
 
+#ifdef CONFIG_FIPS_AES_CBC_256
 #define AES_BLOCK_LEN 16
 
 /* Known-answer test for AES-256 encrypt/decrypt. */
@@ -457,12 +430,13 @@ static bool fips_aes256_kat(void)
 	return !(fips_break_cmd == FIPS_BREAK_AES256) &&
 	       (memcmp(kat_aes128_msg, dec, AES_BLOCK_LEN) == 0);
 }
+#endif
 
 #ifdef CONFIG_FIPS_RSA2048
 /* Known-answer test for RSA 2048. */
 static bool fips_rsa2048_verify_kat(void)
 {
-	uint8_t digest[SHA256_DIGEST_SIZE];
+	struct sha256_digest digest;
 	static const uint32_t pub[64] = {
 		0xf8729219, 0x2b42fc45, 0xfe6f4397, 0xa6ba59df, 0x4ce45ab8,
 		0x4be044ea, 0xdade58ec, 0xf871ada6, 0x3a6355a1, 0x43739940,
@@ -546,16 +520,16 @@ static bool fips_rsa2048_verify_kat(void)
 
 	int passed;
 
-	DCRYPTO_SHA256_hash(msg, sizeof(msg), digest);
-	passed = DCRYPTO_rsa_verify(&rsa, digest, sizeof(digest), sig,
+	SHA256_hw_hash(msg, sizeof(msg), &digest);
+	passed = DCRYPTO_rsa_verify(&rsa, digest.b8, sizeof(digest), sig,
 				    sizeof(sig), PADDING_MODE_PKCS1,
 				    HASH_SHA256);
 	if (!passed)
 		return false;
-	DCRYPTO_SHA256_hash(bad_msg, sizeof(bad_msg), digest);
+	SHA256_hw_hash(bad_msg, sizeof(bad_msg), &digest);
 
 	/* now signature should fail */
-	return !DCRYPTO_rsa_verify(&rsa, digest, sizeof(digest), sig,
+	return !DCRYPTO_rsa_verify(&rsa, digest.b8, sizeof(digest), sig,
 				   sizeof(sig), PADDING_MODE_PKCS1,
 				   HASH_SHA256);
 }
@@ -604,16 +578,11 @@ static bool fips_self_integrity(void)
 	return DCRYPTO_equals(fips_integrity.b8, digest.b8, sizeof(digest));
 }
 
-/**
- * FIPS Power-up known-answer tests.
- * Single point of initialization for all FIPS-compliant
- * cryptography. Responsible for KATs, TRNG testing, and signalling a
- * fatal error.
- * @return FIPS_POWERON_TEST_ERROR if memory allocation error took place
- */
-#define FIPS_POWERON_TEST_ERROR -2ULL
+/* Duration of FIPS tests. */
+uint64_t fips_last_kat_test_duration;
+
 #define FIPS_KAT_STACK_SIZE 2048
-static uint64_t fips_power_up_tests(void)
+void fips_power_up_tests(void)
 {
 	char *stack_buf;
 	void *stack;
@@ -645,10 +614,13 @@ static uint64_t fips_power_up_tests(void)
 		if (!call_on_stack(stack, &fips_ecdsa_verify_kat))
 			_fips_status |= FIPS_FATAL_ECDSA;
 
-		if (!call_on_stack(stack, &fips_aes256_kat))
-			_fips_status |= FIPS_FATAL_AES256;
 		if (!call_on_stack(stack, &fips_hmac_drbg_kat))
 			_fips_status |= FIPS_FATAL_HMAC_DRBG;
+
+#ifdef CONFIG_FIPS_AES_CBC_256
+		if (!call_on_stack(stack, &fips_aes256_kat))
+			_fips_status |= FIPS_FATAL_AES256;
+#endif
 
 #ifdef CONFIG_FIPS_RSA2048
 		/* RSA KAT adds 30ms and not used for U2F */
@@ -667,7 +639,7 @@ static uint64_t fips_power_up_tests(void)
 		if (!call_on_stack(stack, &fips_hmac_sha256_kat))
 			_fips_status |= FIPS_FATAL_HMAC_SHA256;
 #ifdef CONFIG_FIPS_SW_HMAC_DRBG
-		/* SW HMAC DRBG adds 40ms and not used for U2F */
+		/* SW HMAC DRBG adds 30ms and not used for U2F */
 		if (!call_on_stack(stack, &fips_hmac_drbg_kat))
 			_fips_status |= FIPS_FATAL_HMAC_DRBG;
 #endif
@@ -676,9 +648,10 @@ static uint64_t fips_power_up_tests(void)
 
 		/* Second call to TRNG warm-up. */
 		fips_trng_startup(1);
-		/* if no errors, set not to run tests on wake from sleep. */
-		if (!(_fips_status & FIPS_ERROR_MASK))
-			board_set_fips_policy_test(true);
+
+		/* If no errors, set not to run tests on wake from sleep. */
+		if (fips_is_no_crypto_error())
+			fips_set_power_up(true);
 		else /* write combined error to flash log */
 			flash_log_add_event(FE_LOG_FIPS_FAILURE,
 					    sizeof(_fips_status),
@@ -686,39 +659,15 @@ static uint64_t fips_power_up_tests(void)
 		/* Set the bit that power-up tests completed, even if failed. */
 		_fips_status |= FIPS_POWER_UP_TEST_DONE;
 	} else
-		return FIPS_POWERON_TEST_ERROR;
+		_fips_status |= FIPS_FATAL_OTHER;
 
-	return get_time().val - starttime;
-}
-
-/* Print on console current FIPS mode. */
-static void fips_print_mode(void)
-{
-	if (_fips_status == FIPS_UNINITIALIZED)
-		CPRINTS("FIPS mode not initialized");
-	else if (_fips_status & FIPS_ERROR_MASK)
-		CPRINTS("FIPS error code 0x%08x, not-approved", _fips_status);
-	else
-		CPRINTS("Running in FIPS 140-2 %s mode",
-			((_fips_status & FIPS_MODE_ACTIVE) &&
-			 (_fips_status & FIPS_POWER_UP_TEST_DONE)) ?
-				"approved" :
-				"not-approved");
-}
-
-/* Print time it took tests to run or print error message. */
-static void fips_print_test_time(uint64_t time)
-{
-	if (time == FIPS_POWERON_TEST_ERROR)
-		CPRINTS("FIPS test failed to run");
-	else if (time != -1ULL)
-		CPRINTS("FIPS power-up tests completed in %llu", time);
+	fips_last_kat_test_duration = get_time().val - starttime;
 }
 
 /* Initialize FIPS mode. Executed during power-up and resume from sleep. */
 static void fips_power_on(void)
 {
-	uint64_t testtime = -1ULL;
+	fips_last_kat_test_duration = -1ULL;
 	/* make sure on power-on / resume it's cleared */
 	_fips_status = FIPS_UNINITIALIZED;
 
@@ -727,164 +676,16 @@ static void fips_power_on(void)
 	 * for some reason, run them now. Board FIPS KAT status will
 	 * be updated by fips_power_up_tests() if all tests pass.
 	 */
-	if (!board_fips_power_up_done())
-		testtime = fips_power_up_tests();
+	if (!fips_is_power_up_done())
+		fips_power_up_tests();
 	else	/* tests were already completed before sleep */
 		_fips_status |= FIPS_POWER_UP_TEST_DONE;
 
 	/* Check if we can set FIPS-approved mode. */
-	if (fips_u2f_compliant())
+	if (fips_crypto_allowed())
 		fips_set_status(FIPS_MODE_ACTIVE);
 
-	/* Once FIPS power-up tests completed we can enable console output. */
-	console_enable_output();
-
-	fips_print_test_time(testtime);
-	fips_print_mode();
 }
 
 /* FIPS initialization is last init hook, HOOK_PRIO_FIPS > HOOK_PRIO_LAST */
-DECLARE_HOOK(HOOK_INIT, fips_power_on, HOOK_PRIO_FIPS);
-
-/* Switch FIPS status. */
-void fips_set_policy(bool active)
-{
-#ifndef CR50_DEV
-	/* in Production mode never disable FIPS once enabled. */
-	if (!active)
-		return;
-#endif
-	/* Do nothing if there is no change. */
-	if (!(!active ^ !(_fips_status & FIPS_MODE_ACTIVE)))
-		return;
-/* Temporarily prevent switch to FIPS mode until U2F key gen is ready. */
-#if FIPS_MODE_ENABLED
-	/* Update local board FIPS flag. */
-	board_set_local_fips_policy(active);
-	CPRINTS("FIPS policy set to %d", active);
-	cflush();
-	u2f_zeroize();
-
-#ifdef CR50_DEV
-	if (!active) {
-		uint8_t random[32];
-		/* Create fake u2f keys old style */
-		fips_trng_bytes(random, sizeof(random));
-		setvar(&k_salt, sizeof(k_salt), random, sizeof(random));
-
-		fips_trng_bytes(random, sizeof(random));
-		write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK, sizeof(random),
-				       random, 1);
-		fips_trng_bytes(random, sizeof(random));
-		write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KH_SALT, sizeof(random),
-				       random, 1);
-	}
-#endif
-#endif
-	system_reset(EC_RESET_FLAG_SECURITY);
-}
-
-/* Console command 'fips' to report and change status, run tests */
-static int cmd_fips_status(int argc, char **argv)
-{
-	fips_print_mode();
-	ccprints("FIPS crypto allowed: %u, u2f compliant: %u, "
-		 "board power up done: %u, board enforced: %u, fwmp : %u",
-		 fips_crypto_allowed(), fips_u2f_compliant(),
-		 board_fips_power_up_done(), board_fips_enforced(),
-		 board_fwmp_fips_mode_enabled());
-
-	cflush();
-
-	if (argc == 2) {
-		if (!strncmp(argv[1], "on", 2))
-			fips_set_policy(true);
-		else if (!strncmp(argv[1], "test", 4)) {
-			fips_print_test_time(fips_power_up_tests());
-			fips_print_mode();
-		}
-#ifdef CR50_DEV
-		else if (!strncmp(argv[1], "off", 3))
-			fips_set_policy(false);
-		else if (!strncmp(argv[1], "trng", 4))
-			fips_break_cmd = FIPS_BREAK_TRNG;
-		else if (!strncmp(argv[1], "sha", 3))
-			fips_break_cmd = FIPS_BREAK_SHA256;
-#endif
-	}
-	return 0;
-}
-
-DECLARE_SAFE_CONSOLE_COMMAND(fips, cmd_fips_status,
-#ifdef CR50_DEV
-	"[on | off | test | trng | sha]",
-#else
-	"[on | test]",
-#endif
-	"Report or change FIPS status, run tests, simulate errors");
-
-/**
- * Vendor command implementation to report & change status, run tests.
- * Command structure:
- *
- * field     |    size  |                  note
- * =========================================================================
- * op        |    1     | 0 - get status, 1 - set FIPS ON (remove old U2F)
- *           |          | 2 - run tests, 3 .. 8 - simulate errors
- */
-static enum vendor_cmd_rc fips_cmd(enum vendor_cmd_cc code, void *buf,
-				    size_t input_size, size_t *response_size)
-{
-	uint8_t *cmd = buf;
-	uint32_t fips_reverse;
-
-	*response_size = 0;
-	if (input_size != 1)
-		return VENDOR_RC_BOGUS_ARGS;
-
-	switch ((enum fips_cmd)*cmd) {
-	case FIPS_CMD_GET_STATUS:
-		fips_reverse = htobe32(_fips_status);
-		memcpy(buf, &fips_reverse, sizeof(fips_reverse));
-		*response_size = sizeof(fips_reverse);
-		break;
-	case FIPS_CMD_ON:
-		fips_set_policy(true); /* we can reboot here... */
-		break;
-	case FIPS_CMD_TEST:
-		fips_power_up_tests();
-		fips_reverse = htobe32(_fips_status);
-		memcpy(buf, &fips_reverse, sizeof(fips_reverse));
-		*response_size = sizeof(fips_reverse);
-		break;
-#ifdef CR50_DEV
-	case FIPS_CMD_BREAK_TRNG:
-		fips_break_cmd = FIPS_BREAK_TRNG;
-		break;
-	case FIPS_CMD_BREAK_SHA256:
-		fips_break_cmd = FIPS_BREAK_SHA256;
-		break;
-	case FIPS_CMD_BREAK_HMAC_SHA256:
-		fips_break_cmd = FIPS_BREAK_HMAC_SHA256;
-		break;
-	case FIPS_CMD_BREAK_HMAC_DRBG:
-		fips_break_cmd = FIPS_BREAK_HMAC_DRBG;
-		break;
-	case FIPS_CMD_BREAK_ECDSA:
-		fips_break_cmd = FIPS_BREAK_ECDSA;
-		break;
-	case FIPS_CMD_BREAK_AES256:
-		fips_break_cmd = FIPS_BREAK_AES256;
-		break;
-	case FIPS_CMD_NO_BREAK:
-		fips_break_cmd = FIPS_NO_BREAK;
-		break;
-#endif
-	default:
-		return VENDOR_RC_BOGUS_ARGS;
-	}
-
-	return VENDOR_RC_SUCCESS;
-}
-
-DECLARE_VENDOR_COMMAND(VENDOR_CC_FIPS_CMD, fips_cmd);
+DECLARE_HOOK(HOOK_INIT, fips_power_on, HOOK_PRIO_INIT_FIPS);

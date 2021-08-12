@@ -93,8 +93,10 @@
 /* Also use the cr50 as a second factor authentication */
 #define CONFIG_U2F
 
-#undef CONFIG_FIPS_RSA2048
-#undef CONFIG_FIPS_SW_HMAC_DRBG
+/* Additional FIPS KAT tests. */
+#define CONFIG_FIPS_RSA2048
+#define CONFIG_FIPS_SW_HMAC_DRBG
+#define CONFIG_FIPS_AES_CBC_256
 
 /* USB configuration */
 #define CONFIG_USB
@@ -252,7 +254,6 @@ enum nvmem_vars {
 	NVMEM_VAR_U2F_SALT,
 	NVMEM_VAR_CCD_CONFIG,
 	NVMEM_VAR_G2F_SALT,
-	NVMEM_VAR_FIPS_CONFIG,
 
 	NVMEM_VARS_COUNT
 };
@@ -330,16 +331,6 @@ int board_has_ec_cr50_comm_support(void);
 int board_id_is_mismatched(void);
 /* Allow for deep sleep to be enabled on AP shutdown */
 int board_deep_sleep_allowed(void);
-/* indicates completion of power-up tests earlier */
-bool board_fips_power_up_done(void);
-
-/**
- * Set status of FIPS power-up tests on wake from sleep
- *
- * @param asserted: 0 power-up tests should run on resume, otherwise can be
- * skipped
- */
-void board_set_fips_policy_test(bool asserted);
 
 void power_button_record(void);
 
@@ -365,12 +356,6 @@ void board_reboot_ec_deferred(int usec_delay);
 void board_closed_loop_reset(void);
 int board_wipe_tpm(int reset_required);
 int board_is_first_factory_boot(void);
-int board_fwmp_fips_mode_enabled(void);
-
-/* set FIPS policy for board in NVRAM (independent of FWMP) */
-void board_set_local_fips_policy(bool asserted);
-/* return non zero if FIPS mode enforced in FWMP or NVRAM */
-bool board_fips_enforced(void);
 
 int usb_i2c_board_enable(void);
 void usb_i2c_board_disable(void);

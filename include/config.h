@@ -4885,9 +4885,11 @@
 #define CONFIG_CRC8
 #endif
 
-/* Run RSA 2048 known-answer test (+30 ms) */
+/* Don't run RSA 2048 known-answer test (+30 ms). */
 #undef CONFIG_FIPS_RSA2048
-/* Run software HMAC_DRBG-SHA256 known-answer test (+40 ms) */
+/* Don't run software HMAC_DRBG-SHA256 known-answer test (+30 ms). */
 #undef CONFIG_FIPS_SW_HMAC_DRBG
+/* Don't run AES CBC 256 test (not used for U2F anymore). */
+#undef CONFIG_FIPS_AES_CBC_256
 
 #endif  /* __CROS_EC_CONFIG_H */

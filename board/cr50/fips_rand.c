@@ -181,9 +181,11 @@ static struct rand_result read_rand(void)
 	uint32_t empty_count = 0;
 	uint32_t reset_count = 0;
 
+#ifdef CRYPTO_TEST_SETUP
 	/* Do we need to simulate error? */
 	if (fips_break_cmd == FIPS_BREAK_TRNG)
 		return (struct rand_result){ .random_value = 0, .valid = true };
+#endif
 
 	/**
 	 * make sure we never hang in the loop - try at max 1

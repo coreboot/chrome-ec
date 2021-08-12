@@ -15,7 +15,6 @@ enum hook_priority {
 	HOOK_PRIO_FIRST = 1,       /* Highest priority */
 	HOOK_PRIO_DEFAULT = 5000,  /* Default priority */
 	HOOK_PRIO_LAST = 9999,     /* Lowest priority */
-	HOOK_PRIO_FIPS = 10000,    /* FIPS init executes last */
 
 	/* Specific hook vales for HOOK_INIT */
 	/* DMA inits before ADC, I2C, SPI */
@@ -68,6 +67,11 @@ enum hook_priority {
 	HOOK_PRIO_TEMP_SENSOR = 6000,
 	/* After all sensors have been polled */
 	HOOK_PRIO_TEMP_SENSOR_DONE = HOOK_PRIO_TEMP_SENSOR + 1,
+
+	/* Once devices are initialized, run FIPS tests and print status. */
+	HOOK_PRIO_INIT_FIPS = 9997,    /* FIPS init executes last */
+	HOOK_PRIO_INIT_PRINT_FIPS_STATUS = 9998,    /* Status of FIPS tests. */
+
 };
 
 enum hook_type {

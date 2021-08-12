@@ -27,8 +27,12 @@ enum fips_status {
 	FIPS_FATAL_HMAC_SHA256 = 1 << 5,
 	FIPS_FATAL_HMAC_DRBG = 1 << 6,
 	FIPS_FATAL_ECDSA = 1 << 7,
+#ifdef CONFIG_FIPS_RSA2048
 	FIPS_FATAL_RSA2048 = 1 << 8,
+#endif
+#ifdef CONFIG_FIPS_AES_CBC_256
 	FIPS_FATAL_AES256 = 1 << 9,
+#endif
 	FIPS_FATAL_SELF_INTEGRITY = 1 << 10,
 	FIPS_FATAL_OTHER = 1 << 15,
 	FIPS_ERROR_MASK = 0xffff,
@@ -43,9 +47,20 @@ enum fips_break {
 	FIPS_BREAK_HMAC_SHA256 = 3,
 	FIPS_BREAK_HMAC_DRBG = 4,
 	FIPS_BREAK_ECDSA = 5,
-	FIPS_BREAK_AES256 = 6
+#ifdef CONFIG_FIPS_AES_CBC_256
+	FIPS_BREAK_AES256 = 6,
+#endif
+#ifdef CONFIG_FIPS_RSA2048
+	FIPS_BREAK_RSA2048 = 7,
+#endif
 };
+
+#ifdef CRYPTO_TEST_SETUP
 extern uint8_t fips_break_cmd;
+#endif
+
+/* Duration of last FIPS KAT / Power-up tests. */
+extern uint64_t fips_last_kat_test_duration;
 
 /* Command codes for VENDOR_CC_FIPS_CMD. */
 enum fips_cmd {
@@ -57,8 +72,13 @@ enum fips_cmd {
 	FIPS_CMD_BREAK_HMAC_SHA256 = 5,
 	FIPS_CMD_BREAK_HMAC_DRBG = 6,
 	FIPS_CMD_BREAK_ECDSA = 7,
+#ifdef CONFIG_FIPS_AES_CBC_256
 	FIPS_CMD_BREAK_AES256 = 8,
-	FIPS_CMD_NO_BREAK = 9
+#endif
+#ifdef CONFIG_FIPS_RSA2048
+	FIPS_CMD_BREAK_RSA2048 = 9,
+#endif
+	FIPS_CMD_NO_BREAK = 10
 };
 
 /* These symbols defined in core/cortex-m/ec.lds.S. */
@@ -67,9 +87,6 @@ extern uint8_t __fips_module_end;
 
 /* Return current FIPS status of operations. */
 enum fips_status fips_status(void);
-
-/* return true if in FIPS-approved mode. */
-bool fips_mode(void);
 
 /**
  * Crypto is enabled when either FIPS mode is not enforced,
@@ -89,10 +106,14 @@ void fips_set_status(enum fips_status status);
 void fips_throw_err(enum fips_status err);
 
 /**
- * Switch FIPS status, zeroize keys if needed. For Production it's a one way
- * to 'FIPS on'. For development board it allows creation of non-FIPS keys.
+ * FIPS Power-up and known-answer tests.
+ * Single point of initialization for all FIPS-compliant
+ * cryptography. Responsible for KATs, TRNG testing, and signalling a
+ * fatal error.
+ *
+ * Set FIPS status globally as a result.
  */
-void fips_set_policy(bool active);
+void fips_power_up_tests(void);
 
 #ifdef __cplusplus
 }

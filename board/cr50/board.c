@@ -185,20 +185,6 @@ int board_get_ccd_rec_lid_pin(void)
 	return board_properties & BOARD_CCD_REC_LID_PIN_MASK;
 }
 
-bool board_fips_power_up_done(void)
-{
-	return !!(GREG32(PMU, PWRDN_SCRATCH22) == BOARD_FIPS_POWERUP_DONE);
-}
-
-/* Set status of FIPS power-up tests. */
-void board_set_fips_policy_test(bool asserted)
-{
-	/* Enable writing to the long life register */
-	if (asserted)
-		GREG32(PMU, PWRDN_SCRATCH22) = BOARD_FIPS_POWERUP_DONE;
-	else
-		GREG32(PMU, PWRDN_SCRATCH22) = 0;
-}
 
 /* Get header address of the backup RW copy. */
 const struct SignedHeader *get_other_rw_addr(void)
@@ -1573,44 +1559,6 @@ static uint32_t get_properties(void)
 	return properties;
 }
 
-/**
- * NVMEM variable name for FIPS config. This is complementary for FWMP policy
- * and used primarily for lab testing where FWMP would be complicated.
- */
-static const uint8_t k_fips_config = NVMEM_VAR_FIPS_CONFIG;
-void board_set_local_fips_policy(bool asserted)
-{
-	setvar(&k_fips_config, sizeof(k_fips_config), (uint8_t *)&asserted,
-	       sizeof(asserted));
-}
-
-static bool board_get_local_fips_policy(void)
-{
-	const struct tuple *t;
-	bool fips;
-
-	t = getvar(&k_fips_config, sizeof(k_fips_config));
-	fips = (t) ? tuple_val(t)[0] : false;
-	freevar(t);
-
-	return fips;
-}
-
-bool board_fips_enforced(void)
-{
-	/**
-	 * combined flag which caches fips state and the fact it was cached
-	 * bit 7 is set when bit 0 contains fips status
-	 */
-	static uint8_t fips_state;
-
-	if (!(fips_state & 128)) {
-		fips_state = board_fwmp_fips_mode_enabled() ||
-			     board_get_local_fips_policy();
-		fips_state |= 128;
-	}
-	return !!(fips_state & 1);
-}
 
 static void init_board_properties(void)
 {
