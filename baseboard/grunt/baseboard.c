@@ -285,6 +285,7 @@ static int ps8751_tune_mux(int port)
 	 * nuwani board same as treeya board.
 	 */
 	if (((sku_id >= 0xa0) && (sku_id <= 0xaf)) ||
+           sku_id == 0xbe || sku_id == 0xbf ||
 		((sku_id >= 0xd0) && (sku_id <= 0xdf)))
 		mux_write(port, PS8XXX_REG_MUX_USB_C2SS_EQ, 0x40);
 
@@ -772,10 +773,11 @@ int board_is_convertible(void)
 {
 	/* Grunt: 6 */
 	/* Kasumi360: 82 */
-	/* Treeya360: a8-af */
+	/* Treeya360: a8-af, be, bf*/
 	/* Nuwani360: d8 */
 	return (sku_id == 6 || sku_id == 82 || sku_id == 0xd8 ||
-		((sku_id >= 0xa8) && (sku_id <= 0xaf)));
+		((sku_id >= 0xa8) && (sku_id <= 0xaf)) ||
+		sku_id == 0xbe || sku_id == 0xbf);
 }
 
 int board_is_lid_angle_tablet_mode(void)
@@ -796,6 +798,7 @@ uint32_t board_override_feature_flags0(uint32_t flags0)
 	    sku_id == 40 || sku_id == 41 ||
 	    sku_id == 44 || sku_id == 45 ||
 	    ((sku_id >= 0xa0) && (sku_id <= 0xaf)) ||
+            sku_id == 0xbe || sku_id == 0xbf ||
 	    ((sku_id >= 0xd0) && (sku_id <= 0xdf)))
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
 	else
