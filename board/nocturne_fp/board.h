@@ -98,7 +98,6 @@
 #define CONFIG_HOST_COMMAND_STATUS
 #undef CONFIG_I2C
 #undef CONFIG_LID_SWITCH
-#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
 #define CONFIG_PRINTF_LEGACY_LI_FORMAT
@@ -167,6 +166,7 @@
 #define CONFIG_CMD_FLASH
 
 #ifdef SECTION_IS_RW
+#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_CMD_SPI_XFER
 #endif
 
@@ -185,6 +185,8 @@
 
 #include "gpio_signal.h"
 #include "board_rw.h"
+
+void slp_event(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

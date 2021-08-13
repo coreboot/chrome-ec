@@ -2101,6 +2101,14 @@ static void tc_disabled_run(const int port)
 		set_state_tc(port, drp_state[port] == PD_DRP_FORCE_SOURCE ?
 			     TC_UNATTACHED_SRC : TC_UNATTACHED_SNK);
 	} else {
+		if (IS_ENABLED(CONFIG_USBC_RETIMER_FW_UPDATE)) {
+			if (TC_CHK_FLAG(port,
+				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN)) {
+				TC_CLR_FLAG(port,
+				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN);
+				usb_retimer_fw_update_process_op_cb(port);
+			}
+		}
 		tc_pause_event_loop(port);
 	}
 }
@@ -2971,10 +2979,22 @@ static void tc_attached_src_entry(const int port)
 			 * completed and tc_pr_swap_complete is called.
 			 */
 		} else {
+			/*
+			 * Set up CC's, Vconn, and ADD before Vbus, as per
+			 * Figure 4-24. DRP Initialization and Connection
+			 * Detection in TCPCI r2 v1.2 specification.
+			 */
+
 			/* Get connector orientation */
 			tcpm_get_cc(port, &cc1, &cc2);
 			tc[port].polarity = get_src_polarity(cc1, cc2);
 			pd_set_polarity(port, tc[port].polarity);
+
+			/* Attached.SRC - enable AutoDischargeDisconnect */
+			tcpm_enable_auto_discharge_disconnect(port, 1);
+
+			/* Apply Rp */
+			typec_update_cc(port);
 
 			/*
 			 * Initial data role for sink is DFP
@@ -3005,22 +3025,28 @@ static void tc_attached_src_entry(const int port)
 						tc[port].polarity);
 			}
 
-			/* Attached.SRC - enable AutoDischargeDisconnect */
-			tcpm_enable_auto_discharge_disconnect(port, 1);
-
-			/* Apply Rp */
-			typec_update_cc(port);
-
 			tc_enable_pd(port, 0);
 			pd_timer_enable(port, TC_TIMER_TIMEOUT,
 					MAX(PD_POWER_SUPPLY_TURN_ON_DELAY,
 					    PD_T_VCONN_STABLE));
 		}
 	} else {
+		/*
+		 * Set up CC's, Vconn, and ADD before Vbus, as per
+		 * Figure 4-24. DRP Initialization and Connection
+		 * Detection in TCPCI r2 v1.2 specification.
+		 */
+
 		/* Get connector orientation */
 		tcpm_get_cc(port, &cc1, &cc2);
 		tc[port].polarity = get_src_polarity(cc1, cc2);
 		pd_set_polarity(port, tc[port].polarity);
+
+		/* Attached.SRC - enable AutoDischargeDisconnect */
+		tcpm_enable_auto_discharge_disconnect(port, 1);
+
+		/* Apply Rp */
+		typec_update_cc(port);
 
 		/*
 		 * Initial data role for sink is DFP
@@ -3048,12 +3074,6 @@ static void tc_attached_src_entry(const int port)
 				usb_mux_set(port, USB_PD_MUX_NONE,
 				USB_SWITCH_DISCONNECT, tc[port].polarity);
 		}
-
-		/* Attached.SRC - enable AutoDischargeDisconnect */
-		tcpm_enable_auto_discharge_disconnect(port, 1);
-
-		/* Apply Rp */
-		typec_update_cc(port);
 	}
 
 	/* Inform PPC and OCP module that a sink is connected. */
@@ -3827,13 +3847,13 @@ void tc_set_debug_level(enum debug_level debug_level)
 void tc_usb_firmware_fw_update_limited_run(int port)
 {
 	TC_SET_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN);
-	tc_start_event_loop(port);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 void tc_usb_firmware_fw_update_run(int port)
 {
 	TC_SET_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN);
-	tc_start_event_loop(port);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 void tc_run(const int port)
@@ -3859,14 +3879,6 @@ void tc_run(const int port)
 	}
 
 	if (IS_ENABLED(CONFIG_USBC_RETIMER_FW_UPDATE)) {
-		if (TC_CHK_FLAG(port, TC_FLAGS_SUSPENDED) &&
-			TC_CHK_FLAG(port,
-				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN)) {
-			TC_CLR_FLAG(port,
-				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN);
-			usb_retimer_fw_update_process_op_cb(port);
-		}
-
 		if (TC_CHK_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN)) {
 			TC_CLR_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN);
 			usb_retimer_fw_update_process_op_cb(port);

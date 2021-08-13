@@ -14,6 +14,7 @@
 #include "flash.h"
 #include "host_command.h"
 #include "system.h"
+#include "watchdog.h"
 
 LOG_MODULE_REGISTER(cros_flash, LOG_LEVEL_ERR);
 
@@ -177,6 +178,14 @@ static int cros_flash_it8xxx2_write(const struct device *dev, int offset,
 		return -EACCES;
 	}
 
+	/*
+	 * If AP sends write flash command continuously, EC might not have
+	 * chance to go back to hook task to touch watchdog. Reload watchdog
+	 * on each flash write to prevent the reset.
+	 */
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG))
+		watchdog_reload();
+
 	return flash_write(flash_controller, offset, src_data, size);
 }
 
@@ -184,12 +193,48 @@ static int cros_flash_it8xxx2_erase(const struct device *dev, int offset,
 				    int size)
 {
 	struct cros_flash_it8xxx2_data *const data = DRV_DATA(dev);
+	int ret = 0;
 
 	if (data->all_protected) {
 		return -EACCES;
 	}
+	/*
+	 * Before the flash erasing, the interrupts should be disabled. In
+	 * the flash erasing loop, the SHI interrupt should be enabled to
+	 * handle AP's command, so irq_lock() is not used here.
+	 */
+	if (IS_ENABLED(CONFIG_ITE_IT8XXX2_INTC)) {
+		ite_intc_save_and_disable_interrupts();
+	}
+	/*
+	 * EC still need to handle AP's EC_CMD_GET_COMMS_STATUS command
+	 * during erasing.
+	 */
+	if (IS_ENABLED(HAS_TASK_HOSTCMD) &&
+		IS_ENABLED(CONFIG_HOST_COMMAND_STATUS)) {
+		irq_enable(DT_IRQN(DT_NODELABEL(shi)));
+	}
+	/* Always use sector erase command */
+	for (; size > 0; size -= CONFIG_FLASH_ERASE_SIZE) {
+		ret = flash_erase(flash_controller, offset,
+			CONFIG_FLASH_ERASE_SIZE);
+		if (ret)
+			break;
 
-	return flash_erase(flash_controller, offset, size);
+		offset += CONFIG_FLASH_ERASE_SIZE;
+		/*
+		 * If requested erase size is too large at one time on KGD
+		 * flash, we need to reload watchdog to prevent the reset.
+		 */
+		if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG) && (size > 0x10000))
+			watchdog_reload();
+	}
+	/* Restore interrupts */
+	if (IS_ENABLED(CONFIG_ITE_IT8XXX2_INTC)) {
+		ite_intc_restore_interrupts();
+	}
+
+	return ret;
 }
 
 static int cros_flash_it8xxx2_get_protect(const struct device *dev, int bank)

@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early brya boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -60,8 +55,6 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
-#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
-
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT		1
@@ -123,6 +116,10 @@
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
 
+/* Keyboard features */
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
+
 /* I2C Bus Configuration */
 
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
@@ -158,6 +155,7 @@
 #undef CONFIG_USBC_RETIMER_FW_UPDATE
 
 /* Thermal features */
+#define CONFIG_FANS FAN_CH_COUNT
 #define CONFIG_THERMISTOR
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
@@ -170,7 +168,8 @@
 /*
  * TODO(b/181271666): no fan control loop until sensors are tuned
  */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+/* Fan features */
+#define CONFIG_CUSTOM_FAN_CONTROL
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720

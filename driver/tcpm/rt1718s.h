@@ -15,6 +15,10 @@
 #define RT1718S_VID					0x29CF
 #define RT1718S_PID					0x1718
 
+#define RT1718S_DEVICE_ID				0x04
+#define RT1718S_DEVICE_ID_ES1				0x4511
+#define RT1718S_DEVICE_ID_ES2				0x4513
+
 #define RT1718S_PHYCTRL1				0x80
 #define RT1718S_PHYCTRL2				0x81
 #define RT1718S_PHYCTRL3				0x82
@@ -27,6 +31,15 @@
 #define RT1718S_SYS_CTRL2				0x90
 #define RT1718S_SYS_CTRL2_BMCIO_OSC_EN			BIT(0)
 #define RT1718S_SYS_CTRL2_LPWR_EN			BIT(3)
+
+#define RT1718S_VCONN_CONTROL_2				0x8B
+#define RT1718S_VCONN_CONTROL_2_OVP_EN_CC1		BIT(7)
+#define RT1718S_VCONN_CONTROL_2_OVP_EN_CC2		BIT(6)
+#define RT1718S_VCONN_CONTROL_3				0x8C
+#define RT1718S_VCONN_CONTROL_3_VCONN_OVP_DEG		BIT(1)
+
+#define RT1718S_SYS_CTRL2				0x90
+#define RT1718S_SYS_CTRL2_VCONN_DISCHARGE_EN		BIT(5)
 
 #define RT1718S_RT_MASK1				0x91
 #define RT1718S_RT_MASK1_M_VBUS_FRS_LOW			BIT(7)
@@ -41,10 +54,12 @@
 #define RT1718S_RT_MASK6_M_BC12_TA_CHG			BIT(5)
 #define RT1718S_RT_MASK7				0x97
 
+#define RT1718S_RT_INT2					0x99
 #define RT1718S_RT_INT6					0x9D
 #define RT1718S_RT_INT6_INT_BC12_SNK_DONE		BIT(7)
 #define RT1718S_RT_INT6_INT_HVDCP_CHK_DONE		BIT(6)
 #define RT1718S_RT_INT6_INT_BC12_TA_CHG			BIT(5)
+#define RT1718S_RT_INT6_INT_ADC_DONE			BIT(0)
 
 #define RT1718S_RT_ST6					0xA4
 #define RT1718S_RT_ST6_BC12_SNK_DONE			BIT(7)
@@ -88,6 +103,10 @@
 #define RT1718S_RT2_VBUS_VOL_CTRL			0xF213
 #define RT1718S_RT2_VBUS_VOL_CTRL_OVP_SEL		(BIT(5) | BIT(4))
 #define RT1718S_RT2_VBUS_VOL_CTRL_VOL_SEL		0x0F
+
+#define RT1718S_VCON_CTRL4				0xF211
+#define RT1718S_VCON_CTRL4_UVP_CP_EN			BIT(5)
+#define RT1718S_VCON_CTRL4_OVP_CP_EN			BIT(4)
 
 #define RT1718S_RT2_VBUS_OCRC_EN			0xF214
 #define RT1718S_RT2_VBUS_OCRC_EN_VBUS_OCP1_EN		BIT(0)
@@ -138,12 +157,36 @@
 #define RT1718S_RT2_BC12_SRC_FUNC_SRC_MODE_SEL_BC12_DCP	0x20
 #define RT1718S_RT2_BC12_SRC_FUNC_WAIT_VBUS_ON		BIT(0)
 
+#define RT1718S_ADC_CTRL_01				0xF2A0
+#define RT1718S_ADC_CTRL_02				0xF2A1
+#define RT1718S_ADC_CHX_VOL_L(ch)			(0xF2A6 + (ch) * 2)
+#define RT1718S_ADC_CHX_VOL_H(ch)			(0xF2A7 + (ch) * 2)
+
 extern const struct tcpm_drv rt1718s_tcpm_drv;
 extern const struct bc12_drv rt1718s_bc12_drv;
 
 int rt1718s_write8(int port, int reg, int val);
 int rt1718s_read8(int port, int reg, int *val);
 int rt1718s_update_bits8(int port, int reg, int mask, int val);
+int rt1718s_write16(int port, int reg, int val);
+int rt1718s_read16(int port, int reg, int *val);
 __override_proto int board_rt1718s_init(int port);
+
+enum rt1718s_adc_channel {
+	RT1718S_ADC_VBUS1 = 0,
+	RT1718S_ADC_VBUS2,
+	RT1718S_ADC_VDC,
+	RT1718S_ADC_VBUS_CURRENT,
+	RT1718S_ADC_CC1,
+	RT1718S_ADC_CC2,
+	RT1718S_ADC_SBU1,
+	RT1718S_ADC_SBU2,
+	RT1718S_ADC_DP,
+	RT1718S_ADC_DM,
+	RT1718S_ADC_CH10,
+	RT1718S_ADC_CH11,
+};
+
+int rt1718s_get_adc(int port, enum rt1718s_adc_channel channel, int *adc_val);
 
 #endif /* __CROS_EC_USB_PD_TCPM_MT6370_H */

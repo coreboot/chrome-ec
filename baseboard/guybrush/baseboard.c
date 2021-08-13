@@ -347,9 +347,6 @@ static void baseboard_interrupt_init(void)
 	/* Enable SBU fault interrupts */
 	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
 	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_ODL);
-
-	/* Enable Accel/Gyro interrupt for convertibles. */
-	gpio_enable_interrupt(GPIO_6AXIS_INT_L);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -744,8 +741,8 @@ static void reset_nct38xx_port(int port)
 	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
 	gpio_set_level(reset_gpio_l, 1);
 	nct38xx_reset_notify(port);
-	if (NCT38XX_RESET_POST_DELAY_MS != 0)
-		msleep(NCT38XX_RESET_POST_DELAY_MS);
+	if (NCT3807_RESET_POST_DELAY_MS != 0)
+		msleep(NCT3807_RESET_POST_DELAY_MS);
 }
 
 

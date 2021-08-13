@@ -14,6 +14,8 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
+#include "driver/accel_kionix.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/battery/max17055.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
@@ -32,6 +34,7 @@
 #include "registers.h"
 #include "spi.h"
 #include "system.h"
+#include "tablet_mode.h"
 #include "task.h"
 #include "tcpm/tcpm.h"
 #include "timer.h"
@@ -46,6 +49,121 @@
 
 #include "gpio_list.h"
 
+#ifndef VARIANT_KUKUI_NO_SENSORS
+/* Motion sensors */
+/* Mutexes */
+static struct mutex g_lid_mutex;
+static struct mutex g_base_mutex;
+
+/* Rotation matrixes */
+static const mat33_fp_t lid_standard_ref = {
+	{FLOAT_TO_FP(1), 0, 0},
+	{0, FLOAT_TO_FP(-1), 0},
+	{0, 0, FLOAT_TO_FP(-1)}
+};
+
+static const mat33_fp_t base_standard_ref = {
+	{FLOAT_TO_FP(1), 0, 0},
+	{0, FLOAT_TO_FP(1), 0},
+	{0, 0, FLOAT_TO_FP(1)}
+};
+
+/* sensor private data */
+static struct kionix_accel_data g_kx022_data;
+static struct bmi_drv_data_t g_bmi160_data;
+
+struct motion_sensor_t motion_sensors[] = {
+	[LID_ACCEL] = {
+	 .name = "Lid Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_KX022,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_LID,
+	 .drv = &kionix_accel_drv,
+	 .mutex = &g_lid_mutex,
+	 .drv_data = &g_kx022_data,
+	 .port = I2C_PORT_SENSORS,
+	 .i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
+	 .rot_standard_ref = &lid_standard_ref,
+	 .default_range = 2, /* g, enough to calculate lid angle. */
+	 .config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		 /* Sensor on for lid angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	 },
+	},
+	/*
+	 * Note: bmi160: supports accelerometer and gyro sensor
+	 * Requirement: accelerometer sensor must init before gyro sensor
+	 * DO NOT change the order of the following table.
+	 */
+	[BASE_ACCEL] = {
+	 .name = "Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_BMI160,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &bmi160_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_bmi160_data,
+	 .port = I2C_PORT_SENSORS,
+	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	 .rot_standard_ref = &base_standard_ref,
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	 .min_frequency = BMI_ACCEL_MIN_FREQ,
+	 .max_frequency = BMI_ACCEL_MAX_FREQ,
+	 .config = {
+		 /* EC use accel for angle detection */
+		 [SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		 },
+		 /* Sensor on for angle detection */
+		 [SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		 },
+	 },
+	},
+	[BASE_GYRO] = {
+	 .name = "Gyro",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_BMI160,
+	 .type = MOTIONSENSE_TYPE_GYRO,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &bmi160_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_bmi160_data,
+	 .port = I2C_PORT_SENSORS,
+	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	 .default_range = 1000, /* dps */
+	 .rot_standard_ref = &base_standard_ref,
+	 .min_frequency = BMI_GYRO_MIN_FREQ,
+	 .max_frequency = BMI_GYRO_MAX_FREQ,
+	},
+};
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+static bool board_is_convertible(void)
+{
+	int sku = system_get_sku_id();
+
+	return sku == 1;
+}
+
+int board_sensor_at_360(void)
+{
+	if (board_is_convertible())
+		return !gpio_get_level(GMR_TABLET_MODE_GPIO_L);
+
+	return 0;
+}
+#endif /* !VARIANT_KUKUI_NO_SENSORS */
 /*
  * Map keyboard connector pins to EC GPIO pins for factory test.
  * Pins mapped to {-1, -1} are skipped.
@@ -236,8 +354,10 @@ static void board_init(void)
 		gpio_set_level(GPIO_PMIC_FORCE_RESET_ODL, 1);
 	}
 
+#ifndef VARIANT_KUKUI_NO_SENSORS
 	/* Enable interrupts from BMI160 sensor. */
 	gpio_enable_interrupt(GPIO_ACCEL_INT_ODL);
+#endif /* VARIANT_KUKUI_NO_SENSORS */
 
 	/* Enable interrupt from PMIC. */
 	gpio_enable_interrupt(GPIO_PMIC_EC_RESETB);
@@ -246,6 +366,24 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_BC12_EC_INT_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+#ifndef VARIANT_KUKUI_NO_SENSORS
+static void board_motion_init(void)
+{
+	if (!board_is_convertible()) {
+		/* Disable motion sense. */
+		motion_sensor_count = 0;
+		gpio_disable_interrupt(GPIO_ACCEL_INT_ODL);
+		gpio_set_flags(GPIO_ACCEL_INT_ODL, GPIO_INPUT);
+		/* Disable tablet mode. */
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
+		gmr_tablet_switch_disable();
+		gpio_set_flags(GPIO_TABLET_MODE_L,
+				GPIO_INPUT | GPIO_PULL_UP);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_motion_init, HOOK_PRIO_DEFAULT + 1);
+#endif /* VARIANT_KUKUI_NO_SENSORS */
 
 /* Vconn control for integrated ITE TCPC */
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)

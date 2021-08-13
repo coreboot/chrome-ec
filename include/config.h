@@ -2238,9 +2238,10 @@
 #undef CONFIG_HOSTCMD_I2C_ADDR_FLAGS
 
 /*
- * Accept EC host commands over the SPI slave (SPS) interface.
+ * Accept EC host commands over the SPI host interface.  The AP is SPI
+ * controller and the EC is the SPI peripheral for this configuration.
  */
-#undef CONFIG_HOSTCMD_SPS
+#undef CONFIG_HOSTCMD_SHI
 
 /*
  * Host command rate limiting assures EC will have time to process lower
@@ -3656,6 +3657,12 @@
  */
 #undef CONFIG_MCHP_GPSPI
 
+/*
+ * Configure SPI flash read wait time as 1ms
+ * Chip or board can redefine it per design
+ */
+#define CONFIG_SPI_FLASH_READ_WAIT_MS 1
+
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE
 
@@ -4537,6 +4544,12 @@
  * DDI1_AUX_P signals (b/122873171)
  */
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
+
+/*
+ * Use this to override the TCPCI Device ID value to be 0x0002 for
+ * chip rev A3. Early A3 firmware misreports the DID as 0x0001.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
 
 /*
  * Use this to override the TCPCI Device ID value to be 0x0002 for

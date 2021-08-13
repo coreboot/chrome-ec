@@ -62,6 +62,7 @@
 #undef CONFIG_CONSOLE_UART /* Only used by the Chromium EC chip drivers */
 #undef CONFIG_I2C_MULTI_PORT_CONTROLLER /* Not required by I2C shim */
 #undef CONFIG_IRQ_COUNT /* Only used by Chromium EC core drivers */
+#undef CONFIG_KEYBOARD_KSO_HIGH_DRIVE /* Used by the Chromium EC chip drivers */
 #undef CONFIG_LTO /* Link time optimization enabled by Zephyr build system */
 #undef CONFIG_STACK_SIZE /* Only used in Chromium EC core init code */
 #ifndef CONFIG_FPU
@@ -1404,6 +1405,11 @@
 #define CONFIG_HOSTCMD_RTC
 #endif
 
+#undef CONFIG_HOST_COMMAND_STATUS
+#ifdef CONFIG_PLATFORM_EC_HOST_COMMAND_STATUS
+#define CONFIG_HOST_COMMAND_STATUS
+#endif
+
 #undef CONFIG_SWITCH
 #ifdef CONFIG_PLATFORM_EC_SWITCH
 #define CONFIG_SWITCH
@@ -1504,6 +1510,11 @@
 #define CONFIG_CMD_SYSINFO
 #endif
 
+#undef CONFIG_CMD_SCRATCHPAD
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_SCRATCHPAD
+#define CONFIG_CMD_SCRATCHPAD
+#endif
+
 #undef CONFIG_CMD_SYSJUMP
 #ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_SYSJUMP
 #define CONFIG_CMD_SYSJUMP
@@ -1539,7 +1550,7 @@
 
 #undef CONFIG_VBOOT_EFS
 #undef CONFIG_VBOOT_EFS2
-#ifdef CONFIG_PLATFORM_EC_VBOOT
+#ifdef CONFIG_PLATFORM_EC_VBOOT_EFS2
 #define CONFIG_VBOOT_EFS2
 #endif
 
@@ -1731,6 +1742,17 @@
 #undef CONFIG_FW_RESET_VECTOR
 #ifdef CONFIG_PLATFORM_EC_FW_RESET_VECTOR
 #define CONFIG_FW_RESET_VECTOR
+#endif
+
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#if defined(CONFIG_HCDEBUG_OFF)
+#define CONFIG_HOSTCMD_DEBUG_MODE 0
+#elif defined(CONFIG_HCDEBUG_NORMAL)
+#define CONFIG_HOSTCMD_DEBUG_MODE 1
+#elif defined(CONFIG_HCDEBUG_EVERY)
+#define CONFIG_HOSTCMD_DEBUG_MODE 2
+#elif defined(CONFIG_HCDEBUG_PARAMS)
+#define CONFIG_HOSTCMD_DEBUG_MODE 3
 #endif
 
 #endif  /* __CROS_EC_CONFIG_CHIP_H */

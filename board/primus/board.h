@@ -10,15 +10,9 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early primus boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
-#define CONFIG_BRINGUP
 #define CONFIG_SYSTEM_UNLOCKED
 
 /*
@@ -39,6 +33,7 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 #undef  CONFIG_USB_PD_TCPM_NCT38XX
 #define CONFIG_USB_PD_TCPM_RT1715
@@ -95,6 +90,9 @@
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
 
+/* Keyboard features */
+#define CONFIG_KEYBOARD_REFRESH_ROW3
+
 /* I2C Bus Configuration */
 
 #define I2C_PORT_USB_C0_TCPC		NPCX_I2C_PORT1_0
@@ -130,10 +128,10 @@
 #define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-/*
- * TODO: no fan control loop until sensors are tuned
- */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+/* LED */
+#define CONFIG_BATTERY_LEVEL_NEAR_FULL 91
+
+#define CONFIG_FANS			FAN_CH_COUNT
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
@@ -183,8 +181,7 @@ enum sensor_id {
 };
 
 enum battery_type {
-	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_SUNWODA,
 	BATTERY_TYPE_COUNT
 };
 

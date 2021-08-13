@@ -16,6 +16,7 @@
 #include "keyboard_scan.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "system.h"
 #include "task.h"
 #include "tablet_mode.h"
 #include "util.h"
@@ -309,23 +310,12 @@ void motion_interrupt(enum gpio_signal signal)
 {
 	icm426xx_interrupt(signal);
 }
-#endif
 
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+int board_accel_force_mode_mask(void)
 {
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
+	if (system_get_board_version() <= 2)
+		return (BIT(LID_ACCEL) | BIT(CLEAR_ALS) | BIT(BASE_ACCEL));
+	else
+		return (BIT(LID_ACCEL) | BIT(CLEAR_ALS));
 }
 #endif

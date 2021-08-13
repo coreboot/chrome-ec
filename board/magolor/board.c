@@ -177,14 +177,13 @@ __override const struct ec_response_keybd_config
 *board_vivaldi_keybd_config(void)
 {
 	if (get_cbi_fw_config_numeric_pad()) {
-		if (system_get_board_version() >= 6 ||
-		    gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+		if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
 			return &magma_keybd;
 		else
 			return &magpie_keybd;
 	}
 	else {
-		if (system_get_board_version() >= 5)
+		if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
 			return &magister_keybd;
 		else
 			return &magolor_keybd;
@@ -1074,9 +1073,8 @@ static void adc_vol_key_press_check(void)
 }
 DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -1100,4 +1098,3 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif

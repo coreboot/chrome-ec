@@ -17,10 +17,6 @@
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK /* bypass cbi wp check in dev. */
-
 #define CONFIG_VBOOT_EFS2
 
 #define CONFIG_POWER_BUTTON
@@ -79,13 +75,8 @@
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
-/* Enabling Thunderbolt-compatible mode */
-#define CONFIG_USB_PD_TBT_COMPAT_MODE
-
-/* Enabling USB4 mode */
-#define CONFIG_USB_PD_USB4
-#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x40
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
+#undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
