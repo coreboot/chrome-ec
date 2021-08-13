@@ -32,10 +32,15 @@ else
 # Need to generate a .hex file
 all: hex
 
-# The simulator components have their own subdirectory
+ifeq ($(CONFIG_DCRYPTO_BOARD),y)
+# chip/g/build.mk also adds chip/g/dcrypto for CONFIG_DCRYPTO
+# so, only add it if we build RW with CONFIG_DCRYPTO_BOARD
 CFLAGS += -I$(realpath $(BDIR)/dcrypto)
-CFLAGS += -I$(realpath $(BDIR)/tpm2)
 dirs-y += $(BDIR)/dcrypto
+endif
+
+# The simulator components have their own subdirectory
+CFLAGS += -I$(realpath $(BDIR)/tpm2)
 dirs-y += $(BDIR)/tpm2
 
 # Objects that we need to build
@@ -53,7 +58,6 @@ board-${CONFIG_USB_SPI_V2} += usb_spi.o
 board-${CONFIG_USB_I2C} += usb_i2c.o
 board-y += recovery_button.o
 
-# TODO(mruthven): add cryptoc the fips boundary
 fips-y=
 fips-y += fips.o
 fips-y += fips_rand.o
@@ -82,7 +86,12 @@ fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha256.o
 ifeq ($(CONFIG_UPTO_SHA512),y)
 ifeq ($(CONFIG_DCRYPTO_SHA512),y)
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_sha512.o
+# we may still want to have software implementation
+ifneq ($(CONFIG_SHA512_HW_EQ_SW),y)
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha512.o
+endif
 else
+# only software version
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/sha512.o
 endif
 endif

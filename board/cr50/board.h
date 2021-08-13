@@ -164,6 +164,19 @@
 #define CONFIG_UPTO_SHA512
 #define CONFIG_DCRYPTO_RSA_SPEEDUP
 
+/**
+ * Make sw version equal to hw. Unlike SHA2-256, dcrypto implementation
+ * of SHA2-512/384 allows to save context, so can fully replace software
+ * implementation.
+ */
+#define CONFIG_SHA512_HW_EQ_SW
+
+/* Don't link with third_party/cryptoc. */
+#undef CONFIG_LIBCRYPTOC
+
+/* Don't use DCRYPTO code from chip/g. */
+#undef CONFIG_DCRYPTO
+
 /* Implement custom udelay, due to usec hwtimer imprecision. */
 #define CONFIG_HW_SPECIFIC_UDELAY
 

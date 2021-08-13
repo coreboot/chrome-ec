@@ -302,8 +302,8 @@ static inline const struct sha1_digest *SHA1_final(struct sha1_ctx *const ctx)
 	return &ctx->f->final((union hash_ctx *)ctx)->sha1;
 }
 
-static inline const struct sha256_digest *
-SHA256_final(struct sha256_ctx *const ctx)
+static inline const struct sha256_digest *SHA256_final(
+				struct sha256_ctx *const ctx)
 {
 	return &ctx->f->final((union hash_ctx *)ctx)->sha256;
 }
@@ -447,6 +447,30 @@ void SHA512_sw_update(struct sha512_ctx *const ctx, const void *data,
 const struct sha512_digest *SHA512_sw_final(struct sha512_ctx *ctx);
 const struct sha512_digest *SHA512_sw_hash(const void *data, size_t len,
 					   struct sha512_digest *digest);
+
+static inline void SHA384_update(struct sha384_ctx *const ctx, const void *data,
+				 size_t len)
+{
+	ctx->f->update((union hash_ctx *)ctx, data, len);
+}
+
+static inline const struct sha384_digest *SHA384_final(
+				struct sha384_ctx *const ctx)
+{
+	return &ctx->f->final((union hash_ctx *)ctx)->sha384;
+}
+
+static inline void SHA512_update(struct sha512_ctx *const ctx, const void *data,
+				 size_t len)
+{
+	ctx->f->update((union hash_ctx *)ctx, data, len);
+}
+
+static inline const struct sha512_digest *SHA512_final(
+				struct sha512_ctx *const ctx)
+{
+	return &ctx->f->final((union hash_ctx *)ctx)->sha512;
+}
 
 /**
  * HMAC SHA2-384 initialization.

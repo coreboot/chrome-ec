@@ -8,8 +8,6 @@
 
 #include <stdint.h>
 
-#include "cryptoc/util.h"
-
 /**
  * Generic software HMAC support for any type of hash.
  */

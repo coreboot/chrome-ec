@@ -242,6 +242,7 @@ const struct sha384_digest *SHA384_sw_hash(const void *data, size_t len,
 	return digest;
 }
 
+#if defined(CONFIG_SHA512_HW_EQ_SW) || !defined(CONFIG_DCRYPTO_SHA512)
 /**
  * We don't support HW-accelerated SHA384/SHA512 yet, so alias it to software.
  */
@@ -249,9 +250,26 @@ const struct sha512_digest *SHA512_hw_hash(const void *data, size_t len,
 					   struct sha512_digest *digest)
 	__alias(SHA512_sw_hash);
 
+
+void SHA512_hw_init(struct sha512_ctx *const ctx) __alias(SHA512_sw_init);
+
+void SHA512_hw_update(struct sha512_ctx *const ctx, const void *data,
+		      size_t len) __alias(SHA512_sw_update);
+
+const struct sha512_digest *SHA512_hw_final(struct sha512_ctx *const ctx)
+	__alias(SHA512_sw_final);
+
+
 const struct sha384_digest *SHA384_hw_hash(const void *data, size_t len,
 					   struct sha384_digest *digest)
 	__alias(SHA384_sw_hash);
 
-void SHA512_hw_init(struct sha512_ctx *const ctx) __alias(SHA512_sw_init);
 void SHA384_hw_init(struct sha384_ctx *const ctx) __alias(SHA384_sw_init);
+
+void SHA384_hw_update(struct sha384_ctx *const ctx, const void *data,
+		      size_t len) __alias(SHA384_sw_update);
+
+const struct sha384_digest *SHA384_hw_final(struct sha384_ctx *const ctx)
+	__alias(SHA384_sw_final);
+
+#endif

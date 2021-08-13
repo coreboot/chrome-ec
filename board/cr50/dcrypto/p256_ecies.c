@@ -9,8 +9,6 @@
 #include "trng.h"
 #include "util.h"
 
-#include "cryptoc/sha256.h"
-
 #define AES_KEY_BYTES  16
 #define HMAC_KEY_BYTES 32
 
@@ -38,7 +36,7 @@ size_t DCRYPTO_ecies_encrypt(
 	uint8_t key[AES_KEY_BYTES + HMAC_KEY_BYTES];
 	const uint8_t *aes_key;
 	const uint8_t *hmac_key;
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 	uint8_t *outp = out;
 	uint8_t *ciphertext;
 
@@ -98,7 +96,7 @@ size_t DCRYPTO_ecies_encrypt(
 
 	/* Calculate HMAC(auth_data || ciphertext). */
 	HMAC_SHA256_hw_init(&ctx, hmac_key, HMAC_KEY_BYTES);
-	HASH_update(&ctx.hash, outp, in_len);
+	HMAC_SHA256_update(&ctx, outp, in_len);
 	outp += in_len;
 	memcpy(outp, HMAC_SHA256_hw_final(&ctx), SHA256_DIGEST_SIZE);
 	outp += SHA256_DIGEST_SIZE;
@@ -120,7 +118,7 @@ size_t DCRYPTO_ecies_decrypt(
 	uint8_t key[AES_KEY_BYTES + HMAC_KEY_BYTES];
 	const uint8_t *aes_key;
 	const uint8_t *hmac_key;
-	LITE_HMAC_CTX ctx;
+	struct hmac_sha256_ctx ctx;
 	const uint8_t *inp = in;
 	uint8_t *outp = out;
 
@@ -159,7 +157,7 @@ size_t DCRYPTO_ecies_decrypt(
 	aes_key = &key[0];
 	hmac_key = &key[AES_KEY_BYTES];
 	HMAC_SHA256_hw_init(&ctx, hmac_key, HMAC_KEY_BYTES);
-	HASH_update(&ctx.hash, inp, in_len);
+	HMAC_SHA256_update(&ctx, inp, in_len);
 	if (!DCRYPTO_equals(inp + in_len, HMAC_SHA256_hw_final(&ctx),
 				SHA256_DIGEST_SIZE))
 		return 0;

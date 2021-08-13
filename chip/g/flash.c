@@ -41,7 +41,6 @@
 #include "common.h"
 #include "board_id.h"
 #include "console.h"
-#include "cryptoc/util.h"
 #include "extension.h"
 #include "flash.h"
 #include "flash_log.h"

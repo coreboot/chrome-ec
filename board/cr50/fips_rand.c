@@ -4,7 +4,6 @@
  */
 
 #include "console.h"
-#include "cryptoc/util.h"
 #include "fips.h"
 #include "fips_rand.h"
 #include "flash_log.h"

@@ -10,7 +10,6 @@
 #include "dcrypto.h"
 #include "trng.h"
 
-#include "cryptoc/util.h"
 
 #include <assert.h>
 

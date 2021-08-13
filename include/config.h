@@ -1374,15 +1374,23 @@
 #undef CONFIG_DCRYPTO_RSA_SPEEDUP
 
 /*
- * When enabled, accelerate sha512 using the generic crypto engine;
- * only supported on CR50
+ * When enabled, accelerate sha512/384 using the generic crypto engine;
+ * only supported on CR50. It is about 4x faster, but ~620 bytes larger.
  */
 #undef CONFIG_DCRYPTO_SHA512
 
 /*
- * When enabled build support for SHA-384/512, requires CONFIG_DCRYPTO.
+ * When enabled build support for SHA-384/512, requires CONFIG_DCRYPTO or
+ * CONFIG_DCRYPTO_BOARD.
  */
 #undef CONFIG_UPTO_SHA512
+
+/**
+ * Make sw version of SHA2-512/384 equal to hw(dcrypto).
+ * Unlike SHA2-256, dcrypto implementation of SHA2-512/384 allows to save
+ * context, so can fully replace software implementation.
+ */
+#undef CONFIG_SHA512_HW_EQ_SW
 
 /*
  * When enabled ignore version et al during fw upgrade for chip/g.

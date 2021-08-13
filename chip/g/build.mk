@@ -13,7 +13,10 @@ CPPFLAGS += -I$(abspath .)
 CPPFLAGS += -I$(abspath ./builtin)
 CPPFLAGS += -I$(abspath ./chip/$(CHIP))
 CPPFLAGS += -I$(INCLUDE_ROOT)
+dirs-y += chip/g/dcrypto
 endif
+
+CPPFLAGS += -I$(realpath ../../third_party/cryptoc/include)
 
 # Required chip modules
 chip-y = clock.o gpio.o hwtimer.o pre_init.o system.o
@@ -90,7 +93,6 @@ chip-$(CONFIG_I2C_PERIPH)+= i2cp.o
 chip-$(CONFIG_LOW_POWER_IDLE)+=idle.o
 
 chip-$(CONFIG_FLASH_PHYSICAL) += flash.o
-dirs-y += chip/g/dcrypto
 
 ifneq ($(CONFIG_CUSTOMIZED_RO),)
 custom-ro_objs-y  = chip/g/clock.o
