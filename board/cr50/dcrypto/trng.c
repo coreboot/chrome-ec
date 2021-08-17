@@ -4,10 +4,11 @@
  */
 
 #include "common.h"
+#include "fips.h"
+#include "fips_rand.h"
 #include "flash_log.h"
 #include "init_chip.h"
 #include "registers.h"
-#include "trng.h"
 #include "watchdog.h"
 #include "console.h"
 
@@ -39,7 +40,12 @@
  */
 #define TRNG_EMPTY_COUNT 0x7ff
 
-void init_trng(void)
+/**
+ * Number of attempts to reset TRNG after stall is detected.
+ */
+#define TRNG_RESET_COUNT 8
+
+void fips_init_trng(void)
 {
 #if (!(defined(CONFIG_CUSTOMIZED_RO) && defined(SECTION_IS_RO)))
 	/*
@@ -101,25 +107,49 @@ void init_trng(void)
 	GWRITE(TRNG, GO_EVENT, 1);
 }
 
-uint32_t rand(void)
-{	uint32_t empty_count = 0;
+uint64_t read_rand(void)
+{
+	uint32_t empty_count = 0;
+	uint32_t reset_count = 0;
 
-	while (GREAD(TRNG, EMPTY)) {
+#ifdef CRYPTO_TEST_SETUP
+	/* Do we need to simulate error? */
+	if (fips_break_cmd == FIPS_BREAK_TRNG)
+		return (uint64_t)1UL << 32; /* Valid result, but value = 0. */
+#endif
+
+	/**
+	 * Make sure we never hang in the loop - try at max TRNG_RESET_COUNT
+	 * reset attempts, then return error
+	 */
+	while (GREAD(TRNG, EMPTY) && (reset_count < TRNG_RESET_COUNT)) {
 		if (GREAD_FIELD(TRNG, FSM_STATE, FSM_IDLE) ||
 		    empty_count > TRNG_EMPTY_COUNT) {
 			/* TRNG timed out, restart */
 			GWRITE(TRNG, STOP_WORK, 1);
-#if !defined(SECTION_IS_RO) && defined(CONFIG_FLASH_LOG)
 			flash_log_add_event(FE_LOG_TRNG_STALL, 0, NULL);
-#endif
 			GWRITE(TRNG, GO_EVENT, 1);
 			empty_count = 0;
+			reset_count++;
 		}
 		empty_count++;
 	}
-	return GREAD(TRNG, READ_DATA);
+	/**
+	 * High 32-bits set to zero in case of error;
+	 * otherwise value >> 32 == 1
+	 */
+	return (uint64_t)GREAD(TRNG, READ_DATA) |
+	       ((uint64_t)(reset_count < TRNG_RESET_COUNT) << 32);
 }
 
+/* TODO(sukhomlinov): replace uses with fips_trng32(). */
+uint32_t rand(void)
+{
+	/* Just ignore validity status. */
+	return (uint32_t)read_rand();
+}
+
+/* TODO(sukhomlinov): replace uses with fips_rand_bytes(). */
 void rand_bytes(void *buffer, size_t len)
 {
 	int random_togo = 0;

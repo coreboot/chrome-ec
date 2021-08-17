@@ -13,6 +13,7 @@
 #include "ec_version.h"
 #include "endian.h"
 #include "extension.h"
+#include "fips_rand.h"
 #include "flash.h"
 #include "flash_config.h"
 #include "gpio.h"
@@ -34,7 +35,6 @@
 #include "system_chip.h"
 #include "task.h"
 #include "tpm_registers.h"
-#include "trng.h"
 #include "uart_bitbang.h"
 #include "uartn.h"
 #include "usart.h"
@@ -850,7 +850,7 @@ static void board_init(void)
 	configure_board_specific_gpios();
 	init_pmu();
 	reset_wake_logic();
-	init_trng();
+	fips_init_trng();
 	maybe_trigger_ite_sync();
 	init_jittery_clock(1);
 

@@ -11,7 +11,6 @@
 #include "registers.h"
 #include "task.h"
 #include "timer.h"
-#include "trng.h"
 #include "util.h"
 
 /**
@@ -37,16 +36,6 @@ static uint32_t entropy_fifo[ENTROPY_SIZE_WORDS];
  * source, the false positive probability for these tests shall be set to
  * at least 2^-50
  */
-
-/**
- * rand() should be able to return error code if reading from TRNG failed
- * return as struct with 2 params is more efficient as data is passed in
- * registers
- */
-struct rand_result {
-	uint32_t random_value;
-	bool valid;
-};
 
 
 /* state data for TRNG health test */
@@ -163,49 +152,6 @@ static bool fips_powerup_passed(void)
 	       rand_state.apt_initialized;
 }
 
-/**
- * Attempts to read TRNG_EMPTY before reporting a stall.
- * Practically data should be available in less than 777
- * cycles under normal conditions. Give 4 attempts to
- * reset before making decision TRNG is broken
- */
-#define TRNG_EMPTY_COUNT 777
-#define TRNG_RESET_COUNT 4
-
-/**
- * replica of rand() with interface which returns errors properly
- */
-static struct rand_result read_rand(void)
-{
-	uint32_t empty_count = 0;
-	uint32_t reset_count = 0;
-
-#ifdef CRYPTO_TEST_SETUP
-	/* Do we need to simulate error? */
-	if (fips_break_cmd == FIPS_BREAK_TRNG)
-		return (struct rand_result){ .random_value = 0, .valid = true };
-#endif
-
-	/**
-	 * make sure we never hang in the loop - try at max 1
-	 * reset attempt, then return error
-	 */
-	while (GREAD(TRNG, EMPTY) && (reset_count < TRNG_RESET_COUNT)) {
-		if (GREAD_FIELD(TRNG, FSM_STATE, FSM_IDLE) ||
-		    empty_count > TRNG_EMPTY_COUNT) {
-			/* TRNG timed out, restart */
-			GWRITE(TRNG, STOP_WORK, 1);
-			flash_log_add_event(FE_LOG_TRNG_STALL, 0, NULL);
-			GWRITE(TRNG, GO_EVENT, 1);
-			empty_count = 0;
-			reset_count++;
-		}
-		empty_count++;
-	}
-	return (struct rand_result){ .random_value = GREAD(TRNG, READ_DATA),
-				     .valid =
-					     (reset_count < TRNG_RESET_COUNT) };
-}
 
 /**
  * get random from TRNG and run continuous health tests.
@@ -213,26 +159,25 @@ static struct rand_result read_rand(void)
  * @param power_up if non-zero indicates warm-up mode
  * @return random value from TRNG
  */
-static struct rand_result fips_trng32(int power_up)
+static uint64_t fips_trng32(int power_up)
 {
-	struct rand_result r;
+	uint64_t r;
 
 	/* Continuous health tests should have been initialized by now */
 	if (!(power_up || fips_crypto_allowed()))
-		return (struct rand_result){ .random_value = 0,
-					     .valid = false };
+		return 0;
 
 	/* get noise */
 	r = read_rand();
 
-	if (r.valid) {
-		if (!repetition_count_test(r.random_value)) {
+	if (rand_valid(r)) {
+		if (!repetition_count_test((uint32_t)r)) {
 			fips_set_status(FIPS_FATAL_TRNG_RCT);
-			r.valid = false;
+			r = (uint32_t)r;
 		}
-		if (!adaptive_proportion_test(r.random_value)) {
+		if (!adaptive_proportion_test((uint32_t)r)) {
 			fips_set_status(FIPS_FATAL_TRNG_APT);
-			r.valid = false;
+			r = (uint32_t)r;
 		}
 	} else
 		fips_set_status(FIPS_FATAL_TRNG_OTHER);
@@ -243,8 +188,9 @@ static struct rand_result fips_trng32(int power_up)
 bool fips_trng_bytes(void *buffer, size_t len)
 {
 	uint8_t *buf = (uint8_t *)buffer;
-	uint32_t random_togo = 0;
-	struct rand_result r;
+	size_t random_togo = 0;
+	uint64_t rand;
+	uint32_t r;
 	/**
 	 * Retrieve random numbers in 4 byte quantities and pack as many bytes
 	 * as needed into 'buffer'. If len is not divisible by 4, the
@@ -252,14 +198,15 @@ bool fips_trng_bytes(void *buffer, size_t len)
 	 */
 	while (len--) {
 		if (!random_togo) {
-			r = fips_trng32(0);
-			if (!r.valid)
+			rand = fips_trng32(0);
+			if (!rand_valid(rand))
 				return false;
-			random_togo = sizeof(r.random_value);
+			r = (uint32_t)rand;
+			random_togo = sizeof(r);
 		}
-		*buf++ = (uint8_t)r.random_value;
+		*buf++ = (uint8_t)r;
 		random_togo--;
-		r.random_value >>= 8;
+		r >>= 8;
 	}
 	return true;
 }
@@ -278,19 +225,20 @@ bool fips_trng_startup(int stage)
 	/* Startup tests per NIST SP800-90B, Section 4 */
 	/* 4096 1-bit samples, in 2 steps, 2048 bit in each */
 	for (uint32_t i = 0; i < (TRNG_INIT_WORDS) / 2; i++) {
-		struct rand_result r = fips_trng32(1);
+		uint64_t r = fips_trng32(1);
 
-		if (!r.valid)
+		if (!rand_valid(r))
 			return false;
 		/* store entropy for further use */
-		entropy_fifo[i % ARRAY_SIZE(entropy_fifo)] = r.random_value;
+		entropy_fifo[i % ARRAY_SIZE(entropy_fifo)] = (uint32_t)r;
 	}
 	return fips_powerup_passed();
 }
 
 bool fips_drbg_init(void)
 {
-	struct rand_result nonce;
+	uint64_t nonce;
+	uint32_t random;
 
 	if (!fips_crypto_allowed())
 		return EC_ERROR_INVALID_CONFIG;
@@ -304,18 +252,19 @@ bool fips_drbg_init(void)
 	 * Add 32 * 0.85 = 27 bits from nonce.
 	 */
 	nonce = fips_trng32(0);
-	if (!nonce.valid)
+	if (!rand_valid(nonce))
 		return false;
+	random = (uint32_t)nonce;
 
 	/* read another 512 bits of noise */
 	if (!fips_trng_bytes(&entropy_fifo, sizeof(entropy_fifo)))
 		return false;
 
 	hmac_drbg_init(&fips_drbg, &entropy_fifo, sizeof(entropy_fifo),
-		       &nonce.random_value, sizeof(nonce.random_value), NULL,
+		       &random, sizeof(random), NULL,
 		       0);
 
-	set_fast_random_seed(fips_trng32(0).random_value);
+	set_fast_random_seed((uint32_t)fips_trng32(0));
 	rand_state.drbg_initialized = 1;
 	return true;
 }

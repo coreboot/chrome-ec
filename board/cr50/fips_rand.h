@@ -19,6 +19,29 @@ extern "C" {
 #define TRNG_SAMPLE_BITS 1
 
 /**
+ * Initialize the true random number generator (TRNG) in FIPS-compliant
+ * way:
+ * 1. Set 1-bit alphabet
+ * 2. Set maximum possible range for internal ring-oscillator
+ * 3. Disable any other post-processing beyond #2
+ **/
+void fips_init_trng(void);
+
+/**
+ * Returns random number with indication wherever reading is valid. This is
+ * different from rand() which doesn't provide any indication.
+ * High 32-bits set to zero in case of error; otherwise value >> 32 == 1
+ * Use of uint64_t vs. struct results in more efficient code.
+ */
+uint64_t read_rand(void);
+
+/* Return true if read_rand() result contains valid random from TRNG. */
+static inline bool rand_valid(uint64_t rand)
+{
+	return (rand >> 32) != 0;
+}
+
+/**
  * TRNG Health Tests
  *
  * If any of the approved continuous health tests are used by the entropy
@@ -75,7 +98,7 @@ extern "C" {
  * over at least 4096 consecutive samples.
  * Note: This function can throw FIPS_FATAL_TRNG error
  *
- * To hide latenccy of reading TRNG data, this test is executed in 2 stages
+ * To hide latency of reading TRNG data, this test is executed in 2 stages
  * @param stage is 0 or 1, choosing the stage. On each stage 2048
  * samples are processed. Assuming that some other tasks can be executed
  * between stages, when TRNG FIFO if filled with samples.
