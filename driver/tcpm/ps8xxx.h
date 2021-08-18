@@ -79,6 +79,9 @@
 
 #define PS8XXX_P1_REG_MUX_USB_DCI_CFG           0x4B
 
+#define PS8755_P0_REG_SM			0x06
+#define PS8755_P0_REG_SM_VALUE			0x80
+
 /* NOTE: The Product ID will read as 0x8803 if the firmware has malfunctioned in
  * 8705, 8755 and 8805.
  */
@@ -131,5 +134,13 @@ void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
 extern struct i2c_stress_test_dev ps8xxx_i2c_stress_test_dev;
 #endif /* defined(CONFIG_CMD_I2C_STRESS_TEST_TCPC) */
+
+/**
+ * Check if the chip is PS8755
+ *
+ * @param port: The Type-C port number.
+ * @return true if hidden register sm is 0x80
+ */
+bool check_ps8755_chip(int port);
 
 #endif /* defined(__CROS_EC_USB_PD_TCPM_PS8XXX_H) */
