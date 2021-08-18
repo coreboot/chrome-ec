@@ -22,6 +22,7 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -943,7 +944,7 @@ void tcpm_clear_pending_messages(int port)
 	q->tail = q->head;
 }
 
-int tcpci_tcpm_transmit(int port, enum tcpm_transmit_type type,
+int tcpci_tcpm_transmit(int port, enum tcpm_sop_type type,
 			uint16_t header, const uint32_t *data)
 {
 	int reg = TCPC_REG_TX_DATA;
@@ -1515,10 +1516,14 @@ int tcpci_tcpm_mux_enter_low_power(const struct usb_mux *me)
 	return mux_write(me, TCPC_REG_COMMAND, TCPC_REG_COMMAND_I2CIDLE);
 }
 
-int tcpci_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state)
+int tcpci_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state,
+		       bool *ack_required)
 {
 	int rv;
 	int reg = 0;
+
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
 
 	/* Parameter is port only */
 	rv = mux_read(me, TCPC_REG_CONFIG_STD_OUTPUT, &reg);

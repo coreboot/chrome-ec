@@ -17,6 +17,7 @@
 #include "usb_charge.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 #if defined(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE) || \
@@ -835,16 +836,16 @@ static int fusb302_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 			return EC_ERROR_UNKNOWN;
 
 		if (reg & TCPC_REG_STATUS1_RXSOP1)
-			*head |= PD_HEADER_SOP(PD_MSG_SOP_PRIME);
+			*head |= PD_HEADER_SOP(TCPC_TX_SOP_PRIME);
 		else if (reg & TCPC_REG_STATUS1_RXSOP2)
-			*head |= PD_HEADER_SOP(PD_MSG_SOP_PRIME_PRIME);
+			*head |= PD_HEADER_SOP(TCPC_TX_SOP_PRIME_PRIME);
 	}
 #endif
 
 	return rv;
 }
 
-static int fusb302_tcpm_transmit(int port, enum tcpm_transmit_type type,
+static int fusb302_tcpm_transmit(int port, enum tcpm_sop_type type,
 				 uint16_t header, const uint32_t *data)
 {
 	/*

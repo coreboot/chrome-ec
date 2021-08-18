@@ -17,6 +17,7 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 #if !defined(CONFIG_USB_PD_TCPM_TCPCI)
@@ -385,12 +386,16 @@ static int anx74xx_mux_aux_to_sbu(int port, int polarity, int enabled)
 }
 
 static int anx74xx_tcpm_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
+				mux_state_t mux_state,
+				bool *ack_required)
 {
 	int ctrl5;
 	int ctrl1 = 0;
 	int rv;
 	int port = me->usb_port;
+
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
 
 	if (!(mux_state & ~USB_PD_MUX_POLARITY_INVERTED)) {
 		anx[port].mux_state = mux_state;
@@ -776,6 +781,7 @@ static int anx74xx_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	int reg, mux_state, rv = EC_SUCCESS;
 	const struct usb_mux *me = &usb_muxes[port];
+	bool unused;
 
 	rv |= tcpc_read(port, ANX74XX_REG_CC_SOFTWARE_CTRL, &reg);
 	if (polarity_rm_dts(polarity)) /* Inform ANX to use CC2 */
@@ -791,7 +797,7 @@ static int anx74xx_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 	mux_state = anx[port].mux_state & ~USB_PD_MUX_POLARITY_INVERTED;
 	if (polarity_rm_dts(polarity))
 		mux_state |= USB_PD_MUX_POLARITY_INVERTED;
-	anx74xx_tcpm_mux_set(me, mux_state);
+	anx74xx_tcpm_mux_set(me, mux_state, &unused);
 #endif
 	return rv;
 }
@@ -904,7 +910,7 @@ static int anx74xx_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 	return anx74xx_read_pd_obj(port, (uint8_t *)payload, len);
 }
 
-static int anx74xx_tcpm_transmit(int port, enum tcpm_transmit_type type,
+static int anx74xx_tcpm_transmit(int port, enum tcpm_sop_type type,
 		  uint16_t header,
 		  const uint32_t *data)
 {
@@ -1020,9 +1026,9 @@ void anx74xx_tcpc_alert(int port)
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	if (reg & ANX74XX_REG_EXT_SOP)
-		msg_sop[port] = PD_MSG_SOP;
+		msg_sop[port] = TCPC_TX_SOP;
 	else if (reg & ANX74XX_REG_EXT_SOP_PRIME)
-		msg_sop[port] = PD_MSG_SOP_PRIME;
+		msg_sop[port] = TCPC_TX_SOP_PRIME;
 #endif
 
 	/* Check for Hard Reset done bit */
@@ -1037,7 +1043,7 @@ void anx74xx_tcpc_alert(int port)
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	if (reg & ANX74XX_REG_EXT_SOP_PRIME_PRIME)
-		msg_sop[port] = PD_MSG_SOP_PRIME_PRIME;
+		msg_sop[port] = TCPC_TX_SOP_PRIME_PRIME;
 #endif
 
 	if (reg & ANX74XX_REG_EXT_HARD_RST) {

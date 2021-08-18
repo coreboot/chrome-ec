@@ -12,6 +12,7 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "task.h"
+#include "timer.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -73,6 +74,7 @@ static int configure_mux(int port,
 	     mux_ptr = mux_ptr->next_mux) {
 		mux_state_t lcl_state;
 		const struct usb_mux_driver *drv = mux_ptr->driver;
+		bool ack_required = false;
 
 		switch (config) {
 		case USB_MUX_INIT:
@@ -107,7 +109,8 @@ static int configure_mux(int port,
 				lcl_state &= ~USB_PD_MUX_POLARITY_INVERTED;
 
 			if (drv && drv->set) {
-				rv = drv->set(mux_ptr, lcl_state);
+				rv = drv->set(mux_ptr, lcl_state,
+					      &ack_required);
 				if (rv)
 					break;
 			}
@@ -132,6 +135,21 @@ static int configure_mux(int port,
 				*mux_state |= lcl_state;
 			}
 			break;
+		}
+
+		if (ack_required) {
+			/* This should only be called from the PD task */
+			assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
+
+			/*
+			 * Note: This task event could be generalized for more
+			 * purposes beyond host command ACKs.  For now, these
+			 * wait times are tuned for the purposes of the TCSS
+			 * mux, but could be made configurable for other
+			 * purposes.
+			 */
+			task_wait_event_mask(PD_EVENT_AP_MUX_DONE, 100*MSEC);
+			usleep(12.5 * MSEC);
 		}
 	}
 
@@ -356,6 +374,30 @@ static void mux_chipset_reset(void)
 		configure_mux(port, USB_MUX_CHIPSET_RESET, NULL);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESET, mux_chipset_reset, HOOK_PRIO_DEFAULT);
+
+/*
+ * For muxes which have powered off in G3, clear any cached INIT and LPM flags
+ * since the chip will need reset.
+ */
+static void usb_mux_reset_in_g3(void)
+{
+	int port;
+	const struct usb_mux *mux_ptr;
+
+	for (port = 0; port < board_get_usb_pd_port_count(); port++) {
+		mux_ptr = &usb_muxes[port];
+
+		while (mux_ptr) {
+			if (mux_ptr->flags & USB_MUX_FLAG_RESETS_IN_G3) {
+				atomic_clear_bits(&flags[port],
+						  USB_MUX_FLAG_INIT |
+						  USB_MUX_FLAG_IN_LPM);
+			}
+			mux_ptr = mux_ptr->next_mux;
+		}
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_HARD_OFF, usb_mux_reset_in_g3, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_CMD_TYPEC
 static int command_typec(int argc, char **argv)
