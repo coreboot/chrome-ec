@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 #include "dcrypto.h"
+#include "fips.h"
 #include "internal.h"
 #include "registers.h"
 
@@ -27,21 +28,21 @@ int dcrypto_grab_sha_hw(void)
 {
 	int rv = 0;
 
-	mutex_lock(&hw_busy_mutex);
+	fips_vtable->mutex_lock(&hw_busy_mutex);
 	if (!hw_busy) {
 		rv = 1;
 		hw_busy = true;
 	}
-	mutex_unlock(&hw_busy_mutex);
+	fips_vtable->mutex_unlock(&hw_busy_mutex);
 
 	return rv;
 }
 
 void dcrypto_release_sha_hw(void)
 {
-	mutex_lock(&hw_busy_mutex);
+	fips_vtable->mutex_lock(&hw_busy_mutex);
 	hw_busy = false;
-	mutex_unlock(&hw_busy_mutex);
+	fips_vtable->mutex_unlock(&hw_busy_mutex);
 }
 
 #endif /* ! SECTION_IS_RO */

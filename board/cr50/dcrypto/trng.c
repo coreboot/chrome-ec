@@ -47,16 +47,16 @@
 
 void fips_init_trng(void)
 {
-#if (!(defined(CONFIG_CUSTOMIZED_RO) && defined(SECTION_IS_RO)))
 	/*
 	 * Most of the trng initialization requires high permissions. If RO has
 	 * dropped the permission level, dont try to read or write these high
 	 * permission registers because it will cause rolling reboots. RO
 	 * should do the TRNG initialization before dropping the level.
+	 *
+	 * For Cr50 RO doesn't drop permission level and init_trng() is called
+	 * by board_init() before dropping permissions.
 	 */
-	if (!runlevel_is_high())
-		return;
-#endif
+
 	/**
 	 * According to NIST SP 800-90B only vetted conditioning mechanism
 	 * should be used for post-processing raw entropy.
@@ -127,7 +127,10 @@ uint64_t read_rand(void)
 		    empty_count > TRNG_EMPTY_COUNT) {
 			/* TRNG timed out, restart */
 			GWRITE(TRNG, STOP_WORK, 1);
-			flash_log_add_event(FE_LOG_TRNG_STALL, 0, NULL);
+#ifdef CONFIG_FLASH_LOG
+			fips_vtable->flash_log_add_event(FE_LOG_TRNG_STALL, 0,
+							 NULL);
+#endif
 			GWRITE(TRNG, GO_EVENT, 1);
 			empty_count = 0;
 			reset_count++;

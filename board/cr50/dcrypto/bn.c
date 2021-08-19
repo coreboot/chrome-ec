@@ -8,18 +8,10 @@
 #endif
 
 #include "dcrypto.h"
+#include "fips.h"
 #include "internal.h"
 
 #include "trng.h"
-
-
-#include <assert.h>
-
-#ifdef CONFIG_WATCHDOG
-extern void watchdog_reload(void);
-#else
-static inline void watchdog_reload(void) { }
-#endif
 
 void bn_init(struct LITE_BIGNUM *b, void *buf, size_t len)
 {
@@ -29,8 +21,12 @@ void bn_init(struct LITE_BIGNUM *b, void *buf, size_t len)
 
 void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len)
 {
-	/* Only word-multiple sized buffers accepted. */
-	assert((len & 0x3) == 0);
+	/* Note: only word-multiple sized buffers accepted. */
+	if (len & 3) {
+		fips_throw_err(FIPS_FATAL_BN_MATH);
+		return;
+	}
+
 	b->dmax = len / LITE_BN_BYTES;
 	b->d = (struct access_helper *) buf;
 }
@@ -309,8 +305,23 @@ static void bn_compute_RR(struct LITE_BIGNUM *RR, const struct LITE_BIGNUM *N)
 
 	/* Repeat 2 * R % N, log2(R) times. */
 	for (i = 0; i < N->dmax * LITE_BN_BITS2; i++) {
+		/**
+		 * assume RR = N - x, where x is positive, less than N,
+		 * let n = RR & N bit size (RR created same size as N).
+		 *
+		 * if RR * 2 overflows it means 2^n > RR >= 2^(n-1),
+		 * 2^n > N - x >= 2^(n-1)
+		 *    ==>  N >= 2^(n-1) + x
+		 *
+		 * 2*RR - 2^n < N because:
+		 * ((2^(n-1) + x) - x)*2 - 2^n < 2^(n-1) + x
+		 *         0 < 2^(n-1) + x
+		 */
 		if (bn_lshift(RR))
-			assert(bn_sub(RR, N) == -1);
+			if (bn_sub(RR, N) != -1)
+				fips_throw_err(FIPS_FATAL_BN_MATH);
+
+		/* RR < N is invariant of the loop */
 		if (bn_gte(RR, N))
 			bn_sub(RR, N);
 	}
@@ -370,7 +381,9 @@ static void bn_modexp_internal(struct LITE_BIGNUM *output,
 		 * TODO(ngm): may be unnecessary with
 		 * a faster implementation.
 		 */
-		watchdog_reload();
+#ifdef CONFIG_WATCHDOG
+		fips_vtable->watchdog_reload();
+#endif
 	}
 
 	bn_mont_mul(output, NULL, &acc, nprime, N);     /* Convert out. */

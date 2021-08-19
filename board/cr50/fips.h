@@ -6,6 +6,8 @@
 #define __EC_BOARD_CR50_FIPS_H__
 
 #include "common.h"
+#include "timer.h"
+#include "task.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +36,7 @@ enum fips_status {
 	FIPS_FATAL_AES256 = 1 << 9,
 #endif
 	FIPS_FATAL_SELF_INTEGRITY = 1 << 10,
+	FIPS_FATAL_BN_MATH = 1 << 11,
 	FIPS_FATAL_OTHER = 1 << 15,
 	FIPS_ERROR_MASK = 0xffff,
 	FIPS_RFU_MASK = 0x7fff0000
@@ -114,6 +117,42 @@ void fips_throw_err(enum fips_status err);
  * Set FIPS status globally as a result.
  */
 void fips_power_up_tests(void);
+
+struct fips_vtable {
+	int (*shared_mem_acquire)(int size, char **dest_ptr);
+	void (*shared_mem_release)(void *ptr);
+#ifdef CONFIG_FLASH_LOG
+	void (*flash_log_add_event)(uint8_t type, uint8_t size, void *payload);
+#endif
+	void (*cflush)(void);
+	timestamp_t (*get_time)(void);
+
+	void (*task_enable_irq)(int irq);
+	uint32_t (*task_wait_event_mask)(uint32_t event_mask, int timeout_us);
+	uint32_t (*task_set_event)(task_id_t tskid, uint32_t event, int wait);
+	task_id_t (*task_get_current)(void);
+	void (*task_start_irq_handler)(void *excep_return);
+	void (*task_resched_if_needed)(void *excep_return);
+	void (*mutex_lock)(struct mutex *mtx);
+	void (*mutex_unlock)(struct mutex *mtx);
+#ifdef CONFIG_WATCHDOG
+	void (*watchdog_reload)(void);
+#endif
+};
+
+/* Pointer to external callbacks used by FIPS module. */
+extern const struct fips_vtable *fips_vtable;
+
+/**
+ * Set FIPS module vtable. Called during board_init() phase to provide
+ * pointers to several system functions required by module to function.
+ *
+ * This should be called before any other FIPS functions are invoked as
+ * vtable is used during FIPS power-up tests. Internally it checks that
+ * provided vtable and referenced functions are in the same flash bank
+ * as the FIPS module for additional security.
+ */
+void fips_set_callbacks(const struct fips_vtable *vtable);
 
 #ifdef __cplusplus
 }

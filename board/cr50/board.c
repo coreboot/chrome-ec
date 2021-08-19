@@ -14,7 +14,9 @@
 #include "endian.h"
 #include "extension.h"
 #include "fips_rand.h"
+#include "fips.h"
 #include "flash.h"
+#include "flash_log.h"
 #include "flash_config.h"
 #include "gpio.h"
 #include "ite_sync.h"
@@ -29,6 +31,7 @@
 #include "recovery_button.h"
 #include "registers.h"
 #include "scratch_reg1.h"
+#include "shared_mem.h"
 #include "signed_header.h"
 #include "spi.h"
 #include "system.h"
@@ -43,6 +46,7 @@
 #include "usb_i2c.h"
 #include "usb_spi.h"
 #include "util.h"
+#include "watchdog.h"
 #include "wp.h"
 
 /* Define interrupt and gpio structs */
@@ -840,6 +844,28 @@ static void board_init(void)
 #else
 	static enum ccd_state ccd_init_state = CCD_STATE_LOCKED;
 #endif
+	static const struct fips_vtable fips_module_vtable = {
+		.shared_mem_acquire = shared_mem_acquire,
+		.shared_mem_release = shared_mem_release,
+#ifdef CONFIG_FLASH_LOG
+		.flash_log_add_event = flash_log_add_event,
+#endif
+		.get_time = get_time,
+		.task_enable_irq = task_enable_irq,
+		.task_wait_event_mask = task_wait_event_mask,
+		.task_set_event = task_set_event,
+		.task_get_current = task_get_current,
+		.task_start_irq_handler = task_start_irq_handler,
+		.task_resched_if_needed = task_resched_if_needed,
+		.mutex_lock = mutex_lock,
+		.mutex_unlock = mutex_unlock,
+#ifdef CONFIG_WATCHDOG
+		.watchdog_reload = watchdog_reload
+#endif
+	};
+
+	/* Provide callbacks to FIPS module as soon as possible. */
+	fips_set_callbacks(&fips_module_vtable);
 
 	/*
 	 * Deep sleep resets should be considered valid and should not impact
@@ -850,6 +876,7 @@ static void board_init(void)
 	configure_board_specific_gpios();
 	init_pmu();
 	reset_wake_logic();
+	/* It is important to init TRNG before dropping run level. */
 	fips_init_trng();
 	maybe_trigger_ite_sync();
 	init_jittery_clock(1);

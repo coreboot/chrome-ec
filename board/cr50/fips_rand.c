@@ -287,8 +287,7 @@ enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
 	while (err == HMAC_DRBG_RESEED_REQUIRED) {
 		/* read another 512 bits of noise */
 		if (!fips_trng_bytes(&entropy_fifo, sizeof(entropy_fifo))) {
-			/* TODO: Report FIPS error properly */
-			ccprintf("FIPS trng bytes failed\n");
+			/* FIPS error is reported by failed TRNG test. */
 			return HMAC_DRBG_RESEED_REQUIRED;
 		}
 
@@ -296,8 +295,6 @@ enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
 				 0, NULL, 0);
 		err = hmac_drbg_generate(ctx, out, out_len, input, input_len);
 	}
-	if (err != HMAC_DRBG_SUCCESS)
-		ccprintf("DRBG error %d\n", err);
 	return err;
 }
 

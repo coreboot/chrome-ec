@@ -10,6 +10,8 @@
 #include "extension.h"
 #include "fips.h"
 #include "fips_rand.h"
+#include "flash.h"
+#include "flash_info.h"
 #include "flash_log.h"
 #include "hooks.h"
 #include "new_nvmem.h"
@@ -69,10 +71,13 @@ void fips_throw_err(enum fips_status err)
 	if ((_fips_status & err) == err)
 		return;
 	fips_set_status(err);
+#ifdef CONFIG_FLASH_LOG
 	if (_fips_status & FIPS_ERROR_MASK) {
-		flash_log_add_event(FE_LOG_FIPS_FAILURE, sizeof(_fips_status),
-				    &_fips_status);
+		fips_vtable->flash_log_add_event(FE_LOG_FIPS_FAILURE,
+						 sizeof(_fips_status),
+						 &_fips_status);
 	}
+#endif
 }
 
 /**
@@ -589,7 +594,7 @@ void fips_power_up_tests(void)
 	void *stack;
 	uint64_t starttime;
 
-	starttime = get_time().val;
+	starttime = fips_vtable->get_time().val;
 
 	if (!fips_self_integrity())
 		_fips_status |= FIPS_FATAL_SELF_INTEGRITY;
@@ -599,7 +604,7 @@ void fips_power_up_tests(void)
 	 * shared memory for KAT tests temporary larger stack.
 	 */
 	if (EC_SUCCESS ==
-	    shared_mem_acquire(FIPS_KAT_STACK_SIZE, &stack_buf)) {
+	    fips_vtable->shared_mem_acquire(FIPS_KAT_STACK_SIZE, &stack_buf)) {
 		stack = stack_buf + FIPS_KAT_STACK_SIZE;
 		if (!call_on_stack(stack, &fips_sha256_kat))
 			_fips_status |= FIPS_FATAL_SHA256;
@@ -645,7 +650,7 @@ void fips_power_up_tests(void)
 			_fips_status |= FIPS_FATAL_HMAC_DRBG;
 #endif
 		dcrypto_release_sha_hw();
-		shared_mem_release(stack_buf);
+		fips_vtable->shared_mem_release(stack_buf);
 
 		/* Second call to TRNG warm-up. */
 		fips_trng_startup(1);
@@ -653,16 +658,18 @@ void fips_power_up_tests(void)
 		/* If no errors, set not to run tests on wake from sleep. */
 		if (fips_is_no_crypto_error())
 			fips_set_power_up(true);
+#ifdef CONFIG_FLASH_LOG
 		else /* write combined error to flash log */
-			flash_log_add_event(FE_LOG_FIPS_FAILURE,
-					    sizeof(_fips_status),
-					    &_fips_status);
+			fips_vtable->flash_log_add_event(FE_LOG_FIPS_FAILURE,
+							 sizeof(_fips_status),
+							 &_fips_status);
+#endif
 		/* Set the bit that power-up tests completed, even if failed. */
 		_fips_status |= FIPS_POWER_UP_TEST_DONE;
 	} else
 		_fips_status |= FIPS_FATAL_OTHER;
 
-	fips_last_kat_test_duration = get_time().val - starttime;
+	fips_last_kat_test_duration = fips_vtable->get_time().val - starttime;
 }
 
 /* Initialize FIPS mode. Executed during power-up and resume from sleep. */
@@ -690,3 +697,54 @@ static void fips_power_on(void)
 
 /* FIPS initialization is last init hook, HOOK_PRIO_FIPS > HOOK_PRIO_LAST */
 DECLARE_HOOK(HOOK_INIT, fips_power_on, HOOK_PRIO_INIT_FIPS);
+
+const struct fips_vtable *fips_vtable;
+
+/**
+ * Check that given address is in same half of flash as FIPS code.
+ * This rejects addresses in SRAM and provides additional security.
+ */
+static bool is_flash_address(const void *ptr)
+{
+	uintptr_t my_addr =
+		(uintptr_t)is_flash_address - CONFIG_PROGRAM_MEMORY_BASE;
+	uintptr_t offset = (uintptr_t)ptr - CONFIG_PROGRAM_MEMORY_BASE;
+
+	if (my_addr >= CONFIG_RW_MEM_OFF &&
+	    my_addr < CFG_TOP_A_OFF)
+		return (offset >= CONFIG_RW_MEM_OFF) &&
+		       (offset <= CFG_TOP_A_OFF);
+	if (my_addr >= CONFIG_RW_B_MEM_OFF &&
+		 my_addr < CFG_TOP_B_OFF)
+		return (offset >= CONFIG_RW_B_MEM_OFF) &&
+		       (offset <= CFG_TOP_B_OFF);
+
+	/* Otherwise, we don't know what's going on, don't accept it. */
+	return false;
+}
+
+void fips_set_callbacks(const struct fips_vtable *vtable)
+{
+	if (is_flash_address(vtable) &&
+	    is_flash_address(vtable->shared_mem_acquire) &&
+	    is_flash_address(vtable->shared_mem_release) &&
+#ifdef CONFIG_FLASH_LOG
+	    is_flash_address(vtable->flash_log_add_event) &&
+#endif
+#ifdef CONFIG_WATCHDOG
+	    is_flash_address(vtable->watchdog_reload) &&
+#endif
+	    is_flash_address(vtable->get_time) &&
+	    is_flash_address(vtable->task_enable_irq) &&
+	    is_flash_address(vtable->task_wait_event_mask) &&
+	    is_flash_address(vtable->task_set_event) &&
+	    is_flash_address(vtable->task_get_current) &&
+	    is_flash_address(vtable->task_start_irq_handler) &&
+	    is_flash_address(vtable->task_resched_if_needed) &&
+	    is_flash_address(vtable->mutex_lock) &&
+	    is_flash_address(vtable->mutex_unlock))
+
+		fips_vtable = vtable;
+	else
+		fips_vtable = NULL;
+}

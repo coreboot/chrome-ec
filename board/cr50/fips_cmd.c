@@ -19,8 +19,17 @@
 #include "scratch_reg1.h"
 #include "shared_mem.h"
 #include "system.h"
+#include "task.h"
 #include "tpm_nvmem_ops.h"
 #include "u2f_impl.h"
+
+/**
+ * Create IRQ handler calling FIPS module's dcrypto_done_interrupt() on
+ * interrupt. Generated code calls some of the EC OS task management
+ * functions which are not security/crypto related, so to avoid rewriting
+ * macro using FIPS vtable, move it outside FIPS module.
+ */
+DECLARE_IRQ(GC_IRQNUM_CRYPTO0_HOST_CMD_DONE_INT, dcrypto_done_interrupt, 1);
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 

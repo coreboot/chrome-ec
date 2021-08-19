@@ -4,6 +4,7 @@
  */
 
 #include "flash_log.h"
+#include "fips.h"
 #include "internal.h"
 #include "registers.h"
 #include "task.h"
@@ -51,8 +52,8 @@ static void dcrypto_wipe_imem(void)
 
 void dcrypto_init_and_lock(void)
 {
-	mutex_lock(&dcrypto_mutex);
-	my_task_id = task_get_current();
+	fips_vtable->mutex_lock(&dcrypto_mutex);
+	my_task_id = fips_vtable->task_get_current();
 
 	if (dcrypto_is_initialized)
 		return;
@@ -74,14 +75,14 @@ void dcrypto_init_and_lock(void)
 	GREG32(CRYPTO, INT_STATE) = -1;   /* Reset all the status bits. */
 	GREG32(CRYPTO, INT_ENABLE) = -1;  /* Enable all status bits. */
 
-	task_enable_irq(GC_IRQNUM_CRYPTO0_HOST_CMD_DONE_INT);
+	fips_vtable->task_enable_irq(GC_IRQNUM_CRYPTO0_HOST_CMD_DONE_INT);
 
 	dcrypto_is_initialized = 1;
 }
 
 void dcrypto_unlock(void)
 {
-	mutex_unlock(&dcrypto_mutex);
+	fips_vtable->mutex_unlock(&dcrypto_mutex);
 }
 
 #ifndef DCRYPTO_CALL_TIMEOUT_US
@@ -105,7 +106,7 @@ uint32_t dcrypto_call(uint32_t adr)
 
 	GREG32(CRYPTO, HOST_CMD) = 0x08000000 + adr; /* Call imem:adr. */
 
-	event = task_wait_event_mask(TASK_EVENT_DCRYPTO_DONE,
+	event = fips_vtable->task_wait_event_mask(TASK_EVENT_DCRYPTO_DONE,
 				     DCRYPTO_CALL_TIMEOUT_US);
 	/* TODO(ngm): switch return value to an enum. */
 	switch (event) {
@@ -126,19 +127,22 @@ uint32_t dcrypto_call(uint32_t adr)
 		dcrypto_reset_and_wipe();
 #ifdef CONFIG_FLASH_LOG
 		/* State value of zero indicates event timeout. */
-		flash_log_add_event(FE_LOG_DCRYPTO_FAILURE,
+		fips_vtable->flash_log_add_event(FE_LOG_DCRYPTO_FAILURE,
 				    sizeof(state), &state);
 #endif
 		return 1;
 	}
 }
-
+/**
+ * DECLARE_IRQ()  referencing this function moved outside FIPS module
+ * into fips_cmd.c to remove direct references to EC OS functions hard-
+ * coded into macro.
+ */
 void __keep dcrypto_done_interrupt(void)
 {
 	GREG32(CRYPTO, INT_STATE) = GC_CRYPTO_INT_STATE_HOST_CMD_DONE_MASK;
-	task_set_event(my_task_id, TASK_EVENT_DCRYPTO_DONE, 0);
+	fips_vtable->task_set_event(my_task_id, TASK_EVENT_DCRYPTO_DONE, 0);
 }
-DECLARE_IRQ(GC_IRQNUM_CRYPTO0_HOST_CMD_DONE_INT, dcrypto_done_interrupt, 1);
 
 void dcrypto_imem_load(size_t offset, const uint32_t *opcodes,
 			size_t n_opcodes)
