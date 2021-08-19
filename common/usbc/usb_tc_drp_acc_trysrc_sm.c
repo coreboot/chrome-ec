@@ -15,6 +15,7 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_dpm.h"
+#include "usb_pd_tcpm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
@@ -530,7 +531,7 @@ void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
 {
 }
 
-int pd_get_rev(int port, enum tcpm_transmit_type type)
+int pd_get_rev(int port, enum tcpm_sop_type type)
 {
 	return PD_REV30;
 }
@@ -2305,7 +2306,12 @@ static void tc_unattached_snk_run(const int port)
 		set_state_tc(port, TC_UNATTACHED_SRC);
 	} else if (IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER) &&
 		   (drp_state[port] == PD_DRP_FORCE_SINK ||
-		    drp_state[port] == PD_DRP_TOGGLE_OFF)) {
+		    drp_state[port] == PD_DRP_TOGGLE_OFF ||
+		    cc_is_open(cc1, cc2))) {
+		/*
+		 * Enter low power mode for TCPCs that do not
+		 * support DRP Autotoggle.
+		 */
 		set_state_tc(port, TC_LOW_POWER_MODE);
 	}
 }
@@ -2839,9 +2845,13 @@ static void tc_unattached_src_run(const int port)
 		 drp_state[port] == PD_DRP_TOGGLE_ON &&
 		 tcpm_auto_toggle_supported(port) && cc_is_open(cc1, cc2))
 		set_state_tc(port, TC_DRP_AUTO_TOGGLE);
+	/*
+	 * Enter low power mode for TCPCs that do not support DRP Autotoggle.
+	 */
 	else if (IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER) &&
 		 (drp_state[port] == PD_DRP_FORCE_SOURCE ||
-		  drp_state[port] == PD_DRP_TOGGLE_OFF))
+		  drp_state[port] == PD_DRP_TOGGLE_OFF ||
+		  cc_is_open(cc1, cc2)))
 		set_state_tc(port, TC_LOW_POWER_MODE);
 }
 
@@ -2979,10 +2989,22 @@ static void tc_attached_src_entry(const int port)
 			 * completed and tc_pr_swap_complete is called.
 			 */
 		} else {
+			/*
+			 * Set up CC's, Vconn, and ADD before Vbus, as per
+			 * Figure 4-24. DRP Initialization and Connection
+			 * Detection in TCPCI r2 v1.2 specification.
+			 */
+
 			/* Get connector orientation */
 			tcpm_get_cc(port, &cc1, &cc2);
 			tc[port].polarity = get_src_polarity(cc1, cc2);
 			pd_set_polarity(port, tc[port].polarity);
+
+			/* Attached.SRC - enable AutoDischargeDisconnect */
+			tcpm_enable_auto_discharge_disconnect(port, 1);
+
+			/* Apply Rp */
+			typec_update_cc(port);
 
 			/*
 			 * Initial data role for sink is DFP
@@ -3013,22 +3035,28 @@ static void tc_attached_src_entry(const int port)
 						tc[port].polarity);
 			}
 
-			/* Attached.SRC - enable AutoDischargeDisconnect */
-			tcpm_enable_auto_discharge_disconnect(port, 1);
-
-			/* Apply Rp */
-			typec_update_cc(port);
-
 			tc_enable_pd(port, 0);
 			pd_timer_enable(port, TC_TIMER_TIMEOUT,
 					MAX(PD_POWER_SUPPLY_TURN_ON_DELAY,
 					    PD_T_VCONN_STABLE));
 		}
 	} else {
+		/*
+		 * Set up CC's, Vconn, and ADD before Vbus, as per
+		 * Figure 4-24. DRP Initialization and Connection
+		 * Detection in TCPCI r2 v1.2 specification.
+		 */
+
 		/* Get connector orientation */
 		tcpm_get_cc(port, &cc1, &cc2);
 		tc[port].polarity = get_src_polarity(cc1, cc2);
 		pd_set_polarity(port, tc[port].polarity);
+
+		/* Attached.SRC - enable AutoDischargeDisconnect */
+		tcpm_enable_auto_discharge_disconnect(port, 1);
+
+		/* Apply Rp */
+		typec_update_cc(port);
 
 		/*
 		 * Initial data role for sink is DFP
@@ -3056,12 +3084,6 @@ static void tc_attached_src_entry(const int port)
 				usb_mux_set(port, USB_PD_MUX_NONE,
 				USB_SWITCH_DISCONNECT, tc[port].polarity);
 		}
-
-		/* Attached.SRC - enable AutoDischargeDisconnect */
-		tcpm_enable_auto_discharge_disconnect(port, 1);
-
-		/* Apply Rp */
-		typec_update_cc(port);
 	}
 
 	/* Inform PPC and OCP module that a sink is connected. */
@@ -3917,7 +3939,7 @@ static void pd_chipset_reset(void)
 		return;
 
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		enum tcpm_transmit_type tx;
+		enum tcpm_sop_type tx;
 
 		/* Do not notify the AP of irrelevant past Hard Resets. */
 		pd_clear_events(i, PD_STATUS_EVENT_HARD_RESET);

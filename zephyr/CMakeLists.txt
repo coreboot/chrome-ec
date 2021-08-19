@@ -61,6 +61,9 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # with Zephyr builds only.
   zephyr_compile_definitions("CONFIG_ZEPHYR")
 
+  # Force compiler warnings to generate errors
+  zephyr_compile_options(-Werror)
+
   # When LTO is enabled, enable only for the "app" library, which compiles
   # and links all Chromium OS sources.
   # TODO: Enable LTO for all sources when Zephyr supports it.
@@ -405,7 +408,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_HASH
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VOLUME_BUTTONS
                                                 "${PLATFORM_EC}/common/button.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_EFS2
                                                 "${PLATFORM_EC}/common/vboot/efs2.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE

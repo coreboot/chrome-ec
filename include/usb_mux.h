@@ -17,6 +17,7 @@
 /* Flags used for usb_mux.flags */
 #define USB_MUX_FLAG_NOT_TCPC BIT(0) /* TCPC/MUX device used only as MUX */
 #define USB_MUX_FLAG_SET_WITHOUT_FLIP BIT(1) /* SET should not flip */
+#define USB_MUX_FLAG_RESETS_IN_G3 BIT(2) /* Mux chip will reset in G3 */
 
 /*
  * USB-C mux state
@@ -42,11 +43,14 @@ struct usb_mux_driver {
 	/**
 	 * Set USB mux state.
 	 *
-	 * @param me usb_mux
-	 * @param mux_state State to set mux to.
+	 * @param[in]  me usb_mux
+	 * @param[in]  mux_state State to set mux to.
+	 * @param[out] bool ack_required - indication of whether this mux needs
+	 * to wait on a host command ACK at the end of a set
 	 * @return EC_SUCCESS on success, non-zero error code on failure.
 	 */
-	int (*set)(const struct usb_mux *me, mux_state_t mux_state);
+	int (*set)(const struct usb_mux *me, mux_state_t mux_state,
+		   bool *ack_required);
 
 	/**
 	 * Get current state of USB mux.

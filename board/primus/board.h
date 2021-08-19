@@ -33,6 +33,7 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 #undef  CONFIG_USB_PD_TCPM_NCT38XX
 #define CONFIG_USB_PD_TCPM_RT1715
@@ -181,6 +182,7 @@ enum sensor_id {
 
 enum battery_type {
 	BATTERY_SUNWODA,
+	BATTERY_SMP,
 	BATTERY_TYPE_COUNT
 };
 

@@ -18,6 +18,7 @@
 #include "printf.h"
 #include "uart.h"
 #include "usb_console.h"
+#include "zephyr_console_shim.h"
 
 LOG_MODULE_REGISTER(shim_console, LOG_LEVEL_ERR);
 
@@ -42,7 +43,8 @@ static void uart_rx_handle(const struct device *dev)
 			/* Put `rd_len` bytes on the ring buffer */
 			ring_buf_put_finish(&rx_buffer, rd_len);
 		} else {
-			/* There's no room on the ring buffer, throw away 1
+			/*
+			 * There's no room on the ring buffer, throw away 1
 			 * byte.
 			 */
 			rd_len = uart_fifo_read(dev, &scratch, 1);
@@ -67,7 +69,8 @@ static void shell_uninit_callback(const struct shell *shell, int res)
 		/* Set the new callback */
 		uart_irq_callback_user_data_set(dev, uart_callback, NULL);
 
-		/* Disable TX interrupts. We don't actually use TX but for some
+		/*
+		 * Disable TX interrupts. We don't actually use TX but for some
 		 * reason none of this works without this line.
 		 */
 		uart_irq_tx_disable(dev);
@@ -158,26 +161,29 @@ void uart_shell_start(void)
 	k_poll(&event, 1, K_FOREVER);
 }
 
-int zshim_run_ec_console_command(int (*handler)(int argc, char **argv),
-				 const struct shell *shell, size_t argc,
-				 char **argv, const char *help_str,
-				 const char *argdesc)
+int zshim_run_ec_console_command(const struct zephyr_console_command *command,
+				 size_t argc, char **argv)
 {
-	ARG_UNUSED(shell);
-
+	/*
+	 * The Zephyr shell only displays the help string and not
+	 * the argument descriptor when passing "-h" or "--help".  Mimic the
+	 * cros-ec behavior by displaying both the user types "<command> help",
+	 */
+#ifdef CONFIG_SHELL_HELP
 	for (int i = 1; i < argc; i++) {
-		if (!help_str && !argdesc)
+		if (!command->help && !command->argdesc)
 			break;
-		if (!strcmp(argv[i], "-h")) {
-			if (help_str)
-				printk("%s\n", help_str);
-			if (argdesc)
-				printk("Usage: %s\n", argdesc);
+		if (!strcmp(argv[i], "help")) {
+			if (command->help)
+				printk("%s\n", command->help);
+			if (command->argdesc)
+				printk("Usage: %s\n", command->argdesc);
 			return 0;
 		}
 	}
+#endif
 
-	return handler(argc, argv);
+	return command->handler(argc, argv);
 }
 
 #if defined(CONFIG_CONSOLE_CHANNEL) && DT_NODE_EXISTS(DT_PATH(ec_console))
@@ -267,13 +273,14 @@ static void handle_sprintf_rv(int rv, size_t *len)
 
 static void zephyr_print(const char *buff, size_t size)
 {
-	/* shell_* functions can not be used in ISRs so use printk instead.
+	/*
+	 * shell_* functions can not be used in ISRs so use printk instead.
 	 * Also, console_buf_notify_chars uses a mutex, which may not be
 	 * locked in ISRs.
 	 */
-	if (k_is_in_isr() || shell_zephyr->ctx->state != SHELL_STATE_ACTIVE)
+	if (k_is_in_isr() || shell_zephyr->ctx->state != SHELL_STATE_ACTIVE) {
 		printk("%s", buff);
-	else {
+	} else {
 		/*
 		 * On some platforms, shell_* functions are not as fast
 		 * as printk and they need the added speed to avoid

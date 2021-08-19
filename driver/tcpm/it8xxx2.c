@@ -170,7 +170,7 @@ static int it8xxx2_tcpm_get_message_raw(int port, uint32_t *buf, int *head)
 	 * BIT[6:4] SOP type of Rx message
 	 * 000b=SOP, 001b=SOP', 010b=SOP", 011b=Debug SOP', 100b=Debug SOP"
 	 * 101b=HRDRST, 110b=CBLRST
-	 * 000b~100b is aligned to enum pd_msg_type.
+	 * 000b~100b is aligned to enum tcpm_sop_type.
 	 *
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP))
@@ -197,7 +197,7 @@ void it8xxx2_get_tx_error_status(enum usbpd_port port)
 }
 
 static enum tcpc_transmit_complete it8xxx2_tx_data(enum usbpd_port port,
-						   enum tcpm_transmit_type type,
+						   enum tcpm_sop_type type,
 						   uint16_t header,
 						   const uint32_t *buf)
 {
@@ -595,7 +595,7 @@ static int it8xxx2_tcpm_set_rx_enable(int port, int enable)
 }
 
 static int it8xxx2_tcpm_transmit(int port,
-				 enum tcpm_transmit_type type,
+				 enum tcpm_sop_type type,
 				 uint16_t header,
 				 const uint32_t *data)
 {
