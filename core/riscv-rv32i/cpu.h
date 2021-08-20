@@ -46,6 +46,14 @@ static inline uint32_t get_mcause(void)
 	return ret;
 }
 
+/* Read control and status register */
+#define csr_read(csr)					\
+({							\
+	register uint32_t __v;				\
+	asm volatile ("csrr %0, " #csr : "=r" (__v));	\
+	__v;						\
+})
+
 /* Generic CPU core initialization */
 void cpu_init(void);
 extern uint32_t ec_reset_lp;

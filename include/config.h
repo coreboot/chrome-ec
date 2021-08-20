@@ -2578,6 +2578,9 @@
  */
 #undef CONFIG_IT83XX_FLASH_CLOCK_48MHZ
 
+/* This is it8xxx2 specific and is used to track if SOC's irq 0 is fired. */
+#undef CONFIG_IT83XX_HANDLE_IRQ_0
+
 /*
  * If this option is enabled, EC will assert GPG1 pin to reset itself instead of
  * triggering an internal reset while receiving a reset request.

@@ -524,6 +524,11 @@
 #define CPU_INT_GROUP_7          248
 #define IT83XX_CPU_INT_IRQ_248     7
 
+#ifdef CONFIG_IT83XX_HANDLE_IRQ_0
+#define CPU_INT_GROUP_0          247
+#define IT83XX_CPU_INT_IRQ_247    15
+#endif
+
 #define CPU_INT(irq) CONCAT2(IT83XX_CPU_INT_IRQ_, irq)
 
 /* --- INTC --- */
