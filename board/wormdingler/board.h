@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Mrbland board configuration */
+/* Wormdingler board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -57,7 +57,6 @@
 
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
-#define CONFIG_GMR_TABLET_MODE
 #define CONFIG_FRONT_PROXIMITY_SWITCH
 
 #define CONFIG_DETACHABLE_BASE
@@ -67,8 +66,6 @@
 #define GPIO_AC_PRESENT GPIO_CHG_ACOK_OD
 #define GPIO_WP_L GPIO_EC_FLASH_WP_ODL
 #define GPIO_PMIC_RESIN_L GPIO_PM845_RESIN_L
-/* TODO(Dolan): check which pin was used for tablet mode detect */
-#define GMR_TABLET_MODE_GPIO_L GPIO_LID_OPEN_EC
 #define GPIO_SWITCHCAP_PG_INT_L GPIO_LN9310_INT
 
 #define CONFIG_MKBP_INPUT_DEVICES
@@ -100,10 +97,8 @@ enum pwm_channel {
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_GH02047XL_1C,
-	BATTERY_GH02047XL,
-	BATTERY_DS02032XL,
-	BATTERY_DS02032XL_1C,
+	BATTERY_L19C2PD7,
+	BATTERY_TBD,
 	BATTERY_L21D4PG0,
 	BATTERY_L21M4PG0,
 	BATTERY_TYPE_COUNT,
