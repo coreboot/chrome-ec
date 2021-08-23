@@ -1158,6 +1158,9 @@
  */
 #undef CONFIG_CHIP_PANIC_BACKUP
 
+/* Don't save General Purpose Registers during panic */
+#undef CONFIG_PANIC_STRIP_GPR
+
 /*
  * When defined, it enables system safe mode. System safe mode allows the AP to
  * capture the EC state after a panic.
