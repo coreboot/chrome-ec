@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "crypto_common.h"
+
 #include "util.h"
 
 #include "hmacsha2.h"
@@ -39,11 +40,6 @@ extern "C" {
 #define CHAR_BIT 8
 #endif
 
-enum sha_mode {
-	SHA1_MODE = 0,
-	SHA256_MODE = 1
-};
-
 /*
  * Use this structure to avoid alignment problems with input and output
  * pointers.
@@ -56,6 +52,9 @@ struct access_helper {
 int dcrypto_grab_sha_hw(void);
 void dcrypto_release_sha_hw(void);
 #endif
+
+/* Load data into KEYMGR SHA FIFO. */
+void dcrypto_sha_fifo_load(const void *data, size_t n);
 
 /*
  * BIGNUM.
@@ -351,6 +350,12 @@ static inline uint64_t rol64(uint64_t value, int bits)
 
 /* Define machine word alignment mask. */
 #define WORD_MASK (sizeof(uintptr_t) - 1)
+
+/* return true if pointer is not word aligned. */
+static inline bool is_not_aligned(const void *ptr)
+{
+	return (uintptr_t)ptr & WORD_MASK;
+}
 
 /**
  * @brief Launders the machine register sized value `val`.
