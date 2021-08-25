@@ -98,7 +98,6 @@ SECTIONS
 
 		. = ALIGN(4);
 		KEEP(*(.rodata.pstate))
-
 		/**
 		 * Reserve a space for FIPS crypto module.
 		 * We compute sha256 for this block to check integrity, but
@@ -112,11 +111,6 @@ SECTIONS
 		KEEP(*(.text.fips))
 		KEEP(*(.rodata.fips))
 		__fips_module_end = .;
-		. = ALIGN(4);
-		__fips_module_checksum_start = .;
-		KEEP(*(.rodata.fips.checksum))
-		__fips_module_checksum_end = .;
-
 		. = ALIGN(4);
 		STRINGIFY(OUTDIR/core/CORE/init.o) (.text)
 #if defined(CHIP_FAMILY_NPCX7) && !defined(CONFIG_HIBERNATE_PSL)
@@ -146,6 +140,17 @@ SECTIONS
 	} > FLASH
 #	endif /* !CONFIG_FLASH_PHYSICAL */
 #endif
+
+	. = ALIGN(4);
+	/*
+	 * Put the FIPS checksum in its own section, so it's easier to inject it
+	 * into the elf file.
+	 */
+	.text.fips_checksum : {
+		__fips_module_checksum_start = .;
+		KEEP(*(.rodata.fips.checksum))
+		__fips_module_checksum_end = .;
+	}
 	. = ALIGN(4);
 	.rodata : {
 		/* Symbols defined here are declared in link_defs.h */
