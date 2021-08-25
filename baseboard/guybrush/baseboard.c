@@ -203,7 +203,7 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = board_get_soc_temp,
+		.read = board_get_soc_temp_k,
 		.idx = TMP112_SOC,
 	},
 	[TEMP_SENSOR_CHARGER] = {
@@ -227,7 +227,7 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_AMBIENT] = {
 		.name = "Ambient",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = tmp112_get_val,
+		.read = tmp112_get_val_k,
 		.idx = TMP112_AMB,
 	},
 };
