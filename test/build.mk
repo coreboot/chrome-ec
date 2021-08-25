@@ -95,7 +95,6 @@ thermal-y=thermal.o
 timer_calib-y=timer_calib.o
 timer_dos-y=timer_dos.o
 u2f-y=u2f.o
-u2f-y+=../board/cr50/u2f.o
 uptime-y=uptime.o
 utils-y=utils.o
 utils_str-y=utils_str.o
@@ -108,7 +107,6 @@ TPM2_ROOT := $(CROS_WORKON_SRCROOT)/src/third_party/tpm2
 $(out)/RO/common/new_nvmem.o: CFLAGS += -I$(TPM2_ROOT) -I chip/g
 $(out)/RO/test/nvmem.o: CFLAGS += -I$(TPM2_ROOT)
 $(out)/RO/test/nvmem_tpm2_mock.o: CFLAGS += -I$(TPM2_ROOT)
-$(out)/RO/common/u2f.o: CFLAGS += -DU2F_TEST
 
 host-is_enabled_error: TEST_SCRIPT=is_enabled_error.sh
 is_enabled_error-y=is_enabled_error.o.cmd

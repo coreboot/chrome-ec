@@ -73,18 +73,4 @@ enum pp_fsm_state {
 };
 enum pp_fsm_state physical_presense_fsm_state(void);
 
-/* ---- Physical presence ---- */
-enum touch_state {
-	POP_TOUCH_NO = 0, /* waiting for a user touch */
-	POP_TOUCH_YES = 1, /* touch recorded and latched */
-};
-
-/*
- * Check whether the user presence event was latched.
- *
- * @param consume reset the latched touch event and the presence LED.
- * @return POP_TOUCH_NO or POP_TOUCH_YES.
- */
-enum touch_state pop_check_presence(int consume);
-
 #endif /* __CROS_EC_PHYSICAL_PRESENCE_H */

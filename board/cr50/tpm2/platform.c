@@ -10,7 +10,7 @@
 #include "pinweaver.h"
 #include "tpm_nvmem.h"
 #include "trng.h"
-#include "u2f_cmds.h"
+#include "u2f_impl.h"
 #include "util.h"
 #include "version.h"
 
