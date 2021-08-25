@@ -26,7 +26,6 @@ GPIO_INT(PG_PP1050_ST_OD,	 PIN(4, 2), GPIO_INT_BOTH, power_signal_interrupt)
 
 /* USB-C interrupts */
 GPIO_INT(USB_C0_INT_ODL,	 PIN(6, 2), GPIO_INT_FALLING | GPIO_PULL_UP, usb_c0_interrupt)
-GPIO_INT(SUB_USB_C1_INT_ODL,	 PIN(F, 5), GPIO_INT_FALLING | GPIO_PULL_UP, sub_usb_c1_interrupt)
 
 /* Button interrupts */
 GPIO_INT(EC_PWR_BTN_ODL,	 PIN(0, 1), GPIO_INT_BOTH | GPIO_PULL_UP, power_button_interrupt)
@@ -34,8 +33,6 @@ GPIO_INT(EC_PWR_BTN_ODL,	 PIN(0, 1), GPIO_INT_BOTH | GPIO_PULL_UP, power_button_
 /* Other interrupts */
 GPIO_INT(LID_OPEN,		 PIN(D, 2), GPIO_INT_BOTH, lid_interrupt)
 GPIO_INT(EC_WP_OD,		 PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)
-GPIO_INT(BASE_SIXAXIS_INT_L,	 PIN(5, 6), GPIO_INT_FALLING | GPIO_SEL_1P8V, motion_interrupt)
-GPIO_INT(LID_360_L,		 PIN(9, 5), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 
 /* I2C Ports */
 GPIO(EC_I2C_EEPROM_SCL,	      PIN(B, 3), GPIO_INPUT)
@@ -66,9 +63,8 @@ GPIO(EN_BL_OD,		PIN(D, 3), GPIO_ODR_LOW)
 GPIO(EC_CBI_WP,		PIN(E, 5), GPIO_OUT_LOW)
 
 /* LED */
-GPIO(LED_B_ODL,                  PIN(C, 2), GPIO_OUT_HIGH)        /* PWM_CH_LED2_BLUE */
-GPIO(LED_G_ODL,                  PIN(C, 3), GPIO_OUT_HIGH)        /* PWM_CH_LED1_GREEN */
-GPIO(LED_R_ODL,                  PIN(C, 4), GPIO_OUT_HIGH)        /* PWM_CH_LED2_ORANGE */
+GPIO(LED_W_ODL,                  PIN(C, 3), GPIO_OUT_HIGH)        /* POWER LED */
+GPIO(LED_Y_ODL,                  PIN(C, 4), GPIO_OUT_HIGH)        /* BATTERY LED */
 
 /* Power Sequencing */
 GPIO(EC_AP_PSYS,	     PIN(B, 7), GPIO_OUT_LOW)
@@ -91,10 +87,7 @@ GPIO(EC_AP_USB_C1_HDMI_HPD,  PIN(9, 6), GPIO_OUT_LOW)
 GPIO(EC_AP_USB_C0_HPD,	     PIN(9, 3), GPIO_OUT_LOW)
 GPIO(HDMI_SEL_L,	     PIN(7, 2), GPIO_OUT_HIGH)
 GPIO(EC_BATTERY_PRES_ODL,    PIN(E, 1), GPIO_INPUT)
-GPIO(USB_A0_CHARGE_EN_L, PIN(3, 7), GPIO_OUT_HIGH)	/* Enable A0 1.5A Charging */
-GPIO(USB_A1_CHARGE_EN_L, PIN(F, 3), GPIO_OUT_HIGH)	/* Enable A1 1.5A Charging */
-GPIO(EN_USB_A0_VBUS,	 PIN(4, 1), GPIO_OUT_LOW)		/* Enable A1 5V Charging */
-GPIO(EN_USB_A1_VBUS,	 PIN(F, 2), GPIO_OUT_LOW)		/* Enable A1 5V Charging */
+GPIO(EN_USB_A0_VBUS,	 PIN(4, 1), GPIO_OUT_LOW)		/* Enable A0 5V Charging */
 /*
  * Lalala doesn't have these physical pins coming to the EC but uses other
  * logic.
@@ -143,3 +136,7 @@ GPIO(GPIOD1_NC, PIN(D, 1), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(GPIOD6_NC, PIN(D, 6), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(GPIOE0_NC, PIN(E, 0), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(GPIO40_NC, PIN(4, 0), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(GPIO37_NC, PIN(3, 7), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(GPIOF2_NC, PIN(F, 2), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(GPIOF3_NC, PIN(F, 3), GPIO_INPUT | GPIO_PULL_UP)
+GPIO(GPIO50_NC, PIN(5, 0), GPIO_INPUT | GPIO_PULL_UP)

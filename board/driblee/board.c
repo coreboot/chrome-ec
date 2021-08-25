@@ -28,8 +28,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
-#include "keyboard_config.h"
-#include "keyboard_raw.h"
+#include "keyboard_8042.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power.h"
@@ -61,26 +60,7 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 };
 
 /* Keyboard scan setting */
-__override struct keyboard_scan_config keyscan_config = {
-	/*
-	 * F3 key scan cycle completed but scan input is not
-	 * charging to logic high when EC start scan next
-	 * column for "T" key, so we set .output_settle_us
-	 * to 80us from 50us.
-	 */
-	.output_settle_us = 80,
-	.debounce_down_us = 9 * MSEC,
-	.debounce_up_us = 30 * MSEC,
-	.scan_period_us = 3 * MSEC,
-	.min_post_scan_delay_us = 1000,
-	.poll_timeout_us = 100 * MSEC,
-	.actual_key_mask = {
-		0x1c, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
-		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff,  /* full set */
-	},
-};
-
-static const struct ec_response_keybd_config lalala_keybd = {
+static const struct ec_response_keybd_config driblee_keybd = {
 	/* Default Chromeos keyboard config */
 	.num_top_row_keys = 10,
 	.action_keys = {
@@ -102,7 +82,7 @@ static const struct ec_response_keybd_config lalala_keybd = {
 __override const struct ec_response_keybd_config
 *board_vivaldi_keybd_config(void)
 {
-	return &lalala_keybd;
+	return &driblee_keybd;
 }
 
 /* C0 interrupt line shared by BC 1.2 and charger */
@@ -175,13 +155,6 @@ const struct adc_t adc_channels[] = {
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
 	},
-	[ADC_SUB_ANALOG] = {
-		.name = "SUB_ANALOG",
-		.input_ch = NPCX_ADC_CH2,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-	},
 	[ADC_VSNS_PP3300_A] = {
 		.name = "PP3300_A_PGOOD",
 		.input_ch = NPCX_ADC_CH9,
@@ -198,7 +171,7 @@ const struct temp_sensor_t temp_sensors[] = {
 			   .type = TEMP_SENSOR_TYPE_BOARD,
 			   .read = get_temp_3v3_51k1_47k_4050b,
 			   .idx = ADC_TEMP_SENSOR_1},
-	[TEMP_SENSOR_2] = {.name = "Ambient",
+	[TEMP_SENSOR_2] = {.name = "Charger",
 			   .type = TEMP_SENSOR_TYPE_BOARD,
 			   .read = get_temp_3v3_51k1_47k_4050b,
 			   .idx = ADC_TEMP_SENSOR_2},
@@ -521,34 +494,3 @@ int button_is_adc_detected(enum gpio_signal gpio)
 {
 	return (gpio == GPIO_VOLUME_DOWN_L) || (gpio == GPIO_VOLUME_UP_L);
 }
-
-static void adc_vol_key_press_check(void)
-{
-	int volt = adc_read_channel(ADC_SUB_ANALOG);
-	static uint8_t old_adc_key_state;
-	uint8_t adc_key_state_change;
-
-	if (volt > 2400 && volt < 2490) {
-		/* volume-up is pressed */
-		new_adc_key_state = ADC_VOL_UP_MASK;
-	} else if (volt > 2600 && volt < 2690) {
-		/* volume-down is pressed */
-		new_adc_key_state = ADC_VOL_DOWN_MASK;
-	} else if (volt < 2290) {
-		/* both volumn-up and volume-down are pressed */
-		new_adc_key_state = ADC_VOL_UP_MASK | ADC_VOL_DOWN_MASK;
-	} else if (volt > 2700) {
-		/* both volumn-up and volume-down are released */
-		new_adc_key_state = 0;
-	}
-	if (new_adc_key_state != old_adc_key_state) {
-		adc_key_state_change = old_adc_key_state ^ new_adc_key_state;
-		if (adc_key_state_change && ADC_VOL_UP_MASK)
-			button_interrupt(GPIO_VOLUME_UP_L);
-		if (adc_key_state_change && ADC_VOL_DOWN_MASK)
-			button_interrupt(GPIO_VOLUME_DOWN_L);
-
-		old_adc_key_state = new_adc_key_state;
-	}
-}
-DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);

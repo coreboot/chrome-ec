@@ -235,6 +235,7 @@ class Zmake:
             self.logger.info("Clearing old build directory %s", build_dir)
             shutil.rmtree(build_dir)
 
+        generated_include_dir = (build_dir / "include").resolve()
         base_config = zmake.build_config.BuildConfig(
             environ_defs={"ZEPHYR_BASE": str(zephyr_base), "PATH": "/usr/bin"},
             cmake_defs={
@@ -242,6 +243,7 @@ class Zmake:
                 "SYSCALL_INCLUDE_DIRS": str(
                     self.module_paths["ec"] / "zephyr" / "include" / "drivers"
                 ),
+                "ZMAKE_INCLUDE_DIR": str(generated_include_dir),
             },
         )
 
@@ -274,6 +276,8 @@ class Zmake:
 
         if not build_dir.exists():
             build_dir = build_dir.mkdir()
+        if not generated_include_dir.exists():
+            generated_include_dir.mkdir()
         processes = []
         self.logger.info("Building %s in %s.", project_dir, build_dir)
         for build_name, build_config in project.iter_builds():
@@ -373,6 +377,14 @@ class Zmake:
             project,
             build_dir / "zephyr_base",
             zmake.modules.locate_from_directory(build_dir / "modules"),
+        )
+
+        # The version header needs to generated during the build phase
+        # instead of configure, as the tree may have changed since
+        # configure was run.
+        zmake.version.write_version_header(
+            version_string,
+            build_dir / "include" / "ec_version.h",
         )
 
         for build_name, build_config in project.iter_builds():
@@ -572,6 +584,21 @@ class Zmake:
         if rv:
             return rv
 
+        # Compute the version string.
+        version_string = zmake.version.get_version_string(
+            project,
+            build_dir / "zephyr_base",
+            zmake.modules.locate_from_directory(build_dir / "modules"),
+        )
+
+        # The version header needs to generated during the build phase
+        # instead of configure, as the tree may have changed since
+        # configure was run.
+        zmake.version.write_version_header(
+            version_string,
+            build_dir / "include" / "ec_version.h",
+        )
+
         # Use ninja to compile the all.libraries target.
         build_project = zmake.project.Project(build_dir / "project")
 
@@ -656,25 +683,6 @@ class Zmake:
             return rv
 
         with self.jobserver.get_job():
-            # Get the build version
-            proc = self.jobserver.popen(
-                [self.module_paths["ec"] / "util/getversion.sh"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                encoding="utf-8",
-                errors="replace",
-            )
-            zmake.multiproc.log_output(
-                self.logger, logging.ERROR, proc.stderr, job_id="getversion.sh"
-            )
-            version = ""
-            for line in proc.stdout:
-                match = re.search(r'#define VERSION "(.*)"', line)
-                if match:
-                    version = match.group(1)
-            if proc.wait():
-                raise OSError(get_process_failure_msg(proc))
-
             # Merge info files into a single lcov.info
             self.logger.info("Merging coverage data into %s.", build_dir / "lcov.info")
             cmd = ["/usr/bin/lcov", "-o", build_dir / "lcov.info"]
@@ -705,7 +713,7 @@ class Zmake:
                     "-o",
                     build_dir / "coverage_rpt",
                     "-t",
-                    "Zephyr EC Unittest {}".format(version),
+                    "Zephyr EC Unittest",
                     "-p",
                     self.checkout / "src",
                     "-s",
