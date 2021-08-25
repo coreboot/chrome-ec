@@ -76,6 +76,7 @@
 #undef CONFIG_VOLUME_BUTTONS
 
 /* Fan features */
+#define CONFIG_FAN_RPM_CUSTOM
 
 /* charger defines */
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
@@ -141,8 +142,9 @@
 #include "usbc_config.h"
 
 enum battery_type {
-	BATTERY_ATL_3S1P_606072,
-	BATTERY_TYPE_COUNT,
+	BATTERY_FUJITSU_CP813907,
+	BATTERY_NVT_CP813907,
+	BATTERY_TYPE_COUNT
 };
 
 enum pwm_channel {

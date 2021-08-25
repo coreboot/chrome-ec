@@ -41,17 +41,12 @@
 #define GPIO_EC_HDMI_EN_ODL GPIO_EC_I2C_SBU_USB_C1_SCL
 #define GPIO_HDMI_PP3300_EN GPIO_SUB_USB_C1_INT_ODL
 
-/* Keyboard */
-
-#define CONFIG_KEYBOARD_KEYPAD
-
 /* LED defines */
 #define CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 
 /* PWM */
-#define CONFIG_PWM
 #define NPCX7_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
 
 /* Temp sensor */
@@ -116,7 +111,6 @@
 enum adc_channel {
 	ADC_TEMP_SENSOR_1,     /* ADC0 */
 	ADC_TEMP_SENSOR_2,     /* ADC1 */
-	ADC_SUB_ANALOG,	       /* ADC2 */
 	ADC_VSNS_PP3300_A,     /* ADC9 */
 	ADC_CH_COUNT
 };
@@ -125,11 +119,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_1,
 	TEMP_SENSOR_2,
 	TEMP_SENSOR_COUNT
-};
-
-enum pwm_channel {
-	PWM_CH_KBLIGHT,
-	PWM_CH_COUNT,
 };
 
 /* List of possible batteries */
