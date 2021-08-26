@@ -11,6 +11,8 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+#define USE_QSI_VID_PID
+
 /* Optional features */
 /*
  * For MP release, CONFIG_SYSTEM_UNLOCKED must be undefined, and
@@ -33,8 +35,13 @@
 #define CONFIG_USB_MUX_PS8822
 
 #undef CONFIG_USB_VID
+#ifdef USE_QSI_VID_PID
+#define CONFIG_USB_VID 0x2BEF
+#define CONFIG_USB_PID 0x100A
+#else
 #define CONFIG_USB_VID 0x502
 #define CONFIG_USB_PID 0x1195
+#endif
 #define CONFIG_USB_BCD_DEV 0x0001 /* v 0.01 */
 #define CONFIG_USB_PD_IDENTITY_HW_VERS 1
 #define CONFIG_USB_PD_IDENTITY_SW_VERS 1
