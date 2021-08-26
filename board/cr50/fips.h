@@ -154,6 +154,13 @@ extern const struct fips_vtable *fips_vtable;
  */
 void fips_set_callbacks(const struct fips_vtable *vtable);
 
+/**
+ * Run FIPS self-integrity, power-on and known-answer tests.
+ * Called from board_init() during power-up and resume from sleep.
+ * Enables crypto operation on successful completion.
+ */
+void fips_power_on(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -31,7 +31,6 @@ chip-$(CONFIG_UART_BITBANG)+= uart_bitbang.o
 endif # undef CONFIG_POLLING_UART
 
 chip-$(CONFIG_DCRYPTO)+= crypto_api.o
-chip-$(CONFIG_DCRYPTO_BOARD)+= crypto_api.o
 
 chip-$(CONFIG_DCRYPTO)+= dcrypto/aes.o
 chip-$(CONFIG_DCRYPTO)+= dcrypto/aes_cmac.o

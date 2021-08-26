@@ -46,10 +46,15 @@ uint8_t fips_break_cmd;
 #define fips_break_cmd 0
 #endif
 
+/**
+ * Return true if no blocking crypto errors detected.
+ * Until self-integrity works properly (b/138578318), ignore it.
+ * TODO(b/138578318): remove ignoring of FIPS_FATAL_SELF_INTEGRITY.
+ */
 static inline bool fips_is_no_crypto_error(void)
 {
 	return (_fips_status &
-	       (FIPS_ERROR_MASK & (~FIPS_FATAL_SELF_INTEGRITY))) == 0;
+		(FIPS_ERROR_MASK & (~FIPS_FATAL_SELF_INTEGRITY))) == 0;
 }
 
 /* Return true if crypto can be used (no failures detected). */
@@ -58,11 +63,14 @@ bool fips_crypto_allowed(void)
 	/**
 	 * We never allow crypto if there were errors, no matter
 	 * if we are in FIPS approved or not-approved mode.
-	 * Until self-integrity works properly (b/138578318), ignore it.
-	 * TODO(b/138578318): remove ignoring of FIPS_FATAL_SELF_INTEGRITY.
 	 */
 	return ((_fips_status & FIPS_POWER_UP_TEST_DONE) &&
-		fips_is_no_crypto_error());
+		fips_is_no_crypto_error() && DCRYPTO_ladder_is_enabled());
+}
+
+int crypto_enabled(void)
+{
+	return fips_crypto_allowed();
 }
 
 void fips_throw_err(enum fips_status err)
@@ -71,13 +79,15 @@ void fips_throw_err(enum fips_status err)
 	if ((_fips_status & err) == err)
 		return;
 	fips_set_status(err);
+	if (!fips_is_no_crypto_error()) {
 #ifdef CONFIG_FLASH_LOG
-	if (_fips_status & FIPS_ERROR_MASK) {
 		fips_vtable->flash_log_add_event(FE_LOG_FIPS_FAILURE,
 						 sizeof(_fips_status),
 						 &_fips_status);
-	}
 #endif
+		/* Revoke access to secrets in HW Key ladder. */
+		DCRYPTO_ladder_revoke();
+	}
 }
 
 /**
@@ -599,6 +609,10 @@ void fips_power_up_tests(void)
 	if (!fips_self_integrity())
 		_fips_status |= FIPS_FATAL_SELF_INTEGRITY;
 
+	/* Make sure hardware is properly configured. */
+	if (!DCRYPTO_ladder_is_enabled())
+		_fips_status |= FIPS_FATAL_OTHER;
+
 	/**
 	 * Since we are very limited on stack and static RAM, acquire
 	 * shared memory for KAT tests temporary larger stack.
@@ -672,8 +686,7 @@ void fips_power_up_tests(void)
 	fips_last_kat_test_duration = fips_vtable->get_time().val - starttime;
 }
 
-/* Initialize FIPS mode. Executed during power-up and resume from sleep. */
-static void fips_power_on(void)
+void fips_power_on(void)
 {
 	fips_last_kat_test_duration = -1ULL;
 	/* make sure on power-on / resume it's cleared */
@@ -694,9 +707,6 @@ static void fips_power_on(void)
 		fips_set_status(FIPS_MODE_ACTIVE);
 
 }
-
-/* FIPS initialization is last init hook, HOOK_PRIO_FIPS > HOOK_PRIO_LAST */
-DECLARE_HOOK(HOOK_INIT, fips_power_on, HOOK_PRIO_INIT_FIPS);
 
 const struct fips_vtable *fips_vtable;
 

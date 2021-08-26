@@ -3,6 +3,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include "crypto_api.h"
 #include "dcrypto.h"
 #include "registers.h"
 
@@ -141,6 +142,7 @@ int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
 		/* Initialize key, and AES engine. */
 		uint32_t iv[4];
 
+		BUILD_ASSERT(sizeof(iv) == CIPHER_SALT_SIZE);
 		memcpy(iv, salt, sizeof(iv));
 		if (!aes_init(&ctx, appid, iv))
 			return 0;

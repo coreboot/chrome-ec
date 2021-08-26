@@ -890,6 +890,9 @@ static void board_init(void)
 		(GREG32(KEYMGR, HKEY_RWR7) == 0xaa66150f);
 
 	init_runlevel(PERMISSION_MEDIUM);
+
+	/* Run FIPS power-on tests to enable crypto. */
+	fips_power_on();
 	/* Initialize NvMem partitions */
 	nvmem_init();
 

@@ -15,8 +15,6 @@ extern "C" {
 
 #include "internal.h"
 
-#include "crypto_api.h"
-
 #include <stddef.h>
 
 enum cipher_mode {
@@ -395,10 +393,6 @@ int DCRYPTO_appkey_init(enum dcrypto_appid id, struct APPKEY_CTX *ctx);
 void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx);
 int DCRYPTO_appkey_derive(enum dcrypto_appid appid, const uint32_t input[8],
 			  uint32_t output[8]);
-
-/* Number of bytes in the salt object. */
-#define DCRYPTO_CIPHER_SALT_SIZE 16
-BUILD_ASSERT(DCRYPTO_CIPHER_SALT_SIZE == CIPHER_SALT_SIZE);
 
 /*
  * Encrypt/decrypt a flat blob.
