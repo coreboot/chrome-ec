@@ -135,10 +135,19 @@ RW_BD_OUT=$(out)/RW/$(BDIR)
 FIPS_MODULE=dcrypto/fips_module.o
 FIPS_LD_SCRIPT=$(BDIR)/dcrypto/fips_module.ld
 RW_FIPS_OBJS=$(patsubst %.o, $(RW_BD_OUT)/%.o, $(fips-y))
+$(RW_FIPS_OBJS): CFLAGS += -frandom-seed=0 -fno-fat-lto-objects
+
+# Note, since FIPS object files are compiled with lto, actual compilation
+# and code optimization take place during link time.
+# Consider -ffile-prefix-map=old_path=new_path if needed
+FIPS_CFLAGS = $(CFLAGS) -frandom-seed=0 -flto=1 -flto-partition=1to1 -fipa-pta\
+  -fvisibility=hidden -fipa-cp-clone -fweb -ftree-partial-pre\
+  -flive-range-shrinkage -fgcse-after-reload -fgcse-sm -fgcse-las -fivopts\
+  -fpredictive-commoning -freorder-blocks-algorithm=stc
 
 $(RW_BD_OUT)/$(FIPS_MODULE): $(RW_FIPS_OBJS)
 	@echo "  LD      $(notdir $@)"
-	$(Q)$(CC) $(CFLAGS) --static -Wl,--relocatable\
+	$(Q)$(CC) $(FIPS_CFLAGS) --static -Wl,--relocatable\
 		-Wl,-T $(FIPS_LD_SCRIPT) -Wl,-Map=$@.map -o $@ $^
 	$(Q)$(OBJDUMP) -th $@ > $@.sym
 
