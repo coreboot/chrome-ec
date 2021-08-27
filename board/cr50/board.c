@@ -337,7 +337,8 @@ static struct board_cfg board_cfg_table[] = {
 	{
 		.strap_cfg = 0xE0,
 		.board_properties = BOARD_PERIPH_CONFIG_I2C |
-			BOARD_USE_PLT_RESET | BOARD_EC_CR50_COMM_SUPPORT,
+			BOARD_USE_PLT_RESET | BOARD_EC_CR50_COMM_SUPPORT |
+			BOARD_CCD_REC_LID_PIN_DIOA12,
 	},
 };
 
