@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "common.h"
+#include "crypto_common.h"
 #include "util.h"
 
 #include "hmacsha2.h"
@@ -297,6 +298,87 @@ static inline uint64_t rol64(uint64_t value, int bits)
 #define alloca __builtin_alloca
 #endif
 
+/* Define machine word alignment mask. */
+#define WORD_MASK (sizeof(uintptr_t) - 1)
+
+/**
+ * @brief Launders the machine register sized value `val`.
+ *
+ * It returns a value identical to the input, while introducing an optimization
+ * barrier that prevents the compiler from learning new information about the
+ * original value, based on operations on the laundered value. For example
+ * with code:
+ *  temp = b - a;
+ *  c = (cond)? temp + a : a;
+ * compiler will reduce code to:
+ *  c = (cond)? b : a;
+ * Which may not be desirable.
+ * making temp = value_barrier(b-a) prevents compiler from such optimization.
+ *
+ * Another case is for double checks against fault injection:
+ * if (cond == 0) { if (value_barrier(cond) != 0 ) panic(); }
+ * Without value_barrier the nested check will be removed.
+ *
+ * @param val A machine register size integer to launder.
+ * @return An integer which will happen to have the same value as `val` at
+ *         runtime.
+ */
+static inline uintptr_t value_barrier(uintptr_t val)
+{
+	/**
+	 * The +r constraint tells the compiler that this is an "inout"
+	 * parameter: it means that not only does the black box depend on `val`,
+	 * but it also mutates it in an unspecified way. This ensures that the
+	 * laundering operation occurs in the right place in the dependency
+	 * ordering.
+	 */
+	asm("" : "+r"(val));
+	return val;
+}
+static inline void *value_barrier_ptr(void *val)
+{
+	/**
+	 * The +r constraint tells the compiler that this is an "inout"
+	 * parameter: it means that not only does the black box depend on `val`,
+	 * but it also mutates it in an unspecified way. This ensures that the
+	 * laundering operation occurs in the right place in the dependency
+	 * ordering.
+	 */
+	asm("" : "+r"(val));
+	return val;
+}
+
+/**
+ * Hardened select of word without branches.
+ *
+ * @param test the value to test
+ * @param a the value returned if 'test' is not 0
+ * @param b the value returned if 'test' is zero
+ *
+ * @return b if test==0 and a otherwise;
+ *
+ * This function is mostly useful when test == 0 is a good result and
+ * hardening is required to prevent easy generation of 'b'.
+ *
+ * Example:
+ *   hardened_select_if_zero(test, CRYPTO_FAIL, CRYPTO_OK)
+ */
+static inline __attribute__((always_inline))
+uintptr_t hardened_select_if_zero(uintptr_t test, uintptr_t a, uintptr_t b)
+{
+	uintptr_t bma = value_barrier(b - a);
+
+	/* For test == 0, does nothing, otherwise damage bma. */
+	bma &= value_barrier(~test);
+	return (test == 0) ? bma + a : a;
+}
+
+/* Convenience wrapper to return DCRYPTO_OK iff val == 0. */
+static inline enum dcrypto_result dcrypto_ok_if_zero(uintptr_t val)
+{
+	return (enum dcrypto_result)hardened_select_if_zero(val, DCRYPTO_FAIL,
+							    DCRYPTO_OK);
+}
 
 /*
  * Key ladder.

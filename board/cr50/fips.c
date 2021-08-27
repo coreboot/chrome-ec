@@ -154,7 +154,8 @@ static bool fips_sha256_kat(void)
 	SHA256_hw_init(&ctx);
 	SHA256_update(&ctx, in, sizeof(in));
 	return !(fips_break_cmd == FIPS_BREAK_SHA256) &&
-	       (memcmp(SHA256_final(&ctx), ans, SHA256_DIGEST_SIZE) == 0);
+	       (DCRYPTO_equals(SHA256_final(&ctx), ans, SHA256_DIGEST_SIZE) ==
+		DCRYPTO_OK);
 }
 
 /* KAT for HMAC-SHA256, test values from OpenSSL. */
@@ -180,8 +181,8 @@ static bool fips_hmac_sha256_kat(void)
 	HMAC_SHA256_hw_init(&ctx, k, sizeof(k));
 	HMAC_SHA256_update(&ctx, in, sizeof(in));
 	return !(fips_break_cmd == FIPS_BREAK_HMAC_SHA256) &&
-	       (memcmp(HMAC_SHA256_hw_final(&ctx), ans, SHA256_DIGEST_SIZE) ==
-		0);
+	       (DCRYPTO_equals(HMAC_SHA256_hw_final(&ctx), ans,
+			       SHA256_DIGEST_SIZE) == DCRYPTO_OK);
 }
 
 /**
@@ -275,8 +276,8 @@ static bool fips_hmac_drbg_instantiate_kat(struct drbg_ctx *ctx)
 		       drbg_nonce0, sizeof(drbg_nonce0), drbg_perso0,
 		       sizeof(drbg_perso0));
 
-	return (memcmp(ctx->v, V0, sizeof(V0)) == 0) &&
-	       (memcmp(ctx->k, K0, sizeof(K0)) == 0);
+	return (DCRYPTO_equals(ctx->v, V0, sizeof(V0)) == DCRYPTO_OK) &&
+	       (DCRYPTO_equals(ctx->k, K0, sizeof(K0)) == DCRYPTO_OK);
 }
 
 /* Known-answer test for HMAC_DRBG SHA256 reseed. */
@@ -293,8 +294,8 @@ static bool fips_hmac_drbg_reseed_kat(struct drbg_ctx *ctx)
 	hmac_drbg_reseed(ctx, drbg_entropy1, sizeof(drbg_entropy1),
 			 drbg_addtl_input1, sizeof(drbg_addtl_input1), NULL, 0);
 
-	return (memcmp(ctx->v, V1, sizeof(V1)) == 0) &&
-	       (memcmp(ctx->k, K1, sizeof(K1)) == 0);
+	return (DCRYPTO_equals(ctx->v, V1, sizeof(V1)) == DCRYPTO_OK) &&
+	       (DCRYPTO_equals(ctx->k, K1, sizeof(K1)) == DCRYPTO_OK);
 }
 
 /* Known-answer test for HMAC_DRBG SHA256 generate. */
@@ -327,8 +328,8 @@ static bool fips_hmac_drbg_generate_kat(struct drbg_ctx *ctx)
 
 	hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0);
 	/* Verify internal drbg state */
-	if (memcmp(ctx->v, V2, sizeof(V2)) ||
-	    memcmp(ctx->k, K2, sizeof(K2))) {
+	if (DCRYPTO_equals(ctx->v, V2, sizeof(V2)) != DCRYPTO_OK ||
+	    DCRYPTO_equals(ctx->k, K2, sizeof(K2)) != DCRYPTO_OK) {
 		return false;
 	}
 
@@ -340,7 +341,7 @@ static bool fips_hmac_drbg_generate_kat(struct drbg_ctx *ctx)
 	 */
 	hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0);
 	return !(fips_break_cmd == FIPS_BREAK_HMAC_DRBG) &&
-	       (memcmp(buf, KA, sizeof(KA)) == 0);
+	       DCRYPTO_equals(buf, KA, sizeof(KA) == DCRYPTO_OK);
 }
 
 /* Known-answer test for HMAC_DRBG SHA256. */
@@ -573,7 +574,7 @@ static bool call_on_stack(void *new_stack, bool (*func)(void))
 const struct sha256_digest fips_integrity
 	__attribute__((section(".rodata.fips.checksum")));
 
-static bool fips_self_integrity(void)
+static enum dcrypto_result fips_self_integrity(void)
 {
 	struct sha256_digest digest;
 	size_t module_length = &__fips_module_end - &__fips_module_start;
@@ -606,7 +607,7 @@ void fips_power_up_tests(void)
 
 	starttime = fips_vtable->get_time().val;
 
-	if (!fips_self_integrity())
+	if (fips_self_integrity() != DCRYPTO_OK)
 		_fips_status |= FIPS_FATAL_SELF_INTEGRITY;
 
 	/* Make sure hardware is properly configured. */

@@ -470,14 +470,12 @@ static int point_equals(const TPMS_ECC_POINT *a, const TPMS_ECC_POINT *b)
 {
 	int diff = 0;
 
-	diff = a->x.b.size != b->x.b.size;
-	diff |= a->y.b.size != b->y.b.size;
-	if (!diff) {
-		diff |= !DCRYPTO_equals(
-			a->x.b.buffer, b->x.b.buffer, a->x.b.size);
-		diff |= !DCRYPTO_equals(
-			a->y.b.buffer, b->y.b.buffer, a->y.b.size);
-	}
+	diff = a->x.b.size - b->x.b.size;
+	diff |= a->y.b.size - b->y.b.size;
+	diff |= DCRYPTO_equals(a->x.b.buffer, b->x.b.buffer, a->x.b.size) -
+		DCRYPTO_OK;
+	diff |= DCRYPTO_equals(a->y.b.buffer, b->y.b.buffer, a->y.b.size) -
+		DCRYPTO_OK;
 
 	return !diff;
 }

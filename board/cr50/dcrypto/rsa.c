@@ -156,7 +156,9 @@ static int check_oaep_pad(uint8_t *out, uint32_t *out_len,
 		SHA256_hw_init(&ctx.sha256);
 	HASH_update(&ctx, label, label ? strlen(label) + 1 : 0);
 
-	bad = !DCRYPTO_equals(phash, HASH_final(&ctx)->b8, hash_size);
+	/* bad should be zero if CRYPTO_OK is returned. */
+	bad = DCRYPTO_equals(phash, HASH_final(&ctx)->b8, hash_size) -
+	      DCRYPTO_OK;
 	bad |= padded[0];
 
 	for (i = PS - padded; i <  padded_len; i++) {
@@ -370,10 +372,10 @@ static int check_pkcs1_type1_pad(const uint8_t *msg, uint32_t msg_len,
 
 	if (padded[i++] != 0)
 		return 0;
-	if (!DCRYPTO_equals(&padded[i], der, der_size))
+	if (DCRYPTO_equals(&padded[i], der, der_size) != DCRYPTO_OK)
 		return 0;
 	i += der_size;
-	return DCRYPTO_equals(msg, &padded[i], hash_size);
+	return DCRYPTO_equals(msg, &padded[i], hash_size) == DCRYPTO_OK;
 }
 
 /* sign */
@@ -473,7 +475,8 @@ static int check_pkcs1_pss_pad(const uint8_t *in, uint32_t in_len,
 	HASH_update(&ctx, zeros, sizeof(zeros));
 	HASH_update(&ctx, in, in_len);
 	HASH_update(&ctx, padded + db_len - salt_len, salt_len);
-	bad |= !DCRYPTO_equals(padded + db_len, HASH_final(&ctx), hash_size);
+	bad |= DCRYPTO_equals(padded + db_len, HASH_final(&ctx), hash_size) -
+	       DCRYPTO_OK;
 	return !bad;
 }
 

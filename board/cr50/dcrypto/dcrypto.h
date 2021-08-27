@@ -13,6 +13,7 @@
 extern "C" {
 #endif
 
+#include "crypto_common.h"
 #include "internal.h"
 
 #include <stddef.h>
@@ -373,7 +374,7 @@ int DCRYPTO_x509_gen_u2f_cert(const p256_int *d, const p256_int *pk_x,
 /*
  * Memory related functions.
  */
-int DCRYPTO_equals(const void *a, const void *b, size_t len);
+enum dcrypto_result DCRYPTO_equals(const void *a, const void *b, size_t len);
 
 /*
  * Key-ladder and application key related functions.

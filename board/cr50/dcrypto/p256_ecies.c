@@ -158,8 +158,8 @@ size_t DCRYPTO_ecies_decrypt(
 	hmac_key = &key[AES_KEY_BYTES];
 	HMAC_SHA256_hw_init(&ctx, hmac_key, HMAC_KEY_BYTES);
 	HMAC_SHA256_update(&ctx, inp, in_len);
-	if (!DCRYPTO_equals(inp + in_len, HMAC_SHA256_hw_final(&ctx),
-				SHA256_DIGEST_SIZE))
+	if (DCRYPTO_equals(inp + in_len, HMAC_SHA256_hw_final(&ctx),
+			   SHA256_DIGEST_SIZE) != DCRYPTO_OK)
 		return 0;
 
 	memmove(outp, inp, auth_data_len);

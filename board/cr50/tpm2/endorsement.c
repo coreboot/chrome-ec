@@ -594,9 +594,9 @@ enum manufacturing_status tpm_endorse(void)
 		HMAC_SHA256_update(&hmac, "RSA", 4);
 		HMAC_SHA256_hw_init(&hmac, HMAC_SHA256_hw_final(&hmac), 32);
 		HMAC_SHA256_update(&hmac, p, RO_CERTS_REGION_SIZE - 32);
-		if (!DCRYPTO_equals(p + RO_CERTS_REGION_SIZE - 32,
-				   HMAC_SHA256_hw_final(&hmac), 32)) {
-
+		if (DCRYPTO_equals(p + RO_CERTS_REGION_SIZE - 32,
+				   HMAC_SHA256_hw_final(&hmac),
+				   32) != DCRYPTO_OK) {
 			CPRINTF("%s: bad cert region hmac;", __func__);
 #ifdef CR50_INCLUDE_FALLBACK_CERT
 			/* HMAC verification failure indicates either
