@@ -2820,10 +2820,8 @@
 #undef CONFIG_USB_GPIO
 
 /*****************************************************************************/
-/* USB SPI legacy protocol (V1). */
+/* USB SPI config */
 #undef CONFIG_USB_SPI
-/* USB_SPI protocol V2. */
-#undef CONFIG_USB_SPI_V2
 
 /*****************************************************************************/
 /* USB I2C config */
