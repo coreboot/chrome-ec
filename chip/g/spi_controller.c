@@ -33,12 +33,10 @@ static enum spi_clock_mode clock_mode[SPI_NUM_PORTS];
  * The Cr50 SPI controller is not DMA auto-fill/drain capable, so async and
  * flush are not defined on purpose.
  */
-int spi_sub_transaction(const struct spi_device_t *spi_device,
-			const uint8_t *txdata, int txlen, uint8_t *rxdata,
-			int rxlen, bool deassert_cs)
+int spi_transaction(const struct spi_device_t *spi_device,
+		    const uint8_t *txdata, int txlen,
+		    uint8_t *rxdata, int rxlen)
 {
-	static bool cs_asserted;
-
 	int port = spi_device->port;
 	int rv = EC_SUCCESS;
 	timestamp_t timeout;
@@ -76,9 +74,8 @@ int spi_sub_transaction(const struct spi_device_t *spi_device,
 		rxoffset = txlen;
 	}
 
-	if (!cs_asserted)
-		/* Grab the port's mutex. */
-		mutex_lock(&spi_mutex[port]);
+	/* Grab the port's mutex. */
+	mutex_lock(&spi_mutex[port]);
 
 #ifdef CONFIG_STREAM_SIGNATURE
 	/*
@@ -91,13 +88,10 @@ int spi_sub_transaction(const struct spi_device_t *spi_device,
 	/* Copy the txdata into the 128B Transmit Buffer. */
 	memmove((uint8_t *)GREG32_ADDR_I(SPI, port, TX_DATA), txdata, txlen);
 
-	if (!cs_asserted) {
 #ifndef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
-		/* Drive chip select low. */
-		gpio_set_level(spi_device->gpio_cs, 0);
-#endif
-		cs_asserted = true;
-	}
+	/* Drive chip select low. */
+	gpio_set_level(spi_device->gpio_cs, 0);
+#endif  /* CONFIG_SPI_CONTROLLER_NO_CS_GPIOS */
 
 	/* Initiate the transaction. */
 	GWRITE_FIELD_I(SPI, port, ISTATE_CLR, TXDONE, 1);
@@ -126,24 +120,14 @@ int spi_sub_transaction(const struct spi_device_t *spi_device,
 		rxlen);
 
 err_cs_high:
-	if ((rv != EC_SUCCESS) || deassert_cs) {
 #ifndef CONFIG_SPI_CONTROLLER_NO_CS_GPIOS
-		/* Drive chip select high. */
-		gpio_set_level(spi_device->gpio_cs, 1);
+	/* Drive chip select high. */
+	gpio_set_level(spi_device->gpio_cs, 1);
 #endif  /* CONFIG_SPI_CONTROLLER_NO_CS_GPIOS */
-		cs_asserted = false;
-		/* Release the port's mutex. */
-		mutex_unlock(&spi_mutex[port]);
-	}
-	return rv;
-}
 
-int spi_transaction(const struct spi_device_t *spi_device,
-		    const uint8_t *txdata, int txlen, uint8_t *rxdata,
-		    int rxlen)
-{
-	return spi_sub_transaction(spi_device, txdata, txlen, rxdata, rxlen,
-				   true);
+	/* Release the port's mutex. */
+	mutex_unlock(&spi_mutex[port]);
+	return rv;
 }
 
 /*
