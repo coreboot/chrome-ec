@@ -241,7 +241,7 @@ bool fips_drbg_init(void)
 	uint32_t random;
 
 	if (!fips_crypto_allowed())
-		return EC_ERROR_INVALID_CONFIG;
+		return false;
 
 	/**
 	 * initialize DRBG with 440 bits of entropy as required
@@ -329,13 +329,9 @@ int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
 {
 	if (!fips_crypto_allowed())
 		return 0;
-	if (!rand_state.drbg_initialized) {
-		int err;
+	if (!rand_state.drbg_initialized && !fips_drbg_init())
+		return false;
 
-		err = fips_drbg_init();
-		if (err)
-			return 0;
-	}
 	return dcrypto_p256_ecdsa_sign(&fips_drbg, key, message, r, s);
 }
 
