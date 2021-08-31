@@ -255,6 +255,16 @@ int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y, const p256_int *n,
 int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 				const uint8_t bytes[P256_NBYTES]);
 
+/**
+ * Pair-wise consistency test for private and public key.
+ *
+ * @param d - private key (scalar)
+ * @param x - public key part
+ * @param y - public key part
+ * @return !0 on success
+ */
+int DCRYPTO_p256_key_pwct(p256_int *d, p256_int *x, p256_int *y);
+
 /* P256 based integration encryption (DH+AES128+SHA256).
  * Not FIPS 140-2 compliant, not used other than for tests
  * Authenticated data may be provided, where the first auth_data_len

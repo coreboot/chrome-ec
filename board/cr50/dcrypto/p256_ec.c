@@ -4,6 +4,8 @@
  */
 
 #include "dcrypto.h"
+#include "fips.h"
+#include "fips_rand.h"
 
 #include <stdint.h>
 
@@ -36,6 +38,28 @@ int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
 	return dcrypto_p256_point_mul(n, in_x, in_y, out_x, out_y);
 }
 
+int DCRYPTO_p256_key_pwct(p256_int *d, p256_int *x, p256_int *y)
+{
+	p256_int message, r, s;
+	int result;
+
+	if (p256_is_zero(d))
+		return 0;
+
+	/* set some pseudo-random message. */
+	p256_fast_random(&message);
+
+	if (fips_p256_ecdsa_sign(d, &message, &r, &s) == 0)
+		return 0;
+
+#ifdef CRYPTO_TEST_SETUP
+	if (fips_break_cmd == FIPS_BREAK_ECDSA_PWCT)
+		message.a[0] = ~message.a[0];
+#endif
+	result = dcrypto_p256_ecdsa_verify(x, y, &message, &r, &s);
+	return result;
+}
+
 /**
  * Key selection based on FIPS-186-4, section B.4.2 (Key Pair
  * Generation by Testing Candidates).
@@ -44,6 +68,7 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 				const uint8_t key_bytes[P256_NBYTES])
 {
 	p256_int key;
+	p256_int tx, ty;
 
 	p256_from_bin(key_bytes, &key);
 
@@ -57,7 +82,16 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 		return 0;
 	p256_add_d(&key, 1, d);
 	always_memset(&key, 0, sizeof(key));
-	if (x == NULL || y == NULL)
-		return 1;
-	return dcrypto_p256_base_point_mul(d, x, y);
+
+	/* We need public key anyway for pair-wise consistency test. */
+	if (!x)
+		x = &tx;
+	if (!y)
+		y = &ty;
+
+	/* Compute public key (x,y) = d * G */
+	if (dcrypto_p256_base_point_mul(d, x, y) == 0)
+		return 0;
+
+	return DCRYPTO_p256_key_pwct(d, x, y);
 }
