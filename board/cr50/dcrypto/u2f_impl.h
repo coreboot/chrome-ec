@@ -145,7 +145,7 @@ enum ec_error_list u2f_authorize_keyhandle(const struct u2f_state *state,
  * @return size of certificate written to buf, 0 on error.
  */
 size_t g2f_attestation_cert_serial(const struct u2f_state *state,
-				   const uint8_t *serial, uint8_t *buf);
+				   const p256_int *serial, uint8_t *buf);
 
 /**
  * Verify that provided key handle and public key match.

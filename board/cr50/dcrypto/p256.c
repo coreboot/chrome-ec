@@ -4,6 +4,7 @@
  */
 
 #include "dcrypto.h"
+#include "endian.h"
 
 const p256_int SECP256r1_nMin2 = /* P-256 curve order - 2 */
 	{ .a = { 0xfc632551 - 2, 0xf3b9cac2, 0xa7179e84, 0xbce6faad, -1, -1, 0,
@@ -135,6 +136,34 @@ void p256_to_bin(const p256_int *src, uint8_t dst[P256_NBYTES])
 #endif
 }
 
+bool p256_from_be_bin_size(const uint8_t *src, size_t len, p256_int *dst)
+{
+	size_t i;
+
+	/**
+	 * Skip zero padding if input length is larger than P-256 size.
+	 * This may happen with TPM2 commands receiving big-endian number
+	 * with leading zeroes from external sources.
+	 */
+	while (len > P256_NBYTES) {
+		if (*src != 0)
+			return false;
+		len--;
+		src++;
+	}
+
+	i = len;
+	/* Now add zero padding little-endian p256 if length is smaller. */
+	while (i < P256_NBYTES) {
+		dst->b8[i] = 0;
+		i++;
+	}
+	reverse_bytes(dst->b8, src, len);
+
+	/* Note: this code is correct only for little-endian platform. */
+	return true;
+}
+
 void p256_from_bin(const uint8_t src[P256_NBYTES], p256_int *dst)
 {
 #if (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
@@ -193,3 +222,69 @@ enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *rnd)
 
 	return result;
 }
+
+#ifndef P256_BIN_TEST
+#define P256_BIN_TEST 0
+#endif
+
+#ifdef CRYPTO_TEST_SETUP
+
+#if P256_BIN_TEST
+#include "console.h"
+
+static int cmd_p256_bin_test(int argc, char *argv[])
+{
+	static const uint8_t i1[] = {
+		0,    0,    0x10, 0x11, 0x12, 0x13, 0x20, 0x21, 0x22,
+		0x23, 0x30, 0x31, 0x32, 0x33, 0x40, 0x41, 0x42, 0x43,
+		0x50, 0x51, 0x52, 0x53, 0x60, 0x61, 0x62, 0x63, 0x70,
+		0x71, 0x72, 0x73, 0x80, 0x81, 0x82, 0x83, 0x84
+	};
+	p256_int e = { .a = { 0x80818283, 0x70717273, 0x60616263, 0x50515253,
+			      0x40414243, 0x30313233, 0x20212223,
+			      0x10111213 } };
+
+	p256_int r;
+	bool passed = true;
+	bool result;
+
+	/* zero padded */
+	result = p256_from_be_bin_size(i1, 34, &r);
+	passed = result && (p256_cmp(&r, &e) == 0);
+	ccprintf("in=%ph\nout=%ph\n", HEX_BUF(i1, 34), HEX_BUF(&r, sizeof(r)));
+
+	/* right sized. */
+	memset(&r, 0, sizeof(r));
+	result = p256_from_be_bin_size(i1 + 2, 32, &r);
+	passed = passed && (p256_cmp(&r, &e) == 0);
+	ccprintf("in=%ph\nout=%ph\n", HEX_BUF(i1 + 2, 32),
+		 HEX_BUF(&r, sizeof(r)));
+
+	/**
+	 * Smaller big num, where padding high byte(s) with zeroes is needed.
+	 * we do this by loading 31 byte starting 1 byte higher.
+	 * This will result in same value as in 'e' except that the
+	 * highest byte will be 0 (e.a[7] == 0x00111213).
+	 */
+	memset(&r, 0, sizeof(r));
+	result = p256_from_be_bin_size(i1 + 3, 31, &r);
+
+	/* Update expected result by clearing high byte */
+	e.b8[31] = 0x00;
+	passed = passed && (p256_cmp(&r, &e) == 0);
+	ccprintf("in=%ph\nout=%ph\n", HEX_BUF(i1 + 3, 31),
+		 HEX_BUF(&r, sizeof(r)));
+
+	/* larger big num. */
+	result = p256_from_be_bin_size(i1 + 2, 33, &r);
+	passed = passed && !result;
+
+	ccprintf("p256_from_be_bin_size() test %s\n",
+		 (passed) ? "PASSED" : "NOT PASSED");
+
+	return EC_SUCCESS;
+}
+DECLARE_SAFE_CONSOLE_COMMAND(p256_test, cmd_p256_bin_test, NULL, NULL);
+#endif /* P256_BIN_TEST */
+
+#endif /* CRYPTO_TEST_SETUP */

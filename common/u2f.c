@@ -21,7 +21,6 @@
 
 #define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ##args)
 
-
 size_t g2f_attestation_cert(uint8_t *buf)
 {
 	uint8_t *serial;
@@ -34,7 +33,21 @@ size_t g2f_attestation_cert(uint8_t *buf)
 	if (system_get_chip_unique_id(&serial) != P256_NBYTES)
 		return 0;
 
-	return g2f_attestation_cert_serial(state, serial, buf);
+#ifdef CHIP_G
+	/**
+	 * chip/g implementation of system_get_chip_unique_id() always
+	 * returns 32-bit aligned pointer, but host mock-ups do no guarantee
+	 * that, so copy data to aligned location.
+	 */
+	return g2f_attestation_cert_serial(state, (p256_int *)serial, buf);
+#else
+	{
+		p256_int p256_serial;
+
+		memcpy(&p256_serial, serial, sizeof(p256_serial));
+		return g2f_attestation_cert_serial(state, &p256_serial, buf);
+	}
+#endif
 }
 
 /* U2F GENERATE command  */

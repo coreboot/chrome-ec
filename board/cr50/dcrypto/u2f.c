@@ -433,7 +433,7 @@ static bool g2f_individual_key_pair(const struct u2f_state *state, p256_int *d,
 #define G2F_CERT_NAME "CrO2"
 
 size_t g2f_attestation_cert_serial(const struct u2f_state *state,
-				   const uint8_t *serial, uint8_t *buf)
+				   const p256_int *serial, uint8_t *buf)
 {
 	p256_int d, pk_x, pk_y;
 
@@ -441,9 +441,8 @@ size_t g2f_attestation_cert_serial(const struct u2f_state *state,
 		return 0;
 
 	/* Note that max length is not currently respected here. */
-	return DCRYPTO_x509_gen_u2f_cert_name(&d, &pk_x, &pk_y,
-					      (p256_int *)serial, G2F_CERT_NAME,
-					      buf,
+	return DCRYPTO_x509_gen_u2f_cert_name(&d, &pk_x, &pk_y, serial,
+					      G2F_CERT_NAME, buf,
 					      G2F_ATTESTATION_CERT_MAX_LEN);
 }
 

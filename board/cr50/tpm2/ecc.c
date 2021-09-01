@@ -14,66 +14,22 @@
 #include "util.h"
 #include "dcrypto.h"
 
-static void reverse_tpm2b(TPM2B *b)
-{
-	reverse(b->buffer, b->size);
-}
-
 TPM2B_BYTE_VALUE(4);
 TPM2B_BYTE_VALUE(32);
-
-static int check_p256_param(const TPM2B_ECC_PARAMETER *a)
-{
-	return a->b.size == sizeof(p256_int);
-}
-
-static int check_p256_param_in_range(const TPM2B_ECC_PARAMETER *a)
-{
-	return a->b.size <= sizeof(p256_int);
-}
-
-static int check_p256_point_in_range(const TPMS_ECC_POINT *a)
-{
-	return check_p256_param_in_range(&a->x) &&
-	       check_p256_param_in_range(&a->y);
-}
-
-static void append_zeros_to_p256_param(TPM2B_ECC_PARAMETER *a)
-{
-	while (a->b.size < sizeof(p256_int)) {
-		a->b.buffer[a->b.size] = 0;
-		a->b.size++;
-	}
-}
-
-static void append_zeros_to_p256_point(TPMS_ECC_POINT *a)
-{
-	append_zeros_to_p256_param(&a->x);
-	append_zeros_to_p256_param(&a->y);
-}
 
 BOOL _cpri__EccIsPointOnCurve(TPM_ECC_CURVE curve_id, TPMS_ECC_POINT *q)
 {
 	int result;
-	int x_size = q->x.b.size;
-	int y_size = q->y.b.size;
+	p256_int x, y;
 
 	switch (curve_id) {
 	case TPM_ECC_NIST_P256:
-		if (!check_p256_point_in_range(q))
+
+		if (!p256_from_be_bin_size(q->x.b.buffer, q->x.b.size, &x) ||
+		    !p256_from_be_bin_size(q->y.b.buffer, q->y.b.size, &y))
 			return FALSE;
 
-		reverse_tpm2b(&q->x.b);
-		reverse_tpm2b(&q->y.b);
-		append_zeros_to_p256_point(q);
-
-		result = dcrypto_p256_is_valid_point((p256_int *) q->x.b.buffer,
-					(p256_int *) q->y.b.buffer);
-
-		q->x.b.size = x_size;
-		q->y.b.size = y_size;
-		reverse_tpm2b(&q->x.b);
-		reverse_tpm2b(&q->y.b);
+		result = dcrypto_p256_is_valid_point(&x, &y);
 
 		if (result)
 			return TRUE;
@@ -90,61 +46,44 @@ CRYPT_RESULT _cpri__EccPointMultiply(
 	TPM2B_ECC_PARAMETER *n1, TPMS_ECC_POINT *in, TPM2B_ECC_PARAMETER *n2)
 {
 	int result;
+	p256_int n, in_x, in_y, out_x, out_y;
 
 	switch (curve_id) {
 	case TPM_ECC_NIST_P256:
-		if ((n1 != NULL && n2 != NULL) ||
-			(n1 == NULL && n2 == NULL))
+		if ((n1 != NULL && n2 != NULL) || (n1 == NULL && n2 == NULL))
 			/* Only one of n1 or n2 must be specified. */
 			return CRYPT_PARAMETER;
-		if ((n2 != NULL && in == NULL) ||
-			(n2 == NULL && in != NULL))
+		if ((n2 != NULL && in == NULL) || (n2 == NULL && in != NULL))
 			return CRYPT_PARAMETER;
-		if (n1 != NULL && !check_p256_param(n1))
+		if (n1 != NULL &&
+		    !p256_from_be_bin_size(n1->b.buffer, n1->b.size, &n))
 			return CRYPT_PARAMETER;
 		if (in != NULL && !_cpri__EccIsPointOnCurve(curve_id, in))
 			return CRYPT_POINT;
-		if (n2 != NULL && !check_p256_param(n2))
+		if (n2 != NULL &&
+		    !p256_from_be_bin_size(n2->b.buffer, n2->b.size, &n))
 			return CRYPT_PARAMETER;
 
 		if (n1 != NULL) {
-			reverse_tpm2b(&n1->b);
-
-			result = DCRYPTO_p256_base_point_mul(
-				(p256_int *) out->x.b.buffer,
-				(p256_int *) out->y.b.buffer,
-				(p256_int *) n1->b.buffer);
-
-			reverse_tpm2b(&n1->b);
+			result =
+				DCRYPTO_p256_base_point_mul(&out_x, &out_y, &n);
 		} else {
-			const int x_size = in->x.b.size;
-			const int y_size = in->y.b.size;
+			if (!p256_from_be_bin_size(in->x.b.buffer, in->x.b.size,
+						   &in_x) ||
+			    !p256_from_be_bin_size(in->y.b.buffer, in->y.b.size,
+						   &in_y))
+				return CRYPT_PARAMETER;
 
-			reverse_tpm2b(&n2->b);
-			reverse_tpm2b(&in->x.b);
-			reverse_tpm2b(&in->y.b);
-			append_zeros_to_p256_point(in);
-
-			result = DCRYPTO_p256_point_mul(
-				(p256_int *) out->x.b.buffer,
-				(p256_int *) out->y.b.buffer,
-				(p256_int *) n2->b.buffer,
-				(p256_int *) in->x.b.buffer,
-				(p256_int *) in->y.b.buffer);
-
-			reverse_tpm2b(&n2->b);
-			in->x.b.size = x_size;
-			in->y.b.size = y_size;
-			reverse_tpm2b(&in->x.b);
-			reverse_tpm2b(&in->y.b);
+			result = DCRYPTO_p256_point_mul(&out_x, &out_y, &n,
+							&in_x, &in_y);
 		}
 
+		p256_clear(&n);
 		if (result) {
 			out->x.b.size = sizeof(p256_int);
 			out->y.b.size = sizeof(p256_int);
-			reverse_tpm2b(&out->x.b);
-			reverse_tpm2b(&out->y.b);
-
+			p256_to_bin(&out_x, out->x.b.buffer);
+			p256_to_bin(&out_y, out->y.b.buffer);
 			return CRYPT_SUCCESS;
 		} else {
 			return CRYPT_NO_RESULT;
@@ -225,22 +164,22 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 	}
 
 	for (; count != 0; count++) {
+		p256_int x, y, key;
+
 		memcpy(marshaled_counter.t.buffer, &count, sizeof(count));
 		_cpri__KDFa(hash_alg, &local_seed.b, label, local_extra,
 			&marshaled_counter.b, sizeof(key_bytes) * 8, key_bytes,
 			NULL, FALSE);
-		if (DCRYPTO_p256_key_from_bytes(
-				(p256_int *) q->x.b.buffer,
-				(p256_int *) q->y.b.buffer,
-				(p256_int *) d->b.buffer, key_bytes)) {
+		if (DCRYPTO_p256_key_from_bytes(&x, &y, &key, key_bytes)) {
 			q->x.b.size = sizeof(p256_int);
+			p256_to_bin(&x, q->x.b.buffer);
+
 			q->y.b.size = sizeof(p256_int);
-			reverse_tpm2b(&q->x.b);
-			reverse_tpm2b(&q->y.b);
+			p256_to_bin(&y, q->y.b.buffer);
 
 			d->b.size = sizeof(p256_int);
-			reverse_tpm2b(&d->b);
-
+			p256_to_bin(&key, d->b.buffer);
+			p256_clear(&key);
 			break;
 		}
 	}
@@ -263,7 +202,7 @@ CRYPT_RESULT _cpri__SignEcc(
 {
 	uint8_t digest_local[sizeof(p256_int)];
 	const size_t digest_len = MIN(digest->size, sizeof(digest_local));
-	p256_int p256_digest;
+	p256_int p256_digest, key, p256_r, p256_s;
 	int result;
 
 	if (curve_id != TPM_ECC_NIST_P256)
@@ -271,31 +210,23 @@ CRYPT_RESULT _cpri__SignEcc(
 
 	switch (scheme) {
 	case TPM_ALG_ECDSA: {
-		const UINT16 d_size = d->b.size;
-
-		if (!check_p256_param_in_range(d))
+		if (!p256_from_be_bin_size(d->b.buffer, d->b.size, &key))
 			return CRYPT_PARAMETER;
+
 		/* Truncate / zero-pad the digest as appropriate. */
 		memset(digest_local, 0, sizeof(digest_local));
 		memcpy(digest_local + sizeof(digest_local) - digest_len,
-			digest->buffer, digest_len);
+		       digest->buffer, digest_len);
 		p256_from_bin(digest_local, &p256_digest);
 
-		reverse_tpm2b(&d->b);
-		append_zeros_to_p256_param(d);
+		result = fips_p256_ecdsa_sign(&key, &p256_digest, &p256_r,
+					      &p256_s);
 
-		result = fips_p256_ecdsa_sign(
-				(p256_int *) d->b.buffer,
-				&p256_digest,
-				(p256_int *) r->b.buffer,
-				(p256_int *) s->b.buffer);
-		d->b.size = d_size;
-		reverse_tpm2b(&d->b);
-
+		p256_clear(&key);
 		r->b.size = sizeof(p256_int);
 		s->b.size = sizeof(p256_int);
-		reverse_tpm2b(&r->b);
-		reverse_tpm2b(&s->b);
+		p256_to_bin(&p256_r, r->b.buffer);
+		p256_to_bin(&p256_s, s->b.buffer);
 
 		if (result)
 			return CRYPT_SUCCESS;
@@ -314,7 +245,7 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 {
 	uint8_t digest_local[sizeof(p256_int)];
 	const size_t digest_len = MIN(digest->size, sizeof(digest_local));
-	p256_int p256_digest;
+	p256_int p256_digest, q_x, q_y, p256_r, p256_s;
 	int result;
 
 	if (curve_id != TPM_ECC_NIST_P256)
@@ -322,43 +253,20 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 
 	switch (scheme) {
 	case TPM_ALG_ECDSA: {
-		const UINT16 qx_size = q->x.b.size;
-		const UINT16 qy_size = q->y.b.size;
-		const UINT16 r_size = r->b.size;
-		const UINT16 s_size = s->b.size;
+		if (!p256_from_be_bin_size(q->x.b.buffer, q->x.b.size, &q_x) ||
+		    !p256_from_be_bin_size(q->y.b.buffer, q->y.b.size, &q_y) ||
+		    !p256_from_be_bin_size(r->b.buffer, r->b.size, &p256_r) ||
+		    !p256_from_be_bin_size(s->b.buffer, s->b.size, &p256_s))
+			return CRYPT_PARAMETER;
 
 		/* Truncate / zero-pad the digest as appropriate. */
 		memset(digest_local, 0, sizeof(digest_local));
 		memcpy(digest_local + sizeof(digest_local) - digest_len,
-			digest->buffer, digest_len);
+		       digest->buffer, digest_len);
 		p256_from_bin(digest_local, &p256_digest);
 
-		reverse_tpm2b(&q->x.b);
-		reverse_tpm2b(&q->y.b);
-		append_zeros_to_p256_point(q);
-
-		reverse_tpm2b(&r->b);
-		append_zeros_to_p256_param(r);
-
-		reverse_tpm2b(&s->b);
-		append_zeros_to_p256_param(s);
-
-		result = dcrypto_p256_ecdsa_verify(
-			(p256_int *) q->x.b.buffer,
-			(p256_int *) q->y.b.buffer,
-			&p256_digest,
-			(p256_int *) r->b.buffer,
-			(p256_int *) s->b.buffer);
-
-		/* restore original size */
-		q->x.b.size = qx_size;
-		q->y.b.size = qy_size;
-		reverse_tpm2b(&q->x.b);
-		reverse_tpm2b(&q->y.b);
-		r->b.size = r_size;
-		reverse_tpm2b(&r->b);
-		s->b.size = s_size;
-		reverse_tpm2b(&s->b);
+		result = dcrypto_p256_ecdsa_verify(&q_x, &q_y, &p256_digest,
+						   &p256_r, &p256_s);
 
 		if (result)
 			return CRYPT_SUCCESS;
@@ -375,26 +283,26 @@ CRYPT_RESULT _cpri__GetEphemeralEcc(TPMS_ECC_POINT *q, TPM2B_ECC_PARAMETER *d,
 {
 	int result;
 	uint8_t key_bytes[P256_NBYTES] __aligned(4);
+	p256_int x, y, key;
 
 	if (curve_id != TPM_ECC_NIST_P256)
 		return CRYPT_PARAMETER;
 
 	rand_bytes(key_bytes, sizeof(key_bytes));
 
-	result = DCRYPTO_p256_key_from_bytes((p256_int *) q->x.b.buffer,
-					(p256_int *) q->y.b.buffer,
-					(p256_int *) d->b.buffer,
-					key_bytes);
+	result = DCRYPTO_p256_key_from_bytes(&x, &y, &key, key_bytes);
+
 	always_memset(key_bytes, 0, sizeof(key_bytes));
 
 	if (result) {
 		q->x.b.size = sizeof(p256_int);
 		q->y.b.size = sizeof(p256_int);
-		reverse_tpm2b(&q->x.b);
-		reverse_tpm2b(&q->y.b);
+		p256_to_bin(&x, q->x.b.buffer);
+		p256_to_bin(&y, q->y.b.buffer);
 
 		d->b.size = sizeof(p256_int);
-		reverse_tpm2b(&d->b);
+		p256_to_bin(&key, d->b.buffer);
+		p256_clear(&key);
 
 		return CRYPT_SUCCESS;
 	} else {

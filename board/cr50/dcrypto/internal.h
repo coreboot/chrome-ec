@@ -180,7 +180,7 @@ typedef struct p256_int {
 		p256_digit a[P256_NDIGITS];
 		uint8_t b8[P256_NBYTES];
 	};
-} __packed p256_int;
+} p256_int;
 
 extern const p256_int SECP256r1_nMin2;
 
@@ -210,6 +210,14 @@ void p256_to_bin(const p256_int *src, uint8_t dst[P256_NBYTES]);
  * zeros if short. Input length is assumed P256_NBYTES bytes.
  */
 void p256_from_bin(const uint8_t src[P256_NBYTES], p256_int *dst);
+
+/**
+ * Reads from big-endian binary form of given size, add padding with
+ * zeros if short. Check that leading digits beyond P256_NBYTES are zeroes.
+ *
+ * @return true if provided big-endian fits into p256.
+ */
+bool p256_from_be_bin_size(const uint8_t *src, size_t len, p256_int *dst);
 
 int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 			    const p256_int *message, p256_int *r, p256_int *s)
