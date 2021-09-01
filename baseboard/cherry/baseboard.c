@@ -6,7 +6,6 @@
 /* Cherry baseboard-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charger.h"
@@ -558,7 +557,8 @@ int board_set_active_charge_port(int port)
 	if (port == 1)
 		RETURN_ERROR(rt1718s_gpio_ctrl(RT1718S_GPIO_ENABLE_SINK));
 	else if (port != 1 && !ppc_is_sourcing_vbus(1))
-		RETURN_ERROR(rt1718s_gpio_ctrl(RT1718S_GPIO_DISABLED));
+		/* error ignored to make port 0 work without sub-board */
+		rt1718s_gpio_ctrl(RT1718S_GPIO_DISABLED);
 
 	return EC_SUCCESS;
 }
@@ -629,4 +629,22 @@ __override int board_pd_set_frs_enable(int port, int enable)
 
 	/* Use write instead of update to save 1 i2c read in FRS path */
 	return rt1718s_write8(port, RT1718S_GPIO3_CTRL, value);
+}
+
+__override int board_get_vbus_voltage(int port)
+{
+	int voltage = 0;
+
+	switch (port) {
+	case 0:
+		voltage = adc_read_channel(ADC_VBUS);
+		break;
+	case 1:
+		rt1718s_get_adc(port, RT1718S_ADC_VBUS1, &voltage);
+		break;
+	default:
+		return 0;
+	}
+
+	return voltage;
 }

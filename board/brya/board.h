@@ -204,6 +204,12 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
 
+/*
+ * Older boards have a different ADC assignment.
+ */
+
+#define CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"	/* needed by registers.h */
@@ -212,7 +218,7 @@
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
-	ADC_TEMP_SENSOR_2_FAN,
+	ADC_TEMP_SENSOR_2_AMBIENT,
 	ADC_TEMP_SENSOR_3_CHARGER,
 	ADC_TEMP_SENSOR_4_WWAN,
 	ADC_CH_COUNT
@@ -220,7 +226,9 @@ enum adc_channel {
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
-	TEMP_SENSOR_2_FAN,
+	TEMP_SENSOR_2_AMBIENT,
+	TEMP_SENSOR_3_CHARGER,
+	TEMP_SENSOR_4_WWAN,
 	TEMP_SENSOR_COUNT
 };
 
