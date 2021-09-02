@@ -150,7 +150,6 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 
 	/* Pick uniform 0 < k < R */
 	result |= (p256_hmac_drbg_generate(drbg, &k) != HMAC_DRBG_SUCCESS);
-	drbg_exit(drbg);
 
 	CP8WB(k, &k, &rnd);
 
