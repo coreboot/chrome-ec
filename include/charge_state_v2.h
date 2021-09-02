@@ -51,6 +51,11 @@ struct charge_state_data {
 #endif
 };
 
+struct sustain_soc {
+	int8_t lower;
+	int8_t upper;
+};
+
 /**
  * Set the output current limit and voltage. This is used to provide power from
  * the charger chip ("OTG" mode).
@@ -71,17 +76,6 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv);
  * @return EC_SUCCESS or error
  */
 int charge_set_input_current_limit(int ma, int mv);
-
-/*
- * Expose charge/battery related state
- *
- * @param param command to get corresponding data
- * @param value the corresponding data
- * @return EC_SUCCESS or error
- */
-#ifdef CONFIG_CHARGE_STATE_DEBUG
-int charge_get_charge_state_debug(int param, uint32_t *value);
-#endif /* CONFIG_CHARGE_STATE_DEBUG */
 
 /**
  * Set the desired manual charge current when in idle mode.

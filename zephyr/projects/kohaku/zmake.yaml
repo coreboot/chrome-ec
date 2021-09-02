@@ -3,7 +3,9 @@
 # found in the LICENSE file.
 
 board: kohaku
+supported-toolchains:
+  - coreboot-sdk
+  - zephyr
 supported-zephyr-versions:
-  - v2.5
-toolchain: coreboot-sdk
+  - v2.6
 output-type: npcx

@@ -2,6 +2,10 @@
 # Copyright 2016 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+#
+# Ignore indention messages, since legacy scripts use 2 spaces instead of 4.
+# pylint: disable=bad-indentation,docstring-section-indent
+# pylint: disable=docstring-trailing-quotes
 
 # Note: This is a py2/3 compatible file.
 
@@ -442,6 +446,9 @@ def main():
   # Make sure the servo MCU is in RO
   print("===== Rebooting =====")
   do_with_retries(select, tinys, 'ro')
+  # Perform additional reboot to free USB/UART resources, taken by tiny servod.
+  # See https://issuetracker.google.com/196021317 for background.
+  tinys.pty._issue_cmd("reboot")
 
   print("===== Finished =====")
 

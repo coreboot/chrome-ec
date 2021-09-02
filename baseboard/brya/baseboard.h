@@ -24,9 +24,10 @@
 
 /* EC Defines */
 #define CONFIG_LTO
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
+#define CONFIG_DPTF
 #define CONFIG_FPU
 
 /* Verified boot configs */
@@ -52,7 +53,8 @@
 #define CONFIG_GMR_TABLET_MODE
 
 #define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_GPIO
+#define CONFIG_MKBP_USE_HOST_EVENT
+#define CONFIG_MKBP_INPUT_DEVICES
 
 /* LED */
 #define CONFIG_LED_COMMON
@@ -73,8 +75,6 @@
  * communicate on locked systems (which haven't PD negotiated)
  */
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			3
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC		1
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		15001
 
 /* Common battery defines */
@@ -97,10 +97,18 @@
 #define CONFIG_POWER_S0IX
 #define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
+#define CONFIG_LOW_POWER_IDLE
 
 #define CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 
-#define CONFIG_BOARD_HAS_RTC_RESET
+/*
+ * TODO(b/191742284): When DAM enabled coreboot image is flashed on top of DAM
+ * disabled coreboot, S5 exit is taking more than 4 seconds, then EC triggers
+ * system shutdown. This WA deselects CONFIG_BOARD_HAS_RTC_RESET to prevent
+ * EC from system shutdown.
+ */
+/* #define CONFIG_BOARD_HAS_RTC_RESET */
+
 #define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_HOSTCMD_AP_RESET
 
@@ -110,7 +118,7 @@
 
 /* Common Keyboard Defines */
 #define CONFIG_CMD_KEYBOARD
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_KEYPAD
 #define CONFIG_KEYBOARD_PROTOCOL_8042
@@ -204,6 +212,7 @@
 #ifndef __ASSEMBLER__
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "common.h"
 #include "baseboard_usbc_config.h"

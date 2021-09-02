@@ -4,7 +4,6 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "backlight.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -88,7 +87,7 @@ const struct power_signal_info power_signal_list[] = {
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * TODO(b/133200075): Tune this once we have the final performance
 	 * out of the driver and the i2c bus.
@@ -140,7 +139,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 static void board_hpd_status(const struct usb_mux *me,
-			     int hpd_lvl, int hpd_irq)
+			     mux_state_t mux_state)
 {
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
@@ -277,7 +276,7 @@ static void board_spi_enable(void)
 	spi_enable(&spi_devices[0], 1);
 
 	/* Pin mux spi peripheral toward the sensor. */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP,
 	     board_spi_enable,
@@ -288,7 +287,7 @@ static void board_spi_disable(void)
 	/* Set pins to a state calming the sensor down. */
 	gpio_set_flags(GPIO_EC_SENSOR_SPI_CK, GPIO_OUT_LOW);
 	gpio_set_level(GPIO_EC_SENSOR_SPI_CK, 0);
-	gpio_config_module(MODULE_SPI_MASTER, 0);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 0);
 
 	/* Disable spi peripheral and clocks. */
 	spi_enable(&spi_devices[0], 0);
@@ -397,7 +396,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = CONFIG_SPI_ACCEL_PORT,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+		.i2c_spi_addr_flags =
+				ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = BMI_ACCEL_MIN_FREQ,
@@ -425,7 +425,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = CONFIG_SPI_ACCEL_PORT,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+		.i2c_spi_addr_flags =
+				ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI_GYRO_MIN_FREQ,

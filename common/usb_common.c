@@ -46,10 +46,6 @@
  */
 #define MIN_BATTERY_FOR_PD_UPGRADE_MAH 100 /* mAH */
 
-__overridable void board_vbus_present_change(void)
-{
-}
-
 #if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
 int hex8tou32(char *str, uint32_t *val)
 {
@@ -360,7 +356,12 @@ __overridable bool board_is_usb_pd_port_present(int port)
 	return (port >= 0) && (port < board_get_usb_pd_port_count());
 }
 
-int pd_get_retry_count(int port, enum tcpm_transmit_type type)
+__overridable bool board_is_dts_port(int port)
+{
+	return true;
+}
+
+int pd_get_retry_count(int port, enum tcpci_msg_type type)
 {
 	/* PD 3.0 6.7.7: nRetryCount = 2; PD 2.0 6.6.9: nRetryCount = 3 */
 	return pd_get_rev(port, type) == PD_REV30 ? 2 : 3;
@@ -457,6 +458,11 @@ enum pd_drp_next_states drp_auto_toggle_next_state(
 	}
 }
 
+__overridable bool usb_ufp_check_usb3_enable(int port)
+{
+	return false;
+}
+
 mux_state_t get_mux_mode_to_set(int port)
 {
 	/*
@@ -476,19 +482,42 @@ mux_state_t get_mux_mode_to_set(int port)
 	if (pd_is_disconnected(port))
 		return USB_PD_MUX_NONE;
 
+	/*
+	 * For type-c only connections, there may be a need to enable USB3.1
+	 * mode when the port is in a UFP data role, independent of any other
+	 * conditions which are checked below. The default function returns
+	 * false, so only boards that override this check will be affected.
+	 */
+	if (usb_ufp_check_usb3_enable(port) && pd_get_data_role(port)
+	    == PD_ROLE_UFP)
+		return USB_PD_MUX_USB_ENABLED;
+
 	/* If new data role isn't DFP & we only support DFP, also disconnect. */
 	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
 	    IS_ENABLED(CONFIG_USBC_SS_MUX_DFP_ONLY) &&
 	    pd_get_data_role(port) != PD_ROLE_DFP)
 		return USB_PD_MUX_NONE;
 
+	/* If new data role isn't UFP & we only support UFP then disconnect. */
+	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
+	    IS_ENABLED(CONFIG_USBC_SS_MUX_UFP_ONLY) &&
+	    pd_get_data_role(port) != PD_ROLE_UFP)
+		return USB_PD_MUX_NONE;
+
 	/*
 	 * If the power role is sink and the PD partner device is not capable
 	 * of USB communication then disconnect.
+	 *
+	 * On an entry into Unattached.SNK, the partner may be PD capable but
+	 * hasn't yet sent source capabilities. In this case, hold off enabling
+	 * USB3 termination until the PD capability is resolved.
+	 *
+	 * TODO(b/188588458): TCPMv2: Delay enabling USB3 termination when USB4
+	 * is supported.
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
 	    pd_get_power_role(port) == PD_ROLE_SINK &&
-	    pd_capable(port) &&
+	    (pd_capable(port) || pd_waiting_on_partner_src_caps(port)) &&
 	    !pd_get_partner_usb_comm_capable(port))
 		return USB_PD_MUX_NONE;
 
@@ -780,7 +809,7 @@ static void pd_usb_billboard_deferred(void)
 		 * 1. Will we have multiple type-C port UFPs
 		 * 2. Will there be other modes applicable to DFPs besides DP
 		 */
-		if (!pd_alt_mode(0, TCPC_TX_SOP, USB_SID_DISPLAYPORT))
+		if (!pd_alt_mode(0, TCPCI_MSG_SOP, USB_SID_DISPLAYPORT))
 			usb_connect();
 	}
 }

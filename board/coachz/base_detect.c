@@ -6,7 +6,6 @@
 /* Coachz base detection code */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "board.h"
 #include "base_state.h"
 #include "chipset.h"
@@ -83,7 +82,7 @@ static void base_detect_change(enum base_status status)
 		return;
 
 	gpio_set_level(GPIO_EN_BASE, connected);
-	tablet_set_mode(!connected);
+	tablet_set_mode(!connected, TABLET_TRIGGER_BASE);
 	base_set_state(connected);
 	current_base_status = status;
 }
@@ -214,13 +213,13 @@ static void base_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, base_init, HOOK_PRIO_DEFAULT+1);
 
-void base_force_state(int state)
+void base_force_state(enum ec_set_base_state_cmd state)
 {
-	if (state == 1) {
+	if (state == EC_SET_BASE_STATE_ATTACH) {
 		gpio_disable_interrupt(GPIO_BASE_DET_L);
 		base_detect_change(BASE_CONNECTED);
 		CPRINTS("BD forced connected");
-	} else if (state == 0) {
+	} else if (state == EC_SET_BASE_STATE_DETACH) {
 		gpio_disable_interrupt(GPIO_BASE_DET_L);
 		base_detect_change(BASE_DISCONNECTED);
 		CPRINTS("BD forced disconnected");

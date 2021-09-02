@@ -11,7 +11,7 @@
 /* Optional modules */
 #define CONFIG_ADC
 #define CONFIG_PWM
-#define CONFIG_HOSTCMD_SPS /* Used in ARM-based platform for host interface */
+#define CONFIG_HOSTCMD_SHI /* Used in ARM-based platform for host interface */
 
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands for testing */
@@ -20,7 +20,7 @@
 #define CONFIG_SPI_FLASH_W25Q64
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP /* Instead of 8042 protocol of keyboard */
 #define CONFIG_MKBP_USE_GPIO
 #define CONFIG_POWER_BUTTON

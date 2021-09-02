@@ -35,6 +35,7 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Keyboard backliht */
@@ -73,7 +74,7 @@
  * cables only support up to 60W.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
+#define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 

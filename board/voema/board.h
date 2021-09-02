@@ -19,10 +19,6 @@
 #undef CONFIG_CHIP_INIT_ROM_REGION
 #endif
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK /* bypass cbi wp check in dev. */
-
 #define CONFIG_VBOOT_EFS2
 
 #define CONFIG_POWER_BUTTON
@@ -37,12 +33,16 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_KEYBOARD_VIVALDI
 #define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensors */
 /* BMA253 accelerometer in base */
 #define CONFIG_ACCEL_BMA255
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_KX022
 
 /* TCS3400 ALS */
@@ -53,8 +53,12 @@
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 
 /* Sensors without hardware FIFO are in forced mode */
+#ifdef BOARD_VOEMA_NPCX796FC
 #define CONFIG_ACCEL_FORCE_MODE_MASK \
 	(BIT(LID_ACCEL) | BIT(CLEAR_ALS) | BIT(BASE_ACCEL))
+#else
+#define CONFIG_ACCEL_FORCE_MODE_MASK (board_accel_force_mode_mask())
+#endif
 
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
@@ -85,6 +89,8 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USBC PPC*/
+#undef CONFIG_SYV682X_HV_ILIM
+#define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 #define CONFIG_USBC_PPC_SYV682X		/* USBC port C0/C1 */
 #define CONFIG_USB_PD_FRS_PPC
 #undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
@@ -172,6 +178,7 @@ enum pwm_channel {
 enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
+	BASE_GYRO,
 	CLEAR_ALS,
 	RGB_ALS,
 	SENSOR_COUNT,
@@ -184,6 +191,10 @@ enum usbc_port {
 };
 
 void board_reset_pd_mcu(void);
+#ifndef BOARD_VOEMA_NPCX796FC
+void motion_interrupt(enum gpio_signal signal);
+int board_accel_force_mode_mask(void);
+#endif
 
 #endif /* !__ASSEMBLER__ */
 

@@ -5,7 +5,7 @@
 
 /* Lalala board-specific configuration */
 
-#include "adc_chip.h"
+#include "adc.h"
 #include "button.h"
 #include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
@@ -72,7 +72,7 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 };
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next
@@ -824,9 +824,8 @@ static void adc_vol_key_press_check(void)
 }
 DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -850,4 +849,3 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif

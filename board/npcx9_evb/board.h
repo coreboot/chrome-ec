@@ -23,7 +23,7 @@
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_HIBERNATE_PSL_COMPENSATE_RTC
 #define CONFIG_I2C_CONTROLLER
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #undef  CONFIG_LOW_POWER_IDLE /* Deep Sleep Support */
 #define CONFIG_POWER_BUTTON
@@ -86,6 +86,11 @@ enum adc_channel {
 	ADC_CH_10,
 	ADC_CH_11,
 	ADC_CH_COUNT
+};
+
+enum tmp112_sensor {
+	TMP112_0,
+	TMP112_COUNT,
 };
 
 enum temp_sensor_id {

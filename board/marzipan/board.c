@@ -26,7 +26,7 @@
 #include "lid_switch.h"
 #include "pi3usb9201.h"
 #include "power.h"
-#include "power/sc7180.h"
+#include "power/qcom.h"
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
@@ -84,7 +84,7 @@ void board_connect_c0_sbu(enum gpio_signal s)
 }
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Use 80 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/*
@@ -417,26 +417,6 @@ struct motion_sensor_t icm426xx_base_gyro = {
 	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
 	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
 };
-
-#ifndef TEST_BUILD
-/* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
-{
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
-}
-#endif
 
 static int base_accelgyro_config;
 

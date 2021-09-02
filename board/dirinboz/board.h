@@ -86,8 +86,8 @@ enum battery_type {
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_SAMSUNG_SDI,
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_DYNAPACK_COS,
 	BATTERY_COSMX,
 	BATTERY_TYPE_COUNT,
 };
@@ -174,11 +174,6 @@ void board_reset_pd_mcu(void);
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

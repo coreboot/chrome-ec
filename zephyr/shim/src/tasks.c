@@ -32,8 +32,10 @@ CROS_EC_TASK_LIST
 
 /** Context for each CROS EC task that is run in its own zephyr thread */
 struct task_ctx {
+#ifdef CONFIG_THREAD_NAME
 	/** Name of thread (for debugging) */
 	const char *name;
+#endif
 	/** Zephyr thread structure that hosts EC tasks */
 	struct k_thread zephyr_thread;
 	/** Zephyr thread id for above thread */
@@ -57,6 +59,7 @@ struct task_ctx {
 	struct k_timer timer;
 };
 
+#ifdef CONFIG_THREAD_NAME
 #define CROS_EC_TASK(_name, _entry, _parameter, _size) \
 	{                                              \
 		.entry = _entry,                       \
@@ -65,6 +68,15 @@ struct task_ctx {
 		.stack_size = _size,                   \
 		.name = #_name,                        \
 	},
+#else
+#define CROS_EC_TASK(_name, _entry, _parameter, _size) \
+	{                                              \
+		.entry = _entry,                       \
+		.parameter = _parameter,               \
+		.stack = _name##_STACK,                \
+		.stack_size = _size,                   \
+	},
+#endif /* CONFIG_THREAD_NAME */
 #define TASK_TEST(_name, _entry, _parameter, _size) \
 	CROS_EC_TASK(_name, _entry, _parameter, _size)
 static struct task_ctx shimmed_tasks[] = { CROS_EC_TASK_LIST };
@@ -79,6 +91,14 @@ task_id_t task_get_current(void)
 			return i;
 		}
 	}
+
+#if defined(HAS_TASK_HOOKS)
+	/* Hooks ID should be returned for deferred calls */
+	if (k_current_get() == &k_sys_work_q.thread) {
+		return TASK_ID_HOOKS;
+	}
+#endif /* HAS_TASK_HOOKS */
+
 	__ASSERT(false, "Task index out of bound");
 	return 0;
 }
@@ -188,8 +208,11 @@ static void task_entry(void *task_contex, void *unused1, void *unused2)
 	ARG_UNUSED(unused2);
 
 	struct task_ctx *const ctx = (struct task_ctx *)task_contex;
+
+#ifdef CONFIG_THREAD_NAME
 	/* Name thread for debugging */
 	k_thread_name_set(ctx->zephyr_tid, ctx->name);
+#endif
 
 	/* Call into task entry point */
 	ctx->entry((void *)ctx->parameter);
@@ -277,4 +300,26 @@ SYS_INIT(init_signals, POST_KERNEL, 50);
 int task_start_called(void)
 {
 	return tasks_started;
+}
+
+void task_disable_task(task_id_t tskid)
+{
+	/* TODO(b/190203712): Implement this */
+}
+
+void task_clear_pending_irq(int irq)
+{
+#if CONFIG_ITE_IT8XXX2_INTC
+	ite_intc_isr_clear(irq);
+#endif
+}
+
+void task_enable_irq(int irq)
+{
+	arch_irq_enable(irq);
+}
+
+inline int in_interrupt_context(void)
+{
+	return k_is_in_isr();
 }

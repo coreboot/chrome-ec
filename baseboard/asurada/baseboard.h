@@ -22,10 +22,11 @@
  * allow the second reset to be treated as a power-on.
  */
 #define CONFIG_BOARD_RESET_AFTER_POWER_ON
-#define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_CHIPSET_MT8192
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
+#define CONFIG_POWER_SLEEP_FAILURE_DETECTION
+#define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 
 /* Chipset */
 #define CONFIG_CMD_AP_RESET_LOG
@@ -82,6 +83,7 @@
 #define CONFIG_I2C_VIRTUAL_BATTERY
 #define I2C_PORT_CHARGER IT83XX_I2C_CH_A
 #define I2C_PORT_BATTERY IT83XX_I2C_CH_A
+#define I2C_PORT_POWER   IT83XX_I2C_CH_A
 #define I2C_PORT_ACCEL IT83XX_I2C_CH_B
 #define I2C_PORT_PPC0  IT83XX_I2C_CH_C
 #define I2C_PORT_PPC1  IT83XX_I2C_CH_E
@@ -132,15 +134,9 @@
 #define CONFIG_USB_PID 0x5053
 #define CONFIG_USB_POWER_DELIVERY
 
-#define PD_MAX_CURRENT_MA 3000
-#define PD_MAX_VOLTAGE_MV 20000
-#define PD_OPERATING_POWER_MW 15000
-#define PD_MAX_POWER_MW 60000
-#define PD_POWER_SUPPLY_TURN_ON_DELAY  30000  /* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
-
 /* USB-A */
 #define CONFIG_USB_PORT_POWER_DUMB
+#define CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 #define USB_PORT_COUNT USBA_PORT_COUNT
 
 /* UART */
@@ -160,9 +156,6 @@
 
 /* SPI / Host Command */
 #define CONFIG_SPI
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_MOTION_SENSE_CMD, \
-	EC_CMD_PD_GET_LOG_ENTRY
 
 /* MKBP */
 #define CONFIG_MKBP_EVENT
@@ -178,38 +171,26 @@
 	(EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_CONNECTED) |    \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_DISCONNECTED) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |        \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_HANG_DETECT) |     \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
-/* GPIO name remapping */
-#define GPIO_EN_HDMI_PWR        GPIO_EC_X_GPIO1
-#define GPIO_USB_C1_FRS_EN      GPIO_EC_X_GPIO1
-#define GPIO_USB_C1_PPC_INT_ODL GPIO_X_EC_GPIO2
-#define GPIO_PS185_EC_DP_HPD    GPIO_X_EC_GPIO2
-#define GPIO_USB_C1_DP_IN_HPD   GPIO_EC_X_GPIO3
-#define GPIO_PS185_PWRDN_ODL    GPIO_EC_X_GPIO3
+/* And the MKBP events */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK \
+		(BIT(EC_MKBP_EVENT_KEY_MATRIX) | \
+		 BIT(EC_MKBP_EVENT_HOST_EVENT))
+
+#include "baseboard_common.h"
 
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
 #include "registers.h"
+#include "power/mt8192.h"
 
-enum power_signal {
-	PMIC_PWR_GOOD,
-	AP_IN_S3_L,
-	AP_WDT_ASSERTED,
-	POWER_SIGNAL_COUNT,
-};
-
-enum board_sub_board {
-	SUB_BOARD_NONE = -1,
-	SUB_BOARD_TYPEC,
-	SUB_BOARD_HDMI,
-	SUB_BOARD_COUNT,
-};
-
-int board_get_version(void);
 void board_reset_pd_mcu(void);
 enum board_sub_board board_get_sub_board(void);
+void usb_a0_interrupt(enum gpio_signal signal);
+
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BASEBOARD_H */

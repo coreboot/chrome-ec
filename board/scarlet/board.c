@@ -4,7 +4,6 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "backlight.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -230,7 +229,7 @@ int pd_snk_is_vbus_provided(int port)
 
 static void board_spi_enable(void)
 {
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 
 	/* Enable clocks to SPI2 module */
 	STM32_RCC_APB1ENR |= STM32_RCC_PB1_SPI2;
@@ -252,7 +251,7 @@ static void board_spi_disable(void)
 	/* Disable clocks to SPI2 module */
 	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 
-	gpio_config_module(MODULE_SPI_MASTER, 0);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
 	     board_spi_disable,
@@ -411,7 +410,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = CONFIG_SPI_ACCEL_PORT,
-	 .i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+	 .i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 	 .rot_standard_ref = &base_standard_ref,
 	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
@@ -434,7 +433,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = CONFIG_SPI_ACCEL_PORT,
-	 .i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+	 .i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = BMI_GYRO_MIN_FREQ,

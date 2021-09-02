@@ -23,6 +23,8 @@
 
 #undef  PD_MAX_CURRENT_MA
 #define PD_MAX_CURRENT_MA	3000
+#undef  CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 40000
 
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 
@@ -36,6 +38,9 @@
 /* Motion sensing drivers */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_KX022
 #define CONFIG_ACCEL_INTERRUPTS
@@ -170,6 +175,7 @@ void board_reset_pd_mcu(void);
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

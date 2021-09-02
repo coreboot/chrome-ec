@@ -2,18 +2,27 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
 /* Shared USB-C policy for Brya boards */
+
+#include <stddef.h>
+#include <stdint.h>
+
 #include "charge_manager.h"
 #include "chipset.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
+#include "ec_commands.h"
 #include "gpio.h"
-#include "system.h"
-#include "usb_common.h"
 #include "usbc_ppc.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd.h"
+#include "usb_pd_tbt.h"
+#include "usb_pd_tcpm.h"
+#include "usb_pd_vdo.h"
+#include "util.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
@@ -61,11 +70,6 @@ int pd_set_power_supply_ready(int port)
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
 
 	return EC_SUCCESS;
-}
-
-int pd_snk_is_vbus_provided(int port)
-{
-	return ppc_is_vbus_present(port);
 }
 
 int board_vbus_source_enabled(int port)
@@ -128,7 +132,7 @@ static int svdm_tbt_compat_response_identity(int port, uint32_t *payload)
 	payload[VDO_I(CSTAT)] = VDO_CSTAT(0);
 	payload[VDO_I(PRODUCT)] = vdo_product;
 
-	if (pd_get_rev(port, TCPC_TX_SOP) == PD_REV30) {
+	if (pd_get_rev(port, TCPCI_MSG_SOP) == PD_REV30) {
 		/* PD Revision 3.0 */
 		payload[VDO_I(IDH)] = vdo_idh_rev30;
 		payload[VDO_I(PTYPE_UFP1_VDO)] = vdo_ufp1;

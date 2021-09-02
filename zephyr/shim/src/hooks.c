@@ -15,18 +15,22 @@
 
 int hook_call_deferred(const struct deferred_data *data, int us)
 {
-	struct k_delayed_work *work = data->delayed_work;
+	struct k_work_delayable *work = data->work;
 	int rv = 0;
 
 	if (us == -1) {
-		k_delayed_work_cancel(work);
+		k_work_cancel_delayable(work);
 	} else if (us >= 0) {
-		rv = k_delayed_work_submit(work, K_USEC(us));
-		if (rv < 0)
+		rv = k_work_schedule(work, K_USEC(us));
+		if (rv == -EINVAL) {
+			/* Already processing or completed. */
+			return 0;
+		} else if (rv < 0) {
 			cprints(CC_HOOK,
 				"Warning: deferred call not submitted, "
 				"deferred_data=0x%pP, err=%d",
 				data, rv);
+		}
 	} else {
 		return EC_ERROR_PARAM2;
 	}
@@ -36,23 +40,25 @@ int hook_call_deferred(const struct deferred_data *data, int us)
 
 static struct zephyr_shim_hook_list *hook_registry[HOOK_TYPE_COUNT];
 
-void zephyr_shim_setup_hook(enum hook_type type, void (*routine)(void),
-			    int priority, struct zephyr_shim_hook_list *entry)
+static int zephyr_shim_setup_hooks(const struct device *unused)
 {
-	struct zephyr_shim_hook_list **loc = &hook_registry[type];
+	STRUCT_SECTION_FOREACH(zephyr_shim_hook_list, entry) {
+		struct zephyr_shim_hook_list **loc = &hook_registry[entry->type];
 
-	/* Find the correct place to put the entry in the registry. */
-	while (*loc && (*loc)->priority < priority)
-		loc = &((*loc)->next);
+		/* Find the correct place to put the entry in the registry. */
+		while (*loc && (*loc)->priority < entry->priority)
+			loc = &((*loc)->next);
 
-	/* Setup the entry. */
-	entry->routine = routine;
-	entry->priority = priority;
-	entry->next = *loc;
+		entry->next = *loc;
 
-	/* Insert the entry. */
-	*loc = entry;
+		/* Insert the entry. */
+		*loc = entry;
+	}
+
+	return 0;
 }
+
+SYS_INIT(zephyr_shim_setup_hooks, APPLICATION, 1);
 
 void hook_notify(enum hook_type type)
 {
@@ -64,11 +70,15 @@ void hook_notify(enum hook_type type)
 
 static void check_hook_task_priority(k_tid_t thread)
 {
-	if (k_thread_priority_get(thread) != LOWEST_THREAD_PRIORITY)
+	/*
+	 * Numerically lower priorities take precedence, so verify the hook
+	 * related threads cannot preempt any of the shimmed tasks.
+	 */
+	if (k_thread_priority_get(thread) < (TASK_ID_COUNT - 1))
 		cprintf(CC_HOOK,
-			"ERROR: %s has priority %d but must be priority %d\n",
+			"ERROR: %s has priority %d but must be >= %d\n",
 			k_thread_name_get(thread),
-			k_thread_priority_get(thread), LOWEST_THREAD_PRIORITY);
+			k_thread_priority_get(thread), (TASK_ID_COUNT - 1));
 }
 
 void hook_task(void *u)

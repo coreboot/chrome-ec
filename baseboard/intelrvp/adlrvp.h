@@ -14,6 +14,8 @@
 #include "baseboard.h"
 
 /* RVP Board ids */
+#define CONFIG_BOARD_VERSION_GPIO
+#define ADLP_DDR5_RVP_SKU_BOARD_ID	0x12
 #define ADLP_LP5_T4_RVP_SKU_BOARD_ID	0x13
 #define ADL_RVP_BOARD_ID(id)		((id) & 0x3F)
 
@@ -39,6 +41,8 @@
 #define CONFIG_USB_MUX_VIRTUAL
 #define PD_MAX_POWER_MW              100000
 
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+
 /* TCPC AIC config */
 /* Support NXP PCA9675 I/O expander. */
 #define CONFIG_IO_EXPANDER
@@ -63,6 +67,9 @@
 
 /* Config BB retimer */
 #define CONFIG_USBC_RETIMER_INTEL_BB
+#define CONFIG_USBC_RETIMER_FW_UPDATE
+
+/* Connector side BB retimers */
 #define I2C_PORT0_BB_RETIMER_ADDR	0x56
 #if defined(HAS_TASK_PD_C1)
 #define I2C_PORT1_BB_RETIMER_ADDR	0x57
@@ -73,6 +80,19 @@
 #if defined(HAS_TASK_PD_C3)
 #define I2C_PORT3_BB_RETIMER_ADDR	0x59
 #endif
+
+/* SOC side BB retimers (dual retimer config) */
+#define I2C_PORT0_BB_RETIMER_SOC_ADDR	0x54
+#if defined(HAS_TASK_PD_C1)
+#define I2C_PORT1_BB_RETIMER_SOC_ADDR	0x55
+#endif
+
+/* I2C EEPROM */
+#define I2C_ADDR_EEPROM_FLAGS   0x50
+#define I2C_PORT_EEPROM         I2C_PORT_PCA9555_BOARD_ID_GPIO
+
+/* Enable CBI */
+#define CONFIG_CBI_EEPROM
 
 /* Configure mux at runtime */
 #define CONFIG_USB_MUX_RUNTIME_CONFIG
@@ -86,6 +106,9 @@
 
 /* Enabling USB4 mode */
 #define CONFIG_USB_PD_USB4
+
+/* Enable low power mode */
+#define CONFIG_USB_PD_TCPC_LOW_POWER
 
 /* Config Fan */
 #define CONFIG_FANS		1

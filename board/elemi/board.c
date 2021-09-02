@@ -45,7 +45,7 @@
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Increase from 50 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/* Other values should be the same as the default configuration. */
@@ -227,6 +227,14 @@ static void kb_backlight_disable(void)
 	gpio_set_level(GPIO_EC_KB_BL_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, kb_backlight_disable, HOOK_PRIO_DEFAULT);
+
+__override void board_ps8xxx_tcpc_init(int port)
+{
+	/* b/189587527: Set Displayport EQ loss up to 10dB */
+	tcpc_addr_write(port, PS8751_I2C_ADDR1_P1_FLAGS,
+		PS8815_REG_DP_EQ_SETTING,
+		PS8815_DPEQ_LOSS_UP_10DB << PS8815_REG_DP_EQ_COMP_SHIFT);
+}
 
 /*
  * USB3 DB mux configuration - the top level mux still needs to be set to the

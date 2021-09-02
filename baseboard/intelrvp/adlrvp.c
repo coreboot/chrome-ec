@@ -152,6 +152,25 @@ struct usb_mux usb_muxes[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
+/* USB Mux Configuration for Soc side BB-Retimers for Dual retimer config */
+struct usb_mux soc_side_bb_retimer0_usb_mux = {
+	.usb_port = TYPE_C_PORT_0,
+	.next_mux = &usbc0_tcss_usb_mux,
+	.driver = &bb_usb_retimer,
+	.i2c_port = I2C_PORT_TYPEC_0,
+	.i2c_addr_flags = I2C_PORT0_BB_RETIMER_SOC_ADDR,
+};
+
+#if defined(HAS_TASK_PD_C1)
+struct usb_mux soc_side_bb_retimer1_usb_mux = {
+	.usb_port = TYPE_C_PORT_1,
+	.next_mux = &usbc1_tcss_usb_mux,
+	.driver = &bb_usb_retimer,
+	.i2c_port = I2C_PORT_TYPEC_1,
+	.i2c_addr_flags = I2C_PORT1_BB_RETIMER_SOC_ADDR,
+};
+#endif
+
 const struct bb_usb_control bb_controls[] = {
 	[TYPE_C_PORT_0] = {
 		.retimer_rst_gpio = IOEX_USB_C0_BB_RETIMER_RST,
@@ -177,6 +196,9 @@ const struct bb_usb_control bb_controls[] = {
 #endif
 };
 BUILD_ASSERT(ARRAY_SIZE(bb_controls) == CONFIG_USB_PD_PORT_MAX_COUNT);
+
+/* Cache BB retimer power state */
+static bool cache_bb_enable[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Each TCPC have corresponding IO expander and are available in pair */
 struct ioexpander_config_t ioex_config[] = {
@@ -228,10 +250,21 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	ioex_set_level(oc_signal, is_overcurrented ? 0 : 1);
 }
 
-__override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
+__override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 {
+	/*
+	 * ADL-P-DDR5 RVP SKU has cascaded retimer topology.
+	 * Ports with cascaded retimers share common load switch and reset pin
+	 * hence no need to set the power state again if the 1st retimer's power
+	 * status has already changed.
+	 */
+	if (cache_bb_enable[me->usb_port] == enable)
+		return EC_SUCCESS;
+
+	cache_bb_enable[me->usb_port] = enable;
+
 	/* Handle retimer's power domain.*/
-	if (on_off) {
+	if (enable) {
 		ioex_set_level(bb_controls[me->usb_port].usb_ls_en_gpio, 1);
 
 		/*
@@ -254,6 +287,7 @@ __override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 		msleep(1);
 		ioex_set_level(bb_controls[me->usb_port].usb_ls_en_gpio, 0);
 	}
+	return EC_SUCCESS;
 }
 
 static void board_connect_c0_sbu_deferred(void)
@@ -295,6 +329,20 @@ static void configure_retimer_usbmux(void)
 #endif
 		break;
 
+	case ADLP_DDR5_RVP_SKU_BOARD_ID:
+		/*
+		 * ADL-P-DDR5 RVP has dual BB-retimers for port0 & port1.
+		 * Change the default usb mux config on runtime to support
+		 * dual retimer topology.
+		 */
+		usb_muxes[TYPE_C_PORT_0].next_mux
+			= &soc_side_bb_retimer0_usb_mux;
+#if defined(HAS_TASK_PD_C1)
+		usb_muxes[TYPE_C_PORT_1].next_mux
+			= &soc_side_bb_retimer1_usb_mux;
+#endif
+		break;
+
 	/* Add additional board SKUs */
 
 	default:
@@ -328,7 +376,7 @@ const int pwrok_signal_deassert_count = ARRAY_SIZE(pwrok_signal_assert_list);
  * Returns board information (board id[7:0] and Fab id[15:8]) on success
  * -1 on error.
  */
-int board_get_version(void)
+__override int board_get_version(void)
 {
 	/* Cache the ADLRVP board ID */
 	static int adlrvp_board_id;

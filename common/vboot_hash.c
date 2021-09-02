@@ -14,6 +14,7 @@
 #include "sha256.h"
 #include "shared_mem.h"
 #include "stdbool.h"
+#include "stdint.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
@@ -94,7 +95,7 @@ static int read_and_hash_chunk(int offset, int size)
 		return rv;
 	}
 
-	rv = flash_read(offset, size, buf);
+	rv = crec_flash_read(offset, size, buf);
 	if (rv == EC_SUCCESS)
 		SHA256_update(&ctx, (const uint8_t *)buf, size);
 	else
@@ -115,10 +116,11 @@ static int read_and_hash_chunk(int offset, int size)
 static void hash_next_chunk(size_t size)
 {
 #ifdef CONFIG_MAPPED_STORAGE
-	flash_lock_mapped_storage(1);
-	SHA256_update(&ctx, (const uint8_t *)(CONFIG_MAPPED_STORAGE_BASE +
-					      data_offset + curr_pos), size);
-	flash_lock_mapped_storage(0);
+	crec_flash_lock_mapped_storage(1);
+	SHA256_update(&ctx, (const uint8_t *)
+				((uintptr_t)CONFIG_MAPPED_STORAGE_BASE +
+				 data_offset + curr_pos), size);
+	crec_flash_lock_mapped_storage(0);
 #else
 	if (read_and_hash_chunk(data_offset + curr_pos, size) != EC_SUCCESS)
 		return;
@@ -127,28 +129,10 @@ static void hash_next_chunk(size_t size)
 
 static void vboot_hash_all_chunks(void)
 {
-#ifdef CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
-	uint64_t prev_watchdog = get_time().val;
-
-	watchdog_reload();
-#endif
-
 	do {
 		size_t size = MIN(CHUNK_SIZE, data_size - curr_pos);
 		hash_next_chunk(size);
 		curr_pos += size;
-
-#ifdef CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
-		{
-			uint64_t cur_time = get_time().val;
-
-			if ((cur_time - prev_watchdog) >
-			    (CONFIG_WATCHDOG_PERIOD_MS * 1000 / 2)) {
-				watchdog_reload();
-				prev_watchdog = cur_time;
-			}
-		}
-#endif
 	} while (curr_pos < data_size);
 
 	hash = SHA256_final(&ctx);

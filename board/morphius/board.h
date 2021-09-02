@@ -19,6 +19,7 @@
 #define CONFIG_CMD_PS2
 #define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_DEVICE_EVENT
+#define CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
 
 #undef CONFIG_LED_ONOFF_STATES
 #define CONFIG_BATTERY_LEVEL_NEAR_FULL 91
@@ -215,11 +216,6 @@ extern const struct usb_mux usbc0_pi3dpx1207_usb_retimer;
 extern const struct usb_mux usbc1_ps8802;
 extern const struct usb_mux usbc1_ps8818;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

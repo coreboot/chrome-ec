@@ -50,7 +50,7 @@ void pe_message_sent(int port);
  * @param  e    error
  * @param type  port address where error was generated
  */
-void pe_report_error(int port, enum pe_error e, enum tcpm_transmit_type type);
+void pe_report_error(int port, enum pe_error e, enum tcpci_msg_type type);
 
 /**
  * Informs the Policy Engine of a discard.
@@ -176,5 +176,13 @@ const char *pe_get_current_state(int port);
  */
 uint32_t pe_get_flags(int port);
 
-#endif /* __CROS_EC_USB_PE_H */
+#ifdef TEST_BUILD
+/**
+ * Clears all internal port data, as we would on a detach event
+ *
+ * @param port USB-C port number
+ */
+void pe_clear_port_data(int port);
+#endif /* TEST_BUILD */
 
+#endif /* __CROS_EC_USB_PE_H */

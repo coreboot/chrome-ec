@@ -10,6 +10,8 @@
 
 #include "gpio.h"
 #include "gpio/gpio.h"
+#include "sysjump.h"
+#include "cros_version.h"
 
 LOG_MODULE_REGISTER(gpio_shim, LOG_LEVEL_ERR);
 
@@ -21,7 +23,7 @@ struct gpio_config {
 	/* GPIO net name */
 	const char *name;
 	/* Set at build time for lookup */
-	const char *dev_name;
+	const struct device *dev;
 	/* Bit number of pin within device */
 	gpio_pin_t pin;
 	/* From DTS, excludes interrupts flags */
@@ -34,7 +36,7 @@ struct gpio_config {
 		(                                                            \
 			{                                                    \
 				.name = DT_LABEL(id),                        \
-				.dev_name = DT_LABEL(DT_PHANDLE(id, gpios)), \
+				.dev = DEVICE_DT_GET(DT_PHANDLE(id, gpios)), \
 				.pin = DT_GPIO_PIN(id, gpios),               \
 				.init_flags = DT_GPIO_FLAGS(id, gpios),      \
 			}, ),                                                \
@@ -174,6 +176,28 @@ int gpio_get_level(enum gpio_signal signal)
 	return l;
 }
 
+int gpio_get_ternary(enum gpio_signal signal)
+{
+	int pd, pu;
+	int flags = gpio_get_default_flags(signal);
+
+	/* Read GPIO with internal pull-down */
+	gpio_set_flags(signal, GPIO_INPUT | GPIO_PULL_DOWN);
+	pd = gpio_get_level(signal);
+	udelay(100);
+
+	/* Read GPIO with internal pull-up */
+	gpio_set_flags(signal, GPIO_INPUT | GPIO_PULL_UP);
+	pu = gpio_get_level(signal);
+	udelay(100);
+
+	/* Reset GPIO flags */
+	gpio_set_flags(signal, flags);
+
+	/* Check PU and PD readings to determine tristate */
+	return pu && !pd ? 2 : pd;
+}
+
 const char *gpio_get_name(enum gpio_signal signal)
 {
 	if (!gpio_is_implemented(signal))
@@ -246,20 +270,40 @@ int gpio_get_default_flags(enum gpio_signal signal)
 
 static int init_gpios(const struct device *unused)
 {
+	gpio_flags_t flags;
+	struct jump_data *jdata;
+	bool is_sys_jumped;
+
 	ARG_UNUSED(unused);
+
+	jdata = get_jump_data();
+
+	if (jdata && jdata->magic == JUMP_DATA_MAGIC)
+		is_sys_jumped = true;
+	else
+		is_sys_jumped = false;
 
 	/* Loop through all GPIOs in device tree to set initial configuration */
 	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
-		data[i].dev = device_get_binding(configs[i].dev_name);
+		data[i].dev = configs[i].dev;
 		int rv;
 
-		if (data[i].dev == NULL) {
+		if (!device_is_ready(data[i].dev))
 			LOG_ERR("Not found (%s)", configs[i].name);
+
+		/*
+		 * The configs[i].init_flags variable is read-only, so the
+		 * following assignment is needed because the flags need
+		 * adjusting on a warm reboot.
+		 */
+		flags = configs[i].init_flags;
+
+		if (is_sys_jumped) {
+			flags &=
+				~(GPIO_OUTPUT_INIT_LOW | GPIO_OUTPUT_INIT_HIGH);
 		}
 
-		rv = gpio_pin_configure(data[i].dev, configs[i].pin,
-					configs[i].init_flags);
-
+		rv = gpio_pin_configure(data[i].dev, configs[i].pin, flags);
 		if (rv < 0) {
 			LOG_ERR("Config failed %s (%d)", configs[i].name, rv);
 		}
@@ -271,6 +315,9 @@ static int init_gpios(const struct device *unused)
 	for (size_t i = 0; i < ARRAY_SIZE(gpio_interrupts); ++i) {
 		const enum gpio_signal signal = gpio_interrupts[i].signal;
 		int rv;
+
+		if (signal == GPIO_UNIMPLEMENTED)
+			continue;
 
 		gpio_init_callback(&gpio_interrupts[i].callback,
 				   gpio_handler_shim, BIT(configs[signal].pin));
@@ -359,4 +406,9 @@ void gpio_set_flags(enum gpio_signal signal, int flags)
 
 	gpio_pin_configure(data[signal].dev, configs[signal].pin,
 			   convert_to_zephyr_flags(flags));
+}
+
+int signal_is_gpio(int signal)
+{
+	return true;
 }

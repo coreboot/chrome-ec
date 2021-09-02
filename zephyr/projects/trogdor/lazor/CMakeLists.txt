@@ -4,8 +4,6 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 
-set(BOARD_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
-
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(lazor)
 
@@ -18,6 +16,7 @@ set(PLATFORM_EC_BOARD "${PLATFORM_EC}/board/lazor" CACHE PATH
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
   "${PLATFORM_EC_BASEBOARD}/hibernate.c"
+  "${PLATFORM_EC_BASEBOARD}/power.c"
   "${PLATFORM_EC_BASEBOARD}/usbc_config.c"
   "${PLATFORM_EC_BASEBOARD}/usb_pd_policy.c")
 
@@ -31,6 +30,6 @@ zephyr_library_sources(
   "${PLATFORM_EC_BOARD}/switchcap.c"
   "${PLATFORM_EC_BOARD}/usbc_config.c")
 
-# Board specific sensor implementation
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
-  "src/sensors.c")
+# Board specific implementation
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C
+  "src/i2c.c")

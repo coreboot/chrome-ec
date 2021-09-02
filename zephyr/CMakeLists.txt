@@ -25,29 +25,11 @@ if(NOT EXISTS "${PLATFORM_EC}/zephyr/module.yml")
   assert_exists("${PLATFORM_EC}/zephyr/module.yml")
 endif()
 
+if(DEFINED ZMAKE_INCLUDE_DIR)
+  zephyr_include_directories("${ZMAKE_INCLUDE_DIR}")
+endif()
+
 if(DEFINED CONFIG_PLATFORM_EC)
-  # Build the EC's expected ec_version.h file.
-  set(ec_version_file "${CMAKE_BINARY_DIR}/ec/include/generated/ec_version.h")
-  # Create the command used to generate the ec_version.h file.
-  add_custom_command(
-          OUTPUT ${ec_version_file}
-          # TODO(b/185249526): zephyr: add project name to the version output
-          COMMAND BOARD=${BOARD}_zephyr ${PLATFORM_EC}/util/getversion.sh > ${ec_version_file}
-          WORKING_DIRECTORY ${PLATFORM_EC}
-  )
-  # Create a custom target that will depend on the file.
-  add_custom_target(generate_ec_version DEPENDS ${ec_version_file})
-
-  # Create a local library (ec_version) that will be a pure interface library
-  # and will depend on the custom target that generates the ec_version.h file.
-  add_library(ec_version INTERFACE)
-  add_dependencies(ec_version generate_ec_version)
-
-  # Register the library with zephyr so that it generates the file at build
-  # time. Also, append the include directory so we can include ec_version.h.
-  zephyr_append_cmake_library(ec_version)
-  zephyr_include_directories("${CMAKE_BINARY_DIR}/ec/include/generated")
-
   # Add CHROMIUM_EC definition, which is used by ec_commands.h to
   # determine that the header is being compiled for the EC instead of
   # by another third-party C codebase.
@@ -56,6 +38,9 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # Add CONFIG_ZEPHYR, which is commonly used to guard code for use
   # with Zephyr builds only.
   zephyr_compile_definitions("CONFIG_ZEPHYR")
+
+  # Force compiler warnings to generate errors
+  zephyr_compile_options(-Werror)
 
   # When LTO is enabled, enable only for the "app" library, which compiles
   # and links all Chromium OS sources.
@@ -71,82 +56,6 @@ if(DEFINED CONFIG_PLATFORM_EC)
       set_property(TARGET app PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
     endif()
   endif()
-endif()
-
-# If a header is needed (should only be set for npcx) run the ecst.py script to
-# generate it.
-if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER)
-    # Translate the CONFIG_FLASH_SIZE to the correct argument value.
-    if ("${CONFIG_FLASH_SIZE}" STREQUAL "512" OR "${CONFIG_FLASH_SIZE}" STREQUAL "1024")
-        set(flash_size 1)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "2048")
-        set(flash_size 2)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "4096")
-        set(flash_size 4)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "8192")
-        set(flash_size 8)
-    elseif ("${CONFIG_FLASH_SIZE}" STREQUAL "16384")
-        set(flash_size 16)
-    endif()
-
-    if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_CORE_CLOCK_SPI_CLOCK_RATIO_1)
-        set(spiclkratio 1)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_CORE_CLOCK_SPI_CLOCK_RATIO_2)
-        set(spiclkratio 2)
-    else()
-        # Defaults to 1 if none are set.
-        set(spiclkratio 1)
-    endif()
-
-    if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_20)
-        set(spimaxclk 20)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_25)
-        set(spimaxclk 25)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_33)
-        set(spimaxclk 33)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_40)
-        set(spimaxclk 40)
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_MAX_CLOCK_50)
-        set(spimaxclk 50)
-    else()
-        # Defaults to 20 if none are set.
-        set(spimaxclk 20)
-    endif()
-
-    if (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_NORMAL)
-        set(spireadmode "normal")
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_FAST)
-        set(spireadmode "fast")
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_DUAL)
-        set(spireadmode "dual")
-    elseif (DEFINED CONFIG_PLATFORM_EC_RO_HEADER_SPI_READ_MODE_QUAD)
-        set(spireadmode "quad")
-    else()
-        # Defaults to "dual" if none are set.
-        set(spireadmode "dual")
-    endif()
-
-    # Check for disabling header CRC.
-    if (NOT DEFINED CONFIG_PLATFORM_EC_RO_HEADER_ENABLE_HEADER_CRC)
-        set(hcrc "-nohcrc")
-    endif()
-
-    # Check for disabling firmware CRC.
-    if (NOT DEFINED CONFIG_PLATFORM_EC_RO_HEADER_ENABLE_FIRMWARE_CRC)
-        set(fcrc "-nofcrc")
-    endif()
-
-    # Note, we cannot get the chip from Kconfig because currently Zephyr doesn't
-    # support all the variations we need for NPCX. These values should be set
-    # in each project's board.cmake.
-    set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
-            COMMAND ${PYTHON_EXECUTABLE}
-            ${ZEPHYR_BASE}/boards/arm/npcx7m6fb_evb/support/ecst.py
-            -i ${PROJECT_BINARY_DIR}/${CONFIG_KERNEL_BIN_NAME}.bin
-            -o ${PROJECT_BINARY_DIR}/zephyr.packed.bin ${hcrc} ${fcrc}
-            -chip ${ECST_CHIP_ARG} -flashsize ${flash_size}
-            -spiclkratio ${spiclkratio} -spimaxclk ${spimaxclk}
-            -spireadmode ${spireadmode})
 endif()
 
 # Switch from the "zephyr" library to the "app" library for all Chromium OS
@@ -169,6 +78,7 @@ endif()
 
 add_subdirectory("app")
 add_subdirectory("drivers")
+add_subdirectory("emul")
 
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 # Creates a phony target all.libraries in case you only want to build the
@@ -180,7 +90,9 @@ add_custom_target(
   DEPENDS
   ${ZEPHYR_LIBS_PROPERTY}
   kernel
+  ${CMAKE_BINARY_DIR}/gcov.sh
   )
+configure_file(gcov.tmpl.sh ${CMAKE_BINARY_DIR}/gcov.sh)
 
 # CONFIG_PLATFORM_EC files that don't relate to something below should be
 # included here, sorted by filename. This is common functionality which is
@@ -195,6 +107,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/base32.c"
                                                 "${PLATFORM_EC}/common/queue.c"
                                                 "${PLATFORM_EC}/common/shared_mem.c"
                                                 "${PLATFORM_EC}/common/uart_printf.c"
+                                                "${PLATFORM_EC}/common/util.c"
                                                 "${PLATFORM_EC}/common/version.c")
 
 # Now include files that depend on or relate to other CONFIG options, sorted by
@@ -204,6 +117,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA255
                                                 "${PLATFORM_EC}/common/math_util.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_KX022
                                                 "${PLATFORM_EC}/driver/accel_kionix.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DW12
+                                                "${PLATFORM_EC}/driver/accel_lis2dw12.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_BMI
                                                 "${PLATFORM_EC}/driver/accelgyro_bmi_common.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
@@ -233,9 +148,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_SMART
                                                 "${PLATFORM_EC}/driver/battery/smart.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
                                                 "${PLATFORM_EC}/driver/bc12/pi3usb9201.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_MT6360
+                                                "${PLATFORM_EC}/driver/bc12/mt6360.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9237
                                                 "${PLATFORM_EC}/driver/charger/isl923x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9238
+                                                "${PLATFORM_EC}/driver/charger/isl923x.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9238C
                                                 "${PLATFORM_EC}/driver/charger/isl923x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_ISL9241
                                                 "${PLATFORM_EC}/driver/charger/isl9241.c")
@@ -253,8 +172,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp.c"
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI
-                                                "${PLATFORM_EC}/common/cbi.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM
+                                                "${PLATFORM_EC}/common/cbi.c"
+                                                "${PLATFORM_EC}/common/cbi_eeprom.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
+                                                "${PLATFORM_EC}/common/cbi.c"
+                                                "${PLATFORM_EC}/common/cbi_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
                                                 "${PLATFORM_EC}/common/memory_commands.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DPTF
@@ -269,8 +192,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_EXTPOWER_GPIO
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN
                                                 "${PLATFORM_EC}/common/fan.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS
-                                                "${PLATFORM_EC}/common/flash.c"
-                                                "${PLATFORM_EC}/common/spi_flash_reg.c")
+                                                "${PLATFORM_EC}/common/flash.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
                                                 "${PLATFORM_EC}/common/host_command.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
@@ -279,9 +201,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE
                                                 "${PLATFORM_EC}/common/uart_hostcmd.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
                                                 "${PLATFORM_EC}/common/uptime.c")
-
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_REGULATOR
+                                                "${PLATFORM_EC}/common/regulator.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C
                                                 "${PLATFORM_EC}/common/i2c_controller.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_VIRTUAL_BATTERY
+                                                "${PLATFORM_EC}/common/virtual_battery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
                                                 "${PLATFORM_EC}/common/keyboard_scan.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
@@ -332,8 +257,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
                                                 "${PLATFORM_EC}/power/intel_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8192
+						"${PLATFORM_EC}/power/mt8192.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
-                                                "${PLATFORM_EC}/power/sc7180.c")
+                                                "${PLATFORM_EC}/power/qcom.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
+                                                "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC
                                                 "${PLATFORM_EC}/common/panic_output.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM
@@ -346,6 +275,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_LN9310
                                                 "${PLATFORM_EC}/driver/ln9310.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SPI_FLASH_REGS
                                                 "${PLATFORM_EC}/common/spi_flash_reg.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_STM_MEMS_COMMON
+                                                "${PLATFORM_EC}/driver/stm_mems_common.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TABLET_MODE
                                                 "${PLATFORM_EC}/common/tablet_mode.c")
@@ -383,6 +314,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_SS_MUX
                                                 "${PLATFORM_EC}/driver/usb_mux/usb_mux.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_IT5205
+                                                "${PLATFORM_EC}/driver/usb_mux/it5205.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_PS8743
+                                                "${PLATFORM_EC}/driver/usb_mux/ps8743.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_VIRTUAL
                                                 "${PLATFORM_EC}/driver/usb_mux/virtual.c")
 
@@ -435,6 +370,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_TUSB422
                                                 "${PLATFORM_EC}/driver/tcpm/tusb422.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_TCPCI
                                                 "${PLATFORM_EC}/driver/tcpm/tcpci.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
+                                                "${PLATFORM_EC}/driver/tcpm/ite_pd_intc.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_DRIVER_IT83XX
+                                                "${PLATFORM_EC}/driver/tcpm/it83xx.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
+                                                "${PLATFORM_EC}/driver/tcpm/it8xxx2.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC
                                                 "${PLATFORM_EC}/common/usbc_ppc.c")
@@ -448,7 +389,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_HASH
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VOLUME_BUTTONS
                                                 "${PLATFORM_EC}/common/button.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_EFS2
                                                 "${PLATFORM_EC}/common/vboot/efs2.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE

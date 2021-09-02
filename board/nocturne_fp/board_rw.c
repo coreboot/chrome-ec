@@ -19,6 +19,18 @@
 #error "This file should only be built for RW."
 #endif
 
+/**
+ * Disable restricted commands when the system is locked.
+ *
+ * @see console.h system.c
+ */
+int console_is_restricted(void)
+{
+	return system_is_locked();
+}
+
+#include "gpio_list.h"
+
 /* SPI devices */
 struct spi_device_t spi_devices[] = {
 	/* Fingerprint sensor (SCLK at 4Mhz) */
@@ -71,7 +83,7 @@ static void spi_configure(enum fp_sensor_spi_select spi_select)
 		gpio_set_flags_by_mask(GPIO_E, 0x7000, 0);
 		gpio_set_alternate_function(GPIO_E, 0x7000, GPIO_ALT_SPI);
 	} else {
-		gpio_config_module(MODULE_SPI_MASTER, 1);
+		gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 	}
 
 	/* Set all SPI master signal pins to very high speed: pins E2/4/5/6 */
@@ -84,9 +96,18 @@ static void spi_configure(enum fp_sensor_spi_select spi_select)
 	spi_enable(&spi_devices[0], 1);
 }
 
-void board_init_rw(void)
+void board_init(void)
 {
 	enum fp_sensor_spi_select spi_select = get_fp_sensor_spi_select();
+
+	/*
+	 * FP_RST_ODL pin is defined in gpio_rw.inc (with GPIO_OUT_HIGH
+	 * flag) but not in gpio.inc, so RO leaves this pin set to 0 (reset
+	 * default), but RW doesn't initialize this pin to 1 because sysjump
+	 * to RW is a warm reset (see gpio_pre_init() in chip/stm32/gpio.c).
+	 * Explicitly reset FP_RST_ODL pin to default value.
+	 */
+	gpio_reset(GPIO_FP_RST_ODL);
 
 	ccprints("FP_SPI_SEL: %s", fp_sensor_spi_select_to_str(spi_select));
 
@@ -102,6 +123,12 @@ void board_init_rw(void)
 	/* Enable interrupt on PCH power signals */
 	gpio_enable_interrupt(gpio_slp_alt_l);
 	gpio_enable_interrupt(GPIO_SLP_L);
-	/* enable the SPI slave interface if the PCH is up */
-	hook_call_deferred(&ap_deferred_data, 0);
+
+	/*
+	 * Enable the SPI slave interface if the PCH is up.
+	 * Do not use hook_call_deferred(), because ap_deferred() will be
+	 * called after tasks with priority higher than HOOK task (very late).
+	 */
+	ap_deferred();
 }
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);

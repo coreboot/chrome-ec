@@ -161,13 +161,19 @@ static int set_offset(const struct motion_sensor_t *s,
 
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		bmi_set_accel_offset(s, v);
+		ret = bmi_set_accel_offset(s, v);
+		if (ret != EC_SUCCESS)
+			return ret;
+
 		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 				 BMI260_NV_CONF,
 				 val_nv_conf | BMI260_ACC_OFFSET_EN);
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
-		bmi_set_gyro_offset(s, v, &val98);
+		ret = bmi_set_gyro_offset(s, v, &val98);
+		if (ret != EC_SUCCESS)
+			return ret;
+
 		ret = bmi_write8(s->port, s->i2c_spi_addr_flags,
 				 BMI260_OFFSET_EN_GYR98,
 				 val98 | BMI260_OFFSET_GYRO_EN);
@@ -275,6 +281,18 @@ end_perform_calib:
 	set_data_rate(s, rate, 0);
 	return ret;
 }
+
+#ifdef CONFIG_GESTURE_HOST_DETECTION
+int list_activities(const struct motion_sensor_t *s,
+		    uint32_t *enabled,
+		    uint32_t *disabled)
+{
+	struct bmi_drv_data_t *data = BMI_GET_DATA(s);
+	*enabled = data->enabled_activities;
+	*disabled = data->disabled_activities;
+	return EC_RES_SUCCESS;
+}
+#endif
 
 #ifdef CONFIG_ACCEL_INTERRUPTS
 
@@ -573,6 +591,9 @@ const struct accelgyro_drv bmi260_drv = {
 	.read_temp = bmi_read_temp,
 #ifdef CONFIG_ACCEL_INTERRUPTS
 	.irq_handler = irq_handler,
+#endif
+#ifdef CONFIG_GESTURE_HOST_DETECTION
+	.list_activities = list_activities,
 #endif
 #ifdef CONFIG_BODY_DETECTION
 	.get_rms_noise = bmi_get_rms_noise,

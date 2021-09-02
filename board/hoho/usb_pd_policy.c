@@ -17,6 +17,7 @@
 #include "usb_api.h"
 #include "usb_bb.h"
 #include "usb_pd.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -194,9 +195,9 @@ static int svdm_enter_mode(int port, uint32_t *payload)
 	return rv;
 }
 
-int pd_alt_mode(int port, enum tcpm_transmit_type type, uint16_t svid)
+int pd_alt_mode(int port, enum tcpci_msg_type type, uint16_t svid)
 {
-	if (type != TCPC_TX_SOP)
+	if (type != TCPCI_MSG_SOP)
 		return 0;
 
 	if (svid == USB_SID_DISPLAYPORT)

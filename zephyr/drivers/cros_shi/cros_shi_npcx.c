@@ -804,8 +804,7 @@ static int shi_npcx_init(const struct device *dev)
 	int ret;
 	const struct cros_shi_npcx_config *const config = DRV_CONFIG(dev);
 	struct shi_reg *const inst = HAL_INSTANCE(dev);
-	const struct device *const clk_dev =
-		device_get_binding(NPCX_CLK_CTRL_NAME);
+	const struct device *clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 
 	/* Turn on shi device clock first */
 	ret = clock_control_on(clk_dev,
@@ -815,10 +814,10 @@ static int shi_npcx_init(const struct device *dev)
 		return ret;
 	}
 
-	/*
-	 * TODO: for npcx9, HIF_TYP_SEL in DEVCNT register should be set
-	 * by firmware because the BOOTER no longer touches it.
-	 */
+	/* If booter doesn't set the host interface type */
+	if (!NPCX_BOOTER_IS_HIF_TYPE_SET()) {
+		npcx_host_interface_sel(NPCX_HIF_TYPE_ESPI_SHI);
+	}
 
 	/*
 	 * SHICFG1 (SHI Configuration 1) setting
@@ -885,8 +884,8 @@ static const struct cros_shi_driver_api cros_shi_npcx_driver_api = {
 };
 
 static struct cros_shi_npcx_data cros_shi_data;
-DEVICE_DT_INST_DEFINE(0, shi_npcx_init, device_pm_control_nop, &cros_shi_data,
-		      &cros_shi_cfg, PRE_KERNEL_1,
+DEVICE_DT_INST_DEFINE(0, shi_npcx_init, /* pm_control_fn= */ NULL,
+		      &cros_shi_data, &cros_shi_cfg, PRE_KERNEL_1,
 		      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		      &cros_shi_npcx_driver_api);
 

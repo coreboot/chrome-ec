@@ -4,7 +4,6 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "backlight.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -45,6 +44,25 @@
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
 #include "gpio_list.h"
+
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ * The connector has 24 pins total, and there is no pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {GPIO_KSO_H, 4}, {GPIO_KSO_H, 0}, {GPIO_KSO_H, 1},
+	{GPIO_KSO_H, 3}, {GPIO_KSO_H, 2}, {-1, -1}, {-1, -1},
+	{GPIO_KSO_L, 5}, {GPIO_KSO_L, 6}, {-1, -1}, {GPIO_KSO_L, 3},
+	{GPIO_KSO_L, 2}, {GPIO_KSI, 0}, {GPIO_KSO_L, 1}, {GPIO_KSO_L, 4},
+	{GPIO_KSI, 3}, {GPIO_KSI, 2}, {GPIO_KSO_L, 0}, {GPIO_KSI, 5},
+	{GPIO_KSI, 4}, {GPIO_KSO_L, 7}, {GPIO_KSI, 6}, {GPIO_KSI, 7},
+	{GPIO_KSI, 1}, {-1, -1}, {GPIO_KSO_H, 5}, {-1, -1},
+	{GPIO_KSO_H, 6}, {-1, -1}, {-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 /* Wake-up pins for hibernate */
 const enum gpio_signal hibernate_wake_pins[] = {
@@ -104,7 +122,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 static void board_hpd_status(const struct usb_mux *me,
-			     int hpd_lvl, int hpd_irq)
+			     mux_state_t mux_state)
 {
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify

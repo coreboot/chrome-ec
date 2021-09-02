@@ -294,9 +294,12 @@ test_mockable int battery_manufacture_date(int *year, int *month, int *day)
 	/* battery date format:
 	 * ymd = day + month * 32 + (year - 1980) * 512
 	 */
-	*year  = (ymd >> 9) + 1980;
-	*month = (ymd >> 5) & 0xf;
-	*day   = ymd & 0x1f;
+	*year  = ((ymd & MANUFACTURE_DATE_YEAR_MASK) >>
+		  MANUFACTURE_DATE_YEAR_SHIFT) + MANUFACTURE_DATE_YEAR_OFFSET;
+	*month = (ymd & MANUFACTURE_DATE_MONTH_MASK) >>
+		 MANUFACTURE_DATE_MONTH_SHIFT;
+	*day   = (ymd & MANUFACTURE_DATE_DAY_MASK) >>
+		 MANUFACTURE_DATE_DAY_SHIFT;
 
 	return EC_SUCCESS;
 }
@@ -356,6 +359,7 @@ static void apply_fake_state_of_charge(struct batt_params *batt)
 
 	batt->state_of_charge = fake_state_of_charge;
 	batt->remaining_capacity = full * fake_state_of_charge / 100;
+	battery_compensate_params(batt);
 	batt->flags &= ~BATT_FLAG_BAD_STATE_OF_CHARGE;
 	batt->flags &= ~BATT_FLAG_BAD_REMAINING_CAPACITY;
 }
@@ -441,11 +445,7 @@ void battery_get_params(struct batt_params *batt)
 			batt_new.state_of_charge < BATTERY_LEVEL_FULL) ||
 		(batt_new.desired_voltage == 0 &&
 			batt_new.desired_current == 0 &&
-#ifdef CONFIG_BATTERY_DEAD_UNTIL_VALUE
-			batt_new.state_of_charge < CONFIG_BATTERY_DEAD_UNTIL_VALUE)))
-#else
 			batt_new.state_of_charge == 0)))
-#endif
 #else
 	    batt_new.desired_voltage &&
 	    batt_new.desired_current &&

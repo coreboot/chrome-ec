@@ -56,7 +56,7 @@
 #undef CONFIG_SYV682X_HV_ILIM
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 /* SYV682 isn't connected to CC, so TCPC must provide VCONN */
-#define CONFIG_SYV682X_NO_CC
+#define CONFIG_USBC_PPC_SYV682X_NO_CC
 
 /* Additional TCPC second source in Port 1 */
 #define CONFIG_USB_PD_TCPM_MULTI_PS8XXX
@@ -96,9 +96,9 @@ enum sensor_id {
 };
 
 enum battery_type {
-	BATTERY_DANAPACK_COS,
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_SDI,
+	BATTERY_DYNAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_DYNAPACK_SDI,
 	BATTERY_SAMSUNG_SDI,
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_ATL,
@@ -112,11 +112,6 @@ enum ppc_type {
 	PPC_SYV682X,
 	PPC_TYPE_COUNT,
 };
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 int board_is_convertible(void);
 

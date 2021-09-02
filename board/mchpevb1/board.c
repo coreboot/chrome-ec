@@ -11,7 +11,6 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "als.h"
 #include "bd99992gw.h"
 #include "button.h"
@@ -304,7 +303,7 @@ void board_prepare_for_deep_sleep(void)
 #if defined(CONFIG_GPIO_POWER_DOWN) && \
 	defined(CONFIG_MCHP_DEEP_SLP_GPIO_PWR_DOWN)
 	gpio_power_down_module(MODULE_SPI_FLASH);
-	gpio_power_down_module(MODULE_SPI_MASTER);
+	gpio_power_down_module(MODULE_SPI_CONTROLLER);
 	gpio_power_down_module(MODULE_I2C);
 	/* powering down keyscan is causing an issue with keyscan task
 	 * probably due to spurious interrupts on keyscan pins.
@@ -331,7 +330,7 @@ void board_resume_from_deep_sleep(void)
 #endif
 	/* gpio_config_module(MODULE_KEYBOARD_SCAN, 1); */
 	gpio_config_module(MODULE_SPI_FLASH, 1);
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 	gpio_config_module(MODULE_I2C, 1);
 #endif
 }
@@ -891,7 +890,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = CONFIG_SPI_ACCEL_PORT,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(
 			CONFIG_SPI_ACCEL_PORT),
 		.rot_standard_ref = NULL, /* Identity matrix. */
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
@@ -916,7 +915,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = CONFIG_SPI_ACCEL_PORT,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(
 			CONFIG_SPI_ACCEL_PORT),
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = NULL, /* Identity Matrix. */

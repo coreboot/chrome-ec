@@ -12,11 +12,17 @@
 #include <sys/printk.h>
 #include <sys/ring_buffer.h>
 #include <zephyr.h>
+#include <logging/log.h>
 
 #include "console.h"
 #include "printf.h"
 #include "uart.h"
+#include "usb_console.h"
+#include "zephyr_console_shim.h"
 
+LOG_MODULE_REGISTER(shim_console, LOG_LEVEL_ERR);
+
+static const struct shell *shell_zephyr;
 static struct k_poll_signal shell_uninit_signal;
 static struct k_poll_signal shell_init_signal;
 RING_BUF_DECLARE(rx_buffer, CONFIG_UART_RX_BUF_SIZE);
@@ -37,7 +43,8 @@ static void uart_rx_handle(const struct device *dev)
 			/* Put `rd_len` bytes on the ring buffer */
 			ring_buf_put_finish(&rx_buffer, rd_len);
 		} else {
-			/* There's no room on the ring buffer, throw away 1
+			/*
+			 * There's no room on the ring buffer, throw away 1
 			 * byte.
 			 */
 			rd_len = uart_fifo_read(dev, &scratch, 1);
@@ -62,7 +69,8 @@ static void shell_uninit_callback(const struct shell *shell, int res)
 		/* Set the new callback */
 		uart_irq_callback_user_data_set(dev, uart_callback, NULL);
 
-		/* Disable TX interrupts. We don't actually use TX but for some
+		/*
+		 * Disable TX interrupts. We don't actually use TX but for some
 		 * reason none of this works without this line.
 		 */
 		uart_irq_tx_disable(dev);
@@ -153,29 +161,32 @@ void uart_shell_start(void)
 	k_poll(&event, 1, K_FOREVER);
 }
 
-int zshim_run_ec_console_command(int (*handler)(int argc, char **argv),
-				 const struct shell *shell, size_t argc,
-				 char **argv, const char *help_str,
-				 const char *argdesc)
+int zshim_run_ec_console_command(const struct zephyr_console_command *command,
+				 size_t argc, char **argv)
 {
-	ARG_UNUSED(shell);
-
+	/*
+	 * The Zephyr shell only displays the help string and not
+	 * the argument descriptor when passing "-h" or "--help".  Mimic the
+	 * cros-ec behavior by displaying both the user types "<command> help",
+	 */
+#ifdef CONFIG_SHELL_HELP
 	for (int i = 1; i < argc; i++) {
-		if (!help_str && !argdesc)
+		if (!command->help && !command->argdesc)
 			break;
-		if (!strcmp(argv[i], "-h")) {
-			if (help_str)
-				printk("%s\n", help_str);
-			if (argdesc)
-				printk("Usage: %s\n", argdesc);
+		if (!strcmp(argv[i], "help")) {
+			if (command->help)
+				printk("%s\n", command->help);
+			if (command->argdesc)
+				printk("Usage: %s\n", command->argdesc);
 			return 0;
 		}
 	}
+#endif
 
-	return handler(argc, argv);
+	return command->handler(argc, argv);
 }
 
-#if DT_NODE_EXISTS(DT_PATH(ec_console))
+#if defined(CONFIG_CONSOLE_CHANNEL) && DT_NODE_EXISTS(DT_PATH(ec_console))
 #define EC_CONSOLE DT_PATH(ec_console)
 
 static const char * const disabled_channels[] = DT_PROP(EC_CONSOLE, disabled);
@@ -187,18 +198,13 @@ static int init_ec_console(const struct device *unused)
 
 	return 0;
 } SYS_INIT(init_ec_console, PRE_KERNEL_1, 50);
-#endif
+#endif /* CONFIG_CONSOLE_CHANNEL && DT_NODE_EXISTS(DT_PATH(ec_console)) */
 
-/*
- * Minimal implementation of a few uart_* functions we need.
- * TODO(b/178033156): probably need to swap this for something more
- * robust in order to handle UART buffering.
- */
-
-int uart_init_done(void)
+static int init_ec_shell(const struct device *unused)
 {
-	return true;
-}
+	shell_zephyr = shell_backend_uart_get_ptr();
+	return 0;
+} SYS_INIT(init_ec_shell, PRE_KERNEL_1, 50);
 
 void uart_tx_start(void)
 {
@@ -220,15 +226,22 @@ void uart_write_char(char c)
 	printk("%c", c);
 
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
-		console_buf_notify_char(c);
+		console_buf_notify_chars(&c, 1);
 }
 
 void uart_flush_output(void)
 {
+	shell_process(shell_zephyr);
+	uart_tx_flush();
 }
 
 void uart_tx_flush(void)
 {
+	const struct device *dev =
+		device_get_binding(CONFIG_UART_SHELL_ON_DEV_NAME);
+
+	while (!uart_irq_tx_complete(dev))
+		;
 }
 
 int uart_getc(void)
@@ -244,6 +257,106 @@ int uart_getc(void)
 void uart_clear_input(void)
 {
 	/* Clear any remaining shell processing. */
-	shell_process(shell_backend_uart_get_ptr());
+	shell_process(shell_zephyr);
 	ring_buf_reset(&rx_buffer);
+}
+
+static void handle_sprintf_rv(int rv, size_t *len)
+{
+	if (rv < 0) {
+		LOG_ERR("Print buffer is too small");
+		*len = CONFIG_SHELL_PRINTF_BUFF_SIZE;
+	} else {
+		*len += rv;
+	}
+}
+
+static void zephyr_print(const char *buff, size_t size)
+{
+	/*
+	 * shell_* functions can not be used in ISRs so use printk instead.
+	 * Also, console_buf_notify_chars uses a mutex, which may not be
+	 * locked in ISRs.
+	 */
+	if (k_is_in_isr() || shell_zephyr->ctx->state != SHELL_STATE_ACTIVE) {
+		printk("%s", buff);
+	} else {
+		/*
+		 * On some platforms, shell_* functions are not as fast
+		 * as printk and they need the added speed to avoid
+		 * timeouts.
+		 */
+		if (IS_ENABLED(CONFIG_PLATFORM_EC_CONSOLE_USES_PRINTK))
+			printk("%s", buff);
+		else
+			shell_fprintf(shell_zephyr, SHELL_NORMAL, "%s", buff);
+		if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
+			console_buf_notify_chars(buff, size);
+	}
+}
+
+#if defined(CONFIG_USB_CONSOLE) || defined(CONFIG_USB_CONSOLE_STREAM)
+BUILD_ASSERT(0, "USB console is not supported with Zephyr");
+#endif /* defined(CONFIG_USB_CONSOLE) || defined(CONFIG_USB_CONSOLE_STREAM) */
+
+int cputs(enum console_channel channel, const char *outstr)
+{
+	/* Filter out inactive channels */
+	if (console_channel_is_disabled(channel))
+		return EC_SUCCESS;
+
+	zephyr_print(outstr, strlen(outstr));
+
+	return 0;
+}
+
+int cprintf(enum console_channel channel, const char *format, ...)
+{
+	int rv;
+	va_list args;
+	size_t len = 0;
+	char buff[CONFIG_SHELL_PRINTF_BUFF_SIZE];
+
+	/* Filter out inactive channels */
+	if (console_channel_is_disabled(channel))
+		return EC_SUCCESS;
+
+	va_start(args, format);
+	rv = crec_vsnprintf(buff, CONFIG_SHELL_PRINTF_BUFF_SIZE, format, args);
+	va_end(args);
+	handle_sprintf_rv(rv, &len);
+
+	zephyr_print(buff, len);
+
+	return rv > 0 ? EC_SUCCESS : rv;
+}
+
+int cprints(enum console_channel channel, const char *format, ...)
+{
+	int rv;
+	va_list args;
+	char buff[CONFIG_SHELL_PRINTF_BUFF_SIZE];
+	size_t len = 0;
+
+	/* Filter out inactive channels */
+	if (console_channel_is_disabled(channel))
+		return EC_SUCCESS;
+
+	rv = crec_snprintf(buff, CONFIG_SHELL_PRINTF_BUFF_SIZE, "[%pT ",
+			 PRINTF_TIMESTAMP_NOW);
+	handle_sprintf_rv(rv, &len);
+
+	va_start(args, format);
+	rv = crec_vsnprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
+			  format, args);
+	va_end(args);
+	handle_sprintf_rv(rv, &len);
+
+	rv = crec_snprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
+			 "]\n");
+	handle_sprintf_rv(rv, &len);
+
+	zephyr_print(buff, len);
+
+	return rv > 0 ? EC_SUCCESS : rv;
 }

@@ -4,8 +4,9 @@
  */
 
 #include "common.h"
-#include "hooks.h"
 
+#include "compile_time_macros.h"
+#include "hooks.h"
 #include "pwm.h"
 #include "pwm_chip.h"
 
@@ -38,8 +39,8 @@ const struct pwm_t pwm_channels[] = {
 	},
 	[PWM_CH_FAN] = {
 		.channel = 5,
-		.flags = PWM_CONFIG_OPEN_DRAIN,
-		.freq = 25000
+		.flags = PWM_CONFIG_OPEN_DRAIN | PWM_CONFIG_DSLEEP,
+		.freq = 1000
 	},
 	[PWM_CH_LED4] = {
 		.channel = 7,

@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Volteer board configuration */
+/* Chronicler board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -33,37 +33,11 @@
 /* Chipset features */
 #define CONFIG_POWER_PP5000_CONTROL
 
-/* LED defines */
-#define CONFIG_LED_PWM
-/* Although there are 2 LEDs, they are both controlled by the same lines. */
-#define CONFIG_LED_PWM_COUNT 1
-
-/* Keyboard features */
-
 /* Sensors */
-/* BMA253 accelerometer in base */
-#define CONFIG_ACCEL_BMA255
-
-/* BMI260 accel/gyro in base */
-#define CONFIG_ACCELGYRO_BMI260
-#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT		1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
-
-/* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
-
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_SENSOR_BASE		BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID		LID_ACCEL
+#undef CONFIG_TABLET_MODE
+#undef CONFIG_GMR_TABLET_MODE
+#undef CONFIG_ACCEL_FIFO
+#undef CONFIG_ACCEL_FIFO_SIZE
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_PORT_MAX_COUNT			2
@@ -80,13 +54,6 @@
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
-/* Enabling Thunderbolt-compatible mode */
-#define CONFIG_USB_PD_TBT_COMPAT_MODE
-
-/* Enabling USB4 mode */
-#define CONFIG_USB_PD_USB4
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
-
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
 #define CONFIG_USB_PORT_POWER_DUMB
@@ -95,16 +62,28 @@
 #define CONFIG_USBC_PPC_SN5S330		/* USBC port C0 */
 #define CONFIG_USBC_PPC_SYV682X		/* USBC port C1 */
 #define CONFIG_USB_PD_FRS_PPC
+#undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
+#undef CONFIG_USB_PD_TCPM_TUSB422
+#undef CONFIG_USB_MUX_RUNTIME_CONFIG
 
 /* BC 1.2 */
 
 /* Volume Button feature */
+#undef CONFIG_VOLUME_BUTTONS
 
 /* Fan features */
+#define CONFIG_FAN_RPM_CUSTOM
 
 /* charger defines */
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/* Retimer */
+#undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
+
+/* Keyboard feature */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -132,14 +111,9 @@
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
 #define GPIO_USB_C1_BC12_INT_ODL	GPIO_USB_C1_MIX_INT_ODL
-#define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
-#define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /* I2C Bus Configuration */
 #define CONFIG_I2C
-#define I2C_PORT_ACCEL		I2C_PORT_SENSOR
-#define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 #define I2C_PORT_USB_C0		NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1		NPCX_I2C_PORT2_0
 #define I2C_PORT_USB_1_MIX	NPCX_I2C_PORT3_0
@@ -168,27 +142,15 @@
 #include "usbc_config.h"
 
 enum battery_type {
-	BATTERY_LGC011,
-	BATTERY_TYPE_COUNT,
+	BATTERY_FUJITSU_CP813907,
+	BATTERY_NVT_CP813907,
+	BATTERY_TYPE_COUNT
 };
 
 enum pwm_channel {
-	PWM_CH_LED1_BLUE = 0,
-	PWM_CH_LED2_GREEN,
-	PWM_CH_LED3_RED,
-	PWM_CH_LED4_SIDESEL,
 	PWM_CH_FAN,
 	PWM_CH_KBLIGHT,
 	PWM_CH_COUNT
-};
-
-enum sensor_id {
-	LID_ACCEL = 0,
-	BASE_ACCEL,
-	BASE_GYRO,
-	CLEAR_ALS,
-	RGB_ALS,
-	SENSOR_COUNT,
 };
 
 void board_reset_pd_mcu(void);

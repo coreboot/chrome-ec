@@ -6,7 +6,6 @@
 /* Rammus board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "anx7447.h"
 #include "bd99992gw.h"
 #include "board_config.h"
@@ -677,8 +676,7 @@ struct motion_sensor_t motion_sensors[] = {
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 /* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/* If the lid is in 360 position, ignore the lid angle,
 	 * which might be faulty. Disable keyboard.
@@ -687,7 +685,6 @@ void lid_angle_peripheral_enable(int enable)
 		enable = 0;
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif
 
 static void board_chipset_reset(void)
 {

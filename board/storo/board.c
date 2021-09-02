@@ -8,11 +8,17 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_fw_config.h"
+#include "cros_board_info.h"
+#include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
+#include "driver/accel_lis2dw12.h"
 #include "driver/accel_bma2x2.h"
+#include "driver/accel_kionix.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm42607.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/retimer/tusb544.h"
@@ -42,6 +48,7 @@
 #include "usb_pd_tcpm.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTF(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 #define INT_RECHECK_US 5000
 
@@ -218,11 +225,110 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 /* USB Retimer */
+enum tusb544_conf {
+	USB_DP = 0,
+	USB_DP_INV,
+	USB,
+	USB_INV,
+	DP,
+	DP_INV
+};
+
+static int board_tusb544_set(const struct usb_mux *me, mux_state_t mux_state)
+{
+	int  rv = EC_SUCCESS;
+	int reg;
+	enum tusb544_conf usb_mode = 0;
+
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		if (mux_state & USB_PD_MUX_DP_ENABLED) {
+			/* USB with DP */
+			usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+					? USB_DP_INV
+					: USB_DP;
+		} else {
+			/* USB without DP */
+			usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+					? USB_INV
+					: USB;
+		}
+	} else if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		/* DP without USB */
+		usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+				? DP_INV
+				: DP;
+	} else {
+		return EC_SUCCESS;
+	}
+
+	rv = i2c_read8(me->i2c_port, me->i2c_addr_flags,
+			TUSB544_REG_GENERAL6, &reg);
+	if (rv)
+		return rv;
+
+	reg |= TUSB544_VOD_DCGAIN_OVERRIDE;
+	reg &= ~TUSB544_VOD_DCGAIN_SEL;
+	reg |= (TUSB544_VOD_DCGAIN_SETTING_5 << 2);
+
+	rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+			TUSB544_REG_GENERAL6, reg);
+	if (rv)
+		return rv;
+
+	/* Write the retimer config byte */
+	if (usb_mode == USB_INV) {
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x15);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0xff);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0xff);
+	} else if (usb_mode == USB) {
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x11);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0xff);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0xff);
+	} else if (usb_mode == USB_DP_INV) {
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1F);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0xff);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0xff);
+	} else if (usb_mode == USB_DP) {
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1B);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0xff);
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0xff);
+	} else if (usb_mode == DP_INV) {
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1E);
+	} else if (usb_mode == DP) {
+		rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1A);
+	}
+
+	rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x66);
+	rv |= i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x66);
+	if (rv)
+		return EC_ERROR_UNKNOWN;
+	else
+		return EC_SUCCESS;
+}
+
+/* USB Retimer */
 const struct usb_mux usbc1_retimer = {
 	.usb_port = 1,
 	.i2c_port = I2C_PORT_SUB_USB_C1,
 	.i2c_addr_flags = TUSB544_I2C_ADDR_FLAGS0,
 	.driver = &tusb544_drv,
+	.board_set = &board_tusb544_set,
 };
 
 /* USB Muxes */
@@ -241,38 +347,6 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.next_mux = &usbc1_retimer,
 	},
 };
-
-void board_init(void)
-{
-	int on;
-
-	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_INT_ODL);
-
-	/*
-	 * If interrupt lines are already low, schedule them to be processed
-	 * after inits are completed.
-	 */
-	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
-		hook_call_deferred(&check_c0_line_data, 0);
-	if (!gpio_get_level(GPIO_USB_C1_INT_ODL))
-		hook_call_deferred(&check_c1_line_data, 0);
-
-	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
-	/* Enable Base Accel interrupt */
-	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
-	/* Enable gpio interrupt for pen detect */
-	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
-
-	/* Turn on 5V if the system is on, otherwise turn it off */
-	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
-			      CHIPSET_STATE_SOFT_OFF);
-	board_power_5v_enable(on);
-
-	if (!gpio_get_level(GPIO_PEN_DET_ODL))
-		gpio_set_level(GPIO_EN_PP3300_PEN, 1);
-}
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 void board_hibernate(void)
 {
@@ -553,7 +627,227 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 };
 
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+static const mat33_fp_t lid_lis2dwl_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+/* Lid accel private data */
+static struct stprivate_data g_lis2dwl_data;
+struct motion_sensor_t lis2dwl_lid_accel = {
+
+		.name = "Lid Accel",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_LIS2DWL,
+		.type = MOTIONSENSE_TYPE_ACCEL,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &lis2dw12_drv,
+		.mutex = &g_lid_mutex,
+		.drv_data = &g_lis2dwl_data,
+		.port = I2C_PORT_SENSOR,
+		.i2c_spi_addr_flags = LIS2DWL_ADDR1_FLAGS,
+		.rot_standard_ref = &lid_lis2dwl_ref,
+		.default_range = 2, /* g */
+		.min_frequency = LIS2DW12_ODR_MIN_VAL,
+		.max_frequency = LIS2DW12_ODR_MAX_VAL,
+		.config = {
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 12500 | ROUND_UP_FLAG,
+			},
+			/* Sensor on for lid angle detection */
+			[SENSOR_CONFIG_EC_S3] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+			},
+		},
+};
+
+static const mat33_fp_t lid_KX022_ref = {
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+static struct kionix_accel_data g_kx022_data;
+struct motion_sensor_t kx022_lid_accel = {
+	.name = "Lid Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_KX022,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_LID,
+	.drv = &kionix_accel_drv,
+	.mutex = &g_lid_mutex,
+	.drv_data = &g_kx022_data,
+	.port = I2C_PORT_ACCEL,
+	.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
+	.rot_standard_ref = &lid_KX022_ref,
+	.min_frequency = KX022_ACCEL_MIN_FREQ,
+	.max_frequency = KX022_ACCEL_MAX_FREQ,
+	.default_range = 2, /* g, to support tablet mode */
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	},
+};
+
+static struct icm_drv_data_t g_icm42607_data;
+const mat33_fp_t based_ref_icm42607 = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+struct motion_sensor_t icm42607_base_accel = {
+	 .name = "Base Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_ICM42607,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &icm42607_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_icm42607_data,
+	 .port = I2C_PORT_ACCEL,
+	 .i2c_spi_addr_flags = ICM42607_ADDR0_FLAGS,
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
+	 .rot_standard_ref = &based_ref_icm42607,
+	 .min_frequency = ICM42607_ACCEL_MIN_FREQ,
+	 .max_frequency = ICM42607_ACCEL_MAX_FREQ,
+	 .config = {
+		 /* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	 },
+};
+
+struct motion_sensor_t icm42607_base_gyro = {
+	 .name = "Base Gyro",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_ICM42607,
+	 .type = MOTIONSENSE_TYPE_GYRO,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &icm42607_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_icm42607_data,
+	 .port = I2C_PORT_ACCEL,
+	 .i2c_spi_addr_flags = ICM42607_ADDR0_FLAGS,
+	 .default_range = 1000, /* dps */
+	 .rot_standard_ref = &based_ref_icm42607,
+	 .min_frequency = ICM42607_GYRO_MIN_FREQ,
+	 .max_frequency = ICM42607_GYRO_MAX_FREQ,
+};
+
+void board_init(void)
+{
+	int on;
+	uint32_t board_id;
+
+	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_INT_ODL);
+
+	/*
+	 * If interrupt lines are already low, schedule them to be processed
+	 * after inits are completed.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
+		hook_call_deferred(&check_c0_line_data, 0);
+	if (!gpio_get_level(GPIO_USB_C1_INT_ODL))
+		hook_call_deferred(&check_c1_line_data, 0);
+
+	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
+	/* Enable Base Accel interrupt */
+	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+	/* Enable gpio interrupt for pen detect */
+	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
+
+	/* Turn on 5V if the system is on, otherwise turn it off */
+	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
+			      CHIPSET_STATE_SOFT_OFF);
+	board_power_5v_enable(on);
+
+	if (!gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_EN_PP3300_PEN, 1);
+
+	cbi_get_board_version(&board_id);
+
+	if (board_id > 2) {
+		if (get_cbi_fw_config_tablet_mode()) {
+			if (get_cbi_ssfc_base_sensor() ==
+						SSFC_SENSOR_ICM42607) {
+				motion_sensors[BASE_ACCEL] =
+						icm42607_base_accel;
+				motion_sensors[BASE_GYRO] = icm42607_base_gyro;
+				CPRINTF("BASE GYRO is ICM42607");
+			} else {
+				CPRINTF("BASE GYRO is BMI160");
+			}
+
+			if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_LIS2DWL) {
+				motion_sensors[LID_ACCEL] = lis2dwl_lid_accel;
+				CPRINTF("LID_ACCEL is LIS2DWL");
+			} else if (get_cbi_ssfc_lid_sensor() ==
+						SSFC_SENSOR_KX022) {
+				motion_sensors[LID_ACCEL] = kx022_lid_accel;
+				CPRINTF("LID_ACCEL is KX022");
+			} else {
+				CPRINTF("LID_ACCEL is BMA253");
+			}
+		} else {
+			motion_sensor_count = 0;
+			gmr_tablet_switch_disable();
+			/*
+			 * Base accel is not stuffed, don't allow
+			 * line to float.
+			 */
+			gpio_set_flags(GPIO_BASE_SIXAXIS_INT_L,
+					GPIO_INPUT | GPIO_PULL_DOWN);
+		}
+	} else {
+		if (get_cbi_ssfc_base_sensor() == SSFC_SENSOR_ICM42607) {
+			motion_sensors[BASE_ACCEL] = icm42607_base_accel;
+			motion_sensors[BASE_GYRO] = icm42607_base_gyro;
+			CPRINTF("BASE GYRO is ICM42607");
+		} else {
+			CPRINTF("BASE GYRO is BMI160");
+		}
+
+		if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_LIS2DWL) {
+			motion_sensors[LID_ACCEL] = lis2dwl_lid_accel;
+			CPRINTF("LID_ACCEL is LIS2DWL");
+		} else if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_KX022) {
+			motion_sensors[LID_ACCEL] = kx022_lid_accel;
+			CPRINTF("LID_ACCEL is KX022");
+		} else {
+			CPRINTF("LID_ACCEL is BMA253");
+		}
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+void motion_interrupt(enum gpio_signal signal)
+{
+		switch (get_cbi_ssfc_base_sensor()) {
+		case SSFC_SENSOR_ICM42607:
+			icm42607_interrupt(signal);
+			break;
+		case SSFC_SENSOR_BMI160:
+		default:
+			bmi160_interrupt(signal);
+			break;
+		}
+}
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {
@@ -572,9 +866,8 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -598,4 +891,3 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif

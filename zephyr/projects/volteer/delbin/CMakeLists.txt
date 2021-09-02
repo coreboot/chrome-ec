@@ -4,8 +4,6 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 
-set(BOARD_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
-
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(delbin)
 
@@ -23,7 +21,3 @@ zephyr_library_include_directories(
 # Include selected EC source for the baseboard
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
   "${PLATFORM_EC_BASEBOARD}/power.c")
-
-# Board specific sensor implementation
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
-  "src/sensors.c")

@@ -331,8 +331,12 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
 	int ret, cnt = 3;
 
 	BUILD_ASSERT(SENSOR_COUNT < 32);
+#if defined(HAS_TASK_CONSOLE)
 	ASSERT((task_get_current() == TASK_ID_HOOKS) ||
 	       (task_get_current() == TASK_ID_CONSOLE));
+#else
+	ASSERT(task_get_current() == TASK_ID_HOOKS);
+#endif /* HAS_TASK_CONSOLE */
 
 	/* Initialize accelerometers. */
 	do {
@@ -412,7 +416,7 @@ static void motion_sense_switch_sensor_rate(void)
 				    (ret != EC_SUCCESS) &&
 				    (i == CONFIG_LID_ANGLE_SENSOR_BASE ||
 				     i == CONFIG_LID_ANGLE_SENSOR_LID))
-					tablet_set_mode(0);
+					tablet_set_mode(0, TABLET_TRIGGER_LID);
 			}
 		} else {
 			/* The sensors are being powered off */

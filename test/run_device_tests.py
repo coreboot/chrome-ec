@@ -242,13 +242,13 @@ def power(board_config: BoardConfig, on: bool) -> None:
 def hw_write_protect(enable: bool) -> None:
     """Enable/disable hardware write protect."""
     if enable:
-        state = 'on'
+        state = 'force_on'
     else:
-        state = 'off'
+        state = 'force_off'
 
     cmd = [
         'dut-control',
-        'fw_wp_en' + ':' + state,
+        'fw_wp_state:' + state,
         ]
     logging.debug('Running command: "%s"', ' '.join(cmd))
     subprocess.run(cmd).check_returncode()
@@ -267,23 +267,25 @@ def build(test_name: str, board_name: str) -> None:
     subprocess.run(cmd).check_returncode()
 
 
-def flash(test_name: str, board: str, flasher: str) -> bool:
+def flash(test_name: str, board: str, flasher: str, remote: str) -> bool:
     """Flash specified test to specified board."""
     logging.info("Flashing test")
 
+    cmd = []
     if flasher == JTRACE:
-        flash_script = JTRACE_FLASH_SCRIPT
+        cmd.append(JTRACE_FLASH_SCRIPT)
+        if remote:
+            cmd.extend(['--remote', remote])
     elif flasher == SERVO_MICRO:
-        flash_script = SERVO_MICRO_FLASH_SCRIPT
+        cmd.append(SERVO_MICRO_FLASH_SCRIPT)
     else:
         logging.error('Unknown flasher: "%s"', flasher)
         return False
-    cmd = [
-        flash_script,
+    cmd.extend([
         '--board', board,
         '--image', os.path.join(EC_DIR, 'build', board, test_name,
                                 test_name + '.bin'),
-    ]
+    ])
     logging.debug('Running command: "%s"', ' '.join(cmd))
     completed_process = subprocess.run(cmd)
     return completed_process.returncode == 0
@@ -429,6 +431,14 @@ def main():
          default=JTRACE
      )
 
+    # This might be expanded to serve as a "remote" for flash_ec also, so
+    # we will leave it generic.
+    parser.add_argument(
+        '--remote', '-n',
+        help='The remote host:ip to connect to J-Link. '
+        'This is passed to flash_jlink.py.',
+    )
+
     args = parser.parse_args()
     logging.basicConfig(level=args.log_level)
 
@@ -453,7 +463,7 @@ def main():
         flash_succeeded = False
         for i in range(0, test.num_flash_attempts):
             logging.debug('Flash attempt %d', i + 1)
-            if flash(test.name, args.board, args.flasher):
+            if flash(test.name, args.board, args.flasher, args.remote):
                 flash_succeeded = True
                 break
             time.sleep(1)

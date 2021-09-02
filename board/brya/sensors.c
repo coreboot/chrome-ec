@@ -5,7 +5,7 @@
 
 #include "common.h"
 #include "accelgyro.h"
-#include "adc_chip.h"
+#include "adc.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_lsm6dso.h"
 #include "driver/als_tcs3400_public.h"
@@ -16,7 +16,7 @@
 #include "temp_sensor/thermistor.h"
 
 /* ADC configuration */
-const struct adc_t adc_channels[] = {
+struct adc_t adc_channels[] = {
 	[ADC_TEMP_SENSOR_1_DDR_SOC] = {
 		.name = "TEMP_DDR_SOC",
 		.input_ch = NPCX_ADC_CH0,
@@ -24,9 +24,23 @@ const struct adc_t adc_channels[] = {
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
 	},
-	[ADC_TEMP_SENSOR_2_CHARGER] = {
-		.name = "TEMP_CHARGER",
+	[ADC_TEMP_SENSOR_2_AMBIENT] = {
+		.name = "TEMP_AMBIENT",
 		.input_ch = NPCX_ADC_CH1,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_3_CHARGER] = {
+		.name = "TEMP_CHARGER",
+		.input_ch = NPCX_ADC_CH6,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_4_WWAN] = {
+		.name = "TEMP_WWAN",
+		.input_ch = NPCX_ADC_CH7,
 		.factor_mul = ADC_MAX_VOLT,
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
@@ -145,7 +159,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.location = MOTIONSENSE_LOC_BASE,
 		.drv = &lsm6dso_drv,
 		.mutex = &g_base_accel_mutex,
-		.drv_data = &lsm6dso_data,
+		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
+				MOTIONSENSE_TYPE_ACCEL),
 		.int_signal = GPIO_EC_IMU_INT_R_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
@@ -174,7 +189,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.location = MOTIONSENSE_LOC_BASE,
 		.drv = &lsm6dso_drv,
 		.mutex = &g_base_accel_mutex,
-		.drv_data = &lsm6dso_data,
+		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
+				MOTIONSENSE_TYPE_GYRO),
 		.int_signal = GPIO_EC_IMU_INT_R_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
@@ -258,13 +274,25 @@ const struct temp_sensor_t temp_sensors[] = {
 		.name = "DDR and SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_1_DDR_SOC
+		.idx = ADC_TEMP_SENSOR_1_DDR_SOC,
 	},
-	[TEMP_SENSOR_2_CHARGER] = {
+	[TEMP_SENSOR_2_AMBIENT] = {
+		.name = "Ambient",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_30k9_47k_4050b,
+		.idx = ADC_TEMP_SENSOR_2_AMBIENT,
+	},
+	[TEMP_SENSOR_3_CHARGER] = {
 		.name = "Charger",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_CHARGER
+		.idx = ADC_TEMP_SENSOR_3_CHARGER,
+	},
+	[TEMP_SENSOR_4_WWAN] = {
+		.name = "WWAN",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_30k9_47k_4050b,
+		.idx = ADC_TEMP_SENSOR_4_WWAN,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
@@ -301,7 +329,7 @@ static const struct ec_thermal_config thermal_cpu = {
  * Inductors: limit of 125c
  * PCB: limit is 80c
  */
-static const struct ec_thermal_config thermal_inductor = {
+static const struct ec_thermal_config thermal_ambient = {
 	.temp_host = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
@@ -313,9 +341,65 @@ static const struct ec_thermal_config thermal_inductor = {
 	.temp_fan_max = C_TO_K(55),
 };
 
-/* this should really be "const" */
+/*
+ * Inductor limits - used for both charger and PP3300 regulator
+ *
+ * Need to use the lower of the charger IC, PP3300 regulator, and the inductors
+ *
+ * Charger max recommended temperature 100C, max absolute temperature 125C
+ * PP3300 regulator: operating range -40 C to 145 C
+ *
+ * Inductors: limit of 125c
+ * PCB: limit is 80c
+ */
+const static struct ec_thermal_config thermal_charger = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+	},
+	.temp_fan_off = C_TO_K(40),
+	.temp_fan_max = C_TO_K(55),
+};
+
+/*
+ * TODO(b/180681346): update for brya WWAN module
+ */
+static const struct ec_thermal_config thermal_wwan = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+	},
+	.temp_fan_off = C_TO_K(40),
+	.temp_fan_max = C_TO_K(55),
+};
+
 struct ec_thermal_config thermal_params[] = {
 	[TEMP_SENSOR_1_DDR_SOC] = thermal_cpu,
-	[TEMP_SENSOR_2_CHARGER]	= thermal_inductor,
+	[TEMP_SENSOR_2_AMBIENT]	= thermal_ambient,
+	[TEMP_SENSOR_3_CHARGER] = thermal_charger,
+	[TEMP_SENSOR_4_WWAN] = thermal_wwan,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+static void board_thermals_init(void)
+{
+	if (get_board_id() == 1) {
+		/*
+		 * Board ID 1 only has 3 sensors and the AMBIENT sensor
+		 * ADC pins have been reassigned, so we're down to 2
+		 * sensors that can easily be configured. So, alias the
+		 * AMBIENT sensor ADC channel to the unimplemented ADC
+		 * slots.
+		 */
+		adc_channels[ADC_TEMP_SENSOR_3_CHARGER].input_ch = NPCX_ADC_CH1;
+		adc_channels[ADC_TEMP_SENSOR_4_WWAN].input_ch = NPCX_ADC_CH1;
+	}
+}
+
+DECLARE_HOOK(HOOK_INIT, board_thermals_init, HOOK_PRIO_INIT_CHIPSET);

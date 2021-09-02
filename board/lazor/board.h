@@ -18,7 +18,7 @@
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_PWM_KBLIGHT
 
 /* Battery */
@@ -33,6 +33,7 @@
 #define CONFIG_USB_PD_TCPM_MULTI_PS8XXX
 #define CONFIG_USB_PD_TCPM_PS8751
 #define CONFIG_USB_PD_TCPM_PS8805
+#define CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
 #define CONFIG_USBC_PPC_SN5S330
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 
@@ -83,6 +84,7 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
+#include "sku.h"
 
 enum adc_channel {
 	ADC_VBUS,
@@ -114,6 +116,9 @@ enum battery_type {
 	BATTERY_MURATA_AP18C4K,
 	BATTERY_TYPE_COUNT,
 };
+
+/* support factory keyboard test */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);

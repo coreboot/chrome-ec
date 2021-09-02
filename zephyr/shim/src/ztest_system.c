@@ -53,15 +53,17 @@ void system_print_banner(void)
 	printk("Image: %s\n", build_info);
 }
 
-uint32_t chip_read_reset_flags(void)
-{
-	return 0;
-}
-
-void chip_save_reset_flags(uint32_t flags)
-{
-}
-
 void system_set_reset_flags(uint32_t flags)
 {
+}
+
+struct jump_data *get_jump_data(void)
+{
+	return NULL;
+}
+
+__attribute__((weak))
+void system_reset(int flags)
+{
+	__builtin_unreachable();
 }

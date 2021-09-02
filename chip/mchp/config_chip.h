@@ -93,10 +93,11 @@
 #define CONFIG_STACK_SIZE		2048
 
 /* non-standard task stack sizes */
-/* temporarily expanded for debug */
-#define IDLE_TASK_STACK_SIZE		1024	/* 512 */
-#define LARGER_TASK_STACK_SIZE		1024	/* 640 */
-#define VENTI_TASK_STACK_SIZE		1024	/* 768 */
+#define IDLE_TASK_STACK_SIZE		672
+#define LARGER_TASK_STACK_SIZE		800
+#define VENTI_TASK_STACK_SIZE		928
+#define ULTRA_TASK_STACK_SIZE		1056
+#define TRENTA_TASK_STACK_SIZE		1184
 
 #define CHARGER_TASK_STACK_SIZE		1024	/* 640 */
 #define HOOKS_TASK_STACK_SIZE		1024	/* 640 */
@@ -111,7 +112,7 @@
 #define PD_TASK_STACK_SIZE		2048
 
 /* Default task stack size */
-#define TASK_STACK_SIZE			1024	/* 512 */
+#define TASK_STACK_SIZE			672
 
 /************************************************************************/
 /* Define our flash layout. */
@@ -147,6 +148,18 @@
 #define CONFIG_PROGRAM_MEMORY_BASE	0x000C0000
 #else
 #define CONFIG_PROGRAM_MEMORY_BASE	0x000E0000
+#endif
+
+/*
+ * Optimize SPI flash read timing, MEC172x QMSPI controller controls CS#
+ * by hardware, it will add several system clock cycles delay between CS
+ * deassertion to CS assertion at the start of the next transaction, this
+ * guarantees SPI back to back transactions, so 1ms delay can be removed
+ * to optimze timing. MEC172x chip supports this hardware feature.
+ */
+#if defined(CHIP_FAMILY_MEC172X)
+#undef CONFIG_SPI_FLASH_READ_WAIT_MS
+#define CONFIG_SPI_FLASH_READ_WAIT_MS 0
 #endif
 
 #include "config_flash_layout.h"

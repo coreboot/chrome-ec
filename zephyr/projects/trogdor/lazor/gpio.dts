@@ -183,6 +183,7 @@
 		};
 		vbob_en {
 			gpios = <&gpiod 3 GPIO_OUT_LOW>;
+			enum-name = "GPIO_VBOB_EN";
 			label = "VBOB_EN";
 		};
 		en_pp3300_a {
@@ -328,32 +329,32 @@
 			enum-name = "GPIO_EC_I2C_SENSOR_SDA";
 			label = "EC_I2C_SENSOR_SDA";
 		};
-		brd_id0 {
+		gpio_brd_id0: brd_id0 {
 			gpios = <&gpioc 7 GPIO_INPUT>;
 			enum-name = "GPIO_BOARD_VERSION1";
 			label = "BRD_ID0";
 		};
-		brd_id1 {
+		gpio_brd_id1: brd_id1 {
 			gpios = <&gpio9 3 GPIO_INPUT>;
 			enum-name = "GPIO_BOARD_VERSION2";
 			label = "BRD_ID1";
 		};
-		brd_id2 {
+		gpio_brd_id2: brd_id2 {
 			gpios = <&gpio6 3 GPIO_INPUT>;
 			enum-name = "GPIO_BOARD_VERSION3";
 			label = "BRD_ID2";
 		};
-		sku_id0 {
+		gpio_sku_id0: sku_id0 {
 			gpios = <&gpiof 0 GPIO_INPUT>;
 			enum-name = "GPIO_SKU_ID0";
 			label = "SKU_ID0";
 		};
-		sku_id1 {
+		gpio_sku_id1: sku_id1 {
 			gpios = <&gpio4 1 GPIO_INPUT>;
 			enum-name = "GPIO_SKU_ID1";
 			label = "SKU_ID1";
 		};
-		sku_id2 {
+		gpio_sku_id2: sku_id2 {
 			gpios = <&gpiod 4 GPIO_INPUT>;
 			enum-name = "GPIO_SKU_ID2";
 			label = "SKU_ID2";
@@ -388,5 +389,58 @@
 			&gpio_lid_open_ec
 			&gpio_ec_rst_odl
 		>;
+	};
+
+	sku {
+		compatible = "cros-ec,gpio-id";
+
+		bits  = <
+			&gpio_sku_id0
+			&gpio_sku_id1
+			&gpio_sku_id2
+		>;
+
+		system = "binary";
+	};
+
+	board {
+		compatible = "cros-ec,gpio-id";
+
+		bits  = <
+			&gpio_brd_id0
+			&gpio_brd_id1
+			&gpio_brd_id2
+		>;
+
+		system = "binary_first_base3";
+	};
+
+	unused-pins {
+		compatible = "unused-gpios";
+		unused-gpios =
+			<&gpio5 1 0>,
+			<&gpiod 0 0>,
+			<&gpiof 3 0>,
+			<&gpio0 4 0>,
+			<&gpioc 0 0>,
+			<&gpioa 7 0>,
+			<&gpio8 3 0>,
+			<&gpio8 1 0>,
+			<&gpio3 7 0>,
+			<&gpio7 6 0>,
+			<&gpio3 4 0>,
+			<&gpioc 5 0>,
+			<&gpioa 3 0>,
+			<&gpio7 3 0>,
+			<&gpiod 7 0>,
+			<&gpioa 5 0>,
+			<&gpiob 0 0>,
+			<&gpio9 4 0>,
+			<&gpiob 1 0>,
+			<&gpio6 2 0>,
+			<&gpio3 5 0>,
+			<&gpio9 7 0>,
+			<&gpio6 0 0>,
+			<&gpio7 2 0>;
 	};
 };

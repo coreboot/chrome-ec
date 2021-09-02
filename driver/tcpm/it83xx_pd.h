@@ -7,6 +7,8 @@
 #ifndef __CROS_EC_DRIVER_TCPM_IT83XX_H
 #define __CROS_EC_DRIVER_TCPM_IT83XX_H
 
+#include "driver/tcpm/it8xxx2_pd_public.h"
+
 /* USBPD Controller */
 #if defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)
 #define IT83XX_USBPD_BASE(port)   (0x00F03700 + (0x100 * (port)))
@@ -377,6 +379,26 @@
 	IS_MASK_SET(IT83XX_USBPD_IFS(port), USBPD_REG_FAST_SWAP_DETECT_STAT)
 #endif
 
+#if defined(CONFIG_USB_PD_TCPM_ITE_ON_CHIP) && defined(CONFIG_ZEPHYR)
+/* Use the Zephyr names here. When upstreaming we can update this */
+#include <dt-bindings/interrupt-controller/ite-intc.h>
+
+#define IT83XX_GPIO_GPCRF4	GPCRF4
+#define IT83XX_GPIO_GPCRF5	GPCRF5
+#define IT83XX_GPIO_GPCRH1	GPCRH1
+#define IT83XX_GPIO_GPCRH2	GPCRH2
+#define IT83XX_GPIO_GPCRP0	IT8XXX2_GPIO_GPCRP0
+#define IT83XX_GPIO_GPCRP1	IT8XXX2_GPIO_GPCRP1
+#define IT83XX_IRQ_USBPD0	IT8XXX2_IRQ_USBPD0
+#define IT83XX_IRQ_USBPD1	IT8XXX2_IRQ_USBPD1
+#define IT83XX_IRQ_USBPD2	IT8XXX2_IRQ_USBPD2
+#define USB_VID_ITE		0x048d
+
+/* ITE chip supports PD features */
+#define IT83XX_INTC_FAST_SWAP_SUPPORT
+#define IT83XX_INTC_PLUG_IN_OUT_SUPPORT
+#endif
+
 enum usbpd_port {
 	USBPD_PORT_A,
 	USBPD_PORT_B,
@@ -423,13 +445,8 @@ struct cc_para_t {
 };
 
 extern const struct usbpd_ctrl_t usbpd_ctrl_regs[];
-#if defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)
-extern const struct tcpm_drv it83xx_tcpm_drv;
-#elif defined(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2)
-extern const struct tcpm_drv it8xxx2_tcpm_drv;
 void it8xxx2_clear_tx_error_status(enum usbpd_port port);
 void it8xxx2_get_tx_error_status(enum usbpd_port port);
-#endif
 void it83xx_Rd_5_1K_only_for_hibernate(int port);
 void switch_plug_out_type(enum usbpd_port port);
 /*

@@ -22,7 +22,6 @@
  * allow the second reset to be treated as a power-on.
  */
 #define CONFIG_BOARD_RESET_AFTER_POWER_ON
-#define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_CHIPSET_MT8192
 #define CONFIG_EXTPOWER_GPIO
 #define CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
@@ -162,9 +161,6 @@
 
 /* SPI / Host Command */
 #define CONFIG_SPI
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_MOTION_SENSE_CMD, \
-	EC_CMD_PD_GET_LOG_ENTRY
 
 /* MKBP */
 #define CONFIG_MKBP_EVENT
@@ -195,13 +191,7 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
-
-enum power_signal {
-	PMIC_PWR_GOOD,
-	AP_IN_S3_L,
-	AP_WDT_ASSERTED,
-	POWER_SIGNAL_COUNT,
-};
+#include "power/mt8192.h"
 
 enum board_sub_board {
 	SUB_BOARD_NONE = -1,

@@ -6,7 +6,6 @@
 /* Nightfury board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "common.h"
 #include "cros_board_info.h"
@@ -305,7 +304,7 @@ const struct motion_sensor_t *motion_als_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	.output_settle_us = 80,
 	.debounce_down_us = 30 * MSEC,
 	.debounce_up_us = 30 * MSEC,

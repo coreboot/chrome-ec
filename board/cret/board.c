@@ -153,15 +153,19 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 /* Enable HDMI any time the SoC is on */
 static void hdmi_enable(void)
 {
-	gpio_set_level(GPIO_EC_HDMI_EN_ODL, 0);
-	gpio_set_level(GPIO_HDMI_PP3300_EN, 1);
+	if (get_cbi_fw_config_hdmi() == HDMI_PRESENT) {
+		gpio_set_level(GPIO_EC_HDMI_EN_ODL, 0);
+		gpio_set_level(GPIO_HDMI_PP3300_EN, 1);
+	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
 
 static void hdmi_disable(void)
 {
-	gpio_set_level(GPIO_EC_HDMI_EN_ODL, 1);
-	gpio_set_level(GPIO_HDMI_PP3300_EN, 0);
+	if (get_cbi_fw_config_hdmi() == HDMI_PRESENT) {
+		gpio_set_level(GPIO_EC_HDMI_EN_ODL, 1);
+		gpio_set_level(GPIO_HDMI_PP3300_EN, 0);
+	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
 
@@ -254,10 +258,11 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
-
+			raa489000_enable_asgate(i, false);
+		}
 		return EC_SUCCESS;
 	}
 
@@ -278,6 +283,7 @@ int board_set_active_charge_port(int port)
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
@@ -288,7 +294,8 @@ int board_set_active_charge_port(int port)
 		charger_discharge_on_ac(1);
 
 	/* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);
@@ -335,7 +342,7 @@ static const mat33_fp_t lid_standard_ref = {
 
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
+	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
@@ -375,7 +382,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.location = MOTIONSENSE_LOC_BASE,
 		.drv = &lsm6dso_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = &lsm6dso_data,
+		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
+				MOTIONSENSE_TYPE_ACCEL),
 		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
@@ -403,7 +411,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.location = MOTIONSENSE_LOC_BASE,
 		.drv = &lsm6dso_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = &lsm6dso_data,
+		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
+				MOTIONSENSE_TYPE_GYRO),
 		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
@@ -470,18 +479,6 @@ const struct pwm_t pwm_channels[] = {
 		.flags = PWM_CONFIG_DSLEEP,
 		.freq = 10000,
 	},
-
-	[PWM_CH_LED1_AMBER] = {
-		.channel = 2,
-		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
-		.freq = 2400,
-	},
-
-	[PWM_CH_LED2_WHITE] = {
-		.channel = 0,
-		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
-		.freq = 2400,
-	}
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
@@ -529,9 +526,8 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -555,7 +551,6 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif
 
 /* Keyboard scan setting */
 static const struct ec_response_keybd_config cret_keybd = {
@@ -597,3 +592,16 @@ static void fw_config_tablet_mode(void)
 			       GPIO_INPUT | GPIO_PULL_DOWN);
 	}
 }
+
+static void board_extpower(void)
+{
+	int extpower_present;
+
+	if (pd_is_connected(0))
+		extpower_present = extpower_is_present();
+	else
+		extpower_present = 0;
+
+	gpio_set_level(GPIO_EC_ACOK_OTG, extpower_present);
+}
+DECLARE_HOOK(HOOK_AC_CHANGE, board_extpower, HOOK_PRIO_DEFAULT);

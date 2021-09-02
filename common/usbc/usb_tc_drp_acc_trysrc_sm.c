@@ -15,6 +15,7 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_dpm.h"
+#include "usb_pd_tcpm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
@@ -126,7 +127,7 @@ void print_flag(int port, int set_or_clear, int flag);
 #define TC_FLAGS_REQUEST_ERROR_RECOVERY	BIT(22)
 
 /* For checking flag_bit_names[] array */
-#define TC_FLAGS_COUNT			22
+#define TC_FLAGS_COUNT			23
 
 /* On disconnect, clear most of the flags. */
 #define CLR_FLAGS_ON_DISCONNECT(port) TC_CLR_FLAG(port, \
@@ -223,6 +224,16 @@ GEN_NOT_SUPPORTED(TC_CT_ATTACHED_SNK);
 #endif /* CONFIG_USB_PE_SM */
 
 /*
+ * If CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT is not defined then
+ * _GPIO_CCD_MODE_ODL is not needed. Declare as extern so IS_ENABLED will work.
+ */
+#ifndef CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
+extern int _GPIO_CCD_MODE_ODL;
+#else
+#define _GPIO_CCD_MODE_ODL GPIO_CCD_MODE_ODL
+#endif /* CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT */
+
+/*
  * We will use DEBUG LABELS if we will be able to print (COMMON RUNTIME)
  * and either CONFIG_USB_PD_DEBUG_LEVEL is not defined (no override) or
  * we are overriding and the level is not DISABLED.
@@ -310,7 +321,6 @@ static struct bit_name flag_bit_names[] = {
 	{ TC_FLAGS_PARTNER_PD_CAPABLE, "PARTNER_PD_CAPABLE" },
 	{ TC_FLAGS_HARD_RESET_REQUESTED, "HARD_RESET_REQUESTED" },
 	{ TC_FLAGS_PR_SWAP_IN_PROGRESS, "PR_SWAP_IN_PROGRESS" },
-	{ TC_FLAGS_DISC_IDENT_IN_PROGRESS, "DISC_IDENT_IN_PROGRESS" },
 	{ TC_FLAGS_CHECK_CONNECTION, "CHECK_CONNECTION" },
 	{ TC_FLAGS_REQUEST_SUSPEND, "REQUEST_SUSPEND" },
 	{ TC_FLAGS_SUSPENDED, "SUSPENDED" },
@@ -330,7 +340,9 @@ static struct bit_name event_bit_names[] = {
 	{ TASK_EVENT_PD_AWAKE, "PD_AWAKE" },
 	{ TASK_EVENT_PECI_DONE, "PECI_DONE" },
 	{ TASK_EVENT_I2C_IDLE, "I2C_IDLE" },
+#ifdef TASK_EVENT_PS2_DONE
 	{ TASK_EVENT_PS2_DONE, "PS2_DONE" },
+#endif
 	{ TASK_EVENT_DMA_TC, "DMA_TC" },
 	{ TASK_EVENT_ADC_DONE, "ADC_DONE" },
 	{ TASK_EVENT_RESET_DONE, "RESET_DONE" },
@@ -434,6 +446,7 @@ static void set_vconn(int port, int enable);
 static __maybe_unused int reset_device_and_notify(int port);
 static __maybe_unused void check_drp_connection(const int port);
 static void sink_power_sub_states(int port);
+static void set_ccd_mode(int port, bool enable);
 
 __maybe_unused static void handle_new_power_state(int port);
 
@@ -518,7 +531,7 @@ void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
 {
 }
 
-int pd_get_rev(int port, enum tcpm_transmit_type type)
+int pd_get_rev(int port, enum tcpci_msg_type type)
 {
 	return PD_REV30;
 }
@@ -695,9 +708,9 @@ static void tc_set_modes_exit(int port)
 {
 	if (IS_ENABLED(CONFIG_USB_PE_SM) &&
 			IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
-		pd_dfp_exit_mode(port, TCPC_TX_SOP, 0, 0);
-		pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME, 0, 0);
-		pd_dfp_exit_mode(port, TCPC_TX_SOP_PRIME_PRIME, 0, 0);
+		pd_dfp_exit_mode(port, TCPCI_MSG_SOP, 0, 0);
+		pd_dfp_exit_mode(port, TCPCI_MSG_SOP_PRIME, 0, 0);
+		pd_dfp_exit_mode(port, TCPCI_MSG_SOP_PRIME_PRIME, 0, 0);
 	}
 }
 
@@ -707,6 +720,7 @@ static void tc_detached(int port)
 	hook_notify(HOOK_USB_PD_DISCONNECT);
 	tc_pd_connection(port, 0);
 	tcpm_debug_accessory(port, 0);
+	set_ccd_mode(port, 0);
 	tc_set_modes_exit(port);
 	if (IS_ENABLED(CONFIG_USB_PRL_SM))
 		prl_set_default_pd_revision(port);
@@ -751,6 +765,16 @@ void pd_request_data_swap(int port)
 bool pd_capable(int port)
 {
 	return !!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_PD_CAPABLE);
+}
+
+/*
+ * Return true if we transition through Unattached.SNK, but we're still waiting
+ * to receive source caps from the partner. This indicates that the PD
+ * capabilities are not yet known.
+ */
+bool pd_waiting_on_partner_src_caps(int port)
+{
+	return !pd_get_src_cap_cnt(port);
 }
 
 enum pd_dual_role_states pd_get_dual_role(int port)
@@ -1616,6 +1640,17 @@ void tc_set_power_role(int port, enum pd_power_role role)
  * Private Functions
  */
 
+/* Set GPIO_CCD_MODE_ODL gpio */
+static void set_ccd_mode(const int port, const bool enable)
+{
+	if (IS_ENABLED(CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT) &&
+	    port == CONFIG_CCD_USBC_PORT_NUMBER) {
+		if (enable)
+			CPRINTS("Asserting GPIO_CCD_MODE_ODL");
+		gpio_set_level(_GPIO_CCD_MODE_ODL, !enable);
+	}
+}
+
 /* Set the TypeC state machine to a new state. */
 static void set_state_tc(const int port, const enum usb_tc_state new_state)
 {
@@ -1651,9 +1686,11 @@ static void print_current_state(const int port)
 static void handle_device_access(int port)
 {
 	if (IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER) &&
-	    get_state_tc(port) == TC_LOW_POWER_MODE)
+	    get_state_tc(port) == TC_LOW_POWER_MODE) {
+		tc_start_event_loop(port);
 		pd_timer_enable(port, TC_TIMER_LOW_POWER_TIME,
 				PD_LPM_DEBOUNCE_US);
+	}
 }
 
 void tc_event_check(int port, int evt)
@@ -2000,7 +2037,7 @@ static void sink_power_sub_states(int port)
 
 	tcpm_get_cc(port, &cc1, &cc2);
 
-	cc = tc[port].polarity ? cc2 : cc1;
+	cc = polarity_rm_dts(tc[port].polarity) ? cc2 : cc1;
 
 	if (cc == TYPEC_CC_VOLT_RP_DEF)
 		new_cc_voltage = TYPEC_CC_VOLT_RP_DEF;
@@ -2065,6 +2102,14 @@ static void tc_disabled_run(const int port)
 		set_state_tc(port, drp_state[port] == PD_DRP_FORCE_SOURCE ?
 			     TC_UNATTACHED_SRC : TC_UNATTACHED_SNK);
 	} else {
+		if (IS_ENABLED(CONFIG_USBC_RETIMER_FW_UPDATE)) {
+			if (TC_CHK_FLAG(port,
+				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN)) {
+				TC_CLR_FLAG(port,
+				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN);
+				usb_retimer_fw_update_process_op_cb(port);
+			}
+		}
 		tc_pause_event_loop(port);
 	}
 }
@@ -2294,7 +2339,7 @@ static void tc_attach_wait_snk_run(const int port)
 	/* Check for connection */
 	tcpm_get_cc(port, &cc1, &cc2);
 
-	if (cc_is_rp(cc1) && cc_is_rp(cc2))
+	if (cc_is_rp(cc1) && cc_is_rp(cc2) && board_is_dts_port(port))
 		new_cc_state = PD_CC_DFP_DEBUG_ACC;
 	else if (cc_is_rp(cc1) || cc_is_rp(cc2))
 		new_cc_state = PD_CC_DFP_ATTACHED;
@@ -2455,8 +2500,10 @@ static void tc_attached_snk_entry(const int port)
 	if (IS_ENABLED(CONFIG_USB_PE_SM))
 		tc_enable_pd(port, 1);
 
-	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER)) {
 		tcpm_debug_accessory(port, 1);
+		set_ccd_mode(port, 1);
+	}
 }
 
 /*
@@ -2827,9 +2874,12 @@ static void tc_attach_wait_src_run(const int port)
 	/* Check for connection */
 	tcpm_get_cc(port, &cc1, &cc2);
 
-	/* Debug accessory */
-	if (cc_is_snk_dbg_acc(cc1, cc2)) {
-		/* Debug accessory */
+	if (cc_is_snk_dbg_acc(cc1, cc2) && board_is_dts_port(port)) {
+		/*
+		 * Debug accessory.
+		 * A debug accessory in a non-DTS port will be
+		 * recognized by at_least_one_rd as UFP attached.
+		 */
 		new_cc_state = PD_CC_UFP_DEBUG_ACC;
 	} else if (cc_is_at_least_one_rd(cc1, cc2)) {
 		/* UFP attached */
@@ -2930,10 +2980,22 @@ static void tc_attached_src_entry(const int port)
 			 * completed and tc_pr_swap_complete is called.
 			 */
 		} else {
+			/*
+			 * Set up CC's, Vconn, and ADD before Vbus, as per
+			 * Figure 4-24. DRP Initialization and Connection
+			 * Detection in TCPCI r2 v1.2 specification.
+			 */
+
 			/* Get connector orientation */
 			tcpm_get_cc(port, &cc1, &cc2);
 			tc[port].polarity = get_src_polarity(cc1, cc2);
 			pd_set_polarity(port, tc[port].polarity);
+
+			/* Attached.SRC - enable AutoDischargeDisconnect */
+			tcpm_enable_auto_discharge_disconnect(port, 1);
+
+			/* Apply Rp */
+			typec_update_cc(port);
 
 			/*
 			 * Initial data role for sink is DFP
@@ -2964,22 +3026,28 @@ static void tc_attached_src_entry(const int port)
 						tc[port].polarity);
 			}
 
-			/* Attached.SRC - enable AutoDischargeDisconnect */
-			tcpm_enable_auto_discharge_disconnect(port, 1);
-
-			/* Apply Rp */
-			typec_update_cc(port);
-
 			tc_enable_pd(port, 0);
 			pd_timer_enable(port, TC_TIMER_TIMEOUT,
 					MAX(PD_POWER_SUPPLY_TURN_ON_DELAY,
 					    PD_T_VCONN_STABLE));
 		}
 	} else {
+		/*
+		 * Set up CC's, Vconn, and ADD before Vbus, as per
+		 * Figure 4-24. DRP Initialization and Connection
+		 * Detection in TCPCI r2 v1.2 specification.
+		 */
+
 		/* Get connector orientation */
 		tcpm_get_cc(port, &cc1, &cc2);
 		tc[port].polarity = get_src_polarity(cc1, cc2);
 		pd_set_polarity(port, tc[port].polarity);
+
+		/* Attached.SRC - enable AutoDischargeDisconnect */
+		tcpm_enable_auto_discharge_disconnect(port, 1);
+
+		/* Apply Rp */
+		typec_update_cc(port);
 
 		/*
 		 * Initial data role for sink is DFP
@@ -3007,16 +3075,14 @@ static void tc_attached_src_entry(const int port)
 				usb_mux_set(port, USB_PD_MUX_NONE,
 				USB_SWITCH_DISCONNECT, tc[port].polarity);
 		}
-
-		/* Attached.SRC - enable AutoDischargeDisconnect */
-		tcpm_enable_auto_discharge_disconnect(port, 1);
-
-		/* Apply Rp */
-		typec_update_cc(port);
 	}
 
 	/* Inform PPC and OCP module that a sink is connected. */
 	tc_set_partner_role(port, PPC_DEV_SNK);
+
+	/* Initialize type-C supplier to seed the charge manger */
+	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
+		typec_set_input_current_limit(port, 0, 0);
 
 	/*
 	 * Only notify if we're not performing a power role swap.  During a
@@ -3026,8 +3092,21 @@ static void tc_attached_src_entry(const int port)
 		hook_notify(HOOK_USB_PD_CONNECT);
 	}
 
-	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
+	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER)) {
 		tcpm_debug_accessory(port, 1);
+		set_ccd_mode(port, 1);
+	}
+
+	/*
+	 * Some TCPCs require time to correctly return CC status after
+	 * changing the ROLE_CONTROL register. Due to that, we have to ignore
+	 * CC_NONE state until PD_T_SRC_DISCONNECT delay has elapsed.
+	 * From the "Universal Serial Bus Type-C Cable and Connector
+	 * Specification" Release 2.0 paragraph 4.5.2.2.9.2:
+	 * The Source shall detect the SRC.Open state within tSRCDisconnect,
+	 * but should detect it as quickly as possible
+	 */
+	pd_timer_enable(port, TC_TIMER_CC_DEBOUNCE, PD_T_SRC_DISCONNECT);
 }
 
 static void tc_attached_src_run(const int port)
@@ -3037,7 +3116,7 @@ static void tc_attached_src_run(const int port)
 	/* Check for connection */
 	tcpm_get_cc(port, &cc1, &cc2);
 
-	if (tc[port].polarity)
+	if (polarity_rm_dts(tc[port].polarity))
 		cc1 = cc2;
 
 	if (cc1 == TYPEC_CC_VOLT_OPEN)
@@ -3056,7 +3135,7 @@ static void tc_attached_src_run(const int port)
 	 * Attached.SRC.
 	 */
 	if (tc[port].cc_state == PD_CC_NONE &&
-			!TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
+	    pd_timer_is_expired(port, TC_TIMER_CC_DEBOUNCE)) {
 		bool tryWait;
 		enum usb_tc_state new_tc_state = TC_UNATTACHED_SNK;
 
@@ -3216,6 +3295,7 @@ static void tc_attached_src_exit(const int port)
 	if (TC_CHK_FLAG(port, TC_FLAGS_TS_DTS_PARTNER))
 		tcpm_debug_detach(port);
 
+	pd_timer_disable(port, TC_TIMER_CC_DEBOUNCE);
 	pd_timer_disable(port, TC_TIMER_TIMEOUT);
 }
 
@@ -3768,13 +3848,13 @@ void tc_set_debug_level(enum debug_level debug_level)
 void tc_usb_firmware_fw_update_limited_run(int port)
 {
 	TC_SET_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN);
-	tc_start_event_loop(port);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 void tc_usb_firmware_fw_update_run(int port)
 {
 	TC_SET_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN);
-	tc_start_event_loop(port);
+	task_wake(PD_PORT_TO_TASK_ID(port));
 }
 
 void tc_run(const int port)
@@ -3800,14 +3880,6 @@ void tc_run(const int port)
 	}
 
 	if (IS_ENABLED(CONFIG_USBC_RETIMER_FW_UPDATE)) {
-		if (TC_CHK_FLAG(port, TC_FLAGS_SUSPENDED) &&
-			TC_CHK_FLAG(port,
-				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN)) {
-			TC_CLR_FLAG(port,
-				TC_FLAGS_USB_RETIMER_FW_UPDATE_LTD_RUN);
-			usb_retimer_fw_update_process_op_cb(port);
-		}
-
 		if (TC_CHK_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN)) {
 			TC_CLR_FLAG(port, TC_FLAGS_USB_RETIMER_FW_UPDATE_RUN);
 			usb_retimer_fw_update_process_op_cb(port);
@@ -3858,7 +3930,7 @@ static void pd_chipset_reset(void)
 		return;
 
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		enum tcpm_transmit_type tx;
+		enum tcpci_msg_type tx;
 
 		/* Do not notify the AP of irrelevant past Hard Resets. */
 		pd_clear_events(i, PD_STATUS_EVENT_HARD_RESET);
@@ -3867,11 +3939,11 @@ static void pd_chipset_reset(void)
 		 * Re-set events for SOP and SOP' discovery complete so the
 		 * kernel knows to consume discovery information for them.
 		 */
-		for (tx = TCPC_TX_SOP; tx <= TCPC_TX_SOP_PRIME; tx++) {
+		for (tx = TCPCI_MSG_SOP; tx <= TCPCI_MSG_SOP_PRIME; tx++) {
 			if (pd_get_identity_discovery(i, tx) != PD_DISC_NEEDED
 			    && pd_get_svids_discovery(i, tx) != PD_DISC_NEEDED
 			    && pd_get_modes_discovery(i, tx) != PD_DISC_NEEDED)
-				pd_notify_event(i, tx == TCPC_TX_SOP ?
+				pd_notify_event(i, tx == TCPCI_MSG_SOP ?
 					PD_STATUS_EVENT_SOP_DISC_DONE :
 					PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 		}

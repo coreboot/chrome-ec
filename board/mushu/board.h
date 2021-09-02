@@ -11,12 +11,20 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+/* Reduce flash usage */
+#define CONFIG_USB_PD_DEBUG_LEVEL 2
+#undef  CONFIG_CMD_ACCELSPOOF
+#undef  CONFIG_CMD_CHARGER_DUMP
+#undef  CONFIG_CMD_PPC_DUMP
+
 #define CONFIG_POWER_BUTTON
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_LED_COMMON
 #define CONFIG_LOW_POWER_IDLE
 
 #define CONFIG_HOSTCMD_ESPI
+#undef CONFIG_CMD_MFALLOW
+
 
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096

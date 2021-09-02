@@ -4,9 +4,11 @@
 
 board: native_posix
 supported-zephyr-versions:
-  - v2.5
+  - v2.6
 output-type: elf
-toolchain: llvm
+supported-toolchains:
+  - llvm
+  - host
 is-test: true
 dts-overlays:
   - overlay.dts

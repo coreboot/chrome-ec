@@ -38,7 +38,7 @@
 #include "gpio_list.h"
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Use 80 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/*
@@ -56,6 +56,24 @@ struct keyboard_scan_config keyscan_config = {
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 };
+
+/*
+ * We have total 30 pins for keyboard connecter {-1, -1} mean
+ * the N/A pin that don't consider it and reserve index 0 area
+ * that we don't have pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
+	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
+	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
+	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
+	{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1},
+	{-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 /* I2C port map */
 const struct i2c_port_t i2c_ports[] = {
@@ -305,26 +323,6 @@ struct motion_sensor_t icm426xx_base_gyro = {
 	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
 };
 
-#ifndef TEST_BUILD
-/* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
-{
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
-}
-#endif
-
 static int base_accelgyro_config;
 
 void motion_interrupt(enum gpio_signal signal)
@@ -415,3 +413,19 @@ static void board_chipset_resume(void)
 		pwm_enable(PWM_CH_DISPLIGHT, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+__override uint32_t board_get_sku_id(void)
+{
+	static int sku_id = -1;
+
+	if (sku_id == -1) {
+		int bits[3];
+
+		bits[0] = gpio_get_ternary(GPIO_SKU_ID0);
+		bits[1] = gpio_get_ternary(GPIO_SKU_ID1);
+		bits[2] = gpio_get_ternary(GPIO_SKU_ID2);
+		sku_id = binary_first_base3_from_bits(bits, ARRAY_SIZE(bits));
+	}
+
+	return (uint32_t)sku_id;
+}

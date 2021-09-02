@@ -17,6 +17,7 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpc.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 #if !defined(CONFIG_USB_PD_TCPM_TCPCI)
@@ -232,10 +233,12 @@ static void anx74xx_tcpc_discharge_vbus(int port, int enable)
 static uint64_t hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 void anx74xx_tcpc_update_hpd_status(const struct usb_mux *me,
-				    int hpd_lvl, int hpd_irq)
+				    mux_state_t mux_state)
 {
 	int reg;
 	int port = me->usb_port;
+	int hpd_lvl = (mux_state & USB_PD_MUX_HPD_LVL) ? 1 : 0;
+	int hpd_irq = (mux_state & USB_PD_MUX_HPD_IRQ) ? 1 : 0;
 
 	mux_read(me, ANX74XX_REG_HPD_CTRL_0, &reg);
 	if (hpd_lvl)
@@ -385,12 +388,16 @@ static int anx74xx_mux_aux_to_sbu(int port, int polarity, int enabled)
 }
 
 static int anx74xx_tcpm_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
+				mux_state_t mux_state,
+				bool *ack_required)
 {
 	int ctrl5;
 	int ctrl1 = 0;
 	int rv;
 	int port = me->usb_port;
+
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
 
 	if (!(mux_state & ~USB_PD_MUX_POLARITY_INVERTED)) {
 		anx[port].mux_state = mux_state;
@@ -776,6 +783,7 @@ static int anx74xx_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	int reg, mux_state, rv = EC_SUCCESS;
 	const struct usb_mux *me = &usb_muxes[port];
+	bool unused;
 
 	rv |= tcpc_read(port, ANX74XX_REG_CC_SOFTWARE_CTRL, &reg);
 	if (polarity_rm_dts(polarity)) /* Inform ANX to use CC2 */
@@ -791,7 +799,7 @@ static int anx74xx_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 	mux_state = anx[port].mux_state & ~USB_PD_MUX_POLARITY_INVERTED;
 	if (polarity_rm_dts(polarity))
 		mux_state |= USB_PD_MUX_POLARITY_INVERTED;
-	anx74xx_tcpm_mux_set(me, mux_state);
+	anx74xx_tcpm_mux_set(me, mux_state, &unused);
 #endif
 	return rv;
 }
@@ -904,7 +912,7 @@ static int anx74xx_tcpm_get_message_raw(int port, uint32_t *payload, int *head)
 	return anx74xx_read_pd_obj(port, (uint8_t *)payload, len);
 }
 
-static int anx74xx_tcpm_transmit(int port, enum tcpm_transmit_type type,
+static int anx74xx_tcpm_transmit(int port, enum tcpci_msg_type type,
 		  uint16_t header,
 		  const uint32_t *data)
 {
@@ -913,14 +921,14 @@ static int anx74xx_tcpm_transmit(int port, enum tcpm_transmit_type type,
 
 	switch (type) {
 	/* ANX is aware of type */
-	case TCPC_TX_SOP:
-	case TCPC_TX_SOP_PRIME:
-	case TCPC_TX_SOP_PRIME_PRIME:
+	case TCPCI_MSG_SOP:
+	case TCPCI_MSG_SOP_PRIME:
+	case TCPCI_MSG_SOP_PRIME_PRIME:
 		len = PD_HEADER_CNT(header) * 4 + 2;
 		ret = anx74xx_send_message(port, header,
 						  data, type, len);
 		break;
-	case TCPC_TX_HARD_RESET:
+	case TCPCI_MSG_TX_HARD_RESET:
 	/* Request HARD RESET */
 		tcpc_read(port, ANX74XX_REG_TX_CTRL_1, &reg);
 		reg |= ANX74XX_REG_TX_HARD_RESET_REQ;
@@ -928,13 +936,13 @@ static int anx74xx_tcpm_transmit(int port, enum tcpm_transmit_type type,
 	/*After Hard Reset, TCPM shall disable goodCRC*/
 		anx74xx_tcpm_set_auto_good_crc(port, 0);
 		break;
-	case TCPC_TX_CABLE_RESET:
+	case TCPCI_MSG_CABLE_RESET:
 	/* Request CABLE RESET */
 		tcpc_read(port, ANX74XX_REG_TX_CTRL_1, &reg);
 		reg |= ANX74XX_REG_TX_CABLE_RESET_REQ;
 		ret = tcpc_write(port, ANX74XX_REG_TX_CTRL_1, reg);
 		break;
-	case TCPC_TX_BIST_MODE_2:
+	case TCPCI_MSG_TX_BIST_MODE_2:
 	/* Request BIST MODE 2 */
 		reg = ANX74XX_REG_TX_BIST_START
 				| ANX74XX_REG_TX_BIXT_FOREVER | (0x02 << 4);
@@ -1020,9 +1028,9 @@ void anx74xx_tcpc_alert(int port)
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	if (reg & ANX74XX_REG_EXT_SOP)
-		msg_sop[port] = PD_MSG_SOP;
+		msg_sop[port] = TCPCI_MSG_SOP;
 	else if (reg & ANX74XX_REG_EXT_SOP_PRIME)
-		msg_sop[port] = PD_MSG_SOP_PRIME;
+		msg_sop[port] = TCPCI_MSG_SOP_PRIME;
 #endif
 
 	/* Check for Hard Reset done bit */
@@ -1037,7 +1045,7 @@ void anx74xx_tcpc_alert(int port)
 
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	if (reg & ANX74XX_REG_EXT_SOP_PRIME_PRIME)
-		msg_sop[port] = PD_MSG_SOP_PRIME_PRIME;
+		msg_sop[port] = TCPCI_MSG_SOP_PRIME_PRIME;
 #endif
 
 	if (reg & ANX74XX_REG_EXT_HARD_RST) {

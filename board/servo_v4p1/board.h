@@ -11,8 +11,6 @@
 /* Use Link-Time Optimizations to try to reduce the firmware code size */
 #define CONFIG_LTO
 
-#define CONFIG_BOARD_VERSION_CUSTOM
-
 /* 48 MHz SYSCLK clock frequency */
 #define CPU_CLOCK 48000000
 
@@ -216,6 +214,7 @@
 #define CONFIG_USB_PD_ONLY_FIXED_PDOS
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USBC_SS_MUX
+#define CONFIG_USBC_SS_MUX_UFP_ONLY
 
 /* Don't automatically change roles */
 #undef CONFIG_USB_PD_INITIAL_DRP_STATE

@@ -6,7 +6,6 @@
 /* Poppy board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "anx7447.h"
 #include "battery.h"
 #include "board_config.h"
@@ -852,8 +851,7 @@ struct motion_sensor_t motion_sensors[] = {
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 /* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/* If the lid is in 360 position, ignore the lid angle,
 	 * which might be faulty. Disable keyboard.
@@ -862,7 +860,6 @@ void lid_angle_peripheral_enable(int enable)
 		enable = 0;
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif
 
 /* Called on AP S3 -> S0 transition */
 static void board_chipset_resume(void)
@@ -963,7 +960,7 @@ static void cbi_init(void)
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next

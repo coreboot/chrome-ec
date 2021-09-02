@@ -19,7 +19,6 @@
 #include "registers.h"
 #include "system.h"
 #include "task.h"
-#include "timer.h"
 #include "tcpm/tcpm.h"
 #include "util.h"
 #include "usb_charge.h"
@@ -313,7 +312,7 @@ static struct tx_chunked {
 /* Message Reception State Machine Object */
 static struct protocol_layer_rx {
 	/* received message type */
-	enum tcpm_transmit_type sop;
+	enum tcpci_msg_type sop;
 	/* message ids for all valid port partners */
 	int msg_id[NUM_SOP_STAR_TYPES];
 } prl_rx[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -325,7 +324,7 @@ static struct protocol_layer_tx {
 	/* state machine flags */
 	uint32_t flags;
 	/* last message type we transmitted */
-	enum tcpm_transmit_type last_xmit_type;
+	enum tcpci_msg_type last_xmit_type;
 	/* message id counters for all 6 port partners */
 	uint32_t msg_id_counter[NUM_SOP_STAR_TYPES];
 	/* transmit status */
@@ -345,7 +344,7 @@ static struct pd_message {
 	/* message status flags */
 	uint32_t flags;
 	/* SOP* */
-	enum tcpm_transmit_type xmit_type;
+	enum tcpci_msg_type xmit_type;
 	/* type of message */
 	uint8_t msg_type;
 	/* PD revision */
@@ -415,6 +414,8 @@ GEN_NOT_SUPPORTED(TCH_REPORT_ERROR);
 #define TCH_REPORT_ERROR TCH_REPORT_ERROR_NOT_SUPPORTED
 #endif /* !CONFIG_USB_PD_REV30 */
 
+/* To store the time stamp when TCPC sets TX Complete Success */
+static timestamp_t tcpc_tx_success_ts[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Set the protocol transmit statemachine to a new state. */
 static void set_state_prl_tx(const int port,
@@ -507,8 +508,22 @@ static void print_current_tch_state(const int port)
 }
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
+
+timestamp_t prl_get_tcpc_tx_success_ts(int port)
+{
+	return tcpc_tx_success_ts[port];
+}
+
+/* Sets the time stamp when TCPC reports TX success. */
+static void set_tcpc_tx_success_ts(int port)
+{
+	tcpc_tx_success_ts[port] = get_time();
+}
+
 void pd_transmit_complete(int port, int status)
 {
+	if (status == TCPC_TX_COMPLETE_SUCCESS)
+		set_tcpc_tx_success_ts(port);
 	prl_tx[port].xmit_status = status;
 }
 
@@ -551,7 +566,7 @@ static void prl_init(int port)
 	prl_tx[port].flags = 0;
 	if (IS_ENABLED(CONFIG_USB_PD_REV30))
 		typec_select_src_collision_rp(port, SINK_TX_OK);
-	prl_tx[port].last_xmit_type = TCPC_TX_SOP;
+	prl_tx[port].last_xmit_type = TCPCI_MSG_SOP;
 	prl_tx[port].xmit_status = TCPC_TX_UNSET;
 
 	if (IS_ENABLED(CONFIG_USB_PD_REV30)) {
@@ -612,7 +627,7 @@ void prl_hard_reset_complete(int port)
 }
 
 void prl_send_ctrl_msg(int port,
-		      enum tcpm_transmit_type type,
+		      enum tcpci_msg_type type,
 		      enum pd_ctrl_msg_type msg)
 {
 	pdmsg[port].xmit_type = type;
@@ -632,7 +647,7 @@ void prl_send_ctrl_msg(int port,
 }
 
 void prl_send_data_msg(int port,
-		      enum tcpm_transmit_type type,
+		      enum tcpci_msg_type type,
 		      enum pd_data_msg_type msg)
 {
 	pdmsg[port].xmit_type = type;
@@ -652,7 +667,7 @@ void prl_send_data_msg(int port,
 
 #ifdef CONFIG_USB_PD_EXTENDED_MESSAGES
 void prl_send_ext_data_msg(int port,
-			  enum tcpm_transmit_type type,
+			  enum tcpci_msg_type type,
 			  enum pd_ext_msg_type msg)
 {
 	pdmsg[port].xmit_type = type;
@@ -671,11 +686,11 @@ void prl_set_default_pd_revision(int port)
 	 * partner doesn't support this revision, the Protocol Engine will
 	 * lower this value to the revision supported by the partner.
 	 */
-	pdmsg[port].rev[TCPC_TX_SOP] = PD_REVISION;
-	pdmsg[port].rev[TCPC_TX_SOP_PRIME] = PD_REVISION;
-	pdmsg[port].rev[TCPC_TX_SOP_PRIME_PRIME] = PD_REVISION;
-	pdmsg[port].rev[TCPC_TX_SOP_DEBUG_PRIME] = PD_REVISION;
-	pdmsg[port].rev[TCPC_TX_SOP_DEBUG_PRIME_PRIME] = PD_REVISION;
+	pdmsg[port].rev[TCPCI_MSG_SOP] = PD_REVISION;
+	pdmsg[port].rev[TCPCI_MSG_SOP_PRIME] = PD_REVISION;
+	pdmsg[port].rev[TCPCI_MSG_SOP_PRIME_PRIME] = PD_REVISION;
+	pdmsg[port].rev[TCPCI_MSG_SOP_DEBUG_PRIME] = PD_REVISION;
+	pdmsg[port].rev[TCPCI_MSG_SOP_DEBUG_PRIME_PRIME] = PD_REVISION;
 }
 
 void prl_reset_soft(int port)
@@ -757,7 +772,7 @@ void prl_run(int port, int evt, int en)
 	}
 }
 
-void prl_set_rev(int port, enum tcpm_transmit_type type,
+void prl_set_rev(int port, enum tcpci_msg_type type,
 						enum pd_rev_type rev)
 {
 	/* We only store revisions for SOP* types. */
@@ -766,7 +781,7 @@ void prl_set_rev(int port, enum tcpm_transmit_type type,
 	pdmsg[port].rev[type] = rev;
 }
 
-enum pd_rev_type prl_get_rev(int port, enum tcpm_transmit_type type)
+enum pd_rev_type prl_get_rev(int port, enum tcpci_msg_type type)
 {
 	/* We only store revisions for SOP* types. */
 	ASSERT(type < NUM_SOP_STAR_TYPES);
@@ -823,7 +838,7 @@ static __maybe_unused int pdmsg_xmit_type_is_rev30(const int port)
 static bool is_sop_rev30(const int port)
 {
 	return IS_ENABLED(CONFIG_USB_PD_REV30) &&
-	       prl_get_rev(port, TCPC_TX_SOP) == PD_REV30;
+	       prl_get_rev(port, TCPCI_MSG_SOP) == PD_REV30;
 }
 
 /* Common Protocol Layer Message Transmission */
@@ -1038,7 +1053,7 @@ static void prl_tx_layer_reset_for_transmit_run(const int port)
 
 static uint32_t get_sop_star_header(const int port)
 {
-	const int is_sop_packet = pdmsg[port].xmit_type == TCPC_TX_SOP;
+	const int is_sop_packet = pdmsg[port].xmit_type == TCPCI_MSG_SOP;
 	int ext;
 
 #ifdef CONFIG_USB_PD_EXTENDED_MESSAGES
@@ -1214,7 +1229,7 @@ static void prl_tx_snk_pending_entry(const int port)
 
 static void prl_tx_snk_pending_run(const int port)
 {
-	enum tcpc_cc_voltage_status cc1, cc2;
+	bool start_tx = false;
 
 	/*
 	 * Wait unit the SRC applies SINK_TX_OK so we can transmit. In FRS mode,
@@ -1222,9 +1237,17 @@ static void prl_tx_snk_pending_run(const int port)
 	 * gone or the TCPC CC_STATUS update time could be too long to meet
 	 * tFRSwapInit.
 	 */
-	tcpm_get_cc(port, &cc1, &cc2);
-	if (cc1 == TYPEC_CC_VOLT_RP_3_0 || cc2 == TYPEC_CC_VOLT_RP_3_0 ||
-	    pe_in_frs_mode(port)) {
+	if (pe_in_frs_mode(port)) {
+		/* shortcut to save some i2c_xfer calls on the FRS path. */
+		start_tx = true;
+	} else {
+		enum tcpc_cc_voltage_status cc1, cc2;
+
+		tcpm_get_cc(port, &cc1, &cc2);
+		start_tx = (cc1 == TYPEC_CC_VOLT_RP_3_0 ||
+			    cc2 == TYPEC_CC_VOLT_RP_3_0);
+	}
+	if (start_tx) {
 		/*
 		 * We clear the pending XMIT flag here right before we send so
 		 * we can detect if we discarded this message or not
@@ -1257,7 +1280,7 @@ void prl_hr_send_msg_to_phy(const int port)
 	/* Header is not used for hard reset */
 	const uint32_t header = 0;
 
-	pdmsg[port].xmit_type = TCPC_TX_HARD_RESET;
+	pdmsg[port].xmit_type = TCPCI_MSG_TX_HARD_RESET;
 
 	/*
 	 * These flags could be set if this function is called before the
@@ -2168,7 +2191,7 @@ static void prl_rx_wait_for_phy_message(const int port, int evt)
 	 */
 	if (!IS_ENABLED(CONFIG_USB_CTVPD) &&
 	    !IS_ENABLED(CONFIG_USB_VPD) &&
-	    PD_HEADER_GET_SOP(header) != PD_MSG_SOP &&
+	    PD_HEADER_GET_SOP(header) != TCPCI_MSG_SOP &&
 	    PD_HEADER_PROLE(header) == PD_PLUG_FROM_DFP_UFP)
 		return;
 

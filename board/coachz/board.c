@@ -23,7 +23,7 @@
 #include "peripheral_charger.h"
 #include "pi3usb9201.h"
 #include "power.h"
-#include "power/sc7180.h"
+#include "power/qcom.h"
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
@@ -50,6 +50,16 @@ static void ks_interrupt(enum gpio_signal s);
 
 #include "gpio_list.h"
 
+/*
+ * Workaround for b/193223400. This disables the IRQ from CTN730. Fixing this
+ * here (using a rather awkward way) separates the fix from the common code.
+ */
+#ifdef SECTION_IS_RW
+#define GPIO_PCHG_P0 GPIO_WLC_IRQ_CONN
+#else
+#define GPIO_PCHG_P0 ARRAY_SIZE(gpio_irq_handlers)
+#endif
+
 extern struct pchg_drv ctn730_drv;
 
 struct pchg pchgs[] = {
@@ -57,7 +67,7 @@ struct pchg pchgs[] = {
 		.cfg = &(const struct pchg_config) {
 			.drv = &ctn730_drv,
 			.i2c_port = I2C_PORT_WLC,
-			.irq_pin = GPIO_WLC_IRQ_CONN,
+			.irq_pin = GPIO_PCHG_P0,
 			.full_percent = 96,
 			.block_size = 128,
 		},
@@ -375,6 +385,15 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 /* Initialize board. */
 static void board_init(void)
 {
+	/*
+	 * The rev-1 hardware doesn't have the external pull-up fix for the bug
+	 * b/177611071. It requires rework to stuff the resistor. For people who
+	 * has difficulty to do the rework, this is a workaround, which makes
+	 * the GPIO push-pull, instead of open-drain.
+	 */
+	if (system_get_board_version() == 1)
+		gpio_set_flags(GPIO_HIBERNATE_L, GPIO_OUTPUT);
+
 	/* Enable BC1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);

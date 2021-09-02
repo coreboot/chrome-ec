@@ -51,7 +51,6 @@ die() {
 BOARDS_IT83XX=(
 	adlrvpm_ite
 	adlrvpp_ite
-	glkrvp_ite
 	it83xx_evb
 	jslrvp_ite
 	reef_it8320
@@ -83,7 +82,6 @@ BOARDS_STM32=(
 	pit
 	plankton
 	rainier
-	samus_pd
 	strago_pd
 	zinger
 )
@@ -123,7 +121,10 @@ BOARDS_NPCX_7M7X_JTAG=(
 )
 
 BOARDS_NPCX_SPI=(
-	glkrvp
+)
+
+BOARDS_NPCX_INT_SPI=(
+	adlrvpp_npcx
 )
 
 BOARDS_SPI_1800MV=(
@@ -135,7 +136,6 @@ BOARDS_RAIDEN=(
 	coral
 	eve
 	fizz
-	flapjack
 	kukui
 	nami
 	nautilus
@@ -180,6 +180,8 @@ DEFINE_boolean verbose "${FLAGS_FALSE}" \
 	"Verbose hw control logging"
 DEFINE_boolean verify "${FLAGS_FALSE}" \
 	"Verify EC firmware image after programming."
+DEFINE_boolean zephyr "${FLAGS_FALSE}" \
+	"Program a Zephyr EC image instead of a CrOS EC image"
 
 # Parse command line
 FLAGS_HELP="usage: $0 [flags]"
@@ -270,6 +272,11 @@ function dut_control_get_or_die {
 
 : ${BOARD:=${FLAGS_board}}
 
+# Find the Zephyr project directory for the specified board. Zephyr projects
+# organized under ./zephyr/projects as <baseboard>/<board> directory.
+: ${ZEPHYR_DIR:=$(find zephyr/projects -mindepth 2 -maxdepth 2 \
+		-type d -name "${BOARD}")}
+
 in_array() {
 	local n=$#
 	local value=${!n}
@@ -310,6 +317,10 @@ fi
 
 if $(in_array "${BOARDS_NPCX_SPI[@]}" "${BOARD}"); then
 	SUPPORTED_CHIPS+=("npcx_spi")
+fi
+
+if $(in_array "${BOARDS_NPCX_INT_SPI[@]}" "${BOARD}"); then
+	SUPPORTED_CHIPS+=("npcx_int_spi")
 fi
 
 if $(in_array "${BOARDS_IT83XX[@]}" "${BOARD}"); then
@@ -368,7 +379,7 @@ fi
 # Servo variables management
 case "${BOARD}" in
 	chocodile_bec ) MCU="usbpd" ;;
-	oak_pd|samus_pd|strago_pd ) MCU="usbpd" ;;
+	oak_pd|strago_pd ) MCU="usbpd" ;;
 	chell_pd|glados_pd ) MCU="usbpd" ;;
 	bloonchipper|dartmonkey|hatch_fp|nami_fp|nocturne_fp ) MCU="fpmcu" ;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD=( "true" ); MCU="ec" ;;
@@ -395,17 +406,19 @@ esac
 
 SERVO_TYPE="$(dut_control_get servo_type || :)"
 
-if [[ "${SERVO_TYPE}" =~ ^servo_v4_with_.*$ ]]; then
-	ACTIVE_DEVICE="$(dut_control_get active_v4_device)"
+if [[ "${SERVO_TYPE}" =~ ^servo_v4(p1)?_with_.*$ ]]; then
+	ACTIVE_DEVICE="$(dut_control_get active_dut_controller)"
 else
 	ACTIVE_DEVICE="${SERVO_TYPE}"
 fi
 
-if [[ "${SERVO_TYPE}" =~ ^servo_v4_with_.*_and_.*$ ]]; then
+if [[ "${SERVO_TYPE}" =~ ^servo_v4(p1)?_with_.*_and_.*$ ]]; then
 	# If there are two devices, servo v4 type will show both devices. The
 	# default device is first. The other device is second.
-	# servo_type:servo_v4_with_servo_micro_and_ccd_cr50
+	# servo_type:servo_v4{p1}_with_servo_micro_and_ccd_cr50
 	SECOND_DEVICE="${SERVO_TYPE#*_and_}"
+	# servo_v4p1 can shared the same type with servo_v4, since there's no
+	# difference handling the flash.
 	SERVO_TYPE="servo_v4_with_${ACTIVE_DEVICE}"
 	# Controls sent through the default device don't have a prefix. The
 	# second device controls do. If the default device isn't active, we
@@ -658,9 +671,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# TODO: the name of the RO images created for zephyr vary based on whether
+# the RO image includes a header.
+# NPCX images use "build-ro/zephyr/zephyr.npcx.bin"
+# ITE images use "build-ro/zephyr/zephyr.bin"
+if [ "${FLAGS_ro}" = ${FLAGS_TRUE} ] && [ "${FLAGS_zephyr}" = ${FLAGS_TRUE} ]
+then
+	die "The --ro flag is not supported with the --zephyr flag"
+fi
+
 # Possible default EC images
 if [ "${FLAGS_ro}" = ${FLAGS_TRUE} ] ; then
 	EC_FILE=ec.RO.flat
+elif [ "${FLAGS_zephyr}" = ${FLAGS_TRUE} ] ; then
+	EC_FILE=zephyr.bin
 else
 	EC_FILE=ec.bin
 fi
@@ -669,6 +693,8 @@ LOCAL_BUILD=
 if [[ -n "${EC_DIR}" ]]; then
 	if [ "${FLAGS_ro}" = ${FLAGS_TRUE} ] ; then
 		LOCAL_BUILD="${EC_DIR}/build/${BOARD}/RO/${EC_FILE}"
+	elif [ "${FLAGS_zephyr}" = ${FLAGS_TRUE} ] ; then
+		LOCAL_BUILD="${EC_DIR}/build/${ZEPHYR_DIR}/output/${EC_FILE}"
 	else
 		LOCAL_BUILD="${EC_DIR}/build/${BOARD}/${EC_FILE}"
 	fi
@@ -849,7 +875,7 @@ function claim_pty() {
 
 # Returns the serialnumber of the specified servo.
 function get_serial() {
-	if [[ "${SERVO_TYPE}" =~ "servo_v4_with_servo_micro" ]]; then
+	if [[ "${SERVO_TYPE}" =~ ^servo_v4(p1)?_with_servo_micro ]]; then
 		if [[ -z "${BOARD}" ]]; then
 			sn_ctl="servo_micro_"
 		elif [[ "$(dut_control_get "servo_micro_for_${BOARD}_serialname")" =~ \
@@ -1415,6 +1441,7 @@ function flash_npcx_uut() {
 		"$(dirname "$IMG")/chip/npcx/spiflashfw" \
 		"$(dirname "$IMG")" \
 		"${EC_DIR}/build/${BOARD}/chip/npcx/spiflashfw" \
+		"${EC_DIR}/build/${ZEPHYR_DIR}/output" \
 		"$(dirname "$LOCAL_BUILD")" \
 		"$(dirname "$EMERGE_BUILD")" ;
 	do

@@ -11,7 +11,11 @@
 #include <kernel.h>
 #include <logging/log.h>
 #include <soc.h>
+#include <soc_dt.h>
+#include <drivers/pinmux.h>
+#include <dt-bindings/pinctrl/it8xxx2-pinctrl.h>
 
+#include "chipset.h"
 #include "console.h"
 #include "host_command.h"
 
@@ -20,6 +24,21 @@
 #define CPRINTF(format, args...) cprintf(CC_SPI, format, ## args)
 
 LOG_MODULE_REGISTER(cros_shi, LOG_LEVEL_ERR);
+
+#define DRV_CONFIG(dev) ((struct cros_shi_it8xxx2_cfg * const)(dev)->config)
+
+/*
+ * Strcture cros_shi_it8xxx2_cfg is about the setting of SHI,
+ * this config will be used at initial time
+ */
+struct cros_shi_it8xxx2_cfg {
+	/* Pinmux control group */
+	const struct device *pinctrls;
+	/* GPIO pin */
+	uint8_t pin;
+	/* Alternate function */
+	uint8_t alt_fun;
+};
 
 #define SPI_RX_MAX_FIFO_SIZE 256
 #define SPI_TX_MAX_FIFO_SIZE 256
@@ -103,25 +122,36 @@ static void spi_bad_received_data(int count)
 
 static void spi_response_host_data(uint8_t *out_msg_addr, int tx_size)
 {
-	/* Tx FIFO reset and count monitor reset */
-	IT83XX_SPI_TXFCR = IT83XX_SPI_TXFR | IT83XX_SPI_TXFCMR;
-	/* CPU Tx FIFO1 and FIFO2 access */
-	IT83XX_SPI_TXRXFAR = IT83XX_SPI_CPUTFA;
+	/*
+	 * Protect sequence of filling response packet for host.
+	 * This will ensure CPU access FIFO is disabled at SPI end interrupt no
+	 * matter the interrupt is triggered before or after the sequence.
+	 */
+	unsigned int key = irq_lock();
 
-	for (int i = 0; i < tx_size; i += 4) {
-		/* Write response data from out_msg buffer to Tx FIFO */
-		IT83XX_SPI_CPUWTFDB0 = *(uint32_t *)(out_msg_addr + i);
+	if (shi_state == SPI_STATE_PROCESSING) {
+		/* Tx FIFO reset and count monitor reset */
+		IT83XX_SPI_TXFCR = IT83XX_SPI_TXFR | IT83XX_SPI_TXFCMR;
+		/* CPU Tx FIFO1 and FIFO2 access */
+		IT83XX_SPI_TXRXFAR = IT83XX_SPI_CPUTFA;
+
+		for (int i = 0; i < tx_size; i += 4) {
+			/* Write response data from out_msg buffer to Tx FIFO */
+			IT83XX_SPI_CPUWTFDB0 = *(uint32_t *)(out_msg_addr + i);
+		}
+
+		/*
+		 * After writing data to Tx FIFO is finished, this bit will
+		 * be to indicate the SPI slave controller.
+		 */
+		IT83XX_SPI_TXFCR = IT83XX_SPI_TXFS;
+		/* End Tx FIFO access */
+		IT83XX_SPI_TXRXFAR = 0;
+		/* SPI slave read Tx FIFO */
+		IT83XX_SPI_FCR = IT83XX_SPI_SPISRTXF;
 	}
 
-	/*
-	 * After writing data to Tx FIFO is finished, this bit will
-	 * be to indicate the SPI slave controller.
-	 */
-	IT83XX_SPI_TXFCR = IT83XX_SPI_TXFS;
-	/* End Tx FIFO access */
-	IT83XX_SPI_TXRXFAR = 0;
-	/* SPI slave read Tx FIFO */
-	IT83XX_SPI_FCR = IT83XX_SPI_SPISRTXF;
+	irq_unlock(key);
 }
 
 /*
@@ -211,9 +241,6 @@ static void spi_parse_header(void)
 		spi_packet.response_size = 0;
 		spi_packet.driver_result = EC_RES_SUCCESS;
 
-		/* Move to processing state */
-		spi_set_state(SPI_STATE_PROCESSING);
-
 		/* Go to common-layer to handle request */
 		host_packet_receive(&spi_packet);
 	} else {
@@ -232,6 +259,8 @@ static void shi_ite_int_handler(const void *arg)
 	 * EC responded data, then AP ended the transaction.
 	 */
 	if (IT83XX_SPI_ISR & IT83XX_SPI_ENDDETECTINT) {
+		/* Disable CPU access Rx FIFO to clock in data from AP again */
+		IT83XX_SPI_TXRXFAR = 0;
 		/* Ready to receive */
 		spi_set_state(SPI_STATE_READY_TO_RECV);
 		/*
@@ -252,14 +281,30 @@ static void shi_ite_int_handler(const void *arg)
 	if (IT83XX_SPI_RX_VLISR & IT83XX_SPI_RVLI) {
 		/* write clear slave status */
 		IT83XX_SPI_RX_VLISR = IT83XX_SPI_RVLI;
+		/* Move to processing state */
+		spi_set_state(SPI_STATE_PROCESSING);
 		/* Parse header for version of spi-protocol */
 		spi_parse_header();
 	}
-
 }
 
+void spi_event(enum gpio_signal signal)
+{
+	if (chipset_in_state(CHIPSET_STATE_ON)) {
+		/* Move to processing state */
+		spi_set_state(SPI_STATE_PROCESSING);
+		/* Disable idle task deep sleep bit of SPI in S0. */
+		/* TODO(b:185176098): disable_sleep(SLEEP_MASK_SPI); */
+	}
+}
+
+/*
+ * SHI init priority is behind CONFIG_PLATFORM_EC_GPIO_INIT_PRIORITY to
+ * overwrite GPIO_INPUT setting of spi chip select pin.
+ */
 static int cros_shi_ite_init(const struct device *dev)
 {
+	const struct cros_shi_it8xxx2_cfg *const config = DRV_CONFIG(dev);
 	/* Set FIFO data target count */
 	struct ec_host_request cmd_head;
 
@@ -314,13 +359,33 @@ static int cros_shi_ite_init(const struct device *dev)
 	/* SPI slave controller enable (after settings are ready) */
 	IT83XX_SPI_SPISGCR = IT83XX_SPI_SPISCEN;
 
+	/* Ensure spi chip select alt function is enabled. */
+	for (int i = 0; i < DT_INST_PROP_LEN(0, pinctrl_0); i++) {
+		pinmux_pin_set(config[i].pinctrls, config[i].pin,
+			       config[i].alt_fun);
+	}
+
 	/* Enable SPI slave interrupt */
 	IRQ_CONNECT(DT_INST_IRQN(0), 0, shi_ite_int_handler, 0, 0);
 	irq_enable(DT_INST_IRQN(0));
 
+	/* Enable SPI chip select pin interrupt */
+	gpio_enable_interrupt(GPIO_SPI0_CS);
+
 	return 0;
 }
-SYS_INIT(cros_shi_ite_init, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+
+static const struct cros_shi_it8xxx2_cfg cros_shi_cfg[] =
+	IT8XXX2_DT_ALT_ITEMS_LIST(0);
+
+#if CONFIG_CROS_SHI_IT8XXX2_INIT_PRIORITY <= \
+	CONFIG_PLATFORM_EC_GPIO_INIT_PRIORITY
+#error "CROS_SHI must initialize after the GPIOs initialization"
+#endif
+DEVICE_DT_INST_DEFINE(0, cros_shi_ite_init, NULL,
+		      NULL, &cros_shi_cfg, POST_KERNEL,
+		      CONFIG_CROS_SHI_IT8XXX2_INIT_PRIORITY,
+		      NULL);
 
 /* Get protocol information */
 enum ec_status spi_get_protocol_info(struct host_cmd_handler_args *args)

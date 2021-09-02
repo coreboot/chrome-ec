@@ -40,6 +40,13 @@
 
 #define NCT38XX_PRODUCT_ID                 0xC301
 
+/*
+ * Default value from the ROLE_CTRL register on first boot will depend on
+ * whether we're coming from a dead battery state.
+ */
+#define NCT38XX_ROLE_CTRL_DEAD_BATTERY	   0x0A
+#define NCT39XX_ROLE_CTRL_GOOD_BATTERY	   0x4A
+
 #define NCT38XX_REG_GPIO_DATA_IN(n)       (0xC0 + ((n) * 8))
 #define NCT38XX_REG_GPIO_DATA_OUT(n)      (0xC1 + ((n) * 8))
 #define NCT38XX_REG_GPIO_DIR(n)           (0xC2 + ((n) * 8))
@@ -68,7 +75,18 @@
 #define NCT38XX_REG_VBC_FAULT_CTL_VC_OVP_OFF	(1 << 5)
 
 #define NCT38XX_RESET_HOLD_DELAY_MS	1
-#define NCT38XX_RESET_POST_DELAY_MS	0
+
+/*
+ * From the datasheet (section 4.4.2 Reset Timing) as following:
+ *                       |  Min  |  Max  |
+ * ----------------------+-------+-------+
+ * NCT3807 (single port) |   x   | 1.5ms |
+ * ----------------------+-------+-------+
+ * NCT3808 (dual port)   |   x   |   3ms |
+ * ----------------------+-------+-------+
+ */
+#define NCT3807_RESET_POST_DELAY_MS	2
+#define NCT3808_RESET_POST_DELAY_MS	3
 
 extern const struct tcpm_drv nct38xx_tcpm_drv;
 
@@ -85,8 +103,46 @@ void nct38xx_ioex_handle_alert(int ioex);
 /*
  * Check which IO's interrupt event is triggered. If any, call its
  * registered interrupt handler.
+ *
+ * @param ioex	I/O expander number
+ * @return EC_SUCCESS on success else error
  */
 int nct38xx_ioex_event_handler(int ioex);
+
+/*
+ * Board level function to map USB-C port to IOEX port
+ *
+ * Default function assumes USB-C port number to be same as the
+ * I/O expander port number. If this logic differs, add an
+ * overridable function at the board level.
+ *
+ * @param port	USB-C port number
+ * @return IOEX port number
+ */
+__override_proto int board_map_nct38xx_tcpc_port_to_ioex(int port);
+
+enum nct38xx_boot_type {
+	NCT38XX_BOOT_UNKNOWN,
+	NCT38XX_BOOT_DEAD_BATTERY,
+	NCT38XX_BOOT_NORMAL,
+};
+
+/**
+ * Collect our boot type from the driver
+ *
+ * @param port	USB-C port number
+ * @return	Returns the boot type detected for this chip
+ */
+enum nct38xx_boot_type nct38xx_get_boot_type(int port);
+
+/**
+ * Notify the driver that the TCPC has been reset, and any stored state from
+ * the chip should therefore be gathered again.  This should be called when
+ * board_reset_pd_mcu is called after init time.
+ *
+ * @param port	USB-C port number which has been reset
+ */
+void nct38xx_reset_notify(int port);
 
 extern const struct ioexpander_drv nct38xx_ioexpander_drv;
 

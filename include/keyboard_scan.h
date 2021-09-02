@@ -46,7 +46,7 @@ struct keyboard_scan_config *keyboard_scan_get_config(void);
 /*
  * Which is probably this.
  */
-extern struct keyboard_scan_config keyscan_config;
+__override_proto extern struct keyboard_scan_config keyscan_config;
 
 /* Key held down at keyboard-controlled reset boot time. */
 enum boot_key {
@@ -134,5 +134,15 @@ void set_vol_up_key(uint8_t row, uint8_t col);
 #else
 static inline void set_vol_up_key(uint8_t row, uint8_t col) {}
 #endif
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ */
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+#endif
+
 
 #endif  /* __CROS_EC_KEYBOARD_SCAN_H */

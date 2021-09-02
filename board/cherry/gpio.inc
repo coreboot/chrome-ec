@@ -30,12 +30,15 @@ GPIO_INT(PMIC_EC_PWRGD, PIN(F, 3),
 
 /* Sensor Interrupts */
 GPIO_INT(BASE_IMU_INT_L,     PIN(M, 3), GPIO_INT_FALLING | GPIO_SEL_1P8V,
-         icm426xx_interrupt)
+         icm42607_interrupt)
 /* USB-C interrupts */
 GPIO_INT(USB_C0_PPC_INT_ODL, PIN(D, 1), GPIO_INT_BOTH, ppc_interrupt)
+#ifdef BOARD_CHERRY
 GPIO_INT(USB_C0_BC12_INT_ODL,PIN(J, 4), GPIO_INT_FALLING, bc12_interrupt)
-/* TODO: rt1718s interrupt, not implemented */
-GPIO(USB_C1_INT_ODL,         PIN(B, 2), GPIO_INPUT | GPIO_INT_FALLING)
+#else /* TOMATO */
+GPIO_INT(USB_C0_BC12_INT_ODL,PIN(I, 5), GPIO_INT_FALLING, bc12_interrupt)
+#endif
+GPIO_INT(USB_C1_INT_ODL,     PIN(B, 2), GPIO_INT_FALLING, rt1718s_tcpc_interrupt)
 /* TODO: not used in other devices? */
 GPIO(LID_ACCEL_INT_L,        PIN(M, 2), GPIO_INT_FALLING | GPIO_SEL_1P8V)
 
@@ -54,6 +57,10 @@ GPIO_INT(WP,                 PIN(I, 4), GPIO_INT_BOTH | GPIO_SEL_1P8V,
          switch_interrupt) /* EC_FLASH_WP_OD */
 GPIO_INT(SPI0_CS,            PIN(M, 5), GPIO_INT_FALLING,
          spi_event)        /* SPI slave Chip Select -- AP_SPI_EC_CS_L */
+#ifdef BOARD_TOMATO
+GPIO_INT(AP_XHCI_INIT_DONE,  PIN(J, 5), GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V,
+         usb_a0_interrupt)
+#endif
 
 /* Power Sequencing Signals */
 GPIO(EC_PMIC_EN_ODL,         PIN(D, 0), GPIO_ODR_HIGH | GPIO_SEL_1P8V)
@@ -70,20 +77,13 @@ GPIO(EC_INT_L,               PIN(E, 6), GPIO_ODR_HIGH | GPIO_SEL_1P8V) /* EC_AP_
 
 /* USB and USBC Signals */
 GPIO(DP_PATH_SEL,            PIN(G, 0), GPIO_OUT_HIGH)
-GPIO(DP_DEMUX_EN,            PIN(G, 1), GPIO_OUT_LOW)
+/* TODO: Turn off in S3 */
+GPIO(DP_DEMUX_EN,            PIN(G, 1), GPIO_OUT_HIGH)
 GPIO(EC_AP_DP_HPD_ODL,       PIN(J, 0), GPIO_ODR_HIGH)
 GPIO(EN_PP5000_USB_A0_VBUS_X,PIN(B, 7), GPIO_OUT_LOW)
 GPIO(USB_C0_DP_IN_HPD,       PIN(H, 4), GPIO_OUT_LOW)
 GPIO(USB_C1_DP_IN_HPD,       PIN(J, 1), GPIO_OUT_LOW)
 GPIO(USB_C0_FRS_EN,          PIN(F, 0), GPIO_OUT_LOW)
-
-/* NVME */
-GPIO(EC_NVME_PLN_ODL,        PIN(D, 7), GPIO_ODR_HIGH | GPIO_SEL_1P8V)
-GPIO(NVME_EC_PLA_S3_ODL,     PIN(I, 7), GPIO_INPUT)
-GPIO(EN_PP2500_NVME_X,       PIN(J, 2), GPIO_OUTPUT | GPIO_PULL_DOWN)
-GPIO(EN_PP1200_NVME_X,       PIN(J, 3), GPIO_OUTPUT | GPIO_PULL_DOWN)
-GPIO(EN_PP900_NVME_X,        PIN(J, 5), GPIO_OUTPUT | GPIO_PULL_DOWN)
-GPIO(PG_NVME_OD,             PIN(H, 3), GPIO_INPUT)
 
 /* Misc Signals */
 GPIO(EN_KB_BL,               PIN(A, 5), GPIO_OUT_LOW)
@@ -115,10 +115,10 @@ ALTERNATE(PIN_MASK(E, 0x81), 1, MODULE_I2C, 0) /* I2C E */
 ALTERNATE(PIN_MASK(B, 0x03), 1, MODULE_UART, 0) /* EC to Servo */
 
 /* PWM */
-ALTERNATE(PIN_MASK(A, 0b11011111), 1, MODULE_PWM, 0) /* PWM 0~4,6,7 */
+ALTERNATE(PIN_MASK(A, 0b10111), 1, MODULE_PWM, 0) /* PWM 0,1,2,4 */
 
 /* ADC */
-ALTERNATE(PIN_MASK(I, 0x4F), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,6 */
+ALTERNATE(PIN_MASK(I, 0xCF), 0, MODULE_ADC, 0) /* ADC 0,1,2,3,6,7 */
 
 /* SPI */
 ALTERNATE(PIN_MASK(M, 0x33), 0, MODULE_SPI, 0) /* SPI */
@@ -134,7 +134,9 @@ GPIO(CCD_MODE_ODL,           PIN(C, 4), GPIO_INPUT)
  * ADC pins don't have internal pull-down capability,
  * so we set them as output low.
  */
+#ifdef BOARD_CHERRY
 GPIO(NC_GPI5,                PIN(I, 5), GPIO_OUT_LOW)
+#endif
 /* NC pins, enable internal pull-up/down to avoid floating state. */
 GPIO(NC_GPM6,                PIN(M, 6), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(SPI_CLK_GPG6,           PIN(G, 6), GPIO_INPUT | GPIO_PULL_UP)
@@ -145,3 +147,14 @@ GPIO(SPI_CLK_GPG6,           PIN(G, 6), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(SPI_MOSI_GPG4,          PIN(G, 4), GPIO_OUT_LOW)
 GPIO(SPI_MISO_GPG5,          PIN(G, 5), GPIO_OUT_LOW)
 GPIO(SPI_CS_GPG7,            PIN(G, 7), GPIO_OUT_LOW)
+
+/* Other unused pins */
+GPIO(PWM3,                   PIN(A, 3), GPIO_INPUT)
+GPIO(PWM6,                   PIN(A, 6), GPIO_INPUT)
+GPIO(PWM7,                   PIN(A, 7), GPIO_INPUT)
+GPIO(EC_NVME_PLN_ODL,        PIN(D, 7), GPIO_INPUT)
+GPIO(NVME_EC_PLA_S3_ODL,     PIN(I, 7), GPIO_INPUT)
+GPIO(EN_PP2500_NVME_X,       PIN(J, 2), GPIO_INPUT)
+GPIO(EN_PP1200_NVME_X,       PIN(J, 3), GPIO_INPUT)
+GPIO(PG_NVME_OD,             PIN(H, 3), GPIO_INPUT)
+

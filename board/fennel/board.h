@@ -12,7 +12,7 @@
 #define VARIANT_KUKUI_BATTERY_SMART
 #define VARIANT_KUKUI_CHARGER_ISL9238
 #define VARIANT_KUKUI_EC_STM32F098
-
+#undef CONFIG_CMD_MFALLOW
 #ifndef SECTION_IS_RW
 #define VARIANT_KUKUI_NO_SENSORS
 #endif /* SECTION_IS_RW */
@@ -57,6 +57,9 @@
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM42607	/* Base accel second source*/
+#define CONFIG_ACCELGYRO_ICM42607_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 #define CONFIG_ALS
 #define CONFIG_CMD_ACCEL_INFO
 
@@ -90,10 +93,6 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
-/* Define the MKBP events which are allowed to wakeup AP in S3. */
-#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
-		(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |\
-		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
 #ifndef __ASSEMBLER__
 
@@ -147,6 +146,7 @@ void emmc_cmd_interrupt(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void board_reset_pd_mcu(void);
 int board_get_version(void);
+void motion_interrupt(enum gpio_signal signal);
 
 /* returns the i2c port number of charger/battery */
 int board_get_charger_i2c(void);

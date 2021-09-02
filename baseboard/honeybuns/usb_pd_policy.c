@@ -47,9 +47,15 @@ const uint32_t pd_src_host_pdo[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pd_src_host_pdo) == PDO_IDX_COUNT);
 
+#ifdef BOARD_C1_1A5_LIMIT
+const uint32_t pd_src_display_pdo[] = {
+	[PDO_IDX_5V]  = PDO_FIXED(5000,   1500, PDO_FIXED_FLAGS),
+};
+#else
 const uint32_t pd_src_display_pdo[] = {
 	[PDO_IDX_5V]  = PDO_FIXED(5000,   3000, PDO_FIXED_FLAGS),
 };
+#endif
 
 const uint32_t pd_snk_pdo[] = {
 	[PDO_IDX_5V]  = PDO_FIXED(5000,   0, PDO_FIXED_FLAGS),
@@ -160,10 +166,15 @@ void pd_power_supply_reset(int port)
 	if (port < 0 || port >= CONFIG_USB_PD_PORT_MAX_COUNT)
 		return;
 
-	prev_en = ppc_is_sourcing_vbus(port);
-
-	/* Disable VBUS via PPC. */
-	ppc_vbus_source_enable(port, 0);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port) {
+		prev_en = c1_ps8805_is_sourcing_vbus(port);
+		/* Disable VBUS via PPC. */
+		c1_ps8805_vbus_source_enable(port, 0);
+	} else {
+		prev_en = ppc_is_sourcing_vbus(port);
+		/* Disable VBUS via PPC. */
+		ppc_vbus_source_enable(port, 0);
+	}
 
 	/* Enable discharge if we were previously sourcing 5V */
 	if (prev_en)
@@ -199,7 +210,11 @@ int pd_set_power_supply_ready(int port)
 	 * left enabled as there is a switch (either PPC or discrete) to turn
 	 * VBUS on/off on the wire.
 	 */
-	rv = ppc_vbus_source_enable(port, 1);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port)
+		rv = c1_ps8805_vbus_source_enable(port, 1);
+	else
+		rv = ppc_vbus_source_enable(port, 1);
+
 	if (rv)
 		return rv;
 
@@ -286,12 +301,26 @@ void pd_transition_voltage(int idx)
 
 int pd_snk_is_vbus_provided(int port)
 {
-	return ppc_is_vbus_present(port);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port)
+		return c1_ps8805_is_vbus_present(port);
+	else
+		return ppc_is_vbus_present(port);
+}
+
+__override bool pd_check_vbus_level(int port, enum vbus_level level)
+{
+	if (level == VBUS_PRESENT)
+		return pd_snk_is_vbus_provided(port);
+	else
+		return !pd_snk_is_vbus_provided(port);
 }
 
 int board_vbus_source_enabled(int port)
 {
-	return ppc_is_sourcing_vbus(port);
+	if (IS_ENABLED(BOARD_C1_NO_PPC) && port)
+		return c1_ps8805_is_sourcing_vbus(port);
+	else
+		return ppc_is_sourcing_vbus(port);
 }
 
 void pd_set_input_current_limit(int port, uint32_t max_ma,
@@ -321,6 +350,20 @@ int pd_check_power_swap(int port)
 
 	return 0;
 }
+
+#ifdef BOARD_C1_1A5_LIMIT
+__override int typec_get_default_current_limit_rp(int port)
+{
+	int rp = TYPEC_RP_USB;
+
+	if (port == USB_PD_PORT_HOST)
+		rp = TYPEC_RP_3A0;
+	else if (port == USB_PD_PORT_DP)
+		rp = TYPEC_RP_1A5;
+
+	return rp;
+}
+#endif
 
 static void usb_tc_connect(void)
 {
@@ -357,7 +400,7 @@ static void usb_tc_disconnect(void)
 }
 DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, usb_tc_disconnect, HOOK_PRIO_DEFAULT);
 
-__override bool pd_can_source_from_device(int port, const int pdo_cnt,
+__override bool pd_can_charge_from_device(int port, const int pdo_cnt,
 				      const uint32_t *pdos)
 {
 	/*
@@ -415,7 +458,7 @@ static int svdm_response_identity(int port, uint32_t *payload)
 	payload[VDO_INDEX_CSTAT] = VDO_CSTAT(0);
 	payload[VDO_INDEX_PRODUCT] = vdo_product;
 
-	if (pd_get_rev(port, TCPC_TX_SOP) == PD_REV30) {
+	if (pd_get_rev(port, TCPCI_MSG_SOP) == PD_REV30) {
 		/* PD Revision 3.0 */
 		payload[VDO_INDEX_IDH] = vdo_idh_rev30;
 		payload[VDO_INDEX_PTYPE_UFP1_VDO] = vdo_ufp1;

@@ -13,7 +13,7 @@
 #include "baseboard.h"
 
 /* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
+#undef CONFIG_SYSTEM_UNLOCKED
 
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
@@ -78,8 +78,8 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 #define CONFIG_THROTTLE_AP
+#define CONFIG_CHIPSET_CAN_THROTTLE
 
 /* USB Mux and Retimer */
 #define CONFIG_USB_MUX_IT5205			/* C1: ITE Mux */
@@ -90,7 +90,7 @@
 /* Keyboard */
 #define CONFIG_KEYBOARD_VIVALDI
 #define CONFIG_KEYBOARD_REFRESH_ROW3
-#define CONFIG_KEYBOARD_KEYPAD
+
 
 #ifndef __ASSEMBLER__
 

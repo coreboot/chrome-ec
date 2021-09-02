@@ -25,7 +25,7 @@
  *   - human readable name
  */
 
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM)
 #define PANIC_ARCH PANIC_ARCH_CORTEX_M
 #define PANIC_REG_LIST(M)             \
 	M(basic.r0, cm.frame[0], a1)  \
@@ -39,6 +39,32 @@
 #define PANIC_REG_EXCEPTION(pdata) pdata->cm.regs[1]
 #define PANIC_REG_REASON(pdata) pdata->cm.regs[3]
 #define PANIC_REG_INFO(pdata) pdata->cm.regs[4]
+#elif defined(CONFIG_RISCV) && !defined(CONFIG_64BIT)
+#define PANIC_ARCH PANIC_ARCH_RISCV_RV32I
+#define PANIC_REG_LIST(M)         \
+	M(ra, riscv.regs[1], ra)  \
+	M(gp, riscv.regs[2], gp)  \
+	M(tp, riscv.regs[3], tp)  \
+	M(a0, riscv.regs[4], a0)  \
+	M(a1, riscv.regs[5], a1)  \
+	M(a2, riscv.regs[6], a2)  \
+	M(a3, riscv.regs[7], a3)  \
+	M(a4, riscv.regs[8], a4)  \
+	M(a5, riscv.regs[9], a5)  \
+	M(a6, riscv.regs[10], a6) \
+	M(a7, riscv.regs[11], a7) \
+	M(t0, riscv.regs[12], t0) \
+	M(t1, riscv.regs[13], t1) \
+	M(t2, riscv.regs[14], t2) \
+	M(t3, riscv.regs[15], t3) \
+	M(t4, riscv.regs[16], t4) \
+	M(t5, riscv.regs[17], t5) \
+	M(t6, riscv.regs[18], t6) \
+	M(mepc, riscv.mepc, mepc) \
+	M(mstatus, riscv.mcause, mstatus)
+#define PANIC_REG_EXCEPTION(pdata) (pdata->riscv.mcause)
+#define PANIC_REG_REASON(pdata) (pdata->riscv.regs[11])
+#define PANIC_REG_INFO(pdata) (pdata->riscv.regs[10])
 #else
 /* Not implemented for this arch */
 #define PANIC_ARCH 0
@@ -59,6 +85,12 @@ static uint32_t placeholder_info_reg;
 #define PANIC_PRINT_REGS(esf_field, pdata_field, human_name) \
 	panic_printf("  %-8s = 0x%08X\n", #human_name, pdata->pdata_field);
 
+void panic_data_print(const struct panic_data *pdata)
+{
+	PANIC_REG_LIST(PANIC_PRINT_REGS);
+}
+
+#ifndef CONFIG_LOG
 static void copy_esf_to_panic_data(const z_arch_esf_t *esf,
 				   struct panic_data *pdata)
 {
@@ -70,11 +102,6 @@ static void copy_esf_to_panic_data(const z_arch_esf_t *esf,
 	pdata->magic = PANIC_DATA_MAGIC;
 
 	PANIC_REG_LIST(PANIC_COPY_REGS);
-}
-
-void panic_data_print(const struct panic_data *pdata)
-{
-	PANIC_REG_LIST(PANIC_PRINT_REGS);
 }
 
 void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
@@ -90,6 +117,7 @@ void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 	k_fatal_halt(reason);
 	CODE_UNREACHABLE;
 }
+#endif /* CONFIG_LOG */
 
 #ifdef CONFIG_PLATFORM_EC_SOFTWARE_PANIC
 void panic_set_reason(uint32_t reason, uint32_t info, uint8_t exception)

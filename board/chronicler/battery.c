@@ -10,7 +10,7 @@
 #include "util.h"
 
 /*
- * Battery info for all Volteer battery types. Note that the fields
+ * Battery info for all Chronicler battery types. Note that the fields
  * start_charging_min/max and charging_min/max are not used for the charger.
  * The effective temperature limits are given by discharging_min/max_c.
  *
@@ -32,37 +32,69 @@
  * address, mask, and disconnect value need to be provided.
  */
 const struct board_batt_params board_battery_info[] = {
-	/* LGC\011 L17L3PB0 Battery Information */
-	/*
-	 * Battery info provided by ODM on b/143477210, comment #11
-	 */
-	[BATTERY_LGC011] = {
+	/* Fujitsu CP813907-01 Battery Information */
+	[BATTERY_FUJITSU_CP813907] = {
 		.fuel_gauge = {
-			.manuf_name = "LGC",
+			.manuf_name = "Fujitsu",
+			.device_name = "CP813907-01",
 			.ship_mode = {
 				.reg_addr = 0x00,
 				.reg_data = { 0x10, 0x10 },
 			},
 			.fet = {
-				.reg_addr = 0x0,
-				.reg_mask = 0x6000,
-				.disconnect_val = 0x6000,
+				.reg_addr = 0x00,
+				.reg_mask = 0x2000,
+				.disconnect_val = 0x2000,
 			}
 		},
 		.batt_info = {
-			.voltage_max		= TARGET_WITH_MARGIN(13200, 5),
+			.voltage_max		= 13200, /* mV */
 			.voltage_normal		= 11550, /* mV */
-			.voltage_min		= 9000, /* mV */
-			.precharge_current	= 256,	/* mA */
+			.voltage_min		= 9000,  /* mV */
+			.precharge_current	= 128,	 /* mA */
 			.start_charging_min_c	= 0,
 			.start_charging_max_c	= 45,
 			.charging_min_c		= 0,
-			.charging_max_c		= 60,
-			.discharging_min_c	= 0,
-			.discharging_max_c	= 75,
+			.charging_max_c		= 55,
+			.discharging_min_c	= -20,
+			.discharging_max_c	= 60,
+		},
+	},
+
+	/* NVT CP813907-01 Battery Information */
+	/*
+	 *  NVT CP813907-01 Battery only use to support early
+	 *  stage battery, all battery for PVT will update
+	 *  manufacturer name to Fujitsu. See b/190685811.
+	 */
+	[BATTERY_NVT_CP813907] = {
+		.fuel_gauge = {
+			.manuf_name = "NVT",
+			.device_name = "CP813907-01",
+			.ship_mode = {
+				.reg_addr = 0x00,
+				.reg_data = { 0x10, 0x10 },
+			},
+			.fet = {
+				.reg_addr = 0x00,
+				.reg_mask = 0x2000,
+				.disconnect_val = 0x2000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= 13200, /* mV */
+			.voltage_normal		= 11550, /* mV */
+			.voltage_min		= 9000,  /* mV */
+			.precharge_current	= 128,	 /* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 45,
+			.charging_min_c		= 0,
+			.charging_max_c		= 55,
+			.discharging_min_c	= -20,
+			.discharging_max_c	= 60,
 		},
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(board_battery_info) == BATTERY_TYPE_COUNT);
 
-const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_LGC011;
+const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_FUJITSU_CP813907;

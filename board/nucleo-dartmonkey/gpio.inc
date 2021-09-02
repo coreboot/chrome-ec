@@ -14,8 +14,8 @@
 #include "base-gpio.inc"
 
 /* Interrupts */
-GPIO_INT(PCH_SLP_S0_L,    PIN(D, 13), GPIO_INT_BOTH, slp_event)
-GPIO_INT(PCH_SLP_S3_L,    PIN(A, 11), GPIO_INT_BOTH, slp_event)
+GPIO_INT(SLP_L,           PIN(D, 13), GPIO_INT_BOTH, slp_event)
+GPIO_INT(SLP_ALT_L,       PIN(A, 11), GPIO_INT_BOTH, slp_event)
 
 /* Output for User Presence */
 GPIO(USER_PRES_L,         PIN(C, 5),  GPIO_ODR_HIGH)
@@ -25,4 +25,4 @@ GPIO_INT(FPS_INT,         PIN(A, 0),  GPIO_INT_RISING, fps_event)
 GPIO(FP_RST_ODL,          PIN(E, 0),  GPIO_OUT_HIGH)
 GPIO(SPI4_NSS,            PIN(E, 4),  GPIO_OUT_HIGH)
 /* SPI4 master to sensor: PE2/5/6 (CLK/MISO/MOSI) */
-ALTERNATE(PIN_MASK(E, 0x0064), GPIO_ALT_SPI, MODULE_SPI_MASTER,  0)
+ALTERNATE(PIN_MASK(E, 0x0064), GPIO_ALT_SPI, MODULE_SPI_CONTROLLER,  0)

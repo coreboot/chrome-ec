@@ -49,7 +49,8 @@ extern struct ec_response_battery_dynamic_info
 
 /*
  * Shut down main processor and/or hibernate EC when discharging and battery
- * level < this level.
+ * level < this level. Setting this too low makes the battery discharge too
+ * deeply, which isn't good for the battery health.
  */
 #define BATTERY_LEVEL_SHUTDOWN		  3
 
@@ -472,5 +473,7 @@ void battery_compensate_params(struct batt_params *batt);
  * board-specific battery_compensate_params
  */
 __override_proto void board_battery_compensate_params(struct batt_params *batt);
+
+void battery_validate_params(struct batt_params *batt);
 
 #endif /* __CROS_EC_BATTERY_H */

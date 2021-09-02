@@ -5,7 +5,7 @@
 
 /* Waddledoo board-specific configuration */
 
-#include "adc_chip.h"
+#include "adc.h"
 #include "button.h"
 #include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
@@ -73,7 +73,7 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 
 #ifdef BOARD_MAGOLOR
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next
@@ -111,6 +111,25 @@ static const struct ec_response_keybd_config magolor_keybd = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
+static const struct ec_response_keybd_config magister_keybd = {
+	/* Default Chromeos keyboard config */
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	/* No function keys, no numeric keypad, has screenlock key */
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
 static const struct ec_response_keybd_config magpie_keybd = {
 	.num_top_row_keys = 10,
 	.action_keys = {
@@ -128,15 +147,66 @@ static const struct ec_response_keybd_config magpie_keybd = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY | KEYBD_CAP_NUMERIC_KEYPAD,
 };
 
+static const struct ec_response_keybd_config magma_keybd = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY | KEYBD_CAP_NUMERIC_KEYPAD,
+};
+
+__override
+uint8_t board_keyboard_row_refresh(void)
+{
+	if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+		return 3;
+	else
+		return 2;
+}
+
 __override const struct ec_response_keybd_config
 *board_vivaldi_keybd_config(void)
 {
-	if (get_cbi_fw_config_numeric_pad())
-		return &magpie_keybd;
-	else
-		return &magolor_keybd;
+	if (get_cbi_fw_config_numeric_pad()) {
+		if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+			return &magma_keybd;
+		else
+			return &magpie_keybd;
+	}
+	else {
+		if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+			return &magister_keybd;
+		else
+			return &magolor_keybd;
+	}
 }
 #endif
+
+/*
+ * We have total 30 pins for keyboard connecter {-1, -1} mean
+ * the N/A pin that don't consider it and reserve index 0 area
+ * that we don't have pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
+	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
+	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
+	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
+	{-1, -1}, {0, 4}, {-1, -1}, {8, 2}, {-1, -1},
+	{-1, -1},
+};
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 /* C0 interrupt line shared by BC 1.2 and charger */
 static void check_c0_line(void);
@@ -548,6 +618,13 @@ static const mat33_fp_t lid_standard_ref = {
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
+/* Matrices to rotate accelerometers into the magister reference. */
+static const mat33_fp_t lid_magister_ref = {
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(1), 0, 0},
@@ -768,8 +845,13 @@ void board_init(void)
 		if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_KX022) {
 			motion_sensors[LID_ACCEL] = kx022_lid_accel;
 			ccprints("LID_ACCEL is KX022");
-		} else
+		} else {
+			if (system_get_board_version() >= 5) {
+				motion_sensors[LID_ACCEL]
+				.rot_standard_ref = &lid_magister_ref;
+			}
 			ccprints("LID_ACCEL is BMA253");
+		}
 #endif
 		motion_sensor_count = ARRAY_SIZE(motion_sensors);
 		/* Enable gpio interrupt for base accelgyro sensor */
@@ -966,16 +1048,16 @@ static void adc_vol_key_press_check(void)
 	static uint8_t old_adc_key_state;
 	uint8_t adc_key_state_change;
 
-	if (volt > 2400 && volt < 2490) {
+	if (volt > 2400 && volt < 2540) {
 		/* volume-up is pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK;
-	} else if (volt > 2600 && volt < 2690) {
+	} else if (volt > 2600 && volt < 2740) {
 		/* volume-down is pressed */
 		new_adc_key_state = ADC_VOL_DOWN_MASK;
-	} else if (volt < 2290) {
+	} else if (volt < 2300) {
 		/* both volumn-up and volume-down are pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK | ADC_VOL_DOWN_MASK;
-	} else if (volt > 2700) {
+	} else if (volt > 2780) {
 		/* both volumn-up and volume-down are released */
 		new_adc_key_state = 0;
 	}
@@ -991,9 +1073,8 @@ static void adc_vol_key_press_check(void)
 }
 DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -1017,4 +1098,3 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif

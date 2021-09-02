@@ -456,8 +456,6 @@ enum {
 
 /* pin-mux for JTAG */
 #define NPCX_DEVALT5_TRACE_EN            0
-#define NPCX_DEVALT5_NJEN1_EN            1
-#define NPCX_DEVALT5_NJEN0_EN            2
 
 /* pin-mux for ADC */
 #define NPCX_DEVALT6_ADC0_SL             0
@@ -614,7 +612,7 @@ enum {
 /* RX FIFO threshold */
 #define NPCX_SMBRXF_CTL_RX_THR           FIELD(0, 6)
 /*
- * In master receiving mode, last byte in FIFO should send ACK or NACK
+ * In controller receiving mode, last byte in FIFO should send ACK or NACK
  */
 #define NPCX_SMBRXF_CTL_LAST             7
 
@@ -1200,11 +1198,11 @@ enum PM_CHANNEL_T {
 #define NPCX_VWEVMS_VALID                FIELD(4, 4)
 
 /* Macro functions for eSPI CFG & IE */
-#define IS_SLAVE_CHAN_ENABLE(ch)         IS_BIT_SET(NPCX_ESPICFG, ch)
+#define IS_PERIPHERAL_CHAN_ENABLE(ch)    IS_BIT_SET(NPCX_ESPICFG, ch)
 #define IS_HOST_CHAN_EN(ch)              IS_BIT_SET(NPCX_ESPICFG, (ch+4))
 #define ENABLE_ESPI_CHAN(ch)             SET_BIT(NPCX_ESPICFG, ch)
 #define DISABLE_ESPI_CHAN(ch)            CLEAR_BIT(NPCX_ESPICFG, ch)
-/* ESPI Slave Channel Support Definitions */
+/* ESPI Peripheral Channel Support Definitions */
 #define ESPI_SUPP_CH_PC                  BIT(NPCX_ESPICFG_PCCHN_SUPP)
 #define ESPI_SUPP_CH_VM                  BIT(NPCX_ESPICFG_VWCHN_SUPP)
 #define ESPI_SUPP_CH_OOB                 BIT(NPCX_ESPICFG_OOBCHN_SUPP)

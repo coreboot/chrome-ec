@@ -6,6 +6,8 @@
 #if defined(CONFIG_CPU_CORTEX_M) || defined(CONFIG_CPU_CORTEX_R) || \
 	defined(CONFIG_CPU_CORTEX_A)
 __image_size = _flash_used;
+#elif defined(CONFIG_RISCV)
+__image_size = _image_rom_size;
 #else
 /*
  * Intentionally set to 0. Some components, such as EFS2, need this value.

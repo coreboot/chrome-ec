@@ -19,7 +19,7 @@
 #include "lpc.h"
 #include "power.h"
 #include "power/intel_x86.h"
-#include "power/sc7180.h"
+#include "power/qcom.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
@@ -466,7 +466,8 @@ static enum power_state power_common_state(enum power_state state)
 			}
 
 			now = get_time().val;
-			target = last_shutdown_time + hibernate_delay * SECOND;
+			target = last_shutdown_time +
+					(uint64_t)hibernate_delay * SECOND;
 			switch (board_system_is_idle(last_shutdown_time,
 						     &target, now)) {
 			case CRITICAL_SHUTDOWN_HIBERNATE:
@@ -722,15 +723,15 @@ static void power_common_init(void)
 	/* Update input state */
 	power_update_signals();
 
-	/* Call chipset-specific init to set initial state */
-	power_set_state(power_chipset_init());
-
 	/* Enable interrupts for input signals */
 	for (i = 0; i < POWER_SIGNAL_COUNT; i++, s++)
 		if (s->flags & POWER_SIGNAL_DISABLE_AT_BOOT)
 			power_signal_disable_interrupt(s->gpio);
 		else
 			power_signal_enable_interrupt(s->gpio);
+
+	/* Call chipset-specific init to set initial state */
+	power_set_state(power_chipset_init());
 
 	/*
 	 * Update input state again since there is a small window

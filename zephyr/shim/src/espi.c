@@ -22,7 +22,6 @@
 #include "lpc.h"
 #include "port80.h"
 #include "power.h"
-#include "soc_espi.h"
 #include "task.h"
 #include "timer.h"
 #include "zephyr_espi_shim.h"
@@ -47,28 +46,28 @@ static bool init_done;
  * functional application of M to 2-tuples of (platform/ec signal,
  * zephyr vwire).
  */
-#define VW_SIGNAL_TRANSLATION_LIST(M)                                 \
-	M(VW_SLP_S3_L, ESPI_VWIRE_SIGNAL_SLP_S3)                      \
-	M(VW_SLP_S4_L, ESPI_VWIRE_SIGNAL_SLP_S4)                      \
-	M(VW_SLP_S5_L, ESPI_VWIRE_SIGNAL_SLP_S5)                      \
-	M(VW_SUS_STAT_L, ESPI_VWIRE_SIGNAL_SUS_STAT)                  \
-	M(VW_PLTRST_L, ESPI_VWIRE_SIGNAL_PLTRST)                      \
-	M(VW_OOB_RST_WARN, ESPI_VWIRE_SIGNAL_OOB_RST_WARN)            \
-	M(VW_OOB_RST_ACK, ESPI_VWIRE_SIGNAL_OOB_RST_ACK)              \
-	M(VW_WAKE_L, ESPI_VWIRE_SIGNAL_WAKE)                          \
-	M(VW_PME_L, ESPI_VWIRE_SIGNAL_PME)                            \
-	M(VW_ERROR_FATAL, ESPI_VWIRE_SIGNAL_ERR_FATAL)                \
-	M(VW_ERROR_NON_FATAL, ESPI_VWIRE_SIGNAL_ERR_NON_FATAL)        \
-	M(VW_SLAVE_BTLD_STATUS_DONE, ESPI_VWIRE_SIGNAL_SLV_BOOT_DONE) \
-	M(VW_SCI_L, ESPI_VWIRE_SIGNAL_SCI)                            \
-	M(VW_SMI_L, ESPI_VWIRE_SIGNAL_SMI)                            \
-	M(VW_HOST_RST_ACK, ESPI_VWIRE_SIGNAL_HOST_RST_ACK)            \
-	M(VW_HOST_RST_WARN, ESPI_VWIRE_SIGNAL_HOST_RST_WARN)          \
-	M(VW_SUS_ACK, ESPI_VWIRE_SIGNAL_SUS_ACK)                      \
-	M(VW_SUS_WARN_L, ESPI_VWIRE_SIGNAL_SUS_WARN)                  \
-	M(VW_SUS_PWRDN_ACK_L, ESPI_VWIRE_SIGNAL_SUS_PWRDN_ACK)        \
-	M(VW_SLP_A_L, ESPI_VWIRE_SIGNAL_SLP_A)                        \
-	M(VW_SLP_LAN, ESPI_VWIRE_SIGNAL_SLP_LAN)                      \
+#define VW_SIGNAL_TRANSLATION_LIST(M)                                      \
+	M(VW_SLP_S3_L, ESPI_VWIRE_SIGNAL_SLP_S3)                           \
+	M(VW_SLP_S4_L, ESPI_VWIRE_SIGNAL_SLP_S4)                           \
+	M(VW_SLP_S5_L, ESPI_VWIRE_SIGNAL_SLP_S5)                           \
+	M(VW_SUS_STAT_L, ESPI_VWIRE_SIGNAL_SUS_STAT)                       \
+	M(VW_PLTRST_L, ESPI_VWIRE_SIGNAL_PLTRST)                           \
+	M(VW_OOB_RST_WARN, ESPI_VWIRE_SIGNAL_OOB_RST_WARN)                 \
+	M(VW_OOB_RST_ACK, ESPI_VWIRE_SIGNAL_OOB_RST_ACK)                   \
+	M(VW_WAKE_L, ESPI_VWIRE_SIGNAL_WAKE)                               \
+	M(VW_PME_L, ESPI_VWIRE_SIGNAL_PME)                                 \
+	M(VW_ERROR_FATAL, ESPI_VWIRE_SIGNAL_ERR_FATAL)                     \
+	M(VW_ERROR_NON_FATAL, ESPI_VWIRE_SIGNAL_ERR_NON_FATAL)             \
+	M(VW_PERIPHERAL_BTLD_STATUS_DONE, ESPI_VWIRE_SIGNAL_SLV_BOOT_DONE) \
+	M(VW_SCI_L, ESPI_VWIRE_SIGNAL_SCI)                                 \
+	M(VW_SMI_L, ESPI_VWIRE_SIGNAL_SMI)                                 \
+	M(VW_HOST_RST_ACK, ESPI_VWIRE_SIGNAL_HOST_RST_ACK)                 \
+	M(VW_HOST_RST_WARN, ESPI_VWIRE_SIGNAL_HOST_RST_WARN)               \
+	M(VW_SUS_ACK, ESPI_VWIRE_SIGNAL_SUS_ACK)                           \
+	M(VW_SUS_WARN_L, ESPI_VWIRE_SIGNAL_SUS_WARN)                       \
+	M(VW_SUS_PWRDN_ACK_L, ESPI_VWIRE_SIGNAL_SUS_PWRDN_ACK)             \
+	M(VW_SLP_A_L, ESPI_VWIRE_SIGNAL_SLP_A)                             \
+	M(VW_SLP_LAN, ESPI_VWIRE_SIGNAL_SLP_LAN)                           \
 	M(VW_SLP_WLAN, ESPI_VWIRE_SIGNAL_SLP_WLAN)
 
 /*
@@ -154,7 +153,7 @@ static void espi_reset_handler(const struct device *dev,
 }
 #endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
 
-#define ESPI_DEV DT_LABEL(DT_NODELABEL(espi0))
+#define ESPI_NODE DT_NODELABEL(espi0)
 static const struct device *espi_dev;
 
 
@@ -197,11 +196,11 @@ int espi_vw_disable_wire_int(enum espi_vw_signal signal)
 uint8_t *lpc_get_memmap_range(void)
 {
 	uint32_t lpc_memmap = 0;
+	int result = espi_read_lpc_request(espi_dev, EACPI_GET_SHARED_MEMORY,
+					   &lpc_memmap);
 
-	if (espi_read_lpc_request(espi_dev, EACPI_GET_SHARED_MEMORY,
-				  &lpc_memmap) != 0) {
-		LOG_ERR("Get lpc_memmap failed!\n");
-	}
+	if (result != EC_SUCCESS)
+		LOG_ERR("Get lpc_memmap failed (%d)!\n", result);
 
 	return (uint8_t *)lpc_memmap;
 }
@@ -320,10 +319,10 @@ DECLARE_HOOK(HOOK_INIT, host_command_init, HOOK_PRIO_INIT_LPC);
 static void handle_acpi_write(uint32_t data)
 {
 	uint8_t value, result;
-	uint8_t is_cmd = (data >> NPCX_ACPI_TYPE_POS) & 0x01;
+	uint8_t is_cmd = is_acpi_command(data);
 	uint32_t status;
 
-	value = (data >> NPCX_ACPI_DATA_POS) & 0xff;
+	value = get_acpi_value(data);
 
 	/* Handle whatever this was. */
 	if (acpi_ap_to_ec(is_cmd, value, &result)) {
@@ -414,7 +413,7 @@ static enum ec_status lpc_get_protocol_info(struct host_cmd_handler_args *args)
 
 	args->response_size = sizeof(*r);
 
-	return EC_SUCCESS;
+	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, lpc_get_protocol_info,
 		     EC_VER_MASK(0));
@@ -461,12 +460,12 @@ void lpc_aux_put_char(uint8_t chr, int send_irq)
 static void kbc_ibf_obe_handler(uint32_t data)
 {
 #ifdef HAS_TASK_KEYPROTO
-	uint8_t is_ibf = (data >> NPCX_8042_EVT_POS) & NPCX_8042_EVT_IBF;
+	uint8_t is_ibf = is_8042_ibf(data);
 	uint32_t status = I8042_AUX_DATA;
 
 	if (is_ibf) {
-		keyboard_host_write((data >> NPCX_8042_DATA_POS) & 0xFF,
-				    (data >> NPCX_8042_TYPE_POS) & 0xFF);
+		keyboard_host_write(get_8042_data(data),
+				    get_8042_type(data));
 	} else if (IS_ENABLED(CONFIG_8042_AUX)) {
 		espi_write_lpc_request(espi_dev, E8042_CLEAR_FLAG, &status);
 	}
@@ -541,9 +540,9 @@ int zephyr_shim_setup_espi(void)
 		.max_freq = 20,
 	};
 
-	espi_dev = device_get_binding(ESPI_DEV);
-	if (!espi_dev) {
-		LOG_ERR("Failed to find device %s", ESPI_DEV);
+	espi_dev = DEVICE_DT_GET(ESPI_NODE);
+	if (!device_is_ready(espi_dev)) {
+		LOG_ERR("Error: device %s is not ready", espi_dev->name);
 		return -1;
 	}
 

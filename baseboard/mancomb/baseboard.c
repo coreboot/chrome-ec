@@ -6,7 +6,6 @@
 /* Mancomb family-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
 #include "charge_state_v2.h"
@@ -17,7 +16,7 @@
 #include "chipset.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
-#include "driver/retimer/ps8818.h"
+#include "driver/retimer/tdp142.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/temp_sensor/sb_tsi.h"
 #include "driver/usb_mux/amd_fp6.h"
@@ -148,11 +147,12 @@ const struct adc_t adc_channels[] = {
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
 	},
+	/*  100K/(680K+100K) = 5/39 voltage divider */
 	[SNS_PPVAR_PWR_IN] = {
 		.name = "POWER_V",
 		.input_ch = NPCX_ADC_CH5,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
+		.factor_mul = (ADC_MAX_VOLT) * 39,
+		.factor_div = (ADC_READ_MAX + 1) * 5,
 		.shift = 0,
 	},
 	[ADC_TEMP_SENSOR_AMBIENT] = {
@@ -198,20 +198,20 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 	[TEMP_SENSOR_SOC] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
 		},
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
 		/* TODO: Setting fan off to 0 so it's always on */
 		.temp_fan_off = C_TO_K(0),
-		.temp_fan_max = C_TO_K(75),
+		.temp_fan_max = C_TO_K(70),
 	},
 	[TEMP_SENSOR_MEMORY] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
 		},
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
@@ -230,7 +230,17 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_fan_off = 0,
 		.temp_fan_max = 0,
 	},
-	/* TODO: TEMP_SENSOR_CPU */
+		[TEMP_SENSOR_CPU] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		},
+		.temp_fan_off = 0,
+		.temp_fan_max = 0,
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -330,7 +340,7 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
  * not needed as well. usb_mux.c can handle the situation
  * properly.
  */
-static int fsusb42umx_set_mux(const struct usb_mux*, mux_state_t);
+static int fsusb42umx_set_mux(const struct usb_mux*, mux_state_t, bool *);
 const struct usb_mux_driver usbc_sbu_mux_driver = {
 	.set = fsusb42umx_set_mux,
 };
@@ -418,9 +428,9 @@ const struct fan_conf fan_conf_0 = {
 };
 
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 1800,
-	.rpm_start = 3000,
-	.rpm_max = 5200,
+	.rpm_min = 1000,
+	.rpm_start = 1000,
+	.rpm_max = 4500,
 };
 
 const struct fan_t fans[] = {
@@ -436,9 +446,13 @@ BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
  * chip and it needs a board specific driver.
  * Overall, it will use chained mux framework.
  */
-static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state)
+static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state,
+			      bool *ack_required)
 {
 	bool inverted = mux_state & USB_PD_MUX_POLARITY_INVERTED;
+
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
 
 	if (me->usb_port == USBC_PORT_C0)
 		RETURN_ERROR(ioex_set_level(IOEX_USB_C0_SBU_FLIP, inverted));
@@ -678,12 +692,12 @@ void board_reset_pd_mcu(void)
 	/* Reset TCPC0 */
 	reset_pd_port(USBC_PORT_C0, GPIO_USB_C0_TCPC_RST_L,
 		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+		      NCT3807_RESET_POST_DELAY_MS);
 
 	/* Reset TCPC1 */
 	reset_pd_port(USBC_PORT_C1, GPIO_USB_C1_TCPC_RST_L,
 		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+		      NCT3807_RESET_POST_DELAY_MS);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -774,7 +788,8 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
 
 static void baseboard_chipset_resume(void)
 {
-	/* TODO: Handle baseboard chipset resume */
+	/* Enable the DP redriver, which powers on in S0 */
+	tdp142_set_ctlsel(TDP142_CTLSEL_ENABLED);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
 

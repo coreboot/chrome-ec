@@ -10,8 +10,6 @@
 
 /* Interrupts */
 GPIO_INT(FPS_INT,         PIN(A, 0), GPIO_INT_RISING, fps_event)
-GPIO_INT(SLP_L,           PIN(A, 8), GPIO_INT_BOTH, slp_event)
-GPIO_INT(SLP_ALT_L,       PIN(B, 6), GPIO_INT_BOTH, slp_event)
 
 /* Inputs */
 GPIO(FP_SENSOR_SEL,       PIN(B, 0), GPIO_INPUT)
@@ -27,4 +25,4 @@ GPIO(USER_PRES_L,         PIN(B, 9),  GPIO_ODR_HIGH)
  * configured it as a GPIO above and the SPI_MASTER module expects to use it
  * in software NSS management mode, not hardware management mode.
  */
-ALTERNATE(PIN_MASK(B, 0xE000), GPIO_ALT_SPI, MODULE_SPI_MASTER, GPIO_PULL_DOWN)
+ALTERNATE(PIN_MASK(B, 0xE000), GPIO_ALT_SPI, MODULE_SPI_CONTROLLER, GPIO_PULL_DOWN)

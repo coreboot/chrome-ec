@@ -14,6 +14,7 @@
 #include "raa489000.h"
 #include "tcpm/tcpci.h"
 #include "tcpm/tcpm.h"
+#include "timer.h"
 
 #define DEFAULT_R_AC 20
 #define R_AC CONFIG_CHARGER_SENSE_RESISTOR_AC
@@ -113,6 +114,7 @@ int raa489000_init(int port)
 	 * otherwise the board may die (See b/150702984, b/178728138).  This
 	 * works as this part is a combined charger IC and TCPC.
 	 */
+	usleep(853);
 	charger_get_vbus_voltage(port, &vbus_mv);
 
 	/*
@@ -132,7 +134,7 @@ int raa489000_init(int port)
 			CPRINTS("c%d: failed to disable ADCs", port);
 	}
 
-	if (vbus_mv &&
+	if ((vbus_mv > 3900) &&
 	    charge_manager_get_active_charge_port() == CHARGE_PORT_NONE &&
 	    !pd_is_battery_capable()) {
 		chg.current = 500;
@@ -259,6 +261,8 @@ int raa489000_tcpm_set_cc(int port, int pull)
 int raa489000_debug_detach(int port)
 {
 	int rv;
+	int power_status;
+
 	/*
 	 * Force RAA489000 to see debug detach by running:
 	 *
@@ -266,10 +270,13 @@ int raa489000_debug_detach(int port)
 	 * 2. Set ROLE_CONTROL=0x0F(OPEN,OPEN)
 	 * 3. Set POWER_CONTROL. AutoDischargeDisconnect=0
 	 *
-	 * Only if we have sufficient battery.  Otherwise, we would risk
-	 * brown-out during the CC open set.
+	 * Only if we have sufficient battery or are not sinking.  Otherwise,
+	 * we would risk brown-out during the CC open set.
 	 */
-	if (!pd_is_battery_capable())
+	RETURN_ERROR(tcpc_read(port, TCPC_REG_POWER_STATUS, &power_status));
+
+	if (!pd_is_battery_capable() &&
+			(power_status & TCPC_REG_POWER_STATUS_SINKING_VBUS))
 		return EC_SUCCESS;
 
 	tcpci_tcpc_enable_auto_discharge_disconnect(port, 1);

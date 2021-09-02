@@ -124,6 +124,12 @@ void *memchr(const void *buffer, int c, size_t n);
  */
 char *strstr(const char *s1, const char *s2);
 
+/**
+ * Calculates the length of the initial segment of s which consists
+ * entirely of bytes not in reject.
+ */
+size_t strcspn(const char *s, const char *reject);
+
 size_t strlen(const char *s);
 char *strncpy(char *dest, const char *src, size_t n);
 int strncmp(const char *s1, const char *s2, size_t n);
@@ -327,6 +333,56 @@ static inline uint64_t mulaa32(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
  * @param ready  Bit(s) to be read for readiness
  */
 void wait_for_ready(volatile uint32_t *reg, uint32_t enable, uint32_t ready);
+
+/**
+ * Convert the ternary bit array (each element is either 0, 1, or 2) to a
+ * non-standard ternary number system where the first 2^n natural numbers are
+ * represented as they would be in a binary system (without any Z digits) and
+ * the following 3^n-2^n numbers use the remaining ternary representations in
+ * the normal ternary system order (skipping the values that were already used
+ * up).
+ *
+ * This function is useful for converting BOARD ID, which is initially used a
+ * binary and later decided to switch to tri-state after some revisions have
+ * already been built.
+ *
+ * Example: For nbits = 2 we get the following representation:
+ *
+ *   Number      X1     X0
+ *     0          0      0
+ *     1          0      1
+ *     2          1      0
+ *     3          1      1	// Start counting ternaries back at 0 after this
+ *     4          0      2	// Skipping 00 and 01 which are already used up
+ *     5          1      2	// Skipping 10 and 11 which are already used up
+ *     6          2      0
+ *     7          2      1
+ *     8          2      2
+ *
+ * @param bits		Array of ternary bits (LSB first).
+ * @param nbits		Total number of bits.
+ * @return Number in the binary-first ternary number system.
+ */
+int binary_first_base3_from_bits(int *bits, int nbits);
+
+/**
+ * Convert the binary bit array to integer value.
+ *
+ * @param bits    array of integers with values of 0 and 1
+ * @param nbits   number of bits to decode
+ * @return        integer decoded from bits
+ */
+int binary_from_bits(int *bits, int nbits);
+
+/**
+ * Convert the ternary bit array to integer value.
+ * This function is used to handle 'Z' state of gpio as value of '2'.
+ *
+ * @param bits    array of integers with values of 0, 1 or 2
+ * @param nbits   number of bits to decode
+ * @return        integer decoded from bits
+ */
+int ternary_from_bits(int *bits, int nbits);
 
 #ifdef __cplusplus
 }

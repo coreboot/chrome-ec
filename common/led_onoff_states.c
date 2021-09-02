@@ -38,10 +38,7 @@ int charge_get_percent(void);
 
 static int led_get_charge_percent(void)
 {
-	if (IS_ENABLED(CONFIG_BATTERY_EXPORT_DISPLAY_SOC))
-		return DIV_ROUND_NEAREST(charge_get_display_charge(), 10);
-	else
-		return charge_get_percent();
+	return DIV_ROUND_NEAREST(charge_get_display_charge(), 10);
 }
 
 static enum led_states led_get_state(void)
@@ -102,6 +99,8 @@ static enum led_states led_get_state(void)
 	case PWR_STATE_IDLE: /* External power connected in IDLE */
 		if (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)
 			new_state = STATE_FACTORY_TEST;
+		else if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+			new_state = STATE_DISCHARGE_S5;
 		else
 			new_state = STATE_DISCHARGE_S0;
 		break;
@@ -218,7 +217,7 @@ static void led_update_power(void)
 		 * OFF not defined, as indicated by no specified phase 0 time.
 		 */
 		if (desired_state == PWR_LED_STATE_OFF_LOW_POWER &&
-		    led_bat_state_table[desired_state][LED_PHASE_0].time == 0)
+		    led_pwr_state_table[desired_state][LED_PHASE_0].time == 0)
 			desired_state = PWR_LED_STATE_OFF;
 
 		/* State is changing */

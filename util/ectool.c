@@ -73,6 +73,8 @@ const char help_str[] =
 	"      Turn on automatic fan speed control.\n"
 	"  backlight <enabled>\n"
 	"      Enable/disable LCD backlight\n"
+	"  basestate [attach | detach | reset]\n"
+	"      Manually force base state to attached, detached or reset.\n"
 	"  battery\n"
 	"      Prints battery info\n"
 	"  batterycutoff [at-shutdown]\n"
@@ -5291,6 +5293,15 @@ static int cmd_motionsense(int argc, char **argv)
 		case MOTIONSENSE_CHIP_ICM426XX:
 			printf("icm426xx\n");
 			break;
+		case MOTIONSENSE_CHIP_ICM42607:
+			printf("icm42607\n");
+			break;
+		case MOTIONSENSE_CHIP_BMI323:
+			printf("bmi323\n");
+			break;
+		case MOTIONSENSE_CHIP_BMA422:
+			printf("bma422\n");
+			break;
 		default:
 			printf("unknown\n");
 		}
@@ -7434,6 +7445,35 @@ int cmd_lcd_backlight(int argc, char *argv[])
 	return 0;
 }
 
+static void cmd_basestate_help(void)
+{
+	fprintf(stderr,
+		"Usage: ectool basestate [attach | detach | reset]\n");
+}
+
+int cmd_basestate(int argc, char *argv[])
+{
+	struct ec_params_set_base_state p;
+
+	if (argc != 2) {
+		cmd_basestate_help();
+		return -1;
+	}
+
+	if (!strncmp(argv[1], "attach", 6)) {
+		p.cmd = EC_SET_BASE_STATE_ATTACH;
+	} else if (!strncmp(argv[1], "detach", 6)) {
+		p.cmd = EC_SET_BASE_STATE_DETACH;
+	} else if (!strncmp(argv[1], "reset", 5)) {
+		p.cmd = EC_SET_BASE_STATE_RESET;
+	} else {
+		cmd_basestate_help();
+		return -1;
+	}
+
+	return ec_command(EC_CMD_SET_BASE_STATE, 0,
+			  &p, sizeof(p), NULL, 0);
+}
 
 int cmd_ext_power_limit(int argc, char *argv[])
 {
@@ -7488,30 +7528,106 @@ int cmd_charge_current_limit(int argc, char *argv[])
 	return rv;
 }
 
+static void cmd_charge_control_help(const char *cmd, const char *msg)
+{
+	if (msg)
+		fprintf(stderr, "ERROR: %s\n", msg);
+
+	fprintf(stderr,
+	"\n"
+	"  Usage: %s\n"
+	"    Get current settings.\n"
+	"  Usage: %s normal|idle|discharge\n"
+	"    Set charge mode (and disable battery sustainer).\n"
+	"  Usage: %s normal <lower> <upper>\n"
+	"    Enable battery sustainer. <lower> and <upper> are battery SoC\n"
+	"    between which EC tries to keep the battery level.\n"
+	"\n",
+	cmd, cmd, cmd);
+}
 
 int cmd_charge_control(int argc, char *argv[])
 {
 	struct ec_params_charge_control p;
+	struct ec_response_charge_control r;
+	int version = 2;
+	const char * const charge_mode_text[] = EC_CHARGE_MODE_TEXT;
+	char *e;
 	int rv;
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <normal | idle | discharge>\n",
-			argv[0]);
-		return -1;
+	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CONTROL, 2))
+		version = 1;
+
+	if (argc == 1) {
+		if (version < 2) {
+			cmd_charge_control_help(argv[0],
+						"Old EC doesn't support GET.");
+			return -1;
+		}
+		p.cmd = EC_CHARGE_CONTROL_CMD_GET;
+		rv = ec_command(EC_CMD_CHARGE_CONTROL, version,
+				&p, sizeof(p), &r, sizeof(r));
+		if (rv < 0) {
+			fprintf(stderr, "Command failed.\n");
+			return rv;
+		}
+		printf("Charge mode = %s (%d)\n",
+		       r.mode < ARRAY_SIZE(charge_mode_text)
+		       		? charge_mode_text[r.mode] : "UNDEFINED",
+		       r.mode);
+		printf("Battery sustainer = %s (%d%% ~ %d%%)\n",
+		       (r.sustain_soc.lower != -1 && r.sustain_soc.upper != -1)
+				? "on" : "off",
+		       r.sustain_soc.lower, r.sustain_soc.upper);
+		return 0;
 	}
 
+	p.cmd = EC_CHARGE_CONTROL_CMD_SET;
 	if (!strcasecmp(argv[1], "normal")) {
 		p.mode = CHARGE_CONTROL_NORMAL;
+		if (argc == 2) {
+			p.sustain_soc.lower = -1;
+			p.sustain_soc.upper = -1;
+		} else if (argc == 4) {
+			if (version < 2) {
+				cmd_charge_control_help(argv[0],
+					"Old EC doesn't support sustainer.");
+				return -1;
+			}
+			p.sustain_soc.lower = strtol(argv[2], &e, 0);
+			if (e && *e) {
+				cmd_charge_control_help(argv[0],
+						"Bad character in <lower>");
+				return -1;
+			}
+			p.sustain_soc.upper = strtol(argv[3], &e, 0);
+			if (e && *e) {
+				cmd_charge_control_help(argv[0],
+						"Bad character in <upper>");
+				return -1;
+			}
+		} else {
+			cmd_charge_control_help(argv[0], "Bad arguments");
+			return -1;
+		}
 	} else if (!strcasecmp(argv[1], "idle")) {
+		if (argc != 2) {
+			cmd_charge_control_help(argv[0], "Bad arguments");
+			return -1;
+		}
 		p.mode = CHARGE_CONTROL_IDLE;
 	} else if (!strcasecmp(argv[1], "discharge")) {
+		if (argc != 2) {
+			cmd_charge_control_help(argv[0], "Bad arguments");
+			return -1;
+		}
 		p.mode = CHARGE_CONTROL_DISCHARGE;
 	} else {
-		fprintf(stderr, "Bad value.\n");
+		cmd_charge_control_help(argv[0], "Bad sub-command");
 		return -1;
 	}
 
-	rv = ec_command(EC_CMD_CHARGE_CONTROL, 1, &p, sizeof(p), NULL, 0);
+	rv = ec_command(EC_CMD_CHARGE_CONTROL, version, &p, sizeof(p), NULL, 0);
 	if (rv < 0) {
 		fprintf(stderr, "Is AC connected?\n");
 		return rv;
@@ -7519,7 +7635,9 @@ int cmd_charge_control(int argc, char *argv[])
 
 	switch (p.mode) {
 	case CHARGE_CONTROL_NORMAL:
-		printf("Charge state machine normal mode.\n");
+		printf("Charge state machine is in normal mode%s.\n",
+		       (p.sustain_soc.lower == -1 || p.sustain_soc.upper == -1)
+		       		? "" : " with sustainer enabled");
 		break;
 	case CHARGE_CONTROL_IDLE:
 		printf("Charge state machine force idle.\n");
@@ -9390,7 +9508,7 @@ static void cmd_pchg_help(char *cmd)
 	"  Usage3: %s <port> reset\n"
 	"          Reset <port>.\n"
 	"\n"
-	"  Usage4: %s <port> update <address> <version> <file>\n"
+	"  Usage4: %s <port> update <version> <addr1> <file1> <addr2> <file2> ...\n"
 	"          Update firmware of <port>.\n",
 	cmd, cmd, cmd, cmd);
 }
@@ -9399,7 +9517,9 @@ static int cmd_pchg_info(const struct ec_response_pchg *res)
 {
 	static const char * const pchg_state_text[] = EC_PCHG_STATE_TEXT;
 
-	printf("State: %s (%d)\n", res->state < sizeof(pchg_state_text)
+	BUILD_ASSERT(ARRAY_SIZE(pchg_state_text) == PCHG_STATE_COUNT);
+
+	printf("State: %s (%d)\n", res->state < PCHG_STATE_COUNT
 	       ? pchg_state_text[res->state] : "UNDEF", res->state);
 	printf("Battery: %u%%\n", res->battery_percentage);
 	printf("Errors: 0x%x\n", res->error);
@@ -9433,13 +9553,50 @@ static int cmd_pchg_wait_event(int port, uint32_t expected)
 	return -1;
 }
 
-static int cmd_pchg_update(int port, uint32_t address, uint32_t version,
-			   const char *filename)
+static int cmd_pchg_update_open(int port, uint32_t version,
+				uint32_t *block_size, uint32_t *crc)
 {
 	struct ec_params_pchg_update *p =
 		(struct ec_params_pchg_update *)(ec_outbuf);
 	struct ec_response_pchg_update *r =
 		(struct ec_response_pchg_update *)(ec_inbuf);
+	int rv;
+
+	/* Open session. */
+	p->port = port;
+	p->cmd = EC_PCHG_UPDATE_CMD_OPEN;
+	p->version = version;
+	rv = ec_command(EC_CMD_PCHG_UPDATE, 0, p, sizeof(*p), r, sizeof(*r));
+	if (rv < 0) {
+		fprintf(stderr, "\nFailed to open update session: %d\n", rv);
+		return rv;
+	}
+
+	if (r->block_size + sizeof(*p) > ec_max_outsize) {
+		fprintf(stderr, "\nBlock size (%d) is too large.\n",
+			r->block_size);
+		return -1;
+	}
+
+	rv = cmd_pchg_wait_event(port, EC_MKBP_PCHG_UPDATE_OPENED);
+	if (rv)
+		return rv;
+
+	printf("Opened update session (port=%d ver=0x%x bsize=%d):\n",
+	       port, version, r->block_size);
+
+	*block_size = r->block_size;
+	crc32_ctx_init(crc);
+
+	return 0;
+}
+
+static int cmd_pchg_update_write(int port, uint32_t address,
+				 const char *filename, uint32_t block_size,
+				 uint32_t *crc)
+{
+	struct ec_params_pchg_update *p =
+		(struct ec_params_pchg_update *)(ec_outbuf);
 	FILE *fp;
 	size_t len, total;
 	int progress = 0;
@@ -9455,44 +9612,18 @@ static int cmd_pchg_update(int port, uint32_t address, uint32_t version,
 	fseek(fp, 0L, SEEK_END);
 	total = ftell(fp);
 	rewind(fp);
-	printf("Update file %s (%zu bytes) is opened.\n", filename, total);
-
-	/* Open session. */
-	p->port = port;
-	p->cmd = EC_PCHG_UPDATE_CMD_OPEN;
-	p->version = version;
-	rv = ec_command(EC_CMD_PCHG_UPDATE, 0, p, sizeof(*p), r, sizeof(*r));
-	if (rv < 0) {
-		fprintf(stderr, "\nFailed to open update session: %d\n", rv);
-		fclose(fp);
-		return rv;
-	}
-
-	if (r->block_size + sizeof(*p) > ec_max_outsize) {
-		fprintf(stderr, "\nBlock size (%d) is too large.\n",
-			r->block_size);
-		fclose(fp);
-		return -1;
-	}
-
-	rv = cmd_pchg_wait_event(port, EC_MKBP_PCHG_UPDATE_OPENED);
-	if (rv)
-		return rv;
-
-	printf("Writing firmware (port=%d ver=0x%x addr=0x%x bsize=%d):\n",
-	       port, version, address, r->block_size);
+	printf("Writing %s (%zu bytes).\n", filename, total);
 
 	p->cmd = EC_PCHG_UPDATE_CMD_WRITE;
 	p->addr = address;
-	crc32_init();
 
 	/* Write firmware in blocks. */
-	len = fread(p->data, 1, r->block_size, fp);
+	len = fread(p->data, 1, block_size, fp);
 	while (len > 0) {
 		int previous_progress = progress;
 		int i;
 
-		crc32_hash(p->data, len);
+		crc32_ctx_hash(crc, p->data, len);
 		p->size = len;
 		rv = ec_command(EC_CMD_PCHG_UPDATE, 0, p,
 				sizeof(*p) + len, NULL, 0);
@@ -9513,15 +9644,23 @@ static int cmd_pchg_update(int port, uint32_t address, uint32_t version,
 			fflush(stdout);
 		}
 
-		len = fread(p->data, 1, r->block_size, fp);
+		len = fread(p->data, 1, block_size, fp);
 	}
 
 	printf("\n");
 	fclose(fp);
 
-	/* Close session. */
+	return 0;
+}
+
+static int cmd_pchg_update_close(int port, uint32_t *crc)
+{
+	struct ec_params_pchg_update *p =
+		(struct ec_params_pchg_update *)(ec_outbuf);
+	int rv;
+
 	p->cmd = EC_PCHG_UPDATE_CMD_CLOSE;
-	p->crc32 = crc32_result();
+	p->crc32 = crc32_ctx_result(crc);
 	rv = ec_command(EC_CMD_PCHG_UPDATE, 0, p, sizeof(*p), NULL, 0);
 
 	if (rv < 0) {
@@ -9533,18 +9672,18 @@ static int cmd_pchg_update(int port, uint32_t address, uint32_t version,
 	if (rv)
 		return rv;
 
-	printf("FW update session closed (CRC32=0x%x).\n", p->crc32);
+	printf("Firmware was updated successfully (CRC32=0x%x).\n", p->crc32);
 
 	return 0;
 }
 
 static int cmd_pchg(int argc, char *argv[])
 {
+	const size_t max_input_files = 8;
 	int port, port_count;
 	struct ec_response_pchg_count rcnt;
 	struct ec_params_pchg p;
 	struct ec_response_pchg r;
-	uint32_t address, version;
 	char *e;
 	int rv;
 
@@ -9593,21 +9732,66 @@ static int cmd_pchg(int argc, char *argv[])
 		}
 		printf("Reset port %d complete.\n", port);
 		return 0;
-	} else if (argc == 6 && !strcmp(argv[2], "update")) {
-		/* Usage.4 */
-		address = strtol(argv[3], &e, 0);
+	} else if (argc >= 6 && !strcmp(argv[2], "update")) {
+		/*
+		 * Usage.4:
+		 * argv[3]: <version>
+		 * argv[4]: <addr1>
+		 * argv[5]: <file1>
+		 * argv[6]: <addr2>
+		 * argv[7]: <file2>
+		 * ...
+		 */
+		uint32_t address, version;
+		uint32_t block_size = 0;
+		uint32_t crc;
+		int i;
+
+		if (argc > 4 + max_input_files * 2) {
+			fprintf(stderr, "\nToo many input files.\n");
+			return -1;
+		}
+
+		version = strtol(argv[3], &e, 0);
 		if (e && *e) {
-			fprintf(stderr, "\nBad address: %s.\n", argv[3]);
+			fprintf(stderr, "\nBad version: %s.\n", argv[3]);
 			cmd_pchg_help(argv[0]);
 			return -1;
 		}
-		version = strtol(argv[4], &e, 0);
-		if (e && *e) {
-			fprintf(stderr, "\nBad version: %s.\n", argv[4]);
-			cmd_pchg_help(argv[0]);
+
+		rv = cmd_pchg_update_open(port, version, &block_size, &crc);
+		if (rv < 0 || block_size == 0) {
+			fprintf(stderr, "\nFailed to open update session: %d\n",
+				rv);
 			return -1;
 		}
-		return cmd_pchg_update(port, address, version, argv[5]);
+
+		/* Write files one by one. */
+		for (i = 4; i + 1 < argc; i += 2) {
+			address = strtol(argv[i], &e, 0);
+			if (e && *e) {
+				fprintf(stderr, "\nBad address: %s\n", argv[i]);
+				cmd_pchg_help(argv[0]);
+				return -1;
+			}
+			rv = cmd_pchg_update_write(port, address, argv[i+1],
+						   block_size, &crc);
+			if (rv < 0) {
+				fprintf(stderr,
+					"\nFailed to write file '%s': %d",
+					argv[i+i], rv);
+				return -1;
+			}
+		}
+
+		rv = cmd_pchg_update_close(port, &crc);
+		if (rv < 0) {
+			fprintf(stderr, "\nFailed to close update session: %d",
+				rv);
+			return -1;
+		}
+
+		return 0;
 	}
 
 	fprintf(stderr, "Invalid parameter\n\n");
@@ -10494,6 +10678,7 @@ const struct command commands[] = {
 	{"apreset", cmd_apreset},
 	{"autofanctrl", cmd_thermal_auto_fan_ctrl},
 	{"backlight", cmd_lcd_backlight},
+	{"basestate", cmd_basestate},
 	{"battery", cmd_battery},
 	{"batterycutoff", cmd_battery_cut_off},
 	{"batteryparam", cmd_battery_vendor_param},

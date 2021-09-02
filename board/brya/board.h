@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#include "compile_time_macros.h"
+
 /*
  * Early brya boards are not set up for vivaldi
  */
@@ -79,10 +81,11 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_NCT38XX
-#define CONFIG_IO_EXPANDER_PORT_COUNT		2
+#define CONFIG_IO_EXPANDER_PORT_COUNT		4
 
 #define CONFIG_USB_PD_TCPM_PS8815
 #define CONFIG_USBC_RETIMER_INTEL_BB
@@ -137,6 +140,8 @@
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
+
+#define GPIO_ID_1_EC_KB_BL_EN		GPIO_EC_BATT_PRES_ODL
 
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
@@ -199,6 +204,12 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
 
+/*
+ * Older boards have a different ADC assignment.
+ */
+
+#define CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"	/* needed by registers.h */
@@ -207,13 +218,17 @@
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
-	ADC_TEMP_SENSOR_2_CHARGER,
+	ADC_TEMP_SENSOR_2_AMBIENT,
+	ADC_TEMP_SENSOR_3_CHARGER,
+	ADC_TEMP_SENSOR_4_WWAN,
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
-	TEMP_SENSOR_2_CHARGER,
+	TEMP_SENSOR_2_AMBIENT,
+	TEMP_SENSOR_3_CHARGER,
+	TEMP_SENSOR_4_WWAN,
 	TEMP_SENSOR_COUNT
 };
 
@@ -229,6 +244,8 @@ enum sensor_id {
 enum ioex_port {
 	IOEX_C0_NCT38XX = 0,
 	IOEX_C2_NCT38XX,
+	IOEX_ID_1_C0_NCT38XX,
+	IOEX_ID_1_C2_NCT38XX,
 	IOEX_PORT_COUNT
 };
 

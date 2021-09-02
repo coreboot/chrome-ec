@@ -79,8 +79,10 @@
 
 /* Specify type of accelerometers attached. */
 #undef CONFIG_ACCEL_BMA255
+#undef CONFIG_ACCEL_BMA4XX
 #undef CONFIG_ACCEL_KXCJ9
 #undef CONFIG_ACCEL_KX022
+
 /*
  * lis2dh/lis2de/lng2dm have the same register interface but different
  * supported resolution. In normal mode, lis2dh works in 10-bit resolution,
@@ -118,7 +120,9 @@
 
 #undef CONFIG_ACCELGYRO_BMI160
 #undef CONFIG_ACCELGYRO_BMI260
+#undef CONFIG_ACCELGYRO_BMI3XX
 #undef CONFIG_ACCELGYRO_ICM426XX
+#undef CONFIG_ACCELGYRO_ICM42607
 #undef CONFIG_ACCELGYRO_LSM6DS0
 /* Use CONFIG_ACCELGYRO_LSM6DSM for LSM6DSL, LSM6DSM, and/or LSM6DS3 */
 #undef CONFIG_ACCELGYRO_LSM6DSM
@@ -295,6 +299,11 @@
 #undef CONFIG_ADC
 
 /*
+ * Allow runtime configuration of the adc_channels[] array
+ */
+#undef CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
+
+/*
  * ADC sample time selection. The value is chip-dependent.
  * TODO: Replace this with CONFIG_ADC_PROFILE entries.
  */
@@ -362,6 +371,7 @@
  */
 #undef CONFIG_ACCELGYRO_BMI160_INT_EVENT
 #undef CONFIG_ACCELGYRO_BMI260_INT_EVENT
+#undef CONFIG_ACCELGYRO_BMI3XX_INT_EVENT
 #undef CONFIG_ACCELGYRO_ICM426XX_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
@@ -617,13 +627,6 @@
 #undef CONFIG_BATTERY_V2
 
 /*
- * Some fuel gauges in battery take some time to return valid battery params
- * when wake form dead battery.
- * It need to do precharge to take valid battery params.
- */
-#undef CONFIG_BATTERY_DEAD_UNTIL_VALUE
-
-/*
  * Number of batteries, only matters when CONFIG_BATTERY_V2 is used.
  */
 #undef CONFIG_BATTERY_COUNT
@@ -641,59 +644,44 @@
 #undef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
 
 /*
- * If remaining capacity is x% of full capacity, remaining capacity is set
- * equal to full capacity.
- *
  * Some batteries don't update full capacity timely or don't update it at all.
  * On such systems, compensation is required to guarantee remaining_capacity
  * will be equal to full_capacity eventually. This used to be done in ACPI.
  *
- * When CONFIG_BATTERY_EXPORT_DISPLAY_SOC is enabled, CONFIG_BATT_FULL_FACTOR
- * has no effect. Also CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE is used by Powerd
- * as the threshold for low battery shutdown. For example, if we have:
+ * Powerd uses CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE as the threshold for low
+ * battery shutdown.
  *
- *   CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON = 3
- *   CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE = 2,
- *   BATTERY_LEVEL_SHUTDOWN = 1
+ * We want to show the low battery alert whenever we can. Thus, we make EC not
+ * inhibit power-on even if it knows the host would immediately shut down. To
+ * get that behavior, we need:
  *
- * the battery range is divided as follows (assuming system is powered only by
- * internal battery):
+ *   MIN_BAT_PCT_FOR_POWER_ON < HOST_SHUTDOWN_PER = BATTERY_LEVEL_SHUTDOWN
  *
- *   0% ------------------- 1% ------------------- 2% ------------------- 3%
- *                                                   EC refuses to boot ->
- *                      Powerd shuts down system ->
- *   EC shuts down system ->
+ * Thus, we set them as follows by default:
+ *
+ *   CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON = 2 (don't boot if soc < 2%)
+ *   CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE = 4    (shutdown if soc <= 4%)
+ *   BATTERY_LEVEL_SHUTDOWN = 3                  (shutdown if soc < 3%)
+ *
+ * This produces the following behavior:
+ *
+ * - If soc = 1%, system doesn't boot. User wouldn't know why.
+ * - If soc = 2~4%, system boots. Alert is shown. System immediately shuts down.
+ * - If battery discharges to 4% while the system is running, system shuts down.
+ *   If that happens while a user is away, they can press the power button to
+ *   learn what happened.
+ * - If system fails to shutdown for some reason and battery further discharges
+ *   to 2%, EC will trigger shutdown.
  */
-#define CONFIG_BATT_FULL_FACTOR			98
-#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	4
+#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	4  /* shutdown if soc <= 4% */
 
 /*
  * Powerd's full_factor. The value comes from:
  *   src/platform2/power_manager/default_prefs/power_supply_full_factor
  *
- * When CONFIG_BATTERY_EXPORT_DISPLAY_SOC is enabled, this value is exported
- * to the host (i.e. Powerd). It's used to calculate the ETA for full charge.
+ * This value is used by the host to calculate the ETA for full charge.
  */
 #define CONFIG_BATT_HOST_FULL_FACTOR		97
-
-/*
- * This option enables EC to be the origin of the display SoC and allows the
- * host (i.e. Powerd) to retrieve it through EC_CMD_DISPLAY_SOC.
- *
- * The display SoC is computed from the remaining capacity, the last full
- * charge, CONFIG_BATT_FULL_FACTOR, CONFIG_BATT_HOST_FULL_FACTOR, and
- * CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE.
- *
- * If this option is disabled, the EC and the host will individually compute
- * the display SoC, which may result in inconsistent behaviors since the numbers
- * do not necessarily match. As such, this option is going to be enabled by
- * default and the old behavior (#undef CONFIG_BATTERY_EXPORT_DISPLAY_SOC) will
- * be deprecated.
- *
- * TODO: Define CONFIG_BATTERY_EXPORT_DISPLAY_SOC by default and remove
- *       CONFIG_BATTERY_EXPORT_DISPLAY_SOC and CONFIG_BATT_FULL_FACTOR.
- */
-#undef CONFIG_BATTERY_EXPORT_DISPLAY_SOC
 
 /*
  * Smart battery pass-through host commands.
@@ -753,16 +741,8 @@
  */
 #undef CONFIG_BOARD_PRE_INIT
 
-/*
- * EC has the notion of board version either through resistors or EEPROM.
- * The common CONFIG_BOARD_VERSION is defined automatically when one of the
- * specific options is used.
- */
-#undef CONFIG_BOARD_VERSION
 /* The board version comes from Cros Board Info within EEPROM. */
 #undef CONFIG_BOARD_VERSION_CBI
-/* The board version function is defined in board code. */
-#undef CONFIG_BOARD_VERSION_CUSTOM
 /*
  * The board version is encoded with 3 GPIO signals where GPIO_BOARD_VERSION1
  * is the LSB.
@@ -1077,8 +1057,8 @@
  * analog signaling.  If the AP requires greater than 15W to boot, then see
  * CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW.
  */
-#undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
-#undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 2  /* Don't boot if soc < 2% */
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC	1
 /* Default: 15000 */
 #undef CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
 /* Default: Disabled */
@@ -1267,6 +1247,7 @@
 #undef CONFIG_CHIPSET_RK3399		/* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE		/* Intel Skylake (x86) */
 #undef CONFIG_CHIPSET_SC7180            /* Qualcomm SC7180 */
+#undef CONFIG_CHIPSET_SC7280            /* Qualcomm SC7280 */
 #undef CONFIG_CHIPSET_SDM845            /* Qualcomm SDM845 */
 #undef CONFIG_CHIPSET_STONEY		/* AMD Stoney (x86)*/
 #undef CONFIG_CHIPSET_TIGERLAKE		/* Intel Tigerlake (x86) */
@@ -1319,6 +1300,9 @@
 
 /* Redefine when we need a different power-on sequence on the same chipset. */
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 0
+
+/* AMD Side-Band Remote Management Interface (SB-RMI) support */
+#undef CONFIG_AMD_SB_RMI
 
 /*****************************************************************************/
 /*
@@ -1392,10 +1376,19 @@
 #undef  CONFIG_CMD_BATDEBUG
 #define CONFIG_CMD_BATTFAKE
 #undef  CONFIG_CMD_BATT_MFG_ACCESS
-#define CONFIG_CMD_RETIMER
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
-#undef  CONFIG_CMD_CHARGEN
+
+/*
+ * HAS_TASK_CHIPSET implies the GSC presence.
+ * HAS_TASK_CONSOLE means UART console enabled.
+ * chargen command is needed for UART stress test.
+ */
+#if defined(HAS_TASK_CHIPSET) && defined(HAS_TASK_CONSOLE)
+#define CONFIG_CMD_CHARGEN
+#else
+#undef CONFIG_CMD_CHARGEN
+#endif
 #define CONFIG_CMD_CHARGER
 #undef  CONFIG_CMD_CHARGER_ADC_AMON_BMON
 #undef  CONFIG_CMD_CHARGER_DUMP
@@ -1412,14 +1405,12 @@
 #define CONFIG_CMD_FASTCHARGE
 #undef  CONFIG_CMD_FLASH
 #define CONFIG_CMD_FLASHINFO
-#undef  CONFIG_CMD_FLASH_LOG
 #undef  CONFIG_CMD_FLASH_TRISTATE
 #undef  CONFIG_CMD_FORCETIME
 #undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
 #undef  CONFIG_CMD_GL3590
 #undef  CONFIG_CMD_GPIO_EXTENDED
-#undef  CONFIG_CMD_GSV
 #undef  CONFIG_CMD_GT7288
 #define CONFIG_CMD_HASH
 #define CONFIG_CMD_HCDEBUG
@@ -1436,15 +1427,14 @@
 #define CONFIG_CMD_I2C_XFER
 #undef  CONFIG_CMD_I2C_XFER_RAW
 #define CONFIG_CMD_IDLE_STATS
-#undef  CONFIG_CMD_ILIM
 #define CONFIG_CMD_INA
 #undef  CONFIG_CMD_JUMPTAGS
 #define CONFIG_CMD_KEYBOARD
 #undef  CONFIG_CMD_LEDTEST
-#undef  CONFIG_CMD_LID_ANGLE
 #undef  CONFIG_CMD_MCDP
 #define CONFIG_CMD_MD
 #define CONFIG_CMD_MEM
+#define CONFIG_CMD_MFALLOW
 #define CONFIG_CMD_MMAPINFO
 #define CONFIG_CMD_PD
 #undef  CONFIG_CMD_PD_DEV_DUMP_INFO
@@ -1452,7 +1442,6 @@
 #undef  CONFIG_CMD_PD_TIMER
 #define CONFIG_CMD_PECI
 #undef  CONFIG_CMD_PLL
-#undef  CONFIG_CMD_PMU
 #define CONFIG_CMD_POWERINDEBUG
 #undef  CONFIG_CMD_POWERLED
 #define CONFIG_CMD_PWR_AVG
@@ -1462,6 +1451,7 @@
 #undef  CONFIG_CMD_RAND
 #define CONFIG_CMD_REGULATOR
 #undef  CONFIG_CMD_RESET_FLAGS
+#define CONFIG_CMD_RETIMER
 #undef  CONFIG_CMD_RTC
 #undef  CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
@@ -1486,7 +1476,6 @@
 #define CONFIG_CMD_TIMERINFO
 #define CONFIG_CMD_TYPEC
 #undef  CONFIG_CMD_USART_INFO
-#define CONFIG_CMD_USBMUX
 #undef  CONFIG_CMD_USB_PD_CABLE
 #undef  CONFIG_CMD_USB_PD_PE
 #define CONFIG_CMD_WAITMS
@@ -2257,9 +2246,10 @@
 #undef CONFIG_HOSTCMD_I2C_ADDR_FLAGS
 
 /*
- * Accept EC host commands over the SPI slave (SPS) interface.
+ * Accept EC host commands over the SPI host interface.  The AP is SPI
+ * controller and the EC is the SPI peripheral for this configuration.
  */
-#undef CONFIG_HOSTCMD_SPS
+#undef CONFIG_HOSTCMD_SHI
 
 /*
  * Host command rate limiting assures EC will have time to process lower
@@ -2324,8 +2314,15 @@
 /* Command to get the EC uptime (and optionally AP reset stats) */
 #define CONFIG_HOSTCMD_GET_UPTIME_INFO
 
-/* List of host commands whose debug output will be suppressed */
-#undef CONFIG_SUPPRESSED_HOST_COMMANDS
+/*
+ * List of host commands whose debug output will be suppressed
+ * By default remove periodic commands and commands called often (SENSE).
+ */
+#define CONFIG_SUPPRESSED_HOST_COMMANDS \
+	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_USB_PD_DISCOVERY, \
+	EC_CMD_USB_PD_POWER_INFO, EC_CMD_PD_GET_LOG_ENTRY, \
+	EC_CMD_MOTION_SENSE_CMD, EC_CMD_GET_NEXT_EVENT, EC_CMD_GET_UPTIME_INFO
+
 
 /*****************************************************************************/
 
@@ -2724,12 +2721,6 @@
 #undef CONFIG_KEYBOARD_FACTORY_TEST
 
 /*
- * Keyboard config (struct keyboard_scan_config) is in board.c.  If this is
- * not defined, default values from common/keyboard_scan.c will be used.
- */
-#undef CONFIG_KEYBOARD_BOARD_CONFIG
-
-/*
  * Support for boot key combinations (e.g. refresh key being held on boot to
  * trigger recovery).
  */
@@ -2811,6 +2802,21 @@
  * Enable keypad (a palm-sized keyboard section usually placed on the far right)
  */
 #undef CONFIG_KEYBOARD_KEYPAD
+
+/*
+ * Enable strict debouncer. A strict debouncer waits until debounce is done
+ * before registering key up/down while a non-strict debouncer registers a key
+ * up/down as soon as a key is pressed or released.
+ *
+ * A strict debouncer is robust against unintentional key presses, caused by a
+ * device drop, for example. However, its latency isn't as fast as a non-strict
+ * debouncer.
+ *
+ * If a strict debouncer is used, it's recommended to set debounce_down_us and
+ * debounce_up_us to an equal value. This guarantees key events are registered
+ * in the order the keys are pressed.
+ */
+#undef CONFIG_KEYBOARD_STRICT_DEBOUNCE
 
 /*
  * Enable the 8042 AUX port. This is typically used for PS/2 mouse devices.
@@ -3643,21 +3649,14 @@
  */
 #undef CONFIG_SPI_NOR_SMART_ERASE
 
-/* SPI master feature */
-#undef CONFIG_SPI_MASTER
+/* SPI controller feature */
+#undef CONFIG_SPI_CONTROLLER
 
-/* SPI master halfduplex/3-wire mode */
+/* SPI controller halfduplex/3-wire mode */
 #undef CONFIG_SPI_HALFDUPLEX
 
-/* Support STM32 SPI1 as master. */
-#undef CONFIG_STM32_SPI1_MASTER
-
-/* SPI master configure gpios on init */
-#undef CONFIG_SPI_MASTER_CONFIGURE_GPIOS
-
-/* Support SPI masters without GPIO-specified Chip Selects, instead rely on the
- * SPI master port's hardwired CS pin. */
-#undef CONFIG_SPI_MASTER_NO_CS_GPIOS
+/* Support STM32 SPI1 as controller. */
+#undef CONFIG_STM32_SPI1_CONTROLLER
 
 /* Support MCHP MEC family GP-SPI master(s)
  * Define to 0x01 for GPSPI0 only.
@@ -3665,6 +3664,12 @@
  * Define to 0x03 for both controllers.
  */
 #undef CONFIG_MCHP_GPSPI
+
+/*
+ * Configure SPI flash read wait time as 1ms
+ * Chip or board can redefine it per design
+ */
+#define CONFIG_SPI_FLASH_READ_WAIT_MS 1
 
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE
@@ -3875,6 +3880,9 @@
  * powered.
  */
 #undef CONFIG_TEMP_SENSOR_POWER_GPIO
+
+/* AMD STT (Skin Temperature Tracking) */
+#undef CONFIG_AMD_STT
 
 /* Compile common code for throttling the CPU based on the temp sensors */
 #undef CONFIG_THROTTLE_AP
@@ -4105,6 +4113,15 @@
  * enabled otherwise an error will be emitted.
  */
 #undef CONFIG_USB_PD_TCPMV2
+
+/*
+ * Enable dynamic PDO selection.
+ *
+ * DPS picks a power efficient voltage regarding to the battery configuration
+ * and the system loading. It monitors PIn (Power In), so VBUS/IBUS ADC
+ * should be supported on the platform.
+ */
+#undef CONFIG_USB_PD_DPS
 
 /*
  * Device Types for TCPMv2.
@@ -4445,6 +4462,7 @@
 #undef CONFIG_USB_PD_TCPM_TUSB422
 #undef CONFIG_USB_PD_TCPM_RAA489000
 #undef CONFIG_USB_PD_TCPM_RT1715
+#undef CONFIG_USB_PD_TCPM_RT1718S
 #undef CONFIG_USB_PD_TCPM_FUSB307
 #undef CONFIG_USB_PD_TCPM_STM32GX
 #undef CONFIG_USB_PD_TCPM_CCGXXF
@@ -4489,12 +4507,19 @@
  * Type-C retimer drivers to be used.
  */
 #undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_KB800X
 #undef CONFIG_USBC_RETIMER_NB7V904M
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
 #undef CONFIG_USBC_RETIMER_PI3HDX1204
 #undef CONFIG_USBC_RETIMER_PS8802
+#undef CONFIG_USBC_RETIMER_PS8811
 #undef CONFIG_USBC_RETIMER_PS8818
 #undef CONFIG_USBC_RETIMER_TUSB544
+
+/*
+ * DP redriver drivers to be used.
+ */
+#undef CONFIG_DP_REDRIVER_TDP142
 
 /*
  * Define this to enable Type-C retimer firmware update. Each Type-C retimer
@@ -4518,6 +4543,9 @@
 /* Allow run-time configuration of the Burnside Bridge driver structure */
 #undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 
+/* Require manual configuration of the KB800x crossbar mapping. */
+#undef CONFIG_KB800X_CUSTOM_XBAR
+
 /* Enables debug console commands for the STM32 UCPD driver */
 #undef CONFIG_STM32G4_UCPD_DEBUG
 
@@ -4536,6 +4564,12 @@
  * DDI1_AUX_P signals (b/122873171)
  */
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
+
+/*
+ * Use this to override the TCPCI Device ID value to be 0x0002 for
+ * chip rev A3. Early A3 firmware misreports the DID as 0x0001.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
 
 /*
  * Use this to override the TCPCI Device ID value to be 0x0002 for
@@ -4579,6 +4613,9 @@
 
 /* Define if tcpc on the board supports VBUS measurement */
 #undef CONFIG_USB_PD_VBUS_MEASURE_TCPC
+
+/* Define if there is a specific method to measure Vbus voltage */
+#undef CONFIG_USB_PD_VBUS_MEASURE_BY_BOARD
 
 /* Define the type-c port controller I2C base address. */
 #define CONFIG_TCPC_I2C_BASE_ADDR_FLAGS 0x4E
@@ -4658,6 +4695,7 @@
 #undef CONFIG_USBC_PPC_AOZ1380
 #undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
+#undef CONFIG_USBC_PPC_RT1718S
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
@@ -4669,7 +4707,7 @@
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_3_30
 
 /* SYV682 does not pass through CC, instead it bypasses to the TCPC */
-#undef CONFIG_SYV682X_NO_CC
+#undef CONFIG_USBC_PPC_SYV682X_NO_CC
 
 /* Define to enable SYV682X VBUS smart discharge. */
 #undef CONFIG_USBC_PPC_SYV682X_SMART_DISCHARGE
@@ -4691,6 +4729,9 @@
  * don't support being a UFP)
  */
 #undef CONFIG_USBC_SS_MUX_DFP_ONLY
+
+/* Only configure USB type-c superspeed mux when UFP */
+#undef CONFIG_USBC_SS_MUX_UFP_ONLY
 
 /* Support v1.1 type-C connection state machine */
 #undef CONFIG_USBC_BACKWARDS_COMPATIBLE_DFP
@@ -4825,6 +4866,12 @@
 
 /* Support simple control of power to the device's USB ports */
 #undef CONFIG_USB_PORT_POWER_DUMB
+
+/*
+ * Let board customize the timing to enable/disable usb port, instead
+ * of using the default S3 hook.
+ */
+#undef CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 
 /*
  * Support smart power control to the device's USB ports, using
@@ -5038,15 +5085,6 @@
 /* Support computing hash of code for verified boot */
 #undef CONFIG_VBOOT_HASH
 
-/*
- * Reload the watchdog at 1/2 the watchdog period during hash
- * calculation.  When CONFIG_SHA256_HW_ACCELERATE and
- * CONFIG_SHA256_UNROLLED are disabled, the hash calculation may trip
- * the watchdog.  This option becomes enabled by default when both
- * those options are disabled.
- */
-#undef CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
-
 /* Support for secure temporary storage for verified boot */
 #undef CONFIG_VSTORE
 
@@ -5166,10 +5204,21 @@
 #undef CONFIG_EXTENDED_VERSION_INFO
 
 /*
- * Define this to enable Cros Board Info support. I2C_PORT_EEPROM and
- * I2C_ADDR_EEPROM_FLAGS must be defined as well.
+ * Define this to support Cros Board Info from EEPROM. I2C_PORT_EEPROM
+ * and I2C_ADDR_EEPROM_FLAGS must be defined as well.
  */
-#undef CONFIG_CROS_BOARD_INFO
+#undef CONFIG_CBI_EEPROM
+
+/*
+ * Define this if the EC has exclusive control over the CBI EEPROM WP signal.
+ * The accompanying hardware must ensure that the CBI WP gets latched and is
+ * only reset when EC_RST_ODL is asserted.  GPIO_EC_CBI_WP must be set up for
+ * the board.
+ */
+#undef CONFIG_EEPROM_CBI_WP
+
+/* Define this to support Cros Board Info from GPIO. */
+#undef CONFIG_CBI_GPIO
 
 /*****************************************************************************/
 /*
@@ -5250,6 +5299,19 @@
 #ifndef CONFIG_ZEPHYR
 #undef CONFIG_ZEPHYR
 #endif
+
+/*
+ * Define the following to drive CCD_MODE_ODL when a DTS accessory is
+ * connected to the CCD USBC port.
+ *
+ * GPIO_CCD_MODE_ODL should be configured with GPIO_ODR_HIGH flag
+ */
+#undef CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
+
+/*
+ * The USB port used for CCD. Defaults to 0/C0.
+ */
+#define CONFIG_CCD_USBC_PORT_NUMBER	0
 
 /*****************************************************************************/
 /*
@@ -5512,18 +5574,6 @@
 
 /******************************************************************************/
 /*
- * Automatically define common CONFIG_BOARD_VERSION if any specific option is
- * used.
- */
-
-#if defined(CONFIG_BOARD_VERSION_CBI) || \
-	defined(CONFIG_BOARD_VERSION_CUSTOM) || \
-	defined(CONFIG_BOARD_VERSION_GPIO)
-#define CONFIG_BOARD_VERSION
-#endif
-
-/******************************************************************************/
-/*
  * Thermal throttling AP must have temperature sensor enabled to get
  * the temperature readings.
  */
@@ -5632,9 +5682,8 @@
 #if defined(CONFIG_USBC_PPC_SYV682X)
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_VCONN
-#if !defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX) && \
-	!defined(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2) && \
-	!defined(CONFIG_SYV682X_NO_CC)
+#if !defined(CONFIG_USB_PD_TCPM_ITE_ON_CHIP) && \
+	!defined(CONFIG_USBC_PPC_SYV682X_NO_CC)
 #undef CONFIG_USB_PD_TCPC_VCONN
 #endif
 #endif
@@ -5656,7 +5705,8 @@
 	defined(CONFIG_USBC_PPC_NX20P3483) || \
 	defined(CONFIG_USBC_PPC_SN5S330) || \
 	defined(CONFIG_USBC_PPC_SYV682X)  || \
-	defined(CONFIG_CHARGER_SM5803)
+	defined(CONFIG_CHARGER_SM5803) || \
+	defined(CONFIG_USB_PD_TCPM_TCPCI)
 #define CONFIG_USBC_OCP
 #endif
 
@@ -5695,6 +5745,10 @@
  */
 #ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPC_ON_CHIP
+#if !defined(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2) && \
+	!defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)
+#error "No drivers for ITE ON CHIP"
+#endif
 #endif
 
 /*****************************************************************************/
@@ -5946,7 +6000,7 @@
 #error "Must enable CONFIG_POWER_TRACK_HOST_SLEEP_STATE for S0ix"
 #endif
 
-#if defined(CONFIG_CHIPSET_SC7180)
+#if defined(CONFIG_CHIPSET_SC7180) || defined(CONFIG_CHIPSET_SC7280)
 #if defined(CONFIG_POWER_SLEEP_FAILURE_DETECTION) && \
 	!defined(CONFIG_CHIPSET_RESUME_INIT_HOOK)
 #error "Require resume init hook to enable sleep failure detection"
@@ -6353,26 +6407,32 @@
 #define ALS_COUNT 0
 #endif /* CONFIG_ALS */
 
-#if defined(CONFIG_BYPASS_CBI_EEPROM_WP_CHECK) && \
-	!defined(CONFIG_SYSTEM_UNLOCKED)
-#error "CONFIG_BYPASS_CBI_EEPROM_WP_CHECK is only permitted " \
-	"when CONFIG_SYSTEM_UNLOCK is also enabled."
-#endif /* CONFIG_BYPASS_CBI_EEPROM_WP_CHECK && !CONFIG_SYSTEM_UNLOCK */
 
 /*
- * Enable CONFIG_VBOOT_HASH_RELOAD_WATCHDOG by default when these
- * conditions are met:
- * - Watchdog enabled
- * - No hardware acceleration for SHA256 calculation
- * - Loops for SHA256 calculation are not unrolled
- *
- * See the CONFIG_VBOOT_HASH_RELOAD_WATCHDOG entry in this file for an
- * explanation as to why this is necessary.
+ * If the EC has exclusive control over CBI EEPROM WP, don't consult the main
+ * flash WP.
  */
-#if defined(CONFIG_WATCHDOG) && !defined(CONFIG_SHA256_HW_ACCELERATE) && \
-	!defined(CONFIG_SHA256_UNROLLED) &&                              \
-	!defined(CONFIG_VBOOT_HASH_RELOAD_WATCHDOG)
-#define CONFIG_VBOOT_HASH_RELOAD_WATCHDOG
+#ifdef CONFIG_EEPROM_CBI_WP
+#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
+#endif
+
+#if defined(CONFIG_EEPROM_CBI_WP) && !defined(CONFIG_CBI_EEPROM)
+#error "CONFIG_EEPROM_CBI_WP requires CONFIG_CBI_EEPROM to be defined!"
+#endif
+
+#if defined(CONFIG_BYPASS_CBI_EEPROM_WP_CHECK) && \
+	!defined(CONFIG_SYSTEM_UNLOCKED) && !defined(CONFIG_EEPROM_CBI_WP)
+#error "CONFIG_BYPASS_CBI_EEPROM_WP_CHECK is only permitted " \
+	"when CONFIG_SYSTEM_UNLOCK or CONFIG_EEPROM_CBI_WP is also enabled."
+#endif /* CONFIG_BYPASS_CBI_EEPROM_WP_CHECK && !CONFIG_SYSTEM_UNLOCK */
+
+#if defined(CONFIG_BOARD_VERSION_CBI) && defined(CONFIG_BOARD_VERSION_GPIO)
+#error "CONFIG_BOARD_VERSION_CBI and CONFIG_BOARD_VERSION_GPIO " \
+	"are mutually exclusive. "
+#endif /* CONFIG_BOARD_VERSION_CBI && CONFIG_BOARD_VERSION_GPIO */
+
+#if defined(CONFIG_CBI_EEPROM) && defined(CONFIG_CBI_GPIO)
+#error "CONFIG_CBI_EEPROM and CONFIG_CBI_GPIO are mutually exclusive."
 #endif
 
 #if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_ICM_COMM_SPI) && \
@@ -6396,5 +6456,10 @@
 #endif	/* !CONFIG_ZEPHYR && !CONFIG_ACCELGYRO_BMI_SPI && \
 	 * !CONFIG_ACCELGYRO_BMI_I2C
 	 */
+
+/* AMD STT requires AMD SB-RMI to be enabled */
+#if defined(CONFIG_AMD_STT) && !defined(CONFIG_AMD_SB_RMI)
+#define CONFIG_AMD_SB_RMI
+#endif
 
 #endif  /* __CROS_EC_CONFIG_H */

@@ -6,7 +6,6 @@
 /* Bloog/Blooguard board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "battery.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -280,9 +279,8 @@ void board_hibernate_late(void)
 		gpio_set_flags(hibernate_pins[i][0], hibernate_pins[i][1]);
 }
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/*
 	 * If the lid is in tablet position via other sensors,
@@ -295,7 +293,6 @@ void lid_angle_peripheral_enable(int enable)
 	if (board_is_convertible())
 		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif
 
 #ifdef CONFIG_KEYBOARD_FACTORY_TEST
 /*

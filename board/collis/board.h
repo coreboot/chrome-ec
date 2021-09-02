@@ -17,10 +17,6 @@
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK /* bypass cbi wp check in dev. */
-
 #define CONFIG_VBOOT_EFS2
 
 #define CONFIG_POWER_BUTTON
@@ -45,10 +41,15 @@
 /* Sensors */
 /* BMA253 accelerometer in base */
 #define CONFIG_ACCEL_BMA255
+#define CONFIG_ACCEL_KX022
 
 /* BMI160 accel/gyro in base */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* Sensors without hardware FIFO are in forced mode */
@@ -67,20 +68,16 @@
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
- * cables only support up to 60W.
+ * cables only support up to 60W, the limitation of 45W is for the Collis
+ * board.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
+#define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
-/* Enabling Thunderbolt-compatible mode */
-#define CONFIG_USB_PD_TBT_COMPAT_MODE
-
-/* Enabling USB4 mode */
-#define CONFIG_USB_PD_USB4
-#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x40
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x40
+#undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -183,6 +180,7 @@ enum usbc_port {
 };
 
 void board_reset_pd_mcu(void);
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

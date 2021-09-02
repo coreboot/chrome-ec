@@ -455,6 +455,13 @@ extern "C" {
 #define USB_RETIMER_FW_UPDATE_OP_SHIFT 4
 #define USB_RETIMER_FW_UPDATE_ERR         0xfe
 #define USB_RETIMER_FW_UPDATE_INVALID_MUX 0xff
+/* Mask to clear unused MUX bits in retimer firmware update  */
+#define USB_RETIMER_FW_UPDATE_MUX_MASK	(USB_PD_MUX_USB_ENABLED       | \
+					USB_PD_MUX_DP_ENABLED         | \
+					USB_PD_MUX_SAFE_MODE          | \
+					USB_PD_MUX_TBT_COMPAT_ENABLED | \
+					USB_PD_MUX_USB4_ENABLED)
+
 /* Retimer firmware update operations */
 #define USB_RETIMER_FW_UPDATE_QUERY_PORT 0 /* Which ports has retimer */
 #define USB_RETIMER_FW_UPDATE_SUSPEND_PD 1 /* Suspend PD port */
@@ -639,13 +646,13 @@ enum ec_status {
 BUILD_ASSERT(sizeof(enum ec_status) == sizeof(uint16_t));
 
 /*
- * Host event codes.  Note these are 1-based, not 0-based, because ACPI query
- * EC command uses code 0 to mean "no event pending".  We explicitly specify
- * each value in the enum listing so they won't change if we delete/insert an
- * item or rearrange the list (it needs to be stable across platforms, not
- * just within a single compiled instance).
+ * Host event codes. ACPI query EC command uses code 0 to mean "no event
+ * pending".  We explicitly specify each value in the enum listing so they won't
+ * change if we delete/insert an item or rearrange the list (it needs to be
+ * stable across platforms, not just within a single compiled instance).
  */
 enum host_event_code {
+	EC_HOST_EVENT_NONE = 0,
 	EC_HOST_EVENT_LID_CLOSED = 1,
 	EC_HOST_EVENT_LID_OPEN = 2,
 	EC_HOST_EVENT_POWER_BUTTON = 3,
@@ -1949,7 +1956,13 @@ enum sysinfo_flags {
 	SYSTEM_IS_FORCE_LOCKED = BIT(1),
 	SYSTEM_JUMP_ENABLED = BIT(2),
 	SYSTEM_JUMPED_TO_CURRENT_IMAGE = BIT(3),
-	SYSTEM_REBOOT_AT_SHUTDOWN = BIT(4)
+	SYSTEM_REBOOT_AT_SHUTDOWN = BIT(4),
+	/*
+	 * Used internally. It's set when EC_HOST_EVENT_KEYBOARD_RECOVERY is
+	 * set and cleared when the system shuts down (not when the host event
+	 * flag is cleared).
+	 */
+	SYSTEM_IN_MANUAL_RECOVERY = BIT(5),
 };
 
 struct ec_response_sysinfo {
@@ -2672,6 +2685,9 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_LIS2DS = 23,
 	MOTIONSENSE_CHIP_BMI260 = 24,
 	MOTIONSENSE_CHIP_ICM426XX = 25,
+	MOTIONSENSE_CHIP_ICM42607 = 26,
+	MOTIONSENSE_CHIP_BMA422 = 27,
+	MOTIONSENSE_CHIP_BMI323 = 28,
 	MOTIONSENSE_CHIP_MAX,
 };
 
@@ -4248,16 +4264,55 @@ struct ec_params_i2c_write {
  * discharge the battery.
  */
 #define EC_CMD_CHARGE_CONTROL 0x0096
-#define EC_VER_CHARGE_CONTROL 1
+#define EC_VER_CHARGE_CONTROL 2
 
 enum ec_charge_control_mode {
 	CHARGE_CONTROL_NORMAL = 0,
 	CHARGE_CONTROL_IDLE,
 	CHARGE_CONTROL_DISCHARGE,
+	/* Add no more entry below. */
+	CHARGE_CONTROL_COUNT,
+};
+
+#define EC_CHARGE_MODE_TEXT { \
+	[CHARGE_CONTROL_NORMAL] = "NORMAL", \
+	[CHARGE_CONTROL_IDLE] = "IDLE", \
+	[CHARGE_CONTROL_DISCHARGE] = "DISCHARGE", \
+	}
+
+enum ec_charge_control_cmd {
+	EC_CHARGE_CONTROL_CMD_SET = 0,
+	EC_CHARGE_CONTROL_CMD_GET,
 };
 
 struct ec_params_charge_control {
 	uint32_t mode;  /* enum charge_control_mode */
+
+	/* Below are the fields added in V2. */
+	uint8_t cmd;    /* enum ec_charge_control_cmd. */
+	uint8_t reserved;
+	/*
+	 * Lower and upper thresholds for battery sustainer. This struct isn't
+	 * named to avoid tainting foreign projects' name spaces.
+	 *
+	 * If charge mode is explicitly set (e.g. DISCHARGE), battery sustainer
+	 * will be disabled. To disable battery sustainer, set mode=NORMAL,
+	 * lower=-1, upper=-1.
+	 */
+	struct {
+		int8_t lower;	/* Display SoC in percentage. */
+		int8_t upper;	/* Display SoC in percentage. */
+	} sustain_soc;
+} __ec_align4;
+
+/* Added in v2 */
+struct ec_response_charge_control {
+	uint32_t mode;  /* enum charge_control_mode */
+	struct {        /* Battery sustainer thresholds */
+		int8_t lower;
+		int8_t upper;
+	} sustain_soc;
+	uint16_t reserved;
 } __ec_align4;
 
 /*****************************************************************************/
@@ -5800,7 +5855,9 @@ struct ec_params_usb_pd_mux_info {
 #define USB_PD_MUX_DP_ENABLED         BIT(1) /* DP connected */
 #define USB_PD_MUX_POLARITY_INVERTED  BIT(2) /* CC line Polarity inverted */
 #define USB_PD_MUX_HPD_IRQ            BIT(3) /* HPD IRQ is asserted */
+#define USB_PD_MUX_HPD_IRQ_DEASSERTED 0      /* HPD IRQ is deasserted */
 #define USB_PD_MUX_HPD_LVL            BIT(4) /* HPD level is asserted */
+#define USB_PD_MUX_HPD_LVL_DEASSERTED 0      /* HPD level is deasserted */
 #define USB_PD_MUX_SAFE_MODE          BIT(5) /* DP is in safe mode */
 #define USB_PD_MUX_TBT_COMPAT_ENABLED BIT(6) /* TBT compat enabled */
 #define USB_PD_MUX_USB4_ENABLED       BIT(7) /* USB4 enabled */
@@ -6333,6 +6390,8 @@ enum action_key {
 	TK_PLAY_PAUSE = 15,
 	TK_NEXT_TRACK = 16,
 	TK_PREV_TRACK = 17,
+	TK_KBD_BKLIGHT_TOGGLE = 18,
+	TK_MICMUTE = 19,
 };
 
 /*
@@ -6650,6 +6709,7 @@ enum tcpc_cc_polarity {
 #define PD_STATUS_EVENT_SOP_DISC_DONE		BIT(0)
 #define PD_STATUS_EVENT_SOP_PRIME_DISC_DONE	BIT(1)
 #define PD_STATUS_EVENT_HARD_RESET		BIT(2)
+#define PD_STATUS_EVENT_DISCONNECTED		BIT(3)
 
 /*
  * Encode and decode for BCD revision response
@@ -6819,16 +6879,18 @@ enum pchg_state {
 	PCHG_STATE_INITIALIZED,
 	/* Charger is enabled and ready to detect a device. */
 	PCHG_STATE_ENABLED,
-	/* Device is detected in proximity. */
+	/* Device is in proximity. */
 	PCHG_STATE_DETECTED,
 	/* Device is being charged. */
 	PCHG_STATE_CHARGING,
 	/* Device is fully charged. It implies DETECTED (& not charging). */
 	PCHG_STATE_FULL,
-	/* In download (or firmware update) mode. Update session is closed. */
+	/* In download (a.k.a. firmware update) mode */
 	PCHG_STATE_DOWNLOAD,
-	/* In download mode. Session is opened. Ready for receiving data. */
+	/* In download mode. Ready for receiving data. */
 	PCHG_STATE_DOWNLOADING,
+	/* Device is ready for data communication. */
+	PCHG_STATE_CONNECTED,
 	/* Put no more entry below */
 	PCHG_STATE_COUNT,
 };
@@ -6842,6 +6904,7 @@ enum pchg_state {
 	[PCHG_STATE_FULL] = "FULL", \
 	[PCHG_STATE_DOWNLOAD] = "DOWNLOAD", \
 	[PCHG_STATE_DOWNLOADING] = "DOWNLOADING", \
+	[PCHG_STATE_CONNECTED] = "CONNECTED", \
 	}
 
 /**
@@ -6912,6 +6975,18 @@ struct ec_response_display_soc {
 	int16_t shutdown_soc; /* Shutdown SoC in 10ths of a % (1000=100.0%) */
 } __ec_align2;
 
+
+#define EC_CMD_SET_BASE_STATE 0x0138
+
+struct ec_params_set_base_state {
+	uint8_t cmd;  /* enum ec_set_base_state_cmd */
+} __ec_align1;
+
+enum ec_set_base_state_cmd {
+	EC_SET_BASE_STATE_DETACH = 0,
+	EC_SET_BASE_STATE_ATTACH,
+	EC_SET_BASE_STATE_RESET,
+};
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

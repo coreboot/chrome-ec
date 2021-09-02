@@ -23,8 +23,9 @@
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
 
-#if !defined(CONFIG_ACCELGYRO_BMI160) && !defined(CONFIG_ACCELGYRO_BMI260)
-#error "Must use either BMI160 or BMI260"
+#if !defined(CONFIG_ACCELGYRO_BMI160) && !defined(CONFIG_ACCELGYRO_BMI260) \
+&& !defined(CONFIG_ACCELGYRO_BMI3XX)
+#error "Must use following sensors BMI160 BMI260 BMI3XX"
 #endif
 
 #if defined(CONFIG_ACCELGYRO_BMI260) && !defined(CONFIG_ACCELGYRO_BMI160)
@@ -168,7 +169,7 @@ int bmi_read8(const int port, const uint16_t i2c_spi_addr_flags,
 	{
 		uint8_t val;
 
-		rv = bmi_spi_raw_read(SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags),
+		rv = bmi_spi_raw_read(ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags),
 				      reg, &val, 1);
 		if (rv == EC_SUCCESS)
 			*data_ptr = val;
@@ -192,7 +193,7 @@ int bmi_write8(const int port, const uint16_t i2c_spi_addr_flags,
 		uint8_t cmd[2] = { reg, data };
 
 		rv = spi_transaction(
-			&spi_devices[SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags)],
+			&spi_devices[ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags)],
 			cmd, 2, NULL, 0);
 	}
 #else
@@ -216,7 +217,7 @@ int bmi_read16(const int port, const uint16_t i2c_spi_addr_flags,
 	       const uint8_t reg, int *data_ptr)
 {
 #ifdef CONFIG_ACCELGYRO_BMI_COMM_SPI
-	return bmi_spi_raw_read(SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags), reg,
+	return bmi_spi_raw_read(ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags), reg,
 				(uint8_t *)data_ptr, 2);
 #else
 	return i2c_read16(port, i2c_spi_addr_flags, reg, data_ptr);
@@ -253,7 +254,7 @@ int bmi_read32(const int port, const uint16_t i2c_spi_addr_flags,
 	       const uint8_t reg, int *data_ptr)
 {
 #ifdef CONFIG_ACCELGYRO_BMI_COMM_SPI
-	return bmi_spi_raw_read(SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags), reg,
+	return bmi_spi_raw_read(ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags), reg,
 				(uint8_t *)data_ptr, 4);
 #else
 	return i2c_read32(port, i2c_spi_addr_flags, reg, data_ptr);
@@ -267,7 +268,7 @@ int bmi_read_n(const int port, const uint16_t i2c_spi_addr_flags,
 	       const uint8_t reg, uint8_t *data_ptr, const int len)
 {
 #ifdef CONFIG_ACCELGYRO_BMI_COMM_SPI
-	return bmi_spi_raw_read(SLAVE_GET_SPI_ADDR(i2c_spi_addr_flags), reg,
+	return bmi_spi_raw_read(ACCEL_GET_SPI_ADDR(i2c_spi_addr_flags), reg,
 				data_ptr, len);
 #else
 	return i2c_read_block(port, i2c_spi_addr_flags, reg, data_ptr, len);
@@ -569,7 +570,7 @@ int bmi_get_data_rate(const struct motion_sensor_t *s)
 int bmi_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 		   int16_t *temp)
 {
-	int i;
+	int i, ret = EC_SUCCESS;
 	intv3_t v;
 
 	switch (s->type) {
@@ -579,7 +580,7 @@ int bmi_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 		 * two-complement number in units of 3.9 mg independent of the
 		 * range selected for the accelerometer.
 		 */
-		bmi_accel_get_offset(s, v);
+		ret = bmi_accel_get_offset(s, v);
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
 		/*
@@ -588,17 +589,21 @@ int bmi_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 		 * Therefore a maximum range that can be compensated is
 		 * -31.25 °/s to +31.25 °/s
 		 */
-		bmi_gyro_get_offset(s, v);
+		ret = bmi_gyro_get_offset(s, v);
 		break;
 #ifdef CONFIG_MAG_BMI_BMM150
 	case MOTIONSENSE_TYPE_MAG:
-		bmm150_get_offset(s, v);
+		ret = bmm150_get_offset(s, v);
 		break;
 #endif /* defined(CONFIG_MAG_BMI_BMM150) */
 	default:
 		for (i = X; i <= Z; i++)
 			v[i] = 0;
 	}
+
+	if (ret != EC_SUCCESS)
+		return ret;
+
 	rotate(v, *s->rot_standard_ref, v);
 	offset[X] = v[X];
 	offset[Y] = v[Y];
@@ -731,7 +736,7 @@ int bmi_get_sensor_temp(int idx, int *temp_ptr)
 			 BMI_TEMPERATURE_0(V(s)), (uint8_t *)&temp,
 			 sizeof(temp));
 
-	if (ret || temp == BMI_INVALID_TEMP)
+	if (ret || temp == (int16_t)BMI_INVALID_TEMP)
 		return EC_ERROR_NOT_POWERED;
 
 	*temp_ptr = C_TO_K(23 + ((temp + 256) >> 9));
@@ -774,41 +779,54 @@ int bmi_get_normalized_rate(const struct motion_sensor_t *s, int rate, int rnd,
 	return EC_SUCCESS;
 }
 
-void bmi_accel_get_offset(const struct motion_sensor_t *accel, intv3_t v)
+int bmi_accel_get_offset(const struct motion_sensor_t *accel, intv3_t v)
 {
-	int i, val;
+	int i, val, ret;
 
 	for (i = X; i <= Z; i++) {
-		bmi_read8(accel->port, accel->i2c_spi_addr_flags,
-			  BMI_OFFSET_ACC70(V(accel)) + i, &val);
+		ret = bmi_read8(accel->port, accel->i2c_spi_addr_flags,
+				BMI_OFFSET_ACC70(V(accel)) + i, &val);
+		if (ret != EC_SUCCESS)
+			return ret;
+
 		if (val > 0x7f)
 			val = -256 + val;
 		v[i] = round_divide((int64_t)val * BMI_OFFSET_ACC_MULTI_MG,
 				    BMI_OFFSET_ACC_DIV_MG);
 	}
+
+	return EC_SUCCESS;
 }
 
-void bmi_gyro_get_offset(const struct motion_sensor_t *gyro, intv3_t v)
+int bmi_gyro_get_offset(const struct motion_sensor_t *gyro, intv3_t v)
 {
-	int i, val, val98;
+	int i, val, val98, ret;
 
 	/* Read the MSB first */
-	bmi_read8(gyro->port, gyro->i2c_spi_addr_flags,
-		  BMI_OFFSET_EN_GYR98(V(gyro)), &val98);
+	ret = bmi_read8(gyro->port, gyro->i2c_spi_addr_flags,
+			BMI_OFFSET_EN_GYR98(V(gyro)), &val98);
+	if (ret != EC_SUCCESS)
+		return ret;
+
 	for (i = X; i <= Z; i++) {
-		bmi_read8(gyro->port, gyro->i2c_spi_addr_flags,
-			  BMI_OFFSET_GYR70(V(gyro)) + i, &val);
+		ret = bmi_read8(gyro->port, gyro->i2c_spi_addr_flags,
+				BMI_OFFSET_GYR70(V(gyro)) + i, &val);
+		if (ret != EC_SUCCESS)
+			return ret;
+
 		val |= ((val98 >> (2 * i)) & 0x3) << 8;
 		if (val > 0x1ff)
 			val = -1024 + val;
 		v[i] = round_divide((int64_t)val * BMI_OFFSET_GYRO_MULTI_MDS,
 				    BMI_OFFSET_GYRO_DIV_MDS);
 	}
+
+	return EC_SUCCESS;
 }
 
-void bmi_set_accel_offset(const struct motion_sensor_t *accel, intv3_t v)
+int bmi_set_accel_offset(const struct motion_sensor_t *accel, intv3_t v)
 {
-	int i, val;
+	int i, val, ret;
 
 	for (i = X; i <= Z; ++i) {
 		val = round_divide((int64_t)v[i] * BMI_OFFSET_ACC_DIV_MG,
@@ -819,15 +837,19 @@ void bmi_set_accel_offset(const struct motion_sensor_t *accel, intv3_t v)
 			val = -128;
 		if (val < 0)
 			val = 256 + val;
-		bmi_write8(accel->port, accel->i2c_spi_addr_flags,
-			   BMI_OFFSET_ACC70(V(accel)) + i, val);
+		ret = bmi_write8(accel->port, accel->i2c_spi_addr_flags,
+				 BMI_OFFSET_ACC70(V(accel)) + i, val);
+		if (ret != EC_SUCCESS)
+			return ret;
 	}
+
+	return EC_SUCCESS;
 }
 
-void bmi_set_gyro_offset(const struct motion_sensor_t *gyro, intv3_t v,
+int bmi_set_gyro_offset(const struct motion_sensor_t *gyro, intv3_t v,
 			 int *val98_ptr)
 {
-	int i, val;
+	int i, val, ret;
 
 	for (i = X; i <= Z; i++) {
 		val = round_divide((int64_t)v[i] * BMI_OFFSET_GYRO_DIV_MDS,
@@ -838,11 +860,16 @@ void bmi_set_gyro_offset(const struct motion_sensor_t *gyro, intv3_t v,
 			val = -512;
 		if (val < 0)
 			val = 1024 + val;
-		bmi_write8(gyro->port, gyro->i2c_spi_addr_flags,
-			   BMI_OFFSET_GYR70(V(gyro)) + i, val & 0xFF);
+		ret = bmi_write8(gyro->port, gyro->i2c_spi_addr_flags,
+				 BMI_OFFSET_GYR70(V(gyro)) + i, val & 0xFF);
+		if (ret != EC_SUCCESS)
+			return ret;
+
 		*val98_ptr &= ~(0x3 << (2 * i));
 		*val98_ptr |= (val >> 8) << (2 * i);
 	}
+
+	return EC_SUCCESS;
 }
 
 #ifdef CONFIG_BMI_ORIENTATION_SENSOR

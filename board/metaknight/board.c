@@ -5,7 +5,7 @@
 
 /* metaknight board-specific configuration */
 
-#include "adc_chip.h"
+#include "adc.h"
 #include "button.h"
 #include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
@@ -807,16 +807,16 @@ static void adc_vol_key_press_check(void)
 	static uint8_t old_adc_key_state;
 	uint8_t adc_key_state_change;
 
-	if (volt > 2400 && volt < 2490) {
+	if (volt > 2400 && volt < 2540) {
 		/* volume-up is pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK;
-	} else if (volt > 2600 && volt < 2690) {
+	} else if (volt > 2600 && volt < 2740) {
 		/* volume-down is pressed */
 		new_adc_key_state = ADC_VOL_DOWN_MASK;
-	} else if (volt < 2290) {
+	} else if (volt < 2300) {
 		/* both volumn-up and volume-down are pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK | ADC_VOL_DOWN_MASK;
-	} else if (volt > 2700) {
+	} else if (volt > 2780) {
 		/* both volumn-up and volume-down are released */
 		new_adc_key_state = 0;
 	}
@@ -832,9 +832,8 @@ static void adc_vol_key_press_check(void)
 }
 DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -859,6 +858,7 @@ void lid_angle_peripheral_enable(int enable)
 	}
 }
 
+#ifndef TEST_BUILD
 void motion_interrupt(enum gpio_signal signal)
 {
 	switch (base_gyro_config) {
@@ -874,5 +874,33 @@ void motion_interrupt(enum gpio_signal signal)
 		break;
 	}
 }
+
+const struct i2c_port_t i2c_ports[] = {
+	{
+		"eeprom", I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
+		GPIO_EC_I2C_EEPROM_SDA
+	},
+
+	{
+		"battery", I2C_PORT_BATTERY, 100, GPIO_EC_I2C_BATTERY_SCL,
+		GPIO_EC_I2C_BATTERY_SDA
+	},
+
+	{
+		"sensor", I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
+		GPIO_EC_I2C_SENSOR_SDA
+	},
+
+	{
+		"usbc0", I2C_PORT_USB_C0, 1000, GPIO_EC_I2C_USB_C0_SCL,
+		GPIO_EC_I2C_USB_C0_SDA
+	},
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
+	{
+		"sub_usbc1", I2C_PORT_SUB_USB_C1, 1000,
+		GPIO_EC_I2C_SUB_USB_C1_SCL, GPIO_EC_I2C_SUB_USB_C1_SDA
+	},
+#endif
+};
 
 #endif

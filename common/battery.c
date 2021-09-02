@@ -15,6 +15,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "math_util.h"
 #include "timer.h"
 #include "usb_pd.h"
 #include "util.h"
@@ -25,7 +26,6 @@
 #define CUTOFFPRINTS(info) CPRINTS("%s %s", "Battery cut off", info)
 
 /* See config.h for details */
-const static int batt_full_factor = CONFIG_BATT_FULL_FACTOR;
 const static int batt_host_full_factor = CONFIG_BATT_HOST_FULL_FACTOR;
 const static int batt_host_shutdown_pct = CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE;
 
@@ -177,6 +177,14 @@ static void print_battery_params(void)
 
 	print_item_name("Charge:");
 		ccprintf("%d %%\n", batt->state_of_charge);
+
+	if (IS_ENABLED(CONFIG_CHARGER)) {
+		int value;
+
+		print_item_name("  Display:");
+		value = charge_get_display_charge();
+		ccprintf("%d.%d %%\n", value / 10, value % 10);
+	}
 }
 
 static void print_battery_info(void)
@@ -207,12 +215,6 @@ static void print_battery_info(void)
 	print_item_name("Cap-full:");
 	if (check_print_error(battery_full_charge_capacity(&value)))
 		ccprintf("%d mAh\n", value);
-
-#ifdef CONFIG_CHARGER
-	print_item_name("Display:");
-	value = charge_get_display_charge();
-	ccprintf("%d.%d %%\n", value / 10, value % 10);
-#endif
 
 	print_item_name("  Design:");
 	if (check_print_error(battery_design_capacity(&value)))
@@ -617,21 +619,18 @@ void battery_compensate_params(struct batt_params *batt)
 {
 	int numer, denom;
 	int *remain = &(batt->remaining_capacity);
-	int *full = &(batt->full_capacity);
+	int full = batt->full_capacity;
 
 	if ((batt->flags & BATT_FLAG_BAD_FULL_CAPACITY) ||
 			(batt->flags & BATT_FLAG_BAD_REMAINING_CAPACITY))
 		return;
 
-	if (*remain <= 0 || *full <= 0)
+	if (*remain <= 0 || full <= 0)
 		return;
 
 	/* Some batteries don't update full capacity as often. */
-	if (!IS_ENABLED(CONFIG_BATTERY_EXPORT_DISPLAY_SOC))
-		/* full_factor is effectively disabled in powerd. */
-		*full = *full * batt_full_factor / 100;
-	if (*remain > *full)
-		*remain = *full;
+	if (*remain > full)
+		*remain = full;
 
 	/*
 	 * EC calculates the display SoC like how Powerd used to do. Powerd
@@ -654,8 +653,8 @@ void battery_compensate_params(struct batt_params *batt)
 	 *		 = ----------------------------------- x 1000
 	 *		   full x (full_factor - shutdown_pct)
 	 */
-	numer = 1000 * ((100 * *remain) - (*full * batt_host_shutdown_pct));
-	denom = *full * (batt_host_full_factor - batt_host_shutdown_pct);
+	numer = 1000 * ((100 * *remain) - (full * batt_host_shutdown_pct));
+	denom = full * (batt_host_full_factor - batt_host_shutdown_pct);
 	/* Rounding (instead of truncating) */
 	batt->display_charge = (numer + denom / 2) / denom;
 	if (batt->display_charge < 0)
@@ -664,7 +663,7 @@ void battery_compensate_params(struct batt_params *batt)
 		batt->display_charge = 1000;
 }
 
-#ifdef CONFIG_BATTERY_EXPORT_DISPLAY_SOC
+#ifdef CONFIG_CHARGER
 static enum ec_status battery_display_soc(struct host_cmd_handler_args *args)
 {
 	struct ec_response_display_soc *r = args->response;
@@ -702,6 +701,11 @@ __overridable int battery_get_avg_current(void)
 int battery_manufacturer_name(char *dest, int size)
 {
 	return get_battery_manufacturer_name(dest, size);
+}
+
+__overridable enum battery_disconnect_state battery_get_disconnect_state(void)
+{
+	return BATTERY_NOT_DISCONNECTED;
 }
 
 #ifdef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
@@ -783,3 +787,26 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP, reduce_input_voltage_when_full,
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, reduce_input_voltage_when_full,
 	     HOOK_PRIO_DEFAULT);
 #endif
+
+void battery_validate_params(struct batt_params *batt)
+{
+	/*
+	 * TODO(crosbug.com/p/27527). Sometimes the battery thinks its
+	 * temperature is 6280C, which seems a bit high. Let's ignore
+	 * anything above the boiling point of tungsten until this bug
+	 * is fixed. If the battery is really that warm, we probably
+	 * have more urgent problems.
+	 */
+	if (batt->temperature > CELSIUS_TO_DECI_KELVIN(5660)) {
+		CPRINTS("ignoring ridiculous batt.temp of %dC",
+			 DECI_KELVIN_TO_CELSIUS(batt->temperature));
+		batt->flags |= BATT_FLAG_BAD_TEMPERATURE;
+	}
+
+	/* If the battery thinks it's above 100%, don't believe it */
+	if (batt->state_of_charge > 100) {
+		CPRINTS("ignoring ridiculous batt.soc of %d%%",
+			batt->state_of_charge);
+		batt->flags |= BATT_FLAG_BAD_STATE_OF_CHARGE;
+	}
+}

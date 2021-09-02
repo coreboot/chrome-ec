@@ -87,7 +87,7 @@ cmd_bin_to_hex = $(OBJCOPY) -I binary -O ihex \
 	--change-addresses $(_program_memory_base) $^ $@
 cmd_smap = $(NM) $< | sort > $@
 cmd_elf = $(CC) $(objs) $(libsharedobjs_elf-y) $(LDFLAGS) \
-	-o $@ -Wl,-T,$< -Wl,-Map,$(patsubst %.elf,%.map,$@)
+	-o $@ -Wl,-T,$< -Wl,-Map,$(patsubst %.elf,%.map,$@) -flto-partition=one
 cmd_fuzz_exe = $(CXX) $^ $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_run_fuzz = build/host/$*/$*.exe -seed=1 -runs=1 $(silent) \
 	$(silent_err) || (echo "Test $* failed!" && false)
@@ -243,7 +243,10 @@ ifeq ($(TEST_BUILD),)
 	@echo "directory!  Otherwise, you won't be able to enter any commands."
 endif # not a TEST_BUILD
 endif # CONFIG_EXPERIMENTAL_CONSOLE=y
-	$(call quiet,check_allowed)
+#	TODO(b/195718112): Disable config option check as it's
+#	suspected to be breaking the CQ. We should consider enabling
+#	as a pre-submit only when re-enabling.
+#	$(call quiet,check_allowed)
 
 proj-%: | $(FAILED_BOARDS_DIR)
 	@touch $(FAILED_BOARDS_DIR)/$*
@@ -414,6 +417,8 @@ cmd_lcov-initial=flock /tmp/ec-lcov-lock -c "lcov --gcov-tool \
 cmd_merge_cov=lcov -o build/coverage/lcov.info $(foreach info,$^,-a ${info})
 cmd_report_cov=genhtml -q -o build/coverage/coverage_rpt -t \
 	       "EC Unittest "$(bldversion) -s $^
+cmd_strip_lcov=sed -i build/coverage/lcov.info \
+	-e 's/\/mnt\/host\/source\/src\/platform\/ec\///'
 
 # Unless V is set to 0 we always want the 'size:' target to report its output,
 # there is no point in generating a short form command trace when calculating
@@ -461,6 +466,7 @@ coverage: TEST_FLAG=TEST_COVERAGE=y
 coverage: $(cov-test-targets)
 	$(call quiet,merge_cov,MERGE  )
 	$(call quiet,report_cov,REPORT )
+	$(call quiet,strip_lcov,STRIP  )
 
 $(out)/libec.a: $(ro-objs)
 	$(call quiet,libec,BUILD )

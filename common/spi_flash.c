@@ -114,7 +114,8 @@ int spi_flash_set_status(int reg1, int reg2)
 
 	/* fail if both HW pin is asserted and SRP(s) is 1 */
 	if (spi_flash_check_wp() != SPI_WP_NONE &&
-		(flash_get_protect() & EC_FLASH_PROTECT_GPIO_ASSERTED) != 0)
+		(crec_flash_get_protect() &
+		EC_FLASH_PROTECT_GPIO_ASSERTED) != 0)
 		return EC_ERROR_ACCESS_DENIED;
 
 	/* Enable writing to SPI flash */
@@ -169,7 +170,7 @@ int spi_flash_read(uint8_t *buf_usr, unsigned int offset, unsigned int bytes)
 			read_size);
 		if (ret != EC_SUCCESS)
 			break;
-		msleep(1);
+		msleep(CONFIG_SPI_FLASH_READ_WAIT_MS);
 	}
 	return ret;
 }

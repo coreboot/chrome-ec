@@ -64,6 +64,19 @@ void system_common_pre_init(void);
 int system_is_manual_recovery(void);
 
 /**
+ * Set a flag indicating system is in recovery mode.
+ */
+void system_enter_manual_recovery(void);
+
+/**
+ * Set a flag indicating system left recovery mode.
+ *
+ * WARNING: This flag should be cleared right after a shutdown from recovery
+ *          boot. You most likely shouldn't call this elsewhere.
+ */
+void system_exit_manual_recovery(void);
+
+/**
  * Make sure AP shutdown completely, before call system_hibernate
  */
 void system_enter_hibernate(uint32_t seconds, uint32_t microseconds);
@@ -89,10 +102,10 @@ __test_only void system_override_jdata(void *test_jdata);
 /**
  * Set up flags that should be saved to battery backed RAM.
  *
- * @param reset_flags - flags passed into system_reset
+ * @param flags - flags passed into system_reset (i.e. SYSTEM_RESET_*)
  * @param *save_flags - flags to be saved in battery backed RAM
  */
-void system_encode_save_flags(int reset_flags, uint32_t *save_flags);
+void system_encode_save_flags(int flags, uint32_t *save_flags);
 
 /**
  * Get the reset flags.
@@ -348,9 +361,15 @@ void system_reset(int flags);
 int system_set_scratchpad(uint32_t value);
 
 /**
- * Return the current scratchpad register value.
+ * Get the scratchpad register value.
+ *
+ * The scratchpad register maintains its contents across a
+ * software-requested warm reset.
+ *
+ * @param value Where to store the content of the register.
+ * @return      EC_SUCCESS, or non-zero if error.
  */
-uint32_t system_get_scratchpad(void);
+int system_get_scratchpad(uint32_t *value);
 
 /**
  * Return the chip vendor/name/revision string.
@@ -367,6 +386,16 @@ const char *system_get_chip_revision(void);
  * @return Number of bytes available at the provided address.
  */
 int system_get_chip_unique_id(uint8_t **id);
+
+/**
+ * Optional board-level function to read SKU ID.
+ */
+__override_proto uint32_t board_get_sku_id(void);
+
+/**
+ * Optional board-level function to read board version.
+ */
+__override_proto int board_get_version(void);
 
 /**
  * Optional board-level function to pulse EC_ENTERING_RW.

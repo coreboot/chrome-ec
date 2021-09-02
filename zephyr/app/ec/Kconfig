@@ -17,6 +17,7 @@ menuconfig CROS_EC
 if CROS_EC
 
 rsource "soc/Kconfig"
+orsource "chip/$(ARCH)/*/Kconfig.*"
 
 config LTO
 	bool "Link Time Optimization (LTO)"

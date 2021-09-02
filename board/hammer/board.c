@@ -125,8 +125,7 @@ int usb_i2c_board_is_enabled(void)
 	return !system_is_locked();
 }
 
-#ifdef CONFIG_KEYBOARD_BOARD_CONFIG
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	.output_settle_us = 50,
 	.debounce_down_us = 9 * MSEC,
 	.debounce_up_us = 30 * MSEC,
@@ -138,7 +137,6 @@ struct keyboard_scan_config keyscan_config = {
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
 	},
 };
-#endif
 #endif
 
 #if defined(BOARD_WAND) && defined(SECTION_IS_RW)
@@ -214,7 +212,7 @@ static void board_init(void)
 
 	clock_wait_bus_cycles(BUS_APB, 1);
 	/* Enable SPI for touchpad */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 	spi_enable(&spi_devices[SPI_ST_TP_DEVICE_ID], 1);
 #endif /* HAS_SPI_TOUCHPAD */
 }
@@ -347,11 +345,30 @@ static const struct ec_response_keybd_config zed_kb = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
+static const struct ec_response_keybd_config bland_kb = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,
+		TK_REFRESH,
+		TK_FULLSCREEN,
+		TK_OVERVIEW,
+		TK_BRIGHTNESS_DOWN,
+		TK_BRIGHTNESS_UP,
+		TK_MICMUTE,
+		TK_VOL_MUTE,
+		TK_VOL_DOWN,
+		TK_VOL_UP,
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
 __override
 const struct ec_response_keybd_config *board_vivaldi_keybd_config(void)
 {
-	if (IS_ENABLED(BOARD_ZED))
+	if (IS_ENABLED(BOARD_ZED) || IS_ENABLED(BOARD_STAR))
 		return &zed_kb;
+	if (IS_ENABLED(BOARD_BLAND) || IS_ENABLED(BOARD_EEL))
+		return &bland_kb;
 
 	return NULL;
 }

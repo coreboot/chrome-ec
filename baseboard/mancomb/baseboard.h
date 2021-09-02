@@ -14,6 +14,7 @@
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 
 /* Optional features */
+#define CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
@@ -30,7 +31,7 @@
 #define GPIO_PACKET_MODE_EN	GPIO_EC_GSC_PACKET_MODE
 
 /* CBI Config */
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_BOARD_VERSION_CBI
 
 /* Undefs because Box */
@@ -119,6 +120,11 @@
 #define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
 #define DEDICATED_CHARGE_PORT CONFIG_USB_PD_PORT_MAX_COUNT
 
+/* DisplayPort redriver */
+#define CONFIG_DP_REDRIVER_TDP142
+#define TDP142_I2C_PORT		I2C_PORT_USB_HUB
+#define TDP142_I2C_ADDR		TDP142_I2C_ADDR3
+
 /* USB Type C and USB PD config */
 #define CONFIG_USB_PD_REV30
 #define CONFIG_USB_PD_TCPMV2
@@ -137,8 +143,6 @@
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_TCPC_LOW_POWER
-#undef  CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
-#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
 #define CONFIG_USB_PD_TCPM_TCPCI
@@ -164,14 +168,14 @@
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT USBC_PORT_COUNT
 
-/* TODO(b/176988382): Tune values for mancomb */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 
-#define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		65000
-#define PD_MAX_CURRENT_MA	3250
+#define PD_OPERATING_POWER_MW	CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
+#define PD_MAX_CURRENT_MA	5000
 #define PD_MAX_VOLTAGE_MV	20000
+/* Max Power = 100 W */
+#define PD_MAX_POWER_MW		((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
 
 /* USB-A config */
 #define USB_PORT_COUNT USBA_PORT_COUNT
@@ -321,6 +325,11 @@ void tcpc_alert_event(enum gpio_signal signal);
 
 /* Required board functions */
 void board_get_bj_power(int *voltage, int *current);
+
+/* CBI utility functions */
+uint32_t get_sku_id(void);
+uint32_t get_board_version(void);
+uint32_t get_fw_config(void);
 
 #endif /* !__ASSEMBLER__ */
 

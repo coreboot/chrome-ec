@@ -21,8 +21,6 @@
 #undef CONFIG_CHIPSET_POWER_SEQ_VERSION
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 1
 
-#define CONFIG_SYSTEM_UNLOCKED
-
 #define CONFIG_BATTERY_HW_PRESENT_CUSTOM
 
 #define CONFIG_CHARGER_PSYS
@@ -62,10 +60,6 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
-/* Define the MKBP events which are allowed to wakeup AP in S3. */
-#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
-		(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |\
-		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
 #define CONFIG_LED_ONOFF_STATES
 
@@ -111,11 +105,16 @@ enum battery_type {
 	BATTERY_PANASONIC_AP19B5K_KT00305011,
 	BATTERY_LGC_AP19B8K,
 	BATTERY_COSMX_AP20CBL,
+	BATTERY_SMP_AP18C7K,
 	BATTERY_TYPE_COUNT,
 };
 
 #include "gpio_signal.h"
 #include "registers.h"
+
+/* support factory keyboard test */
+#define CONFIG_KEYBOARD_FACTORY_TEST
+#define GPIO_KBD_KSO2		GPIO_EC_KSO_02_INV
 
 #ifdef SECTION_IS_RO
 /* Interrupt handler for AP jump to BL */

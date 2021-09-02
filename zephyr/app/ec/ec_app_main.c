@@ -5,6 +5,7 @@
 
 #include <kernel.h>
 #include <sys/printk.h>
+#include <shell/shell_uart.h>
 #include <zephyr.h>
 
 #include "button.h"
@@ -37,6 +38,10 @@ void ec_app_main(void)
 
 	system_print_banner();
 
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG)) {
+		watchdog_init();
+	}
+
 	/*
 	 * Keyboard scan init/Button init can set recovery events to
 	 * indicate to host entry into recovery mode. Before this is
@@ -62,11 +67,7 @@ void ec_app_main(void)
 		}
 	}
 
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG)) {
-		watchdog_init();
-	}
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_VBOOT)) {
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_VBOOT_EFS2)) {
 		/*
 		 * For RO, it behaves as follows:
 		 *   In recovery, it enables PD communication and returns.
@@ -88,6 +89,28 @@ void ec_app_main(void)
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOOKS)) {
 		hook_notify(HOOK_INIT);
 	}
+
+
+	/*
+	 * Increase priority of shell thread.
+	 * This is temporary code that'll be removed
+	 * after the feature outlined in bug b/191795553
+	 * is implemented.
+	 */
+	{
+		static const struct shell *shell;
+
+		shell = shell_backend_uart_get_ptr();
+		k_thread_priority_set(shell->ctx->tid,
+				K_HIGHEST_APPLICATION_THREAD_PRIO);
+	}
+
+	/*
+	 * Print the init time.  Not completely accurate because it can't take
+	 * into account the time before timer_init(), but it'll at least catch
+	 * the majority of the time.
+	 */
+	cprints(CC_SYSTEM, "Inits done");
 
 	/* Start the EC tasks after performing all main initialization */
 	if (IS_ENABLED(CONFIG_SHIMMED_TASKS)) {

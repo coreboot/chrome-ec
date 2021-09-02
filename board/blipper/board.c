@@ -7,6 +7,7 @@
 
 #include "adc_chip.h"
 #include "button.h"
+#include "cros_board_info.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
@@ -39,6 +40,19 @@
 
 #define CPRINTUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define INT_RECHECK_US 5000
+
+__override struct keyboard_scan_config keyscan_config = {
+	.output_settle_us = 80,
+	.debounce_down_us = 30 * MSEC,
+	.debounce_up_us = 30 * MSEC,
+	.scan_period_us = 3 * MSEC,
+	.min_post_scan_delay_us = 1000,
+	.poll_timeout_us = 100 * MSEC,
+	.actual_key_mask = {
+		0x1c, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
+	},
+};
 
 /* C0 interrupt line shared by BC 1.2 and charger */
 static void check_c0_line(void);
@@ -90,15 +104,6 @@ static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
 	pd_handle_cc_overvoltage(0);
 }
 
-void board_hibernate(void)
-{
-	/*
-	 * Charger IC need to be put into their "low power mode" before
-	 * entering the Z-state.
-	 */
-	raa489000_hibernate(0, false);
-}
-
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
@@ -125,12 +130,12 @@ const struct adc_t adc_channels[] = {
 		.shift = 0,
 		.channel = CHIP_ADC_CH3
 	},
-	[ADC_SUB_ANALOG] = {
-		.name = "SUB_ANALOG",
+	[ADC_TEMP_SENSOR_3] = {
+		.name = "TEMP_SENSOR3",
 		.factor_mul = ADC_MAX_MVOLT,
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
-		.channel = CHIP_ADC_CH13
+		.channel = CHIP_ADC_CH15
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
@@ -204,15 +209,14 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A0_VBUS
 };
 
+static uint32_t board_id;
+
 void board_init(void)
 {
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
 
 	gpio_enable_interrupt(GPIO_HDMI_HPD_SUB_ODL);
-
-
-	gpio_set_level(GPIO_HDMI_EN_SUB_ODL, 0);
 
 	/* Set LEDs luminance */
 	pwm_set_duty(PWM_CH_LED_RED, 70);
@@ -230,8 +234,26 @@ void board_init(void)
 	keyscan_config.actual_key_mask[12] = 0xff;
 	keyscan_config.actual_key_mask[13] = 0xff;
 	keyscan_config.actual_key_mask[14] = 0xff;
+
+	cbi_get_board_version(&board_id);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+void board_hibernate(void)
+{
+	/*
+	 * Charger IC need to be put into their "low power mode" before
+	 * entering the Z-state.
+	 *
+	 * b:186717219: In order to solve the power consumption problem of
+	 * hibernate，HW solution is adopted after board id 3 to solve the
+	 * problem that AC cannot wake up hibernate mode.
+	 */
+	if (board_id > 2)
+		raa489000_hibernate(0, true);
+	else
+		raa489000_hibernate(0, false);
+}
 
 __override void board_pulse_entering_rw(void)
 {
@@ -360,7 +382,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1] = {.name = "Memory",
+	[TEMP_SENSOR_1] = {.name = "Charge",
 			   .type = TEMP_SENSOR_TYPE_BOARD,
 			   .read = get_temp_3v3_51k1_47k_4050b,
 			   .idx = ADC_TEMP_SENSOR_1},
@@ -368,5 +390,9 @@ const struct temp_sensor_t temp_sensors[] = {
 			   .type = TEMP_SENSOR_TYPE_BOARD,
 			   .read = get_temp_3v3_51k1_47k_4050b,
 			   .idx = ADC_TEMP_SENSOR_2},
+	[TEMP_SENSOR_3] = {.name = "5V_Inductor",
+			   .type = TEMP_SENSOR_TYPE_BOARD,
+			   .read = get_temp_3v3_51k1_47k_4050b,
+			   .idx = ADC_TEMP_SENSOR_3},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);

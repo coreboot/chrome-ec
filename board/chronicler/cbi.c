@@ -12,15 +12,14 @@
 
 /******************************************************************************/
 /*
- * FW_CONFIG defaults for Volteer if the CBI data is not initialized.
+ * FW_CONFIG defaults for Chronicler if the CBI data is not initialized.
  */
 union volteer_cbi_fw_config fw_config_defaults = {
-	.usb_db = DB_USB4_GEN2,
+	.usb_db = DB_USB3_ACTIVE,
 };
 
 __override void board_cbi_init(void)
 {
-	config_usb3_db_type();
 	if ((!IS_ENABLED(TEST_BUILD) && !ec_cfg_has_numeric_pad()) ||
 	    get_board_id() <= 2)
 		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);

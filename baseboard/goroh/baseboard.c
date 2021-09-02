@@ -6,7 +6,6 @@
 /* Goroh baseboard-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charger.h"
@@ -102,14 +101,6 @@ __override void board_hibernate_late(void)
 	/* should not reach here */
 	__builtin_unreachable();
 }
-
-/* power signal list.  Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
-	{GPIO_PMIC_EC_PWRGD, POWER_SIGNAL_ACTIVE_HIGH, "PMIC_PWR_GOOD"},
-	{GPIO_AP_IN_SLEEP_L, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_S3_L"},
-	{GPIO_AP_EC_WATCHDOG_L, POWER_SIGNAL_ACTIVE_LOW, "AP_WDT_ASSERTED"},
-};
-BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* Detect subboard */
 static void board_tcpc_init(void)
@@ -458,7 +449,7 @@ int board_set_active_charge_port(int port)
 
 	/* Check if the port is sourcing VBUS. */
 	if (ppc_is_sourcing_vbus(port)) {
-		CPRINTF("Skip enable C%d", port);
+		CPRINTS("Skip enable C%d", port);
 		return EC_ERROR_INVAL;
 	}
 
@@ -573,27 +564,6 @@ int board_regulator_get_voltage(uint32_t index, uint32_t *voltage_mv)
 
 	return mt6360_regulator_get_voltage(id, voltage_mv);
 }
-
-/* Lid */
-#ifndef TEST_BUILD
-/* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
-{
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
-}
-#endif
 
 static void baseboard_init(void)
 {

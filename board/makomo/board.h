@@ -15,6 +15,7 @@
 
 #ifndef SECTION_IS_RW
 #define VARIANT_KUKUI_NO_SENSORS
+#undef CONFIG_CMD_MFALLOW
 #endif /* SECTION_IS_RW */
 
 #include "baseboard.h"
@@ -60,6 +61,7 @@
 #define CONFIG_ALS
 #define CONFIG_CMD_ACCEL_INFO
 
+
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
@@ -90,10 +92,6 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
-/* Define the MKBP events which are allowed to wakeup AP in S3. */
-#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
-		(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |\
-		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
 #ifndef __ASSEMBLER__
 

@@ -5,7 +5,6 @@
 /* Hardware initialization and common functions */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "common.h"
 #include "cpu.h"
 #include "registers.h"
@@ -302,7 +301,7 @@ int adc_disable_watchdog(void)
 #define CR_LOCK  BIT(7)
 #define OPTWRE   BIT(9)
 
-int flash_physical_write(int offset, int size, const char *data)
+int crec_flash_physical_write(int offset, int size, const char *data)
 {
 	uint16_t *address = (uint16_t *)(CONFIG_PROGRAM_MEMORY_BASE + offset);
 	int res = EC_SUCCESS;
@@ -354,7 +353,7 @@ exit_wr:
 	return res;
 }
 
-int flash_physical_erase(int offset, int size)
+int crec_flash_physical_erase(int offset, int size)
 {
 	int res = EC_SUCCESS;
 

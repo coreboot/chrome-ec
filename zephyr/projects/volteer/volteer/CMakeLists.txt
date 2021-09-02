@@ -4,7 +4,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 cmake_minimum_required(VERSION 3.13.1)
-set(BOARD_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(volteer)
@@ -25,7 +24,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
   "${PLATFORM_EC_BASEBOARD}/battery_presence.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_MANAGER
   "${PLATFORM_EC_BASEBOARD}/charger.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM
   "${PLATFORM_EC_BASEBOARD}/cbi.c"
   "${PLATFORM_EC_BASEBOARD}/cbi_ec_fw_config.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
@@ -38,15 +37,9 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
 # Include selected EC source for the board
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
   "${PLATFORM_EC_BOARD}/battery.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM
   "${PLATFORM_EC_BOARD}/cbi.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_BOARD_CONFIG
-  "${PLATFORM_EC_BOARD}/keyboard.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
   "${PLATFORM_EC_BOARD}/led.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
   "${PLATFORM_EC_BOARD}/usbc_config.c")
-
-# Board specific sensor implementation
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
-  "src/sensors.c")

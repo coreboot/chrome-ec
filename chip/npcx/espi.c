@@ -109,32 +109,32 @@ static const struct host_wui_item espi_vw_int_list[] = {
 
 /* VW signals used in eSPI */
 static const struct vw_event_t vw_events_list[] = {
-	{VW_SLP_S3_L,               0x02,   0x01},	/* index 02h (In)  */
-	{VW_SLP_S4_L,               0x02,   0x02},
-	{VW_SLP_S5_L,               0x02,   0x04},
-	{VW_SUS_STAT_L,             0x03,   0x01},	/* index 03h (In)  */
-	{VW_PLTRST_L,               0x03,   0x02},
-	{VW_OOB_RST_WARN,           0x03,   0x04},
-	{VW_OOB_RST_ACK,            0x04,   0x01},	/* index 04h (Out) */
-	{VW_WAKE_L,                 0x04,   0x04},
-	{VW_PME_L,                  0x04,   0x08},
-	{VW_ERROR_FATAL,            0x05,   0x02},	/* index 05h (Out) */
-	{VW_ERROR_NON_FATAL,        0x05,   0x04},
-	{VW_SLAVE_BTLD_STATUS_DONE, 0x05,   0x09},
-	{VW_SCI_L,                  0x06,   0x01},	/* index 06h (Out) */
-	{VW_SMI_L,                  0x06,   0x02},
-	{VW_RCIN_L,                 0x06,   0x04},
-	{VW_HOST_RST_ACK,           0x06,   0x08},
-	{VW_HOST_RST_WARN,          0x07,   0x01},	/* index 07h (In)  */
-	{VW_SUS_ACK,                0x40,   0x01},	/* index 40h (Out) */
-	{VW_SUS_WARN_L,             0x41,   0x01},	/* index 41h (In)  */
-	{VW_SUS_PWRDN_ACK_L,        0x41,   0x02},
-	{VW_SLP_A_L,                0x41,   0x08},
-	{VW_SLP_LAN,                0x42,   0x01},	/* index 42h (In)  */
-	{VW_SLP_WLAN,               0x42,   0x02},
+	{VW_SLP_S3_L,                    0x02,   0x01},	/* index 02h (In)  */
+	{VW_SLP_S4_L,                    0x02,   0x02},
+	{VW_SLP_S5_L,                    0x02,   0x04},
+	{VW_SUS_STAT_L,                  0x03,   0x01},	/* index 03h (In)  */
+	{VW_PLTRST_L,                    0x03,   0x02},
+	{VW_OOB_RST_WARN,                0x03,   0x04},
+	{VW_OOB_RST_ACK,                 0x04,   0x01},	/* index 04h (Out) */
+	{VW_WAKE_L,                      0x04,   0x04},
+	{VW_PME_L,                       0x04,   0x08},
+	{VW_ERROR_FATAL,                 0x05,   0x02},	/* index 05h (Out) */
+	{VW_ERROR_NON_FATAL,             0x05,   0x04},
+	{VW_PERIPHERAL_BTLD_STATUS_DONE, 0x05,   0x09},
+	{VW_SCI_L,                       0x06,   0x01},	/* index 06h (Out) */
+	{VW_SMI_L,                       0x06,   0x02},
+	{VW_RCIN_L,                      0x06,   0x04},
+	{VW_HOST_RST_ACK,                0x06,   0x08},
+	{VW_HOST_RST_WARN,               0x07,   0x01},	/* index 07h (In)  */
+	{VW_SUS_ACK,                     0x40,   0x01},	/* index 40h (Out) */
+	{VW_SUS_WARN_L,                  0x41,   0x01},	/* index 41h (In)  */
+	{VW_SUS_PWRDN_ACK_L,             0x41,   0x02},
+	{VW_SLP_A_L,                     0x41,   0x08},
+	{VW_SLP_LAN,                     0x42,   0x01},	/* index 42h (In)  */
+	{VW_SLP_WLAN,                    0x42,   0x02},
 };
 
-/* Flag for SLAVE_BOOT_LOAD siganls */
+/* Flag for boot load signals */
 static uint8_t boot_load_done;
 
 /*****************************************************************************/
@@ -149,7 +149,7 @@ static void espi_reset_recovery(void)
 	boot_load_done = 0;
 }
 
-/* Configure Master-to-Slave virtual wire inputs */
+/* Configure Controller-to-Peripheral virtual wire inputs */
 static void espi_vw_config_in(const struct vwevms_config_t *config)
 {
 	uint32_t val;
@@ -181,7 +181,7 @@ static void espi_vw_config_in(const struct vwevms_config_t *config)
 	}
 }
 
-/* Configure Slave-to-Master virtual wire outputs */
+/* Configure Peripheral-to-Controller virtual wire outputs */
 static void espi_vw_config_out(const struct vwevsm_config_t *config)
 {
 	uint32_t val;
@@ -213,7 +213,7 @@ static void espi_vw_config_out(const struct vwevsm_config_t *config)
 	}
 }
 
-/* Config Master-to-Slave VWire interrupt edge type and enable it */
+/* Config Controller-to-Peripheral VWire interrupt edge type and enable it */
 static void espi_enable_vw_int(const struct host_wui_item *vwire_int)
 {
 	uint8_t table = vwire_int->table;
@@ -412,17 +412,27 @@ void espi_vw_evt_pltrst(void)
 
 	if (pltrst) {
 		/* PLTRST# deasserted */
+#if defined(CHIP_FAMILY_NPCX5)
+		/* See errata 2.22 */
+
 		/* Disable eSPI peripheral channel support first */
 		CLEAR_BIT(NPCX_ESPICFG, NPCX_ESPICFG_PCCHN_SUPP);
-
-		/* Enable eSPI peripheral channel */
-		SET_BIT(NPCX_ESPICFG, NPCX_ESPICFG_PCHANEN);
 
 		/* Initialize host settings */
 		host_register_init();
 
+		/* Enable eSPI peripheral channel */
+		SET_BIT(NPCX_ESPICFG, NPCX_ESPICFG_PCHANEN);
+
 		/* Re-enable eSPI peripheral channel support */
 		SET_BIT(NPCX_ESPICFG, NPCX_ESPICFG_PCCHN_SUPP);
+#else
+		/* Initialize host settings */
+		host_register_init();
+
+		/* Enable eSPI peripheral channel */
+		SET_BIT(NPCX_ESPICFG, NPCX_ESPICFG_PCHANEN);
+#endif
 	} else {
 		/* PLTRST# asserted */
 #ifdef CONFIG_CHIPSET_RESET_HOOK
@@ -551,7 +561,8 @@ void espi_interrupt(void)
 		NPCX_ESPISTS = status;
 
 		if (IS_BIT_SET(status, NPCX_ESPISTS_BERR))
-			CPRINTS("eSPI Bus Error");
+			/* Always print eSPI Bus Errors */
+			cprints(CC_LPC, "eSPI Bus Error");
 
 		/* eSPI inband reset(from VW) */
 		if (IS_BIT_SET(status, NPCX_ESPISTS_IBRST)) {
@@ -574,23 +585,24 @@ void espi_interrupt(void)
 			 */
 			for (chan = NPCX_ESPI_CH_VW; chan < NPCX_ESPI_CH_COUNT;
 					chan++) {
-				if (!IS_SLAVE_CHAN_ENABLE(chan) &&
+				if (!IS_PERIPHERAL_CHAN_ENABLE(chan) &&
 						IS_HOST_CHAN_EN(chan))
 					ENABLE_ESPI_CHAN(chan);
-				else if (IS_SLAVE_CHAN_ENABLE(chan) &&
+				else if (IS_PERIPHERAL_CHAN_ENABLE(chan) &&
 						!IS_HOST_CHAN_EN(chan))
 					DISABLE_ESPI_CHAN(chan);
 			}
 
 			/*
-			 * Send SLAVE_BOOTLOAD_DONE and SLAVE_BOOTLOAD_STATUS
+			 * Send BOOTLOAD_DONE and BOOTLOAD_STATUS
 			 * events to host simultaneously. To indicate the
 			 * completion of EC firmware code loading.
 			 */
 			if (boot_load_done == 0 &&
-					IS_SLAVE_CHAN_ENABLE(NPCX_ESPI_CH_VW)) {
+			    IS_PERIPHERAL_CHAN_ENABLE(NPCX_ESPI_CH_VW)) {
 
-				espi_vw_set_wire(VW_SLAVE_BTLD_STATUS_DONE, 1);
+				espi_vw_set_wire(
+					VW_PERIPHERAL_BTLD_STATUS_DONE, 1);
 				boot_load_done = 1;
 			}
 		}
@@ -622,11 +634,11 @@ void espi_init(void)
 	SET_FIELD(NPCX_ESPICFG, NPCX_ESPICFG_MAXFREQ_FIELD,
 		  NPCX_ESPI_MAXFREQ_MAX);
 
-	/* Configure Master-to-Slave Virtual Wire indexes (Inputs) */
+	/* Configure Controller-to-Peripheral Virtual Wire indexes (Inputs) */
 	for (i = 0; i < ARRAY_SIZE(espi_in_list); i++)
 		espi_vw_config_in(&espi_in_list[i]);
 
-	/* Configure Slave-to-Master Virtual Wire indexes (Outputs) */
+	/* Configure Peripheral-to-Controller Virtual Wire indexes (Outputs) */
 	for (i = 0; i < ARRAY_SIZE(espi_out_list); i++)
 		espi_vw_config_out(&espi_out_list[i]);
 

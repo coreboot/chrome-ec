@@ -80,24 +80,39 @@ struct cros_system_npcx_data {
 
 #define DRV_DATA(dev) ((struct cros_system_npcx_data *)(dev)->data)
 
-#define FAMILY_ID_NPCX 0x20
-#define CHIP_ID_NPCX79NXB_C 0x07
+#define SYSTEM_DT_NODE_SOC_ID_CONFIG DT_INST(0, nuvoton_npcx_soc_id)
 
-/* device ID for all variants in npcx family */
-enum npcx_chip_id {
-	DEVICE_ID_NPCX796F_B = 0x21,
-	DEVICE_ID_NPCX796F_C = 0x29,
-	DEVICE_ID_NPCX797F_C = 0x20,
-	DEVICE_ID_NPCX797W_B = 0x24,
-	DEVICE_ID_NPCX797W_C = 0x2C,
-};
+/* Chip info devicetree data */
+#define NPCX_FAMILY_ID DT_PROP(SYSTEM_DT_NODE_SOC_ID_CONFIG, family_id)
+
+#define NPCX_CHIP_ID DT_PROP(SYSTEM_DT_NODE_SOC_ID_CONFIG, chip_id)
+
+#define NPCX_DEVICE_ID DT_PROP(SYSTEM_DT_NODE_SOC_ID_CONFIG, device_id)
+
+#define NPCX_REVISION_ADDR \
+	DT_PROP_BY_IDX(SYSTEM_DT_NODE_SOC_ID_CONFIG, revision_reg, 0)
+#define NPCX_REVISION_LEN \
+	DT_PROP_BY_IDX(SYSTEM_DT_NODE_SOC_ID_CONFIG, revision_reg, 1)
 
 /* RAM block size in npcx family (Unit: bytes) */
 #define NPCX_RAM_BLOCK_SIZE (32 * 1024)
 /* RAM block number in npcx7 series */
-#define NPCX7_RAM_BLOCK_NUM 12
-/* RAM block mask for power down in npcx7 series */
-#define NPCX7_RAM_BLOCK_PD_MASK (BIT(12) - 1)
+
+/* Calculate the number of RAM blocks:
+ * total RAM size = code ram + data ram + extra 2K for ROM functions
+ * divided by the block size 32k.
+ */
+#define DATA_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(sram0))
+#define CODE_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(flash0))
+#define NPCX_RAM_BLOCK_COUNT \
+	((DATA_RAM_SIZE + CODE_RAM_SIZE + KB(2)) / NPCX_RAM_BLOCK_SIZE)
+
+/* Valid bit-depth of RAM block Power-Down control (RAM_PD) registers. Use its
+ * mask to power down all unnecessary RAM blocks before hibernating.
+ */
+#define NPCX_RAM_PD_DEPTH DT_PROP(DT_NODELABEL(pcc), ram_pd_depth)
+#define NPCX_RAM_BLOCK_PD_MASK (BIT(NPCX_RAM_PD_DEPTH) - 1)
+
 /* Get saved reset flag address in battery-backed ram */
 #define BBRAM_SAVED_RESET_FLAG_ADDR                         \
 	(DT_REG_ADDR(DT_INST(0, nuvoton_npcx_cros_bbram)) + \
@@ -107,11 +122,10 @@ enum npcx_chip_id {
 static int system_npcx_watchdog_stop(void)
 {
 	if (IS_ENABLED(CONFIG_WATCHDOG)) {
-		const struct device *wdt_dev = device_get_binding(
-			DT_LABEL(DT_INST(0, nuvoton_npcx_watchdog)));
-
-		if (!wdt_dev) {
-			LOG_ERR("wdt_dev get binding failed");
+		const struct device *wdt_dev = DEVICE_DT_GET(
+				DT_NODELABEL(twd0));
+		if (!device_is_ready(wdt_dev)) {
+			LOG_ERR("Error: device %s is not ready", wdt_dev->name);
 			return -ENODEV;
 		}
 
@@ -264,7 +278,7 @@ system_npcx_hibernate_by_lfw_in_last_ram(const struct device *dev,
 
 static inline int system_npcx_get_ram_blk_by_lfw_addr(char *address)
 {
-	return NPCX7_RAM_BLOCK_NUM -
+	return NPCX_RAM_BLOCK_COUNT -
 	       ceiling_fraction((uint32_t)address -
 					CONFIG_CROS_EC_PROGRAM_MEMORY_BASE,
 				NPCX_RAM_BLOCK_SIZE);
@@ -277,7 +291,7 @@ static void system_npcx_hibernate_by_disable_ram(const struct device *dev,
 	/* Get 32kb ram block order of lfw function */
 	extern char __lfw_text_start[], __lfw_text_end[];
 	int lfw_block = system_npcx_get_ram_blk_by_lfw_addr(__lfw_text_start);
-	uint32_t pd_ram_mask = ~BIT(lfw_block) & NPCX7_RAM_BLOCK_PD_MASK;
+	uint32_t pd_ram_mask = ~BIT(lfw_block) & NPCX_RAM_BLOCK_PD_MASK;
 
 	if (lfw_block != system_npcx_get_ram_blk_by_lfw_addr(__lfw_text_end)) {
 		LOG_ERR("LFW cannot cross ram blocks!");
@@ -340,9 +354,11 @@ static const char *cros_system_npcx_get_chip_vendor(const struct device *dev)
 	char *p = str + 8;
 	uint8_t fam_id = inst_mswc->SID_CR;
 
-	if (fam_id == FAMILY_ID_NPCX) {
+#if DT_NODE_EXISTS(SYSTEM_DT_NODE_SOC_ID_CONFIG)
+	if (fam_id == NPCX_FAMILY_ID) {
 		return "Nuvoton";
 	}
+#endif
 
 	hex2char(fam_id >> 4, p++);
 	hex2char(fam_id & 0xf, p);
@@ -357,20 +373,11 @@ static const char *cros_system_npcx_get_chip_name(const struct device *dev)
 	uint8_t chip_id = inst_mswc->SRID_CR;
 	uint8_t device_id = inst_mswc->DEVICE_ID_CR;
 
-	if (chip_id == CHIP_ID_NPCX79NXB_C) {
-		switch (device_id) {
-		case DEVICE_ID_NPCX796F_B:
-			return "NPCX796FB";
-		case DEVICE_ID_NPCX796F_C:
-			return "NPCX796FC";
-		case DEVICE_ID_NPCX797F_C:
-			return "NPCX797FC";
-		case DEVICE_ID_NPCX797W_B:
-			return "NPCX797WB";
-		case DEVICE_ID_NPCX797W_C:
-			return "NPCX797WC";
-		}
+#if DT_NODE_EXISTS(SYSTEM_DT_NODE_SOC_ID_CONFIG)
+	if (chip_id == NPCX_CHIP_ID && device_id == NPCX_DEVICE_ID) {
+		return CONFIG_SOC;
 	}
+#endif
 
 	hex2char(chip_id >> 4, p++);
 	hex2char(chip_id & 0xf, p++);
@@ -382,19 +389,25 @@ static const char *cros_system_npcx_get_chip_name(const struct device *dev)
 static const char *cros_system_npcx_get_chip_revision(const struct device *dev)
 {
 	ARG_UNUSED(dev);
-	static char rev[NPCX_CHIP_REV_STR_SIZE];
+#if DT_NODE_EXISTS(SYSTEM_DT_NODE_SOC_ID_CONFIG)
+	static char rev[NPCX_REVISION_LEN * 2 + 1];
+#else
+	static char rev[1];
+#endif
 	char *p = rev;
-	uint8_t rev_num = *((volatile uint8_t *)NPCX_CHIP_REV_ADDR);
 
+#if DT_NODE_EXISTS(SYSTEM_DT_NODE_SOC_ID_CONFIG)
 	/*
 	 * For NPCX7, the revision number is 1 byte.
 	 * For NPCX9 and later chips, the revision number is 4 bytes.
 	 */
-	for (int s = sizeof(rev_num) - 1; s >= 0; s--) {
-		uint8_t r = rev_num >> (s * 8);
+	for (int s = NPCX_REVISION_ADDR + NPCX_REVISION_LEN - 1;
+	     s >= NPCX_REVISION_ADDR; s--) {
+		uint8_t r = *((volatile uint8_t *)s);
 		hex2char(r >> 4, p++);
 		hex2char(r & 0xf, p++);
 	}
+#endif
 	*p = '\0';
 
 	return rev;
@@ -547,6 +560,7 @@ DEVICE_DEFINE(cros_system_npcx_0, "CROS_SYSTEM", cros_system_npcx_init, NULL,
 	      CONFIG_CROS_SYSTEM_NPCX_INIT_PRIORITY,
 	      &cros_system_driver_npcx_api);
 
+#if DT_NODE_EXISTS(DT_NODELABEL(dbg))
 #define HAL_DBG_REG_BASE_ADDR \
 	((struct dbg_reg *)DT_REG_ADDR(DT_INST(0, nuvoton_npcx_cros_dbg)))
 
@@ -577,3 +591,4 @@ static int jtag_init(const struct device *dev)
 #error "jtag_init must be called after default kernel init"
 #endif
 SYS_INIT(jtag_init, PRE_KERNEL_1, 41);
+#endif /* DT_NODE_EXISTS(DT_NODELABEL(dbg)) */

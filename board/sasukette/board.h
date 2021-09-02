@@ -14,9 +14,7 @@
 #undef GPIO_VOLUME_UP_L
 #undef GPIO_VOLUME_DOWN_L
 #undef CONFIG_VOLUME_BUTTONS
-
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
+#undef CONFIG_I2C_DEBUG
 
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
@@ -24,6 +22,7 @@
 
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
+#define CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS
 
 /* BC 1.2 */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -59,7 +58,6 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB Mux and Retimer */
 #define CONFIG_USB_MUX_IT5205			/* C1: ITE Mux */

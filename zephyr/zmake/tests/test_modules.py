@@ -2,16 +2,17 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import pathlib
 import tempfile
+
 import hypothesis
 import hypothesis.strategies as st
-import pathlib
 
 import zmake.modules
 
-
-module_lists = st.lists(st.one_of(*map(st.just, zmake.modules.known_modules)),
-                        unique=True)
+module_lists = st.lists(
+    st.one_of(*map(st.just, zmake.modules.known_modules)), unique=True
+)
 
 
 @hypothesis.given(module_lists)
@@ -26,13 +27,12 @@ def test_locate_in_directory(modules):
 
         for module in modules:
             module_dir = modules_dir / module
-            zephyr_dir = module_dir / 'zephyr'
+            zephyr_dir = module_dir / "zephyr"
             zephyr_dir.mkdir(parents=True)
 
-            module_yml = zephyr_dir / 'module.yml'
-            module_yml.write_bytes(b'')
+            module_yml = zephyr_dir / "module.yml"
+            module_yml.write_bytes(b"")
 
             expected_modules[module] = module_dir
 
-        assert (zmake.modules.locate_from_directory(modules_dir)
-                == expected_modules)
+        assert zmake.modules.locate_from_directory(modules_dir) == expected_modules

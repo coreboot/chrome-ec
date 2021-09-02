@@ -4,8 +4,8 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
+#include "cbi_ssfc.h"
 #include "charge_state_v2.h"
 #include "cros_board_info.h"
 #include "driver/accelgyro_bmi_common.h"
@@ -42,6 +42,24 @@
 #include "gpio_list.h"
 
 static int board_ver;
+
+/*
+ * We have total 30 pins for keyboard connecter {-1, -1} mean
+ * the N/A pin that don't consider it and reserve index 0 area
+ * that we don't have pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
+	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
+	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
+	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
+	{-1, -1}, {0, 4}, {-1, -1}, {8, 2}, {-1, -1},
+	{-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 /* Motion sensors */
 static struct mutex g_lid_mutex;
@@ -257,8 +275,12 @@ const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
  * chip and it need a board specific driver.
  * Overall, it will use chained mux framework.
  */
-static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state)
+static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state,
+			      bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
 		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
 	else
@@ -318,9 +340,29 @@ void motion_interrupt(enum gpio_signal signal)
  * USB-C MUX/Retimer dynamic configuration
  */
 
+int board_usbc1_retimer_inhpd = IOEX_USB_C1_HPD_IN_DB;
+
 static void setup_mux(void)
 {
-	if (ec_config_has_usbc1_retimer_tusb544()) {
+	enum ec_ssfc_c1_mux mux = get_cbi_ssfc_c1_mux();
+
+	if (mux == SSFC_C1_MUX_NONE && ec_config_has_usbc1_retimer_tusb544())
+		mux = SSFC_C1_MUX_TUSB544;
+
+	if (mux == SSFC_C1_MUX_PS8818) {
+		ccprints("C1 PS8818 detected");
+		/*
+		 * Main MUX is FP5, secondary MUX is PS8818
+		 *
+		 * Replace usb_muxes[USBC_PORT_C1] with the AMD FP5
+		 * table entry.
+		 */
+		memcpy(&usb_muxes[USBC_PORT_C1],
+		       &usbc1_amd_fp5_usb_mux,
+		       sizeof(struct usb_mux));
+		/* Set the PS8818 as the secondary MUX */
+		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_ps8818;
+	} else if (mux == SSFC_C1_MUX_TUSB544) {
 		ccprints("C1 TUSB544 detected");
 		/*
 		 * Main MUX is FP5, secondary MUX is TUSB544

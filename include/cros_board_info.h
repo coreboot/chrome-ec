@@ -12,7 +12,18 @@
 
 #define CBI_VERSION_MAJOR	0
 #define CBI_VERSION_MINOR	0
-#define CBI_EEPROM_SIZE		256
+
+#ifdef CONFIG_CBI_GPIO
+/*
+ * if CBI is sourced from GPIO, the CBI cache only needs to accomondate
+ * BOARD_VERSION and SKU_ID
+ */
+#define CBI_IMAGE_SIZE		(sizeof(struct cbi_header) +  (2 * \
+				(sizeof(struct cbi_data) + sizeof(uint32_t))))
+#else
+#define CBI_IMAGE_SIZE		256
+#endif
+
 static const uint8_t cbi_magic[] = { 0x43, 0x42, 0x49 };  /* 'C' 'B' 'I' */
 
 struct cbi_header {
@@ -40,6 +51,36 @@ struct cbi_data {
 	uint8_t size;		/* size of value[] */
 	uint8_t value[];	/* data value */
 } __attribute__((packed));
+
+enum cbi_cache_status {
+	CBI_CACHE_STATUS_SYNCED = 0,
+	CBI_CACHE_STATUS_INVALID = 1
+};
+
+enum cbi_storage_type {
+	CBI_STORAGE_TYPE_EEPROM = 0,
+	CBI_STORAGE_TYPE_GPIO = 1
+};
+
+/*
+ * Driver for storage media access
+ */
+struct cbi_storage_driver {
+	/* Write the whole CBI from RAM to storage media (i.e. sync) */
+	int (*store)(uint8_t *cache);
+	/*
+	 * Read blocks from storage media to RAM. Note that the granularity
+	 * of load function is asymmetrical to that of the store function.
+	 */
+	int (*load)(uint8_t offset, uint8_t *data, int len);
+	/* Return write protect status for the storage media */
+	int (*is_protected)(void);
+};
+
+extern const struct cbi_storage_config_t {
+	enum cbi_storage_type storage_type;
+	const struct cbi_storage_driver *drv;
+} cbi_config;
 
 /**
  * Board info accessors
@@ -161,13 +202,37 @@ int cbi_board_override(enum cbi_data_tag tag, uint8_t *buf, uint8_t *size);
  */
 int cbi_set_fw_config(uint32_t fw_config);
 
-#ifdef TEST_BUILD
 /**
- * Test only declarations. Firmware shouldn't need them.
+ * Initialize CBI cache
  */
 int cbi_create(void);
-int cbi_write(void);
+
+/**
+ * Override CBI cache status to EC_CBI_CACHE_INVALID
+ */
 void cbi_invalidate_cache(void);
+
+/**
+ * Return CBI cache status
+ */
+int cbi_get_cache_status(void);
+
+/**
+ * Latch the CBI EEPROM WP
+ *
+ * This function assumes that the EC has a pin to set the CBI EEPROM WP signal
+ * (GPIO_EC_CBI_WP).  Note that once the WP is set, the EC must be reset via
+ * EC_RST_ODL in order for the WP to become unset since the signal is latched.
+ */
+void cbi_latch_eeprom_wp(void);
+
+#ifdef TEST_BUILD
+/**
+ * Write the locally cached CBI to EEPROM.
+ *
+ * @return EC_RES_SUCCESS on success or EC_RES_* otherwise.
+ */
+int cbi_write(void);
 #endif
 
 #endif /* __CROS_EC_CROS_BOARD_INFO_H */

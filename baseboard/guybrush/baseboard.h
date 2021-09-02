@@ -14,10 +14,9 @@
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
 
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
+#define CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
-#define CONFIG_KEYBOARD_DEBUG /* Print keyboard debug messages */
 #define CONFIG_CMD_S5_TIMEOUT /* Allow a user-specified timeout to exit S5 */
 
 #undef CONFIG_UART_TX_BUF_SIZE
@@ -29,10 +28,11 @@
 #define CONFIG_VBOOT_HASH
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
+#define GPIO_ENTERING_RW	GPIO_EC_ENTERING_RW
 #define GPIO_PACKET_MODE_EN	GPIO_EC_GSC_PACKET_MODE
 
 /* CBI Config */
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_BOARD_VERSION_CBI
 
 /* Power Config */
@@ -75,9 +75,12 @@
 
 /* Thermal Config */
 #define CONFIG_ADC
+#define CONFIG_AMD_SB_RMI
+#define CONFIG_AMD_STT
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
 #define CONFIG_TEMP_SENSOR_SB_TSI
+#define CONFIG_TEMP_SENSOR_TMP112
 #define CONFIG_THERMISTOR
 #define CONFIG_CPU_PROCHOT_ACTIVE_LOW
 #define GPIO_CPU_PROCHOT	GPIO_PROCHOT_ODL
@@ -101,18 +104,39 @@
 
 /* Keyboard Config */
 #define CONFIG_KEYBOARD_BACKLIGHT
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_VIVALDI
-#define GPIO_KBD_KSO2		GPIO_EC_KSO_02_INV
+#define GPIO_EN_KEYBOARD_BACKLIGHT	GPIO_EN_KB_BL
+#define GPIO_KBD_KSO2			GPIO_EC_KSO_02_INV
 
 /* Sensors */
+#ifdef HAS_TASK_MOTIONSENSE
 #define CONFIG_TABLET_MODE
 #define CONFIG_GMR_TABLET_MODE
 #define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_MOTION_SENSE_CMD
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+#define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
+
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
+/* FIFO size is a power of 2. */
+#define CONFIG_ACCEL_FIFO_SIZE 256
+/* Depends on how fast the AP boots and typical ODRs. */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+
+/* Sensors without hardware FIFO are in forced mode */
+#define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
+#endif
+
+/* Backlight config */
+#define CONFIG_BACKLIGHT_LID
+#define CONFIG_BACKLIGHT_LID_ACTIVE_LOW
+#define GPIO_ENABLE_BACKLIGHT_L GPIO_EC_DISABLE_DISP_BL
 
 /* Battery Config */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
@@ -135,11 +159,10 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 
 /*
- * EC will boot AP to depthcharge if: (BAT >= 4%) || (AC >= 50W)
+ * EC will boot AP to depthcharge if: (BAT >= 2%) || (AC >= 50W)
  * CONFIG_CHARGER_LIMIT_* is not set, so there is no additional restriction on
  * Depthcharge to boot OS.
  */
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			4
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		50000
 
 /*
@@ -159,6 +182,7 @@
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_USB_CHARGER
 #define CONFIG_USB_POWER_DELIVERY
+#define CONFIG_USB_PD_5V_EN_CUSTOM
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DISCHARGE_TCPC
@@ -167,12 +191,9 @@
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_TCPC_LOW_POWER
-#undef  CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
-#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_USB_PD_TCPM_NCT38XX
 #define CONFIG_USB_PD_TCPM_TCPCI
-#define CONFIG_USB_PD_TRY_SRC
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #define CONFIG_USBC_PPC
 #define CONFIG_USBC_PPC_SBU
@@ -182,11 +203,10 @@
 #define CONFIG_USBC_SS_MUX_DFP_ONLY
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
-#define CONFIG_USB_MUX_ANX7451
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USBC_PPC_NX20P3483
+#define CONFIG_USBC_RETIMER_PS8811
 #define CONFIG_USBC_RETIMER_PS8818
-#define CONFIG_USBC_RETIMER_ANX7451
 #define CONFIG_USB_MUX_RUNTIME_CONFIG
 #define CONFIG_USB_MUX_AMD_FP6
 
@@ -202,9 +222,10 @@
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		65000
-#define PD_MAX_CURRENT_MA	3250
+#define PD_MAX_CURRENT_MA	5000
 #define PD_MAX_VOLTAGE_MV	20000
+/* Max Power = 100 W */
+#define PD_MAX_POWER_MW		((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
 
 /* USB-A config */
 #define USB_PORT_COUNT USBA_PORT_COUNT
@@ -303,19 +324,28 @@ enum adc_channel {
 	ADC_CH_COUNT
 };
 
+/* TMP112 sensors */
+enum tmp112_sensor {
+	TMP112_SOC,
+	TMP112_AMB,
+	TMP112_COUNT,
+};
+
 /* Temp Sensors */
 enum temp_sensor_id {
 	TEMP_SENSOR_SOC = 0,
 	TEMP_SENSOR_CHARGER,
 	TEMP_SENSOR_MEMORY,
 	TEMP_SENSOR_CPU,
+	TEMP_SENSOR_AMBIENT,
 	TEMP_SENSOR_COUNT
 };
 
 enum sensor_id {
-	BASE_ACCEL = 0,
+	LID_ACCEL,
+	BASE_ACCEL,
 	BASE_GYRO,
-	SENSOR_COUNT,
+	SENSOR_COUNT
 };
 
 /* PWM Channels */
@@ -347,6 +377,15 @@ void sbu_fault_interrupt(enum ioex_signal signal);
 
 void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
 void baseboard_en_pwr_s0(enum gpio_signal signal);
+
+int board_get_soc_temp_k(int idx, int *temp_k);
+
+/* CBI utility functions */
+uint32_t get_sku_id(void);
+uint32_t get_board_version(void);
+uint32_t get_fw_config(void);
+/* Board callback after CBI has been initialized */
+__overridable void board_cbi_init(void);
 
 #endif /* !__ASSEMBLER__ */
 

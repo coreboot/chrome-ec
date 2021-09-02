@@ -4,6 +4,13 @@
 
 if PLATFORM_EC
 
+config PLATFORM_EC_CONSOLE_CMD_SCRATCHPAD
+	bool "Console Command: scratchpad"
+	help
+	  Enable the scratchpad console command. The scratchpad register
+	  maintain its contents across a software-requested warm reset. The
+	  command is used to set or get the scratchpad.
+
 config PLATFORM_EC_CONSOLE_CMD_SYSINFO
 	bool "Console Command: sysinfo"
 	default y
@@ -29,5 +36,14 @@ config PLATFORM_EC_SYSTEM_PRE_INIT_PRIORITY
 	  cause and stores it into the system reset flags. All drivers, except
 	  those critical to determining the reset type, should be initialized at
 	  lower priority so that the system reset flags are valid.
+
+config PLATFORM_EC_FW_RESET_VECTOR
+	bool "Firmware Reset Vector chip specific retrieval"
+	default y if SOC_FAMILY_RISCV_ITE
+	help
+	  This defines if there is a chip specific machanism for
+	  retrieving the firmware reset vector. The function that
+	  needs to be provided is system_get_fw_reset_vector that
+	  will return the address of the reset vector.
 
 endif # PLATFORM_EC

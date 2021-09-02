@@ -56,12 +56,28 @@
 			label = "SHI";
 			interrupts = <171 0>;
 			interrupt-parent = <&intc>;
+			pinctrl-0 = <&pinctrl_shi_mosi  /* GPM0 */
+				     &pinctrl_shi_miso  /* GPM1 */
+				     &pinctrl_shi_clk   /* GPM4 */
+				     &pinctrl_shi_cs>;  /* GPM5 */
 		};
 
-		fiu0: flash-controller@80000000 {
+		fiu0: cros-flash@80000000 {
 			compatible = "ite,it8xxx2-cros-flash";
-			reg = <0x80000000 0x80000>;
+			reg = <0x80000000 0x100000>;
 			label = "FLASH";
+		};
+	};
+
+	/* it8xxx2 has 1MB of flash. currently, we use 512KB from flash. */
+	binman {
+		wp-ro {
+			offset = <0x0>;
+			size = <0x40000>;
+		};
+		ec-rw {
+			offset = <0x40000>;
+			size = <0x40000>;
 		};
 	};
 };

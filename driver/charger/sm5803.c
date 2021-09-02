@@ -9,6 +9,7 @@
 #include "battery_smart.h"
 #include "charge_state_v2.h"
 #include "charger.h"
+#include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -174,6 +175,16 @@ static enum ec_error_list sm5803_flow2_update(int chgnum, const uint8_t mask,
 	mutex_unlock(&flow2_access_lock[chgnum]);
 
 	return rv;
+}
+
+static bool is_platform_id_2s(uint32_t platform_id)
+{
+	return platform_id >= 0x06 && platform_id <= 0x0D;
+}
+
+static bool is_platform_id_3s(uint32_t platform_id)
+{
+	return platform_id >= 0x0E && platform_id <= 0x16;
 }
 
 int sm5803_is_vbus_present(int chgnum)
@@ -489,8 +500,14 @@ static void sm5803_init(int chgnum)
 		}
 		platform_id &= SM5803_PLATFORM_ID;
 
-		if (platform_id >= 0x0E && platform_id <= 0x16) {
+		if (is_platform_id_3s(platform_id)) {
 			/* 3S Battery inits */
+			/* set 13.3V VBAT_SNSP TH GPADC THRESHOLD*/
+			rv |= meas_write8(chgnum, 0x26,
+				SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
+			/* OV_VBAT HW second level (14.1V) */
+			rv |= chg_write8(chgnum, 0x21,
+				SM5803_VBAT_PWR_MINTH_3S_LEVEL);
 			rv |= main_write8(chgnum, 0x30, 0xC0);
 			rv |= main_write8(chgnum, 0x80, 0x01);
 			rv |= main_write8(chgnum, 0x1A, 0x08);
@@ -528,8 +545,20 @@ static void sm5803_init(int chgnum)
 			rv |= chg_write8(chgnum, 0x33, 0x3C);
 
 			rv |= chg_write8(chgnum, 0x5C, 0x7A);
-		} else if (platform_id >= 0x06 && platform_id <= 0x0D) {
+		} else if (is_platform_id_2s(platform_id)) {
 			/* 2S Battery inits */
+
+			/*
+			 * Set 9V as higher threshold for VBATSNSP_MAX_TH GPADC
+			 * threshold for interrupt generation.
+			 */
+			rv |= meas_write8(chgnum, 0x26,
+				SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
+
+			/* Set OV_VBAT HW second level threshold as 9.4V */
+			rv |= chg_write8(chgnum, 0x21,
+				SM5803_VBAT_PWR_MINTH_2S_LEVEL);
+
 			rv |= main_write8(chgnum, 0x30, 0xC0);
 			rv |= main_write8(chgnum, 0x80, 0x01);
 			rv |= main_write8(chgnum, 0x1A, 0x08);
@@ -645,6 +674,13 @@ static void sm5803_init(int chgnum)
 	 */
 	rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
 						SM5803_TINT_MIN_LEVEL);
+
+	/*
+	 * Configure VBAT_SNSP high interrupt to fire after thresholds are set.
+	 */
+	rv |= main_read8(chgnum, SM5803_REG_INT2_EN, &reg);
+	reg |= SM5803_INT2_VBATSNSP;
+	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, reg);
 
 
 	/* Configure TINT interrupts to fire after thresholds are set */
@@ -1020,13 +1056,12 @@ void sm5803_handle_interrupt(int chgnum)
 			charger_vbus[chgnum] = 0;
 			if (IS_ENABLED(CONFIG_USB_CHARGER))
 				usb_charger_vbus_change(chgnum, 0);
-			board_vbus_present_change();
 		} else {
 			charger_vbus[chgnum] = 1;
 			if (IS_ENABLED(CONFIG_USB_CHARGER))
 				usb_charger_vbus_change(chgnum, 1);
-			board_vbus_present_change();
 		}
+		board_check_extpower();
 	}
 
 	rv = main_read8(chgnum, SM5803_REG_INT2_REQ, &int_reg);
@@ -1068,6 +1103,77 @@ void sm5803_handle_interrupt(int chgnum)
 		 * or the level is below the upper threshold, it can likely be
 		 * ignored.
 		 */
+	}
+
+	if (int_reg & SM5803_INT2_VBATSNSP) {
+		int meas_volt;
+		uint32_t platform_id;
+
+		rv = main_read8(chgnum, SM5803_REG_PLATFORM, &platform_id);
+		if (rv) {
+			CPRINTS("%s %d: Failed to read platform in interrupt",
+							CHARGER_NAME, chgnum);
+			return;
+		}
+		platform_id &= SM5803_PLATFORM_ID;
+		act_chg = charge_manager_get_active_charge_port();
+		rv = meas_read8(CHARGER_PRIMARY,
+					SM5803_REG_VBATSNSP_MEAS_MSB,
+					&meas_reg);
+		if (rv)
+			return;
+		meas_volt = meas_reg << 2;
+		rv = meas_read8(CHARGER_PRIMARY,
+					SM5803_REG_VBATSNSP_MEAS_LSB,
+					&meas_reg);
+		if (rv)
+			return;
+		meas_volt |= meas_reg & 0x03;
+		rv = meas_read8(CHARGER_PRIMARY,
+			SM5803_REG_VBATSNSP_MAX_TH, &meas_reg);
+		if (rv)
+			return;
+
+		if (is_platform_id_2s(platform_id)) {
+			/* 2S Battery */
+			CPRINTS("%s %d : VBAT_SNSP_HIGH_TH: %d mV ! - "
+				"VBAT %d mV",
+				CHARGER_NAME, CHARGER_PRIMARY,
+				meas_reg * 408/10,
+				meas_volt * 102/10);
+		}
+
+		if (is_platform_id_3s(platform_id)) {
+			/* 3S Battery */
+			CPRINTS("%s %d : VBAT_SNSP_HIGH_TH: %d mV ! "
+				"- VBAT %d mV",
+				CHARGER_NAME, CHARGER_PRIMARY,
+				meas_reg * 616/10,
+				meas_volt * 154/10);
+		}
+
+		/* Set Vbat Threshold to Max value to re-arm the interrupt */
+		rv = meas_write8(CHARGER_PRIMARY,
+			SM5803_REG_VBATSNSP_MAX_TH, 0xFF);
+
+		/* Disable battery charge */
+		rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_DISABLED,
+			MASK_CLR);
+		if (is_platform_id_2s(platform_id)) {
+			/* 2S battery: set VBAT_SENSP TH 9V */
+			rv |= meas_write8(CHARGER_PRIMARY,
+				SM5803_REG_VBATSNSP_MAX_TH,
+				SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
+		}
+		if (is_platform_id_3s(platform_id)) {
+			/* 3S battery: set VBAT_SENSP TH 13.3V */
+			rv |= meas_write8(CHARGER_PRIMARY,
+				SM5803_REG_VBATSNSP_MAX_TH,
+				SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
+		}
+
+		active_restart_port = act_chg;
+		hook_call_deferred(&sm5803_restart_charging_data, 1 * SECOND);
 	}
 
 	/* TODO(b/159376384): Take action on fatal BFET power alert. */
@@ -1157,6 +1263,7 @@ void sm5803_handle_interrupt(int chgnum)
 						 SM5803_FLOW1_DIRECTCHG_SRC_EN,
 						 MASK_CLR);
 	}
+
 }
 
 static void sm5803_irq_deferred(void)
@@ -1472,6 +1579,37 @@ static enum ec_error_list sm5803_get_option(int chgnum, int *option)
 	control |= reg << 16;
 
 	return rv;
+}
+
+enum ec_error_list sm5803_is_acok(int chgnum, bool *acok)
+{
+	int rv;
+	int reg, vbus_mv;
+
+	rv = main_read8(chgnum, SM5803_REG_STATUS1, &reg);
+
+	if (rv)
+		return rv;
+
+	/* If we're not sinking, then AC can't be OK. */
+	if (!(reg & SM5803_STATUS1_CHG_DET)) {
+		*acok = false;
+		return EC_SUCCESS;
+	}
+
+	/*
+	 * Okay, we're sinking. Check that VBUS has some voltage. This
+	 * should indicate that the path is good.
+	 */
+	rv = charger_get_vbus_voltage(chgnum, &vbus_mv);
+
+	if (rv)
+		return rv;
+
+	/* Assume that ACOK would be asserted if VBUS is higher than ~4V. */
+	*acok = vbus_mv >= 4000;
+
+	return EC_SUCCESS;
 }
 
 static enum ec_error_list sm5803_is_input_current_limit_reached(int chgnum,
