@@ -18,7 +18,7 @@
  * Since raw TRNG input shouldn't be used as random number generator,
  * all FIPS-compliant code use DRBG, seeded from TRNG
  */
-static struct drbg_ctx fips_drbg;
+struct drbg_ctx fips_drbg;
 
 #define ENTROPY_SIZE_BITS  512
 #define ENTROPY_SIZE_WORDS (BITS_TO_WORDS(ENTROPY_SIZE_BITS))
@@ -276,6 +276,17 @@ void fips_drbg_clear(void)
 	rand_state.drbg_initialized = 0;
 }
 
+static bool fips_drbg_reseed_with_entropy(struct drbg_ctx *ctx)
+{
+	/* FIPS error is reported by failed TRNG test. */
+	if (!fips_trng_bytes(&entropy_fifo, sizeof(entropy_fifo)))
+		return false;
+
+	hmac_drbg_reseed(ctx, entropy_fifo, sizeof(entropy_fifo),
+			 NULL, 0, NULL, 0);
+	return true;
+}
+
 enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
 						size_t out_len,
 						const void *input,
@@ -285,14 +296,8 @@ enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
 		hmac_drbg_generate(ctx, out, out_len, input, input_len);
 
 	while (err == HMAC_DRBG_RESEED_REQUIRED) {
-		/* read another 512 bits of noise */
-		if (!fips_trng_bytes(&entropy_fifo, sizeof(entropy_fifo))) {
-			/* FIPS error is reported by failed TRNG test. */
+		if (!fips_drbg_reseed_with_entropy(ctx))
 			return HMAC_DRBG_RESEED_REQUIRED;
-		}
-
-		hmac_drbg_reseed(ctx, entropy_fifo, sizeof(entropy_fifo), NULL,
-				 0, NULL, 0);
 		err = hmac_drbg_generate(ctx, out, out_len, input, input_len);
 	}
 	return err;
@@ -323,6 +328,19 @@ bool fips_rand_bytes(void *buffer, size_t len)
 	return true;
 }
 
+enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
+					      p256_int *out)
+{
+	enum hmac_result err = p256_hmac_drbg_generate(drbg, out);
+
+	while (err == HMAC_DRBG_RESEED_REQUIRED) {
+		if (!fips_drbg_reseed_with_entropy(drbg))
+			return HMAC_DRBG_RESEED_REQUIRED;
+		err = p256_hmac_drbg_generate(drbg, out);
+	}
+	return err;
+}
+
 /* return codes match dcrypto_p256_ecdsa_sign */
 int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
 			 p256_int *r, p256_int *s)
@@ -332,7 +350,7 @@ int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
 	if (!rand_state.drbg_initialized && !fips_drbg_init())
 		return false;
 
-	return dcrypto_p256_ecdsa_sign(&fips_drbg, key, message, r, s);
+	return dcrypto_p256_fips_sign_internal(&fips_drbg, key, message, r, s);
 }
 
 #ifndef CRYPTO_TEST_CMD_RAND_PERF

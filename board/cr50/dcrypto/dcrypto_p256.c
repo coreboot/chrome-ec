@@ -138,7 +138,25 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 			    const p256_int *message, p256_int *r, p256_int *s)
 {
 	int result;
-	p256_int k, rnd;
+	p256_int nonce;
+
+	/* Pick uniform 0 < k < R */
+	result = (p256_hmac_drbg_generate(drbg, &nonce) != HMAC_DRBG_SUCCESS);
+
+	result |= dcrypto_p256_ecdsa_sign_raw(&nonce, key, message, r, s) - 1;
+
+	/* Wipe temp nonce */
+	p256_clear(&nonce);
+
+	return result == 0;
+}
+
+int dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce, const p256_int *key,
+				const p256_int *message, p256_int *r,
+				p256_int *s)
+{
+	int result;
+	p256_int rnd;
 
 	dcrypto_init_and_lock();
 	dcrypto_ecc_init();
@@ -148,13 +166,7 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 	p256_fast_random(&rnd);
 	CP8W(rnd, &rnd);
 
-	/* Pick uniform 0 < k < R */
-	result |= (p256_hmac_drbg_generate(drbg, &k) != HMAC_DRBG_SUCCESS);
-
-	CP8WB(k, &k, &rnd);
-
-	/* Wipe temp k */
-	p256_clear(&k);
+	CP8WB(k, nonce, &rnd);
 
 	CP8W(msg, message);
 	CP8WB(d, key, &rnd);
@@ -170,8 +182,8 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 	}
 
 	/* Wipe d,k */
-	CP8W(d, &k);
-	CP8W(k, &k);
+	CP8W(d, &rnd);
+	CP8W(k, &rnd);
 
 	dcrypto_unlock();
 	return result == 0;

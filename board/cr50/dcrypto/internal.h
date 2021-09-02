@@ -219,6 +219,20 @@ void p256_from_bin(const uint8_t src[P256_NBYTES], p256_int *dst);
  */
 bool p256_from_be_bin_size(const uint8_t *src, size_t len, p256_int *dst);
 
+/**
+ * Raw sign with provided nonce (k). Used internally and for testing.
+ *
+ * @param k - valid nonce for ECDSA sign
+ * @param key - valid private key for ECDSA sign
+ * @param message - message to sign encoded as p-256 int
+ * @param r - generated signature
+ * @param s  - generated signature
+ * @return !0 if success
+ */
+int dcrypto_p256_ecdsa_sign_raw(const p256_int *k, const p256_int *key,
+				const p256_int *message, p256_int *r,
+				p256_int *s);
+
 int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 			    const p256_int *message, p256_int *r, p256_int *s)
 	__attribute__((warn_unused_result));
@@ -240,6 +254,21 @@ void p256_fast_random(p256_int *rnd);
 
 /* Generate a p256 number between 1 < k < |p256| using provided DRBG. */
 enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *k_out);
+
+/**
+ * Sign using provided DRBG. Reseed DRBG with entropy from verified TRNG if
+ * needed.
+ *
+ * @param drbg DRBG to use
+ * @param key P-256 private key
+ * @param message - Message to sign as P-256 (in little-endian)
+ * @param r - Generated signature
+ * @param s - Generated signature
+ * @return int
+ */
+int dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg, const p256_int *key,
+				    const p256_int *message, p256_int *r,
+				    p256_int *s);
 
 /* Initialize for use as RFC6979 DRBG. */
 void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx,

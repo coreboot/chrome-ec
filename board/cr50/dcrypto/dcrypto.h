@@ -259,12 +259,14 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 /**
  * Pair-wise consistency test for private and public key.
  *
+ * @param drbg - DRBG to use for nonce generation
  * @param d - private key (scalar)
  * @param x - public key part
  * @param y - public key part
  * @return !0 on success
  */
-int DCRYPTO_p256_key_pwct(p256_int *d, p256_int *x, p256_int *y);
+int DCRYPTO_p256_key_pwct(struct drbg_ctx *drbg, const p256_int *d,
+			  const p256_int *x, const p256_int *y);
 
 /* P256 based integration encryption (DH+AES128+SHA256).
  * Not FIPS 140-2 compliant, not used other than for tests

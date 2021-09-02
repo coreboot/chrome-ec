@@ -145,6 +145,8 @@ static bool fips_sha256_kat(void)
 	static const uint8_t in[] = /* "etaonrishd" */ { 0x65, 0x74, 0x61, 0x6f,
 							 0x6e, 0x72, 0x69, 0x73,
 							 0x68, 0x64 };
+	uint8_t in_mem[sizeof(in)];
+
 	static const uint8_t ans[] = { 0xf5, 0x53, 0xcd, 0xb8, 0xcf, 0x1,  0xee,
 				       0x17, 0x9b, 0x93, 0xc9, 0x68, 0xc0, 0xea,
 				       0x40, 0x91, 0x6,	 0xec, 0x8e, 0x11, 0x96,
@@ -152,10 +154,13 @@ static bool fips_sha256_kat(void)
 				       0x50, 0x4f, 0x47, 0x57 };
 
 	SHA256_hw_init(&ctx);
-	SHA256_update(&ctx, in, sizeof(in));
-	return !(fips_break_cmd == FIPS_BREAK_SHA256) &&
-	       (DCRYPTO_equals(SHA256_final(&ctx), ans, SHA256_DIGEST_SIZE) ==
-		DCRYPTO_OK);
+	memcpy(in_mem, in, sizeof(in));
+	if (fips_break_cmd == FIPS_BREAK_SHA256)
+		in_mem[0] ^= 1;
+
+	SHA256_update(&ctx, in_mem, sizeof(in_mem));
+	return DCRYPTO_equals(SHA256_final(&ctx), ans, SHA256_DIGEST_SIZE) ==
+	       DCRYPTO_OK;
 }
 
 /* KAT for HMAC-SHA256, test values from OpenSSL. */
@@ -172,6 +177,8 @@ static bool fips_hmac_sha256_kat(void)
 	static const uint8_t in[] =
 		/* "Sample text" */ { 0x53, 0x61, 0x6d, 0x70, 0x6c, 0x65,
 				      0x20, 0x74, 0x65, 0x78, 0x74 };
+	uint8_t in_mem[sizeof(in)];
+
 	static const uint8_t ans[] = { 0xe9, 0x17, 0xc1, 0x7b, 0x4c, 0x6b, 0x77,
 				       0xda, 0xd2, 0x30, 0x36, 0x02, 0xf5, 0x72,
 				       0x33, 0x87, 0x9f, 0xc6, 0x6e, 0x7b, 0x7e,
@@ -179,10 +186,12 @@ static bool fips_hmac_sha256_kat(void)
 				       0xff, 0xda, 0x24, 0xf4 };
 
 	HMAC_SHA256_hw_init(&ctx, k, sizeof(k));
-	HMAC_SHA256_update(&ctx, in, sizeof(in));
-	return !(fips_break_cmd == FIPS_BREAK_HMAC_SHA256) &&
-	       (DCRYPTO_equals(HMAC_SHA256_hw_final(&ctx), ans,
-			       SHA256_DIGEST_SIZE) == DCRYPTO_OK);
+	memcpy(in_mem, in, sizeof(in));
+	if (fips_break_cmd == FIPS_BREAK_SHA256)
+		in_mem[0] ^= 1;
+	HMAC_SHA256_update(&ctx, in_mem, sizeof(in_mem));
+	return DCRYPTO_equals(HMAC_SHA256_hw_final(&ctx), ans,
+			      SHA256_DIGEST_SIZE) == DCRYPTO_OK;
 }
 
 /**
@@ -325,23 +334,26 @@ static bool fips_hmac_drbg_generate_kat(struct drbg_ctx *ctx)
 		0xf1, 0x32, 0xf6, 0x86, 0xb7, 0x60, 0xf0, 0x12
 	};
 	uint8_t buf[128];
+	int passed;
 
-	hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0);
+	passed = hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0) -
+		 HMAC_DRBG_SUCCESS;
+
 	/* Verify internal drbg state */
-	if (DCRYPTO_equals(ctx->v, V2, sizeof(V2)) != DCRYPTO_OK ||
-	    DCRYPTO_equals(ctx->k, K2, sizeof(K2)) != DCRYPTO_OK) {
-		return false;
-	}
+	passed |= DCRYPTO_equals(ctx->v, V2, sizeof(V2)) - DCRYPTO_OK;
+	passed |= DCRYPTO_equals(ctx->k, K2, sizeof(K2)) - DCRYPTO_OK;
 
-	hmac_drbg_reseed(ctx, drbg_entropy2, sizeof(drbg_entropy2),
-			 drbg_addtl_input2, sizeof(drbg_addtl_input2), NULL, 0);
-	/**
-	 * reuse entropy buffer to avoid allocating too much stack and memory
-	 * it will be cleaned up in TRNG health test
-	 */
-	hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0);
-	return !(fips_break_cmd == FIPS_BREAK_HMAC_DRBG) &&
-	       DCRYPTO_equals(buf, KA, sizeof(KA) == DCRYPTO_OK);
+	memcpy(buf, drbg_entropy2, sizeof(drbg_entropy2));
+	if (fips_break_cmd == FIPS_BREAK_HMAC_DRBG)
+		buf[0] ^= 1;
+
+	hmac_drbg_reseed(ctx, buf, sizeof(drbg_entropy2), drbg_addtl_input2,
+			 sizeof(drbg_addtl_input2), NULL, 0);
+
+	passed |= hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0) -
+		  HMAC_DRBG_SUCCESS;
+	passed |= DCRYPTO_equals(buf, KA, sizeof(KA)) - DCRYPTO_OK;
+	return passed == 0;
 }
 
 /* Known-answer test for HMAC_DRBG SHA256. */
@@ -354,58 +366,113 @@ static bool fips_hmac_drbg_kat(void)
 	       fips_hmac_drbg_generate_kat(&ctx);
 }
 
-/* Known-answer test for ECDSA NIST P-256 verify. */
-static bool fips_ecdsa_verify_kat(void)
+#ifdef CONFIG_FIPS_ECDSA_PWCT
+static bool fips_ecdsa_sign_pwct(void)
 {
-	static const p256_int qx = { .a = { 0xf49abf3c, 0xf82e6e12, 0x7a67c074,
-					    0x5134e16f, 0xf8957a0c, 0xef4344a7,
-					    0xd4bb3cb7, 0xe424dc61 } };
-	static const p256_int qy = { .a = { 0xdfaee927, 0x3d6f60e7, 0xac85d124,
-					    0x127e5965, 0xe1dddaf0, 0x1545949d,
-					    0xa2bc4865, 0x970eed7a } };
-	static const p256_int r = { .a = { 0xd9347f4f, 0xb72f981f, 0x6349b9da,
-					   0x2ff540c7, 0x42017c64, 0x910be331,
-					   0xa49c705c, 0xbf96b99a } };
-	static const p256_int s = { .a = { 0x57ec871c, 0x920b9e0f, 0x75d98f31,
-					   0x444e3230, 0x15abdf12, 0xe03b9cd4,
-					   0x819089c2, 0x17c55095 } };
-	static const uint8_t msg[128] = {
-		0xe1, 0x13, 0x0a, 0xf6, 0xa3, 0x8c, 0xcb, 0x41, 0x2a, 0x9c,
-		0x8d, 0x13, 0xe1, 0x5d, 0xbf, 0xc9, 0xe6, 0x9a, 0x16, 0x38,
-		0x5a, 0xf3, 0xc3, 0xf1, 0xe5, 0xda, 0x95, 0x4f, 0xd5, 0xe7,
-		0xc4, 0x5f, 0xd7, 0x5e, 0x2b, 0x8c, 0x36, 0x69, 0x92, 0x28,
-		0xe9, 0x28, 0x40, 0xc0, 0x56, 0x2f, 0xbf, 0x37, 0x72, 0xf0,
-		0x7e, 0x17, 0xf1, 0xad, 0xd5, 0x65, 0x88, 0xdd, 0x45, 0xf7,
-		0x45, 0x0e, 0x12, 0x17, 0xad, 0x23, 0x99, 0x22, 0xdd, 0x9c,
-		0x32, 0x69, 0x5d, 0xc7, 0x1f, 0xf2, 0x42, 0x4c, 0xa0, 0xde,
-		0xc1, 0x32, 0x1a, 0xa4, 0x70, 0x64, 0xa0, 0x44, 0xb7, 0xfe,
-		0x3c, 0x2b, 0x97, 0xd0, 0x3c, 0xe4, 0x70, 0xa5, 0x92, 0x30,
-		0x4c, 0x5e, 0xf2, 0x1e, 0xed, 0x9f, 0x93, 0xda, 0x56, 0xbb,
-		0x23, 0x2d, 0x1e, 0xeb, 0x00, 0x35, 0xf9, 0xbf, 0x0d, 0xfa,
-		0xfd, 0xcc, 0x46, 0x06, 0x27, 0x2b, 0x20, 0xa3
-	};
+	/**
+	 * Use fixed key pair:
+	 * d = 1
+	 * x = 6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296
+	 * y = 4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5
+	 */
+	p256_int d;
+	static const p256_int x = { .a = { 0xD898C296, 0xF4A13945, 0x2DEB33A0,
+					   0x77037D81, 0x63A440F2, 0xF8BCE6E5,
+					   0xE12C4247, 0x6B17D1F2 } };
 
-	p256_int p256_digest;
-	struct sha256_digest digest;
-	uint8_t bad_msg[128];
+	static const p256_int y = { .a = { 0x37BF51F5, 0xCBB64068, 0x6B315ECE,
+					   0x2BCE3357, 0x7C0F9E16, 0x8EE7EB4A,
+					   0xFE1A7F9B, 0x4FE342E2 } };
+
+	memset(&d, 0, sizeof(d));
+	d.a[0] = 1; /* d = 1 in little-endian */
+
+	/**
+	 * Note, fips_drbg is not instantiated yet, but rather is in
+	 * pre-determined state with K=[0], V=[0].
+	 */
+	return DCRYPTO_p256_key_pwct(&fips_drbg, &d, &x, &y);
+}
+#endif
+
+/**
+ * Test vector from https://csrc.nist.gov/CSRC/media/Projects/
+ * Cryptographic-Algorithm-Validation-Program/
+ * documents/dss/186-4ecdsatestvectors.zip
+ * P-256, SHA2-256, case 1
+ *
+ * Msg = 5905238877c77421f73e43ee3da6f2d9e2ccad5fc942dcec0cbd25482935faaf41
+ *       6983fe165b1a045ee2bcd2e6dca3bdf46c4310a7461f9a37960ca672d3feb5473e
+ *       253605fb1ddfd28065b53cb5858a8ad28175bf9bd386a5e471ea7a65c17cc934a9
+ *       d791e91491eb3754d03799790fe2d308d16146d5c9b0d0debd97d79ce8
+ * digest = 0x44, 0xac, 0xf6, 0xb7, 0xe3, 0x6c, 0x13, 0x42, 0xc2, 0xc5, 0x89,
+ *          0x72, 0x04, 0xfe, 0x09, 0x50, 0x4e, 0x1e, 0x2e, 0xfb, 0x1a, 0x90,
+ *          0x03, 0x77, 0xdb, 0xc4, 0xe7, 0xa6, 0xa1, 0x33, 0xec, 0x56
+ * d = 519b423d715f8b581f4fa8ee59f4771a5b44c8130b4e3eacca54a56dda72b464
+ * Qx = 1ccbe91c075fc7f4f033bfa248db8fccd3565de94bbfb12f3c59ff46c271bf83
+ * Qy = ce4014c68811f9a21a1fdb2c0e6113e06db7ca93b7404e78dc7ccd5ca89a4ca9
+ * k = 94a1bbb14b906a61a280f245f9e93c7f3b4a6247824f5d33b9670787642a68de
+ * R = f3ac8061b514795b8843e3d6629527ed2afd6b1f6a555a7acabb5e6f79c8c2ac
+ * S = 8bf77819ca05a6b2786c76262bf7371cef97b218e96f175a3ccdda2acc058903
+ *
+ * All values are stored in internal little-endian representation.
+ *
+ */
+static bool fips_ecdsa_sign_verify_kat(void)
+{
+	static const uint8_t msg_digest[32] = {
+		0x44, 0xac, 0xf6, 0xb7, 0xe3, 0x6c, 0x13, 0x42,
+		0xc2, 0xc5, 0x89, 0x72, 0x04, 0xfe, 0x09, 0x50,
+		0x4e, 0x1e, 0x2e, 0xfb, 0x1a, 0x90, 0x03, 0x77,
+		0xdb, 0xc4, 0xe7, 0xa6, 0xa1, 0x33, 0xec, 0x56
+	};
+	static const p256_int d = { .a = { 0xda72b464, 0xca54a56d, 0x0b4e3eac,
+					   0x5b44c813, 0x59f4771a, 0x1f4fa8ee,
+					   0x715f8b58, 0x519b423d } };
+
+	static const p256_int k = { .a = { 0x642a68de, 0xb9670787, 0x824f5d33,
+					   0x3b4a6247, 0xf9e93c7f, 0xa280f245,
+					   0x4b906a61, 0x94a1bbb1 } };
+
+	static const p256_int Qx = { .a = { 0xc271bf83, 0x3c59ff46, 0x4bbfb12f,
+					    0xd3565de9, 0x48db8fcc, 0xf033bfa2,
+					    0x075fc7f4, 0x1ccbe91c } };
+	static const p256_int Qy = { .a = { 0xa89a4ca9, 0xdc7ccd5c, 0xb7404e78,
+					    0x6db7ca93, 0x0e6113e0, 0x1a1fdb2c,
+					    0x8811f9a2, 0xce4014c6 } };
+	static const p256_int R = { .a = { 0x79c8c2ac, 0xcabb5e6f, 0x6a555a7a,
+					   0x2afd6b1f, 0x629527ed, 0x8843e3d6,
+					   0xb514795b, 0xf3ac8061 } };
+
+	static const p256_int S = { .a = { 0xcc058903, 0x3ccdda2a, 0xe96f175a,
+					   0xef97b218, 0x2bf7371c, 0x786c7626,
+					   0xca05a6b2, 0x8bf77819 } };
+
+	p256_int msg, r, s;
 	int passed;
 
-	SHA256_hw_hash(msg, sizeof(msg), &digest);
-	p256_from_bin(digest.b8, &p256_digest);
-	passed = dcrypto_p256_ecdsa_verify(&qx, &qy, &p256_digest, &r, &s);
-	if (!passed)
-		return false;
+	p256_from_bin(msg_digest, &msg);
+
+	/* KAT for ECDSA signing with fixed k. */
+	passed = dcrypto_p256_ecdsa_sign_raw(&k, &d, &msg, &r, &s) - 1;
+
+	passed |= DCRYPTO_equals(r.a, R.a, sizeof(R)) - DCRYPTO_OK;
+	passed |= DCRYPTO_equals(s.a, S.a, sizeof(S)) - DCRYPTO_OK;
+
+	if (fips_break_cmd == FIPS_BREAK_ECDSA)
+		msg.a[0] ^= 1;
+
+	/* KAT for verification */
+	passed |= dcrypto_p256_ecdsa_verify(&Qx, &Qy, &msg, &r, &s) - 1;
+
 	/**
-	 * create bad_msg same as msg but has one bit flipped in byte 92 (0x0a
-	 * vs 0x1a) this is to save space in flash vs. having bad message as
-	 * constant
+	 * Flip 1 bit in digest. Signature verification should fail.
 	 */
-	memcpy(bad_msg, msg, sizeof(msg));
-	bad_msg[92] ^= 0x10;
-	SHA256_hw_hash(bad_msg, sizeof(bad_msg), &digest);
-	p256_from_bin(digest.b8, &p256_digest);
-	passed = dcrypto_p256_ecdsa_verify(&qx, &qy, &p256_digest, &r, &s);
-	return !(fips_break_cmd == FIPS_BREAK_ECDSA) && (passed == 0);
+	msg.a[5] ^= 0x10;
+
+	passed |= dcrypto_p256_ecdsa_verify(&Qx, &Qy, &msg, &r, &s);
+
+	return passed == 0;
 }
 
 #ifdef CONFIG_FIPS_AES_CBC_256
@@ -607,6 +674,10 @@ void fips_power_up_tests(void)
 
 	starttime = fips_vtable->get_time().val;
 
+	/* SHA2-256 is used for self-integrity test, so check it first. */
+	if (!fips_sha256_kat())
+		_fips_status |= FIPS_FATAL_SHA256;
+
 	if (fips_self_integrity() != DCRYPTO_OK)
 		_fips_status |= FIPS_FATAL_SELF_INTEGRITY;
 
@@ -621,8 +692,6 @@ void fips_power_up_tests(void)
 	if (EC_SUCCESS ==
 	    fips_vtable->shared_mem_acquire(FIPS_KAT_STACK_SIZE, &stack_buf)) {
 		stack = stack_buf + FIPS_KAT_STACK_SIZE;
-		if (!call_on_stack(stack, &fips_sha256_kat))
-			_fips_status |= FIPS_FATAL_SHA256;
 		if (!call_on_stack(stack, &fips_hmac_sha256_kat))
 			_fips_status |= FIPS_FATAL_HMAC_SHA256;
 		/**
@@ -632,11 +701,17 @@ void fips_power_up_tests(void)
 		 * first call to TRNG warm-up
 		 */
 		fips_trng_startup(0);
-		if (!call_on_stack(stack, &fips_ecdsa_verify_kat))
-			_fips_status |= FIPS_FATAL_ECDSA;
 
 		if (!call_on_stack(stack, &fips_hmac_drbg_kat))
 			_fips_status |= FIPS_FATAL_HMAC_DRBG;
+
+#ifdef CONFIG_FIPS_ECDSA_PWCT
+		if (!call_on_stack(stack, &fips_ecdsa_sign_pwct))
+			_fips_status |= FIPS_FATAL_ECDSA;
+#endif
+
+		if (!call_on_stack(stack, &fips_ecdsa_sign_verify_kat))
+			_fips_status |= FIPS_FATAL_ECDSA;
 
 #ifdef CONFIG_FIPS_AES_CBC_256
 		if (!call_on_stack(stack, &fips_aes256_kat))

@@ -117,6 +117,20 @@ void fips_drbg_init_clear(void);
 /* random bytes using FIPS-compliant HMAC_DRBG */
 bool fips_rand_bytes(void *buffer, size_t len);
 
+/* FIPS DRBG initialized at boot time/first use. */
+extern struct drbg_ctx fips_drbg;
+
+/**
+ * Generate valid P-256 random from FIPS DRBG, reseed DRBG with entropy from
+ * verified TRNG if needed.
+ *
+ * @param drbg DRBG to use
+ * @param out output value
+ * @return HMAC_DRBG_SUCCESS if out contains random.
+ */
+enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
+					      p256_int *out);
+
 /* wrapper around dcrypto_p256_ecdsa_sign using FIPS-compliant HMAC_DRBG */
 int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
 			 p256_int *r, p256_int *s);

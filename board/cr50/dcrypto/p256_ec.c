@@ -38,7 +38,27 @@ int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
 	return dcrypto_p256_point_mul(n, in_x, in_y, out_x, out_y);
 }
 
-int DCRYPTO_p256_key_pwct(p256_int *d, p256_int *x, p256_int *y)
+
+int dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg, const p256_int *key,
+				  const p256_int *message, p256_int *r,
+				  p256_int *s)
+{
+	int result;
+	p256_int k;
+
+	/* Pick uniform 0 < k < R */
+	result = fips_p256_hmac_drbg_generate(drbg, &k) - HMAC_DRBG_SUCCESS;
+
+	result |= dcrypto_p256_ecdsa_sign_raw(&k, key, message, r, s) - 1;
+
+	/* Wipe temp k */
+	p256_clear(&k);
+
+	return result == 0;
+}
+
+int DCRYPTO_p256_key_pwct(struct drbg_ctx *drbg, const p256_int *d,
+			  const p256_int *x, const p256_int *y)
 {
 	p256_int message, r, s;
 	int result;
@@ -49,7 +69,7 @@ int DCRYPTO_p256_key_pwct(p256_int *d, p256_int *x, p256_int *y)
 	/* set some pseudo-random message. */
 	p256_fast_random(&message);
 
-	if (fips_p256_ecdsa_sign(d, &message, &r, &s) == 0)
+	if (dcrypto_p256_fips_sign_internal(drbg, d, &message, &r, &s) == 0)
 		return 0;
 
 #ifdef CRYPTO_TEST_SETUP
@@ -93,5 +113,5 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 	if (dcrypto_p256_base_point_mul(d, x, y) == 0)
 		return 0;
 
-	return DCRYPTO_p256_key_pwct(d, x, y);
+	return DCRYPTO_p256_key_pwct(&fips_drbg, d, x, y);
 }

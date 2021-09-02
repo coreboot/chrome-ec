@@ -4901,5 +4901,7 @@
 #undef CONFIG_FIPS_SW_HMAC_DRBG
 /* Don't run AES CBC 256 test (not used for U2F anymore). */
 #undef CONFIG_FIPS_AES_CBC_256
+/* Don't use ECDSA pair-wise consistency test. We verify sign/verify. */
+#undef CONFIG_FIPS_ECDSA_PWCT
 
 #endif  /* __CROS_EC_CONFIG_H */
