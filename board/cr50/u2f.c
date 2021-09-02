@@ -504,7 +504,12 @@ enum ec_error_list u2f_attest(const struct u2f_state *state,
 	return result;
 }
 
-#ifdef CRYPTO_TEST_SETUP
+#ifndef CRYPTO_TEST_CMD_U2F_TEST
+#define CRYPTO_TEST_CMD_U2F_TEST 0
+#endif
+
+#if defined(CRYPTO_TEST_SETUP) && CRYPTO_TEST_CMD_U2F_TEST
+
 static const char *expect_bool(enum ec_error_list value,
 			       enum ec_error_list expect)
 {

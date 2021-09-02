@@ -142,7 +142,11 @@ void drbg_exit(struct drbg_ctx *ctx)
 	always_memset(ctx->v,  0x00, sizeof(ctx->v));
 }
 
-#ifdef CRYPTO_TEST_SETUP
+#ifndef CRYPTO_TEST_CMD_HMAC_DRBG
+#define CRYPTO_TEST_CMD_HMAC_DRBG 0
+#endif
+
+#if defined(CRYPTO_TEST_SETUP) && CRYPTO_TEST_CMD_HMAC_DRBG
 
 /*
  * from the RFC 6979 A.2.5 example:

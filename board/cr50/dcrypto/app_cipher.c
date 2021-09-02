@@ -169,7 +169,11 @@ int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
 	return 1;
 }
 
-#ifdef CRYPTO_TEST_SETUP
+#ifndef CRYPTO_TEST_CIPHER
+#define CRYPTO_TEST_CIPHER 0
+#endif
+
+#if defined(CRYPTO_TEST_SETUP) && CRYPTO_TEST_CIPHER
 
 #include "common.h"
 #include "console.h"

@@ -181,6 +181,15 @@ uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words)
 	return diff;
 }
 
+
+#ifndef CRYPTO_TEST_CMD_DCRYPTO_ECDSA
+#define CRYPTO_TEST_CMD_DCRYPTO_ECDSA 0
+#endif
+
+#ifndef CRYPTO_TEST_CMD_DCRYPTO_TEST
+#define CRYPTO_TEST_CMD_DCRYPTO_TEST 0
+#endif
+
 #ifdef CRYPTO_TEST_SETUP
 
 #include "console.h"
@@ -190,6 +199,7 @@ uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words)
 #include "system.h"
 #include "watchdog.h"
 
+#if CRYPTO_TEST_CMD_DCRYPTO_TEST
 /* AUTO-GENERATED.  DO NOT MODIFY. */
 /* clang-format off */
 static const uint32_t IMEM_test_hang[] = {
@@ -340,6 +350,10 @@ static int command_dcrypto_test(int argc, char *argv[])
 DECLARE_SAFE_CONSOLE_COMMAND(dcrypto_test, command_dcrypto_test, "",
 			     "dcrypto test");
 
+#endif /* CR50_DEV_CMD_DCRYPTO_TEST */
+
+
+#if CRYPTO_TEST_CMD_DCRYPTO_ECDSA
 #define ECDSA_TEST_ITERATIONS 1000
 
 #define ECDSA_TEST_SLEEP_DELAY_IN_US 1000000
@@ -475,5 +489,6 @@ static int command_dcrypto_ecdsa_test(int argc, char *argv[])
 }
 DECLARE_SAFE_CONSOLE_COMMAND(dcrypto_ecdsa, command_dcrypto_ecdsa_test, "",
 			     "dcrypto ecdsa test");
+#endif /* CR50_DEV_CMD_DCRYPTO_ECDSA */
 
 #endif

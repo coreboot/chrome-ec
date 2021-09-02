@@ -175,7 +175,14 @@ void rand_bytes(void *buffer, size_t len)
 	}
 }
 
+/* Local switch to test command. Enable when work on it. */
+#ifndef CRYPTO_TEST_CMD_RAND
+#define CRYPTO_TEST_CMD_RAND 0
+#endif
+
 #if !defined(SECTION_IS_RO) && defined(CRYPTO_TEST_SETUP)
+
+#if CRYPTO_TEST_CMD_RAND
 #include "console.h"
 #include "watchdog.h"
 
@@ -265,5 +272,7 @@ static int command_rand(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(rand, command_rand, NULL, NULL);
+
+#endif /* CRYPTO_TEST_CMD_RAND */
 
 #endif /* CRYPTO_TEST_SETUP */

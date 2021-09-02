@@ -335,7 +335,11 @@ int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
 	return dcrypto_p256_ecdsa_sign(&fips_drbg, key, message, r, s);
 }
 
-#ifdef CRYPTO_TEST_SETUP
+#ifndef CRYPTO_TEST_CMD_RAND_PERF
+#define CRYPTO_TEST_CMD_RAND_PERF 0
+#endif
+
+#if defined(CRYPTO_TEST_SETUP) && CRYPTO_TEST_CMD_RAND_PERF
 #include "endian.h"
 #include "extension.h"
 #include "trng.h"
