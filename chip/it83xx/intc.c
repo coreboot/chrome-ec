@@ -4,7 +4,6 @@
  */
 
 #include "common.h"
-#include "cpu.h"
 #include "intc.h"
 #include "it83xx_pd.h"
 #include "kmsc_chip.h"
@@ -96,26 +95,6 @@ int __ram_code intc_get_ec_int(void)
 	extern volatile int ec_int;
 	return ec_int;
 }
-
-#ifdef CONFIG_IT83XX_HANDLE_IRQ_0
-void intc_cpu_int_group_0(void)
-{
-	/* Determine interrupt number. */
-	int intc_group_0 = intc_get_ec_int();
-
-	panic_printf("!!! EC should not be here !!!\n");
-	panic_printf("!!! IRQ:%d int_reg:0x%x ier0:0x%x isr0:0x%x !!!\n",
-			intc_group_0, IT83XX_INTC_AIVCT,
-			IT83XX_INTC_IER0, IT83XX_INTC_ISR0);
-	panic_printf("!!! mstatus:0x%x mie:0x%x mip:0x%x mcause:0x%x !!!\n",
-			csr_read(mstatus), csr_read(mie),
-			csr_read(mip), csr_read(mcause));
-	panic_printf("!!! mepc:0x%x mtval:0x%x mideleg:0x%x medeleg:0x%x !!!\n",
-			csr_read(mepc), csr_read(mtval),
-			csr_read(mideleg), csr_read(medeleg));
-}
-DECLARE_IRQ(CPU_INT_GROUP_0, intc_cpu_int_group_0, 0);
-#endif
 
 void intc_cpu_int_group_5(void)
 {

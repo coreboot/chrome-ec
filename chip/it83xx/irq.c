@@ -20,11 +20,7 @@ static const struct {
 	uint8_t ier_off;
 	uint8_t cpu_int[8];
 } irq_groups[] = {
-#ifdef CONFIG_IT83XX_HANDLE_IRQ_0
-	IRQ_GROUP(0,  {15,  2,  5,  4,  6,  2,  2,  4}),
-#else
 	IRQ_GROUP(0,  {-1,  2,  5,  4,  6,  2,  2,  4}),
-#endif
 	IRQ_GROUP(1,  { 7,  6,  6,  5,  2,  2,  2,  8}),
 	IRQ_GROUP(2,  { 6,  2,  8,  8,  8,  2, 12, 12}),
 	IRQ_GROUP(3,  { 5,  4,  4,  4, 11, 11,  3,  2}),
