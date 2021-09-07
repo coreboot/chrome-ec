@@ -265,6 +265,19 @@ void *always_memset(void *s, int c, size_t n);
 #define __alias(func) __attribute__((alias(#func)))
 #endif
 
+/**
+ * Macro to control optimization at function level. Typically used in
+ * very tight and critical loops to override -Os and get a better code.
+ * Only supported by gcc, so ignore it for clang.
+ */
+#ifndef __optimize
+#ifndef __clang__
+#define __optimize(a) __attribute__((optimize(a)))
+#else
+#define __optimize(a)
+#endif
+#endif
+
 /* rotate 32-bit value right */
 static inline uint32_t ror(uint32_t value, int bits)
 {

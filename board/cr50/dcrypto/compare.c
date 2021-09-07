@@ -12,7 +12,7 @@
 #define CRYPTO_FAST_COMPARE 0
 
 /* Constant time, hardened comparator. */
-enum dcrypto_result __attribute__((optimize("-O1"))) DCRYPTO_equals(
+enum dcrypto_result __optimize("O1") DCRYPTO_equals(
 	const void *a, const void *b, size_t len)
 {
 	uintptr_t a_addr = (uintptr_t)a;
