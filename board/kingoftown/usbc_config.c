@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Trogdor board-specific USB-C configuration */
+/* Kingoftown board-specific USB-C configuration */
 
 #include "driver/bc12/pi3usb9201.h"
 #include "charge_manager.h"
