@@ -16,7 +16,6 @@ import zmake.jobserver
 import zmake.modules
 import zmake.multiproc
 import zmake.project
-import zmake.toolchains as toolchains
 import zmake.util as util
 import zmake.version
 
@@ -260,10 +259,8 @@ class Zmake:
 
         dts_overlay_config = project.find_dts_overlays(module_paths)
 
-        if not toolchain:
-            toolchain = project.config.toolchain
-
-        toolchain_config = toolchains.get_toolchain(toolchain, module_paths)
+        toolchain_support = project.get_toolchain(module_paths, override=toolchain)
+        toolchain_config = toolchain_support.get_build_config()
 
         if bringup:
             base_config |= zmake.build_config.BuildConfig(
@@ -635,7 +632,11 @@ class Zmake:
                 proc.stderr,
                 job_id=job_id,
             )
-            procs.append(proc)
+            if self._sequential:
+                if proc.wait():
+                    raise OSError(get_process_failure_msg(proc))
+            else:
+                procs.append(proc)
 
         for proc in procs:
             if proc.wait():
@@ -685,6 +686,10 @@ class Zmake:
                         project, project_build_dir, lcov_file
                     )
                 )
+            if self._sequential:
+                rv = self.executor.wait()
+                if rv:
+                    return rv
 
         rv = self.executor.wait()
         if rv:
@@ -712,6 +717,9 @@ class Zmake:
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
 
+            # Find the common root dir
+            prefixdir = os.path.commonprefix(list(self.module_paths.values()))
+
             # Merge into a nice html report
             self.logger.info("Creating coverage report %s.", build_dir / "coverage_rpt")
             proc = self.jobserver.popen(
@@ -723,7 +731,7 @@ class Zmake:
                     "-t",
                     "Zephyr EC Unittest",
                     "-p",
-                    self.checkout / "src",
+                    prefixdir,
                     "-s",
                 ]
                 + all_lcov_files,

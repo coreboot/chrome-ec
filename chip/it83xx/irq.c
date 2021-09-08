@@ -122,12 +122,28 @@ void chip_disable_irq(int irq)
 	int bit = irq % 8;
 
 	/* SOC's interrupts share CPU machine-mode external interrupt */
-	if (IS_ENABLED(CHIP_CORE_RISCV))
+	if (IS_ENABLED(CHIP_CORE_RISCV)) {
+		volatile uint8_t _ier __unused;
+
 		IT83XX_INTC_REG(irq_groups[group].ier_off) &= ~BIT(bit);
+		/*
+		 * This load operation will guarantee the above modification of
+		 * EC's register can be seen by any following instructions.
+		 */
+		_ier = IT83XX_INTC_REG(irq_groups[group].ier_off);
+	}
 
 	/* SOC's interrupts use CPU HW interrupt 2 ~ 15 */
-	if (IS_ENABLED(CHIP_CORE_NDS32))
+	if (IS_ENABLED(CHIP_CORE_NDS32)) {
+		volatile uint8_t _ext_ier __unused;
+
 		IT83XX_INTC_REG(IT83XX_INTC_EXT_IER_OFF(group)) &= ~BIT(bit);
+		/*
+		 * This load operation will guarantee the above modification of
+		 * EC's register can be seen by any following instructions.
+		 */
+		_ext_ier = IT83XX_INTC_REG(IT83XX_INTC_EXT_IER_OFF(group));
+	}
 }
 
 void chip_clear_pending_irq(int irq)

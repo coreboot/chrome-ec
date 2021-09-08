@@ -27,7 +27,7 @@ GPIO_INT(USB_C0_PPC_INT_ODL,             PIN(F, 5), GPIO_INT_FALLING, ppc_interr
 GPIO_INT(USB_C1_TCPC_INT_ODL,            PIN(A, 2), GPIO_INT_FALLING, tcpc_alert_event)
 GPIO_INT(USB_C1_BC12_INT_ODL,            PIN(0, 2), GPIO_INT_FALLING, bc12_interrupt)
 GPIO_INT(USB_C1_PPC_INT_ODL,             PIN(7, 0), GPIO_INT_FALLING, ppc_interrupt)
-GPIO_INT(USB_C1_RT_INT_ODL,              PIN(4, 1), GPIO_INT_FALLING, retimer_interrupt)
+GPIO_INT(USB_C1_RT_INT_ODL,              PIN(9, 7), GPIO_INT_FALLING, retimer_interrupt)
 
 /* USED GPIOs: */
 GPIO(CCD_MODE_ODL,                   PIN(E, 5), GPIO_INPUT)
@@ -70,16 +70,14 @@ GPIO(USB_C0_RT_RST_ODL,              PIN(A, 7), GPIO_ODR_LOW)
 GPIO(PDEV_STP_N,                     PIN(9, 6), GPIO_ODR_HIGH)
 GPIO(VCCST_PWRGD_OD,                 PIN(A, 4), GPIO_ODR_LOW)
 GPIO(USB_C1_RT_RST_ODL,              PIN(5, 0), GPIO_ODR_LOW)
-GPIO(PAD_FW_RW_EN_N,                 PIN(B, 5), GPIO_ODR_LOW)
-GPIO(TP4_FW_RW_EN_N,                 PIN(B, 4), GPIO_ODR_LOW)
-GPIO(USB_C0_FRS_EN,                  PIN(3, 5), GPIO_OUT_LOW)
-GPIO(USB_A_LOW_PWR_OD,               PIN(6, 6), GPIO_ODR_LOW)
+GPIO(USB_C0_FRS_EN,                  PIN(8, 3), GPIO_OUT_LOW)
+GPIO(USB_A_LOW_PWR_OD,               PIN(B, 5), GPIO_ODR_LOW)
 GPIO(TBT_PWR_EN,                     PIN(D, 4), GPIO_OUT_LOW)
 GPIO(TP4_RESET,                      PIN(9, 3), GPIO_ODR_LOW)
 GPIO(USB_C1_FRS_EN,                  PIN(9, 4), GPIO_OUT_LOW)
-GPIO(FAN_ID,                         PIN(9, 7), GPIO_INPUT)
+GPIO(FAN_ID,                         PIN(4, 1), GPIO_INPUT)
 GPIO(USB_C0_OC_ODL,                  PIN(5, 6), GPIO_ODR_HIGH)
-GPIO(USB_C1_OC_ODL,                  PIN(8, 6), GPIO_ODR_HIGH)
+GPIO(USB_C1_OC_ODL,                  PIN(B, 4), GPIO_ODR_HIGH)
 
 /* UART alternate functions */
 ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)              /* GPIO64/CR_SIN1, GPO65/CR_SOUT1/FLPRG1_L */
@@ -126,6 +124,9 @@ ALTERNATE(PIN_MASK(6, 0x0C), 0, MODULE_PS2, 0)               /* PS2_CLK1/GPIO62,
 UNUSED(PIN(D, 6))       /* GPOD6/CR_SOUT3/SHDF_ESPI_L */
 UNUSED(PIN(8, 1))       /* GPIO81/PECI_DATA */
 UNUSED(PIN(3, 2))       /* GPO32/TRIS# */
+UNUSED(PIN(3, 5))       /* GPO35/CR_SOUT4/TEST# */
+UNUSED(PIN(6, 6))       /* GPO66/ARM#_X86 */
+UNUSED(PIN(8, 6))       /* GPIO86/TXD/CR_SOUT2 */
 /* Pre-configured PSL balls:  J8  K6 */
 
 
