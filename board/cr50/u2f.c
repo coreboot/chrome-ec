@@ -294,8 +294,7 @@ enum ec_error_list u2f_authorize_keyhandle(
 	 * zero, and other results - zero or non-zero will be detected.
 	 */
 	result |= DCRYPTO_equals(&recreated_hmac, kh_hmac,
-				 sizeof(recreated_hmac)) -
-		  1;
+				 sizeof(recreated_hmac)) - DCRYPTO_OK;
 
 	always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
 
@@ -304,8 +303,7 @@ enum ec_error_list u2f_authorize_keyhandle(
 				      recreated_hmac);
 		result |= DCRYPTO_equals(&recreated_hmac,
 					 kh->v1.authorization_hmac,
-					 sizeof(recreated_hmac)) -
-			  1;
+					 sizeof(recreated_hmac)) - DCRYPTO_OK;
 		always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
 	}
 
@@ -348,7 +346,7 @@ u2f_attest_keyhandle_pubkey(const struct u2f_state *state,
 	ccprintf("provided key %ph\n", HEX_BUF(public_key, sizeof(kh_pubkey)));
 #endif
 	return (DCRYPTO_equals(&kh_pubkey, public_key,
-			       sizeof(struct u2f_ec_point)) == 1) ?
+			       sizeof(struct u2f_ec_point)) == DCRYPTO_OK) ?
 		       EC_SUCCESS :
 			     EC_ERROR_ACCESS_DENIED;
 }
