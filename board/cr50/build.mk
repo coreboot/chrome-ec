@@ -81,9 +81,9 @@ board-${CONFIG_USB_I2C} += usb_i2c.o
 board-y += recovery_button.o
 
 fips-y=
-fips-y += fips.o
-fips-y += fips_rand.o
-fips-$(CONFIG_U2F) += u2f.o
+fips-y += dcrypto/fips.o
+fips-y += dcrypto/fips_rand.o
+fips-$(CONFIG_U2F) += dcrypto/u2f.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/aes.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/app_cipher.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/app_key.o

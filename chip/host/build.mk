@@ -15,7 +15,7 @@ chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 endif
 
 ifeq ($(CONFIG_DCRYPTO),y)
-CPPFLAGS += -I$(abspath ./board/cr50)
+CPPFLAGS += -I$(abspath ./board/cr50/dcrypto)
 dirs-y += board/cr50/dcrypto
 LDFLAGS_EXTRA += -lcrypto
 endif
