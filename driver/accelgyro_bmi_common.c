@@ -870,3 +870,12 @@ void bmi_set_gyro_offset(const struct motion_sensor_t *gyro, intv3_t v,
 	}
 }
 
+int bmi_list_activities(const struct motion_sensor_t *s,
+			uint32_t *enabled,
+			uint32_t *disabled)
+{
+	struct bmi_drv_data_t *data = BMI_GET_DATA(s);
+	*enabled = data->enabled_activities;
+	*disabled = data->disabled_activities;
+	return EC_RES_SUCCESS;
+}
