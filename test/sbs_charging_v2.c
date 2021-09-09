@@ -329,6 +329,35 @@ static int test_low_battery(void)
 	return EC_SUCCESS;
 }
 
+static int test_deep_charge_battery(void)
+{
+	enum charge_state_v2 state_v2;
+	const struct battery_info *bat_info = battery_get_info();
+
+	test_setup(1);
+
+	/* battery pack voltage bellow voltage_min */
+	sb_write(SB_VOLTAGE, (bat_info->voltage_min - 200));
+	wait_charging_state();
+	state_v2 = charge_get_state_v2();
+	TEST_ASSERT(state_v2 == ST_PRECHARGE);
+
+	/*
+	 * Battery voltage keep bellow voltage_min,
+	 * precharge over time CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT
+	 */
+	usleep(CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT);
+	state_v2 = charge_get_state_v2();
+	TEST_ASSERT(state_v2 == ST_IDLE);
+
+	/* recovery from a low voltage. */
+	sb_write(SB_VOLTAGE, (bat_info->voltage_normal));
+	wait_charging_state();
+	state_v2 = charge_get_state_v2();
+	TEST_ASSERT(state_v2 == ST_CHARGE);
+
+	return EC_SUCCESS;
+}
 static int test_high_temp_battery(void)
 {
 	test_setup(1);
@@ -724,6 +753,7 @@ void run_test(int argc, char **argv)
 	RUN_TEST(test_hc_charge_state);
 	RUN_TEST(test_hc_current_limit);
 	RUN_TEST(test_low_battery_hostevents);
+	RUN_TEST(test_deep_charge_battery);
 
 	test_print_result();
 }

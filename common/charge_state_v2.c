@@ -1654,6 +1654,39 @@ static int get_desired_input_current(enum battery_present batt_present,
 	}
 }
 
+
+__test_only enum charge_state_v2 charge_get_state_v2(void)
+{
+	return curr.state;
+}
+
+static void deep_charge_battery(int *need_static)
+{
+	if (curr.state == ST_IDLE) {
+		/* Deep charge time out , do nothing */
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	} else if (curr.state == ST_PRECHARGE
+			&& (get_time().val > precharge_start_time.val +
+			CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT)) {
+		/* We've tried long enough, give up */
+		CPRINTS("Precharge for low voltage timed out");
+		set_charge_state(ST_IDLE);
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	} else {
+		/* See if we can wake it up */
+		if (curr.state != ST_PRECHARGE) {
+			CPRINTS("Start precharge for low voltage");
+			precharge_start_time = get_time();
+			*need_static = 1;
+		}
+		set_charge_state(ST_PRECHARGE);
+		curr.requested_voltage = batt_info->voltage_max;
+		curr.requested_current = batt_info->precharge_current;
+	}
+}
+
 /* Main loop */
 void charger_task(void *u)
 {
@@ -1866,6 +1899,13 @@ void charger_task(void *u)
 		/* Used for factory tests. */
 		if (chg_ctl_mode != CHARGE_CONTROL_NORMAL) {
 			set_charge_state(ST_IDLE);
+			goto wait_for_it;
+		}
+
+		if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION)
+			&& !(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE)
+			&& (curr.batt.voltage <= batt_info->voltage_min)) {
+			deep_charge_battery(&need_static);
 			goto wait_for_it;
 		}
 
