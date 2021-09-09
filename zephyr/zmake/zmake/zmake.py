@@ -16,7 +16,6 @@ import zmake.jobserver
 import zmake.modules
 import zmake.multiproc
 import zmake.project
-import zmake.toolchains as toolchains
 import zmake.util as util
 import zmake.version
 
@@ -260,10 +259,8 @@ class Zmake:
 
         dts_overlay_config = project.find_dts_overlays(module_paths)
 
-        if not toolchain:
-            toolchain = project.config.toolchain
-
-        toolchain_config = toolchains.get_toolchain(toolchain, module_paths)
+        toolchain_support = project.get_toolchain(module_paths, override=toolchain)
+        toolchain_config = toolchain_support.get_build_config()
 
         if bringup:
             base_config |= zmake.build_config.BuildConfig(
@@ -513,7 +510,8 @@ class Zmake:
             shutil.rmtree(tmpdir)
         return rv
 
-    def _run_lcov(self, build_dir, lcov_file, initial=False):
+    def _run_lcov(self, build_dir, lcov_file, initial=False, gcov=""):
+        gcov = os.path.abspath(gcov)
         with self.jobserver.get_job():
             if initial:
                 self.logger.info("Running (initial) lcov on %s.", build_dir)
@@ -522,7 +520,7 @@ class Zmake:
             cmd = [
                 "/usr/bin/lcov",
                 "--gcov-tool",
-                self.module_paths["ec"] / "util/llvm-gcov.sh",
+                gcov,
                 "-q",
                 "-o",
                 "-",
@@ -535,6 +533,8 @@ class Zmake:
                 "*/build-*/zephyr/*/generated/*",
                 "--exclude",
                 "*/ec/test/*",
+                "--exclude",
+                "*/ec/zephyr/shim/chip/npcx/npcx_monitor/*",
                 "--exclude",
                 "*/ec/zephyr/emul/*",
                 "--exclude",
@@ -604,9 +604,11 @@ class Zmake:
 
         procs = []
         dirs = {}
+        gcov = "gcov.sh-not-found"
         for build_name, build_config in build_project.iter_builds():
             self.logger.info("Building %s:%s all.libraries.", build_dir, build_name)
             dirs[build_name] = build_dir / "build-{}".format(build_name)
+            gcov = dirs[build_name] / "gcov.sh"
             proc = self.jobserver.popen(
                 ["/usr/bin/ninja", "-C", dirs[build_name], "all.libraries"],
                 # Ninja will connect as a job client instead and claim
@@ -630,13 +632,17 @@ class Zmake:
                 proc.stderr,
                 job_id=job_id,
             )
-            procs.append(proc)
+            if self._sequential:
+                if proc.wait():
+                    raise OSError(get_process_failure_msg(proc))
+            else:
+                procs.append(proc)
 
         for proc in procs:
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
 
-        return self._run_lcov(build_dir, lcov_file, initial=True)
+        return self._run_lcov(build_dir, lcov_file, initial=True, gcov=gcov)
 
     def _coverage_run_test(self, project, build_dir, lcov_file):
         self.logger.info("Running test %s in %s", project.project_dir, build_dir)
@@ -649,7 +655,10 @@ class Zmake:
         )
         if rv:
             return rv
-        return self._run_lcov(build_dir, lcov_file, initial=False)
+        gcov = "gcov.sh-not-found"
+        for build_name, build_config in project.iter_builds():
+            gcov = build_dir / "build-{}".format(build_name) / "gcov.sh"
+        return self._run_lcov(build_dir, lcov_file, initial=False, gcov=gcov)
 
     def coverage(self, build_dir):
         """Builds all targets with coverage enabled, and then runs the tests."""
@@ -677,6 +686,10 @@ class Zmake:
                         project, project_build_dir, lcov_file
                     )
                 )
+            if self._sequential:
+                rv = self.executor.wait()
+                if rv:
+                    return rv
 
         rv = self.executor.wait()
         if rv:
@@ -704,6 +717,9 @@ class Zmake:
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
 
+            # Find the common root dir
+            prefixdir = os.path.commonprefix(list(self.module_paths.values()))
+
             # Merge into a nice html report
             self.logger.info("Creating coverage report %s.", build_dir / "coverage_rpt")
             proc = self.jobserver.popen(
@@ -715,7 +731,7 @@ class Zmake:
                     "-t",
                     "Zephyr EC Unittest",
                     "-p",
-                    self.checkout / "src",
+                    prefixdir,
                     "-s",
                 ]
                 + all_lcov_files,

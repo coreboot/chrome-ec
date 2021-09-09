@@ -40,6 +40,7 @@
 
 /* Keyboard */
 #define GPIO_EN_KEYBOARD_BACKLIGHT	GPIO_EN_KB_BL
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensor */
 #define CONFIG_GMR_TABLET_MODE
@@ -54,6 +55,9 @@
 
 /* KX022 Lid accel */
 #define CONFIG_ACCEL_KX022
+
+/* BMA422 Lid accel */
+#define CONFIG_ACCEL_BMA4XX
 
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 

@@ -383,9 +383,11 @@ bool check_ps8755_chip(int port)
 }
 
 void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
-				   int hpd_lvl, int hpd_irq)
+				   mux_state_t mux_state)
 {
 	int port = me->usb_port;
+	int hpd_lvl = (mux_state & USB_PD_MUX_HPD_LVL) ? 1 : 0;
+	int hpd_irq = (mux_state & USB_PD_MUX_HPD_IRQ) ? 1 : 0;
 
 	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8751_CUSTOM_MUX_DRIVER) &&
 	    product_id[me->usb_port] == PS8751_PRODUCT_ID &&
@@ -424,15 +426,15 @@ static int ps8xxx_tcpc_bist_mode_2(int port)
 	rv |= tcpc_write(port, PS8XXX_REG_BIST_CONT_MODE_CTR, 0);
 
 	/* Start BIST MODE 2 */
-	rv |= tcpc_write(port, TCPC_REG_TRANSMIT, TCPC_TX_BIST_MODE_2);
+	rv |= tcpc_write(port, TCPC_REG_TRANSMIT, TCPCI_MSG_TX_BIST_MODE_2);
 
 	return rv;
 }
 
-static int ps8xxx_tcpm_transmit(int port, enum tcpm_sop_type type,
+static int ps8xxx_tcpm_transmit(int port, enum tcpci_msg_type type,
 			uint16_t header, const uint32_t *data)
 {
-	if (type == TCPC_TX_BIST_MODE_2)
+	if (type == TCPCI_MSG_TX_BIST_MODE_2)
 		return ps8xxx_tcpc_bist_mode_2(port);
 	else
 		return tcpci_tcpm_transmit(port, type, header, data);
@@ -612,6 +614,9 @@ static int ps8xxx_lpm_recovery_delay(int port)
 
 	val = 0;
 	for (;;) {
+		if (timestamp_expired(deadline, NULL))
+			return EC_ERROR_TIMEOUT;
+
 		status = tcpc_read(port, fw_reg, &val);
 		if (status != EC_SUCCESS) {
 			/* wait for chip to wake up */
@@ -621,8 +626,6 @@ static int ps8xxx_lpm_recovery_delay(int port)
 		if (val != 0)
 			break;
 		msleep(1);
-		if (timestamp_expired(deadline, NULL))
-			return EC_ERROR_TIMEOUT;
 	}
 
 	return EC_SUCCESS;

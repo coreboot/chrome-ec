@@ -22,6 +22,7 @@
 #include "hooks.h"
 #include "intc.h"
 #include "keyboard_scan.h"
+#include "keyboard_8042.h"
 #include "lid_switch.h"
 #include "power.h"
 #include "power_button.h"
@@ -210,6 +211,12 @@ void board_init(void)
 	gpio_enable_interrupt(GPIO_HDMI_HPD_SUB_ODL);
 	/* Enable gpio interrupt for pen detect */
 	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
+
+	/* Make sure pen detection is triggered or not at sysjump */
+	if (!gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_EN_PP5000_PEN, 1);
+	if (gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_PEN_DET_PCH, 1);
 
 	/* Set LEDs luminance */
 	pwm_set_duty(PWM_CH_LED_RED, 70);
@@ -484,4 +491,29 @@ __override void lid_angle_peripheral_enable(int enable)
 		if (!chipset_in_s0)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
+}
+
+static const struct ec_response_keybd_config gooey_keybd = {
+	/* Default Chromeos keyboard config */
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_FORWARD,		/* T2 */
+		TK_REFRESH,		/* T3 */
+		TK_FULLSCREEN,		/* T4 */
+		TK_OVERVIEW,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	/* No function keys, no numeric keypad, has screenlock key */
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override const struct ec_response_keybd_config
+*board_vivaldi_keybd_config(void)
+{
+	return &gooey_keybd;
 }

@@ -299,6 +299,11 @@
 #undef CONFIG_ADC
 
 /*
+ * Allow runtime configuration of the adc_channels[] array
+ */
+#undef CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
+
+/*
  * ADC sample time selection. The value is chip-dependent.
  * TODO: Replace this with CONFIG_ADC_PROFILE entries.
  */
@@ -4110,6 +4115,15 @@
 #undef CONFIG_USB_PD_TCPMV2
 
 /*
+ * Enable dynamic PDO selection.
+ *
+ * DPS picks a power efficient voltage regarding to the battery configuration
+ * and the system loading. It monitors PIn (Power In), so VBUS/IBUS ADC
+ * should be supported on the platform.
+ */
+#undef CONFIG_USB_PD_DPS
+
+/*
  * Device Types for TCPMv2.
  *
  * Exactly one must be defined when CONFIG_USB_PD_TCPMV2 is defined.
@@ -4600,6 +4614,9 @@
 /* Define if tcpc on the board supports VBUS measurement */
 #undef CONFIG_USB_PD_VBUS_MEASURE_TCPC
 
+/* Define if there is a specific method to measure Vbus voltage */
+#undef CONFIG_USB_PD_VBUS_MEASURE_BY_BOARD
+
 /* Define the type-c port controller I2C base address. */
 #define CONFIG_TCPC_I2C_BASE_ADDR_FLAGS 0x4E
 
@@ -4740,15 +4757,11 @@
 
 /*
  * Intel Reference Validation Platform's (RVP) Modular Embedded Control
- * Card (MECC) version 0.9
+ * Card (MECC) versions
  */
 #undef CONFIG_INTEL_RVP_MECC_VERSION_0_9
-
-/*
- * Intel Reference Validation Platform's (RVP) Modular Embedded Control
- * Card (MECC) version 1.0
- */
 #undef CONFIG_INTEL_RVP_MECC_VERSION_1_0
+#undef CONFIG_INTEL_RVP_MECC_VERSION_1_1
 
 /*****************************************************************************/
 

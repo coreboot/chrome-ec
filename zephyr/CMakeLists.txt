@@ -42,6 +42,8 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # Force compiler warnings to generate errors
   zephyr_compile_options(-Werror)
 
+  include(fpu.cmake)
+
   # When LTO is enabled, enable only for the "app" library, which compiles
   # and links all Chromium OS sources.
   # TODO: Enable LTO for all sources when Zephyr supports it.
@@ -90,7 +92,9 @@ add_custom_target(
   DEPENDS
   ${ZEPHYR_LIBS_PROPERTY}
   kernel
+  ${CMAKE_BINARY_DIR}/gcov.sh
   )
+configure_file(gcov.tmpl.sh ${CMAKE_BINARY_DIR}/gcov.sh)
 
 # CONFIG_PLATFORM_EC files that don't relate to something below should be
 # included here, sorted by filename. This is common functionality which is
@@ -392,3 +396,5 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_EFS2
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE
                                                 "${PLATFORM_EC}/common/vstore.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC
+						"${PLATFORM_EC}/common/rtc.c")

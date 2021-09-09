@@ -192,10 +192,7 @@
 #define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-/*
- * TODO(b/181271666): no fan control loop until sensors are tuned
- */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+#define CONFIG_FANS			FAN_CH_COUNT
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
@@ -203,6 +200,12 @@
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/*
+ * Older boards have a different ADC assignment.
+ */
+
+#define CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
 
 #ifndef __ASSEMBLER__
 
@@ -212,7 +215,7 @@
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
-	ADC_TEMP_SENSOR_2_FAN,
+	ADC_TEMP_SENSOR_2_AMBIENT,
 	ADC_TEMP_SENSOR_3_CHARGER,
 	ADC_TEMP_SENSOR_4_WWAN,
 	ADC_CH_COUNT
@@ -220,7 +223,9 @@ enum adc_channel {
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
-	TEMP_SENSOR_2_FAN,
+	TEMP_SENSOR_2_AMBIENT,
+	TEMP_SENSOR_3_CHARGER,
+	TEMP_SENSOR_4_WWAN,
 	TEMP_SENSOR_COUNT
 };
 

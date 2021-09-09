@@ -11,6 +11,7 @@
 #include "charger/isl9241_public.h"
 #include "config.h"
 #include "i2c/i2c.h"
+#include "power.h"
 #include "ppc/sn5s330_public.h"
 #include "ppc/syv682x_public.h"
 #include "retimer/bb_retimer_public.h"
@@ -127,6 +128,12 @@ int board_is_sourcing_vbus(int port)
 	return 0;
 }
 
+struct usb_mux usbc1_virtual_usb_mux = {
+	.usb_port = USBC_PORT_C1,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
+};
+
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
@@ -135,11 +142,25 @@ struct usb_mux usb_muxes[] = {
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.driver = &bb_usb_retimer,
+		.next_mux = &usbc1_virtual_usb_mux,
+		.i2c_port = I2C_PORT_USB_C1,
+		.i2c_addr_flags = DT_REG_ADDR(DT_NODELABEL(
+					usb_c1_bb_retimer_emul)),
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
+
+struct bb_usb_control bb_controls[] = {
+	[USBC_PORT_C0] = {
+		/* USB-C port 0 doesn't have a retimer */
+	},
+	[USBC_PORT_C1] = {
+		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
+		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
 
 void pd_power_supply_reset(int port)
 {
@@ -180,3 +201,32 @@ uint16_t tcpc_get_alert_status(void)
 {
 	return 0;
 }
+
+enum power_state power_chipset_init(void)
+{
+	return POWER_G3;
+}
+
+enum power_state mock_state = POWER_G3;
+
+void set_mock_power_state(enum power_state state)
+{
+	mock_state = state;
+	task_wake(TASK_ID_CHIPSET);
+}
+
+enum power_state power_handle_state(enum power_state state)
+{
+	return mock_state;
+}
+
+void chipset_reset(enum chipset_reset_reason reason)
+{
+}
+
+void chipset_force_shutdown(enum chipset_shutdown_reason reason)
+{
+}
+
+/* Power signals list. Must match order of enum power_signal. */
+const struct power_signal_info power_signal_list[] = {};
