@@ -231,28 +231,6 @@ static void ladder_out(uint32_t output[8])
 	output[7] = GREG32(KEYMGR, SHA_STS_H7);
 }
 
-/*
- * Stir TRNG entropy into RSR and pull some out.
- */
-int DCRYPTO_ladder_random(void *output)
-{
-	int error = 1;
-	uint32_t tmp[8];
-
-	if (!dcrypto_grab_sha_hw())
-		goto fail;
-
-	rand_bytes(tmp, sizeof(tmp));
-	/* Mix TRNG bytes with RSR entropy */
-	error = ladder_step(KEYMGR_CERT_27, tmp);
-	if (!error)
-		ladder_out(output);
-
-fail:
-	dcrypto_release_sha_hw();
-	return !error;
-}
-
 int dcrypto_ladder_derive(enum dcrypto_appid appid, const uint32_t salt[8],
 			  const uint32_t input[8], uint32_t output[8])
 {
