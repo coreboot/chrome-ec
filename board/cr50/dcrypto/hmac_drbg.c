@@ -146,8 +146,9 @@ void drbg_exit(struct drbg_ctx *ctx)
 #define CRYPTO_TEST_CMD_HMAC_DRBG 0
 #endif
 
-#if defined(CRYPTO_TEST_SETUP) && CRYPTO_TEST_CMD_HMAC_DRBG
+#ifdef CRYPTO_TEST_SETUP
 
+#if CRYPTO_TEST_CMD_HMAC_DRBG
 /*
  * from the RFC 6979 A.2.5 example:
  *
@@ -354,6 +355,8 @@ static int cmd_hmac_drbg_rand(int argc, char **argv)
 }
 DECLARE_SAFE_CONSOLE_COMMAND(hmac_drbg_rand, cmd_hmac_drbg_rand, NULL, NULL);
 
+#endif /* CRYPTO_TEST_CMD_HMAC_DRBG */
+
 enum drbg_command {
 	DRBG_INIT = 0,
 	DRBG_RESEED = 1,
@@ -455,7 +458,9 @@ static enum vendor_cmd_rc drbg_test(enum vendor_cmd_cc code, void *buf,
 		if (p1_len > sizeof(output) || max_out_len < p1_len)
 			return VENDOR_RC_BOGUS_ARGS;
 
-		hmac_drbg_generate(&drbg_ctx, output, p1_len, p0, p0_len);
+		if (hmac_drbg_generate(&drbg_ctx, output, p1_len, p0, p0_len) !=
+		    HMAC_DRBG_SUCCESS)
+			return VENDOR_RC_INTERNAL_ERROR;
 
 		memcpy(buf, output, p1_len);
 		*response_size = p1_len;
