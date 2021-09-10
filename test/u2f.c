@@ -82,6 +82,7 @@ static struct u2f_state state;
 
 struct u2f_state *u2f_get_state(void)
 {
+	state.drbg_entropy_size = 64;
 	return &state;
 }
 

@@ -171,16 +171,42 @@ static enum ec_error_list u2f_origin_user_key_pair(
 		return EC_ERROR_INVAL;
 	}
 
-	/* TODO(sukhomlinov): implement new FIPS path. */
 	if (!app_hw_device_id(U2F_ORIGIN, state->hmac_key, dev_salt))
 		return EC_ERROR_UNKNOWN;
 
-	hmac_drbg_init(&drbg, state->drbg_entropy, P256_NBYTES, dev_salt,
-		       P256_NBYTES, NULL, 0);
+	/* Check that U2F state is valid. */
+	if (state->drbg_entropy_size != 64 && state->drbg_entropy_size != 32)
+		return EC_ERROR_HW_INTERNAL;
 
-	hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed), key_handle,
-			   key_handle_size);
+	if (state->drbg_entropy_size == 32) {
+		/**
+		 * Legacy path, seeding DRBG not as NIST SP 800-90A requires.
+		 */
+		hmac_drbg_init(&drbg, state->drbg_entropy,
+			       state->drbg_entropy_size, dev_salt, P256_NBYTES,
+			       NULL, 0);
+		hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
+				   key_handle, key_handle_size);
+	} else {
+		/**
+		 * FIPS-compliant path.
+		 *
+		 * Seed DRBG with:
+		 * 512 bit of entropy from TRNG (stored outside module
+		 * boundary).
+		 * nonce = key_handle - contains fresh, unique 256-bit random
+		 * personalization strint - empty
+		 */
+		hmac_drbg_init(&drbg, state->drbg_entropy,
+			       state->drbg_entropy_size, key_handle,
+			       key_handle_size, NULL, 0);
 
+		/**
+		 * Additional data = Device_ID (constant coming from HW).
+		 */
+		hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed), dev_salt,
+				   P256_NBYTES);
+	}
 	if (!DCRYPTO_p256_key_from_bytes(pk_x, pk_y, d, key_seed))
 		return EC_ERROR_TRY_AGAIN;
 
@@ -412,19 +438,47 @@ enum ec_error_list u2f_sign(const struct u2f_state *state,
 static bool g2f_individual_key_pair(const struct u2f_state *state, p256_int *d,
 				    p256_int *pk_x, p256_int *pk_y)
 {
-	uint8_t buf[SHA256_DIGEST_SIZE];
+	uint32_t buf[SHA256_DIGEST_WORDS];
 
 	/* Incorporate HIK & diversification constant. */
-	if (!app_hw_device_id(U2F_ATTEST, state->salt, (uint32_t *)buf))
+	if (!app_hw_device_id(U2F_ATTEST, state->salt, buf))
 		return false;
 
-	/* Generate unbiased private key (non-FIPS path). */
-	while (!DCRYPTO_p256_key_from_bytes(pk_x, pk_y, d, buf)) {
-		struct sha256_ctx sha;
+	/* Check that U2F state is valid. */
+	if (state->drbg_entropy_size != 64 && state->drbg_entropy_size != 32)
+		return false;
 
-		SHA256_hw_init(&sha);
-		SHA256_update(&sha, buf, sizeof(buf));
-		memcpy(buf, SHA256_final(&sha), sizeof(buf));
+	if (state->drbg_entropy_size != 64) {
+		/* Generate unbiased private key (non-FIPS path). */
+		while (!DCRYPTO_p256_key_from_bytes(pk_x, pk_y, d,
+						    (uint8_t *)buf)) {
+			struct sha256_ctx sha;
+
+			SHA256_hw_init(&sha);
+			SHA256_update(&sha, buf, sizeof(buf));
+			memcpy(buf, SHA256_final(&sha), sizeof(buf));
+		}
+	} else {
+		struct drbg_ctx drbg;
+		uint8_t key_candidate[P256_NBYTES];
+		/**
+		 * Entropy = 512 of entropy from TRNG
+		 * Nonce = 256-bit random
+		 * Personalization string = []
+		 */
+		hmac_drbg_init(&drbg, state->drbg_entropy,
+			       state->drbg_entropy_size, state->salt,
+			       sizeof(state->salt), NULL, 0);
+
+		do {
+			/**
+			 * Additional data = constant coming from HW.
+			 */
+			hmac_drbg_generate(&drbg, key_candidate,
+					   sizeof(key_candidate), buf,
+					   sizeof(buf));
+		} while (!DCRYPTO_p256_key_from_bytes(pk_x, pk_y, d,
+						      key_candidate));
 	}
 
 	return true;
