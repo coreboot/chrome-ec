@@ -80,12 +80,11 @@ __stdlib_compat void *memcpy(void *dest, const void *src, size_t len)
 	return dest;
 }
 
-
-__stdlib_compat __visible void *memset(void *dest, int c, size_t len)
+static void *memset_core(volatile void *dest, int c, size_t len)
 {
-	char *d = (char *)dest;
+	volatile char *d = (volatile char *)dest;
 	uint32_t cccc;
-	uint32_t *dw;
+	volatile uint32_t *dw;
 	char *head;
 	char * const tail = (char *)dest + len;
 	/* Set 'body' to the last word boundary */
@@ -106,18 +105,22 @@ __stdlib_compat __visible void *memset(void *dest, int c, size_t len)
 		*(d++) = c;
 
 	/* Copy body */
-	dw = (uint32_t *)d;
+	dw = (volatile uint32_t *)d;
 	while (dw < body)
 		*(dw++) = cccc;
 
 	/* Copy tail */
-	d = (char *)dw;
+	d = (volatile char *)dw;
 	while (d < tail)
 		*(d++) = c;
 
-	return dest;
+	return (void *)dest;
 }
 
+__stdlib_compat __visible void *memset(void *dest, int c, size_t len)
+{
+	return memset_core(dest, c, len);
+}
 
 __stdlib_compat void *memmove(void *dest, const void *src, size_t len)
 {
@@ -204,14 +207,7 @@ __stdlib_compat int strncmp(const char *s1, const char *s2, size_t n)
 	return 0;
 }
 
-static void always_memset_impl(volatile char *s, int c, size_t n)
-{
-	while (n--)
-		*s++ = c;
-}
-
 void *always_memset(void *s, int c, size_t n)
 {
-	always_memset_impl(s, c, n);
-	return s;
+	return memset_core(s, c, n);
 }
