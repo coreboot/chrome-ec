@@ -1131,19 +1131,26 @@ struct DMEM_ctx {
 	struct DMEM_ctx_ptrs sqr_ptrs;
 	struct DMEM_ctx_ptrs mul_ptrs;
 	struct DMEM_ctx_ptrs out_ptrs;
-	uint32_t mod[RSA_WORDS_4K];
+	uint32_t in[RSA_WORDS_4K];
 	uint32_t dInv[8];
 	uint32_t pubexp;
 	uint32_t _pad1[3];
 	uint32_t rnd[2];
 	uint32_t _pad2[2];
+	uint32_t mod[RSA_WORDS_4K];
 	uint32_t RR[RSA_WORDS_4K];
-	uint32_t in[RSA_WORDS_4K];
 	uint32_t exp[RSA_WORDS_4K + 8]; /* extra word for randomization */
 	uint32_t out[RSA_WORDS_4K];
 	uint32_t bin[RSA_WORDS_4K];
 	uint32_t bout[RSA_WORDS_4K];
 };
+
+BUILD_ASSERT(sizeof(struct DMEM_ctx) <= 4096);
+/* Check for 256-bit alignment. */
+BUILD_ASSERT((offsetof(struct DMEM_ctx, in) & 31) == 0);
+BUILD_ASSERT((offsetof(struct DMEM_ctx, mod) & 31) == 0);
+BUILD_ASSERT((offsetof(struct DMEM_ctx, dInv) & 31) == 0);
+BUILD_ASSERT((offsetof(struct DMEM_ctx, RR) & 31) == 0);
 
 #define DMEM_CELL_SIZE 32
 #define DMEM_INDEX(p, f)                                                       \
