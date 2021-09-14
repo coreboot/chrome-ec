@@ -7,11 +7,15 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "charge_state.h"
+#include "ec_commands.h"
 #include "gpio.h"
 #include "system.h"
 
 /* Shutdown mode parameter to write to manufacturer access register */
 #define SB_SHUTDOWN_DATA	0x0010
+#define CHARGING_VOLTAGE_LIMIT	8500
+#define CHARGING_CURRENT_LIMIT	1930
 
 static const struct battery_info info = {
 	.voltage_max = 8700,/* mV */
@@ -55,4 +59,28 @@ int board_cut_off_battery(void)
 		return rv;
 
 	return sb_write(SB_MANUFACTURER_ACCESS, SB_SHUTDOWN_DATA);
+}
+
+int charger_profile_override(struct charge_state_data *curr)
+{
+	if (curr->requested_voltage > CHARGING_VOLTAGE_LIMIT)
+		curr->requested_voltage = CHARGING_VOLTAGE_LIMIT;
+	if (curr->requested_current > CHARGING_CURRENT_LIMIT)
+		curr->requested_current = CHARGING_CURRENT_LIMIT;
+	return 0;
+}
+
+/* Customs options controllable by host command. */
+#define PARAM_FASTCHARGE (CS_PARAM_CUSTOM_PROFILE_MIN + 0)
+
+enum ec_status charger_profile_override_get_param(uint32_t param,
+		uint32_t *value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+enum ec_status charger_profile_override_set_param(uint32_t param,
+		uint32_t value)
+{
+	return EC_RES_INVALID_PARAM;
 }
