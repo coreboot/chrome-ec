@@ -4,7 +4,7 @@
  */
 
 #include <device.h>
-#include <drivers/cros_bbram.h>
+#include <drivers/bbram.h>
 #include <drivers/cros_system.h>
 #include <logging/log.h>
 
@@ -23,6 +23,11 @@
 #define GET_BBRAM_OFFSET(node) \
 	DT_PROP(DT_PATH(named_bbram_regions, node), offset)
 #define GET_BBRAM_SIZE(node) DT_PROP(DT_PATH(named_bbram_regions, node), size)
+
+/* 2 second delay for waiting the H1 reset */
+#define WAIT_RESET_TIME                                     \
+	(CONFIG_PLATFORM_EC_PREINIT_HW_CYCLES_PER_SEC * 2 / \
+	 CONFIG_PLATFORM_EC_WAIT_RESET_CYCLES_PER_ITERATION)
 
 LOG_MODULE_REGISTER(shim_system, LOG_LEVEL_ERR);
 
@@ -67,7 +72,7 @@ int system_get_bbram(enum system_bbram_idx idx, uint8_t *value)
 	if (rc)
 		return rc;
 
-	rc = cros_bbram_read(bbram_dev, offset, size, value);
+	rc = bbram_read(bbram_dev, offset, size, value);
 
 	return rc ? EC_ERROR_INVAL : EC_SUCCESS;
 }
@@ -79,8 +84,8 @@ void chip_save_reset_flags(uint32_t flags)
 		return;
 	}
 
-	cros_bbram_write(bbram_dev, GET_BBRAM_OFFSET(saved_reset_flags),
-			 GET_BBRAM_SIZE(saved_reset_flags), (uint8_t *)&flags);
+	bbram_write(bbram_dev, GET_BBRAM_OFFSET(saved_reset_flags),
+		    GET_BBRAM_SIZE(saved_reset_flags), (uint8_t *)&flags);
 }
 
 uint32_t chip_read_reset_flags(void)
@@ -92,8 +97,8 @@ uint32_t chip_read_reset_flags(void)
 		return 0;
 	}
 
-	cros_bbram_read(bbram_dev, GET_BBRAM_OFFSET(saved_reset_flags),
-			GET_BBRAM_SIZE(saved_reset_flags), (uint8_t *)&flags);
+	bbram_read(bbram_dev, GET_BBRAM_OFFSET(saved_reset_flags),
+		   GET_BBRAM_SIZE(saved_reset_flags), (uint8_t *)&flags);
 
 	return flags;
 }
@@ -105,8 +110,8 @@ int system_set_scratchpad(uint32_t value)
 		return -EC_ERROR_INVAL;
 	}
 
-	return cros_bbram_write(bbram_dev, GET_BBRAM_OFFSET(scratchpad),
-			 GET_BBRAM_SIZE(scratchpad), (uint8_t *)&value);
+	return bbram_write(bbram_dev, GET_BBRAM_OFFSET(scratchpad),
+			   GET_BBRAM_SIZE(scratchpad), (uint8_t *)&value);
 }
 
 int system_get_scratchpad(uint32_t *value)
@@ -116,8 +121,8 @@ int system_get_scratchpad(uint32_t *value)
 		return -EC_ERROR_INVAL;
 	}
 
-	if (cros_bbram_read(bbram_dev, GET_BBRAM_OFFSET(scratchpad),
-			    GET_BBRAM_SIZE(scratchpad), (uint8_t *)value)) {
+	if (bbram_read(bbram_dev, GET_BBRAM_OFFSET(scratchpad),
+		       GET_BBRAM_SIZE(scratchpad), (uint8_t *)value)) {
 		return -EC_ERROR_INVAL;
 	}
 
@@ -355,13 +360,17 @@ static int system_preinitialize(const struct device *unused)
 	 * previous power-on, and treat the second reset as a power-on instead
 	 * of a reset.
 	 */
-	if (IS_ENABLED(CONFIG_BOARD_RESET_AFTER_POWER_ON) &&
-	    system_get_reset_flags() & EC_RESET_FLAG_INITIAL_PWR) {
-		/* TODO(b/182875520): Change to use 2 second delay. */
-		while (1)
-			continue;
+#ifdef CONFIG_BOARD_RESET_AFTER_POWER_ON
+	if (system_get_reset_flags() & EC_RESET_FLAG_INITIAL_PWR) {
+		/*
+		 * The current initial stage couldn't use the kernel delay
+		 * function. Use CPU nop instruction to wait for the external
+		 * reset from H1.
+		 */
+		for (uint32_t i = WAIT_RESET_TIME; i; i--)
+			arch_nop();
 	}
-
+#endif
 	return 0;
 }
 

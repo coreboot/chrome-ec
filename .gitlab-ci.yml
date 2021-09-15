@@ -34,12 +34,16 @@ before_script:
   - git clone -b chromeos-v2.6 https://chromium.googlesource.com/chromiumos/third_party/zephyr "${ZEPHYR_BASE}26"
   - git clone -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/cmsis "${MODULES_DIR}/cmsis"
   - git clone -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/hal_stm32 "${MODULES_DIR}/hal_stm32"
+  - git clone -b main https://chromium.googlesource.com/chromiumos/third_party/zephyr/nanopb "${MODULES_DIR}/nanopb"
   - ln -s "$(pwd)" "${MODULES_DIR}/ec"
   - python3 -V  # Print out python version for debugging
   - python3 -m pip install zephyr/zmake --user
   - export BUILD_DIR=build
   - export ZEPHYR_DIR=/zephyr
   - export PATH="$PATH:$HOME/.local/bin"
+  - python3 -m pip install anytree --user
+  - python3 -m pip install pyelftools --user
+  - export PYTHONIOENCODING=utf-8
 
 # Users of this template must set:
 # $PROJECT to the project to build in zephyr/projects. E.g. "lazor")
@@ -52,6 +56,13 @@ before_script:
       --modules-dir "${MODULES_DIR}" -l DEBUG configure -b
       -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
       zephyr/projects/${PROJECT_SUBDIR}${PROJECT}
+    - for b in "${BUILD_DIR}/${PROJECT}"/build-* ; do
+      bdir=$(basename ${b}) ;
+      ninja -C ${b} ram_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_ram_report.txt" ;
+      cp ${b}/ram.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_ram.json" ;
+      ninja -C ${b} rom_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_rom_report.txt" ;
+      cp ${b}/rom.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_rom.json" ;
+      done
     - ls "${BUILD_DIR}/${PROJECT}" "${BUILD_DIR}/${PROJECT}/output"
   artifacts:
     paths:
