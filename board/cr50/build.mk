@@ -111,8 +111,9 @@ fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/compare.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_runtime.o
 ifneq ($(CRYPTO_TEST),)
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/gcm.o
-endif
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hkdf.o
+endif
+
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_sw.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_drbg.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/key_ladder.o
