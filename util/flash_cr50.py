@@ -15,6 +15,7 @@ util/flash_cr50.py --release prod -c cr50-rescue -p 9999
 """
 
 import argparse
+import logging
 import os
 import pprint
 import re
@@ -29,7 +30,6 @@ import time
 import serial
 
 from chromite.lib import cros_build_lib
-from chromite.lib import cros_logging as logging
 
 CR50_FIRMWARE_BASE = '/opt/google/cr50/firmware/cr50.bin.'
 RELEASE_PATHS = {
