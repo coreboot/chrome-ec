@@ -235,14 +235,33 @@ int DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N, struct LITE_BIGNUM *d,
  *  EC.
  */
 
+/**
+ * Check if point is on NIST P-256 curve
+ *
+ * @param x point coordinate
+ * @param y point coordinate
+ * @return DCRYPTO_OK if (x,y) is a valid point, DCRYPTO_FAIL otherwise
+ */
+enum dcrypto_result DCRYPTO_p256_is_valid_point(const p256_int *x,
+						const p256_int *y);
+
 /* DCRYPTO_p256_base_point_mul sets {out_x,out_y} = nG, where n is < the
  * order of the group.
  */
 int DCRYPTO_p256_base_point_mul(p256_int *out_x, p256_int *out_y,
 				const p256_int *n);
 
-/* DCRYPTO_p256_point_mul sets {out_x,out_y} = n*{in_x,in_y}, where n is <
- * the order of the group.
+/**
+ * DCRYPTO_p256_point_mul sets {out_x,out_y} = n*{in_x,in_y}, where n is <
+ * the order of the group. Prior to computation check than {in_x,in_y} is
+ * on NIST P-256 curve.
+ *
+ * @param out_x output shared coordinate x
+ * @param out_y output shared coordinate y
+ * @param n private key
+ * @param in_x input public point x
+ * @param in_y input public point y
+ * @return 1 if success
  */
 int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y, const p256_int *n,
 			   const p256_int *in_x, const p256_int *in_y);

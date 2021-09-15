@@ -19,7 +19,6 @@ TPM2B_BYTE_VALUE(32);
 
 BOOL _cpri__EccIsPointOnCurve(TPM_ECC_CURVE curve_id, TPMS_ECC_POINT *q)
 {
-	int result;
 	p256_int x, y;
 
 	switch (curve_id) {
@@ -29,9 +28,7 @@ BOOL _cpri__EccIsPointOnCurve(TPM_ECC_CURVE curve_id, TPMS_ECC_POINT *q)
 		    !p256_from_be_bin_size(q->y.b.buffer, q->y.b.size, &y))
 			return FALSE;
 
-		result = dcrypto_p256_is_valid_point(&x, &y);
-
-		if (result)
+		if (DCRYPTO_p256_is_valid_point(&x, &y) == DCRYPTO_OK)
 			return TRUE;
 		else
 			return FALSE;

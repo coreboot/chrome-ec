@@ -282,7 +282,8 @@ int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
 	return result == 0;
 }
 
-int dcrypto_p256_is_valid_point(const p256_int *x, const p256_int *y)
+enum dcrypto_result dcrypto_p256_is_valid_point(const p256_int *x,
+						const p256_int *y)
 {
 	int i, result;
 
@@ -299,5 +300,5 @@ int dcrypto_p256_is_valid_point(const p256_int *x, const p256_int *y)
 		result |= (dmem_ecc->r.a[i] ^ dmem_ecc->s.a[i]);
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }

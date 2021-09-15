@@ -23,18 +23,23 @@ int DCRYPTO_p256_base_point_mul(p256_int *out_x, p256_int *out_y,
 	return dcrypto_p256_base_point_mul(n, out_x, out_y);
 }
 
+enum dcrypto_result DCRYPTO_p256_is_valid_point(const p256_int *x,
+						const p256_int *y)
+{
+	return dcrypto_p256_is_valid_point(x, y);
+}
+
 /* DCRYPTO_p256_point_mul sets {out_x,out_y} = n*{in_x,in_y}, where n is <
  * the order of the group. */
-int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
-			const p256_int *n, const p256_int *in_x,
-			const p256_int *in_y)
+int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y, const p256_int *n,
+			   const p256_int *in_x, const p256_int *in_y)
 {
-	if (p256_is_zero(n) != 0) {
+	if (p256_is_zero(n) != 0 ||
+	    (dcrypto_p256_is_valid_point(in_x, in_y) != DCRYPTO_OK)) {
 		p256_clear(out_x);
 		p256_clear(out_y);
 		return 0;
 	}
-
 	return dcrypto_p256_point_mul(n, in_x, in_y, out_x, out_y);
 }
 

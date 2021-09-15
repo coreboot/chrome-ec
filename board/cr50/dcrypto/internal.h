@@ -246,7 +246,8 @@ int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
 		const p256_int *message, const p256_int *r,
 		const p256_int *s)
 	__attribute__((warn_unused_result));
-int dcrypto_p256_is_valid_point(const p256_int *x, const p256_int *y)
+enum dcrypto_result dcrypto_p256_is_valid_point(const p256_int *x,
+						const p256_int *y)
 	__attribute__((warn_unused_result));
 
 /* Wipe content of rnd with pseudo-random values. */
