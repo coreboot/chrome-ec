@@ -3,12 +3,7 @@
  * found in the LICENSE file.
  */
 
-/ {
-	named-batteries {
-		compatible = "named-batteries";
-
-		ap16l5j {
-			enum-name = "ap16l5j";
-		};
-	};
-};
+/**
+ * See CONFIG_TASK_LIST in config.h for details.
+ */
+#define CONFIG_TEST_TASK_LIST  /* No test task */

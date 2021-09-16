@@ -43,7 +43,8 @@ const struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = RT1715_I2C_ADDR_FLAGS,
 		},
 		.drv = &rt1715_tcpm_drv,
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0 |
+			 TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -69,7 +70,7 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C1] = {
 		/* Compatible with Silicon Mitus SM536A0 */
 		.i2c_port = I2C_PORT_USB_C1_PPC,
-		.i2c_addr_flags = SYV682x_ADDR3_FLAGS,
+		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
 		.drv = &syv682x_drv,
 	},
 };
@@ -116,7 +117,7 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	},
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_C1_BC12,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
+		.i2c_addr_flags = PI3USB9201_I2C_ADDR_2_FLAGS,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
@@ -127,6 +128,8 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 
 	if (me->usb_port == USBC_PORT_C0) {
 		rst_signal = GPIO_USB_C0_RT_RST_ODL;
+	} else if (me->usb_port == USBC_PORT_C1) {
+		rst_signal = GPIO_USB_C1_RT_RST_R_ODL;
 	} else {
 		return EC_ERROR_INVAL;
 	}
@@ -162,6 +165,7 @@ void board_reset_pd_mcu(void)
 	 * TODO(b/179648104): figure out correct timing
 	 */
 
+	gpio_set_level(GPIO_USB_C0_RT_RST_ODL, 0);
 	gpio_set_level(GPIO_USB_C1_RT_RST_R_ODL, 0);
 
 	/*
@@ -170,6 +174,7 @@ void board_reset_pd_mcu(void)
 
 	msleep(20);
 
+	gpio_set_level(GPIO_USB_C0_RT_RST_ODL, 1);
 	gpio_set_level(GPIO_USB_C1_RT_RST_R_ODL, 1);
 
 	/* wait for chips to come up */
