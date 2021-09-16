@@ -8,6 +8,7 @@ set -e
 TMP_PATH="/tmp/ea"
 NIST_URL="https://github.com/usnistgov/SP800-90B_EntropyAssessment.git"
 TRNG_OUT="${TMP_PATH}/trng_output"
+TRNG_OUT_RESTART="${TMP_PATH}/trng_output_restart"
 EA_LOG="ea_non_iid.log"
 rm -rf "${TMP_PATH}"
 git clone --depth 1 "${NIST_URL}" "${TMP_PATH}"
@@ -21,11 +22,19 @@ if [[ ! -f "${TRNG_OUT}" ]]; then
     echo "${TRNG_OUT} does not exist"
     exit 1
 fi
+# -t3 use TRNG with restarts
+./tpmtest.py -t3 -o "${TRNG_OUT_RESTART}"
+if [[ ! -f "${TRNG_OUT_RESTART}" ]]; then
+    echo "${TRNG_OUT_RESTART} does not exist"
+    exit 1
+fi
+
 rm -f "${EA_LOG}"
-"${TMP_PATH}/cpp/ea_non_iid" -a "${TRNG_OUT}" | tee "${EA_LOG}"
+"${TMP_PATH}/cpp/ea_non_iid" -v -a "${TRNG_OUT}" | tee "${EA_LOG}"
 entropy="$(awk '/min/ {print $5}' "${EA_LOG}")"
 if [[ -z "${entropy}" ]]; then
     entropy="$(awk '/H_original/ {print $2}' "${EA_LOG}")"
 fi
 echo "Minimal entropy ${entropy}"
-"${TMP_PATH}/cpp/ea_restart" "${TRNG_OUT}" "${entropy}" | tee -a "${EA_LOG}"
+"${TMP_PATH}/cpp/ea_restart" -v "${TRNG_OUT_RESTART}" \
+    "${entropy}" | tee -a "${EA_LOG}"

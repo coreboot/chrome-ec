@@ -154,6 +154,7 @@ uint64_t read_rand(void)
 #include "console.h"
 #include "endian.h"
 #include "extension.h"
+#include "timer.h"
 #include "watchdog.h"
 
 #if CRYPTO_TEST_CMD_RAND
@@ -291,6 +292,7 @@ static bool raw_rand_bytes(void *buffer, size_t len)
  * =========================================================================
  * text_len  |    2     | the number of random bytes to generate, big endian
  * type      |    1     | 0 - TRNG, 1 = FIPS TRNG, 2 = FIPS DRBG
+ *           |          | 3 - TRNG after restart
  *           |          | other values reserved for extensions
  */
 static enum vendor_cmd_rc trng_test(enum vendor_cmd_cc code, void *buf,
@@ -314,6 +316,13 @@ static enum vendor_cmd_rc trng_test(enum vendor_cmd_cc code, void *buf,
 	}
 
 	switch (op_type) {
+	case 3:
+		/* Power down LDO, wait 1ms, power up. */
+		GWRITE(TRNG, POWER_DOWN_B, 0);
+		udelay(1000);
+		GWRITE(TRNG, POWER_DOWN_B, 1);
+		GWRITE(TRNG, GO_EVENT, 1);
+		/* Fall through */
 	case 0:
 		if (!raw_rand_bytes(buf, text_len))
 			return VENDOR_RC_INTERNAL_ERROR;

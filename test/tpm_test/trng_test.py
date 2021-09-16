@@ -69,7 +69,7 @@ def trng_test(tpm, trng_output, trng_mode, tsb=1):
         subcmd.TpmTestError: on unexpected target responses
     """
 
-    if trng_mode not in [0, 1, 2]:
+    if trng_mode not in [0, 1, 2, 3]:
         raise subcmd.TpmTestError('Unknown random source: %d' % trng_mode)
 
     # minimal recommended by NIST is 1000 samples per block
