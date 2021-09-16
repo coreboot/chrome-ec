@@ -102,5 +102,11 @@ enum nvmem_users {
 
 #endif /* TEST_HOST_COMMAND_FUZZ */
 
-#endif  /* TEST_FUZZ */
-#endif  /* __FUZZ_FUZZ_CONFIG_H */
+#ifdef TEST_CR50_U2F_FUZZ
+#define CONFIG_DCRYPTO
+#define CONFIG_U2F
+#define CC_EXTENSION CC_COMMAND
+#endif /* TEST_CR50_U2F_FUZZ */
+
+#endif /* TEST_FUZZ */
+#endif /* __FUZZ_FUZZ_CONFIG_H */

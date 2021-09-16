@@ -12,7 +12,7 @@ CHIP_VARIANT ?= cr50_fpga
 
 # Additional / overriding warnings for common rules and chip
 # (TODO) enable after https://crrev.com/c/3198155
-# CFLAGS_BOARD :=-Warray-parameter -Wstringop-overread
+# CFLAGS_BOARD :=-Wno-array-parameter -Wno-stringop-overread
 
 # This file is included twice by the Makefile, once to determine the CHIP info
 # and then again after defining all the CONFIG_ and HAS_TASK variables. We use

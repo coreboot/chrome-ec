@@ -9,3 +9,4 @@ cscope.*
 .tests-passed
 .failedboards/
 .sizes.txt
+.vscode/
