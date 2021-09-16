@@ -12,7 +12,7 @@
 #include <unordered_map>
 
 #define HIDE_EC_STDLIB
-#include "fuzz/cr50_fuzz.pb.h"
+#include "fuzz/pinweaver_fuzz.pb.h"
 #include "fuzz/mem_hash_tree.h"
 #include "fuzz/span.h"
 #include "include/pinweaver.h"

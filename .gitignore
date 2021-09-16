@@ -10,3 +10,5 @@ cscope.*
 .failedboards/
 .sizes.txt
 .vscode/
+# Fuzz-test-generated coverage data
+default.profraw

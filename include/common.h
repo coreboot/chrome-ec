@@ -134,7 +134,7 @@
 #define __warn_unused_result __attribute__((warn_unused_result))
 #endif
 
-#ifdef TEST_CR50_FUZZ
+#ifdef TEST_PINWEAVER_FUZZ
 /**
  *  Workaround: Clang incorrectly handles profiling information
  *  used for fuzzing with __attribute__((always_inline)).
