@@ -14,6 +14,7 @@
 #error "This fake trng driver must not be used in non-test builds."
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h> /* Only valid for host */
 
@@ -37,4 +38,10 @@ test_mockable void rand_bytes(void *buffer, size_t len)
 
 	for (b = buffer, end = b+len; b != end; b++)
 		*b = (uint8_t)rand_r(&seed);
+}
+
+test_mockable bool fips_rand_bytes(void *buffer, size_t len)
+{
+	rand_bytes(buffer, len);
+	return true;
 }

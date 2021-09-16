@@ -10,7 +10,6 @@
 #include "TPMB.h"
 
 #include "fips_rand.h"
-#include "trng.h"
 #include "util.h"
 #include "dcrypto.h"
 
@@ -285,7 +284,8 @@ CRYPT_RESULT _cpri__GetEphemeralEcc(TPMS_ECC_POINT *q, TPM2B_ECC_PARAMETER *d,
 	if (curve_id != TPM_ECC_NIST_P256)
 		return CRYPT_PARAMETER;
 
-	rand_bytes(key_bytes, sizeof(key_bytes));
+	if (!fips_rand_bytes(key_bytes, sizeof(key_bytes)))
+		return CRYPT_FAIL;
 
 	result = DCRYPTO_p256_key_from_bytes(&x, &y, &key, key_bytes);
 

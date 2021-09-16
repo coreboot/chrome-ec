@@ -9,7 +9,7 @@
 #include "ccd_config.h"
 #include "pinweaver.h"
 #include "tpm_nvmem.h"
-#include "trng.h"
+#include "dcrypto.h"
 #include "u2f_impl.h"
 #include "util.h"
 #include "version.h"
@@ -17,7 +17,8 @@
 uint16_t _cpri__GenerateRandom(size_t random_size,
 			uint8_t *buffer)
 {
-	rand_bytes(buffer, random_size);
+	if (!fips_rand_bytes(buffer, random_size))
+		return 0;
 	return random_size;
 }
 

@@ -35,12 +35,6 @@ void fips_init_trng(void);
  */
 uint64_t read_rand(void);
 
-/* Return true if read_rand() result contains valid random from TRNG. */
-static inline bool rand_valid(uint64_t rand)
-{
-	return (rand >> 32) != 0;
-}
-
 /**
  * TRNG Health Tests
  *
@@ -107,15 +101,11 @@ static inline bool rand_valid(uint64_t rand)
  */
 bool fips_trng_startup(int stage);
 
-bool fips_trng_bytes(void *buffer, size_t len);
 
 /* initialize cr50-wide DRBG replacing rand */
 bool fips_drbg_init(void);
 /* mark cr50-wide DRBG as not initialized */
 void fips_drbg_init_clear(void);
-
-/* random bytes using FIPS-compliant HMAC_DRBG */
-bool fips_rand_bytes(void *buffer, size_t len);
 
 /* FIPS DRBG initialized at boot time/first use. */
 extern struct drbg_ctx fips_drbg;

@@ -459,6 +459,57 @@ int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt, void *out,
  */
 int DCRYPTO_ladder_is_enabled(void);
 
+/**
+ * Random number generation functions.
+ */
+
+/**
+ * Returns random number from TRNG with indication wherever reading is valid.
+ * This is different from rand() which doesn't provide any indication.
+ * High 32-bits set to zero in case of error; otherwise value >> 32 == 1
+ * Use of uint64_t vs. struct results in more efficient code.
+ * Random is passed continuous TRNG health tests.
+ *
+ * @return uint64_t, low 32 bits - random  high 32 bits - validity status
+ */
+uint64_t fips_trng_rand32(void);
+
+/**
+ * Return true if fips_trng_rand() result contains valid random from TRNG.
+ * @param rand value from fips_trng_rand32() or read_rand()
+ *
+ * @return true if rand contains valid random
+ */
+
+static inline bool rand_valid(uint64_t rand)
+{
+	return (rand >> 32) != 0;
+}
+
+/**
+ * Fill buffer with FIPS health checked randoms directly from TRNG.
+ *
+ * @param buffer buffer to fill
+ * @param len size of buffer in bytes
+ * @return true if successful
+ * @return false if TRNG failed, values didn't pass health test
+ *         or module crypto failed
+ */
+bool fips_trng_bytes(void *buffer, size_t len)
+	__attribute__((warn_unused_result));
+
+/**
+ * Fill buffer with random bytes from FIPS-compliant HMAC_DRBG_SHA256,
+ * instantiated during system start-up and reseeded as needed.
+ *
+ * @param buffer buffer to fill
+ * @param len size of buffer in bytes
+ * @return true if successful
+ * @return false if any errors occurred or module crypto failed
+ */
+bool fips_rand_bytes(void *buffer, size_t len)
+	__attribute__((warn_unused_result));
+
 #ifdef __cplusplus
 }
 #endif

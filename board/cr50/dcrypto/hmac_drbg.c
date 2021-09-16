@@ -84,17 +84,6 @@ void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx, const p256_int *key,
 		       NULL, 0);
 }
 
-void hmac_drbg_init_rand(struct drbg_ctx *ctx, size_t nbits)
-{
-	int i;
-	uint32_t x[(nbits + 31) / 32];
-
-	for (i = 0; i < ARRAY_SIZE(x); ++i)
-		x[i] = rand();
-
-	hmac_drbg_init(ctx, &x, sizeof(x), NULL, 0, NULL, 0);
-}
-
 void hmac_drbg_reseed(struct drbg_ctx *ctx,
 		      const void *p0, size_t p0_len,
 		      const void *p1, size_t p1_len,
@@ -341,7 +330,10 @@ static int cmd_hmac_drbg_rand(int argc, char **argv)
 
 	int i;
 
-	hmac_drbg_init_rand(&ctx, 256);
+	/* Seed with 256 bits from TRNG. */
+	if (!fips_trng_bytes(output, 32))
+		return EC_ERROR_HW_INTERNAL;
+	hmac_drbg_init(&ctx, output, 32, NULL, 0, NULL, 0);
 
 	hmac_drbg_generate(&ctx, output, sizeof(output), NULL, 0);
 

@@ -185,6 +185,11 @@ static uint64_t fips_trng32(int power_up)
 	return r;
 }
 
+uint64_t fips_trng_rand32(void)
+{
+	return fips_trng32(0);
+}
+
 bool fips_trng_bytes(void *buffer, size_t len)
 {
 	uint8_t *buf = (uint8_t *)buffer;
@@ -331,8 +336,12 @@ bool fips_rand_bytes(void *buffer, size_t len)
 enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
 					      p256_int *out)
 {
-	enum hmac_result err = p256_hmac_drbg_generate(drbg, out);
+	enum hmac_result err;
 
+	if (!fips_crypto_allowed())
+		return HMAC_DRBG_INVALID_PARAM;
+
+	err = p256_hmac_drbg_generate(drbg, out);
 	while (err == HMAC_DRBG_RESEED_REQUIRED) {
 		if (!fips_drbg_reseed_with_entropy(drbg))
 			return HMAC_DRBG_RESEED_REQUIRED;

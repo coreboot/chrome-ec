@@ -1157,12 +1157,23 @@ BUILD_ASSERT((offsetof(struct DMEM_ctx, RR) & 31) == 0);
 	(((const uint8_t *)&(p)->f - (const uint8_t *)(p)) / DMEM_CELL_SIZE)
 
 /* Get non-0 64 bit random */
-static void rand64(uint32_t dst[2])
+static bool rand64(uint32_t dst[2])
 {
 	do {
-		dst[0] = rand();
-		dst[1] = rand();
+		uint64_t rnd;
+
+		rnd = fips_trng_rand32();
+		if (!rand_valid(rnd))
+			return false;
+		dst[0] = (uint32_t)rnd;
+
+		rnd = fips_trng_rand32();
+		if (!rand_valid(rnd))
+			return false;
+		dst[1] = (uint32_t)rnd;
 	} while ((dst[0] | dst[1]) == 0);
+
+	return true;
 }
 
 /* Grab dcrypto lock and set things up for modulus and input */
@@ -1292,7 +1303,8 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 	 * pick 64 bit r != 0
 	 * We cannot tolerate risk of 0 since 0 breaks computation.
 	 */
-	rand64(r_buf);
+	if (!rand64(r_buf))
+		return 0;
 
 	/*
 	 * compute 1/r mod N
@@ -1306,10 +1318,12 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 	 */
 	dcrypto_modexp_word(&r, &r, pubexp, N);
 
+	/* Pick !0 64-bit random for exponent blinding */
+	if (!rand64(ctx->rnd))
+		return 0;
+
 	result = setup_and_lock(N, input);
 
-	/* Pick !0 64-bit random for exponent blinding */
-	rand64(ctx->rnd);
 	ctx->pubexp = pubexp;
 
 	ctx->_pad1[0] = ctx->_pad1[1] = ctx->_pad1[2] = 0;

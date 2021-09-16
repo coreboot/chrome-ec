@@ -867,10 +867,10 @@ int setvar(const uint8_t *key, uint8_t key_len, const uint8_t *val,
 /* Mock implementations of TRNG functionality.
  */
 
-void rand_bytes(void *buffer, size_t len)
+bool fips_rand_bytes(void *buffer, size_t len)
 {
 	if (!MOCK_rand_bytes_src)
-		return;
+		return true;
 
 	TEST_ASRT_NORET(len <= MOCK_rand_bytes_len - MOCK_rand_bytes_offset);
 
@@ -878,6 +878,8 @@ void rand_bytes(void *buffer, size_t len)
 	MOCK_rand_bytes_offset += len;
 	if (MOCK_rand_bytes_len == MOCK_rand_bytes_offset)
 		MOCK_rand_bytes_offset = 0;
+
+	return true;
 }
 
 /******************************************************************************/

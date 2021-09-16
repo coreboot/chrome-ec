@@ -83,7 +83,6 @@ static int oaep_pad(uint8_t *output, uint32_t output_len,
 		const uint8_t *msg, uint32_t msg_len,
 		enum hashing_mode hashing, const char *label)
 {
-	int i;
 	const size_t hash_size = (hashing == HASH_SHA1) ? SHA_DIGEST_SIZE
 		: SHA256_DIGEST_SIZE;
 	uint8_t *const seed = output + 1;
@@ -100,14 +99,8 @@ static int oaep_pad(uint8_t *output, uint32_t output_len,
 		return 0;       /* Input message too large for key size. */
 
 	always_memset(output, 0, output_len);
-	for (i = 0; i < hash_size;) {
-		uint32_t r = rand();
-
-		seed[i++] = r >> 0;
-		seed[i++] = r >> 8;
-		seed[i++] = r >> 16;
-		seed[i++] = r >> 24;
-	}
+	if (!fips_rand_bytes(seed, hash_size))
+		return 0;
 
 	if (hashing == HASH_SHA1)
 		SHA1_hw_init(&ctx.sha1);
@@ -205,13 +198,18 @@ static int pkcs1_type2_pad(uint8_t *padded, uint32_t padded_len,
 	*(padded++) = 2;
 	while (PS_len) {
 		int i;
-		uint32_t r = rand();
+		uint8_t r[SHA256_DIGEST_SIZE];
 
-		for (i = 0; i < 4 && PS_len; i++) {
-			uint8_t b = ((uint8_t *) &r)[i];
+		if (!fips_rand_bytes(r, sizeof(r)))
+			return 0;
 
-			if (b) {
-				*padded++ = b;
+		/**
+		 * zero byte has special meaning in PKCS1, so copy
+		 * only non-zero random bytes.
+		 */
+		for (i = 0; i < sizeof(r) && PS_len; i++) {
+			if (r[i]) {
+				*padded++ = r[i];
 				PS_len--;
 			}
 		}
@@ -406,7 +404,8 @@ static int pkcs1_pss_pad(uint8_t *padded, uint32_t padded_len,
 	HASH_update(&ctx, padded, 8);
 	HASH_update(&ctx, in, in_len);
 	/* Pilfer bits of output for temporary use. */
-	rand_bytes(padded, salt_len);
+	if (!fips_rand_bytes(padded, salt_len))
+		return 0;
 	HASH_update(&ctx, padded, salt_len);
 
 	/* Output hash. */

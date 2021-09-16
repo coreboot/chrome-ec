@@ -145,47 +145,18 @@ uint64_t read_rand(void)
 	       ((uint64_t)(reset_count < TRNG_RESET_COUNT) << 32);
 }
 
-/* TODO(sukhomlinov): replace uses with fips_trng32(). */
-uint32_t rand(void)
-{
-	/* Just ignore validity status. */
-	return (uint32_t)read_rand();
-}
-
-/* TODO(sukhomlinov): replace uses with fips_rand_bytes(). */
-void rand_bytes(void *buffer, size_t len)
-{
-	int random_togo = 0;
-	int buffer_index = 0;
-	uint32_t random_value;
-	uint8_t *buf = (uint8_t *) buffer;
-
-	/*
-	 * Retrieve random numbers in 4 byte quantities and pack as many bytes
-	 * as needed into 'buffer'. If len is not divisible by 4, the
-	 * remaining random bytes get dropped.
-	 */
-	while (buffer_index < len) {
-		if (!random_togo) {
-			random_value = rand();
-			random_togo = sizeof(random_value);
-		}
-		buf[buffer_index++] = random_value >>
-			((random_togo-- - 1) * 8);
-	}
-}
-
 /* Local switch to test command. Enable when work on it. */
 #ifndef CRYPTO_TEST_CMD_RAND
 #define CRYPTO_TEST_CMD_RAND 0
 #endif
 
 #if !defined(SECTION_IS_RO) && defined(CRYPTO_TEST_SETUP)
-
-#if CRYPTO_TEST_CMD_RAND
 #include "console.h"
+#include "endian.h"
+#include "extension.h"
 #include "watchdog.h"
 
+#if CRYPTO_TEST_CMD_RAND
 static void  print_rand_stat(uint32_t *histogram, size_t size)
 {
 	struct pair {
@@ -242,10 +213,16 @@ static int command_rand(int argc, char **argv)
 	memset(histogram_trng, 0, sizeof(histogram_trng));
 	ccprintf("Retrieving %d 32-bit random words.\n", count);
 	while (count-- > 0) {
+		uint64_t rnd;
 		uint32_t rvalue;
 		int size;
 
-		rvalue = rand();
+		rnd = fips_trng_rand32();
+		if (!rand_valid(rnd)) {
+			ccprintf("Failed reading TRNG.\n");
+			return EC_ERROR_HW_INTERNAL;
+		}
+		rvalue = (uint32_t)rnd;
 		/* update byte-level histogram */
 		for (size = 0; size < sizeof(rvalue); size++)
 			histogram[((uint8_t *)&rvalue)[size]]++;
@@ -274,5 +251,89 @@ static int command_rand(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(rand, command_rand, NULL, NULL);
 
 #endif /* CRYPTO_TEST_CMD_RAND */
+
+/* For testing we need unchecked values from TRNG. */
+static bool raw_rand_bytes(void *buffer, size_t len)
+{
+	int random_togo = 0;
+	int buffer_index = 0;
+	uint32_t random_value;
+	uint8_t *buf = (uint8_t *) buffer;
+
+	/*
+	 * Retrieve random numbers in 4 byte quantities and pack as many bytes
+	 * as needed into 'buffer'. If len is not divisible by 4, the
+	 * remaining random bytes get dropped.
+	 */
+	while (buffer_index < len) {
+		if (!random_togo) {
+			uint64_t rnd = read_rand();
+
+			if (!rand_valid(rnd))
+				return false;
+
+			random_value = (uint32_t)rnd;
+			random_togo = sizeof(random_value);
+		}
+		buf[buffer_index++] = random_value >>
+			((random_togo-- - 1) * 8);
+	}
+	return true;
+}
+
+/*
+ * This extension command is similar to TPM2_GetRandom, but made
+ * available for CRYPTO_TEST = 1 which disables TPM.
+ * Command structure, shared out of band with the test driver running
+ * on the host:
+ *
+ * field     |    size  |                  note
+ * =========================================================================
+ * text_len  |    2     | the number of random bytes to generate, big endian
+ * type      |    1     | 0 - TRNG, 1 = FIPS TRNG, 2 = FIPS DRBG
+ *           |          | other values reserved for extensions
+ */
+static enum vendor_cmd_rc trng_test(enum vendor_cmd_cc code, void *buf,
+				    size_t input_size, size_t *response_size)
+{
+	uint16_t text_len;
+	uint8_t *cmd = buf;
+	uint8_t op_type = 0;
+
+	if (input_size != sizeof(text_len) + 1) {
+		*response_size = 0;
+		return VENDOR_RC_BOGUS_ARGS;
+	}
+
+	text_len = be16toh(*(uint16_t *)cmd);
+	op_type = cmd[sizeof(text_len)];
+
+	if (text_len > *response_size) {
+		*response_size = 0;
+		return VENDOR_RC_BOGUS_ARGS;
+	}
+
+	switch (op_type) {
+	case 0:
+		if (!raw_rand_bytes(buf, text_len))
+			return VENDOR_RC_INTERNAL_ERROR;
+		break;
+	case 1:
+		if (!fips_trng_bytes(buf, text_len))
+			return VENDOR_RC_INTERNAL_ERROR;
+		break;
+	case 2:
+		if (!fips_rand_bytes(buf, text_len))
+			return VENDOR_RC_INTERNAL_ERROR;
+		break;
+
+	default:
+		return VENDOR_RC_BOGUS_ARGS;
+	}
+	*response_size = text_len;
+	return VENDOR_RC_SUCCESS;
+}
+
+DECLARE_VENDOR_COMMAND(VENDOR_CC_TRNG_TEST, trng_test);
 
 #endif /* CRYPTO_TEST_SETUP */

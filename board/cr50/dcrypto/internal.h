@@ -134,8 +134,7 @@ void hmac_drbg_init(struct drbg_ctx *ctx,
 		    const void *p0, size_t p0_len,
 		    const void *p1, size_t p1_len,
 		    const void *p2, size_t p2_len);
-/* Initialize with at least nbits of random entropy. */
-void hmac_drbg_init_rand(struct drbg_ctx *ctx, size_t nbits);
+
 void hmac_drbg_reseed(struct drbg_ctx *ctx,
 		      const void *p0, size_t p0_len,
 		      const void *p1, size_t p1_len,

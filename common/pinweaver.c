@@ -15,7 +15,6 @@
 #include <pinweaver_types.h>
 #include <timer.h>
 #include <tpm_vendor_cmds.h>
-#include <trng.h>
 #include <tpm_registers.h>
 #include <util.h>
 
@@ -175,8 +174,9 @@ static int create_merkle_tree(struct bits_per_level_t bits_per_level,
 	}
 	memcpy(merkle_tree->root, temp_hash, PW_HASH_SIZE);
 
-	rand_bytes(merkle_tree->key_derivation_nonce,
-		   sizeof(merkle_tree->key_derivation_nonce));
+	if (!fips_rand_bytes(merkle_tree->key_derivation_nonce,
+			     sizeof(merkle_tree->key_derivation_nonce)))
+		return PW_ERR_CRYPTO_FAILURE;
 	return derive_keys(merkle_tree);
 }
 
@@ -272,7 +272,9 @@ static int encrypt_leaf_data(const struct merkle_tree_t *merkle_tree,
 	 * a new IV should be generated and stored as part of the log for a
 	 * replay to be possible.
 	 */
-	rand_bytes(wrapped_leaf_data->iv, sizeof(wrapped_leaf_data->iv));
+	if (!fips_rand_bytes(wrapped_leaf_data->iv,
+			     sizeof(wrapped_leaf_data->iv)))
+		return PW_ERR_CRYPTO_FAILURE;
 	memcpy(&wrapped_leaf_data->pub, &leaf_data->pub,
 	       sizeof(leaf_data->pub));
 	if (!DCRYPTO_aes_ctr(wrapped_leaf_data->cipher_text,

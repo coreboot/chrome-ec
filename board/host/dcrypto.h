@@ -81,6 +81,8 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx, const p256_int *key,
 			    const p256_int *message);
 
+bool fips_rand_bytes(void *buffer, size_t len);
+
 #endif  /* CONFIG_DCRYPTO_MOCK */
 
 #endif  /* __CROS_EC_HOST_DCRYPTO_H */

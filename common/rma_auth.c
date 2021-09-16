@@ -23,7 +23,7 @@
 #include "tpm_registers.h"
 #include "tpm_vendor_cmds.h"
 #ifdef CONFIG_RMA_AUTH_USE_P256
-#include "trng.h"
+#include "dcrypto.h"
 #endif
 #include "util.h"
 
@@ -114,7 +114,7 @@ static void hash_buffer(void *dest, size_t dest_size,
  * @secet - array to return the X coordinate of the product of the server
  *            public key multiplied by our private key.
  */
-static void p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
+static int p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 					uint8_t secret[P256_NBYTES])
 {
 	uint8_t buf[SHA256_DIGEST_SIZE];
@@ -123,7 +123,8 @@ static void p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 	p256_int pk_y;
 
 	/* Get some noise for private key. */
-	rand_bytes(buf, sizeof(buf));
+	if (!fips_rand_bytes(buf, sizeof(buf)))
+		return EC_ERROR_HW_INTERNAL;
 
 	/*
 	 * By convention with the RMA server the Y coordinate of the Cr50
@@ -164,6 +165,7 @@ static void p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 
 	/* Wipe out the private key just in case. */
 	always_memset(&d, 0, sizeof(d));
+	return EC_SUCCESS;
 }
 #endif
 
@@ -230,7 +232,8 @@ int rma_create_challenge(void)
 
 	/* Calculate a new ephemeral key pair and the shared secret. */
 #ifdef CONFIG_RMA_AUTH_USE_P256
-	p256_get_pub_key_and_secret(c.device_pub_key, secret);
+	if (p256_get_pub_key_and_secret(c.device_pub_key, secret) != EC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
 #endif
 #ifdef CONFIG_CURVE25519
 	X25519_keypair(c.device_pub_key, temp);

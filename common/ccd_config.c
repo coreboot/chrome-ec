@@ -20,7 +20,6 @@
 #include "timer.h"
 #include "tpm_registers.h"
 #include "tpm_vendor_cmds.h"
-#include "trng.h"
 #include "wp.h"
 
 #define CPRINTS(format, args...) cprints(CC_CCD, format, ## args)
@@ -310,11 +309,14 @@ static void raw_reset_password(void)
  * Set the password.
  *
  * @param password	New password; must be non-empty
+ * @return EC_SUCCESS if successful
  */
-static void raw_set_password(const char *password)
+static int raw_set_password(const char *password)
 {
 	/* Get a new salt */
-	rand_bytes(config.password_salt, sizeof(config.password_salt));
+	if (!fips_rand_bytes(config.password_salt,
+			     sizeof(config.password_salt)))
+		return EC_ERROR_HW_INTERNAL;
 
 	/* Update the password digest */
 	ccd_password_digest(config.password_digest, password);
@@ -322,6 +324,8 @@ static void raw_set_password(const char *password)
 	/* Track whether we were opened when we set the password */
 	raw_set_flag(CCD_FLAG_PASSWORD_SET_WHEN_UNLOCKED,
 				     ccd_state == CCD_STATE_UNLOCKED);
+
+	return EC_SUCCESS;
 }
 
 /******************************************************************************/
@@ -540,9 +544,14 @@ static int ccd_reset_password(void)
  */
 static int ccd_set_password(const char *password)
 {
+	int result;
+
 	mutex_lock(&ccd_config_mutex);
-	raw_set_password(password);
+	result = raw_set_password(password);
 	mutex_unlock(&ccd_config_mutex);
+
+	if (!result)
+		return result;
 
 	return ccd_save_config();
 }

@@ -93,21 +93,25 @@ static void u2f_keys(void)
 }
 
 /* Set U2F keys as old. */
-static void fips_set_old_u2f_keys(void)
+static int fips_set_old_u2f_keys(void)
 {
 	uint8_t random[32];
 
 	u2f_zeroize_keys();
 
 	/* Create fake u2f keys old style */
-	fips_trng_bytes(random, sizeof(random));
+	if (!fips_trng_bytes(random, sizeof(random)))
+		return EC_ERROR_HW_INTERNAL;
 	setvar(&k_salt, sizeof(k_salt), random, sizeof(random));
 
-	fips_trng_bytes(random, sizeof(random));
+	if (!fips_trng_bytes(random, sizeof(random)))
+		return EC_ERROR_HW_INTERNAL;
 	write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK, sizeof(random), random, 1);
-	fips_trng_bytes(random, sizeof(random));
+	if (!fips_trng_bytes(random, sizeof(random)))
+		return EC_ERROR_HW_INTERNAL;
 	write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KH_SALT, sizeof(random), random,
 			       1);
+	return 0;
 }
 #endif
 
@@ -133,7 +137,7 @@ static int cmd_fips_status(int argc, char **argv)
 			CPRINTS("u2f zeroization status: %d",
 				u2f_zeroize_keys());
 		else if (!strncmp(argv[1], "old", 3))
-			fips_set_old_u2f_keys();
+			return fips_set_old_u2f_keys();
 		else if (!strncmp(argv[1], "u2f", 3))
 			print_u2f_keys_status();
 		else if (!strncmp(argv[1], "gen", 3))
