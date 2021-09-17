@@ -75,23 +75,28 @@ int DCRYPTO_aes_init(const uint8_t *key, uint32_t key_len, const uint8_t *iv,
 	}
 
 	/* Initialize IV for modes that require it. */
-	if (iv) {
-		p = (struct access_helper *) iv;
-		for (i = 0; i < 4; i++)
-			GR_KEYMGR_AES_CTR(i) = p[i].udata;
-	}
+	if (iv)
+		DCRYPTO_aes_write_iv(iv);
+
 	return 1;
 }
 
 int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
 {
 	int i;
-	struct access_helper *outw;
-	const struct access_helper *inw = (struct access_helper *) in;
+	uint32_t buf[4];
+	const uint32_t *inw;
+	uint32_t *outw;
+
+	if (is_not_aligned(in)) {
+		memcpy(buf, in, sizeof(buf));
+		inw = buf;
+	} else
+		inw = (const uint32_t *)in;
 
 	/* Write plaintext. */
 	for (i = 0; i < 4; i++)
-		GREG32(KEYMGR, AES_WFIFO_DATA) = inw[i].udata;
+		GREG32(KEYMGR, AES_WFIFO_DATA) = inw[i];
 
 	/* Wait for the result. */
 	if (!wait_read_data(GREG32_ADDR(KEYMGR, AES_RFIFO_EMPTY))) {
@@ -100,28 +105,52 @@ int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
 	}
 
 	/* Read ciphertext. */
-	outw = (struct access_helper *) out;
+	if (is_not_aligned(out))
+		outw = buf;
+	else
+		outw = (uint32_t *)out;
+
 	for (i = 0; i < 4; i++)
-		outw[i].udata = GREG32(KEYMGR, AES_RFIFO_DATA);
+		outw[i] = GREG32(KEYMGR, AES_RFIFO_DATA);
+
+	if (out != (uint8_t *)outw)
+		memcpy(out, outw, sizeof(buf));
+
 	return 1;
 }
 
 void DCRYPTO_aes_write_iv(const uint8_t *iv)
 {
 	int i;
-	const struct access_helper *p = (const struct access_helper *) iv;
+	uint32_t buf[4];
+	const uint32_t *ivw;
+
+	if (is_not_aligned(iv)) {
+		memcpy(buf, iv, sizeof(buf));
+		ivw = buf;
+	} else
+		ivw = (uint32_t *)iv;
 
 	for (i = 0; i < 4; i++)
-		GR_KEYMGR_AES_CTR(i) = p[i].udata;
+		GR_KEYMGR_AES_CTR(i) = ivw[i];
 }
 
 void DCRYPTO_aes_read_iv(uint8_t *iv)
 {
 	int i;
-	struct access_helper *p = (struct access_helper *) iv;
+	uint32_t buf[4];
+	uint32_t *ivw;
+
+	if (is_not_aligned(iv))
+		ivw = buf;
+	else
+		ivw = (uint32_t *)iv;
 
 	for (i = 0; i < 4; i++)
-		p[i].udata = GR_KEYMGR_AES_CTR(i);
+		ivw[i] = GR_KEYMGR_AES_CTR(i);
+
+	if (iv != (uint8_t *)ivw)
+		memcpy(iv, ivw, sizeof(buf));
 }
 
 int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
@@ -133,16 +162,16 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 		return 0;
 
 	while (in_len > 0) {
-		uint8_t tmpin[16];
-		uint8_t tmpout[16];
+		uint32_t tmpin[4];
+		uint32_t tmpout[4];
 		const uint8_t *inp;
 		uint8_t *outp;
 		const size_t count = MIN(in_len, 16);
 
 		if (count < 16) {
 			memcpy(tmpin, in, count);
-			inp = tmpin;
-			outp = tmpout;
+			inp = (uint8_t *)tmpin;
+			outp = (uint8_t *)tmpout;
 		} else {
 			inp = in;
 			outp = out;
