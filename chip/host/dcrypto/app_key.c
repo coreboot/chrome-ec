@@ -7,7 +7,7 @@
 
 static int dcrypto_appkey_init_flag_ = -1;
 
-int DCRYPTO_appkey_init(enum dcrypto_appid appid, struct APPKEY_CTX *ctx)
+int DCRYPTO_appkey_init(enum dcrypto_appid appid)
 {
 	if (dcrypto_appkey_init_flag_ != -1)
 		return 0;
@@ -16,9 +16,8 @@ int DCRYPTO_appkey_init(enum dcrypto_appid appid, struct APPKEY_CTX *ctx)
 	return 1;
 }
 
-void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx)
+void DCRYPTO_appkey_finish(void)
 {
-	memset(ctx, 0, sizeof(struct APPKEY_CTX));
 	dcrypto_appkey_init_flag_ = -1;
 }
 

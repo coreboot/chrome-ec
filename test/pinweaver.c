@@ -949,13 +949,13 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 }
 
 /* 1 for success 0 for fail*/
-int DCRYPTO_appkey_init(enum dcrypto_appid appid, struct APPKEY_CTX *ctx)
+int DCRYPTO_appkey_init(enum dcrypto_appid appid)
 {
 	MOCK_hwctx_appkey = appid;
 	return 1;
 }
 
-void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx)
+void DCRYPTO_appkey_finish(void)
 {
 	MOCK_hwctx_appkey = 0;
 }

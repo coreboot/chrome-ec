@@ -111,7 +111,6 @@ void import_leaf(const struct unimported_leaf_data_t *unimported,
 
 static int derive_keys(struct merkle_tree_t *merkle_tree)
 {
-	struct APPKEY_CTX ctx;
 	int ret = EC_SUCCESS;
 	const uint32_t KEY_TYPE_AES = 0x0;
 	const uint32_t KEY_TYPE_HMAC = 0xffffffff;
@@ -129,7 +128,7 @@ static int derive_keys(struct merkle_tree_t *merkle_tree)
 		input.bytes[x] ^= merkle_tree->key_derivation_nonce[x];
 	type_field = input.v[6];
 
-	if (!DCRYPTO_appkey_init(PINWEAVER, &ctx))
+	if (!DCRYPTO_appkey_init(PINWEAVER))
 		return PW_ERR_CRYPTO_FAILURE;
 
 	input.v[6] = type_field ^ KEY_TYPE_AES;
@@ -145,7 +144,7 @@ static int derive_keys(struct merkle_tree_t *merkle_tree)
 		ret = PW_ERR_CRYPTO_FAILURE;
 	}
 cleanup:
-	DCRYPTO_appkey_finish(&ctx);
+	DCRYPTO_appkey_finish();
 	return ret;
 }
 

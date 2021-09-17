@@ -49,11 +49,10 @@ const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx);
 int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 		    const uint8_t *iv, const uint8_t *in, size_t in_len);
 
-struct APPKEY_CTX {};
 
-int DCRYPTO_appkey_init(enum dcrypto_appid appid, struct APPKEY_CTX *ctx);
+int DCRYPTO_appkey_init(enum dcrypto_appid appid);
 
-void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx);
+void DCRYPTO_appkey_finish(void);
 
 int DCRYPTO_appkey_derive(enum dcrypto_appid appid, const uint32_t input[8],
 			  uint32_t output[8]);

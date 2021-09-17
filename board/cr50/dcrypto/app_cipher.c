@@ -81,11 +81,10 @@ static int outer_loop(uint32_t **out, const uint32_t **in, size_t len)
 	return len;
 }
 
-static int aes_init(struct APPKEY_CTX *ctx, enum dcrypto_appid appid,
-		const uint32_t iv[4])
+static int aes_init(enum dcrypto_appid appid, const uint32_t iv[4])
 {
 	/* Setup USR-based application key. */
-	if (!DCRYPTO_appkey_init(appid, ctx))
+	if (!DCRYPTO_appkey_init(appid))
 		return 0;
 
 	/* Configure AES engine. */
@@ -130,7 +129,6 @@ static int aes_init(struct APPKEY_CTX *ctx, enum dcrypto_appid appid,
 int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
 		void *out, const void *in, size_t len)
 {
-	struct APPKEY_CTX ctx;
 	const uint32_t *inw = in;
 	uint32_t *outw = out;
 
@@ -144,7 +142,7 @@ int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
 
 		BUILD_ASSERT(sizeof(iv) == CIPHER_SALT_SIZE);
 		memcpy(iv, salt, sizeof(iv));
-		if (!aes_init(&ctx, appid, iv))
+		if (!aes_init(appid, iv))
 			return 0;
 	}
 
@@ -165,7 +163,7 @@ int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
 		memcpy(outw, tmpout, len);
 	}
 
-	DCRYPTO_appkey_finish(&ctx);
+	DCRYPTO_appkey_finish();
 	return 1;
 }
 

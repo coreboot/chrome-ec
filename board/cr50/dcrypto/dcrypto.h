@@ -411,17 +411,11 @@ enum dcrypto_appid {
 	/* This enum value should not exceed 7. */
 };
 
-struct APPKEY_CTX {
-#ifdef TEST_FUZZ
-	uint8_t unused_for_cxx_compatibility;
-#endif
-};
-
 int DCRYPTO_ladder_compute_frk2(size_t major_fw_version, uint8_t *frk2);
 void DCRYPTO_ladder_revoke(void);
 
-int DCRYPTO_appkey_init(enum dcrypto_appid id, struct APPKEY_CTX *ctx);
-void DCRYPTO_appkey_finish(struct APPKEY_CTX *ctx);
+int DCRYPTO_appkey_init(enum dcrypto_appid id);
+void DCRYPTO_appkey_finish(void);
 int DCRYPTO_appkey_derive(enum dcrypto_appid appid, const uint32_t input[8],
 			  uint32_t output[8]);
 

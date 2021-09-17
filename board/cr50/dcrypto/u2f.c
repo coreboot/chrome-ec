@@ -109,7 +109,6 @@ static void u2f_authorization_mac(const struct u2f_state *state,
 static int app_hw_device_id(enum dcrypto_appid appid, const uint32_t input[8],
 			    uint32_t output[8])
 {
-	struct APPKEY_CTX ctx;
 	int result;
 
 	/**
@@ -121,7 +120,7 @@ static int app_hw_device_id(enum dcrypto_appid appid, const uint32_t input[8],
 	 * Important property:
 	 *          For same appid it will load same value.
 	 */
-	if (!DCRYPTO_appkey_init(appid, &ctx))
+	if (!DCRYPTO_appkey_init(appid))
 		return 0;
 
 	/**
@@ -131,7 +130,7 @@ static int app_hw_device_id(enum dcrypto_appid appid, const uint32_t input[8],
 	 */
 	result = DCRYPTO_appkey_derive(appid, input, output);
 
-	DCRYPTO_appkey_finish(&ctx);
+	DCRYPTO_appkey_finish();
 	return result;
 }
 
