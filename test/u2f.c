@@ -38,6 +38,11 @@ bool fips_trng_bytes(void *buffer, size_t len)
 	return true;
 }
 
+bool fips_crypto_allowed(void)
+{
+	return true;
+}
+
 int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
 				   const p256_int *pk_y, const p256_int *serial,
 				   const char *name, uint8_t *cert, const int n)

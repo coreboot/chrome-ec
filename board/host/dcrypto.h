@@ -82,6 +82,8 @@ void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx, const p256_int *key,
 
 bool fips_rand_bytes(void *buffer, size_t len);
 
+bool fips_crypto_allowed(void);
+
 #endif  /* CONFIG_DCRYPTO_MOCK */
 
 #endif  /* __CROS_EC_HOST_DCRYPTO_H */

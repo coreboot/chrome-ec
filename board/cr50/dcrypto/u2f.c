@@ -8,6 +8,7 @@
 #endif
 
 #include "dcrypto.h"
+#include "fips.h"
 #include "fips_rand.h"
 
 #include "u2f_cmds.h"
@@ -233,6 +234,9 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 	/* Generated public keys associated with key handle. */
 	p256_int opk_x, opk_y;
 
+	if (!fips_crypto_allowed())
+		return EC_ERROR_HW_INTERNAL;
+
 	/* Compute constants for request key handler version. */
 	if (kh_version == 0) {
 		kh_hmac = kh->v0.hmac;
@@ -297,6 +301,9 @@ enum ec_error_list u2f_authorize_keyhandle(
 	uint8_t recreated_hmac[SHA256_DIGEST_SIZE];
 	const uint8_t *origin_seed, *kh_hmac;
 	int result = 0;
+
+	if (!fips_crypto_allowed())
+		return EC_ERROR_HW_INTERNAL;
 
 	/*
 	 * Re-create the key handle and compare against that which
@@ -392,6 +399,7 @@ enum ec_error_list u2f_sign(const struct u2f_state *state,
 	struct drbg_ctx ctx;
 	enum ec_error_list result;
 
+	/* u2f_authorize_keyhandle() checks for FIPS errors. */
 	result = u2f_authorize_keyhandle(state, kh, kh_version, user, origin,
 					 authTimeSecretHash);
 
@@ -518,6 +526,9 @@ enum ec_error_list u2f_attest(const struct u2f_state *state,
 	p256_int d, pk_x, pk_y;
 
 	enum ec_error_list result;
+
+	if (!fips_crypto_allowed())
+		return EC_ERROR_HW_INTERNAL;
 
 	result = u2f_attest_keyhandle_pubkey(state, kh, kh_version, user,
 					     origin, authTimeSecretHash,
