@@ -3,8 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include "dcrypto.h"
 #include "endian.h"
+#include "internal.h"
 
 const p256_int SECP256r1_nMin2 = /* P-256 curve order - 2 */
 	{ .a = { 0xfc632551 - 2, 0xf3b9cac2, 0xa7179e84, 0xbce6faad, -1, -1, 0,

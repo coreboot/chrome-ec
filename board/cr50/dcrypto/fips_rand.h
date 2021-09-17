@@ -18,22 +18,6 @@ extern "C" {
 
 #define TRNG_SAMPLE_BITS 1
 
-/**
- * Initialize the true random number generator (TRNG) in FIPS-compliant
- * way:
- * 1. Set 1-bit alphabet
- * 2. Set maximum possible range for internal ring-oscillator
- * 3. Disable any other post-processing beyond #2
- **/
-void fips_init_trng(void);
-
-/**
- * Returns random number with indication wherever reading is valid. This is
- * different from rand() which doesn't provide any indication.
- * High 32-bits set to zero in case of error; otherwise value >> 32 == 1
- * Use of uint64_t vs. struct results in more efficient code.
- */
-uint64_t read_rand(void);
 
 /**
  * TRNG Health Tests
@@ -86,52 +70,7 @@ uint64_t read_rand(void);
  */
 #define APT_CUTOFF_SAMPLES 692
 
-/**
- * FIPS-compliant TRNG startup.
- * The entropy source's startup tests shall run the continuous health tests
- * over at least 4096 consecutive samples.
- * Note: This function can throw FIPS_FATAL_TRNG error
- *
- * To hide latency of reading TRNG data, this test is executed in 2 stages
- * @param stage is 0 or 1, choosing the stage. On each stage 2048
- * samples are processed. Assuming that some other tasks can be executed
- * between stages, when TRNG FIFO if filled with samples.
- *
- * Some number of samples will be available in entropy_fifo
- */
-bool fips_trng_startup(int stage);
 
-
-/* initialize cr50-wide DRBG replacing rand */
-bool fips_drbg_init(void);
-/* mark cr50-wide DRBG as not initialized */
-void fips_drbg_init_clear(void);
-
-/* FIPS DRBG initialized at boot time/first use. */
-extern struct drbg_ctx fips_drbg;
-
-/**
- * Generate valid P-256 random from FIPS DRBG, reseed DRBG with entropy from
- * verified TRNG if needed.
- *
- * @param drbg DRBG to use
- * @param out output value
- * @return HMAC_DRBG_SUCCESS if out contains random.
- */
-enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
-					      p256_int *out);
-
-/* wrapper around dcrypto_p256_ecdsa_sign using FIPS-compliant HMAC_DRBG */
-int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
-			 p256_int *r, p256_int *s);
-/**
- * wrapper around hmac_drbg_generate to automatically reseed drbg
- * when needed.
- */
-enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
-						size_t out_len,
-						const void *input,
-						size_t input_len);
 #ifdef __cplusplus
 }
 #endif

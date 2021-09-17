@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include "dcrypto.h"
+#include "internal.h"
 
 /**
  * CRYPTO_FAST_COMPARE = 1 will enable machine word reads if performance

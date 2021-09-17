@@ -7,9 +7,7 @@
 #include "console.h"
 #endif
 
-#include "dcrypto.h"
-#include "fips.h"
-#include "fips_rand.h"
+#include "internal.h"
 
 #include "u2f_cmds.h"
 #include "u2f_impl.h"

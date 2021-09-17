@@ -8,8 +8,7 @@
 #include "Hierarchy_fp.h"
 
 #include "dcrypto.h"
-#include "trng.h"
-
+#include "util.h"
 
 #include <assert.h>
 

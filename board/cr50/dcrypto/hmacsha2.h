@@ -23,6 +23,15 @@
 #define SHA256_BLOCK_DWORDS (SHA256_BLOCK_SIZE / sizeof(uint64_t))
 #define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
 
+#define SHA_DIGEST_WORDS   (SHA_DIGEST_SIZE / sizeof(uint32_t))
+#define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
+
+#ifdef CONFIG_UPTO_SHA512
+#define SHA_DIGEST_MAX_BYTES SHA512_DIGEST_SIZE
+#else
+#define SHA_DIGEST_MAX_BYTES SHA256_DIGEST_SIZE
+#endif
+
 /**
  * Hash contexts. Each context starts with pointer to vtable containing
  * functions to perform implementation specific operations.

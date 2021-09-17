@@ -3,9 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include "dcrypto.h"
-
-#include <stdint.h>
+#include "internal.h"
 
 /* Limit the size of long form encoded objects to < 64 kB. */
 #define MAX_ASN1_OBJ_LEN_BYTES 3

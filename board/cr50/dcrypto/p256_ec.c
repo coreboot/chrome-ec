@@ -2,12 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-#include "dcrypto.h"
-#include "fips.h"
-#include "fips_rand.h"
-
-#include <stdint.h>
+#include "internal.h"
 
 /* p256_base_point_mul sets {out_x,out_y} = nG, where n is < the
  * order of the group. */

@@ -21,6 +21,7 @@
 #include "tpm_registers.h"
 #include "tpm_vendor_cmds.h"
 #include "wp.h"
+#include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_CCD, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_CCD, format, ## args)

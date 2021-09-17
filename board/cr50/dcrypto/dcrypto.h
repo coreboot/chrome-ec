@@ -13,10 +13,21 @@
 extern "C" {
 #endif
 
-#include "crypto_common.h"
-#include "internal.h"
-
+#include <stdbool.h>
 #include <stddef.h>
+
+#include "hmacsha2.h"
+
+/**
+ * Result codes for crypto operations, targeting
+ * high Hamming distance from each other.
+ */
+enum dcrypto_result {
+	DCRYPTO_OK = 0xAA33AAFF, /* Success. */
+	DCRYPTO_FAIL = 0x55665501, /* Failure. */
+	DCRYPTO_RETRY = 0xA5775A33,
+	DCRYPTO_RESEED_NEEDED = 0x36AA6355,
+};
 
 enum cipher_mode {
 	CIPHER_MODE_ECB = 0, /* NIST SP 800-38A */
@@ -158,7 +169,43 @@ const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx);
 /*
  * BIGNUM utility methods.
  */
+
+/*
+ * Use this structure to avoid alignment problems with input and output
+ * pointers.
+ */
+struct access_helper {
+	uint32_t udata;
+} __packed;
+
+
+struct LITE_BIGNUM {
+	uint32_t dmax;              /* Size of d, in 32-bit words. */
+	struct access_helper *d;  /* Word array, little endian format ... */
+};
+
+
 void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
+
+/**
+ * Return number of bits in big number.
+ * @param b pointer to big number
+ * @return length in bits
+ */
+static inline uint32_t bn_bits(const struct LITE_BIGNUM *b)
+{
+	return b->dmax * sizeof(*b->d) * 8;
+}
+
+/**
+ * Return number of bytes in big number.
+ * @param b pointer to big number
+ * @return length in bits
+ */
+static inline size_t bn_size(const struct LITE_BIGNUM *b)
+{
+	return b->dmax * sizeof(*b->d);
+}
 
 /*
  *  RSA.
@@ -235,6 +282,52 @@ int DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N, struct LITE_BIGNUM *d,
  *  EC.
  */
 
+/*
+ * Accelerated p256. FIPS PUB 186-4
+ */
+#define P256_BITSPERDIGIT 32
+#define P256_NDIGITS	  8
+#define P256_NBYTES	  32
+
+typedef uint32_t p256_digit;
+/**
+ * P-256 integers internally represented as little-endian 32-bit integer
+ * digits in platform-specific format. On little-endian platform this would
+ * be regular 256-bit little-endian unsigned integer. On big-endian platform
+ * it would big-endian 32-bit digits in little-endian order.
+ *
+ * Defining p256_int as struct to leverage struct assignment.
+ */
+typedef struct p256_int {
+	union {
+		p256_digit a[P256_NDIGITS];
+		uint8_t b8[P256_NBYTES];
+	};
+} p256_int;
+
+/* Clear a p256_int to zero. */
+void p256_clear(p256_int *a);
+
+/* Check p256 is odd. */
+int p256_is_odd(const p256_int *a);
+
+/* Outputs big-endian binary form. No leading zero skips. */
+void p256_to_bin(const p256_int *src, uint8_t dst[P256_NBYTES]);
+
+/**
+ * Reads from big-endian binary form, thus pre-pad with leading
+ * zeros if short. Input length is assumed P256_NBYTES bytes.
+ */
+void p256_from_bin(const uint8_t src[P256_NBYTES], p256_int *dst);
+
+/**
+ * Reads from big-endian binary form of given size, add padding with
+ * zeros if short. Check that leading digits beyond P256_NBYTES are zeroes.
+ *
+ * @return true if provided big-endian fits into p256.
+ */
+bool p256_from_be_bin_size(const uint8_t *src, size_t len, p256_int *dst);
+
 /**
  * Check if point is on NIST P-256 curve
  *
@@ -276,16 +369,19 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 				const uint8_t bytes[P256_NBYTES]);
 
 /**
- * Pair-wise consistency test for private and public key.
- *
- * @param drbg - DRBG to use for nonce generation
- * @param d - private key (scalar)
- * @param x - public key part
- * @param y - public key part
- * @return !0 on success
+ * TODO: Provide provide proper wrappers for dcrypto_p256_ecdsa_verify()
+ * and fips_p256_ecdsa_sign()
  */
-int DCRYPTO_p256_key_pwct(struct drbg_ctx *drbg, const p256_int *d,
-			  const p256_int *x, const p256_int *y);
+int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
+		const p256_int *message, const p256_int *r,
+		const p256_int *s)
+	__attribute__((warn_unused_result));
+
+/* wrapper around dcrypto_p256_ecdsa_sign using FIPS-compliant HMAC_DRBG */
+int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
+			 p256_int *r, p256_int *s);
+
+/************************************************************/
 
 /* P256 based integration encryption (DH+AES128+SHA256).
  * Not FIPS 140-2 compliant, not used other than for tests
@@ -458,6 +554,15 @@ int DCRYPTO_ladder_is_enabled(void);
  */
 
 /**
+ * Initialize the true random number generator (TRNG) in FIPS-compliant
+ * way:
+ * 1. Set 1-bit alphabet
+ * 2. Set maximum possible range for internal ring-oscillator
+ * 3. Disable any other post-processing beyond #2
+ **/
+void fips_init_trng(void);
+
+/**
  * Returns random number from TRNG with indication wherever reading is valid.
  * This is different from rand() which doesn't provide any indication.
  * High 32-bits set to zero in case of error; otherwise value >> 32 == 1
@@ -503,6 +608,22 @@ bool fips_trng_bytes(void *buffer, size_t len)
  */
 bool fips_rand_bytes(void *buffer, size_t len)
 	__attribute__((warn_unused_result));
+
+
+/**
+ * Utility functions.
+ */
+
+/**
+ * An implementation of memset that ought not to be optimized away;
+ * useful for scrubbing security sensitive buffers.
+ *
+ * @param d destination buffer
+ * @param c 8-bit value to fill buffer
+ * @param n size of buffer in bytes
+ * @return d
+ */
+void *always_memset(void *d, int c, size_t n);
 
 #ifdef __cplusplus
 }

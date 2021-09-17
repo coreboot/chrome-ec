@@ -9,11 +9,11 @@
 #include <string.h>
 
 #include "common.h"
-#include "crypto_common.h"
-
-#include "util.h"
-
+#include "dcrypto.h"
+#include "fips.h"
+#include "fips_rand.h"
 #include "hmacsha2.h"
+#include "util.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,26 +27,10 @@ extern "C" {
 #define CTRL_ENCRYPT        1
 #define CTRL_NO_SOFT_RESET  0
 
-#define SHA_DIGEST_WORDS   (SHA_DIGEST_SIZE / sizeof(uint32_t))
-#define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
-
-#ifdef CONFIG_UPTO_SHA512
-#define SHA_DIGEST_MAX_BYTES SHA512_DIGEST_SIZE
-#else
-#define SHA_DIGEST_MAX_BYTES SHA256_DIGEST_SIZE
-#endif
-
 #ifndef CHAR_BIT
 #define CHAR_BIT 8
 #endif
 
-/*
- * Use this structure to avoid alignment problems with input and output
- * pointers.
- */
-struct access_helper {
-	uint32_t udata;
-} __packed;
 
 #ifndef SECTION_IS_RO
 int dcrypto_grab_sha_hw(void);
@@ -62,17 +46,12 @@ void dcrypto_sha_fifo_load(const void *data, size_t n);
 #define LITE_BN_BITS2        32
 #define LITE_BN_BYTES        4
 
-struct LITE_BIGNUM {
-	uint32_t dmax;              /* Size of d, in 32-bit words. */
-	struct access_helper *d;  /* Word array, little endian format ... */
-};
 
 #define BN_DIGIT(b, i) ((b)->d[(i)].udata)
 
 void bn_init(struct LITE_BIGNUM *bn, void *buf, size_t len);
-#define bn_size(b) ((b)->dmax * LITE_BN_BYTES)
 #define bn_words(b) ((b)->dmax)
-#define bn_bits(b) ((b)->dmax * LITE_BN_BITS2)
+
 int bn_eq(const struct LITE_BIGNUM *a, const struct LITE_BIGNUM *b);
 int bn_check_topbit(const struct LITE_BIGNUM *N);
 int bn_modexp(struct LITE_BIGNUM *output,
@@ -144,20 +123,69 @@ enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx, void *out,
 				    size_t input_len);
 void drbg_exit(struct drbg_ctx *ctx);
 
+/**
+ * TRNG service functions
+ */
+
+/**
+ * Returns random number with indication wherever reading is valid. This is
+ * different from rand() which doesn't provide any indication.
+ * High 32-bits set to zero in case of error; otherwise value >> 32 == 1
+ * Use of uint64_t vs. struct results in more efficient code.
+ */
+uint64_t read_rand(void);
+
+/**
+ * FIPS-compliant TRNG startup.
+ * The entropy source's startup tests shall run the continuous health tests
+ * over at least 4096 consecutive samples.
+ * Note: This function can throw FIPS_FATAL_TRNG error
+ *
+ * To hide latency of reading TRNG data, this test is executed in 2 stages
+ * @param stage is 0 or 1, choosing the stage. On each stage 2048
+ * samples are processed. Assuming that some other tasks can be executed
+ * between stages, when TRNG FIFO if filled with samples.
+ *
+ * Some number of samples will be available in entropy_fifo
+ */
+bool fips_trng_startup(int stage);
+
+
+/* initialize cr50-wide DRBG replacing rand */
+bool fips_drbg_init(void);
+/* mark cr50-wide DRBG as not initialized */
+void fips_drbg_init_clear(void);
+
+/* FIPS DRBG initialized at boot time/first use. */
+extern struct drbg_ctx fips_drbg;
+
+/**
+ * Generate valid P-256 random from FIPS DRBG, reseed DRBG with entropy from
+ * verified TRNG if needed.
+ *
+ * @param drbg DRBG to use
+ * @param out output value
+ * @return HMAC_DRBG_SUCCESS if out contains random.
+ */
+enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
+					      p256_int *out);
+
+/**
+ * wrapper around hmac_drbg_generate to automatically reseed drbg
+ * when needed.
+ */
+enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
+						size_t out_len,
+						const void *input,
+						size_t input_len);
+
 /* Set seed for fast random number generator using LFSR. */
 void set_fast_random_seed(uint32_t seed);
 
 /* Generate week pseudorandom using LFSR for blinding purposes. */
 uint32_t fast_random(void);
 
-/*
- * Accelerated p256. FIPS PUB 186-4
- */
-#define P256_BITSPERDIGIT 32
-#define P256_NDIGITS	  8
-#define P256_NBYTES	  32
 
-typedef uint32_t p256_digit;
 typedef int32_t p256_sdigit;
 typedef uint64_t p256_ddigit;
 typedef int64_t p256_sddigit;
@@ -165,31 +193,10 @@ typedef int64_t p256_sddigit;
 #define P256_DIGITS(x)	 ((x)->a)
 #define P256_DIGIT(x, y) ((x)->a[y])
 
-/**
- * P-256 integers internally represented as little-endian 32-bit integer
- * digits in platform-specific format. On little-endian platform this would
- * be regular 256-bit little-endian unsigned integer. On big-endian platform
- * it would big-endian 32-bit digits in little-endian order.
- *
- * Defining p256_int as struct to leverage struct assignment.
- */
-typedef struct p256_int {
-	union {
-		p256_digit a[P256_NDIGITS];
-		uint8_t b8[P256_NBYTES];
-	};
-} p256_int;
-
 extern const p256_int SECP256r1_nMin2;
-
-/* Clear a p256_int to zero. */
-void p256_clear(p256_int *a);
 
 /* Check p256 is a zero. */
 int p256_is_zero(const p256_int *a);
-
-/* Check p256 is odd. */
-int p256_is_odd(const p256_int *a);
 
 /* c := a + (single digit)b, returns carry 1 on carry. */
 int p256_add_d(const p256_int *a, p256_digit b, p256_int *c);
@@ -200,22 +207,6 @@ int p256_cmp(const p256_int *a, const p256_int *b);
 /* Return -1 if a < b. */
 int p256_lt_blinded(const p256_int *a, const p256_int *b);
 
-/* Outputs big-endian binary form. No leading zero skips. */
-void p256_to_bin(const p256_int *src, uint8_t dst[P256_NBYTES]);
-
-/**
- * Reads from big-endian binary form, thus pre-pad with leading
- * zeros if short. Input length is assumed P256_NBYTES bytes.
- */
-void p256_from_bin(const uint8_t src[P256_NBYTES], p256_int *dst);
-
-/**
- * Reads from big-endian binary form of given size, add padding with
- * zeros if short. Check that leading digits beyond P256_NBYTES are zeroes.
- *
- * @return true if provided big-endian fits into p256.
- */
-bool p256_from_be_bin_size(const uint8_t *src, size_t len, p256_int *dst);
 
 /**
  * Raw sign with provided nonce (k). Used internally and for testing.
@@ -247,6 +238,18 @@ int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
 enum dcrypto_result dcrypto_p256_is_valid_point(const p256_int *x,
 						const p256_int *y)
 	__attribute__((warn_unused_result));
+
+/**
+ * Pair-wise consistency test for private and public key.
+ *
+ * @param drbg - DRBG to use for nonce generation
+ * @param d - private key (scalar)
+ * @param x - public key part
+ * @param y - public key part
+ * @return !0 on success
+ */
+int DCRYPTO_p256_key_pwct(struct drbg_ctx *drbg, const p256_int *d,
+			  const p256_int *x, const p256_int *y);
 
 /* Wipe content of rnd with pseudo-random values. */
 void p256_fast_random(p256_int *rnd);
@@ -291,11 +294,6 @@ void dcrypto_imem_load(size_t offset, const uint32_t *opcodes,
  */
 uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words);
 
-/**
- * An implementation of memset that ought not to be optimized away;
- * useful for scrubbing security sensitive buffers.
- */
-void *always_memset(void *s, int c, size_t n);
 
 #ifndef __alias
 #define __alias(func) __attribute__((alias(#func)))

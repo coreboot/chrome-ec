@@ -4,7 +4,9 @@
  */
 
 #include "CryptoEngine.h"
+#include "common.h"
 #include "dcrypto.h"
+#include "util.h"
 
 #include <assert.h>
 

@@ -8,6 +8,9 @@
 #include "test_util.h"
 #include "u2f_impl.h"
 
+#include "internal.h"
+#include "util.h"
+
 /******************************************************************************/
 /* Mock implementations of cr50 board.
  */

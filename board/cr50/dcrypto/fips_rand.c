@@ -4,8 +4,7 @@
  */
 
 #include "console.h"
-#include "fips.h"
-#include "fips_rand.h"
+#include "internal.h"
 #include "flash_log.h"
 #include "init_chip.h"
 #include "registers.h"

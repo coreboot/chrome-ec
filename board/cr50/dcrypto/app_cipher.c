@@ -4,7 +4,7 @@
  * found in the LICENSE file.
  */
 #include "crypto_api.h"
-#include "dcrypto.h"
+#include "internal.h"
 #include "registers.h"
 
 /* The default build options compile for size (-Os); instruct the

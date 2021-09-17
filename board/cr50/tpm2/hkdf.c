@@ -4,6 +4,7 @@
  */
 
 #include "dcrypto.h"
+#include "util.h"
 
 #ifdef CRYPTO_TEST_SETUP
 
