@@ -336,7 +336,8 @@ void board_reset_pd_mcu(void)
 	/* Daughterboard specific reset for port 1 */
 	if (usb_db == DB_USB3_ACTIVE) {
 		ps8815_reset();
-		usb_mux_hpd_update(USBC_PORT_C1, 0, 0);
+		usb_mux_hpd_update(USBC_PORT_C1, USB_PD_MUX_HPD_LVL_DEASSERTED |
+						 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 	}
 }
 
@@ -514,6 +515,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C0,
 		.next_mux = &usbc0_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
 	},
@@ -521,6 +523,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.next_mux = &usbc1_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 	},

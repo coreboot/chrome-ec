@@ -120,6 +120,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_0,
 		.next_mux = &usbc0_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_TYPEC_0,
 		.i2c_addr_flags = I2C_PORT0_BB_RETIMER_ADDR,
 	},
@@ -128,6 +129,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_1,
 		.next_mux = &usbc1_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_TYPEC_1,
 		.i2c_addr_flags = I2C_PORT1_BB_RETIMER_ADDR,
 	},
@@ -137,6 +139,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_2,
 		.next_mux = &usbc2_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_TYPEC_2,
 		.i2c_addr_flags = I2C_PORT2_BB_RETIMER_ADDR,
 	},
@@ -146,6 +149,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_3,
 		.next_mux = &usbc3_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_TYPEC_3,
 		.i2c_addr_flags = I2C_PORT3_BB_RETIMER_ADDR,
 	},
@@ -158,6 +162,7 @@ struct usb_mux soc_side_bb_retimer0_usb_mux = {
 	.usb_port = TYPE_C_PORT_0,
 	.next_mux = &usbc0_tcss_usb_mux,
 	.driver = &bb_usb_retimer,
+	.hpd_update = bb_retimer_hpd_update,
 	.i2c_port = I2C_PORT_TYPEC_0,
 	.i2c_addr_flags = I2C_PORT0_BB_RETIMER_SOC_ADDR,
 };
@@ -167,6 +172,7 @@ struct usb_mux soc_side_bb_retimer1_usb_mux = {
 	.usb_port = TYPE_C_PORT_1,
 	.next_mux = &usbc1_tcss_usb_mux,
 	.driver = &bb_usb_retimer,
+	.hpd_update = bb_retimer_hpd_update,
 	.i2c_port = I2C_PORT_TYPEC_1,
 	.i2c_addr_flags = I2C_PORT1_BB_RETIMER_SOC_ADDR,
 };
@@ -323,6 +329,15 @@ DECLARE_HOOK(HOOK_INIT, enable_h1_irq, HOOK_PRIO_LAST);
 static void configure_retimer_usbmux(void)
 {
 	switch (ADL_RVP_BOARD_ID(board_get_version())) {
+	case ADLN_LP5_ERB_SKU_BOARD_ID:
+	case ADLN_LP5_RVP_SKU_BOARD_ID:
+		/* No retimer on Port0 & Port1 */
+		usb_muxes[TYPE_C_PORT_0].driver = NULL;
+#if defined(HAS_TASK_PD_C1)
+		usb_muxes[TYPE_C_PORT_1].driver = NULL;
+#endif
+		break;
+
 	case ADLP_LP5_T4_RVP_SKU_BOARD_ID:
 		/* No retimer on Port-2 */
 #if defined(HAS_TASK_PD_C2)
@@ -412,6 +427,12 @@ __override bool board_is_tbt_usb4_port(int port)
 	bool tbt_usb4 = true;
 
 	switch (ADL_RVP_BOARD_ID(board_get_version())) {
+	case ADLN_LP5_ERB_SKU_BOARD_ID:
+	case ADLN_LP5_RVP_SKU_BOARD_ID:
+		/* No retimer on both ports */
+		tbt_usb4 = false;
+		break;
+
 	case ADLP_LP5_T4_RVP_SKU_BOARD_ID:
 		/* No retimer on Port-2 hence no platform level AUX & LSx mux */
 #if defined(HAS_TASK_PD_C2)

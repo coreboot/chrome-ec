@@ -15,6 +15,8 @@
 
 /* RVP Board ids */
 #define CONFIG_BOARD_VERSION_GPIO
+#define ADLN_LP5_ERB_SKU_BOARD_ID	0x06
+#define ADLN_LP5_RVP_SKU_BOARD_ID	0x07
 #define ADLP_DDR5_RVP_SKU_BOARD_ID	0x12
 #define ADLP_LP5_T4_RVP_SKU_BOARD_ID	0x13
 #define ADL_RVP_BOARD_ID(id)		((id) & 0x3F)
@@ -135,6 +137,14 @@
 #define CONFIG_WATCHDOG_PERIOD_MS 4000
 #endif
 #endif
+
+/*
+ * Enable support for battery hostcmd, supporting longer strings.
+ * Support for EC_CMD_BATTERY_GET_STATIC version 1.
+ */
+#define CONFIG_BATTERY_V2
+#define CONFIG_BATTERY_COUNT	1
+#define CONFIG_HOSTCMD_BATTERY_V2
 
 #ifndef __ASSEMBLER__
 
