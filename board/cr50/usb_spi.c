@@ -683,6 +683,26 @@ int usb_spi_sha256_start(struct sha256_ctx *ctx)
 	return EC_SUCCESS;
 }
 
+int usb_spi_read_buffer(void *buf, unsigned int offset,  size_t bytes)
+{
+	uint8_t *p = buf;
+
+	while (bytes) {
+		const int this_chunk = MIN(bytes, SPI_HASH_CHUNK_SIZE);
+
+		/* Read the data */
+		if (spi_read_chunk(p, offset, this_chunk) != EC_SUCCESS) {
+			CPRINTS("%s: read error at 0x%x", __func__, offset);
+			return VENDOR_RC_READ_FLASH_FAIL;
+		}
+
+		bytes -= this_chunk;
+		offset += this_chunk;
+		p += this_chunk;
+	}
+	return EC_SUCCESS;
+}
+
 int usb_spi_sha256_update(struct sha256_ctx *ctx, uint32_t offset,
 			  uint32_t size)
 {
