@@ -112,6 +112,10 @@ SECTIONS
 		KEEP(*(.rodata.fips))
 		__fips_module_end = .;
 		. = ALIGN(4);
+		__ap_ro_root_key_hash_start = . ;
+		*(.rodata.root_key_hash)
+		__ap_ro_root_key_hash_end = . ;
+		. = ALIGN(4);
 		STRINGIFY(OUTDIR/core/CORE/init.o) (.text)
 #if defined(CHIP_FAMILY_NPCX7) && !defined(CONFIG_HIBERNATE_PSL)
 		/* Keep hibernate utility in last code ram block */
