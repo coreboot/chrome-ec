@@ -340,6 +340,42 @@ static inline uint64_t rol64(uint64_t value, int bits)
 	return (value << bits) | (value >> (64 - bits));
 }
 
+/* Functions to convert between uint32_t and uint64_t */
+static inline uint32_t lo32(uint64_t v)
+{
+	return (uint32_t)v;
+}
+static inline uint32_t hi32(uint64_t v)
+{
+	return (uint32_t)(v >> 32);
+}
+static inline uint64_t make64(uint32_t hi, uint32_t lo)
+{
+	return (((uint64_t)hi) << 32) | lo;
+}
+
+static inline uint32_t lo16(uint32_t v)
+{
+	return (uint32_t)(v)&0xffff;
+}
+
+static inline uint32_t hi16(uint32_t v)
+{
+	return (uint32_t)(v >> 16);
+}
+
+static inline int count_leading_zeros(uint32_t x)
+{
+	/* __builtin_clz(0) is undefined, so explicitly return bit size. */
+	return (x) ? __builtin_clz(x) : 32;
+}
+
+static inline int count_trailing_zeros(uint32_t x)
+{
+	/* __builtin_ctz(0) is undefined, so explicitly return bit size. */
+	return (x) ? __builtin_ctz(x) : 32;
+}
+
 /* stack based allocation */
 #ifndef alloca
 #define alloca __builtin_alloca

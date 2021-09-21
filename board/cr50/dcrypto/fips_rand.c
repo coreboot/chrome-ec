@@ -63,11 +63,12 @@ static struct {
 static bool repetition_count_test(uint32_t rnd)
 {
 	uint32_t clz, ctz, clo, cto;
+
 	/* count repeating 0 and 1 bits from each side */
-	clz = __builtin_clz(rnd);  /* # of leading 0s */
-	ctz = __builtin_ctz(rnd);  /* # of trailing 0s */
-	clo = __builtin_clz(~rnd); /* # of leading 1s */
-	cto = __builtin_ctz(~rnd); /* # of trailing 1s */
+	clz = count_leading_zeros(rnd);  /* # of leading 0s */
+	ctz = count_trailing_zeros(rnd);  /* # of trailing 0s */
+	clo = count_leading_zeros(~rnd); /* # of leading 1s */
+	cto = count_trailing_zeros(~rnd); /* # of trailing 1s */
 
 	/**
 	 * check that number of trailing 0/1 in current sample added to

@@ -503,35 +503,6 @@ static void bn_mul_ex(struct LITE_BIGNUM *c,
 	BN_DIGIT(c, i + b->dmax - 1) = carry;
 }
 
-/* Functions to convert between uint32_t and uint64_t */
-static inline uint32_t lo32(uint64_t v)
-{
-	return (uint32_t)v;
-}
-static inline uint32_t hi32(uint64_t v)
-{
-	return (uint32_t)(v >> 32);
-}
-static inline uint64_t make64(uint32_t hi, uint32_t lo)
-{
-	return (((uint64_t)hi) << 32) | lo;
-}
-
-static inline uint32_t lo16(uint32_t v)
-{
-	return (uint32_t)(v)&0xffff;
-}
-
-static inline uint32_t hi16(uint32_t v)
-{
-	return (uint32_t)(v >> 16);
-}
-
-/* make Clang's host behavior of clz match Soteria and avoid UBSAN error */
-static inline int clz(unsigned int x)
-{
-	return (x) ? __builtin_clz(x) : 32;
-}
 
 /**
  * Unsigned division of 64-bit integer with 32-bit divisor, used to implement
@@ -590,7 +561,7 @@ uint64_t udiv32(uint64_t n, uint32_t d0)
 	if (d0 == 0 || n1 == 0)
 		return n0 / d0;
 
-	bm = clz(d0);
+	bm = count_leading_zeros(d0);
 	if (d0 > n1) { /* 0q = nn / 0D */
 		/* make the most significant bit of the denominator set. */
 		if (bm != 0) {
@@ -671,7 +642,7 @@ static int bn_div_ex(struct LITE_BIGNUM *q,
 		return bn_div_word_ex(q, r, u, m, vtop);
 
 	/* Compute shift factor to make v have high bit set */
-	s = clz(vtop);
+	s = count_leading_zeros(vtop);
 	vtop <<= s;
 
 	/* Normalize u and v into un and vn.
