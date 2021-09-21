@@ -45,6 +45,7 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 		case VENDOR_CC_RMA_CHALLENGE_RESPONSE:
 		case VENDOR_CC_SPI_HASH:   /* Requires physical presence. */
 		case VENDOR_CC_TURN_UPDATE_ON:
+		case VENDOR_CC_AP_RO_VALIDATE:
 			break;
 		default:
 			/* Otherwise, we don't allow this command. */
