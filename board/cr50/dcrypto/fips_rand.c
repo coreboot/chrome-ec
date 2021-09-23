@@ -248,6 +248,8 @@ bool fips_drbg_init(void)
 	if (!fips_crypto_allowed())
 		return false;
 
+	if (rand_state.drbg_initialized)
+		return true;
 	/**
 	 * initialize DRBG with 440 bits of entropy as required
 	 * by NIST SP 800-90A 10.1. Includes entropy and nonce,
@@ -270,7 +272,7 @@ bool fips_drbg_init(void)
 		       0);
 
 	set_fast_random_seed((uint32_t)fips_trng32(0));
-	rand_state.drbg_initialized = 1;
+	rand_state.drbg_initialized = true;
 	return true;
 }
 
@@ -278,7 +280,7 @@ bool fips_drbg_init(void)
 void fips_drbg_clear(void)
 {
 	drbg_exit(&fips_drbg);
-	rand_state.drbg_initialized = 0;
+	rand_state.drbg_initialized = false;
 }
 
 static bool fips_drbg_reseed_with_entropy(struct drbg_ctx *ctx)
@@ -310,13 +312,13 @@ enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
 
 bool fips_rand_bytes(void *buffer, size_t len)
 {
-	if (!fips_crypto_allowed())
-		return false;
 	/**
 	 * make sure cr50 DRBG is initialized after power-on or resume,
 	 * but do it on first use to minimize latency of board_init()
+	 *
+	 * fips_drbg_init() also checks for fips_crypto_allowed().
 	 */
-	if (!rand_state.drbg_initialized && !fips_drbg_init())
+	if (!fips_drbg_init())
 		return false;
 
 	/* HMAC_DRBG can only return up to 7500 bits in a single request */
@@ -354,10 +356,9 @@ enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
 int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
 			 p256_int *r, p256_int *s)
 {
-	if (!fips_crypto_allowed())
+	/* Also check for fips_crypto_allowed(). */
+	if (!fips_drbg_init())
 		return 0;
-	if (!rand_state.drbg_initialized && !fips_drbg_init())
-		return false;
 
 	return dcrypto_p256_fips_sign_internal(&fips_drbg, key, message, r, s);
 }
