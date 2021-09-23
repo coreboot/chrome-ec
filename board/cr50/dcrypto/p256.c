@@ -190,6 +190,7 @@ void p256_fast_random(p256_int *rnd)
 		P256_DIGIT(rnd, i) = fast_random();
 }
 
+/* B.5.2 Per-Message Secret Number Generation by Testing Candidates */
 enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *rnd)
 {
 	enum hmac_result result;

@@ -207,37 +207,94 @@ int p256_cmp(const p256_int *a, const p256_int *b);
 /* Return -1 if a < b. */
 int p256_lt_blinded(const p256_int *a, const p256_int *b);
 
-
 /**
  * Raw sign with provided nonce (k). Used internally and for testing.
  *
- * @param k - valid nonce for ECDSA sign
- * @param key - valid private key for ECDSA sign
- * @param message - message to sign encoded as p-256 int
- * @param r - generated signature
- * @param s  - generated signature
- * @return !0 if success
+ * @param k valid random per-message nonce for ECDSA sign
+ * @param key valid private key for ECDSA sign
+ * @param message message to sign encoded as p-256 int
+ * @param r generated signature
+ * @param s generated signature
+ *
+ * @return DCRYPTO_OK if successful
  */
-int dcrypto_p256_ecdsa_sign_raw(const p256_int *k, const p256_int *key,
-				const p256_int *message, p256_int *r,
-				p256_int *s);
+enum dcrypto_result dcrypto_p256_ecdsa_sign_raw(
+	const p256_int *k, const p256_int *key, const p256_int *message,
+	p256_int *r, p256_int *s) __warn_unused_result;
 
-int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
-			    const p256_int *message, p256_int *r, p256_int *s)
-	__attribute__((warn_unused_result));
-int dcrypto_p256_base_point_mul(const p256_int *k, p256_int *x, p256_int *y)
-	__attribute__((warn_unused_result));
-int dcrypto_p256_point_mul(const p256_int *k,
-		const p256_int *in_x, const p256_int *in_y,
-		p256_int *x, p256_int *y)
-	__attribute__((warn_unused_result));
-int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
-		const p256_int *message, const p256_int *r,
-		const p256_int *s)
-	__attribute__((warn_unused_result));
-enum dcrypto_result dcrypto_p256_is_valid_point(const p256_int *x,
-						const p256_int *y)
-	__attribute__((warn_unused_result));
+/**
+ * ECDSA P-256 Sign using provide DRBG as source for per-message random
+ * nonces. Used primarily for deterministic signatures per RFC 6979.
+ *
+ * @param drbg initialized DRBG
+ * @param key valid private key for ECDSA sign
+ * @param message message to sign encoded as p-256 int
+ * @param r generated signature
+ * @param s  generated signature
+ *
+ * @return DCRYPTO_OK if successful
+ */
+enum dcrypto_result dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg,
+					    const p256_int *key,
+					    const p256_int *message,
+					    p256_int *r,
+					    p256_int *s) __warn_unused_result;
+
+/**
+ * Compute k*G (base point multiplication). Used to compute public key
+ * from private scalar.
+ *
+ * @param k private key
+ * @param x output component x
+ * @param y output component y
+ *
+ * @return DCRYPTO_OK if successful
+ */
+enum dcrypto_result dcrypto_p256_base_point_mul(
+	const p256_int *k, p256_int *x, p256_int *y) __warn_unused_result;
+
+/**
+ * Compute multiplication of input point (in_x, in_y) by scalar k.
+ * Used to compute shared point in ECDH.
+ *
+ * @param k private key
+ * @param in_x input public component x
+ * @param in_y input public component y
+ * @param x output shared component x
+ * @param y output shared component y
+ *
+ * @return DCRYPTO_OK if successful
+ */
+enum dcrypto_result dcrypto_p256_point_mul(const p256_int *k,
+					   const p256_int *in_x,
+					   const p256_int *in_y, p256_int *x,
+					   p256_int *y) __warn_unused_result;
+
+/**
+ * Verify ECDSA NIST P-256 signature.
+ *
+ * @param key_x public key component x
+ * @param key_y public key component y
+ * @param message message digest converted to p256_int
+ * @param r signature component r
+ * @param s signature component s
+ *
+ * @return DCRYPTO_OK if signature is valid
+ */
+enum dcrypto_result dcrypto_p256_ecdsa_verify(
+	const p256_int *key_x, const p256_int *key_y, const p256_int *message,
+	const p256_int *r, const p256_int *s) __warn_unused_result;
+
+/**
+ * Verify that provided point is on NIST P-256 curve.
+ *
+ * @param x public key component x
+ * @param y public key component y
+ *
+ * @return DCRYPTO_OK if point is on curve
+ */
+enum dcrypto_result dcrypto_p256_is_valid_point(
+	const p256_int *x, const p256_int *y) __warn_unused_result;
 
 /**
  * Pair-wise consistency test for private and public key.
@@ -246,10 +303,12 @@ enum dcrypto_result dcrypto_p256_is_valid_point(const p256_int *x,
  * @param d - private key (scalar)
  * @param x - public key part
  * @param y - public key part
- * @return !0 on success
+ *
+ * @return DCRYPTO_OK on success
  */
-int DCRYPTO_p256_key_pwct(struct drbg_ctx *drbg, const p256_int *d,
-			  const p256_int *x, const p256_int *y);
+enum dcrypto_result dcrypto_p256_key_pwct(
+	struct drbg_ctx *drbg, const p256_int *d, const p256_int *x,
+	const p256_int *y) __warn_unused_result;
 
 /* Wipe content of rnd with pseudo-random values. */
 void p256_fast_random(p256_int *rnd);
@@ -266,11 +325,11 @@ enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *k_out);
  * @param message - Message to sign as P-256 (in little-endian)
  * @param r - Generated signature
  * @param s - Generated signature
- * @return int
+ * @return DCRYPTO_OK if success
  */
-int dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg, const p256_int *key,
-				    const p256_int *message, p256_int *r,
-				    p256_int *s);
+enum dcrypto_result dcrypto_p256_fips_sign_internal(
+	struct drbg_ctx *drbg, const p256_int *key, const p256_int *message,
+	p256_int *r, p256_int *s) __warn_unused_result;
 
 /* Initialize for use as RFC6979 DRBG. */
 void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx,

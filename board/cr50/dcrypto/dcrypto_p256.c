@@ -134,8 +134,10 @@ static void dcrypto_ecc_init(void)
 	CP1W(d, 0, 8);
 }
 
-int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
-			    const p256_int *message, p256_int *r, p256_int *s)
+enum dcrypto_result dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg,
+					    const p256_int *key,
+					    const p256_int *message,
+					    p256_int *r, p256_int *s)
 {
 	int result;
 	p256_int nonce;
@@ -143,17 +145,19 @@ int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
 	/* Pick uniform 0 < k < R */
 	result = (p256_hmac_drbg_generate(drbg, &nonce) != HMAC_DRBG_SUCCESS);
 
-	result |= dcrypto_p256_ecdsa_sign_raw(&nonce, key, message, r, s) - 1;
+	result |= dcrypto_p256_ecdsa_sign_raw(&nonce, key, message, r, s) -
+		  DCRYPTO_OK;
 
 	/* Wipe temp nonce */
 	p256_clear(&nonce);
 
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
-int dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce, const p256_int *key,
-				const p256_int *message, p256_int *r,
-				p256_int *s)
+enum dcrypto_result dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce,
+						const p256_int *key,
+						const p256_int *message,
+						p256_int *r, p256_int *s)
 {
 	int result;
 	p256_int rnd;
@@ -186,10 +190,11 @@ int dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce, const p256_int *key,
 	CP8W(k, &rnd);
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
-int dcrypto_p256_base_point_mul(const p256_int *k, p256_int *x, p256_int *y)
+enum dcrypto_result dcrypto_p256_base_point_mul(const p256_int *k, p256_int *x,
+						p256_int *y)
 {
 	int result;
 	p256_int rnd;
@@ -217,11 +222,13 @@ int dcrypto_p256_base_point_mul(const p256_int *k, p256_int *x, p256_int *y)
 	CP8W(d, &dmem_ecc->rnd);
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
-int dcrypto_p256_point_mul(const p256_int *k, const p256_int *in_x,
-			   const p256_int *in_y, p256_int *x, p256_int *y)
+enum dcrypto_result dcrypto_p256_point_mul(const p256_int *k,
+					   const p256_int *in_x,
+					   const p256_int *in_y, p256_int *x,
+					   p256_int *y)
 {
 	int result;
 	p256_int rnd;
@@ -254,12 +261,14 @@ int dcrypto_p256_point_mul(const p256_int *k, const p256_int *in_x,
 	CP8W(y, &rnd);
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
-int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
-			      const p256_int *message, const p256_int *r,
-			      const p256_int *s)
+enum dcrypto_result dcrypto_p256_ecdsa_verify(const p256_int *key_x,
+					      const p256_int *key_y,
+					      const p256_int *message,
+					      const p256_int *r,
+					      const p256_int *s)
 {
 	int i, result;
 
@@ -279,7 +288,7 @@ int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
 		result |= (dmem_ecc->rnd.a[i] ^ r->a[i]);
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
 enum dcrypto_result dcrypto_p256_is_valid_point(const p256_int *x,

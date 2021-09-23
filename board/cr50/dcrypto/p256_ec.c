@@ -4,15 +4,38 @@
  */
 #include "internal.h"
 
+enum dcrypto_result DCRYPTO_p256_ecdsa_verify(const p256_int *key_x,
+					      const p256_int *key_y,
+					      const p256_int *message,
+					      const p256_int *r,
+					      const p256_int *s)
+{
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+
+	return dcrypto_p256_ecdsa_verify(key_x, key_y, message, r, s);
+}
+
+/* return codes match dcrypto_p256_ecdsa_sign */
+enum dcrypto_result DCRYPTO_p256_ecdsa_sign(const p256_int *key,
+					    const p256_int *message,
+					    p256_int *r, p256_int *s)
+{
+	if (!fips_drbg_init()) /* Also check for fips_crypto_allowed(). */
+		return DCRYPTO_FAIL;
+
+	return dcrypto_p256_fips_sign_internal(&fips_drbg, key, message, r, s);
+}
+
 /* p256_base_point_mul sets {out_x,out_y} = nG, where n is < the
  * order of the group. */
-int DCRYPTO_p256_base_point_mul(p256_int *out_x, p256_int *out_y,
-				const p256_int *n)
+enum dcrypto_result DCRYPTO_p256_base_point_mul(p256_int *out_x,
+		p256_int *out_y, const p256_int *n)
 {
-	if (p256_is_zero(n) != 0) {
+	if (!fips_crypto_allowed() || p256_is_zero(n)) {
 		p256_clear(out_x);
 		p256_clear(out_y);
-		return 0;
+		return DCRYPTO_FAIL;
 	}
 
 	return dcrypto_p256_base_point_mul(n, out_x, out_y);
@@ -21,27 +44,29 @@ int DCRYPTO_p256_base_point_mul(p256_int *out_x, p256_int *out_y,
 enum dcrypto_result DCRYPTO_p256_is_valid_point(const p256_int *x,
 						const p256_int *y)
 {
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
 	return dcrypto_p256_is_valid_point(x, y);
 }
 
 /* DCRYPTO_p256_point_mul sets {out_x,out_y} = n*{in_x,in_y}, where n is <
  * the order of the group. */
-int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y, const p256_int *n,
-			   const p256_int *in_x, const p256_int *in_y)
+enum dcrypto_result DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
+		const p256_int *n, const p256_int *in_x, const p256_int *in_y)
 {
-	if (p256_is_zero(n) != 0 ||
+	if (!fips_crypto_allowed() || p256_is_zero(n) ||
 	    (dcrypto_p256_is_valid_point(in_x, in_y) != DCRYPTO_OK)) {
 		p256_clear(out_x);
 		p256_clear(out_y);
-		return 0;
+		return DCRYPTO_FAIL;
 	}
 	return dcrypto_p256_point_mul(n, in_x, in_y, out_x, out_y);
 }
 
-
-int dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg, const p256_int *key,
-				  const p256_int *message, p256_int *r,
-				  p256_int *s)
+enum dcrypto_result dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg,
+						    const p256_int *key,
+						    const p256_int *message,
+						    p256_int *r, p256_int *s)
 {
 	int result;
 	p256_int k;
@@ -49,46 +74,51 @@ int dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg, const p256_int *key,
 	/* Pick uniform 0 < k < R */
 	result = fips_p256_hmac_drbg_generate(drbg, &k) - HMAC_DRBG_SUCCESS;
 
-	result |= dcrypto_p256_ecdsa_sign_raw(&k, key, message, r, s) - 1;
+	result |= dcrypto_p256_ecdsa_sign_raw(&k, key, message, r, s) -
+		  DCRYPTO_OK;
 
 	/* Wipe temp k */
 	p256_clear(&k);
 
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
-int DCRYPTO_p256_key_pwct(struct drbg_ctx *drbg, const p256_int *d,
-			  const p256_int *x, const p256_int *y)
+enum dcrypto_result dcrypto_p256_key_pwct(struct drbg_ctx *drbg,
+					  const p256_int *d, const p256_int *x,
+					  const p256_int *y)
 {
 	p256_int message, r, s;
-	int result;
+	enum dcrypto_result result;
 
 	if (p256_is_zero(d))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	/* set some pseudo-random message. */
 	p256_fast_random(&message);
 
-	if (dcrypto_p256_fips_sign_internal(drbg, d, &message, &r, &s) == 0)
-		return 0;
+	result = dcrypto_p256_fips_sign_internal(drbg, d, &message, &r, &s);
+	if (result != DCRYPTO_OK)
+		return result;
 
 #ifdef CRYPTO_TEST_SETUP
 	if (fips_break_cmd == FIPS_BREAK_ECDSA_PWCT)
 		message.a[0] = ~message.a[0];
 #endif
-	result = dcrypto_p256_ecdsa_verify(x, y, &message, &r, &s);
-	return result;
+	return dcrypto_p256_ecdsa_verify(x, y, &message, &r, &s);
 }
 
 /**
  * Key selection based on FIPS-186-4, section B.4.2 (Key Pair
  * Generation by Testing Candidates).
  */
-int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
-				const uint8_t key_bytes[P256_NBYTES])
+enum dcrypto_result DCRYPTO_p256_key_from_bytes(p256_int *x,
+	p256_int *y, p256_int *d, const uint8_t key_bytes[P256_NBYTES])
 {
 	p256_int key;
 	p256_int tx, ty;
+
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
 
 	p256_from_bin(key_bytes, &key);
 
@@ -99,7 +129,7 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 	 * bring key in proper range.
 	 */
 	if (p256_lt_blinded(&key, &SECP256r1_nMin2) >= 0)
-		return 0;
+		return DCRYPTO_RETRY;
 	p256_add_d(&key, 1, d);
 	always_memset(&key, 0, sizeof(key));
 
@@ -110,8 +140,8 @@ int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
 		y = &ty;
 
 	/* Compute public key (x,y) = d * G */
-	if (dcrypto_p256_base_point_mul(d, x, y) == 0)
-		return 0;
+	if (dcrypto_p256_base_point_mul(d, x, y) != DCRYPTO_OK)
+		return DCRYPTO_FAIL;
 
-	return DCRYPTO_p256_key_pwct(&fips_drbg, d, x, y);
+	return dcrypto_p256_key_pwct(&fips_drbg, d, x, y);
 }

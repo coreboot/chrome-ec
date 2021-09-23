@@ -54,32 +54,32 @@ int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
 	return 0;
 }
 
-int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
-				const uint8_t key_bytes[P256_NBYTES])
+enum dcrypto_result DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y,
+		p256_int *d, const uint8_t key_bytes[P256_NBYTES])
 {
 	p256_int key;
 
 	p256_from_bin(key_bytes, &key);
 
 	if (p256_lt_blinded(&key, &SECP256r1_nMin2) >= 0)
-		return 0;
+		return DCRYPTO_RETRY;
 	p256_add_d(&key, 1, d);
 	if (x == NULL || y == NULL)
-		return 1;
+		return DCRYPTO_OK;
 	memset(x, 0, P256_NBYTES);
 	memset(y, 0, P256_NBYTES);
-	return 1;
+	return DCRYPTO_OK;
 }
 
-int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
-			    const p256_int *message, p256_int *r, p256_int *s)
+enum dcrypto_result dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg,
+					    const p256_int *key,
+					    const p256_int *message,
+					    p256_int *r, p256_int *s)
 {
 	memset(r, 0, sizeof(p256_int));
 	memset(s, 0, sizeof(p256_int));
-	/* Return 1 for success, 0 for error. */
-	return 1;
+	return DCRYPTO_OK;
 }
-
 
 /******************************************************************************/
 /* Mock implementations of U2F functionality.

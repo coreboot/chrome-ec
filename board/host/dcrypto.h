@@ -74,8 +74,10 @@ struct drbg_ctx {
 	uint32_t reseed_counter;
 };
 
-int dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg, const p256_int *key,
-			    const p256_int *message, p256_int *r, p256_int *s);
+enum dcrypto_result dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg,
+					    const p256_int *key,
+					    const p256_int *message,
+					    p256_int *r, p256_int *s);
 
 void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx, const p256_int *key,
 			    const p256_int *message);

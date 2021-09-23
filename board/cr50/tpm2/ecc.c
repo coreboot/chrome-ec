@@ -41,7 +41,7 @@ CRYPT_RESULT _cpri__EccPointMultiply(
 	TPMS_ECC_POINT *out, TPM_ECC_CURVE curve_id,
 	TPM2B_ECC_PARAMETER *n1, TPMS_ECC_POINT *in, TPM2B_ECC_PARAMETER *n2)
 {
-	int result;
+	enum dcrypto_result result;
 	p256_int n, in_x, in_y, out_x, out_y;
 
 	switch (curve_id) {
@@ -75,7 +75,7 @@ CRYPT_RESULT _cpri__EccPointMultiply(
 		}
 
 		p256_clear(&n);
-		if (result) {
+		if (result == DCRYPTO_OK) {
 			out->x.b.size = sizeof(p256_int);
 			out->y.b.size = sizeof(p256_int);
 			p256_to_bin(&out_x, out->x.b.buffer);
@@ -161,12 +161,17 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 
 	for (; count != 0; count++) {
 		p256_int x, y, key;
+		enum dcrypto_result result;
 
 		memcpy(marshaled_counter.t.buffer, &count, sizeof(count));
 		_cpri__KDFa(hash_alg, &local_seed.b, label, local_extra,
 			&marshaled_counter.b, sizeof(key_bytes) * 8, key_bytes,
 			NULL, FALSE);
-		if (DCRYPTO_p256_key_from_bytes(&x, &y, &key, key_bytes)) {
+
+		result = DCRYPTO_p256_key_from_bytes(&x, &y, &key, key_bytes);
+		if (result == DCRYPTO_RETRY)
+			continue;
+		else if (result == DCRYPTO_OK) {
 			q->x.b.size = sizeof(p256_int);
 			p256_to_bin(&x, q->x.b.buffer);
 
@@ -176,6 +181,10 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 			d->b.size = sizeof(p256_int);
 			p256_to_bin(&key, d->b.buffer);
 			p256_clear(&key);
+			break;
+		} else {
+			/* Any other value for result is failure. */
+			count = 0;
 			break;
 		}
 	}
@@ -199,7 +208,7 @@ CRYPT_RESULT _cpri__SignEcc(
 	uint8_t digest_local[sizeof(p256_int)];
 	const size_t digest_len = MIN(digest->size, sizeof(digest_local));
 	p256_int p256_digest, key, p256_r, p256_s;
-	int result;
+	enum dcrypto_result result;
 
 	if (curve_id != TPM_ECC_NIST_P256)
 		return CRYPT_PARAMETER;
@@ -215,8 +224,8 @@ CRYPT_RESULT _cpri__SignEcc(
 		       digest->buffer, digest_len);
 		p256_from_bin(digest_local, &p256_digest);
 
-		result = fips_p256_ecdsa_sign(&key, &p256_digest, &p256_r,
-					      &p256_s);
+		result = DCRYPTO_p256_ecdsa_sign(&key, &p256_digest, &p256_r,
+						 &p256_s);
 
 		p256_clear(&key);
 		r->b.size = sizeof(p256_int);
@@ -224,7 +233,7 @@ CRYPT_RESULT _cpri__SignEcc(
 		p256_to_bin(&p256_r, r->b.buffer);
 		p256_to_bin(&p256_s, s->b.buffer);
 
-		if (result)
+		if (result == DCRYPTO_OK)
 			return CRYPT_SUCCESS;
 		else
 			return CRYPT_FAIL;
@@ -242,7 +251,6 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 	uint8_t digest_local[sizeof(p256_int)];
 	const size_t digest_len = MIN(digest->size, sizeof(digest_local));
 	p256_int p256_digest, q_x, q_y, p256_r, p256_s;
-	int result;
 
 	if (curve_id != TPM_ECC_NIST_P256)
 		return CRYPT_PARAMETER;
@@ -261,13 +269,10 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 		       digest->buffer, digest_len);
 		p256_from_bin(digest_local, &p256_digest);
 
-		result = dcrypto_p256_ecdsa_verify(&q_x, &q_y, &p256_digest,
-						   &p256_r, &p256_s);
-
-		if (result)
+		if (DCRYPTO_p256_ecdsa_verify(&q_x, &q_y, &p256_digest, &p256_r,
+					      &p256_s) == DCRYPTO_OK)
 			return CRYPT_SUCCESS;
-		else
-			return CRYPT_FAIL;
+		return CRYPT_FAIL;
 	}
 	default:
 		return CRYPT_PARAMETER;
@@ -277,7 +282,7 @@ CRYPT_RESULT _cpri__ValidateSignatureEcc(
 CRYPT_RESULT _cpri__GetEphemeralEcc(TPMS_ECC_POINT *q, TPM2B_ECC_PARAMETER *d,
 				TPM_ECC_CURVE curve_id)
 {
-	int result;
+	enum dcrypto_result result;
 	uint8_t key_bytes[P256_NBYTES] __aligned(4);
 	p256_int x, y, key;
 
@@ -291,7 +296,7 @@ CRYPT_RESULT _cpri__GetEphemeralEcc(TPMS_ECC_POINT *q, TPM2B_ECC_PARAMETER *d,
 
 	always_memset(key_bytes, 0, sizeof(key_bytes));
 
-	if (result) {
+	if (result == DCRYPTO_OK) {
 		q->x.b.size = sizeof(p256_int);
 		q->y.b.size = sizeof(p256_int);
 		p256_to_bin(&x, q->x.b.buffer);

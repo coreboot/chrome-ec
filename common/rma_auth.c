@@ -133,8 +133,14 @@ static int p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 	 */
 	while (1) {
 		struct sha256_ctx sha;
+		enum dcrypto_result result;
 
-		if (DCRYPTO_p256_key_from_bytes(&pk_x, &pk_y, &d, buf)) {
+		result = DCRYPTO_p256_key_from_bytes(&pk_x, &pk_y, &d, buf);
+
+		if (result == DCRYPTO_FAIL)
+			return EC_ERROR_HW_INTERNAL;
+
+		if (result == DCRYPTO_OK) {
 
 			/* Is Y coordinate an odd value? */
 			if (p256_is_odd(&pk_y))
@@ -158,7 +164,9 @@ static int p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 	p256_from_bin(rma_key_blob.raw_blob + 1 + P256_NBYTES, &pk_y);
 
 	/* Use input space for storing multiplication results. */
-	DCRYPTO_p256_point_mul(&pk_x, &pk_y, &d, &pk_x, &pk_y);
+	if (DCRYPTO_p256_point_mul(&pk_x, &pk_y, &d, &pk_x, &pk_y) !=
+	    DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
 
 	/* X value is the seed for the shared secret. */
 	p256_to_bin(&pk_x, secret);

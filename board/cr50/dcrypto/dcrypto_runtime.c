@@ -367,11 +367,11 @@ static const p256_int s_golden = {
 	       0xd55d07a0, 0x1efb1274, 0x94afb5c9 },
 };
 
-static int call_on_bigger_stack(uint32_t stack,
-				int (*func)(p256_int *, p256_int *),
-				p256_int *r, p256_int *s)
+static enum dcrypto_result call_on_bigger_stack(
+	uint32_t stack, enum dcrypto_result (*func)(p256_int *, p256_int *),
+	p256_int *r, p256_int *s)
 {
-	int result = 0;
+	enum dcrypto_result result = DCRYPTO_FAIL;
 
 	/* Move to new stack and call the function */
 	__asm__ volatile("mov r4, sp\n"
@@ -384,10 +384,8 @@ static int call_on_bigger_stack(uint32_t stack,
 			 : [result] "=r"(result) /* output */
 			 : [new_stack] "r"(stack), [r] "r"(r), [s] "r"(s),
 			   [func] "r"(func) /* input */
-			 : "r0", "r1", "r2", "r3", "r4",
-			   "lr" /* clobbered registers */
-	);
-
+			 : /* clobbered registers */
+			 "r0", "r1", "r2", "r3", "r4", "lr");
 	return result;
 }
 
@@ -396,11 +394,11 @@ static int call_on_bigger_stack(uint32_t stack,
  * in: r - ptr to entropy, s - ptr to message.
  * out: r,s - generated signature.
  */
-static int ecdsa_sign_go(p256_int *r, p256_int *s)
+static enum dcrypto_result ecdsa_sign_go(p256_int *r, p256_int *s)
 {
 	struct drbg_ctx drbg;
 	p256_int d;
-	int ret = 0;
+	enum dcrypto_result ret = 0;
 	p256_int message = *s;
 
 	/* drbg init with same entropy */
@@ -410,7 +408,7 @@ static int ecdsa_sign_go(p256_int *r, p256_int *s)
 	if (p256_hmac_drbg_generate(&drbg, &d) != HMAC_DRBG_SUCCESS) {
 		/* to be consistent with ecdsa_sign error return */
 		drbg_exit(&drbg);
-		return 0;
+		return DCRYPTO_FAIL;
 	}
 
 	/* drbg_reseed with entropy and message */
@@ -427,7 +425,8 @@ static int command_dcrypto_ecdsa_test(int argc, char *argv[])
 {
 	p256_int entropy, message, r, s;
 	struct sha256_ctx hsh;
-	int result = 0;
+	enum dcrypto_result result = DCRYPTO_FAIL;
+	enum ec_error_list ret;
 	char *new_stack;
 	const uint32_t new_stack_size = 2 * 1024;
 
@@ -444,11 +443,11 @@ static int command_dcrypto_ecdsa_test(int argc, char *argv[])
 	r = entropy;
 	s = message;
 
-	result = shared_mem_acquire(new_stack_size, &new_stack);
+	ret = shared_mem_acquire(new_stack_size, &new_stack);
 
-	if (result != EC_SUCCESS) {
+	if (ret != EC_SUCCESS) {
 		ccprintf("Failed to acquire stack memory: %d\n", result);
-		return result;
+		return ret;
 	}
 
 	for (uint32_t i = 0; i < ECDSA_TEST_ITERATIONS; i++) {
@@ -456,7 +455,7 @@ static int command_dcrypto_ecdsa_test(int argc, char *argv[])
 						      new_stack_size,
 					      ecdsa_sign_go, &r, &s);
 
-		if (!result) {
+		if (result != DCRYPTO_OK) {
 			ccprintf("ECDSA TEST fail: %d\n", result);
 			return EC_ERROR_INVAL;
 		}

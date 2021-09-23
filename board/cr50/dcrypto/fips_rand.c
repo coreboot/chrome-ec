@@ -352,17 +352,6 @@ enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
 	return err;
 }
 
-/* return codes match dcrypto_p256_ecdsa_sign */
-int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
-			 p256_int *r, p256_int *s)
-{
-	/* Also check for fips_crypto_allowed(). */
-	if (!fips_drbg_init())
-		return 0;
-
-	return dcrypto_p256_fips_sign_internal(&fips_drbg, key, message, r, s);
-}
-
 #ifndef CRYPTO_TEST_CMD_RAND_PERF
 #define CRYPTO_TEST_CMD_RAND_PERF 0
 #endif

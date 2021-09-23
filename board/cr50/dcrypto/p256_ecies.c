@@ -6,7 +6,6 @@
 #include "internal.h"
 #include "dcrypto.h"
 
-#include "trng.h"
 #include "util.h"
 
 #define AES_KEY_BYTES  16
@@ -47,12 +46,14 @@ size_t DCRYPTO_ecies_encrypt(
 		return 0;
 
 	/* Generate emphemeral EC key. */
-	rand_bytes(seed, sizeof(seed));
-	if (!DCRYPTO_p256_key_from_bytes(&eph_x, &eph_y, &eph_d, seed))
+	if (!fips_rand_bytes(seed, sizeof(seed)))
+		return 0;
+	if (DCRYPTO_p256_key_from_bytes(&eph_x, &eph_y, &eph_d, seed) !=
+	    DCRYPTO_OK)
 		return 0;
 	/* Compute DH point. */
-	if (!DCRYPTO_p256_point_mul(&secret_x, &secret_y,
-					&eph_d, pub_x, pub_y))
+	if (DCRYPTO_p256_point_mul(&secret_x, &secret_y, &eph_d, pub_x,
+				   pub_y) != DCRYPTO_OK)
 		return 0;
 	/* Check for computational errors. */
 	if (dcrypto_p256_is_valid_point(&secret_x, &secret_y) != DCRYPTO_OK)
@@ -140,7 +141,8 @@ size_t DCRYPTO_ecies_decrypt(
 	 * Verify that the public point is on the curve and compute the DH
 	 * point.
 	 */
-	if (!DCRYPTO_p256_point_mul(&secret_x, &secret_y, d, &eph_x, &eph_y))
+	if (DCRYPTO_p256_point_mul(&secret_x, &secret_y, d, &eph_x, &eph_y) !=
+	    DCRYPTO_OK)
 		return 0;
 	/* Check for computational errors. */
 	if (!dcrypto_p256_is_valid_point(&secret_x, &secret_y) != DCRYPTO_OK)

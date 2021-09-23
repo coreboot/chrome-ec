@@ -46,6 +46,10 @@ enum hashing_mode {
 	HASH_NULL = 4 /* Only supported for PKCS#1 signing */
 };
 
+#ifndef __warn_unused_result
+#define __warn_unused_result __attribute__((warn_unused_result))
+#endif
+
 /*
  * AES implementation, based on a hardware AES block.
  * FIPS Publication 197, The Advanced Encryption Standard (AES)
@@ -333,53 +337,92 @@ bool p256_from_be_bin_size(const uint8_t *src, size_t len, p256_int *dst);
  *
  * @param x point coordinate
  * @param y point coordinate
+ *
  * @return DCRYPTO_OK if (x,y) is a valid point, DCRYPTO_FAIL otherwise
  */
-enum dcrypto_result DCRYPTO_p256_is_valid_point(const p256_int *x,
-						const p256_int *y);
+enum dcrypto_result DCRYPTO_p256_is_valid_point(
+	const p256_int *x, const p256_int *y) __warn_unused_result;
 
-/* DCRYPTO_p256_base_point_mul sets {out_x,out_y} = nG, where n is < the
- * order of the group.
+/**
+ * Base point multiplications (compute public key from private).
+ * Sets {out_x,out_y} = nG, where n is < the order of the group.
+ *
+ * @param out_x output public key component x
+ * @param out_y output public key component y
+ * @param n private key
+ *
+ * @return DCRYPTO_OK if successful
  */
-int DCRYPTO_p256_base_point_mul(p256_int *out_x, p256_int *out_y,
-				const p256_int *n);
+enum dcrypto_result DCRYPTO_p256_base_point_mul(
+	p256_int *out_x, p256_int *out_y,
+	const p256_int *n) __warn_unused_result;
 
 /**
  * DCRYPTO_p256_point_mul sets {out_x,out_y} = n*{in_x,in_y}, where n is <
  * the order of the group. Prior to computation check than {in_x,in_y} is
- * on NIST P-256 curve.
+ * on NIST P-256 curve. Used to implement ECDH.
  *
  * @param out_x output shared coordinate x
  * @param out_y output shared coordinate y
  * @param n private key
  * @param in_x input public point x
  * @param in_y input public point y
- * @return 1 if success
+ *
+ * @return DCRYPTO_OK if success
  */
-int DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y, const p256_int *n,
-			   const p256_int *in_x, const p256_int *in_y);
-/*
- * Key selection based on FIPS-186-4, section B.4.2 (Key Pair
- * Generation by Testing Candidates).
- * Produce uniform private key from seed.
- * If x or y is NULL, the public key part is not computed.
- * Returns !0 on success.
- */
-int DCRYPTO_p256_key_from_bytes(p256_int *x, p256_int *y, p256_int *d,
-				const uint8_t bytes[P256_NBYTES]);
+enum dcrypto_result DCRYPTO_p256_point_mul(
+	p256_int *out_x, p256_int *out_y, const p256_int *n,
+	const p256_int *in_x, const p256_int *in_y) __warn_unused_result;
 
 /**
- * TODO: Provide provide proper wrappers for dcrypto_p256_ecdsa_verify()
- * and fips_p256_ecdsa_sign()
+ * Key selection based on FIPS-186-4, section B.4.2 (Key Pair
+ * Generation by Testing Candidates).
+ *
+ * @param x output public key component x
+ * @param y output public key component y
+ * @param d output private key
+ * @param bytes 32 byte random seed
+ *
+ * d = p256_from_bytes(bytes) + 1
+ *
+ * If x or y is NULL, the public key part is not computed.
+ *
+ * @return DCRYPTO_OK on success, DCRYPTO_RETRY if d is out of range, try
+ * with another seed bytes and DCRYPTO_FAIL for any other error.
  */
-int dcrypto_p256_ecdsa_verify(const p256_int *key_x, const p256_int *key_y,
-		const p256_int *message, const p256_int *r,
-		const p256_int *s)
-	__attribute__((warn_unused_result));
+enum dcrypto_result DCRYPTO_p256_key_from_bytes(
+	p256_int *x, p256_int *y, p256_int *d,
+	const uint8_t bytes[P256_NBYTES]) __warn_unused_result;
 
-/* wrapper around dcrypto_p256_ecdsa_sign using FIPS-compliant HMAC_DRBG */
-int fips_p256_ecdsa_sign(const p256_int *key, const p256_int *message,
-			 p256_int *r, p256_int *s);
+/**
+ * Verify NIST P-256 signature.
+ *
+ * @param key_x public key coordinate x
+ * @param key_y public key coordinate x
+ * @param message message digest to verify
+ * @param r signature component r
+ * @param s signature component s
+ *
+ * @return DCRYPTO_OK if success
+ */
+enum dcrypto_result DCRYPTO_p256_ecdsa_verify(
+	const p256_int *key_x, const p256_int *key_y, const p256_int *message,
+	const p256_int *r, const p256_int *s) __warn_unused_result;
+
+/**
+ * NIST ECDSA P-256 Sign.
+ *
+ * @param key private key
+ * @param message message digest (in p256_int form)
+ * @param r output signature component r
+ * @param s output signature component s
+ *
+ * @return DCRYPTO_OK if success.
+ */
+enum dcrypto_result DCRYPTO_p256_ecdsa_sign(const p256_int *key,
+					    const p256_int *message,
+					    p256_int *r,
+					    p256_int *s) __warn_unused_result;
 
 /************************************************************/
 

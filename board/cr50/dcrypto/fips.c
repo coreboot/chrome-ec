@@ -389,7 +389,7 @@ static bool fips_ecdsa_sign_pwct(void)
 	 * Note, fips_drbg is not instantiated yet, but rather is in
 	 * pre-determined state with K=[0], V=[0].
 	 */
-	return DCRYPTO_p256_key_pwct(&fips_drbg, &d, &x, &y);
+	return dcrypto_p256_key_pwct(&fips_drbg, &d, &x, &y) == DCRYPTO_OK;
 }
 #endif
 
@@ -452,7 +452,7 @@ static bool fips_ecdsa_sign_verify_kat(void)
 	p256_from_bin(msg_digest, &msg);
 
 	/* KAT for ECDSA signing with fixed k. */
-	passed = dcrypto_p256_ecdsa_sign_raw(&k, &d, &msg, &r, &s) - 1;
+	passed = dcrypto_p256_ecdsa_sign_raw(&k, &d, &msg, &r, &s) - DCRYPTO_OK;
 
 	passed |= DCRYPTO_equals(r.a, R.a, sizeof(R)) - DCRYPTO_OK;
 	passed |= DCRYPTO_equals(s.a, S.a, sizeof(S)) - DCRYPTO_OK;
@@ -461,14 +461,16 @@ static bool fips_ecdsa_sign_verify_kat(void)
 		msg.a[0] ^= 1;
 
 	/* KAT for verification */
-	passed |= dcrypto_p256_ecdsa_verify(&Qx, &Qy, &msg, &r, &s) - 1;
+	passed |=
+		dcrypto_p256_ecdsa_verify(&Qx, &Qy, &msg, &r, &s) - DCRYPTO_OK;
 
 	/**
 	 * Flip 1 bit in digest. Signature verification should fail.
 	 */
 	msg.a[5] ^= 0x10;
 
-	passed |= dcrypto_p256_ecdsa_verify(&Qx, &Qy, &msg, &r, &s);
+	passed |= dcrypto_p256_ecdsa_verify(&Qx, &Qy, &msg, &r, &s) -
+		  DCRYPTO_FAIL;
 
 	return passed == 0;
 }
