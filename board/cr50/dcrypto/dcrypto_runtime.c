@@ -194,7 +194,6 @@ uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words)
 
 #include "console.h"
 #include "dcrypto.h"
-#include "trng.h"
 #include "shared_mem.h"
 #include "system.h"
 #include "watchdog.h"

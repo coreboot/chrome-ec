@@ -6,7 +6,6 @@
 #include "dcrypto.h"
 #include "internal.h"
 
-#include "trng.h"
 #include "util.h"
 
 #include <assert.h>

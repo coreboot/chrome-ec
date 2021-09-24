@@ -7,7 +7,6 @@
 #include "dcrypto.h"
 #include "extension.h"
 #include "internal.h"
-#include "trng.h"
 
 /* HMAC_DRBG flow in NIST SP 800-90Ar1, 10.2, RFC 6979
  */

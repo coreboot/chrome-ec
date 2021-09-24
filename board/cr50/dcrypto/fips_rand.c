@@ -370,7 +370,6 @@ enum dcrypto_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
 #if defined(CRYPTO_TEST_SETUP) && CRYPTO_TEST_CMD_RAND_PERF
 #include "endian.h"
 #include "extension.h"
-#include "trng.h"
 #include "watchdog.h"
 
 static int cmd_rand_perf(int argc, char **argv)

@@ -6,7 +6,6 @@
 #include "internal.h"
 #include "endian.h"
 #include "registers.h"
-#include "trng.h"
 
 static void ladder_init(void)
 {

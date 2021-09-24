@@ -5,7 +5,6 @@
 #include "dcrypto.h"
 #include "internal.h"
 #include "registers.h"
-#include "trng.h"
 
 /* Firmware blob for crypto accelerator */
 
