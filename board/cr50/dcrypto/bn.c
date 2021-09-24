@@ -11,8 +11,6 @@
 #include "fips.h"
 #include "internal.h"
 
-#include "trng.h"
-
 void bn_init(struct LITE_BIGNUM *b, void *buf, size_t len)
 {
 	DCRYPTO_bn_wrap(b, buf, len);
@@ -35,18 +33,20 @@ int bn_eq(const struct LITE_BIGNUM *a, const struct LITE_BIGNUM *b)
 {
 	int i;
 	uint32_t top = 0;
+	const int a_dmax = (const int)a->dmax;
+	const int b_dmax = (const int)b->dmax;
 
-	for (i = a->dmax - 1; i > b->dmax - 1; --i)
+	for (i = a_dmax - 1; i > b_dmax - 1; --i)
 		top |= BN_DIGIT(a, i);
 	if (top)
 		return 0;
 
-	for (i = b->dmax - 1; i > a->dmax - 1; --i)
+	for (i = b_dmax - 1; i > a_dmax - 1; --i)
 		top |= BN_DIGIT(b, i);
 	if (top)
 		return 0;
 
-	for (i = MIN(a->dmax, b->dmax) - 1; i >= 0; --i)
+	for (i = MIN(a_dmax, b_dmax) - 1; i >= 0; --i)
 		if (BN_DIGIT(a, i) != BN_DIGIT(b, i))
 			return 0;
 
@@ -65,12 +65,9 @@ int bn_check_topbit(const struct LITE_BIGNUM *N)
 }
 
 /* a[n]. */
-int bn_is_bit_set(const struct LITE_BIGNUM *a, int n)
+int bn_is_bit_set(const struct LITE_BIGNUM *a, size_t n)
 {
-	int i, j;
-
-	if (n < 0)
-		return 0;
+	size_t i, j;
 
 	i = n / LITE_BN_BITS2;
 	j = n % LITE_BN_BITS2;
@@ -80,20 +77,14 @@ int bn_is_bit_set(const struct LITE_BIGNUM *a, int n)
 	return (BN_DIGIT(a, i) >> j) & 1;
 }
 
-static int bn_set_bit(const struct LITE_BIGNUM *a, int n)
+static void bn_set_bit(const struct LITE_BIGNUM *a, size_t n)
 {
-	int i, j;
-
-	if (n < 0)
-		return 0;
+	size_t i, j;
 
 	i = n / LITE_BN_BITS2;
 	j = n % LITE_BN_BITS2;
-	if (a->dmax <= i)
-		return 0;
-
-	BN_DIGIT(a, i) |= 1 << j;
-	return 1;
+	if (i < a->dmax)
+		BN_DIGIT(a, i) |= 1U << j;
 }
 
 /* a[] >= b[]. */
@@ -102,28 +93,30 @@ static int bn_gte(const struct LITE_BIGNUM *a, const struct LITE_BIGNUM *b)
 {
 	int i;
 	uint32_t top = 0;
+	const int a_dmax = (const int)a->dmax;
+	const int b_dmax = (const int)b->dmax;
 
-	for (i = a->dmax - 1; i > b->dmax - 1; --i)
+	for (i = a_dmax - 1; i > b_dmax - 1; --i)
 		top |= BN_DIGIT(a, i);
 	if (top)
 		return 1;
 
-	for (i = b->dmax - 1; i > a->dmax - 1; --i)
+	for (i = b_dmax - 1; i > a_dmax - 1; --i)
 		top |= BN_DIGIT(b, i);
 	if (top)
 		return 0;
 
-	for (i = MIN(a->dmax, b->dmax) - 1;
+	for (i = MIN(a_dmax, b_dmax) - 1;
 	     BN_DIGIT(a, i) == BN_DIGIT(b, i) && i > 0; --i)
 		;
 	return BN_DIGIT(a, i) >= BN_DIGIT(b, i);
 }
 
 /* c[] = c[] - a[], assumes c > a. */
-uint32_t bn_sub(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a)
+int32_t bn_sub(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a)
 {
 	int64_t A = 0;
-	int i;
+	size_t i;
 
 	for (i = 0; i < a->dmax; i++) {
 		A += (uint64_t) BN_DIGIT(c, i) - BN_DIGIT(a, i);
@@ -137,7 +130,7 @@ uint32_t bn_sub(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a)
 		A >>= 32;
 	}
 
-	return (uint32_t) A;  /* 0 or -1. */
+	return (int32_t) A;  /* 0 or -1. */
 }
 
 /* c[] = c[] - a[], negative numbers in 2's complement representation. */
@@ -147,7 +140,7 @@ static uint32_t bn_signed_sub(struct LITE_BIGNUM *c, int *c_neg,
 {
 	uint32_t carry = 0;
 	uint64_t A = 1;
-	int i;
+	size_t i;
 
 	for (i = 0; i < a->dmax; ++i) {
 		A += (uint64_t) BN_DIGIT(c, i) + ~BN_DIGIT(a, i);
@@ -163,7 +156,7 @@ static uint32_t bn_signed_sub(struct LITE_BIGNUM *c, int *c_neg,
 
 	A &= 0x01;
 	carry = (!*c_neg && a_neg && A) || (*c_neg && !a_neg && !A);
-	*c_neg = carry ? *c_neg : (*c_neg + !a_neg + A) & 0x01;
+	*c_neg = carry ? *c_neg : (*c_neg + !a_neg + (int)A) & 0x01;
 	return carry;
 }
 
@@ -171,7 +164,7 @@ static uint32_t bn_signed_sub(struct LITE_BIGNUM *c, int *c_neg,
 uint32_t bn_add(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a)
 {
 	uint64_t A = 0;
-	int i;
+	size_t i;
 
 	for (i = 0; i < a->dmax; ++i) {
 		A += (uint64_t) BN_DIGIT(c, i) + BN_DIGIT(a, i);
@@ -193,7 +186,7 @@ uint32_t bn_add(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a)
 static uint32_t bn_signed_add(struct LITE_BIGNUM *c, int *c_neg,
 			const struct LITE_BIGNUM *a, int a_neg)
 {
-	uint32_t A = bn_add(c, a);
+	int A = (int)bn_add(c, a);
 	uint32_t carry;
 
 	carry = (!*c_neg && !a_neg && A) || (*c_neg && a_neg && !A);
@@ -204,7 +197,7 @@ static uint32_t bn_signed_add(struct LITE_BIGNUM *c, int *c_neg,
 /* r[] <<= 1. */
 static uint32_t bn_lshift(struct LITE_BIGNUM *r)
 {
-	int i;
+	size_t i;
 	uint32_t w;
 	uint32_t carry = 0;
 
@@ -219,7 +212,7 @@ static uint32_t bn_lshift(struct LITE_BIGNUM *r)
 /* r[] >>= 1.  Handles 2's complement negative numbers. */
 static void bn_rshift(struct LITE_BIGNUM *r, uint32_t carry, uint32_t neg)
 {
-	int i;
+	size_t i;
 	uint32_t ones = ~0;
 	uint32_t highbit = (!carry && neg) || (carry && !neg);
 
@@ -235,7 +228,7 @@ static void bn_rshift(struct LITE_BIGNUM *r, uint32_t carry, uint32_t neg)
 	BN_DIGIT(r, i) = (BN_DIGIT(r, i) >> 1) |
 		(highbit << (LITE_BN_BITS2 - 1));
 
-	if (ones == ~0 && highbit && neg)
+	if (ones == ~0U && highbit && neg)
 		memset(r->d, 0x00, bn_size(r));    /* -1 >> 1 = 0. */
 }
 
@@ -246,7 +239,7 @@ static void bn_mont_mul_add(struct LITE_BIGNUM *c, const uint32_t a,
 			const struct LITE_BIGNUM *N)
 {
 	uint32_t A, B, d0;
-	int i;
+	size_t i;
 
 	{
 		register uint64_t tmp;
@@ -285,7 +278,7 @@ static void bn_mont_mul(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a,
 			const struct LITE_BIGNUM *b, const uint32_t nprime,
 			const struct LITE_BIGNUM *N)
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < N->dmax; i++)
 		BN_DIGIT(c, i) = 0;
@@ -299,7 +292,7 @@ static void bn_mont_mul(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a,
 /* TODO(ngm): constant time. */
 static void bn_compute_RR(struct LITE_BIGNUM *RR, const struct LITE_BIGNUM *N)
 {
-	int i;
+	size_t i;
 
 	bn_sub(RR, N);         /* R - N = R % N since R < 2N */
 
@@ -457,7 +450,7 @@ int bn_modexp_blinded(struct LITE_BIGNUM *output,
 static uint32_t bn_mul_add(struct LITE_BIGNUM *c, uint32_t a,
 		const struct LITE_BIGNUM *b, uint32_t offset)
 {
-	int i;
+	size_t i;
 	uint64_t carry = 0;
 
 	for (i = 0; i < b->dmax; i++) {
@@ -474,7 +467,7 @@ static uint32_t bn_mul_add(struct LITE_BIGNUM *c, uint32_t a,
 void DCRYPTO_bn_mul(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a,
 		const struct LITE_BIGNUM *b)
 {
-	int i;
+	size_t i;
 	uint32_t carry = 0;
 
 	memset(c->d, 0, bn_size(c));
@@ -761,7 +754,8 @@ int DCRYPTO_bn_div(struct LITE_BIGNUM *quotient,
 {
 	int src_len = bn_digits(src);
 	int div_len = bn_digits(divisor);
-	int i, result;
+	int result;
+	size_t i;
 
 	if (src_len < div_len)
 		return 0;
@@ -883,7 +877,7 @@ int bn_modinv_vartime(struct LITE_BIGNUM *dst, const struct LITE_BIGNUM *src,
 				 */
 				bn_mul_ex(&tmp, &Q, q_len, pnT);
 			} else {
-				int nt_len = bn_digits(pnT);
+				size_t nt_len = bn_digits(pnT);
 
 				if (q_len < nt_len)
 					bn_mul_ex(&tmp, &Q, q_len, pnT);
@@ -1120,7 +1114,7 @@ static uint32_t bn_mod_word16(const struct LITE_BIGNUM *p, uint16_t word)
 	int i;
 	uint32_t rem = 0;
 
-	for (i = p->dmax - 1; i >= 0; i--) {
+	for (i = (int)p->dmax - 1; i >= 0; i--) {
 		rem = ((rem << 16) |
 			((BN_DIGIT(p, i) >> 16) & 0xFFFFUL)) % word;
 		rem = ((rem << 16) | (BN_DIGIT(p, i) & 0xFFFFUL)) % word;
@@ -1273,8 +1267,8 @@ static void print_primes(uint16_t prime)
 
 int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p)
 {
-	int i;
-	int j;
+	size_t i;
+	size_t j;
 	/* Using a sieve size of 2048-bits results in a failure rate
 	 * of ~0.5% @ 1024-bit candidates.  The failure rate rises to ~6%
 	 * if the sieve size is halved. */

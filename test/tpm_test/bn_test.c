@@ -2,7 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "dcrypto.h"
+#include "internal.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -401,6 +401,29 @@ void *always_memset(void *s, int c, size_t n)
 
 void watchdog_reload(void)
 {
+}
+
+bool fips_rand_bytes(void *buffer, size_t len)
+{
+	uint8_t *b, *end;
+	static unsigned int seed = 1;
+
+	for (b = buffer, end = b+len; b != end; b++)
+		*b = (uint8_t)rand_r(&seed);
+	return true;
+}
+
+const struct fips_vtable *fips_vtable;
+
+void fips_throw_err(enum fips_status err)
+{
+}
+
+uint64_t fips_trng_rand32(void)
+{
+	static unsigned int seed = 100;
+
+	return (uint64_t)(rand_r(&seed) & 0xffffffff) | (1ULL << 32);
 }
 
 int main(void)

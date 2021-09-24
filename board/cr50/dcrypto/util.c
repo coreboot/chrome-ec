@@ -180,7 +180,7 @@ __stdlib_compat void *memmove(void *dest, const void *src, size_t len)
 
 void reverse(void *dest, size_t len)
 {
-	int i;
+	size_t i;
 	uint8_t *start = dest;
 	uint8_t *end = start + len;
 

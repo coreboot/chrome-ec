@@ -50,7 +50,7 @@ static void MGF1_xor(uint8_t *dst, uint32_t dst_len,
 
 	cnt.b0 = cnt.b1 = cnt.b2 = cnt.b3 = 0;
 	while (dst_len) {
-		int i;
+		size_t i;
 
 		if (hashing == HASH_SHA1)
 			SHA1_hw_init(&ctx.sha1);
@@ -119,8 +119,8 @@ static int oaep_pad(uint8_t *output, uint32_t output_len,
 }
 
 /* decrypt */
-static int check_oaep_pad(uint8_t *out, uint32_t *out_len,
-			uint8_t *padded, uint32_t padded_len,
+static int check_oaep_pad(uint8_t *out, size_t *out_len,
+			uint8_t *padded, size_t padded_len,
 			enum hashing_mode hashing, const char *label)
 {
 	const size_t hash_size = (hashing == HASH_SHA1) ? SHA_DIGEST_SIZE
@@ -133,7 +133,7 @@ static int check_oaep_pad(uint8_t *out, uint32_t *out_len,
 	size_t one_index = 0;
 	uint32_t looking_for_one_byte = ~0;
 	int bad;
-	int i;
+	size_t i;
 
 	if (padded_len < 2 + 2 * hash_size)
 		return 0;       /* Invalid input size. */
@@ -183,10 +183,10 @@ static int check_oaep_pad(uint8_t *out, uint32_t *out_len,
 #define RSA_PKCS1_PADDING_SIZE 11
 
 /* encrypt */
-static int pkcs1_type2_pad(uint8_t *padded, uint32_t padded_len,
-		const uint8_t *in, uint32_t in_len)
+static int pkcs1_type2_pad(uint8_t *padded, size_t padded_len,
+		const uint8_t *in, size_t in_len)
 {
-	uint32_t PS_len;
+	size_t PS_len;
 
 	if (padded_len < RSA_PKCS1_PADDING_SIZE)
 		return 0;
@@ -197,7 +197,7 @@ static int pkcs1_type2_pad(uint8_t *padded, uint32_t padded_len,
 	*(padded++) = 0;
 	*(padded++) = 2;
 	while (PS_len) {
-		int i;
+		size_t i;
 		uint8_t r[SHA256_DIGEST_SIZE];
 
 		if (!fips_rand_bytes(r, sizeof(r)))
@@ -220,10 +220,10 @@ static int pkcs1_type2_pad(uint8_t *padded, uint32_t padded_len,
 }
 
 /* decrypt */
-static int check_pkcs1_type2_pad(uint8_t *out, uint32_t *out_len,
-				const uint8_t *padded, uint32_t padded_len)
+static int check_pkcs1_type2_pad(uint8_t *out, size_t *out_len,
+				const uint8_t *padded, size_t padded_len)
 {
-	int i;
+	size_t i;
 	int valid;
 	uint32_t zero_index = 0;
 	uint32_t looking_for_index = ~0;
@@ -276,7 +276,7 @@ static const uint8_t SHA512_DER[] = {
 };
 
 static int pkcs1_get_der(enum hashing_mode hashing, const uint8_t **der,
-			uint32_t *der_size, uint32_t *hash_size)
+			size_t *der_size, size_t *hash_size)
 {
 	switch (hashing) {
 	case HASH_SHA1:
@@ -312,14 +312,14 @@ static int pkcs1_get_der(enum hashing_mode hashing, const uint8_t **der,
 }
 
 /* sign */
-static int pkcs1_type1_pad(uint8_t *padded, uint32_t padded_len,
-			const uint8_t *in, uint32_t in_len,
+static int pkcs1_type1_pad(uint8_t *padded, size_t padded_len,
+			const uint8_t *in, size_t in_len,
 			enum hashing_mode hashing)
 {
 	const uint8_t *der;
-	uint32_t der_size;
-	uint32_t hash_size;
-	uint32_t ps_len;
+	size_t der_size;
+	size_t hash_size;
+	size_t ps_len;
 
 	if (!pkcs1_get_der(hashing, &der, &der_size, &hash_size))
 		return 0;
@@ -343,15 +343,15 @@ static int pkcs1_type1_pad(uint8_t *padded, uint32_t padded_len,
 }
 
 /* verify */
-static int check_pkcs1_type1_pad(const uint8_t *msg, uint32_t msg_len,
-				const uint8_t *padded, uint32_t padded_len,
+static int check_pkcs1_type1_pad(const uint8_t *msg, size_t msg_len,
+				const uint8_t *padded, size_t padded_len,
 				enum hashing_mode hashing)
 {
-	int i;
+	size_t i;
 	const uint8_t *der;
-	uint32_t der_size;
-	uint32_t hash_size;
-	uint32_t ps_len;
+	size_t der_size;
+	size_t hash_size;
+	size_t ps_len;
 
 	if (!pkcs1_get_der(hashing, &der, &der_size, &hash_size))
 		return 0;
@@ -377,15 +377,15 @@ static int check_pkcs1_type1_pad(const uint8_t *msg, uint32_t msg_len,
 }
 
 /* sign */
-static int pkcs1_pss_pad(uint8_t *padded, uint32_t padded_len,
-			const uint8_t *in, uint32_t in_len,
+static int pkcs1_pss_pad(uint8_t *padded, size_t padded_len,
+			const uint8_t *in, size_t in_len,
 			enum hashing_mode hashing)
 {
 	const uint32_t hash_size = (hashing == HASH_SHA1) ? SHA1_DIGEST_SIZE
 		: SHA256_DIGEST_SIZE;
 	const uint32_t salt_len = MIN(padded_len - hash_size - 2, hash_size);
-	uint32_t db_len;
-	uint32_t ps_len;
+	size_t db_len;
+	size_t ps_len;
 	union hash_ctx ctx;
 
 	if (in_len != hash_size)
@@ -426,8 +426,8 @@ static int pkcs1_pss_pad(uint8_t *padded, uint32_t padded_len,
 }
 
 /* verify */
-static int check_pkcs1_pss_pad(const uint8_t *in, uint32_t in_len,
-			uint8_t *padded, uint32_t padded_len,
+static int check_pkcs1_pss_pad(const uint8_t *in, size_t in_len,
+			uint8_t *padded, size_t padded_len,
 			enum hashing_mode hashing)
 {
 	const uint32_t hash_size = (hashing == HASH_SHA1) ? SHA1_DIGEST_SIZE
@@ -438,7 +438,7 @@ static int check_pkcs1_pss_pad(const uint8_t *in, uint32_t in_len,
 	uint32_t salt_len;
 	union hash_ctx ctx;
 	int bad = 0;
-	int i;
+	size_t i;
 
 	if (in_len != hash_size)
 		return 0;
@@ -480,7 +480,7 @@ static int check_pkcs1_pss_pad(const uint8_t *in, uint32_t in_len,
 }
 
 static int check_modulus_params(
-	const struct LITE_BIGNUM *N, size_t rsa_max_bytes, uint32_t *out_len)
+	const struct LITE_BIGNUM *N, size_t rsa_max_bytes, size_t *out_len)
 {
 	if (bn_size(N) > rsa_max_bytes)
 		return 0;                      /* Unsupported key size. */
@@ -491,8 +491,8 @@ static int check_modulus_params(
 	return 1;
 }
 
-int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
-			const uint8_t *in, uint32_t in_len,
+int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
+			const uint8_t *in, size_t in_len,
 			enum padding_mode padding, enum hashing_mode hashing,
 			const char *label)
 {
@@ -550,8 +550,8 @@ int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
 	return ret;
 }
 
-int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
-			const uint8_t *in, const uint32_t in_len,
+int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
+			const uint8_t *in, const size_t in_len,
 			enum padding_mode padding, enum hashing_mode hashing,
 			const char *label)
 {
@@ -609,8 +609,8 @@ int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
 	return ret;
 }
 
-int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
-		const uint8_t *in, const uint32_t in_len,
+int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, size_t *out_len,
+		const uint8_t *in, const size_t in_len,
 		enum padding_mode padding, enum hashing_mode hashing)
 {
 	uint32_t padded_buf[RSA_MAX_WORDS];
@@ -652,8 +652,8 @@ int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
 }
 
 int DCRYPTO_rsa_verify(const struct RSA *rsa, const uint8_t *digest,
-		uint32_t digest_len, const uint8_t *sig,
-		const uint32_t sig_len,	enum padding_mode padding,
+		size_t digest_len, const uint8_t *sig,
+		const size_t sig_len,	enum padding_mode padding,
 		enum hashing_mode hashing)
 {
 	uint32_t padded_buf[RSA_WORDS_4K];

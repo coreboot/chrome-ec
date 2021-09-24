@@ -38,10 +38,10 @@ static int wait_read_data(volatile uint32_t *addr)
 	return empty ? 0 : 1;
 }
 
-int DCRYPTO_aes_init(const uint8_t *key, uint32_t key_len, const uint8_t *iv,
+int DCRYPTO_aes_init(const uint8_t *key, size_t key_len, const uint8_t *iv,
 		enum cipher_mode c_mode, enum encrypt_mode e_mode)
 {
-	int i;
+	size_t i;
 	const struct access_helper *p;
 	uint32_t key_mode;
 
@@ -166,7 +166,7 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 		uint32_t tmpout[4];
 		const uint8_t *inp;
 		uint8_t *outp;
-		const size_t count = MIN(in_len, 16);
+		const size_t count = MIN(in_len, 16U);
 
 		if (count < 16) {
 			memcpy(tmpin, in, count);

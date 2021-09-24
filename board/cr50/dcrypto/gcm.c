@@ -141,7 +141,7 @@ void DCRYPTO_gcm_aad(struct GCM_CTX *ctx, const uint8_t *aad_data, size_t len)
 		size_t count;
 
 		memset(block, 0, sizeof(block));
-		count = MIN(16, len);
+		count = MIN(16U, len);
 		memcpy(block, aad_data, count);
 
 		gcm_aad_block(ctx, block);
@@ -164,7 +164,7 @@ int DCRYPTO_gcm_encrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
 
 	/* Process a previous partial block, if any. */
 	if (ctx->remainder) {
-		size_t count = MIN(in_len, 16 - ctx->remainder);
+		size_t count = MIN(in_len, 16U - ctx->remainder);
 
 		memcpy(ctx->block.c + ctx->remainder, in, count);
 		ctx->remainder += count;

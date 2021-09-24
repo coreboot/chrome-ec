@@ -70,7 +70,7 @@ static int ladder_step(uint32_t cert, const uint32_t input[8])
 
 static int compute_certs(const uint32_t *certs, size_t num_certs)
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < num_certs; i++) {
 		if (ladder_step(certs[i], NULL))
@@ -122,7 +122,7 @@ int DCRYPTO_ladder_compute_frk2(size_t fw_version, uint8_t *frk2)
 		return 0;
 
 	do {
-		int i;
+		size_t i;
 
 		ladder_init();
 

@@ -248,7 +248,7 @@ static size_t asn1_parse(const uint8_t **p, size_t available,
 		obj_len = in[1];
 		obj_len_bytes = 1;
 	} else {
-		int i;
+		size_t i;
 
 		obj_len_bytes = 1 + (in[1] & 127);
 		if (obj_len_bytes > MAX_ASN1_OBJ_LEN_BYTES ||

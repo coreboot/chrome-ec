@@ -85,10 +85,10 @@ static bool repetition_count_test(uint32_t rnd)
 	 * counter of zeros to current number which will be 32,
 	 * otherwise (we had 1s) - just use current value. Same for 1s
 	 */
-	if (rnd == 0) /* if all 32 samples are 0s */
+	if (rnd == 0U) /* if all 32 samples are 0s */
 		clz += rand_state.last_clz;
 
-	if (rnd == ~0) /* if all 32 samples are 1s */
+	if (rnd == ~0U) /* if all 32 samples are 1s */
 		clo += rand_state.last_clo;
 	rand_state.last_clz = clz;
 	rand_state.last_clo = clo;

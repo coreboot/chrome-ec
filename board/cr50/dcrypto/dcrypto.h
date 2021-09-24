@@ -56,7 +56,7 @@ enum hashing_mode {
  */
 #define AES256_BLOCK_CIPHER_KEY_SIZE 32
 
-int DCRYPTO_aes_init(const uint8_t *key, uint32_t key_len, const uint8_t *iv,
+int DCRYPTO_aes_init(const uint8_t *key, size_t key_len, const uint8_t *iv,
 		     enum cipher_mode c_mode, enum encrypt_mode e_mode);
 int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out);
 
@@ -196,7 +196,7 @@ void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
  * @param b pointer to big number
  * @return length in bits
  */
-static inline uint32_t bn_bits(const struct LITE_BIGNUM *b)
+static inline size_t bn_bits(const struct LITE_BIGNUM *b)
 {
 	return b->dmax * sizeof(*b->d) * 8;
 }
@@ -249,32 +249,32 @@ enum padding_mode {
 /* RSA support, FIPS PUB 186-4 *
  * Calculate r = m ^ e mod N
  */
-int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
-			const uint8_t *in, uint32_t in_len,
+int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
+			const uint8_t *in, size_t in_len,
 			enum padding_mode padding, enum hashing_mode hashing,
 			const char *label);
 
 /* Calculate r = m ^ d mod N
  * return 0 if error
  */
-int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
-			const uint8_t *in, const uint32_t in_len,
+int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
+			const uint8_t *in, const size_t in_len,
 			enum padding_mode padding, enum hashing_mode hashing,
 			const char *label);
 
 /* Calculate r = m ^ d mod N
  * return 0 if error
  */
-int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, uint32_t *out_len,
-		     const uint8_t *in, const uint32_t in_len,
+int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, size_t *out_len,
+		     const uint8_t *in, const size_t in_len,
 		     enum padding_mode padding, enum hashing_mode hashing);
 
 /* Calculate r = m ^ e mod N
  * return 0 if error
  */
 int DCRYPTO_rsa_verify(const struct RSA *rsa, const uint8_t *digest,
-		       uint32_t digest_len, const uint8_t *sig,
-		       const uint32_t sig_len, enum padding_mode padding,
+		       size_t digest_len, const uint8_t *sig,
+		       const size_t sig_len, enum padding_mode padding,
 		       enum hashing_mode hashing);
 
 /* Calculate n = p * q, d = e ^ -1 mod phi. */

@@ -256,8 +256,8 @@ DECLARE_SAFE_CONSOLE_COMMAND(rand, command_rand, NULL, NULL);
 /* For testing we need unchecked values from TRNG. */
 static bool raw_rand_bytes(void *buffer, size_t len)
 {
-	int random_togo = 0;
-	int buffer_index = 0;
+	size_t random_togo = 0;
+	size_t buffer_index = 0;
 	uint32_t random_value;
 	uint8_t *buf = (uint8_t *) buffer;
 

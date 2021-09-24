@@ -63,18 +63,15 @@ int bn_modexp_word(struct LITE_BIGNUM *output,
 			uint32_t pubexp,
 			const struct LITE_BIGNUM *N);
 int bn_modexp_blinded(struct LITE_BIGNUM *output,
-			const struct LITE_BIGNUM *input,
-			const struct LITE_BIGNUM *exp,
-			const struct LITE_BIGNUM *N,
-			uint32_t pubexp);
-uint32_t bn_add(struct LITE_BIGNUM *c,
-		const struct LITE_BIGNUM *a);
-uint32_t bn_sub(struct LITE_BIGNUM *c,
-		const struct LITE_BIGNUM *a);
-int bn_modinv_vartime(struct LITE_BIGNUM *r,
-			const struct LITE_BIGNUM *e,
-			const struct LITE_BIGNUM *MOD);
-int bn_is_bit_set(const struct LITE_BIGNUM *a, int n);
+		      const struct LITE_BIGNUM *input,
+		      const struct LITE_BIGNUM *exp,
+		      const struct LITE_BIGNUM *N,
+		      uint32_t pubexp);
+uint32_t bn_add(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a);
+int32_t bn_sub(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a);
+int bn_modinv_vartime(struct LITE_BIGNUM *r, const struct LITE_BIGNUM *e,
+		      const struct LITE_BIGNUM *MOD);
+int bn_is_bit_set(const struct LITE_BIGNUM *a, size_t n);
 
 /*
  * Accelerated bn.

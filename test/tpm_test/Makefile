@@ -37,6 +37,7 @@ CFLAGS += -I ${PYTHON_INCLUDE}
 CFLAGS += -I../../../../third_party/cryptoc/include
 CFLAGS += -I../../board/cr50
 CFLAGS += -I../../chip/g
+CFLAGS += -I../../core/host
 CFLAGS += -I../../fuzz
 CFLAGS += -I../../include
 CFLAGS += -I..
@@ -46,6 +47,8 @@ CFLAGS += -Itestlib
 CFLAGS += -DLIBFTDI1=1
 CFLAGS += -c
 CFLAGS += -DCR50_NO_BN_ASM
+CFLAGS += -DBOARD_HOST
+CFLAGS += -DBOARD_TASKFILE="ec.tasklist"
 CFLAGS += -I../../fuzz
 TARGET = ftdi_spi_tpm
 
@@ -68,7 +71,8 @@ $(obj)/%.o: $(obj)/%.c
 
 $(obj)/%.o: %.c
 	$(call echo,"  CC      $(notdir $@)")
-	$(Q)gcc $(CFLAGS) -Wall -Werror -MMD -MF $@.d -MT $@ -o $@ $<
+	$(Q)gcc $(CFLAGS) -Wall -Werror -Wno-error=deprecated-declarations\
+		-Wno-error=unused-variable -MMD -MF $@.d -MT $@ -o $@ $<
 
 $(obj)/_$(TARGET).so: $(OBJS) $(obj)/$(TARGET).py
 	$(call echo,"  LD      $(notdir $@)")

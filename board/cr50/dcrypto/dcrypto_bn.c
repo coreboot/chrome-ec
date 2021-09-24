@@ -1286,7 +1286,8 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 			   const struct LITE_BIGNUM *exp,
 			   const struct LITE_BIGNUM *N, uint32_t pubexp)
 {
-	int i, result;
+	int result;
+	size_t i;
 	struct DMEM_ctx *ctx =
 		(struct DMEM_ctx *)GREG32_ADDR(CRYPTO, DMEM_DUMMY);
 
@@ -1360,7 +1361,8 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 int dcrypto_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
 		   const struct LITE_BIGNUM *exp, const struct LITE_BIGNUM *N)
 {
-	int i, result;
+	int result;
+	size_t i;
 	struct DMEM_ctx *ctx =
 		(struct DMEM_ctx *)GREG32_ADDR(CRYPTO, DMEM_DUMMY);
 
