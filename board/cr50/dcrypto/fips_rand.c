@@ -306,17 +306,17 @@ static bool fips_drbg_reseed_with_entropy(struct drbg_ctx *ctx)
 	return true;
 }
 
-enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
-						size_t out_len,
-						const void *input,
-						size_t input_len)
+enum dcrypto_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx,
+						   void *out, size_t out_len,
+						   const void *input,
+						   size_t input_len)
 {
-	enum hmac_result err =
+	enum dcrypto_result err =
 		hmac_drbg_generate(ctx, out, out_len, input, input_len);
 
-	while (err == HMAC_DRBG_RESEED_REQUIRED) {
+	while (err == DCRYPTO_RESEED_NEEDED) {
 		if (!fips_drbg_reseed_with_entropy(ctx))
-			return HMAC_DRBG_RESEED_REQUIRED;
+			return DCRYPTO_FAIL;
 		err = hmac_drbg_generate(ctx, out, out_len, input, input_len);
 	}
 	return err;
@@ -338,8 +338,7 @@ bool fips_rand_bytes(void *buffer, size_t len)
 		size_t request = (len > (7500 / 8)) ? (7500 / 8) : len;
 
 		if (fips_hmac_drbg_generate_reseed(&fips_drbg, buffer, request,
-						   NULL,
-						   0) != HMAC_DRBG_SUCCESS)
+						   NULL, 0) != DCRYPTO_OK)
 			return false;
 		len -= request;
 		buffer += request;
@@ -347,18 +346,18 @@ bool fips_rand_bytes(void *buffer, size_t len)
 	return true;
 }
 
-enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
-					      p256_int *out)
+enum dcrypto_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
+						 p256_int *out)
 {
-	enum hmac_result err;
+	enum dcrypto_result err;
 
 	if (!fips_crypto_allowed())
-		return HMAC_DRBG_INVALID_PARAM;
+		return DCRYPTO_FAIL;
 
 	err = p256_hmac_drbg_generate(drbg, out);
-	while (err == HMAC_DRBG_RESEED_REQUIRED) {
+	while (err == DCRYPTO_RESEED_NEEDED) {
 		if (!fips_drbg_reseed_with_entropy(drbg))
-			return HMAC_DRBG_RESEED_REQUIRED;
+			return DCRYPTO_FAIL;
 		err = p256_hmac_drbg_generate(drbg, out);
 	}
 	return err;

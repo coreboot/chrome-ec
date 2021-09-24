@@ -405,7 +405,7 @@ static enum dcrypto_result ecdsa_sign_go(p256_int *r, p256_int *s)
 	hmac_drbg_init(&drbg, r->a, sizeof(r->a), NULL, 0, NULL, 0);
 
 	/* pick a key */
-	if (p256_hmac_drbg_generate(&drbg, &d) != HMAC_DRBG_SUCCESS) {
+	if (p256_hmac_drbg_generate(&drbg, &d) != DCRYPTO_OK) {
 		/* to be consistent with ecdsa_sign error return */
 		drbg_exit(&drbg);
 		return DCRYPTO_FAIL;

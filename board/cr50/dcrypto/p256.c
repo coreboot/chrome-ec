@@ -191,9 +191,9 @@ void p256_fast_random(p256_int *rnd)
 }
 
 /* B.5.2 Per-Message Secret Number Generation by Testing Candidates */
-enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *rnd)
+enum dcrypto_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *rnd)
 {
-	enum hmac_result result;
+	enum dcrypto_result result;
 
 	/* Generate p256 candidates from DRBG until valid is found. */
 	do {
@@ -217,7 +217,7 @@ enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *rnd)
 		 * Key comes from DRBG, it is ensured to be in valid
 		 * range for the P-256 curve.
 		 */
-	} while ((result == HMAC_DRBG_SUCCESS) &&
+	} while ((result == DCRYPTO_OK) &&
 		 (p256_lt_blinded(rnd, &SECP256r1_nMin2) >= 0));
 	p256_add_d(rnd, 1, rnd);
 

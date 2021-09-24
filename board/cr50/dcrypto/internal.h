@@ -99,25 +99,18 @@ struct drbg_ctx {
 /*
  * NIST SP 800-90A HMAC DRBG.
  */
-enum hmac_result {
-	HMAC_DRBG_SUCCESS = 0,
-	HMAC_DRBG_INVALID_PARAM = 1,
-	HMAC_DRBG_RESEED_REQUIRED = 2
-};
 
 /* Standard initialization. */
-void hmac_drbg_init(struct drbg_ctx *ctx,
-		    const void *p0, size_t p0_len,
-		    const void *p1, size_t p1_len,
-		    const void *p2, size_t p2_len);
+void hmac_drbg_init(struct drbg_ctx *ctx, const void *p0, size_t p0_len,
+		    const void *p1, size_t p1_len, const void *p2,
+		    size_t p2_len);
 
-void hmac_drbg_reseed(struct drbg_ctx *ctx,
-		      const void *p0, size_t p0_len,
-		      const void *p1, size_t p1_len,
-		      const void *p2, size_t p2_len);
-enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx, void *out,
-				    size_t out_len, const void *input,
-				    size_t input_len);
+void hmac_drbg_reseed(struct drbg_ctx *ctx, const void *p0, size_t p0_len,
+		      const void *p1, size_t p1_len, const void *p2,
+		      size_t p2_len);
+enum dcrypto_result hmac_drbg_generate(struct drbg_ctx *ctx, void *out,
+				       size_t out_len, const void *input,
+				       size_t input_len);
 void drbg_exit(struct drbg_ctx *ctx);
 
 /**
@@ -162,19 +155,19 @@ extern struct drbg_ctx fips_drbg;
  *
  * @param drbg DRBG to use
  * @param out output value
- * @return HMAC_DRBG_SUCCESS if out contains random.
+ * @return DCRYPTO_OK if out contains random.
  */
-enum hmac_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
-					      p256_int *out);
+enum dcrypto_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
+					         p256_int *out);
 
 /**
  * wrapper around hmac_drbg_generate to automatically reseed drbg
  * when needed.
  */
-enum hmac_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx, void *out,
-						size_t out_len,
-						const void *input,
-						size_t input_len);
+enum dcrypto_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx,
+						   void *out, size_t out_len,
+						   const void *input,
+						   size_t input_len);
 
 /* Set seed for fast random number generator using LFSR. */
 void set_fast_random_seed(uint32_t seed);
@@ -311,7 +304,8 @@ enum dcrypto_result dcrypto_p256_key_pwct(
 void p256_fast_random(p256_int *rnd);
 
 /* Generate a p256 number between 1 < k < |p256| using provided DRBG. */
-enum hmac_result p256_hmac_drbg_generate(struct drbg_ctx *ctx, p256_int *k_out);
+enum dcrypto_result p256_hmac_drbg_generate(struct drbg_ctx *ctx,
+					    p256_int *k_out);
 
 /**
  * Sign using provided DRBG. Reseed DRBG with entropy from verified TRNG if

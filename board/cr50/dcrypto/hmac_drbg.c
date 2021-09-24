@@ -93,7 +93,7 @@ void hmac_drbg_reseed(struct drbg_ctx *ctx,
 	ctx->reseed_counter = 1;
 }
 
-enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx,
+enum dcrypto_result hmac_drbg_generate(struct drbg_ctx *ctx,
 		       void *out, size_t out_len,
 		       const void *input, size_t input_len)
 {
@@ -102,10 +102,10 @@ enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx,
 	 * Reseed_interval = 10 000 requests.
 	 */
 	if (out_len > 7500 / 8)
-		return HMAC_DRBG_INVALID_PARAM;
+		return DCRYPTO_FAIL;
 
 	if (ctx->reseed_counter++ >= 10000)
-		return HMAC_DRBG_RESEED_REQUIRED;
+		return DCRYPTO_RESEED_NEEDED;
 
 	if (input_len)
 		update(ctx, input, input_len, NULL, 0, NULL, 0);
@@ -122,7 +122,7 @@ enum hmac_result hmac_drbg_generate(struct drbg_ctx *ctx,
 
 	update(ctx, input, input_len, NULL, 0, NULL, 0);
 
-	return HMAC_DRBG_SUCCESS;
+	return DCRYPTO_OK;
 }
 
 void drbg_exit(struct drbg_ctx *ctx)
@@ -451,7 +451,7 @@ static enum vendor_cmd_rc drbg_test(enum vendor_cmd_cc code, void *buf,
 			return VENDOR_RC_BOGUS_ARGS;
 
 		if (hmac_drbg_generate(&drbg_ctx, output, p1_len, p0, p0_len) !=
-		    HMAC_DRBG_SUCCESS)
+		    DCRYPTO_OK)
 			return VENDOR_RC_INTERNAL_ERROR;
 
 		memcpy(buf, output, p1_len);

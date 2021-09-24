@@ -332,14 +332,13 @@ static bool fips_hmac_drbg_generate_kat(struct drbg_ctx *ctx)
 		0xf1, 0x32, 0xf6, 0x86, 0xb7, 0x60, 0xf0, 0x12
 	};
 	uint8_t buf[128];
-	int passed;
+	enum dcrypto_result passed;
 
-	passed = hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0) -
-		 HMAC_DRBG_SUCCESS;
+	passed = hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0);
 
 	/* Verify internal drbg state */
-	passed |= DCRYPTO_equals(ctx->v, V2, sizeof(V2)) - DCRYPTO_OK;
-	passed |= DCRYPTO_equals(ctx->k, K2, sizeof(K2)) - DCRYPTO_OK;
+	passed |= DCRYPTO_equals(ctx->v, V2, sizeof(V2));
+	passed |= DCRYPTO_equals(ctx->k, K2, sizeof(K2));
 
 	memcpy(buf, drbg_entropy2, sizeof(drbg_entropy2));
 	if (fips_break_cmd == FIPS_BREAK_HMAC_DRBG)
@@ -348,10 +347,9 @@ static bool fips_hmac_drbg_generate_kat(struct drbg_ctx *ctx)
 	hmac_drbg_reseed(ctx, buf, sizeof(drbg_entropy2), drbg_addtl_input2,
 			 sizeof(drbg_addtl_input2), NULL, 0);
 
-	passed |= hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0) -
-		  HMAC_DRBG_SUCCESS;
-	passed |= DCRYPTO_equals(buf, KA, sizeof(KA)) - DCRYPTO_OK;
-	return passed == 0;
+	passed |= hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0);
+	passed |= DCRYPTO_equals(buf, KA, sizeof(KA));
+	return passed == DCRYPTO_OK;
 }
 
 /* Known-answer test for HMAC_DRBG SHA256. */

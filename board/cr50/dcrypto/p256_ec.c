@@ -68,19 +68,18 @@ enum dcrypto_result dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg,
 						    const p256_int *message,
 						    p256_int *r, p256_int *s)
 {
-	int result;
+	enum dcrypto_result result;
 	p256_int k;
 
 	/* Pick uniform 0 < k < R */
-	result = fips_p256_hmac_drbg_generate(drbg, &k) - HMAC_DRBG_SUCCESS;
+	result = fips_p256_hmac_drbg_generate(drbg, &k);
 
-	result |= dcrypto_p256_ecdsa_sign_raw(&k, key, message, r, s) -
-		  DCRYPTO_OK;
+	result |= dcrypto_p256_ecdsa_sign_raw(&k, key, message, r, s);
 
 	/* Wipe temp k */
 	p256_clear(&k);
 
-	return dcrypto_ok_if_zero(result);
+	return dcrypto_ok_if_zero(result - DCRYPTO_OK);
 }
 
 enum dcrypto_result dcrypto_p256_key_pwct(struct drbg_ctx *drbg,

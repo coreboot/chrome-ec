@@ -139,19 +139,18 @@ enum dcrypto_result dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg,
 					    const p256_int *message,
 					    p256_int *r, p256_int *s)
 {
-	int result;
+	enum dcrypto_result result;
 	p256_int nonce;
 
 	/* Pick uniform 0 < k < R */
-	result = (p256_hmac_drbg_generate(drbg, &nonce) != HMAC_DRBG_SUCCESS);
+	result = p256_hmac_drbg_generate(drbg, &nonce);
 
-	result |= dcrypto_p256_ecdsa_sign_raw(&nonce, key, message, r, s) -
-		  DCRYPTO_OK;
+	result |= dcrypto_p256_ecdsa_sign_raw(&nonce, key, message, r, s);
 
 	/* Wipe temp nonce */
 	p256_clear(&nonce);
 
-	return dcrypto_ok_if_zero(result);
+	return dcrypto_ok_if_zero(result - DCRYPTO_OK);
 }
 
 enum dcrypto_result dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce,
