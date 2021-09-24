@@ -216,7 +216,7 @@ static int command_rand(int argc, char **argv)
 	while (count-- > 0) {
 		uint64_t rnd;
 		uint32_t rvalue;
-		int size;
+		size_t size;
 
 		rnd = fips_trng_rand32();
 		if (!rand_valid(rnd)) {
