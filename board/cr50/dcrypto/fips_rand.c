@@ -50,6 +50,12 @@ static struct {
 } rand_state;
 
 /**
+ * We use FIPS_UNINITIALIZED as default (zero) value to accumulate
+ * errors, so check it is really zero.
+ */
+BUILD_ASSERT(FIPS_UNINITIALIZED == 0);
+
+/**
  * NIST SP 800-90B 4.4.1
  * The repetition count test detects abnormal runs of 0s or 1s.
  * RCT_CUTOFF_BITS must be >= 32.
@@ -60,7 +66,7 @@ static struct {
  * readings, packed into 32-bit words.
  * @return false if test failed
  */
-static bool repetition_count_test(uint32_t rnd)
+static enum fips_status repetition_count_test(uint32_t rnd)
 {
 	uint32_t clz, ctz, clo, cto;
 
@@ -77,7 +83,7 @@ static bool repetition_count_test(uint32_t rnd)
 	 */
 	if ((ctz + rand_state.last_clz >= RCT_CUTOFF_SAMPLES) ||
 	    (cto + rand_state.last_clo >= RCT_CUTOFF_SAMPLES))
-		return false;
+		return FIPS_FATAL_TRNG_RCT;
 
 	/**
 	 * merge series of repetitive values - update running counters in
@@ -96,7 +102,7 @@ static bool repetition_count_test(uint32_t rnd)
 	/* check we collected enough bits for statistics */
 	if (rand_state.rct_count < RCT_CUTOFF_WORDS)
 		++rand_state.rct_count;
-	return true;
+	return FIPS_UNINITIALIZED;
 }
 
 static int misbalanced(uint32_t count)
@@ -122,7 +128,7 @@ static int popcount(uint32_t x)
  * Instead of storing actual samples we can store pop counts
  * of each 32bit reading, which would fit in 8-bit.
  */
-bool adaptive_proportion_test(uint32_t rnd)
+static enum fips_status adaptive_proportion_test(uint32_t rnd)
 {
 	/* update rolling count */
 	rand_state.count -= rand_state.pops[rand_state.oldest];
@@ -142,8 +148,8 @@ bool adaptive_proportion_test(uint32_t rnd)
 	}
 	/* check when initialized */
 	if (rand_state.apt_initialized && misbalanced(rand_state.count))
-		return false;
-	return true;
+		return FIPS_FATAL_TRNG_APT;
+	return FIPS_UNINITIALIZED;
 }
 
 static bool fips_powerup_passed(void)
@@ -152,42 +158,45 @@ static bool fips_powerup_passed(void)
 	       rand_state.apt_initialized;
 }
 
-
 /**
- * get random from TRNG and run continuous health tests.
+ * Get random from TRNG and run continuous health tests.
  * it is also can simulate stuck-bit error
- * @param power_up if non-zero indicates warm-up mode
+ * @param power_up if true indicates warm-up mode
  * @return random value from TRNG
  */
-static uint64_t fips_trng32(int power_up)
+static uint64_t fips_trng32(void)
 {
 	uint64_t r;
+	uint32_t remaining_tries = 4;
+	enum fips_status error = FIPS_UNINITIALIZED;
 
-	/* Continuous health tests should have been initialized by now */
-	if (!(power_up || fips_crypto_allowed()))
-		return 0;
+	do {
+		r = read_rand();
 
-	/* get noise */
-	r = read_rand();
-
-	if (rand_valid(r)) {
-		if (!repetition_count_test((uint32_t)r)) {
-			fips_set_status(FIPS_FATAL_TRNG_RCT);
-			r = (uint32_t)r;
+		/* We can't read from TRNG. read_rand() made several tries. */
+		if (!rand_valid(r)) {
+			fips_set_status(FIPS_FATAL_TRNG_OTHER);
+			break;
 		}
-		if (!adaptive_proportion_test((uint32_t)r)) {
-			fips_set_status(FIPS_FATAL_TRNG_APT);
-			r = (uint32_t)r;
-		}
-	} else
-		fips_set_status(FIPS_FATAL_TRNG_OTHER);
+		error = repetition_count_test((uint32_t)r);
+		error |= adaptive_proportion_test((uint32_t)r);
+		remaining_tries--;
+		/* Repeat several times if statistical tests doesn't pass. */
+	} while (remaining_tries && error != FIPS_UNINITIALIZED);
 
+	if (error != FIPS_UNINITIALIZED) {
+		fips_set_status(error);
+		r = (uint32_t)r; /* Set result as invalid. */
+	}
 	return r;
 }
 
 uint64_t fips_trng_rand32(void)
 {
-	return fips_trng32(0);
+	if (!fips_crypto_allowed())
+		return 0;
+
+	return fips_trng32();
 }
 
 bool fips_trng_bytes(void *buffer, size_t len)
@@ -196,6 +205,9 @@ bool fips_trng_bytes(void *buffer, size_t len)
 	size_t random_togo = 0;
 	uint64_t rand;
 	uint32_t r;
+
+	if (!fips_crypto_allowed())
+		return false;
 	/**
 	 * Retrieve random numbers in 4 byte quantities and pack as many bytes
 	 * as needed into 'buffer'. If len is not divisible by 4, the
@@ -203,7 +215,7 @@ bool fips_trng_bytes(void *buffer, size_t len)
 	 */
 	while (len--) {
 		if (!random_togo) {
-			rand = fips_trng32(0);
+			rand = fips_trng32();
 			if (!rand_valid(rand))
 				return false;
 			r = (uint32_t)rand;
@@ -230,7 +242,7 @@ bool fips_trng_startup(int stage)
 	/* Startup tests per NIST SP800-90B, Section 4 */
 	/* 4096 1-bit samples, in 2 steps, 2048 bit in each */
 	for (uint32_t i = 0; i < (TRNG_INIT_WORDS) / 2; i++) {
-		uint64_t r = fips_trng32(1);
+		uint64_t r = fips_trng32();
 
 		if (!rand_valid(r))
 			return false;
@@ -258,7 +270,7 @@ bool fips_drbg_init(void)
 	 * this is roughly equal to 435 bits of full entropy.
 	 * Add 32 * 0.85 = 27 bits from nonce.
 	 */
-	nonce = fips_trng32(0);
+	nonce = fips_trng32();
 	if (!rand_valid(nonce))
 		return false;
 	random = (uint32_t)nonce;
@@ -271,7 +283,7 @@ bool fips_drbg_init(void)
 		       &random, sizeof(random), NULL,
 		       0);
 
-	set_fast_random_seed((uint32_t)fips_trng32(0));
+	set_fast_random_seed((uint32_t)fips_trng32());
 	rand_state.drbg_initialized = true;
 	return true;
 }
@@ -387,7 +399,11 @@ static int cmd_rand_perf(int argc, char **argv)
 	starttime = get_time().val;
 	for (k = 0; k < 10; k++) {
 		for (j = 0; j < 100; j++)
-			fips_rand_bytes(buf, sizeof(buf));
+			if (!fips_rand_bytes(buf, sizeof(buf))) {
+				ccprintf("DRBG test failed\n");
+				return EC_ERROR_HW_INTERNAL;
+			}
+				;
 		watchdog_reload();
 		cflush();
 	}
@@ -398,18 +414,10 @@ static int cmd_rand_perf(int argc, char **argv)
 	starttime = get_time().val;
 	for (k = 0; k < 10; k++) {
 		for (j = 0; j < 100; j++)
-			rand_bytes(&buf, sizeof(buf));
-		watchdog_reload();
-	}
-	starttime = get_time().val - starttime;
-	ccprintf("time for 1000 rand_byte() = %llu\n", starttime);
-	cflush();
-
-	starttime = get_time().val;
-	for (k = 0; k < 10; k++) {
-		for (j = 0; j < 100; j++)
-			if (!fips_trng_bytes(&buf, sizeof(buf)))
+			if (!fips_trng_bytes(&buf, sizeof(buf))) {
 				ccprintf("FIPS TRNG error\n");
+				return EC_ERROR_HW_INTERNAL;
+			}
 		watchdog_reload();
 	}
 	starttime = get_time().val - starttime;

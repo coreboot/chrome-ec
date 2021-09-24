@@ -18,6 +18,11 @@ extern "C" {
 
 #define TRNG_SAMPLE_BITS 1
 
+/**
+ * Probability of false positive in single APT/RCT test
+ * defined as 2^(-TRNG_TEST_ALPHA).
+ */
+#define TRNG_TEST_ALPHA 40
 
 /**
  * TRNG Health Tests
@@ -43,9 +48,14 @@ extern "C" {
  * (1) Repetition Count Test (RCT) NIST SP 800-90B 4.4.1
  * Cut off value is computed as:
  * c = ceil(1 + (-log2 alpha)/H);
- * alpha = 2^-50, H = 0.85; RCT_CUTOFF = CEIL(1+(50/0.85))
+ * alpha = 2^-50, H = 0.8; RCT_CUTOFF = CEIL(1+(ALPHA/0.8))
  */
-#define RCT_CUTOFF_SAMPLES 60
+#if TRNG_TEST_ALPHA == 40
+#define RCT_CUTOFF_SAMPLES 51
+#else
+/* RCT cut off for TRNG_TEST_ALPHA == 30 */
+#define RCT_CUTOFF_SAMPLES 39
+#endif
 
 /**
  * Number of 32-bit words containing RCT_CUTOFF_SAMPLES samples
@@ -66,10 +76,14 @@ extern "C" {
 #define APT_WINDOW_SIZE_NWORDS (BITS_TO_WORDS(APT_WINDOW_SIZE_BITS))
 /**
  * Cut off value = CRITBINOM(W, power(2,(-H)),1-α).
- * 692 = CRITBINOM(1024, power(2,(-0.85)), 1 - 2^(-50))
+ * 698 = CRITBINOM(1024, power(2,(-0.8)), 1 - 2^(-40))
  */
-#define APT_CUTOFF_SAMPLES 692
-
+#if TRNG_TEST_ALPHA == 40
+#define APT_CUTOFF_SAMPLES 698
+#else
+/* APT cut off for TRNG_TEST_ALPHA == 30 */
+#define APT_CUTOFF_SAMPLES 682
+#endif
 
 #ifdef __cplusplus
 }
