@@ -63,6 +63,15 @@ enum dcrypto_result DCRYPTO_p256_point_mul(p256_int *out_x, p256_int *out_y,
 	return dcrypto_p256_point_mul(n, in_x, in_y, out_x, out_y);
 }
 
+/**
+ * This function serves as workaround for gcc 11.2 crash.
+ */
+static enum dcrypto_result fips_p256_hmac_drbg_generate(struct drbg_ctx *ctx,
+							p256_int *rnd)
+{
+	return p256_hmac_drbg_generate(ctx, rnd);
+}
+
 enum dcrypto_result dcrypto_p256_fips_sign_internal(struct drbg_ctx *drbg,
 						    const p256_int *key,
 						    const p256_int *message,

@@ -401,7 +401,8 @@ static enum dcrypto_result ecdsa_sign_go(p256_int *r, p256_int *s)
 	p256_int message = *s;
 
 	/* drbg init with same entropy */
-	hmac_drbg_init(&drbg, r->a, sizeof(r->a), NULL, 0, NULL, 0);
+	hmac_drbg_init(&drbg, r->a, sizeof(r->a), NULL, 0, NULL, 0,
+		       HMAC_DRBG_DO_NOT_AUTO_RESEED);
 
 	/* pick a key */
 	if (p256_hmac_drbg_generate(&drbg, &d) != DCRYPTO_OK) {
@@ -411,8 +412,7 @@ static enum dcrypto_result ecdsa_sign_go(p256_int *r, p256_int *s)
 	}
 
 	/* drbg_reseed with entropy and message */
-	hmac_drbg_reseed(&drbg, r->a, sizeof(r->a), s->a, sizeof(s->a), NULL,
-			 0);
+	hmac_drbg_reseed(&drbg, r->a, sizeof(r->a), s->a, sizeof(s->a));
 
 	ret = dcrypto_p256_ecdsa_sign(&drbg, &d, &message, r, s);
 

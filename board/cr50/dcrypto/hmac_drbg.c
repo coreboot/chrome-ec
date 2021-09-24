@@ -8,6 +8,10 @@
 #include "extension.h"
 #include "internal.h"
 
+/* Assuming H=0.8, we need 320 bits from TRNG to get 256 bits. */
+#define RESEED_ENTROPY_SIZE_BITS  320
+#define RESEED_ENTROPY_SIZE_WORDS (BITS_TO_WORDS(RESEED_ENTROPY_SIZE_BITS))
+
 /* HMAC_DRBG flow in NIST SP 800-90Ar1, 10.2, RFC 6979
  */
 /* V = HMAC(K, V) */
@@ -59,58 +63,91 @@ static void update(struct drbg_ctx *ctx,
 		  p0, p0_len, p1, p1_len, p2, p2_len);
 }
 
-void hmac_drbg_init(struct drbg_ctx *ctx,
-		    const void *p0, size_t p0_len,
-		    const void *p1, size_t p1_len,
-		    const void *p2, size_t p2_len)
+void hmac_drbg_init(struct drbg_ctx *ctx, const void *entropy,
+		    size_t entropy_len, const void *nonce, size_t nonce_len,
+		    const void *perso, size_t perso_len,
+		    uint32_t reseed_threshold)
 {
-	/* K = 0x00 0x00 0x00 ... 0x00 */
-	always_memset(ctx->k,  0x00, sizeof(ctx->k));
+	/**
+	 * Clear the context. Also set
+	 * K = 0x00 0x00 0x00 ... 0x00
+	 * magic_cookie = 0
+	 */
+	always_memset(ctx, 0x00, sizeof(*ctx));
 	/* V = 0x01 0x01 0x01 ... 0x01 */
-	always_memset(ctx->v,  0x01, sizeof(ctx->v));
+	always_memset(ctx->v, 0x01, sizeof(ctx->v));
 
-	update(ctx, p0, p0_len, p1, p1_len, p2, p2_len);
+	/* seed_material = entropy_input || nonce || personalization_string. */
+	update(ctx, entropy, entropy_len, nonce, nonce_len, perso, perso_len);
 
 	ctx->reseed_counter = 1;
+	ctx->reseed_threshold = reseed_threshold;
+	ctx->magic_cookie = DCRYPTO_OK;
 }
 
 void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx, const p256_int *key,
 			    const p256_int *message)
 {
-	hmac_drbg_init(ctx,
-		       key->a, sizeof(key->a),
-		       message->a, sizeof(message->a),
-		       NULL, 0);
+	hmac_drbg_init(ctx, key->a, sizeof(key->a), message->a,
+		       sizeof(message->a), NULL, 0,
+		       HMAC_DRBG_DO_NOT_AUTO_RESEED);
 }
 
-void hmac_drbg_reseed(struct drbg_ctx *ctx,
-		      const void *p0, size_t p0_len,
-		      const void *p1, size_t p1_len,
-		      const void *p2, size_t p2_len)
+void hmac_drbg_reseed(struct drbg_ctx *ctx, const void *entropy,
+		      size_t entropy_len, const void *additional_input,
+		      size_t additional_input_len)
 {
-	update(ctx, p0, p0_len, p1, p1_len, p2, p2_len);
+	/* seed_material = entropy_input || additional_input. */
+	update(ctx, entropy, entropy_len, additional_input,
+	       additional_input_len, NULL, 0);
 	ctx->reseed_counter = 1;
 }
 
-enum dcrypto_result hmac_drbg_generate(struct drbg_ctx *ctx,
-		       void *out, size_t out_len,
-		       const void *input, size_t input_len)
+enum dcrypto_result hmac_drbg_generate(struct drbg_ctx *ctx, void *out,
+				       size_t out_len,
+				       const void *additional_input,
+				       size_t additional_input_len)
 {
-	/* According to NIST SP 800-90A rev 1 B.2
-	 * Maximum number of bits per request = 7500 bits
-	 * Reseed_interval = 10 000 requests.
-	 */
-	if (out_len > 7500 / 8)
+	/* Prevent misuse of uninitialized DRBG context. */
+	if (!hmac_drbg_ctx_valid(ctx))
 		return DCRYPTO_FAIL;
 
-	if (ctx->reseed_counter++ >= 10000)
+	/**
+	 * In addition to output length, check also additional input
+	 * length to be reasonable.
+	 */
+
+	if (out_len > HMAC_DRBG_MAX_OUTPUT_SIZE ||
+	    additional_input_len > HMAC_DRBG_MAX_OUTPUT_SIZE)
+		return DCRYPTO_FAIL;
+
+	/**
+	 * Special case when no auto reseed is needed. Note, as we use unsigned
+	 * 32-bit values, ctx->reseed_counter can never be larger
+	 * than HMAC_DRBG_DO_NOT_AUTO_RESEED, so check explicitly.
+	 */
+	if (ctx->reseed_counter == HMAC_DRBG_DO_NOT_AUTO_RESEED)
 		return DCRYPTO_RESEED_NEEDED;
 
-	if (input_len)
-		update(ctx, input, input_len, NULL, 0, NULL, 0);
+	if (ctx->reseed_counter > ctx->reseed_threshold) {
+		uint32_t entropy[RESEED_ENTROPY_SIZE_WORDS];
+
+		if (!fips_trng_bytes(&entropy, sizeof(entropy)))
+			return DCRYPTO_FAIL;
+
+		hmac_drbg_reseed(ctx, entropy, sizeof(entropy),
+				 additional_input, additional_input_len);
+		additional_input_len = 0;
+	}
+
+	ctx->reseed_counter++;
+
+	if (additional_input_len)
+		update(ctx, additional_input, additional_input_len, NULL, 0,
+		       NULL, 0);
 
 	while (out_len) {
-		size_t n = out_len > sizeof(ctx->v) ? sizeof(ctx->v) : out_len;
+		size_t n = MIN(out_len, sizeof(ctx->v));
 
 		update_v(ctx->k, ctx->v);
 
@@ -119,15 +156,14 @@ enum dcrypto_result hmac_drbg_generate(struct drbg_ctx *ctx,
 		out_len -= n;
 	}
 
-	update(ctx, input, input_len, NULL, 0, NULL, 0);
+	update(ctx, additional_input, additional_input_len, NULL, 0, NULL, 0);
 
 	return DCRYPTO_OK;
 }
 
 void drbg_exit(struct drbg_ctx *ctx)
 {
-	always_memset(ctx->k,  0x00, sizeof(ctx->k));
-	always_memset(ctx->v,  0x00, sizeof(ctx->v));
+	always_memset(ctx, 0, sizeof(*ctx));
 }
 
 #ifndef CRYPTO_TEST_CMD_HMAC_DRBG
@@ -188,7 +224,10 @@ static int cmd_rfc6979(int argc, char **argv)
 	memcpy(&h1, SHA256_final(&ctx)->b8, SHA256_DIGEST_SIZE);
 
 	hmac_drbg_init_rfc6979(&drbg, x, &h1);
-	hmac_drbg_generate(&drbg, k.a, sizeof(k), NULL, 0);
+	if (hmac_drbg_generate(&drbg, k.a, sizeof(k), NULL, 0) != DCRYPTO_OK) {
+		ccprintf("HMAC DRBG generate failed\n");
+		return EC_ERROR_HW_INTERNAL;
+	}
 	ccprintf("K = %ph\n", HEX_BUF(&k, 32));
 	drbg_exit(&drbg);
 	result = memcmp(&k, reference_k, sizeof(reference_k));
@@ -290,25 +329,25 @@ static int cmd_hmac_drbg(int argc, char **argv)
 	static uint8_t output[128];
 
 	int i, cmp_result;
+	enum dcrypto_result err;
 
 	for (i = 0; i < HMAC_TEST_COUNT; i++) {
-		hmac_drbg_init(&ctx,
-			       init_entropy[i], sizeof(init_entropy[i]),
-			       init_nonce[i], sizeof(init_nonce[i]),
-			       NULL, 0);
+		hmac_drbg_init(&ctx, init_entropy[i], sizeof(init_entropy[i]),
+			       init_nonce[i], sizeof(init_nonce[i]), NULL, 0,
+			       10000);
 
-		hmac_drbg_reseed(&ctx,
-				 reseed_entropy[i], sizeof(reseed_entropy[i]),
-				 NULL, 0,
-				 NULL, 0);
+		hmac_drbg_reseed(&ctx, reseed_entropy[i],
+				 sizeof(reseed_entropy[i]), NULL, 0);
 
-		hmac_drbg_generate(&ctx,
-				   output, sizeof(output),
-				   NULL, 0);
+		err = hmac_drbg_generate(&ctx, output, sizeof(output), NULL, 0);
 
-		hmac_drbg_generate(&ctx,
-				   output, sizeof(output),
-				   NULL, 0);
+		err |= hmac_drbg_generate(&ctx, output, sizeof(output), NULL,
+					  0);
+
+		if (err != DCRYPTO_OK) {
+			ccprintf("HMAC DRBG generate failed.\n");
+			return EC_ERROR_HW_INTERNAL;
+		}
 
 		cmp_result = memcmp(output, expected_output[i], sizeof(output));
 		ccprintf("HMAC DRBG generate test %d, %s\n",
@@ -327,15 +366,18 @@ static int cmd_hmac_drbg_rand(int argc, char **argv)
 	static struct drbg_ctx ctx;
 	static uint8_t output[128];
 
-	int i;
+	size_t i;
 
 	/* Seed with 256 bits from TRNG. */
 	if (!fips_trng_bytes(output, 32))
 		return EC_ERROR_HW_INTERNAL;
-	hmac_drbg_init(&ctx, output, 32, NULL, 0, NULL, 0);
+	hmac_drbg_init(&ctx, output, 32, NULL, 0, NULL, 0, 10000);
 
-	hmac_drbg_generate(&ctx, output, sizeof(output), NULL, 0);
-
+	if (hmac_drbg_generate(&ctx, output, sizeof(output), NULL, 0) !=
+	    DCRYPTO_OK) {
+		ccprintf("HMAC_DRBG generate failed.\n");
+		return EC_ERROR_HW_INTERNAL;
+	}
 	ccprintf("Randomly initialized HMAC DRBG, 1024 bit output: ");
 
 	for (i = 0; i < sizeof(output); i++)
@@ -438,11 +480,12 @@ static enum vendor_cmd_rc drbg_test(enum vendor_cmd_cc code, void *buf,
 
 	switch (drbg_op) {
 	case DRBG_INIT: {
-		hmac_drbg_init(&drbg_ctx, p0, p0_len, p1, p1_len, p2, p2_len);
+		hmac_drbg_init(&drbg_ctx, p0, p0_len, p1, p1_len, p2, p2_len,
+			       10000);
 		break;
 	}
 	case DRBG_RESEED: {
-		hmac_drbg_reseed(&drbg_ctx, p0, p0_len, p1, p1_len, p2, p2_len);
+		hmac_drbg_reseed(&drbg_ctx, p0, p0_len, p1, p1_len);
 		break;
 	}
 	case DRBG_GENERATE: {

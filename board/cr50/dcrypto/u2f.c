@@ -183,9 +183,11 @@ static enum ec_error_list u2f_origin_user_key_pair(
 		 */
 		hmac_drbg_init(&drbg, state->drbg_entropy,
 			       state->drbg_entropy_size, dev_salt, P256_NBYTES,
-			       NULL, 0);
-		hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
-				   key_handle, key_handle_size);
+			       NULL, 0, HMAC_DRBG_DO_NOT_AUTO_RESEED);
+		if (hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
+				       key_handle,
+				       key_handle_size) != DCRYPTO_OK)
+			return EC_ERROR_HW_INTERNAL;
 	} else {
 		/**
 		 * FIPS-compliant path.
@@ -198,15 +200,18 @@ static enum ec_error_list u2f_origin_user_key_pair(
 		 */
 		hmac_drbg_init(&drbg, state->drbg_entropy,
 			       state->drbg_entropy_size, key_handle,
-			       key_handle_size, NULL, 0);
+			       key_handle_size, NULL, 0,
+			       HMAC_DRBG_DO_NOT_AUTO_RESEED);
 
 		/**
 		 * Additional data = Device_ID (constant coming from HW).
 		 */
-		hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed), dev_salt,
-				   P256_NBYTES);
+		if (hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
+				       dev_salt, P256_NBYTES) != DCRYPTO_OK)
+			return EC_ERROR_HW_INTERNAL;
 	}
 	result = DCRYPTO_p256_key_from_bytes(pk_x, pk_y, d, key_seed);
+	drbg_exit(&drbg);
 
 	if (result == DCRYPTO_RETRY)
 		return EC_ERROR_TRY_AGAIN;
@@ -427,7 +432,7 @@ enum ec_error_list u2f_sign(const struct u2f_state *state,
 		  DCRYPTO_OK) ?
 			 EC_SUCCESS :
 			       EC_ERROR_HW_INTERNAL;
-
+	drbg_exit(&ctx);
 	p256_clear(&origin_d);
 
 	p256_to_bin(&r, sig->sig_r);
@@ -485,19 +490,21 @@ static bool g2f_individual_key_pair(const struct u2f_state *state, p256_int *d,
 		 */
 		hmac_drbg_init(&drbg, state->drbg_entropy,
 			       state->drbg_entropy_size, state->salt,
-			       sizeof(state->salt), NULL, 0);
+			       sizeof(state->salt), NULL, 0,
+			       HMAC_DRBG_DO_NOT_AUTO_RESEED);
 
 		do {
 			/**
 			 * Additional data = constant coming from HW.
 			 */
-			hmac_drbg_generate(&drbg, key_candidate,
-					   sizeof(key_candidate), buf.b32,
-					   sizeof(buf));
+			if (hmac_drbg_generate(&drbg, key_candidate,
+					       sizeof(key_candidate), buf.b32,
+					       sizeof(buf)) != DCRYPTO_OK)
+				return false;
 			result = DCRYPTO_p256_key_from_bytes(pk_x, pk_y, d,
 							     key_candidate);
 		} while (result == DCRYPTO_RETRY);
-
+		drbg_exit(&drbg);
 		if (result != DCRYPTO_OK)
 			return false;
 	}

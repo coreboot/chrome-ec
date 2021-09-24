@@ -40,6 +40,12 @@ test_mockable void rand_bytes(void *buffer, size_t len)
 		*b = (uint8_t)rand_r(&seed);
 }
 
+test_mockable bool fips_trng_bytes(void *buffer, size_t len)
+{
+	rand_bytes(buffer, len);
+	return true;
+}
+
 test_mockable bool fips_rand_bytes(void *buffer, size_t len)
 {
 	rand_bytes(buffer, len);

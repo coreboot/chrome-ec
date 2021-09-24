@@ -90,27 +90,43 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 			const struct LITE_BIGNUM *N,
 			uint32_t pubexp);
 
+/**
+ * NIST SP 800-90A HMAC_DRBG_SHA2-256.
+ */
 struct drbg_ctx {
 	uint32_t k[SHA256_DIGEST_WORDS];
 	uint32_t v[SHA256_DIGEST_WORDS];
 	uint32_t reseed_counter;
+	uint32_t reseed_threshold;
+	enum dcrypto_result magic_cookie;
 };
-
-/*
- * NIST SP 800-90A HMAC DRBG.
+/* According to NIST SP 800-90A rev 1 B.2
+ * Maximum number of bits per request = 7500 bit, ~937 bytes
  */
+#define HMAC_DRBG_MAX_OUTPUT_SIZE 937U
+
+#define HMAC_DRBG_DO_NOT_AUTO_RESEED 0xFFFFFFFF
+
+/* Check that DRBG is properly initialized. */
+static inline bool hmac_drbg_ctx_valid(const struct drbg_ctx *drbg)
+{
+	return drbg->magic_cookie == DCRYPTO_OK;
+}
 
 /* Standard initialization. */
-void hmac_drbg_init(struct drbg_ctx *ctx, const void *p0, size_t p0_len,
-		    const void *p1, size_t p1_len, const void *p2,
-		    size_t p2_len);
+void hmac_drbg_init(struct drbg_ctx *ctx, const void *entropy,
+		    size_t entropy_len, const void *nonce, size_t nonce_len,
+		    const void *perso, size_t perso_len,
+		    uint32_t reseed_threshold);
 
-void hmac_drbg_reseed(struct drbg_ctx *ctx, const void *p0, size_t p0_len,
-		      const void *p1, size_t p1_len, const void *p2,
-		      size_t p2_len);
+void hmac_drbg_reseed(struct drbg_ctx *ctx, const void *entropy,
+		      size_t entropy_len, const void *additional_input,
+		      size_t additional_input_len);
+
 enum dcrypto_result hmac_drbg_generate(struct drbg_ctx *ctx, void *out,
 				       size_t out_len, const void *input,
-				       size_t input_len);
+				       size_t input_len) __warn_unused_result;
+
 void drbg_exit(struct drbg_ctx *ctx);
 
 /**
@@ -140,34 +156,24 @@ uint64_t read_rand(void);
  */
 bool fips_trng_startup(int stage);
 
-
-/* initialize cr50-wide DRBG replacing rand */
+/**
+ * Check that Cr50-wide HMAC_DRBG seeded according NIST SP 800-90A
+ * recomendation is properly initialized and can be used.
+ * Includes fips_crypto_allowed() check.
+ * Initialize DRBG if it was not yet initialized.
+ */
 bool fips_drbg_init(void);
-/* mark cr50-wide DRBG as not initialized */
-void fips_drbg_init_clear(void);
 
 /* FIPS DRBG initialized at boot time/first use. */
 extern struct drbg_ctx fips_drbg;
 
-/**
- * Generate valid P-256 random from FIPS DRBG, reseed DRBG with entropy from
- * verified TRNG if needed.
- *
- * @param drbg DRBG to use
- * @param out output value
- * @return DCRYPTO_OK if out contains random.
- */
-enum dcrypto_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
-					         p256_int *out);
+/* Initialize for use as RFC6979 DRBG. */
+void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx, const p256_int *key,
+			    const p256_int *message);
 
-/**
- * wrapper around hmac_drbg_generate to automatically reseed drbg
- * when needed.
- */
-enum dcrypto_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx,
-						   void *out, size_t out_len,
-						   const void *input,
-						   size_t input_len);
+/* Generate a p256 number between 1 < k < |p256| using provided DRBG. */
+enum dcrypto_result p256_hmac_drbg_generate(struct drbg_ctx *ctx,
+					    p256_int *k_out);
 
 /* Set seed for fast random number generator using LFSR. */
 void set_fast_random_seed(uint32_t seed);
@@ -303,10 +309,6 @@ enum dcrypto_result dcrypto_p256_key_pwct(
 /* Wipe content of rnd with pseudo-random values. */
 void p256_fast_random(p256_int *rnd);
 
-/* Generate a p256 number between 1 < k < |p256| using provided DRBG. */
-enum dcrypto_result p256_hmac_drbg_generate(struct drbg_ctx *ctx,
-					    p256_int *k_out);
-
 /**
  * Sign using provided DRBG. Reseed DRBG with entropy from verified TRNG if
  * needed.
@@ -322,10 +324,6 @@ enum dcrypto_result dcrypto_p256_fips_sign_internal(
 	struct drbg_ctx *drbg, const p256_int *key, const p256_int *message,
 	p256_int *r, p256_int *s) __warn_unused_result;
 
-/* Initialize for use as RFC6979 DRBG. */
-void hmac_drbg_init_rfc6979(struct drbg_ctx *ctx,
-			    const p256_int *key,
-			    const p256_int *message);
 
 /*
  * Accelerator runtime.

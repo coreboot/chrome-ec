@@ -281,7 +281,7 @@ static bool fips_hmac_drbg_instantiate_kat(struct drbg_ctx *ctx)
 
 	hmac_drbg_init(ctx, drbg_entropy0, sizeof(drbg_entropy0),
 		       drbg_nonce0, sizeof(drbg_nonce0), drbg_perso0,
-		       sizeof(drbg_perso0));
+		       sizeof(drbg_perso0), 10000);
 
 	return (DCRYPTO_equals(ctx->v, V0, sizeof(V0)) == DCRYPTO_OK) &&
 	       (DCRYPTO_equals(ctx->k, K0, sizeof(K0)) == DCRYPTO_OK);
@@ -299,7 +299,7 @@ static bool fips_hmac_drbg_reseed_kat(struct drbg_ctx *ctx)
 				       0x918D9EB7, 0xAE0CD544 };
 
 	hmac_drbg_reseed(ctx, drbg_entropy1, sizeof(drbg_entropy1),
-			 drbg_addtl_input1, sizeof(drbg_addtl_input1), NULL, 0);
+			 drbg_addtl_input1, sizeof(drbg_addtl_input1));
 
 	return (DCRYPTO_equals(ctx->v, V1, sizeof(V1)) == DCRYPTO_OK) &&
 	       (DCRYPTO_equals(ctx->k, K1, sizeof(K1)) == DCRYPTO_OK);
@@ -345,7 +345,7 @@ static bool fips_hmac_drbg_generate_kat(struct drbg_ctx *ctx)
 		buf[0] ^= 1;
 
 	hmac_drbg_reseed(ctx, buf, sizeof(drbg_entropy2), drbg_addtl_input2,
-			 sizeof(drbg_addtl_input2), NULL, 0);
+			 sizeof(drbg_addtl_input2));
 
 	passed |= hmac_drbg_generate(ctx, buf, sizeof(buf), NULL, 0);
 	passed |= DCRYPTO_equals(buf, KA, sizeof(KA));

@@ -19,16 +19,6 @@
  */
 struct drbg_ctx fips_drbg;
 
-#define ENTROPY_SIZE_BITS  512
-#define ENTROPY_SIZE_WORDS (BITS_TO_WORDS(ENTROPY_SIZE_BITS))
-
-/**
- * buffer for entropy condensing. initialized during
- * fips_trng_startup(), but also used in KAT tests,
- * thus size is enough to accommodate needs
- */
-static uint32_t entropy_fifo[ENTROPY_SIZE_WORDS];
-
 /**
  * NIST FIPS TRNG health tests (NIST SP 800-90B 4.3)
  * If any of the approved continuous health tests are used by the entropy
@@ -46,7 +36,6 @@ static struct {
 	uint8_t rct_count; /* current windows size for RCT */
 	uint8_t oldest; /* position in APT window */
 	bool apt_initialized; /* flag APT window is filled with data */
-	bool drbg_initialized; /* flag DRBG is initialized */
 } rand_state;
 
 /**
@@ -188,6 +177,7 @@ static uint64_t fips_trng32(void)
 		fips_set_status(error);
 		r = (uint32_t)r; /* Set result as invalid. */
 	}
+
 	return r;
 }
 
@@ -231,6 +221,8 @@ bool fips_trng_bytes(void *buffer, size_t len)
 /* FIPS TRNG power-up tests */
 bool fips_trng_startup(int stage)
 {
+	uint64_t r;
+
 	if (!stage) {
 		/**
 		 * To hide TRNG latency, split it into 2 stages.
@@ -242,84 +234,55 @@ bool fips_trng_startup(int stage)
 	/* Startup tests per NIST SP800-90B, Section 4 */
 	/* 4096 1-bit samples, in 2 steps, 2048 bit in each */
 	for (uint32_t i = 0; i < (TRNG_INIT_WORDS) / 2; i++) {
-		uint64_t r = fips_trng32();
+		r = fips_trng32();
 
 		if (!rand_valid(r))
 			return false;
-		/* store entropy for further use */
-		entropy_fifo[i % ARRAY_SIZE(entropy_fifo)] = (uint32_t)r;
 	}
+	/* Also update seed for fast randoms. */
+	set_fast_random_seed((uint32_t)r);
 	return fips_powerup_passed();
 }
 
+/* Assuming H=0.8, we need 550 bits from TRNG to get 440 bits. */
+#define ENTROPY_SIZE_BITS  550
+#define ENTROPY_SIZE_WORDS (BITS_TO_WORDS(ENTROPY_SIZE_BITS))
+
 bool fips_drbg_init(void)
 {
-	uint64_t nonce;
-	uint32_t random;
+	/* Buffer for Entropy + Nonce for DRBG initialization. */
+	uint32_t entropy_input[ENTROPY_SIZE_WORDS];
 
 	if (!fips_crypto_allowed())
 		return false;
 
-	if (rand_state.drbg_initialized)
+	if (hmac_drbg_ctx_valid(&fips_drbg))
 		return true;
+
 	/**
-	 * initialize DRBG with 440 bits of entropy as required
-	 * by NIST SP 800-90A 10.1. Includes entropy and nonce,
-	 * both received from entropy source.
-	 * entropy_fifo contains 512 bits of noise with H>= 0.85
-	 * this is roughly equal to 435 bits of full entropy.
-	 * Add 32 * 0.85 = 27 bits from nonce.
+	 * Get entropy + nonce from TRNG. Assume H>=0.8.
 	 */
-	nonce = fips_trng32();
-	if (!rand_valid(nonce))
-		return false;
-	random = (uint32_t)nonce;
-
-	/* read another 512 bits of noise */
-	if (!fips_trng_bytes(&entropy_fifo, sizeof(entropy_fifo)))
+	if (!fips_trng_bytes(entropy_input, sizeof(entropy_input)))
 		return false;
 
-	hmac_drbg_init(&fips_drbg, &entropy_fifo, sizeof(entropy_fifo),
-		       &random, sizeof(random), NULL,
-		       0);
+	/**
+	 * Pass combined seed containing total 550 bits of entropy and nonce,
+	 * and assuming H=0.8, we will get total entropy in seed as 440bits as
+	 * defined for HMAC DBRG in NIST SP 800-90Ar1 B.2.
+	 * Required minimum entropy for the entropy input at instantiation =
+	 * (3/2) security_strength (this includes the entropy required for the
+	 * nonce). For 256-bit security, this means at least 384 bits.
+	 *
+	 * Maximum length of the personalization string = 160 bits.
+	 * Maximum length of the entropy input = 1000 bits.
+	 *
+	 * Reseed_interval = 10 000 requests.
+	 */
+	hmac_drbg_init(&fips_drbg, &entropy_input, sizeof(entropy_input), NULL,
+		       0, NULL, 0, 10000);
 
-	set_fast_random_seed((uint32_t)fips_trng32());
-	rand_state.drbg_initialized = true;
+	always_memset(entropy_input, 0, sizeof(entropy_input));
 	return true;
-}
-
-/* zeroize DRBG state */
-void fips_drbg_clear(void)
-{
-	drbg_exit(&fips_drbg);
-	rand_state.drbg_initialized = false;
-}
-
-static bool fips_drbg_reseed_with_entropy(struct drbg_ctx *ctx)
-{
-	/* FIPS error is reported by failed TRNG test. */
-	if (!fips_trng_bytes(&entropy_fifo, sizeof(entropy_fifo)))
-		return false;
-
-	hmac_drbg_reseed(ctx, entropy_fifo, sizeof(entropy_fifo),
-			 NULL, 0, NULL, 0);
-	return true;
-}
-
-enum dcrypto_result fips_hmac_drbg_generate_reseed(struct drbg_ctx *ctx,
-						   void *out, size_t out_len,
-						   const void *input,
-						   size_t input_len)
-{
-	enum dcrypto_result err =
-		hmac_drbg_generate(ctx, out, out_len, input, input_len);
-
-	while (err == DCRYPTO_RESEED_NEEDED) {
-		if (!fips_drbg_reseed_with_entropy(ctx))
-			return DCRYPTO_FAIL;
-		err = hmac_drbg_generate(ctx, out, out_len, input, input_len);
-	}
-	return err;
 }
 
 bool fips_rand_bytes(void *buffer, size_t len)
@@ -335,32 +298,15 @@ bool fips_rand_bytes(void *buffer, size_t len)
 
 	/* HMAC_DRBG can only return up to 7500 bits in a single request */
 	while (len) {
-		size_t request = (len > (7500 / 8)) ? (7500 / 8) : len;
+		size_t request = MIN(len, HMAC_DRBG_MAX_OUTPUT_SIZE);
 
-		if (fips_hmac_drbg_generate_reseed(&fips_drbg, buffer, request,
-						   NULL, 0) != DCRYPTO_OK)
+		if (hmac_drbg_generate(&fips_drbg, buffer, request, NULL, 0) !=
+		    DCRYPTO_OK)
 			return false;
 		len -= request;
 		buffer += request;
 	}
 	return true;
-}
-
-enum dcrypto_result fips_p256_hmac_drbg_generate(struct drbg_ctx *drbg,
-						 p256_int *out)
-{
-	enum dcrypto_result err;
-
-	if (!fips_crypto_allowed())
-		return DCRYPTO_FAIL;
-
-	err = p256_hmac_drbg_generate(drbg, out);
-	while (err == DCRYPTO_RESEED_NEEDED) {
-		if (!fips_drbg_reseed_with_entropy(drbg))
-			return DCRYPTO_FAIL;
-		err = p256_hmac_drbg_generate(drbg, out);
-	}
-	return err;
 }
 
 #ifndef CRYPTO_TEST_CMD_RAND_PERF
