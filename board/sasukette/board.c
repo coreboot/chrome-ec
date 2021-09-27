@@ -8,6 +8,7 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_fw_config.h"
+#include "cros_board_info.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
@@ -166,6 +167,8 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	}
 };
 
+static uint32_t board_id;
+
 void board_init(void)
 {
 	int on;
@@ -185,6 +188,12 @@ void board_init(void)
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
 			      CHIPSET_STATE_SOFT_OFF);
 	board_power_5v_enable(on);
+
+	/* modify AC DC prochot value */
+	isl923x_set_ac_prochot(CHARGER_SOLO, 4096);
+	isl923x_set_dc_prochot(CHARGER_SOLO, 6000);
+
+	cbi_get_board_version(&board_id);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -193,8 +202,30 @@ void board_hibernate(void)
 	/*
 	 * Put all charger ICs present into low power mode before entering
 	 * z-state.
+	 *
+	 * b:186335659: In order to solve the power consumption problem of
+	 * hibernate，HW solution is adopted after board id 3 to solve the
+	 * problem that AC cannot wake up hibernate mode.
 	 */
-	raa489000_hibernate(0, true);
+	if (board_id > 2)
+		raa489000_hibernate(0, true);
+	else
+		raa489000_hibernate(0, false);
+}
+
+__override void board_pulse_entering_rw(void)
+{
+	/*
+	 * On the ITE variants, the EC_ENTERING_RW signal was connected to a pin
+	 * which is active high by default.  This causes Cr50 to think that the
+	 * EC has jumped to its RW image even though this may not be the case.
+	 * The pin is changed to GPIO_EC_ENTERING_RW2.
+	 */
+	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
 }
 
 void board_reset_pd_mcu(void)
@@ -237,9 +268,10 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
 
 	/*
-	 * TODO(b/151955431): Characterize the input current limit in case a
-	 * scaling needs to be applied here
+	 * b/147463641: The charger IC seems to overdraw ~4%, therefore we
+	 * reduce our target accordingly.
 	 */
+	icl = icl * 96 / 100;
 	charge_set_input_current_limit(icl, charge_mv);
 }
 
@@ -267,9 +299,12 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+			raa489000_enable_asgate(i, false);
+		}
+
 		return EC_SUCCESS;
 	}
 
@@ -290,6 +325,7 @@ int board_set_active_charge_port(int port)
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
@@ -300,7 +336,8 @@ int board_set_active_charge_port(int port)
 		charger_discharge_on_ac(1);
 
 	/* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);

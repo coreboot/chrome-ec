@@ -10,9 +10,6 @@
 
 #include "baseboard.h"
 
-/* Board revision */
-#include "board_revs.h"
-
 /* TODO(waihong): Remove the following bringup features */
 #define CONFIG_BRINGUP
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
@@ -22,19 +19,20 @@
 #define CONFIG_I2C_DEBUG
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE_BYTES (1024 * 1024)  /* 1MB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
 
 /* Keyboard */
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_KEYBOARD_PROTOCOL_MKBP
+
 #define CONFIG_PWM_KBLIGHT
 
+/* Battery */
+#define CONFIG_BATTERY_DEVICE_CHEMISTRY  "LION"
+#define CONFIG_BATTERY_REVIVE_DISCONNECT
+#define CONFIG_BATTERY_FUEL_GAUGE
+
 /* BC 1.2 Charger */
-#if BOARD_REV >= TROGDOR_REV1
 #define CONFIG_BC12_DETECT_PI3USB9201
-#else
-#define CONFIG_BC12_DETECT_PI3USB9281
-#define CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT 2
-#endif /* BOARD_REV */
 
 /* USB */
 #define CONFIG_USB_PD_TCPM_PS8805
@@ -46,15 +44,32 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* Sensors */
+/* BMI160 Base accel/gyro */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
 
+/* BMA253 lid accel */
+#define CONFIG_ACCEL_BMA255
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
+
+#define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
+#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
+#define CONFIG_LID_ANGLE_UPDATE
+
+#define CONFIG_TABLET_MODE
+#define CONFIG_TABLET_MODE_SWITCH
+#define CONFIG_GMR_TABLET_MODE
+#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
+
 /* GPIO alias */
 #define GPIO_AC_PRESENT GPIO_ACOK_OD
 #define GPIO_WP_L GPIO_EC_WP_ODL
+#define GPIO_SWITCHCAP_PG GPIO_SWITCHCAP_GPIO_1
+#define GPIO_ACOK_OD GPIO_CHG_ACOK_OD
 
 #ifndef __ASSEMBLER__
 
@@ -70,7 +85,8 @@ enum adc_channel {
 
 /* Motion sensors */
 enum sensor_id {
-	BASE_ACCEL = 0,
+	LID_ACCEL = 0,
+	BASE_ACCEL,
 	BASE_GYRO,
 	SENSOR_COUNT,
 };
@@ -81,14 +97,12 @@ enum pwm_channel {
 	PWM_CH_COUNT
 };
 
-/* Swithcap functions */
-void board_set_switchcap_power(int enable);
-int board_is_switchcap_enabled(void);
-int board_is_switchcap_power_good(void);
-/* Custom function to indicate if sourcing VBUS */
-int board_is_sourcing_vbus(int port);
-/* Enable VBUS sink for a given port */
-int board_vbus_sink_enable(int port, int enable);
+/* List of possible batteries */
+enum battery_type {
+	BATTERY_AP16L5J,
+	BATTERY_TYPE_COUNT,
+};
+
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);

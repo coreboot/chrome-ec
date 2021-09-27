@@ -131,6 +131,10 @@ SECTIONS
 		KEEP(*(.rodata.HOOK_CHIPSET_SHUTDOWN_COMPLETE))
 		__hooks_chipset_shutdown_complete_end = .;
 
+		__hooks_chipset_hard_off = .;
+		KEEP(*(.rodata.HOOK_CHIPSET_HARD_OFF))
+		__hooks_chipset_hard_off_end = .;
+
 		__hooks_chipset_reset = .;
 		KEEP(*(.rodata.HOOK_CHIPSET_RESET))
 		__hooks_chipset_reset_end = .;
@@ -201,7 +205,7 @@ SECTIONS
 		*(.init.rom)
 		__init_rom_end = .;
 
-#if defined(SECTION_IS_RO) && defined(CONFIG_FLASH)
+#if defined(SECTION_IS_RO) && defined(CONFIG_FLASH_CROS)
 		. = ALIGN(64);
 		KEEP(*(.google))
 #endif
@@ -281,7 +285,7 @@ SECTIONS
 	__flash_used = LOADADDR(.data) + SIZEOF(.data) - FW_OFF(SECTION);
 	__image_size = __flash_used;
 
-#ifdef CONFIG_FLASH
+#ifdef CONFIG_FLASH_CROS
         /*
          * These linker labels are just for analysis and not used in the code.
          */
@@ -309,7 +313,7 @@ SECTIONS
 	       "Not enough space for h2ram section.")
 #endif
 
-#if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH))
+#if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH_CROS))
 	/DISCARD/ : { *(.google) }
 #endif
 

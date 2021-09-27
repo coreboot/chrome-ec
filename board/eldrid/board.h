@@ -13,13 +13,11 @@
 
 /* Optional features */
 #undef CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-#ifndef BOARD_ELDRID_NPCX796
 /*
  * The RAM and flash size combination on the the NPCX797FC does not leave
  * any unused flash space that can be used to store the .init_rom section.
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
-#endif
 
 #define CONFIG_VBOOT_EFS2
 
@@ -32,7 +30,6 @@
 #define CONFIG_POWER_PP5000_CONTROL
 
 /* LED defines */
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 

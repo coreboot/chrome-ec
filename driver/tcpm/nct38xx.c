@@ -22,10 +22,56 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
+static enum nct38xx_boot_type boot_type[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+enum nct38xx_boot_type nct38xx_get_boot_type(int port)
+{
+	return boot_type[port];
+}
+
+void nct38xx_reset_notify(int port)
+{
+	/* A full reset also resets the chip's dead battery boot status */
+	boot_type[port] = NCT38XX_BOOT_UNKNOWN;
+}
+
 static int nct38xx_init(int port)
 {
 	int rv;
 	int reg;
+
+	/*
+	 * Detect dead battery boot by the default role control value of 0x0A
+	 * once per EC run
+	 */
+	if (boot_type[port] == NCT38XX_BOOT_UNKNOWN) {
+		RETURN_ERROR(tcpc_read(port, TCPC_REG_ROLE_CTRL, &reg));
+
+		if (reg == NCT38XX_ROLE_CTRL_DEAD_BATTERY)
+			boot_type[port] = NCT38XX_BOOT_DEAD_BATTERY;
+		else
+			boot_type[port] = NCT38XX_BOOT_NORMAL;
+	}
+
+	RETURN_ERROR(tcpc_read(port, TCPC_REG_POWER_STATUS, &reg));
+
+	/*
+	 * Set TCPC_CONTROL.DebugAccessoryControl = 1 to control by TCPM,
+	 * not TCPC in most cases.  This must be left alone if we're on a
+	 * dead battery boot with a debug accessory.  CC line detection will
+	 * be delayed if we have booted from a dead battery with a debug
+	 * accessory and change this bit (see b/186799392).
+	 */
+	if ((boot_type[port] == NCT38XX_BOOT_DEAD_BATTERY) &&
+				(reg & TCPC_REG_POWER_STATUS_DEBUG_ACC_CON))
+		CPRINTS("C%d: Booted in dead battery mode, not changing debug"
+			" control", port);
+	else if (tcpc_config[port].flags & TCPC_FLAGS_NO_DEBUG_ACC_CONTROL)
+		CPRINTS("C%d: NO_DEBUG_ACC_CONTROL", port);
+	else
+		RETURN_ERROR(tcpc_update8(port, TCPC_REG_TCPC_CTRL,
+					  TCPC_REG_TCPC_CTRL_DEBUG_ACC_CONTROL,
+					  MASK_SET));
 
 	/*
 	 * Write to the CONTROL_OUT_EN register to enable:
@@ -148,19 +194,10 @@ static int nct38xx_tcpm_set_cc(int port, int pull)
 	 * SNKEN will be re-enabled in nct38xx_init above (from tcpm_init), or
 	 * when CC lines are set again, or when sinking is disabled.
 	 */
-	enum mask_update_action action = MASK_SET;
 	int rv;
-
-	if (pull == TYPEC_CC_OPEN) {
-		bool is_sinking;
-
-		rv = tcpm_get_snk_ctrl(port, &is_sinking);
-		if (rv)
-			return rv;
-
-		if (is_sinking)
-			action = MASK_CLR;
-	}
+	enum mask_update_action action =
+			pull == TYPEC_CC_OPEN && tcpm_get_snk_ctrl(port) ?
+				MASK_CLR : MASK_SET;
 
 	rv = tcpc_update8(port,
 			  NCT38XX_REG_CTRL_OUT_EN,
@@ -172,6 +209,7 @@ static int nct38xx_tcpm_set_cc(int port, int pull)
 	return tcpci_tcpm_set_cc(port, pull);
 }
 
+#ifdef CONFIG_USB_PD_PPC
 static int nct38xx_tcpm_set_snk_ctrl(int port, int enable)
 {
 	int rv;
@@ -191,30 +229,58 @@ static int nct38xx_tcpm_set_snk_ctrl(int port, int enable)
 
 	return tcpci_tcpm_set_snk_ctrl(port, enable);
 }
+#endif
+
+static inline int tcpc_read_alert_no_lpm_exit(int port, int *val)
+{
+	return tcpc_addr_read16_no_lpm_exit(port,
+					tcpc_config[port].i2c_info.addr_flags,
+					TCPC_REG_ALERT, val);
+}
+
+/* Map Type-C port to IOEX port */
+__overridable int board_map_nct38xx_tcpc_port_to_ioex(int port)
+{
+	return port;
+}
 
 static void nct38xx_tcpc_alert(int port)
 {
 	int alert, rv;
 
 	/*
-	 * If IO expander feature is defined, read the ALERT register first to
-	 * keep the status of Vendor Define bit. Otherwise, the status of ALERT
-	 * register will be cleared after tcpci_tcpc_alert() is executed.
+	 * The nct3808 is a dual port chip with a shared ALERT
+	 * pin. Avoid taking a port out of LPM if it is not alerting.
+	 *
+	 * The nct38xx exits Idle mode when ALERT is signaled, so there
+	 * is no need to run the TCPM LPM exit code to check the ALERT
+	 * register bits (Ref. NCT38n7/8 Datasheet S 2.3.4 "Setting the
+	 * I2C to * Idle"). In fact, running the TCPM LPM exit code
+	 * causes a new CC Status ALERT which has the effect of creating
+	 * a new ALERT as a side-effect of handing an ALERT.
 	 */
-	if (IS_ENABLED(CONFIG_IO_EXPANDER_NCT38XX))
-		rv = tcpc_read16(port, TCPC_REG_ALERT, &alert);
+	rv = tcpc_read_alert_no_lpm_exit(port, &alert);
+	if (rv == EC_SUCCESS && alert == TCPC_REG_ALERT_NONE) {
+		/* No ALERT on this port, return early. */
+		return;
+	}
 
-	/* Process normal TCPC ALERT event and clear status */
+	/* Process normal TCPC ALERT event and clear status. */
 	tcpci_tcpc_alert(port);
 
 	/*
-	 * If IO expander feature is defined, check the Vendor Define bit to
-	 * handle the IOEX IO's interrupt event
+	 * If the IO expander feature is enabled, use the ALERT register
+	 * value read before it was cleared by calling
+	 * tcpci_tcpc_alert().  Check the Vendor Defined Alert bit to
+	 * handle the IOEX IO's interrupt event.
 	 */
-	if (IS_ENABLED(CONFIG_IO_EXPANDER_NCT38XX))
-		if (!rv && (alert & TCPC_REG_ALERT_VENDOR_DEF))
-			nct38xx_ioex_event_handler(port);
+	if (IS_ENABLED(CONFIG_IO_EXPANDER_NCT38XX) &&
+		rv == EC_SUCCESS && (alert & TCPC_REG_ALERT_VENDOR_DEF)) {
+		int ioexport;
 
+		ioexport = board_map_nct38xx_tcpc_port_to_ioex(port);
+		nct38xx_ioex_event_handler(ioexport);
+	}
 }
 
 static int nct3807_handle_fault(int port, int fault)
@@ -240,6 +306,28 @@ static int nct3807_handle_fault(int port, int fault)
 			tcpm_enable_auto_discharge_disconnect(port, 0);
 	}
 	return rv;
+}
+
+__maybe_unused static int nct38xx_set_frs_enable(int port, int enable)
+{
+	/*
+	 * From b/192012189: Enabling FRS for this chip should:
+	 *
+	 * 1.  Make sure that the sink will not disconnect if Vbus will drop
+	 * due to the Fast Role Swap by setting VBUS_SINK_DISCONNECT_THRESHOLD
+	 * to 0
+	 * 2. Enable the FRS interrupt (already done in TCPCI alert init)
+	 * 3. Set POWER_CONTORL.FastRoleSwapEnable to 1
+	 */
+	RETURN_ERROR(tcpc_write16(port,
+				TCPC_REG_VBUS_SINK_DISCONNECT_THRESH,
+				enable ? 0x0000 :
+				TCPC_REG_VBUS_SINK_DISCONNECT_THRESH_DEFAULT));
+
+	return tcpc_update8(port,
+			    TCPC_REG_POWER_CTRL,
+			    TCPC_REG_POWER_CTRL_FRS_ENABLE,
+			    enable ? MASK_SET : MASK_CLR);
 }
 
 const struct tcpm_drv nct38xx_tcpm_drv = {
@@ -271,7 +359,7 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	.drp_toggle		= &tcpci_tcpc_drp_toggle,
 #endif
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USB_PD_PPC
 	.get_snk_ctrl		= &tcpci_tcpm_get_snk_ctrl,
 	.set_snk_ctrl		= &nct38xx_tcpm_set_snk_ctrl,
 	.get_src_ctrl		= &tcpci_tcpm_get_src_ctrl,
@@ -283,7 +371,7 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #endif
 	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 #ifdef CONFIG_USB_PD_FRS_TCPC
-	.set_frs_enable         = &tcpci_tcpc_fast_role_swap_enable,
+	.set_frs_enable         = &nct38xx_set_frs_enable,
 #endif
 	.handle_fault		= &nct3807_handle_fault,
 };

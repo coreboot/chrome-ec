@@ -27,6 +27,11 @@
 #define CONFIG_CMD_LEDTEST
 #define CONFIG_KEYBOARD_FACTORY_TEST
 
+/* Thermal */
+#define CONFIG_CHIPSET_CAN_THROTTLE
+#define CONFIG_CPU_PROCHOT_ACTIVE_LOW
+#define CONFIG_THROTTLE_AP
+
 #define CONFIG_BATTERY_MEASURE_IMBALANCE
 #define CONFIG_BATTERY_BQ4050
 
@@ -42,9 +47,9 @@ enum pwm_channel {
 };
 
 enum battery_type {
-	BATTERY_DANAPACK_COS,
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_SDI,
+	BATTERY_DYNAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_DYNAPACK_SDI,
 	BATTERY_SAMSUNG_SDI,
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_ATL,
@@ -52,11 +57,6 @@ enum battery_type {
 	BATTERY_COS,
 	BATTERY_TYPE_COUNT,
 };
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

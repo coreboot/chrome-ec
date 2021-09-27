@@ -27,13 +27,19 @@ int console_is_restricted(void)
 static void ap_deferred(void)
 {
 	/*
-	 * in S3:   SLP_S3_L is 0 and SLP_S0_L is X.
-	 * in S0ix: SLP_S3_L is X and SLP_S0_L is 0.
-	 * in S0:   SLP_S3_L is 1 and SLP_S0_L is 1.
+	 * Behavior:
+	 * AP Active  (ex. Intel S0):   SLP_L is 1
+	 * AP Suspend (ex. Intel S0ix): SLP_L is 0
+	 * The alternative SLP_ALT_L should be pulled high at all the times.
+	 *
+	 * Legacy Intel behavior:
+	 * in S3:   SLP_ALT_L is 0 and SLP_L is X.
+	 * in S0ix: SLP_ALT_L is X and SLP_L is 0.
+	 * in S0:   SLP_ALT_L is 1 and SLP_L is 1.
 	 * in S5/G3, the FP MCU should not be running.
 	 */
-	int running = gpio_get_level(GPIO_PCH_SLP_S3_L)
-			&& gpio_get_level(GPIO_PCH_SLP_S0_L);
+	int running = gpio_get_level(GPIO_SLP_ALT_L)
+			&& gpio_get_level(GPIO_SLP_L);
 
 	if (running) { /* S0 */
 		disable_sleep(SLEEP_MASK_AP_RUN);
@@ -60,7 +66,7 @@ void fps_event(enum gpio_signal signal)
 #include "gpio_list.h"
 
 /* SPI devices */
-const struct spi_device_t spi_devices[] = {
+struct spi_device_t spi_devices[] = {
 	/* Fingerprint sensor (SCLK at 4Mhz) */
 	{ .port = CONFIG_SPI_FP_PORT, .div = 3, .gpio_cs = GPIO_SPI4_NSS }
 };
@@ -69,7 +75,7 @@ const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 static void spi_configure(void)
 {
 	/* Configure SPI GPIOs */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 	/* Set all SPI master signal pins to very high speed: pins E2/4/5/6 */
 	STM32_GPIO_OSPEEDR(GPIO_E) |= 0x00003f30;
 	/* Enable clocks to SPI4 module (master) */
@@ -87,9 +93,14 @@ static void board_init(void)
 		fp_transport_type_to_str(get_fp_transport_type()));
 
 	/* Enable interrupt on PCH power signals */
-	gpio_enable_interrupt(GPIO_PCH_SLP_S3_L);
-	gpio_enable_interrupt(GPIO_PCH_SLP_S0_L);
-	/* enable the SPI slave interface if the PCH is up */
-	hook_call_deferred(&ap_deferred_data, 0);
+	gpio_enable_interrupt(GPIO_SLP_ALT_L);
+	gpio_enable_interrupt(GPIO_SLP_L);
+
+	/*
+	 * Enable the SPI slave interface if the PCH is up.
+	 * Do not use hook_call_deferred(), because ap_deferred() will be
+	 * called after tasks with priority higher than HOOK task (very late).
+	 */
+	ap_deferred();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);

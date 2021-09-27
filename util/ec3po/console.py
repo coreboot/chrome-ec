@@ -818,13 +818,13 @@ class Console(object):
 
     elif cmd[0] == b'timestamp':
       mode = cmd[1].lower()
-      self.timestamp_enabled = mode == 'on'
+      self.timestamp_enabled = (mode == b'on')
       self.logger.info('%sabling uart timestamps.',
                        'En' if self.timestamp_enabled else 'Dis')
 
     elif cmd[0] == b'rawdebug':
       mode = cmd[1].lower()
-      self.raw_debug = mode == 'on'
+      self.raw_debug = (mode == b'on')
       self.logger.info('%sabling per interrupt debug logs.',
                        'En' if self.raw_debug else 'Dis')
 
@@ -1064,7 +1064,7 @@ def StartLoop(console, command_active, shutdown_pipe=None):
                 data_tm = data
 
               # timestamp required on next input
-              if data[end] == b'\n':
+              if data[end] == b'\n'[0]:
                 tm_req = True
               os.write(console.master_pty, data_tm)
             if command_active.value:

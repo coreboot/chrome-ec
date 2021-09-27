@@ -25,8 +25,8 @@
 enum batt_cmd_parse_state {
 	IDLE = 0, /* initial state */
 	START = 1, /* received the register address (command code) */
-	WRITE_VB, /* writing data bytes to the slave */
-	READ_VB, /* reading data bytes to the slave */
+	WRITE_VB, /* writing data bytes to the peripheral */
+	READ_VB, /* reading data bytes to the peripheral */
 };
 
 static enum batt_cmd_parse_state sb_cmd_state;
@@ -244,6 +244,18 @@ int virtual_battery_operation(const uint8_t *batt_cmd_head,
 			return EC_ERROR_BUSY;
 		memcpy(dest, &(curr_batt->current), bounded_read_len);
 		break;
+	case SB_AVERAGE_CURRENT:
+		/* This may cause an i2c transaction */
+		if (curr_batt->flags & BATT_FLAG_BAD_AVERAGE_CURRENT)
+			return EC_ERROR_BUSY;
+		val = battery_get_avg_current();
+		memcpy(dest, &val, bounded_read_len);
+		break;
+	case SB_MAX_ERROR:
+		/* report as 3% to make kernel happy */
+		val = BATTERY_LEVEL_SHUTDOWN;
+		memcpy(dest, &val, bounded_read_len);
+		break;
 	case SB_FULL_CHARGE_CAPACITY:
 		if (curr_batt->flags & BATT_FLAG_BAD_FULL_CAPACITY ||
 				curr_batt->flags & BATT_FLAG_BAD_VOLTAGE)
@@ -302,6 +314,18 @@ int virtual_battery_operation(const uint8_t *batt_cmd_head,
 		/* This may cause an i2c transaction */
 		if (battery_time_to_empty(&val))
 			return EC_ERROR_INVAL;
+		memcpy(dest, &val, bounded_read_len);
+		break;
+	case SB_CHARGING_CURRENT:
+		if (curr_batt->flags & BATT_FLAG_BAD_DESIRED_CURRENT)
+			return EC_ERROR_BUSY;
+		val = curr_batt->desired_current;
+		memcpy(dest, &val, bounded_read_len);
+		break;
+	case SB_CHARGING_VOLTAGE:
+		if (curr_batt->flags & BATT_FLAG_BAD_DESIRED_VOLTAGE)
+			return EC_ERROR_BUSY;
+		val = curr_batt->desired_voltage;
 		memcpy(dest, &val, bounded_read_len);
 		break;
 	case SB_MANUFACTURE_DATE:

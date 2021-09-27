@@ -57,11 +57,19 @@
 *   [EC-3PO overview](./ec-3po.md)
 *   [EC-3PO design doc](./ec-3po-design.md)
 
+## Zephyr
+
+*   [Initialization Order](./zephyr_init.md)
+*   [Proof-of-Concept-Device Bringup](./zephyr_poc_device_bringup.md)
+*   [Shimming](./zephyr_shim.md)
+*   [Porting EC unit tests to Ztest](./ztest.md)
+
 ## Miscellaneous
 
 *   [Low Battery Startup](./low_battery_startup.md)
 *   [I2C tracing via console commands](./i2c-debugging.md)
 *   [Application Processor to EC communication](./ap-ec-comm.md)
+*   [Reducing EC Image Size](./reducing_ec_image_size.md)
 *   [Code Reviews](./code_reviews.md)
 *   [IDE Support](./ide-support.md)
 

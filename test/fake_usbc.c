@@ -7,6 +7,7 @@
 #include "common.h"
 #include "usb_tc_sm.h"
 #include "usb_pd.h"
+#include "usb_pd_tcpm.h"
 
 __overridable int pd_is_vbus_present(int port)
 {
@@ -56,7 +57,7 @@ __overridable enum pd_cable_plug tc_get_cable_plug(int port)
 	return PD_PLUG_FROM_DFP_UFP;
 }
 
-__overridable int pd_get_rev(int port, enum tcpm_transmit_type type)
+__overridable int pd_get_rev(int port, enum tcpci_msg_type type)
 {
 	return IS_ENABLED(CONFIG_USB_PD_REV30) ? PD_REV30 : PD_REV20;
 }
@@ -166,6 +167,11 @@ bool pd_capable(int port)
 	return true;
 }
 
+bool pd_waiting_on_partner_src_caps(int port)
+{
+	return false;
+}
+
 #ifndef CONFIG_TEST_USB_PE_SM
 enum idh_ptype get_usb_pd_mux_cable_type(int port)
 {
@@ -253,12 +259,12 @@ void dpm_init(int port)
 {
 }
 
-void dpm_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
+void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
 		uint32_t *vdm)
 {
 }
 
-void dpm_vdm_naked(int port, enum tcpm_transmit_type type, uint16_t svid,
+void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
 		uint8_t vdm_cmd)
 {
 }
@@ -279,7 +285,15 @@ void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
 {
 }
 
+void dpm_add_non_pd_sink(int port)
+{
+}
+
 void dpm_remove_sink(int port)
+{
+}
+
+void dpm_remove_source(int port)
 {
 }
 

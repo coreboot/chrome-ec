@@ -8,15 +8,23 @@
 #ifndef __CROS_EC_ADC_H
 #define __CROS_EC_ADC_H
 
+#include "adc_chip.h"
 #include "common.h"
 
 #define ADC_READ_ERROR -1  /* Value returned by adc_read_channel() on error */
 
 #ifdef CONFIG_ZEPHYR
-/* TODO(b/175881324): Add a shim for ADC */
-enum adc_channel {
-	ADC_NONE,
-};
+#include <zephyr_adc.h>
+#endif /* CONFIG_ZEPHYR */
+
+/*
+ * Boards must provide this list of ADC channel definitions.  This must match
+ * the enum adc_channel list provided by the board.
+ */
+#ifndef CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
+extern const struct adc_t adc_channels[];
+#else
+extern struct adc_t adc_channels[];
 #endif
 
 /*

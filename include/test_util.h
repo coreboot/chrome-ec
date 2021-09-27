@@ -359,6 +359,10 @@ int test_attach_i2c(const int port, const uint16_t addr_flags);
  * This macro uses the lowest common denominator of the two (Zephyr) so tests
  * that migrate from platform/ec to Zephyr will no longer be able to use the
  * arguments (compile time checked).
+ * TEST_SUITE(name) macro is resolved to TEST_MAIN in platform/ec tests.
+ * In Zephyr tests it allows to use different name for entry point than
+ * test_main(void). Because of that, it is possible to combine multiple test
+ * suites in one test.
  *
  * Usage:
  * TEST_MAIN()
@@ -368,6 +372,7 @@ int test_attach_i2c(const int port, const uint16_t addr_flags);
  */
 #ifdef CONFIG_ZEPHYR
 #define TEST_MAIN() void test_main(void)
+#define TEST_SUITE(name) void name(void)
 #else
 #define TEST_MAIN()                          \
 	void test_main(void);                \
@@ -378,6 +383,7 @@ int test_attach_i2c(const int port, const uint16_t addr_flags);
 		test_print_result();         \
 	}                                    \
 	void test_main(void)
+#define TEST_SUITE(name) TEST_MAIN()
 #endif
 
 /*
@@ -391,17 +397,6 @@ struct unit_test {
 	void (*setup)(void);
 	void (*teardown)(void);
 };
-
-/**
- * @brief void(*)(void) function that does nothing.
- *
- * This function should be used for setup or teardown when no work is required.
- * Note that before_test() and after_test() will still be run to maintain
- * compatibility.
- */
-static inline void unit_test_noop(void)
-{
-}
 
 /**
  * Create a unit test for a given function name with provided setup/teardown
@@ -427,7 +422,7 @@ static inline void unit_test_noop(void)
  * @see ztest_unit_test_setup_teardown
  */
 #define ztest_unit_test(fn) \
-	ztest_unit_test_setup_teardown(fn, unit_test_noop, unit_test_noop)
+	ztest_unit_test_setup_teardown(fn, before_test, after_test)
 
 /**
  * @brief Create a test suite

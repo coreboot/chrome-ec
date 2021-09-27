@@ -6,7 +6,6 @@
 /* Berknip board configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "charger.h"
 #include "cbi_ec_fw_config.h"
@@ -33,7 +32,7 @@
 #include "system.h"
 #include "task.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 
@@ -121,8 +120,12 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
  * chip and it need a board specific driver.
  * Overall, it will use chained mux framework.
  */
-static int pi3usb221_set_mux(const struct usb_mux *me, mux_state_t mux_state)
+static int pi3usb221_set_mux(const struct usb_mux *me, mux_state_t mux_state,
+			     bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
 		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 0);
 	else
@@ -396,11 +399,21 @@ int board_get_temp(int idx, int *temp_k)
 		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
 			return EC_ERROR_NOT_POWERED;
 
+		/* adc power not ready when transition to S5 */
+		if (chipset_in_or_transitioning_to_state(
+			CHIPSET_STATE_SOFT_OFF))
+			return EC_ERROR_NOT_POWERED;
+
 		channel = ADC_TEMP_SENSOR_SOC;
 		break;
 	case TEMP_SENSOR_5V_REGULATOR:
 		/* thermistor is not powered in G3 */
 		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			return EC_ERROR_NOT_POWERED;
+
+		/* adc power not ready when transition to S5 */
+		if (chipset_in_or_transitioning_to_state(
+			CHIPSET_STATE_SOFT_OFF))
 			return EC_ERROR_NOT_POWERED;
 
 		channel = ADC_TEMP_SENSOR_5V_REGULATOR;

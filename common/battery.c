@@ -6,6 +6,7 @@
  */
 
 #include "battery.h"
+#include "charge_manager.h"
 #include "charge_state.h"
 #include "common.h"
 #include "console.h"
@@ -14,7 +15,9 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "math_util.h"
 #include "timer.h"
+#include "usb_pd.h"
 #include "util.h"
 #include "watchdog.h"
 
@@ -23,7 +26,6 @@
 #define CUTOFFPRINTS(info) CPRINTS("%s %s", "Battery cut off", info)
 
 /* See config.h for details */
-const static int batt_full_factor = CONFIG_BATT_FULL_FACTOR;
 const static int batt_host_full_factor = CONFIG_BATT_HOST_FULL_FACTOR;
 const static int batt_host_shutdown_pct = CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE;
 
@@ -175,6 +177,14 @@ static void print_battery_params(void)
 
 	print_item_name("Charge:");
 		ccprintf("%d %%\n", batt->state_of_charge);
+
+	if (IS_ENABLED(CONFIG_CHARGER)) {
+		int value;
+
+		print_item_name("  Display:");
+		value = charge_get_display_charge();
+		ccprintf("%d.%d %%\n", value / 10, value % 10);
+	}
 }
 
 static void print_battery_info(void)
@@ -204,14 +214,7 @@ static void print_battery_info(void)
 
 	print_item_name("Cap-full:");
 	if (check_print_error(battery_full_charge_capacity(&value)))
-		ccprintf("%d mAh (%d mAh with %d %% compensation)\n",
-			 value, value*batt_full_factor/100, batt_full_factor);
-
-#ifdef CONFIG_CHARGER
-	print_item_name("Display:");
-	value = charge_get_display_charge();
-	ccprintf("%d.%d %%\n", value / 10, value % 10);
-#endif
+		ccprintf("%d mAh\n", value);
 
 	print_item_name("  Design:");
 	if (check_print_error(battery_design_capacity(&value)))
@@ -240,6 +243,12 @@ static void print_battery_info(void)
 		}
 		ccprintf("%dh:%d\n", hour, minute);
 	}
+
+	print_item_name("full_factor:");
+	ccprintf("0.%d\n", batt_host_full_factor);
+
+	print_item_name("shutdown_soc:");
+	ccprintf("%d %%\n", batt_host_shutdown_pct);
 }
 
 void print_battery_debug(void)
@@ -610,34 +619,42 @@ void battery_compensate_params(struct batt_params *batt)
 {
 	int numer, denom;
 	int *remain = &(batt->remaining_capacity);
-	int *full = &(batt->full_capacity);
+	int full = batt->full_capacity;
 
 	if ((batt->flags & BATT_FLAG_BAD_FULL_CAPACITY) ||
 			(batt->flags & BATT_FLAG_BAD_REMAINING_CAPACITY))
 		return;
 
-	if (*remain <= 0 || *full <= 0)
+	if (*remain <= 0 || full <= 0)
 		return;
 
-	/* full_factor is effectively disabled in powerd. */
-	*full = *full * batt_full_factor / 100;
-	if (*remain > *full)
-		*remain = *full;
+	/* Some batteries don't update full capacity as often. */
+	if (*remain > full)
+		*remain = full;
 
 	/*
-	 * Powerd uses the following equation to calculate display percentage:
-	 *   charge = 100 * remain / full
-	 *   display = 100 * (charge - shutdown_pct) /
-	 *		     (full_factor - shutdown_pct)
-	 *	     = 100 * ((100 * remain / full) - shutdown_pct) /
-	 *		     (full_factor - shutdown_pct)
-	 *	     = 100 * ((100 * remain) - (full * shutdown_pct)) /
-	 *		     (full * (full_factor - shutdown_pct))
+	 * EC calculates the display SoC like how Powerd used to do. Powerd
+	 * reads the display SoC from the EC. This design allows the system to
+	 * behave consistently on a single SoC value across all power states.
 	 *
-	 * The unit of the following batt->display_charge is 0.1%.
+	 * Display SoC is computed as follows:
+	 *
+	 *   actual_soc = 100 * remain / full
+	 *
+	 *		   actual_soc - shutdown_pct
+	 *   display_soc = --------------------------- x 1000
+	 *		   full_factor - shutdown_pct
+	 *
+	 *		   (100 * remain / full) - shutdown_pct
+	 *		 = ------------------------------------ x 1000
+	 *		        full_factor - shutdown_pct
+	 *
+	 *		   100 x remain - full x shutdown_pct
+	 *		 = ----------------------------------- x 1000
+	 *		   full x (full_factor - shutdown_pct)
 	 */
-	numer = 1000 * ((100 * *remain) - (*full * batt_host_shutdown_pct));
-	denom = *full * (batt_host_full_factor - batt_host_shutdown_pct);
+	numer = 1000 * ((100 * *remain) - (full * batt_host_shutdown_pct));
+	denom = full * (batt_host_full_factor - batt_host_shutdown_pct);
 	/* Rounding (instead of truncating) */
 	batt->display_charge = (numer + denom / 2) / denom;
 	if (batt->display_charge < 0)
@@ -645,6 +662,21 @@ void battery_compensate_params(struct batt_params *batt)
 	if (batt->display_charge > 1000)
 		batt->display_charge = 1000;
 }
+
+#ifdef CONFIG_CHARGER
+static enum ec_status battery_display_soc(struct host_cmd_handler_args *args)
+{
+	struct ec_response_display_soc *r = args->response;
+
+	r->display_soc = charge_get_display_charge();
+	r->full_factor = batt_host_full_factor * 10;
+	r->shutdown_soc = batt_host_shutdown_pct * 10;
+	args->response_size = sizeof(*r);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_DISPLAY_SOC, battery_display_soc, EC_VER_MASK(0));
+#endif
 
 __overridable void board_battery_compensate_params(struct batt_params *batt)
 {
@@ -656,7 +688,125 @@ __attribute__((weak)) int get_battery_manufacturer_name(char *dest, int size)
 	return EC_SUCCESS;
 }
 
+__overridable int battery_get_avg_voltage(void)
+{
+	return -EC_ERROR_UNIMPLEMENTED;
+}
+
+__overridable int battery_get_avg_current(void)
+{
+	return -EC_ERROR_UNIMPLEMENTED;
+}
+
 int battery_manufacturer_name(char *dest, int size)
 {
 	return get_battery_manufacturer_name(dest, size);
+}
+
+__overridable enum battery_disconnect_state battery_get_disconnect_state(void)
+{
+	return BATTERY_NOT_DISCONNECTED;
+}
+
+#ifdef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
+
+#if CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV < 5000 || \
+    CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV >= PD_MAX_VOLTAGE_MV
+	#error "Voltage limit must be between 5000 and PD_MAX_VOLTAGE_MV"
+#endif
+
+#if !((defined(CONFIG_USB_PD_TCPMV1) && defined(CONFIG_USB_PD_DUAL_ROLE)) || \
+    (defined(CONFIG_USB_PD_TCPMV2) && defined(CONFIG_USB_PE_SM)))
+	#error "Voltage reducing requires TCPM with Policy Engine"
+#endif
+
+/*
+ * Returns true if input voltage should be reduced (chipset is in S5/G3) and
+ * battery is full, otherwise returns false
+ */
+static bool board_wants_reduced_input_voltage(void) {
+	struct batt_params batt;
+
+	/* Chipset not in S5/G3, so we don't want to reduce voltage */
+	if (!chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF))
+		return false;
+
+	battery_get_params(&batt);
+
+	/* Battery needs charge, so we don't want to reduce voltage */
+	if (batt.flags & BATT_FLAG_WANT_CHARGE)
+		return false;
+
+	return true;
+}
+
+static void reduce_input_voltage_when_full(void)
+{
+	static int saved_input_voltage = -1;
+	int max_pd_voltage_mv = pd_get_max_voltage();
+	int port;
+
+	port = charge_manager_get_active_charge_port();
+	if (port < 0 || port >= board_get_usb_pd_port_count())
+		return;
+
+	if (board_wants_reduced_input_voltage()) {
+		/*
+		 * Board wants voltage to be reduced. Apply limit if current
+		 * voltage is different. Save current voltage, it will be
+		 * restored when board wants to stop reducing input voltage.
+		 */
+		if (max_pd_voltage_mv !=
+		    CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV) {
+			saved_input_voltage = max_pd_voltage_mv;
+			max_pd_voltage_mv =
+			    CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV;
+		}
+	} else if (saved_input_voltage != -1) {
+		/*
+		 * Board doesn't want to reduce input voltage. If current
+		 * voltage is reduced we will restore previously saved voltage.
+		 * If current voltage is different we will respect newer value.
+		 */
+		if (max_pd_voltage_mv ==
+		    CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV)
+			max_pd_voltage_mv = saved_input_voltage;
+
+		saved_input_voltage = -1;
+	}
+
+	if (pd_get_max_voltage() != max_pd_voltage_mv)
+		pd_set_external_voltage_limit(port, max_pd_voltage_mv);
+}
+DECLARE_HOOK(HOOK_AC_CHANGE, reduce_input_voltage_when_full,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, reduce_input_voltage_when_full,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, reduce_input_voltage_when_full,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, reduce_input_voltage_when_full,
+	     HOOK_PRIO_DEFAULT);
+#endif
+
+void battery_validate_params(struct batt_params *batt)
+{
+	/*
+	 * TODO(crosbug.com/p/27527). Sometimes the battery thinks its
+	 * temperature is 6280C, which seems a bit high. Let's ignore
+	 * anything above the boiling point of tungsten until this bug
+	 * is fixed. If the battery is really that warm, we probably
+	 * have more urgent problems.
+	 */
+	if (batt->temperature > CELSIUS_TO_DECI_KELVIN(5660)) {
+		CPRINTS("ignoring ridiculous batt.temp of %dC",
+			 DECI_KELVIN_TO_CELSIUS(batt->temperature));
+		batt->flags |= BATT_FLAG_BAD_TEMPERATURE;
+	}
+
+	/* If the battery thinks it's above 100%, don't believe it */
+	if (batt->state_of_charge > 100) {
+		CPRINTS("ignoring ridiculous batt.soc of %d%%",
+			batt->state_of_charge);
+		batt->flags |= BATT_FLAG_BAD_STATE_OF_CHARGE;
+	}
 }

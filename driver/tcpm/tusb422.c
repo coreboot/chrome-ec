@@ -51,11 +51,16 @@ static int tusb422_tcpci_tcpm_init(int port)
 {
 	int rv;
 
-	/* TUSB422 has a vendor-defined register reset */
-	rv = tcpc_update8(port, TUSB422_REG_CC_GEN_CTRL,
-			  TUSB422_REG_CC_GEN_CTRL_GLOBAL_SW_RST, MASK_SET);
-	if (rv)
-		return rv;
+	/*
+	 * Do not perform TCPC soft reset while waking from Low Power Mode,
+	 * because it makes DRP incapable of looking for connection correctly
+	 * (see b/176986511) and probably breaks firmware_PDTrySrc test
+	 * (see b/179234089).
+	 *
+	 * TODO(b/179234089): Consider implementing function that performs
+	 * only necessary things when leaving Low Power Mode, so we can perform
+	 * TCPC soft reset here.
+	 */
 
 	rv = tcpci_tcpm_init(port);
 	if (rv)
@@ -175,7 +180,7 @@ const struct tcpm_drv tusb422_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	.drp_toggle		= &tusb422_tcpc_drp_toggle,
 #endif
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USB_PD_PPC
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
 #endif

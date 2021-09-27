@@ -4,7 +4,6 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "backlight.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -16,6 +15,8 @@
 #include "console.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm42607.h"
 #include "driver/battery/max17055.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
@@ -87,7 +88,7 @@ const struct power_signal_info power_signal_list[] = {
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * TODO(b/133200075): Tune this once we have the final performance
 	 * out of the driver and the i2c bus.
@@ -106,8 +107,8 @@ struct keyboard_scan_config keyscan_config = {
 
 struct ioexpander_config_t ioex_config[CONFIG_IO_EXPANDER_PORT_COUNT] = {
 	[0] = {
-		.i2c_host_port = I2C_PORT_IO_EXPANDER_IT8801,
-		.i2c_slave_addr = IT8801_I2C_ADDR,
+		.i2c_host_port = IT8801_KEYBOARD_PWM_I2C_PORT,
+		.i2c_addr_flags = IT8801_I2C_ADDR1,
 		.drv = &it8801_ioexpander_drv,
 	},
 };
@@ -139,7 +140,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 static void board_hpd_status(const struct usb_mux *me,
-			     int hpd_lvl, int hpd_irq)
+			     mux_state_t mux_state)
 {
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
@@ -276,7 +277,7 @@ static void board_spi_enable(void)
 	spi_enable(&spi_devices[0], 1);
 
 	/* Pin mux spi peripheral toward the sensor. */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP,
 	     board_spi_enable,
@@ -287,7 +288,10 @@ static void board_spi_disable(void)
 	/* Set pins to a state calming the sensor down. */
 	gpio_set_flags(GPIO_EC_SENSOR_SPI_CK, GPIO_OUT_LOW);
 	gpio_set_level(GPIO_EC_SENSOR_SPI_CK, 0);
-	gpio_config_module(MODULE_SPI_MASTER, 0);
+	/* Pull SPI_NSS pin to low to prevent a leakage. */
+	gpio_set_flags(GPIO_EC_SENSOR_SPI_NSS, GPIO_OUT_LOW);
+	gpio_set_level(GPIO_EC_SENSOR_SPI_NSS, 0);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 0);
 
 	/* Disable spi peripheral and clocks. */
 	spi_enable(&spi_devices[0], 0);
@@ -350,6 +354,61 @@ static const mat33_fp_t lid_standard_ref = {
 static struct stprivate_data g_lis2dwl_data;
 /* Base accel private data */
 static struct bmi_drv_data_t g_bmi160_data;
+static struct icm_drv_data_t g_icm42607_data;
+
+enum base_accelgyro_type {
+	BASE_GYRO_NONE = 0,
+	BASE_GYRO_BMI160 = 1,
+	BASE_GYRO_ICM426XX = 2,
+};
+
+static enum base_accelgyro_type base_accelgyro_config;
+
+struct motion_sensor_t icm42607_base_accel = {
+	 .name = "Accel",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_ICM42607,
+	 .type = MOTIONSENSE_TYPE_ACCEL,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &icm42607_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_icm42607_data,
+	 .port = CONFIG_SPI_ACCEL_PORT,
+	 .i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
+	 .rot_standard_ref = NULL,
+	 .min_frequency = ICM42607_ACCEL_MIN_FREQ,
+	 .max_frequency = ICM42607_ACCEL_MAX_FREQ,
+	 .config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor on for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+	 },
+};
+
+struct motion_sensor_t icm42607_base_gyro = {
+	 .name = "Gyro",
+	 .active_mask = SENSOR_ACTIVE_S0_S3,
+	 .chip = MOTIONSENSE_CHIP_ICM42607,
+	 .type = MOTIONSENSE_TYPE_GYRO,
+	 .location = MOTIONSENSE_LOC_BASE,
+	 .drv = &icm42607_drv,
+	 .mutex = &g_base_mutex,
+	 .drv_data = &g_icm42607_data,
+	 .port = CONFIG_SPI_ACCEL_PORT,
+	 .i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+	 .default_range = 1000, /* dps */
+	 .rot_standard_ref = NULL,
+	 .min_frequency = ICM42607_GYRO_MIN_FREQ,
+	 .max_frequency = ICM42607_GYRO_MAX_FREQ,
+};
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -393,9 +452,9 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = CONFIG_SPI_ACCEL_PORT,
-	 .i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+	 .i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 	 .rot_standard_ref = &base_standard_ref,
-	 .default_range = 2,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	 .default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
 	 .config = {
@@ -421,7 +480,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .mutex = &g_base_mutex,
 	 .drv_data = &g_bmi160_data,
 	 .port = CONFIG_SPI_ACCEL_PORT,
-	 .i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
+	 .i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(CONFIG_SPI_ACCEL_PORT),
 	 .default_range = 1000, /* dps */
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = BMI_GYRO_MIN_FREQ,
@@ -429,6 +488,52 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+static void board_detect_motionsensor(void)
+{
+	int ret;
+	int val;
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		return;
+	if (base_accelgyro_config != BASE_GYRO_NONE)
+		return;
+	/* Check base accelgyro chip */
+	ret = icm_read8(&icm42607_base_accel,
+				ICM42607_REG_WHO_AM_I, &val);
+	if (ret)
+		ccprints("Get ICM fail.");
+	if (val == ICM42607_CHIP_ICM42607P) {
+		motion_sensors[BASE_ACCEL] = icm42607_base_accel;
+		motion_sensors[BASE_GYRO] = icm42607_base_gyro;
+	}
+	base_accelgyro_config = (val == ICM42607_CHIP_ICM42607P)
+			? BASE_GYRO_ICM426XX : BASE_GYRO_BMI160;
+	ccprints("BASE Accelgyro: %s", (val == ICM42607_CHIP_ICM42607P)
+			? "ICM42607" : "BMI160");
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_detect_motionsensor,
+	     HOOK_PRIO_DEFAULT);
+/*
+ * board_spi_enable() will be called in the board_init() when sysjump to rw
+ * the board_init() is DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT)
+ * the board_detect_motionsensor() reads data via sensor SPI
+ * so the priority of board_detect_motionsensor should be HOOK_PRIO_DEFAULT+1
+ */
+DECLARE_HOOK(HOOK_INIT, board_detect_motionsensor, HOOK_PRIO_DEFAULT + 1);
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	switch (base_accelgyro_config) {
+	case BASE_GYRO_ICM426XX:
+		icm42607_interrupt(signal);
+		break;
+	case BASE_GYRO_BMI160:
+	default:
+		bmi160_interrupt(signal);
+		break;
+	}
+}
 
 const struct it8801_pwm_t it8801_pwm_channels[] = {
 	[IT8801_PWM_CH_KBLIGHT] = {.index = 4},
@@ -575,17 +680,4 @@ host_command_pwm_get_duty(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_PWM_GET_DUTY,
 		     host_command_pwm_get_duty,
 		     EC_VER_MASK(0));
-#endif
-
-/* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
-{
-	/* If the lid is in 360 position, ignore the lid angle,
-	 * which might be faulty. Disable keyboard.
-	 */
-	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		enable = 0;
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
-}
 #endif

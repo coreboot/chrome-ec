@@ -3,15 +3,19 @@
 # found in the LICENSE file.
 """Module for job counters, limiting the amount of concurrent executions."""
 
+import logging
 import multiprocessing
 import os
 import re
 import select
 import subprocess
 
+import zmake
+
 
 class JobHandle:
     """Small object to handle claim of a job."""
+
     def __init__(self, release_func, *args, **kwargs):
         self.release_func = release_func
         self.args = args
@@ -26,32 +30,28 @@ class JobHandle:
 
 class JobClient:
     """Abstract base class for all job clients."""
+
     def get_job(self):
         """Claim a job."""
-        raise NotImplementedError('Abstract method not implemented')
+        raise NotImplementedError("Abstract method not implemented")
 
     def env(self):
         """Get the environment variables necessary to share the job server."""
         return {}
 
-    def popen(self, *args, claim_job=True, **kwargs):
-        """Start a process using subprocess.Popen, optionally claiming a job.
-
-        Args:
-            claim_job: True if a job should be claimed.
+    def popen(self, *args, **kwargs):
+        """Start a process using subprocess.Popen
 
         All other arguments are passed to subprocess.Popen.
 
         Returns:
             A Popen object.
         """
-        if claim_job:
-            with self.get_job():
-                return self.popen(*args, claim_job=False, **kwargs)
+        kwargs.setdefault("env", os.environ)
+        kwargs["env"].update(self.env())
 
-        kwargs.setdefault('env', os.environ)
-        kwargs['env'].update(self.env())
-
+        logger = logging.getLogger(self.__class__.__name__)
+        logger.debug("Running %s", zmake.util.repr_command(*args))
         return subprocess.Popen(*args, **kwargs)
 
     def run(self, *args, claim_job=True, **kwargs):
@@ -69,16 +69,17 @@ class JobClient:
             with self.get_job():
                 return self.run(*args, claim_job=False, **kwargs)
 
-        kwargs.setdefault('env', os.environ)
-        kwargs['env'].update(self.env())
+        kwargs.setdefault("env", os.environ)
+        kwargs["env"].update(self.env())
 
         return subprocess.run(*args, **kwargs)
 
 
 class JobServer(JobClient):
     """Abstract Job Server."""
+
     def __init__(self, jobs=0):
-        raise NotImplementedError('Abstract method not implemented')
+        raise NotImplementedError("Abstract method not implemented")
 
 
 class GNUMakeJobClient(JobClient):
@@ -103,12 +104,12 @@ class GNUMakeJobClient(JobClient):
         """
         if env is None:
             env = os.environ
-        makeflags = env.get('MAKEFLAGS')
+        makeflags = env.get("MAKEFLAGS")
         if not makeflags:
-            raise OSError('MAKEFLAGS is not set in the environment')
-        match = re.search(r'--jobserver-auth=(\d+),(\d+)', makeflags)
+            raise OSError("MAKEFLAGS is not set in the environment")
+        match = re.search(r"--jobserver-auth=(\d+),(\d+)", makeflags)
         if not match:
-            raise OSError('MAKEFLAGS did not contain jobserver flags')
+            raise OSError("MAKEFLAGS did not contain jobserver flags")
         read_fd, write_fd = map(int, match.groups())
         return cls(read_fd, write_fd)
 
@@ -123,7 +124,7 @@ class GNUMakeJobClient(JobClient):
 
     def env(self):
         """Get the environment variables necessary to share the job server."""
-        return {'MAKEFLAGS': '--jobserver-auth={},{}'.format(*self._pipe)}
+        return {"MAKEFLAGS": "--jobserver-auth={},{}".format(*self._pipe)}
 
 
 class GNUMakeJobServer(JobServer, GNUMakeJobClient):
@@ -132,6 +133,7 @@ class GNUMakeJobServer(JobServer, GNUMakeJobClient):
     See https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html
     for specification.
     """
+
     def __init__(self, jobs=0):
         if not jobs:
             jobs = multiprocessing.cpu_count()
@@ -139,4 +141,4 @@ class GNUMakeJobServer(JobServer, GNUMakeJobClient):
             jobs = select.PIPE_BUF
 
         self._pipe = os.pipe()
-        os.write(self._pipe[1], b'+' * jobs)
+        os.write(self._pipe[1], b"+" * jobs)

@@ -8,14 +8,24 @@
 #ifndef __CROS_EC_COMPILE_TIME_MACROS_H
 #define __CROS_EC_COMPILE_TIME_MACROS_H
 
+#ifdef __cplusplus
+#include <type_traits>
+#endif
+
 /* sys/util.h in zephyr provides equivalents to most of these macros */
 #ifdef CONFIG_ZEPHYR
 #include <sys/util.h>
 #endif
 
+#ifdef __cplusplus
+#define _STATIC_ASSERT static_assert
+#else
+#define _STATIC_ASSERT _Static_assert
+#endif
+
 /* Test an important condition at compile time, not run time */
 #define _BA1_(cond, file, line, msg) \
-	_Static_assert(cond, file ":" #line ": " msg)
+	_STATIC_ASSERT(cond, file ":" #line ": " msg)
 #define _BA0_(c, f, l, msg) _BA1_(c, f, l, msg)
 /* Pass in an option message to display after condition */
 
@@ -30,8 +40,12 @@
 #define BUILD_CHECK_INLINE(value, cond_true) ((value) / (!!(cond_true)))
 
 /* Check that the value is an array (not a pointer) */
+#ifdef __cplusplus
+#define _IS_ARRAY(arr) (std::is_array<decltype(arr)>::value)
+#else
 #define _IS_ARRAY(arr) \
 	!__builtin_types_compatible_p(typeof(arr), typeof(&(arr)[0]))
+#endif
 
 /**
  * ARRAY_SIZE - Number of elements in an array.

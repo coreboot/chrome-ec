@@ -11,12 +11,6 @@
 #define VARIANT_DEDEDE_EC_NPCX796FC
 #include "baseboard.h"
 
-/*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* Charger */
 #define CONFIG_CHARGER_RAA489000
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
@@ -45,13 +39,14 @@
 
 /* LED */
 #define CONFIG_LED_COMMON
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 
 /* USB PD */
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PD_TCPM_RAA489000
+#undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 
 /* USB defines specific to external TCPCs */
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
@@ -112,7 +107,6 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 #ifndef __ASSEMBLER__
 
@@ -156,8 +150,8 @@ enum battery_type {
 	BATTERY_SIMPLO_COS,
 	BATTERY_CosMX,
 	BATTERY_SAMSUNG_SDI,
-	BATTERY_DynaPack_COS,
-	BATTERY_DANAPACK_ATL,
+	BATTERY_DYNAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -166,8 +160,6 @@ enum fw_config_keyboard_type {
 	COMMON_KB = 0,
 	CUST_UK2_KB = 1,
 };
-
-int board_is_sourcing_vbus(int port);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

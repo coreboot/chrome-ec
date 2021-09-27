@@ -266,9 +266,11 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+			raa489000_enable_asgate(i, false);
+		}
 
 		return EC_SUCCESS;
 	}
@@ -290,6 +292,7 @@ int board_set_active_charge_port(int port)
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
@@ -300,7 +303,8 @@ int board_set_active_charge_port(int port)
 		charger_discharge_on_ac(1);
 
 	/* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);
@@ -449,25 +453,12 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
 				       int *kd, int *kd_div)
 {
-	/*
-	 * Early boards need different constants due to a change in charger IC
-	 * silicon revision.
-	 */
-	if (system_get_board_version() >= 0) {
-		*kp = 1;
-		*kp_div = 128;
-		*ki = 1;
-		*ki_div = 1024;
-		*kd = 0;
-		*kd_div = 1;
-	} else {
-		*kp = 1;
-		*kp_div = 4;
-		*ki = 1;
-		*ki_div = 15;
-		*kd = 1;
-		*kd_div = 10;
-	}
+	*kp = 1;
+	*kp_div = 20;
+	*ki = 1;
+	*ki_div = 250;
+	*kd = 0;
+	*kd_div = 1;
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -607,9 +598,8 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -633,4 +623,3 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif

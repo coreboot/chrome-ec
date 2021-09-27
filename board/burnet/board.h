@@ -11,6 +11,7 @@
 #define VARIANT_KUKUI_JACUZZI
 #define VARIANT_KUKUI_BATTERY_SMART
 #define VARIANT_KUKUI_CHARGER_ISL9238
+#define VARIANT_KUKUI_EC_STM32F098
 
 #ifndef SECTION_IS_RW
 #define VARIANT_KUKUI_NO_SENSORS
@@ -47,9 +48,14 @@
 /* Motion Sensors */
 #ifndef VARIANT_KUKUI_NO_SENSORS
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
+#define CONFIG_ACCEL_KX022
 #define CONFIG_ACCELGYRO_BMI160		/* Base accel */
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+/* ICM426XX Base accel/gyro */
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ALS
 #define CONFIG_CMD_ACCEL_INFO
@@ -71,8 +77,11 @@
 #define I2C_PORT_BATTERY            2
 #define I2C_PORT_CHARGER            1
 #define I2C_PORT_SENSORS            1
-#define I2C_PORT_IO_EXPANDER_IT8801 1
+#define IT8801_KEYBOARD_PWM_I2C_PORT 1
 #define I2C_PORT_VIRTUAL_BATTERY    I2C_PORT_BATTERY
+
+/* IT8801 I2C address */
+#define IT8801_KEYBOARD_PWM_I2C_ADDR_FLAGS    IT8801_I2C_ADDR1
 
 /* Enable Accel over SPI */
 #define CONFIG_SPI_ACCEL_PORT    0  /* The first SPI master port (SPI2) */
@@ -80,10 +89,6 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
-/* Define the MKBP events which are allowed to wakeup AP in S3. */
-#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
-		(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) |\
-		 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
 
 #ifndef __ASSEMBLER__
 
@@ -116,8 +121,8 @@ enum charge_port {
 };
 
 enum battery_type {
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_DYNAPACK_COS,
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_SAMSUNG_SDI,
@@ -136,12 +141,14 @@ void emmc_cmd_interrupt(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void board_reset_pd_mcu(void);
 int board_get_version(void);
-int board_is_sourcing_vbus(int port);
 
 /* returns the i2c port number of charger */
 int board_get_charger_i2c(void);
 
 int board_is_convertible(void);
+
+/* Motion sensor interrupt */
+void sensor_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

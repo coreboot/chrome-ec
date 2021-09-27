@@ -51,10 +51,10 @@ enum pd_power_role partner_get_power_role(void);
 void partner_set_pd_rev(enum pd_rev_type pd_rev);
 enum pd_rev_type partner_get_pd_rev(void);
 
-#define TCPC_TX_SOP_ALL -1
+#define TCPCI_MSG_SOP_ALL -1
 void partner_tx_msg_id_reset(int sop);
 
-void partner_send_msg(enum pd_msg_type sop,
+void partner_send_msg(enum tcpci_msg_type sop,
 		      uint16_t type,
 		      uint16_t cnt,
 		      uint16_t ext,
@@ -88,8 +88,12 @@ int test_td_pd_src3_e7(void);
 int test_td_pd_src3_e8(void);
 int test_td_pd_src3_e9(void);
 int test_td_pd_src3_e26(void);
+int test_td_pd_src3_e32(void);
 
 int test_td_pd_snk3_e12(void);
+
+int test_td_pd_vndi3_e3_dfp(void);
+int test_td_pd_vndi3_e3_ufp(void);
 
 int test_connect_as_nonpd_sink(void);
 int test_retry_count_sop(void);

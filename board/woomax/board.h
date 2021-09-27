@@ -17,11 +17,12 @@
 #define CONFIG_USB_PORT_POWER_SMART_PORT_COUNT 1
 #define CONFIG_USBC_RETIMER_PI3DPX1207
 
-#define CONFIG_LED_POWER_LED
-
 /* Motion sensing drivers */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCEL_KX022
@@ -114,7 +115,6 @@ enum usba_port {
 /*****************************************************************************
  * CBI EC FW Configuration
  */
-#include "cbi_ec_fw_config.h"
 
 /**
  * WOOMAX_MB_USBAC
@@ -155,6 +155,8 @@ enum ec_cfg_usb_db_type {
 	WOOMAX_DB_T_OPT1_USBAC_HMDI = 0,
 	WOOMAX_DB_T_OPT3_USBAC_HDMI_MSTHUB = 1,
 };
+
+#include "cbi_ec_fw_config.h"
 
 #define HAS_USBC1_RETIMER_PS8802 \
 			 (BIT(WOOMAX_DB_T_OPT3_USBAC_HDMI_MSTHUB))
@@ -207,6 +209,7 @@ extern const struct usb_mux usbc1_ps8802;
 extern const struct usb_mux usbc1_ps8818;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
 void hdmi_hpd_interrupt(enum gpio_signal signal);
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

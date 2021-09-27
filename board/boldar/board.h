@@ -25,6 +25,8 @@
 
 #define CONFIG_POWER_BUTTON
 
+#define CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
@@ -39,15 +41,15 @@
 /* Keyboard features */
 
 /* Sensors */
-/* BMA253 accelerometer in base */
-#define CONFIG_ACCEL_BMA255
+/* LIS2DH12 Lid accel */
+#define CONFIG_ACCEL_LIS2DH
 
 /* BMI260 accel/gyro in base */
 #define CONFIG_ACCELGYRO_BMI260
 #define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
-/* TCS3400 ALS */
+/* TCS3400 ALS/RGB */
 #define CONFIG_ALS
 #define ALS_COUNT		1
 #define CONFIG_ALS_TCS3400
@@ -166,6 +168,7 @@
 
 enum battery_type {
 	BATTERY_LGC011,
+	BATTERY_LGC_AP18C8K,
 	BATTERY_TYPE_COUNT,
 };
 

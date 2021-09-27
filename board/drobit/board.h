@@ -17,9 +17,6 @@
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-
 #define CONFIG_VBOOT_EFS2
 
 #define CONFIG_POWER_BUTTON
@@ -60,6 +57,11 @@
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+#ifdef BOARD_DROBIT_ECMODEENTRY
+#undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+#endif
+
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
 
@@ -75,6 +77,7 @@
 
 /* USBC PPC*/
 #define CONFIG_USBC_PPC_SYV682X
+#define CONFIG_USB_PD_FRS_PPC
 
 /* BC 1.2 */
 

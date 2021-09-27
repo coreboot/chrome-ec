@@ -65,22 +65,18 @@ void uart_init_buffer(void)
 	if (tx_checksum != uart_buffer_calc_checksum() ||
 	    !IN_RANGE(tx_buf_head, 0, CONFIG_UART_TX_BUF_SIZE) ||
 	    !IN_RANGE(tx_buf_tail, 0, CONFIG_UART_TX_BUF_SIZE)) {
+		/*
+		 * NOTE:
+		 * We are here because EC cold reset or RO/RW's preserve_logs
+		 * section are different.
+		 */
 		tx_buf_head = 0;
 		tx_buf_tail = 0;
 		tx_checksum = 0;
 	}
 }
 
-/**
- * Put a single character into the transmit buffer.
- *
- * Does not enable the transmit interrupt; assumes that happens elsewhere.
- *
- * @param context	Context; ignored.
- * @param c		Character to write.
- * @return 0 if the character was transmitted, 1 if it was dropped.
- */
-static int __tx_char_raw(void *context, int c)
+int uart_tx_char_raw(void *context, int c)
 {
 	int tx_buf_next, tx_buf_new_tail;
 
@@ -116,14 +112,6 @@ static int __tx_char_raw(void *context, int c)
 		tx_checksum = uart_buffer_calc_checksum();
 #endif
 	return 0;
-}
-
-static int __tx_char(void *context, int c)
-{
-	/* Translate '\n' to '\r\n' */
-	if (c == '\n' && __tx_char_raw(NULL, '\r'))
-		return 1;
-	return __tx_char_raw(context, c);
 }
 
 #ifdef CONFIG_UART_TX_DMA
@@ -265,77 +253,6 @@ void uart_clear_input(void)
 
 #endif /* !CONFIG_UART_RX_DMA */
 
-int uart_putc(int c)
-{
-	int rv = __tx_char(NULL, c);
-
-	uart_tx_start();
-
-	return rv ? EC_ERROR_OVERFLOW : EC_SUCCESS;
-}
-
-int uart_puts(const char *outstr)
-{
-	/* Put all characters in the output buffer */
-	while (*outstr) {
-		if (__tx_char(NULL, *outstr++) != 0)
-			break;
-	}
-
-	uart_tx_start();
-
-	/* Successful if we consumed all output */
-	return *outstr ? EC_ERROR_OVERFLOW : EC_SUCCESS;
-}
-
-int uart_put(const char *out, int len)
-{
-	/* Put all characters in the output buffer */
-	while (len--) {
-		if (__tx_char(NULL, *out++) != 0)
-			break;
-	}
-
-	uart_tx_start();
-
-	/* Successful if we consumed all output */
-	return len ? EC_ERROR_OVERFLOW : EC_SUCCESS;
-}
-
-int uart_put_raw(const char *out, int len)
-{
-	/* Put all characters in the output buffer */
-	while (len--) {
-		if (__tx_char_raw(NULL, *out++) != 0)
-			break;
-	}
-
-	uart_tx_start();
-
-	/* Successful if we consumed all output */
-	return len ? EC_ERROR_OVERFLOW : EC_SUCCESS;
-}
-
-int uart_vprintf(const char *format, va_list args)
-{
-	int rv = vfnprintf(__tx_char, NULL, format, args);
-
-	uart_tx_start();
-
-	return rv;
-}
-
-int uart_printf(const char *format, ...)
-{
-	int rv;
-	va_list args;
-
-	va_start(args, format);
-	rv = uart_vprintf(format, args);
-	va_end(args);
-	return rv;
-}
-
 void uart_flush_output(void)
 {
 	/* If UART not initialized ignore flush request. */
@@ -344,7 +261,7 @@ void uart_flush_output(void)
 
 	/* Loop until buffer is empty */
 	while (tx_buf_head != tx_buf_tail) {
-		if (in_interrupt_context()) {
+		if (in_interrupt_context() || !is_interrupt_enabled()) {
 			/*
 			 * Explicitly process UART output, since the UART
 			 * interrupt may not be able to preempt the interrupt
@@ -401,55 +318,6 @@ static void uart_rx_dma_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, uart_rx_dma_init, HOOK_PRIO_DEFAULT);
 #endif
-
-/*****************************************************************************/
-/* Host commands */
-
-static enum ec_status
-host_command_console_snapshot(struct host_cmd_handler_args *args)
-{
-	return uart_console_read_buffer_init();
-}
-DECLARE_HOST_COMMAND(EC_CMD_CONSOLE_SNAPSHOT,
-		     host_command_console_snapshot,
-		     EC_VER_MASK(0));
-
-static enum ec_status
-host_command_console_read(struct host_cmd_handler_args *args)
-{
-	if (args->version == 0) {
-		/*
-		 * Prior versions of this command only support reading from
-		 * an entire snapshot, not just the output since the last
-		 * snapshot.
-		 */
-		return uart_console_read_buffer(
-				CONSOLE_READ_NEXT,
-				(char *)args->response,
-				args->response_max,
-				&args->response_size);
-#ifdef CONFIG_CONSOLE_ENABLE_READ_V1
-	} else if (args->version == 1) {
-		const struct ec_params_console_read_v1 *p;
-
-		/* Check the params to figure out where to start reading. */
-		p = args->params;
-		return uart_console_read_buffer(
-				p->subcmd,
-				(char *)args->response,
-				args->response_max,
-				&args->response_size);
-#endif
-	}
-	return EC_RES_INVALID_PARAM;
-}
-DECLARE_HOST_COMMAND(EC_CMD_CONSOLE_READ,
-		     host_command_console_read,
-		     EC_VER_MASK(0)
-#ifdef CONFIG_CONSOLE_ENABLE_READ_V1
-		     | EC_VER_MASK(1)
-#endif
-		     );
 
 enum ec_status uart_console_read_buffer_init(void)
 {

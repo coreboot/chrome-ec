@@ -99,7 +99,6 @@ enum usba_port {
 /*****************************************************************************
  * CBI EC FW Configuration
  */
-#include "cbi_ec_fw_config.h"
 
 /**
  * BERKNIP_MB_USBAC
@@ -146,6 +145,7 @@ enum ec_cfg_usb_db_type {
 	BERKNIP_DB_T_OPT3_USBAC_HDMI_MSTHUB = 1,
 };
 
+#include "cbi_ec_fw_config.h"
 
 #define HAS_USBC1_RETIMER_PS8743 \
 			(BIT(BERKNIP_DB_T_OPT3_USBAC_HDMI_MSTHUB))
@@ -198,11 +198,6 @@ enum gpio_signal board_usbc_port_to_hpd_gpio(int port);
 extern const struct usb_mux usbc1_tusb544;
 extern const struct usb_mux usbc1_ps8743;
 extern struct usb_mux usbc1_amd_fp5_usb_mux;
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

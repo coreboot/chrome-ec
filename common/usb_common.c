@@ -25,6 +25,7 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_dpm.h"
+#include "usb_pd_flags.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
@@ -38,9 +39,13 @@
 #define CPRINTF(format, args...)
 #endif
 
-__overridable void board_vbus_present_change(void)
-{
-}
+/*
+ * If we are trying to upgrade PD firmwares (TCPC chips, retimer, etc), we
+ * need to ensure the battery has enough charge for this process. 100mAh
+ * is about 5% of most batteries, and it should be enough charge to get us
+ * through the EC jump to RW and PD upgrade.
+ */
+#define MIN_BATTERY_FOR_PD_UPGRADE_MAH 100 /* mAH */
 
 #if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
 int hex8tou32(char *str, uint32_t *val)
@@ -121,6 +126,39 @@ int remote_flashing(int argc, char **argv)
 	return EC_SUCCESS;
 }
 #endif /* defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH) */
+
+bool pd_firmware_upgrade_check_power_readiness(int port)
+{
+	if (IS_ENABLED(HAS_TASK_CHARGER)) {
+		struct batt_params batt = { 0 };
+		/*
+		 * Cannot rely on the EC's active charger data as the
+		 * EC may just rebooted into RW and has not necessarily
+		 * picked the active charger yet. Charger task may not
+		 * initialized, so check battery directly.
+		 * Prevent the upgrade if the battery doesn't have enough
+		 * charge to finish the upgrade.
+		 */
+		battery_get_params(&batt);
+		if (batt.flags & BATT_FLAG_BAD_REMAINING_CAPACITY ||
+			batt.remaining_capacity <
+				MIN_BATTERY_FOR_PD_UPGRADE_MAH) {
+			CPRINTS("C%d: Cannot suspend for upgrade, not "
+					"enough battery (%dmAh)!",
+					port, batt.remaining_capacity);
+			return false;
+		}
+	} else {
+		/* VBUS is present on the port (it is either a
+		 * source or sink) to provide power, so don't allow
+		 * PD firmware upgrade on the port.
+		 */
+		if (pd_is_vbus_present(port))
+			return false;
+	}
+
+	return true;
+}
 
 int usb_get_battery_soc(void)
 {
@@ -307,7 +345,24 @@ __overridable uint8_t board_get_usb_pd_port_count(void)
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }
 
-int pd_get_retry_count(int port, enum tcpm_transmit_type type)
+__overridable bool board_is_usb_pd_port_present(int port)
+{
+	/*
+	 * Use board_get_usb_pd_port_count() instead of checking
+	 * CONFIG_USB_PD_PORT_MAX_COUNT directly here for legacy boards
+	 * that implement board_get_usb_pd_port_count() but do not
+	 * implement board_is_usb_pd_port_present().
+	 */
+
+	return (port >= 0) && (port < board_get_usb_pd_port_count());
+}
+
+__overridable bool board_is_dts_port(int port)
+{
+	return true;
+}
+
+int pd_get_retry_count(int port, enum tcpci_msg_type type)
 {
 	/* PD 3.0 6.7.7: nRetryCount = 2; PD 2.0 6.6.9: nRetryCount = 3 */
 	return pd_get_rev(port, type) == PD_REV30 ? 2 : 3;
@@ -404,6 +459,11 @@ enum pd_drp_next_states drp_auto_toggle_next_state(
 	}
 }
 
+__overridable bool usb_ufp_check_usb3_enable(int port)
+{
+	return false;
+}
+
 mux_state_t get_mux_mode_to_set(int port)
 {
 	/*
@@ -423,19 +483,42 @@ mux_state_t get_mux_mode_to_set(int port)
 	if (pd_is_disconnected(port))
 		return USB_PD_MUX_NONE;
 
+	/*
+	 * For type-c only connections, there may be a need to enable USB3.1
+	 * mode when the port is in a UFP data role, independent of any other
+	 * conditions which are checked below. The default function returns
+	 * false, so only boards that override this check will be affected.
+	 */
+	if (usb_ufp_check_usb3_enable(port) && pd_get_data_role(port)
+	    == PD_ROLE_UFP)
+		return USB_PD_MUX_USB_ENABLED;
+
 	/* If new data role isn't DFP & we only support DFP, also disconnect. */
 	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
 	    IS_ENABLED(CONFIG_USBC_SS_MUX_DFP_ONLY) &&
 	    pd_get_data_role(port) != PD_ROLE_DFP)
 		return USB_PD_MUX_NONE;
 
+	/* If new data role isn't UFP & we only support UFP then disconnect. */
+	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
+	    IS_ENABLED(CONFIG_USBC_SS_MUX_UFP_ONLY) &&
+	    pd_get_data_role(port) != PD_ROLE_UFP)
+		return USB_PD_MUX_NONE;
+
 	/*
 	 * If the power role is sink and the PD partner device is not capable
 	 * of USB communication then disconnect.
+	 *
+	 * On an entry into Unattached.SNK, the partner may be PD capable but
+	 * hasn't yet sent source capabilities. In this case, hold off enabling
+	 * USB3 termination until the PD capability is resolved.
+	 *
+	 * TODO(b/188588458): TCPMv2: Delay enabling USB3 termination when USB4
+	 * is supported.
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE) &&
 	    pd_get_power_role(port) == PD_ROLE_SINK &&
-	    pd_capable(port) &&
+	    (pd_capable(port) || pd_waiting_on_partner_src_caps(port)) &&
 	    !pd_get_partner_usb_comm_capable(port))
 		return USB_PD_MUX_NONE;
 
@@ -464,6 +547,17 @@ void usb_mux_set_safe_mode(int port)
 			USB_SWITCH_CONNECT,
 			polarity_rm_dts(pd_get_polarity(port)));
 	}
+
+	/* Isolate the SBU lines. */
+	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
+		ppc_set_sbu(port, 0);
+}
+
+void usb_mux_set_safe_mode_exit(int port)
+{
+	if (IS_ENABLED(CONFIG_USBC_SS_MUX))
+		usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_CONNECT,
+			    polarity_rm_dts(pd_get_polarity(port)));
 
 	/* Isolate the SBU lines. */
 	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
@@ -619,7 +713,9 @@ const uint32_t pd_src_pdo_max[] = {
 const int pd_src_pdo_max_cnt = ARRAY_SIZE(pd_src_pdo_max);
 
 const uint32_t pd_snk_pdo[] = {
-	PDO_FIXED(5000, 500, PDO_FIXED_FLAGS),
+	PDO_FIXED(5000,
+		  GENERIC_MIN((PD_OPERATING_POWER_MW / 5), PD_MAX_CURRENT_MA),
+		  PDO_FIXED_FLAGS),
 	PDO_BATT(4750, PD_MAX_VOLTAGE_MV, PD_OPERATING_POWER_MW),
 	PDO_VAR(4750, PD_MAX_VOLTAGE_MV, PD_MAX_CURRENT_MA),
 };
@@ -714,7 +810,7 @@ static void pd_usb_billboard_deferred(void)
 		 * 1. Will we have multiple type-C port UFPs
 		 * 2. Will there be other modes applicable to DFPs besides DP
 		 */
-		if (!pd_alt_mode(0, TCPC_TX_SOP, USB_SID_DISPLAYPORT))
+		if (!pd_alt_mode(0, TCPCI_MSG_SOP, USB_SID_DISPLAYPORT))
 			usb_connect();
 	}
 }
@@ -756,12 +852,17 @@ void pd_set_vbus_discharge(int port, int enable)
 	mutex_lock(&discharge_lock[port]);
 	enable &= !board_vbus_source_enabled(port);
 
-	if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_GPIO))
+	if (get_usb_pd_discharge() == USB_PD_DISCHARGE_GPIO) {
 		gpio_discharge_vbus(port, enable);
-	else if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_TCPC))
+	} else if (get_usb_pd_discharge() == USB_PD_DISCHARGE_TCPC) {
+#ifdef CONFIG_USB_PD_DISCHARGE_PPC
 		tcpc_discharge_vbus(port, enable);
-	else if (IS_ENABLED(CONFIG_USB_PD_DISCHARGE_PPC))
+#endif
+	} else if (get_usb_pd_discharge() == USB_PD_DISCHARGE_PPC) {
+#ifdef CONFIG_USB_PD_DISCHARGE_PPC
 		ppc_discharge_vbus(port, enable);
+#endif
+	}
 
 	mutex_unlock(&discharge_lock[port]);
 }
@@ -789,6 +890,10 @@ void pd_deferred_resume(int port)
 }
 #endif /* CONFIG_USB_PD_TCPM_TCPCI */
 
+__overridable int pd_snk_is_vbus_provided(int port)
+{
+	return EC_SUCCESS;
+}
 
 /*
  * Check the specified Vbus level
@@ -798,8 +903,10 @@ void pd_deferred_resume(int port)
  */
 __overridable bool pd_check_vbus_level(int port, enum vbus_level level)
 {
-	if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC))
+	if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC) &&
+		(get_usb_pd_vbus_detect() == USB_PD_VBUS_DETECT_TCPC)) {
 		return tcpm_check_vbus_level(port, level);
+	}
 	else if (level == VBUS_PRESENT)
 		return pd_snk_is_vbus_provided(port);
 	else
@@ -878,6 +985,26 @@ static int command_tcpc_dump(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(tcpci_dump, command_tcpc_dump, "<Type-C port>",
 			"dump the TCPC regs");
 #endif /* defined(CONFIG_CMD_TCPC_DUMP) */
+
+void pd_srccaps_dump(int port)
+{
+	int i;
+	const uint32_t *const srccaps = pd_get_src_caps(port);
+
+	for (i = 0; i < pd_get_src_cap_cnt(port); ++i) {
+		uint32_t max_ma, max_mv, min_mv;
+
+		pd_extract_pdo_power(srccaps[i], &max_ma, &max_mv, &min_mv);
+
+		if ((srccaps[i] & PDO_TYPE_MASK) == PDO_TYPE_AUGMENTED) {
+			if (IS_ENABLED(CONFIG_USB_PD_REV30))
+				ccprintf("%d: %dmV-%dmV/%dmA\n", i, min_mv,
+					 max_mv, max_ma);
+		} else {
+			ccprintf("%d: %dmV/%dmA\n", i, max_mv, max_ma);
+		}
+	}
+}
 
 int pd_build_alert_msg(uint32_t *msg, uint32_t *len, enum pd_power_role pr)
 {

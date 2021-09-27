@@ -11,6 +11,14 @@
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
+/*
+ * By default, enable all console messages except HC, ACPI and event:
+ * The sensor stack is generating a lot of activity.
+ */
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
+
 /* NPCX7 config */
 #define NPCX7_PWM1_SEL    0  /* GPIO C2 is not used as PWM1. */
 #define NPCX_UART_MODULE2 1  /* GPIO64/65 are used as UART pins. */
@@ -22,7 +30,12 @@
 
 /* Sensor */
 #define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_ALS_TCS3400_EMULATED_IRQ_EVENT
+/*
+ * Reduce maximal sensor speed: lid accelerometer is not interrupt driven,
+ * so EC does not timestamp sensor events as accurately as interrupt
+ * driven ones.
+ */
+#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 125000
 #define CONFIG_CMD_ACCEL_INFO
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
@@ -53,10 +66,10 @@
 #define CONFIG_DEDICATED_RECOVERY_BUTTON
 #define CONFIG_BOARD_RESET_AFTER_POWER_ON
 #define CONFIG_CRC8
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_EMULATED_SYSRQ
 #undef CONFIG_KEYBOARD_BOOT_KEYS
-#define CONFIG_KEYBOARD_PROTOCOL_MKBP
+#define CONFIG_MKBP_INPUT_DEVICES
 #define CONFIG_MKBP_USE_HOST_EVENT
 #undef CONFIG_KEYBOARD_RUNTIME_KEYS
 #undef CONFIG_HIBERNATE
@@ -71,8 +84,6 @@
 #define CONFIG_VSTORE_SLOT_COUNT 1
 #define CONFIG_SHA256
 
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_PD_GET_LOG_ENTRY
 
 /* EC Commands */
 #define CONFIG_CMD_BUTTON
@@ -233,7 +244,6 @@ enum adc_channel {
 	ADC_VBUS,           /* ADC4 */
 	ADC_PPVAR_IMON,     /* ADC9 */
 	ADC_TEMP_SENSOR_1,  /* ADC0 */
-	ADC_TEMP_SENSOR_2,  /* ADC1 */
 	/* Number of ADC channels */
 	ADC_CH_COUNT
 };
@@ -260,7 +270,6 @@ enum mft_channel {
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1,
-	TEMP_SENSOR_2,
 	TEMP_SENSOR_COUNT
 };
 

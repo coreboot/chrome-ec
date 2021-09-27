@@ -6,7 +6,6 @@
 /* ADC module for Chrome EC */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "common.h"
 #include "console.h"
 #include "ec_commands.h"
@@ -38,7 +37,7 @@ static int print_one_adc(int channel)
 	v = adc_read_channel(channel);
 	if (v == ADC_READ_ERROR)
 		return EC_ERROR_UNKNOWN;
-	ccprintf("  %s = %d\n", adc_channels[channel].name, v);
+	ccprintf("  %s = %d mV\n", adc_channels[channel].name, v);
 	return EC_SUCCESS;
 }
 

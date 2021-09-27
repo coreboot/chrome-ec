@@ -17,6 +17,12 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
+/* Reset PD MCU */
+void board_reset_pd_mcu(void)
+{
+	/* Add code if TCPC chips need a reset */
+}
+
 static void baseboard_tcpc_init(void)
 {
 	int i;
@@ -27,7 +33,8 @@ static void baseboard_tcpc_init(void)
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		/* Enable PPC interrupts. */
-		gpio_enable_interrupt(tcpc_aic_gpios[i].ppc_alert);
+		if (tcpc_aic_gpios[i].ppc_intr_handler)
+			gpio_enable_interrupt(tcpc_aic_gpios[i].ppc_alert);
 
 		/* Enable TCPC interrupts. */
 		if (tcpc_config[i].bus_type != EC_BUS_TYPE_EMBEDDED)
@@ -72,6 +79,9 @@ uint16_t tcpc_get_alert_status(void)
 
 int ppc_get_alert_status(int port)
 {
+	if (!tcpc_aic_gpios[port].ppc_intr_handler)
+		return 0;
+
 	return !gpio_get_level(tcpc_aic_gpios[port].ppc_alert);
 }
 
@@ -81,7 +91,8 @@ void ppc_interrupt(enum gpio_signal signal)
 	int i;
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-		if (signal == tcpc_aic_gpios[i].ppc_alert) {
+		if (tcpc_aic_gpios[i].ppc_intr_handler &&
+			signal == tcpc_aic_gpios[i].ppc_alert) {
 			tcpc_aic_gpios[i].ppc_intr_handler(i);
 			break;
 		}

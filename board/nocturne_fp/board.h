@@ -98,7 +98,6 @@
 #define CONFIG_HOST_COMMAND_STATUS
 #undef CONFIG_I2C
 #undef CONFIG_LID_SWITCH
-#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
 #define CONFIG_PRINTF_LEGACY_LI_FORMAT
@@ -106,14 +105,13 @@
 #define CONFIG_SHA256_UNROLLED
 #define CONFIG_SPI
 #define CONFIG_STM_HWTIMER32
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_PD_GET_LOG_ENTRY
 #undef CONFIG_TASK_PROFILING
 #define CONFIG_WATCHDOG_HELP
 #define CONFIG_WP_ACTIVE_HIGH
+#define CONFIG_PANIC_STRIP_GPR
 
 /* SPI configuration for the fingerprint sensor */
-#define CONFIG_SPI_MASTER
+#define CONFIG_SPI_CONTROLLER
 #define CONFIG_SPI_FP_PORT  2 /* SPI4: third master config */
 
 #define CONFIG_FINGERPRINT_MCU
@@ -169,6 +167,7 @@
 #define CONFIG_CMD_FLASH
 
 #ifdef SECTION_IS_RW
+#define CONFIG_LOW_POWER_IDLE
 #define CONFIG_CMD_SPI_XFER
 #endif
 
@@ -187,6 +186,8 @@
 
 #include "gpio_signal.h"
 #include "board_rw.h"
+
+void slp_event(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-image: sjg20/bionic-20200526-28jan2021
+image: jbettis/bionic-20200807-27aug21
 
 # You can update that image using this repo:
 #   https://gitlab.com/zephyr-ec/gitlab-ci-runner/-/tree/main
@@ -22,20 +22,122 @@ cache:
     - .cache/pip
     - venv/
 
+
+# The directory structure is:
+#
+# /zephyr
+# /builds/zephyr-ec/ec       EC_DIR
 before_script:
+  - export MODULES_DIR="$HOME/modules"
+  - mkdir -p "${MODULES_DIR}"
+  - export ZEPHYR_BASE="$HOME/zephyr"
+  - git clone -b chromeos-v2.6 https://chromium.googlesource.com/chromiumos/third_party/zephyr "${ZEPHYR_BASE}26"
+  - git clone -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/cmsis "${MODULES_DIR}/cmsis"
+  - git clone -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/hal_stm32 "${MODULES_DIR}/hal_stm32"
+  - git clone -b main https://chromium.googlesource.com/chromiumos/third_party/zephyr/nanopb "${MODULES_DIR}/nanopb"
+  - ln -s "$(pwd)" "${MODULES_DIR}/ec"
   - python3 -V  # Print out python version for debugging
   - python3 -m pip install zephyr/zmake --user
-  - export BUILD_DIR=/tmp/z
-  - export PATH=$PATH:~/.local/bin
+  - export BUILD_DIR=build
+  - export ZEPHYR_DIR=/zephyr
+  - export PATH="$PATH:$HOME/.local/bin"
+  - python3 -m pip install anytree --user
+  - python3 -m pip install pyelftools --user
+  - export PYTHONIOENCODING=utf-8
 
-test:
+# Users of this template must set:
+# $PROJECT to the project to build in zephyr/projects. E.g. "lazor")
+# $VERSION to the Zephyr version to use (e.g. 25 for 2.5, 26 for 2.6)
+# $PROJECT_SUBDIR if it is in a subdirectory. E.g. "trogdor/"
+.build_template: &build_template
+  stage: build
   script:
-    echo "It works"
-
-run:
-  script:
-    - zmake -l DEBUG configure -B ${BUILD_DIR}/vol zephyr/projects/volteer
-    - zmake -l DEBUG build ${BUILD_DIR}/vol
+    - zmake --zephyr-base "${ZEPHYR_BASE}${VERSION}"
+      --modules-dir "${MODULES_DIR}" -l DEBUG configure -b
+      -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
+      zephyr/projects/${PROJECT_SUBDIR}${PROJECT}
+    - for b in "${BUILD_DIR}/${PROJECT}"/build-* ; do
+      bdir=$(basename ${b}) ;
+      ninja -C ${b} ram_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_ram_report.txt" ;
+      cp ${b}/ram.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_ram.json" ;
+      ninja -C ${b} rom_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_rom_report.txt" ;
+      cp ${b}/rom.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_rom.json" ;
+      done
+    - ls "${BUILD_DIR}/${PROJECT}" "${BUILD_DIR}/${PROJECT}/output"
   artifacts:
     paths:
-      - ${BUILD_DIR}/vol
+      - build/${PROJECT}/output/*
+    expire_in: 1 week
+
+delbin:
+  variables:
+    PROJECT: "delbin"
+    PROJECT_SUBDIR: "volteer/"
+    VERSION: 26
+  <<: *build_template
+
+hayato:
+  variables:
+    PROJECT: "hayato"
+    PROJECT_SUBDIR: "asurada/"
+    VERSION: 26
+  <<: *build_template
+
+herobrine_npcx9:
+  variables:
+    PROJECT: "herobrine_npcx9"
+    PROJECT_SUBDIR: "herobrine/"
+    VERSION: 26
+  <<: *build_template
+
+it8xxx2_evb:
+  variables:
+    PROJECT: "it8xxx2_evb"
+    VERSION: 26
+  <<: *build_template
+
+kohaku:
+  variables:
+    PROJECT: "kohaku"
+    VERSION: 26
+  <<: *build_template
+
+lazor:
+  variables:
+    PROJECT: "lazor"
+    PROJECT_SUBDIR: "trogdor/"
+    VERSION: 26
+  <<: *build_template
+
+native_posix:
+  variables:
+    PROJECT: "posix-ec"
+    TOOLCHAIN: "host"
+    VERSION: 26
+  <<: *build_template
+
+volteer:
+  variables:
+    PROJECT: "volteer"
+    PROJECT_SUBDIR: "volteer/"
+    VERSION: 26
+  <<: *build_template
+
+coverage:
+  stage: test
+  script:
+    - zmake --zephyr-base "${ZEPHYR_BASE}26"
+      --modules-dir "${MODULES_DIR}" -l DEBUG coverage
+      "${BUILD_DIR}/coverage"
+    - ls "${BUILD_DIR}/coverage" "${BUILD_DIR}/coverage/coverage_rpt"
+  artifacts:
+    paths:
+      - build/coverage/*
+    expire_in: 1 week
+
+testall:
+  stage: test
+  script:
+    - zmake --zephyr-base "${ZEPHYR_BASE}26"
+      --modules-dir "${MODULES_DIR}" -l DEBUG testall
+

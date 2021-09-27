@@ -16,7 +16,6 @@
 #include "baseboard.h"
 
 #define CONFIG_LED_COMMON
-#define CONFIG_LED_POWER_LED
 
 /* USB PD */
 #undef CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
@@ -34,7 +33,6 @@
  * communicate on locked systems (which haven't PD negotiated).
  */
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT 15000
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC 1
 
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 15001
 
@@ -54,7 +52,6 @@
 
 /* All casta systems are clamshells */
 #undef CONFIG_TABLET_MODE
-#undef CONFIG_TABLET_SWITCH
 
 /* TODO(b/119872005): Casta: confirm thermistor parts */
 #define CONFIG_STEINHART_HART_3V3_13K7_47K_4050B

@@ -4,7 +4,6 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "charger.h"
 #include "chipset.h"
 #include "common.h"
@@ -15,7 +14,7 @@
 #include "i2c.h"
 #include "power.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 
 const struct power_signal_info power_signal_list[] = {
 	[X86_SLP_S3_N] = {
@@ -55,6 +54,11 @@ int board_get_temp(int idx, int *temp_k)
 	case TEMP_SENSOR_SOC:
 		/* thermistor is not powered in G3 */
 		if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+			return EC_ERROR_NOT_POWERED;
+
+		/* adc power not ready when transition to S5 */
+		if (chipset_in_or_transitioning_to_state(
+			CHIPSET_STATE_SOFT_OFF))
 			return EC_ERROR_NOT_POWERED;
 
 		channel = ADC_TEMP_SENSOR_SOC;

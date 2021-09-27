@@ -87,12 +87,16 @@ static void check_reset_cause(void)
 {
 	uint32_t flags = chip_read_reset_flags();
 	uint32_t raw_cause = STM32_RCC_RESET_CAUSE;
+#ifdef STM32_PWR_RESET_CAUSE
 	uint32_t pwr_status = STM32_PWR_RESET_CAUSE;
+#endif
 
 	/* Clear the hardware reset cause by setting the RMVF bit */
 	STM32_RCC_RESET_CAUSE |= RESET_CAUSE_RMVF;
+#ifdef STM32_PWR_RESET_CAUSE
 	/* Clear SBF in PWR_CSR */
 	STM32_PWR_RESET_CAUSE_CLR |= RESET_CAUSE_SBF_CLR;
+#endif
 	/* Clear saved reset flags */
 	chip_save_reset_flags(0);
 
@@ -114,9 +118,11 @@ static void check_reset_cause(void)
 	if (raw_cause & RESET_CAUSE_PIN)
 		flags |= EC_RESET_FLAG_RESET_PIN;
 
+#ifdef STM32_PWR_RESET_CAUSE
 	if (pwr_status & RESET_CAUSE_SBF)
 		/* Hibernated and subsequently awakened */
 		flags |= EC_RESET_FLAG_HIBERNATE;
+#endif
 
 	if (!flags && (raw_cause & RESET_CAUSE_OTHER))
 		flags |= EC_RESET_FLAG_OTHER;
@@ -168,11 +174,20 @@ void chip_pre_init(void)
 		STM32_RCC_PB2_TIM1  | STM32_RCC_PB2_TIM8  | STM32_RCC_PB2_TIM9 |
 		STM32_RCC_PB2_TIM10 | STM32_RCC_PB2_TIM11;
 #elif defined(CHIP_FAMILY_STM32L4)
+
+#ifdef	CHIP_VARIANT_STM32L431X
+	apb1fz_reg =
+		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM7 | STM32_RCC_PB1_TIM6 |
+		STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
+	apb2fz_reg =
+		STM32_RCC_PB2_TIM1 | STM32_RCC_PB2_TIM15 | STM32_RCC_PB2_TIM16;
+#else
 	apb1fz_reg =
 		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 | STM32_RCC_PB1_TIM4 |
 		STM32_RCC_PB1_TIM5 | STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_TIM7 |
 		STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
 	apb2fz_reg = STM32_RCC_PB2_TIM1 | STM32_RCC_PB2_TIM8;
+#endif
 #elif defined(CHIP_FAMILY_STM32L)
 	apb1fz_reg =
 		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 | STM32_RCC_PB1_TIM4 |
@@ -193,11 +208,15 @@ void chip_pre_init(void)
 #elif defined(CHIP_FAMILY_STM32H7)
 	/* TODO(b/67081508) */
 #endif
-
+#if defined(CHIP_FAMILY_STM32L5)
+	(void)apb1fz_reg;
+	(void)apb2fz_reg;
+#else
 	if (apb1fz_reg)
 		STM32_DBGMCU_APB1FZ |= apb1fz_reg;
 	if (apb2fz_reg)
 		STM32_DBGMCU_APB2FZ |= apb2fz_reg;
+#endif
 }
 
 #ifdef CONFIG_PVD
@@ -249,12 +268,16 @@ void system_pre_init(void)
 {
 #ifdef CONFIG_SOFTWARE_PANIC
 	uint16_t reason, info;
-	uint8_t exception;
+	uint8_t exception, panic_flags;
 #endif
 
 	/* enable clock on Power module */
 #ifndef CHIP_FAMILY_STM32H7
+#ifdef	CHIP_FAMILY_STM32L4
+	STM32_RCC_APB1ENR1 |= STM32_RCC_PWREN;
+#else
 	STM32_RCC_APB1ENR |= STM32_RCC_PWREN;
+#endif
 #endif
 #if defined(CHIP_FAMILY_STM32F4)
 	/* enable backup registers */
@@ -262,6 +285,9 @@ void system_pre_init(void)
 #elif defined(CHIP_FAMILY_STM32H7)
 	/* enable backup registers */
 	STM32_RCC_AHB4ENR |= BIT(28);
+#elif defined(CHIP_FAMILY_STM32L4)
+	/* enable RTC APB clock */
+	STM32_RCC_APB1ENR1 |= STM32_RCC_APB1ENR1_RTCAPBEN;
 #else
 	/* enable backup registers */
 	STM32_RCC_APB1ENR |= BIT(27);
@@ -280,6 +306,13 @@ void system_pre_init(void)
 	/* Wait for LSI to be ready */
 	while (!(STM32_RCC_CSR & BIT(1)))
 		;
+
+#if defined(CHIP_FAMILY_STM32G4)
+	/* Make sure PWR clock is enabled */
+	STM32_RCC_APB1ENR1 |= STM32_RCC_APB1ENR1_PWREN;
+	/* Enable access to backup domain registers */
+	STM32_PWR_CR1 |= STM32_PWR_CR1_DBP;
+#endif
 	/* re-configure RTC if needed */
 #ifdef CHIP_FAMILY_STM32L
 	if ((STM32_RCC_CSR & 0x00C30000) != 0x00420000) {
@@ -289,7 +322,8 @@ void system_pre_init(void)
 		STM32_RCC_CSR = (STM32_RCC_CSR & ~0x00C30000) | 0x00420000;
 	}
 #elif defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3) || \
-	defined(CHIP_FAMILY_STM32L4) || defined(CHIP_FAMILY_STM32F4) || \
+	defined(CHIP_FAMILY_STM32L4) || \
+	defined(CHIP_FAMILY_STM32L5) || defined(CHIP_FAMILY_STM32F4) ||	\
 	defined(CHIP_FAMILY_STM32H7) || defined(CHIP_FAMILY_STM32G4)
 	if ((STM32_RCC_BDCR & BDCR_ENABLE_MASK) != BDCR_ENABLE_VALUE) {
 		/* The RTC settings are bad, we need to reset it */
@@ -316,11 +350,14 @@ void system_pre_init(void)
 	reason = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_REASON);
 	info = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_INFO);
 	exception = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION);
-	if (reason || info || exception) {
+	panic_flags = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_FLAGS);
+	if (reason || info || exception || panic_flags) {
 		panic_set_reason(reason, info, exception);
+		panic_get_data()->flags = panic_flags;
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_REASON, 0);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_INFO, 0);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, 0);
+		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS, 0);
 	}
 #endif
 
@@ -363,10 +400,20 @@ void system_reset(int flags)
 
 	chip_save_reset_flags(save_flags);
 
+#ifdef CONFIG_ARMV7M_CACHE
+	/*
+	 * Disable caches (D-cache is also flushed and invalidated)
+	 * so changes that lives in cache are saved in memory now.
+	 * Any subsequent writes will be done immediately.
+	 */
+	cpu_disable_caches();
+#endif
+
 	if (flags & SYSTEM_RESET_HARD) {
 #ifdef CONFIG_SOFTWARE_PANIC
 		uint32_t reason, info;
 		uint8_t exception;
+		uint8_t panic_flags = panic_get_data()->flags;
 
 		/* Panic data will be wiped by hard reset, so save it */
 		panic_get_reason(&reason, &info, &exception);
@@ -374,14 +421,15 @@ void system_reset(int flags)
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_REASON, reason);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_INFO, info);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, exception);
+		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS, panic_flags);
 #endif
 
-#ifdef CHIP_FAMILY_STM32L
+#if defined(CHIP_FAMILY_STM32L) || defined(CHIP_FAMILY_STM32L4)
 		/*
 		 * Ask the flash module to reboot, so that we reload the
 		 * option bytes.
 		 */
-		flash_physical_force_reload();
+		crec_flash_physical_force_reload();
 
 		/* Fall through to watchdog if that fails */
 #endif
@@ -394,7 +442,7 @@ void system_reset(int flags)
 		 * use this for hard reset.
 		 */
 		STM32_FLASH_CR |= FLASH_CR_OBL_LAUNCH;
-#elif defined(CHIP_FAMILY_STM32L4)
+#elif defined(CHIP_FAMILY_STM32G4)
 		STM32_FLASH_KEYR = FLASH_KEYR_KEY1;
 		STM32_FLASH_KEYR = FLASH_KEYR_KEY2;
 		STM32_FLASH_OPTKEYR = FLASH_OPTKEYR_KEY1;
@@ -423,6 +471,23 @@ void system_reset(int flags)
 		 */
 
 		/*
+		 * RM0433 Rev 7
+		 * Section 45.4.4 Page 1920
+		 * https://www.st.com/resource/en/reference_manual/dm00314099.pdf
+		 * If several reload, prescaler, or window values are used by
+		 * the application, it is mandatory to wait until RVU bit is
+		 * reset before changing the reload value, to wait until PVU bit
+		 * is reset before changing the prescaler value, and to wait
+		 * until WVU bit is reset before changing the window value.
+		 *
+		 * Here we should wait to finish previous IWDG_RLR register
+		 * update (see watchdog_init()) before starting next update,
+		 * otherwise new IWDG_RLR value will be lost.
+		 */
+		while (STM32_IWDG_SR & STM32_IWDG_SR_RVU)
+			;
+
+		/*
 		 * Enable IWDG, which shouldn't be necessary since the IWDG
 		 * only needs to be started once, but STM32F412 hangs unless
 		 * this is added.
@@ -434,9 +499,11 @@ void system_reset(int flags)
 		/* Ask the watchdog to trigger a hard reboot */
 		STM32_IWDG_KR = STM32_IWDG_KR_UNLOCK;
 		STM32_IWDG_RLR = 0x1;
-		/* Wait for value to be reloaded. */
+		/* Wait for value to be updated. */
 		while (STM32_IWDG_SR & STM32_IWDG_SR_RVU)
 			;
+
+		/* Reload IWDG counter, it also locks registers */
 		STM32_IWDG_KR = STM32_IWDG_KR_RELOAD;
 #endif
 		/* wait for the chip to reboot */
@@ -470,9 +537,10 @@ int system_set_scratchpad(uint32_t value)
 	return bkpdata_write(BKPDATA_INDEX_SCRATCHPAD, (uint16_t)value);
 }
 
-uint32_t system_get_scratchpad(void)
+int system_get_scratchpad(uint32_t *value)
 {
-	return (uint32_t)bkpdata_read(BKPDATA_INDEX_SCRATCHPAD);
+	*value = (uint32_t)bkpdata_read(BKPDATA_INDEX_SCRATCHPAD);
+	return EC_SUCCESS;
 }
 
 const char *system_get_chip_vendor(void)
@@ -545,6 +613,9 @@ int system_is_reboot_warm(void)
 #elif defined(CHIP_FAMILY_STM32L)
 	return ((STM32_RCC_AHBENR & 0x3f) == 0x3f);
 #elif defined(CHIP_FAMILY_STM32L4)
+	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK)
+			== STM32_RCC_AHB2ENR_GPIOMASK);
+#elif defined(CHIP_FAMILY_STM32L5)
 	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK)
 			== STM32_RCC_AHB2ENR_GPIOMASK);
 #elif defined(CHIP_FAMILY_STM32F4)

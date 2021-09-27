@@ -21,7 +21,9 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd_flags.h"
 #include "usb_pd_tcpc.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -116,6 +118,9 @@ static int tcpc_vbus[CONFIG_USB_PD_PORT_MAX_COUNT];
 /* Cached RP role values */
 static int cached_rp[CONFIG_USB_PD_PORT_MAX_COUNT];
 
+/* Cache our Device Capabilities at init for later reference */
+static int dev_cap_1[CONFIG_USB_PD_PORT_MAX_COUNT];
+
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 int tcpc_addr_write(int port, int i2c_addr, int reg, int val)
 {
@@ -172,9 +177,14 @@ int tcpc_addr_read(int port, int i2c_addr, int reg, int *val)
 
 int tcpc_addr_read16(int port, int i2c_addr, int reg, int *val)
 {
-	int rv;
-
 	pd_wait_exit_low_power(port);
+
+	return tcpc_addr_read16_no_lpm_exit(port, i2c_addr, reg, val);
+}
+
+int tcpc_addr_read16_no_lpm_exit(int port, int i2c_addr, int reg, int *val)
+{
+	int rv;
 
 	rv = i2c_read16(tcpc_config[port].i2c_info.port,
 			i2c_addr, reg, val);
@@ -312,13 +322,20 @@ static int init_alert_mask(int port)
 	 * Create mask of alert events that will cause the TCPC to
 	 * signal the TCPM via the Alert# gpio line.
 	 */
-	mask = TCPC_REG_ALERT_TX_SUCCESS | TCPC_REG_ALERT_TX_FAILED |
-		TCPC_REG_ALERT_TX_DISCARDED | TCPC_REG_ALERT_RX_STATUS |
-		TCPC_REG_ALERT_RX_HARD_RST | TCPC_REG_ALERT_CC_STATUS
-#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-		| TCPC_REG_ALERT_POWER_STATUS
-#endif
-		;
+	if (get_usb_pd_vbus_detect() == USB_PD_VBUS_DETECT_TCPC) {
+		mask = TCPC_REG_ALERT_TX_SUCCESS | TCPC_REG_ALERT_TX_FAILED |
+			TCPC_REG_ALERT_TX_DISCARDED | TCPC_REG_ALERT_RX_STATUS |
+			TCPC_REG_ALERT_RX_HARD_RST | TCPC_REG_ALERT_CC_STATUS |
+			TCPC_REG_ALERT_FAULT
+			| TCPC_REG_ALERT_POWER_STATUS
+			;
+	} else {
+		mask = TCPC_REG_ALERT_TX_SUCCESS | TCPC_REG_ALERT_TX_FAILED |
+			TCPC_REG_ALERT_TX_DISCARDED | TCPC_REG_ALERT_RX_STATUS |
+			TCPC_REG_ALERT_RX_HARD_RST | TCPC_REG_ALERT_CC_STATUS |
+			TCPC_REG_ALERT_FAULT
+			;
+	}
 
 	/* TCPCI Rev2 includes SAFE0V alerts */
 	if (TCPC_FLAGS_VSAFE0V(tcpc_config[port].flags))
@@ -351,11 +368,11 @@ static int init_power_status_mask(int port)
 	uint8_t mask;
 	int rv;
 
-#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	mask = TCPC_REG_POWER_STATUS_VBUS_PRES;
-#else
-	mask = 0;
-#endif
+	if (get_usb_pd_vbus_detect() == USB_PD_VBUS_DETECT_TCPC)
+		mask = TCPC_REG_POWER_STATUS_VBUS_PRES;
+	else
+		mask = 0;
+
 	rv = tcpc_write(port, TCPC_REG_POWER_STATUS_MASK , mask);
 
 	return rv;
@@ -574,18 +591,16 @@ int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 					? MASK_SET : MASK_CLR);
 }
 
-#ifdef CONFIG_USBC_PPC
-int tcpci_tcpm_get_snk_ctrl(int port, bool *sinking)
+#ifdef CONFIG_USB_PD_PPC
+bool tcpci_tcpm_get_snk_ctrl(int port)
 {
 	int rv;
 	int pwr_sts;
 
 	rv = tcpci_tcpm_get_power_status(port, &pwr_sts);
-	*sinking = (rv != EC_SUCCESS)
-			? 0
-			: pwr_sts & TCPC_REG_POWER_STATUS_SINKING_VBUS;
 
-	return rv;
+	return rv == EC_SUCCESS &&
+		pwr_sts & TCPC_REG_POWER_STATUS_SINKING_VBUS;
 }
 
 int tcpci_tcpm_set_snk_ctrl(int port, int enable)
@@ -596,17 +611,15 @@ int tcpci_tcpm_set_snk_ctrl(int port, int enable)
 	return tcpc_write(port, TCPC_REG_COMMAND, cmd);
 }
 
-int tcpci_tcpm_get_src_ctrl(int port, bool *sourcing)
+bool tcpci_tcpm_get_src_ctrl(int port)
 {
 	int rv;
 	int pwr_sts;
 
 	rv = tcpci_tcpm_get_power_status(port, &pwr_sts);
-	*sourcing = (rv != EC_SUCCESS)
-			? 0
-			: pwr_sts & TCPC_REG_POWER_STATUS_SOURCING_VBUS;
 
-	return rv;
+	return rv == EC_SUCCESS &&
+		pwr_sts & TCPC_REG_POWER_STATUS_SOURCING_VBUS;
 }
 
 int tcpci_tcpm_set_src_ctrl(int port, int enable)
@@ -645,14 +658,18 @@ int tcpci_tcpm_set_vconn(int port, int enable)
 	if (rv)
 		return rv;
 
-	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP)) {
-		rv = tcpci_tcpm_sop_prime_enable(port, enable);
-		if (rv)
-			return rv;
-	}
-
 	reg &= ~TCPC_REG_POWER_CTRL_VCONN(1);
 	reg |= TCPC_REG_POWER_CTRL_VCONN(enable);
+
+	/*
+	 * Add delay of writing TCPC_REG_POWER_CTRL makes
+	 * CC status being judged correctly when disable VCONN.
+	 * This may be a PS8XXX firmware issue, Parade is still trying.
+	 * https://partnerissuetracker.corp.google.com/issues/185202064
+	 */
+	if (!enable)
+		msleep(PS8XXX_VCONN_TURN_OFF_DELAY_US);
+
 	return tcpc_write(port, TCPC_REG_POWER_CTRL, reg);
 }
 
@@ -934,7 +951,7 @@ void tcpm_clear_pending_messages(int port)
 	q->tail = q->head;
 }
 
-int tcpci_tcpm_transmit(int port, enum tcpm_transmit_type type,
+int tcpci_tcpm_transmit(int port, enum tcpci_msg_type type,
 			uint16_t header, const uint32_t *data)
 {
 	int reg = TCPC_REG_TX_DATA;
@@ -1058,6 +1075,12 @@ static int tcpci_handle_fault(int port, int fault)
 				last_write_op[port].mask & 0xFFFF);
 	}
 
+	/* Report overcurrent to the OCP module if enabled */
+	if ((dev_cap_1[port] & TCPC_REG_DEV_CAP_1_VBUS_OCP_REPORTING) &&
+			IS_ENABLED(CONFIG_USBC_OCP) &&
+			(fault & TCPC_REG_FAULT_STATUS_VBUS_OVER_CURRENT))
+		pd_handle_overcurrent(port);
+
 	if (tcpc_config[port].drv->handle_fault)
 		rv = tcpc_config[port].drv->handle_fault(port, fault);
 
@@ -1126,7 +1149,7 @@ static void tcpci_check_vbus_changed(int port, int alert, uint32_t *pd_event)
 			tcpc_vbus[port] = BIT(VBUS_SAFE0V);
 		}
 
-		if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC) &&
+		if ((get_usb_pd_vbus_detect() == USB_PD_VBUS_DETECT_TCPC) &&
 		    IS_ENABLED(CONFIG_USB_CHARGER)) {
 			/* Update charge manager with new VBUS state */
 			usb_charger_vbus_change(port,
@@ -1135,9 +1158,6 @@ static void tcpci_check_vbus_changed(int port, int alert, uint32_t *pd_event)
 			if (pd_event)
 				*pd_event |= TASK_EVENT_WAKE;
 		}
-
-		if (pwr_status & TCPC_REG_POWER_STATUS_VBUS_DET)
-			board_vbus_present_change();
 	}
 }
 
@@ -1153,6 +1173,7 @@ void tcpci_tcpc_alert(int port)
 	int alert_ext = 0;
 	int failed_attempts;
 	uint32_t pd_event = 0;
+	int retval = 0;
 
 	/* Read the Alert register from the TCPC */
 	if (tcpm_alert_status(port, &alert)) {
@@ -1188,10 +1209,23 @@ void tcpci_tcpc_alert(int port)
 	/* Pull all RX messages from TCPC into EC memory */
 	failed_attempts = 0;
 	while (alert & TCPC_REG_ALERT_RX_STATUS) {
-		if (tcpm_enqueue_message(port))
+		retval = tcpm_enqueue_message(port);
+		if (retval)
 			++failed_attempts;
 		if (tcpm_alert_status(port, &alert))
 			++failed_attempts;
+
+
+		/*
+		 * EC RX FIFO is full. Deassert ALERT# line to exit interrupt
+		 * handler by discarding pending message from TCPC RX FIFO.
+		 */
+		if (retval == EC_ERROR_OVERFLOW) {
+			CPRINTS("C%d: PD RX OVF!", port);
+			tcpc_write16(port, TCPC_REG_ALERT,
+				TCPC_REG_ALERT_RX_STATUS |
+				TCPC_REG_ALERT_RX_BUF_OVF);
+		}
 
 		/* Ensure we don't loop endlessly */
 		if (failed_attempts >= MAX_ALLOW_FAILED_RX_READS) {
@@ -1376,7 +1410,6 @@ int tcpci_tcpm_init(int port)
 	int error;
 	int power_status;
 	int tries = TCPM_INIT_TRIES;
-	int tcpc_ctrl;
 
 	if (port >= board_get_usb_pd_port_count())
 		return EC_ERROR_INVAL;
@@ -1396,23 +1429,17 @@ int tcpci_tcpm_init(int port)
 	}
 
 	/*
-	 * Set TCPC_CONTROL.DebugAccessoryControl = 1 to control by TCPM,
-	 * not TCPC.
-	 */
-	tcpc_ctrl = TCPC_REG_TCPC_CTRL_DEBUG_ACC_CONTROL;
-
-	/*
 	 * For TCPCI Rev 2.0, unless the TCPM sets
 	 * TCPC_CONTROL.EnableLooking4ConnectionAlert bit, TCPC by default masks
 	 * Alert assertion when CC_STATUS.Looking4Connection changes state.
 	 */
 	if (tcpc_config[port].flags & TCPC_FLAGS_TCPCI_REV2_0) {
-		tcpc_ctrl |= TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT;
+		error = tcpc_update8(port, TCPC_REG_TCPC_CTRL,
+				TCPC_REG_TCPC_CTRL_EN_LOOK4CONNECTION_ALERT,
+				MASK_SET);
+		if (error)
+			CPRINTS("C%d: Failed to init TCPC_CTRL!", port);
 	}
-
-	error = tcpc_update8(port, TCPC_REG_TCPC_CTRL, tcpc_ctrl, MASK_SET);
-	if (error)
-		CPRINTS("C%d: Failed to init TCPC_CTRL!", port);
 
 	/*
 	 * Handle and clear any alerts, since we might be coming out of low
@@ -1456,6 +1483,9 @@ int tcpci_tcpm_init(int port)
 
 	/* Read chip info here when we know the chip is awake. */
 	tcpm_get_chip_info(port, 1, NULL);
+
+	/* Cache our device capabilities for future reference */
+	tcpc_read16(port, TCPC_REG_DEV_CAP_1, &dev_cap_1[port]);
 
 	return EC_SUCCESS;
 }
@@ -1507,10 +1537,14 @@ int tcpci_tcpm_mux_enter_low_power(const struct usb_mux *me)
 	return mux_write(me, TCPC_REG_COMMAND, TCPC_REG_COMMAND_I2CIDLE);
 }
 
-int tcpci_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state)
+int tcpci_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state,
+		       bool *ack_required)
 {
 	int rv;
 	int reg = 0;
+
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
 
 	/* Parameter is port only */
 	rv = mux_read(me, TCPC_REG_CONFIG_STD_OUTPUT, &reg);
@@ -1782,12 +1816,16 @@ const struct tcpm_drv tcpci_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
 #endif
+	.tcpc_enable_auto_discharge_disconnect =
+		&tcpci_tcpc_enable_auto_discharge_disconnect,
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	.drp_toggle		= &tcpci_tcpc_drp_toggle,
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USB_PD_PPC
+	.get_snk_ctrl		= &tcpci_tcpm_get_snk_ctrl,
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
+	.get_src_ctrl		= &tcpci_tcpm_get_src_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
 #endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER

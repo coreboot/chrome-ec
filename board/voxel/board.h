@@ -11,14 +11,6 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-/*
- * Create an EC build that requires AP-driven mode entry to facilitate debugging
- * b/177105656.
- */
-#ifdef BOARD_VOXEL_APMODEENTRY
-#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
-#endif
-
 /* Optional features */
 #undef NPCX7_PWM1_SEL
 #define NPCX7_PWM1_SEL    0    /* GPIO C2 is not used as PWM1. */
@@ -43,6 +35,8 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_FACTORY_TEST
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Keyboard backliht */
 #define CONFIG_PWM
@@ -80,9 +74,14 @@
  * cables only support up to 60W.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
+#define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
+
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+#ifdef BOARD_VOXEL_ECMODEENTRY
+#undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+#endif
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
@@ -98,6 +97,7 @@
 
 /* USBC PPC*/
 #define CONFIG_USBC_PPC_SYV682X		/* USBC port C0/C1 */
+#define CONFIG_USB_PD_FRS_PPC
 
 /* BC 1.2 */
 
@@ -168,6 +168,7 @@
 enum battery_type {
 	BATTERY_AP19B8M,
 	BATTERY_LGC_AP18C8K,
+	BATTERY_COSMX_AP20CBL,
 	BATTERY_TYPE_COUNT,
 };
 

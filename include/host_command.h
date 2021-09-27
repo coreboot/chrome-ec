@@ -8,9 +8,9 @@
 #ifndef __CROS_EC_HOST_COMMAND_H
 #define __CROS_EC_HOST_COMMAND_H
 
+#include "compiler.h"
 #include "common.h"
 #include "ec_commands.h"
-enum power_state;
 
 /* Args for host command handler */
 struct host_cmd_handler_args {
@@ -192,6 +192,8 @@ int host_is_event_set(enum host_event_code event);
 
 #ifdef CONFIG_HOSTCMD_X86
 
+FORWARD_DECLARE_ENUM(power_state);
+
 /*
  * Get lazy wake masks for the sleep state provided
  *
@@ -256,7 +258,7 @@ __error("This function should only be called from Zephyr OS code")
 #endif
 struct host_command *zephyr_find_host_command(int command);
 
-#if defined(CONFIG_PLATFORM_EC_HOSTCMD)
+#if defined(CONFIG_ZEPHYR)
 #include "zephyr_host_command.h"
 #elif defined(HAS_TASK_HOSTCMD)
 #define EXPAND(off, cmd) __host_cmd_(off, cmd)
@@ -284,14 +286,14 @@ struct host_command *zephyr_find_host_command(int command);
 	EXPANDSTR(EC_CMD_BOARD_SPECIFIC_BASE, command)))) \
 		= {routine, EC_PRIVATE_HOST_COMMAND_VALUE(command), \
 		   version_mask}
-#else
+#else /* !CONFIG_ZEPHYR && !HAS_TASK_HOSTCMD */
 #define DECLARE_HOST_COMMAND(command, routine, version_mask)    \
 	enum ec_status (routine)(struct host_cmd_handler_args *args)       \
 		__attribute__((unused))
 
 #define DECLARE_PRIVATE_HOST_COMMAND(command, routine, version_mask)	\
 	DECLARE_HOST_COMMAND(command, routine, version_mask)
-#endif
+#endif /* CONFIG_ZEPHYR */
 
 /**
  * Politely ask the CPU to enable/disable its own throttling.
@@ -346,5 +348,21 @@ void host_send_sysrq(uint8_t key);
 /* Return the lower/higher part of the feature flags bitmap */
 uint32_t get_feature_flags0(void);
 uint32_t get_feature_flags1(void);
+
+#ifdef CONFIG_ZTEST
+static inline void
+stub_send_response_callback(struct host_cmd_handler_args *args)
+{
+	ARG_UNUSED(args);
+}
+
+#define BUILD_HOST_COMMAND(CMD, VERSION, RESPONSE)                         \
+	{                                                                  \
+		.command = (CMD), .version = (VERSION),                    \
+		.send_response = stub_send_response_callback,              \
+		.response = &(RESPONSE), .response_max = sizeof(RESPONSE), \
+		.response_size = sizeof(RESPONSE)                          \
+	}
+#endif /* CONFIG_ZTEST */
 
 #endif  /* __CROS_EC_HOST_COMMAND_H */

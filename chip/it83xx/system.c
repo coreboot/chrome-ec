@@ -13,6 +13,7 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "intc.h"
+#include "link_defs.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
@@ -49,8 +50,31 @@ static void clear_reset_flags(void)
 }
 DECLARE_HOOK(HOOK_INIT, clear_reset_flags, HOOK_PRIO_LAST);
 
+#if !defined(CONFIG_HOSTCMD_LPC) && !defined(CONFIG_HOSTCMD_ESPI)
+static void system_save_panic_data_to_bram(void)
+{
+	uint8_t *ptr = (uint8_t *)PANIC_DATA_PTR;
+
+	for (int i = 0; i < CONFIG_PANIC_DATA_SIZE; i++)
+		IT83XX_BRAM_BANK0(i + BRAM_PANIC_DATA_START) = ptr[i];
+}
+
+static void system_restore_panic_data_from_bram(void)
+{
+	uint8_t *ptr = (uint8_t *)PANIC_DATA_PTR;
+
+	for (int i = 0; i < CONFIG_PANIC_DATA_SIZE; i++)
+		ptr[i] = IT83XX_BRAM_BANK0(i + BRAM_PANIC_DATA_START);
+}
+BUILD_ASSERT(BRAM_PANIC_LEN >= CONFIG_PANIC_DATA_SIZE);
+#else
+static void system_save_panic_data_to_bram(void) {}
+static void system_restore_panic_data_from_bram(void) {}
+#endif
+
 static void system_reset_ec_by_gpg1(void)
 {
+	system_save_panic_data_to_bram();
 	/* Set GPG1 as output high and wait until EC reset. */
 	IT83XX_GPIO_CTRL(GPIO_G, 1) = GPCR_PORT_PIN_MODE_OUTPUT;
 	IT83XX_GPIO_DATA(GPIO_G) |= BIT(1);
@@ -143,6 +167,10 @@ static void check_reset_cause(void)
 		for (int i = 0; i < MAX_SYSTEM_BBRAM_IDX_PD_PORTS; i++)
 			system_set_bbram((SYSTEM_BBRAM_IDX_PD0 + i), 0);
 	}
+
+	if ((IS_ENABLED(CONFIG_IT83XX_HARD_RESET_BY_GPG1)) &&
+		(flags & ~(EC_RESET_FLAG_POWER_ON | EC_RESET_FLAG_RESET_PIN)))
+		system_restore_panic_data_from_bram();
 }
 
 static void system_reset_cause_is_unknown(void)
@@ -182,6 +210,9 @@ int system_is_reboot_warm(void)
 
 void chip_pre_init(void)
 {
+	/* bit1=0: disable pre-defined command */
+	IT83XX_SMB_SFFCTL &= ~IT83XX_SMB_HSAPE;
+
 	/* bit0, EC received the special waveform from iteflash */
 	if (IT83XX_GCTRL_DBGROS & IT83XX_SMB_DBGR) {
 		/*
@@ -233,6 +264,16 @@ void chip_bram_valid(void)
 		BRAM_VALID_FLAGS2 = BRAM_VALID_MAGIC_FIELD2;
 		BRAM_VALID_FLAGS3 = BRAM_VALID_MAGIC_FIELD3;
 	}
+
+#if defined(CONFIG_PRESERVE_LOGS) && defined(CONFIG_IT83XX_HARD_RESET_BY_GPG1)
+	if (BRAM_EC_LOG_STATUS == EC_LOG_SAVED_IN_FLASH) {
+		/* Restore EC logs from flash. */
+		memcpy((void *)__preserved_logs_start,
+			(const void *)CHIP_FLASH_PRESERVE_LOGS_BASE,
+			(uintptr_t)__preserved_logs_size);
+	}
+	BRAM_EC_LOG_STATUS = 0;
+#endif
 }
 
 void system_pre_init(void)
@@ -268,6 +309,15 @@ void system_reset(int flags)
 		ccprintf("!Reset will be failed due to EC is in debug mode!\n");
 		cflush();
 	}
+
+#if defined(CONFIG_PRESERVE_LOGS) && defined(CONFIG_IT83XX_HARD_RESET_BY_GPG1)
+	/* Saving EC logs into flash before reset. */
+	crec_flash_physical_erase(CHIP_FLASH_PRESERVE_LOGS_BASE,
+		CHIP_FLASH_PRESERVE_LOGS_SIZE);
+	crec_flash_physical_write(CHIP_FLASH_PRESERVE_LOGS_BASE,
+		(uintptr_t)__preserved_logs_size, __preserved_logs_start);
+	BRAM_EC_LOG_STATUS = EC_LOG_SAVED_IN_FLASH;
+#endif
 
 	/* Disable interrupts to avoid task swaps during reboot. */
 	interrupt_disable();
@@ -323,16 +373,11 @@ int system_set_scratchpad(uint32_t value)
 	return EC_SUCCESS;
 }
 
-uint32_t system_get_scratchpad(void)
+int system_get_scratchpad(uint32_t *value)
 {
-	uint32_t value = 0;
-
-	value |= BRAM_SCRATCHPAD3 << 24;
-	value |= BRAM_SCRATCHPAD2 << 16;
-	value |= BRAM_SCRATCHPAD1 << 8;
-	value |= BRAM_SCRATCHPAD0;
-
-	return value;
+	*value = (BRAM_SCRATCHPAD3 << 24) | (BRAM_SCRATCHPAD2 << 16) |
+		 (BRAM_SCRATCHPAD1 << 8) | (BRAM_SCRATCHPAD0);
+	return EC_SUCCESS;
 }
 
 static uint32_t system_get_chip_id(void)

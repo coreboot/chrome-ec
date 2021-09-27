@@ -42,6 +42,7 @@ static int get_battery_type(void)
 	for (i = 0; i < BATTERY_TYPE_COUNT; i++) {
 		const struct fuel_gauge_info * const fuel_gauge =
 			&board_battery_info[i].fuel_gauge;
+		int len = 0;
 
 		if (strcasecmp(manuf_name, fuel_gauge->manuf_name))
 			continue;
@@ -52,7 +53,9 @@ static int get_battery_type(void)
 						sizeof(device_name)))
 				continue;
 
-			if (strcasecmp(device_name, fuel_gauge->device_name))
+			len = strlen(fuel_gauge->device_name);
+			if (strncasecmp(device_name, fuel_gauge->device_name,
+						len))
 				continue;
 		}
 
@@ -153,6 +156,23 @@ int board_cut_off_battery(void)
 	return rv ? EC_RES_ERROR : EC_RES_SUCCESS;
 }
 
+enum ec_error_list battery_sleep_fuel_gauge(void)
+{
+	const struct sleep_mode_info *sleep_command;
+	int type = get_battery_type();
+
+	/* Sleep entry command must be supplied as it will vary by gauge */
+	if (type == BATTERY_TYPE_COUNT)
+		return EC_ERROR_UNKNOWN;
+
+	sleep_command = &board_battery_info[type].fuel_gauge.sleep_mode;
+
+	if (!sleep_command->sleep_supported)
+		return EC_ERROR_UNIMPLEMENTED;
+
+	return sb_write(sleep_command->reg_addr, sleep_command->reg_data);
+}
+
 static enum ec_error_list battery_get_fet_status_regval(int *regval)
 {
 	int rv;
@@ -225,7 +245,7 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 	/* If battery type is not known, can't check CHG/DCHG FETs */
 	if (type == BATTERY_TYPE_COUNT) {
 		/* Still don't know, so return here */
-		return EC_ERROR_BUSY;
+		return BATTERY_DISCONNECT_ERROR;
 	}
 
 	if (battery_get_fet_status_regval(&reg))

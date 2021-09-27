@@ -6,12 +6,17 @@
 /* Volteer family-specific sensor configuration */
 #include "common.h"
 #include "accelgyro.h"
+#include "cbi_ssfc.h"
 #include "driver/accel_bma2x2.h"
+#include "driver/accelgyro_icm426xx.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accel_kionix.h"
 #include "driver/als_tcs3400.h"
 #include "driver/sync.h"
 #include "keyboard_scan.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "system.h"
 #include "task.h"
 #include "tablet_mode.h"
 #include "util.h"
@@ -24,6 +29,10 @@ static struct mutex g_base_mutex;
 /* BMA253 private data */
 static struct accelgyro_saved_data_t g_bma253_base_data;
 static struct accelgyro_saved_data_t g_bma253_lid_data;
+
+static struct icm_drv_data_t g_icm426xx_data;
+
+static struct kionix_accel_data g_kx022_lid_data;
 
 /* TCS3400 private data */
 static struct als_drv_data_t g_tcs3400_data = {
@@ -87,9 +96,42 @@ static const mat33_fp_t lid_standard_ref = {
 };
 
 const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+const mat33_fp_t base_icm_ref = {
+	{ FLOAT_TO_FP(1), 0,  0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0,  FLOAT_TO_FP(-1)}
+};
+
+struct motion_sensor_t kx022_lid_accel = {
+	.name = "Lid Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_KX022,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_LID,
+	.drv = &kionix_accel_drv,
+	.mutex = &g_lid_accel_mutex,
+	.drv_data = &g_kx022_lid_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = KX022_ADDR0_FLAGS,
+	.rot_standard_ref = &lid_standard_ref,
+	.min_frequency = KX022_ACCEL_MIN_FREQ,
+	.max_frequency = KX022_ACCEL_MAX_FREQ,
+	.default_range = 2, /* g, to support tablet mode */
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	},
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -185,6 +227,50 @@ struct motion_sensor_t motion_sensors[] = {
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+struct motion_sensor_t icm_base_accel = {
+		.name = "Base Accel",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_ICM426XX,
+		.type = MOTIONSENSE_TYPE_ACCEL,
+		.location = MOTIONSENSE_LOC_BASE,
+		.drv = &icm426xx_drv,
+		.mutex = &g_base_mutex,
+		.drv_data = &g_icm426xx_data,
+		.port = I2C_PORT_SENSOR,
+		.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+		.rot_standard_ref = &base_icm_ref,
+		.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+		.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
+		.default_range = 4, /* g */
+		.config = {
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+			},
+			/* Sensor on in S3 */
+			[SENSOR_CONFIG_EC_S3] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+			},
+		},
+};
+
+struct motion_sensor_t icm_base_gyro = {
+		 .name = "Base Gyro",
+		 .active_mask = SENSOR_ACTIVE_S0_S3,
+		 .chip = MOTIONSENSE_CHIP_ICM426XX,
+		 .type = MOTIONSENSE_TYPE_GYRO,
+		 .location = MOTIONSENSE_LOC_BASE,
+		 .drv = &icm426xx_drv,
+		 .mutex = &g_base_mutex,
+		 .drv_data = &g_icm426xx_data,
+		 .port = I2C_PORT_SENSOR,
+		 .i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+		 .default_range = 1000, /* dps */
+		 .rot_standard_ref = &base_icm_ref,
+		 .min_frequency = ICM426XX_GYRO_MIN_FREQ,
+		 .max_frequency = ICM426XX_GYRO_MAX_FREQ,
+};
+
 /* ALS instances when LPC mapping is needed. Each entry directs to a sensor. */
 const struct motion_sensor_t *motion_als_sensors[] = {
 	&motion_sensors[CLEAR_ALS],
@@ -193,28 +279,41 @@ BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
 static void baseboard_sensors_init(void)
 {
-	/* Note - BMA253 interrupt unused by EC */
-
 	/* Enable interrupt for the TCS3400 color light sensor */
 	gpio_enable_interrupt(GPIO_EC_ALS_RGB_INT_L);
+
+	/*
+	 * TODO: If a SSFC for the base sensor is added, add the check
+	 * here.
+	 */
+	if (IS_ENABLED(BOARD_VOEMA) && get_cbi_ssfc_base_sensor() ==
+			SSFC_SENSOR_BASE_ICM426XX) {
+		gpio_enable_interrupt(GPIO_EC_MB_ACCEL_INT_L);
+		motion_sensors[BASE_ACCEL] = icm_base_accel;
+		motion_sensors[BASE_GYRO] = icm_base_gyro;
+		ccprints("BASE ACCEL/GYRO is ICM426XX");
+	} else
+		ccprints("BASE_ACCEL is BMA253");
+
+	if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_LID_KX022) {
+		motion_sensors[LID_ACCEL] = kx022_lid_accel;
+		ccprints("LID_ACCEL is KX022");
+	} else
+		ccprints("LID_ACCEL is BMA253");
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_sensors_init, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+#ifndef BOARD_VOEMA_NPCX796FC
+void motion_interrupt(enum gpio_signal signal)
 {
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
+	icm426xx_interrupt(signal);
+}
 
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
+int board_accel_force_mode_mask(void)
+{
+	if (system_get_board_version() <= 2)
+		return (BIT(LID_ACCEL) | BIT(CLEAR_ALS) | BIT(BASE_ACCEL));
+	else
+		return (BIT(LID_ACCEL) | BIT(CLEAR_ALS));
 }
 #endif

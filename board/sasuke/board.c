@@ -8,12 +8,14 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_fw_config.h"
+#include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
 #include "chipset.h"
 #include "common.h"
 #include "compile_time_macros.h"
+#include "cros_board_info.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/retimer/nb7v904m.h"
@@ -21,6 +23,7 @@
 #include "driver/tcpm/tcpci.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "driver/usb_mux/pi3usb3x532.h"
+#include "driver/usb_mux/ps8743.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -173,6 +176,12 @@ const struct temp_sensor_t temp_sensors[] = {
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 
+static int board_id = -1;
+static int mux_c1 = SSFC_USB_SS_MUX_DEFAULT;
+
+extern const struct usb_mux usbc0_retimer;
+extern const struct usb_mux usbmux_ps8743;
+
 void board_init(void)
 {
 	int on;
@@ -212,6 +221,26 @@ void board_init(void)
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
 			      CHIPSET_STATE_SOFT_OFF);
 	board_power_5v_enable(on);
+
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS) {
+			board_id = val;
+			if (board_id == 2) {
+				nb7v904m_lpm_disable = 1;
+				nb7v904m_set_aux_ch_switch(&usbc0_retimer,
+						NB7V904M_AUX_CH_FLIPPED);
+			}
+		}
+	}
+
+	mux_c1 = get_cbi_ssfc_usb_ss_mux();
+
+	if (mux_c1 == SSFC_USB_SS_MUX_PS8743)
+		memcpy(&usb_muxes[1],
+				&usbmux_ps8743,
+				sizeof(struct usb_mux));
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -238,7 +267,7 @@ void board_hibernate(void)
 	 */
 	if (board_get_charger_chip_count() > 1)
 		raa489000_hibernate(1, true);
-	raa489000_hibernate(0, true);
+	raa489000_hibernate(0, false);
 }
 
 /* USB-A charging control */
@@ -320,9 +349,11 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+			raa489000_enable_asgate(i, false);
+		}
 
 		return EC_SUCCESS;
 	}
@@ -344,6 +375,7 @@ int board_set_active_charge_port(int port)
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
@@ -354,7 +386,8 @@ int board_set_active_charge_port(int port)
 		charger_discharge_on_ac(1);
 
 	/* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);
@@ -392,25 +425,12 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
 				       int *kd, int *kd_div)
 {
-	/*
-	 * Early boards need different constants due to a change in charger IC
-	 * silicon revision.
-	 */
-	if (system_get_board_version() >= 0) {
-		*kp = 1;
-		*kp_div = 128;
-		*ki = 1;
-		*ki_div = 1024;
-		*kd = 0;
-		*kd_div = 1;
-	} else {
-		*kp = 1;
-		*kp_div = 4;
-		*ki = 1;
-		*ki_div = 15;
-		*kd = 1;
-		*kd_div = 10;
-	}
+	*kp = 1;
+	*kp_div = 20;
+	*ki = 1;
+	*ki_div = 250;
+	*kd = 0;
+	*kd_div = 1;
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -468,13 +488,18 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
+static int board_nb7v904m_mux_set_c0(const struct usb_mux *me,
+						mux_state_t mux_state);
 static int board_nb7v904m_mux_set(const struct usb_mux *me,
 						mux_state_t mux_state);
+static int ps8743_tune_mux(const struct usb_mux *me);
+
 const struct usb_mux usbc0_retimer = {
 	.usb_port = 0,
 	.i2c_port = I2C_PORT_USB_C0,
 	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
 	.driver = &nb7v904m_usb_redriver_drv,
+	.board_set = &board_nb7v904m_mux_set_c0,
 };
 const struct usb_mux usbc1_retimer = {
 	.usb_port = 1,
@@ -484,7 +509,15 @@ const struct usb_mux usbc1_retimer = {
 	.board_set = &board_nb7v904m_mux_set,
 };
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux usbmux_ps8743 = {
+	.usb_port = 1,
+	.i2c_port = I2C_PORT_SUB_USB_C1,
+	.i2c_addr_flags = PS8743_I2C_ADDR0_FLAG,
+	.driver = &ps8743_usb_mux_driver,
+	.board_init = &ps8743_tune_mux,
+};
+
+struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.usb_port = 0,
 		.i2c_port = I2C_PORT_USB_C0,
@@ -500,6 +533,113 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.next_mux = &usbc1_retimer,
 	}
 };
+/* USB Mux C1 : board_init of PS8743 */
+static int ps8743_tune_mux(const struct usb_mux *me)
+{
+	ps8743_tune_usb_eq(me,
+			PS8743_USB_EQ_TX_3_6_DB,
+			PS8743_USB_EQ_RX_16_0_DB);
+
+	return EC_SUCCESS;
+}
+
+/* USB Mux C0 */
+static int board_nb7v904m_mux_set_c0(const struct usb_mux *me,
+						mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+	int flipped = !!(mux_state & USB_PD_MUX_POLARITY_INVERTED);
+
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+		if (board_id == 2)
+			nb7v904m_lpm_disable = 1;
+	}
+
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		if (mux_state & USB_PD_MUX_DP_ENABLED) {
+			/* USB with DP */
+			if (flipped) {
+				rv |= nb7v904m_tune_usb_set_eq(me,
+							NB7V904M_CH_A_EQ_10_DB,
+							NB7V904M_CH_B_EQ_0_DB,
+							NB7V904M_CH_C_EQ_2_DB,
+							NB7V904M_CH_D_EQ_2_DB);
+				rv |= nb7v904m_tune_usb_flat_gain(me,
+							NB7V904M_CH_A_GAIN_0_DB,
+							NB7V904M_CH_B_GAIN_1P5_DB,
+							NB7V904M_CH_C_GAIN_0_DB,
+							NB7V904M_CH_D_GAIN_0_DB);
+				rv |= nb7v904m_set_loss_profile_match(me,
+							NB7V904M_LOSS_PROFILE_A,
+							NB7V904M_LOSS_PROFILE_A,
+							NB7V904M_LOSS_PROFILE_C,
+							NB7V904M_LOSS_PROFILE_C);
+			}
+			else {
+				rv |= nb7v904m_tune_usb_set_eq(me,
+							NB7V904M_CH_A_EQ_2_DB,
+							NB7V904M_CH_B_EQ_2_DB,
+							NB7V904M_CH_C_EQ_0_DB,
+							NB7V904M_CH_D_EQ_10_DB);
+				rv |= nb7v904m_tune_usb_flat_gain(me,
+							NB7V904M_CH_A_GAIN_0_DB,
+							NB7V904M_CH_B_GAIN_0_DB,
+							NB7V904M_CH_C_GAIN_1P5_DB,
+							NB7V904M_CH_D_GAIN_0_DB);
+				rv |= nb7v904m_set_loss_profile_match(me,
+							NB7V904M_LOSS_PROFILE_C,
+							NB7V904M_LOSS_PROFILE_C,
+							NB7V904M_LOSS_PROFILE_A,
+							NB7V904M_LOSS_PROFILE_A);
+			}
+		} else {
+			/* USB only */
+			if (board_id == 2)
+				rv |= nb7v904m_set_aux_ch_switch(me,
+						NB7V904M_AUX_CH_FLIPPED);
+
+			rv |= nb7v904m_tune_usb_set_eq(me,
+						NB7V904M_CH_A_EQ_10_DB,
+						NB7V904M_CH_B_EQ_0_DB,
+						NB7V904M_CH_C_EQ_0_DB,
+						NB7V904M_CH_D_EQ_10_DB);
+			rv |= nb7v904m_tune_usb_flat_gain(me,
+						NB7V904M_CH_A_GAIN_0_DB,
+						NB7V904M_CH_B_GAIN_1P5_DB,
+						NB7V904M_CH_C_GAIN_1P5_DB,
+						NB7V904M_CH_D_GAIN_0_DB);
+			rv |= nb7v904m_set_loss_profile_match(me,
+						NB7V904M_LOSS_PROFILE_A,
+						NB7V904M_LOSS_PROFILE_A,
+						NB7V904M_LOSS_PROFILE_A,
+						NB7V904M_LOSS_PROFILE_A);
+		}
+
+	} else if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		/* 4 lanes DP */
+		rv |= nb7v904m_tune_usb_set_eq(me,
+					NB7V904M_CH_A_EQ_2_DB,
+					NB7V904M_CH_B_EQ_2_DB,
+					NB7V904M_CH_C_EQ_2_DB,
+					NB7V904M_CH_D_EQ_2_DB);
+		rv |= nb7v904m_tune_usb_flat_gain(me,
+					NB7V904M_CH_A_GAIN_0_DB,
+					NB7V904M_CH_B_GAIN_0_DB,
+					NB7V904M_CH_C_GAIN_0_DB,
+					NB7V904M_CH_D_GAIN_0_DB);
+		rv |= nb7v904m_set_loss_profile_match(me,
+					NB7V904M_LOSS_PROFILE_C,
+					NB7V904M_LOSS_PROFILE_C,
+					NB7V904M_LOSS_PROFILE_C,
+					NB7V904M_LOSS_PROFILE_C);
+	}
+
+	return rv;
+}
 
 /* USB Mux */
 static int board_nb7v904m_mux_set(const struct usb_mux *me,
@@ -522,6 +662,11 @@ static int board_nb7v904m_mux_set(const struct usb_mux *me,
 							NB7V904M_CH_B_GAIN_3P5_DB,
 							NB7V904M_CH_C_GAIN_0_DB,
 							NB7V904M_CH_ALL_SKIP_GAIN);
+				rv |= nb7v904m_set_loss_profile_match(me,
+							NB7V904M_LOSS_PROFILE_A,
+							NB7V904M_LOSS_PROFILE_A,
+							NB7V904M_LOSS_PROFILE_D,
+							NB7V904M_LOSS_PROFILE_D);
 			}
 			else {
 				rv |= nb7v904m_tune_usb_set_eq(me,
@@ -534,6 +679,11 @@ static int board_nb7v904m_mux_set(const struct usb_mux *me,
 							NB7V904M_CH_B_GAIN_0_DB,
 							NB7V904M_CH_C_GAIN_3P5_DB,
 							NB7V904M_CH_ALL_SKIP_GAIN);
+				rv |= nb7v904m_set_loss_profile_match(me,
+							NB7V904M_LOSS_PROFILE_D,
+							NB7V904M_LOSS_PROFILE_D,
+							NB7V904M_LOSS_PROFILE_A,
+							NB7V904M_LOSS_PROFILE_A);
 			}
 		} else {
 			/* USB only */
@@ -547,6 +697,11 @@ static int board_nb7v904m_mux_set(const struct usb_mux *me,
 						NB7V904M_CH_B_GAIN_3P5_DB,
 						NB7V904M_CH_C_GAIN_3P5_DB,
 						NB7V904M_CH_ALL_SKIP_GAIN);
+			rv |= nb7v904m_set_loss_profile_match(me,
+						NB7V904M_LOSS_PROFILE_A,
+						NB7V904M_LOSS_PROFILE_A,
+						NB7V904M_LOSS_PROFILE_A,
+						NB7V904M_LOSS_PROFILE_A);
 		}
 
 	} else if (mux_state & USB_PD_MUX_DP_ENABLED) {
@@ -561,6 +716,11 @@ static int board_nb7v904m_mux_set(const struct usb_mux *me,
 					NB7V904M_CH_B_GAIN_0_DB,
 					NB7V904M_CH_C_GAIN_0_DB,
 					NB7V904M_CH_ALL_SKIP_GAIN);
+		rv |= nb7v904m_set_loss_profile_match(me,
+					NB7V904M_LOSS_PROFILE_D,
+					NB7V904M_LOSS_PROFILE_D,
+					NB7V904M_LOSS_PROFILE_D,
+					NB7V904M_LOSS_PROFILE_D);
 	}
 
 	return rv;

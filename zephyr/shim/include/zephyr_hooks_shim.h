@@ -13,13 +13,13 @@
 #include <zephyr.h>
 
 #include "common.h"
+#include "cros_version.h"
 
 /**
  * The internal data structure stored for a deferred function.
  */
 struct deferred_data {
-	void (*routine)(void);
-	struct k_delayed_work delayed_work;
+	struct k_work_delayable *work;
 };
 
 /**
@@ -27,66 +27,30 @@ struct deferred_data {
  */
 int hook_call_deferred(const struct deferred_data *data, int us);
 
-/**
- * Runtime helper to setup deferred data.
- *
- * @param data		The struct deferred_data.
- */
-void zephyr_shim_setup_deferred(const struct deferred_data *data);
-
-/**
- * See include/hooks.h for documentation.
- *
- * Typically Zephyr would put const data in the rodata section but that is
- * write-protected with native_posix. So force it into .data instead.
- */
-#define DECLARE_DEFERRED(routine) _DECLARE_DEFERRED(routine)
-#define _DECLARE_DEFERRED(_routine)                                        \
-	__maybe_unused const struct deferred_data _routine##_data          \
-		__attribute__((section(".data.hooks"))) = {                \
-		.routine = _routine,                                       \
-	};                                                                 \
-	static int _setup_deferred_##_routine(const struct device *unused) \
-	{                                                                  \
-		ARG_UNUSED(unused);                                        \
-		zephyr_shim_setup_deferred(&_routine##_data);              \
-		return 0;                                                  \
-	}                                                                  \
-	SYS_INIT(_setup_deferred_##_routine, APPLICATION, 1)
+#define DECLARE_DEFERRED(routine)                                    \
+	K_WORK_DELAYABLE_DEFINE(routine##_work_data,                 \
+				(void (*)(struct k_work *))routine); \
+	__maybe_unused const struct deferred_data routine##_data = { \
+		.work = &routine##_work_data,                \
+	}
 
 /**
  * Internal linked-list structure used to store hook lists.
  */
 struct zephyr_shim_hook_list {
 	void (*routine)(void);
-	int priority;
+	uint16_t priority; /* HOOK_PRIO_LAST = 9999 */
+	enum hook_type type;
 	struct zephyr_shim_hook_list *next;
 };
 
 /**
- * Runtime helper for DECLARE_HOOK setup data.
- *
- * @param type		The type of hook.
- * @param routine	The handler for the hook.
- * @param priority	The priority (smaller values are executed first).
- * @param entry		A statically allocated list entry.
- */
-void zephyr_shim_setup_hook(enum hook_type type, void (*routine)(void),
-			    int priority, struct zephyr_shim_hook_list *entry);
-
-/**
  * See include/hooks.h for documentation.
  */
-#define DECLARE_HOOK(hooktype, routine, priority) \
-	_DECLARE_HOOK_1(hooktype, routine, priority, __LINE__)
-#define _DECLARE_HOOK_1(hooktype, routine, priority, line) \
-	_DECLARE_HOOK_2(hooktype, routine, priority, line)
-#define _DECLARE_HOOK_2(hooktype, routine, priority, line)                 \
-	static int _setup_hook_##line(const struct device *unused)         \
-	{                                                                  \
-		ARG_UNUSED(unused);                                        \
-		static struct zephyr_shim_hook_list lst;                   \
-		zephyr_shim_setup_hook(hooktype, routine, priority, &lst); \
-		return 0;                                                  \
-	}                                                                  \
-	SYS_INIT(_setup_hook_##line, APPLICATION, 1)
+#define DECLARE_HOOK(_hooktype, _routine, _priority)             \
+	STRUCT_SECTION_ITERABLE(zephyr_shim_hook_list,           \
+			_cros_hook_##_hooktype##_##_routine) = { \
+		.type = _hooktype,                               \
+		.routine = _routine,                             \
+		.priority = _priority,                           \
+	}

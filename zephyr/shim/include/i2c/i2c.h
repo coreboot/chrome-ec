@@ -11,11 +11,13 @@
 
 #ifdef CONFIG_PLATFORM_EC_I2C
 #if DT_NODE_EXISTS(DT_PATH(named_i2c_ports))
-#define I2C_PORT(id) DT_CAT(I2C_, id)
+
+#define I2C_PORT(id) DT_STRING_UPPER_TOKEN(id, enum_name)
 #define I2C_PORT_WITH_COMMA(id) I2C_PORT(id),
+
 enum i2c_ports {
-DT_FOREACH_CHILD(DT_PATH(named_i2c_ports), I2C_PORT_WITH_COMMA)
-I2C_PORT_COUNT
+	DT_FOREACH_CHILD(DT_PATH(named_i2c_ports), I2C_PORT_WITH_COMMA)
+	I2C_PORT_COUNT
 };
 #define NAMED_I2C(name) I2C_PORT(DT_PATH(named_i2c_ports, name))
 #endif /* named_i2c_ports */
@@ -36,5 +38,17 @@ I2C_PORT_COUNT
  * @return Pointer to the device struct or {@code NULL} if none are available.
  */
 const struct device *i2c_get_device_for_port(const int port);
+
+/**
+ * @brief Get a port number for a received remote port number.
+ *
+ * This function translate a received port number via the I2C_PASSTHRU host
+ * command to a port number used in ZephyrEC based on remote_port property in
+ * dts. The first port which matches the remote port number is returned.
+ *
+ * @param port The received remote port.
+ * @return Port number used in EC. -1 if the remote port is not defined
+ */
+int i2c_get_port_from_remote_port(int remote_port);
 
 #endif /* ZEPHYR_CHROME_I2C_I2C_H */

@@ -6,7 +6,6 @@
 /* reef_it8320 board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
@@ -40,7 +39,7 @@
 #include "tablet_mode.h"
 #include "task.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "timer.h"
 #include "uart.h"
 #include "usb_charge.h"
@@ -112,8 +111,10 @@ const enum gpio_signal hibernate_wake_pins[] = {
 const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
 static void it83xx_tcpc_update_hpd_status(const struct usb_mux *me,
-					  int hpd_lvl, int hpd_irq)
+					  mux_state_t mux_state)
 {
+	int hpd_lvl = (mux_state & USB_PD_MUX_HPD_LVL) ? 1 : 0;
+	int hpd_irq = (mux_state & USB_PD_MUX_HPD_IRQ) ? 1 : 0;
 	enum gpio_signal gpio =
 		me->usb_port ? GPIO_USB_C1_HPD_1P8_ODL
 			     : GPIO_USB_C0_HPD_1P8_ODL;
@@ -208,7 +209,7 @@ static void board_set_tablet_mode(void)
 	 * Always report device isn't in tablet mode because
 	 * our id is clamshell and no TABLET_MODE_L pin
 	 */
-	tablet_set_mode(0);
+	tablet_set_mode(0, TABLET_TRIGGER_LID);
 }
 
 /* Initialize board. */
@@ -223,7 +224,8 @@ static void board_init(void)
 	* HPD pulse to enable video path
 	*/
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
-		usb_mux_hpd_update(port, 0, 0);
+		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -472,7 +474,7 @@ int board_get_version(void)
 }
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next

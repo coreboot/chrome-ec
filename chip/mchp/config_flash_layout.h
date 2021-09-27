@@ -14,14 +14,14 @@
  * - Loader + (RO | RW) loaded into program memory.
  */
 
-/* Non-memmapped, external SPI */
+/* Non-memmory mapped, external SPI */
 #define CONFIG_EXTERNAL_STORAGE
 #undef  CONFIG_MAPPED_STORAGE
 #undef  CONFIG_FLASH_PSTATE
 #define CONFIG_SPI_FLASH
 
 /*
- * MEC17xx BootROM uses two 4-byte TAG's at SPI offset 0x0 and 0x04.
+ * MEC170x/MEC152x BootROM uses two 4-byte TAG's at SPI offset 0x0 and 0x04.
  * One valid TAG must be present.
  * TAG's point to a Header which must be located on a 256 byte
  * boundary anywhere in the flash (24-bit addressing).
@@ -68,11 +68,19 @@
  * defined by CONFIG_FLASH_ERASE_SIZE in chip/config_chip.h
  * and must be located on a erase block boundary. !!!
  */
+#if (CONFIG_MEC_SRAM_SIZE > CONFIG_EC_PROTECTED_STORAGE_SIZE)
+#define CONFIG_RO_SIZE			(CONFIG_EC_PROTECTED_STORAGE_SIZE - \
+					CONFIG_LOADER_SIZE - 0x2000)
+#else
 #define CONFIG_RO_SIZE			(CONFIG_MEC_SRAM_SIZE - \
 					CONFIG_RAM_SIZE - CONFIG_LOADER_SIZE)
+#endif
+
 #define CONFIG_RW_MEM_OFF		CONFIG_RO_MEM_OFF
 /*
- * NOTE: CONFIG_RW_SIZE is passed to chip/mchp/util/pack_ec.py
+ * NOTE: CONFIG_RW_SIZE is passed to the SPI image generation script by
+ * chip build.mk
+ * LFW requires CONFIG_RW_SIZE is equal to CONFIG_RO_SIZE !!!
  */
 #define CONFIG_RW_SIZE			CONFIG_RO_SIZE
 
@@ -81,21 +89,31 @@
  * of SPI flash and header + binary(LFW+EC_RO) an offset aligned on
  * a 256 byte boundary.
  * NOTE: Changing CONFIG_BOOT_HEADER_STORAGE_OFF requires changing
- * parameter --payload_offset of pack_ec.py in build.mk!
+ * parameter --payload_offset parameter in build.mk passed to the
+ * python image builder.
  * Two 4-byte TAG's exist at offset 0 and 4 in the SPI flash device.
  * We only use first TAG pointing to LFW + EC_RO.
- * Header size is 128 bytes. Firmware binary is located immediately
- * after the header.
+ * MEC170x Header size is 128 bytes.
+ * MEC152x Header size is 320 bytes.
+ * Firmware binary is located immediately after the header.
  * Second half of SPI flash contains:
- * Header(128 bytes) + EC_RW
- * EC flash erase/write commands check alginment base on
+ * Header(128/320 bytes) + EC_RW
+ * EC flash erase/write commands check alignment base on
  * CONFIG_FLASH_ERASE_SIZE defined in config_chip.h
  * NOTE: EC_RO and EC_RW must start at CONFIG_FLASH_ERASE_SIZE or
  * greater aligned boundaries.
  */
 #define CONFIG_BOOT_HEADER_STORAGE_OFF		0x1000
 #define CONFIG_RW_BOOT_HEADER_STORAGE_OFF	0
+#if defined(CHIP_FAMILY_MEC172X)
+#define CONFIG_BOOT_HEADER_STORAGE_SIZE		0xc0
+#elif defined(CHIP_FAMILY_MEC152X)
+#define CONFIG_BOOT_HEADER_STORAGE_SIZE		0x140
+#elif defined(CHIP_FAMILY_MEC170X)
 #define CONFIG_BOOT_HEADER_STORAGE_SIZE		0x80
+#else
+#error "FORCED BUILD ERROR: CHIP_FAMILY_xxxx not set or invalid"
+#endif
 #define CONFIG_RW_BOOT_HEADER_STORAGE_SIZE	0
 
 /* Loader / lfw image immediately follows the boot header on SPI */

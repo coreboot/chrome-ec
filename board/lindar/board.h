@@ -11,8 +11,7 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
+#undef CONFIG_CHIP_INIT_ROM_REGION
 
 #define CONFIG_VBOOT_EFS2
 
@@ -22,7 +21,6 @@
 #define CONFIG_UART_TX_BUF_SIZE 4096
 
 /* LED defines */
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
@@ -50,16 +48,17 @@
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 
+
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
  * cables only support up to 60W.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
+#define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
-#undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
+
 #undef CONFIG_USB_MUX_RUNTIME_CONFIG
 
 /* USB Type A Features */
@@ -83,6 +82,9 @@
 /* Retimer */
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
+
+/* EC console commands */
+#define CONFIG_CMD_TCPC_DUMP
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -116,6 +118,7 @@
 
 /* I2C Bus Configuration */
 #define CONFIG_I2C
+#define CONFIG_I2C_BUS_MAY_BE_UNPOWERED
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 #define I2C_PORT_USB_C0		NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1		NPCX_I2C_PORT2_0

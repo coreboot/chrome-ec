@@ -108,9 +108,11 @@ struct i2c_drv {
 struct i2c_port_t {
 	const char *name;     /* Port name */
 	int port;             /* Port */
+#ifndef CONFIG_ZEPHYR
 	int kbps;             /* Speed in kbps */
 	enum gpio_signal scl; /* Port SCL GPIO line */
 	enum gpio_signal sda; /* Port SDA GPIO line */
+#endif /* CONFIG_ZEPHYR */
 	/* When bus is protected, returns true if passthru allowed for address.
 	 * If the function is not defined, the default value is true. */
 	int (*passthru_allowed)(const struct i2c_port_t *port,
@@ -587,5 +589,19 @@ enum i2c_freq i2c_get_freq(int port);
 
 /* Find the matching port in i2c_ports[] table. */
 const struct i2c_port_t *get_i2c_port(const int port);
+
+/**
+ * @brief Get soc's i2c port number where i2c device is connected to.
+ *
+ * This function translate a i2c port enum value (enum-name property listed in
+ * named-i2c-ports) to soc's i2c port. Devices which are connected to the
+ * same port of soc should have the same number.
+ *
+ * @param enum_port i2c port enum value.
+ * @return i2c port of soc used in mutex_lock().
+ *         -1 if physical port is not defined or i2c port number is out of
+ *         port_mutex space.
+ */
+int i2c_get_physical_port(int enum_port);
 
 #endif  /* __CROS_EC_I2C_H */

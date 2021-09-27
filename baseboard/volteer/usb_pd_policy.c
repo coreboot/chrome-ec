@@ -89,22 +89,22 @@ static const union tbt_mode_resp_device vdo_tbt_modes[1] = {
 
 static const uint32_t vdo_idh = VDO_IDH(
 				1, /* Data caps as USB host     */
-				1, /* Data caps as USB device   */
+				0, /* Not a USB device   */
 				IDH_PTYPE_PERIPH,
 				1, /* Supports alt modes */
 				USB_VID_GOOGLE);
 
 static const uint32_t vdo_idh_rev30 = VDO_IDH_REV30(
 				 1, /* Data caps as USB host     */
-				 1, /* Data caps as USB device   */
+				 0, /* Not a USB device   */
 				 IDH_PTYPE_PERIPH,
 				 1, /* Supports alt modes */
 				 IDH_PTYPE_DFP_HOST,
 				 USB_TYPEC_RECEPTACLE,
 				 USB_VID_GOOGLE);
 
-/* TODO(b:157163664): add product version */
-static const uint32_t vdo_product = VDO_PRODUCT(CONFIG_USB_PID, 0);
+static const uint32_t vdo_product = VDO_PRODUCT(
+				CONFIG_USB_PID, CONFIG_USB_BCD_DEV);
 
 /* TODO(b/168890624): add USB4 to capability once USB4 response implemented */
 static const uint32_t vdo_ufp1 = VDO_UFP1(
@@ -127,7 +127,7 @@ static int svdm_tbt_compat_response_identity(int port, uint32_t *payload)
 	payload[VDO_I(CSTAT)] = VDO_CSTAT(0);
 	payload[VDO_I(PRODUCT)] = vdo_product;
 
-	if (pd_get_rev(port, TCPC_TX_SOP) == PD_REV30) {
+	if (pd_get_rev(port, TCPCI_MSG_SOP) == PD_REV30) {
 		/* PD Revision 3.0 */
 		payload[VDO_I(IDH)] = vdo_idh_rev30;
 		payload[VDO_I(PTYPE_UFP1_VDO)] = vdo_ufp1;

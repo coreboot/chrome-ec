@@ -10,7 +10,6 @@
 
 #include "common.h"
 #include "ec_commands.h"
-#include "gpio.h"
 #include "i2c.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
@@ -23,7 +22,7 @@
 
 #ifndef CONFIG_USB_PD_TCPC
 
-/* I2C wrapper functions - get I2C port / slave addr from config struct. */
+/* I2C wrapper functions - get I2C port / peripheral addr from config struct. */
 #ifndef CONFIG_USB_PD_TCPC_LOW_POWER
 static inline int tcpc_addr_write(int port, int i2c_addr, int reg, int val)
 {
@@ -47,6 +46,29 @@ static inline int tcpc_addr_read16(int port, int i2c_addr, int reg, int *val)
 {
 	return i2c_read16(tcpc_config[port].i2c_info.port,
 			  i2c_addr, reg, val);
+}
+
+/*
+ * The *_no_lpm_exit() routines are intende to be used where the TCPC
+ * needs to be accessed without being being taken out of LPM. The main
+ * use case is to check the alert register to determine if a TCPC is the
+ * source of an interrupt in a shared interrupt implementation. If the
+ * TCPC is taken out of LPM, it may generate a new alert which can lead
+ * to successive unintended interrupts. The TCPC is placed back into the
+ * idle state after the LPM timer expires similar to other tcpc_*()
+ * routines.
+ *
+ * The caller must guarantee that the chip responds to I2C as expected:
+ *  - some TCPCs wake up when they alert and do not need special handing
+ *  - some TCPCs wake up on I2C and respond as expected
+ *  - some TCPCs wake up on I2C and throw away the transaction - these
+ *    need an explicit by the caller.
+ */
+
+static inline int tcpc_addr_read16_no_lpm_exit(int port, int i2c_addr,
+					       int reg, int *val)
+{
+	return tcpc_addr_read16(port, i2c_addr, reg, val);
 }
 
 static inline int tcpc_xfer(int port, const uint8_t *out, int out_size,
@@ -103,6 +125,7 @@ int tcpc_addr_write(int port, int i2c_addr, int reg, int val);
 int tcpc_addr_write16(int port, int i2c_addr, int reg, int val);
 int tcpc_addr_read(int port, int i2c_addr, int reg, int *val);
 int tcpc_addr_read16(int port, int i2c_addr, int reg, int *val);
+int tcpc_addr_read16_no_lpm_exit(int port, int i2c_addr, int reg, int *val);
 int tcpc_read_block(int port, int reg, uint8_t *in, int size);
 int tcpc_write_block(int port, int reg, const uint8_t *out, int size);
 int tcpc_xfer(int port, const uint8_t *out, int out_size,
@@ -204,7 +227,15 @@ static inline int tcpm_sop_prime_enable(int port, bool enable)
 
 static inline int tcpm_set_vconn(int port, int enable)
 {
-	return tcpc_config[port].drv->set_vconn(port, enable);
+#ifdef CONFIG_USB_PD_TCPC_VCONN
+	int rv;
+
+	rv = tcpc_config[port].drv->set_vconn(port, enable);
+	if (rv)
+		return rv;
+#endif
+
+	return tcpm_sop_prime_enable(port, enable);
 }
 
 static inline int tcpm_set_msg_header(int port, int power_role, int data_role)
@@ -226,29 +257,31 @@ static inline void tcpm_enable_auto_discharge_disconnect(int port, int enable)
 		tcpc->tcpc_enable_auto_discharge_disconnect(port, enable);
 }
 
+static inline int tcpm_reset_bist_type_2(int port)
+{
+	if (tcpc_config[port].drv->reset_bist_type_2 != NULL)
+		return tcpc_config[port].drv->reset_bist_type_2(port);
+	else
+		return EC_SUCCESS;
+}
+
 /**
  * Reads a message using get_message_raw driver method and puts it into EC's
  * cache.
  */
 int tcpm_enqueue_message(int port);
 
-static inline int tcpm_transmit(int port, enum tcpm_transmit_type type,
+static inline int tcpm_transmit(int port, enum tcpci_msg_type type,
 				uint16_t header, const uint32_t *data)
 {
 	return tcpc_config[port].drv->transmit(port, type, header, data);
 }
 
-#ifdef CONFIG_USBC_PPC
-static inline int tcpm_get_snk_ctrl(int port, bool *sinking)
+#ifdef CONFIG_USB_PD_PPC
+static inline bool tcpm_get_snk_ctrl(int port)
 {
-	int rv = EC_ERROR_UNIMPLEMENTED;
-
-	if (tcpc_config[port].drv->get_snk_ctrl != NULL)
-		rv = tcpc_config[port].drv->get_snk_ctrl(port, sinking);
-	else
-		*sinking = false;
-
-	return rv;
+	return tcpc_config[port].drv->get_snk_ctrl ?
+		tcpc_config[port].drv->get_snk_ctrl(port) : false;
 }
 static inline int tcpm_set_snk_ctrl(int port, int enable)
 {
@@ -258,16 +291,11 @@ static inline int tcpm_set_snk_ctrl(int port, int enable)
 		return EC_ERROR_UNIMPLEMENTED;
 }
 
-static inline int tcpm_get_src_ctrl(int port, bool *sourcing)
+static inline bool tcpm_get_src_ctrl(int port)
 {
-	int rv = EC_ERROR_UNIMPLEMENTED;
 
-	if (tcpc_config[port].drv->get_src_ctrl != NULL)
-		rv = tcpc_config[port].drv->get_src_ctrl(port, sourcing);
-	else
-		*sourcing = false;
-
-	return rv;
+	return tcpc_config[port].drv->get_src_ctrl ?
+		tcpc_config[port].drv->get_src_ctrl(port) : false;
 }
 static inline int tcpm_set_src_ctrl(int port, int enable)
 {
@@ -381,7 +409,7 @@ static inline int tcpm_set_frs_enable(int port, int enable)
 }
 #endif /* defined(CONFIG_USB_PD_FRS_TCPC) */
 
-#else
+#else /* CONFIG_USB_PD_TCPC */
 
 /**
  * Initialize TCPM driver and wait for TCPC readiness.
@@ -445,6 +473,16 @@ int tcpm_set_cc(int port, int pull);
 int tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity);
 
 /**
+ * Enable SOP' message transmit/receive.
+ *
+ * @param port Type-C port number
+ * @param enable Enable/Disable SOP' and SOP'' messages
+ *
+ * @return EC_SUCCESS or error
+ */
+int tcpm_sop_prime_enable(int port, int enable);
+
+/**
  * Set Vconn.
  *
  * @param port Type-C port number
@@ -494,7 +532,7 @@ void tcpm_enable_auto_discharge_disconnect(int port, int enable);
  *
  * @return EC_SUCCESS or error
  */
-int tcpm_transmit(int port, enum tcpm_transmit_type type, uint16_t header,
+int tcpm_transmit(int port, enum tcpci_msg_type type, uint16_t header,
 		  const uint32_t *data);
 
 /**
@@ -504,7 +542,7 @@ int tcpm_transmit(int port, enum tcpm_transmit_type type, uint16_t header,
  */
 void tcpc_alert(int port);
 
-#endif
+#endif /* CONFIG_USB_PD_TCPC */
 
 /**
  * Gets the next waiting RX message.
@@ -549,5 +587,13 @@ static inline void tcpm_dump_registers(int port)
 		tcpc_dump_std_registers(port);
 }
 #endif /* defined(CONFIG_CMD_TCPC_DUMP) */
+
+/**
+ * Disable BIST type-2 mode
+ *
+ * @param port Type-C port number
+ * @return EC_SUCCESS on success, or an error
+ */
+int tcpm_reset_bist_type_2(int port);
 
 #endif

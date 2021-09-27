@@ -5,8 +5,8 @@
 
 /* Guybrush family-specific configuration */
 
-#include "adc.h"
-#include "adc_chip.h"
+#include "cros_board_info.h"
+#include "base_fw_config.h"
 #include "battery_fuel_gauge.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
@@ -18,10 +18,14 @@
 #include "chipset.h"
 #include "driver/ppc/aoz1380.h"
 #include "driver/ppc/nx20p348x.h"
+#include "driver/retimer/anx7491.h"
+#include "driver/retimer/ps8811.h"
 #include "driver/retimer/ps8818.h"
 #include "driver/tcpm/nct38xx.h"
-#include "driver/temp_sensor/sb_tsi.h"
+#include "driver/usb_mux/anx7451.h"
 #include "driver/usb_mux/amd_fp6.h"
+#include "fan.h"
+#include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -32,15 +36,14 @@
 #include "pi3usb9201.h"
 #include "power.h"
 #include "pwm.h"
-#include "temp_sensor.h"
-#include "thermal.h"
-#include "thermistor.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+static void reset_nct38xx_port(int port);
 
 /* Wake Sources */
 const enum gpio_signal hibernate_wake_pins[] = {
@@ -140,165 +143,7 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-/* ADC Channels */
-const struct adc_t adc_channels[] = {
-	[ADC_TEMP_SENSOR_SOC] = {
-		.name = "SOC",
-		.input_ch = NPCX_ADC_CH0,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-	},
-	[ADC_TEMP_SENSOR_CHARGER] = {
-		.name = "CHARGER",
-		.input_ch = NPCX_ADC_CH1,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-	},
-	[ADC_TEMP_SENSOR_MEMORY] = {
-		.name = "MEMORY",
-		.input_ch = NPCX_ADC_CH2,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-	},
 
-};
-BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
-
-/* Temp Sensors */
-static int board_get_soc_temp(int, int *);
-const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_SOC] = {
-		.name = "SOC",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = board_get_soc_temp,
-		.idx = TEMP_SENSOR_SOC,
-	},
-	[TEMP_SENSOR_CHARGER] = {
-		.name = "Charger",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = TEMP_SENSOR_CHARGER,
-	},
-	[TEMP_SENSOR_MEMORY] = {
-		.name = "Memory",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = TEMP_SENSOR_MEMORY,
-	},
-	[TEMP_SENSOR_CPU] = {
-		.name = "CPU",
-		.type = TEMP_SENSOR_TYPE_CPU,
-		.read = sb_tsi_get_val,
-		.idx = 0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
-	[TEMP_SENSOR_SOC] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = C_TO_K(32),
-		.temp_fan_max = C_TO_K(75),
-	},
-	[TEMP_SENSOR_CHARGER] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
-	},
-	[TEMP_SENSOR_MEMORY] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
-	},
-	[TEMP_SENSOR_CPU] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
-
-
-/*
- * Battery info for all Guybrush battery types. Note that the fields
- * start_charging_min/max and charging_min/max are not used for the charger.
- * The effective temperature limits are given by discharging_min/max_c.
- *
- * Fuel Gauge (FG) parameters which are used for determining if the battery
- * is connected, the appropriate ship mode (battery cutoff) command, and the
- * charge/discharge FETs status.
- *
- * Ship mode (battery cutoff) requires 2 writes to the appropriate smart battery
- * register. For some batteries, the charge/discharge FET bits are set when
- * charging/discharging is active, in other types, these bits set mean that
- * charging/discharging is disabled. Therefore, in addition to the mask for
- * these bits, a disconnect value must be specified. Note that for TI fuel
- * gauge, the charge/discharge FET status is found in Operation Status (0x54),
- * but a read of Manufacturer Access (0x00) will return the lower 16 bits of
- * Operation status which contains the FET status bits.
- *
- * The assumption for battery types supported is that the charge/discharge FET
- * status can be read with a sb_read() command and therefore, only the register
- * address, mask, and disconnect value need to be provided.
- */
-const struct board_batt_params board_battery_info[] = {
-	/* AP18F4M / LIS4163ACPC */
-	[BATTERY_AP18F4M] = {
-		.fuel_gauge = {
-			.manuf_name = "Murata KT00404001",
-			.ship_mode = {
-				.reg_addr = 0x3A,
-				.reg_data = { 0xC574, 0xC574 },
-			},
-			.fet = {
-				.reg_addr = 0x0,
-				.reg_mask = 0x2000,
-				.disconnect_val = 0x2000,
-			}
-		},
-		.batt_info = {
-			.voltage_max          = 8700,
-			.voltage_normal       = 7600,
-			.voltage_min          = 5500,
-			.precharge_current    = 256,
-			.start_charging_min_c = 0,
-			.start_charging_max_c = 50,
-			.charging_min_c       = 0,
-			.charging_max_c       = 60,
-			.discharging_min_c    = -20,
-			.discharging_max_c    = 75,
-		},
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(board_battery_info) == BATTERY_TYPE_COUNT);
-const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_AP18F4M;
 
 const struct charger_config_t chg_chips[] = {
 	{
@@ -338,6 +183,10 @@ const int usb_port_enable[USBA_PORT_COUNT] = {
 
 static void baseboard_interrupt_init(void)
 {
+	/* Enable Power Group interrupts. */
+	gpio_enable_interrupt(GPIO_PG_GROUPC_S0_OD);
+	gpio_enable_interrupt(GPIO_PG_LPDDR4X_S3_OD);
+
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
@@ -390,8 +239,8 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
  * not needed as well. usb_mux.c can handle the situation
  * properly.
  */
-static int fsusb42umx_set_mux(const struct usb_mux*, mux_state_t);
-const struct usb_mux_driver usbc0_sbu_mux_driver = {
+static int fsusb42umx_set_mux(const struct usb_mux*, mux_state_t, bool *);
+struct usb_mux_driver usbc0_sbu_mux_driver = {
 	.set = fsusb42umx_set_mux,
 };
 
@@ -399,18 +248,41 @@ const struct usb_mux_driver usbc0_sbu_mux_driver = {
  * Since FSUSB42UMX is not a i2c device, .i2c_port and
  * .i2c_addr_flags are not required here.
  */
-const struct usb_mux usbc0_sbu_mux = {
+struct usb_mux usbc0_sbu_mux = {
 	.usb_port = USBC_PORT_C0,
 	.driver = &usbc0_sbu_mux_driver,
 };
 
-static int board_ps8818_mux_set(const struct usb_mux*, mux_state_t);
-const struct usb_mux usbc1_ps8818 = {
+__overridable int board_c1_ps8818_mux_set(const struct usb_mux *me,
+					  mux_state_t mux_state)
+{
+	CPRINTSUSB("C1: PS8818 mux using default tuning");
+	return 0;
+}
+
+struct usb_mux usbc1_ps8818 = {
 	.usb_port = USBC_PORT_C1,
 	.i2c_port = I2C_PORT_TCPC1,
+	.flags = USB_MUX_FLAG_RESETS_IN_G3,
 	.i2c_addr_flags = PS8818_I2C_ADDR_FLAGS,
 	.driver = &ps8818_usb_retimer_driver,
-	.board_set = &board_ps8818_mux_set,
+	.board_set = &board_c1_ps8818_mux_set,
+};
+
+__overridable int board_c1_anx7451_mux_set(const struct usb_mux *me,
+					   mux_state_t mux_state)
+{
+	CPRINTSUSB("C1: ANX7451 mux using default tuning");
+	return 0;
+}
+
+struct usb_mux usbc1_anx7451 = {
+	.usb_port = USBC_PORT_C1,
+	.i2c_port = I2C_PORT_TCPC1,
+	.flags = USB_MUX_FLAG_RESETS_IN_G3,
+	.i2c_addr_flags = ANX7491_I2C_ADDR3_FLAGS,
+	.driver = &anx7451_usb_mux_driver,
+	.board_set = &board_c1_anx7451_mux_set,
 };
 
 struct usb_mux usb_muxes[] = {
@@ -426,7 +298,7 @@ struct usb_mux usb_muxes[] = {
 		.i2c_port = I2C_PORT_USB_MUX,
 		.i2c_addr_flags = AMD_FP6_C4_MUX_I2C_ADDR,
 		.driver = &amd_fp6_usb_mux_driver,
-		.next_mux = &usbc1_ps8818,
+		/* .next_mux = filled in by setup_mux based on fw_config */
 	}
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -434,12 +306,12 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 struct ioexpander_config_t ioex_config[] = {
 	[USBC_PORT_C0] = {
 		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 	},
 	[USBC_PORT_C1] = {
 		.i2c_host_port = I2C_PORT_TCPC1,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 	},
 };
@@ -447,7 +319,7 @@ BUILD_ASSERT(ARRAY_SIZE(ioex_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_IO_EXPANDER_PORT_COUNT == USBC_PORT_COUNT);
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next
@@ -490,13 +362,45 @@ const struct pwm_t pwm_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
+const struct mft_t mft_channels[] = {
+	[MFT_CH_0] = {
+		.module = NPCX_MFT_MODULE_1,
+		.clk_src = TCKC_LFCLK,
+		.pwm_id = PWM_CH_FAN,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
+
+const struct fan_conf fan_conf_0 = {
+	.flags = FAN_USE_RPM_MODE,
+	.ch = MFT_CH_0,	/* Use MFT id to control fan */
+	.pgood_gpio = GPIO_S0_PGOOD,
+	.enable_gpio = -1,
+};
+const struct fan_rpm fan_rpm_0 = {
+	.rpm_min = 1000,
+	.rpm_start = 1000,
+	.rpm_max = 6500,
+};
+const struct fan_t fans[] = {
+	[FAN_CH_0] = {
+		.conf = &fan_conf_0,
+		.rpm = &fan_rpm_0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
+
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
  * chip and it needs a board specific driver.
  * Overall, it will use chained mux framework.
  */
-static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state)
+static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state,
+			      bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
 		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
 	else
@@ -505,93 +409,45 @@ static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state)
 	return EC_SUCCESS;
 }
 
-/*
- * PS8818 set mux board tuning.
- * Adds in board specific gain and DP lane count configuration
- * TODO(b/179036200): Adjust PS8818 tuning for guybrush and variants
- */
-static int board_ps8818_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
+static void setup_mux(void)
 {
-	int rv = EC_SUCCESS;
-
-	/* USB specific config */
-	if (mux_state & USB_PD_MUX_USB_ENABLED) {
-		/* Boost the USB gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		/* Set the RX input termination */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_RX_PHY,
-					PS8818_RX_INPUT_TERM_MASK,
-					PS8818_RX_INPUT_TERM_112_OHM);
-		if (rv)
-			return rv;
+	switch (board_get_usb_c1_mux()) {
+	case USB_C1_MUX_PS8818:
+		CPRINTSUSB("C1: Setting PS8818 mux");
+		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_ps8818;
+		break;
+	case USB_C1_MUX_ANX7451:
+		CPRINTSUSB("C1: Setting ANX7451 mux");
+		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_anx7451;
+		break;
+	default:
+		CPRINTSUSB("C1: Mux is unknown");
 	}
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
-		/* Boost the DP gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_DPEQ_LEVEL,
-					PS8818_DPEQ_LEVEL_UP_MASK,
-					PS8818_DPEQ_LEVEL_UP_19DB);
-		if (rv)
-			return rv;
-
-		/* Enable HPD on the DB */
-		gpio_set_level(GPIO_USB_C1_HPD, 1);
-	} else {
-		/* Disable HPD on the DB */
-		gpio_set_level(GPIO_USB_C1_HPD, 0);
-	}
-
-	return rv;
 }
+DECLARE_HOOK(HOOK_INIT, setup_mux, HOOK_PRIO_INIT_I2C);
 
 int board_set_active_charge_port(int port)
 {
 	int is_valid_port = (port >= 0 &&
 			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
+	int cur_port = charge_manager_get_active_charge_port();
 
 	if (port == CHARGE_PORT_NONE) {
 		CPRINTSUSB("Disabling all charger ports");
 
 		/* Disable all ports. */
 		for (i = 0; i < ppc_cnt; i++) {
+			/*
+			 * If this port had booted in dead battery mode, go
+			 * ahead and reset it so EN_SNK responds properly.
+			 */
+			if (nct38xx_get_boot_type(i) ==
+						NCT38XX_BOOT_DEAD_BATTERY) {
+				reset_nct38xx_port(cur_port);
+				pd_set_error_recovery(i);
+			}
+
 			/*
 			 * Do not return early if one fails otherwise we can
 			 * get into a boot loop assertion failure.
@@ -607,9 +463,32 @@ int board_set_active_charge_port(int port)
 
 
 	/* Check if the port is sourcing VBUS. */
-	if (ppc_is_sourcing_vbus(port)) {
-		CPRINTFUSB("Skip enable C%d", port);
+	if (tcpm_get_src_ctrl(port)) {
+		CPRINTSUSB("Skip enable C%d", port);
 		return EC_ERROR_INVAL;
+	}
+
+	/*
+	 * Disallow changing ports if we booted in dead battery mode and don't
+	 * have sufficient power to withstand Vbus loss.  The NCT3807 may
+	 * continue to keep EN_SNK low on the original port and allow a
+	 * dangerous level of voltage to pass through to the initial charge
+	 * port (see b/183660105)
+	 *
+	 * If we do have sufficient power, then reset the dead battery port and
+	 * set up Type-C error recovery on its connection.
+	 */
+	if (cur_port != CHARGE_PORT_NONE &&
+			port != cur_port &&
+			nct38xx_get_boot_type(cur_port) ==
+						NCT38XX_BOOT_DEAD_BATTERY) {
+		if (pd_is_battery_capable()) {
+			reset_nct38xx_port(cur_port);
+			pd_set_error_recovery(cur_port);
+		} else {
+			CPRINTSUSB("Battery too low for charge port change");
+			return EC_ERROR_INVAL;
+		}
 	}
 
 	CPRINTSUSB("New charge port: C%d", port);
@@ -707,28 +586,34 @@ void tcpc_alert_event(enum gpio_signal signal)
 	schedule_deferred_pd_interrupt(port);
 }
 
-static void reset_pd_port(int port, enum gpio_signal reset_gpio_l,
-			  int hold_delay, int post_delay)
+static void reset_nct38xx_port(int port)
 {
+	enum gpio_signal reset_gpio_l;
+
+	if (port == USBC_PORT_C0)
+		reset_gpio_l = GPIO_USB_C0_TCPC_RST_L;
+	else if (port == USBC_PORT_C1)
+		reset_gpio_l = GPIO_USB_C1_TCPC_RST_L;
+	else
+		/* Invalid port: do nothing */
+		return;
+
 	gpio_set_level(reset_gpio_l, 0);
-	msleep(hold_delay);
+	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
 	gpio_set_level(reset_gpio_l, 1);
-	if (post_delay)
-		msleep(post_delay);
+	nct38xx_reset_notify(port);
+	if (NCT3807_RESET_POST_DELAY_MS != 0)
+		msleep(NCT3807_RESET_POST_DELAY_MS);
 }
 
 
 void board_reset_pd_mcu(void)
 {
 	/* Reset TCPC0 */
-	reset_pd_port(USBC_PORT_C0, GPIO_USB_C0_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C0);
 
 	/* Reset TCPC1 */
-	reset_pd_port(USBC_PORT_C1, GPIO_USB_C1_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C1);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -784,13 +669,6 @@ void bc12_interrupt(enum gpio_signal signal)
 	}
 }
 
-static int board_get_soc_temp(int idx, int *temp_k)
-{
-	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
-		return EC_ERROR_NOT_POWERED;
-	return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
-}
-
 /**
  * Return if VBUS is sagging too low
  */
@@ -829,16 +707,22 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
  */
 void board_pwrbtn_to_pch(int level)
 {
-	/* Add delay for G3 exit if asserting PWRBTN_L and S5_PGOOD is low. */
-	if (!level && !gpio_get_level(GPIO_S5_PGOOD)) {
-		/*
-		 * From measurement, wait 80 ms for RSMRST_L to rise after
-		 * S5_PGOOD.
-		 */
-		msleep(G3_TO_PWRBTN_DELAY_MS);
+	timestamp_t start;
+	const uint32_t timeout_rsmrst_rise_us = 30 * MSEC;
 
-		if (!gpio_get_level(GPIO_S5_PGOOD))
-			ccprints("Error: pwrbtn S5_PGOOD low");
+	/* Add delay for G3 exit if asserting PWRBTN_L and RSMRST_L is low. */
+	if (!level && !gpio_get_level(GPIO_PCH_RSMRST_L)) {
+		start = get_time();
+		do {
+			usleep(200);
+			if (gpio_get_level(GPIO_PCH_RSMRST_L))
+				break;
+		} while (time_since32(start) < timeout_rsmrst_rise_us);
+
+		if (!gpio_get_level(GPIO_PCH_RSMRST_L))
+			ccprints("Error pwrbtn: RSMRST_L still low");
+
+		msleep(G3_TO_PWRBTN_DELAY_MS);
 	}
 	gpio_set_level(GPIO_PCH_PWRBTN_L, level);
 }
@@ -860,13 +744,107 @@ void board_hibernate(void)
 		/* Give PD task and PPC chip time to get to 5V */
 		msleep(SAFE_RESET_VBUS_DELAY_MS);
 	}
+
+	/* Try to put our battery fuel gauge into sleep mode */
+	if (battery_sleep_fuel_gauge() != EC_SUCCESS)
+		cprints(CC_SYSTEM, "Failed to send battery sleep command");
 }
+
+__overridable enum ec_error_list
+board_a1_ps8811_retimer_init(const struct usb_mux *me)
+{
+	return EC_SUCCESS;
+}
+
+static int baseboard_a1_ps8811_retimer_init(const struct usb_mux *me)
+{
+	int rv;
+	int tries = 2;
+
+	do {
+		int val;
+
+		rv = ps8811_i2c_read(me, PS8811_REG_PAGE1,
+				     PS8811_REG1_USB_BEQ_LEVEL, &val);
+	} while (rv && --tries);
+
+	if (rv) {
+		CPRINTSUSB("A1: PS8811 retimer not detected!");
+		return rv;
+	}
+	CPRINTSUSB("A1: PS8811 retimer detected");
+	rv = board_a1_ps8811_retimer_init(me);
+	if (rv)
+		CPRINTSUSB("A1: Error during PS8811 setup rv:%d", rv);
+	return rv;
+}
+
+/* PS8811 is just a type-A USB retimer, reusing mux structure for convience. */
+const struct usb_mux usba1_ps8811 = {
+	.usb_port = USBA_PORT_A1,
+	.i2c_port = I2C_PORT_TCPC1,
+	.i2c_addr_flags = PS8811_I2C_ADDR_FLAGS3,
+	.board_init = &baseboard_a1_ps8811_retimer_init,
+};
+
+__overridable enum ec_error_list
+board_a1_anx7491_retimer_init(const struct usb_mux *me)
+{
+	return EC_SUCCESS;
+}
+
+static int baseboard_a1_anx7491_retimer_init(const struct usb_mux *me)
+{
+	int rv;
+	int tries = 2;
+
+	do {
+		int val;
+
+		rv = i2c_read8(me->i2c_port, me->i2c_addr_flags, 0, &val);
+	} while (rv && --tries);
+	if (rv) {
+		CPRINTSUSB("A1: ANX7491 retimer not detected!");
+		return rv;
+	}
+	CPRINTSUSB("A1: ANX7491 retimer detected");
+	rv = board_a1_anx7491_retimer_init(me);
+	if (rv)
+		CPRINTSUSB("A1: Error during ANX7491 setup rv:%d", rv);
+	return rv;
+}
+
+/* ANX7491 is just a type-A USB retimer, reusing mux structure for convience. */
+const struct usb_mux usba1_anx7491 = {
+	.usb_port = USBA_PORT_A1,
+	.i2c_port = I2C_PORT_TCPC1,
+	.i2c_addr_flags = ANX7491_I2C_ADDR0_FLAGS,
+	.board_init = &baseboard_a1_anx7491_retimer_init,
+};
+
+void baseboard_a1_retimer_setup(void)
+{
+	struct usb_mux a1_retimer;
+	switch (board_get_usb_a1_retimer()) {
+	case USB_A1_RETIMER_ANX7491:
+		a1_retimer = usba1_anx7491;
+		break;
+	case USB_A1_RETIMER_PS8811:
+		a1_retimer = usba1_ps8811;
+		break;
+	default:
+		CPRINTSUSB("A1: Unknown retimer!");
+		return;
+	}
+	a1_retimer.board_init(&a1_retimer);
+}
+DECLARE_DEFERRED(baseboard_a1_retimer_setup);
 
 static void baseboard_chipset_suspend(void)
 {
 	/* Disable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 1);
-	ioex_set_level(GPIO_EN_KB_BL, 0);
+	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
 	     HOOK_PRIO_DEFAULT);
@@ -875,7 +853,9 @@ static void baseboard_chipset_resume(void)
 {
 	/* Enable display and keyboard backlights. */
 	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 0);
-	ioex_set_level(GPIO_EN_KB_BL, 1);
+	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
+	/* Some retimers take several ms to be ready, so defer setup call */
+	hook_call_deferred(&baseboard_a1_retimer_setup_data, 20 * MSEC);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, baseboard_chipset_resume, HOOK_PRIO_DEFAULT);
 

@@ -6,7 +6,6 @@
 /* Grunt family-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
@@ -41,7 +40,7 @@
 #include "task.h"
 #include "tcpm/tcpci.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -156,7 +155,8 @@ void board_tcpc_init(void)
 	 * HPD pulse to enable video path
 	 */
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
-		usb_mux_hpd_update(port, 0, 0);
+		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -278,7 +278,8 @@ static uint32_t sku_id;
 static int ps8751_tune_mux(const struct usb_mux *me)
 {
 	/* Tune USB mux registers for treeya's port 1 Rx measurement */
-	if ((sku_id >= 0xa0) && (sku_id <= 0xaf))
+	if (((sku_id >= 0xa0) && (sku_id <= 0xaf)) ||
+	   sku_id == 0xbe || sku_id == 0xbf)
 		mux_write(me, PS8XXX_REG_MUX_USB_C2SS_EQ, 0x40);
 
 	return EC_SUCCESS;
@@ -482,7 +483,7 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 }
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next
@@ -606,7 +607,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = NULL,
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -645,13 +646,11 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 #endif /* HAS_TASK_MOTIONSENSE */
 
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	if (board_is_convertible())
 		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif
 
 static const int sku_thresh_mv[] = {
 	/* Vin = 3.3V, Ideal voltage, R2 values listed below */
@@ -724,7 +723,7 @@ static void cbi_init(void)
 	 * Use board version and SKU ID from CBI EEPROM if the board supports
 	 * it and the SKU ID set via resistors + ADC is not valid.
 	 */
-#ifdef CONFIG_CROS_BOARD_INFO
+#ifdef CONFIG_CBI_EEPROM
 	if (sku_id == 0 || sku_id == 0xff) {
 		uint32_t val;
 
@@ -748,7 +747,7 @@ static void cbi_init(void)
  */
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_ADC + 1);
 
-uint32_t system_get_sku_id(void)
+__override uint32_t board_get_sku_id(void)
 {
 	return sku_id;
 }
@@ -766,9 +765,10 @@ int board_is_convertible(void)
 {
 	/* Grunt: 6 */
 	/* Kasumi360: 82 */
-	/* Treeya360: a8-af */
+	/* Treeya360: a8-af, be, bf*/
 	return (sku_id == 6 || sku_id == 82 ||
-		((sku_id >= 0xa8) && (sku_id <= 0xaf)));
+		((sku_id >= 0xa8) && (sku_id <= 0xaf)) ||
+		sku_id == 0xbe || sku_id == 0xbf);
 }
 
 int board_is_lid_angle_tablet_mode(void)
@@ -786,7 +786,9 @@ __override uint32_t board_override_feature_flags0(uint32_t flags0)
 	    sku_id == 20 || sku_id == 21 ||
 	    sku_id == 32 || sku_id == 33 ||
 	    sku_id == 40 || sku_id == 41 ||
-	    ((sku_id >= 0xa0) && (sku_id <= 0xaf)))
+	    sku_id == 44 || sku_id == 45 ||
+	    ((sku_id >= 0xa0) && (sku_id <= 0xaf)) ||
+		sku_id == 0xbe || sku_id == 0xbf)
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
 	else
 		return flags0;

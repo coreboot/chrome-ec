@@ -69,13 +69,15 @@ const struct i2c_port_t i2c_ports[] = {
 	{"tcpc", I2C_PORT_HOST_TCPC, 100,  0, 0},
 #elif defined I2C_PORT_EEPROM
 	{"eeprom", I2C_PORT_EEPROM, 100, 0, 0},
+#elif defined I2C_PORT_WLC
+	{"wlc", I2C_PORT_WLC, 100, 0, 0},
 #endif
 };
 
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 #endif
 
-#ifdef CONFIG_SPI_MASTER
+#ifdef CONFIG_SPI_CONTROLLER
 /* SPI devices */
 const struct spi_device_t spi_devices[] = {
 	/* Fingerprint sensor (SCLK at 4Mhz) */
@@ -102,7 +104,7 @@ int board_get_entropy(void *buffer, int len)
 }
 #endif
 
-static uint8_t eeprom[CBI_EEPROM_SIZE];
+static uint8_t eeprom[CBI_IMAGE_SIZE];
 
 int eeprom_i2c_xfer(int port, uint16_t addr_flags,
 		    const uint8_t *out, int out_size,

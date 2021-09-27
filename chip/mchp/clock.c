@@ -32,7 +32,7 @@
 #define HTIMER_DIV_1_US_MAX	(1998848)
 #define HTIMER_DIV_1_1SEC	(0x8012)
 
-/* Recovery time for HvySlp2 is 0 usec */
+/* Recovery time for HvySlp2 is 0 us */
 #define HEAVY_SLEEP_RECOVER_TIME_USEC   75
 
 #define SET_HTIMER_DELAY_USEC           200
@@ -70,6 +70,53 @@ int clock_get_freq(void)
 	return freq;
 }
 
+/*
+ * MEC170x and MEC152x have the same 32 KHz clock enable hardware.
+ * MEC172x 32 KHz clock configuration is different and includes
+ * hardware to check the crystal before switching and to monitor
+ * the 32 KHz input if desired.
+ */
+#ifdef CHIP_FAMILY_MEC172X
+/* 32 KHz crystal connected in parallel */
+static inline void config_32k_src_crystal(void)
+{
+	MCHP_VBAT_CSS = MCHP_VBAT_CSS_XTAL_EN
+			| MCHP_VBAT_CSS_SRC_XTAL;
+}
+
+/* 32 KHz source is 32KHZ_IN pin which must be configured */
+static inline void config_32k_src_se_input(void)
+{
+	MCHP_VBAT_CSS = MCHP_VBAT_CSS_SIL32K_EN
+				| MCHP_VBAT_CSS_SRC_SWPS;
+}
+
+static inline void config_32k_src_sil_osc(void)
+{
+	MCHP_VBAT_CSS = MCHP_VBAT_CSS_SIL32K_EN;
+}
+
+#else
+static void config_32k_src_crystal(void)
+{
+	MCHP_VBAT_CE = MCHP_VBAT_CE_XOSEL_PAR
+			| MCHP_VBAT_CE_ALWAYS_ON_32K_SRC_CRYSTAL;
+}
+
+/* 32 KHz source is 32KHZ_IN pin which must be configured */
+static inline void config_32k_src_se_input(void)
+{
+	MCHP_VBAT_CE = MCHP_VBAT_CE_32K_DOMAIN_32KHZ_IN_PIN
+			| MCHP_VBAT_CE_ALWAYS_ON_32K_SRC_INT;
+}
+
+static inline void config_32k_src_sil_osc(void)
+{
+	MCHP_VBAT_CE = ~(MCHP_VBAT_CE_32K_DOMAIN_32KHZ_IN_PIN
+			| MCHP_VBAT_CE_ALWAYS_ON_32K_SRC_CRYSTAL);
+}
+#endif
+
 /** clock_init
  * @note
  * MCHP MEC implements 4 control bits in the VBAT Clock Enable register.
@@ -94,32 +141,19 @@ int clock_get_freq(void)
  */
 void clock_init(void)
 {
-	int __attribute__((unused)) unused;
+	if (IS_ENABLED(CONFIG_CLOCK_SRC_EXTERNAL))
+		if (IS_ENABLED(CONFIG_CLOCK_CRYSTAL))
+			config_32k_src_crystal();
+		else
+			/* 32KHz 50% duty waveform on 32KHZ_IN pin */
+			config_32k_src_se_input();
+	else
+		/* Use internal silicon 32KHz OSC */
+		config_32k_src_sil_osc();
 
-	trace0(0, MEC, 0, "Clock Init");
-
-#ifdef CONFIG_CLOCK_CRYSTAL
-	/* XOSEL: 0 = Parallel resonant crystal */
-	MCHP_VBAT_CE &= ~(1ul << 3);
-
-#else
-	/* XOSEL: 1 = Single ended clock source */
-	MCHP_VBAT_CE |= (1ul << 3);
-#endif
-
-	/* 32K clock enable */
-	MCHP_VBAT_CE = (MCHP_VBAT_CE & ~(0x03)) | (1ul << 2);
-
-#ifdef CONFIG_CLOCK_CRYSTAL
-	/* Wait for crystal to stabilize (OSC_LOCK == 1) */
+	/* Wait for PLL to lock onto 32KHz source (OSC_LOCK == 1) */
 	while (!(MCHP_PCR_CHIP_OSC_ID & 0x100))
 		;
-#endif
-	trace0(0, MEC, 0, "PLL OSC is Locked");
-#ifndef LFW
-	unused = shared_mem_size();
-	trace11(0, MEC, 0, "Shared Memory size = 0x%08x", (uint32_t)unused);
-#endif
 }
 
 /**
@@ -137,14 +171,14 @@ static void clock_turbo_disable(void)
 	else
 #endif
 		/* Use 12 MHz processor clock for power savings */
-		MCHP_PCR_PROC_CLK_CTL = 4;
+		MCHP_PCR_PROC_CLK_CTL = MCHP_PCR_CLK_CTL_12MHZ;
 }
 DECLARE_HOOK(HOOK_INIT,
 		clock_turbo_disable,
 		HOOK_PRIO_INIT_VBOOT_HASH + 1);
 
 /**
- * initialization of Hibernation timer0
+ * initialization of Hibernation timer 0
  * Clear PCR sleep enable.
  * GIRQ=21, aggregator bit = 1, Direct NVIC = 112
  * NVIC direct connect interrupts are used for all peripherals
@@ -155,10 +189,8 @@ void htimer_init(void)
 {
 	MCHP_PCR_SLP_DIS_DEV(MCHP_PCR_HTMR0);
 	MCHP_HTIMER_PRELOAD(0) = 0; /* disable at beginning */
-	MCHP_INT_SOURCE(MCHP_HTIMER_GIRQ) =
-			MCHP_HTIMER_GIRQ_BIT(0);
-	MCHP_INT_ENABLE(MCHP_HTIMER_GIRQ) =
-			MCHP_HTIMER_GIRQ_BIT(0);
+	MCHP_INT_SOURCE(MCHP_HTIMER_GIRQ) = MCHP_HTIMER_GIRQ_BIT(0);
+	MCHP_INT_ENABLE(MCHP_HTIMER_GIRQ) = MCHP_HTIMER_GIRQ_BIT(0);
 
 	task_enable_irq(MCHP_IRQ_HTIMER0);
 }
@@ -171,10 +203,10 @@ void htimer_init(void)
  * @param microseconds Number of microseconds before htimer interrupt
  * @note hibernation timer input clock is 32.768KHz.
  * Control register bit[0] selects the divider.
- * 0 is divide by 1 for 30.5us per LSB for a maximum of
- *	65535 * 30.5us = 1998817.5 us or 32.786 counts per second
- * 1 is divide by 4096 for 0.125s per LSB for a maximum of ~2 hours.
- *	65535 * 0.125s ~ 8192 s = 2.27 hours
+ * 0 is divide by 1 for 30.5 us per LSB for a maximum of
+ *	65535 * 30.5 us = 1998817.5 us or 32.786 counts per second
+ * 1 is divide by 4096 for 0.125 s per LSB for a maximum of ~2 hours.
+ *	65535 * 0.125 s ~ 8192 s = 2.27 hours
  */
 void system_set_htimer_alarm(uint32_t seconds,
 		uint32_t microseconds)
@@ -183,9 +215,6 @@ void system_set_htimer_alarm(uint32_t seconds,
 	uint8_t hctrl;
 
 	MCHP_HTIMER_PRELOAD(0) = 0; /* disable */
-
-	trace12(0, SLP, 0, "sys set htimer: sec=%d us=%d",
-		seconds, microseconds);
 
 	if (microseconds > 1000000ul) {
 		ns = (microseconds / 1000000ul);
@@ -204,16 +233,13 @@ void system_set_htimer_alarm(uint32_t seconds,
 	} else {
 		/*
 		 * approximate(~2% error) as seconds is 0 or 1
-		 * seconds / 30.5e-6 + microseonds / 30.5
+		 * seconds / 30.5e-6 + microseconds / 30.5
 		 */
 		hcnt = (seconds << 15) + (microseconds >> 5) +
 			(microseconds >> 10);
 		hctrl = 0;
 	}
 
-	trace12(0, SLP, 0,
-		"sys set htimer: ctrl=0x%0x preload=0x%0x",
-		hctrl, hcnt);
 	MCHP_HTIMER_CONTROL(0) = hctrl;
 	MCHP_HTIMER_PRELOAD(0) = hcnt;
 }
@@ -235,7 +261,7 @@ static timestamp_t system_get_htimer(void)
 		/* 0.125 sec per count */
 		time.le.lo = (uint32_t)(count * 125000);
 	else    /* if < 2 sec */
-		/* 30.5(=61/2)usec per count */
+		/* 30.5(=61/2) us per count */
 		time.le.lo = (uint32_t)(count * 61 / 2);
 
 	time.le.hi = 0;
@@ -308,6 +334,11 @@ static void print_saved_regs(void)
 		trace12(0, BRD, 0, "GIRQ[%d].Result = 0x%08X",
 			(i+MCHP_INT_GIRQ_FIRST), ecia_result[i]);
 }
+#else
+static __maybe_unused void print_pcr_regs(void) {}
+static __maybe_unused void print_ecia_regs(void) {}
+static __maybe_unused void save_regs(void) {}
+static __maybe_unused void print_saved_regs(void) {}
 #endif /* #ifdef CONFIG_MCHP_DEEP_SLP_DEBUG */
 
 /**
@@ -320,7 +351,7 @@ static void print_saved_regs(void)
  * 3. System sleeps
  * 4. wake event wakes system
  * 5. HW restores original values of all PCR.SLP_EN registers
- * NOTE1: Current RTOS core (Cortex-Mx) does not use SysTick timer.
+ * NOTE1: Current RTOS core (Cortex-M4) does not use SysTick timer.
  * We can leave code to disable it but do not re-enable on wake.
  * NOTE2: Some peripherals will not sleep until outstanding transactions
  * are complete: I2C, DMA, GPSPI, QMSPI, etc.
@@ -330,8 +361,6 @@ static void print_saved_regs(void)
  */
 static void prepare_for_deep_sleep(void)
 {
-	trace0(0, MEC, 0, "Prepare for Deep Sleep");
-
 	/* sysTick timer */
 	CPU_NVIC_ST_CTRL &= ~ST_ENABLE;
 	CPU_NVIC_ST_CTRL &= ~ST_COUNTFLAG;
@@ -377,14 +406,16 @@ static void prepare_for_deep_sleep(void)
 #ifdef CONFIG_ADC
 	/*
 	 * Clear ADC activate bit. If a conversion is in progress the
-	 * ADC block will not enter low power until the converstion is
+	 * ADC block will not enter low power until the conversion is
 	 * complete.
 	 */
 	MCHP_ADC_CTRL &= ~1;
 #endif
 
 	/* stop Port80 capture timer */
+#ifndef CHIP_FAMILY_MEC172X
 	MCHP_P80_ACTIVATE(0) = 0;
+#endif
 
 	/*
 	 * Clear SLP_EN bit(s) for wake sources.
@@ -417,8 +448,6 @@ static void prepare_for_deep_sleep(void)
 
 static void resume_from_deep_sleep(void)
 {
-	trace0(0, MEC, 0, "resume_from_deep_sleep");
-
 	MCHP_PCR_SYS_SLP_CTL = 0x00;  /* default */
 
 	/* Disable assertion of DeepSleep signal when core executes WFI */
@@ -462,8 +491,10 @@ static void resume_from_deep_sleep(void)
 	#endif
 #endif
 
-	/* re-enable Port80 capture */
+	/* re-enable Port 80 capture */
+#ifndef CHIP_FAMILY_MEC172X
 	MCHP_P80_ACTIVATE(0) = 1;
+#endif
 
 #ifdef CONFIG_ADC
 	MCHP_ADC_CTRL |= 1;
@@ -523,9 +554,9 @@ void __idle(void)
 	/*
 	 * Print when the idle task starts. This is the lowest priority
 	 * task, so this only starts once all other tasks have gotten a
-	 * chance to do their task inits and have gone to sleep.
+	 * chance to do their task initializations and have gone to sleep.
 	 */
-	CPRINTS("MEC1701 low power idle task started");
+	CPRINTS("MEC low power idle task started");
 
 	while (1) {
 		/* Disable interrupts */
@@ -545,7 +576,6 @@ void __idle(void)
 
 		/* check if there enough time for deep sleep */
 		if (DEEP_SLEEP_ALLOWED && time_for_dsleep) {
-			trace0(0, MEC, 0, "Enough time for Deep Sleep");
 			/*
 			 * Check if the console use has expired and
 			 * console sleep is masked by GPIO(UART-RX)
@@ -564,8 +594,8 @@ void __idle(void)
 				clock_wait_cycles(1);
 
 				if (LOW_SPEED_DEEP_SLEEP_ALLOWED)
-					CPRINTS("MEC1701 Disable console "
-						"in deepsleep");
+					CPRINTS("MEC Disable console "
+						"in deep sleep");
 			}
 
 
@@ -577,7 +607,7 @@ void __idle(void)
 
 			/*
 			 * Since MCHP's heavy sleep mode requires all
-			 * blocks to be sleepable, UART/console's
+			 * blocks to be sleep capable, UART/console
 			 * readiness is final decision factor of
 			 * heavy sleep of EC.
 			 */
@@ -586,7 +616,7 @@ void __idle(void)
 				idle_dsleep_cnt++;
 
 				/*
-				 * config UART Rx as GPIO wakeup
+				 * configure UART Rx as GPIO wakeup
 				 * interrupt source
 				 */
 				uart_enter_dsleep();
@@ -598,7 +628,7 @@ void __idle(void)
 				 * 'max_sleep_time' value should be big
 				 * enough so that hibernation timer's
 				 * interrupt triggers only after 'wfi'
-				 * completes its excution.
+				 * completes its execution.
 				 */
 				max_sleep_time -=
 					(get_time().le.lo - t0.le.lo);
@@ -649,7 +679,7 @@ void __idle(void)
 
 				force_time(t1);
 
-				/* re-eanble UART */
+				/* re-enable UART */
 				uart_exit_dsleep();
 
 				/* Record time spent in deep sleep. */
@@ -675,19 +705,6 @@ void __idle(void)
  * Print low power idle statistics
  */
 
-#ifdef CONFIG_MCHP_DEEP_SLP_DEBUG
-static void print_pcr_regs(void)
-{
-	int i;
-
-	ccprintf("PCR regs before WFI\n");
-	for (i = 0; i < 5; i++) {
-		ccprintf("PCR SLP_EN[%d]  = 0x%08X\n", pcr_slp_en[i]);
-		ccprintf("PCR CLK_REQ[%d] = 0x%08X\n", pcr_clk_req[i]);
-	}
-}
-#endif
-
 static int command_idle_stats(int argc, char **argv)
 {
 	timestamp_t ts = get_time();
@@ -702,9 +719,9 @@ static int command_idle_stats(int argc, char **argv)
 	ccprintf("Total time on:                       %.6llds\n\n",
 			ts.val);
 
-#ifdef CONFIG_MCHP_DEEP_SLP_DEBUG
-	print_pcr_regs();	/* debug */
-#endif
+	if (IS_ENABLED(CONFIG_MCHP_DEEP_SLP_DEBUG))
+		print_pcr_regs();	/* debug */
+
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats,
@@ -755,9 +772,9 @@ static int command_dsleep(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(dsleep, command_dsleep,
 		"[ on | off | <timeout> sec]",
 		"Deep sleep clock settings:\nUse 'on' to force deep "
-		"sleep NOT to enter heavysleep mode.\nUse 'off' to "
-		"allow deepsleep to use heavysleep whenever conditions "
+		"sleep NOT to enter heavy sleep mode.\nUse 'off' to "
+		"allow deep sleep to use heavy sleep whenever conditions "
 		"allow.\n"
 		"Give a timeout value for the console in use timeout.\n"
-		"See also 'sleepmask'.");
+		"See also 'sleep mask'.");
 #endif /* CONFIG_LOW_POWER_IDLE */

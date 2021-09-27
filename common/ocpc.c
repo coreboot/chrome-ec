@@ -176,9 +176,12 @@ enum ec_error_list ocpc_calc_resistances(struct ocpc_data *ocpc,
 
 	/*
 	 * In order to actually calculate the resistance, we need to make sure
-	 * we're actually charging the battery at a significant rate.
+	 * we're actually charging the battery at a significant rate.  The LSB
+	 * of a charger IC can be as high as 96mV.  Assuming a resistance of 60
+	 * mOhms, we would need a current of 1666mA to have a voltage delta of
+	 * 100mV.
 	 */
-	if ((battery->current <= 1000) ||
+	if ((battery->current <= 1666) ||
 	    (!(ocpc->chg_flags[act_chg] & OCPC_NO_ISYS_MEAS_CAP) &&
 	     (ocpc->isys_ma <= 0)) ||
 	    (ocpc->vsys_aux_mv < ocpc->vsys_mv)) {
@@ -376,7 +379,7 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 	if (batt.desired_voltage) {
 		if (((batt.voltage < batt_info->voltage_min) ||
 		    ((batt.voltage < batt_info->voltage_normal) &&
-		    (batt.desired_current <= batt_info->precharge_current))) &&
+		    (current_ma <= batt_info->precharge_current))) &&
 		    (ph != PHASE_PRECHARGE)) {
 			/*
 			 * If the charger IC doesn't support the linear charge
@@ -388,11 +391,11 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 			} else if (result == EC_SUCCESS) {
 				CPRINTS("OCPC: Enabling linear precharge");
 				ph = PHASE_PRECHARGE;
-				i_ma = batt.desired_current;
+				i_ma = current_ma;
 			}
 		} else if (batt.voltage < batt.desired_voltage) {
 			if ((ph == PHASE_PRECHARGE) &&
-			    (batt.desired_current >
+			    (current_ma >
 			     batt_info->precharge_current)) {
 				/*
 				 * Precharge phase is complete.  Now set the
@@ -422,7 +425,7 @@ int ocpc_config_secondary_charger(int *desired_input_current,
 
 			if ((ph != PHASE_PRECHARGE) && (ph < PHASE_CV_TRIP))
 				ph = PHASE_CC;
-			i_ma = batt.desired_current;
+			i_ma = current_ma;
 		} else {
 			/*
 			 * Once the battery voltage reaches the desired voltage,
@@ -584,7 +587,7 @@ set_vsys:
 				CPRINT_VIZ(i == loc ? "o" : "-");
 		}
 		CPRINT_VIZ("] (actual)%dmA (desired)%dmA\n", batt.current,
-			   batt.desired_current);
+			   i_ma);
 	}
 
 	return rv;
@@ -603,7 +606,7 @@ void ocpc_get_adcs(struct ocpc_data *ocpc)
 		ocpc->primary_ibus_ma = val;
 
 	val = 0;
-	if (!charger_get_voltage(CHARGER_PRIMARY, &val))
+	if (!charger_get_actual_voltage(CHARGER_PRIMARY, &val))
 		ocpc->vsys_mv = val;
 
 	if (board_get_charger_chip_count() <= CHARGER_SECONDARY) {
@@ -623,11 +626,11 @@ void ocpc_get_adcs(struct ocpc_data *ocpc)
 		ocpc->secondary_ibus_ma = val;
 
 	val = 0;
-	if (!charger_get_voltage(CHARGER_SECONDARY, &val))
+	if (!charger_get_actual_voltage(CHARGER_SECONDARY, &val))
 		ocpc->vsys_aux_mv = val;
 
 	val = 0;
-	if (!charger_get_current(CHARGER_SECONDARY, &val))
+	if (!charger_get_actual_current(CHARGER_SECONDARY, &val))
 		ocpc->isys_ma = val;
 }
 
@@ -662,11 +665,18 @@ void ocpc_reset(struct ocpc_data *ocpc)
 	 * Initialize the VSYS target on the aux chargers to the current battery
 	 * voltage to avoid a large spike.
 	 */
-	if (ocpc->active_chg_chip > CHARGER_PRIMARY) {
+	if (ocpc->active_chg_chip > CHARGER_PRIMARY && batt.voltage > 0) {
 		CPRINTS("OCPC: C%d Init VSYS to %dmV", ocpc->active_chg_chip,
 			batt.voltage);
 		charger_set_voltage(ocpc->active_chg_chip, batt.voltage);
 	}
+
+	/*
+	 * See(b:191347747) When linear precharge is enabled, it may affect
+	 * the charging behavior from the primary charger IC. Therefore as
+	 * a part of the reset process, we need to disable linear precharge.
+	 */
+	ocpc_precharge_enable(false);
 }
 
 static void ocpc_set_pid_constants(void)

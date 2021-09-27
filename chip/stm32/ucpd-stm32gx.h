@@ -10,6 +10,35 @@
 #include "usb_pd_tcpm.h"
 
 /*
+ * UCPD is fed directly from HSI which is @ 16MHz. The ucpd_clk goes to
+ * a prescaler who's output feeds the 'half-bit' divider which is used
+ * to generate clock for delay counters and BMC Rx/Tx blocks. The rx is
+ * designed to work in freq ranges of 6 <--> 18 MHz, however recommended
+ * range is 9 <--> 18 MHz.
+ *
+ *          ------- @ 16 MHz ---------   @ ~600 kHz   -------------
+ * HSI ---->| /psc |-------->| /hbit |--------------->| trans_cnt |
+ *          -------          ---------    |           -------------
+ *                                        |           -------------
+ *                                        |---------->| ifrgap_cnt|
+ *                                                    -------------
+ * Requirements:
+ *   1. hbit_clk ~= 600 kHz: 16 MHz / 600 kHz = 26.67
+ *   2. tTransitionWindow - 12 to 20 uSec
+ *   3. tInterframGap - uSec
+ *
+ * hbit_clk = HSI_clk / 27 = 592.6 kHz = 1.687 uSec period
+ * tTransitionWindow = 1.687 uS * 8 = 13.5 uS
+ * tInterFrameGap = 1.687 uS * 17 = 28.68 uS
+ */
+
+#define UCPD_PSC_DIV 1
+#define UCPD_HBIT_DIV 27
+#define UCPD_TRANSWIN_CNT 8
+#define UCPD_IFRGAP_CNT 17
+
+
+/*
  * K-codes and ordered set defines. These codes and sets are used to encode
  * which type of USB-PD message is being sent. This information can be found in
  * the USB-PD spec section 5.4 - 5.6. This info is also included in the STM32G4
@@ -22,7 +51,7 @@
 #define UCPD_RST2  0x19u
 #define UCPD_EOP   0x0Du
 
-/* This order of this enum matches tcpm_transmit_type */
+/* This order of this enum matches tcpm_sop_type */
 enum ucpd_tx_ordset {
 	TX_ORDERSET_SOP =	(UCPD_SYNC1 |
 				(UCPD_SYNC1<<5u) |
@@ -144,7 +173,7 @@ int stm32gx_ucpd_set_msg_header(int port, int power_role, int data_role);
  * @return EC_SUCCESS
  */
 int stm32gx_ucpd_transmit(int port,
-			enum tcpm_transmit_type type,
+			enum tcpci_msg_type type,
 			uint16_t header,
 			  const uint32_t *data);
 
@@ -186,5 +215,17 @@ int stm32gx_ucpd_get_chip_info(int port, int live,
  * @param enable -> on/off control for debug feature
  */
 void ucpd_cc_detect_notify_enable(int enable);
+
+/**
+ * This function is used to enable/disable rx bist test mode in the ucpd
+ * driver. This mode is controlled at the PE layer. When this mode is enabled,
+ * the ucpd receiver will not pass BIST data messages to the protocol layer and
+ * only send GoodCRC replies.
+ *
+ * @param usbc_port -> USB-C Port number
+ * @param enable -> on/off control for rx bist mode
+ */
+enum ec_error_list stm32gx_ucpd_set_bist_test_mode(const int port,
+						   const bool enable);
 
 #endif /* __CROS_EC_UCPD_STM32GX_H */

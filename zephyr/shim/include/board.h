@@ -17,8 +17,8 @@
 #endif
 
 /* Include board specific i2c mapping if I2C is enabled. */
-#if defined(CONFIG_I2C) && !defined(CONFIG_ZTEST)
-#include "i2c_map.h"
+#if defined(CONFIG_I2C)
+#include "i2c/i2c.h"
 #endif
 
 #ifdef CONFIG_PWM
@@ -27,7 +27,7 @@
 
 /* Include board specific sensor configuration if motionsense is enabled */
 #ifdef CONFIG_MOTIONSENSE
-#include "sensor_map.h"
+#include "motionsense_sensors.h"
 #endif
 
 #endif  /* __BOARD_H */

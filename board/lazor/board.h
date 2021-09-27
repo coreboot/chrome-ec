@@ -17,7 +17,8 @@
 #define CONFIG_LN9310
 
 /* Keyboard */
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+#define CONFIG_KEYBOARD_PROTOCOL_MKBP
+
 #define CONFIG_PWM_KBLIGHT
 
 /* Battery */
@@ -32,6 +33,7 @@
 #define CONFIG_USB_PD_TCPM_MULTI_PS8XXX
 #define CONFIG_USB_PD_TCPM_PS8751
 #define CONFIG_USB_PD_TCPM_PS8805
+#define CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
 #define CONFIG_USBC_PPC_SN5S330
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 
@@ -82,6 +84,7 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
+#include "sku.h"
 
 enum adc_channel {
 	ADC_VBUS,
@@ -114,15 +117,9 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
-/* Swithcap functions */
-void board_set_switchcap_power(int enable);
-int board_is_switchcap_enabled(void);
-int board_is_switchcap_power_good(void);
-enum battery_cell_type board_get_battery_cell_type(void);
-/* Custom function to indicate if sourcing VBUS */
-int board_is_sourcing_vbus(int port);
-/* Enable VBUS sink for a given port */
-int board_vbus_sink_enable(int port, int enable);
+/* support factory keyboard test */
+#define CONFIG_KEYBOARD_FACTORY_TEST
+
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);

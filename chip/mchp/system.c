@@ -7,62 +7,89 @@
 
 #include <stdnoreturn.h>
 
+#include "common.h" /* includes config.h and board.h */
 #include "clock.h"
-#include "common.h"
+#include "clock_chip.h"
 #include "console.h"
 #include "cpu.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "host_command.h"
+#include "lpc_chip.h"
 #include "registers.h"
 #include "shared_mem.h"
+#include "spi.h"
 #include "system.h"
-#include "hooks.h"
 #include "task.h"
+#include "tfdp_chip.h"
 #include "timer.h"
 #include "util.h"
-#include "spi.h"
-#include "clock_chip.h"
-#include "lpc_chip.h"
-#include "tfdp_chip.h"
-
 
 #define CPUTS(outstr) cputs(CC_LPC, outstr)
 #define CPRINTS(format, args...) cprints(CC_LPC, format, ## args)
 
-
-/* Indices for hibernate data registers (RAM backed by VBAT) */
+/* Index values for hibernate data registers (RAM backed by VBAT) */
 enum hibdata_index {
-	HIBDATA_INDEX_SCRATCHPAD = 0,    /* General-purpose scratchpad */
+	HIBDATA_INDEX_SCRATCHPAD = 0,    /* General-purpose scratch pad */
 	HIBDATA_INDEX_SAVED_RESET_FLAGS, /* Saved reset flags */
 	HIBDATA_INDEX_PD0,		/* USB-PD0 saved port state */
 	HIBDATA_INDEX_PD1,		/* USB-PD1 saved port state */
 	HIBDATA_INDEX_PD2,		/* USB-PD2 saved port state */
 };
 
+/*
+ * Voltage rail configuration
+ * MEC172x VTR1 is 3.3V only, VTR2 is auto-detected 3.3 or 1.8V, and
+ * VTR3 is always 1.8V.
+ * MEC170x and MEC152x require manual selection of VTR3 for 1.8 or 3.3V.
+ * The eSPI pins are on VTR3 and require 1.8V
+ */
+#ifdef CHIP_FAMILY_MEC172X
+static void vtr3_voltage_select(int use18v)
+{
+	(void) use18v;
+}
+#else
+static void vtr3_voltage_select(int use18v)
+{
+	if (use18v)
+		MCHP_EC_GPIO_BANK_PWR |= MCHP_EC_GPIO_BANK_PWR_VTR3_18;
+	else
+		MCHP_EC_GPIO_BANK_PWR &= ~(MCHP_EC_GPIO_BANK_PWR_VTR3_18);
+}
+#endif
+
+
+/*
+ * The current logic will set EC_RESET_FLAG_RESET_PIN flag
+ * even if the reset was caused by WDT. MEC170x/MEC152x HW RESET_SYS
+ * status goes active for any of the following:
+ *	RESET_VTR: power rail change
+ *	WDT Event: WDT timed out
+ *	FW triggered chip reset: SYSRESETREQ or PCR sys reset bit
+ * The code does check WDT status in the VBAT PFR register.
+ * Is it correct to report both EC_RESET_FLAG_RESET_PIN and
+ * EC_RESET_FLAG_WATCHDOG on a WDT only reset?
+ */
 static void check_reset_cause(void)
 {
 	uint32_t status = MCHP_VBAT_STS;
 	uint32_t flags = 0;
 	uint32_t rst_sts = MCHP_PCR_PWR_RST_STS &
-				(MCHP_PWR_RST_STS_VTR |
+				(MCHP_PWR_RST_STS_SYS |
 				MCHP_PWR_RST_STS_VBAT);
-
-	trace12(0, MEC, 0,
-		"check_reset_cause: VBAT_PFR = 0x%08X  PCR PWRST = 0x%08X",
-		status, rst_sts);
 
 	/* Clear the reset causes now that we've read them */
 	MCHP_VBAT_STS |= status;
 	MCHP_PCR_PWR_RST_STS |= rst_sts;
 
-	trace0(0, MEC, 0, "check_reset_cause: after clear");
-	trace11(0, MEC, 0, "  VBAT_PFR  = 0x%08X", MCHP_VBAT_STS);
-	trace11(0, MEC, 0, "  PCR PWRST = 0x%08X", MCHP_PCR_PWR_RST_STS);
-
 	/*
-	 * BIT[6] determine VTR reset
+	 * BIT[6] indicates RESET_SYS asserted.
+	 * RESET_SYS will assert on VTR reset, WDT reset, or
+	 * firmware triggering a reset using Cortex-M4 SYSRESETREQ
+	 * or MCHP PCR system reset register.
 	 */
-	if (rst_sts & MCHP_PWR_RST_STS_VTR)
+	if (rst_sts & MCHP_PWR_RST_STS_SYS)
 		flags |= EC_RESET_FLAG_RESET_PIN;
 
 
@@ -73,8 +100,6 @@ static void check_reset_cause(void)
 					    EC_RESET_FLAG_HARD |
 					    EC_RESET_FLAG_HIBERNATE)))
 		flags |= EC_RESET_FLAG_WATCHDOG;
-
-	trace11(0, MEC, 0, "check_reset_cause: EC reset flags = 0x%08x", flags);
 
 	system_set_reset_flags(flags);
 }
@@ -101,31 +126,25 @@ int system_is_reboot_warm(void)
 
 /*
  * Sleep unused blocks to reduce power.
- * Drivers/modules will unsleep their blocks.
+ * Drivers/modules will clear PCR sleep enables for their blocks.
  * Keep sleep enables cleared for required blocks:
  * ECIA, PMC, CPU, ECS and optionally JTAG.
  * SLEEP_ALL feature will set these upon sleep entry.
- * Based on CONFIG_CHIPSET_DEBUG enable or disable JTAG.
- * JTAG mode (4-pin or 2-pin SWD + 1-pin SWV) was set
- * by Boot-ROM. We can override Boot-ROM JTAG mode
- * using
- * CONFIG_MCHP_JTAG_MODE
+ * Based on CONFIG_CHIPSET_DEBUG enable or disable ARM SWD
+ * 2-pin JTAG mode.
  */
 static void chip_periph_sleep_control(void)
 {
 	uint32_t d;
 
 	d = MCHP_PCR_SLP_EN0_SLEEP;
-#ifdef CONFIG_CHIPSET_DEBUG
-	d &= ~(MCHP_PCR_SLP_EN0_JTAG);
-#ifdef CONFIG_MCHP_JTAG_MODE
-	MCHP_EC_JTAG_EN = CONFIG_MCHP_JTAG_MODE;
-#else
-	MCHP_EC_JTAG_EN |= 0x01;
-#endif
-#else
-	MCHP_EC_JTAG_EN &= ~0x01;
-#endif
+
+	if (IS_ENABLED(CONFIG_CHIPSET_DEBUG)) {
+		d &= ~(MCHP_PCR_SLP_EN0_JTAG);
+		MCHP_EC_JTAG_EN = MCHP_JTAG_MODE_SWD | MCHP_JTAG_ENABLE;
+	} else
+		MCHP_EC_JTAG_EN &= ~(MCHP_JTAG_ENABLE);
+
 	MCHP_PCR_SLP_EN0 = d;
 	MCHP_PCR_SLP_EN1 = MCHP_PCR_SLP_EN1_UNUSED_BLOCKS;
 	MCHP_PCR_SLP_EN2 = MCHP_PCR_SLP_EN2_SLEEP;
@@ -136,30 +155,15 @@ static void chip_periph_sleep_control(void)
 #ifdef CONFIG_CHIP_PRE_INIT
 void chip_pre_init(void)
 {
-#ifdef CONFIG_MCHP_TFDP
-	uint8_t imgtype;
-#endif
 	chip_periph_sleep_control();
 
-#ifdef CONFIG_MCHP_TFDP
-	/*
-	 * MCHP Enable TFDP for fast debug messages
-	 * If not defined then traceN() and TRACEN() macros are empty
-	 */
-	tfdp_power(1);
-	tfdp_enable(1, 1);
-	imgtype = MCHP_VBAT_RAM(MCHP_IMAGETYPE_IDX);
-	CPRINTS("chip_pre_init: Image type = 0x%02x", imgtype);
-	trace1(0, MEC, 0,
-		"chip_pre_init: Image type = 0x%02x", imgtype);
-
-	trace11(0, MEC, 0,
-		"chip_pre_init: MCHP_VBAT_STS = 0x%0x",
-		MCHP_VBAT_STS);
-	trace11(0, MEC, 0,
-		"chip_pre_init: MCHP_PCR_PWR_RST_STS = 0x%0x",
-		MCHP_VBAT_STS);
-#endif
+	if (IS_ENABLED(CONFIG_MCHP_TFDP)) {
+		/* MCHP Enable TFDP for fast debug messages */
+		tfdp_power(1);
+		tfdp_enable(1, 1);
+		CPRINTS("chip_pre_init: Image type = 0x%02x",
+			MCHP_VBAT_RAM(MCHP_IMAGETYPE_IDX));
+	}
 }
 #endif
 
@@ -173,13 +177,14 @@ void system_pre_init(void)
 	MCHP_EC_AHB_ERR = 0;	/* write any value to clear */
 	MCHP_EC_AHB_ERR_EN = 0; /* enable capture of address on error */
 
-#ifdef CONFIG_HOSTCMD_ESPI
-	MCHP_EC_GPIO_BANK_PWR |= MCHP_EC_GPIO_BANK_PWR_VTR3_18;
-#endif
+	/* Manual voltage selection only required for MEC170x and MEC152x */
+	if (IS_ENABLED(CONFIG_HOSTCMD_ESPI))
+		vtr3_voltage_select(1);
+	else
+		vtr3_voltage_select(0);
 
-#ifndef CONFIG_CHIP_PRE_INIT
-	chip_periph_sleep_control();
-#endif
+	if (!IS_ENABLED(CONFIG_CHIP_PRE_INIT))
+		chip_periph_sleep_control();
 
 	/* Enable direct NVIC */
 	MCHP_EC_INT_CTRL |= 1;
@@ -197,7 +202,7 @@ void system_pre_init(void)
 	 * NOTE: GIRQ22 wake for AHB peripherals not processor.
 	 */
 	MCHP_INT_BLK_DIS = 0xfffffffful;
-	MCHP_INT_BLK_EN = (0x1Ful << 8) + (0x07ul << 24);
+	MCHP_INT_BLK_EN = MCHP_INT_AGGR_ONLY_BITMAP;
 
 	spi_enable(SPI_FLASH_DEVICE, 1);
 }
@@ -216,12 +221,12 @@ noreturn void _system_reset(int flags, int wake_from_hibernate)
 {
 	uint32_t save_flags = 0;
 
+	/* DEBUG */
+	CPRINTS("MEC system reset: flag = 0x%08x wake = %d", flags,
+		wake_from_hibernate);
+
 	/* Disable interrupts to avoid task swaps during reboot */
 	interrupt_disable();
-
-	trace12(0, MEC, 0,
-		"_system_reset: flags=0x%08X  wake_from_hibernate=%d",
-		flags, wake_from_hibernate);
 
 	/* Save current reset reasons if necessary */
 	if (flags & SYSTEM_RESET_PRESERVE_FLAGS)
@@ -239,15 +244,12 @@ noreturn void _system_reset(int flags, int wake_from_hibernate)
 
 	chip_save_reset_flags(save_flags);
 
-	trace11(0, MEC, 0, "_system_reset: save_flags=0x%08X", save_flags);
-
 	/*
 	 * Trigger chip reset
 	 */
-#if defined(CONFIG_CHIPSET_DEBUG)
-#else
-	MCHP_PCR_SYS_RST |= MCHP_PCR_SYS_SOFT_RESET;
-#endif
+	if (!IS_ENABLED(CONFIG_DEBUG_BRINGUP))
+		MCHP_PCR_SYS_RST |= MCHP_PCR_SYS_SOFT_RESET;
+
 	/* Spin and wait for reboot; should never return */
 	while (1)
 		;
@@ -263,6 +265,7 @@ const char *system_get_chip_vendor(void)
 	return "mchp";
 }
 
+#ifdef CHIP_VARIANT_MEC1701
 /*
  * MEC1701H Chip ID = 0x2D
  *              Rev = 0x82
@@ -276,6 +279,79 @@ const char *system_get_chip_name(void)
 		return "unknown";
 	}
 }
+#endif
+
+#ifdef CHIP_FAMILY_MEC152X
+/*
+ * MEC152x family implements chip ID as a 32-bit
+ * register where:
+ * b[31:16] = 16-bit Device ID
+ * b[15:8] = 8-bit Sub ID
+ * b[7:0] = Revision
+ *
+ * MEC1521-128 WFBGA 0023_33_xxh
+ * MEC1521-144 WFBGA 0023_34_xxh
+ * MEC1523-144 WFBGA 0023_B4_xxh
+ * MEC1527-144 WFBGA 0023_74_xxh
+ * MEC1527-128 WFBGA 0023_73_xxh
+ */
+const char *system_get_chip_name(void)
+{
+	switch (MCHP_CHIP_DEVRID32 & ~(MCHP_CHIP_REV_MASK)) {
+	case 0x00201400: /* 144 pin rev A? */
+		return "mec1503_revA";
+	case 0x00203400: /* 144 pin */
+		return "mec1501";
+	case 0x00207400: /* 144 pin */
+		return "mec1507";
+	case 0x00208400: /* 144 pin */
+		return "mec1503";
+	case 0x00233300: /* 128 pin */
+	case 0x00233400: /* 144 pin */
+		return "mec1521";
+	case 0x0023B400: /* 144 pin */
+		return "mec1523";
+	case 0x00237300: /* 128 pin */
+	case 0x00237400: /* 144 pin */
+		return "mec1527";
+	default:
+		return "unknown";
+	}
+}
+#endif
+
+#ifdef CHIP_FAMILY_MEC172X
+/*
+ * MEC172x family implements chip ID as a 32-bit
+ * register where:
+ * b[31:16] = 16-bit Device ID
+ * b[15:8] = 8-bit Sub ID
+ * b[7:0] = Revision
+ *
+ * MEC1723N-B0-I/SZ 144 pin: 0x0022_34_xx
+ * MEC1727N-B0-I/SZ 144 pin: 0x0022_74_xx
+ * MEC1721N-B0-I/LJ 176 pin: 0x0022_27_xx
+ * MEC1723N-B0-I/LJ 176 pin: 0x0022_37_xx
+ * MEC1727N-B0-I/LJ 176 pin: 0x0022_77_xx
+ */
+const char *system_get_chip_name(void)
+{
+	switch (MCHP_CHIP_DEVRID32 & ~(MCHP_CHIP_REV_MASK)) {
+	case 0x00223400:
+		return "MEC1723NSZ";
+	case 0x00227400:
+		return "MEC1727NSZ";
+	case 0x00222700:
+		return "MEC1721NLJ";
+	case 0x00223700:
+		return "MEC1723NLJ";
+	case 0x00227700:
+		return "MEC1727NLJ";
+	default:
+		return "unknown";
+	}
+}
+#endif
 
 static char to_hex(int x)
 {
@@ -337,21 +413,61 @@ int system_set_scratchpad(uint32_t value)
 	return EC_SUCCESS;
 }
 
-uint32_t system_get_scratchpad(void)
+int system_get_scratchpad(uint32_t *value)
 {
-	return MCHP_VBAT_RAM(HIBDATA_INDEX_SCRATCHPAD);
+	*value = MCHP_VBAT_RAM(HIBDATA_INDEX_SCRATCHPAD);
+	return EC_SUCCESS;
 }
+
+/*
+ * Local function to disable clocks in the chip's host interface
+ * so the chip can enter deep sleep. Only MEC170X has LPC.
+ * MEC152x and MEC172x only include eSPI and SPI host interfaces.
+ * NOTE: we do it this way because the LPC registers are only
+ * defined for MEC170x and the IS_ENABLED() macro causes the
+ * compiler to evaluate both true and false code paths.
+ */
+#if defined(CONFIG_HOSTCMD_ESPI)
+static void disable_host_ifc_clocks(void)
+{
+	MCHP_ESPI_ACTIVATE &= ~0x01;
+}
+#else
+static void disable_host_ifc_clocks(void)
+{
+	#ifdef CHIP_FAMILY_MEC170X
+	MCHP_LPC_ACT &= ~0x1;
+	#endif
+}
+#endif
+
+
+/*
+ * Called when hibernation timer is not used in deep sleep.
+ * Switch 32 KHz clock logic from external 32KHz input to
+ * internal silicon OSC.
+ * NOTE: MEC172x auto-switches from external source to silicon
+ * oscillator.
+ */
+#ifdef CHIP_FAMILY_MEC172X
+static void switch_32k_pin2sil(void) {}
+#else
+static void switch_32k_pin2sil(void)
+{
+	MCHP_VBAT_CE &= ~(MCHP_VBAT_CE_32K_DOMAIN_32KHZ_IN_PIN);
+}
+#endif
 
 void system_hibernate(uint32_t seconds, uint32_t microseconds)
 {
 	int i;
 
-#ifdef CONFIG_HOSTCMD_PD
-	/* Inform the PD MCU that we are going to hibernate. */
-	host_command_pd_request_hibernate();
-	/* Wait to ensure exchange with PD before hibernating. */
-	msleep(100);
-#endif
+	if (IS_ENABLED(CONFIG_HOSTCMD_PD)) {
+		/* Inform the PD MCU that we are going to hibernate. */
+		host_command_pd_request_hibernate();
+		/* Wait to ensure exchange with PD before hibernating. */
+		msleep(100);
+	}
 
 	cflush();
 
@@ -372,21 +488,19 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 
 	/* Disable UART */
 	MCHP_UART_ACT(0) &= ~0x1;
-#ifdef CONFIG_HOSTCMD_ESPI
-	MCHP_ESPI_ACTIVATE &= ~0x01;
-#else
-	MCHP_LPC_ACT &= ~0x1;
-#endif
+
+	disable_host_ifc_clocks();
+
 	/* Disable JTAG */
 	MCHP_EC_JTAG_EN &= ~1;
 
 	/* Stop watchdog */
-	MCHP_WDG_CTL &= ~1;
+	MCHP_WDG_CTL &= ~(MCHP_WDT_CTL_ENABLE);
 
 	/* Stop timers */
 	MCHP_TMR32_CTL(0) &= ~1;
 	MCHP_TMR32_CTL(1) &= ~1;
-	for (i = 0; i < MCHP_TMR16_MAX; i++)
+	for (i = 0; i < MCHP_TMR16_INSTANCES; i++)
 		MCHP_TMR16_CTL(i) &= ~1;
 
 	/* Power down ADC */
@@ -423,10 +537,8 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 		htimer_init();
 		system_set_htimer_alarm(seconds, microseconds);
 		interrupt_enable();
-	} else {
-		/* Not using hibernation timer. Disable 32KHz clock */
-		MCHP_VBAT_CE &= ~0x2;
-	}
+	} else
+		switch_32k_pin2sil();
 
 	/*
 	 * Set sleep state
@@ -441,10 +553,8 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 	asm("isb");
 	asm("nop");
 
-	/* Use 48MHz clock to speed through wake-up */
-	MCHP_PCR_PROC_CLK_CTL = 1;
-
-	trace0(0, SYS, 0, "Wake from hibernate: _system_reset[0,1]");
+	/* Use fastest clock to speed through wake-up */
+	MCHP_PCR_PROC_CLK_CTL = MCHP_PCR_CLK_CTL_FASTEST;
 
 	/* Reboot */
 	_system_reset(0, 1);

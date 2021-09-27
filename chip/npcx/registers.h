@@ -456,8 +456,6 @@ enum {
 
 /* pin-mux for JTAG */
 #define NPCX_DEVALT5_TRACE_EN            0
-#define NPCX_DEVALT5_NJEN1_EN            1
-#define NPCX_DEVALT5_NJEN0_EN            2
 
 /* pin-mux for ADC */
 #define NPCX_DEVALT6_ADC0_SL             0
@@ -614,7 +612,7 @@ enum {
 /* RX FIFO threshold */
 #define NPCX_SMBRXF_CTL_RX_THR           FIELD(0, 6)
 /*
- * In master receiving mode, last byte in FIFO should send ACK or NACK
+ * In controller receiving mode, last byte in FIFO should send ACK or NACK
  */
 #define NPCX_SMBRXF_CTL_LAST             7
 
@@ -794,6 +792,7 @@ enum {
 #define NPCX_PWIN_SIZEI_WPROT            14
 #define NPCX_CSEM2                       6
 #define NPCX_CSEM3                       7
+#define NPCX_DP80BUF_OFFS_FIELD          FIELD(8, 3)
 #define NPCX_DP80STS_FWR                 5
 #define NPCX_DP80STS_FNE                 6
 #define NPCX_DP80STS_FOR                 7
@@ -1130,12 +1129,33 @@ enum PM_CHANNEL_T {
 #define NPCX_ESPICFG_VWCHANEN            1
 #define NPCX_ESPICFG_OOBCHANEN           2
 #define NPCX_ESPICFG_FLASHCHANEN         3
-#define NPCX_ESPICFG_IOMODE_FIELD        FIELD(8, 9)
-#define NPCX_ESPICFG_MAXFREQ_FIELD       FIELD(10, 12)
+#define NPCX_ESPICFG_HPCHANEN            4
+#define NPCX_ESPICFG_HVWCHANEN           5
+#define NPCX_ESPICFG_HOOBCHANEN          6
+#define NPCX_ESPICFG_HFLASHCHANEN        7
+#define NPCX_ESPICFG_IOMODE_FIELD        FIELD(8, 2)
+#define NPCX_ESPICFG_MAXFREQ_FIELD       FIELD(10, 3)
+#define NPCX_ESPICFG_OPFREQ_FIELD        FIELD(17, 3)
+#define NPCX_ESPICFG_IOMODESEL_FIELD     FIELD(20, 2)
+#define NPCX_ESPICFG_ALERT_MODE          22
+#define NPCX_ESPICFG_CRC_CHK             23
 #define NPCX_ESPICFG_PCCHN_SUPP          24
 #define NPCX_ESPICFG_VWCHN_SUPP          25
 #define NPCX_ESPICFG_OOBCHN_SUPP         26
 #define NPCX_ESPICFG_FLASHCHN_SUPP       27
+#define NPCX_ESPIERR_INVCMD              0 /* Invalid Command Type */
+#define NPCX_ESPIERR_INVCYC              1 /* Invalid Cycle Type */
+#define NPCX_ESPIERR_CRCERR              2 /* Transaction CRC Error */
+#define NPCX_ESPIERR_ABCOMP              3 /* Abnormal Completion */
+#define NPCX_ESPIERR_PROTERR             4 /* Protocol Error */
+#define NPCX_ESPIERR_BADSIZE             5 /* Bad Size */
+#define NPCX_ESPIERR_NPBADALN            6 /* NPPC Bad Address Alignment */
+#define NPCX_ESPIERR_PCBADALN            7 /* PPC Bad Address Alignment */
+#define NPCX_ESPIERR_UNCMD               9 /* Unsupported Command */
+#define NPCX_ESPIERR_EXTRACYC            10 /* Extra eSPI Clock Cycles */
+#define NPCX_ESPIERR_VWERR               11 /* Virtual Channel Access Error */
+#define NPCX_ESPIERR_UNPBM               14 /* Unsuccessful Bus Completion */
+#define NPCX_ESPIERR_UNFLASH             15 /* Unsuccessful Flash Completion */
 #define NPCX_ESPIIE_IBRSTIE              0
 #define NPCX_ESPIIE_CFGUPDIE             1
 #define NPCX_ESPIIE_BERRIE               2
@@ -1178,11 +1198,11 @@ enum PM_CHANNEL_T {
 #define NPCX_VWEVMS_VALID                FIELD(4, 4)
 
 /* Macro functions for eSPI CFG & IE */
-#define IS_SLAVE_CHAN_ENABLE(ch)         IS_BIT_SET(NPCX_ESPICFG, ch)
+#define IS_PERIPHERAL_CHAN_ENABLE(ch)    IS_BIT_SET(NPCX_ESPICFG, ch)
 #define IS_HOST_CHAN_EN(ch)              IS_BIT_SET(NPCX_ESPICFG, (ch+4))
 #define ENABLE_ESPI_CHAN(ch)             SET_BIT(NPCX_ESPICFG, ch)
 #define DISABLE_ESPI_CHAN(ch)            CLEAR_BIT(NPCX_ESPICFG, ch)
-/* ESPI Slave Channel Support Definitions */
+/* ESPI Peripheral Channel Support Definitions */
 #define ESPI_SUPP_CH_PC                  BIT(NPCX_ESPICFG_PCCHN_SUPP)
 #define ESPI_SUPP_CH_VM                  BIT(NPCX_ESPICFG_VWCHN_SUPP)
 #define ESPI_SUPP_CH_OOB                 BIT(NPCX_ESPICFG_OOBCHN_SUPP)
@@ -1288,9 +1308,17 @@ enum {
 enum {
 	NPCX_ESPI_IO_MODE_SINGLE = 0,
 	NPCX_ESPI_IO_MODE_DUAL   = 1,
-	NPCX_ESPI_IO_MODE_Quad   = 2,
+	NPCX_ESPI_IO_MODE_QUAD   = 2,
 	NPCX_ESPI_IO_MODE_ALL    = 3,
 	NPCX_ESPI_IO_MODE_NONE   = 0xFF
+};
+
+/* eSPI IO mode selected */
+enum {
+	NPCX_ESPI_IO_MODE_SEL_SINGLE = 0,
+	NPCX_ESPI_IO_MODE_SEL_DUAL   = 1,
+	NPCX_ESPI_IO_MODE_SEL_QUARD  = 2,
+	NPCX_ESPI_IO_MODE_SEL_NONE   = 0xFF
 };
 
 /* VW types */

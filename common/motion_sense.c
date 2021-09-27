@@ -211,28 +211,28 @@ static int motion_sense_set_ec_rate_from_ap(
 
 	if (new_rate_us == 0)
 		return 0;
-	if (motion_sensor_in_forced_mode(sensor))
-		/*
-		 * AP EC sampling rate does not matter: we will collect at the
-		 * requested sensor frequency.
-		 */
-		goto end_set_ec_rate_from_ap;
+
 	if (odr_mhz == 0)
+		/*
+		 * No event (interrupt or forced mode) are generated,
+		 * any ec rate works.
+		 */
 		goto end_set_ec_rate_from_ap;
 
 	/*
 	 * If the EC collection rate is close to the sensor data rate,
-	 * given variation from the EC scheduler, it is possible that a sensor
-	 * will not present any measurement for a given time slice, and then 2
-	 * measurement for the next. That will create a large interval between
-	 * 2 measurements.
-	 * To prevent that, increase the EC period by 5% to be sure to get at
-	 * least one measurement at every collection time.
+	 * given variation from the EC scheduler, we want to be sure the EC is
+	 * ready to send an event to the AP when either the interrupt arrives,
+	 * or the EC is actively probing the sensor.
+	 * Decrease the EC period by 5% to be sure to get at least one
+	 * measurement at every collection time.
 	 * We will apply that correction only if the ec rate is within 10% of
 	 * the data rate.
+	 * It is possible for sensors at the same ODR to not be in phase.
+	 * One will have a delay guarantee to be less than its ODR.
 	 */
 	if (SECOND * 1100 / odr_mhz > new_rate_us)
-		new_rate_us = new_rate_us / 100 * 105;
+		new_rate_us = new_rate_us / 95 * 100;
 
 end_set_ec_rate_from_ap:
 	return MAX(new_rate_us, motion_min_interval);
@@ -331,8 +331,12 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
 	int ret, cnt = 3;
 
 	BUILD_ASSERT(SENSOR_COUNT < 32);
+#if defined(HAS_TASK_CONSOLE)
 	ASSERT((task_get_current() == TASK_ID_HOOKS) ||
 	       (task_get_current() == TASK_ID_CONSOLE));
+#else
+	ASSERT(task_get_current() == TASK_ID_HOOKS);
+#endif /* HAS_TASK_CONSOLE */
 
 	/* Initialize accelerometers. */
 	do {
@@ -412,7 +416,7 @@ static void motion_sense_switch_sensor_rate(void)
 				    (ret != EC_SUCCESS) &&
 				    (i == CONFIG_LID_ANGLE_SENSOR_BASE ||
 				     i == CONFIG_LID_ANGLE_SENSOR_LID))
-					tablet_set_mode(0);
+					tablet_set_mode(0, TABLET_TRIGGER_LID);
 			}
 		} else {
 			/* The sensors are being powered off */
@@ -437,6 +441,22 @@ static void motion_sense_switch_sensor_rate(void)
 		ap_event_interval = 0;
 	}
 
+	/* disable the body detection since AP is suspended */
+	if (IS_ENABLED(CONFIG_BODY_DETECTION)) {
+		static bool was_enabled;
+
+		switch (sensor_active) {
+		case SENSOR_ACTIVE_S3:
+			was_enabled = body_detect_get_enable();
+			body_detect_set_enable(false);
+			break;
+		case SENSOR_ACTIVE_S0:
+			body_detect_set_enable(was_enabled);
+			break;
+		default:
+			break;
+		}
+	}
 	/* Forget activities set by the AP */
 	if (IS_ENABLED(CONFIG_GESTURE_DETECTION) &&
 	    (sensor_active == SENSOR_ACTIVE_S5)) {
@@ -500,9 +520,6 @@ static void motion_sense_suspend(void)
 
 	sensor_active = SENSOR_ACTIVE_S3;
 
-	/* disable the body detection since AP is suspended */
-	if (IS_ENABLED(CONFIG_BODY_DETECTION))
-		body_detect_set_enable(false);
 	/*
 	 * During shutdown sequence sensor rails can be powered down
 	 * asynchronously to the EC hence EC cannot interlock the sensor
@@ -618,11 +635,8 @@ static void update_sense_data(uint8_t *lpc_status, int *psample_id)
 
 static int motion_sense_read(struct motion_sensor_t *sensor)
 {
-	if (sensor->state != SENSOR_INITIALIZED)
-		return EC_ERROR_UNKNOWN;
-
-	if (sensor->drv->get_data_rate(sensor) == 0)
-		return EC_ERROR_NOT_POWERED;
+	ASSERT(sensor->state == SENSOR_INITIALIZED);
+	ASSERT(sensor->drv->get_data_rate(sensor) != 0);
 
 	/*
 	 * If the sensor is in spoof mode, the readings are already present in
@@ -723,8 +737,14 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 	}
 	if (motion_sensor_in_forced_mode(sensor)) {
 		if (motion_sensor_time_to_read(ts, sensor)) {
-			ret = motion_sense_read(sensor);
+			/*
+			 * Since motion_sense_read can sleep, other task may be
+			 * scheduled. In particular if suspend is called by
+			 * HOOKS task, it may set colleciton_rate to 0 and we
+			 * would crash in increment_sensor_collection.
+			 */
 			increment_sensor_collection(sensor, ts);
+			ret = motion_sense_read(sensor);
 		} else {
 			ret = EC_ERROR_BUSY;
 		}
@@ -774,15 +794,14 @@ static void check_and_queue_gestures(uint32_t *event)
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION)) {
 			struct ec_response_motion_sensor_data vector;
 
+			vector.flags = MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO;
 			/*
 			 * Send events to the FIFO
 			 * AP is ignoring double tap event, do no wake up and no
 			 * automatic disable.
 			 */
 			if (IS_ENABLED(CONFIG_GESTURE_SENSOR_DOUBLE_TAP_FOR_HOST))
-				vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP;
-			else
-				vector.flags = 0;
+				vector.flags |= MOTIONSENSE_SENSOR_FLAG_WAKEUP;
 			vector.activity_data.activity =
 					MOTIONSENSE_ACTIVITY_DOUBLE_TAP;
 			vector.activity_data.state = 1 /* triggered */;
@@ -802,7 +821,8 @@ static void check_and_queue_gestures(uint32_t *event)
 			struct ec_response_motion_sensor_data vector;
 
 			/* Send events to the FIFO */
-			vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP;
+			vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP |
+				       MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO;
 			vector.activity_data.activity =
 					MOTIONSENSE_ACTIVITY_SIG_MOTION;
 			vector.activity_data.state = 1 /* triggered */;
@@ -823,7 +843,7 @@ static void check_and_queue_gestures(uint32_t *event)
 			&motion_sensors[LID_ACCEL];
 
 		if (SENSOR_ACTIVE(sensor) &&
-				(sensor->state == SENSOR_INITIALIZED)) {
+		    (sensor->state == SENSOR_INITIALIZED)) {
 			struct ec_response_motion_sensor_data vector = {
 				.flags = 0,
 				.activity_data.activity =
@@ -948,7 +968,7 @@ void motion_sense_task(void *u)
 		 * - we haven't done it for a while.
 		 */
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO) &&
-		    (motion_sense_fifo_wake_up_needed() ||
+		    (motion_sense_fifo_bypass_needed() ||
 		     event & (TASK_EVENT_MOTION_ODR_CHANGE |
 			      TASK_EVENT_MOTION_FLUSH_PENDING) ||
 		     motion_sense_fifo_over_thres() ||
@@ -971,8 +991,10 @@ void motion_sense_task(void *u)
 			      sensor_active == SENSOR_ACTIVE_S0) ||
 			     motion_sense_fifo_wake_up_needed()))) {
 				mkbp_send_event(EC_MKBP_EVENT_SENSOR_FIFO);
-				motion_sense_fifo_reset_wake_up_needed();
 			}
+			if (motion_sense_fifo_bypass_needed())
+				/* wakeup flag is a subset of bypass flag. */
+				motion_sense_fifo_reset_needed_flags();
 		}
 
 		ts_end_task = get_time();

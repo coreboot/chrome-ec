@@ -3,9 +3,9 @@
  * found in the LICENSE file.
  */
 
-/* Common code for VARIANT_DEDEDE_NPCX796FC configuration */
+/* Common code for VARIANT_[DEDEDE|KEEBY]_NPCX79[6/7]FC configuration */
 
-#include "adc_chip.h"
+#include "adc.h"
 #include "atomic.h"
 #include "chipset.h"
 #include "common.h"
@@ -158,7 +158,7 @@ static void enable_adc_irqs_via_lid(void)
 DECLARE_HOOK(HOOK_LID_CHANGE, enable_adc_irqs_via_lid, HOOK_PRIO_DEFAULT);
 
 /* I2C Ports */
-const struct i2c_port_t i2c_ports[] = {
+__attribute__((weak)) const struct i2c_port_t i2c_ports[] = {
 	{
 		"eeprom", I2C_PORT_EEPROM, 1000, GPIO_EC_I2C_EEPROM_SCL,
 		GPIO_EC_I2C_EEPROM_SDA
@@ -169,20 +169,23 @@ const struct i2c_port_t i2c_ports[] = {
 		GPIO_EC_I2C_BATTERY_SDA
 	},
 
+#ifdef HAS_TASK_MOTIONSENSE
 	{
 		"sensor", I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
 		GPIO_EC_I2C_SENSOR_SDA
 	},
+#endif
 
 	{
 		"usbc0", I2C_PORT_USB_C0, 1000, GPIO_EC_I2C_USB_C0_SCL,
 		GPIO_EC_I2C_USB_C0_SDA
 	},
-
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	{
 		"sub_usbc1", I2C_PORT_SUB_USB_C1, 1000,
 		GPIO_EC_I2C_SUB_USB_C1_SCL, GPIO_EC_I2C_SUB_USB_C1_SDA
 	},
+#endif
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 

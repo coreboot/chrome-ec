@@ -11,13 +11,17 @@
 #include "charge_state_v2.h"
 #include "charger.h"
 #include "console.h"
+#include "dps.h"
+#include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "system.h"
 #include "tcpm/tcpm.h"
 #include "timer.h"
+#include "usb_common.h"
 #include "usb_pd.h"
+#include "usb_pd_dpm.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
 
@@ -108,7 +112,8 @@ static int override_port = OVERRIDE_OFF;
 static int delayed_override_port = OVERRIDE_OFF;
 static timestamp_t delayed_override_deadline;
 
-static uint8_t source_port_rp[CONFIG_USB_PD_PORT_MAX_COUNT];
+/* Source-out Rp values for TCPMv1 */
+__maybe_unused static uint8_t source_port_rp[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #ifdef CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT
 /* 3A on one port and 1.5A on the rest */
@@ -226,7 +231,7 @@ static void charge_manager_init(void)
 			charge_ceil[i][j] = CHARGE_CEIL_NONE;
 		if (!is_pd_port(i))
 			dualrole_capability[i] = CAP_DEDICATED;
-		if (is_pd_port(i))
+		if (is_pd_port(i) && !IS_ENABLED(CONFIG_USB_PD_TCPMV2))
 			source_port_rp[i] = CONFIG_USB_PD_PULLUP;
 	}
 }
@@ -269,7 +274,7 @@ static int charge_manager_is_seeded(void)
  * @param port	Charge port.
  * @return	Charge current (mA).
  */
-static int charge_manager_get_source_current(int port)
+__maybe_unused static int charge_manager_get_source_current(int port)
 {
 	if (!is_pd_port(port))
 		return 0;
@@ -346,6 +351,11 @@ static enum usb_power_roles get_current_power_role(int port,
 	return role;
 }
 
+__overridable int board_get_vbus_voltage(int port)
+{
+	return 0;
+}
+
 static int get_vbus_voltage(int port, enum usb_power_roles current_role)
 {
 	int voltage_mv;
@@ -371,6 +381,8 @@ static int get_vbus_voltage(int port, enum usb_power_roles current_role)
 #elif defined(CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT)
 		/* No VBUS ADC channel - voltage is unknown */
 		voltage_mv = 0;
+#elif defined(CONFIG_USB_PD_VBUS_MEASURE_BY_BOARD)
+		voltage_mv = board_get_vbus_voltage(port);
 #else
 		/* There is a single ADC that measures joint Vbus */
 		voltage_mv = adc_read_channel(ADC_VBUS);
@@ -409,8 +421,13 @@ static void charge_manager_fill_power_info(int port,
 			r->meas.voltage_max = 0;
 			r->meas.voltage_now =
 				r->role == USB_PD_PORT_POWER_SOURCE ? 5000 : 0;
-			r->meas.current_max =
-				charge_manager_get_source_current(port);
+			/* TCPMv2 tracks source-out current in the DPM */
+			if (IS_ENABLED(CONFIG_USB_PD_TCPMV2))
+				r->meas.current_max =
+					dpm_get_source_current(port);
+			else
+				r->meas.current_max =
+					charge_manager_get_source_current(port);
 			r->max_power = 0;
 		} else {
 			r->type = USB_CHG_TYPE_NONE;
@@ -608,11 +625,13 @@ static void charge_manager_get_best_charge_port(int *new_port,
 
 	/* Skip port selection on OVERRIDE_DONT_CHARGE. */
 	if (override_port != OVERRIDE_DONT_CHARGE) {
+
 		/*
 		 * Charge supplier selection logic:
-		 * 1. Prefer higher priority supply.
-		 * 2. Prefer higher power over lower in case priority is tied.
-		 * 3. Prefer current charge port over new port in case (1)
+		 * 1. Prefer DPS charge port.
+		 * 2. Prefer higher priority supply.
+		 * 3. Prefer higher power over lower in case priority is tied.
+		 * 4. Prefer current charge port over new port in case (1)
 		 *    and (2) are tied.
 		 * available_charge can be changed at any time by other tasks,
 		 * so make no assumptions about its consistency.
@@ -654,8 +673,16 @@ static void charge_manager_get_best_charge_port(int *new_port,
 				candidate_port_power =
 					POWER(available_charge[i][j]);
 
+				/* Select DPS port if provided. */
+				if (IS_ENABLED(CONFIG_USB_PD_DPS) &&
+				    override_port == OVERRIDE_OFF &&
+				    i == CHARGE_SUPPLIER_PD &&
+				    j == dps_get_charge_port()) {
+					supplier = i;
+					port = j;
+					break;
 				/* Select if no supplier chosen yet. */
-				if (supplier == CHARGE_SUPPLIER_NONE ||
+				} else if (supplier == CHARGE_SUPPLIER_NONE ||
 				/* ..or if supplier priority is higher. */
 				    supplier_priority[i] <
 				    supplier_priority[supplier] ||
@@ -744,8 +771,11 @@ static void charge_manager_refresh(void)
 			trigger_ocpc_reset();
 		}
 
-		if (board_set_active_charge_port(new_port) == EC_SUCCESS)
+		if (board_set_active_charge_port(new_port) == EC_SUCCESS) {
+			if (IS_ENABLED(CONFIG_EXTPOWER))
+				board_check_extpower();
 			break;
+		}
 
 		/* 'Dont charge' request must be accepted. */
 		ASSERT(new_port != CHARGE_PORT_NONE);
@@ -821,6 +851,13 @@ static void charge_manager_refresh(void)
 
 		CPRINTS("CL: p%d s%d i%d v%d", new_port, new_supplier,
 			new_charge_current, new_charge_voltage);
+
+		/*
+		 * (b:192638664) We try to check AC OK again to avoid
+		 * unsuccessful detection in the initial detection.
+		 */
+		if (IS_ENABLED(CONFIG_EXTPOWER))
+			board_check_extpower();
 	}
 
 	/*
@@ -878,6 +915,10 @@ static void charge_manager_refresh(void)
 		    IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE)) ||
 		    (IS_ENABLED(CONFIG_USB_PD_TCPMV2) &&
 		    IS_ENABLED(CONFIG_USB_PE_SM))) {
+			uint32_t pdo;
+			uint32_t max_voltage;
+			uint32_t max_current;
+			uint32_t unused;
 			/*
 			 * Check if new voltage/current is different
 			 * than requested. If yes, send new power request
@@ -886,6 +927,19 @@ static void charge_manager_refresh(void)
 			    charge_voltage ||
 			    pd_get_requested_current(updated_new_port) !=
 			    charge_current_uncapped)
+				pd_set_new_power_request(updated_new_port);
+
+			/*
+			 * Check if we can get more power from this port.
+			 * If yes, send new power request
+			 */
+			pd_find_pdo_index(pd_get_src_cap_cnt(updated_new_port),
+					  pd_get_src_caps(updated_new_port),
+					  pd_get_max_voltage(), &pdo);
+			pd_extract_pdo_power(pdo, &max_current, &max_voltage,
+					     &unused);
+			if (charge_voltage != max_voltage ||
+			    charge_current_uncapped != max_current)
 				pd_set_new_power_request(updated_new_port);
 		} else {
 			/*

@@ -36,7 +36,7 @@ void dpm_set_mode_exit_request(int port);
  * @param vdo_count The number of VDOs in vdm; must be at least 1
  * @param vdm       The VDM payload of the ACK
  */
-void dpm_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
+void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
 		uint32_t *vdm);
 
 /*
@@ -48,7 +48,7 @@ void dpm_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
  * @param svid    The SVID of the request
  * @param vdm_cmd The VDM command of the request
  */
-void dpm_vdm_naked(int port, enum tcpm_transmit_type type, uint16_t svid,
+void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
 		uint8_t vdm_cmd);
 
 /*
@@ -69,11 +69,27 @@ void dpm_run(int port);
 void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo);
 
 /*
+ * Registers port as a non-PD sink, so that can be taken into account when
+ * allocating current.
+ *
+ * @param port		USB-C port number
+ */
+void dpm_add_non_pd_sink(int port);
+
+/*
  * Remove this port as a sink, and reallocate maximum current as needed.
  *
  * @param port		USB-C port number
  */
 void dpm_remove_sink(int port);
+
+/*
+ * Remove this port as a source, and reallocate reserved FRS maximum current
+ * as needed.
+ *
+ * @param port		USB-C port number
+ */
+void dpm_remove_source(int port);
 
 /*
  * Return the appropriate Source Capability PDO to offer this port
@@ -83,5 +99,13 @@ void dpm_remove_sink(int port);
  * @return		Number of PDOs
  */
 int dpm_get_source_pdo(const uint32_t **src_pdo, const int port);
+
+/*
+ * Report offered source current for this port
+ *
+ * @param port		USB-C port number
+ * @return		Current offered, in mA
+ */
+int dpm_get_source_current(const int port);
 
 #endif  /* __CROS_EC_USB_DPM_H */

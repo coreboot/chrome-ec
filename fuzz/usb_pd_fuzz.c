@@ -36,12 +36,18 @@ static int mock_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 	return EC_SUCCESS;
 }
 
+static __maybe_unused int mock_tcpm_sop_prime_enable(int port, bool enable)
+{
+	return EC_SUCCESS;
+}
+
 static int mock_tcpm_set_vconn(int port, int enable) { return EC_SUCCESS; }
 static int mock_tcpm_set_msg_header(int port,
 			int power_role, int data_role) { return EC_SUCCESS; }
 static int mock_tcpm_set_rx_enable(int port, int enable) { return EC_SUCCESS; }
-static int mock_tcpm_transmit(int port, enum tcpm_transmit_type type,
-		uint16_t header, const uint32_t *data) { return EC_SUCCESS; }
+static int mock_tcpm_transmit(int port, enum tcpci_msg_type type,
+		uint16_t header, const uint32_t *data)
+{ return EC_SUCCESS; }
 static void mock_tcpc_alert(int port) {}
 static int mock_tcpci_get_chip_info(int port, int live,
 		struct ec_response_pd_chip_info_v1 *info)
@@ -131,6 +137,9 @@ static const struct tcpm_drv mock_tcpm_drv = {
 	.select_rp_value        = &mock_tcpm_select_rp_value,
 	.set_cc                 = &mock_tcpm_set_cc,
 	.set_polarity           = &mock_tcpm_set_polarity,
+#ifdef CONFIG_USB_PD_DECODE_SOP
+	.sop_prime_enable		= &mock_tcpm_sop_prime_enable,
+#endif
 	.set_vconn              = &mock_tcpm_set_vconn,
 	.set_msg_header         = &mock_tcpm_set_msg_header,
 	.set_rx_enable          = &mock_tcpm_set_rx_enable,

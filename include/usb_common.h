@@ -81,6 +81,17 @@ int hex8tou32(char *str, uint32_t *val);
  */
 int remote_flashing(int argc, char **argv);
 
+/*
+ * When AP requests to suspend PD traffic on the EC so it can do
+ * firmware upgrade (retimer firmware, or TCPC chips firmware),
+ * it calls this function to check if power is ready for performing
+ * the upgrade.
+ * @param port USB-C port number
+ * @dreturn true  - power is ready
+ *          false - power is not ready
+ */
+bool pd_firmware_upgrade_check_power_readiness(int port);
+
 /* Returns the battery percentage [0-100] of the system. */
 int usb_get_battery_soc(void);
 
@@ -134,9 +145,11 @@ int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t * const src_caps,
  *
  * @param pdo raw pdo to extract
  * @param ma current of the PDO (output)
- * @param mv voltage of the PDO (output)
+ * @param max_mv maximum voltage of the PDO (output)
+ * @param min_mv minimum voltage of the PDO (output)
  */
-void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *mv);
+void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *max_mv,
+			  uint32_t *min_mv);
 
 /**
  * Decide which PDO to choose from the source capabilities.
@@ -163,6 +176,16 @@ void notify_sysjump_ready(void);
 void set_usb_mux_with_current_data_role(int port);
 
 /**
+ * Check if the mux should be set to enable USB3.1 mode based only on being in a
+ * UFP data role. This is mode is required when attached to a port partner that
+ * is type-c only, but still needs to enable USB3.1 mode.
+ *
+ * @param port USB-C port number
+ * @return true if USB3 mode should be enabled, false otherwise
+ */
+__override_proto bool usb_ufp_check_usb3_enable(int port);
+
+/**
  * Configure the USB MUX in safe mode.
  * Before entering into alternate mode, state of the USB-C MUX needs to be in
  * safe mode.
@@ -172,6 +195,17 @@ void set_usb_mux_with_current_data_role(int port);
  * @param port The PD port number
  */
 void usb_mux_set_safe_mode(int port);
+
+/**
+ * Configure the USB MUX in safe mode while exiting an alternate mode.
+ * Although the TCSS (virtual mux) has a distinct safe mode state, it
+ * needs to be in a disconnected state to properly exit an alternate
+ * mode. Therefore, do not treat the virtual mux as a special case, as
+ * usb_mux_set_safe_mode does.
+ *
+ * @param port The PD port number
+ */
+void usb_mux_set_safe_mode_exit(int port);
 
 /**
  * Get the PD flags stored in BB Ram
@@ -200,4 +234,52 @@ void pd_update_saved_port_flags(int port, uint8_t flag, uint8_t do_set);
  * @return EC_SUCCESS on success else EC_ERROR_INVAL
  */
 int pd_build_alert_msg(uint32_t *msg, uint32_t *len, enum pd_power_role pr);
+
+/**
+ * During USB retimer firmware update, process operation
+ * requested by AP
+ *
+ * @param port USB-C port number
+ * @param op
+ *       0 - USB_RETIMER_FW_UPDATE_QUERY_PORT
+ *       1 - USB_RETIMER_FW_UPDATE_SUSPEND_PD
+ *       2 - USB_RETIMER_FW_UPDATE_RESUME_PD
+ *       3 - USB_RETIMER_FW_UPDATE_GET_MUX
+ *       4 - USB_RETIMER_FW_UPDATE_SET_USB
+ *       5 - USB_RETIMER_FW_UPDATE_SET_SAFE
+ *       6 - USB_RETIMER_FW_UPDATE_SET_TBT
+ *       7 - USB_RETIMER_FW_UPDATE_DISCONNECT
+ */
+void usb_retimer_fw_update_process_op(int port, int op);
+
+/**
+ * Get result of last USB retimer firmware update operation requested
+ * by AP. Result is passed to AP via EC_CMD_ACPI_READ.
+ *
+ * @return Result of last operation. It's
+ *         which port has retimer if last operation is
+ *         USB_RETIMER_FW_UPDATE_QUERY_PORT;
+ *         PD task is enabled or not if last operations are
+ *         USB_RETIMER_FW_UPDATE_SUSPEND_PD or
+ *         USB_RETIMER_FW_UPDATE_QUERY_PORT;
+ *         current mux if last operations are
+ *         USB_RETIMER_FW_UPDATE_GET_MUX, USB_RETIMER_FW_UPDATE_SET_USB,
+ *         USB_RETIMER_FW_UPDATE_SET_SAFE, USB_RETIMER_FW_UPDATE_SET_TBT,
+ *         or USB_RETIMER_FW_UPDATE_DISCONNECT.
+ */
+int usb_retimer_fw_update_get_result(void);
+
+/**
+ * Process deferred retimer firmware update operations.
+ *
+ * @param port USB-C port number
+ */
+void usb_retimer_fw_update_process_op_cb(int port);
+
+/**
+ * Dump SourceCap information.
+ *
+ * @param port USB-C port number
+ */
+void pd_srccaps_dump(int port);
 #endif /* __CROS_EC_USB_COMMON_H */

@@ -79,6 +79,11 @@ void interrupt_disable(void);
  */
 void interrupt_enable(void);
 
+/**
+ * Check if interrupts are enabled
+ */
+int is_interrupt_enabled(void);
+
 /*
  * Define irq_lock and irq_unlock that match the function signatures to Zephyr's
  * functions. In reality, these simply call the current implementation of
@@ -365,6 +370,14 @@ struct mutex {
 };
 
 typedef struct mutex mutex_t;
+
+/**
+ * K_MUTEX_DEFINE is a macro normally provided by the Zephyr kernel,
+ * and allows creation of a static mutex without the need to
+ * initialize it.  We provide the same macro for CrOS EC OS so that we
+ * can use it in shared code.
+ */
+#define K_MUTEX_DEFINE(name) static mutex_t name = { }
 
 /**
  * Lock a mutex.

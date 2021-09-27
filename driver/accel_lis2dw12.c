@@ -10,7 +10,7 @@
 #include "accelgyro.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accel_lis2dw12.h"
+#include "accel_lis2dw12.h"
 #include "hooks.h"
 #include "hwtimer.h"
 #include "math_util.h"
@@ -26,6 +26,23 @@
  * Enable interrupts and FIFO only when the accelerometer is the main sensor.
  */
 #define LIS2DW12_ENABLE_FIFO
+#endif
+
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_ACCEL_INTERRUPTS)
+/* Get the motion sensor ID of the LIS2DW12 sensor that generates the
+ * interrupt. The interrupt is converted to the event and transferred to
+ * motion sense task that actually handles the interrupt.
+ *
+ * Here we use an alias (lis2dw12_int) to get the motion sensor ID. This alias
+ * MUST be defined for this driver to work.
+ * aliases {
+ *   lis2dw12-int = &lid_accel;
+ * };
+ */
+#if DT_NODE_EXISTS(DT_ALIAS(lis2dw12_int))
+#define CONFIG_ACCEL_LIS2DW12_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(lis2dw12_int)))
+#endif
 #endif
 
 STATIC_IF(LIS2DW12_ENABLE_FIFO) volatile uint32_t last_interrupt_timestamp;
@@ -83,7 +100,7 @@ static __maybe_unused int lis2dw12_load_fifo(struct motion_sensor_t *s,
 			vect.data[Y] = axis[Y];
 			vect.data[Z] = axis[Z];
 			vect.flags = 0;
-			vect.sensor_num = 0;
+			vect.sensor_num = s - motion_sensors;
 			motion_sense_fifo_stage_data(&vect, s, 3,
 						     interrupt_timestamp);
 		}
@@ -497,7 +514,7 @@ static int init(struct motion_sensor_t *s)
 	ret = st_raw_read8(s->port, s->i2c_spi_addr_flags,
 			   LIS2DW12_WHO_AM_I_REG, &tmp);
 	if (ret != EC_SUCCESS)
-		return EC_ERROR_UNKNOWN;
+		return ret;
 
 	if (tmp != LIS2DW12_WHO_AM_I)
 		return EC_ERROR_ACCESS_DENIED;
@@ -516,7 +533,7 @@ static int init(struct motion_sensor_t *s)
 	/* Wait End of Reset. */
 	do {
 		if (timeout > 10) {
-			ret = EC_RES_TIMEOUT;
+			ret = EC_ERROR_TIMEOUT;
 			goto err_unlock;
 		}
 
@@ -524,9 +541,7 @@ static int init(struct motion_sensor_t *s)
 		timeout += 1;
 		ret = st_raw_read8(s->port, s->i2c_spi_addr_flags,
 				  LIS2DW12_SOFT_RESET_ADDR, &status);
-		if (ret != EC_SUCCESS)
-			continue;
-	} while ((status & LIS2DW12_SOFT_RESET_MASK) != 0);
+	} while (ret != EC_SUCCESS || (status & LIS2DW12_SOFT_RESET_MASK) != 0);
 
 	/* Enable BDU. */
 	ret = st_write_data_with_mask(s, LIS2DW12_BDU_ADDR, LIS2DW12_BDU_MASK,
@@ -575,8 +590,8 @@ static int init(struct motion_sensor_t *s)
 
 err_unlock:
 	mutex_unlock(s->mutex);
-	CPRINTS("%s: MS Init type:0x%X Error", s->name, s->type);
-	return EC_ERROR_UNKNOWN;
+	CPRINTS("%s: MS Init type:0x%X Error(%d)", s->name, s->type, ret);
+	return ret;
 }
 
 const struct accelgyro_drv lis2dw12_drv = {

@@ -12,6 +12,7 @@
 #include "battery.h"
 #include "battery_smart.h"
 #include "charger.h"
+#include "charge_state.h"
 #include "console.h"
 #include "common.h"
 #include "hooks.h"
@@ -45,7 +46,7 @@
 static int learn_mode;
 
 /* Mutex for CONTROL1 register, that can be updated from multiple tasks. */
-static mutex_t control1_mutex;
+K_MUTEX_DEFINE(control1_mutex);
 
 /* Charger parameters */
 static const struct charger_info isl9241_charger_info = {
@@ -372,10 +373,11 @@ int isl9241_set_dc_prochot(int chgnum, int ma)
 /* ISL-9241 initialization */
 static void isl9241_init(int chgnum)
 {
-	const struct battery_info *bi = battery_get_info();
+#ifdef CONFIG_ISL9241_SWITCHING_FREQ
+	int ctl_val;
+#endif
 
-	/* Init the mutex for ZephyrOS (nop for non-Zephyr builds) */
-	(void)k_mutex_init(&control1_mutex);
+	const struct battery_info *bi = battery_get_info();
 
 	/*
 	 * Set the MaxSystemVoltage to battery maximum,
@@ -427,6 +429,16 @@ static void isl9241_init(int chgnum)
 	if (isl9241_update(chgnum, ISL9241_REG_CONTROL0,
 			   ISL9241_CONTROL0_INPUT_VTG_REGULATION,
 			   MASK_SET))
+		goto init_fail;
+#endif
+
+#ifdef CONFIG_ISL9241_SWITCHING_FREQ
+	if (isl9241_read(chgnum, ISL9241_REG_CONTROL1, &ctl_val))
+		goto init_fail;
+	ctl_val &= ~ISL9241_CONTROL1_SWITCHING_FREQ_MASK;
+	ctl_val |= ((CONFIG_ISL9241_SWITCHING_FREQ << 7) &
+		     ISL9241_CONTROL1_SWITCHING_FREQ_MASK);
+	if (isl9241_write(chgnum, ISL9241_REG_CONTROL1, ctl_val))
 		goto init_fail;
 #endif
 
@@ -486,6 +498,34 @@ static int isl9241_ramp_get_current_limit(int chgnum)
 	return (reg * 222) / 10;
 }
 #endif /* CONFIG_CHARGE_RAMP_HW */
+
+/*
+ * When fully charged in a low-power state, the ISL9241 may get stuck
+ * in CCM. Toggle learning mode for 50 ms to enter DCM and save power.
+ * This is a workaround provided by Renesas. See b/183771327.
+ * Note: the charger_get_state() returns the last known charge value,
+ * so need to check the battery is not disconnected when the system
+ * comes from the battery cutoff.
+ */
+static void isl9241_restart_charge_voltage_when_full(void)
+{
+	if (!chipset_in_or_transitioning_to_state(CHIPSET_STATE_ON)
+	    && charge_get_state() == PWR_STATE_CHARGE_NEAR_FULL
+	    && battery_get_disconnect_state() == BATTERY_NOT_DISCONNECTED) {
+		charger_discharge_on_ac(1);
+		msleep(50);
+		charger_discharge_on_ac(0);
+	}
+}
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE,
+	     isl9241_restart_charge_voltage_when_full,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND,
+	     isl9241_restart_charge_voltage_when_full,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
+	     isl9241_restart_charge_voltage_when_full,
+	     HOOK_PRIO_DEFAULT);
 
 /*****************************************************************************/
 #ifdef CONFIG_CMD_CHARGER_DUMP

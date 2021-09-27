@@ -8,11 +8,18 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#include "compiler.h"
 #include "stdbool.h"
 
 #ifdef VARIANT_INTELRVP_EC_IT8320
 	#include "ite_ec.h"
-#endif /* VARIANT_INTELRVP_EC_IT8320 */
+#elif defined(VARIANT_INTELRVP_EC_MCHP)
+	#include "mchp_ec.h"
+#elif defined(VARIANT_INTELRVP_EC_NPCX)
+	#include "npcx_ec.h"
+#else
+	#error "Define EC chip variant"
+#endif
 
 /*
  * Allow dangerous commands.
@@ -66,12 +73,10 @@
  * communicate on locked systems (which haven't PD negotiated)
  */
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			3
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC		1
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		15001
 
 /* Keyboard */
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI2
@@ -127,7 +132,6 @@
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 
 /* EC */
-#define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_LED_COMMON
 #define CONFIG_LID_SWITCH
 #define CONFIG_VOLUME_BUTTONS
@@ -172,7 +176,7 @@
 #include "module_id.h"
 #include "registers.h"
 
-enum tcpc_rp_value;
+FORWARD_DECLARE_ENUM(tcpc_rp_value);
 
 /* PWM channels */
 enum pwm_channel {
@@ -257,8 +261,6 @@ struct tcpc_aic_gpio_config_t {
 };
 extern const struct tcpc_aic_gpio_config_t tcpc_aic_gpios[];
 
-/* Reset PD MCU */
-void board_reset_pd_mcu(void);
 void board_charging_enable(int port, int enable);
 void board_vbus_enable(int port, int enable);
 void board_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp);

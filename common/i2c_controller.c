@@ -50,7 +50,7 @@
 
 static mutex_t port_mutex[I2C_CONTROLLER_COUNT + I2C_BITBANG_PORT_COUNT];
 /* A bitmap of the controllers which are currently servicing a request. */
-static uint32_t i2c_port_active_list;
+static volatile uint32_t i2c_port_active_list;
 BUILD_ASSERT(ARRAY_SIZE(port_mutex) < 32);
 static uint8_t port_protected[I2C_PORT_COUNT + I2C_BITBANG_PORT_COUNT];
 
@@ -83,6 +83,16 @@ static int i2c_port_is_locked(int port)
 	if (port < 0)
 		return 0;
 
+	if (IS_ENABLED(CONFIG_ZEPHYR)) {
+		/*
+		 * For Zephyr: to convert an i2c port enum value to a port
+		 * number in mutex_lock(), this number should be soc's i2c port
+		 * where the i2 device is connected to.
+		 */
+		if (i2c_get_physical_port(port) >= 0)
+			port = i2c_get_physical_port(port);
+	}
+
 	return (i2c_port_active_list >> port) & 1;
 }
 
@@ -114,6 +124,9 @@ __maybe_unused static int chip_i2c_xfer_with_notify(
 	int ret;
 	uint16_t no_pec_af = addr_flags;
 	const struct i2c_port_t *i2c_port = get_i2c_port(port);
+
+	if (i2c_port == NULL)
+		return EC_ERROR_INVAL;
 
 	if (IS_ENABLED(CONFIG_I2C_XFER_BOARD_CALLBACK))
 		i2c_start_xfer_notify(port, addr_flags);
@@ -152,7 +165,9 @@ static int i2c_xfer_no_retry(const int port,
 			     const uint8_t *out, int out_size,
 			     uint8_t *in, int in_size, int flags)
 {
-	for (int offset = 0; offset < out_size; ) {
+	int offset;
+
+	for (offset = 0; offset < out_size; ) {
 		int chunk_size = MIN(out_size - offset,
 				CONFIG_I2C_CHIP_MAX_TRANSFER_SIZE);
 		int out_flags = 0;
@@ -167,7 +182,7 @@ static int i2c_xfer_no_retry(const int port,
 				out_flags));
 		offset += chunk_size;
 	}
-	for (int offset = 0; offset < in_size; ) {
+	for (offset = 0; offset < in_size; ) {
 		int chunk_size = MIN(in_size - offset,
 				CONFIG_I2C_CHIP_MAX_TRANSFER_SIZE);
 		int in_flags = 0;
@@ -238,8 +253,27 @@ int i2c_xfer_unlocked(const int port,
 			num_msgs++;
 		}
 
-		return i2c_transfer(i2c_get_device_for_port(port), msg,
-				    num_msgs, no_pec_af);
+
+		if (no_pec_af & ~I2C_ADDR_MASK)
+			ccprintf("Ignoring flags from i2c addr_flags: %04x",
+					no_pec_af);
+
+		ret =  i2c_transfer(i2c_get_device_for_port(port), msg,
+				    num_msgs, I2C_STRIP_FLAGS(no_pec_af));
+
+		if (IS_ENABLED(CONFIG_I2C_DEBUG)) {
+			i2c_trace_notify(port, addr_flags, out, out_size,
+					 in, in_size);
+		}
+
+		switch (ret) {
+		case 0:
+			return EC_SUCCESS;
+		case -EIO:
+			return EC_ERROR_INVAL;
+		default:
+			return EC_ERROR_UNKNOWN;
+		}
 #elif defined(CONFIG_I2C_XFER_LARGE_TRANSFER)
 		ret = i2c_xfer_no_retry(port, no_pec_af,
 					    out, out_size, in,
@@ -280,6 +314,16 @@ void i2c_lock(int port, int lock)
 	if (port < 0 || port >= ARRAY_SIZE(port_mutex))
 		return;
 
+	if (IS_ENABLED(CONFIG_ZEPHYR)) {
+		/*
+		 * For Zephyr: to convert an i2c port enum value to a port
+		 * number in mutex_lock(), this number should be soc's i2c port
+		 * where the i2 device is connected to.
+		 */
+		if (i2c_get_physical_port(port) >= 0)
+			port = i2c_get_physical_port(port);
+	}
+
 	if (lock) {
 		uint32_t irq_lock_key;
 
@@ -288,7 +332,7 @@ void i2c_lock(int port, int lock)
 		/* Disable interrupt during changing counter for preemption. */
 		irq_lock_key = irq_lock();
 
-		i2c_port_active_list |= 1 << port;
+		i2c_port_active_list |= BIT(port);
 		/* EC cannot enter sleep if there's any i2c port active. */
 		disable_sleep(SLEEP_MASK_I2C_CONTROLLER);
 
@@ -855,6 +899,7 @@ int i2c_write_block(const int port,
 	return rv;
 }
 
+#ifndef CONFIG_ZEPHYR
 int get_sda_from_i2c_port(int port, enum gpio_signal *sda)
 {
 	const struct i2c_port_t *i2c_port = get_i2c_port(port);
@@ -1063,13 +1108,19 @@ unwedge_done:
 
 	return ret;
 }
+#endif /* !CONFIG_ZEPHYR */
 
 int i2c_set_freq(int port, enum i2c_freq freq)
 {
 	int ret;
+	const struct i2c_port_t *cfg;
 
-	if (!(get_i2c_port(port)->flags & I2C_PORT_FLAG_DYNAMIC_SPEED))
+	cfg = get_i2c_port(port);
+	if (cfg == NULL)
 		return EC_ERROR_INVAL;
+
+	if (!(cfg->flags & I2C_PORT_FLAG_DYNAMIC_SPEED))
+		return EC_ERROR_UNIMPLEMENTED;
 
 	i2c_lock(port, 1);
 	ret = chip_i2c_set_freq(port, freq);
@@ -1152,8 +1203,32 @@ static int check_i2c_params(const struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
+#ifdef I2C_PORT_VIRTUAL_BATTERY
+static inline int is_i2c_port_virtual_battery(int port)
+{
+#ifdef CONFIG_ZEPHYR
+	/* For Zephyr compare the actual device, which will be used in
+	 * i2c_transfer function.
+	 */
+	return (i2c_get_device_for_port(port) ==
+		i2c_get_device_for_port(I2C_PORT_VIRTUAL_BATTERY));
+#else
+	return (port == I2C_PORT_VIRTUAL_BATTERY);
+#endif
+}
+#endif /* I2C_PORT_VIRTUAL_BATTERY */
+
 static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 {
+#ifdef CONFIG_ZEPHYR
+	/* For Zephyr, convert the received remote port number to a port number
+	 * used in EC.
+	 */
+	((struct ec_params_i2c_passthru *)(args->params))->port =
+		i2c_get_port_from_remote_port(
+			((struct ec_params_i2c_passthru *)(args->params))
+			->port);
+#endif
 	const struct ec_params_i2c_passthru *params = args->params;
 	const struct ec_params_i2c_passthru_msg *msg;
 	struct ec_response_i2c_passthru *resp = args->response;
@@ -1179,7 +1254,10 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 	if (ret)
 		return ret;
 
-	if (port_protected[params->port] && i2c_port->passthru_allowed) {
+	if (port_protected[params->port]) {
+		if (!i2c_port->passthru_allowed)
+			return EC_RES_ACCESS_DENIED;
+
 		for (i = 0; i < params->num_msgs; i++) {
 			if (!i2c_port->passthru_allowed(i2c_port,
 					params->msg[i].addr_flags))
@@ -1214,7 +1292,7 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 			xferflags |= I2C_XFER_STOP;
 
 #if defined(VIRTUAL_BATTERY_ADDR_FLAGS) && defined(I2C_PORT_VIRTUAL_BATTERY)
-		if (params->port == I2C_PORT_VIRTUAL_BATTERY &&
+		if (is_i2c_port_virtual_battery(params->port) &&
 		    addr_flags == VIRTUAL_BATTERY_ADDR_FLAGS) {
 			if (virtual_battery_handler(resp, in_len, &rv,
 						xferflags, read_len,
@@ -1310,6 +1388,15 @@ static void i2c_passthru_protect_tcpc_ports(void)
 static enum ec_status
 i2c_command_passthru_protect(struct host_cmd_handler_args *args)
 {
+#ifdef CONFIG_ZEPHYR
+	/* For Zephyr, convert the received remote port number to a port number
+	 * used in EC.
+	 */
+	((struct ec_params_i2c_passthru_protect *)(args->params))
+		->port = i2c_get_port_from_remote_port(
+		((struct ec_params_i2c_passthru_protect *)(args->params))
+		->port);
+#endif
 	const struct ec_params_i2c_passthru_protect *params = args->params;
 	struct ec_response_i2c_passthru_protect *resp = args->response;
 

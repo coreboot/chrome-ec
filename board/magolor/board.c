@@ -5,7 +5,7 @@
 
 /* Waddledoo board-specific configuration */
 
-#include "adc_chip.h"
+#include "adc.h"
 #include "button.h"
 #include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
@@ -73,7 +73,7 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 
 #ifdef BOARD_MAGOLOR
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next
@@ -87,11 +87,126 @@ struct keyboard_scan_config keyscan_config = {
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
-		0x14, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
+		0x1c, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
 		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff,  /* full set */
 	},
 };
+
+static const struct ec_response_keybd_config magolor_keybd = {
+	/* Default Chromeos keyboard config */
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_FORWARD,		/* T2 */
+		TK_REFRESH,		/* T3 */
+		TK_FULLSCREEN,		/* T4 */
+		TK_OVERVIEW,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	/* No function keys, no numeric keypad, has screenlock key */
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+static const struct ec_response_keybd_config magister_keybd = {
+	/* Default Chromeos keyboard config */
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	/* No function keys, no numeric keypad, has screenlock key */
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+static const struct ec_response_keybd_config magpie_keybd = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_FORWARD,		/* T2 */
+		TK_REFRESH,		/* T3 */
+		TK_FULLSCREEN,		/* T4 */
+		TK_OVERVIEW,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY | KEYBD_CAP_NUMERIC_KEYPAD,
+};
+
+static const struct ec_response_keybd_config magma_keybd = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY | KEYBD_CAP_NUMERIC_KEYPAD,
+};
+
+__override
+uint8_t board_keyboard_row_refresh(void)
+{
+	if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+		return 3;
+	else
+		return 2;
+}
+
+__override const struct ec_response_keybd_config
+*board_vivaldi_keybd_config(void)
+{
+	if (get_cbi_fw_config_numeric_pad()) {
+		if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+			return &magma_keybd;
+		else
+			return &magpie_keybd;
+	}
+	else {
+		if (gpio_get_level(GPIO_EC_VIVALDIKEYBOARD_ID))
+			return &magister_keybd;
+		else
+			return &magolor_keybd;
+	}
+}
 #endif
+
+/*
+ * We have total 30 pins for keyboard connecter {-1, -1} mean
+ * the N/A pin that don't consider it and reserve index 0 area
+ * that we don't have pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
+	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
+	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
+	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
+	{-1, -1}, {0, 4}, {-1, -1}, {8, 2}, {-1, -1},
+	{-1, -1},
+};
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 /* C0 interrupt line shared by BC 1.2 and charger */
 static void check_c0_line(void);
@@ -148,7 +263,7 @@ static void check_c1_line(void)
 	 * If line is still being held low, see if there's more to process from
 	 * one of the chips.
 	 */
-	if (!gpio_get_level(GPIO_SUB_USB_C1_INT_ODL)) {
+	if (!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
 		notify_c1_chips();
 		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
 	}
@@ -164,6 +279,13 @@ static void sub_usb_c1_interrupt(enum gpio_signal s)
 
 	/* Check the line again in 5ms */
 	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
+}
+
+static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
+{
+	int hdmi_hpd_odl = gpio_get_level(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
+
+	gpio_set_level(GPIO_EC_AP_USB_C1_HDMI_HPD, !hdmi_hpd_odl);
 }
 
 #include "gpio_list.h"
@@ -257,14 +379,25 @@ static void board_update_no_keypad_by_fwconfig(void)
 		keyboard_raw_set_cols(KEYBOARD_COLS_NO_KEYPAD);
 		keyscan_config.actual_key_mask[11] = 0xfa;
 		keyscan_config.actual_key_mask[12] = 0xca;
-
-		/* Search key is moved back to col=1,row=0 */
-		keyscan_config.actual_key_mask[0] = 0x14;
-		keyscan_config.actual_key_mask[1] = 0xff;
 #endif
 	}
 }
 #endif
+
+/* Enable HDMI any time the SoC is on */
+static void hdmi_enable(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
+
+static void hdmi_disable(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
 
 void board_hibernate(void)
 {
@@ -272,7 +405,8 @@ void board_hibernate(void)
 	 * Both charger ICs need to be put into their "low power mode" before
 	 * entering the Z-state.
 	 */
-	raa489000_hibernate(1, true);
+	if (board_get_charger_chip_count() > 1)
+		raa489000_hibernate(1, true);
 	raa489000_hibernate(0, true);
 }
 
@@ -342,16 +476,38 @@ __override void board_power_5v_enable(int enable)
 	 * polarity on the sub board charger IC.
 	 */
 	set_5v_gpio(!!enable);
-	if (isl923x_set_comparator_inversion(1, !!enable))
-		CPRINTS("Failed to %sable sub rails!", enable ? "en" : "dis");
 
-	if (!enable)
-		return;
-	/*
-	 * Port C1 the PP3300_USB_C1  assert, delay 15ms
-	 * colud be accessed PS8762 by I2C.
-	 */
-	hook_call_deferred(&ps8762_chaddr_deferred_data, 15 * MSEC);
+	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+		gpio_set_level(GPIO_SUB_C1_INT_EN_RAILS_ODL, !enable);
+	} else {
+		if (isl923x_set_comparator_inversion(1, !!enable))
+			CPRINTS("Failed to %sable sub rails!", enable ?
+								  "en" : "dis");
+
+		if (!enable)
+			return;
+		/*
+		 * Port C1 the PP3300_USB_C1  assert, delay 15ms
+		 * colud be accessed PS8762 by I2C.
+		 */
+		hook_call_deferred(&ps8762_chaddr_deferred_data, 15 * MSEC);
+	}
+}
+
+__override uint8_t board_get_usb_pd_port_count(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
+	else
+		return CONFIG_USB_PD_PORT_MAX_COUNT;
+}
+
+__override uint8_t board_get_charger_chip_count(void)
+{
+	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+		return CHARGER_NUM - 1;
+	else
+		return CHARGER_NUM;
 }
 
 int board_is_sourcing_vbus(int port)
@@ -366,7 +522,7 @@ int board_is_sourcing_vbus(int port)
 int board_set_active_charge_port(int port)
 {
 	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
+			    port < board_get_usb_pd_port_count());
 	int i;
 	int old_port;
 
@@ -379,9 +535,11 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+			raa489000_enable_asgate(i, false);
+		}
 
 		return EC_SUCCESS;
 	}
@@ -396,13 +554,14 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		if (i == port)
 			continue;
 
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
@@ -413,7 +572,8 @@ int board_set_active_charge_port(int port)
 		charger_discharge_on_ac(1);
 
 	/* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);
@@ -458,6 +618,13 @@ static const mat33_fp_t lid_standard_ref = {
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
+/* Matrices to rotate accelerometers into the magister reference. */
+static const mat33_fp_t lid_magister_ref = {
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
 static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
 	{ FLOAT_TO_FP(1), 0, 0},
@@ -473,8 +640,8 @@ static struct bmi_drv_data_t g_bmi160_data;
 
 #ifdef BOARD_MAGOLOR
 static const mat33_fp_t base_icm_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(1), 0, 0},
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
@@ -521,7 +688,7 @@ struct motion_sensor_t icm426xx_base_accel = {
 	.drv_data = &g_icm426xx_data,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
-	.default_range = 4, /* g, enough for laptop */
+	.default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	.rot_standard_ref = &base_icm_ref,
 	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
 	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
@@ -633,9 +800,36 @@ void board_init(void)
 	int on;
 
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
-	gpio_enable_interrupt(GPIO_SUB_USB_C1_INT_ODL);
 	check_c0_line();
-	check_c1_line();
+
+	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+		/* Disable i2c on HDMI pins */
+		gpio_config_pin(MODULE_I2C,
+				GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
+		gpio_config_pin(MODULE_I2C,
+				GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+
+		/* Set HDMI and sub-rail enables to output */
+		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL,
+			       chipset_in_state(CHIPSET_STATE_ON) ?
+						GPIO_ODR_LOW : GPIO_ODR_HIGH);
+		gpio_set_flags(GPIO_SUB_C1_INT_EN_RAILS_ODL,   GPIO_ODR_HIGH);
+
+		/* Select HDMI option */
+		gpio_set_level(GPIO_HDMI_SEL_L, 0);
+
+		/* Enable interrupt for passing through HPD */
+		gpio_enable_interrupt(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
+
+	} else {
+		/* Set SDA as an input */
+		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL,
+			       GPIO_INPUT);
+
+		/* Enable C1 interrupt and check if it needs processing */
+		gpio_enable_interrupt(GPIO_SUB_C1_INT_EN_RAILS_ODL);
+		check_c1_line();
+	}
 
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
@@ -651,8 +845,13 @@ void board_init(void)
 		if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_KX022) {
 			motion_sensors[LID_ACCEL] = kx022_lid_accel;
 			ccprints("LID_ACCEL is KX022");
-		} else
+		} else {
+			if (system_get_board_version() >= 5) {
+				motion_sensors[LID_ACCEL]
+				.rot_standard_ref = &lid_magister_ref;
+			}
 			ccprints("LID_ACCEL is BMA253");
+		}
 #endif
 		motion_sensor_count = ARRAY_SIZE(motion_sensors);
 		/* Enable gpio interrupt for base accelgyro sensor */
@@ -702,25 +901,12 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
 				       int *kd, int *kd_div)
 {
-	/*
-	 * Early boards need different constants due to a change in charger IC
-	 * silicon revision.
-	 */
-	if (system_get_board_version() >= 0) {
-		*kp = 1;
-		*kp_div = 128;
-		*ki = 1;
-		*ki_div = 1024;
-		*kd = 0;
-		*kd_div = 1;
-	} else {
-		*kp = 1;
-		*kp_div = 4;
-		*ki = 1;
-		*ki_div = 15;
-		*kd = 1;
-		*kd_div = 10;
-	}
+	*kp = 1;
+	*kp_div = 20;
+	*ki = 1;
+	*ki_div = 250;
+	*kd = 0;
+	*kd_div = 1;
 }
 
 int pd_snk_is_vbus_provided(int port)
@@ -825,7 +1011,8 @@ uint16_t tcpc_get_alert_status(void)
 		}
 	}
 
-	if (!gpio_get_level(GPIO_SUB_USB_C1_INT_ODL)) {
+	if (board_get_usb_pd_port_count() > 1 &&
+				!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
 		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
 			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
 			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))
@@ -861,16 +1048,16 @@ static void adc_vol_key_press_check(void)
 	static uint8_t old_adc_key_state;
 	uint8_t adc_key_state_change;
 
-	if (volt > 2400 && volt < 2490) {
+	if (volt > 2400 && volt < 2540) {
 		/* volume-up is pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK;
-	} else if (volt > 2600 && volt < 2690) {
+	} else if (volt > 2600 && volt < 2740) {
 		/* volume-down is pressed */
 		new_adc_key_state = ADC_VOL_DOWN_MASK;
-	} else if (volt < 2290) {
+	} else if (volt < 2300) {
 		/* both volumn-up and volume-down are pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK | ADC_VOL_DOWN_MASK;
-	} else if (volt > 2700) {
+	} else if (volt > 2780) {
 		/* both volumn-up and volume-down are released */
 		new_adc_key_state = 0;
 	}
@@ -886,9 +1073,8 @@ static void adc_vol_key_press_check(void)
 }
 DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -912,4 +1098,3 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif

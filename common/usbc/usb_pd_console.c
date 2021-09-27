@@ -6,6 +6,7 @@
 #include "common.h"
 #include "console.h"
 #include "usb_common.h"
+#include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
 #include "usb_tc_sm.h"
@@ -113,6 +114,7 @@ test_export_static int command_pd(int argc, char **argv)
 				return EC_ERROR_PARAM3;
 		} else if (!strcasecmp(argv[2], "dualrole")) {
 			if (argc < 4) {
+				cflush();
 				ccprintf("dual-role toggling: ");
 				switch (pd_get_dual_role(port)) {
 				case PD_DRP_TOGGLE_ON:
@@ -130,6 +132,7 @@ test_export_static int command_pd(int argc, char **argv)
 				case PD_DRP_FORCE_SOURCE:
 					ccprintf("force source\n");
 					break;
+				cflush();
 				}
 			} else {
 				if (!strcasecmp(argv[3], "on"))
@@ -154,6 +157,7 @@ test_export_static int command_pd(int argc, char **argv)
 	}
 
 	if (!strcasecmp(argv[2], "state")) {
+		cflush();
 		ccprintf("Port C%d CC%d, %s - Role: %s-%s",
 		port, pd_get_polarity(port) + 1,
 		pd_comm_is_enabled(port) ? "Enable" : "Disable",
@@ -174,6 +178,15 @@ test_export_static int command_pd(int argc, char **argv)
 				pe_get_flags(port));
 		else
 			ccprintf("\n");
+
+		cflush();
+	} else if (!strcasecmp(argv[2], "srccaps")) {
+		pd_srccaps_dump(port);
+	}
+
+	if (IS_ENABLED(CONFIG_CMD_PD_TIMER) &&
+	    !strcasecmp(argv[2], "timer")) {
+		pd_timer_dump(port);
 	}
 
 	return EC_SUCCESS;
@@ -185,6 +198,10 @@ DECLARE_CONSOLE_COMMAND(pd, command_pd,
 	"\ntrysrc [0|1|2]"
 #endif
 	"\n\t<port> state"
+	"\n\t<port> srccaps"
+#ifdef CONFIG_CMD_PD_TIMER
+	"\n\t<port> timer"
+#endif /* CONFIG_CMD_PD_TIMER */
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 	"|tx|charger|dev"
 	"\n\t<port> disable|enable|soft|hard"

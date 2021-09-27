@@ -261,6 +261,10 @@ SECTIONS
 		KEEP(*(.rodata.HOOK_CHIPSET_SHUTDOWN_COMPLETE))
 		__hooks_chipset_shutdown_complete_end = .;
 
+		__hooks_chipset_hard_off = .;
+		KEEP(*(.rodata.HOOK_CHIPSET_HARD_OFF))
+		__hooks_chipset_hard_off_end = .;
+
 		__hooks_chipset_reset = .;
 		KEEP(*(.rodata.HOOK_CHIPSET_RESET))
 		__hooks_chipset_reset_end = .;
@@ -341,7 +345,7 @@ SECTIONS
 		__init_rom_end = .;
 #endif /* CONFIG_CHIP_INIT_ROM_REGION */
 
-#if defined(SECTION_IS_RO) && defined(CONFIG_FLASH)
+#if defined(SECTION_IS_RO) && defined(CONFIG_FLASH_CROS)
 		. = ALIGN(64);
 		KEEP(*(.google))
 #endif
@@ -496,10 +500,21 @@ SECTIONS
 	 */
 	__flash_used = FLASH_USED_END - ORIGIN(EC_IMAGE_LMA_MEM_REGION);
 #ifndef CONFIG_CHIP_INIT_ROM_REGION
+#if !(defined(SECTION_IS_RW) && (CONFIG_FLASH_WRITE_SIZE > 4))
 	__image_size = __flash_used;
+#else
+	.rw_image_size_alignment :
+	{
+		. = ORIGIN(FLASH) + __flash_used;
+		BYTE(0xFF);
+		. = ALIGN (CONFIG_FLASH_WRITE_SIZE);
+	} > FLASH = 0xFF
+
+	__image_size = __flash_used + SIZEOF(.rw_image_size_alignment);
+#endif
 #endif /* CONFIG_CHIP_INIT_ROM_REGION */
 
-#ifdef CONFIG_FLASH
+#ifdef CONFIG_FLASH_CROS
         /*
          * These linker labels are just for analysis and not used in the code.
          */
@@ -699,7 +714,7 @@ SECTIONS
 	} > DRAM
 #endif
 
-#if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH))
+#if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH_CROS))
 	/DISCARD/ : { *(.google) }
 #endif
 	/DISCARD/ : { *(.ARM.*) }

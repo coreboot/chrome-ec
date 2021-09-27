@@ -12,6 +12,7 @@
 #include "compile_time_macros.h"
 #include "console.h"
 #include "ec_commands.h"
+#include "hooks.h"
 #include "system.h"
 #include "task.h"
 #include "tcpm/tcpm.h"
@@ -19,6 +20,7 @@
 #include "usb_mode.h"
 #include "usb_pd.h"
 #include "usb_pd_dpm.h"
+#include "usb_pd_tcpm.h"
 #include "usb_tbt_alt_mode.h"
 
 #ifdef CONFIG_COMMON_RUNTIME
@@ -29,8 +31,14 @@
 #define CPRINTS(format, args...)
 #endif
 
+/* Max Attention length is header + 1 VDO */
+#define DPM_ATTENION_MAX_VDO 2
+
 static struct {
 	uint32_t flags;
+	uint32_t vdm_attention[DPM_ATTENION_MAX_VDO];
+	int vdm_cnt;
+	mutex_t vdm_attention_mutex;
 } dpm[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #define DPM_SET_FLAG(port, flag) atomic_or(&dpm[(port)].flags, (flag))
@@ -43,6 +51,55 @@ static struct {
 #define DPM_FLAG_ENTER_DP        BIT(2)
 #define DPM_FLAG_ENTER_TBT       BIT(3)
 #define DPM_FLAG_ENTER_USB4      BIT(4)
+#define DPM_FLAG_SEND_ATTENTION  BIT(5)
+
+#ifdef CONFIG_ZEPHYR
+static int init_vdm_attention_mutex(const struct device *dev)
+{
+	int port;
+
+	ARG_UNUSED(dev);
+
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++)
+		k_mutex_init(&dpm[port].vdm_attention_mutex);
+
+	return 0;
+}
+SYS_INIT(init_vdm_attention_mutex, POST_KERNEL, 50);
+#endif /* CONFIG_ZEPHYR */
+
+enum ec_status pd_request_vdm_attention(int port, const uint32_t *data,
+					int vdo_count)
+{
+	mutex_lock(&dpm[port].vdm_attention_mutex);
+
+	/* Only one Attention message may be pending */
+	if (DPM_CHK_FLAG(port, DPM_FLAG_SEND_ATTENTION)) {
+		mutex_unlock(&dpm[port].vdm_attention_mutex);
+		return EC_RES_UNAVAILABLE;
+	}
+
+	/* SVDM Attention message must be 1 or 2 VDOs in length */
+	if (!vdo_count || (vdo_count > DPM_ATTENION_MAX_VDO)) {
+		mutex_unlock(&dpm[port].vdm_attention_mutex);
+		return EC_RES_INVALID_PARAM;
+	}
+
+	/* Save contents of Attention message */
+	memcpy(dpm[port].vdm_attention, data, vdo_count * sizeof(uint32_t));
+	dpm[port].vdm_cnt = vdo_count;
+
+	/*
+	 * Indicate to DPM that an Attention message needs to be sent. This flag
+	 * will be cleared when the Attention message is sent to the policy
+	 * engine.
+	 */
+	DPM_SET_FLAG(port, DPM_FLAG_SEND_ATTENTION);
+
+	mutex_unlock(&dpm[port].vdm_attention_mutex);
+
+	return EC_RES_SUCCESS;
+}
 
 enum ec_status pd_request_enter_mode(int port, enum typec_mode mode)
 {
@@ -124,7 +181,7 @@ static bool dpm_mode_entry_requested(int port, enum typec_mode mode)
 	}
 }
 
-void dpm_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
+void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
 		uint32_t *vdm)
 {
 	const uint16_t svid = PD_VDO_VID(vdm[0]);
@@ -146,7 +203,7 @@ void dpm_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
 	}
 }
 
-void dpm_vdm_naked(int port, enum tcpm_transmit_type type, uint16_t svid,
+void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
 		uint8_t vdm_cmd)
 {
 	switch (svid) {
@@ -174,7 +231,7 @@ static void dpm_attempt_mode_entry(int port)
 {
 	int vdo_count = 0;
 	uint32_t vdm[VDO_MAX_SIZE];
-	enum tcpm_transmit_type tx_type = TCPC_TX_SOP;
+	enum tcpci_msg_type tx_type = TCPCI_MSG_SOP;
 	bool enter_mode_requested =
 		IS_ENABLED(CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY) ?  false : true;
 
@@ -191,6 +248,8 @@ static void dpm_attempt_mode_entry(int port)
 		 */
 		return;
 	}
+
+#ifdef HAS_TASK_CHIPSET
 	/*
 	 * Do not try to enter mode while CPU is off.
 	 * CPU transitions (e.g b/158634281) can occur during the discovery
@@ -200,12 +259,13 @@ static void dpm_attempt_mode_entry(int port)
 	 */
 	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF))
 		return;
+#endif
 	/*
 	 * If discovery has not occurred for modes, do not attempt to switch
 	 * to alt mode.
 	 */
-	if (pd_get_svids_discovery(port, TCPC_TX_SOP) != PD_DISC_COMPLETE ||
-	    pd_get_modes_discovery(port, TCPC_TX_SOP) != PD_DISC_COMPLETE)
+	if (pd_get_svids_discovery(port, TCPCI_MSG_SOP) != PD_DISC_COMPLETE ||
+	    pd_get_modes_discovery(port, TCPCI_MSG_SOP) != PD_DISC_COMPLETE)
 		return;
 
 	if (dp_entry_is_done(port) ||
@@ -216,31 +276,20 @@ static void dpm_attempt_mode_entry(int port)
 		return;
 	}
 
-	/* Check if the device and cable support USB4. */
+	/* Check if port, port partner and cable support USB4. */
 	if (IS_ENABLED(CONFIG_USB_PD_USB4) &&
+	    board_is_tbt_usb4_port(port) &&
 	    enter_usb_port_partner_is_capable(port) &&
 	    enter_usb_cable_is_capable(port) &&
 	    dpm_mode_entry_requested(port, TYPEC_MODE_USB4)) {
-		struct pd_discovery *disc_sop_prime =
-			pd_get_am_discovery(port, TCPC_TX_SOP_PRIME);
-		union tbt_mode_resp_cable cable_mode_resp = {
-			.raw_value = pd_get_tbt_mode_vdo(port,
-						TCPC_TX_SOP_PRIME) };
 		/*
-		 * Enter USB mode if -
-		 * 1. It's a passive cable and Thunderbolt Mode SOP' VDO
-		 *    active/passive bit (B25) is TBT_CABLE_PASSIVE or
-		 * 2. It's a active cable with VDM version >= 2.0 and
-		 *    VDO version >= 1.3 or
-		 * 3. The cable has entered Thunderbolt mode.
+		 * For certain cables, enter Thunderbolt alt mode with the
+		 * cable and USB4 mode with the port partner.
 		 */
-		if ((get_usb_pd_cable_type(port) == IDH_PTYPE_PCABLE &&
-		     cable_mode_resp.tbt_active_passive == TBT_CABLE_PASSIVE) ||
-		    (get_usb_pd_cable_type(port) == IDH_PTYPE_ACABLE &&
-		     pd_get_vdo_ver(port, TCPC_TX_SOP_PRIME) >= VDM_VER20 &&
-		     disc_sop_prime->identity.product_t1.a_rev30.vdo_ver >=
-							VDO_VERSION_1_3) ||
-		     tbt_cable_entry_is_done(port)) {
+		if (tbt_cable_entry_required_for_usb4(port)) {
+			vdo_count = tbt_setup_next_vdm(port,
+				ARRAY_SIZE(vdm), vdm, &tx_type);
+		} else {
 			pd_dpm_request(port, DPM_REQUEST_ENTER_USB);
 			return;
 		}
@@ -248,7 +297,9 @@ static void dpm_attempt_mode_entry(int port)
 
 	/* If not, check if they support Thunderbolt alt mode. */
 	if (IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE) &&
-	    pd_is_mode_discovered_for_svid(port, TCPC_TX_SOP, USB_VID_INTEL) &&
+			board_is_tbt_usb4_port(port) &&
+			pd_is_mode_discovered_for_svid(port, TCPCI_MSG_SOP,
+				USB_VID_INTEL) &&
 			dpm_mode_entry_requested(port, TYPEC_MODE_TBT)) {
 		enter_mode_requested = true;
 		vdo_count = tbt_setup_next_vdm(port,
@@ -257,7 +308,7 @@ static void dpm_attempt_mode_entry(int port)
 
 	/* If not, check if they support DisplayPort alt mode. */
 	if (vdo_count == 0 && !DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE) &&
-	    pd_is_mode_discovered_for_svid(port, TCPC_TX_SOP,
+	    pd_is_mode_discovered_for_svid(port, TCPCI_MSG_SOP,
 				USB_SID_DISPLAYPORT) &&
 	    dpm_mode_entry_requested(port, TYPEC_MODE_DP)) {
 		enter_mode_requested = true;
@@ -306,8 +357,13 @@ static void dpm_attempt_mode_exit(int port)
 {
 	uint32_t vdm = 0;
 	int vdo_count = 0;
-	enum tcpm_transmit_type tx_type = TCPC_TX_SOP;
+	enum tcpci_msg_type tx_type = TCPCI_MSG_SOP;
 
+	if (IS_ENABLED(CONFIG_USB_PD_USB4) &&
+	    enter_usb_entry_is_done(port)) {
+		CPRINTS("C%d: USB4 teardown", port);
+		usb4_exit_mode_request(port);
+	}
 	if (IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE) &&
 	    tbt_is_active(port)) {
 		/*
@@ -336,12 +392,31 @@ static void dpm_attempt_mode_exit(int port)
 	pd_dpm_request(port, DPM_REQUEST_VDM);
 }
 
+static void dpm_send_attention_vdm(int port)
+{
+	/* Set up VDM ATTEN msg that was passed in previously */
+	if (pd_setup_vdm_request(port, TCPCI_MSG_SOP, dpm[port].vdm_attention,
+				 dpm[port].vdm_cnt) == true)
+		/* Trigger PE to start a VDM command run */
+		pd_dpm_request(port, DPM_REQUEST_VDM);
+
+	/* Clear flag after message is sent to PE layer */
+	DPM_CLR_FLAG(port, DPM_FLAG_SEND_ATTENTION);
+}
+
 void dpm_run(int port)
 {
-	if (DPM_CHK_FLAG(port, DPM_FLAG_EXIT_REQUEST))
-		dpm_attempt_mode_exit(port);
-	else if (!DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE))
-		dpm_attempt_mode_entry(port);
+	if (pd_get_data_role(port) == PD_ROLE_DFP) {
+		/* Run DFP related DPM requests */
+		if (DPM_CHK_FLAG(port, DPM_FLAG_EXIT_REQUEST))
+			dpm_attempt_mode_exit(port);
+		else if (!DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE))
+			dpm_attempt_mode_entry(port);
+	} else {
+		/* Run UFP related DPM requests */
+		if (DPM_CHK_FLAG(port, DPM_FLAG_SEND_ATTENTION))
+			dpm_send_attention_vdm(port);
+	}
 }
 
 /*
@@ -358,13 +433,14 @@ void dpm_run(int port)
  * them
  */
 static uint32_t		max_current_claimed;
-static mutex_t		max_current_claimed_lock;
+K_MUTEX_DEFINE(max_current_claimed_lock);
 
-#ifdef CONFIG_ZEPHYR
-static bool		dpm_mutex_initialized;
-#endif
-
-static uint32_t sink_max_pdo_requested;	/* Ports with PD sink needing > 1.5A */
+/* Ports with PD sink needing > 1.5 A */
+static uint32_t sink_max_pdo_requested;
+/* Ports with FRS source needing > 1.5 A */
+static uint32_t source_frs_max_requested;
+/* Ports with non-PD sinks, so current requirements are unknown */
+static uint32_t non_pd_sink_max_requested;
 
 #define LOWEST_PORT(p) __builtin_ctz(p)  /* Undefined behavior if p == 0 */
 
@@ -383,21 +459,30 @@ static int count_port_bits(uint32_t bitmask)
 /*
  * Centralized, mutex-controlled updates to the claimed 3.0 A ports
  */
+static void balance_source_ports(void);
+DECLARE_DEFERRED(balance_source_ports);
+
 static void balance_source_ports(void)
 {
 	uint32_t removed_ports, new_ports;
+	static bool deferred_waiting;
 
-#ifdef CONFIG_ZEPHYR
-	if (!dpm_mutex_initialized) {
-		(void)k_mutex_init(&max_current_claimed_lock);
-		dpm_mutex_initialized = true;
-	}
-#endif
+	if (task_get_current() == TASK_ID_HOOKS)
+		deferred_waiting = false;
+
+	/*
+	 * Ignore balance attempts while we're waiting for a downgraded port to
+	 * finish the downgrade.
+	 */
+	if (deferred_waiting)
+		return;
 
 	mutex_lock(&max_current_claimed_lock);
 
 	/* Remove any ports which no longer require 3.0 A */
-	removed_ports = max_current_claimed & ~sink_max_pdo_requested;
+	removed_ports = max_current_claimed & ~(sink_max_pdo_requested |
+						source_frs_max_requested |
+						non_pd_sink_max_requested);
 	max_current_claimed &= ~removed_ports;
 
 	/* Allocate 3.0 A to new PD sink ports that need it */
@@ -410,23 +495,90 @@ static void balance_source_ports(void)
 			max_current_claimed |= BIT(new_max_port);
 			typec_select_src_current_limit_rp(new_max_port,
 							  TYPEC_RP_3A0);
+		} else if (non_pd_sink_max_requested & max_current_claimed) {
+			/* Always downgrade non-PD ports first */
+			int rem_non_pd = LOWEST_PORT(non_pd_sink_max_requested &
+						     max_current_claimed);
+			typec_select_src_current_limit_rp(rem_non_pd,
+				typec_get_default_current_limit_rp(rem_non_pd));
+			max_current_claimed &= ~BIT(rem_non_pd);
+
+			/* Wait tSinkAdj before using current */
+			deferred_waiting = true;
+			hook_call_deferred(&balance_source_ports_data,
+					   PD_T_SINK_ADJ);
+			goto unlock;
+		} else if (source_frs_max_requested & max_current_claimed) {
+			/* Downgrade lowest FRS port from 3.0 A slot */
+			int rem_frs = LOWEST_PORT(source_frs_max_requested &
+						 max_current_claimed);
+			pd_dpm_request(rem_frs, DPM_REQUEST_FRS_DET_DISABLE);
+			max_current_claimed &= ~BIT(rem_frs);
+
+			/* Give 20 ms for the PD task to process DPM flag */
+			deferred_waiting = true;
+			hook_call_deferred(&balance_source_ports_data,
+					   20 * MSEC);
+			goto unlock;
 		} else {
-			/* TODO(b/141690755): Check lower priority claims */
+			/* No lower priority ports to downgrade */
 			goto unlock;
 		}
 		new_ports &= ~BIT(new_max_port);
 	}
 
+	/* Allocate 3.0 A to any new FRS ports that need it */
+	new_ports = source_frs_max_requested & ~max_current_claimed;
+	while (new_ports) {
+		int new_frs_port = LOWEST_PORT(new_ports);
+
+		if (count_port_bits(max_current_claimed) <
+						CONFIG_USB_PD_3A_PORTS) {
+			max_current_claimed |= BIT(new_frs_port);
+			pd_dpm_request(new_frs_port,
+				       DPM_REQUEST_FRS_DET_ENABLE);
+		} else if (non_pd_sink_max_requested & max_current_claimed) {
+			int rem_non_pd = LOWEST_PORT(non_pd_sink_max_requested &
+						     max_current_claimed);
+			typec_select_src_current_limit_rp(rem_non_pd,
+				typec_get_default_current_limit_rp(rem_non_pd));
+			max_current_claimed &= ~BIT(rem_non_pd);
+
+			/* Wait tSinkAdj before using current */
+			deferred_waiting = true;
+			hook_call_deferred(&balance_source_ports_data,
+					   PD_T_SINK_ADJ);
+			goto unlock;
+		} else {
+			/* No lower priority ports to downgrade */
+			goto unlock;
+		}
+		new_ports &= ~BIT(new_frs_port);
+	}
+
+	/* Allocate 3.0 A to any non-PD ports which could need it */
+	new_ports = non_pd_sink_max_requested & ~max_current_claimed;
+	while (new_ports) {
+		int new_max_port = LOWEST_PORT(new_ports);
+
+		if (count_port_bits(max_current_claimed) <
+						CONFIG_USB_PD_3A_PORTS) {
+			max_current_claimed |= BIT(new_max_port);
+			typec_select_src_current_limit_rp(new_max_port,
+							  TYPEC_RP_3A0);
+		} else {
+			/* No lower priority ports to downgrade */
+			goto unlock;
+		}
+		new_ports &= ~BIT(new_max_port);
+	}
 unlock:
 	mutex_unlock(&max_current_claimed_lock);
 }
 
-/* Process sink's first Sink_Capabilities PDO for port current consideration */
+/* Process port's first Sink_Capabilities PDO for port current consideration */
 void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
 {
-	if (CONFIG_USB_PD_3A_PORTS == 0)
-		return;
-
 	/* Verify partner supplied valid vSafe5V fixed object first */
 	if ((vsafe5v_pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
 		return;
@@ -434,11 +586,52 @@ void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo)
 	if (PDO_FIXED_VOLTAGE(vsafe5v_pdo) != 5000)
 		return;
 
-	/* Valid PDO to process, so evaluate whether > 1.5 A is needed */
-	if (PDO_FIXED_CURRENT(vsafe5v_pdo) <= 1500)
+	if (pd_get_power_role(port) == PD_ROLE_SOURCE) {
+		if (CONFIG_USB_PD_3A_PORTS == 0)
+			return;
+
+		/* Valid PDO to process, so evaluate whether >1.5A is needed */
+		if (PDO_FIXED_CURRENT(vsafe5v_pdo) <= 1500)
+			return;
+
+		atomic_or(&sink_max_pdo_requested, BIT(port));
+	} else {
+		int frs_current = vsafe5v_pdo & PDO_FIXED_FRS_CURR_MASK;
+
+		if (!IS_ENABLED(CONFIG_USB_PD_FRS))
+			return;
+
+		/* FRS is only supported in PD 3.0 and higher */
+		if (pd_get_rev(port, TCPCI_MSG_SOP) == PD_REV20)
+			return;
+
+		if ((vsafe5v_pdo & PDO_FIXED_DUAL_ROLE) && frs_current) {
+			/* Always enable FRS when 3.0 A is not needed */
+			if (frs_current == PDO_FIXED_FRS_CURR_DFLT_USB_POWER ||
+			    frs_current == PDO_FIXED_FRS_CURR_1A5_AT_5V) {
+				pd_dpm_request(port,
+					       DPM_REQUEST_FRS_DET_ENABLE);
+				return;
+			}
+
+			if (CONFIG_USB_PD_3A_PORTS == 0)
+				return;
+
+			atomic_or(&source_frs_max_requested, BIT(port));
+		} else {
+			return;
+		}
+	}
+
+	balance_source_ports();
+}
+
+void dpm_add_non_pd_sink(int port)
+{
+	if (CONFIG_USB_PD_3A_PORTS == 0)
 		return;
 
-	atomic_or(&sink_max_pdo_requested, BIT(port));
+	atomic_or(&non_pd_sink_max_requested, BIT(port));
 
 	balance_source_ports();
 }
@@ -448,17 +641,39 @@ void dpm_remove_sink(int port)
 	if (CONFIG_USB_PD_3A_PORTS == 0)
 		return;
 
-	if (!(BIT(port) & sink_max_pdo_requested))
+	if (!(BIT(port) & sink_max_pdo_requested) &&
+	    !(BIT(port) & non_pd_sink_max_requested))
 		return;
 
 	atomic_clear_bits(&sink_max_pdo_requested, BIT(port));
+	atomic_clear_bits(&non_pd_sink_max_requested, BIT(port));
+
+	/* Restore selected default Rp on the port */
+	typec_select_src_current_limit_rp(port,
+		typec_get_default_current_limit_rp(port));
+
+	balance_source_ports();
+}
+
+void dpm_remove_source(int port)
+{
+	if (CONFIG_USB_PD_3A_PORTS == 0)
+		return;
+
+	if (!IS_ENABLED(CONFIG_USB_PD_FRS))
+		return;
+
+	if (!(BIT(port) & source_frs_max_requested))
+		return;
+
+	atomic_clear_bits(&source_frs_max_requested, BIT(port));
 
 	balance_source_ports();
 }
 
 /*
  * Note: all ports receive the 1.5 A source offering until they are found to
- * match a criteria on the 3.0 A priority list (ex. though sink capability
+ * match a criteria on the 3.0 A priority list (ex. through sink capability
  * probing), at which point they will be offered a new 3.0 A source capability.
  */
 __overridable int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
@@ -473,4 +688,17 @@ __overridable int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 
 	*src_pdo = pd_src_pdo;
 	return pd_src_pdo_cnt;
+}
+
+int dpm_get_source_current(const int port)
+{
+	if (pd_get_power_role(port) == PD_ROLE_SINK)
+		return 0;
+
+	if (max_current_claimed & BIT(port))
+		return 3000;
+	else if (typec_get_default_current_limit_rp(port) == TYPEC_RP_1A5)
+		return 1500;
+	else
+		return 500;
 }

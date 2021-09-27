@@ -13,6 +13,7 @@
 #include "host_command.h"
 #include "i2c.h"
 #include "ioexpanders.h"
+#include "pathsel.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
@@ -268,7 +269,7 @@ static void board_manage_dut_port(void)
 static void update_ports(void)
 {
 	int pdo_index, src_index, snk_index, i;
-	uint32_t pdo, max_ma, max_mv;
+	uint32_t pdo, max_ma, max_mv, unused;
 
 	/*
 	 * CHG Vbus has changed states, update PDO that reflects CHG port
@@ -302,7 +303,8 @@ static void update_ports(void)
 					continue;
 
 				snk_index = pdo_index;
-				pd_extract_pdo_power(pdo, &max_ma, &max_mv);
+				pd_extract_pdo_power(pdo, &max_ma, &max_mv,
+						     &unused);
 				pd_src_chg_pdo[src_index++] =
 					PDO_FIXED_VOLT(max_mv) |
 					PDO_FIXED_CURR(max_ma) |
@@ -420,13 +422,23 @@ int pd_tcpc_cc_ra(int port, int cc_volt, int cc_sel)
 	return ra;
 }
 
+/* DUT CC readings aren't valid if we aren't applying CC pulls */
+bool cc_is_valid(void)
+{
+	if ((cc_config & CC_DETACH) || (cc_pull_stored == TYPEC_CC_OPEN) ||
+	    ((cc_pull_stored == TYPEC_CC_RP) &&
+	     (rp_value_stored == TYPEC_RP_RESERVED)))
+		return false;
+	return true;
+}
+
 int pd_adc_read(int port, int cc)
 {
 	int mv = -1;
 
 	if (port == CHG)
 		mv = adc_read_channel(cc ? ADC_CHG_CC2_PD : ADC_CHG_CC1_PD);
-	else if (!(cc_config & CC_DETACH)) {
+	else if (cc_is_valid()) {
 		/*
 		 * In servo v4 hardware logic, both CC lines are wired directly
 		 * to DUT. When servo v4 as a snk, DUT may source Vconn to CC2
@@ -671,9 +683,9 @@ int charge_manager_get_source_pdo(const uint32_t **src_pdo, const int port)
 __override void pd_transition_voltage(int idx)
 {
 	timestamp_t deadline;
-	uint32_t ma, mv;
+	uint32_t ma, mv, unused;
 
-	pd_extract_pdo_power(pd_src_chg_pdo[idx - 1], &ma, &mv);
+	pd_extract_pdo_power(pd_src_chg_pdo[idx - 1], &ma, &mv, &unused);
 	/* Is this a transition to a new voltage? */
 	if (charge_port_is_active() && vbus[CHG].mv != mv) {
 		/*
@@ -791,10 +803,43 @@ __override int pd_check_data_swap(int port,
 __override void pd_execute_data_swap(int port,
 				     enum pd_data_role data_role)
 {
-	/*
-	 * TODO(b/137887386): Turn on the fastboot/DFU path when data swap to
-	 * DFP?
-	 */
+	if (port == CHG)
+		return;
+
+	switch (data_role) {
+	case PD_ROLE_DFP:
+		if (cc_config & CC_FASTBOOT_DFP) {
+			dut_to_host();
+		} else {
+			/* Disable USB2 lines from DUT */
+			gpio_set_level(GPIO_FASTBOOT_DUTHUB_MUX_EN_L, 1);
+			uservo_to_host();
+		}
+		break;
+	case PD_ROLE_UFP:
+		/* Ensure that FASTBOOT is disabled */
+		gpio_set_level(GPIO_FASTBOOT_DUTHUB_MUX_SEL, 1);
+
+		/* Enable USB2 lines */
+		gpio_set_level(GPIO_FASTBOOT_DUTHUB_MUX_EN_L, 0);
+
+		/*
+		 * By default, uServo port will be enabled. Only if the user
+		 * explicitly enable CC_FASTBOOT_DFP then uServo is disabled.
+		 */
+		if (!(cc_config & CC_FASTBOOT_DFP))
+			uservo_to_host();
+		break;
+	case PD_ROLE_DISCONNECTED:
+		/* Disable USB2 lines */
+		gpio_set_level(GPIO_FASTBOOT_DUTHUB_MUX_EN_L, 1);
+
+		if (!(cc_config & CC_FASTBOOT_DFP))
+			uservo_to_host();
+		break;
+	default:
+		CPRINTS("C%d: %s: Invalid data_role:%d", port, __func__,  data_role);
+	}
 }
 
 __override void pd_check_pr_role(int port,
@@ -922,28 +967,28 @@ static int svdm_response_modes(int port, uint32_t *payload)
 
 static void set_typec_mux(int pin_cfg)
 {
-	mux_state_t state = 0;
+	mux_state_t mux_mode = USB_PD_MUX_NONE;
 
 	switch (pin_cfg) {
-	case 0:
+	case 0: /* return to USB3 only */
+		mux_mode = USB_PD_MUX_USB_ENABLED;
 		CPRINTS("PinCfg:off");
 		break;
-	case MODE_DP_PIN_C:
-		state = USB_PD_MUX_DP_ENABLED;
+	case MODE_DP_PIN_C: /* DisplayPort 4 lanes */
+		mux_mode = USB_PD_MUX_DP_ENABLED;
 		CPRINTS("PinCfg:C");
 		break;
-	case MODE_DP_PIN_D:
-		state = USB_PD_MUX_USB_ENABLED;
+	case MODE_DP_PIN_D: /* DP + USB */
+		mux_mode = USB_PD_MUX_DOCK;
 		CPRINTS("PinCfg:D");
 		break;
 	default:
 		CPRINTS("PinCfg not supported: %d", pin_cfg);
 		return;
 	}
-	if (state && cc_config & CC_POLARITY)
-		state |= USB_PD_MUX_POLARITY_INVERTED;
 
-	usb_muxes[DUT].driver->set(&usb_muxes[DUT], state);
+	usb_mux_set(DUT, mux_mode, USB_SWITCH_CONNECT,
+		    !!(cc_config & CC_POLARITY));
 }
 
 static int get_hpd_level(void)
@@ -958,9 +1003,8 @@ static int dp_status(int port, uint32_t *payload)
 {
 	int opos = PD_VDO_OPOS(payload[0]);
 	int hpd = get_hpd_level();
-	mux_state_t state = 0;
-	int res = usb_muxes[DUT].driver->get(&usb_muxes[DUT], &state);
-	int dp_enabled = res == EC_SUCCESS && (state & USB_PD_MUX_DP_ENABLED);
+	mux_state_t state = usb_mux_get(DUT);
+	int dp_enabled = !!(state & USB_PD_MUX_DP_ENABLED);
 
 	if (opos != OPOS)
 		return 0;  /* NAK */
@@ -1000,9 +1044,9 @@ static int svdm_enter_mode(int port, uint32_t *payload)
 	return 1;
 }
 
-int pd_alt_mode(int port, enum tcpm_transmit_type type, uint16_t svid)
+int pd_alt_mode(int port, enum tcpci_msg_type type, uint16_t svid)
 {
-	if (type != TCPC_TX_SOP)
+	if (type != TCPCI_MSG_SOP)
 		return 0;
 
 	if (svid == USB_SID_DISPLAYPORT)
@@ -1256,9 +1300,14 @@ static int cmd_ada_srccaps(int argc, char *argv[])
 	const uint32_t * const ada_srccaps = pd_get_src_caps(CHG);
 
 	for (i = 0; i < pd_get_src_cap_cnt(CHG); ++i) {
-		uint32_t max_ma, max_mv;
+		uint32_t max_ma, max_mv, unused;
 
-		pd_extract_pdo_power(ada_srccaps[i], &max_ma, &max_mv);
+		if (IS_ENABLED(CONFIG_USB_PD_ONLY_FIXED_PDOS) &&
+		    (ada_srccaps[i] & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
+			continue;
+
+		pd_extract_pdo_power(ada_srccaps[i], &max_ma, &max_mv, &unused);
+
 		ccprintf("%d: %dmV/%dmA\n", i, max_mv, max_ma);
 	}
 
@@ -1267,14 +1316,6 @@ static int cmd_ada_srccaps(int argc, char *argv[])
 DECLARE_CONSOLE_COMMAND(ada_srccaps, cmd_ada_srccaps,
 			"",
 			"Print adapter SrcCap");
-
-static void chg_pd_disconnect(void)
-{
-	/* Clear charger PDO on CHG port disconnected. */
-	if (pd_is_disconnected(CHG))
-		pd_set_src_caps(CHG, 0, NULL);
-}
-DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, chg_pd_disconnect, HOOK_PRIO_DEFAULT);
 
 static int cmd_dp_action(int argc, char *argv[])
 {
@@ -1449,6 +1490,20 @@ static int cmd_usbc_action(int argc, char *argv[])
 			return EC_ERROR_PARAM2;
 
 		allow_pr_swap = !!atoi(argv[2]);
+	} else if (!strcasecmp(argv[1], "fastboot")) {
+		if (argc == 2) {
+			CPRINTF("fastboot = %d\n",
+				!!(cc_config & CC_FASTBOOT_DFP));
+			return EC_SUCCESS;
+		}
+
+		if (argc != 3)
+			return EC_ERROR_PARAM2;
+
+		if (!!atoi(argv[2]))
+			cc_config |= CC_FASTBOOT_DFP;
+		else
+			cc_config &= ~CC_FASTBOOT_DFP;
 	} else {
 		return EC_ERROR_PARAM1;
 	}

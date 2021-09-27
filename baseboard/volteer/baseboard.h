@@ -30,7 +30,7 @@
 #define CONFIG_LTO
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_DPTF
 #define CONFIG_FPU
 #define CONFIG_HIBERNATE_PSL
@@ -64,7 +64,7 @@
 
 /* Common Keyboard Defines */
 #define CONFIG_CMD_KEYBOARD
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_KEYPAD
 #define CONFIG_KEYBOARD_PROTOCOL_8042
@@ -111,6 +111,8 @@
  */
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_ISL9241
+/* Setting ISL9241 Register Control1 switching frequency to 724kHz. */
+#define CONFIG_ISL9241_SWITCHING_FREQ	ISL9241_CONTROL1_SWITCHING_FREQ_724KHZ
 
 #define CONFIG_USB_CHARGER
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -120,8 +122,6 @@
  * communicate on locked systems (which haven't PD negotiated)
  */
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON			3
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC		1
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		15001
 
 /* Common battery defines */
@@ -168,6 +168,7 @@
 #define CONFIG_USB_PD_TCPM_RT1715
 #define CONFIG_USB_PD_TCPM_TUSB422	/* USBC port C0 */
 #define CONFIG_USB_PD_TCPM_PS8815	/* USBC port USB3 DB */
+#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USB_PD_TCPM_MUX
 #define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
 #define CONFIG_CMD_USB_PD_PE
@@ -223,10 +224,19 @@
  * http://google3/hardware/standards/usb/
  */
 #define CONFIG_USB_PID 0x503E
+/* Device version of product. */
+#define CONFIG_USB_BCD_DEV 0x0000
 
 /* Retimer */
 #define CONFIG_USBC_RETIMER_INTEL_BB
 #define CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
+#define CONFIG_USBC_RETIMER_FW_UPDATE
+
+/* Enable volume button command in EC console */
+#define CONFIG_CMD_BUTTON
+
+/* Enable volume button in ectool */
+#define CONFIG_HOSTCMD_BUTTON
 
 #ifndef __ASSEMBLER__
 

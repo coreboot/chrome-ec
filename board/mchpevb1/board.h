@@ -39,6 +39,10 @@
  * #define CONFIG_MCHP_LFW_DEBUG
  */
 
+/*
+ * EC UART console on UART 0 or 1
+ */
+#define CONFIG_UART_CONSOLE 0
 
 /*
  * Override Boot-ROM JTAG mode
@@ -93,24 +97,24 @@
  * #define CONFIG_DEBUG_DISABLE_WRITE_BUFFER
  */
 
-/* New eSPI slave configuration items */
+/* New eSPI configuration items */
 
 /*
- * Maximum clock frequence eSPI EC slave advertises
+ * Maximum clock frequence eSPI EC advertises
  * Values in MHz are 20, 25, 33, 50, and 66
  */
 /* KBL + EVB fly-wire hook up only supports 20MHz */
-#define CONFIG_HOSTCMD_ESPI_EC_MAX_FREQ		20
+#define CONFIG_HOSTCMD_ESPI_EC_MAX_FREQ	MCHP_ESPI_CAP1_MAX_FREQ_20M
 
 /*
- * EC eSPI slave advertises IO lanes
+ * EC eSPI advertises IO lanes
  * 0 = Single
  * 1 = Single and Dual
  * 2 = Single and Quad
  * 3 = Single, Dual, and Quad
  */
 /* KBL + EVB fly-wire hook up only support Single mode */
-#define CONFIG_HOSTCMD_ESPI_EC_MODE		0
+#define CONFIG_HOSTCMD_ESPI_EC_MODE	MCHP_ESPI_CAP1_SINGLE_MODE
 
 /*
  * Bit map of eSPI channels EC advertises
@@ -119,7 +123,7 @@
  * bit[2] = 1 OOB channel
  * bit[3] = 1 Flash channel
  */
-#define CONFIG_HOSTCMD_ESPI_EC_CHAN_BITMAP	0x0F
+#define CONFIG_HOSTCMD_ESPI_EC_CHAN_BITMAP	MCHP_ESPI_CAP0_ALL_CHAN_SUPP
 
 #define CONFIG_MCHP_ESPI_VW_SAVE_ON_SLEEP
 
@@ -149,11 +153,6 @@
 /* #define CONFIG_CHARGER_ISL9237 */
 /* #define CONFIG_CHARGER_ILIM_PIN_DISABLED */
 /* #define CONFIG_CHARGER_INPUT_CURRENT 512 */
-
-/*
- * MCHP disable this for Kabylake eSPI bring up
- * #define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 1
- */
 
 /* #define CONFIG_CHARGER_NARROW_VDC */
 /* #define CONFIG_CHARGER_PROFILE_OVERRIDE */
@@ -474,14 +473,6 @@ enum als_id {
 
 /* Map I2C port to controller */
 int board_i2c_p2c(int port);
-
-/* Return the two slave addresses the specified
- * controller will respond to when controller
- * is acting as a slave.
- * b[6:0]  = b[7:1] of I2C address 1
- * b[14:8] = b[7:1] of I2C address 2
- */
-uint16_t board_i2c_slave_addrs(int controller);
 
 /* Reset PD MCU */
 void board_reset_pd_mcu(void);

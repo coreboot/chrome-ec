@@ -18,6 +18,8 @@
 #endif
 
 static int rt1715_polarity[CONFIG_USB_PD_PORT_MAX_COUNT];
+static bool rt1715_initialized[CONFIG_USB_PD_PORT_MAX_COUNT];
+
 
 static int rt1715_enable_ext_messages(int port, int enable)
 {
@@ -29,13 +31,21 @@ static int rt1715_enable_ext_messages(int port, int enable)
 static int rt1715_tcpci_tcpm_init(int port)
 {
 	int rv;
-	/* RT1715 has a vendor-defined register reset */
-	rv = tcpc_update8(port, RT1715_REG_VENDOR_7,
-		  RT1715_REG_VENDOR_7_SOFT_RESET, MASK_SET);
-	if (rv)
-		return rv;
+	/*
+	 * Do not fully reinitialize the registers when leaving low-power mode.
+	 * TODO(b/179234089): Generalize this concept in the tcpm_drv API.
+	 */
 
-	msleep(10);
+	/* Only do soft-reset on first init. */
+	if (!(rt1715_initialized[port])) {
+		/* RT1715 has a vendor-defined register reset */
+		rv = tcpc_update8(port, RT1715_REG_VENDOR_7,
+			RT1715_REG_VENDOR_7_SOFT_RESET, MASK_SET);
+		if (rv)
+			return rv;
+		rt1715_initialized[port] = true;
+		msleep(10);
+	}
 
 	rv = tcpc_update8(port, RT1715_REG_VENDOR_5,
 		  RT1715_REG_VENDOR_5_SHUTDOWN_OFF, MASK_SET);
@@ -48,6 +58,11 @@ static int rt1715_tcpci_tcpm_init(int port)
 	rv = tcpc_write(port, RT1715_REG_I2CRST_CTRL,
 		  (RT1715_REG_I2CRST_CTRL_EN |
 		  RT1715_REG_I2CRST_CTRL_TOUT_200MS));
+	if (rv)
+		return rv;
+
+	/* Unmask interrupt for LPM wakeup */
+	rv = tcpc_write(port, RT1715_REG_RT_MASK, RT1715_REG_RT_MASK_M_WAKEUP);
 	if (rv)
 		return rv;
 
@@ -127,6 +142,59 @@ static int rt1715_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 	return rt1715_init_cc_params(port, rt1715_polarity[port] ? *cc2 : *cc1);
 }
 
+/*
+ * See b/179256608#comment26 for explanation.
+ * Disable 24MHz oscillator and enable LPM. Upon exit from LPM, the LPEN will be
+ * reset to 0.
+ *
+ * The exit condition for LPM is CC status change, and the wakeup interrupt will
+ * be set.
+ */
+#ifdef CONFIG_USB_PD_TCPC_LOW_POWER
+static int rt1715_enter_low_power_mode(int port)
+{
+	int regval;
+	int rv;
+
+	rv = tcpc_read(port, RT1715_REG_PWR, &regval);
+	if (rv)
+		return rv;
+
+	regval |= RT1715_REG_PWR_BMCIO_LPEN;
+	regval &= ~RT1715_REG_PWR_BMCIO_OSCEN;
+	rv = tcpc_write(port, RT1715_REG_PWR, regval);
+	if (rv)
+		return rv;
+
+	return tcpci_enter_low_power_mode(port);
+}
+#endif
+
+static int rt1715_set_vconn(int port, int enable)
+{
+	int rv;
+	int regval;
+
+	/*
+	 * Auto-idle cannot be used while sourcing Vconn.
+	 * See b/179256608#comment26 for explanation.
+	 */
+	rv = tcpc_read(port, RT1715_REG_VENDOR_5, &regval);
+	if (rv)
+		return rv;
+
+	if (enable)
+		regval &= ~RT1715_REG_VENDOR_5_AUTOIDLE_EN;
+	else
+		regval |= RT1715_REG_VENDOR_5_AUTOIDLE_EN;
+
+	rv = tcpc_write(port, RT1715_REG_VENDOR_5, regval);
+	if (rv)
+		return rv;
+
+	return tcpci_tcpm_set_vconn(port, enable);
+}
+
 static int rt1715_set_polarity(int port, enum tcpc_cc_polarity polarity)
 {
 	int rv;
@@ -145,6 +213,17 @@ static int rt1715_set_polarity(int port, enum tcpc_cc_polarity polarity)
 	return tcpci_tcpm_set_polarity(port, polarity);
 }
 
+static void rt1715_alert(int port)
+{
+	/*
+	 * Make sure the wakeup interrupt is cleared. This bit is set on wakeup
+	 * from LPM. See b/179256608#comment16 for explanation.
+	 */
+	tcpc_write(port, RT1715_REG_RT_INT, RT1715_REG_RT_INT_WAKEUP);
+
+	tcpci_tcpc_alert(port);
+}
+
 const struct tcpm_drv rt1715_tcpm_drv = {
 	.init = &rt1715_tcpci_tcpm_init,
 	.release = &tcpci_tcpm_release,
@@ -158,12 +237,12 @@ const struct tcpm_drv rt1715_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	.sop_prime_enable   = &tcpci_tcpm_sop_prime_enable,
 #endif
-	.set_vconn = &tcpci_tcpm_set_vconn,
+	.set_vconn = &rt1715_set_vconn,
 	.set_msg_header = &tcpci_tcpm_set_msg_header,
 	.set_rx_enable = &tcpci_tcpm_set_rx_enable,
 	.get_message_raw = &tcpci_tcpm_get_message_raw,
 	.transmit = &tcpci_tcpm_transmit,
-	.tcpc_alert = &tcpci_tcpc_alert,
+	.tcpc_alert = &rt1715_alert,
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
 	.tcpc_discharge_vbus = &tcpci_tcpc_discharge_vbus,
 #endif
@@ -172,13 +251,13 @@ const struct tcpm_drv rt1715_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	.drp_toggle = &tcpci_tcpc_drp_toggle,
 #endif
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USB_PD_PPC
 	.set_snk_ctrl = &tcpci_tcpm_set_snk_ctrl,
 	.set_src_ctrl = &tcpci_tcpm_set_src_ctrl,
 #endif
 	.get_chip_info = &tcpci_get_chip_info,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
-	.enter_low_power_mode = &tcpci_enter_low_power_mode,
+	.enter_low_power_mode = &rt1715_enter_low_power_mode,
 #endif
 	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 };

@@ -8,82 +8,57 @@
 
 #include "common.h"
 #include "console.h"
+#include "ec_tasks.h"
 #include "hooks.h"
 #include "task.h"
 #include "timer.h"
 
-#define DEFERRED_STACK_SIZE 1024
-
-/*
- * Deferred thread is always the lowest priority, and preemptive if
- * available.
- */
-#ifdef CONFIG_PREEMPT_ENABLED
-#define DEFERRED_THREAD_PRIORITY (CONFIG_NUM_PREEMPT_PRIORITIES - 1)
-#else
-#define DEFERRED_THREAD_PRIORITY -1
-#endif
-
-static K_THREAD_STACK_DEFINE(deferred_thread, DEFERRED_STACK_SIZE);
-static struct k_work_q deferred_work_queue;
-
-static void deferred_work_queue_handler(struct k_work *work)
-{
-	struct deferred_data *data =
-		CONTAINER_OF(work, struct deferred_data, delayed_work.work);
-
-	data->routine();
-}
-
-static int init_deferred_work_queue(const struct device *unused)
-{
-	ARG_UNUSED(unused);
-	k_work_q_start(&deferred_work_queue, deferred_thread,
-		       DEFERRED_STACK_SIZE, DEFERRED_THREAD_PRIORITY);
-	return 0;
-}
-SYS_INIT(init_deferred_work_queue, APPLICATION, 0);
-
-void zephyr_shim_setup_deferred(const struct deferred_data *data)
-{
-	struct deferred_data *non_const = (struct deferred_data *)data;
-
-	k_delayed_work_init(&non_const->delayed_work,
-			    deferred_work_queue_handler);
-}
-
 int hook_call_deferred(const struct deferred_data *data, int us)
 {
-	struct deferred_data *non_const = (struct deferred_data *)data;
-	int rv;
+	struct k_work_delayable *work = data->work;
+	int rv = 0;
 
-	rv = k_delayed_work_submit_to_queue(&deferred_work_queue,
-					    &non_const->delayed_work,
-					    K_USEC(us));
-	if (rv < 0)
-		cprints(CC_HOOK, "Warning: deferred call not submitted.");
+	if (us == -1) {
+		k_work_cancel_delayable(work);
+	} else if (us >= 0) {
+		rv = k_work_reschedule(work, K_USEC(us));
+		if (rv == -EINVAL) {
+			/* Already processing or completed. */
+			return 0;
+		} else if (rv < 0) {
+			cprints(CC_HOOK,
+				"Warning: deferred call not submitted, "
+				"deferred_data=0x%pP, err=%d",
+				data, rv);
+		}
+	} else {
+		return EC_ERROR_PARAM2;
+	}
+
 	return rv;
 }
 
 static struct zephyr_shim_hook_list *hook_registry[HOOK_TYPE_COUNT];
 
-void zephyr_shim_setup_hook(enum hook_type type, void (*routine)(void),
-			    int priority, struct zephyr_shim_hook_list *entry)
+static int zephyr_shim_setup_hooks(const struct device *unused)
 {
-	struct zephyr_shim_hook_list **loc = &hook_registry[type];
+	STRUCT_SECTION_FOREACH(zephyr_shim_hook_list, entry) {
+		struct zephyr_shim_hook_list **loc = &hook_registry[entry->type];
 
-	/* Find the correct place to put the entry in the registry. */
-	while (*loc && (*loc)->priority < priority)
-		loc = &((*loc)->next);
+		/* Find the correct place to put the entry in the registry. */
+		while (*loc && (*loc)->priority < entry->priority)
+			loc = &((*loc)->next);
 
-	/* Setup the entry. */
-	entry->routine = routine;
-	entry->priority = priority;
-	entry->next = *loc;
+		entry->next = *loc;
 
-	/* Insert the entry. */
-	*loc = entry;
+		/* Insert the entry. */
+		*loc = entry;
+	}
+
+	return 0;
 }
+
+SYS_INIT(zephyr_shim_setup_hooks, APPLICATION, 1);
 
 void hook_notify(enum hook_type type)
 {
@@ -93,11 +68,30 @@ void hook_notify(enum hook_type type)
 		p->routine();
 }
 
+static void check_hook_task_priority(k_tid_t thread)
+{
+	/*
+	 * Numerically lower priorities take precedence, so verify the hook
+	 * related threads cannot preempt any of the shimmed tasks.
+	 */
+	if (k_thread_priority_get(thread) < (TASK_ID_COUNT - 1))
+		cprintf(CC_HOOK,
+			"ERROR: %s has priority %d but must be >= %d\n",
+			k_thread_name_get(thread),
+			k_thread_priority_get(thread), (TASK_ID_COUNT - 1));
+}
+
 void hook_task(void *u)
 {
 	/* Periodic hooks will be called first time through the loop */
 	static uint64_t last_second = -SECOND;
 	static uint64_t last_tick = -HOOK_TICK_INTERVAL;
+
+	/*
+	 * Verify deferred routines are run at the lowest priority.
+	 */
+	check_hook_task_priority(&k_sys_work_q.thread);
+	check_hook_task_priority(k_current_get());
 
 	while (1) {
 		uint64_t t = get_time().val;
@@ -126,4 +120,3 @@ void hook_task(void *u)
 			task_wait_event(next);
 	}
 }
-

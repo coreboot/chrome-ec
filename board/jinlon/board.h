@@ -35,6 +35,8 @@
 #undef  CONFIG_POWER_BUTTON_INIT_TIMEOUT
 #define CONFIG_POWER_BUTTON_INIT_TIMEOUT 6
 
+#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV	5000
+
 /* Sensors */
 /* BMI160 Base accel/gyro */
 #define CONFIG_ACCEL_INTERRUPTS
@@ -177,14 +179,9 @@ enum temp_sensor_id {
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_DANAPACK_COS,
+	BATTERY_DYNAPACK_COS,
 	BATTERY_TYPE_COUNT,
 };
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

@@ -6,6 +6,10 @@
 #ifndef __CROS_EC_IOEXPANDERS_H
 #define __CROS_EC_IOEXPANDERS_H
 
+#define BOARD_ID_DET_MASK 0x7
+#define BOARD_ID_DET_OFFSET 3
+#define BOARD_ID_DET_PORT 1
+
 enum uservo_fastboot_mux_sel_t {
 	MUX_SEL_USERVO = 0,
 	MUX_SEL_FASTBOOT = 1
@@ -68,13 +72,13 @@ int usb3_a0_mux_sel(int en);
 int usb3_a0_mux_en_l(int en);
 
 /**
- * Controls load switches for 5V to general USB type A
+ * Controls load switches for 5V to general USB type A.
  *
  * @param en	0 - Disable power
  *		1 - Enable power
  * @return EC_SUCCESS or EC_xxx on error
  */
-int usb3_a0_pwr_en(int en);
+int ec_usb3_a0_pwr_en(int en);
 
 /**
  * Controls logic to select 1.8V or 3.3V UART from STM to DUT on SBU lines
@@ -92,7 +96,7 @@ int uart_18_sel(int en);
  *		1 - Enable power
  * @return EC_SUCCESS or EC_xxx on error
  */
-int uservo_power_en(int en);
+int ec_uservo_power_en(int en);
 
 /**
  * USB data path enable from host hub to downstream userv or DUT peripheral
@@ -110,7 +114,7 @@ int uservo_fastboot_mux_sel(enum uservo_fastboot_mux_sel_t sel);
  *		1 - power enabled
  * @return EC_SUCCESS or EC_xxx on error
  */
-int usb3_a1_pwr_en(int en);
+int ec_usb3_a1_pwr_en(int en);
 
 /**
  * USB data path for general USB type A port, second on J2

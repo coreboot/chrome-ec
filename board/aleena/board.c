@@ -54,7 +54,6 @@ const struct pwm_t pwm_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
-#ifdef HAS_TASK_MOTIONSENSE
 /* Motion sensors */
 static struct mutex icm426xx_mutex;
 
@@ -83,7 +82,7 @@ struct motion_sensor_t icm426xx_base_accel = {
 	 .drv_data = &g_icm426xx_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = &base_standard_ref_icm426xx,
 	 .min_frequency = ICM426XX_ACCEL_MIN_FREQ,
 	 .max_frequency = ICM426XX_ACCEL_MAX_FREQ,
@@ -170,13 +169,12 @@ void board_update_sensor_config_from_sku(void)
 	} else {
 		motion_sensor_count = 0;
 		/* Device is clamshell only */
-		tablet_set_mode(0);
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
 		/* Gyro is not present, don't allow line to float */
 		gpio_set_flags(GPIO_6AXIS_INT_L,
 			       GPIO_INPUT | GPIO_PULL_DOWN);
 	}
 }
-#endif
 
 static void board_kblight_init(void)
 {

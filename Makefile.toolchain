@@ -44,7 +44,7 @@ ADDR2LINE=$(CROSS_COMPILE)addr2line
 PKG_CONFIG?=pkg-config
 BUILDCC?=$(CCACHE) gcc
 HOSTCC?=$(CCACHE) $(HOST_CROSS_COMPILE)gcc
-HOSTCXX?=$(CCACHE) $(HOST_CROSS_COMPILE)g++
+HOSTCXX?=$(CCACHE) $(HOST_CROSS_COMPILE)clang++
 HOST_PKG_CONFIG?=$(HOST_CROSS_COMPILE)pkg-config
 PROTOC?=protoc
 
@@ -52,6 +52,12 @@ C_WARN = -Wstrict-prototypes -Wdeclaration-after-statement -Wno-pointer-sign
 COMMON_WARN = -Wall -Wundef -Werror -Werror-implicit-function-declaration \
 	-Wno-trigraphs -Wno-format-security -Wno-address-of-packed-member \
 	-fno-common -fno-strict-aliasing -fno-strict-overflow
+ifeq ($(cc-name),clang)
+COMMON_WARN+=-Werror=uninitialized
+endif
+ifeq ($(cc-name),gcc)
+COMMON_WARN+=-Werror=maybe-uninitialized
+endif
 
 UBSAN_FLAGS=-fsanitize=array-bounds,vla-bound \
 	-fno-sanitize=vptr \
@@ -138,6 +144,7 @@ HOST_CFLAGS=$(HOST_CPPFLAGS) -O3 $(CFLAGS_DEBUG) $(CFLAGS_WARN) \
 	    -DHOST_TOOLS_BUILD=$(EMPTY)
 HOST_CFLAGS+=$(LIBFTDIUSB_CFLAGS)
 HOST_CFLAGS+=-DCHROMIUM_EC=$(EMPTY)
+HOST_CXXFLAGS=$(HOST_CFLAGS)
 ifneq (${SYSROOT},)
   LDFLAGS_EXTRA+=--sysroot=${SYSROOT}
 endif

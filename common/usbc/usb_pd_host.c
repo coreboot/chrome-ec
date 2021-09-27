@@ -12,6 +12,7 @@
 #include "host_command.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -23,7 +24,7 @@ static enum ec_status hc_typec_discovery(struct host_cmd_handler_args *args)
 	const struct ec_params_typec_discovery *p = args->params;
 	struct ec_response_typec_discovery *r = args->response;
 	const struct pd_discovery *disc;
-	enum tcpm_transmit_type type;
+	enum tcpci_msg_type type;
 
 	/* Confirm the number of HC VDOs matches our stored VDOs */
 	BUILD_ASSERT(sizeof(r->discovery_vdo) == sizeof(union disc_ident_ack));
@@ -35,7 +36,7 @@ static enum ec_status hc_typec_discovery(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 
 	type = p->partner_type == TYPEC_PARTNER_SOP ?
-		TCPC_TX_SOP : TCPC_TX_SOP_PRIME;
+		TCPCI_MSG_SOP : TCPCI_MSG_SOP_PRIME;
 
 	/*
 	 * Clear out access mask so we can track if tasks have touched data
@@ -43,7 +44,7 @@ static enum ec_status hc_typec_discovery(struct host_cmd_handler_args *args)
 	 */
 	pd_discovery_access_clear(p->port, type);
 
-	disc = pd_get_am_discovery(p->port, type);
+	disc = pd_get_am_discovery_and_notify_access(p->port, type);
 
 	/* Initialize return size to that of discovery with no SVIDs */
 	args->response_size = sizeof(*r);
@@ -88,8 +89,10 @@ static enum ec_status hc_typec_discovery(struct host_cmd_handler_args *args)
 	 * of the copy.  If the data was accessed, return BUSY so the AP will
 	 * try retrieving again and get the updated data.
 	 */
-	if (!pd_discovery_access_validate(p->port, type))
+	if (!pd_discovery_access_validate(p->port, type)) {
+		CPRINTS("[C%d] %s returns EC_RES_BUSY!!\n", p->port, __func__);
 		return EC_RES_BUSY;
+	}
 
 	return EC_RES_SUCCESS;
 }
@@ -155,10 +158,12 @@ static enum ec_status hc_typec_status(struct host_cmd_handler_args *args)
 	r->events = pd_get_events(p->port);
 
 	r->sop_revision = r->sop_connected ?
-		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port, TCPC_TX_SOP)) : 0;
-	r->sop_prime_revision = pd_get_identity_discovery(p->port,
-					TCPC_TX_SOP_PRIME) == PD_DISC_COMPLETE ?
-		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port, TCPC_TX_SOP_PRIME))
+		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port, TCPCI_MSG_SOP)) : 0;
+	r->sop_prime_revision =
+		pd_get_identity_discovery(p->port, TCPCI_MSG_SOP_PRIME) ==
+		PD_DISC_COMPLETE ?
+		PD_STATUS_REV_SET_MAJOR(pd_get_rev(p->port,
+					TCPCI_MSG_SOP_PRIME))
 		: 0;
 
 	r->source_cap_count = pd_get_src_cap_cnt(p->port);

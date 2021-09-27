@@ -5,7 +5,7 @@
 
 /* metaknight board-specific configuration */
 
-#include "adc_chip.h"
+#include "adc.h"
 #include "button.h"
 #include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
@@ -18,6 +18,8 @@
 #include "driver/accel_bma2x2.h"
 #include "driver/accel_kionix.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm426xx.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "temp_sensor.h"
@@ -102,46 +104,13 @@ static void usb_c0_interrupt(enum gpio_signal s)
 
 }
 
-/* C1 interrupt line shared by BC 1.2, TCPC, and charger */
-static void check_c1_line(void);
-DECLARE_DEFERRED(check_c1_line);
-
-static void notify_c1_chips(void)
-{
-	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-}
-
-static void check_c1_line(void)
-{
-	/*
-	 * If line is still being held low, see if there's more to process from
-	 * one of the chips.
-	 */
-	if (!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
-		notify_c1_chips();
-		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
-	}
-}
-
-static void sub_usb_c1_interrupt(enum gpio_signal s)
-{
-	/* Cancel any previous calls to check the interrupt line */
-	hook_call_deferred(&check_c1_line_data, -1);
-
-	/* Notify all chips using this line that an interrupt came in */
-	notify_c1_chips();
-
-	/* Check the line again in 5ms */
-	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
-
-}
-
 static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
 {
-	int hdmi_hpd_odl = gpio_get_level(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
+	int hdmi_hpd_odl = gpio_get_level(GPIO_HDMI_HPD_SUB_ODL);
 
 	gpio_set_level(GPIO_EC_AP_USB_C1_HDMI_HPD, !hdmi_hpd_odl);
+
+	cprints(CC_SYSTEM, "HDMI plug-%s", !hdmi_hpd_odl ? "in" : "out");
 }
 
 /**
@@ -149,7 +118,7 @@ static void sub_hdmi_hpd_interrupt(enum gpio_signal s)
  */
 static void pen_input_deferred(void)
 {
-	int pen_charge_enable = !gpio_get_level(GPIO_PEN_DET_ODL) && 
+	int pen_charge_enable = !gpio_get_level(GPIO_PEN_DET_ODL) &&
 			!chipset_in_state(CHIPSET_STATE_ANY_OFF);
 
 	if (pen_charge_enable)
@@ -211,18 +180,23 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1] = {.name = "Memory",
-			   .type = TEMP_SENSOR_TYPE_BOARD,
-			   .read = get_temp_3v3_51k1_47k_4050b,
-			   .idx = ADC_TEMP_SENSOR_1},
-	[TEMP_SENSOR_2] = {.name = "Ambient",
-			   .type = TEMP_SENSOR_TYPE_BOARD,
-			   .read = get_temp_3v3_51k1_47k_4050b,
-			   .idx = ADC_TEMP_SENSOR_2},
+
+	[TEMP_SENSOR_MEMORY] = {
+		.name = "Memory",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_51k1_47k_4050b,
+		.idx  = ADC_TEMP_SENSOR_1
+	},
+	[TEMP_SENSOR_CPU] = {
+		.name = "CPU",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_51k1_47k_4050b,
+		.idx  = ADC_TEMP_SENSOR_2
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_a = {
+const static struct ec_thermal_config thermal_memory = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
@@ -235,7 +209,7 @@ const static struct ec_thermal_config thermal_a = {
 	},
 };
 
-const static struct ec_thermal_config thermal_b = {
+const static struct ec_thermal_config thermal_cpu = {
 	.temp_host = {
 		[EC_TEMP_THRESH_WARN] = 0,
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
@@ -252,26 +226,9 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
 static void setup_thermal(void)
 {
-	thermal_params[TEMP_SENSOR_1] = thermal_a;
-	thermal_params[TEMP_SENSOR_2] = thermal_b;
+	thermal_params[TEMP_SENSOR_MEMORY] = thermal_memory;
+	thermal_params[TEMP_SENSOR_CPU]    = thermal_cpu;
 }
-
-/* Enable HDMI any time the SoC is on */
-static void hdmi_enable(void)
-{
-	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
-		get_cbi_fw_config_db() == DB_LTE_HDMI)
-		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
-}
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hdmi_enable, HOOK_PRIO_DEFAULT);
-
-static void hdmi_disable(void)
-{
-	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
-		get_cbi_fw_config_db() == DB_LTE_HDMI)
-		gpio_set_level(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 1);
-}
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, hdmi_disable, HOOK_PRIO_DEFAULT);
 
 void board_hibernate(void)
 {
@@ -346,30 +303,17 @@ __override void board_power_5v_enable(int enable)
 	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
 		get_cbi_fw_config_db() == DB_LTE_HDMI) {
 		gpio_set_level(GPIO_SUB_C1_INT_EN_RAILS_ODL, !enable);
-	} else {
-		if (isl923x_set_comparator_inversion(1, !!enable))
-			CPRINTS("Failed to %sable sub rails!", enable ?
-								"en" : "dis");
 	}
-
 }
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
-		get_cbi_fw_config_db() == DB_LTE_HDMI)
-		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
-	else
-		return CONFIG_USB_PD_PORT_MAX_COUNT;
+	return CONFIG_USB_PD_PORT_MAX_COUNT;
 }
 
 __override uint8_t board_get_charger_chip_count(void)
 {
-	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
-		get_cbi_fw_config_db() == DB_LTE_HDMI)
-		return CHARGER_NUM - 1;
-	else
-		return CHARGER_NUM;
+	return CHARGER_NUM;
 }
 
 int board_is_sourcing_vbus(int port)
@@ -397,9 +341,11 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+			raa489000_enable_asgate(i, false);
+		}
 
 		return EC_SUCCESS;
 	}
@@ -421,6 +367,7 @@ int board_set_active_charge_port(int port)
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
@@ -431,7 +378,8 @@ int board_set_active_charge_port(int port)
 		charger_discharge_on_ac(1);
 
 	/* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);
@@ -488,10 +436,17 @@ static const mat33_fp_t base_lsm6dsm_ref = {
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
+static const mat33_fp_t base_icm_ref = {
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
 static struct accelgyro_saved_data_t g_bma253_data;
 static struct bmi_drv_data_t g_bmi160_data;
 static struct kionix_accel_data g_kx022_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
+static struct icm_drv_data_t g_icm426xx_data;
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -641,6 +596,53 @@ struct motion_sensor_t lsm6dsm_base_gyro = {
 	.max_frequency = LSM6DSM_ODR_MAX_VAL,
 };
 
+
+struct motion_sensor_t icm426xx_base_accel = {
+	.name = "Base Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_ACCEL,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 4, /* g, enough for laptop */
+	.rot_standard_ref = &base_icm_ref,
+	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 13000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+	},
+};
+
+struct motion_sensor_t icm426xx_base_gyro = {
+	.name = "Base Gyro",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_GYRO,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_ACCEL,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 1000, /* dps */
+	.rot_standard_ref = &base_icm_ref,
+	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
+	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
+};
+
 static int base_gyro_config;
 
 void board_init(void)
@@ -653,87 +655,57 @@ void board_init(void)
 	if (get_cbi_fw_config_db() == DB_1A_HDMI ||
 		get_cbi_fw_config_db() == DB_LTE_HDMI) {
 		/* Disable i2c on HDMI pins */
-		gpio_config_pin(MODULE_I2C,
-				GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL, 0);
-		gpio_config_pin(MODULE_I2C,
-				GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL, 0);
+		gpio_config_pin(MODULE_I2C, GPIO_HDMI_HPD_SUB_ODL, 0);
+		gpio_config_pin(MODULE_I2C, GPIO_GPIO92_NC, 0);
 
-		/* Set HDMI and sub-rail enables to output */
-		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SCL_HDMI_EN_ODL,
-			       chipset_in_state(CHIPSET_STATE_ON) ?
-						GPIO_ODR_LOW : GPIO_ODR_HIGH);
 		gpio_set_flags(GPIO_SUB_C1_INT_EN_RAILS_ODL,   GPIO_ODR_HIGH);
 
 		/* Select HDMI option */
 		gpio_set_level(GPIO_HDMI_SEL_L, 0);
 
 		/* Enable interrupt for passing through HPD */
-		gpio_enable_interrupt(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL);
+		gpio_enable_interrupt(GPIO_HDMI_HPD_SUB_ODL);
 	} else {
 		/* Set SDA as an input */
-		gpio_set_flags(GPIO_EC_I2C_SUB_C1_SDA_HDMI_HPD_ODL,
+		gpio_set_flags(GPIO_HDMI_HPD_SUB_ODL,
 			       GPIO_INPUT);
-
-		/* Enable C1 interrupts */
-		gpio_enable_interrupt(GPIO_SUB_C1_INT_EN_RAILS_ODL);
-		check_c1_line();
 	}
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+
+	/* Enable gpio interrupt for pen detect */
+	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
 
 	/* Turn on 5V if the system is on, otherwise turn it off. */
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
 			      CHIPSET_STATE_SOFT_OFF);
 	board_power_5v_enable(on);
 
-	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
-
 	/* Initialize g-sensor */
 	base_gyro_config = get_cbi_ssfc_base_sensor();
 
 	if (base_gyro_config == SSFC_SENSOR_LSM6DSM) {
 		motion_sensors[BASE_ACCEL] = lsm6dsm_base_accel;
-		motion_sensors[BASE_GYRO] = lsm6dsm_base_gyro;
-		ccprints("BASE GYRO is LSM6DSM");
+		motion_sensors[BASE_GYRO]  = lsm6dsm_base_gyro;
+		cprints(CC_SYSTEM, "SSFC: BASE GYRO is LSM6DSM");
+	} else if (get_cbi_ssfc_base_sensor() == SSFC_SENSOR_ICM426XX) {
+		motion_sensors[BASE_ACCEL] = icm426xx_base_accel;
+		motion_sensors[BASE_GYRO]  = icm426xx_base_gyro;
+		cprints(CC_SYSTEM, "SSFC: BASE GYRO is ICM426XX");
 	} else
-		ccprints("BASE GYRO is BMI160");
+		cprints(CC_SYSTEM, "SSFC: BASE GYRO is BMI160");
 
 	if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_KX022) {
 		motion_sensors[LID_ACCEL] = kx022_lid_accel;
-		ccprints("LID_ACCEL is KX022");
+		cprints(CC_SYSTEM, "SSFC: LID ACCEL is KX022");
 	} else
-		ccprints("LID_ACCEL is BMA253");
+		cprints(CC_SYSTEM, "SSFC: LID ACCEL is BMA253");
 
 	/* Initial thermal */
 	setup_thermal();
 
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
-
-__override void ocpc_get_pid_constants(int *kp, int *kp_div,
-				       int *ki, int *ki_div,
-				       int *kd, int *kd_div)
-{
-	/*
-	 * Early boards need different constants due to a change in charger IC
-	 * silicon revision.
-	 */
-	if (system_get_board_version() >= 0) {
-		*kp = 1;
-		*kp_div = 128;
-		*ki = 1;
-		*ki_div = 1024;
-		*kd = 0;
-		*kd_div = 1;
-	} else {
-		*kp = 1;
-		*kp_div = 4;
-		*ki = 1;
-		*ki_div = 15;
-		*kd = 1;
-		*kd_div = 10;
-	}
-}
 
 int pd_snk_is_vbus_provided(int port)
 {
@@ -755,16 +727,6 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 		.flags = PI3USB9201_ALWAYS_POWERED,
 	},
 };
-
-/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
-const struct pwm_t pwm_channels[] = {
-	[PWM_CH_KBLIGHT] = {
-		.channel = 3,
-		.flags = PWM_CONFIG_DSLEEP,
-		.freq = 10000,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -845,16 +807,16 @@ static void adc_vol_key_press_check(void)
 	static uint8_t old_adc_key_state;
 	uint8_t adc_key_state_change;
 
-	if (volt > 2400 && volt < 2490) {
+	if (volt > 2400 && volt < 2540) {
 		/* volume-up is pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK;
-	} else if (volt > 2600 && volt < 2690) {
+	} else if (volt > 2600 && volt < 2740) {
 		/* volume-down is pressed */
 		new_adc_key_state = ADC_VOL_DOWN_MASK;
-	} else if (volt < 2290) {
+	} else if (volt < 2300) {
 		/* both volumn-up and volume-down are pressed */
 		new_adc_key_state = ADC_VOL_UP_MASK | ADC_VOL_DOWN_MASK;
-	} else if (volt > 2700) {
+	} else if (volt > 2780) {
 		/* both volumn-up and volume-down are released */
 		new_adc_key_state = 0;
 	}
@@ -870,9 +832,8 @@ static void adc_vol_key_press_check(void)
 }
 DECLARE_HOOK(HOOK_TICK, adc_vol_key_press_check, HOOK_PRIO_DEFAULT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -897,11 +858,15 @@ void lid_angle_peripheral_enable(int enable)
 	}
 }
 
+#ifndef TEST_BUILD
 void motion_interrupt(enum gpio_signal signal)
 {
 	switch (base_gyro_config) {
 	case SSFC_SENSOR_LSM6DSM:
 		lsm6dsm_interrupt(signal);
+		break;
+	case SSFC_SENSOR_ICM426XX:
+		icm426xx_interrupt(signal);
 		break;
 	case SSFC_SENSOR_BMI160:
 	default:
@@ -909,5 +874,33 @@ void motion_interrupt(enum gpio_signal signal)
 		break;
 	}
 }
+
+const struct i2c_port_t i2c_ports[] = {
+	{
+		"eeprom", I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
+		GPIO_EC_I2C_EEPROM_SDA
+	},
+
+	{
+		"battery", I2C_PORT_BATTERY, 100, GPIO_EC_I2C_BATTERY_SCL,
+		GPIO_EC_I2C_BATTERY_SDA
+	},
+
+	{
+		"sensor", I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
+		GPIO_EC_I2C_SENSOR_SDA
+	},
+
+	{
+		"usbc0", I2C_PORT_USB_C0, 1000, GPIO_EC_I2C_USB_C0_SCL,
+		GPIO_EC_I2C_USB_C0_SDA
+	},
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
+	{
+		"sub_usbc1", I2C_PORT_SUB_USB_C1, 1000,
+		GPIO_EC_I2C_SUB_USB_C1_SCL, GPIO_EC_I2C_SUB_USB_C1_SDA
+	},
+#endif
+};
 
 #endif

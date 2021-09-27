@@ -2,6 +2,10 @@
 # Copyright 2016 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+#
+# Ignore indention messages, since legacy scripts use 2 spaces instead of 4.
+# pylint: disable=bad-indentation,docstring-section-indent
+# pylint: disable=docstring-trailing-quotes
 
 # Note: This is a py2/3 compatible file.
 
@@ -36,6 +40,22 @@ DEFAULT_BOARD = BOARD_SERVO_V4
 # below.
 BOARDS = [BOARD_C2D2, BOARD_SERVO_MICRO, BOARD_SERVO_V4, BOARD_SERVO_V4P1,
           BOARD_SWEETBERRY]
+
+# Servo firmware bundles four channels of firmware. We need to make sure the
+# user does not request a non-existing channel, so keep the lists around to
+# guard on command-line usage.
+
+DEFAULT_CHANNEL = STABLE_CHANNEL = 'stable'
+
+PREV_CHANNEL = 'prev'
+
+# The ordering here matters. From left to right it's the channel that the user
+# is most likely to be running. This is used to inform and warn the user if
+# there are issues. e.g. if the all channels are the same, we want to let the
+# user know they are running the 'stable' version before letting them know they
+# are running 'dev' or even 'alpah' which (while true) might cause confusion.
+
+CHANNELS = [DEFAULT_CHANNEL, PREV_CHANNEL, 'dev', 'alpha']
 
 DEFAULT_BASE_PATH = '/usr/'
 TEST_IMAGE_BASE_PATH = '/usr/local/'
@@ -211,7 +231,50 @@ def do_updater_version(tinys):
   raise ServoUpdaterException(
       "Can't determine updater target from vers: [%s]" % vers)
 
-def findfiles(cname, fname):
+def _extract_version(boardname, binfile):
+  """Find the version string from |binfile|.
+
+  Args:
+    boardname: the name of the board, eg. "servo_micro"
+    binfile: path to the binary to search
+
+  Returns:
+    the version string.
+  """
+  if boardname is None:
+    # cannot extract the version if the name is None
+    return None
+  rawstrings = subprocess.check_output(
+      ['cbfstool', binfile, 'read', '-r', 'RO_FRID', '-f', '/dev/stdout'],
+      **c.get_subprocess_args())
+  m = re.match(r'%s_v\S+' % boardname, rawstrings)
+  if m:
+    newvers = m.group(0).strip(' \t\r\n\0')
+  else:
+    raise ServoUpdaterException("Can't find version from file: %s." % binfile)
+
+  return newvers
+
+def get_firmware_channel(bname, version):
+  """Find out which channel |version| for |bname| came from.
+
+  Args:
+    bname: board name
+    version: current version string
+
+  Returns:
+    one of the channel names if |version| came from one of those, or None
+  """
+  for channel in CHANNELS:
+    # Pass |bname| as cname to find the board specific file, and pass None as
+    # fname to ensure the default directory is searched
+    _, _, vers = get_files_and_version(bname, None, channel=channel)
+    if version == vers:
+      return channel
+  # None of the channels matched. This firmware is currently unknown.
+  return None
+
+def get_files_and_version(cname, fname=None, channel=DEFAULT_CHANNEL):
   """Select config and firmware binary files.
 
   This checks default file names and paths.
@@ -221,8 +284,10 @@ def findfiles(cname, fname):
   Args:
     cname: board name, or config name. eg. "servo_v4" or "servo_v4.json"
     fname: firmware binary name. Can be None to try default.
+    channel: the channel requested for servo firmware. See |CHANNELS| above.
+
   Returns:
-    cname, fname: validated filenames selected from the path.
+    cname, fname, version: validated filenames selected from the path.
   """
   for p in (DEFAULT_BASE_PATH, TEST_IMAGE_BASE_PATH):
     updater_path = os.path.join(p, COMMON_PATH)
@@ -249,13 +314,15 @@ def findfiles(cname, fname):
     if not os.path.isfile(cname):
       raise ServoUpdaterException("Can't find config file: %s." % cname)
 
-  if not fname:
-    # If None, try to infer board name from config.
-    with open(cname) as data_file:
-      data = json.load(data_file)
-    boardname = data['board']
+  # Always retrieve the boardname
+  with open(cname) as data_file:
+    data = json.load(data_file)
+  boardname = data['board']
 
-    binary_file = boardname + ".bin"
+  if not fname:
+    # If no |fname| supplied, look for the default locations with the board
+    # and channel requested.
+    binary_file = '%s.%s.bin' % (boardname, channel)
     newname = os.path.join(firmware_path, binary_file)
     if os.path.isfile(newname):
       fname = newname
@@ -270,36 +337,25 @@ def findfiles(cname, fname):
     else:
       raise ServoUpdaterException("Can't find file: %s." % fname)
 
-  return cname, fname
+  # Lastly, retrieve the version as well for decision making, debug, and
+  # informational purposes.
+  binvers = _extract_version(boardname, fname)
 
-def find_available_version(boardname, binfile):
-  """Find the version string from the binary file.
-
-  Args:
-    boardname: the name of the board, eg. "servo_micro"
-    binfile: the binary to search
-
-  Returns:
-    the version string.
-  """
-  rawstrings = subprocess.check_output(
-      ['cbfstool', binfile, 'read', '-r', 'RO_FRID', '-f', '/dev/stdout'],
-      **c.get_subprocess_args())
-  m = re.match(r'%s_v\S+' % boardname, rawstrings)
-  if m:
-    newvers = m.group(0).strip(' \t\r\n\0')
-  else:
-    raise ServoUpdaterException("Can't find version from file: %s." % binfile)
-
-  return newvers
+  return cname, fname, binvers
 
 def main():
-  parser = argparse.ArgumentParser(description="Image a servo micro device")
+  parser = argparse.ArgumentParser(description="Image a servo device")
+  parser.add_argument('-p', '--print', dest='print_only', action='store_true',
+                      default=False,
+                      help='only print available firmware for board/channel')
   parser.add_argument('-s', '--serialno', type=str,
                       help="serial number to program", default=None)
   parser.add_argument('-b', '--board', type=str,
                       help="Board configuration json file",
                       default=DEFAULT_BOARD, choices=BOARDS)
+  parser.add_argument('-c', '--channel', type=str,
+                      help="Firmware channel to use",
+                      default=DEFAULT_CHANNEL, choices=CHANNELS)
   parser.add_argument('-f', '--file', type=str,
                       help="Complete ec.bin file", default=None)
   parser.add_argument('--force', action="store_true",
@@ -311,7 +367,17 @@ def main():
 
   args = parser.parse_args()
 
-  brdfile, binfile = findfiles(args.board, args.file)
+  brdfile, binfile, newvers = get_files_and_version(args.board, args.file,
+                                                    args.channel)
+
+  # If the user only cares about the information then just print it here,
+  # and exit.
+  if args.print_only:
+    output = ('board: %s\n'
+              'channel: %s\n'
+              'firmware: %s') % (args.board, args.channel, newvers)
+    print(output)
+    return
 
   serialno = args.serialno
 
@@ -331,8 +397,6 @@ def main():
   if not args.force:
     vers = do_version(tinys)
     print("Current %s version is   %s" % (boardname, vers))
-
-    newvers = find_available_version(boardname, binfile)
     print("Available %s version is %s" % (boardname, newvers))
 
     if newvers == vers:
@@ -382,6 +446,9 @@ def main():
   # Make sure the servo MCU is in RO
   print("===== Rebooting =====")
   do_with_retries(select, tinys, 'ro')
+  # Perform additional reboot to free USB/UART resources, taken by tiny servod.
+  # See https://issuetracker.google.com/196021317 for background.
+  tinys.pty._issue_cmd("reboot")
 
   print("===== Finished =====")
 

@@ -6,7 +6,6 @@
 /* Reef board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "als.h"
 #include "button.h"
 #include "charge_manager.h"
@@ -49,7 +48,7 @@
 #include "task.h"
 #include "temp_sensor.h"
 #include "tfdp_chip.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "timer.h"
 #include "uart.h"
 #include "usb_charge.h"
@@ -232,16 +231,6 @@ const uint16_t i2c_port_to_ctrl[I2C_PORT_COUNT] = {
 	(MCHP_I2C_CTRL3 << 8) + MCHP_I2C_PORT7,
 };
 
-/*
- * Used by chip level I2C controller initialization.
- * Board level can specify two unused I2C addresses
- * for each controller. Current chip level disables
- * controller response to address 0(general call).
- */
-const uint32_t i2c_ctrl_slave_addrs[I2C_CONTROLLER_COUNT] = {
-	0, 0, 0, 0,
-};
-
 const struct charger_config_t chg_chips[] = {
 	{
 		.i2c_port = I2C_PORT_CHARGER,
@@ -249,26 +238,6 @@ const struct charger_config_t chg_chips[] = {
 		.drv = &bd9995x_drv,
 	},
 };
-
-/* Return the two slave addresses the specified
- * controller will respond to when controller
- * is acting as a slave.
- * b[6:0]  = b[7:1] of I2C address 1
- * b[14:8] = b[7:1] of I2C address 2
- * When not using I2C controllers as slaves we can use
- * the same value for all controllers. The address should
- * not be 0x00 as this is the general call address.
- */
-uint16_t board_i2c_slave_addrs(int controller)
-{
-	int i;
-
-	for (i = 0; i < I2C_CONTROLLER_COUNT; i++)
-		if ((i2c_ctrl_slave_addrs[i] & 0xffff) == controller)
-			return (i2c_ctrl_slave_addrs[i] >> 16);
-
-	return 0; /* general call address */
-}
 
 /*
  * default to I2C0 because callers may not check
@@ -420,7 +389,7 @@ static int ps8751_tune_mux(const struct usb_mux *me)
 /*
  * USB_PD_PORT_ANX74XX and USB_PD_PORT_PS8751 are zero based indices into
  * tcpc_config array. The tcpc_config array contains the actual EC I2C
- * port, device slave address, and a function pointer into the driver code.
+ * port, device address, and a function pointer into the driver code.
  */
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_ANX74XX] = {
@@ -540,7 +509,8 @@ void board_tcpc_init(void)
 	 * HPD pulse to enable video path
 	 */
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
-		usb_mux_hpd_update(port, 0, 0);
+		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
@@ -669,7 +639,8 @@ void chipset_pre_init_callback(void)
 
 static void board_set_tablet_mode(void)
 {
-	tablet_set_mode(!gpio_get_level(GPIO_TABLET_MODE_L));
+	tablet_set_mode(!gpio_get_level(GPIO_TABLET_MODE_L),
+			TABLET_TRIGGER_LID);
 }
 
 /* Initialize board. */
@@ -811,8 +782,7 @@ static void enable_input_devices(void)
 }
 
 /* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/* If the lid is in 360 position, ignore the lid angle,
 	 * which might be faulty. Disable keyboard.
@@ -821,7 +791,6 @@ void lid_angle_peripheral_enable(int enable)
 		enable = 0;
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)
@@ -1183,7 +1152,7 @@ int board_get_version(void)
 }
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next

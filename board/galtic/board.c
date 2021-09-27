@@ -8,11 +8,16 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_fw_config.h"
+#include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
+#include "driver/accel_bma2x2.h"
 #include "driver/accel_kionix.h"
-#include "driver/accelgyro_lsm6dsm.h"
+#include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm426xx.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/retimer/tusb544.h"
@@ -212,11 +217,114 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 /* USB Retimer */
+enum tusb544_conf {
+	USB_DP = 0,
+	USB_DP_INV,
+	USB,
+	USB_INV,
+	DP,
+	DP_INV
+};
+
+static int board_tusb544_set(const struct usb_mux *me,
+		mux_state_t mux_state)
+{
+	int  rv = EC_SUCCESS;
+	enum tusb544_conf usb_mode = 0;
+	/* USB */
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		/* USB with DP */
+		if (mux_state & USB_PD_MUX_DP_ENABLED) {
+			usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+					? USB_DP_INV
+					: USB_DP;
+		}
+		/* USB without DP */
+		else {
+			usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+					? USB_INV
+					: USB;
+		}
+	}
+	/* DP without USB */
+	else if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		usb_mode = (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+				? DP_INV
+				: DP;
+	}
+	/* Nothing enabled */
+	else
+		return EC_SUCCESS;
+	/* Write the retimer config byte */
+	if (usb_mode == USB_INV) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x15);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == USB) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x11);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == USB_DP_INV) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1F);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == USB_DP) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1B);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x33);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_1, 0x22);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_USB3_1_2, 0x22);
+	} else if (usb_mode == DP_INV) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1E);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x99);
+	} else if (usb_mode == DP) {
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_GENERAL4, 0x1A);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_1, 0x99);
+		rv = i2c_write8(me->i2c_port, me->i2c_addr_flags,
+				TUSB544_REG_DISPLAYPORT_2, 0x99);
+	}
+
+	return rv;
+}
+
 const struct usb_mux usbc1_retimer = {
 	.usb_port = 1,
 	.i2c_port = I2C_PORT_SUB_USB_C1,
 	.i2c_addr_flags = TUSB544_I2C_ADDR_FLAGS0,
 	.driver = &tusb544_drv,
+	.board_set = &board_tusb544_set,
 };
 
 /* USB Muxes */
@@ -260,7 +368,7 @@ static const struct ec_response_keybd_config galtic_kb = {
 		TK_FORWARD,		/* T2 */
 		TK_REFRESH,		/* T3 */
 		TK_FULLSCREEN,		/* T4 */
-		TK_SNAPSHOT,		/* T5 */
+		TK_OVERVIEW,		/* T5 */
 		TK_BRIGHTNESS_DOWN,	/* T6 */
 		TK_BRIGHTNESS_UP,	/* T7 */
 		TK_VOL_MUTE,		/* T8 */
@@ -413,13 +521,16 @@ int board_set_active_charge_port(int port)
 
 	/* Disable all ports. */
 	if (port == CHARGE_PORT_NONE) {
-		for (i = 0; i < board_get_usb_pd_port_count(); i++)
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			tcpc_write(i, TCPC_REG_COMMAND,
 				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+			raa489000_enable_asgate(i, false);
+		}
+
 		return EC_SUCCESS;
 	}
 
-	/* Check is port is sourcing VBUS. */
+	/* Check if port is sourcing VBUS. */
 	if (board_is_sourcing_vbus(port)) {
 		CPRINTS("Skip enable p%d", port);
 		return EC_ERROR_INVAL;
@@ -430,24 +541,26 @@ int board_set_active_charge_port(int port)
 	 * requested charge port.
 	 */
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		if (port == 0)
+		if (port == i)
 			continue;
 
 		if (tcpc_write(i, TCPC_REG_COMMAND,
 			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
 			CPRINTS("p%d: sink path disable failed.", i);
+		raa489000_enable_asgate(i, false);
 	}
 
 	/*
-	 * Stop the charger IC from switching while charging ports. Otherwise,
-	 * we can overcurrent the adapter we's switching to. (crbug.com/926056)
+	 * Stop the charger IC from switching while changing ports.  Otherwise,
+	 * we can overcurrent the adapter we're switching to. (crbug.com/926056)
 	 */
 	if (old_port != CHARGE_PORT_NONE)
 		charger_discharge_on_ac(1);
 
-	 /* Enable requested charge port. */
-	if (tcpc_write(port, TCPC_REG_COMMAND,
-			TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
+	/* Enable requested charge port. */
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(port, TCPC_REG_COMMAND,
+		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTS("p%d: sink path enable failed.", port);
 		charger_discharge_on_ac(0);
 		return EC_ERROR_UNKNOWN;
@@ -464,14 +577,12 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
 				       int *kd, int *kd_div)
 {
-	*kp = 3;
-	*kp_div = 14;
-
-	*ki = 3;
-	*ki_div = 500;
-
-	*kd = 4;
-	*kd_div = 40;
+	*kp = 1;
+	*kp_div = 20;
+	*ki = 1;
+	*ki_div = 250;
+	*kd = 0;
+	*kd_div = 1;
 }
 
 __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
@@ -497,8 +608,98 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* Sensor Data */
+static struct accelgyro_saved_data_t g_bma253_data;
 static struct kionix_accel_data  g_kx022_data;
-static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
+static struct bmi_drv_data_t g_bmi160_data;
+static struct icm_drv_data_t g_icm426xx_data;
+
+const mat33_fp_t lid_standard_ref = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+const mat33_fp_t base_standard_ref_icm = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+const mat33_fp_t base_standard_ref_bmi = {
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+struct motion_sensor_t bma253_lid_accel = {
+	.name = "Lid Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_BMA255,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_LID,
+	.drv = &bma2x2_accel_drv,
+	.mutex = &g_lid_mutex,
+	.drv_data = &g_bma253_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = BMA2x2_I2C_ADDR1_FLAGS,
+	.rot_standard_ref = &lid_standard_ref,
+	.default_range = 2, /* g */
+	/* We only use 2g because its resolution is only 8-bits */
+	.min_frequency = BMA255_ACCEL_MIN_FREQ,
+	.max_frequency = BMA255_ACCEL_MAX_FREQ,
+	.config = {
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+		},
+	},
+};
+
+struct motion_sensor_t bmi160_base_accel = {
+	.name = "Base Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_BMI160,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &bmi160_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_bmi160_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	.rot_standard_ref = &base_standard_ref_bmi,
+	.default_range = 4,  /* g */
+	.min_frequency = BMI_ACCEL_MIN_FREQ,
+	.max_frequency = BMI_ACCEL_MAX_FREQ,
+	.config = {
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 13000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+	},
+};
+
+struct motion_sensor_t bmi160_base_gyro = {
+	.name = "Base Gyro",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_BMI160,
+	.type = MOTIONSENSE_TYPE_GYRO,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &bmi160_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_bmi160_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
+	.default_range = 1000, /* dps */
+	.rot_standard_ref = &base_standard_ref_bmi,
+	.min_frequency = BMI_GYRO_MIN_FREQ,
+	.max_frequency = BMI_GYRO_MAX_FREQ,
+};
 
 /* Drivers */
 struct motion_sensor_t motion_sensors[] = {
@@ -512,8 +713,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = &g_kx022_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-		.rot_standard_ref = NULL,
+		.i2c_spi_addr_flags = KX022_ADDR0_FLAGS,
+		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 2, /* g */
 		/* We only use 2g because its resolution is only 8-bits */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
@@ -530,24 +731,21 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_ACCEL] = {
 		.name = "Base Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
+		.chip = MOTIONSENSE_CHIP_ICM426XX,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dsm_drv,
+		.drv = &icm426xx_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
+		.drv_data = &g_icm426xx_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.rot_standard_ref = NULL,
+		.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+		.rot_standard_ref = &base_standard_ref_icm,
 		.default_range = 4,  /* g */
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
+		.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+		.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 13000 | ROUND_UP_FLAG,
+				.odr = 10000 | ROUND_UP_FLAG,
 				.ec_rate = 100 * MSEC,
 			},
 			[SENSOR_CONFIG_EC_S3] = {
@@ -559,25 +757,47 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_GYRO] = {
 		.name = "Base Gyro",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
+		.chip = MOTIONSENSE_CHIP_ICM426XX,
 		.type = MOTIONSENSE_TYPE_GYRO,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dsm_drv,
+		.drv = &icm426xx_drv,
 		.mutex = &g_base_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
+		.drv_data = &g_icm426xx_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL,
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
+		.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+		.default_range = 1000, /* dps */
+		.rot_standard_ref = &base_standard_ref_icm,
+		.min_frequency = ICM426XX_GYRO_MIN_FREQ,
+		.max_frequency = ICM426XX_GYRO_MAX_FREQ,
 	},
 };
 
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	if (get_cbi_ssfc_base_sensor() == SSFC_SENSOR_BMI160)
+		bmi160_interrupt(signal);
+	else
+		icm426xx_interrupt(signal);
+}
+
+static void board_sensors_init(void)
+{
+	if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_BMA255) {
+		motion_sensors[LID_ACCEL] = bma253_lid_accel;
+		ccprints("LID_ACCEL is BMA253");
+	} else
+		ccprints("LID_ACCEL is KX022");
+
+	if (get_cbi_ssfc_base_sensor() == SSFC_SENSOR_BMI160) {
+		motion_sensors[BASE_ACCEL] = bmi160_base_accel;
+		motion_sensors[BASE_GYRO] = bmi160_base_gyro;
+		ccprints("BASE_ACCEL is BMI160");
+	} else
+		ccprints("BASE_ACCEL is ICM426XX");
+}
+DECLARE_HOOK(HOOK_INIT, board_sensors_init, HOOK_PRIO_DEFAULT);
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {
@@ -596,9 +816,42 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-#ifndef TEST_BUILD
+const static struct ec_thermal_config thermal_charger = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(98),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+	},
+};
+const static struct ec_thermal_config thermal_vcore = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(50),
+	},
+};
+const static struct ec_thermal_config thermal_ambient = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(50),
+	},
+};
+struct ec_thermal_config thermal_params[] = {
+	[TEMP_SENSOR_1] = thermal_charger,
+	[TEMP_SENSOR_2] = thermal_vcore,
+	[TEMP_SENSOR_3] = thermal_ambient,
+};
+BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -622,4 +875,18 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif
+
+__override void board_pulse_entering_rw(void)
+{
+	/*
+	 * On the ITE variants, the EC_ENTERING_RW signal was connected to a pin
+	 * which is active high by default. This cause Cr50 to think that the
+	 * EC has jumped to its RW image even though this may not be the case.
+	 * The pin is changed to GPIO_EC_ENTERING_RW2.
+	 */
+	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
+}
