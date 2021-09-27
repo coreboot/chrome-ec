@@ -12,4 +12,10 @@
 void configure_spi0_passthrough(int enable);
 void set_spi_clock_mode(int port, enum spi_clock_mode mode);
 
+/*
+ * Not defined in the hardware register spec, the RX and TX buffers share the
+ * same 128 bytes FIFO.
+ */
+#define SPI_BUF_SIZE 0x80
+
 #endif
