@@ -5,10 +5,12 @@
 
 #include "ccd_config.h"
 #include "common.h"
-#include "link_defs.h"
 #include "gpio.h"
+#include "link_defs.h"
 #include "registers.h"
+#include "shared_mem.h"
 #include "spi.h"
+#include "spi_controller.h"
 #include "spi_flash.h"
 #include "timer.h"
 #include "usb_descriptor.h"
@@ -298,18 +300,34 @@ static uint16_t usb_spi_read_packet(struct usb_spi_config const *config)
 		queue_count(config->consumer.queue));
 }
 
-static void usb_spi_write_packet(struct usb_spi_config const *config,
-				 uint8_t count)
+/*
+ * Put a packet on USB TX queue.
+ *
+ * Return EC_SUCCESS if there was enough room on the queue or EC_ERROR_TIMEOUT
+ * if the queue is full for longer than 500 ms
+ */
+static enum ec_error_list usb_spi_write_packet(
+	struct usb_spi_config const *config,
+	uint8_t count)
 {
+#define QUEUE_BACKOFF_TIMEOUT_MS 1
+#define MAX_QUEUE_WAIT_MS 500
+	int i = (MAX_QUEUE_WAIT_MS/QUEUE_BACKOFF_TIMEOUT_MS);
+
 	/*
 	 * Experiments show that while reading a 16M flash time spent waiting
 	 * is less than 30 ms, which is negligible in this case, as the AP is
 	 * held in reset.
 	 */
-	while (queue_space(config->tx_queue) < count)
+	while (queue_space(config->tx_queue) < count) {
+		if (i-- == 0)
+			return EC_ERROR_TIMEOUT;
 		msleep(1);
+	}
 
 	QUEUE_ADD_UNITS(config->tx_queue, config->buffer, count);
+
+	return EC_SUCCESS;
 }
 
 enum packet_id_type {
@@ -376,6 +394,7 @@ union raiden_cmd_hdr {
 #define RESP_PAYLOAD_SIZE \
 	(USB_MAX_PACKET_SIZE - sizeof(struct raiden_response_hdr))
 
+BUILD_ASSERT(START_PAYLOAD_SIZE < SPI_BUF_SIZE);
 /*
  * Hardcoded values used to communicate to the host maximum sizes of read and
  * write transactions.
@@ -387,9 +406,13 @@ union raiden_cmd_hdr {
 #define USB_SPI_MAX_WRITE_COUNT 270
 /*
  * Flashrom deducts 5 from this value, remaining 2040 bytes size results in 34
- * USB packets of 4 byte header and 60 bytes data.
+ * USB packets of 4 byte header and 60 bytes data, getting the PDU size close
+ * to 2K. Decreasing this size would decrease flashrom read efficiency,
+ * increasing it would put more pressure on the heap size.
  */
 #define USB_SPI_MAX_READ_COUNT (5 + 34 * RESP_PAYLOAD_SIZE)
+
+BUILD_ASSERT(USB_SPI_MAX_READ_COUNT < (CONFIG_SHAREDMEM_MINIMUM_SIZE/2));
 
 /* Hadrdcoded response to the config request packet. */
 static const struct {
@@ -419,6 +442,51 @@ static uint8_t report_error(void *packet, uint16_t error,
 	return sizeof(*rsp);
 }
 
+/*
+ * Send buffer containing data read from AP flash to the host.
+ *
+ * The buffer is sent as a V2 PDU, split into as many USB packets as
+ * necessary.
+ */
+static void ship_pdu(const struct usb_spi_config *config, const uint8_t *buf,
+		     size_t size)
+{
+	struct raiden_response_hdr *rsp =
+		(struct raiden_response_hdr *)config->buffer;
+	size_t sent_so_far = 0;
+
+	do {
+		size_t this_count = size - sent_so_far;
+
+		if (this_count > RESP_PAYLOAD_SIZE)
+			this_count = RESP_PAYLOAD_SIZE;
+
+		rsp->packet_id = sent_so_far ?
+					 USB_SPI_PKT_ID_RSP_TRANSFER_CONTINUE :
+					 USB_SPI_PKT_ID_RSP_TRANSFER_START;
+		rsp->value = sent_so_far;
+
+		memcpy(rsp + 1, buf + sent_so_far, this_count);
+		if (usb_spi_write_packet(config, sizeof(*rsp) + this_count)
+		    != EC_SUCCESS) {
+			CPRINTS("%s: USB stuck, breaking out", __func__);
+			return;
+		}
+		sent_so_far += this_count;
+
+	} while (sent_so_far != size);
+}
+
+/*
+ * Most recent SPI transaction request received from the host, used when it is
+ * necessary to restart the transaction.
+ */
+static struct {
+	uint16_t count; /* Actual size of the request packet. */
+	union raiden_cmd_hdr hdr;
+	uint8_t payload[6]; /* Enough for any SPI read command. */
+} last_cmd;
+
 /* Return length of the last response packet to send back to the host. */
 static uint8_t process_raiden_packet(const struct usb_spi_config *config,
 				     size_t count)
@@ -442,17 +510,42 @@ static uint8_t process_raiden_packet(const struct usb_spi_config *config,
 
 	packet_id = packet->s.packet_id;
 	switch (state->raiden_state) {
-	case RAIDEN_IDLE:
+	case RAIDEN_IDLE: {
+		char *read_buf;
+		size_t read_limit;
+
 		if ((packet_id == USB_SPI_PKT_ID_CMD_GET_USB_SPI_CONFIG) &&
 		    (count == sizeof(uint16_t))) {
+			last_cmd.count = 0;
 			memcpy(config->buffer, &config_rsp, sizeof(config_rsp));
 			return sizeof(config_rsp);
+		}
+
+		/*
+		 * If this is a restart request and the most recent command is
+		 * available - use the saved command to start over.
+		 */
+		if ((packet_id == USB_SPI_PKT_ID_CMD_RESTART_RESPONSE) &&
+		    last_cmd.count) {
+			packet = &last_cmd.hdr;
+			packet_id = last_cmd.hdr.s.packet_id;
+			count = last_cmd.count;
+			CPRINTS("%s: will restart the response id %d count %d",
+				__func__, packet_id, count);
 		}
 
 		if ((packet_id != USB_SPI_PKT_ID_CMD_TRANSFER_START) ||
 		    (count < sizeof(struct raiden_cmd_start_hdr)))
 			return report_error(config->buffer,
 					    USB_SPI_RUNT_PACKET, state);
+
+		/* Preserve the request in case host asks to restart. */
+		if (count <= (sizeof(last_cmd) - sizeof(last_cmd.count))) {
+			memcpy(&last_cmd.hdr, packet, count);
+			last_cmd.count = count;
+		} else {
+			last_cmd.count = 0;
+		}
 
 		/* This is request to start a new transaction. */
 		state->total_write_count = packet->s.write_count;
@@ -496,34 +589,63 @@ static uint8_t process_raiden_packet(const struct usb_spi_config *config,
 		else
 			this_write_count = state->total_write_count;
 
+		/* Allocate buffer to store the entire requested read size. */
+		if (total_read_count) {
+			if (shared_mem_acquire(total_read_count, &read_buf) !=
+			    EC_SUCCESS) {
+				ccprintf("%s: Failed to allocate %zd bytes!\n",
+					 __func__, total_read_count);
+				return report_error(config->buffer,
+						    USB_SPI_UNKNOWN_ERROR,
+						    state);
+			}
+		}
+
+		last_sub_transaction = false;
+
+		/*
+		 * This will send the write portion and read the entire read
+		 * portion in multiple SPI subtransactions.
+		 *
+		 * In case the write PDU is split into multiple USB packets
+		 * this will send the first packet and change state to
+		 * RAIDEN_WRITING, where it will process the rest of USB
+		 * packets of this PDU.
+		 */
 		while (this_write_count || (read_so_far != total_read_count)) {
+
 			this_read_count = total_read_count - read_so_far;
 
-			/*
-			 * Need to decide if CS needs to be deasserted in this
-			 * iteration. It would be the case if both final read
-			 * and write counts fit into USB packet.
-			 */
-			if ((this_read_count > RESP_PAYLOAD_SIZE) ||
-			    (state->total_write_count > START_PAYLOAD_SIZE)) {
-				last_sub_transaction = false;
 
-				/* Limit read count by USB packet capacity. */
-				if (this_read_count > RESP_PAYLOAD_SIZE)
-					this_read_count = RESP_PAYLOAD_SIZE;
-			} else {
+			/*
+			 * If there is a write portion, read limit needs to be
+			 * reduced.
+			 */
+			read_limit = SPI_BUF_SIZE - this_write_count;
+
+			/* Limit read count by SPI driver capacity. */
+			if (this_read_count > read_limit)
+				this_read_count = read_limit;
+
+			/*
+			 * This transaction is over when we have read as much
+			 * as requested (which could be zero), AND the entire
+			 * write portion fit into the USB payload.
+			 */
+			if (((this_read_count + read_so_far) ==
+			     total_read_count) &&
+			    (state->total_write_count <= START_PAYLOAD_SIZE))
 				last_sub_transaction = true;
-			}
 
 			res = usb_spi_map_error(spi_sub_transaction(
 				SPI_FLASH_DEVICE,
 				config->buffer +
 					sizeof(struct raiden_cmd_start_hdr),
-				this_write_count,
-				config->buffer +
-					sizeof(struct raiden_response_hdr),
+				this_write_count, read_buf + read_so_far,
 				this_read_count, last_sub_transaction));
 			if (res) {
+				if (total_read_count)
+					shared_mem_release(read_buf);
 				rsp->value = res;
 				rsp->packet_id =
 					USB_SPI_PKT_ID_RSP_TRANSFER_START;
@@ -544,11 +666,14 @@ static uint8_t process_raiden_packet(const struct usb_spi_config *config,
 				return 0;
 			}
 
-			if (last_sub_transaction)
+			if (last_sub_transaction) {
+				if (total_read_count) {
+					ship_pdu(config, read_buf,
+						 total_read_count);
+					shared_mem_release(read_buf);
+				}
 				break;
-
-			usb_spi_write_packet(config,
-					     this_read_count + sizeof(*rsp));
+			}
 
 			/*
 			 * Make sure this does not keep the loop going, we
@@ -557,14 +682,15 @@ static uint8_t process_raiden_packet(const struct usb_spi_config *config,
 			this_write_count = 0;
 		}
 
-		if (this_read_count)
-			return this_read_count + sizeof(*rsp);
-
-		if (state->total_write_count &&
-		    (state->total_write_count == this_write_count))
+		/*
+		 * If this was a pure write transaction and it fit into one
+		 * USB packet - send a response to the host.
+		 */
+		if (!total_read_count && state->total_write_count &&
+		    (state->raiden_state == RAIDEN_IDLE))
 			return sizeof(*rsp);
 		return 0;
-
+	}
 	case RAIDEN_WRITING:
 		if ((packet_id != USB_SPI_PKT_ID_CMD_TRANSFER_CONTINUE) ||
 		    (count <= sizeof(struct raiden_cmd_continue_hdr)))
@@ -690,4 +816,3 @@ void usb_spi_enable(struct usb_spi_config const *config, int enabled)
 
 	hook_call_deferred(config->deferred, 0);
 }
-

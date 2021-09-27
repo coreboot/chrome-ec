@@ -8,6 +8,7 @@
 #include "hooks.h"
 #include "registers.h"
 #include "spi.h"
+#include "spi_controller.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -15,9 +16,6 @@
 #ifdef CONFIG_STREAM_SIGNATURE
 #include "signing.h"
 #endif
-
-/* Not defined in the hardware register spec, the RX and TX buffers are 128B. */
-#define SPI_BUF_SIZE 0x80
 
 /* This timeout should allow a full buffer transaction at the lowest SPI speed
  * by using the largest uint8_t clock divider of 256 (~235kHz). */
