@@ -44,7 +44,7 @@
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Increase from 50 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/* Other values should be the same as the default configuration. */
@@ -283,9 +283,11 @@ static void ps8815_reset(int port)
 void board_reset_pd_mcu(void)
 {
 	ps8815_reset(USBC_PORT_C0);
-	usb_mux_hpd_update(USBC_PORT_C0, 0, 0);
+	usb_mux_hpd_update(USBC_PORT_C0, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 	ps8815_reset(USBC_PORT_C1);
-	usb_mux_hpd_update(USBC_PORT_C1, 0, 0);
+	usb_mux_hpd_update(USBC_PORT_C1, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 
 /******************************************************************************/

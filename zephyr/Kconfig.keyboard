@@ -38,17 +38,64 @@ config PLATFORM_EC_KEYBOARD_PROTOCOL_8042
 
 	  See here for docs: https://wiki.osdev.org/%228042%22_PS/2_Controller
 
+config PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP
+	bool "mkbp"
+	help
+	  Use the MKBP protocol to communicate with the AP. This protocol is
+	  usually used on ARM-based platforms. It sends the raw scan code, like
+	  (row, col), to the AP and the kernel driver will map this scan code to
+	  a key.
+
 endchoice # PLATFORM_EC_KEYBOARD
 
-config PLATFORM_EC_KEYBOARD_BOARD_CONFIG
-	bool "Use custom keyboard config"
+config PLATFORM_EC_KEYBOARD_KEYPAD
+	bool "Support a numeric keypad"
 	help
-	  Enable support for custom keyboard config. in which case
-	  keyscan_config must be defined by the board, using
-	  struct keyboard_scan_config.
+	  Enable support for a keypad, a palm-sized keyboard section usually
+	  placed on the far right. This contains nuumber keys and also some
+	  commonly used symbols, to help speed up numeric data entry.
 
-	  If this is not enabled, default values in common/keyboard_scan.c are
-	  used.
+config PLATFORM_EC_KEYBOARD_VIVALDI
+	bool "Vivaldi keyboard support"
+	depends on PLATFORM_EC_KEYBOARD_PROTOCOL_8042
+	default y
+	help
+	  Enable code for Vivaldi keyboard (standard for new Chromium OS
+	  devices). A Chromium OS device is Vivaldi compatible if the keyboard
+	  matrix complies with: go/vivaldi-matrix.
+
+	  Vivaldi code enables:
+	  - A response to EC_CMD_GET_KEYBD_CONFIG command.
+	  - Boards can specify their custom layout for top keys.
+
+choice "Power button interference"
+	prompt "Select the impact of pressing the power button"
+	help
+	  On some boards one of the keyboard-scan inputs is affected by pressing
+	  the power button. When the power button is pressed, that input needs
+	  to be ignored in that case.
+
+config PLATFORM_EC_KEYBOARD_PWRBTN_INDEPENDENT
+	bool "No impact on keyboard-scan inputs"
+	help
+	  Select this if pressing the power button does not affect any
+	  keyboard-scan inputs.
+
+config PLATFORM_EC_KEYBOARD_PWRBTN_ASSERTS_KSI2
+	bool "Forces KSI2 to be asserted"
+	help
+	  Enable this if KSI2 is stuck 'asserted' for all scan columns if the
+	  power button is held. We must be aware of this case in order to
+	  correctly handle recovery-mode key combinations.
+
+config PLATFORM_EC_KEYBOARD_PWRBTN_ASSERTS_KSI3
+	bool "Forces KSI3 to be asserted"
+	help
+	  Enable this if KSI3 is stuck 'asserted' for all scan columns if the
+	  power button is held. We must be aware of this case in order to
+	  correctly handle recovery-mode key combinations.
+
+endchoice # "Power button interference"
 
 config PLATFORM_EC_KEYBOARD_COL2_INVERTED
 	bool "A mechanism for passing KSO2 to H1 which inverts the signal"
@@ -59,11 +106,41 @@ config PLATFORM_EC_KEYBOARD_COL2_INVERTED
 	  Refresh key will also trigger T key, which is in the next scanning
 	  column line. See http://b/156007029.
 
-config PLATFORM_EC_CONSOLE_CMD_KEYBOARD_8042
-	bool "Console command: i8042"
-	default y if PLATFORM_EC_KEYBOARD_PROTOCOL_8042
+config PLATFORM_EC_KEYBOARD_REFRESH_ROW3
+	bool "Move the refresh key matrix to row 3 instead of row 2"
 	help
-	  This command prints the state of the i8042 keyboard protocol and
+	  The Vivaldi keyboards have the refresh key on row 3 instead of row 2.
+	  The legacy keyboards with the assistant key also move the refresh key
+	  matrix to row 3. This is used by the boot key detection code to
+	  determine if the refresh key is held down at boot.
+
+config PLATFORM_EC_VOLUME_BUTTONS
+	bool "Board has volume-up and volume-down buttons"
+	help
+	  Enable this if the board has physical buttons for the volume controls.
+	  These are buttons controlled by GPIOs and are not part of the keyboard
+	  matrix.
+
+	  Your board must define GPIO_VOLUME_UP_L and GPIO_VOLUME_DOWN_L in
+	  gpio_map.h
+
+config PLATFORM_EC_CMD_BUTTON
+	bool "Console command: button"
+	help
+	  This command simulates button press. The buttons are like volume-up,
+	  volume-down, and recovery buttons.
+
+config PLATFORM_EC_CONSOLE_CMD_KEYBOARD
+	bool "Console command: ksstate, kbpress, 8042"
+	default y if PLATFORM_EC_KEYBOARD
+	help
+	  Enable keyboard related console commands.
+
+	    ksstate     - Show or toggle printing keyboard scan state
+	    kbpress     - Simulate keypress
+
+	  If PLATFORM_EC_KEYBOARD_PROTOCOL_8042 is enabled, it includes 8042
+	  command which prints the state of the i8042 keyboard protocol and
 	  includes the following subcommands:
 
 	    codeset	- Get/set keyboard codeset

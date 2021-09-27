@@ -6,7 +6,6 @@
 /* IT83xx ADC module for Chrome EC */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "clock.h"
 #include "console.h"
 #include "common.h"
@@ -356,6 +355,11 @@ static void adc_init(void)
 	IT83XX_ADC_ADCSTS &= ~BIT(7);
 	IT83XX_ADC_ADCCFG &= ~BIT(5);
 	IT83XX_ADC_ADCCTL = 1;
+	/*
+	 * Enable this bit, and data of VCHxDATL/VCHxDATM will be
+	 * kept until data valid is cleared.
+	 */
+	IT83XX_ADC_ADCGCR |= IT83XX_ADC_DBKEN;
 
 	task_waiting = TASK_ID_INVALID;
 	/* disable adc interrupt */

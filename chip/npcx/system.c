@@ -40,10 +40,18 @@
 #define CHIP_REV_STR_SIZE    6
 #endif
 
+/*  Legacy SuperI/O Configuration D register offset */
+#define SIOCFD_REG_OFFSET    0x2D
+
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+
+#if defined(NPCX_LCT_SUPPORT)
+/* A flag for waking up from hibernate mode by RTC overflow event */
+static int is_rtc_overflow_event;
+#endif
 
 /*****************************************************************************/
 /* Internal functions */
@@ -328,6 +336,15 @@ static void chip_set_hib_flag(uint32_t *flags, uint32_t hib_wake_flags)
 		if (npcx_lct_is_event_set()) {
 			*flags |= EC_RESET_FLAG_RTC_ALARM |
 					  EC_RESET_FLAG_HIBERNATE;
+			/* Is RTC overflow event? */
+			if (bbram_data_read(BBRM_DATA_INDEX_LCT_TIME) ==
+				NPCX_LCT_MAX) {
+				/*
+				 * Mark it as RTC overflow event and handle it
+				 * in hook init function later for logging info.
+				 */
+				is_rtc_overflow_event = 1;
+			}
 			npcx_lct_clear_event();
 			return;
 		}
@@ -767,6 +784,22 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 #endif
 }
 
+#ifndef CONFIG_ENABLE_JTAG_SELECTION
+static void system_disable_host_sel_jtag(void)
+{
+	int data;
+
+	/* Enable Core-to-Host Modules Access */
+	SET_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSAE);
+	/* Clear SIOCFD.JEN0_HSL to disable JTAG0 */
+	data = sib_read_reg(SIO_OFFSET, SIOCFD_REG_OFFSET);
+	data &= ~0x80;
+	sib_write_reg(SIO_OFFSET, SIOCFD_REG_OFFSET, data);
+	/* Disable Core-to-Host Modules Access */
+	CLEAR_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSAE);
+}
+#endif
+
 void chip_pre_init(void)
 {
 	/* Setting for fixing JTAG issue */
@@ -793,21 +826,21 @@ void chip_pre_init(void)
 	 * This is the workaround to disable the JTAG0 which is enabled
 	 * accidentally by a special key combination.
 	 */
+#if NPCX_FAMILY_VERSION < NPCX_FAMILY_NPCX9
 	if (!IS_BIT_SET(NPCX_DEVALT(5), NPCX_DEVALT5_NJEN0_EN)) {
-		int data;
 		/* Set DEVALT5.nJEN0_EN to disable JTAG0 */
 		SET_BIT(NPCX_DEVALT(5), NPCX_DEVALT5_NJEN0_EN);
-		/* Enable Core-to-Host Modules Access */
-		SET_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSAE);
-		/* Clear SIOCFD.JEN0_HSL to disable JTAG0 */
-		data = sib_read_reg(SIO_OFFSET, 0x2D);
-		data &= ~0x80;
-		sib_write_reg(SIO_OFFSET, 0x2D, data);
-		/* Disable Core-to-Host Modules Access */
-		CLEAR_BIT(NPCX_SIBCTRL, NPCX_SIBCTRL_CSAE);
+		system_disable_host_sel_jtag();
+	}
+#else
+	if (GET_FIELD(NPCX_JEN_CTL1, NPCX_JEN_CTL1_JEN_EN_FIELD) ==
+		      NPCX_JEN_CTL1_JEN_EN_ENA) {
+		SET_FIELD(NPCX_JEN_CTL1, NPCX_JEN_CTL1_JEN_EN_FIELD,
+			  NPCX_JEN_CTL1_JEN_EN_DIS);
+		system_disable_host_sel_jtag();
 	}
 #endif
-
+#endif
 }
 
 void system_pre_init(void)
@@ -1049,6 +1082,7 @@ const char *system_get_chip_revision(void)
 #ifdef CHIP_FAMILY_NPCX7
 	uint8_t chip_id = NPCX_DEVICE_ID_CR;
 #endif
+	int s;
 
 	switch (chip_gen) {
 #if defined(CHIP_FAMILY_NPCX5)
@@ -1082,7 +1116,7 @@ const char *system_get_chip_revision(void)
 	 * For npcx5/npcx7, the revision number is 1 byte.
 	 * For NPCX9 and later chips, the revision number is 4 bytes.
 	 */
-	for (int s = sizeof(rev_num) - 1; s >= 0; s--) {
+	for (s = sizeof(rev_num) - 1; s >= 0; s--) {
 		uint8_t r = rev_num >> (s * 8);
 
 		*p++ = system_to_hex(r >> 4);
@@ -1107,9 +1141,10 @@ int system_set_scratchpad(uint32_t value)
 	return bbram_data_write(BBRM_DATA_INDEX_SCRATCHPAD, value);
 }
 
-uint32_t system_get_scratchpad(void)
+int system_get_scratchpad(uint32_t *value)
 {
-	return bbram_data_read(BBRM_DATA_INDEX_SCRATCHPAD);
+	*value = bbram_data_read(BBRM_DATA_INDEX_SCRATCHPAD);
+	return EC_SUCCESS;
 }
 
 int system_is_reboot_warm(void)
@@ -1133,6 +1168,23 @@ int system_is_reboot_warm(void)
 	else
 		return 1;
 }
+
+#if defined(CONFIG_HIBERNATE_PSL) && defined(NPCX_LCT_SUPPORT)
+static void system_init_check_rtc_wakeup_event(void)
+{
+	/*
+	 * If platform uses PSL (Power Switch Logic) for hibernating and RTC is
+	 * also supported, determine whether ec is woken up by RTC with overflow
+	 * event (16 weeks). If so, let it go to hibernate mode immediately.
+	 */
+	if (is_rtc_overflow_event){
+		CPRINTS("Hibernate due to RTC overflow event");
+		system_hibernate(0, 0);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, system_init_check_rtc_wakeup_event,
+	     HOOK_PRIO_DEFAULT - 1);
+#endif
 
 /*****************************************************************************/
 /* Console commands */

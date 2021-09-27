@@ -31,7 +31,7 @@
 /* Timeout for device should be available after reset (SMBus spec. unit:ms) */
 #define I2C_MAX_TIMEOUT 35
 /*
- * Timeout for SCL held to low by slave device . (SMBus spec. unit:ms).
+ * Timeout for SCL held to low by peripheral device. (SMBus spec. unit:ms).
  * Some I2C devices may violate this timing and clock stretch for longer.
  * TODO: Consider increasing this timeout.
  */
@@ -47,7 +47,7 @@
 #define I2C_START(ctrl) SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_START)
 #define I2C_STOP(ctrl)  SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_STOP)
 #define I2C_NACK(ctrl)  SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_ACK)
-/* I2C moudule automatically stall bus after sending slave address */
+/* I2C module automatically stall bus after sending peripheral address */
 #define I2C_STALL(ctrl) SET_BIT(NPCX_SMBCTL1(ctrl), NPCX_SMBCTL1_STASTRE)
 #define I2C_WRITE_BYTE(ctrl, data) (NPCX_SMBSDA(ctrl) = data)
 #define I2C_READ_BYTE(ctrl, data)  (data = NPCX_SMBSDA(ctrl))
@@ -74,20 +74,21 @@
 
 /* Error values that functions can return */
 enum smb_error {
-	SMB_OK = 0,                 /* No error                            */
-	SMB_CH_OCCUPIED,            /* Channel is already occupied         */
-	SMB_MEM_POOL_INIT_ERROR,    /* Memory pool initialization error    */
-	SMB_BUS_FREQ_ERROR,         /* SMbus freq was not valid            */
-	SMB_INVLAID_REGVALUE,       /* Invalid SMbus register value        */
-	SMB_UNEXIST_CH_ERROR,       /* Channel does not exist              */
-	SMB_NO_SUPPORT_PTL,         /* Not support SMBus Protocol          */
-	SMB_BUS_ERROR,              /* Encounter bus error                 */
-	SMB_MASTER_NO_ADDRESS_MATCH,/* No slave address match (Master Mode)*/
-	SMB_READ_DATA_ERROR,        /* Read data for SDA error             */
-	SMB_READ_OVERFLOW_ERROR,    /* Read data over than we predict      */
-	SMB_TIMEOUT_ERROR,          /* Timeout expired                     */
-	SMB_MODULE_ISBUSY,          /* Module is occupied by other device  */
-	SMB_BUS_BUSY,               /* SMBus is occupied by other device   */
+	SMB_OK = 0,                 /* No error                           */
+	SMB_CH_OCCUPIED,            /* Channel is already occupied        */
+	SMB_MEM_POOL_INIT_ERROR,    /* Memory pool initialization error   */
+	SMB_BUS_FREQ_ERROR,         /* SMbus freq was not valid           */
+	SMB_INVLAID_REGVALUE,       /* Invalid SMbus register value       */
+	SMB_UNEXIST_CH_ERROR,       /* Channel does not exist             */
+	SMB_NO_SUPPORT_PTL,         /* Not support SMBus Protocol         */
+	SMB_BUS_ERROR,              /* Encounter bus error                */
+	SMB_NO_ADDRESS_MATCH,       /* No peripheral address match        */
+				    /*  (Controller Mode)                 */
+	SMB_READ_DATA_ERROR,        /* Read data for SDA error            */
+	SMB_READ_OVERFLOW_ERROR,    /* Read data over than we predict     */
+	SMB_TIMEOUT_ERROR,          /* Timeout expired                    */
+	SMB_MODULE_ISBUSY,          /* Module is occupied by other device */
+	SMB_BUS_BUSY,               /* SMBus is occupied by other device  */
 };
 
 /*
@@ -96,7 +97,7 @@ enum smb_error {
  */
 enum smb_oper_state_t {
 	SMB_IDLE,
-	SMB_MASTER_START,
+	SMB_CONTROLLER_START,
 	SMB_WRITE_OPER,
 	SMB_READ_OPER,
 	SMB_FAKE_READ_OPER,
@@ -113,11 +114,12 @@ struct i2c_status {
 	uint16_t              sz_txbuf;  /* Size of Tx buffer in bytes */
 	uint16_t              sz_rxbuf;  /* Size of rx buffer in bytes */
 	uint16_t              idx_buf;   /* Current index of Tx/Rx buffer */
-	uint16_t              slave_addr_flags;/* Target slave address */
+	uint16_t              addr_flags;/* Target address */
 	enum smb_oper_state_t oper_state;/* Smbus operation state */
 	enum smb_error        err_code;  /* Error code */
 	int                   task_waiting; /* Task waiting on controller */
 	uint32_t              timeout_us;/* Transaction timeout */
+	uint16_t              kbps;      /* Speed */
 };
 /* I2C controller state data array */
 static struct i2c_status i2c_stsobjs[I2C_CONTROLLER_COUNT];
@@ -211,6 +213,7 @@ static void i2c_abort_data(int controller)
 static int i2c_reset(int controller)
 {
 	uint16_t timeout = I2C_MAX_TIMEOUT;
+
 	/* Disable the SMB module */
 	CLEAR_BIT(NPCX_SMBCTL2(controller), NPCX_SMBCTL2_ENABLE);
 
@@ -310,7 +313,7 @@ static void i2c_fifo_write_data(int controller)
 	CPRINTF("\n");
 }
 
-enum smb_error i2c_master_transaction(int controller)
+enum smb_error i2c_controller_transaction(int controller)
 {
 	/* Set i2c mode to object */
 	int events = 0;
@@ -323,7 +326,7 @@ enum smb_error i2c_master_transaction(int controller)
 	/* Assign current SMB status of controller */
 	if (p_status->oper_state == SMB_IDLE) {
 		/* New transaction */
-		p_status->oper_state = SMB_MASTER_START;
+		p_status->oper_state = SMB_CONTROLLER_START;
 		/* Clear FIFO and status bit */
 		if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT)) {
 			NPCX_SMBFIF_CTS(controller) =
@@ -358,7 +361,7 @@ enum smb_error i2c_master_transaction(int controller)
 				 * byte from previous transaction, adding a
 				 * extra byte for next transaction which let
 				 * ec sets NACK bit in time is necessary.
-				 * Or i2c master cannot generate STOP
+				 * Or i2c controller cannot generate STOP
 				 * when the last byte is ACK during receiving.
 				 */
 				p_status->sz_rxbuf++;
@@ -408,7 +411,7 @@ enum smb_error i2c_master_transaction(int controller)
 	}
 
 	/* Generate a START condition */
-	if (p_status->oper_state == SMB_MASTER_START ||
+	if (p_status->oper_state == SMB_CONTROLLER_START ||
 			p_status->oper_state == SMB_REPEAT_START) {
 		I2C_START(controller);
 		CPUTS("ST");
@@ -485,7 +488,7 @@ void i2c_done(int controller)
 	p_status->oper_state = (p_status->flags & I2C_XFER_STOP)
 				? SMB_IDLE : SMB_WRITE_SUSPEND;
 	/*
-	 * Disable interrupt for i2c master stall SCL
+	 * Disable interrupt for i2c controller stall SCL
 	 * and forbid SDAST generate interrupt
 	 * until common layer start other transactions
 	 */
@@ -511,7 +514,7 @@ static void i2c_handle_receive(int controller)
 			CPUTS("-SP");
 		} else {
 			/*
-			 * Disable interrupt before i2c master read SDA
+			 * Disable interrupt before i2c controller read SDA
 			 * reg (stall SCL) and forbid SDAST generate
 			 * interrupt until starting other transactions
 			 */
@@ -654,18 +657,18 @@ static void i2c_fifo_handle_receive(int controller)
 static void i2c_handle_sda_irq(int controller)
 {
 	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
-	uint8_t addr_8bit = I2C_STRIP_FLAGS(p_status->slave_addr_flags) << 1;
+	uint8_t addr_8bit = I2C_STRIP_FLAGS(p_status->addr_flags) << 1;
 
 	/* 1 Issue Start is successful ie. write address byte */
-	if (p_status->oper_state == SMB_MASTER_START
+	if (p_status->oper_state == SMB_CONTROLLER_START
 			|| p_status->oper_state == SMB_REPEAT_START) {
 		/* Prepare address byte */
 		if (p_status->sz_txbuf == 0) {/* Receive mode */
 			p_status->oper_state = SMB_READ_OPER;
 			/*
-			 * Receiving one or zero bytes - stall bus after START
-			 * condition. If there's no slave devices on bus, FW
-			 * needn't to set ACK bit.
+			 * Receiving one or zero bytes - stall bus after
+			 * START condition. If there's no peripheral
+			 * devices on bus, FW needn't to set ACK bit.
 			 */
 			if (p_status->sz_rxbuf < 2)
 				I2C_STALL(controller);
@@ -682,14 +685,17 @@ static void i2c_handle_sda_irq(int controller)
 		/* Completed handling START condition */
 		return;
 	}
-	/* 2 Handle master write operation  */
+	/* 2 Handle controller write operation */
 	else if (p_status->oper_state == SMB_WRITE_OPER) {
 		/* all bytes have been written, in a pure write operation */
 		if (p_status->idx_buf == p_status->sz_txbuf) {
 			/*  no more message */
 			if (p_status->sz_rxbuf == 0)
 				i2c_done(controller);
-			/* need to restart & send slave address immediately */
+			/*
+			 * need to restart & send peripheral address
+			 * immediately
+			 */
 			else {
 				/*
 				 * Prepare address byte
@@ -725,7 +731,10 @@ static void i2c_handle_sda_irq(int controller)
 				CPUTS("-ARR");
 			}
 		}
-		/* write next byte (not last byte and not slave address */
+		/*
+		 * write next byte (not last byte and not peripheral
+		 * address)
+		 */
 		else {
 			/*
 			 * This function can be called in either single-byte
@@ -735,7 +744,10 @@ static void i2c_handle_sda_irq(int controller)
 			i2c_fifo_write_data(controller);
 		}
 	}
-	/* 3 Handle master read operation (read or after a write operation) */
+	/*
+	 * 3 Handle controller read operation (read or after a write
+	 * operation)
+	 */
 	else if (p_status->oper_state == SMB_READ_OPER ||
 			p_status->oper_state == SMB_FAKE_READ_OPER) {
 		if (IS_ENABLED(NPCX_I2C_FIFO_SUPPORT))
@@ -745,7 +757,7 @@ static void i2c_handle_sda_irq(int controller)
 	}
 }
 
-void i2c_master_int_handler (int controller)
+static void i2c_controller_int_handler(int controller)
 {
 	volatile struct i2c_status *p_status = i2c_stsobjs + controller;
 
@@ -757,7 +769,7 @@ void i2c_master_int_handler (int controller)
 		CPUTS("-SP");
 		/* Clear BER Bit */
 		SET_BIT(NPCX_SMBST(controller), NPCX_SMBST_BER);
-		/* Make sure slave doesn't hold bus by reading */
+		/* Make sure peripheral doesn't hold bus by reading */
 		I2C_READ_BYTE(controller, data);
 
 		/* Set error code */
@@ -785,7 +797,7 @@ void i2c_master_int_handler (int controller)
 		/* Clear NEGACK Bit */
 		SET_BIT(NPCX_SMBST(controller), NPCX_SMBST_NEGACK);
 		/* Set error code */
-		p_status->err_code = SMB_MASTER_NO_ADDRESS_MATCH;
+		p_status->err_code = SMB_NO_ADDRESS_MATCH;
 		/* Notify upper layer */
 		p_status->oper_state = SMB_IDLE;
 		task_set_event(p_status->task_waiting, TASK_EVENT_I2C_IDLE);
@@ -843,7 +855,7 @@ void i2c_master_int_handler (int controller)
  */
 void handle_interrupt(int controller)
 {
-	i2c_master_int_handler(controller);
+	i2c_controller_int_handler(controller);
 }
 
 void i2c0_interrupt(void) { handle_interrupt(0); }
@@ -885,7 +897,7 @@ void i2c_set_timeout(int port, uint32_t timeout)
 }
 
 int chip_i2c_xfer(const int port,
-		  const uint16_t slave_addr_flags,
+		  const uint16_t addr_flags,
 		  const uint8_t *out, int out_size,
 		  uint8_t *in, int in_size, int flags)
 {
@@ -909,12 +921,12 @@ int chip_i2c_xfer(const int port,
 	i2c_select_port(port);
 
 	/* Copy data to controller struct */
-	p_status->flags       = flags;
-	p_status->tx_buf      = out;
-	p_status->sz_txbuf    = out_size;
-	p_status->rx_buf      = in;
-	p_status->sz_rxbuf    = in_size;
-	p_status->slave_addr_flags = slave_addr_flags;
+	p_status->flags      = flags;
+	p_status->tx_buf     = out;
+	p_status->sz_txbuf   = out_size;
+	p_status->rx_buf     = in;
+	p_status->sz_rxbuf   = in_size;
+	p_status->addr_flags = addr_flags;
 
 	/* Reset index & error */
 	p_status->idx_buf     = 0;
@@ -941,8 +953,8 @@ int chip_i2c_xfer(const int port,
 
 	CPUTS("\n");
 
-	/* Start master transaction */
-	i2c_master_transaction(ctrl);
+	/* Start controller transaction */
+	i2c_controller_transaction(ctrl);
 
 	/* Reset task ID */
 	p_status->task_waiting = TASK_ID_INVALID;
@@ -1007,91 +1019,164 @@ int i2c_raw_get_sda(int port)
 }
 
 /*****************************************************************************/
-/* Hooks */
-static void i2c_freq_changed(void)
-{
-	int freq, i, j;
 
-	for (i = 0; i < i2c_ports_used; i++) {
-		int bus_freq = i2c_ports[i].kbps;
-		int ctrl = i2c_port_to_controller(i2c_ports[i].port);
-		int scl_freq;
+static void i2c_port_set_freq(const int ctrl, const int bus_freq_kbps)
+{
+	int freq, j;
+	int scl_freq;
+	const struct i2c_timing *pTiming;
+	int i2c_timing_used;
 
 #if NPCX_FAMILY_VERSION >= NPCX_FAMILY_NPCX7
-		/*
-		 * SMB0/1/4/5/6/7 use APB3 clock
-		 * SMB2/3 use APB2 clock
-		 */
-		freq = (ctrl < 2 || ctrl > 3) ?
-		       clock_get_apb3_freq() : clock_get_apb2_freq();
+	/*
+	 * SMB0/1/4/5/6/7 use APB3 clock
+	 * SMB2/3 use APB2 clock
+	 */
+	freq = (ctrl < 2 || ctrl > 3) ?
+		clock_get_apb3_freq() : clock_get_apb2_freq();
 #else /* CHIP_FAMILY_NPCX5 */
-		/*
-		 * SMB0/1 use core clock
-		 * SMB2/3 use APB2 clock
-		 */
-		freq = (ctrl < 2) ? clock_get_freq() : clock_get_apb2_freq();
+	/*
+	 * SMB0/1 use core clock
+	 * SMB2/3 use APB2 clock
+	 */
+	freq = (ctrl < 2) ? clock_get_freq() : clock_get_apb2_freq();
 #endif
 
-		/*
-		 * Set SCL frequency by formula:
-		 * tSCL = 4 * SCLFRQ * tCLK
-		 * fSCL = fCLK / (4*SCLFRQ)
-		 * SCLFRQ = ceil(fCLK/(4*fSCL))
-		 */
-		scl_freq = DIV_ROUND_UP(freq, bus_freq*4000); /* Unit in bps */
+	if (bus_freq_kbps == i2c_stsobjs[ctrl].kbps)
+		return;
 
-		/* Normal mode if i2c freq is under 100kHz */
-		if (bus_freq <= 100) {
-			/* Set divider value of SCL */
-			SET_FIELD(NPCX_SMBCTL2(ctrl), NPCX_SMBCTL2_SCLFRQ7_FIELD
-					, (scl_freq & 0x7F));
-			SET_FIELD(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_SCLFRQ2_FIELD
-					, (scl_freq >> 7));
-		} else {
-			const struct i2c_timing *pTiming;
-			int i2c_timing_used;
+	/*
+	 * Set SCL frequency by formula:
+	 * tSCL = 4 * SCLFRQ * tCLK
+	 * fSCL = fCLK / (4*SCLFRQ)
+	 * SCLFRQ = ceil(fCLK/(4*fSCL))
+	 */
+	scl_freq = DIV_ROUND_UP(freq, bus_freq_kbps*4000); /* Unit in bps */
 
-			/* use Fast Mode */
-			SET_BIT(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_400K);
-			/*
-			 * Set SCLH(L)T and hold-time directly for best i2c
-			 * timing condition for all source clocks. Please refer
-			 * Section 7.5.9 "SMBus Timing - Fast Mode" for detail.
-			 */
-			if (bus_freq == 400) {
-				pTiming = i2c_400k_timings;
-				i2c_timing_used = i2c_400k_timing_used;
-			} else if (bus_freq == 1000) {
-				pTiming = i2c_1m_timings;
-				i2c_timing_used = i2c_1m_timing_used;
-			} else {
-				/* Set value from formula */
-				NPCX_SMBSCLLT(ctrl) = scl_freq;
-				NPCX_SMBSCLHT(ctrl) = scl_freq;
-				cprints(CC_I2C,
-					"Warning: Use 400K or 1MHz for better timing of I2c %d",
-					ctrl);
-				continue;
-			}
+	/* Normal mode if I2C freq is under 100kHz */
+	if (bus_freq_kbps <= 100) {
+		i2c_stsobjs[ctrl].kbps = bus_freq_kbps;
+		/* Set divider value of SCL */
+		SET_FIELD(NPCX_SMBCTL2(ctrl), NPCX_SMBCTL2_SCLFRQ7_FIELD,
+			  (scl_freq & 0x7F));
+		SET_FIELD(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_SCLFRQ2_FIELD,
+			  (scl_freq >> 7));
+		return;
+	}
 
-			for (j = 0; j < i2c_timing_used; j++, pTiming++) {
-				if (pTiming->clock == (freq/SECOND)) {
-					/* Set SCLH(L)T and hold-time */
-					NPCX_SMBSCLLT(ctrl) = pTiming->k1/2;
-					NPCX_SMBSCLHT(ctrl) = pTiming->k2/2;
-					SET_FIELD(NPCX_SMBCTL4(ctrl),
-					NPCX_SMBCTL4_HLDT_FIELD, pTiming->HLDT);
-					break;
-				}
-			}
-			if (j == i2c_timing_used)
-				cprints(CC_I2C,
-					"Error: Please make sure src clock of i2c %d is supported",
-					ctrl);
+	/* use Fast Mode */
+	SET_BIT(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_400K);
+	/*
+	 * Set SCLH(L)T and hold-time directly for best I2C
+	 * timing condition for all source clocks. Please refer
+	 * Section 7.5.9 "SMBus Timing - Fast Mode" for detail.
+	 */
+	if (bus_freq_kbps == 400) {
+		pTiming = i2c_400k_timings;
+		i2c_timing_used = i2c_400k_timing_used;
+	} else if (bus_freq_kbps == 1000) {
+		pTiming = i2c_1m_timings;
+		i2c_timing_used = i2c_1m_timing_used;
+	} else {
+		i2c_stsobjs[ctrl].kbps = bus_freq_kbps;
+		/* Set value from formula */
+		NPCX_SMBSCLLT(ctrl) = scl_freq;
+		NPCX_SMBSCLHT(ctrl) = scl_freq;
+		cprints(CC_I2C,
+			"Warning: I2C %d: Use 400kHz or 1MHz for better timing",
+			ctrl);
+		return;
+	}
+
+	for (j = 0; j < i2c_timing_used; j++, pTiming++) {
+		if (pTiming->clock == (freq/SECOND)) {
+			i2c_stsobjs[ctrl].kbps = bus_freq_kbps;
+			/* Set SCLH(L)T and hold-time */
+			NPCX_SMBSCLLT(ctrl) = pTiming->k1/2;
+			NPCX_SMBSCLHT(ctrl) = pTiming->k2/2;
+			SET_FIELD(NPCX_SMBCTL4(ctrl),
+				  NPCX_SMBCTL4_HLDT_FIELD, pTiming->HLDT);
+			break;
 		}
 	}
+	if (j == i2c_timing_used)
+		cprints(CC_I2C, "Error: I2C %d: src clk %d not supported",
+			ctrl, freq / SECOND);
 }
+
+/* Hooks */
+
+static void i2c_freq_changed(void)
+{
+	int i;
+
+	for (i = 0; i < I2C_CONTROLLER_COUNT; ++i) {
+		/* No bus speed configured */
+		i2c_stsobjs[i].kbps = 0;
+	}
+
+	for (i = 0; i < i2c_ports_used; i++) {
+		const struct i2c_port_t *p;
+		int ctrl;
+
+		p = &i2c_ports[i];
+		ctrl = i2c_port_to_controller(p->port);
+		if (ctrl < 0)
+			continue;
+		i2c_port_set_freq(ctrl, p->kbps);
+	}
+}
+
 DECLARE_HOOK(HOOK_FREQ_CHANGE, i2c_freq_changed, HOOK_PRIO_DEFAULT);
+
+enum i2c_freq chip_i2c_get_freq(int chip_i2c_port)
+{
+	int ctrl;
+	int kbps;
+
+	ctrl = i2c_port_to_controller(chip_i2c_port);
+	if (ctrl < 0)
+		return I2C_FREQ_COUNT;
+
+	kbps = i2c_stsobjs[ctrl].kbps;
+
+	if (kbps > 400)
+		return I2C_FREQ_1000KHZ;
+	if (kbps > 100)
+		return I2C_FREQ_400KHZ;
+
+	if (kbps == 100)
+		return I2C_FREQ_100KHZ;
+
+	return I2C_FREQ_COUNT;
+}
+
+int chip_i2c_set_freq(int chip_i2c_port, enum i2c_freq freq)
+{
+	int ctrl;
+	int bus_freq_kbps;
+
+	ctrl = i2c_port_to_controller(chip_i2c_port);
+	if (ctrl < 0)
+		return EC_ERROR_INVAL;
+
+	switch (freq) {
+	case I2C_FREQ_100KHZ:
+		bus_freq_kbps = 100;
+		break;
+	case I2C_FREQ_400KHZ:
+		bus_freq_kbps = 400;
+		break;
+	case I2C_FREQ_1000KHZ:
+		bus_freq_kbps = 1000;
+		break;
+	default:
+		return EC_ERROR_INVAL;
+	}
+
+	i2c_port_set_freq(ctrl, bus_freq_kbps);
+	return EC_SUCCESS;
+}
 
 void i2c_init(void)
 {
@@ -1137,4 +1222,3 @@ void i2c_init(void)
 		i2c_init_bus(ctrl);
 	}
 }
-

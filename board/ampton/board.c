@@ -6,7 +6,6 @@
 /* Ampton/Apel board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "charge_state.h"
 #include "common.h"
@@ -35,7 +34,7 @@
 #include "tablet_mode.h"
 #include "tcpm/tcpci.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "uart.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
@@ -374,9 +373,8 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	cprints(CC_USBPD, "p%d: overcurrent!", port);
 }
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/*
 	 * If the lid is in tablet position via other sensors,
@@ -388,4 +386,3 @@ void lid_angle_peripheral_enable(int enable)
 	if (board_is_convertible())
 		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif

@@ -79,8 +79,10 @@
 
 /* Specify type of accelerometers attached. */
 #undef CONFIG_ACCEL_BMA255
+#undef CONFIG_ACCEL_BMA4XX
 #undef CONFIG_ACCEL_KXCJ9
 #undef CONFIG_ACCEL_KX022
+
 /*
  * lis2dh/lis2de/lng2dm have the same register interface but different
  * supported resolution. In normal mode, lis2dh works in 10-bit resolution,
@@ -118,11 +120,29 @@
 
 #undef CONFIG_ACCELGYRO_BMI160
 #undef CONFIG_ACCELGYRO_BMI260
+#undef CONFIG_ACCELGYRO_BMI3XX
 #undef CONFIG_ACCELGYRO_ICM426XX
+#undef CONFIG_ACCELGYRO_ICM42607
 #undef CONFIG_ACCELGYRO_LSM6DS0
 /* Use CONFIG_ACCELGYRO_LSM6DSM for LSM6DSL, LSM6DSM, and/or LSM6DS3 */
 #undef CONFIG_ACCELGYRO_LSM6DSM
 #undef CONFIG_ACCELGYRO_LSM6DSO
+
+/* Select the communication mode for the accelgyro ICM. Only one of these should
+ * be set. To set the value manually, simply define one or the other. If neither
+ * is defined, but I2C_PORT_ACCEL is defined, then CONFIG_ACCELGYRO_ICM_I2C will
+ * automatically be set.
+ */
+#undef CONFIG_ACCELGYRO_ICM_COMM_SPI
+#undef CONFIG_ACCELGYRO_ICM_COMM_I2C
+
+/* Select the communication mode for the accelgyro BMI. Only one of these should
+ * be set. To set the value manually, simply define one or the other. If neither
+ * is defined, but I2C_PORT_ACCEL is defined, then CONFIG_ACCELGYRO_BMI_I2C will
+ * automatically be set.
+ */
+#undef CONFIG_ACCELGYRO_BMI_COMM_SPI
+#undef CONFIG_ACCELGYRO_BMI_COMM_I2C
 
 /*
  * Some chips have a portion of memory which will remain powered even
@@ -279,6 +299,11 @@
 #undef CONFIG_ADC
 
 /*
+ * Allow runtime configuration of the adc_channels[] array
+ */
+#undef CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
+
+/*
  * ADC sample time selection. The value is chip-dependent.
  * TODO: Replace this with CONFIG_ADC_PROFILE entries.
  */
@@ -346,6 +371,7 @@
  */
 #undef CONFIG_ACCELGYRO_BMI160_INT_EVENT
 #undef CONFIG_ACCELGYRO_BMI260_INT_EVENT
+#undef CONFIG_ACCELGYRO_BMI3XX_INT_EVENT
 #undef CONFIG_ACCELGYRO_ICM426XX_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
@@ -601,13 +627,6 @@
 #undef CONFIG_BATTERY_V2
 
 /*
- * Some fuel gauges in battery take some time to return valid battery params
- * when wake form dead battery.
- * It need to do precharge to take valid battery params.
- */
-#undef CONFIG_BATTERY_DEAD_UNTIL_VALUE
-
-/*
  * Number of batteries, only matters when CONFIG_BATTERY_V2 is used.
  */
 #undef CONFIG_BATTERY_COUNT
@@ -619,19 +638,48 @@
 #undef CONFIG_BATTERY_MEASURE_IMBALANCE
 
 /*
- * If remaining capacity is x% of full capacity, remaining capacity is set
- * equal to full capacity.
- *
+ * Some boards needs to lower input voltage when battery is full and chipset
+ * is in S5/G3. This should be defined to integer value in mV.
+ */
+#undef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
+
+/*
  * Some batteries don't update full capacity timely or don't update it at all.
  * On such systems, compensation is required to guarantee remaining_capacity
  * will be equal to full_capacity eventually. This used to be done in ACPI.
+ *
+ * Powerd uses CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE as the threshold for low
+ * battery shutdown.
+ *
+ * We want to show the low battery alert whenever we can. Thus, we make EC not
+ * inhibit power-on even if it knows the host would immediately shut down. To
+ * get that behavior, we need:
+ *
+ *   MIN_BAT_PCT_FOR_POWER_ON < HOST_SHUTDOWN_PER = BATTERY_LEVEL_SHUTDOWN
+ *
+ * Thus, we set them as follows by default:
+ *
+ *   CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON = 2 (don't boot if soc < 2%)
+ *   CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE = 4    (shutdown if soc <= 4%)
+ *   BATTERY_LEVEL_SHUTDOWN = 3                  (shutdown if soc < 3%)
+ *
+ * This produces the following behavior:
+ *
+ * - If soc = 1%, system doesn't boot. User wouldn't know why.
+ * - If soc = 2~4%, system boots. Alert is shown. System immediately shuts down.
+ * - If battery discharges to 4% while the system is running, system shuts down.
+ *   If that happens while a user is away, they can press the power button to
+ *   learn what happened.
+ * - If system fails to shutdown for some reason and battery further discharges
+ *   to 2%, EC will trigger shutdown.
  */
-#define CONFIG_BATT_FULL_FACTOR			98
-#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	4
+#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	4  /* shutdown if soc <= 4% */
 
 /*
  * Powerd's full_factor. The value comes from:
  *   src/platform2/power_manager/default_prefs/power_supply_full_factor
+ *
+ * This value is used by the host to calculate the ETA for full charge.
  */
 #define CONFIG_BATT_HOST_FULL_FACTOR		97
 
@@ -693,16 +741,8 @@
  */
 #undef CONFIG_BOARD_PRE_INIT
 
-/*
- * EC has the notion of board version either through resistors or EEPROM.
- * The common CONFIG_BOARD_VERSION is defined automatically when one of the
- * specific options is used.
- */
-#undef CONFIG_BOARD_VERSION
 /* The board version comes from Cros Board Info within EEPROM. */
 #undef CONFIG_BOARD_VERSION_CBI
-/* The board version function is defined in board code. */
-#undef CONFIG_BOARD_VERSION_CUSTOM
 /*
  * The board version is encoded with 3 GPIO signals where GPIO_BOARD_VERSION1
  * is the LSB.
@@ -726,7 +766,7 @@
  * On the second reset, the saved flag is used to detect the previous
  * power-on, and treat the second reset as a power-on instead of a reset.
  *
- * NOTE: Implemented only for npcx
+ * NOTE: Implemented only for npcx and ite
  */
 #undef CONFIG_BOARD_RESET_AFTER_POWER_ON
 
@@ -769,6 +809,20 @@
  */
 #undef CONFIG_DEDICATED_RECOVERY_BUTTON
 #undef CONFIG_DEDICATED_RECOVERY_BUTTON_2
+
+/*
+ * RISC-V core specific panic data is bigger than Cortex-M core specific panic
+ * data. Including this into union in panic_data structure causes whole
+ * to grow by 28 bytes. In many boards EC RO is still obtaining pointer to
+ * beginning of panic data by subtracting its panic data structure size from
+ * the end of RAM. When EC RW saves panic data it will be corrupted by EC RO.
+ * Moreover, during next boot EC RW won't be able to find jump data (see
+ * b/165773837 for more details).
+ *
+ * This config allows boards to not include RV32I panic data if their EC RO
+ * doesn't include it to keep panic data structure in sync.
+ */
+#undef CONFIG_DO_NOT_INCLUDE_RV32I_PANIC_DATA
 
 /*
  * The board has volume up and volume down buttons.  Note, these are *buttons*
@@ -849,6 +903,7 @@
 #undef CONFIG_CHARGER_BQ24770
 #undef CONFIG_CHARGER_BQ24773
 #undef CONFIG_CHARGER_BQ25710
+#undef CONFIG_CHARGER_BQ25720
 #undef CONFIG_CHARGER_ISL9237
 #undef CONFIG_CHARGER_ISL9238 /* For ISL9238 A/B */
 #undef CONFIG_CHARGER_ISL9238C
@@ -962,6 +1017,16 @@
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 
 /*
+ * This config option is used to set the charger's VSYS voltage
+ * threshold. When the voltage drops to this level, PROCHOT is asserted
+ * by the charger to request reduced system power demand and hopefully
+ * avoid a voltage droop leading to system instability. The voltage is
+ * specified in deci-volts, so a value of 80 would set the threshold to
+ * 8.0v.
+ */
+#undef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
+
+/*
  * Board specific maximum input current limit, in mA.
  */
 #undef CONFIG_CHARGER_MAX_INPUT_CURRENT
@@ -992,8 +1057,8 @@
  * analog signaling.  If the AP requires greater than 15W to boot, then see
  * CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW.
  */
-#undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
-#undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 2  /* Don't boot if soc < 2% */
+#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC	1
 /* Default: 15000 */
 #undef CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
 /* Default: Disabled */
@@ -1159,6 +1224,10 @@
 
 /* AP chipset support; pick at most one */
 #undef CONFIG_CHIPSET_ALDERLAKE		/* Intel Alderlake (x86) */
+#undef CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540	/* Intel Alderlake (x86)
+						 * with power sequencer
+						 * chip
+						 */
 #undef CONFIG_CHIPSET_APOLLOLAKE	/* Intel Apollolake (x86) */
 #undef CONFIG_CHIPSET_BRASWELL		/* Intel Braswell (x86) */
 #undef CONFIG_CHIPSET_CANNONLAKE	/* Intel Cannonlake (x86) */
@@ -1173,10 +1242,12 @@
 #undef CONFIG_CHIPSET_MT817X		/* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183		/* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192		/* MediaTek MT8192 */
+#undef CONFIG_CHIPSET_CEZANNE		/* AMD Cezanne (x86) */
 #undef CONFIG_CHIPSET_RK3288		/* Rockchip rk3288 */
 #undef CONFIG_CHIPSET_RK3399		/* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE		/* Intel Skylake (x86) */
 #undef CONFIG_CHIPSET_SC7180            /* Qualcomm SC7180 */
+#undef CONFIG_CHIPSET_SC7280            /* Qualcomm SC7280 */
 #undef CONFIG_CHIPSET_SDM845            /* Qualcomm SDM845 */
 #undef CONFIG_CHIPSET_STONEY		/* AMD Stoney (x86)*/
 #undef CONFIG_CHIPSET_TIGERLAKE		/* Intel Tigerlake (x86) */
@@ -1229,6 +1300,9 @@
 
 /* Redefine when we need a different power-on sequence on the same chipset. */
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 0
+
+/* AMD Side-Band Remote Management Interface (SB-RMI) support */
+#undef CONFIG_AMD_SB_RMI
 
 /*****************************************************************************/
 /*
@@ -1302,10 +1376,19 @@
 #undef  CONFIG_CMD_BATDEBUG
 #define CONFIG_CMD_BATTFAKE
 #undef  CONFIG_CMD_BATT_MFG_ACCESS
-#define CONFIG_CMD_RETIMER
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
-#undef  CONFIG_CMD_CHARGEN
+
+/*
+ * HAS_TASK_CHIPSET implies the GSC presence.
+ * HAS_TASK_CONSOLE means UART console enabled.
+ * chargen command is needed for UART stress test.
+ */
+#if defined(HAS_TASK_CHIPSET) && defined(HAS_TASK_CONSOLE)
+#define CONFIG_CMD_CHARGEN
+#else
+#undef CONFIG_CMD_CHARGEN
+#endif
 #define CONFIG_CMD_CHARGER
 #undef  CONFIG_CMD_CHARGER_ADC_AMON_BMON
 #undef  CONFIG_CMD_CHARGER_DUMP
@@ -1322,14 +1405,12 @@
 #define CONFIG_CMD_FASTCHARGE
 #undef  CONFIG_CMD_FLASH
 #define CONFIG_CMD_FLASHINFO
-#undef  CONFIG_CMD_FLASH_LOG
 #undef  CONFIG_CMD_FLASH_TRISTATE
 #undef  CONFIG_CMD_FORCETIME
 #undef  CONFIG_CMD_FPSENSOR_DEBUG
 #define CONFIG_CMD_GETTIME
 #undef  CONFIG_CMD_GL3590
 #undef  CONFIG_CMD_GPIO_EXTENDED
-#undef  CONFIG_CMD_GSV
 #undef  CONFIG_CMD_GT7288
 #define CONFIG_CMD_HASH
 #define CONFIG_CMD_HCDEBUG
@@ -1346,22 +1427,21 @@
 #define CONFIG_CMD_I2C_XFER
 #undef  CONFIG_CMD_I2C_XFER_RAW
 #define CONFIG_CMD_IDLE_STATS
-#undef  CONFIG_CMD_ILIM
 #define CONFIG_CMD_INA
 #undef  CONFIG_CMD_JUMPTAGS
 #define CONFIG_CMD_KEYBOARD
 #undef  CONFIG_CMD_LEDTEST
-#undef  CONFIG_CMD_LID_ANGLE
 #undef  CONFIG_CMD_MCDP
 #define CONFIG_CMD_MD
 #define CONFIG_CMD_MEM
+#define CONFIG_CMD_MFALLOW
 #define CONFIG_CMD_MMAPINFO
 #define CONFIG_CMD_PD
 #undef  CONFIG_CMD_PD_DEV_DUMP_INFO
 #undef  CONFIG_CMD_PD_FLASH
+#undef  CONFIG_CMD_PD_TIMER
 #define CONFIG_CMD_PECI
 #undef  CONFIG_CMD_PLL
-#undef  CONFIG_CMD_PMU
 #define CONFIG_CMD_POWERINDEBUG
 #undef  CONFIG_CMD_POWERLED
 #define CONFIG_CMD_PWR_AVG
@@ -1371,9 +1451,11 @@
 #undef  CONFIG_CMD_RAND
 #define CONFIG_CMD_REGULATOR
 #undef  CONFIG_CMD_RESET_FLAGS
+#define CONFIG_CMD_RETIMER
 #undef  CONFIG_CMD_RTC
 #undef  CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
+#undef	CONFIG_CMD_S5_TIMEOUT
 #undef  CONFIG_CMD_SCRATCHPAD
 #undef	CONFIG_CMD_SEVEN_SEG_DISPLAY
 #define CONFIG_CMD_SHMEM
@@ -1394,7 +1476,6 @@
 #define CONFIG_CMD_TIMERINFO
 #define CONFIG_CMD_TYPEC
 #undef  CONFIG_CMD_USART_INFO
-#define CONFIG_CMD_USBMUX
 #undef  CONFIG_CMD_USB_PD_CABLE
 #undef  CONFIG_CMD_USB_PD_PE
 #define CONFIG_CMD_WAITMS
@@ -1419,6 +1500,9 @@
  * wish to use chip-implemented panic backup/restore functions.
  */
 #undef CONFIG_CHIP_PANIC_BACKUP
+
+/* Don't save General Purpose Registers during panic */
+#undef CONFIG_PANIC_STRIP_GPR
 
 /*
  * Provide the default GPIO abstraction layer.
@@ -1447,6 +1531,13 @@
  * filed in the crbug.com/985540.
  */
 #undef CONFIG_IO_EXPANDER
+
+/*
+ * Enable reading levels for whole IO expander port with one call.
+ * This adds 'get_port' function pointer to 'ioexpander_drv' structure.
+ * Most drivers don't implement this functionality.
+ */
+#undef CONFIG_IO_EXPANDER_SUPPORT_GET_PORT
 
 /*
  * EC's supporting powering down GPIO pins.
@@ -1723,7 +1814,7 @@
 /* Flash configuration */
 
 /* This enables console commands and higher-level features */
-#define CONFIG_FLASH
+#define CONFIG_FLASH_CROS
 /* This enables chip-specific access functions */
 #define CONFIG_FLASH_PHYSICAL
 #undef CONFIG_FLASH_BANK_SIZE
@@ -2158,9 +2249,10 @@
 #undef CONFIG_HOSTCMD_I2C_ADDR_FLAGS
 
 /*
- * Accept EC host commands over the SPI slave (SPS) interface.
+ * Accept EC host commands over the SPI host interface.  The AP is SPI
+ * controller and the EC is the SPI peripheral for this configuration.
  */
-#undef CONFIG_HOSTCMD_SPS
+#undef CONFIG_HOSTCMD_SHI
 
 /*
  * Host command rate limiting assures EC will have time to process lower
@@ -2225,8 +2317,15 @@
 /* Command to get the EC uptime (and optionally AP reset stats) */
 #define CONFIG_HOSTCMD_GET_UPTIME_INFO
 
-/* List of host commands whose debug output will be suppressed */
-#undef CONFIG_SUPPRESSED_HOST_COMMANDS
+/*
+ * List of host commands whose debug output will be suppressed
+ * By default remove periodic commands and commands called often (SENSE).
+ */
+#define CONFIG_SUPPRESSED_HOST_COMMANDS \
+	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_USB_PD_DISCOVERY, \
+	EC_CMD_USB_PD_POWER_INFO, EC_CMD_PD_GET_LOG_ENTRY, \
+	EC_CMD_MOTION_SENSE_CMD, EC_CMD_GET_NEXT_EVENT, EC_CMD_GET_UPTIME_INFO
+
 
 /*****************************************************************************/
 
@@ -2471,7 +2570,18 @@
 
 /******************************************************************************/
 
-/* Support IT8801 I/O expander. */
+/* Support CCGXXF I/O expander built inside PD chip */
+#undef CONFIG_IO_EXPANDER_CCGXXF
+
+/*
+ * Support IT8801 I/O expander.
+ *
+ * I2C address IT8801_KEYBOARD_PWM_I2C_ADDR_FLAGS and I2C port
+ * IT8801_KEYBOARD_PWM_I2C_PORT must be defined as well.
+ * Note: these values are only used when accessing the keyboard and PWM
+ * function of the IT8801 chip.  I/O expander functions are accessed using
+ * the ioex_config[] array.
+ */
 #undef CONFIG_IO_EXPANDER_IT8801
 
 /* Support Nuvoton NCT38xx I/O expander. */
@@ -2485,6 +2595,9 @@
 
 /* Support NXP PCAL6408 I/O expander. */
 #undef CONFIG_IO_EXPANDER_PCAL6408
+
+/* Support TI TCA64xxA I/O expander. */
+#undef CONFIG_IO_EXPANDER_TCA64XXA
 
 /* Number of IO Expander ports */
 #undef CONFIG_IO_EXPANDER_PORT_COUNT
@@ -2619,12 +2732,6 @@
 #undef CONFIG_KEYBOARD_FACTORY_TEST
 
 /*
- * Keyboard config (struct keyboard_scan_config) is in board.c.  If this is
- * not defined, default values from common/keyboard_scan.c will be used.
- */
-#undef CONFIG_KEYBOARD_BOARD_CONFIG
-
-/*
  * Support for boot key combinations (e.g. refresh key being held on boot to
  * trigger recovery).
  */
@@ -2708,6 +2815,21 @@
 #undef CONFIG_KEYBOARD_KEYPAD
 
 /*
+ * Enable strict debouncer. A strict debouncer waits until debounce is done
+ * before registering key up/down while a non-strict debouncer registers a key
+ * up/down as soon as a key is pressed or released.
+ *
+ * A strict debouncer is robust against unintentional key presses, caused by a
+ * device drop, for example. However, its latency isn't as fast as a non-strict
+ * debouncer.
+ *
+ * If a strict debouncer is used, it's recommended to set debounce_down_us and
+ * debounce_up_us to an equal value. This guarantees key events are registered
+ * in the order the keys are pressed.
+ */
+#undef CONFIG_KEYBOARD_STRICT_DEBOUNCE
+
+/*
  * Enable the 8042 AUX port. This is typically used for PS/2 mouse devices.
  * You will need to implement send_aux_data_to_device and lpc_aux_put_char.
  */
@@ -2779,12 +2901,6 @@
  * provided by CONFIG_LED_ONOFF_STATES.
  */
 #undef CONFIG_LED_ONOFF_STATES_BAT_LOW
-
-/*
- * Adds a power LED under the control of the board-defined lookup table.
- * Must be used with the CONFIG_LED_ONOFF_STATES option.
- */
-#undef CONFIG_LED_POWER_LED
 
 /*
  * LEDs for LED_POLICY STD may be inverted.  In this case they are active low
@@ -2922,6 +3038,37 @@
  */
 #undef CONFIG_HOSTCMD_ESPI_EC_CHAN_BITMAP
 
+/*
+ * Background information (from Intel eSPI Compatibility Specification):
+ * eSPI_Reset# may be asserted as part of:
+ * (1) a normal Deep-Sx entry:
+ *    A normal eSPI_Reset# assertion is preceded by {Host,OOB}_Reset_Warn/Ack
+ *    handshakes (using tunneled VWs) between the PCH/SoC and the EC/BMC.
+ *    The eSPI Specification states that the SLP_* signals are reset based on
+ *    eSPI_Reset#. However, for platforms that support Deep Sleep Well (DSW),
+ *    the SLP_{S3,S4,S5,LAN,WLAN}# signals reside in the DSW power well and are
+ *    reset by DSW_PWROK.
+ *    In PCH/SoC, the states of these pins will be communicated to the EC/BMC
+ *    as Virtual Wires over the eSPI interface. As a result, the EC/BMC needs
+ *    to handle/maintain these pins' states during Deep-Sx.
+ *
+ * (2) a Global Reset event:
+ *    It could happen in the middle of an on-going eSPI transaction, which is
+ *    immediately truncated. All tunneled VWs, including
+ *    SLP_{S3,S4,S5,LAN,WLAN}#, are returned to their default reset default
+ *    state upon entry into Global Reset. Note that in the case of a Global
+ *    Reset event, eSPI Virtual Wire messages deasserting the states of these
+ *    wires will not be issued by the eSPI-MC. The eSPI Slave device is
+ *    responsible for resetting the states of all its VWs at the appropriate
+ *    platform reset events.
+ *
+ * Enable this config to reset SLP* VW when eSPI_RST is asserted for the Global
+ * Reset event case.
+ * Don't enable this config if the platform implements the Deep-Sx entry as EC
+ * needs to maintain these pins' states per request.
+ */
+#undef CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+
 /* Base address of low power RAM. */
 #undef CONFIG_LPRAM_BASE
 
@@ -3008,6 +3155,13 @@
 /* Minute-IA watchdog timer vector number. */
 #define CONFIG_MIA_WDT_VEC 0xFF
 
+/*
+ * ISL9241 Configures the switching frequency and overrides the default
+ * switching frequency set by PROG pin. The valid frequency settings are
+ * find in driver/charger/isl9241.h.
+ */
+#undef CONFIG_ISL9241_SWITCHING_FREQ
+
 /* Support MKBP event */
 #undef CONFIG_MKBP_EVENT
 
@@ -3059,6 +3213,11 @@
  * The only things that should be in this mask are EC_MKBP_EVENT_*.
  */
 #undef CONFIG_MKBP_EVENT_WAKEUP_MASK
+
+/*
+ * Send button, switch and sysrq events via MKBP protocol to the host.
+ */
+#undef CONFIG_MKBP_INPUT_DEVICES
 
 /* Support memory protection unit (MPU) */
 #undef CONFIG_MPU
@@ -3135,6 +3294,12 @@
  * this is disabled.
  */
 #define CONFIG_PORT80_PRINT_IN_INT 0
+
+/*
+ * Allow Port80 common layer to dump 4-byte Port80 code. This is only supported
+ * on NPCX9 (and latter) chips.
+ */
+#undef CONFIG_PORT80_4_BYTE
 
 /* MAX695x 7 segment driver */
 #undef CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
@@ -3397,12 +3562,6 @@
 /* Storage  offset of sharedobjects library. */
 #undef CONFIG_SHAREDLIB_STORAGE_OFF
 
-/*
- * If defined, the hash module will save its last computed hash when jumping
- * between EC images.
- */
-#undef CONFIG_SAVE_VBOOT_HASH
-
 /* Allow the board to use a GPIO for the SCI# signal. */
 #undef CONFIG_SCI_GPIO
 
@@ -3501,21 +3660,14 @@
  */
 #undef CONFIG_SPI_NOR_SMART_ERASE
 
-/* SPI master feature */
-#undef CONFIG_SPI_MASTER
+/* SPI controller feature */
+#undef CONFIG_SPI_CONTROLLER
 
-/* SPI master halfduplex/3-wire mode */
+/* SPI controller halfduplex/3-wire mode */
 #undef CONFIG_SPI_HALFDUPLEX
 
-/* Support STM32 SPI1 as master. */
-#undef CONFIG_STM32_SPI1_MASTER
-
-/* SPI master configure gpios on init */
-#undef CONFIG_SPI_MASTER_CONFIGURE_GPIOS
-
-/* Support SPI masters without GPIO-specified Chip Selects, instead rely on the
- * SPI master port's hardwired CS pin. */
-#undef CONFIG_SPI_MASTER_NO_CS_GPIOS
+/* Support STM32 SPI1 as controller. */
+#undef CONFIG_STM32_SPI1_CONTROLLER
 
 /* Support MCHP MEC family GP-SPI master(s)
  * Define to 0x01 for GPSPI0 only.
@@ -3523,6 +3675,12 @@
  * Define to 0x03 for both controllers.
  */
 #undef CONFIG_MCHP_GPSPI
+
+/*
+ * Configure SPI flash read wait time as 1ms
+ * Chip or board can redefine it per design
+ */
+#define CONFIG_SPI_FLASH_READ_WAIT_MS 1
 
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE
@@ -3557,6 +3715,12 @@
  * Also, this will enable PD in RO for TCPMv2.
  */
 #undef CONFIG_SYSTEM_UNLOCKED
+/*
+ * Some systems decouple the CBI eeprom write protection from the
+ * H1_FLASH_WP_ODL via the hardware change. Adds this config to
+ * bypass the cbi eeprom write protection check.
+ */
+#undef CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
 
 /*
  * Device can be a tablet as well as a clamshell.
@@ -3728,6 +3892,9 @@
  */
 #undef CONFIG_TEMP_SENSOR_POWER_GPIO
 
+/* AMD STT (Skin Temperature Tracking) */
+#undef CONFIG_AMD_STT
+
 /* Compile common code for throttling the CPU based on the temp sensors */
 #undef CONFIG_THROTTLE_AP
 
@@ -3770,6 +3937,15 @@
  * indicated to the host.
  */
 #undef CONFIG_DPTF_MULTI_PROFILE
+
+/*
+ * Sometime EC was already driver thermal sensor power pin to high, but sensor
+ * power is still not ready. That cause the system will thermal shutdown when
+ * first boot EC.
+ *
+ * This config can be used to delay thermal sensor read in the first time.
+ */
+#undef CONFIG_TEMP_SENSOR_FIRST_READ_DELAY_MS
 
 /*****************************************************************************/
 /* Touchpad config */
@@ -3859,8 +4035,8 @@
 #undef CONFIG_UART_PAD_SWITCH
 
 /**
- * This will only be used for Kukui and cortex-m0. Preserve EC reset logs and
- * console logs on SRAM so that the logs will be preserved after EC shutting
+ * This will only be used for Kukui. Preserve EC reset logs and console
+ * logs on SRAM/FLASH so that the logs will be preserved after EC shutting
  * down or sysjumped. It will keep the contents across EC resets, so we have
  * more information about system states. The contents on SRAM will be cleared
  * when checksum or validity check fails.
@@ -3911,6 +4087,9 @@
 /* Use this to include support for MP4245 buck boost converter */
 #undef CONFIG_MP4245
 
+/* Use this to include support for MP2964 IMVP9.1 PMIC */
+#undef CONFIG_MP2964
+
 /*****************************************************************************/
 /* USB PD config */
 
@@ -3945,6 +4124,15 @@
  * enabled otherwise an error will be emitted.
  */
 #undef CONFIG_USB_PD_TCPMV2
+
+/*
+ * Enable dynamic PDO selection.
+ *
+ * DPS picks a power efficient voltage regarding to the battery configuration
+ * and the system loading. It monitors PIn (Power In), so VBUS/IBUS ADC
+ * should be supported on the platform.
+ */
+#undef CONFIG_USB_PD_DPS
 
 /*
  * Device Types for TCPMv2.
@@ -3986,14 +4174,17 @@
 /* Support for USB PD alternate mode of Downward Facing Port */
 #undef CONFIG_USB_PD_ALT_MODE_DFP
 
+/* Support for USB PD alternate mode of Upward Facing Port */
+#undef CONFIG_USB_PD_ALT_MODE_UFP
+
 /*
  * Do not enter USB PD alternate modes or USB4 automatically. Wait for the AP to
  * direct the EC to enter a mode. This requires AP software support.
  */
 #undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
-/* Support for USB PD alternate mode of Upward Facing Port */
-#undef CONFIG_USB_PD_ALT_MODE_UFP
+/* Supports DP as UFP-D and requires HPD to DP_ATTEN converter */
+#undef CONFIG_USB_PD_ALT_MODE_UFP_DP
 
 /* HPD is sent to the GPU from the EC via a GPIO */
 #undef CONFIG_USB_PD_DP_HPD_GPIO
@@ -4043,6 +4234,13 @@
  * Undef to allow runtime change via console command.
  */
 #undef CONFIG_USB_PD_DEBUG_LEVEL
+
+/*
+ * Define if this board is using runtime flags instead of build time configs
+ * to control USB PD properties.
+ */
+#define CONFIG_USB_PD_FLAGS
+#undef CONFIG_USB_PD_RUNTIME_FLAGS
 
 /*
  * Define if this board can enable VBUS discharge (eg. through a GPIO-controlled
@@ -4177,6 +4375,9 @@
 /* Define EC and TCPC modules are in one integrated chip */
 #undef CONFIG_USB_PD_TCPC_ON_CHIP
 
+/* If VCONN is enabled, the TCPC will provide VCONN */
+#define CONFIG_USB_PD_TCPC_VCONN
+
 /* Enable the encoding of msg SOP* in bits 31-28 of 32-bit msg header type */
 #undef CONFIG_USB_PD_DECODE_SOP
 
@@ -4201,6 +4402,9 @@
 
 /* Enable PCIE tunneling if Thunderbolt-Compatible mode is enabled*/
 #undef CONFIG_USB_PD_PCIE_TUNNELING
+
+/* Enable Power Path Control from PD */
+#undef CONFIG_USB_PD_PPC
 
 /*
  * The following two macros are ASCII text strings that matches what appears
@@ -4276,8 +4480,10 @@
 #undef CONFIG_USB_PD_TCPM_TUSB422
 #undef CONFIG_USB_PD_TCPM_RAA489000
 #undef CONFIG_USB_PD_TCPM_RT1715
+#undef CONFIG_USB_PD_TCPM_RT1718S
 #undef CONFIG_USB_PD_TCPM_FUSB307
 #undef CONFIG_USB_PD_TCPM_STM32GX
+#undef CONFIG_USB_PD_TCPM_CCGXXF
 
 /* PS8XXX series are all supported by a single driver with a build time config
  * listed below (CONFIG_USB_PD_TCPM_PS*) defined to enable the specific product.
@@ -4319,18 +4525,44 @@
  * Type-C retimer drivers to be used.
  */
 #undef CONFIG_USBC_RETIMER_INTEL_BB
+#undef CONFIG_USBC_RETIMER_KB800X
 #undef CONFIG_USBC_RETIMER_NB7V904M
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
 #undef CONFIG_USBC_RETIMER_PI3HDX1204
 #undef CONFIG_USBC_RETIMER_PS8802
+#undef CONFIG_USBC_RETIMER_PS8811
 #undef CONFIG_USBC_RETIMER_PS8818
 #undef CONFIG_USBC_RETIMER_TUSB544
+
+/*
+ * DP redriver drivers to be used.
+ */
+#undef CONFIG_DP_REDRIVER_TDP142
+
+/*
+ * Define this to enable Type-C retimer firmware update. Each Type-C retimer
+ * indicates its capability of supporting firmware update in usb_mux_driver.
+ * This feature is available to TCPMv2 PD stack, also requires
+ * CONFIG_USBC_SS_MUX is enabled.
+ * This feature includes changes in EC, Coreboot and Kernel. During AP boot
+ * up, AP scans each PD port for retimers if no Type-C device attached;
+ * and firmware update can be performed on retimers showing up in AP
+ * thunderbolt device entries. If PD port has device attached, no retimer
+ * scan on that port.
+ */
+#undef CONFIG_USBC_RETIMER_FW_UPDATE
+
+/* Prevent enabling LPM of NB7V904M */
+#undef CONFIG_NB7V904M_LPM_OVERRIDE
 
 /* Enable retimer TUSB544 tune EQ setting by register  */
 #undef CONFIG_TUSB544_EQ_BY_REGISTER
 
 /* Allow run-time configuration of the Burnside Bridge driver structure */
 #undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
+
+/* Require manual configuration of the KB800x crossbar mapping. */
+#undef CONFIG_KB800X_CUSTOM_XBAR
 
 /* Enables debug console commands for the STM32 UCPD driver */
 #undef CONFIG_STM32G4_UCPD_DEBUG
@@ -4350,6 +4582,18 @@
  * DDI1_AUX_P signals (b/122873171)
  */
 #undef CONFIG_USB_PD_TCPM_ANX7447_AUX_PU_PD
+
+/*
+ * Use this to override the TCPCI Device ID value to be 0x0002 for
+ * chip rev A3. Early A3 firmware misreports the DID as 0x0001.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
+
+/*
+ * Use this to override the TCPCI Device ID value to be 0x0002 for
+ * chip rev A1. Early A1 firmware misreports the DID as 0x0001.
+ */
+#undef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 
 /*
  * Use this option if the TCPC port controller supports the optional register
@@ -4387,6 +4631,9 @@
 
 /* Define if tcpc on the board supports VBUS measurement */
 #undef CONFIG_USB_PD_VBUS_MEASURE_TCPC
+
+/* Define if there is a specific method to measure Vbus voltage */
+#undef CONFIG_USB_PD_VBUS_MEASURE_BY_BOARD
 
 /* Define the type-c port controller I2C base address. */
 #define CONFIG_TCPC_I2C_BASE_ADDR_FLAGS 0x4E
@@ -4442,6 +4689,11 @@
 #undef CONFIG_USB_PID
 
 /*
+ * USB Vendor ID used for USB endpoints.
+ */
+#define CONFIG_USB_VID USB_VID_GOOGLE
+
+/*
  * Track overcurrent events for sinking partners coming from some component on
  * the board.  Auto-enabled for drivers which contain support for this feature.
  */
@@ -4461,7 +4713,9 @@
 #undef CONFIG_USBC_PPC_AOZ1380
 #undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
+#undef CONFIG_USBC_PPC_RT1718S
 #undef CONFIG_USBC_PPC_SN5S330
+#undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
 
 /*
@@ -4469,6 +4723,12 @@
  * 3.3A.  See the syv682x header file for permissible values.
  */
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_3_30
+
+/* SYV682 does not pass through CC, instead it bypasses to the TCPC */
+#undef CONFIG_USBC_PPC_SYV682X_NO_CC
+
+/* Define to enable SYV682X VBUS smart discharge. */
+#undef CONFIG_USBC_PPC_SYV682X_SMART_DISCHARGE
 
 /* PPC is capable of gating the SBU lines. */
 #undef CONFIG_USBC_PPC_SBU
@@ -4487,6 +4747,9 @@
  * don't support being a UFP)
  */
 #undef CONFIG_USBC_SS_MUX_DFP_ONLY
+
+/* Only configure USB type-c superspeed mux when UFP */
+#undef CONFIG_USBC_SS_MUX_UFP_ONLY
 
 /* Support v1.1 type-C connection state machine */
 #undef CONFIG_USBC_BACKWARDS_COMPATIBLE_DFP
@@ -4512,15 +4775,11 @@
 
 /*
  * Intel Reference Validation Platform's (RVP) Modular Embedded Control
- * Card (MECC) version 0.9
+ * Card (MECC) versions
  */
 #undef CONFIG_INTEL_RVP_MECC_VERSION_0_9
-
-/*
- * Intel Reference Validation Platform's (RVP) Modular Embedded Control
- * Card (MECC) version 1.0
- */
 #undef CONFIG_INTEL_RVP_MECC_VERSION_1_0
+#undef CONFIG_INTEL_RVP_MECC_VERSION_1_1
 
 /*****************************************************************************/
 
@@ -4623,6 +4882,12 @@
 #undef CONFIG_USB_PORT_POWER_DUMB
 
 /*
+ * Let board customize the timing to enable/disable usb port, instead
+ * of using the default S3 hook.
+ */
+#undef CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
+
+/*
  * Support smart power control to the device's USB ports, using
  * dedicated power control chips.  This potentially enables automatic
  * negotiation of supplying more power to peripherals.
@@ -4691,6 +4956,12 @@
 #undef CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT
 
 /*
+ * Ignore all non-fixed PDOs received from a src_caps message. Enable this for
+ * boards (like servo_v4) which only support FIXED PDO types.
+ */
+#undef CONFIG_USB_PD_ONLY_FIXED_PDOS
+
+/*
  * Total current in mA the board can supply to external devices through
  * USB-C ports
  *
@@ -4719,10 +4990,22 @@
 #undef CONFIG_USB_MUX_AMD_FP6
 
 /*
+ * Support the Analogix ANX3443 USB Type-C Active mux (6x4) with
+ * Integrated Re-timers for USB3.2/DisplayPort.
+ */
+#undef CONFIG_USB_MUX_ANX3443
+
+/*
  * Support the Analogix ANX7440 USB Type-C Active mux with
  * Integrated Re-timers for USB3.1/DisplayPort.
  */
 #undef CONFIG_USB_MUX_ANX7440
+
+/*
+ * Support the Analogix ANX7451 10G Active Mux (4x4) with
+ * Integrated Re-timers for USB3.2/DisplayPort
+ */
+#undef CONFIG_USB_MUX_ANX7451
 
 /* Support the ITE IT5205 Type-C USB alternate mode mux. */
 #undef CONFIG_USB_MUX_IT5205
@@ -4744,6 +5027,9 @@
 
 /* Support the Texas Instrument TUSB1064 Type-C Redriving Switch (UFP) */
 #undef CONFIG_USB_MUX_TUSB1064
+
+/* Support the Parade PS8822 Type-C Redriving Demux Switch */
+#undef CONFIG_USB_MUX_PS8822
 
 /* 'Virtual' USB mux under host (not EC) control */
 #undef CONFIG_USB_MUX_VIRTUAL
@@ -4827,7 +5113,9 @@
  * if the hook task (which is the lowest-priority task on the system) gets
  * starved for CPU time and isn't able to fire its HOOK_TICK event.
  */
+#ifndef CONFIG_ZEPHYR
 #define CONFIG_WATCHDOG
+#endif
 
 /*
  * Try to detect a watchdog that is about to fire, and print a trace.  This is
@@ -4846,11 +5134,15 @@
 /* Watchdog period in ms; see also AUX_TIMER_PERIOD_MS */
 #define CONFIG_WATCHDOG_PERIOD_MS 1600
 
+/* The leading time of watchdog warning timer. */
+#define CONFIG_WATCHDOG_WARNING_LEADING_TIME_MS 500
+
 /*
- * Fire auxiliary timer 500ms before watchdog timer expires. This leaves
- * some time for debug trace to be printed.
+ * Fire auxiliary timer before watchdog timer expires. This leaves some time for
+ * debug trace to be printed.
  */
-#define CONFIG_AUX_TIMER_PERIOD_MS (CONFIG_WATCHDOG_PERIOD_MS - 500)
+#define CONFIG_AUX_TIMER_PERIOD_MS \
+	(CONFIG_WATCHDOG_PERIOD_MS - CONFIG_WATCHDOG_WARNING_LEADING_TIME_MS)
 
 /*****************************************************************************/
 /* WebUSB config */
@@ -4926,10 +5218,26 @@
 #undef CONFIG_EXTENDED_VERSION_INFO
 
 /*
- * Define this to enable Cros Board Info support. I2C_EEPROM_PORT and
- * I2C_EEPROM_ADDR must be defined as well.
+ * Include CROS_FWID in version output.
  */
-#undef CONFIG_CROS_BOARD_INFO
+#define CONFIG_CROS_FWID_VERSION
+
+/*
+ * Define this to support Cros Board Info from EEPROM. I2C_PORT_EEPROM
+ * and I2C_ADDR_EEPROM_FLAGS must be defined as well.
+ */
+#undef CONFIG_CBI_EEPROM
+
+/*
+ * Define this if the EC has exclusive control over the CBI EEPROM WP signal.
+ * The accompanying hardware must ensure that the CBI WP gets latched and is
+ * only reset when EC_RST_ODL is asserted.  GPIO_EC_CBI_WP must be set up for
+ * the board.
+ */
+#undef CONFIG_EEPROM_CBI_WP
+
+/* Define this to support Cros Board Info from GPIO. */
+#undef CONFIG_CBI_GPIO
 
 /*****************************************************************************/
 /*
@@ -5004,8 +5312,25 @@
 /*
  * This build is not a complete platform/ec based EC, but instead
  * using the platform/ec zephyr module.
+ *
+ * Note: this is here purely for stylistic purposes and documentation.
  */
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_ZEPHYR
+#endif
+
+/*
+ * Define the following to drive CCD_MODE_ODL when a DTS accessory is
+ * connected to the CCD USBC port.
+ *
+ * GPIO_CCD_MODE_ODL should be configured with GPIO_ODR_HIGH flag
+ */
+#undef CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
+
+/*
+ * The USB port used for CCD. Defaults to 0/C0.
+ */
+#define CONFIG_CCD_USBC_PORT_NUMBER	0
 
 /*****************************************************************************/
 /*
@@ -5132,6 +5457,9 @@
  * defines, and define a default number of 3.0 A ports if not selected.  Note
  * that the functionality of this default of 1 is equivalent to both previous
  * defines, which only ever allocated one 3.0 A port.
+ *
+ * To turn off the TCPMv2 3.0 A current allocation from the DPM, set
+ * CONFIG_USB_PD_3A_PORTS to 0.
  */
 #ifdef CONFIG_USB_PD_TCPMV2
 #if defined(CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT) || \
@@ -5145,6 +5473,17 @@
 #if defined(CONFIG_USB_PD_USB4) && CONFIG_USB_PD_3A_PORTS == 0
 #error USB4 support requires at least one 3.0 A port
 #endif
+#endif
+
+
+/******************************************************************************/
+/*
+ * Ensure CONFIG_USB_PD_TCPMV2 and CONFIG_USBC_SS_MUX both are defined. USBC
+ * retimer firmware update feature requires both.
+ */
+#if (defined(CONFIG_USBC_RETIMER_FW_UPDATE) && \
+	(!(defined(CONFIG_USB_PD_TCPMV2) && defined(CONFIG_USBC_SS_MUX))))
+#error Retimer firmware update requires TCPMv2 and USBC_SS_MUX
 #endif
 
 /******************************************************************************/
@@ -5254,18 +5593,6 @@
 
 /******************************************************************************/
 /*
- * Automatically define common CONFIG_BOARD_VERSION if any specific option is
- * used.
- */
-
-#if defined(CONFIG_BOARD_VERSION_CBI) || \
-	defined(CONFIG_BOARD_VERSION_CUSTOM) || \
-	defined(CONFIG_BOARD_VERSION_GPIO)
-#define CONFIG_BOARD_VERSION
-#endif
-
-/******************************************************************************/
-/*
  * Thermal throttling AP must have temperature sensor enabled to get
  * the temperature readings.
  */
@@ -5284,8 +5611,12 @@
 
 
 /******************************************************************************/
-/* The Matrix Keyboard Protocol depends on MKBP events. */
+/* The Matrix Keyboard Protocol depends on MKBP input devices and events. */
 #ifdef CONFIG_KEYBOARD_PROTOCOL_MKBP
+#define CONFIG_MKBP_INPUT_DEVICES
+#endif
+
+#if defined(CONFIG_KEYBOARD_PROTOCOL_MKBP) || defined(CONFIG_MKBP_INPUT_DEVICES)
 #define CONFIG_MKBP_EVENT
 #endif
 
@@ -5338,6 +5669,13 @@
 #define CONFIG_USBC_PPC
 #endif /* "has a PPC" */
 
+/* Following chips use Power Path Control information from TCPC chip */
+#if defined(CONFIG_USBC_PPC_AOZ1380) || \
+	defined(CONFIG_USBC_PPC_NX20P3481) || \
+	defined(CONFIG_USBC_PPC_NX20P3483)
+#define CONFIG_USB_PD_PPC
+#endif
+
 /* The TI SN5S330 supports VCONN and needs to be informed of CC polarity */
 #if defined(CONFIG_USBC_PPC_SN5S330)
 #define CONFIG_USBC_PPC_POLARITY
@@ -5345,10 +5683,38 @@
 #define CONFIG_USBC_PPC_VCONN
 #endif
 
-/* The SYV682X supports VCONN and needs to be informed of CC polarity */
+
+/*****************************************************************************/
+/* PPC SYV682C is a subset of SYV682X. */
+#if defined(CONFIG_USBC_PPC_SYV682C)
+#define CONFIG_USBC_PPC_SYV682X
+#endif
+
+/*
+ * The SYV682X supports VCONN and needs to be informed of CC polarity.
+ * There is a 3.6V limit on the HOST_CC signals, so the TCPC should not source
+ * 5V VCONN.
+ *
+ * For the ITE integrated TCPC, it wants to be notified of VCONN but won't
+ * source VCONN itself, so is safe to keep enabled.
+ */
 #if defined(CONFIG_USBC_PPC_SYV682X)
 #define CONFIG_USBC_PPC_POLARITY
 #define CONFIG_USBC_PPC_VCONN
+#if !defined(CONFIG_USB_PD_TCPM_ITE_ON_CHIP) && \
+	!defined(CONFIG_USBC_PPC_SYV682X_NO_CC)
+#undef CONFIG_USB_PD_TCPC_VCONN
+#endif
+#endif
+
+/* CCGXXF standard default defines */
+#if defined(CONFIG_USB_PD_TCPM_CCGXXF)
+#define CONFIG_USB_PD_DISCHARGE_TCPC
+#define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#define CONFIG_USB_PD_PPC
+#define CONFIG_USB_PD_TCPC_LOW_POWER
+#define CONFIG_USB_PD_TCPM_TCPCI
+#define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #endif
 
 /*****************************************************************************/
@@ -5358,7 +5724,8 @@
 	defined(CONFIG_USBC_PPC_NX20P3483) || \
 	defined(CONFIG_USBC_PPC_SN5S330) || \
 	defined(CONFIG_USBC_PPC_SYV682X)  || \
-	defined(CONFIG_CHARGER_SM5803)
+	defined(CONFIG_CHARGER_SM5803) || \
+	defined(CONFIG_USB_PD_TCPM_TCPCI)
 #define CONFIG_USBC_OCP
 #endif
 
@@ -5372,6 +5739,7 @@
 	defined(CONFIG_CHARGER_RT9467) || \
 	defined(CONFIG_CHARGER_MT6370) || \
 	defined(CONFIG_CHARGER_BQ25710) || \
+	defined(CONFIG_CHARGER_BQ25720) || \
 	defined(CONFIG_CHARGER_ISL9241)
 #define CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 
@@ -5396,6 +5764,10 @@
  */
 #ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPC_ON_CHIP
+#if !defined(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2) && \
+	!defined(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)
+#error "No drivers for ITE ON CHIP"
+#endif
 #endif
 
 /*****************************************************************************/
@@ -5405,7 +5777,8 @@
  */
 #if defined(CONFIG_CHARGER_ISL9237) || defined(CONFIG_CHARGER_ISL9238) || \
 	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
-	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803)
+	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803) || \
+	defined(CONFIG_CHARGER_BQ25710) || defined(CONFIG_CHARGER_BQ25720)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
 
@@ -5490,6 +5863,7 @@
 #ifndef HAS_TASK_CHIPSET
 #undef CONFIG_AP_HANG_DETECT
 #undef CONFIG_CHIPSET_ALDERLAKE
+#undef CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
 #undef CONFIG_CHIPSET_APOLLOLAKE
 #undef CONFIG_CHIPSET_BRASWELL
 #undef CONFIG_CHIPSET_CANNONLAKE
@@ -5500,6 +5874,7 @@
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
+#undef CONFIG_CHIPSET_CEZANNE
 #undef CONFIG_CHIPSET_RK3399
 #undef CONFIG_CHIPSET_RK3288
 #undef CONFIG_CHIPSET_SDM845
@@ -5616,7 +5991,8 @@
 #define CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
 #endif
 
-#if defined(CONFIG_CHIPSET_APOLLOLAKE) || \
+#if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
+	defined(CONFIG_CHIPSET_APOLLOLAKE) || \
 	defined(CONFIG_CHIPSET_BRASWELL) || \
 	defined(CONFIG_CHIPSET_CANNONLAKE) || \
 	defined(CONFIG_CHIPSET_COMETLAKE) || \
@@ -5627,7 +6003,8 @@
 #define CONFIG_POWER_COMMON
 #endif
 
-#if defined(CONFIG_CHIPSET_CANNONLAKE) || \
+#if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
+	defined(CONFIG_CHIPSET_CANNONLAKE) || \
 	defined(CONFIG_CHIPSET_ICELAKE) || \
 	defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_CHIPSET_X86_RSMRST_DELAY
@@ -5642,7 +6019,7 @@
 #error "Must enable CONFIG_POWER_TRACK_HOST_SLEEP_STATE for S0ix"
 #endif
 
-#if defined(CONFIG_CHIPSET_SC7180)
+#if defined(CONFIG_CHIPSET_SC7180) || defined(CONFIG_CHIPSET_SC7280)
 #if defined(CONFIG_POWER_SLEEP_FAILURE_DETECTION) && \
 	!defined(CONFIG_CHIPSET_RESUME_INIT_HOOK)
 #error "Require resume init hook to enable sleep failure detection"
@@ -5703,8 +6080,8 @@
  */
 #ifdef CONFIG_CHIP_INIT_ROM_REGION
 
-#ifndef CONFIG_FLASH
-#error CONFIG_CHIP_INIT_ROM_REGION requires CONFIG_FLASH
+#ifndef CONFIG_FLASH_CROS
+#error CONFIG_CHIP_INIT_ROM_REGION requires CONFIG_FLASH_CROS
 #endif
 
 #ifndef CONFIG_RO_ROM_RESIDENT_SIZE
@@ -5755,8 +6132,15 @@
  * Validity checks to make sure some of the configs above make sense.
  */
 
+/*
+ * Chromium ec uses hook tick to reload the watchdog. The interval between
+ * reloads of the watchdog timer should be less than half of the watchdog
+ * period.
+ */
+#ifdef CONFIG_WATCHDOG
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
+#endif
 #endif
 
 #ifdef CONFIG_USB_SERIALNO
@@ -6041,5 +6425,60 @@
 #ifndef CONFIG_ALS
 #define ALS_COUNT 0
 #endif /* CONFIG_ALS */
+
+
+/*
+ * If the EC has exclusive control over CBI EEPROM WP, don't consult the main
+ * flash WP.
+ */
+#ifdef CONFIG_EEPROM_CBI_WP
+#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
+#endif
+
+#if defined(CONFIG_EEPROM_CBI_WP) && !defined(CONFIG_CBI_EEPROM)
+#error "CONFIG_EEPROM_CBI_WP requires CONFIG_CBI_EEPROM to be defined!"
+#endif
+
+#if defined(CONFIG_BYPASS_CBI_EEPROM_WP_CHECK) && \
+	!defined(CONFIG_SYSTEM_UNLOCKED) && !defined(CONFIG_EEPROM_CBI_WP)
+#error "CONFIG_BYPASS_CBI_EEPROM_WP_CHECK is only permitted " \
+	"when CONFIG_SYSTEM_UNLOCK or CONFIG_EEPROM_CBI_WP is also enabled."
+#endif /* CONFIG_BYPASS_CBI_EEPROM_WP_CHECK && !CONFIG_SYSTEM_UNLOCK */
+
+#if defined(CONFIG_BOARD_VERSION_CBI) && defined(CONFIG_BOARD_VERSION_GPIO)
+#error "CONFIG_BOARD_VERSION_CBI and CONFIG_BOARD_VERSION_GPIO " \
+	"are mutually exclusive. "
+#endif /* CONFIG_BOARD_VERSION_CBI && CONFIG_BOARD_VERSION_GPIO */
+
+#if defined(CONFIG_CBI_EEPROM) && defined(CONFIG_CBI_GPIO)
+#error "CONFIG_CBI_EEPROM and CONFIG_CBI_GPIO are mutually exclusive."
+#endif
+
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_ICM_COMM_SPI) && \
+	!defined(CONFIG_ACCELGYRO_ICM_COMM_I2C)
+#ifdef I2C_PORT_ACCEL
+#define CONFIG_ACCELGYRO_ICM_COMM_I2C
+#else
+#define CONFIG_ACCELGYRO_ICM_COMM_SPI
+#endif
+#endif	/* !CONFIG_ZEPHYR && !CONFIG_ACCELGYRO_ICM_COMM_SPI &&
+	 * !CONFIG_ACCELGYRO_ICM_COMM_I2C
+	 */
+
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_BMI_COMM_SPI) && \
+	!defined(CONFIG_ACCELGYRO_BMI_COMM_I2C)
+#ifdef I2C_PORT_ACCEL
+#define CONFIG_ACCELGYRO_BMI_COMM_I2C
+#else
+#define CONFIG_ACCELGYRO_BMI_COMM_SPI
+#endif
+#endif	/* !CONFIG_ZEPHYR && !CONFIG_ACCELGYRO_BMI_SPI && \
+	 * !CONFIG_ACCELGYRO_BMI_I2C
+	 */
+
+/* AMD STT requires AMD SB-RMI to be enabled */
+#if defined(CONFIG_AMD_STT) && !defined(CONFIG_AMD_SB_RMI)
+#define CONFIG_AMD_SB_RMI
+#endif
 
 #endif  /* __CROS_EC_CONFIG_H */

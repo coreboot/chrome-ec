@@ -6,8 +6,10 @@
 #include <kernel.h>
 #include <init.h>
 #include <sys/atomic.h>
+#include <shell/shell.h>
 
 #include "common.h"
+#include "timer.h"
 #include "task.h"
 
 /* We need to ensure that is one lower priority for the deferred task */
@@ -31,8 +33,10 @@ CROS_EC_TASK_LIST
 
 /** Context for each CROS EC task that is run in its own zephyr thread */
 struct task_ctx {
+#ifdef CONFIG_THREAD_NAME
 	/** Name of thread (for debugging) */
 	const char *name;
+#endif
 	/** Zephyr thread structure that hosts EC tasks */
 	struct k_thread zephyr_thread;
 	/** Zephyr thread id for above thread */
@@ -49,8 +53,14 @@ struct task_ctx {
 	struct k_poll_signal new_event;
 	/** The current platform/ec events set for this task/thread */
 	uint32_t event_mask;
+	/**
+	 * The timer associated with this task, which can be set using
+	 * timer_arm().
+	 */
+	struct k_timer timer;
 };
 
+#ifdef CONFIG_THREAD_NAME
 #define CROS_EC_TASK(_name, _entry, _parameter, _size) \
 	{                                              \
 		.entry = _entry,                       \
@@ -59,9 +69,24 @@ struct task_ctx {
 		.stack_size = _size,                   \
 		.name = #_name,                        \
 	},
+#else
+#define CROS_EC_TASK(_name, _entry, _parameter, _size) \
+	{                                              \
+		.entry = _entry,                       \
+		.parameter = _parameter,               \
+		.stack = _name##_STACK,                \
+		.stack_size = _size,                   \
+	},
+#endif /* CONFIG_THREAD_NAME */
 #define TASK_TEST(_name, _entry, _parameter, _size) \
 	CROS_EC_TASK(_name, _entry, _parameter, _size)
-static struct task_ctx shimmed_tasks[] = { CROS_EC_TASK_LIST };
+static struct task_ctx shimmed_tasks[] = {
+	CROS_EC_TASK_LIST
+#ifdef TEST_BUILD
+	[TASK_ID_TEST_RUNNER] = {},
+#endif
+};
+static int tasks_started;
 #undef CROS_EC_TASK
 #undef TASK_TEST
 
@@ -72,6 +97,14 @@ task_id_t task_get_current(void)
 			return i;
 		}
 	}
+
+#if defined(HAS_TASK_HOOKS)
+	/* Hooks ID should be returned for deferred calls */
+	if (k_current_get() == &k_sys_work_q.thread) {
+		return TASK_ID_HOOKS;
+	}
+#endif /* HAS_TASK_HOOKS */
+
 	__ASSERT(false, "Task index out of bound");
 	return 0;
 }
@@ -181,18 +214,76 @@ static void task_entry(void *task_contex, void *unused1, void *unused2)
 	ARG_UNUSED(unused2);
 
 	struct task_ctx *const ctx = (struct task_ctx *)task_contex;
+
+#ifdef CONFIG_THREAD_NAME
 	/* Name thread for debugging */
 	k_thread_name_set(ctx->zephyr_tid, ctx->name);
+#endif
 
 	/* Call into task entry point */
 	ctx->entry((void *)ctx->parameter);
 }
+
+/*
+ * Callback function to use with k_timer_start to set the
+ * TASK_EVENT_TIMER event on a task.
+ */
+static void timer_expire(struct k_timer *timer_id)
+{
+	struct task_ctx *const ctx =
+		CONTAINER_OF(timer_id, struct task_ctx, timer);
+	task_id_t cros_ec_task_id = ctx - shimmed_tasks;
+
+	task_set_event(cros_ec_task_id, TASK_EVENT_TIMER);
+}
+
+int timer_arm(timestamp_t event, task_id_t cros_ec_task_id)
+{
+	timestamp_t now = get_time();
+	struct task_ctx *const ctx = &shimmed_tasks[cros_ec_task_id];
+
+	if (event.val <= now.val) {
+		/* Timer requested for now or in the past, fire right away */
+		task_set_event(cros_ec_task_id, TASK_EVENT_TIMER);
+		return EC_SUCCESS;
+	}
+
+	/* Check for a running timer */
+	if (k_timer_remaining_get(&ctx->timer))
+		return EC_ERROR_BUSY;
+
+	k_timer_start(&ctx->timer, K_USEC(event.val - now.val), K_NO_WAIT);
+	return EC_SUCCESS;
+}
+
+void timer_cancel(task_id_t cros_ec_task_id)
+{
+	struct task_ctx *const ctx = &shimmed_tasks[cros_ec_task_id];
+
+	k_timer_stop(&ctx->timer);
+}
+
+#ifdef TEST_BUILD
+void set_test_runner_tid(void)
+{
+	shimmed_tasks[TASK_ID_TEST_RUNNER].zephyr_tid = k_current_get();
+}
+#endif
 
 void start_ec_tasks(void)
 {
 	for (size_t i = 0; i < ARRAY_SIZE(shimmed_tasks); ++i) {
 		struct task_ctx *const ctx = &shimmed_tasks[i];
 
+		k_timer_init(&ctx->timer, timer_expire, NULL);
+
+#ifdef TEST_BUILD
+		/* Do not create thread for test runner; it will be set later */
+		if (i == TASK_ID_TEST_RUNNER) {
+			ctx->zephyr_tid = NULL;
+			continue;
+		}
+#endif
 		/*
 		 * TODO(b/172361873): Add K_FP_REGS for FPU tasks. See
 		 * comment in config.h for CONFIG_TASK_LIST for existing flags
@@ -203,6 +294,7 @@ void start_ec_tasks(void)
 			task_entry, ctx, NULL, NULL,
 			K_PRIO_PREEMPT(TASK_ID_COUNT - i - 1), 0, K_NO_WAIT);
 	}
+	tasks_started = 1;
 }
 
 /*
@@ -227,14 +319,35 @@ SYS_INIT(init_signals, POST_KERNEL, 50);
 
 int task_start_called(void)
 {
-	return 1;
+	return tasks_started;
 }
 
-void interrupt_disable(void)
+void task_disable_task(task_id_t tskid)
 {
-	/*
-	 * TODO (b:174481378) system.c needed an implementation of this. Though
-	 * it's not yet clear where we call interrupt_enable() from. These two
-	 * calls should be replaced with irq_lock and irq_unlock.
-	 */
+	/* TODO(b/190203712): Implement this */
 }
+
+void task_clear_pending_irq(int irq)
+{
+#if CONFIG_ITE_IT8XXX2_INTC
+	ite_intc_isr_clear(irq);
+#endif
+}
+
+void task_enable_irq(int irq)
+{
+	arch_irq_enable(irq);
+}
+
+inline int in_interrupt_context(void)
+{
+	return k_is_in_isr();
+}
+
+#if IS_ENABLED(CONFIG_KERNEL_SHELL) && IS_ENABLED(CONFIG_THREAD_MONITOR)
+static int taskinfo(const struct shell *shell, size_t argc, char **argv)
+{
+	return shell_execute_cmd(shell, "kernel threads");
+}
+SHELL_CMD_REGISTER(taskinfo, NULL, "Threads statistics", taskinfo);
+#endif

@@ -6,10 +6,7 @@
 /* Lazor board-specific configuration */
 
 #include "adc_chip.h"
-#include "battery_fuel_gauge.h"
 #include "button.h"
-#include "charge_manager.h"
-#include "charge_state.h"
 #include "extpower.h"
 #include "driver/accel_bma2x2.h"
 #include "driver/accelgyro_bmi_common.h"
@@ -17,121 +14,31 @@
 #include "driver/accelgyro_icm426xx.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
-#include "driver/ppc/sn5s330.h"
-#include "driver/tcpm/ps8xxx.h"
-#include "driver/tcpm/tcpci.h"
+#include "driver/ln9310.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
-#include "ln9310.h"
-#include "pi3usb9201.h"
 #include "power.h"
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
 #include "system.h"
 #include "shi_chip.h"
+#include "sku.h"
 #include "switch.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "usbc_ocp.h"
+#include "usbc_config.h"
 #include "usbc_ppc.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-/* Forward declaration */
-static void tcpc_alert_event(enum gpio_signal signal);
-static void usb0_evt(enum gpio_signal signal);
-static void usb1_evt(enum gpio_signal signal);
-static void usba_oc_interrupt(enum gpio_signal signal);
-static void ppc_interrupt(enum gpio_signal signal);
-static void board_connect_c0_sbu(enum gpio_signal s);
-static void switchcap_interrupt(enum gpio_signal signal);
-
 #include "gpio_list.h"
 
-static uint8_t sku_id;
-
-/* GPIO Interrupt Handlers */
-static void tcpc_alert_event(enum gpio_signal signal)
-{
-	int port = -1;
-
-	switch (signal) {
-	case GPIO_USB_C0_PD_INT_ODL:
-		port = 0;
-		break;
-	case GPIO_USB_C1_PD_INT_ODL:
-		port = 1;
-		break;
-	default:
-		return;
-	}
-
-	schedule_deferred_pd_interrupt(port);
-}
-
-static void usb0_evt(enum gpio_signal signal)
-{
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
-}
-
-static void usb1_evt(enum gpio_signal signal)
-{
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-}
-
-static void usba_oc_deferred(void)
-{
-	/* Use next number after all USB-C ports to indicate the USB-A port */
-	board_overcurrent_event(CONFIG_USB_PD_PORT_MAX_COUNT,
-				!gpio_get_level(GPIO_USB_A0_OC_ODL));
-}
-DECLARE_DEFERRED(usba_oc_deferred);
-
-static void usba_oc_interrupt(enum gpio_signal signal)
-{
-	hook_call_deferred(&usba_oc_deferred_data, 0);
-}
-
-static void ppc_interrupt(enum gpio_signal signal)
-{
-	switch (signal) {
-	case GPIO_USB_C0_SWCTL_INT_ODL:
-		sn5s330_interrupt(0);
-		break;
-	case GPIO_USB_C1_SWCTL_INT_ODL:
-		sn5s330_interrupt(1);
-		break;
-	default:
-		break;
-	}
-}
-
-static void board_connect_c0_sbu_deferred(void)
-{
-	/*
-	 * If CCD_MODE_ODL asserts, it means there's a debug accessory connected
-	 * and we should enable the SBU FETs.
-	 */
-	ppc_set_sbu(0, 1);
-}
-DECLARE_DEFERRED(board_connect_c0_sbu_deferred);
-
-static void board_connect_c0_sbu(enum gpio_signal s)
-{
-	hook_call_deferred(&board_connect_c0_sbu_deferred_data, 0);
-}
-
-static void switchcap_interrupt(enum gpio_signal signal)
-{
-	ln9310_interrupt(signal);
-}
-
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Use 80 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/*
@@ -149,6 +56,24 @@ struct keyboard_scan_config keyscan_config = {
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 };
+
+/*
+ * We have total 30 pins for keyboard connecter {-1, -1} mean
+ * the N/A pin that don't consider it and reserve index 0 area
+ * that we don't have pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
+	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
+	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
+	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
+	{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}, {-1, -1},
+	{-1, -1},
+};
+
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
 
 /* I2C port map */
 const struct i2c_port_t i2c_ports[] = {
@@ -209,83 +134,6 @@ const struct pwm_t pwm_channels[] = {
 	[PWM_CH_DISPLIGHT] = { .channel = 5, .flags = 0, .freq = 4800 },
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
-
-/* LN9310 switchcap */
-const struct ln9310_config_t ln9310_config = {
-	.i2c_port = I2C_PORT_POWER,
-	.i2c_addr_flags = LN9310_I2C_ADDR_0_FLAGS,
-};
-
-/* Power Path Controller */
-struct ppc_config_t ppc_chips[] = {
-	{
-		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv
-	},
-	{
-		.i2c_port = I2C_PORT_TCPC1,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv
-	},
-};
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-/* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC0,
-			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
-		},
-		.drv = &ps8xxx_tcpm_drv,
-	},
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC1,
-			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
-		},
-		.drv = &ps8xxx_tcpm_drv,
-	},
-};
-
-/*
- * Port-0/1 USB mux driver.
- *
- * The USB mux is handled by TCPC chip and the HPD update is through a GPIO
- * to AP. But the TCPC chip is also needed to know the HPD status; otherwise,
- * the mux misbehaves.
- */
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.usb_port = 0,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-	},
-	{
-		.usb_port = 1,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-	}
-};
-
-const int usb_port_enable[USB_PORT_COUNT] = {
-	GPIO_EN_USB_A_5V,
-};
-
-/* BC1.2 */
-const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
-	{
-		.i2c_port = I2C_PORT_POWER,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-	{
-		.i2c_port = I2C_PORT_EEPROM,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-};
 
 /* Mutexes */
 static struct mutex g_base_mutex;
@@ -442,7 +290,7 @@ struct motion_sensor_t icm426xx_base_accel = {
 	.drv_data = &g_icm426xx_data,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
-	.default_range = 2, /* g, enough for laptop */
+	.default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	.rot_standard_ref = &base_standard_ref_icm426xx,
 	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
 	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
@@ -474,55 +322,6 @@ struct motion_sensor_t icm426xx_base_gyro = {
 	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
 	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
 };
-
-#ifndef TEST_BUILD
-/* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
-{
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
-}
-#endif
-
-static int board_is_clamshell(void)
-{
-	/* SKU ID of Limozeen: 4, 5, 6 */
-	return sku_id == 4 || sku_id == 5 || sku_id == 6;
-}
-
-enum battery_cell_type board_get_battery_cell_type(void)
-{
-	/* SKU ID of Limozeen: 4, 5, 6 -> 3S battery */
-	if (sku_id == 4 || sku_id == 5 || sku_id == 6)
-		return BATTERY_CELL_TYPE_3S;
-
-	return BATTERY_CELL_TYPE_UNKNOWN;
-}
-
-__override int board_get_default_battery_type(void)
-{
-	/*
-	 * A 2S battery is set as default. If the board is configured to use
-	 * a 3S battery, according to its SKU_ID, return a 3S battery as
-	 * default. It helps to configure the charger to output a correct
-	 * voltage in case the battery is not attached.
-	 */
-	if (board_get_battery_cell_type() == BATTERY_CELL_TYPE_3S)
-		return BATTERY_LGC_AP18C8K;
-
-	return DEFAULT_BATTERY_TYPE;
-}
 
 static int base_accelgyro_config;
 
@@ -582,199 +381,16 @@ static void board_update_sensor_config_from_sku(void)
 		gpio_enable_interrupt(GPIO_ACCEL_GYRO_INT_L);
 	}
 }
-
-/* Read SKU ID from GPIO and initialize variables for board variants */
-static void sku_init(void)
-{
-	uint8_t val = 0;
-
-	if (gpio_get_level(GPIO_SKU_ID0))
-		val |= 0x01;
-	if (gpio_get_level(GPIO_SKU_ID1))
-		val |= 0x02;
-	if (gpio_get_level(GPIO_SKU_ID2))
-		val |= 0x04;
-
-	sku_id = val;
-	CPRINTS("SKU: %u", sku_id);
-
-	board_update_sensor_config_from_sku();
-}
-DECLARE_HOOK(HOOK_INIT, sku_init, HOOK_PRIO_INIT_I2C + 1);
-
-static int board_has_ln9310(void)
-{
-	static int ln9310_present = -1;
-	int status, val;
-
-	/* Cache the status of LN9310 present or not */
-	if (ln9310_present == -1) {
-		status = i2c_read8(ln9310_config.i2c_port,
-				   ln9310_config.i2c_addr_flags,
-				   LN9310_REG_CHIP_ID,
-				   &val);
-
-		/*
-		 * Any error reading LN9310 CHIP_ID over I2C means the chip
-		 * not present. Fallback to use DA9313 switchcap.
-		 */
-		ln9310_present = !status && val == LN9310_CHIP_ID;
-	}
-
-	return ln9310_present;
-}
-
-static void board_switchcap_init(void)
-{
-	if (board_has_ln9310()) {
-		CPRINTS("Use switchcap: LN9310");
-
-		/* Configure and enable interrupt for LN9310 */
-		gpio_set_flags(GPIO_SWITCHCAP_PG_INT_L, GPIO_INT_FALLING);
-		gpio_enable_interrupt(GPIO_SWITCHCAP_PG_INT_L);
-
-		/*
-		 * Configure LN9310 enable, open-drain output. Don't set the
-		 * level here; otherwise, it will override its value and
-		 * shutdown the switchcap when sysjump to RW.
-		 *
-		 * Note that the gpio.inc configures it GPIO_OUT_LOW. When
-		 * sysjump to RW, will output push-pull a short period of
-		 * time. As it outputs LOW, should be fine.
-		 *
-		 * This GPIO changes like:
-		 * (1) EC boots from RO -> high-Z
-		 * (2) GPIO init according to gpio.inc -> push-pull LOW
-		 * (3) This function configures it -> open-drain HIGH
-		 * (4) Power sequence turns on the switchcap -> open-drain LOW
-		 * (5) EC sysjumps to RW
-		 * (6) GPIO init according to gpio.inc -> push-pull LOW
-		 * (7) This function configures it -> open-drain LOW
-		 */
-		gpio_set_flags(GPIO_SWITCHCAP_ON_L,
-			       GPIO_OUTPUT | GPIO_OPEN_DRAIN);
-
-		/* Only configure the switchcap if not sysjump */
-		if (!system_jumped_late()) {
-			/*
-			 * Deassert the enable pin (set it HIGH), so the
-			 * switchcap won't be enabled after the switchcap is
-			 * configured from standby mode to switching mode.
-			 */
-			gpio_set_level(GPIO_SWITCHCAP_ON_L, 1);
-			ln9310_init();
-		}
-	} else {
-		CPRINTS("Use switchcap: DA9313");
-
-		/*
-		 * When the chip in power down mode, it outputs high-Z.
-		 * Set pull-down to avoid floating.
-		 */
-		gpio_set_flags(GPIO_DA9313_GPIO0, GPIO_INPUT | GPIO_PULL_DOWN);
-
-		/*
-		 * Configure DA9313 enable, push-pull output. Don't set the
-		 * level here; otherwise, it will override its value and
-		 * shutdown the switchcap when sysjump to RW.
-		 */
-		gpio_set_flags(GPIO_SWITCHCAP_ON, GPIO_OUTPUT);
-	}
-}
+DECLARE_HOOK(HOOK_INIT, board_update_sensor_config_from_sku,
+	     HOOK_PRIO_INIT_I2C + 2);
 
 /* Initialize board. */
 static void board_init(void)
 {
-	/* Enable BC1.2 interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
-	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
-
-	/* Enable USB-A overcurrent interrupt */
-	gpio_enable_interrupt(GPIO_USB_A0_OC_ODL);
-
-	/*
-	 * The H1 SBU line for CCD are behind PPC chip. The PPC internal FETs
-	 * for SBU may be disconnected after DP alt mode is off. Should enable
-	 * the CCD_MODE_ODL interrupt to make sure the SBU FETs are connected.
-	 */
-	gpio_enable_interrupt(GPIO_CCD_MODE_ODL);
-
 	/* Set the backlight duty cycle to 0. AP will override it later. */
 	pwm_set_duty(PWM_CH_DISPLIGHT, 0);
-
-	board_switchcap_init();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
-
-void board_hibernate(void)
-{
-	int i;
-
-	if (!board_is_clamshell()) {
-		/*
-		 * Sensors are unpowered in hibernate. Apply PD to the
-		 * interrupt lines such that they don't float.
-		 */
-		gpio_set_flags(GPIO_ACCEL_GYRO_INT_L,
-			       GPIO_INPUT | GPIO_PULL_DOWN);
-		gpio_set_flags(GPIO_LID_ACCEL_INT_L,
-			       GPIO_INPUT | GPIO_PULL_DOWN);
-	}
-
-	/*
-	 * Board rev 5+ has the hardware fix. Don't need the following
-	 * workaround.
-	 */
-	if (system_get_board_version() >= 5)
-		return;
-
-	/*
-	 * Enable the PPC power sink path before EC enters hibernate;
-	 * otherwise, ACOK won't go High and can't wake EC up. Check the
-	 * bug b/170324206 for details.
-	 */
-	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
-		ppc_vbus_sink_enable(i, 1);
-}
-
-__override uint16_t board_get_ps8xxx_product_id(int port)
-{
-	/*
-	 * Lazor (SKU_ID: 0, 1, 2, 3) rev 3+ changes TCPC from PS8751 to
-	 * PS8805.
-	 *
-	 * Limozeen (SKU_ID: 4, 5, 6) all-rev uses PS8805.
-	 */
-	if ((sku_id == 0 || sku_id == 1 || sku_id == 2 || sku_id == 3) &&
-	    system_get_board_version() < 3)
-		return PS8751_PRODUCT_ID;
-
-	return PS8805_PRODUCT_ID;
-}
-
-void board_tcpc_init(void)
-{
-	/* Only reset TCPC if not sysjump */
-	if (!system_jumped_late()) {
-		/* TODO(crosbug.com/p/61098): How long do we need to wait? */
-		board_reset_pd_mcu();
-	}
-
-	/* Enable PPC interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_SWCTL_INT_ODL);
-
-	/* Enable TCPC interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_PD_INT_ODL);
-
-	/*
-	 * Initialize HPD to low; after sysjump SOC needs to see
-	 * HPD pulse to enable video path
-	 */
-	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
-		usb_mux_hpd_update(port, 0, 0);
-}
-DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
 /* Called on AP S0 -> S3 transition */
 static void board_chipset_suspend(void)
@@ -798,154 +414,18 @@ static void board_chipset_resume(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
-void board_set_switchcap_power(int enable)
+__override uint32_t board_get_sku_id(void)
 {
-	if (board_has_ln9310())
-		gpio_set_level(GPIO_SWITCHCAP_ON_L, !enable);
-	else
-		gpio_set_level(GPIO_SWITCHCAP_ON, enable);
-}
+	static int sku_id = -1;
 
-int board_is_switchcap_enabled(void)
-{
-	if (board_has_ln9310())
-		return !gpio_get_level(GPIO_SWITCHCAP_ON_L);
-	else
-		return gpio_get_level(GPIO_SWITCHCAP_ON);
-}
+	if (sku_id == -1) {
+		int bits[3];
 
-int board_is_switchcap_power_good(void)
-{
-	if (board_has_ln9310())
-		return ln9310_power_good();
-	else
-		return gpio_get_level(GPIO_DA9313_GPIO0);
-}
-
-void board_reset_pd_mcu(void)
-{
-	cprints(CC_USB, "Resetting TCPCs...");
-	cflush();
-
-	gpio_set_level(GPIO_USB_C0_PD_RST_L, 0);
-	gpio_set_level(GPIO_USB_C1_PD_RST_L, 0);
-	msleep(PS8XXX_RESET_DELAY_MS);
-	gpio_set_level(GPIO_USB_C0_PD_RST_L, 1);
-	gpio_set_level(GPIO_USB_C1_PD_RST_L, 1);
-}
-
-void board_set_tcpc_power_mode(int port, int mode)
-{
-	/* Ignore the "mode" to turn the chip on.  We can only do a reset. */
-	if (mode)
-		return;
-
-	board_reset_pd_mcu();
-}
-
-int board_vbus_sink_enable(int port, int enable)
-{
-	/* Both ports are controlled by PPC SN5S330 */
-	return ppc_vbus_sink_enable(port, enable);
-}
-
-int board_is_sourcing_vbus(int port)
-{
-	/* Both ports are controlled by PPC SN5S330 */
-	return ppc_is_sourcing_vbus(port);
-}
-
-void board_overcurrent_event(int port, int is_overcurrented)
-{
-	/* TODO(b/120231371): Notify AP */
-	CPRINTS("p%d: overcurrent!", port);
-}
-
-int board_set_active_charge_port(int port)
-{
-	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
-	int i;
-
-	if (!is_real_port && port != CHARGE_PORT_NONE)
-		return EC_ERROR_INVAL;
-
-	if (port == CHARGE_PORT_NONE) {
-		CPRINTS("Disabling all charging port");
-
-		/* Disable all ports. */
-		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-			/*
-			 * Do not return early if one fails otherwise we can
-			 * get into a boot loop assertion failure.
-			 */
-			if (board_vbus_sink_enable(i, 0))
-				CPRINTS("Disabling p%d sink path failed.", i);
-		}
-
-		return EC_SUCCESS;
+		bits[0] = gpio_get_ternary(GPIO_SKU_ID0);
+		bits[1] = gpio_get_ternary(GPIO_SKU_ID1);
+		bits[2] = gpio_get_ternary(GPIO_SKU_ID2);
+		sku_id = binary_first_base3_from_bits(bits, ARRAY_SIZE(bits));
 	}
 
-	/* Check if the port is sourcing VBUS. */
-	if (board_is_sourcing_vbus(port)) {
-		CPRINTS("Skip enable p%d", port);
-		return EC_ERROR_INVAL;
-	}
-
-
-	CPRINTS("New charge port: p%d", port);
-
-	/*
-	 * Turn off the other ports' sink path FETs, before enabling the
-	 * requested charge port.
-	 */
-	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-		if (i == port)
-			continue;
-
-		if (board_vbus_sink_enable(i, 0))
-			CPRINTS("p%d: sink path disable failed.", i);
-	}
-
-	/* Enable requested charge port. */
-	if (board_vbus_sink_enable(port, 1)) {
-		CPRINTS("p%d: sink path enable failed.", port);
-		return EC_ERROR_UNKNOWN;
-	}
-
-	return EC_SUCCESS;
+	return (uint32_t)sku_id;
 }
-
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
-{
-	/*
-	 * Ignore lower charge ceiling on PD transition if our battery is
-	 * critical, as we may brownout.
-	 */
-	if (supplier == CHARGE_SUPPLIER_PD &&
-	    charge_ma < 1500 &&
-	    charge_get_percent() < CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON) {
-		CPRINTS("Using max ilim %d", max_ma);
-		charge_ma = max_ma;
-	}
-
-	charge_set_input_current_limit(MAX(charge_ma,
-					   CONFIG_CHARGER_INPUT_CURRENT),
-				       charge_mv);
-}
-
-uint16_t tcpc_get_alert_status(void)
-{
-	uint16_t status = 0;
-
-	if (!gpio_get_level(GPIO_USB_C0_PD_INT_ODL))
-		if (gpio_get_level(GPIO_USB_C0_PD_RST_L))
-			status |= PD_STATUS_TCPC_ALERT_0;
-	if (!gpio_get_level(GPIO_USB_C1_PD_INT_ODL))
-		if (gpio_get_level(GPIO_USB_C1_PD_RST_L))
-			status |= PD_STATUS_TCPC_ALERT_1;
-
-	return status;
-}
-

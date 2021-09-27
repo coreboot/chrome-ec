@@ -1,7 +1,6 @@
-/*
- * Copyright 2020 Google LLC
- *
- * SPDX-License-Identifier: Apache-2.0
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
  */
 
 #define DT_DRV_COMPAT nuvoton_npcx_cros_kb_raw
@@ -72,8 +71,7 @@ static void kb_raw_npcx_init_ksi_wui_callback(
 static int kb_raw_npcx_init(const struct device *dev)
 {
 	const struct cros_kb_raw_npcx_config *const config = DRV_CONFIG(dev);
-	const struct device *const clk_dev =
-		device_get_binding(NPCX_CLK_CTRL_NAME);
+	const struct device *clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	int ret;
 
 	/* Turn on device clock first and get source clock freq. */
@@ -192,7 +190,7 @@ static int cros_kb_raw_npcx_init(const struct device *dev)
 	 * Select quasi-bidirectional buffers for KSO pins. It reduces the
 	 * low-to-high transition time. This feature only supports in npcx7.
 	 */
-	if (IS_ENABLED(CONFIG_KEYBOARD_KSO_HIGH_DRIVE)) {
+	if (IS_ENABLED(CONFIG_CROS_KB_RAW_NPCX_KSO_HIGH_DRIVE)) {
 		SET_FIELD(inst->KBSCTL, NPCX_KBSCTL_KBHDRV_FIELD, 0x01);
 	}
 
@@ -230,10 +228,11 @@ static const struct cros_kb_raw_npcx_config cros_kb_raw_cfg = {
 	.wui_maps = NPCX_DT_WUI_ITEMS_LIST(0),
 };
 
-DEVICE_AND_API_INIT(cros_kb_raw_npcx_0, DT_INST_LABEL(0), kb_raw_npcx_init,
-		    NULL, &cros_kb_raw_cfg, PRE_KERNEL_1,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &cros_kb_raw_npcx_driver_api);
+/* Verify there's exactly 1 enabled cros,kb-raw-npcx node. */
+BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1);
+DEVICE_DT_INST_DEFINE(0, kb_raw_npcx_init, NULL, NULL, &cros_kb_raw_cfg,
+		      PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      &cros_kb_raw_npcx_driver_api);
 
 /* KBS register structure check */
 NPCX_REG_SIZE_CHECK(kbs_reg, 0x010);

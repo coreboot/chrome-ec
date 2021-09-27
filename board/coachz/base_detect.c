@@ -6,8 +6,8 @@
 /* Coachz base detection code */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "board.h"
+#include "base_state.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -81,9 +81,9 @@ static void base_detect_change(enum base_status status)
 	if (current_base_status == status)
 		return;
 
-	CPRINTS("Base %sconnected", connected ? "" : "not ");
 	gpio_set_level(GPIO_EN_BASE, connected);
-	tablet_set_mode(!connected);
+	tablet_set_mode(!connected, TABLET_TRIGGER_BASE);
+	base_set_state(connected);
 	current_base_status = status;
 }
 
@@ -192,9 +192,13 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP, base_enable, HOOK_PRIO_DEFAULT);
 
 static void base_disable(void)
 {
-	/* Disable base detection interrupt and disable power to base. */
+	/*
+	 * Disable base detection interrupt and disable power to base.
+	 * Set the state UNKNOWN so the next startup will initialize a
+	 * correct state and notify AP.
+	 */
 	gpio_disable_interrupt(GPIO_BASE_DET_L);
-	base_detect_change(BASE_DISCONNECTED);
+	base_detect_change(BASE_UNKNOWN);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, base_disable, HOOK_PRIO_DEFAULT);
 
@@ -209,13 +213,13 @@ static void base_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, base_init, HOOK_PRIO_DEFAULT+1);
 
-void base_force_state(int state)
+void base_force_state(enum ec_set_base_state_cmd state)
 {
-	if (state == 1) {
+	if (state == EC_SET_BASE_STATE_ATTACH) {
 		gpio_disable_interrupt(GPIO_BASE_DET_L);
 		base_detect_change(BASE_CONNECTED);
 		CPRINTS("BD forced connected");
-	} else if (state == 0) {
+	} else if (state == EC_SET_BASE_STATE_DETACH) {
 		gpio_disable_interrupt(GPIO_BASE_DET_L);
 		base_detect_change(BASE_DISCONNECTED);
 		CPRINTS("BD forced disconnected");

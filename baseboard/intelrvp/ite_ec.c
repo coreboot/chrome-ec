@@ -5,6 +5,7 @@
 
 /* Intel BASEBOARD-RVP ITE EC specific configuration */
 
+#include "adc_chip.h"
 #include "common.h"
 #include "it83xx_pd.h"
 #include "keyboard_scan.h"
@@ -13,14 +14,8 @@
 #include "timer.h"
 #include "usb_pd_tcpm.h"
 
-/* Reset PD MCU */
-void board_reset_pd_mcu(void)
-{
-	/* Not applicable for ITE TCPC */
-}
-
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	.output_settle_us = 35,
 	.debounce_down_us = 5 * MSEC,
 	.debounce_up_us = 40 * MSEC,
@@ -32,6 +27,39 @@ struct keyboard_scan_config keyscan_config = {
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
 	},
 };
+
+/* ADC channels */
+const struct adc_t adc_channels[] = {
+	[ADC_TEMP_SNS_AMBIENT] = {
+		.name = "ADC_TEMP_SNS_AMBIENT",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = ADC_TEMP_SNS_AMBIENT_CHANNEL,
+	},
+	[ADC_TEMP_SNS_DDR] = {
+		.name = "ADC_TEMP_SNS_DDR",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = ADC_TEMP_SNS_DDR_CHANNEL,
+	},
+	[ADC_TEMP_SNS_SKIN] = {
+		.name = "ADC_TEMP_SNS_SKIN",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = ADC_TEMP_SNS_SKIN_CHANNEL,
+	},
+	[ADC_TEMP_SNS_VR] = {
+		.name = "ADC_TEMP_SNS_VR",
+		.factor_mul = ADC_MAX_MVOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+		.channel = ADC_TEMP_SNS_VR_CHANNEL,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /*
  * PWM HW channelx binding tachometer channelx for fan control.
@@ -102,7 +130,7 @@ const struct pwm_t pwm_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
-#ifdef CONFIG_USBC_VCONN
+#if defined(CONFIG_USBC_VCONN) && defined(CONFIG_USB_PD_TCPM_ITE_ON_CHIP)
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 {
 #ifndef CONFIG_USBC_PPC_VCONN

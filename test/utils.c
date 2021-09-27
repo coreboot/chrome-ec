@@ -270,8 +270,11 @@ static int test_shared_mem(void)
 
 static int test_scratchpad(void)
 {
+	uint32_t scratchpad_value;
+
 	system_set_scratchpad(0xfeed);
-	TEST_ASSERT(system_get_scratchpad() == 0xfeed);
+	TEST_EQ(system_get_scratchpad(&scratchpad_value), EC_SUCCESS, "%d");
+	TEST_EQ(scratchpad_value, 0xfeed, "%d");
 
 	return EC_SUCCESS;
 }
@@ -463,7 +466,10 @@ test_static int test_safe_memcmp(void)
 	const char str2[] = "def";
 	const char str3[] = "abc";
 
-	BUILD_ASSERT(str1 != str3);
+	/* Verify that the compiler hasn't optimized str1 and str3 to point
+	 * to the same underlying memory.
+	 */
+	TEST_NE(str1, str3, "%p");
 
 	TEST_EQ(safe_memcmp(NULL, NULL, 0), 0, "%d");
 	TEST_EQ(safe_memcmp(str1, str2, sizeof(str1)), 1, "%d");
@@ -478,6 +484,30 @@ test_static int test_alignment_log2(void)
 	TEST_EQ(alignment_log2(5), 0, "%d");
 	TEST_EQ(alignment_log2(0x10070000), 16, "%d");
 	TEST_EQ(alignment_log2(0x80000000), 31, "%d");
+	return EC_SUCCESS;
+}
+
+test_static int test_binary_first_base3_from_bits(void)
+{
+	int n0[] = {0, 0, 0};  /* LSB first */
+	int n7[] = {1, 1, 1};
+	int n8[] = {2, 0, 0};
+	int n9[] = {2, 1, 0};
+	int n10[] = {0, 2, 0};
+	int n11[] = {1, 2, 0};
+	int n18[] = {0, 0, 2};
+	int n26[] = {2, 2, 2};
+	int n38[] = {1, 2, 0, 1};
+
+	TEST_EQ(binary_first_base3_from_bits(n0, ARRAY_SIZE(n0)), 0, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n7, ARRAY_SIZE(n7)), 7, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n8, ARRAY_SIZE(n8)), 8, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n9, ARRAY_SIZE(n9)), 9, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n10, ARRAY_SIZE(n10)), 10, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n11, ARRAY_SIZE(n11)), 11, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n18, ARRAY_SIZE(n18)), 18, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n26, ARRAY_SIZE(n26)), 26, "%d");
+	TEST_EQ(binary_first_base3_from_bits(n38, ARRAY_SIZE(n38)), 38, "%d");
 	return EC_SUCCESS;
 }
 
@@ -502,6 +532,7 @@ void run_test(int argc, char **argv)
 	RUN_TEST(test_is_aligned);
 	RUN_TEST(test_safe_memcmp);
 	RUN_TEST(test_alignment_log2);
+	RUN_TEST(test_binary_first_base3_from_bits);
 
 	test_print_result();
 }

@@ -8,6 +8,7 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#include "compiler.h"
 #include "stdbool.h"
 
 /*
@@ -34,7 +35,7 @@
 #define CONFIG_ADC
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_CRC8
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_DPTF
 #define CONFIG_HIBERNATE_PSL
 #define CONFIG_LED_ONOFF_STATES
@@ -96,8 +97,8 @@
 #define CONFIG_CHARGER_BQ25710
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT 512 /* Allow low-current USB charging */
+#undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
 #define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 1
-#define CONFIG_CHARGER_NARROW_VDC
 #define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
@@ -106,7 +107,6 @@
  * communicate on locked systems (which haven't PD negotiated)
  */
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT 15000
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC 1
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 15001
 
 /* Common battery defines */
@@ -211,6 +211,8 @@ unsigned char get_board_id(void);
 void board_reset_pd_mcu(void);
 void baseboard_mst_enable_control(enum mst_source, int level);
 bool board_is_convertible(void);
+
+FORWARD_DECLARE_ENUM(battery_present);
 
 /* Check with variant about battery presence. */
 enum battery_present variant_battery_present(void);

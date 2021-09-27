@@ -11,9 +11,11 @@
 #include <devicetree.h>
 #include <toolchain.h>
 
-#define GPIO_SIGNAL(id) DT_CAT(GPIO_, id)
-#define GPIO_SIGNAL_WITH_COMMA(id) GPIO_SIGNAL(id),
+#define GPIO_SIGNAL(id) DT_STRING_UPPER_TOKEN(id, enum_name)
+#define GPIO_SIGNAL_WITH_COMMA(id) \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, enum_name), (GPIO_SIGNAL(id), ), ())
 enum gpio_signal {
+	GPIO_UNIMPLEMENTED = -1,
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
 	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_SIGNAL_WITH_COMMA)
 #endif

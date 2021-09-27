@@ -8,9 +8,11 @@
 #include "atomic.h"
 #include "common.h"
 #include "console.h"
+#include "chipset.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "task.h"
+#include "timer.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -34,11 +36,15 @@ static uint32_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 /* Device is in low power mode. */
 #define USB_MUX_FLAG_IN_LPM		BIT(0)
 
-/* The following bit is used to configure virtual mux in disconnect mode */
-#define USB_MUX_FLAG_DISCONNECT_LATCH	BIT(1)
-
 /* Device initialized at least once */
-#define USB_MUX_FLAG_INIT		BIT(2)
+#define USB_MUX_FLAG_INIT		BIT(1)
+
+/* Coordinate mux accesses by-port among the tasks */
+static mutex_t mux_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+/* Coordinate which task requires an ACK event */
+static task_id_t ack_task[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	[0 ... CONFIG_USB_PD_PORT_MAX_COUNT - 1] = TASK_ID_INVALID };
 
 enum mux_config_type {
 	USB_MUX_INIT,
@@ -46,7 +52,21 @@ enum mux_config_type {
 	USB_MUX_SET_MODE,
 	USB_MUX_GET_MODE,
 	USB_MUX_CHIPSET_RESET,
+	USB_MUX_HPD_UPDATE,
 };
+
+#ifdef CONFIG_ZEPHYR
+static int init_mux_mutex(const struct device *dev)
+{
+	int port;
+
+	ARG_UNUSED(dev);
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++)
+		k_mutex_init(&mux_lock[port]);
+	return 0;
+}
+SYS_INIT(init_mux_mutex, POST_KERNEL, 50);
+#endif /* CONFIG_ZEPHYR */
 
 /* Configure the MUX */
 static int configure_mux(int port,
@@ -65,11 +85,6 @@ static int configure_mux(int port,
 			*mux_state = USB_PD_MUX_NONE;
 	}
 
-	if ((config == USB_MUX_SET_MODE && *mux_state == USB_PD_MUX_NONE) ||
-	      config == USB_MUX_INIT) {
-		usb_mux_set_disconnect_latch_flag(port, true);
-	}
-
 	/*
 	 * a MUX for a particular port can be a linked list chain of
 	 * MUXes.  So when we change one, we traverse the whole list
@@ -80,6 +95,10 @@ static int configure_mux(int port,
 	     mux_ptr = mux_ptr->next_mux) {
 		mux_state_t lcl_state;
 		const struct usb_mux_driver *drv = mux_ptr->driver;
+		bool ack_required = false;
+
+		/* Action time!  Lock this mux */
+		mutex_lock(&mux_lock[port]);
 
 		switch (config) {
 		case USB_MUX_INIT:
@@ -114,10 +133,14 @@ static int configure_mux(int port,
 				lcl_state &= ~USB_PD_MUX_POLARITY_INVERTED;
 
 			if (drv && drv->set) {
-				rv = drv->set(mux_ptr, lcl_state);
+				rv = drv->set(mux_ptr, lcl_state,
+					      &ack_required);
 				if (rv)
 					break;
 			}
+
+			if (ack_required)
+				ack_task[port] = task_get_current();
 
 			/* Apply board specific setting */
 			if (mux_ptr->board_set)
@@ -139,6 +162,31 @@ static int configure_mux(int port,
 				*mux_state |= lcl_state;
 			}
 			break;
+
+		case USB_MUX_HPD_UPDATE:
+			if (mux_ptr->hpd_update)
+				mux_ptr->hpd_update(mux_ptr, *mux_state);
+
+		}
+
+		/* Unlock before any host command waits */
+		mutex_unlock(&mux_lock[port]);
+
+		if (ack_required) {
+			/* This should only be called from the PD task */
+			assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
+
+			/*
+			 * Note: This task event could be generalized for more
+			 * purposes beyond host command ACKs.  For now, these
+			 * wait times are tuned for the purposes of the TCSS
+			 * mux, but could be made configurable for other
+			 * purposes.
+			 */
+			task_wait_event_mask(PD_EVENT_AP_MUX_DONE, 100*MSEC);
+			ack_task[port] = TASK_ID_INVALID;
+
+			usleep(12.5 * MSEC);
 		}
 	}
 
@@ -162,11 +210,23 @@ static void enter_low_power_mode(int port)
 	configure_mux(port, USB_MUX_LOW_POWER, NULL);
 }
 
-static inline void exit_low_power_mode(int port)
+static int exit_low_power_mode(int port)
 {
 	/* If we are in low power, initialize device (which clears LPM flag) */
 	if (flags[port] & USB_MUX_FLAG_IN_LPM)
 		usb_mux_init(port);
+
+	if (!(flags[port] & USB_MUX_FLAG_INIT)) {
+		CPRINTS("C%d: USB_MUX_FLAG_INIT not set", port);
+		return EC_ERROR_UNKNOWN;
+	}
+
+	if (flags[port] & USB_MUX_FLAG_IN_LPM) {
+		CPRINTS("C%d: USB_MUX_FLAG_IN_LPM not cleared", port);
+		return EC_ERROR_NOT_POWERED;
+	}
+
+	return EC_SUCCESS;
 }
 
 void usb_mux_init(int port)
@@ -226,7 +286,8 @@ void usb_mux_set(int port, mux_state_t mux_mode,
 	if (should_enter_low_power_mode && (flags[port] & USB_MUX_FLAG_IN_LPM))
 		return;
 
-	exit_low_power_mode(port);
+	if (exit_low_power_mode(port) != EC_SUCCESS)
+		return;
 
 	/* Configure superspeed lanes */
 	mux_state = ((mux_mode != USB_PD_MUX_NONE) && polarity)
@@ -270,35 +331,6 @@ mux_state_t usb_mux_get(int port)
 	return rv ? USB_PD_MUX_NONE : mux_state;
 }
 
-/* Get USB MUX (virtual MUX) disconnect flag */
-bool usb_mux_get_disconnect_latch_flag(int port)
-{
-	bool rv = false;
-
-	if (port >= board_get_usb_pd_port_count())
-		return rv;
-
-	if (!IS_ENABLED(CONFIG_USB_MUX_VIRTUAL))
-		return rv;
-
-	return !!(flags[port] & USB_MUX_FLAG_DISCONNECT_LATCH);
-}
-
-/* Set USB MUX (virtual MUX) disconnect flag */
-void usb_mux_set_disconnect_latch_flag(int port, bool enable)
-{
-	if (port >= board_get_usb_pd_port_count())
-		return;
-
-	if (!IS_ENABLED(CONFIG_USB_MUX_VIRTUAL))
-		return;
-
-	if (enable)
-		atomic_or(&flags[port], USB_MUX_FLAG_DISCONNECT_LATCH);
-	else
-		atomic_clear_bits(&flags[port], USB_MUX_FLAG_DISCONNECT_LATCH);
-}
-
 void usb_mux_flip(int port)
 {
 	mux_state_t mux_state;
@@ -311,7 +343,8 @@ void usb_mux_flip(int port)
 	if (!(flags[port] & USB_MUX_FLAG_INIT))
 		usb_mux_init(port);
 
-	exit_low_power_mode(port);
+	if (exit_low_power_mode(port) != EC_SUCCESS)
+		return;
 
 	if (configure_mux(port, USB_MUX_GET_MODE, &mux_state))
 		return;
@@ -324,11 +357,8 @@ void usb_mux_flip(int port)
 	configure_mux(port, USB_MUX_SET_MODE, &mux_state);
 }
 
-void usb_mux_hpd_update(int port, int hpd_lvl, int hpd_irq)
+void usb_mux_hpd_update(int port, mux_state_t hpd_state)
 {
-	mux_state_t mux_state;
-	const struct usb_mux *mux_ptr = &usb_muxes[port];
-
 	if (port >= board_get_usb_pd_port_count()) {
 		return;
 	}
@@ -337,15 +367,29 @@ void usb_mux_hpd_update(int port, int hpd_lvl, int hpd_irq)
 	if (!(flags[port] & USB_MUX_FLAG_INIT))
 		usb_mux_init(port);
 
-	for (; mux_ptr; mux_ptr = mux_ptr->next_mux)
-		if (mux_ptr->hpd_update)
-			mux_ptr->hpd_update(mux_ptr, hpd_lvl, hpd_irq);
+	if (exit_low_power_mode(port) != EC_SUCCESS)
+		return;
 
-	if (!configure_mux(port, USB_MUX_GET_MODE, &mux_state)) {
-		mux_state |= (hpd_lvl ? USB_PD_MUX_HPD_LVL : 0) |
-			     (hpd_irq ? USB_PD_MUX_HPD_IRQ : 0);
-		configure_mux(port, USB_MUX_SET_MODE, &mux_state);
+	configure_mux(port, USB_MUX_HPD_UPDATE, &hpd_state);
+}
+
+int usb_mux_retimer_fw_update_port_info(void)
+{
+	int i;
+	int port_info = 0;
+	const struct usb_mux *mux_ptr;
+
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		mux_ptr = &usb_muxes[i];
+		while (mux_ptr) {
+			if (mux_ptr->driver &&
+				mux_ptr->driver->is_retimer_fw_update_capable &&
+				mux_ptr->driver->is_retimer_fw_update_capable())
+				port_info |= BIT(i);
+			mux_ptr = mux_ptr->next_mux;
+		}
 	}
+	return port_info;
 }
 
 static void mux_chipset_reset(void)
@@ -356,6 +400,30 @@ static void mux_chipset_reset(void)
 		configure_mux(port, USB_MUX_CHIPSET_RESET, NULL);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESET, mux_chipset_reset, HOOK_PRIO_DEFAULT);
+
+/*
+ * For muxes which have powered off in G3, clear any cached INIT and LPM flags
+ * since the chip will need reset.
+ */
+static void usb_mux_reset_in_g3(void)
+{
+	int port;
+	const struct usb_mux *mux_ptr;
+
+	for (port = 0; port < board_get_usb_pd_port_count(); port++) {
+		mux_ptr = &usb_muxes[port];
+
+		while (mux_ptr) {
+			if (mux_ptr->flags & USB_MUX_FLAG_RESETS_IN_G3) {
+				atomic_clear_bits(&flags[port],
+						  USB_MUX_FLAG_INIT |
+						  USB_MUX_FLAG_IN_LPM);
+			}
+			mux_ptr = mux_ptr->next_mux;
+		}
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_HARD_OFF, usb_mux_reset_in_g3, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_CMD_TYPEC
 static int command_typec(int argc, char **argv)
@@ -426,23 +494,10 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 
 	r->flags = mux_state;
 
-	/*
-	 * Force disconnect mode if disconnect latch flag is set.
-	 * Send host event for configuring the latest mux state
-	 */
-	if (IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) &&
-	    usb_mux_get_disconnect_latch_flag(port)) {
-		r->flags = USB_PD_MUX_NONE;
-		usb_mux_set_disconnect_latch_flag(port, false);
-		args->response_size = sizeof(*r);
-		host_set_single_event(EC_HOST_EVENT_USB_MUX);
-		return EC_RES_SUCCESS;
-	}
-
 	/* Clear HPD IRQ event since we're about to inform host of it. */
 	if (IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) &&
 	    (r->flags & USB_PD_MUX_HPD_IRQ)) {
-		usb_mux_hpd_update(port, r->flags & USB_PD_MUX_HPD_LVL, 0);
+		usb_mux_hpd_update(port, r->flags & USB_PD_MUX_HPD_LVL);
 	}
 
 	args->response_size = sizeof(*r);
@@ -459,7 +514,8 @@ static enum ec_status hc_usb_pd_mux_ack(struct host_cmd_handler_args *args)
 	if (!IS_ENABLED(CONFIG_USB_MUX_AP_ACK_REQUEST))
 		return EC_RES_INVALID_COMMAND;
 
-	task_set_event(PD_PORT_TO_TASK_ID(p->port), PD_EVENT_AP_MUX_DONE);
+	if (ack_task[p->port] != TASK_ID_INVALID)
+		task_set_event(ack_task[p->port], PD_EVENT_AP_MUX_DONE);
 
 	return EC_RES_SUCCESS;
 }

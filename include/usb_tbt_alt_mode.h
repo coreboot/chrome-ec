@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "tcpm/tcpm.h"
+#include "usb_pd_tcpm.h"
 
 /*
  * Initialize Thunderbolt state for the specified port.
@@ -28,6 +29,16 @@ void tbt_init(int port);
  * @param port USB-C port number
  */
 void tbt_exit_mode_request(int port);
+
+/*
+ * Checks whether Thunderbolt cable mode entry is required prior to entering
+ * USB4.
+ *
+ * @param port      USB-C port number
+ * @return          True if Thunderbolt cable mode entry is required
+ *		    False otherwise
+ */
+bool tbt_cable_entry_required_for_usb4(int port);
 
 /*
  * Checks whether the mode entry sequence for Thunderbolt alternate mode is
@@ -65,7 +76,7 @@ bool tbt_is_active(int port);
  * @param vdo_count The number of VDOs in the ACK VDM
  * @param vdm       VDM from ACK
  */
-void intel_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
+void intel_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
 		uint32_t *vdm);
 
 /*
@@ -76,7 +87,7 @@ void intel_vdm_acked(int port, enum tcpm_transmit_type type, int vdo_count,
  * @param svid    The SVID of the request
  * @param vdm_cmd The VDM command of the request
  */
-void intel_vdm_naked(int port, enum tcpm_transmit_type type, uint8_t vdm_cmd);
+void intel_vdm_naked(int port, enum tcpci_msg_type type, uint8_t vdm_cmd);
 
 /*
  * Construct the next Thunderbolt VDM that should be sent.
@@ -89,6 +100,6 @@ void intel_vdm_naked(int port, enum tcpm_transmit_type type, uint8_t vdm_cmd);
  * @return          The number of VDOs written to VDM or -1 to indicate error
  */
 int tbt_setup_next_vdm(int port, int vdo_count, uint32_t *vdm,
-		enum tcpm_transmit_type *tx_type);
+		enum tcpci_msg_type *tx_type);
 
 #endif

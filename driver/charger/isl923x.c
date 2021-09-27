@@ -95,7 +95,7 @@ enum isl923x_mon_dir { MON_CHARGE = 0, MON_DISCHARGE = 1 };
 static int learn_mode;
 
 /* Mutex for CONTROL1 register, that can be updated from multiple tasks. */
-static struct mutex control1_mutex;
+K_MUTEX_DEFINE(control1_mutex);
 
 static enum ec_error_list isl923x_discharge_on_ac(int chgnum, int enable);
 
@@ -243,8 +243,9 @@ static enum ec_error_list raa489000_get_input_current(int chgnum,
 	if (rv)
 		return rv;
 
-	/* LSB is 22.2mA */
-	regval *= 22;
+	/* The value is in 22.2mA increments. */
+	regval *= 222;
+	regval /= 10;
 
 	*input_current = AC_REG_TO_CURRENT(regval);
 	return EC_SUCCESS;
@@ -408,19 +409,28 @@ static enum ec_error_list isl923x_set_mode(int chgnum, int mode)
 	return rv;
 }
 
+#ifdef CONFIG_CHARGER_RAA489000
+static enum ec_error_list raa489000_get_actual_current(int chgnum, int *current)
+{
+	int rv;
+	int reg;
+
+	rv = raw_read16(chgnum, RAA489000_REG_ADC_CHARGE_CURRENT, &reg);
+	/* The value is in 22.2mA increments. */
+	reg *= 222;
+	reg /= 10;
+
+	*current = REG_TO_CURRENT(reg);
+	return rv;
+}
+#endif /* CONFIG_CHARGER_RAA489000 */
+
 static enum ec_error_list isl923x_get_current(int chgnum, int *current)
 {
 	int rv;
 	int reg;
 
-	if (IS_ENABLED(CONFIG_CHARGER_RAA489000)) {
-		rv = raw_read16(chgnum, RAA489000_REG_ADC_CHARGE_CURRENT, &reg);
-		/* The value is in 22.2mA increments. */
-		reg *= 222;
-		reg /= 10;
-	} else {
-		rv = raw_read16(chgnum, ISL923X_REG_CHG_CURRENT, &reg);
-	}
+	rv = raw_read16(chgnum, ISL923X_REG_CHG_CURRENT, &reg);
 	if (rv)
 		return rv;
 
@@ -433,24 +443,28 @@ static enum ec_error_list isl923x_set_current(int chgnum, int current)
 	return isl9237_set_current(chgnum, current);
 }
 
-static enum ec_error_list isl923x_get_voltage(int chgnum, int *voltage)
+#ifdef CONFIG_CHARGER_RAA489000
+static enum ec_error_list raa489000_get_actual_voltage(int chgnum, int *voltage)
 {
 	int rv;
 	int reg;
 
-	if (IS_ENABLED(CONFIG_CHARGER_RAA489000)) {
-		rv = raw_read16(chgnum, RAA489000_REG_ADC_VSYS, &reg);
-		if (rv)
-			return rv;
+	rv = raw_read16(chgnum, RAA489000_REG_ADC_VSYS, &reg);
+	if (rv)
+		return rv;
 
-		/* The voltage is returned in bits 13:6. LSB is 96mV. */
-		reg &= GENMASK(13, 6);
-		reg >>= 6;
-		reg *= 96;
+	/* The voltage is returned in bits 13:6. LSB is 96mV. */
+	reg &= GENMASK(13, 6);
+	reg >>= 6;
+	reg *= 96;
 
-		*voltage = reg;
-		return EC_SUCCESS;
-	}
+	*voltage = reg;
+	return EC_SUCCESS;
+}
+#endif /* CONFIG_CHARGER_RAA489000 */
+
+static enum ec_error_list isl923x_get_voltage(int chgnum, int *voltage)
+{
 	return raw_read16(chgnum, ISL923X_REG_SYS_VOLTAGE_MAX, voltage);
 }
 
@@ -492,7 +506,7 @@ int isl923x_set_ac_prochot(int chgnum, uint16_t ma)
 		return EC_ERROR_INVAL;
 	}
 
-	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_AC, ma);
+	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_AC, AC_CURRENT_TO_REG(ma));
 	if (rv)
 		CPRINTS("%s set_ac_prochot failed (%d)", CHARGER_NAME, rv);
 	return rv;
@@ -507,7 +521,7 @@ int isl923x_set_dc_prochot(int chgnum, uint16_t ma)
 		return EC_ERROR_INVAL;
 	}
 
-	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_DC, ma);
+	rv = raw_write16(chgnum, ISL923X_REG_PROCHOT_DC, CURRENT_TO_REG(ma));
 	if (rv)
 		CPRINTS("%s set_dc_prochot failed (%d)", CHARGER_NAME, rv);
 	return rv;
@@ -727,14 +741,25 @@ static void isl923x_init(int chgnum)
 		/*
 		 * Ignore BATGONE on auxiliary charger ICs as it's not connected
 		 * there.
+		 * Clear DISABLE_GP_CMP & MCU_LDO_BAT_STATE_DISABLE to
+		 * enable ALERT_B with control the power of sub-board
 		 */
 		if (chgnum != CHARGER_PRIMARY) {
 			if (raw_read16(chgnum, ISL9238_REG_CONTROL4, &reg))
 				goto init_fail;
 
 			reg |= RAA489000_C4_BATGONE_DISABLE;
+			reg &= ~RAA489000_C4_DISABLE_GP_CMP;
 
 			if (raw_write16(chgnum, ISL9238_REG_CONTROL4, reg))
+				goto init_fail;
+
+			if (raw_read16(chgnum, RAA489000_REG_CONTROL8, &reg))
+				goto init_fail;
+
+			reg &= ~RAA489000_C8_MCU_LDO_BAT_STATE_DISABLE;
+
+			if (raw_write16(chgnum, RAA489000_REG_CONTROL8, reg))
 				goto init_fail;
 		}
 	}
@@ -772,6 +797,31 @@ out:
 }
 
 #ifdef CONFIG_CHARGER_RAA489000
+enum ec_error_list raa489000_is_acok(int chgnum, bool *acok)
+{
+	int regval, rv;
+
+	if ((chgnum < 0) || (chgnum > board_get_charger_chip_count())) {
+		CPRINTS("%s: Invalid chgnum! (%d)", __func__, chgnum);
+		return EC_ERROR_INVAL;
+	}
+
+	rv = raw_read16(chgnum, ISL9238_REG_INFO2, &regval);
+	if (rv != EC_SUCCESS)
+		return rv;
+	*acok = (regval & RAA489000_INFO2_ACOK);
+
+	return EC_SUCCESS;
+}
+
+int raa489000_enable_asgate(int chgnum, bool enable)
+{
+	enum mask_update_action action = enable ? MASK_SET : MASK_CLR;
+
+	return raw_update16(chgnum, RAA489000_REG_CONTROL8,
+			    RAA489000_C8_ASGATE_ON_READY, action);
+}
+
 void raa489000_hibernate(int chgnum, bool disable_adc)
 {
 	int rv, regval;
@@ -821,6 +871,8 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		if (disable_adc)
 			/* ADC is active only when adapter plugged in */
 			regval &= ~RAA489000_ENABLE_ADC;
+		else
+			regval |= RAA489000_ENABLE_ADC;
 
 		rv = raw_write16(chgnum, ISL9238_REG_CONTROL3, regval);
 	}
@@ -850,6 +902,14 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		}
 		if (rv)
 			CPRINTS("%s(%d):Failed to set Control8!", __func__,
+				chgnum);
+	}
+
+	/* Disable DVC on the main charger to reduce power consumption. */
+	if (chgnum == CHARGER_PRIMARY) {
+		rv = raw_write16(chgnum, RAA489000_REG_CONTROL10, 0);
+		if (rv)
+			CPRINTS("%s(%d):Failed to set Control10!", __func__,
 				chgnum);
 	}
 #endif
@@ -1375,8 +1435,14 @@ const struct charger_drv isl923x_drv = {
 	.enable_otg_power = &isl923x_enable_otg_power,
 	.set_otg_current_voltage = &isl923x_set_otg_current_voltage,
 #endif
+#ifdef CONFIG_CHARGER_RAA489000
+	.get_actual_current = &raa489000_get_actual_current,
+#endif
 	.get_current = &isl923x_get_current,
 	.set_current = &isl923x_set_current,
+#ifdef CONFIG_CHARGER_RAA489000
+	.get_actual_voltage = &raa489000_get_actual_voltage,
+#endif
 	.get_voltage = &isl923x_get_voltage,
 	.set_voltage = &isl923x_set_voltage,
 	.discharge_on_ac = &isl923x_discharge_on_ac,

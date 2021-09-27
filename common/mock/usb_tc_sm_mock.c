@@ -31,7 +31,7 @@ void mock_tc_port_reset(void)
 		mock_tc_port[port].pd_enable = 0;
 		mock_tc_port[port].msg_tx_id = 0;
 		mock_tc_port[port].msg_rx_id = 0;
-		mock_tc_port[port].sop = TCPC_TX_INVALID;
+		mock_tc_port[port].sop = TCPCI_MSG_INVALID;
 		mock_tc_port[port].lcl_rp = TYPEC_RP_RESERVED;
 		mock_tc_port[port].attached_snk = 0;
 		mock_tc_port[port].attached_src = 0;
@@ -54,6 +54,10 @@ uint8_t tc_get_pd_enabled(int port)
 void typec_select_src_collision_rp(int port, enum tcpc_rp_value rp)
 {
 	mock_tc_port[port].lcl_rp = rp;
+}
+
+void typec_select_src_current_limit_rp(int port, enum tcpc_rp_value rp)
+{
 }
 
 int tc_is_attached_src(int port)
@@ -177,7 +181,16 @@ bool pd_capable(int port)
 	return true;
 }
 
+bool pd_waiting_on_partner_src_caps(int port)
+{
+	return false;
+}
+
 void pd_set_suspend(int port, int suspend)
+{
+}
+
+void pd_set_error_recovery(int port)
 {
 }
 

@@ -6,7 +6,6 @@
 /* Oak board configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "als.h"
 #include "atomic.h"
 #include "battery.h"
@@ -61,10 +60,8 @@
 
 void pd_mcu_interrupt(enum gpio_signal signal)
 {
-#ifdef HAS_TASK_PDCMD
 	/* Exchange status with PD MCU to determine interrupt cause */
 	host_command_pd_send_status(0);
-#endif
 }
 
 #if BOARD_REV >= OAK_REV4
@@ -281,7 +278,7 @@ static void board_init(void)
 	STM32_DMA_CSELR(STM32_DMAC_CH6) |= (3 << 20) | (3 << 24);
 
 	/* Enable SPI for BMI160 */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 
 	/* Set all four SPI pins to high speed */
 	/* pins D0/D1/D3/D4 */
@@ -669,7 +666,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(0),
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(0),
 		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = BMI_ACCEL_MIN_FREQ,
@@ -693,7 +690,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = I2C_PORT_ACCEL,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(0),
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(0),
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI_GYRO_MIN_FREQ,
@@ -728,7 +725,7 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }

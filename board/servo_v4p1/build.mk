@@ -14,7 +14,7 @@ CHIP_VARIANT:=stm32f07x
 test-list-y=
 
 # These files are compiled into RO and RW
-board-y=board.o tca6416a.o tca6424a.o
+board-y=board.o
 board-y+=ioexpanders.o
 board-y+=dacs.o
 board-y+=pi3usb9201.o
@@ -28,6 +28,5 @@ board-ro+=usb_pd_policy.o
 board-ro+=fusb302b.o
 board-ro+=usb_sm.o
 board-ro+=usb_tc_snk_sm.o
-board-ro+=power_mgmt.o
 
 all_deps=$(patsubst ro,,$(def_all_deps))

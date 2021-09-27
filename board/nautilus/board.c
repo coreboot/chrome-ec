@@ -6,7 +6,6 @@
 /* Poppy board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "bd99992gw.h"
 #include "board_config.h"
 #include "battery_smart.h"
@@ -230,7 +229,8 @@ void board_tcpc_init(void)
 	 * HPD pulse to enable video path
 	 */
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
-		usb_mux_hpd_update(port, 0, 0);
+		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 
@@ -681,8 +681,7 @@ struct motion_sensor_t motion_sensors[] = {
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 /* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/* If the lid is in 360 position, ignore the lid angle,
 	 * which might be faulty. Disable keyboard.
@@ -691,7 +690,6 @@ void lid_angle_peripheral_enable(int enable)
 		enable = 0;
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif
 
 static void board_chipset_reset(void)
 {

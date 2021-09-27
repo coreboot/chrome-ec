@@ -17,9 +17,14 @@ import argparse
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
+
+
+DEFAULT_SEGGER_REMOTE_PORT = 19020
 
 # Commands are documented here: https://wiki.segger.com/J-Link_Commander
 JLINK_COMMANDS = '''
@@ -49,9 +54,38 @@ ICETOWER_CONFIG = BoardConfig(interface=SWD_INTERFACE, device='STM32H743ZI',
 BOARD_CONFIGS = {
     'dragonclaw': DRAGONCLAW_CONFIG,
     'bloonchipper': DRAGONCLAW_CONFIG,
+    'nucleo-f412zg': DRAGONCLAW_CONFIG,
     'dartmonkey': ICETOWER_CONFIG,
     'icetower': ICETOWER_CONFIG,
+    'nucleo-dartmonkey': ICETOWER_CONFIG,
+    'nucleo-h743zi': ICETOWER_CONFIG,
 }
+
+
+def is_tcp_port_open(host: str, tcp_port: int) -> bool:
+    """Checks if the TCP host port is open."""
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(2)  # 2 Second Timeout
+    try:
+        sock.connect((host, tcp_port))
+        sock.shutdown(socket.SHUT_RDWR)
+    except ConnectionRefusedError:
+        return False
+    except socket.timeout:
+        return False
+    finally:
+        sock.close()
+    # Other errors are propagated as odd exceptions.
+
+    # We shutdown and closed the connection, but the server may need a second
+    # to start listening again. If the following error is seen, this timeout
+    # should be increased. 300ms seems to be the minimum.
+    #
+    # Connecting to J-Link via IP...FAILED: Can not connect to J-Link via \
+    #   TCP/IP (127.0.0.1, port 19020)
+    time.sleep(0.5)
+    return True
 
 
 def create_jlink_command_file(firmware_file, config):
@@ -63,13 +97,44 @@ def create_jlink_command_file(firmware_file, config):
     return tmp
 
 
-def flash(jlink_exe, ip, device, interface, cmd_file):
+def flash(jlink_exe, remote, device, interface, cmd_file):
     cmd = [
         jlink_exe,
     ]
 
-    if len(ip) > 0:
-        cmd.extend(['-ip', ip])
+    if remote:
+        logging.debug(f'Connecting to J-Link over TCP/IP {remote}.')
+        remote_components = remote.split(':')
+        if len(remote_components) not in [1, 2]:
+            logging.debug(f'Given remote "{remote}" is malformed.')
+            return 1
+
+        host = remote_components[0]
+        try:
+            ip = socket.gethostbyname(host)
+        except socket.gaierror as e:
+            logging.error(f'Failed to resolve host "{host}": {e}.')
+            return 1
+        logging.debug(f'Resolved {host} as {ip}.')
+        port = DEFAULT_SEGGER_REMOTE_PORT
+
+        if len(remote_components) == 2:
+            try:
+                port = int(remote_components[1])
+            except ValueError:
+                logging.error(
+                    f'Given remote port "{remote_components[1]}" is malformed.')
+                return 1
+
+        remote = f'{ip}:{port}'
+
+        logging.debug(f'Checking connection to {remote}.')
+        if not is_tcp_port_open(ip, port):
+            logging.error(
+                f'JLink server doesn\'t seem to be listening on {remote}.')
+            logging.error('Ensure that JLinkRemoteServerCLExe is running.')
+            return 1
+        cmd.extend(['-ip', remote])
 
     cmd.extend([
         '-device', device,
@@ -96,12 +161,10 @@ def main(argv: list):
         help='JLinkExe path (default: ' + default_jlink + ')',
         default=default_jlink)
 
-    default_ip = '127.0.0.1:2551'
     parser.add_argument(
-        '--ip', '-n',
-        help='IP address of J-Link or machine running JLinkRemoteServerCLExe '
-             '(default: ' + default_ip + ')',
-        default=default_ip)
+        '--remote', '-n',
+        help='Use TCP/IP host[:port] to connect to a J-Link or '
+        'JLinkRemoteServerCLExe. If unspecified, connect over USB.')
 
     default_board = 'bloonchipper'
     parser.add_argument(
@@ -135,7 +198,7 @@ def main(argv: list):
     args.jlink = args.jlink
 
     cmd_file = create_jlink_command_file(args.image, config)
-    ret_code = flash(args.jlink, args.ip, config.device, config.interface,
+    ret_code = flash(args.jlink, args.remote, config.device, config.interface,
                      cmd_file.name)
     cmd_file.close()
     return ret_code

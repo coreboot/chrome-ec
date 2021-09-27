@@ -165,7 +165,7 @@ static uint32_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
 int start_called;  /* Has task swapping started */
 
 /* in interrupt context */
-static volatile int in_interrupt;
+volatile bool in_interrupt;
 /* Interrupt number of EC modules */
 volatile int ec_int;
 /* Interrupt group of EC INTC modules */
@@ -197,6 +197,16 @@ void __ram_code interrupt_enable(void)
 	/* bit11: enable MEIE */
 	asm volatile ("li t0, 0x800");
 	asm volatile ("csrs  mie, t0");
+}
+
+inline int is_interrupt_enabled(void)
+{
+	int mie = 0;
+
+	asm volatile ("csrr %0, mie" : "=r"(mie));
+
+	/* Check if MEIE bit is set in MIE register */
+	return !!(mie & 0x800);
 }
 
 inline int in_interrupt_context(void)
@@ -319,8 +329,6 @@ void __ram_code update_exc_start_time(void)
  */
 int __ram_code start_irq_handler(void)
 {
-	in_interrupt = 1;
-
 	/* If this is a SW interrupt */
 	if (get_mcause() == 11) {
 		ec_int = sw_int_num;
@@ -369,7 +377,6 @@ void __ram_code end_irq_handler(void)
 		task_switches++;
 	}
 #endif
-	in_interrupt = 0;
 }
 
 static uint32_t __ram_code __wait_evt(int timeout_us, task_id_t resched)
@@ -399,18 +406,6 @@ static uint32_t __ram_code __wait_evt(int timeout_us, task_id_t resched)
 		atomic_clear_bits(&tsk->events, TASK_EVENT_TIMER);
 	}
 	return evt;
-}
-
-/* TODO: Remove the remove_me function.
- * At the moment "make BOARD=it8xxx2_evb" returns an error
- * "relocation truncated to fit" without it.
- */
-uint32_t __ram_code remove_me(task_id_t tskid)
-{
-	task_ *receiver = __task_id_to_ptr(tskid);
-
-	ASSERT(receiver);
-	return 0;
 }
 
 uint32_t __ram_code task_set_event(task_id_t tskid, uint32_t event)

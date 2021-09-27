@@ -6,7 +6,6 @@
 /* Oak board configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "atomic.h"
 #include "battery.h"
 #include "charge_manager.h"
@@ -388,7 +387,7 @@ static void board_chipset_pre_init(void)
 	board_extpower_buffer_to_soc();
 
 	/* Enable SPI for KX022 */
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 
 	/* Set all four SPI pins to high speed */
 	/* pins D0/D1/D3/D4 */
@@ -418,7 +417,7 @@ static void board_chipset_shutdown(void)
 	/* Disable clocks to SPI2 module */
 	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_SPI2;
 
-	gpio_config_module(MODULE_SPI_MASTER, 0);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 0);
 
 	/*
 	 * Calling gpio_config_module sets disabled alternate function pins to
@@ -448,7 +447,6 @@ static void board_chipset_suspend(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
-#ifdef HAS_TASK_MOTIONSENSE
 /* Motion sensors */
 /* Mutexes */
 static struct mutex g_kx022_mutex[2];
@@ -479,7 +477,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &kionix_accel_drv,
 		.mutex = &g_kx022_mutex[0],
 		.drv_data = &g_kx022_data[0],
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(0),
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(0),
 		.rot_standard_ref = &base_standard_ref,
 		.default_range = 2, /* g, enough for lid angle calculation. */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
@@ -502,7 +500,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &kionix_accel_drv,
 		.mutex = &g_kx022_mutex[1],
 		.drv_data = &g_kx022_data[1],
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(1),
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(1),
 		.rot_standard_ref = &lid_standard_ref,
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 		.min_frequency = KX022_ACCEL_MIN_FREQ,
@@ -519,14 +517,13 @@ struct motion_sensor_t motion_sensors[] = {
 
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 
 	/* enable/disable touchpad */
 	gpio_set_level(GPIO_EN_TP_INT_L, !enable);
 }
-#endif /* defined(HAS_TASK_MOTIONSENSE) */
 
 uint16_t tcpc_get_alert_status(void)
 {

@@ -19,6 +19,7 @@
 #include "lpc.h"
 #include "power.h"
 #include "power/intel_x86.h"
+#include "power/qcom.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
@@ -35,8 +36,12 @@
  */
 #define DEFAULT_TIMEOUT SECOND
 
-/* Timeout for dropping back from S5 to G3 */
-#define S5_INACTIVITY_TIMEOUT (10 * SECOND)
+/* Timeout for dropping back from S5 to G3 in seconds */
+#ifdef CONFIG_CMD_S5_TIMEOUT
+static int s5_inactivity_timeout = 10;
+#else
+static const int s5_inactivity_timeout = 10;
+#endif
 
 static const char * const state_names[] = {
 	"G3",
@@ -461,7 +466,8 @@ static enum power_state power_common_state(enum power_state state)
 			}
 
 			now = get_time().val;
-			target = last_shutdown_time + hibernate_delay * SECOND;
+			target = last_shutdown_time +
+					(uint64_t)hibernate_delay * SECOND;
 			switch (board_system_is_idle(last_shutdown_time,
 						     &target, now)) {
 			case CRITICAL_SHUTDOWN_HIBERNATE:
@@ -502,10 +508,15 @@ static enum power_state power_common_state(enum power_state state)
 		 */
 		want_g3_exit = 0;
 
-		/* Wait for inactivity timeout */
 		power_wait_signals(0);
-		if (task_wait_event(S5_INACTIVITY_TIMEOUT) ==
-		    TASK_EVENT_TIMER) {
+
+		/* Wait for inactivity timeout, if desired */
+		if (s5_inactivity_timeout == 0) {
+			return POWER_S5G3;
+		} else if (s5_inactivity_timeout < 0) {
+			task_wait_event(-1);
+		} else if (task_wait_event(s5_inactivity_timeout * SECOND) ==
+			   TASK_EVENT_TIMER) {
 			/* Prepare to drop to G3; wake not requested yet */
 			return POWER_S5G3;
 		}
@@ -693,6 +704,10 @@ void chipset_task(void *u)
 		if (new_state != state) {
 			power_set_state(new_state);
 			power_set_active_wake_mask();
+
+			/* Call hooks before we enter G3 */
+			if (new_state == POWER_G3)
+				hook_notify(HOOK_CHIPSET_HARD_OFF);
 		}
 	}
 }
@@ -708,15 +723,15 @@ static void power_common_init(void)
 	/* Update input state */
 	power_update_signals();
 
-	/* Call chipset-specific init to set initial state */
-	power_set_state(power_chipset_init());
-
 	/* Enable interrupts for input signals */
 	for (i = 0; i < POWER_SIGNAL_COUNT; i++, s++)
 		if (s->flags & POWER_SIGNAL_DISABLE_AT_BOOT)
 			power_signal_disable_interrupt(s->gpio);
 		else
 			power_signal_enable_interrupt(s->gpio);
+
+	/* Call chipset-specific init to set initial state */
+	power_set_state(power_chipset_init());
 
 	/*
 	 * Update input state again since there is a small window
@@ -925,6 +940,31 @@ DECLARE_CONSOLE_COMMAND(powerindebug, command_powerindebug,
 			"Get/set power input debug mask");
 #endif
 
+#ifdef CONFIG_CMD_S5_TIMEOUT
+/* Allow command-line access to configure our S5 delay for power testing */
+static int command_s5_timeout(int argc, char **argv)
+{
+	char *e;
+
+	if (argc >= 2) {
+		uint32_t s = strtoi(argv[1], &e, 0);
+
+		if (*e)
+			return EC_ERROR_PARAM1;
+
+		s5_inactivity_timeout = s;
+	}
+
+	/* Print the current setting */
+	ccprintf("S5 inactivity timeout: %d s\n", s5_inactivity_timeout);
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(s5_timeout, command_s5_timeout,
+			"[sec]",
+			"Set the timeout from S5 to G3 transition, "
+			"-1 to indicate no transition");
+#endif
+
 #ifdef CONFIG_HIBERNATE
 static int command_hibernation_delay(int argc, char **argv)
 {
@@ -980,7 +1020,7 @@ host_command_hibernation_delay(struct host_cmd_handler_args *args)
 	r->hibernate_delay = hibernate_delay;
 
 	args->response_size = sizeof(struct ec_response_hibernation_delay);
-	return EC_SUCCESS;
+	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_HIBERNATION_DELAY,
 		     host_command_hibernation_delay,
@@ -1031,7 +1071,7 @@ __overridable void board_power_5v_enable(int enable)
 
 /* 5V enable request bitmask from various tasks. */
 static uint32_t pwr_5v_en_req;
-static mutex_t pwr_5v_ctl_mtx;
+K_MUTEX_DEFINE(pwr_5v_ctl_mtx);
 
 void power_5v_enable(task_id_t tid, int enable)
 {
@@ -1055,12 +1095,6 @@ static void restore_enable_5v_state(void)
 {
 	const uint32_t *state;
 	int size;
-
-	/*
-	 * Initialize the mutex for ZephyrOS.
-	 * This does nothing for non-Zephyr builds.
-	 */
-	(void)k_mutex_init(&pwr_5v_ctl_mtx);
 
 	state = (const uint32_t *) system_get_jump_tag(P5_SYSJUMP_TAG, 0,
 						       &size);

@@ -133,9 +133,9 @@ struct product_vdo {
 #define PD_PRODUCT_IS_USB4(vdo) ((vdo) >> 24 & BIT(3))
 #define PD_PRODUCT_IS_TBT3(vdo) ((vdo) >> 3 & BIT(0))
 
-/* UFP VDO Version 1.1; update the value when UFP VDO version changes */
+/* UFP VDO Version 1.2; update the value when UFP VDO version changes */
 #define VDO_UFP1(cap, ctype, alt, speed)			\
-	((0x1) << 29 | ((cap) & 0xf) << 24			\
+	((0x2) << 29 | ((cap) & 0xf) << 24			\
 	| ((ctype) & 0x3) << 22 | ((alt) & 0x7) << 3 | ((speed) & 0x7))
 
 /* UFP VDO 1 Alternate Modes */
@@ -526,7 +526,7 @@ union active_cable_vdo2_rev30 {
  *           0b - 3A capable;
  *           1b - 5A capable
  *           Charge Through Support bit = 0b: Reserved, Shall be set to zero
- * <14:13> : Reserved Shall be set to zero.
+ * <13>    : Reserved Shall be set to zero.
  * <12:7>  : VBUS Impedance
  *           Charge Through Support bit = 1b:
  *           Vbus impedance through the VPD in 2 mΩ increments.
@@ -541,11 +541,17 @@ union active_cable_vdo2_rev30 {
  *           1b – the VPD supports Charge Through
  *           0b – the VPD does not support Charge Through
  */
-#define VDO_VPD(hw, fw, vbus, vbusz, gndz, cts)  \
+#define VDO_VPD(hw, fw, vbus, ctc, vbusz, gndz, cts)  \
 	(((hw) & 0xf) << 28 | ((fw) & 0xf) << 24 \
 	 | ((vbus) & 0x3) << 15                  \
+	 | ((ctc) & 0x1) << 14			 \
 	 | ((vbusz) & 0x3f) << 7                 \
 	 | ((gndz) & 0x3f) << 1 | (cts))
+
+enum vpd_ctc_support {
+	VPD_CT_CURRENT_3A,
+	VPD_CT_CURRENT_5A
+};
 
 enum vpd_vbus {
 	VPD_MAX_VBUS_20V,
@@ -555,11 +561,12 @@ enum vpd_vbus {
 };
 
 enum vpd_cts_support {
-	VPD_CTS_SUPPORTED,
 	VPD_CTS_NOT_SUPPORTED,
+	VPD_CTS_SUPPORTED,
 };
 
 #define VPD_VDO_MAX_VBUS(vdo) (((vdo) >> 15) & 0x3)
+#define VPD_VDO_CURRENT(vdo)  (((vdo) >> 14) & 1)
 #define VPD_VDO_VBUS_IMP(vdo) (((vdo) >> 7) & 0x3f)
 #define VPD_VDO_GND_IMP(vdo)  (((vdo) >> 1) & 0x3f)
 #define VPD_VDO_CTS(vdo)      ((vdo) & 1)
@@ -958,6 +965,22 @@ union enter_usb_data_obj {
 	uint32_t raw_value;
 };
 
+union vpd_vdo {
+	struct {
+		uint32_t ct_support : 1;
+		uint32_t gnd_impedance : 6;
+		uint32_t vbus_impedance : 6;
+		uint32_t reserved0 : 1;
+		uint32_t ct_current_support : 1;
+		uint32_t max_vbus_voltage : 2;
+		uint32_t reserved1 : 4;
+		uint32_t vdo_version : 3;
+		uint32_t firmware_version : 4;
+		uint32_t hw_version : 4;
+	};
+	uint32_t raw_value;
+};
+
 /*
  * ############################################################################
  *
@@ -974,6 +997,9 @@ union product_type_vdo1 {
 	/* Active cable VDO */
 	union active_cable_vdo_rev20 a_rev20;
 	union active_cable_vdo1_rev30 a_rev30;
+
+	/* Vconn Power USB Device VDO */
+	union vpd_vdo vpd;
 
 	uint32_t raw_value;
 };

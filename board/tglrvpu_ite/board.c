@@ -5,10 +5,10 @@
 
 /* Intel TGL-U-RVP-ITE board-specific configuration */
 
-#include "bb_retimer.h"
 #include "button.h"
 #include "charger.h"
 #include "driver/charger/isl9241.h"
+#include "driver/retimer/bb_retimer_public.h"
 #include "extpower.h"
 #include "i2c.h"
 #include "intc.h"
@@ -130,6 +130,7 @@ const struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_0,
 		.next_mux = &usbc0_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT0_BB_RETIMER,
 		.i2c_addr_flags = I2C_PORT0_BB_RETIMER_ADDR,
 	},
@@ -137,6 +138,7 @@ const struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_1,
 		.next_mux = &usbc1_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT1_BB_RETIMER,
 		.i2c_addr_flags = I2C_PORT1_BB_RETIMER_ADDR,
 	},
@@ -223,7 +225,7 @@ int board_get_version(void)
 	return board_id | (fab_id << 8);
 }
 
-__override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
+__override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 {
 	const struct bb_usb_control *control = &bb_controls[me->usb_port];
 
@@ -235,7 +237,7 @@ __override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 		GPIO_USB_C1_RETIMER_FORCE_PWR : GPIO_USB_C0_RETIMER_FORCE_PWR;
 
 	/* handle retimer's power domain */
-	if (on_off) {
+	if (enable) {
 		/*
 		 * BB retimer NVM can be shared between multiple ports, hence
 		 * lock enabling the retimer until the current retimer request
@@ -266,4 +268,5 @@ __override void bb_retimer_power_handle(const struct usb_mux *me, int on_off)
 		msleep(1);
 		gpio_set_level(control->usb_ls_en_gpio, 0);
 	}
+	return EC_SUCCESS;
 }

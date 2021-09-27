@@ -31,10 +31,10 @@
 /* TODO: (b/143496253) re-enable CEC */
 /* #define CONFIG_CEC */
 #define CONFIG_CRC8
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_EMULATED_SYSRQ
 #undef CONFIG_KEYBOARD_BOOT_KEYS
-#define CONFIG_KEYBOARD_PROTOCOL_MKBP
+#define CONFIG_MKBP_INPUT_DEVICES
 #define CONFIG_MKBP_USE_HOST_EVENT
 #undef CONFIG_KEYBOARD_RUNTIME_KEYS
 #undef CONFIG_HIBERNATE
@@ -48,9 +48,6 @@
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
 #define CONFIG_SHA256
-
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_PD_GET_LOG_ENTRY
 
 /* EC Commands */
 #define CONFIG_CMD_BUTTON
@@ -173,8 +170,6 @@ enum temp_sensor_id {
 
 
 /* Board specific handlers */
-void board_reset_pd_mcu(void);
-void board_set_tcpc_power_mode(int port, int mode);
 void led_alert(int enable);
 void show_critical_error(void);
 
@@ -200,7 +195,6 @@ void show_critical_error(void);
 #define EC_CFG_THERMAL_H		7
 #define EC_CFG_THERMAL_MASK GENMASK(EC_CFG_THERMAL_H, EC_CFG_THERMAL_L)
 
-int ec_config_get_usb4_present(void);
 unsigned int ec_config_get_thermal_solution(void);
 
 #endif /* !__ASSEMBLER__ */

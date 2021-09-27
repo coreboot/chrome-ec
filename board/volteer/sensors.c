@@ -19,8 +19,8 @@
 
 /******************************************************************************/
 /* Sensors */
-static mutex_t g_lid_accel_mutex;
-static mutex_t g_base_mutex;
+K_MUTEX_DEFINE(g_lid_accel_mutex);
+K_MUTEX_DEFINE(g_base_mutex);
 
 /* BMA253 private data */
 static struct accelgyro_saved_data_t g_bma253_data;
@@ -213,19 +213,6 @@ const struct motion_sensor_t *motion_als_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
-#ifdef CONFIG_ZEPHYR
-static int init_sensor_mutex(const struct device *dev)
-{
-	ARG_UNUSED(dev);
-
-	k_mutex_init(&g_lid_accel_mutex);
-	k_mutex_init(&g_base_mutex);
-
-	return 0;
-}
-SYS_INIT(init_sensor_mutex, POST_KERNEL, 50);
-#endif /* CONFIG_ZEPHYR */
-
 static void baseboard_sensors_init(void)
 {
 	/* Note - BMA253 interrupt unused by EC */
@@ -236,22 +223,3 @@ static void baseboard_sensors_init(void)
 	gpio_enable_interrupt(GPIO_EC_IMU_INT_L);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_sensors_init, HOOK_PRIO_DEFAULT);
-
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
-{
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
-}
-#endif

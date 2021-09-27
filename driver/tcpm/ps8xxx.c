@@ -58,6 +58,8 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
+#define PS8XXX_I2C_RECOVERY_DELAY_MS	10
+
 /*
  * The product_id per ports here is expected to be set in callback function -
  * .init of tcpm_drv by calling board_get_ps8xxx_product_id().
@@ -75,7 +77,7 @@ static uint16_t product_id[CONFIG_USB_PD_PORT_MAX_COUNT];
  *
  * See b/171430855 for details.
  */
-static bool ps8815_role_control_delay[CONFIG_USB_PD_PORT_MAX_COUNT];
+static uint8_t ps8xxx_role_control_delay_ms[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /*
  * b/178664884, on PS8815, firmware revision 0x10 and older can report an
@@ -172,6 +174,58 @@ static int ps8815_dci_disable(int port)
 }
 #endif /* CONFIG_USB_PD_TCPM_PS8815 */
 
+#ifdef CONFIG_USB_PD_TCPM_PS8805
+static int ps8805_gpio_mask[] = {
+	PS8805_REG_GPIO_0,
+	PS8805_REG_GPIO_1,
+	PS8805_REG_GPIO_2,
+};
+
+int ps8805_gpio_set_level(int port, enum ps8805_gpio signal, int level)
+{
+	int rv;
+	int regval;
+	int mask;
+
+	if (signal >= PS8805_GPIO_NUM)
+		return EC_ERROR_INVAL;
+
+	rv = i2c_read8(tcpc_config[port].i2c_info.port,
+		       PS8805_VENDOR_DEFINED_I2C_ADDR,
+		       PS8805_REG_GPIO_CONTROL, &regval);
+	if (rv)
+		return rv;
+
+	mask = ps8805_gpio_mask[signal];
+	if (level)
+		regval |= mask;
+	else
+		regval &= ~mask;
+
+	return i2c_write8(tcpc_config[port].i2c_info.port,
+		       PS8805_VENDOR_DEFINED_I2C_ADDR,
+		       PS8805_REG_GPIO_CONTROL, regval);
+}
+
+int ps8805_gpio_get_level(int port, enum ps8805_gpio signal, int *level)
+{
+	int regval;
+	int rv;
+
+	if (signal >= PS8805_GPIO_NUM)
+		return EC_ERROR_INVAL;
+
+	rv = i2c_read8(tcpc_config[port].i2c_info.port,
+		       PS8805_VENDOR_DEFINED_I2C_ADDR,
+		       PS8805_REG_GPIO_CONTROL, &regval);
+	if (rv)
+		return rv;
+	*level = !!(regval & ps8805_gpio_mask[signal]);
+
+	return EC_SUCCESS;
+}
+#endif /* CONFIG_USB_PD_TCPM_PS8805 */
+
 enum ps8xxx_variant_regs {
 	REG_FIRST_INDEX = 0,
 	/* NOTE: The rev will read as 0x00 if the FW has malfunctioned. */
@@ -238,12 +292,14 @@ static struct ps8xxx_variant_map variant_map[] = {
 };
 
 static int get_reg_by_product(const int port,
-				const enum ps8xxx_variant_regs reg)
+			      const enum ps8xxx_variant_regs reg)
 {
+	int i;
+
 	if (reg < REG_FIRST_INDEX || reg >= REG_MAX_COUNT)
 		return INT32_MAX;
 
-	for (int i = 0; i < ARRAY_SIZE(variant_map); i++) {
+	for (i = 0; i < ARRAY_SIZE(variant_map); i++) {
 		if (product_id[port] ==
 		      variant_map[i].product_id) {
 			return variant_map[i].reg_map[reg];
@@ -311,10 +367,27 @@ uint16_t board_get_ps8xxx_product_id(int port)
 	return 0;
 }
 
+bool check_ps8755_chip(int port)
+{
+	int val;
+	int p0_addr;
+	int status;
+	bool is_ps8755 = false;
+
+	p0_addr = PS8751_P3_TO_P0_FLAGS(tcpc_config[port].i2c_info.addr_flags);
+	status = tcpc_addr_read(port, p0_addr, PS8755_P0_REG_SM, &val);
+	if (status == EC_SUCCESS && val == PS8755_P0_REG_SM_VALUE)
+		is_ps8755 = true;
+
+	return is_ps8755;
+}
+
 void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
-				   int hpd_lvl, int hpd_irq)
+				   mux_state_t mux_state)
 {
 	int port = me->usb_port;
+	int hpd_lvl = (mux_state & USB_PD_MUX_HPD_LVL) ? 1 : 0;
+	int hpd_irq = (mux_state & USB_PD_MUX_HPD_IRQ) ? 1 : 0;
 
 	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8751_CUSTOM_MUX_DRIVER) &&
 	    product_id[me->usb_port] == PS8751_PRODUCT_ID &&
@@ -353,15 +426,15 @@ static int ps8xxx_tcpc_bist_mode_2(int port)
 	rv |= tcpc_write(port, PS8XXX_REG_BIST_CONT_MODE_CTR, 0);
 
 	/* Start BIST MODE 2 */
-	rv |= tcpc_write(port, TCPC_REG_TRANSMIT, TCPC_TX_BIST_MODE_2);
+	rv |= tcpc_write(port, TCPC_REG_TRANSMIT, TCPCI_MSG_TX_BIST_MODE_2);
 
 	return rv;
 }
 
-static int ps8xxx_tcpm_transmit(int port, enum tcpm_transmit_type type,
+static int ps8xxx_tcpm_transmit(int port, enum tcpci_msg_type type,
 			uint16_t header, const uint32_t *data)
 {
-	if (type == TCPC_TX_BIST_MODE_2)
+	if (type == TCPCI_MSG_TX_BIST_MODE_2)
 		return ps8xxx_tcpc_bist_mode_2(port);
 	else
 		return tcpci_tcpm_transmit(port, type, header, data);
@@ -382,6 +455,15 @@ static int ps8xxx_tcpm_release(int port)
 	return tcpci_tcpm_release(port);
 }
 
+static void ps8xxx_role_control_delay(int port)
+{
+	int delay;
+
+	delay = ps8xxx_role_control_delay_ms[port];
+	if (delay)
+		msleep(delay);
+}
+
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 static int ps8xxx_set_role_ctrl(int port, enum tcpc_drp drp,
 	enum tcpc_rp_value rp, enum tcpc_cc_pull pull)
@@ -394,8 +476,7 @@ static int ps8xxx_set_role_ctrl(int port, enum tcpc_drp drp,
 	 * b/171430855 delay 1 ms after ROLE_CONTROL updates to prevent
 	 * transmit buffer corruption
 	 */
-	if (ps8815_role_control_delay[port])
-		msleep(1);
+	ps8xxx_role_control_delay(port);
 
 	return rv;
 }
@@ -444,6 +525,119 @@ static int ps8xxx_tcpc_drp_toggle(int port)
 }
 #endif
 
+#ifdef CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
+static int ps8805_make_device_id(int port, int *id)
+{
+	int p0_addr;
+	int val;
+	int status;
+
+	p0_addr = PS8751_P3_TO_P0_FLAGS(tcpc_config[port].i2c_info.addr_flags);
+
+	status = tcpc_addr_read(port, p0_addr, PS8805_P0_REG_CHIP_REVISION,
+				&val);
+	if (status != EC_SUCCESS)
+		return status;
+	switch (val & 0xF0) {
+	case 0x00: /* A2 chip */
+		*id = 1;
+		break;
+	case 0xa0: /* A3 chip */
+		*id = 2;
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
+}
+#endif
+
+#ifdef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
+/*
+ * Early ps8815 A1 firmware reports 0x0001 in the TCPCI Device ID
+ * registers which makes it indistinguishable from A0. This
+ * overrides the Device ID based if vendor specific registers
+ * identify the chip as A1.
+ *
+ * See b/159289062.
+ *
+ * The ps8815 A2 reports device ID 0x0001 instead of 0x0003 when the
+ * firmware is bad (mis-programmed).
+ */
+static int ps8815_make_device_id(int port, int *id)
+{
+	int p1_addr;
+	int val;
+	int status;
+
+	/* P1 registers are always accessible on PS8815 */
+	p1_addr = PS8751_P3_TO_P1_FLAGS(tcpc_config[port].i2c_info.addr_flags);
+
+	status = tcpc_addr_read16(port, p1_addr, PS8815_P1_REG_HW_REVISION,
+				  &val);
+	if (status != EC_SUCCESS)
+		return status;
+
+	switch (val) {
+	case 0x0a00:
+		*id = 1;
+		break;
+	case 0x0a01:
+		*id = 2;
+		break;
+	case 0x0a02:
+		*id = 3;
+		break;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
+}
+#endif
+
+/*
+ * The ps8815 can take up to 50ms (FW_INIT_DELAY_MS) to fully wake up
+ * from sleep/low power mode - specially when it contains an application
+ * block firmware update. When the chip is asleep, the 1st I2C
+ * transaction will fail but the chip will begin to wake up within 10ms
+ * (I2C_RECOVERY_DELAY_MS). After this delay, I2C transactions succeed,
+ * but the firmware is still not fully operational. The way to check if
+ * the firmware is ready, is to poll the firmware register for a
+ * non-zero value. This logic applies to all ps8xxx family members
+ * supported by this driver.
+ */
+
+static int ps8xxx_lpm_recovery_delay(int port)
+{
+	int val;
+	int status;
+	int fw_reg;
+	timestamp_t deadline;
+
+	fw_reg = get_reg_by_product(port, REG_FW_VER);
+
+	deadline = get_time();
+	deadline.val += PS8815_FW_INIT_DELAY_MS * 1000;
+
+	val = 0;
+	for (;;) {
+		if (timestamp_expired(deadline, NULL))
+			return EC_ERROR_TIMEOUT;
+
+		status = tcpc_read(port, fw_reg, &val);
+		if (status != EC_SUCCESS) {
+			/* wait for chip to wake up */
+			msleep(PS8XXX_I2C_RECOVERY_DELAY_MS);
+			continue;
+		}
+		if (val != 0)
+			break;
+		msleep(1);
+	}
+
+	return EC_SUCCESS;
+}
+
 static int ps8xxx_get_chip_info(int port, int live,
 			struct ec_response_pd_chip_info_v1 *chip_info)
 {
@@ -454,21 +648,44 @@ static int ps8xxx_get_chip_info(int port, int live,
 	if (rv != EC_SUCCESS)
 		return rv;
 
+	if (chip_info == NULL)
+		return EC_SUCCESS;
+
 	if (!live) {
-		product_id[port] = board_get_ps8xxx_product_id(port);
+		uint16_t pid;
+
+		pid = board_get_ps8xxx_product_id(port);
+		if (pid == 0)
+			return EC_ERROR_UNKNOWN;
+		product_id[port] = pid;
 		chip_info->vendor_id = PS8XXX_VENDOR_ID;
 		chip_info->product_id = product_id[port];
 	}
 
-	if (chip_info->fw_version_number == 0 ||
-	    chip_info->fw_version_number == -1 || live) {
-		reg = get_reg_by_product(port, REG_FW_VER);
-		rv = tcpc_read(port, reg, &val);
+#ifdef CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
+	if (chip_info->product_id == PS8805_PRODUCT_ID &&
+	    chip_info->device_id == 0x0001) {
+		rv = ps8805_make_device_id(port, &val);
 		if (rv != EC_SUCCESS)
 			return rv;
-
-		chip_info->fw_version_number = val;
+		chip_info->device_id = val;
 	}
+#endif
+#ifdef CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
+	if (chip_info->product_id == PS8815_PRODUCT_ID &&
+	    chip_info->device_id == 0x0001) {
+		rv = ps8815_make_device_id(port, &val);
+		if (rv != EC_SUCCESS)
+			return rv;
+		chip_info->device_id = val;
+	}
+#endif
+	reg = get_reg_by_product(port, REG_FW_VER);
+	rv = tcpc_read(port, reg, &val);
+	if (rv != EC_SUCCESS)
+		return rv;
+
+	chip_info->fw_version_number = val;
 
 	/* Treat unexpected values as error (FW not initiated from reset) */
 	if (live && (
@@ -506,7 +723,9 @@ static int ps8xxx_enter_low_power_mode(int port)
 
 static int ps8xxx_dci_disable(int port)
 {
-	for (int i = 0; i < ARRAY_SIZE(variant_map); i++) {
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(variant_map); i++) {
 		if (product_id[port] == variant_map[i].product_id)
 			return variant_map[i].dci_disable_ptr(port);
 	}
@@ -515,16 +734,14 @@ static int ps8xxx_dci_disable(int port)
 	return EC_ERROR_INVAL;
 }
 
-__maybe_unused static void ps8815_transmit_buffer_workaround_check(int port)
+__maybe_unused static int ps8815_transmit_buffer_workaround_check(int port)
 {
 	int p1_addr;
 	int val;
 	int status;
 
-	ps8815_role_control_delay[port] = false;
-
 	if (product_id[port] != PS8815_PRODUCT_ID)
-		return;
+		return EC_SUCCESS;
 
 	/* P1 registers are always accessible on PS8815 */
 	p1_addr = PS8751_P3_TO_P1_FLAGS(tcpc_config[port].i2c_info.addr_flags);
@@ -532,19 +749,21 @@ __maybe_unused static void ps8815_transmit_buffer_workaround_check(int port)
 	status = tcpc_addr_read16(port, p1_addr, PS8815_P1_REG_HW_REVISION,
 				  &val);
 	if (status != EC_SUCCESS)
-		return;
+		return status;
 
 	switch (val) {
 	case 0x0a00:
 	case 0x0a01:
-		ps8815_role_control_delay[port] = true;
+		ps8xxx_role_control_delay_ms[port] = 1;
 		break;
 	default:
 		break;
 	}
+
+	return EC_SUCCESS;
 }
 
-__maybe_unused static void ps8815_disable_rp_detect_workaround_check(int port)
+__maybe_unused static int ps8815_disable_rp_detect_workaround_check(int port)
 {
 	int val;
 	int rv;
@@ -556,14 +775,19 @@ __maybe_unused static void ps8815_disable_rp_detect_workaround_check(int port)
 	reg = get_reg_by_product(port, REG_FW_VER);
 	rv = tcpc_read(port, reg, &val);
 	if (rv != EC_SUCCESS)
-		return;
+		return rv;
 
 	/*
 	 * RP detect is a problem in firmware version 0x10 and older.
 	 */
 	if (val <= 0x10)
 		ps8815_disable_rp_detect[port] = true;
+
+	return EC_SUCCESS;
 }
+
+__overridable void board_ps8xxx_tcpc_init(int port)
+{}
 
 static int ps8xxx_tcpm_init(int port)
 {
@@ -571,10 +795,22 @@ static int ps8xxx_tcpm_init(int port)
 
 	product_id[port] = board_get_ps8xxx_product_id(port);
 
-	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8815)) {
-		ps8815_transmit_buffer_workaround_check(port);
-		ps8815_disable_rp_detect_workaround_check(port);
+	status = ps8xxx_lpm_recovery_delay(port);
+	if (status != EC_SUCCESS) {
+		CPRINTS("C%d: init: LPM recovery failed", port);
+		return status;
 	}
+
+	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8815)) {
+		status = ps8815_transmit_buffer_workaround_check(port);
+		if (status != EC_SUCCESS)
+			return status;
+		status = ps8815_disable_rp_detect_workaround_check(port);
+		if (status != EC_SUCCESS)
+			return status;
+	}
+
+	board_ps8xxx_tcpc_init(port);
 
 	status = tcpci_tcpm_init(port);
 	if (status != EC_SUCCESS)
@@ -643,8 +879,7 @@ static int ps8xxx_tcpm_set_cc(int port, int pull)
 	 * b/171430855 delay 1 ms after ROLE_CONTROL updates to prevent
 	 * transmit buffer corruption
 	 */
-	if (ps8815_role_control_delay[port])
-		msleep(1);
+	ps8xxx_role_control_delay(port);
 
 	return rv;
 }
@@ -661,39 +896,39 @@ static int ps8xxx_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 }
 
 const struct tcpm_drv ps8xxx_tcpm_drv = {
-	.init			= &ps8xxx_tcpm_init,
-	.release		= &ps8xxx_tcpm_release,
-	.get_cc			= &ps8xxx_tcpm_get_cc,
+	.init			= ps8xxx_tcpm_init,
+	.release		= ps8xxx_tcpm_release,
+	.get_cc			= ps8xxx_tcpm_get_cc,
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	.check_vbus_level	= &tcpci_tcpm_check_vbus_level,
+	.check_vbus_level	= tcpci_tcpm_check_vbus_level,
 #endif
-	.select_rp_value	= &tcpci_tcpm_select_rp_value,
-	.set_cc			= &ps8xxx_tcpm_set_cc,
-	.set_polarity		= &tcpci_tcpm_set_polarity,
+	.select_rp_value	= tcpci_tcpm_select_rp_value,
+	.set_cc			= ps8xxx_tcpm_set_cc,
+	.set_polarity		= tcpci_tcpm_set_polarity,
 #ifdef CONFIG_USB_PD_DECODE_SOP
-	.sop_prime_enable	= &tcpci_tcpm_sop_prime_enable,
+	.sop_prime_enable	= tcpci_tcpm_sop_prime_enable,
 #endif
-	.set_vconn		= &tcpci_tcpm_set_vconn,
-	.set_msg_header		= &tcpci_tcpm_set_msg_header,
-	.set_rx_enable		= &tcpci_tcpm_set_rx_enable,
-	.get_message_raw	= &tcpci_tcpm_get_message_raw,
-	.transmit		= &ps8xxx_tcpm_transmit,
-	.tcpc_alert		= &tcpci_tcpc_alert,
+	.set_vconn		= tcpci_tcpm_set_vconn,
+	.set_msg_header		= tcpci_tcpm_set_msg_header,
+	.set_rx_enable		= tcpci_tcpm_set_rx_enable,
+	.get_message_raw	= tcpci_tcpm_get_message_raw,
+	.transmit		= ps8xxx_tcpm_transmit,
+	.tcpc_alert		= tcpci_tcpc_alert,
 #ifdef CONFIG_USB_PD_DISCHARGE_TCPC
-	.tcpc_discharge_vbus	= &tcpci_tcpc_discharge_vbus,
+	.tcpc_discharge_vbus	= tcpci_tcpc_discharge_vbus,
 #endif
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
-	.drp_toggle		= &ps8xxx_tcpc_drp_toggle,
+	.drp_toggle		= ps8xxx_tcpc_drp_toggle,
 #endif
-#ifdef CONFIG_USBC_PPC
-	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
-	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
+#ifdef CONFIG_USB_PD_PPC
+	.set_snk_ctrl		= tcpci_tcpm_set_snk_ctrl,
+	.set_src_ctrl		= tcpci_tcpm_set_src_ctrl,
 #endif
-	.get_chip_info		= &ps8xxx_get_chip_info,
+	.get_chip_info		= ps8xxx_get_chip_info,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
-	.enter_low_power_mode	= &ps8xxx_enter_low_power_mode,
+	.enter_low_power_mode	= ps8xxx_enter_low_power_mode,
 #endif
-	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
+	.set_bist_test_mode	= tcpci_set_bist_test_mode,
 };
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
@@ -703,8 +938,8 @@ struct i2c_stress_test_dev ps8xxx_i2c_stress_test_dev = {
 		.read_val = PS8XXX_VENDOR_ID & 0xFF,
 		.write_reg = MUX_IN_HPD_ASSERTION_REG,
 	},
-	.i2c_read = &tcpc_i2c_read,
-	.i2c_write = &tcpc_i2c_write,
+	.i2c_read = tcpc_i2c_read,
+	.i2c_write = tcpc_i2c_write,
 };
 #endif /* CONFIG_CMD_I2C_STRESS_TEST_TCPC */
 
@@ -739,9 +974,9 @@ void ps8xxx_wake_from_standby(const struct usb_mux *me)
 	msleep(10);
 }
 
-static int ps8xxx_mux_set(const struct usb_mux *me, mux_state_t mux_state)
+static int ps8xxx_mux_set(const struct usb_mux *me, mux_state_t mux_state,
+			  bool *ack_required)
 {
-
 	if (product_id[me->usb_port] == PS8751_PRODUCT_ID &&
 	    me->flags & USB_MUX_FLAG_NOT_TCPC) {
 		ps8xxx_wake_from_standby(me);
@@ -759,7 +994,7 @@ static int ps8xxx_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 							       TYPEC_CC_RD)));
 	}
 
-	return tcpci_tcpm_mux_set(me, mux_state);
+	return tcpci_tcpm_mux_set(me, mux_state, ack_required);
 }
 
 static int ps8xxx_mux_get(const struct usb_mux *me, mux_state_t *mux_state)
@@ -793,10 +1028,10 @@ static int ps8xxx_mux_enter_low_power(const struct usb_mux *me)
 }
 
 const struct usb_mux_driver ps8xxx_usb_mux_driver = {
-	.init = &ps8xxx_mux_init,
-	.set = &ps8xxx_mux_set,
-	.get = &ps8xxx_mux_get,
-	.enter_low_power_mode = &ps8xxx_mux_enter_low_power,
+	.init = ps8xxx_mux_init,
+	.set = ps8xxx_mux_set,
+	.get = ps8xxx_mux_get,
+	.enter_low_power_mode = ps8xxx_mux_enter_low_power,
 };
 
 #endif /* CONFIG_USB_PD_TCPM_PS8751_CUSTOM_MUX_DRIVER */

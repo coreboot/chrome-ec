@@ -32,7 +32,7 @@
 
 /******************************************************************************/
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next
@@ -237,7 +237,8 @@ void baseboard_tcpc_init(void)
 	 * HPD pulse to enable video path
 	 */
 	for (int port = 0; port < board_get_usb_pd_port_count(); ++port)
-		usb_mux_hpd_update(port, 0, 0);
+		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 /* Called after the cbi_init (via +2) */
 DECLARE_HOOK(HOOK_INIT, baseboard_tcpc_init, HOOK_PRIO_INIT_I2C + 2);

@@ -17,9 +17,6 @@
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
 
-/* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-
 #define CONFIG_VBOOT_EFS2
 
 #define CONFIG_POWER_BUTTON
@@ -38,14 +35,21 @@
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW	10
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensors */
 /* BMA253 accelerometer in base */
 #define CONFIG_ACCEL_BMA255
+#define CONFIG_ACCEL_KX022
 
 /* BMI160 accel/gyro in base */
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* Sensors without hardware FIFO are in forced mode */
@@ -67,9 +71,11 @@
  * cables only support up to 60W.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
+#define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
-#define PD_MAX_VOLTAGE_MV	20000
+#define PD_MAX_VOLTAGE_MV	15000
+
+#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
@@ -85,6 +91,7 @@
 
 /* USBC PPC*/
 #define CONFIG_USBC_PPC_SYV682X		/* USBC port C0/C1 */
+#define CONFIG_USB_PD_FRS_PPC
 
 #undef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG
 #undef CONFIG_USB_PD_TCPM_TUSB422
@@ -178,6 +185,7 @@ enum usbc_port {
 };
 
 void board_reset_pd_mcu(void);
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

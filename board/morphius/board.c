@@ -6,7 +6,6 @@
 /* Morphius board configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "battery_smart.h"
 #include "button.h"
 #include "cbi_ssfc.h"
@@ -42,7 +41,7 @@
 #include "tablet_mode.h"
 #include "task.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_mux.h"
 #include "usb_charge.h"
 #include "usbc_ppc.h"
@@ -55,8 +54,6 @@ static void board_gmr_tablet_switch_isr(enum gpio_signal signal);
 
 static bool support_aoz_ppc;
 static bool ignore_c1_dp;
-
-#ifdef HAS_TASK_MOTIONSENSE
 
 /* Motion sensors */
 static struct mutex g_lid_mutex;
@@ -124,7 +121,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = (const mat33_fp_t *)&base_standard_ref,
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -172,7 +169,7 @@ struct motion_sensor_t icm426xx_base_accel = {
 	.drv_data = &g_icm426xx_data,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
-	.default_range = 2, /* g, enough for laptop */
+	.default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	.rot_standard_ref = &base_standard_ref_1,
 	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
 	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
@@ -204,8 +201,6 @@ struct motion_sensor_t icm426xx_base_gyro = {
 	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
 	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
 };
-
-#endif /* HAS_TASK_MOTIONSENSE */
 
 const struct pwm_t pwm_channels[] = {
 	[PWM_CH_KBLIGHT] = {

@@ -5,13 +5,13 @@
 /* Servo V4p1 configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "ccd_measure_sbu.h"
 #include "chg_control.h"
 #include "common.h"
 #include "console.h"
 #include "dacs.h"
 #include <driver/gl3590.h>
+#include "driver/ioexpander/tca64xxa.h"
 #include "ec_version.h"
 #include "fusb302b.h"
 #include "gpio.h"
@@ -21,7 +21,6 @@
 #include "ioexpanders.h"
 #include "pathsel.h"
 #include "pi3usb9201.h"
-#include "power_mgmt.h"
 #include "queue_policies.h"
 #include "registers.h"
 #include "spi.h"
@@ -71,7 +70,7 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[DUT] = { /* DUT port with UFP mux */
 		.usb_port = DUT,
 		.i2c_port = I2C_PORT_MASTER,
-		.i2c_addr_flags = TUSB1064_ADDR_FLAGS,
+		.i2c_addr_flags = TUSB1064_I2C_ADDR10_FLAGS,
 		.driver = &tusb1064_usb_mux_driver,
 	}
 };
@@ -103,7 +102,7 @@ static volatile int hpd_prev_level;
 
 void hpd_irq_deferred(void)
 {
-	int dp_mode = pd_alt_mode(1, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
+	int dp_mode = pd_alt_mode(1, TCPCI_MSG_SOP, USB_SID_DISPLAYPORT);
 
 	if (dp_mode) {
 		pd_send_hpd(DUT, hpd_irq);
@@ -115,7 +114,7 @@ DECLARE_DEFERRED(hpd_irq_deferred);
 void hpd_lvl_deferred(void)
 {
 	int level = gpio_get_level(GPIO_DP_HPD);
-	int dp_mode = pd_alt_mode(1, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
+	int dp_mode = pd_alt_mode(1, TCPCI_MSG_SOP, USB_SID_DISPLAYPORT);
 
 	if (level != hpd_prev_level) {
 		/* It's a glitch while in deferred or canceled action */
@@ -187,7 +186,10 @@ static void dut_pwr_evt(enum gpio_signal signal)
 static void init_uservo_port(void)
 {
 	/* Enable USERVO_POWER_EN */
-	uservo_power_en(1);
+	ec_uservo_power_en(1);
+
+	gl3590_enable_ports(0, GL3590_DFP4, 1);
+
 	/* Connect uservo to host hub */
 	uservo_fastboot_mux_sel(0);
 }
@@ -203,28 +205,6 @@ void ext_hpd_detection_enable(int enable)
 	} else {
 		gpio_disable_interrupt(GPIO_DP_HPD);
 	}
-}
-#else
-void snk_task(void *u)
-{
-	/* DO NOTHING */
-}
-
-void pd_task(void *u)
-{
-	/* DO NOTHING */
-}
-__override uint8_t board_get_usb_pd_port_count(void)
-{
-	return CONFIG_USB_PD_PORT_MAX_COUNT;
-}
-
-void pd_set_suspend(int port, int suspend)
-{
-	/*
-	 * Do nothing. This is only here to make the linker happy for this
-	 * old board on ToT.
-	 */
 }
 #endif /* SECTION_IS_RO */
 
@@ -345,15 +325,33 @@ static struct usart_config const usart4 =
 		usart4_to_usb,
 		usb_to_usart4);
 
-USB_STREAM_CONFIG(usart4_usb,
+USB_STREAM_CONFIG_USART_IFACE(usart4_usb,
 	USB_IFACE_USART4_STREAM,
 	USB_STR_USART4_STREAM_NAME,
 	USB_EP_USART4_STREAM,
 	USB_STREAM_RX_SIZE,
 	USB_STREAM_TX_SIZE,
 	usb_to_usart4,
-	usart4_to_usb)
+	usart4_to_usb,
+	usart4)
 
+
+/*
+ * Define usb interface descriptor for the `EMPTY` usb interface, to satisfy
+ * UEFI and kernel requirements (see b/183857501).
+ */
+const struct usb_interface_descriptor
+USB_IFACE_DESC(USB_IFACE_EMPTY) = {
+	.bLength            = USB_DT_INTERFACE_SIZE,
+	.bDescriptorType    = USB_DT_INTERFACE,
+	.bInterfaceNumber   = USB_IFACE_EMPTY,
+	.bAlternateSetting  = 0,
+	.bNumEndpoints      = 0,
+	.bInterfaceClass    = USB_CLASS_VENDOR_SPEC,
+	.bInterfaceSubClass = 0,
+	.bInterfaceProtocol = 0,
+	.iInterface         = 0,
+};
 
 /******************************************************************************
  * Define the strings used in our USB descriptors.
@@ -400,11 +398,33 @@ int board_get_version(void)
 }
 
 #ifdef SECTION_IS_RO
+/* Forward declaration */
+static void evaluate_input_power_def(void);
+DECLARE_DEFERRED(evaluate_input_power_def);
+
 static void evaluate_input_power_def(void)
 {
-	evaluate_input_power();
+	int state;
+	static int retry = 3;
+
+	/* Wait until host hub INTR# signal is asserted */
+	state = gpio_get_level(GPIO_USBH_I2C_BUSY_INT);
+	if ((state == 0) && retry--) {
+		hook_call_deferred(&evaluate_input_power_def_data, 100 * MSEC);
+		return;
+	}
+
+	if (retry == 0)
+		CPRINTF("Host hub I2C isn't online, expect issues with its "
+			"behaviour\n");
+
+	gpio_enable_interrupt(GPIO_USBH_I2C_BUSY_INT);
+
+	gl3590_init(HOST_HUB);
+
+	init_uservo_port();
+	init_pathsel();
 }
-DECLARE_DEFERRED(evaluate_input_power_def);
 #endif
 
 static void board_init(void)
@@ -422,36 +442,33 @@ static void board_init(void)
 	/* Delay DUT hub to avoid brownout. */
 	usleep(MSEC);
 
-	init_ioexpanders();
-	CPRINTS("Board ID is %d", board_id_det());
-
-	vbus_dischrg_en(0);
-
-	init_dacs();
 	init_pi3usb9201();
 
 	/* Clear BBRAM, we don't want any PD state carried over on reset. */
 	system_set_bbram(SYSTEM_BBRAM_IDX_PD0, 0);
 	system_set_bbram(SYSTEM_BBRAM_IDX_PD1, 0);
 
-	/* Bring atmel part out of reset */
-	atmel_reset_l(1);
-
 #ifdef SECTION_IS_RO
+	init_ioexpanders();
+	CPRINTS("Board ID is %d", board_id_det());
+
+	init_dacs();
 	init_uservo_port();
 	init_pathsel();
 	init_ina231s();
 	init_fusb302b(1);
+	vbus_dischrg_en(0);
+
+	/* Bring atmel part out of reset */
+	atmel_reset_l(1);
 
 	/*
-	 * Get data about available input power. Add additional check after a
-	 * delay, since we need to wait for USB2/USB3 enumeration on host hub
-	 * as well as I2C interface of this hub needs to be initialized.
-	 * 3 seconds is experimentally selected value, by this time hub should
-	 * be up and running.
+	 * Get data about available input power. Defer this check, since we need
+	 * to wait for USB2/USB3 enumeration on host hub as well as I2C
+	 * interface of this hub needs to be initialized. Genesys recommends at
+	 * least 100ms.
 	 */
-	evaluate_input_power();
-	hook_call_deferred(&evaluate_input_power_def_data, 3 * SECOND);
+	hook_call_deferred(&evaluate_input_power_def_data, 100 * MSEC);
 
 	/* Enable DUT USB2.0 pair. */
 	gpio_set_level(GPIO_FASTBOOT_DUTHUB_MUX_EN_L, 0);
@@ -462,7 +479,6 @@ static void board_init(void)
 
 	gpio_enable_interrupt(GPIO_STM_FAULT_IRQ_L);
 	gpio_enable_interrupt(GPIO_DP_HPD);
-	gpio_enable_interrupt(GPIO_USBH_I2C_BUSY_INT);
 	gpio_enable_interrupt(GPIO_DUT_PWR_IRQ_ODL);
 
 	/* Disable power to DUT by default */
@@ -476,6 +492,8 @@ static void board_init(void)
 
 	/* Start SuzyQ detection */
 	start_ccd_meas_sbu_cycle();
+#else /* SECTION_IS_RO */
+	CPRINTS("Board ID is %d", board_id_det());
 #endif /* SECTION_IS_RO */
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
@@ -501,4 +519,20 @@ void tick_event(void)
 	}
 }
 DECLARE_HOOK(HOOK_TICK, tick_event, HOOK_PRIO_DEFAULT);
+
+struct ioexpander_config_t ioex_config[] = {
+	[0] = {
+		.drv = &tca64xxa_ioexpander_drv,
+		.i2c_host_port = TCA6416A_PORT,
+		.i2c_addr_flags = TCA6416A_ADDR,
+		.flags = TCA64XXA_FLAG_VER_TCA6416A
+	},
+	[1] = {
+		.drv = &tca64xxa_ioexpander_drv,
+		.i2c_host_port = TCA6424A_PORT,
+		.i2c_addr_flags = TCA6424A_ADDR,
+		.flags = TCA64XXA_FLAG_VER_TCA6424A
+	}
+};
+
 #endif /* SECTION_IS_RO */

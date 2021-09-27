@@ -26,7 +26,7 @@
 
 #define VIF_APP_VENDOR_VALUE	"Google"
 #define VIF_APP_NAME_VALUE	"EC GENVIF"
-#define VIF_APP_VERSION_VALUE	"3.0.0.9"
+#define VIF_APP_VERSION_VALUE	"3.0.0.10"
 #define VENDOR_NAME_VALUE	"Google"
 
 #define DEFAULT_MISSING_TID	0xFFFF
@@ -1040,13 +1040,13 @@ static void vif_output_vif_product_usb4router(FILE *vif_file,
 					USB4_Router_Indexes))
 			break;
 
-		vif_out_str(vif_file, level++, "<USB4Router>");
+		vif_out_str(vif_file, level++, "<Usb4Router>");
 		vif_out_fields(vif_file, level,
 			       router->vif_field, USB4_Router_Indexes);
 		vif_output_vif_product_usb4router_endpoint(vif_file,
 							   router,
 							   level);
-		vif_out_str(vif_file, --level, "</USB4Router>");
+		vif_out_str(vif_file, --level, "</Usb4Router>");
 	}
 	vif_out_str(vif_file, --level, "</USB4RouterList>");
 }
@@ -1399,7 +1399,7 @@ static void override_vif_product_pcie_endpoint_field(
 				str_value);
 		else
 			fprintf(stderr,
-				"VIF/Component/USB4Router/PCIeEndpoint:"
+				"VIF/Component/Usb4Router/PCIeEndpoint:"
 				" Unknown tag '%s'\n", name);
 	}
 }
@@ -1420,7 +1420,7 @@ static void override_vif_product_pcie_endpoint_list_field(
 					&endpoint_list[endpoint_index++]);
 		else
 			fprintf(stderr,
-				"VIF/Product/USB4Router/PCIeEndpointList:"
+				"VIF/Product/Usb4Router/PCIeEndpointList:"
 				" Unknown tag '%s'\n", name);
 	}
 }
@@ -1434,7 +1434,7 @@ static void override_vif_product_usb4router_fields(
 	int endpoint_index = 0;
 
 	while (get_next_tag(name, tag_value, str_value)) {
-		if (streq(name, "/USB4Router"))
+		if (streq(name, "/Usb4Router"))
 			break;
 
 		if (streq(name, "PCIeEndpointList"))
@@ -1455,7 +1455,7 @@ static void override_vif_product_usb4router_fields(
 					str_value);
 			else
 				fprintf(stderr,
-					"VIF/Component/USB4Router:"
+					"VIF/Component/Usb4Router:"
 					" Unknown tag '%s'\n", name);
 		}
 	}
@@ -1472,7 +1472,7 @@ static void override_vif_product_usb4routerlist_fields(
 		if (streq(name, "/USB4RouterList"))
 			break;
 
-		if (streq(name, "USB4Router"))
+		if (streq(name, "Usb4Router"))
 			override_vif_product_usb4router_fields(
 				&router_list[router_index++]);
 		else
@@ -2791,7 +2791,7 @@ static void init_vif_component_general_pd_fields(
 	 * to NO, then this field shall be set to YES.
 	 */
 	{
-		bool supports_to_dfp;
+		bool supports_to_dfp = false;
 
 		switch (type) {
 		case SRC:
@@ -2833,7 +2833,7 @@ static void init_vif_component_general_pd_fields(
 	 * 5 (eMarker) then this field shall be ignored by Testers.
 	 */
 	{
-		bool supports_to_ufp;
+		bool supports_to_ufp = false;
 
 		switch (type) {
 		case SRC:
@@ -3363,7 +3363,7 @@ static int init_vif_component_pd_source_fields(
 			src_pdo_cnt, NULL);
 
 	if (type == DRP || type == SRC) {
-		if (IS_ENABLED(CONFIG_USBC_PPC)) {
+		if (IS_ENABLED(CONFIG_USBC_OCP)) {
 			int resp = 0;
 
 			set_vif_field_b(&vif_fields[PD_OC_Protection],

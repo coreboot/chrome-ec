@@ -1,7 +1,6 @@
-/*
- * Copyright 2020 Google LLC
- *
- * SPDX-License-Identifier: Apache-2.0
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
  */
 
 #define DT_DRV_COMPAT nuvoton_npcx_cros_flash
@@ -16,11 +15,24 @@
 #include <soc/nuvoton_npcx/reg_def_cros.h>
 #include <sys/__assert.h>
 #include "ec_tasks.h"
+#include "flash.h"
+#include "gpio.h"
 #include "soc_miwu.h"
+#include "spi_flash_reg.h"
 #include "task.h"
 #include "../drivers/flash/spi_nor.h"
 
 LOG_MODULE_REGISTER(cros_flash, LOG_LEVEL_ERR);
+
+static int all_protected; /* Has all-flash protection been requested? */
+static int addr_prot_start;
+static int addr_prot_length;
+static uint8_t flag_prot_inconsistent;
+static uint8_t saved_sr1;
+static uint8_t saved_sr2;
+
+#define CMD_READ_STATUS_REG              0x05
+#define CMD_READ_STATUS_REG2             0x35
 
 /* Device config */
 struct cros_flash_npcx_config {
@@ -252,149 +264,6 @@ static int cros_flash_npcx_program_bytes(const struct device *dev,
 	return ret;
 }
 
-/* cros ec flash api functions */
-static int cros_flash_npcx_init(const struct device *dev)
-{
-	const struct cros_flash_npcx_config *const config = DRV_CONFIG(dev);
-	struct cros_flash_npcx_data *data = DRV_DATA(dev);
-
-	/* initialize mutux for flash interface controller */
-	k_sem_init(&data->lock_sem, 1, 1);
-
-	/* Configure pin-mux for FIU device */
-	npcx_pinctrl_mux_configure(config->alts_list, config->alts_size, 1);
-
-	return 0;
-}
-
-static int cros_flash_npcx_read(const struct device *dev, int offset, int size,
-				char *dst_data)
-{
-	int ret = 0;
-
-	/* Unlock flash interface device during reading flash */
-	cros_flash_npcx_mutex_lock(dev);
-
-	/* Chip Select down */
-	cros_flash_npcx_cs_level(dev, 0);
-
-	/* Set read address */
-	cros_flash_npcx_set_address(dev, offset);
-	/* Start with fast read command (skip one dummy byte) */
-	cros_flash_npcx_exec_cmd(dev, SPI_NOR_CMD_FAST_READ,
-				 UMA_CODE_CMD_ADR_WR_BYTE(1));
-	/* Execute burst read */
-	cros_flash_npcx_burst_read(dev, dst_data, size);
-
-	/* Chip Select up */
-	cros_flash_npcx_cs_level(dev, 1);
-
-	/* Unlock flash interface device */
-	cros_flash_npcx_mutex_unlock(dev);
-
-	return ret;
-}
-
-static int cros_flash_npcx_write(const struct device *dev, int offset, int size,
-				 const char *src_data)
-{
-	struct cros_flash_npcx_data *const data = DRV_DATA(dev);
-	int ret = 0;
-
-	/* Is write protection enabled? */
-	if (data->write_protectied) {
-		return -EACCES;
-	}
-
-	/* Invalid data pointer? */
-	if (src_data == 0) {
-		return -EINVAL;
-	}
-
-	/* Unlock flash interface device during writing flash */
-	cros_flash_npcx_mutex_lock(dev);
-
-	while (size > 0) {
-		/* First write multiples of 256, then (size % 256) last */
-		int write_len =
-			((size % CONFIG_FLASH_WRITE_IDEAL_SIZE) == size) ?
-				      size :
-				      CONFIG_FLASH_WRITE_IDEAL_SIZE;
-
-		ret = cros_flash_npcx_program_bytes(dev, offset, write_len,
-						    src_data);
-		if (ret != 0)
-			break;
-
-		src_data += write_len;
-		offset += write_len;
-		size -= write_len;
-	}
-
-	/* Unlock flash interface device */
-	cros_flash_npcx_mutex_unlock(dev);
-
-	return ret;
-}
-
-static int cros_flash_npcx_erase(const struct device *dev, int offset, int size)
-{
-	const struct cros_flash_npcx_config *const config = DRV_CONFIG(dev);
-	struct cros_flash_npcx_data *const data = DRV_DATA(dev);
-	int ret = 0;
-
-	/* Is write protection enabled? */
-	if (data->write_protectied) {
-		return -EACCES;
-	}
-	/* affected region should be within device */
-	if (offset < 0 || (offset + size) > config->size) {
-		LOG_ERR("Flash erase address or size exceeds expected values. "
-			"Addr: 0x%lx size %zu",
-			(long)offset, size);
-		return -EINVAL;
-	}
-
-	/* address must be aligned to erase size */
-	if ((offset % CONFIG_FLASH_ERASE_SIZE) != 0) {
-		return -EINVAL;
-	}
-
-	/* Erase size must be a non-zero multiple of sectors */
-	if ((size == 0) || (size % CONFIG_FLASH_ERASE_SIZE) != 0) {
-		return -EINVAL;
-	}
-
-	/* Unlock flash interface device during erasing flash */
-	cros_flash_npcx_mutex_lock(dev);
-
-	/* Alignment has been checked in upper layer */
-	for (; size > 0; size -= CONFIG_FLASH_ERASE_SIZE,
-			 offset += CONFIG_FLASH_ERASE_SIZE) {
-
-		/* Enable write */
-		ret = cros_flash_npcx_set_write_enable(dev);
-		if (ret != 0)
-			break;
-
-		/* Set erase address */
-		cros_flash_npcx_set_address(dev, offset);
-		/* Start erasing */
-		cros_flash_npcx_exec_cmd(dev, SPI_NOR_CMD_SE, UMA_CODE_CMD_ADR);
-
-		/* Wait erase completed */
-		ret = cros_flash_npcx_wait_ready(dev);
-		if (ret != 0) {
-			break;
-		}
-	}
-
-	/* Unlock flash interface device */
-	cros_flash_npcx_mutex_unlock(dev);
-
-	return ret;
-}
-
 static int cros_flash_npcx_get_status_reg(const struct device *dev,
 					  char cmd_code, char *data)
 {
@@ -476,24 +345,451 @@ static int cros_flash_npcx_uma_lock(const struct device *dev, bool enable)
 	return 0;
 }
 
+static int flash_get_status1(const struct device *dev)
+{
+	uint8_t reg;
+
+	if (all_protected)
+		return saved_sr1;
+
+	/* Lock physical flash operations */
+	crec_flash_lock_mapped_storage(1);
+
+	cros_flash_npcx_get_status_reg(dev, CMD_READ_STATUS_REG, &reg);
+
+	/* Unlock physical flash operations */
+	crec_flash_lock_mapped_storage(0);
+
+	return reg;
+}
+
+static int flash_get_status2(const struct device *dev)
+{
+	uint8_t reg;
+
+	if (all_protected)
+		return saved_sr1;
+
+	/* Lock physical flash operations */
+	crec_flash_lock_mapped_storage(1);
+
+	cros_flash_npcx_get_status_reg(dev, CMD_READ_STATUS_REG2, &reg);
+
+	/* Unlock physical flash operations */
+	crec_flash_lock_mapped_storage(0);
+
+	return reg;
+}
+
+static int flash_write_status_reg(const struct device *dev, uint8_t *data)
+{
+	return cros_flash_npcx_set_status_reg(dev, data);
+}
+
+static int is_int_flash_protected(const struct device *dev)
+{
+	return cros_flash_npcx_write_protection_is_set(dev);
+}
+
+static void flash_protect_int_flash(const struct device *dev, int enable)
+{
+	/*
+	 * Please notice the type of WP_IF bit is R/W1S. Once it's set,
+	 * only rebooting EC can clear it.
+	 */
+	if (enable)
+		cros_flash_npcx_write_protection_set(dev, enable);
+}
+
+static void flash_uma_lock(const struct device *dev, int enable)
+{
+	if (enable && !all_protected) {
+		/*
+		 * Store SR1 / SR2 for later use since we're about to lock
+		 * out all access (including read access) to these regs.
+		 */
+		saved_sr1 = flash_get_status1(dev);
+		saved_sr2 = flash_get_status2(dev);
+	}
+
+	cros_flash_npcx_uma_lock(dev, enable);
+	all_protected = enable;
+}
+
+static int flash_set_status_for_prot(const struct device *dev, int reg1,
+				     int reg2)
+{
+	uint8_t regs[2];
+
+	/*
+	 * Writing SR regs will fail if our UMA lock is enabled. If WP
+	 * is deasserted then remove the lock and allow the write.
+	 */
+	if (all_protected) {
+		if (is_int_flash_protected(dev))
+			return EC_ERROR_ACCESS_DENIED;
+
+		if (crec_flash_get_protect() & EC_FLASH_PROTECT_GPIO_ASSERTED)
+			return EC_ERROR_ACCESS_DENIED;
+		flash_uma_lock(dev, 0);
+	}
+
+	/*
+	 * If WP# is active and ec doesn't protect the status registers of
+	 * internal spi-flash, protect it now before setting them.
+	 */
+#ifdef CONFIG_WP_ACTIVE_HIGH
+	flash_protect_int_flash(dev, gpio_get_level(GPIO_WP));
+#else
+	flash_protect_int_flash(dev, !gpio_get_level(GPIO_WP_L));
+#endif /*_CONFIG_WP_ACTIVE_HIGH_*/
+
+	/* Lock physical flash operations */
+	crec_flash_lock_mapped_storage(1);
+
+	regs[0] = reg1;
+	regs[1] = reg2;
+	flash_write_status_reg(dev, regs);
+
+	/* Unlock physical flash operations */
+	crec_flash_lock_mapped_storage(0);
+
+	spi_flash_reg_to_protect(reg1, reg2, &addr_prot_start,
+				 &addr_prot_length);
+
+	return EC_SUCCESS;
+}
+
+static int flash_check_prot_reg(const struct device *dev, unsigned int offset,
+				unsigned int bytes)
+{
+	unsigned int start;
+	unsigned int len;
+	uint8_t sr1, sr2;
+	int rv = EC_SUCCESS;
+
+	/*
+	 * If WP# is active and ec doesn't protect the status registers of
+	 * internal spi-flash, protect it now.
+	 */
+#ifdef CONFIG_WP_ACTIVE_HIGH
+	flash_protect_int_flash(dev, gpio_get_level(GPIO_WP));
+#else
+	flash_protect_int_flash(dev, !gpio_get_level(GPIO_WP_L));
+#endif /* CONFIG_WP_ACTIVE_HIGH */
+
+	sr1 = flash_get_status1(dev);
+	sr2 = flash_get_status2(dev);
+
+	/* Invalid value */
+	if (offset + bytes > CONFIG_FLASH_SIZE_BYTES)
+		return EC_ERROR_INVAL;
+
+	/* Compute current protect range */
+	rv = spi_flash_reg_to_protect(sr1, sr2, &start, &len);
+	if (rv)
+		return rv;
+
+	/* Check if ranges overlap */
+	if (MAX(start, offset) < MIN(start + len, offset + bytes))
+		return EC_ERROR_ACCESS_DENIED;
+
+	return EC_SUCCESS;
+}
+
+static int flash_write_prot_reg(const struct device *dev, unsigned int offset,
+				unsigned int bytes, int hw_protect)
+{
+	int rv;
+	uint8_t sr1 = flash_get_status1(dev);
+	uint8_t sr2 = flash_get_status2(dev);
+
+	/* Invalid values */
+	if (offset + bytes > CONFIG_FLASH_SIZE_BYTES)
+		return EC_ERROR_INVAL;
+
+	/* Compute desired protect range */
+	rv = spi_flash_protect_to_reg(offset, bytes, &sr1, &sr2);
+	if (rv)
+		return rv;
+
+	if (hw_protect)
+		sr1 |= SPI_FLASH_SR1_SRP0;
+
+	return flash_set_status_for_prot(dev, sr1, sr2);
+}
+
+static int flash_check_prot_range(unsigned int offset, unsigned int bytes)
+{
+	/* Invalid value */
+	if (offset + bytes > CONFIG_FLASH_SIZE_BYTES)
+		return EC_ERROR_INVAL;
+
+	/* Check if ranges overlap */
+	if (MAX(addr_prot_start, offset) <
+	    MIN(addr_prot_start + addr_prot_length, offset + bytes))
+		return EC_ERROR_ACCESS_DENIED;
+
+	return EC_SUCCESS;
+}
+
+/* cros ec flash api functions */
+static int cros_flash_npcx_init(const struct device *dev)
+{
+	const struct cros_flash_npcx_config *const config = DRV_CONFIG(dev);
+	struct cros_flash_npcx_data *data = DRV_DATA(dev);
+
+	/* initialize mutux for flash interface controller */
+	k_sem_init(&data->lock_sem, 1, 1);
+
+	/* Configure pin-mux for FIU device */
+	npcx_pinctrl_mux_configure(config->alts_list, config->alts_size, 1);
+
+	/*
+	 * Protect status registers of internal spi-flash if WP# is active
+	 * during ec initialization.
+	 */
+#ifdef CONFIG_WP_ACTIVE_HIGH
+	flash_protect_int_flash(dev, gpio_get_level(GPIO_WP));
+#else
+	flash_protect_int_flash(dev, !gpio_get_level(GPIO_WP_L));
+#endif /*CONFIG_WP_ACTIVE_HIGH */
+
+	/* Initialize UMA to unlocked */
+	flash_uma_lock(dev, 0);
+
+	return 0;
+}
+
+static int cros_flash_npcx_read(const struct device *dev, int offset, int size,
+				char *dst_data)
+{
+	int ret = 0;
+
+	/* Unlock flash interface device during reading flash */
+	cros_flash_npcx_mutex_lock(dev);
+
+	/* Chip Select down */
+	cros_flash_npcx_cs_level(dev, 0);
+
+	/* Set read address */
+	cros_flash_npcx_set_address(dev, offset);
+	/* Start with fast read command (skip one dummy byte) */
+	cros_flash_npcx_exec_cmd(dev, SPI_NOR_CMD_FAST_READ,
+				 UMA_CODE_CMD_ADR_WR_BYTE(1));
+	/* Execute burst read */
+	cros_flash_npcx_burst_read(dev, dst_data, size);
+
+	/* Chip Select up */
+	cros_flash_npcx_cs_level(dev, 1);
+
+	/* Unlock flash interface device */
+	cros_flash_npcx_mutex_unlock(dev);
+
+	return ret;
+}
+
+static int cros_flash_npcx_write(const struct device *dev, int offset, int size,
+				 const char *src_data)
+{
+	struct cros_flash_npcx_data *const data = DRV_DATA(dev);
+	int ret = 0;
+
+	/* check protection */
+	if (all_protected)
+		return EC_ERROR_ACCESS_DENIED;
+
+	/* check protection */
+	if (flash_check_prot_range(offset, size))
+		return EC_ERROR_ACCESS_DENIED;
+
+	/* Is write protection enabled? */
+	if (data->write_protectied) {
+		return -EACCES;
+	}
+
+	/* Invalid data pointer? */
+	if (src_data == 0) {
+		return -EINVAL;
+	}
+
+	/* Unlock flash interface device during writing flash */
+	cros_flash_npcx_mutex_lock(dev);
+
+	while (size > 0) {
+		/* First write multiples of 256, then (size % 256) last */
+		int write_len =
+			((size % CONFIG_FLASH_WRITE_IDEAL_SIZE) == size) ?
+				      size :
+				      CONFIG_FLASH_WRITE_IDEAL_SIZE;
+
+		ret = cros_flash_npcx_program_bytes(dev, offset, write_len,
+						    src_data);
+		if (ret != 0)
+			break;
+
+		src_data += write_len;
+		offset += write_len;
+		size -= write_len;
+	}
+
+	/* Unlock flash interface device */
+	cros_flash_npcx_mutex_unlock(dev);
+
+	return ret;
+}
+
+static int cros_flash_npcx_erase(const struct device *dev, int offset, int size)
+{
+	const struct cros_flash_npcx_config *const config = DRV_CONFIG(dev);
+	struct cros_flash_npcx_data *const data = DRV_DATA(dev);
+	int ret = 0;
+
+	/* check protection */
+	if (all_protected)
+		return EC_ERROR_ACCESS_DENIED;
+
+	/* check protection */
+	if (flash_check_prot_range(offset, size))
+		return EC_ERROR_ACCESS_DENIED;
+
+	/* Is write protection enabled? */
+	if (data->write_protectied) {
+		return -EACCES;
+	}
+	/* affected region should be within device */
+	if (offset < 0 || (offset + size) > config->size) {
+		LOG_ERR("Flash erase address or size exceeds expected values. "
+			"Addr: 0x%lx size %zu",
+			(long)offset, size);
+		return -EINVAL;
+	}
+
+	/* address must be aligned to erase size */
+	if ((offset % CONFIG_FLASH_ERASE_SIZE) != 0) {
+		return -EINVAL;
+	}
+
+	/* Erase size must be a non-zero multiple of sectors */
+	if ((size == 0) || (size % CONFIG_FLASH_ERASE_SIZE) != 0) {
+		return -EINVAL;
+	}
+
+	/* Unlock flash interface device during erasing flash */
+	cros_flash_npcx_mutex_lock(dev);
+
+	/* Alignment has been checked in upper layer */
+	for (; size > 0; size -= CONFIG_FLASH_ERASE_SIZE,
+			 offset += CONFIG_FLASH_ERASE_SIZE) {
+
+		/* Enable write */
+		ret = cros_flash_npcx_set_write_enable(dev);
+		if (ret != 0)
+			break;
+
+		/* Set erase address */
+		cros_flash_npcx_set_address(dev, offset);
+		/* Start erasing */
+		cros_flash_npcx_exec_cmd(dev, SPI_NOR_CMD_BE, UMA_CODE_CMD_ADR);
+
+		/* Wait erase completed */
+		ret = cros_flash_npcx_wait_ready(dev);
+		if (ret != 0) {
+			break;
+		}
+	}
+
+	/* Unlock flash interface device */
+	cros_flash_npcx_mutex_unlock(dev);
+
+	return ret;
+}
+
+static int cros_flash_npcx_get_protect(const struct device *dev, int bank)
+{
+	uint32_t addr = bank * CONFIG_FLASH_BANK_SIZE;
+
+	return flash_check_prot_reg(dev, addr, CONFIG_FLASH_BANK_SIZE);
+}
+
+static uint32_t cros_flash_npcx_get_protect_flags(const struct device *dev)
+{
+	uint32_t flags = 0;
+
+	/* Check if WP region is protected in status register */
+	if (flash_check_prot_reg(dev, WP_BANK_OFFSET * CONFIG_FLASH_BANK_SIZE,
+				 WP_BANK_COUNT * CONFIG_FLASH_BANK_SIZE))
+		flags |= EC_FLASH_PROTECT_RO_AT_BOOT;
+
+	/*
+	 * TODO: If status register protects a range, but SRP0 is not set,
+	 * flags should indicate EC_FLASH_PROTECT_ERROR_INCONSISTENT.
+	 */
+	if (flag_prot_inconsistent)
+		flags |= EC_FLASH_PROTECT_ERROR_INCONSISTENT;
+
+	/* Read all-protected state from our shadow copy */
+	if (all_protected)
+		flags |= EC_FLASH_PROTECT_ALL_NOW;
+
+	return flags;
+}
+
+static int cros_flash_npcx_protect_at_boot(const struct device *dev,
+					   uint32_t new_flags)
+{
+	int ret;
+
+	if ((new_flags & (EC_FLASH_PROTECT_RO_AT_BOOT |
+			  EC_FLASH_PROTECT_ALL_AT_BOOT)) == 0) {
+		/* Clear protection bits in status register */
+		return flash_set_status_for_prot(dev, 0, 0);
+	}
+
+	ret = flash_write_prot_reg(dev, CONFIG_WP_STORAGE_OFF,
+				   CONFIG_WP_STORAGE_SIZE, 1);
+
+	/*
+	 * Set UMA_LOCK bit for locking all UMA transaction.
+	 * But we still can read directly from flash mapping address
+	 */
+	if (new_flags & EC_FLASH_PROTECT_ALL_AT_BOOT)
+		flash_uma_lock(dev, 1);
+
+	return ret;
+}
+
+static int cros_flash_npcx_protect_now(const struct device *dev, int all)
+{
+	if (all) {
+		/*
+		 * Set UMA_LOCK bit for locking all UMA transaction.
+		 * But we still can read directly from flash mapping address
+		 */
+		flash_uma_lock(dev, 1);
+	} else {
+		/* TODO: Implement RO "now" protection */
+	}
+
+	return EC_SUCCESS;
+}
+
 /* cros ec flash driver registration */
 static const struct cros_flash_driver_api cros_flash_npcx_driver_api = {
 	.init = cros_flash_npcx_init,
 	.physical_read = cros_flash_npcx_read,
 	.physical_write = cros_flash_npcx_write,
 	.physical_erase = cros_flash_npcx_erase,
-	.write_protection = cros_flash_npcx_write_protection_set,
-	.write_protection_is_set = cros_flash_npcx_write_protection_is_set,
-	.get_status_reg = cros_flash_npcx_get_status_reg,
-	.set_status_reg = cros_flash_npcx_set_status_reg,
-	.uma_lock = cros_flash_npcx_uma_lock,
+	.physical_get_protect = cros_flash_npcx_get_protect,
+	.physical_get_protect_flags = cros_flash_npcx_get_protect_flags,
+	.physical_protect_at_boot = cros_flash_npcx_protect_at_boot,
+	.physical_protect_now = cros_flash_npcx_protect_now,
 };
 
 static int flash_npcx_init(const struct device *dev)
 {
 	const struct cros_flash_npcx_config *const config = DRV_CONFIG(dev);
-	const struct device *const clk_dev =
-		device_get_binding(NPCX_CLK_CTRL_NAME);
+	const struct device *clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 
 	int ret;
 
@@ -519,7 +815,7 @@ static const struct cros_flash_npcx_config cros_flash_cfg = {
 
 static struct cros_flash_npcx_data cros_flash_data;
 
-DEVICE_AND_API_INIT(cros_flash_npcx_0, DT_INST_LABEL(0), flash_npcx_init,
-		    &cros_flash_data, &cros_flash_cfg, PRE_KERNEL_1,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &cros_flash_npcx_driver_api);
+DEVICE_DT_INST_DEFINE(0, flash_npcx_init, NULL, &cros_flash_data,
+		      &cros_flash_cfg, PRE_KERNEL_1,
+		      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      &cros_flash_npcx_driver_api);

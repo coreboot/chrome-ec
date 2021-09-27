@@ -14,18 +14,45 @@
 #include "hooks.h"
 #include "led_common.h"
 #include "led_onoff_states.h"
+#include "system.h"
+#include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_GPIO, format, ## args)
+
+/*
+ * In order to support the battery LED being optional (ex. for Chromeboxes),
+ * set up default battery table, setter, and variables.
+ */
+__overridable struct led_descriptor
+			led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES];
+__overridable const int led_charge_lvl_1;
+__overridable const int led_charge_lvl_2;
+__overridable void led_set_color_battery(enum ec_led_colors color)
+{
+}
+
+#ifndef CONFIG_CHARGER
+/* Include for the sake of compilation */
+int charge_get_percent(void);
+#endif
+
+static int led_get_charge_percent(void)
+{
+	return DIV_ROUND_NEAREST(charge_get_display_charge(), 10);
+}
 
 static enum led_states led_get_state(void)
 {
 	int  charge_lvl;
 	enum led_states new_state = LED_NUM_STATES;
 
+	if (!IS_ENABLED(CONFIG_CHARGER))
+		return new_state;
+
 	switch (charge_get_state()) {
 	case PWR_STATE_CHARGE:
 		/* Get percent charge */
-		charge_lvl = charge_get_percent();
+		charge_lvl = led_get_charge_percent();
 		/* Determine which charge state to use */
 		if (charge_lvl < led_charge_lvl_1)
 			new_state = STATE_CHARGING_LVL_1;
@@ -49,7 +76,7 @@ static enum led_states led_get_state(void)
 	case PWR_STATE_DISCHARGE /* and PWR_STATE_DISCHARGE_FULL */:
 		if (chipset_in_state(CHIPSET_STATE_ON)) {
 #ifdef CONFIG_LED_ONOFF_STATES_BAT_LOW
-			if (charge_get_percent() <
+			if (led_get_charge_percent() <
 				CONFIG_LED_ONOFF_STATES_BAT_LOW)
 				new_state = STATE_DISCHARGE_S0_BAT_LOW;
 			else
@@ -72,6 +99,8 @@ static enum led_states led_get_state(void)
 	case PWR_STATE_IDLE: /* External power connected in IDLE */
 		if (charge_get_flags() & CHARGE_FLAG_FORCE_IDLE)
 			new_state = STATE_FACTORY_TEST;
+		else if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+			new_state = STATE_DISCHARGE_S5;
 		else
 			new_state = STATE_DISCHARGE_S0;
 		break;
@@ -142,7 +171,16 @@ static void led_update_battery(void)
 	led_set_color_battery(led_bat_state_table[led_state][phase].color);
 }
 
-#ifdef CONFIG_LED_POWER_LED
+/*
+ * In order to support the power LED being optional, set up default power LED
+ * table and setter
+ */
+__overridable const struct led_descriptor
+			led_pwr_state_table[PWR_LED_NUM_STATES][LED_NUM_PHASES];
+__overridable void led_set_color_power(enum ec_led_colors color)
+{
+}
+
 static enum pwr_led_states pwr_led_get_state(void)
 {
 	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND)) {
@@ -151,7 +189,10 @@ static enum pwr_led_states pwr_led_get_state(void)
 		else
 			return PWR_LED_STATE_SUSPEND_NO_AC;
 	} else if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-		return PWR_LED_STATE_OFF;
+		if (system_can_boot_ap())
+			return PWR_LED_STATE_OFF;
+		else
+			return PWR_LED_STATE_OFF_LOW_POWER;
 	} else if (chipset_in_state(CHIPSET_STATE_ON)) {
 		return PWR_LED_STATE_ON;
 	}
@@ -171,6 +212,14 @@ static void led_update_power(void)
 	 * Otherwise, continue to use old state
 	 */
 	if (desired_state != led_state && desired_state < PWR_LED_NUM_STATES) {
+		/*
+		 * Allow optional OFF_LOW_POWER state to fall back to
+		 * OFF not defined, as indicated by no specified phase 0 time.
+		 */
+		if (desired_state == PWR_LED_STATE_OFF_LOW_POWER &&
+		    led_pwr_state_table[desired_state][LED_PHASE_0].time == 0)
+			desired_state = PWR_LED_STATE_OFF;
+
 		/* State is changing */
 		led_state = desired_state;
 		/* Reset ticks and period when state changes */
@@ -201,7 +250,6 @@ static void led_update_power(void)
 	led_set_color_power(led_pwr_state_table[led_state][phase].color);
 
 }
-#endif
 
 static void led_init(void)
 {
@@ -210,10 +258,8 @@ static void led_init(void)
 		led_set_color_battery(LED_OFF);
 
 	/* If power LED is enabled, set it to "off" to start with */
-#ifdef CONFIG_LED_POWER_LED
 	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
 		led_set_color_power(LED_OFF);
-#endif /* CONFIG_LED_POWER_LED */
 
 }
 DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
@@ -227,9 +273,7 @@ static void led_update(void)
 	 */
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		led_update_battery();
-#ifdef CONFIG_LED_POWER_LED
 	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
 		led_update_power();
-#endif
 }
 DECLARE_HOOK(HOOK_TICK, led_update, HOOK_PRIO_DEFAULT);

@@ -9,6 +9,7 @@
 #define __CROS_EC_BATTERY_H
 
 #include "common.h"
+#include "compiler.h"
 #include "host_command.h"
 
 /* Battery index, only used with CONFIG_BATTERY_V2. */
@@ -48,7 +49,8 @@ extern struct ec_response_battery_dynamic_info
 
 /*
  * Shut down main processor and/or hibernate EC when discharging and battery
- * level < this level.
+ * level < this level. Setting this too low makes the battery discharge too
+ * deeply, which isn't good for the battery health.
  */
 #define BATTERY_LEVEL_SHUTDOWN		  3
 
@@ -56,7 +58,7 @@ extern struct ec_response_battery_dynamic_info
  * Sometimes we have hardware to detect battery present, sometimes we have to
  * wait until we've been able to talk to the battery.
  */
-enum battery_present {
+FORWARD_DECLARE_ENUM(battery_present) {
 	BP_NOT_INIT = -1,
 	BP_NO = 0,
 	BP_YES = 1,
@@ -120,8 +122,9 @@ int battery_get_avg_voltage(void); /* in mV */
 #define BATT_FLAG_BAD_FULL_CAPACITY		0x00000200
 #define BATT_FLAG_BAD_STATUS			0x00000400
 #define BATT_FLAG_IMBALANCED_CELL		0x00000800
+#define BATT_FLAG_BAD_AVERAGE_CURRENT		0x00001000
 /* All of the above BATT_FLAG_BAD_* bits */
-#define BATT_FLAG_BAD_ANY			0x000007fc
+#define BATT_FLAG_BAD_ANY			0x000017fc
 
 /* Battery constants */
 struct battery_info {
@@ -470,5 +473,7 @@ void battery_compensate_params(struct batt_params *batt);
  * board-specific battery_compensate_params
  */
 __override_proto void board_battery_compensate_params(struct batt_params *batt);
+
+void battery_validate_params(struct batt_params *batt);
 
 #endif /* __CROS_EC_BATTERY_H */

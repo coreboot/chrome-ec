@@ -178,6 +178,10 @@ SECTIONS
 		KEEP(*(.rodata.HOOK_CHIPSET_SHUTDOWN_COMPLETE))
 		__hooks_chipset_shutdown_complete_end = .;
 
+		__hooks_chipset_hard_off = .;
+		KEEP(*(.rodata.HOOK_CHIPSET_HARD_OFF))
+		__hooks_chipset_hard_off_end = .;
+
 		__hooks_chipset_reset = .;
 		KEEP(*(.rodata.HOOK_CHIPSET_RESET))
 		__hooks_chipset_reset_end = .;
@@ -250,7 +254,7 @@ SECTIONS
 
 		. = ALIGN(4);
 		*(.srodata*)
-#if defined(SECTION_IS_RO) && defined(CONFIG_FLASH)
+#if defined(SECTION_IS_RO) && defined(CONFIG_FLASH_CROS)
 		. = ALIGN(64);
 		KEEP(*(.google))
 #endif
@@ -266,6 +270,25 @@ SECTIONS
 #endif /* CONFIG_FLASH_PHYSICAL */
 
 	__data_lma_start = .;
+
+#ifdef CONFIG_PRESERVE_LOGS
+	.preserve_logs(NOLOAD) : {
+		/*
+		 * The address of the preserved logs is fixed at the beginning
+		 * of memory.
+		 */
+		. = ALIGN(8);
+		__preserved_logs_start = .;
+		*(SORT(.preserved_logs.*))
+		. = ALIGN(8);
+		__preserved_logs_end = .;
+	} > IRAM
+	__preserved_logs_size = __preserved_logs_end - __preserved_logs_start;
+#ifdef CONFIG_IT83XX_HARD_RESET_BY_GPG1
+	ASSERT(__preserved_logs_size <= CHIP_FLASH_PRESERVE_LOGS_SIZE,
+	       "Not enough flash space to save EC logs.")
+#endif
+#endif /* CONFIG_PRESERVE_LOGS */
 
 	.data : {
 		. = ALIGN(4);
@@ -337,7 +360,7 @@ SECTIONS
 #endif
 	__image_size = __flash_used;
 
-#ifdef CONFIG_FLASH
+#ifdef CONFIG_FLASH_CROS
         /*
          * These linker labels are just for analysis and not used in the code.
          */
@@ -427,7 +450,7 @@ SECTIONS
 	} > DRAM
 #endif /* CONFIG_DRAM_BASE */
 
-#if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH))
+#if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH_CROS))
 	/DISCARD/ : { *(.google) }
 #endif
 

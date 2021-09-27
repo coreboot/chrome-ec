@@ -6,7 +6,6 @@
 /* Trembyle board configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "button.h"
 #include "charger.h"
 #include "cbi_ec_fw_config.h"
@@ -31,7 +30,7 @@
 #include "switch.h"
 #include "system.h"
 #include "task.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "temp_sensor.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -40,8 +39,6 @@
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
-
-#ifdef HAS_TASK_MOTIONSENSE
 
 /* Motion sensors */
 static struct mutex g_lid_mutex;
@@ -92,7 +89,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .drv_data = &g_bmi160_data,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = NULL,
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -128,8 +125,6 @@ struct motion_sensor_t motion_sensors[] = {
 };
 
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-#endif /* HAS_TASK_MOTIONSENSE */
 
 const struct power_signal_info power_signal_list[] = {
 	[X86_SLP_S3_N] = {

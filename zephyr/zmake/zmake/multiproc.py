@@ -1,6 +1,7 @@
 # Copyright 2020 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+import collections
 import logging
 import os
 import select
@@ -19,8 +20,89 @@ on the screen.
 _logging_interrupt_pipe = os.pipe()
 # A condition variable used to synchronize logging operations.
 _logging_cv = threading.Condition()
-# A map of file descriptors to their logger/logging level tuple.
+# A map of file descriptors to their LogWriter
 _logging_map = {}
+# Should we log job names or not
+log_job_names = True
+
+
+def reset():
+    """Reset this module to its starting state (useful for tests)"""
+    global _logging_map
+
+    _logging_map = {}
+
+
+class LogWriter:
+    """Contains information about a file descriptor that is producing output
+
+    There is typically one of these for each file descriptor that a process is
+    writing to while running (stdout and stderr).
+
+    Properties:
+        _logger: The logger object to use.
+        _log_level: The logging level to use.
+        _override_func: A function used to override the log level. The
+            function will be called once per line prior to logging and will be
+            passed the arguments of the line and the default log level.
+        _written_at_level: dict:
+            key: log_level
+            value: True if output was written at that level
+        _job_id: The name to prepend to logged lines
+        _file_descriptor: The file descriptor being logged.
+    """
+
+    def __init__(
+        self, logger, log_level, log_level_override_func, job_id, file_descriptor
+    ):
+        self._logger = logger
+        self._log_level = log_level
+        self._override_func = log_level_override_func
+        # A map whether output was printed at each logging level
+        self._written_at_level = collections.defaultdict(lambda: False)
+        self._job_id = job_id
+        self._file_descriptor = file_descriptor
+
+    def log_line(self, line):
+        """Log a line of output
+
+        If the log-level override function requests a change in log level, that
+        causes self._log_level to be updated accordingly.
+
+        Args:
+            line: Text line to log
+        """
+        if self._override_func:
+            # Get the new log level and update the default. The reason we
+            # want to update the default is that if we hit an error, all
+            # future logging should be moved to the new logging level. This
+            # greatly simplifies the logic that is needed to update the log
+            # level.
+            self._log_level = self._override_func(line, self._log_level)
+        if self._job_id and log_job_names:
+            self._logger.log(self._log_level, "[%s]%s", self._job_id, line)
+        else:
+            self._logger.log(self._log_level, line)
+        self._written_at_level[self._log_level] = True
+
+    def has_written(self, log_level):
+        """Check if output was written at a certain log level
+
+        Args:
+            log_level: log level to check
+
+        Returns:
+            True if any output was written at that log level, False if not
+        """
+        return self._written_at_level[log_level]
+
+    def wait(self):
+        """Wait for this LogWriter to finish.
+
+        This method will block execution until all the logs have been flushed out.
+        """
+        with _logging_cv:
+            _logging_cv.wait_for(lambda: self._file_descriptor not in _logging_map)
 
 
 def _log_fd(fd):
@@ -34,7 +116,7 @@ def _log_fd(fd):
     removed from the map as it is no longer valid.
     """
     with _logging_cv:
-        logger, log_level, log_level_override_func = _logging_map[fd]
+        writer = _logging_map[fd]
         if fd.closed:
             del _logging_map[fd]
             _logging_cv.notify_all()
@@ -45,17 +127,9 @@ def _log_fd(fd):
             del _logging_map[fd]
             _logging_cv.notify_all()
             return
-        line = line.strip()
+        line = line.rstrip("\n")
         if line:
-            if log_level_override_func:
-                # Get the new log level and update the default. The reason we
-                # want to update the default is that if we hit an error, all
-                # future logging should be moved to the new logging level. This
-                # greatly simplifies the logic that is needed to update the log
-                # level.
-                log_level = log_level_override_func(line, log_level)
-                _logging_map[fd] = (logger, log_level, log_level_override_func)
-            logger.log(log_level, line)
+            writer.log_line(line)
 
 
 def _prune_logging_fds():
@@ -76,8 +150,8 @@ def _logging_loop():
     """The primary logging thread loop.
 
     This is the entry point of the logging thread. It will listen for (1) any
-    new data on the output file descriptors that were added via log_output and
-    (2) any new file descriptors being added by log_output. Once a file
+    new data on the output file descriptors that were added via log_output() and
+    (2) any new file descriptors being added by log_output(). Once a file
     descriptor is ready to be read, this function will call _log_fd to perform
     the actual read and logging.
     """
@@ -93,7 +167,7 @@ def _logging_loop():
             _prune_logging_fds()
             continue
         if _logging_interrupt_pipe[0] in fds:
-            # We got a dummy byte sent by log_output, this is a signal used to
+            # We got a dummy byte sent by log_output(), this is a signal used to
             # break out of the blocking select.select call to tell us that the
             # file descriptor set has changed. We just need to read the byte and
             # remove this descriptor from the list. If we actually have data
@@ -104,11 +178,12 @@ def _logging_loop():
             _log_fd(fd)
 
 
-_logging_thread = threading.Thread(target=_logging_loop, daemon=True)
+_logging_thread = None
 
 
-def log_output(logger, log_level, file_descriptor,
-               log_level_override_func=None):
+def log_output(
+    logger, log_level, file_descriptor, log_level_override_func=None, job_id=None
+):
     """Log the output from the given file descriptor.
 
     Args:
@@ -118,17 +193,27 @@ def log_output(logger, log_level, file_descriptor,
         log_level_override_func: A function used to override the log level. The
           function will be called once per line prior to logging and will be
           passed the arguments of the line and the default log level.
+
+    Returns:
+        LogWriter object for the resulting output
     """
     with _logging_cv:
-        if not _logging_thread.is_alive():
+        global _logging_thread
+        if _logging_thread is None or not _logging_thread.is_alive():
+            # First pass or thread must have died, create a new one.
+            _logging_thread = threading.Thread(target=_logging_loop, daemon=True)
             _logging_thread.start()
-        _logging_map[file_descriptor] = (logger, log_level,
-                                         log_level_override_func)
+
+        writer = LogWriter(
+            logger, log_level, log_level_override_func, job_id, file_descriptor
+        )
+        _logging_map[file_descriptor] = writer
         # Write a dummy byte to the pipe to break the select so we can add the
         # new fd.
-        os.write(_logging_interrupt_pipe[1], b'x')
+        os.write(_logging_interrupt_pipe[1], b"x")
         # Notify the condition so we can run the select on the current fds.
         _logging_cv.notify_all()
+    return writer
 
 
 def wait_for_log_end():
@@ -145,22 +230,17 @@ class Executor:
 
     This class is used to run multiple functions in parallel. The functions MUST
     return an integer result code (or throw an exception). This class will start
-    a thread per operation and wait() for all the threads to resolve. If
-    fail_fast is set to True, then not all threads must return before wait()
-    returns. Instead either ALL threads must return 0 OR any thread must return
-    a non zero result (or throw an exception).
+    a thread per operation and wait() for all the threads to resolve.
 
     Attributes:
-        fail_fast: Whether or not the first function's error code should
-         terminate the executor.
         lock: The condition variable used to synchronize across threads.
         threads: A list of threading.Thread objects currently under this
          Executor.
         results: A list of result codes returned by each of the functions called
          by this Executor.
     """
-    def __init__(self, fail_fast):
-        self.fail_fast = fail_fast
+
+    def __init__(self):
         self.lock = threading.Condition()
         self.threads = []
         self.results = []
@@ -181,21 +261,15 @@ class Executor:
              exception.
         """
         with self.lock:
-            thread = threading.Thread(target=lambda: self._run_fn(func),
-                                      daemon=True)
+            thread = threading.Thread(target=lambda: self._run_fn(func), daemon=True)
             thread.start()
             self.threads.append(thread)
 
     def wait(self):
         """Wait for a result to be available.
 
-        This function waits for the executor to resolve. Being resolved depends on
-        the initial fail_fast setting.
-        - If fail_fast is True then the executor is resolved as soon as any thread
-          throws an exception or returns a non-zero result. Or, all the threads
-          returned a zero result code.
-        - If fail_fast is False, then all the threads must have returned a result
-          code or have thrown.
+        This function waits for the executor to resolve (i.e., all
+        threads have finished).
 
         Returns:
             An integer result code of either the first failed function or 0 if
@@ -234,7 +308,7 @@ class Executor:
         """
         if len(self.threads) == len(self.results):
             return True
-        return self.fail_fast and any([result for result in self.results])
+        return False
 
     @property
     def _result(self):

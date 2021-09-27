@@ -92,11 +92,29 @@ static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
 	pd_handle_cc_overvoltage(0);
 }
 
-static void pen_detect_interrupt(enum gpio_signal s)
+/**
+ * Deferred function to handle pen detect change
+ */
+static void pendetect_deferred(void)
 {
+	static int debounced_pen_detect;
 	int pen_detect = !gpio_get_level(GPIO_PEN_DET_ODL);
 
-	gpio_set_level(GPIO_EN_PP5000_PEN, pen_detect);
+	if (pen_detect == debounced_pen_detect)
+		return;
+
+	debounced_pen_detect = pen_detect;
+
+	gpio_set_level(GPIO_EN_PP5000_PEN, debounced_pen_detect);
+	gpio_set_level(GPIO_PEN_DET_PCH, !debounced_pen_detect);
+}
+DECLARE_DEFERRED(pendetect_deferred);
+
+void pen_detect_interrupt(enum gpio_signal s)
+{
+	/* Trigger deferred notification of pen detect change */
+	hook_call_deferred(&pendetect_deferred_data,
+			500 * MSEC);
 }
 
 void board_hibernate(void)
@@ -105,7 +123,22 @@ void board_hibernate(void)
 	 * Charger IC need to be put into their "low power mode" before
 	 * entering the Z-state.
 	 */
-	raa489000_hibernate(0, true);
+	raa489000_hibernate(0, false);
+}
+
+__override void board_pulse_entering_rw(void)
+{
+	/*
+	 * On the ITE variants, the EC_ENTERING_RW signal was connected to a pin
+	 * which is active high by default.  This causes Cr50 to think that the
+	 * EC has jumped to its RW image even though this may not be the case.
+	 * The pin is changed to GPIO_EC_ENTERING_RW2.
+	 */
+	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
 }
 
 /* Must come after other header files and interrupt handler declarations */
@@ -133,13 +166,6 @@ const struct adc_t adc_channels[] = {
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
 		.channel = CHIP_ADC_CH3
-	},
-	[ADC_SUB_ANALOG] = {
-		.name = "SUB_ANALOG",
-		.factor_mul = ADC_MAX_MVOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-		.channel = CHIP_ADC_CH13
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
@@ -185,6 +211,11 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
+/* USB-A charging control */
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_USB_A0_VBUS,
+};
+
 void board_init(void)
 {
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
@@ -195,7 +226,12 @@ void board_init(void)
 	/* Enable gpio interrupt for pen detect */
 	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
 
-	gpio_set_level(GPIO_HDMI_EN_SUB_ODL, 0);
+	/* Make sure pen detection is triggered or not at sysjump */
+	if (!gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_EN_PP5000_PEN, 1);
+
+	if (gpio_get_level(GPIO_PEN_DET_ODL))
+		gpio_set_level(GPIO_PEN_DET_PCH, 1);
 
 	/* Set LEDs luminance */
 	pwm_set_duty(PWM_CH_LED_RED, 70);
@@ -284,7 +320,7 @@ int board_set_active_charge_port(int port)
 	if (port == CHARGE_PORT_NONE) {
 		tcpc_write(0, TCPC_REG_COMMAND,
 				TCPC_REG_COMMAND_SNK_CTRL_LOW);
-
+		raa489000_enable_asgate(0, false);
 		return EC_SUCCESS;
 	}
 
@@ -295,7 +331,8 @@ int board_set_active_charge_port(int port)
 	}
 
 	/* Enable requested charge port. */
-	if (tcpc_write(0, TCPC_REG_COMMAND,
+	if (raa489000_enable_asgate(port, true) ||
+	    tcpc_write(0, TCPC_REG_COMMAND,
 		       TCPC_REG_COMMAND_SNK_CTRL_HIGH)) {
 		CPRINTUSB("p%d: sink path enable failed.", port);
 		return EC_ERROR_UNKNOWN;
@@ -345,8 +382,8 @@ static const mat33_fp_t lid_standard_ref = {
 };
 
 static const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
@@ -445,9 +482,8 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -471,4 +507,3 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif

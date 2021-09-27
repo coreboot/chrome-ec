@@ -11,7 +11,6 @@
  */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "als.h"
 #include "bd99992gw.h"
 #include "button.h"
@@ -88,10 +87,8 @@ static int smart_batt_temp;
 static int ds1624_temp;
 static int sb_temp(int idx, int *temp_ptr);
 static int ds1624_get_val(int idx, int *temp_ptr);
-#ifdef HAS_TASK_MOTIONSENSE
 static void board_spi_enable(void);
 static void board_spi_disable(void);
-#endif
 
 #ifdef CONFIG_BOARD_PRE_INIT
 /*
@@ -274,40 +271,6 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 #endif
 
-const uint32_t i2c_ctrl_slave_addrs[I2C_CONTROLLER_COUNT] = {
-#ifdef CONFIG_BOARD_MCHP_I2C0_SLAVE_ADDRS
-	(MCHP_I2C_CTRL0 + (CONFIG_BOARD_MCHP_I2C0_SLAVE_ADDRS << 16)),
-#else
-	(MCHP_I2C_CTRL0 + (CONFIG_MCHP_I2C0_SLAVE_ADDRS << 16)),
-#endif
-#ifdef CONFIG_BOARD_MCHP_I2C1_SLAVE_ADDRS
-	(MCHP_I2C_CTRL1 + (CONFIG_BOARD_MCHP_I2C1_SLAVE_ADDRS << 16)),
-#else
-	(MCHP_I2C_CTRL1 + (CONFIG_MCHP_I2C1_SLAVE_ADDRS << 16)),
-#endif
-};
-
-/* Return the two slave addresses the specified
- * controller will respond to when controller
- * is acting as a slave.
- * b[6:0]  = b[7:1] of I2C address 1
- * b[14:8] = b[7:1] of I2C address 2
- * When not using I2C controllers as slaves we can use
- * the same value for all controllers. The address should
- * not be 0x00 as this is the general call address.
- */
-uint16_t board_i2c_slave_addrs(int controller)
-{
-	int i;
-
-	for (i = 0; i < I2C_CONTROLLER_COUNT; i++)
-		if ((i2c_ctrl_slave_addrs[i] & 0xffff) == controller)
-			return (i2c_ctrl_slave_addrs[i] >> 16);
-
-	return CONFIG_MCHP_I2C0_SLAVE_ADDRS;
-}
-
-
 /* SPI devices */
 const struct spi_device_t spi_devices[] = {
 	{ QMSPI0_PORT, 4, GPIO_QMSPI_CS0},
@@ -340,7 +303,7 @@ void board_prepare_for_deep_sleep(void)
 #if defined(CONFIG_GPIO_POWER_DOWN) && \
 	defined(CONFIG_MCHP_DEEP_SLP_GPIO_PWR_DOWN)
 	gpio_power_down_module(MODULE_SPI_FLASH);
-	gpio_power_down_module(MODULE_SPI_MASTER);
+	gpio_power_down_module(MODULE_SPI_CONTROLLER);
 	gpio_power_down_module(MODULE_I2C);
 	/* powering down keyscan is causing an issue with keyscan task
 	 * probably due to spurious interrupts on keyscan pins.
@@ -367,7 +330,7 @@ void board_resume_from_deep_sleep(void)
 #endif
 	/* gpio_config_module(MODULE_KEYBOARD_SCAN, 1); */
 	gpio_config_module(MODULE_SPI_FLASH, 1);
-	gpio_config_module(MODULE_SPI_MASTER, 1);
+	gpio_config_module(MODULE_SPI_CONTROLLER, 1);
 	gpio_config_module(MODULE_I2C, 1);
 #endif
 }
@@ -561,13 +524,11 @@ static void board_init(void)
 	/* Provide AC status to the PCH */
 	gpio_set_level(GPIO_PCH_ACOK, extpower_is_present());
 
-#ifdef HAS_TASK_MOTIONSENSE
 	if (system_jumped_late() &&
 	    chipset_in_state(CHIPSET_STATE_ON)) {
 		trace0(0, BRD, 0, "board_init: S0 call board_spi_enable");
 		board_spi_enable();
 	}
-#endif
 
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
@@ -647,11 +608,6 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
  * TODO HACK providing functions from common/charge_state_v2.c
  * which is not compiled in when no charger
  */
-int charge_want_shutdown(void)
-{
-	return 0;
-}
-
 int charge_prevent_power_on(int power_button_pressed)
 {
 	return 0;
@@ -906,7 +862,6 @@ static void board_one_sec(void)
 }
 DECLARE_HOOK(HOOK_SECOND, board_one_sec, HOOK_PRIO_DEFAULT);
 
-#ifdef HAS_TASK_MOTIONSENSE
 /* Motion sensors */
 
 static struct mutex g_base_mutex;
@@ -935,7 +890,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = CONFIG_SPI_ACCEL_PORT,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(
 			CONFIG_SPI_ACCEL_PORT),
 		.rot_standard_ref = NULL, /* Identity matrix. */
 		.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
@@ -960,7 +915,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi160_data,
 		.port = CONFIG_SPI_ACCEL_PORT,
-		.i2c_spi_addr_flags = SLAVE_MK_SPI_ADDR_FLAGS(
+		.i2c_spi_addr_flags = ACCEL_MK_SPI_ADDR_FLAGS(
 			CONFIG_SPI_ACCEL_PORT),
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = NULL, /* Identity Matrix. */
@@ -1018,7 +973,6 @@ static void board_spi_disable(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_spi_disable,
 	     MOTION_SENSE_HOOK_PRIO + 1);
-#endif /* defined(HAS_TASK_MOTIONSENSE) */
 
 #ifdef MEC1701_EVB_TACH_TEST /* PWM/TACH test */
 void tach0_isr(void)

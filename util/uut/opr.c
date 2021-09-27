@@ -5,7 +5,11 @@
  */
 
 /* This file implements the UART console application operations. */
-#define _GNU_SOURCE
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE /* for asprintf */
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -228,7 +232,7 @@ void opr_write_mem(uint8_t *buffer, uint32_t addr, uint32_t size)
 
 	/* Read first token from string */
 	if (console)
-		token = strtok(buffer, seps);
+		token = strtok((char *)(buffer), seps);
 
 	size_remain = size;
 	/* Main write loop */

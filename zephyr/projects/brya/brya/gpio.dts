@@ -1,0 +1,75 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/ {
+	named-gpios {
+		compatible = "named-gpios";
+
+		lid_open: lid_open {
+			gpios = <&gpiod 2 GPIO_INPUT>;
+			enum-name = "GPIO_LID_OPEN";
+			label = "LID_OPEN";
+		};
+
+		gsc_ec_pwr_btn_odl: power_btn {
+			gpios = <&gpio0 1 GPIO_INPUT>;
+			enum-name = "GPIO_POWER_BUTTON_L";
+			label = "GSC_EC_PWR_BTN_ODL";
+		};
+
+		wp_l {
+			gpios = <&gpioa 1 GPIO_INPUT>;
+			enum-name = "GPIO_WP_L";
+			label = "EC_WP_ODL";
+		};
+
+		ec_chg_led_y_c1 {
+			gpios = <&gpioc 3 GPIO_OUT_LOW>;
+			enum-name = "GPIO_EC_CHG_LED_Y_C1";
+			label = "EC_CHG_LED_Y_C1";
+		};
+
+		ec_chg_led_b_c1 {
+			gpios = <&gpioc 4 GPIO_OUT_LOW>;
+			enum-name = "GPIO_EC_CHG_LED_B_C1";
+			label = "EC_CHG_LED_B_C1";
+		};
+
+		packet_mode_en {
+			gpios = <&gpio7 5 GPIO_OUT_LOW>;
+			enum-name = "GPIO_PACKET_MODE_EN";
+			label = "EC_GSC_PACKET_MODE";
+		};
+		acok_od: acok_od {
+			gpios = <&gpio0 0 GPIO_INPUT>;
+			enum-name = "GPIO_AC_PRESENT";
+			label = "ACOK_OD";
+		};
+		ec_kso_02_inv {
+			gpios = <&gpio1 7 GPIO_OUT_LOW>;
+			enum-name = "GPIO_KBD_KSO2";
+			label = "EC_KSO_02_INV";
+		};
+		pch_wake_odl {
+			gpios = <&gpiob 0 GPIO_ODR_HIGH>;
+			enum-name = "GPIO_EC_PCH_WAKE_ODL";
+			label = "EC_PCH_WAKE_R_ODL";
+		};
+		pch_int_odl {
+			gpios = <&gpiob 0 GPIO_ODR_HIGH>;
+			enum-name = "GPIO_EC_INT_L";
+			label = "EC_PCH_INT_ODL";
+		};
+	};
+
+	hibernate-wake-pins {
+		compatible = "cros-ec,hibernate-wake-pins";
+		wakeup-pins = <
+			&acok_od
+			&gsc_ec_pwr_btn_odl
+			&lid_open
+		>;
+	};
+};

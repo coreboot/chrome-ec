@@ -32,6 +32,14 @@
 #define ICM426XX_GYRO_FS_MIN_VAL	125
 #define ICM426XX_GYRO_FS_MAX_VAL	2000
 
+/* accel stabilization time in us */
+#define ICM426XX_ACCEL_START_TIME	20000
+#define ICM426XX_ACCEL_STOP_TIME	0
+
+/* gyro stabilization time in us */
+#define ICM426XX_GYRO_START_TIME	60000
+#define ICM426XX_GYRO_STOP_TIME		150000
+
 /* Reg value from Accel FS in G */
 #define ICM426XX_ACCEL_FS_TO_REG(_fs)	((_fs) < 2 ? 3 : \
 					(_fs) > 16 ? 0 : \
@@ -136,6 +144,9 @@ enum icm426xx_slew_rate {
 #define ICM426XX_UI_SIFS_CFG_MASK	GENMASK(1, 0)
 #define ICM426XX_UI_SIFS_CFG_SPI_DIS	0x02
 #define ICM426XX_UI_SIFS_CFG_I2C_DIS	0x03
+
+#define ICM426XX_REG_INTF_CONFIG1	0x004D
+#define ICM426XX_ACCEL_LP_CLK_SEL	BIT(3)
 
 enum icm426xx_sensor_mode {
 	ICM426XX_MODE_OFF,

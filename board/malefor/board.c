@@ -4,7 +4,6 @@
  */
 
 /* Malefor board-specific configuration */
-#include "bb_retimer.h"
 #include "button.h"
 #include "cbi_ec_fw_config.h"
 #include "common.h"
@@ -13,6 +12,7 @@
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/syv682x.h"
+#include "driver/retimer/bb_retimer_public.h"
 #include "driver/sync.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -45,7 +45,7 @@
 #define CPRINTF(format, args...) cprintf(CC_CHIPSET, format, ## args)
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Increase from 50 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/* Other values should be the same as the default configuration. */
@@ -76,7 +76,7 @@ static void board_init(void)
 	} else {
 		motion_sensor_count = 0;
 		/* Device is clamshell only */
-		tablet_set_mode(0);
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
 		/* Gyro is not present, don't allow line to float */
 		gpio_set_flags(GPIO_EC_IMU_INT_L, GPIO_INPUT | GPIO_PULL_DOWN);
 	}
@@ -97,8 +97,7 @@ int board_is_lid_angle_tablet_mode(void)
 }
 
 /* Enable or disable input devices, based on tablet mode or chipset state */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	if (ec_cfg_has_tabletmode()) {
 		if (chipset_in_state(CHIPSET_STATE_ANY_OFF) ||
@@ -107,7 +106,6 @@ void lid_angle_peripheral_enable(int enable)
 		keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif
 
 /******************************************************************************/
 /* Sensors */
@@ -533,6 +531,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.next_mux = &usbc1_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 	},

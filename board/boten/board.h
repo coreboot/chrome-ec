@@ -12,11 +12,11 @@
 #define VARIANT_DEDEDE_EC_IT8320
 #include "baseboard.h"
 
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
-
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
+#define CONFIG_BATTERY_V2
+#define CONFIG_BATTERY_COUNT 1
+#define CONFIG_HOSTCMD_BATTERY_V2
 
 /* BC 1.2 */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -27,12 +27,13 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
+#undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 
 /* DAC for PSYS */
 #define CONFIG_DAC
 
 /* LED */
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 
 /* PWM */
@@ -74,6 +75,8 @@
 
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
+#define CONFIG_CMD_ACCELS
+#define CONFIG_CMD_ACCEL_INFO
 
 /* Variant references the TCPCs to determine Vbus sourcing */
 #define CONFIG_USB_PD_5V_EN_CUSTOM
@@ -82,10 +85,13 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB Mux */
 #define CONFIG_USB_MUX_IT5205
+
+/* USB Type A Features */
+#define USB_PORT_COUNT 1
+#define CONFIG_USB_PORT_POWER_DUMB
 
 #ifndef __ASSEMBLER__
 
@@ -113,7 +119,6 @@ enum adc_channel {
 	ADC_VSNS_PP3300_A,     /* ADC0 */
 	ADC_TEMP_SENSOR_1,     /* ADC2 */
 	ADC_TEMP_SENSOR_2,     /* ADC3 */
-	ADC_SUB_ANALOG,        /* ADC13 */
 	ADC_CH_COUNT
 };
 
@@ -131,7 +136,7 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
-int board_is_sourcing_vbus(int port);
+void pen_detect_interrupt(enum gpio_signal s);
 
 #endif /* !__ASSEMBLER__ */
 

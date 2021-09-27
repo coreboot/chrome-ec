@@ -111,7 +111,8 @@
 #endif
 
 /* Embedded flash option bytes base address */
-#define STM32_OPTB_BASE             0x1FFF7800
+#define STM32_OPTB_BANK1_BASE       0x1FFF7800UL
+#define STM32_OPTB_BANK2_BASE       0x1FFF8000UL
 
 /* Peripheral base addresses */
 #define STM32_PERIPH_BASE           (0x40000000UL)
@@ -141,7 +142,7 @@
 #define STM32_I2C1_BASE             STM32_APB1PERIPH(0x5400UL)
 #define STM32_I2C2_BASE             STM32_APB1PERIPH(0x5800UL)
 /* USB_IP Peripheral Registers base address */
-#define STM32_USB_BASE              STM32_APB1PERIPH(0x5C00UL)
+#define STM32_USB_FS_BASE           STM32_APB1PERIPH(0x5C00UL)
 /* USB_IP Packet Memory Area base address */
 #define STM32_USB_PMAADDR           STM32_APB1PERIPH(0x6000UL)
 #define STM32_FDCAN1_BASE           STM32_APB1PERIPH(0x6400UL)
@@ -154,6 +155,7 @@
 #define STM32_I2C4_BASE             STM32_APB1PERIPH(0x8400UL)
 /* UART9 is used as link to LPUART in STM32 uart.c implementation */
 #define STM32_USART9_BASE           STM32_APB1PERIPH(0x8000UL)
+#define STM32_I2C4_BASE             STM32_APB1PERIPH(0x8400UL)
 #define STM32_UCPD1_BASE            STM32_APB1PERIPH(0xA000UL)
 #define STM32_SRAMCAN_BASE          STM32_APB1PERIPH(0xA400UL)
 
@@ -587,7 +589,8 @@
 #define STM32_RCC_AHB1RSTR              REG32(STM32_RCC_BASE + 0x28)
 #define STM32_RCC_AHB2RSTR              REG32(STM32_RCC_BASE + 0x2C)
 #define STM32_RCC_AHB3RSTR              REG32(STM32_RCC_BASE + 0x30)
-#define STM32_RCC_APB1RSTR              REG32(STM32_RCC_BASE + 0x38)
+#define STM32_RCC_APB1RSTR1             REG32(STM32_RCC_BASE + 0x38)
+#define STM32_RCC_APB1RSTR2             REG32(STM32_RCC_BASE + 0x3C)
 #define STM32_RCC_APB2RSTR              REG32(STM32_RCC_BASE + 0x40)
 #define STM32_RCC_AHB1ENR               REG32(STM32_RCC_BASE + 0x48)
 #define STM32_RCC_AHB2ENR               REG32(STM32_RCC_BASE + 0x4C)
@@ -721,6 +724,11 @@
 /* gpio.c needs STM32_RCC_SYSCFGEN */
 #define STM32_RCC_SYSCFGEN STM32_RCC_APB2ENR_SYSCFGEN
 
+/* --- RCC APB1RSTR1 Bit Definitions --- */
+#define STM32_RCC_APB1RSTR1_USB_RST     BIT(23)
+#define STM32_RCC_APB1RSTR              STM32_RCC_APB1RSTR1
+#define STM32_RCC_PB1_USB               STM32_RCC_APB1RSTR1_USB_RST
+
 /* --- RCC CSR Bit Definitions --- */
 #define STM32_RCC_CSR_LSION		BIT(0)
 #define STM32_RCC_CSR_LSIRDY		BIT(1)
@@ -786,6 +794,8 @@
 #define STM32_PWR_RESET_CAUSE_CLR STM32_PWR_SCR
 #define  RESET_CAUSE_SBF_CLR            STM32_PWR_SCR_CSBF
 
+#define STM32_PWR_CR1_DBP               BIT(8)
+
 #define STM32_PWR_CR3_UCPD1_STDBY       BIT(13)
 #define STM32_PWR_CR3_UCPD1_DBDIS       BIT(14)
 
@@ -838,7 +848,7 @@
 /* --- Tamper and Backup --- */
 #define STM32_TAMP_BKPxR(n)         REG32(STM32_TAMP_BASE + 0x100 + 4 * (n))
 #define STM32_BKP_DATA(n)           STM32_TAMP_BKPxR(n)
-#define STM32_BKP_BYTES             128
+#define STM32_BKP_BYTES             64
 
 
 /* --- SPI --- */
@@ -941,11 +951,27 @@ typedef volatile struct stm32_spi_regs stm32_spi_regs_t;
 #define STM32_FLASH_SR              STM32_FLASH_REG(0x10)
 #define STM32_FLASH_CR              STM32_FLASH_REG(0x14)
 #define STM32_FLASH_ECCR            STM32_FLASH_REG(0x18)
+/*
+ * Bank 1 Option Byte Copy Registers. These registers are loaded from the option
+ * bytes location in flash at reset, assuming that option byte loading has not
+ * been disabled.
+ */
 #define STM32_FLASH_OPTR            STM32_FLASH_REG(0x20)
 #define STM32_FLASH_PCROP1SR        STM32_FLASH_REG(0x24)
 #define STM32_FLASH_PCROP1ER        STM32_FLASH_REG(0x28)
 #define STM32_FLASH_WRP1AR          STM32_FLASH_REG(0x2C)
 #define STM32_FLASH_WRP1BR          STM32_FLASH_REG(0x30)
+/*
+ * Bank 2 Option Byte Copy Registers. These will only exist for category 3
+ * devices.
+ */
+#define STM32_FLASH_PCROP2SR        STM32_FLASH_REG(0x44)
+#define STM32_FLASH_PCROP2ER        STM32_FLASH_REG(0x48)
+#define STM32_FLASH_WRP2AR          STM32_FLASH_REG(0x4C)
+#define STM32_FLASH_WRP2BR          STM32_FLASH_REG(0x50)
+
+#define STM32_FLASH_SEC_SIZE1       STM32_FLASH_REG(0x70)
+#define STM32_FLASH_SEC_SIZE2       STM32_FLASH_REG(0x74)
 
 /* --- FLASH CR Bit Definitions --- */
 #define STM32_FLASH_ACR_LATENCY_SHIFT (0)
@@ -996,17 +1022,27 @@ typedef volatile struct stm32_spi_regs stm32_spi_regs_t;
 #define STM32_FLASH_MIN_WRITE_SIZE  (CONFIG_FLASH_WRITE_SIZE * 2)
 
 /* --- FLASH Option bytes --- */
-#define STM32_OPTB_USER_RDP         REG32(STM32_OPTB_BASE + 0x00)
-#define STM32_OPTB_PCROP1_START     REG32(STM32_OPTB_BASE + 0x08)
-#define STM32_OPTB_PCROP1_END       REG32(STM32_OPTB_BASE + 0x10)
-#define STM32_OPTB_WRP1AR           REG32(STM32_OPTB_BASE + 0x18)
-#define STM32_OPTB_WRP1BR           REG32(STM32_OPTB_BASE + 0x20)
-#define STM32_OPTB_SECURE_MEM       REG32(STM32_OPTB_BASE + 0x28)
+#define STM32_OPTB_USER_RDP         REG32(STM32_OPTB_BANK1_BASE + 0x00)
+#define STM32_OPTB_PCROP1_START     REG32(STM32_OPTB_BANK1_BASE + 0x08)
+#define STM32_OPTB_PCROP1_END       REG32(STM32_OPTB_BANK1_BASE + 0x10)
+#define STM32_OPTB_WRP1AR           REG32(STM32_OPTB_BANK1_BASE + 0x18)
+#define STM32_OPTB_WRP1BR           REG32(STM32_OPTB_BANK1_BASE + 0x20)
+#define STM32_OPTB_SECURE1_MEM      REG32(STM32_OPTB_BANK1_BASE + 0x28)
 
-#define STM32_OPTB_REG_READ(n)  REG32(STM32_FLASH_REG(0x20) + (n * 4))
-#define STM32_OPTB_READ(n)      REG32(STM32_OPTB_BASE + ((n) * 8))
-#define STM32_OPTB_COMP_READ(n) REG32(STM32_OPTB_BASE + ((n) * 8) + 0x4)
+#define STM32_OPTB_UNUSED           REG32(STM32_OPTB_BANK2_BASE + 0x00)
+#define STM32_OPTB_PCROP2_START     REG32(STM32_OPTB_BANK2_BASE + 0x08)
+#define STM32_OPTB_PCROP2_END       REG32(STM32_OPTB_BANK2_BASE + 0x10)
+#define STM32_OPTB_WRP2AR           REG32(STM32_OPTB_BANK2_BASE + 0x18)
+#define STM32_OPTB_WRP2BR           REG32(STM32_OPTB_BANK2_BASE + 0x20)
+#define STM32_OPTB_SECURE2_MEM      REG32(STM32_OPTB_BANK2_BASE + 0x28)
 
+/* Read option bytes from flash memory for Bank 1 */
+#define STM32_OPTB_BANK1_READ(n)      REG32(STM32_OPTB_BANK1_BASE + ((n) * 8))
+#define STM32_OPTB_BANK1_COMP_READ(n) REG32(STM32_OPTB_BANK1_BASE + ((n) * 8) + 0x4)
+#define STM32_OPTB_BANK2_READ(n)      REG32(STM32_OPTB_BANK2_BASE + ((n) * 8))
+#define STM32_OPTB_BANK2_COMP_READ(n) REG32(STM32_OPTB_BANK2_BASE + ((n) * 8) + 0x4)
+
+#define STM32_OPTB_USER_DBANK       BIT(22)
 #define STM32_OPTB_USER_nBOOT1      BIT(23)
 #define STM32_OPTB_USER_nSWBOOT0    BIT(26)
 #define STM32_OPTB_USER_nBOOT0      BIT(27)
@@ -1416,6 +1452,7 @@ enum dmamux1_request {
 #define STM32_USB_BCDR_PDET	    BIT(5)
 #define STM32_USB_BCDR_SDET	    BIT(6)
 #define STM32_USB_BCDR_PS2DET	    BIT(7)
+#define STM32_USB_BCDR_DPPU	    BIT(15)
 
 /* --- USB Endpoint bit definitions  --- */
 #define EP_MASK     0x0F0F

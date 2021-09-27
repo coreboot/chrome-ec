@@ -57,8 +57,11 @@
  * (include EC clock frequency) is succeed even CS# is low.
  */
 #define IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED
-/* The slave frequency is adjustable (bit[2-0] at register IT83XX_ESPI_GCAC1) */
-#define IT83XX_ESPI_SLAVE_MAX_FREQ_CONFIGURABLE
+/*
+ * The peripheral frequency is adjustable
+ * (bit[2-0] at register IT83XX_ESPI_GCAC1)
+ */
+#define IT83XX_ESPI_PERIPHERAL_MAX_FREQ_CONFIGURABLE
 /* Watchdog reset supports hardware reset. */
 #define IT83XX_ETWD_HW_RESET_SUPPORT
 /*
@@ -100,8 +103,11 @@
  * (include EC clock frequency) is succeed even CS# is low.
  */
 #define IT83XX_ESPI_INHIBIT_CS_BY_PAD_DISABLED
-/* The slave frequency is adjustable (bit[2-0] at register IT83XX_ESPI_GCAC1) */
-#define IT83XX_ESPI_SLAVE_MAX_FREQ_CONFIGURABLE
+/*
+ * The peripheral frequency is adjustable
+ * (bit[2-0] at register IT83XX_ESPI_GCAC1)
+ */
+#define IT83XX_ESPI_PERIPHERAL_MAX_FREQ_CONFIGURABLE
 /* Watchdog reset supports hardware reset. */
 #define IT83XX_ETWD_HW_RESET_SUPPORT
 /*
@@ -136,5 +142,18 @@
 #define CHIP_RAMCODE_ILM0 (CONFIG_RAM_BASE + 0)      /* base+0000h~base+0FFF */
 #define CHIP_H2RAM_BASE   (CONFIG_RAM_BASE + 0x1000) /* base+1000h~base+1FFF */
 #define CHIP_RAMCODE_BASE (CONFIG_RAM_BASE + 0x2000) /* base+2000h~base+2FFF */
+
+#ifdef BASEBOARD_KUKUI
+/*
+ * Reserved 0x80000~0xfffff 512kb on flash for saving EC logs (8kb space is
+ * enough to save the logs). This configuration reduces EC FW binary size to
+ * 512kb. With this config, we still have 4x kb space on RO and 6x kb space on
+ * RW.
+ */
+#define CHIP_FLASH_PRESERVE_LOGS_BASE 0x80000
+#define CHIP_FLASH_PRESERVE_LOGS_SIZE 0x2000
+#undef CONFIG_FLASH_SIZE_BYTES
+#define CONFIG_FLASH_SIZE_BYTES CHIP_FLASH_PRESERVE_LOGS_BASE
+#endif
 
 #endif  /* __CROS_EC_CONFIG_CHIP_IT8XXX2_H */

@@ -55,7 +55,7 @@ static const struct usb_device_descriptor dev_desc = {
 	.bDeviceSubClass = 0x00,
 	.bDeviceProtocol = 0x00,
 	.bMaxPacketSize0 = USB_MAX_PACKET_SIZE,
-	.idVendor = USB_VID_GOOGLE,
+	.idVendor = CONFIG_USB_VID,
 	.idProduct = CONFIG_USB_PID,
 	.bcdDevice = CONFIG_USB_BCD_DEV,
 	.iManufacturer = USB_STR_VENDOR,
@@ -498,8 +498,13 @@ static void usb_wake_deferred(void)
 		 * interface.
 		 */
 		CPRINTF("USB stuck\n");
+#if defined(STM32_RCC_APB1RSTR2_USBFSRST)
+		STM32_RCC_APB1RSTR2 |= STM32_RCC_APB1RSTR2_USBFSRST;
+		STM32_RCC_APB1RSTR2 &= STM32_RCC_APB1RSTR2_USBFSRST;
+#else
 		STM32_RCC_APB1RSTR |= STM32_RCC_PB1_USB;
 		STM32_RCC_APB1RSTR &= ~STM32_RCC_PB1_USB;
+#endif
 		usb_init();
 	}
 }
@@ -672,10 +677,7 @@ DECLARE_IRQ(STM32_IRQ_USB_LP, usb_interrupt, 1);
 
 void usb_init(void)
 {
-	/* Enable USB device clock. */
-	STM32_RCC_APB1ENR |= STM32_RCC_PB1_USB;
-
-	/* we need a proper 48MHz clock */
+	/* Enable USB device clock, possibly increasing system clock to 48MHz */
 	clock_enable_module(MODULE_USB, 1);
 
 	/* configure the pinmux */
@@ -738,18 +740,15 @@ void usb_release(void)
 	/* unset pinmux */
 	gpio_config_module(MODULE_USB, 0);
 
-	/* disable 48MHz clock */
+	/* disable USB device clock, possibly slowing down system clock */
 	clock_enable_module(MODULE_USB, 0);
-
-	/* disable USB device clock */
-	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_USB;
 }
 /* ensure the host disconnects and reconnects over a sysjump */
 DECLARE_HOOK(HOOK_SYSJUMP, usb_release, HOOK_PRIO_DEFAULT);
 
 int usb_is_enabled(void)
 {
-	return (STM32_RCC_APB1ENR & STM32_RCC_PB1_USB) ? 1 : 0;
+	return clock_is_module_enabled(MODULE_USB);
 }
 
 void *memcpy_to_usbram(void *dest, const void *src, size_t n)

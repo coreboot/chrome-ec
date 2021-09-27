@@ -34,8 +34,12 @@
 /* PWM */
 #define CONFIG_PWM
 
+/* LED defines */
+#define CONFIG_LED_ONOFF_STATES
+
 /* Sensors */
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
+#define CONFIG_ACCEL_KX022		/* Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -80,7 +84,6 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
 
 /* USB Mux and Retimer */
 #define CONFIG_USB_MUX_IT5205			/* C1: ITE Mux */
@@ -135,24 +138,10 @@ enum temp_sensor_id {
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_DANAPACK_COS,
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_HIGHPOWER,
-	BATTERY_DANAPACK_BYD,
-	BATTERY_SAMSUNG_SDI,
-	BATTERY_SIMPLO_COS,
-	BATTERY_SIMPLO_HIGHPOWER,
+	BATTERY_SIMPLO,
 	BATTERY_COS,
-	BATTERY_COS_2,
 	BATTERY_TYPE_COUNT,
 };
-
-int board_is_sourcing_vbus(int port);
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

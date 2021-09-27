@@ -6,7 +6,6 @@
 /* Yorp board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "battery.h"
 #include "charge_manager.h"
 #include "charge_state.h"
@@ -34,7 +33,7 @@
 #include "tablet_mode.h"
 #include "tcpm/tcpci.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -211,25 +210,6 @@ void board_hibernate_late(void) {
 }
 
 #ifndef TEST_BUILD
-/* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
-{
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
-}
-
-
 static void post_old_board_warning(void)
 {
 	uint32_t board_id = 0;

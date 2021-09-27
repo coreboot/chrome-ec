@@ -13,15 +13,17 @@
 #include <stdbool.h>
 #include "baseboard.h"
 
-#define CONFIG_IO_EXPANDER_PCAL6408
-
 #define CONFIG_USBC_PPC_NX20P3483
-#define CONFIG_USB_MUX_PS8740
 #define CONFIG_USB_MUX_PS8743
 #define CONFIG_USB_MUX_RUNTIME_CONFIG
 
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PORT_ENABLE_DYNAMIC
+
+#undef  CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 40000
+
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
 
 #define CONFIG_KEYBOARD_FACTORY_TEST
 
@@ -89,8 +91,8 @@ enum battery_type {
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_SAMSUNG_SDI,
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_DYNAPACK_COS,
 	BATTERY_COSMX,
 	BATTERY_TYPE_COUNT,
 };
@@ -132,7 +134,6 @@ enum usbc_port {
 /*****************************************************************************
  * CBI EC FW Configuration
  */
-#include "cbi_ec_fw_config.h"
 
 /**
  * DALBOZ_MB_USBAC
@@ -165,6 +166,8 @@ enum ec_cfg_usb_db_type {
 	GUMBOZ_DB_OPT1_USBC = 0,
 };
 
+#include "cbi_ec_fw_config.h"
+
 static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 {
 	return 0;
@@ -176,11 +179,6 @@ void board_reset_pd_mcu(void);
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

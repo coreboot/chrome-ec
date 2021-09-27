@@ -40,8 +40,6 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-#ifdef HAS_TASK_MOTIONSENSE
-
 /* Motion sensors */
 static struct mutex g_lid_mutex_1;
 static struct mutex g_base_mutex_1;
@@ -174,7 +172,7 @@ void board_update_sensor_config_from_sku(void)
 	} else {
 		motion_sensor_count = 0;
 		/* Device is clamshell only */
-		tablet_set_mode(0);
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
 		/* Gyro is not present, don't allow line to float */
 		gpio_set_flags(GPIO_6AXIS_INT_L,
 			       GPIO_INPUT | GPIO_PULL_DOWN);
@@ -189,5 +187,3 @@ void board_bmi160_lsm6dsm_interrupt(enum gpio_signal signal)
 	else
 		bmi160_interrupt(signal);
 }
-
-#endif

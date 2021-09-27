@@ -4,14 +4,14 @@
  */
 
 /* Volteer board-specific configuration */
-#include "bb_retimer.h"
 #include "button.h"
 #include "common.h"
 #include "accelgyro.h"
 #include "cbi_ec_fw_config.h"
+#include "charge_state_v2.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/syv682x.h"
-#include "driver/retimer/bb_retimer.h"
+#include "driver/retimer/bb_retimer_public.h"
 #include "driver/sync.h"
 #include "driver/tcpm/rt1715.h"
 #include "driver/tcpm/tcpci.h"
@@ -44,7 +44,7 @@
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Increase from 50 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/* Other values should be the same as the default configuration. */
@@ -130,14 +130,14 @@ const struct fan_t fans[FAN_CH_COUNT] = {
  */
 const static struct ec_thermal_config thermal_cpu = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(72),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 	},
 	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(50),
+	.temp_fan_max = C_TO_K(75),
 };
 
 /*
@@ -153,14 +153,14 @@ const static struct ec_thermal_config thermal_cpu = {
  */
 const static struct ec_thermal_config thermal_inductor = {
 	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(72),
 		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
 	},
 	.temp_host_release = {
 		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
 	},
 	.temp_fan_off = C_TO_K(40),
-	.temp_fan_max = C_TO_K(55),
+	.temp_fan_max = C_TO_K(75),
 };
 
 
@@ -248,7 +248,7 @@ const struct pwm_t pwm_channels[] = {
 		 * lower PWM frequencies, but higher frequencies record a much
 		 * lower maximum power.
 		 */
-		.freq = 2400,
+		.freq = 10000,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
@@ -270,11 +270,13 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_C0,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = GPIO_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_C1,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = GPIO_USB_C1_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };
@@ -294,6 +296,22 @@ void ppc_interrupt(enum gpio_signal signal)
 	default:
 		break;
 	}
+}
+
+/* Disable FRS on boards with the SYV682A. FRS only works on the SYV682B. */
+void setup_board_ppc(void)
+{
+	uint8_t board_id = get_board_id();
+
+	if (board_id < 2) {
+		ppc_chips[USBC_PORT_C0].frs_en = 0;
+		ppc_chips[USBC_PORT_C1].frs_en = 0;
+	}
+}
+
+__override void board_cbi_init(void)
+{
+	setup_board_ppc();
 }
 
 /******************************************************************************/
@@ -351,6 +369,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C0,
 		.next_mux = &usbc0_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
 	},
@@ -358,6 +377,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.next_mux = &usbc1_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 	},
@@ -435,3 +455,17 @@ static void board_chipset_suspend(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
+/******************************************************************************/
+/* Set the charge limit based upon desired maximum. */
+void board_set_charge_limit(int port, int supplier, int charge_ma,
+			    int max_ma, int charge_mv)
+{
+	/*
+	 * Limit the input current to 98% negotiated limit,
+	 * to account for the charger chip margin.
+	 */
+	charge_ma = charge_ma * 98 / 100;
+	charge_set_input_current_limit(
+			MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT),
+			charge_mv);
+}

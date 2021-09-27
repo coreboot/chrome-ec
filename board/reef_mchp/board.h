@@ -16,6 +16,8 @@
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
+/* EC console on UART 0 */
+#define CONFIG_UART_CONSOLE 0
 
 /* EC console commands  */
 #define CONFIG_CMD_ACCELS
@@ -55,6 +57,7 @@
 #define CONFIG_CHARGER_LIMIT_POWER_THRESH_BAT_PCT 1
 #define CONFIG_CHARGER_LIMIT_POWER_THRESH_CHG_MW 18000
 #define CONFIG_CHARGER_MAINTAIN_VBAT
+#undef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
 #define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON 1
 #define CONFIG_USB_CHARGER
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
@@ -112,7 +115,6 @@
 
 /* EC */
 #define CONFIG_ADC
-#define CONFIG_BOARD_VERSION_CUSTOM
 #define CONFIG_EXTPOWER_GPIO
 #undef   CONFIG_EXTPOWER_DEBOUNCE_MS
 #define  CONFIG_EXTPOWER_DEBOUNCE_MS 1000
@@ -120,7 +122,7 @@
 #define CONFIG_HOSTCMD_FLASH_SPI_INFO
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI2
@@ -313,14 +315,6 @@ void board_print_tcpc_fw_version(int port);
 
 /* Map I2C port to controller */
 int board_i2c_p2c(int port);
-
-/* Return the two slave addresses the specified
- * controller will respond to when controller
- * is acting as a slave.
- * b[6:0]  = b[7:1] of I2C address 1
- * b[14:8] = b[7:1] of I2C address 2
- */
-uint16_t board_i2c_slave_addrs(int controller);
 
 /* MCHP - firwmare-reef-9042.B does have LID_ALS bit
  * because its using TASK_ALS ?

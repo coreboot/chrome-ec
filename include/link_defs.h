@@ -54,6 +54,8 @@ extern const struct hook_data __hooks_chipset_shutdown[];
 extern const struct hook_data __hooks_chipset_shutdown_end[];
 extern const struct hook_data __hooks_chipset_shutdown_complete[];
 extern const struct hook_data __hooks_chipset_shutdown_complete_end[];
+extern const struct hook_data __hooks_chipset_hard_off[];
+extern const struct hook_data __hooks_chipset_hard_off_end[];
 extern const struct hook_data __hooks_chipset_reset[];
 extern const struct hook_data __hooks_chipset_reset_end[];
 extern const struct hook_data __hooks_ac_change[];
@@ -146,6 +148,9 @@ extern void *__dram_bss_end;
 #ifdef CONFIG_PRESERVE_LOGS
 #define __preserved_logs(name)                                                 \
 	__attribute__((section(".preserved_logs." STRINGIFY(name))))
+/* preserved_logs section. */
+extern const char __preserved_logs_start[];
+extern const char __preserved_logs_size[];
 #else
 #define __preserved_logs(name)
 #endif

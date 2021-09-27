@@ -52,6 +52,21 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A_5V,
 };
 
+__override void board_process_pd_alert(int port)
+{
+	/*
+	 * PD_INT task will process this alert, and that task is only needed on
+	 * C1.
+	 */
+	if (port != 1)
+		return;
+
+	if (gpio_get_level(GPIO_USB_C1_INT_ODL))
+		return;
+
+	sm5803_handle_interrupt(port);
+}
+
 /* C0 interrupt line shared by BC 1.2 and charger */
 static void check_c0_line(void);
 DECLARE_DEFERRED(check_c0_line);
@@ -94,7 +109,6 @@ static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
 	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-	sm5803_interrupt(1);
 }
 
 static void check_c1_line(void)
@@ -123,9 +137,10 @@ static void usb_c1_interrupt(enum gpio_signal s)
 
 static void button_sub_hdmi_hpd_interrupt(enum gpio_signal s)
 {
+	enum fw_config_db db = get_cbi_fw_config_db();
 	int hdmi_hpd = gpio_get_level(GPIO_VOLUP_BTN_ODL_HDMI_HPD);
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (db == DB_1A_HDMI || db == DB_LTE_HDMI || db == DB_1A_HDMI_LTE)
 		gpio_set_level(GPIO_EC_AP_USB_C1_HDMI_HPD, hdmi_hpd);
 	else
 		button_interrupt(s);
@@ -357,8 +372,9 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 void board_init(void)
 {
 	int on;
+	enum fw_config_db db = get_cbi_fw_config_db();
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+	if (db == DB_1A_HDMI || db == DB_LTE_HDMI || db == DB_1A_HDMI_LTE) {
 		/* Select HDMI option */
 		gpio_set_level(GPIO_HDMI_SEL_L, 0);
 	} else {
@@ -450,6 +466,21 @@ __override void board_ocpc_init(struct ocpc_data *ocpc)
 	ocpc->chg_flags[CHARGER_SECONDARY] |= OCPC_NO_ISYS_MEAS_CAP;
 }
 
+__override void board_pulse_entering_rw(void)
+{
+	/*
+	 * On the ITE variants, the EC_ENTERING_RW signal was connected to a pin
+	 * which is active high by default.  This causes Cr50 to think that the
+	 * EC has jumped to its RW image even though this may not be the case.
+	 * The pin is changed to GPIO_EC_ENTERING_RW2.
+	 */
+	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
+}
+
 void board_reset_pd_mcu(void)
 {
 	/*
@@ -477,9 +508,11 @@ __override uint8_t board_get_usb_pd_port_count(void)
 {
 	enum fw_config_db db = get_cbi_fw_config_db();
 
-	if (db == DB_1A_HDMI || db == DB_NONE)
+	if (db == DB_1A_HDMI || db == DB_NONE || db == DB_LTE_HDMI
+			|| db == DB_1A_HDMI_LTE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
-	else if (db == DB_1C || db == DB_1C_LTE)
+	else if (db == DB_1C || db == DB_1C_LTE || db == DB_1C_1A
+			|| db == DB_1C_1A_LTE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
 
 	ccprints("Unhandled DB configuration: %d", db);
@@ -490,9 +523,11 @@ __override uint8_t board_get_charger_chip_count(void)
 {
 	enum fw_config_db db = get_cbi_fw_config_db();
 
-	if (db == DB_1A_HDMI || db == DB_NONE)
+	if (db == DB_1A_HDMI || db == DB_NONE || db == DB_LTE_HDMI
+			|| db == DB_1A_HDMI_LTE)
 		return CHARGER_NUM - 1;
-	else if (db == DB_1C || db == DB_1C_LTE)
+	else if (db == DB_1C || db == DB_1C_LTE || db == DB_1C_1A
+			|| db == DB_1C_1A_LTE)
 		return CHARGER_NUM;
 
 	ccprints("Unhandled DB configuration: %d", db);
@@ -627,9 +662,8 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -653,7 +687,6 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif
 
 __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,

@@ -273,7 +273,7 @@ static void board_manage_dut_port(void)
 static void update_ports(void)
 {
 	int pdo_index, src_index, snk_index, i;
-	uint32_t pdo, max_ma, max_mv;
+	uint32_t pdo, max_ma, max_mv, unused;
 
 	/*
 	 * CHG Vbus has changed states, update PDO that reflects CHG port
@@ -307,7 +307,8 @@ static void update_ports(void)
 					continue;
 
 				snk_index = pdo_index;
-				pd_extract_pdo_power(pdo, &max_ma, &max_mv);
+				pd_extract_pdo_power(pdo, &max_ma, &max_mv,
+						     &unused);
 				pd_src_chg_pdo[src_index++] =
 					PDO_FIXED_VOLT(max_mv) |
 					PDO_FIXED_CURR(max_ma) |
@@ -425,13 +426,22 @@ int pd_tcpc_cc_ra(int port, int cc_volt, int cc_sel)
 	return ra;
 }
 
+/* DUT CC readings aren't valid if we aren't applying CC pulls */
+bool cc_is_valid(void)
+{
+	if ((cc_config & CC_DETACH) || (cc_pull_stored == TYPEC_CC_OPEN) ||
+	    ((cc_pull_stored == TYPEC_CC_RP) &&
+	     (rp_value_stored == TYPEC_RP_RESERVED)))
+		return false;
+	return true;
+}
+
 int pd_adc_read(int port, int cc)
 {
 	int mv;
-
 	if (port == 0)
 		mv = adc_read_channel(cc ? ADC_CHG_CC2_PD : ADC_CHG_CC1_PD);
-	else if (!(cc_config & CC_DETACH)) {
+	else if (cc_is_valid()) {
 		/*
 		 * In servo v4 hardware logic, both CC lines are wired directly
 		 * to DUT. When servo v4 as a snk, DUT may source Vconn to CC2
@@ -462,7 +472,6 @@ int pd_adc_read(int port, int cc)
 		 */
 		mv = 0;
 	}
-
 	return mv;
 }
 
@@ -616,9 +625,9 @@ int charge_manager_get_source_pdo(const uint32_t **src_pdo, const int port)
 __override void pd_transition_voltage(int idx)
 {
 	timestamp_t deadline;
-	uint32_t ma, mv;
+	uint32_t ma, mv, unused;
 
-	pd_extract_pdo_power(pd_src_chg_pdo[idx - 1], &ma, &mv);
+	pd_extract_pdo_power(pd_src_chg_pdo[idx - 1], &ma, &mv, &unused);
 	/* Is this a transition to a new voltage? */
 	if (charge_port_is_active() && vbus[CHG].mv != mv) {
 		/*
@@ -956,9 +965,9 @@ static int svdm_enter_mode(int port, uint32_t *payload)
 	return 1;
 }
 
-int pd_alt_mode(int port, enum tcpm_transmit_type type, uint16_t svid)
+int pd_alt_mode(int port, enum tcpci_msg_type type, uint16_t svid)
 {
-	if (type == TCPC_TX_SOP && svid == USB_SID_DISPLAYPORT)
+	if (type == TCPCI_MSG_SOP && svid == USB_SID_DISPLAYPORT)
 		return alt_mode;
 
 	return 0;
@@ -1203,9 +1212,13 @@ static int cmd_ada_srccaps(int argc, char *argv[])
 	const uint32_t * const ada_srccaps = pd_get_src_caps(CHG);
 
 	for (i = 0; i < pd_get_src_cap_cnt(CHG); ++i) {
-		uint32_t max_ma, max_mv;
+		uint32_t max_ma, max_mv, unused;
 
-		pd_extract_pdo_power(ada_srccaps[i], &max_ma, &max_mv);
+		if (IS_ENABLED(CONFIG_USB_PD_ONLY_FIXED_PDOS) &&
+		    (ada_srccaps[i] & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
+			continue;
+
+		pd_extract_pdo_power(ada_srccaps[i], &max_ma, &max_mv, &unused);
 		ccprintf("%d: %dmV/%dmA\n", i, max_mv, max_ma);
 	}
 
@@ -1214,14 +1227,6 @@ static int cmd_ada_srccaps(int argc, char *argv[])
 DECLARE_CONSOLE_COMMAND(ada_srccaps, cmd_ada_srccaps,
 			"",
 			"Print adapter SrcCap");
-
-static void chg_pd_disconnect(void)
-{
-	/* Clear charger PDO on CHG port disconnected. */
-	if (pd_is_disconnected(CHG))
-		pd_set_src_caps(CHG, 0, NULL);
-}
-DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, chg_pd_disconnect, HOOK_PRIO_DEFAULT);
 
 static int cmd_dp_action(int argc, char *argv[])
 {

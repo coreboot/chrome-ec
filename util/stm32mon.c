@@ -68,7 +68,7 @@
 
 #define CMD_LOOKUP_ENTRY(COMMAND) {CMD_##COMMAND, #COMMAND}
 const struct {
-	const char cmd;
+	const uint8_t cmd;
 	const char *name;
 } cmd_lookup_table[] = {
 	CMD_LOOKUP_ENTRY(INIT),
@@ -87,7 +87,7 @@ const struct {
 	CMD_LOOKUP_ENTRY(RU),
 };
 
-const char *cmd_lookup_name(char cmd)
+const char *cmd_lookup_name(uint8_t cmd)
 {
 	int i;
 	for (i = 0; i < ARRAY_SIZE(cmd_lookup_table); i++) {
@@ -658,7 +658,10 @@ int send_command(int fd, uint8_t cmd, payload_t *loads, int cnt,
 	int res, i, c;
 	payload_t *p;
 	int readcnt = 0;
-	uint8_t cmd_frame[] = { SOF, cmd, 0xff ^ cmd }; /* XOR checksum */
+
+	uint8_t cmd_frame[] = { SOF, cmd,
+				/* XOR checksum */
+				(uint8_t)(0xff ^ cmd) };
 	/* only the SPI mode needs the Start Of Frame byte */
 	int cmd_off = mode == MODE_SPI ? 0 : 1;
 	int count_damaged_ack = 0;
@@ -688,7 +691,7 @@ int send_command(int fd, uint8_t cmd, payload_t *loads, int cnt,
 	for (p = loads, c = 0; c < cnt; c++, p++) {
 		uint8_t crc = 0;
 		int size = p->size;
-		uint8_t *data = malloc(size + 1), *data_ptr;
+		uint8_t *data = (uint8_t *)(malloc(size + 1)), *data_ptr;
 
 		if (data == NULL) {
 			fprintf(stderr,
@@ -901,7 +904,7 @@ int command_get_commands(int fd, struct stm32_def *chip)
 			if (name)
 				printf("%s ", name);
 			else
-				printf("%02x ", cmds[i]);
+				printf("0x%02x ", cmds[i]);
 		}
 
 		if (mode == MODE_I2C)
@@ -1017,7 +1020,7 @@ int command_ext_erase(int fd, uint16_t count, uint16_t start)
 		int i;
 		/* not a special value : build a list of pages */
 		load.size = 2 * (count + 1);
-		pages = malloc(load.size);
+		pages = (uint16_t *)(malloc(load.size));
 		if (!pages)
 			return STM32_ENOMEM;
 		load.data = (uint8_t *)pages;
@@ -1058,7 +1061,7 @@ int command_erase_i2c(int fd, uint16_t count, uint16_t start)
 		 */
 		load_cnt = 2;
 		load[1].size = 2 * count;
-		pages = malloc(load[1].size);
+		pages = (uint16_t *)(malloc(load[1].size));
 		if (!pages)
 			return STM32_ENOMEM;
 		load[1].data = (uint8_t *)pages;
@@ -1092,7 +1095,7 @@ int command_erase(int fd, uint16_t count, uint16_t start)
 		int i;
 		/* not a special value : build a list of pages */
 		load.size = count + 1;
-		pages = malloc(load.size);
+		pages = (uint8_t *)(malloc(load.size));
 		if (!pages)
 			return STM32_ENOMEM;
 		load.data = (uint8_t *)pages;
@@ -1114,7 +1117,7 @@ int command_erase(int fd, uint16_t count, uint16_t start)
 int command_read_unprotect(int fd)
 {
 	int res;
-	int retries = MAX_RETRY_COUNT;
+	int retries = MAX_ACK_RETRY_COUNT;
 
 	printf("Unprotecting flash read...\n");
 
@@ -1258,7 +1261,7 @@ int read_device_signature_register(int fd, const struct stm32_def *chip,
 		return STM32_EINVAL;
 	}
 
-	buffer = malloc(read_size_bytes);
+	buffer = (uint8_t *)(malloc(read_size_bytes));
 	if (!buffer) {
 		fprintf(stderr, "Cannot allocate %" PRIu32 " bytes\n",
 			read_size_bytes);
@@ -1365,7 +1368,7 @@ int read_flash(int fd, struct stm32_def *chip, const char *filename,
 
 	if (!size)
 		size = chip->flash_size;
-	buffer = malloc(size);
+	buffer = (uint8_t *)(malloc(size));
 	if (!buffer) {
 		fprintf(stderr, "Cannot allocate %d bytes\n", size);
 		return STM32_ENOMEM;
@@ -1398,7 +1401,7 @@ int write_flash(int fd, struct stm32_def *chip, const char *filename,
 	int res, written;
 	FILE *hnd;
 	int size = chip->flash_size;
-	uint8_t *buffer = malloc(size);
+	uint8_t *buffer = (uint8_t *)(malloc(size));
 
 	if (!buffer) {
 		fprintf(stderr, "Cannot allocate %d bytes\n", size);
@@ -1669,6 +1672,12 @@ int main(int argc, char **argv)
 	if (!chip)
 		goto terminate;
 
+	if (command_get_commands(ser, chip) < 0)
+		goto terminate;
+
+	if (flags & FLAG_READ_UNPROTECT)
+		command_read_unprotect(ser);
+
 	/*
 	 * Use the actual size if we were able to read it since some chips
 	 * have the same chip ID, but different flash sizes based on the
@@ -1690,11 +1699,6 @@ int main(int argc, char **argv)
 	 */
 	(void)read_package_data_register(ser, chip, &package_data_reg);
 
-	if (command_get_commands(ser, chip) < 0)
-		goto terminate;
-
-	if (flags & FLAG_READ_UNPROTECT)
-		command_read_unprotect(ser);
 	if (flags & FLAG_UNPROTECT)
 		command_write_unprotect(ser);
 

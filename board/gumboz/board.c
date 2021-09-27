@@ -6,6 +6,7 @@
 #include "battery_smart.h"
 #include "button.h"
 #include "cros_board_info.h"
+#include "charge_state.h"
 #include "driver/accel_kionix.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
@@ -29,6 +30,8 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
+#include "temp_sensor.h"
+#include "thermal.h"
 #include "usb_charge.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
@@ -40,8 +43,6 @@
 int I2C_PORT_BATTERY = I2C_PORT_BATTERY_V1;
 
 #include "gpio_list.h"
-
-#ifdef HAS_TASK_MOTIONSENSE
 
 /* Motion sensors */
 static struct mutex g_lid_mutex;
@@ -106,7 +107,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.default_range = 4, /* g, enough for laptop */
+	  .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = LSM6DSM_ODR_MIN_VAL,
 		.max_frequency = LSM6DSM_ODR_MAX_VAL,
@@ -147,8 +148,6 @@ struct motion_sensor_t motion_sensors[] = {
 
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
-#endif /* HAS_TASK_MOTIONSENSE */
-
 /*****************************************************************************
  * Retimers
  */
@@ -176,8 +175,12 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, retimers_off, HOOK_PRIO_DEFAULT);
  * chip and it need a board specific driver.
  * Overall, it will use chained mux framework.
  */
-static int pi3usb221_set_mux(const struct usb_mux *me, mux_state_t mux_state)
+static int pi3usb221_set_mux(const struct usb_mux *me, mux_state_t mux_state,
+			     bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
 		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
 	else
@@ -373,27 +376,34 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
-static void reset_pd_port(int port, enum gpio_signal reset_gpio_l,
-			  int hold_delay, int finish_delay)
+static void reset_nct38xx_port(int port)
 {
+	enum gpio_signal reset_gpio_l;
+
+	if (port == USBC_PORT_C0)
+		reset_gpio_l = GPIO_USB_C0_TCPC_RST_L;
+	else if (port == USBC_PORT_C1)
+		reset_gpio_l = GPIO_USB_C1_TCPC_RST_L;
+	else
+		/* Invalid port: do nothing */
+		return;
+
 	gpio_set_level(reset_gpio_l, 0);
-	msleep(hold_delay);
+	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
 	gpio_set_level(reset_gpio_l, 1);
-	if (finish_delay)
-		msleep(finish_delay);
+	nct38xx_reset_notify(port);
+	if (NCT3807_RESET_POST_DELAY_MS != 0)
+		msleep(NCT3807_RESET_POST_DELAY_MS);
 }
+
 
 void board_reset_pd_mcu(void)
 {
 	/* Reset TCPC0 */
-	reset_pd_port(USBC_PORT_C0, GPIO_USB_C0_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C0);
 
 	/* Reset TCPC1 */
-	reset_pd_port(USBC_PORT_C1, GPIO_USB_C1_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C1);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -491,7 +501,7 @@ static void setup_fw_config(void)
 	} else {
 		motion_sensor_count = 0;
 		/* Device is clamshell only */
-		tablet_set_mode(0);
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
 		/* Gyro is not present, don't allow line to float */
 		gpio_set_flags(GPIO_6AXIS_INT_L, GPIO_INPUT | GPIO_PULL_DOWN);
 	}
@@ -510,12 +520,12 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 struct ioexpander_config_t ioex_config[] = {
 	[IOEX_C0_NCT3807] = {
 		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 	},
 	[IOEX_C1_NCT3807] = {
 		.i2c_host_port = I2C_PORT_TCPC1,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 	},
 };
@@ -542,3 +552,100 @@ const int keyboard_factory_scan_pins[][2] = {
 const int keyboard_factory_scan_pins_used =
 			ARRAY_SIZE(keyboard_factory_scan_pins);
 #endif
+
+#define CHARGING_CURRENT_500MA 500
+
+int charger_profile_override(struct charge_state_data *curr)
+{
+	int rv;
+	static int thermal_sensor_temp;
+	static int prev_thermal_sensor_temp;
+	static int limit_charge;
+	static int limit_usbc_power;
+	static int limit_usbc_power_backup;
+	enum tcpc_rp_value rp;
+
+	rv = temp_sensor_read(TEMP_SENSOR_CHARGER, &thermal_sensor_temp);
+
+	if (rv != EC_SUCCESS)
+		return 0;
+
+	if (thermal_sensor_temp > prev_thermal_sensor_temp) {
+		if (thermal_sensor_temp > C_TO_K(63))
+			limit_usbc_power = 1;
+
+		else if (thermal_sensor_temp > C_TO_K(58)) {
+			if (curr->state == ST_CHARGE)
+				limit_charge = 1;
+		}
+	} else if (thermal_sensor_temp < prev_thermal_sensor_temp) {
+		if (thermal_sensor_temp < C_TO_K(57)) {
+			if (curr->state == ST_CHARGE)
+				limit_charge = 0;
+
+		} else if (thermal_sensor_temp < C_TO_K(62))
+			limit_usbc_power = 0;
+	}
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		return 0;
+
+	curr->requested_current = (limit_charge) ? CHARGING_CURRENT_500MA
+						 : curr->batt.desired_current;
+
+	if (limit_usbc_power != limit_usbc_power_backup) {
+		rp = (limit_usbc_power) ? TYPEC_RP_1A5
+					: TYPEC_RP_3A0;
+
+		ppc_set_vbus_source_current_limit(0, rp);
+		tcpm_select_rp_value(0, rp);
+		pd_update_contract(0);
+		limit_usbc_power_backup = limit_usbc_power;
+	}
+
+	prev_thermal_sensor_temp = thermal_sensor_temp;
+
+	return 0;
+}
+
+enum ec_status charger_profile_override_get_param(uint32_t param,
+							uint32_t *value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+enum ec_status charger_profile_override_set_param(uint32_t param,
+							uint32_t value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+__override struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
+	[TEMP_SENSOR_CHARGER] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(63),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(92),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(62),
+		}
+	},
+	[TEMP_SENSOR_SOC] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(77),
+		}
+	},
+	[TEMP_SENSOR_CPU] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(83),
+		}
+	},
+};

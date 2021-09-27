@@ -19,6 +19,14 @@
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 #endif
 
+#ifdef BOARD_VOLTEER_NPCX797FC
+/*
+ * The RAM and flash size combination on the the NPCX797FC does not leave
+ * any unused flash space that can be used to store the .init_rom section.
+ */
+#undef CONFIG_CHIP_INIT_ROM_REGION
+#endif
+
 /* Optional features */
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
@@ -155,6 +163,14 @@
 #define CONFIG_I2C_CONTROLLER
 
 #define CONFIG_DEBUG_ASSERT_BRIEF
+
+/* Disable console commands to help save space */
+#undef CONFIG_CMD_APTHROTTLE
+#undef CONFIG_CMD_BUTTON
+#undef CONFIG_CONSOLE_CMDHELP
+
+/* Disable volume button in ectool */
+#undef CONFIG_HOSTCMD_BUTTON
 
 #ifndef __ASSEMBLER__
 

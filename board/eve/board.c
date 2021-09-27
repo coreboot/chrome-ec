@@ -6,7 +6,6 @@
 /* Eve board-specific configuration */
 
 #include "acpi.h"
-#include "adc_chip.h"
 #include "bd99992gw.h"
 #include "board_config.h"
 #include "button.h"
@@ -158,7 +157,7 @@ void anx74xx_cable_det_interrupt(enum gpio_signal signal)
 #include "gpio_list.h"
 
 /* Keyboard scan. Increase output_settle_us to 80us from default 50us. */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	.output_settle_us = 80,
 	.debounce_down_us = 9 * MSEC,
 	.debounce_up_us = 30 * MSEC,
@@ -331,7 +330,8 @@ void board_tcpc_init(void)
 	 * HPD pulse to enable video path
 	 */
 	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
-		usb_mux_hpd_update(port, 0, 0);
+		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -459,7 +459,7 @@ static void board_set_tablet_mode(void)
 {
 	int flipped_360_mode = !gpio_get_level(GPIO_TABLET_MODE_L);
 
-	tablet_set_mode(flipped_360_mode);
+	tablet_set_mode(flipped_360_mode, TABLET_TRIGGER_LID);
 
 	/* Update DPTF profile based on mode */
 	if (flipped_360_mode)
@@ -683,8 +683,7 @@ static void enable_input_devices(void)
 }
 
 /* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/*
 	 * If suspended and the lid is in 360 position, ignore the lid angle,
@@ -700,7 +699,6 @@ void lid_angle_peripheral_enable(int enable)
 		enable = 0;
 	trackpad_wake_enable(enable);
 }
-#endif
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)

@@ -78,7 +78,7 @@ BUILD_ASSERT(sizeof(struct gpio_alt_map) == 2);
 #endif
 
 /* Constants for GPIO alternative mapping */
-const struct gpio_alt_map gpio_alt_table[] = NPCX_ALT_TABLE;
+const __const_data struct gpio_alt_map gpio_alt_table[] = NPCX_ALT_TABLE;
 
 struct gpio_lvol_item {
 	struct npcx_gpio lvol_gpio[8];
@@ -319,7 +319,7 @@ BUILD_ASSERT(ARRAY_SIZE(gpio_lvol_table[0].lvol_gpio) == 8);
 void gpio_set_alternate_function(uint32_t port, uint32_t mask,
 				enum gpio_alternate_func func)
 {
-	/* Enable alternative pins by func*/
+	/* Enable alternative pins by func */
 	int pin;
 
 	/* check each bit from mask  */
@@ -560,7 +560,7 @@ void gpio_pre_init(void)
 #endif
 
 	/* Pin_Mux for LPC & SHI */
-#ifdef CONFIG_HOSTCMD_SPS
+#ifdef CONFIG_HOSTCMD_SHI
 	/* Switching to eSPI mode for SHI interface */
 	NPCX_DEVCNT |= 0x08;
 	/* Alternate Intel bus interface LPC/eSPI to GPIOs first */

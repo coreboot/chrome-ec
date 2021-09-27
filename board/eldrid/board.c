@@ -51,7 +51,7 @@
 #define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/* Increase from 50 us, because KSO_02 passes through the H1. */
 	.output_settle_us = 80,
 	/* Other values should be the same as the default configuration. */
@@ -178,16 +178,15 @@ __override void board_set_charge_limit(int port, int supplier, int charge_ma,
 	 * Set different AC_PROCHOT value when using different wattage ADT.
 	 */
 	if (max_ma * charge_mv == PD_MAX_POWER_MW * 1000)
-		isl9241_set_ac_prochot(0, 3072);
+		isl9241_set_ac_prochot(0, 3840);
 	else
-		isl9241_set_ac_prochot(0, 2816);
+		isl9241_set_ac_prochot(0, 3328);
 
 	/*
 	 * Follow OEM request to limit the input current to
-	 * 90% negotiated limit when S0.
+	 * 90% negotiated limit.
 	 */
-	if (chipset_in_state(CHIPSET_STATE_ON))
-		charge_ma = charge_ma * 90 / 100;
+	charge_ma = charge_ma * 90 / 100;
 
 	charge_set_input_current_limit(MAX(charge_ma,
 					CONFIG_CHARGER_INPUT_CURRENT),
@@ -394,7 +393,8 @@ void board_reset_pd_mcu(void)
 	/* Daughterboard specific reset for port 1 */
 	if (usb_db == DB_USB3_ACTIVE) {
 		ps8815_reset();
-		usb_mux_hpd_update(USBC_PORT_C1, 0, 0);
+		usb_mux_hpd_update(USBC_PORT_C1, USB_PD_MUX_HPD_LVL_DEASSERTED |
+						 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 	}
 }
 

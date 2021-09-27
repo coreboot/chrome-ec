@@ -20,6 +20,9 @@
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PORT_ENABLE_DYNAMIC
 
+#undef  CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 40000
+
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 
 #define CONFIG_KEYBOARD_FACTORY_TEST
@@ -30,22 +33,6 @@
 
 /* LED */
 #undef CONFIG_LED_ONOFF_STATES
-
-/* Motion sensing drivers */
-#define CONFIG_ACCELGYRO_LSM6DSM
-#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_ACCEL_LIS2DWL
-#define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-#define CONFIG_TABLET_MODE
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
-
-
 
 /* GPIO mapping from board specific name to EC common name. */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
@@ -86,8 +73,8 @@ enum battery_type {
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_SAMSUNG_SDI,
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_DYNAPACK_COS,
 	BATTERY_COSMX,
 	BATTERY_TYPE_COUNT,
 };
@@ -129,7 +116,6 @@ enum usbc_port {
 /*****************************************************************************
  * CBI EC FW Configuration
  */
-#include "cbi_ec_fw_config.h"
 
 /**
  * DALBOZ_MB_USBAC
@@ -162,6 +148,8 @@ enum ec_cfg_usb_db_type {
 	DIRINBOZ_DB_OPT1_USBC = 0,
 };
 
+#include "cbi_ec_fw_config.h"
+
 static inline bool ec_config_has_hdmi_retimer_pi3hdx1204(void)
 {
 	return 0;
@@ -173,11 +161,6 @@ void board_reset_pd_mcu(void);
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 #endif /* !__ASSEMBLER__ */
 

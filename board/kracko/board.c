@@ -8,11 +8,13 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_fw_config.h"
+#include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
 #include "cros_board_info.h"
 #include "driver/accel_bma2x2.h"
+#include "driver/accel_kionix.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/sm5803.h"
@@ -51,6 +53,21 @@ uint32_t board_version;
 const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A_5V,
 };
+
+__override void board_process_pd_alert(int port)
+{
+	/*
+	 * PD_INT task will process this alert, and that task is only needed on
+	 * C1.
+	 */
+	if (port != 1)
+		return;
+
+	if (gpio_get_level(GPIO_USB_C1_INT_ODL))
+		return;
+
+	sm5803_handle_interrupt(port);
+}
 
 /* C0 interrupt line shared by BC 1.2 and charger */
 static void check_c0_line(void);
@@ -94,7 +111,6 @@ static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
 	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-	sm5803_interrupt(1);
 }
 
 static void check_c1_line(void)
@@ -123,9 +139,10 @@ static void usb_c1_interrupt(enum gpio_signal s)
 
 static void button_sub_hdmi_hpd_interrupt(enum gpio_signal s)
 {
+	enum fw_config_db db = get_cbi_fw_config_db();
 	int hdmi_hpd = gpio_get_level(GPIO_VOLUP_BTN_ODL_HDMI_HPD);
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI)
+	if (db == DB_1A_HDMI || db == DB_LTE_HDMI || db == DB_1A_HDMI_LTE)
 		gpio_set_level(GPIO_EC_AP_USB_C1_HDMI_HPD, hdmi_hpd);
 	else
 		button_interrupt(s);
@@ -262,6 +279,7 @@ static struct mutex g_base_mutex;
 /* Sensor Data */
 static struct accelgyro_saved_data_t g_bma253_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
+static struct kionix_accel_data g_kx022_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
@@ -276,7 +294,41 @@ static const mat33_fp_t lid_standard_ref = {
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
+static const mat33_fp_t lid_kx022_ref = {
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
 /* Drivers */
+struct motion_sensor_t kx022_lid_accel = {
+	.name = "Lid Accel",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_KX022,
+		.type = MOTIONSENSE_TYPE_ACCEL,
+		.location = MOTIONSENSE_LOC_LID,
+		.drv = &kionix_accel_drv,
+		.mutex = &g_lid_mutex,
+		.drv_data = &g_kx022_data,
+		.port = I2C_PORT_SENSOR,
+		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
+		.rot_standard_ref = &lid_kx022_ref,
+		.default_range = 2, /* g, enough for laptop. */
+		.min_frequency = KX022_ACCEL_MIN_FREQ,
+		.max_frequency = KX022_ACCEL_MAX_FREQ,
+		.config = {
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+				.ec_rate = 100,
+			},
+			/* EC use accel for angle detection */
+			[SENSOR_CONFIG_EC_S3] = {
+				.odr = 10000 | ROUND_UP_FLAG,
+			},
+		},
+};
+
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
@@ -357,8 +409,9 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 void board_init(void)
 {
 	int on;
+	enum fw_config_db db = get_cbi_fw_config_db();
 
-	if (get_cbi_fw_config_db() == DB_1A_HDMI) {
+	if (db == DB_1A_HDMI || db == DB_LTE_HDMI || db == DB_1A_HDMI_LTE) {
 		/* Select HDMI option */
 		gpio_set_level(GPIO_HDMI_SEL_L, 0);
 	} else {
@@ -385,6 +438,12 @@ void board_init(void)
 
 	if (get_cbi_fw_config_tablet_mode() == TABLET_MODE_PRESENT) {
 		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+		/* Second source LID ACCEL */
+		if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_KX022) {
+			motion_sensors[LID_ACCEL] = kx022_lid_accel;
+			ccprints("LID ACCEL is KX022");
+		} else
+			ccprints("LID ACCEL is BMA253");
 		/* Enable Base Accel interrupt */
 		gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 	} else {
@@ -450,6 +509,21 @@ __override void board_ocpc_init(struct ocpc_data *ocpc)
 	ocpc->chg_flags[CHARGER_SECONDARY] |= OCPC_NO_ISYS_MEAS_CAP;
 }
 
+__override void board_pulse_entering_rw(void)
+{
+	/*
+	 * On the ITE variants, the EC_ENTERING_RW signal was connected to a pin
+	 * which is active high by default.  This causes Cr50 to think that the
+	 * EC has jumped to its RW image even though this may not be the case.
+	 * The pin is changed to GPIO_EC_ENTERING_RW2.
+	 */
+	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
+}
+
 void board_reset_pd_mcu(void)
 {
 	/*
@@ -477,9 +551,11 @@ __override uint8_t board_get_usb_pd_port_count(void)
 {
 	enum fw_config_db db = get_cbi_fw_config_db();
 
-	if (db == DB_1A_HDMI || db == DB_NONE)
+	if (db == DB_1A_HDMI || db == DB_NONE || db == DB_LTE_HDMI
+			|| db == DB_1A_HDMI_LTE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
-	else if (db == DB_1C || db == DB_1C_LTE)
+	else if (db == DB_1C || db == DB_1C_LTE || db == DB_1C_1A
+			|| db == DB_1C_1A_LTE)
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
 
 	ccprints("Unhandled DB configuration: %d", db);
@@ -490,9 +566,11 @@ __override uint8_t board_get_charger_chip_count(void)
 {
 	enum fw_config_db db = get_cbi_fw_config_db();
 
-	if (db == DB_1A_HDMI || db == DB_NONE)
+	if (db == DB_1A_HDMI || db == DB_NONE || db == DB_LTE_HDMI
+			|| db == DB_1A_HDMI_LTE)
 		return CHARGER_NUM - 1;
-	else if (db == DB_1C || db == DB_1C_LTE)
+	else if (db == DB_1C || db == DB_1C_LTE || db == DB_1C_1A
+			|| db == DB_1C_1A_LTE)
 		return CHARGER_NUM;
 
 	ccprints("Unhandled DB configuration: %d", db);
@@ -627,9 +705,8 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-#ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
 
@@ -653,7 +730,6 @@ void lid_angle_peripheral_enable(int enable)
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
 	}
 }
-#endif
 
 __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,

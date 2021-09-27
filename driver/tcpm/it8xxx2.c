@@ -9,11 +9,13 @@
 #include "config.h"
 #include "console.h"
 #include "it83xx_pd.h"
+#include "ite_pd_intc.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
+#include "usb_common.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "hooks.h"
@@ -35,13 +37,6 @@
 #endif
 
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
-
-/* Wait time for vconn power switch to turn off. */
-#ifdef CONFIG_USBC_VCONN_SWAP_DELAY_US
-#define PD_IT83XX_VCONN_TURN_OFF_DELAY_US CONFIG_USBC_VCONN_SWAP_DELAY_US
-#else
-#define PD_IT83XX_VCONN_TURN_OFF_DELAY_US 500
-#endif
 
 bool rx_en[IT83XX_USBPD_PHY_PORT_COUNT];
 STATIC_IF(CONFIG_USB_PD_DECODE_SOP)
@@ -175,7 +170,7 @@ static int it8xxx2_tcpm_get_message_raw(int port, uint32_t *buf, int *head)
 	 * BIT[6:4] SOP type of Rx message
 	 * 000b=SOP, 001b=SOP', 010b=SOP", 011b=Debug SOP', 100b=Debug SOP"
 	 * 101b=HRDRST, 110b=CBLRST
-	 * 000b~100b is aligned to enum pd_msg_type.
+	 * 000b~100b is aligned to enum tcpci_msg_type.
 	 *
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP))
@@ -202,7 +197,7 @@ void it8xxx2_get_tx_error_status(enum usbpd_port port)
 }
 
 static enum tcpc_transmit_complete it8xxx2_tx_data(enum usbpd_port port,
-						   enum tcpm_transmit_type type,
+						   enum tcpci_msg_type type,
 						   uint16_t header,
 						   const uint32_t *buf)
 {
@@ -532,22 +527,32 @@ static int it8xxx2_tcpm_set_vconn(int port, int enable)
 				/* Enable tcpc receive SOP' and SOP'' packet */
 				it8xxx2_tcpm_decode_sop_prime_enable(port,
 								     true);
-		}
-		/* Turn on/off vconn power switch. */
-		board_pd_vconn_ctrl(port,
-				    USBPD_GET_PULL_CC_SELECTION(port) ?
-				    USBPD_CC_PIN_2 : USBPD_CC_PIN_1, enable);
-		if (!enable) {
+			/* Turn on Vconn power switch. */
+			board_pd_vconn_ctrl(port,
+					    USBPD_GET_PULL_CC_SELECTION(port) ?
+					    USBPD_CC_PIN_2 : USBPD_CC_PIN_1,
+					    enable);
+		} else {
+			/*
+			 * If the pd port has previous connection and supplies
+			 * Vconn, then RO jumping to RW reset the system,
+			 * we never know which cc is the previous Vconn pin,
+			 * so we always turn both cc pins off when disable
+			 * Vconn power switch.
+			 */
+			board_pd_vconn_ctrl(port, USBPD_CC_PIN_1, enable);
+			board_pd_vconn_ctrl(port, USBPD_CC_PIN_2, enable);
 			if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP))
 				/* Disable tcpc receive SOP' and SOP'' packet */
 				it8xxx2_tcpm_decode_sop_prime_enable(port,
 								     false);
 			/*
-			 * We need to make sure cc voltage detector is enabled
-			 * after vconn is turned off to avoid the potential risk
-			 * of voltage fed back into Vcore.
+			 * Before disabling cc 5v tolerant, we need to make
+			 * sure cc voltage detector is enabled and Vconn is
+			 * dropped below 3.3v (>500us) to avoid the potential
+			 * risk of voltage fed back into Vcore.
 			 */
-			usleep(PD_IT83XX_VCONN_TURN_OFF_DELAY_US);
+			usleep(IT83XX_USBPD_T_VCONN_BELOW_3_3V);
 			/*
 			 * Since our cc are not Vconn SRC, enable cc analog
 			 * module (ex.UP/RD/DET/Tx/Rx) and disable 5v tolerant.
@@ -599,31 +604,31 @@ static int it8xxx2_tcpm_set_rx_enable(int port, int enable)
 }
 
 static int it8xxx2_tcpm_transmit(int port,
-				 enum tcpm_transmit_type type,
+				 enum tcpci_msg_type type,
 				 uint16_t header,
 				 const uint32_t *data)
 {
 	int status = TCPC_TX_COMPLETE_FAILED;
 
 	switch (type) {
-	case TCPC_TX_SOP:
-	case TCPC_TX_SOP_PRIME:
-	case TCPC_TX_SOP_PRIME_PRIME:
-	case TCPC_TX_SOP_DEBUG_PRIME:
-	case TCPC_TX_SOP_DEBUG_PRIME_PRIME:
+	case TCPCI_MSG_SOP:
+	case TCPCI_MSG_SOP_PRIME:
+	case TCPCI_MSG_SOP_PRIME_PRIME:
+	case TCPCI_MSG_SOP_DEBUG_PRIME:
+	case TCPCI_MSG_SOP_DEBUG_PRIME_PRIME:
 		status = it8xxx2_tx_data(port,
 					 type,
 					 header,
 					 data);
 		break;
-	case TCPC_TX_BIST_MODE_2:
+	case TCPCI_MSG_TX_BIST_MODE_2:
 		it8xxx2_send_bist_mode2_pattern(port);
 		status = TCPC_TX_COMPLETE_SUCCESS;
 		break;
-	case TCPC_TX_HARD_RESET:
+	case TCPCI_MSG_TX_HARD_RESET:
 		status = it8xxx2_send_hw_reset(port);
 		break;
-	case TCPC_TX_CABLE_RESET:
+	case TCPCI_MSG_CABLE_RESET:
 		status = it8xxx2_send_cable_reset(port);
 		break;
 	default:
@@ -765,6 +770,22 @@ static void it8xxx2_init(enum usbpd_port port, int role)
 					(CONFIG_PD_RETRY_COUNT << 6);
 	/* Disable Rx decode */
 	it8xxx2_tcpm_set_rx_enable(port, 0);
+	if (IS_ENABLED(CONFIG_USB_PD_TCPMV1)) {
+		uint8_t flags = 0;
+		/*
+		 * If explicit contract is set in bbram when EC boot up, then
+		 * TCPMv1 set soft reset as first state instead of
+		 * unattached.SNK, so we need to enable BMC PHY for tx module.
+		 *
+		 * NOTE: If the platform is without battery and connects to
+		 * adapter, then cold reset EC, our Rd is always asserted on cc,
+		 * so adapter keeps providing 5v and data in BBRAM are still
+		 * alive.
+		 */
+		if ((pd_get_saved_port_flags(port, &flags) == EC_SUCCESS) &&
+		    (flags & PD_BBRMFLG_EXPLICIT_CONTRACT))
+			USBPD_ENABLE_BMC_PHY(port);
+	}
 	/* Disable all interrupts */
 	IT83XX_USBPD_IMR(port) = 0xff;
 	/* W/C status */
@@ -780,7 +801,7 @@ static void it8xxx2_init(enum usbpd_port port, int role)
 	/* Set default power role and assert Rp/Rd */
 	it8xxx2_set_power_role(port, role);
 	/* Disable vconn: connect cc analog module, disable cc 5v tolerant */
-	it8xxx2_enable_vconn(port, 0);
+	it8xxx2_tcpm_set_vconn(port, 0);
 	/* Enable tx done and hard reset detect interrupt */
 	IT83XX_USBPD_IMR(port) &= ~(USBPD_REG_MASK_MSG_TX_DONE |
 				    USBPD_REG_MASK_HARD_RESET_DETECT);
@@ -800,6 +821,10 @@ static void it8xxx2_init(enum usbpd_port port, int role)
 	*usbpd_ctrl_regs[port].cc1 = cc_config;
 	*usbpd_ctrl_regs[port].cc2 = cc_config;
 	task_clear_pending_irq(usbpd_ctrl_regs[port].irq);
+#ifdef CONFIG_ZEPHYR
+	irq_connect_dynamic(usbpd_ctrl_regs[port].irq, 0,
+			(void (*)(const void *))chip_pd_irq, (void *)port, 0);
+#endif
 	task_enable_irq(usbpd_ctrl_regs[port].irq);
 	USBPD_START(port);
 	/*
@@ -825,7 +850,7 @@ static void it8xxx2_set_pd_sleep_mask(int port)
 	bool prevent_deep_sleep = false;
 
 	/*
-	 * Set SLEEP_MASK_USB_PD for deep sleep mode in TCPMv2:
+	 * Set SLEEP_MASK_USB_PD for deep sleep mode:
 	 * 1.Enable deep sleep mode, when all ITE ports are in Unattach.SRC/SNK
 	 *   state (HOOK_DISCONNECT called) and other ports aren't pd_capable().
 	 * 2.Disable deep sleep mode, when one of ITE port is in Attach.SRC/SNK
@@ -855,11 +880,11 @@ static void it8xxx2_set_pd_sleep_mask(int port)
 		enable_sleep(SLEEP_MASK_USB_PD);
 }
 
-#ifdef CONFIG_USB_PD_TCPMV2
 static void it8xxx2_tcpm_hook_connect(void)
 {
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
 
+#ifdef CONFIG_USB_PD_TCPMV2
 	/*
 	 * There are five cases that hook_connect() be called by TCPMv2:
 	 * 1)AttachWait.SNK -> Attached.SNK: disable detect interrupt.
@@ -875,17 +900,16 @@ static void it8xxx2_tcpm_hook_connect(void)
 	 * SRC_DISCONNECT and SNK_DISCONNECT in TCPMv1. Every time we go to
 	 * Try.SRC/TryWait.SNK state, the plug in interrupt will be enabled and
 	 * fire for 3), 4), 5) cases, then set correctly for the SRC detect plug
-	 * out or the SNK disable detect, so TCPMv1 needn't hook connection.
+	 * out or the SNK disable detect, so TCPMv1 needn't this.
 	 */
 	it8xxx2_tcpm_switch_plug_out_type(port);
-
+#endif
 	/* Enable PD PHY Tx and Rx module since type-c has connected. */
 	USBPD_ENABLE_BMC_PHY(port);
 	it8xxx2_set_pd_sleep_mask(port);
 }
 
 DECLARE_HOOK(HOOK_USB_PD_CONNECT, it8xxx2_tcpm_hook_connect, HOOK_PRIO_DEFAULT);
-#endif
 
 static void it8xxx2_tcpm_hook_disconnect(void)
 {
@@ -916,7 +940,7 @@ static void it8xxx2_tcpm_hook_disconnect(void)
 DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, it8xxx2_tcpm_hook_disconnect,
 	     HOOK_PRIO_DEFAULT);
 
-const struct tcpm_drv it83xx_tcpm_drv = {
+const struct tcpm_drv it8xxx2_tcpm_drv = {
 	.init			= &it8xxx2_tcpm_init,
 	.release		= &it8xxx2_tcpm_release,
 	.get_cc			= &it8xxx2_tcpm_get_cc,

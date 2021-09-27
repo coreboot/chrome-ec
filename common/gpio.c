@@ -38,7 +38,7 @@ struct gpio_alt_func {
 	{GPIO_##pinmask, .func = (function), .module_id = (module),            \
 	 .flags = (flagz)},
 
-static const struct gpio_alt_func gpio_alt_funcs[] = {
+static __const_data const struct gpio_alt_func gpio_alt_funcs[] = {
 #include "gpio.wrap"
 };
 
@@ -127,8 +127,8 @@ void gpio_reset(enum gpio_signal signal)
 {
 	const struct gpio_info *g = gpio_list + signal;
 
-	gpio_set_flags_by_mask(g->port, g->mask, g->flags);
 	gpio_set_alternate_function(g->port, g->mask, GPIO_ALT_FUNC_NONE);
+	gpio_set_flags_by_mask(g->port, g->mask, g->flags);
 }
 
 const char *gpio_get_name(enum gpio_signal signal)

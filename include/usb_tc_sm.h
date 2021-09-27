@@ -181,22 +181,6 @@ void tc_request_power_swap(int port);
 void tc_pr_swap_complete(int port, bool success);
 
 /**
- * Informs the Type-C State Machine that a Discover Identity is in progress.
- * This function is called from the Policy Engine.
- *
- * @param port USB_C port number
- */
-void tc_disc_ident_in_progress(int port);
-
-/**
- * Informs the Type-C State Machine that a Discover Identity is complete.
- * This function is called from the Policy Engine.
- *
- * @param port USB_C port number
- */
-void tc_disc_ident_complete(int port);
-
-/**
  * Instructs the Attached.SNK to stop drawing power. This function is called
  * from the Policy Engine and only has effect if the current Type-C state
  * Attached.SNK.
@@ -332,11 +316,12 @@ void tc_start_event_loop(int port);
 void tc_pause_event_loop(int port);
 
 /**
- * Increase the frequency of waking the event loop for high priority cases
+ * Determine if the state machine event loop is paused
  *
  * @param port USB-C port number
+ * @return true if paused, else false
  */
-void tc_high_priority_event(int port, bool high_pri);
+bool tc_event_loop_is_paused(int port);
 
 /**
  * Allow system to override the control of TrySrc
@@ -371,6 +356,24 @@ const char *tc_get_current_state(int port);
  * @return flag mask of the typeC state machine
  */
 uint32_t tc_get_flags(int port);
+
+/**
+ * USB retimer firmware update set run flag
+ * Setting this flag indicates firmware update operations can be
+ * processed unconditionally.
+ *
+ * @param port USB-C port number
+ */
+void tc_usb_firmware_fw_update_run(int port);
+
+/**
+ * USB retimer firmware update set limited run flag
+ * Setting this flag indicates firmware update operations can be
+ * processed under limitation: PD task has to be suspended.
+ *
+ * @param port USB-C port number
+ */
+void tc_usb_firmware_fw_update_limited_run(int port);
 
 #ifdef CONFIG_USB_CTVPD
 

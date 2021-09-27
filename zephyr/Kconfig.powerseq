@@ -22,9 +22,57 @@ config PLATFORM_EC_POWERSEQ_HOST_SLEEP
 	  required for S0ix support on Intel platforms, and optional
 	  for boards without S0ix support.
 
+config PLATFORM_EC_POWER_SLEEP_FAILURE_DETECTION
+	bool "Detect failure to enter a sleep state (S0ix/S3)"
+	depends on PLATFORM_EC_POWERSEQ_HOST_SLEEP
+	help
+	  Enables detection of the AP failing to go to sleep, perhaps due to a
+	  bug in the internal SoC periodic housekeeping code.
+
+	  Failure information is reported via the EC_CMD_HOST_SLEEP_EVENT host
+	  command.
+
+config PLATFORM_EC_HOSTCMD_AP_RESET
+	bool "Host command: EC_CMD_AP_RESET"
+	depends on PLATFORM_EC_HOSTCMD
+	help
+	  Enable support for EC_CMD_AP_RESET, used by the AP to request that
+	  the EC perform a reset of the AP.
+
+	  Warning: This command skips the normal reset mechanism on the AP and
+	  may leave data unsaved.
+
+config PLATFORM_EC_POWERSEQ_PP5000_CONTROL
+	bool "Enable a task-safe way to control the PP5000 rail"
+	depends on !AP_X86_AMD
+	default y
+	help
+	  Guard access to the PP5000 GPIO using mutex locks, allowing
+	  the rail to be changed in a task-safe manner.
+
+menuconfig PLATFORM_EC_POWERSEQ_AMD
+	bool "AMD power sequencing"
+	depends on AP_X86_AMD
+	select HAS_TASK_POWERBTN
+	default y
+	help
+	  Enable AMD power sequencing code.
+
+if PLATFORM_EC_POWERSEQ_AMD
+
+config PLATFORM_EC_POWER_BUTTON_TO_PCH_CUSTOM
+	bool "Custom board_pwrbtn_to_pch"
+	help
+	  The board support code provides a custom function,
+	  board_pwrbtn_to_pch, that replaces the standard GPIO set
+	  level to the SoC.
+
+endif  # PLATFORM_EC_POWERSEQ_AMD
+
 menuconfig PLATFORM_EC_POWERSEQ_INTEL
 	bool "Enable shimming common Intel power sequencing code"
 	depends on AP_X86_INTEL
+	select HAS_TASK_POWERBTN
 	default y
 	help
 	  Enable shimming platform/ec AP power sequencing code for
@@ -38,13 +86,6 @@ config PLATFORM_EC_POWERSEQ_CPU_PROCHOT_ACTIVE_LOW
 	help
 	  If CPU_PROCHOT should be treated as active-low, enable this
 	  configuration option.
-
-config PLATFORM_EC_POWERSEQ_PP5000_CONTROL
-	bool "Enable a task-safe way to control the PP5000 rail"
-	default y
-	help
-	  Guard access to the PP5000 GPIO using mutex locks, allowing
-	  the rail to be changed in a task-safe manner.
 
 config PLATFORM_EC_POWERSEQ_RSMRST_DELAY
 	bool "Wait at least 10ms before deasserting RSMRST to PCH"
@@ -103,5 +144,47 @@ config PLATFORM_EC_POWERSEQ_PP3300_RAIL_FIRST
 endif # PLATFORM_EC_POWERSEQ_ICELAKE
 
 endif # PLATFORM_EC_POWERSEQ_INTEL
+
+menuconfig PLATFORM_EC_POWERSEQ_IT8XXX2
+	bool "Enable shimming common ITE8xxx2 power sequencing code"
+	depends on AP_ARM_MTK_MT8192
+	default y
+	help
+	  Enable shimming platform/ec AP power sequencing code for
+	  IT8xxx2.
+
+if PLATFORM_EC_POWERSEQ_IT8XXX2
+
+config PLATFORM_EC_POWERSEQ_MT8192
+	bool "Use common MT8192 code for power sequencing"
+	default y
+	help
+	  Use the Comet Lake code for power sequencing.
+
+endif # PLATFORM_EC_POWERSEQ_ITE8XXX2
+
+config PLATFORM_EC_POWERSEQ_SC7180
+	bool "SC7180 power sequencing"
+	depends on AP_ARM_QUALCOMM_SC7180
+	default y
+	help
+	  Enable power sequencing for the Qualcomm Snapdragon SC7180
+	  chipset.
+
+config PLATFORM_EC_POWERSEQ_SC7280
+	bool "SC7280 power sequencing"
+	depends on AP_ARM_QUALCOMM_SC7280
+	default y
+	help
+	  Enable power sequencing for the Qualcomm Snapdragon SC7280
+	  chipset.
+
+config PLATFORM_EC_CONSOLE_CMD_S5_TIMEOUT
+	bool "Console command: s5_timeout"
+	help
+	  Enable the console command 's5_timeout'. This command is used to
+	  change the timeout waiting for inactivity in the S5 power state before
+	  transitioning to the G3 state. This command is useful for power
+	  testing.
 
 endif # PLATFORM_EC_POWERSEQ

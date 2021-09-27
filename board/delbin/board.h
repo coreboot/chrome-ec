@@ -11,13 +11,11 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#ifndef BOARD_DELBIN_NPCX796FC
 /*
  * The RAM and flash size combination on the NPCX797FC dose not leave
  * any unused flash space that can be used to store the .init_rom section.
  */
 #undef CONFIG_CHIP_INIT_ROM_REGION
-#endif
 
 #undef NPCX_PWM1_SEL
 #define NPCX_PWM1_SEL 0	/* GPIO C2 is not used as PWM1. */
@@ -36,7 +34,6 @@
 #define CONFIG_POWER_PP5000_CONTROL
 
 /* LED defines */
-#define CONFIG_LED_POWER_LED
 #define CONFIG_LED_ONOFF_STATES
 
 /* Keyboard features */
@@ -46,10 +43,14 @@
 /* Sensors */
 /* BMA253 accelerometer in base */
 #define CONFIG_ACCEL_BMA255
+#define CONFIG_ACCEL_KX022
 
 /* BMI260 accel/gyro in base */
 #define CONFIG_ACCELGYRO_BMI260
 #define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* Sensors without hardware FIFO are in forced mode */
@@ -177,6 +178,7 @@ enum usbc_port {
 };
 
 void board_reset_pd_mcu(void);
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

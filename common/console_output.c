@@ -35,8 +35,44 @@ static const char * const channel_names[] = {
 BUILD_ASSERT(ARRAY_SIZE(channel_names) == CC_CHANNEL_COUNT);
 /* ensure that we are not silently masking additional channels */
 BUILD_ASSERT(CC_CHANNEL_COUNT <= 8*sizeof(uint32_t));
+
+static int console_channel_name_to_index(const char *name)
+{
+	int i;
+
+	for (i = 0; i < CC_CHANNEL_COUNT; i++) {
+		if (!strncasecmp(name, channel_names[i], strlen(name)))
+			return i;
+	}
+
+	/* Not found */
+	return -1;
+}
+
+void console_channel_enable(const char *name)
+{
+	int index = console_channel_name_to_index(name);
+
+	if (index >= 0 && index != CC_COMMAND)
+		channel_mask |= CC_MASK(index);
+}
+void console_channel_disable(const char *name)
+{
+	int index = console_channel_name_to_index(name);
+
+	if (index >= 0 && index != CC_COMMAND)
+		channel_mask &= ~CC_MASK(index);
+}
+
+bool console_channel_is_disabled(enum console_channel channel)
+{
+	if (!(CC_MASK(channel) & channel_mask))
+		return true;
+	return false;
+}
 #endif /* CONFIG_CONSOLE_CHANNEL */
 
+#ifndef CONFIG_ZEPHYR
 /*****************************************************************************/
 /* Channel-based console output */
 
@@ -44,11 +80,9 @@ int cputs(enum console_channel channel, const char *outstr)
 {
 	int rv1, rv2;
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 	/* Filter out inactive channels */
-	if (!(CC_MASK(channel) & channel_mask))
+	if (console_channel_is_disabled(channel))
 		return EC_SUCCESS;
-#endif
 
 	rv1 = usb_puts(outstr);
 	rv2 = uart_puts(outstr);
@@ -61,11 +95,9 @@ int cprintf(enum console_channel channel, const char *format, ...)
 	int rv1, rv2;
 	va_list args;
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 	/* Filter out inactive channels */
-	if (!(CC_MASK(channel) & channel_mask))
+	if (console_channel_is_disabled(channel))
 		return EC_SUCCESS;
-#endif
 
 	usb_va_start(args, format);
 	rv1 = usb_vprintf(format, args);
@@ -83,11 +115,9 @@ int cprints(enum console_channel channel, const char *format, ...)
 	int r, rv;
 	va_list args;
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 	/* Filter out inactive channels */
-	if (!(CC_MASK(channel) & channel_mask))
+	if (console_channel_is_disabled(channel))
 		return EC_SUCCESS;
-#endif
 
 	rv = cprintf(channel, "[%pT ", PRINTF_TIMESTAMP_NOW);
 
@@ -106,6 +136,7 @@ int cprints(enum console_channel channel, const char *format, ...)
 	r = cputs(channel, "]\n");
 	return r ? r : rv;
 }
+#endif /* CONFIG_ZEPHYR */
 
 void cflush(void)
 {

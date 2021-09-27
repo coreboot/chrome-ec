@@ -5,6 +5,9 @@
  * ITE83xx SoC in-system programming tool
  */
 
+/* remove when ftdi_usb_purge_buffers has been replaced to follow libftdi */
+#define _FTDI_DISABLE_DEPRECATED
+
 #include <errno.h>
 #include <fcntl.h>
 #include <ftdi.h>
@@ -12,6 +15,7 @@
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +23,7 @@
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "compile_time_macros.h"
 #include "usb_if.h"
@@ -1207,6 +1212,18 @@ failed_read:
 	return res;
 }
 
+static bool is_empty_page(uint8_t *buffer, int size)
+{
+	int i;
+
+	for (i = 0; i < size; i++) {
+		if (buffer[i] != 0xFF)
+			return false;
+	}
+
+	return true;
+}
+
 static int command_write_pages(struct common_hnd *chnd, uint32_t address,
 			       uint32_t size, uint8_t *buffer)
 {
@@ -1790,7 +1807,10 @@ static int write_flash3(struct common_hnd *chnd, const char *filename,
 
 	while (res) {
 		cnt = (res > block_write_size) ? block_write_size : res;
-		if (command_write_pages3(chnd, offset, cnt, &buf[offset]) < 0) {
+		if (chnd->conf.erase && is_empty_page(&buf[offset], cnt)) {
+			/* do nothing */
+		} else if (command_write_pages3(chnd, offset, cnt, &buf[offset])
+				< 0) {
 			ret = -EIO;
 			goto failed_write;
 		}
@@ -2248,15 +2268,18 @@ static int parse_parameters(int argc, char **argv, struct iteflash_config *conf)
 
 static void sighandler(int signum)
 {
+	int status;
 	printf("\nCaught signal %d: %s\nExiting...\n",
 		signum, strsignal(signum));
-	exit_requested = 1;
+	wait(&status);
+	exit_requested = status;
 }
 
 static void register_sigaction(void)
 {
 	struct sigaction sigact;
 
+	memset(&sigact, 0, sizeof(sigact));
 	sigact.sa_handler = sighandler;
 	sigemptyset(&sigact.sa_mask);
 	sigact.sa_flags = 0;

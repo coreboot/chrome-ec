@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 """Types which provide many builds and composite them into a single binary."""
 import logging
-import pathlib
+import shutil
 import subprocess
 
 import zmake.build_config as build_config
@@ -11,54 +11,9 @@ import zmake.multiproc
 import zmake.util as util
 
 
-def _write_dts_file(dts_file, config_header, output_bin, ro_filename, rw_filename):
-    """Generate the .dts file used for binman.
-
-    Args:
-        dts_file: The dts file to write to.
-        config_header: The full path to the generated autoconf.h header.
-        output_bin: The full path to the binary that binman should output.
-        ro_filename: The RO image file name.
-        rw_filename: The RW image file name.
-
-    Returns:
-        The path to the .dts file that was generated.
-    """
-    dts_file.write("""
-    /dts-v1/;
-    #include "{config_header}"
-    / {{
-      #address-cells = <1>;
-      #size-cells = <1>;
-      binman {{
-        filename = "{output_bin}";
-        pad-byte = <0x1d>;
-        section@0 {{
-          read-only;
-          offset = <CONFIG_PLATFORM_EC_PROTECTED_STORAGE_OFF>;
-          size = <CONFIG_PLATFORM_EC_PROTECTED_STORAGE_SIZE>;
-          blob {{
-            filename = "{ro_filename}";
-          }};
-        }};
-        section@1 {{
-          offset = <CONFIG_PLATFORM_EC_WRITABLE_STORAGE_OFF>;
-          size = <CONFIG_PLATFORM_EC_WRITABLE_STORAGE_SIZE>;
-          blob {{
-            filename = "{rw_filename}";
-          }};
-        }};
-      }};
-    }};""".format(
-        output_bin=output_bin,
-        config_header=config_header,
-        ro_filename=ro_filename,
-        rw_filename=rw_filename
-    ))
-
-
 class BasePacker:
     """Abstract base for all packers."""
+
     def __init__(self, project):
         self.project = project
 
@@ -68,9 +23,9 @@ class BasePacker:
         Yields:
             2-tuples of config name and a BuildConfig.
         """
-        yield 'singleimage', build_config.BuildConfig()
+        yield "singleimage", build_config.BuildConfig()
 
-    def pack_firmware(self, work_dir, jobclient):
+    def pack_firmware(self, work_dir, jobclient, version_string=""):
         """Pack a firmware image.
 
         Config names from the configs generator are passed as keyword
@@ -81,83 +36,195 @@ class BasePacker:
             work_dir: A directory to write outputs and temporary files
             into.
             jobclient: A JobClient object to use.
+            version_string: The version string, which may end up in
+               certain parts of the outputs.
 
         Yields:
             2-tuples of the path of each file in the work_dir (or any
             other directory) which should be copied into the output
             directory, and the output filename.
         """
-        raise NotImplementedError('Abstract method not implemented')
+        raise NotImplementedError("Abstract method not implemented")
+
+    def _get_max_image_bytes(self):
+        """Get the maximum allowed image size (in bytes).
+
+        This value will generally be found in CONFIG_FLASH_SIZE but may vary
+        depending on the specific way things are being packed.
+
+        Returns:
+            The maximum allowed size of the image in bytes.
+        """
+        raise NotImplementedError("Abstract method not implemented")
+
+    def _is_size_bound(self, path):
+        """Check whether the given path should be constrained by size.
+
+        Generally, .elf files will be unconstrained while .bin files will be
+        constrained.
+
+        Args:
+            path: A file's path to test.
+
+        Returns:
+            True if the file size should be checked. False otherwise.
+        """
+        return path.suffix == ".bin"
+
+    def _check_packed_file_size(self, file, dirs):
+        """Check that a packed file passes size constraints.
+
+        Args:
+            file: A file to test.
+            dirs: A map of the arguments to pass to _get_max_image_bytes
+
+        Returns:
+            The file if it passes the test.
+        """
+        if not self._is_size_bound(
+            file
+        ) or file.stat().st_size <= self._get_max_image_bytes(**dirs):
+            return file
+        raise RuntimeError("Output file ({}) too large".format(file))
 
 
 class ElfPacker(BasePacker):
     """Raw proxy for ELF output of a single build."""
-    def pack_firmware(self, work_dir, jobclient, singleimage):
-        yield singleimage / 'zephyr' / 'zephyr.elf', 'zephyr.elf'
+
+    def pack_firmware(self, work_dir, jobclient, singleimage, version_string=""):
+        yield singleimage / "zephyr" / "zephyr.elf", "zephyr.elf"
 
 
 class RawBinPacker(BasePacker):
+    """Raw proxy for zephyr.bin output of a single build."""
+
+    def pack_firmware(self, work_dir, jobclient, singleimage, version_string=""):
+        yield singleimage / "zephyr" / "zephyr.bin", "zephyr.bin"
+
+
+class BinmanPacker(BasePacker):
     """Packer for RO/RW image to generate a .bin build using FMAP."""
+
+    ro_file = "zephyr.bin"
+    rw_file = "zephyr.bin"
+
     def __init__(self, project):
         self.logger = logging.getLogger(self.__class__.__name__)
         super().__init__(project)
 
     def configs(self):
-        yield 'ro', build_config.BuildConfig(kconfig_defs={'CONFIG_CROS_EC_RO': 'y'})
-        yield 'rw', build_config.BuildConfig(kconfig_defs={'CONFIG_CROS_EC_RW': 'y'})
+        yield "ro", build_config.BuildConfig(kconfig_defs={"CONFIG_CROS_EC_RO": "y"})
+        yield "rw", build_config.BuildConfig(kconfig_defs={"CONFIG_CROS_EC_RW": "y"})
 
-    def pack_firmware(self, work_dir, jobclient, ro, rw):
-        """Pack the 'raw' binary.
+    def pack_firmware(self, work_dir, jobclient, ro, rw, version_string=""):
+        """Pack RO and RW sections using Binman.
 
-        This combines the RO and RW images as specified in the Kconfig file for
-        the project. For this function to work, the following config values must
-        be defined:
-        * CONFIG_CROS_EC_RO_MEM_OFF - The offset in bytes of the RO image from
-          the start of the resulting binary.
-        * CONFIG_CROS_EC_RO_SIZE - The maximum allowed size (in bytes) of the RO
-          image.
-        * CONFIG_CROS_EC_RW_MEM_OFF - The offset in bytes of the RW image from
-          the start of the resulting binary (must be >= RO_MEM_OFF + RO_SIZE).
-        * CONFIG_CROS_EC_RW_SIZE - The maximum allowed size (in bytes) of the RW
-           image.
+        Binman configuration is expected to be found in the RO build
+        device-tree configuration.
 
         Args:
             work_dir: The directory used for packing.
             jobclient: The client used to run subprocesses.
             ro: Directory containing the RO image build.
             rw: Directory containing the RW image build.
+            version_string: The version string to use in FRID/FWID.
 
-        Returns:
-            Tuple mapping the resulting .bin file to the output filename.
+        Yields:
+            2-tuples of the path of each file in the work_dir that
+            should be copied into the output directory, and the output
+            filename.
         """
-        work_dir = pathlib.Path(work_dir).resolve()
-        ro = pathlib.Path(ro).resolve()
-        rw = pathlib.Path(rw).resolve()
-        dts_file_path = work_dir / 'project.dts'
-        with open(dts_file_path, 'w+') as dts_file:
-            _write_dts_file(
-                dts_file=dts_file,
-                config_header=ro / 'zephyr' / 'include' / 'generated' / 'autoconf.h',
-                output_bin=work_dir / 'zephyr.bin',
-                ro_filename=ro / 'zephyr' / 'zephyr.bin',
-                rw_filename=rw / 'zephyr' / 'zephyr.bin')
+        dts_file_path = ro / "zephyr" / "zephyr.dts"
+
+        # Copy the inputs into the work directory so that Binman can
+        # find them under a hard-coded name.
+        shutil.copy2(ro / "zephyr" / self.ro_file, work_dir / "zephyr_ro.bin")
+        shutil.copy2(rw / "zephyr" / self.rw_file, work_dir / "zephyr_rw.bin")
+
+        # Version in FRID/FWID can be at most 31 bytes long (32, minus
+        # one for null character).
+        if len(version_string) > 31:
+            version_string = version_string[:31]
 
         proc = jobclient.popen(
-            ['binman', '-v', '5', 'build', '-d', dts_file_path, '-m'],
+            [
+                "binman",
+                "-v",
+                "5",
+                "build",
+                "-a",
+                "version={}".format(version_string),
+                "-d",
+                dts_file_path,
+                "-m",
+                "-O",
+                work_dir,
+            ],
+            cwd=work_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            encoding='utf-8')
+            encoding="utf-8",
+        )
 
         zmake.multiproc.log_output(self.logger, logging.DEBUG, proc.stdout)
         zmake.multiproc.log_output(self.logger, logging.ERROR, proc.stderr)
-        if proc.wait(timeout=5):
-            raise OSError('Failed to run binman')
+        if proc.wait(timeout=60):
+            raise OSError("Failed to run binman")
 
-        yield work_dir / 'zephyr.bin', 'zephyr.bin'
+        yield work_dir / "zephyr.bin", "zephyr.bin"
+        yield ro / "zephyr" / "zephyr.elf", "zephyr.ro.elf"
+        yield rw / "zephyr" / "zephyr.elf", "zephyr.rw.elf"
+
+
+class NpcxPacker(BinmanPacker):
+    """Packer for RO/RW image to generate a .bin build using FMAP.
+
+    This expects that the build is setup to generate a
+    zephyr.npcx.bin for the RO image, which should be packed using
+    Nuvoton's loader format.
+    """
+
+    ro_file = "zephyr.npcx.bin"
+    npcx_monitor = "npcx_monitor.bin"
+
+    # TODO(b/192401039): CONFIG_FLASH_SIZE is nuvoton-only.  Since
+    # binman already checks sizes, perhaps we can just remove this
+    # code?
+    def _get_max_image_bytes(self, ro, rw):
+        ro_size = util.read_kconfig_autoconf_value(
+            ro / "zephyr" / "include" / "generated", "CONFIG_FLASH_SIZE"
+        )
+        rw_size = util.read_kconfig_autoconf_value(
+            ro / "zephyr" / "include" / "generated", "CONFIG_FLASH_SIZE"
+        )
+        return max(int(ro_size, 0), int(rw_size, 0)) * 1024
+
+    # This can probably be removed too and just rely on binman to
+    # check the sizes... see the comment above.
+    def pack_firmware(self, work_dir, jobclient, ro, rw, version_string=""):
+        for path, output_file in super().pack_firmware(
+            work_dir,
+            jobclient,
+            ro,
+            rw,
+            version_string=version_string,
+        ):
+            if output_file == "zephyr.bin":
+                yield (
+                    self._check_packed_file_size(path, {"ro": ro, "rw": rw}),
+                    "zephyr.bin",
+                )
+            else:
+                yield path, output_file
+
+        # Include the NPCX monitor file as an output artifact.
+        yield ro / self.npcx_monitor, self.npcx_monitor
 
 
 # A dictionary mapping packer config names to classes.
 packer_registry = {
-    'elf': ElfPacker,
-    'raw': RawBinPacker,
+    "binman": BinmanPacker,
+    "elf": ElfPacker,
+    "npcx": NpcxPacker,
+    "raw": RawBinPacker,
 }

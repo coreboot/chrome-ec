@@ -12,7 +12,7 @@
 /* Default-yes, override to no by including fake_battery module. */
 #define CONFIG_BATTERY_PRESENT_CUSTOM
 #undef CONFIG_CMD_PD
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_EXTPOWER_GPIO
 #undef CONFIG_FMAP
 #define CONFIG_POWER_BUTTON
@@ -81,7 +81,7 @@ enum {
 #define PD_MIN_POWER_MW       7500
 
 /* Configuration for fake Fingerprint Sensor */
-#define CONFIG_SPI_MASTER
+#define CONFIG_SPI_CONTROLLER
 #define CONFIG_SPI_FP_PORT    1 /* SPI1: third master config */
 
 #define CONFIG_RNG

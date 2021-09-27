@@ -21,6 +21,13 @@
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
 #define CONFIG_USB_PORT_ENABLE_DYNAMIC
 
+#undef  PD_MAX_CURRENT_MA
+#define PD_MAX_CURRENT_MA	3000
+#undef  CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 40000
+
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
+
 /* USB-A config */
 #define GPIO_USB1_ILIM_SEL IOEX_USB_A0_CHARGE_EN_L
 #define GPIO_USB2_ILIM_SEL IOEX_USB_A1_CHARGE_EN_DB_L
@@ -32,6 +39,9 @@
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_KX022
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_CMD_ACCELS
@@ -42,7 +52,12 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 
-
+/*
+ * Jelboz's battery takes several seconds to come back out of its disconnect
+ * state (~4 seconds on the unit I have, so give it a little more for margin).
+ */
+#undef CONFIG_POWER_BUTTON_INIT_TIMEOUT
+#define CONFIG_POWER_BUTTON_INIT_TIMEOUT 5
 
 /* GPIO mapping from board specific name to EC common name. */
 #define CONFIG_BATTERY_PRESENT_GPIO	GPIO_EC_BATT_PRES_ODL
@@ -121,8 +136,6 @@ enum usbc_port {
 /*****************************************************************************
  * CBI EC FW Configuration
  */
-#include "cbi_ec_fw_config.h"
-
 /**
  * SHUBOZ_MB_USBAC
  *	USB-A0  Speed: 5 Gbps
@@ -154,12 +167,15 @@ enum ec_cfg_usb_db_type {
 	SHUBOZ_DB_D_OPT1_USBAC = 0,
 };
 
+#include "cbi_ec_fw_config.h"
+
 void board_reset_pd_mcu(void);
 
 /* Common definition for the USB PD interrupt handlers. */
 void tcpc_alert_event(enum gpio_signal signal);
 void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

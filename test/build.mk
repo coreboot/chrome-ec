@@ -20,6 +20,7 @@ test-list-host += bklight_passthru
 test-list-host += body_detection
 test-list-host += button
 test-list-host += cbi
+test-list-host += cbi_wp
 test-list-host += cec
 test-list-host += charge_manager
 test-list-host += charge_manager_drp_charging
@@ -48,7 +49,8 @@ test-list-host += is_enabled_error
 test-list-host += kasa
 test-list-host += kb_8042
 test-list-host += kb_mkbp
-#test-list-host += kb_scan	# crbug.com/976974
+test-list-host += kb_scan
+test-list-host += kb_scan_strict
 test-list-host += lid_sw
 test-list-host += lightbar
 test-list-host += mag_cal
@@ -83,6 +85,7 @@ test-list-host += usb_pd_int
 test-list-host += usb_pd
 test-list-host += usb_pd_giveback
 test-list-host += usb_pd_rev30
+test-list-host += usb_pd_pdo_fixed
 test-list-host += usb_ppc
 test-list-host += usb_sm_framework_h3
 test-list-host += usb_sm_framework_h2
@@ -102,6 +105,7 @@ test-list-host += usb_pe_drp_noextended
 test-list-host += utils
 test-list-host += utils_str
 test-list-host += vboot
+test-list-host += version
 test-list-host += x25519
 test-list-host += stillness_detector
 endif
@@ -119,6 +123,8 @@ cov-dont-test += fpsensor
 cov-dont-test += fpsensor_crypto
 # fpsensor_state: genhtml looks for build/host/fpsensor_state/cryptoc/util.c
 cov-dont-test += fpsensor_state
+# version: Only works in a chroot.
+cov-dont-test += version
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))
 
 accel_cal-y=accel_cal.o
@@ -130,6 +136,7 @@ bklight_passthru-y=bklight_passthru.o
 body_detection-y=body_detection.o body_detection_data_literals.o motion_common.o
 button-y=button.o
 cbi-y=cbi.o
+cbi_wp-y=cbi_wp.o
 cec-y=cec.o
 charge_manager-y=charge_manager.o
 charge_manager_drp_charging-y=charge_manager.o
@@ -145,6 +152,7 @@ flash_physical-y=flash_physical.o
 flash_write_protect-y=flash_write_protect.o
 fpsensor-y=fpsensor.o
 fpsensor_crypto-y=fpsensor_crypto.o
+fpsensor_hw-y=fpsensor_hw.o
 fpsensor_state-y=fpsensor_state.o
 gyro_cal-y=gyro_cal.o gyro_cal_init_for_test.o
 hooks-y=hooks.o
@@ -157,6 +165,7 @@ is_enabled-y=is_enabled.o
 kb_8042-y=kb_8042.o
 kb_mkbp-y=kb_mkbp.o
 kb_scan-y=kb_scan.o
+kb_scan_strict-y=kb_scan.o
 lid_sw-y=lid_sw.o
 lightbar-y=lightbar.o
 mag_cal-y=mag_cal.o
@@ -200,6 +209,7 @@ usb_pd_int-y=usb_pd_int.o
 usb_pd-y=usb_pd.o
 usb_pd_giveback-y=usb_pd.o
 usb_pd_rev30-y=usb_pd.o
+usb_pd_pdo_fixed-y=usb_pd_pdo_fixed_test.o
 usb_ppc-y=usb_ppc.o
 usb_sm_framework_h3-y=usb_sm_framework_h3.o
 usb_sm_framework_h2-y=usb_sm_framework_h3.o
@@ -228,11 +238,14 @@ usb_tcpmv2_compliance-y=usb_tcpmv2_compliance.o usb_tcpmv2_compliance_common.o \
 	usb_tcpmv2_td_pd_src3_e8.o \
 	usb_tcpmv2_td_pd_src3_e9.o \
 	usb_tcpmv2_td_pd_src3_e26.o \
+	usb_tcpmv2_td_pd_src3_e32.o \
 	usb_tcpmv2_td_pd_snk3_e12.o \
+	usb_tcpmv2_td_pd_vndi3_e3.o \
 	usb_tcpmv2_td_pd_other.o
 utils-y=utils.o
 utils_str-y=utils_str.o
 vboot-y=vboot.o
+version-y += version.o
 float-y=fp.o
 fp-y=fp.o
 x25519-y=x25519.o

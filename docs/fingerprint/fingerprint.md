@@ -30,8 +30,8 @@ building the EC code) are for fingerprint:
 
 MCU                    | Sensor     | Firmware (EC "board")                          | Dev Board                                    | Nucleo Board
 ---------------------- | ---------- | ---------------------------------------------- | -------------------------------------------- | ------------
-[STM32H743](Cortex-M7) | [FPC 1145] | `dartmonkey`<br>(aka `nocturne_fp`, `nami_fp`) | [Icetower v0.2] <br>(Previously Dragontalon) | [Nucleo H743ZI2]
-[STM32F412](Cortex-M4) | [FPC 1025] | `bloonchipper`<br>(aka `hatch_fp`)             | [Dragonclaw v0.2]                            | [Nucleo F412ZG]
+[STM32H743] \(Cortex-M7) | [FPC 1145] | `dartmonkey`<br>(aka `nocturne_fp`, `nami_fp`) | [Icetower v0.2] <br>(Previously Dragontalon) | [Nucleo H743ZI2]
+[STM32F412] \(Cortex-M4) | [FPC 1025] | `bloonchipper`<br>(aka `hatch_fp`)             | [Dragonclaw v0.2]                            | [Nucleo F412ZG]
 
 ### Sensor Template Sizes
 
@@ -319,60 +319,94 @@ fingerprint development boards.
 ### Dragonclaw v0.2
 
 ```bash
-(chroot) $  dut-control -t 60 pp3300_dx_mcu_mv pp3300_dx_fp_mv pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
+(chroot) $ dut-control -t 60 pp3300_dx_mcu_mv pp3300_dx_fp_mv pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
 ```
 
-**Firmware Version**: `bloonchipper_v2.0.6509-80a3a4a2`
+**Firmware Version**:
+`bloonchipper_v2.0.4277-9f652bb3-RO_v2.0.7314-3dfc5ff6-RW.bin`
 
-When the MCU is idling waiting for an AP message:
+#### MCU is idle
 
 ```
-@@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@       sample_msecs   1285    46.71   24.16   394.68    17.88
-@@    pp1800_dx_fp_mv   1285  1807.90    0.89  1808.00  1800.00
-@@    pp1800_dx_fp_mw   1285     0.00    0.00     0.00     0.00
-@@    pp3300_dx_fp_mv   1285  3288.00    0.00  3288.00  3288.00
-@@    pp3300_dx_fp_mw   1285     0.01    0.04     0.26     0.00
-@@   pp3300_dx_mcu_mv   1285  3280.93    2.56  3288.00  3280.00
-@@   pp3300_dx_mcu_mw   1285    21.26    0.08    22.36    20.99
+(chroot) $ dut-control fpmcu_slp_alt:off
 ```
-
-When the MCU is in **low power** mode during the AP suspend (as emulated by
-`dut-control slp_s3:on`):
 
 ```
 @@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@       sample_msecs   1243    48.27   24.90   385.11    17.12
-@@    pp1800_dx_fp_mv   1243  1807.92    0.81  1808.00  1800.00
-@@    pp1800_dx_fp_mw   1243     0.00    0.00     0.00     0.00
-@@    pp3300_dx_fp_mv   1243  3288.04    0.55  3296.00  3288.00
-@@    pp3300_dx_fp_mw   1243     0.01    0.04     0.26     0.00
-@@   pp3300_dx_mcu_mv   1243  3288.00    0.00  3288.00  3288.00
-@@   pp3300_dx_mcu_mw   1243     2.25    0.39    10.26     2.10
+@@       sample_msecs    113   533.56   40.91   658.52   447.06
+@@    pp1800_dx_fp_mv    113  1800.00    0.00  1800.00  1800.00
+@@    pp1800_dx_fp_mw    113     0.00    0.00     0.00     0.00
+@@    pp3300_dx_fp_mv    113  3280.00    0.00  3280.00  3280.00
+@@    pp3300_dx_fp_mw    113     0.01    0.05     0.26     0.00
+@@   pp3300_dx_mcu_mv    113  3280.00    0.00  3280.00  3280.00
+@@   pp3300_dx_mcu_mw    113    24.67    0.00    24.67    24.67
 ```
 
-### Dragontalon
+#### MCU in low power mode (suspend)
+
+```
+(chroot) $ dut-control fpmcu_slp_alt:on
+```
+
+```
+@@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
+@@       sample_msecs    115   526.56   36.79   607.60   426.58
+@@    pp1800_dx_fp_mv    115  1800.00    0.00  1800.00  1800.00
+@@    pp1800_dx_fp_mw    115     0.00    0.00     0.00     0.00
+@@    pp3300_dx_fp_mv    115  3287.30    2.25  3288.00  3280.00
+@@    pp3300_dx_fp_mw    115     0.00    0.02     0.26     0.00
+@@   pp3300_dx_mcu_mv    115  3280.97    2.62  3288.00  3280.00
+@@   pp3300_dx_mcu_mw    115     4.02    0.64    10.76     3.94
+```
+
+### Icetower v0.1
 
 <!-- mdformat off(b/139308852) -->
 *** note
-**NOTE**: The sensor doesn't work on Dragontalon, so the measurements below show
-zero for the sensor.
+**NOTE**: Icetower v0.1 has a hardware bug in the INA connections, so you cannot
+measure the 1.8V fingerprint sensor rail. See http://b/178098140.
+
+Additionally, before https://crrev.com/c/2689101, the sleep GPIOs were not
+configured correctly, so the change needs to be cherry-picked in order to
+measure releases before that point.
 ***
 <!-- mdformat on -->
 
 ```bash
-(chroot) $  dut-control -t 60 pp3300_h7_mv pp3300_h7_mw pp1800_fpc_mv pp1800_fpc_mw
+(chroot) $ dut-control -t 60 pp3300_dx_mcu_mv pp3300_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw
 ```
 
-**Firmware Version**: `dartmonkey_v2.0.4017-9c45fb4b3`
+**Firmware Version**:
+`dartmonkey_v2.0.2887-311310808-RO_v2.0.7304-441100b93-RW.bin`
+
+#### MCU is idle
 
 ```
-@@            NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@    sample_msecs   1502    39.96   13.14   379.43    22.31
-@@   pp1800_fpc_mv   1502     0.00    0.00     0.00     0.00
-@@   pp1800_fpc_mw   1502     0.00    0.00     0.00     0.00
-@@    pp3300_h7_mv   1502  3288.00    0.00  3288.00  3288.00
-@@    pp3300_h7_mw   1502     8.20    0.51    18.08     7.67
+(chroot) $ dut-control fpmcu_slp_alt:off
+```
+
+```
+@@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
+@@       sample_msecs    178   337.13   20.91   404.32   289.82
+@@    pp3300_dx_fp_mv    178  3256.00    0.00  3256.00  3256.00
+@@    pp3300_dx_fp_mw    178     0.00    0.00     0.00     0.00
+@@   pp3300_dx_mcu_mv    178  3248.00    0.00  3248.00  3248.00
+@@   pp3300_dx_mcu_mw    178    45.17    0.09    45.21    44.95
+```
+
+#### MCU in low power mode (suspend)
+
+```
+(chroot) $ dut-control fpmcu_slp_alt:on
+```
+
+```
+@@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
+@@       sample_msecs    174   345.60   31.93   457.62   283.00
+@@    pp3300_dx_fp_mv    174  3264.00    0.00  3264.00  3264.00
+@@    pp3300_dx_fp_mw    174     0.00    0.00     0.00     0.00
+@@   pp3300_dx_mcu_mv    174  3260.69    3.94  3264.00  3256.00
+@@   pp3300_dx_mcu_mw    174     5.47    0.10     5.48     4.17
 ```
 
 ## Chrome OS Build (portage / ebuild)
@@ -468,10 +502,29 @@ that should be built as part of the build.
 
 See the [`model.yaml` for the Hatch board][hatch model.yaml] as an example.
 
-You can test your changes by
+Instead of crafting the `model.yaml` by hand, newer boards are moving to the
+[Chrome OS Project Configuration] model, where the config is generated using
+[Starlark]. The common [`create_fingerprint`] function can be used across models
+to configure the fingerprint settings. See the [Morphius `config.star`] for an
+example of how to call `create_fingerprint`. After you modify a `config.star`
+file you will need to [regenerate the config]. If you need to change many
+projects (e.g., modifying [`create_fingerprint`]), you can use the [`CLFactory`]
+tool.
+
+Once you have updated the config, you can test your changes by
 [running `cros_config`](#chromeos-config-fingerprint). The Chrome OS Config
 documentation has a [section on testing properties] that describes this in more
 detail.
+
+### SKUs
+
+The fingerprint sensor may only be included on certain SKUs for a given device.
+The fingerprint code uses [Chrome OS Config] to determine whether a device has a
+fingerprint sensor or not. For each SKU, there is an associated
+[fingerprint config][Chrome OS Config fingerprint]. [Chrome OS Config]
+determines the [SKU information][Chrome OS Config SKU] (and thus the
+[fingerprint config][Chrome OS Config fingerprint]) from [CBI Info]. The SKU for
+a given device can be found by viewing `chrome://system/#platform_identity_sku`.
 
 [`common/fpsensor`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/common/fpsensor/
 [`driver/fingerprint`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/driver/fingerprint
@@ -527,3 +580,11 @@ detail.
 [Icetower v0.2]: ./fingerprint-dev-for-partners.md#fpmcu-dev-board
 [Nucleo F412ZG]: https://www.digikey.com/en/products/detail/stmicroelectronics/NUCLEO-F412ZG/6137573
 [Nucleo H743ZI2]: https://www.digikey.com/en/products/detail/stmicroelectronics/NUCLEO-H743ZI2/10130892
+[CBI Info]: https://chromium.googlesource.com/chromiumos/docs/+/HEAD/design_docs/cros_board_info.md
+[Chrome OS Config SKU]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/chromeos-config/README.md#identity
+[Chrome OS Project Configuration]: https://chromium.googlesource.com/chromiumos/config/+/HEAD/README.md
+[Starlark]: https://docs.bazel.build/versions/master/skylark/language.html
+[`create_fingerprint`]: https://chromium.googlesource.com/chromiumos/config/+/e1fa0d7f56eb3dd6e9378e4326de086ada46b7d3/util/hw_topology.star#444
+[Morphius `config.star`]: https://chrome-internal.googlesource.com/chromeos/project/zork/morphius/+/593b657a776ed6b320c826916adc9cd845faf709/config.star#85
+[regenerate the config]: https://chromium.googlesource.com/chromiumos/config/+/HEAD/README.md#making-configuration-changes-for-your-project
+[`CLFactory`]: https://chromium.googlesource.com/chromiumos/config/+/HEAD/README.md#making-bulk-changes-across-repos

@@ -37,7 +37,7 @@
 #undef CONFIG_DEBUG_ASSERT
 #undef CONFIG_DEBUG_EXCEPTIONS
 #undef CONFIG_DEBUG_STACK_OVERFLOW
-#undef CONFIG_FLASH
+#undef CONFIG_FLASH_CROS
 #undef CONFIG_FLASH_PHYSICAL
 #undef CONFIG_FMAP
 /* Not using pstate but keep some space for the public key */
@@ -92,7 +92,6 @@
 #include "common.h"
 
 /* No GPIO abstraction layer */
-enum gpio_signal;
 
 enum adc_channel {
 	ADC_CH_CC1_PD = 1,

@@ -9,6 +9,29 @@ import re
 import shlex
 
 
+def c_str(input_str):
+    """Make a string that can be included as a literal in C source code.
+
+    Args:
+        input_str: The string to process.
+
+    Returns:
+        A string which can be included in C source code.
+    """
+
+    def c_chr(char):
+        # Convert a char in a string to the C representation.  Per the
+        # C standard, we can use all characters but quote, newline,
+        # and backslash directly with no replacements.
+        return {
+            '"': r"\"",
+            "\n": r"\n",
+            "\\": "\\\\",
+        }.get(char, char)
+
+    return '"{}"'.format("".join(map(c_chr, input_str)))
+
+
 def locate_cros_checkout():
     """Find the path to the ChromiumOS checkout.
 
@@ -18,26 +41,27 @@ def locate_cros_checkout():
         variable, then scanning upwards from the current directory,
         and finally from a known set of common paths.
     """
+
     def propose_checkouts():
-        yield os.getenv('CROS_WORKON_SRCROOT')
+        yield os.getenv("CROS_WORKON_SRCROOT")
 
         path = pathlib.Path.cwd()
-        while path.resolve() != pathlib.Path('/'):
+        while path.resolve() != pathlib.Path("/"):
             yield path
-            path = path / '..'
+            path = path / ".."
 
-        yield '/mnt/host/source'
-        yield pathlib.Path.home() / 'trunk'
-        yield pathlib.Path.home() / 'chromiumos'
+        yield "/mnt/host/source"
+        yield pathlib.Path.home() / "trunk"
+        yield pathlib.Path.home() / "chromiumos"
 
     for path in propose_checkouts():
         if not path:
             continue
         path = pathlib.Path(path)
-        if (path / '.repo').is_dir():
+        if (path / ".repo").is_dir():
             return path.resolve()
 
-    raise FileNotFoundError('Unable to locate a ChromiumOS checkout')
+    raise FileNotFoundError("Unable to locate a ChromiumOS checkout")
 
 
 def locate_zephyr_base(checkout, version):
@@ -50,8 +74,14 @@ def locate_zephyr_base(checkout, version):
     Returns:
         The path to the Zephyr source.
     """
-    return (checkout / 'src' / 'third_party' / 'zephyr' / 'main' /
-            'v{}.{}'.format(*version[:2]))
+    return (
+        checkout
+        / "src"
+        / "third_party"
+        / "zephyr"
+        / "main"
+        / "v{}.{}".format(*version[:2])
+    )
 
 
 def read_kconfig_file(path):
@@ -66,12 +96,30 @@ def read_kconfig_file(path):
     result = {}
     with open(path) as f:
         for line in f:
-            line, _, _ = line.partition('#')
+            line, _, _ = line.partition("#")
             line = line.strip()
             if line:
-                name, _, value = line.partition('=')
+                name, _, value = line.partition("=")
                 result[name.strip()] = value.strip()
     return result
+
+
+def read_kconfig_autoconf_value(path, key):
+    """Parse an autoconf.h file for a resolved kconfig value
+
+    Args:
+        path: The path to the autoconf.h file.
+        key: The define key to lookup.
+
+    Returns:
+        The value associated with the key or nothing if the key wasn't found.
+    """
+    prog = re.compile(r"^#define\s{}\s(\S+)$".format(key))
+    with open(path / "autoconf.h") as f:
+        for line in f:
+            m = prog.match(line)
+            if m:
+                return m.group(1)
 
 
 def write_kconfig_file(path, config, only_if_changed=True):
@@ -88,7 +136,7 @@ def write_kconfig_file(path, config, only_if_changed=True):
             return
     with open(path, "w") as f:
         for name, value in config.items():
-            f.write('{}={}\n'.format(name, value))
+            f.write("{}={}\n".format(name, value))
 
 
 def parse_zephyr_version(version_string):
@@ -100,11 +148,36 @@ def parse_zephyr_version(version_string):
     Returns:
         A 2-tuple or 3-tuple of integers representing the version.
     """
-    match = re.fullmatch(r'v?(\d+)[._](\d+)(?:[._](\d+))?', version_string)
+    match = re.fullmatch(r"v?(\d+)[._](\d+)(?:[._](\d+))?", version_string)
     if not match:
         raise ValueError(
-            "{} does not look like a Zephyr version.".format(version_string))
+            "{} does not look like a Zephyr version.".format(version_string)
+        )
     return tuple(int(x) for x in match.groups() if x is not None)
+
+
+def read_zephyr_version(zephyr_base):
+    """Read the Zephyr version from a Zephyr OS checkout.
+
+    Args:
+         zephyr_base: path to the Zephyr OS repository.
+
+    Returns:
+         A 3-tuple of the version number (major, minor, patchset).
+    """
+    version_file = pathlib.Path(zephyr_base) / "VERSION"
+
+    file_vars = {}
+    with open(version_file) as f:
+        for line in f:
+            key, sep, value = line.partition("=")
+            file_vars[key.strip()] = value.strip()
+
+    return (
+        int(file_vars["VERSION_MAJOR"]),
+        int(file_vars["VERSION_MINOR"]),
+        int(file_vars["PATCHLEVEL"]),
+    )
 
 
 def repr_command(argv):
@@ -116,7 +189,7 @@ def repr_command(argv):
     Returns:
         A string which could be pasted into a shell for execution.
     """
-    return ' '.join(shlex.quote(str(arg)) for arg in argv)
+    return " ".join(shlex.quote(str(arg)) for arg in argv)
 
 
 def update_symlink(target_path, link_path):
@@ -127,11 +200,13 @@ def update_symlink(target_path, link_path):
         link_path: A Path-like object of the symlink.
     """
     target = target_path.resolve()
-    if (not link_path.is_symlink()
-            or pathlib.Path(os.readlink(link_path)).resolve() != target):
-            if link_path.exists():
-                link_path.unlink()
-            link_path.symlink_to(target)
+    if (
+        not link_path.is_symlink()
+        or pathlib.Path(os.readlink(link_path)).resolve() != target
+    ):
+        if link_path.exists():
+            link_path.unlink()
+        link_path.symlink_to(target)
 
 
 def log_multi_line(logger, level, message):
@@ -145,3 +220,36 @@ def log_multi_line(logger, level, message):
     for line in message.splitlines():
         if line:
             logger.log(level, line)
+
+
+def resolve_build_dir(platform_ec_dir, project_dir, build_dir):
+    """Resolve the build directory using platform/ec/build/... as default.
+
+    Args:
+        platform_ec_dir: The path to the chromiumos source's platform/ec
+          directory.
+        project_dir: The directory of the project.
+        build_dir: The directory to build in (may be None).
+    Returns:
+        The resolved build directory (using build_dir if not None).
+    """
+    if build_dir:
+        return build_dir
+
+    if not pathlib.Path.exists(project_dir / "zmake.yaml"):
+        raise OSError("Invalid configuration")
+
+    # Resolve project_dir to absolute path.
+    project_dir = project_dir.resolve()
+
+    # Compute the path of project_dir relative to platform_ec_dir.
+    project_relative_path = pathlib.Path.relative_to(project_dir, platform_ec_dir)
+
+    # Make sure that the project_dir is a subdirectory of platform_ec_dir.
+    if platform_ec_dir / project_relative_path != project_dir:
+        raise OSError(
+            "Can't resolve project directory {} which is not a subdirectory"
+            " of the platform/ec directory {}".format(project_dir, platform_ec_dir)
+        )
+
+    return platform_ec_dir / "build" / project_relative_path

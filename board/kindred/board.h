@@ -179,9 +179,10 @@ enum battery_type {
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
 
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
 void motion_interrupt(enum gpio_signal signal);
+
+void ccd_mode_isr(enum gpio_signal signal);
+
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __CROS_EC_BOARD_H */

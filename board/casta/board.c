@@ -6,7 +6,6 @@
 /* Casta board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "battery.h"
 #include "cbi_ssfc.h"
 #include "charge_manager.h"
@@ -33,7 +32,7 @@
 #include "system.h"
 #include "tcpm/tcpci.h"
 #include "temp_sensor.h"
-#include "thermistor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "util.h"

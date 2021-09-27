@@ -12,9 +12,6 @@
 #define VARIANT_DEDEDE_EC_IT8320
 #include "baseboard.h"
 
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
-
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
 
@@ -31,6 +28,8 @@
 #undef  CONFIG_CHARGER_SINGLE_CHIP
 #define CONFIG_OCPC
 #define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr */
+#undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 
 #define GPIO_USB_C1_INT_ODL GPIO_SUB_USB_C1_INT_ODL
 
@@ -42,8 +41,17 @@
 #define CONFIG_PWM
 
 /* Sensors */
+#define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCEL_KX022		/* Lid accel */
-#define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
+#define CONFIG_ACCELGYRO_BMI160		/* Base accel */
+#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_BMI_COMM_I2C
+#define CONFIG_ACCELGYRO_ICM426XX	/* Base accel */
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_ICM_COMM_I2C
+
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
@@ -76,7 +84,7 @@
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PP3300_A
+#define CONFIG_THROTTLE_AP
 
 /* USB Mux and Retimer */
 #define CONFIG_USB_MUX_IT5205			/* C1: ITE Mux */
@@ -132,11 +140,11 @@ enum temp_sensor_id {
 /* List of possible batteries */
 enum battery_type {
 	BATTERY_C140254,
+	BATTERY_C340184,
 	BATTERY_TYPE_COUNT,
 };
 
-int board_is_sourcing_vbus(int port);
-
+void motion_interrupt(enum gpio_signal signal);
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __CROS_EC_BOARD_H */

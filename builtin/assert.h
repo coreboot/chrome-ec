@@ -27,27 +27,46 @@ extern noreturn void panic_assert_fail(const char *fname, int linenum);
 		if (!(cond))                                   \
 			panic_assert_fail(__FILE__, __LINE__); \
 	} while (0)
-#else
+
+#else /* !CONFIG_DEBUG_ASSERT_BRIEF */
+
 extern noreturn void panic_assert_fail(const char *msg, const char *func,
-			      const char *fname, int linenum);
+				       const char *fname, int linenum);
 #define ASSERT(cond)                                                 \
 	do {                                                         \
 		if (!(cond))                                         \
 			panic_assert_fail(#cond, __func__, __FILE__, \
 					  __LINE__);                 \
 	} while (0)
-#endif
+#endif /* CONFIG_DEBUG_ASSERT_BRIEF */
+
+#else /* !CONFIG_DEBUG_ASSERT_REBOOTS */
+
+#if defined(__arm__)
+#define ARCH_SOFTWARE_BREAKPOINT __asm("bkpt")
+#elif defined(__nds32__)
+#define ARCH_SOFTWARE_BREAKPOINT __asm("break 0")
+#elif defined(__riscv)
+#define ARCH_SOFTWARE_BREAKPOINT __asm("ebreak")
+#elif defined(VIF_BUILD)
+/* The genvif utility compiles usb_pd_policy.c and needs an empty definition. */
+#define ARCH_SOFTWARE_BREAKPOINT
 #else
-#define ASSERT(cond)                     \
-	do {                             \
-		if (!(cond))             \
-			__asm("bkpt");   \
-		__builtin_unreachable(); \
+#error "CONFIG_DEBUG_ASSERT_REBOOTS must be defined on this architecture"
+#endif
+
+#define ASSERT(cond)                              \
+	do {                                      \
+		if (!(cond)) {                    \
+			ARCH_SOFTWARE_BREAKPOINT; \
+			__builtin_unreachable();  \
+		}                                 \
 	} while (0)
-#endif
-#else
+#endif /* CONFIG_DEBUG_ASSERT_REBOOTS */
+
+#else /* !CONFIG_DEBUG_ASSERT */
 #define ASSERT(cond)
-#endif
+#endif /* CONFIG_DEBUG_ASSERT */
 
 /* This collides with cstdlib, so exclude it where cstdlib is supported. */
 #ifndef assert

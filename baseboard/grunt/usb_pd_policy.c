@@ -96,7 +96,7 @@ mux_state_t svdm_dp_mux_mode(int port)
 
 __override int svdm_dp_config(int port, uint32_t *payload)
 {
-	int opos = pd_alt_mode(port, TCPC_TX_SOP, USB_SID_DISPLAYPORT);
+	int opos = pd_alt_mode(port, TCPCI_MSG_SOP, USB_SID_DISPLAYPORT);
 	int mf_pref = PD_VDO_DPSTS_MF_PREF(dp_status[port]);
 	int pin_mode = pd_dfp_dp_get_pin_mode(port, dp_status[port]);
 	mux_state_t mux_mode = svdm_dp_mux_mode(port);
@@ -142,7 +142,8 @@ __override void svdm_dp_post_config(int port)
 
 	/* set the minimum time delay (2ms) for the next HPD IRQ */
 	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
-	usb_mux_hpd_update(port, 1, 0);
+	usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL |
+				 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 
 #endif /* CONFIG_USB_PD_ALT_MODE_DFP */

@@ -54,6 +54,22 @@ static int icm426xx_normalize(const struct motion_sensor_t *s, intv3_t v,
 	return EC_SUCCESS;
 }
 
+static int icm426xx_check_sensor_stabilized(const struct motion_sensor_t *s,
+					    uint32_t ts)
+{
+	int32_t rem;
+
+	rem = icm_get_sensor_stabilized(s, ts);
+	if (rem == 0)
+		return EC_SUCCESS;
+	if (rem > 0)
+		return EC_ERROR_BUSY;
+
+	/* rem < 0: reset check since ts has passed stabilize_ts */
+	icm_reset_stabilize_ts(s);
+	return EC_SUCCESS;
+}
+
 /* use FIFO threshold interrupt on INT1 */
 #define ICM426XX_FIFO_INT_EN		ICM426XX_FIFO_THS_INT1_EN
 #define ICM426XX_FIFO_INT_STATUS	ICM426XX_FIFO_THS_INT
@@ -218,10 +234,16 @@ static int __maybe_unused icm426xx_load_fifo(struct motion_sensor_t *s,
 		/* exit if error or FIFO is empty */
 		if (size <= 0)
 			return -size;
-		if (accel != NULL)
-			icm426xx_push_fifo_data(st->accel, accel, ts);
-		if (gyro != NULL)
-			icm426xx_push_fifo_data(st->gyro, gyro, ts);
+		if (accel != NULL) {
+			ret = icm426xx_check_sensor_stabilized(st->accel, ts);
+			if (ret == EC_SUCCESS)
+				icm426xx_push_fifo_data(st->accel, accel, ts);
+		}
+		if (gyro != NULL) {
+			ret = icm426xx_check_sensor_stabilized(st->gyro, ts);
+			if (ret == EC_SUCCESS)
+				icm426xx_push_fifo_data(st->gyro, gyro, ts);
+		}
 	}
 
 	return EC_SUCCESS;
@@ -327,7 +349,8 @@ static int icm426xx_config_interrupt(const struct motion_sensor_t *s)
 
 static int icm426xx_enable_sensor(const struct motion_sensor_t *s, int enable)
 {
-	unsigned int sleep;
+	uint32_t delay, stop_delay;
+	int32_t rem;
 	uint8_t mask, val;
 	int ret;
 
@@ -335,43 +358,50 @@ static int icm426xx_enable_sensor(const struct motion_sensor_t *s, int enable)
 	case MOTIONSENSE_TYPE_ACCEL:
 		mask = ICM426XX_ACCEL_MODE_MASK;
 		if (enable) {
-			sleep = 20;
+			delay = ICM426XX_ACCEL_START_TIME;
+			stop_delay = ICM426XX_ACCEL_STOP_TIME;
 			val = ICM426XX_ACCEL_MODE(ICM426XX_MODE_LOW_POWER);
 		} else {
-			sleep = 0;
+			delay = ICM426XX_ACCEL_STOP_TIME;
 			val = ICM426XX_ACCEL_MODE(ICM426XX_MODE_OFF);
 		}
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
 		mask = ICM426XX_GYRO_MODE_MASK;
 		if (enable) {
-			sleep = 60;
+			delay = ICM426XX_GYRO_START_TIME;
+			stop_delay = ICM426XX_GYRO_STOP_TIME;
 			val = ICM426XX_GYRO_MODE(ICM426XX_MODE_LOW_NOISE);
 		} else {
-			sleep = 150;
+			delay = ICM426XX_GYRO_STOP_TIME;
 			val = ICM426XX_GYRO_MODE(ICM426XX_MODE_OFF);
 		}
 		break;
 	default:
-		return -EC_ERROR_INVAL;
+		return EC_ERROR_INVAL;
+	}
+
+	/* check stop delay and sleep if required */
+	if (enable) {
+		rem = icm_get_sensor_stabilized(s, __hw_clock_source_read());
+		/* rem > stop_delay means counter rollover */
+		if (rem > 0 && rem <= stop_delay)
+			usleep(rem);
 	}
 
 	mutex_lock(s->mutex);
 
 	ret = icm_field_update8(s, ICM426XX_REG_PWR_MGMT0, mask, val);
-	/* when turning sensor on block any register write for 200 us */
-	if (ret == EC_SUCCESS && enable)
-		usleep(200);
+	if (ret == EC_SUCCESS) {
+		icm_set_stabilize_ts(s, delay);
+		/* when turning sensor on block any register write for 200 us */
+		if (enable)
+			usleep(200);
+	}
 
 	mutex_unlock(s->mutex);
 
-	if (ret != EC_SUCCESS)
-		return ret;
-
-	if (sleep)
-		msleep(sleep);
-
-	return EC_SUCCESS;
+	return ret;
 }
 
 static int icm426xx_set_data_rate(const struct motion_sensor_t *s, int rate,
@@ -421,11 +451,6 @@ static int icm426xx_set_data_rate(const struct motion_sensor_t *s, int rate,
 		ret = icm426xx_enable_sensor(s, 0);
 		data->odr = 0;
 		return ret;
-	} else if (data->odr == 0) {
-		/* enable sensor */
-		ret = icm426xx_enable_sensor(s, 1);
-		if (ret)
-			return ret;
 	}
 
 	mutex_lock(s->mutex);
@@ -435,14 +460,19 @@ static int icm426xx_set_data_rate(const struct motion_sensor_t *s, int rate,
 	if (ret != EC_SUCCESS)
 		goto out_unlock;
 
-	data->odr = normalized_rate;
-
 	mutex_unlock(s->mutex);
 
-	/* enable data in FIFO */
-	if (IS_ENABLED(CONFIG_ACCEL_FIFO))
-		icm426xx_config_fifo(s, 1);
+	if (data->odr == 0) {
+		/* enable sensor */
+		ret = icm426xx_enable_sensor(s, 1);
+		if (ret)
+			return ret;
+		/* enable data in FIFO */
+		if (IS_ENABLED(CONFIG_ACCEL_FIFO))
+			icm426xx_config_fifo(s, 1);
+	}
 
+	data->odr = normalized_rate;
 	return EC_SUCCESS;
 
 out_unlock:
@@ -739,9 +769,13 @@ static int icm426xx_read(const struct motion_sensor_t *s, intv3_t v)
 		return EC_ERROR_INVAL;
 	}
 
-	/* read data registers */
+	/* read data registers if sensor is stabilized */
 	mutex_lock(s->mutex);
-	ret = icm_read_n(s, reg, raw, sizeof(raw));
+
+	ret = icm426xx_check_sensor_stabilized(s, __hw_clock_source_read());
+	if (ret == EC_SUCCESS)
+		ret = icm_read_n(s, reg, raw, sizeof(raw));
+
 	mutex_unlock(s->mutex);
 	if (ret != EC_SUCCESS)
 		return ret;
@@ -788,46 +822,32 @@ static int icm426xx_init_config(const struct motion_sensor_t *s)
 	 * interferences on the bus.
 	 */
 
-	ret = 0;
-	if (SLAVE_IS_SPI(s->i2c_spi_addr_flags)) {
-#ifdef CONFIG_SPI_ACCEL_PORT
-		icm_field_update8(s, ICM426XX_REG_INTF_CONFIG6,
-			ICM426XX_INTF_CONFIG6_MASK,
-			ICM426XX_I3C_EN | ICM426XX_I3C_SDR_EN |
-			ICM426XX_I3C_DDR_EN);
-		ret = icm_field_update8(s, ICM426XX_REG_INTF_CONFIG4,
-			ICM426XX_I3C_BUS_MODE,
-			ICM426XX_I3C_BUS_MODE);
+#ifdef CONFIG_ACCELGYRO_ICM_COMM_SPI
+	icm_field_update8(
+		s, ICM426XX_REG_INTF_CONFIG6, ICM426XX_INTF_CONFIG6_MASK,
+		ICM426XX_I3C_EN | ICM426XX_I3C_SDR_EN | ICM426XX_I3C_DDR_EN);
+	ret = icm_field_update8(s, ICM426XX_REG_INTF_CONFIG4,
+				ICM426XX_I3C_BUS_MODE, ICM426XX_I3C_BUS_MODE);
+#else
+	icm_field_update8(s, ICM426XX_REG_INTF_CONFIG6,
+			  ICM426XX_INTF_CONFIG6_MASK, ICM426XX_I3C_EN);
+	ret = icm_field_update8(s, ICM426XX_REG_INTF_CONFIG4,
+				ICM426XX_I3C_BUS_MODE, 0);
 #endif
-	} else {
-#ifdef I2C_PORT_ACCEL
-		icm_field_update8(s, ICM426XX_REG_INTF_CONFIG6,
-			ICM426XX_INTF_CONFIG6_MASK,
-			ICM426XX_I3C_EN);
-		ret = icm_field_update8(s, ICM426XX_REG_INTF_CONFIG4,
-			ICM426XX_I3C_BUS_MODE,
-			0);
-#endif
-	}
 	if (ret)
 		return ret;
 
-	ret = 0;
-	if (SLAVE_IS_SPI(s->i2c_spi_addr_flags)) {
-#ifdef CONFIG_SPI_ACCEL_PORT
-		ret = icm_field_update8(s, ICM426XX_REG_DRIVE_CONFIG,
-			ICM426XX_DRIVE_CONFIG_MASK,
-			ICM426XX_I2C_SLEW_RATE(ICM426XX_SLEW_RATE_20NS_60NS) |
+#ifdef CONFIG_ACCELGYRO_ICM_COMM_SPI
+	ret = icm_field_update8(
+		s, ICM426XX_REG_DRIVE_CONFIG, ICM426XX_DRIVE_CONFIG_MASK,
+		ICM426XX_I2C_SLEW_RATE(ICM426XX_SLEW_RATE_20NS_60NS) |
 			ICM426XX_SPI_SLEW_RATE(ICM426XX_SLEW_RATE_INF_2NS));
-#endif
-	} else {
-#ifdef I2C_PORT_ACCEL
-		ret = icm_field_update8(s, ICM426XX_REG_DRIVE_CONFIG,
-			ICM426XX_DRIVE_CONFIG_MASK,
-			ICM426XX_I2C_SLEW_RATE(ICM426XX_SLEW_RATE_12NS_36NS) |
+#else
+	ret = icm_field_update8(
+		s, ICM426XX_REG_DRIVE_CONFIG, ICM426XX_DRIVE_CONFIG_MASK,
+		ICM426XX_I2C_SLEW_RATE(ICM426XX_SLEW_RATE_12NS_36NS) |
 			ICM426XX_SPI_SLEW_RATE(ICM426XX_SLEW_RATE_12NS_36NS));
 #endif
-	}
 	if (ret)
 		return ret;
 
@@ -837,18 +857,20 @@ static int icm426xx_init_config(const struct motion_sensor_t *s)
 	 * Disable unused serial interface.
 	 */
 	mask = ICM426XX_DATA_CONF_MASK | ICM426XX_UI_SIFS_CFG_MASK;
-	val = 0;
-	if (SLAVE_IS_SPI(s->i2c_spi_addr_flags)) {
-#ifdef CONFIG_SPI_ACCEL_PORT
-		val |= ICM426XX_UI_SIFS_CFG_I2C_DIS;
+#ifdef CONFIG_ACCELGYRO_ICM_COMM_SPI
+	val = ICM426XX_UI_SIFS_CFG_I2C_DIS;
+#else
+	val = ICM426XX_UI_SIFS_CFG_SPI_DIS;
 #endif
-	} else {
-#ifdef I2C_PORT_ACCEL
-		val |= ICM426XX_UI_SIFS_CFG_SPI_DIS;
-#endif
-	}
 
-	return icm_field_update8(s, ICM426XX_REG_INTF_CONFIG0, mask, val);
+	ret = icm_field_update8(s, ICM426XX_REG_INTF_CONFIG0, mask, val);
+	if (ret)
+		return ret;
+
+	/* set accel oscillator to RC clock to avoid bad transition with PLL */
+	return icm_field_update8(s, ICM426XX_REG_INTF_CONFIG1,
+				 ICM426XX_ACCEL_LP_CLK_SEL,
+				 ICM426XX_ACCEL_LP_CLK_SEL);
 }
 
 static int icm426xx_init(struct motion_sensor_t *s)

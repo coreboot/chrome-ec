@@ -5,8 +5,11 @@
 
 #include "battery_smart.h"
 #include "button.h"
+#include "cbi_ssfc.h"
 #include "cros_board_info.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_icm_common.h"
+#include "driver/accelgyro_icm426xx.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
 #include "driver/bc12/pi3usb9201.h"
@@ -31,6 +34,7 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
+#include "thermal.h"
 #include "usb_charge.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
@@ -43,8 +47,6 @@ int I2C_PORT_BATTERY = I2C_PORT_BATTERY_V1;
 
 #include "gpio_list.h"
 
-#ifdef HAS_TASK_MOTIONSENSE
-
 /* Motion sensors */
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
@@ -52,6 +54,7 @@ static struct mutex g_base_mutex;
 /* sensor private data */
 static struct kionix_accel_data g_kx022_data;
 static struct bmi_drv_data_t g_bmi160_data;
+static struct icm_drv_data_t g_icm426xx_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t lid_standard_ref = {
@@ -64,9 +67,54 @@ static const mat33_fp_t base_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
-
+static const mat33_fp_t base_standard_ref_icm = {
+	{FLOAT_TO_FP(1), 0, 0},
+	{0, FLOAT_TO_FP(-1), 0},
+	{0, 0, FLOAT_TO_FP(-1)},
+};
 
 /* TODO(gcc >= 5.0) Remove the casts to const pointer at rot_standard_ref */
+struct motion_sensor_t icm426xx_base_accel = {
+	.name = "Base Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs. */
+	.rot_standard_ref = &base_standard_ref_icm,
+	.min_frequency = ICM426XX_ACCEL_MIN_FREQ,
+	.max_frequency = ICM426XX_ACCEL_MAX_FREQ,
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100,
+		},
+	},
+};
+
+struct motion_sensor_t icm426xx_base_gyro = {
+	.name = "Base Gyro",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_ICM426XX,
+	.type = MOTIONSENSE_TYPE_GYRO,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &icm426xx_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = &g_icm426xx_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = ICM426XX_ADDR0_FLAGS,
+	.default_range = 1000, /* dps */
+	.rot_standard_ref = &base_standard_ref_icm,
+	.min_frequency = ICM426XX_GYRO_MIN_FREQ,
+	.max_frequency = ICM426XX_GYRO_MAX_FREQ,
+};
+
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 	 .name = "Lid Accel",
@@ -108,7 +156,7 @@ struct motion_sensor_t motion_sensors[] = {
 	 .int_signal = GPIO_6AXIS_INT_L,
 	 .port = I2C_PORT_SENSOR,
 	 .i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	 .default_range = 2, /* g, enough for laptop */
+	 .default_range = 4, /* g, to meet CDD 7.3.1/C-1-4 reqs.*/
 	 .rot_standard_ref = &base_standard_ref,
 	 .min_frequency = BMI_ACCEL_MIN_FREQ,
 	 .max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -145,7 +193,23 @@ struct motion_sensor_t motion_sensors[] = {
 
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
-#endif /* HAS_TASK_MOTIONSENSE */
+static void setup_base_gyro_config(void)
+{
+	if (get_cbi_ssfc_base_sensor() == SSFC_BASE_GYRO_ICM426XX) {
+		motion_sensors[BASE_ACCEL] = icm426xx_base_accel;
+		motion_sensors[BASE_GYRO] = icm426xx_base_gyro;
+		ccprints("BASE GYRO is ICM426XX");
+	} else
+		ccprints("BASE GYRO is BMI160");
+}
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	if (get_cbi_ssfc_base_sensor() == SSFC_BASE_GYRO_ICM426XX)
+		icm426xx_interrupt(signal);
+	else
+		bmi160_interrupt(signal);
+}
 
 /*****************************************************************************
  * Board suspend / resume
@@ -189,8 +253,12 @@ static int board_ps8743_mux_set(const struct usb_mux *me,
  * chip and it need a board specific driver.
  * Overall, it will use chained mux framework.
  */
-static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state)
+static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state,
+			      bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
 		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
 	else
@@ -387,27 +455,34 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
-static void reset_pd_port(int port, enum gpio_signal reset_gpio_l,
-			  int hold_delay, int finish_delay)
+static void reset_nct38xx_port(int port)
 {
+	enum gpio_signal reset_gpio_l;
+
+	if (port == USBC_PORT_C0)
+		reset_gpio_l = GPIO_USB_C0_TCPC_RST_L;
+	else if (port == USBC_PORT_C1)
+		reset_gpio_l = GPIO_USB_C1_TCPC_RST_L;
+	else
+		/* Invalid port: do nothing */
+		return;
+
 	gpio_set_level(reset_gpio_l, 0);
-	msleep(hold_delay);
+	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
 	gpio_set_level(reset_gpio_l, 1);
-	if (finish_delay)
-		msleep(finish_delay);
+	nct38xx_reset_notify(port);
+	if (NCT3807_RESET_POST_DELAY_MS != 0)
+		msleep(NCT3807_RESET_POST_DELAY_MS);
 }
+
 
 void board_reset_pd_mcu(void)
 {
 	/* Reset TCPC0 */
-	reset_pd_port(USBC_PORT_C0, GPIO_USB_C0_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C0);
 
 	/* Reset TCPC1 */
-	reset_pd_port(USBC_PORT_C1, GPIO_USB_C1_TCPC_RST_L,
-		      NCT38XX_RESET_HOLD_DELAY_MS,
-		      NCT38XX_RESET_POST_DELAY_MS);
+	reset_nct38xx_port(USBC_PORT_C1);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -499,13 +574,22 @@ static void setup_fw_config(void)
 	ioex_enable_interrupt(IOEX_USB_C0_SBU_FAULT_ODL);
 	ioex_enable_interrupt(IOEX_USB_C1_SBU_FAULT_DB_ODL);
 
+	/* Config Thermal params */
+	thermal_params[0].temp_host[EC_TEMP_THRESH_HIGH] = C_TO_K(72);
+	thermal_params[0].temp_host[EC_TEMP_THRESH_HALT] = C_TO_K(80);
+	thermal_params[0].temp_host_release[EC_TEMP_THRESH_HIGH] = C_TO_K(67);
+	thermal_params[1].temp_host[EC_TEMP_THRESH_HIGH] = C_TO_K(72);
+	thermal_params[1].temp_host[EC_TEMP_THRESH_HALT] = C_TO_K(80);
+	thermal_params[1].temp_host_release[EC_TEMP_THRESH_HIGH] = C_TO_K(67);
+
 	if (ec_config_has_lid_angle_tablet_mode()) {
+		setup_base_gyro_config();
 		/* Enable Gyro interrupts */
 		gpio_enable_interrupt(GPIO_6AXIS_INT_L);
 	} else {
 		motion_sensor_count = 0;
 		/* Device is clamshell only */
-		tablet_set_mode(0);
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
 		/* Gyro is not present, don't allow line to float */
 		gpio_set_flags(GPIO_6AXIS_INT_L, GPIO_INPUT | GPIO_PULL_DOWN);
 	}
@@ -527,12 +611,12 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 struct ioexpander_config_t ioex_config[] = {
 	[IOEX_C0_NCT3807] = {
 		.i2c_host_port = I2C_PORT_TCPC0,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 	},
 	[IOEX_C1_NCT3807] = {
 		.i2c_host_port = I2C_PORT_TCPC1,
-		.i2c_slave_addr = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 	},
 };

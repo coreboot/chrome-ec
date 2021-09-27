@@ -85,9 +85,9 @@ enum sensor_id {
 };
 
 enum battery_type {
-	BATTERY_DANAPACK_COS,
-	BATTERY_DANAPACK_ATL,
-	BATTERY_DANAPACK_SDI,
+	BATTERY_DYNAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_DYNAPACK_SDI,
 	BATTERY_SAMSUNG_SDI,
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_ATL,
@@ -97,11 +97,6 @@ enum battery_type {
 	BATTERY_COS_2,
 	BATTERY_TYPE_COUNT,
 };
-
-#ifdef CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
-#endif
 
 int board_is_convertible(void);
 

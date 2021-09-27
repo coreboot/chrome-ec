@@ -16,6 +16,8 @@ driver-$(CONFIG_ACCEL_KX022)+=accel_kionix.o
 driver-$(CONFIG_ACCELGYRO_LSM6DS0)+=accelgyro_lsm6ds0.o
 driver-$(CONFIG_ACCELGYRO_BMI160)+=accelgyro_bmi160.o accelgyro_bmi_common.o
 driver-$(CONFIG_ACCELGYRO_BMI260)+=accelgyro_bmi260.o accelgyro_bmi_common.o
+driver-$(CONFIG_ACCELGYRO_BMI3XX)+=accelgyro_bmi3xx.o accelgyro_bmi_common.o
+driver-$(CONFIG_ACCEL_BMA4XX)+=accel_bma4xx.o
 driver-$(CONFIG_MAG_BMI_BMM150)+=mag_bmm150.o
 driver-$(CONFIG_ACCELGYRO_LSM6DSM)+=accelgyro_lsm6dsm.o stm_mems_common.o
 driver-$(CONFIG_ACCELGYRO_LSM6DSO)+=accelgyro_lsm6dso.o stm_mems_common.o
@@ -26,6 +28,7 @@ driver-$(CONFIG_SYNC)+=sync.o
 driver-$(CONFIG_ACCEL_LIS2DW_COMMON)+=accel_lis2dw12.o stm_mems_common.o
 driver-$(CONFIG_ACCEL_LIS2DS)+=accel_lis2ds.o stm_mems_common.o
 driver-$(CONFIG_ACCELGYRO_ICM426XX)+=accelgyro_icm426xx.o accelgyro_icm_common.o
+driver-$(CONFIG_ACCELGYRO_ICM42607)+=accelgyro_icm42607.o accelgyro_icm_common.o
 
 # BC1.2 Charger Detection Devices
 driver-$(CONFIG_BC12_DETECT_MAX14637)+=bc12/max14637.o
@@ -62,6 +65,7 @@ driver-$(CONFIG_CHARGER_BQ24715)+=charger/bq24715.o
 driver-$(CONFIG_CHARGER_BQ24770)+=charger/bq24773.o
 driver-$(CONFIG_CHARGER_BQ24773)+=charger/bq24773.o
 driver-$(CONFIG_CHARGER_BQ25710)+=charger/bq25710.o
+driver-$(CONFIG_CHARGER_BQ25720)+=charger/bq25710.o
 driver-$(CONFIG_CHARGER_ISL9237)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_ISL9238)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_ISL9238C)+=charger/isl923x.o
@@ -73,15 +77,20 @@ driver-$(CONFIG_CHARGER_RT9467)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_SY21612)+=charger/sy21612.o
 driver-$(CONFIG_CHARGER_SM5803)+=charger/sm5803.o
 
+# DP Redrivers
+driver-$(CONFIG_DP_REDRIVER_TDP142)+=retimer/tdp142.o
+
 # Fingerprint Sensors
 include $(_driver_cur_dir)fingerprint/build.mk
 
 # I/O expander
+driver-$(CONFIG_IO_EXPANDER_CCGXXF)+=ioexpander/ccgxxf.o
 driver-$(CONFIG_IO_EXPANDER_IT8801)+=ioexpander/it8801.o
 driver-$(CONFIG_IO_EXPANDER_NCT38XX)+=ioexpander/ioexpander_nct38xx.o
 driver-$(CONFIG_IO_EXPANDER_PCA9534)+=ioexpander/pca9534.o
 driver-$(CONFIG_IO_EXPANDER_PCA9675)+=ioexpander/pca9675.o
 driver-$(CONFIG_IO_EXPANDER_PCAL6408)+=ioexpander/pcal6408.o
+driver-$(CONFIG_IO_EXPANDER_TCA64XXA)+=ioexpander/tca64xxa.o
 
 driver-$(CONFIG_CTN730)+=nfc/ctn730.o
 
@@ -134,6 +143,7 @@ driver-$(CONFIG_USB_PD_TCPM_TCPCI)+=tcpm/tcpci.o
 driver-$(CONFIG_USB_PD_TCPM_FUSB302)+=tcpm/fusb302.o
 driver-$(CONFIG_USB_PD_TCPM_MT6370)+=tcpm/mt6370.o
 ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
+driver-y +=tcpm/ite_pd_intc.o
 driver-$(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)+=tcpm/it83xx.o
 driver-$(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2)+=tcpm/it8xxx2.o
 endif
@@ -147,6 +157,7 @@ driver-$(CONFIG_USB_PD_TCPM_PS8805)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8815)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_TUSB422)+=tcpm/tusb422.o
 driver-$(CONFIG_USB_PD_TCPM_RT1715)+=tcpm/rt1715.o
+driver-$(CONFIG_USB_PD_TCPM_RT1718S)+=tcpm/rt1718s.o
 driver-$(CONFIG_USB_PD_TCPM_NCT38XX)+=tcpm/nct38xx.o
 driver-$(CONFIG_USB_PD_TCPM_RAA489000)+=tcpm/raa489000.o
 driver-$(CONFIG_USB_PD_TCPM_FUSB307)+=tcpm/fusb307.o
@@ -154,10 +165,12 @@ driver-$(CONFIG_USB_PD_TCPM_STM32GX)+=tcpm/stm32gx.o
 
 # Type-C Retimer drivers
 driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
+driver-$(CONFIG_USBC_RETIMER_KB800X)+=retimer/kb800x.o
 driver-$(CONFIG_USBC_RETIMER_NB7V904M)+=retimer/nb7v904m.o
 driver-$(CONFIG_USBC_RETIMER_PI3DPX1207)+=retimer/pi3dpx1207.o
 driver-$(CONFIG_USBC_RETIMER_PI3HDX1204)+=retimer/pi3hdx1204.o
 driver-$(CONFIG_USBC_RETIMER_PS8802)+=retimer/ps8802.o
+driver-$(CONFIG_USBC_RETIMER_PS8811)+=retimer/ps8811.o
 driver-$(CONFIG_USBC_RETIMER_PS8818)+=retimer/ps8818.o
 driver-$(CONFIG_USBC_RETIMER_TUSB544)+=retimer/tusb544.o
 
@@ -167,7 +180,9 @@ driver-$(CONFIG_USBC_SS_MUX)+=usb_mux/usb_mux.o
 # USB muxes
 driver-$(CONFIG_USB_MUX_AMD_FP5)+=usb_mux/amd_fp5.o
 driver-$(CONFIG_USB_MUX_AMD_FP6)+=usb_mux/amd_fp6.o
+driver-$(CONFIG_USB_MUX_ANX3443)+=usb_mux/anx3443.o
 driver-$(CONFIG_USB_MUX_ANX7440)+=usb_mux/anx7440.o
+driver-$(CONFIG_USB_MUX_ANX7451)+=usb_mux/anx7451.o
 driver-$(CONFIG_USB_MUX_IT5205)+=usb_mux/it5205.o
 driver-$(CONFIG_USB_MUX_PI3USB30532)+=usb_mux/pi3usb3x532.o
 driver-$(CONFIG_USB_MUX_PI3USB31532)+=usb_mux/pi3usb3x532.o
@@ -175,6 +190,7 @@ driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8742)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps8743.o
 driver-$(CONFIG_USB_MUX_TUSB1064)+=usb_mux/tusb1064.o
+driver-$(CONFIG_USB_MUX_PS8822)+=usb_mux/ps8822.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
 
 # USB Hub with I2C interface
@@ -182,6 +198,7 @@ driver-$(CONFIG_USB_HUB_GL3590)+=gl3590.o
 
 # Type-C Power Path Controllers (PPC)
 driver-$(CONFIG_USBC_PPC_AOZ1380)+=ppc/aoz1380.o
+driver-$(CONFIG_USBC_PPC_RT1718S)+=ppc/rt1718s.o
 driver-$(CONFIG_USBC_PPC_SN5S330)+=ppc/sn5s330.o
 ifeq ($(CONFIG_USBC_PPC_NX20P3481)$(CONFIG_USBC_PPC_NX20P3483),y)
 driver-y += ppc/nx20p348x.o
@@ -200,3 +217,10 @@ driver-$(HAS_TASK_WPC) += wpc/p9221.o
 
 # Buck-Boost converters
 driver-$(CONFIG_MP4245)+=mp4245.o
+
+# Power Management ICs
+driver-$(CONFIG_MP2964)+=mp2964.o
+
+# SOC Interface
+driver-$(CONFIG_AMD_SB_RMI)+=sb_rmi.o
+driver-$(CONFIG_AMD_STT)+=amd_stt.o

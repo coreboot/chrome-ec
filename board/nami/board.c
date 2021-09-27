@@ -6,7 +6,6 @@
 /* Poppy board-specific configuration */
 
 #include "adc.h"
-#include "adc_chip.h"
 #include "anx7447.h"
 #include "battery.h"
 #include "board_config.h"
@@ -330,7 +329,8 @@ void board_tcpc_init(void)
 	 * HPD pulse to enable video path
 	 */
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
-		usb_mux_hpd_update(port, 0, 0);
+		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 2);
 
@@ -852,8 +852,7 @@ struct motion_sensor_t motion_sensors[] = {
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 /* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
+__override void lid_angle_peripheral_enable(int enable)
 {
 	/* If the lid is in 360 position, ignore the lid angle,
 	 * which might be faulty. Disable keyboard.
@@ -862,7 +861,6 @@ void lid_angle_peripheral_enable(int enable)
 		enable = 0;
 	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
 }
-#endif
 
 /* Called on AP S3 -> S0 transition */
 static void board_chipset_resume(void)
@@ -963,7 +961,7 @@ static void cbi_init(void)
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
 /* Keyboard scan setting */
-struct keyboard_scan_config keyscan_config = {
+__override struct keyboard_scan_config keyscan_config = {
 	/*
 	 * F3 key scan cycle completed but scan input is not
 	 * charging to logic high when EC start scan next
@@ -981,6 +979,26 @@ struct keyboard_scan_config keyscan_config = {
 		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff,  /* full set */
 	},
 };
+
+static void anx7447_set_aux_switch(void)
+{
+	const int port = USB_PD_PORT_ANX7447;
+
+	/* Debounce */
+	if (gpio_get_level(GPIO_CCD_MODE_ODL))
+		return;
+
+	CPRINTS("C%d: AUX_SW_SEL=0x%x", port, 0xc);
+	if (tcpc_write(port, ANX7447_REG_TCPC_AUX_SWITCH, 0xc))
+		CPRINTS("C%d: Setting AUX_SW_SEL failed", port);
+}
+DECLARE_DEFERRED(anx7447_set_aux_switch);
+
+void ccd_mode_isr(enum gpio_signal signal)
+{
+	/* Wait 2 seconds until all mux setting is done by PD task */
+	hook_call_deferred(&anx7447_set_aux_switch_data, 2 * SECOND);
+}
 
 static void board_init(void)
 {
@@ -1013,6 +1031,10 @@ static void board_init(void)
 	/* Enable pericom BC1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
+
+	/* Trigger once to set mux in case CCD cable is already connected. */
+	ccd_mode_isr(GPIO_CCD_MODE_ODL);
+	gpio_enable_interrupt(GPIO_CCD_MODE_ODL);
 
 	/* Enable Accel/Gyro interrupt for convertibles. */
 	if (sku & SKU_ID_MASK_CONVERTIBLE)

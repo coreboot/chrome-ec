@@ -9,22 +9,26 @@
 # Note that this variable includes the trailing "/"
 _common_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
 
-common-y=util.o
+common-y=util.o util_stdlib.o
 common-y+=version.o printf.o queue.o queue_policies.o irq_locking.o
 
 common-$(CONFIG_ACCELGYRO_BMI160)+=math_util.o
 common-$(CONFIG_ACCELGYRO_BMI260)+=math_util.o
+common-$(CONFIG_ACCELGYRO_BMI3XX)+=math_util.o
 common-$(CONFIG_ACCELGYRO_ICM426XX)+=math_util.o
+common-$(CONFIG_ACCELGYRO_ICM42607)+=math_util.o
 common-$(CONFIG_ACCELGYRO_LSM6DS0)+=math_util.o
 common-$(CONFIG_ACCELGYRO_LSM6DSM)+=math_util.o
 common-$(CONFIG_ACCELGYRO_LSM6DSO)+=math_util.o
 common-$(CONFIG_ACCEL_FIFO)+=motion_sense_fifo.o
 common-$(CONFIG_ACCEL_BMA255)+=math_util.o
+common-$(CONFIG_ACCEL_BMA4XX)+=math_util.o
 common-$(CONFIG_ACCEL_LIS2DW12)+=math_util.o
 common-$(CONFIG_ACCEL_LIS2DH)+=math_util.o
 common-$(CONFIG_ACCEL_LIS2DS)+=math_util.o
 common-$(CONFIG_ACCEL_KXCJ9)+=math_util.o
 common-$(CONFIG_ACCEL_KX022)+=math_util.o
+common-$(CONFIG_TEMP_SENSOR_TMP112)+=math_util.o
 ifneq ($(CORE),cortex-m)
 common-$(CONFIG_AES)+=aes.o
 endif
@@ -40,14 +44,16 @@ common-$(CONFIG_BACKLIGHT_LID)+=backlight_lid.o
 common-$(CONFIG_BASE32)+=base32.o
 common-$(CONFIG_BLINK)+=blink.o
 common-$(CONFIG_DETACHABLE_BASE)+=base_state.o
-common-$(CONFIG_BATTERY)+=battery.o
+common-$(CONFIG_BATTERY)+=battery.o math_util.o
 common-$(CONFIG_BATTERY_FUEL_GAUGE)+=battery_fuel_gauge.o
 common-$(CONFIG_BLUETOOTH_LE)+=bluetooth_le.o
 common-$(CONFIG_BLUETOOTH_LE_STACK)+=btle_hci_controller.o btle_ll.o
 common-$(CONFIG_BODY_DETECTION)+=body_detection.o
 common-$(CONFIG_CAPSENSE)+=capsense.o
 common-$(CONFIG_CEC)+=cec.o
-common-$(CONFIG_CROS_BOARD_INFO)+=cbi.o
+common-$(CONFIG_CBI_EEPROM)+=cbi.o cbi_eeprom.o
+common-$(CONFIG_USB_PD_FLAGS)+=usb_pd_flags.o
+common-$(CONFIG_CBI_GPIO)+=cbi.o cbi_gpio.o
 ifeq ($(HAS_MOCK_CHARGE_MANAGER),)
 common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o
 endif
@@ -78,7 +84,7 @@ common-$(CONFIG_HOSTCMD_ESPI)+=espi.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
 common-$(CONFIG_EXTPOWER)+=extpower_common.o
 common-$(CONFIG_FANS)+=fan.o pwm.o
-common-$(CONFIG_FLASH)+=flash.o
+common-$(CONFIG_FLASH_CROS)+=flash.o
 common-$(CONFIG_FMAP)+=fmap.o
 common-$(CONFIG_GESTURE_SW_DETECTION)+=gesture.o
 common-$(CONFIG_HOSTCMD_EVENTS)+=host_event_commands.o
@@ -95,9 +101,12 @@ common-$(CONFIG_I2C_VIRTUAL_BATTERY)+=virtual_battery.o
 common-$(CONFIG_INDUCTIVE_CHARGING)+=inductive_charging.o
 common-$(CONFIG_KEYBOARD_PROTOCOL_8042)+=keyboard_8042.o \
 	keyboard_8042_sharedlib.o
-common-$(CONFIG_KEYBOARD_PROTOCOL_MKBP)+=keyboard_mkbp.o
+common-$(CONFIG_KEYBOARD_PROTOCOL_MKBP)+=keyboard_mkbp.o mkbp_fifo.o \
+	mkbp_info.o
 common-$(CONFIG_KEYBOARD_TEST)+=keyboard_test.o
 common-$(CONFIG_KEYBOARD_VIVALDI)+=keyboard_vivaldi.o
+common-$(CONFIG_MKBP_INPUT_DEVICES)+=mkbp_input_devices.o mkbp_fifo.o \
+	mkbp_info.o
 common-$(CONFIG_LED_COMMON)+=led_common.o
 common-$(CONFIG_LED_POLICY_STD)+=led_policy_std.o
 common-$(CONFIG_LED_PWM)+=led_pwm.o
@@ -166,6 +175,7 @@ common-$(CONFIG_USB_PD_CONSOLE_CMD)+=usb_pd_console_cmd.o
 endif
 common-$(CONFIG_USB_PD_ALT_MODE_DFP)+=usb_pd_alt_mode_dfp.o
 common-$(CONFIG_USB_PD_ALT_MODE_UFP)+=usb_pd_alt_mode_ufp.o
+common-$(CONFIG_USB_PD_DPS)+=dps.o
 common-$(CONFIG_USB_PD_LOGGING)+=event_log.o pd_log.o
 common-$(CONFIG_USB_PD_TCPC)+=usb_pd_tcpc.o
 common-$(CONFIG_USB_UPDATE)+=usb_update.o update_fw.o
@@ -186,7 +196,8 @@ common-$(CONFIG_VSTORE)+=vstore.o
 common-$(CONFIG_WEBUSB_URL)+=webusb_desc.o
 common-$(CONFIG_WIRELESS)+=wireless.o
 common-$(HAS_TASK_CHIPSET)+=chipset.o
-common-$(HAS_TASK_CONSOLE)+=console.o console_output.o uart_buffering.o
+common-$(HAS_TASK_CONSOLE)+=console.o console_output.o
+common-$(HAS_TASK_CONSOLE)+=uart_buffering.o uart_hostcmd.o uart_printf.o
 common-$(CONFIG_CMD_MEM)+=memory_commands.o
 common-$(HAS_TASK_HOSTCMD)+=host_command.o ec_features.o
 common-$(HAS_TASK_PDCMD)+=host_command_pd.o
@@ -240,10 +251,6 @@ $(out)/.fake-bootblock:
 
 endif # BOOTBLOCK
 
-build-util-bin-y += gen_emmc_transfer_data
-
-# Bootblock is only packed in RO image.
-$(out)/util/gen_emmc_transfer_data: BUILD_LDFLAGS += -DSECTION_IS_RO=$(EMPTY)
 $(out)/bootblock_data.h: $(out)/util/gen_emmc_transfer_data $(out)/.bootblock
 	$(call quiet,emmc_bootblock,BTBLK  )
 

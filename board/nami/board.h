@@ -21,14 +21,14 @@
 #define CONFIG_BOARD_VERSION_CBI
 #define CONFIG_BOARD_FORCE_RESET_PIN
 #define CONFIG_CRC8
-#define CONFIG_CROS_BOARD_INFO
+#define CONFIG_CBI_EEPROM
 #define CONFIG_CASE_CLOSED_DEBUG_EXTERNAL
 #define CONFIG_DPTF
 #define CONFIG_FLASH_SIZE_BYTES 0x80000
 #define CONFIG_FPU
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
-#define CONFIG_KEYBOARD_BOARD_CONFIG
+
 #define CONFIG_KEYBOARD_COL2_INVERTED
 #define CONFIG_KEYBOARD_PROTOCOL_8042
 #define CONFIG_KEYBOARD_KEYPAD
@@ -58,9 +58,6 @@
 #define CONFIG_FAN_DYNAMIC
 #define CONFIG_THROTTLE_AP
 #define CONFIG_PWM_KBLIGHT
-#define CONFIG_SUPPRESSED_HOST_COMMANDS \
-	EC_CMD_CONSOLE_SNAPSHOT, EC_CMD_CONSOLE_READ, EC_CMD_PD_GET_LOG_ENTRY, \
-	EC_CMD_MOTION_SENSE_CMD
 
 /* EC console commands */
 #define CONFIG_CMD_ACCELS
@@ -100,9 +97,6 @@
 #define CONFIG_CHARGER_ISL9238
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_INPUT_CURRENT 512
-/* EC's thresholds. 3%: boot, 2%: no boot. Required for soft sync. */
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON		3
-#define CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC 1
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		27000
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
 /* AP's thresholds. */
@@ -220,8 +214,6 @@
 
 /* support factory keyboard test */
 #define CONFIG_KEYBOARD_FACTORY_TEST
-extern const int keyboard_factory_scan_pins[][2];
-extern const int keyboard_factory_scan_pins_used;
 
 #include "gpio_signal.h"
 #include "registers.h"
@@ -329,6 +321,8 @@ extern uint8_t model;
 
 /* SKU_ID[24:31] are dedicated to OEM customization */
 #define CBI_SKU_CUSTOM_FIELD(val)	((val) >> 24)
+
+void ccd_mode_isr(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 
