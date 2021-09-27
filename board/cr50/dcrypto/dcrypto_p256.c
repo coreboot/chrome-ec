@@ -139,18 +139,24 @@ enum dcrypto_result dcrypto_p256_ecdsa_sign(struct drbg_ctx *drbg,
 					    const p256_int *message,
 					    p256_int *r, p256_int *s)
 {
-	enum dcrypto_result result;
+	enum dcrypto_result ret1, ret2;
 	p256_int nonce;
 
-	/* Pick uniform 0 < k < R */
-	result = p256_hmac_drbg_generate(drbg, &nonce);
+	do {
+		/* Pick uniform 0 < k < R */
+		ret1 = p256_hmac_drbg_generate(drbg, &nonce);
+		/* Don't even try with broken nonce. */
+		if (ret1 != DCRYPTO_OK)
+			return ret1;
 
-	result |= dcrypto_p256_ecdsa_sign_raw(&nonce, key, message, r, s);
+		ret2 = dcrypto_p256_ecdsa_sign_raw(&nonce, key, message, r, s);
+		ret1 |= ret2;
+	} while (ret2 == DCRYPTO_RETRY);
 
 	/* Wipe temp nonce */
 	p256_clear(&nonce);
 
-	return dcrypto_ok_if_zero(result - DCRYPTO_OK);
+	return dcrypto_ok_if_zero(ret1 - DCRYPTO_OK);
 }
 
 enum dcrypto_result dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce,
@@ -160,6 +166,7 @@ enum dcrypto_result dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce,
 {
 	int result;
 	p256_int rnd;
+	bool s_zero, r_zero;
 
 	dcrypto_init_and_lock();
 	dcrypto_ecc_init();
@@ -183,12 +190,23 @@ enum dcrypto_result dcrypto_p256_ecdsa_sign_raw(const p256_int *nonce,
 		p256_clear(r);
 		p256_clear(s);
 	}
+	s_zero = p256_is_zero(s);
+	r_zero = p256_is_zero(r);
 
 	/* Wipe d,k */
 	CP8W(d, &rnd);
 	CP8W(k, &rnd);
-
 	dcrypto_unlock();
+
+	/**
+	 * Very unlikely case where combination of private key, nonce and
+	 * message results in zero r or s.
+	 * r = nonce * G and take its x-coordinate: r = R.x mod n
+	 * s = nonce^{-1} * (message + r * key) mod n
+	 */
+	if ((s_zero || r_zero) && !result)
+		return DCRYPTO_RETRY;
+
 	return dcrypto_ok_if_zero(result);
 }
 
