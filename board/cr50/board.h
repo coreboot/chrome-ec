@@ -155,6 +155,12 @@
 #define CONFIG_UPTO_SHA512
 #define CONFIG_DCRYPTO_RSA_SPEEDUP
 
+/*
+ * This is pretty arbitrary, a rough estimate of what's required for smooth
+ * Cr50 operation.
+ */
+#define CONFIG_SHAREDMEM_MINIMUM_SIZE 5500
+
 /* Implement custom udelay, due to usec hwtimer imprecision. */
 #define CONFIG_HW_SPECIFIC_UDELAY
 
