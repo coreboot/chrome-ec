@@ -3,7 +3,18 @@
  * found in the LICENSE file.
  */
 
-#include "dcrypto.h"
+#include "internal.h"
+
+void SHA1_hw_init(struct sha1_ctx *ctx)
+{
+	SHA1_sw_init(ctx);
+}
+
+const struct sha1_digest *SHA1_hw_hash(const void *data, size_t n,
+					   struct sha1_digest *digest)
+{
+	return SHA1_sw_hash(data, n, digest);
+}
 
 void SHA256_hw_init(struct sha256_ctx *ctx)
 {

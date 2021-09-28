@@ -354,10 +354,6 @@ const struct sha256_digest *SHA256_hw_hash(const void *data, size_t n,
 	return digest;
 }
 
-/* For compatibility with chip/g code. */
-const uint8_t *DCRYPTO_SHA1_hash(const void *data, size_t n, uint8_t *digest)
-	__alias(SHA1_hw_hash);
-
 const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx)
 {
 	return HMAC_SHA256_final(ctx);

@@ -116,7 +116,7 @@ ifneq ($(CRYPTO_TEST),)
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/gcm.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hkdf.o
 endif
-
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hash_api.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_sw.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hmac_drbg.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/key_ladder.o

@@ -54,45 +54,38 @@ void _cpri__ImportExportHashState(CPRI_HASH_STATE *osslFmt,
 		memcpy(externalFmt, osslFmt, sizeof(CPRI_HASH_STATE));
 }
 
+/* We try to use same encoding for TPM & Dcrypto. */
+BUILD_ASSERT(TPM_ALG_SHA1 == HASH_SHA1);
+BUILD_ASSERT(TPM_ALG_SHA256 == HASH_SHA256);
+BUILD_ASSERT(TPM_ALG_SHA384 == HASH_SHA384);
+BUILD_ASSERT(TPM_ALG_SHA512 == HASH_SHA512);
+BUILD_ASSERT(TPM_ALG_NULL == HASH_NULL);
+
 uint16_t _cpri__HashBlock(TPM_ALG_ID alg, uint32_t in_len, uint8_t *in,
-			uint32_t out_len, uint8_t *out)
+			  uint32_t out_len, uint8_t *out)
 {
-	union sha_digests digest;
 	const uint16_t digest_len = _cpri__GetDigestSize(alg);
+	union hash_ctx ctx;
 
 	if (digest_len == 0)
 		return 0;
 
-	switch (alg) {
-	case TPM_ALG_SHA1:
-		SHA1_hw_hash(in, in_len, &digest.sha1);
-		break;
-
-	case TPM_ALG_SHA256:
-		SHA256_hw_hash(in, in_len, &digest.sha256);
-		break;
-	case TPM_ALG_SHA384:
-		SHA384_hw_hash(in, in_len, &digest.sha384);
-		break;
-	case TPM_ALG_SHA512:
-		SHA512_hw_hash(in, in_len, &digest.sha512);
-		break;
-	default:
+	if (DCRYPTO_hw_hash_init(&ctx, alg) != DCRYPTO_OK) {
 		FAIL(FATAL_ERROR_INTERNAL);
-		break;
+		return 0;
 	}
-
+	HASH_update(&ctx, in, in_len);
 	out_len = MIN(out_len, digest_len);
-	memcpy(out, digest.b8, out_len);
+	memcpy(out, HASH_final(&ctx), out_len);
 	return out_len;
 }
 
 BUILD_ASSERT(sizeof(union hash_ctx) <=
 	     sizeof(((CPRI_HASH_STATE *)0)->state));
-uint16_t _cpri__StartHash(TPM_ALG_ID alg, BOOL sequence,
-			  CPRI_HASH_STATE *state)
+
+uint16_t _cpri__StartHash(TPM_ALG_ID alg, BOOL sequence, CPRI_HASH_STATE *state)
 {
-	union hash_ctx *ctx = (union hash_ctx *) state->state;
+	union hash_ctx *ctx = (union hash_ctx *)state->state;
 	uint16_t result;
 
 	/* NOTE: as per bug http://crosbug.com/p/55331#26 (NVMEM
@@ -101,28 +94,10 @@ uint16_t _cpri__StartHash(TPM_ALG_ID alg, BOOL sequence,
 	 * that the key-ladder will not be used between SHA_init() and
 	 * final().
 	 */
-	switch (alg) {
-	case TPM_ALG_SHA1:
-		SHA1_sw_init(&ctx->sha1);
-		result = HASH_size(ctx);
-		break;
-	case TPM_ALG_SHA256:
-		SHA256_sw_init(&ctx->sha256);
-		result = HASH_size(ctx);
-		break;
+	if (DCRYPTO_sw_hash_init(ctx, (enum hashing_mode)alg) != DCRYPTO_OK)
+		return 0;
 
-	case TPM_ALG_SHA384:
-		SHA384_sw_init(&ctx->sha384);
-		result = HASH_size(ctx);
-		break;
-	case TPM_ALG_SHA512:
-		SHA512_sw_init(&ctx->sha512);
-		result = HASH_size(ctx);
-		break;
-	default:
-		result = 0;
-		break;
-	}
+	result = HASH_size(ctx);
 
 	if (result > 0)
 		state->hashAlg = alg;
@@ -291,23 +266,23 @@ static uint16_t do_software_hmac(TPM_ALG_ID alg, uint32_t in_len, uint8_t *in,
 	return out_len;
 }
 
-static uint16_t do_dcrypto_hmac(TPM_ALG_ID alg, uint32_t in_len,
-				uint8_t *in, int32_t out_len, uint8_t *out)
+static uint16_t do_dcrypto_hmac(TPM_ALG_ID alg, uint32_t in_len, uint8_t *in,
+				int32_t out_len, uint8_t *out)
 {
-	struct hmac_sha256_ctx ctx;
+	union hmac_ctx ctx;
 	uint8_t *key;
 	uint32_t key_len;
 
-	/* Dcrypto only support SHA-256 */
-	if (alg != TPM_ALG_SHA256)
-		return 0;
 	key = in + in_len;
 	key_len = *key++;
 	key_len = key_len * 256 + *key++;
-	HMAC_SHA256_hw_init(&ctx, key, key_len);
-	HMAC_SHA256_update(&ctx, in, in_len);
-	out_len = MIN(out_len, SHA256_DIGEST_SIZE);
-	memcpy(out, HMAC_SHA256_hw_final(&ctx), out_len);
+	/* Check if requested algorithm is supported. */
+	if (DCRYPTO_hw_hmac_init(&ctx, key, key_len, (enum hashing_mode)alg) !=
+	    DCRYPTO_OK)
+		return 0;
+	HMAC_update(&ctx, in, in_len);
+	out_len = MIN(out_len, DCRYPTO_hash_size((enum hashing_mode)alg));
+	memcpy(out, HMAC_final(&ctx), out_len);
 	return out_len;
 }
 

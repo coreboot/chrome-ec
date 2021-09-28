@@ -678,7 +678,8 @@ int usb_spi_sha256_start(struct sha256_ctx *ctx)
 		return EC_ERROR_BUSY;
 	}
 
-	SHA256_hw_init(ctx);
+	if (DCRYPTO_hw_sha256_init(ctx) != DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
 
 	return EC_SUCCESS;
 }

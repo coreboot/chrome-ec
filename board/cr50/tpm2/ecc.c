@@ -141,8 +141,10 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 
 	/* Hash down the primary seed for ECC key generation, so that
 	 * the derivation tree is distinct from RSA key derivation. */
-	HMAC_SHA256_hw_init(&hmac, seed->buffer,
-				 seed->size);
+	if (DCRYPTO_hw_hmac_sha256_init(&hmac, seed->buffer, seed->size) !=
+	    DCRYPTO_OK)
+		return CRYPT_FAIL;
+
 	HMAC_SHA256_update(&hmac, "ECC", 4);
 	memcpy(local_seed.t.buffer, HMAC_SHA256_final(&hmac),
 	       local_seed.t.size);

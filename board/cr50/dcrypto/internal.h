@@ -12,7 +12,6 @@
 #include "dcrypto.h"
 #include "fips.h"
 #include "fips_rand.h"
-#include "hmacsha2.h"
 #include "util.h"
 
 #ifdef __cplusplus
@@ -39,6 +38,154 @@ void dcrypto_release_sha_hw(void);
 
 /* Load data into KEYMGR SHA FIFO. */
 void dcrypto_sha_fifo_load(const void *data, size_t n);
+
+/*
+ * SHA implementation.  This abstraction is backed by either a
+ * software or hardware implementation.
+ *
+ * There could be only a single hardware SHA context in progress. The init
+ * functions will try using the HW context, if available, unless 'sw_required'
+ * is TRUE, in which case there will be no attempt to use the hardware for
+ * this particular hashing session.
+ */
+
+/**
+ * Reset hash context with the same hash function as configured.
+ * Will crash if previously not configured! Used for HMAC.
+ */
+static inline void HASH_reinit(union hash_ctx *const ctx)
+{
+	ctx->f->init(ctx);
+}
+
+/* Software implementations of hash functions. */
+void SHA1_sw_init(struct sha1_ctx *const ctx);
+void SHA1_sw_update(struct sha1_ctx *const ctx, const void *data, size_t len);
+const struct sha1_digest *SHA1_sw_final(struct sha1_ctx *const ctx);
+const struct sha1_digest *SHA1_sw_hash(const void *data, size_t len,
+				       struct sha1_digest *digest);
+void SHA256_sw_init(struct sha256_ctx *const ctx);
+void SHA256_sw_update(struct sha256_ctx *const ctx, const void *data,
+		      size_t len);
+const struct sha256_digest *SHA256_sw_final(struct sha256_ctx *const ctx);
+const struct sha256_digest *SHA256_sw_hash(const void *data, size_t len,
+					   struct sha256_digest *digest);
+void SHA224_sw_init(struct sha224_ctx *const ctx);
+void SHA224_sw_update(struct sha224_ctx *const ctx, const void *data,
+		      size_t len);
+const struct sha224_digest *SHA224_sw_final(struct sha224_ctx *const ctx);
+const struct sha224_digest *SHA224_sw_hash(const void *data, size_t len,
+					   struct sha224_digest *digest);
+
+
+/**
+ * Initialize HMAC for pre-configured hash.
+ * This is generic function which can initialize HMAC with any supported
+ * hash function.
+ */
+void HMAC_sw_init(union hmac_ctx *const ctx, const void *key, size_t len);
+const union sha_digests *HMAC_sw_final(union hmac_ctx *const ctx);
+
+/**
+ * HMAC SHA2-224 initialization.
+ */
+static inline void HMAC_SHA224_sw_init(struct hmac_sha224_ctx *const ctx,
+				       const void *key, size_t len)
+{
+	SHA224_sw_init(&ctx->hash);
+	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
+}
+
+static inline void HMAC_SHA224_update(struct hmac_sha224_ctx *const ctx,
+				      const void *data, size_t len)
+{
+	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
+}
+
+static inline const struct sha224_digest *
+HMAC_SHA224_final(struct hmac_sha224_ctx *const ctx)
+{
+	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha224;
+}
+
+/**
+ * HMAC SHA2-256 initialization.
+ */
+static inline void HMAC_SHA256_sw_init(struct hmac_sha256_ctx *const ctx,
+				       const void *key, size_t len)
+{
+	SHA256_sw_init(&ctx->hash);
+	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
+}
+
+
+/**
+ * HMAC SHA1 initialization.
+ */
+static inline void HMAC_SHA1_sw_init(struct hmac_sha1_ctx *const ctx,
+				     const void *key, size_t len)
+{
+	SHA1_sw_init(&ctx->hash);
+	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
+}
+
+void SHA1_hw_init(struct sha1_ctx *ctx);
+void SHA256_hw_init(struct sha256_ctx *ctx);
+const struct sha1_digest *SHA1_hw_hash(const void *data, size_t len,
+				       struct sha1_digest *digest);
+const struct sha256_digest *SHA256_hw_hash(const void *data, size_t len,
+					   struct sha256_digest *digest);
+
+#ifdef CONFIG_UPTO_SHA512
+void SHA384_sw_init(struct sha384_ctx *const ctx);
+void SHA384_sw_update(struct sha384_ctx *const ctx, const void *data,
+		      size_t len);
+const struct sha384_digest *SHA384_sw_final(struct sha384_ctx *const ctx);
+const struct sha384_digest *SHA384_sw_hash(const void *data, size_t len,
+					   struct sha384_digest *digest);
+void SHA512_sw_init(struct sha512_ctx *const ctx);
+void SHA512_sw_update(struct sha512_ctx *const ctx, const void *data,
+		      size_t len);
+const struct sha512_digest *SHA512_sw_final(struct sha512_ctx *ctx);
+const struct sha512_digest *SHA512_sw_hash(const void *data, size_t len,
+					   struct sha512_digest *digest);
+
+void SHA384_hw_init(struct sha384_ctx *ctx);
+void SHA512_hw_init(struct sha512_ctx *ctx);
+const struct sha384_digest *SHA384_hw_hash(const void *data, size_t len,
+					   struct sha384_digest *digest);
+
+const struct sha512_digest *SHA512_hw_hash(const void *data, size_t len,
+					   struct sha512_digest *digest);
+
+
+/**
+ * HMAC SHA2-384 initialization.
+ */
+static inline void HMAC_SHA384_sw_init(struct hmac_sha384_ctx *ctx,
+				       const void *key, size_t len)
+{
+	SHA384_sw_init(&ctx->hash);
+	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
+}
+/**
+ * HMAC SHA2-512 initialization.
+ */
+static inline void HMAC_SHA512_sw_init(struct hmac_sha512_ctx *ctx,
+				       const void *key, size_t len)
+{
+	SHA512_sw_init(&ctx->hash);
+	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
+}
+#endif
+
+/*
+ *  HMAC. FIPS 198-1
+ */
+void HMAC_SHA256_hw_init(struct hmac_sha256_ctx *ctx, const void *key,
+			      size_t len);
+/* DCRYPTO HMAC-SHA256 final */
+const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx);
 
 /*
  * BIGNUM.

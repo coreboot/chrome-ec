@@ -236,7 +236,8 @@ static int raw_has_password(void)
  * @param digest	Pointer to a CCD_PASSWORD_DIGEST_SIZE buffer
  * @param password	The password to digest
  */
-static void ccd_password_digest(uint8_t *digest, const char *password)
+static enum ec_error_list ccd_password_digest(uint8_t *digest,
+					      const char *password)
 {
 	struct sha256_ctx sha;
 	uint8_t *unique_id;
@@ -244,11 +245,13 @@ static void ccd_password_digest(uint8_t *digest, const char *password)
 
 	unique_id_len = system_get_chip_unique_id(&unique_id);
 
-	SHA256_hw_init(&sha);
+	if (DCRYPTO_hw_sha256_init(&sha) != DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
 	SHA256_update(&sha, config.password_salt, sizeof(config.password_salt));
 	SHA256_update(&sha, unique_id, unique_id_len);
 	SHA256_update(&sha, password, strlen(password));
 	memcpy(digest, SHA256_final(&sha)->b8, CCD_PASSWORD_DIGEST_SIZE);
+	return EC_SUCCESS;
 }
 
 /**
@@ -258,7 +261,7 @@ static void ccd_password_digest(uint8_t *digest, const char *password)
  * @return EC_SUCCESS, EC_ERROR_BUSY if too soon since last attempt, or
  *	   EC_ERROR_ACCESS_DENIED if mismatch.
  */
-static int raw_check_password(const char *password)
+static enum ec_error_list raw_check_password(const char *password)
 {
 	/*
 	 * Time of last password attempt; initialized to 0 at boot.  Yes, we're
@@ -272,6 +275,7 @@ static int raw_check_password(const char *password)
 
 	uint8_t digest[CCD_PASSWORD_DIGEST_SIZE];
 	uint32_t t;
+	enum ec_error_list result;
 
 	/* If no password is set, match only an empty password */
 	if (!raw_has_password())
@@ -284,7 +288,9 @@ static int raw_check_password(const char *password)
 	last_password_time = t;
 
 	/* Calculate the digest of the password */
-	ccd_password_digest(digest, password);
+	result = ccd_password_digest(digest, password);
+	if (result != EC_SUCCESS)
+		return result;
 
 	if (safe_memcmp(digest, config.password_digest,
 			sizeof(config.password_digest)))
@@ -312,19 +318,23 @@ static void raw_reset_password(void)
  * @param password	New password; must be non-empty
  * @return EC_SUCCESS if successful
  */
-static int raw_set_password(const char *password)
+static enum ec_error_list raw_set_password(const char *password)
 {
+	enum ec_error_list result;
+
 	/* Get a new salt */
 	if (!fips_rand_bytes(config.password_salt,
 			     sizeof(config.password_salt)))
 		return EC_ERROR_HW_INTERNAL;
 
 	/* Update the password digest */
-	ccd_password_digest(config.password_digest, password);
+	result = ccd_password_digest(config.password_digest, password);
+	if (result != EC_SUCCESS)
+		return result;
 
 	/* Track whether we were opened when we set the password */
 	raw_set_flag(CCD_FLAG_PASSWORD_SET_WHEN_UNLOCKED,
-				     ccd_state == CCD_STATE_UNLOCKED);
+		     ccd_state == CCD_STATE_UNLOCKED);
 
 	return EC_SUCCESS;
 }

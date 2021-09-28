@@ -75,7 +75,8 @@ int rma_try_authcode(const char *code);
  *
  * @param rma_device_id		Pointer to the buffer that will be filled with
  * the ID. The buffer must be of size RMA_DEVICE_ID_SIZE.
+ * @return EC_SUCCESS if successful
  */
-void get_rma_device_id(uint8_t rma_device_id[RMA_DEVICE_ID_SIZE]);
+int get_rma_device_id(uint8_t rma_device_id[RMA_DEVICE_ID_SIZE]);
 
 #endif

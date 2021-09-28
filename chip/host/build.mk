@@ -34,8 +34,12 @@ chip-$(CONFIG_DCRYPTO)+= dcrypto/sha256.o
 
 # Object files that can be shared with the Cr50 dcrypto implementation
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hmac_sw.o
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hash_api.o
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/sha1.o
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/sha256.o
+ifeq ($(CONFIG_UPTO_SHA512),y)
+chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/sha512.o
+endif
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/hmac_drbg.o
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/p256.o
 chip-$(CONFIG_DCRYPTO)+= ../../board/cr50/dcrypto/compare.o

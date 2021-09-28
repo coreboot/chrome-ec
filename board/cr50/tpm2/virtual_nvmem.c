@@ -304,9 +304,11 @@ static void GetRSUDevID(BYTE *to, size_t offset, size_t size)
 	uint8_t rma_device_id[RMA_DEVICE_ID_SIZE];
 	const uint8_t *rsu_device_id;
 
-	get_rma_device_id(rma_device_id);
-
-	SHA256_hw_init(&ctx);
+	if (get_rma_device_id(rma_device_id) != EC_SUCCESS ||
+	    DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK) {
+		memset(to, 0, size);
+		return;
+	};
 	SHA256_update(&ctx, rma_device_id, sizeof(rma_device_id));
 	SHA256_update(&ctx, kRsuSalt, RSU_SALT_SIZE);
 	rsu_device_id = SHA256_final(&ctx)->b8;

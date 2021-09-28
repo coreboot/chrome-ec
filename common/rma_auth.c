@@ -75,31 +75,38 @@ static char authcode[RMA_AUTHCODE_BUF_SIZE];
 static int tries_left;
 static uint64_t last_challenge_time;
 
-static void get_hmac_sha256(void *hmac_out, const uint8_t *secret,
+static enum ec_error_list get_hmac_sha256(void *hmac_out, const uint8_t *secret,
 			    size_t secret_size, const void *ch_ptr,
 			    size_t ch_size)
 {
 #ifdef USE_DCRYPTO
 	struct hmac_sha256_ctx hmac;
 
-	HMAC_SHA256_hw_init(&hmac, secret, secret_size);
+	if (DCRYPTO_hw_hmac_sha256_init(&hmac, secret, secret_size) !=
+	    DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
 	HMAC_SHA256_update(&hmac, ch_ptr, ch_size);
-	memcpy(hmac_out, HMAC_SHA256_hw_final(&hmac), 32);
+	memcpy(hmac_out, HMAC_SHA256_final(&hmac), 32);
 #else
 	hmac_SHA256(hmac_out, secret, secret_size, ch_ptr, ch_size);
 #endif
+	return EC_SUCCESS;
 }
 
-static void hash_buffer(void *dest, size_t dest_size,
-			const void *buffer, size_t buf_size)
+static enum ec_error_list hash_buffer(void *dest, size_t dest_size,
+				      const void *buffer, size_t buf_size)
 {
 	/* We know that the destination is no larger than 32 bytes. */
 	uint8_t temp[32];
+	enum ec_error_list ret;
 
-	get_hmac_sha256(temp, buffer, buf_size, buffer, buf_size);
+	ret = get_hmac_sha256(temp, buffer, buf_size, buffer, buf_size);
+	if (ret)
+		return ret;
 
 	/* Or should we do XOR of the temp modulo dest size? */
 	memcpy(dest, temp, dest_size);
+	return EC_SUCCESS;
 }
 
 #ifdef CONFIG_RMA_AUTH_USE_P256
@@ -148,7 +155,8 @@ static int p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 		}
 
 		/* Did not succeed, rehash the private key and try again. */
-		SHA256_hw_init(&sha);
+		if (DCRYPTO_hw_sha256_init(&sha) != DCRYPTO_OK)
+			return EC_ERROR_HW_INTERNAL;
 		SHA256_update(&sha, buf, sizeof(buf));
 		memcpy(buf, SHA256_final(&sha), sizeof(buf));
 	}
@@ -177,10 +185,11 @@ static int p256_get_pub_key_and_secret(uint8_t pub_key[P256_NBYTES],
 }
 #endif
 
-void get_rma_device_id(uint8_t rma_device_id[RMA_DEVICE_ID_SIZE])
+int get_rma_device_id(uint8_t rma_device_id[RMA_DEVICE_ID_SIZE])
 {
 	uint8_t *chip_unique_id;
 	int chip_unique_id_size = system_get_chip_unique_id(&chip_unique_id);
+	enum ec_error_list ret;
 
 	if (chip_unique_id_size < 0)
 		chip_unique_id_size = 0;
@@ -198,9 +207,12 @@ void get_rma_device_id(uint8_t rma_device_id[RMA_DEVICE_ID_SIZE])
 		 * rma_challenge:device_id, let's use first few bytes of
 		 * its hash.
 		 */
-		hash_buffer(rma_device_id, RMA_DEVICE_ID_SIZE,
-			    chip_unique_id, chip_unique_id_size);
+		ret = hash_buffer(rma_device_id, RMA_DEVICE_ID_SIZE,
+				  chip_unique_id, chip_unique_id_size);
+		if (ret != EC_SUCCESS)
+			return ret;
 	}
+	return EC_SUCCESS;
 }
 
 /**
@@ -217,6 +229,7 @@ int rma_create_challenge(void)
 	struct board_id bid;
 	uint8_t *cptr = (uint8_t *)&c;
 	uint64_t t;
+	int ret;
 
 	/* Clear the current challenge and authcode, if any */
 	memset(challenge, 0, sizeof(challenge));
@@ -236,9 +249,11 @@ int rma_create_challenge(void)
 		return EC_ERROR_UNKNOWN;
 
 	memcpy(c.board_id, &bid.type, sizeof(c.board_id));
-	get_rma_device_id(c.device_id);
+	ret = get_rma_device_id(c.device_id);
+	if (ret != EC_SUCCESS)
+		return ret;
 
-	/* Calculate a new ephemeral key pair and the shared secret. */
+		/* Calculate a new ephemeral key pair and the shared secret. */
 #ifdef CONFIG_RMA_AUTH_USE_P256
 	if (p256_get_pub_key_and_secret(c.device_pub_key, secret) != EC_SUCCESS)
 		return EC_ERROR_UNKNOWN;
@@ -251,13 +266,15 @@ int rma_create_challenge(void)
 	if (base32_encode(challenge, sizeof(challenge), cptr, 8 * sizeof(c), 9))
 		return EC_ERROR_UNKNOWN;
 
-
 	/*
 	 * Auth code is a truncated HMAC of the ephemeral public key, BoardID,
 	 * and DeviceID.  Those are all in the right order in the challenge
 	 * struct, after the version/key id byte.
 	 */
-	get_hmac_sha256(temp, secret, sizeof(secret), cptr + 1, sizeof(c) - 1);
+	ret = get_hmac_sha256(temp, secret, sizeof(secret), cptr + 1,
+			      sizeof(c) - 1);
+	if (ret != EC_SUCCESS)
+		return ret;
 	if (base32_encode(authcode, sizeof(authcode), temp,
 			  RMA_AUTHCODE_CHARS * 5, 0))
 		return EC_ERROR_UNKNOWN;

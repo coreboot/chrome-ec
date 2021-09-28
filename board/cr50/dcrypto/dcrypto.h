@@ -16,7 +16,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "hmacsha2.h"
+#include "common.h"
 
 /**
  * Result codes for crypto operations, targeting
@@ -39,15 +39,569 @@ enum cipher_mode {
 enum encrypt_mode { DECRYPT_MODE = 0, ENCRYPT_MODE = 1 };
 
 enum hashing_mode {
-	HASH_SHA1 = 0,
-	HASH_SHA256 = 1,
-	HASH_SHA384 = 2, /* Only supported for PKCS#1 signing */
-	HASH_SHA512 = 3, /* Only supported for PKCS#1 signing */
-	HASH_NULL = 4 /* Only supported for PKCS#1 signing */
+	HASH_SHA1 = 0x0004, /* = TPM_ALG_SHA1 */
+	HASH_SHA256 = 0x000B, /* = TPM_ALG_SHA256 */
+	HASH_SHA384 = 0x000C, /* = TPM_ALG_SHA384 */
+	HASH_SHA512 = 0x000D, /* = TPM_ALG_SHA512 */
+	HASH_NULL = 0x0010 /* = TPM_ALG_NULL, Only supported for PKCS#1 */
 };
 
 #ifndef __warn_unused_result
 #define __warn_unused_result __attribute__((warn_unused_result))
+#endif
+
+/**
+ * SHA1/SHA2, HMAC API
+ */
+#define SHA1_DIGEST_SIZE 20
+#define SHA_DIGEST_SIZE	 SHA1_DIGEST_SIZE
+
+#define SHA224_DIGEST_SIZE  28
+#define SHA256_DIGEST_SIZE  32
+#define SHA1_BLOCK_SIZE	    64
+#define SHA1_BLOCK_WORDS    (SHA1_BLOCK_SIZE / sizeof(uint32_t))
+#define SHA1_BLOCK_DWORDS   (SHA1_BLOCK_SIZE / sizeof(uint64_t))
+#define SHA1_DIGEST_WORDS   (SHA1_DIGEST_SIZE / sizeof(uint32_t))
+#define SHA224_BLOCK_SIZE   64
+#define SHA224_BLOCK_WORDS  (SHA224_BLOCK_SIZE / sizeof(uint32_t))
+#define SHA224_BLOCK_DWORDS (SHA224_BLOCK_SIZE / sizeof(uint64_t))
+#define SHA224_DIGEST_WORDS (SHA224_DIGEST_SIZE / sizeof(uint32_t))
+#define SHA256_BLOCK_SIZE   64
+#define SHA256_BLOCK_WORDS  (SHA256_BLOCK_SIZE / sizeof(uint32_t))
+#define SHA256_BLOCK_DWORDS (SHA256_BLOCK_SIZE / sizeof(uint64_t))
+#define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
+
+#define SHA_DIGEST_WORDS    (SHA_DIGEST_SIZE / sizeof(uint32_t))
+#define SHA256_DIGEST_WORDS (SHA256_DIGEST_SIZE / sizeof(uint32_t))
+
+#ifdef CONFIG_UPTO_SHA512
+#define SHA_DIGEST_MAX_BYTES SHA512_DIGEST_SIZE
+#else
+#define SHA_DIGEST_MAX_BYTES SHA256_DIGEST_SIZE
+#endif
+
+/**
+ * Hash contexts. Each context starts with pointer to vtable containing
+ * functions to perform implementation specific operations.
+ * It is designed to support both software and hardware implementations.
+ * Contexts for different digest types can overlap, but vtable stores
+ * actual size of context which enables stack-efficient implementation of
+ * HMAC - say HMAC SHA2-256 shouldn't reserve space as for HMAC SHA2-512.
+ */
+union hash_ctx; /* forward declaration of generic hash context type */
+union hmac_ctx; /* forward declaration of generic HMAC context type */
+
+union sha_digests; /* forward declaration of generic digest type */
+
+/* Combined HASH & HMAC vtable to support SW & HW implementations. */
+struct hash_vtable {
+	/* SHA init function, used primarily by SW HMAC implementation. */
+	void (*const init)(union hash_ctx *const);
+	/* Update function for SHA & HMAC, assuming it's the same. */
+	void (*const update)(union hash_ctx *const, const void *, size_t);
+	/* SHA final function, digest specific. */
+	const union sha_digests *(*const final)(union hash_ctx *const);
+
+	/* HW HMAC support may require special ending. */
+	const union sha_digests *(*const hmac_final)(union hmac_ctx *const);
+
+	/* Digest size of in bytes. */
+	size_t digest_size;
+
+	/* Digest block size in bytes. */
+	size_t block_size;
+
+	/* Offset of first byte after context, used for HMAC */
+	size_t context_size;
+};
+
+struct sha256_digest {
+	union {
+		uint8_t b8[SHA256_DIGEST_SIZE];
+		uint32_t b32[SHA256_DIGEST_WORDS];
+	};
+};
+BUILD_ASSERT(sizeof(struct sha256_digest) == SHA256_DIGEST_SIZE);
+
+struct sha224_digest {
+	union {
+		uint8_t b8[SHA224_DIGEST_SIZE];
+		uint32_t b32[SHA224_DIGEST_WORDS];
+	};
+};
+BUILD_ASSERT(sizeof(struct sha224_digest) == SHA224_DIGEST_SIZE);
+
+struct sha1_digest {
+	union {
+		uint8_t b8[SHA1_DIGEST_SIZE];
+		uint32_t b32[SHA1_DIGEST_WORDS];
+	};
+};
+BUILD_ASSERT(sizeof(struct sha1_digest) == SHA1_DIGEST_SIZE);
+
+
+/* SHA256 specific type to allocate just enough memory. */
+struct sha256_ctx {
+	const struct hash_vtable *f; /* metadata & vtable */
+	size_t count; /* number of bytes processed */
+	uint32_t state[SHA256_DIGEST_WORDS]; /* up to SHA2-256 */
+	union {
+		uint8_t b8[SHA256_BLOCK_SIZE];
+		uint32_t b32[SHA256_BLOCK_WORDS];
+		uint64_t b64[SHA256_BLOCK_DWORDS];
+		struct sha256_digest digest;
+	};
+};
+
+#define sha224_ctx sha256_ctx
+
+struct sha1_ctx {
+	const struct hash_vtable *f; /* metadata & vtable. */
+	size_t count; /* number of bytes processed. */
+	uint32_t state[SHA1_DIGEST_WORDS];
+	union {
+		uint8_t b8[SHA1_BLOCK_SIZE];
+		uint32_t b32[SHA1_BLOCK_WORDS];
+		uint64_t b64[SHA1_BLOCK_DWORDS];
+		struct sha1_digest digest;
+	};
+};
+
+#ifdef CONFIG_UPTO_SHA512
+#define SHA384_DIGEST_SIZE 48
+#define SHA512_DIGEST_SIZE 64
+
+#define SHA384_BLOCK_SIZE 128
+#define SHA512_BLOCK_SIZE 128
+
+#define SHA384_BLOCK_WORDS   (SHA384_BLOCK_SIZE / sizeof(uint32_t))
+#define SHA384_BLOCK_DWORDS  (SHA384_BLOCK_SIZE / sizeof(uint64_t))
+#define SHA384_DIGEST_WORDS  (SHA384_DIGEST_SIZE / sizeof(uint32_t))
+#define SHA384_DIGEST_DWORDS (SHA384_DIGEST_SIZE / sizeof(uint64_t))
+
+#define SHA512_BLOCK_WORDS   (SHA512_BLOCK_SIZE / sizeof(uint32_t))
+#define SHA512_BLOCK_DWORDS  (SHA512_BLOCK_SIZE / sizeof(uint64_t))
+#define SHA512_DIGEST_WORDS  (SHA512_DIGEST_SIZE / sizeof(uint32_t))
+#define SHA512_DIGEST_DWORDS (SHA512_DIGEST_SIZE / sizeof(uint64_t))
+
+struct sha384_digest {
+	union {
+		uint8_t b8[SHA384_DIGEST_SIZE];
+		uint32_t b32[SHA384_DIGEST_WORDS];
+	};
+};
+BUILD_ASSERT(sizeof(struct sha384_digest) == SHA384_DIGEST_SIZE);
+
+struct sha512_digest {
+	union {
+		uint8_t b8[SHA512_DIGEST_SIZE];
+		uint32_t b32[SHA512_DIGEST_WORDS];
+	};
+};
+BUILD_ASSERT(sizeof(struct sha512_digest) == SHA512_DIGEST_SIZE);
+
+struct sha512_ctx {
+	const struct hash_vtable *f; /* metadata & vtable. */
+	size_t count; /* number of bytes processed. */
+	uint64_t state[SHA512_DIGEST_DWORDS]; /* up to SHA2-512. */
+	union {
+		uint8_t b8[SHA512_BLOCK_SIZE];
+		uint32_t b32[SHA512_BLOCK_WORDS];
+		uint64_t b64[SHA512_BLOCK_DWORDS];
+		struct sha512_digest digest;
+	};
+};
+
+#define sha384_ctx sha512_ctx
+#endif
+
+/**
+ * Generic hash type, allocating memory for any supported hash context
+ * Each context should have header at known location.
+ */
+union hash_ctx {
+	const struct hash_vtable *f; /* common metadata & vtable */
+	struct sha1_ctx sha1;
+	struct sha256_ctx sha256;
+	struct sha224_ctx sha224;
+#ifdef CONFIG_UPTO_SHA512
+	struct sha384_ctx sha384;
+	struct sha512_ctx sha512;
+#endif
+};
+
+union sha_digests {
+	struct sha1_digest sha1;
+	struct sha224_digest sha224;
+	struct sha256_digest sha256;
+#ifdef CONFIG_UPTO_SHA512
+	struct sha384_digest sha384;
+	struct sha512_digest sha512;
+#endif
+	/* Convenience accessor to bytes. */
+	uint8_t b8[SHA256_DIGEST_SIZE];
+};
+
+/* Header should be at constant offset to safely cast types to smaller size */
+BUILD_ASSERT(offsetof(union hash_ctx, f) == offsetof(struct sha1_ctx, f));
+BUILD_ASSERT(offsetof(union hash_ctx, f) == offsetof(struct sha256_ctx, f));
+BUILD_ASSERT(offsetof(union hash_ctx, f) == offsetof(struct sha224_ctx, f));
+
+#ifdef CONFIG_UPTO_SHA512
+BUILD_ASSERT(offsetof(union hash_ctx, f) == offsetof(struct sha384_ctx, f));
+BUILD_ASSERT(offsetof(union hash_ctx, f) == offsetof(struct sha512_ctx, f));
+#endif
+
+struct hmac_sha1_ctx {
+	struct sha1_ctx hash;
+	uint32_t opad[SHA1_BLOCK_WORDS];
+};
+
+struct hmac_sha224_ctx {
+	struct sha224_ctx hash;
+	uint32_t opad[SHA224_BLOCK_WORDS];
+};
+
+struct hmac_sha256_ctx {
+	struct sha256_ctx hash;
+	uint32_t opad[SHA256_BLOCK_WORDS];
+};
+
+#ifdef CONFIG_UPTO_SHA512
+struct hmac_sha384_ctx {
+	struct sha384_ctx hash;
+	uint32_t opad[SHA384_BLOCK_WORDS];
+};
+
+struct hmac_sha512_ctx {
+	struct sha512_ctx hash;
+	uint32_t opad[SHA512_BLOCK_WORDS];
+};
+#endif
+
+/**
+ * HMAC context reserving memory for any supported hash type.
+ * It's SHA context following storage for ipad/opad
+ */
+union hmac_ctx {
+	const struct hash_vtable *f; /* common metadata & vtable */
+	union hash_ctx hash; /* access as hash */
+	/* hmac contexts */
+	struct hmac_sha1_ctx hmac_sha1;
+	struct hmac_sha256_ctx hmac_sha256;
+	struct hmac_sha224_ctx hmac_sha224;
+#ifdef CONFIG_UPTO_SHA512
+	struct hmac_sha384_ctx hmac_sha384;
+	struct hmac_sha512_ctx hmac_sha512;
+#endif
+};
+
+/* Header should be at constant offset to safely cast types to smaller size */
+BUILD_ASSERT(offsetof(union hmac_ctx, f) == offsetof(struct sha1_ctx, f));
+BUILD_ASSERT(offsetof(union hmac_ctx, f) == offsetof(struct sha256_ctx, f));
+BUILD_ASSERT(offsetof(union hmac_ctx, f) == offsetof(struct sha224_ctx, f));
+
+#ifdef CONFIG_UPTO_SHA512
+BUILD_ASSERT(offsetof(union hmac_ctx, f) == offsetof(struct sha384_ctx, f));
+BUILD_ASSERT(offsetof(union hmac_ctx, f) == offsetof(struct sha512_ctx, f));
+#endif
+
+/**
+ * Initialize software version of hash computation which explicitly allows
+ * context switching / serialization.
+ *
+ * @param ctx storage for context
+ * @param mode hashing algorithm
+ *
+ * @return DCRYPTO_OK if successful, DCRYPTO_FAIL otherwise.
+ */
+enum dcrypto_result DCRYPTO_sw_hash_init(
+	union hash_ctx *ctx, enum hashing_mode mode) __warn_unused_result;
+
+/**
+ * Initialize hardware-acceleated or software version of hash computation,
+ * preferring hardware version when available.
+ *
+ * @param ctx storage for context
+ * @param mode hashing algorithm
+ *
+ * @return DCRYPTO_OK if successful, DCRYPTO_FAIL otherwise.
+ */
+enum dcrypto_result DCRYPTO_hw_hash_init(
+	union hash_ctx *ctx, enum hashing_mode mode) __warn_unused_result;
+
+/**
+ * Return hash size for specified hash algorithm
+ * @param mode hash algorithm
+ * @return non-zero if algorithm is supported, 0 otherwise
+ */
+size_t DCRYPTO_hash_size(enum hashing_mode mode);
+
+/**
+ * Initialize software version of hash computation which explicitly allows
+ * context switching / serialization.
+ *
+ * @param ctx storage for context
+ * @param key HMAC key
+ * @param len length of HMAC key
+ * @param mode hashing algorithm
+ *
+ * @return DCRYPTO_OK if successful, DCRYPTO_FAIL otherwise.
+ */
+enum dcrypto_result DCRYPTO_sw_hmac_init(union hmac_ctx *ctx, const void *key,
+					 size_t len, enum hashing_mode mode)
+	__warn_unused_result;
+
+/**
+ * Initialize hardware-acceleated or software version of HMAC computation,
+ * preferring hardware version when available.
+ *
+ * @param ctx storage for context
+ * @param key HMAC key
+ * @param len length of HMAC key
+ * @param mode hashing algorithm
+ *
+ * @return DCRYPTO_OK if successful, DCRYPTO_FAIL otherwise.
+ */
+enum dcrypto_result DCRYPTO_hw_hmac_init(union hmac_ctx *ctx, const void *key,
+					 size_t len, enum hashing_mode mode)
+	__warn_unused_result;
+
+/**
+ * Compute SHA256 using preferably hardware implementation.
+ * API maintained compatible with RO code.
+ *
+ * @param data input data
+ * @param n length of data
+ * @param digest destination
+ * @return NULL if failure, digest if successful
+ */
+const uint8_t *DCRYPTO_SHA256_hash(const void *data, size_t n, uint8_t *digest);
+
+/**
+ * Compute SHA256 using preferably hardware implementation.
+ * API maintained compatible with RO code.
+ *
+ * @param data input data
+ * @param n length of data
+ * @param digest destination
+ * @return NULL if failure, digest if successful
+ */
+const uint8_t *DCRYPTO_SHA1_hash(const void *data, size_t n, uint8_t *digest);
+
+/**
+ * Convenience wrappers with type checks.
+ */
+#ifndef CONFIG_DCRYPTO_MOCK
+
+/**
+ * Add data to message, call configured transform function when block
+ * is full.
+ * @param ctx digest context (can be one of union subtypes).
+ * @param data input data
+ * @param len length of data
+ */
+static inline void HASH_update(union hash_ctx *const ctx, const void *data,
+			       size_t len)
+{
+	ctx->f->update(ctx, data, len);
+}
+/**
+ * Finalize hash computation by adding padding, message length.
+ * Returns pointer to computed digest stored inside provided context.
+ *
+ * @param ctx digest context (can be one of union subtypes).
+ *
+ * @return pointer to computed digest inside ctx.
+ */
+static inline const union sha_digests *HASH_final(union hash_ctx *const ctx)
+{
+	return ctx->f->final(ctx);
+}
+
+/**
+ * Add data to message, call configured transform function when block
+ * is full.
+ * @param ctx SHA256 digest context
+ * @param data input data
+ * @param len length of data
+ */
+static inline void SHA256_update(struct sha256_ctx *const ctx, const void *data,
+				 size_t len)
+{
+	ctx->f->update((union hash_ctx *)ctx, data, len);
+}
+
+/**
+ * Finalize hash computation by adding padding, message length.
+ * Returns pointer to computed digest stored inside provided context.
+ *
+ * @param ctx SHA256 digest context.
+ *
+ * @return pointer to computed digest inside ctx.
+ */
+static inline const struct sha256_digest *SHA256_final(
+	struct sha256_ctx *const ctx)
+{
+	return &ctx->f->final((union hash_ctx *)ctx)->sha256;
+}
+static inline void HMAC_SHA256_update(struct hmac_sha256_ctx *const ctx,
+				      const void *data, size_t len)
+{
+	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
+}
+
+static inline const struct sha256_digest *HMAC_SHA256_final(
+	struct hmac_sha256_ctx *ctx)
+{
+	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha256;
+}
+static inline void SHA1_update(struct sha1_ctx *const ctx, const void *data,
+			       size_t len)
+{
+	ctx->f->update((union hash_ctx *)ctx, data, len);
+}
+static inline const struct sha1_digest *SHA1_final(struct sha1_ctx *const ctx)
+{
+	return &ctx->f->final((union hash_ctx *)ctx)->sha1;
+}
+
+/**
+ * Initialize SHA2-256 computation
+ *
+ * @param ctx SHA256 context
+
+ * @return DCRYPTO_OK if successful
+ */
+static inline __warn_unused_result enum dcrypto_result DCRYPTO_hw_sha256_init(
+	struct sha256_ctx *ctx)
+{
+	return DCRYPTO_hw_hash_init((union hash_ctx *)ctx, HASH_SHA256);
+}
+
+/**
+ * Initialize HMAC SHA2-256 computation
+ *
+ * @param ctx HMAC SHA256 context
+ * @param key HMAC key
+ * @param len length of key
+ * @return DCRYPTO_OK if successful
+ */
+static inline __warn_unused_result enum dcrypto_result
+DCRYPTO_hw_hmac_sha256_init(struct hmac_sha256_ctx *ctx, const void *key,
+			    size_t len)
+{
+	return DCRYPTO_hw_hmac_init((union hmac_ctx *)ctx, key, len,
+				    HASH_SHA256);
+}
+
+#else
+/* To enable DCRYPTO mocks just provide prototypes. */
+void HASH_update(union hash_ctx *const ctx, const void *data, size_t len);
+const union sha_digests *HASH_final(union hash_ctx *const ctx);
+void SHA256_update(struct sha256_ctx *const ctx, const void *data, size_t len);
+const struct sha256_digest *SHA256_final(struct sha256_ctx *const ctx);
+void HMAC_SHA256_update(struct hmac_sha256_ctx *const ctx, const void *data,
+			size_t len);
+const struct sha256_digest *HMAC_SHA256_final(struct hmac_sha256_ctx *ctx);
+void SHA1_update(struct sha1_ctx *const ctx, const void *data, size_t len);
+const struct sha1_digest *SHA1_final(struct sha1_ctx *const ctx);
+enum dcrypto_result DCRYPTO_hw_sha256_init(struct sha256_ctx *ctx);
+enum dcrypto_result DCRYPTO_hw_hmac_sha256_init(struct hmac_sha256_ctx *ctx,
+						const void *key, size_t len);
+#endif
+
+/**
+ * Returns digest size for configured hash.
+ */
+static inline size_t HASH_size(union hash_ctx *const ctx)
+{
+	return ctx->f->digest_size;
+}
+
+/**
+ * Return block size for configured hash.
+ */
+static inline size_t HASH_block_size(union hash_ctx *const ctx)
+{
+	return ctx->f->block_size;
+}
+
+/* HMAC_update() is same as HASH_update(). */
+static inline void HMAC_update(union hmac_ctx *const ctx, const void *data,
+			       size_t len)
+{
+	ctx->f->update(&ctx->hash, data, len);
+}
+
+static inline size_t HMAC_size(union hmac_ctx *const ctx)
+{
+	return ctx->f->digest_size;
+}
+
+static inline const union sha_digests *HMAC_final(union hmac_ctx *const ctx)
+{
+	return ctx->f->hmac_final(ctx);
+}
+
+static inline void HMAC_SHA1_update(struct hmac_sha1_ctx *const ctx,
+				    const void *data, size_t len)
+{
+	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
+}
+
+static inline const struct sha1_digest *HMAC_SHA1_final(
+	struct hmac_sha1_ctx *const ctx)
+{
+	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha1;
+}
+
+#ifdef CONFIG_UPTO_SHA512
+static inline void SHA384_update(struct sha384_ctx *const ctx, const void *data,
+				 size_t len)
+{
+	ctx->f->update((union hash_ctx *)ctx, data, len);
+}
+
+static inline const struct sha384_digest *SHA384_final(
+	struct sha384_ctx *const ctx)
+{
+	return &ctx->f->final((union hash_ctx *)ctx)->sha384;
+}
+
+static inline void SHA512_update(struct sha512_ctx *const ctx, const void *data,
+				 size_t len)
+{
+	ctx->f->update((union hash_ctx *)ctx, data, len);
+}
+
+static inline const struct sha512_digest *SHA512_final(
+	struct sha512_ctx *const ctx)
+{
+	return &ctx->f->final((union hash_ctx *)ctx)->sha512;
+}
+
+static inline void HMAC_SHA384_update(struct hmac_sha384_ctx *ctx,
+				      const void *data, size_t len)
+{
+	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
+}
+static inline const struct sha384_digest *HMAC_SHA384_final(
+	struct hmac_sha384_ctx *ctx)
+{
+	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha384;
+}
+
+static inline void HMAC_SHA512_update(struct hmac_sha512_ctx *ctx,
+				      const void *data, size_t len)
+{
+	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
+}
+static inline const struct sha512_digest *HMAC_SHA512_final(
+	struct hmac_sha512_ctx *ctx)
+{
+	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha512;
+}
 #endif
 
 /*
@@ -130,45 +684,6 @@ int DCRYPTO_aes_cmac(const uint8_t *K, const uint8_t *M, const uint32_t len,
  */
 int DCRYPTO_aes_cmac_verify(const uint8_t *key, const uint8_t *M, const int len,
 			    const uint32_t T[4]);
-
-/*
- * SHA implementation.  This abstraction is backed by either a
- * software or hardware implementation.
- *
- * There could be only a single hardware SHA context in progress. The init
- * functions will try using the HW context, if available, unless 'sw_required'
- * is TRUE, in which case there will be no attempt to use the hardware for
- * this particular hashing session.
- */
-
-void SHA1_hw_init(struct sha1_ctx *ctx);
-void SHA256_hw_init(struct sha256_ctx *ctx);
-const struct sha1_digest *SHA1_hw_hash(const void *data, size_t len,
-				       struct sha1_digest *digest);
-const struct sha256_digest *SHA256_hw_hash(const void *data, size_t len,
-					   struct sha256_digest *digest);
-#ifdef CONFIG_UPTO_SHA512
-void SHA384_hw_init(struct sha384_ctx *ctx);
-void SHA512_hw_init(struct sha512_ctx *ctx);
-const struct sha384_digest *SHA384_hw_hash(const void *data, size_t len,
-					   struct sha384_digest *digest);
-
-const struct sha512_digest *SHA512_hw_hash(const void *data, size_t len,
-					   struct sha512_digest *digest);
-#endif
-
-const uint8_t *DCRYPTO_SHA1_hash(const void *data, size_t n, uint8_t *digest);
-
-/* TODO: remove dependency on board/cr50/dcrypto/dcrypto.h for RO. */
-const uint8_t *DCRYPTO_SHA256_hash(const void *data, size_t n, uint8_t *digest);
-
-/*
- *  HMAC. FIPS 198-1
- */
-void HMAC_SHA256_hw_init(struct hmac_sha256_ctx *ctx, const void *key,
-			      size_t len);
-/* DCRYPTO HMAC-SHA256 final */
-const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx);
 
 /*
  * BIGNUM utility methods.

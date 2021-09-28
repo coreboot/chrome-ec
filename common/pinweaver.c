@@ -164,7 +164,8 @@ static int create_merkle_tree(struct bits_per_level_t bits_per_level,
 
 	/* Initialize the root hash. */
 	for (hx = 0; hx < height.v; ++hx) {
-		SHA256_hw_init(&ctx);
+		if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+			return PW_ERR_CRYPTO_FAILURE;
 		for (kx = 0; kx < fan_out; ++kx)
 			HASH_update((union hash_ctx *)&ctx, temp_hash,
 				    PW_HASH_SIZE);
@@ -180,29 +181,31 @@ static int create_merkle_tree(struct bits_per_level_t bits_per_level,
 }
 
 /* Computes the HMAC for an encrypted leaf using the key in the merkle_tree. */
-static void compute_hmac(const struct merkle_tree_t *merkle_tree,
+static int compute_hmac(const struct merkle_tree_t *merkle_tree,
 			 const struct imported_leaf_data_t *imported_leaf_data,
 			 uint8_t result[PW_HASH_SIZE])
 {
 	struct hmac_sha256_ctx hmac;
 
-	HMAC_SHA256_hw_init(&hmac, merkle_tree->hmac_key,
-				 sizeof(merkle_tree->hmac_key));
-	/* use HASH_update() vs. HMAC_update() due limits of dcrypto mock. */
-	HASH_update((union hash_ctx *)&hmac.hash, imported_leaf_data->head,
-		    sizeof(*imported_leaf_data->head));
-	HASH_update((union hash_ctx *)&hmac.hash, imported_leaf_data->iv,
-		    sizeof(PW_WRAP_BLOCK_SIZE));
-	HASH_update((union hash_ctx *)&hmac.hash, imported_leaf_data->pub,
-		    imported_leaf_data->head->pub_len);
-	HASH_update((union hash_ctx *)&hmac.hash,
-		    imported_leaf_data->cipher_text,
-		    imported_leaf_data->head->sec_len);
-	memcpy(result, HMAC_SHA256_hw_final(&hmac), PW_HASH_SIZE);
+	if (DCRYPTO_hw_hmac_sha256_init(&hmac, merkle_tree->hmac_key,
+					sizeof(merkle_tree->hmac_key)) !=
+	    DCRYPTO_OK)
+		return PW_ERR_CRYPTO_FAILURE;
+
+	HMAC_SHA256_update(&hmac, imported_leaf_data->head,
+			   sizeof(*imported_leaf_data->head));
+	HMAC_SHA256_update(&hmac, imported_leaf_data->iv,
+			   sizeof(PW_WRAP_BLOCK_SIZE));
+	HMAC_SHA256_update(&hmac, imported_leaf_data->pub,
+			   imported_leaf_data->head->pub_len);
+	HMAC_SHA256_update(&hmac, imported_leaf_data->cipher_text,
+			   imported_leaf_data->head->sec_len);
+	memcpy(result, HMAC_SHA256_final(&hmac), PW_HASH_SIZE);
+	return EC_SUCCESS;
 }
 
 /* Computes the root hash for the specified path and child hash. */
-static void compute_root_hash(const struct merkle_tree_t *merkle_tree,
+static int compute_root_hash(const struct merkle_tree_t *merkle_tree,
 			      struct label_t path,
 			      const uint8_t hashes[][PW_HASH_SIZE],
 			      const uint8_t child_hash[PW_HASH_SIZE],
@@ -214,18 +217,25 @@ static void compute_root_hash(const struct merkle_tree_t *merkle_tree,
 	uint8_t temp_hash[PW_HASH_SIZE];
 	uint8_t hx = 0;
 	uint64_t index = path.v;
+	int ret;
 
-	compute_hash(hashes, num_aux,
-		     (struct index_t){index & path_suffix_mask},
-		     child_hash, temp_hash);
+	ret = compute_hash(hashes, num_aux,
+			   (struct index_t){ index & path_suffix_mask },
+			   child_hash, temp_hash);
+	if (ret != EC_SUCCESS)
+		return ret;
+
 	for (hx = 1; hx < merkle_tree->height.v; ++hx) {
 		hashes += num_aux;
 		index = index >> merkle_tree->bits_per_level.v;
-		compute_hash(hashes, num_aux,
-			     (struct index_t){index & path_suffix_mask},
-			     temp_hash, temp_hash);
+		ret = compute_hash(hashes, num_aux,
+				   (struct index_t){ index & path_suffix_mask },
+				   temp_hash, temp_hash);
+		if (ret != EC_SUCCESS)
+			return ret;
 	}
 	memcpy(new_root, temp_hash, sizeof(temp_hash));
+	return EC_SUCCESS;
 }
 
 /* Checks to see the specified path is valid. The length of the path should be
@@ -239,8 +249,11 @@ static int authenticate_path(const struct merkle_tree_t *merkle_tree,
 			     const uint8_t child_hash[PW_HASH_SIZE])
 {
 	uint8_t parent[PW_HASH_SIZE];
+	int ret;
 
-	compute_root_hash(merkle_tree, path, hashes, child_hash, parent);
+	ret = compute_root_hash(merkle_tree, path, hashes, child_hash, parent);
+	if (ret != EC_SUCCESS)
+		return ret;
 	if (memcmp(parent, merkle_tree->root, sizeof(parent)) != 0)
 		return PW_ERR_PATH_AUTH_FAILED;
 	return EC_SUCCESS;
@@ -334,13 +347,13 @@ static int handle_leaf_update(
 
 	import_leaf((const struct unimported_leaf_data_t *)wrapped_leaf_data,
 		    &ptrs);
-	compute_hmac(merkle_tree, &ptrs, wrapped_leaf_data->hmac);
 
-	compute_root_hash(merkle_tree, leaf_data->pub.label,
-			  hashes, wrapped_leaf_data->hmac,
-			  new_root);
+	ret = compute_hmac(merkle_tree, &ptrs, wrapped_leaf_data->hmac);
+	if (ret != EC_SUCCESS)
+		return ret;
 
-	return EC_SUCCESS;
+	return compute_root_hash(merkle_tree, leaf_data->pub.label, hashes,
+				 wrapped_leaf_data->hmac, new_root);
 }
 
 /******************************************************************************/
@@ -532,7 +545,9 @@ static int validate_request_with_wrapped_leaf(
 	if (ret != EC_SUCCESS)
 		return ret;
 
-	compute_hmac(merkle_tree, imported_leaf_data, hmac);
+	ret = compute_hmac(merkle_tree, imported_leaf_data, hmac);
+	if (ret != EC_SUCCESS)
+		return ret;
 	/* Safe memcmp is used here to prevent an attacker from being able to
 	 * brute force a valid HMAC for a crafted wrapped_leaf_data.
 	 * memcmp provides an attacker a timing side-channel they can use to
@@ -994,8 +1009,10 @@ static int pw_handle_remove_leaf(struct merkle_tree_t *merkle_tree,
 	if (ret != EC_SUCCESS)
 		return ret;
 
-	compute_root_hash(merkle_tree, request->leaf_location,
-			  request->path_hashes, empty_hash, new_root);
+	ret = compute_root_hash(merkle_tree, request->leaf_location,
+				request->path_hashes, empty_hash, new_root);
+	if (ret != EC_SUCCESS)
+		return ret;
 
 	ret = log_remove_leaf(request->leaf_location, new_root);
 	if (ret != EC_SUCCESS)
@@ -1283,7 +1300,10 @@ static int pw_handle_log_replay(const struct merkle_tree_t *merkle_tree,
 	if (log.entries[x].type.v != PW_TRY_AUTH)
 		return PW_ERR_TYPE_INVALID;
 
-	compute_hmac(merkle_tree, &imported_leaf_data, hmac);
+	ret = compute_hmac(merkle_tree, &imported_leaf_data, hmac);
+	if (ret != EC_SUCCESS)
+		return ret;
+
 	if (safe_memcmp(hmac, request->unimported_leaf_data.hmac, sizeof(hmac)))
 		return PW_ERR_HMAC_AUTH_FAILED;
 
@@ -1385,14 +1405,15 @@ int get_path_auxiliary_hash_count(const struct merkle_tree_t *merkle_tree)
  * ARRAY_SIZE(hashes) == num_hashes
  * 0 <= location <= num_hashes
  */
-void compute_hash(const uint8_t hashes[][PW_HASH_SIZE], uint16_t num_hashes,
+int compute_hash(const uint8_t hashes[][PW_HASH_SIZE], uint16_t num_hashes,
 		  struct index_t location,
 		  const uint8_t child_hash[PW_HASH_SIZE],
 		  uint8_t result[PW_HASH_SIZE])
 {
 	struct sha256_ctx ctx;
 
-	SHA256_hw_init(&ctx);
+	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+		return PW_ERR_CRYPTO_FAILURE;
 	if (location.v > 0)
 		HASH_update((union hash_ctx *)&ctx, hashes[0],
 			    PW_HASH_SIZE * location.v);
@@ -1401,6 +1422,7 @@ void compute_hash(const uint8_t hashes[][PW_HASH_SIZE], uint16_t num_hashes,
 		HASH_update((union hash_ctx *)&ctx, hashes[location.v],
 			    PW_HASH_SIZE * (num_hashes - location.v));
 	memcpy(result, HASH_final((union hash_ctx *)&ctx), PW_HASH_SIZE);
+	return EC_SUCCESS;
 }
 
 /* If a request from older protocol comes, this method should make it

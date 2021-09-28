@@ -15,7 +15,7 @@ void app_compute_hash(const void *p_buf, size_t num_bytes, void *p_hash,
 	 * Use the built in dcrypto engine to generate the sha1 hash of the
 	 * buffer.
 	 */
-	SHA256_hw_hash(p_buf, num_bytes, &digest);
+	DCRYPTO_SHA256_hash(p_buf, num_bytes, digest.b8);
 
 	memcpy(p_hash, digest.b8, MIN(hash_len, sizeof(digest)));
 
@@ -45,4 +45,9 @@ int app_cipher(const void *salt_p, void *out_p, const void *in_p, size_t size)
 int crypto_enabled(void)
 {
 	return 1;
+}
+
+bool fips_crypto_allowed(void)
+{
+	return true;
 }

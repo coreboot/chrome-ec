@@ -163,8 +163,11 @@ void import_leaf(const struct unimported_leaf_data_t *unimported,
 /* Computes the total number of the sibling hashes along a path. */
 int get_path_auxiliary_hash_count(const struct merkle_tree_t *merkle_tree);
 
-/* Computes the parent hash for an array of child hashes. */
-void compute_hash(const uint8_t hashes[][PW_HASH_SIZE], uint16_t num_hashes,
+/**
+ * Computes the parent hash for an array of child hashes.
+ * Return EC_SUCCESS if successful.
+ */
+int compute_hash(const uint8_t hashes[][PW_HASH_SIZE], uint16_t num_hashes,
 		  struct index_t location,
 		  const uint8_t child_hash[PW_HASH_SIZE],
 		  uint8_t result[PW_HASH_SIZE]);

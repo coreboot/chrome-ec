@@ -73,7 +73,8 @@ void MemHashTree::UpdatePath(uint64_t label,
     shifted_parent_label &= ~child_index_mask;
 
     struct sha256_ctx ctx;
-    SHA256_hw_init(&ctx);
+    if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+	return;
     int empty_nodes = 0;
     for (int index = 0; index < fan_out; ++index) {
       auto itr =
@@ -119,7 +120,8 @@ void MemHashTree::Reset(uint8_t bits_per_level, uint8_t height) {
   uint8_t fan_out = 1 << bits_per_level;
   for (int level = 1; level < height; ++level) {
     struct sha256_ctx ctx;
-    SHA256_hw_init(&ctx);
+   if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+	return;
     for (int index = 0; index < fan_out; ++index) {
       SHA256_update(&ctx, hash.data(), hash.size());
     }
