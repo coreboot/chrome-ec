@@ -266,7 +266,14 @@ int i2c_xfer_unlocked(const int port,
 					 in, in_size);
 		}
 
-		return ret;
+		switch (ret) {
+		case 0:
+			return EC_SUCCESS;
+		case -EIO:
+			return EC_ERROR_INVAL;
+		default:
+			return EC_ERROR_UNKNOWN;
+		}
 #elif defined(CONFIG_I2C_XFER_LARGE_TRANSFER)
 		ret = i2c_xfer_no_retry(port, no_pec_af,
 					    out, out_size, in,
@@ -1106,9 +1113,14 @@ unwedge_done:
 int i2c_set_freq(int port, enum i2c_freq freq)
 {
 	int ret;
+	const struct i2c_port_t *cfg;
 
-	if (!(get_i2c_port(port)->flags & I2C_PORT_FLAG_DYNAMIC_SPEED))
+	cfg = get_i2c_port(port);
+	if (cfg == NULL)
 		return EC_ERROR_INVAL;
+
+	if (!(cfg->flags & I2C_PORT_FLAG_DYNAMIC_SPEED))
+		return EC_ERROR_UNIMPLEMENTED;
 
 	i2c_lock(port, 1);
 	ret = chip_i2c_set_freq(port, freq);

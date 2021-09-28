@@ -49,13 +49,15 @@ enum power_signal {
 		 power_signal_interrupt)                                     \
 	GPIO_INT(GPIO_PCH_SLP_S0_L, GPIO_INT_EDGE_BOTH,                      \
 		 power_signal_interrupt)                                     \
-	GPIO_INT(GPIO_S5_PGOOD, GPIO_INT_EDGE_BOTH, extpower_interrupt)      \
+	GPIO_INT(GPIO_S5_PGOOD, GPIO_INT_EDGE_BOTH, baseboard_en_pwr_s0)     \
 	GPIO_INT(GPIO_S0_PGOOD, GPIO_INT_EDGE_BOTH, power_signal_interrupt)  \
 	GPIO_INT(GPIO_EC_PCORE_INT_ODL, GPIO_INT_EDGE_BOTH,                  \
 		 power_signal_interrupt)                                     \
 	GPIO_INT(GPIO_PG_GROUPC_S0_OD, GPIO_INT_EDGE_BOTH,                   \
 		 baseboard_en_pwr_pcore_s0)                                  \
 	GPIO_INT(GPIO_PG_LPDDR4X_S3_OD, GPIO_INT_EDGE_BOTH,                  \
-		 baseboard_en_pwr_pcore_s0)
+		 baseboard_en_pwr_pcore_s0)                                  \
+	GPIO_INT(GPIO_VOLUME_UP_L, GPIO_INT_EDGE_BOTH, button_interrupt)     \
+	GPIO_INT(GPIO_VOLUME_DOWN_L, GPIO_INT_EDGE_BOTH, button_interrupt)
 
 #endif /* __ZEPHYR_GPIO_MAP_H */

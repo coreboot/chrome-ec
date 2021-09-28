@@ -346,7 +346,7 @@ static enum ec_status ipi_get_protocol_info(struct host_cmd_handler_args *args)
 
 	args->response_size = sizeof(*r);
 
-	return EC_SUCCESS;
+	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, ipi_get_protocol_info,
 		     EC_VER_MASK(0));
@@ -381,6 +381,7 @@ static void ipi_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, ipi_init, HOOK_PRIO_DEFAULT);
 
+DECLARE_IRQ(SCP_IRQ_IPC0, ipc_handler, 4);
 void ipc_handler(void)
 {
 	/* TODO(b/117917141): We only support IPC_ID(0) for now. */
@@ -391,4 +392,3 @@ void ipc_handler(void)
 
 	SCP_GIPC_IN &= (SCP_GPIC_IN_CLEAR_ALL & ~SCP_GIPC_IN_CLEAR_IPCN(0));
 }
-DECLARE_IRQ(SCP_IRQ_IPC0, ipc_handler, 4);

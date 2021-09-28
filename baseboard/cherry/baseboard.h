@@ -131,6 +131,7 @@
 #define CONFIG_USB_PD_DECODE_SOP
 #define CONFIG_USB_PD_DISCHARGE
 #define CONFIG_USB_PD_DISCHARGE_PPC
+#define CONFIG_USB_PD_DPS
 #define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
 #define CONFIG_USB_PD_DUAL_ROLE
@@ -161,6 +162,7 @@
 
 /* USB-A */
 #define CONFIG_USB_PORT_POWER_DUMB
+#define CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 #define USB_PORT_COUNT USBA_PORT_COUNT
 
 /* UART */
@@ -231,13 +233,10 @@ enum pwm_channel {
 void board_reset_pd_mcu(void);
 void rt1718s_tcpc_interrupt(enum gpio_signal signal);
 
-enum rt1718s_gpio_state {
-	RT1718S_GPIO_DISABLED,
-	RT1718S_GPIO_ENABLE_SINK,
-	RT1718S_GPIO_ENABLE_SOURCE,
-};
-
-int rt1718s_gpio_ctrl(enum rt1718s_gpio_state state);
+/* RT1718S gpio to pin name mapping */
+#define GPIO_EN_USB_C1_VBUS_L RT1718S_GPIO1
+#define GPIO_EN_USB_C1_5V_OUT RT1718S_GPIO2
+#define GPIO_EN_USB_C1_FRS    RT1718S_GPIO3
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BASEBOARD_H */
