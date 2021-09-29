@@ -798,14 +798,6 @@ int DCRYPTO_bn_div(struct LITE_BIGNUM *quotient,
 int bn_modinv_vartime(struct LITE_BIGNUM *dst, const struct LITE_BIGNUM *src,
 		const struct LITE_BIGNUM *mod)
 {
-	uint32_t R_buf[RSA_MAX_WORDS];
-	uint32_t nR_buf[RSA_MAX_WORDS];
-	uint32_t Q_buf[RSA_MAX_WORDS];
-
-	uint32_t nT_buf[RSA_MAX_WORDS + 1]; /* Can go negative, hence +1 */
-	uint32_t T_buf[RSA_MAX_WORDS + 1]; /* Can go negative */
-	uint32_t tmp_buf[2 * RSA_MAX_WORDS + 1]; /* needs to hold Q*nT */
-
 	struct LITE_BIGNUM R;
 	struct LITE_BIGNUM nR;
 	struct LITE_BIGNUM Q;
@@ -823,14 +815,35 @@ int bn_modinv_vartime(struct LITE_BIGNUM *dst, const struct LITE_BIGNUM *src,
 	int nt_neg = 0;
 	int iswap;
 
-	size_t r_len, nr_len;
+	size_t r_len, nr_len, mod_len;
+	uint8_t *buffer;
 
-	bn_init(&R, R_buf, bn_size(mod));
-	bn_init(&nR, nR_buf, bn_size(mod));
-	bn_init(&Q, Q_buf, bn_size(mod));
-	bn_init(&T, T_buf, bn_size(mod) + sizeof(uint32_t));
-	bn_init(&nT, nT_buf, bn_size(mod) + sizeof(uint32_t));
-	bn_init(&tmp, tmp_buf, bn_size(mod) + sizeof(uint32_t));
+	mod_len = bn_size(mod);
+	/**
+	 * Allocate buffer once, as mod_len is multiple of sizeof(uint32_t), and
+	 * this way we reduce code size for alignments.
+	 */
+	buffer = alloca(mod_len * 7 + 3 * sizeof(uint32_t));
+
+	bn_init(&R, buffer, mod_len);
+	buffer += mod_len;
+
+	bn_init(&nR, buffer, mod_len);
+	buffer += mod_len;
+
+	bn_init(&Q, buffer, mod_len);
+	buffer += mod_len;
+
+	/* Can go negative, hence +1 */
+	bn_init(&T, buffer, mod_len + sizeof(uint32_t));
+	buffer += mod_len + sizeof(uint32_t);
+
+	/* Can go negative */
+	bn_init(&nT, buffer, mod_len + sizeof(uint32_t));
+	buffer += mod_len + sizeof(uint32_t);
+
+	/* The rest is 2*bn_size(mod) + 4, needs to hold Q*nT later */
+	bn_init(&tmp, buffer, mod_len + sizeof(uint32_t));
 
 	r_len = bn_digits(mod);
 	nr_len = bn_digits(src);
@@ -1160,14 +1173,13 @@ static int bn_probable_prime(const struct LITE_BIGNUM *p)
 	int s = 0;
 
 	uint32_t ONE_buf = 1;
-	uint8_t r_buf[RSA_MAX_BYTES / 2];
-	uint8_t A_buf[RSA_MAX_BYTES / 2];
-	uint8_t y_buf[RSA_MAX_BYTES / 2];
 
 	struct LITE_BIGNUM ONE;
 	struct LITE_BIGNUM r;
 	struct LITE_BIGNUM A;
 	struct LITE_BIGNUM y;
+	uint8_t *buffer;
+	size_t p_len;
 
 	const int rounds = bn_bits(p) >= 1024 ? ROUNDS_1024 :
 			bn_bits(p) >= 512 ? ROUNDS_512 :
@@ -1177,11 +1189,25 @@ static int bn_probable_prime(const struct LITE_BIGNUM *p)
 	if (bn_bits(p) < 384)
 		return 0;
 
-	if (bn_size(p) > sizeof(r_buf))
+	p_len = bn_size(p);
+	/* Support up to RSA 4K, thus prime should be less than 2K */
+	if (p_len > RSA_BYTES_2K)
 		return 0;
 
+	/**
+	 * Allocate buffer once, as p_len is multiple of sizeof(uint32_t), and
+	 * this way we reduce code size for alignments.
+	 */
+
+	buffer = alloca(p_len * 3);
+
 	DCRYPTO_bn_wrap(&ONE, &ONE_buf, sizeof(ONE_buf));
-	DCRYPTO_bn_wrap(&r, r_buf, bn_size(p));
+	DCRYPTO_bn_wrap(&r, buffer, p_len);
+	buffer += p_len;
+	DCRYPTO_bn_wrap(&A, buffer, p_len);
+	buffer += p_len;
+	DCRYPTO_bn_wrap(&y, buffer, p_len);
+
 	bn_copy(&r, p);
 
 	/* r * (2 ^ s) = p - 1 */
@@ -1191,13 +1217,11 @@ static int bn_probable_prime(const struct LITE_BIGNUM *p)
 		s++;
 	}
 
-	DCRYPTO_bn_wrap(&A, A_buf, bn_size(p));
-	DCRYPTO_bn_wrap(&y, y_buf, bn_size(p));
 	for (j = 0; j < rounds; j++) {
 		int i;
 
 		/* pick random A, such that A < p */
-		if (!fips_rand_bytes(A_buf, bn_size(&A)))
+		if (!fips_rand_bytes(A.d, bn_size(&A)))
 			return 0;
 
 		for (i = A.dmax - 1; i >= 0; i--) {
