@@ -689,14 +689,15 @@ void DCRYPTO_gcm_finish(struct GCM_CTX *ctx);
  * Writes 128-bit tag to T; returns 0 if an error is encountered and 1
  * otherwise.
  */
-int DCRYPTO_aes_cmac(const uint8_t *K, const uint8_t *M, const uint32_t len,
-		     uint32_t T[4]);
+enum dcrypto_result DCRYPTO_aes_cmac(const uint8_t *K, const uint8_t *M,
+				     size_t len, uint32_t T[4]);
 /* key: 128-bit key, M: message, len: number of bytes in M,
  *    T: tag to be verified
  * Returns 1 if the tag is correct and 0 otherwise.
  */
-int DCRYPTO_aes_cmac_verify(const uint8_t *key, const uint8_t *M, const int len,
-			    const uint32_t T[4]);
+enum dcrypto_result DCRYPTO_aes_cmac_verify(const uint8_t *key,
+					    const uint8_t *M, size_t len,
+					    const uint32_t T[4]);
 
 /*
  * BIGNUM utility methods.

@@ -24,7 +24,7 @@ ifeq ($(BOARD_MK_INCLUDED_ONCE),)
 # command line.
 ENV_VARS := CR50_DEV CRYPTO_TEST H1_RED_BOARD U2F_TEST RND_TEST DRBG_TEST\
 	    ECDSA_TEST DCRYPTO_TEST P256_BIN_TEST SHA1_TEST SHA256_TEST\
-	    HMAC_SHA256_TEST
+	    HMAC_SHA256_TEST CMAC_TEST
 
 ifneq ($(CRYPTO_TEST),)
 CPPFLAGS += -DCRYPTO_TEST_SETUP
@@ -114,6 +114,9 @@ fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_p256.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/compare.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/dcrypto_runtime.o
 ifneq ($(CRYPTO_TEST),)
+ifneq ($(CMAC_TEST),)
+fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/aes_cmac.o
+endif
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/gcm.o
 fips-${CONFIG_DCRYPTO_BOARD} += dcrypto/hkdf.o
 endif
