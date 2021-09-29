@@ -612,6 +612,13 @@ static int ps8743_tune_mux_c1(const struct usb_mux *me)
 			PS8743_USB_EQ_TX_3_6_DB,
 			PS8743_USB_EQ_RX_16_0_DB);
 
+	ps8743_write(me,
+			PS8743_REG_USB_SWING,
+			PS8743_LFPS_SWG_TD);
+	ps8743_write(me,
+			PS8743_REG_DP_SETTING,
+			PS8743_DP_SWG_ADJ_P15P);
+
 	return EC_SUCCESS;
 }
 
@@ -723,6 +730,8 @@ static void panel_power_change_deferred(void)
 	gpio_set_level(GPIO_EN_LCD_ENP, signal);
 	msleep(1);
 	gpio_set_level(GPIO_EN_LCD_ENN, signal);
+
+	gpio_set_level(GPIO_TSP_TA, signal & extpower_is_present());
 }
 DECLARE_DEFERRED(panel_power_change_deferred);
 
@@ -737,6 +746,14 @@ void panel_power_change_interrupt(enum gpio_signal signal)
  */
 static void handle_tsp_ta(void)
 {
-	gpio_set_level(GPIO_TSP_TA, extpower_is_present());
+	int signal = gpio_get_level(GPIO_EN_PP1800_PANEL_S0);
+
+	gpio_set_level(GPIO_TSP_TA, signal & extpower_is_present());
 }
 DECLARE_HOOK(HOOK_AC_CHANGE, handle_tsp_ta, HOOK_PRIO_DEFAULT);
+
+/******************************************************************************/
+/* USB-A charging control */
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_USB_A0_VBUS,
+};

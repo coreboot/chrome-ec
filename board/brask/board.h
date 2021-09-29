@@ -55,8 +55,8 @@
  * to 100W after we verify it.
  */
 #define PD_OPERATING_POWER_MW	CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
-#define PD_MAX_POWER_MW		60000
-#define PD_MAX_CURRENT_MA	3000
+#define PD_MAX_POWER_MW		100000
+#define PD_MAX_CURRENT_MA	5000
 #define PD_MAX_VOLTAGE_MV	20000
 
 /*
@@ -144,6 +144,9 @@
  * to check the sensor value and adjust the fan speed.
  */
 /* #define CONFIG_FANS			FAN_CH_COUNT */
+
+/* Include math_util for bitmask_uint64 used in pd_timers */
+#define CONFIG_MATH_UTIL
 
 #ifndef __ASSEMBLER__
 

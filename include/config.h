@@ -1418,6 +1418,7 @@
 #undef  CONFIG_CMD_I2CWEDGE
 #undef  CONFIG_CMD_I2C_PROTECT
 #define CONFIG_CMD_I2C_SCAN
+#undef  CONFIG_CMD_I2C_SPEED
 #undef  CONFIG_CMD_I2C_STRESS_TEST
 #undef  CONFIG_CMD_I2C_STRESS_TEST_ACCEL
 #undef  CONFIG_CMD_I2C_STRESS_TEST_ALS
@@ -4234,6 +4235,13 @@
  * Undef to allow runtime change via console command.
  */
 #undef CONFIG_USB_PD_DEBUG_LEVEL
+
+/*
+ * Define if this board is using runtime flags instead of build time configs
+ * to control USB PD properties.
+ */
+#define CONFIG_USB_PD_FLAGS
+#undef CONFIG_USB_PD_RUNTIME_FLAGS
 
 /*
  * Define if this board can enable VBUS discharge (eg. through a GPIO-controlled

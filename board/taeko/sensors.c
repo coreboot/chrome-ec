@@ -48,8 +48,8 @@ const struct adc_t adc_channels[] = {
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
 	},
-	[ADC_TEMP_SENSOR_4_WWAN] = {
-		.name = "TEMP_WWAN",
+	[ADC_TEMP_SENSOR_4_CPUCHOKE] = {
+		.name = "CPU_CHOKE",
 		.input_ch = NPCX_ADC_CH7,
 		.factor_mul = ADC_MAX_VOLT,
 		.factor_div = ADC_READ_MAX + 1,
@@ -285,23 +285,18 @@ const struct temp_sensor_t temp_sensors[] = {
 		.read = get_temp_3v3_30k9_47k_4050b,
 		.idx = ADC_TEMP_SENSOR_2_FAN
 	},
-#if 0
-/*
- * TOOD(b/194774929): need to update for real fan
- */
 	[TEMP_SENSOR_3_CHARGER] = {
 		.name = "CHARGER",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
 		.idx = ADC_TEMP_SENSOR_3_CHARGER
 	},
-	[TEMP_SENSOR_4_WWAN] = {
-		.name = "WWAN",
+	[TEMP_SENSOR_4_CPUCHOKE] = {
+		.name = "CPU CHOKE",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_4_WWAN
+		.idx = ADC_TEMP_SENSOR_4_CPUCHOKE
 	},
-#endif
 };
 
 
@@ -355,13 +350,8 @@ static const struct ec_thermal_config thermal_fan = {
 struct ec_thermal_config thermal_params[] = {
 	[TEMP_SENSOR_1_DDR_SOC] = thermal_cpu,
 	[TEMP_SENSOR_2_FAN]	= thermal_fan,
-#if 0
-/*
- * TOOD(b/194774929): need to update for real fan
- */
 	[TEMP_SENSOR_3_CHARGER]	= thermal_fan,
-	[TEMP_SENSOR_4_WWAN]	= thermal_fan,
-#endif
+	[TEMP_SENSOR_4_CPUCHOKE] = thermal_fan,
 };
 
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);

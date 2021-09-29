@@ -119,6 +119,7 @@ struct i2c_status {
 	enum smb_error        err_code;  /* Error code */
 	int                   task_waiting; /* Task waiting on controller */
 	uint32_t              timeout_us;/* Transaction timeout */
+	uint16_t              kbps;      /* Speed */
 };
 /* I2C controller state data array */
 static struct i2c_status i2c_stsobjs[I2C_CONTROLLER_COUNT];
@@ -212,6 +213,7 @@ static void i2c_abort_data(int controller)
 static int i2c_reset(int controller)
 {
 	uint16_t timeout = I2C_MAX_TIMEOUT;
+
 	/* Disable the SMB module */
 	CLEAR_BIT(NPCX_SMBCTL2(controller), NPCX_SMBCTL2_ENABLE);
 
@@ -1017,91 +1019,164 @@ int i2c_raw_get_sda(int port)
 }
 
 /*****************************************************************************/
-/* Hooks */
-static void i2c_freq_changed(void)
-{
-	int freq, i, j;
 
-	for (i = 0; i < i2c_ports_used; i++) {
-		int bus_freq = i2c_ports[i].kbps;
-		int ctrl = i2c_port_to_controller(i2c_ports[i].port);
-		int scl_freq;
+static void i2c_port_set_freq(const int ctrl, const int bus_freq_kbps)
+{
+	int freq, j;
+	int scl_freq;
+	const struct i2c_timing *pTiming;
+	int i2c_timing_used;
 
 #if NPCX_FAMILY_VERSION >= NPCX_FAMILY_NPCX7
-		/*
-		 * SMB0/1/4/5/6/7 use APB3 clock
-		 * SMB2/3 use APB2 clock
-		 */
-		freq = (ctrl < 2 || ctrl > 3) ?
-		       clock_get_apb3_freq() : clock_get_apb2_freq();
+	/*
+	 * SMB0/1/4/5/6/7 use APB3 clock
+	 * SMB2/3 use APB2 clock
+	 */
+	freq = (ctrl < 2 || ctrl > 3) ?
+		clock_get_apb3_freq() : clock_get_apb2_freq();
 #else /* CHIP_FAMILY_NPCX5 */
-		/*
-		 * SMB0/1 use core clock
-		 * SMB2/3 use APB2 clock
-		 */
-		freq = (ctrl < 2) ? clock_get_freq() : clock_get_apb2_freq();
+	/*
+	 * SMB0/1 use core clock
+	 * SMB2/3 use APB2 clock
+	 */
+	freq = (ctrl < 2) ? clock_get_freq() : clock_get_apb2_freq();
 #endif
 
-		/*
-		 * Set SCL frequency by formula:
-		 * tSCL = 4 * SCLFRQ * tCLK
-		 * fSCL = fCLK / (4*SCLFRQ)
-		 * SCLFRQ = ceil(fCLK/(4*fSCL))
-		 */
-		scl_freq = DIV_ROUND_UP(freq, bus_freq*4000); /* Unit in bps */
+	if (bus_freq_kbps == i2c_stsobjs[ctrl].kbps)
+		return;
 
-		/* Normal mode if i2c freq is under 100kHz */
-		if (bus_freq <= 100) {
-			/* Set divider value of SCL */
-			SET_FIELD(NPCX_SMBCTL2(ctrl), NPCX_SMBCTL2_SCLFRQ7_FIELD
-					, (scl_freq & 0x7F));
-			SET_FIELD(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_SCLFRQ2_FIELD
-					, (scl_freq >> 7));
-		} else {
-			const struct i2c_timing *pTiming;
-			int i2c_timing_used;
+	/*
+	 * Set SCL frequency by formula:
+	 * tSCL = 4 * SCLFRQ * tCLK
+	 * fSCL = fCLK / (4*SCLFRQ)
+	 * SCLFRQ = ceil(fCLK/(4*fSCL))
+	 */
+	scl_freq = DIV_ROUND_UP(freq, bus_freq_kbps*4000); /* Unit in bps */
 
-			/* use Fast Mode */
-			SET_BIT(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_400K);
-			/*
-			 * Set SCLH(L)T and hold-time directly for best i2c
-			 * timing condition for all source clocks. Please refer
-			 * Section 7.5.9 "SMBus Timing - Fast Mode" for detail.
-			 */
-			if (bus_freq == 400) {
-				pTiming = i2c_400k_timings;
-				i2c_timing_used = i2c_400k_timing_used;
-			} else if (bus_freq == 1000) {
-				pTiming = i2c_1m_timings;
-				i2c_timing_used = i2c_1m_timing_used;
-			} else {
-				/* Set value from formula */
-				NPCX_SMBSCLLT(ctrl) = scl_freq;
-				NPCX_SMBSCLHT(ctrl) = scl_freq;
-				cprints(CC_I2C,
-					"Warning: Use 400K or 1MHz for better timing of I2c %d",
-					ctrl);
-				continue;
-			}
+	/* Normal mode if I2C freq is under 100kHz */
+	if (bus_freq_kbps <= 100) {
+		i2c_stsobjs[ctrl].kbps = bus_freq_kbps;
+		/* Set divider value of SCL */
+		SET_FIELD(NPCX_SMBCTL2(ctrl), NPCX_SMBCTL2_SCLFRQ7_FIELD,
+			  (scl_freq & 0x7F));
+		SET_FIELD(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_SCLFRQ2_FIELD,
+			  (scl_freq >> 7));
+		return;
+	}
 
-			for (j = 0; j < i2c_timing_used; j++, pTiming++) {
-				if (pTiming->clock == (freq/SECOND)) {
-					/* Set SCLH(L)T and hold-time */
-					NPCX_SMBSCLLT(ctrl) = pTiming->k1/2;
-					NPCX_SMBSCLHT(ctrl) = pTiming->k2/2;
-					SET_FIELD(NPCX_SMBCTL4(ctrl),
-					NPCX_SMBCTL4_HLDT_FIELD, pTiming->HLDT);
-					break;
-				}
-			}
-			if (j == i2c_timing_used)
-				cprints(CC_I2C,
-					"Error: Please make sure src clock of i2c %d is supported",
-					ctrl);
+	/* use Fast Mode */
+	SET_BIT(NPCX_SMBCTL3(ctrl), NPCX_SMBCTL3_400K);
+	/*
+	 * Set SCLH(L)T and hold-time directly for best I2C
+	 * timing condition for all source clocks. Please refer
+	 * Section 7.5.9 "SMBus Timing - Fast Mode" for detail.
+	 */
+	if (bus_freq_kbps == 400) {
+		pTiming = i2c_400k_timings;
+		i2c_timing_used = i2c_400k_timing_used;
+	} else if (bus_freq_kbps == 1000) {
+		pTiming = i2c_1m_timings;
+		i2c_timing_used = i2c_1m_timing_used;
+	} else {
+		i2c_stsobjs[ctrl].kbps = bus_freq_kbps;
+		/* Set value from formula */
+		NPCX_SMBSCLLT(ctrl) = scl_freq;
+		NPCX_SMBSCLHT(ctrl) = scl_freq;
+		cprints(CC_I2C,
+			"Warning: I2C %d: Use 400kHz or 1MHz for better timing",
+			ctrl);
+		return;
+	}
+
+	for (j = 0; j < i2c_timing_used; j++, pTiming++) {
+		if (pTiming->clock == (freq/SECOND)) {
+			i2c_stsobjs[ctrl].kbps = bus_freq_kbps;
+			/* Set SCLH(L)T and hold-time */
+			NPCX_SMBSCLLT(ctrl) = pTiming->k1/2;
+			NPCX_SMBSCLHT(ctrl) = pTiming->k2/2;
+			SET_FIELD(NPCX_SMBCTL4(ctrl),
+				  NPCX_SMBCTL4_HLDT_FIELD, pTiming->HLDT);
+			break;
 		}
 	}
+	if (j == i2c_timing_used)
+		cprints(CC_I2C, "Error: I2C %d: src clk %d not supported",
+			ctrl, freq / SECOND);
 }
+
+/* Hooks */
+
+static void i2c_freq_changed(void)
+{
+	int i;
+
+	for (i = 0; i < I2C_CONTROLLER_COUNT; ++i) {
+		/* No bus speed configured */
+		i2c_stsobjs[i].kbps = 0;
+	}
+
+	for (i = 0; i < i2c_ports_used; i++) {
+		const struct i2c_port_t *p;
+		int ctrl;
+
+		p = &i2c_ports[i];
+		ctrl = i2c_port_to_controller(p->port);
+		if (ctrl < 0)
+			continue;
+		i2c_port_set_freq(ctrl, p->kbps);
+	}
+}
+
 DECLARE_HOOK(HOOK_FREQ_CHANGE, i2c_freq_changed, HOOK_PRIO_DEFAULT);
+
+enum i2c_freq chip_i2c_get_freq(int chip_i2c_port)
+{
+	int ctrl;
+	int kbps;
+
+	ctrl = i2c_port_to_controller(chip_i2c_port);
+	if (ctrl < 0)
+		return I2C_FREQ_COUNT;
+
+	kbps = i2c_stsobjs[ctrl].kbps;
+
+	if (kbps > 400)
+		return I2C_FREQ_1000KHZ;
+	if (kbps > 100)
+		return I2C_FREQ_400KHZ;
+
+	if (kbps == 100)
+		return I2C_FREQ_100KHZ;
+
+	return I2C_FREQ_COUNT;
+}
+
+int chip_i2c_set_freq(int chip_i2c_port, enum i2c_freq freq)
+{
+	int ctrl;
+	int bus_freq_kbps;
+
+	ctrl = i2c_port_to_controller(chip_i2c_port);
+	if (ctrl < 0)
+		return EC_ERROR_INVAL;
+
+	switch (freq) {
+	case I2C_FREQ_100KHZ:
+		bus_freq_kbps = 100;
+		break;
+	case I2C_FREQ_400KHZ:
+		bus_freq_kbps = 400;
+		break;
+	case I2C_FREQ_1000KHZ:
+		bus_freq_kbps = 1000;
+		break;
+	default:
+		return EC_ERROR_INVAL;
+	}
+
+	i2c_port_set_freq(ctrl, bus_freq_kbps);
+	return EC_SUCCESS;
+}
 
 void i2c_init(void)
 {
@@ -1147,4 +1222,3 @@ void i2c_init(void)
 		i2c_init_bus(ctrl);
 	}
 }
-
