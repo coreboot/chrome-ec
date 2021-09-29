@@ -482,6 +482,7 @@ static bool fips_aes256_kat(void)
 	uint8_t enc[AES_BLOCK_LEN];
 	uint8_t dec[AES_BLOCK_LEN];
 	uint8_t iv[AES_BLOCK_LEN];
+	enum dcrypto_result result;
 
 	static const uint8_t kat_aes128_k[AES256_BLOCK_CIPHER_KEY_SIZE] = {
 		0x65, 0x74, 0x61, 0x6f, 0x6e, 0x72, 0x69, 0x73,
@@ -500,16 +501,21 @@ static bool fips_aes256_kat(void)
 	};
 
 	memset(iv, 0, sizeof(iv));
-	DCRYPTO_aes_init(kat_aes128_k, 256, iv, CIPHER_MODE_CBC, ENCRYPT_MODE);
-	DCRYPTO_aes_block(kat_aes128_msg, enc);
-	if (memcmp(enc, ans_aes128, AES_BLOCK_LEN))
-		return false;
+	/* Use internal function as we are not yet in FIPS mode. */
+	result = dcrypto_aes_init(kat_aes128_k, 256, iv, CIPHER_MODE_CBC,
+				  ENCRYPT_MODE);
+	result |= DCRYPTO_aes_block(kat_aes128_msg, enc);
+	result |= DCRYPTO_equals(enc, ans_aes128, AES_BLOCK_LEN);
 
-	DCRYPTO_aes_init(kat_aes128_k, 256, iv, CIPHER_MODE_CBC, DECRYPT_MODE);
-	DCRYPTO_aes_block(enc, dec);
+	if (fips_break_cmd == FIPS_BREAK_AES256)
+		enc[1] ^= 1;
 
-	return !(fips_break_cmd == FIPS_BREAK_AES256) &&
-	       (memcmp(kat_aes128_msg, dec, AES_BLOCK_LEN) == 0);
+	result |= dcrypto_aes_init(kat_aes128_k, 256, iv, CIPHER_MODE_CBC,
+				   DECRYPT_MODE);
+	result |= DCRYPTO_aes_block(enc, dec);
+	result |= DCRYPTO_equals(kat_aes128_msg, dec, AES_BLOCK_LEN);
+
+	return result == DCRYPTO_OK;
 }
 #endif
 

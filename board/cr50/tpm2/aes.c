@@ -24,7 +24,8 @@ CRYPT_RESULT _cpri__AESDecryptCBC(
 		return CRYPT_SUCCESS;
 	assert(key != NULL && iv != NULL && in != NULL && out != NULL);
 	assert(len <= INT32_MAX);
-	if (!DCRYPTO_aes_init(key, num_bits, iv, CIPHER_MODE_CBC, DECRYPT_MODE))
+	if (DCRYPTO_aes_init(key, num_bits, iv, CIPHER_MODE_CBC,
+			     DECRYPT_MODE) != DCRYPTO_OK)
 		return CRYPT_PARAMETER;
 
 	result = _cpri__AESBlock(out, len, in);
@@ -44,18 +45,19 @@ CRYPT_RESULT _cpri__AESDecryptCFB(uint8_t *out, uint32_t num_bits,
 	assert(key != NULL && iv != NULL && out != NULL && in != NULL);
 
 	/* Initialize AES hardware. */
-	if (!DCRYPTO_aes_init(key, num_bits, NULL,
-				CIPHER_MODE_ECB, ENCRYPT_MODE))
+	if (DCRYPTO_aes_init(key, num_bits, NULL, CIPHER_MODE_ECB,
+			     ENCRYPT_MODE) != DCRYPTO_OK)
 		return CRYPT_PARAMETER;
 
 	while (len > 0) {
-		int i;
+		size_t i;
 		size_t chunk_len;
 		uint8_t mask[16];
 
 		chunk_len = MIN(len, 16);
 
-		DCRYPTO_aes_block(iv, mask);
+		if (DCRYPTO_aes_block(iv, mask) != DCRYPTO_OK)
+			return CRYPT_FAIL;
 
 		memcpy(iv, in, chunk_len);
 		if (chunk_len != 16)
@@ -92,7 +94,8 @@ static CRYPT_RESULT _cpri__AESBlock(
 		return CRYPT_PARAMETER;
 
 	for (; slen > 0; slen -= 16) {
-		DCRYPTO_aes_block(in, out);
+		if (DCRYPTO_aes_block(in, out) != DCRYPTO_OK)
+			return CRYPT_FAIL;
 		in = &in[16];
 		out = &out[16];
 	}
@@ -106,7 +109,8 @@ CRYPT_RESULT _cpri__AESEncryptCBC(
 	CRYPT_RESULT result;
 
 	assert(key != NULL && iv != NULL);
-	if (!DCRYPTO_aes_init(key, num_bits, iv, CIPHER_MODE_CBC, ENCRYPT_MODE))
+	if (DCRYPTO_aes_init(key, num_bits, iv, CIPHER_MODE_CBC,
+			     ENCRYPT_MODE) != DCRYPTO_OK)
 		return CRYPT_PARAMETER;
 
 	result = _cpri__AESBlock(out, len, in);
@@ -126,11 +130,13 @@ CRYPT_RESULT _cpri__AESEncryptCFB(
 
 	assert(out != NULL && key != NULL && iv != NULL && in != NULL);
 	assert(len <= INT32_MAX);
-	if (!DCRYPTO_aes_init(key, num_bits, iv, CIPHER_MODE_CTR, ENCRYPT_MODE))
+	if (DCRYPTO_aes_init(key, num_bits, iv, CIPHER_MODE_CTR,
+			     ENCRYPT_MODE) != DCRYPTO_OK)
 		return CRYPT_PARAMETER;
 
 	for (; len >= 16; len -= 16, in += 16, out += 16) {
-		DCRYPTO_aes_block(in, out);
+		if (DCRYPTO_aes_block(in, out) != DCRYPTO_OK)
+			return CRYPT_FAIL;
 		DCRYPTO_aes_write_iv(out);
 	}
 	if (len > 0) {
@@ -158,7 +164,7 @@ CRYPT_RESULT _cpri__AESEncryptCTR(
 	assert(out != NULL && key != NULL && iv != NULL && in != NULL);
 	assert(len <= INT32_MAX);
 
-	if (!DCRYPTO_aes_ctr(out, key, num_bits, iv, in, len))
+	if (DCRYPTO_aes_ctr(out, key, num_bits, iv, in, len) != DCRYPTO_OK)
 		return CRYPT_PARAMETER;
 	else
 		return CRYPT_SUCCESS;
@@ -170,8 +176,8 @@ CRYPT_RESULT _cpri__AESEncryptECB(
 {
 	assert(key != NULL);
 	/* Initialize AES hardware. */
-	if (!DCRYPTO_aes_init(key, num_bits, NULL,
-			      CIPHER_MODE_ECB, ENCRYPT_MODE))
+	if (DCRYPTO_aes_init(key, num_bits, NULL, CIPHER_MODE_ECB,
+			     ENCRYPT_MODE) != DCRYPTO_OK)
 		return CRYPT_PARAMETER;
 	return _cpri__AESBlock(out, len, in);
 }
@@ -191,8 +197,8 @@ CRYPT_RESULT _cpri__AESEncryptOFB(
 	assert(len <= INT32_MAX);
 	slen = (int32_t) len;
 	/* Initialize AES hardware. */
-	if (!DCRYPTO_aes_init(key, num_bits, NULL,
-				CIPHER_MODE_ECB, ENCRYPT_MODE))
+	if (DCRYPTO_aes_init(key, num_bits, NULL, CIPHER_MODE_ECB,
+			     ENCRYPT_MODE) != DCRYPTO_OK)
 		return CRYPT_PARAMETER;
 
 	for (; slen > 0; slen -= 16) {

@@ -10,16 +10,17 @@
 #include "dcrypto.h"
 #include "registers.h"
 
-int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
-		const uint8_t *iv, const uint8_t *in, size_t in_len)
+enum dcrypto_result DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key,
+				    uint32_t key_bits, const uint8_t *iv,
+				    const uint8_t *in, size_t in_len)
 {
 	EVP_CIPHER_CTX *ctx;
-	int ret = 0;
+	enum dcrypto_result ret = DCRYPTO_FAIL;
 	int out_len = 0;
 
 	ctx = EVP_CIPHER_CTX_new();
 	if (!ctx)
-		return 0;
+		return DCRYPTO_FAIL;
 
 	if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key, iv) != 1)
 		goto cleanup;
@@ -29,7 +30,7 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 
 	if (EVP_EncryptFinal(ctx, out + out_len, &out_len) != 1)
 		goto cleanup;
-	ret = 1;
+	ret = DCRYPTO_OK;
 
 cleanup:
 	EVP_CIPHER_CTX_free(ctx);

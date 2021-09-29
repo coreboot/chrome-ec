@@ -54,10 +54,11 @@ static int aes128(const uint8_t *K, const uint32_t in[4], uint32_t out[4])
 {
 	const uint32_t zero[4] = {0, 0, 0, 0};
 
-	if (!DCRYPTO_aes_init((const uint8_t *)K, 128, (const uint8_t *) zero,
-				CIPHER_MODE_ECB, ENCRYPT_MODE))
+	if (DCRYPTO_aes_init((const uint8_t *)K, 128, (const uint8_t *)zero,
+			     CIPHER_MODE_ECB, ENCRYPT_MODE) != DCRYPTO_OK)
 		return 0;
-	if (!DCRYPTO_aes_block((const uint8_t *) in, (uint8_t *) out))
+	if (DCRYPTO_aes_block((const uint8_t *)in, (uint8_t *)out) !=
+	    DCRYPTO_OK)
 		return 0;
 	return 1;
 }

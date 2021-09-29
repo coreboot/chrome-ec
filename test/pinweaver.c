@@ -936,16 +936,17 @@ const struct sha256_digest *HMAC_SHA256_final(struct hmac_sha256_ctx *ctx)
 /* Perform a symmetric transformation of the data to simulate AES without
  * requiring a full AES-CTR implementation.
  *
- * 1 for success 0 for fail
+ * DCRYPTO_OK for success DCRYPTO_FAIL for fail
  */
-int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
-		    const uint8_t *iv, const uint8_t *in, size_t in_len)
+enum dcrypto_result DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key,
+				    uint32_t key_bits, const uint8_t *iv,
+				    const uint8_t *in, size_t in_len)
 {
 	size_t x;
 
 	if (MOCK_aes_fail) {
 		--MOCK_aes_fail;
-		return 0;
+		return DCRYPTO_FAIL;
 	}
 
 	TEST_ASSERT(key_bits == 256);
@@ -956,7 +957,7 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 
 	for (x = 0; x < in_len; ++x)
 		out[x] = MOCK_AES_XOR_BYTE(x) ^ in[x];
-	return 1;
+	return DCRYPTO_OK;
 }
 
 /* 1 for success 0 for fail*/

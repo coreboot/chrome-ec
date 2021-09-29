@@ -38,8 +38,9 @@ static int wait_read_data(volatile uint32_t *addr)
 	return empty ? 0 : 1;
 }
 
-int DCRYPTO_aes_init(const uint8_t *key, size_t key_len, const uint8_t *iv,
-		enum cipher_mode c_mode, enum encrypt_mode e_mode)
+enum dcrypto_result dcrypto_aes_init(const uint8_t *key, size_t key_len,
+				     const uint8_t *iv, enum cipher_mode c_mode,
+				     enum encrypt_mode e_mode)
 {
 	size_t i;
 	const struct access_helper *p;
@@ -57,9 +58,19 @@ int DCRYPTO_aes_init(const uint8_t *key, size_t key_len, const uint8_t *iv,
 		break;
 	default:
 		/* Invalid key length specified. */
-		return 0;
+		return DCRYPTO_FAIL;
 	}
-	set_control_register(c_mode, key_mode, e_mode);
+
+	switch (c_mode) {
+	case CIPHER_MODE_ECB:
+	case CIPHER_MODE_CTR:
+	case CIPHER_MODE_CBC:
+		set_control_register(c_mode, key_mode, e_mode);
+		break;
+	default:
+		/* Invalid mode specified. */
+		return DCRYPTO_FAIL;
+	}
 
 	/* Initialize hardware with AES key */
 	p = (struct access_helper *) key;
@@ -71,17 +82,26 @@ int DCRYPTO_aes_init(const uint8_t *key, size_t key_len, const uint8_t *iv,
 	/* Wait for key expansion. */
 	if (!wait_read_data(GREG32_ADDR(KEYMGR, AES_KEY_START))) {
 		/* Should not happen. */
-		return 0;
+		return DCRYPTO_FAIL;
 	}
 
 	/* Initialize IV for modes that require it. */
 	if (iv)
 		DCRYPTO_aes_write_iv(iv);
 
-	return 1;
+	return DCRYPTO_OK;
 }
 
-int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
+enum dcrypto_result DCRYPTO_aes_init(const uint8_t *key, size_t key_len,
+				     const uint8_t *iv, enum cipher_mode c_mode,
+				     enum encrypt_mode e_mode)
+{
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+	return dcrypto_aes_init(key, key_len, iv, c_mode, e_mode);
+}
+
+enum dcrypto_result DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
 {
 	int i;
 	uint32_t buf[4];
@@ -101,7 +121,7 @@ int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
 	/* Wait for the result. */
 	if (!wait_read_data(GREG32_ADDR(KEYMGR, AES_RFIFO_EMPTY))) {
 		/* Should not happen, ciphertext not ready. */
-		return 0;
+		return DCRYPTO_FAIL;
 	}
 
 	/* Read ciphertext. */
@@ -116,7 +136,7 @@ int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
 	if (out != (uint8_t *)outw)
 		memcpy(out, outw, sizeof(buf));
 
-	return 1;
+	return DCRYPTO_OK;
 }
 
 void DCRYPTO_aes_write_iv(const uint8_t *iv)
@@ -153,13 +173,14 @@ void DCRYPTO_aes_read_iv(uint8_t *iv)
 		memcpy(iv, ivw, sizeof(buf));
 }
 
-int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
-		const uint8_t *iv, const uint8_t *in, size_t in_len)
+enum dcrypto_result DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key,
+				    uint32_t key_bits, const uint8_t *iv,
+				    const uint8_t *in, size_t in_len)
 {
 	/* Initialize AES hardware. */
-	if (!DCRYPTO_aes_init(key, key_bits, iv,
-				CIPHER_MODE_CTR, ENCRYPT_MODE))
-		return 0;
+	if (DCRYPTO_aes_init(key, key_bits, iv, CIPHER_MODE_CTR,
+			     ENCRYPT_MODE) != DCRYPTO_OK)
+		return DCRYPTO_FAIL;
 
 	while (in_len > 0) {
 		uint32_t tmpin[4];
@@ -176,8 +197,8 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 			inp = in;
 			outp = out;
 		}
-		if (!DCRYPTO_aes_block(inp, outp))
-			return 0;
+		if (DCRYPTO_aes_block(inp, outp) != DCRYPTO_OK)
+			return DCRYPTO_FAIL;
 		if (outp != out)
 			memcpy(out, outp, count);
 
@@ -185,5 +206,5 @@ int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
 		out += count;
 		in_len -= count;
 	}
-	return 1;
+	return DCRYPTO_OK;
 }

@@ -289,11 +289,11 @@ static int encrypt_leaf_data(const struct merkle_tree_t *merkle_tree,
 		return PW_ERR_CRYPTO_FAILURE;
 	memcpy(&wrapped_leaf_data->pub, &leaf_data->pub,
 	       sizeof(leaf_data->pub));
-	if (!DCRYPTO_aes_ctr(wrapped_leaf_data->cipher_text,
+	if (DCRYPTO_aes_ctr(wrapped_leaf_data->cipher_text,
 			    merkle_tree->wrap_key,
 			    sizeof(merkle_tree->wrap_key) << 3,
 			    wrapped_leaf_data->iv, (uint8_t *)&leaf_data->sec,
-			    sizeof(leaf_data->sec))) {
+			    sizeof(leaf_data->sec)) != DCRYPTO_OK) {
 		return PW_ERR_CRYPTO_FAILURE;
 	}
 	return EC_SUCCESS;
@@ -308,11 +308,11 @@ static int decrypt_leaf_data(
 	memcpy(&leaf_data->pub, imported_leaf_data->pub,
 	       MIN(imported_leaf_data->head->pub_len,
 		   sizeof(struct leaf_public_data_t)));
-	if (!DCRYPTO_aes_ctr((uint8_t *)&leaf_data->sec, merkle_tree->wrap_key,
+	if (DCRYPTO_aes_ctr((uint8_t *)&leaf_data->sec, merkle_tree->wrap_key,
 			    sizeof(merkle_tree->wrap_key) << 3,
 			    imported_leaf_data->iv,
 			    imported_leaf_data->cipher_text,
-			    sizeof(leaf_data->sec))) {
+			    sizeof(leaf_data->sec)) != DCRYPTO_OK) {
 		return PW_ERR_CRYPTO_FAILURE;
 	}
 	return EC_SUCCESS;

@@ -610,18 +610,31 @@ static inline const struct sha512_digest *HMAC_SHA512_final(
  */
 #define AES256_BLOCK_CIPHER_KEY_SIZE 32
 
-int DCRYPTO_aes_init(const uint8_t *key, size_t key_len, const uint8_t *iv,
-		     enum cipher_mode c_mode, enum encrypt_mode e_mode);
-int DCRYPTO_aes_block(const uint8_t *in, uint8_t *out);
+/**
+ * Initialize AES hardware into specified mode
+ *
+ * @param key AES key
+ * @param key_len key length in bits 128/192/256
+ * @param iv initialization vector for CTR/CBC mode
+ * @param c_mode cipher mode ECB/CTR/CBC
+ * @param e_mode encryption mode (encrypt/decrypt)
+ * @return DCRYPTO_OK if successful
+ */
+enum dcrypto_result DCRYPTO_aes_init(const uint8_t *key, size_t key_len,
+				     const uint8_t *iv, enum cipher_mode c_mode,
+				     enum encrypt_mode e_mode);
 
-void DCRYPTO_aes_write_iv(const uint8_t *iv);
-void DCRYPTO_aes_read_iv(uint8_t *iv);
+enum dcrypto_result DCRYPTO_aes_block(const uint8_t *in, uint8_t *out);
 
 /* AES-CTR-128/192/256
  * NIST Special Publication 800-38A
  */
-int DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key, uint32_t key_bits,
-		    const uint8_t *iv, const uint8_t *in, size_t in_len);
+enum dcrypto_result DCRYPTO_aes_ctr(uint8_t *out, const uint8_t *key,
+				    uint32_t key_bits, const uint8_t *iv,
+				    const uint8_t *in, size_t in_len);
+
+void DCRYPTO_aes_write_iv(const uint8_t *iv);
+void DCRYPTO_aes_read_iv(uint8_t *iv);
 
 /* AES-GCM-128/192/256
  * NIST Special Publication 800-38D, IV is provided externally

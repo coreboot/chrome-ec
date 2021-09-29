@@ -188,6 +188,12 @@ void HMAC_SHA256_hw_init(struct hmac_sha256_ctx *ctx, const void *key,
 const struct sha256_digest *HMAC_SHA256_hw_final(struct hmac_sha256_ctx *ctx);
 
 /*
+ * Hardware AES.
+ */
+enum dcrypto_result dcrypto_aes_init(const uint8_t *key, size_t key_len,
+				     const uint8_t *iv, enum cipher_mode c_mode,
+				     enum encrypt_mode e_mode);
+/*
  * BIGNUM.
  */
 #define LITE_BN_BITS2        32
