@@ -1027,6 +1027,34 @@ unwedge_done:
 	return ret;
 }
 
+int i2c_freq_to_khz(enum i2c_freq freq)
+{
+	switch (freq) {
+	case I2C_FREQ_100KHZ:
+		return 100;
+	case I2C_FREQ_400KHZ:
+		return 400;
+	case I2C_FREQ_1000KHZ:
+		return 1000;
+	default:
+		return 0;
+	}
+}
+
+enum i2c_freq i2c_khz_to_freq(int speed_khz)
+{
+	switch (speed_khz) {
+	case 100:
+		return I2C_FREQ_100KHZ;
+	case 400:
+		return I2C_FREQ_400KHZ;
+	case 1000:
+		return I2C_FREQ_1000KHZ;
+	default:
+		return I2C_FREQ_COUNT;
+	}
+}
+
 int i2c_set_freq(int port, enum i2c_freq freq)
 {
 	int ret;
