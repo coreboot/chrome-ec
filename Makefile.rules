@@ -238,7 +238,8 @@ dis-$(CONFIG_SHAREDLIB) += $(out)/$(SHOBJLIB)/$(SHOBJLIB).dis
 dis: $(dis-y)
 .PHONY: dis
 
-hex-y := $(out)/RO/$(PROJECT).RO.hex $(out)/RW/$(PROJECT).RW.hex $(out)/$(PROJECT).hex
+hex-y := $(out)/RW/$(PROJECT).RW.hex $(out)/$(PROJECT).hex
+hex-$(CONFIG_FW_INCLUDE_RO) += $(out)/RO/$(PROJECT).RO.hex
 hex-$(CONFIG_RW_B) += $(out)/RW/$(PROJECT).RW_B.hex
 hex: $(hex-y)
 .PHONY: hex

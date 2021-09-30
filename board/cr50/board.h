@@ -28,6 +28,10 @@
 #undef CONFIG_CMD_SYSJUMP
 #undef CONFIG_CMD_SYSLOCK
 
+#define CONFIG_CUSTOMIZED_RO
+/* TODO: find a way to drop RO build. */
+#define CONFIG_FW_INCLUDE_RO
+
 #ifndef CR50_DEV
 /* Disable stuff that should only be in debug builds */
 #undef CONFIG_CMD_CRASH

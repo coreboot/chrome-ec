@@ -319,7 +319,7 @@ dirs+=$(shell find driver -type d)
 common_dirs=util
 
 custom-ro_objs-y += $(custom-board-ro_objs-y)
-ifeq ($(custom-ro_objs-y),)
+ifneq ($(CONFIG_CUSTOMIZED_RO),y)
 ro-common-objs := $(sort $(foreach obj, $(all-obj-y), $(out)/RO/$(obj)))
 ro-only-objs := $(sort $(foreach obj, $(all-obj-ro), $(out)/RO/$(obj)))
 ro-objs := $(sort $(ro-common-objs) $(ro-only-objs))
@@ -361,7 +361,11 @@ $(rw-eps) $(out)/RW/str_blob: $(rw-es)
 $(rw-objs): $(out)/RW/str_blob $(rw-eps)
 endif
 
+ifeq ($(CONFIG_FW_INCLUDE_RO),y)
 deps := $(ro-deps) $(rw-deps) $(deps-y)
+else
+deps := $(rw-deps) $(deps-y)
+endif
 
 .PHONY: ro rw
 $(config): $(out)/$(PROJECT).bin
