@@ -9,7 +9,7 @@
 #include "byteorder.h"
 #include "compile_time_macros.h"
 #include "console.h"
-#include "dcrypto/dcrypto.h"
+#include "dcrypto.h"
 #include "extension.h"
 #include "flash.h"
 #include "flash_info.h"

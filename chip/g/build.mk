@@ -14,12 +14,12 @@ ifeq ($(CONFIG_DCRYPTO),y)
 INCLUDE_ROOT := $(abspath ./include)
 CPPFLAGS += -I$(abspath .)
 CPPFLAGS += -I$(abspath ./builtin)
-CPPFLAGS += -I$(abspath ./chip/$(CHIP))
+CPPFLAGS += -I$(abspath ./chip/$(CHIP)/dcrypto)
 CPPFLAGS += -I$(INCLUDE_ROOT)
+CPPFLAGS += -I$(realpath ../../third_party/cryptoc/include)
 dirs-y += chip/g/dcrypto
 endif
 
-CPPFLAGS += -I$(realpath ../../third_party/cryptoc/include)
 
 # Required chip modules
 chip-y = clock.o gpio.o hwtimer.o pre_init.o system.o
@@ -97,6 +97,8 @@ chip-$(CONFIG_LOW_POWER_IDLE)+=idle.o
 chip-$(CONFIG_FLASH_PHYSICAL) += flash.o
 
 ifneq ($(CONFIG_CUSTOMIZED_RO),)
+CPPFLAGS_RO += -I$(abspath ./chip/$(CHIP)/dcrypto)
+CPPFLAGS_RO += -I$(realpath ../../third_party/cryptoc/include)
 custom-ro_objs-y  = chip/g/clock.o
 custom-ro_objs-y += chip/g/dcrypto/sha256.o
 custom-ro_objs-y += chip/g/loader/key_ladder.o

@@ -29,39 +29,39 @@ ifneq ($(CRYPTO_TEST),)
 CPPFLAGS += -DCRYPTO_TEST_SETUP
 
 ifneq ($(U2F_TEST),)
-CPPFLAGS += -DCRYPTO_TEST_CMD_U2F_TEST=1
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_U2F_TEST=1
 endif
 
 ifneq ($(RND_TEST),)
-CPPFLAGS += -DCRYPTO_TEST_CMD_RAND=1
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_RAND=1
 endif
 
 ifneq ($(DRBG_TEST),)
-CPPFLAGS += -DCRYPTO_TEST_CMD_HMAC_DRBG=1
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_HMAC_DRBG=1
 endif
 
 ifneq ($(ECDSA_TEST),)
-CPPFLAGS += -DCRYPTO_TEST_CMD_DCRYPTO_ECDSA=1
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_DCRYPTO_ECDSA=1
 endif
 
 ifneq ($(DCRYPTO_TEST),)
-CPPFLAGS += -DCRYPTO_TEST_CMD_DCRYPTO_TEST=1
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_DCRYPTO_TEST=1
 endif
 
 ifneq ($(P256_BIN_TEST),)
-CPPFLAGS += -DP256_BIN_TEST=1
+CPPFLAGS_RW += -DP256_BIN_TEST=1
 endif
 
 ifneq ($(SHA1_TEST),)
-CPPFLAGS += -DSHA1_TEST=1
+CPPFLAGS_RW += -DSHA1_TEST=1
 endif
 
 ifneq ($(SHA256_TEST),)
-CPPFLAGS += -DSHA256_TEST=1
+CPPFLAGS_RW += -DSHA256_TEST=1
 endif
 
 ifneq ($(HMAC_SHA256_TEST),)
-CPPFLAGS += -DHMAC_SHA256_TEST=1
+CPPFLAGS_RW += -DHMAC_SHA256_TEST=1
 endif
 
 endif
@@ -77,7 +77,7 @@ all: hex
 ifeq ($(CONFIG_DCRYPTO_BOARD),y)
 # chip/g/build.mk also adds chip/g/dcrypto for CONFIG_DCRYPTO
 # so, only add it if we build RW with CONFIG_DCRYPTO_BOARD
-CFLAGS += -I$(realpath $(BDIR)/dcrypto)
+CPPFLAGS_RW += -I$(realpath $(BDIR)/dcrypto)
 dirs-y += $(BDIR)/dcrypto
 endif
 
@@ -167,6 +167,7 @@ board-y += tpm2/trng.o
 board-y += tpm2/virtual_nvmem.o
 board-y += tpm_nvmem_ops.o
 board-y += wp.o
+board-$(CONFIG_PINWEAVER)+=pinweaver_tpm_imports.o
 
 ifneq ($(H1_RED_BOARD),)
 CPPFLAGS += -DH1_RED_BOARD=$(EMPTY)
@@ -250,5 +251,3 @@ $(TPM2_TARGET):
 	$(call quiet,tpm2lib,TPM2   )
 
 endif   # BOARD_MK_INCLUDED_ONCE is nonempty
-
-board-$(CONFIG_PINWEAVER)+=pinweaver_tpm_imports.o
