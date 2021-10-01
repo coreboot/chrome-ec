@@ -182,6 +182,8 @@ RW_FIPS_OBJS=$(patsubst %.o, $(RW_BD_OUT)/%.o, $(fips-y))
 $(RW_FIPS_OBJS): CFLAGS += -frandom-seed=0 -fno-fat-lto-objects -Wswitch\
 			   -Wsign-compare -Wuninitialized
 
+$(RW_FIPS_OBJS): $(out)/ec_version.h $(out)/env_config.h
+
 # Note, since FIPS object files are compiled with lto, actual compilation
 # and code optimization take place during link time.
 # Consider -ffile-prefix-map=old_path=new_path if needed
@@ -190,10 +192,10 @@ FIPS_CFLAGS = $(CFLAGS) -frandom-seed=0 -flto=1 -flto-partition=1to1 -fipa-pta\
   -flive-range-shrinkage -fgcse-after-reload -fgcse-sm -fgcse-las -fivopts\
   -fpredictive-commoning -freorder-blocks-algorithm=stc
 
-$(RW_BD_OUT)/$(FIPS_MODULE): $(RW_FIPS_OBJS)
+$(RW_BD_OUT)/$(FIPS_MODULE): $(RW_FIPS_OBJS) $(FIPS_LD_SCRIPT)
 	@echo "  LD      $(notdir $@)"
 	$(Q)$(CC) $(FIPS_CFLAGS) --static -Wl,--relocatable\
-		-Wl,-T $(FIPS_LD_SCRIPT) -Wl,-Map=$@.map -o $@ $^
+		-Wl,-T $(FIPS_LD_SCRIPT) -Wl,-Map=$@.map -o $@ $(RW_FIPS_OBJS)
 	$(Q)$(OBJDUMP) -th $@ > $@.sym
 
 board-y+= $(FIPS_MODULE)
