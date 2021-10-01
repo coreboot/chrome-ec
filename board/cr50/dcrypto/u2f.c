@@ -53,7 +53,7 @@ static void u2f_origin_user_mac(const struct u2f_state *state,
 	HMAC_SHA256_update(&ctx, origin, U2F_APPID_SIZE);
 	HMAC_SHA256_update(&ctx, user, U2F_USER_SECRET_SIZE);
 	HMAC_SHA256_update(&ctx, origin_seed, U2F_ORIGIN_SEED_SIZE);
-	if (kh_version != 0)
+	if (kh_version == U2F_KH_VERSION_1)
 		HMAC_SHA256_update(&ctx, &kh_version, sizeof(kh_version));
 #ifdef CR50_DEV_U2F_VERBOSE
 	ccprintf("origin %ph\n", HEX_BUF(origin, U2F_APPID_SIZE));
@@ -71,7 +71,8 @@ static void u2f_origin_user_mac(const struct u2f_state *state,
 
 static void u2f_authorization_mac(const struct u2f_state *state,
 				  const union u2f_key_handle_variant *kh,
-				  uint8_t kh_version,
+				  uint8_t kh_version, const uint8_t *user,
+				  const uint8_t *origin,
 				  const uint8_t *auth_time_secret_hash,
 				  uint8_t *kh_auth_mac)
 {
@@ -80,25 +81,39 @@ static void u2f_authorization_mac(const struct u2f_state *state,
 	const void *kh_header = NULL;
 	size_t kh_header_size = 0;
 
-	if (kh_version == 0) {
-		memset(kh_auth_mac, 0xff, SHA256_DIGEST_SIZE);
-		return;
-	}
-	/* At some point we may have v2 key handle, so prepare for it. */
-	if (kh_version == 1) {
+	switch (kh_version) {
+	case U2F_KH_VERSION_2:
+		auth_salt = kh->v2.authorization_salt;
+		kh_header = &kh->v2;
+		kh_header_size = U2F_V2_KH_HEADER_SIZE;
+		break;
+	case U2F_KH_VERSION_1:
 		auth_salt = kh->v1.authorization_salt;
 		kh_header = &kh->v1;
+		/* include kh_hmac, which depends on user and origin */
 		kh_header_size = U2F_V1_KH_HEADER_SIZE;
+		break;
+	default:
+		/**
+		 * Version 0 doesn't contain authorization salt, so do
+		 * nothing for it as well as for unknown versions.
+		 */
+		memset(kh_auth_mac, 0xff, SHA256_DIGEST_SIZE);
+		return;
 	}
 
 	/**
 	 * HMAC(u2f_hmac_key, auth_salt || key_handle_header
-	 *                              || authTimeSecret)
+	 *       [origin || user ]      || authTimeSecret)
 	 */
 	HMAC_SHA256_hw_init(&ctx, state->hmac_key, SHA256_DIGEST_SIZE);
 	HMAC_SHA256_update(&ctx, auth_salt, U2F_AUTHORIZATION_SALT_SIZE);
 	HMAC_SHA256_update(&ctx, kh_header, kh_header_size);
 
+	if (kh_version == U2F_KH_VERSION_2) {
+		HMAC_SHA256_update(&ctx, origin, U2F_APPID_SIZE);
+		HMAC_SHA256_update(&ctx, user, U2F_USER_SECRET_SIZE);
+	}
 	HMAC_SHA256_update(&ctx, auth_time_secret_hash,
 			   U2F_AUTH_TIME_SECRET_SIZE);
 
@@ -124,7 +139,7 @@ static int app_hw_device_id(enum dcrypto_appid appid, const uint32_t input[8],
 
 	/**
 	 * Compute HMAC(HMAC(hw_device_id, SHA256(name[appid])), input)
-	 * It is not used as a key though, and treated as personalization
+	 * It is not used as a key though, and treated as additional data
 	 * string for DRBG.
 	 */
 	result = DCRYPTO_appkey_derive(appid, input, output);
@@ -141,7 +156,7 @@ static int app_hw_device_id(enum dcrypto_appid appid, const uint32_t input[8],
  *
  * @param state U2F state parameters
  * @param kh key handle
- * @param kh_version key handle version (0 - legacy, 1 - versioned)
+ * @param kh_version key handle version
  * @param d pointer to ECDSA private key
  * @param pk_x pointer to public key point
  * @param pk_y pointer to public key point
@@ -158,15 +173,29 @@ static enum ec_error_list u2f_origin_user_key_pair(
 	struct drbg_ctx drbg;
 	size_t key_handle_size = 0;
 	uint8_t *key_handle = NULL;
-	enum dcrypto_result result;
+	enum dcrypto_result result = DCRYPTO_FAIL;
 
-	if (kh_version == 0) {
-		key_handle_size = sizeof(struct u2f_key_handle_v0);
-		key_handle = (uint8_t *)&kh->v0;
-	} else if ((kh_version == 1) && (kh->v1.version == kh_version)) {
+	p256_clear(d);
+	memset(key_seed, 0, sizeof(key_seed));
+
+	switch (kh_version) {
+	case U2F_KH_VERSION_2:
+		if (kh->v2.version != U2F_KH_VERSION_2)
+			return EC_ERROR_INVAL;
+		key_handle_size = U2F_V2_KH_HEADER_SIZE;
+		key_handle = (uint8_t *)&kh->v2;
+		break;
+	case U2F_KH_VERSION_1:
+		if (kh->v1.version != U2F_KH_VERSION_1)
+			return EC_ERROR_INVAL;
 		key_handle_size = U2F_V1_KH_HEADER_SIZE;
 		key_handle = (uint8_t *)&kh->v1;
-	} else {
+		break;
+	case 0:
+		key_handle_size = sizeof(struct u2f_key_handle_v0);
+		key_handle = (uint8_t *)&kh->v0;
+		break;
+	default:
 		return EC_ERROR_INVAL;
 	}
 
@@ -184,10 +213,8 @@ static enum ec_error_list u2f_origin_user_key_pair(
 		hmac_drbg_init(&drbg, state->drbg_entropy,
 			       state->drbg_entropy_size, dev_salt, P256_NBYTES,
 			       NULL, 0, HMAC_DRBG_DO_NOT_AUTO_RESEED);
-		if (hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
-				       key_handle,
-				       key_handle_size) != DCRYPTO_OK)
-			return EC_ERROR_HW_INTERNAL;
+		result = hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
+					    key_handle, key_handle_size);
 	} else {
 		/**
 		 * FIPS-compliant path.
@@ -206,10 +233,13 @@ static enum ec_error_list u2f_origin_user_key_pair(
 		/**
 		 * Additional data = Device_ID (constant coming from HW).
 		 */
-		if (hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
-				       dev_salt, P256_NBYTES) != DCRYPTO_OK)
-			return EC_ERROR_HW_INTERNAL;
+		result = hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
+					    dev_salt, P256_NBYTES);
 	}
+
+	if (result != DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
+
 	result = DCRYPTO_p256_key_from_bytes(pk_x, pk_y, d, key_seed);
 	drbg_exit(&drbg);
 
@@ -237,28 +267,48 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 				union u2f_key_handle_variant *kh,
 				uint8_t kh_version, struct u2f_ec_point *pubKey)
 {
-	uint8_t *kh_hmac, *kh_origin_seed;
-	int generate_key_pair_rc;
+	uint8_t *kh_hmac = NULL;
+	uint8_t *kh_origin_seed = NULL;
+	uint8_t *auth_salt = NULL;
+	uint8_t	*auth_hmac = NULL;
+	enum ec_error_list generate_key_pair_rc = EC_ERROR_HW_INTERNAL;
+
 	/* Generated public keys associated with key handle. */
 	p256_int opk_x, opk_y;
 
 	if (!fips_crypto_allowed())
 		return EC_ERROR_HW_INTERNAL;
 
-	/* Compute constants for request key handler version. */
-	if (kh_version == 0) {
-		kh_hmac = kh->v0.hmac;
-		kh_origin_seed = kh->v0.origin_seed;
-	} else if (kh_version == 1) {
+	/* Compute constants for requested key handle version. */
+	switch (kh_version) {
+	case U2F_KH_VERSION_2:
+		/**
+		 * This may overwrite input parameters if shared
+		 * request/response buffer is used by caller.
+		 */
+		kh_origin_seed = kh->v2.origin_seed;
+		auth_salt = kh->v2.authorization_salt;
+		auth_hmac = kh->v2.authorization_hmac;
+		kh->v2.version = U2F_KH_VERSION_2;
+		break;
+	case U2F_KH_VERSION_1:
 		kh_hmac = kh->v1.kh_hmac;
 		kh_origin_seed = kh->v1.origin_seed;
+		auth_salt = kh->v1.authorization_salt;
+		auth_hmac = kh->v1.authorization_hmac;
 		/**
 		 * This may overwrite input parameters if shared
 		 * request/response buffer is used by caller.
 		 */
 		kh->v1.version = kh_version;
-	} else
+		break;
+	case 0:
+		kh_hmac = kh->v0.hmac;
+		kh_origin_seed = kh->v0.origin_seed;
+		break;
+	default:
 		return EC_ERROR_INVAL;
+	}
 
 	/* Generate key handle candidates and origin-specific key pair. */
 	do {
@@ -267,8 +317,9 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 		if (!fips_rand_bytes(kh_origin_seed, U2F_ORIGIN_SEED_SIZE))
 			return EC_ERROR_HW_INTERNAL;
 
-		u2f_origin_user_mac(state, user, origin, kh_origin_seed,
-				    kh_version, kh_hmac);
+		if (kh_hmac) /* Versions 0 & 1 only. */
+			u2f_origin_user_mac(state, user, origin, kh_origin_seed,
+					    kh_version, kh_hmac);
 
 		/**
 		 * Try to generate key pair using key handle. This may fail if
@@ -284,13 +335,12 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 	if (generate_key_pair_rc != EC_SUCCESS)
 		return generate_key_pair_rc;
 
-	if (kh_version == 1) {
-		if (!fips_rand_bytes(kh->v1.authorization_salt,
-				     U2F_AUTHORIZATION_SALT_SIZE))
+	if (kh_version) {
+		if (!fips_rand_bytes(auth_salt, U2F_AUTHORIZATION_SALT_SIZE))
 			return EC_ERROR_HW_INTERNAL;
 
-		u2f_authorization_mac(state, kh, kh_version, authTimeSecretHash,
-				      kh->v1.authorization_hmac);
+		u2f_authorization_mac(state, kh, kh_version, user, origin,
+				      authTimeSecretHash, auth_hmac);
 	}
 
 	pubKey->pointFormat = U2F_POINT_UNCOMPRESSED;
@@ -307,8 +357,8 @@ enum ec_error_list u2f_authorize_keyhandle(
 {
 	/* Re-created key handle. */
 	uint8_t recreated_hmac[SHA256_DIGEST_SIZE];
-	const uint8_t *origin_seed, *kh_hmac;
-	int result = 0;
+	const uint8_t *origin_seed = NULL, *kh_hmac = NULL, *auth_hmac = NULL;
+	enum dcrypto_result result = 0;
 
 	if (!fips_crypto_allowed())
 		return EC_ERROR_HW_INTERNAL;
@@ -318,36 +368,54 @@ enum ec_error_list u2f_authorize_keyhandle(
 	 * was provided. This allows us to verify that the key handle
 	 * is owned by this combination of device, current user and origin.
 	 */
-	if (kh_version == 0) {
+	switch (kh_version) {
+	case U2F_KH_VERSION_2:
+		if (!authTimeSecretHash || kh->v2.version != U2F_KH_VERSION_2)
+			return EC_ERROR_ACCESS_DENIED;
+
+		origin_seed = kh->v2.origin_seed;
+		auth_hmac = kh->v2.authorization_hmac;
+		break;
+	case U2F_KH_VERSION_1:
+		if (kh->v1.version != U2F_KH_VERSION_1)
+			return EC_ERROR_ACCESS_DENIED;
+		origin_seed = kh->v1.origin_seed;
+		auth_hmac = kh->v1.authorization_hmac;
+		kh_hmac = kh->v1.kh_hmac;
+		break;
+	case 0:
 		origin_seed = kh->v0.origin_seed;
 		kh_hmac = kh->v0.hmac;
-	} else {
-		origin_seed = kh->v1.origin_seed;
-		kh_hmac = kh->v1.kh_hmac;
+		break;
+	default:
+		return EC_ERROR_INVAL;
 	}
-	/* First, check inner part. */
-	u2f_origin_user_mac(state, user, origin, origin_seed, kh_version,
-			    recreated_hmac);
 
-	/**
-	 * DCRYPTO_equals return 1 if success, by subtracting 1 we make it
-	 * zero, and other results - zero or non-zero will be detected.
-	 */
-	result |= DCRYPTO_equals(&recreated_hmac, kh_hmac,
-				 sizeof(recreated_hmac)) - DCRYPTO_OK;
+	if (kh_hmac) {
+		/* First, check inner part. */
+		u2f_origin_user_mac(state, user, origin, origin_seed,
+				    kh_version, recreated_hmac);
 
-	always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
+		/**
+		 * DCRYPTO_equals return DCRYPTO_OK if success, by subtracting 1
+		 * we make it zero, and other results - zero or non-zero will be
+		 * detected.
+		 */
+		result |= DCRYPTO_equals(&recreated_hmac, kh_hmac,
+					 sizeof(recreated_hmac));
 
-	if ((kh_version != 0) && (authTimeSecretHash != NULL)) {
-		u2f_authorization_mac(state, kh, kh_version, authTimeSecretHash,
-				      recreated_hmac);
-		result |= DCRYPTO_equals(&recreated_hmac,
-					 kh->v1.authorization_hmac,
-					 sizeof(recreated_hmac)) - DCRYPTO_OK;
 		always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
 	}
 
-	return (result == 0) ? EC_SUCCESS : EC_ERROR_ACCESS_DENIED;
+	if (auth_hmac && authTimeSecretHash) {
+		u2f_authorization_mac(state, kh, kh_version, user, origin,
+				      authTimeSecretHash, recreated_hmac);
+		result |= DCRYPTO_equals(&recreated_hmac, auth_hmac,
+					 sizeof(recreated_hmac));
+		always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
+	}
+
+	return (result == DCRYPTO_OK) ? EC_SUCCESS : EC_ERROR_ACCESS_DENIED;
 }
 
 static enum ec_error_list
@@ -411,14 +479,18 @@ enum ec_error_list u2f_sign(const struct u2f_state *state,
 	result = u2f_authorize_keyhandle(state, kh, kh_version, user, origin,
 					 authTimeSecretHash);
 
-	if (result != EC_SUCCESS)
+	if (result != EC_SUCCESS) {
+		memset(sig, 0, sizeof(*sig));
 		return result;
+	}
 
 	/* Re-create origin-specific key. */
 	result = u2f_origin_user_key_pair(state, kh, kh_version, &origin_d,
 					  NULL, NULL);
-	if (result != EC_SUCCESS)
+	if (result != EC_SUCCESS) {
+		memset(sig, 0, sizeof(*sig));
 		return result;
+	}
 
 	/* Prepare hash to sign. */
 	p256_from_bin(hash, &h);
@@ -581,6 +653,7 @@ enum ec_error_list u2f_attest(const struct u2f_state *state,
 		  DCRYPTO_OK) ?
 			 EC_SUCCESS :
 			       EC_ERROR_HW_INTERNAL;
+	drbg_exit(&dr_ctx);
 	p256_clear(&d);
 
 	p256_to_bin(&r, sig->sig_r);
@@ -675,41 +748,90 @@ static int cmd_u2f_test(int argc, char **argv)
 	ccprintf("\nVersion 1 tests\n");
 	ccprintf("u2f_generate - %s\n",
 		 expect_bool(u2f_generate(&state, user, origin, authTime, &kh,
-					  1, &pubKey),
+					  U2F_KH_VERSION_1, &pubKey),
 			     EC_SUCCESS));
 	ccprintf("kh: %ph\n", HEX_BUF(&kh, sizeof(kh.v1)));
 	ccprintf("pubKey: %ph\n", HEX_BUF(&pubKey, sizeof(pubKey)));
 
 	ccprintf("u2f_authorize_keyhandle - %s\n",
-		 expect_bool(u2f_authorize_keyhandle(&state, &kh, 1, user,
+		 expect_bool(u2f_authorize_keyhandle(&state, &kh,
+						     U2F_KH_VERSION_1, user,
 						     origin, authTime),
 			     EC_SUCCESS));
 
 	kh.v1.authorization_salt[0] ^= 0x10;
 	ccprintf("u2f_authorize_keyhandle - %s\n",
-		 expect_bool(u2f_authorize_keyhandle(&state, &kh, 1, user,
+		 expect_bool(u2f_authorize_keyhandle(&state, &kh,
+						     U2F_KH_VERSION_1, user,
 						     origin, authTime),
 			     EC_ERROR_ACCESS_DENIED));
 
 	kh.v1.authorization_salt[0] ^= 0x10;
 	ccprintf("u2f_sign - %s\n",
-		 expect_bool(u2f_sign(&state, &kh, 1, user, origin, authTime,
-				      authTime, &sig),
+		 expect_bool(u2f_sign(&state, &kh, U2F_KH_VERSION_1, user,
+				      origin, authTime, authTime, &sig),
 			     EC_SUCCESS));
 	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
 
 	ccprintf("u2f_attest - %s\n",
-		 expect_bool(u2f_attest(&state, &kh, 1, user, origin, authTime,
-					&pubKey, authTime, sizeof(authTime),
-					&sig),
+		 expect_bool(u2f_attest(&state, &kh, U2F_KH_VERSION_1, user,
+					origin, authTime, &pubKey, authTime,
+					sizeof(authTime), &sig),
 			     EC_SUCCESS));
 	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
 
 	/* Should fail with incorrect key handle. */
 	kh.v1.origin_seed[0] ^= 0x10;
 	ccprintf("u2f_sign - %s\n",
-		 expect_bool(u2f_sign(&state, &kh, 1, user, origin, authTime,
-				      authTime, &sig),
+		 expect_bool(u2f_sign(&state, &kh, U2F_KH_VERSION_1, user,
+				      origin, authTime, authTime, &sig),
+			     EC_ERROR_ACCESS_DENIED));
+	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
+
+	cflush();
+
+	/* Version 2 key handle. */
+	memset(&kh, 0, sizeof(kh));
+	ccprintf("\nVersion 2 tests\n");
+	ccprintf("u2f_generate - %s\n",
+		 expect_bool(u2f_generate(&state, user, origin, authTime, &kh,
+					  U2F_KH_VERSION_2, &pubKey),
+			     EC_SUCCESS));
+	ccprintf("kh: %ph\n", HEX_BUF(&kh, sizeof(kh.v2)));
+	ccprintf("pubKey: %ph\n", HEX_BUF(&pubKey, sizeof(pubKey)));
+
+	ccprintf("u2f_authorize_keyhandle - %s\n",
+		 expect_bool(u2f_authorize_keyhandle(&state, &kh,
+						     U2F_KH_VERSION_2, user,
+						     origin, authTime),
+			     EC_SUCCESS));
+
+	kh.v2.authorization_salt[0] ^= 0x10;
+	ccprintf("u2f_authorize_keyhandle - %s\n",
+		 expect_bool(u2f_authorize_keyhandle(&state, &kh,
+						     U2F_KH_VERSION_2, user,
+						     origin, authTime),
+			     EC_ERROR_ACCESS_DENIED));
+
+	kh.v2.authorization_salt[0] ^= 0x10;
+	ccprintf("u2f_sign - %s\n",
+		 expect_bool(u2f_sign(&state, &kh, U2F_KH_VERSION_2, user,
+				      origin, authTime, authTime, &sig),
+			     EC_SUCCESS));
+	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
+
+	ccprintf("u2f_attest - %s\n",
+		 expect_bool(u2f_attest(&state, &kh, U2F_KH_VERSION_2, user,
+					origin, authTime, &pubKey, authTime,
+					sizeof(authTime), &sig),
+			     EC_SUCCESS));
+	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
+
+	/* Should fail with incorrect key handle. */
+	kh.v2.origin_seed[0] ^= 0x10;
+	ccprintf("u2f_sign - %s\n",
+		 expect_bool(u2f_sign(&state, &kh, U2F_KH_VERSION_2, user,
+				      origin, authTime, authTime, &sig),
 			     EC_ERROR_ACCESS_DENIED));
 	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
 

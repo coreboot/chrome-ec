@@ -81,28 +81,56 @@ def u2f_test(tpm):
     user = b'2'
     auth = b'3'
     msg = b'12345'
-    public_key1, khv1 = u2f_generate(tpm, origin, user, 0, auth)
+
+    print('U2F_GENERATE v0');
+    public_key0, khv0 = u2f_generate(tpm, origin, user, 0, auth)
+    if tpm.debug_enabled():
+        print('key_handle v0 = ',utils.hex_dump(khv0), len(khv0))
+        print('public_key v0 = ',utils.hex_dump(public_key0), len(public_key0))
+
+    print('U2F_GENERATE v1');
+    public_key1, khv1 = u2f_generate(tpm, origin, user, 8, auth)
     if tpm.debug_enabled():
         print('key_handle v1 = ',utils.hex_dump(khv1), len(khv1))
-        print('public_key v1 = ',utils.hex_dump(public_key1), len(public_key1))
 
-    public_key2, khv2 = u2f_generate(tpm, origin, user, 8, auth)
+    print('U2F_GENERATE v2');
+    public_key2, khv2 = u2f_generate(tpm, origin, user, 24, auth)
     if tpm.debug_enabled():
         print('key_handle v2 = ',utils.hex_dump(khv2), len(khv2))
 
+    print('U2F_SIGN v0');
+    sig1 = u2f_sign(tpm, origin, user, auth, khv0, msg, 2)
+    if tpm.debug_enabled():
+        print('sig v0 = ',utils.hex_dump(sig1), len(sig1))
+
+    print('U2F_SIGN v0 to fail');
+    sig1 = u2f_sign(tpm, user, origin, auth, khv0, msg, 2, fail=True)
+    if tpm.debug_enabled():
+        print('sig v0 = ',utils.hex_dump(sig1), len(sig1))
+
+    print('U2F_SIGN v1');
     sig1 = u2f_sign(tpm, origin, user, auth, khv1, msg, 2)
     if tpm.debug_enabled():
         print('sig v1 = ',utils.hex_dump(sig1), len(sig1))
 
+    print('U2F_SIGN v1 to fail');
+    sig1 = u2f_sign(tpm, user, origin, auth, khv1, msg, 2, fail=True)
+    if tpm.debug_enabled():
+        print('sig v1 = ',utils.hex_dump(sig1), len(sig1))
+
+
+    print('U2F_SIGN v2');
     sig1 = u2f_sign(tpm, origin, user, auth, khv2, msg, 2)
     if tpm.debug_enabled():
         print('sig v2 = ',utils.hex_dump(sig1), len(sig1))
 
+    print('U2F_SIGN v2 to fail');
     sig1 = u2f_sign(tpm, user, origin, auth, khv2, msg, 2, fail=True)
     if tpm.debug_enabled():
         print('sig v2 = ',utils.hex_dump(sig1), len(sig1))
 
-    sig_attest = u2f_attest(tpm, origin, user, auth, khv1, public_key1)
+    print('U2F_ATTEST v0');
+    sig_attest = u2f_attest(tpm, origin, user, auth, khv0, public_key0)
     if tpm.debug_enabled():
         print('sig attest = ',utils.hex_dump(sig_attest), len(sig_attest))
     print('%sSUCCESS: %s' % (utils.cursor_back(), 'U2F test'))

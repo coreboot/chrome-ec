@@ -68,7 +68,13 @@ struct u2f_ec_point {
 /* The key handle can be used with fingerprint or PIN. */
 #define U2F_UV_ENABLED_KH 0x08
 
+/* Request v2 key handle. Should be used with U2F_UV_ENABLED_KH */
+#define U2F_V2_KH 0x10
+#define U2F_V2_KH_MASK (U2F_V2_KH | U2F_UV_ENABLED_KH)
+
+
 #define U2F_KH_VERSION_1 0x01
+#define U2F_KH_VERSION_2 0x02
 
 #define U2F_AUTHORIZATION_SALT_SIZE 16
 #define U2F_V0_KH_SIZE 64
@@ -80,6 +86,14 @@ struct u2f_ec_point {
 
 /* Header is composed of version || origin_seed || kh_hmac */
 #define U2F_V1_KH_HEADER_SIZE (U2F_ORIGIN_SEED_SIZE + SHA256_DIGEST_SIZE + 1)
+
+/**
+ * Key handle version = 2 for WebAuthn, bound to device and user.
+ */
+#define U2F_V2_KH_SIZE 81
+
+/* Header is composed of version || origin_seed */
+#define U2F_V2_KH_HEADER_SIZE (U2F_ORIGIN_SEED_SIZE + 1)
 
 struct u2f_signature {
 	uint8_t sig_r[U2F_EC_KEY_SIZE]; /* Signature */
@@ -122,15 +136,35 @@ struct u2f_key_handle_v0 {
 struct u2f_key_handle_v1 {
 	uint8_t version;
 	uint8_t origin_seed[U2F_ORIGIN_SEED_SIZE];
+	/* HMAC(u2f_hmac_key, origin || user || origin seed || version) */
 	uint8_t kh_hmac[SHA256_DIGEST_SIZE];
 	/* Optionally checked in u2f_sign. */
 	uint8_t authorization_salt[U2F_AUTHORIZATION_SALT_SIZE];
+	/**
+	 * HMAC(u2f_hmac_key,
+	 *   auth_salt || version || origin_seed || kh_hmac || authTimeSecret)
+	 */
+	uint8_t authorization_hmac[SHA256_DIGEST_SIZE];
+};
+
+/* Key handle version = 2, bound to device and user. */
+struct u2f_key_handle_v2 {
+	uint8_t version;
+	uint8_t origin_seed[U2F_ORIGIN_SEED_SIZE];
+	/* Always checked in u2f_sign. */
+	uint8_t authorization_salt[U2F_AUTHORIZATION_SALT_SIZE];
+	/**
+	 * HMAC(u2f_hmac_key,
+	 *      auth_salt || version || origin_seed || origin ||
+	 *      user || authTimeSecret)
+	 */
 	uint8_t authorization_hmac[SHA256_DIGEST_SIZE];
 };
 
 union u2f_key_handle_variant {
 	struct u2f_key_handle_v0 v0;
 	struct u2f_key_handle_v1 v1;
+	struct u2f_key_handle_v2 v2;
 };
 
 /* TODO(louiscollard): Add Descriptions. */
@@ -156,6 +190,22 @@ struct u2f_generate_versioned_resp {
 	struct u2f_versioned_key_handle keyHandle;
 };
 
+struct u2f_generate_versioned_resp_v2 {
+	struct u2f_ec_point pubKey; /* Generated public key */
+	struct u2f_key_handle_v2 keyHandle;
+};
+
+/**
+ * Combined type for U2F_GENERATE response. Length of response size
+ * should be used to determine which version of key handle is generated.
+ * Caller may check that response matches request flags.
+ */
+union u2f_generate_response {
+	struct u2f_generate_resp v0;
+	struct u2f_generate_versioned_resp v1;
+	struct u2f_generate_versioned_resp_v2 v2;
+};
+
 struct u2f_sign_req {
 	uint8_t appId[U2F_APPID_SIZE]; /* Application id */
 	uint8_t userSecret[U2F_USER_SECRET_SIZE];
@@ -173,6 +223,25 @@ struct u2f_sign_versioned_req {
 	struct u2f_versioned_key_handle keyHandle;
 };
 
+struct u2f_sign_versioned_req_v2 {
+	uint8_t appId[U2F_APPID_SIZE]; /* Application id */
+	uint8_t userSecret[U2F_USER_SECRET_SIZE];
+	uint8_t authTimeSecret[U2F_AUTH_TIME_SECRET_SIZE];
+	uint8_t hash[U2F_P256_SIZE];
+	uint8_t flags;
+	struct u2f_key_handle_v2 keyHandle;
+};
+
+/**
+ * Combined type for U2F_SIGN request. Length of request size
+ * is used to determine which version of key handle is provided.
+ */
+union u2f_sign_request {
+	struct u2f_sign_req v0;
+	struct u2f_sign_versioned_req v1;
+	struct u2f_sign_versioned_req_v2 v2;
+};
+
 struct u2f_sign_resp {
 	uint8_t sig_r[U2F_P256_SIZE]; /* Signature */
 	uint8_t sig_s[U2F_P256_SIZE]; /* Signature */
@@ -182,7 +251,15 @@ struct u2f_attest_req {
 	uint8_t userSecret[U2F_USER_SECRET_SIZE];
 	uint8_t format;
 	uint8_t dataLen;
-	uint8_t data[U2F_MAX_ATTEST_SIZE];
+	uint8_t data[U2F_MAX_ATTEST_SIZE]; /* struct g2f_register_msg_vX */
+};
+
+struct g2f_register_msg_v0 {
+	uint8_t reserved;
+	uint8_t app_id[U2F_APPID_SIZE];
+	uint8_t challenge[U2F_CHAL_SIZE];
+	struct u2f_key_handle_v0 key_handle;
+	struct u2f_ec_point public_key;
 };
 
 struct u2f_attest_resp {

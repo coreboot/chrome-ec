@@ -20,14 +20,11 @@ BUILD_ASSERT(sizeof(struct u2f_key_handle_v1) ==
 BUILD_ASSERT(sizeof(struct u2f_signature) == sizeof(struct u2f_sign_resp));
 BUILD_ASSERT(sizeof(struct u2f_signature) == sizeof(struct u2f_attest_resp));
 
-struct g2f_register_msg {
-	uint8_t reserved;
-	uint8_t app_id[U2F_APPID_SIZE];
-	uint8_t challenge[U2F_CHAL_SIZE];
-	struct u2f_key_handle_v0 key_handle;
-	struct u2f_ec_point public_key;
-};
+BUILD_ASSERT(sizeof(struct u2f_key_handle_v0) == U2F_V0_KH_SIZE);
+BUILD_ASSERT(sizeof(struct u2f_key_handle_v1) == U2F_V1_KH_SIZE);
+BUILD_ASSERT(sizeof(struct u2f_key_handle_v2) == U2F_V2_KH_SIZE);
 
+BUILD_ASSERT(sizeof(struct g2f_register_msg_v0) <= U2F_MAX_ATTEST_SIZE);
 /**
  * U2F_GENERATE command handler. Generates a key handle according to input
  * parameters.

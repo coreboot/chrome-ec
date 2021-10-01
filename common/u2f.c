@@ -55,20 +55,24 @@ enum vendor_cmd_rc u2f_generate_cmd(enum vendor_cmd_cc code, void *buf,
 				    size_t input_size, size_t *response_size)
 {
 	struct u2f_generate_req *req = buf;
-	struct u2f_generate_resp *resp = buf;
-	struct u2f_generate_versioned_resp *resp_versioned = buf;
-	struct u2f_ec_point *pubKey;
+	union u2f_generate_response *resp = buf;
+	struct u2f_ec_point *pubKey = NULL;
 
 	const struct u2f_state *state = u2f_get_state();
-	uint8_t kh_version =
-		(req->flags & U2F_UV_ENABLED_KH) ? U2F_KH_VERSION_1 : 0;
+	uint8_t kh_version = 0; /* Fall back version of key handle. */
+
+	static const size_t kh_version_response_size[] = {
+		sizeof(struct u2f_generate_resp),
+		sizeof(struct u2f_generate_versioned_resp),
+		sizeof(struct u2f_generate_versioned_resp_v2)
+	};
 
 	/**
 	 * Buffer for generating key handle as part of response. Note, it
 	 * overlaps with authTimeSecret in response since request and response
 	 * shares same buffer.
 	 */
-	union u2f_key_handle_variant *kh_buf;
+	union u2f_key_handle_variant *kh_buf = NULL;
 
 	uint8_t authTimeSecretHash[U2F_AUTH_TIME_SECRET_SIZE];
 
@@ -83,22 +87,32 @@ enum vendor_cmd_rc u2f_generate_cmd(enum vendor_cmd_cc code, void *buf,
 	if (state == NULL)
 		return VENDOR_RC_INTERNAL_ERROR;
 
+	if ((req->flags & U2F_V2_KH_MASK) == U2F_V2_KH_MASK)
+		kh_version = U2F_KH_VERSION_2;
+	else if (req->flags & U2F_UV_ENABLED_KH)
+		kh_version = U2F_KH_VERSION_1;
+
+	/* Check there is enough room for response in response buffer. */
+	if (response_buf_size < kh_version_response_size[kh_version])
+		return VENDOR_RC_BOGUS_ARGS;
+
 	/* Copy to avoid overwriting data before use. */
 	memcpy(authTimeSecretHash, req->authTimeSecretHash,
 	       sizeof(authTimeSecretHash));
 
-	if (kh_version == 0) {
-		if (response_buf_size < sizeof(struct u2f_generate_resp))
-			return VENDOR_RC_BOGUS_ARGS;
-		pubKey = &resp->pubKey;
-		kh_buf = (union u2f_key_handle_variant *)&resp->keyHandle;
-	} else {
-		if (response_buf_size <
-		    sizeof(struct u2f_generate_versioned_resp))
-			return VENDOR_RC_BOGUS_ARGS;
-		pubKey = &resp_versioned->pubKey;
-		kh_buf = (union u2f_key_handle_variant *)&resp_versioned
-				 ->keyHandle;
+	switch (kh_version) {
+	case U2F_KH_VERSION_2:
+		pubKey = &resp->v2.pubKey;
+		kh_buf = (union u2f_key_handle_variant *)&resp->v2.keyHandle;
+		break;
+	case U2F_KH_VERSION_1:
+		pubKey = &resp->v1.pubKey;
+		kh_buf = (union u2f_key_handle_variant *)&resp->v1.keyHandle;
+		break;
+	default: /* Version 0 */
+		pubKey = &resp->v0.pubKey;
+		kh_buf = (union u2f_key_handle_variant *)&resp->v0.keyHandle;
+		break;
 	}
 
 	/* Maybe enforce user presence, w/ optional consume */
@@ -122,12 +136,7 @@ enum vendor_cmd_rc u2f_generate_cmd(enum vendor_cmd_cc code, void *buf,
 	 * From this point: the request 'req' content is invalid as it is
 	 * overridden by the response we are building in the same buffer.
 	 */
-	if (kh_version == 0) {
-		*response_size = sizeof(struct u2f_generate_resp);
-	} else {
-		*response_size = sizeof(struct u2f_generate_versioned_resp);
-	}
-
+	*response_size = kh_version_response_size[kh_version];
 	return VENDOR_RC_SUCCESS;
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_U2F_GENERATE, u2f_generate_cmd);
@@ -135,17 +144,17 @@ DECLARE_VENDOR_COMMAND(VENDOR_CC_U2F_GENERATE, u2f_generate_cmd);
 /* Below, we depend on the response not being larger than than the request. */
 BUILD_ASSERT(sizeof(struct u2f_sign_resp) <= sizeof(struct u2f_sign_req));
 
+
 /* U2F SIGN command */
 enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 				size_t input_size, size_t *response_size)
 {
-	const struct u2f_sign_req *req = buf;
-	const struct u2f_sign_versioned_req *req_versioned = buf;
+	const union u2f_sign_request *req = buf;
 	union u2f_key_handle_variant *kh;
 
 	const struct u2f_state *state = u2f_get_state();
 
-	const uint8_t *hash, *user, *origin /* TODO: *authTimeSecret = NULL */;
+	const uint8_t *hash, *user, *origin, *authTimeSecret = NULL;
 
 	uint8_t flags;
 	struct u2f_sign_resp *resp;
@@ -167,26 +176,38 @@ enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 	 */
 	if (input_size == sizeof(struct u2f_sign_req)) {
 		kh_version = 0;
-		kh = (union u2f_key_handle_variant *)&req->keyHandle;
-		hash = req->hash;
-		flags = req->flags;
-		user = req->userSecret;
-		origin = req->appId;
+		kh = (union u2f_key_handle_variant *)&req->v0.keyHandle;
+		hash = req->v0.hash;
+		flags = req->v0.flags;
+		user = req->v0.userSecret;
+		origin = req->v0.appId;
 	} else if (input_size == sizeof(struct u2f_sign_versioned_req)) {
-		kh = (union u2f_key_handle_variant *)&req_versioned->keyHandle;
-		kh_version = kh->v1.version;
-		hash = req_versioned->hash;
-		flags = req_versioned->flags;
-		user = req_versioned->userSecret;
-		origin = req_versioned->appId;
-		/* TODO: authTimeSecret = req_versioned->authTimeSecret; */
-	} else {
+		kh = (union u2f_key_handle_variant *)&req->v1.keyHandle;
+		kh_version = U2F_KH_VERSION_1;
+		hash = req->v1.hash;
+		flags = req->v1.flags;
+		user = req->v1.userSecret;
+		origin = req->v1.appId;
+		/**
+		 * TODO(b/184393647): Enforce user verification if no user
+		 * presence check is requested. Set
+		 *    authTimeSecret = req->v1.authTimeSecret;
+		 * unconditionally or if (flags & U2F_AUTH_FLAG_TUP) == 0
+		 */
+		authTimeSecret = NULL;
+	} else if (input_size == sizeof(struct u2f_sign_versioned_req_v2)) {
+		kh = (union u2f_key_handle_variant *)&req->v2.keyHandle;
+		kh_version = U2F_KH_VERSION_2;
+		hash = req->v2.hash;
+		flags = req->v2.flags;
+		user = req->v2.userSecret;
+		origin = req->v2.appId;
+		authTimeSecret = req->v2.authTimeSecret;
+	} else
 		return VENDOR_RC_BOGUS_ARGS;
-	}
 
-	/* TODO(b/184393647): pass authTimeSecret when ready. */
 	result = u2f_authorize_keyhandle(state, kh, kh_version, user, origin,
-					 NULL);
+					 authTimeSecret);
 	if (result == EC_ERROR_ACCESS_DENIED)
 		return VENDOR_RC_PASSWORD_REQUIRED;
 	if (result != EC_SUCCESS)
@@ -198,6 +219,7 @@ enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 
 	/*
 	 * Enforce user presence for version 0 KHs, with optional consume.
+	 * TODO(b/184393647): update logic for version 2 if needed.
 	 */
 	if (pop_check_presence(flags & G2F_CONSUME) != POP_TOUCH_YES) {
 		if (kh_version != U2F_KH_VERSION_1)
@@ -215,15 +237,8 @@ enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 	 */
 	resp = buf;
 
-	/**
-	 * TODO(b/184393647): When auth-time secrets is ready, enforce
-	 * authorization hmac when no power button press.
-	 * use u2f_authorize_keyhandle_with_secret() which requires
-	 * correct authorization mac to be provided by the caller.
-	 */
-	result = u2f_sign(state, kh, kh_version, user, origin,
-			  NULL /* TODO: authTimeSecret */, hash,
-			  (struct u2f_signature *)resp);
+	result = u2f_sign(state, kh, kh_version, user, origin, authTimeSecret,
+			  hash, (struct u2f_signature *)resp);
 
 	if (result == EC_ERROR_ACCESS_DENIED)
 		return VENDOR_RC_PASSWORD_REQUIRED;
@@ -240,7 +255,7 @@ static inline size_t u2f_attest_format_size(uint8_t format)
 {
 	switch (format) {
 	case U2F_ATTEST_FORMAT_REG_RESP:
-		return sizeof(struct g2f_register_msg);
+		return sizeof(struct g2f_register_msg_v0);
 	default:
 		return 0;
 	}
@@ -253,7 +268,7 @@ static enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
 {
 	const struct u2f_attest_req *req = buf;
 	struct u2f_attest_resp *resp;
-	struct g2f_register_msg *msg = (void *)req->data;
+	struct g2f_register_msg_v0 *msg = (void *)req->data;
 	enum ec_error_list result;
 
 	size_t response_buf_size = *response_size;
@@ -276,7 +291,7 @@ static enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
 	if (req->format != U2F_ATTEST_FORMAT_REG_RESP)
 		return VENDOR_RC_NOT_ALLOWED;
 
-	if (req->dataLen != sizeof(struct g2f_register_msg))
+	if (req->dataLen != sizeof(struct g2f_register_msg_v0))
 		return VENDOR_RC_NOT_ALLOWED;
 
 	if (msg->reserved != 0)
