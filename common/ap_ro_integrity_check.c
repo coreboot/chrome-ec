@@ -437,40 +437,18 @@ static int verify_signature(struct memory_block *blocks,
 	const void *digest;
 	uint32_t digest_size;
 	size_t i;
-	union {
-		struct sha512_ctx sha512;
-		struct sha256_ctx sha256;
-	} uctx;
+	union hash_ctx ctx;
 
-	switch (pubk->hashing) {
-	case HASH_SHA512: {
-		struct sha512_ctx *ctx = &uctx.sha512;
+	digest_size = DCRYPTO_hash_size(pubk->hashing);
 
-		digest_size = sizeof(struct sha512_digest);
-		SHA512_hw_init(ctx);
-
-		for (i = 0; blocks[i].base; i++)
-			SHA512_update(ctx, blocks[i].base, blocks[i].size);
-
-		digest = SHA512_final(ctx);
-		break;
-	}
-	case HASH_SHA256: {
-		struct sha256_ctx *ctx = &uctx.sha256;
-
-		digest_size = sizeof(struct sha256_digest);
-
-		SHA256_hw_init(ctx);
-
-		for (i = 0; blocks[i].base; i++)
-			SHA256_update(ctx, blocks[i].base, blocks[i].size);
-
-		digest = SHA256_final(ctx);
-		break;
-	}
-	default:
+	if (!digest_size ||
+	    DCRYPTO_hw_hash_init(&ctx, pubk->hashing) != DCRYPTO_OK)
 		return -1; /* Will never happen, inputs have been verified. */
-	}
+
+	for (i = 0; blocks[i].base; i++)
+		HASH_update(&ctx, blocks[i].base, blocks[i].size);
+
+	digest = HASH_final(&ctx);
 
 	return !DCRYPTO_rsa_verify(&pubk->rsa, digest, digest_size, sig_body,
 				   sig_size, PADDING_MODE_PKCS1, pubk->hashing);
@@ -674,7 +652,9 @@ static const struct gvd_descriptor *find_v2_entry(void)
 		return NULL;
 
 	/* Verify entry integrity. */
-	SHA256_hw_init(&ctx);
+	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+		return NULL;
+
 	SHA256_update(&ctx, &p_chk->descriptor, sizeof(p_chk->descriptor));
 	if (DCRYPTO_equals(SHA256_final(&ctx), &p_chk->header.checksum,
 		   sizeof(p_chk->header.checksum)) != DCRYPTO_OK) {
@@ -1019,7 +999,9 @@ static int read_rootk(struct rootk_container *rootkc)
 			total_size - sizeof(rootk), __LINE__))
 		return -1;
 
-	SHA256_hw_init(&ctx);
+	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+		return -1;
+
 	SHA256_update(&ctx, rootkc->rootk, sizeof(rootk) + rootk.key_size);
 	if (DCRYPTO_equals(SHA256_final(&ctx), root_key_hash,
 			   sizeof(root_key_hash)) != DCRYPTO_OK) {
@@ -1194,7 +1176,9 @@ static int save_gvd_hash(struct gvd_container *gvdc, struct ro_ranges *ranges)
 	ro_check.descriptor.rollback = gvdc->gvd.rollback_counter;
 
 	/* Calculate SHA256 of the GVD header and ranges. */
-	SHA256_hw_init(&ctx);
+	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
+
 	SHA256_update(&ctx, &gvdc->gvd, sizeof(gvdc->gvd));
 	SHA256_update(&ctx, ranges->ranges,
 		      sizeof(ranges->ranges[0]) * gvdc->gvd.range_count);
@@ -1202,7 +1186,8 @@ static int save_gvd_hash(struct gvd_container *gvdc, struct ro_ranges *ranges)
 	       sizeof(ro_check.descriptor.digest));
 
 	/* Now truncated sha256 of the descriptor. */
-	SHA256_hw_init(&ctx);
+	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
 	SHA256_update(&ctx, &ro_check.descriptor, sizeof(ro_check.descriptor));
 	memcpy(&ro_check.header.checksum, SHA256_final(&ctx),
 	       sizeof(ro_check.header.checksum));
@@ -1237,7 +1222,9 @@ static int gvd_cache_check(const struct gsc_verification_data *gvd,
 {
 	struct sha256_ctx ctx;
 
-	SHA256_hw_init(&ctx);
+	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
+		return EC_ERROR_HW_INTERNAL;
+
 	SHA256_update(&ctx, gvd, sizeof(*gvd));
 	SHA256_update(&ctx, ranges->ranges,
 		      gvd->range_count * sizeof(ranges->ranges[0]));
