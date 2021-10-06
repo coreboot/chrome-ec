@@ -53,7 +53,7 @@ void dcrypto_sha_fifo_load(const void *data, size_t n);
  * Reset hash context with the same hash function as configured.
  * Will crash if previously not configured! Used for HMAC.
  */
-static inline void HASH_reinit(union hash_ctx *const ctx)
+__always_inline void HASH_reinit(union hash_ctx *const ctx)
 {
 	ctx->f->init(ctx);
 }
@@ -77,7 +77,6 @@ const struct sha224_digest *SHA224_sw_final(struct sha224_ctx *const ctx);
 const struct sha224_digest *SHA224_sw_hash(const void *data, size_t len,
 					   struct sha224_digest *digest);
 
-
 /**
  * Initialize HMAC for pre-configured hash.
  * This is generic function which can initialize HMAC with any supported
@@ -89,21 +88,21 @@ const union sha_digests *HMAC_sw_final(union hmac_ctx *const ctx);
 /**
  * HMAC SHA2-224 initialization.
  */
-static inline void HMAC_SHA224_sw_init(struct hmac_sha224_ctx *const ctx,
-				       const void *key, size_t len)
+__always_inline void HMAC_SHA224_sw_init(
+	struct hmac_sha224_ctx *const ctx, const void *key, size_t len)
 {
 	SHA224_sw_init(&ctx->hash);
 	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
 }
 
-static inline void HMAC_SHA224_update(struct hmac_sha224_ctx *const ctx,
-				      const void *data, size_t len)
+__always_inline void HMAC_SHA224_update(
+	struct hmac_sha224_ctx *const ctx, const void *data, size_t len)
 {
 	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
 }
 
-static inline const struct sha224_digest *
-HMAC_SHA224_final(struct hmac_sha224_ctx *const ctx)
+__always_inline const struct sha224_digest *HMAC_SHA224_final(
+	struct hmac_sha224_ctx *const ctx)
 {
 	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha224;
 }
@@ -111,19 +110,18 @@ HMAC_SHA224_final(struct hmac_sha224_ctx *const ctx)
 /**
  * HMAC SHA2-256 initialization.
  */
-static inline void HMAC_SHA256_sw_init(struct hmac_sha256_ctx *const ctx,
-				       const void *key, size_t len)
+__always_inline void HMAC_SHA256_sw_init(
+	struct hmac_sha256_ctx *const ctx, const void *key, size_t len)
 {
 	SHA256_sw_init(&ctx->hash);
 	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
 }
 
-
 /**
  * HMAC SHA1 initialization.
  */
-static inline void HMAC_SHA1_sw_init(struct hmac_sha1_ctx *const ctx,
-				     const void *key, size_t len)
+__always_inline void HMAC_SHA1_sw_init(struct hmac_sha1_ctx *const ctx,
+					      const void *key, size_t len)
 {
 	SHA1_sw_init(&ctx->hash);
 	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
@@ -162,8 +160,8 @@ const struct sha512_digest *SHA512_hw_hash(const void *data, size_t len,
 /**
  * HMAC SHA2-384 initialization.
  */
-static inline void HMAC_SHA384_sw_init(struct hmac_sha384_ctx *ctx,
-				       const void *key, size_t len)
+__always_inline void HMAC_SHA384_sw_init(struct hmac_sha384_ctx *ctx,
+						const void *key, size_t len)
 {
 	SHA384_sw_init(&ctx->hash);
 	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
@@ -171,8 +169,8 @@ static inline void HMAC_SHA384_sw_init(struct hmac_sha384_ctx *ctx,
 /**
  * HMAC SHA2-512 initialization.
  */
-static inline void HMAC_SHA512_sw_init(struct hmac_sha512_ctx *ctx,
-				       const void *key, size_t len)
+__always_inline void HMAC_SHA512_sw_init(struct hmac_sha512_ctx *ctx,
+						const void *key, size_t len)
 {
 	SHA512_sw_init(&ctx->hash);
 	HMAC_sw_init((union hmac_ctx *)ctx, key, len);
@@ -262,7 +260,7 @@ struct drbg_ctx {
 #define HMAC_DRBG_DO_NOT_AUTO_RESEED 0xFFFFFFFF
 
 /* Check that DRBG is properly initialized. */
-static inline bool hmac_drbg_ctx_valid(const struct drbg_ctx *drbg)
+__always_inline bool hmac_drbg_ctx_valid(const struct drbg_ctx *drbg)
 {
 	return drbg->magic_cookie == DCRYPTO_OK;
 }
@@ -515,64 +513,64 @@ uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words);
 #endif
 
 /* rotate 32-bit value right */
-static inline uint32_t ror(uint32_t value, int bits)
+__always_inline uint32_t ror(uint32_t value, int bits)
 {
 	/* return __builtin_rotateright32(value, bits); */
 	return (value >> bits) | (value << (32 - bits));
 }
 
 /* rotate 64-bit value right */
-static inline uint64_t ror64(uint64_t value, int bits)
+__always_inline uint64_t ror64(uint64_t value, int bits)
 {
 	/* return __builtin_rotateright64(value, bits); */
 	return (value >> bits) | (value << (64 - bits));
 }
 
 /* rotate 32-bit value left */
-static inline uint32_t rol(uint32_t value, int bits)
+__always_inline uint32_t rol(uint32_t value, int bits)
 {
 	/* return __builtin_rotateleft32(value, bits); */
 	return (value << bits) | (value >> (32 - bits));
 }
 
 /* rotate 64-bit value left */
-static inline uint64_t rol64(uint64_t value, int bits)
+__always_inline uint64_t rol64(uint64_t value, int bits)
 {
 	/* return __builtin_rotateleft64(value, bits); */
 	return (value << bits) | (value >> (64 - bits));
 }
 
 /* Functions to convert between uint32_t and uint64_t */
-static inline uint32_t lo32(uint64_t v)
+__always_inline uint32_t lo32(uint64_t v)
 {
 	return (uint32_t)v;
 }
-static inline uint32_t hi32(uint64_t v)
+__always_inline uint32_t hi32(uint64_t v)
 {
 	return (uint32_t)(v >> 32);
 }
-static inline uint64_t make64(uint32_t hi, uint32_t lo)
+__always_inline uint64_t make64(uint32_t hi, uint32_t lo)
 {
 	return (((uint64_t)hi) << 32) | lo;
 }
 
-static inline uint32_t lo16(uint32_t v)
+__always_inline uint32_t lo16(uint32_t v)
 {
 	return (uint32_t)(v)&0xffff;
 }
 
-static inline uint32_t hi16(uint32_t v)
+__always_inline uint32_t hi16(uint32_t v)
 {
 	return (uint32_t)(v >> 16);
 }
 
-static inline int count_leading_zeros(uint32_t x)
+__always_inline int count_leading_zeros(uint32_t x)
 {
 	/* __builtin_clz(0) is undefined, so explicitly return bit size. */
 	return (x) ? __builtin_clz(x) : 32;
 }
 
-static inline int count_trailing_zeros(uint32_t x)
+__always_inline int count_trailing_zeros(uint32_t x)
 {
 	/* __builtin_ctz(0) is undefined, so explicitly return bit size. */
 	return (x) ? __builtin_ctz(x) : 32;
@@ -587,7 +585,7 @@ static inline int count_trailing_zeros(uint32_t x)
 #define WORD_MASK (sizeof(uintptr_t) - 1)
 
 /* return true if pointer is not word aligned. */
-static inline bool is_not_aligned(const void *ptr)
+__always_inline bool is_not_aligned(const void *ptr)
 {
 	return (uintptr_t)ptr & WORD_MASK;
 }
@@ -614,7 +612,7 @@ static inline bool is_not_aligned(const void *ptr)
  * @return An integer which will happen to have the same value as `val` at
  *         runtime.
  */
-static inline uintptr_t value_barrier(uintptr_t val)
+__always_inline uintptr_t value_barrier(uintptr_t val)
 {
 	/**
 	 * The +r constraint tells the compiler that this is an "inout"
@@ -626,7 +624,7 @@ static inline uintptr_t value_barrier(uintptr_t val)
 	asm("" : "+r"(val));
 	return val;
 }
-static inline void *value_barrier_ptr(void *val)
+__always_inline void *value_barrier_ptr(void *val)
 {
 	/**
 	 * The +r constraint tells the compiler that this is an "inout"
@@ -654,8 +652,9 @@ static inline void *value_barrier_ptr(void *val)
  * Example:
  *   hardened_select_if_zero(test, CRYPTO_FAIL, CRYPTO_OK)
  */
-static inline __attribute__((always_inline))
-uintptr_t hardened_select_if_zero(uintptr_t test, uintptr_t a, uintptr_t b)
+__always_inline uintptr_t hardened_select_if_zero(uintptr_t test,
+							 uintptr_t a,
+							 uintptr_t b)
 {
 	uintptr_t bma = value_barrier(b - a);
 
@@ -665,7 +664,7 @@ uintptr_t hardened_select_if_zero(uintptr_t test, uintptr_t a, uintptr_t b)
 }
 
 /* Convenience wrapper to return DCRYPTO_OK iff val == 0. */
-static inline enum dcrypto_result dcrypto_ok_if_zero(uintptr_t val)
+__always_inline enum dcrypto_result dcrypto_ok_if_zero(uintptr_t val)
 {
 	return (enum dcrypto_result)hardened_select_if_zero(val, DCRYPTO_FAIL,
 							    DCRYPTO_OK);

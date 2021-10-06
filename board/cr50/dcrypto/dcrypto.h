@@ -50,6 +50,10 @@ enum hashing_mode {
 #define __warn_unused_result __attribute__((warn_unused_result))
 #endif
 
+#ifndef __always_inline
+#define __always_inline __inline __attribute__((always_inline))
+#endif
+
 /**
  * SHA1/SHA2, HMAC API
  */
@@ -401,8 +405,8 @@ const uint8_t *DCRYPTO_SHA1_hash(const void *data, size_t n, uint8_t *digest);
  * @param data input data
  * @param len length of data
  */
-static inline void HASH_update(union hash_ctx *const ctx, const void *data,
-			       size_t len)
+__always_inline void HASH_update(union hash_ctx *const ctx, const void *data,
+				 size_t len)
 {
 	ctx->f->update(ctx, data, len);
 }
@@ -414,7 +418,7 @@ static inline void HASH_update(union hash_ctx *const ctx, const void *data,
  *
  * @return pointer to computed digest inside ctx.
  */
-static inline const union sha_digests *HASH_final(union hash_ctx *const ctx)
+__always_inline const union sha_digests *HASH_final(union hash_ctx *const ctx)
 {
 	return ctx->f->final(ctx);
 }
@@ -426,8 +430,8 @@ static inline const union sha_digests *HASH_final(union hash_ctx *const ctx)
  * @param data input data
  * @param len length of data
  */
-static inline void SHA256_update(struct sha256_ctx *const ctx, const void *data,
-				 size_t len)
+__always_inline void SHA256_update(struct sha256_ctx *const ctx,
+				   const void *data, size_t len)
 {
 	ctx->f->update((union hash_ctx *)ctx, data, len);
 }
@@ -440,28 +444,28 @@ static inline void SHA256_update(struct sha256_ctx *const ctx, const void *data,
  *
  * @return pointer to computed digest inside ctx.
  */
-static inline const struct sha256_digest *SHA256_final(
+__always_inline const struct sha256_digest *SHA256_final(
 	struct sha256_ctx *const ctx)
 {
 	return &ctx->f->final((union hash_ctx *)ctx)->sha256;
 }
-static inline void HMAC_SHA256_update(struct hmac_sha256_ctx *const ctx,
-				      const void *data, size_t len)
+__always_inline void HMAC_SHA256_update(struct hmac_sha256_ctx *const ctx,
+					const void *data, size_t len)
 {
 	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
 }
 
-static inline const struct sha256_digest *HMAC_SHA256_final(
+__always_inline const struct sha256_digest *HMAC_SHA256_final(
 	struct hmac_sha256_ctx *ctx)
 {
 	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha256;
 }
-static inline void SHA1_update(struct sha1_ctx *const ctx, const void *data,
-			       size_t len)
+__always_inline void SHA1_update(struct sha1_ctx *const ctx, const void *data,
+				 size_t len)
 {
 	ctx->f->update((union hash_ctx *)ctx, data, len);
 }
-static inline const struct sha1_digest *SHA1_final(struct sha1_ctx *const ctx)
+__always_inline const struct sha1_digest *SHA1_final(struct sha1_ctx *const ctx)
 {
 	return &ctx->f->final((union hash_ctx *)ctx)->sha1;
 }
@@ -473,7 +477,7 @@ static inline const struct sha1_digest *SHA1_final(struct sha1_ctx *const ctx)
 
  * @return DCRYPTO_OK if successful
  */
-static inline __warn_unused_result enum dcrypto_result DCRYPTO_hw_sha256_init(
+__always_inline __warn_unused_result enum dcrypto_result DCRYPTO_hw_sha256_init(
 	struct sha256_ctx *ctx)
 {
 	return DCRYPTO_hw_hash_init((union hash_ctx *)ctx, HASH_SHA256);
@@ -487,7 +491,7 @@ static inline __warn_unused_result enum dcrypto_result DCRYPTO_hw_sha256_init(
  * @param len length of key
  * @return DCRYPTO_OK if successful
  */
-static inline __warn_unused_result enum dcrypto_result
+__always_inline __warn_unused_result enum dcrypto_result
 DCRYPTO_hw_hmac_sha256_init(struct hmac_sha256_ctx *ctx, const void *key,
 			    size_t len)
 {
@@ -514,7 +518,7 @@ enum dcrypto_result DCRYPTO_hw_hmac_sha256_init(struct hmac_sha256_ctx *ctx,
 /**
  * Returns digest size for configured hash.
  */
-static inline size_t HASH_size(union hash_ctx *const ctx)
+__always_inline size_t HASH_size(union hash_ctx *const ctx)
 {
 	return ctx->f->digest_size;
 }
@@ -522,82 +526,82 @@ static inline size_t HASH_size(union hash_ctx *const ctx)
 /**
  * Return block size for configured hash.
  */
-static inline size_t HASH_block_size(union hash_ctx *const ctx)
+__always_inline size_t HASH_block_size(union hash_ctx *const ctx)
 {
 	return ctx->f->block_size;
 }
 
 /* HMAC_update() is same as HASH_update(). */
-static inline void HMAC_update(union hmac_ctx *const ctx, const void *data,
-			       size_t len)
+__always_inline void HMAC_update(union hmac_ctx *const ctx, const void *data,
+				 size_t len)
 {
 	ctx->f->update(&ctx->hash, data, len);
 }
 
-static inline size_t HMAC_size(union hmac_ctx *const ctx)
+__always_inline size_t HMAC_size(union hmac_ctx *const ctx)
 {
 	return ctx->f->digest_size;
 }
 
-static inline const union sha_digests *HMAC_final(union hmac_ctx *const ctx)
+__always_inline const union sha_digests *HMAC_final(union hmac_ctx *const ctx)
 {
 	return ctx->f->hmac_final(ctx);
 }
 
-static inline void HMAC_SHA1_update(struct hmac_sha1_ctx *const ctx,
-				    const void *data, size_t len)
+__always_inline void HMAC_SHA1_update(struct hmac_sha1_ctx *const ctx,
+				      const void *data, size_t len)
 {
 	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
 }
 
-static inline const struct sha1_digest *HMAC_SHA1_final(
+__always_inline const struct sha1_digest *HMAC_SHA1_final(
 	struct hmac_sha1_ctx *const ctx)
 {
 	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha1;
 }
 
 #ifdef CONFIG_UPTO_SHA512
-static inline void SHA384_update(struct sha384_ctx *const ctx, const void *data,
-				 size_t len)
+__always_inline void SHA384_update(struct sha384_ctx *const ctx,
+				   const void *data, size_t len)
 {
 	ctx->f->update((union hash_ctx *)ctx, data, len);
 }
 
-static inline const struct sha384_digest *SHA384_final(
+__always_inline const struct sha384_digest *SHA384_final(
 	struct sha384_ctx *const ctx)
 {
 	return &ctx->f->final((union hash_ctx *)ctx)->sha384;
 }
 
-static inline void SHA512_update(struct sha512_ctx *const ctx, const void *data,
-				 size_t len)
+__always_inline void SHA512_update(struct sha512_ctx *const ctx,
+				   const void *data, size_t len)
 {
 	ctx->f->update((union hash_ctx *)ctx, data, len);
 }
 
-static inline const struct sha512_digest *SHA512_final(
+__always_inline const struct sha512_digest *SHA512_final(
 	struct sha512_ctx *const ctx)
 {
 	return &ctx->f->final((union hash_ctx *)ctx)->sha512;
 }
 
-static inline void HMAC_SHA384_update(struct hmac_sha384_ctx *ctx,
-				      const void *data, size_t len)
+__always_inline void HMAC_SHA384_update(struct hmac_sha384_ctx *ctx,
+					const void *data, size_t len)
 {
 	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
 }
-static inline const struct sha384_digest *HMAC_SHA384_final(
+__always_inline const struct sha384_digest *HMAC_SHA384_final(
 	struct hmac_sha384_ctx *ctx)
 {
 	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha384;
 }
 
-static inline void HMAC_SHA512_update(struct hmac_sha512_ctx *ctx,
-				      const void *data, size_t len)
+__always_inline void HMAC_SHA512_update(struct hmac_sha512_ctx *ctx,
+					const void *data, size_t len)
 {
 	ctx->hash.f->update((union hash_ctx *)&ctx->hash, data, len);
 }
-static inline const struct sha512_digest *HMAC_SHA512_final(
+__always_inline const struct sha512_digest *HMAC_SHA512_final(
 	struct hmac_sha512_ctx *ctx)
 {
 	return &ctx->hash.f->hmac_final((union hmac_ctx *)ctx)->sha512;
@@ -725,7 +729,7 @@ void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
  * @param b pointer to big number
  * @return length in bits
  */
-static inline size_t bn_bits(const struct LITE_BIGNUM *b)
+inline size_t bn_bits(const struct LITE_BIGNUM *b)
 {
 	return b->dmax * sizeof(*b->d) * 8;
 }
@@ -735,7 +739,7 @@ static inline size_t bn_bits(const struct LITE_BIGNUM *b)
  * @param b pointer to big number
  * @return length in bits
  */
-static inline size_t bn_size(const struct LITE_BIGNUM *b)
+inline size_t bn_size(const struct LITE_BIGNUM *b)
 {
 	return b->dmax * sizeof(*b->d);
 }
@@ -1160,7 +1164,7 @@ uint64_t fips_trng_rand32(void);
  * @return true if rand contains valid random
  */
 
-static inline bool rand_valid(uint64_t rand)
+inline bool rand_valid(uint64_t rand)
 {
 	return (rand >> 32) != 0;
 }
