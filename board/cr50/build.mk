@@ -195,7 +195,8 @@ RW_FIPS_OBJS=$(patsubst %.o, $(RW_BD_OUT)/%.o, $(fips-y))
 $(RW_FIPS_OBJS): CFLAGS += -frandom-seed=0 -fno-fat-lto-objects -Wswitch\
 			   -Wsign-compare -Wuninitialized
 
-$(RW_FIPS_OBJS): $(out)/ec_version.h $(out)/env_config.h
+$(RW_FIPS_OBJS): | $(out)/ec_version.h $(out)/env_config.h
+rw_board_deps := $(addsuffix .d, $(RW_FIPS_OBJS))
 
 # Note, since FIPS object files are compiled with lto, actual compilation
 # and code optimization take place during link time.

@@ -360,6 +360,7 @@ $(rw-eps) $(out)/RW/str_blob: $(rw-es)
 
 $(rw-objs): $(out)/RW/str_blob $(rw-eps)
 endif
+rw-deps += $(rw_board_deps)
 
 ifeq ($(CONFIG_FW_INCLUDE_RO),y)
 deps := $(ro-deps) $(rw-deps) $(deps-y)
