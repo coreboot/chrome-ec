@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#if defined(CRYPTO_TEST_SETUP) || defined(CR50_DEV)
+#if defined(CRYPTO_TEST_SETUP)
 #include "console.h"
 #endif
 
@@ -55,7 +55,7 @@ static void u2f_origin_user_mac(const struct u2f_state *state,
 	HMAC_SHA256_update(&ctx, origin_seed, U2F_ORIGIN_SEED_SIZE);
 	if (kh_version == U2F_KH_VERSION_1)
 		HMAC_SHA256_update(&ctx, &kh_version, sizeof(kh_version));
-#ifdef CR50_DEV_U2F_VERBOSE
+#ifdef U2F_DEV_VERBOSE
 	ccprintf("origin %ph\n", HEX_BUF(origin, U2F_APPID_SIZE));
 	ccprintf("user %ph\n", HEX_BUF(user, U2F_USER_SECRET_SIZE));
 	ccprintf("origin_seed %ph\n",
@@ -63,7 +63,7 @@ static void u2f_origin_user_mac(const struct u2f_state *state,
 	cflush();
 #endif
 	memcpy(kh_hmac, HMAC_SHA256_final(&ctx), SHA256_DIGEST_SIZE);
-#ifdef CR50_DEV_U2F_VERBOSE
+#ifdef U2F_DEV_VERBOSE
 	ccprintf("kh_hmac %ph\n", HEX_BUF(kh_hmac, SHA256_DIGEST_SIZE));
 	cflush();
 #endif
@@ -248,7 +248,7 @@ static enum ec_error_list u2f_origin_user_key_pair(
 	else if (result != DCRYPTO_OK)
 		return EC_ERROR_HW_INTERNAL;
 
-#ifdef CR50_DEV_U2F_VERBOSE
+#ifdef U2F_DEV_VERBOSE
 	ccprintf("user private key %ph\n", HEX_BUF(d, sizeof(*d)));
 	cflush();
 	if (pk_x)
@@ -449,7 +449,7 @@ u2f_attest_keyhandle_pubkey(const struct u2f_state *state,
 	p256_to_bin(&opk_y, kh_pubkey.y);
 	kh_pubkey.pointFormat = U2F_POINT_UNCOMPRESSED;
 
-#ifdef CR50_DEV_U2F_VERBOSE
+#ifdef U2F_DEV_VERBOSE
 	ccprintf("recreated key %ph\n", HEX_BUF(&kh_pubkey, sizeof(kh_pubkey)));
 	ccprintf("provided key %ph\n", HEX_BUF(public_key, sizeof(kh_pubkey)));
 #endif
@@ -632,7 +632,7 @@ enum ec_error_list u2f_attest(const struct u2f_state *state,
 
 	/* Derive G2F Attestation Key. */
 	if (!g2f_individual_key_pair(state, &d, &pk_x, &pk_y)) {
-#ifdef CR50_DEV
+#ifdef U2F_DEV_VERBOSE
 		ccprintf("G2F Attestation key generation failed\n");
 #endif
 		return EC_ERROR_HW_INTERNAL;

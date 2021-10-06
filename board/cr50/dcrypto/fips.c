@@ -642,18 +642,22 @@ static bool call_on_stack(void *new_stack, bool (*func)(void))
 const struct sha256_digest fips_integrity
 	__attribute__((section(".rodata.fips.checksum")));
 
+#ifndef SELF_INTEGRITY_TEST
+#define SELF_INTEGRITY_TEST 0
+#endif
+
 static enum dcrypto_result fips_self_integrity(void)
 {
 	struct sha256_digest digest;
 	size_t module_length = &__fips_module_end - &__fips_module_start;
 
-#ifdef CR50_DEV
+#if SELF_INTEGRITY_TEST
 	CPRINTS("FIPS self-integrity start %x, length %u",
 		(uintptr_t)&__fips_module_start, module_length);
 #endif
 	SHA256_hw_hash(&__fips_module_start, module_length, &digest);
 
-#ifdef CR50_DEV
+#if SELF_INTEGRITY_TEST
 	CPRINTS("Stored:   %ph",
 		HEX_BUF(fips_integrity.b8, SHA256_DIGEST_SIZE));
 	CPRINTS("Computed: %ph",

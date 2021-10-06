@@ -22,19 +22,20 @@ ifeq ($(BOARD_MK_INCLUDED_ONCE),)
 
 # List of variables which can be defined in the environment or set in the make
 # command line.
-ENV_VARS := CR50_DEV CRYPTO_TEST H1_RED_BOARD U2F_TEST RND_TEST DRBG_TEST\
-	    ECDSA_TEST DCRYPTO_TEST P256_BIN_TEST SHA1_TEST SHA256_TEST\
-	    HMAC_SHA256_TEST CMAC_TEST
+ENV_VARS := CR50_DEV CRYPTO_TEST CMAC_TEST DCRYPTO_TEST DRBG_TEST ECDSA_TEST\
+	    H1_RED_BOARD HMAC_SHA256_TEST P256_BIN_TEST RND_TEST SELF_TEST\
+	    SHA1_TEST SHA256_TEST U2F_TEST U2F_VERBOSE
+
+ifneq ($(H1_RED_BOARD),)
+CPPFLAGS += -DH1_RED_BOARD=$(EMPTY)
+endif
 
 ifneq ($(CRYPTO_TEST),)
 CPPFLAGS += -DCRYPTO_TEST_SETUP
 
-ifneq ($(U2F_TEST),)
-CPPFLAGS_RW += -DCRYPTO_TEST_CMD_U2F_TEST=1
-endif
-
-ifneq ($(RND_TEST),)
-CPPFLAGS_RW += -DCRYPTO_TEST_CMD_RAND=1
+# These options only work with CRYPTO_TEST=1
+ifneq ($(DCRYPTO_TEST),)
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_DCRYPTO_TEST=1
 endif
 
 ifneq ($(DRBG_TEST),)
@@ -45,12 +46,20 @@ ifneq ($(ECDSA_TEST),)
 CPPFLAGS_RW += -DCRYPTO_TEST_CMD_DCRYPTO_ECDSA=1
 endif
 
-ifneq ($(DCRYPTO_TEST),)
-CPPFLAGS_RW += -DCRYPTO_TEST_CMD_DCRYPTO_TEST=1
+ifneq ($(HMAC_SHA256_TEST),)
+CPPFLAGS_RW += -DHMAC_SHA256_TEST=1
 endif
 
 ifneq ($(P256_BIN_TEST),)
 CPPFLAGS_RW += -DP256_BIN_TEST=1
+endif
+
+ifneq ($(RND_TEST),)
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_RAND=1
+endif
+
+ifneq ($(SELF_TEST),)
+CPPFLAGS_RW += -DSELF_INTEGRITY_TEST=1
 endif
 
 ifneq ($(SHA1_TEST),)
@@ -61,11 +70,15 @@ ifneq ($(SHA256_TEST),)
 CPPFLAGS_RW += -DSHA256_TEST=1
 endif
 
-ifneq ($(HMAC_SHA256_TEST),)
-CPPFLAGS_RW += -DHMAC_SHA256_TEST=1
+ifneq ($(U2F_TEST),)
+CPPFLAGS_RW += -DCRYPTO_TEST_CMD_U2F_TEST=1
 endif
 
+ifneq ($(U2F_VERBOSE),)
+CPPFLAGS_RW += -DU2F_DEV_VERBOSE=1
 endif
+
+endif # CRYPTO_TEST=1
 
 
 BOARD_MK_INCLUDED_ONCE=1
@@ -172,10 +185,6 @@ board-y += tpm2/virtual_nvmem.o
 board-y += tpm_nvmem_ops.o
 board-y += wp.o
 board-$(CONFIG_PINWEAVER)+=pinweaver_tpm_imports.o
-
-ifneq ($(H1_RED_BOARD),)
-CPPFLAGS += -DH1_RED_BOARD=$(EMPTY)
-endif
 
 # Build fips code separately
 ifneq ($(fips-y),)

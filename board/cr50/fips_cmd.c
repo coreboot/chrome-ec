@@ -68,7 +68,7 @@ static void fips_print_status(void)
 }
 DECLARE_HOOK(HOOK_INIT, fips_print_status, HOOK_PRIO_INIT_PRINT_FIPS_STATUS);
 
-#if defined(CRYPTO_TEST_SETUP) || defined(CR50_DEV)
+#if defined(CRYPTO_TEST_SETUP)
 static const uint8_t k_salt = NVMEM_VAR_G2F_SALT;
 
 static void print_u2f_keys_status(void)
@@ -130,7 +130,7 @@ static int cmd_fips_status(int argc, char **argv)
 			fips_print_test_time();
 			fips_print_mode();
 		}
-#if defined(CRYPTO_TEST_SETUP) || defined(CR50_DEV)
+#ifdef CRYPTO_TEST_SETUP
 		else if (!strncmp(argv[1], "new", 3))
 			CPRINTS("u2f update status: %d", u2f_update_keys());
 		else if (!strncmp(argv[1], "del", 3))
@@ -142,8 +142,6 @@ static int cmd_fips_status(int argc, char **argv)
 			print_u2f_keys_status();
 		else if (!strncmp(argv[1], "gen", 3))
 			u2f_keys();
-#endif
-#ifdef CRYPTO_TEST_SETUP
 		else if (!strncmp(argv[1], "trng", 4))
 			fips_break_cmd = FIPS_BREAK_TRNG;
 		else if (!strncmp(argv[1], "sha", 3))
