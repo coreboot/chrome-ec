@@ -342,17 +342,19 @@ static void bn_modexp_internal(struct LITE_BIGNUM *output,
 {
 	int i;
 	uint32_t nprime;
-	uint32_t RR_buf[RSA_MAX_WORDS];
-	uint32_t acc_buf[RSA_MAX_WORDS];
-	uint32_t aR_buf[RSA_MAX_WORDS];
+	uint8_t *buf;
+	size_t n_len;
 
 	struct LITE_BIGNUM RR;
 	struct LITE_BIGNUM acc;
 	struct LITE_BIGNUM aR;
 
-	bn_init(&RR, RR_buf, bn_size(N));
-	bn_init(&acc, acc_buf, bn_size(N));
-	bn_init(&aR, aR_buf, bn_size(N));
+	n_len = bn_size(N);
+	/* Combined buffer for acc, RR and aR. */
+	buf = alloca(n_len * 3);
+	bn_init(&acc, buf, n_len);
+	bn_init(&RR, buf + n_len, n_len);
+	bn_init(&aR, buf + n_len + n_len, n_len);
 
 	nprime = bn_compute_nprime(BN_DIGIT(N, 0));
 	bn_compute_RR(&RR, N);
@@ -381,8 +383,8 @@ static void bn_modexp_internal(struct LITE_BIGNUM *output,
 
 	bn_mont_mul(output, NULL, &acc, nprime, N);     /* Convert out. */
 	/* Copy to output buffer if necessary. */
-	if (acc.d != (struct access_helper *) acc_buf) {
-		memcpy(acc.d, acc_buf, bn_size(output));
+	if (acc.d != (struct access_helper *)buf) {
+		memcpy(acc.d, buf, bn_size(output));
 		*output = acc;
 	}
 
@@ -391,9 +393,7 @@ static void bn_modexp_internal(struct LITE_BIGNUM *output,
 		bn_add(output, N);                      /* Final reduce. */
 	output->dmax = N->dmax;
 
-	always_memset(RR_buf, 0, sizeof(RR_buf));
-	always_memset(acc_buf, 0, sizeof(acc_buf));
-	always_memset(aR_buf, 0, sizeof(aR_buf));
+	always_memset(buf, 0, n_len * 3);
 }
 
 /* output = input ^ exp % N */
@@ -623,8 +623,8 @@ static int bn_div_ex(struct LITE_BIGNUM *q,
 {
 	uint32_t vtop;
 	int s, i, j;
-	uint32_t vn[RSA_MAX_WORDS]; /* Normalized v */
-	uint32_t un[RSA_MAX_WORDS + 1]; /* Normalized u */
+	uint32_t *vn; /* Normalized v */
+	uint32_t *un; /* Normalized u */
 
 	if (m < n || n <= 0)
 		return 0;
@@ -636,6 +636,10 @@ static int bn_div_ex(struct LITE_BIGNUM *q,
 
 	if (n == 1)
 		return bn_div_word_ex(q, r, u, m, vtop);
+
+	/* Allocate buffer for vn and un. */
+	vn = alloca((n + m + 1) * sizeof(v->d[0]));
+	un = vn + n; /* un size is m words. */
 
 	/* Compute shift factor to make v have high bit set */
 	s = count_leading_zeros(vtop);
