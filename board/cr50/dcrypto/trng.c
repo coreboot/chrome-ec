@@ -3,14 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include "common.h"
-#include "fips.h"
-#include "fips_rand.h"
+#include "internal.h"
 #include "flash_log.h"
-#include "init_chip.h"
-#include "registers.h"
-#include "watchdog.h"
-#include "console.h"
+#include "dcrypto_regs.h"
+
+/**
+ * Define KEYMGR SHA/HMAC access structure.
+ */
+static volatile struct trng_reg *reg_trng = (void *)(GC_TRNG_BASE_ADDR);
 
 /**
  * The H1 TRNG uses the collapse time of a ring oscillator (RO) that is
@@ -66,7 +66,7 @@ void fips_init_trng(void)
 	 * which increase number of requests to TRNG to get desirable
 	 * entropy and prevents from getting full entropy.
 	 */
-	GWRITE(TRNG, POST_PROCESSING_CTRL, 0);
+	reg_trng->post_processing  = 0;
 
 	/**
 	 * TRNG can return up to 16 bits at a time, but highest bits
@@ -76,10 +76,10 @@ void fips_init_trng(void)
 	 * for up to 8 bits [7..0].
 	 * Time to get 32bit random is roughly 160/TRNG_SAMPLE_BITS us.
 	 */
-	GWRITE(TRNG, SLICE_MAX_UPPER_LIMIT, TRNG_SAMPLE_BITS - 1);
+	reg_trng->slice_max_upper_limit = TRNG_SAMPLE_BITS - 1;
 
 	/* lowest bit have highest entropy, so always start from it */
-	GWRITE(TRNG, SLICE_MIN_LOWER_LIMIT, 0);
+	reg_trng->slice_min_lower_limit = 0;
 
 	/**
 	 * Analog logic cannot create a value < 8 under normal operating
@@ -88,7 +88,7 @@ void fips_init_trng(void)
 	 * Bit 0 - Enable rejection for values outside of range specified
 	 * by TRNG_ALLOWED_VALUES register
 	 */
-	GWRITE(TRNG, SECURE_POST_PROCESSING_CTRL, 0x1);
+	reg_trng->secure_post_processing = 0x1;
 
 	/**
 	 * Since for FIPS settings we use TRNG_SAMPLE_BITS = 1,
@@ -99,12 +99,12 @@ void fips_init_trng(void)
 	 * So, range will be [8..65535], with probability for bit 0 and 1
 	 * remaining 50/50.
 	 */
-	GWRITE(TRNG, ALLOWED_VALUES_MIN, 0x26);
+	reg_trng->allowed_values = 0x26;
 
-	GWRITE(TRNG, TIMEOUT_COUNTER, 0x7ff);
-	GWRITE(TRNG, TIMEOUT_MAX_TRY_NUM, 4);
-	GWRITE(TRNG, POWER_DOWN_B, 1);
-	GWRITE(TRNG, GO_EVENT, 1);
+	reg_trng->timeout_counter = 0x7ff;
+	reg_trng->timeout_max_try = 4;
+	reg_trng->power_down_b = 1;
+	reg_trng->go_event = 1;
 }
 
 uint64_t read_rand(void)
@@ -122,16 +122,16 @@ uint64_t read_rand(void)
 	 * Make sure we never hang in the loop - try at max TRNG_RESET_COUNT
 	 * reset attempts, then return error
 	 */
-	while (GREAD(TRNG, EMPTY) && (reset_count < TRNG_RESET_COUNT)) {
-		if (GREAD_FIELD(TRNG, FSM_STATE, FSM_IDLE) ||
+	while (reg_trng->empty && (reset_count < TRNG_RESET_COUNT)) {
+		if ((reg_trng->fsm_state & GC_TRNG_FSM_STATE_FSM_IDLE_MASK) ||
 		    empty_count > TRNG_EMPTY_COUNT) {
 			/* TRNG timed out, restart */
-			GWRITE(TRNG, STOP_WORK, 1);
+			reg_trng->stop_work = 1;
 #ifdef CONFIG_FLASH_LOG
 			fips_vtable->flash_log_add_event(FE_LOG_TRNG_STALL, 0,
 							 NULL);
 #endif
-			GWRITE(TRNG, GO_EVENT, 1);
+			reg_trng->go_event = 1;
 			empty_count = 0;
 			reset_count++;
 		}
@@ -141,7 +141,7 @@ uint64_t read_rand(void)
 	 * High 32-bits set to zero in case of error;
 	 * otherwise value >> 32 == 1
 	 */
-	return (uint64_t)GREAD(TRNG, READ_DATA) |
+	return (uint64_t)reg_trng->read_data |
 	       ((uint64_t)(reset_count < TRNG_RESET_COUNT) << 32);
 }
 
@@ -318,10 +318,10 @@ static enum vendor_cmd_rc trng_test(enum vendor_cmd_cc code, void *buf,
 	switch (op_type) {
 	case 3:
 		/* Power down LDO, wait 1ms, power up. */
-		GWRITE(TRNG, POWER_DOWN_B, 0);
+		reg_trng->power_down_b = 0;
 		udelay(1000);
-		GWRITE(TRNG, POWER_DOWN_B, 1);
-		GWRITE(TRNG, GO_EVENT, 1);
+		reg_trng->power_down_b = 1;
+		reg_trng->go_event = 1;
 		/* Fall through */
 	case 0:
 		if (!raw_rand_bytes(buf, text_len))

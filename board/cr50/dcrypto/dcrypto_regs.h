@@ -74,9 +74,49 @@ BUILD_ASSERT(offsetof(struct keymgr_sha, rand_stall) ==
 	     GC_KEYMGR_SHA_RAND_STALL_CTL_OFFSET -
 		     GC_KEYMGR_SHA_CFG_MSGLEN_LO_OFFSET);
 
+struct trng_reg {
+	const uint32_t version; /* TRNG_VERSION = 0x2d013316 */
+	uint32_t int_enable; /* TRNG_INT_ENABLE */
+	uint32_t int_state; /* TRNG_INT_STATE */
+	uint32_t int_test; /* TRNG_INT_TEST */
+	uint32_t secure_post_processing; /* TRNG_SECURE_POST_PROCESSING_CTRL */
+	uint32_t post_processing; /* TRNG_POST_PROCESSING_CTRL */
+	uint32_t go_event; /* TRNG_GO_EVENT */
+	uint32_t timeout_counter; /* TRNG_TIMEOUT_COUNTER */
+	uint32_t timeout_max_try; /* TRNG_TIMEOUT_MAX_TRY_NUM */
+	uint32_t output_time; /* TRNG_OUTPUT_TIME_COUNTER */
+	uint32_t stop_work; /* TRNG_STOP_WORK */
+	const uint32_t fsm_state; /* TRNG_FSM_STATE */
+	uint32_t allowed_values; /* TRNG_ALLOWED_VALUES */
+	const uint32_t timer_counter; /* TRNG_TIMER_COUNTER */
+	uint32_t slice_max_upper_limit; /* TRNG_SLICE_MAX_UPPER_LIMIT */
+	uint32_t slice_min_lower_limit; /* TRNG_SLICE_MIN_LOWER_LIMIT */
+	const uint32_t max_value; /* TRNG_MAX_VALUE */
+	const uint32_t min_value; /* TRNG_MIN_VALUE */
+	uint32_t ldo_ctrl; /* TRNG_LDO_CTRL */
+	uint32_t power_down_b; /* TRNG_POWER_DOWN_B */
+	uint32_t proc_lock_power_down_b; /* TRNG_PROC_LOCK_POWER_DOWN_B */
+	uint32_t antest; /* TRNG_ANTEST */
+	uint32_t analog_sen_lsr_in; /* TRNG_ANALOG_SEN_LSR_INPUT */
+	const uint32_t analog_sen_lsr_out; /* TRNG_ANALOG_SEN_LSR_OUTPUT */
+	uint32_t analog_test; /* TRNG_ANALOG_TEST */
+	uint32_t analog_control; /* TRNG_ANALOG_CTRL */
+	uint32_t one_shot_mode; /* TRNG_ONE_SHOT_MODE */
+	uint32_t one_shot_reg; /* TRNG_ONE_SHOT_REG */
+	const uint32_t read_data; /* TRNG_READ_DATA */
+	const uint32_t frequency_calls; /* TRNG_FREQUENCY_CALLS */
+	const uint32_t num_ones; /* TRNG_CUR_NUM_ONES */
+	const uint32_t empty; /* TRNG_EMPTY */
+};
+
+BUILD_ASSERT(offsetof(struct trng_reg, go_event) ==
+	     GC_TRNG_GO_EVENT_OFFSET - GC_TRNG_VERSION_CHANGE_OFFSET);
+
+BUILD_ASSERT(offsetof(struct trng_reg, read_data) ==
+	     GC_TRNG_READ_DATA_OFFSET - GC_TRNG_VERSION_CHANGE_OFFSET);
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* __EC_FIPS_MODULE_REGS_H */
-
