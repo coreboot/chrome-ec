@@ -530,10 +530,12 @@ static enum dcrypto_result check_modulus_params(const struct RSA *rsa,
 	return DCRYPTO_OK;
 }
 
-int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
-			const uint8_t *in, size_t in_len,
-			enum padding_mode padding, enum hashing_mode hashing,
-			const char *label)
+enum dcrypto_result DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out,
+					size_t *out_len, const uint8_t *in,
+					size_t in_len,
+					enum padding_mode padding,
+					enum hashing_mode hashing,
+					const char *label)
 {
 	uint8_t *p;
 	size_t n_len;
@@ -541,10 +543,14 @@ int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
 
 	struct LITE_BIGNUM padded;
 	struct LITE_BIGNUM encrypted;
-	int ret;
+	enum dcrypto_result ret;
 
-	if (check_modulus_params(rsa, out_len) != DCRYPTO_OK)
-		return 0;
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+
+	ret = check_modulus_params(rsa, out_len);
+	if (ret != DCRYPTO_OK)
+		return ret;
 
 	n_len = bn_size(&rsa->N);
 	padded_buf = alloca(n_len);
@@ -554,22 +560,20 @@ int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
 
 	switch (padding) {
 	case PADDING_MODE_OAEP:
-		if (oaep_pad((uint8_t *)padded.d, bn_size(&padded),
+		ret = oaep_pad((uint8_t *)padded.d, bn_size(&padded),
 			     (const uint8_t *)in, in_len, hashing,
-			     label) != DCRYPTO_OK)
-			return 0;
+			     label);
 		break;
 	case PADDING_MODE_PKCS1:
-		if (pkcs1_type2_pad((uint8_t *)padded.d, bn_size(&padded),
-				    (const uint8_t *)in, in_len) != DCRYPTO_OK)
-			return 0;
+		ret = pkcs1_type2_pad((uint8_t *)padded.d, bn_size(&padded),
+				    (const uint8_t *)in, in_len);
 		break;
 	case PADDING_MODE_NULL:
 		/* Input is allowed to have more bytes than N, in
 		 * which case the excess must be zero. */
 		for (; in_len > bn_size(&padded); in_len--)
 			if (*in++ != 0)
-				return 0;
+				return DCRYPTO_FAIL;
 		p = (uint8_t *) padded.d;
 		/* If in_len < bn_size(&padded), padded will
 		 * have leading zero bytes. */
@@ -578,9 +582,12 @@ int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
 		 * handle this case. */
 		break;
 	default:
-		return 0;                       /* Unsupported padding mode. */
+		/* Unsupported padding mode. */
+		ret = DCRYPTO_FAIL;
+		break;
 	}
-
+	if (ret != DCRYPTO_OK)
+		return ret;
 	/* Reverse from big-endian to little-endian notation. */
 	reverse((uint8_t *) padded.d, bn_size(&padded));
 	ret = bn_modexp_word(&encrypted, &padded, rsa->e, &rsa->N);
@@ -592,21 +599,27 @@ int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
 	return ret;
 }
 
-int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
-			const uint8_t *in, const size_t in_len,
-			enum padding_mode padding, enum hashing_mode hashing,
-			const char *label)
+enum dcrypto_result DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out,
+					size_t *out_len, const uint8_t *in,
+					const size_t in_len,
+					enum padding_mode padding,
+					enum hashing_mode hashing,
+					const char *label)
 {
 	uint8_t *buf = NULL;
 
 	struct LITE_BIGNUM encrypted;
 	struct LITE_BIGNUM padded;
-	int ret;
+	enum dcrypto_result ret;
 
-	if (check_modulus_params(rsa, NULL) != DCRYPTO_OK)
-		return 0;
-	if (in_len != bn_size(&rsa->N))
-		return 0;                      /* Invalid input length. */
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+
+	ret = check_modulus_params(rsa, NULL);
+	if (ret != DCRYPTO_OK)
+		return ret;
+	if (in_len != bn_size(&rsa->N)) /* Invalid input length. */
+		return DCRYPTO_FAIL;
 	buf = alloca(in_len * 2);
 	/* TODO: this copy can be eliminated if input may be modified. */
 	bn_init(&encrypted, buf, in_len);
@@ -621,20 +634,18 @@ int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
 
 	switch (padding) {
 	case PADDING_MODE_OAEP:
-		if (check_oaep_pad(out, out_len, (uint8_t *)padded.d,
+		ret |= check_oaep_pad(out, out_len, (uint8_t *)padded.d,
 				   bn_size(&padded), hashing,
-				   label) != DCRYPTO_OK)
-			ret = 0;
+				   label);
 		break;
 	case PADDING_MODE_PKCS1:
-		if (check_pkcs1_type2_pad(out, out_len,
+		ret |= check_pkcs1_type2_pad(out, out_len,
 					  (const uint8_t *)padded.d,
-					  bn_size(&padded)) != DCRYPTO_OK)
-			ret = 0;
+					  bn_size(&padded));
 		break;
 	case PADDING_MODE_NULL:
 		if (*out_len < bn_size(&padded)) {
-			ret = 0;
+			ret = DCRYPTO_FAIL;
 		} else {
 			*out_len = bn_size(&padded);
 			memcpy(out, padded.d, *out_len);
@@ -642,27 +653,34 @@ int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
 		break;
 	default:
 		/* Unsupported padding mode. */
-		ret = 0;
+		ret = DCRYPTO_FAIL;
 		break;
 	}
-
+	if (ret != DCRYPTO_OK)
+		ret = DCRYPTO_FAIL;
 	always_memset(buf, 0, in_len * 2);
 	return ret;
 }
 
-int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, size_t *out_len,
-		const uint8_t *in, const size_t in_len,
-		enum padding_mode padding, enum hashing_mode hashing)
+enum dcrypto_result DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out,
+				     size_t *out_len, const uint8_t *in,
+				     const size_t in_len,
+				     enum padding_mode padding,
+				     enum hashing_mode hashing)
 {
 	uint8_t *padded_buf;
 	size_t n_len;
 
 	struct LITE_BIGNUM padded;
 	struct LITE_BIGNUM signature;
-	int ret;
+	enum dcrypto_result ret;
 
-	if (check_modulus_params(rsa, out_len) != DCRYPTO_OK)
-		return 0;
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+
+	ret = check_modulus_params(rsa, out_len);
+	if (ret != DCRYPTO_OK)
+		return ret;
 
 	n_len = bn_size(&rsa->N);
 	padded_buf = alloca(n_len);
@@ -671,20 +689,20 @@ int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, size_t *out_len,
 
 	switch (padding) {
 	case PADDING_MODE_PKCS1:
-		if (pkcs1_type1_pad((uint8_t *)padded.d, bn_size(&padded),
+		ret = pkcs1_type1_pad((uint8_t *)padded.d, bn_size(&padded),
 				    (const uint8_t *)in, in_len,
-				    hashing) != DCRYPTO_OK)
-			return 0;
+				    hashing);
 		break;
 	case PADDING_MODE_PSS:
-		if (pkcs1_pss_pad((uint8_t *)padded.d, bn_size(&padded),
+		ret = pkcs1_pss_pad((uint8_t *)padded.d, bn_size(&padded),
 				  (const uint8_t *)in, in_len,
-				  hashing) != DCRYPTO_OK)
-			return 0;
+				  hashing);
 		break;
 	default:
-		return 0;
+		ret = DCRYPTO_FAIL;
 	}
+	if (ret != DCRYPTO_OK)
+		return ret;
 
 	/* Reverse from big-endian to little-endian notation. */
 	reverse((uint8_t *) padded.d, bn_size(&padded));
@@ -697,21 +715,26 @@ int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, size_t *out_len,
 	return ret;
 }
 
-int DCRYPTO_rsa_verify(const struct RSA *rsa, const uint8_t *digest,
-		size_t digest_len, const uint8_t *sig,
-		const size_t sig_len,	enum padding_mode padding,
-		enum hashing_mode hashing)
+enum dcrypto_result DCRYPTO_rsa_verify(const struct RSA *rsa,
+				       const uint8_t *digest, size_t digest_len,
+				       const uint8_t *sig, const size_t sig_len,
+				       enum padding_mode padding,
+				       enum hashing_mode hashing)
 {
 	uint8_t *buf;
 
 	struct LITE_BIGNUM padded;
 	struct LITE_BIGNUM signature;
-	int ret;
+	enum dcrypto_result ret;
 
-	if (check_modulus_params(rsa, NULL) != DCRYPTO_OK)
-		return 0;
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+
+	ret = check_modulus_params(rsa, NULL);
+	if (ret != DCRYPTO_OK)
+		return ret;
 	if (sig_len != bn_size(&rsa->N))
-		return 0; /* Invalid input length. */
+		return DCRYPTO_FAIL; /* Invalid input length. */
 
 	buf = alloca(sig_len * 2);
 	bn_init(&signature, buf, sig_len);
@@ -719,27 +742,25 @@ int DCRYPTO_rsa_verify(const struct RSA *rsa, const uint8_t *digest,
 	bn_init(&padded, buf + sig_len, sig_len);
 
 	/* Reverse from big-endian to little-endian notation. */
-	reverse((uint8_t *) signature.d, bn_size(&signature));
+	reverse((uint8_t *)signature.d, bn_size(&signature));
 	ret = bn_modexp_word(&padded, &signature, rsa->e, &rsa->N);
 	/* Back to big-endian notation. */
-	reverse((uint8_t *) padded.d, bn_size(&padded));
+	reverse((uint8_t *)padded.d, bn_size(&padded));
 
 	switch (padding) {
 	case PADDING_MODE_PKCS1:
-		if (check_pkcs1_type1_pad(digest, digest_len,
-					  (uint8_t *)padded.d, bn_size(&padded),
-					  hashing) != DCRYPTO_OK)
-			ret = 0;
+		ret = check_pkcs1_type1_pad(digest, digest_len,
+					    (uint8_t *)padded.d,
+					    bn_size(&padded), hashing);
 		break;
 	case PADDING_MODE_PSS:
-		if (check_pkcs1_pss_pad(digest, digest_len, (uint8_t *)padded.d,
-					bn_size(&padded),
-					hashing) != DCRYPTO_OK)
-			ret = 0;
+		ret = check_pkcs1_pss_pad(digest, digest_len,
+					  (uint8_t *)padded.d, bn_size(&padded),
+					  hashing);
 		break;
 	default:
 		/* Unsupported padding mode. */
-		ret = 0;
+		ret = DCRYPTO_FAIL;
 		break;
 	}
 
@@ -747,9 +768,11 @@ int DCRYPTO_rsa_verify(const struct RSA *rsa, const uint8_t *digest,
 	return ret;
 }
 
-int DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N, struct LITE_BIGNUM *d,
-			struct LITE_BIGNUM *p, struct LITE_BIGNUM *q,
-			uint32_t e_buf)
+enum dcrypto_result DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N,
+					    struct LITE_BIGNUM *d,
+					    struct LITE_BIGNUM *p,
+					    struct LITE_BIGNUM *q,
+					    uint32_t e_buf)
 {
 	uint32_t ONE_buf = 1;
 	uint8_t *buf;
@@ -759,11 +782,14 @@ int DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N, struct LITE_BIGNUM *d,
 	struct LITE_BIGNUM phi;
 	struct LITE_BIGNUM q_local;
 
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+
 	n_len = bn_size(N);
 	p_len = bn_size(p);
 
 	if (n_len > RSA_BYTES_4K || p_len > RSA_BYTES_2K || !(e_buf & 1))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	buf = alloca(n_len + p_len);
 	DCRYPTO_bn_wrap(&ONE, &ONE_buf, sizeof(ONE_buf));
@@ -774,12 +800,12 @@ int DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N, struct LITE_BIGNUM *d,
 		q = &q_local;
 
 		if (!DCRYPTO_bn_div(q, NULL, N, p))
-			return 0;
+			return DCRYPTO_FAIL;
 
 		/* Check that p * q == N */
 		DCRYPTO_bn_mul(&phi, p, q);
 		if (!bn_eq(N, &phi))
-			return 0;
+			return DCRYPTO_FAIL;
 	} else {
 		DCRYPTO_bn_mul(N, p, q);
 		memcpy(phi.d, N->d, n_len);

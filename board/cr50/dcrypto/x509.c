@@ -355,8 +355,8 @@ static size_t asn1_parse_signature_value(const uint8_t **p, size_t *available,
  * where signatureValue = SIGN(HASH(tbsCertificate)), with SIGN and
  * HASH specified by signatureAlgorithm.
  */
-int DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
-			const struct RSA *ca_pub_key)
+enum dcrypto_result DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
+					const struct RSA *ca_pub_key)
 {
 	const uint8_t *p = cert;
 	const uint8_t *tbs;
@@ -366,32 +366,35 @@ int DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
 
 	struct sha256_digest digest;
 
+	if (!fips_crypto_allowed())
+		return DCRYPTO_FAIL;
+
 	/* Read Certificate SEQUENCE. */
 	if (!asn1_parse_certificate(&p, &len))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	/* Read tbsCertificate SEQUENCE. */
 	tbs = p;
 	if (!asn1_parse_tbs(&p, &len, &tbs_len))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	/* Read signatureAlgorithm SEQUENCE. */
 	if (!asn1_parse_signature_algorithm(&p, &len))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	/* Read signatureValue BIT STRING. */
 	if (!asn1_parse_signature_value(&p, &len, &sig, &sig_len))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	/* Check that the signature length corresponds to the issuer's
 	 * public key size. */
 	if (sig_len != bn_size(&ca_pub_key->N) &&
 		sig_len != bn_size(&ca_pub_key->N) + 1)
-		return 0;
+		return DCRYPTO_FAIL;
 	/* Check that leading signature bytes (if any) are zero. */
 	if (sig_len == bn_size(&ca_pub_key->N) + 1) {
 		if (sig[0] != 0)
-			return 0;
+			return DCRYPTO_FAIL;
 		sig++;
 		sig_len--;
 	}

@@ -605,20 +605,17 @@ static bool fips_rsa2048_verify_kat(void)
 		       .d = (struct access_helper *)pub }
 	};
 
-	int passed;
-
 	SHA256_hw_hash(msg, sizeof(msg), &digest);
-	passed = DCRYPTO_rsa_verify(&rsa, digest.b8, sizeof(digest), sig,
-				    sizeof(sig), PADDING_MODE_PKCS1,
-				    HASH_SHA256);
-	if (!passed)
+	if (DCRYPTO_rsa_verify(&rsa, digest.b8, sizeof(digest), sig,
+			       sizeof(sig), PADDING_MODE_PKCS1,
+			       HASH_SHA256) != DCRYPTO_OK)
 		return false;
 	SHA256_hw_hash(bad_msg, sizeof(bad_msg), &digest);
 
 	/* now signature should fail */
-	return !DCRYPTO_rsa_verify(&rsa, digest.b8, sizeof(digest), sig,
+	return DCRYPTO_rsa_verify(&rsa, digest.b8, sizeof(digest), sig,
 				   sizeof(sig), PADDING_MODE_PKCS1,
-				   HASH_SHA256);
+				   HASH_SHA256) == DCRYPTO_OK;
 }
 #endif
 

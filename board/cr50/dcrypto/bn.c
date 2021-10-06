@@ -397,8 +397,10 @@ static void bn_modexp_internal(struct LITE_BIGNUM *output,
 }
 
 /* output = input ^ exp % N */
-int bn_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
-		const struct LITE_BIGNUM *exp, const struct LITE_BIGNUM *N)
+enum dcrypto_result bn_modexp(struct LITE_BIGNUM *output,
+			      const struct LITE_BIGNUM *input,
+			      const struct LITE_BIGNUM *exp,
+			      const struct LITE_BIGNUM *N)
 {
 #ifndef CR50_NO_BN_ASM
 	if ((bn_bits(N) & 255) == 0) {
@@ -407,12 +409,13 @@ int bn_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
 	}
 #endif
 	bn_modexp_internal(output, input, exp, N);
-	return 1;
+	return DCRYPTO_OK;
 }
 
 /* output = input ^ exp % N */
-int bn_modexp_word(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
-		uint32_t exp, const struct LITE_BIGNUM *N)
+enum dcrypto_result bn_modexp_word(struct LITE_BIGNUM *output,
+				   const struct LITE_BIGNUM *input,
+				   uint32_t exp, const struct LITE_BIGNUM *N)
 {
 #ifndef CR50_NO_BN_ASM
 	if ((bn_bits(N) & 255) == 0) {
@@ -421,16 +424,16 @@ int bn_modexp_word(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
 	}
 #endif
 	{
-	struct LITE_BIGNUM pubexp;
+		struct LITE_BIGNUM pubexp;
 
-	DCRYPTO_bn_wrap(&pubexp, &exp, sizeof(exp));
-	bn_modexp_internal(output, input, &pubexp, N);
-	return 1;
+		DCRYPTO_bn_wrap(&pubexp, &exp, sizeof(exp));
+		bn_modexp_internal(output, input, &pubexp, N);
+		return DCRYPTO_OK;
 	}
 }
 
 /* output = input ^ exp % N */
-int bn_modexp_blinded(struct LITE_BIGNUM *output,
+enum dcrypto_result bn_modexp_blinded(struct LITE_BIGNUM *output,
 			const struct LITE_BIGNUM *input,
 			const struct LITE_BIGNUM *exp,
 			const struct LITE_BIGNUM *N,
@@ -443,7 +446,7 @@ int bn_modexp_blinded(struct LITE_BIGNUM *output,
 	}
 #endif
 	bn_modexp_internal(output, input, exp, N);
-	return 1;
+	return DCRYPTO_OK;
 }
 
 /* c[] += a * b[] */
@@ -795,8 +798,9 @@ int DCRYPTO_bn_div(struct LITE_BIGNUM *quotient,
  *  if t < 0 then t := t + n
  *  return t
  */
-int bn_modinv_vartime(struct LITE_BIGNUM *dst, const struct LITE_BIGNUM *src,
-		const struct LITE_BIGNUM *mod)
+enum dcrypto_result bn_modinv_vartime(struct LITE_BIGNUM *dst,
+				      const struct LITE_BIGNUM *src,
+				      const struct LITE_BIGNUM *mod)
 {
 	struct LITE_BIGNUM R;
 	struct LITE_BIGNUM nR;
@@ -907,7 +911,7 @@ int bn_modinv_vartime(struct LITE_BIGNUM *dst, const struct LITE_BIGNUM *src,
 
 	if (r_len != 1 || BN_DIGIT(pR, 0) != 1) {
 		/* gcd not 1; no direct inverse */
-		return 0;
+		return DCRYPTO_FAIL;
 	}
 
 	if (t_neg)
@@ -915,7 +919,7 @@ int bn_modinv_vartime(struct LITE_BIGNUM *dst, const struct LITE_BIGNUM *src,
 
 	bn_set_bn(dst, pT, bn_digits(pT));
 
-	return 1;
+	return DCRYPTO_OK;
 }
 
 #define PRIME1 3
@@ -1289,7 +1293,7 @@ static void print_primes(uint16_t prime)
 #endif
 }
 
-int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p)
+enum dcrypto_result DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p)
 {
 	size_t i;
 	size_t j;
@@ -1355,10 +1359,10 @@ int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p)
 		/* Make sure prime will work with F4 public exponent. */
 		if (bn_mod_f4(p) >= 2) {
 			if (bn_probable_prime(p))
-				return 1;
+				return DCRYPTO_OK;
 		}
 	}
 
 	always_memset(composites_buf, 0, sizeof(composites_buf));
-	return 0;
+	return DCRYPTO_FAIL;
 }

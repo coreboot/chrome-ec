@@ -450,8 +450,9 @@ static int verify_signature(struct memory_block *blocks,
 
 	digest = HASH_final(&ctx);
 
-	return !DCRYPTO_rsa_verify(&pubk->rsa, digest, digest_size, sig_body,
-				   sig_size, PADDING_MODE_PKCS1, pubk->hashing);
+	return DCRYPTO_rsa_verify(&pubk->rsa, digest, digest_size, sig_body,
+				  sig_size, PADDING_MODE_PKCS1, pubk->hashing) -
+	       DCRYPTO_OK;
 }
 
 /**

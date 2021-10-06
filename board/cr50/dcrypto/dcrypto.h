@@ -777,38 +777,46 @@ enum padding_mode {
 /* RSA support, FIPS PUB 186-4 *
  * Calculate r = m ^ e mod N
  */
-int DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
-			const uint8_t *in, size_t in_len,
-			enum padding_mode padding, enum hashing_mode hashing,
-			const char *label);
+enum dcrypto_result DCRYPTO_rsa_encrypt(struct RSA *rsa, uint8_t *out,
+					size_t *out_len, const uint8_t *in,
+					size_t in_len,
+					enum padding_mode padding,
+					enum hashing_mode hashing,
+					const char *label);
 
 /* Calculate r = m ^ d mod N
- * return 0 if error
+ * return DCRYPTO_OK if success
  */
-int DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out, size_t *out_len,
-			const uint8_t *in, const size_t in_len,
-			enum padding_mode padding, enum hashing_mode hashing,
-			const char *label);
+enum dcrypto_result DCRYPTO_rsa_decrypt(struct RSA *rsa, uint8_t *out,
+					size_t *out_len, const uint8_t *in,
+					const size_t in_len,
+					enum padding_mode padding,
+					enum hashing_mode hashing,
+					const char *label);
 
 /* Calculate r = m ^ d mod N
- * return 0 if error
+ * return DCRYPTO_OK if success
  */
-int DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out, size_t *out_len,
-		     const uint8_t *in, const size_t in_len,
-		     enum padding_mode padding, enum hashing_mode hashing);
+enum dcrypto_result DCRYPTO_rsa_sign(struct RSA *rsa, uint8_t *out,
+				     size_t *out_len, const uint8_t *in,
+				     const size_t in_len,
+				     enum padding_mode padding,
+				     enum hashing_mode hashing);
 
 /* Calculate r = m ^ e mod N
- * return 0 if error
+ * return DCRYPTO_OK if success
  */
-int DCRYPTO_rsa_verify(const struct RSA *rsa, const uint8_t *digest,
-		       size_t digest_len, const uint8_t *sig,
-		       const size_t sig_len, enum padding_mode padding,
-		       enum hashing_mode hashing);
+enum dcrypto_result DCRYPTO_rsa_verify(const struct RSA *rsa,
+				       const uint8_t *digest, size_t digest_len,
+				       const uint8_t *sig, const size_t sig_len,
+				       enum padding_mode padding,
+				       enum hashing_mode hashing);
 
 /* Calculate n = p * q, d = e ^ -1 mod phi. */
-int DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N, struct LITE_BIGNUM *d,
-			    struct LITE_BIGNUM *p, struct LITE_BIGNUM *q,
-			    uint32_t e);
+enum dcrypto_result DCRYPTO_rsa_key_compute(struct LITE_BIGNUM *N,
+					    struct LITE_BIGNUM *d,
+					    struct LITE_BIGNUM *p,
+					    struct LITE_BIGNUM *q, uint32_t e);
 
 /*
  *  EC.
@@ -990,9 +998,9 @@ int DCRYPTO_hkdf(uint8_t *OKM, size_t OKM_len, const uint8_t *salt,
  */
 
 /* Apply Miller-Rabin test for prime candidate p.
- * Returns 1 if test passed, 0 otherwise
+ * Returns DCRYPTO_OK if test passed, DCRYPTO_FAIL otherwise
  */
-int DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p);
+enum dcrypto_result DCRYPTO_bn_generate_prime(struct LITE_BIGNUM *p);
 void DCRYPTO_bn_wrap(struct LITE_BIGNUM *b, void *buf, size_t len);
 void DCRYPTO_bn_mul(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a,
 		    const struct LITE_BIGNUM *b);
@@ -1029,7 +1037,7 @@ size_t DCRYPTO_asn1_pubp(uint8_t *buf, const p256_int *x, const p256_int *y);
  * Accepts only certs with OID: sha256WithRSAEncryption:
  * 30 0d 06 09 2a 86 48 86 f7 0d 01 01 0b 05 00
  */
-int DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
+enum dcrypto_result DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
 			const struct RSA *ca_pub_key);
 
 /* Generate U2F Certificate and sign it

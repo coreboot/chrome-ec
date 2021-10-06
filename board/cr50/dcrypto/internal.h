@@ -207,41 +207,42 @@ void bn_init(struct LITE_BIGNUM *bn, void *buf, size_t len);
 
 int bn_eq(const struct LITE_BIGNUM *a, const struct LITE_BIGNUM *b);
 int bn_check_topbit(const struct LITE_BIGNUM *N);
-int bn_modexp(struct LITE_BIGNUM *output,
-			const struct LITE_BIGNUM *input,
-			const struct LITE_BIGNUM *exp,
-			const struct LITE_BIGNUM *N);
-int bn_modexp_word(struct LITE_BIGNUM *output,
-			const struct LITE_BIGNUM *input,
-			uint32_t pubexp,
-			const struct LITE_BIGNUM *N);
-int bn_modexp_blinded(struct LITE_BIGNUM *output,
-		      const struct LITE_BIGNUM *input,
-		      const struct LITE_BIGNUM *exp,
-		      const struct LITE_BIGNUM *N,
-		      uint32_t pubexp);
+enum dcrypto_result bn_modexp(struct LITE_BIGNUM *output,
+			      const struct LITE_BIGNUM *input,
+			      const struct LITE_BIGNUM *exp,
+			      const struct LITE_BIGNUM *N);
+enum dcrypto_result bn_modexp_word(struct LITE_BIGNUM *output,
+				   const struct LITE_BIGNUM *input,
+				   uint32_t pubexp,
+				   const struct LITE_BIGNUM *N);
+enum dcrypto_result bn_modexp_blinded(struct LITE_BIGNUM *output,
+				      const struct LITE_BIGNUM *input,
+				      const struct LITE_BIGNUM *exp,
+				      const struct LITE_BIGNUM *N,
+				      uint32_t pubexp);
 uint32_t bn_add(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a);
 int32_t bn_sub(struct LITE_BIGNUM *c, const struct LITE_BIGNUM *a);
-int bn_modinv_vartime(struct LITE_BIGNUM *r, const struct LITE_BIGNUM *e,
-		      const struct LITE_BIGNUM *MOD);
+enum dcrypto_result bn_modinv_vartime(struct LITE_BIGNUM *r,
+				      const struct LITE_BIGNUM *e,
+				      const struct LITE_BIGNUM *MOD);
 int bn_is_bit_set(const struct LITE_BIGNUM *a, size_t n);
 
 /*
  * Accelerated bn.
  */
-int dcrypto_modexp(struct LITE_BIGNUM *output,
-			const struct LITE_BIGNUM *input,
-			const struct LITE_BIGNUM *exp,
-			const struct LITE_BIGNUM *N);
-int dcrypto_modexp_word(struct LITE_BIGNUM *output,
-			const struct LITE_BIGNUM *input,
-			uint32_t pubexp,
-			const struct LITE_BIGNUM *N);
-int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
-			const struct LITE_BIGNUM *input,
-			const struct LITE_BIGNUM *exp,
-			const struct LITE_BIGNUM *N,
-			uint32_t pubexp);
+enum dcrypto_result dcrypto_modexp(struct LITE_BIGNUM *output,
+				   const struct LITE_BIGNUM *input,
+				   const struct LITE_BIGNUM *exp,
+				   const struct LITE_BIGNUM *N);
+enum dcrypto_result dcrypto_modexp_word(struct LITE_BIGNUM *output,
+					const struct LITE_BIGNUM *input,
+					uint32_t pubexp,
+					const struct LITE_BIGNUM *N);
+enum dcrypto_result dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
+					   const struct LITE_BIGNUM *input,
+					   const struct LITE_BIGNUM *exp,
+					   const struct LITE_BIGNUM *N,
+					   uint32_t pubexp);
 
 /**
  * NIST SP 800-90A HMAC_DRBG_SHA2-256.

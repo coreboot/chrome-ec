@@ -94,7 +94,7 @@ CRYPT_RESULT _cpri__EncryptRSA(uint32_t *out_len, uint8_t *out,
 	struct RSA rsa;
 	enum padding_mode padding;
 	enum hashing_mode hashing;
-	int result;
+	enum dcrypto_result result;
 
 	if (!check_key(key))
 		return CRYPT_FAIL;
@@ -113,7 +113,7 @@ CRYPT_RESULT _cpri__EncryptRSA(uint32_t *out_len, uint8_t *out,
 
 	reverse_tpm2b(key->publicKey);
 
-	if (result)
+	if (result == DCRYPTO_OK)
 		return CRYPT_SUCCESS;
 	else
 		return CRYPT_FAIL;
@@ -127,7 +127,7 @@ CRYPT_RESULT _cpri__DecryptRSA(uint32_t *out_len, uint8_t *out,
 	struct RSA rsa;
 	enum padding_mode padding;
 	enum hashing_mode hashing;
-	int result;
+	enum dcrypto_result result;
 
 	if (!check_key(key))
 		return CRYPT_FAIL;
@@ -149,7 +149,7 @@ CRYPT_RESULT _cpri__DecryptRSA(uint32_t *out_len, uint8_t *out,
 	reverse_tpm2b(key->publicKey);
 	reverse_tpm2b(key->privateKey);
 
-	if (result)
+	if (result == DCRYPTO_OK)
 		return CRYPT_SUCCESS;
 	else
 		return CRYPT_FAIL;
@@ -162,7 +162,7 @@ CRYPT_RESULT _cpri__SignRSA(uint32_t *out_len, uint8_t *out,
 	struct RSA rsa;
 	enum padding_mode padding;
 	enum hashing_mode hashing;
-	int result;
+	enum dcrypto_result result;
 
 	if (!check_key(key))
 		return CRYPT_FAIL;
@@ -186,7 +186,7 @@ CRYPT_RESULT _cpri__SignRSA(uint32_t *out_len, uint8_t *out,
 	reverse_tpm2b(key->publicKey);
 	reverse_tpm2b(key->privateKey);
 
-	if (result)
+	if (result == DCRYPTO_OK)
 		return CRYPT_SUCCESS;
 	else
 		return CRYPT_FAIL;
@@ -200,7 +200,7 @@ CRYPT_RESULT _cpri__ValidateSignatureRSA(
 	struct RSA rsa;
 	enum padding_mode padding;
 	enum hashing_mode hashing;
-	int result;
+	enum dcrypto_result result;
 
 	if (!check_key(key))
 		return CRYPT_FAIL;
@@ -220,7 +220,7 @@ CRYPT_RESULT _cpri__ValidateSignatureRSA(
 
 	reverse_tpm2b(key->publicKey);
 
-	if (result)
+	if (result == DCRYPTO_OK)
 		return CRYPT_SUCCESS;
 	else
 		return CRYPT_FAIL;
@@ -233,7 +233,7 @@ CRYPT_RESULT _cpri__TestKeyRSA(TPM2B *d_buf, uint32_t e,
 	struct LITE_BIGNUM p;
 	struct LITE_BIGNUM q;
 	struct LITE_BIGNUM d;
-	int result;
+	enum dcrypto_result result;
 
 	if (!p_buf)
 		return CRYPT_PARAMETER;
@@ -262,7 +262,7 @@ CRYPT_RESULT _cpri__TestKeyRSA(TPM2B *d_buf, uint32_t e,
 	if (q_buf)
 		reverse_tpm2b(q_buf);
 
-	if (result) {
+	if (result == DCRYPTO_OK) {
 		d_buf->size = N_buf->size;
 		reverse_tpm2b(d_buf);
 		return CRYPT_SUCCESS;
@@ -290,7 +290,7 @@ static int generate_prime(struct LITE_BIGNUM *b, TPM_ALG_ID hashing,
 			bn_bits(b), (uint8_t *) b->d, NULL, FALSE);
 
 		(*counter)++;           /* Mark as used. */
-		if (DCRYPTO_bn_generate_prime(b))
+		if (DCRYPTO_bn_generate_prime(b) == DCRYPTO_OK)
 			return 1;
 	}
 
@@ -1132,7 +1132,7 @@ static void rsa_command_handler(void *cmd_body,
 		}
 		DCRYPTO_bn_wrap(&bn, bn_buf, in_len);
 		memcpy(bn_buf, in, in_len);
-		if (DCRYPTO_bn_generate_prime(&bn)) {
+		if (DCRYPTO_bn_generate_prime(&bn) == DCRYPTO_OK) {
 			memcpy(out, bn.d, bn_size(&bn));
 			*response_size = bn_size(&bn);
 		} else {
@@ -1160,7 +1160,7 @@ static void rsa_command_handler(void *cmd_body,
 					sizeof(RSA_2048_CERT), &rsa);
 		reverse_tpm2b(key.publicKey);
 
-		if (!result) {
+		if (result != DCRYPTO_OK) {
 			*response_size = 0;
 			return;
 		}

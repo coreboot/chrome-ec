@@ -364,10 +364,12 @@ static int validate_cert(
 	 * certificates serve as roots for the installed endorsement
 	 * certificate.
 	 */
-	return DCRYPTO_x509_verify(cert->cert, cert->cert_len,
-				&PROD_ENDORSEMENT_CA_RSA_PUB) ||
-		DCRYPTO_x509_verify(cert->cert, cert->cert_len,
-				&TEST_ENDORSEMENT_CA_RSA_PUB);
+	return (DCRYPTO_x509_verify(cert->cert, cert->cert_len,
+				    &PROD_ENDORSEMENT_CA_RSA_PUB) ==
+		DCRYPTO_OK) ||
+	       (DCRYPTO_x509_verify(cert->cert, cert->cert_len,
+				    &TEST_ENDORSEMENT_CA_RSA_PUB) ==
+		DCRYPTO_OK);
 }
 
 static int store_cert(enum cros_perso_component_type component_type,

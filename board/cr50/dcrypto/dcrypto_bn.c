@@ -1280,7 +1280,7 @@ static int modexp(struct DMEM_ctx *ctx, uint32_t adr, uint32_t rr, uint32_t pIn,
 }
 
 /* output = input ** exp % N. */
-int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
+enum dcrypto_result dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 			   const struct LITE_BIGNUM *input,
 			   const struct LITE_BIGNUM *exp,
 			   const struct LITE_BIGNUM *N, uint32_t pubexp)
@@ -1304,7 +1304,7 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 	 * We cannot tolerate risk of 0 since 0 breaks computation.
 	 */
 	if (!rand64(r_buf))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	/*
 	 * compute 1/r mod N
@@ -1320,7 +1320,7 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 
 	/* Pick !0 64-bit random for exponent blinding */
 	if (!rand64(ctx->rnd))
-		return 0;
+		return DCRYPTO_FAIL;
 
 	result = setup_and_lock(N, input);
 
@@ -1353,12 +1353,14 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 	memcpy(output->d, ctx->out, bn_size(output));
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
 /* output = input ** exp % N. */
-int dcrypto_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
-		   const struct LITE_BIGNUM *exp, const struct LITE_BIGNUM *N)
+enum dcrypto_result dcrypto_modexp(struct LITE_BIGNUM *output,
+				   const struct LITE_BIGNUM *input,
+				   const struct LITE_BIGNUM *exp,
+				   const struct LITE_BIGNUM *N)
 {
 	int result;
 	size_t i;
@@ -1386,11 +1388,11 @@ int dcrypto_modexp(struct LITE_BIGNUM *output, const struct LITE_BIGNUM *input,
 	memcpy(output->d, ctx->out, bn_size(output));
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
 /* output = input ** exp % N. */
-int dcrypto_modexp_word(struct LITE_BIGNUM *output,
+enum dcrypto_result dcrypto_modexp_word(struct LITE_BIGNUM *output,
 			const struct LITE_BIGNUM *input, uint32_t exp,
 			const struct LITE_BIGNUM *N)
 {
@@ -1429,7 +1431,7 @@ int dcrypto_modexp_word(struct LITE_BIGNUM *output,
 	memcpy(output->d, ctx->out, bn_size(output));
 
 	dcrypto_unlock();
-	return result == 0;
+	return dcrypto_ok_if_zero(result);
 }
 
 #ifndef CRYPTO_TEST_CMD_GENP
@@ -1457,8 +1459,9 @@ static int genp_core(void)
 	DCRYPTO_bn_wrap(&prime, &prime_buf, sizeof(prime_buf));
 
 	genp_start = get_time();
-	result = (DCRYPTO_bn_generate_prime(&prime) != 0) ? EC_SUCCESS
-							  : EC_ERROR_UNKNOWN;
+	result = (DCRYPTO_bn_generate_prime(&prime) == DCRYPTO_OK) ?
+			 EC_SUCCESS :
+			       EC_ERROR_UNKNOWN;
 	genp_end = get_time();
 
 	return result;
