@@ -186,9 +186,16 @@ board-y += tpm_nvmem_ops.o
 board-y += wp.o
 board-$(CONFIG_PINWEAVER)+=pinweaver_tpm_imports.o
 
+TPM2_MODULE := linkedtpm2.cp.o
+board-y += $(TPM2_MODULE)
+
+ifneq ($(H1_RED_BOARD),)
+CPPFLAGS += -DH1_RED_BOARD=$(EMPTY)
+endif
+RW_BD_OUT=$(out)/RW/$(BDIR)
+
 # Build fips code separately
 ifneq ($(fips-y),)
-RW_BD_OUT=$(out)/RW/$(BDIR)
 FIPS_MODULE=dcrypto/fips_module.o
 FIPS_LD_SCRIPT=$(BDIR)/dcrypto/fips_module.ld
 RW_FIPS_OBJS=$(patsubst %.o, $(RW_BD_OUT)/%.o, $(fips-y))
@@ -242,28 +249,17 @@ CFLAGS += -DEMBEDDED_MODE=1
 
 # Use absolute path as the destination to ensure that TPM2 makefile finds the
 # place for output.
-outdir := $(realpath $(out))/tpm2
-cmd_tpm2_base = $(MAKE) obj=$(outdir) EMBEDDED_MODE=1 \
-		-C $(EXTLIB) --no-print-directory
+outdir := $(abspath $(RW_BD_OUT))
+cmd_tpm2linked := $(MAKE) obj=$(outdir) EMBEDDED_MODE=1 LTO=1 \
+		 -C $(EXTLIB) --no-print-directory $(outdir)/$(TPM2_MODULE)
 
-TPM2_OBJS := $(shell $(cmd_tpm2_base) list_copied_objs)
-
-TPM2_TARGET := $(outdir)/.copied_objs
-
-# Add dependencies on that library
-$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: LDFLAGS_EXTRA += $(TPM2_OBJS)
-$(out)/RW/ec.RW.elf $(out)/RW/ec.RW_B.elf: $(TPM2_TARGET)
-
-cmd_tpm2lib = $(cmd_tpm2_base) $(TPM2_TARGET)
-
-tpm2lib_check_clean = $(cmd_tpm2lib) -q && echo clean
-
-ifneq ($(shell $(tpm2lib_check_clean)),clean)
+tpm2_check_clean := $(cmd_tpm2linked) -q && echo clean
+ifneq ($(shell $(tpm2_check_clean)),clean)
 # Force the external build only if it is needed.
-.PHONY: $(TPM2_TARGET)
+.PHONY: $(RW_BD_OUT)/$(TPM2_MODULE)
 endif
 
-$(TPM2_TARGET):
-	$(call quiet,tpm2lib,TPM2   )
+$(RW_BD_OUT)/$(TPM2_MODULE):
+	$(call quiet,tpm2linked,TPM2   )
 
 endif   # BOARD_MK_INCLUDED_ONCE is nonempty
