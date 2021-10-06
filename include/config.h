@@ -119,6 +119,7 @@
 #undef CONFIG_ACCEL_LIS2DW_AS_BASE
 
 #undef CONFIG_ACCELGYRO_BMI160
+#undef CONFIG_ACCELGYRO_BMI220
 #undef CONFIG_ACCELGYRO_BMI260
 #undef CONFIG_ACCELGYRO_BMI3XX
 #undef CONFIG_ACCELGYRO_ICM426XX
@@ -2317,6 +2318,9 @@
 
 /* Command to get the EC uptime (and optionally AP reset stats) */
 #define CONFIG_HOSTCMD_GET_UPTIME_INFO
+
+/* Include host command to control I2C busses (get, set speed, etc.) */
+#undef CONFIG_HOSTCMD_I2C_CONTROL
 
 /*
  * List of host commands whose debug output will be suppressed
@@ -5185,13 +5189,6 @@
  * independently of the GPIO existence or current value.
  */
 #undef CONFIG_WP_ALWAYS
-
-/*
- * If needed to allocate some free space in the base of the RO or RW section
- * of the image, define these to be equal the required size of the free space.
- */
-#define CONFIG_RO_HEAD_ROOM 0
-#define CONFIG_RW_HEAD_ROOM 0
 
 /* Firmware upgrade options. */
 /* A different config for the same update. TODO(vbendeb): dedupe these */

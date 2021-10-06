@@ -11,6 +11,7 @@
 #include "util.h"
 
 #define CPUTS(str) cputs(CC_I2C, str)
+#define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
 
 static int started;
 
@@ -334,6 +335,22 @@ exit:
 		started = 0;
 	}
 	return err;
+}
+
+void enable_i2c_raw_mode(bool enable)
+{
+	int i;
+
+	for (i = 0; i < i2c_bitbang_ports_used; i++) {
+		if (i2c_raw_mode(i2c_bitbang_ports[i].port, enable))
+			CPRINTS("I2C p%d: Failed to %s raw mode",
+				i2c_bitbang_ports[i].port,
+				enable ? "enable" : "disable");
+	}
+}
+
+__overridable void board_pre_task_i2c_peripheral_init(void)
+{
 }
 
 const struct i2c_drv bitbang_drv = {

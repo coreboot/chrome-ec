@@ -145,12 +145,6 @@ SECTIONS
 	} > SHARED_LIB
 #endif
 	.text : {
-#ifdef SECTION_IS_RO
-		. = . +  CONFIG_RO_HEAD_ROOM;
-#endif
-#ifdef SECTION_IS_RW
-		. = . +  CONFIG_RW_HEAD_ROOM;
-#endif
 		*(.text.vecttable)
 		. = ALIGN(4);
 		__image_data_offset = .;
@@ -511,6 +505,11 @@ SECTIONS
 	} > FLASH = 0xFF
 
 	__image_size = __flash_used + SIZEOF(.rw_image_size_alignment);
+#endif
+#if defined(SECTION_IS_RW) && (CONFIG_FLASH_WRITE_SIZE > 0)
+	/* Alignment is needed by flash_command_write() for RW update. */
+	ASSERT(__image_size % CONFIG_FLASH_WRITE_SIZE == 0,
+	       "Error: RW image is not aligned to CONFIG_FLASH_WRITE_SIZE")
 #endif
 #endif /* CONFIG_CHIP_INIT_ROM_REGION */
 

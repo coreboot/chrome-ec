@@ -2709,6 +2709,7 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_ICM42607 = 26,
 	MOTIONSENSE_CHIP_BMA422 = 27,
 	MOTIONSENSE_CHIP_BMI323 = 28,
+	MOTIONSENSE_CHIP_BMI220 = 29,
 	MOTIONSENSE_CHIP_MAX,
 };
 
@@ -7008,6 +7009,31 @@ enum ec_set_base_state_cmd {
 	EC_SET_BASE_STATE_ATTACH,
 	EC_SET_BASE_STATE_RESET,
 };
+
+#define EC_CMD_I2C_CONTROL 0x0139
+
+/* Subcommands for I2C control */
+
+enum ec_i2c_control_command {
+	EC_I2C_CONTROL_GET_SPEED,
+	EC_I2C_CONTROL_SET_SPEED,
+};
+
+#define EC_I2C_CONTROL_SPEED_UNKNOWN 0
+
+struct ec_params_i2c_control {
+	uint8_t port;		/* I2C port number */
+	uint8_t cmd;		/* enum ec_i2c_control_command */
+	union {
+		uint16_t speed_khz;
+	} cmd_params;
+} __ec_align_size1;
+
+struct ec_response_i2c_control {
+	union {
+		uint16_t speed_khz;
+	} cmd_response;
+} __ec_align_size1;
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */
