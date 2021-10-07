@@ -9,7 +9,7 @@
 #define __CROS_EC_CONFIG_CHIP_H
 
 /* Memory mapping */
-#if !defined(TEST_NVMEM) && !defined(TEST_PINWEAVER_FUZZ)
+#if !defined(TEST_NVMEM) && !defined(TEST_CR50_FUZZ)
 #define CONFIG_FLASH_SIZE 0x00020000
 #define CONFIG_FLASH_BANK_SIZE 0x1000
 #else

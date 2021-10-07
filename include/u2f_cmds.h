@@ -39,11 +39,6 @@ enum vendor_cmd_rc u2f_generate_cmd(enum vendor_cmd_cc code, void *buf,
 enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 				size_t input_size, size_t *response_size);
 
-/**
- *  U2F_ATTEST command handler.
- */
-enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
-				  size_t input_size, size_t *response_size);
 
 /* Maximum size in bytes of G2F attestation certificate. */
 #define G2F_ATTESTATION_CERT_MAX_LEN 315

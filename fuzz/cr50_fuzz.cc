@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Fuzzer for the Cr50 commands related to Pinweaver.
+// Fuzzer for the TPM2 and vendor specific Cr50 commands.
 
 #include <unistd.h>
 
@@ -17,7 +17,7 @@
 
 #define HIDE_EC_STDLIB
 #include "chip/host/persistence.h"
-#include "fuzz/pinweaver_fuzz.pb.h"
+#include "fuzz/cr50_fuzz.pb.h"
 #include "fuzz/fuzz_config.h"
 #include "fuzz/pinweaver_model.h"
 #include "fuzz/span.h"

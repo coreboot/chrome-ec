@@ -262,8 +262,9 @@ static inline size_t u2f_attest_format_size(uint8_t format)
 }
 
 /* U2F ATTEST command */
-enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
-				  size_t input_size, size_t *response_size)
+static enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
+					 size_t input_size,
+					 size_t *response_size)
 {
 	const struct u2f_attest_req *req = buf;
 	struct u2f_attest_resp *resp;

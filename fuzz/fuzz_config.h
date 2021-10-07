@@ -12,7 +12,7 @@
 /* Disable hibernate: We never want to exit while fuzzing. */
 #undef CONFIG_HIBERNATE
 
-#ifdef TEST_PINWEAVER_FUZZ
+#ifdef TEST_CR50_FUZZ
 #define CONFIG_DCRYPTO
 #define CONFIG_PINWEAVER
 #define CONFIG_UPTO_SHA512
@@ -80,7 +80,7 @@ enum nvmem_users {
 /******************************************************************************/
 #define CONFIG_SW_CRC
 
-#endif /* TEST_PINWEAVER_FUZZ */
+#endif /* TEST_CR50_FUZZ */
 
 #ifdef TEST_HOST_COMMAND_FUZZ
 #undef CONFIG_HOSTCMD_DEBUG_MODE
@@ -102,11 +102,11 @@ enum nvmem_users {
 
 #endif /* TEST_HOST_COMMAND_FUZZ */
 
-#ifdef TEST_U2F_FUZZ
+#ifdef TEST_CR50_U2F_FUZZ
 #define CONFIG_DCRYPTO
 #define CONFIG_U2F
 #define CC_EXTENSION CC_COMMAND
-#endif /* TEST_U2F_FUZZ */
+#endif /* TEST_CR50_U2F_FUZZ */
 
 #endif /* TEST_FUZZ */
 #endif /* __FUZZ_FUZZ_CONFIG_H */
