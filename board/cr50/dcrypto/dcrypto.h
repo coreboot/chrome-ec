@@ -46,14 +46,6 @@ enum hashing_mode {
 	HASH_NULL = 0x0010 /* = TPM_ALG_NULL, Only supported for PKCS#1 */
 };
 
-#ifndef __warn_unused_result
-#define __warn_unused_result __attribute__((warn_unused_result))
-#endif
-
-#ifndef __always_inline
-#define __always_inline __inline __attribute__((always_inline))
-#endif
-
 /**
  * SHA1/SHA2, HMAC API
  */

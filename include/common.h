@@ -130,6 +130,23 @@
 #endif
 #endif
 
+#ifndef __warn_unused_result
+#define __warn_unused_result __attribute__((warn_unused_result))
+#endif
+
+#ifdef TEST_CR50_FUZZ
+/**
+ *  Workaround: Clang incorrectly handles profiling information
+ *  used for fuzzing with __attribute__((always_inline)).
+ */
+#undef __always_inline
+#define __always_inline static inline
+#else
+#ifndef __always_inline
+#define __always_inline __inline __attribute__((always_inline))
+#endif
+#endif
+
 /*
  * Macros for combining bytes into larger integers. _LE and _BE signify little
  * and big endian versions respectively.
