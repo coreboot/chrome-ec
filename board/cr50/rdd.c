@@ -230,7 +230,7 @@ static void ccd_state_change_hook(void)
 	/* Start out by figuring what flags we might want enabled */
 
 	/* Enable AP UART RX if that device is on */
-	if (ap_uart_is_on())
+	if (ap_uart_is_on() && ap_is_on())
 		flags_want |= CCD_ENABLE_UART_AP;
 	/*
 	 * Enable EC UART RX.
