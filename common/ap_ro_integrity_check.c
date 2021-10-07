@@ -84,13 +84,14 @@ static const struct ap_ro_check *p_chk =
  * Track if the AP RO hash was validated this boot. Must be cleared every AP
  * reset.
  */
-static uint8_t validated_ap_ro_boot;
+static enum ap_ro_status apro_result = AP_RO_NOT_RUN;
 
 void ap_ro_device_reset(void)
 {
-	if (validated_ap_ro_boot)
-		CPRINTS("%s: clear validated state", __func__);
-	validated_ap_ro_boot = 0;
+	if (apro_result == AP_RO_NOT_RUN)
+		return;
+	CPRINTS("%s: clear apro result", __func__);
+	apro_result = AP_RO_NOT_RUN;
 }
 
 static int ap_ro_erase_hash(void)
@@ -273,8 +274,10 @@ int validate_ap_ro(void)
 	uint8_t digest[SHA256_DIGEST_SIZE];
 	int rv;
 
-	if (ap_ro_check_unsupported(true))
+	if (ap_ro_check_unsupported(true)) {
+		apro_result = AP_RO_UNSUPPORTED_TRIGGERED;
 		return EC_ERROR_INVAL;
+	}
 
 	enable_ap_spi_hash_shortcut();
 	usb_spi_sha256_start(&ctx);
@@ -291,6 +294,7 @@ int validate_ap_ro(void)
 
 	usb_spi_sha256_final(&ctx, digest, sizeof(digest));
 	if (memcmp(digest, p_chk->payload.digest, sizeof(digest))) {
+		apro_result = AP_RO_FAIL;
 		CPRINTS("AP RO verification FAILED!");
 		CPRINTS("Calculated digest %ph",
 			HEX_BUF(digest, sizeof(digest)));
@@ -300,9 +304,9 @@ int validate_ap_ro(void)
 		ap_ro_add_flash_event(APROF_CHECK_FAILED);
 		rv = EC_ERROR_CRC;
 	} else {
+		apro_result = AP_RO_PASS;
 		ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
 		rv = EC_SUCCESS;
-		validated_ap_ro_boot = 1;
 		CPRINTS("AP RO verification SUCCEEDED!");
 	}
 	disable_ap_spi_hash_shortcut();
@@ -362,13 +366,14 @@ static int ap_ro_info_cmd(int argc, char **argv)
 	}
 #endif
 	rv = ap_ro_check_unsupported(false);
+	ccprintf("result    : %d\n", apro_result);
+	ccprintf("supported : %s\n", rv ? "no" : "yes");
 	if (rv == ARCVE_FLASH_READ_FAILED)
 		return EC_ERROR_CRC; /* No verification possible. */
 	/* All other AP RO verificaiton unsupported reasons are fine */
 	if (rv)
 		return EC_SUCCESS;
 
-	ccprintf("boot validated: %s\n", validated_ap_ro_boot ? "yes" : "no");
 	ccprintf("sha256 hash %ph\n",
 		 HEX_BUF(p_chk->payload.digest, sizeof(p_chk->payload.digest)));
 	ccprintf("Covered ranges:\n");
@@ -393,7 +398,7 @@ static enum vendor_cmd_rc vc_get_ap_ro_status(enum vendor_cmd_cc code,
 					      void *buf, size_t input_size,
 					      size_t *response_size)
 {
-	uint8_t rv = AP_RO_NOT_RUN;
+	uint8_t rv = apro_result;
 	uint8_t *response = buf;
 
 	CPRINTS("Check AP RO status");
@@ -402,13 +407,9 @@ static enum vendor_cmd_rc vc_get_ap_ro_status(enum vendor_cmd_cc code,
 	if (input_size)
 		return VENDOR_RC_BOGUS_ARGS;
 
-	if (ap_ro_check_unsupported(false))
-		rv = AP_RO_UNSUPPORTED;
-	else if (ec_rst_override())
-		rv = AP_RO_FAIL;
-	else if (validated_ap_ro_boot)
-		rv = AP_RO_PASS;
-
+	if ((apro_result != AP_RO_UNSUPPORTED_TRIGGERED) &&
+	    (ap_ro_check_unsupported(false) != ARCVE_OK))
+		rv = AP_RO_UNSUPPORTED_NOT_TRIGGERED;
 	*response_size = 1;
 	response[0] = rv;
 	return VENDOR_RC_SUCCESS;
