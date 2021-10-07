@@ -6,6 +6,8 @@
 #
 # Calculate hash of fips module and inject it into the .elf file.
 
+SCRIPT="$(basename "$0")"
+
 main() {
   local objcopy="${1}"
   local objdump="${2}"
@@ -13,8 +15,9 @@ main() {
   local base="${rw_elf_in%.elf}"
   local rw_elf_out="${rw_elf_in}.fips"
   local checksum_section=".text.fips_checksum"
-  local fips_checksum="${base}.fips.checksum"
-  local fips_checksum_dump="${fips_checksum}.dump"
+  local fips_body="${base}.fips.body"
+  local fips_checksum_dump="${base}.fips.checksum_dump"
+  local fips_error="${base}.fips.error"
   local size
   local sections
   local fips_start
@@ -22,7 +25,6 @@ main() {
   local fips_offset
   local file_offset
   local base_addr
-  local result
 
   if [ ! -f "${rw_elf_in}" ] ; then
     echo "  ${rw_elf_in} doesn't exist"
@@ -32,6 +34,8 @@ main() {
   echo "${rw_elf_in} ${rw_elf_out}"
   sections=$( objdump -t "${rw_elf_in}" )
 
+  # Never mind the shellcheck suggestion to remove the quotes,
+  # literal match is required in this case.
   if [[ "${sections}" =~ "${checksum_section}" ]] ; then
     echo "  get fips checksum"
   else
@@ -57,11 +61,13 @@ main() {
   size=$((fips_end - fips_start))
   fips_offset=$((file_offset + fips_start - base_addr))
 
-  result=$(dd if="${rw_elf_in}" skip="${fips_offset}" count="${size}" bs=1 | \
-               sha256sum)
+  if ! dd if="${rw_elf_in}" skip="${fips_offset}" count="${size}" bs=1 \
+     >"${fips_body}" 2>"${fips_error}"; then
+    printf "%s: error:\n$(cat "${fips_error}")" "${SCRIPT}" >&2
+    exit 1
+  fi
 
-  echo "${result%% *}" > "${fips_checksum}"
-  echo "${result%% *}" | xxd -r -p  > "${fips_checksum_dump}"
+  sha256sum "${fips_body}" | xxd -r -p -l 32 > "${fips_checksum_dump}"
 
   cp "${rw_elf_in}" "${rw_elf_out}"
   ${objcopy} --update-section "${checksum_section}"="${fips_checksum_dump}" \

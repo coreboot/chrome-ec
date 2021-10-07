@@ -69,7 +69,8 @@ cmd_ec_elf_to_flat_dram ?= $(OBJCOPY) -j .dram* -O binary $< $@
 cmd_elf_to_signed ?= $(SIGNER) --key=util/signer/$(3) \
 	--b --input=$< --format=bin --output=$@.signed $(SIGNER_EXTRAS) \
 	&& sudo chown $(shell whoami) $@.signed && mv $@.signed $@
-cmd_elf_to_elf_fips = ./util/inject_fips_fingerprint.sh $(OBJCOPY) $(OBJDUMP) $^
+cmd_elf_to_elf_fips = ./util/inject_fips_fingerprint.sh $(OBJCOPY) $(OBJDUMP) \
+	$^ $(silent)
 cmd_elf_to_dis = $(OBJDUMP) -D $< > $@
 cmd_elf_to_bin = $(OBJCOPY) -O binary $< $@
 cmd_elf_to_hex = $(OBJCOPY) -O ihex $< $@
