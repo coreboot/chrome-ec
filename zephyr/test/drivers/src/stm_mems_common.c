@@ -172,6 +172,165 @@ static void test_st_write_data_with_mask(void)
 		      "mock_write_fn was not called.");
 }
 
+static void test_st_get_resolution(void)
+{
+	int expected_resolution = 123;
+	int rv;
+
+	struct stprivate_data driver_data = {
+		.resol = expected_resolution,
+	};
+
+	const struct motion_sensor_t sensor = {
+		.drv_data = &driver_data,
+	};
+
+	rv = st_get_resolution(&sensor);
+	zassert_equal(rv, expected_resolution, "rv is %d but expected %d", rv,
+		      expected_resolution);
+}
+
+static void test_st_set_offset(void)
+{
+	int16_t expected_offset[3] = { 123, 456, 789 };
+
+	struct stprivate_data driver_data;
+	const struct motion_sensor_t sensor = {
+		.drv_data = &driver_data,
+	};
+
+	int rv = st_set_offset(&sensor, expected_offset, 0);
+
+	zassert_equal(rv, EC_SUCCESS, "rv as %d but expected %d", rv,
+		      EC_SUCCESS);
+	zassert_equal(driver_data.offset[X], expected_offset[X],
+		      "X offset is %d but expected %d", driver_data.offset[X],
+		      expected_offset[X]);
+	zassert_equal(driver_data.offset[Y], expected_offset[Y],
+		      "Y offset is %d but expected %d", driver_data.offset[Y],
+		      expected_offset[Y]);
+	zassert_equal(driver_data.offset[Z], expected_offset[Z],
+		      "Z offset is %d but expected %d", driver_data.offset[Z],
+		      expected_offset[Z]);
+}
+
+static void test_st_get_offset(void)
+{
+	struct stprivate_data driver_data = {
+		.offset = { [X] = 123, [Y] = 456, [Z] = 789 },
+	};
+	const struct motion_sensor_t sensor = {
+		.drv_data = &driver_data,
+	};
+
+	int16_t temp_out = 0;
+	int16_t actual_offset[3] = { 0, 0, 0 };
+
+	int rv = st_get_offset(&sensor, actual_offset, &temp_out);
+
+	zassert_equal(rv, EC_SUCCESS, "rv as %d but expected %d", rv,
+		      EC_SUCCESS);
+	zassert_equal(
+		temp_out, (int16_t)EC_MOTION_SENSE_INVALID_CALIB_TEMP,
+		"temp is %d but should be %d (EC_MOTION_SENSE_INVALID_CALIB_TEMP)",
+		temp_out, (int16_t)EC_MOTION_SENSE_INVALID_CALIB_TEMP);
+
+	zassert_equal(actual_offset[X], driver_data.offset[X],
+		      "X offset is %d but expected %d", actual_offset[X],
+		      driver_data.offset[X]);
+	zassert_equal(actual_offset[Y], driver_data.offset[Y],
+		      "Y offset is %d but expected %d", actual_offset[Y],
+		      driver_data.offset[Y]);
+	zassert_equal(actual_offset[Z], driver_data.offset[Z],
+		      "Z offset is %d but expected %d", actual_offset[Z],
+		      driver_data.offset[Z]);
+}
+
+static void test_st_get_data_rate(void)
+{
+	int expected_data_rate = 456;
+	int rv;
+
+	struct stprivate_data driver_data = {
+		.base = {
+			.odr = expected_data_rate,
+		},
+	};
+
+	const struct motion_sensor_t sensor = {
+		.drv_data = &driver_data,
+	};
+
+	rv = st_get_data_rate(&sensor);
+	zassert_equal(rv, expected_data_rate, "rv is %d but expected %d", rv,
+		      expected_data_rate);
+}
+
+static void test_st_normalize(void)
+{
+	struct stprivate_data driver_data = {
+		.resol = 12, /* 12 bits of useful data (arbitrary) */
+		.offset = {  /* Arbitrary offsets */
+			[X] = -100,
+			[Y] = 200,
+			[Z] = 100,
+		},
+	};
+	/* Fixed-point identity matrix that performs no rotation. */
+	const mat33_fp_t identity_rot_matrix = {
+		{ INT_TO_FP(1), INT_TO_FP(0), INT_TO_FP(0) },
+		{ INT_TO_FP(0), INT_TO_FP(1), INT_TO_FP(0) },
+		{ INT_TO_FP(0), INT_TO_FP(0), INT_TO_FP(1) },
+	};
+	const struct motion_sensor_t sensor = {
+		.drv_data = &driver_data,
+		.rot_standard_ref = &identity_rot_matrix,
+		.current_range = 32, /* used to scale offsets (arbitrary) */
+	};
+
+	/* Accelerometer data is passed in with the format:
+	 * (lower address)                  (higher address)
+	 *  [X LSB] [X MSB] [Y LSB] [Y MSB] [Z LSB] [Z MSB]
+	 *
+	 * The LSB are left-aligned and contain noise/junk data
+	 * in their least-significant bit positions. When interpreted
+	 * as int16 samples, the `driver_data.resol`-count most
+	 * significant bits are what we actually use. For this test, we
+	 * set `resol` to 12, so there will be 12 useful bits and 4 noise
+	 * bits. This test (and the EC code) assume we are compiling on
+	 * a little-endian machine. The samples themselvesare unsigned and
+	 * biased at 2^12/2 = 2^11.
+	 */
+	uint16_t input_reading[] = {
+		((BIT(11) - 100) << 4) | 0x000a,
+		((BIT(11) + 0) << 4) | 0x000b,
+		((BIT(11) + 100) << 4) | 0x000c,
+	};
+
+	/* Expected outputs w/ noise bits suppressed and offsets applied.
+	 * Note that the data stays left-aligned.
+	 */
+	intv3_t expected_output = {
+		((BIT(11) - 100) << 4) + driver_data.offset[X],
+		((BIT(11) + 0) << 4) + driver_data.offset[Y],
+		((BIT(11) + 100) << 4) + driver_data.offset[Z],
+	};
+
+	intv3_t actual_output = { 0 };
+
+	st_normalize(&sensor, (int *)&actual_output, (uint8_t *)input_reading);
+
+	zassert_within(actual_output[X], expected_output[X], 0.5f,
+		      "X output is %d but expected %d", actual_output[X],
+		      expected_output[X]);
+	zassert_within(actual_output[Y], expected_output[Y], 0.5f,
+		      "Y output is %d but expected %d", actual_output[Y],
+		      expected_output[Y]);
+	zassert_within(actual_output[Z], expected_output[Z], 0.5f,
+		      "Z output is %d but expected %d", actual_output[Z],
+		      expected_output[Z]);
+}
+
 void test_suite_stm_mems_common(void)
 {
 	ztest_test_suite(
@@ -181,6 +340,11 @@ void test_suite_stm_mems_common(void)
 		ztest_unit_test_setup_teardown(test_st_raw_read_n_noinc, setup,
 					       unit_test_noop),
 		ztest_unit_test_setup_teardown(test_st_write_data_with_mask,
-					       setup, unit_test_noop));
+					       setup, unit_test_noop),
+		ztest_unit_test(test_st_get_resolution),
+		ztest_unit_test(test_st_set_offset),
+		ztest_unit_test(test_st_get_offset),
+		ztest_unit_test(test_st_get_data_rate),
+		ztest_unit_test(test_st_normalize));
 	ztest_run_test_suite(stm_mems_common);
 }
