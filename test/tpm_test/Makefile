@@ -30,9 +30,10 @@ else
 # Use BOARD=cr50 specific implementation
 vpath %c $(src) ../../board/cr50/dcrypto $(src)/testlib
 CFLAGS += -I../../board/cr50/dcrypto
+CFLAGS += -DCR50_DCRYPTO
 endif
 
-CFLAGS += -fPIC
+CFLAGS += -O2 -fPIC
 CFLAGS += -I ${PYTHON_INCLUDE}
 CFLAGS += -I../../../../third_party/cryptoc/include
 CFLAGS += -I../../board/cr50

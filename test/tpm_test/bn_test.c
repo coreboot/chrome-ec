@@ -2,7 +2,12 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#ifdef CR50_DCRYPTO
+/* some of the functions became internal in CR50 */
 #include "internal.h"
+#else
+#include "dcrypto.h"
+#endif
 
 #include <assert.h>
 #include <stdio.h>
@@ -403,6 +408,8 @@ void watchdog_reload(void)
 {
 }
 
+#ifdef CR50_DCRYPTO
+/* For CR50 we need to mock additional functions. */
 bool fips_rand_bytes(void *buffer, size_t len)
 {
 	uint8_t *b, *end;
@@ -425,6 +432,7 @@ uint64_t fips_trng_rand32(void)
 
 	return (uint64_t)(rand_r(&seed) & 0xffffffff) | (1ULL << 32);
 }
+#endif
 
 int main(void)
 {
