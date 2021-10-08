@@ -3,26 +3,33 @@
  * found in the LICENSE file.
  */
 
-#include "dcrypto.h"
 #include "internal.h"
-#include "registers.h"
+#include "dcrypto_regs.h"
+/**
+ * Define KEYMGR AES access structure.
+ */
+static volatile struct keymgr_aes *reg_aes = (void *)(GC_KEYMGR_BASE_ADDR);
 
-static void set_control_register(
-	unsigned mode, unsigned key_size, unsigned encrypt)
+static void set_control_register(enum cipher_mode mode, uint32_t key_size,
+				 enum encrypt_mode encrypt)
 {
-	GWRITE_FIELD(KEYMGR, AES_CTRL, RESET, CTRL_NO_SOFT_RESET);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, KEYSIZE, key_size);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, CIPHER_MODE, mode);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, ENC_MODE, encrypt);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, CTR_ENDIAN, CTRL_CTR_BIG_ENDIAN);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, ENABLE, CTRL_ENABLE);
+	/* Make sure we don't use key coming from keyladder. */
+	reg_aes->use_hidden_key = GC_KEYMGR_AES_USE_HIDDEN_KEY_ENABLE_DEFAULT;
+	/* Bring AES engine FIFO into known state. */
+	reg_aes->ctrl = GC_KEYMGR_AES_CTRL_RESET_MASK;
+	reg_aes->ctrl =
+		(CTRL_NO_SOFT_RESET << GC_KEYMGR_AES_CTRL_RESET_LSB) |
+		(key_size << GC_KEYMGR_AES_CTRL_KEYSIZE_LSB) |
+		(mode << GC_KEYMGR_AES_CTRL_CIPHER_MODE_LSB) |
+		(encrypt << GC_KEYMGR_AES_CTRL_ENC_MODE_LSB) |
+		(CTRL_CTR_BIG_ENDIAN << GC_KEYMGR_AES_CTRL_CTR_ENDIAN_LSB) |
+		(CTRL_ENABLE << GC_KEYMGR_AES_CTRL_ENABLE_LSB);
 
 	/* Turn off random nops (which are enabled by default). */
-	GWRITE_FIELD(KEYMGR, AES_RAND_STALL_CTL, STALL_EN, 0);
-	/* Configure random nop percentage at 25%. */
-	GWRITE_FIELD(KEYMGR, AES_RAND_STALL_CTL, FREQ, 1);
-	/* Now turn on random nops. */
-	GWRITE_FIELD(KEYMGR, AES_RAND_STALL_CTL, STALL_EN, 1);
+	reg_aes->rand_stall = 0;
+	/* Configure random nop percentage at 25%, turn on random nops.  */
+	reg_aes->rand_stall = (1 << GC_KEYMGR_AES_RAND_STALL_CTL_FREQ_LSB) |
+			      GC_KEYMGR_AES_RAND_STALL_CTL_STALL_EN_MASK;
 }
 
 static int wait_read_data(volatile uint32_t *addr)
@@ -75,12 +82,12 @@ enum dcrypto_result dcrypto_aes_init(const uint8_t *key, size_t key_len,
 	/* Initialize hardware with AES key */
 	p = (struct access_helper *) key;
 	for (i = 0; i < (key_len >> 5); i++)
-		GR_KEYMGR_AES_KEY(i) = p[i].udata;
+		reg_aes->key[i] = p[i].udata;
 	/* Trigger key expansion. */
-	GREG32(KEYMGR, AES_KEY_START) = 1;
+	reg_aes->key_start = 1;
 
 	/* Wait for key expansion. */
-	if (!wait_read_data(GREG32_ADDR(KEYMGR, AES_KEY_START))) {
+	if (!wait_read_data(&reg_aes->key_start)) {
 		/* Should not happen. */
 		return DCRYPTO_FAIL;
 	}
@@ -103,10 +110,9 @@ enum dcrypto_result DCRYPTO_aes_init(const uint8_t *key, size_t key_len,
 
 enum dcrypto_result DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
 {
-	int i;
 	uint32_t buf[4];
 	const uint32_t *inw;
-	uint32_t *outw;
+	uint32_t *outw, *outw2;
 
 	if (is_not_aligned(in)) {
 		memcpy(buf, in, sizeof(buf));
@@ -114,27 +120,16 @@ enum dcrypto_result DCRYPTO_aes_block(const uint8_t *in, uint8_t *out)
 	} else
 		inw = (const uint32_t *)in;
 
-	/* Write plaintext. */
-	for (i = 0; i < 4; i++)
-		GREG32(KEYMGR, AES_WFIFO_DATA) = inw[i];
-
-	/* Wait for the result. */
-	if (!wait_read_data(GREG32_ADDR(KEYMGR, AES_RFIFO_EMPTY))) {
-		/* Should not happen, ciphertext not ready. */
-		return DCRYPTO_FAIL;
-	}
-
-	/* Read ciphertext. */
 	if (is_not_aligned(out))
 		outw = buf;
 	else
 		outw = (uint32_t *)out;
 
-	for (i = 0; i < 4; i++)
-		outw[i] = GREG32(KEYMGR, AES_RFIFO_DATA);
+	outw2 = outw;
+	dcrypto_aes_process(&outw, &inw, 16);
 
-	if (out != (uint8_t *)outw)
-		memcpy(out, outw, sizeof(buf));
+	if (out != (uint8_t *)outw2)
+		memcpy(out, outw2, sizeof(buf));
 
 	return DCRYPTO_OK;
 }
@@ -152,7 +147,7 @@ void DCRYPTO_aes_write_iv(const uint8_t *iv)
 		ivw = (uint32_t *)iv;
 
 	for (i = 0; i < 4; i++)
-		GR_KEYMGR_AES_CTR(i) = ivw[i];
+		reg_aes->counter[i] = ivw[i];
 }
 
 void DCRYPTO_aes_read_iv(uint8_t *iv)
@@ -167,7 +162,7 @@ void DCRYPTO_aes_read_iv(uint8_t *iv)
 		ivw = (uint32_t *)iv;
 
 	for (i = 0; i < 4; i++)
-		ivw[i] = GR_KEYMGR_AES_CTR(i);
+		ivw[i] = reg_aes->counter[i];
 
 	if (iv != (uint8_t *)ivw)
 		memcpy(iv, ivw, sizeof(buf));

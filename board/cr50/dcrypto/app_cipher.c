@@ -6,122 +6,120 @@
 #include "crypto_api.h"
 #include "internal.h"
 #include "registers.h"
+#include "dcrypto_regs.h"
+/**
+ * Define KEYMGR AES access structure.
+ */
+static volatile struct keymgr_aes *reg_aes = (void *)(GC_KEYMGR_BASE_ADDR);
+
+static inline void read_aes_fifo(uint32_t *outw)
+{
+	uint32_t w0, w1, w2, w3;
+
+	w0 = reg_aes->rfifo_data;
+	w1 = reg_aes->rfifo_data;
+	w2 = reg_aes->rfifo_data;
+	w3 = reg_aes->rfifo_data;
+	outw[0] = w0;
+	outw[1] = w1;
+	outw[2] = w2;
+	outw[3] = w3;
+}
+
+static inline void write_aes_fifo(const uint32_t *inw)
+{
+	uint32_t w0, w1, w2, w3;
+
+	w0 = inw[0];
+	w1 = inw[1];
+	w2 = inw[2];
+	w3 = inw[3];
+	reg_aes->wfifo_data = w0;
+	reg_aes->wfifo_data = w1;
+	reg_aes->wfifo_data = w2;
+	reg_aes->wfifo_data = w3;
+}
 
 /* The default build options compile for size (-Os); instruct the
  * compiler to optimize for speed here.  Incidentally -O produces
  * faster code than -O2!
+ *
+ * AES FIFOs are 32-bits wide by 16 entries deep (64-Bytes), so to
+ * get maximum throughput try to load it at least at 50% and that's why we don't
+ * read after the first 4 words are loaded, unless they are the only 4 words
  */
-static int __optimize("O") inner_loop(uint32_t **out, const uint32_t **in,
-				      size_t len)
-{
-	uint32_t *outw = *out;
-	const uint32_t *inw = *in;
-
-	while (len >= 16) {
-		uint32_t w0, w1, w2, w3;
-
-		w0 = inw[0];
-		w1 = inw[1];
-		w2 = inw[2];
-		w3 = inw[3];
-		GREG32(KEYMGR, AES_WFIFO_DATA) = w0;
-		GREG32(KEYMGR, AES_WFIFO_DATA) = w1;
-		GREG32(KEYMGR, AES_WFIFO_DATA) = w2;
-		GREG32(KEYMGR, AES_WFIFO_DATA) = w3;
-
-		while (GREG32(KEYMGR, AES_RFIFO_EMPTY))
-			;
-
-		w0 = GREG32(KEYMGR, AES_RFIFO_DATA);
-		w1 = GREG32(KEYMGR, AES_RFIFO_DATA);
-		w2 = GREG32(KEYMGR, AES_RFIFO_DATA);
-		w3 = GREG32(KEYMGR, AES_RFIFO_DATA);
-		outw[0] = w0;
-		outw[1] = w1;
-		outw[2] = w2;
-		outw[3] = w3;
-
-		inw += 4;
-		outw += 4;
-		len -= 16;
-	}
-
-	*in = inw;
-	*out = outw;
-	return len;
-}
-
-static int outer_loop(uint32_t **out, const uint32_t **in, size_t len)
+size_t __optimize("O")
+	dcrypto_aes_process(uint32_t **out, const uint32_t **in, size_t len)
 {
 	uint32_t *outw = *out;
 	const uint32_t *inw = *in;
 
 	if (len >= 16) {
-		GREG32(KEYMGR, AES_WFIFO_DATA) = inw[0];
-		GREG32(KEYMGR, AES_WFIFO_DATA) = inw[1];
-		GREG32(KEYMGR, AES_WFIFO_DATA) = inw[2];
-		GREG32(KEYMGR, AES_WFIFO_DATA) = inw[3];
+		write_aes_fifo(inw);
 		inw += 4;
 		len -= 16;
 
-		len = inner_loop(&outw, &inw, len);
+		while (len >= 16) {
+			write_aes_fifo(inw);
+			inw += 4;
+			len -= 16;
+			while (reg_aes->rfifo_empty)
+				;
 
-		while (GREG32(KEYMGR, AES_RFIFO_EMPTY))
+			read_aes_fifo(outw);
+			outw += 4;
+		}
+		while (reg_aes->rfifo_empty)
 			;
 
-		outw[0] = GREG32(KEYMGR, AES_RFIFO_DATA);
-		outw[1] = GREG32(KEYMGR, AES_RFIFO_DATA);
-		outw[2] = GREG32(KEYMGR, AES_RFIFO_DATA);
-		outw[3] = GREG32(KEYMGR, AES_RFIFO_DATA);
+		read_aes_fifo(outw);
 		outw += 4;
 	}
-
-	*in =  inw;
+	*in = inw;
 	*out = outw;
 	return len;
 }
 
-static int aes_init(enum dcrypto_appid appid, const uint32_t iv[4])
+static int aes_init(enum dcrypto_appid appid)
 {
+	uint32_t aes_config;
+
 	/* Setup USR-based application key. */
 	if (!DCRYPTO_appkey_init(appid))
 		return 0;
 
 	/* Configure AES engine. */
-	GWRITE_FIELD(KEYMGR, AES_CTRL, RESET, CTRL_NO_SOFT_RESET);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, KEYSIZE, 2 /* AES-256 */);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, CIPHER_MODE, CIPHER_MODE_CTR);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, ENC_MODE, ENCRYPT_MODE);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, CTR_ENDIAN, CTRL_CTR_BIG_ENDIAN);
+	aes_config = (CTRL_NO_SOFT_RESET << GC_KEYMGR_AES_CTRL_RESET_LSB) |
+		     (2 << GC_KEYMGR_AES_CTRL_KEYSIZE_LSB) |
+		     (CIPHER_MODE_CTR << GC_KEYMGR_AES_CTRL_CIPHER_MODE_LSB) |
+		     (ENCRYPT_MODE << GC_KEYMGR_AES_CTRL_ENC_MODE_LSB) |
+		     (CTRL_CTR_BIG_ENDIAN << GC_KEYMGR_AES_CTRL_CTR_ENDIAN_LSB);
+	reg_aes->ctrl = aes_config;
 
 	/*
 	 * For fixed-key, bulk ciphering, turn off random nops (which
 	 * are enabled by default).
 	 */
-	GWRITE_FIELD(KEYMGR, AES_RAND_STALL_CTL, STALL_EN, 0);
+	reg_aes->rand_stall = 0;
 
 	/* Enable hidden key usage, each appid gets its own
 	 * USR, with USR0 starting at 0x2a0.
 	 */
-	GWRITE_FIELD(KEYMGR, AES_USE_HIDDEN_KEY, INDEX,
-		0x2a0 + (appid * 2));
-	GWRITE_FIELD(KEYMGR, AES_USE_HIDDEN_KEY, ENABLE, 1);
-	GWRITE_FIELD(KEYMGR, AES_CTRL, ENABLE, CTRL_ENABLE);
+	reg_aes->use_hidden_key = GC_KEYMGR_AES_USE_HIDDEN_KEY_ENABLE_MASK |
+				  ((0x2a0 + (appid * 2))
+				   << GC_KEYMGR_AES_USE_HIDDEN_KEY_INDEX_LSB);
+
+	reg_aes->ctrl = aes_config |
+			(CTRL_ENABLE << GC_KEYMGR_AES_CTRL_ENABLE_LSB);
 
 	/* Wait for key-expansion. */
-	GREG32(KEYMGR, AES_KEY_START) = 1;
-	while (GREG32(KEYMGR, AES_KEY_START))
+	reg_aes->key_start = 1;
+	while (reg_aes->key_start)
 		;
 
 	/* Check for errors (e.g. USR not correctly setup. */
 	if (GREG32(KEYMGR, HKEY_ERR_FLAGS))
 		return 0;
-
-	/* Set IV. */
-	GR_KEYMGR_AES_CTR(0) = iv[0];
-	GR_KEYMGR_AES_CTR(1) = iv[1];
-	GR_KEYMGR_AES_CTR(2) = iv[2];
-	GR_KEYMGR_AES_CTR(3) = iv[3];
 
 	return 1;
 }
@@ -138,15 +136,14 @@ int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
 
 	{
 		/* Initialize key, and AES engine. */
-		uint32_t iv[4];
-
-		BUILD_ASSERT(sizeof(iv) == CIPHER_SALT_SIZE);
-		memcpy(iv, salt, sizeof(iv));
-		if (!aes_init(appid, iv))
+		BUILD_ASSERT(CIPHER_SALT_SIZE == 16);
+		if (!aes_init(appid))
 			return 0;
+		/* Set IV. */
+		DCRYPTO_aes_write_iv(salt);
 	}
 
-	len = outer_loop(&outw, &inw, len);
+	len = dcrypto_aes_process(&outw, &inw, len);
 
 	if (len) {
 		/* Cipher the final partial block */
@@ -159,7 +156,7 @@ int DCRYPTO_app_cipher(enum dcrypto_appid appid, const void *salt,
 		tmpoutw = tmpout;
 
 		memcpy(tmpin, inw, len);
-		outer_loop(&tmpoutw, &tmpinw, 16);
+		dcrypto_aes_process(&tmpoutw, &tmpinw, 16);
 		memcpy(outw, tmpout, len);
 	}
 
@@ -283,7 +280,7 @@ static int prepare_running(struct test_info *pinfo)
 static int basic_check(struct test_info *pinfo)
 {
 	size_t half;
-	int i;
+	size_t i;
 	uint32_t *p;
 
 	ccprintf("original data  %ph\n", HEX_BUF(pinfo->p, 16));
@@ -291,7 +288,7 @@ static int basic_check(struct test_info *pinfo)
 	half = (pinfo->test_blob_size/2) & ~3;
 	if (!DCRYPTO_app_cipher(NVMEM, pinfo->p, pinfo->p,
 				pinfo->p + half, half)) {
-		ccprintf("first ecnryption run failed\n");
+		ccprintf("first encryption run failed\n");
 		return EC_ERROR_UNKNOWN;
 	}
 
@@ -341,7 +338,7 @@ static int command_loop(struct test_info *pinfo)
 
 		*p_last_byte = last_byte;
 
-		if (!(iteration % 500))
+		if (!(iteration % 512))
 			watchdog_reload();
 
 		tstamp = get_time().val;

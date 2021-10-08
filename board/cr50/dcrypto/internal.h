@@ -778,6 +778,9 @@ __always_inline enum dcrypto_result dcrypto_ok_if_zero(uintptr_t val)
 							    DCRYPTO_OK);
 }
 
+/* Process blocks using configured AES engine. */
+size_t dcrypto_aes_process(uint32_t **out, const uint32_t **in, size_t len);
+
 /*
  * Key ladder.
  */

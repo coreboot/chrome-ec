@@ -3,39 +3,38 @@
  * found in the LICENSE file.
  */
 
-#include "dcrypto.h"
 #include "internal.h"
 #include "registers.h"
-
+#include "dcrypto_regs.h"
 #include "endian.h"
+
+/**
+ * Define KEYMGR AES access structure.
+ */
+static volatile struct keymgr_aes *reg_aes = (void *)(GC_KEYMGR_BASE_ADDR);
 
 static void gcm_mul(uint32_t *counter)
 {
-	int i;
-	volatile uint32_t *p;
+	size_t i;
 
 	/* Set HASH to zero. */
-	p = GREG32_ADDR(KEYMGR, GCM_HASH_IN0);
 	for (i = 0; i < 4; i++)
-		*p++ = 0;
+		reg_aes->gcm_hash_in[i] = 0;
 
 	/* Initialize GMAC. */
-	p = GREG32_ADDR(KEYMGR, GCM_MAC0);
 	for (i = 0; i < 4; i++)
-		*p++ = counter[i];
+		reg_aes->gcm_mac[i] = counter[i];
 
 	/* Crank GMAC. */
-	GREG32(KEYMGR, GCM_DO_ACC) = 1;
+	reg_aes->gcm_do_acc = 1;
 
 	/* Read GMAC. */
-	p = GREG32_ADDR(KEYMGR, GCM_MAC0);
 	for (i = 0; i < 4; i++)
-		counter[i] = *p++;
+		counter[i] = reg_aes->gcm_mac[i];
 
 	/* Reset GMAC. */
-	p = GREG32_ADDR(KEYMGR, GCM_MAC0);
 	for (i = 0; i < 4; ++i)
-		*p++ = 0;
+		reg_aes->gcm_mac[i] = 0;
 }
 
 static void gcm_init_iv(
@@ -83,8 +82,8 @@ static void gcm_init_iv(
 void DCRYPTO_gcm_init(struct GCM_CTX *ctx, uint32_t key_bits,
 		const uint8_t *key, const uint8_t *iv, size_t iv_len)
 {
-	int i;
-	const uint32_t zero[4] = {0, 0, 0, 0};
+	size_t i;
+	static const uint32_t zero[4] = {0, 0, 0, 0};
 	uint32_t H[4];
 	uint32_t counter[4];
 
@@ -98,38 +97,45 @@ void DCRYPTO_gcm_init(struct GCM_CTX *ctx, uint32_t key_bits,
 
 	/* Initialize the GMAC accumulator to ZERO. */
 	for (i = 0; i < 4; i++)
-		GR_KEYMGR_GCM_MAC(i) = zero[i];
+		reg_aes->gcm_mac[i] = 0;
 
 	/* Initialize H. */
 	for (i = 0; i < 4; i++)
-		GR_KEYMGR_GCM_H(i) = H[i];
+		reg_aes->gcm_h[i] = H[i];
 
 	/* Map the IV to a 128-bit counter. */
 	gcm_init_iv(iv, iv_len, counter);
 
 	/* Re-initialize the IV counter. */
 	for (i = 0; i < 4; i++)
-		GR_KEYMGR_AES_CTR(i) = counter[i];
+		reg_aes->counter[i] = counter[i];
 
 	/* Calculate Ej0: encrypt IV counter XOR ZERO. */
 	DCRYPTO_aes_block((const uint8_t *) zero, ctx->Ej0.c);
 }
 
-static void gcm_aad_block(const struct GCM_CTX *ctx, const uint32_t *block)
+static void gcm_aad_block(const struct GCM_CTX *ctx, const void *block)
 {
-	int i;
-	const struct access_helper *p = (struct access_helper *) block;
+	size_t i;
+	uint32_t buf[4];
+	const uint32_t *p;
+
+	if (is_not_aligned(block)) {
+		memcpy(buf, block, 16);
+		p = buf;
+	} else
+		p = block;
 
 	if (ctx->aad_len == 0 && ctx->count <= 16) {
 		/* Update GMAC. */
 		for (i = 0; i < 4; i++)
-			GR_KEYMGR_GCM_MAC(i) = p[i].udata;
+			reg_aes->gcm_mac[i] = p[i];
 	} else {
 		for (i = 0; i < 4; i++)
-			GR_KEYMGR_GCM_HASH_IN(i) = p[i].udata;
+			reg_aes->gcm_hash_in[i] = p[i];
 
 		/* Crank GMAC. */
-		GREG32(KEYMGR, GCM_DO_ACC) = 1;
+		reg_aes->gcm_do_acc = 1;
 	}
 }
 
@@ -173,7 +179,7 @@ int DCRYPTO_gcm_encrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
 
 		DCRYPTO_aes_block(ctx->block.c, outp);
 		ctx->count += 16;
-		gcm_aad_block(ctx, (uint32_t *) outp);
+		gcm_aad_block(ctx, outp);
 		ctx->remainder = 0;
 		in += count;
 		in_len -= count;
@@ -184,7 +190,7 @@ int DCRYPTO_gcm_encrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
 		DCRYPTO_aes_block(in, outp);
 		ctx->count += 16;
 
-		gcm_aad_block(ctx, (uint32_t *) outp);
+		gcm_aad_block(ctx, outp);
 
 		in_len -= 16;
 		in += 16;
@@ -304,23 +310,23 @@ static void dcrypto_gcm_len_vector(
 
 static void dcrypto_gcm_tag(const struct GCM_CTX *ctx,
 			const uint32_t *len_vector, uint32_t *tag) {
-	int i;
+	size_t i;
 
 	for (i = 0; i < 4; i++)
-		GR_KEYMGR_GCM_HASH_IN(i) = len_vector[i];
+		reg_aes->gcm_hash_in[i] = len_vector[i];
 
 	/* Crank GMAC. */
-	GREG32(KEYMGR, GCM_DO_ACC) = 1;
+	reg_aes->gcm_do_acc = 1;
 
 	for (i = 0; i < 4; i++)
-		GR_KEYMGR_GCM_HASH_IN(i) = ctx->Ej0.d[i];
+		reg_aes->gcm_hash_in[i] = ctx->Ej0.d[i];
 
 	/* Crank GMAC. */
-	GREG32(KEYMGR, GCM_DO_ACC) = 1;
+	reg_aes->gcm_do_acc = 1;
 
 	/* Read tag. */
 	for (i = 0; i < 4; i++)
-		tag[i] = GR_KEYMGR_GCM_MAC(i);
+		tag[i] = reg_aes->gcm_mac[i];
 }
 
 int DCRYPTO_gcm_tag(struct GCM_CTX *ctx, uint8_t *tag, size_t tag_len)
@@ -339,5 +345,5 @@ int DCRYPTO_gcm_tag(struct GCM_CTX *ctx, uint8_t *tag, size_t tag_len)
 void DCRYPTO_gcm_finish(struct GCM_CTX *ctx)
 {
 	always_memset(ctx, 0, sizeof(struct GCM_CTX));
-	GREG32(KEYMGR, AES_WIPE_SECRETS) = 1;
+	reg_aes->wipe_secrets = 1;
 }

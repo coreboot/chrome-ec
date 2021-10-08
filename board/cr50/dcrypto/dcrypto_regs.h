@@ -29,7 +29,42 @@ extern "C" {
 #endif
 #include "registers.h"
 
-
+/**
+ * AES/GCM part of KEYMGR starting offset 0x000
+ */
+struct keymgr_aes {
+	uint32_t ctrl; /* KEYMGR_AES_CTRL */
+	const uint32_t _pad0;
+	uint32_t wfifo_data; /*KEYMGR_AES_WFIFO_DATA */
+	const uint32_t rfifo_data; /* KEYMGR_AES_RFIFO_DATA */
+	const uint32_t _pad1[7];
+	uint32_t key[8]; /* KEYMGR_AES_KEY0 .. 7 */
+	uint32_t key_start; /* KEYMGR_AES_KEY_START */
+	uint32_t counter[4]; /* KEYMGR_AES_CTR0 .. 3 */
+	uint32_t rand_stall; /* KEYMGR_AES_RAND_STALL_CTL */
+	uint32_t wfifo_level; /* KEYMGR_AES_WFIFO_LEVEL */
+	uint32_t wfifo_full; /* KEYMGR_AES_WFIFO_FULL */
+	uint32_t rfifo_level; /* KEYMGR_AES_RFIFO_LEVEL */
+	uint32_t rfifo_empty; /* KEYMGR_AES_RFIFO_EMPTY */
+	const uint32_t execute_count_state; /* KEYMGR_AES_EXECUTE_COUNT_STATE */
+	uint32_t execute_count_max; /* KEYMGR_AES_EXECUTE_COUNT_MAX */
+	uint32_t gcm_do_acc; /* KEYMGR_GCM_DO_ACC */
+	uint32_t gcm_h[4]; /* KEYMGR_GCM_H0 .. 3 */
+	uint32_t gcm_mac[4]; /* KEYMGR_GCM_MAC0 .. 3 */
+	uint32_t gcm_hash_in[4]; /* KEYMGR_GCM_HASH_IN0 .. 3 */
+	uint32_t wipe_secrets; /* KEYMGR_AES_WIPE_SECRETS */
+	uint32_t int_enable; /* KEYMGR_AES_INT_ENABLE */
+	uint32_t int_state; /* KEYMGR_AES_INT_STATE */
+	uint32_t int_test; /* KEYMGR_AES_INT_TEST */
+	uint32_t use_hidden_key; /* KEYMGR_AES_USE_HIDDEN_KEY */
+};
+BUILD_ASSERT(offsetof(struct keymgr_aes, wfifo_data) ==
+	     GC_KEYMGR_AES_WFIFO_DATA_OFFSET);
+BUILD_ASSERT(offsetof(struct keymgr_aes, key) == GC_KEYMGR_AES_KEY0_OFFSET);
+BUILD_ASSERT(offsetof(struct keymgr_aes, counter) == GC_KEYMGR_AES_CTR0_OFFSET);
+BUILD_ASSERT(offsetof(struct keymgr_aes, gcm_h) == GC_KEYMGR_GCM_H0_OFFSET);
+BUILD_ASSERT(offsetof(struct keymgr_aes, use_hidden_key) ==
+	     GC_KEYMGR_AES_USE_HIDDEN_KEY_OFFSET);
 
 /**
  * SHA/HMAC part of KEYMGR starting offset 0x400
