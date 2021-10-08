@@ -78,6 +78,7 @@ void FtdiStop(void)
 	mpsse_ = NULL;
 }
 
+static int FtdiReadReg(unsigned reg_number, size_t bytes, void *buffer);
 /*
  * If the TPM is asleep we may need to poke it once to wake it up. Just assert
  * the CS briefly without sending any data, then wait a bit to be sure it's
@@ -85,10 +86,13 @@ void FtdiStop(void)
  */
 static void FtdiSpiPoke(void)
 {
+	uint32_t did_vid;
+
 	Start(mpsse_);
-	usleep(10000);
 	Stop(mpsse_);
 	usleep(60000);
+	/* Try to read register. */
+	FtdiReadReg(TPM_DID_VID_REG, sizeof(did_vid), &did_vid);
 }
 
 static void StartTransaction(int read_write, size_t bytes, unsigned addr)
@@ -99,10 +103,10 @@ static void StartTransaction(int read_write, size_t bytes, unsigned addr)
 	char *transfer_data;
 
 	/*
-	 * give it 10 ms. TODO(vbendeb): remove this once cr50 SPP TPM driver
+	 * give it 200 us. TODO(vbendeb): remove this once cr50 SPP TPM driver
 	 * performance is fixed.
 	 */
-	usleep(10000);
+	usleep(200);
 
 	/*
 	 * The first byte of the frame header encodes the transaction type

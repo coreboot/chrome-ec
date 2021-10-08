@@ -54,7 +54,7 @@ class TPM:
     STARTUP_RSP = ('80 01 00 00 00 0a 00 00 00 00',
                    '80 01 00 00 00 0a 00 00 01 00')
 
-    def __init__(self, freq=800*1000, debug_mode=False):
+    def __init__(self, freq=2000*1000, debug_mode=False):
         self._debug_enabled = debug_mode
         self._handle = ftdi_spi_tpm
         if not self._handle.FtdiSpiInit(freq, debug_mode):
