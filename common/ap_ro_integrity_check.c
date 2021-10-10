@@ -140,41 +140,6 @@ struct fmap_area_header {
 	uint16_t area_flags;
 } __packed;
 
-/*
- * Header of GSC Verification data saved in AP RO flash. The variable element
- * of range_count RO ranges is placed adjacent to this structure in the AP RO
- * flash.
- */
-#define GSC_VD_MAGIC 0x65666135 /* Little endian '5 a f e' */
-struct gsc_verification_data {
-	uint32_t gv_magic;
-	uint16_t size; /* Size of this struct in bytes inclusive */
-	uint16_t major_version; /* Version of this struct layout. Starts at 0 */
-	uint16_t minor_version;
-	/*
-	 * GSC will cache the counter value and will not accept verification
-	 * data blobs with a lower value.
-	 */
-	uint16_t rollback_counter;
-	uint32_t gsc_board_id; /* Locks blob to certain platform. */
-	uint32_t gsc_flags; /* A field for future enhancements. */
-	/*
-	 * The location of fmap that points to this blob. This location must
-	 * also be in one of the verified sections, expressed as offset in
-	 * flash
-	 */
-	uint32_t fmap_location;
-	uint32_t hash_alg; /* one of enum vb2_hash_algorithm alg. */
-	/*
-	 * SHAxxx(ranges[0].offset..ranges[0].size || ... ||
-	 *        ranges[n].offset..ranges[n].size)
-	 *
-	 * Let the digest space allow to accommodate the largest possible one.
-	 */
-	uint8_t ranges_digest[SHA512_DIGEST_SIZE];
-	uint32_t range_count; /* Number of VerifiedSection entries. */
-	struct ro_range ranges[0];
-};
 
 /* Cryptographic entities defined in vboot_reference. */
 struct vb2_signature {
@@ -247,15 +212,57 @@ struct vb2_keyblock {
 };
 
 /*
+ * Header of GSC Verification data saved in AP RO flash. The variable element
+ * of range_count RO ranges is placed adjacent to this structure in the AP RO
+ * flash.
+ */
+#define GSC_VD_MAGIC 0x65666135 /* Little endian '5 a f e' */
+struct gsc_verification_data {
+	uint32_t gv_magic;
+	/*
+	 * Size of this structure in bytes, including the ranges array,
+	 * signature and root key bodies.
+	 */
+	uint16_t size;
+	uint16_t major_version; /* Version of this struct layout. Starts at 0 */
+	uint16_t minor_version;
+	/*
+	 * GSC will cache the counter value and will not accept verification
+	 * data blobs with a lower value.
+	 */
+	uint16_t rollback_counter;
+	uint32_t gsc_board_id; /* Locks blob to certain platform. */
+	uint32_t gsc_flags; /* A field for future enhancements. */
+	/*
+	 * The location of fmap that points to this blob. This location must
+	 * also be in one of the verified sections, expressed as offset in
+	 * flash
+	 */
+	uint32_t fmap_location;
+	uint32_t hash_alg; /* one of enum vb2_hash_algorithm alg. */
+	struct vb2_signature sig_header;
+	struct vb2_packed_key root_key_header;
+	/*
+	 * SHAxxx(ranges[0].offset..ranges[0].size || ... ||
+	 *        ranges[n].offset..ranges[n].size)
+	 *
+	 * Let the digest space allow to accommodate the largest possible one.
+	 */
+	uint8_t ranges_digest[SHA512_DIGEST_SIZE];
+	uint32_t range_count; /* Number of gscvd_ro_range entries. */
+	struct ro_range ranges[0];
+};
+
+/*
  * The layout of RO_GSCVD area of AP RO flash is as follows:
  * struct gsc_verication_data,
  * ro_ranges, number of ranges is found in gsc verification data,
- * vb2_signature  signature of the two objects above
+ * gvd signature body  signature of the two objects above, signature header is
+ *               included in gsc_verification data
+ * root key body  root key, used as root of trust, key header is included in
+ *               gsc_verification_data
  * vb2_keyblock   contains the key used to generate the signature and
  *		  the signature of the key
- * vb2_packed_key RSA public key to use to verify the vb2_keyblock above.
- *		  The hash of this key is saved in the root_key_hash array
- *		  above.
  */
 
 /*
@@ -273,19 +280,12 @@ enum vb2_crypto_algorithm {
 struct gvd_container {
 	uint32_t offset;
 	struct gsc_verification_data gvd;
+	struct ro_ranges ranges;
 };
 
-struct sig_container {
-	uint32_t offset;
-	struct vb2_signature sigh;
-};
 struct kb_container {
 	uint32_t offset;
 	struct vb2_keyblock *kb;
-};
-struct rootk_container {
-	uint32_t offset;
-	struct vb2_packed_key *rootk;
 };
 
 /*
@@ -826,40 +826,29 @@ static uint32_t find_fmap(struct fmap_header *fmh)
  */
 static int read_gscvd_header(uint32_t fmap_offset, struct gvd_container *gvdc)
 {
+	uint32_t expected_size;
+	const struct gsc_verification_data *gvd;
+	struct board_id id;
+
 	if (read_ap_spi(&gvdc->gvd, gvdc->offset, sizeof(gvdc->gvd), __LINE__))
 		return -1;
 
-	if ((gvdc->gvd.gv_magic != GSC_VD_MAGIC) ||
-	    (gvdc->gvd.size !=
-	     (sizeof(gvdc->gvd) +
-	      sizeof(struct ro_range) * gvdc->gvd.range_count)) ||
-	    (gvdc->gvd.fmap_location != fmap_offset)) {
+	gvd = &gvdc->gvd;
+
+	expected_size = sizeof(struct gsc_verification_data) +
+		sizeof(struct ro_range) * gvd->range_count +
+		gvd->sig_header.sig_size + gvd->root_key_header.key_size;
+
+	if ((gvd->gv_magic != GSC_VD_MAGIC) || (gvd->size != expected_size) ||
+	    (gvd->fmap_location != fmap_offset)) {
 		CPRINTS("Inconsistent GSCVD contents");
 		return -1;
 	}
 
-	return 0;
-}
-
-/**
- * Read signature structure header.
- *
- * This function does not yet read the entire signature, it reads the header
- * to determine the size of the signature to be able to gain access to the
- * next field in the RO_GSCVD layout. This is done to save memory on the heap,
- * and defer signature memory allocation until the signature is necessary,
- * leaving the heap available for root key and key block.
- *
- * @param sigc pointer to the signature container.
- *
- * @return zero on success, -1 on failure.
- */
-static int read_signature_header(struct sig_container *sigc)
-{
-	if (read_ap_spi(&sigc->sigh, sigc->offset, sizeof(sigc->sigh),
-			__LINE__) ||
-	    (sigc->sigh.sig_offset != sizeof(sigc->sigh))) {
-		CPRINTS("Failed to read signature at %x", sigc->offset);
+	if ((read_board_id(&id) != EC_SUCCESS) ||
+	    (id.type != gvd->gsc_board_id)) {
+		CPRINTS("Board ID mismatch %#07x != %#08x",
+			id.type, gvd->gsc_board_id);
 		return -1;
 	}
 
@@ -969,47 +958,60 @@ static int read_keyblock(struct kb_container *kbc)
  * function returns error. Once the key is read verify its validity by
  * comparing its hash against the known value.
  *
- * @param rootkc container to place the root key into
+ * @param gvdc  pointer to the previously filled GVD container
+ * @param rootk  pointer to pointer to contain root key
  *
  * @return zero on success, -1 on failure.
  */
-static int read_rootk(struct rootk_container *rootkc)
+static int read_rootk(const struct gvd_container *gvdc,
+		      struct vb2_packed_key **prootk)
 {
 	struct sha256_ctx ctx;
-	struct vb2_packed_key rootk;
 	size_t total_size;
+	struct vb2_packed_key *rootk;
+	const struct gsc_verification_data *gvd;
+	uint32_t key_offset;
 
-	if (read_ap_spi(&rootk, rootkc->offset, sizeof(rootk), __LINE__) ||
-	    (rootk.key_offset != sizeof(rootk))) {
-		CPRINTS("Failed to read root key at %x", rootkc->offset);
-		return -1;
-	}
+	gvd = &gvdc->gvd;
+
+	*prootk = NULL;
 
 	/* Let's read the root key body. */
-	total_size = sizeof(rootk) + rootk.key_size + rootk.key_offset;
-	if (shared_mem_acquire(total_size, (char **)&rootkc->rootk) !=
+	total_size = sizeof(*rootk) + gvd->root_key_header.key_size;
+	if (shared_mem_acquire(total_size, (char **)&rootk) !=
 	    EC_SUCCESS) {
-		rootkc->rootk = NULL;
-		CPRINTS("Failed to allocated %d bytes",
-			rootk.key_size + rootk.key_offset);
+		CPRINTS("Failed to allocate %d bytes", total_size);
 		return -1;
 	}
 
-	/* Copy key rootk header. */
-	memcpy(rootkc->rootk, &rootk, sizeof(rootk));
-	if (read_ap_spi(rootkc->rootk + 1, rootkc->offset + sizeof(rootk),
-			total_size - sizeof(rootk), __LINE__))
+	/* Copy rootk header. */
+	memcpy(rootk, &gvd->root_key_header, sizeof(*rootk));
+
+	/* Copy rootk body. */
+	key_offset = gvdc->offset +
+		offsetof(struct gsc_verification_data, root_key_header) +
+		gvdc->gvd.root_key_header.key_offset;
+
+	/* Use 'rootk + 1' as a pointer to memory adjacent to the header. */
+	if (read_ap_spi(rootk + 1,
+			key_offset,
+			gvd->root_key_header.key_size,
+			__LINE__))
 		return -1;
 
 	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
 		return -1;
 
-	SHA256_update(&ctx, rootkc->rootk, sizeof(rootk) + rootk.key_size);
+	SHA256_update(&ctx, rootk + 1, rootk->key_size);
 	if (DCRYPTO_equals(SHA256_final(&ctx), root_key_hash,
 			   sizeof(root_key_hash)) != DCRYPTO_OK) {
 		CPRINTS("Root key digest mismatch");
 		return -1;
 	}
+
+	/* Adjust key_offset to point to the uploaded key body. */
+	rootk->key_offset = sizeof(*rootk);
+	*prootk = rootk;
 
 	return 0;
 }
@@ -1063,21 +1065,20 @@ static int validate_ranges_sha(const struct ro_range *ranges, size_t count,
  * Read ranges as defined in gsc_verification_data structure.
  *
  * @param gvdc pointer to the gsc_verifcation_data container
- * @param ranges pointer to the array of ro_ranges structure to fill up
  *
  * @return zero on success, non zero on failure.
  */
-static int read_ranges(const struct gvd_container *gvdc,
-		       struct ro_ranges *ranges)
+static int read_ranges(struct gvd_container *gvdc)
 {
 	size_t range_count = gvdc->gvd.range_count;
 
-	if (range_count > ARRAY_SIZE(ranges->ranges)) {
+	if (range_count > ARRAY_SIZE(gvdc->ranges.ranges)) {
 		CPRINTS("Too many ranges in gvd (%d)", range_count);
 		return -1;
 	}
 
-	return read_ap_spi(ranges->ranges, gvdc->offset + sizeof(gvdc->gvd),
+	return read_ap_spi(&gvdc->ranges,
+			   gvdc->offset + sizeof(gvdc->gvd),
 			   sizeof(struct ro_range) * range_count, __LINE__);
 }
 
@@ -1091,43 +1092,43 @@ static int read_ranges(const struct gvd_container *gvdc,
  * from AP flash, based on signature container information.
  *
  * @param gvd pointer to the gsc_verification_data header
- * @param ranges pointer to the array of ranges, AP flash offset:size pairs
  * @param key pointer RSA key used for signing, vb2 representation
- * @param sig_container pointer to signature container, vb2 representation
  *
  * return 0 on success, nonzero on failure.
  */
-static int verify_gvd_signature(const struct gsc_verification_data *gvd,
-				const struct ro_ranges *ranges,
-				const struct vb2_packed_key *key,
-				const struct sig_container *sigc)
+static int verify_gvd_signature(const struct gvd_container *gvdc,
+				const struct vb2_packed_key *key)
 {
 	struct vb_rsa_pubk rsa_key;
 	void *sig_body;
 	int rv = -1;
 	struct memory_block blocks[3];
+	uint32_t sig_body_offset;
+	uint32_t sig_size;
 
 	if (unpack_pubk(key, &rsa_key))
 		return -1;
 
-	if (shared_mem_acquire(sigc->sigh.sig_size, (char **)&sig_body) !=
-	    EC_SUCCESS) {
+	sig_body_offset = gvdc->offset +
+		offsetof(struct gsc_verification_data, sig_header) +
+		gvdc->gvd.sig_header.sig_offset;
+	sig_size = gvdc->gvd.sig_header.sig_size;
+	if (shared_mem_acquire(sig_size, (char **)&sig_body) != EC_SUCCESS) {
 		CPRINTS("Failed to allocate %d bytes for sig body",
-			sigc->sigh.sig_size);
+			gvdc->gvd.sig_header.sig_size);
 		return EC_ERROR_HW_INTERNAL;
 	}
 
-	if (read_ap_spi(sig_body, sigc->offset + sigc->sigh.sig_offset,
-			sigc->sigh.sig_size, __LINE__))
+	if (read_ap_spi(sig_body, sig_body_offset, sig_size, __LINE__))
 		goto exit;
 
-	blocks[0].base = gvd;
-	blocks[0].size = sizeof(*gvd);
-	blocks[1].base = ranges;
-	blocks[1].size = gvd->range_count * sizeof(ranges->ranges[0]);
+	blocks[0].base = &gvdc->gvd;
+	blocks[0].size = sizeof(gvdc->gvd);
+	blocks[1].base = &gvdc->ranges;
+	blocks[1].size = gvdc->gvd.range_count * sizeof(gvdc->ranges.ranges[0]);
 	blocks[2].base = NULL;
 
-	rv = verify_signature(blocks, &rsa_key, sig_body, sigc->sigh.sig_size);
+	rv = verify_signature(blocks, &rsa_key, sig_body, sig_size);
 
 exit:
 	CPRINTS("GVDC %sOK", rv ? "NOT " : "");
@@ -1148,15 +1149,15 @@ exit:
  * If the dedicated page is not empty, it is erased.
  *
  * @param gvdc pointer to the gsc_verification_data container
- * @param ranges pointer to the ranges structure, gvd stores the range count
  *
  * @return 0 on success, non-zero on failure.
  */
-static int save_gvd_hash(struct gvd_container *gvdc, struct ro_ranges *ranges)
+static int save_gvd_hash(struct gvd_container *gvdc)
 {
 	struct ap_ro_check ro_check;
 	struct sha256_ctx ctx;
 	int rv;
+	struct ro_ranges *ranges;
 
 	if (gvdc->gvd.rollback_counter < LOWEST_ACCEPTABLE_GVD_ROLLBACK) {
 		CPRINTS("Rejecting GVD rollback %d",
@@ -1181,6 +1182,7 @@ static int save_gvd_hash(struct gvd_container *gvdc, struct ro_ranges *ranges)
 	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
 		return EC_ERROR_HW_INTERNAL;
 
+	ranges = &gvdc->ranges;
 	SHA256_update(&ctx, &gvdc->gvd, sizeof(gvdc->gvd));
 	SHA256_update(&ctx, ranges->ranges,
 		      sizeof(ranges->ranges[0]) * gvdc->gvd.range_count);
@@ -1211,25 +1213,26 @@ static int save_gvd_hash(struct gvd_container *gvdc, struct ro_ranges *ranges)
 /**
  * Verify gsc_verification_data cache.
  *
- * @param gvd pointer to gsc_verification_data
- * @param ranges pointer to ro_ranges, gvd stores the range_count
+ * @param gvdc pointer to the gsc_verification_data container
  * @param descriptor pointer to the descriptor containing cached hash value to
  *        compare against.
  *
  * @return zero on success, non zero on failure/
  */
-static int gvd_cache_check(const struct gsc_verification_data *gvd,
-			   const struct ro_ranges *ranges,
+static int gvd_cache_check(const struct gvd_container *gvdc,
 			   const struct gvd_descriptor *descriptor)
 {
 	struct sha256_ctx ctx;
+	const struct ro_ranges *ranges;
 
 	if (DCRYPTO_hw_sha256_init(&ctx) != DCRYPTO_OK)
 		return EC_ERROR_HW_INTERNAL;
 
-	SHA256_update(&ctx, gvd, sizeof(*gvd));
+	SHA256_update(&ctx, &gvdc->gvd, sizeof(gvdc->gvd));
+
+	ranges = &gvdc->ranges;
 	SHA256_update(&ctx, ranges->ranges,
-		      gvd->range_count * sizeof(ranges->ranges[0]));
+		      gvdc->gvd.range_count * sizeof(ranges->ranges[0]));
 
 	return DCRYPTO_equals(SHA256_final(&ctx), descriptor->digest,
 			      SHA256_DIGEST_SIZE) != DCRYPTO_OK;
@@ -1251,7 +1254,6 @@ static int8_t validate_cached_ap_ro_v2(const struct gvd_descriptor *descriptor)
 
 	uint32_t fmap_offset;
 	struct gvd_container gvdc;
-	struct ro_ranges ranges;
 
 	fmap_offset = descriptor->fmap_offset;
 	gvdc.offset = descriptor->gvd_offset;
@@ -1259,14 +1261,15 @@ static int8_t validate_cached_ap_ro_v2(const struct gvd_descriptor *descriptor)
 	if (read_gscvd_header(fmap_offset, &gvdc))
 		return -1;
 
-	if (read_ranges(&gvdc, &ranges))
+	if (read_ranges(&gvdc))
 		return -1;
 
-	if (gvd_cache_check(&gvdc.gvd, &ranges, descriptor)) {
+	if (gvd_cache_check(&gvdc, descriptor)) {
 		CPRINTS("GVD HASH MISMATCH!!");
 		return -1;
 	}
-	return validate_ranges_sha(ranges.ranges, gvdc.gvd.range_count,
+
+	return validate_ranges_sha(gvdc.ranges.ranges, gvdc.gvd.range_count,
 				   gvdc.gvd.ranges_digest) ==
 		EC_SUCCESS ? 0 : -1;
 }
@@ -1287,13 +1290,11 @@ static int8_t validate_and_cache_ap_ro_v2_from_flash(void)
 	uint32_t fmap_offset;
 	struct fmap_header fmh;
 	struct gvd_container gvdc;
-	struct sig_container sigc;
 	struct kb_container kbc;
-	struct rootk_container rootkc;
 	struct vb_rsa_pubk pubk;
-	struct ro_ranges ranges;
 	struct fmap_area_header fmap;
 	struct fmap_area_header gscvd;
+	struct vb2_packed_key *rootk = NULL;
 
 	int rv = -1;
 
@@ -1309,47 +1310,41 @@ static int8_t validate_and_cache_ap_ro_v2_from_flash(void)
 	if (read_gscvd_header(fmap_offset, &gvdc))
 		return -1;
 
-	if (read_ranges(&gvdc, &ranges))
+	if (read_ranges(&gvdc))
 		return -1;
 
-	/* Signature comes after gscvd. */
-	sigc.offset = gvdc.offset + gvdc.gvd.size;
-	if (read_signature_header(&sigc))
-		return -1;
-
-	kbc.offset = sigc.offset + sigc.sigh.sig_offset + sigc.sigh.sig_size;
+	kbc.offset = gvdc.offset + gvdc.gvd.size;
 	if (read_keyblock(&kbc))
 		return -1;
 
-	rootkc.offset = kbc.offset + kbc.kb->keyblock_size;
-	if (read_rootk(&rootkc))
+	if (read_rootk(&gvdc, &rootk))
 		goto exit;
 
 	/* Root key hash matches, let's verify the platform key. */
-	if (unpack_pubk(rootkc.rootk, &pubk))
+	if (unpack_pubk(rootk, &pubk))
 		goto exit;
 
 	if (verify_keyblock(&kbc, &pubk))
 		goto exit;
 
-	shared_mem_release(rootkc.rootk);
-	rootkc.rootk = NULL;
+	shared_mem_release(rootk);
+	rootk = NULL;
 
-	if (verify_gvd_signature(&gvdc.gvd, &ranges, &kbc.kb->data_key, &sigc))
+	if (verify_gvd_signature(&gvdc, &kbc.kb->data_key))
 		return -1;
 
-	rv = validate_ranges_sha(ranges.ranges, gvdc.gvd.range_count,
+	rv = validate_ranges_sha(gvdc.ranges.ranges, gvdc.gvd.range_count,
 				 gvdc.gvd.ranges_digest);
 	if (!rv) {
 		/* Verification succeeded, save the hash for the next time. */
-		rv = save_gvd_hash(&gvdc, &ranges);
+		rv = save_gvd_hash(&gvdc);
 	}
 exit:
 	if (kbc.kb)
 		shared_mem_release(kbc.kb);
 
-	if (rootkc.rootk)
-		shared_mem_release(rootkc.rootk);
+	if (rootk)
+		shared_mem_release(rootk);
 
 	return rv;
 }
