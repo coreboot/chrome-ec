@@ -7,9 +7,13 @@
 
 #include "common.h"
 #include "panic.h"
+#include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "watchdog.h"
+
+/* Panic data goes at the end of RAM. */
+static struct panic_data * const pdata_ptr = PANIC_DATA_PTR;
 
 void __keep watchdog_trace(uint32_t excep_lr, uint32_t excep_sp)
 {
@@ -27,6 +31,13 @@ void __keep watchdog_trace(uint32_t excep_lr, uint32_t excep_sp)
 
 	panic_set_reason(PANIC_SW_WATCHDOG, stack[6],
 			 (excep_lr & 0xf) == 1 ? 0xff : task_get_current());
+
+	/*
+	 * Store LR to cm.hfsr. It is for HardFault status register but it is
+	 * probably the least informative register used by
+	 * chip_panic_data_backup of the existing RO.
+	 */
+	pdata_ptr->cm.hfsr = stack[5];
 
 	panic_printf("### WATCHDOG PC=%08x / LR=%08x / pSP=%08x ",
 		     stack[6], stack[5], psp);
