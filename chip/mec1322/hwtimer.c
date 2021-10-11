@@ -107,3 +107,14 @@ int __hw_clock_source_init(uint32_t start_t)
 
 	return MEC1322_IRQ_TIMER32_1;
 }
+
+/*
+ * Unrolled udelay. It preserves LR, which points to the root cause of WD crash.
+ */
+__override void udelay(unsigned us)
+{
+	unsigned t0 = 0xffffffff - MEC1322_TMR32_CNT(0);
+
+	while (0xffffffff - MEC1322_TMR32_CNT(0) - t0 <= us)
+		;
+}
