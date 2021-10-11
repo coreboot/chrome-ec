@@ -242,7 +242,8 @@ static void panic_show_extra(const struct panic_data *pdata)
 	panic_printf("\nmmfs = %x, ", pdata->cm.mmfs);
 	panic_printf("shcsr = %x, ", pdata->cm.shcsr);
 	panic_printf("hfsr = %x, ", pdata->cm.hfsr);
-	panic_printf("dfsr = %x\n", pdata->cm.dfsr);
+	panic_printf("dfsr = %x, ", pdata->cm.dfsr);
+	panic_printf("ipsr = %x\n", pdata->cm.regs[1]);
 }
 
 /*
@@ -283,9 +284,18 @@ void panic_data_print(const struct panic_data *pdata)
 	if (pdata->flags & PANIC_DATA_FLAG_FRAME_VALID)
 		sregs = pdata->cm.frame;
 
-	panic_printf("\n=== %s EXCEPTION: %02x ====== xPSR: %08x ===\n",
-		     in_handler ? "HANDLER" : "PROCESS",
-		     lregs[1] & 0xff, sregs ? sregs[7] : -1);
+	if (((pdata->cm.hfsr >> 26) & 0xf) == HFSR_FLAG_WATCHDOG) {
+		panic_printf("\n### WATCHDOG PC=%08x / LR=%08x / task=%d\n",
+			     lregs[4], lregs[1], (pdata->cm.hfsr >> 2) & 0xff);
+	} else if (((pdata->cm.hfsr >> 26) & 0xf) == HFSR_FLAG_ASSERT) {
+		panic_printf("\nASSERTION FAILURE in %s() at %s:%d\n",
+			     lregs[3], lregs[4],
+			     (pdata->cm.hfsr >> 10) & 0xffff);
+	} else {
+		panic_printf("\n=== %s EXCEPTION: %02x ====== xPSR: %08x ===\n",
+			     in_handler ? "HANDLER" : "PROCESS",
+			     lregs[1] & 0xff, sregs ? sregs[7] : -1);
+	}
 	for (i = 0; i < 4; i++)
 		print_reg(i, sregs, i);
 	for (i = 4; i < 10; i++)
@@ -335,6 +345,12 @@ void __keep report_panic(void)
 	pdata->cm.shcsr = CPU_NVIC_SHCSR;
 	pdata->cm.hfsr = CPU_NVIC_HFSR;
 	pdata->cm.dfsr = CPU_NVIC_DFSR;
+
+	/* Store LR & PC in cm.regs to make them survive a PMIC reset. */
+	if (pdata->flags & PANIC_DATA_FLAG_FRAME_VALID) {
+		pdata->cm.regs[3] = pdata->cm.frame[5];  /* LR */
+		pdata->cm.regs[4] = pdata->cm.frame[6];  /* PC */
+	}
 
 #ifdef CONFIG_UART_PAD_SWITCH
 	uart_reset_default_pad_panic();
@@ -417,6 +433,36 @@ void panic_get_reason(uint32_t *reason, uint32_t *info, uint8_t *exception)
 	}
 }
 #endif
+
+void panic_assert(const char *func, const char *file, uint16_t line)
+{
+	struct panic_data *pdata = pdata_ptr;
+
+	pdata->magic = PANIC_DATA_MAGIC;
+	pdata->struct_size = sizeof(*pdata);
+	pdata->struct_version = 2;
+	pdata->arch = PANIC_ARCH_CORTEX_M;
+	pdata->flags = 0;
+	pdata->reserved = 0;
+
+	/*
+	 * Panic data is cleared by PMIC reset on Nami. HFSR is used because
+	 * it's saved to BBRAM by the released RO (before PMIC reset). Bit
+	 * assignments are as follows:
+	 *
+	 * ([31:30] Used for DEBUGEVT and FORCED)
+	 * [29:26]  Flags
+	 * [25:10]  Line #
+	 * [9:2]    Task #
+	 * ([1:0]   Used for VECTTBLE and reserved)
+	 */
+	pdata->cm.hfsr = HFSR_FLAG_ASSERT << 26 | line << 10
+			| (task_get_current() & 0xff) << 2;
+	pdata->cm.regs[3] = (uint32_t)func;
+	pdata->cm.regs[4] = (uint32_t)file;
+
+	panic_reboot();
+}
 
 void bus_fault_handler(void)
 {
