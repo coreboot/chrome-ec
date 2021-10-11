@@ -1850,9 +1850,6 @@
  */
 #undef CONFIG_HIBERNATE_PSL
 
-/* Use a hardware specific udelay(). */
-#undef CONFIG_HW_SPECIFIC_UDELAY
-
 /*****************************************************************************/
 /* I2C configuration */
 

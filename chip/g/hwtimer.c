@@ -178,14 +178,13 @@ int __hw_clock_source_init(uint32_t start_t)
 	return GC_IRQNUM_TIMELS0_TIMINT1;
 }
 
-#ifdef CONFIG_HW_SPECIFIC_UDELAY
 /*
  * Custom chip/g udelay(), guaranteed to delay for at least us microseconds.
  *
  * Lost time during timer wrap is not taken into account since interrupt latency
  * and __hw_clock_source_irq() execution time likely exceeds the lost 3us.
  */
-void udelay(unsigned us)
+__override void udelay(unsigned us)
 {
 	unsigned t0 = __hw_clock_source_read();
 
@@ -210,4 +209,3 @@ void udelay(unsigned us)
 	while (__hw_clock_source_read() - t0 <= us)
 		;
 }
-#endif /* CONFIG_HW_SPECIFIC_UDELAY */
