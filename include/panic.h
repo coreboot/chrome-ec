@@ -188,6 +188,19 @@ void panic_set_reason(uint32_t reason, uint32_t info, uint8_t exception);
 void panic_get_reason(uint32_t *reason, uint32_t *info, uint8_t *exception);
 #endif
 
+#define HFSR_FLAG_ASSERT	3
+#define HFSR_FLAG_WATCHDOG	4
+
+/**
+ * Save code location in struct panic_data then reboot.
+ *
+ * @param func Function name (i.e. __func__). Stored in regs[3].
+ * @param file File path (i.e. __FILE__). Stored in regs[4].
+ * @param line Line number (i.e. __LINE__). Stored in HFSR[25:10].
+ */
+void panic_assert(const char *func, const char *file, uint16_t line)
+	__attribute__((noreturn));
+
 /**
  * Enable/disable bus fault handler
  *

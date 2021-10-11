@@ -32,12 +32,17 @@ void __keep watchdog_trace(uint32_t excep_lr, uint32_t excep_sp)
 	panic_set_reason(PANIC_SW_WATCHDOG, stack[6],
 			 (excep_lr & 0xf) == 1 ? 0xff : task_get_current());
 
+	/* Copy task# to cm.hfsr[9:2]. */
+	pdata_ptr->cm.hfsr = HFSR_FLAG_WATCHDOG << 26
+			| (pdata_ptr->cm.regs[1] & 0xff) << 2;
+
 	/*
-	 * Store LR to cm.hfsr. It is for HardFault status register but it is
-	 * probably the least informative register used by
-	 * chip_panic_data_backup of the existing RO.
+	 * Store LR in cm.regs[1] (ipsr). IPSR holds exception# but we don't
+	 * need it because the reason (=PANIC_SW_WATCHDOG) is already stored
+	 * in cm.regs[3] (r4). Note this overwrites task# in cm.regs[1] stored
+	 * by panic_set_reason.
 	 */
-	pdata_ptr->cm.hfsr = stack[5];
+	pdata_ptr->cm.regs[1] = stack[5];
 
 	panic_printf("### WATCHDOG PC=%08x / LR=%08x / pSP=%08x ",
 		     stack[6], stack[5], psp);

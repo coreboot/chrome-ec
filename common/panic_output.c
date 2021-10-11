@@ -98,7 +98,7 @@ void panic_assert_fail(const char *msg, const char *func, const char *fname,
 	panic_printf("\nASSERTION FAILURE '%s' in %s() at %s:%d\n",
 		     msg, func, fname, linenum);
 #ifdef CONFIG_SOFTWARE_PANIC
-	software_panic(PANIC_SW_ASSERT, linenum);
+	panic_assert(func, fname, (uint16_t)linenum);
 #else
 	panic_reboot();
 #endif
