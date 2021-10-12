@@ -407,9 +407,9 @@ static int bmi_config_load(const struct motion_sensor_t *s)
 	int bmi_config_tbin_len;
 	/*
 	 * Due to i2c transaction timeout limit,
-	 * burst_write_len should not be above 2048 to prevent timeout.
+	 * burst_write_len should not be above 128.
 	 */
-	int burst_write_len = 2048;
+	int burst_write_len = 128;
 
 	/*
 	 * The BMI config data may be linked into .rodata or the .init_rom
