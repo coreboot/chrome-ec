@@ -210,7 +210,8 @@ rw_board_deps := $(addsuffix .d, $(RW_FIPS_OBJS))
 FIPS_CFLAGS = $(CFLAGS) -frandom-seed=0 -flto=1 -flto-partition=1to1 -fipa-pta\
   -fvisibility=hidden -fipa-cp-clone -fweb -ftree-partial-pre\
   -flive-range-shrinkage -fgcse-after-reload -fgcse-sm -fgcse-las -fivopts\
-  -fpredictive-commoning -freorder-blocks-algorithm=stc
+  -fpredictive-commoning -freorder-blocks-algorithm=stc\
+  $(CFLAGS_LTO_PARTIAL_LINK)
 
 $(RW_BD_OUT)/$(FIPS_MODULE): $(RW_FIPS_OBJS) $(FIPS_LD_SCRIPT)
 	@echo "  LD      $(notdir $@)"

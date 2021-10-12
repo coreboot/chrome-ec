@@ -24,6 +24,16 @@ CFLAGS_CPU+=-flto
 LDFLAGS_EXTRA+=-flto
 endif
 
+# TODO: remove this workaround once migration to gcc 11.2 completed.
+GCC_VERSION := $(shell $(CROSS_COMPILE)gcc -dumpversion)
+ifeq ("$(GCC_VERSION)","11.2.0")
+# IPA modref pass crashes gcc 11.2 when LTO is used with partial linking
+CFLAGS_CPU += -fno-ipa-modref
+
+# Set an option to force LTO to generate target machine code
+export CFLAGS_LTO_PARTIAL_LINK := -flinker-output=nolto-rel
+endif
+
 core-y=cpu.o init.o ldivmod.o llsr.o uldivmod.o vecttable.o
 core-$(CONFIG_AES)+=aes.o
 core-$(CONFIG_AES_GCM)+=ghash.o
