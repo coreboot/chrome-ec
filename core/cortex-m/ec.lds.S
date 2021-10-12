@@ -110,7 +110,22 @@ SECTIONS
 		__fips_module_start = .;
 		KEEP(*(.text.fips))
 		KEEP(*(.rodata.fips))
+		. = ALIGN(4);
 		__fips_module_end = .;
+	} > FLASH =0xFFFFFFFF
+	/*
+	 * Put the FIPS checksum in its own section, so it's easier to inject it
+	 * into the elf file. This section should be adjacent to last section of
+         * FIPS module which is rodata.fips.
+	 */
+	.text.fips_checksum : {
+		__fips_module_checksum_start = .;
+		KEEP(*(.rodata.fips.checksum))
+		__fips_module_checksum_end = .;
+	} > FLASH =0xFFFFFFFF
+
+	/* The rest of .text sections. */
+	.text.__main : {
 		. = ALIGN(4);
 		__ap_ro_root_key_hash_start = . ;
 		*(.rodata.root_key_hash)
@@ -145,16 +160,6 @@ SECTIONS
 #	endif /* !CONFIG_FLASH_PHYSICAL */
 #endif
 
-	. = ALIGN(4);
-	/*
-	 * Put the FIPS checksum in its own section, so it's easier to inject it
-	 * into the elf file.
-	 */
-	.text.fips_checksum : {
-		__fips_module_checksum_start = .;
-		KEEP(*(.rodata.fips.checksum))
-		__fips_module_checksum_end = .;
-	}
 	. = ALIGN(4);
 	.rodata : {
 		/* Symbols defined here are declared in link_defs.h */
