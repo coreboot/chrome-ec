@@ -216,6 +216,7 @@ CRYPT_RESULT _cpri__AESEncryptOFB(
 #include "extension.h"
 #include "hooks.h"
 #include "uart.h"
+#include "internal.h"
 
 enum aes_test_cipher_mode {
 	TEST_MODE_ECB = 0,

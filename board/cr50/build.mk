@@ -172,7 +172,6 @@ board-y += tpm2/ecc.o
 board-y += tpm2/endorsement.o
 board-y += tpm2/hash.o
 board-y += tpm2/hash_data.o
-board-y += tpm2/hkdf.o
 board-y += tpm2/manufacture.o
 board-y += tpm2/nvmem_ops.o
 board-y += tpm2/platform.o

@@ -308,6 +308,19 @@ uint64_t read_rand(void);
  */
 bool fips_trng_startup(int stage);
 
+
+
+/**
+ * Returns random number from TRNG with indication wherever reading is valid.
+ * This is different from rand() which doesn't provide any indication.
+ * High 32-bits set to zero in case of error; otherwise value >> 32 == 1
+ * Use of uint64_t vs. struct results in more efficient code.
+ * Random is passed continuous TRNG health tests.
+ *
+ * @return uint64_t, low 32 bits - random  high 32 bits - validity status
+ */
+uint64_t fips_trng_rand32(void);
+
 /**
  * Check that Cr50-wide HMAC_DRBG seeded according NIST SP 800-90A
  * recomendation is properly initialized and can be used.
@@ -493,6 +506,101 @@ void dcrypto_imem_load(size_t offset, const uint32_t *opcodes,
  * Returns 0 iff no difference was observed between existing and new content.
  */
 uint32_t dcrypto_dmem_load(size_t offset, const void *words, size_t n_words);
+
+/* P256 based integration encryption (DH+AES128+SHA256).
+ * Not FIPS 140-2 compliant, not used other than for tests
+ * Authenticated data may be provided, where the first auth_data_len
+ * bytes of in will be authenticated but not encrypted. *
+ * Supports in-place encryption / decryption. *
+ * The output format is:
+ * 0x04 || PUBKEY || AUTH_DATA || AES128_CTR(PLAINTEXT) ||
+ *         HMAC_SHA256(AUTH_DATA || CIPHERTEXT)
+ */
+size_t DCRYPTO_ecies_encrypt(void *out, size_t out_len, const void *in,
+			     size_t in_len, size_t auth_data_len,
+			     const uint8_t *iv, const p256_int *pub_x,
+			     const p256_int *pub_y, const uint8_t *salt,
+			     size_t salt_len, const uint8_t *info,
+			     size_t info_len);
+size_t DCRYPTO_ecies_decrypt(void *out, size_t out_len, const void *in,
+			     size_t in_len, size_t auth_data_len,
+			     const uint8_t *iv, const p256_int *d,
+			     const uint8_t *salt, size_t salt_len,
+			     const uint8_t *info, size_t info_len);
+
+/*
+ * HKDF as per RFC 5869. Mentioned as conforming NIST SP 800-56C Rev.1
+ * [RFC 5869] specifies a version of the above extraction-then-expansion
+ * key-derivation procedure using HMAC for both the extraction and expansion
+ * steps.
+ */
+int DCRYPTO_hkdf(uint8_t *OKM, size_t OKM_len, const uint8_t *salt,
+		 size_t salt_len, const uint8_t *IKM, size_t IKM_len,
+		 const uint8_t *info, size_t info_len);
+
+
+/* AES-GCM-128/192/256
+ * NIST Special Publication 800-38D, IV is provided externally
+ * Caller should use IV length according to section 8.2 of SP 800-38D
+ * And choose appropriate IV construction method, constrain number
+ * of invocations according to section 8.3 of SP 800-38D
+ */
+struct GCM_CTX {
+	union {
+		uint32_t d[4];
+		uint8_t c[16];
+	} block, Ej0;
+
+	uint64_t aad_len;
+	uint64_t count;
+	size_t remainder;
+};
+
+/* Initialize the GCM context structure. */
+void DCRYPTO_gcm_init(struct GCM_CTX *ctx, uint32_t key_bits,
+		      const uint8_t *key, const uint8_t *iv, size_t iv_len);
+/* Additional authentication data to include in the tag calculation. */
+void DCRYPTO_gcm_aad(struct GCM_CTX *ctx, const uint8_t *aad_data, size_t len);
+/* Encrypt & decrypt return the number of bytes written to out
+ * (always an integral multiple of 16), or -1 on error.  These functions
+ * may be called repeatedly with incremental data.
+ *
+ * NOTE: if in_len is not a integral multiple of 16, then out_len must
+ * be at least in_len - (in_len % 16) + 16 bytes.
+ */
+int DCRYPTO_gcm_encrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
+			const uint8_t *in, size_t in_len);
+int DCRYPTO_gcm_decrypt(struct GCM_CTX *ctx, uint8_t *out, size_t out_len,
+			const uint8_t *in, size_t in_len);
+/* Encrypt & decrypt a partial final block, if any.  These functions
+ * return the number of bytes written to out (<= 15), or -1 on error.
+ */
+int DCRYPTO_gcm_encrypt_final(struct GCM_CTX *ctx, uint8_t *out,
+			      size_t out_len);
+int DCRYPTO_gcm_decrypt_final(struct GCM_CTX *ctx, uint8_t *out,
+			      size_t out_len);
+/* Compute the tag over AAD + encrypt or decrypt data, and return the
+ * number of bytes written to tag.  Returns -1 on error.
+ */
+int DCRYPTO_gcm_tag(struct GCM_CTX *ctx, uint8_t *tag, size_t tag_len);
+/* Cleanup secrets. */
+void DCRYPTO_gcm_finish(struct GCM_CTX *ctx);
+
+/* AES-CMAC-128
+ * NIST Special Publication 800-38B, RFC 4493
+ * K: 128-bit key, M: message, len: number of bytes in M
+ * Writes 128-bit tag to T; returns 0 if an error is encountered and 1
+ * otherwise.
+ */
+enum dcrypto_result DCRYPTO_aes_cmac(const uint8_t *K, const uint8_t *M,
+				     size_t len, uint32_t T[4]);
+/* key: 128-bit key, M: message, len: number of bytes in M,
+ *    T: tag to be verified
+ * Returns 1 if the tag is correct and 0 otherwise.
+ */
+enum dcrypto_result DCRYPTO_aes_cmac_verify(const uint8_t *key,
+					    const uint8_t *M, size_t len,
+					    const uint32_t T[4]);
 
 
 #ifndef __alias
