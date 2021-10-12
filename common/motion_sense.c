@@ -232,7 +232,7 @@ static int motion_sense_set_ec_rate_from_ap(
 	 * One will have a delay guarantee to be less than its ODR.
 	 */
 	if (SECOND * 1100 / odr_mhz > new_rate_us)
-		new_rate_us = new_rate_us / 95 * 100;
+		new_rate_us = new_rate_us * 95 / 100;
 
 end_set_ec_rate_from_ap:
 	return MAX(new_rate_us, motion_min_interval);
@@ -1120,6 +1120,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			return EC_RES_INVALID_PARAM;
 
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION) &&
+		    MOTION_SENSE_ACTIVITY_SENSOR_ID >= 0 &&
 		    (in->sensor_odr.sensor_num ==
 		     MOTION_SENSE_ACTIVITY_SENSOR_ID))
 			out->info.type = MOTIONSENSE_TYPE_ACTIVITY;
@@ -1451,6 +1452,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 	case MOTIONSENSE_CMD_SPOOF: {
 		/* spoof activity if it is activity sensor */
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION) &&
+		    MOTION_SENSE_ACTIVITY_SENSOR_ID >= 0 &&
 		    in->spoof.sensor_id == MOTION_SENSE_ACTIVITY_SENSOR_ID) {
 			switch (in->spoof.activity_num) {
 #ifdef CONFIG_BODY_DETECTION

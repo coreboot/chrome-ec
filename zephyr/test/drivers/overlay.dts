@@ -3,8 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include <dt-bindings/gpio_defines.h>
 #include <cros/thermistor/thermistor.dtsi>
+#include <dt-bindings/gpio_defines.h>
+#include <freq.h>
 
 / {
 	aliases {
@@ -444,6 +445,11 @@
 			error-on-msb-first-access;
 		};
 	};
+
+	clock: clock {
+		compatible = "cros,clock-control-emul";
+		clock-frequency = <DT_FREQ_M(100)>; /* 100 MHz */
+	};
 };
 
 &espi0 {
@@ -540,6 +546,13 @@
 		status = "okay";
 		reg = <0x84>;
 		label = "I2C_MOCK";
+	};
+
+	isl923x_emul: isl923x@9 {
+		compatible = "cros,isl923x-emul";
+		status = "okay";
+		reg = <0x9>;
+		label = "ISL923X_EMUL";
 	};
 };
 

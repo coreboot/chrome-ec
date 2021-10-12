@@ -32,11 +32,7 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Sensors */
-
-/* TODO(b/194765820)
- * Check if project support dynamic motion sensor count
- */
-/* #define	CONFIG_DYNAMIC_MOTION_SENSOR_COUNT */
+#define	CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 #define CONFIG_ACCELGYRO_LSM6DSO	/* Base accel */
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
@@ -55,6 +51,7 @@
 
 /* Lid accel */
 #define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
 #define CONFIG_ACCEL_BMA4XX

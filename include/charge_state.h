@@ -45,7 +45,9 @@ enum charge_state {
 	/* Charging, almost fully charged */
 	PWR_STATE_CHARGE_NEAR_FULL,
 	/* Charging state machine error */
-	PWR_STATE_ERROR
+	PWR_STATE_ERROR,
+	/*  Count of total states */
+	PWR_STATE_COUNT
 };
 
 /* Charge state flags */
@@ -78,6 +80,11 @@ enum charge_state {
  * Return current charge state.
  */
 enum charge_state charge_get_state(void);
+
+/**
+ * Return current charge v2 state.
+ */
+__test_only enum charge_state_v2 charge_get_state_v2(void);
 
 /**
  * Return non-zero if battery is so low we want to keep AP off.

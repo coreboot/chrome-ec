@@ -95,7 +95,7 @@ enum isl923x_mon_dir { MON_CHARGE = 0, MON_DISCHARGE = 1 };
 static int learn_mode;
 
 /* Mutex for CONTROL1 register, that can be updated from multiple tasks. */
-K_MUTEX_DEFINE(control1_mutex);
+K_MUTEX_DEFINE(control1_mutex_isl923x);
 
 static enum ec_error_list isl923x_discharge_on_ac(int chgnum, int enable);
 
@@ -112,13 +112,6 @@ static const struct charger_info isl9237_charger_info = {
 	.input_current_min  = AC_REG_TO_CURRENT(INPUT_I_MIN),
 	.input_current_step = AC_REG_TO_CURRENT(INPUT_I_STEP),
 };
-
-static inline enum ec_error_list raw_read8(int chgnum, int offset, int *value)
-{
-	return i2c_read8(chg_chips[chgnum].i2c_port,
-			 chg_chips[chgnum].i2c_addr_flags,
-			 offset, value);
-}
 
 static inline enum ec_error_list raw_read16(int chgnum, int offset, int *value)
 {
@@ -189,7 +182,7 @@ static int get_amon_bmon(int chgnum, enum isl923x_amon_bmon amon,
 			return ret;
 	}
 
-	mutex_lock(&control1_mutex);
+	mutex_lock(&control1_mutex_isl923x);
 
 	ret = raw_read16(chgnum, ISL923X_REG_CONTROL1, &reg);
 	if (!ret) {
@@ -204,7 +197,7 @@ static int get_amon_bmon(int chgnum, enum isl923x_amon_bmon amon,
 		ret = raw_write16(chgnum, ISL923X_REG_CONTROL1, reg);
 	}
 
-	mutex_unlock(&control1_mutex);
+	mutex_unlock(&control1_mutex_isl923x);
 
 	if (ret)
 		return ret;
@@ -271,7 +264,7 @@ static enum ec_error_list isl923x_enable_otg_power(int chgnum, int enabled)
 {
 	int rv, control1;
 
-	mutex_lock(&control1_mutex);
+	mutex_lock(&control1_mutex_isl923x);
 
 	rv = raw_read16(chgnum, ISL923X_REG_CONTROL1, &control1);
 	if (rv)
@@ -285,7 +278,7 @@ static enum ec_error_list isl923x_enable_otg_power(int chgnum, int enabled)
 	rv = raw_write16(chgnum, ISL923X_REG_CONTROL1, control1);
 
 out:
-	mutex_unlock(&control1_mutex);
+	mutex_unlock(&control1_mutex_isl923x);
 
 	return rv;
 }
@@ -775,7 +768,7 @@ static enum ec_error_list isl923x_discharge_on_ac(int chgnum, int enable)
 	int rv;
 	int control1;
 
-	mutex_lock(&control1_mutex);
+	mutex_lock(&control1_mutex_isl923x);
 
 	rv = raw_read16(chgnum, ISL923X_REG_CONTROL1, &control1);
 	if (rv)
@@ -792,11 +785,10 @@ static enum ec_error_list isl923x_discharge_on_ac(int chgnum, int enable)
 	learn_mode = !rv && enable;
 
 out:
-	mutex_unlock(&control1_mutex);
+	mutex_unlock(&control1_mutex_isl923x);
 	return rv;
 }
 
-#ifdef CONFIG_CHARGER_RAA489000
 enum ec_error_list raa489000_is_acok(int chgnum, bool *acok)
 {
 	int regval, rv;
@@ -916,9 +908,7 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 
 	cflush();
 }
-#endif /* CONFIG_CHARGER_RAA489000 */
 
-#ifdef CONFIG_CHARGER_ISL9238C
 enum ec_error_list isl9238c_hibernate(int chgnum)
 {
 	/* Disable IMON */
@@ -958,7 +948,6 @@ enum ec_error_list isl9238c_resume(int chgnum)
 
 	return EC_SUCCESS;
 }
-#endif /* CONFIG_CHARGER_ISL9238C */
 
 
 /*****************************************************************************/
@@ -1022,7 +1011,7 @@ static void charger_enable_psys(void)
 {
 	int val;
 
-	mutex_lock(&control1_mutex);
+	mutex_lock(&control1_mutex_isl923x);
 
 	/*
 	 * enable system power monitor PSYS function
@@ -1038,7 +1027,7 @@ static void charger_enable_psys(void)
 	psys_enabled = 1;
 
 out:
-	mutex_unlock(&control1_mutex);
+	mutex_unlock(&control1_mutex_isl923x);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, charger_enable_psys, HOOK_PRIO_DEFAULT);
 
@@ -1046,7 +1035,7 @@ static void charger_disable_psys(void)
 {
 	int val;
 
-	mutex_lock(&control1_mutex);
+	mutex_lock(&control1_mutex_isl923x);
 
 	/*
 	 * disable system power monitor PSYS function
@@ -1062,7 +1051,7 @@ static void charger_disable_psys(void)
 	psys_enabled = 0;
 
 out:
-	mutex_unlock(&control1_mutex);
+	mutex_unlock(&control1_mutex_isl923x);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, charger_disable_psys, HOOK_PRIO_DEFAULT);
 
