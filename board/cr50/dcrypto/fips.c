@@ -185,7 +185,7 @@ static bool fips_hmac_sha256_kat(void)
 
 	HMAC_SHA256_hw_init(&ctx, k, sizeof(k));
 	memcpy(in_mem, in, sizeof(in));
-	if (fips_break_cmd == FIPS_BREAK_SHA256)
+	if (fips_break_cmd == FIPS_BREAK_HMAC_SHA256)
 		in_mem[0] ^= 1;
 	HMAC_SHA256_update(&ctx, in_mem, sizeof(in_mem));
 	return DCRYPTO_equals(HMAC_SHA256_hw_final(&ctx), ans,

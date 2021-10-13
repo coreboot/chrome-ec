@@ -146,6 +146,16 @@ static int cmd_fips_status(int argc, char **argv)
 			fips_break_cmd = FIPS_BREAK_TRNG;
 		else if (!strncmp(argv[1], "sha", 3))
 			fips_break_cmd = FIPS_BREAK_SHA256;
+		else if (!strncmp(argv[1], "hmac", 4))
+			fips_break_cmd = FIPS_BREAK_HMAC_SHA256;
+		else if (!strncmp(argv[1], "drbg", 4))
+			fips_break_cmd = FIPS_BREAK_HMAC_DRBG;
+		else if (!strncmp(argv[1], "ecdsa", 5))
+			fips_break_cmd = FIPS_BREAK_ECDSA;
+		else if (!strncmp(argv[1], "pwct", 4))
+			fips_break_cmd = FIPS_BREAK_ECDSA_PWCT;
+		else if (!strncmp(argv[1], "none", 4))
+			fips_break_cmd = FIPS_NO_BREAK;
 #endif
 	}
 	return 0;

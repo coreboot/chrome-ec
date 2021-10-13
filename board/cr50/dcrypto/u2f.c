@@ -212,7 +212,7 @@ static enum ec_error_list u2f_origin_user_key_pair(
 		 */
 		hmac_drbg_init(&drbg, state->drbg_entropy,
 			       state->drbg_entropy_size, dev_salt, P256_NBYTES,
-			       NULL, 0, HMAC_DRBG_DO_NOT_AUTO_RESEED);
+			       NULL, 0, 16);
 		result = hmac_drbg_generate(&drbg, key_seed, sizeof(key_seed),
 					    key_handle, key_handle_size);
 	} else {
@@ -228,7 +228,7 @@ static enum ec_error_list u2f_origin_user_key_pair(
 		hmac_drbg_init(&drbg, state->drbg_entropy,
 			       state->drbg_entropy_size, key_handle,
 			       key_handle_size, NULL, 0,
-			       HMAC_DRBG_DO_NOT_AUTO_RESEED);
+			       16);
 
 		/**
 		 * Additional data = Device_ID (constant coming from HW).
@@ -563,7 +563,7 @@ static bool g2f_individual_key_pair(const struct u2f_state *state, p256_int *d,
 		hmac_drbg_init(&drbg, state->drbg_entropy,
 			       state->drbg_entropy_size, state->salt,
 			       sizeof(state->salt), NULL, 0,
-			       HMAC_DRBG_DO_NOT_AUTO_RESEED);
+			       16);
 
 		do {
 			/**
