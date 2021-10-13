@@ -255,10 +255,6 @@ static void poll_read_state(void)
 			 */
 			i2cp_register_write_complete_handler(
 				write_complete_handler_);
-
-#ifdef CONFIG_FLASH_LOG
-			flash_log_add_event(FE_TPM_I2C_ERROR, 0, NULL);
-#endif
 			return;
 		}
 	}
