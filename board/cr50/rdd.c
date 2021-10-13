@@ -62,7 +62,13 @@ enum ccd_block_flags {
 	 * This will block EC-CR50-communication. CR50 should not enable EC
 	 * UART.
 	 */
-	CCD_BLOCK_EC_CR50_COMM = BIT(4)
+	CCD_BLOCK_EC_CR50_COMM = BIT(4),
+
+	/*
+	 * This will block EC-CR50-communication. CR50 should not enable EC
+	 * UART.
+	 */
+	CCD_BLOCK_TRISTATE_EC = BIT(5)
 };
 
 /* Which UARTs are blocked by console command */
@@ -107,8 +113,13 @@ static void uartn_tx_disconnect(int uart)
 	} else {
 		GWRITE(PINMUX, DIOB5_SEL, 0);
 
-		/* Set up the pulldown */
-		GWRITE_FIELD(PINMUX, DIOB5_CTL, PD, 1);
+		/*
+		 * Set up the pulldown on EC RX unless the EC UART is supposed
+		 * to be tri-stated. If it's supposed to be tristated, disable
+		 * TX and remove the pull-down from RX.
+		 */
+		GWRITE_FIELD(PINMUX, DIOB5_CTL, PD,
+			     !(ccd_block & CCD_BLOCK_TRISTATE_EC));
 	}
 }
 
@@ -452,6 +463,8 @@ static void print_ccd_ports_blocked(void)
 	}
 	if (ccd_block & CCD_BLOCK_EC_CR50_COMM)
 		ccputs(" EC_CR50_COMM");
+	if (ccd_block & CCD_BLOCK_TRISTATE_EC)
+		ccputs(" TRISTATE_EC");
 	if (!ccd_block)
 		ccputs(" (none)");
 	ccputs("\n");
@@ -494,6 +507,10 @@ static int command_ccd_block(int argc, char **argv)
 			block_flag = CCD_BLOCK_IGNORE_SERVO;
 		else if (!strcasecmp(argv[1], "EC_CR50_COMM"))
 			block_flag = CCD_BLOCK_EC_CR50_COMM;
+		else if (!strcasecmp(argv[1], "TRISTATE_EC"))
+			block_flag = (CCD_BLOCK_TRISTATE_EC |
+				      CCD_BLOCK_EC_UART |
+				      CCD_BLOCK_EC_CR50_COMM);
 		else
 			return EC_ERROR_PARAM1;
 
@@ -507,8 +524,15 @@ static int command_ccd_block(int argc, char **argv)
 
 		if (block_flag == CCD_BLOCK_IGNORE_SERVO)
 			servo_ignore(new_state);
-		else if (block_flag == CCD_BLOCK_EC_CR50_COMM)
+		else if (block_flag & CCD_BLOCK_EC_CR50_COMM)
 			ec_comm_block(new_state);
+
+		/*
+		 * Call uartn_tx_disconnect to make sure the pulldown gets
+		 * removed even if the EC uart is already disabled.
+		 */
+		if (block_flag & CCD_BLOCK_TRISTATE_EC)
+			uartn_tx_disconnect(UART_EC);
 
 		/* Update blocked state in deferred function */
 		ccd_update_state();
@@ -519,6 +543,6 @@ static int command_ccd_block(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(ccdblock, command_ccd_block,
-			"[<AP | EC | SERVO | IGNORE_SERVO | EC_CR50_COMM>"
-			" [BOOLEAN]]",
+			"[<AP | EC | SERVO | IGNORE_SERVO | EC_CR50_COMM | "
+			"TRISTATE_EC> [BOOLEAN]]",
 			"Force CCD ports disabled");
