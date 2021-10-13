@@ -19,6 +19,9 @@ def u2f_generate(tpm, origin, user, flag, auth):
     origin = origin[:32].ljust(32, b'\0')
     user = user[:32].ljust(32, b'\0')
     auth = auth[:32].ljust(32, b'\0')
+
+    # U2F_Sign receives prehashed credentials, U2F_Generate - hashed
+    auth = hashlib.sha256(auth).digest()
     cmd = origin + user + flag.to_bytes(1, 'big') + auth
     wrapped_response = tpm.command(tpm.wrap_ext_command(subcmd.U2F_GENERATE, cmd))
     response = tpm.unwrap_ext_response(subcmd.U2F_GENERATE, wrapped_response)

@@ -154,8 +154,8 @@ enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 
 	const struct u2f_state *state = u2f_get_state();
 
-	const uint8_t *hash, *user, *origin, *authTimeSecret = NULL;
-
+	const uint8_t *hash, *user, *origin;
+	uint8_t *authTimeSecret = NULL;
 	uint8_t flags;
 	struct u2f_sign_resp *resp;
 
@@ -190,11 +190,10 @@ enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 		origin = req->v1.appId;
 		/**
 		 * TODO(b/184393647): Enforce user verification if no user
-		 * presence check is requested. Set
-		 *    authTimeSecret = req->v1.authTimeSecret;
-		 * unconditionally or if (flags & U2F_AUTH_FLAG_TUP) == 0
+		 * presence check is requested.
 		 */
-		authTimeSecret = NULL;
+		if ((flags & U2F_AUTH_FLAG_TUP) == 0)
+			authTimeSecret = (uint8_t *)req->v1.authTimeSecret;
 	} else if (input_size == sizeof(struct u2f_sign_versioned_req_v2)) {
 		kh = (union u2f_key_handle_variant *)&req->v2.keyHandle;
 		kh_version = U2F_KH_VERSION_2;
@@ -202,10 +201,20 @@ enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 		flags = req->v2.flags;
 		user = req->v2.userSecret;
 		origin = req->v2.appId;
-		authTimeSecret = req->v2.authTimeSecret;
+		authTimeSecret = (uint8_t *)req->v2.authTimeSecret;
 	} else
 		return VENDOR_RC_BOGUS_ARGS;
 
+	if (authTimeSecret) {
+		/**
+		 * U2F_Sign receives a pre-hashed version of credential which
+		 * was used by U2F_Generate, so perform hash before use.
+		 */
+		if (!DCRYPTO_SHA256_hash(authTimeSecret,
+					 U2F_AUTH_TIME_SECRET_SIZE,
+					 authTimeSecret))
+			return VENDOR_RC_INTERNAL_ERROR;
+	}
 	result = u2f_authorize_keyhandle(state, kh, kh_version, user, origin,
 					 authTimeSecret);
 	if (result == EC_ERROR_ACCESS_DENIED)
