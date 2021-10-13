@@ -3,8 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include <dt-bindings/gpio_defines.h>
 #include <cros/thermistor/thermistor.dtsi>
+#include <dt-bindings/gpio_defines.h>
+#include <freq.h>
 
 / {
 	aliases {
@@ -109,6 +110,25 @@
 
 		lgc011 {
 			enum-name = "lgc011";
+		};
+	};
+
+	cbi-ssfc {
+		compatible = "named-cbi-ssfc";
+		cbi_ssfc_base_sensor: base_sensor {
+			enum-name = "BASE_SENSOR";
+			size = <2>;
+			base_sensor_0: base0 {
+				compatible = "named-cbi-ssfc-value";
+				status = "okay";
+				value = <1>;
+				default;
+			};
+			base_sensor_1: base1 {
+				compatible = "named-cbi-ssfc-value";
+				status = "okay";
+				value = <2>;
+			};
 		};
 	};
 
@@ -443,6 +463,11 @@
 			error-on-reserved-bit-write;
 			error-on-msb-first-access;
 		};
+	};
+
+	clock: clock {
+		compatible = "cros,clock-control-emul";
+		clock-frequency = <DT_FREQ_M(100)>; /* 100 MHz */
 	};
 };
 

@@ -351,7 +351,7 @@ SECTIONS
 	__data_lma_start = ORIGIN(ROM_RESIDENT_VMA);
 	#define INIT_ROM_LMA	(ORIGIN(ROM_RESIDENT_VMA) + SIZEOF(.data))
 #else
-	__data_lma_start = .;
+	__data_lma_start = LOADADDR(.data);
 	#define INIT_ROM_LMA	ORIGIN(ROM_RESIDENT_VMA)
 #endif
 
@@ -488,19 +488,22 @@ SECTIONS
 #endif
 
 	/*
-	 * __flash_used is used in flash free calculations by the makefile.
+	 * __flash_used and __flash_size is used in flash free calculations by
+	 * the makefile. Note the difference between __flash_size and
+	 * __config_flash_size. __flash_size is the flash size for the given
+	 * image (RW, RO, etc.), while __config_flash_size is the *total*
+	 * flash size.
 	 * __image_size is stored in the struct image_data header and used
-	 * in hash calcuations.
+	 * in hash calculations.
 	 */
 	__flash_used = FLASH_USED_END - ORIGIN(EC_IMAGE_LMA_MEM_REGION);
+	__flash_size = LENGTH(EC_IMAGE_LMA_MEM_REGION);
 #ifndef CONFIG_CHIP_INIT_ROM_REGION
 #if !(defined(SECTION_IS_RW) && (CONFIG_FLASH_WRITE_SIZE > 4))
 	__image_size = __flash_used;
 #else
-	.rw_image_size_alignment :
+	.rw_image_size_alignment FLASH_USED_END : AT(FLASH_USED_END)
 	{
-		. = ORIGIN(FLASH) + __flash_used;
-		BYTE(0xFF);
 		. = ALIGN (CONFIG_FLASH_WRITE_SIZE);
 	} > FLASH = 0xFF
 

@@ -18,7 +18,6 @@ const enum ec_led_id supported_led_ids[] = {
 };
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-#ifndef CONFIG_ZEPHYR
 struct pwm_led_color_map led_color_map[EC_LED_COLOR_COUNT] = {
 				/* Red, Green, Blue */
 	[EC_LED_COLOR_RED] =    {  100,   0,     0 },
@@ -78,7 +77,6 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 
 	return EC_SUCCESS;
 }
-#endif
 
 /* Illuminates the LED on the side of the active charging port. If not charging,
  * illuminates both LEDs.

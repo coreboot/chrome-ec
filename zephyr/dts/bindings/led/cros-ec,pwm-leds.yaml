@@ -21,17 +21,19 @@ properties:
         pwmleds {
                 compatible = "pwm-leds";
                 pwm_led0: pwm_led_0 {
-                        pwms = <&led3_red
-                                &led2_green
-                                &led1_blue
-                                &led3_sidesel
-                                >;
+                        pwms = <&led3_red &led2_green &led1_blue>;
                 };
         };
         cros-pwmleds {
                 compatible = "cros-ec,pwm-leds";
                 leds = <&pwm_led0>;
         };
+
+  sidesel:
+    type: phandle
+    required: false
+    description: |
+      PWM node phandle for the SIDESEL line, if present.
 
   color-map-red:
     type: array
