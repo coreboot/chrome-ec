@@ -1026,7 +1026,7 @@ void tpm_task(void *u)
 			response_size = buffer_size;
 			call_extension_command(tpmh, &response_size,
 					       alt_if_command ?
-					       VENDOR_CMD_FROM_USB : 0);
+					       VENDOR_CMD_FROM_ALT_IF : 0);
 		} else
 #endif
 		{

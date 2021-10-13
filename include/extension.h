@@ -14,12 +14,13 @@
 
 /* Flags for vendor or extension commands */
 enum vendor_cmd_flags {
-	/*
-	 * Command is coming from the USB interface (either via the vendor
-	 * command endpoint or the console).  If this flag is not present,
-	 * the command is coming from the AP.
-	 */
+	/* Command is coming from the USB interface. */
 	VENDOR_CMD_FROM_USB = BIT(0),
+	/*
+	 * Command is coming through TPM task, but was not originated in the
+	 * AP.
+	 */
+	VENDOR_CMD_FROM_ALT_IF = BIT(1),
 };
 
 /* Parameters for vendor commands */

@@ -24,7 +24,7 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 #endif
 
 	/* Filter commands from USB */
-	if (p->flags & VENDOR_CMD_FROM_USB) {
+	if (p->flags & (VENDOR_CMD_FROM_USB | VENDOR_CMD_FROM_ALT_IF)) {
 		switch (p->code) {
 #ifdef CR50_DEV
 		case VENDOR_CC_IMMEDIATE_RESET:
@@ -45,8 +45,13 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 		case VENDOR_CC_RMA_CHALLENGE_RESPONSE:
 		case VENDOR_CC_SPI_HASH:   /* Requires physical presence. */
 		case VENDOR_CC_TURN_UPDATE_ON:
-		case VENDOR_CC_AP_RO_VALIDATE:
 			break;
+		case VENDOR_CC_AP_RO_VALIDATE:
+			/* This command is allowed if triggered locally. */
+			if (p->flags & VENDOR_CMD_FROM_ALT_IF)
+				break;
+
+			/* Fall through to the default case. */
 		default:
 			/* Otherwise, we don't allow this command. */
 			why_ignore = "usb";
