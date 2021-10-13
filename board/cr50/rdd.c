@@ -456,15 +456,15 @@ static void print_ccd_ports_blocked(void)
 		ccputs(" EC");
 	if (ccd_block & CCD_BLOCK_SERVO_SHARED)
 		ccputs(" SERVO");
+	if (ccd_block & CCD_BLOCK_EC_CR50_COMM)
+		ccputs(" EC_CR50_COMM");
+	if (ccd_block & CCD_BLOCK_TRISTATE_EC)
+		ccputs(" TRISTATE_EC");
 	if (ccd_block & CCD_BLOCK_IGNORE_SERVO) {
 		ccputs(" IGNORE_SERVO");
 		ccputs("\nWARNING: enabling UART while servo is connected may "
 		       "damage hardware");
 	}
-	if (ccd_block & CCD_BLOCK_EC_CR50_COMM)
-		ccputs(" EC_CR50_COMM");
-	if (ccd_block & CCD_BLOCK_TRISTATE_EC)
-		ccputs(" TRISTATE_EC");
 	if (!ccd_block)
 		ccputs(" (none)");
 	ccputs("\n");
