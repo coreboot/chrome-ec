@@ -450,38 +450,3 @@ static void board_chipset_shutdown(void)
 	gpio_set_level(GPIO_EN_USBA_5V, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
-
-int battery_get_vendor_param(uint32_t param, uint32_t *value)
-{
-	int rv;
-	uint8_t data[16] = {};
-
-	/* only allow reading 0x70~0x7F, 16 byte data */
-	if (param < 0x70 || param >= 0x80)
-		return EC_ERROR_ACCESS_DENIED;
-
-	rv = sb_read_string(0x70, data, sizeof(data));
-	if (rv)
-		return rv;
-
-	*value = data[param - 0x70];
-	return EC_SUCCESS;
-}
-
-int battery_set_vendor_param(uint32_t param, uint32_t value)
-{
-	return EC_ERROR_UNIMPLEMENTED;
-}
-
-/* Enable or disable input devices, based on chipset state and tablet mode */
-#ifndef TEST_BUILD
-void lid_angle_peripheral_enable(int enable)
-{
-	/* If the lid is in 360 position, ignore the lid angle,
-	 * which might be faulty. Disable keyboard.
-	 */
-	if (tablet_get_mode() || chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		enable = 0;
-	keyboard_scan_enable(enable, KB_SCAN_DISABLE_LID_ANGLE);
-}
-#endif
