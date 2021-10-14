@@ -142,7 +142,8 @@ struct u2f_key_handle_v1 {
 	uint8_t authorization_salt[U2F_AUTHORIZATION_SALT_SIZE];
 	/**
 	 * HMAC(u2f_hmac_key,
-	 *   auth_salt || version || origin_seed || kh_hmac || authTimeSecret)
+	 *      auth_salt || version || origin_seed
+	 *      || kh_hmac || authTimeSecretHash)
 	 */
 	uint8_t authorization_hmac[SHA256_DIGEST_SIZE];
 };
@@ -156,7 +157,7 @@ struct u2f_key_handle_v2 {
 	/**
 	 * HMAC(u2f_hmac_key,
 	 *      auth_salt || version || origin_seed || origin ||
-	 *      user || authTimeSecret)
+	 *      user || authTimeSecretHash)
 	 */
 	uint8_t authorization_hmac[SHA256_DIGEST_SIZE];
 };
