@@ -97,6 +97,9 @@ enum dcrypto_result dcrypto_p256_key_pwct(struct drbg_ctx *drbg,
 {
 	p256_int message, r, s;
 	enum dcrypto_result result;
+#ifdef CRYPTO_TEST_SETUP
+	p256_int d_altered;
+#endif
 
 	if (p256_is_zero(d))
 		return DCRYPTO_FAIL;
@@ -104,14 +107,19 @@ enum dcrypto_result dcrypto_p256_key_pwct(struct drbg_ctx *drbg,
 	/* set some pseudo-random message. */
 	p256_fast_random(&message);
 
+#ifdef CRYPTO_TEST_SETUP
+	if (fips_break_cmd == FIPS_BREAK_ECDSA_PWCT) {
+		/* Modify key used for signing. */
+		d_altered = *d;
+		d_altered.a[1] ^= 1;
+		d = &d_altered;
+	}
+#endif
+
 	result = dcrypto_p256_fips_sign_internal(drbg, d, &message, &r, &s);
 	if (result != DCRYPTO_OK)
 		return result;
 
-#ifdef CRYPTO_TEST_SETUP
-	if (fips_break_cmd == FIPS_BREAK_ECDSA_PWCT)
-		message.a[0] = ~message.a[0];
-#endif
 	return dcrypto_p256_ecdsa_verify(x, y, &message, &r, &s);
 }
 
