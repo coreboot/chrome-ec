@@ -244,8 +244,8 @@ bool fips_trng_startup(int stage)
 	return fips_powerup_passed();
 }
 
-/* Assuming H=0.8, we need 550 bits from TRNG to get 440 bits. */
-#define ENTROPY_SIZE_BITS  550
+/* Assuming H=0.77, we need 571 bits from TRNG to get 440 bits. */
+#define ENTROPY_SIZE_BITS  571
 #define ENTROPY_SIZE_WORDS (BITS_TO_WORDS(ENTROPY_SIZE_BITS))
 
 bool fips_drbg_init(void)
@@ -260,15 +260,15 @@ bool fips_drbg_init(void)
 		return true;
 
 	/**
-	 * Get entropy + nonce from TRNG. Assume H>=0.8.
+	 * Get entropy + nonce from TRNG. Assume H>=0.77.
 	 */
 	if (!fips_trng_bytes(entropy_input, sizeof(entropy_input)))
 		return false;
 
 	/**
-	 * Pass combined seed containing total 550 bits of entropy and nonce,
-	 * and assuming H=0.8, we will get total entropy in seed as 440bits as
-	 * defined for HMAC DBRG in NIST SP 800-90Ar1 B.2.
+	 * Pass combined seed containing total 571 bits of entropy and nonce,
+	 * and assuming H=0.77, we will get total entropy in seed as 440 bits
+	 * as defined for HMAC DBRG in NIST SP 800-90Ar1 B.2.
 	 * Required minimum entropy for the entropy input at instantiation =
 	 * (3/2) security_strength (this includes the entropy required for the
 	 * nonce). For 256-bit security, this means at least 384 bits.
@@ -276,10 +276,10 @@ bool fips_drbg_init(void)
 	 * Maximum length of the personalization string = 160 bits.
 	 * Maximum length of the entropy input = 1000 bits.
 	 *
-	 * Reseed_interval = 10 000 requests.
+	 * Reseed_interval = 1000 requests.
 	 */
 	hmac_drbg_init(&fips_drbg, &entropy_input, sizeof(entropy_input), NULL,
-		       0, NULL, 0, 10000);
+		       0, NULL, 0, 1000);
 
 	always_memset(entropy_input, 0, sizeof(entropy_input));
 	return true;

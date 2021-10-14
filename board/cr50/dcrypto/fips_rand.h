@@ -22,7 +22,11 @@ extern "C" {
  * Probability of false positive in single APT/RCT test
  * defined as 2^(-TRNG_TEST_ALPHA).
  */
-#define TRNG_TEST_ALPHA 40
+#define TRNG_TEST_ALPHA 39
+
+/* Entropy estimate for H1 = 0.77 = 77/100 */
+#define H_ENTROPY 77
+#define H_ENTROPY_DIVISOR 100
 
 /**
  * TRNG Health Tests
@@ -48,13 +52,19 @@ extern "C" {
  * (1) Repetition Count Test (RCT) NIST SP 800-90B 4.4.1
  * Cut off value is computed as:
  * c = ceil(1 + (-log2 alpha)/H);
- * alpha = 2^-50, H = 0.8; RCT_CUTOFF = CEIL(1+(ALPHA/0.8))
+ * RCT_CUTOFF = CEIL(1+(ALPHA/H)) = CEIL(1+(ALPHA*(1/H)))
  */
-#if TRNG_TEST_ALPHA == 40
-#define RCT_CUTOFF_SAMPLES 51
-#else
-/* RCT cut off for TRNG_TEST_ALPHA == 30 */
-#define RCT_CUTOFF_SAMPLES 39
+#define RCT_CUTOFF_SAMPLES                                              \
+	(1 + (((TRNG_TEST_ALPHA * H_ENTROPY_DIVISOR) + H_ENTROPY - 1) / \
+	      H_ENTROPY))
+
+/* Our implementation supports only certain range of RCT_CUTOFF values. */
+BUILD_ASSERT((RCT_CUTOFF_SAMPLES >= 1) && (RCT_CUTOFF_SAMPLES <= 63));
+
+#if TRNG_TEST_ALPHA == 39
+BUILD_ASSERT(RCT_CUTOFF_SAMPLES == 52);
+#elif TRNG_TEST_ALPHA == 30
+BUILD_ASSERT(RCT_CUTOFF_SAMPLES == 40);
 #endif
 
 /**
@@ -65,25 +75,30 @@ extern "C" {
 /**
  * (2) Adaptive Proportion Test (APT), NIST SP 800-90B 4.4.2, Table 2
  */
-#if TRNG_SAMPLE_BITS == 1
+/* We only support 1-bit alphabet for TRNG. */
+BUILD_ASSERT(TRNG_SAMPLE_BITS == 1);
 /* APT Windows size W = 1024 for 1 bit samples */
 #define APT_WINDOW_SIZE_SAMPLES 1024
-#else
-/* or 512 samples if more than 1 bit per sample */
-#define APT_WINDOW_SIZE_SAMPLES 512
-#endif
 #define APT_WINDOW_SIZE_BITS   (APT_WINDOW_SIZE_SAMPLES * TRNG_SAMPLE_BITS)
 #define APT_WINDOW_SIZE_NWORDS (BITS_TO_WORDS(APT_WINDOW_SIZE_BITS))
+
 /**
  * Cut off value = CRITBINOM(W, power(2,(-H)),1-α).
- * 698 = CRITBINOM(1024, power(2,(-0.8)), 1 - 2^(-40))
+ * 708 = CRITBINOM(1024, power(2,(-0.77)), 1 - 2^(-39))
  */
-#if TRNG_TEST_ALPHA == 40
-#define APT_CUTOFF_SAMPLES 698
-#else
+#if TRNG_TEST_ALPHA == 39
+#define APT_CUTOFF_SAMPLES 708
+#elif TRNG_TEST_ALPHA == 30
 /* APT cut off for TRNG_TEST_ALPHA == 30 */
-#define APT_CUTOFF_SAMPLES 682
+#define APT_CUTOFF_SAMPLES 694
 #endif
+
+/**
+ * APT_CUTOFF should be larger than half of window size, but less
+ * than windows size.
+ */
+BUILD_ASSERT((APT_CUTOFF_SAMPLES >= (APT_WINDOW_SIZE_SAMPLES / 2)) &&
+	     (APT_CUTOFF_SAMPLES < APT_WINDOW_SIZE_SAMPLES));
 
 #ifdef __cplusplus
 }
