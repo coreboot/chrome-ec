@@ -267,11 +267,14 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 				union u2f_key_handle_variant *kh,
 				uint8_t kh_version, struct u2f_ec_point *pubKey)
 {
+	static const size_t kh_size[] = { sizeof(kh->v0), sizeof(kh->v1),
+					  sizeof(kh->v2) };
+
 	uint8_t *kh_hmac = NULL;
 	uint8_t *kh_origin_seed = NULL;
 	uint8_t *auth_salt = NULL;
 	uint8_t	*auth_hmac = NULL;
-	enum ec_error_list generate_key_pair_rc = EC_ERROR_HW_INTERNAL;
+	enum ec_error_list rc = EC_ERROR_HW_INTERNAL;
 
 	/* Generated public keys associated with key handle. */
 	p256_int opk_x, opk_y;
@@ -313,9 +316,12 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 	/* Generate key handle candidates and origin-specific key pair. */
 	do {
 		p256_int od;
+
 		/* Generate random origin seed for key handle candidate. */
-		if (!fips_rand_bytes(kh_origin_seed, U2F_ORIGIN_SEED_SIZE))
-			return EC_ERROR_HW_INTERNAL;
+		if (!fips_rand_bytes(kh_origin_seed, U2F_ORIGIN_SEED_SIZE)) {
+			rc = EC_ERROR_HW_INTERNAL;
+			goto cleanup;
+		}
 
 		if (kh_hmac) /* Versions 0 & 1 only. */
 			u2f_origin_user_mac(state, user, origin, kh_origin_seed,
@@ -326,18 +332,20 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 		 * key handle results in private key which is out of allowed
 		 * range. If this is the case, repeat with another origin seed.
 		 */
-		generate_key_pair_rc = u2f_origin_user_key_pair(
-			state, kh, kh_version, &od, &opk_x, &opk_y);
+		rc = u2f_origin_user_key_pair(state, kh, kh_version, &od,
+					      &opk_x, &opk_y);
 
 		p256_clear(&od);
-	} while (generate_key_pair_rc == EC_ERROR_TRY_AGAIN);
+	} while (rc == EC_ERROR_TRY_AGAIN);
 
-	if (generate_key_pair_rc != EC_SUCCESS)
-		return generate_key_pair_rc;
+	if (rc != EC_SUCCESS)
+		goto cleanup;
 
 	if (kh_version) {
-		if (!fips_rand_bytes(auth_salt, U2F_AUTHORIZATION_SALT_SIZE))
-			return EC_ERROR_HW_INTERNAL;
+		if (!fips_rand_bytes(auth_salt, U2F_AUTHORIZATION_SALT_SIZE)) {
+			rc = EC_ERROR_HW_INTERNAL;
+			goto cleanup;
+		}
 
 		u2f_authorization_mac(state, kh, kh_version, user, origin,
 				      authTimeSecretHash, auth_hmac);
@@ -348,6 +356,10 @@ enum ec_error_list u2f_generate(const struct u2f_state *state,
 	p256_to_bin(&opk_y, pubKey->y); /* endianness */
 
 	return EC_SUCCESS;
+cleanup:
+	always_memset(pubKey, 0, sizeof(*pubKey));
+	always_memset(kh, 0, kh_size[kh_version]);
+	return rc;
 }
 
 enum ec_error_list u2f_authorize_keyhandle(
@@ -395,16 +407,8 @@ enum ec_error_list u2f_authorize_keyhandle(
 		/* First, check inner part. */
 		u2f_origin_user_mac(state, user, origin, origin_seed,
 				    kh_version, recreated_hmac);
-
-		/**
-		 * DCRYPTO_equals return DCRYPTO_OK if success, by subtracting 1
-		 * we make it zero, and other results - zero or non-zero will be
-		 * detected.
-		 */
 		result |= DCRYPTO_equals(&recreated_hmac, kh_hmac,
 					 sizeof(recreated_hmac));
-
-		always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
 	}
 
 	if (auth_hmac && authTimeSecretHash) {
@@ -412,9 +416,8 @@ enum ec_error_list u2f_authorize_keyhandle(
 				      authTimeSecretHash, recreated_hmac);
 		result |= DCRYPTO_equals(&recreated_hmac, auth_hmac,
 					 sizeof(recreated_hmac));
-		always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
 	}
-
+	always_memset(recreated_hmac, 0, sizeof(recreated_hmac));
 	return (result == DCRYPTO_OK) ? EC_SUCCESS : EC_ERROR_ACCESS_DENIED;
 }
 
@@ -479,24 +482,17 @@ enum ec_error_list u2f_sign(const struct u2f_state *state,
 	result = u2f_authorize_keyhandle(state, kh, kh_version, user, origin,
 					 authTimeSecretHash);
 
-	if (result != EC_SUCCESS) {
-		memset(sig, 0, sizeof(*sig));
-		return result;
-	}
+	if (result != EC_SUCCESS)
+		goto cleanup;
 
 	/* Re-create origin-specific key. */
 	result = u2f_origin_user_key_pair(state, kh, kh_version, &origin_d,
 					  NULL, NULL);
-	if (result != EC_SUCCESS) {
-		memset(sig, 0, sizeof(*sig));
-		return result;
-	}
+	if (result != EC_SUCCESS)
+		goto cleanup;
 
 	/* Prepare hash to sign. */
 	p256_from_bin(hash, &h);
-
-	/* Now, we processed input parameters, so clean-up output. */
-	memset(sig, 0, sizeof(*sig));
 
 	/* Sign. */
 	hmac_drbg_init_rfc6979(&ctx, &origin_d, &h);
@@ -506,10 +502,12 @@ enum ec_error_list u2f_sign(const struct u2f_state *state,
 			       EC_ERROR_HW_INTERNAL;
 	drbg_exit(&ctx);
 	p256_clear(&origin_d);
-
 	p256_to_bin(&r, sig->sig_r);
 	p256_to_bin(&s, sig->sig_s);
 
+cleanup:
+	if (result != EC_SUCCESS)
+		always_memset(sig, 0, sizeof(*sig));
 	return result;
 }
 
@@ -609,55 +607,57 @@ enum ec_error_list u2f_attest(const struct u2f_state *state,
 			      const uint8_t *data, size_t data_size,
 			      struct u2f_signature *sig)
 {
-	struct sha256_ctx h_ctx;
-	struct drbg_ctx dr_ctx;
+	union { /* save stack by explicitly overlapping contexts. */
+		struct sha256_digest hash;
+		struct drbg_ctx drbg;
+	} ctx;
 
 	/* Data hash, and corresponding signature. */
 	p256_int h, r, s;
 
 	/* Attestation key. */
-	p256_int d, pk_x, pk_y;
+	p256_int d;
 
-	enum ec_error_list result;
+	enum ec_error_list result = EC_ERROR_HW_INTERNAL;
 
 	if (!fips_crypto_allowed())
-		return EC_ERROR_HW_INTERNAL;
+		goto cleanup;
 
 	result = u2f_attest_keyhandle_pubkey(state, kh, kh_version, user,
 					     origin, authTimeSecretHash,
 					     public_key);
 
 	if (result != EC_SUCCESS)
-		return result;
+		goto cleanup;
 
-	/* Derive G2F Attestation Key. */
-	if (!g2f_individual_key_pair(state, &d, &pk_x, &pk_y)) {
+	/* Derive G2F Attestation private key only. */
+	if (!g2f_individual_key_pair(state, &d, NULL, NULL)) {
 #ifdef U2F_DEV_VERBOSE
 		ccprintf("G2F Attestation key generation failed\n");
 #endif
-		return EC_ERROR_HW_INTERNAL;
+		result = EC_ERROR_HW_INTERNAL;
+		goto cleanup;
 	}
 
 	/* Message signature. */
-	SHA256_hw_init(&h_ctx);
-	SHA256_update(&h_ctx, data, data_size);
-	p256_from_bin(SHA256_final(&h_ctx)->b8, &h);
-
-	/* Now, we processed input parameters, so clean-up output. */
-	memset(sig, 0, sizeof(*sig));
+	SHA256_hw_hash(data, data_size, &ctx.hash);
+	p256_from_bin(ctx.hash.b8, &h);
 
 	/* Sign over the response w/ the attestation key. */
-	hmac_drbg_init_rfc6979(&dr_ctx, &d, &h);
+	hmac_drbg_init_rfc6979(&ctx.drbg, &d, &h);
 
-	result = (dcrypto_p256_ecdsa_sign(&dr_ctx, &d, &h, &r, &s) ==
+	result = (dcrypto_p256_ecdsa_sign(&ctx.drbg, &d, &h, &r, &s) ==
 		  DCRYPTO_OK) ?
 			 EC_SUCCESS :
 			       EC_ERROR_HW_INTERNAL;
-	drbg_exit(&dr_ctx);
+	drbg_exit(&ctx.drbg);
 	p256_clear(&d);
 
 	p256_to_bin(&r, sig->sig_r);
 	p256_to_bin(&s, sig->sig_s);
+cleanup:
+	if (result != EC_SUCCESS)
+		always_memset(sig, 0, sizeof(*sig));
 
 	return result;
 }
@@ -710,7 +710,7 @@ static int cmd_u2f_test(int argc, char **argv)
 			     EC_SUCCESS));
 	ccprintf("kh: %ph\n", HEX_BUF(&kh, sizeof(kh.v0)));
 	ccprintf("pubKey: %ph\n", HEX_BUF(&pubKey, sizeof(pubKey)));
-
+	cflush();
 	ccprintf("u2f_authorize_keyhandle - %s\n",
 		 expect_bool(u2f_authorize_keyhandle(&state, &kh, 0, user,
 						     origin, authTime),
@@ -722,6 +722,7 @@ static int cmd_u2f_test(int argc, char **argv)
 						     origin, authTime),
 			     EC_ERROR_ACCESS_DENIED));
 
+	cflush();
 	kh.v0.origin_seed[0] ^= 0x10;
 	ccprintf("u2f_sign - %s\n",
 		 expect_bool(u2f_sign(&state, &kh, 0, user, origin, authTime,
@@ -743,7 +744,7 @@ static int cmd_u2f_test(int argc, char **argv)
 				      authTime, &sig),
 			     EC_ERROR_ACCESS_DENIED));
 	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
-
+	cflush();
 	/* Version 1 key handle. */
 	ccprintf("\nVersion 1 tests\n");
 	ccprintf("u2f_generate - %s\n",
@@ -772,6 +773,7 @@ static int cmd_u2f_test(int argc, char **argv)
 				      origin, authTime, authTime, &sig),
 			     EC_SUCCESS));
 	ccprintf("sig: %ph\n", HEX_BUF(&sig, sizeof(sig)));
+	cflush();
 
 	ccprintf("u2f_attest - %s\n",
 		 expect_bool(u2f_attest(&state, &kh, U2F_KH_VERSION_1, user,
@@ -812,7 +814,7 @@ static int cmd_u2f_test(int argc, char **argv)
 						     U2F_KH_VERSION_2, user,
 						     origin, authTime),
 			     EC_ERROR_ACCESS_DENIED));
-
+	cflush();
 	kh.v2.authorization_salt[0] ^= 0x10;
 	ccprintf("u2f_sign - %s\n",
 		 expect_bool(u2f_sign(&state, &kh, U2F_KH_VERSION_2, user,
