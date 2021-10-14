@@ -207,6 +207,10 @@ buildalltests: | $(FAILED_BOARDS_DIR)
 	$(MAKE) try_build_tests
 	@echo "$@ completed successfully!"
 
+.PHONY: buildall_only
+buildall_only: build_boards buildalltests
+	$(MAKE) buildfuzztests
+
 .PHONY: print-boards
 print-boards:
 	$(call cmd_pretty_print_list,\
