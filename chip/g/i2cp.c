@@ -104,6 +104,9 @@ static uint16_t last_read_pointer;
 static uint16_t i2cp_read_recovery_count;
 static uint16_t i2cp_sda_low_count;
 
+/* Maximum number of times to log i2c errors each boot. */
+#define FLOG_I2C_MAX_ERRORS 2
+
 static void check_i2cp_state(void)
 {
 	if (gpio_get_level(GPIO_MONITOR_I2CP_SDA))
@@ -255,6 +258,11 @@ static void poll_read_state(void)
 			 */
 			i2cp_register_write_complete_handler(
 				write_complete_handler_);
+
+#ifdef CONFIG_FLASH_LOG
+			if (i2cp_read_recovery_count <= FLOG_I2C_MAX_ERRORS)
+				flash_log_add_event(FE_TPM_I2C_ERROR, 0, NULL);
+#endif
 			return;
 		}
 	}
