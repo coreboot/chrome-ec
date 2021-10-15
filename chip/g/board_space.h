@@ -46,6 +46,11 @@ struct info1_board_space {
 	/* Pad so that board_id occupies it's full 'protect' size */
 	uint8_t bid_padding[4];
 	struct sn_data sn;
+	/*
+	 * Unless this field is set to zero, AP RO verification does not have
+	 * to be enforced.
+	 */
+	uint32_t aprv_not_needed;
 };
 
 /*
@@ -67,15 +72,16 @@ struct info1_layout {
 };
 BUILD_ASSERT(sizeof(struct info1_layout) == FLASH_INFO_SIZE);
 
+#define INFO_SPACE_OFFSET(field) (INFO_BOARD_SPACE_OFFSET +		\
+				  offsetof(struct info1_board_space, field))
 #define INFO_BOARD_ID_SIZE		sizeof(struct board_id)
-#define INFO_BOARD_ID_OFFSET		(INFO_BOARD_SPACE_OFFSET + \
-					 offsetof(struct info1_board_space, \
-						  bid))
+#define INFO_BOARD_ID_OFFSET		INFO_SPACE_OFFSET(bid)
 
-#define INFO_SN_DATA_SIZE		 sizeof(struct sn_data)
-#define INFO_SN_DATA_OFFSET		 (INFO_BOARD_SPACE_OFFSET + \
-					  offsetof(struct info1_board_space, \
-						   sn))
+#define INFO_SN_DATA_SIZE		sizeof(struct sn_data)
+#define INFO_SN_DATA_OFFSET		INFO_SPACE_OFFSET(sn)
+
+#define INFO_APRV_DATA_SIZE		sizeof(uint32_t)
+#define INFO_APRV_DATA_OFFSET		INFO_SPACE_OFFSET(aprv_not_needed)
 
 /*
  * Write protection for the INFO1 space allows windows with sizes that are
@@ -94,5 +100,8 @@ BUILD_ASSERT(INFO_BOARD_ID_SIZE <= INFO_BOARD_ID_PROTECT_SIZE);
 BUILD_ASSERT((INFO_SN_DATA_SIZE & 3) == 0);
 BUILD_ASSERT((INFO_SN_DATA_OFFSET & 3) == 0);
 BUILD_ASSERT(INFO_SN_DATA_SIZE <= INFO_SN_DATA_PROTECT_SIZE);
+
+BUILD_ASSERT((INFO_APRV_DATA_SIZE & 3) == 0);
+BUILD_ASSERT((INFO_APRV_DATA_OFFSET & 3) == 0);
 
 #endif  /* ! __EC_CHIP_G_BOARD_SPACE_H */

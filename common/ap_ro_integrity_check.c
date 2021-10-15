@@ -304,6 +304,13 @@ struct memory_block {
 	size_t size;
 };
 
+/* One of the AP RO verification outcomes, internal representation. */
+enum ap_ro_check_result {
+	ROV_NOT_FOUND = 1, /* Control structures not found. */
+	ROV_FAILED,	    /* Verification failed. */
+	ROV_SUCCEEDED	    /* Verification succeeded. */
+};
+
 /* Page offset for H1 flash operations. */
 static const uint32_t h1_flash_offset_ =
 	AP_RO_DATA_SPACE_ADDR - CONFIG_PROGRAM_MEMORY_BASE;
@@ -951,12 +958,12 @@ static int read_rootk(const struct gvd_container *gvdc,
  * @param count number of ranges in the array
  * @param expected_digest pointer to the expected sha256 digest value.
  *
- * @return zero if digest matches, EC_ERROR_CRC if it does not. This value
- *	   is used by the caller to decide if AP boot should be allowed or
- *	   not.
+ * @return ROV_SUCCEEDED if succeeded, ROV_FAILED otherwise.
  */
-static int validate_ranges_sha(const struct ro_range *ranges, size_t count,
-			       const uint8_t *expected_digest)
+static
+enum ap_ro_check_result validate_ranges_sha(const struct ro_range *ranges,
+					    size_t count,
+					    const uint8_t *expected_digest)
 {
 	int8_t digest[SHA256_DIGEST_SIZE];
 	size_t i;
@@ -980,10 +987,10 @@ static int validate_ranges_sha(const struct ro_range *ranges, size_t count,
 			HEX_BUF(digest, sizeof(digest)));
 		CPRINTS("Stored digest %ph",
 			HEX_BUF(expected_digest, sizeof(digest)));
-		return EC_ERROR_CRC;
+		return ROV_FAILED;
 	}
 
-	return EC_SUCCESS;
+	return ROV_SUCCEEDED;
 }
 
 /**
@@ -1174,9 +1181,10 @@ static int gvd_cache_check(const struct gvd_container *gvdc,
  *
  * @param descriptor  points to locally cached hash of gsc_verification_data.
  *
- * @return zero on success, non zero on failure.
+ * @return ROV_SUCCEEDED if succeeded, ROV_FAILED otherwise.
  */
-static int8_t validate_cached_ap_ro_v2(const struct gvd_descriptor *descriptor)
+static enum ap_ro_check_result validate_cached_ap_ro_v2(
+	const struct gvd_descriptor *descriptor)
 {
 
 	uint32_t fmap_offset;
@@ -1186,55 +1194,74 @@ static int8_t validate_cached_ap_ro_v2(const struct gvd_descriptor *descriptor)
 	gvdc.offset = descriptor->gvd_offset;
 
 	if (read_gscvd_header(fmap_offset, &gvdc))
-		return -1;
+		return ROV_NOT_FOUND;
 
 	if (read_ranges(&gvdc))
-		return -1;
+		return ROV_NOT_FOUND;
 
 	if (gvd_cache_check(&gvdc, descriptor)) {
 		CPRINTS("GVD HASH MISMATCH!!");
-		return -1;
+		return ROV_FAILED;
 	}
 
 	return validate_ranges_sha(gvdc.ranges.ranges, gvdc.gvd.range_count,
-				   gvdc.gvd.ranges_digest) ==
-		EC_SUCCESS ? 0 : -1;
+				   gvdc.gvd.ranges_digest);
+}
+
+static bool check_is_required(void)
+{
+	uint32_t value;
+	int rv;
+
+	rv = flash_physical_info_read_word(INFO_APRV_DATA_OFFSET, &value);
+
+	return !value || (rv != EC_SUCCESS);
+}
+
+static int require_future_checks(void)
+{
+	uint32_t value = 0;
+	int rv;
+
+	flash_info_write_enable();
+	rv = flash_info_physical_write(INFO_APRV_DATA_OFFSET,
+					 sizeof(value),
+					 (const char *)&value);
+	flash_info_write_disable();
+
+	return rv;
 }
 
 /**
- * Try validating AP RO.
+ * Try validating RO_GSCVD FMAP area.
  *
- * This function receives an offset of FMAP in the AP flash and the number of
- * areas in the FMAP. The function looks for the RO_GSCVD area, and if found
- * tries to cryptographically verify the GVD, starting with the hash of the
- * root key, then signature of the key block, and then signature of
+ * This function receives the AP flash offsets of FMAP and RO_GSCVD area. The
+ * function tries to cryptographically verify the GVD, starting with the hash
+ * of the root key, then signature of the key block, and then signature of
  * gsc_verification_data and the hash of the RO ranges.
  *
- * @return zero on success, non zero on failure.
+ * @return ROV_SUCCEEDED if succeeded, ROV_FAILED otherwise.
  */
-static int8_t check_fmap_location(uint32_t fmap_offset, uint16_t nareas)
+static enum ap_ro_check_result check_gscvd(uint32_t fmap_offset,
+					   uint32_t gscvd_offset)
 {
 	struct gvd_container gvdc;
 	struct kb_container kbc;
 	struct vb_rsa_pubk pubk;
-	struct fmap_area_header gscvd;
 	struct vb2_packed_key *rootk = NULL;
-	int rv = -1;
+	enum ap_ro_check_result rv = ROV_FAILED;
 
-	if (find_gscvd(fmap_offset + sizeof(struct fmap_header), nareas,
-		       &gscvd))
-		return -1;
-	gvdc.offset = gscvd.area_offset;
+	gvdc.offset = gscvd_offset;
 
 	if (read_gscvd_header(fmap_offset, &gvdc))
-		return -1;
+		return ROV_NOT_FOUND;
 
 	if (read_ranges(&gvdc))
-		return -1;
+		return rv;
 
 	kbc.offset = gvdc.offset + gvdc.gvd.size;
 	if (read_keyblock(&kbc))
-		return -1;
+		return rv;
 
 	if (read_rootk(&gvdc, &rootk))
 		goto exit;
@@ -1250,13 +1277,25 @@ static int8_t check_fmap_location(uint32_t fmap_offset, uint16_t nareas)
 	rootk = NULL;
 
 	if (verify_gvd_signature(&gvdc, &kbc.kb->data_key))
-		return -1;
+		return rv;
 
 	rv = validate_ranges_sha(gvdc.ranges.ranges, gvdc.gvd.range_count,
 				 gvdc.gvd.ranges_digest);
-	if (!rv) {
+	if (rv == ROV_SUCCEEDED) {
+		if (!check_is_required()) {
+			/*
+			 * Make sure from now on only signed images will be
+			 * allowed.
+			 */
+			if (require_future_checks() != EC_SUCCESS) {
+				rv = ROV_FAILED;
+				goto exit;
+			}
+		}
+
 		/* Verification succeeded, save the hash for the next time. */
-		rv = save_gvd_hash(&gvdc);
+		if (save_gvd_hash(&gvdc))
+			rv = ROV_FAILED;
 	}
 exit:
 	if (kbc.kb)
@@ -1276,14 +1315,15 @@ exit:
  *
  * Return zero if a valid GVD was found, -1 otherwise.
  */
-static int8_t validate_and_cache_ap_ro_v2_from_flash(void)
+static enum ap_ro_check_result validate_and_cache_ap_ro_v2_from_flash(void)
 {
 	uint32_t offset;
-	struct fmap_header fmh;
-	bool fmap_found = false;
+	bool ro_gscvd_found = false;
 
 	for (offset = 0; offset < MAX_SUPPORTED_FLASH_SIZE;
 	     offset += LOWEST_FMAP_ALIGNMENT) {
+		struct fmap_header fmh;
+		struct fmap_area_header gscvd;
 
 		if (read_ap_spi(fmh.fmap_signature, offset,
 				sizeof(fmh.fmap_signature), __LINE__))
@@ -1308,21 +1348,26 @@ static int8_t validate_and_cache_ap_ro_v2_from_flash(void)
 			continue;
 		}
 
-		fmap_found = true;
+		if (find_gscvd(offset + sizeof(struct fmap_header),
+			       fmh.fmap_nareas, &gscvd))
+			continue;
 
-		if (!check_fmap_location(offset, fmh.fmap_nareas))
-			return 0;
+		ro_gscvd_found = true;
+
+		if (check_gscvd(offset, gscvd.area_offset) == ROV_SUCCEEDED)
+			return ROV_SUCCEEDED;
 	}
 
-	if (!fmap_found)
-		CPRINTS("Could not find FMAP");
+	if (ro_gscvd_found)
+		return ROV_FAILED;
 
-	return -1;
+
+	return ROV_NOT_FOUND;
 }
 
 static uint8_t do_ap_ro_check(void)
 {
-	int rv;
+	enum ap_ro_check_result rv;
 	enum ap_ro_check_vc_errors support_status;
 	bool v1_record_found;
 
@@ -1335,14 +1380,16 @@ static uint8_t do_ap_ro_check(void)
 
 	enable_ap_spi_hash_shortcut();
 
-	rv = EC_ERROR_CRC;
 	v1_record_found = (support_status == ARCVE_OK) &&
 		(p_chk->header.type == AP_RO_HASH_TYPE_FACTORY);
 	if (v1_record_found) {
 		rv = validate_ranges_sha(p_chk->payload.ranges,
 					 p_chk->header.num_ranges,
 					 p_chk->payload.digest);
+	} else {
+		rv = ROV_NOT_FOUND;
 	}
+
 
 	/*
 	 * If a V2 entry is found, or V1 check failed, which could be because
@@ -1350,8 +1397,7 @@ static uint8_t do_ap_ro_check(void)
 	 */
 	if ((support_status == ARCVE_NOT_PROGRAMMED) ||
 	    (p_chk->header.type == AP_RO_HASH_TYPE_GSCVD) ||
-	    (v1_record_found && (rv != EC_SUCCESS))) {
-
+	    (v1_record_found && (rv != ROV_SUCCEEDED))) {
 		const struct gvd_descriptor *descriptor;
 
 		descriptor = find_v2_entry();
@@ -1359,31 +1405,36 @@ static uint8_t do_ap_ro_check(void)
 		if (descriptor)
 			rv = validate_cached_ap_ro_v2(descriptor);
 
-		if (rv || !descriptor)
+		if ((rv != ROV_SUCCEEDED) || !descriptor)
 			/* There could have been a legitimate RO change. */
 			rv = validate_and_cache_ap_ro_v2_from_flash();
 	}
 
 	disable_ap_spi_hash_shortcut();
 
-	if (rv != EC_SUCCESS) {
-		apro_result = AP_RO_FAIL;
+	if (rv != ROV_SUCCEEDED) {
 		/* Failure reason has already been reported. */
+		apro_result = AP_RO_FAIL;
 		ap_ro_add_flash_event(APROF_CHECK_FAILED);
 
 		/*
-		 * Map all errors into EC_ERROR_CRC, this will make sure that
-		 * in case this was invoked by the operator keypress, the
-		 * device will not continue booting.
+		 * Map failures into EC_ERROR_CRC, this will make sure that in
+		 * case this was invoked by the operator keypress, the device
+		 * will not continue booting.
+		 *
+		 * Both explicit failure to verify OR any error if cached
+		 * descriptor was found should block the booting.
 		 */
-		rv = EC_ERROR_CRC;
-	} else {
-		apro_result = AP_RO_PASS;
-		ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
-		CPRINTS("AP RO verification SUCCEEDED!");
+		if ((rv == ROV_FAILED) || check_is_required())
+			return EC_ERROR_CRC;
+		return EC_ERROR_UNIMPLEMENTED;
 	}
 
-	return rv;
+	apro_result = AP_RO_PASS;
+	ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
+	CPRINTS("AP RO verification SUCCEEDED!");
+
+	return EC_SUCCESS;
 }
 
 /*
