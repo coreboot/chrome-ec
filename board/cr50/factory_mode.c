@@ -26,18 +26,18 @@ static int inactive_image_is_guc_image(void)
 	other = (struct SignedHeader *) get_program_memory_addr(
 		inactive_copy);
 	/*
-	 * Chips from GUC are manufactured with 0.0.13 or 0.0.22. Compare the
-	 * versions to determine if the inactive image is a GUC image.
+	 * Chips from GUC are manufactured with 0.0.13, 0.0.22, or 0.3.22.
+	 * Compare the versions to determine if the inactive image is a GUC
+	 * image.
 	 */
-	if (other->epoch_ == 0 && other->major_ == 0 &&
-	    ((other->minor_ == 13) || (other->minor_ == 22))) {
+	if (other->epoch_)
+		return 0;
+	if ((other->major_ == 0 && other->minor_ == 13) ||
+	    (other->major_ == 0 && other->minor_ == 22) ||
+	    (other->major_ == 3 && other->minor_ == 22)) {
 		CPRINTS("GUC in inactive RW");
 		return 1;
 	}
-	/*
-	 * TODO(mruthven): Return true if factory image field of header is
-	 * set
-	 */
 	return 0;
 }
 
