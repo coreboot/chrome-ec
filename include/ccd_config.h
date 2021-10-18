@@ -132,6 +132,9 @@ enum ccd_capability {
 	/* Override battery presence temporarily or at boot */
 	CCD_CAP_OVERRIDE_BATT_STATE = 19,
 
+	/* Allow AP RO verification check vendor command from the AP. */
+	CCD_CAP_AP_RO_CHECK_VC = 20,
+
 	/* Number of currently defined capabilities */
 	CCD_CAP_COUNT
 };
@@ -194,6 +197,7 @@ struct ccd_capability_info {
 	{"OpenNoDevMode",	CCD_CAP_STATE_OPEN_REQ}, \
 	{"OpenFromUSB",		CCD_CAP_STATE_OPEN_REQ}, \
 	{"OverrideBatt",	CCD_CAP_STATE_IF_OPENED}, \
+	{"APROCheckVC",		CCD_CAP_STATE_IF_OPENED}, \
 	}
 
 #define CCD_STATE_NAMES { "Locked", "Unlocked", "Opened" }

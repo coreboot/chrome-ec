@@ -8,6 +8,7 @@
 #include "ap_ro_integrity_check.h"
 #include "board_id.h"
 #include "byteorder.h"
+#include "ccd_config.h"
 #include "console.h"
 #include "crypto_api.h"
 #include "extension.h"
@@ -1392,17 +1393,22 @@ static uint8_t do_ap_ro_check(void)
  * amounts of stack, this is why this function must run on TPM task context.
  *
  */
-static enum vendor_cmd_rc ap_ro_check_callback(enum vendor_cmd_cc code,
-						  void *buf, size_t input_size,
-						  size_t *response_size)
+static enum vendor_cmd_rc ap_ro_check_callback(struct vendor_cmd_params *p)
 {
-	*response_size = 1;
-	*((int8_t *)buf) = do_ap_ro_check();
+	uint8_t *response = p->buffer;
+
+	p->out_size = 0;
+
+	if (!(p->flags & VENDOR_CMD_FROM_ALT_IF) &&
+	    !(ccd_is_cap_enabled(CCD_CAP_AP_RO_CHECK_VC)))
+		return VENDOR_RC_NOT_ALLOWED;
+
+	p->out_size = 1;
+	response[0] = do_ap_ro_check();
 
 	return VENDOR_RC_SUCCESS;
 }
-
-DECLARE_VENDOR_COMMAND(VENDOR_CC_AP_RO_VALIDATE, ap_ro_check_callback);
+DECLARE_VENDOR_COMMAND_P(VENDOR_CC_AP_RO_VALIDATE, ap_ro_check_callback);
 
 int validate_ap_ro(void)
 {
